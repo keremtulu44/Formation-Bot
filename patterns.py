@@ -959,6 +959,389 @@ def find_best_triangle_candidate(df: pd.DataFrame, profile: str = "Dengeli", ver
     
     return best_candidate, logs
 
+# === BREAKOUT GÜCÜ ===
+def f_breakout_strength(df: pd.DataFrame, atr_series: pd.Series, 
+                        bar_idx: int, direction: int, boundary_price: float,
+                        profile: str, volume_sma_series: Optional[pd.Series] = None) -> Tuple[float, float, float, float, float, float]:
+    """
+    Kırılım mum gücü - Pine'daki f_breakout_strength ile aynı
+    direction: 1 yukarı, -1 aşağı
+    Neden? Zayıf kırılımlar BREAK_ATTEMPT, güçlüler BREAK_CANDIDATE
+    
+    Skorlar:
+    - bodyScore: Gövde ne kadar yönlü?
+    - closeScore: Kapanış range'in neresinde?
+    - penetrationScore: Sınırı ne kadar geçmiş? ATR cinsinden
+    - expansionScore: Mum ne kadar geniş?
+    - volumeScore: Hacim ortalamadan fazla mı?
+    """
+    if bar_idx >= len(df) or bar_idx < 0:
+        return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    
+    open_p = df['open'].iloc[bar_idx]
+    high_p = df['high'].iloc[bar_idx]
+    low_p = df['low'].iloc[bar_idx]
+    close_p = df['close'].iloc[bar_idx]
+    volume = df['volume'].iloc[bar_idx] if 'volume' in df.columns else 0
+    
+    atr = atr_series.iloc[bar_idx] if bar_idx < len(atr_series) else atr_series.iloc[-1]
+    if pd.isna(atr) or atr <= 0:
+        atr = 1.0
+    
+    candle_range = max(high_p - low_p, 0.0001)
+    
+    # Directional body ratio
+    if direction == 1:
+        directional_body_ratio = (close_p - open_p) / candle_range
+        close_location = (close_p - low_p) / candle_range
+        penetration_atr = (close_p - boundary_price) / max(atr, 0.0001)
+    else:
+        directional_body_ratio = (open_p - close_p) / candle_range
+        close_location = (high_p - close_p) / candle_range
+        penetration_atr = (boundary_price - close_p) / max(atr, 0.0001)
+    
+    expansion_atr = candle_range / max(atr, 0.0001)
+    
+    # Volume
+    volume_available = False
+    volume_ratio = 1.0
+    if volume_sma_series is not None and bar_idx < len(volume_sma_series):
+        vol_sma = volume_sma_series.iloc[bar_idx]
+        if not pd.isna(vol_sma) and vol_sma > 0 and volume > 0:
+            volume_available = True
+            volume_ratio = volume / vol_sma
+    
+    # Skorlar - Pine ile aynı eşikler
+    from config import get_profile_params
+    params = get_profile_params(profile)
+    base_break_atr = params['break_atr_mult']
+    
+    body_score = f_smoothstep(0.10, 0.65, directional_body_ratio) * 100.0
+    close_score = f_smoothstep(0.56, 0.88, close_location) * 100.0
+    penetration_score = f_smoothstep(base_break_atr * 0.75, max(0.24, base_break_atr * 4.0), penetration_atr) * 100.0
+    expansion_score = f_smoothstep(0.65, 1.55, expansion_atr) * 100.0
+    volume_score = f_smoothstep(0.90, 1.55, volume_ratio) * 100.0 if volume_available else 50.0
+    
+    strength = f_clamp(body_score * 0.24 + close_score * 0.28 + penetration_score * 0.25 + expansion_score * 0.15 + volume_score * 0.08, 0.0, 100.0)
+    
+    return strength, body_score, close_score, penetration_score, expansion_score, volume_score
+
+# === LIFECYCLE YÖNETİCİSİ ===
+@dataclass
+class PatternState:
+    """Bir hissenin anlık formasyon state'i - Pine'daki var değişkenlerin karşılığı"""
+    active_candidate: Optional[PatternCandidate] = None
+    state: str = ST_NONE
+    break_candidate_bar: Optional[int] = None
+    break_confirmed_bar: Optional[int] = None
+    break_candidate_dir: int = 0
+    break_line_x1: Optional[int] = None
+    break_line_y1: Optional[float] = None
+    break_line_x2: Optional[int] = None
+    break_line_y2: Optional[float] = None
+    retest_success_bar: Optional[int] = None
+    invalid_reason: str = "Yok"
+    last_update_bar: int = 0
+
+class PatternLifecycleManager:
+    """
+    Lifecycle yöneticisi - her hisse için state tutar
+    Pine'daki barstate.isconfirmed ile çalışan lifecycle'ın Python karşılığı
+    
+    Neden gerekli? Formasyon tek barda oluşmuyor, bar bar evriliyor
+    """
+    def __init__(self, profile: str = "Dengeli"):
+        from config import get_profile_params
+        self.profile = profile
+        self.params = get_profile_params(profile)
+        self.states: Dict[str, PatternState] = {}  # stock -> state
+        self.logger = logging.getLogger(__name__)
+    
+    def get_state(self, stock: str) -> PatternState:
+        if stock not in self.states:
+            self.states[stock] = PatternState()
+        return self.states[stock]
+    
+    def update(self, stock: str, df: pd.DataFrame, candidate: Optional[PatternCandidate]) -> Tuple[str, int, str]:
+        """
+        State güncelle - Pine'daki 19-20. bölüm lifecycle mantığı
+        Döner: (new_state, break_dir, log_message)
+        """
+        state_obj = self.get_state(stock)
+        current_bar = len(df) - 1
+        
+        if current_bar <= 0:
+            return ST_NONE, 0, "Bar yok"
+        
+        # ATR ve diğer seriler
+        atr_series = calculate_atr(df, 14)
+        safe_atr = atr_series.iloc[-1] if len(atr_series) > 0 and not pd.isna(atr_series.iloc[-1]) else 1.0
+        break_buffer = max(0.0001, safe_atr * self.params['break_atr_mult'])
+        tol = max(0.0001, safe_atr * self.params['touch_atr_mult'])
+        
+        # Eğer candidate yoksa
+        if candidate is None or not candidate.valid:
+            if state_obj.state in [ST_NONE, ST_INVALID, ST_BREAK_FAILED, ST_BREAK_TIMEOUT, ST_COMPLETED]:
+                # Terminal state'te kal veya NONE
+                return state_obj.state, state_obj.break_candidate_dir, "Formasyon yok, terminal state korunuyor"
+            else:
+                # Aktif formasyon vardı ama şimdi yok - zayıfladı mı?
+                if state_obj.active_candidate is not None:
+                    # Eski candidate'i kontrol et hala geçerli mi?
+                    # Basit: Eğer yaş çok ilerlediyse INVALID
+                    age = current_bar - (state_obj.active_candidate.start_bar or 0)
+                    if age > self.params['max_consolidation_bars'] * 2:
+                        state_obj.state = ST_INVALID
+                        state_obj.invalid_reason = "Formasyon süresi aşırı uzadı, teyit gelmedi"
+                        return ST_INVALID, 0, state_obj.invalid_reason
+                
+                state_obj.state = ST_NONE
+                state_obj.invalid_reason = "Yeterli teyitli geometri yok"
+                return ST_NONE, 0, state_obj.invalid_reason
+        
+        # Candidate var - ilk kez mi?
+        if state_obj.active_candidate is None or state_obj.state in [ST_NONE, ST_INVALID, ST_BREAK_FAILED, ST_BREAK_TIMEOUT, ST_COMPLETED]:
+            # Yeni formasyon
+            state_obj.active_candidate = candidate
+            state_obj.state = ST_CANDIDATE
+            state_obj.break_candidate_bar = None
+            state_obj.break_candidate_dir = 0
+            state_obj.invalid_reason = "Yok"
+            state_obj.last_update_bar = current_bar
+            return ST_CANDIDATE, 0, f"Yeni aday: {candidate.pattern_type} kalite {candidate.raw_quality:.0f}"
+        
+        # Aktif candidate var - güncelle
+        # Sınır fiyatları
+        upper_now = candidate.upper_now
+        lower_now = candidate.lower_now
+        if upper_now is None or lower_now is None:
+            # Eski candidate'in sınırlarını kullan
+            upper_now = f_line_price(candidate.hb1, candidate.hp1, candidate.hb2, candidate.hp2, current_bar) if candidate.hb1 is not None else df['close'].iloc[-1]
+            lower_now = f_line_price(candidate.lb1, candidate.lp1, candidate.lb2, candidate.lp2, current_bar) if candidate.lb1 is not None else df['close'].iloc[-1]
+        
+        close = df['close'].iloc[-1]
+        high = df['high'].iloc[-1]
+        low = df['low'].iloc[-1]
+        
+        # Breakout kontrolü - sadece DEFINED ve sonrası state'lerde
+        if state_obj.state in [ST_CANDIDATE, ST_GEOMETRY, ST_DEFINED, ST_MATURING, ST_COMPRESSING, ST_PREP]:
+            # Kırılım var mı?
+            close_up_break_raw = close > upper_now + break_buffer
+            close_down_break_raw = close < lower_now - break_buffer
+            
+            if close_up_break_raw or close_down_break_raw:
+                direction = 1 if close_up_break_raw else -1
+                boundary = upper_now if direction == 1 else lower_now
+                
+                # Breakout gücü hesapla
+                strength, body_s, close_s, pen_s, exp_s, vol_s = f_breakout_strength(
+                    df, atr_series, current_bar, direction, boundary, self.profile
+                )
+                
+                min_strength = self.params['min_break_strength']
+                
+                # Güçlü mü zayıf mı?
+                if strength >= min_strength:
+                    # Güçlü kırılım - BREAK_CANDIDATE
+                    state_obj.state = ST_BREAK_CANDIDATE
+                    state_obj.break_candidate_bar = current_bar
+                    state_obj.break_candidate_dir = direction
+                    state_obj.break_line_x1 = candidate.hb1 if direction == 1 else candidate.lb1
+                    state_obj.break_line_y1 = candidate.hp1 if direction == 1 else candidate.lp1
+                    state_obj.break_line_x2 = candidate.hb2 if direction == 1 else candidate.lb2
+                    state_obj.break_line_y2 = candidate.hp2 if direction == 1 else candidate.lp2
+                    
+                    # Candidate'i dondur (quality freeze)
+                    candidate.quality_frozen = True
+                    candidate.frozen_raw_quality = candidate.raw_quality
+                    candidate.frozen_upper_boundary_at_break = candidate.upper_now
+                    candidate.frozen_lower_boundary_at_break = candidate.lower_now
+                    candidate.frozen_break_buffer = break_buffer
+                    candidate.frozen_retest_tolerance = tol
+                    candidate.frozen_atr_at_break = safe_atr
+                    candidate.break_snapshot_bar = current_bar
+                    candidate.break_snapshot_price = boundary
+                    candidate.break_snapshot_direction = direction
+                    candidate.break_strength = strength
+                    candidate.break_body_score = body_s
+                    candidate.break_close_score = close_s
+                    candidate.break_penetration_score = pen_s
+                    candidate.break_expansion_score = exp_s
+                    candidate.break_volume_score = vol_s
+                    
+                    state_obj.active_candidate = candidate
+                    
+                    return ST_BREAK_CANDIDATE, direction, f"Güçlü kırılım adayı {direction} güç {strength:.0f} (min {min_strength})"
+                else:
+                    # Zayıf kırılım - BREAK_ATTEMPT
+                    state_obj.state = ST_BREAK_ATTEMPT
+                    state_obj.break_candidate_bar = current_bar
+                    state_obj.break_candidate_dir = direction
+                    state_obj.break_line_x1 = candidate.hb1 if direction == 1 else candidate.lb1
+                    state_obj.break_line_y1 = candidate.hp1 if direction == 1 else candidate.lp1
+                    state_obj.break_line_x2 = candidate.hb2 if direction == 1 else candidate.lb2
+                    state_obj.break_line_y2 = candidate.hp2 if direction == 1 else candidate.lp2
+                    
+                    return ST_BREAK_ATTEMPT, direction, f"Zayıf kırılım denemesi {direction} güç {strength:.0f} < {min_strength} - teyit bekliyor"
+            else:
+                # Kırılım yok - olgunlaşma state'ine geç
+                if candidate.raw_quality >= self.params['min_raw_quality'] + 25:
+                    new_state = ST_PREP if (abs(close - upper_now) / max(tol, 0.0001) <= 1.35 or abs(close - lower_now) / max(tol, 0.0001) <= 1.35) else ST_COMPRESSING
+                elif candidate.raw_quality >= self.params['min_raw_quality'] + 12:
+                    new_state = ST_MATURING
+                else:
+                    new_state = ST_DEFINED
+                
+                state_obj.state = new_state
+                state_obj.active_candidate = candidate
+                state_obj.last_update_bar = current_bar
+                return new_state, 0, f"Olgunlaşıyor: {new_state} kalite {candidate.raw_quality:.0f} kırılım yok"
+        
+        # BREAK_ATTEMPT ve BREAK_CANDIDATE state'lerinde teyit bekle
+        elif state_obj.state in [ST_BREAK_ATTEMPT, ST_BREAK_CANDIDATE]:
+            if state_obj.break_candidate_bar is None:
+                return state_obj.state, state_obj.break_candidate_dir, "Break bar yok"
+            
+            # Kaç bar geçti?
+            age = current_bar - state_obj.break_candidate_bar
+            confirm_window = self.params['confirm_window']
+            
+            # Sınır çizgisi
+            if state_obj.break_line_x1 is None or state_obj.break_line_x2 is None:
+                return state_obj.state, state_obj.break_candidate_dir, "Break line yok"
+            
+            boundary = f_line_price(state_obj.break_line_x1, state_obj.break_line_y1, 
+                                   state_obj.break_line_x2, state_obj.break_line_y2, current_bar)
+            
+            direction = state_obj.break_candidate_dir
+            
+            # Aynı yönde kapanış var mı?
+            same_side_close = (direction == 1 and close > boundary + break_buffer) or (direction == -1 and close < boundary - break_buffer)
+            
+            # Güç hesapla
+            strength, _, _, _, _, _ = f_breakout_strength(df, atr_series, current_bar, direction, boundary, self.profile)
+            
+            # Formasyon içine dönüş var mı?
+            projected_upper = upper_now
+            projected_lower = lower_now
+            hold_buffer = max(0.0001, tol * 0.12)
+            back_inside = (direction == 1 and close < projected_upper - hold_buffer) or (direction == -1 and close > projected_lower + hold_buffer)
+            
+            if back_inside and current_bar > state_obj.break_candidate_bar:
+                state_obj.state = ST_BREAK_FAILED
+                state_obj.invalid_reason = "Kırılım sonrası formasyon içine dönüldü"
+                return ST_BREAK_FAILED, direction, state_obj.invalid_reason
+            
+            # Teyit?
+            strong_same_side = same_side_close and strength >= max(25.0, self.params['min_break_strength'] - 6.0)
+            
+            # Retest kontrolü
+            retest = False
+            if direction == 1:
+                retest = low <= boundary + tol and close > boundary + hold_buffer
+            else:
+                retest = high >= boundary - tol and close < boundary - hold_buffer
+            
+            if current_bar > state_obj.break_candidate_bar and age <= confirm_window and (strong_same_side or retest):
+                state_obj.state = ST_BREAK_CONFIRMED
+                state_obj.break_confirmed_bar = current_bar
+                if state_obj.active_candidate:
+                    state_obj.active_candidate.break_confirmation_strength = strength
+                return ST_BREAK_CONFIRMED, direction, f"Kırılım teyitli {direction} güç {strength:.0f} retest={retest}"
+            
+            if age > confirm_window:
+                state_obj.state = ST_BREAK_TIMEOUT
+                state_obj.invalid_reason = "Kırılım teyit alamadı"
+                return ST_BREAK_TIMEOUT, direction, state_obj.invalid_reason
+            
+            return state_obj.state, direction, f"Teyit bekleniyor age={age}/{confirm_window} sameSide={same_side_close} retest={retest}"
+        
+        # BREAK_CONFIRMED, RETEST_WAIT, RETESTING
+        elif state_obj.state in [ST_BREAK_CONFIRMED, ST_RETEST_WAIT, ST_RETESTING]:
+            if state_obj.break_line_x1 is None:
+                return state_obj.state, state_obj.break_candidate_dir, "Break line yok"
+            
+            boundary = f_line_price(state_obj.break_line_x1, state_obj.break_line_y1,
+                                   state_obj.break_line_x2, state_obj.break_line_y2, current_bar)
+            direction = state_obj.break_candidate_dir
+            hold_buffer = max(0.0001, tol * 0.12)
+            
+            # İçeri dönüş?
+            returned_inside = (direction == 1 and close < upper_now - hold_buffer) or (direction == -1 and close > lower_now + hold_buffer)
+            if returned_inside:
+                state_obj.state = ST_BREAK_FAILED
+                state_obj.invalid_reason = "Kırılım sonrası formasyon alanına dönüldü"
+                return ST_BREAK_FAILED, direction, state_obj.invalid_reason
+            
+            # Retest?
+            retest_touch = False
+            retest_held = False
+            if direction == 1:
+                retest_touch = low <= boundary + tol and high >= boundary - tol
+                retest_held = retest_touch and close > boundary + hold_buffer
+            else:
+                retest_touch = high >= boundary - tol and low <= boundary + tol
+                retest_held = retest_touch and close < boundary - hold_buffer
+            
+            confirmed_age = current_bar - (state_obj.break_confirmed_bar or state_obj.break_candidate_bar or current_bar)
+            
+            if retest_held:
+                state_obj.state = ST_RETEST_OK
+                state_obj.retest_success_bar = current_bar
+                return ST_RETEST_OK, direction, f"Retest başarılı {direction}"
+            elif retest_touch:
+                state_obj.state = ST_RETESTING
+                return ST_RETESTING, direction, f"Retest ediliyor {direction}"
+            elif confirmed_age > self.params['retest_window']:
+                state_obj.state = ST_COMPLETED
+                return ST_COMPLETED, direction, f"Kırılım korunuyor, retest olmadan tamamlandı"
+            else:
+                state_obj.state = ST_RETEST_WAIT
+                return ST_RETEST_WAIT, direction, f"Retest bekleniyor age={confirmed_age}"
+        
+        # RETEST_OK
+        elif state_obj.state == ST_RETEST_OK:
+            if state_obj.break_line_x1 is None:
+                return state_obj.state, state_obj.break_candidate_dir, "Break line yok"
+            
+            boundary = f_line_price(state_obj.break_line_x1, state_obj.break_line_y1,
+                                   state_obj.break_line_x2, state_obj.break_line_y2, current_bar)
+            direction = state_obj.break_candidate_dir
+            hold_buffer = max(0.0001, tol * 0.12)
+            
+            retained = (direction == 1 and close > boundary + hold_buffer) or (direction == -1 and close < boundary - hold_buffer)
+            returned_inside = (direction == 1 and close < upper_now - hold_buffer) or (direction == -1 and close > lower_now + hold_buffer)
+            
+            retest_hold_age = current_bar - (state_obj.retest_success_bar or current_bar)
+            
+            if returned_inside:
+                state_obj.state = ST_BREAK_FAILED
+                state_obj.invalid_reason = "Başarılı retest sonrası yapı içine dönüldü"
+                return ST_BREAK_FAILED, direction, state_obj.invalid_reason
+            elif retained and retest_hold_age >= self.params['retest_hold_window']:
+                state_obj.state = ST_COMPLETED
+                return ST_COMPLETED, direction, f"Retest sonrası tamamlandı holdAge={retest_hold_age}"
+            elif not retained:
+                state_obj.state = ST_RETESTING
+                return ST_RETESTING, direction, "Retest sınır çevresinde yeniden izleniyor"
+            else:
+                return ST_RETEST_OK, direction, f"Retest korunumu bekleniyor holdAge={retest_hold_age}"
+        
+        # Diğer state'ler - formasyon olgunlaşıyor mu?
+        else:
+            # Basit: DEFINED, MATURING, COMPRESSING, PREP arası geçiş
+            # Şimdilik sadece DEFINED döndür, detay sonra
+            if candidate.raw_quality >= self.params['min_raw_quality'] + 25:
+                new_state = ST_PREP if (abs(close - upper_now) / max(tol, 0.0001) <= 1.35 or abs(close - lower_now) / max(tol, 0.0001) <= 1.35) else ST_COMPRESSING
+            elif candidate.raw_quality >= self.params['min_raw_quality'] + 12:
+                new_state = ST_MATURING
+            else:
+                new_state = ST_DEFINED
+            
+            state_obj.state = new_state
+            state_obj.active_candidate = candidate
+            return new_state, 0, f"Olgunlaşıyor: {new_state} kalite {candidate.raw_quality:.0f}"
+
 # === PATTERN TESPİTİ - İSKELET ===
 # Tam implementasyon adım adım gelecek
 # Şimdilik sadece yardımcılar ve pivot motoru var
