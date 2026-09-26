@@ -1,105 +1,322 @@
-# --- TELEGRAM NOTIFIER ---
-# Henüz aktif değil - iskelet
-# Neden en son? Önce formasyon sistemi otursun, mesaj formatını insanlaştırma yapacağız dedin
+# --- TELEGRAM NOTIFIER - İNSANLAŞTIRMA V2 ---
+# Neden insanlaştırma? Robot gibi "FORMASYON_TESPIT" değil, trader dostu mesaj
+# "Her şeyi dışarı çıkarma avantajı sun dışarda insanlaştırma" dedin - o yüzden teaser tarzı
+# Türkçe, samimi, ama teknik seviyeyi koruyan
 
 import os
 import logging
+import random
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+# Pattern emoji ve açıklama
+PATTERN_EMOJI = {
+    "Yükselen Üçgen": "🔺",
+    "Alçalan Üçgen": "🔻",
+    "Simetrik Üçgen": "🔷",
+    "Yükselen Kama": "📐⬆️",
+    "Alçalan Kama": "📐⬇️",
+    "Boğa Bayrağı": "🚩🐂",
+    "Ayı Bayrağı": "🚩🐻",
+    "Boğa Flaması": "🎏🐂",
+    "Ayı Flaması": "🎏🐻",
+}
+
+# Timeframe insanlaştırma
+TF_HUMAN = {
+    "1h": "saatlik",
+    "2h": "2 saatlik",
+    "4h": "4 saatlik",
+    "1d": "günlük",
+}
+
+# Kalite yorumu
+def quality_comment(q: float) -> str:
+    if q >= 85:
+        return "çok güçlü"
+    elif q >= 75:
+        return "güçlü"
+    elif q >= 65:
+        return "orta"
+    else:
+        return "zayıf"
+
+def quality_emoji(q: float) -> str:
+    if q >= 85:
+        return "⭐⭐⭐"
+    elif q >= 75:
+        return "⭐⭐"
+    elif q >= 65:
+        return "⭐"
+    else:
+        return "〰️"
+
 class TelegramNotifier:
     """
-    Telegram bildirim yöneticisi
-    - Cooldown: aynı pattern için 4 saat spam önleme
-    - Env'den token/chat_id
-    - Mesaj formatı sonra insanlaştırılacak
+    Telegram bildirim yöneticisi - İnsanlaştırma V2
+    - Cooldown: aynı pattern için 4 saat
+    - State bazlı insanlaştırma: her state farklı ton
+    - Avantajı dışarda sun: her şeyi söyleme, merak uyandır
+    - AL/SAT yok, sadece durum bildirimi
     """
     def __init__(self):
         self.token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
         self.chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
         self.cooldown_hours = 4
-        self.last_sent: Dict[str, datetime] = {}  # key: stock_pattern_timeframe -> timestamp
+        self.last_sent: Dict[str, datetime] = {}
         
         if not self.token or not self.chat_id:
             logger.warning("Telegram token/chat_id env'de yok - notifier pasif (test modu)")
             self.enabled = False
         else:
             self.enabled = True
-            logger.info("Telegram notifier aktif")
-    
-    def _cooldown_key(self, stock: str, pattern: str, timeframe: str) -> str:
-        return f"{stock}_{pattern}_{timeframe}"
-    
-    def can_send(self, stock: str, pattern: str, timeframe: str) -> bool:
-        """Cooldown kontrolü - 4 saat içinde aynı pattern gönderildi mi?"""
-        key = self._cooldown_key(stock, pattern, timeframe)
+            logger.info("Telegram notifier aktif - insanlaştırma V2")
+
+    def _cooldown_key(self, stock: str, pattern: str, timeframe: str, state: str) -> str:
+        # State de dahil - aynı pattern farklı state'e geçince tekrar gönder
+        # Ama aynı state için cooldown
+        return f"{stock}_{pattern}_{timeframe}_{state}"
+
+    def can_send(self, stock: str, pattern: str, timeframe: str, state: str = "") -> bool:
+        key = self._cooldown_key(stock, pattern, timeframe, state)
         if key not in self.last_sent:
             return True
-        
         last = self.last_sent[key]
         elapsed = datetime.now() - last
         return elapsed > timedelta(hours=self.cooldown_hours)
-    
+
     def format_message(self, data: Dict) -> str:
         """
-        Mesaj formatla - şimdilik ham, sonra insanlaştırma
-        data: {stock, timeframe, pattern, state, quality, price, timestamp, ...}
+        İnsanlaştırılmış mesaj - state bazlı
+        data: stock_name, timeframe, pattern_name, state, confidence_score, critical_price_level, timestamp, break_dir, contraction, etc.
         """
-        # Eski prompt'taki format ALIM/SATIM içeriyordu, sen dedin olmayacak
-        # Şimdilik state bazlı format
         stock = data.get('stock_name', 'Bilinmiyor')
         timeframe = data.get('timeframe', '1h')
         pattern = data.get('pattern_name', 'Formasyon')
-        state = data.get('state', 'Tespit')
+        state = data.get('state', 'ADAY_OLUSUYOR')
         quality = data.get('confidence_score', 0)
         price = data.get('critical_price_level', 0)
         timestamp = data.get('timestamp', datetime.now())
+        break_dir = data.get('break_dir', 0)
+        upper = data.get('upper_now', price)
+        lower = data.get('lower_now', price)
+        contraction = data.get('contraction', None)
         
-        # İnsanlaştırma sonra - şimdilik teknik
-        message = f"""🤖 ARGENT Formasyon Radarı
-📌 Hisse: {stock}
-📊 Zaman: {timeframe}
-📈 Formasyon: {pattern}
-📍 Durum: {state}
-💰 Seviye: {price:.2f}
-⏰ Saat: {timestamp}
-📝 Kalite: {quality:.0f}/100
-"""
-        return message
-    
+        tf_human = TF_HUMAN.get(timeframe, timeframe)
+        emoji = PATTERN_EMOJI.get(pattern, "📈")
+        q_comment = quality_comment(quality)
+        q_emoji = quality_emoji(quality)
+        
+        # Saat formatı
+        if isinstance(timestamp, str):
+            time_str = timestamp
+        else:
+            try:
+                time_str = timestamp.strftime("%d %b %H:%M")
+            except:
+                time_str = str(timestamp)
+
+        # Daralma yorumu
+        contraction_str = ""
+        if contraction is not None:
+            pct = contraction * 100
+            if pct >= 80:
+                contraction_str = f"daralma %{pct:.0f} - baya sıkışmış"
+            elif pct >= 60:
+                contraction_str = f"daralma %{pct:.0f} - sıkışıyor"
+            elif pct >= 40:
+                contraction_str = f"daralma %{pct:.0f}"
+            else:
+                contraction_str = f"daralma %{pct:.0f} - erken"
+
+        # === STATE BAZLI MESAJLAR ===
+        # Her state farklı ton, farklı avantaj sunumu
+        
+        if state == "ADAY_OLUSUYOR":
+            templates = [
+                f"{emoji} {stock} {tf_human} grafikte {pattern} oluşuyor...\n"
+                f"Kalite {quality:.0f} {q_emoji} ({q_comment}), {contraction_str}\n"
+                f"Üst {upper:.2f} / Alt {lower:.2f} bandında sıkışma var\n"
+                f"Takipteyiz 👀 - kırılıma yaklaştıkça haber veririm",
+                
+                f"👀 {stock}'da bir şeyler oluyor\n"
+                f"{tf_human} grafikte {pattern} {q_comment} duruyor (kalite {quality:.0f})\n"
+                f"{contraction_str}, bant {lower:.2f} - {upper:.2f}\n"
+                f"Henüz erken ama radarımda 📡",
+            ]
+            msg = random.choice(templates)
+            
+        elif state == "GEOMETRI_ADAYI":
+            msg = (
+                f"{emoji} {stock} {tf_human} - {pattern} geometrisi oturuyor\n"
+                f"Kalite {quality:.0f} {q_emoji}, {contraction_str}\n"
+                f"Bant: {lower:.2f} - {upper:.2f}\n"
+                f"Olgunlaşmasını bekliyorum..."
+            )
+            
+        elif state == "FORMASYON_TANIMLANDI":
+            msg = (
+                f"📋 {stock} {tf_human} {pattern} tanımlandı\n"
+                f"Kalite {quality:.0f} {q_emoji} ({q_comment}) {contraction_str}\n"
+                f"Üst: {upper:.2f} Alt: {lower:.2f}\n"
+                f"Sıkışma güçlenirse kırılım gelebilir"
+            )
+            
+        elif state == "SIKISMA_GUCLENIYOR":
+            msg = (
+                f"⚡ {stock}'da sıkışma güçleniyor!\n"
+                f"{tf_human} {pattern} {contraction_str} - sona yaklaşıyor\n"
+                f"Kalite {quality:.0f} {q_emoji}, bant {lower:.2f}-{upper:.2f}\n"
+                f"Kırılım yakın olabilir, gözüm üstünde 👁️"
+            )
+            
+        elif state == "KIRILIM_HAZIRLIGI":
+            msg = (
+                f"⚠️ {stock} {tf_human} {pattern} kırılım hazırlığında\n"
+                f"{contraction_str}, kalite {quality:.0f} {q_emoji}\n"
+                f"Kritik seviyeler: {lower:.2f} / {upper:.2f}\n"
+                f"Birkaç mum içinde hareket gelebilir"
+            )
+            
+        elif state == "KIRILIM_DENEMESI":
+            direction = "yukarı" if break_dir == 1 else "aşağı" if break_dir == -1 else ""
+            level = upper if break_dir == 1 else lower
+            msg = (
+                f"🔥 {stock}'da deneme var!\n"
+                f"{tf_human} {pattern} {direction} {level:.2f}'i zorluyor\n"
+                f"Güç henüz düşük, teyit bekliyorum...\n"
+                f"Kalite {quality:.0f} {q_emoji} | {time_str}"
+            )
+            
+        elif state == "KIRILIM_ADAYI":
+            direction = "YUKARI" if break_dir == 1 else "AŞAĞI" if break_dir == -1 else ""
+            level = upper if break_dir == 1 else lower
+            power = data.get('break_strength', quality)
+            templates = [
+                f"🚀 {stock} KIRIYOR! {direction}\n"
+                f"{tf_human} {pattern} {level:.2f} üstünde kapanış\n"
+                f"Güç {power:.0f} {q_emoji} - teyit mumu bekleniyor\n"
+                f"Retest olursa fırsat olabilir, takipteyim",
+                
+                f"💥 {stock} {tf_human} {pattern}\n"
+                f"{direction} kırılım adayı! {level:.2f} kırıldı\n"
+                f"Güç {power:.0f} ({q_comment}) - teyit gelirse haber veririm\n"
+                f"Şimdilik izle, acele etme",
+            ]
+            msg = random.choice(templates)
+            
+        elif state == "KIRILIM_TEYITLI":
+            direction = "yukarı" if break_dir == 1 else "aşağı" if break_dir == -1 else ""
+            level = data.get('break_price', upper if break_dir==1 else lower)
+            msg = (
+                f"✅ {stock} teyit aldı! {direction} kırılım\n"
+                f"{tf_human} {pattern} {level:.2f} kırılımı teyitli\n"
+                f"Kalite {quality:.0f} {q_emoji}, {contraction_str}\n"
+                f"{level:.2f} artık {'destek' if break_dir==1 else 'direnç'} olabilir\n"
+                f"Retest bekleniyor..."
+            )
+            
+        elif state == "RETEST_BEKLENIYOR":
+            level = data.get('break_price', price)
+            msg = (
+                f"⏳ {stock} retest bekleniyor\n"
+                f"{tf_human} {pattern} kırılım sonrası {level:.2f}'e dönüş olabilir\n"
+                f"Kalite {quality:.0f} {q_emoji} - retest tutarsa güçlenir"
+            )
+            
+        elif state == "RETEST_EDILIYOR":
+            msg = (
+                f"🔄 {stock}'da retest oluyor\n"
+                f"{tf_human} {pattern} kırılan seviyeye geri döndü\n"
+                f"Tutunursa devamı gelebilir, izliyorum"
+            )
+            
+        elif state == "RETEST_BASARILI":
+            direction = "yukarı" if break_dir == 1 else "aşağı"
+            msg = (
+                f"🎯 {stock} RETEST BAŞARILI!\n"
+                f"{tf_human} {pattern} {direction} kırılım sonrası retest tuttu\n"
+                f"Kalite {quality:.0f} {q_emoji} - formasyon tamamlanmaya yakın\n"
+                f"Bu seviyelerden sonrası için kendi analizini yap"
+            )
+            
+        elif state == "FORMASYON_TAMAMLANDI":
+            direction = "yukarı" if break_dir == 1 else "aşağı"
+            msg = (
+                f"🏁 {stock} {pattern} TAMAMLANDI\n"
+                f"{tf_human} grafikte {direction} kırılım + retest başarılı\n"
+                f"Kalite {quality:.0f} {q_emoji} - görev tamam\n"
+                f"Yeni formasyon için taramaya devam"
+            )
+            
+        elif state == "BASARISIZ_KIRILIM":
+            msg = (
+                f"❌ {stock} kırılım başarısız\n"
+                f"{tf_human} {pattern} kırılım denedi ama geri döndü\n"
+                f"Formasyon alanına dönüş - sahte kırılım olabilir\n"
+                f"Tekrar sıkışma bekleniyor"
+            )
+            
+        elif state == "FORMASYON_GECERSIZ":
+            reason = data.get('invalid_reason', 'Süre doldu veya bozuldu')
+            msg = (
+                f"⚪ {stock} {tf_human} {pattern} geçersiz oldu\n"
+                f"Sebep: {reason}\n"
+                f"Yeni oluşum için takipteyim"
+            )
+            
+        else:
+            # Fallback - teknik ama insanlaştırılmış
+            msg = (
+                f"{emoji} {stock} {tf_human} {pattern}\n"
+                f"Durum: {state} | Kalite: {quality:.0f} {q_emoji}\n"
+                f"Seviye: {price:.2f} | {contraction_str}\n"
+                f"{time_str}"
+            )
+
+        # Footer - avantaj dışarda, her şeyi söyleme
+        footer_options = [
+            f"\n\n💡 Detaylı analiz için grafiğe bak - {stock} {timeframe}",
+            f"\n\n📊 Kendi analizini de ekle, sadece formasyon yetmez",
+            f"\n\n🔍 {stock} {tf_human} - daha fazlası için takipte kal",
+        ]
+        # Sadece önemli state'lerde footer ekle, her mesajda değil
+        if state in ["KIRILIM_ADAYI", "KIRILIM_TEYITLI", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI"]:
+            msg += random.choice(footer_options)
+
+        return msg
+
     def send(self, data: Dict) -> bool:
-        """Gönder - şimdilik sadece log"""
         stock = data.get('stock_name', '')
         pattern = data.get('pattern_name', '')
         timeframe = data.get('timeframe', '')
-        
-        if not self.can_send(stock, pattern, timeframe):
-            logger.info(f"{stock} {pattern} {timeframe} - cooldown aktif, gönderilmiyor")
+        state = data.get('state', '')
+
+        if not self.can_send(stock, pattern, timeframe, state):
+            logger.info(f"{stock} {pattern} {timeframe} {state} - cooldown, gönderilmiyor")
             return False
-        
+
+        message = self.format_message(data)
+
         if not self.enabled:
-            logger.info(f"[MOCK TELEGRAM] {self.format_message(data)}")
-            # Cooldown kaydet
-            key = self._cooldown_key(stock, pattern, timeframe)
+            logger.info(f"[MOCK TELEGRAM {state}]\n{message}\n")
+            key = self._cooldown_key(stock, pattern, timeframe, state)
             self.last_sent[key] = datetime.now()
             return True
-        
-        # Gerçek gönderim - requests ile
+
         try:
             import requests
-            message = self.format_message(data)
             url = f"https://api.telegram.org/bot{self.token}/sendMessage"
             payload = {
                 'chat_id': self.chat_id,
                 'text': message,
-                'parse_mode': 'Markdown'
             }
             resp = requests.post(url, json=payload, timeout=10)
             if resp.status_code == 200:
-                logger.info(f"Telegram gönderildi: {stock} {pattern}")
-                key = self._cooldown_key(stock, pattern, timeframe)
+                logger.info(f"Telegram gönderildi: {stock} {pattern} {state}")
+                key = self._cooldown_key(stock, pattern, timeframe, state)
                 self.last_sent[key] = datetime.now()
                 return True
             else:
@@ -109,16 +326,23 @@ class TelegramNotifier:
             logger.error(f"Telegram gönderim hatası: {e}")
             return False
 
+
 if __name__ == "__main__":
-    # Test
+    # Test tüm state'ler
     notifier = TelegramNotifier()
-    test_data = {
-        'stock_name': 'THYAO',
-        'timeframe': '1h',
-        'pattern_name': 'Simetrik Üçgen',
-        'state': 'KIRILIM_ADAYI',
-        'confidence_score': 72,
-        'critical_price_level': 298.5,
-        'timestamp': datetime.now()
-    }
-    notifier.send(test_data)
+    
+    test_cases = [
+        {'stock_name': 'THYAO', 'timeframe': '1h', 'pattern_name': 'Yükselen Üçgen', 'state': 'ADAY_OLUSUYOR', 'confidence_score': 83, 'critical_price_level': 302.11, 'upper_now': 302.11, 'lower_now': 294.32, 'contraction': 0.87, 'timestamp': datetime.now()},
+        {'stock_name': 'GARAN', 'timeframe': '4h', 'pattern_name': 'Simetrik Üçgen', 'state': 'SIKISMA_GUCLENIYOR', 'confidence_score': 88, 'critical_price_level': 120.5, 'upper_now': 122.0, 'lower_now': 119.0, 'contraction': 0.91, 'timestamp': datetime.now()},
+        {'stock_name': 'AKBNK', 'timeframe': '1h', 'pattern_name': 'Alçalan Kama', 'state': 'KIRILIM_ADAYI', 'confidence_score': 82, 'critical_price_level': 58.3, 'upper_now': 58.3, 'lower_now': 55.1, 'contraction': 0.75, 'break_dir': 1, 'break_strength': 82, 'timestamp': datetime.now()},
+        {'stock_name': 'YKBNK', 'timeframe': '2h', 'pattern_name': 'Boğa Bayrağı', 'state': 'KIRILIM_TEYITLI', 'confidence_score': 79, 'critical_price_level': 32.5, 'upper_now': 32.5, 'lower_now': 31.2, 'contraction': 0.65, 'break_dir': 1, 'break_price': 32.5, 'timestamp': datetime.now()},
+        {'stock_name': 'SAHOL', 'timeframe': '1h', 'pattern_name': 'Yükselen Üçgen', 'state': 'RETEST_BASARILI', 'confidence_score': 85, 'critical_price_level': 95.0, 'upper_now': 95.0, 'lower_now': 92.0, 'contraction': 0.88, 'break_dir': 1, 'timestamp': datetime.now()},
+        {'stock_name': 'BIMAS', 'timeframe': '4h', 'pattern_name': 'Alçalan Üçgen', 'state': 'BASARISIZ_KIRILIM', 'confidence_score': 72, 'critical_price_level': 450.0, 'upper_now': 455.0, 'lower_now': 445.0, 'contraction': 0.60, 'timestamp': datetime.now()},
+    ]
+    
+    for tc in test_cases:
+        print("\n" + "="*50)
+        print(f"STATE: {tc['state']}")
+        print("="*50)
+        print(notifier.format_message(tc))
+        print()

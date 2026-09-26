@@ -10,9 +10,9 @@ import logging
 from datetime import datetime
 import pytz
 
-from config import ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR
+from config import ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR, ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES
 from data import StockDequeManager, is_bist_open, time_until_next_open, time_until_next_candle_close, resample_all_timeframes, mock_fetch_60d_1h
-from patterns import detect_patterns, calculate_atr, PatternLifecycleManager, find_best_triangle_candidate, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED
+from patterns import calculate_atr, PatternLifecycleManager, find_best_triangle_candidate, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
 from notifier import TelegramNotifier
 
 # === LOGGING KURULUMU ===
@@ -114,9 +114,13 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     daily_stats['patterns_found'] += 1
                     logger.info(f"🔍 {stock} {tf_name} - {best_cand.pattern_type} kalite {best_cand.raw_quality:.0f} state {state} - {lifecycle_log}")
                     
-                    # Sadece önemli state'lerde Telegram gönder
-                    if state in [ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED]:
-                        # Human-readable mesaj sonra, şimdilik teknik
+                    # Alert eşiği kontrolü - timeframe'e göre
+                    min_q = ALERT_MIN_QUALITY.get(tf_name, ALERT_MIN_QUALITY_GLOBAL)
+                    if best_cand.raw_quality < min_q:
+                        logger.debug(f"{stock} {tf_name} kalite {best_cand.raw_quality:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
+                    # Sadece önemli state'lerde Telegram gönder (insanlaştırma V2)
+                    elif state in ALERT_STATES or state in [ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_COMPRESSING, ST_PREP]:
+                        # Humanized mesaj için ek bilgiler
                         alert_data = {
                             'stock_name': stock,
                             'timeframe': tf_name,
@@ -124,13 +128,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'state': state,
                             'confidence_score': best_cand.raw_quality,
                             'critical_price_level': best_cand.upper_now if break_dir == 1 else best_cand.lower_now,
+                            'upper_now': best_cand.upper_now,
+                            'lower_now': best_cand.lower_now,
+                            'contraction': getattr(best_cand, 'contraction', None),
                             'timestamp': df_tf.index[-1],
                             'break_dir': break_dir,
-                            'logs': logs_tri[:2]
+                            'break_strength': getattr(best_cand, 'break_strength', best_cand.raw_quality),
+                            'break_price': best_cand.upper_now if break_dir == 1 else best_cand.lower_now,
                         }
                         if notifier.send(alert_data):
                             daily_stats['alerts_sent'] += 1
-                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state}")
+                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {best_cand.raw_quality:.0f}")
                 else:
                     # Neden yok? İlk 2 reddedilme sebebini logla (rejected_only)
                     if logs_tri:

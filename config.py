@@ -127,10 +127,31 @@ MAX_VIOLATION_SCAN = 220
 MAX_VIOLATION_CACHE = 100
 MAX_HISTORY_OFFSET = 900
 
-# === TELEGRAM AYARLARI (henüz aktif değil, iskelet) ===
+# === TELEGRAM AYARLARI - İnsanlaştırma V2 ===
 # Token ve chat_id .env'den gelecek, burada hardcoded yok
-# Mesaj formatını seninle sonra insanlaştırma yapacağız dedin
-TELEGRAM_COOLDOWN_HOURS = 4  # Aynı pattern için spam önleme
+# İnsanlaştırma yapıldı, state bazlı mesajlar
+TELEGRAM_COOLDOWN_HOURS = 4  # Aynı pattern+state için spam önleme
+
+# Alert kalite eşikleri - toplu test 73 pattern ort 80.5, 38% >=80
+# Tespit eşiği 46 (Dengeli) ama alert için daha yüksek olmalı yoksa çok spam
+# Timeframe'e göre kademeli: 1h daha gürültülü, daha yüksek eşik
+ALERT_MIN_QUALITY = {
+    "1h": 80,  # saatlik gürültülü, sadece yüksek kalite alert
+    "2h": 78,
+    "4h": 75,
+    "1d": 70,  # günlük daha az pattern, daha düşük eşik kabul
+}
+# Global fallback
+ALERT_MIN_QUALITY_GLOBAL = 75
+
+# Sadece önemli state'lerde alert gönder (ADAY_OLUSUYOR spam olur)
+ALERT_STATES = [
+    "KIRILIM_ADAYI",
+    "KIRILIM_TEYITLI",
+    "RETEST_BASARILI",
+    "FORMASYON_TAMAMLANDI",
+    "SIKISMA_GUCLENIYOR",  # sıkışma da önemli, erken uyarı
+]
 
 # === LOGGING ===
 LOG_DIR = "/var/log/bist-bot"  # Prod'da bu path, local'de ./logs

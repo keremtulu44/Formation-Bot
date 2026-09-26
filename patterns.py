@@ -1051,10 +1051,15 @@ def f_build_flag_candidate(df: pd.DataFrame, atr_series: pd.Series,
     slope_gap_norm = upper_slope_norm - lower_slope_norm
     avg_slope_norm = (upper_slope_norm + lower_slope_norm) * 0.5
     
-    # Paralel kontrolü
-    parallel_like = abs(slope_gap_norm) <= params['flat_slope_norm_tol'] * 0.75
+    # Paralel kontrolü - bayrak için daha toleranslı olmalı
+    # Eskisi: flat_tol * 0.75 = 0.018 (çok katı)
+    # 2.5->0.06, 6.0->0.144 hala katı (0.1471 bile RED)
+    # Yenisi: flat_tol * 10.0 = 0.24 (Dengeli), gerçek BIST kanalında %20-25 sapma normal
+    # Üçgen converging için -0.006 altı, bayrak parallel için |gap| <0.24 makul
+    flag_parallel_tol = params['flat_slope_norm_tol'] * 10.0
+    parallel_like = abs(slope_gap_norm) <= flag_parallel_tol
     if not parallel_like:
-        return None, f"Paralel değil: slopeGapNorm={slope_gap_norm:.4f} tol={params['flat_slope_norm_tol']*0.75:.4f} (bayrak için paralel olmalı)"
+        return None, f"Paralel değil: slopeGapNorm={slope_gap_norm:.4f} tol={flag_parallel_tol:.4f} (bayrak için paralel olmalı)"
     
     # Touch basics (üçgen adayından al, ama bayrak için de gerekli)
     touch_tolerance = max(0.0001, geometry_atr * params['touch_atr_mult'])
@@ -1077,8 +1082,10 @@ def f_build_flag_candidate(df: pd.DataFrame, atr_series: pd.Series,
     if not f_chronological_swings(hb1, hb2, lb1, lb2):
         return None, "Kronolojik değil (bayrak)"
     
-    # Direk bağlantısı
-    max_pole_link_bars = max(params['pivot_len'] * 2, params['min_touch_gap'] + 2)
+    # Direk bağlantısı - genişletildi
+    # Eskisi: 10 bar çok katı, 20 de yetmedi (32 bar diff vardı THYAO'da)
+    # Yenisi: 35 bar, direk sonrası konsolidasyon biraz gecikebilir
+    max_pole_link_bars = max(params['pivot_len'] * 5, params['min_touch_gap'] + 15, 35)
     
     bull_seq_compat = hb1 < lb1  # Önce üst sonra alt -> yukarı impuls sonrası
     bear_seq_compat = lb1 < hb1
@@ -1087,7 +1094,7 @@ def f_build_flag_candidate(df: pd.DataFrame, atr_series: pd.Series,
     bear_linked = bear_pole.valid and bear_seq_compat and abs(bear_pole.end_bar - start_bar) <= max_pole_link_bars
     
     if not bull_linked and not bear_linked:
-        return None, f"Direk bağlantısı yok: bullLinked={bull_linked} bearLinked={bear_linked} maxLink={max_pole_link_bars}"
+        return None, f"Direk bağlantısı yok: bullLinked={bull_linked} bearLinked={bear_linked} maxLink={max_pole_link_bars} bullEnd={bull_pole.end_bar if bull_pole.valid else 'Yok'} bearEnd={bear_pole.end_bar if bear_pole.valid else 'Yok'} start={start_bar}"
     
     # Hangi direk?
     pole = bull_pole if bull_linked else bear_pole
@@ -1114,23 +1121,29 @@ def f_build_flag_candidate(df: pd.DataFrame, atr_series: pd.Series,
     # Height ratio
     height_ratio = consol_height / max(pole.magnitude or 1.0, 0.0001)
     
-    # Bayrak eğim kontrolü
+    # Bayrak eğim kontrolü - genişletildi
+    # Boğa bayrağı: genelde hafif aşağı/yatay ama hafif yukarı da olabilir (BIST gürültülü)
+    # Ayı bayrağı: hafif yukarı/yatay ama hafif aşağı da olabilir
+    # Eskisi bull <=0.024 çok katı, 0.10 bile RED oluyordu
+    # Yenisi: bull -0.35..+0.12, bear -0.12..+0.35
     flat_tol = params['flat_slope_norm_tol']
     if is_bull_flag:
-        flag_slope_ok = avg_slope_norm <= flat_tol * 0.35 and avg_slope_norm >= -0.16
+        flag_slope_ok = avg_slope_norm <= 0.12 and avg_slope_norm >= -0.35
     else:
-        flag_slope_ok = avg_slope_norm >= -flat_tol * 0.35 and avg_slope_norm <= 0.16
+        flag_slope_ok = avg_slope_norm >= -0.12 and avg_slope_norm <= 0.35
     
     if not flag_slope_ok:
-        return None, f"Bayrak eğimi uygun değil: avgSlopeNorm={avg_slope_norm:.4f} bull={is_bull_flag}"
+        return None, f"Bayrak eğimi uygun değil: avgSlopeNorm={avg_slope_norm:.4f} bull={is_bull_flag} (bull: -0.35..0.12, bear: -0.12..0.35)"
     
-    # Validasyon
-    if not (0.08 <= depth <= 0.80):
-        return None, f"Depth uygun değil: {depth:.2f} (0.08-0.80 olmalı)"
-    if height_ratio > 0.58:
-        return None, f"Height ratio fazla: {height_ratio:.2f} >0.58"
-    if duration_ratio > 3.50:
-        return None, f"Duration ratio fazla: {duration_ratio:.2f} >3.5"
+    # Validasyon - gevşetildi BIST için
+    # Eskisi depth 0.08-0.80 çok katı, 1.00 bile RED oluyordu
+    # Yenisi 0.05-1.0, bayrak biraz derin düzeltme yapabilir BIST'te
+    if not (0.05 <= depth <= 1.0):
+        return None, f"Depth uygun değil: {depth:.2f} (0.05-1.0 olmalı, eski 0.08-0.80)"
+    if height_ratio > 0.70:
+        return None, f"Height ratio fazla: {height_ratio:.2f} >0.70 (eski 0.58)"
+    if duration_ratio > 4.0:
+        return None, f"Duration ratio fazla: {duration_ratio:.2f} >4.0 (eski 3.5)"
     if formed_duration > params['max_consolidation_bars']:
         return None, f"Konsolidasyon süresi uzun: {formed_duration} > {params['max_consolidation_bars']}"
     

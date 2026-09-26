@@ -95,8 +95,10 @@ for stock in BIST_30:
             # Lifecycle
             state, break_dir, lifecycle_log = lifecycle_manager.update(f"{stock}_{tf_name}", df_tf, best)
             
-            print(f"  ✅ {tf_name}: {best.pattern_type} kalite {best.raw_quality:.0f} daralma %{best.contraction*100:.0f} state {state}")
-            print(f"      Üst {best.upper_now:.2f} Alt {best.lower_now:.2f} Genişlik {best.current_width:.2f} Temas {best.upper_touches}/{best.lower_touches}")
+            contraction_str = f"%{best.contraction*100:.0f}" if best.contraction is not None else "N/A (bayrak)"
+            width_str = f"{best.current_width:.2f}" if hasattr(best, 'current_width') and best.current_width else f"{(best.upper_now - best.lower_now):.2f}" if best.upper_now and best.lower_now else "N/A"
+            print(f"  ✅ {tf_name}: {best.pattern_type} kalite {best.raw_quality:.0f} daralma {contraction_str} state {state}")
+            print(f"      Üst {best.upper_now:.2f} Alt {best.lower_now:.2f} Genişlik {width_str} Temas {best.upper_touches}/{best.lower_touches}")
             print(f"      Lifecycle: {lifecycle_log}")
             
             # Kritik seviye
