@@ -1,0 +1,367 @@
+# --- DATA LAYER ---
+# BIST veri katmanı - deque, resampling, BIST saat kontrolü
+# Türkçe açıklamalar: Her fonksiyon ne yapar, neden?
+
+import pandas as pd
+import numpy as np
+from collections import deque
+from datetime import datetime, timedelta
+import pytz
+import time
+import random
+import logging
+import os
+import pickle
+from typing import Dict, List, Optional
+
+from config import (
+    ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN, 
+    RATE_LIMIT_MIN, RATE_LIMIT_MAX, DATA_DIR, ACTIVE_STOCKS
+)
+
+logger = logging.getLogger(__name__)
+
+# === BIST SAAT KONTROLÜ ===
+
+def is_bist_open(now: Optional[datetime] = None) -> bool:
+    """
+    BIST açık mı?
+    - Hafta içi mi?
+    - Saat 09:50-18:10 arası mı? (İstanbul)
+    Neden? Bot sadece seans saatlerinde CPU harcasın, dışında uyusun
+    """
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    else:
+        # Eğer naive datetime gelirse Istanbul'a çevir
+        if now.tzinfo is None:
+            now = ISTANBUL_TZ.localize(now)
+        else:
+            now = now.astimezone(ISTANBUL_TZ)
+    
+    # Hafta sonu mu?
+    if now.weekday() >= 5:  # 5=Cumartesi, 6=Pazar
+        return False
+    
+    # Saat kontrolü
+    current_time = now.time()
+    return BIST_OPEN <= current_time <= BIST_CLOSE
+
+def time_until_next_open(now: Optional[datetime] = None) -> float:
+    """Bir sonraki açılışa kadar kaç saniye? Uyku için"""
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    if now.tzinfo is None:
+        now = ISTANBUL_TZ.localize(now)
+    else:
+        now = now.astimezone(ISTANBUL_TZ)
+    
+    # Eğer şu an açıksa 0 dön
+    if is_bist_open(now):
+        return 0.0
+    
+    # Sonraki iş gününü bul
+    next_day = now
+    while True:
+        next_day = next_day + timedelta(days=1)
+        if next_day.weekday() < 5:  # Hafta içi
+            break
+    
+    # O günün 09:50'si
+    next_open = next_day.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute, second=0, microsecond=0)
+    # Eğer bugün hafta içi ve saat 09:50'den önce ise, bugün açılacak
+    if now.weekday() < 5 and now.time() < BIST_OPEN:
+        next_open = now.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute, second=0, microsecond=0)
+    
+    delta = (next_open - now).total_seconds()
+    return max(delta, 0.0)
+
+def time_until_next_candle_close(now: Optional[datetime] = None) -> float:
+    """
+    Bir sonraki 1H mum kapanışına kadar kaç saniye?
+    BIST mumları saat başı kapanır (10:00, 11:00, vs)
+    Kapanıştan 5 dk sonra tarama başlatacağız (prompt gereği)
+    """
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    if now.tzinfo is None:
+        now = ISTANBUL_TZ.localize(now)
+    else:
+        now = now.astimezone(ISTANBUL_TZ)
+    
+    # Bir sonraki saat başı
+    next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    # 5 dk ekle (mum kapanışından 5 dk sonra tara)
+    next_scan = next_hour + timedelta(minutes=5)
+    
+    return (next_scan - now).total_seconds()
+
+# === DEQUE YÖNETİMİ ===
+
+class StockDequeManager:
+    """
+    Her hisse için 360 mumluk deque tutar
+    Neden deque? maxlen=360 ile en eski otomatik silinir, rolling window
+    Neden kalıcı? Bot restart olursa diskten yükle, 60 gün veriyi tekrar çekme
+    """
+    def __init__(self, maxlen: int = DEQUE_MAXLEN, data_dir: str = DATA_DIR):
+        self.maxlen = maxlen
+        self.data_dir = data_dir
+        self.deques: Dict[str, deque] = {}
+        
+        # Data dir oluştur
+        os.makedirs(data_dir, exist_ok=True)
+        
+        logger.info(f"Deque manager başlatıldı - maxlen={maxlen}, dir={data_dir}")
+    
+    def get_deque(self, stock: str) -> deque:
+        """Hisse için deque al, yoksa oluştur"""
+        if stock not in self.deques:
+            # Diskten yüklemeyi dene
+            loaded = self.load_from_disk(stock)
+            if loaded is not None:
+                self.deques[stock] = loaded
+                logger.info(f"{stock} deque diskten yüklendi - {len(loaded)} mum")
+            else:
+                self.deques[stock] = deque(maxlen=self.maxlen)
+                logger.info(f"{stock} için yeni deque oluşturuldu")
+        return self.deques[stock]
+    
+    def append_candle(self, stock: str, candle: dict):
+        """
+        Yeni mum ekle
+        candle: {'open','high','low','close','volume','timestamp'}
+        """
+        dq = self.get_deque(stock)
+        dq.append(candle)
+    
+    def append_dataframe(self, stock: str, df: pd.DataFrame):
+        """DataFrame'den toplu ekle - ilk yükleme için"""
+        dq = self.get_deque(stock)
+        for idx, row in df.iterrows():
+            candle = {
+                'timestamp': idx if isinstance(idx, datetime) else pd.to_datetime(idx),
+                'open': float(row['open']),
+                'high': float(row['high']),
+                'low': float(row['low']),
+                'close': float(row['close']),
+                'volume': float(row.get('volume', 0))
+            }
+            dq.append(candle)
+        logger.info(f"{stock} için {len(df)} mum deque'ye eklendi - toplam {len(dq)}")
+    
+    def to_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
+        """Deque'yi DataFrame'e çevir - pattern tespiti için"""
+        if stock not in self.deques or len(self.deques[stock]) == 0:
+            return None
+        
+        dq = self.deques[stock]
+        data = list(dq)
+        
+        # Timestamp'e göre sırala
+        data_sorted = sorted(data, key=lambda x: x['timestamp'])
+        
+        df = pd.DataFrame(data_sorted)
+        df.set_index('timestamp', inplace=True)
+        df.sort_index(inplace=True)
+        
+        # Sütun sırası
+        df = df[['open', 'high', 'low', 'close', 'volume']]
+        
+        return df
+    
+    def save_to_disk(self, stock: str):
+        """Diske kaydet - pickle"""
+        if stock not in self.deques:
+            return
+        
+        filepath = os.path.join(self.data_dir, f"{stock}.pkl")
+        try:
+            with open(filepath, 'wb') as f:
+                pickle.dump(list(self.deques[stock]), f)
+            logger.debug(f"{stock} deque diske kaydedildi - {filepath}")
+        except Exception as e:
+            logger.error(f"{stock} diske kaydedilemedi: {e}")
+    
+    def load_from_disk(self, stock: str) -> Optional[deque]:
+        """Diskten yükle"""
+        filepath = os.path.join(self.data_dir, f"{stock}.pkl")
+        if not os.path.exists(filepath):
+            return None
+        
+        try:
+            with open(filepath, 'rb') as f:
+                data = pickle.load(f)
+            dq = deque(data, maxlen=self.maxlen)
+            return dq
+        except Exception as e:
+            logger.warning(f"{stock} diskten yüklenemedi, yeni oluşturulacak: {e}")
+            return None
+    
+    def save_all(self):
+        """Tümünü kaydet"""
+        for stock in self.deques:
+            self.save_to_disk(stock)
+        logger.info(f"Tüm deque'ler kaydedildi - {len(self.deques)} hisse")
+
+# === RESAMPLING ===
+
+def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
+    """
+    1H veriyi 2H, 4H, 1D'ye çevir
+    Pine'daki resample mantığı ile aynı
+    
+    Neden dropna? BIST seans dışı boş mumlar oluşur, onları at
+    Neden session gap handling? Gece mumları olmamalı
+    
+    timeframe: '2h', '4h', '1D'
+    """
+    if df_1h is None or len(df_1h) == 0:
+        return pd.DataFrame()
+    
+    # Sütun isimleri küçük harf mi büyük mü kontrol et
+    # Bizim deque open/high/low/close küçük, ama yfinance büyük olabilir
+    df = df_1h.copy()
+    # Normalize et - küçük harfe çevir
+    df.columns = [c.lower() for c in df.columns]
+    
+    # Resample
+    # open: first, high: max, low: min, close: last, volume: sum
+    agg_dict = {
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last',
+        'volume': 'sum'
+    }
+    
+    # Sadece var olan sütunları agg'le
+    available_cols = {k: v for k, v in agg_dict.items() if k in df.columns}
+    
+    try:
+        # Resample
+        df_resampled = df.resample(timeframe).agg(available_cols)
+        
+        # Boşları at - BIST seans dışı
+        df_resampled.dropna(inplace=True)
+        
+        # Eğer hiç veri kalmadıysa
+        if len(df_resampled) == 0:
+            logger.warning(f"{timeframe} resample sonrası boş - {len(df)} -> 0")
+            return pd.DataFrame()
+        
+        logger.debug(f"Resample {len(df)} 1H -> {len(df_resampled)} {timeframe}")
+        return df_resampled
+        
+    except Exception as e:
+        logger.error(f"Resample hatası {timeframe}: {e}")
+        return pd.DataFrame()
+
+def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    """
+    1H'den tüm timeframe'leri üret
+    Döner: {'1h': df, '2h': df, '4h': df, '1d': df}
+    """
+    result = {}
+    result['1h'] = df_1h
+    
+    for tf in ['2h', '4h', '1D']:
+        resampled = resample_ohlcv(df_1h, tf)
+        # Key'i normalize et: 1D -> 1d
+        key = tf.lower()
+        result[key] = resampled
+    
+    return result
+
+# === VERİ ÇEKME (MOCK + GERÇEK İSKELET) ===
+
+def fetch_with_rate_limit(stock: str, fetch_func, *args, **kwargs) -> Optional[pd.DataFrame]:
+    """
+    Rate limit korumalı veri çekme
+    - 45-50 sn bekleme
+    - Hata olursa logla, None dön, crash etme
+    Neden? tvdatafeed/yfinance ban yemesin, bot çökmesin
+    """
+    try:
+        # Rate limit bekleme
+        delay = random.uniform(RATE_LIMIT_MIN, RATE_LIMIT_MAX)
+        logger.info(f"{stock} için {delay:.1f}sn bekleniyor (rate limit)")
+        time.sleep(delay)
+        
+        # Veriyi çek
+        df = fetch_func(stock, *args, **kwargs)
+        
+        if df is None or len(df) == 0:
+            logger.warning(f"{stock} boş veri döndü, atlanıyor")
+            return None
+        
+        logger.info(f"{stock} için {len(df)} mum çekildi")
+        return df
+        
+    except Exception as e:
+        logger.error(f"{stock} veri çekme hatası: {e} - atlanıyor, bot devam ediyor")
+        return None
+
+def mock_fetch_60d_1h(stock: str, n_bars: int = 360) -> pd.DataFrame:
+    """
+    Mock veri çekme - gerçek API yoksa test için
+    Gerçek implementasyonda burası yfinance/borsapy olacak
+    """
+    np.random.seed(hash(stock) % 2**32)
+    
+    # Son 60 iş günü ~ 360 saat
+    end = datetime.now(ISTANBUL_TZ)
+    # İş günlerini hesapla - basit: son 60 gün, ama hafta sonu atla
+    # Şimdilik sadece hourly freq
+    dates = pd.date_range(end=end, periods=n_bars, freq='h')
+    
+    # Random walk - hisseye göre farklı seed
+    base_price = 10 + (hash(stock) % 100)  # Her hisse farklı fiyat
+    close = base_price + np.cumsum(np.random.randn(n_bars) * 0.3)
+    close = np.maximum(close, 1.0)  # Negatif olmasın
+    
+    high = close + np.abs(np.random.randn(n_bars) * 0.2)
+    low = close - np.abs(np.random.randn(n_bars) * 0.2)
+    low = np.maximum(low, 0.5)
+    open_ = close + np.random.randn(n_bars) * 0.1
+    volume = np.random.randint(100000, 5000000, n_bars)
+    
+    df = pd.DataFrame({
+        'open': open_,
+        'high': high,
+        'low': low,
+        'close': close,
+        'volume': volume
+    }, index=dates)
+    
+    return df
+
+# === TEST ===
+
+if __name__ == "__main__":
+    print("=== Data.py Test ===")
+    
+    # BIST açık mı?
+    print(f"BIST açık mı? {is_bist_open()}")
+    print(f"Sonraki açılışa: {time_until_next_open()/3600:.2f} saat")
+    print(f"Sonraki mum kapanışına: {time_until_next_candle_close()/60:.1f} dk")
+    
+    # Deque test
+    manager = StockDequeManager(maxlen=10, data_dir="./test_data")
+    df_mock = mock_fetch_60d_1h("THYAO", 20)
+    print(f"\nMock THYAO: {len(df_mock)} bar")
+    print(df_mock.tail(3))
+    
+    manager.append_dataframe("THYAO", df_mock)
+    df_from_deque = manager.to_dataframe("THYAO")
+    print(f"\nDeque'den DataFrame: {len(df_from_deque)} bar")
+    
+    # Resample test
+    resampled = resample_all_timeframes(df_from_deque)
+    for tf, df in resampled.items():
+        print(f"{tf}: {len(df)} bar")
+    
+    # Temizle
+    import shutil
+    shutil.rmtree("./test_data", ignore_errors=True)
+    print("\nTest bitti")

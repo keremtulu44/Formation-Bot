@@ -1,0 +1,23 @@
+# BIST Formation Bot - Requirements
+# Ücretsiz/open-source sadece
+
+# Veri
+yfinance==1.7.0
+pandas==2.2.2
+numpy==1.26.4
+
+# Alternatif BIST kütüphanesi (opsiyonel, tvdatafeed yerine)
+borsapy==0.11.0
+
+# Zaman ve config
+pytz==2024.1
+python-dotenv==1.0.1
+
+# Telegram (basit requests de olur ama python-telegram-bot opsiyonel)
+requests==2.32.3
+
+# Test ve util
+pytest==8.3.2
+
+# Not: tvdatafeed PyPI'de yok, gerekirse git'ten:
+# git+https://github.com/rongardF/tvdatafeed.git
