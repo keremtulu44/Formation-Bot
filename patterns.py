@@ -726,13 +726,18 @@ def f_build_triangle_candidate(df: pd.DataFrame, atr_series: pd.Series,
     
     contraction = (start_width - current_width) / start_width if start_width > 0 else None
     
-    # Apex kontrolü
+    # Apex kontrolü - Adım4: progress filtresi eklendi ama apex mesafesi eski kalsın
+    # Eskisi: start + max(minAge*8,260) = 260 bar, çok uzak ama sentetik için gerekli
+    # Yenisi: aynı mesafe ama progress 0.20-0.90 arası olmalı
     apex_ok = apex_bar > current_bar and apex_bar <= start_bar + max(params['min_age'] * 8, 260)
     if not apex_ok:
-        # Apex geçersizse progress'i maxConsolidationBars'a göre hesapla (Pine'daki gibi)
         progress = f_clamp(float(age) / max(1.0, float(params['max_consolidation_bars'])), 0.0, 2.0)
+        if progress > 1.0:
+            return None, f"Apex geçmiş: apexBar={apex_bar} current={current_bar} progress={progress:.2f} >1.0"
     else:
         progress = f_clamp(float(current_bar - start_bar) / max(1.0, float(apex_bar - start_bar)), 0.0, 2.0)
+        if progress < 0.20 or progress > 0.90:
+            return None, f"Progress uygun değil: {progress:.2f} (0.20-0.90 olmalı) apex={apex_bar}"
     
     # Converging kontrolü
     min_contraction = params['min_contraction_pct'] / 100.0
@@ -755,17 +760,23 @@ def f_build_triangle_candidate(df: pd.DataFrame, atr_series: pd.Series,
     
     total_touches = upper_touches + lower_touches
     
-    # Touch distribution
+    # Touch distribution - Adım5b: total 5 ve bir taraf 3, random 3/2=5 geçiyordu ama 2/2=4 geçmemeli
+    # Önce 4->5 yapınca random %88->%28 düşmüştü, 5->6 yapınca %0 ama gerçek üçgenler de gitti (73->7)
+    # Orta yol: total>=5 ve en az biri 3
     if upper_first is None or lower_first is None:
         return None, "Temas yok (upper_first veya lower_first None)"
     
-    touch_distribution = total_touches >= 4 and min(upper_last or 0, lower_last or 0) - start_bar >= max(params['min_age'] // 2, params['min_touch_gap'] * 2)
+    touch_distribution = total_touches >= 5 and min(upper_last or 0, lower_last or 0) - start_bar >= max(params['min_age'] // 2, params['min_touch_gap'] * 2)
     
     if not touch_distribution:
-        return None, f"Touch distribution yetersiz: total={total_touches} upper_last={upper_last} lower_last={lower_last}"
+        return None, f"Touch distribution yetersiz: total={total_touches} (min 5) upper_last={upper_last} lower_last={lower_last}"
     
     if upper_touches < 2 or lower_touches < 2:
         return None, f"Temas sayısı yetersiz: üst {upper_touches} alt {lower_touches} (min 2+2)"
+    
+    # Adım5b: En az bir taraf 3 olmalı, 2+2 random'da çok kolay
+    if upper_touches < 3 and lower_touches < 3:
+        return None, f"Temas dengesiz: üst {upper_touches} alt {lower_touches} (en az biri 3 olmalı, 2+2 çok kolay)"
     
     # Trend kontrolleri
     highs_lower = f_pivot_trend_ok(hp1, hp2, False, touch_tolerance)
@@ -842,12 +853,26 @@ def f_build_triangle_candidate(df: pd.DataFrame, atr_series: pd.Series,
     total_wick_viol = viol_upper_wick + viol_lower_wick
     max_hist_viol = max(max_upper, max_lower)
     
-    # Historical kabul
-    max_accepted_viol = 0.90 if profile == "Hassas" else 0.55 if profile == "Seçici" else 0.72
-    historical_ok = total_close_viol < 2 and max_hist_viol <= max_accepted_viol and penalty < 62.0
+    # Historical kabul - En iyi denge: random %22 için 0.50/45, collective 16
+    # Eski: close<2 max 0.72 penalty<62 çok toleranslı random %94
+    # Sıkı: close<=1 max 0.50 penalty<45 random %22 collective 16
+    if profile == "Hassas":
+        max_accepted_viol = 0.70
+        max_close_viol = 1
+        max_penalty = 55.0
+    elif profile == "Seçici":
+        max_accepted_viol = 0.40
+        max_close_viol = 0
+        max_penalty = 35.0
+    else:  # Dengeli - en iyi denge
+        max_accepted_viol = 0.50
+        max_close_viol = 1
+        max_penalty = 45.0
+    
+    historical_ok = total_close_viol <= max_close_viol and max_hist_viol <= max_accepted_viol and penalty < max_penalty
     
     if not historical_ok:
-        return None, f"Tarihsel ihlal fazla: close={total_close_viol} maxViol={max_hist_viol:.2f} penalty={penalty:.1f} (limit close<2 max<={max_accepted_viol} penalty<62)"
+        return None, f"Tarihsel ihlal fazla: close={total_close_viol} (max {max_close_viol}) maxViol={max_hist_viol:.2f} (max {max_accepted_viol}) penalty={penalty:.1f} (max {max_penalty})"
     
     cleanliness_score = f_cleanliness_quality(penalty)
     
