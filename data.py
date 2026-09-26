@@ -152,10 +152,9 @@ class StockDequeManager:
     
     def to_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
         """Deque'yi DataFrame'e çevir - pattern tespiti için"""
-        if stock not in self.deques or len(self.deques[stock]) == 0:
+        dq = self.get_deque(stock)  # Diskten yüklemeyi de dene
+        if len(dq) == 0:
             return None
-        
-        dq = self.deques[stock]
         data = list(dq)
         
         # Timestamp'e göre sırala
@@ -171,32 +170,84 @@ class StockDequeManager:
         return df
     
     def save_to_disk(self, stock: str):
-        """Diske kaydet - pickle"""
+        """Diske kaydet - hem pickle hem json (senin isteğin both)"""
         if stock not in self.deques:
             return
         
-        filepath = os.path.join(self.data_dir, f"{stock}.pkl")
+        # Pickle - hızlı
+        pkl_path = os.path.join(self.data_dir, f"{stock}.pkl")
+        # JSON - GitHub'da görünsün, human-readable
+        json_path = os.path.join(self.data_dir, f"{stock}.json")
+        
         try:
-            with open(filepath, 'wb') as f:
-                pickle.dump(list(self.deques[stock]), f)
-            logger.debug(f"{stock} deque diske kaydedildi - {filepath}")
+            data_list = list(self.deques[stock])
+            
+            # Pickle
+            with open(pkl_path, 'wb') as f:
+                pickle.dump(data_list, f)
+            
+            # JSON - timestamp'i string'e çevir
+            json_data = []
+            for candle in data_list:
+                json_candle = candle.copy()
+                # Timestamp'i ISO format string yap
+                if 'timestamp' in json_candle:
+                    ts = json_candle['timestamp']
+                    if hasattr(ts, 'isoformat'):
+                        json_candle['timestamp'] = ts.isoformat()
+                    else:
+                        json_candle['timestamp'] = str(ts)
+                json_data.append(json_candle)
+            
+            import json
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(json_data, f, indent=2, ensure_ascii=False)
+            
+            logger.debug(f"{stock} deque diske kaydedildi - {pkl_path} + {json_path} ({len(data_list)} mum)")
         except Exception as e:
             logger.error(f"{stock} diske kaydedilemedi: {e}")
     
     def load_from_disk(self, stock: str) -> Optional[deque]:
-        """Diskten yükle"""
-        filepath = os.path.join(self.data_dir, f"{stock}.pkl")
-        if not os.path.exists(filepath):
-            return None
+        """Diskten yükle - önce pickle, yoksa json"""
+        pkl_path = os.path.join(self.data_dir, f"{stock}.pkl")
+        json_path = os.path.join(self.data_dir, f"{stock}.json")
         
-        try:
-            with open(filepath, 'rb') as f:
-                data = pickle.load(f)
-            dq = deque(data, maxlen=self.maxlen)
-            return dq
-        except Exception as e:
-            logger.warning(f"{stock} diskten yüklenemedi, yeni oluşturulacak: {e}")
-            return None
+        # Önce pickle dene (hızlı)
+        if os.path.exists(pkl_path):
+            try:
+                with open(pkl_path, 'rb') as f:
+                    data = pickle.load(f)
+                dq = deque(data, maxlen=self.maxlen)
+                logger.debug(f"{stock} pickle'dan yüklendi: {len(dq)} mum")
+                return dq
+            except Exception as e:
+                logger.warning(f"{stock} pickle yüklenemedi: {e}, json deneniyor")
+        
+        # Pickle yoksa json dene
+        if os.path.exists(json_path):
+            try:
+                import json
+                from dateutil import parser as date_parser
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    json_data = json.load(f)
+                
+                data_list = []
+                for candle in json_data:
+                    # Timestamp'i geri çevir
+                    if 'timestamp' in candle and isinstance(candle['timestamp'], str):
+                        try:
+                            candle['timestamp'] = date_parser.parse(candle['timestamp'])
+                        except:
+                            pass
+                    data_list.append(candle)
+                
+                dq = deque(data_list, maxlen=self.maxlen)
+                logger.debug(f"{stock} json'dan yüklendi: {len(dq)} mum")
+                return dq
+            except Exception as e:
+                logger.warning(f"{stock} json'dan yüklenemedi: {e}")
+        
+        return None
     
     def save_all(self):
         """Tümünü kaydet"""
