@@ -1,0 +1,27 @@
+[Unit]
+Description=BIST Formasyon Radarı Botu - ARGENT v0.4.6
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/bist-bot
+EnvironmentFile=/etc/bist-bot.env
+ExecStart=/opt/bist-bot/venv/bin/python3 /opt/bist-bot/main.py
+Restart=always
+RestartSec=30
+StandardOutput=append:/var/log/bist-bot/bot.log
+StandardError=append:/var/log/bist-bot/bot.log
+
+# Kaynak limitleri - Oracle Free ARM için
+MemoryMax=800M
+CPUQuota=80%
+
+# Güvenlik
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

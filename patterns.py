@@ -959,6 +959,314 @@ def find_best_triangle_candidate(df: pd.DataFrame, profile: str = "Dengeli", ver
     
     return best_candidate, logs
 
+# === BAYRAK/FLAMA YARDIMCILARI ===
+def f_range_between(df: pd.DataFrame, start_bar: int, end_bar: int, max_bars: int = 120) -> Tuple[float, float]:
+    """İki bar arası high/low range - Pine'daki f_range_between"""
+    bounded_end = min(end_bar, len(df) - 1)
+    available_bars = min(max(bounded_end - start_bar, 0), max_bars)
+    
+    if bounded_end < 0 or bounded_end >= len(df):
+        return 0.0, 0.0
+    
+    range_high = df['high'].iloc[bounded_end]
+    range_low = df['low'].iloc[bounded_end]
+    
+    for step in range(available_bars):
+        abs_bar = bounded_end - step
+        if 0 <= abs_bar < len(df):
+            range_high = max(range_high, df['high'].iloc[abs_bar])
+            range_low = min(range_low, df['low'].iloc[abs_bar])
+    
+    return range_high, range_low
+
+def f_efficiency_between(df: pd.DataFrame, start_bar: int, end_bar: int, max_bars: int = 120) -> float:
+    """İki bar arası efficiency - Pine'daki f_efficiency_between"""
+    bounded_end = min(end_bar, len(df) - 1)
+    duration = max(0, bounded_end - start_bar)
+    sample_bars = min(duration, max_bars)
+    
+    total_path = 0.0
+    if sample_bars > 0:
+        for step in range(sample_bars):
+            abs_bar = bounded_end - step
+            if abs_bar > 0 and abs_bar < len(df):
+                total_path += abs(df['close'].iloc[abs_bar] - df['close'].iloc[abs_bar - 1])
+    
+    if sample_bars > 0 and bounded_end - sample_bars >= 0:
+        net_move = abs(df['close'].iloc[bounded_end] - df['close'].iloc[bounded_end - sample_bars])
+    else:
+        net_move = 0.0
+    
+    return f_clamp(net_move / max(max(total_path, net_move), 0.0001), 0.0, 1.0)
+
+def f_build_flag_candidate(df: pd.DataFrame, atr_series: pd.Series,
+                           high_pivots: List[Dict], low_pivots: List[Dict],
+                           hiA_idx: int, hiB_idx: int, loA_idx: int, loB_idx: int,
+                           bull_pole: PoleInfo, bear_pole: PoleInfo,
+                           params: dict, profile: str, current_bar: int) -> Tuple[Optional[PatternCandidate], str]:
+    """
+    Bayrak adayı - Pine'daki flag kısmı
+    - Direk + paralel kanal
+    - Boğa bayrağı: yukarı direk sonrası hafif aşağı/yan kanal
+    - Ayı bayrağı: aşağı direk sonrası hafif yukarı/yan kanal
+    """
+    # Önce üçgen adayını dene (temel geometri için)
+    base_candidate, base_reason = f_build_triangle_candidate(
+        df, atr_series, high_pivots, low_pivots, hiA_idx, hiB_idx, loA_idx, loB_idx, params, profile, current_bar
+    )
+    
+    # Eğer üçgen adayı yoksa, bayrak için de temel kontrolleri yap
+    # Ama bayrak paralel olmalı, üçgen converging olmalı - farklı
+    # O yüzden üçgen adayının reddedilme sebebi parallel ise bayrak için OK olabilir
+    
+    # Pivotları al
+    try:
+        hb1 = high_pivots[hiA_idx]['bar']
+        hp1 = high_pivots[hiA_idx]['price']
+        hb2 = high_pivots[hiB_idx]['bar']
+        hp2 = high_pivots[hiB_idx]['price']
+        lb1 = low_pivots[loA_idx]['bar']
+        lp1 = low_pivots[loA_idx]['price']
+        lb2 = low_pivots[loB_idx]['bar']
+        lp2 = low_pivots[loB_idx]['price']
+    except IndexError:
+        return None, "Pivot index hatası (bayrak)"
+    
+    start_bar = min(min(hb1, hb2), min(lb1, lb2))
+    end_bar = max(max(hb1, hb2), max(lb1, lb2))
+    
+    # Geometri ATR
+    geometry_atr = atr_series.iloc[-1] if len(atr_series) > 0 else 1.0
+    if pd.isna(geometry_atr) or geometry_atr <= 0:
+        geometry_atr = 1.0
+    
+    # Eğimler
+    upper_slope = f_slope(hb1, hp1, hb2, hp2)
+    lower_slope = f_slope(lb1, lp1, lb2, lp2)
+    upper_slope_norm = upper_slope / geometry_atr
+    lower_slope_norm = lower_slope / geometry_atr
+    slope_gap_norm = upper_slope_norm - lower_slope_norm
+    avg_slope_norm = (upper_slope_norm + lower_slope_norm) * 0.5
+    
+    # Paralel kontrolü
+    parallel_like = abs(slope_gap_norm) <= params['flat_slope_norm_tol'] * 0.75
+    if not parallel_like:
+        return None, f"Paralel değil: slopeGapNorm={slope_gap_norm:.4f} tol={params['flat_slope_norm_tol']*0.75:.4f} (bayrak için paralel olmalı)"
+    
+    # Touch basics (üçgen adayından al, ama bayrak için de gerekli)
+    touch_tolerance = max(0.0001, geometry_atr * params['touch_atr_mult'])
+    high_prices = [p['price'] for p in high_pivots]
+    high_bars = [p['bar'] for p in high_pivots]
+    low_prices = [p['price'] for p in low_pivots]
+    low_bars = [p['bar'] for p in low_pivots]
+    
+    upper_touches, _, upper_first, upper_last = f_touch_stats(
+        high_prices, high_bars, hb1, hp1, hb2, hp2, start_bar, current_bar, touch_tolerance, params['min_touch_gap']
+    )
+    lower_touches, _, lower_first, lower_last = f_touch_stats(
+        low_prices, low_bars, lb1, lp1, lb2, lp2, start_bar, current_bar, touch_tolerance, params['min_touch_gap']
+    )
+    
+    if upper_touches < 2 or lower_touches < 2:
+        return None, f"Bayrak temas yetersiz: üst {upper_touches} alt {lower_touches}"
+    
+    # Kronolojik
+    if not f_chronological_swings(hb1, hb2, lb1, lb2):
+        return None, "Kronolojik değil (bayrak)"
+    
+    # Direk bağlantısı
+    max_pole_link_bars = max(params['pivot_len'] * 2, params['min_touch_gap'] + 2)
+    
+    bull_seq_compat = hb1 < lb1  # Önce üst sonra alt -> yukarı impuls sonrası
+    bear_seq_compat = lb1 < hb1
+    
+    bull_linked = bull_pole.valid and bull_seq_compat and abs(bull_pole.end_bar - start_bar) <= max_pole_link_bars
+    bear_linked = bear_pole.valid and bear_seq_compat and abs(bear_pole.end_bar - start_bar) <= max_pole_link_bars
+    
+    if not bull_linked and not bear_linked:
+        return None, f"Direk bağlantısı yok: bullLinked={bull_linked} bearLinked={bear_linked} maxLink={max_pole_link_bars}"
+    
+    # Hangi direk?
+    pole = bull_pole if bull_linked else bear_pole
+    is_bull_flag = bull_linked
+    
+    # Consolidation range
+    observed_high, observed_low = f_range_between(df, pole.end_bar, end_bar, 120)
+    base_low = min(lp1, lp2)
+    base_high = max(hp1, hp2)
+    consol_low = min(base_low, observed_low)
+    consol_high = max(base_high, observed_high)
+    consol_height = max(consol_high - consol_low, 0.0001)
+    
+    # Depth
+    if is_bull_flag:
+        depth = f_clamp((pole.end_price - consol_low) / max(pole.magnitude or 1.0, 0.0001), 0.0, 2.0)
+    else:
+        depth = f_clamp((consol_high - pole.end_price) / max(pole.magnitude or 1.0, 0.0001), 0.0, 2.0)
+    
+    # Duration ratio
+    formed_duration = max(1, end_bar - start_bar)
+    duration_ratio = float(formed_duration) / max(1.0, float(pole.duration or 1))
+    
+    # Height ratio
+    height_ratio = consol_height / max(pole.magnitude or 1.0, 0.0001)
+    
+    # Bayrak eğim kontrolü
+    flat_tol = params['flat_slope_norm_tol']
+    if is_bull_flag:
+        flag_slope_ok = avg_slope_norm <= flat_tol * 0.35 and avg_slope_norm >= -0.16
+    else:
+        flag_slope_ok = avg_slope_norm >= -flat_tol * 0.35 and avg_slope_norm <= 0.16
+    
+    if not flag_slope_ok:
+        return None, f"Bayrak eğimi uygun değil: avgSlopeNorm={avg_slope_norm:.4f} bull={is_bull_flag}"
+    
+    # Validasyon
+    if not (0.08 <= depth <= 0.80):
+        return None, f"Depth uygun değil: {depth:.2f} (0.08-0.80 olmalı)"
+    if height_ratio > 0.58:
+        return None, f"Height ratio fazla: {height_ratio:.2f} >0.58"
+    if duration_ratio > 3.50:
+        return None, f"Duration ratio fazla: {duration_ratio:.2f} >3.5"
+    if formed_duration > params['max_consolidation_bars']:
+        return None, f"Konsolidasyon süresi uzun: {formed_duration} > {params['max_consolidation_bars']}"
+    
+    # Efficiency
+    consol_eff = f_efficiency_between(df, start_bar, end_bar, 120)
+    if consol_eff >= (pole.efficiency or 0) + 0.10:
+        return None, f"Konsolidasyon direktten daha verimli: {consol_eff:.2f} >= {pole.efficiency:.2f}+0.10"
+    
+    # Quality
+    # Touch score (basit)
+    total_touches = upper_touches + lower_touches
+    touch_score = f_clamp(f_smoothstep(4.0, 7.0, float(total_touches)) * 100.0, 0.0, 100.0)
+    
+    # Parallel quality
+    parallel_q = f_inverse_smoothstep(params['flat_slope_norm_tol'] * 0.30, params['flat_slope_norm_tol'] * 1.05, abs(slope_gap_norm)) * 100.0
+    
+    # Calmness
+    calmness_q = 100.0 if consol_eff <= (pole.efficiency or 0) else f_inverse_smoothstep(0.00, 0.28, consol_eff - (pole.efficiency or 0)) * 100.0
+    
+    # Depth, duration quality
+    depth_q = f_depth_quality(depth)
+    duration_q = f_duration_quality(duration_ratio)
+    
+    # Cleanliness (basit - violation yok varsay)
+    cleanliness_q = 80.0
+    
+    raw_q = f_clamp(
+        pole.quality * 0.28 + depth_q * 0.20 + duration_q * 0.12 + parallel_q * 0.16 + touch_score * 0.12 + calmness_q * 0.07 + cleanliness_q * 0.05,
+        0.0, 100.0
+    )
+    
+    min_qual = params['min_specialized_quality']
+    if raw_q < min_qual:
+        return None, f"Bayrak kalite düşük: {raw_q:.1f} < {min_qual}"
+    
+    # Başarılı
+    candidate = PatternCandidate()
+    candidate.valid = True
+    candidate.pattern_type = "Boğa Bayrağı" if is_bull_flag else "Ayı Bayrağı"
+    candidate.family = "Bayrak"
+    candidate.classic_dir = 1 if is_bull_flag else -1
+    candidate.raw_quality = raw_q
+    candidate.geometry_score = parallel_q
+    candidate.slope_shape_score = parallel_q
+    candidate.touch_score = touch_score
+    candidate.upper_touches = upper_touches
+    candidate.lower_touches = lower_touches
+    candidate.start_bar = start_bar
+    candidate.end_bar = end_bar
+    candidate.hb1 = hb1
+    candidate.hp1 = hp1
+    candidate.hb2 = hb2
+    candidate.hp2 = hp2
+    candidate.lb1 = lb1
+    candidate.lp1 = lp1
+    candidate.lb2 = lb2
+    candidate.lp2 = lp2
+    candidate.upper_slope = upper_slope
+    candidate.lower_slope = lower_slope
+    candidate.has_pole = True
+    candidate.pole_dir = pole.direction
+    candidate.pole_start_bar = pole.start_bar
+    candidate.pole_start_price = pole.start_price
+    candidate.pole_end_bar = pole.end_bar
+    candidate.pole_end_price = pole.end_price
+    candidate.pole_duration = pole.duration
+    candidate.pole_magnitude = pole.magnitude
+    candidate.pole_efficiency = pole.efficiency
+    candidate.pole_quality = pole.quality
+    candidate.correction_depth = depth
+    candidate.duration_ratio = duration_ratio
+    candidate.consolidation_efficiency = consol_eff
+    candidate.consolidation_height_ratio = height_ratio
+    candidate.upper_now = f_line_price(hb1, hp1, hb2, hp2, current_bar)
+    candidate.lower_now = f_line_price(lb1, lp1, lb2, lp2, current_bar)
+    candidate.geometry_atr = geometry_atr
+    
+    return candidate, f"OK - {candidate.pattern_type} kalite {raw_q:.1f} depth {depth:.2f}"
+
+def find_best_flag_candidate(df: pd.DataFrame, profile: str = "Dengeli", verbose: bool = False) -> Tuple[Optional[PatternCandidate], List[str]]:
+    """En iyi bayrak adayını bul"""
+    from config import get_profile_params
+    params = get_profile_params(profile)
+    pivot_len = params['pivot_len']
+    
+    atr_series = calculate_atr(df, 14)
+    high_pivots, low_pivots = find_pivots(df, pivot_len)
+    
+    if len(high_pivots) < 2 or len(low_pivots) < 2:
+        return None, [f"Yetersiz pivot bayrak: high={len(high_pivots)} low={len(low_pivots)}"]
+    
+    search_n = 6
+    high_search = high_pivots[-search_n:] if len(high_pivots) > search_n else high_pivots
+    low_search = low_pivots[-search_n:] if len(low_pivots) > search_n else low_pivots
+    
+    # Direkleri bul - son pivotlar için
+    bull_poles = []
+    bear_poles = []
+    for hp in high_search:
+        pole = find_pole(df, atr_series, high_pivots, low_pivots, hp['bar'], hp['price'], 1, params)
+        bull_poles.append(pole)
+    for lp in low_search:
+        pole = find_pole(df, atr_series, high_pivots, low_pivots, lp['bar'], lp['price'], -1, params)
+        bear_poles.append(pole)
+    
+    # En iyi direkleri seç
+    best_bull = max(bull_poles, key=lambda p: p.quality if p.valid else -1) if bull_poles else PoleInfo()
+    best_bear = max(bear_poles, key=lambda p: p.quality if p.valid else -1) if bear_poles else PoleInfo()
+    
+    best_candidate = None
+    logs = []
+    tried = 0
+    rejected = 0
+    
+    for hiA in range(len(high_search) - 1):
+        for hiB in range(hiA + 1, len(high_search)):
+            for loA in range(len(low_search) - 1):
+                for loB in range(loA + 1, len(low_search)):
+                    tried += 1
+                    cand, reason = f_build_flag_candidate(
+                        df, atr_series, high_search, low_search, hiA, hiB, loA, loB,
+                        best_bull, best_bear, params, profile, len(df)-1
+                    )
+                    if cand is None:
+                        rejected += 1
+                        if verbose and len(logs) < 15:
+                            logs.append(f"RED BAYRAK [{hiA},{hiB},{loA},{loB}]: {reason}")
+                    else:
+                        if best_candidate is None or cand.raw_quality > best_candidate.raw_quality:
+                            best_candidate = cand
+                            logs.append(f"OK BAYRAK [{hiA},{hiB},{loA},{loB}]: {reason}")
+    
+    if best_candidate and best_candidate.valid:
+        summary = f"Bayrak: Toplam {tried} denendi, {rejected} reddedildi, {tried-rejected} geçti, en iyi {best_candidate.raw_quality:.1f} {best_candidate.pattern_type}"
+    else:
+        summary = f"Bayrak: Toplam {tried} denendi, {rejected} reddedildi, {tried-rejected} geçti, en iyi Yok"
+    logs.insert(0, summary)
+    return best_candidate, logs
+
 # === BREAKOUT GÜCÜ ===
 def f_breakout_strength(df: pd.DataFrame, atr_series: pd.Series, 
                         bar_idx: int, direction: int, boundary_price: float,
@@ -1352,74 +1660,71 @@ def detect_patterns(df_1h: pd.DataFrame, df_2h: Optional[pd.DataFrame] = None,
                    stock_name: str = "", profile: str = "Dengeli", verbose: bool = False) -> Optional[Dict]:
     """
     Ana tespit fonksiyonu - Pine'daki tüm mantığın Python karşılığı
-    Şu an: Sadece üçgen/kama (bayrak/flama sonra)
-    
-    Döner:
-    {
-        'stock_name': str,
-        'timeframe': str,
-        'pattern_name': str,
-        'family': str,
-        'classic_dir': int,
-        'confidence_score': float (0-100),
-        'critical_price_level': float,
-        'upper_level': float,
-        'lower_level': float,
-        'contraction': float,
-        'progress': float,
-        'timestamp': datetime,
-        'state': str (FORMASYON_TANIMLANDI vs),
-        'logs': List[str] (neden reddedildi / kabul edildi)
-    }
-    veya None
-    
-    Neden verbose? Senin istediğin explainable log için
+    Şu an: Üçgen/Kama + Bayrak (flama sonra)
     """
     if df_1h is None or len(df_1h) < 50:
         logger.debug(f"{stock_name} için yetersiz veri: {0 if df_1h is None else len(df_1h)}")
         return None
     
     try:
-        # Şimdilik sadece 1H kullan, sonra 2H/4H/1D de
-        # En iyi üçgen adayını bul
-        candidate, logs = find_best_triangle_candidate(df_1h, profile=profile, verbose=verbose)
+        # Önce üçgen/kama dene
+        candidate_tri, logs_tri = find_best_triangle_candidate(df_1h, profile=profile, verbose=verbose)
         
-        if candidate is None:
+        # Sonra bayrak dene
+        candidate_flag, logs_flag = find_best_flag_candidate(df_1h, profile=profile, verbose=verbose)
+        
+        # En iyiyi seç - kaliteye göre
+        best_candidate = None
+        all_logs = []
+        
+        if candidate_tri and candidate_tri.valid:
+            best_candidate = candidate_tri
+            all_logs.extend(logs_tri[:3])
+        
+        if candidate_flag and candidate_flag.valid:
+            if best_candidate is None or candidate_flag.raw_quality > best_candidate.raw_quality:
+                best_candidate = candidate_flag
+                all_logs = logs_flag[:3] + all_logs
+            else:
+                all_logs.extend(logs_flag[:2])
+        
+        if best_candidate is None:
             if verbose:
-                logger.info(f"{stock_name} - Formasyon yok: {logs[0] if logs else 'Bilinmiyor'}")
+                combined_log = (logs_tri[0] if logs_tri else "Üçgen yok") + " | " + (logs_flag[0] if logs_flag else "Bayrak yok")
+                logger.info(f"{stock_name} - Formasyon yok: {combined_log}")
             return None
         
-        # Başarılı - dict'e çevir
-        # Kritik seviye: Üst veya alt sınır (hangisi yakınsa)
-        # Şimdilik üst ve alt'ı da döndür
+        # Başarılı
         result = {
             'stock_name': stock_name,
             'timeframe': '1h',
-            'pattern_name': candidate.pattern_type,
-            'family': candidate.family,
-            'classic_dir': candidate.classic_dir,
-            'confidence_score': candidate.raw_quality,
-            'critical_price_level': candidate.upper_now,  # Kritik seviye üst sınır (kırılım için)
-            'upper_level': candidate.upper_now,
-            'lower_level': candidate.lower_now,
-            'contraction': candidate.contraction,
-            'progress': candidate.progress,
-            'apex_bar': candidate.apex_bar,
-            'start_bar': candidate.start_bar,
-            'end_bar': candidate.end_bar,
-            'geometry_score': candidate.geometry_score,
-            'touch_score': candidate.touch_score,
-            'maturity_score': candidate.maturity_score,
-            'contraction_score': candidate.contraction_score,
+            'pattern_name': best_candidate.pattern_type,
+            'family': best_candidate.family,
+            'classic_dir': best_candidate.classic_dir,
+            'confidence_score': best_candidate.raw_quality,
+            'critical_price_level': best_candidate.upper_now,
+            'upper_level': best_candidate.upper_now,
+            'lower_level': best_candidate.lower_now,
+            'contraction': best_candidate.contraction,
+            'progress': best_candidate.progress,
+            'apex_bar': best_candidate.apex_bar,
+            'start_bar': best_candidate.start_bar,
+            'end_bar': best_candidate.end_bar,
+            'geometry_score': best_candidate.geometry_score,
+            'touch_score': best_candidate.touch_score,
+            'maturity_score': best_candidate.maturity_score,
+            'contraction_score': best_candidate.contraction_score,
             'timestamp': df_1h.index[-1] if hasattr(df_1h.index[-1], 'strftime') else pd.Timestamp.now(),
-            'state': ST_DEFINED,  # Şimdilik sadece DEFINED, lifecycle sonra
-            'upper_touches': candidate.upper_touches,
-            'lower_touches': candidate.lower_touches,
-            'violation_penalty': candidate.historical_violation_penalty,
-            'logs': logs[:10] if verbose else [logs[0]] if logs else []
+            'state': ST_DEFINED,
+            'upper_touches': best_candidate.upper_touches,
+            'lower_touches': best_candidate.lower_touches,
+            'violation_penalty': best_candidate.historical_violation_penalty,
+            'has_pole': best_candidate.has_pole,
+            'pole_quality': best_candidate.pole_quality if best_candidate.has_pole else None,
+            'logs': all_logs
         }
         
-        logger.info(f"{stock_name} - {candidate.pattern_type} bulundu: kalite {candidate.raw_quality:.1f} daralma %{candidate.contraction*100:.0f}")
+        logger.info(f"{stock_name} - {best_candidate.pattern_type} bulundu: kalite {best_candidate.raw_quality:.1f}")
         
         return result
         

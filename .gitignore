@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+*.egg-info/
+.env
+*.pkl
+*.log
+
+# Bot data - hem pickle hem json ama git'e eklenmesin (sen dedin GitHub'da tutalım ama .gitignore'da olsun, isteğe bağlı)
+# Eğer GitHub'da tutmak istiyorsan bu satırları sil
+bot_data/
+logs/
+test_data/
+test_bot_data/
+
+# OS
+.DS_Store
+*.swp
+*~
+
+# IDE
+.vscode/
+.idea/

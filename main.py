@@ -12,7 +12,8 @@ import pytz
 
 from config import ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR
 from data import StockDequeManager, is_bist_open, time_until_next_open, time_until_next_candle_close, resample_all_timeframes, mock_fetch_60d_1h
-from patterns import detect_patterns, calculate_atr
+from patterns import detect_patterns, calculate_atr, PatternLifecycleManager, find_best_triangle_candidate, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED
+from notifier import TelegramNotifier
 
 # === LOGGING KURULUMU ===
 def setup_logging():
@@ -59,10 +60,14 @@ def reset_daily_if_needed():
         daily_stats['errors'] = 0
         daily_stats['last_reset'] = today
 
-def scan_all_stocks(deque_manager: StockDequeManager):
+def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: PatternLifecycleManager, notifier: TelegramNotifier):
     """
     Tüm hisseleri tara - 40-45 dk sürer (rate limit)
-    Neden 45-50sn bekleme? Ban yememek için
+    - Deque'den veri al
+    - Resample 2H/4H/1D
+    - Pattern tespit (üçgen/kama/bayrak)
+    - Lifecycle update (kırılım takibi)
+    - Telegram (cooldown ile)
     """
     logger.info(f"=== TARAMA BAŞLIYOR - {len(ACTIVE_STOCKS)} hisse, profil: {PROFILE} ===")
     
@@ -76,40 +81,67 @@ def scan_all_stocks(deque_manager: StockDequeManager):
             df_1h = deque_manager.to_dataframe(stock)
             
             if df_1h is None or len(df_1h) < 50:
-                logger.warning(f"{stock} için yeterli veri yok ({0 if df_1h is None else len(df_1h)} mum), mock veri ile dolduruluyor (test)")
-                # Test için mock - gerçekte burası yfinance/borsapy olacak
+                logger.warning(f"{stock} için yeterli veri yok, mock veri ile dolduruluyor (test)")
                 df_1h = mock_fetch_60d_1h(stock, 360)
                 deque_manager.append_dataframe(stock, df_1h)
             
             # Tüm timeframe'leri üret
             all_tfs = resample_all_timeframes(df_1h)
             
-            # Her timeframe için pattern tespit
+            # Her timeframe için pattern tespit + lifecycle
             for tf_name, df_tf in all_tfs.items():
-                if df_tf is None or len(df_tf) < 20:
-                    logger.debug(f"{stock} {tf_name} için yeterli veri yok, atlanıyor")
+                if df_tf is None or len(df_tf) < 30:
+                    logger.debug(f"{stock} {tf_name} için yeterli veri yok")
                     continue
                 
-                # Pattern tespit - şimdilik iskelet, None döner
-                result = detect_patterns(
-                    df_1h=all_tfs.get('1h'),
-                    df_2h=all_tfs.get('2h'),
-                    df_4h=all_tfs.get('4h'),
-                    df_1d=all_tfs.get('1d'),
-                    stock_name=stock,
-                    profile=PROFILE
-                )
+                # Önce candidate bul (verbose=True -> neden reddedildi logla)
+                from patterns import find_best_triangle_candidate, find_best_flag_candidate
+                cand_tri, logs_tri = find_best_triangle_candidate(df_tf, profile=PROFILE, verbose=True)
+                cand_flag, logs_flag = find_best_flag_candidate(df_tf, profile=PROFILE, verbose=False)
                 
-                if result is not None:
+                # En iyi candidate
+                best_cand = None
+                if cand_tri and cand_tri.valid:
+                    best_cand = cand_tri
+                if cand_flag and cand_flag.valid:
+                    if best_cand is None or cand_flag.raw_quality > best_cand.raw_quality:
+                        best_cand = cand_flag
+                
+                # Lifecycle update
+                state, break_dir, lifecycle_log = lifecycle_manager.update(stock + "_" + tf_name, df_tf, best_cand)
+                
+                if best_cand:
                     daily_stats['patterns_found'] += 1
-                    logger.info(f"🔍 {stock} {tf_name} - Formasyon bulundu: {result}")
-                    # TODO: Telegram gönderimi (en son)
+                    logger.info(f"🔍 {stock} {tf_name} - {best_cand.pattern_type} kalite {best_cand.raw_quality:.0f} state {state} - {lifecycle_log}")
+                    
+                    # Sadece önemli state'lerde Telegram gönder
+                    if state in [ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED]:
+                        # Human-readable mesaj sonra, şimdilik teknik
+                        alert_data = {
+                            'stock_name': stock,
+                            'timeframe': tf_name,
+                            'pattern_name': best_cand.pattern_type,
+                            'state': state,
+                            'confidence_score': best_cand.raw_quality,
+                            'critical_price_level': best_cand.upper_now if break_dir == 1 else best_cand.lower_now,
+                            'timestamp': df_tf.index[-1],
+                            'break_dir': break_dir,
+                            'logs': logs_tri[:2]
+                        }
+                        if notifier.send(alert_data):
+                            daily_stats['alerts_sent'] += 1
+                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state}")
                 else:
-                    logger.debug(f"{stock} {tf_name} - Formasyon yok (neden? log detayında)")
+                    # Neden yok? İlk 2 reddedilme sebebini logla (rejected_only)
+                    if logs_tri:
+                        logger.debug(f"{stock} {tf_name} - Formasyon yok: {logs_tri[0]}")
+                        if len(logs_tri) > 1:
+                            for l in logs_tri[1:3]:
+                                logger.debug(f"  {l}")
             
             daily_stats['stocks_scanned'] += 1
             
-            # Rate limit - son hisse değilse bekle
+            # Rate limit
             if idx < len(ACTIVE_STOCKS) - 1:
                 import random
                 from config import RATE_LIMIT_MIN, RATE_LIMIT_MAX
@@ -119,7 +151,7 @@ def scan_all_stocks(deque_manager: StockDequeManager):
                 
         except Exception as e:
             daily_stats['errors'] += 1
-            logger.error(f"{stock} tarama hatası: {e} - devam ediliyor, bot çökmüyor", exc_info=True)
+            logger.error(f"{stock} tarama hatası: {e} - devam ediliyor", exc_info=True)
             continue
     
     logger.info(f"=== TARAMA BİTTİ - Günlük: {daily_stats} ===")
@@ -137,10 +169,12 @@ def main_loop():
     logger.info(f"Hisseler: {ACTIVE_STOCKS[:5]}... (toplam {len(ACTIVE_STOCKS)})")
     
     deque_manager = StockDequeManager()
+    lifecycle_manager = PatternLifecycleManager(profile=PROFILE)
+    notifier = TelegramNotifier()
     
-    # İlk yükleme - eğer deque boşsa 60 gün veri çek
+    # İlk yükleme
     logger.info("İlk yükleme kontrolü...")
-    for stock in ACTIVE_STOCKS[:2]:  # Test için sadece 2 hisse
+    for stock in ACTIVE_STOCKS[:2]:  # Test için 2 hisse
         df = deque_manager.to_dataframe(stock)
         if df is None or len(df) == 0:
             logger.info(f"{stock} için ilk veri çekiliyor (mock - test)")
@@ -163,7 +197,7 @@ def main_loop():
                     continue
                 
                 # Tara
-                scan_all_stocks(deque_manager)
+                scan_all_stocks(deque_manager, lifecycle_manager, notifier)
                 
                 # Tümünü diske kaydet
                 deque_manager.save_all()
