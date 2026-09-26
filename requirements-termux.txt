@@ -1,16 +1,25 @@
-# Termux için - prebuilt paketler, build yok
-# Python 3.14 ile uyumlu
+# Termux için - MINIMAL, build yok
+# Python 3.14 + aarch64 Android - rust derleme hatası var
+# Çözüm: prebuilt paketler + sadece yfinance
 
-# Termux pkg ile kurulanlar (pip değil):
+# Termux pkg ile kurulanlar (pip ile kurma, build hatası verir):
 # pkg install python-numpy python-pandas
-# Ama pip için de esnek versiyonlar:
+# Bunlar pip list'te görünür ama pkg'den gelir
 
+# Sadece saf python paketler - build gerektirmeyen:
 yfinance
-pandas
-numpy
 pytz
 python-dotenv
 requests
-borsapy
 
-# Sabit versiyon yok, Termux en uygun wheel'i bulsun
+# borsapy TERIMUX'TA KURULMAZ! Sebep:
+# borsapy -> openai -> jiter -> maturin -> rustc
+# rustup aarch64-unknown-linux-android desteklemiyor
+# Hata: Target triple not supported by rustup
+# İhtiyaç olursa --no-deps ile kur, ama yfinance yeterli
+# pip install borsapy --no-deps  (opsiyonel, test için)
+# Ama bot yfinance ile de çalışır, borsapy fallback zaten
+
+# pandas/numpy buraya yazma! pkg'den geliyor
+# Eğer illa pip'den kurmak istersen:
+# pip install pandas --only-binary=:all: --no-build-isolation

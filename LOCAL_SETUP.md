@@ -1,10 +1,23 @@
 # Yerele Çekme - PowerShell Rehberi
 
-## 🚨 Termux İçin Önemli - Pandas Build Hatası Çözümü
+## 🚨 Termux İçin Önemli - 2 Farklı Build Hatası
 
-Termux'ta Python 3.14 ile `pandas==2.2.2` build hatası veriyor (numpy derlenemiyor). Çözüm:
+### Hata 1: Pandas Build Hatası
+Termux'ta Python 3.14 ile `pandas==2.2.2` build hatası:
+```
+npy_math_complex.c.src:432 cpowf undeclared
+```
+**Çözüm:** `pkg install python-numpy python-pandas` + venv `--system-site-packages`
 
-### Termux Hızlı Kurulum (Önerilen)
+### Hata 2: Borsapy / Jiter / Rust Hatası (YENİ)
+```
+borsapy -> openai -> jiter -> maturin -> rustc
+Target triple not supported by rustup: aarch64-unknown-linux-android
+ERROR: Failed to build 'jiter'
+```
+**Çözüm:** Borsapy'yi Termux'ta kurma! Yfinance yeterli. İstersen `--no-deps` ile.
+
+### Termux Hızlı Kurulum (Önerilen - Güncel)
 
 ```bash
 # Termux'u aç
@@ -21,9 +34,9 @@ git pull origin arena/01a0dd9d-formation-bot
 python -m venv venv --system-site-packages
 source venv/bin/activate
 
-# Sadece saf python paketleri
+# Sadece yfinance ve hafif paketler (borsapy YOK!)
 pip install --upgrade pip
-pip install yfinance borsapy python-dotenv pytz requests
+pip install yfinance python-dotenv pytz requests
 
 # Klasörler
 mkdir -p bot_data logs
@@ -32,18 +45,27 @@ cp .env.example .env
 # Test
 python -c "import pandas, numpy, yfinance; print('ok')"
 python test_triangle.py
+python collective_test.py
 ```
 
-**Veya otomatik script:**
+**Borsapy opsiyonel (gerek yok):**
+```bash
+# Sadece ticker için, openai olmadan
+pip install borsapy --no-deps
+```
+
+**Otomatik script:**
 ```bash
 bash setup-termux.sh
+# Script borsapy'yi sormadan atlar, yfinance ile devam eder
 ```
 
 ### Neden?
 
-- `pkg install python-numpy python-pandas` = Termux'un kendi derlediği prebuilt paketler, build yok
+- `pkg install python-numpy python-pandas` = Termux'un kendi derlediği prebuilt, build yok
 - `pip install pandas==2.2.2` = Kaynaktan derlemeye çalışıyor, clang hatası
-- `--system-site-packages` = venv içinde system paketleri (numpy/pandas) görünsün
+- `--system-site-packages` = venv içinde system paketleri görünsün
+- `borsapy` = openai -> jiter -> Rust gerektiriyor, Termux aarch64 desteklemiyor, o yüzden yfinance yeterli
 
 ---
 
