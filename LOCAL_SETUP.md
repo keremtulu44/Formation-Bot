@@ -1,6 +1,53 @@
 # Yerele Çekme - PowerShell Rehberi
 
-## 🚀 Hızlı Kurulum (PowerShell)
+## 🚨 Termux İçin Önemli - Pandas Build Hatası Çözümü
+
+Termux'ta Python 3.14 ile `pandas==2.2.2` build hatası veriyor (numpy derlenemiyor). Çözüm:
+
+### Termux Hızlı Kurulum (Önerilen)
+
+```bash
+# Termux'u aç
+
+pkg update -y
+pkg install python python-numpy python-pandas git -y
+
+cd ~
+cd Formation-Bot
+git checkout arena/01a0dd9d-formation-bot
+git pull origin arena/01a0dd9d-formation-bot
+
+# Venv --system-site-packages ile (pkg paketlerini görsün)
+python -m venv venv --system-site-packages
+source venv/bin/activate
+
+# Sadece saf python paketleri
+pip install --upgrade pip
+pip install yfinance borsapy python-dotenv pytz requests
+
+# Klasörler
+mkdir -p bot_data logs
+cp .env.example .env
+
+# Test
+python -c "import pandas, numpy, yfinance; print('ok')"
+python test_triangle.py
+```
+
+**Veya otomatik script:**
+```bash
+bash setup-termux.sh
+```
+
+### Neden?
+
+- `pkg install python-numpy python-pandas` = Termux'un kendi derlediği prebuilt paketler, build yok
+- `pip install pandas==2.2.2` = Kaynaktan derlemeye çalışıyor, clang hatası
+- `--system-site-packages` = venv içinde system paketleri (numpy/pandas) görünsün
+
+---
+
+## 🚀 Windows PowerShell Hızlı Kurulum
 
 ### 1. Repo'yu Çek
 

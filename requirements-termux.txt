@@ -1,0 +1,16 @@
+# Termux için - prebuilt paketler, build yok
+# Python 3.14 ile uyumlu
+
+# Termux pkg ile kurulanlar (pip değil):
+# pkg install python-numpy python-pandas
+# Ama pip için de esnek versiyonlar:
+
+yfinance
+pandas
+numpy
+pytz
+python-dotenv
+requests
+borsapy
+
+# Sabit versiyon yok, Termux en uygun wheel'i bulsun
