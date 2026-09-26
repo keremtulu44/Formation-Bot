@@ -954,7 +954,10 @@ def find_best_triangle_candidate(df: pd.DataFrame, profile: str = "Dengeli", ver
                             best_candidate = candidate
                             logs.append(f"OK [{hiA},{hiB},{loA},{loB}]: {reason}")
     
-    summary = f"Toplam {tried} aday denendi, {rejected} reddedildi, {tried-rejected} geçti, en iyi kalite {best_candidate.raw_quality:.1f} ise {best_candidate.pattern_type if best_candidate else 'Yok'}"
+    if best_candidate and best_candidate.valid:
+        summary = f"Toplam {tried} aday denendi, {rejected} reddedildi, {tried-rejected} geçti, en iyi kalite {best_candidate.raw_quality:.1f} ise {best_candidate.pattern_type}"
+    else:
+        summary = f"Toplam {tried} aday denendi, {rejected} reddedildi, {tried-rejected} geçti, en iyi kalite Yok"
     logs.insert(0, summary)
     
     return best_candidate, logs
