@@ -23,3 +23,9 @@ test_bot_data/
 # IDE
 .vscode/
 .idea/
+__pycache__/
+logs/
+bot_data/
+*.pkl
+*.log
+
