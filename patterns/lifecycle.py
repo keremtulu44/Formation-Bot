@@ -26,7 +26,7 @@ from .candidate import (PatternCandidate, build_candidate, effective_raw_quality
 from .constants import (ST_BREAK_ATTEMPT, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_BREAK_FAILED,
                         ST_BREAK_TIMEOUT, ST_CANDIDATE, ST_COMPLETED, ST_COMPRESSING, ST_DEFINED,
                         ST_GEOMETRY, ST_INVALID, ST_MATURING, ST_NONE, ST_PREP, ST_RETESTING,
-                        ST_RETEST_OK, ST_RETEST_WAIT, ST_WEAK,
+                        ST_RETEST_OK, ST_RETEST_WAIT, ST_WEAK, f_is_dead_state,
                         f_is_break_lifecycle, f_is_flag, f_is_pennant, f_is_specialized, f_is_terminal)
 from .indicators import calculate_atr, volume_sma_series
 from .mathutil import (f_age_quality, f_cleanliness_quality, f_clamp, f_contraction_quality,
@@ -67,6 +67,8 @@ class ArgentEngine:
 
     def __init__(self, profile: str = "Dengeli", mintick: float = 0.01,
                  use_breakout_quality_filter: bool = True):
+        from config import TERMINAL_TAZE_BAR
+        self.terminal_taze_bar = TERMINAL_TAZE_BAR
         self.profile = profile
         self.mintick = mintick
         self.use_breakout_quality_filter = use_breakout_quality_filter
@@ -109,6 +111,8 @@ class ArgentEngine:
         self.last_accepted_pivot_type = 0
         self.pattern_state = ST_NONE
         self.last_pattern_state = ST_NONE
+        # pattern_state EN SON hangi barda değişti? (ölü formasyon tazelik kontrolü için)
+        self.pattern_state_bar = -1
         self.invalid_reason = "Yok"
         self.break_candidate_bar: Optional[int] = None
         self.break_confirmed_bar: Optional[int] = None
@@ -209,8 +213,31 @@ class ArgentEngine:
     def _snapshot(self, prev_state: str, events: List[Dict], df: pd.DataFrame) -> EngineSnapshot:
         active = self.active if self.active.valid else None
         eff_q = effective_raw_quality(self.active) if self.active.valid else None
+
+        # --- ÖLÜ FORMASYON FİLTRESİ (FAZ 1 / teşhis C2) ---
+        # Terminal state = canlı takip edilecek formasyon YOK: kırılım+retest tamamlandı,
+        # kırılım başarısız/teyit alamadı veya formasyon geçersiz. Motor bunu içeride
+        # takip etmeye devam eder (replacement-margin için gerekli) ama dışarıya
+        # "canlı formasyon" olarak raporlanmamalı.
+        # Ölçüm: gerçek BIST verisinde 80 formasyondan 44'ü terminaldi ve hepsi
+        # ALERT_STATES'teki FORMASYON_TAMAMLANDI sayesinde her taramada mesaj
+        # üretiyordu -> alert akışının %55'i günler önce biten formasyonlardı.
+        # İSTİSNA: terminal geçiş son TERMINAL_TAZE_BAR bar içindeyse (taze olay)
+        # bir kez raporlanır, böylece "az önce tamamlandı" bilgisi kaçmaz.
+        dead_age = None
+        if active is not None and f_is_dead_state(self.pattern_state):
+            if self.pattern_state_bar >= 0:
+                dead_age = self.bar_index - self.pattern_state_bar
+            if dead_age is None or dead_age > self.terminal_taze_bar:
+                active = None
+                eff_q = None
+
         if active is None:
-            log = f"Formasyon yok (state {self.pattern_state})"
+            if dead_age is not None:
+                log = (f"Ölü formasyon ({self.pattern_state}, {dead_age} bar önce bitti) "
+                       f"- canlı takip yok")
+            else:
+                log = f"Formasyon yok (state {self.pattern_state})"
         else:
             log = (f"{active.pattern_type} kalite {eff_q:.0f} state {self.pattern_state}"
                    + (f" yön {self.break_candidate_dir}" if self.break_candidate_dir != 0 else ""))
@@ -567,6 +594,8 @@ class ArgentEngine:
             else:
                 next_state = ST_CANDIDATE
 
+        if next_state != prev_state:
+            self.pattern_state_bar = b   # state bu barda değişti (tazelik ölçümü)
         self.pattern_state = next_state
         self.break_candidate_dir = next_break_dir
 

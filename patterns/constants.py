@@ -74,3 +74,20 @@ def f_is_break_lifecycle(state_value: str) -> bool:
 def f_is_terminal(state_value: str) -> bool:
     """Pine: f_is_terminal — son state'ler."""
     return state_value in (ST_COMPLETED, ST_BREAK_FAILED, ST_INVALID)
+
+
+def f_is_dead_state(state_value: str) -> bool:
+    """
+    Formasyon "ölü" mü? (canlı takip edilecek bir formasyon kalmadı)
+
+    f_is_terminal'e ek olarak KIRILIM_TEYIT_ALAMADI (ST_BREAK_TIMEOUT) da burada:
+    kırılım teyit alamadı, formasyon ya zayıfladı ya yeni aday bekliyor.
+
+    Neden lazım? Motor deterministik tekrar (tam_yeniden=True) ile tüm pencereyi her
+    taramada baştan oynatır. Terminal state'e ulaşmış formasyonlar `self.active`'te
+    valid kalmaya devam eder (replacement-margin mantığı için gerekli) ve
+    _snapshot'ta "canlı formasyon" olarak raporlanırdı. Sonuç: günler önce
+    tamamlanmış/başarısız formasyonlar için her taramada "🏁 TAMAMLANDI" mesajı
+    (ölçüm: 80 formasyondan 44'ü terminal -> alert akışının %55'i çöptü).
+    """
+    return state_value in (ST_COMPLETED, ST_BREAK_FAILED, ST_INVALID, ST_BREAK_TIMEOUT, ST_NONE)

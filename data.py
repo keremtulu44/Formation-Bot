@@ -15,8 +15,10 @@ import pickle
 from typing import Dict, List, Optional
 
 from config import (
-    ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN, 
-    RATE_LIMIT_MIN, RATE_LIMIT_MAX, DATA_DIR, ACTIVE_STOCKS
+    ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN,
+    RATE_LIMIT_MIN, RATE_LIMIT_MAX, DATA_DIR, ACTIVE_STOCKS,
+    CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER_CLOSE_MIN, TARAMA_PENCERE_SONU,
+    STALE_BAR_UYARI_DK, TERMINAL_TAZE_BAR
 )
 
 logger = logging.getLogger(__name__)
@@ -50,6 +52,33 @@ def is_bist_open(now: Optional[datetime] = None) -> bool:
     current_time = now.time()
     return BIST_OPEN <= current_time <= BIST_CLOSE
 
+
+def tarama_penceresi_acik_mi(now: Optional[datetime] = None) -> bool:
+    """
+    Bot şu an TARAMA yapmalı mı? (is_bist_open'tan farklı: seans kapandıktan SONRA
+    günün son mumunu analiz etmek için ek pay verir.)
+
+    Neden ayrı fonksiyon? Yahoo'nun .IS 1H seansı 09:30-18:30 (ölçüldü). Günün son
+    mumu (17:30 etiketli) 18:30'da kapanır. ESKİ kodda pencere 18:10'da kapandığı
+    için BU MUM HİÇ ANALİZ EDİLMİYORDU. Şimdi pencere TARAMA_PENCERE_SONU'na
+    (18:40) kadar açık -> son mum 18:35 taramasında görülür.
+
+    Hafta içi + BIST_OPEN..TARAMA_PENCERE_SONU arası.
+    """
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    else:
+        if now.tzinfo is None:
+            now = ISTANBUL_TZ.localize(now)
+        else:
+            now = now.astimezone(ISTANBUL_TZ)
+
+    if now.weekday() >= 5:  # 5=Cumartesi, 6=Pazar
+        return False
+
+    current_time = now.time()
+    return BIST_OPEN <= current_time <= TARAMA_PENCERE_SONU
+
 def time_until_next_open(now: Optional[datetime] = None) -> float:
     """Bir sonraki açılışa kadar kaç saniye? Uyku için"""
     if now is None:
@@ -81,9 +110,19 @@ def time_until_next_open(now: Optional[datetime] = None) -> float:
 
 def time_until_next_candle_close(now: Optional[datetime] = None) -> float:
     """
-    Bir sonraki 1H mum kapanışına kadar kaç saniye?
-    BIST mumları saat başı kapanır (10:00, 11:00, vs)
-    Kapanıştan 5 dk sonra tarama başlatacağız (prompt gereği)
+    Bir sonraki TARAMA anına kadar kaç saniye? (mum kapanışı + 5 dk)
+
+    ÖLÇÜLMÜŞ GERÇEKLİK (config.py'deki notlara bak): yfinance'in .IS 1H mumları
+    :30'da kapanır (09:30, 10:30, ... 17:30 etiketli, etiket = mum BAşı) ve günün
+    son mumu 18:30'da kapanır.
+
+    ESKİ HATA: "saat başı + 5 dk" (=:05) hesaplıyordu. Mum :30'da kapandığı için
+      - her tarama veriyi 35 DAKİKA geç gösteriyordu (11:05 taraması 09:30 mumunu
+        görüyordu, 10:30 mumu 11:30'da kapanıyordu), ve
+      - günün son mumu (18:30 kapanış) hiç analiz edilmiyordu.
+
+    YENİ: tarama = mum kapanışı + SCAN_DELAY_AFTER_CLOSE_MIN -> :35.
+    Günün son taraması: son mum 18:30 kapanır -> 18:35.
     """
     if now is None:
         now = datetime.now(ISTANBUL_TZ)
@@ -91,13 +130,92 @@ def time_until_next_candle_close(now: Optional[datetime] = None) -> float:
         now = ISTANBUL_TZ.localize(now)
     else:
         now = now.astimezone(ISTANBUL_TZ)
-    
-    # Bir sonraki saat başı
-    next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-    # 5 dk ekle (mum kapanışından 5 dk sonra tara)
-    next_scan = next_hour + timedelta(minutes=5)
-    
-    return (next_scan - now).total_seconds()
+
+    # Bu saatin (veya bir sonraki saatin) :30'su = mum kapanışı
+    kapanis = now.replace(minute=0, second=0, microsecond=0) + timedelta(minutes=CANDLE_CLOSE_MINUTE)
+    if kapanis <= now:
+        kapanis += timedelta(hours=1)
+
+    # Mum kapanışı + gecikme = tarama anı
+    tarama = kapanis + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN)
+
+    # Günün SON taraması: son mum 18:30'da kapanır -> 18:35'te taranmalı.
+    # Eğer hesaplanan tarama bundan sonraysa ve son tarama henüz gelmediyse, ona çek.
+    son_tarama = now.replace(hour=TARAMA_PENCERE_SONU.hour,
+                             minute=TARAMA_PENCERE_SONU.minute - SCAN_DELAY_AFTER_CLOSE_MIN,
+                             second=0, microsecond=0)
+    if tarama > son_tarama:
+        if now < son_tarama:
+            tarama = son_tarama
+        elif now.time() <= TARAMA_PENCERE_SONU:
+            # Son tarama anındayız (18:35-18:40) -> hemen tara.
+            # Bu kontrol olmadan ana döngü "1dk'den fazla bekle" dalına düşüp günün
+            # son taramasını uyuyarak geçiyordu.
+            return 0.0
+
+    return (tarama - now).total_seconds()
+
+def son_kapanan_mum_ani(now: Optional[datetime] = None) -> Optional[datetime]:
+    """
+    Bugün EN SON kapanmış 1H mumun kapanış anı. Hiç kapanmadıysa None.
+
+    Ölçülen seans: ilk mum 09:30 etiketli (09:30-10:30), son mum 17:30 etiketli
+    (17:30-18:30). Yani kapanış anları 10:30, 11:30, ..., 18:30.
+    09:30 "kapanışı" YOKTUR (ilk mum daha yeni açılmıştır) -> None döner.
+    """
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    if now.tzinfo is None:
+        now = ISTANBUL_TZ.localize(now)
+    else:
+        now = now.astimezone(ISTANBUL_TZ)
+
+    kapanis = now.replace(minute=0, second=0, microsecond=0) + timedelta(minutes=CANDLE_CLOSE_MINUTE)
+    if kapanis > now:
+        kapanis -= timedelta(hours=1)
+    # İlk gerçek kapanış 10:30'dur; ondan önceki "kapanış" bugün için geçerli değil.
+    ilk_kapanis = (now.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute, second=0, microsecond=0)
+                   + timedelta(minutes=40))
+    if kapanis < ilk_kapanis:
+        return None
+    return kapanis
+
+
+def tarama_animi_mi(now: Optional[datetime] = None,
+                    son_taranan_kapanis: Optional[datetime] = None) -> bool:
+    """
+    Şu an tarama YAPILMALI MI?
+
+    Kural (ölçümden): mum :30'da kapanır, kapanış + 5 dk = tarama anı (:35).
+    Aynı kapanış iki kez taranmasın diye `son_taranan_kapanis` verilir.
+
+    Ana döngü bunu kullanır: böylece eski "saat başı + 5 dk" mantığı (5 dk'lik uyku
+    evreleri hedefi ıskaladığı için çoğu tarama saatini hiç yakalamıyordu)
+    ve 18:35'te üst üste tekrar eden tarama fırtınası ortadan kalkar.
+    """
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    if now.tzinfo is None:
+        now = ISTANBUL_TZ.localize(now)
+    else:
+        now = now.astimezone(ISTANBUL_TZ)
+
+    if now.weekday() >= 5:
+        return False
+
+    kapanis = son_kapanan_mum_ani(now)
+    if kapanis is None:
+        return False
+    # Sadece bugünün seansına ait mumlar (dünkü son mumu yeniden taramayalım)
+    if kapanis.date() != now.date():
+        return False
+    hedef = kapanis + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN)
+    if now < hedef:
+        return False
+    if son_taranan_kapanis is not None and kapanis <= son_taranan_kapanis:
+        return False
+    return True
+
 
 # === DEQUE YÖNETİMİ ===
 
@@ -407,13 +525,19 @@ def fetch_with_rate_limit(stock: str, fetch_func, *args, **kwargs) -> Optional[p
 
 def fetch_yfinance_1h(stock: str, period: str = "60d") -> Optional[pd.DataFrame]:
     """yfinance'den 1h OHLCV çeker (gürültü bastırılmış). Başarısızlıkta None döner.
-    Not: Yahoo bazı sembolleri taşımıyor (örn. KOZAL.IS / KOZAA.IS -> HTTP 404)."""
+    Not: Yahoo bazı sembolleri taşımıyor (örn. KOZAL.IS / KOZAA.IS -> HTTP 404).
+
+    ÖNEMLİ - auto_adjust=False: yfinance'in default'ı auto_adjust=True (v0.2.51+).
+    True iken geçmiş OHLC temettü/splite göre YENİDEN AYARLANIR; TradingView/Pine ise
+    ham fiyat kullanır. Bu port sırasında parametre düşmüştü -> temettü sonrası tüm
+    geçmiş kayar, pivot/sınır/ATR değerleri Pine'dan sapardı. Geri konuldu.
+    """
     try:
         import io
         import contextlib
         import yfinance as yf
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            ham = yf.Ticker(stock + ".IS").history(period=period, interval="1h")
+            ham = yf.Ticker(stock + ".IS").history(period=period, interval="1h", auto_adjust=False)
         if ham is None or ham.empty:
             return None
         ham = ham.rename(columns=str.lower)

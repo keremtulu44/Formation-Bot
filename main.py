@@ -10,7 +10,7 @@ import json
 import signal
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, timedelta, time as dt_time
 import pytz
 
 try:
@@ -19,8 +19,11 @@ try:
 except ImportError:
     pass
 
-from config import ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR, ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES
-from data import (StockDequeManager, is_bist_open, time_until_next_open, time_until_next_candle_close,
+from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR,
+                    ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES, BIST_OPEN,
+                    SCAN_DELAY_AFTER_CLOSE_MIN, STALE_BAR_UYARI_DK)
+from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
+                  son_kapanan_mum_ani, time_until_next_open,
                   resample_all_timeframes, fetch_yfinance_1h, tamamlanmis_mumlar)
 from patterns import PatternLifecycleManager, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
 from notifier import TelegramNotifier
@@ -59,6 +62,15 @@ def setup_logging():
 
 logger = setup_logging()
 
+
+def son_bar_yasi_dakika_str(dk: float) -> str:
+    """Dakikayı insan okunur yapar: 95 -> '1sa 35dk'"""
+    dk = int(round(dk))
+    if dk < 60:
+        return f"{dk} dk"
+    return f"{dk // 60}sa {dk % 60}dk"
+
+
 # === SİNYAL YÖNETİMİ (systemctl stop -> SIGTERM) ===
 # Neden? systemd durdururken Python anında ölürse o taramada biriken deque'ler kaybolur.
 _shutdown_requested = False
@@ -78,6 +90,14 @@ daily_stats = {
     'patterns_found': 0,
     'alerts_sent': 0,
     'errors': 0,
+    # Veri sağlığı (FAZ 1): fetch başarısızlıkları artık SAYILIYOR ve görünür.
+    # Önceden fetch başarısız olunca cache dolu olduğu için hiç log satırı yoktu
+    # -> Yahoo saatlerce kapalıysa bot "sağlıklı" görünürken kör çalışıyordu.
+    'fetch_ok': 0,
+    'fetch_failures': 0,
+    'stale_stocks': 0,
+    'max_bar_age_min': None,
+    'data_stale': False,
     'last_reset': datetime.now(ISTANBUL_TZ).date()
 }
 
@@ -92,6 +112,11 @@ def reset_daily_if_needed():
         daily_stats['patterns_found'] = 0
         daily_stats['alerts_sent'] = 0
         daily_stats['errors'] = 0
+        daily_stats['fetch_ok'] = 0
+        daily_stats['fetch_failures'] = 0
+        daily_stats['stale_stocks'] = 0
+        daily_stats['max_bar_age_min'] = None
+        daily_stats['data_stale'] = False
         daily_stats['last_reset'] = today
 
 # === HEARTBEAT ===
@@ -115,6 +140,12 @@ def write_heartbeat(data_dir: str = None):
             "alerts_sent": daily_stats['alerts_sent'],
             "errors": daily_stats['errors'],
             "active_stocks": len(ACTIVE_STOCKS),
+            # --- veri sağlığı (FAZ 1) ---
+            "fetch_ok": daily_stats['fetch_ok'],
+            "fetch_failures": daily_stats['fetch_failures'],
+            "stale_stocks": daily_stats['stale_stocks'],
+            "max_bar_age_min": daily_stats['max_bar_age_min'],
+            "data_stale": daily_stats['data_stale'],
         }
         with open(heartbeat_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
@@ -130,7 +161,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     - Lifecycle update (kırılım takibi)
     - Telegram (cooldown ile)
     """
-    logger.info(f"=== TARAMA BAŞLIYOR - {len(ACTIVE_STOCKS)} hisse, profil: {PROFILE} ===")
+    simdiki_zaman = datetime.now(ISTANBUL_TZ)
+    logger.info(f"=== TARAMA BAŞLIYOR - {len(ACTIVE_STOCKS)} hisse, profil: {PROFILE} "
+                f"({simdiki_zaman.strftime('%H:%M')}) ===")
     
     for idx, stock in enumerate(ACTIVE_STOCKS):
         if _shutdown_requested:
@@ -147,14 +180,41 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             # Taze veri: yeni 1h mumlari deque'ye ekle (maxlen FIFO en eskisini atar).
             # Fetch basarisizsa cache ile devam; ikisi de yoksa hisse ATLANIR.
             # Canli dongude MOCK VERI YOK - sahte veriyle formasyon uretilmez.
+            # FAZ 1: fetch basarisizligi ARTIK LOGLANIYOR ve SAYILIYOR. Onceki kodda
+            # cache doluysa tek satir log bile yoktu -> "saglikli" gorunen kor bot.
             taze = fetch_yfinance_1h(stock)
             if taze is not None:
                 deque_manager.append_dataframe(stock, taze)
                 df_1h = deque_manager.to_dataframe(stock)
+                daily_stats['fetch_ok'] += 1
+            else:
+                daily_stats['fetch_failures'] += 1
             
             if df_1h is None or len(df_1h) < 50:
                 logger.warning(f"{stock}: veri yok (fetch basarisiz + cache bos) - bu tur atlandi")
                 continue
+            
+            # --- VERİ TAZELİĞİ ÖLÇÜMÜ (FAZ 1) ---
+            # En yeni 1H mumun yaşı. Yahoo saatlerce kapalıysa bu değer büyür ve
+            # bot eski veriyle (yanlış sinyalle) çalışmaya devam eder. Ölçüp
+            # loglayıp heartbeat'e yazıyoruz ki kör çalışma görünür olsun.
+            son_bar_yasi_dk = (simdiki_zaman - df_1h.index[-1].tz_convert(ISTANBUL_TZ)
+                               if df_1h.index[-1].tzinfo else
+                               simdiki_zaman - ISTANBUL_TZ.localize(df_1h.index[-1])).total_seconds() / 60.0
+            if daily_stats['max_bar_age_min'] is None or son_bar_yasi_dk > daily_stats['max_bar_age_min']:
+                daily_stats['max_bar_age_min'] = round(son_bar_yasi_dk, 1)
+            # Seansın ilk saatinde en yeni veri dünkü kapanıştır (ilk mum 10:30'da
+            # kapanır) -> o pencereyi uyarı dışında tut.
+            erken_seans = simdiki_zaman.time() < dt_time(10, 50)
+            if son_bar_yasi_dk > STALE_BAR_UYARI_DK and not erken_seans:
+                daily_stats['stale_stocks'] += 1
+                daily_stats['data_stale'] = True
+                logger.warning(
+                    f"{stock}: VERİ ESKİ - en yeni 1H mum {son_bar_yasi_dakika_str(son_bar_yasi_dk)} önce "
+                    f"(eşik {STALE_BAR_UYARI_DK} dk). yfinance çekimi "
+                    f"{'başarısız' if taze is None else 'veri gelmiyor'}, cache ile devam ediliyor - "
+                    f"formasyonlar eski veriyle hesaplanıyor!"
+                )
             
             # Tüm timeframe'leri üret
             all_tfs = resample_all_timeframes(df_1h)
@@ -231,6 +291,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             continue
     
     logger.info(f"=== TARAMA BİTTİ - Günlük: {daily_stats} ===")
+    if daily_stats['fetch_failures'] > 0 or daily_stats['data_stale']:
+        logger.warning(
+            f"VERİ SAĞLIĞI: taze veri {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse, "
+            f"fetch hatası {daily_stats['fetch_failures']}, eski veri {daily_stats['stale_stocks']} hisse, "
+            f"en eski mum {daily_stats['max_bar_age_min']} dk"
+        )
+    else:
+        logger.info(
+            f"VERİ SAĞLIĞI: taze veri {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse, "
+            f"en eski mum {daily_stats['max_bar_age_min']} dk"
+        )
     write_heartbeat()
 
 def main_loop():
@@ -264,30 +335,40 @@ def main_loop():
             else:
                 logger.warning(f"{stock}: ilk veri çekilemedi (Yahoo yok + cache boş) - canlıda atlanacak")
     
+    # Aynı mum iki kez taranmasın (drift koruması). Restart'ta None -> bir sonraki
+    # kapanışta tazelenir, son mum gerekiyorsa bir kez daha taranır (zararsız).
+    son_taranan_kapanis = None
+    
     while not _shutdown_requested:
         try:
             now = datetime.now(ISTANBUL_TZ)
             
-            if is_bist_open(now):
-                logger.info(f"BIST AÇIK - {now.strftime('%H:%M:%S')} - tarama başlıyor")
-                
-                # Mum kapanışına kadar bekle (5dk sonrası)
-                wait_sec = time_until_next_candle_close(now)
-                if wait_sec > 60:  # 1dk'dan fazlaysa bekle
-                    logger.info(f"Sonraki mum kapanış +5dk'ya kadar {wait_sec/60:.1f}dk bekleniyor")
-                    time.sleep(min(wait_sec, 300))  # Max 5dk uyu, sonra tekrar kontrol et
+            if tarama_penceresi_acik_mi(now):
+                if tarama_animi_mi(now, son_taranan_kapanis):
+                    # Tarama anı: en son kapanmış mum + 5 dk doldu.
+                    kapanis = son_kapanan_mum_ani(now)
+                    logger.info(f"TARAMA - {now.strftime('%H:%M:%S')} "
+                                f"(mum {kapanis.strftime('%H:%M')}'de kapandı, "
+                                f"günün {kapanis.hour - 9}. taraması)")
+                    scan_all_stocks(deque_manager, lifecycle_manager, notifier)
+                    son_taranan_kapanis = kapanis
+                    # Tümünü diske kaydet (yarım kaldıysa sonraki turda devam)
+                    deque_manager.save_all()
+                    time.sleep(5)  # aynı saniyede tekrar girmesin
                     continue
                 
-                # Tara
-                scan_all_stocks(deque_manager, lifecycle_manager, notifier)
-                
-                # Tümünü diske kaydet
-                deque_manager.save_all()
-                
-                # Sonraki mum kapanışına kadar uyu
-                wait_next = time_until_next_candle_close(datetime.now(ISTANBUL_TZ))
-                logger.info(f"Tarama bitti, sonraki mum için {wait_next/60:.1f}dk uyku")
-                time.sleep(max(wait_next, 60))
+                # Henüz tarama anı değil: ne kadar bekleyeceğiz?
+                kapanis = son_kapanan_mum_ani(now)
+                if kapanis is None or kapanis.date() != now.date():
+                    # Bugün henüz mum kapanmadı (ilk kapanış 10:30) -> ilk tarama anını bekle
+                    hedef = (now.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute,
+                                         second=0, microsecond=0)
+                             + timedelta(minutes=40 + SCAN_DELAY_AFTER_CLOSE_MIN))
+                else:
+                    hedef = kapanis + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN)
+                bekle = max((hedef - now).total_seconds(), 30)
+                logger.info(f"Sonraki tarama {hedef.strftime('%H:%M')} -> {bekle/60:.1f} dk bekleniyor")
+                time.sleep(min(bekle, 300))  # Max 5dk uyu, sonra tekrar kontrol et
                 
             else:
                 # BIST kapalı

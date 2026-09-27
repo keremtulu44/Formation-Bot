@@ -33,8 +33,24 @@ BIST_30 = BIST_50[:30]
 ACTIVE_STOCKS = BIST_30
 
 ISTANBUL_TZ = pytz.timezone("Europe/Istanbul")
-BIST_OPEN = time(9, 50)
-BIST_CLOSE = time(18, 10)
+BIST_OPEN = time(9, 50)     # gerçek BIST seans başlangıcı (Yahoo ilk mumu 09:30 etiketli)
+BIST_CLOSE = time(18, 10)   # gerçek BIST kapanışı + tampon
+
+# --- CANLI TARAMA ZAMANLAMASI (yfinance .IS verisinden ÖLÇÜLDÜ, varsayım değil) ---
+# Ölçüm 1: 1H bar etiketleri 09:30, 10:30, ... 17:30 (günde 9 mum) ve barlar bitişik
+#           (close[i] == open[i+1])  ->  etiket = MUM BAŞI, mum :30'da kapanır.
+# Ölçüm 2: 17:30 etiketli (günün son) mumun hacmi ortalama mumun %91'i -> TAM mum,
+#           yani son mum 18:30'da kapanır (Yahoo'nun .IS seansı 09:30-18:30).
+# Ölçüm 3: 09:30 etiketli mumun hacmi ~0 (yfinance'nin bilinen ilk-bar hatası),
+#           OHLC'i gerçek -> filtrelemeye gerek yok, sadece hacim skoru nötr kalır.
+# ESKİ HATA: tetikleyici "saat başı + 5 dk" (=:05) idi. Mum :30'da kapandığı için
+#            her tarama veriyi 35 dk geç gösteriyordu ve günün son mumu (18:30
+#            kapanış) hiç analiz edilmiyordu (pencere 18:10'da kapanıyordu).
+CANDLE_CLOSE_MINUTE = 30          # 1H mumun kapanış dakikası (saat başından offset)
+SCAN_DELAY_AFTER_CLOSE_MIN = 5    # mum kapanışından kaç dk sonra taranacak
+TARAMA_PENCERE_SONU = time(18, 40)  # son mum 18:30 kapanır + 5 dk = 18:35 (+ pay)
+STALE_BAR_UYARI_DK = 120          # en yeni 1H mum bu kadardır eskiyse "kör çalışma" uyarısı
+TERMINAL_TAZE_BAR = 3             # terminal (ölü) formasyon bu kadar bar içindeyse haber ver
 
 DEQUE_MAXLEN = 360
 RATE_LIMIT_MIN = 45
