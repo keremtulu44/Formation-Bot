@@ -57,6 +57,7 @@ def main():
     rapor_satirlari = []
     bulgular = []  # (stock, tf, cand, snap, df_tf)
     kaynak_notlari = []
+    veri_son_barlari = []  # veri tazeligi icin (hisse basina son bar zamani)
 
     for i, stock in enumerate(ACTIVE_STOCKS):
         kaynak = "-"
@@ -77,6 +78,7 @@ def main():
             continue
 
         son_bar = df_1h.index[-1]
+        veri_son_barlari.append(son_bar)
         kaynak_notlari.append(f"{stock}: {kaynak}, son bar {son_bar}")
 
         tfs = resample_all_timeframes(df_1h)
@@ -110,6 +112,15 @@ def main():
     print(baslik)
     rapor_satirlari.append(baslik)
 
+    # Veri tazeligi: TradingView karsilastirmasi icin SON BAR zamani kritik
+    if veri_son_barlari:
+        en_son_veri = max(veri_son_barlari)
+        gecikme_saat = (pd.Timestamp.now(tz=ISTANBUL_TZ) - en_son_veri).total_seconds() / 3600.0
+        tazelik = (f"Veri son bar: {en_son_veri.strftime('%d.%m.%Y %H:%M')} "
+                   f"({gecikme_saat:.1f} saat once) — TradingView'da AYNI ana bakin")
+        print(tazelik)
+        rapor_satirlari.append(tazelik)
+
     print("\n--- Veri kaynaklari ---")
     for n in kaynak_notlari:
         print(" ", n)
@@ -119,8 +130,9 @@ def main():
         print(mesaj)
         rapor_satirlari.append(mesaj)
     else:
+        n_ozel = len([b for b in bulgular if b[2].family in ("Bayrak", "Flama")])
         print(f"\n>>> {len(set(b[0] for b in bulgular))} hissede "
-              f"{len(bulgular)} CANLI formasyon var <<<\n")
+              f"{len(bulgular)} CANLI formasyon var ({n_ozel} tanesi flama/bayrak) <<<\n")
         rapor_satirlari.append(f"\n>>> {len(bulgular)} canli formasyon <<<\n")
 
         sira = 0
