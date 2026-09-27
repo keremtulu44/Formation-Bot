@@ -18,7 +18,7 @@ import time
 import pandas as pd
 
 from config import ACTIVE_STOCKS, ISTANBUL_TZ
-from data import StockDequeManager, resample_all_timeframes
+from data import StockDequeManager, resample_all_timeframes, fetch_yfinance_1h
 from patterns import PatternLifecycleManager
 from patterns.detect import _usable_active, LIVE_STATES, TRIANGLE_FAMILIES, SPECIALIZED_FAMILIES
 

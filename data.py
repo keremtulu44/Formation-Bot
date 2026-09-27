@@ -136,19 +136,34 @@ class StockDequeManager:
         dq.append(candle)
     
     def append_dataframe(self, stock: str, df: pd.DataFrame):
-        """DataFrame'den toplu ekle - ilk yükleme için"""
+        """DataFrame'den toplu ekle — timestamp bazlı TEKİLLEŞTİRİLMİŞ (idempotent).
+        Aynı zamana sahip mum varsa yeni değerler yazılır (taze kazınır),
+        pencere taşarsa en eski düşer (maxlen FIFO). Böylece aynı 60d penceresi
+        tekrar çekilip eklense bile deque bozulmaz."""
         dq = self.get_deque(stock)
+        birlesik: Dict[datetime, dict] = {c['timestamp']: c for c in dq}
+        yeni = 0
+        guncellenen = 0
         for idx, row in df.iterrows():
+            ts = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
             candle = {
-                'timestamp': idx if isinstance(idx, datetime) else pd.to_datetime(idx),
+                'timestamp': ts,
                 'open': float(row['open']),
                 'high': float(row['high']),
                 'low': float(row['low']),
                 'close': float(row['close']),
                 'volume': float(row.get('volume', 0))
             }
-            dq.append(candle)
-        logger.info(f"{stock} için {len(df)} mum deque'ye eklendi - toplam {len(dq)}")
+            if ts in birlesik:
+                guncellenen += 1
+            else:
+                yeni += 1
+            birlesik[ts] = candle
+        tumu = sorted(birlesik.values(), key=lambda c: c['timestamp'])
+        dq.clear()
+        for c in tumu[-self.maxlen:]:
+            dq.append(c)
+        logger.info(f"{stock}: {yeni} yeni / {guncellenen} güncellenen mum (geldi {len(df)}, toplam {len(dq)})")
     
     def to_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
         """Deque'yi DataFrame'e çevir - pattern tespiti için"""
@@ -352,6 +367,26 @@ def fetch_with_rate_limit(stock: str, fetch_func, *args, **kwargs) -> Optional[p
     except Exception as e:
         logger.error(f"{stock} veri çekme hatası: {e} - atlanıyor, bot devam ediyor")
         return None
+
+def fetch_yfinance_1h(stock: str, period: str = "60d") -> Optional[pd.DataFrame]:
+    """yfinance'den 1h OHLCV çeker (gürültü bastırılmış). Başarısızlıkta None döner.
+    Not: Yahoo bazı sembolleri taşımıyor (örn. KOZAL.IS / KOZAA.IS -> HTTP 404)."""
+    try:
+        import io
+        import contextlib
+        import yfinance as yf
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            ham = yf.Ticker(stock + ".IS").history(period=period, interval="1h")
+        if ham is None or ham.empty:
+            return None
+        ham = ham.rename(columns=str.lower)
+        gerekli = ["open", "high", "low", "close", "volume"]
+        if not all(c in ham.columns for c in gerekli):
+            return None
+        return ham[gerekli]
+    except Exception:
+        return None
+
 
 def mock_fetch_60d_1h(stock: str, n_bars: int = 360) -> pd.DataFrame:
     """

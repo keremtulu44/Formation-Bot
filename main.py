@@ -10,8 +10,14 @@ import logging
 from datetime import datetime
 import pytz
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # .env dosyasindan TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID okur
+except ImportError:
+    pass
+
 from config import ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR, ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES
-from data import StockDequeManager, is_bist_open, time_until_next_open, time_until_next_candle_close, resample_all_timeframes, mock_fetch_60d_1h
+from data import StockDequeManager, is_bist_open, time_until_next_open, time_until_next_candle_close, resample_all_timeframes, fetch_yfinance_1h
 from patterns import PatternLifecycleManager, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
 from notifier import TelegramNotifier
 
@@ -77,13 +83,20 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             
             logger.info(f"[{idx+1}/{len(ACTIVE_STOCKS)}] {stock} taranıyor...")
             
-            # Deque'den DataFrame al
+            # Deque'den mevcut pencere
             df_1h = deque_manager.to_dataframe(stock)
             
+            # Taze veri: yeni 1h mumlari deque'ye ekle (maxlen FIFO en eskisini atar).
+            # Fetch basarisizsa cache ile devam; ikisi de yoksa hisse ATLANIR.
+            # Canli dongude MOCK VERI YOK - sahte veriyle formasyon uretilmez.
+            taze = fetch_yfinance_1h(stock)
+            if taze is not None:
+                deque_manager.append_dataframe(stock, taze)
+                df_1h = deque_manager.to_dataframe(stock)
+            
             if df_1h is None or len(df_1h) < 50:
-                logger.warning(f"{stock} için yeterli veri yok, mock veri ile dolduruluyor (test)")
-                df_1h = mock_fetch_60d_1h(stock, 360)
-                deque_manager.append_dataframe(stock, df_1h)
+                logger.warning(f"{stock}: veri yok (fetch basarisiz + cache bos) - bu tur atlandi")
+                continue
             
             # Tüm timeframe'leri üret
             all_tfs = resample_all_timeframes(df_1h)
@@ -166,15 +179,18 @@ def main_loop():
     lifecycle_manager = PatternLifecycleManager(profile=PROFILE)
     notifier = TelegramNotifier()
     
-    # İlk yükleme
-    logger.info("İlk yükleme kontrolü...")
-    for stock in ACTIVE_STOCKS[:2]:  # Test için 2 hisse
+    # İlk yükleme: cache'i boş olan hisseler için taze veri çek
+    logger.info("İlk yükleme: cache'i boş olan hisseler taze çekiliyor...")
+    for stock in ACTIVE_STOCKS:
         df = deque_manager.to_dataframe(stock)
-        if df is None or len(df) == 0:
-            logger.info(f"{stock} için ilk veri çekiliyor (mock - test)")
-            df_mock = mock_fetch_60d_1h(stock, 360)
-            deque_manager.append_dataframe(stock, df_mock)
-            deque_manager.save_to_disk(stock)
+        if df is None or len(df) < 50:
+            taze = fetch_yfinance_1h(stock)
+            if taze is not None:
+                deque_manager.append_dataframe(stock, taze)
+                deque_manager.save_to_disk(stock)
+                logger.info(f"{stock}: {len(taze)} mum çekildi ve diske kaydedildi")
+            else:
+                logger.warning(f"{stock}: ilk veri çekilemedi (Yahoo yok + cache boş) - canlıda atlanacak")
     
     while True:
         try:
