@@ -27,9 +27,14 @@ TFLER = ["1h", "2h", "4h", "1d"]
 
 
 def taze_veri_cek(stock: str) -> pd.DataFrame:
-    """yfinance'den 60d 1h çeker, OHLCV lowercase döner."""
+    """yfinance'den 60d 1h çeker, OHLCV lowercase döner.
+    yfinance'in gürültülü hata baskıları (HTTP 404 vb.) yakalanıp susturulur —
+    başarısızlık tek satır özetle raporlanır (cache'e düşer)."""
+    import io
+    import contextlib
     import yfinance as yf
-    df = yf.Ticker(stock + ".IS").history(period="60d", interval="1h")
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        df = yf.Ticker(stock + ".IS").history(period="60d", interval="1h")
     if df is None or df.empty:
         raise ValueError("bos veri")
     df = df.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]]
