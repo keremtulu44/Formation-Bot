@@ -12,7 +12,7 @@ import pytz
 
 from config import ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR, ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES
 from data import StockDequeManager, is_bist_open, time_until_next_open, time_until_next_candle_close, resample_all_timeframes, mock_fetch_60d_1h
-from patterns import calculate_atr, PatternLifecycleManager, find_best_triangle_candidate, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
+from patterns import PatternLifecycleManager, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
 from notifier import TelegramNotifier
 
 # === LOGGING KURULUMU ===
@@ -94,58 +94,44 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     logger.debug(f"{stock} {tf_name} için yeterli veri yok")
                     continue
                 
-                # Önce candidate bul (verbose=True -> neden reddedildi logla)
-                from patterns import find_best_triangle_candidate, find_best_flag_candidate
-                cand_tri, logs_tri = find_best_triangle_candidate(df_tf, profile=PROFILE, verbose=True)
-                cand_flag, logs_flag = find_best_flag_candidate(df_tf, profile=PROFILE, verbose=False)
+                # Motor adayı kendisi bulur ve kırılım anında dondurur (Pine v0.4.6 akışı)
+                snap = lifecycle_manager.scan(stock + "_" + tf_name, df_tf)
+                state, break_dir, lifecycle_log = snap.state, snap.break_dir, snap.log
+                active = snap.active
                 
-                # En iyi candidate
-                best_cand = None
-                if cand_tri and cand_tri.valid:
-                    best_cand = cand_tri
-                if cand_flag and cand_flag.valid:
-                    if best_cand is None or cand_flag.raw_quality > best_cand.raw_quality:
-                        best_cand = cand_flag
-                
-                # Lifecycle update
-                state, break_dir, lifecycle_log = lifecycle_manager.update(stock + "_" + tf_name, df_tf, best_cand)
-                
-                if best_cand:
+                if active:
+                    q = snap.effective_quality if snap.effective_quality is not None else active.raw_quality
                     daily_stats['patterns_found'] += 1
-                    logger.info(f"🔍 {stock} {tf_name} - {best_cand.pattern_type} kalite {best_cand.raw_quality:.0f} state {state} - {lifecycle_log}")
+                    logger.info(f"🔍 {stock} {tf_name} - {active.pattern_type} kalite {q:.0f} state {state} - {snap.log}")
                     
-                    # Alert eşiği kontrolü - timeframe'e göre
+                    # Alert eşiği kontrolü - timeframe'e göre (effective_quality üzerinden)
                     min_q = ALERT_MIN_QUALITY.get(tf_name, ALERT_MIN_QUALITY_GLOBAL)
-                    if best_cand.raw_quality < min_q:
-                        logger.debug(f"{stock} {tf_name} kalite {best_cand.raw_quality:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
+                    if q < min_q:
+                        logger.debug(f"{stock} {tf_name} kalite {q:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
                     # Sadece önemli state'lerde Telegram gönder (insanlaştırma V2)
                     elif state in ALERT_STATES or state in [ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_COMPRESSING, ST_PREP]:
                         # Humanized mesaj için ek bilgiler
                         alert_data = {
                             'stock_name': stock,
                             'timeframe': tf_name,
-                            'pattern_name': best_cand.pattern_type,
+                            'pattern_name': active.pattern_type,
                             'state': state,
-                            'confidence_score': best_cand.raw_quality,
-                            'critical_price_level': best_cand.upper_now if break_dir == 1 else best_cand.lower_now,
-                            'upper_now': best_cand.upper_now,
-                            'lower_now': best_cand.lower_now,
-                            'contraction': getattr(best_cand, 'contraction', None),
+                            'confidence_score': q,
+                            'critical_price_level': active.upper_now if break_dir == 1 else active.lower_now,
+                            'upper_now': active.upper_now,
+                            'lower_now': active.lower_now,
+                            'contraction': getattr(active, 'contraction', None),
                             'timestamp': df_tf.index[-1],
                             'break_dir': break_dir,
-                            'break_strength': getattr(best_cand, 'break_strength', best_cand.raw_quality),
-                            'break_price': best_cand.upper_now if break_dir == 1 else best_cand.lower_now,
+                            'break_strength': getattr(active, 'break_strength', q),
+                            'break_price': active.upper_now if break_dir == 1 else active.lower_now,
                         }
                         if notifier.send(alert_data):
                             daily_stats['alerts_sent'] += 1
-                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {best_cand.raw_quality:.0f}")
+                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {q:.0f}")
                 else:
-                    # Neden yok? İlk 2 reddedilme sebebini logla (rejected_only)
-                    if logs_tri:
-                        logger.debug(f"{stock} {tf_name} - Formasyon yok: {logs_tri[0]}")
-                        if len(logs_tri) > 1:
-                            for l in logs_tri[1:3]:
-                                logger.debug(f"  {l}")
+                    # Canlı formasyon yok (terminal state'ler ve kalite kapısı dahil)
+                    logger.debug(f"{stock} {tf_name} - Canlı formasyon yok: {snap.log}")
             
             daily_stats['stocks_scanned'] += 1
             
