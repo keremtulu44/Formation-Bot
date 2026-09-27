@@ -131,10 +131,32 @@ def main():
                 f"[{sira}] {stock} | {tf} | {a.pattern_type} | q{snap.effective_quality:.0f} | {snap.state}",
                 f"    Ust cizgi: {a.upper_now:.2f}   Alt cizgi: {a.lower_now:.2f}",
                 f"    Daralma: %{(a.contraction or 0) * 100:.0f}   Formasyon baslangici: {bas_zaman}",
-                f"    TV KONTROL: {stock} grafigini {tf} periyotta ac; Pine overlay'inde "
-                f"'{a.pattern_type}' ve state '{snap.state}' etiketi gorunmeli; cizgiler "
-                f"ust~{a.upper_now:.2f} / alt~{a.lower_now:.2f} seviyesinde olmali.",
             ]
+            # Pine karşılaştırma detayı: özel formasyonlarda (bayrak/flama) direk + varyant
+            if a.family in ("Bayrak", "Flama"):
+                satir.append(f"    Pine varyanti: {a.specialized_variant or '-'}")
+                if a.has_pole:
+                    satir.append(
+                        f"    Direk: {'yukari' if a.pole_dir == 1 else 'asagi'} yonlu, "
+                        f"{a.pole_duration} bar, {(a.pole_magnitude or 0):.2f} TL, "
+                        f"direk kalitesi {a.pole_quality:.0f}")
+                if a.family == "Flama":
+                    egik = a.specialized_variant == "Flama (eğik)"
+                    satir.append(
+                        f"    Flama olculeri (Pine esikleri parantezde): derinlik "
+                        f"{a.correction_depth:.2f} [{('0.08-0.60' if egik else '0.06-0.70')}], "
+                        f"yukseklik orani {a.consolidation_height_ratio:.2f} "
+                        f"[{'0.40' if egik else '0.46'}], sure orani {a.duration_ratio:.2f} "
+                        f"[{'2.40' if egik else '2.80'}]")
+                satir.append(
+                    f"    TV KONTROL: {stock} grafigini {tf} periyotta ac; Pine overlay'inde "
+                    f"'{a.pattern_type}' etiketi + hemen oncesindeki DIREK gorunmeli; cizgiler "
+                    f"ust~{a.upper_now:.2f} / alt~{a.lower_now:.2f} seviyesinde olmali.")
+            else:
+                satir.append(
+                    f"    TV KONTROL: {stock} grafigini {tf} periyotta ac; Pine overlay'inde "
+                    f"'{a.pattern_type}' ve state '{snap.state}' etiketi gorunmeli; cizgiler "
+                    f"ust~{a.upper_now:.2f} / alt~{a.lower_now:.2f} seviyesinde olmali.")
             for s in satir:
                 print(s)
                 rapor_satirlari.append(s)
@@ -143,6 +165,26 @@ def main():
     ozet = f"\nToplam: {len(bulgular)} canli formasyon / {len(ACTIVE_STOCKS)} hisse x {len(TFLER)} TF"
     print(ozet)
     rapor_satirlari.append(ozet)
+
+    # Pine karşılaştırma rehberi — özel formasyon (bayrak/flama) eşikleri
+    n_ozel = len([b for b in bulgular if b[2].family in ("Bayrak", "Flama")])
+    rehber = [
+        "",
+        "PINE KARSILASTIRMA REHBERI (bayrak/flama, Dengeli profili):",
+        f"  - Bu taramada {n_ozel} bayrak/flama tespit edildi.",
+        "  - Pine'da AYNI hisse+periyotta bayrak/flama goruyorsaniz ama burada yoksa",
+        "    (veya tersi), tipi ve olculeri PINE_FARK_ANALIZI.md'deki dogrulama",
+        "    listesine not edin (Pine dosyasi ile karsilastirma bekleniyor).",
+        "  - Standart flama (Simetrik Ucgen): derinlik 0.06-0.70, yukseklik orani <=0.46,",
+        "    sure orani <=2.80, sure <= 40 bar, eff < direk eff + 0.08, kalite >= 50",
+        "  - Egik flama (Yuksen/Alcan Ucgen): direk kalitesi >= 59, derinlik 0.08-0.60,",
+        "    yukseklik orani <=0.40, sure orani <=2.40, sure <= 34 bar, eff < direk eff,",
+        "    kalite >= 58",
+        "  - Bayrak: paralel kanal (daralma yok), direk sart, kalite >= 50",
+    ]
+    for s in rehber:
+        print(s)
+        rapor_satirlari.append(s)
     print("\nRapor dosyasi: CANLI_FORMASYONLAR.txt")
 
     with open("CANLI_FORMASYONLAR.txt", "w", encoding="utf-8") as f:

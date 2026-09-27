@@ -88,6 +88,9 @@ class PatternCandidate:
     duration_ratio: Optional[float] = None
     consolidation_efficiency: Optional[float] = None
     consolidation_height_ratio: Optional[float] = None
+    # Özel formasyonun Pine varyantı: "Bayrak" | "Flama (standart)" | "Flama (eğik)"
+    # (standart = Simetrik Üçgen geometrisi; eğik = Yükselen/Alçalan Üçgen geometrisi)
+    specialized_variant: str = ""
 
     quality_frozen: bool = False
     frozen_raw_quality: Optional[float] = None
@@ -731,7 +734,8 @@ def build_candidate(engine, hi_a: int, hi_b: int, lo_a: int, lo_b: int,
     inclined_max_duration = int(round(engine.max_consolidation_bars * 0.85))
 
     def _std_base(pole, linked, depth, height_ratio, duration_ratio):
-        return bool(linked and depth is not None and 0.06 <= depth <= 0.70
+        # Pine: standart flama YALNIZ Simetrik Üçgen geometrisinde kurulur
+        return bool(standard_pennant_geometry and linked and depth is not None and 0.06 <= depth <= 0.70
                     and height_ratio is not None and height_ratio <= 0.46
                     and duration_ratio is not None and duration_ratio <= 2.80
                     and formed_duration <= engine.max_consolidation_bars
@@ -781,6 +785,7 @@ def build_candidate(engine, hi_a: int, hi_b: int, lo_a: int, lo_b: int,
     selected_geometry_score = geometry_score
     selected_contraction_score = contraction_score
     selected_slope_shape = slope_shape_quality
+    selected_variant = ""
 
     best_specialized = max(bull_flag_quality, bear_flag_quality, bull_pennant_quality, bear_pennant_quality)
     if best_specialized >= engine.min_specialized_quality:
@@ -790,20 +795,24 @@ def build_candidate(engine, hi_a: int, hi_b: int, lo_a: int, lo_b: int,
             selected_duration_ratio, selected_height_ratio = bull_duration_ratio, bull_height_ratio
             selected_geometry_score, selected_contraction_score = parallel_quality, 0.0
             selected_slope_shape = parallel_quality
+            selected_variant = "Bayrak"
         elif best_specialized == bear_flag_quality:
             selected_type, selected_family, selected_raw = "Ayı Bayrağı", "Bayrak", bear_flag_quality
             selected_pole, selected_depth = bear_pole, bear_depth
             selected_duration_ratio, selected_height_ratio = bear_duration_ratio, bear_height_ratio
             selected_geometry_score, selected_contraction_score = parallel_quality, 0.0
             selected_slope_shape = parallel_quality
+            selected_variant = "Bayrak"
         elif best_specialized == bull_pennant_quality:
             selected_type, selected_family, selected_raw = "Boğa Flaması", "Flama", bull_pennant_quality
             selected_pole, selected_depth = bull_pole, bull_depth
             selected_duration_ratio, selected_height_ratio = bull_duration_ratio, bull_height_ratio
+            selected_variant = ("Flama (eğik)" if (bull_inc_base and not bull_std_base) else "Flama (standart)")
         else:
             selected_type, selected_family, selected_raw = "Ayı Flaması", "Flama", bear_pennant_quality
             selected_pole, selected_depth = bear_pole, bear_depth
             selected_duration_ratio, selected_height_ratio = bear_duration_ratio, bear_height_ratio
+            selected_variant = ("Flama (eğik)" if (bear_inc_base and not bear_std_base) else "Flama (standart)")
 
     accepted = (selected_type != "Yok" and historical_geometry_acceptable and post_pivot_survival_passed
                 and selected_raw >= (engine.min_specialized_quality if f_is_specialized(selected_type)
@@ -857,6 +866,7 @@ def build_candidate(engine, hi_a: int, hi_b: int, lo_a: int, lo_b: int,
     candidate.duration_ratio = selected_duration_ratio
     candidate.consolidation_efficiency = consolidation_efficiency
     candidate.consolidation_height_ratio = selected_height_ratio
+    candidate.specialized_variant = selected_variant
     if f_is_specialized(selected_type):
         candidate = copy_pole_to_candidate(candidate, selected_pole)
     return candidate

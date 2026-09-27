@@ -20,17 +20,21 @@
 | Madde | Durum | Kanıt |
 |---|---|---|
 | Pivot + sağ teyit | ✅ Birebir | `patterns/pivots.py` — `range(pivot_len, n-pivot_len)` sağ karşılaştırma zorunlu |
-| Geometri (eğim/ATR normalize) | ✅ Birebir | `patterns/candidate.py` + `FORMASYYON_MANTIGI.md` §2 |
-| Üçgen / kama tespiti | ✅ Birebir | `patterns/candidate.py` `f_build_candidate` |
+| Geometri (eğim/ATR normalize) | ✅ Birebir | `patterns/candidate.py` + `FORMASYON_MANTIGI.md` §2 |
+| Üçgen / kema tespiti | ✅ Birebir | `patterns/candidate.py` `f_build_candidate` |
 | Kalite skorlama | ✅ Birebir | §5 formülü kodda uygulanmış |
 | İhlal taraması (A1) | ✅ Çözülmüş | `patterns/violation.py:51` `safe_end_bar = min(requested_end_bar, n-1)` |
 | Selection score (A2) | ✅ Çözülmüş | `patterns/selection.py` — recency/proximity/continuity + replacement_margin |
 | Bayrak motoru (A4) | ✅ Çözülmüş | `test_flag.py` 3/3 geçiyor (sentetik boğa + ayı bayrağı bulunuyor) |
-| **Flama motoru** | ⚠️ Kod VAR, test eksikti | `patterns/candidate.py:723-800` → **`test_pennant.py` eklendi, 4/4 geçti** |
+| **Flama motoru** | ✅ Çözüldü + raporlandı | `patterns/candidate.py:723-800` → `test_pennant.py` **6/6 geçti**; canlı rapora direk/varyant detayı eklendi |
+| **Flama varyantı (standart/eğik)** | ✅ Yeni | `PatternCandidate.specialized_variant` = "Bayrak" / "Flama (standart)" / "Flama (eğik)" — Pine'ın iki koşul tablosunu ayırt eder |
+| **Standart flama geometri şartı** | 🔧 Düzeltildi | `_std_base` artık `standard_pennant_geometry` (Simetrik Üçgen) ister; eğik geometri standart flama sayılamıyor (Pine tablo mantığı) |
 | A5 kalanlar | ❌ Açık | `filter_same_bar_double_pivot` stub, `local_break` TODO, `ST_WEAK`/`ST_GEOMETRY` kod yolu yok |
 
 **Sonuç:** Faz 3'ün ana maddesi olan "flama ekle" aslında 01a0e276 portunda
-**kodlanmıştı**; eksik olan **test ve doğrulamaydı**. Bunu bu adımda tamamladım.
+**kodlanmıştı**; eksik olan **test, varyant ayrımı ve karşılaştırma detayıydı**.
+Bunlar bu adımda tamamlandı. Kullanıcı Pine ile kendisi karşılaştıracaği için
+canlı rapora direk/varyant/ölçüm detayı ve eşik rehberi eklendi.
 
 ---
 
@@ -41,7 +45,7 @@ kurulu. Akış:
 
 ```
 1. 4 pivot seç (hb1,hp1 / hb2,hp2 / lb1,lp1 / lb2,lp2)
-   -> kronolojik olmalı: hb1<lb1<hb2<lb2 veya lb1<hb1<lb2<hb2
+   -> kronolojik olmalı: hb1<lb1<hb2<lp2 veya lb1<hb1<lb2<hb2
    -> topAbove: upperStart>lowerStart ve upperNow>lowerNow
 2. Geometri: iki üst pivottan üst doğru, iki alt pivottan alt doğru
    -> eğimler ATR'ye normalize (fiyattan bağımsız)
@@ -66,7 +70,7 @@ minContraction=%25, maxConsolidationBars=40.
 
 ---
 
-## 3. Flama (pennant) — kod ve test durumu
+## 3. Flama (pennant) — kod, test ve rapor durumu
 
 ### 3.1 Kod (`patterns/candidate.py:723-800`)
 
@@ -80,27 +84,90 @@ Pine'daki dört ayrı tablo koşulu birebir çevrilmiş:
 
 Ek koşul: eğik flamada **pole kalitesi >= minPoleQuality + 10** olmalı.
 Seçim: `best_specialized = max(bull_flag, bear_flag, bull_pennant, bear_pennant)`
-— en iyi özel tip generic üçgen/kama üzerine geçebilir.
+— en iyi özel tip generic üçgen/kema üzerine geçebilir.
 
-### 3.2 Test sonuçları (`test_pennant.py`, 4/4 geçti)
+**Bu adımda yapılan iki değişiklik:**
+
+1. **`specialized_variant` alanı eklendi** (`PatternCandidate`): seçim anında
+   "Bayrak" / "Flama (standart)" / "Flama (eğik)" olarak dolduruluyor. Böylece
+   canlı raporda ve testlerde Pine'ın hangi koşul tablosunun devreye girdiği
+   görülebiliyor (eğik = eğim koşulları +8 kalite, daha sıkı süre).
+2. **Standart flama geometri şartı düzeltildi:** `_std_base` artık
+   `standard_pennant_geometry` (yani `generic_type == "Simetrik Üçgen"`) ister.
+   Önce bu değişken hesaplanıyordu ama kullanılmıyordu; sonuç: Yükselen/Alçalan
+   Üçgen geometrisindeki formasyonlar standart flama eşikleriyle (gevşek) değerlendirilebiliyordu.
+   Artık eğik geometri yalnız eğik flama tablosundan geçer (daha sıkı: pole +10,
+   süre *0.85, kalite +8). **Bu bir SIKILAŞTIRMA** — ölçümsüz gevşetme değil.
+   Not: Pine dosyası gelince bu şartın Pine'da birebir var olduğu doğrulanacak
+   (doğrulama listesine madde 11 olarak eklendi).
+
+### 3.2 Test sonuçları (`test_pennant.py`, 6/6 geçti)
 
 Sentetik veri (Pine-uyumlu): dip 88 → 12 barlık direk (88→126, ~3.2 TL/bar) →
-**yavaş daralan** kanal (üst -0.06/bar, alt +0.03/bar).
+daralan kanal. Kanal eğimi ATR'ye normalize edildiği için (eğim/geometry_atr,
+flat tol 0.024) **geometriyi eğim oranı belirliyor**:
+
+| Kanal (üst/alt eğim) | Üretilen geometri | Flama varyantı |
+|---|---|---|
+| -0.06 / +0.06 TL/bar | Simetrik Üçgen | Flama (standart) |
+| -0.001 / +0.15 TL/bar | Yükselen Üçgen | Flama (eğik) |
+| -0.06 / -0.03 TL/bar | Alçalan Kema | flama YOK |
 
 | Test | Sonuç |
 |---|---|
-| Boğa flaması | ✅ bar 44'te tespit, kalite **79.5**, direk 12 bar / 38.26 TL |
-| Ayı flaması (fiyat aynası) | ✅ bar 48'de tespit, kalite **75.8** |
+| Boğa flaması standart | ✅ bar 44'te tespit, kalite **73.8**, direk 12 bar / 38.26 TL / direk kalitesi 88 |
+| Ayı flaması standart (fiyat aynası) | ✅ bar 48'de tespit, kalite **68.9**, direk aşağı 18 bar / 37.88 TL / direk kalitesi 81 |
+| Eğik flama (yükselen üçgen kanalı) | ✅ bar 44'te tespit, kalite **83.6**, varyant **Flama (eğik)** |
+| Kema benzeri kanal | ✅ flama yok (Pine kuralı: flama üçgen geometrisi ister) |
 | Random veri | ✅ flama yok (yanlış pozitif yok) |
 | Direksiz daralan üçgen | ✅ flama yok (Pine kuralı: direk şart) |
 
-**Test yazarken öğrendiğim kritik nokta:** İlk sentetik verimde kanalı hızlı
-daralttım (üst -0.60/bar, alt +0.42/bar). Sonuç: **4 barda üst < alt** oldu,
-geometri çöktü ve flama hiç bulunamadı. Yavaş daralma (-0.06/+0.03) ile 28 barda
-genişlik 4.0 → 1.6 (daralma %60) oldu ve motor doğru tespit etti.
-→ **Ders: sentetik veri üretirken Pine'ın oran kısıtlarını (heightRatio,
-durationRatio) gerçekten sağlamak gerekiyor; aksi halde "motor bozuk" sanıp
-aslında verinin geçersiz olduğunu göremeyebiliriz.**
+**Test yazarken öğrendiğim kritik noktalar:**
+- İlk sentetik veride kanalı hızlı daralttım (üst -0.60/bar, alt +0.42/bar):
+  4 barda üst < alt oldu, geometri çöktü, flama hiç bulunamadı. Yavaş daralma ile
+  motor doğru tespit etti. → Sentetik veri üretirken Pine'ın oran kısıtlarını
+  (heightRatio, durationRatio) gerçekten sağlamak gerekir.
+- Ayı flamayı "bağımsız üretmek" (92→128 zirve → 128→88 düşüş + kanal) direk
+  bağlantısını geç kurdu: teğet çifti bar 48'de oluştu, pole link penceresi
+  (10 bar) aşıldı. Fiyat aynası kullanınca direk 18 bar olarak bağlandı.
+  → Ayna veri hem simetrik hem pivot zamanlaması açısından daha güvenilir.
+
+### 3.3 Canlı rapora eklenen detay (`canli_tarama.py`)
+
+Bayrak/flama formasyonlarında rapora 3 ek satır geliyor:
+
+```
+[3] XXXX | 1h | Boğa Flaması | q78 | SIKISMA_GUCLENIYOR
+    Ust cizgi: ...   Alt cizgi: ...
+    Daralma: %60   Formasyon baslangici: ...
+    Pine varyanti: Flama (standart)
+    Direk: yukari yonlu, 12 bar, 38.26 TL, direk kalitesi 88
+    Flama olculeri (Pine esikleri parantezde): derinlik 0.11 [0.06-0.70],
+      yukseklik orani 0.11 [0.46], sure orani 1.83 [2.80]
+    TV KONTROL: ... '{a.pattern_type}' etiketi + hemen oncesindeki DIREK gorunmeli ...
+```
+
+Raporun sonuna **PINE KARSILASTIRMA REHBERI** bloğu eklendi: kaç bayrak/flama
+tespit edildiği, eşik özeti (standart/eğik/bayrak) ve fark görülürse ne yapılacağı
+(bu defterdeki doğrulama listesine not).
+
+### 3.4 Gerçek BIST verisi ölçümü (cache ile)
+
+`canli_tarama.py --cache` çalıştırıldı (28 hisse x 4 TF, 25 Eylül verisi):
+
+- **9 canlı formasyon** bulundu (SIKISMA_GUCLENIYOR, OLGUNLASIYOR, KIRILIM_ADAYI,
+  RETEST_BASARILI ...) ama **hiçbiri Bayrak/Flama değil.**
+- Yani gerçek veride flama/bayrak eşikleri şu an hiçbir formasyonu geçirmiyor.
+
+**Yorum (dikkatli):** Bu iki şeyden biri demek:
+  (a) o gün gerçekten flama/bayrak uygun formasyon yok (nadir formasyonlardır), veya
+  (b) eşikler gerçek veri için çok sert.
+Hangisi olduğunu anlamak için **Pine dosyası şart**: Pine'da eşikler birebir aynıysa
+(a) doğru davranıştır ve dokunulmaz. Pine dosyası gelmeden eşik gevşetmek **YAPILMAYACAK**
+— teşhis A4'ün kök nedeni tam olarak buydu (sentetik bayrak reddediliyor, gerçek veride
+sahte bayrak bulunuyordu; eşikler keyfi gevşetilmişti).
+Bir sonraki ölçüm: daha uzun bir geçmiş penceresinde (1D derin veri dahil) kaç günde bir
+flama/bayrak çıkıyor — Pine uyumu teyit edildikten sonra yapılacak.
 
 ---
 
@@ -114,6 +181,9 @@ aslında verinin geçersiz olduğunu göremeyebiliriz.**
   donduruluyor (A3 düzeltmesi: frozen alanlar artık okunuyor).
 - `patterns/mathutil.py:82-108` — volume=0 → nötr 50.0 skor (yfinance ilk bar hacmi 0).
 - `patterns/constants.py` — ST_* state isimleri Pine ile aynı.
+- `patterns/pole.py:110-165` — pole kalite formülü (magnitude*0.30 + efficiency*0.30 +
+  duration*0.16 + speed*0.12 + localBreak 12 - singleShock 24), "tek bar şoku" tespiti
+  (duration<=1 veya range >= magnitude*0.72 → kalite tavanı 46).
 
 ---
 
@@ -144,6 +214,15 @@ aslında verinin geçersiz olduğunu göremeyebiliriz.**
    uyumlu mu?
 10. **Alert koşulları** — Pine'da `alertcondition` hangi state'lerde? Bizim
     `ALERT_STATES` listesiyle aynı mı?
+11. **Standart flama geometri şartı (bu adımda eklendi)** — Pine'da standart pennant
+    koşulu gerçekten `triangleType == SYMMETRICAL` (veya dengi) mi kontrol ediyor?
+    Kodda `_std_base` artık `standard_pennant_geometry` ister; eğer Pine'da bu şart
+    YOKSA geri alınacak (yoksa eğik üçgen geometrisindeki formasyonlar standart
+    eşiklerle değerlendirilemiyor). Ayrıca eğik flamada yön-uyumu: boğa = Yükselen
+    Üçgen, ayı = Alçalan Üçgen (kod böyle) — Pine'da da öyle mi?
+12. **Varyant etiketlemesi** — `specialized_variant` alanı sadece rapor/test içindir;
+    Pine'da karşılığı yok. Pine'da hangi etiketin gösterildiği (ör. "Pennant" vs
+    "Inclined Pennant") doğrulanırsa rapora yansıtılabilir.
 
 ---
 
@@ -156,67 +235,71 @@ aslında verinin geçersiz olduğunu göremeyebiliriz.**
 1. **Gerçek BIST verisinde flama taraması.** Sentetik test geçti ama gerçek veride
    hiç flama bulunuyor mu? `canli_tarama.py --cache` çalıştırıp "Flama" geçen
    formasyon sayısını ölç. 0 ise ya eşikler çok sert ya da gerçek flama yok —
-   ikisi de bilgi. *(Ölçüm bekliyor)*
+   ikisi de bilgi. *(Ölçüldü: 9 formasyon, 0 flama/bayrak — Pine dosyası bekleniyor)*
 2. **Flama + 1D derin veri etkileşimi.** 1D'de flama nadir ama daha uzun süren
    direkler mümkün. `GUNLUK_DEQUE_MAXLEN=500` yeterli mi?
 3. **Eğik flama kalite cezası.** Kodda eğik flama +8 eşikle geçiyor. Pine'da öyleyse
    dokunma; değilse düzelt.
+4. **Yükselen/Alçalan Üçgen geometrisi + yanlış yön direk.** Kodda boğa eğik flama
+   yalnız Yükselen Üçgen geometrisinde kuruluyor. Pine'da da yön-uyum var mı
+   (yoksa Alçalan Üçgen + boğa direği de flama olabilir) — madde 11 ile birlikte
+   doğrulanacak.
 
 ### 6.2 Genel motor
-4. **`ST_WEAK` / `ST_GEOMETRY` state'leri** — Pine'da üretiliyorsa ekle. Bu iki
+5. **`ST_WEAK` / `ST_GEOMETRY` state'leri** — Pine'da üretiliyorsa ekle. Bu iki
    state Telegram'a gitmiyor ama iç seçim mantığını etkileyebilir.
-5. **A5 stub'lar** (`filter_same_bar_double_pivot`, `local_break`) — Pine'dan
+6. **A5 stub'lar** (`filter_same_bar_double_pivot`, `local_break`) — Pine'dan
    birebir çevir. Yanlış çeviri riski var, Pine olmadan YAPMA.
-6. **Kalite katsayı sapması** (madde 5.8) — döküman ile kod farklı görünüyor.
+7. **Kalite katsayı sapması** (madde 5.8) — döküman ile kod farklı görünüyor.
    Pine dosyası gelince bunu çöz; o zamana kadar KODU DEĞİŞTİRME.
 
 ### 6.3 Pine ile çakışabilecek fikirler (dikkat!)
-7. **"Flama tespitini gevşetelim" fikri — RED.** Pine eşikleri bilerek sert;
+8. **"Flama tespitini gevşetelim" fikri — RED.** Pine eşikleri bilerek sert;
    gevşetmek yanlış pozitif getirir (A4'ün asıl sorunuydu: sentetik bayrak
    reddediliyor, gerçek veride sahte bayrak bulunuyordu).
-8. **"Gerçek zamanlı flama alarmı" — olabilir ama önce Pine uyumu.** Faz 1'deki
+9. **"Gerçek zamanlı flama alarmı" — olabilir ama önce Pine uyumu.** Faz 1'deki
    :35 tetikleyici + Faz 2'deki tatil/veri-yok modu sayesinde altyapı hazır.
-9. **Backtest / ileri test** — `test_forward.py` var. Flama için ayrı forward testi
-   yazılabilir (direk sonrası flama kırılımının ne kadar çalıştığı).
+10. **Backtest / ileri test** — `test_forward.py` var. Flama için ayrı forward testi
+    yazılabilir (direk sonrası flama kırılımının ne kadar çalıştığı).
 
 ---
-
-### 3.3 Gerçek BIST verisi ölçümü (cache ile)
-
-`canli_tarama.py --cache` çalıştırıldı (28 hisse x 4 TF, 25 Eylül verisi):
-
-- **9 canlı formasyon** bulundu (SIKISMA_GUCLENIYOR, OLGUNLASIYOR, KIRILIM_ADAYI,
-  RETEST_BASARILI ...) ama **hiçbiri Flama değil.**
-- Yani gerçek veride flama eşikleri şu an hiçbir formasyonu geçirmiyor.
-
-**Yorum (dikkatli):** Bu iki şeyden biri demek:
-  (a) o gün gerçekten flama uygun formasyon yok (flama nadir bir formasyondur), veya
-  (b) eşikler gerçek veri için çok sert.
-Hangisi olduğunu anlamak için **Pine dosyası şart**: Pine'da eşikler birebir aynıysa
-(a) doğru davranıştır ve dokunulmaz. Pine dosyası gelmeden eşik gevşetmek **YAPILMAYACAK**
-— teşhis A4'ün kök nedeni tam olarak buydu (sentetik bayrak reddediliyor, gerçek veride
-sahte bayrak bulunuyordu; eşikler keyfi gevşetilmişti).
-Bir sonraki ölçüm: daha uzun bir geçmiş penceresinde (1D derin veri dahil) kaç günde bir
-flama çıkıyor — Pine uyumu teyit edildikten sonra yapılacak.
 
 ## 7. Bu adımda yapılanlar
 
 1. Pine dosyasının diske ulaşmadığı görüldü → kullanıcıya tekrar yüklemesi istendi.
 2. `patterns/candidate.py:723-800` okundu: flama kodu mevcut, Pine dökümanıyla uyumlu.
-3. `test_pennant.py` yazıldı (4 test): boğa flama ✅, ayı flama ✅, random ✅, direksiz ✅.
+3. `test_pennant.py` yazıldı; ilk hali 4 testti (boğa flama ✅, ayı flama ✅, random ✅,
+   direksiz ✅).
 4. Ortamın sıfırlandığı görüldü (pandas/numpy yoktu) → kuruldu.
 5. **Sandbox sıfırlanması local checkout'u eski bir commit'e (a1afd75) döndürdü.**
    Faz 3 commit'i yanlış tabana yapılmıştı; push doğru şekilde reddedildi.
    `git reset --hard c3000b6` ile doğru tabana dönüldü, Faz 3 dosyaları reflog'dan
    kurtarıldı (`git show a49c017:<dosya>`). Faz 1+2 commit'leri remote'da güvenliydi.
 6. Doğru tabanda doğrulama: `test_tarama_zamani.py` 90/90, `test_pennant.py` 4/4,
-   `canli_tarama.py --cache` 9 canlı formasyon (0 flama).
-7. Bu defter yazıldı.
+   `canli_tarama.py --cache` 9 canlı formasyon (0 flama). Bu defter yazıldı.
+7. **Kullanıcı yönlendirmesi:** Pine dosyasını beklemeden canlı formasyon sistemine
+   flamayı raporla — kullanıcı kendisi Pine ile karşılaştırıp çıktı alacak.
+8. **`specialized_variant` alanı eklendi** (`patterns/candidate.py`): seçim anında
+   "Bayrak" / "Flama (standart)" / "Flama (eğik)" dolduruluyor.
+9. **Standart flama geometri şartı düzeltildi:** `_std_base` artık Simetrik Üçgen
+   geometrisi ister (eğik geometri yalnız eğik flama tablosundan geçer).
+   Regresyon: `test_tarama_zamani.py` 90/90 korundu.
+10. **`test_pennant.py` 6 teste çıkarıldı:** standart boğa/ayı flama, eğik flama
+    (varyant assert'li), kema kanalı (flama olmamalı), random, direksiz.
+    Ölçüm: ATR normalize eğimde -0.06/+0.06 → Simetrik Üçgen, -0.001/+0.15 →
+    Yükselen Üçgen, -0.06/-0.03 → Alçalan Kema.
+11. **`canli_tarama.py` raporuna Pine karşılaştırma detayı eklendi:** bayrak/flamada
+    varyant + direk (yön/süre/büyüklük/direk kalitesi) + flama ölçümleri (derinlik,
+    yükseklik oranı, süre oranı; Pine eşikleri parantezde) + rapor sonunda
+    PINE KARSILASTIRMA REHBERI bloğu. Canlı cache ile doğrulandı (9 formasyon,
+    0 bayrak/flama).
 
 ## 8. Sıradaki adımlar (sırayla)
 
-1. **Pine dosyasını bekle** → 5. bölüm listesini tek tek doğrula (özellikle 5.8 katsayı sapması).
-2. Gerçek BIST verisinde flama taraması ölç (`canli_tarama.py --cache`).
+1. **Pine dosyasını bekle** → 5. bölüm listesini tek tek doğrula (özellikle 5.8 katsayı
+   sapması ve 5.11 standart flama geometri şartı).
+2. Gerçek BIST verisinde flama/bayrak taraması ölç (yapıldı: 0; uzun pencere + 1D
+   derin veri ile tekrar).
 3. A5 kalanlarını Pine'dan çevir (stub'lar ve ST_WEAK/ST_GEOMETRY).
-4. Flama için forward test (backtest) yaz.
+4. Flama/bayrak için forward test (backtest) yaz.
 5. Hepsi geçtikten sonra FAZ 3 kapanır → Pine ile birebir uyum raporu.
