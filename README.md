@@ -1,123 +1,74 @@
-# Formation-Bot - BIST Formasyon Radarı
+# Formation-Bot — BIST Formasyon Radarı
 
-> ARGENT v0.4.6 Pine Script'in Python'a dönüşümü - adım adım, explainable
+> ARGENT v0.4.6 Pine Script'in Python portu. BIST hisselerinde üçgen/kema/bayrak/flama
+> formasyonlarını tespit eder, state makinesiyle takip eder ve Telegram'dan bildirir.
+> Pine ile **birebir** uyum hedefi; her reddedilme sebebi Türkçe loglanır (explainable).
 
-## 🎯 Proje Durumu - Adım 4 Bitti
-
-### ✅ Tamamlananlar
-
-- [x] `config.py` - Profil (Dengeli), BIST30/50 listesi, tüm sabitler
-- [x] `patterns.py` - **~80KB, 1500 satır**
-  - Matematik yardımcıları: `f_clamp`, `f_smoothstep`, `f_band_quality`, `f_line_price`, `f_slope`
-  - ATR hesaplama (Wilder's RMA, Pine ile aynı)
-  - Pivot motoru: `find_pivots` (ta.pivothigh/low)
-  - Touch stats: `f_touch_stats` (sınır temas sayma, min gap)
-  - Violation tarama: `f_boundary_violation_stats_simple` (geçmiş ihlal)
-  - Üçgen/Kama: `f_build_triangle_candidate`, `find_best_triangle_candidate`
-    - Yükselen Üçgen, Alçalan Üçgen, Simetrik Üçgen
-    - Yükselen Kama, Alçalan Kama
-    - Her reddedilme sebebi Türkçe loglanıyor (rejected_only)
-  - Bayrak: `f_build_flag_candidate`, `find_best_flag_candidate`
-    - Boğa/Ayı Bayrağı (direk + paralel kanal)
-    - Direk bulma: `find_pole` (magnitude, efficiency, quality)
-  - Kırılım gücü: `f_breakout_strength` (body, close, penetration, expansion, volume)
-  - Lifecycle: `PatternLifecycleManager`
-    - `ADAY_OLUSUYOR` → `KIRILIM_ADAYI` → `KIRILIM_TEYITLI` → `RETEST_BEKLENIYOR` → `RETEST_BASARILI` → `TAMAMLANDI`
-    - `KIRILIM_TEYIT_ALAMADI`, `BASARISIZ_KIRILIM`, `GECERSIZ`
-  - Ana fonksiyon: `detect_patterns` (dict döner, explainable logs ile)
-- [x] `data.py` - Deque yönetimi
-  - `StockDequeManager`: maxlen=360, hem pickle hem json (both)
-  - Resampling: 1H → 2H, 4H, 1D (dropna ile BIST gap handling)
-  - BIST saat kontrolü: `is_bist_open`, `time_until_next_open`, `time_until_next_candle_close`
-  - Mock data: `mock_fetch_60d_1h` (test için)
-- [x] `main.py` - Ana döngü
-  - Lifecycle + Deque + Notifier entegre
-  - Günlük özet log
-  - Rate limit 45-50sn, hata olursa devam (crash yok)
-  - BIST kapalıysa 5dk uyku
-- [x] `notifier.py` - Telegram iskeleti
-  - Cooldown 4 saat (spam önleme)
-  - Env'den token/chat_id
-  - Mock modda sadece log
-- [x] Deployment
-  - `setup.sh` - Ubuntu 22.04 ARM kurulum
-  - `bist-bot.service` - systemd (Restart=always, RestartSec=30)
-  - `logrotate.conf` - 7 gün log tutma
-  - `.env.example`, `requirements.txt`, `.gitignore`
-
-### 🧪 Test Sonuçları
-
-**test_triangle.py:**
-- Random data: 225 adaydan 1 geçti (82 kalite) - false positive normal, random walk bile üçgen oluşturur
-- Simetrik üçgen mock: 14 aday geçti, en iyi 83.7 kalite Alçalan Üçgen
-- Yükselen üçgen mock: 87.0 kalite ile doğru tespit
-
-**test_breakout.py:**
-- `ADAY_OLUSUYOR` → `KIRILIM_ADAYI` (güç 82) → `KIRILIM_TEYITLI` → `RETEST` → `COMPLETED/FAILED`
-- Başarısız kırılım: içeri dönüş → `BASARISIZ_KIRILIM`
-
-**test_flag.py:**
-- Direk bulma: valid=True quality 77.9 eff 0.76 (Dengeli min 0.62 üstü)
-- Bayrak: Mock data'da paralel toleransı çok katı (0.018), gerçek BIST datasında daha iyi olacak
-- Random data'da bayrak yok (beklendiği gibi)
-
-**main.py mock tarama (30 hisse):**
-- 25 hisse tarandı, 76 pattern bulundu (mock data çok pattern üretiyor, gerçek data daha az olur)
-
-### 📝 Kalanlar
-
-- [ ] Flama (pennant) - bayrak gibi ama daralan (simetrik üçgen)
-- [ ] Violation taraması tam versiyon (şu an basit, Pine'daki cache'li versiyon sonra)
-- [ ] Gerçek veri katmanı: yfinance/borsapy entegrasyonu (sandbox'ta SSL hatası, sen canlıda test edeceksin)
-- [ ] Telegram insanlaştırma: State bazlı mesajı daha anlaşılır yap
-- [ ] BIST 50 listesi final
-- [ ] Loglama Türkçe iyileştirme
-
-## 🧠 Formasyon Mantığı
-
-Detaylı döküman: `FORMASYON_MANTIGI.md`
-
-- 4 pivot ile formasyon (2 üst + 2 alt)
-- Kronolojik, topAbove, yaş, temas, daralma, apex kontrolleri
-- Kalite: geometry*0.38 + touch*0.32 + maturity*0.18 + cleanliness*0.12
-- İhlal taraması: close<2, maxViol<0.72, penalty<62
-- Selection: recency + proximity + continuity
-- Lifecycle: breakout gücü, teyit, retest
-
-## 🚀 Kurulum
+## Hızlı başlangıç
 
 ```bash
-git clone https://github.com/keremtulu44/Formation-Bot.git
-cd Formation-Bot
-git checkout arena/01a0dd9d-formation-bot
-
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt --break-system-packages
-
-# Test
-python3 test_triangle.py
-python3 test_breakout.py
-python3 test_flag.py
-
-# Main (mock data ile)
-python3 main.py
+python3 -m pip install -r requirements.txt   # pandas, numpy, pytz, yfinance
+cp .env.example .env                         # TELEGRAM_TOKEN / TELEGRAM_CHAT_ID
+python3 main.py                              # canlı bot (heartbeat + SIGTERM destekli)
+python3 canli_tarama.py                      # 30 hisse x 4 TF canlı formasyon taraması (rapor: CANLI_FORMASYONLAR.txt)
+python3 canli_tarama.py --cache              # internet yok: bot_data cache ile tarar
+python3 test_tarama_zamani.py                # Faz 1+2 regresyon (90 kontrol)
+python3 test_pennant.py                      # flama regresyon (6 test)
 ```
 
-## 📊 Veri Kaynağı
+Profil seçimi: `.env` içinde `BOT_PROFILE=Dengeli` (Hassas / Dengeli / Seçici).
 
-- **Mock**: Şu an mock data ile test (sandbox'ta yfinance/borsapy SSL engelli)
-- **Gerçek**: Sen canlıda `yfinance` (THYAO.IS) veya `borsapy` ile test edeceksin
-- `data.py`'deki `mock_fetch_60d_1h` yerine gerçek fetch koyulacak
+## Dosya haritası
 
-## 💬 Notlar
+| Dosya | İçerik |
+|---|---|
+| `main.py` | Bot döngüsü: fetch → resample → motor → Telegram + heartbeat; veri-yok/split kapıları |
+| `canli_tarama.py` | 30 hisse × 4 TF (1h/2h/4h/1d) canlı tarama raporu — **Pine karşılaştırması için** |
+| `config.py` | Profiller (eşikler), hisse listesi, tatil/yarım gün takvimi, timing sabitleri |
+| `data.py` | yfinance fetch (`auto_adjust=False`), StockDequeManager (1H + ayrı 1D deque), tatil/veri-yok/split yardımcıları |
+| `patterns/` | Motor: `candidate.py` (geometri + bayrak/flama), `pivots.py`, `pole.py` (direk), `lifecycle.py` (state makinesi), `violation.py`, `selection.py`, `mathutil.py` |
+| `notifier.py` | Telegram: 4 saat cooldown + global günlük/saatlik kapanı |
+| `bot_data/` | Hisse cache'leri — **bilerek git-tracked** (kullanıcı isteği) |
+| `PINE_FARK_ANALIZI.md` | **Çalışma defteri:** Pine ile fark analizi, doğrulama listesi, fikir defteri |
+| `FORMASYON_MANTIGI.md` | Pine v0.4.6 Türkçe dökümanı (formasyon koşulları, kalite formülleri) |
+| `TESHIS_RAPORU.md` | Dış teşhis raporunun bağımsız doğrulaması (TRUE/FALSE/PARTIAL) |
 
-- Adım adım gidiyoruz, aniden zıplamıyoruz
-- Her reddedilme sebebi loglanıyor (rejected_only) - explainable
-- Dosya yapısı düzenli: config, data, patterns, notifier, main
-- Telegram: Şimdilik ham, sonra insanlaştırma (senin isteğin)
-- AL/SAT yok, state bazlı (KIRILIM_ADAYI, TEYITLI, RETEST)
+## Canlı tarama raporu nasıl okunur (Pine karşılaştırması)
 
-## 🔜 Sonraki Adım
+`canli_tarama.py` çıktısı TradingView'daki Pine overlay'iyle karşılaştırmak için tasarlandı:
 
-Senin seçimin: Flama mı, deployment test mi, main entegrasyon mu, telegram humanize mı?
+- Başlıkta **"Veri son bar: <tarih> (<N> saat once)"** — TradingView'da tam olarak hangi ana bakılacağını söyler.
+- Her formasyon: tip, kalite, state, üst/alt çizgi seviyeleri, daralma %, başlangıç tarihi.
+- **Bayrak/flamada ek detay:** `Pine varyanti` (standart/eğik), `Direk` (yön/süre/büyüklük/kalite), `Flama olculeri` (derinlik, yükseklik/süre oranı — Pine eşikleri parantezde).
+- Rapor sonunda **PINE KARSILASTIRMA REHBERI**: kaç bayrak/flama bulundu + tüm eşikler.
+- Not: Pine ekranında eski TAMAMLANDI/BASARISIZ formasyonlar da çizili kalabilir — rapor yalnız **canlı** olanları listeler.
+
+## Durum (2026-09-27, dal `arena/01a0e2d0-formation-bot`)
+
+| Faz | İçerik | Commit |
+|---|---|---|
+| Faz 1 | Son mum/35-dk gecikme düzeltmesi, `auto_adjust=False`, ölü formasyon alarm kapısı, fetch hata loglama + `data_stale` heartbeat | `7485ab6` |
+| Faz 2 | 1D gecikme, BIST tatil/yarım gün takvimi + veri-yok modu, split/süreklilik kontrolü, Telegram global kapanı, tarama drift uyarısı, 1D derin deque (500 bar) | `c3000b6` |
+| Faz 3 | Flama motoru doğrulama: `test_pennant.py` (6/6), `specialized_variant` (standart/eğik ayrımı), standart flama geometri şartı, canlı rapora direk/ölçüm detayı + veri tazeliği | `da3840b`, `0fd1f46`, `28a1e7a` |
+
+Regresyon: `test_tarama_zamani.py` **90/90**, `test_pennant.py` **6/6**.
+
+## Bilinmesi gerekenler (yeni oturum için)
+
+1. **Pine dosyası bekleniyor** (`Yeni Metin Belgesi.txt`, ARGENT v0.4.6 export). Diske
+   ulaşmadı; geldiğinde `PINE_FARK_ANALIZI.md` §5'teki 12 maddelik doğrulama listesi açılacak.
+2. **Kalite katsayı sapması:** döküman 0.28/0.20/0.12/0.16/0.12/0.07/0.05 diyor, kod
+   0.26/0.18/0.12/0.20/0.10/0.07/0.07 kullanıyor — **Pine gelmeden kod değiştirilmeyecek**.
+3. **Standart flama geometri şartı** (Faz 3'te eklendi): standart flama yalnız Simetrik Üçgen
+   geometrisinde kurulur; eğik geometri eğik flama tablosundan (direk kalitesi +10, süre ×0.85,
+   kalite +8) geçer. Pine'da birebir var mı — doğrulama madde 11.
+4. **Açık A5 maddeleri:** `filter_same_bar_double_pivot` stub, `local_break` TODO,
+   `ST_WEAK`/`ST_GEOMETRY` kod yolu yok.
+5. **Eşikleri ölçüm olmadan gevşetme yasağı** — A4'ün kök nedeni buydu (sentetik bayrak
+   reddediliyor, gerçek veride sahte bayrak bulunuyordu).
+6. **Sandbox kısıtı:** bu ortamdan Yahoo Finance ve Telegram'a erişilemiyor (SSL). Gerçek
+   zamanlı tarama ve canlı bot testi kullanıcının kendi makinesinde yapılmalı; burada
+   `--cache` modu ve commit'li `bot_data` kullanılır.
+7. **Bot kuralları:** `bot_data/*.json` + `*.pkl` git-tracked kalacak; runtime dosyaları
+   (heartbeat, telegram_kap, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0e2d0-formation-bot`
+   dalında; başka dala push yok.
