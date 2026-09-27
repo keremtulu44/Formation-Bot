@@ -136,11 +136,44 @@ class StockDequeManager:
         dq.append(candle)
     
     def append_dataframe(self, stock: str, df: pd.DataFrame):
-        """DataFrame'den toplu ekle - ilk yükleme için"""
+        """DataFrame'den toplu ekle - deduplicate ile"""
         dq = self.get_deque(stock)
+        # Mevcut timestamp'leri set olarak al - hızlı lookup
+        existing_ts = set()
+        try:
+            for c in dq:
+                ts = c.get('timestamp')
+                if ts is not None:
+                    # Normalize et string'e çevirmeden önce
+                    existing_ts.add(pd.to_datetime(ts))
+        except Exception:
+            existing_ts = set()
+
+        added = 0
+        updated = 0
         for idx, row in df.iterrows():
+            ts = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
+            # Eğer zaten varsa güncelle (son fiyat daha güncel olabilir)
+            if ts in existing_ts:
+                # Mevcut deque içinde bul ve güncelle
+                # Deque'yi listeye çevirip güncelleme maliyetli, o yüzden atla ve sonra sort ile son değer kalır
+                # Basit: eğer aynı timestamp varsa eskiyi sil, yenisini ekle mantığı için deque'yi yeniden oluştur
+                # Ama performans için: var olanı atla, çünkü yfinance aynı mum için aynı veriyi verir
+                # Eğer kapanış değişmişse (canlı mum) güncelleyelim
+                for existing in dq:
+                    if pd.to_datetime(existing.get('timestamp')) == ts:
+                        # Güncelle
+                        existing['open'] = float(row['open'])
+                        existing['high'] = float(row['high'])
+                        existing['low'] = float(row['low'])
+                        existing['close'] = float(row['close'])
+                        existing['volume'] = float(row.get('volume', 0))
+                        updated += 1
+                        break
+                continue
+            
             candle = {
-                'timestamp': idx if isinstance(idx, datetime) else pd.to_datetime(idx),
+                'timestamp': ts,
                 'open': float(row['open']),
                 'high': float(row['high']),
                 'low': float(row['low']),
@@ -148,7 +181,10 @@ class StockDequeManager:
                 'volume': float(row.get('volume', 0))
             }
             dq.append(candle)
-        logger.info(f"{stock} için {len(df)} mum deque'ye eklendi - toplam {len(dq)}")
+            existing_ts.add(ts)
+            added += 1
+        
+        logger.info(f"{stock} için {len(df)} mumdan {added} yeni, {updated} güncellendi - toplam {len(dq)}")
     
     def to_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
         """Deque'yi DataFrame'e çevir - pattern tespiti için"""
@@ -324,7 +360,86 @@ def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     
     return result
 
-# === VERİ ÇEKME (MOCK + GERÇEK İSKELET) ===
+# === GERÇEK VERİ ÇEKME (yfinance) + MOCK ===
+
+def fetch_yfinance_1h(stock: str, period: str = "60d", interval: str = "1h") -> Optional[pd.DataFrame]:
+    """
+    Gerçek BIST verisi - yfinance ile
+    - THYAO -> THYAO.IS
+    - Sütunları küçük harfe çevir
+    - Index'i timezone-aware yap (Istanbul)
+    - Boşsa None dön
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        logger.error("yfinance kurulu değil!")
+        return None
+
+    try:
+        ticker_str = f"{stock}.IS"
+        ticker = yf.Ticker(ticker_str)
+        df = ticker.history(period=period, interval=interval, auto_adjust=False)
+
+        if df is None or len(df) == 0:
+            logger.warning(f"{stock} yfinance boş döndü ({ticker_str})")
+            return None
+
+        # Sütun isimlerini küçük harfe çevir
+        df.columns = [c.lower() for c in df.columns]
+
+        # Gerekli sütunlar var mı?
+        for col in ["open", "high", "low", "close"]:
+            if col not in df.columns:
+                logger.warning(f"{stock} için {col} sütunu yok, atlanıyor")
+                return None
+
+        # Index timezone kontrolü
+        if df.index.tz is None:
+            try:
+                df.index = df.index.tz_localize("UTC").tz_convert(ISTANBUL_TZ)
+            except Exception:
+                df.index = pd.to_datetime(df.index).tz_localize(ISTANBUL_TZ)
+        else:
+            try:
+                df.index = df.index.tz_convert(ISTANBUL_TZ)
+            except Exception:
+                pass
+
+        if "volume" not in df.columns:
+            df["volume"] = 0
+
+        df = df.dropna(subset=["open", "high", "low", "close"])
+        df = df.sort_index()
+
+        if len(df) > DEQUE_MAXLEN:
+            df = df.iloc[-DEQUE_MAXLEN:]
+
+        logger.info(f"{stock} yfinance: {len(df)} bar çekildi (son {df.index[-1]})")
+        return df
+
+    except Exception as e:
+        logger.error(f"{stock} yfinance hatası: {e}", exc_info=True)
+        return None
+
+
+def fetch_with_retry(stock: str, retries: int = 2, base_delay: float = 5.0) -> Optional[pd.DataFrame]:
+    """
+    Retry + exponential backoff ile yfinance çekme
+    """
+    for attempt in range(retries + 1):
+        df = fetch_yfinance_1h(stock)
+        if df is not None and len(df) >= 30:
+            return df
+        
+        if attempt < retries:
+            delay = base_delay * (2 ** attempt) + random.uniform(0, 2)
+            logger.warning(f"{stock} fetch başarısız, {delay:.1f}sn sonra retry {attempt+1}/{retries}")
+            time.sleep(delay)
+    
+    logger.error(f"{stock} {retries+1} denemede de veri alınamadı")
+    return None
+
 
 def fetch_with_rate_limit(stock: str, fetch_func, *args, **kwargs) -> Optional[pd.DataFrame]:
     """
@@ -355,10 +470,13 @@ def fetch_with_rate_limit(stock: str, fetch_func, *args, **kwargs) -> Optional[p
 
 def mock_fetch_60d_1h(stock: str, n_bars: int = 360) -> pd.DataFrame:
     """
-    Mock veri çekme - gerçek API yoksa test için
-    Gerçek implementasyonda burası yfinance/borsapy olacak
+    Mock veri çekme - sadece testler için, canlıda kullanılmaz
+    Gerçek implementasyon: fetch_yfinance_1h
     """
-    np.random.seed(hash(stock) % 2**32)
+    import hashlib
+    # Stabil seed - hash() randomize olduğu için hashlib kullan
+    stable_hash = int(hashlib.md5(stock.encode()).hexdigest()[:8], 16)
+    np.random.seed(stable_hash % 2**32)
     
     # Son 60 iş günü ~ 360 saat
     end = datetime.now(ISTANBUL_TZ)
@@ -366,8 +484,8 @@ def mock_fetch_60d_1h(stock: str, n_bars: int = 360) -> pd.DataFrame:
     # Şimdilik sadece hourly freq
     dates = pd.date_range(end=end, periods=n_bars, freq='h')
     
-    # Random walk - hisseye göre farklı seed
-    base_price = 10 + (hash(stock) % 100)  # Her hisse farklı fiyat
+    # Random walk - hisseye göre farklı seed (stabil)
+    base_price = 10 + (stable_hash % 100)  # Her hisse farklı fiyat
     close = base_price + np.cumsum(np.random.randn(n_bars) * 0.3)
     close = np.maximum(close, 1.0)  # Negatif olmasın
     

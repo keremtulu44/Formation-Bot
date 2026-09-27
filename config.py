@@ -2,10 +2,25 @@
 # BIST Formasyon Botu - Konfigürasyon
 # Pine v0.4.6 FINAL EXPORT birebir - matematik düzgün, yüzdeye göre oynama yok
 
+import os
 from datetime import time
 import pytz
 
-PROFILE = "Dengeli"
+# .env desteği - local ve /etc/bist-bot.env için
+try:
+    from dotenv import load_dotenv
+    # Önce proje kökündeki .env
+    load_dotenv()
+    # Sonra systemd EnvironmentFile yolu
+    if os.path.exists("/etc/bist-bot.env"):
+        load_dotenv("/etc/bist-bot.env", override=False)
+except ImportError:
+    pass
+
+PROFILE = os.getenv("BOT_PROFILE", "Dengeli").strip() or "Dengeli"
+# Sadece 3 profile izin ver, yoksa Dengeli'ye düş
+if PROFILE not in ("Hassas", "Dengeli", "Seçici"):
+    PROFILE = "Dengeli"
 
 BIST_50 = [
     "THYAO", "GARAN", "AKBNK", "ISCTR", "YKBNK", "KCHOL", "SAHOL", "EREGL", "SISE", "BIMAS",

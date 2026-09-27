@@ -6,8 +6,18 @@
 import os
 import logging
 import random
+import json
 from datetime import datetime, timedelta
 from typing import Dict, Optional
+
+# .env desteği
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    if os.path.exists("/etc/bist-bot.env"):
+        load_dotenv("/etc/bist-bot.env", override=False)
+except ImportError:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -56,23 +66,72 @@ def quality_emoji(q: float) -> str:
 class TelegramNotifier:
     """
     Telegram bildirim yöneticisi - İnsanlaştırma V2
-    - Cooldown: aynı pattern için 4 saat
+    - Cooldown: aynı pattern için 4 saat, diske kalıcı
     - State bazlı insanlaştırma: her state farklı ton
     - Avantajı dışarda sun: her şeyi söyleme, merak uyandır
     - AL/SAT yok, sadece durum bildirimi
     """
-    def __init__(self):
+    def __init__(self, cooldown_file: str = None):
         self.token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
         self.chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
         self.cooldown_hours = 4
         self.last_sent: Dict[str, datetime] = {}
-        
+        # Cooldown dosyası - bot_data içinde kalıcı
+        if cooldown_file is None:
+            # config'den DATA_DIR almaya çalış, yoksa ./bot_data
+            try:
+                from config import DATA_DIR
+                data_dir = DATA_DIR
+            except ImportError:
+                data_dir = "./bot_data"
+            os.makedirs(data_dir, exist_ok=True)
+            cooldown_file = os.path.join(data_dir, "telegram_soguma.json")
+        self.cooldown_file = cooldown_file
+        self._load_cooldown()
+
         if not self.token or not self.chat_id:
             logger.warning("Telegram token/chat_id env'de yok - notifier pasif (test modu)")
             self.enabled = False
         else:
             self.enabled = True
-            logger.info("Telegram notifier aktif - insanlaştırma V2")
+            logger.info(f"Telegram notifier aktif - insanlaştırma V2 - cooldown file: {self.cooldown_file}")
+
+    def _load_cooldown(self):
+        """Diskten cooldown yükle ve eski kayıtları buda"""
+        try:
+            if os.path.exists(self.cooldown_file):
+                with open(self.cooldown_file, "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+                now = datetime.now()
+                loaded = 0
+                for k, v in raw.items():
+                    try:
+                        dt = datetime.fromisoformat(v)
+                        # 4 saatten eski ise atla (budama)
+                        if now - dt <= timedelta(hours=self.cooldown_hours * 2):
+                            self.last_sent[k] = dt
+                            loaded += 1
+                    except Exception:
+                        continue
+                logger.info(f"Cooldown yüklendi: {loaded} kayıt (budandı)")
+        except Exception as e:
+            logger.warning(f"Cooldown yüklenemedi: {e}")
+
+    def _save_cooldown(self):
+        """Cooldown'u diske kaydet"""
+        try:
+            # Önce buda
+            now = datetime.now()
+            pruned = {}
+            for k, v in self.last_sent.items():
+                if now - v <= timedelta(hours=self.cooldown_hours * 2):
+                    pruned[k] = v.isoformat()
+            # Kaydet
+            os.makedirs(os.path.dirname(self.cooldown_file), exist_ok=True)
+            with open(self.cooldown_file, "w", encoding="utf-8") as f:
+                json.dump(pruned, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"Cooldown kaydedilemedi: {e}")
 
     def _cooldown_key(self, stock: str, pattern: str, timeframe: str, state: str) -> str:
         # State de dahil - aynı pattern farklı state'e geçince tekrar gönder
@@ -304,26 +363,42 @@ class TelegramNotifier:
             logger.info(f"[MOCK TELEGRAM {state}]\n{message}\n")
             key = self._cooldown_key(stock, pattern, timeframe, state)
             self.last_sent[key] = datetime.now()
+            self._save_cooldown()
             return True
 
         try:
             import requests
+            import time
             url = f"https://api.telegram.org/bot{self.token}/sendMessage"
             payload = {
                 'chat_id': self.chat_id,
                 'text': message,
             }
-            resp = requests.post(url, json=payload, timeout=10)
-            if resp.status_code == 200:
-                logger.info(f"Telegram gönderildi: {stock} {pattern} {state}")
-                key = self._cooldown_key(stock, pattern, timeframe, state)
-                self.last_sent[key] = datetime.now()
-                return True
-            else:
-                logger.error(f"Telegram hatası: {resp.text}")
-                return False
+            # Retry for 429
+            for attempt in range(3):
+                resp = requests.post(url, json=payload, timeout=10)
+                if resp.status_code == 200:
+                    logger.info(f"Telegram gönderildi: {stock} {pattern} {state}")
+                    key = self._cooldown_key(stock, pattern, timeframe, state)
+                    self.last_sent[key] = datetime.now()
+                    self._save_cooldown()
+                    return True
+                elif resp.status_code == 429:
+                    retry_after = 5 * (attempt + 1)
+                    try:
+                        retry_after = resp.json().get('parameters', {}).get('retry_after', retry_after)
+                    except Exception:
+                        pass
+                    logger.warning(f"Telegram 429, {retry_after}sn bekleniyor (attempt {attempt+1}/3)")
+                    time.sleep(retry_after)
+                    continue
+                else:
+                    logger.error(f"Telegram hatası {resp.status_code}: {resp.text}")
+                    return False
+            logger.error("Telegram 3 denemede de başarısız")
+            return False
         except Exception as e:
-            logger.error(f"Telegram gönderim hatası: {e}")
+            logger.error(f"Telegram gönderim hatası: {e}", exc_info=True)
             return False
 
 

@@ -361,13 +361,117 @@ def filter_same_bar_double_pivot(high_pivots: List[Dict], low_pivots: List[Dict]
                                  last_accepted_type: int) -> Tuple[List[Dict], List[Dict]]:
     """
     Aynı barda hem high hem low pivot varsa hangisi seçilecek?
-    Pine'daki f_choose_same_bar_pivot mantığı
+    Pine'daki f_choose_same_bar_pivot mantığı - birebir çeviri
     Neden? Dönüşümlü swing önceliği, ATR-normalize mesafe, mum gücü
     """
-    # Bu fonksiyon pivot listelerini filtreler, aynı bar çakışmasını çözer
-    # Şimdilik iskelet - detaylı implementasyon sonra
-    # TODO: Pine'daki mantığı tam çevir
-    return high_pivots, low_pivots
+    if not high_pivots and not low_pivots:
+        return high_pivots, low_pivots
+
+    # Bar bazlı grupla
+    from collections import defaultdict
+    bar_to_high = defaultdict(list)
+    bar_to_low = defaultdict(list)
+    
+    for hp in high_pivots:
+        bar_to_high[hp['bar']].append(hp)
+    for lp in low_pivots:
+        bar_to_low[lp['bar']].append(lp)
+
+    # Çakışan barlar
+    common_bars = set(bar_to_high.keys()) & set(bar_to_low.keys())
+    
+    if not common_bars:
+        return high_pivots, low_pivots
+
+    filtered_high = []
+    filtered_low = []
+    
+    # last_accepted_type: 1=high, -1=low, 0=yok
+    last_type = last_accepted_type
+
+    # Tüm barları sıralı işle
+    all_bars = sorted(set(list(bar_to_high.keys()) + list(bar_to_low.keys())))
+    
+    for bar in all_bars:
+        has_high = bar in bar_to_high
+        has_low = bar in bar_to_low
+        
+        if has_high and has_low:
+            # Aynı barda ikisi de var - seçim yap
+            # ATR al
+            try:
+                atr = atr_series.iloc[bar] if bar < len(atr_series) else atr_series.iloc[-1]
+                if pd.isna(atr) or atr <= 0:
+                    atr = 1.0
+            except Exception:
+                atr = 1.0
+
+            # Mum bilgileri
+            try:
+                open_p = df['open'].iloc[bar] if bar < len(df) else 0
+                close_p = df['close'].iloc[bar] if bar < len(df) else 0
+                high_p = df['high'].iloc[bar] if bar < len(df) else 0
+                low_p = df['low'].iloc[bar] if bar < len(df) else 0
+                # Mum gücü - gövde / range
+                candle_range = max(high_p - low_p, 0.0001)
+                upper_wick = high_p - max(open_p, close_p)
+                lower_wick = min(open_p, close_p) - low_p
+            except Exception:
+                upper_wick = 0
+                lower_wick = 0
+                candle_range = atr
+
+            # Pine mantığı: dönüşümlü swing önceliği
+            # Eğer son kabul edilen high ise low'u seç, tersi de öyle
+            # Eğer yoksa wick büyüklüğüne göre seç
+            choose_high = False
+            if last_type == 1:
+                # Son high idi, şimdi low tercih et
+                choose_high = False
+            elif last_type == -1:
+                # Son low idi, high tercih et
+                choose_high = True
+            else:
+                # İlk pivot - wick'e göre
+                # Üst fitil büyükse high pivot daha anlamlı, alt fitil büyükse low
+                if upper_wick > lower_wick:
+                    choose_high = True
+                elif lower_wick > upper_wick:
+                    choose_high = False
+                else:
+                    # Eşitse ATR-normalize mesafeye bak
+                    # High pivot'un open'a uzaklığı vs low pivot'un
+                    try:
+                        high_dist = abs(bar_to_high[bar][0]['price'] - open_p) / atr
+                        low_dist = abs(open_p - bar_to_low[bar][0]['price']) / atr
+                        choose_high = high_dist > low_dist
+                    except Exception:
+                        choose_high = True
+
+            if choose_high:
+                filtered_high.extend(bar_to_high[bar])
+                last_type = 1
+            else:
+                filtered_low.extend(bar_to_low[bar])
+                last_type = -1
+        elif has_high:
+            filtered_high.extend(bar_to_high[bar])
+            last_type = 1
+        else:
+            filtered_low.extend(bar_to_low[bar])
+            last_type = -1
+
+    return filtered_high, filtered_low
+
+
+def f_same_bar_candidate_valid(high_pivots: List[Dict], low_pivots: List[Dict], bar: int) -> bool:
+    """Aynı barda çift pivot var mı kontrolü - hızlı"""
+    for hp in high_pivots:
+        if hp['bar'] == bar:
+            for lp in low_pivots:
+                if lp['bar'] == bar:
+                    return False
+    return True
 
 # === DİREK (POLE) MOTORU ===
 def calculate_path_stats(df: pd.DataFrame, start_bar: int, end_bar: int, 
@@ -921,6 +1025,12 @@ def find_best_triangle_candidate(df: pd.DataFrame, profile: str = "Dengeli", ver
     
     high_pivots, low_pivots = find_pivots(df, pivot_len)
     
+    # Aynı barda çift pivot filtresi - Pine birebir
+    try:
+        high_pivots, low_pivots = filter_same_bar_double_pivot(high_pivots, low_pivots, df, atr_series, 0)
+    except Exception:
+        pass
+    
     if len(high_pivots) < 2 or len(low_pivots) < 2:
         return None, [f"Yetersiz pivot: high={len(high_pivots)} low={len(low_pivots)}"]
     
@@ -1231,6 +1341,12 @@ def find_best_flag_candidate(df: pd.DataFrame, profile: str = "Dengeli", verbose
     
     atr_series = calculate_atr(df, 14)
     high_pivots, low_pivots = find_pivots(df, pivot_len)
+
+    # Aynı barda çift pivot filtresi
+    try:
+        high_pivots, low_pivots = filter_same_bar_double_pivot(high_pivots, low_pivots, df, atr_series, 0)
+    except Exception:
+        pass
     
     if len(high_pivots) < 2 or len(low_pivots) < 2:
         return None, [f"Yetersiz pivot bayrak: high={len(high_pivots)} low={len(low_pivots)}"]
@@ -1402,6 +1518,11 @@ class PatternLifecycleManager:
         safe_atr = atr_series.iloc[-1] if len(atr_series) > 0 and not pd.isna(atr_series.iloc[-1]) else 1.0
         break_buffer = max(0.0001, safe_atr * self.params['break_atr_mult'])
         tol = max(0.0001, safe_atr * self.params['touch_atr_mult'])
+        # Volume SMA - kırılım gücü için
+        try:
+            volume_sma = calculate_sma(df['volume'], 20) if 'volume' in df.columns else None
+        except Exception:
+            volume_sma = None
         
         # Eğer candidate yoksa
         if candidate is None or not candidate.valid:
@@ -1457,9 +1578,9 @@ class PatternLifecycleManager:
                 direction = 1 if close_up_break_raw else -1
                 boundary = upper_now if direction == 1 else lower_now
                 
-                # Breakout gücü hesapla
+                # Breakout gücü hesapla - volume SMA ile
                 strength, body_s, close_s, pen_s, exp_s, vol_s = f_breakout_strength(
-                    df, atr_series, current_bar, direction, boundary, self.profile
+                    df, atr_series, current_bar, direction, boundary, self.profile, volume_sma
                 )
                 
                 min_strength = self.params['min_break_strength']
@@ -1542,8 +1663,8 @@ class PatternLifecycleManager:
             # Aynı yönde kapanış var mı?
             same_side_close = (direction == 1 and close > boundary + break_buffer) or (direction == -1 and close < boundary - break_buffer)
             
-            # Güç hesapla
-            strength, _, _, _, _, _ = f_breakout_strength(df, atr_series, current_bar, direction, boundary, self.profile)
+            # Güç hesapla - volume SMA ile
+            strength, _, _, _, _, _ = f_breakout_strength(df, atr_series, current_bar, direction, boundary, self.profile, volume_sma)
             
             # Formasyon içine dönüş var mı?
             projected_upper = upper_now

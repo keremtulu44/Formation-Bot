@@ -12,8 +12,10 @@ EnvironmentFile=/etc/bist-bot.env
 ExecStart=/opt/bist-bot/venv/bin/python3 /opt/bist-bot/main.py
 Restart=always
 RestartSec=30
-StandardOutput=append:/var/log/bist-bot/bot.log
-StandardError=append:/var/log/bist-bot/bot.log
+# Logları journal'e yaz, Python FileHandler kendi dosyasına yazsın - çift yazımı önle
+StandardOutput=journal
+StandardError=journal
+# Python'un kendi log dosyası: /var/log/bist-bot/bot.log (FileHandler)
 
 # Kaynak limitleri - Oracle Free ARM için
 MemoryMax=800M
