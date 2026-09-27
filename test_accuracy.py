@@ -3,13 +3,17 @@ Doğruluk testi - Sentetik + Random + Shuffle
 Manuel olmadan sistem ne kadar doğru?
 
 1. Sentetik üçgenler (ground truth belli) - detection rate
-2. Random walk - false positive rate
-3. Shuffle - zaman sırası bozulunca pattern kalmamalı
+   a) "son barda canlı" — radar şu an ne görüyor?
+   b) "seride herhangi bir bar" — formasyon kuruldu mu? (lifecycle kırılımı başarıdır)
+2. Random walk - false positive rate ("şu an canlı formasyon" oranı; Pine'da da pivot
+   çizgili üçgenler rastgele yürüyüşte doğal olarak oluşur, kullanıcı bunu bilir)
+3. Shuffle - zaman sırası bozulunca pattern KALMAMALI (Pine-birebir S1 taramasının testi)
 """
 
 import pandas as pd
 import numpy as np
-from patterns import find_best_triangle_candidate, find_best_flag_candidate, calculate_atr, find_pivots
+from patterns import (find_best_triangle_candidate, find_best_flag_candidate, calculate_atr,
+                      find_pivots, scan_for_first_detection, ArgentEngine)
 from config import get_profile_params
 import random
 
@@ -79,7 +83,8 @@ print("=== DOĞRULUK TESTİ ===\n")
 # 1. Sentetik üçgen - gürültü seviyesine göre detection rate
 print("1. Sentetik Üçgen Detection Rate (ground truth belli)\n")
 for noise in [0.0, 0.1, 0.3, 0.6, 1.0]:
-    found = 0
+    found_last = 0
+    found_any = 0
     total = 20
     qualities = []
     for _ in range(total):
@@ -91,10 +96,14 @@ for noise in [0.0, 0.1, 0.3, 0.6, 1.0]:
             df = create_ascending_triangle(250, noise_level=noise)
         cand, _ = find_best_triangle_candidate(df, profile="Dengeli", verbose=False)
         if cand and cand.valid:
-            found += 1
+            found_last += 1
             qualities.append(cand.raw_quality)
+        hit, _snap = scan_for_first_detection(df, families=("Üçgen", "Kama"))
+        if hit:
+            found_any += 1
     avg_q = sum(qualities)/len(qualities) if qualities else 0
-    print(f"  Gürültü {noise:.1f}: {found}/{total} bulundu ({found/total*100:.0f}%) ort kalite {avg_q:.0f}")
+    print(f"  Gürültü {noise:.1f}: son barda canlı {found_last}/{total} ({found_last/total*100:.0f}%) | "
+          f"seride tespit {found_any}/{total} ({found_any/total*100:.0f}%) ort kalite {avg_q:.0f}")
 
 # 2. Random walk false positive
 print("\n2. Random Walk False Positive (olmaması lazım)\n")
@@ -144,7 +153,14 @@ if df_real is not None and len(df_real) >= 360:
         print(f"  Aynı tip mi? {same_type}, Üst fark {upper_diff:.2f} (<%2 ise stabil)")
         print(f"  Stabil mi? {'EVET' if same_type and upper_diff < 2.0 else 'HAYIR - hassas'}")
     else:
-        print(f"  360: {cand_360.pattern_type if cand_360 else 'Yok'}, 350: {cand_350.pattern_type if cand_350 else 'Yok'} - biri yok")
+        # Canlı formasyon yoksa motor statelerini karşılaştır (10 bar fark state'i değiştirebilir -
+        # kırılım/timeout gerçek olaylardır, kararsızlık değildir)
+        s360 = ArgentEngine(profile="Dengeli").process(df_360)
+        s350 = ArgentEngine(profile="Dengeli").process(df_350)
+        print(f"  360: state {s360.state} | 350: state {s350.state}")
+        same = s360.state == s350.state
+        print(f"  Her ikisinde de canlı formasyon yok (terminal/olay sonrası) -> "
+              f"{'TUTARLI (aynı state)' if same else 'farklı evrelerde - 10 bar içinde olay yaşanmış olabilir'}")
 
 print("\n=== SONUÇ ===")
 print("Bu testler manuel olmadan sistemin sağlamlığını gösterir:")

@@ -21,6 +21,9 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
+# Timeframe -> pandas süre etiketi (tamamlanmis_mumlar filtresi için)
+TF_SURELERI = {"1h": "1h", "2h": "2h", "4h": "4h", "1d": "1D"}
+
 # === BIST SAAT KONTROLÜ ===
 
 def is_bist_open(now: Optional[datetime] = None) -> bool:
@@ -136,42 +139,16 @@ class StockDequeManager:
         dq.append(candle)
     
     def append_dataframe(self, stock: str, df: pd.DataFrame):
-        """DataFrame'den toplu ekle - deduplicate ile"""
+        """DataFrame'den toplu ekle — timestamp bazlı TEKİLLEŞTİRİLMİŞ (idempotent).
+        Aynı zamana sahip mum varsa yeni değerler yazılır (taze kazınır),
+        pencere taşarsa en eski düşer (maxlen FIFO). Böylece aynı 60d penceresi
+        tekrar çekilip eklense bile deque bozulmaz."""
         dq = self.get_deque(stock)
-        # Mevcut timestamp'leri set olarak al - hızlı lookup
-        existing_ts = set()
-        try:
-            for c in dq:
-                ts = c.get('timestamp')
-                if ts is not None:
-                    # Normalize et string'e çevirmeden önce
-                    existing_ts.add(pd.to_datetime(ts))
-        except Exception:
-            existing_ts = set()
-
-        added = 0
-        updated = 0
+        birlesik: Dict[datetime, dict] = {c['timestamp']: c for c in dq}
+        yeni = 0
+        guncellenen = 0
         for idx, row in df.iterrows():
             ts = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
-            # Eğer zaten varsa güncelle (son fiyat daha güncel olabilir)
-            if ts in existing_ts:
-                # Mevcut deque içinde bul ve güncelle
-                # Deque'yi listeye çevirip güncelleme maliyetli, o yüzden atla ve sonra sort ile son değer kalır
-                # Basit: eğer aynı timestamp varsa eskiyi sil, yenisini ekle mantığı için deque'yi yeniden oluştur
-                # Ama performans için: var olanı atla, çünkü yfinance aynı mum için aynı veriyi verir
-                # Eğer kapanış değişmişse (canlı mum) güncelleyelim
-                for existing in dq:
-                    if pd.to_datetime(existing.get('timestamp')) == ts:
-                        # Güncelle
-                        existing['open'] = float(row['open'])
-                        existing['high'] = float(row['high'])
-                        existing['low'] = float(row['low'])
-                        existing['close'] = float(row['close'])
-                        existing['volume'] = float(row.get('volume', 0))
-                        updated += 1
-                        break
-                continue
-            
             candle = {
                 'timestamp': ts,
                 'open': float(row['open']),
@@ -180,11 +157,16 @@ class StockDequeManager:
                 'close': float(row['close']),
                 'volume': float(row.get('volume', 0))
             }
-            dq.append(candle)
-            existing_ts.add(ts)
-            added += 1
-        
-        logger.info(f"{stock} için {len(df)} mumdan {added} yeni, {updated} güncellendi - toplam {len(dq)}")
+            if ts in birlesik:
+                guncellenen += 1
+            else:
+                yeni += 1
+            birlesik[ts] = candle
+        tumu = sorted(birlesik.values(), key=lambda c: c['timestamp'])
+        dq.clear()
+        for c in tumu[-self.maxlen:]:
+            dq.append(c)
+        logger.info(f"{stock}: {yeni} yeni / {guncellenen} güncellenen mum (geldi {len(df)}, toplam {len(dq)})")
     
     def to_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
         """Deque'yi DataFrame'e çevir - pattern tespiti için"""
@@ -301,7 +283,12 @@ def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     Neden dropna? BIST seans dışı boş mumlar oluşur, onları at
     Neden session gap handling? Gece mumları olmamalı
     
-    timeframe: '2h', '4h', '1D'
+    ÖNEMLİ (B1 fix): 2H/4H kovaları BIST SEANS başına (ilk 1H mumun etiketi, 09:30)
+    hizalanır. Neden? Pine'daki request.security(..., "120"/"240") seans başından
+    sayar; pandas'in varsayılanı gece yarısıdır. Varsayıanla BIST gününün ilk 1H mumu
+    (09:30) TEK BAŞINA bir "2H mumu" oluyor ve sonraki tüm barlar 1 saat kayıyordu
+    -> 2H/4H formasyonlar TradingView'dekiyle aynı pivotları üretmiyordu.
+    Ölçüm: eskiden 08:00/10:00/12:00... -> şimdi 09:30/11:30/13:30... (TV ile aynı)
     """
     if df_1h is None or len(df_1h) == 0:
         return pd.DataFrame()
@@ -326,8 +313,18 @@ def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     available_cols = {k: v for k, v in agg_dict.items() if k in df.columns}
     
     try:
-        # Resample
-        df_resampled = df.resample(timeframe).agg(available_cols)
+        # Kova hizası: günlük için gece yarısı (doğal), 2H/4H için SEANS başı.
+        # origin=start_day + offset=<seans başı> -> kovalar 09:30'dan itibaren N saatlik.
+        # Seans başını veriden çıkarıyoruz (hard-code 09:30 değil): ilk barın saati.
+        offset = None
+        if timeframe in ("2h", "4h") and len(df.index) > 0:
+            ilk = df.index[0]
+            offset = f"{ilk.hour}h{ilk.minute:02d}min"
+        
+        if offset:
+            df_resampled = df.resample(timeframe, offset=offset).agg(available_cols)
+        else:
+            df_resampled = df.resample(timeframe).agg(available_cols)
         
         # Boşları at - BIST seans dışı
         df_resampled.dropna(inplace=True)
@@ -343,6 +340,25 @@ def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     except Exception as e:
         logger.error(f"Resample hatası {timeframe}: {e}")
         return pd.DataFrame()
+
+def tamamlanmis_mumlar(df: pd.DataFrame, tf: str, now: Optional[datetime] = None) -> pd.DataFrame:
+    """Devam eden (yarım) mumu çıkarır: kova etiketi + TF süresi > now ise o mum henüz
+    kapanmamıştır ve motor verilmemelidir. Yahoo'nun etiket hizalaması ne olursa olsun
+    güvenlidir — her mum kapanışından sonraki İLK taramada beslenir (Pine bar kapanışı
+    mantığıyla birebir). Resample sol-etiketli olduğu için etiket+TF = kova kapanışıdır."""
+    if df is None or len(df) == 0:
+        return df
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    idx = df.index
+    if idx.tz is None:
+        idx = idx.tz_localize(ISTANBUL_TZ)
+    else:
+        idx = idx.tz_convert(ISTANBUL_TZ)
+    sinir = pd.Timestamp(now).tz_convert(ISTANBUL_TZ) if pd.Timestamp(now).tzinfo else ISTANBUL_TZ.localize(pd.Timestamp(now))
+    tamam = (idx + pd.Timedelta(TF_SURELERI.get(tf, "1h"))) <= sinir
+    return df[np.asarray(tamam, dtype=bool)]
+
 
 def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     """
@@ -360,86 +376,7 @@ def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     
     return result
 
-# === GERÇEK VERİ ÇEKME (yfinance) + MOCK ===
-
-def fetch_yfinance_1h(stock: str, period: str = "60d", interval: str = "1h") -> Optional[pd.DataFrame]:
-    """
-    Gerçek BIST verisi - yfinance ile
-    - THYAO -> THYAO.IS
-    - Sütunları küçük harfe çevir
-    - Index'i timezone-aware yap (Istanbul)
-    - Boşsa None dön
-    """
-    try:
-        import yfinance as yf
-    except ImportError:
-        logger.error("yfinance kurulu değil!")
-        return None
-
-    try:
-        ticker_str = f"{stock}.IS"
-        ticker = yf.Ticker(ticker_str)
-        df = ticker.history(period=period, interval=interval, auto_adjust=False)
-
-        if df is None or len(df) == 0:
-            logger.warning(f"{stock} yfinance boş döndü ({ticker_str})")
-            return None
-
-        # Sütun isimlerini küçük harfe çevir
-        df.columns = [c.lower() for c in df.columns]
-
-        # Gerekli sütunlar var mı?
-        for col in ["open", "high", "low", "close"]:
-            if col not in df.columns:
-                logger.warning(f"{stock} için {col} sütunu yok, atlanıyor")
-                return None
-
-        # Index timezone kontrolü
-        if df.index.tz is None:
-            try:
-                df.index = df.index.tz_localize("UTC").tz_convert(ISTANBUL_TZ)
-            except Exception:
-                df.index = pd.to_datetime(df.index).tz_localize(ISTANBUL_TZ)
-        else:
-            try:
-                df.index = df.index.tz_convert(ISTANBUL_TZ)
-            except Exception:
-                pass
-
-        if "volume" not in df.columns:
-            df["volume"] = 0
-
-        df = df.dropna(subset=["open", "high", "low", "close"])
-        df = df.sort_index()
-
-        if len(df) > DEQUE_MAXLEN:
-            df = df.iloc[-DEQUE_MAXLEN:]
-
-        logger.info(f"{stock} yfinance: {len(df)} bar çekildi (son {df.index[-1]})")
-        return df
-
-    except Exception as e:
-        logger.error(f"{stock} yfinance hatası: {e}", exc_info=True)
-        return None
-
-
-def fetch_with_retry(stock: str, retries: int = 2, base_delay: float = 5.0) -> Optional[pd.DataFrame]:
-    """
-    Retry + exponential backoff ile yfinance çekme
-    """
-    for attempt in range(retries + 1):
-        df = fetch_yfinance_1h(stock)
-        if df is not None and len(df) >= 30:
-            return df
-        
-        if attempt < retries:
-            delay = base_delay * (2 ** attempt) + random.uniform(0, 2)
-            logger.warning(f"{stock} fetch başarısız, {delay:.1f}sn sonra retry {attempt+1}/{retries}")
-            time.sleep(delay)
-    
-    logger.error(f"{stock} {retries+1} denemede de veri alınamadı")
-    return None
-
+# === VERİ ÇEKME (MOCK + GERÇEK İSKELET) ===
 
 def fetch_with_rate_limit(stock: str, fetch_func, *args, **kwargs) -> Optional[pd.DataFrame]:
     """
@@ -468,15 +405,46 @@ def fetch_with_rate_limit(stock: str, fetch_func, *args, **kwargs) -> Optional[p
         logger.error(f"{stock} veri çekme hatası: {e} - atlanıyor, bot devam ediyor")
         return None
 
+def fetch_yfinance_1h(stock: str, period: str = "60d") -> Optional[pd.DataFrame]:
+    """yfinance'den 1h OHLCV çeker (gürültü bastırılmış). Başarısızlıkta None döner.
+    Not: Yahoo bazı sembolleri taşımıyor (örn. KOZAL.IS / KOZAA.IS -> HTTP 404)."""
+    try:
+        import io
+        import contextlib
+        import yfinance as yf
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            ham = yf.Ticker(stock + ".IS").history(period=period, interval="1h")
+        if ham is None or ham.empty:
+            return None
+        ham = ham.rename(columns=str.lower)
+        gerekli = ["open", "high", "low", "close", "volume"]
+        if not all(c in ham.columns for c in gerekli):
+            return None
+        ham = ham[gerekli]
+        # Zaman dilimi: deque'daki mumlar Europe/Istanbul tz-aware. yfinance genelde
+        # borsa saatini verir ama bazı durumlarda UTC/naive dönebilir - normalize et,
+        # yoksa dedup bozulur (aynı mum iki kez eklenir) ve tamamlanmis_mumlar şaşar.
+        try:
+            if ham.index.tz is None:
+                ham.index = ham.index.tz_localize("UTC").tz_convert(ISTANBUL_TZ)
+            else:
+                ham.index = ham.index.tz_convert(ISTANBUL_TZ)
+        except Exception:
+            try:
+                ham.index = pd.to_datetime(ham.index).tz_localize(ISTANBUL_TZ)
+            except Exception:
+                pass
+        return ham
+    except Exception:
+        return None
+
+
 def mock_fetch_60d_1h(stock: str, n_bars: int = 360) -> pd.DataFrame:
     """
-    Mock veri çekme - sadece testler için, canlıda kullanılmaz
-    Gerçek implementasyon: fetch_yfinance_1h
+    Mock veri çekme - gerçek API yoksa test için
+    Gerçek implementasyonda burası yfinance/borsapy olacak
     """
-    import hashlib
-    # Stabil seed - hash() randomize olduğu için hashlib kullan
-    stable_hash = int(hashlib.md5(stock.encode()).hexdigest()[:8], 16)
-    np.random.seed(stable_hash % 2**32)
+    np.random.seed(hash(stock) % 2**32)
     
     # Son 60 iş günü ~ 360 saat
     end = datetime.now(ISTANBUL_TZ)
@@ -484,8 +452,8 @@ def mock_fetch_60d_1h(stock: str, n_bars: int = 360) -> pd.DataFrame:
     # Şimdilik sadece hourly freq
     dates = pd.date_range(end=end, periods=n_bars, freq='h')
     
-    # Random walk - hisseye göre farklı seed (stabil)
-    base_price = 10 + (stable_hash % 100)  # Her hisse farklı fiyat
+    # Random walk - hisseye göre farklı seed
+    base_price = 10 + (hash(stock) % 100)  # Her hisse farklı fiyat
     close = base_price + np.cumsum(np.random.randn(n_bars) * 0.3)
     close = np.maximum(close, 1.0)  # Negatif olmasın
     

@@ -12,7 +12,7 @@ borsapy==0.11.0
 # Zaman ve config
 pytz==2024.1
 python-dotenv==1.0.1
-python-dateutil==2.9.0.post0
+python-dateutil==2.9.0.post0   # data.py JSON fallback (pickle bozulursa) bunu kullanır - KALDIRMA!
 
 # Telegram (basit requests de olur ama python-telegram-bot opsiyonel)
 requests==2.32.3

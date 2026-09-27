@@ -6,9 +6,10 @@ Gerçek BIST verisini çekip kalıcı olarak kaydet
 - Sonra git add -f ile pushlayabilirsin
 """
 
+import yfinance as yf
 import os
 import shutil
-from data import StockDequeManager, fetch_with_retry
+from data import StockDequeManager
 from config import BIST_30, BIST_50, ACTIVE_STOCKS
 import time
 import random
@@ -19,13 +20,16 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
 # Hangi hisseler? Şimdilik BIST30 ile test, sonra 50
 stocks_to_fetch = BIST_30  # veya BIST_50
 
-print(f"=== GERÇEK VERİ ÇEKME VE KALICI KAYIT (güncel) ===")
+print(f"=== GERÇEK VERİ ÇEKME VE KALICI KAYIT ===")
 print(f"Hisseler: {len(stocks_to_fetch)} adet")
 print(f"Liste: {stocks_to_fetch[:5]}...")
 
 # Deque manager - kalıcı
 data_dir = "./bot_data"
 mgr = StockDequeManager(maxlen=360, data_dir=data_dir)
+
+# Eğer bot_data varsa temizle mi? Hayır, üzerine ekle
+# shutil.rmtree(data_dir, ignore_errors=True)
 
 success = 0
 failed = 0
@@ -34,8 +38,9 @@ for idx, stock in enumerate(stocks_to_fetch):
     try:
         print(f"\n[{idx+1}/{len(stocks_to_fetch)}] {stock} çekiliyor...")
         
-        # Yeni retry'li fetch kullan
-        df = fetch_with_retry(stock, retries=2, base_delay=5.0)
+        # yfinance ile çek
+        ticker = yf.Ticker(f"{stock}.IS")
+        df = ticker.history(period="60d", interval="1h")
         
         if df is None or len(df) == 0:
             print(f"  ❌ Boş veri")
@@ -44,7 +49,10 @@ for idx, stock in enumerate(stocks_to_fetch):
         
         print(f"  Çekildi: {len(df)} bar 1H")
         
-        # Deque'ye ekle (deduplicate ile)
+        # Sütun isimlerini küçük harfe çevir
+        df.columns = [c.lower() for c in df.columns]
+        
+        # Deque'ye ekle (son 360'ı tutar)
         mgr.append_dataframe(stock, df)
         
         # Kaydet (hem pkl hem json)
@@ -55,7 +63,7 @@ for idx, stock in enumerate(stocks_to_fetch):
         
         # Rate limit - ban yememek için
         if idx < len(stocks_to_fetch) - 1:
-            delay = random.uniform(2, 4)  # Test için kısa, canlıda 45-50sn main.py'de
+            delay = random.uniform(2, 4)  # Gerçekte 45-50sn ama test için 2-4sn
             print(f"  {delay:.1f}sn bekleniyor...")
             time.sleep(delay)
             

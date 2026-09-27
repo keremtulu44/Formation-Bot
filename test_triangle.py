@@ -5,8 +5,32 @@ Gerçek üçgen oluşturup tespit ediyor mu bakalım
 
 import pandas as pd
 import numpy as np
-from patterns import find_best_triangle_candidate, create_mock_data, calculate_atr, find_pivots
+from patterns import (find_best_triangle_candidate, create_mock_data, calculate_atr,
+                      find_pivots, scan_for_first_detection)
 from config import PROFILE_PARAMS
+
+
+def raporla(df, ad, verbose_logs=None):
+    """Son bar canlı formasyonu; yoksa serideki İLK tespiti raporlar.
+    Lifecycle motorunda formasyon kırılabilir (bu bir BAŞARIdır) — o yüzden
+    'tespit edildi mi?' sorusu seri boyunca sorulur."""
+    cand, logs = find_best_triangle_candidate(df, profile="Dengeli", verbose=True)
+    if cand:
+        print(f"  ✅ CANLI: {cand.pattern_type} kalite {cand.raw_quality:.1f}")
+        print(f"     Üst: {cand.upper_now:.2f} Alt: {cand.lower_now:.2f} Daralma: "
+              f"{cand.contraction*100 if cand.contraction is not None else 0:.0f}%")
+        return cand
+    hit, snap = scan_for_first_detection(df, families=("Üçgen", "Kama"))
+    if hit:
+        bar, c, q = hit
+        print(f"  ✅ SERİDE TESPİT: bar {bar}'de {c.pattern_type} q{q:.0f} (o anki state: {snap.state}; "
+              f"formasyon sonrasında kırılmış olabilir — bu radar için başarıdır)")
+        return c
+    print(f"  ❌ Formasyon bulunamadı (son state {snap.state})")
+    if verbose_logs:
+        for log in (verbose_logs[:3] if isinstance(verbose_logs, list) else []):
+            print(f"   {log}")
+    return None
 
 def create_perfect_symmetrical_triangle(n_bars=200):
     """
@@ -145,29 +169,15 @@ print()
 # Test 2: Simetrik üçgen (formasyon olmalı)
 print("Test 2: Simetrik üçgen (formasyon OLMALI)")
 df_sym = create_perfect_symmetrical_triangle(200)
-candidate, logs = find_best_triangle_candidate(df_sym, profile="Dengeli", verbose=True)
-print(logs[0])
-for log in logs[:10]:
-    print(f"  {log}")
-if candidate:
-    print(f"  ✅ BULUNDU: {candidate.pattern_type} kalite {candidate.raw_quality:.1f}")
-    print(f"     Üst: {candidate.upper_now:.2f} Alt: {candidate.lower_now:.2f} Genişlik: {candidate.current_width:.2f}")
-    print(f"     Daralma: {candidate.contraction*100:.1f}% Apex: {candidate.apex_bar} Progress: {candidate.progress*100:.0f}%")
-else:
-    print("  ❌ Formasyon bulunamadı (sorun var)")
+candidate = raporla(df_sym, "simetrik")
+if candidate and candidate.progress is not None:
+    print(f"     Apex: {candidate.apex_bar} Progress: {candidate.progress*100:.0f}%")
 print()
 
 # Test 3: Yükselen üçgen
 print("Test 3: Yükselen üçgen")
 df_asc = create_ascending_triangle(200)
-candidate, logs = find_best_triangle_candidate(df_asc, profile="Dengeli", verbose=True)
-print(logs[0])
-for log in logs[:10]:
-    print(f"  {log}")
-if candidate:
-    print(f"  ✅ BULUNDU: {candidate.pattern_type} kalite {candidate.raw_quality:.1f}")
-else:
-    print("  ❌ Bulunamadı")
+candidate = raporla(df_asc, "yükselen")
 print()
 
 # Test 4: Farklı profiller
@@ -177,4 +187,9 @@ for profile in ["Hassas", "Dengeli", "Seçici"]:
     if cand:
         print(f"  {profile}: {cand.pattern_type} kalite {cand.raw_quality:.1f}")
     else:
-        print(f"  {profile}: Yok")
+        hit, _snap = scan_for_first_detection(df_sym, profile=profile, families=("Üçgen", "Kama"))
+        if hit:
+            bar, c, q = hit
+            print(f"  {profile}: seri içinde bar {bar} ({c.pattern_type} q{q:.0f}), son bar canlı değil")
+        else:
+            print(f"  {profile}: Yok")

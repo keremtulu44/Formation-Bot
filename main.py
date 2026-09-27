@@ -1,47 +1,39 @@
 # --- MAIN LOOP ---
-# BIST Bot Ana Döngü - Canlı için güvenli
+# BIST Bot Ana Döngü - İskelet
+# Henüz tam değil, adım adım doldurulacak
 # Türkçe yorumlar: Neden uyuyor, neden tarıyor?
 
 import os
 import sys
 import time
+import json
+import signal
 import logging
 import random
-import signal
-import json
 from datetime import datetime
 import pytz
 
-# .env yükle - local ve systemd için
 try:
     from dotenv import load_dotenv
-    load_dotenv()
-    if os.path.exists("/etc/bist-bot.env"):
-        load_dotenv("/etc/bist-bot.env", override=False)
+    load_dotenv()  # .env dosyasindan TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID okur
 except ImportError:
     pass
 
-from config import ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR, ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES, DATA_DIR
-from data import StockDequeManager, is_bist_open, time_until_next_open, time_until_next_candle_close, resample_all_timeframes, fetch_with_retry, fetch_yfinance_1h
-from patterns import calculate_atr, PatternLifecycleManager, find_best_triangle_candidate, find_best_flag_candidate, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
+from config import ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR, ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES
+from data import (StockDequeManager, is_bist_open, time_until_next_open, time_until_next_candle_close,
+                  resample_all_timeframes, fetch_yfinance_1h, tamamlanmis_mumlar)
+from patterns import PatternLifecycleManager, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
 from notifier import TelegramNotifier
 
 # === LOGGING KURULUMU ===
 def setup_logging():
-    """Log hem console hem dosyaya - duplicate handler korumalı"""
-    # Eğer zaten handler varsa tekrar ekleme (import yan etkisi)
-    root_logger = logging.getLogger()
-    if root_logger.handlers:
-        # Zaten kurulmuş, sadece bizim logger'ı döndür
-        logger = logging.getLogger(__name__)
-        return logger
-
-    # Local mi prod mu?
-    # /var/log/bist-bot yazılabilir mi kontrol et, yoksa LOCAL_LOG_DIR
+    """Log hem console hem dosyaya - Türkçe mesajlar"""
+    # Local mi prod mu? LOG_DIR (/var/log/bist-bot) GERÇEKTEN yazılabilir mi?
+    # Not: /var/log'un kendisine bakmak yetmez (root dışında yazılamaz) -
+    # LOG_DIR'e yazma testi yapılmalı, yoksa sunucuda loglar ./logs'a düşer.
     log_dir = LOG_DIR
     try:
         os.makedirs(log_dir, exist_ok=True)
-        # Yazılabilir mi test et
         test_path = os.path.join(log_dir, ".write_test")
         with open(test_path, "w") as f:
             f.write("test")
@@ -67,7 +59,8 @@ def setup_logging():
 
 logger = setup_logging()
 
-# === GLOBAL STATE FOR SIGNAL HANDLING ===
+# === SİNYAL YÖNETİMİ (systemctl stop -> SIGTERM) ===
+# Neden? systemd durdururken Python anında ölürse o taramada biriken deque'ler kaybolur.
 _shutdown_requested = False
 _deque_manager_ref = None
 
@@ -75,15 +68,7 @@ def signal_handler(signum, frame):
     global _shutdown_requested
     logger.info(f"Sinyal alındı: {signum} - güvenli kapanış hazırlanıyor...")
     _shutdown_requested = True
-    # Deque'yi kaydetmeye çalış
-    if _deque_manager_ref is not None:
-        try:
-            logger.info("Kapanış öncesi deque'ler kaydediliyor...")
-            _deque_manager_ref.save_all()
-        except Exception as e:
-            logger.error(f"Kapanış kayıt hatası: {e}")
 
-# SIGTERM ve SIGINT için handler kur
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
 
@@ -102,14 +87,23 @@ def reset_daily_if_needed():
     if today != daily_stats['last_reset']:
         logger.info(f"=== GÜNLÜK ÖZET {daily_stats['last_reset']} ===")
         logger.info(f"Taranan hisse: {daily_stats['stocks_scanned']}, Bulunan formasyon: {daily_stats['patterns_found']}, Gönderilen alert: {daily_stats['alerts_sent']}, Hata: {daily_stats['errors']}")
+        # Sıfırla
         daily_stats['stocks_scanned'] = 0
         daily_stats['patterns_found'] = 0
         daily_stats['alerts_sent'] = 0
         daily_stats['errors'] = 0
         daily_stats['last_reset'] = today
 
-def write_heartbeat(data_dir: str = DATA_DIR):
-    """Botun yaşadığını dışarıdan anlamak için heartbeat dosyası"""
+# === HEARTBEAT ===
+def write_heartbeat(data_dir: str = None):
+    """Botun yaşadığını dışarıdan anlamak için heartbeat dosyası.
+    Dışarıdan izleme: `jq .last_scan bot_data/heartbeat.json` 2 saatten eskiyse bot takılmış/kapanmıştır."""
+    if data_dir is None:
+        try:
+            from config import DATA_DIR
+            data_dir = DATA_DIR
+        except ImportError:
+            data_dir = "./bot_data"
     try:
         heartbeat_path = os.path.join(data_dir, "heartbeat.json")
         os.makedirs(data_dir, exist_ok=True)
@@ -129,8 +123,8 @@ def write_heartbeat(data_dir: str = DATA_DIR):
 
 def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: PatternLifecycleManager, notifier: TelegramNotifier):
     """
-    Tüm hisseleri tara - rate limit 45-50sn ile 30 hisse ~25dk sürer
-    - Deque'den veri al, yoksa yfinance ile taze çek
+    Tüm hisseleri tara - 40-45 dk sürer (rate limit)
+    - Deque'den veri al
     - Resample 2H/4H/1D
     - Pattern tespit (üçgen/kama/bayrak)
     - Lifecycle update (kırılım takibi)
@@ -142,120 +136,94 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
         if _shutdown_requested:
             logger.info("Kapanış istendi, tarama durduruluyor")
             break
-
         try:
             reset_daily_if_needed()
             
             logger.info(f"[{idx+1}/{len(ACTIVE_STOCKS)}] {stock} taranıyor...")
             
-            # Deque'den DataFrame al
+            # Deque'den mevcut pencere
             df_1h = deque_manager.to_dataframe(stock)
             
-            # Yeterli veri yoksa gerçek veriyi çek, mock ASLA kullanma
+            # Taze veri: yeni 1h mumlari deque'ye ekle (maxlen FIFO en eskisini atar).
+            # Fetch basarisizsa cache ile devam; ikisi de yoksa hisse ATLANIR.
+            # Canli dongude MOCK VERI YOK - sahte veriyle formasyon uretilmez.
+            taze = fetch_yfinance_1h(stock)
+            if taze is not None:
+                deque_manager.append_dataframe(stock, taze)
+                df_1h = deque_manager.to_dataframe(stock)
+            
             if df_1h is None or len(df_1h) < 50:
-                logger.warning(f"{stock} için yeterli veri yok ({0 if df_1h is None else len(df_1h)} bar), yfinance ile çekiliyor...")
-                # Rate limit beklemeden önce değil, fetch_with_retry kendi içinde retry yapar
-                # Ama tarama arası beklemeyi de koruyacağız
-                fresh_df = fetch_with_retry(stock, retries=2, base_delay=5.0)
-                if fresh_df is not None and len(fresh_df) >= 50:
-                    deque_manager.append_dataframe(stock, fresh_df)
-                    deque_manager.save_to_disk(stock)
-                    df_1h = deque_manager.to_dataframe(stock)
-                    logger.info(f"{stock} taze veri ile dolduruldu: {len(df_1h)} bar")
-                else:
-                    logger.warning(f"{stock} taze veri alınamadı, bu tur atlanıyor (cache: {0 if df_1h is None else len(df_1h)} bar)")
-                    # Yetersiz veriyle devam etme, skip
-                    if df_1h is None or len(df_1h) < 30:
-                        continue
-                    # 30-50 arası varsa yine de dene ama kalite düşük olabilir
+                logger.warning(f"{stock}: veri yok (fetch basarisiz + cache bos) - bu tur atlandi")
+                continue
             
             # Tüm timeframe'leri üret
             all_tfs = resample_all_timeframes(df_1h)
             
-            # Her timeframe için pattern tespit + lifecycle
+            # Her TF için: yarım (devam eden) mumu çıkar, TAMAMLANMIŞ mumları besle
             for tf_name, df_tf in all_tfs.items():
                 if df_tf is None or len(df_tf) < 30:
                     logger.debug(f"{stock} {tf_name} için yeterli veri yok")
                     continue
+                df_tf = tamamlanmis_mumlar(df_tf, tf_name)
+                if df_tf is None or len(df_tf) < 30:
+                    logger.debug(f"{stock} {tf_name}: tamamlanmış mum kalmadı (seans içi erken tarama)")
+                    continue
                 
-                # Candidate bul
-                cand_tri, logs_tri = find_best_triangle_candidate(df_tf, profile=PROFILE, verbose=False)
-                cand_flag, logs_flag = find_best_flag_candidate(df_tf, profile=PROFILE, verbose=False)
+                # Motor adayı kendisi bulur ve kırılım anında dondurur (Pine v0.4.6 akışı).
+                # tam_yeniden=True: pencere her taramada sıfırdan deterministik oynatılır.
+                snap = lifecycle_manager.scan(stock + "_" + tf_name, df_tf, tam_yeniden=True)
+                state, break_dir, lifecycle_log = snap.state, snap.break_dir, snap.log
+                active = snap.active
                 
-                # En iyi candidate - kaliteye göre
-                best_cand = None
-                if cand_tri and cand_tri.valid:
-                    best_cand = cand_tri
-                if cand_flag and cand_flag.valid:
-                    if best_cand is None or cand_flag.raw_quality > best_cand.raw_quality:
-                        best_cand = cand_flag
-                
-                # Lifecycle update - stock + timeframe için ayrı state
-                state, break_dir, lifecycle_log = lifecycle_manager.update(stock + "_" + tf_name, df_tf, best_cand)
-                
-                if best_cand:
+                if active:
+                    q = snap.effective_quality if snap.effective_quality is not None else active.raw_quality
                     daily_stats['patterns_found'] += 1
-                    logger.info(f"🔍 {stock} {tf_name} - {best_cand.pattern_type} kalite {best_cand.raw_quality:.0f} state {state} - {lifecycle_log}")
+                    logger.info(f"🔍 {stock} {tf_name} - {active.pattern_type} kalite {q:.0f} state {state} - {snap.log}")
                     
-                    # Alert eşiği kontrolü - timeframe'e göre
+                    # Alert eşiği kontrolü - timeframe'e göre (effective_quality üzerinden)
                     min_q = ALERT_MIN_QUALITY.get(tf_name, ALERT_MIN_QUALITY_GLOBAL)
-                    if best_cand.raw_quality < min_q:
-                        logger.debug(f"{stock} {tf_name} kalite {best_cand.raw_quality:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
-                    # Sadece önemli state'lerde Telegram gönder
-                    # ALERT_STATES içinde zaten SIKISMA_GUCLENIYOR var, redundant listeyi temizledik
-                    elif state in ALERT_STATES:
+                    if q < min_q:
+                        logger.debug(f"{stock} {tf_name} kalite {q:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
+                    # Sadece önemli state'lerde Telegram gönder (insanlaştırma V2)
+                    elif state in ALERT_STATES or state in [ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_COMPRESSING, ST_PREP]:
+                        # Humanized mesaj için ek bilgiler
                         alert_data = {
                             'stock_name': stock,
                             'timeframe': tf_name,
-                            'pattern_name': best_cand.pattern_type,
+                            'pattern_name': active.pattern_type,
                             'state': state,
-                            'confidence_score': best_cand.raw_quality,
-                            'critical_price_level': best_cand.upper_now if break_dir == 1 else best_cand.lower_now,
-                            'upper_now': best_cand.upper_now,
-                            'lower_now': best_cand.lower_now,
-                            'contraction': getattr(best_cand, 'contraction', None),
+                            'confidence_score': q,
+                            'critical_price_level': active.upper_now if break_dir == 1 else active.lower_now,
+                            'upper_now': active.upper_now,
+                            'lower_now': active.lower_now,
+                            'contraction': getattr(active, 'contraction', None),
                             'timestamp': df_tf.index[-1],
                             'break_dir': break_dir,
-                            'break_strength': getattr(best_cand, 'break_strength', best_cand.raw_quality),
-                            'break_price': best_cand.upper_now if break_dir == 1 else best_cand.lower_now,
+                            'break_strength': getattr(active, 'break_strength', q),
+                            'break_price': active.upper_now if break_dir == 1 else active.lower_now,
                         }
                         if notifier.send(alert_data):
                             daily_stats['alerts_sent'] += 1
-                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {best_cand.raw_quality:.0f}")
+                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {q:.0f}")
                 else:
-                    # Neden yok? Debug için ilk log
-                    if logs_tri and len(logs_tri) > 0:
-                        logger.debug(f"{stock} {tf_name} - Formasyon yok: {logs_tri[0]}")
+                    # Canlı formasyon yok (terminal state'ler ve kalite kapısı dahil)
+                    logger.debug(f"{stock} {tf_name} - Canlı formasyon yok: {snap.log}")
             
             daily_stats['stocks_scanned'] += 1
             
-            # Her hisse sonrası diske kaydet (crash durumunda kayıp azalsın)
+            # Her hisse sonrası diske kaydet (crash durumunda kayıp azalsın) + heartbeat
             try:
                 deque_manager.save_to_disk(stock)
             except Exception as e:
                 logger.warning(f"{stock} save_to_disk hatası: {e}")
-
-            # Heartbeat güncelle
             write_heartbeat()
             
-            # Rate limit - son hisse değilse bekle
+            # Rate limit
             if idx < len(ACTIVE_STOCKS) - 1:
-                if _shutdown_requested:
-                    break
-                delay = random.uniform(45, 50)  # config'den de okunabilir ama sabit tutalım canlı için güvenli
-                # config'den okuma dene
-                try:
-                    from config import RATE_LIMIT_MIN, RATE_LIMIT_MAX
-                    delay = random.uniform(RATE_LIMIT_MIN, RATE_LIMIT_MAX)
-                except ImportError:
-                    pass
-                logger.info(f"{stock} bitti, {delay:.1f}sn bekleniyor (rate limit)...")
-                # Uyku sırasında shutdown kontrolü için küçük parçalara böl
-                slept = 0
-                while slept < delay and not _shutdown_requested:
-                    chunk = min(5.0, delay - slept)
-                    time.sleep(chunk)
-                    slept += chunk
+                from config import RATE_LIMIT_MIN, RATE_LIMIT_MAX
+                delay = random.uniform(RATE_LIMIT_MIN, RATE_LIMIT_MAX)
+                logger.info(f"{stock} bitti, {delay:.1f}sn bekleniyor...")
+                time.sleep(delay)
                 
         except Exception as e:
             daily_stats['errors'] += 1
@@ -271,62 +239,43 @@ def main_loop():
     1. BIST açık mı kontrol et
     2. Açıksa -> mum kapanışından 5dk sonra tara
     3. Kapalıysa -> 5dk uyu, tekrar kontrol et
+    Neden 24/7 çalışıp sadece seans saatlerinde CPU harcasın? Oracle Free'de kaynak kısıtlı
     """
-    global _deque_manager_ref
-
     logger.info("=== BIST FORMASYON BOTU BAŞLATILIYOR ===")
     logger.info(f"Profil: {PROFILE}, Params: {PROFILE_PARAMS}")
     logger.info(f"Hisseler: {ACTIVE_STOCKS[:5]}... (toplam {len(ACTIVE_STOCKS)})")
     
+    global _deque_manager_ref
     deque_manager = StockDequeManager()
     _deque_manager_ref = deque_manager
     lifecycle_manager = PatternLifecycleManager(profile=PROFILE)
     notifier = TelegramNotifier()
     
-    # İlk yükleme - TÜM hisseler için, mock yok
-    logger.info("İlk yükleme kontrolü - tüm hisseler...")
+    # İlk yükleme: cache'i boş olan hisseler için taze veri çek
+    logger.info("İlk yükleme: cache'i boş olan hisseler taze çekiliyor...")
     for stock in ACTIVE_STOCKS:
-        if _shutdown_requested:
-            break
-        try:
-            df = deque_manager.to_dataframe(stock)
-            if df is None or len(df) < 50:
-                logger.info(f"{stock} için ilk veri çekiliyor (yfinance)...")
-                fresh = fetch_with_retry(stock, retries=2, base_delay=5.0)
-                if fresh is not None and len(fresh) >= 30:
-                    deque_manager.append_dataframe(stock, fresh)
-                    deque_manager.save_to_disk(stock)
-                    logger.info(f"{stock} ilk yükleme tamam: {len(fresh)} bar")
-                else:
-                    logger.warning(f"{stock} ilk yüklemede veri alınamadı, sonra tekrar denenecek")
-                # İlk yüklemede de rate limit
-                if stock != ACTIVE_STOCKS[-1]:
-                    time.sleep(random.uniform(2, 4))
-        except Exception as e:
-            logger.error(f"{stock} ilk yükleme hatası: {e}", exc_info=True)
-            continue
+        df = deque_manager.to_dataframe(stock)
+        if df is None or len(df) < 50:
+            taze = fetch_yfinance_1h(stock)
+            if taze is not None:
+                deque_manager.append_dataframe(stock, taze)
+                deque_manager.save_to_disk(stock)
+                logger.info(f"{stock}: {len(taze)} mum çekildi ve diske kaydedildi")
+            else:
+                logger.warning(f"{stock}: ilk veri çekilemedi (Yahoo yok + cache boş) - canlıda atlanacak")
     
-    logger.info("İlk yükleme bitti, ana döngüye geçiliyor")
-    write_heartbeat()
-
     while not _shutdown_requested:
         try:
             now = datetime.now(ISTANBUL_TZ)
             
             if is_bist_open(now):
-                logger.info(f"BIST AÇIK - {now.strftime('%H:%M:%S')} - tarama kontrolü")
+                logger.info(f"BIST AÇIK - {now.strftime('%H:%M:%S')} - tarama başlıyor")
                 
                 # Mum kapanışına kadar bekle (5dk sonrası)
                 wait_sec = time_until_next_candle_close(now)
                 if wait_sec > 60:  # 1dk'dan fazlaysa bekle
                     logger.info(f"Sonraki mum kapanış +5dk'ya kadar {wait_sec/60:.1f}dk bekleniyor")
-                    # 5dk parçalı uyku, shutdown kontrolü
-                    sleep_target = min(wait_sec, 300)
-                    slept = 0
-                    while slept < sleep_target and not _shutdown_requested:
-                        chunk = min(5.0, sleep_target - slept)
-                        time.sleep(chunk)
-                        slept += chunk
+                    time.sleep(min(wait_sec, 300))  # Max 5dk uyu, sonra tekrar kontrol et
                     continue
                 
                 # Tara
@@ -334,43 +283,31 @@ def main_loop():
                 
                 # Tümünü diske kaydet
                 deque_manager.save_all()
-                write_heartbeat()
                 
                 # Sonraki mum kapanışına kadar uyu
                 wait_next = time_until_next_candle_close(datetime.now(ISTANBUL_TZ))
                 logger.info(f"Tarama bitti, sonraki mum için {wait_next/60:.1f}dk uyku")
-                sleep_target = max(wait_next, 60)
-                slept = 0
-                while slept < sleep_target and not _shutdown_requested:
-                    chunk = min(5.0, sleep_target - slept)
-                    time.sleep(chunk)
-                    slept += chunk
+                time.sleep(max(wait_next, 60))
                 
             else:
                 # BIST kapalı
                 wait_open = time_until_next_open(now)
+                # 5dk'da bir kontrol et, ama açılışa kadar uyu
                 sleep_time = min(wait_open, 300)  # Max 5dk
                 logger.info(f"BIST KAPALI - {now.strftime('%Y-%m-%d %H:%M:%S')} - {sleep_time/60:.1f}dk uyku (açılışa {wait_open/3600:.1f}sa)")
-                slept = 0
-                while slept < sleep_time and not _shutdown_requested:
-                    chunk = min(5.0, sleep_time - slept)
-                    time.sleep(chunk)
-                    slept += chunk
+                time.sleep(sleep_time)
                 
         except KeyboardInterrupt:
             logger.info("Bot durduruldu (Ctrl+C)")
             break
         except Exception as e:
+            daily_stats['errors'] += 1
             logger.error(f"Ana döngü hatası: {e} - 30sn sonra yeniden denenecek", exc_info=True)
-            # Hata durumunda da heartbeat yaz
             write_heartbeat()
-            slept = 0
-            while slept < 30 and not _shutdown_requested:
-                time.sleep(1)
-                slept += 1
+            time.sleep(30)
             continue
-
-    # Graceful shutdown
+    
+    # Güvenli kapanış (SIGTERM/SIGINT)
     logger.info("Bot kapanıyor, son kayıtlar yapılıyor...")
     try:
         if _deque_manager_ref is not None:

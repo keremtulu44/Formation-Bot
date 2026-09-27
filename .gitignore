@@ -12,6 +12,9 @@ logs/
 test_data/
 test_bot_data/
 
+# Üretim çıktıları - geçici
+CANLI_FORMASYONLAR.txt
+
 # OS
 .DS_Store
 *.swp
@@ -21,5 +24,8 @@ test_bot_data/
 .vscode/
 .idea/
 
-# Not: bot_data/ bilerek git'te tutuluyor (senin isteğin) - 28 hisse * 360 bar gerçek veri
-# Hem .json (human-readable) hem .pkl (hızlı yükleme) pushlanıyor
+# Not: bot_data/ BİLEREK git'te tutuluyor (senin isteğin) - 28 hisse * 360 bar gerçek veri
+# Hem .json (human-readable) hem .pkl (hızlı yükleme) pushlanıyor.
+# DİKKAT (canlı sunucu): bot her taramada bu dosyaları yeniden yazar. Sunucuda
+# bot_data'yı repo dışına almak (örn. DATA_DIR=/var/lib/bist-bot/bot_data) veya
+# deployment'ı "git fetch + dosyaları ezmeden" yapmak gerekir, yoksa git pull çakışır.
