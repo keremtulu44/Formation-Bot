@@ -15,6 +15,9 @@ test_bot_data/
 # Üretim çıktıları - geçici
 CANLI_FORMASYONLAR.txt
 bot_data/heartbeat.json
+bot_data/telegram_kap.json
+bot_data/telegram_soguma.json
+bot_data/*_gunluk.json
 
 # OS
 .DS_Store

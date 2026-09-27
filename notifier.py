@@ -7,9 +7,9 @@ import os
 import logging
 import random
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
-from config import DATA_DIR
+from config import DATA_DIR, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,14 @@ PATTERN_EMOJI = {
     "Boğa Flaması": "🎏🐂",
     "Ayı Flaması": "🎏🐻",
 }
+
+# Saatlik kapan aşıldığında BİLE geçmesine izin verilen (aksiyon gerektiren) state'ler.
+# SIKISMA_GUCLENIYOR / tanımlama state'leri "izleme" kategorisidir: fırtına anında
+# sessiz kalabilir, kırılım/retest sinyalleri kaçmamalı.
+KRITIK_STATELER = (
+    "KIRILIM_ADAYI", "KIRILIM_TEYITLI", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI",
+    "KIRILIM_DENEMESI", "BASARISIZ_KIRILIM",
+)
 
 # Timeframe insanlaştırma
 TF_HUMAN = {
@@ -68,9 +76,20 @@ class TelegramNotifier:
         self.chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
         self.cooldown_hours = 4
         self.last_sent: Dict[str, datetime] = {}
+        # --- GLOBAL KAPANI (FAZ 2) ---
+        # Cooldown tek tek spam'i engeller ama üst sınır yoktur: teorik 3600 mesaj/gün.
+        # Saatlik/günlük sayaç + saatlik kap aşıldığında sadece KRITIK_STATELER geçer.
+        self.max_saatlik = TELEGRAM_MAX_MESAJ_SAAT
+        self.max_gunluk = TELEGRAM_MAX_MESAJ_GUN
+        self._saatlik_zamanlar: List[datetime] = []   # son 1 saatteki gönderimler
+        self._gunluk_sayac = 0
+        self._gunluk_tarih = datetime.now().date()
+        self._kap_uyarildi = False  # aynı saat penceresinde 1 kez uyar
         # Cooldown kalıcılığı: restart sonrası aynı mesajın tekrar gitmesini engeller
         self._cooldown_dosya = os.path.join(os.path.dirname(DATA_DIR) or ".", "bot_data", "telegram_soguma.json")
+        self._kap_dosya = os.path.join(os.path.dirname(self._cooldown_dosya), "telegram_kap.json")
         self._cooldown_yukle()
+        self._kap_yukle()
         
         if not self.token or not self.chat_id:
             logger.warning("Telegram token/chat_id env'de yok - notifier pasif (test modu)")
@@ -78,6 +97,64 @@ class TelegramNotifier:
         else:
             self.enabled = True
             logger.info("Telegram notifier aktif - insanlaştırma V2")
+
+    def _kap_yukle(self):
+        """Saatlik/günlük sayaçları diskten yükle (restart kapani aşmasın)."""
+        try:
+            import json
+            if os.path.exists(self._kap_dosya):
+                with open(self._kap_dosya, "r", encoding="utf-8") as f:
+                    ham = json.load(f)
+                self._gunluk_sayac = int(ham.get("gunluk_sayac", 0))
+                self._gunluk_tarih = datetime.fromisoformat(ham["gunluk_tarih"]).date()
+                self._saatlik_zamanlar = [datetime.fromisoformat(t) for t in ham.get("saatlik", [])]
+                logger.info(f"Telegram kap hafızası yüklendi: saatlik={len(self._saatlik_zamanlar)}, "
+                            f"günlük={self._gunluk_sayac}")
+        except Exception as e:
+            logger.debug(f"Kap hafızası yüklenemedi (ilk çalışma olabilir): {e}")
+
+    def _gonderim_kaydet(self):
+        """Başarılı gönderimi sayaçlara işle (mock mod dahil)."""
+        self._gunu_sifirla_gerekirse()
+        self._saatligi_temizle()
+        self._saatlik_zamanlar.append(datetime.now())
+        self._gunluk_sayac += 1
+        self._kap_kaydet()
+
+    def _kap_kaydet(self):
+        try:
+            import json
+            os.makedirs(os.path.dirname(self._kap_dosya), exist_ok=True)
+            with open(self._kap_dosya, "w", encoding="utf-8") as f:
+                json.dump({
+                    "gunluk_sayac": self._gunluk_sayac,
+                    "gunluk_tarih": self._gunluk_tarih.isoformat(),
+                    "saatlik": [t.isoformat() for t in self._saatlik_zamanlar],
+                }, f, ensure_ascii=False)
+        except Exception as e:
+            logger.debug(f"Kap hafızası kaydedilemedi: {e}")
+
+    def _gunu_sifirla_gerekirse(self):
+        bugun = datetime.now().date()
+        if bugun != self._gunluk_tarih:
+            self._gunluk_sayac = 0
+            self._gunluk_tarih = bugun
+            self._kap_uyarildi = False
+
+    def _saatligi_temizle(self):
+        sinir = datetime.now() - timedelta(hours=1)
+        self._saatlik_zamanlar = [t for t in self._saatlik_zamanlar if t > sinir]
+
+    def kap_durumu(self) -> Dict:
+        """İzleme/log için kap durumu."""
+        self._saatligi_temizle()
+        self._gunu_sifirla_gerekirse()
+        return {
+            "saatlik": len(self._saatlik_zamanlar),
+            "saatlik_limit": self.max_saatlik,
+            "gunluk": self._gunluk_sayac,
+            "gunluk_limit": self.max_gunluk,
+        }
 
     def _cooldown_yukle(self):
         try:
@@ -109,10 +186,37 @@ class TelegramNotifier:
     def can_send(self, stock: str, pattern: str, timeframe: str, state: str = "") -> bool:
         key = self._cooldown_key(stock, pattern, timeframe, state)
         if key not in self.last_sent:
-            return True
-        last = self.last_sent[key]
-        elapsed = datetime.now() - last
-        return elapsed > timedelta(hours=self.cooldown_hours)
+            cooldown_tamam = True
+        else:
+            elapsed = datetime.now() - self.last_sent[key]
+            cooldown_tamam = elapsed > timedelta(hours=self.cooldown_hours)
+        if not cooldown_tamam:
+            return False
+
+        # --- GLOBAL KAPANI (FAZ 2) ---
+        self._gunu_sifirla_gerekirse()
+        self._saatligi_temizle()
+        if self._gunluk_sayac >= self.max_gunluk:
+            # Günlük sınır: telegram SUSAR (log'da kalır). Bir kez uyar.
+            if not self._kap_uyarildi:
+                self._kap_uyarildi = True
+                logger.error(
+                    f"TELEGRAM GÜNLÜK KAPANI AŞILDI ({self.max_gunluk} mesaj) - bugün başka "
+                    f"mesaj gönderilmeyecek. Tüm sinyaller log dosyasında."
+                )
+            return False
+        if len(self._saatlik_zamanlar) >= self.max_saatlik:
+            # Saatlik sınır: sadece kritik (aksiyon gerektiren) state'ler geçer.
+            if state in KRITIK_STATELER:
+                return True
+            if not self._kap_uyarildi:
+                self._kap_uyarildi = True
+                logger.warning(
+                    f"TELEGRAM SAATLİK KAPANI AŞILDI ({self.max_saatlik} mesaj/saat) - "
+                    f"sadece kritik sinyaller (kırılım/retest) gönderilecek."
+                )
+            return False
+        return True
 
     def format_message(self, data: Dict) -> str:
         """
@@ -331,6 +435,7 @@ class TelegramNotifier:
             logger.info(f"[MOCK TELEGRAM {state}]\n{message}\n")
             key = self._cooldown_key(stock, pattern, timeframe, state)
             self.last_sent[key] = datetime.now()
+            self._gonderim_kaydet()
             return True
 
         try:
@@ -346,6 +451,7 @@ class TelegramNotifier:
                 key = self._cooldown_key(stock, pattern, timeframe, state)
                 self.last_sent[key] = datetime.now()
                 self._cooldown_kaydet()
+                self._gonderim_kaydet()
                 return True
             else:
                 logger.error(f"Telegram hatası: {resp.text}")

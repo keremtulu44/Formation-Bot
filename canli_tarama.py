@@ -18,7 +18,8 @@ import time
 import pandas as pd
 
 from config import ACTIVE_STOCKS, ISTANBUL_TZ
-from data import StockDequeManager, resample_all_timeframes, fetch_yfinance_1h, tamamlanmis_mumlar
+from data import (StockDequeManager, resample_all_timeframes, fetch_yfinance_1h,
+                  fetch_yfinance_1d, tamamlanmis_mumlar)
 from patterns import PatternLifecycleManager
 from patterns.detect import _usable_active, LIVE_STATES, TRIANGLE_FAMILIES, SPECIALIZED_FAMILIES
 
@@ -79,6 +80,15 @@ def main():
         kaynak_notlari.append(f"{stock}: {kaynak}, son bar {son_bar}")
 
         tfs = resample_all_timeframes(df_1h)
+        # 1D için derin veri (FAZ 2): resample sadece ~40 bar verir, ayrı deque ~500.
+        if deque_manager.gunluk_veri_eksik_mi(stock):
+            taze_gunluk = fetch_yfinance_1d(stock)
+            if taze_gunluk is not None and len(taze_gunluk) >= 30:
+                deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
+                deque_manager.save_gunluk_to_disk(stock)
+        df_gunluk = deque_manager.to_gunluk_dataframe(stock)
+        if df_gunluk is not None and len(df_gunluk) >= 30:
+            tfs["1d"] = df_gunluk
         for tf in TFLER:
             df_tf = tfs.get(tf)
             if df_tf is None or len(df_tf) < 30:

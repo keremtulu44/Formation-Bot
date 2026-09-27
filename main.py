@@ -21,10 +21,12 @@ except ImportError:
 
 from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR,
                     ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES, BIST_OPEN,
-                    SCAN_DELAY_AFTER_CLOSE_MIN, STALE_BAR_UYARI_DK)
+                    SCAN_DELAY_AFTER_CLOSE_MIN, STALE_BAR_UYARI_DK, VERI_YOK_MODU_ESIK_DK,
+                    TARAMA_SURESI_UYARI_DK)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   son_kapanan_mum_ani, time_until_next_open,
-                  resample_all_timeframes, fetch_yfinance_1h, tamamlanmis_mumlar)
+                  resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
+                  tamamlanmis_mumlar)
 from patterns import PatternLifecycleManager, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
 from notifier import TelegramNotifier
 
@@ -62,6 +64,10 @@ def setup_logging():
 
 logger = setup_logging()
 
+# main_loop icinde olusturulan nesnelerin global referanslari (heartbeat icin)
+_deque_manager_ref = None
+_notifier_ref = None
+
 
 def son_bar_yasi_dakika_str(dk: float) -> str:
     """Dakikayı insan okunur yapar: 95 -> '1sa 35dk'"""
@@ -98,6 +104,10 @@ daily_stats = {
     'stale_stocks': 0,
     'max_bar_age_min': None,
     'data_stale': False,
+    'veri_yok_modu': False,
+    'split_atlanan': 0,
+    'son_tarama_suresi_dk': None,
+    'gunluk_bar_sayisi': None,
     'last_reset': datetime.now(ISTANBUL_TZ).date()
 }
 
@@ -117,10 +127,14 @@ def reset_daily_if_needed():
         daily_stats['stale_stocks'] = 0
         daily_stats['max_bar_age_min'] = None
         daily_stats['data_stale'] = False
+        daily_stats['veri_yok_modu'] = False
+        daily_stats['split_atlanan'] = 0
+        daily_stats['son_tarama_suresi_dk'] = None
+        daily_stats['gunluk_bar_sayisi'] = None
         daily_stats['last_reset'] = today
 
 # === HEARTBEAT ===
-def write_heartbeat(data_dir: str = None):
+def write_heartbeat(data_dir: str = None, notifier=None):
     """Botun yaşadığını dışarıdan anlamak için heartbeat dosyası.
     Dışarıdan izleme: `jq .last_scan bot_data/heartbeat.json` 2 saatten eskiyse bot takılmış/kapanmıştır."""
     if data_dir is None:
@@ -146,6 +160,15 @@ def write_heartbeat(data_dir: str = None):
             "stale_stocks": daily_stats['stale_stocks'],
             "max_bar_age_min": daily_stats['max_bar_age_min'],
             "data_stale": daily_stats['data_stale'],
+            "veri_yok_modu": daily_stats['veri_yok_modu'],
+            "split_atlanan": daily_stats['split_atlanan'],
+            "son_tarama_suresi_dk": daily_stats['son_tarama_suresi_dk'],
+            "gunluk_bar_sayisi": daily_stats['gunluk_bar_sayisi'],
+            "telegram_kap": (notifier.kap_durumu() if notifier is not None
+                             else (_notifier_ref.kap_durumu() if _notifier_ref else None)),
+            "veri_sorunlari": ({k: [x['tip'] for x in v]
+                               for k, v in _deque_manager_ref.sureklilik_sorunlari.items()}
+                              if _deque_manager_ref else {}),
         }
         with open(heartbeat_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
@@ -162,6 +185,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     - Telegram (cooldown ile)
     """
     simdiki_zaman = datetime.now(ISTANBUL_TZ)
+    tarama_baslangici = time.monotonic()
     logger.info(f"=== TARAMA BAŞLIYOR - {len(ACTIVE_STOCKS)} hisse, profil: {PROFILE} "
                 f"({simdiki_zaman.strftime('%H:%M')}) ===")
     
@@ -206,6 +230,37 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             # Seansın ilk saatinde en yeni veri dünkü kapanıştır (ilk mum 10:30'da
             # kapanır) -> o pencereyi uyarı dışında tut.
             erken_seans = simdiki_zaman.time() < dt_time(10, 50)
+            # --- SPLIT / VERİ SORUNU KONTROLÜ (FAZ 2) ---
+            # Ham seride split/bedelsiz tespit edildiyse bu hisseyi ANALİZ ETME:
+            # pivot/sınır/kırılım sahte olur. Log'da net yazar, kullanıcı müdahale
+            # edene kadar hisse sessiz kalır (yanlış sinyal vermekten iyidir).
+            st_sorunlar = deque_manager.sureklilik_sorunlari.get(stock)
+            if st_sorunlar:
+                tipler = sorted({x['tip'] for x in st_sorunlar})
+                if 'split' in tipler:
+                    daily_stats['split_atlanan'] += 1
+                    logger.error(
+                        f"{stock}: analiz atlanıyor - veri sorunu {tipler}. "
+                        f"Detay yukarıdaki uyarılarda; veri düzeltilince otomatik döner."
+                    )
+                    continue
+                # boşluk/şok: analize devam (tek olay, motor ATR ile absorbe eder)
+                logger.info(f"{stock}: veri notu {tipler} - analiz devam ediyor")
+
+            # --- VERİ YOK MODU (FAZ 2) ---
+            # Fetch başarısız ve cache'deki son mum çok eskiyse bugün için piyasa
+            # verisi yoktur (bilinmeyen tatil / Yahoo arızası). Bu hisseyi analiz
+            # ETME: eski veriyle formasyon üretmek yanlış sinyaldir. Karar fetch
+            # SONRASI verilir (cache her sabah dünkü olduğu için fetch öncesi
+            # bakılsa normal sabah taraması yanlışta atılırdı).
+            if taze is None and son_bar_yasi_dk is not None and son_bar_yasi_dk > VERI_YOK_MODU_ESIK_DK:
+                daily_stats['veri_yok_modu'] = True
+                logger.info(
+                    f"{stock}: bugün için veri yok (son mum {son_bar_yasi_dakika_str(son_bar_yasi_dk)} önce, "
+                    f"fetch başarısız) - analiz atlanıyor"
+                )
+                continue
+
             if son_bar_yasi_dk > STALE_BAR_UYARI_DK and not erken_seans:
                 daily_stats['stale_stocks'] += 1
                 daily_stats['data_stale'] = True
@@ -218,6 +273,23 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             
             # Tüm timeframe'leri üret
             all_tfs = resample_all_timeframes(df_1h)
+            
+            # --- 1D İÇİN DERİN VERİ (FAZ 2) ---
+            # Resample 1D sadece 1H penceresi kadar (~40 bar) derinlikte olur ve 1D
+            # formasyon penceresi (20-60 bar) marjinal kalıyordu (ölçüm: 40.0 bar).
+            # 1H penceresini büyütmek Pine uyumunu bozabileceği için günlük veriyi
+            # AYRI ve DERİN (~2 yıl) çekiyoruz. Veri yoksa resample'e geri dönülür
+            # (davranış asla kötüleşmez, sadece iyileşir).
+            if deque_manager.gunluk_veri_eksik_mi(stock, simdiki_zaman):
+                taze_gunluk = fetch_yfinance_1d(stock)
+                if taze_gunluk is not None and len(taze_gunluk) >= 30:
+                    deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
+                    logger.info(f"{stock}: günlük veri tazelendi ({len(taze_gunluk)} bar)")
+                else:
+                    logger.warning(f"{stock}: günlük derin veri çekilemedi - resample kullanılacak")
+            df_gunluk = deque_manager.to_gunluk_dataframe(stock)
+            if df_gunluk is not None and len(df_gunluk) >= 30:
+                all_tfs['1d'] = df_gunluk
             
             # Her TF için: yarım (devam eden) mumu çıkar, TAMAMLANMIŞ mumları besle
             for tf_name, df_tf in all_tfs.items():
@@ -276,7 +348,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 deque_manager.save_to_disk(stock)
             except Exception as e:
                 logger.warning(f"{stock} save_to_disk hatası: {e}")
-            write_heartbeat()
+            write_heartbeat(notifier=notifier)
             
             # Rate limit
             if idx < len(ACTIVE_STOCKS) - 1:
@@ -290,8 +362,38 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             logger.error(f"{stock} tarama hatası: {e} - devam ediliyor", exc_info=True)
             continue
     
+    for _st in ACTIVE_STOCKS[:3]:
+        _df_g = deque_manager.to_gunluk_dataframe(_st)
+        if _df_g is not None:
+            daily_stats['gunluk_bar_sayisi'] = len(_df_g)
+            break
+
+    sure_dk = (time.monotonic() - tarama_baslangici) / 60.0
+    daily_stats['son_tarama_suresi_dk'] = round(sure_dk, 1)
+
+    # --- TARAMA DRİFT KORUMASI (FAZ 2) ---
+    if sure_dk > TARAMA_SURESI_UYARI_DK:
+        logger.warning(
+            f"TARAMA ÇOK UZUN SÜRDÜ: {sure_dk:.1f} dk (eşik {TARAMA_SURESI_UYARI_DK} dk, "
+            f"mum kapanış aralığı 60 dk). Bir sonraki mum gecikmeli analiz edilecek - "
+            f"Yahoo yavaşlığı veya rate-limit birikmesi olabilir."
+        )
+
     logger.info(f"=== TARAMA BİTTİ - Günlük: {daily_stats} ===")
-    if daily_stats['fetch_failures'] > 0 or daily_stats['data_stale']:
+    if daily_stats['split_atlanan']:
+        logger.error(
+            f"SPLIT/VERİ SORUNU: {daily_stats['split_atlanan']} hisse analiz edilmedi "
+            f"(ham seride fiyat sürekliliği ihlali). Detay: "
+            f"{ {k: [x['tip'] for x in v] for k, v in deque_manager.sureklilik_sorunlari.items()} }"
+        )
+    if daily_stats['veri_yok_modu']:
+        logger.warning(
+            f"VERİ YOK MODU: bugün için yeni piyasa verisi alınamadı "
+            f"(fetch hatası {daily_stats['fetch_failures']}/{len(ACTIVE_STOCKS)}, "
+            f"en eski mum {daily_stats['max_bar_age_min']} dk). Analiz yapılmadı - "
+            f"tatil veya veri kaynağı arızası olabilir."
+        )
+    elif daily_stats['fetch_failures'] > 0 or daily_stats['data_stale']:
         logger.warning(
             f"VERİ SAĞLIĞI: taze veri {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse, "
             f"fetch hatası {daily_stats['fetch_failures']}, eski veri {daily_stats['stale_stocks']} hisse, "
@@ -302,7 +404,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             f"VERİ SAĞLIĞI: taze veri {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse, "
             f"en eski mum {daily_stats['max_bar_age_min']} dk"
         )
-    write_heartbeat()
+    write_heartbeat(notifier=notifier)
 
 def main_loop():
     """
@@ -321,6 +423,8 @@ def main_loop():
     _deque_manager_ref = deque_manager
     lifecycle_manager = PatternLifecycleManager(profile=PROFILE)
     notifier = TelegramNotifier()
+    global _notifier_ref
+    _notifier_ref = notifier
     
     # İlk yükleme: cache'i boş olan hisseler için taze veri çek
     logger.info("İlk yükleme: cache'i boş olan hisseler taze çekiliyor...")
@@ -334,6 +438,13 @@ def main_loop():
                 logger.info(f"{stock}: {len(taze)} mum çekildi ve diske kaydedildi")
             else:
                 logger.warning(f"{stock}: ilk veri çekilemedi (Yahoo yok + cache boş) - canlıda atlanacak")
+        # 1D derin veri de boşsa çek (ilk kurulumda 1D analizi için gerekli)
+        if deque_manager.gunluk_veri_eksik_mi(stock):
+            taze_gunluk = fetch_yfinance_1d(stock)
+            if taze_gunluk is not None and len(taze_gunluk) >= 30:
+                deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
+                deque_manager.save_gunluk_to_disk(stock)
+                logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
     
     # Aynı mum iki kez taranmasın (drift koruması). Restart'ta None -> bir sonraki
     # kapanışta tazelenir, son mum gerekiyorsa bir kez daha taranır (zararsız).

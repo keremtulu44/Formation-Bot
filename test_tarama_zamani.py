@@ -14,6 +14,7 @@ botu sessizce körleştiriyordu:
 """
 
 import inspect
+import os
 import sys
 from datetime import datetime, time as dt_time
 
@@ -22,6 +23,7 @@ import pandas as pd
 from config import (BIST_OPEN, BIST_CLOSE, CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER_CLOSE_MIN,
                     STALE_BAR_UYARI_DK, TARAMA_PENCERE_SONU, TERMINAL_TAZE_BAR)
 import data as data_mod
+import main as main_mod
 from data import (son_kapanan_mum_ani, tarama_animi_mi, tarama_penceresi_acik_mi,
                   time_until_next_candle_close)
 from patterns import ArgentEngine
@@ -42,7 +44,7 @@ def kontrol(ad, kosul, detay=""):
         print(f"  [FAIL] {ad}" + (f"  ({detay})" if detay else ""))
 
 
-def t(yil, ay, gun, saat, dakika=0):
+def t(yil, ay, gun, saat=0, dakika=0):
     """Istanbul saat diliminde sabit bir an."""
     return IST.localize(datetime(yil, ay, gun, saat, dakika))
 
@@ -109,8 +111,10 @@ if df is not None:
     kontrol("18:35 taramasında son mum = 17:30 (günün son mumu)",
             t_df is not None and t_df.index[-1].strftime("%H:%M") == "17:30",
             t_df.index[-1].strftime("%H:%M") if t_df is not None else "yok")
-    kontrol("18:20'de son mum henüz 16:30 (17:30'u henüz analiz etmiyoruz)",
-            data_mod.tamamlanmis_mumlar(df, "1h", now=t(2026, 9, 25, 18, 20)).index[-1].strftime("%H:%M") == "16:30")
+    kontrol("17:59'da son mum 16:30 (17:30'lu mum henüz kapanmadı)",
+            data_mod.tamamlanmis_mumlar(df, "1h", now=t(2026, 9, 25, 17, 59)).index[-1].strftime("%H:%M") == "16:30")
+    kontrol("18:00'de son mum 17:30 (1H mum 1 saat sonra kapanır)",
+            data_mod.tamamlanmis_mumlar(df, "1h", now=t(2026, 9, 25, 18, 0)).index[-1].strftime("%H:%M") == "17:30")
 else:
     print("  [SKIP] THYAO cache yok")
 
@@ -214,6 +218,159 @@ print()
 print("=== 4. fetch_yfinance_1h auto_adjust=False ===")
 src = inspect.getsource(data_mod.fetch_yfinance_1h)
 kontrol("history() çağrısı auto_adjust=False içeriyor", "auto_adjust=False" in src)
+
+print()
+print("=== 5. FAZ 2: 1D GECİKME DÜZELTMESİ ===")
+from data import resample_all_timeframes, tamamlanmis_mumlar as tmm
+kontrol("1D mumu seans kapanışında (18:30) tamamlanır",
+        tmm(resample_all_timeframes(df)['1d'], '1d', now=t(2026, 9, 25, 18, 29)).index[-1].strftime('%d') == '24',
+        "18:29'da hâlâ 24 Eylül")
+kontrol("18:35'te günün 1D mumu analiz edilir (24 saatlik körlük bitti)",
+        tmm(resample_all_timeframes(df)['1d'], '1d', now=t(2026, 9, 25, 18, 35)).index[-1].strftime('%d') == '25',
+        "25 Eylül mumu görülüyor")
+for tf_name, beklenen in [('1h', '17:30'), ('2h', '15:30'), ('4h', '13:30')]:
+    d_ = tmm(resample_all_timeframes(df)[tf_name], tf_name, now=t(2026, 9, 25, 18, 35))
+    kontrol(f"{tf_name} davranışı değişmedi", d_.index[-1].strftime('%H:%M') == beklenen, beklenen)
+
+print()
+print("=== 6. FAZ 2: BIST TATİL TAKVİMİ / YARIM GÜN ===")
+from config import BIST_TATILLER, BIST_YARIM_GUNLER
+from data import bist_tatil_adi, seans_kapanis_saati, veri_yok_modu_acik_mi
+kontrol("29 Ekim 2026 tatil (Cumhuriyet Bayramı)", bist_tatil_adi(t(2026, 10, 29)) == "Cumhuriyet Bayramı")
+kontrol("1 Ocak 2026 tatil (Yılbaşı)", bist_tatil_adi(t(2026, 1, 1)) == "Yılbaşı")
+kontrol("27 Mayıs 2026 tatil (Kurban Bayramı)", bist_tatil_adi(t(2026, 5, 27)) is not None)
+kontrol("25 Eylül 2026 tatil DEĞİL", bist_tatil_adi(t(2026, 9, 25)) is None)
+kontrol("tatil günü tarama penceresi kapalı", not data_mod.tarama_penceresi_acik_mi(t(2026, 10, 29, 12, 35)))
+kontrol("tatil günü tarama anı da kapalı", not data_mod.tarama_animi_mi(t(2026, 10, 29, 12, 35)))
+kontrol("normal gün penceresi açık", data_mod.tarama_penceresi_acik_mi(t(2026, 9, 25, 12, 35)))
+
+kontrol("19 Mart 2026 yarım gün (kapanış 13:00)",
+        seans_kapanis_saati(t(2026, 3, 19)) == dt_time(13, 0))
+kontrol("yarım günde son mum 12:30 etiketli, kapanış 13:00",
+        data_mod.son_kapanan_mum_ani(t(2026, 3, 19, 13, 5)).strftime('%H:%M') == '13:00')
+kontrol("yarım gün 12:35'te son kapanan 12:30 (11:30 etiketli mum)",
+        data_mod.son_kapanan_mum_ani(t(2026, 3, 19, 12, 35)).strftime('%H:%M') == '12:30')
+kontrol("yarım gün 13:05'te tarama anı", data_mod.tarama_animi_mi(t(2026, 3, 19, 13, 5)))
+kontrol("yarım gün 13:04'te henüz tarama yok", not data_mod.tarama_animi_mi(t(2026, 3, 19, 13, 4)))
+kontrol("yarım gün 14:00'te pencere kapalı", not data_mod.tarama_penceresi_acik_mi(t(2026, 3, 19, 14, 0)))
+
+kontrol("veri yok modu: eski veri + seans içi -> True",
+        veri_yok_modu_acik_mi(t(2026, 9, 25, 12, 35), 26 * 60))
+kontrol("veri yok modu: taze veri -> False", not veri_yok_modu_acik_mi(t(2026, 9, 25, 12, 35), 5))
+kontrol("veri yok modu: tatil günü -> False (tatil zaten elci)",
+        not veri_yok_modu_acik_mi(t(2026, 10, 29, 12, 35), 26 * 60))
+kontrol("veri yok modu: pencere dışı -> False",
+        not veri_yok_modu_acik_mi(t(2026, 9, 25, 20, 0), 26 * 60))
+
+print()
+print("=== 7. FAZ 2: SPLIT / VERİ SÜREKLİLİĞİ ===")
+import copy
+from data import sureklilik_sorunlari_bul, yuvarlak_orana_yakin_mi
+temiz_mumlar = list(mgr.get_deque('THYAO'))
+kontrol("temiz gerçek veride sorun yok", len(sureklilik_sorunlari_bul(temiz_mumlar)) == 0)
+
+mumlar = copy.deepcopy(temiz_mumlar)
+for c in mumlar[-5:]:
+    for k in ('open', 'high', 'low', 'close'):
+        c[k] = c[k] / 2
+s_ = sureklilik_sorunlari_bul(mumlar)
+kontrol("2:1 split yakalandı", any(x['tip'] == 'split' and x.get('oran') == 2.0 for x in s_))
+
+mumlar = copy.deepcopy(temiz_mumlar)
+for c in mumlar[-5:]:
+    for k in ('open', 'high', 'low', 'close'):
+        c[k] = c[k] / 3
+s_ = sureklilik_sorunlari_bul(mumlar)
+kontrol("3:1 split yakalandı", any(x['tip'] == 'split' and x.get('oran') == 3.0 for x in s_))
+
+mumlar = copy.deepcopy(temiz_mumlar)
+c_ = mumlar[len(mumlar) // 2]
+for k in ('open', 'high', 'low', 'close'):
+    c_[k] = c_[k] * 1.15
+s_ = sureklilik_sorunlari_bul(mumlar)
+kontrol("%15 haber şoku split DEĞİL olarak sınıflanır",
+        any(x['tip'] == 'sok' for x in s_) and not any(x['tip'] == 'split' for x in s_))
+
+mumlar = copy.deepcopy(temiz_mumlar)
+son_gun = mumlar[-1]['timestamp'].date()
+idx_ = [i for i, c in enumerate(mumlar) if c['timestamp'].date() == son_gun]
+del mumlar[idx_[len(idx_) // 2]]
+s_ = sureklilik_sorunlari_bul(mumlar)
+kontrol("seans içi eksik mum 'bosluk' olarak sınıflanır",
+        any(x['tip'] == 'bosluk' for x in s_))
+kontrol("yuvarlak oran yardımcısı doğru (3:1 -> %66.67 düşüş)",
+        yuvarlak_orana_yakin_mi(50.0) == 2.0 and yuvarlak_orana_yakin_mi(66.67) == 3.0
+        and yuvarlak_orana_yakin_mi(15.0) is None and yuvarlak_orana_yakin_mi(80.0) == 5.0)
+
+print()
+print("=== 8. FAZ 2: TELEGRAM GLOBAL KAPANI ===")
+from config import TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN
+from notifier import TelegramNotifier, KRITIK_STATELER
+kontrol("limitler makul", 5 <= TELEGRAM_MAX_MESAJ_SAAT <= 100 and 50 <= TELEGRAM_MAX_MESAJ_GUN <= 1000)
+kontrol("kritik state'ler tanımlı", 'KIRILIM_ADAYI' in KRITIK_STATELER
+        and 'FORMASYON_TAMAMLANDI' in KRITIK_STATELER)
+
+nt_test = TelegramNotifier()
+for _f in ('bot_data/telegram_kap.json',):
+    if os.path.exists(_f):
+        os.remove(_f)
+nt_test = TelegramNotifier()
+
+
+def _mesaj(state, hisse):
+    return {'stock_name': hisse, 'timeframe': '1h', 'pattern_name': 'Yükselen Üçgen',
+            'state': state, 'confidence_score': 85, 'critical_price_level': 10.0,
+            'upper_now': 10.0, 'lower_now': 9.0, 'contraction': 0.8,
+            'timestamp': datetime.now(data_mod.ISTANBUL_TZ)}
+
+
+gonderilen = sum(1 for i in range(TELEGRAM_MAX_MESAJ_SAAT + 10)
+                 if nt_test.send(_mesaj('SIKISMA_GUCLENIYOR', f'IZ{i}')))
+kontrol(f"izleme state'leri saatlik kapta kesilir ({TELEGRAM_MAX_MESAJ_SAAT})",
+        gonderilen == TELEGRAM_MAX_MESAJ_SAAT, f"{gonderilen} gönderildi")
+
+gonderilen2 = sum(1 for i in range(5)
+                  if nt_test.send(_mesaj('KIRILIM_ADAYI', f'KR{i}')))
+kontrol("kritik state'ler saatlik kaptan etkilenmez", gonderilen2 == 5, f"{gonderilen2} gönderildi")
+
+nt_test._gunluk_sayac = TELEGRAM_MAX_MESAJ_GUN
+kontrol("günlük kap aşıldığında kritik state bile gitmez",
+        not nt_test.send(_mesaj('KIRILIM_ADAYI', 'SON')))
+kontrol("kap durumu raporlanıyor",
+        nt_test.kap_durumu()['gunluk_limit'] == TELEGRAM_MAX_MESAJ_GUN)
+if os.path.exists('bot_data/telegram_kap.json'):
+    os.remove('bot_data/telegram_kap.json')
+
+print()
+print("=== 9. FAZ 2: 1D DERİN VERİ (ayrı deque) ===")
+from data import StockDequeManager
+mgr_t = StockDequeManager(data_dir='/tmp/test_gunluk_dir')
+kontrol("günlük deque boş -> eksik sayılır", mgr_t.gunluk_veri_eksik_mi('TEST'))
+kontrol("günlük DataFrame boş", mgr_t.to_gunluk_dataframe('TEST') is None)
+sentetik = pd.DataFrame(
+    {'open': [10 + i * 0.1 for i in range(50)], 'high': [10.2 + i * 0.1 for i in range(50)],
+     'low': [9.8 + i * 0.1 for i in range(50)], 'close': [10 + i * 0.1 for i in range(50)],
+     'volume': [1000] * 50},
+    index=pd.date_range('2026-08-01', periods=50, freq='B', tz=IST))
+mgr_t.append_gunluk_dataframe('TEST', sentetik)
+kontrol("günlük veri eklendi", len(mgr_t.to_gunluk_dataframe('TEST')) == 50)
+kontrol("bugüne ait veri -> eksik değil",
+        not mgr_t.gunluk_veri_eksik_mi('TEST', t(2026, 9, 25, 18, 35)))
+mgr_t.save_gunluk_to_disk('TEST')
+mgr_t2 = StockDequeManager(data_dir='/tmp/test_gunluk_dir')
+kontrol("günlük veri diskten yüklenir", len(mgr_t2.to_gunluk_dataframe('TEST')) == 50)
+kontrol("günlük deque ayrı dosyada", os.path.exists('/tmp/test_gunluk_dir/TEST_gunluk.json'))
+import shutil
+shutil.rmtree('/tmp/test_gunluk_dir', ignore_errors=True)
+
+print()
+print("=== 10. FAZ 2: TARAMA SÜRESİ ÖLÇÜMÜ ===")
+kontrol("daily_stats tarama süresi alanı içeriyor", 'son_tarama_suresi_dk' in main_mod.daily_stats)
+kontrol("heartbeat tarama süresi alanı içeriyor",
+        'son_tarama_suresi_dk' in open('main.py', encoding='utf-8').read().split('payload = {')[1])
+kontrol("telegram_kap heartbeat alanı içeriyor", 'telegram_kap' in open('main.py', encoding='utf-8').read())
+kontrol("veri_sorunlari heartbeat alanı içeriyor", 'veri_sorunlari' in open('main.py', encoding='utf-8').read())
+
 
 print()
 print("=" * 60)

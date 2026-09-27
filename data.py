@@ -5,28 +5,67 @@
 import pandas as pd
 import numpy as np
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dt_time
 import pytz
 import time
 import random
 import logging
 import os
 import pickle
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from config import (
     ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN,
     RATE_LIMIT_MIN, RATE_LIMIT_MAX, DATA_DIR, ACTIVE_STOCKS,
     CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER_CLOSE_MIN, TARAMA_PENCERE_SONU,
-    STALE_BAR_UYARI_DK, TERMINAL_TAZE_BAR
+    STALE_BAR_UYARI_DK, TERMINAL_TAZE_BAR, BIST_TATILLER, BIST_YARIM_GUNLER,
+    VERI_YOK_MODU_ESIK_DK, SPLIT_SUREKLILIK_ESIK_PCT, BAR_BOSLUK_ESIK_SAAT,
+    GUNLUK_FETCH_PERIOD, GUNLUK_DEQUE_MAXLEN
 )
 
 logger = logging.getLogger(__name__)
 
 # Timeframe -> pandas süre etiketi (tamamlanmis_mumlar filtresi için)
 TF_SURELERI = {"1h": "1h", "2h": "2h", "4h": "4h", "1d": "1D"}
+# Mum kapanış anı = etiket + bu süre. 1D İSTİSNA: günlük mum 00:00 etiketli ama gerçek
+# seans kapanışı 18:30'dur (ölçüldü: son 1H mum 17:30 etiketli, 18:30'da kapanıyor).
+# ESKİ HATA: 1D için de "etiket + 1 gün" kullanılıyordu -> 25 Eylül'ün günlük mumu
+# 26 Eylül 00:00'a kadar "yarım mum" sayılırdı, yani GÜN İÇİNDE HİÇ analiz edilmez,
+# günlük formasyonlar 24 saat gecikmeyle görülürdü (ölçüm: 18:35 taramasında son
+# tamamlanan 1D mum = 24 Eylül'dü).
+TF_KAPANIS_SURESI = {
+    "1h": timedelta(minutes=30),
+    "2h": timedelta(hours=2),
+    "4h": timedelta(hours=4),
+}
+GUNLUK_MUM_KAPANIS_SAATI = dt_time(18, 30)  # BIST seans kapanışı (1H ölçümünden)
 
 # === BIST SAAT KONTROLÜ ===
+
+def bist_tatil_adi(d) -> Optional[str]:
+    """Verilen gün BIST resmî tatiliyse tatil adını, değilse None döner.
+
+    Neden? Tatil gününde (örn. 29 Ekim) Yahoo yeni mum üretmez. Bot bu bilgiyi
+    bilmezse: (a) 30 hisse x 9 tur boşuna fetch eder, (b) Faz 1'in tazelik uyarısı
+    tatil günü HER turda "VERİ ESKİ" der -> ölçüm: günde 270 satır gürültü.
+    Tatil takvimi bu iki sorunu birden keser.
+    """
+    return BIST_TATILLER.get(d.date() if isinstance(d, datetime) else d)
+
+
+def yarim_gun_kapanisi(d) -> Optional[Tuple[str, dt_time]]:
+    """Yarım günse (açıklama, kapanış saati), değilse None. Örnek: 19 Mart 2026 -> 13:00."""
+    anahtar = d.date() if isinstance(d, datetime) else d
+    return BIST_YARIM_GUNLER.get(anahtar)
+
+
+def seans_kapanis_saati(d=None) -> dt_time:
+    """O günün seans kapanış saati (yarım günde 13:00, normalde 18:30)."""
+    if d is None:
+        d = datetime.now(ISTANBUL_TZ)
+    yg = yarim_gun_kapanisi(d)
+    return yg[1] if yg else GUNLUK_MUM_KAPANIS_SAATI
+
 
 def is_bist_open(now: Optional[datetime] = None) -> bool:
     """
@@ -76,8 +115,17 @@ def tarama_penceresi_acik_mi(now: Optional[datetime] = None) -> bool:
     if now.weekday() >= 5:  # 5=Cumartesi, 6=Pazar
         return False
 
+    # Resmî tatil: hiç tarama yapma (gereksiz fetch + yanlış "VERİ ESKİ" alarmı yok)
+    tatil = bist_tatil_adi(now)
+    if tatil:
+        return False
+
     current_time = now.time()
-    return BIST_OPEN <= current_time <= TARAMA_PENCERE_SONU
+    kapanis = seans_kapanis_saati(now)
+    # kapanış + tarama gecikmesi + pay (time + timedelta doğrudan toplanamaz)
+    pencere_sonu = (now.replace(hour=kapanis.hour, minute=kapanis.minute, second=0, microsecond=0)
+                    + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN + 5))
+    return BIST_OPEN <= current_time <= pencere_sonu.time()
 
 def time_until_next_open(now: Optional[datetime] = None) -> float:
     """Bir sonraki açılışa kadar kaç saniye? Uyku için"""
@@ -170,6 +218,17 @@ def son_kapanan_mum_ani(now: Optional[datetime] = None) -> Optional[datetime]:
     else:
         now = now.astimezone(ISTANBUL_TZ)
 
+    # Yarım günde seans 13:00'te kapanır: son mum 12:30 etiketli (12:00-13:00).
+    yg = yarim_gun_kapanisi(now)
+    if yg:
+        kapanis = now.replace(hour=yg[1].hour, minute=yg[1].minute, second=0, microsecond=0)
+        if now < kapanis:
+            kapanis = (now.replace(minute=0, second=0, microsecond=0)
+                       + timedelta(minutes=CANDLE_CLOSE_MINUTE))
+            if kapanis > now:
+                kapanis -= timedelta(hours=1)
+        return kapanis
+
     kapanis = now.replace(minute=0, second=0, microsecond=0) + timedelta(minutes=CANDLE_CLOSE_MINUTE)
     if kapanis > now:
         kapanis -= timedelta(hours=1)
@@ -202,6 +261,8 @@ def tarama_animi_mi(now: Optional[datetime] = None,
 
     if now.weekday() >= 5:
         return False
+    if bist_tatil_adi(now):
+        return False  # resmî tatil: veri yok, tarama da yok
 
     kapanis = son_kapanan_mum_ani(now)
     if kapanis is None:
@@ -217,6 +278,36 @@ def tarama_animi_mi(now: Optional[datetime] = None,
     return True
 
 
+def veri_yok_modu_acik_mi(now: Optional[datetime] = None,
+                          son_bar_yasi_dk: Optional[float] = None) -> bool:
+    """
+    Bugün için piyasa verisi gelmiyor mu? (tatil / Yahoo arızası / bilinmeyen durum)
+
+    Ne zaman True?
+      - Takvimde tatil DEĞİL (tatil zaten tarama_penceresi_acik_mi'da elendi),
+      - Seans içindeyiz,
+      - En yeni 1H mum VERI_YOK_MODU_ESIK_DK (20 saat) yaşında veya daha eski.
+        Normal seans içi bu değer < 60 dk'dır (ölçüm); gece/hafta sonu boşluğunda
+        15-60 saate çıkar ama o zaman pencere kapalıdır, bu fonksiyon çağrılmaz.
+
+    Neden gerekli? Faz 1 tazelik uyarısı tatillerde ve veri arızasında her turda
+    bağırırdı (ölçüm: günde 270 satır). Bu modda tarama ATLANIR (gereksiz fetch de
+    yok) ve tek satır log + heartbeat alanı ile görünür olur.
+    """
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    if now.tzinfo is None:
+        now = ISTANBUL_TZ.localize(now)
+    else:
+        now = now.astimezone(ISTANBUL_TZ)
+
+    if son_bar_yasi_dk is None or son_bar_yasi_dk < VERI_YOK_MODU_ESIK_DK:
+        return False
+    if not tarama_penceresi_acik_mi(now):
+        return False
+    return bist_tatil_adi(now) is None
+
+
 # === DEQUE YÖNETİMİ ===
 
 class StockDequeManager:
@@ -229,6 +320,13 @@ class StockDequeManager:
         self.maxlen = maxlen
         self.data_dir = data_dir
         self.deques: Dict[str, deque] = {}
+        # 1D (günlük) derin veri: 1H penceresinden BAĞIMSIZ (~500 bar).
+        # Neden ayrı? 1H deque 360 bar = ~40 iş günü; resample 1D sadece ~40 bar
+        # verir ve 1D formasyon penceresi (20-60 bar) marjinal kalır. 1H'yi
+        # büyütmek Pine uyumunu bozabileceği için günlük veri ayrı ve derin tutulur.
+        self.gunluk_deques: Dict[str, deque] = {}
+        # Son tespit edilen veri sorunları (split / bar boşluğu) - main.py okur
+        self.sureklilik_sorunlari: Dict[str, List[Dict]] = {}
         
         # Data dir oluştur
         os.makedirs(data_dir, exist_ok=True)
@@ -285,6 +383,28 @@ class StockDequeManager:
         for c in tumu[-self.maxlen:]:
             dq.append(c)
         logger.info(f"{stock}: {yeni} yeni / {guncellenen} güncellenen mum (geldi {len(df)}, toplam {len(dq)})")
+        # --- SPLIT / SÜREKLİLİK KONTROLÜ (FAZ 2) ---
+        # Ham (auto_adjust=False) seride split/bedelsiz ani zıplama üretir -> pivot,
+        # sınır ve kırılım sinyali sahte olur. Tespit edilirse deque sıfırlanır:
+        # sahte sinyal üretmek yerine bot 360 yeni bar biriktirip temiz başlar.
+        # NOT: split tespitinde deque SIFIRLANMAZ. Neden? Eşik normal gürültünün
+        # (%9.97) çok üstünde olsa da gelecekte %12lik haber şoku yanlış pozitif
+        # yaparsa hisse 40 gün kör kalır. Bunun yerine sorun kaydedilir ve main.py
+        # o hisseyi o taramada ANALİZ ETMEZ (sahte sinyal üretmez), kullanıcı
+        # logdan görüp müdahale eder (veri yenileme / düzeltme).
+        sorunlar = sureklilik_sorunlari_bul(dq)
+        if sorunlar:
+            self.sureklilik_sorunlari[stock] = sorunlar
+            for s_ in sorunlar:
+                logger.warning(f"{stock}: {s_['mesaj']}")
+            if any(s_['tip'] == 'split' for s_ in sorunlar):
+                logger.error(
+                    f"{stock}: SPLIT/BEDELSİZ tespit edildi - bu hisse bu tur ANALİZ EDİLMEYECEK "
+                    f"(ham seride sahte kırılım sinyali riski). Veriyi yenilemek/düzeltmek için "
+                    f"elle müdahale gerekir; düzeltilene kadar sessiz kalır."
+                )
+        else:
+            self.sureklilik_sorunlari.pop(stock, None)
     
     def to_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
         """Deque'yi DataFrame'e çevir - pattern tespiti için"""
@@ -385,11 +505,196 @@ class StockDequeManager:
         
         return None
     
+    def _gunluk_dosya(self, stock: str) -> str:
+        return os.path.join(self.data_dir, f"{stock}_gunluk.json")
+
+    def get_gunluk_deque(self, stock: str) -> deque:
+        """1D (günlük) deque al, yoksa diskten yükle / oluştur."""
+        if stock not in self.gunluk_deques:
+            yol = self._gunluk_dosya(stock)
+            dq = None
+            if os.path.exists(yol):
+                try:
+                    import json
+                    with open(yol, "r", encoding="utf-8") as f:
+                        ham = json.load(f)
+                    yuklenen = []
+                    for c in ham:
+                        ts = pd.to_datetime(c["timestamp"])
+                        if ts.tzinfo is None:
+                            ts = ISTANBUL_TZ.localize(ts)
+                        else:
+                            ts = ts.tz_convert(ISTANBUL_TZ)
+                        yuklenen.append({"timestamp": ts, "open": float(c["open"]),
+                                         "high": float(c["high"]), "low": float(c["low"]),
+                                         "close": float(c["close"]),
+                                         "volume": float(c.get("volume", 0))})
+                    yuklenen.sort(key=lambda c: c["timestamp"])
+                    dq = deque(yuklenen[-GUNLUK_DEQUE_MAXLEN:], maxlen=GUNLUK_DEQUE_MAXLEN)
+                    logger.info(f"{stock} günlük deque diskten yüklendi - {len(dq)} bar")
+                except Exception as e:
+                    logger.warning(f"{stock} günlük cache okunamadı ({e}) - yeniden çekilecek")
+                    dq = None
+            if dq is None:
+                dq = deque(maxlen=GUNLUK_DEQUE_MAXLEN)
+            self.gunluk_deques[stock] = dq
+        return self.gunluk_deques[stock]
+
+    def append_gunluk_dataframe(self, stock: str, df: pd.DataFrame) -> None:
+        """1H ile aynı idempotent birleştirme (timestamp bazlı tekilleştirme)."""
+        dq = self.get_gunluk_deque(stock)
+        birlesik = {c["timestamp"]: c for c in dq}
+        yeni = guncellenen = 0
+        for idx, row in df.iterrows():
+            ts = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
+            if ts.tzinfo is None:
+                ts = ISTANBUL_TZ.localize(ts)
+            else:
+                ts = ts.tz_convert(ISTANBUL_TZ)
+            candle = {"timestamp": ts, "open": float(row["open"]), "high": float(row["high"]),
+                      "low": float(row["low"]), "close": float(row["close"]),
+                      "volume": float(row.get("volume", 0))}
+            if ts in birlesik:
+                guncellenen += 1
+            else:
+                yeni += 1
+            birlesik[ts] = candle
+        tumu = sorted(birlesik.values(), key=lambda c: c["timestamp"])
+        dq.clear()
+        for c in tumu[-GUNLUK_DEQUE_MAXLEN:]:
+            dq.append(c)
+        logger.info(f"{stock}: {yeni} yeni / {guncellenen} güncellenen GÜNLÜK mum "
+                    f"(toplam {len(dq)} bar)")
+
+    def to_gunluk_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
+        dq = self.get_gunluk_deque(stock)
+        if len(dq) == 0:
+            return None
+        df = pd.DataFrame(list(dq))
+        df.set_index("timestamp", inplace=True)
+        return df
+
+    def gunluk_veri_eksik_mi(self, stock: str, now: Optional[datetime] = None) -> bool:
+        """Günlük veri bugüne ait değilse (boş/eksik) True -> fetch gerekir."""
+        df = self.to_gunluk_dataframe(stock)
+        if df is None or len(df) < 30:
+            return True
+        if now is None:
+            now = datetime.now(ISTANBUL_TZ)
+        son = df.index[-1]
+        son = son.tz_convert(ISTANBUL_TZ) if son.tzinfo else ISTANBUL_TZ.localize(son)
+        # Son günlük bar bugün değilse (tatil/yarım gün dahil) eksik sayılır.
+        return son.date() < now.date()
+
+    def save_gunluk_to_disk(self, stock: str):
+        dq = self.get_gunluk_deque(stock)
+        os.makedirs(self.data_dir, exist_ok=True)
+        import json
+        with open(self._gunluk_dosya(stock), "w", encoding="utf-8") as f:
+            json.dump([{"timestamp": c["timestamp"].isoformat(), "open": c["open"],
+                        "high": c["high"], "low": c["low"], "close": c["close"],
+                        "volume": c["volume"]} for c in dq], f, ensure_ascii=False)
+
+    def son_bar_yasi_dk(self, stock: str, now: Optional[datetime] = None) -> Optional[float]:
+        """Bu hissenin cache'indeki en yeni 1H mumun yaşı (dakika). Veri yoksa None.
+        Veri-yok modu (tatil / Yahoo arızası) tespiti için kullanılır."""
+        df = self.to_dataframe(stock)
+        if df is None or len(df) == 0:
+            return None
+        if now is None:
+            now = datetime.now(ISTANBUL_TZ)
+        if now.tzinfo is None:
+            now = ISTANBUL_TZ.localize(now)
+        son = df.index[-1]
+        son = son.tz_convert(ISTANBUL_TZ) if son.tzinfo else ISTANBUL_TZ.localize(son)
+        return (now - son).total_seconds() / 60.0
+
     def save_all(self):
-        """Tümünü kaydet"""
+        """Tümünü kaydet (1H + 1D)"""
         for stock in self.deques:
             self.save_to_disk(stock)
-        logger.info(f"Tüm deque'ler kaydedildi - {len(self.deques)} hisse")
+        for stock in self.gunluk_deques:
+            self.save_gunluk_to_disk(stock)
+        logger.info(f"Tüm deque'ler kaydedildi - {len(self.deques)} hisse "
+                    f"(+{len(self.gunluk_deques)} günlük)")
+
+# === VERİ SÜREKLİLİK / SPLIT KONTROLÜ ===
+
+def yuvarlak_orana_yakin_mi(yuzde: float, tolerans: float = 1.0) -> Optional[float]:
+    """
+    Zıplama yüzdesi bir SPLIT oranına yakın mı? (2:1 -> %50, 3:1 -> %33.3, 5:1 -> %20 ...)
+
+    Neden? Haber şoku da tek barda %15 yapabilir ama split oranları yuvarlaktır.
+    Yuvarlak oran = split/bedelsiz (kalıcı, tüm geçmişi etkiler);
+    yuvarlak olmayan = tek barlık fiyat şoku (geçici).
+    Oranı döner (örn. 2.0), değilse None.
+    """
+    for oran in (2, 3, 4, 5, 6, 7, 8, 9, 10, 20):
+        beklenen = (1 - 1 / oran) * 100  # 2:1 -> %50
+        if abs(yuzde - beklenen) <= tolerans:
+            return float(oran)
+    return None
+
+
+def sureklilik_sorunlari_bul(dq) -> List[Dict]:
+    """
+    Deque'daki mumlarda veri bütünlüğü sorunu ara.
+
+    Üç kontrol (config'teki ölçülmüş eşiklerle):
+      1) split/bedelsiz: SEANS İÇİ ve NORMAL aralıklı (≈1 saat) iki mumda
+         |open[i+1]-close[i]|/close[i] > %10 VE oran yuvarlak (2:1, 3:1, 5:1...).
+      2) eksik veri: aynı seans içinde 1.5 saatten fazla boşluk (1 mum atlaması).
+      3) fiyat şoku: %10 üstü ama yuvarlak olmayan zıplama (haber/tek olay).
+
+    Neden gerekli? auto_adjust=False (Pine uyumu için) HAM seri verir; split olan
+    hissede fiyat aniden yarıya iner ve motor bunu "kırılım" sanıp sahte alarm
+    üretir. Gece/hafta sonu boşlukları (15-60 saat) DOĞALDIR, onlar sayılmaz.
+    """
+    sorunlar: List[Dict] = []
+    if dq is None or len(dq) < 3:
+        return sorunlar
+
+    onceki = None
+    for c in dq:
+        ts = c['timestamp']
+        ts = ts.tz_convert(ISTANBUL_TZ) if ts.tzinfo else ISTANBUL_TZ.localize(ts)
+        if onceki is not None:
+            onceki_ts, onceki_kapanis, onceki_gun = onceki
+            bosluk_saat = (ts - onceki_ts).total_seconds() / 3600.0
+            if ts.date() == onceki_gun:  # sadece aynı seans içi
+                if bosluk_saat > BAR_BOSLUK_ESIK_SAAT:
+                    sorunlar.append({
+                        'tip': 'bosluk',
+                        'mesaj': (f"SEANS İÇİ EKSİK VERİ: {onceki_ts.strftime('%d %b %H:%M')} ile "
+                                  f"{ts.strftime('%H:%M')} arasında {bosluk_saat:.1f} saat boşluk"),
+                        'zamandar': ts, 'yuzde': round(bosluk_saat, 2),
+                    })
+                elif onceki_kapanis > 0:
+                    # Zıplama kontrolü SADECE normal aralıkta (boşlukta fiyat
+                    # normalde hareket eder, onu split sanmak yanlış pozitiftir)
+                    ziplama = abs(c['open'] - onceki_kapanis) / onceki_kapanis * 100.0
+                    if ziplama > SPLIT_SUREKLILIK_ESIK_PCT:
+                        oran = yuvarlak_orana_yakin_mi(ziplama)
+                        if oran:
+                            sorunlar.append({
+                                'tip': 'split',
+                                'mesaj': (f"FİYAT SÜREKLİLİĞİ İHLALİ (SPLIT/BEDELSİZ ~{oran:.0f}:1): "
+                                          f"{ts.strftime('%d %b %H:%M')} mumu önceki kapanışa göre "
+                                          f"%{ziplama:.1f} zıplamış ({onceki_kapanis:.2f} -> "
+                                          f"{c['open']:.2f})"),
+                                'zamandar': ts, 'yuzde': round(ziplama, 2), 'oran': oran,
+                            })
+                        else:
+                            sorunlar.append({
+                                'tip': 'sok',
+                                'mesaj': (f"FİYAT ŞOKU (split değil): {ts.strftime('%d %b %H:%M')} mumu "
+                                          f"%{ziplama:.1f} zıplamış ({onceki_kapanis:.2f} -> "
+                                          f"{c['open']:.2f}) - tek barlık hareket, oran yuvarlak değil"),
+                                'zamandar': ts, 'yuzde': round(ziplama, 2),
+                            })
+        onceki = (ts, c['close'], ts.date())
+    return sorunlar
+
 
 # === RESAMPLING ===
 
@@ -474,7 +779,14 @@ def tamamlanmis_mumlar(df: pd.DataFrame, tf: str, now: Optional[datetime] = None
     else:
         idx = idx.tz_convert(ISTANBUL_TZ)
     sinir = pd.Timestamp(now).tz_convert(ISTANBUL_TZ) if pd.Timestamp(now).tzinfo else ISTANBUL_TZ.localize(pd.Timestamp(now))
-    tamam = (idx + pd.Timedelta(TF_SURELERI.get(tf, "1h"))) <= sinir
+    if tf == "1d":
+        # Günlük mum 00:00 etiketli ama SEANS KAPANIŞINDA (18:30) tamamlanır.
+        # "Etiket + 1 gün" kuralı günlük mumu 24 saat yarım sayardı.
+        kapanis = idx.normalize() + pd.Timedelta(
+            hours=GUNLUK_MUM_KAPANIS_SAATI.hour, minutes=GUNLUK_MUM_KAPANIS_SAATI.minute)
+    else:
+        kapanis = idx + TF_KAPANIS_SURESI.get(tf, timedelta(minutes=30))
+    tamam = kapanis <= sinir
     return df[np.asarray(tamam, dtype=bool)]
 
 
@@ -522,6 +834,34 @@ def fetch_with_rate_limit(stock: str, fetch_func, *args, **kwargs) -> Optional[p
     except Exception as e:
         logger.error(f"{stock} veri çekme hatası: {e} - atlanıyor, bot devam ediyor")
         return None
+
+def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional[pd.DataFrame]:
+    """Günlük (1D) OHLCV çeker — DERİN geçmiş (varsayılan 2 yıl, ~500 bar).
+
+    Neden ayrı fonksiyon? 1H deque 360 bar = ~40 iş günü tutar; resample ile 1D
+    yapılırsa sadece ~40 bar olur ve 1D formasyon penceresi (20-60 bar) marjinal
+    kalır. 1H penceresini büyütmek Pine uyumunu bozabileceği için 1D verisini
+    AYRI ve DERİN çekiyoruz. auto_adjust=False: 1H ile aynı gerekçe (ham fiyat).
+    """
+    try:
+        import io
+        import contextlib
+        import yfinance as yf
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            ham = yf.Ticker(stock + ".IS").history(period=period, interval="1d", auto_adjust=False)
+        if ham is None or len(ham) == 0:
+            return None
+        df = ham.copy()
+        if df.index.tz is None:
+            df.index = df.index.tz_localize("UTC").tz_convert(ISTANBUL_TZ)
+        else:
+            df.index = df.index.tz_convert(ISTANBUL_TZ)
+        df.columns = [c.lower() for c in df.columns]
+        return df[["open", "high", "low", "close", "volume"]]
+    except Exception as e:
+        logger.debug(f"{stock} 1D fetch hatası: {e}")
+        return None
+
 
 def fetch_yfinance_1h(stock: str, period: str = "60d") -> Optional[pd.DataFrame]:
     """yfinance'den 1h OHLCV çeker (gürültü bastırılmış). Başarısızlıkta None döner.
