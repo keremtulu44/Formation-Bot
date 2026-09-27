@@ -10,6 +10,7 @@
 yfinance
 pytz
 python-dotenv
+python-dateutil
 requests
 
 # borsapy TERIMUX'TA KURULMAZ! Sebep:
