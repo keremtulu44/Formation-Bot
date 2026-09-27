@@ -18,7 +18,7 @@ import time
 import pandas as pd
 
 from config import ACTIVE_STOCKS, ISTANBUL_TZ
-from data import StockDequeManager, resample_all_timeframes, fetch_yfinance_1h
+from data import StockDequeManager, resample_all_timeframes, fetch_yfinance_1h, tamamlanmis_mumlar
 from patterns import PatternLifecycleManager
 from patterns.detect import _usable_active, LIVE_STATES, TRIANGLE_FAMILIES, SPECIALIZED_FAMILIES
 
@@ -81,6 +81,9 @@ def main():
         tfs = resample_all_timeframes(df_1h)
         for tf in TFLER:
             df_tf = tfs.get(tf)
+            if df_tf is None or len(df_tf) < 30:
+                continue
+            df_tf = tamamlanmis_mumlar(df_tf, tf)  # seans içindeyken yarım mum beslenmez
             if df_tf is None or len(df_tf) < 30:
                 continue
             snap = lifecycle.scan(f"{stock}_{tf}", df_tf)

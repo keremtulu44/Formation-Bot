@@ -9,6 +9,8 @@ import random
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
+from config import DATA_DIR
+
 logger = logging.getLogger(__name__)
 
 # Pattern emoji ve açıklama
@@ -66,6 +68,9 @@ class TelegramNotifier:
         self.chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
         self.cooldown_hours = 4
         self.last_sent: Dict[str, datetime] = {}
+        # Cooldown kalıcılığı: restart sonrası aynı mesajın tekrar gitmesini engeller
+        self._cooldown_dosya = os.path.join(os.path.dirname(DATA_DIR) or ".", "bot_data", "telegram_soguma.json")
+        self._cooldown_yukle()
         
         if not self.token or not self.chat_id:
             logger.warning("Telegram token/chat_id env'de yok - notifier pasif (test modu)")
@@ -73,6 +78,28 @@ class TelegramNotifier:
         else:
             self.enabled = True
             logger.info("Telegram notifier aktif - insanlaştırma V2")
+
+    def _cooldown_yukle(self):
+        try:
+            import json
+            if os.path.exists(self._cooldown_dosya):
+                with open(self._cooldown_dosya, "r", encoding="utf-8") as f:
+                    ham = json.load(f)
+                for k, iso in ham.items():
+                    self.last_sent[k] = datetime.fromisoformat(iso)
+                logger.info(f"Cooldown hafızası diskten yüklendi: {len(ham)} kayıt")
+        except Exception as e:
+            logger.warning(f"Cooldown yüklenemedi (devam ediliyor): {e}")
+
+    def _cooldown_kaydet(self):
+        try:
+            import json
+            os.makedirs(os.path.dirname(self._cooldown_dosya), exist_ok=True)
+            with open(self._cooldown_dosya, "w", encoding="utf-8") as f:
+                json.dump({k: v.isoformat() for k, v in self.last_sent.items()}, f,
+                          ensure_ascii=False, indent=0)
+        except Exception as e:
+            logger.warning(f"Cooldown kaydedilemedi (devam ediliyor): {e}")
 
     def _cooldown_key(self, stock: str, pattern: str, timeframe: str, state: str) -> str:
         # State de dahil - aynı pattern farklı state'e geçince tekrar gönder
@@ -318,6 +345,7 @@ class TelegramNotifier:
                 logger.info(f"Telegram gönderildi: {stock} {pattern} {state}")
                 key = self._cooldown_key(stock, pattern, timeframe, state)
                 self.last_sent[key] = datetime.now()
+                self._cooldown_kaydet()
                 return True
             else:
                 logger.error(f"Telegram hatası: {resp.text}")

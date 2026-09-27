@@ -21,6 +21,9 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
+# Timeframe -> pandas süre etiketi (tamamlanmis_mumlar filtresi için)
+TF_SURELERI = {"1h": "1h", "2h": "2h", "4h": "4h", "1d": "1D"}
+
 # === BIST SAAT KONTROLÜ ===
 
 def is_bist_open(now: Optional[datetime] = None) -> bool:
@@ -322,6 +325,25 @@ def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     except Exception as e:
         logger.error(f"Resample hatası {timeframe}: {e}")
         return pd.DataFrame()
+
+def tamamlanmis_mumlar(df: pd.DataFrame, tf: str, now: Optional[datetime] = None) -> pd.DataFrame:
+    """Devam eden (yarım) mumu çıkarır: kova etiketi + TF süresi > now ise o mum henüz
+    kapanmamıştır ve motor verilmemelidir. Yahoo'nun etiket hizalaması ne olursa olsun
+    güvenlidir — her mum kapanışından sonraki İLK taramada beslenir (Pine bar kapanışı
+    mantığıyla birebir). Resample sol-etiketli olduğu için etiket+TF = kova kapanışıdır."""
+    if df is None or len(df) == 0:
+        return df
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    idx = df.index
+    if idx.tz is None:
+        idx = idx.tz_localize(ISTANBUL_TZ)
+    else:
+        idx = idx.tz_convert(ISTANBUL_TZ)
+    sinir = pd.Timestamp(now).tz_convert(ISTANBUL_TZ) if pd.Timestamp(now).tzinfo else ISTANBUL_TZ.localize(pd.Timestamp(now))
+    tamam = (idx + pd.Timedelta(TF_SURELERI.get(tf, "1h"))) <= sinir
+    return df[np.asarray(tamam, dtype=bool)]
+
 
 def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     """

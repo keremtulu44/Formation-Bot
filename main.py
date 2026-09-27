@@ -17,7 +17,8 @@ except ImportError:
     pass
 
 from config import ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR, ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES
-from data import StockDequeManager, is_bist_open, time_until_next_open, time_until_next_candle_close, resample_all_timeframes, fetch_yfinance_1h
+from data import (StockDequeManager, is_bist_open, time_until_next_open, time_until_next_candle_close,
+                  resample_all_timeframes, fetch_yfinance_1h, tamamlanmis_mumlar)
 from patterns import PatternLifecycleManager, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
 from notifier import TelegramNotifier
 
@@ -101,14 +102,19 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             # Tüm timeframe'leri üret
             all_tfs = resample_all_timeframes(df_1h)
             
-            # Her timeframe için pattern tespit + lifecycle
+            # Her TF için: yarım (devam eden) mumu çıkar, TAMAMLANMIŞ mumları besle
             for tf_name, df_tf in all_tfs.items():
                 if df_tf is None or len(df_tf) < 30:
                     logger.debug(f"{stock} {tf_name} için yeterli veri yok")
                     continue
+                df_tf = tamamlanmis_mumlar(df_tf, tf_name)
+                if df_tf is None or len(df_tf) < 30:
+                    logger.debug(f"{stock} {tf_name}: tamamlanmış mum kalmadı (seans içi erken tarama)")
+                    continue
                 
-                # Motor adayı kendisi bulur ve kırılım anında dondurur (Pine v0.4.6 akışı)
-                snap = lifecycle_manager.scan(stock + "_" + tf_name, df_tf)
+                # Motor adayı kendisi bulur ve kırılım anında dondurur (Pine v0.4.6 akışı).
+                # tam_yeniden=True: pencere her taramada sıfırdan deterministik oynatılır.
+                snap = lifecycle_manager.scan(stock + "_" + tf_name, df_tf, tam_yeniden=True)
                 state, break_dir, lifecycle_log = snap.state, snap.break_dir, snap.log
                 active = snap.active
                 

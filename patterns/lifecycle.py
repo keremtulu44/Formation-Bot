@@ -154,15 +154,22 @@ class ArgentEngine:
         """Tüm kalıcı state'i sıfırla (yeni/bozulan veri akışı)."""
         self.__init__(self.profile, self.mintick, self.use_breakout_quality_filter)
 
-    def process(self, df: pd.DataFrame) -> EngineSnapshot:
-        """DataFrame'i (artabilir) motora ver. Yeni barlar sırayla işlenir."""
+    def process(self, df: pd.DataFrame, tam_yeniden: bool = False) -> EngineSnapshot:
+        """DataFrame'i (artabilir) motora ver. Yeni barlar sırayla işlenir.
+        tam_yeniden=True: tüm pencere sıfırdan deterministik yeniden oynatılır.
+        Canlı taramada KULLANILMALI: 1h penceresi 360'ta doygun olunca her yeni mumda
+        en eski düşer; resample edilmiş 2h/4h/1d kovalarının kenar değerleri sessizce
+        değişir — artımlı işleme bunu güvenli karşılayamaz, tam tekrar tutarlılığı
+        garantiler (~0.1-0.3s, geri test = canlı birebir)."""
         if df is None or len(df) == 0:
             return EngineSnapshot(state=self.pattern_state, previous_state=self.last_pattern_state,
                                   break_dir=self.break_candidate_dir, invalid_reason=self.invalid_reason,
                                   active=self.active if self.active.valid else None,
                                   bar_index=self.bar_index, log="Veri yok")
+        if tam_yeniden and self._bars_done > 0:
+            self.reset()
         # Veri akışı değişti mi? (kısaltıldı / uyumsuz index) -> sıfırla ve baştan
-        incremental = (self._bars_done > 0 and len(df) >= self._bars_done
+        incremental = (not tam_yeniden and self._bars_done > 0 and len(df) >= self._bars_done
                        and self._last_index_value is not None
                        and df.index[self._bars_done - 1] == self._last_index_value)
         if not incremental and self._bars_done > 0:
@@ -799,9 +806,9 @@ class PatternLifecycleManager:
             self.engines[key] = ArgentEngine(self.profile, self.mintick)
         return self.engines[key]
 
-    def scan(self, key: str, df: pd.DataFrame) -> EngineSnapshot:
+    def scan(self, key: str, df: pd.DataFrame, tam_yeniden: bool = False) -> EngineSnapshot:
         engine = self.get_engine(key)
-        snap = engine.process(df)
+        snap = engine.process(df, tam_yeniden=tam_yeniden)
         self.last_snapshots[key] = snap
         return snap
 
