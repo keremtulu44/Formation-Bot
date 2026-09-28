@@ -558,6 +558,9 @@ def main_loop():
     global _deque_manager_ref, _notifier_ref, _supabase_store_ref
     supabase_store = SupabaseStore.from_env()
     _supabase_store_ref = supabase_store
+    if supabase_store is not None:
+        # Ortam değişkenleri yanlışsa teşhis loga düşsün; hata halinde bot durmaz.
+        supabase_store.ping()
     deque_manager = StockDequeManager(persistent_store=supabase_store)
     _deque_manager_ref = deque_manager
 
@@ -583,6 +586,8 @@ def main_loop():
         initial_store_data=remote_rows,
     )
     _notifier_ref = notifier
+    # Telegram token/chat_id teşhisi: mesaj göndermeden getMe ile doğrular.
+    notifier.check_connection()
     
     # İlk kurulum/preload de aynı hız sınırını kullanır; boş 1H cache'ler seri çekilir.
     logger.info(

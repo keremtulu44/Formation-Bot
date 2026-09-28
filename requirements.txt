@@ -6,8 +6,10 @@ yfinance==1.7.0
 pandas==2.2.2
 numpy==1.26.4
 
-# Alternatif BIST kütüphanesi (opsiyonel, tvdatafeed yerine)
-borsapy==0.11.0
+# Alternatif BIST kütüphanesi (tvdatafeed yerine) OPSIYONELDIR ve deploy
+# zincirinden cikarildi: agir C/Rust bagimlilik zinciri getiriyor, hicbir kod
+# icinde import edilmiyor. Yerelde denemek istersen:
+#   pip install -r requirements-optional.txt
 
 # Zaman ve config
 pytz==2024.1

@@ -114,6 +114,19 @@ class SupabaseStore:
             self._warned.add(category)
             logger.warning(message)
 
+    def ping(self) -> bool:
+        """Başlangıçta bağlantı/tablo/anahtar doğrulaması (tek satır SELECT).
+
+        Render ortam değişkenleri yanlışsa (404 tablo yok, 401/403 anahtar
+        geçersiz) hata mesajını loga düşürür; bot yerel cache ile çalışmaya
+        devam eder. Mesaj göndermez, veri değiştirmez.
+        """
+        response = self._request("GET", params={"select": "store_key", "limit": 1})
+        if response is None:
+            return False
+        logger.info(f"Supabase bağlantısı OK ({self.project_url}, tablo: {self.TABLE})")
+        return True
+
     def get_many(self, store_keys: Iterable[str]) -> Optional[Dict[str, Any]]:
         """Fetch multiple keys in one PostgREST request.
 

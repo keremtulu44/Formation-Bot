@@ -100,6 +100,33 @@ class TelegramNotifier:
             self.enabled = True
             logger.info("Telegram notifier aktif - insanlaştırma V2")
 
+    def check_connection(self) -> bool:
+        """Başlangıçta token'ı doğrular (getMe). Mesaj GÖNDERMEZ, sadece loglar.
+
+        Render'a yeni ortam değişkeni ekledikten sonra "Telegram çalışıyor mu?"
+        sorusunu loglardan tek bakışta cevaplamak için. Token loglanmaz.
+        """
+        if not self.enabled:
+            return False
+        try:
+            import requests
+            resp = requests.get(
+                f"https://api.telegram.org/bot{self.token}/getMe", timeout=10
+            )
+            if resp.status_code == 200:
+                username = (resp.json().get("result") or {}).get("username", "?")
+                logger.info(
+                    f"Telegram bağlantısı OK (bot: @{username}, chat_id: {self.chat_id})"
+                )
+                return True
+            logger.error(
+                f"Telegram token/chat_id reddedildi: HTTP {resp.status_code} "
+                f"{resp.text[:200]}"
+            )
+        except Exception as e:
+            logger.error(f"Telegram bağlantı hatası (token yanlış olabilir): {e}")
+        return False
+
     def _kap_yukle(self):
         """Saatlik/günlük sayaçları diskten yükle (restart kapani aşmasın)."""
         try:

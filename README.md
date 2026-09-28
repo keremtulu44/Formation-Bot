@@ -41,7 +41,13 @@ elle güncellenmelidir.
 
 ## Render ve Supabase dağıtımı
 
+> Adım adım kurulum (Python sürümü sabitleme, Supabase `sb_secret_` anahtarı,
+> telefondan Telegram token alma, keep-alive) için: **[RENDER_DEPLOY.md](RENDER_DEPLOY.md)**
+
 Build Command `pip install -r requirements.txt`, Start Command `python main.py`.
+Python sürümü repodaki `.python-version` ile **3.12**'ye sabitlidir; Render'ın
+varsayılanı 3.14'tür ve pandas 2.2.2 / numpy 1.26.4'ün cp314 tekerleği
+olmadığı için build kaynak koddan derlemeye düşüp patlıyor.
 Render `PORT` değişkenini verdiğinde bot `0.0.0.0:$PORT` üzerinde `/health` endpoint'i açar;
 monitör yalnızca liveness JSON'u görür, token/anahtar veya portföy verisi döndürülmez.
 
@@ -84,6 +90,10 @@ tablosuna yazar; yerel JSON/pickle dosyalarını da fallback olarak tutar.
 | `supabase_store.py` | Supabase REST API adaptörü; servis anahtarı yalnızca environment'tan okunur |
 | `health_server.py` | Render `PORT` varsa `/health` liveness endpoint'i; uptime monitörleri için |
 | `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
+| `RENDER_DEPLOY.md` | Render Free + Supabase + Telegram kurulum rehberi; build hatası ve keep-alive dahil |
+| `.python-version` | Render build'ı için Python 3.12 sabitlemesi (3.14'te pandas derlenemiyor) |
+| `.github/workflows/keepalive.yml` | 10 dakikada bir `/health` isteği; Render Free'ın 15 dk uyku kuralını engeller |
+| `requirements-optional.txt` | Deploy zincirinde olmayan isteğe bağlı paketler (borsapy) |
 | `patterns/` | Motor: `candidate.py` (geometri + bayrak/flama), `pivots.py`, `pole.py` (direk), `lifecycle.py` (state makinesi), `violation.py`, `selection.py`, `mathutil.py` |
 | `notifier.py` | Telegram: 4 saat cooldown + global günlük/saatlik kapanı |
 | `bot_data/` | Hisse cache'leri — **bilerek git-tracked** (kullanıcı isteği) |
