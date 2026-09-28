@@ -20,7 +20,8 @@ from config import (
     CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER_CLOSE_MIN, TARAMA_PENCERE_SONU,
     STALE_BAR_UYARI_DK, TERMINAL_TAZE_BAR, BIST_TATILLER, BIST_YARIM_GUNLER,
     VERI_YOK_MODU_ESIK_DK, SPLIT_SUREKLILIK_ESIK_PCT, BAR_BOSLUK_ESIK_SAAT,
-    GUNLUK_FETCH_PERIOD, GUNLUK_DEQUE_MAXLEN
+    GUNLUK_FETCH_PERIOD, GUNLUK_DEQUE_MAXLEN,
+    FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD, FULL_1H_FETCH_STALE_DAYS
 )
 
 logger = logging.getLogger(__name__)
@@ -316,15 +317,20 @@ class StockDequeManager:
     Neden deque? maxlen=360 ile en eski otomatik silinir, rolling window
     Neden kalıcı? Bot restart olursa diskten yükle, 60 gün veriyi tekrar çekme
     """
-    def __init__(self, maxlen: int = DEQUE_MAXLEN, data_dir: str = DATA_DIR):
+    def __init__(self, maxlen: int = DEQUE_MAXLEN, data_dir: str = DATA_DIR,
+                 persistent_store=None):
         self.maxlen = maxlen
         self.data_dir = data_dir
+        self.persistent_store = persistent_store
         self.deques: Dict[str, deque] = {}
         # 1D (günlük) derin veri: 1H penceresinden BAĞIMSIZ (~500 bar).
         # Neden ayrı? 1H deque 360 bar = ~40 iş günü; resample 1D sadece ~40 bar
         # verir ve 1D formasyon penceresi (20-60 bar) marjinal kalır. 1H'yi
         # büyütmek Pine uyumunu bozabileceği için günlük veri ayrı ve derin tutulur.
         self.gunluk_deques: Dict[str, deque] = {}
+        # Günlük endpoint, tamamlanmamış seans mumunu aynı gün döndürmeyebilir.
+        # Başarısız/henüz güncellenmemiş veriyi her saat tekrar istememek için cooldown.
+        self._gunluk_fetch_attempts: Dict[str, datetime] = {}
         # Son tespit edilen veri sorunları (split / bar boşluğu) - main.py okur
         self.sureklilik_sorunlari: Dict[str, List[Dict]] = {}
         
@@ -332,7 +338,72 @@ class StockDequeManager:
         os.makedirs(data_dir, exist_ok=True)
         
         logger.info(f"Deque manager başlatıldı - maxlen={maxlen}, dir={data_dir}")
-    
+
+    def hydrate_from_supabase(self, stocks, rows) -> None:
+        """Supabase satırlarını belleğe al; eksik anahtarlar yerel diske düşer."""
+        if not isinstance(rows, dict):
+            return
+        from dateutil import parser as date_parser
+
+        for stock in stocks:
+            hourly = rows.get(f"cache:1h:{stock}")
+            if isinstance(hourly, list) and hourly:
+                bars = []
+                for item in hourly:
+                    try:
+                        candle = dict(item)
+                        ts = candle.get("timestamp")
+                        if isinstance(ts, str):
+                            candle["timestamp"] = date_parser.parse(ts)
+                        for field in ("open", "high", "low", "close", "volume"):
+                            candle[field] = float(candle.get(field, 0))
+                        bars.append(candle)
+                    except (TypeError, ValueError, KeyError, OverflowError):
+                        logger.warning(f"{stock} 1H Supabase cache satırı bozuk; atlanıyor")
+                if bars:
+                    self.deques[stock] = deque(bars[-self.maxlen:], maxlen=self.maxlen)
+
+            daily = rows.get(f"cache:1d:{stock}")
+            if isinstance(daily, list) and daily:
+                bars = []
+                for item in daily:
+                    try:
+                        ts = pd.to_datetime(item["timestamp"])
+                        if ts.tzinfo is None:
+                            ts = ISTANBUL_TZ.localize(ts)
+                        else:
+                            ts = ts.tz_convert(ISTANBUL_TZ)
+                        bars.append({
+                            "timestamp": ts,
+                            "open": float(item["open"]),
+                            "high": float(item["high"]),
+                            "low": float(item["low"]),
+                            "close": float(item["close"]),
+                            "volume": float(item.get("volume", 0)),
+                        })
+                    except (TypeError, ValueError, KeyError, OverflowError):
+                        logger.warning(f"{stock} 1D Supabase cache satırı bozuk; atlanıyor")
+                bars.sort(key=lambda candle: candle["timestamp"])
+                if bars:
+                    self.gunluk_deques[stock] = deque(
+                        bars[-GUNLUK_DEQUE_MAXLEN:], maxlen=GUNLUK_DEQUE_MAXLEN
+                    )
+
+        attempts = rows.get("state:daily_fetch_attempts")
+        if isinstance(attempts, dict):
+            for stock, iso_time in attempts.items():
+                if not isinstance(iso_time, str):
+                    continue
+                try:
+                    self._gunluk_fetch_attempts[stock] = date_parser.isoparse(iso_time)
+                except (TypeError, ValueError, OverflowError):
+                    logger.warning(f"{stock} günlük fetch zamanı Supabase'te bozuk; atlanıyor")
+
+        logger.info(
+            f"Supabase cache yüklendi: 1H={len(self.deques)}, 1D={len(self.gunluk_deques)}, "
+            f"günlük fetch denemesi={len(self._gunluk_fetch_attempts)}"
+        )
+
     def get_deque(self, stock: str) -> deque:
         """Hisse için deque al, yoksa oluştur"""
         if stock not in self.deques:
@@ -458,7 +529,10 @@ class StockDequeManager:
             import json
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(json_data, f, indent=2, ensure_ascii=False)
-            
+
+            if self.persistent_store is not None:
+                self.persistent_store.upsert(f"cache:1h:{stock}", json_data)
+
             logger.debug(f"{stock} deque diske kaydedildi - {pkl_path} + {json_path} ({len(data_list)} mum)")
         except Exception as e:
             logger.error(f"{stock} diske kaydedilemedi: {e}")
@@ -575,25 +649,92 @@ class StockDequeManager:
         return df
 
     def gunluk_veri_eksik_mi(self, stock: str, now: Optional[datetime] = None) -> bool:
-        """Günlük veri bugüne ait değilse (boş/eksik) True -> fetch gerekir."""
-        df = self.to_gunluk_dataframe(stock)
-        if df is None or len(df) < 30:
-            return True
+        """Günlük veri eksik/eskiyse ve cooldown dolduysa True -> fetch gerekir.
+
+        Intraday Yahoo yanıtında bugünün günlük mumu henüz olmayabilir. Aynı 50
+        sembolü her saat 2 yıllık günlük geçmişle tekrar istememek için başarısız
+        denemeleri 6 saat soğutur; kapanıştan sonra bir kez daha tazeler.
+        """
         if now is None:
             now = datetime.now(ISTANBUL_TZ)
-        son = df.index[-1]
-        son = son.tz_convert(ISTANBUL_TZ) if son.tzinfo else ISTANBUL_TZ.localize(son)
-        # Son günlük bar bugün değilse (tatil/yarım gün dahil) eksik sayılır.
-        return son.date() < now.date()
+        elif now.tzinfo is None:
+            now = ISTANBUL_TZ.localize(now)
+        else:
+            now = now.astimezone(ISTANBUL_TZ)
+
+        df = self.to_gunluk_dataframe(stock)
+        son_gun = None
+        if df is not None and len(df) >= 30:
+            son = df.index[-1]
+            son = son.tz_convert(ISTANBUL_TZ) if son.tzinfo else ISTANBUL_TZ.localize(son)
+            son_gun = son.date()
+
+        last_attempt = self._gunluk_fetch_attempts.get(stock)
+        if last_attempt is not None:
+            if last_attempt.tzinfo is None:
+                last_attempt = ISTANBUL_TZ.localize(last_attempt)
+            else:
+                last_attempt = last_attempt.astimezone(ISTANBUL_TZ)
+
+        kapanis = seans_kapanis_saati(now)
+        kapanis_ani = now.replace(hour=kapanis.hour, minute=kapanis.minute,
+                                  second=0, microsecond=0)
+        kapanis_sonrasi = (
+            now.weekday() < 5 and bist_tatil_adi(now) is None and now >= kapanis_ani
+        )
+        bugun_kapanis_sonrasi_denendi = (
+            last_attempt is not None
+            and last_attempt.date() == now.date()
+            and last_attempt >= kapanis_ani
+        )
+
+        # Bugün alınan günlük mum seans içi indiyse kapanıştan sonra bir kez
+        # tazele; diskte zaten bugüne ait veri varsa (fetch zamanı bilinmiyorsa)
+        # tekrar çekmeden önce onu geçerli kabul et.
+        kapanis_ici_deneme_var = (
+            last_attempt is not None
+            and last_attempt.date() == now.date()
+            and last_attempt < kapanis_ani
+        )
+        if (kapanis_sonrasi and not bugun_kapanis_sonrasi_denendi
+                and (son_gun is None or son_gun < now.date() or kapanis_ici_deneme_var)):
+            return True
+        if son_gun is not None and son_gun >= now.date():
+            return False
+
+        if last_attempt is not None and now - last_attempt < timedelta(hours=6):
+            return False
+        return True
+
+    def gunluk_fetch_denemesi_kaydet(self, stock: str, now: Optional[datetime] = None) -> None:
+        """Başarılı veya başarısız günlük fetch denemesinin zamanını kaydet."""
+        if now is None:
+            now = datetime.now(ISTANBUL_TZ)
+        elif now.tzinfo is None:
+            now = ISTANBUL_TZ.localize(now)
+        else:
+            now = now.astimezone(ISTANBUL_TZ)
+        self._gunluk_fetch_attempts[stock] = now
+        if self.persistent_store is not None:
+            from datetime import timezone
+            attempts = {
+                key: value.astimezone(timezone.utc).isoformat()
+                if value.tzinfo is not None else value.isoformat()
+                for key, value in self._gunluk_fetch_attempts.items()
+            }
+            self.persistent_store.upsert("state:daily_fetch_attempts", attempts)
 
     def save_gunluk_to_disk(self, stock: str):
         dq = self.get_gunluk_deque(stock)
         os.makedirs(self.data_dir, exist_ok=True)
         import json
+        payload = [{"timestamp": c["timestamp"].isoformat(), "open": c["open"],
+                    "high": c["high"], "low": c["low"], "close": c["close"],
+                    "volume": c["volume"]} for c in dq]
         with open(self._gunluk_dosya(stock), "w", encoding="utf-8") as f:
-            json.dump([{"timestamp": c["timestamp"].isoformat(), "open": c["open"],
-                        "high": c["high"], "low": c["low"], "close": c["close"],
-                        "volume": c["volume"]} for c in dq], f, ensure_ascii=False)
+            json.dump(payload, f, ensure_ascii=False)
+        if self.persistent_store is not None:
+            self.persistent_store.upsert(f"cache:1d:{stock}", payload)
 
     def son_bar_yasi_dk(self, stock: str, now: Optional[datetime] = None) -> Optional[float]:
         """Bu hissenin cache'indeki en yeni 1H mumun yaşı (dakika). Veri yoksa None.
@@ -810,10 +951,10 @@ def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
 
 def fetch_with_rate_limit(stock: str, fetch_func, *args, **kwargs) -> Optional[pd.DataFrame]:
     """
-    Rate limit korumalı veri çekme
-    - 45-50 sn bekleme
+    Eski genel amaçlı rate-limit wrapper'ı (canlı bot ana döngüsü kullanmaz).
+    - RATE_LIMIT_MIN/MAX kadar bekler
     - Hata olursa logla, None dön, crash etme
-    Neden? tvdatafeed/yfinance ban yemesin, bot çökmesin
+    Canlı tarama daha düşük tempolu grup pacing'i için YahooRequestPacer kullanır.
     """
     try:
         # Rate limit bekleme
@@ -863,8 +1004,70 @@ def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional
         return None
 
 
-def fetch_yfinance_1h(stock: str, period: str = "60d") -> Optional[pd.DataFrame]:
-    """yfinance'den 1h OHLCV çeker (gürültü bastırılmış). Başarısızlıkta None döner.
+def select_yfinance_1h_period(
+    cached: Optional[pd.DataFrame],
+    now: Optional[datetime] = None,
+) -> str:
+    """Cache'e göre 1H fetch penceresini seç.
+
+    İlk/boş cache veya 5 günden eski cache tam geçmiş alır. Sağlıklı ve yakın
+    cache için son 5 günlük pencere yeterlidir; append_dataframe zaman bazında
+    tekilleştirdiği için bu pencereyi güvenle birleştirebiliriz.
+    """
+    if cached is None or len(cached) < 50:
+        return FULL_1H_FETCH_PERIOD
+
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    elif now.tzinfo is None:
+        now = ISTANBUL_TZ.localize(now)
+    else:
+        now = now.astimezone(ISTANBUL_TZ)
+
+    latest = pd.Timestamp(cached.index[-1])
+    if latest.tzinfo is None:
+        latest = ISTANBUL_TZ.localize(latest.to_pydatetime())
+    else:
+        latest = latest.tz_convert(ISTANBUL_TZ)
+
+    age_days = (now - latest.to_pydatetime()).total_seconds() / 86400.0
+    if age_days > FULL_1H_FETCH_STALE_DAYS:
+        return FULL_1H_FETCH_PERIOD
+    return ROUTINE_1H_FETCH_PERIOD
+
+
+def yfinance_error_is_retryable(error) -> bool:
+    """Sadece geçici ağ/rate-limit hatalarını yeniden denemeye uygun say.
+
+    Yahoo'nun desteklemediği semboller veya 404/no-data sonuçları tekrar denenmez.
+    Bu ayrım, geçici hata olmayan hisselere gereksiz istek gönderilmesini önler.
+    """
+    text = f"{type(error).__name__} {error}".lower()
+    permanent_markers = (
+        "404", "possibly delisted", "may be delisted", "no data found",
+        "no timezone found", "symbol not found", "not found",
+    )
+    if any(marker in text for marker in permanent_markers):
+        return False
+
+    transient_markers = (
+        "429", "too many requests", "rate limit", "ratelimit",
+        "timeout", "timed out", "connection", "temporarily unavailable",
+        "502", "503", "504", "service unavailable", "bad gateway",
+        "gateway timeout", "network is unreachable", "remote disconnected",
+    )
+    return any(marker in text for marker in transient_markers)
+
+
+def fetch_yfinance_1h(
+    stock: str,
+    period: str = "60d",
+    with_status: bool = False,
+):
+    """yfinance'den 1h OHLCV çeker; varsayılan olarak DataFrame veya None döner.
+
+    with_status=True iken (DataFrame/None, geçici-hata-mı, hata-açıklaması)
+    döndürür; ana tarama bunu kullanarak yalnız geçici hataları bir kez tekrarlar.
     Not: Yahoo bazı sembolleri taşımıyor (örn. KOZAL.IS / KOZAA.IS -> HTTP 404).
 
     ÖNEMLİ - auto_adjust=False: yfinance'in default'ı auto_adjust=True (v0.2.51+).
@@ -872,18 +1075,23 @@ def fetch_yfinance_1h(stock: str, period: str = "60d") -> Optional[pd.DataFrame]
     ham fiyat kullanır. Bu port sırasında parametre düşmüştü -> temettü sonrası tüm
     geçmiş kayar, pivot/sınır/ATR değerleri Pine'dan sapardı. Geri konuldu.
     """
+    def result(df, retryable=False, reason=""):
+        return (df, retryable, reason) if with_status else df
+
     try:
         import io
         import contextlib
         import yfinance as yf
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(captured):
             ham = yf.Ticker(stock + ".IS").history(period=period, interval="1h", auto_adjust=False)
         if ham is None or ham.empty:
-            return None
+            reason = captured.getvalue().strip() or "Yahoo boş veri döndürdü"
+            return result(None, yfinance_error_is_retryable(reason), reason)
         ham = ham.rename(columns=str.lower)
         gerekli = ["open", "high", "low", "close", "volume"]
         if not all(c in ham.columns for c in gerekli):
-            return None
+            return result(None, False, "Gerekli OHLCV sütunları eksik")
         ham = ham[gerekli]
         # Zaman dilimi: deque'daki mumlar Europe/Istanbul tz-aware. yfinance genelde
         # borsa saatini verir ama bazı durumlarda UTC/naive dönebilir - normalize et,
@@ -898,9 +1106,10 @@ def fetch_yfinance_1h(stock: str, period: str = "60d") -> Optional[pd.DataFrame]
                 ham.index = pd.to_datetime(ham.index).tz_localize(ISTANBUL_TZ)
             except Exception:
                 pass
-        return ham
-    except Exception:
-        return None
+        return result(ham)
+    except Exception as exc:
+        reason = f"{type(exc).__name__}: {exc}"
+        return result(None, yfinance_error_is_retryable(exc), reason)
 
 
 def mock_fetch_60d_1h(stock: str, n_bars: int = 360) -> pd.DataFrame:

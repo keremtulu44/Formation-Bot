@@ -71,7 +71,9 @@ class TelegramNotifier:
     - Avantajı dışarda sun: her şeyi söyleme, merak uyandır
     - AL/SAT yok, sadece durum bildirimi
     """
-    def __init__(self):
+    def __init__(self, persistent_store=None, initial_store_data=None):
+        self.persistent_store = persistent_store
+        self.initial_store_data = initial_store_data if isinstance(initial_store_data, dict) else {}
         self.token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
         self.chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
         self.cooldown_hours = 4
@@ -102,14 +104,19 @@ class TelegramNotifier:
         """Saatlik/günlük sayaçları diskten yükle (restart kapani aşmasın)."""
         try:
             import json
-            if os.path.exists(self._kap_dosya):
+            ham = self.initial_store_data.get("state:telegram_caps")
+            kaynak = "Supabase"
+            if not isinstance(ham, dict):
+                kaynak = "disk"
+                if not os.path.exists(self._kap_dosya):
+                    return
                 with open(self._kap_dosya, "r", encoding="utf-8") as f:
                     ham = json.load(f)
-                self._gunluk_sayac = int(ham.get("gunluk_sayac", 0))
-                self._gunluk_tarih = datetime.fromisoformat(ham["gunluk_tarih"]).date()
-                self._saatlik_zamanlar = [datetime.fromisoformat(t) for t in ham.get("saatlik", [])]
-                logger.info(f"Telegram kap hafızası yüklendi: saatlik={len(self._saatlik_zamanlar)}, "
-                            f"günlük={self._gunluk_sayac}")
+            self._gunluk_sayac = int(ham.get("gunluk_sayac", 0))
+            self._gunluk_tarih = datetime.fromisoformat(ham["gunluk_tarih"]).date()
+            self._saatlik_zamanlar = [datetime.fromisoformat(t) for t in ham.get("saatlik", [])]
+            logger.info(f"Telegram kap hafızası {kaynak} yüklendi: saatlik={len(self._saatlik_zamanlar)}, "
+                        f"günlük={self._gunluk_sayac}")
         except Exception as e:
             logger.debug(f"Kap hafızası yüklenemedi (ilk çalışma olabilir): {e}")
 
@@ -122,17 +129,20 @@ class TelegramNotifier:
         self._kap_kaydet()
 
     def _kap_kaydet(self):
+        payload = {
+            "gunluk_sayac": self._gunluk_sayac,
+            "gunluk_tarih": self._gunluk_tarih.isoformat(),
+            "saatlik": [t.isoformat() for t in self._saatlik_zamanlar],
+        }
         try:
             import json
             os.makedirs(os.path.dirname(self._kap_dosya), exist_ok=True)
             with open(self._kap_dosya, "w", encoding="utf-8") as f:
-                json.dump({
-                    "gunluk_sayac": self._gunluk_sayac,
-                    "gunluk_tarih": self._gunluk_tarih.isoformat(),
-                    "saatlik": [t.isoformat() for t in self._saatlik_zamanlar],
-                }, f, ensure_ascii=False)
+                json.dump(payload, f, ensure_ascii=False)
         except Exception as e:
             logger.debug(f"Kap hafızası kaydedilemedi: {e}")
+        if self.persistent_store is not None:
+            self.persistent_store.upsert("state:telegram_caps", payload)
 
     def _gunu_sifirla_gerekirse(self):
         bugun = datetime.now().date()
@@ -159,24 +169,31 @@ class TelegramNotifier:
     def _cooldown_yukle(self):
         try:
             import json
-            if os.path.exists(self._cooldown_dosya):
+            ham = self.initial_store_data.get("state:telegram_cooldowns")
+            kaynak = "Supabase"
+            if not isinstance(ham, dict):
+                kaynak = "disk"
+                if not os.path.exists(self._cooldown_dosya):
+                    return
                 with open(self._cooldown_dosya, "r", encoding="utf-8") as f:
                     ham = json.load(f)
-                for k, iso in ham.items():
-                    self.last_sent[k] = datetime.fromisoformat(iso)
-                logger.info(f"Cooldown hafızası diskten yüklendi: {len(ham)} kayıt")
+            for k, iso in ham.items():
+                self.last_sent[k] = datetime.fromisoformat(iso)
+            logger.info(f"Cooldown hafızası {kaynak} yüklendi: {len(ham)} kayıt")
         except Exception as e:
             logger.warning(f"Cooldown yüklenemedi (devam ediliyor): {e}")
 
     def _cooldown_kaydet(self):
+        payload = {k: v.isoformat() for k, v in self.last_sent.items()}
         try:
             import json
             os.makedirs(os.path.dirname(self._cooldown_dosya), exist_ok=True)
             with open(self._cooldown_dosya, "w", encoding="utf-8") as f:
-                json.dump({k: v.isoformat() for k, v in self.last_sent.items()}, f,
-                          ensure_ascii=False, indent=0)
+                json.dump(payload, f, ensure_ascii=False, indent=0)
         except Exception as e:
             logger.warning(f"Cooldown kaydedilemedi (devam ediliyor): {e}")
+        if self.persistent_store is not None:
+            self.persistent_store.upsert("state:telegram_cooldowns", payload)
 
     def _cooldown_key(self, stock: str, pattern: str, timeframe: str, state: str) -> str:
         # State de dahil - aynı pattern farklı state'e geçince tekrar gönder

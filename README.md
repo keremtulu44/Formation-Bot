@@ -8,9 +8,9 @@
 
 ```bash
 python3 -m pip install -r requirements.txt   # pandas, numpy, pytz, yfinance
-cp .env.example .env                         # TELEGRAM_TOKEN / TELEGRAM_CHAT_ID
+cp .env.example .env                         # TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
 python3 main.py                              # canlı bot (heartbeat + SIGTERM destekli)
-python3 canli_tarama.py                      # 30 hisse x 4 TF canlı formasyon taraması (rapor: CANLI_FORMASYONLAR.txt)
+python3 canli_tarama.py                      # Aktif evren (48 sembol) x 4 TF canlı tarama raporu
 python3 canli_tarama.py --cache              # internet yok: bot_data cache ile tarar
 python3 test_tarama_zamani.py                # Faz 1+2 regresyon (90 kontrol)
 python3 test_pennant.py                      # flama regresyon (6 test)
@@ -18,14 +18,72 @@ python3 test_pennant.py                      # flama regresyon (6 test)
 
 Profil seçimi: `.env` içinde `BOT_PROFILE=Dengeli` (Hassas / Dengeli / Seçici).
 
+## Tarama temposu
+
+Canlı bot `BIST_50` listesindeki **48 sembolü** tarar; Yahoo'da sorunlu KOZAL ve KOZAA
+şimdilik çıkarılmıştır. Eksik iki bileşen için veri sağlayıcısı doğrulaması sonrası
+sembol eklenmelidir. Boş/kısa veya 5 günden eski cache için 60 günlük 1H geçmişi;
+sağlıklı cache'in rutin güncellemesinde yalnızca son 5 gün indirilir ve timestamp'e
+göre tekilleştirilerek eklenir. Yahoo istekleri paralel değil, seri yürütülür: en çok
+10 HTTP isteğinden sonra 10–15 sn mola; istekler arasında 0,9–1,5 sn rastgele aralık.
+Yalnızca geçici ağ/rate-limit hataları için tüm ilk tur bittikten sonra 30–60 sn
+beklenip tek bir retry yapılır. Boş/404 veya desteklenmeyen semboller retry edilmez.
+Aynı pacing ilk 1H/1D cache yüklemesinde de uygulanır.
+Günlük seri, intraday güncelleme gelmediyse 6 saat dolmadan tekrar istenmez; kapanıştan
+sonra aynı gün içi kısmi barı tamamlamak için bir kez daha yenilenir.
+
+Ayarlar `.env` üzerinden değiştirilebilir: `SCAN_REQUEST_BATCH_SIZE`,
+`SCAN_REQUEST_DELAY_MIN_SEC`, `SCAN_REQUEST_DELAY_MAX_SEC`,
+`SCAN_BATCH_PAUSE_MIN_SEC`, `SCAN_BATCH_PAUSE_MAX_SEC`,
+`SCAN_RETRY_BACKOFF_MIN_SEC`, `SCAN_RETRY_BACKOFF_MAX_SEC`.
+BIST 50 bileşenleri endeks değişikliklerinde `config.py` içindeki listeyle birlikte
+elle güncellenmelidir.
+
+## Render ve Supabase dağıtımı
+
+Build Command `pip install -r requirements.txt`, Start Command `python main.py`.
+Render `PORT` değişkenini verdiğinde bot `0.0.0.0:$PORT` üzerinde `/health` endpoint'i açar;
+monitör yalnızca liveness JSON'u görür, token/anahtar veya portföy verisi döndürülmez.
+
+İki çalışma seçeneği:
+
+- **Background Worker (önerilen, ücretli):** Sürekli çalışan Python döngüsüne uygun servis türü;
+  dışarıdan ping gerekmez. Bot piyasa dışında/hafta sonu tarama yapmadan bekler, fakat servis açık
+  kaldığından worker çalışma süresi devam eder.
+- **Free Web Service (deneysel/garantisiz):** Bir dış uptime monitörü
+  `https://<render-adresi>/health` adresine hafta içi İstanbul saatiyle 08:00–19:00 arasında
+  10 dakikada bir istek gönderebilir. Render Free, 15 dakika inbound trafik olmazsa servisi
+  uyutur; 10 dk aralık 5 dk pay bırakır. 5 dakikalık kontrol daha güvenlidir. Monitör durursa,
+  Render servisi yeniden başlatırsa veya isteği kaçırırsa bot uyuyabilir; bu yöntem uptime
+  garantisi değildir. Son kontrol 19:00'da yapılırsa servis yaklaşık 19:15'te uykuya geçer.
+  Süreç pingler arasında çalışır, yalnızca CPU'yu sürekli meşgul etmez.
+
+Supabase SQL scriptini çalıştırdıktan sonra Render servisinin **Environment** bölümüne şu
+secret'ları girin (değerleri Git'e veya sohbete koymayın):
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+- İsteğe bağlı `BOT_PROFILE`
+
+Supabase değişkenleri yoksa bot mevcut yerel cache/dosya davranışıyla çalışır; ancak Render'ın
+ephemeral diski nedeniyle restart/deploy sonrası bu yerel veriler korunmaz. Değişkenler varsa
+bot açılışta 1H/1D cache ve Telegram state'ini tek istekle yükler, değişiklikleri `bot_store`
+tablosuna yazar; yerel JSON/pickle dosyalarını da fallback olarak tutar.
+
 ## Dosya haritası
 
 | Dosya | İçerik |
 |---|---|
 | `main.py` | Bot döngüsü: fetch → resample → motor → Telegram + heartbeat; veri-yok/split kapıları |
-| `canli_tarama.py` | 30 hisse × 4 TF (1h/2h/4h/1d) canlı tarama raporu — **Pine karşılaştırması için** |
+| `canli_tarama.py` | Aktif evren (48 sembol) × 4 TF (1h/2h/4h/1d) canlı tarama raporu — **Pine karşılaştırması için** |
 | `config.py` | Profiller (eşikler), hisse listesi, tatil/yarım gün takvimi, timing sabitleri |
 | `data.py` | yfinance fetch (`auto_adjust=False`), StockDequeManager (1H + ayrı 1D deque), tatil/veri-yok/split yardımcıları |
+| `scan_pacer.py` | Seri Yahoo istekleri için rastgele aralık, 10'lu istek grubu ve grup molası |
+| `supabase_store.py` | Supabase REST API adaptörü; servis anahtarı yalnızca environment'tan okunur |
+| `health_server.py` | Render `PORT` varsa `/health` liveness endpoint'i; uptime monitörleri için |
+| `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
 | `patterns/` | Motor: `candidate.py` (geometri + bayrak/flama), `pivots.py`, `pole.py` (direk), `lifecycle.py` (state makinesi), `violation.py`, `selection.py`, `mathutil.py` |
 | `notifier.py` | Telegram: 4 saat cooldown + global günlük/saatlik kapanı |
 | `bot_data/` | Hisse cache'leri — **bilerek git-tracked** (kullanıcı isteği) |

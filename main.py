@@ -22,13 +22,20 @@ except ImportError:
 from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR,
                     ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES, BIST_OPEN,
                     SCAN_DELAY_AFTER_CLOSE_MIN, STALE_BAR_UYARI_DK, VERI_YOK_MODU_ESIK_DK,
-                    TARAMA_SURESI_UYARI_DK)
+                    TARAMA_SURESI_UYARI_DK, SCAN_REQUEST_BATCH_SIZE,
+                    SCAN_REQUEST_DELAY_MIN_SEC, SCAN_REQUEST_DELAY_MAX_SEC,
+                    FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD,
+                    SCAN_BATCH_PAUSE_MIN_SEC, SCAN_BATCH_PAUSE_MAX_SEC,
+                    SCAN_RETRY_BACKOFF_MIN_SEC, SCAN_RETRY_BACKOFF_MAX_SEC)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   son_kapanan_mum_ani, time_until_next_open,
                   resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
-                  tamamlanmis_mumlar)
+                  select_yfinance_1h_period, tamamlanmis_mumlar)
+from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
 from notifier import TelegramNotifier
+from supabase_store import SupabaseStore
+from health_server import start_render_health_server
 
 # === LOGGING KURULUMU ===
 def setup_logging():
@@ -67,6 +74,7 @@ logger = setup_logging()
 # main_loop icinde olusturulan nesnelerin global referanslari (heartbeat icin)
 _deque_manager_ref = None
 _notifier_ref = None
+_supabase_store_ref = None
 
 
 def son_bar_yasi_dakika_str(dk: float) -> str:
@@ -101,6 +109,8 @@ daily_stats = {
     # -> Yahoo saatlerce kapalıysa bot "sağlıklı" görünürken kör çalışıyordu.
     'fetch_ok': 0,
     'fetch_failures': 0,
+    'fetch_retries': 0,
+    'fetch_retry_recovered': 0,
     'stale_stocks': 0,
     'max_bar_age_min': None,
     'data_stale': False,
@@ -124,6 +134,8 @@ def reset_daily_if_needed():
         daily_stats['errors'] = 0
         daily_stats['fetch_ok'] = 0
         daily_stats['fetch_failures'] = 0
+        daily_stats['fetch_retries'] = 0
+        daily_stats['fetch_retry_recovered'] = 0
         daily_stats['stale_stocks'] = 0
         daily_stats['max_bar_age_min'] = None
         daily_stats['data_stale'] = False
@@ -132,6 +144,95 @@ def reset_daily_if_needed():
         daily_stats['son_tarama_suresi_dk'] = None
         daily_stats['gunluk_bar_sayisi'] = None
         daily_stats['last_reset'] = today
+
+def create_yahoo_pacer() -> YahooRequestPacer:
+    """Her Yahoo isteğine uygulanan seri pacing ayarları."""
+    return YahooRequestPacer(
+        batch_size=SCAN_REQUEST_BATCH_SIZE,
+        request_delay_min=SCAN_REQUEST_DELAY_MIN_SEC,
+        request_delay_max=SCAN_REQUEST_DELAY_MAX_SEC,
+        batch_pause_min=SCAN_BATCH_PAUSE_MIN_SEC,
+        batch_pause_max=SCAN_BATCH_PAUSE_MAX_SEC,
+        logger=logger,
+    )
+
+
+def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=None):
+    """1H verilerini seri çeker; geçici hatalı sembolleri bir kez tekrar dener.
+
+    Dönenler: başarılı DataFrame'ler, kalıcı/son hatalar, retry sayısı,
+    retry ile kurtarılan sembol sayısı.
+    """
+    fetched = {}
+    failures = {}
+    retryable = {}
+    periods = periods or {}
+
+    for index, stock in enumerate(stocks, start=1):
+        if _shutdown_requested:
+            logger.info(f"{phase}: kapanış istendi; veri çekimi durduruluyor")
+            break
+        period = periods.get(stock, FULL_1H_FETCH_PERIOD)
+        try:
+            with pacer.request(f"{stock} 1H"):
+                frame, can_retry, reason = fetch_yfinance_1h(
+                    stock, period=period, with_status=True
+                )
+        except Exception as exc:
+            frame, can_retry, reason = None, False, f"{type(exc).__name__}: {exc}"
+
+        if frame is not None:
+            fetched[stock] = frame
+            logger.info(
+                f"{phase} [{index}/{len(stocks)}] {stock}: {period} taze 1H veri alındı "
+                f"({len(frame)} bar)"
+            )
+        else:
+            failures[stock] = reason or "veri alınamadı"
+            if can_retry:
+                retryable[stock] = failures.pop(stock)
+                logger.warning(f"{phase} {stock}: geçici fetch hatası; son turda bir kez denenecek ({retryable[stock]})")
+            else:
+                logger.warning(f"{phase} {stock}: yeniden denenmeyecek fetch hatası ({failures[stock]})")
+
+    retry_count = 0
+    recovered_count = 0
+    if retryable and _shutdown_requested:
+        failures.update(retryable)
+    if retryable and not _shutdown_requested:
+        backoff = random.uniform(SCAN_RETRY_BACKOFF_MIN_SEC, SCAN_RETRY_BACKOFF_MAX_SEC)
+        logger.warning(
+            f"{phase}: {len(retryable)} geçici veri hatası için tek tekrar denemesi; "
+            f"{backoff:.1f} sn bekleniyor"
+        )
+        time.sleep(backoff)
+        pacer.reset_batch()
+
+        for stock, first_reason in retryable.items():
+            if _shutdown_requested:
+                failures[stock] = first_reason
+                continue
+            retry_count += 1
+            try:
+                with pacer.request(f"{stock} 1H retry"):
+                    frame, _can_retry_again, reason = fetch_yfinance_1h(
+                        stock,
+                        period=periods.get(stock, FULL_1H_FETCH_PERIOD),
+                        with_status=True,
+                    )
+            except Exception as exc:
+                frame, reason = None, f"{type(exc).__name__}: {exc}"
+
+            if frame is not None:
+                fetched[stock] = frame
+                recovered_count += 1
+                logger.info(f"{phase} {stock}: tekrar denemesi başarılı ({len(frame)} bar)")
+            else:
+                failures[stock] = reason or first_reason or "tekrar denemesi başarısız"
+                logger.warning(f"{phase} {stock}: tekrar denemesi de başarısız ({failures[stock]})")
+
+    return fetched, failures, retry_count, recovered_count
+
 
 # === HEARTBEAT ===
 def write_heartbeat(data_dir: str = None, notifier=None):
@@ -157,6 +258,8 @@ def write_heartbeat(data_dir: str = None, notifier=None):
             # --- veri sağlığı (FAZ 1) ---
             "fetch_ok": daily_stats['fetch_ok'],
             "fetch_failures": daily_stats['fetch_failures'],
+            "fetch_retries": daily_stats['fetch_retries'],
+            "fetch_retry_recovered": daily_stats['fetch_retry_recovered'],
             "stale_stocks": daily_stats['stale_stocks'],
             "max_bar_age_min": daily_stats['max_bar_age_min'],
             "data_stale": daily_stats['data_stale'],
@@ -170,6 +273,8 @@ def write_heartbeat(data_dir: str = None, notifier=None):
                                for k, v in _deque_manager_ref.sureklilik_sorunlari.items()}
                               if _deque_manager_ref else {}),
         }
+        if _supabase_store_ref is not None:
+            _supabase_store_ref.upsert("state:heartbeat", payload)
         with open(heartbeat_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
     except Exception as e:
@@ -177,7 +282,7 @@ def write_heartbeat(data_dir: str = None, notifier=None):
 
 def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: PatternLifecycleManager, notifier: TelegramNotifier):
     """
-    Tüm hisseleri tara - 40-45 dk sürer (rate limit)
+    Aktif tarama evrenini tara; Yahoo verisi seri ve gruplu alınır, analiz ardından yapılır.
     - Deque'den veri al
     - Resample 2H/4H/1D
     - Pattern tespit (üçgen/kama/bayrak)
@@ -188,31 +293,57 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     tarama_baslangici = time.monotonic()
     logger.info(f"=== TARAMA BAŞLIYOR - {len(ACTIVE_STOCKS)} hisse, profil: {PROFILE} "
                 f"({simdiki_zaman.strftime('%H:%M')}) ===")
-    
+    logger.info(
+        f"Yahoo pacing: her {SCAN_REQUEST_BATCH_SIZE} istekte "
+        f"{SCAN_REQUEST_DELAY_MIN_SEC:.1f}-{SCAN_REQUEST_DELAY_MAX_SEC:.1f} sn aralık, "
+        f"grup arası {SCAN_BATCH_PAUSE_MIN_SEC:.0f}-{SCAN_BATCH_PAUSE_MAX_SEC:.0f} sn"
+    )
+
+    # Sağlıklı cache'te son 5 günü, boş/5 günden eski cache'te tam 60 günü çek.
+    # Böylece rutin saatlik taramada büyük geçmiş penceresi tekrar tekrar inmez.
+    fetch_periods = {}
+    for stock in ACTIVE_STOCKS:
+        cached = deque_manager.to_dataframe(stock)
+        fetch_periods[stock] = select_yfinance_1h_period(cached)
+    full_count = sum(period == FULL_1H_FETCH_PERIOD for period in fetch_periods.values())
+    routine_count = len(fetch_periods) - full_count
+    logger.info(
+        f"1H fetch penceresi: tam {FULL_1H_FETCH_PERIOD}={full_count}, "
+        f"rutin cache güncellemesi={routine_count} ({ROUTINE_1H_FETCH_PERIOD})"
+    )
+
+    # Önce 1H fetch turu ve yalnız geçici hatalar için tek retry; analiz retry
+    # tamamlandıktan sonra yapılır ki kurtarılan taze veri aynı turda kullanılsın.
+    pacer = create_yahoo_pacer()
+    taze_1h_verileri, fetch_hatalari, retry_sayisi, retry_kurtarilan = fetch_1h_stocks_paced(
+        ACTIVE_STOCKS, pacer, "CANLI TARAMA", periods=fetch_periods
+    )
+    daily_stats['fetch_ok'] += len(taze_1h_verileri)
+    daily_stats['fetch_failures'] += len(fetch_hatalari)
+    daily_stats['fetch_retries'] += retry_sayisi
+    daily_stats['fetch_retry_recovered'] += retry_kurtarilan
+
     for idx, stock in enumerate(ACTIVE_STOCKS):
         if _shutdown_requested:
             logger.info("Kapanış istendi, tarama durduruluyor")
             break
         try:
             reset_daily_if_needed()
+            simdiki_zaman = datetime.now(ISTANBUL_TZ)
             
             logger.info(f"[{idx+1}/{len(ACTIVE_STOCKS)}] {stock} taranıyor...")
             
-            # Deque'den mevcut pencere
+            # Deque'den mevcut pencere; fetch aşaması yukarıda, retry dahil tamamlandı.
             df_1h = deque_manager.to_dataframe(stock)
-            
-            # Taze veri: yeni 1h mumlari deque'ye ekle (maxlen FIFO en eskisini atar).
-            # Fetch basarisizsa cache ile devam; ikisi de yoksa hisse ATLANIR.
-            # Canli dongude MOCK VERI YOK - sahte veriyle formasyon uretilmez.
-            # FAZ 1: fetch basarisizligi ARTIK LOGLANIYOR ve SAYILIYOR. Onceki kodda
-            # cache doluysa tek satir log bile yoktu -> "saglikli" gorunen kor bot.
-            taze = fetch_yfinance_1h(stock)
+            taze = taze_1h_verileri.get(stock)
             if taze is not None:
                 deque_manager.append_dataframe(stock, taze)
                 df_1h = deque_manager.to_dataframe(stock)
-                daily_stats['fetch_ok'] += 1
             else:
-                daily_stats['fetch_failures'] += 1
+                logger.warning(
+                    f"{stock}: taze 1H veri yok ({fetch_hatalari.get(stock, 'fetch yapılmadı')}); "
+                    "cache varsa yalnız veri tazeliği uygunsa kullanılacak"
+                )
             
             if df_1h is None or len(df_1h) < 50:
                 logger.warning(f"{stock}: veri yok (fetch basarisiz + cache bos) - bu tur atlandi")
@@ -261,6 +392,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 )
                 continue
 
+            # Fetch başarısızken sınırın ötesindeki cache ile formasyon/Telegram
+            # üretme. Cache'i yalnızca makul tazelikteyse analizde kullan.
+            if taze is None and son_bar_yasi_dk > STALE_BAR_UYARI_DK:
+                daily_stats['stale_stocks'] += 1
+                daily_stats['data_stale'] = True
+                logger.warning(
+                    f"{stock}: taze fetch başarısız ve cache {son_bar_yasi_dakika_str(son_bar_yasi_dk)} "
+                    f"yaşında (eşik {STALE_BAR_UYARI_DK} dk); eski cache ile analiz/alert atlanıyor"
+                )
+                continue
+
             if son_bar_yasi_dk > STALE_BAR_UYARI_DK and not erken_seans:
                 daily_stats['stale_stocks'] += 1
                 daily_stats['data_stale'] = True
@@ -281,7 +423,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             # AYRI ve DERİN (~2 yıl) çekiyoruz. Veri yoksa resample'e geri dönülür
             # (davranış asla kötüleşmez, sadece iyileşir).
             if deque_manager.gunluk_veri_eksik_mi(stock, simdiki_zaman):
-                taze_gunluk = fetch_yfinance_1d(stock)
+                with pacer.request(f"{stock} 1D"):
+                    taze_gunluk = fetch_yfinance_1d(stock)
+                deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
                 if taze_gunluk is not None and len(taze_gunluk) >= 30:
                     deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
                     logger.info(f"{stock}: günlük veri tazelendi ({len(taze_gunluk)} bar)")
@@ -350,13 +494,6 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 logger.warning(f"{stock} save_to_disk hatası: {e}")
             write_heartbeat(notifier=notifier)
             
-            # Rate limit
-            if idx < len(ACTIVE_STOCKS) - 1:
-                from config import RATE_LIMIT_MIN, RATE_LIMIT_MAX
-                delay = random.uniform(RATE_LIMIT_MIN, RATE_LIMIT_MAX)
-                logger.info(f"{stock} bitti, {delay:.1f}sn bekleniyor...")
-                time.sleep(delay)
-                
         except Exception as e:
             daily_stats['errors'] += 1
             logger.error(f"{stock} tarama hatası: {e} - devam ediliyor", exc_info=True)
@@ -418,33 +555,81 @@ def main_loop():
     logger.info(f"Profil: {PROFILE}, Params: {PROFILE_PARAMS}")
     logger.info(f"Hisseler: {ACTIVE_STOCKS[:5]}... (toplam {len(ACTIVE_STOCKS)})")
     
-    global _deque_manager_ref
-    deque_manager = StockDequeManager()
+    global _deque_manager_ref, _notifier_ref, _supabase_store_ref
+    supabase_store = SupabaseStore.from_env()
+    _supabase_store_ref = supabase_store
+    deque_manager = StockDequeManager(persistent_store=supabase_store)
     _deque_manager_ref = deque_manager
+
+    # Başlangıçta tüm cache ve notifier durumlarını tek Supabase isteğiyle al.
+    # Supabase boş/erişilemezse mevcut bot_data JSON/pickle fallback'i kullanılır.
+    remote_rows = None
+    if supabase_store is not None:
+        remote_keys = [
+            key
+            for stock in ACTIVE_STOCKS
+            for key in (f"cache:1h:{stock}", f"cache:1d:{stock}")
+        ] + [
+            "state:daily_fetch_attempts",
+            "state:telegram_cooldowns",
+            "state:telegram_caps",
+        ]
+        remote_rows = supabase_store.get_many(remote_keys)
+        if remote_rows is not None:
+            deque_manager.hydrate_from_supabase(ACTIVE_STOCKS, remote_rows)
     lifecycle_manager = PatternLifecycleManager(profile=PROFILE)
-    notifier = TelegramNotifier()
-    global _notifier_ref
+    notifier = TelegramNotifier(
+        persistent_store=supabase_store,
+        initial_store_data=remote_rows,
+    )
     _notifier_ref = notifier
     
-    # İlk yükleme: cache'i boş olan hisseler için taze veri çek
-    logger.info("İlk yükleme: cache'i boş olan hisseler taze çekiliyor...")
+    # İlk kurulum/preload de aynı hız sınırını kullanır; boş 1H cache'ler seri çekilir.
+    logger.info(
+        f"İlk yükleme: {len(ACTIVE_STOCKS)} hisse evreni; eksik cache'ler "
+        f"{SCAN_REQUEST_BATCH_SIZE}'li istek gruplarıyla yavaşça doldurulacak"
+    )
+    pacer = create_yahoo_pacer()
+    cache_eksik_hisseler = []
     for stock in ACTIVE_STOCKS:
-        df = deque_manager.to_dataframe(stock)
-        if df is None or len(df) < 50:
-            taze = fetch_yfinance_1h(stock)
-            if taze is not None:
-                deque_manager.append_dataframe(stock, taze)
-                deque_manager.save_to_disk(stock)
-                logger.info(f"{stock}: {len(taze)} mum çekildi ve diske kaydedildi")
-            else:
-                logger.warning(f"{stock}: ilk veri çekilemedi (Yahoo yok + cache boş) - canlıda atlanacak")
-        # 1D derin veri de boşsa çek (ilk kurulumda 1D analizi için gerekli)
+        mevcut = deque_manager.to_dataframe(stock)
+        if mevcut is None or len(mevcut) < 50:
+            cache_eksik_hisseler.append(stock)
+
+    ilk_veriler, ilk_hatalar, ilk_retry, ilk_kurtarilan = fetch_1h_stocks_paced(
+        cache_eksik_hisseler, pacer, "İLK YÜKLEME"
+    )
+    if ilk_retry:
+        logger.info(
+            f"İlk yükleme retry özeti: {ilk_retry} tekrar, {ilk_kurtarilan} başarılı, "
+            f"{len(ilk_hatalar)} çözülemeyen"
+        )
+    for stock in cache_eksik_hisseler:
+        taze = ilk_veriler.get(stock)
+        if taze is not None:
+            deque_manager.append_dataframe(stock, taze)
+            deque_manager.save_to_disk(stock)
+            logger.info(f"{stock}: {len(taze)} mum çekildi ve diske kaydedildi")
+        else:
+            logger.warning(
+                f"{stock}: ilk veri çekilemedi ({ilk_hatalar.get(stock, 'veri yok')}); "
+                "canlı taramada tekrar denenecek"
+            )
+
+    # 1D derin veri de eksikse aynı pacing kuyruğundan geçir.
+    for stock in ACTIVE_STOCKS:
+        if _shutdown_requested:
+            break
         if deque_manager.gunluk_veri_eksik_mi(stock):
-            taze_gunluk = fetch_yfinance_1d(stock)
+            with pacer.request(f"{stock} initial 1D"):
+                taze_gunluk = fetch_yfinance_1d(stock)
+            deque_manager.gunluk_fetch_denemesi_kaydet(stock)
             if taze_gunluk is not None and len(taze_gunluk) >= 30:
                 deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
                 deque_manager.save_gunluk_to_disk(stock)
                 logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
+            else:
+                logger.warning(f"{stock}: ilk günlük veri çekilemedi - resample kullanılacak")
     
     # Aynı mum iki kez taranmasın (drift koruması). Restart'ta None -> bir sonraki
     # kapanışta tazelenir, son mum gerekiyorsa bir kez daha taranır (zararsız).
@@ -510,4 +695,5 @@ def main_loop():
     logger.info("Bot durdu")
 
 if __name__ == "__main__":
+    start_render_health_server()
     main_loop()

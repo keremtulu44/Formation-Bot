@@ -1,7 +1,7 @@
 """
 CANLI FORMASYON TARAMASI — TradingView çapraz doğrulama
 Ne yapar:
-  30 hisse x 4 TF (1h/2h/4h/1d) taranır; ŞU AN canlı formasyonu olanlar listelenir.
+  Aktif evrendeki 48 hisse x 4 TF (1h/2h/4h/1d) taranır; canlı formasyonlar listelenir.
   Her formasyon için: tip, state, kalite, üst/alt çizgi seviyeleri, pivot zamanları.
 Kullanım:
   python canli_tarama.py            -> yfinance'den TAZE veri çeker (başarısızsa cache)
@@ -14,12 +14,14 @@ Karşılaştırma:
 """
 
 import sys
-import time
 import pandas as pd
 
-from config import ACTIVE_STOCKS, ISTANBUL_TZ
+from config import (ACTIVE_STOCKS, ISTANBUL_TZ, SCAN_REQUEST_BATCH_SIZE,
+                    SCAN_REQUEST_DELAY_MIN_SEC, SCAN_REQUEST_DELAY_MAX_SEC,
+                    SCAN_BATCH_PAUSE_MIN_SEC, SCAN_BATCH_PAUSE_MAX_SEC)
 from data import (StockDequeManager, resample_all_timeframes, fetch_yfinance_1h,
                   fetch_yfinance_1d, tamamlanmis_mumlar)
+from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from patterns.detect import _usable_active, LIVE_STATES, TRIANGLE_FAMILIES, SPECIALIZED_FAMILIES
 
@@ -28,17 +30,10 @@ TFLER = ["1h", "2h", "4h", "1d"]
 
 
 def taze_veri_cek(stock: str) -> pd.DataFrame:
-    """yfinance'den 60d 1h çeker, OHLCV lowercase döner.
-    yfinance'in gürültülü hata baskıları (HTTP 404 vb.) yakalanıp susturulur —
-    başarısızlık tek satır özetle raporlanır (cache'e düşer)."""
-    import io
-    import contextlib
-    import yfinance as yf
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        df = yf.Ticker(stock + ".IS").history(period="60d", interval="1h")
+    """Ortak 1H fetch katmanını kullanır (ham fiyat, timezone normalizasyonu)."""
+    df = fetch_yfinance_1h(stock)
     if df is None or df.empty:
-        raise ValueError("bos veri")
-    df = df.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]]
+        raise ValueError("veri alınamadı")
     return df
 
 
@@ -53,6 +48,13 @@ def main():
     force_cache = "--cache" in sys.argv
     deque_manager = StockDequeManager()
     lifecycle = PatternLifecycleManager()
+    pacer = YahooRequestPacer(
+        batch_size=SCAN_REQUEST_BATCH_SIZE,
+        request_delay_min=SCAN_REQUEST_DELAY_MIN_SEC,
+        request_delay_max=SCAN_REQUEST_DELAY_MAX_SEC,
+        batch_pause_min=SCAN_BATCH_PAUSE_MIN_SEC,
+        batch_pause_max=SCAN_BATCH_PAUSE_MAX_SEC,
+    )
 
     rapor_satirlari = []
     bulgular = []  # (stock, tf, cand, snap, df_tf)
@@ -64,7 +66,8 @@ def main():
         try:
             if not force_cache:
                 try:
-                    df_1h = taze_veri_cek(stock)
+                    with pacer.request(f"{stock} 1H"):
+                        df_1h = taze_veri_cek(stock)
                     kaynak = "yfinance(taze)"
                     deque_manager.append_dataframe(stock, df_1h)
                 except Exception as e:
@@ -83,8 +86,10 @@ def main():
 
         tfs = resample_all_timeframes(df_1h)
         # 1D için derin veri (FAZ 2): resample sadece ~40 bar verir, ayrı deque ~500.
-        if deque_manager.gunluk_veri_eksik_mi(stock):
-            taze_gunluk = fetch_yfinance_1d(stock)
+        if not force_cache and deque_manager.gunluk_veri_eksik_mi(stock):
+            with pacer.request(f"{stock} 1D"):
+                taze_gunluk = fetch_yfinance_1d(stock)
+            deque_manager.gunluk_fetch_denemesi_kaydet(stock)
             if taze_gunluk is not None and len(taze_gunluk) >= 30:
                 deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
                 deque_manager.save_gunluk_to_disk(stock)
@@ -102,8 +107,6 @@ def main():
             cand = _usable_active(snap, TUM_AILELER)
             if cand is not None:
                 bulgular.append((stock, tf, cand, snap, df_tf))
-        if not force_cache:
-            time.sleep(0.7)  # rate limit nazik olsun
 
     # ---- Rapor ----
     baslik = ("=" * 60 + "\nCANLI FORMASYON TARAMASI — "

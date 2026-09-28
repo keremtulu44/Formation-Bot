@@ -25,12 +25,51 @@ if PROFILE not in ("Hassas", "Dengeli", "Seçici"):
 BIST_50 = [
     "THYAO", "GARAN", "AKBNK", "ISCTR", "YKBNK", "KCHOL", "SAHOL", "EREGL", "SISE", "BIMAS",
     "ASELS", "TUPRS", "FROTO", "TOASO", "KRDMD", "PETKM", "PGSUS", "SASA", "HEKTS", "GUBRF",
-    "KOZAL", "KOZAA", "EKGYO", "HALKB", "VAKBN", "TCELL", "TTKOM", "TAVHL", "DOHOL", "ALARK",
+    "EKGYO", "HALKB", "VAKBN", "TCELL", "TTKOM", "TAVHL", "DOHOL", "ALARK",
     "ARCLK", "ENKAI", "ODAS", "ASTOR", "KONTR", "SMRTG", "CWENE", "SNGYO", "ISMEN", "SKBNK",
     "TSKB", "TTRAK", "OTKAR", "AKSA", "AKSEN", "AYDEM", "BRSAN", "CIMSA", "DOAS", "EGEEN"
 ]
 BIST_30 = BIST_50[:30]
-ACTIVE_STOCKS = BIST_30
+# Canlı tarama evreni: mevcut BIST 50 listesinden Yahoo verisi sorunlu KOZAL/KOZAA çıkarıldı (48 sembol).
+# Eksik iki bileşen için sağlayıcı desteği doğrulanmış semboller sonra eklenebilir.
+ACTIVE_STOCKS = BIST_50
+
+# Yahoo Finance istek temposu. Kısa istek aralığı + grup molası; paralel istek yok.
+def _env_float(name: str, default: float) -> float:
+    try:
+        return max(0.0, float(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+SCAN_REQUEST_BATCH_SIZE = _env_int("SCAN_REQUEST_BATCH_SIZE", 10)
+SCAN_REQUEST_DELAY_MIN_SEC = _env_float("SCAN_REQUEST_DELAY_MIN_SEC", 0.9)
+SCAN_REQUEST_DELAY_MAX_SEC = max(
+    SCAN_REQUEST_DELAY_MIN_SEC,
+    _env_float("SCAN_REQUEST_DELAY_MAX_SEC", 1.5),
+)
+SCAN_BATCH_PAUSE_MIN_SEC = _env_float("SCAN_BATCH_PAUSE_MIN_SEC", 10.0)
+SCAN_BATCH_PAUSE_MAX_SEC = max(
+    SCAN_BATCH_PAUSE_MIN_SEC,
+    _env_float("SCAN_BATCH_PAUSE_MAX_SEC", 15.0),
+)
+SCAN_RETRY_BACKOFF_MIN_SEC = _env_float("SCAN_RETRY_BACKOFF_MIN_SEC", 30.0)
+SCAN_RETRY_BACKOFF_MAX_SEC = max(
+    SCAN_RETRY_BACKOFF_MIN_SEC,
+    _env_float("SCAN_RETRY_BACKOFF_MAX_SEC", 60.0),
+)
+
+# Büyük 1H geçmişi yalnızca soğuk/eski cache'te indir; normal tarama daha hafif.
+FULL_1H_FETCH_PERIOD = "60d"
+ROUTINE_1H_FETCH_PERIOD = "5d"
+FULL_1H_FETCH_STALE_DAYS = 5
 
 ISTANBUL_TZ = pytz.timezone("Europe/Istanbul")
 BIST_OPEN = time(9, 50)     # gerçek BIST seans başlangıcı (Yahoo ilk mumu 09:30 etiketli)
@@ -93,8 +132,8 @@ VERI_YOK_MODU_ESIK_DK = 20 * 60
 
 # --- TELEGRAM GLOBAL KAPANI (FAZ 2) ---
 # Cooldown (hisse+desen+TF+state, 4 saat) tek tek spam'i engeller ama üst sınır
-# yoktur: 30 hisse x 4 TF x 5 desen x 5 state = 3000 anahtar x günde 6 kez
-# teorik 18000 mesaj. Pratikte ölçüm: tek taramada 12-40 mesaj.
+# yoktur: 48 aktif hisse x 4 TF x 5 desen x 5 state = 4800 anahtar x günde 6 kez
+# teorik 28800 mesaj. Global Telegram kapları bu yüzden önemlidir.
 # Günde/saatte üst sınır koyuyoruz: aşıldığında sadece en kritik state'ler geçer.
 # --- VERİ SÜREKLİLİK / SPLIT KONTROLÜ (FAZ 2) ---
 # auto_adjust=False ile HAM fiyat geliyor (Pine/TV ile aynı). Ama hisse split/bedelsiz
@@ -107,8 +146,9 @@ SPLIT_SUREKLILIK_ESIK_PCT = 10.0
 # 1 mum atlanınca 2 saat boşluk oluşur -> eşik 1.5 saat (normal aralık 1 saat).
 BAR_BOSLUK_ESIK_SAAT = 1.5
 # --- TARAMA DRİFT KORUMASI (FAZ 2) ---
-# Bir tarama 30 hisse x (45-50 sn rate limit + motor) ~= 24-26 dk sürer; mum
-# kapanışları 60 dk arayla olduğu için normalde ~35 dk pay var. Tarama bu eşiği
+# Canlı tarama aktif 48 hisseyi seri fetch eder; istek pacing'i SCAN_* ayarlarıyla
+# sınırlandırılır. Mum kapanışları 60 dk arayla olduğu için tarama eşiği geniş
+# tutulur; Yahoo yavaşlarsa veya retry gerekirse drift görünür olur. Tarama bu eşiği
 # aşarsa (Yahoo yavaşlar, motor yavaşlar) bir sonraki mumu kaçırma riski doğar.
 # Faz 1'deki "aynı mum iki kez taranmaz + kapanış bazlı tetik" yapısı sayesinde
 # atlanan mum OLMAZ (sonraki döngüde taranır) ama gecikme büyür - ölçüp uyarıyoruz.
@@ -129,6 +169,7 @@ TELEGRAM_MAX_MESAJ_SAAT = 20
 TELEGRAM_MAX_MESAJ_GUN = 120
 
 DEQUE_MAXLEN = 360
+# Eski fetch_with_rate_limit yardımcı fonksiyonu içindir; canlı bot SCAN_* pacing'ini kullanır.
 RATE_LIMIT_MIN = 45
 RATE_LIMIT_MAX = 50
 
