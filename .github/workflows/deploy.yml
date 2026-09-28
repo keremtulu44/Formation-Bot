@@ -1,0 +1,89 @@
+name: Render deploy
+
+# Neden bu iş akışı: Render'ın kendi "Auto-Deploy"u kapalıysa veya GitHub
+# bağlantısı kopmuşsa, main'e merge edilen kod canlıya HİÇ düşmez ve bunu
+# dışarıdan anlamak zor olur (canlı /health eski sürümü döndürmeye devam eder).
+# Bu iş akışı, Render'ın verdiği Deploy Hook adresini çağırarak deploy'u
+# tetikler; böylece merge → deploy zinciri görünür ve tekrarlanabilir olur.
+#
+# KURULUM (tek seferlik, ~30 saniye):
+#   1. Render → servisin → Settings → Deploy Hook → "Create deploy hook" → URL'i kopyala
+#      (biçim: https://api.render.com/deploy/srv-xxxxxxxx?key=yyyyyyyy)
+#   2. GitHub → repo → Settings → Secrets and variables → Actions → New secret
+#      ad: RENDER_DEPLOY_HOOK   değer: <kopyaladığın URL>
+#   3. Bitti: bundan sonra her main push'unda deploy otomatik tetiklenir.
+#
+# Secret tanımlı değilse iş akışı kırmızı olmaz: "atlandı" diye sarı uyarı verir
+# ve Actions özetinde ne yapılacağını yazar.
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      hook_url:
+        description: "Sadece bu koşu için Deploy Hook URL'i (boş = RENDER_DEPLOY_HOOK)"
+        required: false
+        type: string
+
+concurrency:
+  group: render-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: "Doğrulama: hook var mı?"
+        id: kontrol
+        env:
+          DISPATCH_HOOK: ${{ github.event.inputs.hook_url }}
+          SECRET_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          set -uo pipefail
+          hook="${DISPATCH_HOOK:-$SECRET_HOOK}"
+          if [ -z "$hook" ]; then
+            echo "var=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Otomatik deploy kapalı::RENDER_DEPLOY_HOOK tanımlı değil. Render → Settings → Deploy Hook URL'ini GitHub secret olarak ekleyin; yoksa her merge'den sonra Dashboard'dan Manual Deploy gerekir."
+            {
+              echo "### ⚠️ Otomatik deploy tetiklenmedi"
+              echo ""
+              echo "RENDER_DEPLOY_HOOK secret'ı yok. Kurulum:"
+              echo "Render → Settings → **Deploy Hook** → oluştur → URL'i kopyala,"
+              echo "GitHub → Settings → Secrets and variables → Actions → **New repository secret**."
+              echo ""
+              echo "Alternatif: Render Dashboard → **Manual Deploy → Deploy latest commit**."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # URL gizli anahtar içerir: loglara tam yazma.
+          echo "var=true" >> "$GITHUB_OUTPUT"
+          echo "Deploy hook bulundu (${hook%%\?*}?key=***)"
+
+      - name: Deploy tetikle
+        if: steps.kontrol.outputs.var == 'true'
+        env:
+          HOOK: ${{ github.event.inputs.hook_url || secrets.RENDER_DEPLOY_HOOK }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+          kod=$(curl -sS -o /tmp/deploy.json -w "%{http_code}" -X POST --max-time 60 "$HOOK" || echo "000")
+          govde=$(head -c 300 /tmp/deploy.json 2>/dev/null || true)
+          echo "HTTP $kod — $govde"
+          {
+            echo "### Render deploy"
+            echo ""
+            echo "- Tetikleyen commit: \`${COMMIT:0:7}\`"
+            echo "- Yanıt: HTTP **$kod**"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$kod" != "200" ] && [ "$kod" != "201" ] && [ "$kod" != "202" ]; then
+            echo "::error title=Deploy tetiklenemedi::Deploy hook HTTP $kod döndü. Hook URL'i/anahtarı geçersiz olabilir (Render → Settings → Deploy Hook)."
+            exit 1
+          fi
+          echo "Deploy tetiklendi. Render → Events'te 'Deploy in progress' görünmeli."
+          echo "Doğrulama (deploy bittikten ~2 dk sonra):"
+          echo "  python deploy_check.py --url https://<servis>.onrender.com   # canlı commit = yerel HEAD olmalı"

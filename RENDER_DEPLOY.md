@@ -82,6 +82,12 @@ GitHub → **Actions** → sol taraftan **Render keep-alive** → **Run workflow
 Elle tetikleme saat penceresini yok sayar ve 10 saniye içinde sonucu gösterir;
 secret'ı sonra eklemen gerekir.
 
+## C2) (Önerilir) Otomatik deploy için Deploy Hook
+
+Render → servis → **Settings → Deploy Hook → Create deploy hook** → URL'i
+GitHub'a secret olarak ekle: `RENDER_DEPLOY_HOOK`. Böylece her merge otomatik
+deploy olur; Auto-Deploy kapalıysa bile kod canlıya iner. Ayrıntı: **§2.1**.
+
 ## D) Yapılacak son iki iş
 
 - [ ] Repodaki değişiklikler (`main` branch'i) Render'ın deploy ettiği branch'e
@@ -200,6 +206,41 @@ token, anahtar veya portföy verisi sızmaz. Servis canlıysa tarayıcıda
 > sıfırlanır. Bu yüzden önbellek ve Telegram cooldown state'i **Supabase**
 > üzerinde tutulmalıdır (aşağıdaki bölüm). Repoda commit'lenmiş `bot_data/`
 > dosyaları ilk açılışta botu hemen çalıştırmak için yeterlidir.
+
+---
+
+### 2.1 Otomatik deploy: Auto-Deploy ve Deploy Hook
+
+İki yol var; **ikisinden biri mutlaka açık olmalı**, yoksa merge edilen kod
+canlıya hiç düşmez ve bunu ancak `/health`'teki commit bilgisinden anlarsın.
+
+| Yol | Kurulum | Not |
+|---|---|---|
+| Render Auto-Deploy | Dashboard → servis → Settings → **Auto-Deploy: Yes** | En basit; her `main` push'unda Render kendisi deploy eder |
+| **Deploy Hook + GitHub Actions** | Aşağıdaki 3 adım | Auto-Deploy kapalıysa/bağlantı koptuysa kurtarıcı; deploy'u GitHub tetikler ve Actions'ta görünür |
+
+Repo içindeki `.github/workflows/deploy.yml` hazırdır:
+
+1. Render → servisin → **Settings → Deploy Hook → Create deploy hook** → URL'i kopyala
+   (biçim: `https://api.render.com/deploy/srv-xxxxxxxx?key=yyyyyyyy`)
+2. GitHub → repo → **Settings → Secrets and variables → Actions → New repository secret**
+   → ad: `RENDER_DEPLOY_HOOK`, değer: kopyaladığın URL
+3. Bundan sonra `main`'e her push'ta deploy otomatik tetiklenir.
+
+Secret yoksa iş akışı kırmızı olmaz; “atlandı” uyarısı verir ve yapılacakları
+Actions özetine yazar. Elle denemek için: **Actions → Render deploy → Run
+workflow** (hook URL'ini girdi olarak da verebilirsin).
+
+**Deploy gerçekten düştü mü?** `python deploy_check.py --url
+https://<servis>.onrender.com` komutu `/health` içindeki `commit` alanını yerel
+HEAD ile karşılaştırır:
+
+```
+✅ [OK  ] /health ayakta (formation-bot)
+           https://<servis>.onrender.com/health · canlı sürüm: a1b2c3d
+⚠️  [UYARI] Canlı sürüm yerelden FARKLI (canlı a1b2c3d ≠ yerel e4f5g6h)
+           Render yeni commit'i henüz deploy etmemiş olabilir: ...
+```
 
 ---
 
@@ -529,6 +570,7 @@ Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 | `numpy/meson` derleme hatası | Aynı sorun; `.python-version` = 3.12 çözüm |
 | `/health` 404 veriyor | Start Command `python main.py` değil. Logda `PORT ... başladı` satırını ara |
 | `/health?ka=...` 404 veriyordu | Düzeltildi: uç artık sorgu dizesini ve sondaki slash'ı yok sayar. Eski sürümde keep-alive pingi 404 alıp "servis ölü" sanılıyordu |
+| Merge ettim ama `/health`'teki `commit` değişmedi | Otomatik deploy tetiklenmemiş: Auto-Deploy'u aç (§2.1) veya `RENDER_DEPLOY_HOOK` secret'ı ekleyip **Actions → Render deploy → Run workflow**. Alternatif: Dashboard → Manual Deploy → Deploy latest commit |
 | Merge ettim ama davranış değişmedi | Render yeni commit'i deploy etmemiş olabilir: `deploy_check.py` canlı sürümü (`/health` içindeki `commit`) yerel HEAD ile karşılaştırır. Dashboard → Events → yoksa **Manual Deploy → Deploy latest commit**; Auto-Deploy'un açık olduğundan emin ol (B8) |
 | Sayfa "Render is loading..." | Free instance uyuyor, ~1 dk sonra düzelir (keep-alive kurulmadıysa) |
 | Telegram mesajleri gelmiyor | Logda `Telegram bağlantısı OK` yok → token/chat_id hatalı; bot'a `/start` atılmamış olabilir |
