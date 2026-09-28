@@ -21,7 +21,12 @@ class SupabaseStore:
     REQUEST_TIMEOUT_SEC = 8
 
     def __init__(self, project_url: str, service_key: str, session=None):
-        self.project_url = project_url.rstrip("/")
+        # Kullanici Dashboard'dan "https://<ref>.supabase.co" yerine REST API
+        # uc noktasini (https://<ref>.supabase.co/rest/v1/) kopyalayabiliyor.
+        # Sondaki slash ve /rest/v1 suffix'i at ki URL iki kez eklenip 404 yemesin.
+        self.project_url = project_url.strip().rstrip("/")
+        if self.project_url.endswith("/rest/v1"):
+            self.project_url = self.project_url[: -len("/rest/v1")]
         self.rest_url = f"{self.project_url}/rest/v1/{self.TABLE}"
         self._session = session or requests.Session()
         self._headers = {

@@ -92,9 +92,19 @@ Kısa cevap:
 | `SUPABASE_SERVICE_ROLE_KEY` | `sb_secret_...` **veya** eski `eyJ...` JWT | **Secret** |
 
 **URL:** Supabase Dashboard → Project → **Settings → API → Project URL**.
-Başında `https://` var, sonunda `/` yok. Bu bir sır değildir; tarayıcıdan da
-görülebilen bir adrestir. Yine de "Secret" seçersen de çalışır, Render bunu
-şifreleyip loglarda maskeler. Tavsiye: URL'yi **plain** bırak.
+
+Render'a yapıştıracağın değer **sonda `/rest/v1/` olmadan**:
+
+```
+https://<proje-ref>.supabase.co
+```
+
+Dashboard'da gördüğün `https://<proje-ref>.supabase.co/rest/v1/` ise **o
+REST API uç noktası**, projeyle ilgili değil. (Kod artık sondaki `/rest/v1`
+yazılsa da onu temizliyor, yine de doğru olanı yapıştırmak en temiz yol.)
+Bu bir sır değildir; tarayıcıdan da görülebilen bir adrestir. Yine de "Secret"
+seçersen de çalışır, Render bunu şifreleyip loglarda maskeler. Tavsiye: URL'yi
+**plain** bırak.
 
 **Anahtar — `sb_secret_` formatı doğru mu? Evet, çalışır.** Supabase 2025'te
 anahtar sistemini değiştirdi ve artık iki format bir arada geçerli:
@@ -160,11 +170,16 @@ Telefonundayken 2 dakikada alınır, bilgisayar gerekmez.
    7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw
    ```
 
-   `7123456789:AA...` kısmının tamamı `TELEGRAM_BOT_TOKEN` olacak.
+   `7123456789:AA...` kısmının **tamamı** (rakamlar + iki nokta + `AA` ile
+   başlayan 35 karakter) `TELEGRAM_BOT_TOKEN` olacak. Tek bir karakter eksik
+   yazarsan `401 Unauthorized` alırsın.
 
-> Token'ı WhatsApp'a, README'ye, `.env`'i commit ederek ya da bu sohbete
-> yapıştırma. Render'da **Secret** olarak gir. BotFather'da `/revoke` ile
-> istediğin an iptal edebilirsin.
+> 🔴 **Token'ı hiçbir yere yapıştırma.** Telegram token'ı olan biri botun adına
+> mesaj gönderebilir, botu başka gruplara ekleyebilir. Bu sohbete, WhatsApp'a,
+> README'ye veya `.env`'i commit ederek yazma. Yalnızca Render → Environment →
+> **Secret** alanına gir. BotFather'da `/revoke` ile istediğin an iptal edip
+> yenisini alabilirsin; bir yere sızdıysa hemen iptal et, sonra `/newbot` ile
+> yeni bot aç (revoke edilen botun token'ı geri kazanılamaz).
 
 ### 4.2 Chat ID (kendine mesaj göndermesi için)
 
@@ -218,6 +233,28 @@ Kurulum (tek seferlik, telefondan da yapılabilir):
 GitHub Actions bu repo için **aylık 2000 dakika ücretsiz**; 10 dakikada bir
 koşu ≈ 25 dakika/ay. Render'ın kendi Cron Job'u ise **ücretsiz değil**
 (aylık en az 1 $) ve ayrıca çalışan bir web service'ı uyandırmaz.
+
+#### ⚠️ Self-hosted runner sayfasını KULLANMA
+
+GitHub, "Self-hosted runners" bölümünden bir **runner kayıt token'ı** veren
+kurulum sayfası açıyor. O sayfa **bize gerekmiyor** — `keepalive.yml`
+`runs-on: ubuntu-latest` kullanıyor, yani GitHub'ın kendi ücretsiz
+makinesinde koşuyor. Self-hosted runner'ın çalışması için 7/24 açık bir Linux
+sunucu ister; Render Free, telefonun veya bu repo için hiçbir şeye ihtiyacımız
+yok. İndirdiğin `actions-runner-*.tar.gz` klasörünü silebilirsin.
+
+O sayfadaki `--token CAJRK...` değeri de gizli bir bilgidir (yalnızca runner
+kaydı yetkisi verir, 1 saatte geçerliliği biter). Kimseyle paylaşma, ihtiyacımız
+da yok.
+
+#### ⚠️ Schedule sadece varsayılan branch'te çalışır
+
+GitHub, `schedule` tetikleyicisini **yalnızca repo'nun varsayılan branch'inde**
+(varsayılan olarak `main`) çalıştırır. `.github/workflows/keepalive.yml`
+`main` üzerinde değilse Actions sekmesinde hiç görünmez ve hiç çalışmaz.
+
+Bu, `.python-version` için de geçerli: Render hangi branch'i deploy ediyorsa
+oraya merge edilmesi gerekir. İkisi de tek seferde çözülür.
 
 ### Seçenek B — cron-job.org / UptimeRobot (ücretsiz, daha basit)
 

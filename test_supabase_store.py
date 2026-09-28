@@ -37,6 +37,29 @@ def test_from_env_requires_both_values():
     assert store.rest_url == "https://demo.supabase.co/rest/v1/bot_store"
 
 
+def test_rest_api_url_variant_is_normalised():
+    # Dashboard'da REST API uc noktasinin tamamini kopyalayan kullanici var;
+    # /rest/v1 iki kez eklenip 404 donuyordu.
+    for ham, beklenen in [
+        ("https://demo.supabase.co", "https://demo.supabase.co/rest/v1/bot_store"),
+        ("https://demo.supabase.co/", "https://demo.supabase.co/rest/v1/bot_store"),
+        ("https://demo.supabase.co/rest/v1", "https://demo.supabase.co/rest/v1/bot_store"),
+        ("https://demo.supabase.co/rest/v1/", "https://demo.supabase.co/rest/v1/bot_store"),
+    ]:
+        store = SupabaseStore(ham, "test-secret", session=FakeSession([]))
+        assert store.rest_url == beklenen, ham
+
+
+def test_ping_returns_false_and_keeps_running_on_missing_table():
+    session = FakeSession([FakeResponse(status_code=404, text="relation missing")])
+    store = SupabaseStore("https://demo.supabase.co", "test-secret", session=session)
+
+    assert store.ping() is False
+    method, url, kwargs = session.calls[0]
+    assert (method, url) == ("GET", "https://demo.supabase.co/rest/v1/bot_store")
+    assert kwargs["params"] == {"select": "store_key", "limit": 1}
+
+
 def test_get_many_returns_payload_map_and_uses_in_filter():
     session = FakeSession([FakeResponse(payload=[
         {"store_key": "cache:1h:THYAO", "payload": [{"close": 1}]},

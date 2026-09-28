@@ -13,6 +13,13 @@ name: Render keep-alive
 # Not: GitHub Actions cron'ı UTC'dir ve "*/10" her zaman tam 10 dakikada bir
 # çalışır. Render 15 dakika eşiğine göre 5 dakika pay bırakıyoruz.
 
+# NOT: GitHub `schedule` tetikleyicisini YALNIZCA repo'nun varsayilan branch'inde
+# calistirir (varsayilan: main). Bu dosya main'e merge edilmeden Actions
+# sekmesinde gorunmez.
+#
+# NOT: Bu workflow GitHub-hosted `ubuntu-latest` makinesinde kosar. Repodaki
+# "Self-hosted runners" kurulum sayfasindan alinan runner token'i ve
+# actions-runner*.tar.gz paketi HIC GEREKMEZ; onlari indirme.
 on:
   schedule:
     - cron: "*/10 * * * *"
