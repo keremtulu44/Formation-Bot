@@ -6,6 +6,72 @@ token'ın telefondan alınması ve servisi ayakta tutma (keep-alive) yöntemi.
 
 ---
 
+# ⚡ TEK SAYFA KONTROL LİSTESİ
+
+`__` = boş yer. Her satırda **soldaki yere kendi değerini yaz**, sağdaki yere
+o değeri yapıştır. Üç ayrı yere yazılacak toplam **7 şey** var.
+
+## A) Render → Environment (5 değişken)
+
+Render Dashboard → servisin → **Environment** → **Add**. Sağdaki "Secret" sütununu
+`TELEGRAM_*` ve `SUPABASE_SERVICE_ROLE_KEY` için **aç**, `SUPABASE_URL` ve
+`BOT_PROFILE` için açma.
+
+| # | Key (yazılacak isim) | Value (yapıştırılacak) | Secret? |
+|---|---|---|---|
+| 1 | `SUPABASE_URL` | `https://pzbuqlvehiokeondvrdq.supabase.co` | hayır |
+| 2 | `SUPABASE_SERVICE_ROLE_KEY` | `__` ← Supabase → Settings → API → **service_role** (`eyJ...` ile başlayan uzun metin) | **evet** |
+| 3 | `TELEGRAM_BOT_TOKEN` | `__` ← **@BotFather** → `/newbot` → "Use this token" satırındaki kod | **evet** |
+| 4 | `TELEGRAM_CHAT_ID` | `__` ← **@userinfobot** → Start → verdiği `Id:` sayısı | **evet** |
+| 5 | `BOT_PROFILE` | `Dengeli` | hayır |
+
+> #2'nin değeri: `eyJhbGciOi...` diye başlayan **çok uzun** bir metin. Kısaltma,
+> ortadan kesme — satır sonuna kadar tamamını yapıştır.
+> #3'ün değeri: `8914822495:AAG...` biçiminde, iki nokta içeren tek satır.
+
+Boş bırakırsan bot çalışır ama: #2 boşsa önbellek/Telegram state'i kaydedilmez,
+#3/#4 boşsa **hiç Telegram mesajı gelmez**.
+
+## B) Render → servis ayarları (env değil, ayar kutusu)
+
+| # | Ayar | Yazılacak |
+|---|---|---|
+| 6 | Region | `Frankfurt` |
+| 7 | Instance Type | `Free` |
+| 8 | Build Command | `pip install -r requirements.txt` |
+| 9 | Start Command | `python main.py` |
+| 10 | Health Check Path | `/health` |
+| 11 | Python Version | Boş bırak — repodaki `.python-version` (3.12) zorlar |
+
+## C) GitHub → repo → Settings → Secrets → Actions → New secret
+
+| # | Secret adı | Değer |
+|---|---|---|
+| 12 | `RENDER_HEALTH_URL` | `__` ← Render'ın verdiği adres + `/health` |
+
+Render'ın servis sayfasında en üstte `https://<adın>.onrender.com` yazar;
+`SUPABASE_URL`'deki gibi sadece o adresi al, `/rest/v1` gibi bir şey ekleme.
+Örnek biçim: `https://formation-bot-xxxx.onrender.com/health`
+
+## D) Yapılacak son iki iş
+
+- [ ] Repodaki değişiklikler (`main` branch'i) Render'ın deploy ettiği branch'e
+      **merge** edilsin — yoksa Python 3.12 sabiti ve keep-alive çalışmaz.
+- [ ] Supabase → SQL Editor → `supabase_schema.sql` içeriğini yapıştır → **Run**
+
+## E) Doğrulama (loglarda arayacağın 3 satır)
+
+```
+Supabase bağlantısı OK (https://pzbuqlvehiokeondvrdq.supabase.co, tablo: bot_store)
+Telegram bağlantısı OK (bot: @__ , chat_id: __)
+Render health endpoint 0.0.0.0:____ üzerinde başladı (/health)
+```
+
+Bu üçü varsa her şey yerindedir. Tarayıcıda
+`https://<render-adresin>.onrender.com/health` açınca `{"status":"ok"}` görünür.
+
+---
+
 ## 1. Build hatası: `Preparing metadata (pyproject.toml) ... error`
 
 Logdaki asıl satır şu:
