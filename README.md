@@ -134,11 +134,11 @@ tablosuna yazar; yerel JSON/pickle dosyalarını da fallback olarak tutar.
 | `health_server.py` | Render `PORT` varsa `/health` liveness endpoint'i; uptime monitörleri için |
 | `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
 | `deploy_check.py` | Kurulum doktoru: repo dosyaları + env + Supabase tablosu + Telegram + Render `/health` ve `/test` uçlarını tek komutla doğrular (sır yazdırmaz) |
+| `.github/workflows/deploy.yml` | Render Deploy Hook ile `main` push'unda otomatik deploy (hook secret yoksa uyarı verip atlar) |
 | `.github/workflows/ci.yml` | Render eşdeğeri CI: Python 3.12 kurulumu, pytest, zamanlama regresyonu ve `PORT` verilip `/health` duman testi |
-| `.github/workflows/keepalive.yml` | Render Free uyumasın diye `/health` pingi (5 dk, hafta içi 09:30–18:50 İstanbul) |
+| `.github/workflows/keepalive.yml` | Render Free uyumasın diye `/health` pingi (5 dk, her gün 08:00–23:00 İstanbul; `KEEPALIVE_*` değişkenleriyle ayarlanır) |
 | `RENDER_DEPLOY.md` | Render Free + Supabase + Telegram kurulum rehberi; build hatası ve keep-alive dahil |
 | `.python-version` | Render build'ı için Python 3.12 sabitlemesi (3.14'te pandas derlenemiyor) |
-| `.github/workflows/keepalive.yml` | 10 dakikada bir `/health` isteği; Render Free'ın 15 dk uyku kuralını engeller |
 | `requirements-optional.txt` | Deploy zincirinde olmayan isteğe bağlı paketler (borsapy) |
 | `patterns/` | Motor: `candidate.py` (geometri + bayrak/flama), `pivots.py`, `pole.py` (direk), `lifecycle.py` (state makinesi), `violation.py`, `selection.py`, `mathutil.py` |
 | `notifier.py` | Telegram: 4 saat cooldown + global günlük/saatlik kapanı |
