@@ -303,6 +303,9 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
     if not chat_id:
         satir(WARN, "chat_id yok", "Telegram'a gönderim için TELEGRAM_CHAT_ID şart (@userinfobot).")
         return
+    satir(OK, "Komutlar açık: /formasyonlar · /durum · /tara · /yardim",
+          "Komutlar yalnızca bu chat_id'den kabul edilir. Aynı token'ı ikinci bir kopya "
+          "(Termux/PC) da dinlerse Telegram 409 Conflict verir ve komutlar çalışmaz.")
     if not chat_id.lstrip("-").isdigit():
         satir(WARN, "chat_id sayı değil", "Kendine mesaj için pozitif Id, grup için -100... ile başlar.")
     else:

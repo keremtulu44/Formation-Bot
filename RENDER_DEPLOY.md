@@ -345,16 +345,39 @@ https://<servis-adin>.onrender.com/test?k=k7m2x9
 Anahtar yanlissa `403` doner ve **Telegram'a hicbir istek gitmez** - yani
 adresi tanimadigi icin disaridan spam gonderilemez.
 
-### 4.5 Telegram'dan komut gonderilmez
+### 4.5 Telegram'dan komut gönderme (iki yönlü — YENİ)
 
-Bu bot **tek yonludur**: yalnizca `sendMessage` cagirir, gelen mesajlari
-**okumaz**. Yani botuna `/start`, `/ozet`, `/dur` yazman **hicbir cevap
-uretmez** ve bu bir hata degildir. Telegram'da `getUpdates`/uzun dinleme kodu
-yoktur, dolayisiyla komut isleyen bir katman yoktur.
+Bot artık **iki yönlüdür**: alarm göndermenin yanında Telegram'dan gelen
+komutları okuyup yanıtlar. Komutlar `getUpdates` uzun yoklamasıyla ayrı bir
+daemon thread'de toplanır; **yalnızca `TELEGRAM_CHAT_ID`** komut verebilir,
+başka sohbetlerden gelen mesajlar sessizce yok sayılır.
 
-Gonderim tarafini dogrulamak icin 4.4'teki `/test` ucunu kullan. Gercek alarm
-akisi ise sadece bir formasyon tetiklendiginde devreye girer: 48 hisse x 4 zaman
-dilimi tarandigi icin ilk mesaj birkac gun surebilir.
+| Komut | Ne yapar |
+|---|---|
+| `/formasyonlar` | Günün canlı formasyonları (hisse, TF, tip, kalite, state, üst/alt seviye) |
+| `/formasyonlar 1h` | Zaman dilimi filtresi (`1h`, `2h`, `4h`, `1d`) |
+| `/formasyonlar THYAO` | Hisse veya formasyon adı filtresi |
+| `/durum` | Profil, piyasa açık/kapalı, son tarama yaşı, canlı sayı, veri sağlığı, günlük alarm/hata sayacı |
+| `/tara` | Şimdi tara (mum kapanışını beklemez). **Yalnızca seans içinde çalışır**; kapalıyken nazikçe reddeder |
+| `/yardim`, `/start` | Komut listesi |
+
+Akış: `/tara` isteği bir bayrağa yazılır, ana döngünün 5 dakikalık uykusu
+kesilir ve tarama normal akışla (aynı pacing, aynı kalite eşikleri, aynı
+Supabase kaydı) başlar; bitince `/formasyonlar` güncel listeyi gösterir.
+
+> ⚠️ **Tek tüketici kuralı:** Telegram aynı token için **iki süreç** aynı anda
+> `getUpdates` yaparsa ikincisi `409 Conflict` alır. Termux/PC'de açık kalmış
+> ikinci bir kopya varsa **kapatın**; bot bunu logda net söyler ve dinleyiciyi
+> durdurur (alarmlar çalışmaya devam eder). Render `/test` ucu yalnızca
+> `sendMessage` kullanır, bu kuraldan etkilenmez.
+
+Komut listesi `.env` değişkeni gerektirmez; token/chat_id doğruysa otomatik
+açılır. Token/chat_id yoksa bot eskisi gibi yalnızca alarm gönderir.
+
+Gönderim tarafını yine 4.4'teki `/test` ucuyla doğrula. Gerçek alarm akışı ise
+bir formasyon tetiklendiğinde devreye girer: 48 hisse × 4 zaman dilimi
+tarandığı için ilk alarm birkaç gün sürebilir — bu arada `/formasyonlar`
+yazarak canlı adayları görebilirsin.
 
 ---
 
@@ -373,6 +396,9 @@ Repo içinde `.github/workflows/keepalive.yml` hazır. **5 dakikada bir**
 - GitHub `schedule` **“en iyi çaba”** ile çalışır; yoğun saatlerde koşular
   5–20 dakika gecikebilir. 15 dakikalık uyku eşiğine karşı 5 dakikalık aralık
   pay bırakır (10 dakikalık aralıkta bir gecikme servisi uyutabilir).
+- Komutlar (`/formasyonlar`, `/tara`, ...) da bu yüzden servis uyanıkken çalışır:
+  servis uykuya geçtiyse ilk komut onu ~1 dakikada uyandırır ama cevap ilk turda
+  gecikebilir. Seans içinde ping penceresi bunu zaten engeller.
 - Ping **yalnızca İstanbul saatiyle hafta içi 09:30–18:50** arasında atılır;
   BIST kapalıyken bot zaten tarama yapmaz. Bunun ölçülebilir faydası: Render
   Free aylık **750 instance saat** verir; 7/24 ping ≈ 730 saat/ay (tüm kota),
@@ -493,6 +519,9 @@ Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 | `/health` 404 veriyor | Start Command `python main.py` değil. Logda `PORT ... başladı` satırını ara |
 | Sayfa "Render is loading..." | Free instance uyuyor, ~1 dk sonra düzelir (keep-alive kurulmadıysa) |
 | Telegram mesajleri gelmiyor | Logda `Telegram bağlantısı OK` yok → token/chat_id hatalı; bot'a `/start` atılmamış olabilir |
+| Bot komutlara cevap vermiyor | Logda `Telegram komut dinleyicisi başladı` var mı? `HTTP 409` varsa aynı token'ı başka bir kopya (Termux/PC) dinliyor → onu kapatın |
+| `/tara` "piyasa kapalı" diyor | Normal: elle tarama yalnızca seans içinde (İstanbul 09:50-18:40) çalışır |
+| Komut cevabı 1 dk gecikiyor | Servis uyuyorsa ilk istek onu uyandırır (~1 dk); keep-alive penceresi bunu seans içinde engeller |
 | `Supabase bağlantısı OK` yok | `supabase_schema.sql` çalıştırılmamış veya anahtar yanlış (yukarıdaki HTTP kodlarına bak) |
 | Tarama çok yavaş | Free instance 0.1 CPU. Tarama 48 hisse × 4 zaman dilimi; ilk yükleme birkaç dakika sürebilir, sonraki turlar mum başına bir tarama yapılır |
 | `MemoryError` / restart döngüsü | Free instance 512 MB. `BOT_PROFILE=Seçici` ile evreni daraltmak gerekebilir |

@@ -10,6 +10,7 @@ import json
 import signal
 import logging
 import random
+import threading
 from datetime import datetime, timedelta, time as dt_time
 import pytz
 
@@ -36,6 +37,8 @@ from patterns import PatternLifecycleManager, ST_BREAK_CANDIDATE, ST_BREAK_CONFI
 from notifier import TelegramNotifier
 from supabase_store import SupabaseStore
 from health_server import start_render_health_server
+from live_state import LiveState
+from telegram_commands import TelegramCommandListener
 
 # === LOGGING KURULUMU ===
 def setup_logging():
@@ -89,6 +92,10 @@ def son_bar_yasi_dakika_str(dk: float) -> str:
 # Neden? systemd durdururken Python anında ölürse o taramada biriken deque'ler kaybolur.
 _shutdown_requested = False
 _deque_manager_ref = None
+# Telegram komutları için paylaşılan durum (tarama thread'i yazar, listener okur)
+_live_state = LiveState()
+_scan_istegi = threading.Event()
+_telegram_listener_ref = None
 
 def signal_handler(signum, frame):
     global _shutdown_requested
@@ -280,7 +287,206 @@ def write_heartbeat(data_dir: str = None, notifier=None):
     except Exception as e:
         logger.warning(f"Heartbeat yazılamadı: {e}")
 
-def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: PatternLifecycleManager, notifier: TelegramNotifier):
+# === TELEGRAM KOMUTLARI (iki yönlü) ===
+# Bot alarm gönderir; bu bölüm Telegram'dan GELEN komutları yanıtlar. Komutlar
+# yalnızca TELEGRAM_CHAT_ID'den kabul edilir (yetki kontrolü telegram_commands.py
+# içinde). Yanıtlar getUpdates uzun yoklamasıyla ayrı bir thread'de toplanır.
+KOMUT_YARDIM = """🤖 Formation-Bot komutları
+
+/formasyonlar — günün canlı formasyonları
+   filtre: /formasyonlar 1h   ·   /formasyonlar THYAO
+/durum — bot, piyasa ve veri sağlığı özeti
+/tara — şimdi tara (yalnızca seans içinde; mum kapanışını beklemez)
+/yardim — bu liste
+
+Notlar:
+• Komutlar yalnızca kayıtlı sohbetten (TELEGRAM_CHAT_ID) kabul edilir.
+• Bu bir AL/SAT aracı değildir: formasyon durumu ve kalite skoru bildirir.
+• Alarmlar mum kapanışından 5 dk sonra kendiliğinden gelir; /tara bunu beklemez."""
+
+STATE_TR = {
+    "ADAY_OLUSUYOR": "Aday oluşuyor",
+    "GEOMETRI_ADAYI": "Geometri adayı",
+    "FORMASYON_TANIMLANDI": "Formasyon tanımlandı",
+    "OLGUNLASIYOR": "Olgunlaşıyor",
+    "SIKISMA_GUCLENIYOR": "Sıkışma güçleniyor",
+    "KIRILIM_HAZIRLIGI": "Kırılım hazırlığı",
+    "KIRILIM_DENEMESI": "Kırılım denemesi",
+    "KIRILIM_ADAYI": "Kırılım adayı",
+    "KIRILIM_TEYITLI": "Kırılım teyitli",
+    "RETEST_BEKLENIYOR": "Retest bekleniyor",
+    "RETEST_EDILIYOR": "Retest ediliyor",
+    "RETEST_BASARILI": "Retest başarılı",
+    "FORMASYON_TAMAMLANDI": "Formasyon tamamlandı",
+}
+
+def _gecen_sure(iso_zaman):
+    """'12 dk önce' gibi kısa yaş metni."""
+    if not iso_zaman:
+        return "—"
+    try:
+        an = datetime.fromisoformat(iso_zaman)
+    except (TypeError, ValueError):
+        return "—"
+    if an.tzinfo is None:
+        an = ISTANBUL_TZ.localize(an)
+    fark = (datetime.now(ISTANBUL_TZ) - an).total_seconds()
+    if fark < 90:
+        return f"{int(fark)} sn önce"
+    if fark < 5400:
+        return f"{int(fark // 60)} dk önce"
+    return f"{fark / 3600:.1f} sa önce"
+
+def _sayi(deger, basamak=2, varsayilan="—"):
+    try:
+        return f"{float(deger):.{basamak}f}"
+    except (TypeError, ValueError):
+        return varsayilan
+
+def _komut_yardim(_arguman: str) -> str:
+    return KOMUT_YARDIM
+
+def _komut_durum(_arguman: str) -> str:
+    now = datetime.now(ISTANBUL_TZ)
+    st = _live_state.status()
+    if tarama_penceresi_acik_mi(now):
+        piyasa = "AÇIK (tarama penceresi içinde)"
+    else:
+        try:
+            kalan = time_until_next_open(now)
+            piyasa = f"KAPALI · açılışa {kalan / 3600:.1f} saat"
+        except Exception:
+            piyasa = "KAPALI"
+    formations = _live_state.formations()
+    en_iyi = formations[0] if formations else None
+    yas = daily_stats.get('max_bar_age_min')
+    satirlar = [
+        "🤖 Formation-Bot durum",
+        f"Profil: {PROFILE} · Evren: {len(ACTIVE_STOCKS)} hisse",
+        f"Piyasa: {piyasa}",
+    ]
+    if st.get("tarama_suruyor"):
+        satirlar.append("⏳ Şu an tarama sürüyor (liste son tamamlanan taramadan)")
+    satirlar += [
+        f"Son tarama: {_gecen_sure(st.get('son_tarama_bitis'))} "
+        f"(süre {st.get('son_tarama_suresi_dk') or '—'} dk, {st.get('son_tarama_hissesi') or '—'} hisse)",
+        f"Canlı formasyon: {len(formations)}" + (
+            f" · en yüksek: {en_iyi['stock']} {en_iyi['timeframe']} "
+            f"{en_iyi['pattern_name']} q{_sayi(en_iyi.get('quality'), 0)}" if en_iyi else ""),
+        f"Bugün: {daily_stats['patterns_found']} formasyon kaydı, "
+        f"{daily_stats['alerts_sent']} alarm, {daily_stats['errors']} hata",
+        f"Veri: taze {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse · "
+        f"en eski mum {_sayi(yas, 0, '—')} dk · eski veri {daily_stats['stale_stocks']} hisse",
+    ]
+    if daily_stats.get('veri_yok_modu'):
+        satirlar.append("⚠️ VERİ YOK MODU: bugün yeni piyasa verisi alınamadı (tatil/arıza)")
+    if st.get("son_tarama_hatasi"):
+        satirlar.append(f"⚠️ Son tarama hatası: {st['son_tarama_hatasi']}")
+    satirlar.append("")
+    satirlar.append("Komutlar: /formasyonlar · /tara · /durum · /yardim")
+    return "\n".join(satirlar)
+
+def _komut_formasyonlar(arguman: str) -> str:
+    st = _live_state.status()
+    formations = _live_state.formations()
+    filtre = (arguman or "").strip().lower()
+
+    if filtre:
+        if filtre in ("1h", "2h", "4h", "1d"):
+            formations = [f for f in formations if str(f.get("timeframe")) == filtre]
+        else:
+            formations = [f for f in formations
+                          if filtre in str(f.get("stock", "")).lower()
+                          or filtre in str(f.get("pattern_name", "")).lower()]
+        if not formations:
+            return (f"🔍 '{arguman.strip()}' filtresine uyan canlı formasyon yok.\n"
+                    "Filtresiz liste için: /formasyonlar")
+
+    baslik = [f"📊 CANLI FORMASYONLAR — {datetime.now(ISTANBUL_TZ).strftime('%d.%m.%Y %H:%M')}"]
+    if st.get("son_tarama_bitis"):
+        baslik.append(f"Son tarama: {_gecen_sure(st['son_tarama_bitis'])}"
+                      + (" · tarama sürüyor" if st.get("tarama_suruyor") else ""))
+    if not formations:
+        if not st.get("son_tarama_bitis"):
+            baslik.append("")
+            baslik.append("Henüz tamamlanmış tarama yok; ilk tarama mum kapanışından 5 dk sonra yapılır.")
+            baslik.append("/tara ile hemen tarama isteyebilirsin (seans içinde).")
+        else:
+            baslik.append("")
+            baslik.append("Şu an canlı formasyon yok (calisan motor: üçgen/kama/bayrak/flama).")
+            baslik.append("Bot her mum kapanışından sonra otomatik tarar; kırılım yaklaşınca yazar.")
+        return "\n".join(baslik)
+
+    gosterilecek = formations[:15]
+    satirlar = list(baslik)
+    satirlar.append("")
+    for i, f in enumerate(gosterilecek, 1):
+        q = float(f.get("quality") or 0.0)
+        yon = "⬆️ yukarı" if f.get("break_dir") == 1 else ("⬇️ aşağı" if f.get("break_dir") == -1 else "↔️ belirsiz")
+        durum = STATE_TR.get(str(f.get("state")), str(f.get("state") or "—"))
+        esik = f.get("min_quality")
+        esik_notu = "" if esik is None else ("" if q >= float(esik) else f" (alarm eşiği {_sayi(esik, 0)} altında)")
+        satirlar.append(f"{i}) {f.get('stock')} · {f.get('timeframe')} · {f.get('pattern_name')}")
+        satirlar.append(f"   kalite {_sayi(q, 0)}{esik_notu} · {durum} · {yon}")
+        satirlar.append(f"   üst {_sayi(f.get('upper'))} / alt {_sayi(f.get('lower'))}"
+                        f" · kritik {_sayi(f.get('critical_price'))}")
+    if len(formations) > len(gosterilecek):
+        satirlar.append("")
+        satirlar.append(f"… ve {len(formations) - len(gosterilecek)} tane daha "
+                        f"(filtre: /formasyonlar 1h veya /formasyonlar THYAO)")
+    satirlar.append("")
+    taranan = st.get("son_tarama_hissesi") or daily_stats['stocks_scanned']
+    satirlar.append(f"Toplam {len(formations)} canlı formasyon · son tarama {taranan} hisse")
+    return "\n".join(satirlar)
+
+def _komut_tara(_arguman: str) -> str:
+    now = datetime.now(ISTANBUL_TZ)
+    if not tarama_penceresi_acik_mi(now):
+        try:
+            kalan = time_until_next_open(now)
+            ek = f"\nSonraki açılışa: {kalan / 3600:.1f} saat"
+        except Exception:
+            ek = ""
+        return ("🚫 Piyasa kapalı — elle tarama yapılmıyor.\n"
+                "Kapanış saatlerinde taze veri gelmediği için tarama yanıltıcı sinyal üretir;\n"
+                "bot mum kapanışından 5 dk sonra seans içinde kendiliğinden tarar." + ek)
+    if _live_state.status().get("tarama_suruyor"):
+        return "⏳ Tarama zaten sürüyor; bitince /formasyonlar ile sonucu görebilirsin."
+    if _scan_istegi.is_set():
+        return "🕓 Tarama isteği kuyrukta; birkaç saniye içinde başlıyor."
+    _scan_istegi.set()
+    logger.info("Telegram /tara: elle tarama istendi")
+    return ("🔍 Tarama isteği alındı, birkaç saniye içinde başlıyor.\n"
+            "Bitince /formasyonlar yazınca güncel liste gelir.")
+
+TELEGRAM_KOMUTLARI = {
+    "start": _komut_yardim,
+    "yardim": _komut_yardim,
+    "help": _komut_yardim,
+    "durum": _komut_durum,
+    "formasyonlar": _komut_formasyonlar,
+    "formasyon": _komut_formasyonlar,
+    "liste": _komut_formasyonlar,
+    "tara": _komut_tara,
+}
+
+def _bekle_veya_tarama(seconds: float) -> bool:
+    """Belirtilen süre bekler; /tara isteği gelirse erken döner (True).
+
+    Neden: ana döngü 5 dakikaya kadar uyuyor. Elle tarama isteği geldiğinde
+    uykuyu beklemek yerine hemen taramaya geçilir (komut 5 dk askıda kalmasın).
+    """
+    bitis = time.monotonic() + seconds
+    while not _shutdown_requested:
+        kalan = bitis - time.monotonic()
+        if kalan <= 0:
+            return False
+        if _scan_istegi.wait(min(kalan, 1.0)):
+            return True
+    return False
+
+
+def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: PatternLifecycleManager, notifier: TelegramNotifier, manuel: bool = False):
     """
     Aktif tarama evrenini tara; Yahoo verisi seri ve gruplu alınır, analiz ardından yapılır.
     - Deque'den veri al
@@ -291,7 +497,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     """
     simdiki_zaman = datetime.now(ISTANBUL_TZ)
     tarama_baslangici = time.monotonic()
-    logger.info(f"=== TARAMA BAŞLIYOR - {len(ACTIVE_STOCKS)} hisse, profil: {PROFILE} "
+    tur_taranan = 0
+    tur_formasyon = 0
+    _live_state.begin_scan(simdiki_zaman, manuel=manuel)
+    logger.info(f"=== TARAMA BAŞLIYOR{' (ELLE /tara)' if manuel else ''} - {len(ACTIVE_STOCKS)} hisse, profil: {PROFILE} "
                 f"({simdiki_zaman.strftime('%H:%M')}) ===")
     logger.info(
         f"Yahoo pacing: her {SCAN_REQUEST_BATCH_SIZE} istekte "
@@ -458,6 +667,23 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     
                     # Alert eşiği kontrolü - timeframe'e göre (effective_quality üzerinden)
                     min_q = ALERT_MIN_QUALITY.get(tf_name, ALERT_MIN_QUALITY_GLOBAL)
+                    # Telegram /formasyonlar komutu bu kayittan beslenir (esik altindakiler de gorunur).
+                    tur_formasyon += 1
+                    _live_state.record_formation({
+                        'stock': stock,
+                        'timeframe': tf_name,
+                        'pattern_name': active.pattern_type,
+                        'quality': float(q),
+                        'state': state,
+                        'break_dir': break_dir,
+                        'upper': getattr(active, 'upper_now', None),
+                        'lower': getattr(active, 'lower_now', None),
+                        'critical_price': (active.upper_now if break_dir == 1 else active.lower_now),
+                        'break_strength': getattr(active, 'break_strength', None),
+                        'bar_time': str(df_tf.index[-1]),
+                        'min_quality': float(min_q),
+                        'alert_gonderildi': False,
+                    })
                     if q < min_q:
                         logger.debug(f"{stock} {tf_name} kalite {q:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
                     # Sadece önemli state'lerde Telegram gönder (insanlaştırma V2)
@@ -480,12 +706,14 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         }
                         if notifier.send(alert_data):
                             daily_stats['alerts_sent'] += 1
+                            _live_state.mark_alert_sent(stock, tf_name)
                             logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {q:.0f}")
                 else:
                     # Canlı formasyon yok (terminal state'ler ve kalite kapısı dahil)
                     logger.debug(f"{stock} {tf_name} - Canlı formasyon yok: {snap.log}")
             
             daily_stats['stocks_scanned'] += 1
+            tur_taranan += 1
             
             # Her hisse sonrası diske kaydet (crash durumunda kayıp azalsın) + heartbeat
             try:
@@ -507,6 +735,12 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
 
     sure_dk = (time.monotonic() - tarama_baslangici) / 60.0
     daily_stats['son_tarama_suresi_dk'] = round(sure_dk, 1)
+    _live_state.finish_scan(
+        datetime.now(ISTANBUL_TZ),
+        son_tarama_suresi_dk=round(sure_dk, 1),
+        son_tarama_hissesi=tur_taranan,
+        son_tarama_formasyonu=tur_formasyon,
+    )
 
     # --- TARAMA DRİFT KORUMASI (FAZ 2) ---
     if sure_dk > TARAMA_SURESI_UYARI_DK:
@@ -588,6 +822,24 @@ def main_loop():
     _notifier_ref = notifier
     # Telegram token/chat_id teşhisi: mesaj göndermeden getMe ile doğrular.
     notifier.check_connection()
+
+    # İki yönlü Telegram: komutları (formasyonlar/durum/tara/yardim) dinleyen
+    # daemon thread. getUpdates uzun yoklaması kullanır; token/chat_id yoksa
+    # hiç başlatılmaz (bot eskisi gibi yalnızca alarm gönderir).
+    global _telegram_listener_ref
+    if notifier.enabled:
+        liste = ", ".join("/" + k for k in TELEGRAM_KOMUTLARI)
+        listener = TelegramCommandListener(
+            token=notifier.token,
+            allowed_chat_id=notifier.chat_id,
+            handlers=TELEGRAM_KOMUTLARI,
+            help_text=KOMUT_YARDIM,
+        )
+        if listener.start():
+            _telegram_listener_ref = listener
+            logger.info(f"Telegram komutları aktif: {liste} (yalnızca chat_id {notifier.chat_id})")
+    else:
+        logger.info("Telegram komut dinleyicisi başlatılmadı (token/chat_id yok)")
     
     # İlk kurulum/preload de aynı hız sınırını kullanır; boş 1H cache'ler seri çekilir.
     logger.info(
@@ -645,13 +897,21 @@ def main_loop():
             now = datetime.now(ISTANBUL_TZ)
             
             if tarama_penceresi_acik_mi(now):
-                if tarama_animi_mi(now, son_taranan_kapanis):
+                # Telegram /tara: mum kapanışını beklemeden tara (aynı mum tekrar
+                # taranabilir; alarm cooldown'ı tekrar mesajı engeller).
+                elle = _scan_istegi.is_set()
+                if elle:
+                    _scan_istegi.clear()
+                if elle or tarama_animi_mi(now, son_taranan_kapanis):
                     # Tarama anı: en son kapanmış mum + 5 dk doldu.
                     kapanis = son_kapanan_mum_ani(now)
-                    logger.info(f"TARAMA - {now.strftime('%H:%M:%S')} "
-                                f"(mum {kapanis.strftime('%H:%M')}'de kapandı, "
-                                f"günün {kapanis.hour - 9}. taraması)")
-                    scan_all_stocks(deque_manager, lifecycle_manager, notifier)
+                    if elle:
+                        logger.info(f"ELLE TARAMA (Telegram /tara) - {now.strftime('%H:%M:%S')}")
+                    else:
+                        logger.info(f"TARAMA - {now.strftime('%H:%M:%S')} "
+                                    f"(mum {kapanis.strftime('%H:%M')}'de kapandı, "
+                                    f"günün {kapanis.hour - 9}. taraması)")
+                    scan_all_stocks(deque_manager, lifecycle_manager, notifier, manuel=elle)
                     son_taranan_kapanis = kapanis
                     # Tümünü diske kaydet (yarım kaldıysa sonraki turda devam)
                     deque_manager.save_all()
@@ -669,7 +929,10 @@ def main_loop():
                     hedef = kapanis + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN)
                 bekle = max((hedef - now).total_seconds(), 30)
                 logger.info(f"Sonraki tarama {hedef.strftime('%H:%M')} -> {bekle/60:.1f} dk bekleniyor")
-                time.sleep(min(bekle, 300))  # Max 5dk uyu, sonra tekrar kontrol et
+                # Max 5dk uyu; /tara isteği gelirse uyku erken biter.
+                if _bekle_veya_tarama(min(bekle, 300)):
+                    logger.info("Elle tarama isteği geldi, uyku kesildi")
+                    continue
                 
             else:
                 # BIST kapalı
@@ -685,12 +948,19 @@ def main_loop():
         except Exception as e:
             daily_stats['errors'] += 1
             logger.error(f"Ana döngü hatası: {e} - 30sn sonra yeniden denenecek", exc_info=True)
+            if _live_state.status().get('tarama_suruyor'):
+                _live_state.fail_scan(f"ana döngü: {e}")
             write_heartbeat()
             time.sleep(30)
             continue
     
     # Güvenli kapanış (SIGTERM/SIGINT)
     logger.info("Bot kapanıyor, son kayıtlar yapılıyor...")
+    try:
+        if _telegram_listener_ref is not None:
+            _telegram_listener_ref.stop()
+    except Exception as e:
+        logger.warning(f"Komut dinleyicisi kapatılamadı: {e}")
     try:
         if _deque_manager_ref is not None:
             _deque_manager_ref.save_all()
