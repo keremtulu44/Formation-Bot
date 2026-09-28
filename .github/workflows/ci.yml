@@ -85,6 +85,15 @@ jobs:
           grep -q '"status": "ok"' /tmp/health.json \
             || { echo "::error::/health gövdesi beklenen JSON değil"; exit 1; }
 
+          # Keep-alive iş akışı önbellek kırıcı parametre ekler (/health?ka=...).
+          # Sorgu dizesi 404'e yol açarsa ping "servis ölü" sanılır - burada kilitliyoruz.
+          kod_q=$(curl -s -o /tmp/health_q.json -w "%{http_code}" "http://127.0.0.1:10000/health?ka=1")
+          echo "--- /health?ka=1 -> HTTP $kod_q ---"
+          if [ "$kod_q" != "200" ]; then
+            echo "::error title=Sorgu dizesi /health'i bozuyor::/health?ka=1 HTTP $kod_q döndü; sorgu dizesi (ve sondaki slash) yok sayılmalı."
+            exit 1
+          fi
+
           code=$(curl -s -o /tmp/test.json -w "%{http_code}" \
                  "http://127.0.0.1:10000/test?k=yanlis-anahtar" || echo "000")
           echo "--- /test (TELEGRAM_TEST_KEY tanımsız) -> HTTP $code ---"

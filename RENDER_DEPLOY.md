@@ -522,6 +522,7 @@ Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 | Build `metadata-generation-failed` | Python 3.14 seçilmiş. `.python-version` push edildi mi? Branch'i kontrol et (Render hangi branch'i deploy ediyor?) |
 | `numpy/meson` derleme hatası | Aynı sorun; `.python-version` = 3.12 çözüm |
 | `/health` 404 veriyor | Start Command `python main.py` değil. Logda `PORT ... başladı` satırını ara |
+| `/health?ka=...` 404 veriyordu | Düzeltildi: uç artık sorgu dizesini ve sondaki slash'ı yok sayar. Eski sürümde keep-alive pingi 404 alıp "servis ölü" sanılıyordu |
 | Sayfa "Render is loading..." | Free instance uyuyor, ~1 dk sonra düzelir (keep-alive kurulmadıysa) |
 | Telegram mesajleri gelmiyor | Logda `Telegram bağlantısı OK` yok → token/chat_id hatalı; bot'a `/start` atılmamış olabilir |
 | Bot komutlara cevap vermiyor | Logda `Telegram komut dinleyicisi başladı` var mı? `HTTP 409` varsa aynı token'ı başka bir kopya (Termux/PC) dinliyor → onu kapatın |
