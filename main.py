@@ -699,6 +699,18 @@ def main_loop():
         logger.error(f"Kapanış kayıt hatası: {e}")
     logger.info("Bot durdu")
 
+def _render_test_sender(text):
+    """/test ucu icin geri cagirma: notifier hazirsa tek mesaj gonderir.
+
+    Notifier main_loop icinde kurulur; bu yuzden modul seviyesindeki global
+    uzerinden okunur (server startup'ta None olabilir, cagri aninda doludur).
+    """
+    notifier = _notifier_ref
+    if notifier is None:
+        return False, "bot henuz baslamadi"
+    return notifier.send_text(text)
+
+
 if __name__ == "__main__":
-    start_render_health_server()
+    start_render_health_server(test_sender=_render_test_sender)
     main_loop()

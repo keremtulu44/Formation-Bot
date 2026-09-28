@@ -51,6 +51,13 @@ olmadığı için build kaynak koddan derlemeye düşüp patlıyor.
 Render `PORT` değişkenini verdiğinde bot `0.0.0.0:$PORT` üzerinde `/health` endpoint'i açar;
 monitör yalnızca liveness JSON'u görür, token/anahtar veya portföy verisi döndürülmez.
 
+`TELEGRAM_TEST_KEY` tanımlıysa `GET /test?k=<anahtar>` gerçek bir Telegram test
+mesajı gönderir (gönderim tarafını telefondan doğrulamak için). Anahtar
+tanımlı değilse bu yol 404 döner ve Telegram'a hiçbir istek gitmez.
+
+Bot **tek yönlüdür**: Telegram'dan gelen mesajları okumaz, yani `/start` gibi
+komutlara cevap vermez. Sadece formasyon tetiklendiğinde `sendMessage` çağırır.
+
 İki çalışma seçeneği:
 
 - **Background Worker (önerilen, ücretli):** Sürekli çalışan Python döngüsüne uygun servis türü;

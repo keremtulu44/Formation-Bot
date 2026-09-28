@@ -100,6 +100,28 @@ class TelegramNotifier:
             self.enabled = True
             logger.info("Telegram notifier aktif - insanlaştırma V2")
 
+    def send_text(self, text: str):
+        """Biçimlendirme/cooldown kapılarına girmeden düz metin gonderir.
+
+        Yalnizca Render'in /test ucu icindir: bot baslamis mi, token/chat_id
+        dogru mu diye uctan uca dogrulamak. Gonderim sayaclarini (saatlik/gunluk
+        kap) tuketmez, cunku sahte bir alarm degil.
+        """
+        if not self.enabled:
+            return False, "Telegram notifier pasif (token/chat_id env'de yok)"
+        try:
+            import requests
+            resp = requests.post(
+                f"https://api.telegram.org/bot{self.token}/sendMessage",
+                json={"chat_id": self.chat_id, "text": text},
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                return True, "mesaj gonderildi"
+            return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+        except Exception as e:
+            return False, f"istek hatasi: {e}"[:200]
+
     def check_connection(self) -> bool:
         """Başlangıçta token'ı doğrular (getMe). Mesaj GÖNDERMEZ, sadece loglar.
 

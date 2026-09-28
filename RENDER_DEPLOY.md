@@ -24,6 +24,7 @@ Render Dashboard → servisin → **Environment** → **Add**. Sağdaki "Secret"
 | 3 | `TELEGRAM_BOT_TOKEN` | `__` ← **@BotFather** → `/newbot` → "Use this token" satırındaki kod | **evet** |
 | 4 | `TELEGRAM_CHAT_ID` | `__` ← **@userinfobot** → Start → verdiği `Id:` sayısı | **evet** |
 | 5 | `BOT_PROFILE` | `Dengeli` | hayır |
+| 6 | `TELEGRAM_TEST_KEY` | `__` ← istediğin rastgele bir yazı (örn. `k7m2x9`) | **evet** |
 
 > #2'nin değeri: `eyJhbGciOi...` diye başlayan **çok uzun** bir metin. Kısaltma,
 > ortadan kesme — satır sonuna kadar tamamını yapıştır.
@@ -36,12 +37,15 @@ Boş bırakırsan bot çalışır ama: #2 boşsa önbellek/Telegram state'i kayd
 
 | # | Ayar | Yazılacak |
 |---|---|---|
-| 6 | Region | `Frankfurt` |
+| 6 | Region | `Frankfurt` (ABD ise calisir ama Turk'e ping uzun) |
 | 7 | Instance Type | `Free` |
 | 8 | Build Command | `pip install -r requirements.txt` |
 | 9 | Start Command | `python main.py` |
 | 10 | Health Check Path | `/health` |
-| 11 | Python Version | Boş bırak — repodaki `.python-version` (3.12) zorlar |
+| 11 | Python Version | Bos birak - repodaki `.python-version` (3.12) zorlar |
+| 12 | Root Directory | Bos birak (repo kok) |
+| 13 | Auto-Deploy | `Yes` (yoksa her merge'de elle "Manual Deploy" bas) |
+| 14 | Branch | `main` olmali - `main`de bot kodu yoksa servis acilmaz |
 
 ## C) GitHub → repo → Settings → Secrets → Actions → New secret
 
@@ -58,6 +62,17 @@ Render'ın servis sayfasında en üstte `https://<adın>.onrender.com` yazar;
 - [ ] Repodaki değişiklikler (`main` branch'i) Render'ın deploy ettiği branch'e
       **merge** edilsin — yoksa Python 3.12 sabiti ve keep-alive çalışmaz.
 - [ ] Supabase → SQL Editor → `supabase_schema.sql` içeriğini yapıştır → **Run**
+
+## D2) Merge sonrası sırayla doğrula
+
+1. Render → **Events**: yeşil **"Deploy succeeded"** ✅ (kırmızıysa logun
+   son 20 satırına bak)
+2. `https://<servis>.onrender.com/health` → `{"status":"ok"}`
+3. Render → **Logs** → 3 satır:
+   `Supabase bağlantısı OK` · `Telegram bağlantısı OK` · `health endpoint ... başladı`
+4. `https://<servis>.onrender.com/test?k=<TELEGRAM_TEST_KEY>` → `{"ok":true}`
+   ve Telegram'da test mesajı düşer
+5. GitHub → **Actions** → "Render keep-alive" yeşil koşular (10 dk'da bir)
 
 ## E) Doğrulama (loglarda arayacağın 3 satır)
 
@@ -274,6 +289,38 @@ Telegram bağlantısı OK (bot: @bist_formation_radar_bot, chat_id: 1857xxxxxx)
 
 Bu mesajı görmüyorsan token/chat_id yanlış, hata satırı tam neyi söylüyor.
 Mesaj gönderilmez, sadece `getMe` ile kontrol edilir.
+
+### 4.4 Mesaj gonderimini test etme (bir tikla)
+
+`getMe` sadece **token'i** dogrular; asil soru "alarm mesajlari bana ulasacak mi?"
+bunu `TELEGRAM_TEST_KEY` ile acilan `/test` ucu cevaplar. Render → Environment'a
+istedigin rastgele bir yazi ekle (orn. `k7m2x9`), sonra telefondan tarayicida ac:
+
+```
+https://<servis-adin>.onrender.com/test?k=k7m2x9
+```
+
+| Cevap | Anlami |
+|---|---|
+| `{"ok": true, "detail": "mesaj gonderildi"}` | Telegram'da test mesaji dustu |
+| `{"ok": false, "detail": "HTTP 403: ..."}` | `chat_id` yanlis - bot bu sohbete gidemiyor |
+| `{"ok": false, "detail": "HTTP 401: ..."}` | Token yanlis/iptal edilmis |
+| `404 ... test endpoint kapali` | `TELEGRAM_TEST_KEY` tanimli degil (ya da henuz deploy edilmedi) |
+| `503 ... bot henuz baslamadi` | Servis uyaniyor, 30 sn sonra tekrar ac |
+
+Anahtar yanlissa `403` doner ve **Telegram'a hicbir istek gitmez** - yani
+adresi tanimadigi icin disaridan spam gonderilemez.
+
+### 4.5 Telegram'dan komut gonderilmez
+
+Bu bot **tek yonludur**: yalnizca `sendMessage` cagirir, gelen mesajlari
+**okumaz**. Yani botuna `/start`, `/ozet`, `/dur` yazman **hicbir cevap
+uretmez** ve bu bir hata degildir. Telegram'da `getUpdates`/uzun dinleme kodu
+yoktur, dolayisiyla komut isleyen bir katman yoktur.
+
+Gonderim tarafini dogrulamak icin 4.4'teki `/test` ucunu kullan. Gercek alarm
+akisi ise sadece bir formasyon tetiklendiginde devreye girer: 48 hisse x 4 zaman
+dilimi tarandigi icin ilk mesaj birkac gun surebilir.
 
 ---
 
