@@ -55,21 +55,55 @@ monitör yalnızca liveness JSON'u görür, token/anahtar veya portföy verisi d
 mesajı gönderir (gönderim tarafını telefondan doğrulamak için). Anahtar
 tanımlı değilse bu yol 404 döner ve Telegram'a hiçbir istek gitmez.
 
-Bot **tek yönlüdür**: Telegram'dan gelen mesajları okumaz, yani `/start` gibi
-komutlara cevap vermez. Sadece formasyon tetiklendiğinde `sendMessage` çağırır.
+Bot artık **iki yönlüdür**: Telegram'dan gelen komutları yanıtlar. Komutlar
+yalnızca `TELEGRAM_CHAT_ID`'den kabul edilir:
+
+| Komut | Ne yapar |
+|---|---|
+| `/formasyonlar` | Günün canlı formasyonları (`/formasyonlar 1h`, `/formasyonlar THYAO` filtreleri) |
+| `/durum` | Piyasa, son tarama yaşı, canlı sayı, veri sağlığı, günlük alarm/hata |
+| `/tara` | Şimdi tara (yalnızca seans içinde; mum kapanışını beklemez) |
+| `/yardim` | Komut listesi |
+
+Komutlar `getUpdates` uzun yoklamasıyla ayrı bir thread'de toplanır; aynı
+token'la ikinci bir kopya (Termux/PC) çalışıyorsa `409 Conflict` alır —
+o kopyayı kapatın, yoksa komutlar çalışmaz. Detay: `RENDER_DEPLOY.md` §4.5.
+
+Kurulumun neresinde takıldığını tek komutla görmek için:
+
+```bash
+python deploy_check.py --url https://<servis-adin>.onrender.com
+python deploy_check.py --url https://<servis-adin>.onrender.com --test-key <TELEGRAM_TEST_KEY>
+```
+
+Her satır ✅/⚠️/❌ ile biter, ❌ satırının altında ne yapılacağı yazar; token ve
+anahtar değerleri hiçbir zaman ekrana basılmaz. Deploy öncesi kontrol ise GitHub
+tarafındadır: `.github/workflows/ci.yml` her push'ta aynı Python 3.12 sürümüyle
+kurulumu, testleri ve `PORT` verilip `/health`'in 200 döndüğünü doğrular.
+
+Keep-alive iş akışı (`.github/workflows/keepalive.yml`) **5 dakikada bir**, her gün
+İstanbul saatiyle 08:00–23:00 arasında `/health`'e istek atar. Pencere, BIST
+seansını ve akşam komut kullanımını kapsar; gece servis uyur (Render Free'nin
+750 instance saat/ay kotası korunur: 15 sa/gün ≈ 450–465 sa/ay, 7/24 ≈ 730 sa/ay).
+7/24 ayakta tutmak için Actions → Variables → `KEEPALIVE_ALWAYS=true`
+(bkz. `RENDER_DEPLOY.md` §5).
 
 İki çalışma seçeneği:
 
 - **Background Worker (önerilen, ücretli):** Sürekli çalışan Python döngüsüne uygun servis türü;
   dışarıdan ping gerekmez. Bot piyasa dışında/hafta sonu tarama yapmadan bekler, fakat servis açık
   kaldığından worker çalışma süresi devam eder.
-- **Free Web Service (deneysel/garantisiz):** Bir dış uptime monitörü
-  `https://<render-adresi>/health` adresine hafta içi İstanbul saatiyle 08:00–19:00 arasında
-  10 dakikada bir istek gönderebilir. Render Free, 15 dakika inbound trafik olmazsa servisi
-  uyutur; 10 dk aralık 5 dk pay bırakır. 5 dakikalık kontrol daha güvenlidir. Monitör durursa,
-  Render servisi yeniden başlatırsa veya isteği kaçırırsa bot uyuyabilir; bu yöntem uptime
-  garantisi değildir. Son kontrol 19:00'da yapılırsa servis yaklaşık 19:15'te uykuya geçer.
-  Süreç pingler arasında çalışır, yalnızca CPU'yu sürekli meşgul etmez.
+- **Free Web Service (repo içindeki iş akışıyla):** `.github/workflows/keepalive.yml`
+  `https://<render-adresi>/health` adresine **5 dakikada bir**, her gün İstanbul
+  saatiyle 08:00–23:00 arasında istek atar (gece servis uyur, tarama da yapmaz).
+  Render Free, 15 dakika inbound trafik olmazsa servisi uyutur; 5 dk aralık
+  GitHub cron gecikmelerine karşı pay bırakır. Dış monitör (cron-job.org /
+  UptimeRobot) alternatiftir ve repo aktivitesinden bağımsızdır. Monitör durursa,
+  Render servisi yeniden başlatırsa veya istek kaçarsa bot uyuyabilir; bu yöntem
+  uptime garantisi değildir. Süreç pingler arasında çalışır, CPU'yu sürekli meşgul
+  etmez; ancak uyuyan servis Telegram komutlarına cevap veremez (Telegram mesajı
+  Render'a gelen bir HTTP isteği değildir) — gece komut yanıtı için
+  `KEEPALIVE_ALWAYS=true`.
 
 Supabase SQL scriptini çalıştırdıktan sonra Render servisinin **Environment** bölümüne şu
 secret'ları girin (değerleri Git'e veya sohbete koymayın):
@@ -95,8 +129,13 @@ tablosuna yazar; yerel JSON/pickle dosyalarını da fallback olarak tutar.
 | `data.py` | yfinance fetch (`auto_adjust=False`), StockDequeManager (1H + ayrı 1D deque), tatil/veri-yok/split yardımcıları |
 | `scan_pacer.py` | Seri Yahoo istekleri için rastgele aralık, 10'lu istek grubu ve grup molası |
 | `supabase_store.py` | Supabase REST API adaptörü; servis anahtarı yalnızca environment'tan okunur |
+| `telegram_commands.py` | İki yönlü Telegram: `getUpdates` uzun yoklaması, yetki kontrolü, komut dağıtımı, 401/409 yönetimi |
+| `live_state.py` | Tarama thread'i ile komut thread'i arasında thread-safe canlı formasyon/durum paylaşımı |
 | `health_server.py` | Render `PORT` varsa `/health` liveness endpoint'i; uptime monitörleri için |
 | `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
+| `deploy_check.py` | Kurulum doktoru: repo dosyaları + env + Supabase tablosu + Telegram + Render `/health` ve `/test` uçlarını tek komutla doğrular (sır yazdırmaz) |
+| `.github/workflows/ci.yml` | Render eşdeğeri CI: Python 3.12 kurulumu, pytest, zamanlama regresyonu ve `PORT` verilip `/health` duman testi |
+| `.github/workflows/keepalive.yml` | Render Free uyumasın diye `/health` pingi (5 dk, hafta içi 09:30–18:50 İstanbul) |
 | `RENDER_DEPLOY.md` | Render Free + Supabase + Telegram kurulum rehberi; build hatası ve keep-alive dahil |
 | `.python-version` | Render build'ı için Python 3.12 sabitlemesi (3.14'te pandas derlenemiyor) |
 | `.github/workflows/keepalive.yml` | 10 dakikada bir `/health` isteği; Render Free'ın 15 dk uyku kuralını engeller |

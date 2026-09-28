@@ -1,46 +1,167 @@
 name: Render keep-alive
 
-# Render Free web service 15 dakika inbound istek gelmezse uykuya geçer
-# (kapanınca ~1 dakika sonra uyanır, bu arada bot tarama yapmaz).
-# Bu iş akışı /health endpoint'ine 10 dakikada bir istek atarak servisi ayakta
-# tutar. Render'ın kendi Cron Job'u ücretsiz DEĞİL (aylık en az 1 $), bu yüzden
-# GitHub Actions kullanıyoruz: public repo'da sınırsız, private repo'da 2000
-# dakika/ay ücretsiz (144 çalışma ≈ 25 dk).
+# Render Free web service 15 dakika INBOUND istek gelmezse uykuya geçer
+# (uyanması ~1 dakika; o dakikada tarama yapılmaz). Bot kendi Telegram/Yahoo
+# çağrılarını outbound yaptığı için servisi kendi kendine ayakta tutmaz.
+# Bu iş akışı /health ucuna periyodik istek atarak servisi uyanık tutar.
 #
-# Kurulum: repo → Settings → Secrets and variables → Actions → New repository
-# secret → RENDER_HEALTH_URL = https://<servis-adin>.onrender.com/health
+# KURULUM (tek seferlik):
+#   GitHub → repo → Settings → Secrets and variables → Actions
+#   → New repository secret  → ad: RENDER_HEALTH_URL
+#     değer: https://<servis-adin>.onrender.com/health
+#   (Secret yerine "Variables" sekmesine aynı adla eklemek de yeterlidir;
+#    iş akışı önce secret'a, yoksa variable'a bakar. Adres gizli bilgi değildir.)
 #
-# Not: GitHub Actions cron'ı UTC'dir ve "*/10" her zaman tam 10 dakikada bir
-# çalışır. Render 15 dakika eşiğine göre 5 dakika pay bırakıyoruz.
+# KURULUMU TEST ETME (secret oluşturmadan):
+#   Actions → "Render keep-alive" → Run workflow → health_url alanına
+#   https://<servis-adin>.onrender.com/health yaz → Run.
+#   (Elle tetikleme saat penceresini yok sayar, yani hemen ping atar.)
+#
+# NEDEN 5 DAKİKA: GitHub cron'u "en iyi çaba" ile çalışır ve yoğun saatlerde
+# 5-20 dk gecikebilir. 5 dakikalık aralık, 15 dakikalık uyku eşiğine karşı
+# pay bırakır. Bu repo PUBLIC olduğu için GitHub Actions dakikaları ücretsizdir
+# (private repoda 2000 dk/ay sınırı vardır ve bu iş akışı kotayı yakabilir;
+#  ayrıntı: RENDER_DEPLOY.md §5).
+#
+# BİLİNEN TUZAK: Public repoda GitHub, 60 gün repo aktivitesi olmazsa zamanlanmış
+# iş akışlarını SESSİZCE devre dışı bırakır. Actions sekmesinde uyarı görürsen
+# "Enable workflow" de; kalıcı çözüm için RENDER_DEPLOY.md §5'e bak.
+#
+# NOT: GitHub `schedule` tetikleyicisini YALNIZCA repo'nun varsayılan branch'inde
+# (main) çalıştırır. Bu dosya main'e merge edilmeden Actions sekmesinde görünmez.
+# GitHub-hosted `ubuntu-latest` kullanılır; self-hosted runner GEREKMEZ.
 
-# NOT: GitHub `schedule` tetikleyicisini YALNIZCA repo'nun varsayilan branch'inde
-# calistirir (varsayilan: main). Bu dosya main'e merge edilmeden Actions
-# sekmesinde gorunmez.
-#
-# NOT: Bu workflow GitHub-hosted `ubuntu-latest` makinesinde kosar. Repodaki
-# "Self-hosted runners" kurulum sayfasindan alinan runner token'i ve
-# actions-runner*.tar.gz paketi HIC GEREKMEZ; onlari indirme.
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
+    inputs:
+      health_url:
+        description: "Sadece bu koşu için /health adresi (boş = RENDER_HEALTH_URL)"
+        required: false
+        type: string
+      force:
+        description: "Saat penceresini yok say (elle test için önerilir)"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: render-keepalive
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 6
     steps:
-      - name: GET /health
+      # Varsayılan pencere: her gün 08:00-23:00 İstanbul. BIST seansı 09:50-18:40
+      # olduğu için tarama saatleri içeride kalır; akşam da servis uyanık kalır ki
+      # Telegram komutları (/formasyonlar, /tara) anında cevaplanır.
+      # Kota: 7/24 ≈ 730 sa/ay (750 sınırına çok yakın); 15 sa/gün ≈ 450-465 sa/ay.
+      # Pencere dışında servis 15 dk sonra uyur ve komutlar yanıtlanmaz; istersen
+      # Actions → Variables → KEEPALIVE_ALWAYS=true ile 7/24 ping açabilirsin.
+      - name: Zaman penceresi (İstanbul saati)
+        id: window
         env:
-          HEALTH_URL: ${{ secrets.RENDER_HEALTH_URL }}
+          WINDOW_START: ${{ vars.KEEPALIVE_WINDOW_START }}
+          WINDOW_END: ${{ vars.KEEPALIVE_WINDOW_END }}
+          ALWAYS: ${{ vars.KEEPALIVE_ALWAYS }}
+          WEEKDAYS_ONLY: ${{ vars.KEEPALIVE_WEEKDAYS_ONLY }}
         run: |
-          if [ -z "$HEALTH_URL" ]; then
-            echo "RENDER_HEALTH_URL secret tanimli degil; ping atlandi."
+          set -uo pipefail
+          start="${WINDOW_START:-0800}"
+          end="${WINDOW_END:-2300}"
+          if [ "${ALWAYS:-}" = "true" ]; then
+            echo "KEEPALIVE_ALWAYS=true -> 7/24 ping (pencere yok sayıldı)"
+            echo "in_window=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "GET $HEALTH_URL"
-          code=$(curl -sS -o /tmp/health.json -w "%{http_code}" \
-                 --max-time 90 --retry 2 --retry-delay 10 "$HEALTH_URL" || echo "000")
-          cat /tmp/health.json || true
-          echo
-          echo "HTTP $code"
-          [ "$code" = "200" ]
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] \
+             && [ "${{ github.event.inputs.force }}" != "false" ]; then
+            echo "Elle tetiklendi -> pencere yok sayıldı"
+            echo "in_window=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          now=$((10#$(TZ=Europe/Istanbul date +%H%M)))
+          start_num=$((10#$start))
+          end_num=$((10#$end))
+          dow=$(TZ=Europe/Istanbul date +%u)   # 1=Pazartesi ... 7=Pazar
+          echo "İstanbul: $(TZ=Europe/Istanbul date '+%Y-%m-%d %H:%M %A') (gün=$dow, pencere=$start-$end)"
+          if [ "${WEEKDAYS_ONLY:-}" = "true" ] && [ "$dow" -gt 5 ]; then
+            echo "Hafta sonu ve KEEPALIVE_WEEKDAYS_ONLY=true -> ping atlandı"
+            echo "in_window=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$now" -ge "$start_num" ] && [ "$now" -le "$end_num" ]; then
+            echo "in_window=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Pencere dışı (gece): ping atlandı, servis uyur. 08:00'deki ilk ping"
+            echo "onu uyandırır; gece komut yanıtı istiyorsan KEEPALIVE_ALWAYS=true yap."
+            echo "in_window=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: GET /health
+        if: steps.window.outputs.in_window == 'true'
+        env:
+          DISPATCH_URL: ${{ github.event.inputs.health_url }}
+          SECRET_URL: ${{ secrets.RENDER_HEALTH_URL }}
+          VAR_URL: ${{ vars.RENDER_HEALTH_URL }}
+        run: |
+          set -uo pipefail
+          url="${DISPATCH_URL:-${SECRET_URL:-$VAR_URL}}"
+
+          if [ -z "$url" ]; then
+            echo "::warning title=Keep-alive kapalı::RENDER_HEALTH_URL tanımlı değil. Settings → Secrets and variables → Actions bölümünden ekleyin, yoksa Render servisi 15 dk sonra uyur."
+            {
+              echo "### ⚠️ Keep-alive çalışmıyor"
+              echo ""
+              echo "RENDER_HEALTH_URL secret **veya** variable olarak tanımlı değil."
+              echo "Settings → Secrets and variables → Actions → New repository secret"
+              echo ""
+              echo 'Değer: `https://<servis-adin>.onrender.com/health`'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          case "$url" in
+            *\?*) sep='&' ;;
+            *)    sep='?' ;;
+          esac
+
+          ok=0
+          code="000"
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /tmp/health.json -w "%{http_code}" \
+                     --max-time 120 --retry 1 --retry-delay 5 \
+                     -H "Cache-Control: no-cache" \
+                     -H "User-Agent: formation-bot-keepalive" \
+                     "${url}${sep}ka=$(date +%s)" || echo "000")
+            body=$(head -c 400 /tmp/health.json 2>/dev/null || true)
+            echo "Deneme $attempt: HTTP $code — $body"
+            if [ "$code" = "200" ] && printf '%s' "$body" | grep -q '"status"'; then
+              ok=1
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "  (uyuyan servis ~1 dk'da uyanır, 45 sn sonra tekrar denenecek)"
+              sleep 45
+            fi
+          done
+
+          {
+            echo "### Render keep-alive"
+            echo ""
+            echo "- Hedef: \`$url\`"
+            echo "- Son HTTP kodu: **$code**"
+            echo "- Sonuç: $([ "$ok" = "1" ] && echo '✅ servis uyanık' || echo '❌ yanıt yok')"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$ok" = "1" ]; then
+            exit 0
+          fi
+          echo "::error title=/health yanıt vermedi::3 denemede de yanıt alınamadı (son HTTP $code). Render → Logs ve RENDER_DEPLOY.md §1'e bakın."
+          exit 1
