@@ -67,13 +67,22 @@ class _HealthHandler(BaseHTTPRequestHandler):
         self._send_json(200 if ok else 502, {"ok": ok, "detail": detail})
 
     def _send_health(self):
-        if self.path not in ("/", "/health"):
-            if self.path.split("?")[0] == "/test":
-                self._handle_test()
-                return
-            self.send_error(404)
+        # Sorgu dizesini AT: uptime monitörleri ve keep-alive iş akışı
+        # `/health?ka=<zaman>` gibi önbellek kırıcı parametre ekler. Önceden
+        # self.path ("/health?ka=...") tam eşleşmediği için 404 dönüyordu ve
+        # ping "servis ölü" sanılıyordu. Sondaki tek slash da tolere edilir.
+        yol = urlparse(self.path).path
+        if len(yol) > 1:
+            yol = yol.rstrip("/") or "/"
+        if yol in ("/", "/health"):
+            self._send_ok()
             return
+        if yol == "/test":
+            self._handle_test()
+            return
+        self.send_error(404)
 
+    def _send_ok(self):
         body = json.dumps({
             "status": "ok",
             "service": "formation-bot",

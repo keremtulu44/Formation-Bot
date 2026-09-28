@@ -118,3 +118,38 @@ def test_test_route_reports_sender_failure_as_bad_gateway():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_health_ignores_query_string_and_trailing_slash():
+    """Keep-alive ve uptime monitörleri `/health?ka=...` çağırır; 404 olmamalı."""
+    server = start_render_health_server({"PORT": "0"})
+    try:
+        port = server.server_address[1]
+        for yol in ("/health?ka=1727530000", "/health/", "/?x=1", "/health?t=1&b=2"):
+            durum, govde = _get(port, yol)
+            assert durum == 200, yol
+            assert govde["status"] == "ok", yol
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_test_route_query_string_ile_calisir():
+    server = start_render_health_server(
+        {"PORT": "0", "TELEGRAM_TEST_KEY": "k7m2x9"},
+        test_sender=lambda text: (True, "mesaj gonderildi"),
+    )
+    try:
+        port = server.server_address[1]
+        durum, govde = _get(port, "/test?k=k7m2x9")
+        assert durum == 200 and govde["ok"] is True
+        # Bilinmeyen yol: send_error HTML döner, JSON beklemeyiz.
+        try:
+            urlopen(f"http://127.0.0.1:{port}/bilinmeyen?x=1", timeout=2)
+        except HTTPError as exc:
+            assert exc.code == 404
+        else:
+            raise AssertionError("bilinmeyen yol 404 dönmeli")
+    finally:
+        server.shutdown()
+        server.server_close()
