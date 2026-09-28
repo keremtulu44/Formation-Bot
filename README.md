@@ -81,23 +81,29 @@ anahtar değerleri hiçbir zaman ekrana basılmaz. Deploy öncesi kontrol ise Gi
 tarafındadır: `.github/workflows/ci.yml` her push'ta aynı Python 3.12 sürümüyle
 kurulumu, testleri ve `PORT` verilip `/health`'in 200 döndüğünü doğrular.
 
-Keep-alive iş akışı (`.github/workflows/keepalive.yml`) **5 dakikada bir**, yalnızca
-hafta içi İstanbul saatiyle 09:30–18:50 arasında `/health`'e istek atar; pencere
-dışında servis uyur (Render Free'nin 750 instance saat/ay kotası korunur,
-bkz. `RENDER_DEPLOY.md` §5).
+Keep-alive iş akışı (`.github/workflows/keepalive.yml`) **5 dakikada bir**, her gün
+İstanbul saatiyle 08:00–23:00 arasında `/health`'e istek atar. Pencere, BIST
+seansını ve akşam komut kullanımını kapsar; gece servis uyur (Render Free'nin
+750 instance saat/ay kotası korunur: 15 sa/gün ≈ 450–465 sa/ay, 7/24 ≈ 730 sa/ay).
+7/24 ayakta tutmak için Actions → Variables → `KEEPALIVE_ALWAYS=true`
+(bkz. `RENDER_DEPLOY.md` §5).
 
 İki çalışma seçeneği:
 
 - **Background Worker (önerilen, ücretli):** Sürekli çalışan Python döngüsüne uygun servis türü;
   dışarıdan ping gerekmez. Bot piyasa dışında/hafta sonu tarama yapmadan bekler, fakat servis açık
   kaldığından worker çalışma süresi devam eder.
-- **Free Web Service (deneysel/garantisiz):** Bir dış uptime monitörü
-  `https://<render-adresi>/health` adresine hafta içi İstanbul saatiyle 08:00–19:00 arasında
-  10 dakikada bir istek gönderebilir. Render Free, 15 dakika inbound trafik olmazsa servisi
-  uyutur; 10 dk aralık 5 dk pay bırakır. 5 dakikalık kontrol daha güvenlidir. Monitör durursa,
-  Render servisi yeniden başlatırsa veya isteği kaçırırsa bot uyuyabilir; bu yöntem uptime
-  garantisi değildir. Son kontrol 19:00'da yapılırsa servis yaklaşık 19:15'te uykuya geçer.
-  Süreç pingler arasında çalışır, yalnızca CPU'yu sürekli meşgul etmez.
+- **Free Web Service (repo içindeki iş akışıyla):** `.github/workflows/keepalive.yml`
+  `https://<render-adresi>/health` adresine **5 dakikada bir**, her gün İstanbul
+  saatiyle 08:00–23:00 arasında istek atar (gece servis uyur, tarama da yapmaz).
+  Render Free, 15 dakika inbound trafik olmazsa servisi uyutur; 5 dk aralık
+  GitHub cron gecikmelerine karşı pay bırakır. Dış monitör (cron-job.org /
+  UptimeRobot) alternatiftir ve repo aktivitesinden bağımsızdır. Monitör durursa,
+  Render servisi yeniden başlatırsa veya istek kaçarsa bot uyuyabilir; bu yöntem
+  uptime garantisi değildir. Süreç pingler arasında çalışır, CPU'yu sürekli meşgul
+  etmez; ancak uyuyan servis Telegram komutlarına cevap veremez (Telegram mesajı
+  Render'a gelen bir HTTP isteği değildir) — gece komut yanıtı için
+  `KEEPALIVE_ALWAYS=true`.
 
 Supabase SQL scriptini çalıştırdıktan sonra Render servisinin **Environment** bölümüne şu
 secret'ları girin (değerleri Git'e veya sohbete koymayın):

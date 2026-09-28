@@ -399,20 +399,25 @@ Repo içinde `.github/workflows/keepalive.yml` hazır. **5 dakikada bir**
 - Komutlar (`/formasyonlar`, `/tara`, ...) da bu yüzden servis uyanıkken çalışır:
   servis uykuya geçtiyse ilk komut onu ~1 dakikada uyandırır ama cevap ilk turda
   gecikebilir. Seans içinde ping penceresi bunu zaten engeller.
-- Ping **yalnızca İstanbul saatiyle hafta içi 09:30–18:50** arasında atılır;
-  BIST kapalıyken bot zaten tarama yapmaz. Bunun ölçülebilir faydası: Render
-  Free aylık **750 instance saat** verir; 7/24 ping ≈ 730 saat/ay (tüm kota),
-  pencere ≈ 190 saat/ay. Kota taşarsa servis ay sonuna kadar askıya alınır.
+- Ping **her gün İstanbul saatiyle 08:00–23:00** arasında atılır; gece servis
+  uyur. Pencere BIST seansını (09:50–18:40) kapsar **ve akşam Telegram
+  komutları da anında cevaplanır** (uyuyan servis komuta cevap veremez, çünkü
+  Telegram mesajı Render'a gelen bir HTTP isteği değildir; gelen tek trafik bu
+  pingdir). Kota: Render Free aylık **750 instance saat** verir; 15 sa/gün
+  ≈ 450–465 saat/ay, 7/24 ise ≈ 730 saat/ay (sınıra çok yakın). Kota taşarsa
+  servis ay sonuna kadar askıya alınır.
 - Pencere dışında iş akışı “içeride miyim?” kontrolünden sonra hiçbir şey
-  yapmaz ve yeşil biter; servis 15 dakikada bir normal şekilde uyur, 09:30'daki
+  yapmaz ve yeşil biter; servis 15 dakikada bir normal şekilde uyur, 08:00'deki
   ilk ping onu ~1 dakikada uyandırır ve bot ilk taramayı 10:35'te yapar.
+- Gece komut yanıtı da istiyorsan `KEEPALIVE_ALWAYS=true` yap (7/24 ping).
 
 Ayarlar (istersen, Actions → Variables):
 
 | Değişken | Etkisi |
 |---|---|
-| `KEEPALIVE_ALWAYS=true` | Pencereyi kapatır, 7/24 ping atar |
-| `KEEPALIVE_WINDOW_START` / `KEEPALIVE_WINDOW_END` | Pencereyi değiştirir (varsayılan `0930` / `1850`) |
+| `KEEPALIVE_ALWAYS=true` | Pencereyi kapatır, 7/24 ping atar (komutlar gece de çalışır, kota ~730 sa/ay) |
+| `KEEPALIVE_WINDOW_START` / `KEEPALIVE_WINDOW_END` | Pencereyi değiştirir (varsayılan `0800` / `2300`; `0930`/`1850` = yalnızca seans) |
+| `KEEPALIVE_WEEKDAYS_ONLY=true` | Hafta sonu ping atmaz (pencere hafta içi kalır) |
 
 Kurulum (tek seferlik, telefondan da yapılabilir):
 

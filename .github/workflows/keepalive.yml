@@ -58,20 +58,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      # Servis yalnızca tarama saatlerinde ayakta tutulur. BIST seansı 09:50-18:40
-      # (İstanbul). Pencere dışında ping atılmaz → Render Free aylık 750 instance
-      # saatinden tasarruf edilir (7/24 ping ≈ 730 saat, pencere ≈ 190 saat/ay).
-      # Bot kapalıyken tarama da yapmaz; 09:30'daki ilk ping servisi uyandırır.
+      # Varsayılan pencere: her gün 08:00-23:00 İstanbul. BIST seansı 09:50-18:40
+      # olduğu için tarama saatleri içeride kalır; akşam da servis uyanık kalır ki
+      # Telegram komutları (/formasyonlar, /tara) anında cevaplanır.
+      # Kota: 7/24 ≈ 730 sa/ay (750 sınırına çok yakın); 15 sa/gün ≈ 450-465 sa/ay.
+      # Pencere dışında servis 15 dk sonra uyur ve komutlar yanıtlanmaz; istersen
+      # Actions → Variables → KEEPALIVE_ALWAYS=true ile 7/24 ping açabilirsin.
       - name: Zaman penceresi (İstanbul saati)
         id: window
         env:
           WINDOW_START: ${{ vars.KEEPALIVE_WINDOW_START }}
           WINDOW_END: ${{ vars.KEEPALIVE_WINDOW_END }}
           ALWAYS: ${{ vars.KEEPALIVE_ALWAYS }}
+          WEEKDAYS_ONLY: ${{ vars.KEEPALIVE_WEEKDAYS_ONLY }}
         run: |
           set -uo pipefail
-          start="${WINDOW_START:-0930}"
-          end="${WINDOW_END:-1850}"
+          start="${WINDOW_START:-0800}"
+          end="${WINDOW_END:-2300}"
           if [ "${ALWAYS:-}" = "true" ]; then
             echo "KEEPALIVE_ALWAYS=true -> 7/24 ping (pencere yok sayıldı)"
             echo "in_window=true" >> "$GITHUB_OUTPUT"
@@ -88,11 +91,16 @@ jobs:
           end_num=$((10#$end))
           dow=$(TZ=Europe/Istanbul date +%u)   # 1=Pazartesi ... 7=Pazar
           echo "İstanbul: $(TZ=Europe/Istanbul date '+%Y-%m-%d %H:%M %A') (gün=$dow, pencere=$start-$end)"
-          if [ "$dow" -le 5 ] && [ "$now" -ge "$start_num" ] && [ "$now" -le "$end_num" ]; then
+          if [ "${WEEKDAYS_ONLY:-}" = "true" ] && [ "$dow" -gt 5 ]; then
+            echo "Hafta sonu ve KEEPALIVE_WEEKDAYS_ONLY=true -> ping atlandı"
+            echo "in_window=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$now" -ge "$start_num" ] && [ "$now" -le "$end_num" ]; then
             echo "in_window=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Pencere dışı: ping atlandı. Servisin uyuması normaldir; 09:30'daki"
-            echo "ilk ping onu uyandırır ve bot ilk taramayı 10:35'te yapar."
+            echo "Pencere dışı (gece): ping atlandı, servis uyur. 08:00'deki ilk ping"
+            echo "onu uyandırır; gece komut yanıtı istiyorsan KEEPALIVE_ALWAYS=true yap."
             echo "in_window=false" >> "$GITHUB_OUTPUT"
           fi
 
