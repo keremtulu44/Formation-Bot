@@ -348,6 +348,34 @@ def _health_hedefi(url: str) -> str:
     return temiz
 
 
+def _yerel_commit() -> str:
+    """Yerel main/HEAD kısa commit'i (git yoksa boş)."""
+    import subprocess
+
+    try:
+        cikti = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=10,
+        )
+        return cikti.stdout.strip() if cikti.returncode == 0 else ""
+    except Exception:  # noqa: BLE001 - git yoksa karşılaştırma yapılmaz
+        return ""
+
+
+def _commit_karsilastir(canli_commit: str) -> None:
+    """Canlı sürüm yerelden farklıysa: deploy düşmemiş ya da eski kod çalışıyor."""
+    yerel = _yerel_commit()
+    if not canli_commit or not yerel:
+        return
+    if canli_commit == yerel[:7] or yerel.startswith(canli_commit) or canli_commit.startswith(yerel):
+        satir(OK, f"Canlı sürüm yerelle aynı ({canli_commit})")
+        return
+    satir(WARN, f"Canlı sürüm yerelden FARKLI (canlı {canli_commit} ≠ yerel {yerel})",
+          "Render yeni commit'i henüz deploy etmemiş olabilir: Dashboard → servis → "
+          "Events'te 'Deploy succeeded' var mı? Yoksa Manual Deploy → Deploy latest commit. "
+          "Auto-Deploy kapalıysa her merge'de elle deploy gerekir.")
+
+
 def kontrol_render(url: str, test_key: str) -> None:
     bolum("5) RENDER SERVİSİ")
     if not url:
@@ -373,7 +401,10 @@ def kontrol_render(url: str, test_key: str) -> None:
         except ValueError:
             govde = {}
         if govde.get("status") == "ok":
-            satir(OK, f"/health ayakta ({govde.get('service', '?')})", hedef)
+            canli_commit = str(govde.get("commit") or "")
+            detay = hedef + (f" · canlı sürüm: {canli_commit}" if canli_commit else "")
+            satir(OK, f"/health ayakta ({govde.get('service', '?')})", detay)
+            _commit_karsilastir(canli_commit)
         else:
             satir(WARN, "200 döndü ama gövde beklenen JSON değil", str(govde)[:160])
     elif r.status_code in (502, 503, 504):

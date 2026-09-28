@@ -83,11 +83,21 @@ class _HealthHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def _send_ok(self):
-        body = json.dumps({
+        # Render bu değişkenleri deploy sırasında enjekte eder: hangi commit'in
+        # canlı olduğunu /health'ten görebilmek, "deploy düştü mü?" sorusunu
+        # log/dashboard gezmeden cevaplar (deploy_check.py bunu karşılaştırır).
+        payload = {
             "status": "ok",
             "service": "formation-bot",
             "time": datetime.now(timezone.utc).isoformat(),
-        }).encode("utf-8")
+        }
+        commit = (os.environ.get("RENDER_GIT_COMMIT") or "").strip()
+        if commit:
+            payload["commit"] = commit[:7]
+        branch = (os.environ.get("RENDER_GIT_BRANCH") or "").strip()
+        if branch:
+            payload["branch"] = branch
+        body = json.dumps(payload).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
