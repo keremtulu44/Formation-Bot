@@ -1,0 +1,13 @@
+# OPSIYONEL - Render build'ına DAHİL EDİLMEZ.
+# Botun canlı veri kaynağı yfinance'tir; requirements.txt yeterlidir.
+# Bu dosya yalnızca terminalde denemek istersen:
+#   pip install -r requirements-optional.txt
+#
+# Neden ayrı: borsapy -> openai, pymupdf4llm, lxml, tradingview-screener gibi
+# ağır ve C/Rust uzantılı bir bağımlılık zinciri getirir. Render Free'da
+# (Hobby workspace) aylık 500 build dakikası sınırı vardır; bu zincir kurulumu
+# yavaşlatır ve herhangi bir pakette hazır tekerlek (wheel) bulunamazsa build
+# kaynak koddan derlemeye düşüp patlıyor. Repo içinde borsapy'yi import eden
+# tek bir satır yok, bu yüzden deploy zincirinden çıkarıldı.
+
+borsapy==0.11.0

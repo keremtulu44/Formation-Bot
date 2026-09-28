@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+*.egg-info/
+.env
+*.log
+
+# Logs ve test klasörleri - git'e eklenmesin
+logs/
+test_data/
+test_bot_data/
+
+# Üretim çıktıları - geçici
+CANLI_FORMASYONLAR.txt
+bot_data/heartbeat.json
+bot_data/telegram_kap.json
+bot_data/telegram_soguma.json
+bot_data/*_gunluk.json
+
+# OS
+.DS_Store
+*.swp
+*~
+
+# IDE
+.vscode/
+.idea/
+
+# Not: bot_data/ BİLEREK git'te tutuluyor (senin isteğin) - 28 hisse * 360 bar gerçek veri
+# Hem .json (human-readable) hem .pkl (hızlı yükleme) pushlanıyor.
+# DİKKAT (canlı sunucu): bot her taramada bu dosyaları yeniden yazar. Sunucuda
+# bot_data'yı repo dışına almak (örn. DATA_DIR=/var/lib/bist-bot/bot_data) veya
+# deployment'ı "git fetch + dosyaları ezmeden" yapmak gerekir, yoksa git pull çakışır.

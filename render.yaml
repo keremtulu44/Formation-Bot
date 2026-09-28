@@ -1,0 +1,38 @@
+# OPSIYONEL Render Blueprint.
+#
+# DİKKAT: Bu dosya yalnızca servisi Blueprint ile oluşturmak istersen kullanılır.
+# Dashboard'dan zaten bir Web Service oluşturduysan BURAYA UYGULAMA, yoksa
+# aynı servisin ikinci kopyası (double billing / iki bot aynı Telegram'a mesaj)
+# oluşur. Mevcut serviyi yönetmek için Render Dashboard > Settings'i kullan.
+#
+# Python sürümü burada değil, repodaki `.python-version` dosyasında sabitlendi
+# (3.12). Gerekçe: Render 2026-02-11 sonrası oluşturulan servislerde varsayılan
+# Python 3.14'tür ve pandas 2.2.2 / numpy 1.26.4'ün cp314 tekerleği yoktur;
+# pip kaynak koddan derlemeye düşüp build'i patlatıyor. `.python-version`
+# Render dokümanında desteklenen yöntemdir ve dashboard ayarından önceliklidir.
+
+services:
+  - type: web
+    name: formation-bot
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Telegram — @BotFather'dan alınan token, Secret olarak işaretlenir
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      # Kendi Telegram user id'n (ör. @userinfobot)
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      # Supabase — Settings > API bölümünden
+      - key: SUPABASE_URL
+        sync: false
+      # Yeni "sb_secret_..." anahtarı veya eski service_role JWT; ikisi de olur
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: BOT_PROFILE
+        value: Dengeli

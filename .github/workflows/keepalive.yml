@@ -1,0 +1,46 @@
+name: Render keep-alive
+
+# Render Free web service 15 dakika inbound istek gelmezse uykuya geçer
+# (kapanınca ~1 dakika sonra uyanır, bu arada bot tarama yapmaz).
+# Bu iş akışı /health endpoint'ine 10 dakikada bir istek atarak servisi ayakta
+# tutar. Render'ın kendi Cron Job'u ücretsiz DEĞİL (aylık en az 1 $), bu yüzden
+# GitHub Actions kullanıyoruz: public repo'da sınırsız, private repo'da 2000
+# dakika/ay ücretsiz (144 çalışma ≈ 25 dk).
+#
+# Kurulum: repo → Settings → Secrets and variables → Actions → New repository
+# secret → RENDER_HEALTH_URL = https://<servis-adin>.onrender.com/health
+#
+# Not: GitHub Actions cron'ı UTC'dir ve "*/10" her zaman tam 10 dakikada bir
+# çalışır. Render 15 dakika eşiğine göre 5 dakika pay bırakıyoruz.
+
+# NOT: GitHub `schedule` tetikleyicisini YALNIZCA repo'nun varsayilan branch'inde
+# calistirir (varsayilan: main). Bu dosya main'e merge edilmeden Actions
+# sekmesinde gorunmez.
+#
+# NOT: Bu workflow GitHub-hosted `ubuntu-latest` makinesinde kosar. Repodaki
+# "Self-hosted runners" kurulum sayfasindan alinan runner token'i ve
+# actions-runner*.tar.gz paketi HIC GEREKMEZ; onlari indirme.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: GET /health
+        env:
+          HEALTH_URL: ${{ secrets.RENDER_HEALTH_URL }}
+        run: |
+          if [ -z "$HEALTH_URL" ]; then
+            echo "RENDER_HEALTH_URL secret tanimli degil; ping atlandi."
+            exit 0
+          fi
+          echo "GET $HEALTH_URL"
+          code=$(curl -sS -o /tmp/health.json -w "%{http_code}" \
+                 --max-time 90 --retry 2 --retry-delay 10 "$HEALTH_URL" || echo "000")
+          cat /tmp/health.json || true
+          echo
+          echo "HTTP $code"
+          [ "$code" = "200" ]
