@@ -59,6 +59,12 @@ Boş bırakırsan bot çalışır ama: #2 boşsa önbellek/Telegram state'i kayd
 |---|---|---|---|
 | C1 | `RENDER_HEALTH_URL` | **Secrets** *veya* **Variables** | `__` ← Render adresi + `/health` |
 
+> **Deploy doğrulama:** `/health` yanıtı artık canlı commit'i de içerir:
+> `{"status":"ok",...,"commit":"67cadbd","branch":"main"}`. `deploy_check.py`
+> bunu yerel HEAD ile karşılaştırır ve fark varsa "Render yeni commit'i deploy
+> etmemiş" uyarısı verir. Böylece "merge ettim ama eski sürüm çalışıyor" durumu
+> tek komutla görünür olur.
+
 Render'ın servis sayfasında en üstte `https://<adın>.onrender.com` yazar;
 `SUPABASE_URL`'deki gibi sadece o adresi al, `/rest/v1` gibi bir şey ekleme.
 Örnek biçim: `https://formation-bot-xxxx.onrender.com/health`
@@ -523,6 +529,7 @@ Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 | `numpy/meson` derleme hatası | Aynı sorun; `.python-version` = 3.12 çözüm |
 | `/health` 404 veriyor | Start Command `python main.py` değil. Logda `PORT ... başladı` satırını ara |
 | `/health?ka=...` 404 veriyordu | Düzeltildi: uç artık sorgu dizesini ve sondaki slash'ı yok sayar. Eski sürümde keep-alive pingi 404 alıp "servis ölü" sanılıyordu |
+| Merge ettim ama davranış değişmedi | Render yeni commit'i deploy etmemiş olabilir: `deploy_check.py` canlı sürümü (`/health` içindeki `commit`) yerel HEAD ile karşılaştırır. Dashboard → Events → yoksa **Manual Deploy → Deploy latest commit**; Auto-Deploy'un açık olduğundan emin ol (B8) |
 | Sayfa "Render is loading..." | Free instance uyuyor, ~1 dk sonra düzelir (keep-alive kurulmadıysa) |
 | Telegram mesajleri gelmiyor | Logda `Telegram bağlantısı OK` yok → token/chat_id hatalı; bot'a `/start` atılmamış olabilir |
 | Bot komutlara cevap vermiyor | Logda `Telegram komut dinleyicisi başladı` var mı? `HTTP 409` varsa aynı token'ı başka bir kopya (Termux/PC) dinliyor → onu kapatın |

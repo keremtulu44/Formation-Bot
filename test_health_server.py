@@ -153,3 +153,31 @@ def test_test_route_query_string_ile_calisir():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_health_render_git_bilgilerini_dondurur(monkeypatch):
+    """Render deploy sırasında RENDER_GIT_COMMIT/Branch enjekte eder."""
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "67cadbd1f2e3")
+    monkeypatch.setenv("RENDER_GIT_BRANCH", "main")
+    server = start_render_health_server({"PORT": "0"})
+    try:
+        port = server.server_address[1]
+        _, govde = _get(port, "/health?ka=1")
+        assert govde["commit"] == "67cadbd"
+        assert govde["branch"] == "main"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_health_commit_alanini_env_yokken_eklemez(monkeypatch):
+    monkeypatch.delenv("RENDER_GIT_COMMIT", raising=False)
+    monkeypatch.delenv("RENDER_GIT_BRANCH", raising=False)
+    server = start_render_health_server({"PORT": "0"})
+    try:
+        port = server.server_address[1]
+        _, govde = _get(port, "/health")
+        assert "commit" not in govde and "branch" not in govde
+    finally:
+        server.shutdown()
+        server.server_close()

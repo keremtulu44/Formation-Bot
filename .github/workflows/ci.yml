@@ -59,6 +59,9 @@ jobs:
       - name: Render duman testi (/health ayakta mı?)
         run: |
           set -uo pipefail
+          # Render'ın deploy sırasında enjekte ettiği değişkenler (sürüm görünürlüğü)
+          export RENDER_GIT_COMMIT=deadbeefcafe
+          export RENDER_GIT_BRANCH=main
           PORT=10000 python main.py > /tmp/bot.log 2>&1 &
           BOT_PID=$!
           trap 'kill "$BOT_PID" 2>/dev/null || true' EXIT
@@ -93,6 +96,9 @@ jobs:
             echo "::error title=Sorgu dizesi /health'i bozuyor::/health?ka=1 HTTP $kod_q döndü; sorgu dizesi (ve sondaki slash) yok sayılmalı."
             exit 1
           fi
+          grep -q '"commit": "deadbee"' /tmp/health_q.json \
+            || { echo "::error::/health canlı sürüm (RENDER_GIT_COMMIT) bilgisini döndürmeli"; exit 1; }
+          echo "✅ /health sorgu dizesiyle 200 ve sürüm bilgisi (commit) içeriyor"
 
           code=$(curl -s -o /tmp/test.json -w "%{http_code}" \
                  "http://127.0.0.1:10000/test?k=yanlis-anahtar" || echo "000")
