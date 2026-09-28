@@ -1,0 +1,99 @@
+name: CI (Render parity)
+
+# Neden bu iş akışı: Render build'i "pip install -r requirements.txt" ile
+# Python 3.12'de çalışır. Burada aynı sürümle kurulum + testler + gerçek bir
+# "PORT ver, /health bekle" duman testi koşar; deploy'dan ÖNCE kırılırsa burada
+# kırmızı olur. Render'ın en pahalı hatası (cp314 tekerleği olmadığı için
+# pandas'ın kaynak koddan derlenip patlaması) tam olarak bu adımda yakalanır.
+
+on:
+  push:
+    branches: ["main", "arena/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Python sürümü repodaki .python-version (3.12) dosyasından okunur - yani
+      # Render'ın gördüğü dosyanın AYNISI. Sürüm değişirse CI de onu izler.
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+
+      - name: Python sürümü (Render ile aynı olmalı)
+        run: |
+          python -V
+          echo "--- .python-version ---"
+          cat .python-version
+
+      - name: Bağımlılıklar (Render Build Command'in aynısı)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Kurulu sürümler
+        run: pip show pandas numpy yfinance | grep -E "^(Name|Version)"
+
+      - name: Unit testler (pytest)
+        run: python -m pytest -q
+
+      - name: Zamanlama / ölü formasyon regresyonu (90 kontrol)
+        run: python test_tarama_zamani.py
+
+      # Render Start Command'i ("python main.py") burada birebir denenir:
+      # PORT verilince /health açılmalı, TELEGRAM_TEST_KEY yokken /test 404
+      # dönmeli ve Telegram'a hiç istek gitmemeli.
+      - name: Render duman testi (/health ayakta mı?)
+        run: |
+          set -uo pipefail
+          PORT=10000 python main.py > /tmp/bot.log 2>&1 &
+          BOT_PID=$!
+          trap 'kill "$BOT_PID" 2>/dev/null || true' EXIT
+
+          up=0
+          for i in $(seq 1 30); do
+            if curl -fsS -m 5 -o /tmp/health.json http://127.0.0.1:10000/health; then
+              up=1
+              break
+            fi
+            sleep 2
+          done
+
+          echo "--- /health ---"
+          cat /tmp/health.json 2>/dev/null || true
+          echo
+
+          if [ "$up" != "1" ]; then
+            echo "::error title=/health açılmadı::PORT verildiği halde 60 sn içinde /health yanıt vermedi."
+            tail -40 /tmp/bot.log
+            exit 1
+          fi
+
+          grep -q '"status": "ok"' /tmp/health.json \
+            || { echo "::error::/health gövdesi beklenen JSON değil"; exit 1; }
+
+          code=$(curl -s -o /tmp/test.json -w "%{http_code}" \
+                 "http://127.0.0.1:10000/test?k=yanlis-anahtar" || echo "000")
+          echo "--- /test (TELEGRAM_TEST_KEY tanımsız) -> HTTP $code ---"
+          cat /tmp/test.json; echo
+          if [ "$code" != "404" ]; then
+            echo "::error title=/test kapalı değil::TELEGRAM_TEST_KEY tanımsızken /test 404 dönmeli (Telegram'a istek gitmemeli). Dönen kod: $code"
+            exit 1
+          fi
+
+          echo "--- bot logu (ilk 25 satır) ---"
+          head -25 /tmp/bot.log
+          echo "OK: start command ayakta ve /health 200 döndü"

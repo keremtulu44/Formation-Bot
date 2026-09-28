@@ -58,6 +58,23 @@ tanımlı değilse bu yol 404 döner ve Telegram'a hiçbir istek gitmez.
 Bot **tek yönlüdür**: Telegram'dan gelen mesajları okumaz, yani `/start` gibi
 komutlara cevap vermez. Sadece formasyon tetiklendiğinde `sendMessage` çağırır.
 
+Kurulumun neresinde takıldığını tek komutla görmek için:
+
+```bash
+python deploy_check.py --url https://<servis-adin>.onrender.com
+python deploy_check.py --url https://<servis-adin>.onrender.com --test-key <TELEGRAM_TEST_KEY>
+```
+
+Her satır ✅/⚠️/❌ ile biter, ❌ satırının altında ne yapılacağı yazar; token ve
+anahtar değerleri hiçbir zaman ekrana basılmaz. Deploy öncesi kontrol ise GitHub
+tarafındadır: `.github/workflows/ci.yml` her push'ta aynı Python 3.12 sürümüyle
+kurulumu, testleri ve `PORT` verilip `/health`'in 200 döndüğünü doğrular.
+
+Keep-alive iş akışı (`.github/workflows/keepalive.yml`) **5 dakikada bir**, yalnızca
+hafta içi İstanbul saatiyle 09:30–18:50 arasında `/health`'e istek atar; pencere
+dışında servis uyur (Render Free'nin 750 instance saat/ay kotası korunur,
+bkz. `RENDER_DEPLOY.md` §5).
+
 İki çalışma seçeneği:
 
 - **Background Worker (önerilen, ücretli):** Sürekli çalışan Python döngüsüne uygun servis türü;
@@ -97,6 +114,9 @@ tablosuna yazar; yerel JSON/pickle dosyalarını da fallback olarak tutar.
 | `supabase_store.py` | Supabase REST API adaptörü; servis anahtarı yalnızca environment'tan okunur |
 | `health_server.py` | Render `PORT` varsa `/health` liveness endpoint'i; uptime monitörleri için |
 | `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
+| `deploy_check.py` | Kurulum doktoru: repo dosyaları + env + Supabase tablosu + Telegram + Render `/health` ve `/test` uçlarını tek komutla doğrular (sır yazdırmaz) |
+| `.github/workflows/ci.yml` | Render eşdeğeri CI: Python 3.12 kurulumu, pytest, zamanlama regresyonu ve `PORT` verilip `/health` duman testi |
+| `.github/workflows/keepalive.yml` | Render Free uyumasın diye `/health` pingi (5 dk, hafta içi 09:30–18:50 İstanbul) |
 | `RENDER_DEPLOY.md` | Render Free + Supabase + Telegram kurulum rehberi; build hatası ve keep-alive dahil |
 | `.python-version` | Render build'ı için Python 3.12 sabitlemesi (3.14'te pandas derlenemiyor) |
 | `.github/workflows/keepalive.yml` | 10 dakikada bir `/health` isteği; Render Free'ın 15 dk uyku kuralını engeller |

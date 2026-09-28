@@ -9,9 +9,15 @@ token'ın telefondan alınması ve servisi ayakta tutma (keep-alive) yöntemi.
 # ⚡ TEK SAYFA KONTROL LİSTESİ
 
 `__` = boş yer. Her satırda **soldaki yere kendi değerini yaz**, sağdaki yere
-o değeri yapıştır. Üç ayrı yere yazılacak toplam **7 şey** var.
+o değeri yapıştır. Üç ayrı yere yazılacak toplam **7 zorunlu değer** var
+(6 Render değişkeni + 1 GitHub secret'ı; `TELEGRAM_TEST_KEY` opsiyoneldir).
 
-## A) Render → Environment (5 değişken)
+> **Takıldığın yeri tek komutla bul:** `python deploy_check.py --url
+> https://<servis-adin>.onrender.com` → hangi halka kopuk (Render mı, Supabase
+> mi, Telegram mı) doğrudan söyler. Aşağıdaki A–D listesi o çıktıyı düzeltmek
+> için var. Ayrıntı: **§D3**.
+
+## A) Render → Environment (6 değişken)
 
 Render Dashboard → servisin → **Environment** → **Add**. Sağdaki "Secret" sütununu
 `TELEGRAM_*` ve `SUPABASE_SERVICE_ROLE_KEY` için **aç**, `SUPABASE_URL` ve
@@ -37,25 +43,38 @@ Boş bırakırsan bot çalışır ama: #2 boşsa önbellek/Telegram state'i kayd
 
 | # | Ayar | Yazılacak |
 |---|---|---|
-| 6 | Region | `Frankfurt` (ABD ise calisir ama Turk'e ping uzun) |
-| 7 | Instance Type | `Free` |
-| 8 | Build Command | `pip install -r requirements.txt` |
-| 9 | Start Command | `python main.py` |
-| 10 | Health Check Path | `/health` |
-| 11 | Python Version | Bos birak - repodaki `.python-version` (3.12) zorlar |
-| 12 | Root Directory | Bos birak (repo kok) |
-| 13 | Auto-Deploy | `Yes` (yoksa her merge'de elle "Manual Deploy" bas) |
-| 14 | Branch | `main` olmali - `main`de bot kodu yoksa servis acilmaz |
+| B1 | Region | `Frankfurt` (ABD ise calisir ama Turk'e ping uzun) |
+| B2 | Instance Type | `Free` |
+| B3 | Build Command | `pip install -r requirements.txt` |
+| B4 | Start Command | `python main.py` |
+| B5 | Health Check Path | `/health` |
+| B6 | Python Version | Bos birak - repodaki `.python-version` (3.12) zorlar |
+| B7 | Root Directory | Bos birak (repo kok) |
+| B8 | Auto-Deploy | `Yes` (yoksa her merge'de elle "Manual Deploy" bas) |
+| B9 | Branch | `main` olmali - `main`de bot kodu yoksa servis acilmaz |
 
-## C) GitHub → repo → Settings → Secrets → Actions → New secret
+## C) GitHub → repo → Settings → Secrets and variables → Actions
 
-| # | Secret adı | Değer |
-|---|---|---|
-| 12 | `RENDER_HEALTH_URL` | `__` ← Render'ın verdiği adres + `/health` |
+| # | Ad | Nereye | Değer |
+|---|---|---|---|
+| C1 | `RENDER_HEALTH_URL` | **Secrets** *veya* **Variables** | `__` ← Render adresi + `/health` |
 
 Render'ın servis sayfasında en üstte `https://<adın>.onrender.com` yazar;
 `SUPABASE_URL`'deki gibi sadece o adresi al, `/rest/v1` gibi bir şey ekleme.
 Örnek biçim: `https://formation-bot-xxxx.onrender.com/health`
+
+Bu adres gizli bir bilgi değildir; **Variables** sekmesine (secret olmadan)
+eklemek de yeterlidir. İş akışı sırayla şuna bakar: elle tetikleme girdisi →
+`secrets.RENDER_HEALTH_URL` → `vars.RENDER_HEALTH_URL`. Hiçbiri yoksa iş
+akışı kırmızı olmak yerine sarı `warning` verir ve atlar (Actions sekmesinde
+görünür), yani sessizce kaybolmaz.
+
+### C2) Secret oluşturmadan hemen denemek (telefondan yapılabilir)
+
+GitHub → **Actions** → sol taraftan **Render keep-alive** → **Run workflow** →
+`health_url` alanına `https://<servis-adin>.onrender.com/health` yaz → **Run**.
+Elle tetikleme saat penceresini yok sayar ve 10 saniye içinde sonucu gösterir;
+secret'ı sonra eklemen gerekir.
 
 ## D) Yapılacak son iki iş
 
@@ -72,7 +91,22 @@ Render'ın servis sayfasında en üstte `https://<adın>.onrender.com` yazar;
    `Supabase bağlantısı OK` · `Telegram bağlantısı OK` · `health endpoint ... başladı`
 4. `https://<servis>.onrender.com/test?k=<TELEGRAM_TEST_KEY>` → `{"ok":true}`
    ve Telegram'da test mesajı düşer
-5. GitHub → **Actions** → "Render keep-alive" yeşil koşular (10 dk'da bir)
+5. GitHub → **Actions** → "Render keep-alive" yeşil koşular (5 dk'da bir,
+   yalnızca İstanbul saatiyle 09:30–18:50 arasında)
+
+### D3) Tek komutla hepsini kontrol et: `deploy_check.py`
+
+Dört adımı elle gezmek yerine (telefondan Termux'ta da çalışır):
+
+```bash
+python deploy_check.py --url https://<servis-adin>.onrender.com
+python deploy_check.py --url https://<servis-adin>.onrender.com --test-key <TELEGRAM_TEST_KEY>
+python deploy_check.py --env-file .env --send-test-message   # Supabase + Telegram
+```
+
+Her satır ya ✅ ya ⚠️ ya ❌ ile biter ve ❌ satırının altında **ne yapılacağı**
+yazar (örn. "Supabase → SQL Editor → supabase_schema.sql"). Çıkış kodu 0 ise
+kritik hata yok. Token/anahtar değerleri hiçbir zaman ekrana basılmaz.
 
 ## E) Doğrulama (loglarda arayacağın 3 satır)
 
@@ -331,21 +365,63 @@ uyanması ~1 dakika sürer, o dakika boyunca tarama yapılmaz. Telegram'a 15
 dakikada bir mesaj gelmesi de kendiliğinden koruma sağlamaz, çünkü mesaj
 **outbound** bir istektir.
 
-### Seçenek A — GitHub Actions (ücretsiz, önerilen) ✅
+### Seçenek A — GitHub Actions (public repoda ücretsiz, önerilen) ✅
 
-Repo içinde `.github/workflows/keepalive.yml` hazır. Her 10 dakikada bir
-`/health` adresine istek atar (15 dakikalık eşiğe 5 dakika pay bırakarak).
+Repo içinde `.github/workflows/keepalive.yml` hazır. **5 dakikada bir**
+`/health` adresine istek atar. Neden 5 ve neden sadece gündüz:
+
+- GitHub `schedule` **“en iyi çaba”** ile çalışır; yoğun saatlerde koşular
+  5–20 dakika gecikebilir. 15 dakikalık uyku eşiğine karşı 5 dakikalık aralık
+  pay bırakır (10 dakikalık aralıkta bir gecikme servisi uyutabilir).
+- Ping **yalnızca İstanbul saatiyle hafta içi 09:30–18:50** arasında atılır;
+  BIST kapalıyken bot zaten tarama yapmaz. Bunun ölçülebilir faydası: Render
+  Free aylık **750 instance saat** verir; 7/24 ping ≈ 730 saat/ay (tüm kota),
+  pencere ≈ 190 saat/ay. Kota taşarsa servis ay sonuna kadar askıya alınır.
+- Pencere dışında iş akışı “içeride miyim?” kontrolünden sonra hiçbir şey
+  yapmaz ve yeşil biter; servis 15 dakikada bir normal şekilde uyur, 09:30'daki
+  ilk ping onu ~1 dakikada uyandırır ve bot ilk taramayı 10:35'te yapar.
+
+Ayarlar (istersen, Actions → Variables):
+
+| Değişken | Etkisi |
+|---|---|
+| `KEEPALIVE_ALWAYS=true` | Pencereyi kapatır, 7/24 ping atar |
+| `KEEPALIVE_WINDOW_START` / `KEEPALIVE_WINDOW_END` | Pencereyi değiştirir (varsayılan `0930` / `1850`) |
 
 Kurulum (tek seferlik, telefondan da yapılabilir):
 
 1. GitHub → repo → **Settings → Secrets and variables → Actions**
-2. **New repository secret** → ad: `RENDER_HEALTH_URL`,
-   değer: `https://<servis-adin>.onrender.com/health`
-3. Kaydet. İş akışı 10 dakika içinde yeşil "Render keep-alive" koşusu görünür.
+2. **New repository secret** (veya sekmesi **Variables**) → ad:
+   `RENDER_HEALTH_URL`, değer: `https://<servis-adin>.onrender.com/health`
+3. Kaydet. İlk koşu en geç 5 dakika içinde Actions sekmesinde görünür.
 
-GitHub Actions bu repo için **aylık 2000 dakika ücretsiz**; 10 dakikada bir
-koşu ≈ 25 dakika/ay. Render'ın kendi Cron Job'u ise **ücretsiz değil**
-(aylık en az 1 $) ve ayrıca çalışan bir web service'ı uyandırmaz.
+> Secret oluşturmadan denemek istersen: **Actions → Render keep-alive →
+> Run workflow → `health_url` alanına adresi yaz → Run.** Elle tetikleme
+> pencereyi yok sayar, yani hemen ping atar.
+
+#### Kota gerçeği: public mi, private mı? (önemli)
+
+| Repo tipi | Actions dakikası | 5 dk'lık cron ne yakar? |
+|---|---|---|
+| **Public** (bu repo) | Ücretsiz ve **sınırsız** | Sorun yok, `*/5` en güvenli seçenek |
+| Private | 2.000 dk/ay ücretsiz | Her koşu **en az 1 dk** yazılır: `*/5` ≈ 8.600 dk/ay, `*/10` ≈ 4.300 dk/ay → **kota biter** |
+
+Yani repo private olsaydı GitHub Actions ile keep-alive ücretsiz olmazdı;
+o durumda **Seçenek B**'ye (cron-job.org / UptimeRobot, ücretsiz) geç.
+(Eski sürümde yazan “10 dakikada bir koşu ≈ 25 dk/ay” hesabı yanlıştı;
+GitHub her koşuyu en az 1 dakika olarak faturalandırır.)
+
+#### ⚠️ 60 gün kuralı: public repoda zamanlanmış işler sessizce durur
+
+GitHub, **public** bir repoda 60 gün boyunca hiç repo aktivitesi (commit/PR)
+olmazsa zamanlanmış iş akışlarını **kendiliğinden devre dışı bırakır** — koşu
+durmaz, hata da vermez. Actions sekmesinde gri bir uyarı ve “Enable workflow”
+düğmesi görürsün; `gh workflow enable keepalive.yml` de işe yarar. Kalıcı
+çözüm: Seçenek B'yi (dış monitör) kurmak ya da repoya ara ara commit atmak.
+
+Render'ın kendi Cron Job'u ise **ücretsiz değil** (aylık en az 1 $) ve ayrıca
+uyuyan bir web service'ı uyandırmaz.
+
 
 #### ⚠️ Self-hosted runner sayfasını KULLANMA
 
@@ -372,8 +448,10 @@ oraya merge edilmesi gerekir. İkisi de tek seferde çözülür.
 ### Seçenek B — cron-job.org / UptimeRobot (ücretsiz, daha basit)
 
 `https://cron-job.org` veya UptimeRobot'a üye ol, `https://<servis>.onrender.com/health`
-adresini **her 10 dakikada bir** GET ile çağrılan monitör olarak tanımla.
-Kod değişikliği gerektirmez.
+adresini **her 5 dakikada bir** GET ile çağrılan monitör olarak tanımla
+(gün/gece ayrımı yapmıyorsa da çalışır, sadece 750 saat kotasını daha hızlı
+tüketir). Repo aktivitesi, Actions kotası veya 60 gün kuralıyla hiç işi yoktur;
+GitHub tarafı tamamen kopsa bile çalışır. İkisini birlikte kurmak en sağlamıdır.
 
 ### Seçenek C — Background Worker (ücretli, ama en sağlam)
 
@@ -418,3 +496,34 @@ Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 | `Supabase bağlantısı OK` yok | `supabase_schema.sql` çalıştırılmamış veya anahtar yanlış (yukarıdaki HTTP kodlarına bak) |
 | Tarama çok yavaş | Free instance 0.1 CPU. Tarama 48 hisse × 4 zaman dilimi; ilk yükleme birkaç dakika sürebilir, sonraki turlar mum başına bir tarama yapılır |
 | `MemoryError` / restart döngüsü | Free instance 512 MB. `BOT_PROFILE=Seçici` ile evreni daraltmak gerekebilir |
+| Actions'ta "Render keep-alive" koşusu **sarı** ve logda `RENDER_HEALTH_URL tanımlı değil` | Secret/Variable hiç eklenmemiş (bkz. §C). Bu bir hata değil uyarıdır; ekleyince yeşile döner |
+| Actions "Render keep-alive" hiç görünmüyor | İş akışı `main`'e merge edilmemiş (schedule sadece varsayılan branch'te çalışır) |
+| Keep-alive bir süre çalıştı, sonra durdu | Public repoda 60 gün aktivite olmaması (bkz. §5). Actions sekmesinden **Enable workflow** |
+| Koşular 5 dk yerine 20+ dk aralıkla geliyor | GitHub cron'u gecikebilir; pencere dışıysa normal. Sık oluyorsa Seçenek B'yi kur |
+| `deploy_check.py` "Supabase'e ulaşılamadı" | Ağ/proxy engeli ya da URL yanlış; `--skip-network` ile dosya tarafını yine kontrol edebilirsin |
+
+---
+
+## 8. GitHub Actions ile otomatik kontrol (CI)
+
+Render'a giden kod, deploy'dan **önce** GitHub tarafında sınanır:
+`.github/workflows/ci.yml` her `main` push'unda ve pull request'te şunları koşar.
+
+1. **Python sürümü**: `actions/setup-python` ile repodaki `.python-version`
+   (3.12) okunur — yani Render'ın göreceği sürümün aynısı.
+2. **Kurulum**: `pip install -r requirements.txt` (Render Build Command'in
+   birebir aynısı). Tekerlek bulunamazsa, yani Render'ı patlatacak durum
+   (cp314 senaryosu) oluşursa burada kırmızı olur — deploy'u hiç denemezsin.
+3. **Testler**: `python -m pytest -q` + `python test_tarama_zamani.py`
+   (zamanlama ve ölü formasyon regresyonu, 90 kontrol).
+4. **Render duman testi**: `PORT=10000 python main.py` arka planda başlatılır,
+   `/health` 200 ve `{"status":"ok"}` dönene kadar beklenir; `TELEGRAM_TEST_KEY`
+   tanımsızken `/test` ucunun **404** döndüğü (yani Telegram'a istek gitmediği)
+   doğrulanır. Bu adım, Render'ın "Deploy failed / start command çıktı vermiyor"
+   hatalarının hepsini önceden yakalar.
+
+Kırmızı bir koşu görürsen: Actions → koşu → adım adım log. En sık iki sebep
+sürüm uyumsuzluğu (adım 2) ve bir testin gerçekten bozulması (adım 3).
+
+> Render Free'de her deploy ~1 dakika sürer ve yeni sürüm ayağa kalkana kadar
+> eskisi çalışmaya devam eder. CI yeşilse deploy neredeyse her zaman yeşildir.
