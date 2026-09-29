@@ -60,6 +60,7 @@ class EngineSnapshot:
     log: str = ""
     min_raw_quality: float = 46.0
     min_specialized_quality: float = 50.0
+    retest_seen: bool = False
 
 
 class ArgentEngine:
@@ -67,8 +68,9 @@ class ArgentEngine:
 
     def __init__(self, profile: str = "Dengeli", mintick: float = 0.01,
                  use_breakout_quality_filter: bool = True):
-        from config import TERMINAL_TAZE_BAR
+        from config import TERMINAL_TAZE_BAR, FAILED_PATTERN_PENALTY_BARS
         self.terminal_taze_bar = TERMINAL_TAZE_BAR
+        self.failed_penalty_bars = FAILED_PATTERN_PENALTY_BARS
         self.profile = profile
         self.mintick = mintick
         self.use_breakout_quality_filter = use_breakout_quality_filter
@@ -122,6 +124,8 @@ class ArgentEngine:
         self.break_line_x2: Optional[int] = None
         self.break_line_y2: Optional[float] = None
         self.retest_success_bar: Optional[int] = None
+        self._retest_seen: bool = False
+        self.last_failed_bar: int = -9999
         self.completed_type = "Yok"
         self.completed_start_bar: Optional[int] = None
         self.completed_end_bar: Optional[int] = None
@@ -169,7 +173,8 @@ class ArgentEngine:
             return EngineSnapshot(state=self.pattern_state, previous_state=self.last_pattern_state,
                                   break_dir=self.break_candidate_dir, invalid_reason=self.invalid_reason,
                                   active=self.active if self.active.valid else None,
-                                  bar_index=self.bar_index, log="Veri yok")
+                                  bar_index=self.bar_index, log="Veri yok",
+                                  retest_seen=self._retest_seen)
         if tam_yeniden and self._bars_done > 0:
             self.reset()
         # Veri akışı değişti mi? (kısaltıldı / uyumsuz index) -> sıfırla ve baştan
@@ -244,7 +249,8 @@ class ArgentEngine:
         return EngineSnapshot(state=self.pattern_state, previous_state=prev_state,
                               break_dir=self.break_candidate_dir, invalid_reason=self.invalid_reason,
                               active=active, effective_quality=eff_q, events=events,
-                              bar_index=self.bar_index, log=log)
+                              bar_index=self.bar_index, log=log,
+                              retest_seen=self._retest_seen)
 
     # ---------- yardımcılar (candidate.py'nin kullandığı bağlam) ----------
 
@@ -347,7 +353,9 @@ class ArgentEngine:
             self.active.selection_score = self.refresh_selection_score(self.active)
 
         started_new_identity = False
-        if new_pivot:
+        # Failure penalty: başarısız kırılımdan sonra 24 bar yeni formasyon arama
+        in_penalty = (b - self.last_failed_bar) < self.failed_penalty_bars
+        if new_pivot and not in_penalty:
             best = PatternCandidate()
             if len(self.high_side) >= 2 and len(self.low_side) >= 2:
                 hstart = max(0, len(self.high_side) - self.search_pivots)
@@ -405,6 +413,7 @@ class ArgentEngine:
                         self.break_line_x2 = None
                         self.break_line_y2 = None
                         self.retest_success_bar = None
+                        self._retest_seen = False
 
         # --- Bölüm 18: aktif adayın her-bar hafif güncellemesi ---
         has_pattern = self.active.valid
@@ -636,6 +645,7 @@ class ArgentEngine:
         age = b - self.break_candidate_bar
         if back_inside and b > self.break_candidate_bar:
             self.invalid_reason = "Kırılım denemesi formasyon içine döndü" if is_attempt else "Teyitsiz kırılım formasyon içine döndü"
+            self.last_failed_bar = b
             return ST_BREAK_FAILED
         if b > self.break_candidate_bar and age <= self.confirm_window and (strong_same_side or attempt_retest):
             self.break_confirmed_bar = b
@@ -664,11 +674,14 @@ class ArgentEngine:
         confirmed_age = b - self.break_confirmed_bar
         if returned_inside:
             self.invalid_reason = "Kırılım sonrası formasyon alanına dönüldü"
+            self.last_failed_bar = b
             return ST_BREAK_FAILED
         if retest_held:
             self.retest_success_bar = b
+            self._retest_seen = True
             return ST_RETEST_OK
         if retest_touch:
+            self._retest_seen = True
             return ST_RETESTING
         if confirmed_age > self.retest_window:
             self._capture_completed()
@@ -688,12 +701,15 @@ class ArgentEngine:
         retest_hold_age = b - self.retest_success_bar
         if returned_inside:
             self.invalid_reason = "Başarılı retest sonrası yapı içine dönüldü"
+            self.last_failed_bar = b
             return ST_BREAK_FAILED
         if retained and retest_hold_age >= self.retest_hold_window:
+            self._retest_seen = True
             self._capture_completed()
             return ST_COMPLETED
         if not retained:
             self.invalid_reason = "Retest sınır çevresinde yeniden izleniyor"
+            self._retest_seen = True
             return ST_RETESTING
         self.invalid_reason = "Retest korunumu bekleniyor"
         return ST_RETEST_OK

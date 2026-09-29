@@ -1112,6 +1112,11 @@ def fetch_yfinance_1h(
         return result(None, yfinance_error_is_retryable(exc), reason)
 
 
+def fetch_last_bar(stock: str) -> Optional[pd.DataFrame]:
+    """Sabah pre-load için son 5 günlük 1h veriyi hafifçe çeker (0-latency açılış)."""
+    return fetch_yfinance_1h(stock, period="5d")
+
+
 def mock_fetch_60d_1h(stock: str, n_bars: int = 360) -> pd.DataFrame:
     """
     Mock veri çekme - gerçek API yoksa test için

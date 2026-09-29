@@ -20,11 +20,13 @@ Ne yapar:
   5. Render: https://<servis>.onrender.com/health ayakta mı; /test ucu açık mı.
 
 Çıkış kodu 0 = kritik hata yok, 1 = en az bir HATA var (uyarılar kodu bozmaz).
+Canlı modda (--url) eksik env = HATA ve exit 1.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import sys
@@ -62,6 +64,16 @@ def bolum(baslik: str) -> None:
     print("=" * 72)
 
 
+def _anahtari_temizle(deger) -> str:
+    """Env değerlerindeki tırnak/boşluk kirliliğini temizle."""
+    if deger is None:
+        return ""
+    s = str(deger).strip()
+    while len(s) >= 2 and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+        s = s[1:-1].strip()
+    return s.strip()
+
+
 def _oku_env_dosyasi(yol: Path) -> dict:
     """Minimal .env okuyucu (python-dotenv bağımlılığı olmadan).
 
@@ -75,13 +87,72 @@ def _oku_env_dosyasi(yol: Path) -> dict:
         if not satir_ or satir_.startswith("#") or "=" not in satir_:
             continue
         anahtar, _, deger = satir_.partition("=")
-        deger = deger.strip().strip('"').strip("'")
-        veri[anahtar.strip()] = deger
+        veri[anahtar.strip()] = _anahtari_temizle(deger)
     return veri
 
 
 def env_degeri(anahtar: str, dosya_env: dict) -> str:
-    return (os.environ.get(anahtar) or dosya_env.get(anahtar) or "").strip()
+    return _anahtari_temizle(os.environ.get(anahtar) or dosya_env.get(anahtar) or "")
+
+
+def _jwt_rolu(anahtar: str) -> str:
+    """JWT payload'ındaki 'role' alanını okur (imza doğrulaması yapmaz, sır yazmaz)."""
+    k = _anahtari_temizle(anahtar)
+    if k.count(".") != 2 or not k.startswith("eyJ"):
+        return ""
+    try:
+        payload = k.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        veri = json.loads(base64.urlsafe_b64decode(payload).decode("utf-8", "replace"))
+        return str(veri.get("role", ""))
+    except Exception:  # noqa: BLE001 - çözülemeyen token sessizce geçilir
+        return ""
+
+
+def anahtar_turu(anahtar: str) -> str:
+    """Supabase anahtar türünü değerini loglamadan döndür."""
+    k = _anahtari_temizle(anahtar)
+    if not k:
+        return "boş"
+    if k.startswith("sb_secret_"):
+        return "yeni secret key (sb_secret_)"
+    if k.startswith("sb_publishable_"):
+        return "publishable key (sb_publishable_)"
+    if k.startswith("eyJ") and k.count(".") == 2:
+        rol = _jwt_rolu(k)
+        if rol == "service_role":
+            return "legacy JWT (service_role)"
+        if rol == "anon":
+            return "legacy JWT (anon)"
+        if rol:
+            return f"legacy JWT ({rol})"
+        return "legacy JWT"
+    if k.startswith("sb_"):
+        return f"yeni anahtar ({k[:20]}...)"
+    return "bilinmeyen format"
+
+
+def supabase_basliklari(service_key: str) -> dict:
+    """Supabase REST için doğru başlıkları üret.
+
+    Yeni anahtarlar (sb_secret_, sb_publishable_) JWT değildir;
+    Authorization: Bearer gönderilirse 401 Invalid JWT döner.
+    Sadece apikey başlığı gönderilmeli. Legacy eyJ... JWT'lerde eski davranış
+    (apikey + Bearer) korunmalı.
+    """
+    k = _anahtari_temizle(service_key)
+    basliklar = {
+        "apikey": k,
+        "Accept": "application/json",
+    }
+    if k.startswith("sb_"):
+        # Yeni anahtarlar apikey-only
+        return basliklar
+    if k.startswith("eyJ") and k.count(".") == 2:
+        basliklar["Authorization"] = f"Bearer {k}"
+        return basliklar
+    # Bilinmeyen: apikey-only (güvenli)
+    return basliklar
 
 
 def kontrol_repo() -> None:
@@ -139,7 +210,7 @@ def kontrol_repo() -> None:
         satir(WARN, "bot_data/ yok", "İlk açılışta tüm evren Yahoo'dan indirilir.")
 
 
-def kontrol_env(dosya_env: dict) -> dict:
+def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
     bolum("2) ORTAM DEĞİŞKENLERİ (Render → Environment)")
 
     beklenti = [
@@ -158,41 +229,34 @@ def kontrol_env(dosya_env: dict) -> dict:
         if deger:
             satir(OK, f"{anahtar} tanımlı ({len(deger)} karakter)")
         elif zorunlu:
-            satir(WARN, f"{anahtar} tanımlı değil", aciklama)
+            seviye = FAIL if canli_mod else WARN
+            satir(seviye, f"{anahtar} tanımlı değil", aciklama)
         else:
             satir(OK, f"{anahtar} tanımlı değil (opsiyonel)", aciklama)
 
     if not degerler.get("TELEGRAM_BOT_TOKEN") and not degerler.get("TELEGRAM_CHAT_ID"):
-        satir(WARN, "Telegram kapalı olacak", "Token/chat_id yoksa bot çalışır ama hiç mesaj göndermez (log: 'notifier pasif').")
+        seviye = FAIL if canli_mod else WARN
+        satir(seviye, "Telegram kapalı olacak", "Token/chat_id yoksa bot çalışır ama hiç mesaj göndermez (log: 'notifier pasif').")
     if not degerler.get("SUPABASE_URL") and not degerler.get("SUPABASE_SERVICE_ROLE_KEY"):
-        satir(WARN, "Supabase kapalı olacak",
+        seviye = FAIL if canli_mod else WARN
+        satir(seviye, "Supabase kapalı olacak",
               "Render diski kalıcı değil: restart/deploy sonrası yerel önbellek ve Telegram sayaçları sıfırlanır.")
     anahtar = degerler.get("SUPABASE_SERVICE_ROLE_KEY", "")
     rol = _jwt_rolu(anahtar)
+    tur = anahtar_turu(anahtar) if anahtar else ""
     if anahtar.startswith("sb_publishable_"):
-        satir(WARN, "SUPABASE_SERVICE_ROLE_KEY 'publishable' anahtar",
+        satir(WARN, f"SUPABASE_SERVICE_ROLE_KEY 'publishable' anahtar ({tur})",
               "RLS açıkken bu anahtar 401/403 alır; service_role JWT veya 'sb_secret_...' kullanın.")
     elif rol == "anon":
-        satir(WARN, "SUPABASE_SERVICE_ROLE_KEY 'anon' rolünde",
+        satir(WARN, f"SUPABASE_SERVICE_ROLE_KEY 'anon' rolünde ({tur})",
               "service_role JWT veya 'sb_secret_...' kullanın; anon anahtar tabloya yazamaz.")
     elif rol == "service_role":
-        satir(OK, "Supabase anahtarı service_role rolünde")
+        satir(OK, f"Supabase anahtarı service_role rolünde ({tur})")
+    elif anahtar.startswith("sb_secret_"):
+        satir(OK, f"Supabase anahtarı yeni secret key ({tur})")
+    elif anahtar:
+        satir(OK, f"Supabase anahtar türü: {tur}")
     return degerler
-
-
-def _jwt_rolu(anahtar: str) -> str:
-    """JWT payload'ındaki 'role' alanını okur (imza doğrulaması yapmaz, sır yazmaz)."""
-    if anahtar.count(".") != 2 or not anahtar.startswith("eyJ"):
-        return ""
-    try:
-        import base64
-
-        payload = anahtar.split(".")[1]
-        payload += "=" * (-len(payload) % 4)
-        veri = json.loads(base64.urlsafe_b64decode(payload).decode("utf-8", "replace"))
-        return str(veri.get("role", ""))
-    except Exception:  # noqa: BLE001 - çözülemeyen token sessizce geçilir
-        return ""
 
 
 def kontrol_supabase(url: str, anahtar: str) -> None:
@@ -207,7 +271,7 @@ def kontrol_supabase(url: str, anahtar: str) -> None:
         satir(WARN, "Atlandı", "requests kurulu değil (pip install -r requirements.txt).")
         return
 
-    temiz = url.strip().rstrip("/")
+    temiz = _anahtari_temizle(url).rstrip("/")
     if temiz.endswith("/rest/v1"):
         temiz = temiz[: -len("/rest/v1")]
         satir(WARN, "SUPABASE_URL sonunda /rest/v1 var",
@@ -215,15 +279,15 @@ def kontrol_supabase(url: str, anahtar: str) -> None:
     if not temiz.startswith("https://"):
         satir(WARN, "SUPABASE_URL https:// ile başlamıyor", f"Girilen: {temiz[:40]}")
 
-    basliklar = {
-        "apikey": anahtar,
-        "Authorization": f"Bearer {anahtar}",
-        "Accept": "application/json",
-    }
+    basliklar = supabase_basliklari(anahtar)
+    # Content-Type ve Prefer sadece yazma için, okuma için de ekleyelim zararsız
+    basliklar_okuma = {**basliklar, "Accept": "application/json"}
+    tur = anahtar_turu(anahtar)
+
     try:
         r = requests.get(
             f"{temiz}/rest/v1/bot_store",
-            headers=basliklar,
+            headers=basliklar_okuma,
             params={"select": "store_key", "limit": 1},
             timeout=12,
         )
@@ -232,14 +296,23 @@ def kontrol_supabase(url: str, anahtar: str) -> None:
         return
 
     if r.status_code == 200:
-        satir(OK, "Supabase bağlantısı OK", f"{temiz} · tablo: bot_store")
+        satir(OK, f"Supabase bağlantısı OK ({tur})", f"{temiz} · tablo: bot_store")
     elif r.status_code == 404:
         satir(FAIL, "Tablo yok (HTTP 404)",
               "Supabase → SQL Editor → New query → supabase_schema.sql içeriğini yapıştır → Run.")
     elif r.status_code in (401, 403):
-        satir(FAIL, f"Anahtar reddedildi (HTTP {r.status_code})",
-              "service_role yerine anon/publishable anahtar girilmiş ya da anahtar iptal edilmiş. "
-              "Doğrusu: Settings → API → service_role (veya Secret key).")
+        # Anahtar türü ipucu
+        ipucu = ""
+        if "sb_publishable_" in anahtar or tur.startswith("publishable"):
+            ipucu = "Publishable anahtar (sb_publishable_) RLS açıkken yazamaz ve 401/403 döner. Doğrusu: sb_secret_... veya service_role JWT."
+        elif tur.startswith("legacy JWT (anon)") or _jwt_rolu(anahtar) == "anon":
+            ipucu = "Anon anahtar (anon rolü) tabloya yazamaz, 401/403 alır. Doğrusu: service_role JWT (eyJ... service_role) veya sb_secret_..."
+        elif "Invalid JWT" in r.text or "invalid" in r.text.lower():
+            ipucu = f"Anahtar türü {tur} için Bearer başlığı hatalı olabilir. sb_secret_/sb_publishable_ anahtarlarında sadece apikey gönderilmeli (kod bunu yapıyor). Anahtar iptal edilmiş veya yanlış kopyalanmış olabilir."
+        else:
+            ipucu = f"Anahtar türü: {tur}. service_role yerine anon/publishable girilmiş ya da anahtar iptal edilmiş. Doğrusu: Settings → API → service_role (veya Secret key sb_secret_...)."
+        satir(FAIL, f"Anahtar reddedildi (HTTP {r.status_code}) [{tur}]",
+              ipucu)
     elif r.status_code == 400:
         satir(FAIL, "İstek reddedildi (HTTP 400)",
               "URL biçimini kontrol edin: https://<ref>.supabase.co (sonda /rest/v1 olmadan).")
@@ -339,7 +412,7 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
 
 
 def _health_hedefi(url: str) -> str:
-    temiz = url.strip().rstrip("/")
+    temiz = _anahtari_temizle(url).rstrip("/")
     if temiz.endswith("/health") or temiz.endswith("/"):
         return temiz if temiz.endswith("/health") else temiz + "health"
     # Servis kökü verildiyse /health'e tamamla; başka bir yol verildiyse dokunma.
@@ -464,8 +537,9 @@ def main() -> int:
     else:
         print("Not: .env bulunamadı; yalnızca süreç ortam değişkenleri kullanılacak (Render'da normaldir).")
 
+    canli_mod = bool(args.url)
     kontrol_repo()
-    degerler = kontrol_env(dosya_env)
+    degerler = kontrol_env(dosya_env, canli_mod=canli_mod)
 
     if args.skip_network:
         bolum("AĞ KONTROLLERİ")
@@ -480,6 +554,12 @@ def main() -> int:
         kontrol_render(args.url or "", args.test_key or degerler.get("TELEGRAM_TEST_KEY", ""))
 
     bolum("ÖZET")
+    # Yeni istenen satır: ÖZET: Telegram HAZIR|YOK · Supabase HAZIR|YOK
+    telegram_hazir = bool(degerler.get("TELEGRAM_BOT_TOKEN") and degerler.get("TELEGRAM_CHAT_ID"))
+    supabase_hazir = bool(degerler.get("SUPABASE_URL") and degerler.get("SUPABASE_SERVICE_ROLE_KEY"))
+    ozet_telegram = "HAZIR" if telegram_hazir else "YOK"
+    ozet_supabase = "HAZIR" if supabase_hazir else "YOK"
+    print(f"ÖZET: Telegram {ozet_telegram} · Supabase {ozet_supabase}")
     print(f"✅ {_sayac[OK]} tamam   ⚠️  {_sayac[WARN]} uyarı   ❌ {_sayac[FAIL]} hata")
     if _sayac[FAIL] == 0 and _sayac[WARN] == 0:
         print("Her şey yerinde: Render tarafı hazır.")

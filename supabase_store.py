@@ -6,6 +6,8 @@ unavailable, callers keep using the existing local JSON cache without crashing.
 
 from __future__ import annotations
 
+import base64
+import json
 import logging
 import os
 import time
@@ -16,38 +18,139 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def _anahtari_temizle(deger: Any) -> str:
+    """Env değerlerindeki tırnak/boşluk kirliliğini temizle.
+
+    Kullanıcı Dashboard'dan kopyalarken yanlışlıkla tırnak içinde yapıştırabilir
+    veya Render'da boşluk bırakabilir. Değer asla loglanmaz, sadece temizlenir.
+    """
+    if deger is None:
+        return ""
+    s = str(deger).strip()
+    # Tekrarlayan tırnak sarımını temizle: "\"sb_secret_...\"" -> sb_secret_...
+    while len(s) >= 2 and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+        s = s[1:-1].strip()
+    return s.strip()
+
+
+def _jwt_rolu_coz(anahtar: str) -> str:
+    """JWT payload'ındaki role alanını okur (imza doğrulaması yapmaz)."""
+    if not anahtar or anahtar.count(".") != 2:
+        return ""
+    if not anahtar.startswith("eyJ"):
+        return ""
+    try:
+        payload = anahtar.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        veri = json.loads(base64.urlsafe_b64decode(payload).decode("utf-8", "replace"))
+        return str(veri.get("role", ""))
+    except Exception:
+        return ""
+
+
+def anahtar_turu(anahtar: str) -> str:
+    """Anahtarın türünü değerini loglamadan döndür.
+
+    - sb_secret_... -> yeni secret key
+    - sb_publishable_... -> publishable key (RLS'de yazamaz)
+    - eyJ... JWT -> legacy JWT (role bilgisiyle)
+    - diğer -> bilinmeyen format
+    """
+    k = _anahtari_temizle(anahtar)
+    if not k:
+        return "boş"
+    if k.startswith("sb_secret_"):
+        return "yeni secret key (sb_secret_)"
+    if k.startswith("sb_publishable_"):
+        return "publishable key (sb_publishable_)"
+    if k.startswith("eyJ") and k.count(".") == 2:
+        rol = _jwt_rolu_coz(k)
+        if rol == "service_role":
+            return "legacy JWT (service_role)"
+        if rol == "anon":
+            return "legacy JWT (anon)"
+        if rol:
+            return f"legacy JWT ({rol})"
+        return "legacy JWT"
+    # sb_ ile başlayan diğer yeni formatlar da apikey-only olmalı
+    if k.startswith("sb_"):
+        return f"yeni anahtar ({k.split('_')[0]}_{k.split('_')[1] if '_' in k else ''})".strip()
+    return "bilinmeyen format"
+
+
+def supabase_basliklari(service_key: str) -> Dict[str, str]:
+    """Supabase REST için doğru başlıkları üret.
+
+    Yeni Supabase anahtarları (sb_secret_..., sb_publishable_...) JWT değildir;
+    Authorization: Bearer olarak gönderilirse Supabase 401 \"Invalid JWT\" döner.
+    Sadece apikey başlığı gönderilmeli. Legacy eyJ... JWT'lerde eski davranış
+    (apikey + Bearer) korunmalı.
+    """
+    k = _anahtari_temizle(service_key)
+    basliklar: Dict[str, str] = {
+        "apikey": k,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Prefer": "resolution=merge-duplicates,return=minimal",
+    }
+    # sb_ prefix'li yeni anahtarlar apikey-only
+    if k.startswith("sb_"):
+        return basliklar
+    # Legacy JWT'ler için Bearer ekle
+    if k.startswith("eyJ") and k.count(".") == 2:
+        basliklar["Authorization"] = f"Bearer {k}"
+        return basliklar
+    # Bilinmeyen format: güvenli tarafta kal, apikey-only (eski davranışa yakın)
+    # Ama eğer JWT'ye benzemiyorsa Bearer ekleme.
+    # Eğer kullanıcı eski olmayan ama JWT benzeri bir şey verdiyse Bearer eklemeyelim
+    # çünkü 401 Invalid JWT üretir; en azından apikey denenecek.
+    # Eski kod her zaman Bearer ekliyordu, şimdi sadece JWT'de ekliyoruz.
+    return basliklar
+
+
 class SupabaseStore:
     TABLE = "bot_store"
     REQUEST_TIMEOUT_SEC = 8
 
     def __init__(self, project_url: str, service_key: str, session=None):
-        # Kullanici Dashboard'dan "https://<ref>.supabase.co" yerine REST API
+        # Kullanici Dashboard'dan \"https://<ref>.supabase.co\" yerine REST API
         # uc noktasini (https://<ref>.supabase.co/rest/v1/) kopyalayabiliyor.
         # Sondaki slash ve /rest/v1 suffix'i at ki URL iki kez eklenip 404 yemesin.
-        self.project_url = project_url.strip().rstrip("/")
-        if self.project_url.endswith("/rest/v1"):
-            self.project_url = self.project_url[: -len("/rest/v1")]
+        temiz_url = _anahtari_temizle(project_url).rstrip("/")
+        if temiz_url.endswith("/rest/v1"):
+            temiz_url = temiz_url[: -len("/rest/v1")]
+        self.project_url = temiz_url
+
+        temiz_key = _anahtari_temizle(service_key)
+        self._service_key = temiz_key  # debug için değil, sadece header üretiminde
         self.rest_url = f"{self.project_url}/rest/v1/{self.TABLE}"
         self._session = session or requests.Session()
-        self._headers = {
-            "apikey": service_key,
-            "Authorization": f"Bearer {service_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Prefer": "resolution=merge-duplicates,return=minimal",
-        }
+        self._headers = supabase_basliklari(temiz_key)
+
         self._disabled_reason: Optional[str] = None
         self._warned: set[str] = set()
         self._retry_after = 0.0
+
+        # Anahtar türünü logla (değer asla loglanmaz)
+        try:
+            tur = anahtar_turu(temiz_key)
+            logger.info(f"Supabase anahtar türü: {tur}")
+            if temiz_key.startswith("sb_publishable_"):
+                logger.warning(
+                    "Supabase publishable key (sb_publishable_) kullanıyorsun; "
+                    "RLS açıkken bu anahtar bot_store tablosuna yazamaz ve 401/403 alır. "
+                    "Doğrusu: sb_secret_... veya legacy service_role JWT (eyJ...)."
+                )
+        except Exception:
+            pass
 
     @classmethod
     def from_env(cls, environ=None) -> Optional["SupabaseStore"]:
         """Create a store from Render secrets; return None for local-only mode."""
         environ = os.environ if environ is None else environ
-        project_url = environ.get("SUPABASE_URL", "").strip()
-        service_key = (
-            environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-            or environ.get("SUPABASE_SECRET_KEY", "").strip()
+        project_url = _anahtari_temizle(environ.get("SUPABASE_URL", ""))
+        service_key = _anahtari_temizle(
+            environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or environ.get("SUPABASE_SECRET_KEY", "")
         )
         if not project_url and not service_key:
             logger.info("Supabase env tanımlı değil; mevcut yerel cache ile devam ediliyor")
@@ -58,6 +161,20 @@ class SupabaseStore:
                 "yerel cache ile devam edilecek"
             )
             return None
+
+        # Anahtar türünü env aşamasında da logla (değer yok)
+        try:
+            tur = anahtar_turu(service_key)
+            logger.info(f"Supabase anahtar türü: {tur}")
+            if service_key.startswith("sb_publishable_"):
+                logger.warning(
+                    "Supabase publishable key (sb_publishable_) kullanıyorsun; "
+                    "RLS açıkken bu anahtar bot_store tablosuna yazamaz ve 401/403 alır. "
+                    "Doğrusu: sb_secret_... veya legacy service_role JWT (eyJ...)."
+                )
+        except Exception:
+            pass
+
         return cls(project_url, service_key)
 
     @property
