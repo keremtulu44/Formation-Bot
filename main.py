@@ -297,16 +297,23 @@ def write_heartbeat(data_dir: str = None, notifier=None):
 # içinde). Yanıtlar getUpdates uzun yoklamasıyla ayrı bir thread'de toplanır.
 KOMUT_YARDIM = """🤖 Formation-Bot komutları
 
-/formasyonlar — günün canlı formasyonları
+/formasyonlar — günün canlı formasyonları (detaylı)
    filtre: /formasyonlar 1h   ·   /formasyonlar THYAO
+/canli veya /c — canlı formasyonlar tek mesajda kompakt (kısayol)
+/ozet veya /o — günlük özet tek mesajda (tamamlanan/retest/sıkışan)
+/sikisanlar veya /s — sadece sıkışması güçlenenler
+/tamamlanan veya /t — sadece tamamlananlar
+/retest veya /r — retest bekleyen/başarılı
+/kirilim veya /k — kırılım adayı/teyitli
 /durum — bot, piyasa ve veri sağlığı özeti
-/tara — şimdi tara (yalnızca seans içinde; mum kapanışını beklemez)
+/tara — şimdi tara (yalnızca seans içinde)
 /yardim — bu liste
 
 Notlar:
 • Komutlar yalnızca kayıtlı sohbetten (TELEGRAM_CHAT_ID) kabul edilir.
 • Bu bir AL/SAT aracı değildir: formasyon durumu ve kalite skoru bildirir.
-• Alarmlar mum kapanışından 5 dk sonra kendiliğinden gelir; /tara bunu beklemez."""
+• Alarmlar mum kapanışından 5 dk sonra kendiliğinden gelir; /tara bunu beklemez.
+• Public kanal için: /canli ve /ozet en verimli kısayollar."""
 
 STATE_TR = {
     "ADAY_OLUSUYOR": "Aday oluşuyor",
@@ -463,6 +470,170 @@ def _komut_tara(_arguman: str) -> str:
     return ("🔍 Tarama isteği alındı, birkaç saniye içinde başlıyor.\n"
             "Bitince /formasyonlar yazınca güncel liste gelir.")
 
+def _filtrele_formasyonlar(formations, filtre: str):
+    """Filtre: '1h', 'THYAO', '1h THYAO' gibi çoklu token destekler."""
+    filtre = (filtre or "").strip().lower()
+    if not filtre:
+        return formations
+    tokens = filtre.split()
+    result = formations
+    for tok in tokens:
+        if tok in ("1h", "2h", "4h", "1d"):
+            result = [f for f in result if str(f.get("timeframe", "")).lower() == tok]
+        else:
+            result = [f for f in result
+                      if tok in str(f.get("stock", "")).lower()
+                      or tok in str(f.get("pattern_name", "")).lower()
+                      or tok in str(f.get("state", "")).lower()]
+    return result
+
+
+def _break_ok(bd) -> str:
+    try:
+        bd = int(bd)
+    except Exception:
+        return "↔️"
+    if bd == 1:
+        return "⬆️"
+    if bd == -1:
+        return "⬇️"
+    return "↔️"
+
+
+def _komut_canli(arguman: str) -> str:
+    """Kısayol: canlı hisselerde olan formasyonları tek mesajda kompakt at."""
+    formations = _live_state.formations()
+    formations = _filtrele_formasyonlar(formations, arguman)
+    if not formations:
+        filt = f" ('{arguman}' filtresi)" if arguman else ""
+        return f"🔍 Şu an canlı formasyon yok{filt}.\n/formasyonlar ile detaylı listeye bak."
+    sirali = sorted(formations, key=lambda x: float(x.get("quality") or 0), reverse=True)[:20]
+    saat = datetime.now(ISTANBUL_TZ).strftime("%H:%M")
+    filt_notu = f" [{arguman}]" if arguman else ""
+    satirlar = [f"⚡ CANLI ({len(formations)}){filt_notu} - {saat} - tek mesaj"]
+    for f in sirali:
+        q = f.get("quality") or 0
+        ok = _break_ok(f.get("break_dir"))
+        durum = f.get("state") or "—"
+        # kısa durum: ilk kelimeyi koru, TR map varsa kısa kullan
+        satirlar.append(
+            f"{f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} q{float(q):.0f} {ok} {durum}"
+        )
+    if len(formations) > 20:
+        satirlar.append(f"... ve {len(formations)-20} daha (/formasyonlar ile hepsi)")
+    satirlar.append("")
+    satirlar.append("💡 /ozet günlük özet, /s sıkışanlar, /r retest, /k kırılım")
+    return "\n".join(satirlar)
+
+
+def _komut_ozet(arguman: str) -> str:
+    """Kısayol: günlük özet tek mesajda. Filtre destekler."""
+    try:
+        formations = _live_state.formations()
+        formations = _filtrele_formasyonlar(formations, arguman)
+        notifier = _notifier_ref
+        if notifier and hasattr(notifier, "format_daily_summary"):
+            aktif = []
+            for f in formations:
+                aktif.append({
+                    "stock_name": f.get("stock"),
+                    "timeframe": f.get("timeframe"),
+                    "pattern_name": f.get("pattern_name"),
+                    "state": f.get("state"),
+                    "confidence_score": f.get("quality"),
+                    "contraction": f.get("contraction"),
+                    "break_dir": f.get("break_dir", 0),
+                })
+            return notifier.format_daily_summary(aktif, daily_stats)
+        if not formations:
+            return "📊 Özet: Şu an aktif formasyon yok."
+        tamam = len([f for f in formations if f.get("state") == "FORMASYON_TAMAMLANDI"])
+        retest = len([f for f in formations if str(f.get("state", "")).startswith("RETEST")])
+        sikis = len([f for f in formations if f.get("state") == "SIKISMA_GUCLENIYOR"])
+        kirilim = len([f for f in formations if str(f.get("state", "")).startswith("KIRILIM")])
+        filt = f" [{arguman}]" if arguman else ""
+        return (
+            f"📊 Özet {datetime.now(ISTANBUL_TZ).strftime('%H:%M')}{filt}\n"
+            f"Canlı: {len(formations)} | Tamamlanan: {tamam} | Retest: {retest} | Sıkışan: {sikis} | Kırılım: {kirilim}\n"
+            f"/canli ile tek mesajda hepsi"
+        )
+    except Exception as e:
+        return f"Özet alınamadı: {e}"
+
+
+def _komut_sikisanlar(arguman: str) -> str:
+    formations = [f for f in _live_state.formations() if f.get("state") == "SIKISMA_GUCLENIYOR"]
+    formations = _filtrele_formasyonlar(formations, arguman)
+    if not formations:
+        filt = f" ('{arguman}')" if arguman else ""
+        return f"⚡ Şu an yüksek sıkışma yok{filt}."
+    sirali = sorted(formations, key=lambda x: float(x.get("quality") or 0), reverse=True)[:15]
+    satirlar = [f"⚡ SIKIŞANLAR ({len(formations)})" + (f" [{arguman}]" if arguman else "")]
+    for f in sirali:
+        satirlar.append(
+            f"{f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} q{float(f.get('quality') or 0):.0f} {_break_ok(f.get('break_dir'))}"
+        )
+    if len(formations) > 15:
+        satirlar.append(f"... ve {len(formations)-15} daha")
+    return "\n".join(satirlar)
+
+
+def _komut_tamamlanan(arguman: str) -> str:
+    formations = [f for f in _live_state.formations() if f.get("state") == "FORMASYON_TAMAMLANDI"]
+    formations = _filtrele_formasyonlar(formations, arguman)
+    if not formations:
+        filt = f" ('{arguman}')" if arguman else ""
+        return f"🏁 Şu an tamamlanan yok{filt}."
+    sirali = sorted(formations, key=lambda x: float(x.get("quality") or 0), reverse=True)[:15]
+    satirlar = [f"🏁 TAMAMLANAN ({len(formations)})" + (f" [{arguman}]" if arguman else "")]
+    for f in sirali:
+        satirlar.append(
+            f"{f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} q{float(f.get('quality') or 0):.0f} {_break_ok(f.get('break_dir'))}"
+        )
+    if len(formations) > 15:
+        satirlar.append(f"... ve {len(formations)-15} daha")
+    return "\n".join(satirlar)
+
+
+def _komut_retest(arguman: str) -> str:
+    formations = [
+        f for f in _live_state.formations()
+        if str(f.get("state", "")).startswith("RETEST")
+    ]
+    formations = _filtrele_formasyonlar(formations, arguman)
+    if not formations:
+        filt = f" ('{arguman}')" if arguman else ""
+        return f"🎯 Retest bekleyen/başarılı yok{filt}."
+    sirali = sorted(formations, key=lambda x: float(x.get("quality") or 0), reverse=True)[:15]
+    satirlar = [f"🎯 RETEST ({len(formations)})" + (f" [{arguman}]" if arguman else "")]
+    for f in sirali:
+        satirlar.append(
+            f"{f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} {f.get('state')} q{float(f.get('quality') or 0):.0f} {_break_ok(f.get('break_dir'))}"
+        )
+    if len(formations) > 15:
+        satirlar.append(f"... ve {len(formations)-15} daha")
+    return "\n".join(satirlar)
+
+
+def _komut_kirilim(arguman: str) -> str:
+    formations = [
+        f for f in _live_state.formations()
+        if str(f.get("state", "")).startswith("KIRILIM")
+    ]
+    formations = _filtrele_formasyonlar(formations, arguman)
+    if not formations:
+        filt = f" ('{arguman}')" if arguman else ""
+        return f"🚀 Kırılım adayı/teyitli yok{filt}."
+    sirali = sorted(formations, key=lambda x: float(x.get("quality") or 0), reverse=True)[:15]
+    satirlar = [f"🚀 KIRILIM ({len(formations)})" + (f" [{arguman}]" if arguman else "")]
+    for f in sirali:
+        satirlar.append(
+            f"{f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} {f.get('state')} q{float(f.get('quality') or 0):.0f} {_break_ok(f.get('break_dir'))}"
+        )
+    if len(formations) > 15:
+        satirlar.append(f"... ve {len(formations)-15} daha")
+    return "\n".join(satirlar)
+
 TELEGRAM_KOMUTLARI = {
     "start": _komut_yardim,
     "yardim": _komut_yardim,
@@ -472,6 +643,24 @@ TELEGRAM_KOMUTLARI = {
     "formasyon": _komut_formasyonlar,
     "liste": _komut_formasyonlar,
     "tara": _komut_tara,
+    "canli": _komut_canli,
+    "c": _komut_canli,
+    "ozet": _komut_ozet,
+    "o": _komut_ozet,
+    "gunluk": _komut_ozet,
+    "sikisanlar": _komut_sikisanlar,
+    "sikisan": _komut_sikisanlar,
+    "sıkışanlar": _komut_sikisanlar,
+    "sıkışan": _komut_sikisanlar,
+    "s": _komut_sikisanlar,
+    "tamamlanan": _komut_tamamlanan,
+    "tamam": _komut_tamamlanan,
+    "t": _komut_tamamlanan,
+    "retest": _komut_retest,
+    "r": _komut_retest,
+    "kirilim": _komut_kirilim,
+    "kırılım": _komut_kirilim,
+    "k": _komut_kirilim,
 }
 
 def _bekle_veya_tarama(seconds: float) -> bool:
