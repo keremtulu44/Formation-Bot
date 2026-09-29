@@ -168,6 +168,22 @@ GUNLUK_DEQUE_MAXLEN = 500
 TELEGRAM_MAX_MESAJ_SAAT = 20
 TELEGRAM_MAX_MESAJ_GUN = 120
 
+# --- TELEGRAM WEBHOOK (Render) ---
+# Varsayılan mod YOKLAMA'dır (getUpdates): yerel/systemd kurulumunda inbound HTTP
+# gerekmez. Render gibi bir web serviste komutları webhook ile almak için:
+#
+#   RENDER_EXTERNAL_URL       Render otomatik verir: https://<servis>.onrender.com
+#   TELEGRAM_WEBHOOK_SECRET   rastgele bir metin; adresin son parçasıdır ve
+#                             Telegram'a secret_token olarak da bildirilir
+#   TELEGRAM_WEBHOOK_URL      (opsiyonel) tam adres; boşsa RENDER_EXTERNAL_URL'den
+#                             https://<servis>.onrender.com/webhook/<secret> üretilir
+#
+# Secret boşsa webhook modu KAPALIDIR: bot eskisi gibi getUpdates yoklaması yapar
+# ve /webhook/<secret> ucu 404 döner (dışarıdan varlığı görülmez).
+TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
+TELEGRAM_WEBHOOK_URL = os.getenv("TELEGRAM_WEBHOOK_URL", "").strip()
+RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip()
+
 # --- PUBLIC KANAL ve ÖZET ---
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()
 SUMMARY_HOURS = os.getenv("SUMMARY_HOURS", "09:55,18:15").strip()  # İstanbul saati, virgülle ayrılmış

@@ -55,19 +55,28 @@ monitör yalnızca liveness JSON'u görür, token/anahtar veya portföy verisi d
 mesajı gönderir (gönderim tarafını telefondan doğrulamak için). Anahtar
 tanımlı değilse bu yol 404 döner ve Telegram'a hiçbir istek gitmez.
 
+`TELEGRAM_WEBHOOK_SECRET` tanımlıysa aynı sunucu `POST /webhook/<secret>`
+ucunu açar ve Telegram komutları webhook ile gelir (adres `RENDER_EXTERNAL_URL`
+üzerinden otomatik üretilir); tanımlı değilse uç 404 döner ve bot `getUpdates`
+yoklamasını kullanır. Detay: `RENDER_DEPLOY.md` §4.6.
+
 Bot artık **iki yönlüdür**: Telegram'dan gelen komutları yanıtlar. Komutlar
 yalnızca `TELEGRAM_CHAT_ID`'den kabul edilir:
 
 | Komut | Ne yapar |
 |---|---|
 | `/formasyonlar` | Günün canlı formasyonları (`/formasyonlar 1h`, `/formasyonlar THYAO` filtreleri) |
+| `/canli`, `/c` | Canlı formasyonlar tek kompakt mesajda |
+| `/panel`, `/p` | 48 hisse × 4 TF slot tablosu + sayılar + en kritik 12 kayıt (`/genel`, `/tablo` diğer adları; `/panel 1h THYAO` gibi filtreler) |
+| `/ozet`, `/o` | Günlük özet (tamamlanan/retest/sıkışan) |
 | `/durum` | Piyasa, son tarama yaşı, canlı sayı, veri sağlığı, günlük alarm/hata |
 | `/tara` | Şimdi tara (yalnızca seans içinde; mum kapanışını beklemez) |
 | `/yardim` | Komut listesi |
 
-Komutlar `getUpdates` uzun yoklamasıyla ayrı bir thread'de toplanır; aynı
-token'la ikinci bir kopya (Termux/PC) çalışıyorsa `409 Conflict` alır —
-o kopyayı kapatın, yoksa komutlar çalışmaz. Detay: `RENDER_DEPLOY.md` §4.5.
+Komutlar varsayılan olarak `getUpdates` uzun yoklamasıyla ayrı bir thread'de
+toplanır; aynı token'la ikinci bir kopya (Termux/PC) çalışıyorsa `409 Conflict`
+alır — o kopyayı kapatın, yoksa komutlar çalışmaz. Webhook modunda (`§4.6`)
+yoklama kapanır, çakışma olmaz. Detay: `RENDER_DEPLOY.md` §4.5.
 
 Kurulumun neresinde takıldığını tek komutla görmek için:
 
@@ -129,9 +138,9 @@ tablosuna yazar; yerel JSON/pickle dosyalarını da fallback olarak tutar.
 | `data.py` | yfinance fetch (`auto_adjust=False`), StockDequeManager (1H + ayrı 1D deque), tatil/veri-yok/split yardımcıları |
 | `scan_pacer.py` | Seri Yahoo istekleri için rastgele aralık, 10'lu istek grubu ve grup molası |
 | `supabase_store.py` | Supabase REST API adaptörü; servis anahtarı yalnızca environment'tan okunur |
-| `telegram_commands.py` | İki yönlü Telegram: `getUpdates` uzun yoklaması, yetki kontrolü, komut dağıtımı, 401/409 yönetimi |
+| `telegram_commands.py` | İki yönlü Telegram: `getUpdates` uzun yoklaması, yetki kontrolü, komut dağıtımı, 401/409 yönetimi (webhook modunda da aynı komut dağıtımı kullanılır) |
 | `live_state.py` | Tarama thread'i ile komut thread'i arasında thread-safe canlı formasyon/durum paylaşımı |
-| `health_server.py` | Render `PORT` varsa `/health` liveness endpoint'i; uptime monitörleri için |
+| `health_server.py` | Render `PORT` varsa `/health` liveness, korumalı `/test` ve `POST /webhook/<secret>` uçları; uptime monitörleri ve Telegram komutları için |
 | `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
 | `deploy_check.py` | Kurulum doktoru: repo dosyaları + env + Supabase tablosu + Telegram + Render `/health` ve `/test` uçlarını tek komutla doğrular (sır yazdırmaz) |
 | `.github/workflows/deploy.yml` | Render Deploy Hook ile `main` push'unda otomatik deploy (hook secret yoksa uyarı verip atlar) |

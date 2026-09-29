@@ -36,3 +36,9 @@ services:
         sync: false
       - key: BOT_PROFILE
         value: Dengeli
+      # OPSIYONEL — Telegram komutlarını webhook ile almak için rastgele bir değer.
+      # RENDER_EXTERNAL_URL'i Render otomatik verir; adres
+      # https://<servis>.onrender.com/webhook/<secret> olarak kurulur.
+      # Boş bırakılırsa bot getUpdates yoklamasını kullanır (varsayılan davranış).
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
