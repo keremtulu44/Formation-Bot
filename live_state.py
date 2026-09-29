@@ -9,13 +9,26 @@ Davranış:
 - `begin_scan()` → yeni liste geçici tampona yazılır, ESKİ liste yayında kalır.
   Böylece tarama sürerken `/formasyonlar` yarım listeyi göstermez.
 - `finish_scan()` → tampon yayına alınır (tek atama, atomik).
+- `snapshot()` / `hydrate()` → son liste restart/uyku sonrası geri yüklenebilir;
+  yarım tarama ve geçici süreç durumları geri yüklenmez.
 """
 
 from __future__ import annotations
 
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+
+SON_TARAMA_SURUMU = 1
+_SNAPSHOT_STATUS_ALANLARI = (
+    "son_tarama_baslangic",
+    "son_tarama_bitis",
+    "son_tarama_suresi_dk",
+    "son_tarama_hissesi",
+    "son_tarama_formasyonu",
+    "tarama_sayisi",
+)
 
 
 class LiveState:
@@ -33,6 +46,9 @@ class LiveState:
             "son_tarama_hatasi": None,
             "manuel_tarama": False,
             "baslangic": None,
+            "snapshot_yuklendi": False,
+            "snapshot_zamani": None,
+            "snapshot_formasyon": 0,
         }
 
     # --- tarama tarafı (main thread) -----------------------------------
@@ -46,6 +62,7 @@ class LiveState:
             self._pending = {}
             self._status["tarama_suruyor"] = True
             self._status["manuel_tarama"] = bool(manuel)
+            self._status["snapshot_yuklendi"] = False
             self._status["son_tarama_baslangic"] = (ts or datetime.now()).isoformat()
             self._status["son_tarama_hatasi"] = None
             self._status["tarama_sayisi"] = int(self._status.get("tarama_sayisi") or 0) + 1
@@ -81,6 +98,56 @@ class LiveState:
             self._status["tarama_suruyor"] = False
             self._status["son_tarama_hatasi"] = str(hata)[:200]
             self._status["son_tarama_bitis"] = (ts or datetime.now()).isoformat()
+
+    # --- son tamamlanan taramanın kalıcı kopyası -----------------------
+    def snapshot(self) -> dict:
+        """Yalnızca yayındaki listeyi kopyalar; yarım tarama kayda girmez.
+
+        JSON/disk/ağ işlemleri bu kilidin dışında, çağıran tarafta yapılır.
+        """
+        with self._lock:
+            formations = [dict(v) for v in self._formations.values()]
+            durum = dict(self._status)
+        durum["tarama_suruyor"] = False
+        durum.pop("snapshot_yuklendi", None)
+        return {
+            "surum": SON_TARAMA_SURUMU,
+            "kayit_zamani": datetime.now(timezone.utc).isoformat(),
+            "status": durum,
+            "formations": formations,
+        }
+
+    def hydrate(self, veri: Any) -> int:
+        """Kayıtlı listeyi yükler; geçici/çalışan süreç durumunu geri yüklemez."""
+        if not isinstance(veri, dict) or not isinstance(veri.get("formations"), list):
+            return 0
+        kayitlar = {}
+        for kayit in veri["formations"]:
+            if not isinstance(kayit, dict):
+                continue
+            stock, timeframe = kayit.get("stock"), kayit.get("timeframe")
+            if not isinstance(stock, str) or not isinstance(timeframe, str):
+                continue
+            stock, timeframe = stock.strip().upper(), timeframe.strip().lower()
+            if not stock or not timeframe:
+                continue
+            kopya = dict(kayit)
+            kopya.update(stock=stock, timeframe=timeframe)
+            kayitlar[f"{stock}|{timeframe}"] = kopya
+        durum = veri.get("status")
+        if not isinstance(durum, dict):
+            durum = {}
+        with self._lock:
+            self._formations = kayitlar
+            self._pending = {}
+            for alan in _SNAPSHOT_STATUS_ALANLARI:
+                if durum.get(alan) is not None:
+                    self._status[alan] = durum[alan]
+            self._status["tarama_suruyor"] = False
+            self._status["snapshot_yuklendi"] = bool(kayitlar)
+            self._status["snapshot_zamani"] = veri.get("kayit_zamani")
+            self._status["snapshot_formasyon"] = len(kayitlar)
+        return len(kayitlar)
 
     # --- komut tarafı (listener thread) --------------------------------
     def formations(self) -> List[Dict[str, Any]]:

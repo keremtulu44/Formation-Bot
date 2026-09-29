@@ -68,6 +68,7 @@ yalnızca `TELEGRAM_CHAT_ID`'den kabul edilir:
 | `/formasyonlar` | Günün canlı formasyonları (`/formasyonlar 1h`, `/formasyonlar THYAO` filtreleri) |
 | `/canli`, `/c` | Canlı formasyonlar tek kompakt mesajda |
 | `/panel`, `/p` | 48 hisse × 4 TF slot tablosu + sayılar + en kritik 12 kayıt (`/genel`, `/tablo` diğer adları; `/panel 1h THYAO` gibi filtreler) |
+| Son tarama kalıcılığı (otomatik) | Restart/uyku sonrası `/panel` ve `/canli` son tamamlanan listeyi gösterir; `/panel` taramanın yaşını, `/panel` ve `/durum` kayıtlı kopya için ♻️ notunu gösterir. Render'da mevcut Supabase env değerleri gereklidir. |
 | `/ozet`, `/o` | Günlük özet (tamamlanan/retest/sıkışan) |
 | `/durum` | Piyasa, son tarama yaşı, canlı sayı, veri sağlığı, günlük alarm/hata |
 | `/tara` | Şimdi tara (yalnızca seans içinde; mum kapanışını beklemez) |
@@ -125,8 +126,11 @@ secret'ları girin (değerleri Git'e veya sohbete koymayın):
 
 Supabase değişkenleri yoksa bot mevcut yerel cache/dosya davranışıyla çalışır; ancak Render'ın
 ephemeral diski nedeniyle restart/deploy sonrası bu yerel veriler korunmaz. Değişkenler varsa
-bot açılışta 1H/1D cache ve Telegram state'ini tek istekle yükler, değişiklikleri `bot_store`
-tablosuna yazar; yerel JSON/pickle dosyalarını da fallback olarak tutar.
+bot açılışta son taramayı, ardından 1H/1D cache ve Telegram state'ini yükler;
+cache/Telegram state'i tek istekte alınır. Son liste mevcut `bot_store` tablosunda
+`state:son_tarama` anahtarıyla, yerelde de atomik `bot_data/son_tarama.json` dosyasıyla
+tutulur. Açılışta en yeni kopya seçilir; okuma/yazma hatası botu durdurmaz.
+Yerel JSON/pickle dosyaları da fallback olarak tutulur.
 
 ## Dosya haritası
 

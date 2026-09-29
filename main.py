@@ -404,6 +404,8 @@ def _komut_durum(_arguman: str) -> str:
         f"Veri: taze {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse · "
         f"en eski mum {_sayi(yas, 0, '—')} dk · eski veri {daily_stats['stale_stocks']} hisse",
     ]
+    if st.get("snapshot_yuklendi"):
+        satirlar.append("♻️ Liste kayıtlı son taramadan yüklendi (bot yeniden başladı ya da yeni uyandı)")
     if daily_stats.get('veri_yok_modu'):
         satirlar.append("⚠️ VERİ YOK MODU: bugün yeni piyasa verisi alınamadı (tatil/arıza)")
     if st.get("son_tarama_hatasi"):
@@ -828,6 +830,8 @@ def _komut_panel(arguman: str) -> str:
     if st.get("tarama_suruyor"):
         tarama += " · tarama sürüyor"
     satirlar.append(f"{tarama} · dolu slot {len(slot)}/{toplam_slot}")
+    if st.get("snapshot_yuklendi"):
+        satirlar.append("♻️ Kayıtlı son tarama gösteriliyor (bu oturumda henüz yeni tarama yok)")
     satirlar.append("")
     satirlar.append("📊 SAYILAR")
     tf_parcalari = []
@@ -841,8 +845,12 @@ def _komut_panel(arguman: str) -> str:
     satirlar.append(" · ".join(tf_parcalari))
     satirlar.append(_panel_durum_sayilari(filtreli))
     if not formations:
-        satirlar.append("⚠️ Henüz tamamlanmış tarama yok; ilk tarama mum kapanışından "
-                        "5 dk sonra yapılır (/tara ile seans içinde elle isteyebilirsin).")
+        if st.get("son_tarama_bitis"):
+            satirlar.append("ℹ️ (kayıtlı) son taramada canlı formasyon bulunmadı; "
+                            "bot her mum kapanışından sonra yeniden tarar.")
+        else:
+            satirlar.append("⚠️ Henüz tamamlanmış tarama yok; ilk tarama mum kapanışından "
+                            "5 dk sonra yapılır (/tara ile seans içinde elle isteyebilirsin).")
     sabit_kuyruk = [""] + _panel_kritik_listesi(filtreli) + ["", PANEL_IPUCU]
 
     # --- slot tablosu: önce tam (boş slotlar '—'), sığmazsa kompakt ---
@@ -908,6 +916,137 @@ TELEGRAM_KOMUTLARI = {
     "genel": _komut_panel,
     "tablo": _komut_panel,
 }
+
+# === SON TARAMA KALICILIĞI ===
+# Render'ın diski geçicidir; aynı liste mevcut bot_store tablosunda da tutulur.
+# LiveState kilidinden yalnızca kopya alınır, disk/ağ I/O'su kilit dışında yapılır.
+SON_TARAMA_DOSYA = "son_tarama.json"
+SON_TARAMA_SUPABASE_KEY = "state:son_tarama"
+
+
+def _son_tarama_data_dir(data_dir=None):
+    if data_dir is None:
+        from config import DATA_DIR
+        return DATA_DIR
+    return data_dir
+
+
+def _son_tarama_yolu(data_dir=None):
+    return os.path.join(_son_tarama_data_dir(data_dir), SON_TARAMA_DOSYA)
+
+
+def _kayit_zamani(veri) -> datetime | None:
+    if not isinstance(veri, dict):
+        return None
+    try:
+        return datetime.fromisoformat(veri.get("kayit_zamani"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _yeni_snapshot(*adaylar):
+    """Geçerli kopyalardan en yenisini seçer; bozuk kopya diğerini gölgelemez."""
+    secilen = None
+    for aday in adaylar:
+        if not isinstance(aday, dict) or not isinstance(aday.get("formations"), list):
+            continue
+        if secilen is None:
+            secilen = aday
+            continue
+        yeni_zaman, eski_zaman = _kayit_zamani(aday), _kayit_zamani(secilen)
+        if yeni_zaman is None:
+            continue
+        if eski_zaman is None:
+            secilen = aday
+            continue
+        try:
+            if yeni_zaman > eski_zaman:
+                secilen = aday
+        except TypeError:
+            # Eski naive kayıt ile timezone-aware kayıt karşılaştırılamazsa
+            # mevcut tercih korunur (aday sırası: Supabase, yerel dosya).
+            pass
+    return secilen
+
+
+def son_tarama_kaydet(store=None, data_dir=None) -> bool:
+    """Son listeyi iki yere bağımsız kaydeder; hiçbir I/O hatası botu durdurmaz."""
+    store = _supabase_store_ref if store is None else store
+    try:
+        veri = _live_state.snapshot()
+        formasyon_sayisi = len(veri["formations"])
+    except Exception as exc:
+        logger.warning("Son tarama kopyası alınamadı: %s", exc)
+        return False
+
+    dosya_var, supabase_var = False, False
+    gecici_yol = None
+    try:
+        yol = _son_tarama_yolu(data_dir)
+        os.makedirs(_son_tarama_data_dir(data_dir), exist_ok=True)
+        gecici_yol = yol + ".tmp"
+        with open(gecici_yol, "w", encoding="utf-8") as dosya:
+            json.dump(veri, dosya, ensure_ascii=False, indent=2)
+        os.replace(gecici_yol, yol)
+        dosya_var = True
+    except Exception as exc:
+        logger.warning("Son tarama dosyaya kaydedilemedi: %s", exc)
+    finally:
+        if gecici_yol is not None:
+            try:
+                os.remove(gecici_yol)
+            except FileNotFoundError:
+                pass  # Başarılı os.replace geçici dosyayı zaten kaldırır.
+            except Exception as exc:
+                logger.warning("Son tarama geçici dosyası temizlenemedi: %s", exc)
+
+    if store is not None:
+        try:
+            supabase_var = bool(store.upsert(SON_TARAMA_SUPABASE_KEY, veri))
+        except Exception as exc:
+            logger.warning("Son tarama Supabase'e kaydedilemedi: %s", exc)
+    logger.info(
+        "Son tarama kaydedildi: %d formasyon (supabase=%s, dosya=%s)",
+        formasyon_sayisi, "var" if supabase_var else "yok", "var" if dosya_var else "yok",
+    )
+    return dosya_var or supabase_var
+
+
+def son_tarama_yukle(store=None, data_dir=None) -> int:
+    """Supabase/yerel dosyanın en yenisini yükler; ilk kurulumda sessizce 0 döner."""
+    store = _supabase_store_ref if store is None else store
+    uzak_veri, yerel_veri = None, None
+    if store is not None:
+        try:
+            satirlar = store.get_many([SON_TARAMA_SUPABASE_KEY])
+            if isinstance(satirlar, dict):
+                uzak_veri = satirlar.get(SON_TARAMA_SUPABASE_KEY)
+        except Exception as exc:
+            logger.warning("Son tarama Supabase'den okunamadı: %s", exc)
+    try:
+        with open(_son_tarama_yolu(data_dir), encoding="utf-8") as dosya:
+            yerel_veri = json.load(dosya)
+    except (FileNotFoundError, ValueError, UnicodeError):
+        pass  # İlk kurulum/bozuk JSON: diğer kopya varsa onu kullan.
+    except Exception as exc:
+        logger.warning("Son tarama dosyadan okunamadı: %s", exc)
+
+    try:
+        veri = _yeni_snapshot(uzak_veri, yerel_veri)
+        if veri is None:
+            return 0
+        sayi = _live_state.hydrate(veri)
+        if sayi or not veri["formations"]:
+            kaynak = "Supabase" if veri is uzak_veri else "yerel dosya"
+            logger.info(
+                "Kayıtlı son tarama yüklendi (%s): %d formasyon, tarama zamanı %s",
+                kaynak, sayi, _live_state.status().get("son_tarama_bitis") or "—",
+            )
+        return sayi
+    except Exception as exc:
+        logger.warning("Son tarama kaydı yüklenemedi: %s", exc)
+        return 0
+
 
 # === TELEGRAM WEBHOOK (Render) ===
 # Neden: Render Free bir web servistir; uyku/restart döngüsüne girer. Yoklama
@@ -1433,6 +1572,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
         son_tarama_hissesi=tur_taranan,
         son_tarama_formasyonu=tur_formasyon,
     )
+    son_tarama_kaydet()
 
     # --- TARAMA DRİFT KORUMASI (FAZ 2) ---
     if sure_dk > TARAMA_SURESI_UYARI_DK:
@@ -1615,6 +1755,7 @@ def main_loop():
     if supabase_store is not None:
         # Ortam değişkenleri yanlışsa teşhis loga düşsün; hata halinde bot durmaz.
         supabase_store.ping()
+    son_tarama_yukle(supabase_store)
     deque_manager = StockDequeManager(persistent_store=supabase_store)
     _deque_manager_ref = deque_manager
 
@@ -1819,6 +1960,7 @@ def main_loop():
     try:
         if _deque_manager_ref is not None:
             _deque_manager_ref.save_all()
+        son_tarama_kaydet()
         write_heartbeat()
     except Exception as e:
         logger.error(f"Kapanış kayıt hatası: {e}")

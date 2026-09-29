@@ -464,6 +464,17 @@ Akış: `/tara` isteği bir bayrağa yazılır, ana döngünün 5 dakikalık uyk
 kesilir ve tarama normal akışla (aynı pacing, aynı kalite eşikleri, aynı
 Supabase kaydı) başlar; bitince `/formasyonlar` güncel listeyi gösterir.
 
+> 💾 **Son tarama kalıcılığı:** Her tamamlanan tarama ve güvenli kapanışta liste
+> mevcut `bot_store` tablosuna `state:son_tarama` anahtarıyla ve yerelde
+> `bot_data/son_tarama.json` dosyasına atomik olarak kaydedilir. Açılışta iki
+> kopyadan en yenisi yüklenir; `/panel` ve `/canli` piyasa kapalıyken veya
+> restart/uyku sonrasında da son listeyi gösterir. `/panel` taramanın yaşını ve
+> `/panel` ile `/durum` **♻️ kayıtlı kopya** notunu gösterir; yeni tarama başlayınca
+> not kalkar. **Render'da kalıcılık için mevcut `SUPABASE_URL` ve
+> `SUPABASE_SERVICE_ROLE_KEY` tanımlı olmalıdır**: Free servisin diski geçicidir,
+> yalnızca yerel dosyaya güvenilmez. Yeni env değişkeni veya SQL/şema değişikliği
+> gerekmez; okuma/yazma hatasında bot durmaz, mümkünse diğer kopyayı kullanır.
+
 > ⚠️ **Tek tüketici kuralı:** Telegram aynı token için **iki süreç** aynı anda
 > `getUpdates` yaparsa ikincisi `409 Conflict` alır. Termux/PC'de açık kalmış
 > ikinci bir kopya varsa **kapatın**; bot bunu logda net söyler ve dinleyiciyi
@@ -710,6 +721,8 @@ Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 | `getWebhookInfo` `last_error_message` dolu | Adres yanlış/erişilemez ya da HTTPS değil. `TELEGRAM_WEBHOOK_URL`'i temizleyip `RENDER_EXTERNAL_URL` ile otomatik üretime dönün (§4.6) |
 | Webhook açtım, komutlar bir süre sonra durdu | Render Free uykuya geçmiş olabilir. Telegram başarısız teslimatı bir süre tekrar dener; keep-alive penceresini genişletin (`KEEPALIVE_ALWAYS=true`, §5) |
 | `/tara` "piyasa kapalı" diyor | Normal: elle tarama yalnızca seans içinde (İstanbul 09:50-18:40) çalışır |
+| `/panel` boş geliyor | İki olasılık: son tamamlanan taramada canlı formasyon yoktu; veya restart sonrası kayıt yüklenemedi (Render'da `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` yok/yanlış ya da Supabase erişilemiyor). Son tarama yaşına ve yükleme loguna bak; ilk kurulumda ilk taramayı bekle |
+| `/panel` "♻️ Kayıtlı son tarama gösteriliyor" diyor | Normal: restart/uyku sonrası son liste yüklendi; bu oturumda henüz yeni tarama yok. Başlıktaki tarama yaşı verinin güncelliğini gösterir; yeni tarama başlayınca not kalkar |
 | Komut cevabı 1 dk gecikiyor | Servis uyuyorsa ilk istek onu uyandırır (~1 dk); keep-alive penceresi bunu seans içinde engeller |
 | `Supabase bağlantısı OK` yok | `supabase_schema.sql` çalıştırılmamış veya anahtar yanlış (yukarıdaki HTTP kodlarına bak) |
 | Tarama çok yavaş | Free instance 0.1 CPU. Tarama 48 hisse × 4 zaman dilimi; ilk yükleme birkaç dakika sürebilir, sonraki turlar mum başına bir tarama yapılır |

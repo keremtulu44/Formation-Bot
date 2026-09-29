@@ -17,6 +17,9 @@ CANLI_FORMASYONLAR.txt
 bot_data/heartbeat.json
 bot_data/telegram_kap.json
 bot_data/telegram_soguma.json
+# Son tarama çalışma durumudur; kayıtlı liste ve atomik yazım dosyası Git'e girmez.
+bot_data/son_tarama.json
+bot_data/son_tarama.json.tmp
 bot_data/*_gunluk.json
 
 # OS
