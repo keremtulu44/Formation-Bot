@@ -109,6 +109,21 @@ jobs:
             exit 1
           fi
 
+          # Webhook ucu da secret tanımsızken KAPALI olmalı: kurulu olmayan uç
+          # kendini belli etmez (aynı /test kuralı). Webhook'un uçtan uca akışı
+          # (secret doğrulama + JSON parse + komut cevabı) pytest'te koşar:
+          # test_telegram_webhook.py
+          code=$(curl -s -o /tmp/webhook.json -w "%{http_code}" -X POST \
+                 -H "Content-Type: application/json" -d '{"update_id":1}' \
+                 "http://127.0.0.1:10000/webhook/deneme" || echo "000")
+          echo "--- /webhook/deneme (TELEGRAM_WEBHOOK_SECRET tanımsız) -> HTTP $code ---"
+          cat /tmp/webhook.json; echo
+          if [ "$code" != "404" ]; then
+            echo "::error title=Webhook ucu kapalı değil::TELEGRAM_WEBHOOK_SECRET tanımsızken POST /webhook/<secret> 404 dönmeli. Dönen kod: $code"
+            exit 1
+          fi
+          echo "✅ webhook ucu secret tanımsızken 404 (kapalı)"
+
           echo "--- bot logu (ilk 25 satır) ---"
           head -25 /tmp/bot.log
           echo "OK: start command ayakta ve /health 200 döndü"

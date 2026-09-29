@@ -10,6 +10,7 @@ Kapsam:
 """
 
 import json
+import re
 import time
 
 import pytest
@@ -384,3 +385,155 @@ def test_health_test_ucu_ile_komut_dinleyicisi_ayni_tokeni_paylasir():
     kaynak = open("telegram_commands.py", encoding="utf-8").read()
     assert "getUpdates" in kaynak and "sendMessage" in kaynak
     assert "setWebhook" not in kaynak  # webhook kurulursa getUpdates 409 alır
+
+
+# --- /panel komutu (48 hisse x 4 TF slot tablosu) -------------------------
+def _panel_doldur(durum, hisseler=None, kayitlar=None):
+    """Panel testleri için canlı durum üretir (küçük evren: hızlı ve deterministik)."""
+    durum.begin_scan()
+    for kayit in (kayitlar or []):
+        durum.record_formation(kayit)
+    durum.finish_scan(son_tarama_suresi_dk=1.0, son_tarama_hissesi=len(hisseler or []))
+
+
+def _panel_kayit(stock, tf, state="SIKISMA_GUCLENIYOR", quality=80.0, pattern="Yükselen Üçgen"):
+    return {
+        "stock": stock, "timeframe": tf, "pattern_name": pattern, "quality": quality,
+        "state": state, "break_dir": 1, "upper": 100.0, "lower": 95.0,
+        "critical_price": 100.0, "min_quality": 80.0, "alert_gonderildi": False,
+    }
+
+
+def test_panel_komutu_hisse_ve_slot_sayilarini_gosterir(monkeypatch):
+    hisseler = ["THYAO", "GARAN", "AKBNK", "EREGL"]
+    durum = LiveState()
+    _panel_doldur(durum, hisseler, [
+        _panel_kayit("THYAO", "1h", "KIRILIM_TEYITLI", 88.0),
+        _panel_kayit("GARAN", "4h", "RETEST_BASARILI", 75.0),
+    ])
+    monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", hisseler)
+    monkeypatch.setattr(main_mod, "_live_state", durum)
+
+    cevap = main_mod._komut_panel("")
+    assert "PANEL" in cevap
+    assert "4 hisse x 4 TF" in cevap          # 48 hisse x 4 slot yapısı
+    assert "dolu slot 2/16" in cevap          # 4 hisse x 4 TF = 16 slot
+    assert "📊 SAYILAR" in cevap
+    assert "🚀 kırılım 1" in cevap and "🎯 retest 1" in cevap
+    assert "THYAO 1h 88🚀" in cevap           # slot hücresi: TF + kalite + işaret
+    assert "2h —" in cevap                    # boş slot görünür kalır
+    assert "🔥 TOP 12 KRİTİK" in cevap
+    for hisse in hisseler:
+        assert hisse in cevap
+
+
+def test_panel_komutu_top12_kritik_sirasini_uygular(monkeypatch):
+    hisseler = ["H00", "H01", "H02"]
+    kayitlar = [
+        _panel_kayit("H00", "1h", "FORMASYON_TAMAMLANDI", 99.0),
+        _panel_kayit("H01", "1h", "KIRILIM_ADAYI", 50.0),
+        _panel_kayit("H02", "1h", "RETEST_BASARILI", 70.0),
+    ]
+    durum = LiveState()
+    _panel_doldur(durum, hisseler, kayitlar)
+    monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", hisseler)
+    monkeypatch.setattr(main_mod, "_live_state", durum)
+
+    cevap = main_mod._komut_panel("")
+    # Kritiklik state'e göre: kırılım adayı > retest > tamamlanan (kalite ikincil)
+    sira = [s for s in cevap.splitlines() if s.strip().startswith(("1)", "2)", "3)"))]
+    assert "H01" in sira[0] and "Kırılım adayı" in sira[0]
+    assert "H02" in sira[1] and "Retest başarılı" in sira[1]
+    assert "H00" in sira[2] and "Formasyon tamamlandı" in sira[2]
+    assert "· kritik 100.00" in sira[0]
+
+
+def test_panel_komutu_top12_ile_sinirlidir(monkeypatch):
+    hisseler = [f"H{i:02d}" for i in range(15)]
+    durum = LiveState()
+    _panel_doldur(durum, hisseler, [
+        _panel_kayit(f"H{i:02d}", "1h", "KIRILIM_TEYITLI", 90.0 - i) for i in range(15)
+    ])
+    monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", hisseler)
+    monkeypatch.setattr(main_mod, "_live_state", durum)
+
+    cevap = main_mod._komut_panel("")
+    assert "(15 kayıt içinden)" in cevap
+    numarali = [s for s in cevap.splitlines() if re.match(r"^\s*\d+\)", s)]
+    assert len(numarali) == 12                  # TOP 12: fazlası listelenmez
+
+
+def test_panel_komutu_timeframe_filtresi_kolonlari_daraltir(monkeypatch):
+    hisseler = ["THYAO", "GARAN"]
+    durum = LiveState()
+    _panel_doldur(durum, hisseler, [
+        _panel_kayit("THYAO", "1h"),
+        _panel_kayit("GARAN", "4h"),
+    ])
+    monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", hisseler)
+    monkeypatch.setattr(main_mod, "_live_state", durum)
+
+    cevap = main_mod._komut_panel("4h")
+    assert "Filtre: 4h" in cevap
+    assert "1/4 TF" in cevap                      # yalnızca 4h kolonu
+    assert "GARAN 4h 80⚡" in cevap
+    assert "THYAO 4h —" in cevap                  # 1h kaydı 4h filtresinde görünmez
+    grid = cevap.split("🗂 SLOTLAR")[1].split("🔥 TOP")[0]
+    assert "1h" not in grid                       # yalnızca 4h kolonu çizilir
+
+
+def test_panel_komutu_hisse_filtresi_satirlari_daraltir(monkeypatch):
+    hisseler = ["THYAO", "GARAN", "AKBNK"]
+    durum = LiveState()
+    _panel_doldur(durum, hisseler, [
+        _panel_kayit("THYAO", "1h"),
+        _panel_kayit("GARAN", "1h", "KIRILIM_TEYITLI", 85.0),
+    ])
+    monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", hisseler)
+    monkeypatch.setattr(main_mod, "_live_state", durum)
+
+    cevap = main_mod._komut_panel("THYAO")
+    assert "Filtre: THYAO" in cevap
+    assert "1/3 hisse" in cevap
+    grid = cevap.split("🗂 SLOTLAR")[1]
+    assert "THYAO 1h 80⚡" in grid
+    assert "GARAN" not in grid and "AKBNK" not in grid
+
+
+def test_panel_komutu_bos_evrende_durum_soyler(monkeypatch):
+    monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", ["THYAO", "GARAN"])
+    monkeypatch.setattr(main_mod, "_live_state", LiveState())
+
+    cevap = main_mod._komut_panel("")
+    assert "2 hisse x 4 TF" in cevap
+    assert "tüm slotlar boş" in cevap
+    assert "tarama yok" in cevap.lower()
+
+
+def test_panel_komutu_mesaji_telegram_sinirinda_tutar(monkeypatch):
+    """48 hisse x 4 TF tamamen dolu + uzun desen adları: mesaj 4096'yı aşmamalı."""
+    hisseler = [f"H{i:02d}" for i in range(48)]
+    durum = LiveState()
+    durum.begin_scan()
+    tfs = ["1h", "2h", "4h", "1d"]
+    for i, hisse in enumerate(hisseler):
+        for j, tf in enumerate(tfs):
+            durum.record_formation(_panel_kayit(
+                hisse, tf, "KIRILIM_TEYITLI" if (i + j) % 2 == 0 else "SIKISMA_GUCLENIYOR",
+                90.0 - (i % 30), pattern="Simetrik Üçgen (genişleyen dipli formasyon)"))
+    durum.finish_scan(son_tarama_hissesi=48)
+    monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", hisseler)
+    monkeypatch.setattr(main_mod, "_live_state", durum)
+
+    cevap = main_mod._komut_panel("")
+    assert len(cevap) <= 4096
+    assert cevap == kirp(cevap)                 # kirp() kesme yapmıyor
+    assert "TOP 12 KRİTİK" in cevap
+    assert "dolu slot 192/192" in cevap
+
+
+def test_panel_aliasleri_ve_yardim_metni_tutarlidir():
+    for alias in ("panel", "p", "genel", "tablo"):
+        assert main_mod.TELEGRAM_KOMUTLARI[alias] is main_mod._komut_panel
+    assert "/panel" in main_mod.KOMUT_YARDIM
+    assert "/canli" in main_mod.KOMUT_YARDIM and "/formasyonlar" in main_mod.KOMUT_YARDIM

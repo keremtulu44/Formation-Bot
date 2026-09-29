@@ -30,7 +30,8 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     SCAN_BATCH_PAUSE_MIN_SEC, SCAN_BATCH_PAUSE_MAX_SEC,
                     SCAN_RETRY_BACKOFF_MIN_SEC, SCAN_RETRY_BACKOFF_MAX_SEC,
                     SUMMARY_HOURS, PUBLIC_MIN_QUALITY, PUBLIC_STATES,
-                    MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE)
+                    MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE,
+                    TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   son_kapanan_mum_ani, time_until_next_open,
                   resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
@@ -40,9 +41,9 @@ from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
 from notifier import TelegramNotifier
 from supabase_store import SupabaseStore
-from health_server import start_render_health_server
+from health_server import start_render_health_server, WEBHOOK_YOL_ONEK
 from live_state import LiveState
-from telegram_commands import TelegramCommandListener
+from telegram_commands import TelegramCommandListener, kirp
 
 # === LOGGING KURULUMU ===
 def setup_logging():
@@ -100,6 +101,16 @@ _deque_manager_ref = None
 _live_state = LiveState()
 _scan_istegi = threading.Event()
 _telegram_listener_ref = None
+# Webhook modunda: Telegram güncellemelerini işleyen nesne (yoklama thread'i YOK).
+# health_server'ın /webhook ucu bu referans üzerinden çalışır; bot hazır değilse
+# (açılıştaki ilk veri yüklemesi) uç 503 döner ve Telegram tekrar dener.
+_telegram_update_processor_ref = None
+# Aynı anda birden çok webhook isteği gelirse (Telegram sıralı gönderir ama ağ
+# tekrarı olabilir) komut işleme serileştirilir: dinleyicinin hız sınırı/tekrar
+# kümesi kilitli bir bölgede kullanılır.
+_telegram_webhook_kilidi = threading.Lock()
+# Render PORT'unda çalışan küçük HTTP sunucusu (webhook + /health + /test).
+_health_server_ref = None
 
 def signal_handler(signum, frame):
     global _shutdown_requested
@@ -300,6 +311,9 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 /formasyonlar — günün canlı formasyonları (detaylı)
    filtre: /formasyonlar 1h   ·   /formasyonlar THYAO
 /canli veya /c — canlı formasyonlar tek mesajda kompakt (kısayol)
+/panel veya /p — 48 hisse x 4 zaman dilimi slot tablosu (sayılar + top 12 kritik)
+   diğer adlar: /genel · /tablo
+   filtre: /panel 1h  ·  /panel THYAO  ·  /panel 1h THYAO  ·  /panel kirilim
 /ozet veya /o — günlük özet tek mesajda (tamamlanan/retest/sıkışan)
 /sikisanlar veya /s — sadece sıkışması güçlenenler
 /tamamlanan veya /t — sadece tamamlananlar
@@ -313,7 +327,8 @@ Notlar:
 • Komutlar yalnızca kayıtlı sohbetten (TELEGRAM_CHAT_ID) kabul edilir.
 • Bu bir AL/SAT aracı değildir: formasyon durumu ve kalite skoru bildirir.
 • Alarmlar mum kapanışından 5 dk sonra kendiliğinden gelir; /tara bunu beklemez.
-• Public kanal için: /canli ve /ozet en verimli kısayollar."""
+• Public kanal için: /canli, /panel ve /ozet en verimli kısayollar.
+• Komutlar webhook (Render) ya da yoklama ile gelir; ikisi aynı anda açık olmaz."""
 
 STATE_TR = {
     "ADAY_OLUSUYOR": "Aday oluşuyor",
@@ -634,6 +649,233 @@ def _komut_kirilim(arguman: str) -> str:
         satirlar.append(f"... ve {len(formations)-15} daha")
     return "\n".join(satirlar)
 
+# === /panel — 48 hisse x 4 zaman dilimi slot tablosu ===
+# Neden ayrı komut: /canli ve /formasyonlar yalnızca DOLU slotları listeler; hangi
+# hissede hiç formasyon yok, hangi TF boş, toplam kaç slot dolu -> görünmez.
+# /panel evrenin tamamını (ACTIVE_STOCKS x 4 TF) tek bakışta gösterir: doluluk
+# sayıları + kritiklik sırasına göre en kritik 12 kayıt.
+PANEL_TIMEFRAMES = ("1h", "2h", "4h", "1d")
+PANEL_TOP_KRITIK = 12        # kırılım/retest sırasına göre en kritik 12 kayıt
+PANEL_MESAJ_SINIRI = 3800    # Telegram 4096; kirp() kesmesin diye kendimiz sığdırırız
+
+# Kritiklik sırası: teyitli kırılım > aday > retest > tamamlanan > sıkışma.
+# Eşitlikte kalite büyük olan önce gelir (bkz. _panel_kritik_anahtar).
+PANEL_KRITIK_SIRA = {
+    "KIRILIM_TEYITLI": 0,
+    "KIRILIM_ADAYI": 1,
+    "RETEST_BASARILI": 2,
+    "FORMASYON_TAMAMLANDI": 3,
+    "RETEST_EDILIYOR": 4,
+    "RETEST_BEKLENIYOR": 5,
+    "KIRILIM_DENEMESI": 6,
+    "KIRILIM_HAZIRLIGI": 7,
+    "SIKISMA_GUCLENIYOR": 8,
+    "OLGUNLASIYOR": 9,
+}
+
+PANEL_IPUCU = "💡 /canli kompakt · /formasyonlar detay · /panel THYAO · /panel 1h · /panel kirilim"
+
+
+def _panel_kalite(kayit) -> float:
+    """Kalite alanı bozuk/eksik gelse de panel çökmesin."""
+    try:
+        return float((kayit or {}).get("quality") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _panel_sembol(state) -> str:
+    """State -> tek işaret (slot hücresinde yer kazanmak için)."""
+    s = str(state or "").upper()
+    if s.startswith("KIRILIM"):
+        return "🚀"
+    if s.startswith("RETEST"):
+        return "🎯"
+    if s == "FORMASYON_TAMAMLANDI":
+        return "🏁"
+    if s == "SIKISMA_GUCLENIYOR":
+        return "⚡"
+    if s.startswith("BASARISIZ") or s.endswith("GECERSIZ"):
+        return "⛔"
+    return "•"
+
+
+def _panel_hucre(kayit, tf: str) -> str:
+    """Tek slot hücresi: '1h 87🚀' ya da boşsa '1h —'."""
+    if not kayit:
+        return f"{tf} —"
+    return f"{tf} {_panel_kalite(kayit):.0f}{_panel_sembol(kayit.get('state'))}"
+
+
+def _panel_kritik_anahtar(kayit):
+    """Sıralama: önce state kritikliği, eşitlikte kalite (büyük önce)."""
+    state = str((kayit or {}).get("state") or "")
+    return (PANEL_KRITIK_SIRA.get(state, 50), -_panel_kalite(kayit))
+
+
+def _panel_filtre_coz(arguman: str):
+    """Argümanı (kolonlar, hisse_tokenlari) olarak ayırır.
+
+    - Zaman dilimi token'ları (1h/2h/4h/1d) gösterilecek SLOT sütunlarını seçer.
+    - Evrendeki bir hisseye (en az 3 karakter) uyan token'lar satırları daraltır.
+    - Kalan token'lar (kirilim, üçgen, KIRILIM_TEYITLI ...) sayıları ve top-12
+      listesini süzer (_filtrele_formasyonlar ile aynı sözdizimi).
+    """
+    tokens = [t for t in (arguman or "").replace(",", " ").split() if t]
+    kolonlar = tuple(t.lower() for t in tokens if t.lower() in PANEL_TIMEFRAMES)
+    hisse_tokenlari = []
+    for t in tokens:
+        tl = t.lower()
+        if tl in PANEL_TIMEFRAMES or len(tl) < 3:
+            continue
+        if any(tl in s.lower() for s in ACTIVE_STOCKS):
+            hisse_tokenlari.append(tl)
+    return (kolonlar or PANEL_TIMEFRAMES), hisse_tokenlari
+
+
+def _panel_durum_sayilari(kayitlar) -> str:
+    """State gruplarına göre sayılar: kırılım/retest/tamamlanan/sıkışma/diğer."""
+    kirilim = retest = tamam = sikis = diger = 0
+    for f in kayitlar:
+        s = str(f.get("state") or "").upper()
+        if s.startswith("KIRILIM"):
+            kirilim += 1
+        elif s.startswith("RETEST"):
+            retest += 1
+        elif s == "FORMASYON_TAMAMLANDI":
+            tamam += 1
+        elif s == "SIKISMA_GUCLENIYOR":
+            sikis += 1
+        else:
+            diger += 1
+    return (f"🚀 kırılım {kirilim} · 🎯 retest {retest} · 🏁 tamamlanan {tamam} · "
+            f"⚡ sıkışma {sikis} · • diğer {diger} · toplam {len(kayitlar)}")
+
+
+def _panel_kritik_listesi(kayitlar, adet: int = PANEL_TOP_KRITIK):
+    """Kritiklik sırasına göre ilk `adet` kayıt (fiyat seviyesiyle)."""
+    sirali = sorted(kayitlar, key=_panel_kritik_anahtar)[:adet]
+    baslik = f"🔥 TOP {adet} KRİTİK"
+    if len(kayitlar) > adet:
+        baslik += f" ({len(kayitlar)} kayıt içinden)"
+    satirlar = [baslik]
+    if not sirali:
+        satirlar.append("— (filtreye uyan formasyon yok)")
+        return satirlar
+    for i, f in enumerate(sirali, 1):
+        durum = STATE_TR.get(str(f.get("state")), str(f.get("state") or "—"))
+        satirlar.append(
+            f"{i:>2}) {f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} "
+            f"q{_sayi(f.get('quality'), 0)} {_panel_sembol(f.get('state'))} {durum}"
+            f" · kritik {_sayi(f.get('critical_price'))}"
+        )
+    return satirlar
+
+
+def _panel_sigdir(grid_satirlari, butce: int):
+    """Slotsatırlarını mesaj bütçesine sığdırır; sığmayan kuyruk tek satırda özetlenir."""
+    secilen = []
+    kullanilan = 0
+    for i, satir in enumerate(grid_satirlari):
+        uzunluk = len(satir) + 1
+        if kullanilan + uzunluk <= butce:
+            secilen.append(satir)
+            kullanilan += uzunluk
+            continue
+        kalan = len(grid_satirlari) - i
+        secilen.append(f"… ve {kalan} satır daha (filtre: /panel THYAO)")
+        break
+    return secilen
+
+
+def _komut_panel(arguman: str) -> str:
+    """48 hisse x 4 TF slot paneli: sayılar + top 12 kritik. Filtre destekler.
+
+    Filtre: `/panel 1h` · `/panel THYAO` · `/panel 1h THYAO` · `/panel kirilim`
+    """
+    now = datetime.now(ISTANBUL_TZ)
+    st = _live_state.status()
+    formations = _live_state.formations()
+    kolonlar, hisse_tokenlari = _panel_filtre_coz(arguman)
+    satir_hisseler = list(ACTIVE_STOCKS)
+    if hisse_tokenlari:
+        satir_hisseler = [s for s in ACTIVE_STOCKS
+                          if any(t in s.lower() for t in hisse_tokenlari)]
+        if not satir_hisseler:
+            return (f"🔍 '{arguman.strip()}' filtresine uyan hisse yok "
+                    f"({len(ACTIVE_STOCKS)} hisse evreni).")
+    filtreli = _filtrele_formasyonlar(formations, arguman)
+
+    # Slot haritası: (HISSE, tf) -> kayıt. LiveState hisse|TF başına tek kayıt tutar,
+    # bu yüzden 48x4 = 192 slotun üzerine çıkılamaz (sayılar bu yüzden anlamlı).
+    slot = {}
+    for f in filtreli:
+        tf = str(f.get("timeframe", "")).lower()
+        hisse = str(f.get("stock", "")).upper()
+        if hisse and tf in kolonlar:
+            slot[(hisse, tf)] = f
+    toplam_slot = len(satir_hisseler) * len(kolonlar)
+
+    # --- başlık + sayılar (her modda tam görünür) ---
+    filtresiz = not arguman.strip()
+    kapsam = (f"{len(ACTIVE_STOCKS)} hisse x {len(PANEL_TIMEFRAMES)} TF" if filtresiz
+              else f"{len(satir_hisseler)}/{len(ACTIVE_STOCKS)} hisse · "
+                   f"{len(kolonlar)}/{len(PANEL_TIMEFRAMES)} TF")
+    satirlar = [f"📋 PANEL — {kapsam} — {now.strftime('%d.%m.%Y %H:%M')}"]
+    if not filtresiz:
+        satirlar.append(f"Filtre: {arguman.strip()}")
+    tarama = f"Son tarama: {_gecen_sure(st.get('son_tarama_bitis'))}"
+    if st.get("tarama_suruyor"):
+        tarama += " · tarama sürüyor"
+    satirlar.append(f"{tarama} · dolu slot {len(slot)}/{toplam_slot}")
+    satirlar.append("")
+    satirlar.append("📊 SAYILAR")
+    tf_parcalari = []
+    for tf in kolonlar:
+        kayitlar = [slot[(h, tf)] for h in satir_hisseler if (h, tf) in slot]
+        if kayitlar:
+            ort = sum(_panel_kalite(k) for k in kayitlar) / len(kayitlar)
+            tf_parcalari.append(f"{tf} {len(kayitlar)}/{len(satir_hisseler)} ort q{ort:.0f}")
+        else:
+            tf_parcalari.append(f"{tf} 0/{len(satir_hisseler)}")
+    satirlar.append(" · ".join(tf_parcalari))
+    satirlar.append(_panel_durum_sayilari(filtreli))
+    if not formations:
+        satirlar.append("⚠️ Henüz tamamlanmış tarama yok; ilk tarama mum kapanışından "
+                        "5 dk sonra yapılır (/tara ile seans içinde elle isteyebilirsin).")
+    sabit_kuyruk = [""] + _panel_kritik_listesi(filtreli) + ["", PANEL_IPUCU]
+
+    # --- slot tablosu: önce tam (boş slotlar '—'), sığmazsa kompakt ---
+    grid_tam = [f"{h} " + " · ".join(_panel_hucre(slot.get((h, tf)), tf) for tf in kolonlar)
+                for h in satir_hisseler]
+    if not slot:
+        # Hiç dolu slot yok (taze kurulum ya da filtre hiçbir şeye uymadı): 48 satır
+        # '—' yazmak yerine tek satırda söyle; sayılar ve top 12 zaten durumu anlatıyor.
+        grid_tam = [f"— tüm slotlar boş ({len(satir_hisseler)} hisse x {len(kolonlar)} TF)"]
+    metin = "\n".join(satirlar + [""] + ["🗂 SLOTLAR (" + " · ".join(kolonlar) + ")"] +
+                      grid_tam + sabit_kuyruk)
+    if len(metin) > PANEL_MESAJ_SINIRI:
+        # Kompakt: boş slotlar yazılmaz, hiç slotu dolmayan hisseler tek satırda toplanır.
+        grid_kisa, bos = [], []
+        for h in satir_hisseler:
+            dolu = [_panel_hucre(slot[(h, tf)], tf) for tf in kolonlar if (h, tf) in slot]
+            if dolu:
+                grid_kisa.append(f"{h} " + " · ".join(dolu))
+            else:
+                bos.append(h)
+        if bos:
+            grid_kisa.append(f"boş ({len(bos)}): " + " ".join(bos))
+        govde = satirlar + [""] + ["🗂 SLOTLAR (kompakt)"] + grid_kisa + sabit_kuyruk
+        metin = "\n".join(govde)
+        if len(metin) > PANEL_MESAJ_SINIRI:
+            # Aşırı kalabalık gün: grid kırpılır, sayılar ve TOP 12 korunur.
+            sabit = satirlar + [""] + ["🗂 SLOTLAR (kompakt)"]
+            butce = PANEL_MESAJ_SINIRI - sum(len(s) + 1 for s in sabit + sabit_kuyruk)
+            metin = "\n".join(sabit + _panel_sigdir(grid_kisa, max(butce, 0)) + sabit_kuyruk)
+    # Son güvenlik: desen adları çok uzun olsa bile Telegram'ın 4096 sınırını aşma.
+    return kirp(metin, PANEL_MESAJ_SINIRI + 200)
+
+
 TELEGRAM_KOMUTLARI = {
     "start": _komut_yardim,
     "yardim": _komut_yardim,
@@ -661,7 +903,239 @@ TELEGRAM_KOMUTLARI = {
     "kirilim": _komut_kirilim,
     "kırılım": _komut_kirilim,
     "k": _komut_kirilim,
+    "panel": _komut_panel,
+    "p": _komut_panel,
+    "genel": _komut_panel,
+    "tablo": _komut_panel,
 }
+
+# === TELEGRAM WEBHOOK (Render) ===
+# Neden: Render Free bir web servistir; uyku/restart döngüsüne girer. Yoklama
+# (getUpdates) modunda uzun yoklama bağlantısı her restart'ta yeniden kurulur ve
+# token'ı dinleyen ikinci bir kopya varsa 409 alınır. Webhook modunda Telegram
+# güncellemeyi doğrudan HTTPS ile iter; ayrı port/thread gerekmez, mevcut küçük
+# HTTP sunucusu (health_server) kullanılır.
+#
+# Mod seçimi: TELEGRAM_WEBHOOK_SECRET varsa webhook, yoksa yoklama. İkisi asla
+# aynı anda açık olmaz: webhook açıkken getUpdates çağrılmaz (Telegram 409 verir),
+# yoklamaya dönülürken de webhook silinir.
+
+def _telegram_webhook_secret_ayikla(secret=None) -> str:
+    """Parametre verilmediyse config'teki TELEGRAM_WEBHOOK_SECRET kullanılır."""
+    if secret is None:
+        secret = TELEGRAM_WEBHOOK_SECRET
+    return (secret or "").strip()
+
+
+def _webhook_adres_gizle(adres: str, secret: str = "") -> str:
+    """Log için: adresteki sırrı *** yapar (loglara sır düşmesin)."""
+    return adres.replace(secret, "***") if secret else adres
+
+
+def _telegram_webhook_url_olustur(secret=None, webhook_url=None, render_url=None) -> str:
+    """Telegram webhook adresini üretir; webhook modu kapalıysa boş döner.
+
+    Öncelik:
+      1. `TELEGRAM_WEBHOOK_URL` — tam adres. `/webhook/<secret>` içeriyorsa aynen
+         kullanılır, `/webhook` ile bitiyorsa sır eklenir, aksi halde taban adres sayılır.
+      2. `RENDER_EXTERNAL_URL` + `/webhook/<secret>`
+         (Render bunu otomatik verir: https://<servis>.onrender.com)
+
+    Secret boşsa mod kapalıdır (boş döner) ve bot yoklamaya devam eder. Telegram
+    webhook için HTTPS zorunlu kılar; http adres üretilirse kurulmaz, loga yazılır.
+    """
+    secret = _telegram_webhook_secret_ayikla(secret)
+    if not secret:
+        return ""
+    webhook_url = (TELEGRAM_WEBHOOK_URL if webhook_url is None else webhook_url or "").strip()
+    render_url = (RENDER_EXTERNAL_URL if render_url is None else render_url or "").strip()
+
+    if webhook_url:
+        adres = webhook_url.rstrip("/")
+        if WEBHOOK_YOL_ONEK in adres:
+            return adres                       # tam adres: sır zaten içinde
+        if adres.endswith("/webhook"):
+            adres = f"{adres}/{secret}"
+        else:
+            adres = f"{adres}{WEBHOOK_YOL_ONEK}{secret}"
+    elif render_url:
+        adres = f"{render_url.rstrip('/')}{WEBHOOK_YOL_ONEK}{secret}"
+    else:
+        logger.warning(
+            "TELEGRAM_WEBHOOK_SECRET tanimli ama taban adres yok "
+            "(TELEGRAM_WEBHOOK_URL veya RENDER_EXTERNAL_URL gerekli) - yoklama kullanilacak"
+        )
+        return ""
+
+    if not adres.startswith("https://"):
+        logger.warning(
+            "Webhook adresi https olmali (Telegram zorunlu): "
+            f"{_webhook_adres_gizle(adres, secret)} - webhook kurulmadi"
+        )
+        return ""
+    return adres
+
+
+def _telegram_token_al(token=None) -> str:
+    """Token parametresi yoksa notifier'ın token'ı (main_loop kurduktan sonra dolu)."""
+    if token:
+        return str(token).strip()
+    return (getattr(_notifier_ref, "token", "") or "").strip()
+
+
+def _telegram_api_cagri(method: str, token: str, payload: dict, timeout: int = 15):
+    """Telegram Bot API POST çağrısı (test edilebilirlik için tek nokta)."""
+    import requests
+    return requests.post(f"https://api.telegram.org/bot{token}/{method}",
+                         json=payload, timeout=timeout)
+
+
+def _telegram_yanit_oku(yanit):
+    """(ok, aciklama) — Telegram yanıtından okunabilir sonuç çıkarır."""
+    kod = getattr(yanit, "status_code", 0)
+    try:
+        govde = yanit.json() or {}
+    except Exception:
+        govde = {}
+    ok = kod == 200 and bool(govde.get("ok"))
+    aciklama = str(govde.get("description") or "").strip() or f"HTTP {kod}"
+    return ok, aciklama
+
+
+def _telegram_set_webhook(url=None, secret=None, token=None) -> bool:
+    """setWebhook: komutlar Telegram → `/webhook/<secret>` ile gelsin.
+
+    - `drop_pending_updates=True`: bot kapalıyken biriken BAYAT komutlar (örn. dünkü
+      /tara) webhook kurulur kurulmaz çalışmasın. Yoklama modundaki "backlog atla"
+      kuralının (telegram_commands.BACKLOG_SINIR_SN) webhook karşılığıdır.
+    - `secret_token`: Telegram her istekte `X-Telegram-Bot-Api-Secret-Token`
+      başlığını gönderir; health_server bu başlığı da doğrular (yol sırrına ek katman).
+    """
+    secret = _telegram_webhook_secret_ayikla(secret)
+    token = _telegram_token_al(token)
+    adres = (url or "").strip() or _telegram_webhook_url_olustur(secret=secret)
+    if not token:
+        logger.warning("Webhook kurulmadi: Telegram token yok")
+        return False
+    if not adres:
+        logger.warning("Webhook kurulmadi: adres uretilemedi (secret/RENDER_EXTERNAL_URL eksik)")
+        return False
+    govde = {
+        "url": adres,
+        "allowed_updates": ["message"],
+        "drop_pending_updates": True,
+    }
+    if secret:
+        govde["secret_token"] = secret
+    try:
+        yanit = _telegram_api_cagri("setWebhook", token, govde)
+    except Exception as exc:  # noqa: BLE001 - ağ hatası botu düşürmesin
+        logger.error(f"Webhook kurulamadi (ag hatasi): {exc}")
+        return False
+    ok, aciklama = _telegram_yanit_oku(yanit)
+    if ok:
+        logger.info(f"Telegram webhook kuruldu: {_webhook_adres_gizle(adres, secret)} ({aciklama})")
+    else:
+        logger.error(f"Telegram webhook kurulamadi: {aciklama}")
+    return ok
+
+
+def _telegram_delete_webhook(token=None) -> bool:
+    """deleteWebhook: yoklama moduna dönmeden önce eski webhook kaydını siler.
+
+    Neden gerekli: webhook kurulu bir token'da `getUpdates` 409 Conflict alır, yani
+    mod değişince (secret silindi / yerelde yoklama) eski kayıt kalırsa komutlar
+    sessizce çalışmaz. `drop_pending_updates=True` ile bayat güncellemeler de temizlenir.
+    """
+    token = _telegram_token_al(token)
+    if not token:
+        return False
+    try:
+        yanit = _telegram_api_cagri("deleteWebhook", token, {"drop_pending_updates": True})
+    except Exception as exc:  # noqa: BLE001 - ağ hatası botu düşürmesin
+        logger.warning(f"Webhook kaldirilamadi (ag hatasi): {exc}")
+        return False
+    ok, aciklama = _telegram_yanit_oku(yanit)
+    if ok:
+        logger.info(f"Telegram webhook kaldirildi ({aciklama})")
+    else:
+        logger.warning(f"Telegram webhook kaldirilamadi: {aciklama}")
+    return ok
+
+
+def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
+    """Komut katmanını AYNI ANDA TEK modda kurar: 'webhook', 'yoklama' veya 'kapali'.
+
+    - **webhook**: secret + taban adres var, HTTP sunucusu ayakta ve setWebhook
+      başarılı. Güncellemeler `/webhook/<secret>` ucundan gelir; yoklama thread'i
+      AÇILMAZ (aynı token'da getUpdates 409 alır).
+    - **yoklama**: eski davranış (getUpdates daemon thread). Webhook kapalıyken ya da
+      setWebhook başarısız olduğunda komutlar tamamen susmasın diye buraya düşülür;
+      önce eski webhook kaydı silinir (yoksa 409).
+    - **kapali**: token/chat_id yok - bot yalnızca alarm gönderir.
+
+    `isleyici` yalnızca testler için verilir (ağa çıkmayan sahte dinleyici).
+    """
+    global _telegram_listener_ref, _telegram_update_processor_ref
+    if notifier is None or not getattr(notifier, "enabled", False):
+        logger.info("Telegram komut dinleyicisi başlatılmadı (token/chat_id yok)")
+        return "kapali"
+    if isleyici is None:
+        isleyici = TelegramCommandListener(
+            token=notifier.token,
+            allowed_chat_id=notifier.chat_id,
+            handlers=TELEGRAM_KOMUTLARI,
+            help_text=KOMUT_YARDIM,
+        )
+    liste = ", ".join("/" + k for k in TELEGRAM_KOMUTLARI)
+    webhook_url = _telegram_webhook_url_olustur()
+    if webhook_url:
+        if _health_server_ref is None:
+            logger.warning(
+                "TELEGRAM_WEBHOOK_SECRET tanimli ama HTTP sunucusu yok "
+                "(PORT env yok ya da sunucu baslatilamadi) - yoklama moduna donuldu"
+            )
+        elif _telegram_set_webhook(url=webhook_url, token=notifier.token):
+            # Güncellemeler health_server thread'inden gelir; bu referans olmadan
+            # /webhook ucu 503 döner ve Telegram güncellemeyi tekrar dener.
+            _telegram_update_processor_ref = isleyici
+            logger.info(
+                "Telegram komutları WEBHOOK modunda: "
+                f"{_webhook_adres_gizle(webhook_url, _telegram_webhook_secret_ayikla())} "
+                f"(yalnızca chat_id {notifier.chat_id})"
+            )
+            return "webhook"
+        else:
+            logger.warning("Webhook kurulamadi - yoklama moduna donuluyor")
+    # Yoklama moduna dönerken eski webhook kaydı kalırsa getUpdates 409 alır.
+    _telegram_delete_webhook(token=notifier.token)
+    if isleyici.start():
+        _telegram_listener_ref = isleyici
+        logger.info(f"Telegram komutları aktif (yoklama): {liste} "
+                    f"(yalnızca chat_id {notifier.chat_id})")
+        return "yoklama"
+    return "kapali"
+
+
+def _telegram_webhook_isle(guncelleme):
+    """health_server'ın /webhook ucundan gelen güncellemeyi işler (thread-safe).
+
+    Dönen değer HTTP kodudur:
+      200 → işlendi (cevap sendMessage ile gitti),
+      503 → bot henüz komutları kurmadı (Telegram tekrar dener),
+      500 → işleyici hatası (Telegram tekrar dener, güncelleme kaybolmaz).
+    """
+    isleyici = _telegram_update_processor_ref
+    if isleyici is None:
+        return 503
+    with _telegram_webhook_kilidi:
+        try:
+            isleyici.handle_update(guncelleme)
+        except Exception as exc:  # noqa: BLE001 - tek güncelleme sunucuyu düşürmesin
+            logger.error(f"Webhook guncellemesi islenemedi: {exc}", exc_info=True)
+            return 500
+    return 200
+
 
 def _bekle_veya_tarama(seconds: float) -> bool:
     """Belirtilen süre bekler; /tara isteği gelirse erken döner (True).
@@ -1135,7 +1609,7 @@ def main_loop():
     logger.info(f"Profil: {PROFILE}, Params: {PROFILE_PARAMS}")
     logger.info(f"Hisseler: {ACTIVE_STOCKS[:5]}... (toplam {len(ACTIVE_STOCKS)})")
     
-    global _deque_manager_ref, _notifier_ref, _supabase_store_ref
+    global _deque_manager_ref, _notifier_ref, _supabase_store_ref, _telegram_update_processor_ref
     supabase_store = SupabaseStore.from_env()
     _supabase_store_ref = supabase_store
     if supabase_store is not None:
@@ -1169,23 +1643,13 @@ def main_loop():
     # Telegram token/chat_id teşhisi: mesaj göndermeden getMe ile doğrular.
     notifier.check_connection()
 
-    # İki yönlü Telegram: komutları (formasyonlar/durum/tara/yardim) dinleyen
-    # daemon thread. getUpdates uzun yoklaması kullanır; token/chat_id yoksa
-    # hiç başlatılmaz (bot eskisi gibi yalnızca alarm gönderir).
-    global _telegram_listener_ref
-    if notifier.enabled:
-        liste = ", ".join("/" + k for k in TELEGRAM_KOMUTLARI)
-        listener = TelegramCommandListener(
-            token=notifier.token,
-            allowed_chat_id=notifier.chat_id,
-            handlers=TELEGRAM_KOMUTLARI,
-            help_text=KOMUT_YARDIM,
-        )
-        if listener.start():
-            _telegram_listener_ref = listener
-            logger.info(f"Telegram komutları aktif: {liste} (yalnızca chat_id {notifier.chat_id})")
-    else:
-        logger.info("Telegram komut dinleyicisi başlatılmadı (token/chat_id yok)")
+    # İki yönlü Telegram: komutları (panel/canli/formasyonlar/durum/tara/yardim)
+    # dinleyen katman. İki mod var, AYNI ANDA YALNIZCA BİRİ açılır:
+    #   - webhook  : TELEGRAM_WEBHOOK_SECRET varsa ve HTTP sunucusu ayaktaysa
+    #                (Telegram → POST /webhook/<secret>, health_server taşır)
+    #   - yoklama  : aksi halde getUpdates uzun yoklaması (daemon thread)
+    # Token/chat_id yoksa hiçbiri başlatılmaz; bot eskisi gibi yalnızca alarm gönderir.
+    _telegram_komut_katmanini_kur(notifier)
     
     # İlk kurulum/preload de aynı hız sınırını kullanır; boş 1H cache'ler seri çekilir.
     logger.info(
@@ -1349,6 +1813,9 @@ def main_loop():
             _telegram_listener_ref.stop()
     except Exception as e:
         logger.warning(f"Komut dinleyicisi kapatılamadı: {e}")
+    # Webhook modunda: kapanışta gelen güncellemeler 503 alsın (Telegram tekrar
+    # dener; yarım kalan komut yanıtı üretilmez).
+    _telegram_update_processor_ref = None
     try:
         if _deque_manager_ref is not None:
             _deque_manager_ref.save_all()
@@ -1370,5 +1837,12 @@ def _render_test_sender(text):
 
 
 if __name__ == "__main__":
-    start_render_health_server(test_sender=_render_test_sender)
+    # HTTP sunucusu main_loop'tan ÖNCE başlar: Render'ın health check'i ilk veri
+    # yüklemesi sürerken de yanıt verir. Webhook modunda güncellemeler bu sunucudan
+    # gelir; bot komutları kurana kadar /webhook 503 döner (Telegram tekrar dener).
+    _health_server_ref = start_render_health_server(
+        test_sender=_render_test_sender,
+        webhook_handler=_telegram_webhook_isle,
+        webhook_secret=TELEGRAM_WEBHOOK_SECRET,
+    )
     main_loop()
