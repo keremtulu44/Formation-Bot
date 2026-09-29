@@ -271,14 +271,33 @@ seçersen de çalışır, Render bunu şifreleyip loglarda maskeler. Tavsiye: UR
 **Anahtar — `sb_secret_` formatı doğru mu? Evet, çalışır.** Supabase 2025'te
 anahtar sistemini değiştirdi ve artık iki format bir arada geçerli:
 
-| Format | Örnek başlangıç | Nerede |
-|---|---|---|
-| Yeni secret key | `sb_secret_...` | API Keys sayfasındaki **Secret** key |
-| Eski service_role | `eyJhbGciOi...` (uzun JWT) | API → Service Role → `service_role` |
+| Format | Örnek başlangıç | Nerede | Başlık kuralı |
+|---|---|---|---|
+| Yeni secret key | `sb_secret_...` | API Keys sayfasındaki **Secret** key | sadece `apikey` |
+| Yeni publishable | `sb_publishable_...` | API Keys → Publishable | sadece `apikey` (ama RLS'de yazamaz) |
+| Eski service_role | `eyJhbGciOi...` (uzun JWT) | API → Service Role → `service_role` | `apikey` + `Authorization: Bearer` |
+| Eski anon | `eyJ...` (anon rolü) | API → anon | `apikey` + `Bearer` (yazamaz) |
 
-`supabase_store.py` anahtarı doğrudan `apikey` ve `Authorization: Bearer`
-başlıklarında kullandığı için **her iki format da aynen çalışır**, aralarında
-seçim yapmana gerek yok. `sb_secret_...` aldıysan doğrudan yapıştır.
+`supabase_store.py` artık anahtar türüne göre başlık seçer:
+
+- `sb_secret_...` ve `sb_publishable_...` **JWT değildir**; `Authorization: Bearer`
+  olarak gönderilirse Supabase `401 Invalid JWT` döner. Bu yüzden kod **sadece
+  `apikey` başlığı** gönderir (`supabase_basliklari()`).
+- Legacy `eyJ...` JWT'lerde eski davranış korunur: `apikey` + `Bearer` birlikte.
+
+`sb_secret_...` aldıysan doğrudan yapıştır. Loglarda şunu görürsün (değer asla
+loglanmaz):
+
+```
+Supabase anahtar türü: yeni secret key (sb_secret_)
+Supabase bağlantısı OK (https://xxxx.supabase.co, tablo: bot_store)
+```
+
+veya
+
+```
+Supabase anahtar türü: legacy JWT (service_role)
+```
 
 > **Asla yapma:** `service_role` anahtarını `.env` dosyasını Git'e commit ederek
 > paylaşma, README'ye yazma, sohbete yapıştırma. `.env` zaten `.gitignore`'da.

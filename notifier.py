@@ -6,6 +6,7 @@
 import os
 import logging
 import random
+import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
@@ -63,6 +64,106 @@ def quality_emoji(q: float) -> str:
     else:
         return "〰️"
 
+
+def _env_temizle(deger) -> str:
+    """Env değerlerindeki tırnak/boşluk kirliliğini temizle.
+
+    Kullanıcı Render'da yanlışlıkla boşluk veya tırnak içinde yapıştırabilir.
+    Değer asla loglanmaz, sadece temizlenir.
+    """
+    if deger is None:
+        return ""
+    s = str(deger).strip()
+    while len(s) >= 2 and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+        s = s[1:-1].strip()
+    return s.strip()
+
+
+def token_bicimi_uygun_mu(token: str) -> bool:
+    """Telegram bot token biçimi uygun mu?
+
+    Doğru biçim: 123456789:AAH... (rakamlar + iki nokta + 30+ karakter)
+    """
+    t = _env_temizle(token)
+    if not t:
+        return False
+    if ":" not in t:
+        return False
+    parcalar = t.split(":", 1)
+    if len(parcalar) != 2:
+        return False
+    ilk, ikinci = parcalar
+    if not ilk.isdigit():
+        return False
+    if len(ilk) < 5:  # bot id genelde 8-10 hane
+        return False
+    if len(ikinci) < 20:
+        return False
+    # İkinci kısım genelde harf/rakam/_- içerir
+    if not re.match(r"^[A-Za-z0-9_\-]+$", ikinci):
+        return False
+    return True
+
+
+def telegram_hata_ipucu(status_code: int, response_text: str = "") -> str:
+    """Telegram HTTP hatası için Türkçe ipucu.
+
+    401/404/400/403/409 için net çözüm önerisi.
+    """
+    txt = (response_text or "").lower()
+    if status_code == 401:
+        return (
+            "Token geçersiz veya iptal edilmiş (401). "
+            "@BotFather'dan token'ı tam kopyala, Render → Environment → TELEGRAM_BOT_TOKEN'ı güncelle. "
+            "Sızdıysa /revoke ile iptal edip yeni bot aç."
+        )
+    if status_code == 404:
+        return (
+            "Bot bulunamadı veya endpoint yanlış (404). "
+            "Token doğru mu? URL https://api.telegram.org/bot<token>/... olmalı. "
+            "BotFather'da bot silinmiş olabilir."
+        )
+    if "chat not found" in txt:
+        return (
+            "Sohbet bulunamadı (chat not found). "
+            "Kendi botuna Telegram'da /start yaz, sonra tekrar dene. "
+            "chat_id yanlışsa @userinfobot'tan Id'yi tekrar al."
+        )
+    if "bot was blocked" in txt or "blocked" in txt or "bot was blocked" in txt:
+        return (
+            "Bot engellenmiş (bot was blocked): Telegram'da bot sohbetinde Unblock yap, "
+            "engellenmiş olabilir, /start ile yeniden başlat."
+        )
+    if status_code == 400:
+        return (
+            "İstek hatalı (400). chat_id sayı mı, mesaj boş mu? "
+            "@userinfobot'tan Id'yi tekrar al, grup için -100... ile başlayan id kullan. "
+            "Sohbet bulunamadı (chat not found) ise kendi botuna /start yaz. "
+            "Mesaj çok uzun veya biçim hatalı olabilir."
+        )
+    if status_code == 403:
+        return (
+            "Bot bu sohbete mesaj gönderemiyor (403). "
+            "Kendi botuna Telegram'da bir kez /start yaz, engeli kaldır, engellenmiş olabilir. "
+            "Grup ise botu gruba ekle ve admin yap. chat not found ise botla hiç konuşmamışsındır. "
+            "Unblock yapman gerekebilir."
+        )
+    if status_code == 409:
+        return (
+            "Aynı token'ı iki yer aynı anda dinliyor (409 Conflict). "
+            "Termux/PC'de açık kalan ikinci kopyayı kapat, Render'da tek instance çalışmalı. "
+            "getUpdates aynı anda iki süreçten çağrılamaz."
+        )
+    if "chat not found" in txt:
+        return (
+            "Sohbet bulunamadı (chat not found). "
+            "Kendi botuna Telegram'da /start yaz, sonra tekrar dene."
+        )
+    if "bot was blocked" in txt or "blocked" in txt:
+        return "Bot engellenmiş: Telegram'da bot sohbetinde Unblock yap."
+    return f"Telegram hatası HTTP {status_code}: {response_text[:200]}"
+
+
 class TelegramNotifier:
     """
     Telegram bildirim yöneticisi - İnsanlaştırma V2
@@ -74,8 +175,8 @@ class TelegramNotifier:
     def __init__(self, persistent_store=None, initial_store_data=None):
         self.persistent_store = persistent_store
         self.initial_store_data = initial_store_data if isinstance(initial_store_data, dict) else {}
-        self.token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-        self.chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+        self.token = _env_temizle(os.environ.get("TELEGRAM_BOT_TOKEN", ""))
+        self.chat_id = _env_temizle(os.environ.get("TELEGRAM_CHAT_ID", ""))
         self.cooldown_hours = 4
         self.last_sent: Dict[str, datetime] = {}
         # --- GLOBAL KAPANI (FAZ 2) ---
@@ -97,6 +198,8 @@ class TelegramNotifier:
             logger.warning("Telegram token/chat_id env'de yok - notifier pasif (test modu)")
             self.enabled = False
         else:
+            if not token_bicimi_uygun_mu(self.token):
+                logger.warning("Telegram token biçimi uygun değil (beklenen 123456789:AA...). Kontrol et.")
             self.enabled = True
             logger.info("Telegram notifier aktif - insanlaştırma V2")
 
@@ -118,7 +221,8 @@ class TelegramNotifier:
             )
             if resp.status_code == 200:
                 return True, "mesaj gonderildi"
-            return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+            ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
+            return False, f"HTTP {resp.status_code}: {resp.text[:200]} | {ipucu}"
         except Exception as e:
             return False, f"istek hatasi: {e}"[:200]
 
@@ -141,9 +245,10 @@ class TelegramNotifier:
                     f"Telegram bağlantısı OK (bot: @{username}, chat_id: {self.chat_id})"
                 )
                 return True
+            ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
             logger.error(
                 f"Telegram token/chat_id reddedildi: HTTP {resp.status_code} "
-                f"{resp.text[:200]}"
+                f"{resp.text[:200]} | {ipucu}"
             )
         except Exception as e:
             logger.error(f"Telegram bağlantı hatası (token yanlış olabilir): {e}")
@@ -211,7 +316,7 @@ class TelegramNotifier:
         return {
             "saatlik": len(self._saatlik_zamanlar),
             "saatlik_limit": self.max_saatlik,
-            "gunluk": self._gunluk_sayac,
+            "gunluk": len(self._saatlik_zamanlar),
             "gunluk_limit": self.max_gunluk,
         }
 
@@ -300,6 +405,7 @@ class TelegramNotifier:
         upper = data.get('upper_now', price)
         lower = data.get('lower_now', price)
         contraction = data.get('contraction', None)
+        retest_seen = data.get('retest_seen', True)
         
         tf_human = TF_HUMAN.get(timeframe, timeframe)
         emoji = PATTERN_EMOJI.get(pattern, "📈")
@@ -391,9 +497,10 @@ class TelegramNotifier:
             direction = "YUKARI" if break_dir == 1 else "AŞAĞI" if break_dir == -1 else ""
             level = upper if break_dir == 1 else lower
             power = data.get('break_strength', quality)
+            kapanis_yonu = "üstünde" if break_dir == 1 else "altında" if break_dir == -1 else "yakınında"
             templates = [
                 f"🚀 {stock} KIRIYOR! {direction}\n"
-                f"{tf_human} {pattern} {level:.2f} üstünde kapanış\n"
+                f"{tf_human} {pattern} {level:.2f} {kapanis_yonu} kapanış\n"
                 f"Güç {power:.0f} {q_emoji} - teyit mumu bekleniyor\n"
                 f"Retest olursa fırsat olabilir, takipteyim",
                 
@@ -441,12 +548,22 @@ class TelegramNotifier:
             
         elif state == "FORMASYON_TAMAMLANDI":
             direction = "yukarı" if break_dir == 1 else "aşağı"
-            msg = (
-                f"🏁 {stock} {pattern} TAMAMLANDI\n"
-                f"{tf_human} grafikte {direction} kırılım + retest başarılı\n"
-                f"Kalite {quality:.0f} {q_emoji} - görev tamam\n"
-                f"Yeni formasyon için taramaya devam"
-            )
+            if retest_seen:
+                msg = (
+                    f"🏁 {stock} {pattern} TAMAMLANDI\n"
+                    f"{tf_human} grafikte {direction} kırılım + retest başarılı\n"
+                    f"Kalite {quality:.0f} {q_emoji} - görev tamam\n"
+                    f"Yeni formasyon için taramaya devam"
+                )
+            else:
+                # Retest görülmeden tamamlandı: iki yoldan biri (retest penceresi doldu)
+                msg = (
+                    f"🏁 {stock} {pattern} TAMAMLANDI\n"
+                    f"{tf_human} grafikte {direction} kırılım - retest olmadan ilerledi / "
+                    f"fiyat kırılan seviyeye geri dönmedi\n"
+                    f"Kalite {quality:.0f} {q_emoji} - görev tamam\n"
+                    f"Yeni formasyon için taramaya devam"
+                )
             
         elif state == "BASARISIZ_KIRILIM":
             msg = (
@@ -520,7 +637,8 @@ class TelegramNotifier:
                 self._gonderim_kaydet()
                 return True
             else:
-                logger.error(f"Telegram hatası: {resp.text}")
+                ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
+                logger.error(f"Telegram hatası: {resp.text} | {ipucu}")
                 return False
         except Exception as e:
             logger.error(f"Telegram gönderim hatası: {e}")

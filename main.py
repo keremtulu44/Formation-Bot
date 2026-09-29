@@ -703,6 +703,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'break_dir': break_dir,
                             'break_strength': getattr(active, 'break_strength', q),
                             'break_price': active.upper_now if break_dir == 1 else active.lower_now,
+                            'retest_seen': getattr(snap, 'retest_seen', False),
                         }
                         if notifier.send(alert_data):
                             daily_stats['alerts_sent'] += 1

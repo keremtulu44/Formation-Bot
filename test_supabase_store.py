@@ -1,5 +1,7 @@
+import base64
+import json
 import supabase_store as supabase_store_module
-from supabase_store import SupabaseStore
+from supabase_store import SupabaseStore, _anahtari_temizle, anahtar_turu, supabase_basliklari
 
 
 class FakeResponse:
@@ -27,6 +29,12 @@ class FakeSession:
         return result
 
 
+def _fake_jwt(role: str) -> str:
+    header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256"}).encode()).decode().rstrip("=")
+    payload = base64.urlsafe_b64encode(json.dumps({"role": role}).encode()).decode().rstrip("=")
+    return f"{header}.{payload}.signature"
+
+
 def test_from_env_requires_both_values():
     assert SupabaseStore.from_env({}) is None
     assert SupabaseStore.from_env({"SUPABASE_URL": "https://demo.supabase.co"}) is None
@@ -38,8 +46,6 @@ def test_from_env_requires_both_values():
 
 
 def test_rest_api_url_variant_is_normalised():
-    # Dashboard'da REST API uc noktasinin tamamini kopyalayan kullanici var;
-    # /rest/v1 iki kez eklenip 404 donuyordu.
     for ham, beklenen in [
         ("https://demo.supabase.co", "https://demo.supabase.co/rest/v1/bot_store"),
         ("https://demo.supabase.co/", "https://demo.supabase.co/rest/v1/bot_store"),
@@ -112,3 +118,96 @@ def test_transient_server_error_uses_circuit_breaker(monkeypatch):
     assert len(session.calls) == 2
     assert store.get_many(["state:heartbeat"]) is None
     assert len(session.calls) == 2
+
+
+# --- Yeni anahtar formatı testleri ---
+
+def test_anahtari_temizle_bosluk_ve_tirnak():
+    assert _anahtari_temizle("  sb_secret_abc123  ") == "sb_secret_abc123"
+    assert _anahtari_temizle('"sb_secret_abc123"') == "sb_secret_abc123"
+    assert _anahtari_temizle("'sb_secret_abc123'") == "sb_secret_abc123"
+    assert _anahtari_temizle('  " sb_secret_abc123 "  ') == "sb_secret_abc123"
+    assert _anahtari_temizle(None) == ""
+    assert _anahtari_temizle("") == ""
+
+
+def test_anahtar_turu_yeni_secret():
+    assert "sb_secret_" in anahtar_turu("sb_secret_abc123")
+    assert "yeni secret" in anahtar_turu("sb_secret_abc123")
+
+
+def test_anahtar_turu_publishable():
+    tur = anahtar_turu("sb_publishable_xyz")
+    assert "publishable" in tur.lower()
+    assert "sb_publishable_" in tur
+
+
+def test_anahtar_turu_legacy_jwt_service_role():
+    jwt = _fake_jwt("service_role")
+    # eyJ ile başlatmak için header'ı eyJ yapalım
+    jwt = "eyJ" + jwt[3:]
+    tur = anahtar_turu(jwt)
+    assert "legacy" in tur.lower()
+    assert "service_role" in tur
+
+
+def test_anahtar_turu_legacy_jwt_anon():
+    jwt = _fake_jwt("anon")
+    jwt = "eyJ" + jwt[3:]
+    tur = anahtar_turu(jwt)
+    assert "legacy" in tur.lower()
+    assert "anon" in tur.lower()
+
+
+def test_supabase_basliklari_yeni_secret_sadece_apikey():
+    baslik = supabase_basliklari("sb_secret_abc123")
+    assert baslik["apikey"] == "sb_secret_abc123"
+    assert "Authorization" not in baslik
+    assert "Content-Type" in baslik
+
+
+def test_supabase_basliklari_publishable_sadece_apikey():
+    baslik = supabase_basliklari("sb_publishable_xyz")
+    assert baslik["apikey"] == "sb_publishable_xyz"
+    assert "Authorization" not in baslik
+
+
+def test_supabase_basliklari_legacy_jwt_ikisi_birden():
+    jwt = "eyJhbGciOi.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.signature"
+    baslik = supabase_basliklari(jwt)
+    assert baslik["apikey"] == jwt
+    assert "Authorization" in baslik
+    assert baslik["Authorization"] == f"Bearer {jwt}"
+
+
+def test_supabase_basliklari_temizleme():
+    baslik = supabase_basliklari('  "sb_secret_abc123"  ')
+    assert baslik["apikey"] == "sb_secret_abc123"
+    assert "Authorization" not in baslik
+
+
+def test_store_init_yeni_secret_baslik_kurali():
+    session = FakeSession([FakeResponse(payload=[])])
+    store = SupabaseStore("https://demo.supabase.co", "sb_secret_test123", session=session)
+    assert "Authorization" not in store._headers
+    assert store._headers["apikey"] == "sb_secret_test123"
+
+
+def test_store_init_legacy_jwt_baslik_kurali():
+    jwt = "eyJhbGciOi.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.signature"
+    session = FakeSession([FakeResponse(payload=[])])
+    store = SupabaseStore("https://demo.supabase.co", jwt, session=session)
+    assert "Authorization" in store._headers
+    assert store._headers["Authorization"] == f"Bearer {jwt}"
+
+
+def test_from_env_tirnak_temizligi():
+    env = {
+        "SUPABASE_URL": '  "https://demo.supabase.co/rest/v1/"  ',
+        "SUPABASE_SERVICE_ROLE_KEY": "  'sb_secret_abc123'  ",
+    }
+    store = SupabaseStore.from_env(env)
+    assert store is not None
+    assert store.project_url == "https://demo.supabase.co"
+    assert store._headers["apikey"] == "sb_secret_abc123"
+    assert "Authorization" not in store._headers
