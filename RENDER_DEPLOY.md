@@ -565,15 +565,39 @@ servis açma.
 
 ---
 
+## 5.1 Dengeli Deployment ve Gece Döngüsü (GÜNCEL - Render Free için sadeleştirildi)
+
+Eski planda 5 görevli, 1.5dk iş / 3.5dk uyku döngüsü vardı (Oracle reclaim'i engellemek için %35-45 CPU hedefi).
+Render Free'de bu gereksiz, hatta zararlı. 750 saat sınırı içindeyiz:
+
+- 20 iş günü x 24 saat = 480 saat, 30 gün x 24 = 720 saat < 750 saat
+- Keep-alive zaten GitHub Actions ile 08:00-23:00 arası yapılıyor (15 saat/gün)
+- Gece CPU yakmak saati boşa harcar, RAM şişirir, Yahoo rate-limit yedirir
+
+**Güncel 3 fazlı mimari (bedava kalma odaklı):**
+
+| Faz | Saat | CPU | İş |
+|---|---|---|---|
+| Canlı | 09:50-18:10 | %60-80 | Mum kapanış +5dk tarama, Telegram DM + kanal |
+| Kapanış Bakımı | 18:10-19:00 | %20 15dk | Veri hijyeni (hacim 0 bar), state temizliği (48h ölü), gün sonu raporu |
+| Gece | 19:00-08:00 | %0-2 | Derin uyku `sleep(300)`, sadece keep-alive ping, Yahoo'ya istek yok |
+| Pre-load | 08:30 | %25 | Sabah 10 hissenin son 5 gününü yavaşça çek, 09:50'de 0-latency |
+
+Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi kapatıldı - manuel tuning daha güvenli.
+`fetch_last_bar()` ve `evening_maintenance()` fonksiyonları eklendi.
+
 ## 6. Ortam değişkenleri (Render → Environment)
 
 | Anahtar | Değer | Secret? |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | BotFather token'ı | Evet |
-| `TELEGRAM_CHAT_ID` | Kendi Telegram id'n | Evet |
+| `TELEGRAM_CHAT_ID` | Kendi Telegram id'n (owner DM) | Evet |
+| `TELEGRAM_CHANNEL_ID` | Public kanal ID'si `-100...` (botu kanala admin ekle) | Evet |
 | `SUPABASE_URL` | `https://<ref>.supabase.co` | Hayır (plain) |
 | `SUPABASE_SERVICE_ROLE_KEY` | `sb_secret_...` veya `eyJ...` | Evet |
 | `BOT_PROFILE` | `Dengeli` / `Hassas` / `Seçici` | Hayır |
+| `SUMMARY_HOURS` | `09:55,18:15` (İstanbul, özet saatleri) | Hayır |
+| `PUBLIC_MIN_QUALITY` | `80` (public kanala min kalite) | Hayır |
 | `LOG_LEVEL` | `INFO` (varsayılan) | Hayır |
 
 Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır

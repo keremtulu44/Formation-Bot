@@ -168,6 +168,21 @@ GUNLUK_DEQUE_MAXLEN = 500
 TELEGRAM_MAX_MESAJ_SAAT = 20
 TELEGRAM_MAX_MESAJ_GUN = 120
 
+# --- PUBLIC KANAL ve ÖZET ---
+TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()
+SUMMARY_HOURS = os.getenv("SUMMARY_HOURS", "09:55,18:15").strip()  # İstanbul saati, virgülle ayrılmış
+PUBLIC_MIN_QUALITY = _env_int("PUBLIC_MIN_QUALITY", 80)
+PUBLIC_STATES = [s.strip() for s in os.getenv("PUBLIC_STATES", "FORMASYON_TAMAMLANDI,RETEST_BASARILI").split(",") if s.strip()]
+# Kanal için günlük SIKISMA özetinde min daralma
+PUBLIC_SIKISMA_MIN_CONTRACTION = _env_float("PUBLIC_SIKISMA_MIN_CONTRACTION", 0.80)
+
+# --- FAILURE PENALTY ---
+FAILED_PATTERN_PENALTY_BARS = _env_int("FAILED_PATTERN_PENALTY_BARS", 24)
+
+# --- PRE-LOAD ---
+MORNING_PRELOAD_HOUR = _env_int("MORNING_PRELOAD_HOUR", 8)
+MORNING_PRELOAD_MINUTE = _env_int("MORNING_PRELOAD_MINUTE", 30)
+
 DEQUE_MAXLEN = 360
 # Eski fetch_with_rate_limit yardımcı fonksiyonu içindir; canlı bot SCAN_* pacing'ini kullanır.
 RATE_LIMIT_MIN = 45

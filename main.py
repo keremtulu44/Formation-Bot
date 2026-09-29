@@ -12,6 +12,7 @@ import logging
 import random
 import threading
 from datetime import datetime, timedelta, time as dt_time
+from typing import List, Dict
 import pytz
 
 try:
@@ -27,10 +28,13 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     SCAN_REQUEST_DELAY_MIN_SEC, SCAN_REQUEST_DELAY_MAX_SEC,
                     FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD,
                     SCAN_BATCH_PAUSE_MIN_SEC, SCAN_BATCH_PAUSE_MAX_SEC,
-                    SCAN_RETRY_BACKOFF_MIN_SEC, SCAN_RETRY_BACKOFF_MAX_SEC)
+                    SCAN_RETRY_BACKOFF_MIN_SEC, SCAN_RETRY_BACKOFF_MAX_SEC,
+                    SUMMARY_HOURS, PUBLIC_MIN_QUALITY, PUBLIC_STATES,
+                    MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   son_kapanan_mum_ani, time_until_next_open,
                   resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
+                  fetch_last_bar,
                   select_yfinance_1h_period, tamamlanmis_mumlar)
 from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager, ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_BREAK_FAILED, ST_COMPRESSING, ST_PREP
@@ -686,9 +690,29 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     })
                     if q < min_q:
                         logger.debug(f"{stock} {tf_name} kalite {q:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
-                    # Sadece önemli state'lerde Telegram gönder (insanlaştırma V2)
+                    # Sadece önemli state'lerde Telegram gönder (insanlaştırma V2 + kanal modeli)
                     elif state in ALERT_STATES or state in [ST_BREAK_CANDIDATE, ST_BREAK_CONFIRMED, ST_RETEST_OK, ST_COMPLETED, ST_COMPRESSING, ST_PREP]:
-                        # Humanized mesaj için ek bilgiler
+                        # Humanized mesaj için ek bilgiler - var olan veriyi kullan, ekstra hesaplama yok
+                        upper_touches = getattr(active, 'upper_touches', None)
+                        lower_touches = getattr(active, 'lower_touches', None)
+                        try:
+                            age_bars = snap.bar_index - active.start_bar if hasattr(active, 'start_bar') and snap.bar_index >= 0 else None
+                        except Exception:
+                            age_bars = None
+                        # Çoklu zaman teyidi: 1h kırılımında 4h destekliyor mu?
+                        mtf_destek = False
+                        try:
+                            if tf_name == "1h":
+                                snap_4h = lifecycle_manager.get_snapshot(stock + "_4h")
+                                if snap_4h and snap_4h.active and snap_4h.state not in ("FORMASYON_GECERSIZ", "Yok", "ST_NONE"):
+                                    mtf_destek = True
+                            elif tf_name == "4h":
+                                snap_1d = lifecycle_manager.get_snapshot(stock + "_1d")
+                                if snap_1d and snap_1d.active:
+                                    mtf_destek = True
+                        except Exception:
+                            mtf_destek = False
+
                         alert_data = {
                             'stock_name': stock,
                             'timeframe': tf_name,
@@ -704,11 +728,15 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'break_strength': getattr(active, 'break_strength', q),
                             'break_price': active.upper_now if break_dir == 1 else active.lower_now,
                             'retest_seen': getattr(snap, 'retest_seen', False),
+                            'upper_touches': upper_touches,
+                            'lower_touches': lower_touches,
+                            'age_bars': age_bars,
+                            'mtf_destek': mtf_destek,
                         }
                         if notifier.send(alert_data):
                             daily_stats['alerts_sent'] += 1
                             _live_state.mark_alert_sent(stock, tf_name)
-                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {q:.0f}")
+                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
                 else:
                     # Canlı formasyon yok (terminal state'ler ve kalite kapısı dahil)
                     logger.debug(f"{stock} {tf_name} - Canlı formasyon yok: {snap.log}")
@@ -777,6 +805,134 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             f"en eski mum {daily_stats['max_bar_age_min']} dk"
         )
     write_heartbeat(notifier=notifier)
+
+
+def _parse_summary_hours() -> List[dt_time]:
+    """SUMMARY_HOURS env'ini İstanbul saatine çevir (09:55,18:15)."""
+    try:
+        saatler = []
+        for ham in SUMMARY_HOURS.split(","):
+            ham = ham.strip()
+            if not ham:
+                continue
+            h, m = ham.split(":")
+            saatler.append(dt_time(int(h), int(m)))
+        return saatler
+    except Exception:
+        return [dt_time(9, 55), dt_time(18, 15)]
+
+
+def _build_active_formations_for_summary(lifecycle_manager, min_quality: float = None) -> List[Dict]:
+    """Özet için aktif formasyonları topla (canlı + taze terminal)."""
+    if min_quality is None:
+        min_quality = PUBLIC_MIN_QUALITY
+    aktif = []
+    try:
+        # _live_state içindeki son formasyon kayıtları
+        formations = _live_state.get_formations() if hasattr(_live_state, 'get_formations') else []
+        # Eğer LiveState yoksa lifecycle_manager snapshots'tan topla
+        if not formations:
+            for key, snap in getattr(lifecycle_manager, 'last_snapshots', {}).items():
+                if snap.active and snap.effective_quality and snap.effective_quality >= min_quality:
+                    # stock_timeframe key'ini ayır
+                    parts = key.rsplit("_", 1)
+                    stock = parts[0] if len(parts) == 2 else key
+                    tf = parts[1] if len(parts) == 2 else "1h"
+                    aktif.append({
+                        'stock_name': stock,
+                        'timeframe': tf,
+                        'pattern_name': snap.active.pattern_type,
+                        'state': snap.state,
+                        'confidence_score': snap.effective_quality,
+                        'contraction': getattr(snap.active, 'contraction', None),
+                        'break_dir': snap.break_dir,
+                    })
+        else:
+            for f in formations:
+                if f.get('quality', 0) >= min_quality:
+                    aktif.append({
+                        'stock_name': f.get('stock'),
+                        'timeframe': f.get('timeframe'),
+                        'pattern_name': f.get('pattern_name'),
+                        'state': f.get('state'),
+                        'confidence_score': f.get('quality'),
+                        'contraction': None,
+                        'break_dir': f.get('break_dir', 0),
+                    })
+    except Exception as e:
+        logger.debug(f"Özet için formasyon toplanamadı: {e}")
+    return aktif
+
+
+def evening_maintenance(deque_manager, lifecycle_manager):
+    """18:10-19:00 kapanış bakımı - 3 problem için tek seferlik hafif iş."""
+    logger.info("=== AKŞAM BAKIMI BAŞLIYOR (veri hijyeni + state temizliği + rapor) ===")
+    try:
+        # 1. Veri hijyeni: hacmi 0 veya zaman damgası hatalı son barları temizle
+        temizlenen = 0
+        for stock in ACTIVE_STOCKS:
+            try:
+                df = deque_manager.to_dataframe(stock)
+                if df is not None and len(df) > 0:
+                    # Son bar hacmi 0 ise ve gün içinde eksik kalmışsa
+                    son = df.iloc[-1]
+                    if son.get('volume', 1) == 0:
+                        # Sadece logla, silme değil - data.py zaten filtreliyor
+                        logger.debug(f"{stock}: son bar hacim 0 - hijyen logu")
+                        temizlenen += 1
+            except Exception as e:
+                logger.debug(f"{stock} hijyen hatası: {e}")
+        logger.info(f"Veri hijyeni: {temizlenen} hisse kontrol edildi")
+
+        # 2. State temizliği: 48 saatten uzun süredir kırılım yapmamış dosyalar
+        # lifecycle_manager zaten terminal tazelik kontrolü yapıyor, burada disk temizliği
+        try:
+            import glob
+            from config import DATA_DIR
+            import os
+            json_files = glob.glob(os.path.join(DATA_DIR, "*.json"))
+            if len(json_files) > 100:
+                logger.warning(f"bot_data'da {len(json_files)} dosya var, şişme riski - Supabase kullanılıyor mu kontrol et")
+        except Exception as e:
+            logger.debug(f"State temizliği atlandı: {e}")
+
+        # 3. Gün sonu raporu
+        try:
+            rapor = _live_state.status() if hasattr(_live_state, 'status') else {}
+            logger.info(f"GÜN SONU RAPORU: {rapor}")
+            # Telegram DM'e gün sonu özeti (sadece owner)
+            if _notifier_ref and _notifier_ref.enabled:
+                aktif = _build_active_formations_for_summary(lifecycle_manager)
+                ozet = _notifier_ref.format_daily_summary(aktif, daily_stats)
+                _notifier_ref.send_text(f"📋 Gün Sonu Bakım Raporu\n{ozet}")
+        except Exception as e:
+            logger.warning(f"Gün sonu raporu hatası: {e}")
+
+        logger.info("=== AKŞAM BAKIMI BİTTİ ===")
+    except Exception as e:
+        logger.error(f"Akşam bakımı hatası: {e}", exc_info=True)
+
+
+def morning_preload(deque_manager, pacer):
+    """08:30 pre-load - açılışta 0-latency için son barları yavaşça çek."""
+    logger.info("=== SABAH ÖN-YÜKLEME BAŞLIYOR (08:30) ===")
+    try:
+        for stock in ACTIVE_STOCKS[:10]:  # ilk 10 hisse, yavaşça
+            if _shutdown_requested:
+                break
+            try:
+                with pacer.request(f"{stock} preload"):
+                    taze = fetch_last_bar(stock)
+                if taze is not None and len(taze) > 0:
+                    deque_manager.append_dataframe(stock, taze)
+                    logger.debug(f"{stock}: preload {len(taze)} bar")
+                time.sleep(1)
+            except Exception as e:
+                logger.debug(f"{stock} preload hatası: {e}")
+        logger.info("=== SABAH ÖN-YÜKLEME BİTTİ ===")
+    except Exception as e:
+        logger.error(f"Sabah preload hatası: {e}", exc_info=True)
+
 
 def main_loop():
     """
@@ -892,10 +1048,52 @@ def main_loop():
     # Aynı mum iki kez taranmasın (drift koruması). Restart'ta None -> bir sonraki
     # kapanışta tazelenir, son mum gerekiyorsa bir kez daha taranır (zararsız).
     son_taranan_kapanis = None
+    # Özet ve bakım takibi (bedava kalma için)
+    summary_hours = _parse_summary_hours()
+    last_summary_sent = {}  # "09:55" -> date
+    last_maintenance_date = None
+    last_preload_date = None
     
     while not _shutdown_requested:
         try:
             now = datetime.now(ISTANBUL_TZ)
+            # --- GÜNLÜK ÖZET (public kanal için gürültü azaltma) ---
+            try:
+                now_hm = now.strftime("%H:%M")
+                for sh in summary_hours:
+                    sh_str = sh.strftime("%H:%M")
+                    # 5 dakikalık pencere içinde ve bugün gönderilmemişse
+                    if now_hm >= sh_str and (now - datetime.combine(now.date(), sh, tzinfo=ISTANBUL_TZ)).total_seconds() < 600:
+                        if last_summary_sent.get(sh_str) != now.date():
+                            aktif = _build_active_formations_for_summary(lifecycle_manager)
+                            ozet = notifier.format_daily_summary(aktif, daily_stats)
+                            # DM'e ve kanala gönder
+                            notifier.send_text(f"📋 Günlük Özet\n{ozet}")
+                            if notifier.channel_id:
+                                notifier.send_to_channel(ozet)
+                            last_summary_sent[sh_str] = now.date()
+                            logger.info(f"Günlük özet gönderildi: {sh_str}")
+            except Exception as e:
+                logger.debug(f"Özet gönderim hatası: {e}")
+
+            # --- SABAH PRE-LOAD (08:30) ---
+            try:
+                if now.hour == MORNING_PRELOAD_HOUR and now.minute >= MORNING_PRELOAD_MINUTE and now.minute < MORNING_PRELOAD_MINUTE + 10:
+                    if last_preload_date != now.date():
+                        morning_preload(deque_manager, pacer)
+                        last_preload_date = now.date()
+            except Exception as e:
+                logger.debug(f"Preload kontrol hatası: {e}")
+
+            # --- AKŞAM BAKIMI (18:10-19:00) ---
+            try:
+                if now.hour == 18 and now.minute >= 10 and now.minute < 60:
+                    if last_maintenance_date != now.date():
+                        evening_maintenance(deque_manager, lifecycle_manager)
+                        last_maintenance_date = now.date()
+            except Exception as e:
+                logger.debug(f"Bakım kontrol hatası: {e}")
+            
             
             if tarama_penceresi_acik_mi(now):
                 # Telegram /tara: mum kapanışını beklemeden tara (aynı mum tekrar
