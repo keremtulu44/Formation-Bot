@@ -24,7 +24,7 @@
 | **B4** | A4 TZ + A5 kirp/retry + A6 gönderim sağlığı | ✅ tamamlandı `fix(batch-4)` — pytest 235, test_tarama_zamani 100/100 |
 | **B5** | B3 kalıcı digest + B4 engellenen acil kuyruğu | ✅ tamamlandı `0ba343e` (`feat(batch-5)`) — pytest 250, test_tarama_zamani 100/100 |
 | **B6** | B5 yazma amplikasyonu + A7 sır/rate limit + A8 pickle + B10 çoklu örnek | ✅ tamamlandı `fix(batch-6)` — pytest 267, test_tarama_zamani 100/100 |
-| **B7** | C1 sabitler + C3 namespace + C4 DATA_DIR + C7 ölü araçlar | ✅ tamamlandı `fix(batch-7)` — pytest 271, test_tarama_zamani 100/100 |
+| **B7** | C1 sabitler + C3 namespace + C4 DATA_DIR + C7 ölü araçlar | ✅ tamamlandı `a738ec4` (`fix(batch-7)`) — pytest 271, test_tarama_zamani 100/100 |
 | **B8** | C2 `main.py` katmanlara ayırma (yapısal, dallanmış iş) | ⏳ sırada |
 
 ---
