@@ -202,13 +202,19 @@ def test_bos_snapshot_kayitli_kopya_notu_cikarmaz():
     assert "Son başarılı analiz:" in main_mod._komut_durum("")
 
 
+def _caplog_seviyesi(caplog):
+    """Batch 8 / 8.4: kalıcılık logları artık `state.persistence`'ten gelir."""
+    caplog.set_level(logging.INFO, logger=main_mod.__name__)
+    caplog.set_level(logging.INFO, logger="state.persistence")
+
+
 def test_kaydet_atomik_dosya_ve_supabase_anahtari(tmp_path, monkeypatch, caplog):
     data_dir = tmp_path / "bot_data"
     store = SahteStore()
     monkeypatch.setattr(config, "DATA_DIR", str(data_dir))
     monkeypatch.setattr(main_mod, "_supabase_store_ref", store)
     monkeypatch.setattr(main_mod, "_live_state", _tarama())
-    caplog.set_level(logging.INFO, logger=main_mod.__name__)
+    _caplog_seviyesi(caplog)
 
     assert main_mod.son_tarama_kaydet() is True
     yol = data_dir / "son_tarama.json"
@@ -252,7 +258,7 @@ def test_kaydet_hatalari_botu_durdurmaz_ve_eski_dosyayi_korur(tmp_path, monkeypa
 def test_supabase_yok_veya_hatalisa_dosya_dosya_hatalisa_supabase(tmp_path, caplog):
     veri = _kayit()
     _dosyaya_yaz(tmp_path, veri)
-    caplog.set_level(logging.INFO, logger=main_mod.__name__)
+    _caplog_seviyesi(caplog)
     assert main_mod.son_tarama_yukle(data_dir=tmp_path) == 2
     assert main_mod._live_state.formations() == veri["formations"]
     assert "Kayıtlı son tarama yüklendi (yerel dosya): 2 formasyon" in caplog.text
@@ -273,7 +279,7 @@ def test_en_yeni_kopya_kazanir_ve_zaman_karsilastirmasi_guvenlidir(tmp_path, cap
     uzak_veri = _kayit([_formasyon("GARAN", "4h")], zaman + timedelta(minutes=5))
     store = SahteStore({"state:son_tarama": uzak_veri})
     _dosyaya_yaz(tmp_path, dosya_verisi)
-    caplog.set_level(logging.INFO, logger=main_mod.__name__)
+    _caplog_seviyesi(caplog)
 
     assert main_mod.son_tarama_yukle(store, tmp_path) == 1
     assert main_mod._live_state.formations()[0]["stock"] == "GARAN"
@@ -296,7 +302,7 @@ def test_en_yeni_kopya_kazanir_ve_zaman_karsilastirmasi_guvenlidir(tmp_path, cap
 
 
 def test_kayit_yok_veya_bozuksa_sessizce_sifir(tmp_path, caplog):
-    caplog.set_level(logging.INFO, logger=main_mod.__name__)
+    _caplog_seviyesi(caplog)
     assert main_mod.son_tarama_yukle(SahteStore(), tmp_path) == 0
     assert not caplog.records
     yol = tmp_path / "son_tarama.json"

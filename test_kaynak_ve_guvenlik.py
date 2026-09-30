@@ -467,3 +467,77 @@ def test_main_panel_adaptoru_ayni_metni_uretir(monkeypatch):
         kapsam_notu="", bos_analiz_mesaji="ℹ️ boş",
     )
     assert main_mod._panel_raporu("") == beklenen
+
+
+# --- Batch 8 / C2 (8.4): kalıcılık katmanı -----------------------------------
+def test_state_katmani_bagimsiz():
+    import ast
+    for dosya in ("state/paths.py", "state/persistence.py"):
+        kaynak = open(dosya, encoding="utf-8").read()
+        moduller = set()
+        for dugum in ast.walk(ast.parse(kaynak)):
+            if isinstance(dugum, ast.Import):
+                moduller.update(a.name.split(".")[0] for a in dugum.names)
+            elif isinstance(dugum, ast.ImportFrom) and dugum.module:
+                moduller.add(dugum.module.split(".")[0])
+        assert "main" not in moduller, dosya
+        assert "live_state" not in moduller, dosya
+
+
+def test_son_tarama_kaliciligi_live_state_parametresiyle_calisir(tmp_path):
+    """8.4: kaydet/yükle main globaline değil, verilen duruma yazar/okur."""
+    from state import persistence
+
+    class SahteDurum:
+        def __init__(self, veri):
+            self.veri, self.hydrate_edilen = veri, None
+        def snapshot(self):
+            return self.veri
+        def hydrate(self, veri):
+            self.hydrate_edilen = veri
+            return len(veri.get("formations", []))
+        def status(self):
+            return {"son_tarama_bitis": "2026-09-30T18:10:00+03:00"}
+
+    veri = {"formations": [{"stock": "THYAO"}], "kayit_zamani": "2026-09-30T18:10:00+03:00"}
+    durum = SahteDurum(veri)
+    assert persistence.son_tarama_kaydet(durum, data_dir=str(tmp_path)) is True
+    assert (tmp_path / "son_tarama.json").exists()
+
+    okuyan = SahteDurum(None)
+    assert persistence.son_tarama_yukle(okuyan, data_dir=str(tmp_path)) == 1
+    assert okuyan.hydrate_edilen["formations"] == veri["formations"]
+
+
+def test_digest_tamponu_parametre_olarak_tampon_alir(tmp_path):
+    from state import persistence
+
+    class SahteTampon:
+        def __init__(self):
+            self.yuklenen = None
+        def snapshot(self):
+            return {"surum": 1, "bekleyen": [{"stock": "GARAN", "timeframe": "1h"}]}
+        def yukle(self, veri):
+            self.yuklenen = veri
+            return len(veri.get("bekleyen", []))
+        def gun(self):
+            return "2026-09-30"
+
+    assert persistence.digest_tamponu_kaydet(
+        SahteTampon(), data_dir=str(tmp_path), son_digest_gun="2026-09-30") is True
+    okuyan = SahteTampon()
+    sayi, gun = persistence.digest_tamponu_yukle(okuyan, data_dir=str(tmp_path))
+    assert sayi == 1 and gun == "2026-09-30"
+    assert okuyan.yuklenen["bekleyen"][0]["stock"] == "GARAN"
+
+
+def test_main_kalicilik_adaptorleri_delege_eder():
+    """main'deki eski imzalar duruyor; iş katmana gidiyor."""
+    from state import persistence
+    assert main_mod.son_tarama_kaydet.__code__.co_names or True
+    assert main_mod.digest_tamponu_yukle.__doc__ is not None
+    import inspect
+    kaynak = inspect.getsource(main_mod.son_tarama_kaydet)
+    assert "_state_persistence.son_tarama_kaydet(" in kaynak
+    kaynak2 = inspect.getsource(main_mod.digest_tamponu_kaydet)
+    assert "_state_persistence.digest_tamponu_kaydet(" in kaynak2

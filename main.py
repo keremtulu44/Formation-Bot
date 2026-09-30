@@ -1102,133 +1102,39 @@ TELEGRAM_KOMUTLARI = {
 # === SON TARAMA KALICILIĞI ===
 # Render'ın diski geçicidir; aynı liste mevcut bot_store tablosunda da tutulur.
 # LiveState kilidinden yalnızca kopya alınır, disk/ağ I/O'su kilit dışında yapılır.
-SON_TARAMA_DOSYA = "son_tarama.json"
-SON_TARAMA_SUPABASE_KEY = "state:son_tarama"
+# Batch 8 / C2 (8.4): son tarama kalıcılığı `state/persistence.py`'ye taşındı.
+# Aşağıdaki fonksiyonlar eski imzalarını koruyan ince adaptörlerdir (global
+# durumu toplar, işi katmana bırakır).
+from state import persistence as _state_persistence
+from state import paths as _state_paths
 
-
-def _son_tarama_data_dir(data_dir=None):
-    if data_dir is None:
-        from config import DATA_DIR
-        return DATA_DIR
-    return data_dir
-
-
-def _son_tarama_yolu(data_dir=None):
-    return os.path.join(_son_tarama_data_dir(data_dir), SON_TARAMA_DOSYA)
-
-
-def _kayit_zamani(veri) -> datetime | None:
-    if not isinstance(veri, dict):
-        return None
-    try:
-        return datetime.fromisoformat(veri.get("kayit_zamani"))
-    except (TypeError, ValueError):
-        return None
-
-
-def _yeni_snapshot(*adaylar):
-    """Geçerli kopyalardan en yenisini seçer; bozuk kopya diğerini gölgelemez."""
-    secilen = None
-    for aday in adaylar:
-        if not isinstance(aday, dict) or not isinstance(aday.get("formations"), list):
-            continue
-        if secilen is None:
-            secilen = aday
-            continue
-        yeni_zaman, eski_zaman = _kayit_zamani(aday), _kayit_zamani(secilen)
-        if yeni_zaman is None:
-            continue
-        if eski_zaman is None:
-            secilen = aday
-            continue
-        try:
-            if yeni_zaman > eski_zaman:
-                secilen = aday
-        except TypeError:
-            # Eski naive kayıt ile timezone-aware kayıt karşılaştırılamazsa
-            # mevcut tercih korunur (aday sırası: Supabase, yerel dosya).
-            pass
-    return secilen
+# Eski iç adlar (testler ve main gövdesi) korunuyor: yol/snapshot yardımcıları
+# artık `state/paths.py`'de yaşıyor.
+_son_tarama_data_dir = _state_paths.son_tarama_data_dir
+_son_tarama_yolu = _state_paths.son_tarama_yolu
+_digest_pending_yolu = _state_paths.digest_pending_yolu
+_kayit_zamani = _state_paths.kayit_zamani
+_yeni_snapshot = _state_paths.yeni_snapshot
+SON_TARAMA_DOSYA = _state_paths.SON_TARAMA_DOSYA
+SON_TARAMA_SUPABASE_KEY = _state_paths.SON_TARAMA_SUPABASE_KEY
 
 
 def son_tarama_kaydet(store=None, data_dir=None) -> bool:
-    """Son listeyi iki yere bağımsız kaydeder; hiçbir I/O hatası botu durdurmaz."""
-    store = _supabase_store_ref if store is None else store
-    try:
-        veri = _live_state.snapshot()
-        formasyon_sayisi = len(veri["formations"])
-    except Exception as exc:
-        logger.warning("Son tarama kopyası alınamadı: %s", exc)
-        return False
-
-    dosya_var, supabase_var = False, False
-    gecici_yol = None
-    try:
-        yol = _son_tarama_yolu(data_dir)
-        os.makedirs(_son_tarama_data_dir(data_dir), exist_ok=True)
-        gecici_yol = yol + ".tmp"
-        with open(gecici_yol, "w", encoding="utf-8") as dosya:
-            json.dump(veri, dosya, ensure_ascii=False, indent=2)
-        os.replace(gecici_yol, yol)
-        dosya_var = True
-    except Exception as exc:
-        logger.warning("Son tarama dosyaya kaydedilemedi: %s", exc)
-    finally:
-        if gecici_yol is not None:
-            try:
-                os.remove(gecici_yol)
-            except FileNotFoundError:
-                pass  # Başarılı os.replace geçici dosyayı zaten kaldırır.
-            except Exception as exc:
-                logger.warning("Son tarama geçici dosyası temizlenemedi: %s", exc)
-
-    if store is not None:
-        try:
-            supabase_var = bool(store.upsert(SON_TARAMA_SUPABASE_KEY, veri))
-        except Exception as exc:
-            logger.warning("Son tarama Supabase'e kaydedilemedi: %s", exc)
-    logger.info(
-        "Son tarama kaydedildi: %d formasyon (supabase=%s, dosya=%s)",
-        formasyon_sayisi, "var" if supabase_var else "yok", "var" if dosya_var else "yok",
+    """Son listeyi Supabase + diske kaydeder (bkz. state.persistence)."""
+    return _state_persistence.son_tarama_kaydet(
+        _live_state,
+        store=_supabase_store_ref if store is None else store,
+        data_dir=data_dir,
     )
-    return dosya_var or supabase_var
 
 
 def son_tarama_yukle(store=None, data_dir=None) -> int:
-    """Supabase/yerel dosyanın en yenisini yükler; ilk kurulumda sessizce 0 döner."""
-    store = _supabase_store_ref if store is None else store
-    uzak_veri, yerel_veri = None, None
-    if store is not None:
-        try:
-            satirlar = store.get_many([SON_TARAMA_SUPABASE_KEY])
-            if isinstance(satirlar, dict):
-                uzak_veri = satirlar.get(SON_TARAMA_SUPABASE_KEY)
-        except Exception as exc:
-            logger.warning("Son tarama Supabase'den okunamadı: %s", exc)
-    try:
-        with open(_son_tarama_yolu(data_dir), encoding="utf-8") as dosya:
-            yerel_veri = json.load(dosya)
-    except (FileNotFoundError, ValueError, UnicodeError):
-        pass  # İlk kurulum/bozuk JSON: diğer kopya varsa onu kullan.
-    except Exception as exc:
-        logger.warning("Son tarama dosyadan okunamadı: %s", exc)
-
-    try:
-        veri = _yeni_snapshot(uzak_veri, yerel_veri)
-        if veri is None:
-            return 0
-        sayi = _live_state.hydrate(veri)
-        if sayi or not veri["formations"]:
-            kaynak = "Supabase" if veri is uzak_veri else "yerel dosya"
-            logger.info(
-                "Kayıtlı son tarama yüklendi (%s): %d formasyon, tarama zamanı %s",
-                kaynak, sayi, _live_state.status().get("son_tarama_bitis") or "—",
-            )
-        return sayi
-    except Exception as exc:
-        logger.warning("Son tarama kaydı yüklenemedi: %s", exc)
-        return 0
-
+    """Kayıtlı son taramayı yükler (bkz. state.persistence)."""
+    return _state_persistence.son_tarama_yukle(
+        _live_state,
+        store=_supabase_store_ref if store is None else store,
+        data_dir=data_dir,
+    )
 
 # === TELEGRAM WEBHOOK (Render) ===
 # Neden: Render Free bir web servistir; uyku/restart döngüsüne girer. Yoklama
@@ -2005,87 +1911,32 @@ def _effective_summary_hours() -> List[dt_time]:
     return sorted(set(morning_and_day + [digest_time]))
 
 
-DIGEST_PENDING_SUPABASE_KEY = "state:digest_pending"
-DIGEST_PENDING_DOSYA = "telegram_digest_pending.json"
-
-
-def _digest_pending_yolu(data_dir=None) -> str:
-    from config import DATA_DIR
-    return os.path.join(data_dir or DATA_DIR, DIGEST_PENDING_DOSYA)
+# Batch 8 / C2 (8.4): digest tamponu kalıcılığı da `state/persistence.py`'de.
+DIGEST_PENDING_SUPABASE_KEY = _state_persistence.DIGEST_PENDING_SUPABASE_KEY
+DIGEST_PENDING_DOSYA = _state_paths.DIGEST_PENDING_DOSYA
 
 
 def digest_tamponu_kaydet(store=None, data_dir=None) -> bool:
-    """Bekleyen gün içi aday tamponunu Supabase + diske yazar (Batch 5 / B3).
-
-    Neden: tampon yalnız bellekteydi; 18:45'ten önce restart olursa gün içi
-    adaylar sessizce kayboluyordu. Yazma sıklığı ana döngüde seyreltilir
-    (kaydet_gerekirse), böylece tarama başına yüzlerce yazma oluşmaz.
-    """
-    global _digest_son_gonderim_gun
-    store = _supabase_store_ref if store is None else store
-    veri = _deferred_alert_buffer.snapshot()
-    veri["son_digest_gun"] = _digest_son_gonderim_gun
-    veri["kayit_zamani"] = datetime.now(ISTANBUL_TZ).isoformat()
-    dosya_var, uzak_var = False, False
-    try:
-        yol = _digest_pending_yolu(data_dir)
-        os.makedirs(os.path.dirname(yol), exist_ok=True)
-        gecici = yol + ".tmp"
-        with open(gecici, "w", encoding="utf-8") as dosya:
-            json.dump(veri, dosya, ensure_ascii=False, indent=2)
-        os.replace(gecici, yol)
-        dosya_var = True
-    except Exception as exc:
-        logger.warning("Digest tamponu dosyaya kaydedilemedi: %s", exc)
-    if store is not None:
-        try:
-            uzak_var = bool(store.upsert(DIGEST_PENDING_SUPABASE_KEY, veri))
-        except Exception as exc:
-            logger.warning("Digest tamponu Supabase'e kaydedilemedi: %s", exc)
-    return dosya_var or uzak_var
+    """Bekleyen gün içi adayları Supabase + diske yazar."""
+    return _state_persistence.digest_tamponu_kaydet(
+        _deferred_alert_buffer,
+        store=_supabase_store_ref if store is None else store,
+        data_dir=data_dir,
+        son_digest_gun=_digest_son_gonderim_gun,
+    )
 
 
 def digest_tamponu_yukle(store=None, data_dir=None) -> int:
-    """En yeni digest tamponunu (Supabase > disk) yükler; yüklenen aday sayısı."""
+    """En yeni digest tamponunu yükler; yüklenen aday sayısını döner."""
     global _digest_son_gonderim_gun
-    store = _supabase_store_ref if store is None else store
-    uzak_veri, yerel_veri = None, None
-    if store is not None:
-        try:
-            satirlar = store.get_many([DIGEST_PENDING_SUPABASE_KEY])
-            if isinstance(satirlar, dict):
-                uzak_veri = satirlar.get(DIGEST_PENDING_SUPABASE_KEY)
-        except Exception as exc:
-            logger.warning("Digest tamponu Supabase'den okunamadı: %s", exc)
-    try:
-        with open(_digest_pending_yolu(data_dir), encoding="utf-8") as dosya:
-            yerel_veri = json.load(dosya)
-    except (FileNotFoundError, ValueError, UnicodeError):
-        pass
-    except Exception as exc:
-        logger.warning("Digest tamponu dosyadan okunamadı: %s", exc)
-
-    def _kayit_ani(veri):
-        if not isinstance(veri, dict):
-            return None
-        try:
-            return datetime.fromisoformat(veri.get("kayit_zamani"))
-        except (TypeError, ValueError):
-            return None
-
-    adaylar = [v for v in (uzak_veri, yerel_veri) if isinstance(v, dict)]
-    veri = max(adaylar, key=lambda v: _kayit_ani(v) or datetime.min.replace(tzinfo=ISTANBUL_TZ), default=None)
-    if veri is None:
-        return 0
-    sayi = _deferred_alert_buffer.yukle(veri)
-    if veri.get("son_digest_gun"):
-        _digest_son_gonderim_gun = str(veri["son_digest_gun"]).strip() or None
-    logger.info(
-        "Digest tamponu yüklendi: %d bekleyen aday (gün=%s, son digest=%s)",
-        sayi, _deferred_alert_buffer.gun(), _digest_son_gonderim_gun,
+    sayi, son_digest_gun = _state_persistence.digest_tamponu_yukle(
+        _deferred_alert_buffer,
+        store=_supabase_store_ref if store is None else store,
+        data_dir=data_dir,
     )
+    if son_digest_gun is not None:
+        _digest_son_gonderim_gun = son_digest_gun
     return sayi
-
 
 def _kacirilan_digest_ozeti(notifier, simdiki_zaman) -> str:
     """Geçmiş günden kalan bekleyen adaylar için kaçırılan 18:45 telafisi.

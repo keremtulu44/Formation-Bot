@@ -145,7 +145,7 @@ Her adım ayrı commit; davranış değişmez, yalnız taşıma.
 | 8.1 | `reporting/format.py`: saf metin/sayı üretimi (panel, digest özeti, yaş metni, filtreleme) main'den ayrıldı; main'de alias'larla geriye dönük uyum | ✅ `bd6214f` |
 | 8.2 | `import main` yan etkileri (logger ele geçirme, `/var/log`-`./logs` yazımı) kaldırıldı; kurulum `main_loop()`/girişe taşındı | ✅ `8fd8028` |
 | 8.3 | `reporting/panel.py`: `panel_raporu` artık durumu parametre alır; `main._panel_raporu` ince adaptör (bu commit) | ✅ |
-| 8.4 | `state/`: kalıcılık yardımcıları (son tarama, digest tamponu) main'den ayrılır | ⏳ |
+| 8.4 | `state/`: `paths.py` (yol/snapshot yardımcıları) + `persistence.py` (son tarama + digest tamponu kaydet/yükle); main'de ince adaptörler | ✅ |
 | 8.5 | `transport/`: telegram/webhook kurulumu main'den ayrılır; main ince orkestratör | ⏳ |
 
 ---
