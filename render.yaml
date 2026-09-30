@@ -36,6 +36,11 @@ services:
         sync: false
       - key: BOT_PROFILE
         value: Dengeli
+      # Sunucu saat dilimi = BIST saati. Verilmezse Render süreçleri UTC çalışır ve
+      # Telegram günlük kotası gece 03:00'te (İstanbul) sıfırlanırdı. Kod artık
+      # sayılarda İstanbul'u sabitliyor; bu değişken log damgalarını da hizalar.
+      - key: TZ
+        value: Europe/Istanbul
       # OPSIYONEL — Telegram komutlarını webhook ile almak için rastgele bir değer.
       # RENDER_EXTERNAL_URL'i Render otomatik verir; adres
       # https://<servis>.onrender.com/webhook/<secret> olarak kurulur.

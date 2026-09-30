@@ -18,11 +18,11 @@
 
 | Batch | Kapsam | Durum |
 |---|---|---|
-| **B1** | A1 (kalıcılık çağrısı) + A2 (tatil/yarım gün döngüsü) + 11 test | ✅ tamamlandı (`fix(batch-1)`) |
-| B2 | A3 ölü kod + A9 metrik + C6 doküman + B2 digest şeffaflığı | sırada |
-| B3 | B1 bastırılan aday sayacı + B6 eşik altı + A10 kap sayacı | — |
-| B4 | A4 TZ + A5 kirp/retry + A6 gönderim sağlığı | — |
-| B5 | B3 kalıcı digest + B4 kuyruk/retry | — |
+| **B1** | A1 (kalıcılık çağrısı) + A2 (tatil/yarım gün döngüsü) + 11 test | ✅ tamamlandı `e9a736f` (`fix(batch-1)`) — pytest 200, test_tarama_zamani 100/100 |
+| **B2** | A3 ölü kod + A9 metrik + C6 doküman + B2 digest şeffaflığı | ✅ tamamlandı `6dca717` (`fix(batch-2)`) — pytest 213, test_tarama_zamani 100/100 |
+| **B3** | B1 bastırılan aday sayacı + B6 eşik altı + A10 kap sayacı | ✅ tamamlandı `401a788` (`feat(batch-3)`) — pytest 224, test_tarama_zamani 100/100 |
+| **B4** | A4 TZ + A5 kirp/retry + A6 gönderim sağlığı | ✅ tamamlandı `fix(batch-4)` — pytest 235, test_tarama_zamani 100/100 |
+| B5 | B3 kalıcı digest + B4 kuyruk/retry | sırada |
 | B6 | B5 yazma amplifikasyonu + A7 sır/rate limit + A8 pickle | — |
 | B7 | C1 sabitler + C3 namespace + C4 DATA_DIR + C7 ölü araçlar | — |
 | B8 | C2 `main.py` katmanlara ayırma (yapısal, dallanmış iş) | — |

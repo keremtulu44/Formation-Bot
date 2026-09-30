@@ -177,7 +177,9 @@ sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 | Faz 3 | Flama motoru doğrulama: `test_pennant.py` (6/6), `specialized_variant` (standart/eğik ayrımı), standart flama geometri şartı, canlı rapora direk/ölçüm detayı + veri tazeliği | `da3840b`, `0fd1f46`, `28a1e7a` |
 | Faz 4 | Son tarama kalıcılığı + `LiveState.snapshot/hydrate`, Telegram webhook modu, `telegram_alert_flow` ile erteleme (18:45 digest) ve panel rapor katmanı | `b85f6bb` (PR #9), `0bca8e5` |
 | Faz 5 (batch-1) | Açılışta `son_tarama_yukle()` çağrısı geri kondu; tatil/yarım gün günlerinde ana döngünün 0 sn uykulu boş dönmesi düzeltildi | `e9a736f` |
-| Faz 5 (batch-2) | Ölü kod temizliği (kanal dalı, `[:10]`, `get_formations`), özet ile panel aynı kaynaktan, digest şeffaflığı (`12/21 gösteriliyor` + `… N aday daha`), `DEFERRED_ALERT_DIGEST_LIMIT`, benzersiz günlük formasyon sayacı | bu commit |
+| Faz 5 (batch-2) | Ölü kod temizliği (kanal dalı, `[:10]`, `get_formations`), özet ile panel aynı kaynaktan, digest şeffaflığı (`12/21 gösteriliyor` + `… N aday daha`), `DEFERRED_ALERT_DIGEST_LIMIT`, benzersiz günlük formasyon sayacı | `6dca717` |
+| Faz 5 (batch-3) | Aday hunisi sayaçları (`/durum` "🔎 Aday hunisi"), engel sayaçları (cooldown/günlük kap/saatlik kap/hata), `/panel` eşik altı satırı | `401a788` |
+| Faz 5 (batch-4) | Sunucu saat dilimi (İstanbul) sayaç/log uyumu + `TZ` değişkeni, uzun mesaj kırpma + sınırlı retry, gönderim sağlığı alanları (heartbeat + `/durum` "Telegram PASİF" uyarısı) | bu commit |
 
 Regresyon: `pytest` **200+ passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
 Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölçümlü teşhis: `SORUN_RAPORU.md`.

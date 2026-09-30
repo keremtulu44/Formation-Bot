@@ -5,12 +5,26 @@ import os
 import logging
 import random
 import re
+import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from config import DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN
 
 logger = logging.getLogger(__name__)
+
+
+def _istanbul(dt: datetime) -> datetime:
+    """Naive datetime'ı İstanbul saatine sabitler.
+
+    Neden: süreç UTC'de çalışsa bile gün/saat sınırları BIST saatine göre
+    hesaplanmalı (Render'da TZ verilmezse günlük kota gece 03:00'te sıfırlanıyordu).
+    Eski kayıtlarda (telegram_kap.json / Supabase) naive ISO damgalar var; onları
+    da buradan geçirerek TypeError riskini ortadan kaldırıyoruz.
+    """
+    if dt.tzinfo is None:
+        return ISTANBUL_TZ.localize(dt)
+    return dt.astimezone(ISTANBUL_TZ)
 
 PATTERN_EMOJI = {
     "Yükselen Üçgen": "🔺",
@@ -153,8 +167,15 @@ class TelegramNotifier:
         # Son can_send çağrısının engel sebebi (None = engel yok). Çağıran taraf
         # "gönderilemedi" durumunu bundan ayırt eder (kuyruk için gerekli).
         self._son_engel = None
+        # --- gönderim sağlığı (heartbeat) ---
+        # "Yaşıyor ama hiçbir şey gönderemiyor" durumu dışarıdan görünmeli.
+        self.son_basarili_gonderim = None   # ISO (İstanbul)
+        self.son_gonderme_hatasi = None     # son hata metni
+        self.kanal_hatasi = 0               # public kanal gönderim hatası
+        self.retry_bekleme_sn = 1.0         # testlerde 0'a çekilir
         self._gunluk_sayac = 0
-        self._gunluk_tarih = datetime.now().date()
+        # Gün/saat sınırları İstanbul'a göre (naive now() UTC sunucuda 03:00 sıfırlaması yapıyordu).
+        self._gunluk_tarih = datetime.now(ISTANBUL_TZ).date()
         self._kap_uyarildi = False
         self._cooldown_dosya = os.path.join(os.path.dirname(DATA_DIR) or ".", "bot_data", "telegram_soguma.json")
         self._kap_dosya = os.path.join(os.path.dirname(self._cooldown_dosya), "telegram_kap.json")
@@ -182,22 +203,57 @@ class TelegramNotifier:
             self.enabled = True
             logger.info("Telegram notifier aktif - insanlaştırma V2 + kanal")
 
-    def send_text(self, text: str):
+    def _gonderim_sagligi_kaydet(self, basari: bool, hata: str = "") -> None:
+        """Son başarılı/başarısız gönderimi işaretle (heartbeat ve /durum okur).
+
+        Neden: token yanlış/eksikken veya ağ sürekli hata veriyorken bot
+        "çalışıyor" görünüyordu; dışarıdan "hiç mesaj gitmiyor" durumu
+        görülemiyordu.
+        """
+        if basari:
+            self.son_basarili_gonderim = datetime.now(ISTANBUL_TZ).isoformat()
+        else:
+            self.gonderim_hatasi += 1
+            self.son_gonderme_hatasi = str(hata or "bilinmeyen hata")[:200]
+
+    def send_text(self, text: str, deneme: int = 2):
+        """Düz metin gönderir (özet, komut yanıtı, /test).
+
+        - Telegram'ın 4096 karakter sınırına karşı metin `kirp()` ile kısaltılır;
+          eskiden uzun bir özet sessizce HTTP 400 alabiliyordu.
+        - Geçici hatada (ağ hatası, 5xx, 429) bir kez daha denenir; 4xx kalıcı
+          hatalar (403 engel, 400 bozuk istek) tekrar denenmez.
+        """
         if not self.enabled:
             return False, "Telegram notifier pasif (token/chat_id env'de yok)"
-        try:
-            import requests
-            resp = requests.post(
-                f"https://api.telegram.org/bot{self.token}/sendMessage",
-                json={"chat_id": self.chat_id, "text": text},
-                timeout=15,
-            )
-            if resp.status_code == 200:
-                return True, "mesaj gonderildi"
-            ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
-            return False, f"HTTP {resp.status_code}: {resp.text[:200]} | {ipucu}"
-        except Exception as e:
-            return False, f"istek hatasi: {e}"[:200]
+
+        from telegram_commands import kirp  # döngüsel import yok: telegram_commands notifier'ı import etmez
+        govde = kirp(text)
+        deneme = max(1, int(deneme))
+        son_hata = ""
+        for i in range(deneme):
+            try:
+                import requests
+                resp = requests.post(
+                    f"https://api.telegram.org/bot{self.token}/sendMessage",
+                    json={"chat_id": self.chat_id, "text": govde},
+                    timeout=15,
+                )
+                if resp.status_code == 200:
+                    self._gonderim_sagligi_kaydet(basari=True)
+                    return True, "mesaj gonderildi"
+                ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
+                son_hata = f"HTTP {resp.status_code}: {resp.text[:200]} | {ipucu}"
+                if 400 <= resp.status_code < 500 and resp.status_code != 429:
+                    break  # kalıcı hata: tekrar denemek anlamsız
+                logger.warning(f"Telegram gönderimi başarısız (deneme {i + 1}/{deneme}): HTTP {resp.status_code}")
+            except Exception as e:
+                son_hata = f"istek hatasi: {e}"[:200]
+                logger.warning(f"Telegram gönderim hatası (deneme {i + 1}/{deneme}): {e}")
+            if i + 1 < deneme and self.retry_bekleme_sn > 0:
+                time.sleep(self.retry_bekleme_sn)
+        self._gonderim_sagligi_kaydet(basari=False, hata=son_hata)
+        return False, son_hata
 
     def check_connection(self) -> bool:
         if not self.enabled:
@@ -254,12 +310,17 @@ class TelegramNotifier:
             )
             if resp.status_code == 200:
                 logger.info(f"Telegram kanala gönderildi: {self.channel_id}")
+                self._gonderim_sagligi_kaydet(basari=True)
                 return True
             ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
             logger.error(f"Telegram kanal hatası: {resp.text} | {ipucu}")
+            self.kanal_hatasi += 1
+            self._gonderim_sagligi_kaydet(basari=False, hata=f"kanal: HTTP {resp.status_code}")
             return False
         except Exception as e:
             logger.error(f"Telegram kanal gönderim hatası: {e}")
+            self.kanal_hatasi += 1
+            self._gonderim_sagligi_kaydet(basari=False, hata=f"kanal: {e}")
             return False
 
     def format_daily_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None) -> str:
@@ -306,7 +367,8 @@ class TelegramNotifier:
                     ham = json.load(f)
             self._gunluk_sayac = int(ham.get("gunluk_sayac", 0))
             self._gunluk_tarih = datetime.fromisoformat(ham["gunluk_tarih"]).date()
-            self._saatlik_zamanlar = [datetime.fromisoformat(t) for t in ham.get("saatlik", [])]
+            self._saatlik_zamanlar = [_istanbul(datetime.fromisoformat(t))
+                                      for t in ham.get("saatlik", [])]
             logger.info(f"Telegram kap hafızası {kaynak} yüklendi: saatlik={len(self._saatlik_zamanlar)}, günlük={self._gunluk_sayac}")
         except Exception as e:
             logger.debug(f"Kap hafızası yüklenemedi (ilk çalışma olabilir): {e}")
@@ -314,7 +376,7 @@ class TelegramNotifier:
     def _gonderim_kaydet(self):
         self._gunu_sifirla_gerekirse()
         self._saatligi_temizle()
-        self._saatlik_zamanlar.append(datetime.now())
+        self._saatlik_zamanlar.append(datetime.now(ISTANBUL_TZ))
         self._gunluk_sayac += 1
         self._kap_kaydet()
 
@@ -335,7 +397,7 @@ class TelegramNotifier:
             self.persistent_store.upsert("state:telegram_caps", payload)
 
     def _gunu_sifirla_gerekirse(self):
-        bugun = datetime.now().date()
+        bugun = datetime.now(ISTANBUL_TZ).date()
         if bugun != self._gunluk_tarih:
             self._gunluk_sayac = 0
             self._gunluk_tarih = bugun
@@ -346,7 +408,7 @@ class TelegramNotifier:
             self.gonderilen_alarm = 0
 
     def _saatligi_temizle(self):
-        sinir = datetime.now() - timedelta(hours=1)
+        sinir = datetime.now(ISTANBUL_TZ) - timedelta(hours=1)
         self._saatlik_zamanlar = [t for t in self._saatlik_zamanlar if t > sinir]
 
     def kap_durumu(self) -> Dict:
@@ -371,7 +433,8 @@ class TelegramNotifier:
                 with open(self._cooldown_dosya, "r", encoding="utf-8") as f:
                     ham = json.load(f)
             for k, iso in ham.items():
-                self.last_sent[k] = datetime.fromisoformat(iso)
+                # Eski kayıtlar naive olabilir; _istanbul ile normalize edilir.
+                self.last_sent[k] = _istanbul(datetime.fromisoformat(iso))
             logger.info(f"Cooldown hafızası {kaynak} yüklendi: {len(ham)} kayıt")
         except Exception as e:
             logger.warning(f"Cooldown yüklenemedi (devam ediliyor): {e}")
@@ -400,7 +463,7 @@ class TelegramNotifier:
         if key not in self.last_sent:
             cooldown_tamam = True
         else:
-            elapsed = datetime.now() - self.last_sent[key]
+            elapsed = datetime.now(ISTANBUL_TZ) - _istanbul(self.last_sent[key])
             cooldown_tamam = elapsed > timedelta(hours=self.cooldown_hours)
         if not cooldown_tamam:
             self.engeller["cooldown"] += 1
@@ -430,11 +493,15 @@ class TelegramNotifier:
     def gonderim_durumu(self) -> Dict:
         """Bugünün gönderim/engel özeti (/durum ve heartbeat için)."""
         return {
+            "enabled": self.enabled,
             "gonderilen_alarm": self.gonderilen_alarm,
             "hatalar": self.gonderim_hatasi,
+            "kanal_hatasi": self.kanal_hatasi,
             "engeller": dict(self.engeller),
             "gunluk_kap": self.max_gunluk,
             "saatlik_kap": self.max_saatlik,
+            "son_basarili_gonderim": self.son_basarili_gonderim,
+            "son_gonderme_hatasi": self.son_gonderme_hatasi,
         }
 
     def format_message(self, data: Dict) -> str:
@@ -688,9 +755,10 @@ class TelegramNotifier:
             if self.should_send_to_public(data):
                 logger.info(f"[MOCK CHANNEL {state}]\n{message}\n")
             key = self._cooldown_key(stock, pattern, timeframe, state)
-            self.last_sent[key] = datetime.now()
+            self.last_sent[key] = datetime.now(ISTANBUL_TZ)
             self._gonderim_kaydet()
             self.gonderilen_alarm += 1
+            self._gonderim_sagligi_kaydet(basari=True)
             return True
 
         try:
@@ -701,10 +769,11 @@ class TelegramNotifier:
             if resp.status_code == 200:
                 logger.info(f"Telegram gönderildi: {stock} {pattern} {state}")
                 key = self._cooldown_key(stock, pattern, timeframe, state)
-                self.last_sent[key] = datetime.now()
+                self.last_sent[key] = datetime.now(ISTANBUL_TZ)
                 self._cooldown_kaydet()
                 self._gonderim_kaydet()
                 self.gonderilen_alarm += 1
+                self._gonderim_sagligi_kaydet(basari=True)
                 # Public kanala da gönder (filtreli)
                 if self.should_send_to_public(data):
                     self.send_to_channel(message)
@@ -712,11 +781,11 @@ class TelegramNotifier:
             else:
                 ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
                 logger.error(f"Telegram hatası: {resp.text} | {ipucu}")
-                self.gonderim_hatasi += 1
+                self._gonderim_sagligi_kaydet(basari=False, hata=ipucu)
                 return False
         except Exception as e:
             logger.error(f"Telegram gönderim hatası: {e}")
-            self.gonderim_hatasi += 1
+            self._gonderim_sagligi_kaydet(basari=False, hata=f"istek hatasi: {e}")
             return False
 
 

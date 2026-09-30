@@ -377,6 +377,26 @@ def write_heartbeat(data_dir: str = None, notifier=None):
             "gunluk_bar_sayisi": daily_stats['gunluk_bar_sayisi'],
             "telegram_kap": (notifier.kap_durumu() if notifier is not None
                              else (_notifier_ref.kap_durumu() if _notifier_ref else None)),
+            # --- GÖNDERİM SAĞLIĞI (A6) ---
+            # "Bot çalışıyor ama hiçbir mesaj gitmiyor" durumu dışarıdan görünsün:
+            # token/chat_id yokluğu, son başarılı gönderim, son hata ve engel sayaçları.
+            "notifier_enabled": (notifier.enabled if notifier is not None
+                                 else (getattr(_notifier_ref, "enabled", None) if _notifier_ref else None)),
+            "telegram_gonderim": (notifier.gonderim_durumu() if notifier is not None
+                                  else (getattr(_notifier_ref, "gonderim_durumu", lambda: None)()
+                                        if _notifier_ref else None)),
+            # --- ADAY HUNİSİ (B1) ---
+            "alerts_attempted": daily_stats['alerts_attempted'],
+            "alerts_failed": daily_stats['alerts_failed'],
+            "aday_hunisi": {
+                "push": daily_stats['alerts_sent'],
+                "digest_ertelenen": daily_stats['alerts_deferred'],
+                "state_kapsam_disi": daily_stats['alerts_state_disabled'],
+                "esik_alti": daily_stats['alerts_below_threshold'],
+                "digest_tasmasi": daily_stats['alerts_digest_overflow'],
+                "engel_cooldown": daily_stats['alerts_engel_cooldown'],
+                "engel_kap": daily_stats['alerts_engel_kap'],
+            },
             "veri_sorunlari": ({k: [x['tip'] for x in v]
                                for k, v in _deque_manager_ref.sureklilik_sorunlari.items()}
                               if _deque_manager_ref else {}),
@@ -555,6 +575,10 @@ def _komut_durum(_arguman: str) -> str:
             logger.debug(f"Gönderim durumu okunamadı: {exc}")
     if gosterim:
         satirlar.append(gosterim)
+    # Notifier pasifse (token/chat_id yok) komut bunu açıkça söyler: aksi halde
+    # kullanıcı "hiç mesaj gelmiyor ama bot çalışıyor" durumunu ayırt edemez.
+    if getattr(_notifier_ref, "enabled", None) is False:
+        satirlar.append("⚠️ Telegram PASİF: token/chat_id tanımlı değil, hiçbir bildirim gönderilmiyor.")
     if st.get("son_tarama_hatasi"):
         satirlar.append(f"⚠️ Son hata: {st['son_tarama_hatasi']}")
     kapsam_notu = _kismi_kapsam_notu()

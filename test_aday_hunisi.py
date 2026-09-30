@@ -88,7 +88,7 @@ def _notifier():
 def test_cooldown_engeli_sayilir_ve_sebep_yazilir():
     n = _notifier()
     key = n._cooldown_key("THYAO", "Simetrik Üçgen", "1h", "KIRILIM_TEYITLI")
-    n.last_sent[key] = datetime.now()
+    n.last_sent[key] = datetime.now(ISTANBUL_TZ)
     assert n.can_send("THYAO", "Simetrik Üçgen", "1h", "KIRILIM_TEYITLI") is False
     assert n.engeller["cooldown"] == 1
     assert n._son_engel == "cooldown"
@@ -105,7 +105,7 @@ def test_gunluk_kap_engeli_sayilir():
 def test_saatlik_kap_engeli_sayilir_ama_kritik_state_gecer():
     n = _notifier()
     n.max_saatlik = 1
-    n._saatlik_zamanlar = [datetime.now(), datetime.now()]
+    n._saatlik_zamanlar = [datetime.now(ISTANBUL_TZ), datetime.now(ISTANBUL_TZ)]
     assert n.can_send("THYAO", "X", "1h", "SIKISMA_GUCLENIYOR") is False
     assert n.engeller["saatlik_kap"] == 1 and n._son_engel == "saatlik_kap"
     # Kritik state kapıyı geçer ve sayaç ARTMAZ (yanlış engel raporlanmasın).
