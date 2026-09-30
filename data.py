@@ -7,8 +7,6 @@ import numpy as np
 from collections import deque
 from datetime import date, datetime, timedelta, time as dt_time
 import pytz
-import time
-import random
 import logging
 import os
 import pickle
@@ -16,7 +14,7 @@ from typing import Dict, List, Optional, Tuple
 
 from config import (
     ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN,
-    RATE_LIMIT_MIN, RATE_LIMIT_MAX, DATA_DIR, ACTIVE_STOCKS,
+    DATA_DIR, SEED_DATA_DIR, MARKET_SUFFIX, ACTIVE_STOCKS,
     CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER_CLOSE_MIN, TARAMA_PENCERE_SONU,
     STALE_BAR_UYARI_DK, TERMINAL_TAZE_BAR, BIST_TATILLER, BIST_YARIM_GUNLER,
     VERI_YOK_MODU_ESIK_DK, SPLIT_SUREKLILIK_ESIK_PCT, BAR_BOSLUK_ESIK_SAAT,
@@ -598,8 +596,8 @@ class StockDequeManager:
         pickle'a ihtiyaç kalmaz; eski kurulumlardaki .pkl dosyaları yedek
         olarak çalışmaya devam eder (yalnız yerel diskten, dosya varsa).
         """
-        pkl_path = os.path.join(self.data_dir, f"{stock}.pkl")
-        json_path = os.path.join(self.data_dir, f"{stock}.json")
+        pkl_path = self._okuma_yolu(f"{stock}.pkl")
+        json_path = self._okuma_yolu(f"{stock}.json")
 
         # JSON birincil
         if os.path.exists(json_path):
@@ -653,7 +651,8 @@ class StockDequeManager:
     def get_gunluk_deque(self, stock: str) -> deque:
         """1D (günlük) deque al, yoksa diskten yükle / oluştur."""
         if stock not in self.gunluk_deques:
-            yol = self._gunluk_dosya(stock)
+            # Yazma yolu DATA_DIR; okuma gerekirse repo seed'ine düşer (C4).
+            yol = self._okuma_yolu(f"{stock}_gunluk.json")
             dq = None
             if os.path.exists(yol):
                 try:
@@ -823,6 +822,23 @@ class StockDequeManager:
             now = ISTANBUL_TZ.localize(now)
         son = _istanbul_zaman(df.index[-1])
         return (now - son).total_seconds() / 60.0
+
+    # --- C4: veri dizini (repo dışı) + repo seed yedeği ---------------------
+    def _okuma_yolu(self, dosya_adi: str) -> str:
+        """Okuma için yol: DATA_DIR'de yoksa repodaki örnek veriye (SEED_DATA_DIR) bak.
+
+        Yalnız OKUMA içindir; yazımlar her zaman DATA_DIR'e gider, böylece canlı
+        sunucuda `git pull` repo içindeki veriyi ezmez/çakışmaz.
+        """
+        yol = os.path.join(self.data_dir, dosya_adi)
+        if os.path.exists(yol):
+            return yol
+        yedek = os.path.join(SEED_DATA_DIR, dosya_adi)
+        farkli = os.path.abspath(yedek) != os.path.abspath(yol)
+        if farkli and os.path.exists(yedek):
+            logger.debug(f"{dosya_adi}: veri dizininde yok, repo seed yedeği kullanılıyor")
+            return yedek
+        return yol
 
     @staticmethod
     def _veri_ozeti(data_list) -> tuple:
@@ -1039,33 +1055,6 @@ def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
 
 # === VERİ ÇEKME (MOCK + GERÇEK İSKELET) ===
 
-def fetch_with_rate_limit(stock: str, fetch_func, *args, **kwargs) -> Optional[pd.DataFrame]:
-    """
-    Eski genel amaçlı rate-limit wrapper'ı (canlı bot ana döngüsü kullanmaz).
-    - RATE_LIMIT_MIN/MAX kadar bekler
-    - Hata olursa logla, None dön, crash etme
-    Canlı tarama daha düşük tempolu grup pacing'i için YahooRequestPacer kullanır.
-    """
-    try:
-        # Rate limit bekleme
-        delay = random.uniform(RATE_LIMIT_MIN, RATE_LIMIT_MAX)
-        logger.info(f"{stock} için {delay:.1f}sn bekleniyor (rate limit)")
-        time.sleep(delay)
-        
-        # Veriyi çek
-        df = fetch_func(stock, *args, **kwargs)
-        
-        if df is None or len(df) == 0:
-            logger.warning(f"{stock} boş veri döndü, atlanıyor")
-            return None
-        
-        logger.info(f"{stock} için {len(df)} mum çekildi")
-        return df
-        
-    except Exception as e:
-        logger.error(f"{stock} veri çekme hatası: {e} - atlanıyor, bot devam ediyor")
-        return None
-
 def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional[pd.DataFrame]:
     """Günlük (1D) OHLCV çeker — DERİN geçmiş (varsayılan 2 yıl, ~500 bar).
 
@@ -1079,7 +1068,7 @@ def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional
         import contextlib
         import yfinance as yf
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            ham = yf.Ticker(stock + ".IS").history(period=period, interval="1d", auto_adjust=False)
+            ham = yf.Ticker(stock + MARKET_SUFFIX).history(period=period, interval="1d", auto_adjust=False)
         if ham is None or len(ham) == 0:
             return None
         df = ham.copy()
@@ -1174,7 +1163,7 @@ def fetch_yfinance_1h(
         import yfinance as yf
         captured = io.StringIO()
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(captured):
-            ham = yf.Ticker(stock + ".IS").history(period=period, interval="1h", auto_adjust=False)
+            ham = yf.Ticker(stock + MARKET_SUFFIX).history(period=period, interval="1h", auto_adjust=False)
         if ham is None or ham.empty:
             reason = captured.getvalue().strip() or "Yahoo boş veri döndürdü"
             return result(None, yfinance_error_is_retryable(reason), reason)
@@ -1207,66 +1196,33 @@ def fetch_last_bar(stock: str) -> Optional[pd.DataFrame]:
     return fetch_yfinance_1h(stock, period="5d")
 
 
-def mock_fetch_60d_1h(stock: str, n_bars: int = 360) -> pd.DataFrame:
-    """
-    Mock veri çekme - gerçek API yoksa test için
-    Gerçek implementasyonda burası yfinance/borsapy olacak
-    """
-    np.random.seed(hash(stock) % 2**32)
-    
-    # Son 60 iş günü ~ 360 saat
-    end = datetime.now(ISTANBUL_TZ)
-    # İş günlerini hesapla - basit: son 60 gün, ama hafta sonu atla
-    # Şimdilik sadece hourly freq
-    dates = pd.date_range(end=end, periods=n_bars, freq='h')
-    
-    # Random walk - hisseye göre farklı seed
-    base_price = 10 + (hash(stock) % 100)  # Her hisse farklı fiyat
-    close = base_price + np.cumsum(np.random.randn(n_bars) * 0.3)
-    close = np.maximum(close, 1.0)  # Negatif olmasın
-    
-    high = close + np.abs(np.random.randn(n_bars) * 0.2)
-    low = close - np.abs(np.random.randn(n_bars) * 0.2)
-    low = np.maximum(low, 0.5)
-    open_ = close + np.random.randn(n_bars) * 0.1
-    volume = np.random.randint(100000, 5000000, n_bars)
-    
-    df = pd.DataFrame({
-        'open': open_,
-        'high': high,
-        'low': low,
-        'close': close,
-        'volume': volume
-    }, index=dates)
-    
-    return df
-
 # === TEST ===
 
 if __name__ == "__main__":
-    print("=== Data.py Test ===")
-    
-    # BIST açık mı?
+    # C7: sahte veri üreticisi kaldırıldı; demo yalnız çevrimdışı yardımcıları
+    # ve deque turunu sınar (gerçek veri için fetch_yfinance_1h/1d).
+    print("=== Data.py duman testi (çevrimdışı) ===")
     print(f"BIST açık mı? {is_bist_open()}")
     print(f"Sonraki açılışa: {time_until_next_open()/3600:.2f} saat")
     print(f"Sonraki mum kapanışına: {time_until_next_candle_close()/60:.1f} dk")
-    
-    # Deque test
+
+    idx = pd.date_range(end=datetime.now(ISTANBUL_TZ).replace(minute=0, second=0, microsecond=0),
+                        periods=20, freq="h", tz=ISTANBUL_TZ)
+    df_ornek = pd.DataFrame({
+        "open": [100.0 + i * 0.1 for i in range(20)],
+        "high": [101.0 + i * 0.1 for i in range(20)],
+        "low": [99.0 + i * 0.1 for i in range(20)],
+        "close": [100.5 + i * 0.1 for i in range(20)],
+        "volume": [1000 + i for i in range(20)],
+    }, index=idx)
+
     manager = StockDequeManager(maxlen=10, data_dir="./test_data")
-    df_mock = mock_fetch_60d_1h("THYAO", 20)
-    print(f"\nMock THYAO: {len(df_mock)} bar")
-    print(df_mock.tail(3))
-    
-    manager.append_dataframe("THYAO", df_mock)
-    df_from_deque = manager.to_dataframe("THYAO")
-    print(f"\nDeque'den DataFrame: {len(df_from_deque)} bar")
-    
-    # Resample test
-    resampled = resample_all_timeframes(df_from_deque)
-    for tf, df in resampled.items():
+    manager.append_dataframe("TEST", df_ornek)
+    df_from_deque = manager.to_dataframe("TEST")
+    print(f"\nDeque'de {len(df_from_deque)} bar (giriş 20, maxlen 10)")
+    for tf, df in resample_all_timeframes(df_from_deque).items():
         print(f"{tf}: {len(df)} bar")
-    
-    # Temizle
+
     import shutil
     shutil.rmtree("./test_data", ignore_errors=True)
-    print("\nTest bitti")
+    print("\nDuman testi bitti")

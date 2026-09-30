@@ -22,6 +22,11 @@ PROFILE = os.getenv("BOT_PROFILE", "Dengeli").strip() or "Dengeli"
 if PROFILE not in ("Hassas", "Dengeli", "Seçici"):
     PROFILE = "Dengeli"
 
+# --- PAZAR / SAĞLAYICI (C1) ---
+# Sağlayıcı sembol eki ve seans adları artık tek yerde: başka bir pazara (örn.
+# başka bir borsa) uyarlamak için kod içindeki ".IS" aramak gerekmez.
+MARKET_SUFFIX = os.getenv("MARKET_SUFFIX", ".IS").strip() or ".IS"
+
 BIST_50 = [
     "THYAO", "GARAN", "AKBNK", "ISCTR", "YKBNK", "KCHOL", "SAHOL", "EREGL", "SISE", "BIMAS",
     "ASELS", "TUPRS", "FROTO", "TOASO", "KRDMD", "PETKM", "PGSUS", "SASA", "HEKTS", "GUBRF",
@@ -32,7 +37,10 @@ BIST_50 = [
 BIST_30 = BIST_50[:30]
 # Canlı tarama evreni: mevcut BIST 50 listesinden Yahoo verisi sorunlu KOZAL/KOZAA çıkarıldı (48 sembol).
 # Eksik iki bileşen için sağlayıcı desteği doğrulanmış semboller sonra eklenebilir.
-ACTIVE_STOCKS = BIST_50
+# C1: evren env ile değiştirilebilir (virgülle ayrılmış semboller).
+#   STOCK_UNIVERSE=THYAO,GARAN,AKBNK
+_STOCK_UNIVERSE = [x.strip().upper() for x in os.getenv("STOCK_UNIVERSE", "").split(",") if x.strip()]
+ACTIVE_STOCKS = _STOCK_UNIVERSE or BIST_50
 
 # Yahoo Finance istek temposu. Kısa istek aralığı + grup molası; paralel istek yok.
 def _env_float(name: str, default: float) -> float:
@@ -75,6 +83,10 @@ ISTANBUL_TZ = pytz.timezone("Europe/Istanbul")
 BIST_OPEN = time(9, 50)     # gerçek BIST seans başlangıcı (Yahoo ilk mumu 09:30 etiketli)
 BIST_CLOSE = time(18, 10)   # gerçek BIST kapanışı + tampon
 
+# C1: sağlayıcıdan bağımsız seans adları (aynı değerler; yeni kod bunları okur).
+SESSION_OPEN = BIST_OPEN
+SESSION_CLOSE = BIST_CLOSE
+
 # --- CANLI TARAMA ZAMANLAMASI (yfinance .IS verisinden ÖLÇÜLDÜ, varsayım değil) ---
 # Ölçüm 1: 1H bar etiketleri 09:30, 10:30, ... 17:30 (günde 9 mum) ve barlar bitişik
 #           (close[i] == open[i+1])  ->  etiket = MUM BAŞI, mum :30'da kapanır.
@@ -111,11 +123,20 @@ BIST_TATILLER = {
     date(2026, 5, 29): "Kurban Bayramı 3. gün",
     date(2026, 7, 15): "Demokrasi ve Milli Birlik Günü",
     date(2026, 10, 29): "Cumhuriyet Bayramı",
-    # 2027 kesin tarihler (İslami bayramlar Diyanet açıklamasından sonra eklenecek)
+    # 2027 — C1 (Batch 7): üç bağımsız kaynakla çapraz doğrulandı (2026-09-30):
+    # Resmî tatil listeleri + Diyanet takvimi. Hafta sonuna denk gelenler (1 Mayıs
+    # Cmt, 15-16 Mayıs) listeye alınmadı: BIST zaten kapalı.
     date(2027, 1, 1): "Yılbaşı",
+    date(2027, 3, 9): "Ramazan Bayramı 1. gün",
+    date(2027, 3, 10): "Ramazan Bayramı 2. gün",
+    date(2027, 3, 11): "Ramazan Bayramı 3. gün",
     date(2027, 4, 23): "Ulusal Egemenlik ve Çocuk Bayramı",
-    date(2027, 5, 19): "Atatürk'ü Anma, Gençlik ve Spor Bayramı",
+    date(2027, 5, 17): "Kurban Bayramı 2. gün",
+    date(2027, 5, 18): "Kurban Bayramı 3. gün",
+    date(2027, 5, 19): "Kurban Bayramı 4. gün + Atatürk'ü Anma, Gençlik ve Spor Bayramı",
     date(2027, 7, 15): "Demokrasi ve Milli Birlik Günü",
+    date(2027, 8, 30): "Zafer Bayramı",
+    date(2027, 10, 29): "Cumhuriyet Bayramı",
 }
 
 # Yarım gün: (açıklama, seans kapanış saati)
@@ -123,6 +144,9 @@ BIST_YARIM_GUNLER = {
     date(2026, 3, 19): ("Ramazan Bayramı arefesi", time(13, 0)),
     date(2026, 5, 26): ("Kurban Bayramı arefesi", time(13, 0)),
     date(2026, 10, 28): ("Cumhuriyet Bayramı arefesi", time(13, 0)),
+    # 2027 (C1): arefe günleri 13:00'te kapanır (15 Mayıs Cmt olduğu için yok)
+    date(2027, 3, 8): ("Ramazan Bayramı arefesi", time(13, 0)),
+    date(2027, 10, 28): ("Cumhuriyet Bayramı arefesi", time(13, 0)),
 }
 
 # --- VERİ TAZELİĞİ / TATIL MODU EŞİKLERİ ---
@@ -223,9 +247,6 @@ MORNING_PRELOAD_HOUR = _env_int("MORNING_PRELOAD_HOUR", 8)
 MORNING_PRELOAD_MINUTE = _env_int("MORNING_PRELOAD_MINUTE", 30)
 
 DEQUE_MAXLEN = 360
-# Eski fetch_with_rate_limit yardımcı fonksiyonu içindir; canlı bot SCAN_* pacing'ini kullanır.
-RATE_LIMIT_MIN = 45
-RATE_LIMIT_MAX = 50
 
 def get_profile_params(profile: str):
     if profile == "Hassas":
@@ -321,7 +342,38 @@ ALERT_STATES = [
     "BASARISIZ_KIRILIM",
 ]
 
-LOG_DIR = "/var/log/bist-bot"
+LOG_DIR = os.getenv("LOG_DIR", "/var/log/bist-bot").strip() or "/var/log/bist-bot"
 LOG_FILE = "bot.log"
 LOCAL_LOG_DIR = "./logs"
-DATA_DIR = "./bot_data"
+def _varsayilan_data_dir() -> str:
+    """Veri dizini: repo DIŞI varsayılan (C4).
+
+    Neden: `bot_data/` git-tracked ve canlı sunucuda her taramada yeniden yazılıyor;
+    `git pull`/deploy çakışıyordu. Artık:
+      - `DATA_DIR` env verilirse o kullanılır,
+      - Render/konteynerde repo geçici olduğu için `/tmp/formation-bot-data`
+        (kalıcı veri zaten Supabase'de),
+      - yerel/systemd kurulumda `/var/lib/formation-bot/data`, yazılamıyorsa
+        `~/.formation-bot/data`, o da olmazsa son çare `./bot_data`.
+    Repodaki `bot_data/*.json` örnek/seed verisi README'de anlatıldığı gibi yalnız
+    OKUMA yedeği olarak kullanılabilir (SEED_DATA_DIR).
+    """
+    ortam = os.getenv("DATA_DIR", "").strip()
+    if ortam:
+        return ortam
+    if os.environ.get("RENDER"):
+        return "/tmp/formation-bot-data"
+    for aday in ("/var/lib/formation-bot/data",
+                 os.path.expanduser("~/.formation-bot/data")):
+        try:
+            os.makedirs(aday, exist_ok=True)
+            if os.access(aday, os.W_OK):
+                return aday
+        except OSError:
+            continue
+    return "./bot_data"
+
+
+DATA_DIR = _varsayilan_data_dir()
+# Repodaki örnek veri: DATA_DIR'de dosya yoksa yalnız okuma için buraya bakılır.
+SEED_DATA_DIR = os.getenv("SEED_DATA_DIR", "./bot_data").strip() or "./bot_data"

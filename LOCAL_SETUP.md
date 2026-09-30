@@ -1,4 +1,4 @@
-# Yerele Çekme - PowerShell Rehberi
+# Yerel Kurulum ve Test Rehberi
 
 ## 🚨 Termux İçin Önemli - 2 Farklı Build Hatası
 
@@ -27,8 +27,8 @@ pkg install python python-numpy python-pandas git -y
 
 cd ~
 cd Formation-Bot
-git checkout arena/01a0dd9d-formation-bot
-git pull origin arena/01a0dd9d-formation-bot
+git checkout main
+git pull origin main
 
 # Venv --system-site-packages ile (pkg paketlerini görsün)
 python -m venv venv --system-site-packages
@@ -80,27 +80,15 @@ bash setup-termux.sh
 git clone https://github.com/keremtulu44/Formation-Bot.git
 cd Formation-Bot
 
-# Branch'e geç (bizim çalışma branch'imiz)
-git checkout arena/01a0dd9d-formation-bot
-
-# Güncel mi kontrol et
-git pull origin arena/01a0dd9d-formation-bot
+# Varsayılan dal (main) üzerinde çalış
+git pull origin main
 ```
 
-### 2. Otomatik Kurulum Scripti
+### 2. Kurulum
 
-```powershell
-# PowerShell'de çalıştır (ExecutionPolicy hatası alırsan: Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned)
-.\setup.ps1
-```
-
-Bu script şunları yapar:
-- venv oluşturur
-- requirements.txt kurar
-- .env oluşturur (.env.example'dan)
-- bot_data/ ve logs/ klasörlerini oluşturur
-
-### 3. Manuel Kurulum (setup.ps1 çalışmazsa)
+> **Not (Batch 7 / C7):** Windows'a özel `setup.ps1` ve `local_test.ps1` kaldırıldı;
+> Linux/Render hattında kullanılmıyorlardı ve bakımsız kalmışlardı. Aşağıdaki
+> komutlar Windows PowerShell'de de çalışır.
 
 ```powershell
 # Python venv
@@ -123,35 +111,37 @@ mkdir bot_data
 mkdir logs
 ```
 
-## 📁 Dosya Konumları
+### 3. Ortam ve Klasörler
 
 ```
 Formation-Bot/
 ├── config.py              # BIST listesi, profil, sabitler
 ├── data.py                # Deque, resample, BIST saat kontrolü
-├── patterns.py            # Ana pattern motoru (79KB)
-│   ├── find_pivots()      # Pivot bulma
-│   ├── find_best_triangle_candidate()  # Üçgen/kama
-│   ├── find_best_flag_candidate()      # Bayrak
-│   ├── f_breakout_strength()           # Kırılım gücü
-│   └── PatternLifecycleManager         # Lifecycle
+├── patterns/              # Ana pattern motoru (paket)
+│   ├── pivots.py          # Pivot bulma
+│   ├── detect.py          # Üçgen/kama + bayrak tespiti
+│   ├── pole.py            # Kırılım gücü (f_breakout_strength)
+│   ├── lifecycle.py       # PatternLifecycleManager
+│   └── constants.py       # State sabitleri
 ├── main.py                # Ana döngü (BIST saat + tarama)
 ├── notifier.py            # Telegram (cooldown 4 saat)
 ├── test_triangle.py       # Üçgen test (mock)
 ├── test_breakout.py       # Kırılım test
 ├── test_flag.py           # Bayrak test
 ├── requirements.txt       # API bağımlılıkları
-├── setup.ps1              # Windows kurulum
 ├── setup.sh               # Linux kurulum (Oracle Cloud)
 ├── bist-bot.service       # systemd service
-├── logrotate.conf         # Log rotate
 ├── .env.example           # Env örneği
 ├── FORMASYON_MANTIGI.md   # Türkçe mantık dökümanı
-├── bot_data/              # Kalıcı veri (pickle + json) - gitignore'da
-│   ├── THYAO.pkl          # Hızlı yükleme
-│   └── THYAO.json         # Human-readable, GitHub'da görünsün istersen
+├── bot_data/              # Örnek/seed veri (seed okuma) - gitignore'da
+│   └── THYAO.json         # Human-readable; PICKLE_CACHE=1 ise .pkl de yazılır
 └── logs/
     └── bot.log
+
+> **Batch 7 / C4:** Canlı veri artık repo dışında tutulur. `DATA_DIR` boşsa sırasıyla
+> `RENDER` ortamı → `/tmp/formation-bot-data` → `/var/lib/formation-bot/data` →
+> `~/.formation-bot/data` → `./bot_data` denenir; yazma **her zaman** `DATA_DIR`'e gider,
+> `SEED_DATA_DIR` (varsayılan `./bot_data`) yalnız okuma yedeğidir.
 ```
 
 ## 🔌 API Kullanımı - Ne Kullanıyoruz?
@@ -220,56 +210,36 @@ df = tv.get_hist(symbol="THYAO", exchange="BIST", interval=Interval.in_1_hour, n
 
 ### data.py'de Nasıl Değiştirilir?
 
+`data.py` içinde bu iş **hazır** gelir:
+
 ```python
-# data.py içinde mock_fetch_60d_1h yerine:
+from data import fetch_yfinance_1h, fetch_yfinance_1d   # canlı veri
+from config import MARKET_SUFFIX                        # ".IS" (env: MARKET_SUFFIX)
 
-def real_fetch_yfinance(stock: str, n_bars: int = 360) -> pd.DataFrame:
-    import yfinance as yf
-    ticker = yf.Ticker(f"{stock}.IS")
-    df = ticker.history(period="60d", interval="1h")
-    # Sütun isimlerini küçük harfe çevir
-    df.columns = [c.lower() for c in df.columns]
-    return df
-
-# Sonra StockDequeManager ile kullan
+# fetch_yfinance_1h/1d: yfinance → borsapy yedeği, sütunları küçük harfe çevirir,
+# MARKET_SUFFIX ekini kendisi uygular. Doğrudan çağırman yeterli:
+df = fetch_yfinance_1h("THYAO")     # ~60 gün, 1 saatlik
 ```
 
-## 🧪 Test Komutları (PowerShell)
+## 🧪 Test Komutları
 
-```powershell
-# Venv aktif olmalı
-.\venv\Scripts\Activate.ps1
+> **Batch 7 / C7:** Sahte veri üreteci (`mock_fetch_60d_1h`) kaldırıldı; zaman
+> mantığı ve veri katmanı testleri artık gerçek/önbellek verisiyle çalışır.
 
-# 1. Üçgen testi
-python test_triangle.py
+```bash
+# Venv aktif olmalı:  source .venv/bin/activate
 
-# 2. Kırılım testi
-python test_breakout.py
+# 1. Kapsamlı zaman/tarama kontrol listesi (çevrimdışı, veri gerektirmez)
+python test_tarama_zamani.py
 
-# 3. Bayrak testi
-python test_flag.py
+# 2. Tüm test paketi
+python -m pytest -q
 
-# 4. Data katmanı
+# 3. Veri katmanı duman testi (çevrimdışı)
 python data.py
 
-# 5. Hızlı tarama (2 hisse, mock)
-python -c "
-from data import StockDequeManager, mock_fetch_60d_1h
-from patterns import PatternLifecycleManager
-from notifier import TelegramNotifier
-from main import scan_all_stocks
-import config
-config.ACTIVE_STOCKS = ['THYAO', 'GARAN']
-config.RATE_LIMIT_MIN = 1
-config.RATE_LIMIT_MAX = 2
-mgr = StockDequeManager(data_dir='./test_data')
-life = PatternLifecycleManager()
-notif = TelegramNotifier()
-for s in config.ACTIVE_STOCKS:
-    df = mock_fetch_60d_1h(s, 100)
-    mgr.append_dataframe(s, df)
-scan_all_stocks(mgr, life, notif)
-"
+# 4. Kaynak/şablon güvenlik kontrolleri
+python -m pytest -q test_kaynak_ve_guvenlik.py
 
 # 6. Gerçek BIST verisi ile tek hisse test (internet gerekli)
 python -c "
@@ -312,15 +282,15 @@ git status
 git branch
 
 # Bizim branch
-git checkout arena/01a0dd9d-formation-bot
+git checkout main
 
 # Güncelle
-git pull origin arena/01a0dd9d-formation-bot
+git pull origin main
 
 # Değişiklik yapınca
 git add -A
 git commit -m "mesaj"
-git push origin arena/01a0dd9d-formation-bot
+git push origin main
 
 # Main ile karşılaştır
 git log --oneline --graph --all -10

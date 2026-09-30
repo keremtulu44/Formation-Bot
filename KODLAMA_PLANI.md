@@ -24,9 +24,8 @@
 | **B4** | A4 TZ + A5 kirp/retry + A6 gönderim sağlığı | ✅ tamamlandı `fix(batch-4)` — pytest 235, test_tarama_zamani 100/100 |
 | **B5** | B3 kalıcı digest + B4 engellenen acil kuyruğu | ✅ tamamlandı `0ba343e` (`feat(batch-5)`) — pytest 250, test_tarama_zamani 100/100 |
 | **B6** | B5 yazma amplikasyonu + A7 sır/rate limit + A8 pickle + B10 çoklu örnek | ✅ tamamlandı `fix(batch-6)` — pytest 267, test_tarama_zamani 100/100 |
-| B6 | B5 yazma amplifikasyonu + A7 sır/rate limit + A8 pickle | — |
-| B7 | C1 sabitler + C3 namespace + C4 DATA_DIR + C7 ölü araçlar | — |
-| B8 | C2 `main.py` katmanlara ayırma (yapısal, dallanmış iş) | — |
+| **B7** | C1 sabitler + C3 namespace + C4 DATA_DIR + C7 ölü araçlar | ✅ tamamlandı `fix(batch-7)` — pytest 271, test_tarama_zamani 100/100 |
+| **B8** | C2 `main.py` katmanlara ayırma (yapısal, dallanmış iş) | ⏳ sırada |
 
 ---
 
@@ -99,7 +98,7 @@
 | A8 | `bot_data/*.pkl`, `data.py:549` | `.pkl` git'ten çıkar veya okuma JSON'a sabitlenir |
 | B10 | `supabase_store.py:107` | Anahtarlara örnek namespace'i; webhook modunda tekil örnek kontrolü |
 
-## BATCH 7 — Şablon hazırlığı (yapısal olmayan kısım)
+## BATCH 7 — ✅ Tamamlandı (şablon hazırlığı)
 
 | İş | Dosya | Detay |
 |---|---|---|
@@ -107,6 +106,29 @@
 | C3 | `data.py:534`, `supabase_store.py:107` | `STORE_PREFIX` (örn. `formation-bot:`) |
 | C4 | `config.py`, `.gitignore` | `DATA_DIR` repo dışı varsayılan |
 | C7 | — | `fetch_with_rate_limit`, `mock_fetch_60d_1h`, `repo_teshis.py`, `logrotate.conf`, `.ps1` temizliği |
+
+**Ne yapıldı:**
+
+- **C1 — sabitler config'e:** `MARKET_SUFFIX` (env, `.IS`; `data.py` iki `yf.Ticker` çağrısı bu eki kullanır),
+  `STOCK_UNIVERSE` (env, boşsa BIST 50), `SESSION_OPEN`/`SESSION_CLOSE` adları (`BIST_OPEN`/`BIST_CLOSE`
+  alias'ı; yeni kod okur), `LOG_DIR` env; 2027 resmi tatil takvimi eklendi (11 tam gün; 8 Mart ve
+  28 Ekim yarım gün — 3 kaynakla doğrulandı).
+- **C3 — Supabase ön eki:** `SupabaseStore.VARSAYILAN_PREFIX = "formation-bot:"`; env
+  `SUPABASE_STORE_PREFIX` (boş/`off` = öneksiz eski davranış). Okuma iki turlu: önce ön ekli,
+  bulunamayanlar için eski (öneksiz) anahtarlar → mevcut veri kaybolmaz, sonraki yazımda taşınır.
+  Çağıranlar öneksiz ad kullanmaya devam eder.
+- **C4 — veri dizini repo dışı:** `DATA_DIR` env → yoksa `RENDER` ortamı `/tmp/formation-bot-data`,
+  `/var/lib/formation-bot/data`, `~/.formation-bot/data` (makedirs + W_OK denemesi), son çare `./bot_data`.
+  `SEED_DATA_DIR` (varsayılan `./bot_data`) **yalnız okuma** yedeği: `StockDequeManager._okuma_yolu()`
+  DATA_DIR'de dosya yoksa seed'e bakar, yazım her zaman DATA_DIR'e gider. `notifier` cooldown/kap
+  dosyaları da DATA_DIR köküne taşındı; testler artık `~/.formation-bot` altına kalıcı durum yazmaz
+  (`conftest.py` autouse fixture).
+- **C7 — ölü araç temizliği:** `fetch_with_rate_limit` + `RATE_LIMIT_MIN/MAX` silindi;
+  `mock_fetch_60d_1h` ve `python data.py` mock demosu kaldırıldı (yerine çevrimdışı duman testi);
+  `repo_teshis.py`, `logrotate.conf`, `setup.ps1`, `local_test.ps1` git'ten çıkarıldı;
+  `LOCAL_SETUP.md` güncellendi (ölü referanslar, eski dal adı, `patterns/` paket yapısı).
+- Dokümanlar: `.env.example`, `render.yaml`, `RENDER_DEPLOY.md` env tablosu ve `README.md`
+  Batch 7 satırı; `TESHIS_RAPORU.md`'ye aracın kaldırıldığına dair not.
 
 ## BATCH 8 — `main.py` katmanlara ayırma (yapısal)
 

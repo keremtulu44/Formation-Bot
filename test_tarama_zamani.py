@@ -16,6 +16,7 @@ botu sessizce körleştiriyordu:
 import inspect
 import os
 import sys
+import tempfile
 from datetime import datetime, time as dt_time
 
 import pandas as pd
@@ -310,8 +311,14 @@ kontrol("limitler makul", 5 <= TELEGRAM_MAX_MESAJ_SAAT <= 100 and 50 <= TELEGRAM
 kontrol("kritik state'ler tanımlı", 'KIRILIM_ADAYI' in KRITIK_STATELER
         and 'FORMASYON_TAMAMLANDI' in KRITIK_STATELER)
 
+_nt_data = tempfile.mkdtemp(prefix='bot_kap_')
+os.environ['DATA_DIR'] = _nt_data          # C4: repo dışı veri dizini
+import config as config_mod
+config_mod.DATA_DIR = _nt_data             # notifier/cooldown bu klasörü kullanır
+import notifier as _notifier_mod
+_notifier_mod.DATA_DIR = _nt_data          # C4: DATA_DIR modülde import anında bağlanıyor
 nt_test = TelegramNotifier()
-for _f in ('bot_data/telegram_kap.json',):
+for _f in (os.path.join(_nt_data, 'telegram_kap.json'),):
     if os.path.exists(_f):
         os.remove(_f)
 nt_test = TelegramNotifier()

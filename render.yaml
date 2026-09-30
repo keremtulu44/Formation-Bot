@@ -50,3 +50,17 @@ services:
       # Boş bırakılırsa bot getUpdates yoklamasını kullanır (varsayılan davranış).
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
+      # --- Batch 7 (C1/C4): pazar/evren/veri dizini (hepsi OPSİYONEL) ---
+      # MARKET_SUFFIX: BIST için varsayılan .IS; BIST dışı pazar için değiştirin.
+      # STOCK_UNIVERSE: virgülle ayrılmış semboller; BOŞ = BIST 50.
+      # DATA_DIR: Render'da varsayılan /tmp/formation-bot-data (repo/disk geçici,
+      #           kalıcı veri Supabase'de). Kalıcı disk bağlarsanız buradan verin.
+      # SEED_DATA_DIR: yalnız okuma yedeği (varsayılan ./bot_data).
+      # LOG_DIR: /var/log yazılamazsa otomatik ./logs'a düşer.
+      - key: MARKET_SUFFIX
+        value: ".IS"
+      - key: STOCK_UNIVERSE
+        sync: false
+      # C3: `bot_store` tablosunu paylaşan ikinci örnek anahtar çakışmasın diye.
+      - key: SUPABASE_STORE_PREFIX
+        value: "formation-bot:"

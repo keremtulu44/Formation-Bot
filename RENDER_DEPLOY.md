@@ -712,6 +712,12 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `HEARTBEAT_MIN_ARALIK_SN` | `60` — yerel heartbeat dosyası yazım aralığı (B5) | Hayır |
 | `HEARTBEAT_UZAK_ARALIK_SN` | `300` — heartbeat'in Supabase'e yazım aralığı (B5) | Hayır |
 | `PICKLE_CACHE` | `0` — 1 ise eski `.pkl` kopyası da yazılır (JSON birincil; A8) | Hayır |
+| `MARKET_SUFFIX` | `.IS` — Yahoo sembol eki (BIST). BIST dışı pazar izlerseniz değiştirin | Hayır |
+| `STOCK_UNIVERSE` | Virgülle ayrılmış semboller (`THYAO,GARAN`); boş = BIST 50 | Hayır |
+| `DATA_DIR` | Kalıcı veri dizini. Render'da varsayılan `/tmp/formation-bot-data` (repo diski geçici; kalıcı veri Supabase'de). Kalıcı disk bağlarsanız buradan verin | Hayır |
+| `SEED_DATA_DIR` | `./bot_data` — DATA_DIR'de dosya yoksa **yalnız okuma** için kullanılan seed veri | Hayır |
+| `LOG_DIR` | `/var/log/bist-bot`; yazılamıyorsa otomatik `./logs` | Hayır |
+| `SUPABASE_STORE_PREFIX` | `formation-bot:` — `bot_store` tablosundaki anahtar ön eki (aynı tabloyu paylaşan ikinci örnekle çakışmayı önler; `off` = eski öneksiz davranış) | Hayır |
 | `RENDER_EXTERNAL_URL` | Render **otomatik** verir (`https://<servis>.onrender.com`); elle eklemeyin | Hayır |
 
 Bildirim akışı: teyitli kırılım, başarılı retest, tamamlanma ve başarısız kırılım

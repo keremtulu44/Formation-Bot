@@ -182,9 +182,10 @@ sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 | Faz 5 (batch-3) | Aday hunisi sayaçları (`/durum` "🔎 Aday hunisi"), engel sayaçları (cooldown/günlük kap/saatlik kap/hata), `/panel` eşik altı satırı | `401a788` |
 | Faz 5 (batch-4) | Sunucu saat dilimi (İstanbul) sayaç/log uyumu + `TZ` değişkeni, uzun mesaj kırpma + sınırlı retry, gönderim sağlığı alanları (heartbeat + `/durum` "Telegram PASİF" uyarısı) | `7626e7d` |
 | Faz 5 (batch-5) | 18:45 digest tamponu kalıcı (`state:digest_pending` + açılışta geri yükleme + kaçırılan özet telafisi), engellenen acil olay kuyruğu (`state:telegram_acil_kuyruk`, engel kalkınca gönderim, kuyruk derinliği heartbeat'te) | `0ba343e` |
-| Faz 5 (batch-6) | Yazma amplikasyonu (içerik parmak izi + heartbeat throttle → tarama başına 144 istek/3,3 MB yerine ~50 istek/2 MB, değişmeyen turda ~0), sır URL'den çıktı (webhook `/webhook` + secret_token başlığı, `/test` X-Test-Key, IP rate limit), `.pkl` Git'ten çıkarıldı (JSON birincil), çoklu örnek tespiti (`state:instances` + heartbeat/`/durum` uyarısı) | bu commit |
+| Faz 5 (batch-6) | Yazma amplikasyonu (içerik parmak izi + heartbeat throttle → tarama başına 144 istek/3,3 MB yerine ~50 istek/2 MB, değişmeyen turda ~0), sır URL'den çıktı (webhook `/webhook` + secret_token başlığı, `/test` X-Test-Key, IP rate limit), `.pkl` Git'ten çıkarıldı (JSON birincil), çoklu örnek tespiti (`state:instances` + heartbeat/`/durum` uyarısı) | `a65b053` |
+| Faz 5 (batch-7) | Şablon hazırlığı: `MARKET_SUFFIX`/`STOCK_UNIVERSE`/`LOG_DIR` env + `SESSION_OPEN/CLOSE` adları + 2027 tatil takvimi (C1), Supabase anahtar ön eki `SUPABASE_STORE_PREFIX=formation-bot:` + eski anahtarları iki turlu okuma (C3), `DATA_DIR` repo dışı varsayılan + `SEED_DATA_DIR` salt-okuma seed (C4), ölü araç temizliği (`fetch_with_rate_limit`, mock demo, `repo_teshis.py`, `logrotate.conf`, `.ps1`) (C7) | bu commit |
 
-Regresyon: `pytest` **267 passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
+Regresyon: `pytest` **271 passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
 
 Ölçüm (B5, 48 hisse × 360 bar 1H + 250 bar 1D, tek tarama turu):
 `96 istek / 3,26 MB` → seans içi `48 istek / 1,98 MB`, veri değişmeyen turda `0 istek / 0 MB`;
@@ -213,6 +214,11 @@ Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölç
 7. **Sandbox kısıtı:** bu ortamdan Yahoo Finance ve Telegram'a erişilemiyor (SSL). Gerçek
    zamanlı tarama ve canlı bot testi kullanıcının kendi makinesinde yapılmalı; burada
    `--cache` modu ve commit'li `bot_data` kullanılır.
-8. **Bot kuralları:** `bot_data/*.json` git-tracked; **`*.pkl` artık dışarıda** (A8: public repoda pickle yürütme yüzeyi olmasın; okuma JSON birincil, eski `.pkl` yalnız yedek). Runtime dosyaları
+8. **Veri dizini artık repo dışında (batch-7 / C4):** yazımlar `DATA_DIR`'e gider; sırayla
+   `RENDER` → `/tmp/formation-bot-data` → `/var/lib/formation-bot/data` → `~/.formation-bot/data` →
+   `./bot_data` denenir. Repodaki `bot_data/*.json` yalnız **okuma** yedeğidir (`SEED_DATA_DIR`);
+   canlı veri diske yazılmaz. Supabase anahtarları `SUPABASE_STORE_PREFIX` (varsayılan
+   `formation-bot:`) ile öneklenir; öneksiz eski kayıtlar okunur ve sonraki yazımda taşınır.
+9. **Bot kuralları:** `bot_data/*.json` git-tracked; **`*.pkl` artık dışarıda** (A8: public repoda pickle yürütme yüzeyi olmasın; okuma JSON birincil, eski `.pkl` yalnız yedek). Runtime dosyaları
    (heartbeat, telegram_kap, telegram_acil_kuyruk, telegram_digest_pending, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0f318-formation-bot`
    dalında; başka dala push yok. Merge YALNIZCA kullanıcı onayıyla yapılır.

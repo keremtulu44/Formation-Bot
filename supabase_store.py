@@ -111,8 +111,14 @@ def supabase_basliklari(service_key: str) -> Dict[str, str]:
 class SupabaseStore:
     TABLE = "bot_store"
     REQUEST_TIMEOUT_SEC = 8
+    # C3 (Batch 7): aynı `bot_store` tablosunu paylaşan ikinci bir proje/örnek
+    # diğerinin verisini ezmesin diye anahtarlara ön ek eklenir.
+    #   SUPABASE_STORE_PREFIX=formation-bot:   (varsayılan)
+    #   SUPABASE_STORE_PREFIX=off              (öneksiz, eski davranış)
+    # Eski (öneksiz) anahtarlar okunabilir; sonraki yazımda ön ekli hâle taşınır.
+    VARSAYILAN_PREFIX = "formation-bot:"
 
-    def __init__(self, project_url: str, service_key: str, session=None):
+    def __init__(self, project_url: str, service_key: str, session=None, prefix=None):
         # Kullanici Dashboard'dan \"https://<ref>.supabase.co\" yerine REST API
         # uc noktasini (https://<ref>.supabase.co/rest/v1/) kopyalayabiliyor.
         # Sondaki slash ve /rest/v1 suffix'i at ki URL iki kez eklenip 404 yemesin.
@@ -123,6 +129,16 @@ class SupabaseStore:
 
         temiz_key = _anahtari_temizle(service_key)
         self._service_key = temiz_key  # debug için değil, sadece header üretiminde
+        if prefix is None:
+            ham_prefix = os.environ.get("SUPABASE_STORE_PREFIX")
+            if ham_prefix is None:
+                prefix = self.VARSAYILAN_PREFIX
+            else:
+                prefix = _anahtari_temizle(ham_prefix)
+                if prefix.lower() in ("off", "none", "yok", "0"):
+                    prefix = ""
+        self.prefix = prefix or ""
+        self._legacy_uyarildi = False
         self.rest_url = f"{self.project_url}/rest/v1/{self.TABLE}"
         self._session = session or requests.Session()
         self._headers = supabase_basliklari(temiz_key)
@@ -249,15 +265,25 @@ class SupabaseStore:
         logger.info(f"Supabase bağlantısı OK ({self.project_url}, tablo: {self.TABLE})")
         return True
 
-    def get_many(self, store_keys: Iterable[str]) -> Optional[Dict[str, Any]]:
-        """Fetch multiple keys in one PostgREST request.
+    def _uzak_anahtar(self, yerel: str) -> str:
+        return f"{self.prefix}{yerel}" if self.prefix else yerel
 
-        Returns an empty dict for a successful query with no rows, and None when
-        Supabase is unavailable so callers can distinguish the two cases.
-        """
-        keys = list(dict.fromkeys(store_keys))
-        if not keys:
-            return {}
+    def _yerel_anahtar(self, uzak: str) -> str:
+        if self.prefix and uzak.startswith(self.prefix):
+            return uzak[len(self.prefix):]
+        return uzak
+
+    def _satirlari_oku(self, response):
+        rows = response.json()
+        if not isinstance(rows, list):
+            raise TypeError("beklenen liste yerine farklı JSON türü geldi")
+        return {
+            self._yerel_anahtar(row["store_key"]): row.get("payload")
+            for row in rows
+            if isinstance(row, dict) and isinstance(row.get("store_key"), str)
+        }
+
+    def _tek_istek(self, keys) -> Optional[Dict[str, Any]]:
         response = self._request(
             "GET",
             params={
@@ -268,17 +294,40 @@ class SupabaseStore:
         if response is None:
             return None
         try:
-            rows = response.json()
-            if not isinstance(rows, list):
-                raise TypeError("beklenen liste yerine farklı JSON türü geldi")
-            return {
-                row["store_key"]: row.get("payload")
-                for row in rows
-                if isinstance(row, dict) and isinstance(row.get("store_key"), str)
-            }
+            return self._satirlari_oku(response)
         except (ValueError, TypeError, KeyError) as exc:
             self._warn_once("response", f"Supabase yanıtı okunamadı: {exc}")
             return None
+
+    def get_many(self, store_keys: Iterable[str]) -> Optional[Dict[str, Any]]:
+        """Fetch multiple keys in one PostgREST request.
+
+        Returns an empty dict for a successful query with no rows, and None when
+        Supabase is unavailable so callers can distinguish the two cases.
+
+        C3: istek ön ekli anahtarlarla yapılır; bulunamayanlar için eski
+        (öneksiz) anahtarlarla ikinci bir tur atılır. Böylece ön ek devreye
+        girerken mevcut veri kaybolmaz ve sonraki yazımda taşınır.
+        """
+        keys = list(dict.fromkeys(store_keys))
+        if not keys:
+            return {}
+        sonuc = self._tek_istek([self._uzak_anahtar(k) for k in keys])
+        if sonuc is None:
+            return None
+        eksik = [k for k in keys if k not in sonuc]
+        if self.prefix and eksik:
+            legacy = self._tek_istek(eksik)
+            if legacy:
+                sonuc.update(legacy)
+                if not self._legacy_uyarildi:
+                    self._legacy_uyarildi = True
+                    logger.info(
+                        "Supabase'de ön eksiz (legacy) %d anahtar bulundu; ön ek '%s' "
+                        "devrede, bir sonraki yazımda taşınır.",
+                        len(legacy), self.prefix,
+                    )
+        return sonuc
 
     def upsert_many(self, values: Dict[str, Any]) -> bool:
         """Insert/update key-payload pairs; updated_at is refreshed on every write."""
@@ -288,7 +337,7 @@ class SupabaseStore:
 
         updated_at = datetime.now(timezone.utc).isoformat()
         rows = [
-            {"store_key": key, "payload": payload, "updated_at": updated_at}
+            {"store_key": self._uzak_anahtar(key), "payload": payload, "updated_at": updated_at}
             for key, payload in values.items()
         ]
         response = self._request(

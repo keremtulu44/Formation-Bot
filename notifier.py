@@ -178,7 +178,9 @@ class TelegramNotifier:
         # Gün/saat sınırları İstanbul'a göre (naive now() UTC sunucuda 03:00 sıfırlaması yapıyordu).
         self._gunluk_tarih = datetime.now(ISTANBUL_TZ).date()
         self._kap_uyarildi = False
-        self._cooldown_dosya = os.path.join(os.path.dirname(DATA_DIR) or ".", "bot_data", "telegram_soguma.json")
+        # C4: dosyalar doğrudan DATA_DIR'e (eskiden DATA_DIR'ın ebeveyni + "bot_data"
+        # sabitleniyordu; DATA_DIR repo dışına çıkınca yol tutarsız kalıyordu).
+        self._cooldown_dosya = os.path.join(DATA_DIR, "telegram_soguma.json")
         self._kap_dosya = os.path.join(os.path.dirname(self._cooldown_dosya), "telegram_kap.json")
         self._cooldown_yukle()
         self._kap_yukle()

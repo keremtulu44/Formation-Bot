@@ -139,12 +139,29 @@ def test_json_birincil_pickle_yazilmaz(tmp_path, monkeypatch):
 def test_eski_pickle_yedek_olarak_okunur(tmp_path, monkeypatch):
     import pickle
     from collections import deque
+    # C4 seed yedeği devrede olmasın: repo bot_data/ dosyaları testi kirletmesin.
+    monkeypatch.setattr("data.SEED_DATA_DIR", str(tmp_path / "seed"))
     mgr = StockDequeManager(data_dir=str(tmp_path))
     veri = [_mum(datetime(2026, 9, 1, 10, 0, tzinfo=ISTANBUL_TZ), 101)]
     (tmp_path / "GARAN.pkl").write_bytes(pickle.dumps(veri))
     dq = mgr.load_from_disk("GARAN")      # JSON yok → pickle yedeği
     assert dq is not None and len(dq) == 1
     assert dq[0]["close"] == 101
+
+
+def test_seed_yedegi_repo_verisini_okur(tmp_path, monkeypatch):
+    """C4: DATA_DIR boşsa repo seed'i (bot_data) yalnız OKUMA için kullanılır."""
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    (seed / "AKBNK.json").write_text(json.dumps([
+        {"timestamp": "2026-09-01T10:00:00+03:00", "open": 1, "high": 2, "low": 0.5,
+         "close": 1.5, "volume": 10}
+    ]), encoding="utf-8")
+    monkeypatch.setattr("data.SEED_DATA_DIR", str(seed))
+    mgr = StockDequeManager(data_dir=str(tmp_path / "veri"))
+    dq = mgr.load_from_disk("AKBNK")
+    assert dq is not None and len(dq) == 1
+    assert not (tmp_path / "veri" / "AKBNK.json").exists(), "seed okuması yazmaya dönüşmemeli"
 
 
 def test_pickle_git_disinda():

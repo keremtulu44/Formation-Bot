@@ -43,6 +43,7 @@ bot_data/*.pkl
 
 # Not: bot_data/ BİLEREK git'te tutuluyor (senin isteğin) - 28 hisse * 360 bar gerçek veri
 # Yalnız .json (human-readable) pushlanıyor.
-# DİKKAT (canlı sunucu): bot her taramada bu dosyaları yeniden yazar. Sunucuda
-# bot_data'yı repo dışına almak (örn. DATA_DIR=/var/lib/bist-bot/bot_data) veya
-# deployment'ı "git fetch + dosyaları ezmeden" yapmak gerekir, yoksa git pull çakışır.
+# Batch 7 / C4: canlı veri artık repo DIŞINA yazılıyor (varsayılan: /var/lib/formation-bot/data
+# veya ~/.formation-bot/data; Render'da /tmp/formation-bot-data). bot_data/ bu yüzden yalnız
+# OKUMA yedeğidir (SEED_DATA_DIR) ve canlı sunucuda git pull artık çakışmaz. Yukarıdaki
+# runtime kalıpları, biri DATA_DIR=./bot_data seçerse diye korunuyor.
