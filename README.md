@@ -50,6 +50,11 @@ varsayılanı 3.14'tür ve pandas 2.2.2 / numpy 1.26.4'ün cp314 tekerleği
 olmadığı için build kaynak koddan derlemeye düşüp patlıyor.
 Render `PORT` değişkenini verdiğinde bot `0.0.0.0:$PORT` üzerinde `/health` endpoint'i açar;
 monitör yalnızca liveness JSON'u görür, token/anahtar veya portföy verisi döndürülmez.
+Yanıt canlılık alanları da taşır (`heartbeat_age_s`, `heartbeat_stale`,
+`tarama_suruyor`, `seans_acik`): Render'ın kendi health check'i sorgusuz çağırdığı
+için **her zaman 200** alır, ama `GET /health?strict=1` heartbeat bayatken **503**
+döner — UptimeRobot/cron-job.org gibi bir monitörü bu adrese bağlarsan "bot dondu"
+durumu sessizce geçmez.
 
 `TELEGRAM_TEST_KEY` tanımlıysa `GET /test?k=<anahtar>` gerçek bir Telegram test
 mesajı gönderir (gönderim tarafını telefondan doğrulamak için). Anahtar
@@ -140,9 +145,9 @@ sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 | `supabase_store.py` | Supabase REST API adaptörü; servis anahtarı yalnızca environment'tan okunur |
 | `telegram_commands.py` | İki yönlü Telegram: `getUpdates` uzun yoklaması, yetki kontrolü, komut dağıtımı, 401/409 yönetimi (webhook modunda da aynı komut dağıtımı kullanılır) |
 | `live_state.py` | Tarama thread'i ile komut thread'i arasında thread-safe canlı formasyon/durum paylaşımı |
-| `health_server.py` | Render `PORT` varsa `/health` liveness, korumalı `/test` (X-Test-Key) ve `POST /webhook` (secret_token başlığı) uçları + IP başına rate limit |
+| `health_server.py` | Render `PORT` varsa `/health` liveness (+ canlılık alanları, `?strict=1`), korumalı `/test` (X-Test-Key) ve `POST /webhook` (secret_token başlığı) uçları + IP başına rate limit |
 | `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
-| `deploy_check.py` | Kurulum doktoru: repo dosyaları + env + Supabase tablosu + Telegram + Render `/health` ve `/test` uçlarını tek komutla doğrular (sır yazdırmaz) |
+| `deploy_check.py` | Kurulum doktoru: repo dosyaları + env + Supabase tablosu + **heartbeat canlılığı** + Telegram + Render `/health` ve `/test` uçlarını tek komutla doğrular (sır yazdırmaz) |
 | `.github/workflows/deploy.yml` | Render Deploy Hook ile `main` push'unda otomatik deploy (hook secret yoksa uyarı verip atlar) |
 | `.github/workflows/ci.yml` | Render eşdeğeri CI: Python 3.12 kurulumu, pytest, zamanlama regresyonu ve `PORT` verilip `/health` duman testi |
 | `.github/workflows/keepalive.yml` | Render Free uyumasın diye `/health` pingi (5 dk, her gün 08:00–23:00 İstanbul; `KEEPALIVE_*` değişkenleriyle ayarlanır) |
@@ -187,7 +192,7 @@ sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 
 | Faz 5 (batch-8) | `main.py` katmanlara ayrıldı (yapısal, davranış değişmedi): `reporting/format.py` (saf metin/sayı üretimi, 8.1), `import main` yan etkisi kaldırıldı (8.2), `reporting/panel.py` (panel raporu bağlam ile, 8.3), `state/paths.py` + `state/persistence.py` (son tarama + digest tamponu, 8.4), `transport/telegram.py` (webhook/komut katmanı, 8.5). `main.py` 3047 → 2380 satır | `77a2756` |
 
-Regresyon: `pytest` **287 passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
+Regresyon: `pytest` **305 passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
 
 Ölçüm (B5, 48 hisse × 360 bar 1H + 250 bar 1D, tek tarama turu):
 `96 istek / 3,26 MB` → seans içi `48 istek / 1,98 MB`, veri değişmeyen turda `0 istek / 0 MB`;

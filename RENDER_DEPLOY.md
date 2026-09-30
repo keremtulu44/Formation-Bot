@@ -223,6 +223,22 @@ Bot, Render'ın verdiği `PORT` değişkenini görünce `0.0.0.0:$PORT` üzerind
 token, anahtar veya portföy verisi sızmaz. Servis canlıysa tarayıcıda
 `https://<servis>.onrender.com/health` çalışıyor demektir.
 
+Yanıt ayrıca **canlılık alanları** taşır (denetim B-4) — bot donmuş mu, yoksa
+yalnız internet mi yavaş, dışarıdan görünür:
+
+| Alan | Anlamı |
+|---|---|
+| `heartbeat_age_s` | Son heartbeat yazımından bu yana geçen saniye |
+| `heartbeat_stale` | Eşiğe göre `true`/`false` (tarama sürerken 45 dk, seans açıkken 30 dk, seans kapalıyken 72 sa) |
+| `heartbeat_stale_esik_s` | O an geçerli eşik (saniye) |
+| `tarama_suruyor` / `seans_acik` | Anlık durum bayrakları |
+| `evren` / `instance_id` | Taranan hisse sayısı / örnek kimliği |
+
+Render'ın kendi health check'i sorgusuz `/health` çağırdığı için **her zaman 200**
+alır (davranış değişmedi). Gerçek izleme yapmak istersen UptimeRobot/cron-job.org
+adresini `/health?strict=1` yap: heartbeat bayatken uç **503** döner ve monitör
+alarm verir.
+
 > **Not:** Render Free disk kalıcı değildir. Her deploy/restart'ta `bot_data/`
 > sıfırlanabilir. Supabase bu yüzden **önerilen ama opsiyonel** uzak OHLCV cache'i
 > ve Telegram cooldown/cap state kalıcılığı sağlar. Supabase yokken analiz Yahoo
@@ -703,6 +719,8 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `POST_CLOSE_ANALYSIS_TIME` | `20:00` (İstanbul, ayrı günlük tam evren analizi) | Hayır |
 | `OFFSESSION_CACHE_MAX_AGE_DAYS` | `14` (fetch yokken izin verilen en eski seans dışı cache) | Hayır |
 | `PUBLIC_MIN_QUALITY` | `80` (public kanala min kalite) | Hayır |
+| `PUBLIC_STATES` | `FORMASYON_TAMAMLANDI,RETEST_BASARILI` (public kanala giden state'ler) | Hayır |
+| `BOT_INSTANCE_ID` | Boş = `hostname:pid`. Aynı Supabase'i paylaşan ikinci kopya varsa farklı ad ver (B10) | Hayır |
 | `LOG_LEVEL` | `INFO` (varsayılan) | Hayır |
 | `TELEGRAM_TEST_KEY` | `/test` için anahtar; `X-Test-Key` başlığı (bkz. §4.4). `?k=` yalnız `TELEGRAM_TEST_KEY_QUERY=1` iken kabul edilir | Evet |
 | `TELEGRAM_WEBHOOK_SECRET` | Rastgele metin; doluysa komutlar webhook ile gelir (bkz. §4.6). Boş = yoklama | Evet |

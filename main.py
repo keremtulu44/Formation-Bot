@@ -37,7 +37,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE, EVREN_BUYUME_UYARI_ESIGI,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
-                  son_kapanan_mum_ani, time_until_next_open,
+                  son_kapanan_mum_ani, time_until_next_open, is_bist_open,
                   resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_last_bar,
                   select_yfinance_1h_period, tamamlanmis_mumlar)
@@ -545,6 +545,75 @@ def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
         _son_heartbeat_zamani = simdi
     except Exception as e:
         logger.warning(f"Heartbeat yazılamadı: {e}")
+
+
+def _heartbeat_yolu() -> str:
+    """write_heartbeat ile AYNI dizin çözümlemesini kullanır (tek davranış)."""
+    try:
+        from config import DATA_DIR
+        data_dir = DATA_DIR
+    except ImportError:  # pragma: no cover - config her zaman var; güvenlik ağı
+        data_dir = "./bot_data"
+    return os.path.join(data_dir, "heartbeat.json")
+
+
+def _heartbeat_yasi_sn(simdi: datetime = None) -> float:
+    """heartbeat.json'daki `last_scan` damgasının yaşı (saniye); okunamazsa None.
+
+    Denetim B-4: /health artık botun canlı olup olmadığını bu değerle raporlar.
+    Dosya yoksa/bozuksa uydurma değer üretilmez, None döner ('bilinmiyor').
+    """
+    try:
+        with open(_heartbeat_yolu(), "r", encoding="utf-8") as f:
+            ham = json.load(f).get("last_scan")
+        if not ham:
+            return None
+        damga = datetime.fromisoformat(str(ham))
+        if damga.tzinfo is None:
+            damga = ISTANBUL_TZ.localize(damga)
+        return max(0.0, ((simdi or datetime.now(ISTANBUL_TZ)) - damga).total_seconds())
+    except Exception:
+        return None
+
+
+def _saglik_ozeti() -> dict:
+    """GET /health için canlılık alanları (denetim B-4).
+
+    `/health` DAİMA 200 döner; Render'ın health check davranışı değişmez. Bu özet
+    "bot ayakta mı, tarama sürüyor mu, seans açık mı" sorusunu dışarıdan
+    cevaplanabilir yapar; `?strict=1` ile çağıran monitör heartbeat bayatken 503 alır.
+
+    Bayatlama eşiği:
+      - tarama sürüyorsa  → TARAMA_SURESI_UYARI_DK (uzun tam evren taraması yanlış
+        alarm üretmesin),
+      - seans açıkken     → 30 dk (tarama aralığı ~5 dk + gecikme payı),
+      - seans kapalıyken  → 72 sa (hafta sonu/tatil boşluğunda heartbeat üretilmez).
+    """
+    simdi = datetime.now(ISTANBUL_TZ)
+    try:
+        seans_acik = bool(is_bist_open(simdi))
+    except Exception:
+        seans_acik = None
+    try:
+        tarama_suruyor = bool(_live_state.status().get("tarama_suruyor"))
+    except Exception:
+        tarama_suruyor = None
+    if tarama_suruyor:
+        esik_sn = int(TARAMA_SURESI_UYARI_DK * 60)
+    elif seans_acik:
+        esik_sn = 1800
+    else:
+        esik_sn = 259200
+    yas = _heartbeat_yasi_sn(simdi)
+    return {
+        "heartbeat_age_s": None if yas is None else int(yas),
+        "heartbeat_stale": None if yas is None else bool(yas > esik_sn),
+        "heartbeat_stale_esik_s": esik_sn,
+        "tarama_suruyor": tarama_suruyor,
+        "seans_acik": seans_acik,
+        "evren": len(ACTIVE_STOCKS),
+        "instance_id": INSTANCE_ID,
+    }
 
 # === TELEGRAM KOMUTLARI (iki yönlü) ===
 # Bot alarm gönderir; bu bölüm Telegram'dan GELEN komutları yanıtlar. Komutlar
@@ -2394,5 +2463,7 @@ if __name__ == "__main__":
         test_sender=_render_test_sender,
         webhook_handler=_telegram_webhook_isle,
         webhook_secret=TELEGRAM_WEBHOOK_SECRET,
+        # Denetim B-4: /health botun canlılığını da raporlasın (heartbeat yaşı).
+        health_provider=_saglik_ozeti,
     )
     main_loop()

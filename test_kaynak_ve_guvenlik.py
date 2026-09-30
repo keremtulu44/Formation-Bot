@@ -649,3 +649,96 @@ def test_evren_buyume_uyarisi_davranisi_degistirmez(caplog):
     assert main_mod._evren_olcek_uyarisi(["THYAO", "GARAN"]) == ""
     mesaj = main_mod._evren_olcek_uyarisi([f"X{i}" for i in range(cfg.EVREN_BUYUME_UYARI_ESIGI + 1)])
     assert "pacing" in mesaj and str(cfg.EVREN_BUYUME_UYARI_ESIGI) in mesaj
+
+
+# --- Denetim B-4: /health canlılık özeti (main tarafı) ---------------------
+
+
+def _heartbeat_yaz(dizin, dakika_once: float) -> None:
+    import config as cfg
+    damga = datetime.now(cfg.ISTANBUL_TZ) - timedelta(minutes=dakika_once)
+    (dizin / "heartbeat.json").write_text(
+        json.dumps({"last_scan": damga.isoformat()}), encoding="utf-8")
+
+
+def test_saglik_ozeti_heartbeat_yasini_raporlar(tmp_path, monkeypatch):
+    import config as cfg
+    _heartbeat_yaz(tmp_path, 7)
+    monkeypatch.setattr(cfg, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(main_mod, "is_bist_open", lambda now=None: True)
+    monkeypatch.setattr(main_mod._live_state, "status", lambda: {"tarama_suruyor": False})
+
+    ozet = main_mod._saglik_ozeti()
+    assert 400 < ozet["heartbeat_age_s"] < 500      # ~7 dk
+    assert ozet["heartbeat_stale"] is False
+    assert ozet["seans_acik"] is True
+    assert ozet["heartbeat_stale_esik_s"] == 1800    # seans açık eşiği
+
+
+def test_saglik_ozeti_seans_icinde_bayat_der(tmp_path, monkeypatch):
+    import config as cfg
+    _heartbeat_yaz(tmp_path, 60)
+    monkeypatch.setattr(cfg, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(main_mod, "is_bist_open", lambda now=None: True)
+    monkeypatch.setattr(main_mod._live_state, "status", lambda: {"tarama_suruyor": False})
+
+    ozet = main_mod._saglik_ozeti()
+    assert ozet["heartbeat_stale"] is True
+
+
+def test_saglik_ozeti_gece_bayatlamaz(tmp_path, monkeypatch):
+    """Seans kapalıyken 72 saate kadar bayat sayılmaz (hafta sonu boşluğu)."""
+    import config as cfg
+    _heartbeat_yaz(tmp_path, 10 * 60)   # 10 saat önce: seans dışı normal
+    monkeypatch.setattr(cfg, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(main_mod, "is_bist_open", lambda now=None: False)
+    monkeypatch.setattr(main_mod._live_state, "status", lambda: {"tarama_suruyor": False})
+
+    ozet = main_mod._saglik_ozeti()
+    assert ozet["heartbeat_stale"] is False
+    assert ozet["heartbeat_stale_esik_s"] == 259200
+
+
+def test_saglik_ozeti_tarama_surerken_uyari_esigini_kullanir(tmp_path, monkeypatch):
+    import config as cfg
+    _heartbeat_yaz(tmp_path, 30)
+    monkeypatch.setattr(cfg, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(main_mod, "is_bist_open", lambda now=None: True)
+    monkeypatch.setattr(main_mod._live_state, "status", lambda: {"tarama_suruyor": True})
+
+    ozet = main_mod._saglik_ozeti()
+    assert ozet["heartbeat_stale_esik_s"] == cfg.TARAMA_SURESI_UYARI_DK * 60
+    assert ozet["tarama_suruyor"] is True
+    assert ozet["heartbeat_stale"] is False   # 30 dk < 45 dk
+
+
+def test_saglik_ozeti_heartbeat_yoksa_bilinmiyor_der(tmp_path, monkeypatch):
+    import config as cfg
+    monkeypatch.setattr(cfg, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(main_mod._live_state, "status", lambda: {"tarama_suruyor": False})
+
+    ozet = main_mod._saglik_ozeti()
+    assert ozet["heartbeat_age_s"] is None
+    assert ozet["heartbeat_stale"] is None
+
+
+def test_health_ucu_main_uzerinden_canli_veri_dondurur(tmp_path, monkeypatch):
+    """/health uçtan uca: main'in enjekte ettiği özet JSON'a düşer."""
+    import config as cfg
+    _heartbeat_yaz(tmp_path, 1)
+    monkeypatch.setattr(cfg, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(main_mod, "is_bist_open", lambda now=None: True)
+    monkeypatch.setattr(main_mod._live_state, "status", lambda: {"tarama_suruyor": False})
+
+    server = start_render_health_server({"PORT": "0"}, health_provider=main_mod._saglik_ozeti)
+    try:
+        port = server.server_address[1]
+        import urllib.request
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=3) as yanit:
+            govde = json.loads(yanit.read().decode("utf-8"))
+        assert govde["status"] == "ok"
+        assert govde["heartbeat_stale"] is False
+        assert govde["evren"] == len(main_mod.ACTIVE_STOCKS)
+    finally:
+        server.shutdown()
+        server.server_close()

@@ -689,7 +689,8 @@ class TelegramNotifier:
         else:
             try:
                 time_str = timestamp.strftime("%d %b %H:%M")
-            except:
+            except (AttributeError, ValueError, TypeError):
+                # strftime desteklemeyen/tuhaf timestamp: metne düşür (dar kapsam).
                 time_str = str(timestamp)
 
         contraction_str = ""

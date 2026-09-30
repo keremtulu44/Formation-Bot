@@ -181,3 +181,88 @@ def test_health_commit_alanini_env_yokken_eklemez(monkeypatch):
     finally:
         server.shutdown()
         server.server_close()
+
+
+# --- Denetim B-4: /health canlılık alanları ve ?strict=1 ---
+
+
+def test_health_reports_liveness_from_provider():
+    server = start_render_health_server(
+        {"PORT": "0"},
+        health_provider=lambda: {"heartbeat_age_s": 42, "heartbeat_stale": False,
+                                 "tarama_suruyor": False, "seans_acik": True},
+    )
+    try:
+        port = server.server_address[1]
+        kod, payload = _get(port, "/health")
+        assert kod == 200
+        assert payload["status"] == "ok"
+        assert payload["heartbeat_age_s"] == 42
+        assert payload["heartbeat_stale"] is False
+        assert payload["seans_acik"] is True
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_health_without_provider_stays_backward_compatible():
+    server = start_render_health_server({"PORT": "0"})
+    try:
+        port = server.server_address[1]
+        kod, payload = _get(port, "/health")
+        assert kod == 200
+        assert "heartbeat_stale" not in payload
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_health_strict_mode_returns_503_only_when_stale():
+    server = start_render_health_server(
+        {"PORT": "0"},
+        health_provider=lambda: {"heartbeat_age_s": 99999, "heartbeat_stale": True},
+    )
+    try:
+        port = server.server_address[1]
+        # Render'ın kendi health check'i sorgusuz çağırır -> 200 kalmalı.
+        kod, _ = _get(port, "/health")
+        assert kod == 200
+        # ?strict=1 isteyen monitör bayat heartbeat'te 503 alır.
+        kod_strict, payload = _get_expecting_error(port, "/health?strict=1")
+        assert kod_strict == 503
+        assert payload["status"] == "bayat"
+        assert payload["heartbeat_stale"] is True
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_health_strict_mode_ok_when_fresh():
+    server = start_render_health_server(
+        {"PORT": "0", "HEALTH_RATE_LIMIT_PER_MIN": "0"},
+        health_provider=lambda: {"heartbeat_age_s": 30, "heartbeat_stale": False},
+    )
+    try:
+        port = server.server_address[1]
+        kod, payload = _get(port, "/health?strict=1")
+        assert kod == 200
+        assert payload["status"] == "ok"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_health_provider_failure_does_not_break_endpoint():
+    def patlat():
+        raise RuntimeError("boom")
+
+    server = start_render_health_server({"PORT": "0"}, health_provider=patlat)
+    try:
+        port = server.server_address[1]
+        kod, payload = _get(port, "/health")
+        assert kod == 200
+        assert payload["heartbeat_stale"] is None
+        assert "canlilik_hatasi" in payload
+    finally:
+        server.shutdown()
+        server.server_close()

@@ -170,3 +170,19 @@ Her adım ayrı commit; davranış değişmez, yalnız taşıma.
 ## Bağımlılık sırası
 `B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ → B6 ✅ → B7 ✅ → B8 ✅`
 (B3'ün B1'e bağımlılığı yok; B5, B4'ten sonra anlamlı — kuyruk, sağlıklı gönderim varsayar.)
+
+## Canlıya hazırlık denetimi düzeltmeleri (plan dışı, salt iyileştirme)
+
+Bağımsız denetimde bulunan 5 madde, davranışı bozmadan kapatıldı
+(`pytest` **305 passed**, `test_tarama_zamani.py` **100/100**):
+
+| # | Bulgu | Yapılan |
+|---|---|---|
+| B-1 | CI adım adı "90 kontrol" (gerçek: 100) | `.github/workflows/ci.yml` etiketi 100'e çekildi |
+| B-2 | `.env.example`'da `BOT_INSTANCE_ID` yoktu | Değişken + çoklu örnek açıklaması eklendi |
+| B-3 | `RENDER_DEPLOY.md` env tablosu eksikleri | `BOT_INSTANCE_ID`, `PUBLIC_STATES` satırları + `/health?strict=1` bölümü |
+| B-4 | `/health` statik 200: donmuş bot "sağlıklı" görünüyordu | `main._saglik_ozeti()` heartbeat yaşını raporlar; `health_server` bu özeti DI ile alır; `?strict=1` bayatken 503; `deploy_check.py` Supabase `state:heartbeat` yaşını da kontrol eder |
+| B-5 | `notifier.py`'de çıplak `except:` | `except (AttributeError, ValueError, TypeError)` (dar kapsam) |
+
+Not: yfinance `history()` çağrılarında açık timeout yok **değil** — kütüphane
+varsayılanı `timeout=10` sn'dir (1.7.0 imzası); bu yüzden kod değişikliği gerekmedi.

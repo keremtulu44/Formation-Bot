@@ -154,3 +154,28 @@ def test_kontrol_env_publishable_uyari(monkeypatch):
     dc.kontrol_env(env, canli_mod=False)
     # publishable için WARN olmalı
     assert dc._sayac[dc.WARN] >= 1
+
+
+# --- Denetim B-4: heartbeat (canlılık) yardımcıları ---
+
+
+def test_store_onek_varsayilan_ve_kapali():
+    assert dc.store_onek("") == "formation-bot:"
+    assert dc.store_onek("  benim-ek:  ") == "benim-ek:"
+    for kapali in ("off", "none", "yok", "0", "OFF"):
+        assert dc.store_onek(kapali) == ""
+
+
+def test_heartbeat_seviyesi_esikleri():
+    assert dc.heartbeat_seviyesi(None)[0] == dc.WARN
+    assert dc.heartbeat_seviyesi(60)[0] == dc.OK
+    assert dc.heartbeat_seviyesi(5 * 3600)[0] == dc.WARN
+    assert dc.heartbeat_seviyesi(100 * 3600)[0] == dc.FAIL
+
+
+def test_heartbeat_seviyesi_metni_yas_icerir():
+    _, baslik_taze, _ = dc.heartbeat_seviyesi(120)
+    assert "2 dk" in baslik_taze
+    _, baslik_bayat, detay_bayat = dc.heartbeat_seviyesi(4 * 24 * 3600)
+    assert "bayat" in baslik_bayat.lower()
+    assert "Render" in detay_bayat

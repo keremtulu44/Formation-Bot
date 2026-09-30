@@ -50,7 +50,7 @@ jobs:
       - name: Unit testler (pytest)
         run: python -m pytest -q
 
-      - name: Zamanlama / ölü formasyon regresyonu (90 kontrol)
+      - name: Zamanlama / ölü formasyon regresyonu (100 kontrol)
         run: python test_tarama_zamani.py
 
       # Render Start Command'i ("python main.py") burada birebir denenir:

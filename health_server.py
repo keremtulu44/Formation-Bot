@@ -22,6 +22,12 @@ stray caller cannot spam Telegram sends or webhook parsing.
 
 The route stays CLOSED (404, exactly like /test) unless TELEGRAM_WEBHOOK_SECRET
 is set, so an unconfigured deployment exposes nothing to the outside.
+
+Denetim B-4: `/health` her koşulda 200 döner (Render health check davranışı
+değişmez) ama artık botun canlılığını da raporlar. `health_provider` ile dışarıdan
+enjekte edilen özet (heartbeat yaşı, tarama sürüyor mu, seans açık mı) yanıta
+eklenir; monitör `?strict=1` ile çağırırsa heartbeat bayatken uç 503 döner.
+Bu modül main'i import etmez; veriyi yalnızca enjekte edilen callable'dan alır.
 """
 
 import hmac
@@ -284,6 +290,29 @@ class _HealthHandler(BaseHTTPRequestHandler):
             "update_id": guncelleme.get("update_id"),
         })
 
+    def _canlilik_ozeti(self):
+        """health_provider'dan (varsa) canlılık alanlarını al; hata olsa bile uç düşmesin.
+
+        Denetim B-4: bu modül main'i import etmez; özet dışarıdan enjekte edilir.
+        Sağlayıcı patlarsa /health yine 200 döner, yalnız 'canlilik_hatasi' alanı eklenir.
+        """
+        saglayici = getattr(self.server, "health_provider", None)
+        if not callable(saglayici):
+            return None
+        try:
+            ozet = saglayici()
+        except Exception as exc:  # noqa: BLE001 - /health asla 500 dönmemeli
+            logger.warning("Canlılık özeti alınamadı: %s: %s", type(exc).__name__, exc)
+            return {"heartbeat_stale": None,
+                    "canlilik_hatasi": f"{type(exc).__name__}: {exc}"[:120]}
+        return ozet if isinstance(ozet, dict) else None
+
+    def _strict_istendi(self) -> bool:
+        """`?strict=1` ile çağıran monitör, bayat heartbeat'te 503 ister."""
+        sorgu = parse_qs(urlparse(self.path).query)
+        deger = (sorgu.get("strict", ["0"])[0] or "").strip().lower()
+        return deger not in ("", "0", "false", "no")
+
     def _send_ok(self):
         # Render bu değişkenleri deploy sırasında enjekte eder: hangi commit'in
         # canlı olduğunu /health'ten görebilmek, "deploy düştü mü?" sorusunu
@@ -299,8 +328,19 @@ class _HealthHandler(BaseHTTPRequestHandler):
         branch = (os.environ.get("RENDER_GIT_BRANCH") or "").strip()
         if branch:
             payload["branch"] = branch
+        # --- CANLILIK (denetim B-4) ---
+        # Render'ın health check'i sorgusuz `/health` çağırır -> her zaman 200.
+        # Gerçek canlılık ayrı alanlarda raporlanır; monitör ?strict=1 ile
+        # bayat heartbeat'i 503'e çevirebilir.
+        canli = self._canlilik_ozeti()
+        if canli:
+            payload.update(canli)
+        kod = 200
+        if self._strict_istendi() and payload.get("heartbeat_stale") is True:
+            kod = 503
+            payload["status"] = "bayat"
         body = json.dumps(payload).encode("utf-8")
-        self.send_response(200)
+        self.send_response(kod)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
@@ -325,7 +365,8 @@ class _HealthHandler(BaseHTTPRequestHandler):
 
 
 def start_render_health_server(environ=None, test_sender=None,
-                               webhook_handler=None, webhook_secret=None):
+                               webhook_handler=None, webhook_secret=None,
+                               health_provider=None):
     """Start on Render's injected PORT; in local/systemd mode do nothing.
 
     test_sender(text) -> (ok, detail) enables the guarded /test route that sends
@@ -335,6 +376,12 @@ def start_render_health_server(environ=None, test_sender=None,
     /webhook/<secret> route. It stays 404 unless TELEGRAM_WEBHOOK_SECRET is set;
     the secret comes from `webhook_secret` (tercih edilir) ya da aynı adlı env
     değişkeninden.
+
+    health_provider() -> dict enables the liveness fields on /health (heartbeat
+    yaşı, tarama sürüyor mu, seans açık mı). Verilmezse /health eski hâliyle
+    yalnız status/service/time/commit/branch döner. `/health?strict=1` çağrısı,
+    heartbeat bayatken 503 döner (Render'ın kendi health check'i sorgusuz
+    çağırdığı için bu davranış yalnız monitörleri etkiler).
     """
     environ = os.environ if environ is None else environ
     raw_port = environ.get("PORT")
@@ -349,6 +396,8 @@ def start_render_health_server(environ=None, test_sender=None,
     server.test_sender = test_sender
     server.test_key = (environ.get("TELEGRAM_TEST_KEY") or "").strip()
     server.webhook_handler = webhook_handler
+    # Denetim B-4: /health canlılık alanları (main, _saglik_ozeti'ni enjekte eder).
+    server.health_provider = health_provider
     if webhook_secret is None:
         webhook_secret = environ.get("TELEGRAM_WEBHOOK_SECRET")
     server.webhook_secret = (webhook_secret or "").strip()
@@ -369,6 +418,9 @@ def start_render_health_server(environ=None, test_sender=None,
     )
     thread.start()
     logger.info(f"Render health endpoint 0.0.0.0:{port} üzerinde başladı (/health)")
+    if callable(health_provider):
+        logger.info("GET /health canlılık alanlarını döndürür "
+                    "(heartbeat yaşı; ?strict=1 -> bayatsa 503)")
     if server.test_key:
         logger.info("Telegram /test ucu etkin (TELEGRAM_TEST_KEY tanimli, anahtar X-Test-Key basliginda)")
         if server.test_key_query:
