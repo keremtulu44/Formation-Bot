@@ -187,13 +187,16 @@ def panel_kritik_anahtar(kayit):
             str((kayit or {}).get("timeframe") or ""))
 
 
-def panel_filtre_coz(arguman: str):
+def panel_filtre_coz(arguman: str, evren=None):
     """Argümanı (kolonlar, hisse_tokenlari) olarak ayırır.
 
     - Zaman dilimi token'ları (1h/2h/4h/1d) gösterilecek SLOT sütunlarını seçer.
     - Evrendeki bir hisseye (en az 3 karakter) uyan token'lar satırları daraltır.
     - Kalan token'lar (kirilim, üçgen, KIRILIM_TEYITLI ...) sayıları ve top-12
       listesini süzer (filtrele_formasyonlar ile aynı sözdizimi).
+
+    `evren` verilmezse config'teki ACTIVE_STOCKS kullanılır; main kendi
+    (monkeypatch edilebilir) evrenini açıkça geçirir.
     """
     tokens = [t for t in (arguman or "").replace(",", " ").split() if t]
     kolonlar = tuple(t.lower() for t in tokens if t.lower() in PANEL_TIMEFRAMES)
@@ -202,7 +205,7 @@ def panel_filtre_coz(arguman: str):
         tl = t.lower()
         if tl in PANEL_TIMEFRAMES or len(tl) < 3:
             continue
-        if any(tl in s.lower() for s in ACTIVE_STOCKS):
+        if any(tl in s.lower() for s in (evren if evren is not None else ACTIVE_STOCKS)):
             hisse_tokenlari.append(tl)
     return (kolonlar or PANEL_TIMEFRAMES), hisse_tokenlari
 

@@ -54,6 +54,7 @@ from telegram_commands import TelegramCommandListener, kirp
 # Batch 8 / C2: raporlama katmanı `reporting/format.py`'ye ayrıldı. Burada eski
 # iç adlar (`_sayi`, `_panel_*`) alias olarak korunuyor: main döngüsü ve testler
 # aynı isimlerle çalışmaya devam eder, davranış değişmez.
+from reporting.panel import panel_raporu
 from reporting.format import (
     STATE_TR, PANEL_TIMEFRAMES, PANEL_TOP_KRITIK, PANEL_MESAJ_SINIRI,
     PANEL_DURUM_PUANI, PANEL_IPUCU, son_bar_yasi_dakika_str,
@@ -975,128 +976,21 @@ def _komut_kirilim(arguman: str) -> str:
 # sayıları + kompozit puana göre en anlamlı 12 aday.
 WATCH_CONTEXT_HAVUZU = 12    # acil mesaja eklenecek adayların seçildiği havuz (gönderilen: en fazla 3)
 def _panel_raporu(arguman: str = "", tamamlandi: bool = False) -> str:
-    """48 hisse x 4 TF slot paneli: sayılar + puana göre top 12 aday. Filtre destekler.
+    """Panel metni (Batch 8 / 8.3): bağlam burada toplanır, üretim reporting'te.
 
-    Filtre: `/panel 1h` · `/panel THYAO` · `/panel 1h THYAO` · `/panel kirilim`
+    Global durumu okuyan tek yer burasıdır; metin üretimi saf fonksiyona taşındı.
     """
-    now = datetime.now(ISTANBUL_TZ)
-    st = _live_state.status()
-    formations = _live_state.formations()
-    kolonlar, hisse_tokenlari = _panel_filtre_coz(arguman)
-    satir_hisseler = list(ACTIVE_STOCKS)
-    if hisse_tokenlari:
-        satir_hisseler = [s for s in ACTIVE_STOCKS
-                          if any(t in s.lower() for t in hisse_tokenlari)]
-        if not satir_hisseler:
-            return (f"🔍 '{arguman.strip()}' filtresine uyan hisse yok "
-                    f"({len(ACTIVE_STOCKS)} hisse evreni).")
-    filtreli = _filtrele_formasyonlar(formations, arguman)
-
-    # Slot haritası: (HISSE, tf) -> kayıt. LiveState hisse|TF başına tek kayıt tutar,
-    # bu yüzden 48x4 = 192 slotun üzerine çıkılamaz (sayılar bu yüzden anlamlı).
-    slot = {}
-    for f in filtreli:
-        tf = str(f.get("timeframe", "")).lower()
-        hisse = str(f.get("stock", "")).upper()
-        if hisse and tf in kolonlar:
-            slot[(hisse, tf)] = f
-    toplam_slot = len(satir_hisseler) * len(kolonlar)
-
-    # --- başlık + sayılar (her modda tam görünür) ---
-    filtresiz = not arguman.strip()
-    kapsam = (f"{len(ACTIVE_STOCKS)} hisse x {len(PANEL_TIMEFRAMES)} TF" if filtresiz
-              else f"{len(satir_hisseler)}/{len(ACTIVE_STOCKS)} hisse · "
-                   f"{len(kolonlar)}/{len(PANEL_TIMEFRAMES)} TF")
-    satirlar = [f"📋 PANEL — {kapsam} — {now.strftime('%d.%m.%Y %H:%M')}"]
-    if not filtresiz:
-        satirlar.append(f"Filtre: {arguman.strip()}")
-    durum = st.get("son_tarama_durumu", "yok")
-    tarama = f"Son başarılı tarama: {_gecen_sure(st.get('son_tarama_bitis'))} · durum {durum}"
-    if st.get("tarama_suruyor") or (_scan_job_active.is_set() and not tamamlandi):
-        tarama = "Analiz sürüyor"
-    if durum == "basarisiz":
-        kapsam_is = (f"{last_run_stats.get('processed', st.get('son_is_hisse_basarili', 0))}/"
-                     f"{last_run_stats.get('requested', st.get('son_is_hisse_istek', len(ACTIVE_STOCKS)))}")
-        tarama += f" · son deneme başarısız ({kapsam_is} hisse hesaplandı)"
-    elif durum == "tamamlandi":
-        tarama += (f" · hesaplanan {st.get('son_tarama_hissesi', '—')}/"
-                   f"{st.get('son_tarama_beklenen_hisse') or len(ACTIVE_STOCKS)} hisse")
-    satirlar.append(f"{tarama} · dolu slot {len(slot)}/{toplam_slot}")
-    veri_zamani = st.get("son_tarama_veri_zamani")
-    if veri_zamani:
-        satirlar.append(_veri_durumu_satiri(
-            veri_zamani, st.get("son_tarama_taze_veri"),
-            st.get("son_tarama_beklenen_hisse"), st.get("son_tarama_fetch_hatasi"),
-            st.get("son_tarama_en_eski_veri_yasi_dk"),
-        ))
-    kapsam_notu = _kismi_kapsam_notu()
-    if kapsam_notu:
-        satirlar.append(kapsam_notu)
-    if st.get("snapshot_yuklendi"):
-        satirlar.append("♻️ Önceki kayıt gösteriliyor; güncel analiz için /panel çalıştırılıyor.")
-    satirlar.append("")
-    satirlar.append("📊 SAYILAR")
-    tf_parcalari = []
-    for tf in kolonlar:
-        kayitlar = [slot[(h, tf)] for h in satir_hisseler if (h, tf) in slot]
-        if kayitlar:
-            ort = sum(_panel_kalite(k) for k in kayitlar) / len(kayitlar)
-            tf_parcalari.append(f"{tf} {len(kayitlar)}/{len(satir_hisseler)} ort q{ort:.0f}")
-        else:
-            tf_parcalari.append(f"{tf} 0/{len(satir_hisseler)}")
-    satirlar.append(" · ".join(tf_parcalari))
-    satirlar.append(_panel_durum_sayilari(filtreli))
-    # Eşik altı adaylar: liste ve sayaçlarda görünürler ama alarm ÜRETMEZLER.
-    # (Eskiden yalnız debug log'da düşüyorlardı; kullanıcı "kaç tanesi
-    # gösterilmiyor?" sorusunu hiçbir yerden göremiyordu.)
-    esik_alti = 0
-    for f in filtreli:
-        esik = f.get("min_quality")
-        if esik is None:
-            continue
-        try:
-            if _panel_kalite(f) < float(esik):
-                esik_alti += 1
-        except (TypeError, ValueError):
-            continue
-    if esik_alti:
-        satirlar.append(f"⚠️ {esik_alti} aday alarm eşiğinin altında (listelenir, push üretmez)")
-    if st.get("son_tarama_durumu") == "basarisiz":
-        satirlar.append("⚠️ Son tarama eksik/başarısız; bu panel boşluğu sinyal yokluğu değildir.")
-    elif not formations:
-        satirlar.append(_bos_analiz_mesaji(tamamlandi=tamamlandi))
-    sabit_kuyruk = [""] + _panel_kritik_listesi(filtreli) + ["", PANEL_IPUCU]
-
-    # --- slot tablosu: önce tam (boş slotlar '—'), sığmazsa kompakt ---
-    grid_tam = [f"{h} " + " · ".join(_panel_hucre(slot.get((h, tf)), tf) for tf in kolonlar)
-                for h in satir_hisseler]
-    if not slot:
-        # Hiç dolu slot yok (taze kurulum ya da filtre hiçbir şeye uymadı): 48 satır
-        # '—' yazmak yerine tek satırda söyle; sayılar ve top 12 zaten durumu anlatıyor.
-        grid_tam = [f"— tüm slotlar boş ({len(satir_hisseler)} hisse x {len(kolonlar)} TF)"]
-    metin = "\n".join(satirlar + [""] + ["🗂 SLOTLAR (" + " · ".join(kolonlar) + ")"] +
-                      grid_tam + sabit_kuyruk)
-    if len(metin) > PANEL_MESAJ_SINIRI:
-        # Kompakt: boş slotlar yazılmaz, hiç slotu dolmayan hisseler tek satırda toplanır.
-        grid_kisa, bos = [], []
-        for h in satir_hisseler:
-            dolu = [_panel_hucre(slot[(h, tf)], tf) for tf in kolonlar if (h, tf) in slot]
-            if dolu:
-                grid_kisa.append(f"{h} " + " · ".join(dolu))
-            else:
-                bos.append(h)
-        if bos:
-            grid_kisa.append(f"boş ({len(bos)}): " + " ".join(bos))
-        govde = satirlar + [""] + ["🗂 SLOTLAR (kompakt)"] + grid_kisa + sabit_kuyruk
-        metin = "\n".join(govde)
-        if len(metin) > PANEL_MESAJ_SINIRI:
-            # Aşırı kalabalık gün: grid kırpılır, sayılar ve TOP 12 korunur.
-            sabit = satirlar + [""] + ["🗂 SLOTLAR (kompakt)"]
-            butce = PANEL_MESAJ_SINIRI - sum(len(s) + 1 for s in sabit + sabit_kuyruk)
-            metin = "\n".join(sabit + _panel_sigdir(grid_kisa, max(butce, 0)) + sabit_kuyruk)
-    # Son güvenlik: desen adları çok uzun olsa bile Telegram'ın 4096 sınırını aşma.
-    return kirp(metin, PANEL_MESAJ_SINIRI + 200)
-
+    return panel_raporu(
+        arguman,
+        durum=_live_state.status(),
+        formations=_live_state.formations(),
+        aktif_hisseler=list(ACTIVE_STOCKS),
+        tarama_suruyor=_scan_job_active.is_set(),
+        last_run_stats=last_run_stats,
+        tamamlandi=tamamlandi,
+        kapsam_notu=_kismi_kapsam_notu(),
+        bos_analiz_mesaji=_bos_analiz_mesaji(tamamlandi=tamamlandi),
+    )
 
 def _manuel_tarama_istegi(tip: str, arguman: str = "") -> str:
     """Analizi ana döngüye kuyruğa koy; Telegram işleyicisini bloklama."""

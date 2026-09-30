@@ -422,3 +422,48 @@ def test_setup_logging_tekrarlanabilir():
     ilk = len(logging.getLogger().handlers)
     main_mod.setup_logging()
     assert len(logging.getLogger().handlers) == ilk
+
+
+# --- Batch 8 / C2 (8.3): panel raporu bağlam ile üretilir --------------------
+def test_panel_katmani_main_ve_live_state_okumaz():
+    import ast
+    kaynak = open("reporting/panel.py", encoding="utf-8").read()
+    moduller = set()
+    for dugum in ast.walk(ast.parse(kaynak)):
+        if isinstance(dugum, ast.Import):
+            moduller.update(a.name.split(".")[0] for a in dugum.names)
+        elif isinstance(dugum, ast.ImportFrom) and dugum.module:
+            moduller.add(dugum.module.split(".")[0])
+    assert "main" not in moduller
+    assert "live_state" not in moduller
+
+
+def test_panel_raporu_baglamla_uretilebilir():
+    """8.3: panel metni canlı durum olmadan, açık bağlamla üretilebilir."""
+    import reporting.panel as rp
+    durum = {"son_tarama_durumu": "tamamlandi", "son_tarama_hissesi": 2,
+             "son_tarama_beklenen_hisse": 2}
+    formations = [
+        {"stock": "THYAO", "timeframe": "1h", "pattern_name": "Yükselen Üçgen",
+         "state": "KIRILIM_TEYITLI", "quality": 88.0, "critical_price": 312.5,
+         "upper_touches": 2, "lower_touches": 2, "contraction": 0.9, "mtf_destek": True},
+    ]
+    metin = rp.panel_raporu("", durum, formations, ["THYAO", "GARAN"],
+                            bos_analiz_mesaji="ℹ️ boş")
+    assert "📋 PANEL — 2 hisse x 4 TF" in metin
+    assert "THYAO 1h 88🚀" in metin, "slot hücresi kalite + durum sembolü göstermeli"
+    assert "🔥 TOP 12" in metin
+
+
+def test_main_panel_adaptoru_ayni_metni_uretir(monkeypatch):
+    """Adaptör, saf fonksiyonu main bağlamıyla besler (davranış aynı)."""
+    import reporting.panel as rp
+    monkeypatch.setattr(main_mod, "_kismi_kapsam_notu", lambda: "")
+    monkeypatch.setattr(main_mod, "_bos_analiz_mesaji", lambda tamamlandi=False: "ℹ️ boş")
+    beklenen = rp.panel_raporu(
+        "", main_mod._live_state.status(), main_mod._live_state.formations(),
+        list(main_mod.ACTIVE_STOCKS), tarama_suruyor=False,
+        last_run_stats=main_mod.last_run_stats, tamamlandi=False,
+        kapsam_notu="", bos_analiz_mesaji="ℹ️ boş",
+    )
+    assert main_mod._panel_raporu("") == beklenen
