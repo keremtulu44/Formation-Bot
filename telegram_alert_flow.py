@@ -109,5 +109,61 @@ class DeferredAlertBuffer:
         self._pending.clear()
         self._reported.clear()
 
+    # --- kalıcılık (Batch 5 / B3) -----------------------------------------
+    # Neden: tampon bellekteydi; 18:45'ten önce restart olursa gün içi adaylar
+    # sessizce kayboluyordu. Snapshot Supabase'e ve diske yazılır, açılışta geri
+    # yüklenir. Snapshot biçimi sürümlenir; bilinmeyen sürüm sessizce yok sayılır.
+
+    SURUM = 1
+
+    def snapshot(self) -> dict:
+        return {
+            "surum": self.SURUM,
+            "gun": self._date.isoformat() if self._date else None,
+            "bekleyen": [dict(record) for record in self._pending.values()],
+            "bildirilen": [list(key) for key in sorted(self._reported)],
+        }
+
+    def yukle(self, ham: Optional[dict]) -> int:
+        """Kayıtlı tamponu geri yükler; kaç aday yüklendiğini döndürür.
+
+        Gün bilgisi korunur: eski güne ait kayıtlar `gun()` ile ayırt edilir ve
+        çağıran taraf kaçırılan kapanış özetini telafi edebilir.
+        """
+        if not isinstance(ham, dict):
+            return 0
+        try:
+            surum = int(ham.get("surum") or 0)
+        except (TypeError, ValueError):
+            return 0
+        if surum != self.SURUM:
+            return 0
+        gun = None
+        if ham.get("gun"):
+            try:
+                gun = datetime.fromisoformat(str(ham["gun"])).date()
+            except (TypeError, ValueError):
+                gun = None
+        bekleyen: Dict[AlertKey, dict] = {}
+        for record in ham.get("bekleyen") or []:
+            if not isinstance(record, dict):
+                continue
+            key = _key(record)
+            if not all(key) or key[3] not in WATCH_STATES:
+                continue
+            bekleyen[key] = dict(record)
+        bildirilen = set()
+        for key in ham.get("bildirilen") or []:
+            if isinstance(key, (list, tuple)) and len(key) == 4:
+                bildirilen.add(tuple(str(parca) for parca in key))
+        self._date = gun
+        self._pending = bekleyen
+        self._reported = bildirilen
+        return len(bekleyen)
+
+    def gun(self):
+        """Tamponun ait olduğu İstanbul günü (date) veya None."""
+        return self._date
+
     def __len__(self) -> int:
         return len(self._pending)

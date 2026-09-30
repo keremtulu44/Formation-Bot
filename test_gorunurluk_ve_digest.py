@@ -50,8 +50,11 @@ def test_digest_limiti_env_ile_ayarlanabilir():
     assert isinstance(config.DEFERRED_ALERT_DIGEST_LIMIT, int)
     assert config.DEFERRED_ALERT_DIGEST_LIMIT >= 1
     kaynak = open(main_mod.__file__, encoding="utf-8").read()
-    assert kaynak.count("limit=DEFERRED_ALERT_DIGEST_LIMIT") == 1, (
-        "digest limiti tek yerde ve env kaynaklı olmalı (sabit 12 kalmamalı)")
+    # İki meşru çağrı yeri var: 18:45 digesti ve kaçırılan kapanış telafisi
+    # (Batch 5). İkisi de env kaynaklı sabiti kullanır; gömülü sayı olmamalı.
+    assert kaynak.count("limit=DEFERRED_ALERT_DIGEST_LIMIT") == 2, (
+        "digest limiti env kaynaklı olmalı (sabit 12 kalmamalı)")
+    assert "limit=12" not in kaynak and "limit = 12" not in kaynak
 
 
 def test_tampon_bossa_digest_metni_cikmaz():

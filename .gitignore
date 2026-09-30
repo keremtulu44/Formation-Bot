@@ -18,6 +18,10 @@ CANLI_FORMASYONLAR.txt
 bot_data/heartbeat.json
 bot_data/telegram_kap.json
 bot_data/telegram_soguma.json
+# Batch 5: bekleyen 18:45 digest tamponu ve engellenen acil olay kuyruğu (runtime durum)
+bot_data/telegram_digest_pending.json
+bot_data/telegram_digest_pending.json.tmp
+bot_data/telegram_acil_kuyruk.json
 # Son tarama çalışma durumudur; kayıtlı liste ve atomik yazım dosyası Git'e girmez.
 bot_data/son_tarama.json
 bot_data/son_tarama.json.tmp

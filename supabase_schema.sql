@@ -17,9 +17,9 @@ grant select, insert, update on table public.bot_store to service_role;
 comment on table public.bot_store is
     'Formation-Bot OHLCV cache ve runtime JSON verileri için tek satır/anahtar store.';
 comment on column public.bot_store.store_key is
-    'Kullanılan anahtarlar: cache:1h:<SYMBOL>, cache:1d:<SYMBOL>, state:daily_fetch_attempts, state:telegram_cooldowns, state:telegram_caps, state:heartbeat, state:son_tarama.';
+    'Kullanılan anahtarlar: cache:1h:<SYMBOL>, cache:1d:<SYMBOL>, state:daily_fetch_attempts, state:telegram_cooldowns, state:telegram_caps, state:heartbeat, state:son_tarama, state:digest_pending, state:telegram_acil_kuyruk.';
 comment on column public.bot_store.payload is
-    'OHLCV cache: timestamp/open/high/low/close/volume alanlı JSON array. Telegram cooldowns, caps, heartbeat ve son tarama (state:son_tarama): mevcut JSON dosya yapılarıyla uyumlu JSON object.';
+    'OHLCV cache: timestamp/open/high/low/close/volume alanlı JSON array. Telegram cooldowns, caps, heartbeat, son tarama (state:son_tarama), bekleyen 18:45 digest tamponu (state:digest_pending) ve engellenen acil alarm kuyruğu (state:telegram_acil_kuyruk): mevcut JSON dosya yapılarıyla uyumlu JSON object.';
 comment on column public.bot_store.updated_at is
     'Son yazma zamanı; uygulama UPSERT sırasında güncel UTC zaman damgası yazar.';
 

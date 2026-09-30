@@ -31,7 +31,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     SCAN_BATCH_PAUSE_MIN_SEC, SCAN_BATCH_PAUSE_MAX_SEC,
                     SCAN_RETRY_BACKOFF_MIN_SEC, SCAN_RETRY_BACKOFF_MAX_SEC,
                     SUMMARY_HOURS, DEFERRED_ALERT_DIGEST_TIME, DEFERRED_ALERT_DIGEST_LIMIT,
-                    POST_CLOSE_ANALYSIS_TIME,
+                    POST_CLOSE_ANALYSIS_TIME, ACIL_KUYRUK_BOSALTMA_ARALIK_SN,
                     PUBLIC_MIN_QUALITY, PUBLIC_STATES,
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL)
@@ -88,6 +88,9 @@ _deque_manager_ref = None
 _notifier_ref = None
 _supabase_store_ref = None
 _deferred_alert_buffer = DeferredAlertBuffer()
+# Bugüne ait 18:45 kapanış özetinin gönderilip gönderilmediği (ISO gün). Kalıcı
+# tamponla birlikte Supabase/diske yazılır; restart sonrası aynı özet iki kez gitmez.
+_digest_son_gonderim_gun = None
 IMMEDIATE_ALERT_STATES = frozenset(ALERT_STATES)
 
 
@@ -201,6 +204,7 @@ daily_stats = {
     'alerts_below_threshold': 0,  # kalite eşiği altı (push üretmez)
     'alerts_state_disabled': 0,   # state hiçbir push akışında değil (yalnız panel)
     'alerts_digest_overflow': 0,  # digest limiti nedeniyle gösterilmeyen aday
+    'alerts_kuyruk': 0,           # acil alarm engel yüzünden kuyruğa alındı (Batch 5 / B4)
     'alerts_engel_cooldown': 0,   # cooldown nedeniyle gönderilemedi (B4 kuyruğuna girer)
     'alerts_engel_kap': 0,        # saatlik/günlük kap nedeniyle gönderilemedi
     # Veri sağlığı (FAZ 1): fetch başarısızlıkları artık SAYILIYOR ve görünür.
@@ -237,6 +241,7 @@ def reset_daily_if_needed():
         daily_stats['alerts_below_threshold'] = 0
         daily_stats['alerts_state_disabled'] = 0
         daily_stats['alerts_digest_overflow'] = 0
+        daily_stats['alerts_kuyruk'] = 0
         daily_stats['alerts_engel_cooldown'] = 0
         daily_stats['alerts_engel_kap'] = 0
         daily_stats['errors'] = 0
@@ -385,6 +390,14 @@ def write_heartbeat(data_dir: str = None, notifier=None):
             "telegram_gonderim": (notifier.gonderim_durumu() if notifier is not None
                                   else (getattr(_notifier_ref, "gonderim_durumu", lambda: None)()
                                         if _notifier_ref else None)),
+            # Bekleyen gün içi aday (18:45 digest) ve engellenen acil kuyruğu:
+            # restart/tıkanma durumunda "içeride ne var" dışarıdan görünsün.
+            "bekleyen_bildirim": len(_deferred_alert_buffer),
+            "digest_son_gonderim_gun": _digest_son_gonderim_gun,
+            "acil_kuyruk": (notifier.gonderim_durumu().get("acil_kuyruk")
+                            if notifier is not None
+                            else (getattr(_notifier_ref, "kuyruk_durumu", lambda: None)()
+                                  if _notifier_ref else None)),
             # --- ADAY HUNİSİ (B1) ---
             "alerts_attempted": daily_stats['alerts_attempted'],
             "alerts_failed": daily_stats['alerts_failed'],
@@ -396,6 +409,7 @@ def write_heartbeat(data_dir: str = None, notifier=None):
                 "digest_tasmasi": daily_stats['alerts_digest_overflow'],
                 "engel_cooldown": daily_stats['alerts_engel_cooldown'],
                 "engel_kap": daily_stats['alerts_engel_kap'],
+                "kuyruga_alindi": daily_stats['alerts_kuyruk'],
             },
             "veri_sorunlari": ({k: [x['tip'] for x in v]
                                for k, v in _deque_manager_ref.sureklilik_sorunlari.items()}
@@ -560,6 +574,8 @@ def _komut_durum(_arguman: str) -> str:
             f"{daily_stats['alerts_below_threshold']} eşik altı")
     if daily_stats.get('alerts_digest_overflow'):
         huni += f" · {daily_stats['alerts_digest_overflow']} digest taşması"
+    if daily_stats.get('alerts_kuyruk'):
+        huni += f" · {daily_stats['alerts_kuyruk']} kuyruğa alındı"
     satirlar.append(huni)
     gosterim = None
     gonderim = getattr(_notifier_ref, "gonderim_durumu", None)
@@ -2058,6 +2074,13 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                     daily_stats['alerts_engel_cooldown'] += 1
                                 else:
                                     daily_stats['alerts_engel_kap'] += 1
+                                # Olay kaybolmadı: kuyruğa alındı, engel kalkınca gider.
+                                if notifier.kuyrukta_mi(alert_data):
+                                    daily_stats['alerts_kuyruk'] += 1
+                                    logger.info(
+                                        f"📬 {stock} {tf_name} {state} engel nedeniyle kuyruğa alındı "
+                                        f"({notifier._son_engel})"
+                                    )
                             logger.warning(
                                 f"⚠️ Telegram gönderilemedi: {stock} {tf_name} {state} "
                                 f"(engel: {getattr(notifier, '_son_engel', None) or 'gönderim hatası'})"
@@ -2222,6 +2245,124 @@ def _effective_summary_hours() -> List[dt_time]:
     digest_time = _parse_deferred_alert_digest_time()
     morning_and_day = [hour for hour in _parse_summary_hours() if hour.hour < 18]
     return sorted(set(morning_and_day + [digest_time]))
+
+
+DIGEST_PENDING_SUPABASE_KEY = "state:digest_pending"
+DIGEST_PENDING_DOSYA = "telegram_digest_pending.json"
+
+
+def _digest_pending_yolu(data_dir=None) -> str:
+    from config import DATA_DIR
+    return os.path.join(data_dir or DATA_DIR, DIGEST_PENDING_DOSYA)
+
+
+def digest_tamponu_kaydet(store=None, data_dir=None) -> bool:
+    """Bekleyen gün içi aday tamponunu Supabase + diske yazar (Batch 5 / B3).
+
+    Neden: tampon yalnız bellekteydi; 18:45'ten önce restart olursa gün içi
+    adaylar sessizce kayboluyordu. Yazma sıklığı ana döngüde seyreltilir
+    (kaydet_gerekirse), böylece tarama başına yüzlerce yazma oluşmaz.
+    """
+    global _digest_son_gonderim_gun
+    store = _supabase_store_ref if store is None else store
+    veri = _deferred_alert_buffer.snapshot()
+    veri["son_digest_gun"] = _digest_son_gonderim_gun
+    veri["kayit_zamani"] = datetime.now(ISTANBUL_TZ).isoformat()
+    dosya_var, uzak_var = False, False
+    try:
+        yol = _digest_pending_yolu(data_dir)
+        os.makedirs(os.path.dirname(yol), exist_ok=True)
+        gecici = yol + ".tmp"
+        with open(gecici, "w", encoding="utf-8") as dosya:
+            json.dump(veri, dosya, ensure_ascii=False, indent=2)
+        os.replace(gecici, yol)
+        dosya_var = True
+    except Exception as exc:
+        logger.warning("Digest tamponu dosyaya kaydedilemedi: %s", exc)
+    if store is not None:
+        try:
+            uzak_var = bool(store.upsert(DIGEST_PENDING_SUPABASE_KEY, veri))
+        except Exception as exc:
+            logger.warning("Digest tamponu Supabase'e kaydedilemedi: %s", exc)
+    return dosya_var or uzak_var
+
+
+def digest_tamponu_yukle(store=None, data_dir=None) -> int:
+    """En yeni digest tamponunu (Supabase > disk) yükler; yüklenen aday sayısı."""
+    global _digest_son_gonderim_gun
+    store = _supabase_store_ref if store is None else store
+    uzak_veri, yerel_veri = None, None
+    if store is not None:
+        try:
+            satirlar = store.get_many([DIGEST_PENDING_SUPABASE_KEY])
+            if isinstance(satirlar, dict):
+                uzak_veri = satirlar.get(DIGEST_PENDING_SUPABASE_KEY)
+        except Exception as exc:
+            logger.warning("Digest tamponu Supabase'den okunamadı: %s", exc)
+    try:
+        with open(_digest_pending_yolu(data_dir), encoding="utf-8") as dosya:
+            yerel_veri = json.load(dosya)
+    except (FileNotFoundError, ValueError, UnicodeError):
+        pass
+    except Exception as exc:
+        logger.warning("Digest tamponu dosyadan okunamadı: %s", exc)
+
+    def _kayit_ani(veri):
+        if not isinstance(veri, dict):
+            return None
+        try:
+            return datetime.fromisoformat(veri.get("kayit_zamani"))
+        except (TypeError, ValueError):
+            return None
+
+    adaylar = [v for v in (uzak_veri, yerel_veri) if isinstance(v, dict)]
+    veri = max(adaylar, key=lambda v: _kayit_ani(v) or datetime.min.replace(tzinfo=ISTANBUL_TZ), default=None)
+    if veri is None:
+        return 0
+    sayi = _deferred_alert_buffer.yukle(veri)
+    if veri.get("son_digest_gun"):
+        _digest_son_gonderim_gun = str(veri["son_digest_gun"]).strip() or None
+    logger.info(
+        "Digest tamponu yüklendi: %d bekleyen aday (gün=%s, son digest=%s)",
+        sayi, _deferred_alert_buffer.gun(), _digest_son_gonderim_gun,
+    )
+    return sayi
+
+
+def _kacirilan_digest_ozeti(notifier, simdiki_zaman) -> str:
+    """Geçmiş günden kalan bekleyen adaylar için kaçırılan 18:45 telafisi.
+
+    Bot akşam 18:45'te kapalıysa tampon bir sonraki açılışa kadar bekler;
+    burada tek seferde gönderilir (aksi halde _ensure_day ilk taramada temizler).
+    """
+    global _digest_son_gonderim_gun
+    gun = _deferred_alert_buffer.gun()
+    if not _deferred_alert_buffer or gun is None or gun >= simdiki_zaman.date():
+        return ""
+    bekleyen = _deferred_alert_buffer.items(
+        ISTANBUL_TZ.localize(datetime.combine(gun, dt_time(23, 59))),
+        limit=DEFERRED_ALERT_DIGEST_LIMIT,
+    )
+    if not bekleyen:
+        return ""
+    watch_summary = _format_deferred_alert_summary(bekleyen, len(_deferred_alert_buffer))
+    metin = f"⏰ Kaçırılan kapanış özeti ({gun.strftime('%d.%m')} 18:45)\n{watch_summary}"
+    if notifier is None or not notifier.enabled:
+        # Pasif modda sessizce düşmesin: bir sonraki açılışta tekrar denenmeyecek,
+        # bu yüzden kayıt yine de temizlenir ve durum loglanır.
+        logger.warning("Kaçırılan kapanış özeti gönderilemedi (Telegram pasif): %d aday", len(bekleyen))
+    else:
+        gonderildi, hata = notifier.send_text(metin)
+        if gonderildi:
+            _deferred_alert_buffer.mark_reported(bekleyen, simdiki_zaman)
+            # Telafi edilen gün "gönderildi" sayılır; bugünün 18:45'i hâlâ bekliyor.
+            _digest_son_gonderim_gun = gun.isoformat()
+            logger.info("Kaçırılan kapanış özeti gönderildi: %d aday (%s)", len(bekleyen), gun)
+        else:
+            logger.warning("Kaçırılan kapanış özeti gönderilemedi: %s", hata)
+    _deferred_alert_buffer.clear(simdiki_zaman)
+    digest_tamponu_kaydet()
+    return metin
 
 
 def _format_deferred_alert_summary(records: List[dict], toplam: int = None) -> str:
@@ -2408,6 +2549,9 @@ def main_loop():
     logger.info(f"Hisseler: {ACTIVE_STOCKS[:5]}... (toplam {len(ACTIVE_STOCKS)})")
     
     global _deque_manager_ref, _notifier_ref, _supabase_store_ref, _telegram_update_processor_ref, _lifecycle_manager_ref
+    # Digest damgası main_loop içinde birden çok yerde okunur/yazılır; global
+    # bildirimi fonksiyon başında olmalı (Python kuralı).
+    global _digest_son_gonderim_gun
     supabase_store = SupabaseStore.from_env()
     _supabase_store_ref = supabase_store
     if supabase_store is not None:
@@ -2417,6 +2561,10 @@ def main_loop():
     # yerel dosyanın EN YENİ kopyası). Bu çağrı olmadan /panel, /canli, /durum ve
     # sabah özeti her yeniden başlatmada boş görünür; kalıcılık yazılır ama okunmaz.
     son_tarama_yukle(supabase_store)
+    # Bekleyen gün içi aday tamponu da kalıcıdır (Batch 5): 18:45'ten önce
+    # restart olursa adaylar kaybolmaz. Telafi gönderimi notifier kurulduktan
+    # hemen sonra yapılır (tampon günü eskiyse).
+    digest_tamponu_yukle(supabase_store)
     # Analiz snapshot'ı komutların güncel kaynağı değildir. Her /panel ve
     # /tara isteği yeni veriyle yeniden hesaplanır. OHLCV önbelleği Supabase
     # erişilemezse yerel disk/Yahoo üzerinden kurulabilir.
@@ -2455,6 +2603,15 @@ def main_loop():
     #                (Telegram → POST /webhook/<secret>, health_server taşır)
     #   - yoklama  : aksi halde getUpdates uzun yoklaması (daemon thread)
     # Token/chat_id yoksa hiçbiri başlatılmaz; bot eskisi gibi yalnızca alarm gönderir.
+    # 18:45 kapanış özeti kaçırıldıysa (bot akşam kapalıydı) ilk fırsatta telafi et.
+    _kacirilan_digest_ozeti(notifier, datetime.now(ISTANBUL_TZ))
+    # Kapanıştan önce engellenip kuyruğa giren acil olaylar varsa açılışta denensin.
+    try:
+        if notifier.enabled and notifier.kuyruk_durumu().get("bekleyen"):
+            notifier.kuyrugu_bosalt()
+    except Exception as _kuyruk_hata:
+        logger.debug(f"Açılış kuyruk boşaltma hatası: {_kuyruk_hata}")
+
     _telegram_komut_katmanini_kur(notifier)
     
     # İlk kurulum/preload de aynı hız sınırını kullanır; boş 1H cache'ler seri çekilir.
@@ -2516,6 +2673,7 @@ def main_loop():
     last_post_close_analysis_date = None
     last_maintenance_date = None
     last_preload_date = None
+    son_kuyruk_bosaltma = 0.0  # engellenen acil olaylar bu aralıkla yeniden denenir
     
     while not _shutdown_requested:
         try:
@@ -2531,6 +2689,19 @@ def main_loop():
                             son_taranan_kapanis = kapanis
                     deque_manager.save_all()
                     continue
+            # --- ENGELLENEN ACİL OLAYLAR (Batch 5 / B4) ---
+            # Cooldown/saatlik kap yüzünden gönderilemeyen teyitli kırılım gibi
+            # olaylar kuyrukta bekler; engel kalkınca en geç birkaç dakikada gider.
+            try:
+                if (notifier.enabled and notifier.kuyruk_durumu().get("bekleyen")
+                        and time.time() - son_kuyruk_bosaltma >= ACIL_KUYRUK_BOSALTMA_ARALIK_SN):
+                    son_kuyruk_bosaltma = time.time()
+                    gonderilen_kuyruk = notifier.kuyrugu_bosalt()
+                    if gonderilen_kuyruk:
+                        logger.info(f"Engellenen acil kuyruğundan {gonderilen_kuyruk} olay gönderildi")
+            except Exception as e:
+                logger.debug(f"Acil kuyruk boşaltma hatası: {e}")
+
             # --- GÜNLÜK ÖZET + ERTELENMİŞ ADAYLAR (akşam 18:45) ---
             try:
                 for sh in summary_hours:
@@ -2542,6 +2713,11 @@ def main_loop():
                     ozet_zamani = now >= hedef and (
                         sh == deferred_alert_digest_time or gecikme_sn < 600
                     )
+                    # Kapanış özeti kalıcı tampon taşır: restart sonrası aynı
+                    # özet ikinci kez gönderilmesin (state:digest_pending).
+                    if (ozet_zamani and sh == deferred_alert_digest_time
+                            and _digest_son_gonderim_gun == now.date().isoformat()):
+                        ozet_zamani = False
                     if not ozet_zamani:
                         continue
                     aktif = _build_active_formations_for_summary(lifecycle_manager)
@@ -2567,12 +2743,17 @@ def main_loop():
                                 last_summary_sent[sh_str] = now.date()
                                 if bekleyen:
                                     _deferred_alert_buffer.mark_reported(bekleyen, now)
+                                if sh == deferred_alert_digest_time:
+                                    _digest_son_gonderim_gun = now.date().isoformat()
+                                    digest_tamponu_kaydet()
                                 logger.info(f"Günlük DM özeti gönderildi: {sh_str}")
                             else:
                                 logger.warning(f"Günlük DM özeti gönderilemedi ({sh_str}): {hata}")
                         else:
                             # Test/pasif modda döngü boyunca aynı özeti tekrar deneme.
                             last_summary_sent[sh_str] = now.date()
+                            if sh == deferred_alert_digest_time:
+                                _digest_son_gonderim_gun = now.date().isoformat()
 
                     if (notifier.channel_id
                             and last_summary_channel_sent.get(sh_str) != now.date()):
@@ -2649,6 +2830,9 @@ def main_loop():
                         _scan_job_active.clear()
                     son_taranan_kapanis = kapanis
                     deque_manager.save_all()
+                    # Tarama sonunda bekleyen aday tamponu kalıcılaştır (Batch 5 / B3):
+                    # restart tamponun tamamını kaybetmesin, tarama başına tek yazma.
+                    digest_tamponu_kaydet()
                     time.sleep(5)  # aynı saniyede tekrar girmesin
                     continue
                 
@@ -2718,6 +2902,8 @@ def main_loop():
         if _deque_manager_ref is not None:
             _deque_manager_ref.save_all()
         son_tarama_kaydet()
+        # Bekleyen gün içi adaylar kapanışta da kaybolmasın (Batch 5 / B3).
+        digest_tamponu_kaydet()
         write_heartbeat()
     except Exception as e:
         logger.error(f"Kapanış kayıt hatası: {e}")

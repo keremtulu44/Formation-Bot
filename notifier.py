@@ -9,7 +9,8 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from config import DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN
+from config import (DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN,
+                    ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK)
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +182,16 @@ class TelegramNotifier:
         self._kap_dosya = os.path.join(os.path.dirname(self._cooldown_dosya), "telegram_kap.json")
         self._cooldown_yukle()
         self._kap_yukle()
+        # --- engellenen acil olay kuyruğu (Batch 5 / B4) ---
+        # Neden: cooldown/kap yüzünden gönderilemeyen teyitli kırılım gibi acil
+        # olaylar tamamen kayboluyordu; artık engel kalkınca gönderilir.
+        self._acil_kuyruk: List[dict] = []  # en eski kayıt önce
+        self._kuyruk_dosya = os.path.join(os.path.dirname(self._cooldown_dosya),
+                                          "telegram_acil_kuyruk.json")
+        self.kuyruk_gonderildi = 0
+        self.kuyruk_zaman_asimi = 0
+        self.kuyruk_tasmasi = 0
+        self._kuyruk_yukle()
 
         try:
             from config import PUBLIC_MIN_QUALITY, PUBLIC_STATES, PUBLIC_SIKISMA_MIN_CONTRACTION
@@ -454,6 +465,145 @@ class TelegramNotifier:
     def _cooldown_key(self, stock: str, pattern: str, timeframe: str, state: str) -> str:
         return f"{stock}_{pattern}_{timeframe}_{state}"
 
+    # --- engellenen acil olay kuyruğu (Batch 5 / B4) ------------------------
+
+    @staticmethod
+    def _kuyruk_key(veri: Dict) -> tuple:
+        return (
+            str(veri.get("stock_name") or "").strip().upper(),
+            str(veri.get("pattern_name") or "").strip(),
+            str(veri.get("timeframe") or "").strip().lower(),
+            str(veri.get("state") or "").strip().upper(),
+        )
+
+    def _kuyruk_yukle(self):
+        try:
+            import json
+            ham = self.initial_store_data.get("state:telegram_acil_kuyruk")
+            kaynak = "Supabase"
+            if not isinstance(ham, list):
+                kaynak = "disk"
+                if not os.path.exists(self._kuyruk_dosya):
+                    return
+                with open(self._kuyruk_dosya, "r", encoding="utf-8") as f:
+                    ham = json.load(f)
+            if not isinstance(ham, list):
+                return
+            self._acil_kuyruk = [k for k in ham if isinstance(k, dict) and isinstance(k.get("veri"), dict)]
+            logger.info(f"Telegram acil kuyruğu {kaynak} yüklendi: {len(self._acil_kuyruk)} olay")
+        except Exception as e:
+            logger.debug(f"Acil kuyruk yüklenemedi (ilk çalışma olabilir): {e}")
+
+    def _kuyruk_kaydet(self):
+        kayitlar = [dict(k) for k in self._acil_kuyruk]
+        try:
+            import json
+            os.makedirs(os.path.dirname(self._kuyruk_dosya), exist_ok=True)
+            with open(self._kuyruk_dosya, "w", encoding="utf-8") as f:
+                json.dump(kayitlar, f, ensure_ascii=False)
+        except Exception as e:
+            logger.debug(f"Acil kuyruk dosyaya kaydedilemedi: {e}")
+        if self.persistent_store is not None:
+            try:
+                self.persistent_store.upsert("state:telegram_acil_kuyruk", kayitlar)
+            except Exception as e:
+                logger.debug(f"Acil kuyruk Supabase'e kaydedilemedi: {e}")
+
+    def _kuyruga_ekle(self, data: Dict, engel: str) -> None:
+        """Engel nedeniyle gönderilemeyen acil olayı kuyruğa alır (en fazla 1 kopya)."""
+        key = self._kuyruk_key(data)
+        if not all(key):
+            return
+        simdi = datetime.now(ISTANBUL_TZ)
+        for kayit in self._acil_kuyruk:
+            if self._kuyruk_key(kayit.get("veri") or {}) == key:
+                # Aynı sinyal zaten kuyrukta: veriyi tazele, kuyrukta bekleme süresi
+                # ilk girişten sayılmaya devam etsin (TTL şişmesin).
+                kayit["veri"] = dict(data)
+                kayit["son_deneme"] = simdi.isoformat()
+                kayit["son_engel"] = engel
+                self._kuyruk_kaydet()
+                return
+        while len(self._acil_kuyruk) >= ACIL_KUYRUK_LIMIT:
+            self._acil_kuyruk.pop(0)
+            self.kuyruk_tasmasi += 1
+        self._acil_kuyruk.append({
+            "kuyruk_zaman": simdi.isoformat(),
+            "son_deneme": simdi.isoformat(),
+            "son_engel": engel,
+            "veri": dict(data),
+        })
+        logger.info(f"📬 Acil olay kuyruğa alındı ({engel}): {key[0]} {key[2]} {key[3]} "
+                    f"(kuyruk: {len(self._acil_kuyruk)})")
+        self._kuyruk_kaydet()
+
+    def kuyrukta_mi(self, data: Dict) -> bool:
+        """Bu olay kuyrukta bekliyor mu? (çağıran taraf sayaç/huni için kullanır)"""
+        key = self._kuyruk_key(data)
+        return any(self._kuyruk_key(kayit.get("veri") or {}) == key for kayit in self._acil_kuyruk)
+
+    def kuyruk_durumu(self) -> Dict:
+        return {
+            "bekleyen": len(self._acil_kuyruk),
+            "limit": ACIL_KUYRUK_LIMIT,
+            "gonderildi": self.kuyruk_gonderildi,
+            "zaman_asimi": self.kuyruk_zaman_asimi,
+            "tasma": self.kuyruk_tasmasi,
+        }
+
+    def kuyrugu_bosalt(self, max_adet: int = 5) -> int:
+        """Engel kalkınca kuyruktaki acil olayları sırayla gönderir (Batch 5 / B4).
+
+        - TTL'yi aşan kayıtlar gönderilmez, atılır (bayat sinyal zarar verir).
+        - Aynı sinyal sonradan gönderilmişse kuyruk kopyası sessizce düşürülür.
+        - Kap/cooldown sürüyorsa sıradaki tura kadar beklenir; ağ hatasında
+          kayıt korunur (veri kaybı yok).
+        """
+        if not self.enabled or not self._acil_kuyruk:
+            return 0
+        simdi = datetime.now(ISTANBUL_TZ)
+        ttl_siniri = simdi - timedelta(minutes=max(1, ACIL_KUYRUK_TTL_DK))
+        gonderilen = 0
+        degisti = False
+        for kayit in list(self._acil_kuyruk):
+            if gonderilen >= max(1, int(max_adet)):
+                break
+            veri = kayit.get("veri") or {}
+            try:
+                kuyruk_zamani = _istanbul(datetime.fromisoformat(kayit.get("kuyruk_zaman")))
+            except (TypeError, ValueError):
+                kuyruk_zamani = simdi
+            if kuyruk_zamani < ttl_siniri:
+                self._acil_kuyruk.remove(kayit)
+                self.kuyruk_zaman_asimi += 1
+                degisti = True
+                logger.warning(
+                    f"📬 Kuyruktaki acil olay bayatladı ({ACIL_KUYRUK_TTL_DK} dk): "
+                    f"{self._kuyruk_key(veri)[0]} {veri.get('state')}"
+                )
+                continue
+            key = self._kuyruk_key(veri)
+            if not self.can_send(key[0], key[1], key[2], key[3]):
+                if self._son_engel == "cooldown" and key in self.last_sent:
+                    if _istanbul(self.last_sent[key]) > kuyruk_zamani:
+                        # Aynı sinyal kuyruğa girdikten sonra gönderildi; kopya gereksiz.
+                        self._acil_kuyruk.remove(kayit)
+                        degisti = True
+                        continue
+                break  # engel sürüyor: sırayı bozmadan bekle
+            if self._gonder(veri):
+                self._acil_kuyruk.remove(kayit)
+                self.kuyruk_gonderildi += 1
+                gonderilen += 1
+                degisti = True
+                logger.info(f"📬 Kuyruktan gönderildi: {key[0]} {key[2]} {key[3]}")
+            else:
+                # Ağ/Telegram hatası: kayıt kuyrukta kalır, kaybolmaz.
+                break
+        if degisti:
+            self._kuyruk_kaydet()
+        return gonderilen
+
     def can_send(self, stock: str, pattern: str, timeframe: str, state: str = "") -> bool:
         """Gönderim yapılabilir mi? Hayırsa SEBEBİ sayaca yazılır (bkz. self.engeller)."""
         # Her çağrı temiz başlar: kritik state'in kapıyı geçmesi bir önceki
@@ -502,6 +652,11 @@ class TelegramNotifier:
             "saatlik_kap": self.max_saatlik,
             "son_basarili_gonderim": self.son_basarili_gonderim,
             "son_gonderme_hatasi": self.son_gonderme_hatasi,
+            # Engellenen acil olaylar: kaç tanesi bekliyor / kaçı gönderildi.
+            "acil_kuyruk": len(self._acil_kuyruk),
+            "kuyruk_gonderildi": self.kuyruk_gonderildi,
+            "kuyruk_zaman_asimi": self.kuyruk_zaman_asimi,
+            "kuyruk_tasmasi": self.kuyruk_tasmasi,
         }
 
     def format_message(self, data: Dict) -> str:
@@ -738,15 +893,33 @@ class TelegramNotifier:
 
         return msg
 
-    def send(self, data: Dict) -> bool:
+    def send(self, data: Dict, kuyrukla: bool = True) -> bool:
+        """Acil alarm gönderir; engel varsa olay kuyruğa alınır (Batch 5 / B4).
+
+        `kuyrukla=False` kuyruktan gelen gönderimlerde kullanılır (aynı olay
+        tekrar kuyruğa girmesin).
+        """
         stock = data.get('stock_name', '')
         pattern = data.get('pattern_name', '')
         timeframe = data.get('timeframe', '')
         state = data.get('state', '')
 
         if not self.can_send(stock, pattern, timeframe, state):
+            engel = self._son_engel or "cooldown"
+            if kuyrukla and self.enabled:
+                # Kaybolmasın: kap/cooldown açılınca kuyruktan gönderilir.
+                self._kuyruga_ekle(data, engel)
             logger.info(f"{stock} {pattern} {timeframe} {state} - cooldown, gönderilmiyor")
             return False
+
+        return self._gonder(data)
+
+    def _gonder(self, data: Dict) -> bool:
+        """can_send kapısı geçildikten sonraki gerçek gönderim (kuyruk bunu çağırır)."""
+        stock = data.get('stock_name', '')
+        pattern = data.get('pattern_name', '')
+        timeframe = data.get('timeframe', '')
+        state = data.get('state', '')
 
         message = self.format_message(data)
 

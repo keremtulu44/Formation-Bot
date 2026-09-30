@@ -179,27 +179,34 @@ sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 | Faz 5 (batch-1) | Açılışta `son_tarama_yukle()` çağrısı geri kondu; tatil/yarım gün günlerinde ana döngünün 0 sn uykulu boş dönmesi düzeltildi | `e9a736f` |
 | Faz 5 (batch-2) | Ölü kod temizliği (kanal dalı, `[:10]`, `get_formations`), özet ile panel aynı kaynaktan, digest şeffaflığı (`12/21 gösteriliyor` + `… N aday daha`), `DEFERRED_ALERT_DIGEST_LIMIT`, benzersiz günlük formasyon sayacı | `6dca717` |
 | Faz 5 (batch-3) | Aday hunisi sayaçları (`/durum` "🔎 Aday hunisi"), engel sayaçları (cooldown/günlük kap/saatlik kap/hata), `/panel` eşik altı satırı | `401a788` |
-| Faz 5 (batch-4) | Sunucu saat dilimi (İstanbul) sayaç/log uyumu + `TZ` değişkeni, uzun mesaj kırpma + sınırlı retry, gönderim sağlığı alanları (heartbeat + `/durum` "Telegram PASİF" uyarısı) | bu commit |
+| Faz 5 (batch-4) | Sunucu saat dilimi (İstanbul) sayaç/log uyumu + `TZ` değişkeni, uzun mesaj kırpma + sınırlı retry, gönderim sağlığı alanları (heartbeat + `/durum` "Telegram PASİF" uyarısı) | `7626e7d` |
+| Faz 5 (batch-5) | 18:45 digest tamponu kalıcı (`state:digest_pending` + açılışta geri yükleme + kaçırılan özet telafisi), engellenen acil olay kuyruğu (`state:telegram_acil_kuyruk`, engel kalkınca gönderim, kuyruk derinliği heartbeat'te) | bu commit |
 
-Regresyon: `pytest` **200+ passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
+Regresyon: `pytest` **250 passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
 Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölçümlü teşhis: `SORUN_RAPORU.md`.
 
 ## Bilinmesi gerekenler (yeni oturum için)
 
 1. **Pine dosyası bekleniyor** (`Yeni Metin Belgesi.txt`, ARGENT v0.4.6 export). Diske
    ulaşmadı; geldiğinde `PINE_FARK_ANALIZI.md` §5'teki 12 maddelik doğrulama listesi açılacak.
-2. **Kalite katsayı sapması:** döküman 0.28/0.20/0.12/0.16/0.12/0.07/0.05 diyor, kod
+2. **Bildirim durumu artık kalıcı (Faz 5):** 18:45 digest tamponu `state:digest_pending`,
+   engellenen acil olaylar `state:telegram_acil_kuyruk` anahtarıyla Supabase'e + `bot_data/`
+   dosyalarına yazılır; açılışta geri yüklenir. Bot akşam 18:45'te kapalıysa kaçırılan
+   kapanış özeti açılışta "⏰ Kaçırılan kapanış özeti" olarak telafi edilir. Engellenen acil
+   olay `ACIL_KUYRUK_TTL_DK` (varsayılan 180 dk) içinde engel kalkınca gönderilir; süre aşılırsa
+   bayat sinyal atılır (kuyruk sayaçları `/durum` ve heartbeat'te görünür).
+3. **Kalite katsayı sapması:** döküman 0.28/0.20/0.12/0.16/0.12/0.07/0.05 diyor, kod
    0.26/0.18/0.12/0.20/0.10/0.07/0.07 kullanıyor — **Pine gelmeden kod değiştirilmeyecek**.
-3. **Standart flama geometri şartı** (Faz 3'te eklendi): standart flama yalnız Simetrik Üçgen
+4. **Standart flama geometri şartı** (Faz 3'te eklendi): standart flama yalnız Simetrik Üçgen
    geometrisinde kurulur; eğik geometri eğik flama tablosundan (direk kalitesi +10, süre ×0.85,
    kalite +8) geçer. Pine'da birebir var mı — doğrulama madde 11.
-4. **Açık A5 maddeleri:** `filter_same_bar_double_pivot` stub, `local_break` TODO,
+5. **Açık A5 maddeleri:** `filter_same_bar_double_pivot` stub, `local_break` TODO,
    `ST_WEAK`/`ST_GEOMETRY` kod yolu yok.
-5. **Eşikleri ölçüm olmadan gevşetme yasağı** — A4'ün kök nedeni buydu (sentetik bayrak
+6. **Eşikleri ölçüm olmadan gevşetme yasağı** — A4'ün kök nedeni buydu (sentetik bayrak
    reddediliyor, gerçek veride sahte bayrak bulunuyordu).
-6. **Sandbox kısıtı:** bu ortamdan Yahoo Finance ve Telegram'a erişilemiyor (SSL). Gerçek
+7. **Sandbox kısıtı:** bu ortamdan Yahoo Finance ve Telegram'a erişilemiyor (SSL). Gerçek
    zamanlı tarama ve canlı bot testi kullanıcının kendi makinesinde yapılmalı; burada
    `--cache` modu ve commit'li `bot_data` kullanılır.
-7. **Bot kuralları:** `bot_data/*.json` + `*.pkl` git-tracked kalacak; runtime dosyaları
-   (heartbeat, telegram_kap, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0f318-formation-bot`
+8. **Bot kuralları:** `bot_data/*.json` + `*.pkl` git-tracked kalacak; runtime dosyaları
+   (heartbeat, telegram_kap, telegram_acil_kuyruk, telegram_digest_pending, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0f318-formation-bot`
    dalında; başka dala push yok. Merge YALNIZCA kullanıcı onayıyla yapılır.
