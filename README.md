@@ -154,6 +154,9 @@ sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 | `PINE_FARK_ANALIZI.md` | **Çalışma defteri:** Pine ile fark analizi, doğrulama listesi, fikir defteri |
 | `FORMASYON_MANTIGI.md` | Pine v0.4.6 Türkçe dökümanı (formasyon koşulları, kalite formülleri) |
 | `TESHIS_RAPORU.md` | Dış teşhis raporunun bağımsız doğrulaması (TRUE/FALSE/PARTIAL) |
+| `SORUN_RAPORU.md` | Ölçümlü teşhis: üretim→Telegram hunisi, bastırılan adaylar, S1-S11 + ek bulgular |
+| `YAPILACAKLAR.md` | A (düzeltme) / B (iyileştirme) / C (şablon) tam iş listesi, öncelik ve efor |
+| `KODLAMA_PLANI.md` | Batch'li uygulama planı; her batch için kapsam/dosya/test/kabul kriteri |
 
 ## Canlı tarama raporu nasıl okunur (Pine karşılaştırması)
 
@@ -165,15 +168,19 @@ sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 - Rapor sonunda **PINE KARSILASTIRMA REHBERI**: kaç bayrak/flama bulundu + tüm eşikler.
 - Not: Pine ekranında eski TAMAMLANDI/BASARISIZ formasyonlar da çizili kalabilir — rapor yalnız **canlı** olanları listeler.
 
-## Durum (2026-09-27, dal `arena/01a0e2d0-formation-bot`)
+## Durum (2026-09-30, dal `arena/01a0f318-formation-bot`)
 
 | Faz | İçerik | Commit |
 |---|---|---|
 | Faz 1 | Son mum/35-dk gecikme düzeltmesi, `auto_adjust=False`, ölü formasyon alarm kapısı, fetch hata loglama + `data_stale` heartbeat | `7485ab6` |
 | Faz 2 | 1D gecikme, BIST tatil/yarım gün takvimi + veri-yok modu, split/süreklilik kontrolü, Telegram global kapanı, tarama drift uyarısı, 1D derin deque (500 bar) | `c3000b6` |
 | Faz 3 | Flama motoru doğrulama: `test_pennant.py` (6/6), `specialized_variant` (standart/eğik ayrımı), standart flama geometri şartı, canlı rapora direk/ölçüm detayı + veri tazeliği | `da3840b`, `0fd1f46`, `28a1e7a` |
+| Faz 4 | Son tarama kalıcılığı + `LiveState.snapshot/hydrate`, Telegram webhook modu, `telegram_alert_flow` ile erteleme (18:45 digest) ve panel rapor katmanı | `b85f6bb` (PR #9), `0bca8e5` |
+| Faz 5 (batch-1) | Açılışta `son_tarama_yukle()` çağrısı geri kondu; tatil/yarım gün günlerinde ana döngünün 0 sn uykulu boş dönmesi düzeltildi | `e9a736f` |
+| Faz 5 (batch-2) | Ölü kod temizliği (kanal dalı, `[:10]`, `get_formations`), özet ile panel aynı kaynaktan, digest şeffaflığı (`12/21 gösteriliyor` + `… N aday daha`), `DEFERRED_ALERT_DIGEST_LIMIT`, benzersiz günlük formasyon sayacı | bu commit |
 
-Regresyon: `test_tarama_zamani.py` **90/90**, `test_pennant.py` **6/6**.
+Regresyon: `pytest` **200+ passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
+Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölçümlü teşhis: `SORUN_RAPORU.md`.
 
 ## Bilinmesi gerekenler (yeni oturum için)
 
@@ -192,5 +199,5 @@ Regresyon: `test_tarama_zamani.py` **90/90**, `test_pennant.py` **6/6**.
    zamanlı tarama ve canlı bot testi kullanıcının kendi makinesinde yapılmalı; burada
    `--cache` modu ve commit'li `bot_data` kullanılır.
 7. **Bot kuralları:** `bot_data/*.json` + `*.pkl` git-tracked kalacak; runtime dosyaları
-   (heartbeat, telegram_kap, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0e2d0-formation-bot`
-   dalında; başka dala push yok.
+   (heartbeat, telegram_kap, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0f318-formation-bot`
+   dalında; başka dala push yok. Merge YALNIZCA kullanıcı onayıyla yapılır.

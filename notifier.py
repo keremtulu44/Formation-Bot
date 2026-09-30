@@ -209,13 +209,21 @@ class TelegramNotifier:
         return False
 
     def should_send_to_public(self, data: Dict) -> bool:
+        """Public kanala gönderilsin mi? (DM'den bağımsız filtre)
+
+        Kural bugün iki koşula bakar: state `PUBLIC_STATES` içinde olacak ve
+        kalite `PUBLIC_MIN_QUALITY` üstünde olacak.
+
+        NOT: Eskiden burada `SIKISMA_GUCLENIYOR` için "daralma >= eşik ise
+        gönderilebilir" gibi görünen bir dal vardı ama iki yolda da `False`
+        dönüyordu (ölü kod). Kanal davranışı KİMSENİN onayı olmadan
+        değiştirilmesin diye dal kaldırıldı: sıkışma adaylarını kanalda görmek
+        istersen `PUBLIC_STATES` env'ine `SIKISMA_GUCLENIYOR` ekle (günlük
+        özetteki daralma eşiği `PUBLIC_SIKISMA_MIN_CONTRACTION` ayrıca geçerli).
+        """
         state = data.get('state', '')
         quality = data.get('confidence_score', 0)
         if state not in self.public_states:
-            if state == "SIKISMA_GUCLENIYOR":
-                contraction = data.get('contraction', 0) or 0
-                if contraction >= self.public_sikisma_min and quality >= self.public_min_quality:
-                    return False
             return False
         if quality < self.public_min_quality:
             return False
@@ -252,7 +260,10 @@ class TelegramNotifier:
         if not aktif_formasyonlar:
             baslik += "Şu an aktif yüksek kaliteli formasyon yok.\nTakipteyim 👀\n"
             return baslik
-        sirali = sorted(aktif_formasyonlar, key=lambda x: x.get('confidence_score', 0), reverse=True)[:10]
+        # NOT: Burada eskiden hesaplanıp hiç kullanılmayan bir `[:10]` sıralaması
+        # vardı (ölü kod). Özet gövdesi bilerek bölüm bazlı ve sınırlıdır:
+        # tamamlanan [:3], retest [:3], sıkışan [:5]. Eksik kalan adaylar için
+        # 18:45 digest'i ve /formasyonlar komutu kullanılır.
         tamamlanan = [f for f in aktif_formasyonlar if f.get('state') == 'FORMASYON_TAMAMLANDI']
         retest = [f for f in aktif_formasyonlar if f.get('state') == 'RETEST_BASARILI']
         sikisan = [f for f in aktif_formasyonlar if f.get('state') == 'SIKISMA_GUCLENIYOR' and (f.get('contraction', 0) or 0) >= self.public_sikisma_min]
@@ -577,6 +588,8 @@ class TelegramNotifier:
             )
 
         elif state == "FORMASYON_GECERSIZ":
+            # Bu şablon bilerek korunuyor: ölü formasyonlar alarm akışından
+            # kapı ile elenir (yalnız manuel/test gönderiminde buraya düşülür).
             reason = data.get('invalid_reason', 'Süre doldu veya bozuldu')
             msg = (
                 f"⚪ {stock} {tf_human} {pattern} geçersiz oldu\n"

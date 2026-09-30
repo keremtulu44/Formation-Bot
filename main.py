@@ -30,7 +30,8 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD,
                     SCAN_BATCH_PAUSE_MIN_SEC, SCAN_BATCH_PAUSE_MAX_SEC,
                     SCAN_RETRY_BACKOFF_MIN_SEC, SCAN_RETRY_BACKOFF_MAX_SEC,
-                    SUMMARY_HOURS, DEFERRED_ALERT_DIGEST_TIME, POST_CLOSE_ANALYSIS_TIME,
+                    SUMMARY_HOURS, DEFERRED_ALERT_DIGEST_TIME, DEFERRED_ALERT_DIGEST_LIMIT,
+                    POST_CLOSE_ANALYSIS_TIME,
                     PUBLIC_MIN_QUALITY, PUBLIC_STATES,
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL)
@@ -172,6 +173,19 @@ def _analiz_hatasi_kaydi(exc, istek_hisse: int, kaynak: str = "analiz") -> dict:
     return dict(last_run_stats)
 
 
+# Aynı hisse/TF slotu gün içinde her taramada yeniden bulunur; "bugün kaç formasyon
+# buldun?" sorusunun doğru cevabı BENZERSİZ slot sayısıdır. Eskiden sayaç her
+# taramada yeniden artıyordu (9 tarama x 21 slot = 189) ve metrik şişiyordu.
+# Set, daily_stats içinde tutulmaz (JSON'a serileşmez/heartbeat'e sığmaz).
+_daily_pattern_keys: set = set()
+
+
+def _note_pattern_found(stock: str, timeframe: str) -> None:
+    """Günlük BENZERSİZ formasyon sayacını güncelle (aynı hisse|TF bir kez sayılır)."""
+    _daily_pattern_keys.add(f"{str(stock).upper()}|{str(timeframe).lower()}")
+    daily_stats['patterns_found'] = len(_daily_pattern_keys)
+
+
 daily_stats = {
     'stocks_scanned': 0,
     'patterns_found': 0,
@@ -203,6 +217,7 @@ def reset_daily_if_needed():
         # Sıfırla
         daily_stats['stocks_scanned'] = 0
         daily_stats['patterns_found'] = 0
+        _daily_pattern_keys.clear()
         daily_stats['alerts_sent'] = 0
         daily_stats['errors'] = 0
         daily_stats['fetch_ok'] = 0
@@ -832,6 +847,7 @@ def _komut_kirilim(arguman: str) -> str:
 # hissede hiç formasyon yok, hangi TF boş, toplam kaç slot dolu -> görünmez.
 # /panel evrenin tamamını (ACTIVE_STOCKS x 4 TF) tek bakışta gösterir: doluluk
 # sayıları + kompozit puana göre en anlamlı 12 aday.
+WATCH_CONTEXT_HAVUZU = 12    # acil mesaja eklenecek adayların seçildiği havuz (gönderilen: en fazla 3)
 PANEL_TIMEFRAMES = ("1h", "2h", "4h", "1d")
 PANEL_TOP_KRITIK = 12        # analiz puanına göre en anlamlı 12 canlı aday
 PANEL_MESAJ_SINIRI = 3800    # Telegram 4096; kirp() kesmesin diye kendimiz sığdırırız
@@ -1847,7 +1863,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 
                 if active:
                     q = snap.effective_quality if snap.effective_quality is not None else active.raw_quality
-                    daily_stats['patterns_found'] += 1
+                    _note_pattern_found(stock, tf_name)
                     logger.info(f"🔍 {stock} {tf_name} - {active.pattern_type} kalite {q:.0f} state {state} - {snap.log}")
                     
                     # Alert eşiği kontrolü - timeframe'e göre (effective_quality üzerinden)
@@ -1933,8 +1949,11 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'lower_touches': lower_touches,
                             'age_bars': age_bars,
                             'mtf_destek': mtf_destek,
+                            # Acil mesaja bağlam olarak en fazla 3 aday eklenir; havuz
+                            # (12) bu listenin seçildiği yerdir, gönderilen sayı değil.
                             'watch_context': [
-                                item for item in _deferred_alert_buffer.items(simdiki_zaman, limit=12)
+                                item for item in _deferred_alert_buffer.items(
+                                    simdiki_zaman, limit=WATCH_CONTEXT_HAVUZU)
                                 if not (item.get('stock') == stock and item.get('timeframe') == tf_name)
                             ][:3],
                         }
@@ -2101,12 +2120,30 @@ def _effective_summary_hours() -> List[dt_time]:
     return sorted(set(morning_and_day + [digest_time]))
 
 
-def _format_deferred_alert_summary(records: List[dict]) -> str:
-    """Bekletilmiş düşük öncelikli adayları tek kısa kapanış bölümüne çevir."""
+def _format_deferred_alert_summary(records: List[dict], toplam: int = None) -> str:
+    """Bekletilmiş düşük öncelikli adayları tek kısa kapanış bölümüne çevir.
+
+    `toplam` verilirse (tampondaki gerçek aday sayısı) kesilenler görünür olur:
+    başlıkta "12/21 gösteriliyor" ve altta "… 9 aday daha (tam liste: /formasyonlar)".
+    Neden: eşik üstü adaylar sabit bir limitle kırpılıyordu ve kaç tanesinin
+    gösterilmediği hiçbir yerde yazmıyordu (kullanıcı: "18 üretiliyor, 3-5'inden
+    bahsediliyor").
+    """
     if not records:
         return ""
+    gosterilen = len(records)
+    try:
+        toplam_sayi = int(toplam) if toplam is not None else gosterilen
+    except (TypeError, ValueError):
+        toplam_sayi = gosterilen
+    toplam_sayi = max(toplam_sayi, gosterilen)
+    baslik = "📡 Gün içi izleme adayları"
+    if toplam_sayi > gosterilen:
+        baslik += f" ({gosterilen}/{toplam_sayi} gösteriliyor)"
+    else:
+        baslik += " (en yüksek puanlılar)"
     lines = []
-    for record in records[:12]:
+    for record in records:
         stock = str(record.get("stock") or "?")
         timeframe = str(record.get("timeframe") or "")
         pattern = str(record.get("pattern_name") or "formasyon")
@@ -2121,7 +2158,9 @@ def _format_deferred_alert_summary(records: List[dict]) -> str:
         except (TypeError, ValueError):
             contraction_text = ""
         lines.append(f"• {stock} {timeframe} {pattern} — {state}, {quality}{contraction_text}".strip())
-    return "📡 Gün içi izleme adayları (en yüksek puanlılar)\n" + "\n".join(lines)
+    if toplam_sayi > gosterilen:
+        lines.append(f"… {toplam_sayi - gosterilen} aday daha (tam liste: /formasyonlar)")
+    return baslik + "\n" + "\n".join(lines)
 
 
 def _parse_post_close_analysis_time() -> dt_time:
@@ -2140,9 +2179,12 @@ def _build_active_formations_for_summary(lifecycle_manager, min_quality: float =
         min_quality = PUBLIC_MIN_QUALITY
     aktif = []
     try:
-        # _live_state içindeki son formasyon kayıtları
-        formations = _live_state.get_formations() if hasattr(_live_state, 'get_formations') else []
-        # Eğer LiveState yoksa lifecycle_manager snapshots'tan topla
+        # Özet ile /panel AYNI kaynaktan beslenir: son başarılı taramanın canlı
+        # listesi. (Eski kod olmayan bir metodu -get_formations- hasattr ile
+        # yoklayıp her zaman lifecycle snapshots yoluna düşüyordu; sonuç: özet ile
+        # panel farklı listeler gösterebiliyordu.)
+        formations = _live_state.formations()
+        # LiveState boşsa (ilk tarama öncesi) lifecycle_manager snapshots'a düş.
         if not formations:
             for key, snap in getattr(lifecycle_manager, 'last_snapshots', {}).items():
                 if snap.active and snap.effective_quality and snap.effective_quality >= min_quality:
@@ -2168,7 +2210,10 @@ def _build_active_formations_for_summary(lifecycle_manager, min_quality: float =
                         'pattern_name': f.get('pattern_name'),
                         'state': f.get('state'),
                         'confidence_score': f.get('quality'),
-                        'contraction': None,
+                        # Daralma gerçek kayıttan gelir; eskiden sabit None
+                        # yazılıyordu ve özetin "⚡ SIKIŞANLAR" bölümü sessizce
+                        # boşalıyordu (karşılaştırma: contraction >= eşik).
+                        'contraction': f.get('contraction'),
                         'break_dir': f.get('break_dir', 0),
                     })
     except Exception as e:
@@ -2398,10 +2443,15 @@ def main_loop():
                     aktif = _build_active_formations_for_summary(lifecycle_manager)
                     ozet = notifier.format_daily_summary(aktif, daily_stats)
                     bekleyen = (
-                        _deferred_alert_buffer.items(now, limit=12)
+                        _deferred_alert_buffer.items(now, limit=DEFERRED_ALERT_DIGEST_LIMIT)
                         if sh == deferred_alert_digest_time else []
                     )
-                    watch_summary = _format_deferred_alert_summary(bekleyen)
+                    # Tampondaki gerçek aday sayısı: kesilenler özet metninde
+                    # "… N aday daha" satırıyla görünür ve sayaca yazılır.
+                    bekleyen_toplam = len(_deferred_alert_buffer) if bekleyen else 0
+                    if bekleyen and bekleyen_toplam > len(bekleyen):
+                        daily_stats['alerts_digest_overflow'] = bekleyen_toplam - len(bekleyen)
+                    watch_summary = _format_deferred_alert_summary(bekleyen, bekleyen_toplam)
                     dm_ozet = f"📋 Günlük Özet\n{ozet}"
                     if watch_summary:
                         dm_ozet += "\n\n" + watch_summary

@@ -189,6 +189,11 @@ RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip()
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()
 SUMMARY_HOURS = os.getenv("SUMMARY_HOURS", "09:55,18:45").strip()  # İstanbul saati, virgülle ayrılmış
 DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").strip()
+# 18:45 erteleme özetinde gösterilecek EN FAZLA aday. Kalan adaylar kaybolmaz:
+# başlıkta "12/21 gösteriliyor" ve altta "… 9 aday daha (tam liste: /formasyonlar)"
+# satırı ile sayılır. Env ile büyütülebilir (Telegram 4096 karakter sınırı):
+#   DEFERRED_ALERT_DIGEST_LIMIT=20
+DEFERRED_ALERT_DIGEST_LIMIT = _env_int("DEFERRED_ALERT_DIGEST_LIMIT", 12)
 POST_CLOSE_ANALYSIS_TIME = os.getenv("POST_CLOSE_ANALYSIS_TIME", "20:00").strip()  # gün sonu tam evren taraması
 PUBLIC_MIN_QUALITY = _env_int("PUBLIC_MIN_QUALITY", 80)
 PUBLIC_STATES = [s.strip() for s in os.getenv("PUBLIC_STATES", "FORMASYON_TAMAMLANDI,RETEST_BASARILI").split(",") if s.strip()]
