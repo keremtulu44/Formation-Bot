@@ -2264,6 +2264,10 @@ def main_loop():
     if supabase_store is not None:
         # Ortam değişkenleri yanlışsa teşhis loga düşsün; hata halinde bot durmaz.
         supabase_store.ping()
+    # Restart/uyku sonrası son başarılı tarama listesi geri yüklenir (Supabase ve
+    # yerel dosyanın EN YENİ kopyası). Bu çağrı olmadan /panel, /canli, /durum ve
+    # sabah özeti her yeniden başlatmada boş görünür; kalıcılık yazılır ama okunmaz.
+    son_tarama_yukle(supabase_store)
     # Analiz snapshot'ı komutların güncel kaynağı değildir. Her /panel ve
     # /tara isteği yeni veriyle yeniden hesaplanır. OHLCV önbelleği Supabase
     # erişilemezse yerel disk/Yahoo üzerinden kurulabilir.
@@ -2522,6 +2526,13 @@ def main_loop():
                         second=0, microsecond=0,
                     )
                     sleep_time = min(sleep_time, max(1.0, (rapor_anina - now).total_seconds()))
+                # TABAN UYKU (regresyon koruması): tatil/yarım gün gibi "pencere
+                # kapalı ama is_bist_open True" durumlarında sleep_time 0'a düşüp
+                # ana döngü boş dönüyordu (ölçüm: ~21.500 log satırı/sn; tatil
+                # günü ~600 milyon satır). time_until_next_open artık tatili
+                # atlıyor; bu taban ikinci güvenlik ağı, hiçbir koşulda 0 sn uyku
+                # ile dönülmez (60 sn'de bir uyanıp durumu yeniden değerlendirir).
+                sleep_time = max(sleep_time, 60.0)
                 logger.info(f"BIST KAPALI - {now.strftime('%Y-%m-%d %H:%M:%S')} - {sleep_time/60:.1f}dk uyku (açılışa {wait_open/3600:.1f}sa)")
                 if _bekle_veya_tarama(sleep_time):
                     logger.info("Seans dışı analiz isteği geldi; ana döngü uyandırıldı")

@@ -5,7 +5,7 @@
 import pandas as pd
 import numpy as np
 from collections import deque
-from datetime import datetime, timedelta, time as dt_time
+from datetime import date, datetime, timedelta, time as dt_time
 import pytz
 import time
 import random
@@ -128,32 +128,52 @@ def tarama_penceresi_acik_mi(now: Optional[datetime] = None) -> bool:
                     + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN + 5))
     return BIST_OPEN <= current_time <= pencere_sonu.time()
 
+def sonraki_islem_gunu(baslangic) -> date:
+    """Hafta sonu ve resmî tatilleri atlayarak bir sonraki işlem gününü bulur.
+
+    Neden ayrı fonksiyon: ana döngü "BIST kapalı" dalında uyku süresini buradan
+    alıyor. Tatil günü `is_bist_open` (tatili bilmez) True döndüğü için uyku 0'a
+    düşüyor ve döngü boş dönüyordu (ölçüm: ~21.500 log satırı/sn; bir tatil günü
+    ~600 milyon satır). Tatil atlanarak uyku en az bir sonraki seansa kalır.
+    """
+    aday = baslangic.date() if isinstance(baslangic, datetime) else baslangic
+    for _ in range(60):  # takvim bozuksa bile sonsuz döngü olmasın
+        aday = aday + timedelta(days=1)
+        if aday.weekday() < 5 and bist_tatil_adi(aday) is None:
+            return aday
+    return aday
+
+
 def time_until_next_open(now: Optional[datetime] = None) -> float:
-    """Bir sonraki açılışa kadar kaç saniye? Uyku için"""
+    """Bir sonraki açılışa kadar kaç saniye? Uyku için.
+
+    Sözleşme: tarama penceresi KAPALIYSA dönen değer HER ZAMAN > 0'dır ve gerçek
+    sonraki seansa işaret eder; pencere açıkken 0. Ana döngünün kapalı dalı bu
+    değerle uyuduğu için 0 dönmesi boş döngü (CPU + log fırtınası) demektir.
+    Tatil/hafta sonu atlanır; yarım günde pencere kapandıktan sonra da bir sonraki
+    işlem gününe atlanır.
+    """
     if now is None:
         now = datetime.now(ISTANBUL_TZ)
     if now.tzinfo is None:
         now = ISTANBUL_TZ.localize(now)
     else:
         now = now.astimezone(ISTANBUL_TZ)
-    
-    # Eğer şu an açıksa 0 dön
-    if is_bist_open(now):
+
+    # Pencere açıkken beklenecek bir şey yok (ana döngü zaten tarama dalına girer).
+    if tarama_penceresi_acik_mi(now):
         return 0.0
-    
-    # Sonraki iş gününü bul
-    next_day = now
-    while True:
-        next_day = next_day + timedelta(days=1)
-        if next_day.weekday() < 5:  # Hafta içi
-            break
-    
-    # O günün 09:50'si
-    next_open = next_day.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute, second=0, microsecond=0)
-    # Eğer bugün hafta içi ve saat 09:50'den önce ise, bugün açılacak
-    if now.weekday() < 5 and now.time() < BIST_OPEN:
-        next_open = now.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute, second=0, microsecond=0)
-    
+
+    # Bugün işlem günü ve seans henüz açılmadıysa bugünün açılışı.
+    if now.weekday() < 5 and bist_tatil_adi(now) is None and now.time() < BIST_OPEN:
+        next_open = now.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute,
+                                second=0, microsecond=0)
+    else:
+        gun = sonraki_islem_gunu(now)
+        next_open = ISTANBUL_TZ.localize(
+            datetime.combine(gun, BIST_OPEN)
+        )
+
     delta = (next_open - now).total_seconds()
     return max(delta, 0.0)
 

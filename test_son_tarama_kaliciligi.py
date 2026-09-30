@@ -397,3 +397,36 @@ def test_basarisiz_tarama_pending_boslugunu_yayimlamaz_onceki_sonucu_korur():
 
     assert durum.formations() == onceki
     assert durum.status()["son_tarama_durumu"] == "basarisiz"
+
+
+def test_acilista_son_tarama_yukle_cagriliyor():
+    """A1 regresyonu: hydratE eden çağrı main_loop'ta GERÇEKTEN yapılmalı.
+
+    Neden bu test var: fonksiyon, LiveState.hydrate ve testleri vardı ama çağrı
+    main_loop'tan düşmüştü; kalıcılık yazılıyor, okunmuyordu. Böyle bir durumda
+    yalnız birim testleri yeşil kalır — bu yüzden çağrının kendisi denetlenir.
+    """
+    import ast
+    from pathlib import Path
+
+    kaynak = Path(main_mod.__file__).read_text(encoding="utf-8")
+    agac = ast.parse(kaynak)
+    main_loop = next(
+        (d for d in ast.walk(agac)
+         if isinstance(d, ast.FunctionDef) and d.name == "main_loop"), None,
+    )
+    assert main_loop is not None, "main_loop bulunamadı"
+
+    cagrilar = [
+        d for d in ast.walk(main_loop)
+        if isinstance(d, ast.Call)
+        and ((isinstance(d.func, ast.Name) and d.func.id == "son_tarama_yukle")
+             or (isinstance(d.func, ast.Attribute) and d.func.attr == "son_tarama_yukle"))
+    ]
+    assert cagrilar, (
+        "main_loop içinde son_tarama_yukle(...) çağrısı yok: restart/uyku sonrası "
+        "/panel, /canli ve sabah özeti boş kalır (kalıcılık yazılır ama okunmaz)."
+    )
+    # Çağrı, tarama başlamadan önce (Store kurulumu bölgesinde) yapılmalı.
+    satirlar = [n.lineno for n in ast.walk(main_loop) if isinstance(n, ast.Call)]
+    assert cagrilar[0].lineno <= max(satirlar), "çağrı main_loop gövdesinde olmalı"

@@ -373,6 +373,45 @@ kontrol("veri_sorunlari heartbeat alanı içeriyor", 'veri_sorunlari' in open('m
 
 
 print()
+print("=== 11. N+1: TATİL / YARIM GÜN UYKU DÖNGÜSÜ ===")
+# Kök neden: is_bist_open tatili bilmiyordu -> kapalı dalda time_until_next_open 0
+# dönüyordu -> ana döngü 0 sn uykuyla boş dönüyordu (ölçüm: ~21.500 log satırı/sn).
+_acik_29 = t(2026, 10, 29, 12, 0)
+_hedef_30 = t(2026, 10, 30, 9, 50)
+kontrol("tatil günü bekleme > 0 (0 sn uyku fırtınası yok)",
+        data_mod.time_until_next_open(_acik_29) > 0,
+        f"{data_mod.time_until_next_open(_acik_29)/3600:.1f} sa")
+kontrol("29 Eki tatil -> sonraki açılış 30 Eki 09:50",
+        abs(data_mod.time_until_next_open(_acik_29)
+            - (_hedef_30 - _acik_29).total_seconds()) < 1)
+kontrol("29 Ekim (tatil) is_bist_open hâlâ True (kapsam notu: is_bist_open takvim bilmez)",
+        data_mod.is_bist_open(_acik_29))
+kontrol("30 Ekim 09:00 (tatil ertesi, seans öncesi) -> bugün 09:50",
+        abs(data_mod.time_until_next_open(t(2026, 10, 30, 9, 0))
+            - (t(2026, 10, 30, 9, 50) - t(2026, 10, 30, 9, 0)).total_seconds()) < 1)
+# 28 Eki yarım gün (kapanış 13:00), 29 Eki tatil -> ikisi de atlanır.
+kontrol("yarım gün 13:30 (arefe, seans kapandı) -> 30 Eki 09:50",
+        abs(data_mod.time_until_next_open(t(2026, 10, 28, 13, 30))
+            - (t(2026, 10, 30, 9, 50) - t(2026, 10, 28, 13, 30)).total_seconds()) < 1)
+kontrol("cuma 20:00 -> pazartesi 09:50 (hafta sonu atlanır)",
+        abs(data_mod.time_until_next_open(t(2026, 10, 2, 20, 0))
+            - (t(2026, 10, 5, 9, 50) - t(2026, 10, 2, 20, 0)).total_seconds()) < 1)
+kontrol("cumartesi 12:00 -> pazartesi 09:50",
+        abs(data_mod.time_until_next_open(t(2026, 10, 3, 12, 0))
+            - (t(2026, 10, 5, 9, 50) - t(2026, 10, 3, 12, 0)).total_seconds()) < 1)
+kontrol("seans içinde (12:35) bekleme 0", data_mod.time_until_next_open(t(2026, 9, 30, 12, 35)) == 0)
+# Sözleşme: pencere kapalıysa bekleme HER ZAMAN > 0.
+_ornekler = [t(2026, 9, 30, 8, 0), t(2026, 9, 30, 20, 0), t(2026, 10, 29, 10, 0),
+             t(2026, 10, 28, 13, 30), t(2026, 10, 3, 12, 0), t(2026, 9, 30, 12, 35),
+             t(2026, 10, 30, 9, 50)]
+kontrol("pencere kapalı <=> bekleme > 0 (tüm örnekler)",
+        all((data_mod.tarama_penceresi_acik_mi(an)) == (data_mod.time_until_next_open(an) == 0)
+            for an in _ornekler))
+_main_kaynak = open('main.py', encoding='utf-8').read()
+kontrol("ana döngüde taban uyku var (0 sn uyku imkânsız)", "sleep_time = max(sleep_time, 60.0)" in _main_kaynak)
+
+
+print()
 print("=" * 60)
 if kalan:
     print(f"SONUÇ: {gecen} geçti, {len(kalan)} KALDI:")
