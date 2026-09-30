@@ -10,6 +10,7 @@ import json
 import signal
 import logging
 import random
+import socket
 import threading
 from datetime import datetime, timedelta, time as dt_time
 from typing import List, Dict
@@ -32,6 +33,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     SCAN_RETRY_BACKOFF_MIN_SEC, SCAN_RETRY_BACKOFF_MAX_SEC,
                     SUMMARY_HOURS, DEFERRED_ALERT_DIGEST_TIME, DEFERRED_ALERT_DIGEST_LIMIT,
                     POST_CLOSE_ANALYSIS_TIME, ACIL_KUYRUK_BOSALTMA_ARALIK_SN,
+                    HEARTBEAT_MIN_ARALIK_SN, HEARTBEAT_UZAK_ARALIK_SN,
                     PUBLIC_MIN_QUALITY, PUBLIC_STATES,
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL)
@@ -45,7 +47,7 @@ from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
 from notifier import TelegramNotifier
 from supabase_store import SupabaseStore
-from health_server import start_render_health_server, WEBHOOK_YOL_ONEK
+from health_server import start_render_health_server, WEBHOOK_YOL, WEBHOOK_YOL_ONEK
 from live_state import LiveState
 from telegram_commands import TelegramCommandListener, kirp
 
@@ -347,10 +349,78 @@ def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=
     return fetched, failures, retry_count, recovered_count
 
 
+# === ÇOKLU ÖRNEK KORUMASI (Batch 6 / B10) ===
+# Aynı token + aynı Supabase anahtarıyla iki kopya çalışırsa: çift mesaj + cache
+# yarışı. Yoklama modunda Telegram 409 verir; webhook modunda hiçbir sinyal yoktu.
+# Sert kilit kurulmaz (kısa ağ kesintisinde botu durdurmak daha kötü olurdu):
+# durum loglanır, heartbeat ve /durum'a taşınır.
+INSTANCE_ID = (os.environ.get("BOT_INSTANCE_ID") or "").strip() or f"{socket.gethostname()}:{os.getpid()}"
+ORNEK_KONTROL_ARALIK_SN = 300
+_cift_ornek_durumu = {
+    "instance_id": INSTANCE_ID,
+    "son_kontrol": None,
+    "canli_digerleri": [],
+    "uyari": False,
+}
+
+
+def _tekil_ornek_kontrolu(store=None, force: bool = False) -> dict:
+    """Supabase'de başka canlı bot örneği var mı? (uyarı + heartbeat alanı)"""
+    global _cift_ornek_durumu
+    store = _supabase_store_ref if store is None else store
+    if store is None:
+        return _cift_ornek_durumu
+    simdi = datetime.now(ISTANBUL_TZ)
+    son = _cift_ornek_durumu.get("son_kontrol")
+    if not force and son is not None and (simdi - son).total_seconds() < ORNEK_KONTROL_ARALIK_SN:
+        return _cift_ornek_durumu
+    try:
+        sonuc = store.ornek_bildir(INSTANCE_ID, simdi.isoformat())
+    except Exception as exc:
+        logger.debug(f"Çoklu örnek kontrolü yapılamadı: {exc}")
+        return _cift_ornek_durumu
+    if not isinstance(sonuc, dict):
+        return _cift_ornek_durumu
+    digerleri = sonuc.get("canli_digerleri") or []
+    _cift_ornek_durumu = {
+        "instance_id": INSTANCE_ID,
+        "son_kontrol": simdi,
+        "canli_digerleri": digerleri,
+        "uyari": bool(digerleri),
+    }
+    if digerleri:
+        logger.error(
+            "⚠️ AYNI ANDA ÇALIŞAN BAŞKA BOT ÖRNEĞİ GÖRÜNÜYOR: %s — çift mesaj ve cache "
+            "yarışı riski. Fazladan kopyayı kapatın (Render'da tek instance olmalı).",
+            ", ".join(str(d.get("id")) for d in digerleri),
+        )
+    return _cift_ornek_durumu
+
+
 # === HEARTBEAT ===
-def write_heartbeat(data_dir: str = None, notifier=None):
+# Yazma amplifikasyonu koruması (Batch 6 / B5): heartbeat her hisse sonrası
+# çağrılıyordu (48 hisse × tarama = 48 Supabase UPSERT + 48 dosya yazımı).
+# Yeni kural:
+#   - yerel dosya: HEARTBEAT_MIN_ARALIK_SN'den sık yazılmaz (canlılık göstergesi
+#     olduğu için tamamen atlanmaz; force=True ile hemen yazılır),
+#   - Supabase: içerik değişmediyse veya HEARTBEAT_UZAK_ARALIK_SN dolmadıysa yazılmaz.
+_son_heartbeat_zamani = 0.0
+_son_heartbeat_icerik = None
+_son_heartbeat_uzak_zamani = 0.0
+
+
+def _heartbeat_icerik_ozeti(payload: dict) -> str:
+    """`last_scan` dışındaki alanların özeti: değişiklik tespiti için."""
+    return json.dumps({k: v for k, v in payload.items() if k != "last_scan"},
+                      ensure_ascii=False, sort_keys=True, default=str)
+
+
+def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
     """Botun yaşadığını dışarıdan anlamak için heartbeat dosyası.
     Dışarıdan izleme: `jq .last_scan bot_data/heartbeat.json` 2 saatten eskiyse bot takılmış/kapanmıştır."""
+    global _son_heartbeat_zamani, _son_heartbeat_icerik, _son_heartbeat_uzak_zamani
+    if not force and time.time() - _son_heartbeat_zamani < HEARTBEAT_MIN_ARALIK_SN:
+        return
     if data_dir is None:
         try:
             from config import DATA_DIR
@@ -398,6 +468,9 @@ def write_heartbeat(data_dir: str = None, notifier=None):
                             if notifier is not None
                             else (getattr(_notifier_ref, "kuyruk_durumu", lambda: None)()
                                   if _notifier_ref else None)),
+            # B5 telemetrisi: kaç uzak yazım yapıldı / kaçı gereksizdi
+            "uzak_yazma": (_deque_manager_ref.uzak_yazma_durumu()
+                           if _deque_manager_ref else None),
             # --- ADAY HUNİSİ (B1) ---
             "alerts_attempted": daily_stats['alerts_attempted'],
             "alerts_failed": daily_stats['alerts_failed'],
@@ -411,14 +484,29 @@ def write_heartbeat(data_dir: str = None, notifier=None):
                 "engel_kap": daily_stats['alerts_engel_kap'],
                 "kuyruga_alindi": daily_stats['alerts_kuyruk'],
             },
+            "cift_ornek": {
+                "uyari": _cift_ornek_durumu.get("uyari", False),
+                "instance_id": INSTANCE_ID,
+                "canli_digerleri": _cift_ornek_durumu.get("canli_digerleri", []),
+                "son_kontrol": (_cift_ornek_durumu["son_kontrol"].isoformat()
+                                if _cift_ornek_durumu.get("son_kontrol") else None),
+            },
             "veri_sorunlari": ({k: [x['tip'] for x in v]
                                for k, v in _deque_manager_ref.sureklilik_sorunlari.items()}
                               if _deque_manager_ref else {}),
         }
-        if _supabase_store_ref is not None:
-            _supabase_store_ref.upsert("state:heartbeat", payload)
+        icerik = _heartbeat_icerik_ozeti(payload)
+        simdi = time.time()
+        if _supabase_store_ref is not None and (
+                force
+                or icerik != _son_heartbeat_icerik
+                or simdi - _son_heartbeat_uzak_zamani >= HEARTBEAT_UZAK_ARALIK_SN):
+            if _supabase_store_ref.upsert("state:heartbeat", payload):
+                _son_heartbeat_uzak_zamani = simdi
+        _son_heartbeat_icerik = icerik
         with open(heartbeat_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
+        _son_heartbeat_zamani = simdi
     except Exception as e:
         logger.warning(f"Heartbeat yazılamadı: {e}")
 
@@ -593,6 +681,9 @@ def _komut_durum(_arguman: str) -> str:
         satirlar.append(gosterim)
     # Notifier pasifse (token/chat_id yok) komut bunu açıkça söyler: aksi halde
     # kullanıcı "hiç mesaj gelmiyor ama bot çalışıyor" durumunu ayırt edemez.
+    if _cift_ornek_durumu.get("uyari"):
+        kimlikler = ", ".join(str(d.get("id")) for d in _cift_ornek_durumu.get("canli_digerleri") or [])
+        satirlar.append(f"🚨 Çoklu örnek uyarısı: başka canlı kopya görünüyor ({kimlikler})")
     if getattr(_notifier_ref, "enabled", None) is False:
         satirlar.append("⚠️ Telegram PASİF: token/chat_id tanımlı değil, hiçbir bildirim gönderilmiyor.")
     if st.get("son_tarama_hatasi"):
@@ -1511,10 +1602,15 @@ def _webhook_adres_gizle(adres: str, secret: str = "") -> str:
 def _telegram_webhook_url_olustur(secret=None, webhook_url=None, render_url=None) -> str:
     """Telegram webhook adresini üretir; webhook modu kapalıysa boş döner.
 
+    A7 (Batch 6): adres artık SIR TAŞIMAZ — `…/webhook`. Doğrulama, `setWebhook`
+    ile bildirilen `secret_token` başlığıyla yapılır; böylece sır URL ile birlikte
+    Telegram sunucularına, proxy ve erişim loglarına düşmez.
+
     Öncelik:
-      1. `TELEGRAM_WEBHOOK_URL` — tam adres. `/webhook/<secret>` içeriyorsa aynen
-         kullanılır, `/webhook` ile bitiyorsa sır eklenir, aksi halde taban adres sayılır.
-      2. `RENDER_EXTERNAL_URL` + `/webhook/<secret>`
+      1. `TELEGRAM_WEBHOOK_URL` — tam adres. Sonunda `/webhook` varsa aynen
+         kullanılır; eski biçim (`/webhook/<secret>`) verilmişse geriye dönük
+         uyumluluk için korunur (uyarı loglanır); diğer durumda taban adres sayılır.
+      2. `RENDER_EXTERNAL_URL` + `/webhook`
          (Render bunu otomatik verir: https://<servis>.onrender.com)
 
     Secret boşsa mod kapalıdır (boş döner) ve bot yoklamaya devam eder. Telegram
@@ -1528,14 +1624,20 @@ def _telegram_webhook_url_olustur(secret=None, webhook_url=None, render_url=None
 
     if webhook_url:
         adres = webhook_url.rstrip("/")
+        if adres.endswith(WEBHOOK_YOL):
+            return adres                       # sırsız tam adres (önerilen)
         if WEBHOOK_YOL_ONEK in adres:
-            return adres                       # tam adres: sır zaten içinde
+            # Eski kayıt: sır yolda. Çalışır ama sır loglara düşer; uyarı ver.
+            logger.warning(
+                "TELEGRAM_WEBHOOK_URL sır içeriyor (…/webhook/<secret>); önerilen biçim "
+                f"…{WEBHOOK_YOL} + secret_token başlığı. Eski biçim kabul edildi."
+            )
+            return adres
         if adres.endswith("/webhook"):
-            adres = f"{adres}/{secret}"
-        else:
-            adres = f"{adres}{WEBHOOK_YOL_ONEK}{secret}"
+            return adres
+        adres = f"{adres}{WEBHOOK_YOL}"
     elif render_url:
-        adres = f"{render_url.rstrip('/')}{WEBHOOK_YOL_ONEK}{secret}"
+        adres = f"{render_url.rstrip('/')}{WEBHOOK_YOL}"
     else:
         logger.warning(
             "TELEGRAM_WEBHOOK_SECRET tanimli ama taban adres yok "
@@ -1579,13 +1681,13 @@ def _telegram_yanit_oku(yanit):
 
 
 def _telegram_set_webhook(url=None, secret=None, token=None) -> bool:
-    """setWebhook: komutlar Telegram → `/webhook/<secret>` ile gelsin.
+    """setWebhook: komutlar Telegram → `/webhook` (sırsız yol) ile gelsin.
 
     - `drop_pending_updates=True`: bot kapalıyken biriken BAYAT komutlar (örn. dünkü
       /tara) webhook kurulur kurulmaz çalışmasın. Yoklama modundaki "backlog atla"
       kuralının (telegram_commands.BACKLOG_SINIR_SN) webhook karşılığıdır.
     - `secret_token`: Telegram her istekte `X-Telegram-Bot-Api-Secret-Token`
-      başlığını gönderir; health_server bu başlığı da doğrular (yol sırrına ek katman).
+      başlığını gönderir; health_server sırsız yolda bu başlığı ZORUNLU tutar (A7).
     """
     secret = _telegram_webhook_secret_ayikla(secret)
     token = _telegram_token_al(token)
@@ -2207,7 +2309,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             f"VERİ SAĞLIĞI: taze veri {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse, "
             f"en eski mum {daily_stats['max_bar_age_min']} dk"
         )
-    write_heartbeat(notifier=notifier)
+    # Tarama bitti: heartbeat kesin yazılsın (force), böylece per-hisse
+    # throttle'a takılan son durum dışarıdan anında görünür.
+    write_heartbeat(notifier=notifier, force=True)
     return dict(last_run_stats)
 
 
@@ -2561,6 +2665,8 @@ def main_loop():
     # yerel dosyanın EN YENİ kopyası). Bu çağrı olmadan /panel, /canli, /durum ve
     # sabah özeti her yeniden başlatmada boş görünür; kalıcılık yazılır ama okunmaz.
     son_tarama_yukle(supabase_store)
+    # Çoklu kopya koruması: aynı anahtarlarla başka bir canlı örnek var mı?
+    _tekil_ornek_kontrolu(supabase_store, force=True)
     # Bekleyen gün içi aday tamponu da kalıcıdır (Batch 5): 18:45'ten önce
     # restart olursa adaylar kaybolmaz. Telafi gönderimi notifier kurulduktan
     # hemen sonra yapılır (tampon günü eskiyse).
@@ -2701,6 +2807,14 @@ def main_loop():
                         logger.info(f"Engellenen acil kuyruğundan {gonderilen_kuyruk} olay gönderildi")
             except Exception as e:
                 logger.debug(f"Acil kuyruk boşaltma hatası: {e}")
+
+            # --- ÇOKLU ÖRNEK KONTROLÜ (Batch 6 / B10) ---
+            # 5 dakikada bir: aynı Supabase anahtarlarını kullanan başka bir canlı
+            # kopya var mı? (webhook modunda 409 sinyali yok; bu onun yerini tutar)
+            try:
+                _tekil_ornek_kontrolu(supabase_store)
+            except Exception as e:
+                logger.debug(f"Çoklu örnek kontrol hatası: {e}")
 
             # --- GÜNLÜK ÖZET + ERTELENMİŞ ADAYLAR (akşam 18:45) ---
             try:
@@ -2884,7 +2998,7 @@ def main_loop():
             logger.error(f"Ana döngü hatası: {e} - 30sn sonra yeniden denenecek", exc_info=True)
             if _live_state.status().get('tarama_suruyor'):
                 _analiz_hatasi_kaydi(e, len(ACTIVE_STOCKS), "ana döngü")
-            write_heartbeat()
+            write_heartbeat(force=True)
             time.sleep(30)
             continue
     
@@ -2904,7 +3018,7 @@ def main_loop():
         son_tarama_kaydet()
         # Bekleyen gün içi adaylar kapanışta da kaybolmasın (Batch 5 / B3).
         digest_tamponu_kaydet()
-        write_heartbeat()
+        write_heartbeat(force=True)
     except Exception as e:
         logger.error(f"Kapanış kayıt hatası: {e}")
     logger.info("Bot durdu")

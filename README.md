@@ -55,7 +55,8 @@ monitör yalnızca liveness JSON'u görür, token/anahtar veya portföy verisi d
 mesajı gönderir (gönderim tarafını telefondan doğrulamak için). Anahtar
 tanımlı değilse bu yol 404 döner ve Telegram'a hiçbir istek gitmez.
 
-`TELEGRAM_WEBHOOK_SECRET` tanımlıysa aynı sunucu `POST /webhook/<secret>`
+`TELEGRAM_WEBHOOK_SECRET` tanımlıysa aynı sunucu `POST /webhook` (sırsız yol;
+doğrulama `X-Telegram-Bot-Api-Secret-Token` başlığıyla)
 ucunu açar ve Telegram komutları webhook ile gelir (adres `RENDER_EXTERNAL_URL`
 üzerinden otomatik üretilir); tanımlı değilse uç 404 döner ve bot `getUpdates`
 yoklamasını kullanır. Detay: `RENDER_DEPLOY.md` §4.6.
@@ -139,7 +140,7 @@ sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 | `supabase_store.py` | Supabase REST API adaptörü; servis anahtarı yalnızca environment'tan okunur |
 | `telegram_commands.py` | İki yönlü Telegram: `getUpdates` uzun yoklaması, yetki kontrolü, komut dağıtımı, 401/409 yönetimi (webhook modunda da aynı komut dağıtımı kullanılır) |
 | `live_state.py` | Tarama thread'i ile komut thread'i arasında thread-safe canlı formasyon/durum paylaşımı |
-| `health_server.py` | Render `PORT` varsa `/health` liveness, korumalı `/test` ve `POST /webhook/<secret>` uçları; uptime monitörleri ve Telegram komutları için |
+| `health_server.py` | Render `PORT` varsa `/health` liveness, korumalı `/test` (X-Test-Key) ve `POST /webhook` (secret_token başlığı) uçları + IP başına rate limit |
 | `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
 | `deploy_check.py` | Kurulum doktoru: repo dosyaları + env + Supabase tablosu + Telegram + Render `/health` ve `/test` uçlarını tek komutla doğrular (sır yazdırmaz) |
 | `.github/workflows/deploy.yml` | Render Deploy Hook ile `main` push'unda otomatik deploy (hook secret yoksa uyarı verip atlar) |
@@ -180,9 +181,14 @@ sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 | Faz 5 (batch-2) | Ölü kod temizliği (kanal dalı, `[:10]`, `get_formations`), özet ile panel aynı kaynaktan, digest şeffaflığı (`12/21 gösteriliyor` + `… N aday daha`), `DEFERRED_ALERT_DIGEST_LIMIT`, benzersiz günlük formasyon sayacı | `6dca717` |
 | Faz 5 (batch-3) | Aday hunisi sayaçları (`/durum` "🔎 Aday hunisi"), engel sayaçları (cooldown/günlük kap/saatlik kap/hata), `/panel` eşik altı satırı | `401a788` |
 | Faz 5 (batch-4) | Sunucu saat dilimi (İstanbul) sayaç/log uyumu + `TZ` değişkeni, uzun mesaj kırpma + sınırlı retry, gönderim sağlığı alanları (heartbeat + `/durum` "Telegram PASİF" uyarısı) | `7626e7d` |
-| Faz 5 (batch-5) | 18:45 digest tamponu kalıcı (`state:digest_pending` + açılışta geri yükleme + kaçırılan özet telafisi), engellenen acil olay kuyruğu (`state:telegram_acil_kuyruk`, engel kalkınca gönderim, kuyruk derinliği heartbeat'te) | bu commit |
+| Faz 5 (batch-5) | 18:45 digest tamponu kalıcı (`state:digest_pending` + açılışta geri yükleme + kaçırılan özet telafisi), engellenen acil olay kuyruğu (`state:telegram_acil_kuyruk`, engel kalkınca gönderim, kuyruk derinliği heartbeat'te) | `0ba343e` |
+| Faz 5 (batch-6) | Yazma amplikasyonu (içerik parmak izi + heartbeat throttle → tarama başına 144 istek/3,3 MB yerine ~50 istek/2 MB, değişmeyen turda ~0), sır URL'den çıktı (webhook `/webhook` + secret_token başlığı, `/test` X-Test-Key, IP rate limit), `.pkl` Git'ten çıkarıldı (JSON birincil), çoklu örnek tespiti (`state:instances` + heartbeat/`/durum` uyarısı) | bu commit |
 
-Regresyon: `pytest` **250 passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
+Regresyon: `pytest` **267 passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
+
+Ölçüm (B5, 48 hisse × 360 bar 1H + 250 bar 1D, tek tarama turu):
+`96 istek / 3,26 MB` → seans içi `48 istek / 1,98 MB`, veri değişmeyen turda `0 istek / 0 MB`;
+heartbeat `48 istek / 42 KB` → `2 istek / 1,8 KB`. Telemetri: heartbeat `uzak_yazma` alanı.
 Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölçümlü teşhis: `SORUN_RAPORU.md`.
 
 ## Bilinmesi gerekenler (yeni oturum için)
@@ -207,6 +213,6 @@ Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölç
 7. **Sandbox kısıtı:** bu ortamdan Yahoo Finance ve Telegram'a erişilemiyor (SSL). Gerçek
    zamanlı tarama ve canlı bot testi kullanıcının kendi makinesinde yapılmalı; burada
    `--cache` modu ve commit'li `bot_data` kullanılır.
-8. **Bot kuralları:** `bot_data/*.json` + `*.pkl` git-tracked kalacak; runtime dosyaları
+8. **Bot kuralları:** `bot_data/*.json` git-tracked; **`*.pkl` artık dışarıda** (A8: public repoda pickle yürütme yüzeyi olmasın; okuma JSON birincil, eski `.pkl` yalnız yedek). Runtime dosyaları
    (heartbeat, telegram_kap, telegram_acil_kuyruk, telegram_digest_pending, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0f318-formation-bot`
    dalında; başka dala push yok. Merge YALNIZCA kullanıcı onayıyla yapılır.

@@ -36,8 +36,13 @@ bot_data/*_gunluk.json
 .vscode/
 .idea/
 
+# A8 (Batch 6): .pkl dosyaları Git'ten ÇIKARILDI. Gerekçe: public repoda pickle
+# (kod yürütme yüzeyi) + binary yükü. JSON yolu zaten mevcut ve artık birincil
+# okuma biçimi; eski .pkl dosyaları varsa yalnız yedek olarak okunur.
+bot_data/*.pkl
+
 # Not: bot_data/ BİLEREK git'te tutuluyor (senin isteğin) - 28 hisse * 360 bar gerçek veri
-# Hem .json (human-readable) hem .pkl (hızlı yükleme) pushlanıyor.
+# Yalnız .json (human-readable) pushlanıyor.
 # DİKKAT (canlı sunucu): bot her taramada bu dosyaları yeniden yazar. Sunucuda
 # bot_data'yı repo dışına almak (örn. DATA_DIR=/var/lib/bist-bot/bot_data) veya
 # deployment'ı "git fetch + dosyaları ezmeden" yapmak gerekir, yoksa git pull çakışır.

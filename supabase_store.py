@@ -300,3 +300,47 @@ class SupabaseStore:
 
     def upsert(self, store_key: str, payload: Any) -> bool:
         return self.upsert_many({store_key: payload})
+
+    # --- çoklu örnek tespiti (Batch 6 / B10) -------------------------------
+    ORNEK_ANAHTARI = "state:instances"
+    ORNEK_TTL_SN = 180          # bu süre içinde görülen başka kayıt "canlı" sayılır
+    ORNEK_TEMIZLIK_SN = 86400   # 1 günden eski kayıtlar temizlenir
+
+    def ornek_bildir(self, instance_id: str, now_iso: str = "") -> Optional[dict]:
+        """Bu örneğin yaşadığını yazar ve BAŞKA canlı örnek var mı diye bakar.
+
+        Neden: aynı token + aynı Supabase anahtarıyla iki kopya çalışırsa çift mesaj
+        gider ve cache yarışır. Yoklama modunda Telegram 409 veriyordu; webhook
+        modunda böyle bir koruma yoktu. Burası sert bir kilit kurmaz (kısa ağ
+        kesintisinde botu durdurmak daha kötü olurdu) ama durumu görünür kılar.
+        """
+        from datetime import datetime, timezone
+        simdi = datetime.now(timezone.utc)
+        ham = self.get_many([self.ORNEK_ANAHTARI])
+        if ham is None:
+            return None  # Supabase erişilemez: sessizce vazgeç (bot durmasın)
+        kayitlar = ham.get(self.ORNEK_ANAHTARI)
+        if not isinstance(kayitlar, dict):
+            kayitlar = {}
+        temiz = {
+            str(k): str(v) for k, v in kayitlar.items()
+            if isinstance(v, str) and self._iso_taze(v, simdi, self.ORNEK_TEMIZLIK_SN)
+        }
+        temiz[instance_id] = (now_iso or simdi.isoformat())
+        self.upsert(self.ORNEK_ANAHTARI, temiz)
+        canli = [
+            {"id": k, "son_gorulme": v} for k, v in temiz.items()
+            if k != instance_id and self._iso_taze(v, simdi, self.ORNEK_TTL_SN)
+        ]
+        return {"canli_digerleri": canli, "kayit_sayisi": len(temiz)}
+
+    @staticmethod
+    def _iso_taze(zaman: str, simdi, azami_sn: int) -> bool:
+        from datetime import datetime, timezone
+        try:
+            t = datetime.fromisoformat(str(zaman))
+        except (TypeError, ValueError):
+            return False
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return (simdi - t).total_seconds() <= azami_sn

@@ -94,7 +94,7 @@ def test_heartbeat_gonderim_sagligini_ve_huniyi_yazar(monkeypatch, tmp_path):
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "")
     n = TelegramNotifier()
     main_mod.daily_stats.update(alerts_attempted=5, alerts_failed=1, alerts_sent=4)
-    main_mod.write_heartbeat(data_dir=str(tmp_path), notifier=n)
+    main_mod.write_heartbeat(data_dir=str(tmp_path), notifier=n, force=True)
 
     veri = json.loads((tmp_path / "heartbeat.json").read_text(encoding="utf-8"))
     assert veri["notifier_enabled"] is False

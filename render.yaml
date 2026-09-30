@@ -41,6 +41,9 @@ services:
       # sayılarda İstanbul'u sabitliyor; bu değişken log damgalarını da hizalar.
       - key: TZ
         value: Europe/Istanbul
+      # A7: public uçlarda IP başına istek limiti (0 = kapalı)
+      - key: HEALTH_RATE_LIMIT_PER_MIN
+        value: "60"
       # OPSIYONEL — Telegram komutlarını webhook ile almak için rastgele bir değer.
       # RENDER_EXTERNAL_URL'i Render otomatik verir; adres
       # https://<servis>.onrender.com/webhook/<secret> olarak kurulur.

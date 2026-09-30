@@ -331,6 +331,20 @@ def veri_yok_modu_acik_mi(now: Optional[datetime] = None,
 
 # === DEQUE YÖNETİMİ ===
 
+def _istanbul_zaman(ts):
+    """Timestamp'i İstanbul saatine çevirir; pandas Timestamp ve datetime uyumlu.
+
+    Neden: seri verisi farklı kaynaklardan gelebiliyor (pickle→Timestamp, JSON/
+    Supabase→datetime). Tek bir yardımcı, `tz_convert` varsayımından doğan
+    AttributeError sınıfını kapatır.
+    """
+    if isinstance(ts, datetime) and not hasattr(ts, "tz_convert"):
+        return ts.astimezone(ISTANBUL_TZ) if ts.tzinfo else ISTANBUL_TZ.localize(ts)
+    if hasattr(ts, "tz_convert"):
+        return ts.tz_convert(ISTANBUL_TZ) if ts.tzinfo else ts.tz_localize(ISTANBUL_TZ)
+    return ISTANBUL_TZ.localize(pd.Timestamp(ts))
+
+
 class StockDequeManager:
     """
     Her hisse için 360 mumluk deque tutar
@@ -353,6 +367,14 @@ class StockDequeManager:
         self._gunluk_fetch_attempts: Dict[str, datetime] = {}
         # Son tespit edilen veri sorunları (split / bar boşluğu) - main.py okur
         self.sureklilik_sorunlari: Dict[str, List[Dict]] = {}
+        # --- yazma amplifikasyonu koruması (Batch 6 / B5) ---
+        # Supabase'e aynı içerik ikinci kez gönderilmesin: son gönderilen verinin
+        # parmak izi (len, son bar zamanı, son kapanış). Disk yazımı her zaman
+        # yapılır (yerel kurtarma), uzak yazım yalnız içerik değiştiğinde.
+        self._uzak_ozet: Dict[str, tuple] = {}
+        self._gunluk_uzak_ozet: Dict[str, tuple] = {}
+        self.uzak_yazma_atlanan = 0   # telemetri: kaç UPSERT gereksizdi
+        self.uzak_yazma_yapilan = 0   # telemetri: kaç UPSERT gönderildi
         
         # Data dir oluştur
         os.makedirs(data_dir, exist_ok=True)
@@ -517,21 +539,26 @@ class StockDequeManager:
         return df
     
     def save_to_disk(self, stock: str):
-        """Diske kaydet - hem pickle hem json (senin isteğin both)"""
+        """Diske kaydet: JSON birincil, pickle yalnız PICKLE_CACHE=1 ise.
+
+        A8 (Batch 6): pickle dosyaları Git'ten çıkarıldı ve varsayılan yazım
+        kapatıldı (public repoda kod yürütme yüzeyi + gereksiz ikili yük).
+        Eski .pkl dosyaları hâlâ okunabilir (load_from_disk yedeği).
+        """
         if stock not in self.deques:
             return
-        
-        # Pickle - hızlı
+
         pkl_path = os.path.join(self.data_dir, f"{stock}.pkl")
         # JSON - GitHub'da görünsün, human-readable
         json_path = os.path.join(self.data_dir, f"{stock}.json")
-        
+
         try:
             data_list = list(self.deques[stock])
-            
-            # Pickle
-            with open(pkl_path, 'wb') as f:
-                pickle.dump(data_list, f)
+
+            # Pickle yalnız açıkça istendiğinde (varsayılan: kapalı)
+            if os.environ.get("PICKLE_CACHE", "").strip() in ("1", "true", "True"):
+                with open(pkl_path, 'wb') as f:
+                    pickle.dump(data_list, f)
             
             # JSON - timestamp'i string'e çevir
             json_data = []
@@ -551,52 +578,73 @@ class StockDequeManager:
                 json.dump(json_data, f, indent=2, ensure_ascii=False)
 
             if self.persistent_store is not None:
-                self.persistent_store.upsert(f"cache:1h:{stock}", json_data)
+                # İçerik değişmediyse UPSERT atlanır (tarama başına ~48 gereksiz
+                # istek + ~2 MB gidiyordu). Kapanış/timestamp değişince yazılır.
+                ozet = self._veri_ozeti(data_list)
+                if self._uzak_ozet.get(stock) == ozet:
+                    self.uzak_yazma_atlanan += 1
+                elif self.persistent_store.upsert(f"cache:1h:{stock}", json_data):
+                    self._uzak_ozet[stock] = ozet
+                    self.uzak_yazma_yapilan += 1
 
             logger.debug(f"{stock} deque diske kaydedildi - {pkl_path} + {json_path} ({len(data_list)} mum)")
         except Exception as e:
             logger.error(f"{stock} diske kaydedilemedi: {e}")
     
     def load_from_disk(self, stock: str) -> Optional[deque]:
-        """Diskten yükle - önce pickle, yoksa json"""
+        """Diskten yükle - önce JSON (birincil), yoksa pickle (eski/yedek).
+
+        A8 (Batch 6): okuma sırası tersine çevrildi. Böylece public repoda
+        pickle'a ihtiyaç kalmaz; eski kurulumlardaki .pkl dosyaları yedek
+        olarak çalışmaya devam eder (yalnız yerel diskten, dosya varsa).
+        """
         pkl_path = os.path.join(self.data_dir, f"{stock}.pkl")
         json_path = os.path.join(self.data_dir, f"{stock}.json")
-        
-        # Önce pickle dene (hızlı)
-        if os.path.exists(pkl_path):
-            try:
-                with open(pkl_path, 'rb') as f:
-                    data = pickle.load(f)
-                dq = deque(data, maxlen=self.maxlen)
-                logger.debug(f"{stock} pickle'dan yüklendi: {len(dq)} mum")
-                return dq
-            except Exception as e:
-                logger.warning(f"{stock} pickle yüklenemedi: {e}, json deneniyor")
-        
-        # Pickle yoksa json dene
+
+        # JSON birincil
         if os.path.exists(json_path):
             try:
                 import json
-                from dateutil import parser as date_parser
                 with open(json_path, 'r', encoding='utf-8') as f:
                     json_data = json.load(f)
-                
+
                 data_list = []
                 for candle in json_data:
-                    # Timestamp'i geri çevir
-                    if 'timestamp' in candle and isinstance(candle['timestamp'], str):
+                    # Timestamp'i geri çevir. pandas Timestamp kullanılır: diğer
+                    # yükleyiciler (Supabase hydrate, günlük JSON) ve tüketiciler
+                    # (tz_convert) bu türü bekler. dateutil datetime'ı verirse
+                    # `ts.tz_convert` çağrıları AttributeError ile patlıyordu.
+                    ts = candle.get('timestamp')
+                    if ts is not None and not isinstance(ts, datetime):
                         try:
-                            candle['timestamp'] = date_parser.parse(candle['timestamp'])
-                        except:
-                            pass
+                            ts = pd.to_datetime(ts)
+                        except (TypeError, ValueError):
+                            ts = None
+                    if ts is not None:
+                        if ts.tzinfo is None:
+                            ts = ISTANBUL_TZ.localize(ts)
+                        else:
+                            ts = ts.tz_convert(ISTANBUL_TZ)
+                        candle['timestamp'] = ts
                     data_list.append(candle)
-                
+
                 dq = deque(data_list, maxlen=self.maxlen)
                 logger.debug(f"{stock} json'dan yüklendi: {len(dq)} mum")
                 return dq
             except Exception as e:
                 logger.warning(f"{stock} json'dan yüklenemedi: {e}")
-        
+
+        # JSON yok/bozuksa eski pickle dosyası (varsa) son çare.
+        if os.path.exists(pkl_path):
+            try:
+                with open(pkl_path, 'rb') as f:
+                    data = pickle.load(f)
+                dq = deque(data, maxlen=self.maxlen)
+                logger.info(f"{stock} eski pickle dosyasından yüklendi: {len(dq)} mum "
+                            f"(JSON birincil; .pkl git dışı)")
+                return dq
+            except Exception as e:
+                logger.warning(f"{stock} pickle yüklenemedi: {e}")
         return None
     
     def _gunluk_dosya(self, stock: str) -> str:
@@ -754,7 +802,14 @@ class StockDequeManager:
         with open(self._gunluk_dosya(stock), "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False)
         if self.persistent_store is not None:
-            self.persistent_store.upsert(f"cache:1d:{stock}", payload)
+            # Günlük seri günde bir değişir; tarama başına 48 kez yazmak ~2,4 MB
+            # gereksiz trafikti. İçerik değişmediyse gönderilmez.
+            ozet = self._veri_ozeti(payload)
+            if self._gunluk_uzak_ozet.get(stock) == ozet:
+                self.uzak_yazma_atlanan += 1
+            elif self.persistent_store.upsert(f"cache:1d:{stock}", payload):
+                self._gunluk_uzak_ozet[stock] = ozet
+                self.uzak_yazma_yapilan += 1
 
     def son_bar_yasi_dk(self, stock: str, now: Optional[datetime] = None) -> Optional[float]:
         """Bu hissenin cache'indeki en yeni 1H mumun yaşı (dakika). Veri yoksa None.
@@ -766,9 +821,25 @@ class StockDequeManager:
             now = datetime.now(ISTANBUL_TZ)
         if now.tzinfo is None:
             now = ISTANBUL_TZ.localize(now)
-        son = df.index[-1]
-        son = son.tz_convert(ISTANBUL_TZ) if son.tzinfo else ISTANBUL_TZ.localize(son)
+        son = _istanbul_zaman(df.index[-1])
         return (now - son).total_seconds() / 60.0
+
+    @staticmethod
+    def _veri_ozeti(data_list) -> tuple:
+        """Uzak yazım gerekip gerekmediğini anlamak için ucuz parmak izi."""
+        if not data_list:
+            return (0, None, None)
+        son = data_list[-1] if isinstance(data_list[-1], dict) else {}
+        return (len(data_list), str(son.get("timestamp")), son.get("close"))
+
+    def uzak_yazma_durumu(self) -> Dict:
+        """B5 telemetrisi: kaç uzak yazım yapıldı, kaçı gereksizdi."""
+        return {
+            "yapilan": self.uzak_yazma_yapilan,
+            "atlanan": self.uzak_yazma_atlanan,
+            "izlenen_1h": len(self._uzak_ozet),
+            "izlenen_1d": len(self._gunluk_uzak_ozet),
+        }
 
     def save_all(self):
         """Tümünü kaydet (1H + 1D)"""
@@ -817,8 +888,7 @@ def sureklilik_sorunlari_bul(dq) -> List[Dict]:
 
     onceki = None
     for c in dq:
-        ts = c['timestamp']
-        ts = ts.tz_convert(ISTANBUL_TZ) if ts.tzinfo else ISTANBUL_TZ.localize(ts)
+        ts = _istanbul_zaman(c['timestamp'])
         if onceki is not None:
             onceki_ts, onceki_kapanis, onceki_gun = onceki
             bosluk_saat = (ts - onceki_ts).total_seconds() / 3600.0

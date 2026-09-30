@@ -177,10 +177,11 @@ TELEGRAM_MAX_MESAJ_GUN = 120
 #   TELEGRAM_WEBHOOK_SECRET   rastgele bir metin; adresin son parçasıdır ve
 #                             Telegram'a secret_token olarak da bildirilir
 #   TELEGRAM_WEBHOOK_URL      (opsiyonel) tam adres; boşsa RENDER_EXTERNAL_URL'den
-#                             https://<servis>.onrender.com/webhook/<secret> üretilir
+#                             https://<servis>.onrender.com/webhook üretilir (sırsız;
+#                             doğrulama secret_token başlığıyla yapılır)
 #
 # Secret boşsa webhook modu KAPALIDIR: bot eskisi gibi getUpdates yoklaması yapar
-# ve /webhook/<secret> ucu 404 döner (dışarıdan varlığı görülmez).
+# ve /webhook ucu 404 döner (dışarıdan varlığı görülmez).
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
 TELEGRAM_WEBHOOK_URL = os.getenv("TELEGRAM_WEBHOOK_URL", "").strip()
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip()
@@ -195,6 +196,13 @@ DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").st
 #   DEFERRED_ALERT_DIGEST_LIMIT=20
 DEFERRED_ALERT_DIGEST_LIMIT = _env_int("DEFERRED_ALERT_DIGEST_LIMIT", 12)
 POST_CLOSE_ANALYSIS_TIME = os.getenv("POST_CLOSE_ANALYSIS_TIME", "20:00").strip()  # gün sonu tam evren taraması
+# --- YAZMA AMPLİKASYONU (Batch 6 / B5) ---
+# Heartbeat her hisse sonrası yazılıyordu: 48 hisse × tarama = 48 Supabase UPSERT.
+# Yerel dosya canlılık göstergesi olduğu için her zaman yazılır; Supabase'e yazım
+# bu aralıktan sık yapılmaz ve içerik değişmediyse atlanır.
+HEARTBEAT_MIN_ARALIK_SN = _env_int("HEARTBEAT_MIN_ARALIK_SN", 60)      # yerel dosya
+HEARTBEAT_UZAK_ARALIK_SN = _env_int("HEARTBEAT_UZAK_ARALIK_SN", 300)   # Supabase
+
 # --- ENGELLENEN ACİL OLAYLAR (Batch 5 / B4) ---
 # Cooldown veya saatlik/günlük kap nedeniyle gönderilemeyen ACİL alarmlar kuyruğa
 # girer ve engel kalkınca gider. Kuyruk hem Supabase'e hem diske yazılır.

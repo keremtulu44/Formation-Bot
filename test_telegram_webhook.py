@@ -16,7 +16,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import main as main_mod
-from health_server import WEBHOOK_YOL_ONEK, start_render_health_server
+from health_server import WEBHOOK_YOL, WEBHOOK_YOL_ONEK, start_render_health_server
 from live_state import LiveState
 from telegram_commands import TelegramCommandListener
 
@@ -123,9 +123,11 @@ def _get(port, yol):
 
 # --- webhook adresi ------------------------------------------------------
 def test_webhook_url_render_external_url_ile_uretilir():
+    # A7 (Batch 6): sır artık URL yolunda DEĞİL; başlıkla doğrulanıyor.
     adres = main_mod._telegram_webhook_url_olustur(
         secret=SECRET, render_url="https://formation-bot.onrender.com/")
-    assert adres == f"{RENDER_URL}{WEBHOOK_YOL_ONEK}{SECRET}"
+    assert adres == f"{RENDER_URL}{WEBHOOK_YOL}"
+    assert SECRET not in adres
 
 
 def test_webhook_url_secret_yoksa_mod_kapali():
@@ -138,14 +140,15 @@ def test_webhook_url_taban_adres_yoksa_kapali():
 
 
 def test_webhook_url_tam_adres_verilirse_aynen_kullanilir():
-    tam = f"{RENDER_URL}{WEBHOOK_YOL_ONEK}{SECRET}"
-    assert main_mod._telegram_webhook_url_olustur(secret=SECRET, webhook_url=tam) == tam
-    # /webhook ile biten adrese sır eklenir
+    # Sırsız tam adres (önerilen biçim)
+    sirsiz = f"{RENDER_URL}{WEBHOOK_YOL}"
+    assert main_mod._telegram_webhook_url_olustur(secret=SECRET, webhook_url=sirsiz) == sirsiz
+    # Taban adres verilirse sırsız yol eklenir
     assert main_mod._telegram_webhook_url_olustur(
-        secret=SECRET, webhook_url=f"{RENDER_URL}/webhook") == tam
-    # taban adres verilirse yol + sır eklenir
-    assert main_mod._telegram_webhook_url_olustur(
-        secret=SECRET, webhook_url=RENDER_URL) == tam
+        secret=SECRET, webhook_url=RENDER_URL) == sirsiz
+    # Eski biçim (sır yolda) geriye dönük uyumluluk için korunur
+    eski = f"{RENDER_URL}{WEBHOOK_YOL_ONEK}{SECRET}"
+    assert main_mod._telegram_webhook_url_olustur(secret=SECRET, webhook_url=eski) == eski
 
 
 def test_webhook_url_https_zorunlu():
@@ -238,7 +241,7 @@ def test_komut_katmani_webhook_modunda_yoklamayi_kapatir(monkeypatch):
     mod = main_mod._telegram_komut_katmanini_kur(SahteNotifier(), isleyici)
 
     assert mod == "webhook"
-    assert cagrilar == [(f"{RENDER_URL}{WEBHOOK_YOL_ONEK}{SECRET}", "111:AAA")]
+    assert cagrilar == [(f"{RENDER_URL}{WEBHOOK_YOL}", "111:AAA")]
     assert main_mod._telegram_update_processor_ref is isleyici   # uç bu nesneyi kullanır
     assert isleyici.basladi is False                            # yoklama BAŞLAMAZ
     assert main_mod._telegram_listener_ref is None

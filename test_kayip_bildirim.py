@@ -263,7 +263,9 @@ def test_heartbeat_kuyruk_ve_bekleyen_digest_yazar(tmp_path, monkeypatch):
     now = datetime.now(ISTANBUL_TZ)
     main_mod._deferred_alert_buffer.clear(now)
     main_mod._deferred_alert_buffer.observe("GARAN", "1h", _kayit(), now)
-    main_mod.write_heartbeat(data_dir=str(tmp_path), notifier=n)
+    # force=True: throttle penceresi önceki testten taşabilir (üretimde tarama
+    # sonunda da force çağrılır).
+    main_mod.write_heartbeat(data_dir=str(tmp_path), notifier=n, force=True)
 
     veri = json.loads((tmp_path / "heartbeat.json").read_text(encoding="utf-8"))
     assert veri["bekleyen_bildirim"] == 1
