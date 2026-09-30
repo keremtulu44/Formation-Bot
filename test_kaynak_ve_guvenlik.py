@@ -613,3 +613,39 @@ def test_transport_komut_katmani_modlari():
                                      set_webhook_fn=lambda **k: True,
                                      delete_webhook_fn=ortak["delete_webhook_fn"])
     assert yoklama["mod"] == "yoklama" and yoklama["listener"] is not None
+
+
+# --- Alarm/kanal politikası: TEK KAYNAK (davranış değişmedi) -----------------
+def test_alarm_politikasi_tek_kaynaktan_gelir():
+    """B7: anlık/digest listeleri config'te tanımlı; başka yerde kopya yok."""
+    import config as cfg
+    import telegram_alert_flow as taf
+    assert taf.WATCH_STATES is cfg.WATCH_STATES, "WATCH_STATES config'e bağlı olmalı"
+    assert main_mod.IMMEDIATE_ALERT_STATES == frozenset(cfg.ALERT_STATES)
+    assert not (set(cfg.ALERT_STATES) & set(cfg.WATCH_STATES)), "listeler kesişemez"
+    assert cfg._politika_hatalari == [], cfg._politika_hatalari
+
+
+def test_alarm_politikasi_state_adlari_gecerli():
+    """Politikadaki tüm state adları patterns/constants.py'de tanımlı olmalı."""
+    import config as cfg
+    from patterns import constants as pc
+    bilinen = {v for k, v in vars(pc).items() if k.startswith("ST_") and isinstance(v, str)}
+    tanimsiz = (set(cfg.ALERT_STATES) | set(cfg.WATCH_STATES) | set(cfg.PUBLIC_STATES)) - bilinen
+    assert not tanimsiz, f"tanımsız state adları: {sorted(tanimsiz)}"
+
+
+def test_public_kanal_politikasi_config_ten_okunur():
+    from config import PUBLIC_MIN_QUALITY, PUBLIC_STATES
+    notifier = main_mod.TelegramNotifier()
+    assert notifier.public_states == set(PUBLIC_STATES)
+    assert notifier.public_min_quality == PUBLIC_MIN_QUALITY
+
+
+def test_evren_buyume_uyarisi_davranisi_degistirmez(caplog):
+    import logging
+    import config as cfg
+    caplog.set_level(logging.WARNING, logger=main_mod.__name__)
+    assert main_mod._evren_olcek_uyarisi(["THYAO", "GARAN"]) == ""
+    mesaj = main_mod._evren_olcek_uyarisi([f"X{i}" for i in range(cfg.EVREN_BUYUME_UYARI_ESIGI + 1)])
+    assert "pacing" in mesaj and str(cfg.EVREN_BUYUME_UYARI_ESIGI) in mesaj

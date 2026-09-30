@@ -333,14 +333,44 @@ ALERT_MIN_QUALITY = {
     "1d": 70,
 }
 ALERT_MIN_QUALITY_GLOBAL = 75
-# Sadece gecikmeden iletilecek kritik olaylar. Hazırlık/adayı/sıkışma/retest
-# bekleme durumları telegram_alert_flow tarafından kapanış özetine ertelenir.
+# --- ALARM / KANAL POLİTİKASI (TEK KAYNAK) ----------------------------------
+# KURAL: Aşağıdaki listeler BİRBİRİNDEN AYRIDIR (aynı state iki listede olamaz)
+# ve tüm state adları `patterns/constants.py`'de tanımlıdır; test bunu doğrular.
+#
+# 1) ANINDA iletilen (gecikmeden push) kritik olaylar:
 ALERT_STATES = [
     "KIRILIM_TEYITLI",
     "RETEST_BASARILI",
     "FORMASYON_TAMAMLANDI",
     "BASARISIZ_KIRILIM",
 ]
+
+# 2) 18:45 kapanış özetine (digest) ERTELENEN izleme state'leri. Hazırlık/adayı/
+# sıkışma/retest bekleme burada; main tarafı `IMMEDIATE_ALERT_STATES` ile anlık,
+# kalanı `DeferredAlertBuffer` + `WATCH_STATES` ile toplu bildirir.
+# Politikayı değiştirmek için SADECE bu listeyi düzenle (B7 kararı burada).
+WATCH_STATES = frozenset({
+    "SIKISMA_GUCLENIYOR",
+    "KIRILIM_HAZIRLIGI",
+    "KIRILIM_ADAYI",
+    "KIRILIM_DENEMESI",
+    "RETEST_BEKLENIYOR",
+    "RETEST_EDILIYOR",
+})
+
+# 3) PUBLIC KANAL akışı: yalnız bu state'ler ve eşikleri geçen kayıtlar kanala
+# gider (DM'den bağımsız). Kanal politikasını değiştirmek için PUBLIC_* env'leri
+# veya aşağıdaki varsayılanlar kullanılır (tek kaynak burasıdır; B9 kararı).
+#   PUBLIC_STATES, PUBLIC_MIN_QUALITY, PUBLIC_SIKISMA_MIN_CONTRACTION (aşağıda)
+
+# Politika tutarlılık kontrolü (import anında; sessiz çift bildirimi engeller).
+_politika_hatalari = []
+_ortak_state = set(ALERT_STATES) & set(WATCH_STATES)
+if _ortak_state:
+    _politika_hatalari.append(f"ALERT_STATES ve WATCH_STATES kesişiyor: {sorted(_ortak_state)}")
+
+# Evren büyürse pacing/panel/digest limitleri yeniden ölçülmeli (rapor B8).
+EVREN_BUYUME_UYARI_ESIGI = 48
 
 LOG_DIR = os.getenv("LOG_DIR", "/var/log/bist-bot").strip() or "/var/log/bist-bot"
 LOG_FILE = "bot.log"

@@ -154,13 +154,18 @@ Her adım ayrı commit; davranış değişmez, yalnız taşıma.
 
 > Not: Aşağıdaki kodlar rapor numaralarıdır; "Batch 8" ile karıştırılmasın.
 
-- **B7 (WATCH state politikası):** hangi izleme state'leri anında push, hangileri 18:45 özetine
-  gitsin. Şu an: `main.IMMEDIATE_ALERT_STATES` (6 kritik state) anında; kalan izleme state'leri
-  (`WATCH_STATES`) digest'e. Karar = tek yerde tanım + README notu + test.
-- **B9 (kanal akışı):** public kanala hangi state'ler gitsin (`PUBLIC_STATES`, varsayılan:
-  `FORMASYON_TAMAMLANDI`, `RETEST_BASARILI` + `PUBLIC_MIN_QUALITY`/`PUBLIC_SIKISMA_MIN_CONTRACTION`).
-- **Evren büyütme (rapor B8):** evren 48'den büyükse önce pacing/panel/digest limitleri gözden
-  geçirilmeli (ölçüm: `test_scan_pacing.py`, `KODLAMA_PLANI` B5 ölçümü). Şu an gerekmiyor.
+- **B7 (WATCH state politikası):** ✅ *tek kaynağa alındı, davranış değişmedi* (kullanıcı kararı:
+  "tek kaynak + test + doküman, davranış aynı kalsın"). Anlık liste `config.ALERT_STATES`
+  (4 kritik olay), digest listesi `config.WATCH_STATES` (6 izleme state'i); `main.IMMEDIATE_ALERT_STATES`
+  ve `telegram_alert_flow.WATCH_STATES` bunlara bağlı. Kesişim import anında
+  `config._politika_hatalari` ile yakalanıyor, testler doğruluyor. Davranışı değiştirmek istersen
+  sadece bu iki listeyi düzenle.
+- **B9 (kanal akışı):** ✅ *tek kaynak + doküman; davranış aynı.* Public kanal politikası
+  yalnız `config.PUBLIC_STATES` / `PUBLIC_MIN_QUALITY` / `PUBLIC_SIKISMA_MIN_CONTRACTION`
+  (env ile de verilebilir). Kanalı genişletmek için tek yer burası.
+- **Evren büyütme (rapor B8):** ✅ *uyarı eklendi; evren değişmedi.* `config.EVREN_BUYUME_UYARI_ESIGI = 48`
+  üzerine çıkılırsa açılışta tek satır uyarı loglanır (`main._evren_olcek_uyarisi`); pacing/panel/digest
+  limitleri yeniden ölçülene kadar evren 48'de kalır (ölçüm: `test_scan_pacing.py`).
 
 ## Bağımlılık sırası
 `B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ → B6 ✅ → B7 ✅ → B8 ✅`

@@ -34,7 +34,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     POST_CLOSE_ANALYSIS_TIME, ACIL_KUYRUK_BOSALTMA_ARALIK_SN,
                     HEARTBEAT_MIN_ARALIK_SN, HEARTBEAT_UZAK_ARALIK_SN,
                     PUBLIC_MIN_QUALITY,
-                    MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE,
+                    MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE, EVREN_BUYUME_UYARI_ESIGI,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   son_kapanan_mum_ani, time_until_next_open,
@@ -124,7 +124,23 @@ _deferred_alert_buffer = DeferredAlertBuffer()
 # Bugüne ait 18:45 kapanış özetinin gönderilip gönderilmediği (ISO gün). Kalıcı
 # tamponla birlikte Supabase/diske yazılır; restart sonrası aynı özet iki kez gitmez.
 _digest_son_gonderim_gun = None
+# Politika tek kaynak: `config.ALERT_STATES` (anlık) / `config.WATCH_STATES`
+# (digest). Bu frozenset yalnız okuma kolaylığı içindir (B7 kararı config'te).
 IMMEDIATE_ALERT_STATES = frozenset(ALERT_STATES)
+
+
+def _evren_olcek_uyarisi(evren=None) -> str:
+    """Evren eşiğin üzerindeyse pacing/panel/digest limitlerini hatırlatır.
+
+    Davranışı DEĞİŞTİRMEZ: yalnız loga tek satır uyarı düşer (rapor B8: evren
+    48'den büyürse önce pacing/digest/panel limitleri ölçülmeli).
+    """
+    hisseler = list(ACTIVE_STOCKS if evren is None else evren)
+    if len(hisseler) <= EVREN_BUYUME_UYARI_ESIGI:
+        return ""
+    return (f"⚠️ Evren {len(hisseler)} hisse (eşik {EVREN_BUYUME_UYARI_ESIGI}): pacing "
+            "(SCAN_*), panel mesaj bütçesi ve 18:45 digest limiti yeniden ölçülmeli "
+            "(KODLAMA_PLANI → 'Evren büyütme').")
 
 
 def _cache_verisi_kullanilabilir(yas_dk: float, taze_veri_var: bool, seans_acik: bool) -> bool:
@@ -1982,6 +1998,9 @@ def main_loop():
     logger.info("=== BIST FORMASYON BOTU BAŞLATILIYOR ===")
     logger.info(f"Profil: {PROFILE}, Params: {PROFILE_PARAMS}")
     logger.info(f"Hisseler: {ACTIVE_STOCKS[:5]}... (toplam {len(ACTIVE_STOCKS)})")
+    evren_uyarisi = _evren_olcek_uyarisi()
+    if evren_uyarisi:
+        logger.warning(evren_uyarisi)
     
     global _deque_manager_ref, _notifier_ref, _supabase_store_ref, _telegram_update_processor_ref, _lifecycle_manager_ref
     # Digest damgası main_loop içinde birden çok yerde okunur/yazılır; global

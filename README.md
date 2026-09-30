@@ -217,11 +217,21 @@ Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölç
 7. **Sandbox kısıtı:** bu ortamdan Yahoo Finance ve Telegram'a erişilemiyor (SSL). Gerçek
    zamanlı tarama ve canlı bot testi kullanıcının kendi makinesinde yapılmalı; burada
    `--cache` modu ve commit'li `bot_data` kullanılır.
-8. **Veri dizini artık repo dışında (batch-7 / C4):** yazımlar `DATA_DIR`'e gider; sırayla
+8. **Alarm ve kanal politikası TEK KAYNAK (`config.py`):** karar bekleyen B7/B9
+   maddeleri davranışı değiştirmeden tek yerde toplandı —
+   `ALERT_STATES` (anında push edilen 4 kritik olay), `WATCH_STATES` (18:45 kapanış
+   özetine ertelenen 6 izleme state'i; `telegram_alert_flow.WATCH_STATES` bu listeye
+   bağlıdır) ve `PUBLIC_STATES` + `PUBLIC_MIN_QUALITY` + `PUBLIC_SIKISMA_MIN_CONTRACTION`
+   (public kanal akışı; B9). Kesişim/çift bildirim `config._politika_hatalari` ile
+   import anında yakalanır, testler bunu doğrular. Politikayı değiştirmek için sadece
+   bu üç yeri düzenle; kodda başka yerde kopya liste yok. Evren 48'in üzerine çıkarsa
+   `EVREN_BUYUME_UYARI_ESIGI` ile açılışta tek satır uyarı loglanır (pacing/digest/panel
+   limitleri yeniden ölçülmeli).
+9. **Veri dizini artık repo dışında (batch-7 / C4):** yazımlar `DATA_DIR`'e gider; sırayla
    `RENDER` → `/tmp/formation-bot-data` → `/var/lib/formation-bot/data` → `~/.formation-bot/data` →
    `./bot_data` denenir. Repodaki `bot_data/*.json` yalnız **okuma** yedeğidir (`SEED_DATA_DIR`);
    canlı veri diske yazılmaz. Supabase anahtarları `SUPABASE_STORE_PREFIX` (varsayılan
    `formation-bot:`) ile öneklenir; öneksiz eski kayıtlar okunur ve sonraki yazımda taşınır.
-9. **Bot kuralları:** `bot_data/*.json` git-tracked; **`*.pkl` artık dışarıda** (A8: public repoda pickle yürütme yüzeyi olmasın; okuma JSON birincil, eski `.pkl` yalnız yedek). Runtime dosyaları
+10. **Bot kuralları:** `bot_data/*.json` git-tracked; **`*.pkl` artık dışarıda** (A8: public repoda pickle yürütme yüzeyi olmasın; okuma JSON birincil, eski `.pkl` yalnız yedek). Runtime dosyaları
    (heartbeat, telegram_kap, telegram_acil_kuyruk, telegram_digest_pending, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0f318-formation-bot`
    dalında; başka dala push yok. Merge YALNIZCA kullanıcı onayıyla yapılır.

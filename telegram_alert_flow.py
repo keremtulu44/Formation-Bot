@@ -10,15 +10,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional, Tuple
 
-
-WATCH_STATES = frozenset({
-    "SIKISMA_GUCLENIYOR",
-    "KIRILIM_HAZIRLIGI",
-    "KIRILIM_ADAYI",
-    "KIRILIM_DENEMESI",
-    "RETEST_BEKLENIYOR",
-    "RETEST_EDILIYOR",
-})
+# Tek kaynak: politika config.py'de (Batch 8 sonrası düzeltme / B7).
+# Bu isim geriye dönük uyumluluk için burada da erişilebilir.
+from config import WATCH_STATES  # noqa: F401
 
 AlertKey = Tuple[str, str, str, str]
 
