@@ -79,8 +79,10 @@ def test_kontrol_env_canli_mod_eksik_hata(monkeypatch):
     # Canlı modda eksik env = HATA
     monkeypatch.setattr(dc, "_sayac", {dc.OK: 0, dc.WARN: 0, dc.FAIL: 0})
     degerler = dc.kontrol_env({}, canli_mod=True)
-    # En az 4 zorunlu eksik -> FAIL sayacı artmalı
-    assert dc._sayac[dc.FAIL] >= 4
+    # Telegram zorunlulukları fail; opsiyonel Supabase eksikliği yalnızca uyarıdır.
+    assert dc._sayac[dc.FAIL] >= 3
+    assert degerler["SUPABASE_URL"] == ""
+    assert dc._sayac[dc.WARN] >= 1
 
 
 def test_kontrol_env_normal_mod_uyari(monkeypatch):

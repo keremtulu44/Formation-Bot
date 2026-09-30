@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from config import DATA_DIR, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN
+from config import DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN
 
 logger = logging.getLogger(__name__)
 
@@ -246,7 +246,7 @@ class TelegramNotifier:
             return False
 
     def format_daily_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None) -> str:
-        now = datetime.now()
+        now = datetime.now(ISTANBUL_TZ)
         baslik = f"📊 BIST Formasyon Özeti - {now.strftime('%d %b %H:%M')}\n"
         baslik += "─" * 30 + "\n"
         if not aktif_formasyonlar:
@@ -599,6 +599,28 @@ class TelegramNotifier:
         ]
         if state in ["KIRILIM_ADAYI", "KIRILIM_TEYITLI", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI"]:
             msg += random.choice(footer_options)
+
+        # Acil olay mesajına, ayrı alarm olarak henüz gönderilmemiş en fazla üç
+        # kısa izleme adayı bağlamı eklenir. Adaylar kendi başlarına gönderilmez.
+        watch_context = data.get("watch_context") or []
+        context_lines = []
+        for candidate in watch_context[:3]:
+            if not isinstance(candidate, dict):
+                continue
+            candidate_stock = str(candidate.get("stock") or "?")
+            candidate_tf = TF_HUMAN.get(candidate.get("timeframe"), candidate.get("timeframe", ""))
+            candidate_pattern = str(candidate.get("pattern_name") or "formasyon")
+            candidate_state = str(candidate.get("state") or "izlemede").replace("_", " ").lower()
+            try:
+                candidate_quality = float(candidate.get("quality") or 0)
+                quality_suffix = f" · kalite {candidate_quality:.0f}"
+            except (TypeError, ValueError):
+                quality_suffix = ""
+            context_lines.append(
+                f"• {candidate_stock} {candidate_tf} {candidate_pattern}: {candidate_state}{quality_suffix}"
+            )
+        if context_lines:
+            msg += "\n\n👀 Diğer izleme adayları\n" + "\n".join(context_lines)
 
         return msg
 

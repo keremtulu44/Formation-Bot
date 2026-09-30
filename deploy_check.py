@@ -12,15 +12,15 @@ Kullanım (yerelde, telefondan Termux'ta veya Render Shell'de):
 Ne yapar:
   1. Repo tarafı: .python-version (Render 3.12 sabiti), requirements pinleri,
      .github/workflows/keepalive.yml varlığı, yerel bot_data önbelleği.
-  2. Env: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / TELEGRAM_BOT_TOKEN /
-     TELEGRAM_CHAT_ID tanımlı mı (değerleri ASLA yazdırmaz, sadece uzunluk).
-  3. Supabase: tablo gerçekten var mı? (404 -> SQL çalıştırılmamış,
-     401/403 -> anahtar yanlış, 200 -> hazır)
+  2. Env: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (komutlar için gerekli),
+     Supabase env'leri (opsiyonel) tanımlı mı? Değerleri ASLA yazdırmaz.
+  3. Supabase varsa: tablo gerçekten var mı? (404 -> SQL çalıştırılmamış,
+     401/403 -> anahtar yanlış, 200 -> hazır); yoksa analiz yine çalışır.
   4. Telegram: getMe ile token; istenirse gerçek test mesajı.
   5. Render: https://<servis>.onrender.com/health ayakta mı; /test ucu açık mı.
 
 Çıkış kodu 0 = kritik hata yok, 1 = en az bir HATA var (uyarılar kodu bozmaz).
-Canlı modda (--url) eksik env = HATA ve exit 1.
+Canlı modda (--url) eksik Telegram env'i = HATA; opsiyonel Supabase env'i eksikliği uyarıdır.
 """
 
 from __future__ import annotations
@@ -214,8 +214,8 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
     bolum("2) ORTAM DEĞİŞKENLERİ (Render → Environment)")
 
     beklenti = [
-        ("SUPABASE_URL", True, "Supabase → Settings → API → Project URL (sonda /rest/v1 OLMADAN)"),
-        ("SUPABASE_SERVICE_ROLE_KEY", True, "service_role JWT (eyJ...) veya yeni 'sb_secret_...' anahtarı"),
+        ("SUPABASE_URL", False, "İsteğe bağlı: Supabase → Settings → API → Project URL (sonda /rest/v1 OLMADAN)"),
+        ("SUPABASE_SERVICE_ROLE_KEY", False, "İsteğe bağlı uzak cache/state için service_role JWT veya sb_secret_... anahtarı"),
         ("TELEGRAM_BOT_TOKEN", True, "@BotFather → /newbot → 'Use this token'"),
         ("TELEGRAM_CHAT_ID", True, "@userinfobot'un verdiği Id (kendine mesaj için pozitif sayı)"),
         ("BOT_PROFILE", False, "Dengeli / Hassas / Seçici"),
@@ -238,9 +238,8 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         seviye = FAIL if canli_mod else WARN
         satir(seviye, "Telegram kapalı olacak", "Token/chat_id yoksa bot çalışır ama hiç mesaj göndermez (log: 'notifier pasif').")
     if not degerler.get("SUPABASE_URL") and not degerler.get("SUPABASE_SERVICE_ROLE_KEY"):
-        seviye = FAIL if canli_mod else WARN
-        satir(seviye, "Supabase kapalı olacak",
-              "Render diski kalıcı değil: restart/deploy sonrası yerel önbellek ve Telegram sayaçları sıfırlanır.")
+        satir(WARN, "Supabase kapalı olacak",
+              "Analiz yine çalışır; Render restart/deploy sonrası yerel OHLCV önbelleği ve Telegram sayaçları kalıcı olmayabilir.")
     anahtar = degerler.get("SUPABASE_SERVICE_ROLE_KEY", "")
     rol = _jwt_rolu(anahtar)
     tur = anahtar_turu(anahtar) if anahtar else ""

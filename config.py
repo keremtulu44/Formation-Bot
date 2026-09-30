@@ -89,6 +89,7 @@ CANDLE_CLOSE_MINUTE = 30          # 1H mumun kapanış dakikası (saat başında
 SCAN_DELAY_AFTER_CLOSE_MIN = 5    # mum kapanışından kaç dk sonra taranacak
 TARAMA_PENCERE_SONU = time(18, 40)  # son mum 18:30 kapanır + 5 dk = 18:35 (+ pay)
 STALE_BAR_UYARI_DK = 120          # en yeni 1H mum bu kadardır eskiyse "kör çalışma" uyarısı
+OFFSESSION_CACHE_MAX_AGE_DAYS = max(1, _env_int("OFFSESSION_CACHE_MAX_AGE_DAYS", 14))  # seans dışı son mevcut veriye izin
 TERMINAL_TAZE_BAR = 3             # terminal (ölü) formasyon bu kadar bar içindeyse haber ver
 
 # --- BIST RESMİ TATİL TAKVİMİ ---
@@ -186,7 +187,9 @@ RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip()
 
 # --- PUBLIC KANAL ve ÖZET ---
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()
-SUMMARY_HOURS = os.getenv("SUMMARY_HOURS", "09:55,18:15").strip()  # İstanbul saati, virgülle ayrılmış
+SUMMARY_HOURS = os.getenv("SUMMARY_HOURS", "09:55,18:45").strip()  # İstanbul saati, virgülle ayrılmış
+DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").strip()
+POST_CLOSE_ANALYSIS_TIME = os.getenv("POST_CLOSE_ANALYSIS_TIME", "20:00").strip()  # gün sonu tam evren taraması
 PUBLIC_MIN_QUALITY = _env_int("PUBLIC_MIN_QUALITY", 80)
 PUBLIC_STATES = [s.strip() for s in os.getenv("PUBLIC_STATES", "FORMASYON_TAMAMLANDI,RETEST_BASARILI").split(",") if s.strip()]
 # Kanal için günlük SIKISMA özetinde min daralma
@@ -289,12 +292,13 @@ ALERT_MIN_QUALITY = {
     "1d": 70,
 }
 ALERT_MIN_QUALITY_GLOBAL = 75
+# Sadece gecikmeden iletilecek kritik olaylar. Hazırlık/adayı/sıkışma/retest
+# bekleme durumları telegram_alert_flow tarafından kapanış özetine ertelenir.
 ALERT_STATES = [
-    "KIRILIM_ADAYI",
     "KIRILIM_TEYITLI",
     "RETEST_BASARILI",
     "FORMASYON_TAMAMLANDI",
-    "SIKISMA_GUCLENIYOR",
+    "BASARISIZ_KIRILIM",
 ]
 
 LOG_DIR = "/var/log/bist-bot"

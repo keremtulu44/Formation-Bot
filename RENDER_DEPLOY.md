@@ -8,21 +8,22 @@ token'ın telefondan alınması ve servisi ayakta tutma (keep-alive) yöntemi.
 
 # ⚡ TEK SAYFA KONTROL LİSTESİ
 
-`__` = boş yer. Her satırda **soldaki yere kendi değerini yaz**, sağdaki yere
-o değeri yapıştır. Üç ayrı yere yazılacak toplam **7 zorunlu değer** var
-(6 Render değişkeni + 1 GitHub secret'ı; `TELEGRAM_TEST_KEY` ve
-`TELEGRAM_WEBHOOK_SECRET` opsiyoneldir).
+`__` = boş yer. Telegram komutları için `TELEGRAM_BOT_TOKEN` ve
+`TELEGRAM_CHAT_ID` gereklidir. Supabase URL/anahtar çifti uzak cache ve state
+kalıcılığı için **opsiyoneldir**; `TELEGRAM_TEST_KEY` ve
+`TELEGRAM_WEBHOOK_SECRET` de opsiyoneldir.
 
 > **Takıldığın yeri tek komutla bul:** `python deploy_check.py --url
-> https://<servis-adin>.onrender.com` → hangi halka kopuk (Render mı, Supabase
-> mi, Telegram mı) doğrudan söyler. Aşağıdaki A–D listesi o çıktıyı düzeltmek
-> için var. Ayrıntı: **§D3**.
+> https://<servis-adin>.onrender.com` → Render/Telegram durumunu ve (varsa)
+> Supabase bağlantısını kontrol eder. Supabase eksikliği analiz çalışmasına engel
+> değildir; yalnızca uzak cache/Telegram state kalıcılığı olmaz. Ayrıntı: **§D3**.
 
-## A) Render → Environment (6 değişken)
+## A) Render → Environment (Telegram gerekli; Supabase opsiyonel)
 
-Render Dashboard → servisin → **Environment** → **Add**. Sağdaki "Secret" sütununu
-`TELEGRAM_*` ve `SUPABASE_SERVICE_ROLE_KEY` için **aç**, `SUPABASE_URL` ve
-`BOT_PROFILE` için açma.
+Render Dashboard → servisin → **Environment** → **Add**. `TELEGRAM_BOT_TOKEN` ve
+`TELEGRAM_CHAT_ID` komutlar için gereklidir. Supabase URL/anahtar çifti isteğe
+bağlıdır (uzak OHLCV cache ve Telegram state kalıcılığı için); ekliyorsanız anahtar
+Secret olmalı. `BOT_PROFILE` plain/isteğe bağlıdır.
 
 | # | Key (yazılacak isim) | Value (yapıştırılacak) | Secret? |
 |---|---|---|---|
@@ -34,8 +35,9 @@ Render Dashboard → servisin → **Environment** → **Add**. Sağdaki "Secret"
 | 6 | `TELEGRAM_TEST_KEY` | `__` ← istediğin rastgele bir yazı (örn. `k7m2x9`) | **evet** |
 | 7 | `TELEGRAM_WEBHOOK_SECRET` | `__` ← **OPSİYONEL**: rastgele bir yazı (`python3 -c "import secrets; print(secrets.token_urlsafe(24))"`). Doldurursan Telegram komutları webhook ile gelir; boş bırakırsan bot `getUpdates` yoklamasını kullanır (bkz. **§4.6**) | **evet** |
 
-> #2'nin değeri: `eyJhbGciOi...` diye başlayan **çok uzun** bir metin. Kısaltma,
-> ortadan kesme — satır sonuna kadar tamamını yapıştır.
+> Supabase'i kullanacaksan #2'nin değerini `eyJhbGciOi...` diye başlayan uzun
+> anahtarın tamamından al; kısaltma veya ortadan kesme. Supabase kullanmıyorsan
+> #1/#2 ve SQL kurulum adımları atlanabilir.
 > #3'ün değeri: `8914822495:AAG...` biçiminde, iki nokta içeren tek satır.
 > #7'nin adresi (webhook için) `RENDER_EXTERNAL_URL`'den otomatik üretilir:
 > `https://<servis>.onrender.com/webhook/<secret>`. `RENDER_EXTERNAL_URL`'i elle
@@ -98,7 +100,7 @@ deploy olur; Auto-Deploy kapalıysa bile kod canlıya iner. Ayrıntı: **§2.1**
 
 - [ ] Repodaki değişiklikler (`main` branch'i) Render'ın deploy ettiği branch'e
       **merge** edilsin — yoksa Python 3.12 sabiti ve keep-alive çalışmaz.
-- [ ] Supabase → SQL Editor → `supabase_schema.sql` içeriğini yapıştır → **Run**
+- [ ] (İsteğe bağlı) Supabase → SQL Editor → `supabase_schema.sql` içeriğini yapıştır → **Run**
 
 ## D2) Merge sonrası sırayla doğrula
 
@@ -106,7 +108,7 @@ deploy olur; Auto-Deploy kapalıysa bile kod canlıya iner. Ayrıntı: **§2.1**
    son 20 satırına bak)
 2. `https://<servis>.onrender.com/health` → `{"status":"ok"}`
 3. Render → **Logs** → 3 satır:
-   `Supabase bağlantısı OK` · `Telegram bağlantısı OK` · `health endpoint ... başladı`
+   `Telegram bağlantısı OK` · `health endpoint ... başladı`; Supabase yapılandırdıysan ayrıca `Supabase bağlantısı OK`
 4. `https://<servis>.onrender.com/test?k=<TELEGRAM_TEST_KEY>` → `{"ok":true}`
    ve Telegram'da test mesajı düşer
 5. GitHub → **Actions** → "Render keep-alive" yeşil koşular (5 dk'da bir,
@@ -119,7 +121,7 @@ Dört adımı elle gezmek yerine (telefondan Termux'ta da çalışır):
 ```bash
 python deploy_check.py --url https://<servis-adin>.onrender.com
 python deploy_check.py --url https://<servis-adin>.onrender.com --test-key <TELEGRAM_TEST_KEY>
-python deploy_check.py --env-file .env --send-test-message   # Supabase + Telegram
+python deploy_check.py --env-file .env --send-test-message   # Telegram; Supabase varsa onu da denetler
 ```
 
 Her satır ya ✅ ya ⚠️ ya ❌ ile biter ve ❌ satırının altında **ne yapılacağı**
@@ -221,9 +223,10 @@ token, anahtar veya portföy verisi sızmaz. Servis canlıysa tarayıcıda
 `https://<servis>.onrender.com/health` çalışıyor demektir.
 
 > **Not:** Render Free disk kalıcı değildir. Her deploy/restart'ta `bot_data/`
-> sıfırlanır. Bu yüzden önbellek ve Telegram cooldown state'i **Supabase**
-> üzerinde tutulmalıdır (aşağıdaki bölüm). Repoda commit'lenmiş `bot_data/`
-> dosyaları ilk açılışta botu hemen çalıştırmak için yeterlidir.
+> sıfırlanabilir. Supabase bu yüzden **önerilen ama opsiyonel** uzak OHLCV cache'i
+> ve Telegram cooldown/cap state kalıcılığı sağlar. Supabase yokken analiz Yahoo
+> verisi ve mevcut yerel cache ile yine çalışır; soğuk başlangıçta daha fazla
+> veri indirilir ve Telegram limit state'i yeniden başlar.
 
 ---
 
@@ -442,7 +445,7 @@ başka sohbetlerden gelen mesajlar sessizce yok sayılır.
 | `/formasyonlar 1h` | Zaman dilimi filtresi (`1h`, `2h`, `4h`, `1d`) |
 | `/formasyonlar THYAO` | Hisse veya formasyon adı filtresi |
 | `/canli` veya `/c` | Canlı formasyonlar **tek kompakt mesajda** (kalabalık günde hızlı bakış) |
-| `/panel` veya `/p` | **48 hisse x 4 zaman dilimi slot tablosu** + sayılar + **en kritik 12 kayıt**. Diğer adlar: `/genel`, `/tablo` |
+| `/panel` veya `/p` | **48 hisse x 4 zaman dilimi slot tablosu** + sayılar + **puanı en yüksek 12 anlamlı aday**. Diğer adlar: `/genel`, `/tablo` |
 | `/panel 1h` | Panel filtresi: yalnızca o TF kolonu (çoklu TF de verilebilir: `/panel 1h 4h`) |
 | `/panel THYAO` | Panel filtresi: yalnızca o hisse(ler) satırı (kısmi ad yeter: `/panel thy`) |
 | `/panel kirilim` | Panel filtresi: state/desen adı (`kirilim`, `retest`, `üçgen`, `KIRILIM_TEYITLI` ...) |
@@ -450,7 +453,7 @@ başka sohbetlerden gelen mesajlar sessizce yok sayılır.
 | `/ozet` veya `/o` | Günlük özet tek mesajda (tamamlanan/retest/sıkışan sayıları) |
 | `/sikisanlar` · `/tamamlanan` · `/retest` · `/kirilim` | Kısa listeler (kısayollar: `/s`, `/t`, `/r`, `/k`) |
 | `/durum` | Profil, piyasa açık/kapalı, son tarama yaşı, canlı sayı, veri sağlığı, günlük alarm/hata sayacı |
-| `/tara` | Şimdi tara (mum kapanışını beklemez). **Yalnızca seans içinde çalışır**; kapalıyken nazikçe reddeder |
+| `/tara [HISSE]` | Yeni veriyi çekerek analiz eder (seans dışı da; son tamamlanmış mum/veri yaşı raporlanır) |
 | `/yardim`, `/start` | Komut listesi |
 
 Panel nasıl okunur (tek satır = bir hisse, hücreler `TF kalite` + işaret):
@@ -460,20 +463,19 @@ THYAO 1h 87🚀 · 2h — · 4h 75⚡ · 1d —
         🚀 kırılım   🎯 retest   🏁 tamamlandı   ⚡ sıkışma   — boş slot
 ```
 
-Akış: `/tara` isteği bir bayrağa yazılır, ana döngünün 5 dakikalık uykusu
-kesilir ve tarama normal akışla (aynı pacing, aynı kalite eşikleri, aynı
-Supabase kaydı) başlar; bitince `/formasyonlar` güncel listeyi gösterir.
+Akış: `/panel` tüm 48 hisseyi, `/tara [HISSE]` istenen kapsamı kuyruğa alır.
+Ana döngü uyandırılır ve iş tamamlanınca kapsam, son tamamlanmış mum zamanı,
+veri yaşı ve sonuç tek mesajda raporlanır. Seans dışı sonuçlar en son bulunan
+mumla hesaplanır; bu veri canlı olmayabilir. Supabase sonuç üretmek için zorunlu
+değildir; yalnızca OHLCV önbelleği/geçmiş kaydı için opsiyoneldir.
 
-> 💾 **Son tarama kalıcılığı:** Her tamamlanan tarama ve güvenli kapanışta liste
-> mevcut `bot_store` tablosuna `state:son_tarama` anahtarıyla ve yerelde
-> `bot_data/son_tarama.json` dosyasına atomik olarak kaydedilir. Açılışta iki
-> kopyadan en yenisi yüklenir; `/panel` ve `/canli` piyasa kapalıyken veya
-> restart/uyku sonrasında da son listeyi gösterir. `/panel` taramanın yaşını ve
-> `/panel` ile `/durum` **♻️ kayıtlı kopya** notunu gösterir; yeni tarama başlayınca
-> not kalkar. **Render'da kalıcılık için mevcut `SUPABASE_URL` ve
-> `SUPABASE_SERVICE_ROLE_KEY` tanımlı olmalıdır**: Free servisin diski geçicidir,
-> yalnızca yerel dosyaya güvenilmez. Yeni env değişkeni veya SQL/şema değişikliği
-> gerekmez; okuma/yazma hatasında bot durmaz, mümkünse diğer kopyayı kullanır.
+> ⚠️ **Sonuç güvenliği:** Eksik/başarısız tarama başarılı boş sonuç sayılmaz ve
+> önceki başarılı sonuçları silmez. Başarılı, gerçekten boş tarama ise açıkça
+> “canlı formasyon bulunmadı” olarak raporlanır. Yeniden başlatılmış eski analiz
+> snapshot'ı güncel kabul edilmez; `/panel` yeni veriyle hesaplama başlatır.
+> İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan `20:00`) anında
+> bağımsız bir tam evren analizi ve ayrı rapor çalışır. Analiz sürerken gelen
+> slash komutları cevapsız bırakılır, kuyruklanmaz.
 
 > ⚠️ **Tek tüketici kuralı:** Telegram aynı token için **iki süreç** aynı anda
 > `getUpdates` yaparsa ikincisi `409 Conflict` alır. Termux/PC'de açık kalmış
@@ -686,16 +688,25 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `TELEGRAM_BOT_TOKEN` | BotFather token'ı | Evet |
 | `TELEGRAM_CHAT_ID` | Kendi Telegram id'n (owner DM) | Evet |
 | `TELEGRAM_CHANNEL_ID` | Public kanal ID'si `-100...` (botu kanala admin ekle) | Evet |
-| `SUPABASE_URL` | `https://<ref>.supabase.co` | Hayır (plain) |
+| `SUPABASE_URL` | `https://<ref>.supabase.co` (opsiyonel uzak cache/state) | Hayır (plain) |
 | `SUPABASE_SERVICE_ROLE_KEY` | `sb_secret_...` veya `eyJ...` | Evet |
 | `BOT_PROFILE` | `Dengeli` / `Hassas` / `Seçici` | Hayır |
-| `SUMMARY_HOURS` | `09:55,18:15` (İstanbul, özet saatleri) | Hayır |
+| `SUMMARY_HOURS` | `09:55,18:45` (İstanbul; akşam özeti son tarama sonrasına alınır) | Hayır |
+| `DEFERRED_ALERT_DIGEST_TIME` | `18:45` (İstanbul; ertelenen adaylar kapanış özetine eklenir) | Hayır |
+| `POST_CLOSE_ANALYSIS_TIME` | `20:00` (İstanbul, ayrı günlük tam evren analizi) | Hayır |
+| `OFFSESSION_CACHE_MAX_AGE_DAYS` | `14` (fetch yokken izin verilen en eski seans dışı cache) | Hayır |
 | `PUBLIC_MIN_QUALITY` | `80` (public kanala min kalite) | Hayır |
 | `LOG_LEVEL` | `INFO` (varsayılan) | Hayır |
 | `TELEGRAM_TEST_KEY` | `/test?k=<değer>` için anahtar (bkz. §4.4) | Evet |
 | `TELEGRAM_WEBHOOK_SECRET` | Rastgele metin; doluysa komutlar webhook ile gelir (bkz. §4.6). Boş = yoklama | Evet |
 | `TELEGRAM_WEBHOOK_URL` | (Opsiyonel) Tam webhook adresi; boşsa `RENDER_EXTERNAL_URL` + `/webhook/<secret>` | Evet |
 | `RENDER_EXTERNAL_URL` | Render **otomatik** verir (`https://<servis>.onrender.com`); elle eklemeyin | Hayır |
+
+Bildirim akışı: teyitli kırılım, başarılı retest, tamamlanma ve başarısız kırılım
+anında gönderilir. Sıkışma/hazırlık/adayı/retest bekleme durumları slot başına
+bellekte güncellenir ve 18:45 DM kapanış özetinde en yüksek kalite puanlı en fazla
+12 aday olarak yer alır. Bu geçici kuyruk restart'ta sıfırlanır; 20:00 tam evren
+raporu ayrı kalır.
 
 Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 (redeploy). Loglarını **Logs → Live logs** veya **Events** sekmesinden izle.
@@ -720,11 +731,10 @@ Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 | Webhook adresi 503 döndürüyor | Normal: servis uyanıyor ya da bot komutları henüz kurmadı; Telegram tekrar dener |
 | `getWebhookInfo` `last_error_message` dolu | Adres yanlış/erişilemez ya da HTTPS değil. `TELEGRAM_WEBHOOK_URL`'i temizleyip `RENDER_EXTERNAL_URL` ile otomatik üretime dönün (§4.6) |
 | Webhook açtım, komutlar bir süre sonra durdu | Render Free uykuya geçmiş olabilir. Telegram başarısız teslimatı bir süre tekrar dener; keep-alive penceresini genişletin (`KEEPALIVE_ALWAYS=true`, §5) |
-| `/tara` "piyasa kapalı" diyor | Normal: elle tarama yalnızca seans içinde (İstanbul 09:50-18:40) çalışır |
-| `/panel` boş geliyor | İki olasılık: son tamamlanan taramada canlı formasyon yoktu; veya restart sonrası kayıt yüklenemedi (Render'da `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` yok/yanlış ya da Supabase erişilemiyor). Son tarama yaşına ve yükleme loguna bak; ilk kurulumda ilk taramayı bekle |
-| `/panel` "♻️ Kayıtlı son tarama gösteriliyor" diyor | Normal: restart/uyku sonrası son liste yüklendi; bu oturumda henüz yeni tarama yok. Başlıktaki tarama yaşı verinin güncelliğini gösterir; yeni tarama başlayınca not kalkar |
+| `/tara` sonucu eski görünüyor | Seans dışı veri canlı değildir; rapordaki son tamamlanmış mum zamanı ve veri yaşını kontrol edin |
+| `/panel` boş geliyor | Üstteki tarama durumunu kontrol et: “henüz başarılı analiz yok”, “eksik/başarısız” ve “başarılı ama aday yok” birbirinden ayrıdır. `/panel` yeni tam evren analizi başlatır |
 | Komut cevabı 1 dk gecikiyor | Servis uyuyorsa ilk istek onu uyandırır (~1 dk); keep-alive penceresi bunu seans içinde engeller |
-| `Supabase bağlantısı OK` yok | `supabase_schema.sql` çalıştırılmamış veya anahtar yanlış (yukarıdaki HTTP kodlarına bak) |
+| Supabase bağlantısı yok | Zorunlu değildir; bot Yahoo verisi ve yerel cache ile analiz yapar. Supabase yalnızca opsiyonel OHLCV cache/geçmiş kaydıdır |
 | Tarama çok yavaş | Free instance 0.1 CPU. Tarama 48 hisse × 4 zaman dilimi; ilk yükleme birkaç dakika sürebilir, sonraki turlar mum başına bir tarama yapılır |
 | `MemoryError` / restart döngüsü | Free instance 512 MB. `BOT_PROFILE=Seçici` ile evreni daraltmak gerekebilir |
 | Actions'ta "Render keep-alive" koşusu **sarı** ve logda `RENDER_HEALTH_URL tanımlı değil` | Secret/Variable hiç eklenmemiş (bkz. §C). Bu bir hata değil uyarıdır; ekleyince yeşile döner |

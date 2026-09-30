@@ -67,12 +67,14 @@ yalnızca `TELEGRAM_CHAT_ID`'den kabul edilir:
 |---|---|
 | `/formasyonlar` | Günün canlı formasyonları (`/formasyonlar 1h`, `/formasyonlar THYAO` filtreleri) |
 | `/canli`, `/c` | Canlı formasyonlar tek kompakt mesajda |
-| `/panel`, `/p` | 48 hisse × 4 TF slot tablosu + sayılar + en kritik 12 kayıt (`/genel`, `/tablo` diğer adları; `/panel 1h THYAO` gibi filtreler) |
-| Son tarama kalıcılığı (otomatik) | Restart/uyku sonrası `/panel` ve `/canli` son tamamlanan listeyi gösterir; `/panel` taramanın yaşını, `/panel` ve `/durum` kayıtlı kopya için ♻️ notunu gösterir. Render'da mevcut Supabase env değerleri gereklidir. |
+| `/panel`, `/p` | 48 hisse × 4 TF slot tablosu + sayılar + kompozit kalite/durum puanına göre en anlamlı 12 aday (`/genel`, `/tablo` diğer adları; `/panel 1h THYAO` gibi filtreler). Çağrıldığında güncel veriyle analiz başlatır. |
+| Son tarama durumu | Başarısız/eksik analiz başarılı boş sonuçtan ayrılır; önceki başarılı adaylar hata durumunda korunur. Yeniden başlatılmış snapshot güncel kabul edilmez. Supabase yalnızca opsiyonel OHLCV cache/geçmiş kaydıdır. |
 | `/ozet`, `/o` | Günlük özet (tamamlanan/retest/sıkışan) |
 | `/durum` | Piyasa, son tarama yaşı, canlı sayı, veri sağlığı, günlük alarm/hata |
-| `/tara` | Şimdi tara (yalnızca seans içinde; mum kapanışını beklemez) |
+| `/tara [HISSE]` | Şimdi analiz et (seans dışı da; mum kapanışını beklemez). Son tamamlanmış mumun zamanı/veri yaşı raporlanır. |
 | `/yardim` | Komut listesi |
+
+`/panel` ve `/tara [HISSE]` yeni analiz işini kuyruğa alır ve bitince raporlar. Analiz sırasında gelen slash komutları cevapsız bırakılır ve kuyruğa eklenmez. İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan 20:00) anında ayrı bir tam evren analizi yapılır.
 
 Komutlar varsayılan olarak `getUpdates` uzun yoklamasıyla ayrı bir thread'de
 toplanır; aynı token'la ikinci bir kopya (Termux/PC) çalışıyorsa `409 Conflict`
@@ -115,22 +117,15 @@ seansını ve akşam komut kullanımını kapsar; gece servis uyur (Render Free'
   Render'a gelen bir HTTP isteği değildir) — gece komut yanıtı için
   `KEEPALIVE_ALWAYS=true`.
 
-Supabase SQL scriptini çalıştırdıktan sonra Render servisinin **Environment** bölümüne şu
-secret'ları girin (değerleri Git'e veya sohbete koymayın):
-
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHAT_ID`
-- İsteğe bağlı `BOT_PROFILE`
-
-Supabase değişkenleri yoksa bot mevcut yerel cache/dosya davranışıyla çalışır; ancak Render'ın
-ephemeral diski nedeniyle restart/deploy sonrası bu yerel veriler korunmaz. Değişkenler varsa
-bot açılışta son taramayı, ardından 1H/1D cache ve Telegram state'ini yükler;
-cache/Telegram state'i tek istekte alınır. Son liste mevcut `bot_store` tablosunda
-`state:son_tarama` anahtarıyla, yerelde de atomik `bot_data/son_tarama.json` dosyasıyla
-tutulur. Açılışta en yeni kopya seçilir; okuma/yazma hatası botu durdurmaz.
-Yerel JSON/pickle dosyaları da fallback olarak tutulur.
+Telegram komutları için Render **Environment** bölümüne `TELEGRAM_BOT_TOKEN` ve
+`TELEGRAM_CHAT_ID` ekleyin (secret değerleri Git'e veya sohbete koymayın).
+`BOT_PROFILE` isteğe bağlıdır. Supabase entegrasyonu da isteğe bağlıdır:
+`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` ve `supabase_schema.sql`, OHLCV
+cache/history ile Telegram rate-limit/cooldown durumunun restart sonrası
+korunmasını sağlar. Bunlar olmadan da bot Yahoo Finance ve yerel cache ile analiz
+üretir; Render'ın ephemeral diski restart/deploy'da yerel geçmişi ve Telegram
+cooldown state'ini sıfırlayabilir. Yeniden başlatılan analiz snapshot'ı güncel
+sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 
 ## Dosya haritası
 
