@@ -138,6 +138,16 @@ Yöntem: dosya taşıma değil **kademeli**: önce `reporting/` (saf fonksiyonla
 orchestrator'a iner; `import main` yan etkileri (logger ele geçirme, `/var/log` yazma) kaldırılır.
 Her adım ayrı commit; davranış değişmez, yalnız taşıma.
 
+**İlerleme (kademeli, her adım ayrı commit):**
+
+| Adım | Kapsam | Durum |
+|---|---|---|
+| 8.1 | `reporting/format.py`: saf metin/sayı üretimi (panel, digest özeti, yaş metni, filtreleme) main'den ayrıldı; main'de alias'larla geriye dönük uyum | ✅ |
+| 8.2 | `import main` yan etkileri (logger ele geçirme, `/var/log`-`./logs` yazımı) kaldırılır | ⏳ |
+| 8.3 | `_panel_raporu` gibi durum okuyan rapor fonksiyonlarına bağlam enjeksiyonu (`reporting/panel.py`) | ⏳ |
+| 8.4 | `state/`: kalıcılık yardımcıları (son tarama, digest tamponu) main'den ayrılır | ⏳ |
+| 8.5 | `transport/`: telegram/webhook kurulumu main'den ayrılır; main ince orkestratör | ⏳ |
+
 ---
 
 ## Riskli/karar bekleyen işler

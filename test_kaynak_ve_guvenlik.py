@@ -344,3 +344,44 @@ def test_supabase_erisilemezse_kontrol_sessiz(monkeypatch):
                         {"instance_id": "ben", "son_kontrol": None, "canli_digerleri": [], "uyari": False})
     durum = main_mod._tekil_ornek_kontrolu(_Kirik(), force=True)
     assert durum["uyari"] is False, "ağ hatası uyarı üretmemeli (yanlış alarm olmasın)"
+
+
+# --- Batch 8 / C2: raporlama katmanı ayrımı ---------------------------------
+def test_reporting_katmani_main_import_etmez():
+    """8.1: `reporting/format.py` saf olmalı; main'i (döngü) import etmemeli."""
+    import ast
+    kaynak = open("reporting/format.py", encoding="utf-8").read()
+    agac = ast.parse(kaynak)
+    moduller = set()
+    for dugum in ast.walk(agac):
+        if isinstance(dugum, ast.Import):
+            moduller.update(a.name.split(".")[0] for a in dugum.names)
+        elif isinstance(dugum, ast.ImportFrom) and dugum.module:
+            moduller.add(dugum.module.split(".")[0])
+    assert "main" not in moduller
+    assert "live_state" not in moduller, "raporlama canlı durumu okumaz, parametre alır"
+
+
+def test_main_aliaslari_raporlama_katmanini_gosterir():
+    """Eski iç adlar korunuyor ama artık reporting'ten geliyor (davranış aynı)."""
+    import reporting.format as fmt
+    assert main_mod._sayi is fmt.sayi
+    assert main_mod._panel_aday_puani is fmt.panel_aday_puani
+    assert main_mod._format_deferred_alert_summary is fmt.format_deferred_alert_summary
+
+
+def test_panel_metinleri_tasima_sonrasi_ayni():
+    kayitlar = [
+        {"stock": "THYAO", "timeframe": "1h", "pattern_name": "Yükselen Üçgen",
+         "state": "KIRILIM_TEYITLI", "quality": 88.0, "critical_price": 312.5,
+         "upper_touches": 2, "lower_touches": 2, "contraction": 0.9, "mtf_destek": True},
+        {"stock": "GARAN", "timeframe": "1d", "pattern_name": "Flama",
+         "state": "SIKISMA_GUCLENIYOR", "quality": 74.0, "critical_price": 55.0,
+         "upper_touches": 1, "lower_touches": 1, "contraction": 0.5},
+    ]
+    ozet = main_mod._format_deferred_alert_summary(kayitlar, toplam=21)
+    assert "(2/21 gösteriliyor)" in ozet
+    assert "… 19 aday daha (tam liste: /formasyonlar)" in ozet
+    satirlar = main_mod._panel_kritik_listesi(kayitlar)
+    assert satirlar[0].startswith("🔥 TOP 12")
+    assert "THYAO 1h Yükselen Üçgen" in satirlar[1], "kompozit puan sıralaması bozulmamalı"
