@@ -191,6 +191,18 @@ daily_stats = {
     'patterns_found': 0,
     'alerts_sent': 0,
     'errors': 0,
+    # --- ADAY HUNİSİ (kullanıcı isteği) ---
+    # "18 üretiliyor ama 3-5'inden bahsediliyor" sorusunun cevabı: her adayın
+    # akıbeti sayılır ve /durum'da tek satırda gösterilir. Hiçbir kayıt sessizce
+    # düşmez: ya gönderilir, ya ertelenir, ya da NEDENİ sayılır.
+    'alerts_attempted': 0,        # acil gönderim denemesi
+    'alerts_failed': 0,           # deneme başarısız (HTTP/ağ)
+    'alerts_deferred': 0,         # WATCH state: 18:45 digest'ine ertelendi
+    'alerts_below_threshold': 0,  # kalite eşiği altı (push üretmez)
+    'alerts_state_disabled': 0,   # state hiçbir push akışında değil (yalnız panel)
+    'alerts_digest_overflow': 0,  # digest limiti nedeniyle gösterilmeyen aday
+    'alerts_engel_cooldown': 0,   # cooldown nedeniyle gönderilemedi (B4 kuyruğuna girer)
+    'alerts_engel_kap': 0,        # saatlik/günlük kap nedeniyle gönderilemedi
     # Veri sağlığı (FAZ 1): fetch başarısızlıkları artık SAYILIYOR ve görünür.
     # Önceden fetch başarısız olunca cache dolu olduğu için hiç log satırı yoktu
     # -> Yahoo saatlerce kapalıysa bot "sağlıklı" görünürken kör çalışıyordu.
@@ -219,6 +231,14 @@ def reset_daily_if_needed():
         daily_stats['patterns_found'] = 0
         _daily_pattern_keys.clear()
         daily_stats['alerts_sent'] = 0
+        daily_stats['alerts_attempted'] = 0
+        daily_stats['alerts_failed'] = 0
+        daily_stats['alerts_deferred'] = 0
+        daily_stats['alerts_below_threshold'] = 0
+        daily_stats['alerts_state_disabled'] = 0
+        daily_stats['alerts_digest_overflow'] = 0
+        daily_stats['alerts_engel_cooldown'] = 0
+        daily_stats['alerts_engel_kap'] = 0
         daily_stats['errors'] = 0
         daily_stats['fetch_ok'] = 0
         daily_stats['fetch_failures'] = 0
@@ -511,6 +531,30 @@ def _komut_durum(_arguman: str) -> str:
         f"Günlük toplam: {daily_stats['patterns_found']} formasyon kaydı, "
         f"{daily_stats['alerts_sent']} alarm, {daily_stats['errors']} hata",
     ]
+    # --- ADAY HUNİSİ: "kaç aday üretildi, kaçı nereye gitti?" ---
+    # Kullanıcı sorusu: "18 çıktı alıyoruz ama 3-5'inden bahsediyoruz". Bu satır
+    # her adayın akıbetini tek bakışta gösterir; düşen aday sessiz kalmaz.
+    huni = (f"🔎 Aday hunisi: {daily_stats['patterns_found']} üretildi · "
+            f"{daily_stats['alerts_sent']} push · {daily_stats['alerts_deferred']} digest · "
+            f"{daily_stats['alerts_state_disabled']} state dışı · "
+            f"{daily_stats['alerts_below_threshold']} eşik altı")
+    if daily_stats.get('alerts_digest_overflow'):
+        huni += f" · {daily_stats['alerts_digest_overflow']} digest taşması"
+    satirlar.append(huni)
+    gosterim = None
+    gonderim = getattr(_notifier_ref, "gonderim_durumu", None)
+    if callable(gonderim):
+        try:
+            gd = gonderim()
+            engel = gd.get("engeller") or {}
+            gosterim = (f"🚧 Gönderim engeli: {engel.get('cooldown', 0)} cooldown · "
+                        f"{engel.get('gunluk_kap', 0)} günlük kap · "
+                        f"{engel.get('saatlik_kap', 0)} saatlik kap · "
+                        f"{gd.get('hatalar', 0)} hata")
+        except Exception as exc:  # noqa: BLE001 - komut asla çökmesin
+            logger.debug(f"Gönderim durumu okunamadı: {exc}")
+    if gosterim:
+        satirlar.append(gosterim)
     if st.get("son_tarama_hatasi"):
         satirlar.append(f"⚠️ Son hata: {st['son_tarama_hatasi']}")
     kapsam_notu = _kismi_kapsam_notu()
@@ -1111,6 +1155,21 @@ def _panel_raporu(arguman: str = "", tamamlandi: bool = False) -> str:
             tf_parcalari.append(f"{tf} 0/{len(satir_hisseler)}")
     satirlar.append(" · ".join(tf_parcalari))
     satirlar.append(_panel_durum_sayilari(filtreli))
+    # Eşik altı adaylar: liste ve sayaçlarda görünürler ama alarm ÜRETMEZLER.
+    # (Eskiden yalnız debug log'da düşüyorlardı; kullanıcı "kaç tanesi
+    # gösterilmiyor?" sorusunu hiçbir yerden göremiyordu.)
+    esik_alti = 0
+    for f in filtreli:
+        esik = f.get("min_quality")
+        if esik is None:
+            continue
+        try:
+            if _panel_kalite(f) < float(esik):
+                esik_alti += 1
+        except (TypeError, ValueError):
+            continue
+    if esik_alti:
+        satirlar.append(f"⚠️ {esik_alti} aday alarm eşiğinin altında (listelenir, push üretmez)")
     if st.get("son_tarama_durumu") == "basarisiz":
         satirlar.append("⚠️ Son tarama eksik/başarısız; bu panel boşluğu sinyal yokluğu değildir.")
     elif not formations:
@@ -1903,9 +1962,12 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         _deferred_alert_buffer.observe(stock, tf_name, formasyon_kaydi, simdiki_zaman)
                     else:
                         _deferred_alert_buffer.observe(stock, tf_name, None, simdiki_zaman)
+                    # Aday hunisi: bu kaydın akıbeti sayılır (bkz. daily_stats notu).
                     if q < min_q:
+                        daily_stats['alerts_below_threshold'] += 1
                         logger.debug(f"{stock} {tf_name} kalite {q:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
                     elif send_alerts and state in WATCH_STATES:
+                        daily_stats['alerts_deferred'] += 1
                         logger.info(f"{stock} {tf_name} {state}: düşük öncelikli bildirim kapanış özetine ertelendi")
                     # Teyitli kırılım, başarılı retest, tamamlanma ve başarısız kırılım acildir.
                     elif send_alerts and state in IMMEDIATE_ALERT_STATES:
@@ -1957,11 +2019,29 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 if not (item.get('stock') == stock and item.get('timeframe') == tf_name)
                             ][:3],
                         }
+                        daily_stats['alerts_attempted'] += 1
                         if notifier.send(alert_data):
                             daily_stats['alerts_sent'] += 1
                             _deferred_alert_buffer.mark_reported(alert_data['watch_context'], simdiki_zaman)
                             _live_state.mark_alert_sent(stock, tf_name)
                             logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
+                        else:
+                            # Neden gönderilemedi? cooldown/kap ise olay kaybolmasın
+                            # (Batch 5'te kuyruğa alınır); şimdilik sayılır.
+                            daily_stats['alerts_failed'] += 1
+                            if getattr(notifier, "_son_engel", ""):
+                                if notifier._son_engel == "cooldown":
+                                    daily_stats['alerts_engel_cooldown'] += 1
+                                else:
+                                    daily_stats['alerts_engel_kap'] += 1
+                            logger.warning(
+                                f"⚠️ Telegram gönderilemedi: {stock} {tf_name} {state} "
+                                f"(engel: {getattr(notifier, '_son_engel', None) or 'gönderim hatası'})"
+                            )
+                    elif send_alerts:
+                        # Ne acil ne izleme: mevcut state politikasında push yok,
+                        # yalnız /panel ve /formasyonlar gösterir. Sessizce düşmesin.
+                        daily_stats['alerts_state_disabled'] += 1
                 else:
                     # Başarılı TF taramasında aday kaybolduysa bekleyen kaydı kaldır.
                     _deferred_alert_buffer.observe(stock, tf_name, None, simdiki_zaman)

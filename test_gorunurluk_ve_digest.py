@@ -102,8 +102,13 @@ def test_ozet_daralmayi_korur_sikisanlar_bolumu_bosalmaz(monkeypatch):
     assert "SIKIŞANLAR" in ozet and "ASELS" in ozet
 
 
-def test_live_state_bosken_lifecycle_snapshots_yedegi_calisir():
+def test_live_state_bosken_lifecycle_snapshots_yedegi_calisir(monkeypatch):
     """İlk tarama öncesi (LiveState boş) davranış korunur."""
+    class _BosLS:
+        def formations(self):
+            return []
+    monkeypatch.setattr(main_mod, "_live_state", _BosLS())
+
     class _Snap:
         active = type("A", (), {"pattern_type": "Alçalan Kama", "contraction": 0.7})()
         state = "KIRILIM_ADI"  # içerik önemli değil

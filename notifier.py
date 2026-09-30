@@ -144,6 +144,15 @@ class TelegramNotifier:
         self.max_saatlik = TELEGRAM_MAX_MESAJ_SAAT
         self.max_gunluk = TELEGRAM_MAX_MESAJ_GUN
         self._saatlik_zamanlar: List[datetime] = []
+        # Gönderilemeyen alarmların SEBEP sayaçları (gün içi, gün değişiminde sıfırlanır).
+        # Neden: can_send False döndüğünde olay hiçbir yerde görünmüyordu; kullanıcı
+        # "kaç tanesi bastırıldı" sorusunun cevabını /durum'da görebilmeli.
+        self.engeller = {"cooldown": 0, "gunluk_kap": 0, "saatlik_kap": 0}
+        self.gonderim_hatasi = 0
+        self.gonderilen_alarm = 0
+        # Son can_send çağrısının engel sebebi (None = engel yok). Çağıran taraf
+        # "gönderilemedi" durumunu bundan ayırt eder (kuyruk için gerekli).
+        self._son_engel = None
         self._gunluk_sayac = 0
         self._gunluk_tarih = datetime.now().date()
         self._kap_uyarildi = False
@@ -331,6 +340,10 @@ class TelegramNotifier:
             self._gunluk_sayac = 0
             self._gunluk_tarih = bugun
             self._kap_uyarildi = False
+            # Engel/hata sayaçları da günlüktür; yoksa /durum dünün engelini gösterir.
+            self.engeller = {"cooldown": 0, "gunluk_kap": 0, "saatlik_kap": 0}
+            self.gonderim_hatasi = 0
+            self.gonderilen_alarm = 0
 
     def _saatligi_temizle(self):
         sinir = datetime.now() - timedelta(hours=1)
@@ -379,6 +392,10 @@ class TelegramNotifier:
         return f"{stock}_{pattern}_{timeframe}_{state}"
 
     def can_send(self, stock: str, pattern: str, timeframe: str, state: str = "") -> bool:
+        """Gönderim yapılabilir mi? Hayırsa SEBEBİ sayaca yazılır (bkz. self.engeller)."""
+        # Her çağrı temiz başlar: kritik state'in kapıyı geçmesi bir önceki
+        # engelin sebebini taşımaz (yanlış "kuyruğa al" kararı olmasın).
+        self._son_engel = None
         key = self._cooldown_key(stock, pattern, timeframe, state)
         if key not in self.last_sent:
             cooldown_tamam = True
@@ -386,10 +403,14 @@ class TelegramNotifier:
             elapsed = datetime.now() - self.last_sent[key]
             cooldown_tamam = elapsed > timedelta(hours=self.cooldown_hours)
         if not cooldown_tamam:
+            self.engeller["cooldown"] += 1
+            self._son_engel = "cooldown"
             return False
         self._gunu_sifirla_gerekirse()
         self._saatligi_temizle()
         if self._gunluk_sayac >= self.max_gunluk:
+            self.engeller["gunluk_kap"] += 1
+            self._son_engel = "gunluk_kap"
             if not self._kap_uyarildi:
                 self._kap_uyarildi = True
                 logger.error(f"TELEGRAM GÜNLÜK KAPANI AŞILDI ({self.max_gunluk} mesaj) - bugün başka mesaj gönderilmeyecek.")
@@ -397,11 +418,24 @@ class TelegramNotifier:
         if len(self._saatlik_zamanlar) >= self.max_saatlik:
             if state in KRITIK_STATELER:
                 return True
+            self.engeller["saatlik_kap"] += 1
+            self._son_engel = "saatlik_kap"
             if not self._kap_uyarildi:
                 self._kap_uyarildi = True
                 logger.warning(f"TELEGRAM SAATLİK KAPANI AŞILDI ({self.max_saatlik} mesaj/saat) - sadece kritik sinyaller.")
             return False
+        self._son_engel = None
         return True
+
+    def gonderim_durumu(self) -> Dict:
+        """Bugünün gönderim/engel özeti (/durum ve heartbeat için)."""
+        return {
+            "gonderilen_alarm": self.gonderilen_alarm,
+            "hatalar": self.gonderim_hatasi,
+            "engeller": dict(self.engeller),
+            "gunluk_kap": self.max_gunluk,
+            "saatlik_kap": self.max_saatlik,
+        }
 
     def format_message(self, data: Dict) -> str:
         stock = data.get('stock_name', 'Bilinmiyor')
@@ -656,6 +690,7 @@ class TelegramNotifier:
             key = self._cooldown_key(stock, pattern, timeframe, state)
             self.last_sent[key] = datetime.now()
             self._gonderim_kaydet()
+            self.gonderilen_alarm += 1
             return True
 
         try:
@@ -669,6 +704,7 @@ class TelegramNotifier:
                 self.last_sent[key] = datetime.now()
                 self._cooldown_kaydet()
                 self._gonderim_kaydet()
+                self.gonderilen_alarm += 1
                 # Public kanala da gönder (filtreli)
                 if self.should_send_to_public(data):
                     self.send_to_channel(message)
@@ -676,9 +712,11 @@ class TelegramNotifier:
             else:
                 ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
                 logger.error(f"Telegram hatası: {resp.text} | {ipucu}")
+                self.gonderim_hatasi += 1
                 return False
         except Exception as e:
             logger.error(f"Telegram gönderim hatası: {e}")
+            self.gonderim_hatasi += 1
             return False
 
 
