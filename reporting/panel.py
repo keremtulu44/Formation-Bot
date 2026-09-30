@@ -21,7 +21,7 @@ from config import ISTANBUL_TZ
 from telegram_commands import kirp
 
 from reporting.format import (
-    PANEL_IPUCU, PANEL_MESAJ_SINIRI, PANEL_TIMEFRAMES, PANEL_TOP_KRITIK,
+    PANEL_IPUCU, PANEL_MESAJ_SINIRI, PANEL_TIMEFRAMES,
     filtrele_formasyonlar, gecen_sure, panel_durum_sayilari, panel_filtre_coz, panel_hucre,
     panel_kalite, panel_kritik_listesi, panel_sigdir, veri_durumu_satiri,
 )

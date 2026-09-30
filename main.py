@@ -14,7 +14,6 @@ import socket
 import threading
 from datetime import datetime, timedelta, time as dt_time
 from typing import List, Dict
-import pytz
 
 try:
     from dotenv import load_dotenv
@@ -34,7 +33,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     SUMMARY_HOURS, DEFERRED_ALERT_DIGEST_TIME, DEFERRED_ALERT_DIGEST_LIMIT,
                     POST_CLOSE_ANALYSIS_TIME, ACIL_KUYRUK_BOSALTMA_ARALIK_SN,
                     HEARTBEAT_MIN_ARALIK_SN, HEARTBEAT_UZAK_ARALIK_SN,
-                    PUBLIC_MIN_QUALITY, PUBLIC_STATES,
+                    PUBLIC_MIN_QUALITY,
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
@@ -47,16 +46,16 @@ from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
 from notifier import TelegramNotifier
 from supabase_store import SupabaseStore
-from health_server import start_render_health_server, WEBHOOK_YOL, WEBHOOK_YOL_ONEK
+from health_server import start_render_health_server
 from live_state import LiveState
-from telegram_commands import TelegramCommandListener, kirp
+from telegram_commands import TelegramCommandListener
 
 # Batch 8 / C2: raporlama katmanı `reporting/format.py`'ye ayrıldı. Burada eski
 # iç adlar (`_sayi`, `_panel_*`) alias olarak korunuyor: main döngüsü ve testler
 # aynı isimlerle çalışmaya devam eder, davranış değişmez.
 from reporting.panel import panel_raporu
 from reporting.format import (
-    STATE_TR, PANEL_TIMEFRAMES, PANEL_TOP_KRITIK, PANEL_MESAJ_SINIRI,
+    STATE_TR, PANEL_TIMEFRAMES, PANEL_MESAJ_SINIRI,
     PANEL_DURUM_PUANI, PANEL_IPUCU, son_bar_yasi_dakika_str,
     sayi as _sayi, gecen_sure as _gecen_sure,
     filtrele_formasyonlar as _filtrele_formasyonlar, break_ok as _break_ok,

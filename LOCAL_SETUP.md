@@ -117,6 +117,9 @@ mkdir logs
 Formation-Bot/
 ├── config.py              # BIST listesi, profil, sabitler
 ├── data.py                # Deque, resample, BIST saat kontrolü
+├── reporting/             # Raporlama katmanı (panel/digest metinleri; batch-8)
+├── state/                 # Kalıcılık katmanı (son tarama + digest tamponu; batch-8)
+├── transport/             # Taşıma katmanı (Telegram webhook/komut; batch-8)
 ├── patterns/              # Ana pattern motoru (paket)
 │   ├── pivots.py          # Pivot bulma
 │   ├── detect.py          # Üçgen/kama + bayrak tespiti

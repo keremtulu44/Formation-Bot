@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, Optional
 
 import requests
 

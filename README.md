@@ -199,8 +199,9 @@ Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölç
 1. **Pine dosyası bekleniyor** (`Yeni Metin Belgesi.txt`, ARGENT v0.4.6 export). Diske
    ulaşmadı; geldiğinde `PINE_FARK_ANALIZI.md` §5'teki 12 maddelik doğrulama listesi açılacak.
 2. **Bildirim durumu artık kalıcı (Faz 5):** 18:45 digest tamponu `state:digest_pending`,
-   engellenen acil olaylar `state:telegram_acil_kuyruk` anahtarıyla Supabase'e + `bot_data/`
-   dosyalarına yazılır; açılışta geri yüklenir. Bot akşam 18:45'te kapalıysa kaçırılan
+   engellenen acil olaylar `state:telegram_acil_kuyruk` anahtarıyla Supabase'e +
+   `DATA_DIR` içindeki dosyalara yazılır (batch-7/C4: repo dışı; `state/persistence.py`);
+   açılışta geri yüklenir. Bot akşam 18:45'te kapalıysa kaçırılan
    kapanış özeti açılışta "⏰ Kaçırılan kapanış özeti" olarak telafi edilir. Engellenen acil
    olay `ACIL_KUYRUK_TTL_DK` (varsayılan 180 dk) içinde engel kalkınca gönderilir; süre aşılırsa
    bayat sinyal atılır (kuyruk sayaçları `/durum` ve heartbeat'te görünür).

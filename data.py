@@ -6,7 +6,6 @@ import pandas as pd
 import numpy as np
 from collections import deque
 from datetime import date, datetime, timedelta, time as dt_time
-import pytz
 import logging
 import os
 import pickle
@@ -14,9 +13,9 @@ from typing import Dict, List, Optional, Tuple
 
 from config import (
     ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN,
-    DATA_DIR, SEED_DATA_DIR, MARKET_SUFFIX, ACTIVE_STOCKS,
+    DATA_DIR, SEED_DATA_DIR, MARKET_SUFFIX,
     CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER_CLOSE_MIN, TARAMA_PENCERE_SONU,
-    STALE_BAR_UYARI_DK, TERMINAL_TAZE_BAR, BIST_TATILLER, BIST_YARIM_GUNLER,
+    BIST_TATILLER, BIST_YARIM_GUNLER,
     VERI_YOK_MODU_ESIK_DK, SPLIT_SUREKLILIK_ESIK_PCT, BAR_BOSLUK_ESIK_SAAT,
     GUNLUK_FETCH_PERIOD, GUNLUK_DEQUE_MAXLEN,
     FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD, FULL_1H_FETCH_STALE_DAYS

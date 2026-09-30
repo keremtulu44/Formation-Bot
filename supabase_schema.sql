@@ -1,4 +1,11 @@
 -- Formation-Bot için Supabase kalıcı store şeması.
+--
+-- NOT (Batch 7 / C3): Uygulama anahtarları varsayılan olarak `formation-bot:` ön
+-- ekiyle yazar (`SUPABASE_STORE_PREFIX`). Aynı tabloyu paylaşan ikinci bir örnek
+-- varsa bu ön ek çakışmayı önler. Aşağıdaki "kullanılan anahtarlar" açıklaması
+-- ÖNEKSİZ (mantıksal) adları listeler; tabloda `formation-bot:cache:1h:THYAO`
+-- gibi görünürler. Ön ek devreye girerken yazılmış eski (öneksiz) kayıtlar
+-- okunur ve bir sonraki yazımda ön ekli hâle taşınır.
 -- Bu dosyanın tamamını Supabase Dashboard -> SQL Editor'da bir kez çalıştırın.
 -- Bot bağlantısı sunucu tarafında service_role ile yapılmalı; anahtarı koda/Git'e koymayın.
 

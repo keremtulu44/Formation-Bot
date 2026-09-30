@@ -3,7 +3,7 @@
 # Pine v0.4.6 FINAL EXPORT birebir - matematik düzgün, yüzdeye göre oynama yok
 
 import os
-from datetime import date, datetime, time
+from datetime import date, time
 import pytz
 
 # .env desteği - local ve /etc/bist-bot.env için

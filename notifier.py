@@ -7,7 +7,7 @@ import random
 import re
 import time
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from config import (DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN,
                     ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK)

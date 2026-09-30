@@ -25,7 +25,7 @@
 | **B5** | B3 kalıcı digest + B4 engellenen acil kuyruğu | ✅ tamamlandı `0ba343e` (`feat(batch-5)`) — pytest 250, test_tarama_zamani 100/100 |
 | **B6** | B5 yazma amplikasyonu + A7 sır/rate limit + A8 pickle + B10 çoklu örnek | ✅ tamamlandı `fix(batch-6)` — pytest 267, test_tarama_zamani 100/100 |
 | **B7** | C1 sabitler + C3 namespace + C4 DATA_DIR + C7 ölü araçlar | ✅ tamamlandı `a738ec4` (`fix(batch-7)`) — pytest 271, test_tarama_zamani 100/100 |
-| **B8** | C2 `main.py` katmanlara ayırma (yapısal, dallanmış iş) | ⏳ sırada |
+| **B8** | C2 `main.py` katmanlara ayırma (yapısal) | ✅ tamamlandı: 8.1 `bd6214f` · 8.2 `8fd8028` · 8.3 `d324544` · 8.4 `f6d24a5` · 8.5 `011721f` — pytest 287 |
 
 ---
 
@@ -145,17 +145,23 @@ Her adım ayrı commit; davranış değişmez, yalnız taşıma.
 | 8.1 | `reporting/format.py`: saf metin/sayı üretimi (panel, digest özeti, yaş metni, filtreleme) main'den ayrıldı; main'de alias'larla geriye dönük uyum | ✅ `bd6214f` |
 | 8.2 | `import main` yan etkileri (logger ele geçirme, `/var/log`-`./logs` yazımı) kaldırıldı; kurulum `main_loop()`/girişe taşındı | ✅ `8fd8028` |
 | 8.3 | `reporting/panel.py`: `panel_raporu` artık durumu parametre alır; `main._panel_raporu` ince adaptör (bu commit) | ✅ |
-| 8.4 | `state/`: `paths.py` (yol/snapshot yardımcıları) + `persistence.py` (son tarama + digest tamponu kaydet/yükle); main'de ince adaptörler | ✅ |
-| 8.5 | `transport/telegram.py`: sır/adres çözümleme, Bot API çağrısı, setWebhook/deleteWebhook ve komut katmanı (webhook ↔ yoklama) seçimi; main'de ince adaptörler | ✅ |
+| 8.4 | `state/`: `paths.py` (yol/snapshot yardımcıları) + `persistence.py` (son tarama + digest tamponu kaydet/yükle); main'de ince adaptörler | ✅ `f6d24a5` |
+| 8.5 | `transport/telegram.py`: sır/adres çözümleme, Bot API çağrısı, setWebhook/deleteWebhook ve komut katmanı (webhook ↔ yoklama) seçimi; main'de ince adaptörler | ✅ `011721f` |
 
 ---
 
-## Riskli/karar bekleyen işler
-- **B7 (WATCH state politikası):** bu dal 3 state'i topluya çevirdi, `main` anlık atıyor. Karar + tek
-  yerde tanım + README notu + test gerekir. Karar senin.
-- **B9 (kanal akışı):** hangi state'ler public kanala gitsin.
-- **B8 (evren büyütme):** pacing/panel/digest limitleri — evren 48'den büyükse önce bu batch.
+## Riskli/karar bekleyen işler (hepsi SENİN kararın)
+
+> Not: Aşağıdaki kodlar rapor numaralarıdır; "Batch 8" ile karıştırılmasın.
+
+- **B7 (WATCH state politikası):** hangi izleme state'leri anında push, hangileri 18:45 özetine
+  gitsin. Şu an: `main.IMMEDIATE_ALERT_STATES` (6 kritik state) anında; kalan izleme state'leri
+  (`WATCH_STATES`) digest'e. Karar = tek yerde tanım + README notu + test.
+- **B9 (kanal akışı):** public kanala hangi state'ler gitsin (`PUBLIC_STATES`, varsayılan:
+  `FORMASYON_TAMAMLANDI`, `RETEST_BASARILI` + `PUBLIC_MIN_QUALITY`/`PUBLIC_SIKISMA_MIN_CONTRACTION`).
+- **Evren büyütme (rapor B8):** evren 48'den büyükse önce pacing/panel/digest limitleri gözden
+  geçirilmeli (ölçüm: `test_scan_pacing.py`, `KODLAMA_PLANI` B5 ölçümü). Şu an gerekmiyor.
 
 ## Bağımlılık sırası
-`B1 ✅ → B2 → B3 → B4 → B5 → B6 → B7 → B8`
+`B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ → B6 ✅ → B7 ✅ → B8 ✅`
 (B3'ün B1'e bağımlılığı yok; B5, B4'ten sonra anlamlı — kuyruk, sağlıklı gönderim varsayar.)

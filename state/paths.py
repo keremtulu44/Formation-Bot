@@ -4,7 +4,6 @@ Saf yardımcılar: dosya adları, yol üretimi, kayıt zamanı okuma ve iki kopy
 (Supabase / yerel dosya) en yenisini seçme. Canlı durum okumaz.
 """
 
-import json
 import logging
 import os
 from datetime import datetime
