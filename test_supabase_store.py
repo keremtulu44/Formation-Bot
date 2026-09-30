@@ -67,17 +67,22 @@ def test_ping_returns_false_and_keeps_running_on_missing_table():
 
 
 def test_get_many_returns_payload_map_and_uses_in_filter():
-    session = FakeSession([FakeResponse(payload=[
-        {"store_key": "cache:1h:THYAO", "payload": [{"close": 1}]},
-    ])])
+    session = FakeSession([
+        FakeResponse(payload=[
+            {"store_key": "formation-bot:cache:1h:THYAO", "payload": [{"close": 1}]},
+        ]),
+        FakeResponse(payload=[]),   # eksik anahtar için legacy (öneksiz) tur
+    ])
     store = SupabaseStore("https://demo.supabase.co", "test-secret", session=session)
 
     result = store.get_many(["cache:1h:THYAO", "cache:1d:THYAO"])
 
+    # Çağıran taraf ÖNEKSİZ adları görür; istek ön ekli anahtarla gider (C3).
     assert result == {"cache:1h:THYAO": [{"close": 1}]}
     method, _, kwargs = session.calls[0]
     assert method == "GET"
-    assert kwargs["params"]["store_key"] == "in.(cache:1h:THYAO,cache:1d:THYAO)"
+    assert kwargs["params"]["store_key"] == \
+        "in.(formation-bot:cache:1h:THYAO,formation-bot:cache:1d:THYAO)"
 
 
 def test_upsert_uses_merge_conflict_and_refreshes_updated_at():
@@ -91,9 +96,37 @@ def test_upsert_uses_merge_conflict_and_refreshes_updated_at():
     assert kwargs["params"] == {"on_conflict": "store_key"}
     assert "resolution=merge-duplicates" in kwargs["headers"]["Prefer"]
     row = kwargs["json"][0]
-    assert row["store_key"] == "state:telegram_caps"
+    assert row["store_key"] == "formation-bot:state:telegram_caps"
     assert row["payload"] == {"gunluk_sayac": 2}
     assert row["updated_at"].endswith("+00:00")
+
+
+def test_legacy_oneksiz_anahtarlar_okunur():
+    """C3: ön ek devreye girerken mevcut (öneksiz) kayıtlar kaybolmaz."""
+    session = FakeSession([
+        FakeResponse(payload=[]),                                     # ön ekli sorgu boş
+        FakeResponse(payload=[{"store_key": "state:heartbeat", "payload": {"a": 1}}]),
+    ])
+    store = SupabaseStore("https://demo.supabase.co", "test-secret", session=session)
+    sonuc = store.get_many(["state:heartbeat"])
+    assert sonuc == {"state:heartbeat": {"a": 1}}
+    assert session.calls[1][2]["params"]["store_key"] == "in.(state:heartbeat)"
+
+
+def test_onek_env_ile_kapatilir(monkeypatch):
+    monkeypatch.setenv("SUPABASE_STORE_PREFIX", "off")
+    session = FakeSession([FakeResponse()])
+    store = SupabaseStore("https://demo.supabase.co", "test-secret", session=session)
+    store.upsert("state:heartbeat", {})
+    assert session.calls[0][2]["json"][0]["store_key"] == "state:heartbeat"
+
+
+def test_onek_env_ile_ozel(monkeypatch):
+    monkeypatch.setenv("SUPABASE_STORE_PREFIX", "proje-x:")
+    session = FakeSession([FakeResponse()])
+    store = SupabaseStore("https://demo.supabase.co", "test-secret", session=session)
+    store.upsert("cache:1h:THYAO", [])
+    assert session.calls[0][2]["json"][0]["store_key"] == "proje-x:cache:1h:THYAO"
 
 
 def test_bad_credentials_disable_repeated_requests():

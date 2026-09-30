@@ -36,9 +36,31 @@ services:
         sync: false
       - key: BOT_PROFILE
         value: Dengeli
+      # Sunucu saat dilimi = BIST saati. Verilmezse Render süreçleri UTC çalışır ve
+      # Telegram günlük kotası gece 03:00'te (İstanbul) sıfırlanırdı. Kod artık
+      # sayılarda İstanbul'u sabitliyor; bu değişken log damgalarını da hizalar.
+      - key: TZ
+        value: Europe/Istanbul
+      # A7: public uçlarda IP başına istek limiti (0 = kapalı)
+      - key: HEALTH_RATE_LIMIT_PER_MIN
+        value: "60"
       # OPSIYONEL — Telegram komutlarını webhook ile almak için rastgele bir değer.
       # RENDER_EXTERNAL_URL'i Render otomatik verir; adres
       # https://<servis>.onrender.com/webhook/<secret> olarak kurulur.
       # Boş bırakılırsa bot getUpdates yoklamasını kullanır (varsayılan davranış).
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
+      # --- Batch 7 (C1/C4): pazar/evren/veri dizini (hepsi OPSİYONEL) ---
+      # MARKET_SUFFIX: BIST için varsayılan .IS; BIST dışı pazar için değiştirin.
+      # STOCK_UNIVERSE: virgülle ayrılmış semboller; BOŞ = BIST 50.
+      # DATA_DIR: Render'da varsayılan /tmp/formation-bot-data (repo/disk geçici,
+      #           kalıcı veri Supabase'de). Kalıcı disk bağlarsanız buradan verin.
+      # SEED_DATA_DIR: yalnız okuma yedeği (varsayılan ./bot_data).
+      # LOG_DIR: /var/log yazılamazsa otomatik ./logs'a düşer.
+      - key: MARKET_SUFFIX
+        value: ".IS"
+      - key: STOCK_UNIVERSE
+        sync: false
+      # C3: `bot_store` tablosunu paylaşan ikinci örnek anahtar çakışmasın diye.
+      - key: SUPABASE_STORE_PREFIX
+        value: "formation-bot:"

@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.venv/
 venv/
 *.egg-info/
 .env
@@ -17,6 +18,10 @@ CANLI_FORMASYONLAR.txt
 bot_data/heartbeat.json
 bot_data/telegram_kap.json
 bot_data/telegram_soguma.json
+# Batch 5: bekleyen 18:45 digest tamponu ve engellenen acil olay kuyruğu (runtime durum)
+bot_data/telegram_digest_pending.json
+bot_data/telegram_digest_pending.json.tmp
+bot_data/telegram_acil_kuyruk.json
 # Son tarama çalışma durumudur; kayıtlı liste ve atomik yazım dosyası Git'e girmez.
 bot_data/son_tarama.json
 bot_data/son_tarama.json.tmp
@@ -31,8 +36,14 @@ bot_data/*_gunluk.json
 .vscode/
 .idea/
 
+# A8 (Batch 6): .pkl dosyaları Git'ten ÇIKARILDI. Gerekçe: public repoda pickle
+# (kod yürütme yüzeyi) + binary yükü. JSON yolu zaten mevcut ve artık birincil
+# okuma biçimi; eski .pkl dosyaları varsa yalnız yedek olarak okunur.
+bot_data/*.pkl
+
 # Not: bot_data/ BİLEREK git'te tutuluyor (senin isteğin) - 28 hisse * 360 bar gerçek veri
-# Hem .json (human-readable) hem .pkl (hızlı yükleme) pushlanıyor.
-# DİKKAT (canlı sunucu): bot her taramada bu dosyaları yeniden yazar. Sunucuda
-# bot_data'yı repo dışına almak (örn. DATA_DIR=/var/lib/bist-bot/bot_data) veya
-# deployment'ı "git fetch + dosyaları ezmeden" yapmak gerekir, yoksa git pull çakışır.
+# Yalnız .json (human-readable) pushlanıyor.
+# Batch 7 / C4: canlı veri artık repo DIŞINA yazılıyor (varsayılan: /var/lib/formation-bot/data
+# veya ~/.formation-bot/data; Render'da /tmp/formation-bot-data). bot_data/ bu yüzden yalnız
+# OKUMA yedeğidir (SEED_DATA_DIR) ve canlı sunucuda git pull artık çakışmaz. Yukarıdaki
+# runtime kalıpları, biri DATA_DIR=./bot_data seçerse diye korunuyor.

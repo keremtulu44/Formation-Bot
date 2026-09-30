@@ -21,7 +21,6 @@ kararları ve gerekçeleri:
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 import time
@@ -65,11 +64,13 @@ class TelegramCommandListener:
         session: Any = None,
         poll_timeout: int = 25,
         stop_event: Optional[threading.Event] = None,
+        komutlari_yoksay: Optional[Callable[[], bool]] = None,
     ) -> None:
         self.token = (token or "").strip()
         self.allowed_chat_id = str(allowed_chat_id or "").strip()
         self.handlers = dict(handlers or {})
         self.help_text = help_text
+        self.komutlari_yoksay = komutlari_yoksay
         self.poll_timeout = max(1, int(poll_timeout))
         self._session = session
         self._offset: Optional[int] = None
@@ -271,6 +272,15 @@ class TelegramCommandListener:
         komut, arguman = komut_coz(metin)
         if not komut:
             return self._cevapla(self.help_text or "Komut listesi için /yardim yazın.")
+
+        # Uzun analiz sırasında komut update'i tüketilir ama cevap verilmez ve
+        # iş kuyruğuna konmaz. Aynı kontrol webhook ve getUpdates yollarında çalışır.
+        try:
+            if self.komutlari_yoksay is not None and self.komutlari_yoksay():
+                logger.info(f"Telegram /{komut}: analiz sürerken sessizce yok sayıldı")
+                return None
+        except Exception as exc:
+            logger.warning(f"Telegram komut meşguliyet kontrolü başarısız: {exc}")
 
         simdi = time.monotonic()
         son = self._son_komut_zamani.get(komut, 0.0)

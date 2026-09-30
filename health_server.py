@@ -8,23 +8,36 @@ outbound path can be verified from a phone browser without a shell. It stays
 disabled unless TELEGRAM_TEST_KEY is set, and the key must match.
 
 Since the Telegram **webhook** mode was added, the same tiny server also carries
-`POST /webhook/<secret>`: Telegram pushes updates here, the secret in the path
-(plus the `X-Telegram-Bot-Api-Secret-Token` header, when Telegram sends it) is
-verified, the JSON body is parsed and handed to `webhook_handler`. This removes
-the need for the long-polling `getUpdates` loop, which a free Render instance
-cannot keep open across sleep/restart cycles.
+`POST /webhook`: Telegram pushes updates here, the JSON body is verified against
+the `X-Telegram-Bot-Api-Secret-Token` header (set once via `setWebhook`'s
+`secret_token`) and handed to `webhook_handler`. This removes the need for the
+long-polling `getUpdates` loop, which a free Render instance cannot keep open
+across sleep/restart cycles.
+
+A7 (batch 6): the secret no longer travels in the URL path —
+`POST /webhook/<secret>` is accepted only for backward compatibility while an
+older registration is still active; the bot re-registers with the secret-free
+path at startup. Public routes are additionally rate limited per client IP so a
+stray caller cannot spam Telegram sends or webhook parsing.
 
 The route stays CLOSED (404, exactly like /test) unless TELEGRAM_WEBHOOK_SECRET
 is set, so an unconfigured deployment exposes nothing to the outside.
+
+Denetim B-4: `/health` her koşulda 200 döner (Render health check davranışı
+değişmez) ama artık botun canlılığını da raporlar. `health_provider` ile dışarıdan
+enjekte edilen özet (heartbeat yaşı, tarama sürüyor mu, seans açık mı) yanıta
+eklenir; monitör `?strict=1` ile çağırırsa heartbeat bayatken uç 503 döner.
+Bu modül main'i import etmez; veriyi yalnızca enjekte edilen callable'dan alır.
 """
 
 import hmac
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Thread
+from threading import Lock, Thread
 from urllib.parse import parse_qs, urlparse
 
 logger = logging.getLogger(__name__)
@@ -34,9 +47,14 @@ TEST_MESSAGE = (
     "Telegram baglantisi calisiyor; alarmlar bu kanaldan gelecek."
 )
 
-# /webhook/<secret> — secret adresin son parçasıdır (Telegram yol içinde sır kabul etmez
-# ama pratikte bu yöntem yaygındır; asıl doğrulama secret_token başlığıyla da yapılır).
+# Sırsız webhook yolu: doğrulama `X-Telegram-Bot-Api-Secret-Token` başlığıyla yapılır.
+WEBHOOK_YOL = "/webhook"
+# Eski (sır yol içinde) biçim: yalnız geriye dönük uyumluluk için kabul edilir;
+# bot açılışta setWebhook ile sırsız yolu yeniden kaydeder.
 WEBHOOK_YOL_ONEK = "/webhook/"
+
+# Basit IP başına istek limiti (dakikada). 0 = kapalı.
+VARSAYILAN_DAKIKA_LIMIT = 60
 
 # Telegram güncellemeleri birkaç KB'dir. Content-Length ile gövde okuduğumuz için
 # bozuk/kötü niyetli bir istek belleği şişirmesin diye üst sınır koyuyoruz.
@@ -58,6 +76,47 @@ class _HealthHandler(BaseHTTPRequestHandler):
         expected = (getattr(self.server, "test_key", "") or "").strip()
         return bool(expected)
 
+    # --- A7: IP başına basit istek limiti ---------------------------------
+    def _istemci_ip(self) -> str:
+        # Render/proxy arkasında gerçek istemci ilk X-Forwarded-For değeridir.
+        fwd = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+        return fwd or (self.client_address[0] if self.client_address else "?")
+
+    def _limit_asildi(self) -> bool:
+        """(ip, pencere) başına istek sayısı sınırı; aşıldıysa 429 yollar."""
+        limit = int(getattr(self.server, "rate_limit_per_min", 0) or 0)
+        if limit <= 0:
+            return False
+        simdi = time.time()
+        ip = self._istemci_ip()
+        with self.server.rate_kilidi:
+            gecmis = [t for t in self.server.rate_kayitlari.get(ip, []) if simdi - t < 60.0]
+            if len(gecmis) >= limit:
+                self.server.rate_kayitlari[ip] = gecmis
+                logger.warning(f"Rate limit: {ip} dakikada {len(gecmis)} istek (limit {limit}) - 429")
+                self.send_response(429)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Retry-After", "60")
+                self.send_header("Cache-Control", "no-store")
+                govde = json.dumps({"ok": False, "error": "cok fazla istek"}).encode("utf-8")
+                self.send_header("Content-Length", str(len(govde)))
+                self.end_headers()
+                self.wfile.write(govde)
+                return True
+            gecmis.append(simdi)
+            self.server.rate_kayitlari[ip] = gecmis
+        return False
+
+    def _test_anahtari(self) -> str:
+        """Başlıktan anahtar: X-Test-Key veya Authorization: Bearer <anahtar>."""
+        baslik = (self.headers.get("X-Test-Key") or "").strip()
+        if baslik:
+            return baslik
+        yetki = (self.headers.get("Authorization") or "").strip()
+        if yetki.lower().startswith("bearer "):
+            return yetki[7:].strip()
+        return ""
+
     def _handle_test(self):
         # Endpoint kurulu degilse hic bilgi verme: herkesin bilgisi olmaz.
         if not self._test_enabled():
@@ -66,9 +125,22 @@ class _HealthHandler(BaseHTTPRequestHandler):
                 "error": "test endpoint kapali (TELEGRAM_TEST_KEY tanimli degil)",
             })
             return
+        if self._limit_asildi():
+            return
 
-        provided = parse_qs(urlparse(self.path).query).get("k", [""])[0]
-        if not hmac.compare_digest(provided, self.server.test_key):
+        # A7: anahtar artık başlıktan okunur (URL/erişim loglarına düşmesin).
+        provided = self._test_anahtari()
+        kaynak = "baslik"
+        if not provided and getattr(self.server, "test_key_query", True):
+            # Geriye dönük: telefon yer imleri için ?k= hâlâ kabul edilir ama
+            # sır URL'de kalır; başlığa geçilmesi logla hatırlatılır.
+            provided = parse_qs(urlparse(self.path).query).get("k", [""])[0]
+            if provided:
+                logger.warning(
+                    "/test anahtarı URL sorgusunda geldi (?k=). Sır erişim loglarına düşer; "
+                    "X-Test-Key başlığına geçin (TELEGRAM_TEST_KEY_QUERY=0 ile kapatılır)."
+                )
+        if not provided or not hmac.compare_digest(provided, self.server.test_key):
             self._send_json(403, {"ok": False, "error": "yanlis anahtar"})
             return
 
@@ -98,7 +170,8 @@ class _HealthHandler(BaseHTTPRequestHandler):
         if yol == "/test":
             self._handle_test()
             return
-        if yol.startswith(WEBHOOK_YOL_ONEK):
+        # Sırsız yol (yeni) + sır yol içinde (eski kayıt; geriye dönük).
+        if yol == WEBHOOK_YOL or yol.startswith(WEBHOOK_YOL_ONEK):
             self._handle_webhook(yol)
             return
         self.send_error(404)
@@ -130,12 +203,13 @@ class _HealthHandler(BaseHTTPRequestHandler):
             return None
 
     def _handle_webhook(self, yol: str):
-        """POST /webhook/<secret> — Telegram güncellemesini işleyiciye verir.
+        """Telegram güncellemesini işleyiciye verir (`POST /webhook`).
 
-        Sıra: (1) uç kurulu mu, (2) path secret'ı doğru mu, (3) varsa
-        `X-Telegram-Bot-Api-Secret-Token` başlığı doğru mu, (4) JSON çözümle,
-        (5) işleyiciyi çağır. Yanıt 200 olmazsa Telegram güncellemeyi tekrar
-        gönderir; bu yüzden işleyici hatasında 500 döneriz (update kaybolmaz).
+        Sıra: (1) uç kurulu mu, (2) kimlik doğrulama — sırsız yolda
+        `X-Telegram-Bot-Api-Secret-Token` başlığı ZORUNLU, eski `<secret>`
+        yolunda yol parçası + (varsa) başlık, (3) JSON çözümle, (4) işleyiciyi
+        çağır. Yanıt 200 olmazsa Telegram güncellemeyi tekrar gönderir; bu
+        yüzden işleyici hatasında 500 döneriz (update kaybolmaz).
         """
         expected = self._webhook_secret()
         # Uç kurulu değilse varlığını bile belli etme (aynı /test kuralı).
@@ -145,16 +219,28 @@ class _HealthHandler(BaseHTTPRequestHandler):
                 "error": "webhook kapali (TELEGRAM_WEBHOOK_SECRET tanimli degil)",
             })
             return
-
-        # Karşılaştırmalar sabit zamanlı: sır uzunluğu/prefix'i zamanlamadan sızmasın.
-        verilen = yol[len(WEBHOOK_YOL_ONEK):]
-        if not verilen or not hmac.compare_digest(verilen, expected):
-            self._send_json(403, {"ok": False, "error": "yanlis webhook adresi"})
+        if self._limit_asildi():
             return
 
+        # Karşılaştırmalar sabit zamanlı: sır uzunluğu/prefix'i zamanlamadan sızmasın.
+        yol_sirri = yol[len(WEBHOOK_YOL_ONEK):] if yol.startswith(WEBHOOK_YOL_ONEK) else ""
+        if yol_sirri:
+            logger.warning(
+                "Webhook isteği ESKİ sırlı yoldan geldi (/webhook/<secret>). "
+                "Sır adres/erişim loglarında görünür; bot açılışta sırsız yolu kaydeder."
+            )
+            if not hmac.compare_digest(yol_sirri, expected):
+                self._send_json(403, {"ok": False, "error": "yanlis webhook adresi"})
+                return
+
         baslik = (self.headers.get("X-Telegram-Bot-Api-Secret-Token") or "").strip()
-        if baslik and not hmac.compare_digest(baslik, expected):
-            self._send_json(403, {"ok": False, "error": "yanlis secret token basligi"})
+        if baslik:
+            if not hmac.compare_digest(baslik, expected):
+                self._send_json(403, {"ok": False, "error": "yanlis secret token basligi"})
+                return
+        elif not yol_sirri:
+            # Sırsız yolda başlık yoksa istek kimliksizdir: reddet.
+            self._send_json(403, {"ok": False, "error": "secret token basligi gerekli"})
             return
 
         # GET: telefondan tarayıcıyla durum kontrolü. Güncelleme işlemez, sır sızdırmaz.
@@ -204,6 +290,29 @@ class _HealthHandler(BaseHTTPRequestHandler):
             "update_id": guncelleme.get("update_id"),
         })
 
+    def _canlilik_ozeti(self):
+        """health_provider'dan (varsa) canlılık alanlarını al; hata olsa bile uç düşmesin.
+
+        Denetim B-4: bu modül main'i import etmez; özet dışarıdan enjekte edilir.
+        Sağlayıcı patlarsa /health yine 200 döner, yalnız 'canlilik_hatasi' alanı eklenir.
+        """
+        saglayici = getattr(self.server, "health_provider", None)
+        if not callable(saglayici):
+            return None
+        try:
+            ozet = saglayici()
+        except Exception as exc:  # noqa: BLE001 - /health asla 500 dönmemeli
+            logger.warning("Canlılık özeti alınamadı: %s: %s", type(exc).__name__, exc)
+            return {"heartbeat_stale": None,
+                    "canlilik_hatasi": f"{type(exc).__name__}: {exc}"[:120]}
+        return ozet if isinstance(ozet, dict) else None
+
+    def _strict_istendi(self) -> bool:
+        """`?strict=1` ile çağıran monitör, bayat heartbeat'te 503 ister."""
+        sorgu = parse_qs(urlparse(self.path).query)
+        deger = (sorgu.get("strict", ["0"])[0] or "").strip().lower()
+        return deger not in ("", "0", "false", "no")
+
     def _send_ok(self):
         # Render bu değişkenleri deploy sırasında enjekte eder: hangi commit'in
         # canlı olduğunu /health'ten görebilmek, "deploy düştü mü?" sorusunu
@@ -219,8 +328,19 @@ class _HealthHandler(BaseHTTPRequestHandler):
         branch = (os.environ.get("RENDER_GIT_BRANCH") or "").strip()
         if branch:
             payload["branch"] = branch
+        # --- CANLILIK (denetim B-4) ---
+        # Render'ın health check'i sorgusuz `/health` çağırır -> her zaman 200.
+        # Gerçek canlılık ayrı alanlarda raporlanır; monitör ?strict=1 ile
+        # bayat heartbeat'i 503'e çevirebilir.
+        canli = self._canlilik_ozeti()
+        if canli:
+            payload.update(canli)
+        kod = 200
+        if self._strict_istendi() and payload.get("heartbeat_stale") is True:
+            kod = 503
+            payload["status"] = "bayat"
         body = json.dumps(payload).encode("utf-8")
-        self.send_response(200)
+        self.send_response(kod)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
@@ -245,7 +365,8 @@ class _HealthHandler(BaseHTTPRequestHandler):
 
 
 def start_render_health_server(environ=None, test_sender=None,
-                               webhook_handler=None, webhook_secret=None):
+                               webhook_handler=None, webhook_secret=None,
+                               health_provider=None):
     """Start on Render's injected PORT; in local/systemd mode do nothing.
 
     test_sender(text) -> (ok, detail) enables the guarded /test route that sends
@@ -255,6 +376,12 @@ def start_render_health_server(environ=None, test_sender=None,
     /webhook/<secret> route. It stays 404 unless TELEGRAM_WEBHOOK_SECRET is set;
     the secret comes from `webhook_secret` (tercih edilir) ya da aynı adlı env
     değişkeninden.
+
+    health_provider() -> dict enables the liveness fields on /health (heartbeat
+    yaşı, tarama sürüyor mu, seans açık mı). Verilmezse /health eski hâliyle
+    yalnız status/service/time/commit/branch döner. `/health?strict=1` çağrısı,
+    heartbeat bayatken 503 döner (Render'ın kendi health check'i sorgusuz
+    çağırdığı için bu davranış yalnız monitörleri etkiler).
     """
     environ = os.environ if environ is None else environ
     raw_port = environ.get("PORT")
@@ -269,9 +396,20 @@ def start_render_health_server(environ=None, test_sender=None,
     server.test_sender = test_sender
     server.test_key = (environ.get("TELEGRAM_TEST_KEY") or "").strip()
     server.webhook_handler = webhook_handler
+    # Denetim B-4: /health canlılık alanları (main, _saglik_ozeti'ni enjekte eder).
+    server.health_provider = health_provider
     if webhook_secret is None:
         webhook_secret = environ.get("TELEGRAM_WEBHOOK_SECRET")
     server.webhook_secret = (webhook_secret or "").strip()
+    # A7: public uçlarda IP başına istek limiti + sorgu anahtarı politikası.
+    try:
+        server.rate_limit_per_min = max(0, int((environ.get("HEALTH_RATE_LIMIT_PER_MIN")
+                                                or VARSAYILAN_DAKIKA_LIMIT)))
+    except (TypeError, ValueError):
+        server.rate_limit_per_min = VARSAYILAN_DAKIKA_LIMIT
+    server.rate_kayitlari = {}
+    server.rate_kilidi = Lock()
+    server.test_key_query = (environ.get("TELEGRAM_TEST_KEY_QUERY", "1") or "").strip() not in ("0", "false", "False")
     thread = Thread(
         target=server.serve_forever,
         kwargs={"poll_interval": 0.5},
@@ -280,13 +418,20 @@ def start_render_health_server(environ=None, test_sender=None,
     )
     thread.start()
     logger.info(f"Render health endpoint 0.0.0.0:{port} üzerinde başladı (/health)")
+    if callable(health_provider):
+        logger.info("GET /health canlılık alanlarını döndürür "
+                    "(heartbeat yaşı; ?strict=1 -> bayatsa 503)")
     if server.test_key:
-        logger.info("Telegram /test ucu etkin (TELEGRAM_TEST_KEY tanimli)")
+        logger.info("Telegram /test ucu etkin (TELEGRAM_TEST_KEY tanimli, anahtar X-Test-Key basliginda)")
+        if server.test_key_query:
+            logger.warning("TELEGRAM_TEST_KEY_QUERY=1: ?k= sorgu anahtari hâlâ kabul ediliyor (sır URL'de)")
+    if server.rate_limit_per_min:
+        logger.info(f"HTTP rate limit: IP başına {server.rate_limit_per_min} istek/dk")
     else:
         logger.info("Telegram /test ucu kapali (TELEGRAM_TEST_KEY tanimli degil)")
     if server.webhook_secret:
         # Sırrın kendisi ASLA loglanmaz; yalnızca ucun açık olduğu söylenir.
-        logger.info("Telegram webhook ucu etkin (POST /webhook/<secret>, secret gizli)")
+        logger.info("Telegram webhook ucu etkin (POST /webhook, secret X-Telegram-Bot-Api-Secret-Token basliginda)")
         if webhook_handler is None:
             logger.warning("Webhook ucu acik ama isleyici yok; guncellemeler 503 alacak")
     else:

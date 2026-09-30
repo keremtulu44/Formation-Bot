@@ -12,15 +12,16 @@ Kullanım (yerelde, telefondan Termux'ta veya Render Shell'de):
 Ne yapar:
   1. Repo tarafı: .python-version (Render 3.12 sabiti), requirements pinleri,
      .github/workflows/keepalive.yml varlığı, yerel bot_data önbelleği.
-  2. Env: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / TELEGRAM_BOT_TOKEN /
-     TELEGRAM_CHAT_ID tanımlı mı (değerleri ASLA yazdırmaz, sadece uzunluk).
-  3. Supabase: tablo gerçekten var mı? (404 -> SQL çalıştırılmamış,
-     401/403 -> anahtar yanlış, 200 -> hazır)
+  2. Env: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (komutlar için gerekli),
+     Supabase env'leri (opsiyonel) tanımlı mı? Değerleri ASLA yazdırmaz.
+  3. Supabase varsa: tablo gerçekten var mı? (404 -> SQL çalıştırılmamış,
+     401/403 -> anahtar yanlış, 200 -> hazır) ve bot canlı mı (state:heartbeat
+     yaşı); yoksa analiz yine çalışır.
   4. Telegram: getMe ile token; istenirse gerçek test mesajı.
   5. Render: https://<servis>.onrender.com/health ayakta mı; /test ucu açık mı.
 
 Çıkış kodu 0 = kritik hata yok, 1 = en az bir HATA var (uyarılar kodu bozmaz).
-Canlı modda (--url) eksik env = HATA ve exit 1.
+Canlı modda (--url) eksik Telegram env'i = HATA; opsiyonel Supabase env'i eksikliği uyarıdır.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -214,12 +216,14 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
     bolum("2) ORTAM DEĞİŞKENLERİ (Render → Environment)")
 
     beklenti = [
-        ("SUPABASE_URL", True, "Supabase → Settings → API → Project URL (sonda /rest/v1 OLMADAN)"),
-        ("SUPABASE_SERVICE_ROLE_KEY", True, "service_role JWT (eyJ...) veya yeni 'sb_secret_...' anahtarı"),
+        ("SUPABASE_URL", False, "İsteğe bağlı: Supabase → Settings → API → Project URL (sonda /rest/v1 OLMADAN)"),
+        ("SUPABASE_SERVICE_ROLE_KEY", False, "İsteğe bağlı uzak cache/state için service_role JWT veya sb_secret_... anahtarı"),
         ("TELEGRAM_BOT_TOKEN", True, "@BotFather → /newbot → 'Use this token'"),
         ("TELEGRAM_CHAT_ID", True, "@userinfobot'un verdiği Id (kendine mesaj için pozitif sayı)"),
         ("BOT_PROFILE", False, "Dengeli / Hassas / Seçici"),
         ("TELEGRAM_TEST_KEY", False, "İsteğe bağlı: /test ucunu açar (telefondan Telegram testi)"),
+        ("SUPABASE_STORE_PREFIX", False, "Varsayılan formation-bot: ; aynı tabloyu paylaşan 2. kopya için değiştirin"),
+        ("BOT_INSTANCE_ID", False, "Varsayılan hostname:pid ; ikinci canlı kopya varsa farklı ad verin (B10)"),
     ]
 
     degerler = {}
@@ -238,9 +242,8 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         seviye = FAIL if canli_mod else WARN
         satir(seviye, "Telegram kapalı olacak", "Token/chat_id yoksa bot çalışır ama hiç mesaj göndermez (log: 'notifier pasif').")
     if not degerler.get("SUPABASE_URL") and not degerler.get("SUPABASE_SERVICE_ROLE_KEY"):
-        seviye = FAIL if canli_mod else WARN
-        satir(seviye, "Supabase kapalı olacak",
-              "Render diski kalıcı değil: restart/deploy sonrası yerel önbellek ve Telegram sayaçları sıfırlanır.")
+        satir(WARN, "Supabase kapalı olacak",
+              "Analiz yine çalışır; Render restart/deploy sonrası yerel OHLCV önbelleği ve Telegram sayaçları kalıcı olmayabilir.")
     anahtar = degerler.get("SUPABASE_SERVICE_ROLE_KEY", "")
     rol = _jwt_rolu(anahtar)
     tur = anahtar_turu(anahtar) if anahtar else ""
@@ -259,7 +262,73 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
     return degerler
 
 
-def kontrol_supabase(url: str, anahtar: str) -> None:
+def store_onek(deger: str = "") -> str:
+    """SUPABASE_STORE_PREFIX'i normalize eder (uygulamayla aynı kural).
+
+    Boş -> "formation-bot:" (uygulama varsayılanı); off/none/yok/0 -> öneksiz.
+    """
+    ham = (deger or "").strip()
+    if not ham:
+        return "formation-bot:"
+    if ham.lower() in ("off", "none", "yok", "0"):
+        return ""
+    return ham
+
+
+def heartbeat_seviyesi(yas_sn):
+    """Heartbeat yaşına göre (seviye, başlık, detay) döner; None = bilinmiyor.
+
+    Eşikler: <3 sa taze · <72 sa uyarı (seans dışı/tatil normal) · >=72 sa bayat.
+    """
+    if yas_sn is None:
+        return (WARN, "Heartbeat okunamadı",
+                "state:heartbeat kaydı yok ya da bozuk: bot henüz hiç tarama yapmamış olabilir.")
+    if yas_sn < 3 * 3600:
+        return (OK, f"Heartbeat taze ({yas_sn / 60:.0f} dk)",
+                "Bot canlı yazıyor; /health?strict=1 ile bu kontrol monitöre devredilebilir.")
+    if yas_sn < 72 * 3600:
+        return (WARN, f"Heartbeat {yas_sn / 3600:.1f} saat",
+                "Seans dışı/tatil için normaldir; seans içinde 30 dk'yı geçerse bot tıkanmış olabilir.")
+    return (FAIL, f"Heartbeat {yas_sn / 3600:.1f} saat (bayat)",
+            "Bot 3 gündür heartbeat yazmıyor: Render loglarını ve son deploy olayını kontrol edin.")
+
+
+def _heartbeat_kontrol(kok: str, basliklar: dict, onek: str) -> None:
+    """Supabase'deki state:heartbeat kaydından botun canlı olup olmadığını raporlar."""
+    try:
+        import requests
+    except ImportError:
+        return
+    anahtar = f"{onek}state:heartbeat"
+    try:
+        r = requests.get(
+            f"{kok}/rest/v1/bot_store",
+            headers=basliklar,
+            params={"select": "payload", "store_key": f"eq.{anahtar}", "limit": 1},
+            timeout=12,
+        )
+    except Exception as exc:  # noqa: BLE001
+        satir(WARN, "Heartbeat okunamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+        return
+    if r.status_code != 200:
+        satir(WARN, "Heartbeat okunamadı", f"HTTP {r.status_code}: {_kisa(r.text)}")
+        return
+    yas_sn = None
+    try:
+        satirlar = r.json()
+        payload = (satirlar[0] or {}).get("payload") if satirlar else None
+        ham = (payload or {}).get("last_scan") if isinstance(payload, dict) else None
+        if ham:
+            damga = datetime.fromisoformat(str(ham))
+            if damga.tzinfo is None:
+                damga = damga.replace(tzinfo=timezone.utc)
+            yas_sn = max(0.0, (datetime.now(timezone.utc) - damga).total_seconds())
+    except Exception:  # noqa: BLE001 - bozuk kayıt "bilinmiyor" sayılır
+        yas_sn = None
+    satir(*heartbeat_seviyesi(yas_sn))
+
+
+def kontrol_supabase(url: str, anahtar: str, onek: str = None) -> None:
     bolum("3) SUPABASE")
     if not url or not anahtar:
         satir(WARN, "Atlandı", "SUPABASE_URL ve SUPABASE_SERVICE_ROLE_KEY birlikte gerekli.")
@@ -338,6 +407,10 @@ def kontrol_supabase(url: str, anahtar: str) -> None:
                       "service_role anahtarı kullanılmalı; yazma için upsert politikası şart. " + yaz.text[:160])
         except Exception as exc:  # noqa: BLE001
             satir(WARN, "Yazma testi yapılamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+
+    # B-4: bot gerçekten yaşıyor mu? (heartbeat yaşı; /health?strict=1 ile aynı kaynak)
+    _heartbeat_kontrol(temiz, basliklar_okuma, store_onek(onek if onek is not None
+                                                          else os.environ.get("SUPABASE_STORE_PREFIX", "")))
 
 
 def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
@@ -545,7 +618,8 @@ def main() -> int:
         bolum("AĞ KONTROLLERİ")
         satir(WARN, "--skip-network verildi", "Supabase/Telegram/Render kontrolleri atlandı.")
     else:
-        kontrol_supabase(degerler.get("SUPABASE_URL", ""), degerler.get("SUPABASE_SERVICE_ROLE_KEY", ""))
+        kontrol_supabase(degerler.get("SUPABASE_URL", ""), degerler.get("SUPABASE_SERVICE_ROLE_KEY", ""),
+                         degerler.get("SUPABASE_STORE_PREFIX", ""))
         kontrol_telegram(
             degerler.get("TELEGRAM_BOT_TOKEN", ""),
             degerler.get("TELEGRAM_CHAT_ID", ""),

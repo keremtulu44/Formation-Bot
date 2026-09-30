@@ -16,7 +16,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import main as main_mod
-from health_server import WEBHOOK_YOL_ONEK, start_render_health_server
+from health_server import WEBHOOK_YOL, WEBHOOK_YOL_ONEK, start_render_health_server
 from live_state import LiveState
 from telegram_commands import TelegramCommandListener
 
@@ -123,9 +123,11 @@ def _get(port, yol):
 
 # --- webhook adresi ------------------------------------------------------
 def test_webhook_url_render_external_url_ile_uretilir():
+    # A7 (Batch 6): sır artık URL yolunda DEĞİL; başlıkla doğrulanıyor.
     adres = main_mod._telegram_webhook_url_olustur(
         secret=SECRET, render_url="https://formation-bot.onrender.com/")
-    assert adres == f"{RENDER_URL}{WEBHOOK_YOL_ONEK}{SECRET}"
+    assert adres == f"{RENDER_URL}{WEBHOOK_YOL}"
+    assert SECRET not in adres
 
 
 def test_webhook_url_secret_yoksa_mod_kapali():
@@ -138,14 +140,15 @@ def test_webhook_url_taban_adres_yoksa_kapali():
 
 
 def test_webhook_url_tam_adres_verilirse_aynen_kullanilir():
-    tam = f"{RENDER_URL}{WEBHOOK_YOL_ONEK}{SECRET}"
-    assert main_mod._telegram_webhook_url_olustur(secret=SECRET, webhook_url=tam) == tam
-    # /webhook ile biten adrese sır eklenir
+    # Sırsız tam adres (önerilen biçim)
+    sirsiz = f"{RENDER_URL}{WEBHOOK_YOL}"
+    assert main_mod._telegram_webhook_url_olustur(secret=SECRET, webhook_url=sirsiz) == sirsiz
+    # Taban adres verilirse sırsız yol eklenir
     assert main_mod._telegram_webhook_url_olustur(
-        secret=SECRET, webhook_url=f"{RENDER_URL}/webhook") == tam
-    # taban adres verilirse yol + sır eklenir
-    assert main_mod._telegram_webhook_url_olustur(
-        secret=SECRET, webhook_url=RENDER_URL) == tam
+        secret=SECRET, webhook_url=RENDER_URL) == sirsiz
+    # Eski biçim (sır yolda) geriye dönük uyumluluk için korunur
+    eski = f"{RENDER_URL}{WEBHOOK_YOL_ONEK}{SECRET}"
+    assert main_mod._telegram_webhook_url_olustur(secret=SECRET, webhook_url=eski) == eski
 
 
 def test_webhook_url_https_zorunlu():
@@ -238,7 +241,7 @@ def test_komut_katmani_webhook_modunda_yoklamayi_kapatir(monkeypatch):
     mod = main_mod._telegram_komut_katmanini_kur(SahteNotifier(), isleyici)
 
     assert mod == "webhook"
-    assert cagrilar == [(f"{RENDER_URL}{WEBHOOK_YOL_ONEK}{SECRET}", "111:AAA")]
+    assert cagrilar == [(f"{RENDER_URL}{WEBHOOK_YOL}", "111:AAA")]
     assert main_mod._telegram_update_processor_ref is isleyici   # uç bu nesneyi kullanır
     assert isleyici.basladi is False                            # yoklama BAŞLAMAZ
     assert main_mod._telegram_listener_ref is None
@@ -531,18 +534,20 @@ def _sahte_formasyonlar(durum, adet=4):
     durum.finish_scan(son_tarama_suresi_dk=1.0, son_tarama_hissesi=48)
 
 
-def test_webhook_uctan_uca_panel_ve_canli_komutlari_cevap_gonderir(monkeypatch):
-    """Gerçek HTTP POST → gerçek dinleyici → /panel ve /canli cevabı Telegram'a gider."""
-    durum = LiveState()
-    _sahte_formasyonlar(durum)
-    monkeypatch.setattr(main_mod, "_live_state", durum)
-    monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", ["HISSE0", "HISSE1", "HISSE2", "HISSE3", "THYAO"])
+def test_webhook_panel_analizini_kuyruga_alir_ve_diger_komutlari_yok_sayar(monkeypatch):
+    """Webhook /panel başlangıcını yanıtlar; iş sürerken diğer komutlar sessizdir."""
+    monkeypatch.setattr(main_mod, "_scan_job_active", __import__("threading").Event())
+    monkeypatch.setattr(main_mod, "_scan_istegi", __import__("threading").Event())
+    monkeypatch.setattr(main_mod, "_scan_job_request", None)
+    monkeypatch.setattr(main_mod, "_live_state", LiveState())
+    monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", ["THYAO", "GARAN"])
 
     session = SahteSession()
     dinleyici = TelegramCommandListener(
         token="111:AAA", allowed_chat_id=CHAT_ID,
         handlers=main_mod.TELEGRAM_KOMUTLARI, help_text=main_mod.KOMUT_YARDIM,
         session=session,
+        komutlari_yoksay=lambda: main_mod._scan_job_active.is_set(),
     )
     monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", dinleyici)
 
@@ -552,31 +557,19 @@ def test_webhook_uctan_uca_panel_ve_canli_komutlari_cevap_gonderir(monkeypatch):
     )
     try:
         port = server.server_address[1]
-
         kod, govde = _post(port, f"{WEBHOOK_YOL_ONEK}{SECRET}", _guncelleme(1, "/panel"))
         assert kod == 200 and govde["ok"] is True
-        panel = session.gonderilenler[-1]
-        assert "PANEL" in panel
-        assert "5 hisse x 4 TF" in panel           # ACTIVE_STOCKS monkeypatch'lendi
-        assert "TOP 12 KRİTİK" in panel
-        assert "Kırılım teyitli" in panel          # state insan okunur hâle geldi
-        assert len(panel) <= 4096
+        assert "Analiz başladı" in session.gonderilenler[-1]
+        assert main_mod._scan_job_request["tip"] == "panel"
+        assert main_mod._scan_job_active.is_set()
 
+        onceki = len(session.post_cagrilari)
         kod2, _ = _post(port, f"{WEBHOOK_YOL_ONEK}{SECRET}", _guncelleme(2, "/canli"))
         assert kod2 == 200
-        assert "CANLI" in session.gonderilenler[-1]
-
-        # Filtreli panel de webhook üzerinden çalışır. (Aynı komut adı 1 sn içinde
-        # tekrar edilirse dinleyici hız sınırı devreye girer; alias farklı komut adıdır.)
-        kod3, _ = _post(port, f"{WEBHOOK_YOL_ONEK}{SECRET}", _guncelleme(3, "/genel 1h"))
-        assert kod3 == 200
-        assert "Filtre: 1h" in session.gonderilenler[-1]
-
-        # Yetkisiz sohbetten gelen webhook güncellemesi cevap ÜRETMEZ (200 döner)
-        onceki = len(session.post_cagrilari)
-        kod4, _ = _post(port, f"{WEBHOOK_YOL_ONEK}{SECRET}", _guncelleme(4, "/panel", chat_id="999999"))
-        assert kod4 == 200
         assert len(session.post_cagrilari) == onceki
     finally:
+        main_mod._scan_job_active.clear()
+        main_mod._scan_istegi.clear()
+        main_mod._scan_job_request = None
         server.shutdown()
         server.server_close()

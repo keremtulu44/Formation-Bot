@@ -3,7 +3,7 @@
 # Pine v0.4.6 FINAL EXPORT birebir - matematik düzgün, yüzdeye göre oynama yok
 
 import os
-from datetime import date, datetime, time
+from datetime import date, time
 import pytz
 
 # .env desteği - local ve /etc/bist-bot.env için
@@ -22,6 +22,11 @@ PROFILE = os.getenv("BOT_PROFILE", "Dengeli").strip() or "Dengeli"
 if PROFILE not in ("Hassas", "Dengeli", "Seçici"):
     PROFILE = "Dengeli"
 
+# --- PAZAR / SAĞLAYICI (C1) ---
+# Sağlayıcı sembol eki ve seans adları artık tek yerde: başka bir pazara (örn.
+# başka bir borsa) uyarlamak için kod içindeki ".IS" aramak gerekmez.
+MARKET_SUFFIX = os.getenv("MARKET_SUFFIX", ".IS").strip() or ".IS"
+
 BIST_50 = [
     "THYAO", "GARAN", "AKBNK", "ISCTR", "YKBNK", "KCHOL", "SAHOL", "EREGL", "SISE", "BIMAS",
     "ASELS", "TUPRS", "FROTO", "TOASO", "KRDMD", "PETKM", "PGSUS", "SASA", "HEKTS", "GUBRF",
@@ -32,7 +37,10 @@ BIST_50 = [
 BIST_30 = BIST_50[:30]
 # Canlı tarama evreni: mevcut BIST 50 listesinden Yahoo verisi sorunlu KOZAL/KOZAA çıkarıldı (48 sembol).
 # Eksik iki bileşen için sağlayıcı desteği doğrulanmış semboller sonra eklenebilir.
-ACTIVE_STOCKS = BIST_50
+# C1: evren env ile değiştirilebilir (virgülle ayrılmış semboller).
+#   STOCK_UNIVERSE=THYAO,GARAN,AKBNK
+_STOCK_UNIVERSE = [x.strip().upper() for x in os.getenv("STOCK_UNIVERSE", "").split(",") if x.strip()]
+ACTIVE_STOCKS = _STOCK_UNIVERSE or BIST_50
 
 # Yahoo Finance istek temposu. Kısa istek aralığı + grup molası; paralel istek yok.
 def _env_float(name: str, default: float) -> float:
@@ -75,6 +83,10 @@ ISTANBUL_TZ = pytz.timezone("Europe/Istanbul")
 BIST_OPEN = time(9, 50)     # gerçek BIST seans başlangıcı (Yahoo ilk mumu 09:30 etiketli)
 BIST_CLOSE = time(18, 10)   # gerçek BIST kapanışı + tampon
 
+# C1: sağlayıcıdan bağımsız seans adları (aynı değerler; yeni kod bunları okur).
+SESSION_OPEN = BIST_OPEN
+SESSION_CLOSE = BIST_CLOSE
+
 # --- CANLI TARAMA ZAMANLAMASI (yfinance .IS verisinden ÖLÇÜLDÜ, varsayım değil) ---
 # Ölçüm 1: 1H bar etiketleri 09:30, 10:30, ... 17:30 (günde 9 mum) ve barlar bitişik
 #           (close[i] == open[i+1])  ->  etiket = MUM BAŞI, mum :30'da kapanır.
@@ -89,6 +101,7 @@ CANDLE_CLOSE_MINUTE = 30          # 1H mumun kapanış dakikası (saat başında
 SCAN_DELAY_AFTER_CLOSE_MIN = 5    # mum kapanışından kaç dk sonra taranacak
 TARAMA_PENCERE_SONU = time(18, 40)  # son mum 18:30 kapanır + 5 dk = 18:35 (+ pay)
 STALE_BAR_UYARI_DK = 120          # en yeni 1H mum bu kadardır eskiyse "kör çalışma" uyarısı
+OFFSESSION_CACHE_MAX_AGE_DAYS = max(1, _env_int("OFFSESSION_CACHE_MAX_AGE_DAYS", 14))  # seans dışı son mevcut veriye izin
 TERMINAL_TAZE_BAR = 3             # terminal (ölü) formasyon bu kadar bar içindeyse haber ver
 
 # --- BIST RESMİ TATİL TAKVİMİ ---
@@ -110,11 +123,20 @@ BIST_TATILLER = {
     date(2026, 5, 29): "Kurban Bayramı 3. gün",
     date(2026, 7, 15): "Demokrasi ve Milli Birlik Günü",
     date(2026, 10, 29): "Cumhuriyet Bayramı",
-    # 2027 kesin tarihler (İslami bayramlar Diyanet açıklamasından sonra eklenecek)
+    # 2027 — C1 (Batch 7): üç bağımsız kaynakla çapraz doğrulandı (2026-09-30):
+    # Resmî tatil listeleri + Diyanet takvimi. Hafta sonuna denk gelenler (1 Mayıs
+    # Cmt, 15-16 Mayıs) listeye alınmadı: BIST zaten kapalı.
     date(2027, 1, 1): "Yılbaşı",
+    date(2027, 3, 9): "Ramazan Bayramı 1. gün",
+    date(2027, 3, 10): "Ramazan Bayramı 2. gün",
+    date(2027, 3, 11): "Ramazan Bayramı 3. gün",
     date(2027, 4, 23): "Ulusal Egemenlik ve Çocuk Bayramı",
-    date(2027, 5, 19): "Atatürk'ü Anma, Gençlik ve Spor Bayramı",
+    date(2027, 5, 17): "Kurban Bayramı 2. gün",
+    date(2027, 5, 18): "Kurban Bayramı 3. gün",
+    date(2027, 5, 19): "Kurban Bayramı 4. gün + Atatürk'ü Anma, Gençlik ve Spor Bayramı",
     date(2027, 7, 15): "Demokrasi ve Milli Birlik Günü",
+    date(2027, 8, 30): "Zafer Bayramı",
+    date(2027, 10, 29): "Cumhuriyet Bayramı",
 }
 
 # Yarım gün: (açıklama, seans kapanış saati)
@@ -122,6 +144,9 @@ BIST_YARIM_GUNLER = {
     date(2026, 3, 19): ("Ramazan Bayramı arefesi", time(13, 0)),
     date(2026, 5, 26): ("Kurban Bayramı arefesi", time(13, 0)),
     date(2026, 10, 28): ("Cumhuriyet Bayramı arefesi", time(13, 0)),
+    # 2027 (C1): arefe günleri 13:00'te kapanır (15 Mayıs Cmt olduğu için yok)
+    date(2027, 3, 8): ("Ramazan Bayramı arefesi", time(13, 0)),
+    date(2027, 10, 28): ("Cumhuriyet Bayramı arefesi", time(13, 0)),
 }
 
 # --- VERİ TAZELİĞİ / TATIL MODU EŞİKLERİ ---
@@ -176,17 +201,39 @@ TELEGRAM_MAX_MESAJ_GUN = 120
 #   TELEGRAM_WEBHOOK_SECRET   rastgele bir metin; adresin son parçasıdır ve
 #                             Telegram'a secret_token olarak da bildirilir
 #   TELEGRAM_WEBHOOK_URL      (opsiyonel) tam adres; boşsa RENDER_EXTERNAL_URL'den
-#                             https://<servis>.onrender.com/webhook/<secret> üretilir
+#                             https://<servis>.onrender.com/webhook üretilir (sırsız;
+#                             doğrulama secret_token başlığıyla yapılır)
 #
 # Secret boşsa webhook modu KAPALIDIR: bot eskisi gibi getUpdates yoklaması yapar
-# ve /webhook/<secret> ucu 404 döner (dışarıdan varlığı görülmez).
+# ve /webhook ucu 404 döner (dışarıdan varlığı görülmez).
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
 TELEGRAM_WEBHOOK_URL = os.getenv("TELEGRAM_WEBHOOK_URL", "").strip()
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip()
 
 # --- PUBLIC KANAL ve ÖZET ---
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()
-SUMMARY_HOURS = os.getenv("SUMMARY_HOURS", "09:55,18:15").strip()  # İstanbul saati, virgülle ayrılmış
+SUMMARY_HOURS = os.getenv("SUMMARY_HOURS", "09:55,18:45").strip()  # İstanbul saati, virgülle ayrılmış
+DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").strip()
+# 18:45 erteleme özetinde gösterilecek EN FAZLA aday. Kalan adaylar kaybolmaz:
+# başlıkta "12/21 gösteriliyor" ve altta "… 9 aday daha (tam liste: /formasyonlar)"
+# satırı ile sayılır. Env ile büyütülebilir (Telegram 4096 karakter sınırı):
+#   DEFERRED_ALERT_DIGEST_LIMIT=20
+DEFERRED_ALERT_DIGEST_LIMIT = _env_int("DEFERRED_ALERT_DIGEST_LIMIT", 12)
+POST_CLOSE_ANALYSIS_TIME = os.getenv("POST_CLOSE_ANALYSIS_TIME", "20:00").strip()  # gün sonu tam evren taraması
+# --- YAZMA AMPLİKASYONU (Batch 6 / B5) ---
+# Heartbeat her hisse sonrası yazılıyordu: 48 hisse × tarama = 48 Supabase UPSERT.
+# Yerel dosya canlılık göstergesi olduğu için her zaman yazılır; Supabase'e yazım
+# bu aralıktan sık yapılmaz ve içerik değişmediyse atlanır.
+HEARTBEAT_MIN_ARALIK_SN = _env_int("HEARTBEAT_MIN_ARALIK_SN", 60)      # yerel dosya
+HEARTBEAT_UZAK_ARALIK_SN = _env_int("HEARTBEAT_UZAK_ARALIK_SN", 300)   # Supabase
+
+# --- ENGELLENEN ACİL OLAYLAR (Batch 5 / B4) ---
+# Cooldown veya saatlik/günlük kap nedeniyle gönderilemeyen ACİL alarmlar kuyruğa
+# girer ve engel kalkınca gider. Kuyruk hem Supabase'e hem diske yazılır.
+# Neden: teyitli kırılım gibi bir olay kap yüzünden tamamen kayboluyordu.
+ACIL_KUYRUK_LIMIT = _env_int("ACIL_KUYRUK_LIMIT", 20)          # kuyrukta en fazla olay
+ACIL_KUYRUK_TTL_DK = _env_int("ACIL_KUYRUK_TTL_DK", 180)       # bu süreden eski kayıt atılır
+ACIL_KUYRUK_BOSALTMA_ARALIK_SN = _env_int("ACIL_KUYRUK_BOSALTMA_ARALIK_SN", 60)  # ana döngü denemesi
 PUBLIC_MIN_QUALITY = _env_int("PUBLIC_MIN_QUALITY", 80)
 PUBLIC_STATES = [s.strip() for s in os.getenv("PUBLIC_STATES", "FORMASYON_TAMAMLANDI,RETEST_BASARILI").split(",") if s.strip()]
 # Kanal için günlük SIKISMA özetinde min daralma
@@ -200,9 +247,6 @@ MORNING_PRELOAD_HOUR = _env_int("MORNING_PRELOAD_HOUR", 8)
 MORNING_PRELOAD_MINUTE = _env_int("MORNING_PRELOAD_MINUTE", 30)
 
 DEQUE_MAXLEN = 360
-# Eski fetch_with_rate_limit yardımcı fonksiyonu içindir; canlı bot SCAN_* pacing'ini kullanır.
-RATE_LIMIT_MIN = 45
-RATE_LIMIT_MAX = 50
 
 def get_profile_params(profile: str):
     if profile == "Hassas":
@@ -289,15 +333,77 @@ ALERT_MIN_QUALITY = {
     "1d": 70,
 }
 ALERT_MIN_QUALITY_GLOBAL = 75
+# --- ALARM / KANAL POLİTİKASI (TEK KAYNAK) ----------------------------------
+# KURAL: Aşağıdaki listeler BİRBİRİNDEN AYRIDIR (aynı state iki listede olamaz)
+# ve tüm state adları `patterns/constants.py`'de tanımlıdır; test bunu doğrular.
+#
+# 1) ANINDA iletilen (gecikmeden push) kritik olaylar:
 ALERT_STATES = [
-    "KIRILIM_ADAYI",
     "KIRILIM_TEYITLI",
     "RETEST_BASARILI",
     "FORMASYON_TAMAMLANDI",
-    "SIKISMA_GUCLENIYOR",
+    "BASARISIZ_KIRILIM",
 ]
 
-LOG_DIR = "/var/log/bist-bot"
+# 2) 18:45 kapanış özetine (digest) ERTELENEN izleme state'leri. Hazırlık/adayı/
+# sıkışma/retest bekleme burada; main tarafı `IMMEDIATE_ALERT_STATES` ile anlık,
+# kalanı `DeferredAlertBuffer` + `WATCH_STATES` ile toplu bildirir.
+# Politikayı değiştirmek için SADECE bu listeyi düzenle (B7 kararı burada).
+WATCH_STATES = frozenset({
+    "SIKISMA_GUCLENIYOR",
+    "KIRILIM_HAZIRLIGI",
+    "KIRILIM_ADAYI",
+    "KIRILIM_DENEMESI",
+    "RETEST_BEKLENIYOR",
+    "RETEST_EDILIYOR",
+})
+
+# 3) PUBLIC KANAL akışı: yalnız bu state'ler ve eşikleri geçen kayıtlar kanala
+# gider (DM'den bağımsız). Kanal politikasını değiştirmek için PUBLIC_* env'leri
+# veya aşağıdaki varsayılanlar kullanılır (tek kaynak burasıdır; B9 kararı).
+#   PUBLIC_STATES, PUBLIC_MIN_QUALITY, PUBLIC_SIKISMA_MIN_CONTRACTION (aşağıda)
+
+# Politika tutarlılık kontrolü (import anında; sessiz çift bildirimi engeller).
+_politika_hatalari = []
+_ortak_state = set(ALERT_STATES) & set(WATCH_STATES)
+if _ortak_state:
+    _politika_hatalari.append(f"ALERT_STATES ve WATCH_STATES kesişiyor: {sorted(_ortak_state)}")
+
+# Evren büyürse pacing/panel/digest limitleri yeniden ölçülmeli (rapor B8).
+EVREN_BUYUME_UYARI_ESIGI = 48
+
+LOG_DIR = os.getenv("LOG_DIR", "/var/log/bist-bot").strip() or "/var/log/bist-bot"
 LOG_FILE = "bot.log"
 LOCAL_LOG_DIR = "./logs"
-DATA_DIR = "./bot_data"
+def _varsayilan_data_dir() -> str:
+    """Veri dizini: repo DIŞI varsayılan (C4).
+
+    Neden: `bot_data/` git-tracked ve canlı sunucuda her taramada yeniden yazılıyor;
+    `git pull`/deploy çakışıyordu. Artık:
+      - `DATA_DIR` env verilirse o kullanılır,
+      - Render/konteynerde repo geçici olduğu için `/tmp/formation-bot-data`
+        (kalıcı veri zaten Supabase'de),
+      - yerel/systemd kurulumda `/var/lib/formation-bot/data`, yazılamıyorsa
+        `~/.formation-bot/data`, o da olmazsa son çare `./bot_data`.
+    Repodaki `bot_data/*.json` örnek/seed verisi README'de anlatıldığı gibi yalnız
+    OKUMA yedeği olarak kullanılabilir (SEED_DATA_DIR).
+    """
+    ortam = os.getenv("DATA_DIR", "").strip()
+    if ortam:
+        return ortam
+    if os.environ.get("RENDER"):
+        return "/tmp/formation-bot-data"
+    for aday in ("/var/lib/formation-bot/data",
+                 os.path.expanduser("~/.formation-bot/data")):
+        try:
+            os.makedirs(aday, exist_ok=True)
+            if os.access(aday, os.W_OK):
+                return aday
+        except OSError:
+            continue
+    return "./bot_data"
+
+
+DATA_DIR = _varsayilan_data_dir()
+# Repodaki örnek veri: DATA_DIR'de dosya yoksa yalnız okuma için buraya bakılır.
+SEED_DATA_DIR = os.getenv("SEED_DATA_DIR", "./bot_data").strip() or "./bot_data"

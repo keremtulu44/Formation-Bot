@@ -50,12 +50,18 @@ varsayılanı 3.14'tür ve pandas 2.2.2 / numpy 1.26.4'ün cp314 tekerleği
 olmadığı için build kaynak koddan derlemeye düşüp patlıyor.
 Render `PORT` değişkenini verdiğinde bot `0.0.0.0:$PORT` üzerinde `/health` endpoint'i açar;
 monitör yalnızca liveness JSON'u görür, token/anahtar veya portföy verisi döndürülmez.
+Yanıt canlılık alanları da taşır (`heartbeat_age_s`, `heartbeat_stale`,
+`tarama_suruyor`, `seans_acik`): Render'ın kendi health check'i sorgusuz çağırdığı
+için **her zaman 200** alır, ama `GET /health?strict=1` heartbeat bayatken **503**
+döner — UptimeRobot/cron-job.org gibi bir monitörü bu adrese bağlarsan "bot dondu"
+durumu sessizce geçmez.
 
 `TELEGRAM_TEST_KEY` tanımlıysa `GET /test?k=<anahtar>` gerçek bir Telegram test
 mesajı gönderir (gönderim tarafını telefondan doğrulamak için). Anahtar
 tanımlı değilse bu yol 404 döner ve Telegram'a hiçbir istek gitmez.
 
-`TELEGRAM_WEBHOOK_SECRET` tanımlıysa aynı sunucu `POST /webhook/<secret>`
+`TELEGRAM_WEBHOOK_SECRET` tanımlıysa aynı sunucu `POST /webhook` (sırsız yol;
+doğrulama `X-Telegram-Bot-Api-Secret-Token` başlığıyla)
 ucunu açar ve Telegram komutları webhook ile gelir (adres `RENDER_EXTERNAL_URL`
 üzerinden otomatik üretilir); tanımlı değilse uç 404 döner ve bot `getUpdates`
 yoklamasını kullanır. Detay: `RENDER_DEPLOY.md` §4.6.
@@ -67,12 +73,14 @@ yalnızca `TELEGRAM_CHAT_ID`'den kabul edilir:
 |---|---|
 | `/formasyonlar` | Günün canlı formasyonları (`/formasyonlar 1h`, `/formasyonlar THYAO` filtreleri) |
 | `/canli`, `/c` | Canlı formasyonlar tek kompakt mesajda |
-| `/panel`, `/p` | 48 hisse × 4 TF slot tablosu + sayılar + en kritik 12 kayıt (`/genel`, `/tablo` diğer adları; `/panel 1h THYAO` gibi filtreler) |
-| Son tarama kalıcılığı (otomatik) | Restart/uyku sonrası `/panel` ve `/canli` son tamamlanan listeyi gösterir; `/panel` taramanın yaşını, `/panel` ve `/durum` kayıtlı kopya için ♻️ notunu gösterir. Render'da mevcut Supabase env değerleri gereklidir. |
+| `/panel`, `/p` | 48 hisse × 4 TF slot tablosu + sayılar + kompozit kalite/durum puanına göre en anlamlı 12 aday (`/genel`, `/tablo` diğer adları; `/panel 1h THYAO` gibi filtreler). Çağrıldığında güncel veriyle analiz başlatır. |
+| Son tarama durumu | Başarısız/eksik analiz başarılı boş sonuçtan ayrılır; önceki başarılı adaylar hata durumunda korunur. Yeniden başlatılmış snapshot güncel kabul edilmez. Supabase yalnızca opsiyonel OHLCV cache/geçmiş kaydıdır. |
 | `/ozet`, `/o` | Günlük özet (tamamlanan/retest/sıkışan) |
 | `/durum` | Piyasa, son tarama yaşı, canlı sayı, veri sağlığı, günlük alarm/hata |
-| `/tara` | Şimdi tara (yalnızca seans içinde; mum kapanışını beklemez) |
+| `/tara [HISSE]` | Şimdi analiz et (seans dışı da; mum kapanışını beklemez). Son tamamlanmış mumun zamanı/veri yaşı raporlanır. |
 | `/yardim` | Komut listesi |
+
+`/panel` ve `/tara [HISSE]` yeni analiz işini kuyruğa alır ve bitince raporlar. Analiz sırasında gelen slash komutları cevapsız bırakılır ve kuyruğa eklenmez. İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan 20:00) anında ayrı bir tam evren analizi yapılır.
 
 Komutlar varsayılan olarak `getUpdates` uzun yoklamasıyla ayrı bir thread'de
 toplanır; aynı token'la ikinci bir kopya (Termux/PC) çalışıyorsa `409 Conflict`
@@ -115,22 +123,15 @@ seansını ve akşam komut kullanımını kapsar; gece servis uyur (Render Free'
   Render'a gelen bir HTTP isteği değildir) — gece komut yanıtı için
   `KEEPALIVE_ALWAYS=true`.
 
-Supabase SQL scriptini çalıştırdıktan sonra Render servisinin **Environment** bölümüne şu
-secret'ları girin (değerleri Git'e veya sohbete koymayın):
-
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHAT_ID`
-- İsteğe bağlı `BOT_PROFILE`
-
-Supabase değişkenleri yoksa bot mevcut yerel cache/dosya davranışıyla çalışır; ancak Render'ın
-ephemeral diski nedeniyle restart/deploy sonrası bu yerel veriler korunmaz. Değişkenler varsa
-bot açılışta son taramayı, ardından 1H/1D cache ve Telegram state'ini yükler;
-cache/Telegram state'i tek istekte alınır. Son liste mevcut `bot_store` tablosunda
-`state:son_tarama` anahtarıyla, yerelde de atomik `bot_data/son_tarama.json` dosyasıyla
-tutulur. Açılışta en yeni kopya seçilir; okuma/yazma hatası botu durdurmaz.
-Yerel JSON/pickle dosyaları da fallback olarak tutulur.
+Telegram komutları için Render **Environment** bölümüne `TELEGRAM_BOT_TOKEN` ve
+`TELEGRAM_CHAT_ID` ekleyin (secret değerleri Git'e veya sohbete koymayın).
+`BOT_PROFILE` isteğe bağlıdır. Supabase entegrasyonu da isteğe bağlıdır:
+`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` ve `supabase_schema.sql`, OHLCV
+cache/history ile Telegram rate-limit/cooldown durumunun restart sonrası
+korunmasını sağlar. Bunlar olmadan da bot Yahoo Finance ve yerel cache ile analiz
+üretir; Render'ın ephemeral diski restart/deploy'da yerel geçmişi ve Telegram
+cooldown state'ini sıfırlayabilir. Yeniden başlatılan analiz snapshot'ı güncel
+sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 
 ## Dosya haritası
 
@@ -144,9 +145,9 @@ Yerel JSON/pickle dosyaları da fallback olarak tutulur.
 | `supabase_store.py` | Supabase REST API adaptörü; servis anahtarı yalnızca environment'tan okunur |
 | `telegram_commands.py` | İki yönlü Telegram: `getUpdates` uzun yoklaması, yetki kontrolü, komut dağıtımı, 401/409 yönetimi (webhook modunda da aynı komut dağıtımı kullanılır) |
 | `live_state.py` | Tarama thread'i ile komut thread'i arasında thread-safe canlı formasyon/durum paylaşımı |
-| `health_server.py` | Render `PORT` varsa `/health` liveness, korumalı `/test` ve `POST /webhook/<secret>` uçları; uptime monitörleri ve Telegram komutları için |
+| `health_server.py` | Render `PORT` varsa `/health` liveness (+ canlılık alanları, `?strict=1`), korumalı `/test` (X-Test-Key) ve `POST /webhook` (secret_token başlığı) uçları + IP başına rate limit |
 | `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
-| `deploy_check.py` | Kurulum doktoru: repo dosyaları + env + Supabase tablosu + Telegram + Render `/health` ve `/test` uçlarını tek komutla doğrular (sır yazdırmaz) |
+| `deploy_check.py` | Kurulum doktoru: repo dosyaları + env + Supabase tablosu + **heartbeat canlılığı** + Telegram + Render `/health` ve `/test` uçlarını tek komutla doğrular (sır yazdırmaz) |
 | `.github/workflows/deploy.yml` | Render Deploy Hook ile `main` push'unda otomatik deploy (hook secret yoksa uyarı verip atlar) |
 | `.github/workflows/ci.yml` | Render eşdeğeri CI: Python 3.12 kurulumu, pytest, zamanlama regresyonu ve `PORT` verilip `/health` duman testi |
 | `.github/workflows/keepalive.yml` | Render Free uyumasın diye `/health` pingi (5 dk, her gün 08:00–23:00 İstanbul; `KEEPALIVE_*` değişkenleriyle ayarlanır) |
@@ -159,6 +160,9 @@ Yerel JSON/pickle dosyaları da fallback olarak tutulur.
 | `PINE_FARK_ANALIZI.md` | **Çalışma defteri:** Pine ile fark analizi, doğrulama listesi, fikir defteri |
 | `FORMASYON_MANTIGI.md` | Pine v0.4.6 Türkçe dökümanı (formasyon koşulları, kalite formülleri) |
 | `TESHIS_RAPORU.md` | Dış teşhis raporunun bağımsız doğrulaması (TRUE/FALSE/PARTIAL) |
+| `SORUN_RAPORU.md` | Ölçümlü teşhis: üretim→Telegram hunisi, bastırılan adaylar, S1-S11 + ek bulgular |
+| `YAPILACAKLAR.md` | A (düzeltme) / B (iyileştirme) / C (şablon) tam iş listesi, öncelik ve efor |
+| `KODLAMA_PLANI.md` | Batch'li uygulama planı; her batch için kapsam/dosya/test/kabul kriteri |
 
 ## Canlı tarama raporu nasıl okunur (Pine karşılaştırması)
 
@@ -170,32 +174,69 @@ Yerel JSON/pickle dosyaları da fallback olarak tutulur.
 - Rapor sonunda **PINE KARSILASTIRMA REHBERI**: kaç bayrak/flama bulundu + tüm eşikler.
 - Not: Pine ekranında eski TAMAMLANDI/BASARISIZ formasyonlar da çizili kalabilir — rapor yalnız **canlı** olanları listeler.
 
-## Durum (2026-09-27, dal `arena/01a0e2d0-formation-bot`)
+## Durum (2026-09-30, dal `arena/01a0f318-formation-bot`)
 
 | Faz | İçerik | Commit |
 |---|---|---|
 | Faz 1 | Son mum/35-dk gecikme düzeltmesi, `auto_adjust=False`, ölü formasyon alarm kapısı, fetch hata loglama + `data_stale` heartbeat | `7485ab6` |
 | Faz 2 | 1D gecikme, BIST tatil/yarım gün takvimi + veri-yok modu, split/süreklilik kontrolü, Telegram global kapanı, tarama drift uyarısı, 1D derin deque (500 bar) | `c3000b6` |
 | Faz 3 | Flama motoru doğrulama: `test_pennant.py` (6/6), `specialized_variant` (standart/eğik ayrımı), standart flama geometri şartı, canlı rapora direk/ölçüm detayı + veri tazeliği | `da3840b`, `0fd1f46`, `28a1e7a` |
+| Faz 4 | Son tarama kalıcılığı + `LiveState.snapshot/hydrate`, Telegram webhook modu, `telegram_alert_flow` ile erteleme (18:45 digest) ve panel rapor katmanı | `b85f6bb` (PR #9), `0bca8e5` |
+| Faz 5 (batch-1) | Açılışta `son_tarama_yukle()` çağrısı geri kondu; tatil/yarım gün günlerinde ana döngünün 0 sn uykulu boş dönmesi düzeltildi | `e9a736f` |
+| Faz 5 (batch-2) | Ölü kod temizliği (kanal dalı, `[:10]`, `get_formations`), özet ile panel aynı kaynaktan, digest şeffaflığı (`12/21 gösteriliyor` + `… N aday daha`), `DEFERRED_ALERT_DIGEST_LIMIT`, benzersiz günlük formasyon sayacı | `6dca717` |
+| Faz 5 (batch-3) | Aday hunisi sayaçları (`/durum` "🔎 Aday hunisi"), engel sayaçları (cooldown/günlük kap/saatlik kap/hata), `/panel` eşik altı satırı | `401a788` |
+| Faz 5 (batch-4) | Sunucu saat dilimi (İstanbul) sayaç/log uyumu + `TZ` değişkeni, uzun mesaj kırpma + sınırlı retry, gönderim sağlığı alanları (heartbeat + `/durum` "Telegram PASİF" uyarısı) | `7626e7d` |
+| Faz 5 (batch-5) | 18:45 digest tamponu kalıcı (`state:digest_pending` + açılışta geri yükleme + kaçırılan özet telafisi), engellenen acil olay kuyruğu (`state:telegram_acil_kuyruk`, engel kalkınca gönderim, kuyruk derinliği heartbeat'te) | `0ba343e` |
+| Faz 5 (batch-6) | Yazma amplikasyonu (içerik parmak izi + heartbeat throttle → tarama başına 144 istek/3,3 MB yerine ~50 istek/2 MB, değişmeyen turda ~0), sır URL'den çıktı (webhook `/webhook` + secret_token başlığı, `/test` X-Test-Key, IP rate limit), `.pkl` Git'ten çıkarıldı (JSON birincil), çoklu örnek tespiti (`state:instances` + heartbeat/`/durum` uyarısı) | `a65b053` |
+| Faz 5 (batch-7) | Şablon hazırlığı: `MARKET_SUFFIX`/`STOCK_UNIVERSE`/`LOG_DIR` env + `SESSION_OPEN/CLOSE` adları + 2027 tatil takvimi (C1), Supabase anahtar ön eki `SUPABASE_STORE_PREFIX=formation-bot:` + eski anahtarları iki turlu okuma (C3), `DATA_DIR` repo dışı varsayılan + `SEED_DATA_DIR` salt-okuma seed (C4), ölü araç temizliği (`fetch_with_rate_limit`, mock demo, `repo_teshis.py`, `logrotate.conf`, `.ps1`) (C7) | `a738ec4` |
 
-Regresyon: `test_tarama_zamani.py` **90/90**, `test_pennant.py` **6/6**.
+| Faz 5 (batch-8) | `main.py` katmanlara ayrıldı (yapısal, davranış değişmedi): `reporting/format.py` (saf metin/sayı üretimi, 8.1), `import main` yan etkisi kaldırıldı (8.2), `reporting/panel.py` (panel raporu bağlam ile, 8.3), `state/paths.py` + `state/persistence.py` (son tarama + digest tamponu, 8.4), `transport/telegram.py` (webhook/komut katmanı, 8.5). `main.py` 3047 → 2380 satır | `77a2756` |
+
+Regresyon: `pytest` **305 passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
+
+Ölçüm (B5, 48 hisse × 360 bar 1H + 250 bar 1D, tek tarama turu):
+`96 istek / 3,26 MB` → seans içi `48 istek / 1,98 MB`, veri değişmeyen turda `0 istek / 0 MB`;
+heartbeat `48 istek / 42 KB` → `2 istek / 1,8 KB`. Telemetri: heartbeat `uzak_yazma` alanı.
+Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölçümlü teşhis: `SORUN_RAPORU.md`.
 
 ## Bilinmesi gerekenler (yeni oturum için)
 
 1. **Pine dosyası bekleniyor** (`Yeni Metin Belgesi.txt`, ARGENT v0.4.6 export). Diske
    ulaşmadı; geldiğinde `PINE_FARK_ANALIZI.md` §5'teki 12 maddelik doğrulama listesi açılacak.
-2. **Kalite katsayı sapması:** döküman 0.28/0.20/0.12/0.16/0.12/0.07/0.05 diyor, kod
+2. **Bildirim durumu artık kalıcı (Faz 5):** 18:45 digest tamponu `state:digest_pending`,
+   engellenen acil olaylar `state:telegram_acil_kuyruk` anahtarıyla Supabase'e +
+   `DATA_DIR` içindeki dosyalara yazılır (batch-7/C4: repo dışı; `state/persistence.py`);
+   açılışta geri yüklenir. Bot akşam 18:45'te kapalıysa kaçırılan
+   kapanış özeti açılışta "⏰ Kaçırılan kapanış özeti" olarak telafi edilir. Engellenen acil
+   olay `ACIL_KUYRUK_TTL_DK` (varsayılan 180 dk) içinde engel kalkınca gönderilir; süre aşılırsa
+   bayat sinyal atılır (kuyruk sayaçları `/durum` ve heartbeat'te görünür).
+3. **Kalite katsayı sapması:** döküman 0.28/0.20/0.12/0.16/0.12/0.07/0.05 diyor, kod
    0.26/0.18/0.12/0.20/0.10/0.07/0.07 kullanıyor — **Pine gelmeden kod değiştirilmeyecek**.
-3. **Standart flama geometri şartı** (Faz 3'te eklendi): standart flama yalnız Simetrik Üçgen
+4. **Standart flama geometri şartı** (Faz 3'te eklendi): standart flama yalnız Simetrik Üçgen
    geometrisinde kurulur; eğik geometri eğik flama tablosundan (direk kalitesi +10, süre ×0.85,
    kalite +8) geçer. Pine'da birebir var mı — doğrulama madde 11.
-4. **Açık A5 maddeleri:** `filter_same_bar_double_pivot` stub, `local_break` TODO,
+5. **Açık A5 maddeleri:** `filter_same_bar_double_pivot` stub, `local_break` TODO,
    `ST_WEAK`/`ST_GEOMETRY` kod yolu yok.
-5. **Eşikleri ölçüm olmadan gevşetme yasağı** — A4'ün kök nedeni buydu (sentetik bayrak
+6. **Eşikleri ölçüm olmadan gevşetme yasağı** — A4'ün kök nedeni buydu (sentetik bayrak
    reddediliyor, gerçek veride sahte bayrak bulunuyordu).
-6. **Sandbox kısıtı:** bu ortamdan Yahoo Finance ve Telegram'a erişilemiyor (SSL). Gerçek
+7. **Sandbox kısıtı:** bu ortamdan Yahoo Finance ve Telegram'a erişilemiyor (SSL). Gerçek
    zamanlı tarama ve canlı bot testi kullanıcının kendi makinesinde yapılmalı; burada
    `--cache` modu ve commit'li `bot_data` kullanılır.
-7. **Bot kuralları:** `bot_data/*.json` + `*.pkl` git-tracked kalacak; runtime dosyaları
-   (heartbeat, telegram_kap, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0e2d0-formation-bot`
-   dalında; başka dala push yok.
+8. **Alarm ve kanal politikası TEK KAYNAK (`config.py`):** karar bekleyen B7/B9
+   maddeleri davranışı değiştirmeden tek yerde toplandı —
+   `ALERT_STATES` (anında push edilen 4 kritik olay), `WATCH_STATES` (18:45 kapanış
+   özetine ertelenen 6 izleme state'i; `telegram_alert_flow.WATCH_STATES` bu listeye
+   bağlıdır) ve `PUBLIC_STATES` + `PUBLIC_MIN_QUALITY` + `PUBLIC_SIKISMA_MIN_CONTRACTION`
+   (public kanal akışı; B9). Kesişim/çift bildirim `config._politika_hatalari` ile
+   import anında yakalanır, testler bunu doğrular. Politikayı değiştirmek için sadece
+   bu üç yeri düzenle; kodda başka yerde kopya liste yok. Evren 48'in üzerine çıkarsa
+   `EVREN_BUYUME_UYARI_ESIGI` ile açılışta tek satır uyarı loglanır (pacing/digest/panel
+   limitleri yeniden ölçülmeli).
+9. **Veri dizini artık repo dışında (batch-7 / C4):** yazımlar `DATA_DIR`'e gider; sırayla
+   `RENDER` → `/tmp/formation-bot-data` → `/var/lib/formation-bot/data` → `~/.formation-bot/data` →
+   `./bot_data` denenir. Repodaki `bot_data/*.json` yalnız **okuma** yedeğidir (`SEED_DATA_DIR`);
+   canlı veri diske yazılmaz. Supabase anahtarları `SUPABASE_STORE_PREFIX` (varsayılan
+   `formation-bot:`) ile öneklenir; öneksiz eski kayıtlar okunur ve sonraki yazımda taşınır.
+10. **Bot kuralları:** `bot_data/*.json` git-tracked; **`*.pkl` artık dışarıda** (A8: public repoda pickle yürütme yüzeyi olmasın; okuma JSON birincil, eski `.pkl` yalnız yedek). Runtime dosyaları
+   (heartbeat, telegram_kap, telegram_acil_kuyruk, telegram_digest_pending, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0f318-formation-bot`
+   dalında; başka dala push yok. Merge YALNIZCA kullanıcı onayıyla yapılır.
