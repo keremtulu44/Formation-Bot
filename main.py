@@ -71,8 +71,17 @@ from reporting.format import (
 )
 
 # === LOGGING KURULUMU ===
+# Batch 8 / C2: bu fonksiyon artık IMPORT anında ÇAĞRILMAZ (yan etki kaldırıldı:
+# modül import edildiğinde log dizini oluşturulmuyor/`/var/log` denenmiyordu).
+# `main_loop()` ve `python main.py` girişi kurulumu kendisi yapar.
+_logging_kuruldu = False
+
+
 def setup_logging():
-    """Log hem console hem dosyaya - Türkçe mesajlar"""
+    """Log hem console hem dosyaya - Türkçe mesajlar (tek seferlik)."""
+    global _logging_kuruldu
+    if _logging_kuruldu:
+        return logging.getLogger(__name__)
     # Local mi prod mu? LOG_DIR (/var/log/bist-bot) GERÇEKTEN yazılabilir mi?
     # Not: /var/log'un kendisine bakmak yetmez (root dışında yazılamaz) -
     # LOG_DIR'e yazma testi yapılmalı, yoksa sunucuda loglar ./logs'a düşer.
@@ -98,11 +107,14 @@ def setup_logging():
         ]
     )
     
+    _logging_kuruldu = True
     logger = logging.getLogger(__name__)
     logger.info(f"Logging kuruldu - dosya: {log_file} - profil: {PROFILE}")
     return logger
 
-logger = setup_logging()
+# Import anında yalnız logger nesnesi alınır; handler'lar setup_logging() ile
+# bağlanır (yukarıdaki nota bakın).
+logger = logging.getLogger(__name__)
 
 # main_loop icinde olusturulan nesnelerin global referanslari (heartbeat icin)
 _deque_manager_ref = None
@@ -2353,6 +2365,7 @@ def main_loop():
     3. Kapalıysa -> 5dk uyu, tekrar kontrol et
     Neden 24/7 çalışıp sadece seans saatlerinde CPU harcasın? Oracle Free'de kaynak kısıtlı
     """
+    setup_logging()   # Batch 8 / C2: handler'lar burada bağlanır (import yan etkisi yok)
     logger.info("=== BIST FORMASYON BOTU BAŞLATILIYOR ===")
     logger.info(f"Profil: {PROFILE}, Params: {PROFILE_PARAMS}")
     logger.info(f"Hisseler: {ACTIVE_STOCKS[:5]}... (toplam {len(ACTIVE_STOCKS)})")
@@ -2741,6 +2754,7 @@ def _render_test_sender(text):
 
 
 if __name__ == "__main__":
+    setup_logging()
     # HTTP sunucusu main_loop'tan ÖNCE başlar: Render'ın health check'i ilk veri
     # yüklemesi sürerken de yanıt verir. Webhook modunda güncellemeler bu sunucudan
     # gelir; bot komutları kurana kadar /webhook 503 döner (Telegram tekrar dener).
