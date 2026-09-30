@@ -541,3 +541,75 @@ def test_main_kalicilik_adaptorleri_delege_eder():
     assert "_state_persistence.son_tarama_kaydet(" in kaynak
     kaynak2 = inspect.getsource(main_mod.digest_tamponu_kaydet)
     assert "_state_persistence.digest_tamponu_kaydet(" in kaynak2
+
+
+# --- Batch 8 / C2 (8.5): Telegram taşıma katmanı -----------------------------
+def test_transport_katmani_main_import_etmez():
+    import ast
+    kaynak = open("transport/telegram.py", encoding="utf-8").read()
+    moduller = set()
+    for dugum in ast.walk(ast.parse(kaynak)):
+        if isinstance(dugum, ast.Import):
+            moduller.update(a.name.split(".")[0] for a in dugum.names)
+        elif isinstance(dugum, ast.ImportFrom) and dugum.module:
+            moduller.add(dugum.module.split(".")[0])
+    assert "main" not in moduller
+
+
+def test_transport_adres_uretimi_bagimsiz():
+    """Adres üretimi artık config'i parametre olarak alıyor (main monkeypatch'i çalışır)."""
+    from transport import telegram as tt
+    assert tt.webhook_url_olustur(secret="", varsayilan_render="https://x.onrender.com") == ""
+    adres = tt.webhook_url_olustur(secret="s3cr3t", varsayilan_render="https://x.onrender.com")
+    assert adres == "https://x.onrender.com/webhook", "sır URL'de taşınmamalı (A7)"
+    assert tt.webhook_adres_gizle("https://x/webhook/s3cr3t", "s3cr3t") == "https://x/webhook/***"
+
+
+def test_transport_komut_katmani_modlari():
+    from transport import telegram as tt
+
+    class SahteNotifier:
+        enabled = True
+        token = "111:AAA"
+        chat_id = "42"
+
+    class SahteIsleyici:
+        def __init__(self, start_sonucu=True):
+            self.start_sonucu = start_sonucu
+            self.baslatildi = False
+        def start(self):
+            self.baslatildi = True
+            return self.start_sonucu
+
+    ortak = dict(komutlar={"durum": lambda *_: "ok"}, yardim_metni="yardim",
+                 tarama_suruyor=lambda: False, listener_factory=lambda **k: SahteIsleyici(),
+                 adres_olustur=lambda: "https://x.onrender.com/webhook",
+                 gizle=lambda adres, secret="": adres, secret_ayikla=lambda: "s3cr3t",
+                 delete_webhook_fn=lambda **k: True)
+
+    kapali = tt.komut_katmanini_kur(None, komutlar=ortak["komutlar"], yardim_metni="y",
+                                    tarama_suruyor=lambda: False, health_server_var=True,
+                                    listener_factory=ortak["listener_factory"],
+                                    adres_olustur=ortak["adres_olustur"], gizle=ortak["gizle"],
+                                    secret_ayikla=ortak["secret_ayikla"],
+                                    set_webhook_fn=lambda **k: True,
+                                    delete_webhook_fn=ortak["delete_webhook_fn"])
+    assert kapali["mod"] == "kapali"
+
+    webhook = tt.komut_katmanini_kur(SahteNotifier(), komutlar=ortak["komutlar"], yardim_metni="y",
+                                     tarama_suruyor=lambda: False, health_server_var=True,
+                                     listener_factory=ortak["listener_factory"],
+                                     adres_olustur=ortak["adres_olustur"], gizle=ortak["gizle"],
+                                     secret_ayikla=ortak["secret_ayikla"],
+                                     set_webhook_fn=lambda **k: True,
+                                     delete_webhook_fn=ortak["delete_webhook_fn"])
+    assert webhook["mod"] == "webhook" and webhook["processor"] is not None
+
+    yoklama = tt.komut_katmanini_kur(SahteNotifier(), komutlar=ortak["komutlar"], yardim_metni="y",
+                                     tarama_suruyor=lambda: False, health_server_var=False,
+                                     listener_factory=ortak["listener_factory"],
+                                     adres_olustur=ortak["adres_olustur"], gizle=ortak["gizle"],
+                                     secret_ayikla=ortak["secret_ayikla"],
+                                     set_webhook_fn=lambda **k: True,
+                                     delete_webhook_fn=ortak["delete_webhook_fn"])
+    assert yoklama["mod"] == "yoklama" and yoklama["listener"] is not None

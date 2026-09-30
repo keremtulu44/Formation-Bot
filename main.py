@@ -1147,158 +1147,50 @@ def son_tarama_yukle(store=None, data_dir=None) -> int:
 # aynı anda açık olmaz: webhook açıkken getUpdates çağrılmaz (Telegram 409 verir),
 # yoklamaya dönülürken de webhook silinir.
 
+# === TELEGRAM (taşıma katmanı — Batch 8 / C2, 8.5) ===
+# Sır/adres çözümleme, Bot API çağrısı ve webhook kurulumu artık
+# `transport/telegram.py`'de. Buradaki adaptörler eski iç adları ve imzaları
+# korur; API fonksiyonları ÇAĞRI ANINDA main globalinden okunur, böylece
+# testlerdeki `monkeypatch.setattr(main_mod, "_telegram_api_cagri", ...)`
+# davranışı aynen çalışır.
+from transport import telegram as _transport_telegram
+
+_webhook_adres_gizle = _transport_telegram.webhook_adres_gizle
+_telegram_api_cagri = _transport_telegram.api_cagri
+_telegram_yanit_oku = _transport_telegram.yanit_oku
+
+
 def _telegram_webhook_secret_ayikla(secret=None) -> str:
-    """Parametre verilmediyse config'teki TELEGRAM_WEBHOOK_SECRET kullanılır."""
-    if secret is None:
-        secret = TELEGRAM_WEBHOOK_SECRET
-    return (secret or "").strip()
-
-
-def _webhook_adres_gizle(adres: str, secret: str = "") -> str:
-    """Log için: adresteki sırrı *** yapar (loglara sır düşmesin)."""
-    return adres.replace(secret, "***") if secret else adres
-
-
-def _telegram_webhook_url_olustur(secret=None, webhook_url=None, render_url=None) -> str:
-    """Telegram webhook adresini üretir; webhook modu kapalıysa boş döner.
-
-    A7 (Batch 6): adres artık SIR TAŞIMAZ — `…/webhook`. Doğrulama, `setWebhook`
-    ile bildirilen `secret_token` başlığıyla yapılır; böylece sır URL ile birlikte
-    Telegram sunucularına, proxy ve erişim loglarına düşmez.
-
-    Öncelik:
-      1. `TELEGRAM_WEBHOOK_URL` — tam adres. Sonunda `/webhook` varsa aynen
-         kullanılır; eski biçim (`/webhook/<secret>`) verilmişse geriye dönük
-         uyumluluk için korunur (uyarı loglanır); diğer durumda taban adres sayılır.
-      2. `RENDER_EXTERNAL_URL` + `/webhook`
-         (Render bunu otomatik verir: https://<servis>.onrender.com)
-
-    Secret boşsa mod kapalıdır (boş döner) ve bot yoklamaya devam eder. Telegram
-    webhook için HTTPS zorunlu kılar; http adres üretilirse kurulmaz, loga yazılır.
-    """
-    secret = _telegram_webhook_secret_ayikla(secret)
-    if not secret:
-        return ""
-    webhook_url = (TELEGRAM_WEBHOOK_URL if webhook_url is None else webhook_url or "").strip()
-    render_url = (RENDER_EXTERNAL_URL if render_url is None else render_url or "").strip()
-
-    if webhook_url:
-        adres = webhook_url.rstrip("/")
-        if adres.endswith(WEBHOOK_YOL):
-            return adres                       # sırsız tam adres (önerilen)
-        if WEBHOOK_YOL_ONEK in adres:
-            # Eski kayıt: sır yolda. Çalışır ama sır loglara düşer; uyarı ver.
-            logger.warning(
-                "TELEGRAM_WEBHOOK_URL sır içeriyor (…/webhook/<secret>); önerilen biçim "
-                f"…{WEBHOOK_YOL} + secret_token başlığı. Eski biçim kabul edildi."
-            )
-            return adres
-        if adres.endswith("/webhook"):
-            return adres
-        adres = f"{adres}{WEBHOOK_YOL}"
-    elif render_url:
-        adres = f"{render_url.rstrip('/')}{WEBHOOK_YOL}"
-    else:
-        logger.warning(
-            "TELEGRAM_WEBHOOK_SECRET tanimli ama taban adres yok "
-            "(TELEGRAM_WEBHOOK_URL veya RENDER_EXTERNAL_URL gerekli) - yoklama kullanilacak"
-        )
-        return ""
-
-    if not adres.startswith("https://"):
-        logger.warning(
-            "Webhook adresi https olmali (Telegram zorunlu): "
-            f"{_webhook_adres_gizle(adres, secret)} - webhook kurulmadi"
-        )
-        return ""
-    return adres
+    # config değeri ÇAĞRI ANINDA okunur: testlerdeki monkeypatch(main, ...) etkili olur.
+    return _transport_telegram.webhook_secret_ayikla(secret, varsayilan=TELEGRAM_WEBHOOK_SECRET)
 
 
 def _telegram_token_al(token=None) -> str:
-    """Token parametresi yoksa notifier'ın token'ı (main_loop kurduktan sonra dolu)."""
-    if token:
-        return str(token).strip()
-    return (getattr(_notifier_ref, "token", "") or "").strip()
+    return _transport_telegram.token_al(token, notifier=_notifier_ref)
 
 
-def _telegram_api_cagri(method: str, token: str, payload: dict, timeout: int = 15):
-    """Telegram Bot API POST çağrısı (test edilebilirlik için tek nokta)."""
-    import requests
-    return requests.post(f"https://api.telegram.org/bot{token}/{method}",
-                         json=payload, timeout=timeout)
-
-
-def _telegram_yanit_oku(yanit):
-    """(ok, aciklama) — Telegram yanıtından okunabilir sonuç çıkarır."""
-    kod = getattr(yanit, "status_code", 0)
-    try:
-        govde = yanit.json() or {}
-    except Exception:
-        govde = {}
-    ok = kod == 200 and bool(govde.get("ok"))
-    aciklama = str(govde.get("description") or "").strip() or f"HTTP {kod}"
-    return ok, aciklama
+def _telegram_webhook_url_olustur(secret=None, webhook_url=None, render_url=None) -> str:
+    return _transport_telegram.webhook_url_olustur(
+        secret=secret, webhook_url=webhook_url, render_url=render_url,
+        varsayilan_secret=TELEGRAM_WEBHOOK_SECRET,
+        varsayilan_url=TELEGRAM_WEBHOOK_URL,
+        varsayilan_render=RENDER_EXTERNAL_URL)
 
 
 def _telegram_set_webhook(url=None, secret=None, token=None) -> bool:
-    """setWebhook: komutlar Telegram → `/webhook` (sırsız yol) ile gelsin.
-
-    - `drop_pending_updates=True`: bot kapalıyken biriken BAYAT komutlar (örn. dünkü
-      /tara) webhook kurulur kurulmaz çalışmasın. Yoklama modundaki "backlog atla"
-      kuralının (telegram_commands.BACKLOG_SINIR_SN) webhook karşılığıdır.
-    - `secret_token`: Telegram her istekte `X-Telegram-Bot-Api-Secret-Token`
-      başlığını gönderir; health_server sırsız yolda bu başlığı ZORUNLU tutar (A7).
-    """
-    secret = _telegram_webhook_secret_ayikla(secret)
-    token = _telegram_token_al(token)
-    adres = (url or "").strip() or _telegram_webhook_url_olustur(secret=secret)
-    if not token:
-        logger.warning("Webhook kurulmadi: Telegram token yok")
-        return False
-    if not adres:
-        logger.warning("Webhook kurulmadi: adres uretilemedi (secret/RENDER_EXTERNAL_URL eksik)")
-        return False
-    govde = {
-        "url": adres,
-        "allowed_updates": ["message"],
-        "drop_pending_updates": True,
-    }
-    if secret:
-        govde["secret_token"] = secret
-    try:
-        yanit = _telegram_api_cagri("setWebhook", token, govde)
-    except Exception as exc:  # noqa: BLE001 - ağ hatası botu düşürmesin
-        logger.error(f"Webhook kurulamadi (ag hatasi): {exc}")
-        return False
-    ok, aciklama = _telegram_yanit_oku(yanit)
-    if ok:
-        logger.info(f"Telegram webhook kuruldu: {_webhook_adres_gizle(adres, secret)} ({aciklama})")
-    else:
-        logger.error(f"Telegram webhook kurulamadi: {aciklama}")
-    return ok
+    return _transport_telegram.set_webhook(
+        url=url, secret=secret, token=token,
+        api=_telegram_api_cagri, yanit_oku_fn=_telegram_yanit_oku,
+        secret_ayikla_fn=_telegram_webhook_secret_ayikla, token_al_fn=_telegram_token_al,
+        adres_olustur_fn=_telegram_webhook_url_olustur, gizle_fn=_webhook_adres_gizle,
+    )
 
 
 def _telegram_delete_webhook(token=None) -> bool:
-    """deleteWebhook: yoklama moduna dönmeden önce eski webhook kaydını siler.
-
-    Neden gerekli: webhook kurulu bir token'da `getUpdates` 409 Conflict alır, yani
-    mod değişince (secret silindi / yerelde yoklama) eski kayıt kalırsa komutlar
-    sessizce çalışmaz. `drop_pending_updates=True` ile bayat güncellemeler de temizlenir.
-    """
-    token = _telegram_token_al(token)
-    if not token:
-        return False
-    try:
-        yanit = _telegram_api_cagri("deleteWebhook", token, {"drop_pending_updates": True})
-    except Exception as exc:  # noqa: BLE001 - ağ hatası botu düşürmesin
-        logger.warning(f"Webhook kaldirilamadi (ag hatasi): {exc}")
-        return False
-    ok, aciklama = _telegram_yanit_oku(yanit)
-    if ok:
-        logger.info(f"Telegram webhook kaldirildi ({aciklama})")
-    else:
-        logger.warning(f"Telegram webhook kaldirilamadi: {aciklama}")
-    return ok
+    return _transport_telegram.delete_webhook(
+        token=token, api=_telegram_api_cagri, yanit_oku_fn=_telegram_yanit_oku,
+        token_al_fn=_telegram_token_al,
+    )
 
 
 def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
@@ -1315,46 +1207,23 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
     `isleyici` yalnızca testler için verilir (ağa çıkmayan sahte dinleyici).
     """
     global _telegram_listener_ref, _telegram_update_processor_ref
-    if notifier is None or not getattr(notifier, "enabled", False):
-        logger.info("Telegram komut dinleyicisi başlatılmadı (token/chat_id yok)")
-        return "kapali"
-    if isleyici is None:
-        isleyici = TelegramCommandListener(
-            token=notifier.token,
-            allowed_chat_id=notifier.chat_id,
-            handlers=TELEGRAM_KOMUTLARI,
-            help_text=KOMUT_YARDIM,
-            komutlari_yoksay=lambda: _scan_job_active.is_set(),
-        )
-    liste = ", ".join("/" + k for k in TELEGRAM_KOMUTLARI)
-    webhook_url = _telegram_webhook_url_olustur()
-    if webhook_url:
-        if _health_server_ref is None:
-            logger.warning(
-                "TELEGRAM_WEBHOOK_SECRET tanimli ama HTTP sunucusu yok "
-                "(PORT env yok ya da sunucu baslatilamadi) - yoklama moduna donuldu"
-            )
-        elif _telegram_set_webhook(url=webhook_url, token=notifier.token):
-            # Güncellemeler health_server thread'inden gelir; bu referans olmadan
-            # /webhook ucu 503 döner ve Telegram güncellemeyi tekrar dener.
-            _telegram_update_processor_ref = isleyici
-            logger.info(
-                "Telegram komutları WEBHOOK modunda: "
-                f"{_webhook_adres_gizle(webhook_url, _telegram_webhook_secret_ayikla())} "
-                f"(yalnızca chat_id {notifier.chat_id})"
-            )
-            return "webhook"
-        else:
-            logger.warning("Webhook kurulamadi - yoklama moduna donuluyor")
-    # Yoklama moduna dönerken eski webhook kaydı kalırsa getUpdates 409 alır.
-    _telegram_delete_webhook(token=notifier.token)
-    if isleyici.start():
-        _telegram_listener_ref = isleyici
-        logger.info(f"Telegram komutları aktif (yoklama): {liste} "
-                    f"(yalnızca chat_id {notifier.chat_id})")
-        return "yoklama"
-    return "kapali"
-
+    sonuc = _transport_telegram.komut_katmanini_kur(
+        notifier, isleyici,
+        komutlar=TELEGRAM_KOMUTLARI, yardim_metni=KOMUT_YARDIM,
+        tarama_suruyor=lambda: _scan_job_active.is_set(),
+        health_server_var=_health_server_ref is not None,
+        listener_factory=TelegramCommandListener,
+        adres_olustur=_telegram_webhook_url_olustur,
+        gizle=_webhook_adres_gizle,
+        secret_ayikla=_telegram_webhook_secret_ayikla,
+        set_webhook_fn=_telegram_set_webhook,
+        delete_webhook_fn=_telegram_delete_webhook,
+    )
+    if sonuc["mod"] == "webhook":
+        _telegram_update_processor_ref = sonuc["processor"]
+    elif sonuc["mod"] == "yoklama":
+        _telegram_listener_ref = sonuc["listener"]
+    return sonuc["mod"]
 
 def _telegram_webhook_isle(guncelleme):
     """health_server'ın /webhook ucundan gelen güncellemeyi işler (thread-safe).

@@ -130,7 +130,7 @@
 - Dokümanlar: `.env.example`, `render.yaml`, `RENDER_DEPLOY.md` env tablosu ve `README.md`
   Batch 7 satırı; `TESHIS_RAPORU.md`'ye aracın kaldırıldığına dair not.
 
-## BATCH 8 — `main.py` katmanlara ayırma (yapısal)
+## BATCH 8 — ✅ Tamamlandı: `main.py` katmanlara ayırma (yapısal)
 
 Hedef mimari: `patterns/` (motor, **zaten bağımsız**) · `orchestration/` (tarama+zamanlama) ·
 `reporting/` (panel/digest/özet metinleri) · `transport/` (telegram, supabase, health) · `state/`.
@@ -146,7 +146,7 @@ Her adım ayrı commit; davranış değişmez, yalnız taşıma.
 | 8.2 | `import main` yan etkileri (logger ele geçirme, `/var/log`-`./logs` yazımı) kaldırıldı; kurulum `main_loop()`/girişe taşındı | ✅ `8fd8028` |
 | 8.3 | `reporting/panel.py`: `panel_raporu` artık durumu parametre alır; `main._panel_raporu` ince adaptör (bu commit) | ✅ |
 | 8.4 | `state/`: `paths.py` (yol/snapshot yardımcıları) + `persistence.py` (son tarama + digest tamponu kaydet/yükle); main'de ince adaptörler | ✅ |
-| 8.5 | `transport/`: telegram/webhook kurulumu main'den ayrılır; main ince orkestratör | ⏳ |
+| 8.5 | `transport/telegram.py`: sır/adres çözümleme, Bot API çağrısı, setWebhook/deleteWebhook ve komut katmanı (webhook ↔ yoklama) seçimi; main'de ince adaptörler | ✅ |
 
 ---
 
