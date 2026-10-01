@@ -130,7 +130,6 @@ class _HealthHandler(BaseHTTPRequestHandler):
 
         # A7: anahtar artık başlıktan okunur (URL/erişim loglarına düşmesin).
         provided = self._test_anahtari()
-        kaynak = "baslik"
         if not provided and getattr(self.server, "test_key_query", True):
             # Geriye dönük: telefon yer imleri için ?k= hâlâ kabul edilir ama
             # sır URL'de kalır; başlığa geçilmesi logla hatırlatılır.

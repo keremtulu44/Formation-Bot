@@ -392,8 +392,20 @@ class StockDequeManager:
                     try:
                         candle = dict(item)
                         ts = candle.get("timestamp")
-                        if isinstance(ts, str):
-                            candle["timestamp"] = date_parser.parse(ts)
+                        if ts is not None:
+                            # pd.to_datetime + tek tz sınıfı (İstanbul/pytz).
+                            # Önceki sürüm dateutil.parse döndürüyordu (tzoffset);
+                            # taze Yahoo barları pytz olduğundan to_dataframe'de
+                            # object-Index oluşuyor, resample + tamamlanmis_mumlar
+                            # "'Index' object has no attribute 'tz'" ile çöküyor
+                            # ve her hisse hatalı sayılıyordu (canlı 0/48 olayı).
+                            # Günlük kol ve disk okuyucusuyla birebir aynı kalıp.
+                            ts = pd.to_datetime(ts)
+                            if ts.tzinfo is None:
+                                ts = ISTANBUL_TZ.localize(ts)
+                            else:
+                                ts = ts.tz_convert(ISTANBUL_TZ)
+                        candle["timestamp"] = ts
                         for field in ("open", "high", "low", "close", "volume"):
                             candle[field] = float(candle.get(field, 0))
                         bars.append(candle)
@@ -529,7 +541,15 @@ class StockDequeManager:
         df = pd.DataFrame(data_sorted)
         df.set_index('timestamp', inplace=True)
         df.sort_index(inplace=True)
-        
+
+        # Nihai sigorta: karışık tz sınıfları (ör. tarihsel Supabase hydrate
+        # verisi dateutil.tzoffset; taze Yahoo verisi pytz.Timestamp) set_index'te
+        # object-Index üretir; resample ve tamamlanmis_mumlar bu dizinle çöker
+        # (canlı 0/48 olayı). Tarihsel zehirli veriyi zararsız kılmak için dizin
+        # tek kova altında toplanır: UTC üzerinden okunup İstanbul'a basılır.
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index, utc=True).tz_convert(ISTANBUL_TZ)
+
         # Sütun sırası
         df = df[['open', 'high', 'low', 'close', 'volume']]
         
@@ -712,6 +732,9 @@ class StockDequeManager:
             return None
         df = pd.DataFrame(list(dq))
         df.set_index("timestamp", inplace=True)
+        # to_dataframe ile aynı tz sigortası (tarihsel karma-tz veri güvenliği)
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index, utc=True).tz_convert(ISTANBUL_TZ)
         return df
 
     def gunluk_veri_eksik_mi(self, stock: str, now: Optional[datetime] = None) -> bool:
@@ -1019,6 +1042,13 @@ def tamamlanmis_mumlar(df: pd.DataFrame, tf: str, now: Optional[datetime] = None
         return df
     if now is None:
         now = datetime.now(ISTANBUL_TZ)
+    # Savunma: object/karma-tz dizin küp operasyonlarında AttributeError üretir
+    # (idx.tz erişimi) — canlı 0/48 olayının kırılma noktası buydu. Yerel hata
+    # yerine tek adımda normalleştirilir; tarihsel zehirli veriler yutulmaz,
+    # dizin düzeltilip tarama tamamlanır.
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df = df.copy()
+        df.index = pd.to_datetime(df.index, utc=True)
     idx = df.index
     if idx.tz is None:
         idx = idx.tz_localize(ISTANBUL_TZ)

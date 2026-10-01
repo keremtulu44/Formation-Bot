@@ -1340,7 +1340,6 @@ def _istek_tam_evrende_tamamlandi(result: dict, evren_boyutu: int = None) -> boo
 
 def _calistir_istek_taramasi(deque_manager, lifecycle_manager, notifier) -> bool:
     """Kuyruktaki kullanıcı isteğini seans saatinden bağımsız çalıştır."""
-    global _scan_job_request
     with _scan_request_lock:
         request = _scan_job_request
         _scan_istegi.clear()
