@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 
 from config import (DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN,
-                    ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK, ALERT_STATES, WATCH_STATES)
+                    ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK, ALERT_STATES, WATCH_STATES,
+                    TERMINAL_TAZE_BAR)
 # Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
 # katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
 from reporting.format import STATE_TR
@@ -94,6 +95,30 @@ _AY_KISALTMALARI = {
 def _tr_tarih(dt: datetime) -> str:
     """Kısa Türkçe tarih: '02 Eki 20:05'. Gün/ay/saat hizalı kalır (telefonda düzgün görünür)."""
     return f"{dt.day:02d} {_AY_KISALTMALARI.get(dt.month, '')} {dt:%H:%M}"
+
+# Zaman dilimi -> bir bar kaç saat? Tek-seferlik mühürün bayatma süresi buna
+# göre ölçeklenir (bkz. _muhur_ttl_saat).
+_TF_BAR_SAAT = {"1h": 1, "2h": 2, "4h": 4, "1d": 24}
+
+
+def _muhur_ttl_saat(timeframe: str) -> float:
+    """Tek-seferlik mühürün kaç saat geçerli olduğu.
+
+    NEDEN VAR: motor bitmiş (terminal) bir formasyonu TERMINAL_TAZE_BAR bar
+    boyunca "taze" sayar ve raporlamaya devam eder (ölü formasyon
+    filtresindeki istisna — "az önce tamamlandı" bilgisi kaçmasın diye).
+    Mühür gün bazlı bayatıyorsa bu pencereden taşan formasyon sonraki
+    gün/taramada TEKRAR bildiriliyordu:
+        1 günlük grafikte 3 bar = 3 gün  -> aynı haber 3 gün daha basılıyordu
+        4 saatlikte     3 bar = 12 saat -> ertesi sabah yine basılıyordu
+    TTL artık bar süresine göre ölçekleniyor: 3 bar + 1 saat pay.
+    Böylece mühür her zaman motorun "aynı olay" penceresini kapsar.
+    """
+    bar_saat = _TF_BAR_SAAT.get(str(timeframe or "").lower())
+    if bar_saat is None:
+        return 24.0          # bilinmeyen TF: eski gün bazlı davranış
+    return TERMINAL_TAZE_BAR * bar_saat + 1
+
 
 def _env_temizle(deger) -> str:
     if deger is None:
@@ -516,39 +541,79 @@ class TelegramNotifier:
         return f"{stock}_{pattern}_{timeframe}_{state}"
 
     # --- tek-seferlik olay hafızası (repeat-guard) --------------------------
-    # Mühür artık (hisse + TF + state) anahtarlı ve İstanbul GÜNÜ ile bayatlar.
-    # İki kök neden düzeltildi:
+    # Mühür (hisse + TF + state) anahtarlı ve ZAMAN damgalı bayatlar (TTL,
+    # bkz. _muhur_ttl_saat). Üç kök neden düzeltildi:
     #   1) pattern anahtardan ÇİKARILDI: motor aynı slotta bazen "Simetrik
     #      Üçgen", bazen "Alçalan Üçgen" etiketi üretebiliyordu; iki farklı
     #      anahtar = iki ayrı mesaj (örn. PETKM 4h iki kez TAMAMLANDI).
     #   2) mühür "slot sıfırlama" ile siliniyordu; canlı geometri (has_pattern)
     #      kayan pencerede bir taramada False olup FORMASYON_YOK'a düştüğünde
-    #      (flicker) mühür silinip aynı olay tekrar basılıyordu. Artık mühür
-    #      yalnız gün değişiminde bayatlar — aynı gün içinde aynı hisse+TF+state
-    #      en fazla BİR kez bildirilir.
+    #      (flicker) mühür silinip aynı olay tekrar basılıyordu.
+    #   3) bayatlık "İstanbul günü" ölçülüyordu; motor terminal formasyonu
+    #      TERMINAL_TAZE_BAR bar taze tuttuğu için gün sınırını aşan formasyon
+    #      (1 günlük grafikte 3 gün, 4 saatlikte ertesi sabah) tekrar
+    #      bildiriliyordu. Artık TTL bar süresine göre ölçekleniyor.
+    # Aynı hisse+TF+state, motorun aynı olay penceresi içinde en fazla BİR kez bildirilir.
     def _son_alert_key(self, stock: str, timeframe: str, state: str) -> str:
         """Slot anahtarı: hisse + zaman dilimi + state (pattern GİRMEZ)."""
         return f"{stock}_{timeframe}_{state}"
 
-    @staticmethod
-    def _son_alert_bugun() -> str:
-        """Mühürlerin bayatlık ölçütü: İstanbul günü (ISO)."""
-        return datetime.now(ISTANBUL_TZ).date().isoformat()
-
     @classmethod
-    def _muhr_gecerli_mi(cls, muhur, state: str, bugun: str) -> bool:
-        """Mühür bu state'i bugün içeriyorsa True (olay zaten bildirildi).
+    def _muhr_gecerli_mi(cls, muhur, state: str, timeframe: str = "") -> bool:
+        """Mühür hâlâ geçerliyse True (olay zaten bildirildi, tekrar basma).
 
-        Eski biçim (düz state string) upgrade öncesi kalıntısıdır; aynı gün
-        sayılır ki deploy sonrası kopya dalgası çıkmasın.
+        Bayatlık ölçütü TTL: motor terminal formasyonu TERMINAL_TAZE_BAR bar
+        boyunca taze sayar, mühür de en az o kadar süre (bkz. _muhur_ttl_saat)
+        geçerli kalır. Gün bazlı ölçüt 1 günlük grafikte aynı haberi 3 gün
+        daha tekrar bastırıyordu.
         """
-        if not muhur:
+        if not muhur or not isinstance(muhur, dict):
             return False
-        if isinstance(muhur, str):
-            return muhur == state
-        if not isinstance(muhur, dict):
+        if muhur.get("state") != state:
             return False
-        return muhur.get("state") == state and muhur.get("gun") == bugun
+        zaman = muhur.get("zaman")
+        if not isinstance(zaman, str):
+            return False
+        try:
+            basma = datetime.fromisoformat(zaman)
+        except (TypeError, ValueError):
+            return False
+        if basma.tzinfo is None:
+            basma = ISTANBUL_TZ.localize(basma)
+        yas_saat = (datetime.now(ISTANBUL_TZ) - basma).total_seconds() / 3600.0
+        return 0 <= yas_saat < _muhur_ttl_saat(muhur.get("tf") or timeframe)
+
+    @staticmethod
+    def _muhur_kaydi(state: str, timeframe: str, gun: str = None, zaman: str = None) -> Dict:
+        """Mühür kaydı üretir: {"state", "zaman" (ISO), "tf"}.
+
+        Yeni mühür ŞU AN ile damgalanır. Yalnız ESKİ (gün bazlı) kayıtlar
+        dönüştürülürken o günün 00:00'i kullanılır: böylece deploy öncesi
+        basılmış mühürler bayat sayılmaz, upgrade anında kopya dalgası çıkmaz.
+        """
+        if not isinstance(zaman, str) or not zaman:
+            if isinstance(gun, str) and gun:
+                # ESKİ BİÇİM (gün bazlı): o günün 00:00'i (İstanbul).
+                try:
+                    zaman = datetime.fromisoformat(gun).isoformat()
+                except (TypeError, ValueError):
+                    zaman = datetime.now(ISTANBUL_TZ).isoformat()
+            else:
+                zaman = datetime.now(ISTANBUL_TZ).isoformat()
+        return {"state": state, "zaman": zaman, "tf": timeframe}
+
+    @staticmethod
+    def _anahtardan_tf(anahtar: str) -> str:
+        """"hisse_tf_STATE" anahtarından zaman dilimini çıkar (eski kayıtlar için).
+
+        STATE adları alt çizgi içerir (FORMASYON_TAMAMLANDI), bu yüzden sağdan
+        değil bilinen state listesiyle eşleştirilerek ayrıştırılır.
+        """
+        for state in ALERT_STATES:
+            if anahtar.endswith(f"_{state}"):
+                _, _, tf = anahtar[:-len(f"_{state}")].rpartition("_")
+                return tf
+        return ""
 
     def _son_alert_yukle(self):
         try:
@@ -562,7 +627,6 @@ class TelegramNotifier:
                 with open(self._son_alert_dosya, "r", encoding="utf-8") as f:
                     ham = json.load(f)
             if isinstance(ham, dict):
-                bugun = self._son_alert_bugun()
                 for k, v in ham.items():
                     if not isinstance(k, str):
                         continue
@@ -576,20 +640,20 @@ class TelegramNotifier:
                         stock = stock_pattern.split("_", 1)[0]
                         if not stock:
                             continue
-                        self._son_alert[f"{stock}_{tf}_{v}"] = {"state": v, "gun": bugun}
+                        self._son_alert[f"{stock}_{tf}_{v}"] = self._muhur_kaydi(v, tf)
                     elif isinstance(v, dict) and isinstance(v.get("state"), str):
-                        # Yeni biçim: kendi gün damgasıyla korunur (bayatsa geçersiz).
-                        self._son_alert[k] = {"state": v["state"],
-                                              "gun": v.get("gun") or bugun}
+                        # Yeni biçim: zaman damgası korunur (bayatsa _muhr_gecerli_mi reddeder).
+                        self._son_alert[k] = self._muhur_kaydi(
+                            v["state"], v.get("tf") or self._anahtardan_tf(k),
+                            gun=v.get("gun"), zaman=v.get("zaman"))
             logger.info(f"Son-alert mühürleri {kaynak} yüklendi: {len(self._son_alert)} kayıt")
         except Exception as e:
             logger.warning(f"Son-alert mühürleri yüklenemedi (devam ediliyor): {e}")
 
     def _son_alert_kaydet(self):
-        # Bayat (bugün dışı) mühürler diske/Supabase'a taşınmaz; sözlük şişmesin.
-        bugun = self._son_alert_bugun()
+        # Bayat (TTL dolmuş) mühürler diske/Supabase'a taşınmaz; sözlük şişmesin.
         for anahtar in [k for k, v in self._son_alert.items()
-                        if not (isinstance(v, dict) and v.get("gun") == bugun)]:
+                        if not self._muhr_gecerli_mi(v, v.get("state", ""), v.get("tf", ""))]:
             del self._son_alert[anahtar]
         payload = {k: dict(v) for k, v in self._son_alert.items()}
         try:
@@ -615,8 +679,8 @@ class TelegramNotifier:
         """
         if state not in ALERT_STATES:
             return
-        self._son_alert[self._son_alert_key(stock, timeframe, state)] = {
-            "state": state, "gun": self._son_alert_bugun()}
+        self._son_alert[self._son_alert_key(stock, timeframe, state)] = \
+            self._muhur_kaydi(state, timeframe)
         self._son_alert_kaydet()
 
     def son_alert_sifirla(self, stock: str, timeframe: str) -> None:
@@ -802,7 +866,7 @@ class TelegramNotifier:
         if state in ALERT_STATES:
             if self._muhr_gecerli_mi(
                     self._son_alert.get(self._son_alert_key(stock, timeframe, state)),
-                    state, self._son_alert_bugun()):
+                    state, timeframe):
                 self.engeller["tekrar"] += 1
                 self._son_engel = "tekrar"
                 return False
