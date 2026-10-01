@@ -23,47 +23,28 @@ def _base_data(**override):
 
 
 def test_kirilim_adayi_yukari_ustunde():
+    # Rastgele şablon seçimi kaldırıldı: mesaj deterministik, tek seferde doğrulanır.
     notifier = TelegramNotifier()
-    # Random template var; 20 kez dene, kapanış içerenlerde üstünde olmalı
-    found_kapanis = False
-    for _ in range(20):
-        data = _base_data(state='KIRILIM_ADAYI', break_dir=1, upper_now=302.0)
-        msg = notifier.format_message(data)
-        assert "YUKARI" in msg or "yukarı" in msg.lower()
-        if "kapanış" in msg:
-            found_kapanis = True
-            assert "üstünde" in msg
-            assert "altında" not in msg
-    # En az bir kapanış mesajı görmeliyiz (olasılık yüksek)
-    # Eğer hiç görmediysek de sorun değil, ama üstünde/altında mantığı doğru
-    # Yine de 20 denemede en az bir kez kapanış gelmeli
-    # (random %50, 20'de gelmeme olasılığı çok düşük)
-    assert found_kapanis or True
+    msg = notifier.format_message(_base_data(state='KIRILIM_ADAYI', break_dir=1, upper_now=302.0))
+    assert "YUKARI" in msg
+    assert "üstünde kapanış" in msg
+    assert "altında kapanış" not in msg
 
 
 def test_kirilim_adayi_asagi_altinda():
     notifier = TelegramNotifier()
-    found_kapanis = False
-    for _ in range(20):
-        data = _base_data(state='KIRILIM_ADAYI', break_dir=-1, lower_now=295.0)
-        msg = notifier.format_message(data)
-        assert "AŞAĞI" in msg or "aşağı" in msg.lower()
-        if "kapanış" in msg:
-            found_kapanis = True
-            assert "altında" in msg
-            assert "üstünde" not in msg
-    assert found_kapanis or True
+    msg = notifier.format_message(_base_data(state='KIRILIM_ADAYI', break_dir=-1, lower_now=295.0))
+    assert "AŞAĞI" in msg
+    assert "altında kapanış" in msg
+    assert "üstünde kapanış" not in msg
 
 
 def test_kirilim_adayi_asagi_ustunde_yazmamali():
-    notifier = TelegramNotifier()
     # Eski bug: AŞAĞI kırılımda da "üstünde kapanış" yazıyordu
-    for _ in range(20):
-        data = _base_data(state='KIRILIM_ADAYI', break_dir=-1)
-        msg = notifier.format_message(data)
-        if "kapanış" in msg:
-            assert "altında kapanış" in msg
-            assert "üstünde kapanış" not in msg
+    notifier = TelegramNotifier()
+    msg = notifier.format_message(_base_data(state='KIRILIM_ADAYI', break_dir=-1))
+    assert "altında kapanış" in msg
+    assert "üstünde kapanış" not in msg
 
 
 def test_tamamlandi_retest_var():
@@ -244,4 +225,99 @@ def test_gun_sonu_ozeti_yon_ve_daralma_okunabilir():
     assert "ISMEN Alçalan Üçgen 2h" in ozet
     assert "AKSEN Alçalan Kama 1d" in ozet
     # Sıkışanlar: hisse önce, daralma sonra
+    assert "ISCTR Alçalan Üçgen 4h · %81 daralma" in ozet
+
+
+# --- Mesaj kalitesi: ton, sabit metin, telefon uyumu -------------------------
+# Bu bölüm "mesajlar herkese açık kanal diliyle, telefonda okunur yazılsın"
+# kararının regresyon testidir. İhlal olursa test kırılır.
+
+_TUM_STATELER = [
+    "ADAY_OLUSUYOR", "GEOMETRI_ADAYI", "FORMASYON_TANIMLANDI", "SIKISMA_GUCLENIYOR",
+    "KIRILIM_HAZIRLIGI", "KIRILIM_DENEMESI", "KIRILIM_ADAYI", "KIRILIM_TEYITLI",
+    "RETEST_BEKLENIYOR", "RETEST_EDILIYOR", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI",
+    "BASARISIZ_KIRILIM", "FORMASYON_GECERSIZ",
+]
+
+# Kişisel asistan sesi ve tavsiye veren cümleler bilerek metin dışı bırakıldı.
+_YASAK_KALIPLAR = (
+    "radarımda", "gözüm üstünde", "takipteyim", "Takipteyiz", "haber veririm",
+    "acele etme", "görev tamam", "kendi analizini", "izliyorum", "bekliyorum",
+    "Şimdilik izle", "takipte kal", "grafiğe bak -", "sadece formasyon yetmez",
+)
+
+
+def _mesaj(state, **override):
+    return TelegramNotifier().format_message(_base_data(state=state, **override))
+
+
+def test_mesajlar_kişisel_asistan_tonu_kullanmaz():
+    for state in _TUM_STATELER:
+        for varyant in ({}, {"break_dir": -1}, {"retest_seen": False}):
+            msg = _mesaj(state, **varyant)
+            for kalip in _YASAK_KALIPLAR:
+                assert kalip not in msg, f"{state}: yasak kalıp '{kalip}' mesajda geçiyor"
+
+
+def test_mesajlar_deterministik_ayni_olay_hep_aynı_metin():
+    # Rastgele şablon/footer seçimi kaldırıldı: aynı veri -> birebir aynı mesaj.
+    for state in _TUM_STATELER:
+        birinci = _mesaj(state)
+        for _ in range(5):
+            assert _mesaj(state) == birinci, f"{state}: metin kararsız üretiliyor"
+
+
+def test_mesajlar_telefona_sigar_boyutta():
+    for state in _TUM_STATELER:
+        for varyant in ({}, {"break_dir": -1}, {"retest_seen": False}, {"contraction": 0.93}):
+            msg = _mesaj(state, **varyant)
+            assert len(msg) <= 400, f"{state}: {len(msg)} karakter (telefon için fazla uzun)"
+            for satir in msg.splitlines():
+                # Tek satıra sığmayan satır telefonda sarar; hiçbir satır sarmalanmamalı.
+                assert len(satir) <= 70, f"{state}: {len(satir)} karakterlik satır sarar"
+
+
+def test_mesajlar_ayni_iskeleti_paylasir():
+    # Her mesaj: "emoji HISSE tf · desen" başlığı ile başlar (tek bakışta ne olduğu anlaşılır).
+    for state in _TUM_STATELER:
+        ilk_satir = _mesaj(state).splitlines()[0]
+        assert "THYAO" in ilk_satir, state
+        assert "saatlik" in ilk_satir, state
+        assert "Yükselen Üçgen" in ilk_satir, state
+
+
+def test_mesajlar_tek_sabit_footer_tasir():
+    # Eskiden üç cümleden biri rastgele ekleniyordu; artık tek ve sabit footer var.
+    for state in ("KIRILIM_ADAYI", "KIRILIM_TEYITLI", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI"):
+        msg = _mesaj(state)
+        assert msg.count("Formasyon takibi · yatırım tavsiyesi değildir") == 1, state
+
+
+def test_ozet_tek_sabit_footer_ve_turkce_tarih():
+    n = TelegramNotifier()
+    ozet = n.format_daily_summary([
+        {"stock_name": "THYAO", "timeframe": "1h", "pattern_name": "Yükselen Üçgen",
+         "state": "FORMASYON_TAMAMLANDI", "confidence_score": 86, "contraction": 0.7, "break_dir": 1},
+    ], {"stocks_scanned": 48, "alerts_sent": 1})
+    assert "kanalı takipte kal" not in ozet
+    assert "Takipteyim" not in ozet
+    assert ozet.rstrip().endswith("Formasyon takibi · yatırım tavsiyesi değildir")
+    # Türkçe ay kısaltması: strftime('%b') İngilizce basıyordu.
+    assert " BIST Formasyon Özeti · " in ozet
+
+
+def test_ozet_tum_bolumlerde_kalite_gorunur():
+    n = TelegramNotifier()
+    aktif = [
+        {"stock_name": "THYAO", "timeframe": "1h", "pattern_name": "Yükselen Üçgen",
+         "state": "FORMASYON_TAMAMLANDI", "confidence_score": 86, "contraction": 0.7, "break_dir": 1},
+        {"stock_name": "ISMEN", "timeframe": "2h", "pattern_name": "Alçalan Üçgen",
+         "state": "RETEST_BASARILI", "confidence_score": 84, "contraction": 0.7, "break_dir": -1},
+        {"stock_name": "ISCTR", "timeframe": "4h", "pattern_name": "Alçalan Üçgen",
+         "state": "SIKISMA_GUCLENIYOR", "confidence_score": 88, "contraction": 0.81, "break_dir": 0},
+    ]
+    ozet = n.format_daily_summary(aktif, {"stocks_scanned": 48, "alerts_sent": 1})
+    # Üç bölüm de aynı madde biçimini kullanır: hisse · desen · tf · kalite
+    assert "THYAO Yükselen Üçgen 1h · kalite 86" in ozet
+    assert "ISMEN Alçalan Üçgen 2h · aşağı yön · kalite 84" in ozet
     assert "ISCTR Alçalan Üçgen 4h · %81 daralma" in ozet
