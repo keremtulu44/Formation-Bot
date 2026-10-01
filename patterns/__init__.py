@@ -26,7 +26,7 @@ from .mathutil import (f_age_quality, f_band_quality, f_cleanliness_quality, f_c
                        f_inverse_smoothstep, f_line_price, f_progress_quality, f_slope,
                        f_smoothstep)
 from .pivots import PivotSide, find_pivots
-from .pole import PoleInfo, find_pole
+from .pole import PoleInfo
 from .candidate import (PatternCandidate, build_candidate, effective_raw_quality,
                         freeze_pattern_quality, hard_geometry_invalid, refresh_active_candidate,
                         reset_quality_snapshot)

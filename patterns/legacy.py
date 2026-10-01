@@ -49,7 +49,6 @@ def find_pole_legacy(df: pd.DataFrame, atr_series: pd.Series,
                      high_pivots: List[Dict], low_pivots: List[Dict],
                      end_bar: int, end_price: float, direction: int, params: dict) -> "object":
     """Eski test imzası — aynı profil varsayımıyla motora delege eder."""
-    profile = None
     # params içindeki değerlerden profili tahmin etmeye gerek yok; Dengeli varsay
     engine = _prepare_context(df, atr_series, "Dengeli", end_bar)
     engine.high_side = side_from_legacy(high_pivots)

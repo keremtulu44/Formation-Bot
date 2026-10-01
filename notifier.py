@@ -866,7 +866,7 @@ class TelegramNotifier:
 
         footer_options = [
             f"\n\n💡 Detaylı analiz için grafiğe bak - {stock} {timeframe}",
-            f"\n\n📊 Kendi analizini de ekle, sadece formasyon yetmez",
+            "\n\n📊 Kendi analizini de ekle, sadece formasyon yetmez",
             f"\n\n🔍 {stock} {tf_human} - daha fazlası için takipte kal",
         ]
         if state in ["KIRILIM_ADAYI", "KIRILIM_TEYITLI", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI"]:
