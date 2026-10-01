@@ -13,7 +13,7 @@ from config import (DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX
                     ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK, ALERT_STATES, WATCH_STATES)
 # Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
 # katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
-from reporting.format import STATE_TR
+from reporting.format import STATE_TR, break_ok
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,15 @@ def quality_comment(q: float) -> str:
         return "orta"
     else:
         return "zayıf"
+
+def _yon_metni(break_dir) -> str:
+    """Kırılım yönünü Türkçe tek kelimeye çevirir (özet satırları için)."""
+    if break_dir == 1:
+        return "yukarı"
+    if break_dir == -1:
+        return "aşağı"
+    return "belirsiz"
+
 
 def quality_emoji(q: float) -> str:
     if q >= 85:
@@ -374,11 +383,17 @@ class TelegramNotifier:
         if retest:
             baslik += f"\n🎯 RETEST BAŞARILI ({len(retest)}):\n"
             for f in retest[:3]:
-                baslik += f"• {f.get('stock_name')} {f.get('pattern_name')} - {f.get('break_dir',0)} yön\n"
+                # Eskiden ham break_dir basılıyordu: "• ISMEN Alçalan Üçgen - -1 yön".
+                # Artık yön Türkçe ve zaman dilimi de görünüyor (diğer bölümlerle tutarlı).
+                baslik += (f"• {f.get('stock_name')} {f.get('pattern_name')} "
+                           f"{f.get('timeframe') or ''} · {break_ok(f.get('break_dir', 0))} "
+                           f"{_yon_metni(f.get('break_dir', 0))} yön\n").replace("  ", " ")
         if sikisan:
             baslik += f"\n⚡ SIKIŞANLAR ({len(sikisan)}):\n"
             for f in sikisan[:5]:
-                baslik += f"• {f.get('stock_name')} %{(f.get('contraction',0)*100):.0f} daralma - {f.get('pattern_name')}\n"
+                baslik += (f"• {f.get('stock_name')} {f.get('pattern_name')} "
+                           f"{f.get('timeframe') or ''} · %{(f.get('contraction', 0) * 100):.0f} "
+                           f"daralma\n").replace("  ", " ")
         if gun_ozeti:
             baslik += f"\n📈 Gün: {gun_ozeti.get('stocks_scanned',0)} hisse tarandı, {gun_ozeti.get('alerts_sent',0)} alert\n"
         baslik += "\n💡 Detay için kanalı takipte kal - yatırım tavsiyesi değildir"

@@ -223,3 +223,25 @@ def test_lifecycle_retest_tracking():
     # reset should clear
     engine.reset()
     assert engine._retest_seen is False
+
+
+def test_gun_sonu_ozeti_yon_ve_daralma_okunabilir():
+    """Özet satırlarında ham break_dir ("- -1 yön") ve dağını daralma basılmamalı."""
+    n = TelegramNotifier()
+    aktif = [
+        {"stock_name": "ISMEN", "timeframe": "2h", "pattern_name": "Alçalan Üçgen",
+         "state": "RETEST_BASARILI", "confidence_score": 84, "contraction": 0.7, "break_dir": -1},
+        {"stock_name": "AKSEN", "timeframe": "1d", "pattern_name": "Alçalan Kama",
+         "state": "RETEST_BASARILI", "confidence_score": 85, "contraction": 0.7, "break_dir": 1},
+        {"stock_name": "ISCTR", "timeframe": "4h", "pattern_name": "Alçalan Üçgen",
+         "state": "SIKISMA_GUCLENIYOR", "confidence_score": 88, "contraction": 0.81, "break_dir": 0},
+    ]
+    ozet = n.format_daily_summary(aktif, {"stocks_scanned": 96, "alerts_sent": 2})
+    # Ham yön değeri ve çift tire görünmemeli
+    assert "- -1 yön" not in ozet and "- 1 yön" not in ozet
+    assert "yukarı" in ozet and "aşağı" in ozet
+    # Zaman dilimi üç bölümde de görünür (tutarlılık)
+    assert "ISMEN Alçalan Üçgen 2h" in ozet
+    assert "AKSEN Alçalan Kama 1d" in ozet
+    # Sıkışanlar: hisse önce, daralma sonra
+    assert "ISCTR Alçalan Üçgen 4h · %81 daralma" in ozet
