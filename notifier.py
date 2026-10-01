@@ -3,14 +3,17 @@
 
 import os
 import logging
-import random
 import re
 import time
 from datetime import datetime, timedelta
 from typing import Dict, List
 
 from config import (DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN,
-                    ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK, ALERT_STATES, WATCH_STATES)
+                    ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK, ALERT_STATES, WATCH_STATES,
+                    TERMINAL_TAZE_BAR)
+# Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
+# katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
+from reporting.format import STATE_TR
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +64,15 @@ def quality_comment(q: float) -> str:
     else:
         return "zayıf"
 
+def _yon_metni(break_dir) -> str:
+    """Kırılım yönünü Türkçe tek kelimeye çevirir (özet satırları için)."""
+    if break_dir == 1:
+        return "yukarı"
+    if break_dir == -1:
+        return "aşağı"
+    return "belirsiz"
+
+
 def quality_emoji(q: float) -> str:
     if q >= 85:
         return "⭐⭐⭐"
@@ -70,6 +82,43 @@ def quality_emoji(q: float) -> str:
         return "⭐"
     else:
         return "〰️"
+
+
+# Türkçe ay kısaltmaları: strftime('%b') sistem yerelinden İngilizce basıyordu
+# ("02 Oct 20:05"); mesajların tamamı Türkçe olduğu için tarih de Türkçe olmalı.
+_AY_KISALTMALARI = {
+    1: "Oca", 2: "Şub", 3: "Mar", 4: "Nis", 5: "May", 6: "Haz",
+    7: "Tem", 8: "Ağu", 9: "Eyl", 10: "Eki", 11: "Kas", 12: "Ara",
+}
+
+
+def _tr_tarih(dt: datetime) -> str:
+    """Kısa Türkçe tarih: '02 Eki 20:05'. Gün/ay/saat hizalı kalır (telefonda düzgün görünür)."""
+    return f"{dt.day:02d} {_AY_KISALTMALARI.get(dt.month, '')} {dt:%H:%M}"
+
+# Zaman dilimi -> bir bar kaç saat? Tek-seferlik mühürün bayatma süresi buna
+# göre ölçeklenir (bkz. _muhur_ttl_saat).
+_TF_BAR_SAAT = {"1h": 1, "2h": 2, "4h": 4, "1d": 24}
+
+
+def _muhur_ttl_saat(timeframe: str) -> float:
+    """Tek-seferlik mühürün kaç saat geçerli olduğu.
+
+    NEDEN VAR: motor bitmiş (terminal) bir formasyonu TERMINAL_TAZE_BAR bar
+    boyunca "taze" sayar ve raporlamaya devam eder (ölü formasyon
+    filtresindeki istisna — "az önce tamamlandı" bilgisi kaçmasın diye).
+    Mühür gün bazlı bayatıyorsa bu pencereden taşan formasyon sonraki
+    gün/taramada TEKRAR bildiriliyordu:
+        1 günlük grafikte 3 bar = 3 gün  -> aynı haber 3 gün daha basılıyordu
+        4 saatlikte     3 bar = 12 saat -> ertesi sabah yine basılıyordu
+    TTL artık bar süresine göre ölçekleniyor: 3 bar + 1 saat pay.
+    Böylece mühür her zaman motorun "aynı olay" penceresini kapsar.
+    """
+    bar_saat = _TF_BAR_SAAT.get(str(timeframe or "").lower())
+    if bar_saat is None:
+        return 24.0          # bilinmeyen TF: eski gün bazlı davranış
+    return TERMINAL_TAZE_BAR * bar_saat + 1
+
 
 def _env_temizle(deger) -> str:
     if deger is None:
@@ -198,11 +247,14 @@ class TelegramNotifier:
         # Neden: motor tam_yeniden=True ile pencereyi her taramada baştan oynatır;
         # terminal/acil state'ler her tur yeniden üretilir ve eski tek koruma
         # (4 saatlik zaman cooldown'ı) dolunca AYNI olay tekrar basılıyordu
-        # (örn. 4h TF'de 1 bar = 4 saat = cooldown süresi). Mühür, slotun
-        # (hisse+formasyon+TF) son bildirilen acil state'ini saklar; aynı state
-        # sessizce düşer, state ilerlemesi (TEYITLI -> RETEST -> TAMAMLANDI)
-        # serbest kalır. Kalıcıdır: Supabase "state:telegram_son_alerts" + disk.
-        self._son_alert: Dict[str, str] = {}
+        # (örn. 4h TF'de 1 bar = 4 saat = cooldown süresi).
+        # Mühür (hisse+TF+state) başına son bildirilen İstanbul GÜNÜNÜ tutar:
+        # aynı gün içinde aynı olay bir kez bildirilir; state ilerlemesi
+        # (TEYITLI -> RETEST -> TAMAMLANDI) serbest kalır; yeni gün tekrar
+        # haberdar. Slot sıfırlama (flicker) mühürü silmez. Kalıcıdır:
+        # Supabase "state:telegram_son_alerts" + disk (eski düz-string biçimi
+        # açılışta yeni biçime taşınır).
+        self._son_alert: Dict[str, dict] = {}
         self._son_alert_dosya = os.path.join(DATA_DIR, "telegram_son_alerts.json")
         self._son_alert_yukle()
 
@@ -349,10 +401,11 @@ class TelegramNotifier:
 
     def format_daily_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None) -> str:
         now = datetime.now(ISTANBUL_TZ)
-        baslik = f"📊 BIST Formasyon Özeti - {now.strftime('%d %b %H:%M')}\n"
+        # Türkçe ay kısaltması + tek ayırıcı: "📊 BIST Formasyon Özeti · 02 Eki 20:05"
+        baslik = f"📊 BIST Formasyon Özeti · {_tr_tarih(now)}\n"
         baslik += "─" * 30 + "\n"
         if not aktif_formasyonlar:
-            baslik += "Şu an aktif yüksek kaliteli formasyon yok.\nTakipteyim 👀\n"
+            baslik += "Şu an aktif yüksek kaliteli formasyon yok.\n"
             return baslik
         # NOT: Burada eskiden hesaplanıp hiç kullanılmayan bir `[:10]` sıralaması
         # vardı (ölü kod). Özet gövdesi bilerek bölüm bazlı ve sınırlıdır:
@@ -364,18 +417,27 @@ class TelegramNotifier:
         if tamamlanan:
             baslik += f"\n🏁 TAMAMLANAN ({len(tamamlanan)}):\n"
             for f in tamamlanan[:3]:
-                baslik += f"• {f.get('stock_name')} {f.get('pattern_name')} {f.get('timeframe')} - Kalite {f.get('confidence_score',0):.0f}\n"
+                # Diğer bölümlerle aynı madde biçimi: hisse · desen · tf · kalite
+                baslik += (f"• {f.get('stock_name')} {f.get('pattern_name')} "
+                           f"{f.get('timeframe') or ''} · kalite "
+                           f"{f.get('confidence_score', 0):.0f}\n").replace("  ", " ")
         if retest:
             baslik += f"\n🎯 RETEST BAŞARILI ({len(retest)}):\n"
             for f in retest[:3]:
-                baslik += f"• {f.get('stock_name')} {f.get('pattern_name')} - {f.get('break_dir',0)} yön\n"
+                # Yön Türkçe ve kalite de görünüyor: tüm bölümler aynı madde biçimini kullanır.
+                baslik += (f"• {f.get('stock_name')} {f.get('pattern_name')} "
+                           f"{f.get('timeframe') or ''} · {_yon_metni(f.get('break_dir', 0))} yön"
+                           f" · kalite {f.get('confidence_score', 0):.0f}\n").replace("  ", " ")
         if sikisan:
             baslik += f"\n⚡ SIKIŞANLAR ({len(sikisan)}):\n"
             for f in sikisan[:5]:
-                baslik += f"• {f.get('stock_name')} %{(f.get('contraction',0)*100):.0f} daralma - {f.get('pattern_name')}\n"
+                baslik += (f"• {f.get('stock_name')} {f.get('pattern_name')} "
+                           f"{f.get('timeframe') or ''} · %{(f.get('contraction', 0) * 100):.0f} "
+                           f"daralma\n").replace("  ", " ")
         if gun_ozeti:
-            baslik += f"\n📈 Gün: {gun_ozeti.get('stocks_scanned',0)} hisse tarandı, {gun_ozeti.get('alerts_sent',0)} alert\n"
-        baslik += "\n💡 Detay için kanalı takipte kal - yatırım tavsiyesi değildir"
+            baslik += (f"\n📈 Gün: {gun_ozeti.get('stocks_scanned', 0)} hisse tarandı, "
+                       f"{gun_ozeti.get('alerts_sent', 0)} bildirim gönderildi\n")
+        baslik += "\n📌 Formasyon takibi · yatırım tavsiyesi değildir"
         return baslik
 
     def _kap_yukle(self):
@@ -479,10 +541,79 @@ class TelegramNotifier:
         return f"{stock}_{pattern}_{timeframe}_{state}"
 
     # --- tek-seferlik olay hafızası (repeat-guard) --------------------------
+    # Mühür (hisse + TF + state) anahtarlı ve ZAMAN damgalı bayatlar (TTL,
+    # bkz. _muhur_ttl_saat). Üç kök neden düzeltildi:
+    #   1) pattern anahtardan ÇİKARILDI: motor aynı slotta bazen "Simetrik
+    #      Üçgen", bazen "Alçalan Üçgen" etiketi üretebiliyordu; iki farklı
+    #      anahtar = iki ayrı mesaj (örn. PETKM 4h iki kez TAMAMLANDI).
+    #   2) mühür "slot sıfırlama" ile siliniyordu; canlı geometri (has_pattern)
+    #      kayan pencerede bir taramada False olup FORMASYON_YOK'a düştüğünde
+    #      (flicker) mühür silinip aynı olay tekrar basılıyordu.
+    #   3) bayatlık "İstanbul günü" ölçülüyordu; motor terminal formasyonu
+    #      TERMINAL_TAZE_BAR bar taze tuttuğu için gün sınırını aşan formasyon
+    #      (1 günlük grafikte 3 gün, 4 saatlikte ertesi sabah) tekrar
+    #      bildiriliyordu. Artık TTL bar süresine göre ölçekleniyor.
+    # Aynı hisse+TF+state, motorun aynı olay penceresi içinde en fazla BİR kez bildirilir.
+    def _son_alert_key(self, stock: str, timeframe: str, state: str) -> str:
+        """Slot anahtarı: hisse + zaman dilimi + state (pattern GİRMEZ)."""
+        return f"{stock}_{timeframe}_{state}"
 
-    def _son_alert_key(self, stock: str, pattern: str, timeframe: str) -> str:
-        """Slot anahtarı: state GİRMEZ (yalnız "bu slot son ne bildirdi" tutulur)."""
-        return f"{stock}_{pattern}_{timeframe}"
+    @classmethod
+    def _muhr_gecerli_mi(cls, muhur, state: str, timeframe: str = "") -> bool:
+        """Mühür hâlâ geçerliyse True (olay zaten bildirildi, tekrar basma).
+
+        Bayatlık ölçütü TTL: motor terminal formasyonu TERMINAL_TAZE_BAR bar
+        boyunca taze sayar, mühür de en az o kadar süre (bkz. _muhur_ttl_saat)
+        geçerli kalır. Gün bazlı ölçüt 1 günlük grafikte aynı haberi 3 gün
+        daha tekrar bastırıyordu.
+        """
+        if not muhur or not isinstance(muhur, dict):
+            return False
+        if muhur.get("state") != state:
+            return False
+        zaman = muhur.get("zaman")
+        if not isinstance(zaman, str):
+            return False
+        try:
+            basma = datetime.fromisoformat(zaman)
+        except (TypeError, ValueError):
+            return False
+        if basma.tzinfo is None:
+            basma = ISTANBUL_TZ.localize(basma)
+        yas_saat = (datetime.now(ISTANBUL_TZ) - basma).total_seconds() / 3600.0
+        return 0 <= yas_saat < _muhur_ttl_saat(muhur.get("tf") or timeframe)
+
+    @staticmethod
+    def _muhur_kaydi(state: str, timeframe: str, gun: str = None, zaman: str = None) -> Dict:
+        """Mühür kaydı üretir: {"state", "zaman" (ISO), "tf"}.
+
+        Yeni mühür ŞU AN ile damgalanır. Yalnız ESKİ (gün bazlı) kayıtlar
+        dönüştürülürken o günün 00:00'i kullanılır: böylece deploy öncesi
+        basılmış mühürler bayat sayılmaz, upgrade anında kopya dalgası çıkmaz.
+        """
+        if not isinstance(zaman, str) or not zaman:
+            if isinstance(gun, str) and gun:
+                # ESKİ BİÇİM (gün bazlı): o günün 00:00'i (İstanbul).
+                try:
+                    zaman = datetime.fromisoformat(gun).isoformat()
+                except (TypeError, ValueError):
+                    zaman = datetime.now(ISTANBUL_TZ).isoformat()
+            else:
+                zaman = datetime.now(ISTANBUL_TZ).isoformat()
+        return {"state": state, "zaman": zaman, "tf": timeframe}
+
+    @staticmethod
+    def _anahtardan_tf(anahtar: str) -> str:
+        """"hisse_tf_STATE" anahtarından zaman dilimini çıkar (eski kayıtlar için).
+
+        STATE adları alt çizgi içerir (FORMASYON_TAMAMLANDI), bu yüzden sağdan
+        değil bilinen state listesiyle eşleştirilerek ayrıştırılır.
+        """
+        for state in ALERT_STATES:
+            if anahtar.endswith(f"_{state}"):
+                _, _, tf = anahtar[:-len(f"_{state}")].rpartition("_")
+                return tf
+        return ""
 
     def _son_alert_yukle(self):
         try:
@@ -497,21 +628,41 @@ class TelegramNotifier:
                     ham = json.load(f)
             if isinstance(ham, dict):
                 for k, v in ham.items():
-                    if isinstance(k, str) and isinstance(v, str):
-                        self._son_alert[k] = v
+                    if not isinstance(k, str):
+                        continue
+                    if isinstance(v, str):
+                        # ESKİ BİÇİM: anahtar "hisse_pattern_tf", değer state.
+                        # Yeni anahtara ("hisse_tf_state") taşınır ve bugüne
+                        # mühürlenir — upgrade anında olay tekrar basmaz.
+                        stock_pattern, _, tf = k.rpartition("_")
+                        if not stock_pattern or not tf or not v:
+                            continue
+                        stock = stock_pattern.split("_", 1)[0]
+                        if not stock:
+                            continue
+                        self._son_alert[f"{stock}_{tf}_{v}"] = self._muhur_kaydi(v, tf)
+                    elif isinstance(v, dict) and isinstance(v.get("state"), str):
+                        # Yeni biçim: zaman damgası korunur (bayatsa _muhr_gecerli_mi reddeder).
+                        self._son_alert[k] = self._muhur_kaydi(
+                            v["state"], v.get("tf") or self._anahtardan_tf(k),
+                            gun=v.get("gun"), zaman=v.get("zaman"))
             logger.info(f"Son-alert mühürleri {kaynak} yüklendi: {len(self._son_alert)} kayıt")
         except Exception as e:
             logger.warning(f"Son-alert mühürleri yüklenemedi (devam ediliyor): {e}")
 
     def _son_alert_kaydet(self):
-        payload = dict(self._son_alert)
+        # Bayat (TTL dolmuş) mühürler diske/Supabase'a taşınmaz; sözlük şişmesin.
+        for anahtar in [k for k, v in self._son_alert.items()
+                        if not self._muhr_gecerli_mi(v, v.get("state", ""), v.get("tf", ""))]:
+            del self._son_alert[anahtar]
+        payload = {k: dict(v) for k, v in self._son_alert.items()}
         try:
             import json
             os.makedirs(os.path.dirname(self._son_alert_dosya), exist_ok=True)
             with open(self._son_alert_dosya, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, indent=0)
         except Exception as e:
-            logger.warning(f"Son-alert mühürleri diske kaydedilemedi (devam ediliyor): {e}")
+            logger.warning(f"Son-alert mühürleri diske kaydedilemedi: {e}")
         if self.persistent_store is not None:
             try:
                 self.persistent_store.upsert("state:telegram_son_alerts", payload)
@@ -523,25 +674,30 @@ class TelegramNotifier:
 
         Mühür yalnız AYNI state'i susturur; yaşam döngüsü ilerlemesi
         (TEYITLI -> RETEST_BASARILI -> TAMAMLANDI) her biri bir kez bildirilebilir.
+        `pattern` bilinçli olarak anahtara girmez: aynı slotta motorun ürettiği
+        farklı formasyon etiketleri aynı olayın kopyasıdır.
         """
         if state not in ALERT_STATES:
             return
-        self._son_alert[self._son_alert_key(stock, pattern, timeframe)] = state
+        self._son_alert[self._son_alert_key(stock, timeframe, state)] = \
+            self._muhur_kaydi(state, timeframe)
         self._son_alert_kaydet()
 
     def son_alert_sifirla(self, stock: str, timeframe: str) -> None:
-        """Slotun (hisse+TF) tek-seferlik mühürlerini VE zaman cooldown'larını siler.
+        """Slotun (hisse+TF) ZAMAN cooldown'larını siler; mühürlere DOKUNMAZ.
 
-        Yaşam döngüsü bir yok/geçersiz/zayıflama state'ine düşürdüğünde çağrılır:
-        aynı slotu tekrar kaplayan yeni formasyon 4 saat beklemeksizin, eski
-        mühürle sessiz kalmaksızın anında bildirilebilir. Başka slotların
-        mühürleri/cooldown'ları dokunulmaz kalır.
+        NEDEN DEĞİŞTİ: bu fonksiyon önce mühürleri de siliyordu. Motorun canlı
+        geometrisi (has_pattern) kayan pencerede bir taramada False olup
+        FORMASYON_YOK'a düştüğünde (flicker) main bu fonksiyonu çağırıyordu;
+        mühür silinince aynı formasyon bir sonraki taramada yeniden "doğup"
+        AYNI TAMAMLANDI/BAŞARISIZ mesajını tekrar basıyordu (ölçüm: kullanıcının
+        günlüğünde ~45 mesajın ~13'ü birebir kopya). Mühür artık yalnız gün
+        değişiminde bayatlar.
+
+        Cooldown temizliği KORUNUR: slotu tekrar kaplayan yeni formasyonun
+        ilerleme mesajları (TEYITLI -> RETEST -> TAMAMLANDI) 4 saat beklemez.
         """
         on_ek = f"{stock}_"
-        sonek = f"_{timeframe}"
-        for anahtar in list(self._son_alert.keys()):
-            if anahtar.startswith(on_ek) and anahtar.endswith(sonek):
-                del self._son_alert[anahtar]
         # Anahtar biçimi hisse_desen_tf_STATE; STATE listesi üzerinden sonek eşle.
         durumler = set(ALERT_STATES) | set(WATCH_STATES)
         for anahtar in list(self.last_sent.keys()):
@@ -551,7 +707,6 @@ class TelegramNotifier:
             if any(govde.endswith(f"_{timeframe}_{durum}") for durum in durumler):
                 del self.last_sent[anahtar]
         self._cooldown_kaydet()
-        self._son_alert_kaydet()
 
     # --- engellenen acil olay kuyruğu (Batch 5 / B4) ------------------------
 
@@ -705,10 +860,13 @@ class TelegramNotifier:
         self._son_engel = None
         # Tek-seferlik mühür (repeat-guard) ZAMAN cooldown'undan ÖNCE gelir:
         # motor aynı terminal state'i her tur yeniden ürettiği için 4 saat dolunca
-        # kopya mesaj basılıyordu. Mühür "bu slot bu state'i zaten bildirdi"
-        # derse olay NİHAİ reddir (kuyruğa alınmaz, beklenmez).
+        # kopya mesaj basılıyordu. Mühür "bu slot bu state'i BUGÜN zaten bildirdi"
+        # derse olay NİHAİ reddir (kuyruğa alınmaz, beklenmez). Slot sıfırlama
+        # (flicker) mühürü artık silmez; bayatlık yalnız gün değişiminde.
         if state in ALERT_STATES:
-            if self._son_alert.get(self._son_alert_key(stock, pattern, timeframe)) == state:
+            if self._muhr_gecerli_mi(
+                    self._son_alert.get(self._son_alert_key(stock, timeframe, state)),
+                    state, timeframe):
                 self.engeller["tekrar"] += 1
                 self._son_engel = "tekrar"
                 return False
@@ -789,189 +947,183 @@ class TelegramNotifier:
             time_str = timestamp
         else:
             try:
-                time_str = timestamp.strftime("%d %b %H:%M")
+                time_str = _tr_tarih(timestamp)
             except (AttributeError, ValueError, TypeError):
                 # strftime desteklemeyen/tuhaf timestamp: metne düşür (dar kapsam).
                 time_str = str(timestamp)
 
+        # Daralma metni: "baya sıkışmış" gibi günlük konuşma dilinden çıkarıldı;
+        # aynı bilgi kısa ve nötr veriliyor.
         contraction_str = ""
         if contraction is not None:
             pct = contraction * 100
             if pct >= 80:
-                contraction_str = f"daralma %{pct:.0f} - baya sıkışmış"
+                contraction_str = f"daralma %{pct:.0f} · sıkışma güçlü"
             elif pct >= 60:
-                contraction_str = f"daralma %{pct:.0f} - sıkışıyor"
+                contraction_str = f"daralma %{pct:.0f} · sıkışıyor"
             elif pct >= 40:
                 contraction_str = f"daralma %{pct:.0f}"
             else:
-                contraction_str = f"daralma %{pct:.0f} - erken"
+                contraction_str = f"daralma %{pct:.0f} · erken"
 
         temas_str = ""
         if upper_touches is not None and lower_touches is not None:
-            toplam = upper_touches + lower_touches
-            temas_str = f", {toplam} temas"
-        yas_str = f", {age_bars} bar" if age_bars else ""
-        mtf_str = " + 4h destekliyor" if mtf_destek else ""
+            temas_str = f"{upper_touches + lower_touches} temas"
+        yas_str = f"{age_bars} bar" if age_bars else ""
 
+        kalite_str = f"Kalite {quality:.0f} {q_emoji} ({q_comment})"
+        # Kalite ve detay AYRI satırlarda: telefon ekranında hiçbir satırın
+        # tek satıra sığması gerekiyor (eskiden tek satır ~90 karaktere çıkıp
+        # üç satıra bölünüyordu).
+        detay_str = " · ".join(p for p in (contraction_str, temas_str, yas_str,
+                                           "4h destekliyor" if mtf_destek else "") if p)
+
+        # Her mesaj aynı iskeleti paylaşır: başlık / olay / kalite / detay / seviye.
+        # Rastgele şablon seçimi yok: aynı olay her zaman birebir aynı metni üretir.
+        # Dil herkese açık kanal dili — kişisel asistan sesi ve tavsiye cümlesi yok.
         if state == "ADAY_OLUSUYOR":
-            templates = [
-                f"{emoji} {stock} {tf_human} grafikte {pattern} oluşuyor...\n"
-                f"Kalite {quality:.0f} {q_emoji} ({q_comment}), {contraction_str}{temas_str}{yas_str}\n"
-                f"Üst {upper:.2f} / Alt {lower:.2f} bandında sıkışma var\n"
-                f"Takipteyiz 👀 - kırılıma yaklaştıkça haber veririm",
-                f"👀 {stock}'da bir şeyler oluyor\n"
-                f"{tf_human} grafikte {pattern} {q_comment} duruyor (kalite {quality:.0f}){temas_str}\n"
-                f"{contraction_str}, bant {lower:.2f} - {upper:.2f}\n"
-                f"Henüz erken ama radarımda 📡",
-            ]
-            msg = random.choice(templates)
+            satirlar = [f"👀 {stock} {tf_human} · {pattern}",
+                        "Formasyon oluşuyor",
+                        kalite_str]
+            if detay_str:
+                satirlar.append(detay_str)
+            satirlar.append(f"Bant: {lower:.2f} - {upper:.2f}")
 
         elif state == "GEOMETRI_ADAYI":
-            msg = (
-                f"{emoji} {stock} {tf_human} - {pattern} geometrisi oturuyor\n"
-                f"Kalite {quality:.0f} {q_emoji}, {contraction_str}{temas_str}\n"
-                f"Bant: {lower:.2f} - {upper:.2f}\n"
-                f"Olgunlaşmasını bekliyorum..."
-            )
+            satirlar = [f"{emoji} {stock} {tf_human} · {pattern}",
+                        "Geometri oturuyor",
+                        kalite_str]
+            if detay_str:
+                satirlar.append(detay_str)
+            satirlar.append(f"Bant: {lower:.2f} - {upper:.2f} · olgunlaşma bekleniyor")
 
         elif state == "FORMASYON_TANIMLANDI":
-            msg = (
-                f"📋 {stock} {tf_human} {pattern} tanımlandı\n"
-                f"Kalite {quality:.0f} {q_emoji} ({q_comment}) {contraction_str}{temas_str}{yas_str}\n"
-                f"Üst: {upper:.2f} Alt: {lower:.2f}\n"
-                f"Sıkışma güçlenirse kırılım gelebilir"
-            )
+            satirlar = [f"📋 {stock} {tf_human} · {pattern}",
+                        "Formasyon tanımlandı",
+                        kalite_str]
+            if detay_str:
+                satirlar.append(detay_str)
+            satirlar.append(f"Üst: {upper:.2f} / Alt: {lower:.2f}")
 
         elif state == "SIKISMA_GUCLENIYOR":
-            msg = (
-                f"⚡ {stock}'da sıkışma güçleniyor!\n"
-                f"{tf_human} {pattern} {contraction_str}{temas_str}{yas_str} - sona yaklaşıyor\n"
-                f"Kalite {quality:.0f} {q_emoji}, bant {lower:.2f}-{upper:.2f}\n"
-                f"Kırılım yakın olabilir, gözüm üstünde 👁️"
-            )
+            satirlar = [f"⚡ {stock} {tf_human} · {pattern}",
+                        "Sıkışma güçleniyor",
+                        kalite_str]
+            if detay_str:
+                satirlar.append(detay_str)
+            satirlar.append(f"Bant: {lower:.2f} - {upper:.2f} · kırılım yakın")
 
         elif state == "KIRILIM_HAZIRLIGI":
-            msg = (
-                f"⚠️ {stock} {tf_human} {pattern} kırılım hazırlığında\n"
-                f"{contraction_str}, kalite {quality:.0f} {q_emoji}{temas_str}\n"
-                f"Kritik seviyeler: {lower:.2f} / {upper:.2f}\n"
-                f"Birkaç mum içinde hareket gelebilir"
-            )
+            satirlar = [f"⚠️ {stock} {tf_human} · {pattern}",
+                        "Kırılım hazırlığında",
+                        kalite_str]
+            if detay_str:
+                satirlar.append(detay_str)
+            satirlar.append(f"Kritik seviyeler: {lower:.2f} / {upper:.2f}")
 
         elif state == "KIRILIM_DENEMESI":
             direction = "yukarı" if break_dir == 1 else "aşağı" if break_dir == -1 else ""
             level = upper if break_dir == 1 else lower
-            msg = (
-                f"🔥 {stock}'da deneme var!\n"
-                f"{tf_human} {pattern} {direction} {level:.2f}'i zorluyor\n"
-                f"Güç henüz düşük, teyit bekliyorum...{mtf_str}\n"
-                f"Kalite {quality:.0f} {q_emoji} | {time_str}"
-            )
+            yon_eki = f"{direction} yönde " if direction else ""
+            satirlar = [f"🔥 {stock} {tf_human} · {pattern}",
+                        f"Kırılım denemesi · {yon_eki}{level:.2f} zorlanıyor",
+                        kalite_str]
+            if detay_str:
+                satirlar.append(detay_str)
+            satirlar.append("Kırılım gücü henüz düşük, teyit bekleniyor")
 
         elif state == "KIRILIM_ADAYI":
             direction = "YUKARI" if break_dir == 1 else "AŞAĞI" if break_dir == -1 else ""
             level = upper if break_dir == 1 else lower
             power = data.get('break_strength', quality)
             kapanis_yonu = "üstünde" if break_dir == 1 else "altında" if break_dir == -1 else "yakınında"
-            templates = [
-                f"🚀 {stock} KIRIYOR! {direction}\n"
-                f"{tf_human} {pattern} {level:.2f} {kapanis_yonu} kapanış{mtf_str}\n"
-                f"Güç {power:.0f} {q_emoji} - teyit mumu bekleniyor\n"
-                f"Retest olursa fırsat olabilir, takipteyim",
-                f"💥 {stock} {tf_human} {pattern}\n"
-                f"{direction} kırılım adayı! {level:.2f} kırıldı\n"
-                f"Güç {power:.0f} ({q_comment}) - teyit gelirse haber veririm\n"
-                f"Şimdilik izle, acele etme",
-            ]
-            msg = random.choice(templates)
+            baslik_eki = f"{direction} " if direction else ""
+            # Eskiden iki şablon rastgele seçiliyordu (🚀 KIRIYOR / 💥 kırılım adayı);
+            # aynı olay iki farklı metinle gidiyordu. Artık tek metin.
+            satirlar = [f"🚀 {stock} {tf_human} · {pattern}",
+                        f"{baslik_eki}kırılım adayı · {level:.2f} {kapanis_yonu} kapanış",
+                        f"Kırılım gücü {power:.0f} {q_emoji} · teyit mumu bekleniyor"]
 
         elif state == "KIRILIM_TEYITLI":
             direction = "yukarı" if break_dir == 1 else "aşağı" if break_dir == -1 else ""
             level = data.get('break_price', upper if break_dir==1 else lower)
-            msg = (
-                f"✅ {stock} teyit aldı! {direction} kırılım{mtf_str}\n"
-                f"{tf_human} {pattern} {level:.2f} kırılımı teyitli\n"
-                f"Kalite {quality:.0f} {q_emoji}, {contraction_str}{temas_str}\n"
-                f"{level:.2f} artık {'destek' if break_dir==1 else 'direnç'} olabilir\n"
-                f"Retest bekleniyor..."
-            )
+            yon = f"{direction} kırılım" if direction else "Kırılım"
+            rol = "destek" if break_dir == 1 else "direnç" if break_dir == -1 else "kritik seviye"
+            satirlar = [f"✅ {stock} {tf_human} · {pattern}",
+                        f"{yon} teyitli · {level:.2f}",
+                        kalite_str]
+            if detay_str:
+                satirlar.append(detay_str)
+            satirlar.append(f"Retest bekleniyor · {level:.2f} artık {rol}")
 
         elif state == "RETEST_BEKLENIYOR":
             level = data.get('break_price', price)
-            msg = (
-                f"⏳ {stock} retest bekleniyor\n"
-                f"{tf_human} {pattern} kırılım sonrası {level:.2f}'e dönüş olabilir\n"
-                f"Kalite {quality:.0f} {q_emoji} - retest tutarsa güçlenir"
-            )
+            satirlar = [f"⏳ {stock} {tf_human} · {pattern}",
+                        f"Retest bekleniyor · {level:.2f}'e dönüş olabilir",
+                        kalite_str]
+            if detay_str:
+                satirlar.append(detay_str)
+            satirlar.append("Retest tutarsa yapı güçlenir")
 
         elif state == "RETEST_EDILIYOR":
-            msg = (
-                f"🔄 {stock}'da retest oluyor\n"
-                f"{tf_human} {pattern} kırılan seviyeye geri döndü\n"
-                f"Tutunursa devamı gelebilir, izliyorum"
-            )
+            satirlar = [f"🔄 {stock} {tf_human} · {pattern}",
+                        "Retest sürüyor · kırılan seviyeye geri dönüldü",
+                        kalite_str]
+            if detay_str:
+                satirlar.append(detay_str)
+            satirlar.append("Tutunursa devamı bekleniyor")
 
         elif state == "RETEST_BASARILI":
-            direction = "yukarı" if break_dir == 1 else "aşağı"
-            msg = (
-                f"🎯 {stock} RETEST BAŞARILI!\n"
-                f"{tf_human} {pattern} {direction} kırılım sonrası retest tuttu{mtf_str}\n"
-                f"Kalite {quality:.0f} {q_emoji}{temas_str}{yas_str} - formasyon tamamlanmaya yakın\n"
-                f"Bu seviyelerden sonrası için kendi analizini yap"
-            )
+            direction = "yukarı" if break_dir == 1 else "aşağı" if break_dir == -1 else ""
+            yon = f"{direction} kırılım" if direction else "Kırılım"
+            satirlar = [f"🎯 {stock} {tf_human} · {pattern}",
+                        f"RETEST BAŞARILI · {yon} sonrası retest tuttu",
+                        kalite_str]
+            if detay_str:
+                satirlar.append(detay_str)
+            satirlar.append("Formasyon tamamlanmaya yakın")
 
         elif state == "FORMASYON_TAMAMLANDI":
-            direction = "yukarı" if break_dir == 1 else "aşağı"
-            detay = f"{temas_str}{yas_str}{mtf_str}"
+            direction = "yukarı" if break_dir == 1 else "aşağı" if break_dir == -1 else ""
+            yon = f"{direction} kırılım" if direction else "Kırılım"
             if retest_seen:
-                msg = (
-                    f"🏁 {stock} {pattern} TAMAMLANDI\n"
-                    f"{tf_human} grafikte {direction} kırılım + retest başarılı{detay}\n"
-                    f"Kalite {quality:.0f} {q_emoji} - görev tamam\n"
-                    f"Yeni formasyon için taramaya devam"
-                )
+                satirlar = [f"🏁 {stock} {tf_human} · {pattern}",
+                            f"TAMAMLANDI · {yon} + retest başarılı",
+                            kalite_str]
             else:
-                msg = (
-                    f"🏁 {stock} {pattern} TAMAMLANDI\n"
-                    f"{tf_human} grafikte {direction} kırılım - retest olmadan ilerledi / "
-                    f"fiyat kırılan seviyeye geri dönmedi{detay}\n"
-                    f"Kalite {quality:.0f} {q_emoji} - görev tamam\n"
-                    f"Yeni formasyon için taramaya devam"
-                )
+                satirlar = [f"🏁 {stock} {tf_human} · {pattern}",
+                            f"TAMAMLANDI · {yon}, retest olmadan ilerledi",
+                            "Fiyat kırılan seviyeye geri dönmedi",
+                            kalite_str]
+            if detay_str:
+                satirlar.append(detay_str)
 
         elif state == "BASARISIZ_KIRILIM":
-            msg = (
-                f"❌ {stock} kırılım başarısız\n"
-                f"{tf_human} {pattern} kırılım denedi ama geri döndü\n"
-                f"Formasyon alanına dönüş - sahte kırılım olabilir\n"
-                f"Tekrar sıkışma bekleniyor"
-            )
+            satirlar = [f"❌ {stock} {tf_human} · {pattern}",
+                        "Kırılım başarısız · formasyon alanına dönüldü",
+                        "Sahte kırılım olabilir · yeniden sıkışma bekleniyor"]
 
         elif state == "FORMASYON_GECERSIZ":
             # Bu şablon bilerek korunuyor: ölü formasyonlar alarm akışından
             # kapı ile elenir (yalnız manuel/test gönderiminde buraya düşülür).
             reason = data.get('invalid_reason', 'Süre doldu veya bozuldu')
-            msg = (
-                f"⚪ {stock} {tf_human} {pattern} geçersiz oldu\n"
-                f"Sebep: {reason}\n"
-                f"Yeni oluşum için takipteyim"
-            )
+            satirlar = [f"⚪ {stock} {tf_human} · {pattern}",
+                        f"Formasyon geçersiz · sebep: {reason}"]
 
         else:
-            msg = (
-                f"{emoji} {stock} {tf_human} {pattern}\n"
-                f"Durum: {state} | Kalite: {quality:.0f} {q_emoji}\n"
-                f"Seviye: {price:.2f} | {contraction_str}\n"
-                f"{time_str}"
-            )
+            satirlar = [f"{emoji} {stock} {tf_human} · {pattern}",
+                        f"Durum: {state}",
+                        kalite_str,
+                        f"Seviye: {price:.2f} · {time_str}"]
 
-        footer_options = [
-            f"\n\n💡 Detaylı analiz için grafiğe bak - {stock} {timeframe}",
-            "\n\n📊 Kendi analizini de ekle, sadece formasyon yetmez",
-            f"\n\n🔍 {stock} {tf_human} - daha fazlası için takipte kal",
-        ]
-        if state in ["KIRILIM_ADAYI", "KIRILIM_TEYITLI", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI"]:
-            msg += random.choice(footer_options)
+        msg = "\n".join(satirlar)
+
+        # Tek ve sabit footer: eskiden üç cümleden biri rastgele ekleniyordu —
+        # hem mesajı gereksiz uzatıyordu hem de aynı olay iki farklı metinle
+        # gidiyordu. Tavsiye veren cümleler ("kendi analizini yap", "acele etme")
+        # kaldırıldı; kanal dili birebir aynı kalıyor.
+        if state in ("KIRILIM_ADAYI", "KIRILIM_TEYITLI", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI"):
+            msg += "\n\n📌 Formasyon takibi · yatırım tavsiyesi değildir"
 
         # Acil olay mesajına, ayrı alarm olarak henüz gönderilmemiş en fazla üç
         # kısa izleme adayı bağlamı eklenir. Adaylar kendi başlarına gönderilmez.
@@ -983,7 +1135,12 @@ class TelegramNotifier:
             candidate_stock = str(candidate.get("stock") or "?")
             candidate_tf = TF_HUMAN.get(candidate.get("timeframe"), candidate.get("timeframe", ""))
             candidate_pattern = str(candidate.get("pattern_name") or "formasyon")
-            candidate_state = str(candidate.get("state") or "izlemede").replace("_", " ").lower()
+            # State adı Türkçe ve tek kaynaktan (STATE_TR): eskiden
+            # "SIKISMA_GUCLENIYOR" -> "sikisma gucleniyor" gibi Türkçe
+            # karaktersiz/eksik metin basıyordu.
+            _ham_state = str(candidate.get("state") or "").strip().upper()
+            candidate_state = STATE_TR.get(
+                _ham_state, _ham_state.title().replace("_", " ") or "izlemede")
             try:
                 candidate_quality = float(candidate.get("quality") or 0)
                 quality_suffix = f" · kalite {candidate_quality:.0f}"
