@@ -11,6 +11,9 @@ from typing import Dict, List
 
 from config import (DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN,
                     ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK, ALERT_STATES, WATCH_STATES)
+# Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
+# katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
+from reporting.format import STATE_TR
 
 logger = logging.getLogger(__name__)
 
@@ -198,11 +201,14 @@ class TelegramNotifier:
         # Neden: motor tam_yeniden=True ile pencereyi her taramada baştan oynatır;
         # terminal/acil state'ler her tur yeniden üretilir ve eski tek koruma
         # (4 saatlik zaman cooldown'ı) dolunca AYNI olay tekrar basılıyordu
-        # (örn. 4h TF'de 1 bar = 4 saat = cooldown süresi). Mühür, slotun
-        # (hisse+formasyon+TF) son bildirilen acil state'ini saklar; aynı state
-        # sessizce düşer, state ilerlemesi (TEYITLI -> RETEST -> TAMAMLANDI)
-        # serbest kalır. Kalıcıdır: Supabase "state:telegram_son_alerts" + disk.
-        self._son_alert: Dict[str, str] = {}
+        # (örn. 4h TF'de 1 bar = 4 saat = cooldown süresi).
+        # Mühür (hisse+TF+state) başına son bildirilen İstanbul GÜNÜNÜ tutar:
+        # aynı gün içinde aynı olay bir kez bildirilir; state ilerlemesi
+        # (TEYITLI -> RETEST -> TAMAMLANDI) serbest kalır; yeni gün tekrar
+        # haberdar. Slot sıfırlama (flicker) mühürü silmez. Kalıcıdır:
+        # Supabase "state:telegram_son_alerts" + disk (eski düz-string biçimi
+        # açılışta yeni biçime taşınır).
+        self._son_alert: Dict[str, dict] = {}
         self._son_alert_dosya = os.path.join(DATA_DIR, "telegram_son_alerts.json")
         self._son_alert_yukle()
 
@@ -479,10 +485,39 @@ class TelegramNotifier:
         return f"{stock}_{pattern}_{timeframe}_{state}"
 
     # --- tek-seferlik olay hafızası (repeat-guard) --------------------------
+    # Mühür artık (hisse + TF + state) anahtarlı ve İstanbul GÜNÜ ile bayatlar.
+    # İki kök neden düzeltildi:
+    #   1) pattern anahtardan ÇİKARILDI: motor aynı slotta bazen "Simetrik
+    #      Üçgen", bazen "Alçalan Üçgen" etiketi üretebiliyordu; iki farklı
+    #      anahtar = iki ayrı mesaj (örn. PETKM 4h iki kez TAMAMLANDI).
+    #   2) mühür "slot sıfırlama" ile siliniyordu; canlı geometri (has_pattern)
+    #      kayan pencerede bir taramada False olup FORMASYON_YOK'a düştüğünde
+    #      (flicker) mühür silinip aynı olay tekrar basılıyordu. Artık mühür
+    #      yalnız gün değişiminde bayatlar — aynı gün içinde aynı hisse+TF+state
+    #      en fazla BİR kez bildirilir.
+    def _son_alert_key(self, stock: str, timeframe: str, state: str) -> str:
+        """Slot anahtarı: hisse + zaman dilimi + state (pattern GİRMEZ)."""
+        return f"{stock}_{timeframe}_{state}"
 
-    def _son_alert_key(self, stock: str, pattern: str, timeframe: str) -> str:
-        """Slot anahtarı: state GİRMEZ (yalnız "bu slot son ne bildirdi" tutulur)."""
-        return f"{stock}_{pattern}_{timeframe}"
+    @staticmethod
+    def _son_alert_bugun() -> str:
+        """Mühürlerin bayatlık ölçütü: İstanbul günü (ISO)."""
+        return datetime.now(ISTANBUL_TZ).date().isoformat()
+
+    @classmethod
+    def _muhr_gecerli_mi(cls, muhur, state: str, bugun: str) -> bool:
+        """Mühür bu state'i bugün içeriyorsa True (olay zaten bildirildi).
+
+        Eski biçim (düz state string) upgrade öncesi kalıntısıdır; aynı gün
+        sayılır ki deploy sonrası kopya dalgası çıkmasın.
+        """
+        if not muhur:
+            return False
+        if isinstance(muhur, str):
+            return muhur == state
+        if not isinstance(muhur, dict):
+            return False
+        return muhur.get("state") == state and muhur.get("gun") == bugun
 
     def _son_alert_yukle(self):
         try:
@@ -496,22 +531,43 @@ class TelegramNotifier:
                 with open(self._son_alert_dosya, "r", encoding="utf-8") as f:
                     ham = json.load(f)
             if isinstance(ham, dict):
+                bugun = self._son_alert_bugun()
                 for k, v in ham.items():
-                    if isinstance(k, str) and isinstance(v, str):
-                        self._son_alert[k] = v
+                    if not isinstance(k, str):
+                        continue
+                    if isinstance(v, str):
+                        # ESKİ BİÇİM: anahtar "hisse_pattern_tf", değer state.
+                        # Yeni anahtara ("hisse_tf_state") taşınır ve bugüne
+                        # mühürlenir — upgrade anında olay tekrar basmaz.
+                        stock_pattern, _, tf = k.rpartition("_")
+                        if not stock_pattern or not tf or not v:
+                            continue
+                        stock = stock_pattern.split("_", 1)[0]
+                        if not stock:
+                            continue
+                        self._son_alert[f"{stock}_{tf}_{v}"] = {"state": v, "gun": bugun}
+                    elif isinstance(v, dict) and isinstance(v.get("state"), str):
+                        # Yeni biçim: kendi gün damgasıyla korunur (bayatsa geçersiz).
+                        self._son_alert[k] = {"state": v["state"],
+                                              "gun": v.get("gun") or bugun}
             logger.info(f"Son-alert mühürleri {kaynak} yüklendi: {len(self._son_alert)} kayıt")
         except Exception as e:
             logger.warning(f"Son-alert mühürleri yüklenemedi (devam ediliyor): {e}")
 
     def _son_alert_kaydet(self):
-        payload = dict(self._son_alert)
+        # Bayat (bugün dışı) mühürler diske/Supabase'a taşınmaz; sözlük şişmesin.
+        bugun = self._son_alert_bugun()
+        for anahtar in [k for k, v in self._son_alert.items()
+                        if not (isinstance(v, dict) and v.get("gun") == bugun)]:
+            del self._son_alert[anahtar]
+        payload = {k: dict(v) for k, v in self._son_alert.items()}
         try:
             import json
             os.makedirs(os.path.dirname(self._son_alert_dosya), exist_ok=True)
             with open(self._son_alert_dosya, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, indent=0)
         except Exception as e:
-            logger.warning(f"Son-alert mühürleri diske kaydedilemedi (devam ediliyor): {e}")
+            logger.warning(f"Son-alert mühürleri diske kaydedilemedi: {e}")
         if self.persistent_store is not None:
             try:
                 self.persistent_store.upsert("state:telegram_son_alerts", payload)
@@ -523,25 +579,30 @@ class TelegramNotifier:
 
         Mühür yalnız AYNI state'i susturur; yaşam döngüsü ilerlemesi
         (TEYITLI -> RETEST_BASARILI -> TAMAMLANDI) her biri bir kez bildirilebilir.
+        `pattern` bilinçli olarak anahtara girmez: aynı slotta motorun ürettiği
+        farklı formasyon etiketleri aynı olayın kopyasıdır.
         """
         if state not in ALERT_STATES:
             return
-        self._son_alert[self._son_alert_key(stock, pattern, timeframe)] = state
+        self._son_alert[self._son_alert_key(stock, timeframe, state)] = {
+            "state": state, "gun": self._son_alert_bugun()}
         self._son_alert_kaydet()
 
     def son_alert_sifirla(self, stock: str, timeframe: str) -> None:
-        """Slotun (hisse+TF) tek-seferlik mühürlerini VE zaman cooldown'larını siler.
+        """Slotun (hisse+TF) ZAMAN cooldown'larını siler; mühürlere DOKUNMAZ.
 
-        Yaşam döngüsü bir yok/geçersiz/zayıflama state'ine düşürdüğünde çağrılır:
-        aynı slotu tekrar kaplayan yeni formasyon 4 saat beklemeksizin, eski
-        mühürle sessiz kalmaksızın anında bildirilebilir. Başka slotların
-        mühürleri/cooldown'ları dokunulmaz kalır.
+        NEDEN DEĞİŞTİ: bu fonksiyon önce mühürleri de siliyordu. Motorun canlı
+        geometrisi (has_pattern) kayan pencerede bir taramada False olup
+        FORMASYON_YOK'a düştüğünde (flicker) main bu fonksiyonu çağırıyordu;
+        mühür silinince aynı formasyon bir sonraki taramada yeniden "doğup"
+        AYNI TAMAMLANDI/BAŞARISIZ mesajını tekrar basıyordu (ölçüm: kullanıcının
+        günlüğünde ~45 mesajın ~13'ü birebir kopya). Mühür artık yalnız gün
+        değişiminde bayatlar.
+
+        Cooldown temizliği KORUNUR: slotu tekrar kaplayan yeni formasyonun
+        ilerleme mesajları (TEYITLI -> RETEST -> TAMAMLANDI) 4 saat beklemez.
         """
         on_ek = f"{stock}_"
-        sonek = f"_{timeframe}"
-        for anahtar in list(self._son_alert.keys()):
-            if anahtar.startswith(on_ek) and anahtar.endswith(sonek):
-                del self._son_alert[anahtar]
         # Anahtar biçimi hisse_desen_tf_STATE; STATE listesi üzerinden sonek eşle.
         durumler = set(ALERT_STATES) | set(WATCH_STATES)
         for anahtar in list(self.last_sent.keys()):
@@ -551,7 +612,6 @@ class TelegramNotifier:
             if any(govde.endswith(f"_{timeframe}_{durum}") for durum in durumler):
                 del self.last_sent[anahtar]
         self._cooldown_kaydet()
-        self._son_alert_kaydet()
 
     # --- engellenen acil olay kuyruğu (Batch 5 / B4) ------------------------
 
@@ -705,10 +765,13 @@ class TelegramNotifier:
         self._son_engel = None
         # Tek-seferlik mühür (repeat-guard) ZAMAN cooldown'undan ÖNCE gelir:
         # motor aynı terminal state'i her tur yeniden ürettiği için 4 saat dolunca
-        # kopya mesaj basılıyordu. Mühür "bu slot bu state'i zaten bildirdi"
-        # derse olay NİHAİ reddir (kuyruğa alınmaz, beklenmez).
+        # kopya mesaj basılıyordu. Mühür "bu slot bu state'i BUGÜN zaten bildirdi"
+        # derse olay NİHAİ reddir (kuyruğa alınmaz, beklenmez). Slot sıfırlama
+        # (flicker) mühürü artık silmez; bayatlık yalnız gün değişiminde.
         if state in ALERT_STATES:
-            if self._son_alert.get(self._son_alert_key(stock, pattern, timeframe)) == state:
+            if self._muhr_gecerli_mi(
+                    self._son_alert.get(self._son_alert_key(stock, timeframe, state)),
+                    state, self._son_alert_bugun()):
                 self.engeller["tekrar"] += 1
                 self._son_engel = "tekrar"
                 return False
@@ -966,7 +1029,7 @@ class TelegramNotifier:
             )
 
         footer_options = [
-            f"\n\n💡 Detaylı analiz için grafiğe bak - {stock} {timeframe}",
+            f"\n\n💡 Detaylı analiz için grafiğe bak - {stock} {tf_human}",
             "\n\n📊 Kendi analizini de ekle, sadece formasyon yetmez",
             f"\n\n🔍 {stock} {tf_human} - daha fazlası için takipte kal",
         ]
@@ -983,7 +1046,12 @@ class TelegramNotifier:
             candidate_stock = str(candidate.get("stock") or "?")
             candidate_tf = TF_HUMAN.get(candidate.get("timeframe"), candidate.get("timeframe", ""))
             candidate_pattern = str(candidate.get("pattern_name") or "formasyon")
-            candidate_state = str(candidate.get("state") or "izlemede").replace("_", " ").lower()
+            # State adı Türkçe ve tek kaynaktan (STATE_TR): eskiden
+            # "SIKISMA_GUCLENIYOR" -> "sikisma gucleniyor" gibi Türkçe
+            # karaktersiz/eksik metin basıyordu.
+            _ham_state = str(candidate.get("state") or "").strip().upper()
+            candidate_state = STATE_TR.get(
+                _ham_state, _ham_state.title().replace("_", " ") or "izlemede")
             try:
                 candidate_quality = float(candidate.get("quality") or 0)
                 quality_suffix = f" · kalite {candidate_quality:.0f}"

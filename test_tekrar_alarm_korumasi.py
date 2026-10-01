@@ -60,9 +60,9 @@ def _aktif(monkeypatch, cevaplar=None):
     return n, gonderilenler
 
 
-def _veri(state="FORMASYON_TAMAMLANDI", stock="THYAO"):
+def _veri(state="FORMASYON_TAMAMLANDI", stock="THYAO", pattern_name="Yükselen Üçgen"):
     """Acil (ALERT_STATES) bir olay; aynı slot = THYAO + Yükselen Üçgen + 1h."""
-    return {"stock_name": stock, "pattern_name": "Yükselen Üçgen", "timeframe": "1h",
+    return {"stock_name": stock, "pattern_name": pattern_name, "timeframe": "1h",
             "state": state, "confidence_score": 84, "upper_now": 302.0, "lower_now": 294.0,
             "break_dir": 1, "break_price": 302.0, "critical_price_level": 302.0}
 
@@ -104,28 +104,92 @@ def test_state_ilemesi_serbest_kalir(monkeypatch):
     assert len(gonderilenler) == 3
 
 
-# --- c) slot sıfırlama: anında yeniden bildirim, başka slot korunur ---------
+# --- c) slot sıfırlama (flicker): aynı gün tekrar bildirim YOK ------------
+# KÖK NEDEN (düzeltme sonrası): motorun canlı geometrisi (has_pattern) kayan
+# pencerede bir taramada False olup FORMASYON_YOK'a düşüyor (flicker); main bu
+# yüzden son_alert_sifirla() çağırıyordu. Eskiden bu fonksiyon MÜHÜRÜ de sildiği
+# için formasyon bir sonraki taramada yeniden "doğup" AYNI TAMAMLANDI mesajını
+# tekrar basıyordu (kullanıcı günlüğünde ~45 mesajın ~13'ü birebir kopya).
+# Artık sıfırlama yalnız ZAMAN cooldown'ını temizler; mühür gün sonuna kadar
+# korunur. Yeni formasyonun ilerleme mesajları (TEYITLI/RETEST) yine serbest.
 
-def test_slot_sifirlaninca_ayni_olay_aninda_gonderilir(monkeypatch):
+def test_slot_sifirlaninca_ayni_olay_tekrar_gonderilmez(monkeypatch):
     n, gonderilenler = _aktif(monkeypatch)
     assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is True
     assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="GARAN")) is True
 
     # Yaşam döngüsü THYAO slotunu sıfırladı (örn. FORMASYON_GECERSIZ):
     n.son_alert_sifirla("THYAO", "1h")
-    # Slotun zaman cooldown'ları da temizlendi (mühürle birlikte).
+    # Zaman cooldown'ları temizlendi (yeni formasyon 4 saat beklemesin)...
     assert not any(k.startswith("THYAO_") and "_1h_" in k for k in n.last_sent), \
-        "slot sıfırlama cooldown anahtarlarını da silmeli"
-    # Mühür SİLİNDİ: 4 saat cooldown'una bakılmaksızın anında tekrar bildirilebilir.
-    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is True
-    assert len(gonderilenler) == 3
-    assert n.engeller["tekrar"] == 0
+        "slot sıfırlama cooldown anahtarlarını silmeli"
+    # ...AMA mühür KORUNUR: aynı gün içinde aynı olay bir daha basılmaz.
+    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is False
+    assert n._son_engel == "tekrar"
+    assert n._son_alert.get(n._son_alert_key("THYAO", "1h", "FORMASYON_TAMAMLANDI")) \
+        == {"state": "FORMASYON_TAMAMLANDI", "gun": n._son_alert_bugun()}
+    assert len(gonderilenler) == 2, "kopya mesaj gitmemeli"
 
-    # Başka slotun (GARAN) mührü korunur: kopyası hâlâ düşer.
+    # Başka slotun (GARAN) mührü de korunur: kopyası hâlâ düşer.
     assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="GARAN")) is False
     assert n._son_engel == "tekrar"
-    assert n._son_alert.get(n._son_alert_key("GARAN", "Yükselen Üçgen", "1h")) == "FORMASYON_TAMAMLANDI"
+    assert len(gonderilenler) == 2
+
+    # Flicker üst üste gelse bile mühür yerinde (eski davranış: her sıfırlamada
+    # mühür silinip kopya basılıyordu).
+    for _ in range(3):
+        n.son_alert_sifirla("THYAO", "1h")
+        assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is False
+    assert len(gonderilenler) == 2
+
+    # Yeni formasyonun FARKLI state'i (ilerleme) yine bildirilir.
+    assert n.send(_veri("RETEST_BASARILI", stock="THYAO")) is True
     assert len(gonderilenler) == 3
+
+
+def test_pattern_etiketi_degisince_ayni_olay_tekrar_sayilmaz(monkeypatch):
+    """Aynı slotta motor bazen 'Simetrik Üçgen' bazen 'Alçalan Üçgen' basıyordu.
+
+    Mühür anahtarında pattern OLMAYINCA iki etiket = iki mesaj olmuyor.
+    """
+    n, gonderilenler = _aktif(monkeypatch)
+    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="PETKM")) is True
+    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="PETKM",
+                        pattern_name="Alçalan Üçgen")) is False
+    assert n._son_engel == "tekrar"
+    assert len(gonderilenler) == 1
+
+
+def test_muhr_yeni_gunde_bayalar_tekrar_bildirim_serbest(monkeypatch):
+    n, gonderilenler = _aktif(monkeypatch)
+    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is True
+    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is False
+
+    # Gün değişimi: mühürler bayatlar, aynı olay tekrar bildirilebilir.
+    dun = {"state": "FORMASYON_TAMAMLANDI", "gun": "2020-01-01"}
+    n._son_alert[n._son_alert_key("THYAO", "1h", "FORMASYON_TAMAMLANDI")] = dun
+    n.last_sent.pop(n._cooldown_key("THYAO", "Yükselen Üçgen", "1h",
+                                    "FORMASYON_TAMAMLANDI"), None)
+    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is True
+    assert len(gonderilenler) == 2
+
+
+def test_eski_bicim_muhurler_acilista_tasinir(monkeypatch):
+    """Upgrade öncesi düz-string mühürler açılışta yeni biçime taşınır.
+
+    Amaç: deploy anında kopya mesaj dalgası çıkmasın.
+    """
+    eski = {"THYAO_Yükselen Üçgen_1h": "FORMASYON_TAMAMLANDI",
+            "GARAN_Alçalan Kama_4h": "RETEST_BASARILI"}
+    yeni = TelegramNotifier(initial_store_data={"state:telegram_son_alerts": eski})
+    bugun = yeni._son_alert_bugun()
+    assert yeni._son_alert.get("THYAO_1h_FORMASYON_TAMAMLANDI") == \
+        {"state": "FORMASYON_TAMAMLANDI", "gun": bugun}
+    assert yeni._son_alert.get("GARAN_4h_RETEST_BASARILI") == \
+        {"state": "RETEST_BASARILI", "gun": bugun}
+    # Eski biçim taşındığı için aynı olay bugün tekrar basılmaz.
+    assert yeni.can_send("THYAO", "Yükselen Üçgen", "1h", "FORMASYON_TAMAMLANDI") is False
+    assert yeni._son_engel == "tekrar"
 
 
 # --- d) mühür restart'ta kalıcı (Supabase state satırı) --------------------
