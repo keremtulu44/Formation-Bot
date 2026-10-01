@@ -122,7 +122,7 @@ def test_gun_degisiminde_engel_sayaclari_sifirlanir():
     n.gonderilen_alarm = 5
     n._gunluk_tarih = n._gunluk_tarih - timedelta(days=1)
     n._gunu_sifirla_gerekirse()
-    assert n.engeller == {"cooldown": 0, "gunluk_kap": 0, "saatlik_kap": 0}
+    assert n.engeller == {"cooldown": 0, "gunluk_kap": 0, "saatlik_kap": 0, "tekrar": 0}
     assert n.gonderim_hatasi == 0 and n.gonderilen_alarm == 0
 
 
