@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 
 from config import (DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN,
-                    ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK)
+                    ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK, ALERT_STATES, WATCH_STATES)
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,7 @@ class TelegramNotifier:
         # Gönderilemeyen alarmların SEBEP sayaçları (gün içi, gün değişiminde sıfırlanır).
         # Neden: can_send False döndüğünde olay hiçbir yerde görünmüyordu; kullanıcı
         # "kaç tanesi bastırıldı" sorusunun cevabını /durum'da görebilmeli.
-        self.engeller = {"cooldown": 0, "gunluk_kap": 0, "saatlik_kap": 0}
+        self.engeller = {"cooldown": 0, "gunluk_kap": 0, "saatlik_kap": 0, "tekrar": 0}
         self.gonderim_hatasi = 0
         self.gonderilen_alarm = 0
         # Son can_send çağrısının engel sebebi (None = engel yok). Çağıran taraf
@@ -194,6 +194,17 @@ class TelegramNotifier:
         self.kuyruk_zaman_asimi = 0
         self.kuyruk_tasmasi = 0
         self._kuyruk_yukle()
+        # --- tek-seferlik olay hafızası (repeat-guard) ---
+        # Neden: motor tam_yeniden=True ile pencereyi her taramada baştan oynatır;
+        # terminal/acil state'ler her tur yeniden üretilir ve eski tek koruma
+        # (4 saatlik zaman cooldown'ı) dolunca AYNI olay tekrar basılıyordu
+        # (örn. 4h TF'de 1 bar = 4 saat = cooldown süresi). Mühür, slotun
+        # (hisse+formasyon+TF) son bildirilen acil state'ini saklar; aynı state
+        # sessizce düşer, state ilerlemesi (TEYITLI -> RETEST -> TAMAMLANDI)
+        # serbest kalır. Kalıcıdır: Supabase "state:telegram_son_alerts" + disk.
+        self._son_alert: Dict[str, str] = {}
+        self._son_alert_dosya = os.path.join(DATA_DIR, "telegram_son_alerts.json")
+        self._son_alert_yukle()
 
         try:
             from config import PUBLIC_MIN_QUALITY, PUBLIC_STATES, PUBLIC_SIKISMA_MIN_CONTRACTION
@@ -416,7 +427,7 @@ class TelegramNotifier:
             self._gunluk_tarih = bugun
             self._kap_uyarildi = False
             # Engel/hata sayaçları da günlüktür; yoksa /durum dünün engelini gösterir.
-            self.engeller = {"cooldown": 0, "gunluk_kap": 0, "saatlik_kap": 0}
+            self.engeller = {"cooldown": 0, "gunluk_kap": 0, "saatlik_kap": 0, "tekrar": 0}
             self.gonderim_hatasi = 0
             self.gonderilen_alarm = 0
 
@@ -466,6 +477,81 @@ class TelegramNotifier:
 
     def _cooldown_key(self, stock: str, pattern: str, timeframe: str, state: str) -> str:
         return f"{stock}_{pattern}_{timeframe}_{state}"
+
+    # --- tek-seferlik olay hafızası (repeat-guard) --------------------------
+
+    def _son_alert_key(self, stock: str, pattern: str, timeframe: str) -> str:
+        """Slot anahtarı: state GİRMEZ (yalnız "bu slot son ne bildirdi" tutulur)."""
+        return f"{stock}_{pattern}_{timeframe}"
+
+    def _son_alert_yukle(self):
+        try:
+            import json
+            ham = self.initial_store_data.get("state:telegram_son_alerts")
+            kaynak = "Supabase"
+            if not isinstance(ham, dict):
+                kaynak = "disk"
+                if not os.path.exists(self._son_alert_dosya):
+                    return
+                with open(self._son_alert_dosya, "r", encoding="utf-8") as f:
+                    ham = json.load(f)
+            if isinstance(ham, dict):
+                for k, v in ham.items():
+                    if isinstance(k, str) and isinstance(v, str):
+                        self._son_alert[k] = v
+            logger.info(f"Son-alert mühürleri {kaynak} yüklendi: {len(self._son_alert)} kayıt")
+        except Exception as e:
+            logger.warning(f"Son-alert mühürleri yüklenemedi (devam ediliyor): {e}")
+
+    def _son_alert_kaydet(self):
+        payload = dict(self._son_alert)
+        try:
+            import json
+            os.makedirs(os.path.dirname(self._son_alert_dosya), exist_ok=True)
+            with open(self._son_alert_dosya, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=0)
+        except Exception as e:
+            logger.warning(f"Son-alert mühürleri diske kaydedilemedi (devam ediliyor): {e}")
+        if self.persistent_store is not None:
+            try:
+                self.persistent_store.upsert("state:telegram_son_alerts", payload)
+            except Exception as e:
+                logger.debug(f"Son-alert mühürleri Supabase'e kaydedilemedi: {e}")
+
+    def _tek_seferlik_isle(self, stock: str, pattern: str, timeframe: str, state: str) -> None:
+        """Başarılı gönderim sonrası acil (ALERT_STATES) olaya tek-seferlik mühür basar.
+
+        Mühür yalnız AYNI state'i susturur; yaşam döngüsü ilerlemesi
+        (TEYITLI -> RETEST_BASARILI -> TAMAMLANDI) her biri bir kez bildirilebilir.
+        """
+        if state not in ALERT_STATES:
+            return
+        self._son_alert[self._son_alert_key(stock, pattern, timeframe)] = state
+        self._son_alert_kaydet()
+
+    def son_alert_sifirla(self, stock: str, timeframe: str) -> None:
+        """Slotun (hisse+TF) tek-seferlik mühürlerini VE zaman cooldown'larını siler.
+
+        Yaşam döngüsü bir yok/geçersiz/zayıflama state'ine düşürdüğünde çağrılır:
+        aynı slotu tekrar kaplayan yeni formasyon 4 saat beklemeksizin, eski
+        mühürle sessiz kalmaksızın anında bildirilebilir. Başka slotların
+        mühürleri/cooldown'ları dokunulmaz kalır.
+        """
+        on_ek = f"{stock}_"
+        sonek = f"_{timeframe}"
+        for anahtar in list(self._son_alert.keys()):
+            if anahtar.startswith(on_ek) and anahtar.endswith(sonek):
+                del self._son_alert[anahtar]
+        # Anahtar biçimi hisse_desen_tf_STATE; STATE listesi üzerinden sonek eşle.
+        durumler = set(ALERT_STATES) | set(WATCH_STATES)
+        for anahtar in list(self.last_sent.keys()):
+            if not anahtar.startswith(on_ek):
+                continue
+            govde = anahtar[len(on_ek):]
+            if any(govde.endswith(f"_{timeframe}_{durum}") for durum in durumler):
+                del self.last_sent[anahtar]
+        self._cooldown_kaydet()
+        self._son_alert_kaydet()
 
     # --- engellenen acil olay kuyruğu (Batch 5 / B4) ------------------------
 
@@ -586,6 +672,12 @@ class TelegramNotifier:
                 continue
             key = self._kuyruk_key(veri)
             if not self.can_send(key[0], key[1], key[2], key[3]):
+                if self._son_engel == "tekrar":
+                    # Mühür bu olayın zaten gönderildiğini söylüyor; kuyruktaki
+                    # bayat kopya gereksiz -> sessizce düşür (cooldown dalından önce).
+                    self._acil_kuyruk.remove(kayit)
+                    degisti = True
+                    continue
                 if self._son_engel == "cooldown" and key in self.last_sent:
                     if _istanbul(self.last_sent[key]) > kuyruk_zamani:
                         # Aynı sinyal kuyruğa girdikten sonra gönderildi; kopya gereksiz.
@@ -611,6 +703,15 @@ class TelegramNotifier:
         # Her çağrı temiz başlar: kritik state'in kapıyı geçmesi bir önceki
         # engelin sebebini taşımaz (yanlış "kuyruğa al" kararı olmasın).
         self._son_engel = None
+        # Tek-seferlik mühür (repeat-guard) ZAMAN cooldown'undan ÖNCE gelir:
+        # motor aynı terminal state'i her tur yeniden ürettiği için 4 saat dolunca
+        # kopya mesaj basılıyordu. Mühür "bu slot bu state'i zaten bildirdi"
+        # derse olay NİHAİ reddir (kuyruğa alınmaz, beklenmez).
+        if state in ALERT_STATES:
+            if self._son_alert.get(self._son_alert_key(stock, pattern, timeframe)) == state:
+                self.engeller["tekrar"] += 1
+                self._son_engel = "tekrar"
+                return False
         key = self._cooldown_key(stock, pattern, timeframe, state)
         if key not in self.last_sent:
             cooldown_tamam = True
@@ -909,10 +1010,12 @@ class TelegramNotifier:
 
         if not self.can_send(stock, pattern, timeframe, state):
             engel = self._son_engel or "cooldown"
-            if kuyrukla and self.enabled:
+            # "tekrar" engeli nihai reddir: olay zaten gönderildi (mühür var),
+            # bayat kopyası kuyrukta birikip sonra çift mesaj üretmesin.
+            if kuyrukla and self.enabled and engel != "tekrar":
                 # Kaybolmasın: kap/cooldown açılınca kuyruktan gönderilir.
                 self._kuyruga_ekle(data, engel)
-            logger.info(f"{stock} {pattern} {timeframe} {state} - cooldown, gönderilmiyor")
+            logger.info(f"{stock} {pattern} {timeframe} {state} - {engel}, gönderilmiyor")
             return False
 
         return self._gonder(data)
@@ -935,6 +1038,7 @@ class TelegramNotifier:
             self._gonderim_kaydet()
             self.gonderilen_alarm += 1
             self._gonderim_sagligi_kaydet(basari=True)
+            self._tek_seferlik_isle(stock, pattern, timeframe, state)
             return True
 
         try:
@@ -950,6 +1054,9 @@ class TelegramNotifier:
                 self._gonderim_kaydet()
                 self.gonderilen_alarm += 1
                 self._gonderim_sagligi_kaydet(basari=True)
+                # Tek-seferlik mühür: DM ve public kanal aynı kapıdan geçtiği
+                # için her ikisi de tekilleşir.
+                self._tek_seferlik_isle(stock, pattern, timeframe, state)
                 # Public kanala da gönder (filtreli)
                 if self.should_send_to_public(data):
                     self.send_to_channel(message)

@@ -127,6 +127,17 @@ _digest_son_gonderim_gun = None
 # Politika tek kaynak: `config.ALERT_STATES` (anlık) / `config.WATCH_STATES`
 # (digest). Bu frozenset yalnız okuma kolaylığı içindir (B7 kararı config'te).
 IMMEDIATE_ALERT_STATES = frozenset(ALERT_STATES)
+# Yaşam döngüsü "slotu sıfırlayan" state'ler: motor bu state'lerden birine
+# düştüğünde ilgili hisse/TF slotunun tek-seferlik mühürleri (notifier
+# son_alert) ve 4 saatlik zaman cooldown'ları temizlenir. Böylece aynı slotu
+# tekrar kaplayan yeni formasyon eski mühürle sessiz kalmadan, 4 saat
+# beklemeksizin anında bildirilebilir (tekrar alarm koruması, bkz. SORUN_RAPORU).
+TEKRAR_SIFIRLA_STATELER = frozenset({
+    "FORMASYON_YOK",
+    "FORMASYON_GECERSIZ",
+    "FORMASYON_ZAYIFLADI",
+    "KIRILIM_TEYIT_ALAMADI",
+})
 
 
 def _evren_olcek_uyarisi(evren=None) -> str:
@@ -245,6 +256,7 @@ daily_stats = {
     'alerts_kuyruk': 0,           # acil alarm engel yüzünden kuyruğa alındı (Batch 5 / B4)
     'alerts_engel_cooldown': 0,   # cooldown nedeniyle gönderilemedi (B4 kuyruğuna girer)
     'alerts_engel_kap': 0,        # saatlik/günlük kap nedeniyle gönderilemedi
+    'alerts_engel_tekrar': 0,     # aynı olay tekrar bastırıldı (tekrar mühürü; nihai red, kuyruğa girmez)
     # Veri sağlığı (FAZ 1): fetch başarısızlıkları artık SAYILIYOR ve görünür.
     # Önceden fetch başarısız olunca cache dolu olduğu için hiç log satırı yoktu
     # -> Yahoo saatlerce kapalıysa bot "sağlıklı" görünürken kör çalışıyordu.
@@ -282,6 +294,7 @@ def reset_daily_if_needed():
         daily_stats['alerts_kuyruk'] = 0
         daily_stats['alerts_engel_cooldown'] = 0
         daily_stats['alerts_engel_kap'] = 0
+        daily_stats['alerts_engel_tekrar'] = 0
         daily_stats['errors'] = 0
         daily_stats['fetch_ok'] = 0
         daily_stats['fetch_failures'] = 0
@@ -740,6 +753,7 @@ def _komut_durum(_arguman: str) -> str:
             gosterim = (f"🚧 Gönderim engeli: {engel.get('cooldown', 0)} cooldown · "
                         f"{engel.get('gunluk_kap', 0)} günlük kap · "
                         f"{engel.get('saatlik_kap', 0)} saatlik kap · "
+                        f"{engel.get('tekrar', 0)} aynı-olay · "
                         f"{gd.get('hatalar', 0)} hata")
         except Exception as exc:  # noqa: BLE001 - komut asla çökmesin
             logger.debug(f"Gönderim durumu okunamadı: {exc}")
@@ -1573,6 +1587,11 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 snap = lifecycle_manager.scan(stock + "_" + tf_name, df_tf, tam_yeniden=True)
                 state, break_dir, lifecycle_log = snap.state, snap.break_dir, snap.log
                 active = snap.active
+                # Yaşam döngüsü yok/geçersiz/zayıflama state'ine düştü: bu slotun
+                # "tekrar" mühürleri + 4 saatlik cooldown'ı temizlenir, aynı slotu
+                # tekrar kaplayan yeni formasyon anında bildirilebilir.
+                if state in TEKRAR_SIFIRLA_STATELER:
+                    notifier.son_alert_sifirla(stock, tf_name)
                 
                 if active:
                     q = snap.effective_quality if snap.effective_quality is not None else active.raw_quality
@@ -1686,6 +1705,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             if getattr(notifier, "_son_engel", ""):
                                 if notifier._son_engel == "cooldown":
                                     daily_stats['alerts_engel_cooldown'] += 1
+                                elif notifier._son_engel == "tekrar":
+                                    # Nihai red: olay zaten bildirildi, kuyruğa girmez.
+                                    daily_stats['alerts_engel_tekrar'] += 1
                                 else:
                                     daily_stats['alerts_engel_kap'] += 1
                                 # Olay kaybolmadı: kuyruğa alındı, engel kalkınca gider.
@@ -2107,6 +2129,11 @@ def main_loop():
             "state:daily_fetch_attempts",
             "state:telegram_cooldowns",
             "state:telegram_caps",
+            # Depolanan durumlara ait kuyruk/mühür anahtarları: redploy'da
+            # acil kuyruk ve tek-seferlik mühürler kaybolmasın (kayıp çift
+            # mesaj / tekrar alarm kök nedenlerinden biri buydu).
+            "state:telegram_acil_kuyruk",
+            "state:telegram_son_alerts",
         ]
         remote_rows = supabase_store.get_many(remote_keys)
         if remote_rows is not None:
