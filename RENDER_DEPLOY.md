@@ -732,6 +732,10 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `PICKLE_CACHE` | `0` — 1 ise eski `.pkl` kopyası da yazılır (JSON birincil; A8) | Hayır |
 | `MARKET_SUFFIX` | `.IS` — Yahoo sembol eki (BIST). BIST dışı pazar izlerseniz değiştirin | Hayır |
 | `STOCK_UNIVERSE` | Virgülle ayrılmış semboller (`THYAO,GARAN`); boş = BIST 50 | Hayır |
+| `KARNE_GUNU` | `4` — karne gönderim günü (0=Pazartesi ... 4=Cuma) | Hayır |
+| `KARNE_HEDEF_ATR` | `1.5` — kırılım sonrası "hedef" sayılan lehte hareket (ATR katı) | Hayır |
+| `KARNE_STOP_ATR` | `1.0` — "stop" sayılan alehte hareket (ATR katı) | Hayır |
+| `KARNE_HORIZON_BAR` | `10` — sinyalden sonra izlenen bar sayısı | Hayır |
 | `DATA_DIR` | Kalıcı veri dizini. Render'da varsayılan `/tmp/formation-bot-data` (repo diski geçici; kalıcı veri Supabase'de). Kalıcı disk bağlarsanız buradan verin | Hayır |
 | `SEED_DATA_DIR` | `./bot_data` — DATA_DIR'de dosya yoksa **yalnız okuma** için kullanılan seed veri | Hayır |
 | `LOG_DIR` | `/var/log/bist-bot`; yazılamıyorsa otomatik `./logs` | Hayır |
@@ -745,6 +749,25 @@ bellekte güncellenir ve 18:45 DM kapanış özetinde en yüksek kalite puanlı 
 kaybolmaz, 18:45 kaçırıldıysa açılışta telafi edilir. Engel nedeniyle gönderilemeyen
 acil alarmlar da kuyruğa girip (`state:telegram_acil_kuyruk`) engel kalkınca gider; 20:00 tam evren
 raporu ayrı kalır.
+
+### 6.1 Haftalık doğruluk karnesi (canlıda nasıl çalışır)
+
+* Karne **her Cuma** gün sonu mesajının altında gelir (18:45 `📋 Günlük Özet`;
+  gönderim kaçarsa 20:00 `🌙 GÜN SONU ANALİZİ` altında). Haftada bir kez gider.
+* Anında görmek için Telegram'dan `/karne` (bu hafta) veya `/karne 30` (son 30 gün).
+* Sinyal defteri **yerel dosyadadır**: `DATA_DIR/karne_defteri.json`. **Supabase
+  kurmak zorunlu değildir**; Supabase yoksa karne yine tam çalışır.
+* Render Free'de `DATA_DIR=/tmp/formation-bot-data` **geçicidir** (redeploy/restart
+  siler). Bu yüzden `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` tanımlıysa defter
+  `state:karne_defteri` anahtarına **yalnız yedek** olarak da yazılır ve açılışta
+  yerel defterle birleştirilir — haftalık karne restart'ta boşalmaz. Supabase
+  tanımlı değilse hiçbir uzak istek yapılmaz.
+* Karne içeriği: formasyon sayısı + zaman dilimi dağılımı, hisse listesi (adet),
+  kırılım sayısı (yukarı/aşağı), "N bar içinde hedef / nötr / stop", kırılım
+  yönünde kapatan oranı, ortalama lehte/aleyhte hareket, TF ve kalite performansı,
+  en iyi/en kötü sinyaller ve huni (`kırılım → retest → tamamlanan/başarısız`).
+* Mesaj sınırı: karne özetle birlikte 3900 karakteri aşarsa **ayrı mesaj** olarak
+  gönderilir (kesilmez).
 
 Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 (redeploy). Loglarını **Logs → Live logs** veya **Events** sekmesinden izle.

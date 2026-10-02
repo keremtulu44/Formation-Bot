@@ -298,6 +298,48 @@ class KarneDefteri:
     def kayitlar(self) -> List[dict]:
         return [dict(v) for v in self._kayitlar.values()]
 
+    # --- uzak yedek (OPSİYONEL: Supabase varsa) -----------------------------
+    # Neden: Render Free'de DATA_DIR=/tmp'dir ve restart/redeploy'da silinir;
+    # defter yalnız yerelde kalırsa haftalık karne boşalır. Supabase KURULU
+    # DEĞİLSE hiçbir şey değişmez (bu metotlar çağrılmaz).
+    def snapshot(self) -> dict:
+        return {
+            "surum": KARNE_SURUM,
+            "kayitlar": {k: dict(v) for k, v in self._kayitlar.items()},
+            "formasyon_zamanlari": dict(self._formasyon_zamanlari),
+            "son_karne_gonderim": self.son_karne_gonderim,
+            "kayit_zamani": datetime.now(ISTANBUL_TZ).isoformat(),
+        }
+
+    def birlestir(self, veri) -> int:
+        """Uzak kopyayı yerelle birleştirir (birleşim; yerel kopya kazanır).
+
+        Döner: eklenen kayıt sayısı. Restart sonrası yarım kalan yerel defter ile
+        uzaktaki tam defteri kaybetmeden birleştirmek için kullanılır.
+        """
+        if not isinstance(veri, dict):
+            return 0
+        eklenen = 0
+        uzak_kayitlar = veri.get("kayitlar")
+        if isinstance(uzak_kayitlar, dict):
+            for kimlik, kayit in uzak_kayitlar.items():
+                if kimlik not in self._kayitlar and isinstance(kayit, dict):
+                    self._kayitlar[kimlik] = kayit
+                    eklenen += 1
+        uzak_zamanlar = veri.get("formasyon_zamanlari")
+        if isinstance(uzak_zamanlar, dict):
+            for anahtar, zaman in uzak_zamanlar.items():
+                yerel = self._formasyon_zamanlari.get(anahtar)
+                if yerel is None or str(zaman) > str(yerel):
+                    self._formasyon_zamanlari[anahtar] = str(zaman)
+        uzak_gonderim = veri.get("son_karne_gonderim")
+        if isinstance(uzak_gonderim, str) and uzak_gonderim:
+            if not self.son_karne_gonderim or uzak_gonderim > self.son_karne_gonderim:
+                self.son_karne_gonderim = uzak_gonderim
+        if eklenen:
+            self.kaydet()
+        return eklenen
+
     def aralikta(self, baslangic: datetime, bitis: datetime = None) -> List[dict]:
         """kayit_zaman'ı aralıkta olan kayıtlar (kayıt anı bazlı pencere)."""
         bitis = bitis or datetime.now(ISTANBUL_TZ)

@@ -79,7 +79,13 @@ Bot, sinyal defterini **tamamen yerel** tutar: `DATA_DIR/karne_defteri.json`
   `KARNE_HORIZON_BAR=10`); ilk dokunuş yarışı kullanılır, aynı barda ikisi de
   olursa muhafazakâr sayılır (stop).
 
-Regresyon: `test_karne.py` (25 test).
+Regresyon: `test_karne.py` (30 test).
+
+**Canlı notu (Render):** `DATA_DIR` orada `/tmp` olduğu için defter redeploy'da
+silinir; `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` tanımlıysa defter
+`state:karne_defteri` anahtarına **yalnız yedek** olarak yazılır ve açılışta
+yerelle birleştirilir. Supabase **zorunlu değildir**; yoksa karne yerel dosyayla
+tam çalışır.
 
 ## Render ve Supabase dağıtımı
 

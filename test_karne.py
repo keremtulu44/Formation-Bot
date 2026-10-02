@@ -365,3 +365,100 @@ def test_karne_gonderilemezse_isaretlenmez(monkeypatch, tmp_path):
     ok, hata = M._karneyle_gonder(N(), "özet", "karne")
     assert ok is False and "ağ" in hata
     assert M._karne_al().karne_gonderildi_mi("2026-W40") is False
+
+
+# === 7) OPSİYONEL UZAK YEDEK (Supabase KURULU DEĞİLSE DEĞİŞMEZ) ===========
+
+class _SahteStore:
+    """SupabaseStore yerine geçen basit sahte (yalnız test)."""
+
+    def __init__(self, veri=None):
+        self.veri = dict(veri or {})
+        self.yazma = 0
+        self.hata = False
+
+    def get_many(self, keys):
+        if self.hata:
+            raise RuntimeError("uzak yok")
+        return {k: self.veri.get(k) for k in keys}
+
+    def upsert(self, key, payload):
+        if self.hata:
+            raise RuntimeError("uzak yok")
+        self.veri[key] = payload
+        self.yazma += 1
+        return True
+
+
+def test_store_yoksa_defter_sadece_yerel(defter, tmp_path):
+    """Supabase YOK: defter yerel dosyayla tam çalışır (kullanıcı şartı)."""
+    import state.persistence as SP
+    assert SP.karne_defteri_yukle(defter, None) == 0
+    assert SP.karne_defteri_kaydet(defter, None) is False
+    defter.formasyon_kaydet("THYAO", "1h", "Üçgen", "SIKISMA_GUCLENIYOR", 82, t(2026, 10, 2, 10))
+    assert (tmp_path / K.KARNE_DOSYA).exists()
+    assert K.KarneDefteri().boyut() == 1
+
+
+def test_uzak_yedek_birlestirir(tmp_path, monkeypatch):
+    """Supabase VARSA: yerel (restart sonrası) + uzak defter birleşir, veri kaybolmaz."""
+    monkeypatch.setattr(K, "DATA_DIR", str(tmp_path))
+    import state.persistence as SP
+
+    # Uzakta geçen haftanın kayıtları var; yerelde sadece bu restart'ta yazılan var
+    uzak = K.KarneDefteri(dosya=str(tmp_path / "uzak.json"))
+    uzak.formasyon_kaydet("ASELS", "4h", "Üçgen", "SIKISMA_GUCLENIYOR", 80, t(2026, 9, 30, 10))
+    store = _SahteStore({"state:karne_defteri": uzak.snapshot()})
+
+    yerel = K.KarneDefteri()
+    yerel.formasyon_kaydet("THYAO", "1h", "Üçgen", "SIKISMA_GUCLENIYOR", 82, t(2026, 10, 2, 10))
+    assert yerel.boyut() == 1
+    eklenen = SP.karne_defteri_yukle(yerel, store)
+    assert eklenen == 1 and yerel.boyut() == 2
+    # Yerel kopya kazanır: tekrar birleştirme çift kayıt üretmez
+    assert SP.karne_defteri_yukle(yerel, store) == 0
+
+
+def test_uzak_yedek_yazilir_ve_tasir(tmp_path, monkeypatch):
+    monkeypatch.setattr(K, "DATA_DIR", str(tmp_path))
+    import state.persistence as SP
+    store = _SahteStore()
+    d = K.KarneDefteri()
+    d.kirilim_kaydet("THYAO", "1h", "Üçgen", "KIRILIM_TEYITLI", 1, 100.0, 2.0, 84,
+                     t(2026, 10, 2, 10, 30))
+    assert SP.karne_defteri_kaydet(d, store) is True
+    assert store.yazma == 1
+    # /tmp silindikten sonra (yeni ortam) yalnız uzaktan geri yüklenebilmeli
+    (tmp_path / K.KARNE_DOSYA).unlink()
+    yeni = K.KarneDefteri()
+    assert yeni.boyut() == 0
+    assert SP.karne_defteri_yukle(yeni, store) == 1
+    assert yeni.kayitlar()[0]["stock"] == "THYAO"
+
+
+def test_uzak_hata_karneyi_durdurmaz(tmp_path, monkeypatch):
+    monkeypatch.setattr(K, "DATA_DIR", str(tmp_path))
+    import state.persistence as SP
+    store = _SahteStore()
+    store.hata = True
+    d = K.KarneDefteri()
+    d.formasyon_kaydet("THYAO", "1h", "Üçgen", "SIKISMA_GUCLENIYOR", 82, t(2026, 10, 2, 10))
+    assert SP.karne_defteri_yukle(d, store) == 0        # sessizce 0
+    assert SP.karne_defteri_kaydet(d, store) is False   # sessizce False
+    assert d.boyut() == 1 and (tmp_path / K.KARNE_DOSYA).exists()
+
+
+def test_main_karne_al_uzak_yedekle_birlesir(monkeypatch, tmp_path):
+    """main._karne_al: yerel boşken uzak yedekten doldurur (Render restart senaryosu)."""
+    import main as M
+    monkeypatch.setattr(K, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(M, "_karne_defteri", None)
+    uzak = K.KarneDefteri(dosya=str(tmp_path / "uzak.json"))
+    uzak.formasyon_kaydet("GARAN", "1d", "Üçgen", "SIKISMA_GUCLENIYOR", 78, t(2026, 10, 1, 10))
+    monkeypatch.setattr(M, "_supabase_store_ref", _SahteStore({"state:karne_defteri": uzak.snapshot()}))
+    try:
+        d = M._karne_al()
+        assert d.boyut() == 1 and d.kayitlar()[0]["stock"] == "GARAN"
+    finally:
+        monkeypatch.setattr(M, "_supabase_store_ref", None)
+        monkeypatch.setattr(M, "_karne_defteri", None)

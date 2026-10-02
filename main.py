@@ -127,6 +127,10 @@ _deferred_alert_buffer = DeferredAlertBuffer()
 # Haftalık doğruluk karnesi defteri (yerel JSON; Supabase GEREKTİRMEZ).
 # Tembel kurulur: dosya yolu DATA_DIR'e bağlı, import anında I/O yapılmaz.
 _karne_defteri: "KarneDefteri | None" = None
+# Uzak yedeğe yazma aralığı (saniye): defter her tarama turunda birkaç kayıt alır;
+# her kayıtta tüm JSON'u Supabase'e yazmak gereksiz trafik olurdu.
+_karne_son_uzak_yazma = 0.0
+KARNE_UZAK_YAZMA_ARALIK_SN = 300
 
 # Bugüne ait 18:45 kapanış özetinin gönderilip gönderilmediği (ISO gün). Kalıcı
 # tamponla birlikte Supabase/diske yazılır; restart sonrası aynı özet iki kez gitmez.
@@ -1984,11 +1988,37 @@ def _parse_deferred_alert_digest_time() -> dt_time:
 # YERELDİR (DATA_DIR/karne_defteri.json) - Supabase/uzak store gerekmez.
 
 def _karne_al() -> KarneDefteri:
-    """Karne defterini (tembel) oluşturur; dosya okunamazsa da çalışır."""
+    """Karne defterini (tembel) oluşturur; dosya okunamazsa da çalışır.
+
+    Opsiyonel uzak yedek (Supabase): kuruluysa yerel defterle BİRLEŞTİRİLİR
+    (Render'da DATA_DIR=/tmp olduğu için restart/redeploy yereli siler; yedek
+    haftalık karnenin boşalmasını engeller). Supabase yoksa hiçbir şey değişmez.
+    """
     global _karne_defteri
     if _karne_defteri is None:
         _karne_defteri = KarneDefteri()
+        try:
+            _state_persistence.karne_defteri_yukle(_karne_defteri, _supabase_store_ref)
+        except Exception as exc:  # noqa: BLE001 - yedek sorunu karneyi engellemesin
+            logger.debug("Karne uzak yedeği yüklenemedi: %s", exc)
     return _karne_defteri
+
+
+def _karne_uzak_kaydet(zorla: bool = False) -> bool:
+    """Defteri (varsa) uzak yedeğe yazar. Sık yazmamak için aralık uygulanır.
+
+    Yerel dosya her kayıtta zaten yazılır; bu yalnız dayanıklılık içindir.
+    """
+    global _karne_son_uzak_yazma
+    if _supabase_store_ref is None or _karne_defteri is None:
+        return False
+    simdi = time.monotonic()
+    if not zorla and (simdi - _karne_son_uzak_yazma) < KARNE_UZAK_YAZMA_ARALIK_SN:
+        return False
+    sonuc = _state_persistence.karne_defteri_kaydet(_karne_defteri, _supabase_store_ref)
+    if sonuc:
+        _karne_son_uzak_yazma = simdi
+    return sonuc
 
 
 def _karne_seri_saglayici(deque_manager):
@@ -2068,6 +2098,8 @@ def _karne_gonderildi_isaretle(now: datetime) -> None:
     """Karne başarıyla gönderildi -> bu hafta tekrar eklenmez (kalıcı)."""
     try:
         _karne_al().karne_gonderildi_isaretle(hafta_damgasi(now))
+        # Haftalık işaret + kayıtlar restart'ta kaybolmasın: yedeği hemen tazele.
+        _karne_uzak_kaydet(zorla=True)
     except Exception as exc:  # noqa: BLE001
         logger.debug("Karne gönderim işareti yazılamadı: %s", exc)
 
@@ -2432,6 +2464,17 @@ def main_loop():
             else:
                 logger.warning(f"{stock}: ilk günlük veri çekilemedi - resample kullanılacak")
     
+    # Haftalık karne defteri: açılışta bir kez hazırlanır (uzak yedek varsa
+    # Supabase'den birleştirilir). Böylece tarama döngüsü içinde ağ beklemesi
+    # olmaz; Supabase yoksa yalnız yerel dosya okunur.
+    try:
+        kd = _karne_al()
+        kd.buda()
+        _karne_uzak_kaydet(zorla=True)
+        logger.info("Karne defteri hazır: %d kayıt (%s)", kd.boyut(), kd.dosya)
+    except Exception as e:
+        logger.warning(f"Karne defteri hazırlanamadı (devam ediliyor): {e}")
+
     # Aynı mum iki kez taranmasın (drift koruması). Restart'ta None -> bir sonraki
     # kapanışta tazelenir, son mum gerekiyorsa bir kez daha taranır (zararsız).
     son_taranan_kapanis = None
@@ -2631,6 +2674,8 @@ def main_loop():
                     # Tarama sonunda bekleyen aday tamponu kalıcılaştır (Batch 5 / B3):
                     # restart tamponun tamamını kaybetmesin, tarama başına tek yazma.
                     digest_tamponu_kaydet()
+                    # Karne defteri yedeği (varsa Supabase; aralıklı, en fazla 5 dk'da bir).
+                    _karne_uzak_kaydet()
                     time.sleep(5)  # aynı saniyede tekrar girmesin
                     continue
                 
