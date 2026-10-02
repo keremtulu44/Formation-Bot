@@ -28,6 +28,11 @@ import acilis_metinleri as metinler
 ACIKLAMA_SINIRI = 255
 
 
+def _kr(metin: str) -> int:
+    """Telegram'ın saydığı uzunluk (UTF-16 birimi; emoji 2 sayılır)."""
+    return len((metin or "").encode("utf-16-le")) // 2
+
+
 class KanalHatasi(Exception):
     """Telegram API hatası (Türkçe ipucu ile)."""
 
@@ -103,10 +108,10 @@ class TelegramAPI:
         return self.cagri("getChatMember", chat_id=hedef, user_id=kullanici_id) or {}
 
     def aciklama_yaz(self, hedef, metin: str):
-        if len(metin) > ACIKLAMA_SINIRI:
+        if _kr(metin) > ACIKLAMA_SINIRI:
             raise KanalHatasi(
                 "setChatDescription",
-                f"metin {len(metin)} karakter; Telegram sınırı {ACIKLAMA_SINIRI}",
+                f"metin {_kr(metin)} karakter; Telegram sınırı {ACIKLAMA_SINIRI}",
             )
         return self.cagri("setChatDescription", chat_id=hedef, description=metin)
 
@@ -164,10 +169,10 @@ def durum(api: TelegramAPI, hedef: str, yazdir: bool = True) -> dict:
         mevcut = bilgi["aciklama"]
         yeni = metinler.ACILIK_ACIKLAMASI
         print(f"📝 Açıklama: {('(boş)' if not mevcut else mevcut[:60] + ('…' if len(mevcut) > 60 else ''))}")
-        print(f"   → yazılacak metin {len(yeni)}/{ACIKLAMA_SINIRI} karakter"
+        print(f"   → yazılacak metin {_kr(yeni)}/{ACIKLAMA_SINIRI} karakter"
               + (" (aynı; değişiklik gerekmez)" if mevcut == yeni else ""))
         print(f"📌 Sabit mesaj: gönderilecek karşılama "
-              f"{len(metinler.ACILIK_SABIT_MESAJ)}/4096 karakter")
+              f"{_kr(metinler.ACILIK_SABIT_MESAJ)}/4096 karakter")
         if bilgi["hata"]:
             print(f"⚠️  Yetki okunamadı: {bilgi['hata']}")
     return bilgi
@@ -185,7 +190,7 @@ def acilisi_uygula(api: TelegramAPI, hedef: str, aciklama: str = None,
         api.aciklama_yaz(hedef, aciklama)
         sonuc["aciklama_yazildi"] = True
         if yazdir:
-            print(f"✅ Açıklama yazıldı ({len(aciklama)}/{ACIKLAMA_SINIRI} karakter)")
+            print(f"✅ Açıklama yazıldı ({_kr(aciklama)}/{ACIKLAMA_SINIRI} karakter)")
 
     if sabit_yaz:
         gonderilen = api.mesaj_gonder(hedef, sabit_mesaj)

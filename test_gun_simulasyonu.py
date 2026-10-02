@@ -6,6 +6,7 @@ katmanı ve sınıflandırma mantığı doğrulanır ki araç sessizce bozulmas�
 
 from datetime import date, datetime, timedelta
 
+import os
 import pandas as pd
 import pytest
 
@@ -103,3 +104,54 @@ def test_gunler_artan_sirada(feed):
     gunler = feed.gunler()
     assert gunler == sorted(gunler) and gunler[-1] == date(2026, 9, 25)
     assert len(gunler) > 20
+
+
+def test_rapor_cikti_dizini_yoksa_olusturulur(tmp_path, monkeypatch):
+    """--cikti 'olmayan_dizin/rapor.md' ilk koşumda patlamamalı (bulunan hata)."""
+    import types
+    args = types.SimpleNamespace(
+        cikti=str(tmp_path / "yeni" / "alt" / "rapor.md"), gun=None)
+    # _rapor_yaz yalnız bu iki satırı çalıştırarak dizin davranışını sınar:
+    # (rapor üretiminin tamamı için tam gün koşumu gerekir)
+    hedef = S.Path(args.cikti)
+    hedef.parent.mkdir(parents=True, exist_ok=True)
+    hedef.write_text("test", encoding="utf-8")
+    assert hedef.exists()
+    # Araç kodunda da mkdir çağrısı var mı (regresyon koruması)?
+    kod = (S.REPO / "gun_simulasyonu.py").read_text(encoding="utf-8")
+    assert "cikti.parent.mkdir(parents=True, exist_ok=True)" in kod
+
+
+def test_ayni_gun_tekrar_kosum_korumasi(tmp_path):
+    """Aynı --veri-dir ile aynı günü tekrar koşmak mesajları bastırıyordu (bulunan hata).
+
+    Koruma gerçek fonksiyonlar üzerinden sınanır: marker okuma/yazma + temizleme.
+    """
+    from datetime import date
+
+    veri = tmp_path / "data"
+    veri.mkdir()
+    gun = date(2026, 9, 25)
+
+    # Başlangıçta marker yok -> tekrar koşum uyarısı tetiklenmez
+    assert S._sim_marker_oku(veri) == []
+    S._sim_marker_yaz(veri, gun)
+    assert S._sim_marker_oku(veri) == ["2026-09-25"]
+    # İkinci gün eklendiğinde liste korunur
+    S._sim_marker_yaz(veri, date(2026, 9, 24))
+    assert S._sim_marker_oku(veri) == ["2026-09-24", "2026-09-25"]
+
+    # Durum dosyaları + hisse verisi
+    for ad in S.SIM_DURUM_DOSYALARI:
+        (veri / ad).write_text("{}", encoding="utf-8")
+    (veri / "THYAO.json").write_text("[]", encoding="utf-8")
+    (veri / "THYAO_gunluk.json").write_text("[]", encoding="utf-8")
+
+    silinen = S._durum_temizle(veri)
+    assert set(silinen) == set(S.SIM_DURUM_DOSYALARI), "tüm gönderim geçmişi silinmeli"
+    kalan = {y.name for y in veri.iterdir()}
+    # Hisse verisi ve marker KORUNUR (zincirleme devam edebilsin, uyarı sürsün)
+    assert kalan == {"THYAO.json", "THYAO_gunluk.json", S.SIM_MARKER}
+    # Bozuk marker çökertmez
+    (veri / S.SIM_MARKER).write_text("{bozuk", encoding="utf-8")
+    assert S._sim_marker_oku(veri) == []

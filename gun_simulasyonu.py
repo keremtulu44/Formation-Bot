@@ -26,7 +26,6 @@ import argparse
 import json
 import logging
 import os
-import shutil
 import sys
 import tempfile
 import time
@@ -39,6 +38,17 @@ import pandas as pd
 
 REPO = Path(__file__).resolve().parent
 ISTANBUL_TZ = ZoneInfo("Europe/Istanbul")   # config import'undan bağımsız (env kuralı)
+
+# Sim veri dizininde kalan GÖNDERİM GEÇMİŞİ dosyaları. Bunlar temizlenmezse aynı
+# günü ikinci kez koşmak sessizce farklı sonuç verir: cooldown/tekrar kayıtları
+# yüzünden alarmlar bastırılır (ölçüm: 19 DM yerine 8 DM).
+SIM_DURUM_DOSYALARI = (
+    "telegram_soguma.json", "telegram_kap.json", "telegram_son_alerts.json",
+    "telegram_acil_kuyruk.json", "telegram_digest_pending.json",
+    "karne_defteri.json", "gonderim_durumu.json", "son_tarama.json",
+    "heartbeat.json",
+)
+SIM_MARKER = "simulasyon_durum.json"
 CACHE_DIR = REPO / "bot_data"
 TUM_TF = ("1h", "2h", "4h", "1d")
 
@@ -186,8 +196,6 @@ class Feed:
         self._yukle()
 
     def _yukle(self):
-        import config  # noqa: F401  (DATA_DIR env'i import'tan önce kuruldu)
-
         eksik = []
         for dosya in sorted(CACHE_DIR.glob("*.json")):
             stock = dosya.stem
@@ -251,7 +259,7 @@ class Feed:
         return None if kesit.empty else kesit.tail(30)
 
     def fetch_1d(self, stock, period=None):
-        from data import mum_kapanis_anlari, resample_ohlcv
+        from data import resample_ohlcv
 
         df = self.cache.get(stock)
         if df is None:
@@ -344,13 +352,30 @@ def simule_et(args) -> dict:
     baslangic = datetime.combine(gun, datetime.strptime(args.baslangic, "%H:%M").time())
     bitis = datetime.combine(gun, datetime.strptime(args.bitis, "%H:%M").time())
 
-    tohum = feed.tohumla(gecici / "data", gun)
+    # --- temiz başlangıç / tekrar koşum koruması ---
+    veri_dizini = gecici / "data"
+    onceki_gunler = _sim_marker_oku(veri_dizini)
+    if args.temiz:
+        silinen = _durum_temizle(veri_dizini)
+        if silinen:
+            print(f"🧹 Temizlendi: {', '.join(silinen)}")
+    elif gun.isoformat() in onceki_gunler:
+        mesaj = (f"⚠️  {gun} bu dizinde DAHA ÖNCE koşuldu ({veri_dizini}).\n"
+                 f"    Gönderim geçmişi (cooldown/tekrar/kuyruk) duruyor; mesaj sayıları\n"
+                 f"    gerçek günden AZ çıkabilir. Temiz ölçüm için: --temiz "
+                 f"ya da başka bir --veri-dir.")
+        print(mesaj, file=sys.stderr)
+        print(mesaj)
+    try:
+        _sim_marker_yaz(veri_dizini, gun)
+    except Exception as exc:  # noqa: BLE001 - marker yazılamazsa koşum devam etsin
+        logging.debug("Simülasyon işaretçisi yazılamadı: %s", exc)
+    tohum = feed.tohumla(veri_dizini, gun)
 
     # --- modüller (env'den SONRA) ---
     import config
     import data as data_mod
     import main as main_mod
-    import notifier as notifier_mod
 
     # Evren: cache'i olmayan hisseler (ağ yok) simde analiz edilemez. Varsayılan
     # olarak yalnız cache kapsamındaki hisselerle koşarız ki gün, üretimdeki
@@ -408,7 +433,6 @@ def simule_et(args) -> dict:
     _DURDUR["fn"] = lambda: setattr(main_mod, "_shutdown_requested", True)
     _DURDUR["adim_sayaci"] = 0
 
-    basladi = time.time()  # NOT: yamadan sonra bu sanal saat; gerçek süre ayrı ölçülür
     gercek_baslangic = _GERCEK_DATETIME.now()
     hata = None
     try:
@@ -430,6 +454,40 @@ def simule_et(args) -> dict:
                        tohum, log_yolu, gercek_sure, hata, len(config.ACTIVE_STOCKS),
                        evren_notu, str(gecici / "data"))
     return rapor
+
+
+def _sim_marker_oku(veri_dizini: Path) -> list:
+    """Bu dizinde daha önce koşulmuş sim günlerinin listesi (yoksa boş)."""
+    try:
+        veri = json.loads((Path(veri_dizini) / SIM_MARKER).read_text(encoding="utf-8")) or {}
+        return [str(g) for g in (veri.get("gunler") or [])]
+    except Exception:  # noqa: BLE001 - marker yoksa/bozuksa sorun değil
+        return []
+
+
+def _sim_marker_yaz(veri_dizini: Path, gun: date) -> None:
+    """Koşumu marker'a yazar; böylece aynı günün tekrar koşumu uyarı üretir."""
+    veri_dizini = Path(veri_dizini)
+    veri_dizini.mkdir(parents=True, exist_ok=True)
+    gunler = sorted(set(_sim_marker_oku(veri_dizini)) | {gun.isoformat()})
+    (veri_dizini / SIM_MARKER).write_text(
+        json.dumps({"gunler": gunler}, ensure_ascii=False), encoding="utf-8")
+
+
+def _durum_temizle(veri_dizini: Path) -> list:
+    """Gönderim geçmişi dosyalarını siler; HİSSE VERİSİNE dokunmaz.
+
+    Döner: silinen dosya adları. Neden gerekli: bu dosyalar kalırsa aynı günün
+    ikinci koşumu cooldown/tekrar kayıtları yüzünden mesajları bastırır ve
+    ölçüm yanlış çıkar (19 DM yerine 8 DM ölçülmüştü).
+    """
+    silinen = []
+    for ad in SIM_DURUM_DOSYALARI:
+        yol = Path(veri_dizini) / ad
+        if yol.exists():
+            yol.unlink()
+            silinen.append(ad)
+    return silinen
 
 
 class _IstanbulFormatter(logging.Formatter):
@@ -488,11 +546,15 @@ def _rapor_yaz(args, kayitci: Kayitci, feed: Feed, gun: date, baslangic: datetim
     ekle(f"- **Evren:** {hisse_sayisi} hisse × 4 zaman dilimi (1h/2h/4h/1d), cache: `bot_data/`")
     if evren_notu:
         ekle(f"- **Evren kapsamı:** {evren_notu}")
+    gecmis_notu = ("temiz başlangıç (--temiz)" if getattr(args, "temiz", False)
+                   else "önceki koşumlardan devralındı (chaining)"
+                   if getattr(args, "veri_dir", None) else "geçici dizin, temiz")
+    ekle(f"- **Gönderim geçmişi:** {gecmis_notu}")
     if veri_dir:
         ekle(f"- **Sim veri dizini:** `{veri_dir}` (günler zincirlenebilsin diye korunur)")
     ekle(f"- **Tohumlanan geçmiş:** {tohum} hisse (sim günü öncesi barlar)")
     ekle(f"- **Gerçek çalışma süresi:** {gercek_sure:.1f} sn · log: `{log_yolu}`")
-    ekle(f"- **Mod:** ağ yok — Telegram çağrıları yakalandı, Yahoo yerine cache beslemesi")
+    ekle("- **Mod:** ağ yok — Telegram çağrıları yakalandı, Yahoo yerine cache beslemesi")
     if hata:
         ekle(f"- ⚠️ **Simülasyon hatası:** {hata}")
     ekle("")
@@ -600,6 +662,9 @@ def _rapor_yaz(args, kayitci: Kayitci, feed: Feed, gun: date, baslangic: datetim
 
     metin = "\n".join(satirlar)
     cikti = Path(args.cikti) if args.cikti else (REPO / f"SIMULASYON_{gun.isoformat()}.md")
+    # Çıktı dizini yoksa oluştur: "raporlar/SIMULASYON_…" gibi bir yol ilk
+    # koşumda FileNotFoundError verip TÜM günün koşumunu çöpe atıyordu.
+    cikti.parent.mkdir(parents=True, exist_ok=True)
     cikti.write_text(metin, encoding="utf-8")
 
     print(f"\n=== SİMÜLASYON BİTTİ — {gun} ===")
@@ -630,6 +695,8 @@ def main():
     ap.add_argument("--evren", choices=("cache", "tum"), default="cache",
                     help="cache: yalnız verisi olan hisseler (varsayılan), tum: 48 hisse")
     ap.add_argument("--veri-dir", help="kalıcı sim veri dizini (günleri zincirlemek için)")
+    ap.add_argument("--temiz", action="store_true",
+                    help="koşumdan önce gönderim geçmişini sil (aynı günü tekrar ölçerken şart)")
     ap.add_argument("--liste", action="store_true", help="cache'teki günleri listele ve çık")
     args = ap.parse_args()
     simule_et(args)

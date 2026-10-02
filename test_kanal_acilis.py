@@ -172,3 +172,15 @@ def test_ag_hatasi_anlasilir_mesaja_doner():
     with pytest.raises(K.KanalHatasi) as hata:
         api.sohbet("@k")
     assert "ağ" in str(hata.value).lower() and "internet" in str(hata.value).lower()
+
+
+def test_uzunluk_utf16_sayilir():
+    """Emoji UTF-16'da 2 birim: 130 emoji = 260 > 255 sınırı, ham len ise 130 der."""
+    metin = "📌" * 130
+    assert len(metin) == 130
+    assert K._kr(metin) == 260
+    api = _api(_kanal_yanitlari())
+    with pytest.raises(K.KanalHatasi) as hata:
+        K.acilisi_uygula(api, "@k", aciklama=metin, sabit_yaz=False, yazdir=False)
+    assert "260" in str(hata.value)
+    assert api._oturum.metotlar() == []

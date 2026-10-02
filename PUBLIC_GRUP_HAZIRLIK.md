@@ -372,8 +372,14 @@ akar; `main_loop` gerçek kod yollarıyla koşar, Telegram çağrıları yakalan
 
 ```bash
 .venv/bin/python gun_simulasyonu.py --liste
-.venv/bin/python gun_simulasyonu.py --gun 2026-09-25 --veri-dir /tmp/sim
+.venv/bin/python gun_simulasyonu.py --gun 2026-09-25 --veri-dir /tmp/sim --temiz
 ```
+
+> **Ölçüm tuzağı (bulundu ve korundu):** `--veri-dir` gönderim geçmişini de saklar.
+> Aynı günü aynı dizinde ikinci kez koşmak cooldown/tekrar kayıtları yüzünden
+> mesajları bastırır (ölçüm: temiz 19 DM ↔ kirli 8 DM). Araç artık bu durumda
+> uyarır; net ölçüm için `--temiz` (veri silinmez, yalnız durum dosyaları silinir)
+> ya da yeni bir dizin kullanılır. Zincirlemede `--temiz` yalnız ilk güne verilir.
 
 | Ölçüm (tam gün 08:40→20:20) | 24.09 (Perşembe) | 25.09 (Cuma) |
 |---|---|---|
