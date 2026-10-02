@@ -222,6 +222,18 @@ DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").st
 #   DEFERRED_ALERT_DIGEST_LIMIT=20
 DEFERRED_ALERT_DIGEST_LIMIT = _env_int("DEFERRED_ALERT_DIGEST_LIMIT", 12)
 POST_CLOSE_ANALYSIS_TIME = os.getenv("POST_CLOSE_ANALYSIS_TIME", "20:00").strip()  # gün sonu tam evren taraması
+
+# --- HAFTALIK DOĞRULUK KARNESİ (yerel dosya; Supabase GEREKTİRMEZ) ---
+# Cuma gün sonu mesajının (18:45 özeti; gönderilemezse 20:00 gün sonu analizi)
+# ALTINA eklenir. Defter DATA_DIR/karne_defteri.json'da tutulur; /karne komutuyla
+# istenildiği an alınabilir. Amaç: "bu hafta kaç formasyon bulundu, kırılımdan
+# sonra kaçı pozitif/negatif gitti?" sorusunun ölçülmüş cevabı.
+KARNE_GUNU = _env_int("KARNE_GUNU", 4)                 # 0=Pazartesi ... 4=Cuma (gönderim günü)
+KARNE_HEDEF_ATR = _env_float("KARNE_HEDEF_ATR", 1.5)   # hedef: lehte bu kadar ATR (ilk dokunuş)
+KARNE_STOP_ATR = _env_float("KARNE_STOP_ATR", 1.0)     # stop: alehte bu kadar ATR (ilk dokunuş)
+KARNE_HORIZON_BAR = _env_int("KARNE_HORIZON_BAR", 10)  # sinyalden sonra kaç bar izlenecek
+KARNE_SAKLAMA_GUN = _env_int("KARNE_SAKLAMA_GUN", 120)  # bu günden eski kayıtlar budanır
+KARNE_FORMASYON_TTL_SAAT = _env_int("KARNE_FORMASYON_TTL_SAAT", 48)  # aynı hisse/TF/formasyon sayımı
 # --- YAZMA AMPLİKASYONU (Batch 6 / B5) ---
 # Heartbeat her hisse sonrası yazılıyordu: 48 hisse × tarama = 48 Supabase UPSERT.
 # Yerel dosya canlılık göstergesi olduğu için her zaman yazılır; Supabase'e yazım

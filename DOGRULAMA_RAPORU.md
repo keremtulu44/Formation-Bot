@@ -249,3 +249,53 @@ kovasını da işler. Bu kova BIST'te 30 dakikalık (17:30–18:00) bir kovadır
 TradingView'in 4 saatlik grafiğinde de aynı şekilde görünür; "kapanmış mum"
 sayıldığı için (seans sonu) kırılım bildirimi üretebilir. İstenmezse
 `data.mum_kapanis_anlari`'daki kesme kaldırılarak bu kova dışlanabilir.
+
+---
+
+# EK 2 — HAFTALIK DOĞRULUK KARNESİ (uygulandı: 2 Eki 2026)
+
+Raporun 2. bölümündeki "doğruluk karnesi" tasarımı, **Supabase gerektirmeden**
+ve **Cuma gün sonu mesajının altına eklenerek** uygulandı.
+
+| Karar | Uygulama |
+|---|---|
+| Supabase gerekmesin | Defter tek yerel dosya: `DATA_DIR/karne_defteri.json` (atomik `.tmp`→`os.replace`). `supabase_store` hiç çağrılmaz; uzak store olmadan da tam çalışır. |
+| Gün sonu mesajı altında | Cuma 18:45 `📋 Günlük Özet`'in altına eklenir; gönderilemezse (bot kapalı / hata) 20:00 `🌙 GÜN SONU ANALİZİ`'nin altına eklenir ve haftalık işaret konur. |
+| Her Cuma | `KARNE_GUNU=4` (env ile değişir); haftada bir kez (ISO hafta işareti, kalıcı). `/karne` ile her an. |
+| Mesaj sınırı | Karne eklenince mesaj 3900 karakteri aşarsa karne **ayrı mesaj** olur (`_karneyle_gonder`); `kirp()` sondan kestiği için karne kaybolmaz. |
+| Ölçüm | Kırılım kaydı: giriş = teyit barının kapanışı + yön + kalite + ATR. Sonraki barlarda MFE/MAE; ilk dokunuş yarışı: hedef (1.5 ATR) / stop (1.0 ATR) / nötr; aynı barda ikisi de varsa stop (muhafazakâr). Yön doğruluğu ayrı satır. |
+| Tekilleştirme | Kırılım: `hisse|TF|K|bar` (motor pencereyi her taramada yeniden oynatır). Formasyon: `hisse|TF|formasyon` + 48 saat TTL. |
+| Bakım | `KARNE_SAKLAMA_GUN=120` ile eski kayıtlar budanır (dosya sınırsız büyümez). |
+
+**Örnek çıktı** (gerçek cache ile uçtan uca):
+
+```
+📊 HAFTALIK DOĞRULUK KARNESİ · 28.09–02.10.2026
+5 seans · defter: 8 kayıt (yerel dosya)
+
+🔍 Formasyon tespiti: 5
+ 1 saatlik 2 · 4 saatlik 1 · günlük 1 · 2 saatlik 1
+ Hisse: (4 hisse)
+ THYAO 2 · ASELS 1 · EREGL 1 · GARAN 1
+
+⚡ Kırılım sinyali: 2 (yukarı 2 · aşağı 0)
+ 10 bar içinde: hedef 1 · nötr 0 · stop 1
+ Kırılım yönünde kapatan: 1/2 (%50) · ters 1 · yatay 0
+ Ort. maks. lehte +%2.1 · alehte −%2.1
+ TF (yönünde/n): 1 saatlik 1/2
+ Kalite: q≥80 1/1 · q70–79 0/1
+ En iyi: THYAO 1h %+3.0 · En kötü: ASELS 1h %-4.0
+
+🔁 Huni: kırılım 2 → tamamlanan 1
+
+⚠️ n=2 küçük: oranlar için 30+ sinyal birikmeli
+ℹ️ Veriler yerel dosyada (Supabase gerekmez) · /karne ile istediğin an al
+```
+
+**Test:** `test_karne.py` 25 test (defter/tekilleştirme/buda, MFE-MAE ve yön aynası,
+rapor metni, Cuma kapısı, gönderim tekilliği, mesaj sınırı güvenliği, tarama
+sırasında defter kaydı). Toplam suite: **379 test**; `test_tarama_zamani.py` 102/102.
+
+**Bilinen sınır:** Ölçüm yalnız botun topladığı veriyle yapılır; bot/worker kapalıyken
+geçen barlar sonraki ilk taramada tek seferde işlenir (sinyal anı gerçek bar kapanışı
+olduğu için giriş fiyatı kaymaz). Karne boş haftalarda (kayıt yoksa) gönderilmez.
