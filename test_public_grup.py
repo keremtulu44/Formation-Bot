@@ -289,3 +289,33 @@ def test_sabah_notu_kapanis_gibi_konusmaz(grup_notifier):
     assert "Yarının" not in metin
     assert "kapanış" not in metin
     assert "❌ 3 kırılım" not in metin    # gün yeni başladı, dünün sayısı yazılmaz
+
+
+# --- 9) Tarama turu sonu: kuyruk boşaltma + tur sayacı ---------------------
+
+def test_tarama_turu_sonunda_bulten_bosaltilir(monkeypatch):
+    import main as M
+
+    cagrilar = []
+
+    class SahteNotifier:
+        def public_bosalt(self):
+            cagrilar.append("bosalt")
+            return 2
+
+    eski = M.daily_stats.get("tarama_sayisi")
+    try:
+        M.daily_stats["tarama_sayisi"] = 8
+        M._public_turu_kapat(SahteNotifier())
+        assert cagrilar == ["bosalt"]
+        assert M.daily_stats["tarama_sayisi"] == 9
+
+        # Bülten hatası taramayı/sayacı bozmaz.
+        class Patlayan:
+            def public_bosalt(self):
+                raise RuntimeError("ağ yok")
+
+        M._public_turu_kapat(Patlayan())
+        assert M.daily_stats["tarama_sayisi"] == 10
+    finally:
+        M.daily_stats["tarama_sayisi"] = eski

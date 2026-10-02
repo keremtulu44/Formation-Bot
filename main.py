@@ -1154,6 +1154,20 @@ def _komut_kirilim(arguman: str) -> str:
 # /panel evrenin tamamını (ACTIVE_STOCKS x 4 TF) tek bakışta gösterir: doluluk
 # sayıları + kompozit puana göre en anlamlı 12 aday.
 WATCH_CONTEXT_HAVUZU = 12    # acil mesaja eklenecek adayların seçildiği havuz (gönderilen: en fazla 3)
+def _public_turu_kapat(notifier) -> None:
+    """Tarama turu sonu: tur sayacını artır + public kuyruğunu bültende boşalt.
+
+    Bülten gönderimi taramayı ASLA durdurmaz (dış servis hatası tarama sonucunu
+    geçersiz kılmamalı); hata yalnız loglanır, kayıtlar kuyrukta kalır.
+    """
+    daily_stats['tarama_sayisi'] = int(daily_stats.get('tarama_sayisi') or 0) + 1
+    try:
+        if notifier is not None:
+            notifier.public_bosalt()
+    except Exception as public_hata:  # noqa: BLE001 - bülten hatası taramayı durdurmasın
+        logger.warning("Public bülten gönderilemedi: %s", public_hata)
+
+
 def _panel_raporu(arguman: str = "", tamamlandi: bool = False) -> str:
     """Panel metni (Batch 8 / 8.3): bağlam burada toplanır, üretim reporting'te.
 
@@ -1993,12 +2007,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     # Tarama turu bitti: public (grup) kuyruğunda biriken olaylar TEK bültende
     # gider. DM'den bağımsızdır; manuel taramalarda (send_alerts=False) kuyruk
     # zaten boştur.
-    daily_stats['tarama_sayisi'] = int(daily_stats.get('tarama_sayisi') or 0) + 1
-    try:
-        if notifier is not None:
-            notifier.public_bosalt()
-    except Exception as public_hata:  # noqa: BLE001 - bülten hatası taramayı durdurmasın
-        logger.warning("Public bülten gönderilemedi: %s", public_hata)
+    _public_turu_kapat(notifier)
     # Tarama bitti: heartbeat kesin yazılsın (force), böylece per-hisse
     # throttle'a takılan son durum dışarıdan anında görünür.
     write_heartbeat(notifier=notifier, force=True)
