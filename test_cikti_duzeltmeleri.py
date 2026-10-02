@@ -95,3 +95,46 @@ def test_gonderim_durumu_public_alanlarini_tasir(monkeypatch):
     for anahtar in ("public_gonderilen", "public_hatasi", "public_engel",
                     "public_kuyruk", "public_kuyruk_tasmasi"):
         assert anahtar in durum
+
+
+# --- Panel: işaret anahtarı + ham enum sızması ------------------------------
+
+def test_panel_isaret_anahtari_yalniz_gorunen_isaretleri_aciklar():
+    from reporting.format import panel_sembol_anahtari
+
+    anahtar = panel_sembol_anahtari([{"state": "FORMASYON_TAMAMLANDI"},
+                                     {"state": "BASARISIZ_KIRILIM"}])
+    assert "🏁 tamamlandı" in anahtar and "⛔ başarısız/geçersiz" in anahtar
+    assert "🚀" not in anahtar and "⚡" not in anahtar   # görünmeyen işaret yazılmaz
+    assert panel_sembol_anahtari([]) == ""
+    assert panel_sembol_anahtari([{"state": "Yok"}]) == ""
+
+
+def test_panel_ham_enum_gostermez():
+    """Kapanış durumları da Türkçe görünür ('⛔ BASARISIZ_KIRILIM' değil)."""
+    from reporting.format import STATE_TR
+
+    assert STATE_TR["BASARISIZ_KIRILIM"] == "Kırılım başarısız"
+    assert STATE_TR["BASARISIZ_RETEST"] == "Retest başarısız"
+    assert STATE_TR["FORMASYON_GECERSIZ"] == "Formasyon geçersiz"
+
+
+def test_panel_cikitisinda_anahtar_satiri_var():
+    from datetime import datetime, timedelta
+
+    from config import ISTANBUL_TZ
+    from reporting.panel import panel_raporu
+
+    now = datetime(2026, 10, 2, 18, 45, tzinfo=ISTANBUL_TZ)
+    formasyonlar = [
+        {"stock": "TSKB", "timeframe": "4h", "pattern_name": "Alçalan Üçgen",
+         "state": "BASARISIZ_KIRILIM", "quality": 90, "critical_price": 30.75,
+         "min_quality": 75, "updated_at": (now - timedelta(minutes=5)).isoformat()},
+    ]
+    metin = panel_raporu("", durum={"son_tarama_durumu": "tamamlandi"},
+                         formations=formasyonlar, aktif_hisseler=["TSKB"],
+                         tarama_suruyor=False, last_run_stats={"stocks_scanned": 1},
+                         kapsam_notu="", bos_analiz_mesaji="—")
+    assert "🔑 ⛔ başarısız/geçersiz" in metin
+    assert "⛔ Kırılım başarısız" in metin          # TOP listesinde Türkçe
+    assert "BASARISIZ_KIRILIM" not in metin         # ham enum yok

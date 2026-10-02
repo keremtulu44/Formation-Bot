@@ -23,7 +23,8 @@ from telegram_commands import kirp
 from reporting.format import (
     PANEL_IPUCU, PANEL_MESAJ_SINIRI, PANEL_TIMEFRAMES,
     filtrele_formasyonlar, gecen_sure, panel_durum_sayilari, panel_filtre_coz, panel_hucre,
-    panel_kalite, panel_kritik_listesi, panel_sigdir, veri_durumu_satiri,
+    panel_kalite, panel_kritik_listesi, panel_sembol_anahtari, panel_sigdir,
+    veri_durumu_satiri,
 )
 
 
@@ -118,7 +119,12 @@ def panel_raporu(arguman: str, durum, formations, aktif_hisseler, tarama_suruyor
         satirlar.append("⚠️ Son tarama eksik/başarısız; bu panel boşluğu sinyal yokluğu değildir.")
     elif not formations:
         satirlar.append(bos_analiz_mesaji)
-    sabit_kuyruk = [""] + panel_kritik_listesi(filtreli) + ["", PANEL_IPUCU]
+    sabit_kuyruk = [""] + panel_kritik_listesi(filtreli)
+    # İşaret anahtarı yalnızca o işaret panelde GERÇEKTEN varsa eklenir (satır bütçesi).
+    _anahtar = panel_sembol_anahtari(filtreli)
+    if _anahtar:
+        sabit_kuyruk += ["", _anahtar]
+    sabit_kuyruk += ["", PANEL_IPUCU]
 
     # --- slot tablosu: önce tam (boş slotlar '—'), sığmazsa kompakt ---
     grid_tam = [f"{h} " + " · ".join(panel_hucre(slot.get((h, tf)), tf) for tf in kolonlar)
