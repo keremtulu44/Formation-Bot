@@ -264,7 +264,8 @@ def test_main_komut_karne(monkeypatch, tmp_path):
                                    t(2026, 10, 2, 10, 30))
     cevap = M._komut_karne("")
     assert "DOĞRULUK KARNESİ" in cevap and "Formasyon tespiti: 1" in cevap
-    assert "karne_defteri.json" in cevap
+    # Dosya yolu artık komut çıktısında YOK (iç işletim bilgisi sızmasın).
+    assert "karne_defteri.json" not in cevap
     assert "Kullanım: /karne" in M._komut_karne("abc")
 
 
@@ -329,8 +330,9 @@ def test_karne_sigarsa_altina_eklenir():
             return True, ""
 
     n = N()
-    ok, _ = M._karneyle_gonder(n, "📋 Günlük Özet\nkısa", "📊 KARNE\nsatır")
-    assert ok and len(n.gonderilenler) == 1
+    # Yeni sözleşme: (ana_gitti, karne_gitti, hata) — parça bazlı.
+    ana_ok, karne_ok, _ = M._karneyle_gonder(n, "📋 Günlük Özet\nkısa", "📊 KARNE\nsatır")
+    assert ana_ok and karne_ok and len(n.gonderilenler) == 1
     assert n.gonderilenler[0].endswith("📊 KARNE\nsatır"), "karne ana mesajın ALTINDA olmalı"
 
 
@@ -348,8 +350,8 @@ def test_karne_sigmazsa_ayri_mesaj_ve_kesilmez():
     n = N()
     ana = "x" * 4000          # kirp() ile kesilecek uzunluk
     karne = "📊 KARNE\n" + "y" * 300
-    ok, _ = M._karneyle_gonder(n, ana, karne)
-    assert ok and len(n.gonderilenler) == 2
+    ana_ok, karne_ok, _ = M._karneyle_gonder(n, ana, karne)
+    assert ana_ok and karne_ok and len(n.gonderilenler) == 2
     assert n.gonderilenler[0] == ana                    # ana mesaj kırpılmadı
     assert n.gonderilenler[1] == karne                  # karne tam gitti (kesilmedi)
 
@@ -366,9 +368,35 @@ def test_karne_gonderilemezse_isaretlenmez(monkeypatch, tmp_path):
         def send_text(self, metin):
             return False, "ağ hatası"
 
-    ok, hata = M._karneyle_gonder(N(), "özet", "karne")
-    assert ok is False and "ağ" in hata
+    ana_ok, karne_ok, hata = M._karneyle_gonder(N(), "özet", "karne")
+    assert ana_ok is False and karne_ok is False and "ağ" in hata
     assert M._karne_al().karne_gonderildi_mi("2026-W40") is False
+
+
+def test_karne_parcasi_gitmezse_ana_ozet_basarili_sayilir():
+    """Split gönderimde ana özet gitti, karne gitmedi: ana_ok True, karne_ok False.
+
+    Bu ayrım olmadan ana özet 'gitmedi' sayılıp döngü onu tekrar yolluyordu
+    (02.10 kopya mesaj şikâyetinin kök nedeni).
+    """
+    import main as M
+
+    class N:
+        def __init__(self):
+            self.gonderilenler = []
+
+        def send_text(self, metin):
+            self.gonderilenler.append(metin)
+            if metin.startswith("📊 KARNE"):
+                return False, "karne hatası"
+            return True, ""
+
+    n = N()
+    ana = "x" * 4000
+    karne = "📊 KARNE\n" + "y" * 300
+    ana_ok, karne_ok, hata = M._karneyle_gonder(n, ana, karne)
+    assert ana_ok is True and karne_ok is False and "karne" in hata
+    assert len(n.gonderilenler) == 2
 
 
 # === 7) OPSİYONEL UZAK YEDEK (Supabase KURULU DEĞİLSE DEĞİŞMEZ) ===========

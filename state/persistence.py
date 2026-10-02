@@ -17,9 +17,11 @@ from datetime import datetime
 from config import ISTANBUL_TZ
 from state.paths import (
     DIGEST_PENDING_SUPABASE_KEY,
+    GONDERIM_DURUMU_DOSYA,
     KARNE_DEFTERI_SUPABASE_KEY,
     SON_TARAMA_SUPABASE_KEY,
     digest_pending_yolu,
+    gonderim_durumu_yolu,
     kayit_zamani,
     son_tarama_data_dir,
     son_tarama_yolu,
@@ -207,4 +209,37 @@ def karne_defteri_kaydet(defter, store=None) -> bool:
         return bool(store.upsert(KARNE_DEFTERI_SUPABASE_KEY, defter.snapshot()))
     except Exception as exc:  # noqa: BLE001
         logger.debug("Karne defteri uzak yedeğe yazılamadı: %s", exc)
+        return False
+
+
+def gonderim_durumu_yukle(data_dir=None) -> dict:
+    """Gönderim gün işaretlerini okur; dosya yok/bozuksa {} döner (bot durmaz)."""
+    try:
+        with open(gonderim_durumu_yolu(data_dir), encoding="utf-8") as dosya:
+            veri = json.load(dosya)
+        return veri if isinstance(veri, dict) else {}
+    except FileNotFoundError:
+        return {}
+    except Exception as exc:  # noqa: BLE001 - I/O hatası botu durdurmaz
+        logger.warning("Gönderim durumu okunamadı (%s): %s", GONDERIM_DURUMU_DOSYA, exc)
+        return {}
+
+
+def gonderim_durumu_kaydet(guncelleme: dict, data_dir=None) -> bool:
+    """İşaretleri mevcut dosyayla birleştirip atomik yazar.
+
+    Tek tek anahtar güncellemesi desteklenir: {"post_close_analizi_gun": "2026-10-02"}
+    """
+    try:
+        mevcut = gonderim_durumu_yukle(data_dir)
+        mevcut.update(guncelleme or {})
+        yol = gonderim_durumu_yolu(data_dir)
+        os.makedirs(os.path.dirname(yol), exist_ok=True)
+        gecici = yol + ".tmp"
+        with open(gecici, "w", encoding="utf-8") as dosya:
+            json.dump(mevcut, dosya, ensure_ascii=False, indent=2, default=str)
+        os.replace(gecici, yol)
+        return True
+    except Exception as exc:  # noqa: BLE001 - I/O hatası botu durdurmaz
+        logger.warning("Gönderim durumu yazılamadı (%s): %s", GONDERIM_DURUMU_DOSYA, exc)
         return False

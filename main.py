@@ -283,8 +283,27 @@ daily_stats = {
     'split_atlanan': 0,
     'son_tarama_suresi_dk': None,
     'gunluk_bar_sayisi': None,
+    # Public grup kapanış özeti için: gün içinde kaç kırılım başarısız oldu
+    # (tek tek mesaj yerine özette tek satır) ve kaç tarama turu yapıldı
+    # ("432 hisse tarandı" = 48 hisse × 9 tarama; doğrusu tur sayısıdır).
+    'basarisiz_kirilim': 0,
+    'tarama_sayisi': 0,
     'last_reset': datetime.now(ISTANBUL_TZ).date()
 }
+
+
+# Gün içinde BENZERSİZ başarısız kırılım sayacı (hisse|TF|bar): aynı slot her
+# taramada yeniden üretildiği için ham sayım olayı şişirirdi.
+_daily_basarisiz_keys: set = set()
+
+
+def _note_basarisiz_kirilim(stock: str, timeframe: str, bar_time=None) -> None:
+    """Başarısız kırılımı günde bir kez sayar (public özet satırı için)."""
+    anahtar = f"{str(stock).upper()}|{str(timeframe).lower()}|{bar_time}"
+    if anahtar in _daily_basarisiz_keys:
+        return
+    _daily_basarisiz_keys.add(anahtar)
+    daily_stats['basarisiz_kirilim'] = len(_daily_basarisiz_keys)
 
 def reset_daily_if_needed():
     """Gün değiştiyse günlük sayacı sıfırla"""
@@ -296,6 +315,9 @@ def reset_daily_if_needed():
         daily_stats['stocks_scanned'] = 0
         daily_stats['patterns_found'] = 0
         _daily_pattern_keys.clear()
+        daily_stats['basarisiz_kirilim'] = 0
+        _daily_basarisiz_keys.clear()
+        daily_stats['tarama_sayisi'] = 0
         daily_stats['alerts_sent'] = 0
         daily_stats['alerts_attempted'] = 0
         daily_stats['alerts_failed'] = 0
@@ -765,6 +787,7 @@ def _komut_durum(_arguman: str) -> str:
         huni += f" · {daily_stats['alerts_bar_kapanmadi']} kapanmamış bar (ertelendi)"
     satirlar.append(huni)
     gosterim = None
+    gosterim_public = None
     gonderim = getattr(_notifier_ref, "gonderim_durumu", None)
     if callable(gonderim):
         try:
@@ -775,10 +798,17 @@ def _komut_durum(_arguman: str) -> str:
                         f"{engel.get('saatlik_kap', 0)} saatlik kap · "
                         f"{engel.get('tekrar', 0)} aynı-olay · "
                         f"{gd.get('hatalar', 0)} hata")
+            if gd.get("public_enabled"):
+                gosterim_public = (f"📣 Public grup: {gd.get('public_gonderilen', 0)} gönderim · "
+                                   f"{gd.get('public_hatasi', 0)} hata · "
+                                   f"kuyruk {gd.get('public_kuyruk', 0)} · "
+                                   f"engel {gd.get('public_engel', 0)}")
         except Exception as exc:  # noqa: BLE001 - komut asla çökmesin
             logger.debug(f"Gönderim durumu okunamadı: {exc}")
     if gosterim:
         satirlar.append(gosterim)
+    if gosterim_public:
+        satirlar.append(gosterim_public)
     # Notifier pasifse (token/chat_id yok) komut bunu açıkça söyler: aksi halde
     # kullanıcı "hiç mesaj gelmiyor ama bot çalışıyor" durumunu ayırt edemez.
     if _cift_ornek_durumu.get("uyari"):
@@ -966,7 +996,9 @@ def _komut_karne(arguman: str) -> str:
         logger.error("Karne üretilemedi: %s", exc, exc_info=True)
         return "⚠️ Karne üretilemedi; ayrıntı için bot loglarına bakın."
     # Kayıtlar/tarih bilgisi: kullanıcı karnenin kaynağını ve yaşını görsün.
-    return metin + f"\n📁 Kayıt: {defter.dosya}"
+    # NOT: "📁 Kayıt: /tmp/..." satırı kaldırıldı; dosya yolu iç işletim bilgisidir
+    # ve komut çıktısı kopyalanıp paylaşıldığında dışarı sızıyordu.
+    return metin
 
 
 def _komut_ozet(arguman: str) -> str:
@@ -1720,6 +1752,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         _deferred_alert_buffer.observe(stock, tf_name, formasyon_kaydi, simdiki_zaman)
                     else:
                         _deferred_alert_buffer.observe(stock, tf_name, None, simdiki_zaman)
+                    # Public kapanış özeti için: gün içinde kaç kırılım başarısız
+                    # oldu? (Gruba her ❌ tek tek gitmez; özet tek satır verir.)
+                    if send_alerts and state == "BASARISIZ_KIRILIM":
+                        _note_basarisiz_kirilim(stock, tf_name, df_tf.index[-1])
                     # Aday hunisi: bu kaydın akıbeti sayılır (bkz. daily_stats notu).
                     if q < min_q:
                         daily_stats['alerts_below_threshold'] += 1
@@ -1796,6 +1832,13 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 if not (item.get('stock') == stock and item.get('timeframe') == tf_name)
                             ][:3],
                         }
+                        # Public (grup) kuyruğuna ekle: gönderim tarama turu sonunda
+                        # TEK bültende yapılır; DM engeli (cooldown/kap) grubu etkilemez.
+                        try:
+                            notifier.public_kuyruk(alert_data)
+                        except Exception as public_hata:  # noqa: BLE001
+                            logger.debug("Public kuyruğa eklenemedi (%s %s): %s",
+                                         stock, tf_name, public_hata)
                         daily_stats['alerts_attempted'] += 1
                         if notifier.send(alert_data):
                             daily_stats['alerts_sent'] += 1
@@ -1947,6 +1990,15 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             f"VERİ SAĞLIĞI: taze veri {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse, "
             f"en eski mum {daily_stats['max_bar_age_min']} dk"
         )
+    # Tarama turu bitti: public (grup) kuyruğunda biriken olaylar TEK bültende
+    # gider. DM'den bağımsızdır; manuel taramalarda (send_alerts=False) kuyruk
+    # zaten boştur.
+    daily_stats['tarama_sayisi'] = int(daily_stats.get('tarama_sayisi') or 0) + 1
+    try:
+        if notifier is not None:
+            notifier.public_bosalt()
+    except Exception as public_hata:  # noqa: BLE001 - bülten hatası taramayı durdurmasın
+        logger.warning("Public bülten gönderilemedi: %s", public_hata)
     # Tarama bitti: heartbeat kesin yazılsın (force), böylece per-hisse
     # throttle'a takılan son durum dışarıdan anında görünür.
     write_heartbeat(notifier=notifier, force=True)
@@ -2094,6 +2146,26 @@ def _haftalik_karne_ekle(now: datetime, deque_manager, zorla: bool = False) -> s
         return ""
 
 
+def _haftalik_karne_kisa(now: datetime, deque_manager) -> str:
+    """Karne metninin PUBLIC (grup) sürümü: 4-5 satır.
+
+    Tam metin teknik döküm (defter satırı, hedef/nötr/stop, dosya yolu) taşır ve
+    gruba uygun değildir; kısa sürüm aynı ölçümü sade dille verir.
+    """
+    try:
+        defter = _karne_al()
+        if not _karne_dolu(defter, now):
+            return ""
+        from karne import hafta_baslangici, karne_hesapla, karne_kisa_metni, pencere
+        baslangic = hafta_baslangici(now)
+        kayitlar = defter.aralikta(baslangic, now)
+        metrik = karne_hesapla(kayitlar, _karne_seri_saglayici(deque_manager), now=now)
+        return karne_kisa_metni(metrik, pencere(baslangic, now))
+    except Exception as exc:  # noqa: BLE001 - kısa karne özeti engellemesin
+        logger.debug("Kısa karne üretilemedi: %s", exc)
+        return ""
+
+
 def _karne_gonderildi_isaretle(now: datetime) -> None:
     """Karne başarıyla gönderildi -> bu hafta tekrar eklenmez (kalıcı)."""
     try:
@@ -2113,21 +2185,36 @@ def _karneyle_gonder(notifier, ana_mesaj: str, karne_ek: str = ""):
     """Ana mesajı (ve varsa karneyi) Telegram sınırına takılmadan gönderir.
 
     Karne normalde ana mesajın ALTINA eklenir; sığmıyorsa kesilmek yerine ayrı
-    mesaj olarak gönderilir. Döner: (tamamı_gitti_mi, son_hata).
+    mesaj olarak gönderilir.
+
+    Döner: (ana_gitti, karne_gitti, son_hata).
+    NEDEN parça bazlı: "karne iki kez gitti" hatasının kökü, gönderim sonucunun
+    tek bayrak olmasıydı. Karne ayrı mesajken başarısız olursa işaret konmuyor,
+    ana özet de "gitmedi" sayıldığı için döngü onu tekrar yolluyordu. Artık ana
+    özet ve karne AYRI izlenir; karne tekrarı imkânsız hale gelir.
     """
     if karne_ek and len(ana_mesaj) + len(karne_ek) + 2 <= _MESAJ_GUVENLI_SINIR:
-        parcalar = [ana_mesaj + "\n\n" + karne_ek]
+        parcalar = [(ana_mesaj + "\n\n" + karne_ek, "ikisi")]
     elif karne_ek:
         logger.info("Karne mesaj sınırını aştı; ayrı mesaj olarak gönderiliyor (%d + %d kr)",
                     len(ana_mesaj), len(karne_ek))
-        parcalar = [ana_mesaj, karne_ek]
+        parcalar = [(ana_mesaj, "ana"), (karne_ek, "karne")]
     else:
-        parcalar = [ana_mesaj]
-    for parca in parcalar:
-        ok, hata = notifier.send_text(parca)
-        if not ok:
-            return False, hata
-    return True, ""
+        parcalar = [(ana_mesaj, "ana")]
+    ana_ok, karne_ok, hata = False, False, ""
+    for parca, tur in parcalar:
+        ok, parca_hata = notifier.send_text(parca)
+        if ok:
+            if tur in ("ana", "ikisi"):
+                ana_ok = True
+            if tur in ("karne", "ikisi"):
+                karne_ok = True
+        else:
+            hata = parca_hata or hata
+            # Ana mesaj gitmediyse karneyi denemenin anlamı yok; parça sırası
+            # gereği burada zaten karne denenmemiş olur.
+            break
+    return ana_ok, karne_ok, hata
 
 
 def _effective_summary_hours() -> List[dt_time]:
@@ -2483,8 +2570,16 @@ def main_loop():
     deferred_alert_digest_time = _parse_deferred_alert_digest_time()
     post_close_analysis_time = _parse_post_close_analysis_time()
     last_summary_sent = {}  # DM özeti: "09:55" -> date
-    last_summary_channel_sent = {}  # kanal özeti ayrı izlenir; DM retry kanala kopya üretmesin
-    last_post_close_analysis_date = None
+    last_summary_public_sent = {}  # public (grup) özeti ayrı izlenir; DM retry gruba kopya üretmesin
+    # Gün sonu analizi damgası KALICI okunur: yalnız bellekte tutulunca süreç
+    # yeniden başlayınca aynı gün ikinci kez çalışıyor ve panel mesajı
+    # tekrarlanıyordu (02.10: 20:05 ve 21:49 iki panel).
+    try:
+        _pc_ham = (_state_persistence.gonderim_durumu_yukle() or {}).get("post_close_analizi_gun")
+        last_post_close_analysis_date = (
+            datetime.fromisoformat(str(_pc_ham)).date() if _pc_ham else None)
+    except (TypeError, ValueError):
+        last_post_close_analysis_date = None
     last_maintenance_date = None
     last_preload_date = None
     son_kuyruk_bosaltma = 0.0  # engellenen acil olaylar bu aralıkla yeniden denenir
@@ -2569,30 +2664,44 @@ def main_loop():
 
                     if last_summary_sent.get(sh_str) != now.date():
                         if notifier.enabled:
-                            gonderildi, hata = _karneyle_gonder(notifier, dm_ozet, karne_metni_eklendi)
-                            if gonderildi:
+                            # Parça bazlı sonuç: ana özet ve karne AYRI izlenir.
+                            # Böylece (a) karne parçası gitmezse yalnız karne, 20:00
+                            # yolunda yeniden denenir; (b) ana özet gittiği halde
+                            # sayaç artmadığı için özet İKİ KEZ gönderilmez.
+                            ana_ok, karne_ok, hata = _karneyle_gonder(
+                                notifier, dm_ozet, karne_metni_eklendi)
+                            if ana_ok:
                                 last_summary_sent[sh_str] = now.date()
                                 if bekleyen:
                                     _deferred_alert_buffer.mark_reported(bekleyen, now)
                                 if sh == deferred_alert_digest_time:
                                     _digest_son_gonderim_gun = now.date().isoformat()
                                     digest_tamponu_kaydet()
-                                if karne_metni_eklendi:
-                                    _karne_gonderildi_isaretle(now)
-                                    logger.info("Haftalık doğruluk karnesi gönderildi (Cuma özeti altında)")
                                 logger.info(f"Günlük DM özeti gönderildi: {sh_str}")
                             else:
                                 logger.warning(f"Günlük DM özeti gönderilemedi ({sh_str}): {hata}")
+                            if karne_metni_eklendi and karne_ok:
+                                _karne_gonderildi_isaretle(now)
+                                logger.info("Haftalık doğruluk karnesi gönderildi (18:45 özeti altında)")
                         else:
                             # Test/pasif modda döngü boyunca aynı özeti tekrar deneme.
                             last_summary_sent[sh_str] = now.date()
                             if sh == deferred_alert_digest_time:
                                 _digest_son_gonderim_gun = now.date().isoformat()
 
-                    if (notifier.channel_id
-                            and last_summary_channel_sent.get(sh_str) != now.date()):
-                        if notifier.send_to_channel(ozet):
-                            last_summary_channel_sent[sh_str] = now.date()
+                    # --- PUBLIC GRUP: sade kapanış özeti (DM'den bağımsız) ---
+                    # DM kapalıyken de çalışır; iç izleme notu/dosya yolu taşımaz.
+                    if (notifier.public_enabled
+                            and last_summary_public_sent.get(sh_str) != now.date()):
+                        kisa_karne = ""
+                        if sh == deferred_alert_digest_time:
+                            kisa_karne = _haftalik_karne_kisa(now, deque_manager)
+                        grup_ozet = notifier.format_public_summary(
+                            aktif, daily_stats, izleme=bekleyen, karne_kisa=kisa_karne,
+                            tarama_turu=daily_stats.get('tarama_sayisi'),
+                        )
+                        if notifier.send_to_public(grup_ozet):
+                            last_summary_public_sent[sh_str] = now.date()
             except Exception as e:
                 logger.debug(f"Özet gönderim hatası: {e}")
 
@@ -2619,8 +2728,12 @@ def main_loop():
                             # Cuma karnesi 18:45 özetiyle gidemediyse (bot kapalıydı /
                             # gönderim hatası) burada gün sonu analizinin altına eklenir.
                             karne_ek = _haftalik_karne_ekle(now, deque_manager)
-                            gonderildi, _hata = _karneyle_gonder(notifier, mesaj, karne_ek)
-                            if gonderildi and karne_ek:
+                            ana_ok, karne_ok, _hata = _karneyle_gonder(notifier, mesaj, karne_ek)
+                            if ana_ok:
+                                logger.info("Gün sonu analizi gönderildi")
+                            if karne_ek and karne_ok:
+                                # İşaret KARNE parçası gerçekten gittiyse konur;
+                                # 18:45'te gönderilen karne burada ikinci kez çıkmaz.
                                 _karne_gonderildi_isaretle(now)
                                 logger.info("Haftalık doğruluk karnesi gönderildi (gün sonu analizi altında)")
                         else:
@@ -2631,6 +2744,12 @@ def main_loop():
                     finally:
                         _scan_job_active.clear()
                         last_post_close_analysis_date = now.date()
+                        # Kalıcı damga: restart olsa bile aynı gün ikinci panel yok.
+                        try:
+                            _state_persistence.gonderim_durumu_kaydet(
+                                {"post_close_analizi_gun": now.date().isoformat()})
+                        except Exception as pc_hata:  # noqa: BLE001
+                            logger.debug("Gün sonu damgası yazılamadı: %s", pc_hata)
                     continue
             except Exception as e:
                 logger.error("Gün sonu analizi zamanlayıcısı hata verdi: %s", e, exc_info=True)

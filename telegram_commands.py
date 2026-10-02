@@ -271,6 +271,14 @@ class TelegramCommandListener:
 
         komut, arguman = komut_coz(metin)
         if not komut:
+            # GRUPLARDA sohbete karışılmaz: admin bot tüm mesajları görür, ama
+            # yalnız komutlara cevap verir. (Eskiden komut olmayan HER metne
+            # /yardim basılıyordu; grup sohbetinde bot spam'i olurdu.)
+            sohbet_tipi = str((mesaj.get("chat") or {}).get("type") or "").lower()
+            if sohbet_tipi and sohbet_tipi != "private":
+                logger.debug("Grup sohbetinde komut olmayan mesaj yok sayıldı (chat_id=%s)",
+                             sohbet_id or "?")
+                return None
             return self._cevapla(self.help_text or "Komut listesi için /yardim yazın.")
 
         # Uzun analiz sırasında komut update'i tüketilir ama cevap verilmez ve

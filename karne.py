@@ -636,6 +636,32 @@ def karne_metni(metrik: dict, baslik: str = "HAFTALIK DOĞRULUK KARNESİ",
 
 
 _KALITE_SIRA = {"q≥80": 0, "q70–79": 1, "q<70": 2}
+
+
+def karne_kisa_metni(metrik: dict, pencere_metni: str = "") -> str:
+    """PUBLIC (grup) sürümü: 4-5 satır. Teknik döküm, dosya yolu ve küçük-n
+    uyarısı bilerek yok — grup için özet ve dürüst, ama iç muhasebe değil."""
+    satirlar = ["📊 Haftalık doğruluk" + (f" · {pencere_metni}" if pencere_metni else "")]
+    kirilim = int(metrik.get("kirilim_toplam") or 0)
+    degerlendirilen = int(metrik.get("degerlendirilen") or 0)
+    if kirilim and degerlendirilen:
+        oran = (metrik.get("pozitif") or 0) * 100.0 / degerlendirilen
+        satirlar.append(f"Kırılım sinyali {kirilim} · {KARNE_HORIZON_BAR} bar içinde yönünde "
+                        f"kapatan {metrik.get('pozitif', 0)}/{degerlendirilen} (%{oran:.0f})")
+        if metrik.get("ort_mfe_pct") is not None and metrik.get("ort_mae_pct") is not None:
+            satirlar.append(f"Ort. maks. lehte +%{metrik['ort_mfe_pct']:.1f} · "
+                            f"alehte −%{metrik['ort_mae_pct']:.1f}")
+    elif kirilim:
+        satirlar.append(f"Kırılım sinyali {kirilim} · sonuçlar için yeterli bar henüz oluşmadı")
+    else:
+        satirlar.append("Kırılım sinyali: 0 (bu hafta teyitli kırılım yok)")
+    huni = metrik.get("huni") or {}
+    tamamlanan = sum(n for s, n in huni.items() if s == "FORMASYON_TAMAMLANDI")
+    retest = sum(n for s, n in huni.items() if s == "RETEST_BASARILI")
+    if tamamlanan or retest:
+        satirlar.append(f"Tamamlanan {tamamlanan} · retest başarılı {retest}")
+    satirlar.append("ℹ️ Geçmiş performans, gelecek getirinin garantisi değildir")
+    return "\n".join(satirlar)
 _TF_TR = {"1h": "1 saatlik", "2h": "2 saatlik", "4h": "4 saatlik", "1d": "günlük"}
 _STATE_TR = {
     "KIRILIM_TEYITLI": "teyitli kırılım",

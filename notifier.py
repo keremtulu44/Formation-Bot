@@ -4,13 +4,18 @@
 import os
 import logging
 import re
+import threading
 import time
 from datetime import datetime, timedelta
 from typing import Dict, List
 
-from config import (DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN,
+from config import (ACTIVE_STOCKS, DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT,
+                    TELEGRAM_MAX_MESAJ_GUN,
                     ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK, ALERT_STATES, WATCH_STATES,
-                    TERMINAL_TAZE_BAR)
+                    TERMINAL_TAZE_BAR,
+                    ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL,
+                    PUBLIC_MAX_MESAJ_SAAT, PUBLIC_MAX_MESAJ_GUN, PUBLIC_MIN_ARALIK_SN,
+                    PUBLIC_MIN_QUALITY_TF)
 # Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
 # katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
 from reporting.format import STATE_TR
@@ -128,6 +133,35 @@ def _env_temizle(deger) -> str:
         s = s[1:-1].strip()
     return s.strip()
 
+_PUBLIC_MAX_METIN = 4000     # Telegram sınırı 4096; kanal/grup yolu da kırpmalı
+
+
+def _kirp(metin: str, sinir: int = _PUBLIC_MAX_METIN) -> str:
+    """Public gönderim için Telegram sınırına sığdırır (eskiden kırpma yoktu →
+    uzun özet 400 alabiliyordu)."""
+    metin = str(metin or "")
+    if len(metin) <= sinir:
+        return metin
+    return metin[: sinir - 40].rstrip() + "\n\n… (mesaj sınırı nedeniyle kesildi)"
+
+
+# Public grup için SADE durum etiketleri: iç izleme notları ("teyit bekleniyor",
+# "retest tutarsa yapı güçlenir") gruba taşınmaz.
+PUBLIC_STATE_ETIKET = {
+    "KIRILIM_TEYITLI": "kırılım teyitli",
+    "RETEST_BASARILI": "retest başarılı",
+    "FORMASYON_TAMAMLANDI": "tamamlandı",
+}
+
+
+def _yon_kisa(break_dir) -> str:
+    if break_dir == 1:
+        return "yukarı"
+    if break_dir == -1:
+        return "aşağı"
+    return ""
+
+
 def token_bicimi_uygun_mu(token: str) -> bool:
     t = _env_temizle(token)
     if not t:
@@ -202,7 +236,11 @@ class TelegramNotifier:
         self.initial_store_data = initial_store_data if isinstance(initial_store_data, dict) else {}
         self.token = _env_temizle(os.environ.get("TELEGRAM_BOT_TOKEN", ""))
         self.chat_id = _env_temizle(os.environ.get("TELEGRAM_CHAT_ID", ""))
+        # Public hedef: grup (tercih) ya da eski kanal ayarı. Grup, DM'den BAĞIMSIZ
+        # çalışır; DM kapalıyken de grup yayını sürer.
+        self.group_id = _env_temizle(os.environ.get("TELEGRAM_GROUP_ID", ""))
         self.channel_id = _env_temizle(os.environ.get("TELEGRAM_CHANNEL_ID", ""))
+        self.public_chat_id = self.group_id or self.channel_id
         self.cooldown_hours = 4
         self.last_sent: Dict[str, datetime] = {}
         self.max_saatlik = TELEGRAM_MAX_MESAJ_SAAT
@@ -264,16 +302,49 @@ class TelegramNotifier:
             self.public_states = set(PUBLIC_STATES)
             self.public_sikisma_min = PUBLIC_SIKISMA_MIN_CONTRACTION
         except Exception:
-            self.public_min_quality = 80
-            self.public_states = {"FORMASYON_TAMAMLANDI", "RETEST_BASARILI"}
+            self.public_min_quality = 0
+            self.public_states = {"FORMASYON_TAMAMLANDI", "RETEST_BASARILI",
+                                  "KIRILIM_TEYITLI"}
             self.public_sikisma_min = 0.80
+        # TF bazlı public eşik: DM alarm eşikleriyle AYNI (tek kaynak ALERT_MIN_QUALITY);
+        # `public_min_quality` sıfırdan büyükse ek taban olarak uygulanır.
+        try:
+            self.public_min_quality_tf = {str(k).lower(): float(v)
+                                          for k, v in dict(PUBLIC_MIN_QUALITY_TF).items()}
+        except Exception:
+            self.public_min_quality_tf = dict(ALERT_MIN_QUALITY)
 
-        if not self.token or not self.chat_id:
-            logger.warning("Telegram token/chat_id env'de yok - notifier pasif (test modu)")
+        # --- PUBLIC (grup) kuyruğu: olaylar tarama turu boyunca toplanır, tur
+        # sonunda TEK bülten olarak gönderilir (mum kapanışında 9 ayrı mesaj
+        # yerine 1 mesaj). Bütçe DM'den ayrıdır: grup için saatte/günde sınır.
+        self._public_kuyruk: List[dict] = []
+        self._public_lck = threading.Lock()
+        self._public_saatlik: List[datetime] = []
+        self._public_gun_sayac = 0
+        self._public_gun = datetime.now(ISTANBUL_TZ).date()
+        self._son_public_ts = None
+        self.public_max_saatlik = PUBLIC_MAX_MESAJ_SAAT
+        self.public_max_gunluk = PUBLIC_MAX_MESAJ_GUN
+        self.public_min_aralik_sn = PUBLIC_MIN_ARALIK_SN
+        self.public_kuyruk_limit = 40
+        self.public_gonderilen = 0
+        self.public_hatasi = 0
+        self.public_engel = 0
+        self.public_kuyruk_tasmasi = 0
+        self.son_public_gonderim = None
+
+        self.public_enabled = bool(self.token and self.public_chat_id)
+        if not self.token:
+            logger.warning("Telegram token env'de yok - notifier pasif (test modu)")
+            self.enabled = False
+        elif not self.chat_id:
+            # DM kapalı ama public hedef tanımlı: grup yayını DM olmadan çalışır.
+            logger.info("TELEGRAM_CHAT_ID yok: DM kapalı, public hedef (%s) yayında",
+                        self.public_chat_id or "-")
             self.enabled = False
         else:
-            if self.channel_id:
-                logger.info(f"Telegram public kanal aktif: {self.channel_id} (DM + kanal)")
+            if self.public_enabled:
+                logger.info(f"Telegram public hedef aktif: {self.public_chat_id} (DM + public)")
             if not token_bicimi_uygun_mu(self.token):
                 logger.warning("Telegram token biçimi uygun değil (beklenen 123456789:AA...). Kontrol et.")
             self.enabled = True
@@ -366,38 +437,248 @@ class TelegramNotifier:
         quality = data.get('confidence_score', 0)
         if state not in self.public_states:
             return False
-        if quality < self.public_min_quality:
+        try:
+            q = float(quality or 0)
+        except (TypeError, ValueError):
+            return False
+        tf = str(data.get('timeframe') or '').lower()
+        esik = self.public_min_quality_tf.get(tf, ALERT_MIN_QUALITY_GLOBAL)
+        try:
+            esik = max(float(esik), float(self.public_min_quality or 0))
+        except (TypeError, ValueError):
+            pass
+        return q >= esik
+
+    # --- PUBLIC (grup) gönderim yolu ------------------------------------
+    # DM yolundan tamamen bağımsızdır: kendi bütçesi, kendi sayaçları, kendi
+    # hata durumu vardır. DM kapalıyken de çalışır.
+
+    def _public_gun_sifirla_gerekirse(self, simdi: datetime) -> None:
+        if simdi.date() != self._public_gun:
+            self._public_gun = simdi.date()
+            self._public_gun_sayac = 0
+            self._public_saatlik = []
+
+    def _public_kap_gec(self) -> bool:
+        """Saatlik/günlük public bütçesi müsait mi? (DM kapılarından AYRI)"""
+        simdi = datetime.now(ISTANBUL_TZ)
+        self._public_gun_sifirla_gerekirse(simdi)
+        self._public_saatlik = [t for t in self._public_saatlik
+                                if (simdi - t).total_seconds() < 3600]
+        if self._public_gun_sayac >= self.public_max_gunluk:
+            return False
+        if len(self._public_saatlik) >= self.public_max_saatlik:
             return False
         return True
 
-    def send_to_channel(self, text: str) -> bool:
-        if not self.enabled:
-            logger.info(f"[MOCK CHANNEL] {text[:120]}")
+    def _public_pace(self) -> None:
+        """Sohbet başına ~1 mesaj/sn kuralı: aynı flush içinde kısa bekleme."""
+        try:
+            ara = float(self.public_min_aralik_sn or 0)
+        except (TypeError, ValueError):
+            ara = 0.0
+        if ara <= 0 or self._son_public_ts is None:
+            return
+        bekle = ara - (time.monotonic() - self._son_public_ts)
+        if bekle > 0:
+            time.sleep(min(bekle, 5.0))
+
+    def send_to_public(self, text: str, deneme: int = 1) -> bool:
+        """Grup/kanal hedefine gönderir: bütçe + pacing + 429 retry + kırpma."""
+        if not self.public_enabled:
+            logger.info(f"[MOCK PUBLIC] {text[:120]}")
             return True
-        if not self.channel_id:
-            logger.debug("CHANNEL_ID yok, kanala gönderim atlandı")
+        if not self._public_kap_gec():
+            self.public_engel += 1
+            logger.warning("Public bütçe dolu (saatlik %d / günlük %d) - gönderim atlandı",
+                           self.public_max_saatlik, self.public_max_gunluk)
             return False
+        govde = _kirp(text)
         try:
             import requests
-            resp = requests.post(
-                f"https://api.telegram.org/bot{self.token}/sendMessage",
-                json={"chat_id": self.channel_id, "text": text},
-                timeout=15,
-            )
-            if resp.status_code == 200:
-                logger.info(f"Telegram kanala gönderildi: {self.channel_id}")
-                self._gonderim_sagligi_kaydet(basari=True)
-                return True
-            ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
-            logger.error(f"Telegram kanal hatası: {resp.text} | {ipucu}")
-            self.kanal_hatasi += 1
-            self._gonderim_sagligi_kaydet(basari=False, hata=f"kanal: HTTP {resp.status_code}")
+            self._public_pace()
+            for deneme_no in range(max(0, int(deneme)) + 1):
+                resp = requests.post(
+                    f"https://api.telegram.org/bot{self.token}/sendMessage",
+                    json={"chat_id": self.public_chat_id, "text": govde},
+                    timeout=15,
+                )
+                if resp.status_code == 200:
+                    self._son_public_ts = time.monotonic()
+                    self._public_saatlik.append(datetime.now(ISTANBUL_TZ))
+                    self._public_gun_sayac += 1
+                    self.public_gonderilen += 1
+                    self.son_public_gonderim = datetime.now(ISTANBUL_TZ).isoformat()
+                    logger.info("Telegram public hedefe gönderildi: %s", self.public_chat_id)
+                    return True
+                if resp.status_code == 429 and deneme_no < max(0, int(deneme)):
+                    bekle = 3.0
+                    try:
+                        bekle = float((resp.json().get("parameters") or {}).get("retry_after") or bekle)
+                    except Exception:
+                        pass
+                    logger.warning("Public 429: %.0f sn sonra tekrar denenecek", bekle)
+                    time.sleep(max(0.0, min(bekle, 20.0)))
+                    continue
+                ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
+                logger.error("Telegram public hata: %s | %s", resp.text[:200], ipucu)
+                break
+            self.public_hatasi += 1
+            self._gonderim_sagligi_kaydet(basari=False, hata="public: gönderim başarısız")
             return False
         except Exception as e:
-            logger.error(f"Telegram kanal gönderim hatası: {e}")
-            self.kanal_hatasi += 1
-            self._gonderim_sagligi_kaydet(basari=False, hata=f"kanal: {e}")
+            logger.error("Telegram public gönderim hatası: %s", e)
+            self.public_hatasi += 1
+            self._gonderim_sagligi_kaydet(basari=False, hata=f"public: {e}")
             return False
+
+    def send_to_channel(self, text: str) -> bool:
+        """Geriye dönük ad: eski kanal çağrıları artık public yola düşer."""
+        return self.send_to_public(text)
+
+    def public_kuyruk(self, data: Dict) -> bool:
+        """Uygun olayı public kuyruğa alır (gönderim tarama turu sonunda)."""
+        if not self.public_enabled:
+            return False
+        try:
+            if not self.should_send_to_public(data):
+                return False
+        except Exception as exc:  # noqa: BLE001 - kuyruk hatası taramayı durdurmasın
+            logger.debug("Public filtre hatası: %s", exc)
+            return False
+        kayit = {k: data.get(k) for k in (
+            "stock_name", "timeframe", "pattern_name", "state", "confidence_score",
+            "critical_price_level", "break_price", "break_dir", "contraction", "bar_metni")}
+        anahtar = (str(kayit["stock_name"] or "").upper(),
+                   str(kayit["timeframe"] or "").lower(),
+                   str(kayit["state"] or ""))
+        with self._public_lck:
+            for k in self._public_kuyruk:
+                if (str(k.get("stock_name") or "").upper(),
+                        str(k.get("timeframe") or "").lower(),
+                        str(k.get("state") or "")) == anahtar:
+                    return False
+            if len(self._public_kuyruk) >= self.public_kuyruk_limit:
+                self.public_kuyruk_tasmasi += 1
+                logger.warning("Public kuyruk dolu (%d) - olay atıldı: %s",
+                               self.public_kuyruk_limit, anahtar)
+                return False
+            self._public_kuyruk.append(kayit)
+        return True
+
+    def public_bosalt(self, azami: int = 12) -> int:
+        """Kuyruğu tek bülten(ler) halinde gönderir; engel varsa kayıtlar bekler."""
+        with self._public_lck:
+            kuyruk = list(self._public_kuyruk)
+        if not kuyruk or not self.public_enabled:
+            return 0
+        gonderilen = 0
+        kalan = list(kuyruk)
+        while kalan:
+            parca = kalan[:max(1, int(azami))]
+            metin = self.format_public_batch(parca)
+            if not metin:
+                kalan = kalan[len(parca):]
+                continue
+            if not self.send_to_public(metin):
+                # Bütçe/ağ engeli: kayıtlar kuyrukta kalır, sonraki turda denenir.
+                break
+            gonderilen += len(parca)
+            kalan = kalan[len(parca):]
+        if gonderilen:
+            with self._public_lck:
+                self._public_kuyruk = self._public_kuyruk[gonderilen:]
+            logger.info("Public bülten gönderildi: %d olay (%d mesaj)",
+                        gonderilen, max(1, (gonderilen + azami - 1) // azami))
+        return gonderilen
+
+    def format_public_batch(self, kayitlar: List[Dict]) -> str:
+        """Grup sürümü bülten: sade satırlar, iç izleme notu ve kuyruk yok."""
+        kayitlar = [k for k in (kayitlar or []) if isinstance(k, dict)]
+        if not kayitlar:
+            return ""
+        satirlar = [f"📊 Formasyon bülteni · {_tr_tarih(datetime.now(ISTANBUL_TZ))} "
+                    f"· {len(kayitlar)} gelişme"]
+        for k in kayitlar:
+            stock = str(k.get("stock_name") or "?")
+            tf = TF_HUMAN.get(k.get("timeframe"), str(k.get("timeframe") or ""))
+            pattern = str(k.get("pattern_name") or "Formasyon")
+            state = str(k.get("state") or "")
+            etiket = PUBLIC_STATE_ETIKET.get(state, STATE_TR.get(state, state))
+            yon = _yon_kisa(k.get("break_dir"))
+            satir = (f"{PATTERN_EMOJI.get(pattern, '📈')} {stock} {tf} · {pattern} · "
+                     f"{yon + ' ' if yon else ''}{etiket}")
+            seviye = k.get("critical_price_level") or k.get("break_price")
+            try:
+                if seviye:
+                    satir += f" · {float(seviye):.2f}"
+            except (TypeError, ValueError):
+                pass
+            try:
+                satir += f" · q{float(k.get('confidence_score') or 0):.0f}"
+            except (TypeError, ValueError):
+                pass
+            mum = str(k.get("bar_metni") or "").strip().splitlines()
+            if mum:
+                satir += f"\n   {mum[-1]}" if len(mum) > 1 else ""
+            satirlar.append(satir)
+        satirlar.append("")
+        satirlar.append("📌 Formasyon takibi · yatırım tavsiyesi değildir")
+        return "\n".join(satirlar)
+
+    def format_public_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None,
+                              izleme: List[Dict] = None, karne_kisa: str = "",
+                              tarama_turu=None) -> str:
+        """Grup sürümü kapanış özeti: sayılar + izleme listesi, teknik döküm yok."""
+        simdi = datetime.now(ISTANBUL_TZ)
+        aktif = [f for f in (aktif_formasyonlar or []) if isinstance(f, dict)]
+        satirlar = [f"📊 {_tr_tarih(simdi)} kapanış · BIST formasyon özeti"]
+        tamamlanan = [f for f in aktif if f.get('state') == 'FORMASYON_TAMAMLANDI']
+        retest = [f for f in aktif if f.get('state') == 'RETEST_BASARILI']
+        teyitli = [f for f in aktif if f.get('state') == 'KIRILIM_TEYITLI']
+        sikisan = [f for f in aktif if f.get('state') == 'SIKISMA_GUCLENIYOR'
+                   and (f.get('contraction') or 0) >= self.public_sikisma_min]
+        if tamamlanan:
+            ilk = " · ".join(f"{f.get('stock_name')} {f.get('timeframe') or ''}".strip()
+                             for f in tamamlanan[:3])
+            ek = f" (ilk {min(3, len(tamamlanan))})" if len(tamamlanan) > 3 else ""
+            satirlar.append(f"🏁 Tamamlanan {len(tamamlanan)}{ek}: {ilk}")
+        if retest or teyitli:
+            satirlar.append(f"🎯 Retest başarılı {len(retest)} · "
+                            f"✅ Teyitli kırılım {len(teyitli)}")
+        basarisiz = int((gun_ozeti or {}).get('basarisiz_kirilim') or 0)
+        if basarisiz:
+            satirlar.append(f"❌ {basarisiz} kırılım başarısız oldu")
+        if sikisan:
+            ilk = " · ".join(f"{f.get('stock_name')} {f.get('timeframe') or ''} "
+                             f"(%{(f.get('contraction') or 0) * 100:.0f})" for f in sikisan[:3])
+            satirlar.append(f"⚡ Sıkışan {len(sikisan)}: {ilk}")
+        if izleme:
+            satirlar.append("")
+            satirlar.append(f"📡 Yarının izleme listesi (ilk {min(5, len(izleme))})")
+            for k in list(izleme)[:5]:
+                if not isinstance(k, dict):
+                    continue
+                tf = TF_HUMAN.get(k.get('timeframe'), str(k.get('timeframe') or ''))
+                try:
+                    kalite = f" · kalite {float(k.get('quality') or 0):.0f}"
+                except (TypeError, ValueError):
+                    kalite = ""
+                satirlar.append(f"• {k.get('stock')} {tf} {k.get('pattern_name') or 'formasyon'}"
+                                f"{kalite}")
+        if not aktif and not izleme:
+            satirlar.append("Bugün öne çıkan formasyon olmadı.")
+        try:
+            tur = int(tarama_turu) if tarama_turu is not None else 0
+        except (TypeError, ValueError):
+            tur = 0
+        satirlar.append("")
+        satirlar.append(f"{len(ACTIVE_STOCKS)} hisse × 4 zaman dilimi"
+                        + (f" · {tur} tarama" if tur else ""))
+        if karne_kisa:
+            satirlar += ["", karne_kisa]
+        satirlar.append("📌 Formasyon takibi · yatırım tavsiyesi değildir")
+        return "\n".join(satirlar)
 
     def format_daily_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None) -> str:
         now = datetime.now(ISTANBUL_TZ)
@@ -415,28 +696,42 @@ class TelegramNotifier:
         retest = [f for f in aktif_formasyonlar if f.get('state') == 'RETEST_BASARILI']
         sikisan = [f for f in aktif_formasyonlar if f.get('state') == 'SIKISMA_GUCLENIYOR' and (f.get('contraction', 0) or 0) >= self.public_sikisma_min]
         if tamamlanan:
-            baslik += f"\n🏁 TAMAMLANAN ({len(tamamlanan)}):\n"
+            # Başlık toplamı, gövde ise ilk 3'ü listeler; "(6)" ile 3 satır
+            # görmek kafa karıştırıyordu → "6 · ilk 3".
+            baslik += (f"\n🏁 TAMAMLANAN ({len(tamamlanan)}"
+                       f"{' · ilk 3' if len(tamamlanan) > 3 else ''}):\n")
             for f in tamamlanan[:3]:
                 # Diğer bölümlerle aynı madde biçimi: hisse · desen · tf · kalite
                 baslik += (f"• {f.get('stock_name')} {f.get('pattern_name')} "
                            f"{f.get('timeframe') or ''} · kalite "
                            f"{f.get('confidence_score', 0):.0f}\n").replace("  ", " ")
         if retest:
-            baslik += f"\n🎯 RETEST BAŞARILI ({len(retest)}):\n"
+            baslik += (f"\n🎯 RETEST BAŞARILI ({len(retest)}"
+                       f"{' · ilk 3' if len(retest) > 3 else ''}):\n")
             for f in retest[:3]:
                 # Yön Türkçe ve kalite de görünüyor: tüm bölümler aynı madde biçimini kullanır.
                 baslik += (f"• {f.get('stock_name')} {f.get('pattern_name')} "
                            f"{f.get('timeframe') or ''} · {_yon_metni(f.get('break_dir', 0))} yön"
                            f" · kalite {f.get('confidence_score', 0):.0f}\n").replace("  ", " ")
         if sikisan:
-            baslik += f"\n⚡ SIKIŞANLAR ({len(sikisan)}):\n"
+            baslik += (f"\n⚡ SIKIŞANLAR ({len(sikisan)}"
+                       f"{' · ilk 5' if len(sikisan) > 5 else ''}):\n")
             for f in sikisan[:5]:
                 baslik += (f"• {f.get('stock_name')} {f.get('pattern_name')} "
                            f"{f.get('timeframe') or ''} · %{(f.get('contraction', 0) * 100):.0f} "
                            f"daralma\n").replace("  ", " ")
         if gun_ozeti:
-            baslik += (f"\n📈 Gün: {gun_ozeti.get('stocks_scanned', 0)} hisse tarandı, "
-                       f"{gun_ozeti.get('alerts_sent', 0)} bildirim gönderildi\n")
+            # "432 hisse tarandı" = 48 hisse × 9 tarama; yanıltıcıydı.
+            # Doğru okuma: kaç tur tarandı + evren büyüklüğü.
+            try:
+                tur = int(gun_ozeti.get("tarama_sayisi") or 0)
+            except (TypeError, ValueError):
+                tur = 0
+            if tur <= 0:
+                baslik += "\n📈 Gün: henüz tarama yapılmadı\n"
+            else:
+                baslik += (f"\n📈 Gün: {tur} tarama · {len(ACTIVE_STOCKS)} hisse × "
+                           f"4 zaman dilimi · {gun_ozeti.get('alerts_sent', 0)} bildirim\n")
         baslik += "\n📌 Formasyon takibi · yatırım tavsiyesi değildir"
         return baslik
 
@@ -918,6 +1213,15 @@ class TelegramNotifier:
             "kuyruk_gonderildi": self.kuyruk_gonderildi,
             "kuyruk_zaman_asimi": self.kuyruk_zaman_asimi,
             "kuyruk_tasmasi": self.kuyruk_tasmasi,
+            # Public (grup) hedefi: DM'den bağımsız sayaçlar.
+            "public_enabled": self.public_enabled,
+            "public_chat_id": self.public_chat_id,
+            "public_gonderilen": self.public_gonderilen,
+            "public_hatasi": self.public_hatasi,
+            "public_engel": self.public_engel,
+            "public_kuyruk": len(self._public_kuyruk),
+            "public_kuyruk_tasmasi": self.public_kuyruk_tasmasi,
+            "son_public_gonderim": self.son_public_gonderim,
         }
 
     def format_message(self, data: Dict) -> str:
@@ -1197,7 +1501,8 @@ class TelegramNotifier:
         if not self.enabled:
             logger.info(f"[MOCK TELEGRAM {state}]\n{message}\n")
             if self.should_send_to_public(data):
-                logger.info(f"[MOCK CHANNEL {state}]\n{message}\n")
+                # Public hedef artık bültenle gider; mock modda yalnız görünürlük.
+                logger.info(f"[MOCK PUBLIC {state}] {stock} {timeframe} bültene eklenecek")
             key = self._cooldown_key(stock, pattern, timeframe, state)
             self.last_sent[key] = datetime.now(ISTANBUL_TZ)
             self._gonderim_kaydet()
@@ -1219,12 +1524,12 @@ class TelegramNotifier:
                 self._gonderim_kaydet()
                 self.gonderilen_alarm += 1
                 self._gonderim_sagligi_kaydet(basari=True)
-                # Tek-seferlik mühür: DM ve public kanal aynı kapıdan geçtiği
+                # Tek-seferlik mühür: DM ve public hedef aynı kapıdan geçtiği
                 # için her ikisi de tekilleşir.
                 self._tek_seferlik_isle(stock, pattern, timeframe, state)
-                # Public kanala da gönder (filtreli)
-                if self.should_send_to_public(data):
-                    self.send_to_channel(message)
+                # NOT: Public (grup) gönderimi burada YAPILMAZ. Olaylar tarama
+                # turu boyunca `public_kuyruk()` ile toplanır ve tur sonunda tek
+                # bültende gider; DM başarısız olsa bile grup yayını etkilenmez.
                 return True
             else:
                 ipucu = telegram_hata_ipucu(resp.status_code, resp.text)

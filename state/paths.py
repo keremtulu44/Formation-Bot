@@ -75,3 +75,14 @@ KARNE_DEFTERI_SUPABASE_KEY = "state:karne_defteri"
 def karne_defteri_yolu(data_dir=None) -> str:
     from config import DATA_DIR
     return os.path.join(data_dir or DATA_DIR, KARNE_DEFTERI_DOSYA)
+
+
+# Gönderim gün işaretleri: "gün sonu analizi bugün yapıldı mı?" gibi bayraklar.
+# Neden kalıcı: damga yalnız bellekte tutulunca süreç yeniden başlayınca aynı iş
+# (ör. 20:00 paneli) aynı gün ikinci kez çalışıyor ve mesaj tekrarlanıyordu.
+GONDERIM_DURUMU_DOSYA = "gonderim_durumu.json"
+
+
+def gonderim_durumu_yolu(data_dir=None) -> str:
+    from config import DATA_DIR
+    return os.path.join(data_dir or DATA_DIR, GONDERIM_DURUMU_DOSYA)
