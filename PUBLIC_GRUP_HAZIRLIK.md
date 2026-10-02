@@ -126,7 +126,7 @@ satır satır metin üretiliyor; ikinci dil eklemek bugün kopyala-yapıştır d
 | Dil | **Yalnız Türkçe** — i18n katmanı yapılmayacak, mevcut metinler korunur |
 | Yapı | **Tek public supergroup** (ayrı kanal yok); bot alarmları yayınlar, sahibi ara sıra kendi mesajını yazar |
 | Komut yetkisi | **Yalnız grup adminleri**; üyeler yayını görür, komut çalıştıramaz |
-| Kurulum | Bot gruba eklenir/yönetici yapılır; env'de yalnız bot token + grubun chat_id'si tutulur |
+| Kurulum | Bot gruba **üye olarak** eklenir (yönetici yapılması GEREKMEZ, bkz. §7.1); env'de yalnız bot token + grubun chat_id'si tutulur |
 | İçerik politikası | **AÇIK** — B9 kararı, uygulamadan önce konuşulacak (aşağıdaki seçenekler) |
 
 ### Açık konu: gruba hangi içerik gitsin? (B9)
@@ -152,3 +152,74 @@ Karar verilmesi gereken iki nokta:
 1. Yukarıdaki A/B/C/D'den hangisi (veya karışımı)?
 2. Sahibin "ara sıra mesajı" kendi hesabından mı yazılacak (bot işi yok), yoksa bot üzerinden
    duyuru olarak mı gönderilsin (admin-only `/duyuru <metin>` komutu eklenir)?
+
+
+## 6) Mesaj hacmi analizi (02.10.2026 gerçek gün)
+
+Kullanıcının iletisi koddan sayıldı: **28 alarm + 2 özet = 30 mesaj** (DM yolu).
+
+| Kategori | Adet | Not |
+|---|---|---|
+| 🏁 FORMASYON_TAMAMLANDI | 11 | KCHOL, ISMEN(×2), TAVHL, SNGYO, BIMAS, AYDEM, EREGL, THYAO, GARAN, TTRAK |
+| ❌ BASARISIZ_KIRILIM | 9 | **Alarmların %32'si negatif** — public grup için itibar riski |
+| ✅ KIRILIM_TEYITLI | 5 | TTRAK(×2), BRSAN, SKBNK, ODAS |
+| 🎯 RETEST_BASARILI | 3 | EREGL, ISMEN, AKSEN |
+| Özet/digest | 2 | 09:55 özeti + dünkü kaçırılan 18:45 özeti |
+
+**Hacmin sebebi:** 4 zaman dilimi × 4 anlık state × TF bazlı eşik (1h:80 / 2h:78 / 4h:75 / 1d:70).
+Tek fiyat hareketi 4 mesaj üretiyor (ISMEN gün içinde 4, TTRAK 4, KCHOL 3 kez bildirildi).
+Kod içi politika değerleri son commit'te **değişmedi** (ALERT_STATES, eşikler, 4 saat cooldown,
+20/saat + 120/gün kap aynı); son commit yalnız mum kapanış zamanlamasını düzeltti — yan etkisi
+günün son 2h/4h kovasının (18:00) artık analiz edilmesi, yani akşam birkaç mesaj artabilir.
+
+**Gruba mevcut public politikasıyla gidecek olan:** yalnız `FORMASYON_TAMAMLANDI`/`RETEST_BASARILI`
++ kalite ≥ 80 → yukarıdaki günden **9 alarm + 2 özet ≈ 11 mesaj**. `KIRILIM_TEYITLI` eklenirse
+≈ 16-18. İzleme adayları da eklenirse 30+ (önerilmez).
+
+## 7) Gruba eklerken çıkabilecek sorunlar (kontrol listesi)
+
+### Kritik — bugün kodda böyle
+
+1. **Botu grup yöneticisi yapmak sohbeti bozar.** Yönetici botlarda Telegram gizlilik modu devre dışı
+   kalır ve bot **tüm grup mesajlarını** alır; kodda ise komut olmayan HER metne yardım metni cevabı
+   var (test: `test_telegram_commands.py::test_komut_olmayan_metin_yardim_metni_gonderir`). Yani
+   "grup sohbeti → bot her mesaja /yardim basıyor" durumu doğar.
+   **Not:** Botun gruba mesaj atması için admin olması **gerekmez** (üye olması yeterli; yalnız kanalda
+   admin şart). Admin yapmayın; komut yetkisi için `getChatAdministrators` (önbellekli) veya env'deki
+   admin listesi kullanılmalı.
+2. **Admin tespiti:** `getChatMember` yalnızca "bot sohbette yöneticiyse diğer kullanıcılar için
+   garanti" (Bot API). Bu yüzden admin-kapısı için önerilen yol: `getChatAdministrators` + 5-10 dk
+   önbellek; alternatif `TELEGRAM_ADMIN_IDS` (tek env).
+3. **Grup → supergroup yükseltmesi `chat_id`'yi değiştirir**; kodda `migrate_to_chat_id` işleme yok →
+   kayıtlı ID sessizce ölür. Çözüm: grup public ise `@kullanici_adi` ile gönder (API kabul eder) ya da
+   taşınma güncellemesini yakala.
+4. **Grup başına 20 mesaj/dakika** (Telegram Bots FAQ) + sohbet başına ~1 msg/sn. Bugünkü iletide
+   11:30'da 9 mesaj aynı anda gitti; volatil günde 20+ olursa 429 alınır. `send_to_channel`'da
+   pacing/retry/429 yok (DM `send_text` yolunda var).
+5. **4096 karakter sınırı:** `send_to_channel` `kirp()` kullanmıyor → uzun özet 400 dönebilir.
+6. **Sessiz kesinti:** bot gruptan atılırsa veya gönderim sürekli 403 alırsa hiçbir uyarı yok;
+   hedef bazlı gönderim sağlığı eklenmeli.
+
+### İçerik / algı
+
+7. ❌ `BASARISIZ_KIRILIM` alarmların ~%32'si. Public grupta "bot sürekli yanılıyor" algısı yaratır;
+   ya gruba hiç gitmesin ya akşam bülteninde toplu verilsin.
+8. **Aynı hisse × 4 TF** tekrarı (ISMEN 4, TTRAK 4): grup için "hisse başına tek mesaj / aynı mum
+   kapanışını tek mesajda birleştir" kuralı gürültüyü ~%60 azaltır.
+9. `👀 Diğer izleme adayları` kuyrukları her alarmın altına ekleniyor; grup için gereksiz uzunluk.
+10. `⏰ Kaçırılan kapanış özeti (01.10 18:45)` gibi eski damgalı telafi mesajları grupta "bozuk" görünür.
+11. 09:55 özetindeki `📈 Gün: 0 hisse tarandı, 0 bildirim gönderildi` satırı sayaçların gece
+    sıfırlanmasından geliyor (sabah henüz tarama yok) → grupta "bot ölü" izlenimi. Önceki günün
+    toplamı gösterilmeli ya da satır kaldırılmalı.
+12. Footer (`yatırım tavsiyesi değildir`) yalnız 4 state'te var; ❌ ve 👀 mesajlarında yok.
+13. Forum/konu (topics) açık gruplarda bot mesajları "General"a düşer; belirli konuya göndermek için
+    `message_thread_id` desteği gerekir (kodda yok).
+
+### İşletim
+
+14. Komutlar tek sohbete kilitli: grubu `TELEGRAM_CHAT_ID` yaparsan **kendi DM komutların susar**
+    (çok sohbet desteği yok) — ya çok sohbet ya ayrı `TELEGRAM_KOMUT_CHAT_ID`.
+15. Aynı token'la ikinci kopya → grupta çift mesaj; 409 koruması yalnız yoklama modunda.
+16. Saatlik/günlük kap (20/120) yalnız DM yolunu sayıyor; grup hedefi için ayrı bütçe gerekir.
+17. Grup public olacaksa: sabitlenmiş karşılama + "bu bir AL/SAT aracı değildir" + Telegram'ın
+    "bot has access to messages" etiketi için şeffaflık metni hazırlanmalı.
