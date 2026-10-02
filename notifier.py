@@ -101,6 +101,30 @@ def _tr_tarih(dt: datetime) -> str:
     """Kısa Türkçe tarih: '02 Eki 20:05'. Gün/ay/saat hizalı kalır (telefonda düzgün görünür)."""
     return f"{dt.day:02d} {_AY_KISALTMALARI.get(dt.month, '')} {dt:%H:%M}"
 
+
+def _public_izleme_adaylari(aktif: List[Dict], adet: int = 5, haric=None) -> List[Dict]:
+    """Sabah notu için izleme listesi: hâlâ WATCH_STATES'te olan adaylar.
+
+    Kaynak DM tarafındaki kuyruk değil, o anki canlı durumdur; kaliteye göre
+    sıralanır ve alan adları panel/kuyruk sözlüğüne çevrilir.
+    `haric`: aynı mesajda zaten yazılmış hisseler (örn. ⚡ Sıkışan satırı) —
+    tek mesajda aynı hisse iki kez görünmesin.
+    """
+    haric = set(haric or ())
+    adaylar = [f for f in aktif or []
+               if isinstance(f, dict) and str(f.get('state') or '') in WATCH_STATES
+               and f.get('stock_name') not in haric]
+    try:
+        adaylar.sort(key=lambda f: float(f.get('confidence_score') or 0), reverse=True)
+    except (TypeError, ValueError):
+        pass
+    sonuc = []
+    for f in adaylar[:adet]:
+        sonuc.append({"stock": f.get("stock_name"), "timeframe": f.get("timeframe"),
+                      "pattern_name": f.get("pattern_name"),
+                      "quality": f.get("confidence_score")})
+    return sonuc
+
 # Zaman dilimi -> bir bar kaç saat? Tek-seferlik mühürün bayatma süresi buna
 # göre ölçeklenir (bkz. _muhur_ttl_saat).
 _TF_BAR_SAAT = {"1h": 1, "2h": 2, "4h": 4, "1d": 24}
@@ -628,11 +652,18 @@ class TelegramNotifier:
 
     def format_public_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None,
                               izleme: List[Dict] = None, karne_kisa: str = "",
-                              tarama_turu=None) -> str:
-        """Grup sürümü kapanış özeti: sayılar + izleme listesi, teknik döküm yok."""
+                              tarama_turu=None, kapanis: bool = True) -> str:
+        """Grup sürümü kapanış/sabah özeti: sayılar + izleme listesi, teknik döküm yok.
+
+        `kapanis=False` (09:55 sabah notu): başlık ve izleme listesi başlığı değişir;
+        dün akşam gönderilen kuyruk yerine o an İZLENEN adaylar listelenir; gün
+        sıfırlandığı için "❌ bugün" satırı ve tarama sayısı yazılmaz.
+        """
         simdi = datetime.now(ISTANBUL_TZ)
         aktif = [f for f in (aktif_formasyonlar or []) if isinstance(f, dict)]
-        satirlar = [f"📊 {_tr_tarih(simdi)} kapanış · BIST formasyon özeti"]
+        baslik = (f"📊 {_tr_tarih(simdi)} kapanış · BIST formasyon özeti" if kapanis
+                  else f"📊 {_tr_tarih(simdi)} sabah notu · BIST formasyon takibi")
+        satirlar = [baslik]
         tamamlanan = [f for f in aktif if f.get('state') == 'FORMASYON_TAMAMLANDI']
         retest = [f for f in aktif if f.get('state') == 'RETEST_BASARILI']
         teyitli = [f for f in aktif if f.get('state') == 'KIRILIM_TEYITLI']
@@ -647,15 +678,20 @@ class TelegramNotifier:
             satirlar.append(f"🎯 Retest başarılı {len(retest)} · "
                             f"✅ Teyitli kırılım {len(teyitli)}")
         basarisiz = int((gun_ozeti or {}).get('basarisiz_kirilim') or 0)
-        if basarisiz:
+        if basarisiz and kapanis:
             satirlar.append(f"❌ {basarisiz} kırılım başarısız oldu")
         if sikisan:
             ilk = " · ".join(f"{f.get('stock_name')} {f.get('timeframe') or ''} "
                              f"(%{(f.get('contraction') or 0) * 100:.0f})" for f in sikisan[:3])
             satirlar.append(f"⚡ Sıkışan {len(sikisan)}: {ilk}")
+        if not izleme and not kapanis:
+            # Sabah: dün akşamki kuyruk çoktan tüketildi; o an izlenen adaylar
+            # (sıkışma/olgunlaşma) kaliteye göre sıralanıp "bugünün listesi" olur.
+            izleme = _public_izleme_adaylari(aktif, haric={f.get('stock_name') for f in sikisan})
         if izleme:
             satirlar.append("")
-            satirlar.append(f"📡 Yarının izleme listesi (ilk {min(5, len(izleme))})")
+            basliklar = ("Yarının izleme listesi" if kapanis else "Bugünün izleme listesi")
+            satirlar.append(f"📡 {basliklar} (ilk {min(5, len(izleme))})")
             for k in list(izleme)[:5]:
                 if not isinstance(k, dict):
                     continue
@@ -667,14 +703,16 @@ class TelegramNotifier:
                 satirlar.append(f"• {k.get('stock')} {tf} {k.get('pattern_name') or 'formasyon'}"
                                 f"{kalite}")
         if not aktif and not izleme:
-            satirlar.append("Bugün öne çıkan formasyon olmadı.")
+            satirlar.append("Bugün öne çıkan formasyon olmadı." if kapanis
+                            else "Şu an izlenen formasyon yok.")
         try:
             tur = int(tarama_turu) if tarama_turu is not None else 0
         except (TypeError, ValueError):
             tur = 0
         satirlar.append("")
         satirlar.append(f"{len(ACTIVE_STOCKS)} hisse × 4 zaman dilimi"
-                        + (f" · {tur} tarama" if tur else ""))
+                        + (f" · {tur} tarama" if tur else "")
+                        + ("" if kapanis else " · gün yeni başlıyor"))
         if karne_kisa:
             satirlar += ["", karne_kisa]
         satirlar.append("📌 Formasyon takibi · yatırım tavsiyesi değildir")

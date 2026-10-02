@@ -352,9 +352,20 @@ takibi, (b) yarının izleme listesi, (c) ölçülmüş doğruluk karnesi. Üç�
 kartı: piyasadaki "sinyal gruplarının" çoğu geçmiş performansını yayınlamaz; ölçülü ve dürüst bir
 karne, grubu ayırt eden şey olur.
 
-### Uygulama planı
+### Uygulama durumu (02.10.2026, kod tarafı)
 
-**Faz 0 — grup açılmadan (zorunlu, bugün):** karne/panel tekrarını bitiren kalıcı işaretler ·
+| Faz | Durum | Not |
+|---|---|---|
+| **Faz 0** | ✅ Bitti (commit `f53db88`, `7e0acdc`) | karne çift gönderimi parça bazlı sonuçla kesildi · gün sonu paneli kalıcı damga (`gonderim_durumu.json`) · `📁 Kayıt` satırı kaldırıldı · "(6 · ilk 3)" başlıkları · "N tarama · 48 hisse × 4 TF" · grup sohbetine cevap yok · panel işaret anahtarı + ⛔ Türkçeleştirme |
+| **Faz 1** | ✅ Bitti (commit `f53db88`) | DM'siz grup yayını · tur başına tek bülten · grup bütçesi 6/saat & 25/gün · 1.2 sn tempo · 429 `retry_after` · `@kullanıcı_adı` hedefi · public sade şablonlar + 18:45 özeti + 09:55 sabah notu + Cuma kısa karne · `durum()`/`/durum` public sağlık sayacı |
+| **Faz 2** | ⏳ Sırada | sabitlenmiş karşılama + "AL/SAT değildir" + şeffaflık notu · ilk hafta gözlem · eşik ayarı |
+
+**Faz 1'de beklenen ile gerçekleşen fark:** bültende olay başına mesaj yerine tur başına
+tek mesaj tercih edildi (kullanıcı şikâyeti olan "çok mesaj" riskini baştan kapatır);
+grup özeti DM özetinden **tamamen ayrı** bir izleme bayrağıyla (`last_summary_public_sent`)
+gönderiliyor, böylece DM hatası grubu, DM tekrarı da grubu etkilemiyor.
+
+### Uygulama planı (onaylanan sürüm)
 "yalnız komutlara cevap ver" kuralı · özet satır düzeltmeleri ("48 hisse · 9 tarama",
 "TAMAMLANAN 6 · ilk 3", `📁 Kayıt` satırının çıkarılması).
 

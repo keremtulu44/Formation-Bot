@@ -2696,9 +2696,11 @@ def main_loop():
                         kisa_karne = ""
                         if sh == deferred_alert_digest_time:
                             kisa_karne = _haftalik_karne_kisa(now, deque_manager)
+                        kapanis_mi = (sh == deferred_alert_digest_time)
                         grup_ozet = notifier.format_public_summary(
                             aktif, daily_stats, izleme=bekleyen, karne_kisa=kisa_karne,
                             tarama_turu=daily_stats.get('tarama_sayisi'),
+                            kapanis=kapanis_mi,
                         )
                         if notifier.send_to_public(grup_ozet):
                             last_summary_public_sent[sh_str] = now.date()

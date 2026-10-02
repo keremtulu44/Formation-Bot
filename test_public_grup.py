@@ -263,3 +263,29 @@ def test_grup_sohbetinde_komut_calisir():
     cevap = dinleyici.handle_update(_grup_guncellemesi(2, "/durum"))
     assert cevap == "durum cevabi"
     assert len(session.post_cagrilari) == 1
+
+
+# --- 8) Sabah notu (09:55) --------------------------------------------------
+
+def test_sabah_notu_kapanis_gibi_konusmaz(grup_notifier):
+    n = grup_notifier
+    aktif = [
+        {"stock_name": "ISMEN", "timeframe": "1h", "state": "SIKISMA_GUCLENIYOR",
+         "pattern_name": "Simetrik Üçgen", "confidence_score": 79, "contraction": 0.82},
+        {"stock_name": "GARAN", "timeframe": "2h", "state": "KIRILIM_HAZIRLIGI",
+         "pattern_name": "Üçgen", "confidence_score": 81},
+        {"stock_name": "KCHOL", "timeframe": "4h", "state": "KIRILIM_DENEMESI",
+         "pattern_name": "Üçgen", "confidence_score": 77},
+        {"stock_name": "AKBNK", "timeframe": "4h", "state": "TeyitBekliyor",
+         "confidence_score": 88},
+    ]
+    metin = n.format_public_summary(aktif, {"basarisiz_kirilim": 3}, kapanis=False)
+    assert "sabah notu" in metin
+    assert "Bugünün izleme listesi (ilk 2)" in metin
+    assert "• GARAN" in metin and "• KCHOL" in metin
+    # ⚡ Sıkışan satırında yazan hisse izleme listesinde TEKRAR etmez.
+    assert "⚡ Sıkışan 1: ISMEN 1h" in metin and "• ISMEN" not in metin
+    assert "AKBNK" not in metin          # WATCH_STATES dışı -> izleme listesine girmez
+    assert "Yarının" not in metin
+    assert "kapanış" not in metin
+    assert "❌ 3 kırılım" not in metin    # gün yeni başladı, dünün sayısı yazılmaz
