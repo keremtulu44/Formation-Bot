@@ -239,7 +239,11 @@ def test_main_karne_ekleme_kapisi(monkeypatch, tmp_path):
     monkeypatch.setattr(K, "DATA_DIR", str(tmp_path))
     monkeypatch.setattr(M, "_karne_defteri", None)
     d = M._karne_al()
-    d.formasyon_kaydet("THYAO", "1h", "Üçgen", "SIKISMA_GUCLENIYOR", 82, t(2026, 10, 2, 10, 30))
+    # `now` AÇIKÇA verilir: verilmezse formasyon_kaydet() duvar saatini kullanır ve
+    # kayıt 18:45'ten sonra oluşursa `_karne_dolu(now=18:45)` penceresine girmez
+    # (test İstanbul saati 18:45'i geçince CI'da kırmızıya düşüyordu).
+    d.formasyon_kaydet("THYAO", "1h", "Üçgen", "SIKISMA_GUCLENIYOR", 82, t(2026, 10, 2, 10, 30),
+                       now=t(2026, 10, 2, 10, 30))
     # Cuma -> eklenir ve metin döner
     metin = M._haftalik_karne_ekle(t(2026, 10, 2, 18, 45), None)
     assert "HAFTALIK DOĞRULUK KARNESİ" in metin
