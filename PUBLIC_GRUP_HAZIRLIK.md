@@ -321,3 +321,47 @@ Tamamlanan 45 · retest başarılı 12
 | 6 | Panelde `87⛔` gibi hücreler | ⛔ = `BASARISIZ_KIRILIM`/`FORMASYON_GECERSIZ` (`reporting/format.py:167`); legend yok, "kalite 87 ama yasak" gibi okunuyor | Panel gruptan çıkacak; DM'de legend satırı |
 | 7 | Karne "hedef 0 · nötr 8 · stop 2" | Teknik ve ilk bakışta olumsuz; oorijinal metrik | Public sürümde yalnız "%60 yönünde kapattı" satırı |
 | 8 | İki kopya çalışıyorsa tüm bu tekrarlar katlanır | Çoklu örnek koruması yalnız Supabase kuruluysa çalışıyor (`main.py:429` — store yoksa erken döner) | Supabase yoksa `DATA_DIR`'de kilit dosyası + uyarı |
+
+## 10) ÖNERİLEN KARAR (ajan tavsiyesi — onay bekliyor)
+
+**İlke:** DM = kişisel takip aracı (her detay, her TF, her olay kalır).
+**Grup = dışa dönük vitrin:** az mesaj, yüksek kalite, dürüst muhasebe.
+Grup asla "AL/SAT sinyal servisi" gibi davranmamalı; "formasyon takip panosu" olmalı.
+
+### İçerik politikası — "B + D, tekilleştirilmiş"
+
+| Akış | İçerik | Sıklık |
+|---|---|---|
+| **Anlık bülten** | `KIRILIM_TEYITLI`, `RETEST_BASARILI`, `FORMASYON_TAMAMLANDI`; TF eşikleri 80/78/75/70; **mum kapanışı/tarama turu başına TEK mesaj** (birden çok olay tek listede) | Günde ~5-8 |
+| **18:45 kapanış** | Sayılar (tamamlanan/retest/teyitli) + **yarının izleme listesi** (en iyi 5: sıkışma/hazırlık + seviye) + "❌ N kırılım başarısız" satırı | 1 mesaj |
+| **09:55 sabah** | Önceki kapanışın kısa hatırlatması + bugünün takip listesi | 1 mesaj |
+| **Cuma** | Haftalık doğruluk karnesi **kısa sürüm** (4-5 satır) | 1 mesaj |
+| **Asla** | `/panel`, `/durum`, izleme adayı kuyrukları, ham "kaçırılan özet", her ❌ için ayrı mesaj | — |
+
+**Neden `KIRILIM_TEYITLI` dahil, `BASARISIZ_KIRILIM` hariç?**
+- Teyitli kırılım, formasyonun çözüldüğü andır; grup bu anı görmezse yalnız gecikmiş sonuçları görür
+  ("neden geç söylüyorsun?" algısı). Eşik zaten var (1h:80 … 1d:70).
+- Başarısız kırılımlar bugün alarmların **%32'si**; tek tek gönderilirse "sürekli yanılıyor" algısı
+  yaratır. Ama gizlemek de yanlış: **aynı gün 18:45 özetinde "❌ N başarısız" satırıyla, Cuma
+  karnesinde ayrıntılı** açıklanır → dürüstlük korunur, spam olmaz.
+
+**Beklenen hacim:** 02.10 gibi hareketli bir günde ~8-10 mesaj (bugün 30'du); sakin günde 2-3.
+
+**Neden bu kadarı yeterli:** grubun günlük değeri "anlık heyecan" değil, (a) çözülen formasyonların
+takibi, (b) yarının izleme listesi, (c) ölçülmüş doğruluk karnesi. Üçüncüsü bu projenin en güçlü
+kartı: piyasadaki "sinyal gruplarının" çoğu geçmiş performansını yayınlamaz; ölçülü ve dürüst bir
+karne, grubu ayırt eden şey olur.
+
+### Uygulama planı
+
+**Faz 0 — grup açılmadan (zorunlu, bugün):** karne/panel tekrarını bitiren kalıcı işaretler ·
+"yalnız komutlara cevap ver" kuralı · özet satır düzeltmeleri ("48 hisse · 9 tarama",
+"TAMAMLANAN 6 · ilk 3", `📁 Kayıt` satırının çıkarılması).
+
+**Faz 1 — grup yayını:** DM'den bağımsız grup gönderimi (DM kapalıyken de çalışır) · public şablonlar
+(sade anlık, bülten, özet, karne kısa) · tarama turu sonunda toplama/flush · grup bütçesi
+(saat ≤6, gün ≤25) + 1 msg/sn pacing + 429 `retry_after` · `@kullanici_adi` desteği · hedef bazlı
+gönderim sağlığı.
+
+**Faz 2 — açılış:** sabitlenmiş karşılama + "AL/SAT değildir" + bot ne görüyor şeffaflığı ·
+ilk hafta günlük gözlem (mesaj sayısı, 429, geri bildirim) · eşik ayarı (gerekirse 80→82).
