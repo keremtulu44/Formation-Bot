@@ -49,3 +49,6 @@ bot_data/*.pkl
 # veya ~/.formation-bot/data; Render'da /tmp/formation-bot-data). bot_data/ bu yüzden yalnız
 # OKUMA yedeğidir (SEED_DATA_DIR) ve canlı sunucuda git pull artık çakışmaz. Yukarıdaki
 # runtime kalıpları, biri DATA_DIR=./bot_data seçerse diye korunuyor.
+
+# Simülasyon raporları (üretilen çıktı)
+raporlar/

@@ -365,6 +365,46 @@ tek mesaj tercih edildi (kullanıcı şikâyeti olan "çok mesaj" riskini başta
 grup özeti DM özetinden **tamamen ayrı** bir izleme bayrağıyla (`last_summary_public_sent`)
 gönderiliyor, böylece DM hatası grubu, DM tekrarı da grubu etkilemiyor.
 
+## 11) Simülasyon ölçümü — 24–25.09.2026 (gerçek cache verisi, ağ yok)
+
+**Araç:** `gun_simulasyonu.py` — `bot_data/` içindeki gerçek 1H barları sanal saatle
+akar; `main_loop` gerçek kod yollarıyla koşar, Telegram çağrıları yakalanır (ağ yok).
+
+```bash
+.venv/bin/python gun_simulasyonu.py --liste
+.venv/bin/python gun_simulasyonu.py --gun 2026-09-25 --veri-dir /tmp/sim
+```
+
+| Ölçüm (tam gün 08:40→20:20) | 24.09 (Perşembe) | 25.09 (Cuma) |
+|---|---|---|
+| **DM mesajı** | 19 | 14 |
+| **Grup mesajı** | 11 | 11 |
+| Tarama turu | 10 | 10 |
+| Grup: en yoğun saat | 2/6 ✅ | 2/6 ✅ |
+| Grup: günlük toplam | 11/25 ✅ | 11/25 ✅ |
+
+**Grup akışı (Cuma):** 09:55 sabah notu (1) + 9 tarama bülteni + 18:45 kapanış özeti
+(kısa karne dahil) = 11 mesaj. Bültenler 2–4 olayı tek mesajda topladı; her saat en
+fazla 1–2 grup mesajı düştü. 18:45 özeti doğru satırları üretti:
+"🏁 Tamamlanan 1 · 🎯 Retest başarılı 1 · ✅ Teyitli kırılım 1 · ❌ 9 kırılım başarısız ·
+⚡ Sıkışan 2" + yarının izleme listesi (ilk 3).
+
+**Grup içerik denetimi:** 22 grup mesajı yasaklı ifadeler için tarandı
+(`/panel`, `/durum`, `defter`, `📁`, `MOCK`, "Diğer izleme adayları", `kuyruk`,
+`Traceback`, `cooldown`, "alarm eşiğinin altında") → **ihlal yok**.
+
+**DM-only kalanlar (tasarım gereği):** 18:10 "Gün Sonu Bakım Raporu" ve 20:00
+"🌙 GÜN SONU ANALİZİ" paneli hiç gruba gitmedi.
+
+**Simülasyon notları / açık uçlar:**
+- Evren 28/48 hisse: bu çalışma alanındaki `bot_data/` yalnız 28 hisse içeriyor; kalan
+  20 hisse ağ olmadığı için analiz edilemedi. Üretimde evren tamdır.
+- 20:00 analizinde `VERİ ESKİ (2sa 30dk)` uyarıları düşüyor: seans dışı çalıştırmada
+  son mum yaşı doğal olarak büyüyor. Faz 2'de bu uyarı "seans dışı" bağlamında
+  susturulabilir (kozmetik, davranışı etkilemiyor).
+- Haftalık karne simülasyonda 3/9 (%33) pozitif çıktı; karne gruba **kısa sürümle**
+  ve "garantisi değildir" notuyla gidiyor.
+
 ### Uygulama planı (onaylanan sürüm)
 "yalnız komutlara cevap ver" kuralı · özet satır düzeltmeleri ("48 hisse · 9 tarama",
 "TAMAMLANAN 6 · ilk 3", `📁 Kayıt` satırının çıkarılması).
