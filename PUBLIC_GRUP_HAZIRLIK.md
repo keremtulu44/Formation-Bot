@@ -125,8 +125,9 @@ satır satır metin üretiliyor; ikinci dil eklemek bugün kopyala-yapıştır d
 |---|---|
 | Dil | **Yalnız Türkçe** — i18n katmanı yapılmayacak, mevcut metinler korunur |
 | Yapı | **Tek public supergroup** (ayrı kanal yok); bot alarmları yayınlar, sahibi ara sıra kendi mesajını yazar |
-| Komut yetkisi | **Yalnız grup adminleri**; üyeler yayını görür, komut çalıştıramaz |
-| Kurulum | Bot gruba **üye olarak** eklenir (yönetici yapılması GEREKMEZ, bkz. §7.1); env'de yalnız bot token + grubun chat_id'si tutulur |
+| Grup yetkisi | **Salt okunur grup**: üyeler yazamaz; gruba yalnız sahibi ve bot yazar |
+| Komut yetkisi | Komutlar **DM'de** kalır (grup salt yayın). Grup salt-okunur olduğu için üye komutu riski yok |
+| Kurulum | Bot, **"Post Messages" yetkisiyle admin** yapılmalı: Telegram'da Send Messages üyeler için kapalıyken admin olmayan bot da yazamaz (bkz. §8). Env: bot token + grubun chat_id'si |
 | İçerik politikası | **AÇIK** — B9 kararı, uygulamadan önce konuşulacak (aşağıdaki seçenekler) |
 
 ### Açık konu: gruba hangi içerik gitsin? (B9)
@@ -180,13 +181,15 @@ günün son 2h/4h kovasının (18:00) artık analiz edilmesi, yani akşam birka�
 
 ### Kritik — bugün kodda böyle
 
-1. **Botu grup yöneticisi yapmak sohbeti bozar.** Yönetici botlarda Telegram gizlilik modu devre dışı
-   kalır ve bot **tüm grup mesajlarını** alır; kodda ise komut olmayan HER metne yardım metni cevabı
-   var (test: `test_telegram_commands.py::test_komut_olmayan_metin_yardim_metni_gonderir`). Yani
-   "grup sohbeti → bot her mesaja /yardim basıyor" durumu doğar.
-   **Not:** Botun gruba mesaj atması için admin olması **gerekmez** (üye olması yeterli; yalnız kanalda
-   admin şart). Admin yapmayın; komut yetkisi için `getChatAdministrators` (önbellekli) veya env'deki
-   admin listesi kullanılmalı.
+1. **Botu grup yöneticisi yapmak sohbeti bozar — üyeler yazabiliyorsa.** Yönetici botlarda Telegram
+   gizlilik modu devre dışı kalır ve bot **tüm grup mesajlarını** alır; kodda ise komut olmayan HER
+   metne yardım metni cevabı var (test: `test_telegram_commands.py::test_komut_olmayan_metin_yardim_metni_gonderir`).
+   **İstisna (bu proje):** grup salt-okunur olacaksa (üyeler yazamaz) admin bot ZORUNLUDUR — Telegram'da
+   "Send Messages" üyeler için kapalıyken admin olmayan bot da yazamaz. Bu durumda spam riski üyelerden
+   gelmez; yine de sahibin kendi yazdığı mesaja botun cevap vermemesi için "komut olmayan metne cevap
+   verme" kuralı eklenmelidir.
+   **Not:** Üyelerin yazabildiği normal gruplarda botun mesaj atması için admin **gerekmez** (üye olması
+   yeterli; yalnız kanalda admin şart).
 2. **Admin tespiti:** `getChatMember` yalnızca "bot sohbette yöneticiyse diğer kullanıcılar için
    garanti" (Bot API). Bu yüzden admin-kapısı için önerilen yol: `getChatAdministrators` + 5-10 dk
    önbellek; alternatif `TELEGRAM_ADMIN_IDS` (tek env).
@@ -223,3 +226,98 @@ günün son 2h/4h kovasının (18:00) artık analiz edilmesi, yani akşam birka�
 16. Saatlik/günlük kap (20/120) yalnız DM yolunu sayıyor; grup hedefi için ayrı bütçe gerekir.
 17. Grup public olacaksa: sabitlenmiş karşılama + "bu bir AL/SAT aracı değildir" + Telegram'ın
     "bot has access to messages" etiketi için şeffaflık metni hazırlanmalı.
+
+## 8) Grup mesaj tasarımı — önerilen çıktılar (henüz UYGULANMADI)
+
+**Grup salt-okunur olacaksa (üyeler yazamaz):** Telegram'da "Send Messages" üyeler için kapalıyken
+**yönetici olmayan bot da yazamaz** — botun "Post Messages" yetkisiyle admin yapılması zorunludur.
+Bu durumda komut karmaşası gereksizdir: **grup = salt yayın, komutlar DM'de** kalır (en basit ve
+risksiz kurgu). Tek istisna: sahibin kendi yazdığı mesaja botun cevap vermemesi için "komut olmayan
+metne cevap verme" kuralı yine şart (admin bot tüm mesajları görür).
+
+### 8.1 Anlık olay — bugünkü DM hali (grup için fazla uzun)
+
+```
+🏁 ISMEN 4 saatlik · Alçalan Üçgen
+🕒 4 saatlik mum 02.10 12:30 → 16:30 kapandı
+TAMAMLANDI · aşağı kırılım + retest başarılı
+Kalite 87 ⭐⭐⭐ (çok güçlü)
+daralma %80 · sıkışıyor · 4 temas · 97 bar · 4h destekliyor
+
+📌 Formasyon takibi · yatırım tavsiyesi değildir
+
+👀 Diğer izleme adayları
+• EKGYO 2 saatlik Alçalan Üçgen: Sıkışma güçleniyor · kalite 84
+• HEKTS 2 saatlik Alçalan Kama: Kırılım hazırlığı · kalite 81
+• AKBNK 2 saatlik Alçalan Kama: Sıkışma güçleniyor · kalite 79
+```
+
+### 8.2 Grup sürümü — sade anlık (önerilen)
+
+```
+🏁 ISMEN · 4 saatlik
+Alçalan Üçgen · aşağı kırılım + başarılı retest
+Kalite 87/100 · sıkışma %80 · seviye 30.75
+```
+
+Farklar: kuyruk yok, "çok güçlü" yorumu yok, mum satırı kısa, tek footer grup bülteninin altında.
+
+### 8.3 Grup sürümü — mum kapanışı bülteni (aynı anda 3+ olay)
+
+```
+📊 16:30 mum kapanışı · 4 gelişme
+🏁 ISMEN 4h · Alçalan Üçgen · aşağı kırılım + retest · q87
+🏁 GARAN 4h · Yükselen Üçgen · aşağı kırılım · q86
+🏁 TTRAK 1h · Simetrik Üçgen · aşağı kırılım · q83
+❌ TSKB 4h · Alçalan Kama · kırılım başarısız
+```
+
+Bugünkü 11:30 ve 16:30 kapanışlarında 5-9 ayrı mesaj yerine 2 mesaj giderdi.
+
+### 8.4 Grup sürümü — kapanış özeti (18:45)
+
+```
+📊 02 Eki kapanış · BIST formasyon özeti
+🏁 Tamamlanan 6 (ilk 3): ISMEN 4h · AKSEN 1d · KCHOL 4h
+🎯 Retest başarılı 3 · ✅ Teyitli kırılım 5
+⚡ Sıkışan: GUBRF 4h (%81)
+48 hisse · 4 zaman dilimi tarandı
+📌 Formasyon takibi · yatırım tavsiyesi değildir
+```
+
+Düzeltmeler: "432 hisse tarandı" → "48 hisse · 4 zaman dilimi" (432 = 48×9 tarama, yanıltıcı),
+"TAMAMLANAN (6)" deyip 3 satır listelemek → "6 (ilk 3)".
+
+### 8.5 Haftalık karne — grup sürümü (kısa) ya da hiç
+
+```
+📊 Haftalık doğruluk · 28.09–02.10
+Kırılım sinyali 13 · 10 bar içinde yönünde kapatan 6/10 (%60)
+Ort. maks. lehte +%0.9 · alehte −%1.3
+Tamamlanan 45 · retest başarılı 12
+ℹ️ Geçmiş performans, gelecek getirinin garantisi değildir
+```
+
+### 8.6 Gruba GİTMEMESİ gerekenler
+
+| İçerik | Neden |
+|---|---|
+| `/panel` (48×4 slot tablosu, ~3.4k+ karakter) | Teknik jargon, Telegram 4096 sınırına dayanıyor, gruba bilgi taşımıyor |
+| Tam karne (defter satırı, `📁 Kayıt: /tmp/...`, "n=10 küçük" uyarısı, hedef/nötr/stop dağılımı) | Yöntem detayı + dosya yolu sızıntısı; abartılı iddia/olumsuzluk algısı |
+| `/durum` çıktısı | Sunucu iç bilgisi (instance_id, heartbeat, Supabase uyarıları) |
+| `⏰ Kaçırılan kapanış özeti (dün)` ham hali | Grupta "bozuk/gecikmiş" görünür |
+| `👀 Diğer izleme adayları` kuyrukları | Her mesajı şişiriyor; izleme adayları zaten 18:45 bülteninde |
+| ❌ başarısız kırılımların her biri ayrı mesaj | Alarmların ~%32'si; grup ya hiç görmesin ya bültende toplu görsün |
+
+## 9) 02.10 çıktılarında tespit edilen hatalar
+
+| # | Sorun | Kanıt / Kök neden | Çözüm |
+|---|---|---|---|
+| 1 | **Karne aynı akşam iki kez** | Karne iki ayrı yolun altına ekleniyor: 18:45 özeti (`main.py:2566`) ve 20:00 gün sonu analizi (`main.py:2621`). "Gönderildi" işareti yalnızca gönderim TAM başarılıysa konuyor; mesaj iki parçaya bölündüğünde ikinci parça hata alırsa işaret konmaz → sonraki turda karne yeniden basılır | İşareti gönderimden ÖNCE "sahiplen" (claim) + tek yol; ikinci yol yalnız "hiç gönderilmedi" ise |
+| 2 | **Gün sonu paneli 20:05 ve 21:49'da iki kez** | `last_post_close_analysis_date` yalnız bellekte (`main.py:2487`) → süreç yeniden başlarsa aynı gün ikinci kez çalışır | Damgayı kalıcı yaz (digest gün işareti gibi) |
+| 3 | `📁 Kayıt: /tmp/formation-bot-data/karne_defteri.json` | `/karne` komutu çıktısı (`main.py:969`) — admin komutuyla bile gruba sızabilir | Public/komut şablonlarından dosya yolu satırı çıkarılmalı |
+| 4 | `📈 Gün: 432 hisse tarandı` | `stocks_scanned` her taramada artıyor (48 hisse × 9 tarama); dün sabah aynı satır "0 hisse" dedi | "48 hisse · 9 tarama" gibi gerçek anlamı yaz ya da satırı kaldır |
+| 5 | `🏁 TAMAMLANAN (6):` ama 3 satır | Özet listesi bilerek `[:3]` ile sınırlı (`notifier.py:412`), başlık toplamı yazıyor | "(6 · ilk 3)" biçimi |
+| 6 | Panelde `87⛔` gibi hücreler | ⛔ = `BASARISIZ_KIRILIM`/`FORMASYON_GECERSIZ` (`reporting/format.py:167`); legend yok, "kalite 87 ama yasak" gibi okunuyor | Panel gruptan çıkacak; DM'de legend satırı |
+| 7 | Karne "hedef 0 · nötr 8 · stop 2" | Teknik ve ilk bakışta olumsuz; oorijinal metrik | Public sürümde yalnız "%60 yönünde kapattı" satırı |
+| 8 | İki kopya çalışıyorsa tüm bu tekrarlar katlanır | Çoklu örnek koruması yalnız Supabase kuruluysa çalışıyor (`main.py:429` — store yoksa erken döner) | Supabase yoksa `DATA_DIR`'de kilit dosyası + uyarı |
