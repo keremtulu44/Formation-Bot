@@ -432,6 +432,14 @@ def simule_et(args) -> dict:
     return rapor
 
 
+class _IstanbulFormatter(logging.Formatter):
+    """Log saatini SANAL saate göre İstanbul'da yazar (log UTC görünmesin)."""
+
+    def formatTime(self, record, datefmt=None):
+        zaman = _GERCEK_DATETIME.fromtimestamp(record.created, tz=ISTANBUL_TZ)
+        return zaman.strftime(datefmt or "%Y-%m-%d %H:%M:%S")
+
+
 def _log_kur(log_yolu: Path, seviye: str) -> None:
     log_yolu.parent.mkdir(parents=True, exist_ok=True)
     kok = logging.getLogger()
@@ -439,7 +447,7 @@ def _log_kur(log_yolu: Path, seviye: str) -> None:
     kok.setLevel(logging.DEBUG)
     dosya = logging.FileHandler(log_yolu, encoding="utf-8")
     dosya.setLevel(logging.DEBUG)
-    dosya.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    dosya.setFormatter(_IstanbulFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     kok.addHandler(dosya)
     konsol = logging.StreamHandler(sys.stderr)
     konsol.setLevel(getattr(logging, seviye.upper(), logging.WARNING))
