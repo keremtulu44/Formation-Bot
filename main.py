@@ -40,7 +40,8 @@ from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   son_kapanan_mum_ani, time_until_next_open, is_bist_open,
                   resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_last_bar,
-                  select_yfinance_1h_period, tamamlanmis_mumlar)
+                  select_yfinance_1h_period, tamamlanmis_mumlar,
+                  mum_kapanis_ani, bar_kapandi_mi)
 from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
@@ -67,6 +68,7 @@ from reporting.format import (
     panel_durum_sayilari as _panel_durum_sayilari,
     panel_kritik_listesi as _panel_kritik_listesi,
     panel_sigdir as _panel_sigdir,
+    mum_kapanis_metni as _mum_bilgisi,
     format_deferred_alert_summary as _format_deferred_alert_summary,
 )
 
@@ -252,6 +254,7 @@ daily_stats = {
     'alerts_deferred': 0,         # WATCH state: 18:45 digest'ine ertelendi
     'alerts_below_threshold': 0,  # kalite eşiği altı (push üretmez)
     'alerts_state_disabled': 0,   # state hiçbir push akışında değil (yalnız panel)
+    'alerts_bar_kapanmadi': 0,    # kapanmamış bar nedeniyle push ertelendi (P0 güvenlik kapısı)
     'alerts_digest_overflow': 0,  # digest limiti nedeniyle gösterilmeyen aday
     'alerts_kuyruk': 0,           # acil alarm engel yüzünden kuyruğa alındı (Batch 5 / B4)
     'alerts_engel_cooldown': 0,   # cooldown nedeniyle gönderilemedi (B4 kuyruğuna girer)
@@ -290,6 +293,7 @@ def reset_daily_if_needed():
         daily_stats['alerts_deferred'] = 0
         daily_stats['alerts_below_threshold'] = 0
         daily_stats['alerts_state_disabled'] = 0
+        daily_stats['alerts_bar_kapanmadi'] = 0
         daily_stats['alerts_digest_overflow'] = 0
         daily_stats['alerts_kuyruk'] = 0
         daily_stats['alerts_engel_cooldown'] = 0
@@ -528,6 +532,7 @@ def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
                 "digest_ertelenen": daily_stats['alerts_deferred'],
                 "state_kapsam_disi": daily_stats['alerts_state_disabled'],
                 "esik_alti": daily_stats['alerts_below_threshold'],
+                "bar_kapanmadi": daily_stats['alerts_bar_kapanmadi'],
                 "digest_tasmasi": daily_stats['alerts_digest_overflow'],
                 "engel_cooldown": daily_stats['alerts_engel_cooldown'],
                 "engel_kap": daily_stats['alerts_engel_kap'],
@@ -743,6 +748,9 @@ def _komut_durum(_arguman: str) -> str:
         huni += f" · {daily_stats['alerts_digest_overflow']} digest taşması"
     if daily_stats.get('alerts_kuyruk'):
         huni += f" · {daily_stats['alerts_kuyruk']} kuyruğa alındı"
+    if daily_stats.get('alerts_bar_kapanmadi'):
+        # Güvenlik kapısı: kapanmamış bar ile push denenmedi, sonraki tura bırakıldı.
+        huni += f" · {daily_stats['alerts_bar_kapanmadi']} kapanmamış bar (ertelendi)"
     satirlar.append(huni)
     gosterim = None
     gonderim = getattr(_notifier_ref, "gonderim_durumu", None)
@@ -1581,6 +1589,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 if df_tf is None or len(df_tf) < 30:
                     logger.debug(f"{stock} {tf_name}: tamamlanmış mum kalmadı (seans içi erken tarama)")
                     continue
+                # P0 güvenlik kapısı: motorun gördüğü SON bar gerçekten kapandı mı?
+                # tamamlanmis_mumlar aynı kuralı uygular; burada olay anındaki an ile
+                # yeniden doğrulanır (restart/telafi/saat kayması regresyonlarına karşı).
+                # Kapı "hayır" derse anlık push yapılmaz, sonraki taramaya bırakılır.
+                son_bar_kapanis = mum_kapanis_ani(df_tf.index[-1], tf_name)
+                son_bar_kapandi = bar_kapandi_mi(df_tf.index[-1], tf_name, now=simdiki_zaman)
+                if not son_bar_kapandi:
+                    logger.warning(
+                        f"{stock} {tf_name}: son bar ({df_tf.index[-1]}) henüz kapanmadı "
+                        f"(kapanış {son_bar_kapanis}) - bu tur bildirim üretilmeyecek"
+                    )
                 
                 # Motor adayı kendisi bulur ve kırılım anında dondurur (Pine v0.4.6 akışı).
                 # tam_yeniden=True: pencere her taramada sıfırdan deterministik oynatılır.
@@ -1624,6 +1643,14 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         'age_bars': yas_bar,
                         'mtf_destek': False,
                         'bar_time': str(df_tf.index[-1]),
+                        # Kapanan mumun damgası + güvenlik kapısı sonucu: mesajda
+                        # gösterilir ve push öncesi son kontrol olarak kullanılır.
+                        # ISO STRING: bu kayıt LiveState/son_tarama JSON'larına
+                        # yazılır; Timestamp nesnesi serileştirmeyi kırardı.
+                        'bar_kapanis': (son_bar_kapanis.isoformat()
+                                        if son_bar_kapanis is not None else None),
+                        'bar_kapandi': bool(son_bar_kapandi),
+                        'bar_metni': _mum_bilgisi(tf_name, df_tf.index[-1], son_bar_kapanis),
                         'min_quality': float(min_q),
                         'alert_gonderildi': False,
                     }
@@ -1643,6 +1670,16 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         daily_stats['alerts_deferred'] += 1
                         logger.info(f"{stock} {tf_name} {state}: düşük öncelikli bildirim kapanış özetine ertelendi")
                     # Teyitli kırılım, başarılı retest, tamamlanma ve başarısız kırılım acildir.
+                    elif send_alerts and state in IMMEDIATE_ALERT_STATES and not son_bar_kapandi:
+                        # P0 güvenlik kapısı: bar kapanmadan anlık push yok. Bu dal
+                        # normalde HİÇ çalışmaz (tamamlanmis_mumlar aynı kuralı
+                        # uygular); saat/tarama kayması olursa sinyal yanlış
+                        # gönderilmek yerine bir sonraki taramaya bırakılır.
+                        daily_stats['alerts_bar_kapanmadi'] += 1
+                        logger.warning(
+                            f"⏸️ {stock} {tf_name} {state}: bar henüz kapanmadı "
+                            f"({df_tf.index[-1]} → {son_bar_kapanis}); push sonraki taramaya bırakıldı"
+                        )
                     elif send_alerts and state in IMMEDIATE_ALERT_STATES:
                         # Humanized mesaj için ek bilgiler - var olan veriyi kullan, ekstra hesaplama yok
                         upper_touches = getattr(active, 'upper_touches', None)
@@ -1676,6 +1713,15 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'lower_now': active.lower_now,
                             'contraction': getattr(active, 'contraction', None),
                             'timestamp': df_tf.index[-1],
+                            # Kapanan mum bilgisi: mesajda "hangi mum kapandı?" satırı
+                            # olarak görünür (bar_kapandi zaten yukarıda doğrulandı).
+                            # ISO string: engellenen alarm kuyruğa yazılırken JSON
+                            # serileştirmesi bozulmasın.
+                            'bar_time': df_tf.index[-1],
+                            'bar_kapanis': (son_bar_kapanis.isoformat()
+                                            if son_bar_kapanis is not None else None),
+                            'bar_kapandi': True,
+                            'bar_metni': _mum_bilgisi(tf_name, df_tf.index[-1], son_bar_kapanis),
                             'break_dir': break_dir,
                             'break_strength': getattr(active, 'break_strength', q),
                             'break_price': active.upper_now if break_dir == 1 else active.lower_now,

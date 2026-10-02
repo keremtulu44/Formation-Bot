@@ -23,20 +23,35 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
-# Timeframe -> pandas süre etiketi (tamamlanmis_mumlar filtresi için)
+# Timeframe -> pandas süre etiketi (resample için)
 TF_SURELERI = {"1h": "1h", "2h": "2h", "4h": "4h", "1d": "1D"}
-# Mum kapanış anı = etiket + bu süre. 1D İSTİSNA: günlük mum 00:00 etiketli ama gerçek
-# seans kapanışı 18:30'dur (ölçüldü: son 1H mum 17:30 etiketli, 18:30'da kapanıyor).
-# ESKİ HATA: 1D için de "etiket + 1 gün" kullanılıyordu -> 25 Eylül'ün günlük mumu
-# 26 Eylül 00:00'a kadar "yarım mum" sayılırdı, yani GÜN İÇİNDE HİÇ analiz edilmez,
-# günlük formasyonlar 24 saat gecikmeyle görülürdü (ölçüm: 18:35 taramasında son
-# tamamlanan 1D mum = 24 Eylül'dü).
-TF_KAPANIS_SURESI = {
-    "1h": timedelta(minutes=30),
+
+# --- MUM KAPANIŞ KURALI (P0 düzeltmesi, 2 Eki 2026) -------------------------
+# ÖLÇÜM (Yahoo chart API, THYAO.IS; meta.currentTradingPeriod.regular):
+#   * Seans 09:30–18:00, barlar SOL etiketli (etiket = bar BAŞI): 09:30, 10:30, ... 17:30.
+#   * Bir barın ömrü = etiket + TF süresi. GÜNÜN SON barı/kovası seans sonunda KESİLİR
+#     (17:30 etiketli kova 18:00'de kapanır; 4 saatlikte bu 30 dakikalık kovadır —
+#     TradingView'in BIST 4h grafiğinde de aynı).
+#
+# ESKİ HATA 1: 1h için "+30 dk" kullanılıyordu -> 10:30 barı 11:00'de "kapandı"
+#   sayılıyordu. Normal :35 taramaları doğru barı görüyordu ama :00–:29 arasında
+#   tetiklenen bir tarama (restart / kaçırılan tarama telafisi / çok uzun tur)
+#   HENÜZ KAPANMAMIŞ 1h mumunu kapanmış sayıp bildirim üretebiliyordu.
+# ESKİ HATA 2: 2h/4h için kesme yoktu -> günün son kovası (17:30) "+2sa/+4sa" kuralıyla
+#   19:30/21:30'a kadar "yarım" kalıyor, 18:35 taramasında hiç analiz edilmiyordu
+#   (ölçüm: 2h son kova 15:30, 4h son kova 13:30). Günün kapanış saati kayıptı.
+# ESKİ HATA 3: 1d mumu sabit 18:30'da tamamlanıyordu; yarım günde (arefe, 13:00 kapanış)
+#   mum 18:30'a kadar "yarım" kalıyor ve o gün günlük bildirim hiç gitmiyordu.
+TF_BAR_SURELERI = {
+    "1h": timedelta(hours=1),
     "2h": timedelta(hours=2),
     "4h": timedelta(hours=4),
 }
-GUNLUK_MUM_KAPANIS_SAATI = dt_time(18, 30)  # BIST seans kapanışı (1H ölçümünden)
+# Günlük (1d) mum: 00:00 etiketli, seans kapanışında tamamlanır (normal 18:30, yarım gün 13:00).
+GUNLUK_MUM_KAPANIS_SAATI = dt_time(18, 30)  # BIST seans kapanışı + takas payı (1H ölçümünden)
+# Seansın GERÇEK bitiş saati (intraday barların kesme sınırı): normal gün 18:00, yarım gün 13:00.
+# Ölçüm: Yahoo regular period 09:30–18:00; kapanış müzayedesi fiyatı ~18:09'da oluşur.
+INTRADAY_SEANS_SONU_SAATI = dt_time(18, 0)
 
 # === BIST SAAT KONTROLÜ ===
 
@@ -58,11 +73,28 @@ def yarim_gun_kapanisi(d) -> Optional[Tuple[str, dt_time]]:
 
 
 def seans_kapanis_saati(d=None) -> dt_time:
-    """O günün seans kapanış saati (yarım günde 13:00, normalde 18:30)."""
+    """O günün seans kapanış saati (yarım günde 13:00, normalde 18:30).
+
+    Günlük (1d) mumun tamamlanma saatidir: kapanış fiyatı/müzayede oturduktan
+    sonraki güvenli an.
+    """
     if d is None:
         d = datetime.now(ISTANBUL_TZ)
     yg = yarim_gun_kapanisi(d)
     return yg[1] if yg else GUNLUK_MUM_KAPANIS_SAATI
+
+
+def seans_sonu_saati(d=None) -> dt_time:
+    """Seansın GERÇEK bitiş saati (intraday barların kesme sınırı).
+
+    Normal gün 18:00 (Yahoo regular period end ölçümü), yarım gün 13:00.
+    Günlük mumdan farkı: 18:30 takas/müzayede payıdır; intraday bar 17:30'da
+    biter ve 18:00'de kesin kapanmıştır.
+    """
+    if d is None:
+        d = datetime.now(ISTANBUL_TZ)
+    yg = yarim_gun_kapanisi(d)
+    return yg[1] if yg else INTRADAY_SEANS_SONU_SAATI
 
 
 def is_bist_open(now: Optional[datetime] = None) -> bool:
@@ -1033,37 +1065,113 @@ def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         logger.error(f"Resample hatası {timeframe}: {e}")
         return pd.DataFrame()
 
-def tamamlanmis_mumlar(df: pd.DataFrame, tf: str, now: Optional[datetime] = None) -> pd.DataFrame:
-    """Devam eden (yarım) mumu çıkarır: kova etiketi + TF süresi > now ise o mum henüz
-    kapanmamıştır ve motor verilmemelidir. Yahoo'nun etiket hizalaması ne olursa olsun
-    güvenlidir — her mum kapanışından sonraki İLK taramada beslenir (Pine bar kapanışı
-    mantığıyla birebir). Resample sol-etiketli olduğu için etiket+TF = kova kapanışıdır."""
-    if df is None or len(df) == 0:
-        return df
-    if now is None:
-        now = datetime.now(ISTANBUL_TZ)
-    # Savunma: object/karma-tz dizin küp operasyonlarında AttributeError üretir
-    # (idx.tz erişimi) — canlı 0/48 olayının kırılma noktası buydu. Yerel hata
-    # yerine tek adımda normalleştirilir; tarihsel zehirli veriler yutulmaz,
-    # dizin düzeltilip tarama tamamlanır.
-    if not isinstance(df.index, pd.DatetimeIndex):
-        df = df.copy()
-        df.index = pd.to_datetime(df.index, utc=True)
-    idx = df.index
+def _istanbul_dizin(idx) -> pd.DatetimeIndex:
+    """Dizini Europe/Istanbul tz'li DatetimeIndex'e normalize eder (savunmalı).
+
+    Savunma: object/karma-tz dizin küp operasyonlarında AttributeError üretir
+    (idx.tz erişimi) — canlı 0/48 olayının kırılma noktası buydu. Yerel hata
+    yerine tek adımda normalleştirilir; tarihsel zehirli veriler yutulmaz,
+    dizin düzeltilip tarama tamamlanır.
+    """
+    if not isinstance(idx, pd.DatetimeIndex):
+        idx = pd.DatetimeIndex(pd.to_datetime(idx, utc=True))
     if idx.tz is None:
         idx = idx.tz_localize(ISTANBUL_TZ)
     else:
         idx = idx.tz_convert(ISTANBUL_TZ)
-    sinir = pd.Timestamp(now).tz_convert(ISTANBUL_TZ) if pd.Timestamp(now).tzinfo else ISTANBUL_TZ.localize(pd.Timestamp(now))
-    if tf == "1d":
-        # Günlük mum 00:00 etiketli ama SEANS KAPANIŞINDA (18:30) tamamlanır.
-        # "Etiket + 1 gün" kuralı günlük mumu 24 saat yarım sayardı.
-        kapanis = idx.normalize() + pd.Timedelta(
-            hours=GUNLUK_MUM_KAPANIS_SAATI.hour, minutes=GUNLUK_MUM_KAPANIS_SAATI.minute)
-    else:
-        kapanis = idx + TF_KAPANIS_SURESI.get(tf, timedelta(minutes=30))
-    tamam = kapanis <= sinir
-    return df[np.asarray(tamam, dtype=bool)]
+    return idx
+
+
+def _gun_kapanis_damgalari(idx: pd.DatetimeIndex, gunluk: bool) -> pd.DatetimeIndex:
+    """Her barın kendi GÜNÜNE ait kapanış damgası (İstanbul tz).
+
+    gunluk=True  -> günlük mum kuralı (normal 18:30 / yarım gün 13:00)
+    gunluk=False -> seans sonu (normal 18:00 / yarım gün 13:00)
+    """
+    onbellek: Dict[date, dt_time] = {}
+    damgalar = []
+    for ts in idx:
+        gun = ts.date()
+        saat = onbellek.get(gun)
+        if saat is None:
+            saat = seans_kapanis_saati(gun) if gunluk else seans_sonu_saati(gun)
+            onbellek[gun] = saat
+        damgalar.append(ts.normalize() + pd.Timedelta(hours=saat.hour, minutes=saat.minute))
+    return pd.DatetimeIndex(damgalar)
+
+
+def mum_kapanis_anlari(idx, tf: str) -> pd.DatetimeIndex:
+    """Her mumun kapandığı anı hesaplar (TEK KAYNAK, P0 kapanış kuralı).
+
+    Kural: kapanış = etiket + TF süresi, ama o günün SEANS SONUNU aşamaz
+    (17:30 etiketli 4h kovası 18:00'de kapanır; yarım günde 13:00).
+    Günlük (1d) mum ise günün seans kapanışında (18:30 / yarım gün 13:00) tamamlanır.
+    """
+    idx = _istanbul_dizin(idx)
+    if len(idx) == 0:
+        return idx
+    if str(tf).lower() == "1d":
+        return _gun_kapanis_damgalari(idx, gunluk=True)
+    sure = TF_BAR_SURELERI.get(str(tf).lower())
+    if sure is None:
+        logger.warning(f"Bilinmeyen timeframe '{tf}' - 1h süresi varsayıldı")
+        sure = TF_BAR_SURELERI["1h"]
+    dogal = idx + sure
+    seans_sonu = _gun_kapanis_damgalari(idx, gunluk=False)
+    # Sadece seans sonunu AŞAN barlar kesilir (günün son 1h/2h/4h kovası).
+    kesilecek = dogal > seans_sonu
+    if bool(np.asarray(kesilecek, dtype=bool).any()):
+        dogal = dogal.where(~np.asarray(kesilecek, dtype=bool), seans_sonu)
+    return dogal
+
+
+def mum_kapanis_ani(ts, tf: str) -> Optional[pd.Timestamp]:
+    """Tek bir mumun (etiketli) kapandığı an. ts None ise None."""
+    if ts is None:
+        return None
+    idx = _istanbul_dizin(pd.DatetimeIndex([pd.Timestamp(ts)]))
+    kapanislar = mum_kapanis_anlari(idx, tf)
+    return None if len(kapanislar) == 0 else kapanislar[0]
+
+
+def bar_kapandi_mi(ts, tf: str, now: Optional[datetime] = None) -> bool:
+    """Bu mum, verilen ana kadar GERÇEKTEN kapandı mı? (bildirim güvenlik kapısı).
+
+    `tamamlanmis_mumlar` aynı kuralı kullanır; bu fonksiyon kapı/gösterim için
+    tek bar üzerinde aynı hesabı yapar (tek kaynak: `mum_kapanis_anlari`).
+    """
+    kapanis = mum_kapanis_ani(ts, tf)
+    if kapanis is None:
+        return False
+    sinir = pd.Timestamp(now) if now is not None else pd.Timestamp(datetime.now(ISTANBUL_TZ))
+    sinir = sinir.tz_convert(ISTANBUL_TZ) if sinir.tzinfo else ISTANBUL_TZ.localize(sinir)
+    return bool(kapanis <= sinir)
+
+
+def tamamlanmis_mumlar(df: pd.DataFrame, tf: str, now: Optional[datetime] = None) -> pd.DataFrame:
+    """Devam eden (yarım) mumu çıkarır; motoru yalnız KAPANMIŞ mumlarla besler.
+
+    Kapanış kuralı `mum_kapanis_anlari`'dır (tek kaynak):
+      * intraday: etiket + TF süresi, ama seans sonunu aşamaz
+        (1h: +1 saat; 17:30 etiketli 2h/4h kovası 18:00'de kapanır; yarım gün 13:00),
+      * günlük: günün seans kapanışı (normal 18:30 / yarım gün 13:00).
+
+    Böylece Yahoo'nun etiket hizalaması ne olursa olsun her mum kapanışından
+    sonraki İLK taramada beslenir (Pine bar kapanışı mantığıyla birebir) ve
+    :00–:29 arası tetiklenen taramalar (restart/telafi) kısmi mumu görmez.
+    """
+    if df is None or len(df) == 0:
+        return df
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df = df.copy()
+        df.index = pd.to_datetime(df.index, utc=True)
+    kapanis = mum_kapanis_anlari(df.index, tf)
+    sinir = pd.Timestamp(now)
+    sinir = sinir.tz_convert(ISTANBUL_TZ) if sinir.tzinfo else ISTANBUL_TZ.localize(sinir)
+    tamam = np.asarray(kapanis <= sinir, dtype=bool)
+    return df[tamam]
 
 
 def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:

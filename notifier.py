@@ -743,7 +743,7 @@ class TelegramNotifier:
             import json
             os.makedirs(os.path.dirname(self._kuyruk_dosya), exist_ok=True)
             with open(self._kuyruk_dosya, "w", encoding="utf-8") as f:
-                json.dump(kayitlar, f, ensure_ascii=False)
+                json.dump(kayitlar, f, ensure_ascii=False, default=str)
         except Exception as e:
             logger.debug(f"Acil kuyruk dosyaya kaydedilemedi: {e}")
         if self.persistent_store is not None:
@@ -1115,6 +1115,14 @@ class TelegramNotifier:
                         f"Durum: {state}",
                         kalite_str,
                         f"Seviye: {price:.2f} · {time_str}"]
+
+        # Kapanan mum satırı (P0): anlık olay mesajlarında "hangi mum kapandı?"
+        # sorusu mesajın içinde cevaplanır. İzleme/digest akışına eklenmez
+        # (orada yer bütçesi farklı ve o adaylar zaten kapanış özetiyle gider).
+        mum_str = str(data.get('bar_metni') or "").strip()
+        if mum_str and state in ("KIRILIM_TEYITLI", "RETEST_BASARILI",
+                                 "FORMASYON_TAMAMLANDI", "BASARISIZ_KIRILIM"):
+            satirlar.insert(1, mum_str)
 
         msg = "\n".join(satirlar)
 

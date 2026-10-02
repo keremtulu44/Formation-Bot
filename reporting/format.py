@@ -61,6 +61,39 @@ def gecen_sure(iso_zaman):
         return f"{int(fark // 60)} dk önce"
     return f"{fark / 3600:.1f} sa önce"
 
+# Zaman dilimi adları (Telegram metinleri): notifier'daki TF_HUMAN ile aynı dil.
+# reporting katmanı notifier'ı import ETMEZ (ters yön: notifier -> reporting), bu
+# yüzden küçük eşleme burada tutulur.
+TF_TR = {"1h": "1 saatlik", "2h": "2 saatlik", "4h": "4 saatlik", "1d": "günlük"}
+
+
+def mum_kapanis_metni(tf_name: str, bar_zamani=None, bar_kapanis=None) -> str:
+    """Mesaj satırı: bildirime kaynak olan KAPANMIŞ mumun aralığı.
+
+    "Bu mesaj hangi mumun kapanışıyla geldi?" sorusu mesajın içinde cevaplanır
+    (P0 doğrulaması sonrası eklenen güven satırı). Örnekler:
+      1h  -> "🕒 1 saatlik mum 25.09 17:30 → 18:00 kapandı"
+      4h  -> "🕒 4 saatlik mum 25.09 13:30 → 17:30 kapandı"
+      1d  -> "🕒 Günlük mum 25.09 kapanışı · 18:30"
+    Boş/geçersiz damgada "" döner (mesaj üretimi asla bozulmaz).
+    """
+    if bar_zamani is None:
+        return ""
+    try:
+        if str(tf_name) == "1d":
+            gun = bar_zamani.strftime("%d.%m")
+            if bar_kapanis is not None and callable(getattr(bar_kapanis, "strftime", None)):
+                return f"🕒 Günlük mum {gun} kapanışı · {bar_kapanis.strftime('%H:%M')}"
+            return f"🕒 Günlük mum {gun} kapanışı"
+        ad = TF_TR.get(str(tf_name), str(tf_name))
+        baslangic = bar_zamani.strftime("%d.%m %H:%M")
+        if bar_kapanis is not None and callable(getattr(bar_kapanis, "strftime", None)):
+            return f"🕒 {ad} mum {baslangic} → {bar_kapanis.strftime('%H:%M')} kapandı"
+        return f"🕒 {ad} mum {baslangic} kapandı"
+    except (AttributeError, ValueError, TypeError):
+        return ""
+
+
 def sayi(deger, basamak=2, varsayilan="—"):
     try:
         return f"{float(deger):.{basamak}f}"

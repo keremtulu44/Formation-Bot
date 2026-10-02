@@ -39,6 +39,25 @@ Ayarlar `.env` üzerinden değiştirilebilir: `SCAN_REQUEST_BATCH_SIZE`,
 BIST 50 bileşenleri endeks değişikliklerinde `config.py` içindeki listeyle birlikte
 elle güncellenmelidir.
 
+### Mum kapanış kuralı (bildirim ancak mum KAPANDIKTAN sonra)
+
+`tamamlanmis_mumlar()` (data.py) motoru yalnız kapanmış mumlarla besler; kural tek
+kaynaktan (`mum_kapanis_anlari`) yönetilir:
+
+| TF | Kapanış anı |
+|---|---|
+| 1h | etiket + 1 saat (17:30 etiketli günün son barı 18:00'de) |
+| 2h | etiket + 2 saat; günün son kovası (17:30) seans sonunda, 18:00'de |
+| 4h | etiket + 4 saat; günün son kovası (17:30) seans sonunda, 18:00'de |
+| 1d | o günün seans kapanışı (normal 18:30, yarım günde 13:00) |
+
+Kapanmamış bar hiçbir koşulda bildirime kaynak olmaz: tarama anı kayarsa (:00–:29
+arası restart/telafi taraması) `bar_kapandi_mi()` güvenlik kapısı anlık push'u
+sonraki tura bırakır ve durum `/durum` aday hunisinde "kapanmamış bar (ertelendi)"
+olarak görünür. Anlık mesajlar hangi mumun kapandığını da yazar
+(`🕒 4 saatlik mum 25.09 13:30 → 17:30 kapandı`).
+Regresyon: `test_mum_kapanis_penceresi.py` (23 test) + `test_tarama_zamani.py`.
+
 ## Render ve Supabase dağıtımı
 
 > Adım adım kurulum (Python sürümü sabitleme, Supabase `sb_secret_` anahtarı,

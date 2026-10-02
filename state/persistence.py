@@ -44,7 +44,7 @@ def son_tarama_kaydet(live_state, store=None, data_dir=None) -> bool:
         os.makedirs(son_tarama_data_dir(data_dir), exist_ok=True)
         gecici_yol = yol + ".tmp"
         with open(gecici_yol, "w", encoding="utf-8") as dosya:
-            json.dump(veri, dosya, ensure_ascii=False, indent=2)
+            json.dump(veri, dosya, ensure_ascii=False, indent=2, default=str)
         os.replace(gecici_yol, yol)
         dosya_var = True
     except Exception as exc:
@@ -121,7 +121,7 @@ def digest_tamponu_kaydet(tampon, store=None, data_dir=None, son_digest_gun=None
         os.makedirs(os.path.dirname(yol), exist_ok=True)
         gecici = yol + ".tmp"
         with open(gecici, "w", encoding="utf-8") as dosya:
-            json.dump(veri, dosya, ensure_ascii=False, indent=2)
+            json.dump(veri, dosya, ensure_ascii=False, indent=2, default=str)
         os.replace(gecici, yol)
         dosya_var = True
     except Exception as exc:

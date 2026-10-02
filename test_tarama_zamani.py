@@ -229,9 +229,18 @@ kontrol("1D mumu seans kapanışında (18:30) tamamlanır",
 kontrol("18:35'te günün 1D mumu analiz edilir (24 saatlik körlük bitti)",
         tmm(resample_all_timeframes(df)['1d'], '1d', now=t(2026, 9, 25, 18, 35)).index[-1].strftime('%d') == '25',
         "25 Eylül mumu görülüyor")
-for tf_name, beklenen in [('1h', '17:30'), ('2h', '15:30'), ('4h', '13:30')]:
+# P0 DÜZELTMESİ (2 Eki 2026): 2h/4h kovaları artık seans sonunda (18:00) kesilir.
+# Eski hata: kova "+2sa/+4sa" ile 19:30/21:30'a kadar yarım sayılıyordu ->
+# 18:35 taramasında 2h son kova 15:30, 4h son kova 13:30'da kalıyor, günün
+# kapanış saati (17:30–18:00) hiç analiz edilmiyordu.
+for tf_name, beklenen in [('1h', '17:30'), ('2h', '17:30'), ('4h', '17:30')]:
     d_ = tmm(resample_all_timeframes(df)[tf_name], tf_name, now=t(2026, 9, 25, 18, 35))
-    kontrol(f"{tf_name} davranışı değişmedi", d_.index[-1].strftime('%H:%M') == beklenen, beklenen)
+    kontrol(f"{tf_name} günün son kapanan kovası (seans sonu kesmesi)",
+            d_.index[-1].strftime('%H:%M') == beklenen, beklenen)
+# Kısmi (devam eden) bar kapısı: :05 taraması 12:30 barını kapanmış SAYMAZ.
+kontrol("13:05'te 12:30 barı henüz kapanmadı (kısmi bar sızmaz)",
+        tmm(df, '1h', now=t(2026, 9, 25, 13, 5)).index[-1].strftime('%H:%M') == '11:30',
+        "son kapanan 11:30")
 
 print()
 print("=== 6. FAZ 2: BIST TATİL TAKVİMİ / YARIM GÜN ===")
@@ -245,6 +254,10 @@ kontrol("tatil günü tarama penceresi kapalı", not data_mod.tarama_penceresi_a
 kontrol("tatil günü tarama anı da kapalı", not data_mod.tarama_animi_mi(t(2026, 10, 29, 12, 35)))
 kontrol("normal gün penceresi açık", data_mod.tarama_penceresi_acik_mi(t(2026, 9, 25, 12, 35)))
 
+# P0 DÜZELTMESİ: yarım günde günlük mum 18:30 yerine SEANS KAPANIŞINDA (13:00)
+# tamamlanır. Eski davranışta o gün günlük formasyon/kırılım hiç bildirilmiyordu.
+kontrol("yarım günde günlük mum 13:00'te tamamlanır (eski hata: 18:30)",
+        data_mod.mum_kapanis_ani(t(2026, 3, 19), '1d').strftime('%H:%M') == '13:00')
 kontrol("19 Mart 2026 yarım gün (kapanış 13:00)",
         seans_kapanis_saati(t(2026, 3, 19)) == dt_time(13, 0))
 kontrol("yarım günde son mum 12:30 etiketli, kapanış 13:00",
