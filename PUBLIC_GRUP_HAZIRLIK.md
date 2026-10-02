@@ -416,3 +416,16 @@ gönderim sağlığı.
 
 **Faz 2 — açılış:** sabitlenmiş karşılama + "AL/SAT değildir" + bot ne görüyor şeffaflığı ·
 ilk hafta günlük gözlem (mesaj sayısı, 429, geri bildirim) · eşik ayarı (gerekirse 80→82).
+
+---
+
+## 12) Kanal mı grup mu? — KARAR (02.10.2026): **KANAL**
+
+Gerekçe: içerik tek yönlü (bülten + özet + karne), marka @bisthisseveri X hesabıyla
+taşınacak, soru-cevap ihtiyacı yok. Kanalda üye listesi görünmez, spam/modarasyon yükü
+yoktur ve `t.me/...` adresi X profiline konabilir. Yorum istenirse kanala bağlı bir
+**tartışma grubu** eklenir; bot oraya hiçbir şey göndermez.
+
+Açıklama + sabitlenmiş karşılama metinleri ve kurulum adımları: **`KANAL_ACILIS_PAKETI.md`**;
+metinlerin tek kaynağı `acilis_metinleri.py`, uygulama aracı
+`python kanal_acilis.py --durum|--uygula`.

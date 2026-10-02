@@ -286,7 +286,11 @@ Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölç
    429 `retry_after` desteklenir. Grup metni sadedir: iç izleme notu, `/panel`, `/durum`,
    dosya yolu, ❌ tek tek olaylar gruba **gitmez**; başarısız kırılımlar 18:45 özetinde
    sayı olarak ve Cuma karnesinin kısa sürümünde görünür. Gruba yönetici bot, komut
-   olmayan grup mesajlarına **cevap vermez** (yalnız DM'de yardım metni döner). Evren 48'in üzerine çıkarsa
+   olmayan grup mesajlarına **cevap vermez** (yalnız DM'de yardım metni döner).
+
+   **Kanal/grup açılışı:** hedef bir **kanal** da olabilir (önerilen); açıklama ve
+   sabitlenmiş karşılama metinleri `KANAL_ACILIS_PAKETI.md`'de, uygulama aracı
+   `python kanal_acilis.py --durum|--uygula` (varsayılan kuru çalışma, yazmaz). Evren 48'in üzerine çıkarsa
    `EVREN_BUYUME_UYARI_ESIGI` ile açılışta tek satır uyarı loglanır (pacing/digest/panel
    limitleri yeniden ölçülmeli).
 9. **Veri dizini artık repo dışında (batch-7 / C4):** yazımlar `DATA_DIR`'e gider; sırayla
