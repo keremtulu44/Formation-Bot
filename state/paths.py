@@ -65,3 +65,13 @@ def yeni_snapshot(*adaylar):
             # mevcut tercih korunur (aday sırası: Supabase, yerel dosya).
             pass
     return secilen
+
+
+# Haftalık doğruluk karnesi defteri (karne.py) — yerel dosya + opsiyonel uzak yedek.
+KARNE_DEFTERI_DOSYA = "karne_defteri.json"
+KARNE_DEFTERI_SUPABASE_KEY = "state:karne_defteri"
+
+
+def karne_defteri_yolu(data_dir=None) -> str:
+    from config import DATA_DIR
+    return os.path.join(data_dir or DATA_DIR, KARNE_DEFTERI_DOSYA)

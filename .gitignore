@@ -26,6 +26,8 @@ bot_data/telegram_acil_kuyruk.json
 bot_data/son_tarama.json
 bot_data/son_tarama.json.tmp
 bot_data/*_gunluk.json
+# Haftalik dogruluk karnesi sinyal defteri (runtime durum; kalicilik DATA_DIR'de)
+bot_data/karne_defteri.json
 
 # OS
 .DS_Store

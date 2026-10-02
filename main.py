@@ -40,11 +40,13 @@ from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   son_kapanan_mum_ani, time_until_next_open, is_bist_open,
                   resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_last_bar,
-                  select_yfinance_1h_period, tamamlanmis_mumlar)
+                  select_yfinance_1h_period, tamamlanmis_mumlar,
+                  mum_kapanis_ani, bar_kapandi_mi)
 from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
 from notifier import TelegramNotifier
+from karne import (KarneDefteri, atr_hesapla, hafta_damgasi, karne_gunu_mu, karne_uret)
 from supabase_store import SupabaseStore
 from health_server import start_render_health_server
 from live_state import LiveState
@@ -67,6 +69,7 @@ from reporting.format import (
     panel_durum_sayilari as _panel_durum_sayilari,
     panel_kritik_listesi as _panel_kritik_listesi,
     panel_sigdir as _panel_sigdir,
+    mum_kapanis_metni as _mum_bilgisi,
     format_deferred_alert_summary as _format_deferred_alert_summary,
 )
 
@@ -121,6 +124,14 @@ _deque_manager_ref = None
 _notifier_ref = None
 _supabase_store_ref = None
 _deferred_alert_buffer = DeferredAlertBuffer()
+# Haftalık doğruluk karnesi defteri (yerel JSON; Supabase GEREKTİRMEZ).
+# Tembel kurulur: dosya yolu DATA_DIR'e bağlı, import anında I/O yapılmaz.
+_karne_defteri: "KarneDefteri | None" = None
+# Uzak yedeğe yazma aralığı (saniye): defter her tarama turunda birkaç kayıt alır;
+# her kayıtta tüm JSON'u Supabase'e yazmak gereksiz trafik olurdu.
+_karne_son_uzak_yazma = 0.0
+KARNE_UZAK_YAZMA_ARALIK_SN = 300
+
 # Bugüne ait 18:45 kapanış özetinin gönderilip gönderilmediği (ISO gün). Kalıcı
 # tamponla birlikte Supabase/diske yazılır; restart sonrası aynı özet iki kez gitmez.
 _digest_son_gonderim_gun = None
@@ -252,6 +263,7 @@ daily_stats = {
     'alerts_deferred': 0,         # WATCH state: 18:45 digest'ine ertelendi
     'alerts_below_threshold': 0,  # kalite eşiği altı (push üretmez)
     'alerts_state_disabled': 0,   # state hiçbir push akışında değil (yalnız panel)
+    'alerts_bar_kapanmadi': 0,    # kapanmamış bar nedeniyle push ertelendi (P0 güvenlik kapısı)
     'alerts_digest_overflow': 0,  # digest limiti nedeniyle gösterilmeyen aday
     'alerts_kuyruk': 0,           # acil alarm engel yüzünden kuyruğa alındı (Batch 5 / B4)
     'alerts_engel_cooldown': 0,   # cooldown nedeniyle gönderilemedi (B4 kuyruğuna girer)
@@ -290,6 +302,7 @@ def reset_daily_if_needed():
         daily_stats['alerts_deferred'] = 0
         daily_stats['alerts_below_threshold'] = 0
         daily_stats['alerts_state_disabled'] = 0
+        daily_stats['alerts_bar_kapanmadi'] = 0
         daily_stats['alerts_digest_overflow'] = 0
         daily_stats['alerts_kuyruk'] = 0
         daily_stats['alerts_engel_cooldown'] = 0
@@ -528,6 +541,7 @@ def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
                 "digest_ertelenen": daily_stats['alerts_deferred'],
                 "state_kapsam_disi": daily_stats['alerts_state_disabled'],
                 "esik_alti": daily_stats['alerts_below_threshold'],
+                "bar_kapanmadi": daily_stats['alerts_bar_kapanmadi'],
                 "digest_tasmasi": daily_stats['alerts_digest_overflow'],
                 "engel_cooldown": daily_stats['alerts_engel_cooldown'],
                 "engel_kap": daily_stats['alerts_engel_kap'],
@@ -646,6 +660,9 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 /retest veya /r — retest bekleyen/başarılı
 /kirilim veya /k — kırılım adayı/teyitli
 /durum — bot, piyasa ve veri sağlığı özeti
+/karne [gün] — doğruluk karnesi: formasyon/kırılım sayıları + kırılım sonrası
+   performans (varsayılan bu hafta; /karne 30 ile son 30 gün). Cuma gün sonu
+   mesajının altında otomatik gelir. Veriler yerel dosyada (Supabase gerekmez).
 /tara [HISSE] — şimdi analiz et (seans dışı da çalışır)
 /yardim — bu liste
 
@@ -743,6 +760,9 @@ def _komut_durum(_arguman: str) -> str:
         huni += f" · {daily_stats['alerts_digest_overflow']} digest taşması"
     if daily_stats.get('alerts_kuyruk'):
         huni += f" · {daily_stats['alerts_kuyruk']} kuyruğa alındı"
+    if daily_stats.get('alerts_bar_kapanmadi'):
+        # Güvenlik kapısı: kapanmamış bar ile push denenmedi, sonraki tura bırakıldı.
+        huni += f" · {daily_stats['alerts_bar_kapanmadi']} kapanmamış bar (ertelendi)"
     satirlar.append(huni)
     gosterim = None
     gonderim = getattr(_notifier_ref, "gonderim_durumu", None)
@@ -918,6 +938,35 @@ def _komut_canli(arguman: str) -> str:
     satirlar.append("")
     satirlar.append("💡 /ozet günlük özet, /s sıkışanlar, /r retest, /k kırılım")
     return "\n".join(satirlar)
+
+
+def _komut_karne(arguman: str) -> str:
+    """Haftalık doğruluk karnesi: /karne · /karne 30 (son 30 gün).
+
+    Kaynak: yerel sinyal defteri (DATA_DIR/karne_defteri.json). Supabase gerekmez.
+    Cuma gün sonu mesajının altına otomatik eklenir; bu komut istenildiği an verir.
+    """
+    arguman = (arguman or "").strip()
+    gun_sayisi = None
+    if arguman:
+        try:
+            gun_sayisi = max(1, min(365, int(arguman.split()[0])))
+        except (TypeError, ValueError):
+            return ("Kullanım: /karne · /karne 30\n"
+                    "(sayı = kaç günlük karne; boş bırakılırsa bu hafta)")
+    defter = _karne_al()
+    if defter.boyut() == 0:
+        return ("📊 Doğruluk karnesi boş: henüz kayıtlı sinyal yok.\n"
+                "Defter tarama sırasında kendiliğinden dolar (yerel dosya; "
+                "Supabase gerekmez). Cuma günü gün sonu mesajının altında otomatik gelir.")
+    try:
+        metin = karne_uret(defter, _karne_seri_saglayici(_deque_manager_ref),
+                           gun_sayisi=gun_sayisi)
+    except Exception as exc:  # noqa: BLE001 - komut asla çökmesin
+        logger.error("Karne üretilemedi: %s", exc, exc_info=True)
+        return "⚠️ Karne üretilemedi; ayrıntı için bot loglarına bakın."
+    # Kayıtlar/tarih bilgisi: kullanıcı karnenin kaynağını ve yaşını görsün.
+    return metin + f"\n📁 Kayıt: {defter.dosya}"
 
 
 def _komut_ozet(arguman: str) -> str:
@@ -1191,6 +1240,8 @@ TELEGRAM_KOMUTLARI = {
     "kirilim": _komut_kirilim,
     "kırılım": _komut_kirilim,
     "k": _komut_kirilim,
+    "karne": _komut_karne,
+    "karnem": _komut_karne,
     "panel": _komut_panel,
     "p": _komut_panel,
     "genel": _komut_panel,
@@ -1581,6 +1632,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 if df_tf is None or len(df_tf) < 30:
                     logger.debug(f"{stock} {tf_name}: tamamlanmış mum kalmadı (seans içi erken tarama)")
                     continue
+                # P0 güvenlik kapısı: motorun gördüğü SON bar gerçekten kapandı mı?
+                # tamamlanmis_mumlar aynı kuralı uygular; burada olay anındaki an ile
+                # yeniden doğrulanır (restart/telafi/saat kayması regresyonlarına karşı).
+                # Kapı "hayır" derse anlık push yapılmaz, sonraki taramaya bırakılır.
+                son_bar_kapanis = mum_kapanis_ani(df_tf.index[-1], tf_name)
+                son_bar_kapandi = bar_kapandi_mi(df_tf.index[-1], tf_name, now=simdiki_zaman)
+                if not son_bar_kapandi:
+                    logger.warning(
+                        f"{stock} {tf_name}: son bar ({df_tf.index[-1]}) henüz kapanmadı "
+                        f"(kapanış {son_bar_kapanis}) - bu tur bildirim üretilmeyecek"
+                    )
                 
                 # Motor adayı kendisi bulur ve kırılım anında dondurur (Pine v0.4.6 akışı).
                 # tam_yeniden=True: pencere her taramada sıfırdan deterministik oynatılır.
@@ -1597,6 +1659,21 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     q = snap.effective_quality if snap.effective_quality is not None else active.raw_quality
                     _note_pattern_found(stock, tf_name)
                     logger.info(f"🔍 {stock} {tf_name} - {active.pattern_type} kalite {q:.0f} state {state} - {snap.log}")
+                    # --- HAFTALIK KARNE DEFTERİ (yerel; Supabase gerekmez) ---
+                    # Kırılım teyidi: performans ölçülecek sinyal (giriş = teyit
+                    # barının kapanışı). Diğer state'ler: formasyon sayımı + huni.
+                    try:
+                        if state == "KIRILIM_TEYITLI" and break_dir in (1, -1):
+                            _karne_olay_kaydet(
+                                stock, tf_name, state, active.pattern_type, q,
+                                df_tf.index[-1], kirilim=True, dir=int(break_dir),
+                                entry=float(df_tf["close"].iloc[-1]), df_tf=df_tf,
+                            )
+                        else:
+                            _karne_olay_kaydet(stock, tf_name, state, active.pattern_type, q,
+                                               df_tf.index[-1])
+                    except Exception as karne_hata:  # noqa: BLE001 - tarama asla durmasın
+                        logger.debug("Karne kaydı atlandı (%s %s): %s", stock, tf_name, karne_hata)
                     
                     # Alert eşiği kontrolü - timeframe'e göre (effective_quality üzerinden)
                     min_q = ALERT_MIN_QUALITY.get(tf_name, ALERT_MIN_QUALITY_GLOBAL)
@@ -1624,6 +1701,14 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         'age_bars': yas_bar,
                         'mtf_destek': False,
                         'bar_time': str(df_tf.index[-1]),
+                        # Kapanan mumun damgası + güvenlik kapısı sonucu: mesajda
+                        # gösterilir ve push öncesi son kontrol olarak kullanılır.
+                        # ISO STRING: bu kayıt LiveState/son_tarama JSON'larına
+                        # yazılır; Timestamp nesnesi serileştirmeyi kırardı.
+                        'bar_kapanis': (son_bar_kapanis.isoformat()
+                                        if son_bar_kapanis is not None else None),
+                        'bar_kapandi': bool(son_bar_kapandi),
+                        'bar_metni': _mum_bilgisi(tf_name, df_tf.index[-1], son_bar_kapanis),
                         'min_quality': float(min_q),
                         'alert_gonderildi': False,
                     }
@@ -1643,6 +1728,16 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         daily_stats['alerts_deferred'] += 1
                         logger.info(f"{stock} {tf_name} {state}: düşük öncelikli bildirim kapanış özetine ertelendi")
                     # Teyitli kırılım, başarılı retest, tamamlanma ve başarısız kırılım acildir.
+                    elif send_alerts and state in IMMEDIATE_ALERT_STATES and not son_bar_kapandi:
+                        # P0 güvenlik kapısı: bar kapanmadan anlık push yok. Bu dal
+                        # normalde HİÇ çalışmaz (tamamlanmis_mumlar aynı kuralı
+                        # uygular); saat/tarama kayması olursa sinyal yanlış
+                        # gönderilmek yerine bir sonraki taramaya bırakılır.
+                        daily_stats['alerts_bar_kapanmadi'] += 1
+                        logger.warning(
+                            f"⏸️ {stock} {tf_name} {state}: bar henüz kapanmadı "
+                            f"({df_tf.index[-1]} → {son_bar_kapanis}); push sonraki taramaya bırakıldı"
+                        )
                     elif send_alerts and state in IMMEDIATE_ALERT_STATES:
                         # Humanized mesaj için ek bilgiler - var olan veriyi kullan, ekstra hesaplama yok
                         upper_touches = getattr(active, 'upper_touches', None)
@@ -1676,6 +1771,15 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'lower_now': active.lower_now,
                             'contraction': getattr(active, 'contraction', None),
                             'timestamp': df_tf.index[-1],
+                            # Kapanan mum bilgisi: mesajda "hangi mum kapandı?" satırı
+                            # olarak görünür (bar_kapandi zaten yukarıda doğrulandı).
+                            # ISO string: engellenen alarm kuyruğa yazılırken JSON
+                            # serileştirmesi bozulmasın.
+                            'bar_time': df_tf.index[-1],
+                            'bar_kapanis': (son_bar_kapanis.isoformat()
+                                            if son_bar_kapanis is not None else None),
+                            'bar_kapandi': True,
+                            'bar_metni': _mum_bilgisi(tf_name, df_tf.index[-1], son_bar_kapanis),
                             'break_dir': break_dir,
                             'break_strength': getattr(active, 'break_strength', q),
                             'break_price': active.upper_now if break_dir == 1 else active.lower_now,
@@ -1876,6 +1980,154 @@ def _parse_deferred_alert_digest_time() -> dt_time:
     except Exception:
         logger.warning("DEFERRED_ALERT_DIGEST_TIME geçersiz; 18:45 kullanılacak")
         return dt_time(18, 45)
+
+
+# === HAFTALIK DOĞRULUK KARNESİ ============================================
+# Tasarım: sinyal defteri verileri tarama sırasında toplanır (scan_all_stocks),
+# karne metni Cuma gün sonu mesajının ALTINA eklenir. Defter ve ölçüm TAMAMEN
+# YERELDİR (DATA_DIR/karne_defteri.json) - Supabase/uzak store gerekmez.
+
+def _karne_al() -> KarneDefteri:
+    """Karne defterini (tembel) oluşturur; dosya okunamazsa da çalışır.
+
+    Opsiyonel uzak yedek (Supabase): kuruluysa yerel defterle BİRLEŞTİRİLİR
+    (Render'da DATA_DIR=/tmp olduğu için restart/redeploy yereli siler; yedek
+    haftalık karnenin boşalmasını engeller). Supabase yoksa hiçbir şey değişmez.
+    """
+    global _karne_defteri
+    if _karne_defteri is None:
+        _karne_defteri = KarneDefteri()
+        try:
+            _state_persistence.karne_defteri_yukle(_karne_defteri, _supabase_store_ref)
+        except Exception as exc:  # noqa: BLE001 - yedek sorunu karneyi engellemesin
+            logger.debug("Karne uzak yedeği yüklenemedi: %s", exc)
+    return _karne_defteri
+
+
+def _karne_uzak_kaydet(zorla: bool = False) -> bool:
+    """Defteri (varsa) uzak yedeğe yazar. Sık yazmamak için aralık uygulanır.
+
+    Yerel dosya her kayıtta zaten yazılır; bu yalnız dayanıklılık içindir.
+    """
+    global _karne_son_uzak_yazma
+    if _supabase_store_ref is None or _karne_defteri is None:
+        return False
+    simdi = time.monotonic()
+    if not zorla and (simdi - _karne_son_uzak_yazma) < KARNE_UZAK_YAZMA_ARALIK_SN:
+        return False
+    sonuc = _state_persistence.karne_defteri_kaydet(_karne_defteri, _supabase_store_ref)
+    if sonuc:
+        _karne_son_uzak_yazma = simdi
+    return sonuc
+
+
+def _karne_seri_saglayici(deque_manager):
+    """Karne ölçümü için seri sağlayıcı: yeni veri indirmez, cache'i okur.
+
+    Kırılım kaydı hangi TF'de alındıysa o TF'in serisi kullanılır (1d için derin
+    günlük deque, diğerleri için 1H deque).
+    """
+    def saglayici(stock: str, tf: str):
+        if deque_manager is None:
+            return None
+        try:
+            if str(tf).lower() == "1d":
+                return deque_manager.to_gunluk_dataframe(stock)
+            return deque_manager.to_dataframe(stock)
+        except Exception as exc:  # noqa: BLE001 - ölçüm hatası karneyi düşürmesin
+            logger.debug("Karne serisi alınamadı (%s %s): %s", stock, tf, exc)
+            return None
+    return saglayici
+
+
+def _karne_olay_kaydet(stock: str, tf: str, state: str, pattern: str, quality: float,
+                       bar_zamani, *, kirilim: bool = False, dir: int = 0,
+                       entry=None, df_tf=None, mtf_destek: bool = False) -> None:
+    """Tarama sırasında karne defterine kayıt düşer (hatalar taramayı durdurmaz)."""
+    try:
+        defter = _karne_al()
+        if kirilim:
+            defter.kirilim_kaydet(
+                stock=stock, tf=tf, pattern=pattern, state=state, dir=dir,
+                entry=entry, atr=atr_hesapla(df_tf), quality=quality,
+                bar_zamani=bar_zamani, mtf_destek=mtf_destek,
+            )
+        elif state == "FORMASYON_TANIMLANDI" or state in ("SIKISMA_GUCLENIYOR", "KIRILIM_HAZIRLIGI"):
+            # Yalnız anlamlı olgunluk eşiği: her aday state'i sayılmaz.
+            defter.formasyon_kaydet(stock=stock, tf=tf, pattern=pattern, state=state,
+                                    quality=quality, bar_zamani=bar_zamani)
+        elif state in ("RETEST_BASARILI", "FORMASYON_TAMAMLANDI", "BASARISIZ_KIRILIM"):
+            defter.olay_kaydet(stock=stock, tf=tf, state=state, bar_zamani=bar_zamani)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Karne kaydı yazılamadı (%s %s %s): %s", stock, tf, state, exc)
+
+
+def _karne_dolu(defter: KarneDefteri, now: datetime) -> bool:
+    """Bu hafta için karnede gösterilecek en az bir kayıt var mı?"""
+    try:
+        from karne import hafta_baslangici
+        return bool(defter.aralikta(hafta_baslangici(now), now))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _haftalik_karne_ekle(now: datetime, deque_manager, zorla: bool = False) -> str:
+    """Karne günüyse ve bu hafta gönderilmediyse karne metnini döner; yoksa ''.
+
+    `zorla=True` -> gün/hafta kapıları atlanır (yalnız açıkça isteyen çağrı için).
+    Karne, gün sonu mesajının ALTINA eklenir; burada gönderim YAPILMAZ.
+    """
+    try:
+        hafta = hafta_damgasi(now)
+        defter = _karne_al()
+        if not zorla:
+            if not karne_gunu_mu(now):
+                return ""
+            if defter.karne_gonderildi_mi(hafta):
+                return ""
+        if not _karne_dolu(defter, now):
+            # Hiç kayıt yoksa boş karne gönderme (hafta başı / yeni kurulum).
+            return ""
+        return karne_uret(defter, _karne_seri_saglayici(deque_manager), now=now)
+    except Exception as exc:  # noqa: BLE001 - karne hatası özeti engellemesin
+        logger.warning("Haftalık karne üretilemedi: %s", exc)
+        return ""
+
+
+def _karne_gonderildi_isaretle(now: datetime) -> None:
+    """Karne başarıyla gönderildi -> bu hafta tekrar eklenmez (kalıcı)."""
+    try:
+        _karne_al().karne_gonderildi_isaretle(hafta_damgasi(now))
+        # Haftalık işaret + kayıtlar restart'ta kaybolmasın: yedeği hemen tazele.
+        _karne_uzak_kaydet(zorla=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Karne gönderim işareti yazılamadı: %s", exc)
+
+
+# Telegram tek mesaj sınırı 4096; `kirp()` sondan kestiği için karne (mesajın
+# ALTINDA) kaybolabilirdi. Bu sınırın üstünde karne ikinci mesaj olarak gider.
+_MESAJ_GUVENLI_SINIR = 3900
+
+
+def _karneyle_gonder(notifier, ana_mesaj: str, karne_ek: str = ""):
+    """Ana mesajı (ve varsa karneyi) Telegram sınırına takılmadan gönderir.
+
+    Karne normalde ana mesajın ALTINA eklenir; sığmıyorsa kesilmek yerine ayrı
+    mesaj olarak gönderilir. Döner: (tamamı_gitti_mi, son_hata).
+    """
+    if karne_ek and len(ana_mesaj) + len(karne_ek) + 2 <= _MESAJ_GUVENLI_SINIR:
+        parcalar = [ana_mesaj + "\n\n" + karne_ek]
+    elif karne_ek:
+        logger.info("Karne mesaj sınırını aştı; ayrı mesaj olarak gönderiliyor (%d + %d kr)",
+                    len(ana_mesaj), len(karne_ek))
+        parcalar = [ana_mesaj, karne_ek]
+    else:
+        parcalar = [ana_mesaj]
+    for parca in parcalar:
+        ok, hata = notifier.send_text(parca)
+        if not ok:
+            return False, hata
+    return True, ""
 
 
 def _effective_summary_hours() -> List[dt_time]:
@@ -2212,6 +2464,17 @@ def main_loop():
             else:
                 logger.warning(f"{stock}: ilk günlük veri çekilemedi - resample kullanılacak")
     
+    # Haftalık karne defteri: açılışta bir kez hazırlanır (uzak yedek varsa
+    # Supabase'den birleştirilir). Böylece tarama döngüsü içinde ağ beklemesi
+    # olmaz; Supabase yoksa yalnız yerel dosya okunur.
+    try:
+        kd = _karne_al()
+        kd.buda()
+        _karne_uzak_kaydet(zorla=True)
+        logger.info("Karne defteri hazır: %d kayıt (%s)", kd.boyut(), kd.dosya)
+    except Exception as e:
+        logger.warning(f"Karne defteri hazırlanamadı (devam ediliyor): {e}")
+
     # Aynı mum iki kez taranmasın (drift koruması). Restart'ta None -> bir sonraki
     # kapanışta tazelenir, son mum gerekiyorsa bir kez daha taranır (zararsız).
     son_taranan_kapanis = None
@@ -2295,9 +2558,18 @@ def main_loop():
                     if watch_summary:
                         dm_ozet += "\n\n" + watch_summary
 
+                    # --- HAFTALIK DOĞRULUK KARNESİ (gün sonu mesajının ALTINA) ---
+                    # Cuma günü 18:45 kapanış özetinin altına eklenir; haftada bir
+                    # kez gönderilir. Defter/ölçüm tamamen yereldir (Supabase yok).
+                    karne_metni_eklendi = ""
+                    if sh == deferred_alert_digest_time:
+                        karne_metni_eklendi = _haftalik_karne_ekle(now, deque_manager)
+                        if karne_metni_eklendi:
+                            dm_ozet += "\n\n" + karne_metni_eklendi
+
                     if last_summary_sent.get(sh_str) != now.date():
                         if notifier.enabled:
-                            gonderildi, hata = notifier.send_text(dm_ozet)
+                            gonderildi, hata = _karneyle_gonder(notifier, dm_ozet, karne_metni_eklendi)
                             if gonderildi:
                                 last_summary_sent[sh_str] = now.date()
                                 if bekleyen:
@@ -2305,6 +2577,9 @@ def main_loop():
                                 if sh == deferred_alert_digest_time:
                                     _digest_son_gonderim_gun = now.date().isoformat()
                                     digest_tamponu_kaydet()
+                                if karne_metni_eklendi:
+                                    _karne_gonderildi_isaretle(now)
+                                    logger.info("Haftalık doğruluk karnesi gönderildi (Cuma özeti altında)")
                                 logger.info(f"Günlük DM özeti gönderildi: {sh_str}")
                             else:
                                 logger.warning(f"Günlük DM özeti gönderilemedi ({sh_str}): {hata}")
@@ -2340,7 +2615,14 @@ def main_loop():
                             )
                         if result.get("status") == "tamamlandi":
                             rapor = _panel_raporu("", tamamlandi=True)
-                            notifier.send_text("🌙 GÜN SONU ANALİZİ\n" + rapor)
+                            mesaj = "🌙 GÜN SONU ANALİZİ\n" + rapor
+                            # Cuma karnesi 18:45 özetiyle gidemediyse (bot kapalıydı /
+                            # gönderim hatası) burada gün sonu analizinin altına eklenir.
+                            karne_ek = _haftalik_karne_ekle(now, deque_manager)
+                            gonderildi, _hata = _karneyle_gonder(notifier, mesaj, karne_ek)
+                            if gonderildi and karne_ek:
+                                _karne_gonderildi_isaretle(now)
+                                logger.info("Haftalık doğruluk karnesi gönderildi (gün sonu analizi altında)")
                         else:
                             notifier.send_text(
                                 "⚠️ Gün sonu analizi tamamlanamadı; eski sonuç yeni sonuç gibi "
@@ -2392,6 +2674,8 @@ def main_loop():
                     # Tarama sonunda bekleyen aday tamponu kalıcılaştır (Batch 5 / B3):
                     # restart tamponun tamamını kaybetmesin, tarama başına tek yazma.
                     digest_tamponu_kaydet()
+                    # Karne defteri yedeği (varsa Supabase; aralıklı, en fazla 5 dk'da bir).
+                    _karne_uzak_kaydet()
                     time.sleep(5)  # aynı saniyede tekrar girmesin
                     continue
                 

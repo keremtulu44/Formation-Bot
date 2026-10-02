@@ -39,6 +39,54 @@ Ayarlar `.env` üzerinden değiştirilebilir: `SCAN_REQUEST_BATCH_SIZE`,
 BIST 50 bileşenleri endeks değişikliklerinde `config.py` içindeki listeyle birlikte
 elle güncellenmelidir.
 
+### Mum kapanış kuralı (bildirim ancak mum KAPANDIKTAN sonra)
+
+`tamamlanmis_mumlar()` (data.py) motoru yalnız kapanmış mumlarla besler; kural tek
+kaynaktan (`mum_kapanis_anlari`) yönetilir:
+
+| TF | Kapanış anı |
+|---|---|
+| 1h | etiket + 1 saat (17:30 etiketli günün son barı 18:00'de) |
+| 2h | etiket + 2 saat; günün son kovası (17:30) seans sonunda, 18:00'de |
+| 4h | etiket + 4 saat; günün son kovası (17:30) seans sonunda, 18:00'de |
+| 1d | o günün seans kapanışı (normal 18:30, yarım günde 13:00) |
+
+Kapanmamış bar hiçbir koşulda bildirime kaynak olmaz: tarama anı kayarsa (:00–:29
+arası restart/telafi taraması) `bar_kapandi_mi()` güvenlik kapısı anlık push'u
+sonraki tura bırakır ve durum `/durum` aday hunisinde "kapanmamış bar (ertelendi)"
+olarak görünür. Anlık mesajlar hangi mumun kapandığını da yazar
+(`🕒 4 saatlik mum 25.09 13:30 → 17:30 kapandı`).
+Regresyon: `test_mum_kapanis_penceresi.py` (23 test) + `test_tarama_zamani.py`.
+
+### Haftalık doğruluk karnesi (Supabase GEREKTİRMEZ)
+
+Bot, sinyal defterini **tamamen yerel** tutar: `DATA_DIR/karne_defteri.json`
+(atomik yazım, tek dosya). Uzak store yoksa da karne tam çalışır.
+
+* Tarama sırasında iki olay deftere düşer: **formasyon** (hisse/TF/formasyon
+  48 saat TTL ile tekilleştirilir) ve **kırılım** (giriş = teyit barının kapanışı,
+  yön, kalite, ATR). Retest/tamamlanma/başarısız kırılım **huni** sayılarına girer.
+* **Her Cuma** gün sonu mesajının (18:45 `📋 Günlük Özet`; gönderilemezse 20:00
+  `🌙 GÜN SONU ANALİZİ`) **altına** karne otomatik eklenir; haftada bir kez
+  gönderilir (kalıcı işaret). Karne uzun ve mesaja sığmıyorsa kesilmez, ayrı
+  mesaj olarak gider.
+* `/karne` (veya `/karnem`) ile istenildiği an alınır: `/karne 30` son 30 gün.
+* Karne içeriği: formasyon sayısı + TF kırılımı, hisse listesi (adet ile),
+  kırılım sayısı (yukarı/aşağı), `N bar içinde: hedef / nötr / stop`,
+  "kırılım yönünde kapatan" oranı, ortalama lehte/aleyhte hareket, TF ve kalite
+  performansı, en iyi/en kötü sinyaller, huni ve `n<30` uyarısı.
+* Performans ölçütü ATR bazlıdır (`KARNE_HEDEF_ATR=1.5`, `KARNE_STOP_ATR=1.0`,
+  `KARNE_HORIZON_BAR=10`); ilk dokunuş yarışı kullanılır, aynı barda ikisi de
+  olursa muhafazakâr sayılır (stop).
+
+Regresyon: `test_karne.py` (30 test).
+
+**Canlı notu (Render):** `DATA_DIR` orada `/tmp` olduğu için defter redeploy'da
+silinir; `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` tanımlıysa defter
+`state:karne_defteri` anahtarına **yalnız yedek** olarak yazılır ve açılışta
+yerelle birleştirilir. Supabase **zorunlu değildir**; yoksa karne yerel dosyayla
+tam çalışır.
+
 ## Render ve Supabase dağıtımı
 
 > Adım adım kurulum (Python sürümü sabitleme, Supabase `sb_secret_` anahtarı,

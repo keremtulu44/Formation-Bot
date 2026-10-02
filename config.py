@@ -89,9 +89,11 @@ SESSION_CLOSE = BIST_CLOSE
 
 # --- CANLI TARAMA ZAMANLAMASI (yfinance .IS verisinden ÖLÇÜLDÜ, varsayım değil) ---
 # Ölçüm 1: 1H bar etiketleri 09:30, 10:30, ... 17:30 (günde 9 mum) ve barlar bitişik
-#           (close[i] == open[i+1])  ->  etiket = MUM BAŞI, mum :30'da kapanır.
-# Ölçüm 2: 17:30 etiketli (günün son) mumun hacmi ortalama mumun %91'i -> TAM mum,
-#           yani son mum 18:30'da kapanır (Yahoo'nun .IS seansı 09:30-18:30).
+#           (close[i] == open[i+1])  ->  etiket = MUM BAŞI, mum bir saat sonra kapanır.
+# Ölçüm 2 (2 Eki 2026, chart API meta.currentTradingPeriod.regular): seans
+#           09:30–18:00'dır; 17:30 etiketli son mum 18:00'de kapanır (kapanış
+#           müzayedesi fiyatı ~18:09'da oluşur). Tarama barları yine :35'te
+#           işlenir; 18:35 = günün son taraması.
 # Ölçüm 3: 09:30 etiketli mumun hacmi ~0 (yfinance'nin bilinen ilk-bar hatası),
 #           OHLC'i gerçek -> filtrelemeye gerek yok, sadece hacim skoru nötr kalır.
 # ESKİ HATA: tetikleyici "saat başı + 5 dk" (=:05) idi. Mum :30'da kapandığı için
@@ -99,7 +101,7 @@ SESSION_CLOSE = BIST_CLOSE
 #            kapanış) hiç analiz edilmiyordu (pencere 18:10'da kapanıyordu).
 CANDLE_CLOSE_MINUTE = 30          # 1H mumun kapanış dakikası (saat başından offset)
 SCAN_DELAY_AFTER_CLOSE_MIN = 5    # mum kapanışından kaç dk sonra taranacak
-TARAMA_PENCERE_SONU = time(18, 40)  # son mum 18:30 kapanır + 5 dk = 18:35 (+ pay)
+TARAMA_PENCERE_SONU = time(18, 40)  # son mum 18:00'de kapanır; 18:35 taraması + pay
 STALE_BAR_UYARI_DK = 120          # en yeni 1H mum bu kadardır eskiyse "kör çalışma" uyarısı
 OFFSESSION_CACHE_MAX_AGE_DAYS = max(1, _env_int("OFFSESSION_CACHE_MAX_AGE_DAYS", 14))  # seans dışı son mevcut veriye izin
 TERMINAL_TAZE_BAR = 3             # terminal (ölü) formasyon bu kadar bar içindeyse haber ver
@@ -220,6 +222,18 @@ DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").st
 #   DEFERRED_ALERT_DIGEST_LIMIT=20
 DEFERRED_ALERT_DIGEST_LIMIT = _env_int("DEFERRED_ALERT_DIGEST_LIMIT", 12)
 POST_CLOSE_ANALYSIS_TIME = os.getenv("POST_CLOSE_ANALYSIS_TIME", "20:00").strip()  # gün sonu tam evren taraması
+
+# --- HAFTALIK DOĞRULUK KARNESİ (yerel dosya; Supabase GEREKTİRMEZ) ---
+# Cuma gün sonu mesajının (18:45 özeti; gönderilemezse 20:00 gün sonu analizi)
+# ALTINA eklenir. Defter DATA_DIR/karne_defteri.json'da tutulur; /karne komutuyla
+# istenildiği an alınabilir. Amaç: "bu hafta kaç formasyon bulundu, kırılımdan
+# sonra kaçı pozitif/negatif gitti?" sorusunun ölçülmüş cevabı.
+KARNE_GUNU = _env_int("KARNE_GUNU", 4)                 # 0=Pazartesi ... 4=Cuma (gönderim günü)
+KARNE_HEDEF_ATR = _env_float("KARNE_HEDEF_ATR", 1.5)   # hedef: lehte bu kadar ATR (ilk dokunuş)
+KARNE_STOP_ATR = _env_float("KARNE_STOP_ATR", 1.0)     # stop: alehte bu kadar ATR (ilk dokunuş)
+KARNE_HORIZON_BAR = _env_int("KARNE_HORIZON_BAR", 10)  # sinyalden sonra kaç bar izlenecek
+KARNE_SAKLAMA_GUN = _env_int("KARNE_SAKLAMA_GUN", 120)  # bu günden eski kayıtlar budanır
+KARNE_FORMASYON_TTL_SAAT = _env_int("KARNE_FORMASYON_TTL_SAAT", 48)  # aynı hisse/TF/formasyon sayımı
 # --- YAZMA AMPLİKASYONU (Batch 6 / B5) ---
 # Heartbeat her hisse sonrası yazılıyordu: 48 hisse × tarama = 48 Supabase UPSERT.
 # Yerel dosya canlılık göstergesi olduğu için her zaman yazılır; Supabase'e yazım

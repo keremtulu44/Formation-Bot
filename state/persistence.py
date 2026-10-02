@@ -17,6 +17,7 @@ from datetime import datetime
 from config import ISTANBUL_TZ
 from state.paths import (
     DIGEST_PENDING_SUPABASE_KEY,
+    KARNE_DEFTERI_SUPABASE_KEY,
     SON_TARAMA_SUPABASE_KEY,
     digest_pending_yolu,
     kayit_zamani,
@@ -44,7 +45,7 @@ def son_tarama_kaydet(live_state, store=None, data_dir=None) -> bool:
         os.makedirs(son_tarama_data_dir(data_dir), exist_ok=True)
         gecici_yol = yol + ".tmp"
         with open(gecici_yol, "w", encoding="utf-8") as dosya:
-            json.dump(veri, dosya, ensure_ascii=False, indent=2)
+            json.dump(veri, dosya, ensure_ascii=False, indent=2, default=str)
         os.replace(gecici_yol, yol)
         dosya_var = True
     except Exception as exc:
@@ -121,7 +122,7 @@ def digest_tamponu_kaydet(tampon, store=None, data_dir=None, son_digest_gun=None
         os.makedirs(os.path.dirname(yol), exist_ok=True)
         gecici = yol + ".tmp"
         with open(gecici, "w", encoding="utf-8") as dosya:
-            json.dump(veri, dosya, ensure_ascii=False, indent=2)
+            json.dump(veri, dosya, ensure_ascii=False, indent=2, default=str)
         os.replace(gecici, yol)
         dosya_var = True
     except Exception as exc:
@@ -170,3 +171,40 @@ def digest_tamponu_yukle(tampon, store=None, data_dir=None):
         sayi, tampon.gun(), son_digest_gun,
     )
     return sayi, son_digest_gun
+
+
+# --- HAFTALIK KARNE DEFTERİ (yerel dosya + opsiyonel uzak yedek) -------------
+# Kural: Supabase KURULU DEĞİLSE davranış değişmez; yerel dosya tek başına yeter.
+# Supabase varsa yalnız yedek/taşıma amaçlı kullanılır (Render /tmp silinmesine karşı).
+
+def karne_defteri_yukle(defter, store=None) -> int:
+    """Uzak yedek varsa yerel defterle birleştirir. Eklenen kayıt sayısını döner."""
+    if store is None:
+        return 0
+    try:
+        satirlar = store.get_many([KARNE_DEFTERI_SUPABASE_KEY])
+        uzak = satirlar.get(KARNE_DEFTERI_SUPABASE_KEY) if isinstance(satirlar, dict) else None
+    except Exception as exc:  # noqa: BLE001 - yedek okunamazsa karne yerelle çalışır
+        logger.debug("Karne defteri uzak yedeği okunamadı: %s", exc)
+        return 0
+    if not isinstance(uzak, dict):
+        return 0
+    try:
+        eklenen = defter.birlestir(uzak)
+        if eklenen:
+            logger.info("Karne defteri uzak yedekten birleştirildi: +%d kayıt", eklenen)
+        return eklenen
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Karne defteri birleştirilemedi: %s", exc)
+        return 0
+
+
+def karne_defteri_kaydet(defter, store=None) -> bool:
+    """Defteri uzak yedeğe yazar (yerel dosya `KarneDefteri.kaydet` ile zaten yazıldı)."""
+    if store is None:
+        return False
+    try:
+        return bool(store.upsert(KARNE_DEFTERI_SUPABASE_KEY, defter.snapshot()))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Karne defteri uzak yedeğe yazılamadı: %s", exc)
+        return False
