@@ -119,10 +119,36 @@ satır satır metin üretiliyor; ikinci dil eklemek bugün kopyala-yapıştır d
 4. **Faz D — Açılış:** grup kurulumu (bot üye/admin, davet linki), ilk hafta gözlem, `PUBLIC_STATES`
    ve kalite eşiklerinin gerçek trafikle ayarı.
 
-## 5) Karar bekleyen sorular
+## 5) Kararlar (2026-10-02 görüşmesi)
 
-1. Grup hangi dilde olacak: **yalnız Türkçe** mi, **Türkçe + İngilizce** (uluslararası) mu?
-2. Grup tipi: **duyuru ağırlıklı supergroup** mu (üyeler yazabilir), yoksa **grup + ayrı kanal** mı?
-3. Üyeler bot komutu kullanabilsin mi: **herkes**, **yalnız adminler**, yoksa **hiç kimse** (salt okunur yayın)?
-4. Gruba hangi içerik gitsin: **mevcut politika** (tamamlanan + retest, kalite ≥ 80) mi, yoksa
-   **kırılım teyitli/adayı da dahil** daha zengin akış mı?
+| Konu | Karar |
+|---|---|
+| Dil | **Yalnız Türkçe** — i18n katmanı yapılmayacak, mevcut metinler korunur |
+| Yapı | **Tek public supergroup** (ayrı kanal yok); bot alarmları yayınlar, sahibi ara sıra kendi mesajını yazar |
+| Komut yetkisi | **Yalnız grup adminleri**; üyeler yayını görür, komut çalıştıramaz |
+| Kurulum | Bot gruba eklenir/yönetici yapılır; env'de yalnız bot token + grubun chat_id'si tutulur |
+| İçerik politikası | **AÇIK** — B9 kararı, uygulamadan önce konuşulacak (aşağıdaki seçenekler) |
+
+### Açık konu: gruba hangi içerik gitsin? (B9)
+
+Bugün gruba/kanala giden: `FORMASYON_TAMAMLANDI` + `RETEST_BASARILI` (global kalite ≥ 80) ve
+09:55/18:45 temel özet. Gitmeyen: `KIRILIM_TEYITLI` (DM'de anında gidiyor), 18:45 izleme
+digest'i, haftalık karne.
+
+| Seçenek | İçerik | Artı | Eksi |
+|---|---|---|---|
+| A · Mevcut | Tamamlanan + retest ≥ 80 + 2 özet | Sıfır risk, en temiz | Çok seyrek; bazı günler 0 mesaj → grup ölü görünür |
+| B · Teyitli dahil | A + `KIRILIM_TEYITLI` (TF bazlı eşik: 80/78/75/70) | Grubun görmek isteyeceği asıl olay; kalite kapısı zaten var | Anlık mesaj sayısı artar (günde birkaç) |
+| C · İzleme dahil | B + sıkışma/kırılım adayı | Bilgi yoğun | Gürültü: günde 10-30 satır; gruplar için spam hissi |
+| D · Özet ağırlıklı | 09:55 + 18:45 toplu özet + yalnız en güçlü 1-2 anlık | Gürültüsüz, büyük kitleye uygun | Anlık heyecan yok; gecikmeli bilgi |
+
+**Öneri (tartışmaya açık):** **B + D karışımı** — anında yalnız `KIRILIM_TEYITLI`,
+`FORMASYON_TAMAMLANDI`, `RETEST_BASARILI` (TF bazlı kalite eşikleriyle); izleme adayları günde
+tek toplu bültende (18:45) ve **public'e özel, iç notlardan arındırılmış** metinle. Ayrıca
+`PUBLIC_MIN_QUALITY` tek global eşik yerine DM'deki gibi TF bazlı olmalı ve grup için ayrı,
+daha sıkı bir saatlik/günlük bütçe tanımlanmalı (örn. saatte ≤ 6, günde ≤ 25).
+
+Karar verilmesi gereken iki nokta:
+1. Yukarıdaki A/B/C/D'den hangisi (veya karışımı)?
+2. Sahibin "ara sıra mesajı" kendi hesabından mı yazılacak (bot işi yok), yoksa bot üzerinden
+   duyuru olarak mı gönderilsin (admin-only `/duyuru <metin>` komutu eklenir)?
