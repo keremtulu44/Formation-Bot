@@ -435,3 +435,27 @@ yoktur ve `t.me/...` adresi X profiline konabilir. Yorum istenirse kanala bağl�
 Açıklama + sabitlenmiş karşılama metinleri ve kurulum adımları: **`KANAL_ACILIS_PAKETI.md`**;
 metinlerin tek kaynağı `acilis_metinleri.py`, uygulama aracı
 `python kanal_acilis.py --durum|--uygula`.
+
+---
+
+## 13) 02.10 DM dökümü → kanal dönüşümü (ölçüm)
+
+Kullanıcının 02.10 tarihli gerçek DM dökümü (28 uyarı bloğu + 2 özet) gerçek filtre
+kodundan (`notifier.should_send_to_public` + `format_public_batch`) geçirildi.
+Tam tablo ve bültenlerin birebir metni: `raporlar/02EKIM_KANAL_DONUSUMU.md` (üretilen).
+
+| Ölçüt | 02.10 DM (eski) | 02.10 kanal (yeni) |
+|---|---|---|
+| Mesaj sayısı | 30 (28 uyarı + 2 özet) | **9** (7 bülten + 09:55 sabah notu + 18:45 kapanış) |
+| Gruba giden olay | — | 19 (🏁 11 · ✅ 5 · 🎯 3) |
+| Yalnız DM'de kalan | — | 9 (hepsi ❌ → özette "❌ 9 kırılım başarısız") |
+| Bülten başına olay | — | 1–5 (5 · 4 · 1 · 3 · 1 · 1 · 4) |
+| Sıkışma adayları | 1 uyarı + kuyruk satırları | yalnız özetin "⚡ Sıkışan N" satırı |
+| "Kaçırılan kapanış özeti" | 1 mesaj + ham kuyruk | kanala **hiç gitmez** |
+
+**Günlük ortalama (yoğun günler):** 02.10 → 9 · 24.09 → 11 · 25.09 → 11 mesaj; yani
+**yoğun günde ~10 mesaj**, sakin günde 2-3. Kanal günlük tavanı 25, saatlik tavanı 6;
+ölçülen en yoğun saat 2 mesaj — sınırlar rahat.
+
+**Dağılım kuralı:** tur başına TEK bülten; bir turda 12'den çok uygun olay olursa
+`public_bosalt(azami=12)` bülteni ikiye böler (tek mesaj 4000 karakterde kırpılır).
