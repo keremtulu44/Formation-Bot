@@ -250,7 +250,17 @@ class ArgentEngine:
 
     def reset(self) -> None:
         """Tüm kalıcı state'i sıfırla (yeni/bozulan veri akışı)."""
+        # Phase 1: `_key`, motorun formation/lifecycle state'i DEĞİL — manager'ın
+        # bu motoru hangi (stock, timeframe) kaydına bağladığını tutan metadata'dır.
+        # Reset tüm formation state'ini (aktif aday, state makinesi, sayaçlar,
+        # pivot kilitleri) __init__ ile tamamen temizler; bu metadata ise korunur.
+        # Korunmasaydı `tam_yeniden=True` taramasında (process -> reset -> __init__)
+        # anahtar silinir ve `_match_persisted_anchor` / `_save_formation_anchor`
+        # erken çıkarak restart re-attach'i ve anchor yazımını sessizce devre
+        # dışı bırakır (her turda yeni stable_id üretilir).
+        anahtar = getattr(self, "_key", None)
         self.__init__(self.profile, self.mintick, self.use_breakout_quality_filter)
+        self._key = anahtar
 
     def process(self, df: pd.DataFrame, tam_yeniden: bool = False) -> EngineSnapshot:
         """DataFrame'i (artabilir) motora ver. Yeni barlar sırayla işlenir.

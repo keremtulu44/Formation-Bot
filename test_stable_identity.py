@@ -26,12 +26,14 @@ import pandas as pd
 import pytest
 
 import karne as karne_mod
+import patterns.lifecycle as L
 from karne import (DURUM_BEKLIYOR, DURUM_HEDEF, DURUM_NOTR, DURUM_STOP,
                    KarneDefteri, karne_hesapla, sinyal_sonucu)
 from live_state import LiveState
 from patterns.candidate import PatternCandidate
-from patterns.lifecycle import (PatternLifecycleManager, _match_persisted_anchor,
-                                _new_stable_id, _parse_stock_tf)
+from patterns.lifecycle import (ArgentEngine, PatternLifecycleManager,
+                                _match_persisted_anchor, _new_stable_id,
+                                _parse_stock_tf)
 from state import formation_identity as fid
 
 
@@ -676,3 +678,176 @@ def test_regresyon_outcome_sabitleri_degismedi():
     assert karne_mod.KARNE_HEDEF_ATR == 1.5
     assert karne_mod.KARNE_STOP_ATR == 1.0
     assert karne_mod.KARNE_HORIZON_BAR == 10
+
+
+# ===========================================================================
+# GERÇEK BOT YOLU — tam_yeniden=True (main.py'nin kullandığı yol)
+#
+# Neden ayrı bir bölüm: main.py her taramada
+#   lifecycle_manager.scan(key, df, tam_yeniden=True)
+# çağırır. `process()` tam_yeniden=True ve _bars_done>0 iken reset() tetikler;
+# reset() __init__ çağırır. Bu yolda `_key` metadata'sı korunmazsa anchor okuma
+# ve yazma sessizce devre dışı kalır ve HER turda yeni UUID üretilir.
+# ===========================================================================
+
+def _gercek_bot_turu(mgr, key, df, tur=4):
+    """main.py'nin yaptığı gibi: her turda TAM df, tam_yeniden=True."""
+    gorulen = []
+    for _ in range(tur):
+        snap = mgr.scan(key, df, tam_yeniden=True)
+        a = snap.active
+        gorulen.append(a.stable_id if a is not None and a.valid else None)
+    return gorulen
+
+
+def test_gercek_bot_yolu_tam_yeniden_stable_id_kararli():
+    """4 tur tam_yeniden=True tarama: aynı formation -> aynı stable_id (X)."""
+    df = _kanalli_pennant(n_bars=60)
+    mgr = PatternLifecycleManager("Dengeli", 0.01)
+
+    gorulen = _gercek_bot_turu(mgr, "GARAN_1h", df, tur=4)
+
+    assert all(s for s in gorulen), f"stable_id üretilemedi: {gorulen}"
+    assert len(set(gorulen)) == 1, (
+        f"tam_yeniden=True akışında stable_id kararsız: "
+        f"{[s[:8] if s else None for s in gorulen]}")
+
+
+def test_gercek_bot_yolu_yeni_uuid_uretmiyor():
+    """Aynı formation devam ettiği sürece hiçbir turda yeni UUID üretilmemeli."""
+    df = _kanalli_pennant(n_bars=60)
+    mgr = PatternLifecycleManager("Dengeli", 0.01)
+
+    uretilen = []
+    orijinal = L._new_stable_id
+
+    def _izlekli():
+        v = orijinal()
+        uretilen.append(v)
+        return v
+
+    L._new_stable_id = _izlekli
+    try:
+        gorulen = _gercek_bot_turu(mgr, "GARAN_1h", df, tur=4)
+    finally:
+        L._new_stable_id = orijinal
+
+    # Tek bir doğum -> tek UUID. (4 ayrı UUID = her turda yeni formation sanılırdı.)
+    assert len(uretilen) == 1, (
+        f"{len(uretilen)} kez yeni UUID üretildi: {[u[:8] for u in uretilen]}")
+    assert len(set(gorulen)) == 1
+
+
+def test_gercek_bot_yolu_anchor_her_turda_yaziliyor():
+    """tam_yeniden=True akışında anchor her turda güncellenmeli (bayat kalmamalı)."""
+    df = _kanalli_pennant(n_bars=60)
+    mgr = PatternLifecycleManager("Dengeli", 0.01)
+
+    gorulen = _gercek_bot_turu(mgr, "GARAN_1h", df, tur=3)
+    son_sid = gorulen[-1]
+
+    anchor = fid.load_anchor("GARAN", "1h")
+    assert anchor is not None, "tam_yeniden akışında anchor diske yazılmadı"
+    assert anchor["stable_id"] == son_sid, (
+        f"anchor bayat: disk={anchor['stable_id'][:8]}... canlı={son_sid[:8]}...")
+
+
+def test_gercek_bot_yolu_reset_sonrasi_key_korunuyor():
+    """reset() formation state'ini temizler ama (stock,tf) metadata'sını korur."""
+    df = _kanalli_pennant(n_bars=60)
+    mgr = PatternLifecycleManager("Dengeli", 0.01)
+    eng = mgr.get_engine("GARAN_1h")
+    assert eng._key == "GARAN_1h"
+
+    # reset gerçek formation/lifecycle state'ini sıfırlamalı
+    mgr.scan("GARAN_1h", df, tam_yeniden=True)
+    assert eng.active.valid
+    eng.reset()
+    assert eng._key == "GARAN_1h", "reset manager metadata'sını kaybetti"
+    assert not eng.active.valid, "reset aktif formation state'ini temizlemeli"
+    assert eng.next_pattern_identity == 0, "reset sayaçları sıfırlamalı"
+    assert eng.pattern_state == "FORMASYON_YOK"
+
+
+def test_gercek_bot_yolu_reset_bare_engine_key_none_kalir():
+    """Manager dışı (bare) motor: _key None ise reset sonrası da None kalır."""
+    eng = ArgentEngine("Dengeli", 0.01)
+    assert eng._key is None
+    eng.reset()
+    assert eng._key is None
+
+
+def test_gercek_bot_yolu_restart_sonrasi_re_attach():
+    """Gerçek bot yolunda restart: yeni manager/engine aynı stable_id'yi bağlar."""
+    df = _kanalli_pennant(n_bars=60)
+    mgr1 = PatternLifecycleManager("Dengeli", 0.01)
+    once = _gercek_bot_turu(mgr1, "GARAN_1h", df, tur=3)
+    sid_once = once[-1]
+    assert len(set(once)) == 1
+
+    # --- RESTART: tamamen yeni manager + yeni engine ---
+    mgr2 = PatternLifecycleManager("Dengeli", 0.01)
+    sonra = _gercek_bot_turu(mgr2, "GARAN_1h", df, tur=3)
+    assert len(set(sonra)) == 1, f"restart sonrası kararsız: {[s[:8] for s in sonra]}"
+    assert sonra[-1] == sid_once, (
+        f"re-attach başarısız: {sonra[-1][:8]}... != {sid_once[:8]}...")
+
+
+def test_gercek_bot_yolu_timeframe_ve_stock_ayrimi():
+    """tam_yeniden=True akışında (stock,tf) ayrımı korunur."""
+    df = _kanalli_pennant(n_bars=60)
+    mgr = PatternLifecycleManager("Dengeli", 0.01)
+    s1 = _gercek_bot_turu(mgr, "GARAN_1h", df, tur=2)
+    s4 = _gercek_bot_turu(mgr, "GARAN_4h", df, tur=2)
+    st = _gercek_bot_turu(mgr, "THYAO_1h", df, tur=2)
+    assert len(set(s1)) == 1 and len(set(s4)) == 1 and len(set(st)) == 1
+    assert len({s1[0], s4[0], st[0]}) == 3, "stock/timeframe kimlikleri karıştı"
+
+
+def test_gercek_bot_yolu_terminal_sonrasi_yeni_stable_id():
+    """Gerçek bot yolunda: terminal formation X, yeni formation Y, X != Y.
+
+    Formasyonlar start_bar ile ayrıştırılır; terminal olan formasyonun
+    stable_id'sinin yeni formasyona sızmadığı doğrulanır.
+    """
+    df = _iki_formasyon()
+    mgr = PatternLifecycleManager("Dengeli", 0.01)
+
+    # Gerçek bot yolu: büyüyen pencere + tam_yeniden=True
+    formasyonlar = {}
+    for i in range(30, len(df) + 1):
+        snap = mgr.scan("GARAN_1h", df.iloc[:i], tam_yeniden=True)
+        a = snap.active
+        if a is None or not a.valid or not a.stable_id:
+            continue
+        kayit = formasyonlar.setdefault(a.start_bar, {"kimlikler": [], "terminal": False})
+        if a.stable_id not in kayit["kimlikler"]:
+            kayit["kimlikler"].append(a.stable_id)
+        if ("GECERSIZ" in snap.state) or ("TAMAMLANDI" in snap.state) or ("BASARISIZ" in snap.state):
+            kayit["terminal"] = True
+
+    terminal_olan = [k for k, v in formasyonlar.items() if v["terminal"]]
+    terminal_olmayan = [k for k, v in formasyonlar.items() if not v["terminal"]]
+    assert terminal_olan, f"terminal bir formasyon gorulmedi: {formasyonlar}"
+    assert terminal_olmayan, f"terminal sonrasi yeni formasyon dogmadi: {formasyonlar}"
+
+    X = formasyonlar[min(terminal_olan)]["kimlikler"][0]
+    Y = formasyonlar[max(terminal_olmayan)]["kimlikler"][0]
+    assert X != Y, (
+        f"terminal olan stable_id yeni formasyona tasinmis: X={X[:8]}... Y={Y[:8]}...")
+def test_gercek_bot_yolu_terminal_sonrasi_anchor_yeni_kimlige_yazilir():
+    """Yeni formation doğunca anchor da yeni stable_id'yi yazar (bayat kalmaz)."""
+    df = _iki_formasyon()
+    mgr = PatternLifecycleManager("Dengeli", 0.01)
+    kimlikler = []
+    for i in range(30, len(df) + 1):
+        snap = mgr.scan("GARAN_1h", df.iloc[:i], tam_yeniden=True)
+        a = snap.active
+        if a is not None and a.valid and a.stable_id and a.stable_id not in kimlikler:
+            kimlikler.append(a.stable_id)
+    if len(kimlikler) < 2:
+        pytest.skip("bu veride ikinci formation doğmadı")
+
+    anchor = fid.load_anchor("GARAN", "1h")
+    assert anchor is not None
+    assert anchor["stable_id"] == kimlikler[-1], "anchor bayat kaldı"
