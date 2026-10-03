@@ -72,6 +72,13 @@ def _match_persisted_anchor(engine, candidate: "PatternCandidate") -> Optional[s
     anchor = fid.load_anchor(stock, tf)
     if not anchor:
         return None
+    # Eksik/bozuk anchor (eski yazım, elle düzenleme): eşleştirme denenmez,
+    # formation gerçekten yeni kabul edilir. `continuity_score` bar farkı
+    # hesabı yaptığı için start_bar şart; family ise identity_compatible şartı.
+    if not anchor.get("stable_id") or not anchor.get("family"):
+        return None
+    if not isinstance(anchor.get("start_bar"), int):
+        return None
     prev = PatternCandidate()
     prev.valid = True
     prev.family = anchor.get("family")
@@ -482,12 +489,22 @@ class ArgentEngine:
                                        or self.pattern_state == ST_NONE
                                        or (lifecycle_can_update and (materially_better or context_wins)))
                     if replace_current:
-                        # Phase 1: restart re-attach — aynı (stock,tf) eski formation
-                        # ile eşleşirse eski stable_id yeniden bağlanır, yeni üretilmez.
-                        if self.active.valid and getattr(self.active, "stable_id", None):
-                            yeni_stable = self.active.stable_id
-                        else:
+                        # Phase 1 — yeni formation doğumu: stable_id burada üretilir.
+                        #
+                        # `self.active` GEÇERSİZ ise motor hiç formation doğurmamıştır
+                        # (taze motor / restart). Bu tek durumda diske yazılmış
+                        # (stock,tf) anchor'u ile eşleştirme denenir; eşleşirse eski
+                        # stable_id korunur (restart re-attach), eşleşme yoksa yeni
+                        # UUID üretilir.
+                        #
+                        # `self.active` GEÇERLİ ise burada gerçekten YENİ bir formation
+                        # kabul ediliyor yaşar (terminal olanın / daha zayıf olanın
+                        # yerine geçiyor). Terminal olmuş eski formation'ın
+                        # stable_id'si ASLA buraya taşınmaz — her zaman yeni üretilir.
+                        if not self.active.valid:
                             yeni_stable = _match_persisted_anchor(self, best) or _new_stable_id()
+                        else:
+                            yeni_stable = _new_stable_id()
                         self.next_pattern_identity += 1
                         self.active = best
                         self.active.identity = self.next_pattern_identity

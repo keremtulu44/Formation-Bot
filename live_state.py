@@ -201,6 +201,10 @@ class LiveState:
                 continue
             kopya = dict(kayit)
             kopya.update(stock=stock, timeframe=timeframe)
+            # Not: `stable_id` burada bilinçli olarak EKLENMEZ. Eski (stable_id'siz)
+            # son_tarama kayıtları olduğu gibi okunur; okuyan taraf alanı `.get()`
+            # ile okur (komutlar/panel/karne), bu yüzden eksik anahtar crash üretmez.
+            # Böylece hydrate() "kaydı olduğu gibi geri yükler" sözleşmesi korunur.
             kayitlar[f"{stock}|{timeframe}"] = kopya
         durum = veri.get("status")
         if not isinstance(durum, dict):

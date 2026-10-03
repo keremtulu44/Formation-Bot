@@ -1890,10 +1890,12 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 stock, tf_name, state, active.pattern_type, q,
                                 df_tf.index[-1], kirilim=True, dir=int(break_dir),
                                 entry=float(df_tf["close"].iloc[-1]), df_tf=df_tf,
+                                stable_id=getattr(active, "stable_id", None),
                             )
                         else:
                             _karne_olay_kaydet(stock, tf_name, state, active.pattern_type, q,
-                                               df_tf.index[-1])
+                                               df_tf.index[-1],
+                                               stable_id=getattr(active, "stable_id", None))
                     except Exception as karne_hata:  # noqa: BLE001 - tarama asla durmasın
                         logger.debug("Karne kaydı atlandı (%s %s): %s", stock, tf_name, karne_hata)
                     
@@ -1913,6 +1915,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         'quality': float(q),
                         'state': state,
                         'break_dir': break_dir,
+                        # Phase 1: kalıcı formation kimliği (doğumdan terminal'e).
+                        # Motor-içi `identity`'den ayrıdır; restart sonrası re-attach
+                        # ile aynı formation aynı stable_id'yi taşımaya devam eder.
+                        'stable_id': getattr(active, 'stable_id', None),
                         'upper': getattr(active, 'upper_now', None),
                         'lower': getattr(active, 'lower_now', None),
                         'critical_price': (active.upper_now if break_dir == 1 else active.lower_now),
@@ -2279,7 +2285,8 @@ def _karne_seri_saglayici(deque_manager):
 
 def _karne_olay_kaydet(stock: str, tf: str, state: str, pattern: str, quality: float,
                        bar_zamani, *, kirilim: bool = False, dir: int = 0,
-                       entry=None, df_tf=None, mtf_destek: bool = False) -> None:
+                       entry=None, df_tf=None, mtf_destek: bool = False,
+                       stable_id=None) -> None:
     """Tarama sırasında karne defterine kayıt düşer (hatalar taramayı durdurmaz)."""
     try:
         defter = _karne_al()
@@ -2287,14 +2294,16 @@ def _karne_olay_kaydet(stock: str, tf: str, state: str, pattern: str, quality: f
             defter.kirilim_kaydet(
                 stock=stock, tf=tf, pattern=pattern, state=state, dir=dir,
                 entry=entry, atr=atr_hesapla(df_tf), quality=quality,
-                bar_zamani=bar_zamani, mtf_destek=mtf_destek,
+                bar_zamani=bar_zamani, mtf_destek=mtf_destek, stable_id=stable_id,
             )
         elif state == "FORMASYON_TANIMLANDI" or state in ("SIKISMA_GUCLENIYOR", "KIRILIM_HAZIRLIGI"):
             # Yalnız anlamlı olgunluk eşiği: her aday state'i sayılmaz.
             defter.formasyon_kaydet(stock=stock, tf=tf, pattern=pattern, state=state,
-                                    quality=quality, bar_zamani=bar_zamani)
+                                    quality=quality, bar_zamani=bar_zamani,
+                                    stable_id=stable_id)
         elif state in ("RETEST_BASARILI", "FORMASYON_TAMAMLANDI", "BASARISIZ_KIRILIM"):
-            defter.olay_kaydet(stock=stock, tf=tf, state=state, bar_zamani=bar_zamani)
+            defter.olay_kaydet(stock=stock, tf=tf, state=state, bar_zamani=bar_zamani,
+                               stable_id=stable_id)
     except Exception as exc:  # noqa: BLE001
         logger.debug("Karne kaydı yazılamadı (%s %s %s): %s", stock, tf, state, exc)
 
