@@ -143,7 +143,9 @@ python deploy_check.py --url https://<servis-adin>.onrender.com --test-key <TELE
 ```
 
 Her satır ✅/⚠️/❌ ile biter, ❌ satırının altında ne yapılacağı yazar; token ve
-anahtar değerleri hiçbir zaman ekrana basılmaz. Deploy öncesi kontrol ise GitHub
+anahtar değerleri hiçbir zaman ekrana basılmaz. Özet satırı üç durumu ayrı söyler:
+`ÖZET: Telegram HAZIR · Kanal HAZIR|YOK|HEDEF VAR, IZIN YOK · Supabase HAZIR|YOK`
+— kanal adımı (bot yönetici mi, mesaj izni açık mı) aynı komutla doğrulanır. Deploy öncesi kontrol ise GitHub
 tarafındadır: `.github/workflows/ci.yml` her push'ta aynı Python 3.12 sürümüyle
 kurulumu, testleri ve `PORT` verilip `/health`'in 200 döndüğünü doğrular.
 

@@ -37,6 +37,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE, EVREN_BUYUME_UYARI_ESIGI,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
+                  islem_gunu_mu,
                   son_kapanan_mum_ani, time_until_next_open, is_bist_open,
                   resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_last_bar,
@@ -122,6 +123,14 @@ logger = logging.getLogger(__name__)
 # main_loop icinde olusturulan nesnelerin global referanslari (heartbeat icin)
 _deque_manager_ref = None
 _notifier_ref = None
+# İşlem günü değilken her döngüde aynı log satırını basmamak için gün damgası.
+_islem_gunu_loglandi = {"gun": None}
+# SESSİZ ARIZA BEKÇİSİ: üst üste başarısız tarama turu sayacı + son uyarı günü.
+# Neden: Yahoo/veri kaynağı bozulduğunda süreç ayakta kalır, kanal sessizleşir ve
+# sahibin bundan haberi olmaz (kullanıcı "bot öldü" sanır). En fazla günde 1 DM.
+_ardisik_basarisiz_tur = 0
+_son_tarama_uyari_gun = None
+TARAMA_UYARI_ESIK_TUR = 3
 _supabase_store_ref = None
 _deferred_alert_buffer = DeferredAlertBuffer()
 # Haftalık doğruluk karnesi defteri (yerel JSON; Supabase GEREKTİRMEZ).
@@ -367,6 +376,47 @@ def _gunluk_sayac_yukle() -> None:
         daily_stats['basarisiz_kirilim'] = _daily_basarisiz_tabani
     if yuklenen:
         logger.info("Günlük sayaçlar restart'tan geri yüklendi: %s", yuklenen)
+
+
+def _tarama_saglik_kontrolu(notifier) -> None:
+    """Tur sonucuna göre sessiz arıza bekçisi: üst üste başarısızsa sahibe DM.
+
+    Başarı ölçütü: tur "tamamlandi" VE en az bir hisse işlendi. Üst üste
+    TARAMA_UYARI_ESIK_TUR tur bu sağlanmazsa bir kez DM gider (günde en fazla
+    bir). Kanal sessizleşmeden sahip haberdar olur; başarılı turda sayaç sıfırlanır.
+    """
+    global _ardisik_basarisiz_tur, _son_tarama_uyari_gun
+    try:
+        durum = (last_run_stats or {}).get("status")
+        islenen = int((last_run_stats or {}).get("processed") or 0)
+    except Exception:  # noqa: BLE001
+        return
+    if durum == "tamamlandi" and islenen > 0:
+        if _ardisik_basarisiz_tur:
+            logger.info("Tarama sağlığı düzeldi (üst üste %d başarısız turdan sonra).",
+                        _ardisik_basarisiz_tur)
+        _ardisik_basarisiz_tur = 0
+        return
+    _ardisik_basarisiz_tur += 1
+    if _ardisik_basarisiz_tur < TARAMA_UYARI_ESIK_TUR:
+        return
+    bugun = datetime.now(ISTANBUL_TZ).date().isoformat()
+    if _son_tarama_uyari_gun == bugun:
+        return
+    _son_tarama_uyari_gun = bugun
+    logger.error("Tarama üst üste %d turdur başarısız; sahibe uyarı gönderiliyor.",
+                 _ardisik_basarisiz_tur)
+    if notifier is None or not getattr(notifier, "enabled", False):
+        return
+    try:
+        notifier.send_text(
+            "⚠️ Tarama üst üste %d turdur sonuç üretemedi.\n"
+            "Kanal sessiz kalabilir (veri kaynağı/bağlantı sorunu).\n"
+            "Durum: /durum · Panel: /panel\n"
+            "Botu yeniden başlatmak gerekirse Render → servis → Restart."
+            % _ardisik_basarisiz_tur)
+    except Exception as hata:  # noqa: BLE001
+        logger.debug("Tarama sağlık uyarısı gönderilemedi: %s", hata)
 
 
 def reset_daily_if_needed():
@@ -2761,7 +2811,19 @@ def main_loop():
                 logger.debug(f"Çoklu örnek kontrol hatası: {e}")
 
             # --- GÜNLÜK ÖZET + ERTELENMİŞ ADAYLAR (akşam 18:45) ---
+            # İŞLEM GÜNÜ KAPISI: hafta sonu ve resmî tatilde kanala özet GİTMEZ.
+            # Saat hedefleri (09:55/18:45) takvimden bağımsız geldiği için, kapı
+            # olmadan cumartesi günü "öne çıkan formasyon olmadı" mesajı gidiyordu;
+            # aynı şekilde 20:00 gün sonu analizi boşuna tam evren taraması yapıyordu.
+            # DM tarafı da kapanır: sahibe anlamsız "boş gün" özeti gitmez (tam detay
+            # istenirse /panel ve /durum komutları her zaman çalışır).
             try:
+              if not islem_gunu_mu(now):
+                if not _islem_gunu_loglandi.get("gun") == now.date().isoformat():
+                    logger.info("İşlem günü değil (%s); günlük özetler ve gün sonu "
+                                "analizi atlanıyor.", now.date().isoformat())
+                    _islem_gunu_loglandi["gun"] = now.date().isoformat()
+              else:
                 for sh in summary_hours:
                     sh_str = sh.strftime("%H:%M")
                     hedef = ISTANBUL_TZ.localize(datetime.combine(now.date(), sh))
@@ -2858,8 +2920,13 @@ def main_loop():
                 logger.debug(f"Özet gönderim hatası: {e}")
 
             # --- GÜN SONU TAM EVREN ANALİZİ (varsayılan 20:00 İstanbul) ---
+            # İşlem günü değilse (hafta sonu/tatil) gece analizi ÇALIŞMAZ: veri
+            # değişmediği için tam evren taraması boşuna kaynak harcar ve panel
+            # "değişmeyen gün" raporu üretirdi.
             try:
-                if now.time() >= post_close_analysis_time and last_post_close_analysis_date != now.date():
+                if (islem_gunu_mu(now)
+                        and now.time() >= post_close_analysis_time
+                        and last_post_close_analysis_date != now.date()):
                     logger.info("Gün sonu tam evren analizi başlıyor (%s)",
                                 post_close_analysis_time.strftime("%H:%M"))
                     _scan_job_active.set()
@@ -2940,6 +3007,7 @@ def main_loop():
                         )
                     finally:
                         _scan_job_active.clear()
+                    _tarama_saglik_kontrolu(notifier)
                     son_taranan_kapanis = kapanis
                     deque_manager.save_all()
                     # Tarama sonunda bekleyen aday tamponu kalıcılaştır (Batch 5 / B3):

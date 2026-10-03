@@ -1,4 +1,7 @@
-import deploy_check as dc
+import json
+
+import deploy_check as dc  # noqa: F401 - eski testler bu adı kullanıyor
+import deploy_check as D
 from deploy_check import _anahtari_temizle, anahtar_turu, supabase_basliklari, _jwt_rolu
 
 
@@ -179,3 +182,84 @@ def test_heartbeat_seviyesi_metni_yas_icerir():
     _, baslik_bayat, detay_bayat = dc.heartbeat_seviyesi(4 * 24 * 3600)
     assert "bayat" in baslik_bayat.lower()
     assert "Render" in detay_bayat
+
+
+# --- Public kanal hedefi (canlıya alma adımı) --------------------------------
+# NEDEN: public yayın DM'den bağımsız çalışır; hedef yanlış ya da bot yönetici
+# değilse bot çalışır ama kanala hiçbir şey düşmez. deploy_check bu adımı
+# doğrular (ağ çağrıları sahtelenir, gerçek Telegram isteği YOK).
+
+class _Yanit:
+    def __init__(self, payload=None, status_code=200):
+        self.status_code = status_code
+        self._payload = payload or {"ok": True}
+        self.text = json.dumps(self._payload)
+
+    def json(self):
+        return self._payload
+
+
+def _satirlari_tut(monkeypatch):
+    kayit = []
+    monkeypatch.setattr(D, "satir", lambda seviye, baslik, detay="": kayit.append((seviye, baslik)))
+    return kayit
+
+
+def test_public_hedef_yoksa_uyari(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    assert D.kontrol_public_hedef("123456789:AAAA", "", "12345") is False
+    assert kayit and kayit[0][0] == D.WARN and "Public kanal hedefi yok" in kayit[0][1]
+
+
+def test_token_yoksa_sessiz_atlanir(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    assert D.kontrol_public_hedef("", "@kanal") is False
+    assert kayit == []
+
+
+def test_kanal_yonetici_ve_izinliyse_hazir(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    cevaplar = [
+        _Yanit({"ok": True, "result": {"type": "channel", "title": "BIST Formasyon"}}),
+        _Yanit({"ok": True, "result": {"id": 42, "username": "bot"}}),
+        _Yanit({"ok": True, "result": {"status": "administrator", "can_post_messages": True}}),
+    ]
+    monkeypatch.setattr("requests.post", lambda *a, **k: cevaplar.pop(0))
+    assert D.kontrol_public_hedef("123456789:AAAA", "@bisthisseveri", "12345") is True
+    assert any("YÖNETİCİ" in b for _, b in kayit)
+
+
+def test_kanal_izin_kapaliysa_hata(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    cevaplar = [
+        _Yanit({"ok": True, "result": {"type": "channel", "title": "BIST Formasyon"}}),
+        _Yanit({"ok": True, "result": {"id": 42}}),
+        _Yanit({"ok": True, "result": {"status": "administrator", "can_post_messages": False}}),
+    ]
+    monkeypatch.setattr("requests.post", lambda *a, **k: cevaplar.pop(0))
+    assert D.kontrol_public_hedef("123456789:AAAA", "@bisthisseveri", "12345") is False
+    assert any(s == D.FAIL and "Mesaj gönderme" in b for s, b in kayit)
+
+
+def test_bot_hedefte_yoksa_hata(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    cevaplar = [
+        _Yanit({"ok": True, "result": {"type": "channel", "title": "Kanal"}}),
+        _Yanit({"ok": True, "result": {"id": 42}}),
+        _Yanit({"ok": True, "result": {"status": "left"}}),
+    ]
+    monkeypatch.setattr("requests.post", lambda *a, **k: cevaplar.pop(0))
+    assert D.kontrol_public_hedef("123456789:AAAA", "@kanal", "12345") is False
+    assert any(s == D.FAIL and "left" in b for s, b in kayit)
+
+
+def test_dm_yoksa_uyari(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    cevaplar = [
+        _Yanit({"ok": True, "result": {"type": "channel", "title": "Kanal"}}),
+        _Yanit({"ok": True, "result": {"id": 42}}),
+        _Yanit({"ok": True, "result": {"status": "administrator", "can_post_messages": True}}),
+    ]
+    monkeypatch.setattr("requests.post", lambda *a, **k: cevaplar.pop(0))
+    D.kontrol_public_hedef("123456789:AAAA", "@kanal", "")
+    assert any(s == D.WARN and "komutlar kapalı" in b for s, b in kayit)

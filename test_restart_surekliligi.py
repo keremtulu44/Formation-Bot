@@ -257,3 +257,74 @@ def test_hedef_yoksa_dogrulama_hata_verir(monkeypatch, veri_dizini):
     n = notifier_mod.TelegramNotifier()
     bilgi = n.check_public_connection()
     assert bilgi["can_post"] is None and bilgi["hata"]
+
+
+# --- 6) sessiz arıza bekçisi (tarama üst üste başarısızsa sahibe DM) ---------
+# NEDEN: veri kaynağı bozulduğunda süreç ayakta kalır, kanal sessizleşir ve
+# sahibin haberi olmaz. Bekçi en fazla günde bir DM gönderir.
+
+class _SahteNotifier:
+    def __init__(self):
+        self.enabled = True
+        self.gonderilen = []
+
+    def send_text(self, metin):
+        self.gonderilen.append(metin)
+        return True, ""
+
+
+def _tur_sonucu(status, processed):
+    main_mod.last_run_stats = {"status": status, "processed": processed}
+
+
+def test_basarisiz_turlar_esik_asilinca_uyari_gonderir(monkeypatch):
+    monkeypatch.setattr(main_mod, "_ardisik_basarisiz_tur", 0, raising=False)
+    monkeypatch.setattr(main_mod, "_son_tarama_uyari_gun", None, raising=False)
+    n = _SahteNotifier()
+    for _ in range(2):
+        _tur_sonucu("basarisiz", 0)
+        main_mod._tarama_saglik_kontrolu(n)
+    assert n.gonderilen == []          # eşik altı: sessiz
+    _tur_sonucu("basarisiz", 0)
+    main_mod._tarama_saglik_kontrolu(n)
+    assert len(n.gonderilen) == 1      # 3. turda uyarı
+    assert "üst üste 3 turdur" in n.gonderilen[0]
+
+
+def test_uyari_gunde_bir_kez(monkeypatch):
+    monkeypatch.setattr(main_mod, "_ardisik_basarisiz_tur", 3, raising=False)
+    monkeypatch.setattr(main_mod, "_son_tarama_uyari_gun",
+                        main_mod.datetime.now(main_mod.ISTANBUL_TZ).date().isoformat(),
+                        raising=False)
+    n = _SahteNotifier()
+    _tur_sonucu("basarisiz", 0)
+    main_mod._tarama_saglik_kontrolu(n)
+    assert n.gonderilen == []
+
+
+def test_basarili_tur_sayaci_sifirlar(monkeypatch):
+    monkeypatch.setattr(main_mod, "_ardisik_basarisiz_tur", 5, raising=False)
+    n = _SahteNotifier()
+    _tur_sonucu("tamamlandi", 28)
+    main_mod._tarama_saglik_kontrolu(n)
+    assert main_mod._ardisik_basarisiz_tur == 0
+    assert n.gonderilen == []
+
+
+def test_bos_tur_basarisiz_sayilir(monkeypatch):
+    """status 'tamamlandi' ama hiç hisse işlenmediyse sağlıklı sayılmaz."""
+    monkeypatch.setattr(main_mod, "_ardisik_basarisiz_tur", 0, raising=False)
+    n = _SahteNotifier()
+    _tur_sonucu("tamamlandi", 0)
+    main_mod._tarama_saglik_kontrolu(n)
+    assert main_mod._ardisik_basarisiz_tur == 1
+
+
+def test_dm_kapaliysa_uyari_gondermez(monkeypatch):
+    monkeypatch.setattr(main_mod, "_ardisik_basarisiz_tur", 2, raising=False)
+    monkeypatch.setattr(main_mod, "_son_tarama_uyari_gun", None, raising=False)
+    n = _SahteNotifier()
+    n.enabled = False
+    _tur_sonucu("basarisiz", 0)
+    main_mod._tarama_saglik_kontrolu(n)
+    assert n.gonderilen == []
