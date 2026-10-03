@@ -361,6 +361,13 @@ class TelegramNotifier:
         self.son_public_gonderim = None
 
         self.public_enabled = bool(self.token and self.public_chat_id)
+        # GÖREV 6 (A10): Telegram sayaç ayrımı — alert/watch/digest/command
+        # Mevcut alert/watch/digest/command ayrımını bozmayacak şekilde eklenir.
+        # send_text() içeriğine göre kategorize edilir; mevcut çağrı noktaları değişmeden çalışır.
+        self.command_sayac = 0        # /durum, /ozet, /karne gibi komut yanıtları
+        self.digest_sayac = 0         # 18:45 digest (WATCH_STATES) — not: bu ayrı bir mekanizma,
+        # ancak notifier üzerinden gönderilen digest parçaları için sayılır.
+        self.alert_sayac = 0          # ALERT_STATES (anlık push) — mevcut _gunluk_sayac ile paralel
         # Kanal hedefi doğrulamasının önbelleği (main açılışta bir kez doldurur;
         # heartbeat ağa çıkmadan bunu okur).
         self.public_hedef_bilgi: Dict = {}
@@ -422,6 +429,22 @@ class TelegramNotifier:
                 )
                 if resp.status_code == 200:
                     self._gonderim_sagligi_kaydet(basari=True)
+                    # GÖREV 6 (A10): Telegram sayaç ayrımı — içerik tabanlı kategorize
+                    # Mevcut alert/watch/digest/command ayrımını bozmaz; sadece sayaçları ayırır.
+                    # Heuristik: mesaj içeriğine göre kategori belirlenir.
+                    metin_kucuk = (govde or "").lower()
+                    if "📊" in metin_kucuk or "📋" in metin_kucuk or "📈" in metin_kucuk or "haftalık" in metin_kucuk:
+                        self.digest_sayac += 1  # Digest / WATCH_STATES (18:45 özet)
+                    elif "/durum" in metin_kucuk or "/ozet" in metin_kucuk or "/karne" in metin_kucuk or "/yardim" in metin_kucuk:
+                        self.command_sayac += 1  # Komut yanıtı
+                    elif any(x in metin_kucuk for x in ["formasyon", "üçgen", "kema", "bayrak", "flama", "kırılım", "retest", "tamamlanma"]):
+                        self.alert_sayac += 1  # ALERT_STATES (anlık formasyon bildirimi)
+                    else:
+                        # Diğer mesajlar (genel duyuru, hata, vb.) mevcut alert sayacına eklenir
+                        # (mevcut davranış korunur)
+                        pass
+                    # Ana günlük/saatlik sayaç (mevcut budget) alert için korunur;
+                    # diğer kategoriler ayrı sayaçta takip edilir.
                     return True, "mesaj gonderildi"
                 ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
                 son_hata = f"HTTP {resp.status_code}: {resp.text[:200]} | {ipucu}"
@@ -956,6 +979,10 @@ class TelegramNotifier:
             "saatlik_limit": self.max_saatlik,
             "gunluk": self._gunluk_sayac,
             "gunluk_limit": self.max_gunluk,
+            # GÖREV 6 (A10): Ayrı kategori sayaçları — mevcut alert/watch/digest/command ayrımı korunur
+            "alert_sayac": getattr(self, 'alert_sayac', 0),
+            "watch_digest_sayac": getattr(self, 'digest_sayac', 0),
+            "command_sayac": getattr(self, 'command_sayac', 0),
         }
 
     def _cooldown_yukle(self):

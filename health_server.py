@@ -408,7 +408,7 @@ def start_render_health_server(environ=None, test_sender=None,
         server.rate_limit_per_min = VARSAYILAN_DAKIKA_LIMIT
     server.rate_kayitlari = {}
     server.rate_kilidi = Lock()
-    server.test_key_query = (environ.get("TELEGRAM_TEST_KEY_QUERY", "1") or "").strip() not in ("0", "false", "False")
+    server.test_key_query = (environ.get("TELEGRAM_TEST_KEY_QUERY", "0") or "").strip() not in ("0", "false", "False")
     thread = Thread(
         target=server.serve_forever,
         kwargs={"poll_interval": 0.5},

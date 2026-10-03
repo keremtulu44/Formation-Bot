@@ -117,6 +117,11 @@ def is_bist_open(now: Optional[datetime] = None) -> bool:
     if now.weekday() >= 5:  # 5=Cumartesi, 6=Pazar
         return False
     
+    # Resmî tatil kontrolü (A2 düzeltmesi): tarama_penceresi_acik_mi() ile tutarlı
+    tatil = bist_tatil_adi(now)
+    if tatil:
+        return False
+
     # Saat kontrolü
     current_time = now.time()
     return BIST_OPEN <= current_time <= BIST_CLOSE

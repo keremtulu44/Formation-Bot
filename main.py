@@ -253,8 +253,12 @@ _daily_pattern_keys: set = set()
 
 
 def _note_pattern_found(stock: str, timeframe: str) -> None:
-    """Günlük BENZERSİZ formasyon sayacını güncelle (aynı hisse|TF bir kez sayılır)."""
-    _daily_pattern_keys.add(f"{str(stock).upper()}|{str(timeframe).lower()}")
+    """Günlük BENZERSİZ formasyon sayacını güncelle (aynı hisse bir kez sayılır; A9 düzeltmesi).
+    Mevcut TF davranışı (tarama, alert, digest) bozulmaz; sadece istatistik metrik düzeltilir.
+    Aynı hisse farklı TF'de (1h, 2h, 4h, 1d) aynı formasyon gösterirse, tekrar sayılmaz."""
+    # GÖREV 5 (A9): Multi-timeframe aynı formasyon tekrar sayılmasını önle
+    # Yalnızca hisse adı (TF'den bağımsız) anahtar olarak kullanılır
+    _daily_pattern_keys.add(f"{str(stock).upper()}")
     daily_stats['patterns_found'] = len(_daily_pattern_keys)
 
 
