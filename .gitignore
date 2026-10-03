@@ -28,6 +28,9 @@ bot_data/son_tarama.json.tmp
 bot_data/*_gunluk.json
 # Haftalik dogruluk karnesi sinyal defteri (runtime durum; kalicilik DATA_DIR'de)
 bot_data/karne_defteri.json
+# Phase 1: kalici formation kimligi anchor'lari (runtime durum; DATA_DIR'de yazilir)
+bot_data/formation_identity.json
+bot_data/formation_identity.json.tmp
 
 # OS
 .DS_Store

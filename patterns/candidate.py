@@ -21,6 +21,9 @@ class PatternCandidate:
     """Pine: type PatternCandidate — alan adları eşleşecek şekilde."""
     valid: bool = False
     identity: int = 0
+    # Phase 1: kalıcı formation kimliği (motor-içi `identity`'den ayrı kavram).
+    # Doğumda UUID ile üretilir; restart sonrası re-attach ile korunur.
+    stable_id: Optional[str] = None
     pattern_type: str = "Yok"
     family: str = "Yok"
     classic_dir: int = 0

@@ -13,6 +13,7 @@
 # bunun yerine Python dostu `events` listesi üretilir (notifier kullanır).
 
 import math
+import uuid
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -38,6 +39,87 @@ from .selection import (candidate_preferred, continuity_score, identity_compatib
                         quality_priority_gap, replacement_margin, same_completed_structure,
                         selection_score)
 from .violation import MAX_ACCEPTED_VIOLATION, ViolationCache
+
+# === PHASE 1: Persistent Formation Identity yardımcıları ====================
+# Formation matematiğine, geometriye, kaliteye, continuity_score eşiklerine
+# veya lifecycle state geçişlerine DOKUNMAZ. Yalnız mevcut `identity_compatible`
+# + `continuity_score` (değiştirilmemiş eşiklerle) ile restart re-attach yapar.
+
+def _new_stable_id() -> str:
+    """Yeni formation için benzersiz, restart-safe UUID (motor-içi `identity` ayrıdır)."""
+    return str(uuid.uuid4())
+
+
+def _parse_stock_tf(key: str):
+    """Manager anahtarı ``STOCK_TF`` -> (stock, tf). Sembol '_' içermez varsayımı."""
+    stock, tf = key.rsplit("_", 1)
+    return stock, tf
+
+
+def _match_persisted_anchor(engine, candidate: "PatternCandidate") -> Optional[str]:
+    """Restart sonrası: (stock,tf) anchor'ıyla `candidate`'ı eşleştir.
+
+    Eşleşme için mevcut kurallar kullanılır (eşik DEĞİŞTİRİLMEDİ):
+      * identity_compatible (family + classic_dir)
+      * continuity_score >= 60
+    Uyum sağlanırsa eski stable_id döner, yoksa None.
+    """
+    key = getattr(engine, "_key", None)
+    if not key:
+        return None
+    stock, tf = _parse_stock_tf(key)
+    from state import formation_identity as fid
+    anchor = fid.load_anchor(stock, tf)
+    if not anchor:
+        return None
+    prev = PatternCandidate()
+    prev.valid = True
+    prev.family = anchor.get("family")
+    prev.classic_dir = anchor.get("classic_dir") or 0
+    prev.pattern_type = anchor.get("pattern_type")
+    prev.start_bar = anchor.get("start_bar")
+    prev.apex_bar = anchor.get("apex_bar")
+    prev.hb1, prev.hb2 = anchor.get("hb1"), anchor.get("hb2")
+    prev.lb1, prev.lb2 = anchor.get("lb1"), anchor.get("lb2")
+    prev.hp1, prev.hp2 = anchor.get("hp1"), anchor.get("hp2")
+    prev.lp1, prev.lp2 = anchor.get("lp1"), anchor.get("lp2")
+    if not identity_compatible(prev, candidate):
+        return None
+    if continuity_score(engine, prev, candidate) >= 60.0:
+        return anchor.get("stable_id")
+    return None
+
+
+def _save_formation_anchor(engine, candidate: "PatternCandidate") -> None:
+    """Mevcut formation'ın minimum anchor'unu (stock,tf) anahtarıyla sakla."""
+    key = getattr(engine, "_key", None)
+    if not key or not candidate.valid or not candidate.stable_id:
+        return
+    stock, tf = _parse_stock_tf(key)
+    birth_bar_time = None
+    try:
+        sb = candidate.start_bar
+        if sb is not None and getattr(engine, "index_values", None) is not None \
+                and 0 <= sb < len(engine.index_values):
+            birth_bar_time = str(engine.index_values[sb])
+    except Exception:
+        birth_bar_time = None
+    from state import formation_identity as fid
+    fid.save_anchor({
+        "stable_id": candidate.stable_id,
+        "stock": stock,
+        "timeframe": tf,
+        "family": candidate.family,
+        "classic_dir": candidate.classic_dir,
+        "pattern_type": candidate.pattern_type,
+        "start_bar": candidate.start_bar,
+        "apex_bar": candidate.apex_bar,
+        "hb1": candidate.hb1, "hb2": candidate.hb2,
+        "lb1": candidate.lb1, "lb2": candidate.lb2,
+        "hp1": candidate.hp1, "hp2": candidate.hp2,
+        "lp1": candidate.lp1, "lp2": candidate.lp2,
+        "birth_bar_time": birth_bar_time,
+    })
 
 try:
     from config import get_profile_params
@@ -69,6 +151,7 @@ class ArgentEngine:
     def __init__(self, profile: str = "Dengeli", mintick: float = 0.01,
                  use_breakout_quality_filter: bool = True):
         from config import TERMINAL_TAZE_BAR, FAILED_PATTERN_PENALTY_BARS
+        self._key = None  # Phase 1: (stock,tf) anahtarı manager tarafından atanır
         self.terminal_taze_bar = TERMINAL_TAZE_BAR
         self.failed_penalty_bars = FAILED_PATTERN_PENALTY_BARS
         self.profile = profile
@@ -381,8 +464,10 @@ class ArgentEngine:
                 identity_ok = self.active.valid and identity_compatible(self.active, best)
                 if identity_ok and lifecycle_can_update and continuity >= 60.0:
                     preserved = self.active.identity
+                    preserved_stable = getattr(self.active, "stable_id", None)
                     self.active = best
                     self.active.identity = preserved
+                    self.active.stable_id = preserved_stable
                     reset_quality_snapshot(self.active)
                     self.lock_used_pivots(self.active)
                 else:
@@ -397,11 +482,19 @@ class ArgentEngine:
                                        or self.pattern_state == ST_NONE
                                        or (lifecycle_can_update and (materially_better or context_wins)))
                     if replace_current:
+                        # Phase 1: restart re-attach — aynı (stock,tf) eski formation
+                        # ile eşleşirse eski stable_id yeniden bağlanır, yeni üretilmez.
+                        if self.active.valid and getattr(self.active, "stable_id", None):
+                            yeni_stable = self.active.stable_id
+                        else:
+                            yeni_stable = _match_persisted_anchor(self, best) or _new_stable_id()
                         self.next_pattern_identity += 1
                         self.active = best
                         self.active.identity = self.next_pattern_identity
+                        self.active.stable_id = yeni_stable
                         reset_quality_snapshot(self.active)
                         self.lock_used_pivots(self.active)
+                        _save_formation_anchor(self, self.active)
                         started_new_identity = True
                         self.pattern_state = ST_CANDIDATE
                         self.invalid_reason = "Yok"
@@ -849,6 +942,8 @@ class PatternLifecycleManager:
     def get_engine(self, key: str) -> ArgentEngine:
         if key not in self.engines:
             self.engines[key] = ArgentEngine(self.profile, self.mintick)
+        # Phase 1: restart re-attach için motorun (stock,tf) anahtarını taşı.
+        self.engines[key]._key = key
         return self.engines[key]
 
     def scan(self, key: str, df: pd.DataFrame, tam_yeniden: bool = False) -> EngineSnapshot:

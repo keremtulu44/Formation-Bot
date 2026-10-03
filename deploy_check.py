@@ -649,7 +649,12 @@ def kontrol_render(url: str, test_key: str) -> None:
         return
 
     try:
-        r = requests.get(hedef.rsplit("/health", 1)[0] + "/test", params={"k": test_key}, timeout=60)
+        # A7 sonrası /test anahtarı varsayılan BAŞLIKTAN okunur (X-Test-Key).
+        r = requests.get(
+            hedef.rsplit("/health", 1)[0] + "/test",
+            headers={"X-Test-Key": test_key},
+            timeout=60,
+        )
     except Exception as exc:  # noqa: BLE001
         satir(FAIL, "/test çağrısı başarısız", f"{type(exc).__name__}: {_kisa(exc)}")
         return

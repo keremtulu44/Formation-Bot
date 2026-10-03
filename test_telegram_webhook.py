@@ -113,9 +113,11 @@ def _post(port, yol, govde, basliklar=None):
         return hata.code, json.loads(hata.read().decode("utf-8"))
 
 
-def _get(port, yol):
+def _get(port, yol, anahtar=None):
+    # /test anahtarı A7 sonrası varsayılan BAŞLIKTAN okunur (X-Test-Key).
+    basliklar = {"X-Test-Key": anahtar} if anahtar else {}
     try:
-        with urlopen(f"http://127.0.0.1:{port}{yol}", timeout=5) as yanit:
+        with urlopen(Request(f"http://127.0.0.1:{port}{yol}", headers=basliklar), timeout=5) as yanit:
             return yanit.status, json.loads(yanit.read().decode("utf-8"))
     except HTTPError as hata:
         return hata.code, json.loads(hata.read().decode("utf-8"))
@@ -512,7 +514,7 @@ def test_webhook_yolu_health_ve_test_ile_cakismaz():
     try:
         port = server.server_address[1]
         assert _get(port, "/health")[0] == 200
-        assert _get(port, "/test?k=k7m2x9")[0] == 200
+        assert _get(port, "/test", anahtar="k7m2x9")[0] == 200
         assert _post(port, f"{WEBHOOK_YOL_ONEK}{SECRET}", _guncelleme(1, "/durum"))[0] == 200
         assert len(cagrilar) == 2       # 1 test mesajı + 1 güncelleme
     finally:

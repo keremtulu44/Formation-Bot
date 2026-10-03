@@ -435,6 +435,9 @@ def reset_daily_if_needed():
         daily_stats['patterns_found'] = 0
         _daily_pattern_keys.clear()
         daily_stats['basarisiz_kirilim'] = 0
+        # Restart tabanı yalnızca AYNI günün devralınan sayısıdır; yeni güne
+        # sıfırla (yoksa eski günün sayısı yeni güne taşınır ve sayaç şişer).
+        _daily_basarisiz_tabani = 0
         _daily_basarisiz_keys.clear()
         daily_stats['tarama_sayisi'] = 0
         daily_stats['alerts_sent'] = 0
