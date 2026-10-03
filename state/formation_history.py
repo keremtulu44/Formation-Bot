@@ -380,11 +380,14 @@ def snapshot_ekle(
     stable_id: Optional[str],
     tur: str,
     snapshot: Dict[str, Any],
+    ek: Optional[Dict[str, Any]] = None,
 ) -> bool:
     """Bir kayda anlamlı bir snapshot ekler (birth hariç).
 
     `tur`: "geometri" | "kirilim" | "terminal"
     Aynı (tur, bar_time) tekrar yazılmaz -> tam_yeniden replay'de şişmez.
+    `ek`: snapshot'a eklenecek bağlamsal alanlar (örn. `state`). Alan adları
+    `tur`/`bar_time`/`alanlar` ile ÇAKIŞMAZ; JSON-safe indirgenir.
     """
     rec = kayit_getir(defter, stable_id)
     if rec is None or not snapshot:
@@ -394,11 +397,16 @@ def snapshot_ekle(
     for mevcut in rec["snapshotlar"][-MAX_SNAPSHOT:]:
         if mevcut.get("tur") == tur and mevcut.get("bar_time") == bar_time:
             return False
-    rec["snapshotlar"].append({
+    kayit: Dict[str, Any] = {
         "tur": tur,
         "bar_time": bar_time,
         "alanlar": snapshot.get("alanlar", {}),
-    })
+    }
+    if ek:
+        for anahtar, deger in ek.items():
+            if anahtar not in kayit:
+                kayit[anahtar] = schema.json_guvenli(deger)
+    rec["snapshotlar"].append(kayit)
     if len(rec["snapshotlar"]) > MAX_SNAPSHOT:
         del rec["snapshotlar"][:-MAX_SNAPSHOT]
     rec["son_gorulme"] = _simdi()

@@ -15,7 +15,7 @@
 import math
 import uuid
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -279,6 +279,12 @@ class ArgentEngine:
         # iki farklı candidate'a atanamaz (deterministik "ilk gelen alır").
         self._p2_births: List["PatternCandidate"] = []
         self._p2_kullanilan: set = set()
+        # --- Faz 2.3: geometry evolution snapshot'ları ---
+        # `_p2_geo`: bu scan'de ANLAMLI state geçişlerinde yakalanan geometry
+        # snapshot'ları. Per-bar DEĞİL: yalnızca lifecycle'nin kendi "anlamlı
+        # aşama" tespiti (prev_state != state) tetikler. Böylece disk yazımı
+        # state geçişi sayısıyla sınırlı kalır.
+        self._p2_geo: List[Dict[str, Any]] = []
 
     # ---------- yüksek seviye API ----------
 
@@ -346,6 +352,10 @@ class ArgentEngine:
         # aynı stable_id iki farklı candidate'a atanamaz.
         self._p2_births = []
         self._p2_kullanilan = set()
+        # Faz 2.3: geometry snapshot'ları da bu scan'a özgüdür (tam_yeniden
+        # replay'de tekrar yakalanır; yazım tarafında (tur, bar_time) dedup'ı
+        # gereksiz çoğalmayı engeller).
+        self._p2_geo = []
         for b in range(start, len(df)):
             before = len(self.events)
             self._process_bar(b)
@@ -991,6 +1001,10 @@ class ArgentEngine:
         def maybe(cond: bool, ev_type: str, name: str, direction: int = 0, q: Optional[float] = None):
             if cond:
                 self._emit(ev_type, name, direction, q if q is not None else eff_q, price)
+                # Faz 2.3: anlamlı state geçişinde geometry snapshot'ı yakala.
+                # Matematik DEĞİŞTİRMEZ — mevcut candidate'ın halihazırda
+                # hesaplanmış alanları okunur (schema.geometri_snapshot).
+                self._p2_geometri_yakala()
 
         if not a.valid:
             return
@@ -1018,8 +1032,74 @@ class ArgentEngine:
               self.invalid_reason if False else None)
         maybe(s == ST_INVALID and prev_state != ST_INVALID, "INVALID", "Formasyon geçersiz", a.classic_dir)
 
+    def _p2_geometri_yakala(self) -> None:
+        """Faz 2.3: anlamlı state geçişinde geometry snapshot'ı yakalar.
+
+        NEDEN BURADA: lifecycle zaten "anlamlı aşama" kavramını kendi state
+        makinesiyle tanımlıyor (`prev_state != state`). Yeni ve yapay bir
+        eşik/scoring sistemi icat ETMEK YERİNE bu mevcut sinyal kullanılır;
+        böylece snapshot'lar bar sayısıyla değil, gerçek anlamlı geçişlerle
+        sınırlı kalır (per-bar persistence olmaz).
+
+        Matematik DEĞİŞMEZ: `schema.geometri_snapshot` mevcut candidate'ın
+        halihazırda hesaplanmış STATE alanlarını okur; hiçbir geometri yeniden
+        hesaplanmaz.
+        """
+        a = self.active
+        if not getattr(a, "valid", False) or not getattr(a, "stable_id", None):
+            return
+        bar_time = None
+        if self.index_values is not None and 0 <= self.bar_index < len(self.index_values):
+            bar_time = self.index_values[self.bar_index]
+        bar_time = str(bar_time) if bar_time is not None else None
+
+        from state import formation_schema as schema
+
+        temel = {
+            "stable_id": a.stable_id,
+            "bar": self.bar_index,
+            "bar_time": bar_time,
+            "state": self.pattern_state,
+        }
+        # 1) Her anlamlı geçişte: o andaki geometri.
+        self._p2_geo.append(dict(temel, tur="geometri",
+                                 **schema.geometri_snapshot(a, bar_time=bar_time)))
+        # 2) Kırılım teyidinde: kırılım anında dondurulmuş geometri.
+        if self.pattern_state == ST_BREAK_CONFIRMED:
+            self._p2_geo.append(dict(temel, tur="kirilim",
+                                     **schema.kirilim_snapshot(a, bar_time=bar_time)))
+
 
 # --- YÖNETİCİ (eski PatternLifecycleManager API'sini korur) ---
+
+def _terminal_snapshotu(engine, snap: EngineSnapshot) -> Optional[Dict[str, Any]]:
+    """Faz 2.3: terminal anındaki SON anlamlı geometry snapshot'ı.
+
+    Terminal formation'ın son geometrisi history'de `tur="terminal"` ile
+    saklanır. Matematik DEĞİŞTİRMEZ: mevcut candidate'ın halihazırda
+    hesaplanmış alanları okunur. Kırılım sonrası terminal ise kırılım anında
+    DONDURULMUŞ geometri (BREAKOUT alanları) daha anlamlıdır; değilse o anki
+    geometry (STATE alanları) kullanılır.
+
+    Bar zamanı MUTLAK olmalı: pencere-koordinat bar indeksleri yalnızca bu
+    zamana göre yorumlanabilir (bkz. formation_history BAR-TIME ALIGNMENT).
+    """
+    aktif = getattr(snap, "active", None)
+    if aktif is None or not getattr(aktif, "valid", False):
+        return None
+    idx = getattr(engine, "index_values", None)
+    b = getattr(engine, "bar_index", None)
+    if idx is None or b is None or not (0 <= b < len(idx)):
+        return None
+    try:
+        from state import formation_schema as schema
+        bar_time = str(idx[b])
+        if snap.state in ("FORMASYON_TAMAMLANDI", "RETEST_BASARILI"):
+            return schema.kirilim_snapshot(aktif, bar_time=bar_time)
+        return schema.geometri_snapshot(aktif, bar_time=bar_time)
+    except Exception:  # noqa: BLE001 - snapshot üretilemezse terminal yine yazılır
+        return None
+
 
 class PatternLifecycleManager:
     """
@@ -1055,6 +1135,7 @@ class PatternLifecycleManager:
         Yazma tetikleyicileri (per-bar dump YOK):
           * doğum  -> engine._p2_births
           * olay   -> snap.events (state geçişleri)
+          * geometri -> engine._p2_geo (anlamlı state geçişlerinde yakalanan)
           * terminal -> snap.state terminal ise
 
         Tek taramada tek save: defter bir kez yüklenir, tüm mutasyonlar
@@ -1068,8 +1149,9 @@ class PatternLifecycleManager:
             stock, tf = _parse_stock_tf(key)
             dogumlar = list(getattr(engine, "_p2_births", None) or [])
             olaylar = list(getattr(snap, "events", None) or [])
+            geo = list(getattr(engine, "_p2_geo", None) or [])
             terminal = fh.terminal_durumu(snap.state)
-            if not dogumlar and not olaylar and not terminal:
+            if not dogumlar and not olaylar and not terminal and not geo:
                 return
             defter = fh.yukle(stock, tf)
             degisti = False
@@ -1078,11 +1160,35 @@ class PatternLifecycleManager:
                     degisti = True
             if olaylar and fh.olay_ekle(defter, olaylar):
                 degisti = True
+            # --- Faz 2.3: geometry evolution snapshot'ları ---
+            # (tur, bar_time) dedup'ı sayesinde tam_yeniden replay'de ve kayan
+            # pencerede AYNI fiziksel an için ikinci kayıt yazılmaz.
+            for y in geo:
+                sid = y.get("stable_id")
+                if not sid:
+                    continue
+                if fh.snapshot_ekle(defter, sid, y.get("tur") or "geometri", y,
+                                    ek={"state": y.get("state"),
+                                        "bar": y.get("bar")}):
+                    degisti = True
             if terminal:
                 sid = (getattr(snap, "active", None).stable_id
                        if getattr(snap, "active", None) is not None
                        and getattr(snap.active, "valid", False) else None)
-                if sid and fh.terminal_ekle(defter, sid, snap.state):
+                # Faz 2.3: terminal geometry BİR KEZ yazılır. Terminal
+                # formation'ın geometrisi donmuştur; tazelik penceresi
+                # içinde her taramada yenisini yazmak gereksiz snapshot
+                # çoğaltır ve MAX_SNAPSHOT altındaki gerçek geometry
+                # evrimini dışarı iter.
+                terminal_snap = None
+                if sid:
+                    rec_t = fh.kayit_getir(defter, sid)
+                    if rec_t is not None and not any(
+                            x.get("tur") == "terminal"
+                            for x in rec_t.get("snapshotlar", [])):
+                        terminal_snap = _terminal_snapshotu(engine, snap)
+                if sid and fh.terminal_ekle(defter, sid, snap.state,
+                                            snapshot=terminal_snap):
                     degisti = True
                 elif sid:
                     # Terminal geçişi bu turda yakalanmasa bile (replay'de
