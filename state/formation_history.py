@@ -80,6 +80,8 @@ __all__ = [
     "kayitlar",
     "eslestir",
     "kirilim_turu",
+    "durum_guncelle",
+    "_DURUM_SIRA",
     "terminal_durumu",
 ]
 
@@ -418,14 +420,56 @@ def snapshot_ekle(
 # =====================================================================
 
 def kirilim_turu(state: Optional[str]) -> Optional[str]:
-    """Motor state'ini history durumuna çevirir (kırılım yolu)."""
+    """Motor state'ini history durumuna çevirir (kırılım yolu).
+
+    Faz 2.4: teyitli kırılım (KIRILIM_TEYITLI) ve başarılı retest
+    (RETEST_BASARILI) da kendi fazlarına eşlenir. Bunlar önce eksikti:
+    teyitli kırılım `None` döndüğü için kaydın fazı hiç ilerlemiyordu.
+
+    Faz 2.4 EŞLEME NOTU: `KIRILIM_HAZIRLIGI` (ST_PREP) BU KÜMEDEN ÇIKARILDI.
+    Bu state henüz kırılım ÖNCESİ hazırlıktır; `freeze_pattern_quality`
+    henüz çalışmadığı için BREAKOUT alanlarının 18/20'si boş olurdu.
+    Açıkçası: bu fonksiyon P2.4 öncesinde ÇAĞIRAN'i OLMAYAN dormant kodtu, dolayısıyla
+    davranış değişikliği riski yok. Küme, `patterns.lifecycle._FAZ_KIRILIM`
+    ile BİREBİR aynıdır: `durum` fazı ile snapshot kanıtı çelişmez
+    (durum=kirilim olan kayıtta gerçekten `kirilim` snapshot'ı vardır).
+    """
     if not state:
         return None
-    if state == "RETEST_BEKLENIYOR" or state == "RETEST_EDILIYOR":
+    if state in ("RETEST_BEKLENIYOR", "RETEST_EDILIYOR", "RETEST_BASARILI"):
         return DURUM_RETEST
-    if state in ("KIRILIM_HAZIRLIGI", "KIRILIM_ADAYI", "KIRILIM_DENEMESI"):
+    if state in ("KIRILIM_ADAYI", "KIRILIM_DENEMESI", "KIRILIM_TEYITLI"):
         return DURUM_KIRILIM
     return None
+
+
+# Yaşam döngüsü faz sırası: açık < kırılım < retest < terminal.
+# Faz ASLA geriye gitmez (bkz. `durum_guncelle`).
+_DURUM_SIRA = {DURUM_ACIK: 0, DURUM_KIRILIM: 1, DURUM_RETEST: 2,
+               DURUM_TERMINAL: 3}
+
+
+def durum_guncelle(defter: Dict[str, Any], stable_id: Optional[str],
+                   yeni_durum: Optional[str]) -> bool:
+    """Faz 2.4: kaydın yaşam döngüsü fazini İLERLETİR.
+
+    MONOTONİK: `acik -> kirilim -> retest -> terminal`. Faz asla geriye
+    gitmez — bir formation bir kez kırılıma ulaştıysa history'de öyle
+    kalır; sonraki başarısız deneme veya motorun ön-kırılım state'ine
+    dönmesi bu bilgiyi silmez. Terminal en üst fazdır ve geri alınmaz.
+
+    Dönen: değişiklik olduysa True (yazma tetikleyicisi).
+    """
+    if not yeni_durum or not stable_id:
+        return False
+    rec = kayit_getir(defter, stable_id)
+    if rec is None:
+        return False
+    if _DURUM_SIRA.get(yeni_durum, 0) <= _DURUM_SIRA.get(rec.get("durum"), 0):
+        return False
+    rec["durum"] = yeni_durum
+    rec["son_gorulme"] = _simdi()
+    return True
 
 
 def terminal_durumu(state: Optional[str]) -> bool:

@@ -180,6 +180,22 @@ class EngineSnapshot:
     retest_seen: bool = False
 
 
+# --- Faz 2.4: yaşam döngüsü fazları ---
+# Snapshot turu bu fazlardan gelir: `geometri` (ön-kırılım), `kirilim`
+# (kırılım anında dondurulmuş), `retest` (retest evresi), `terminal`.
+_FAZ_KIRILIM = (ST_BREAK_CANDIDATE, ST_BREAK_ATTEMPT, ST_BREAK_CONFIRMED)
+_FAZ_RETEST = (ST_RETEST_WAIT, ST_RETESTING, ST_RETEST_OK)
+
+
+def _faz(state: Optional[str]) -> str:
+    """Motor state'inin yaşam döngüsü fazi."""
+    if state in _FAZ_KIRILIM:
+        return "kirilim"
+    if state in _FAZ_RETEST:
+        return "retest"
+    return "diger"
+
+
 class ArgentEngine:
     """Tek hisse-tek timeframe için Pine v0.4.6 karar çekirdeği."""
 
@@ -802,6 +818,16 @@ class ArgentEngine:
 
         # --- olaylar (Pine alertcondition karşılıkları; alert() çağrısı YOK) ---
         self._emit_state_events(prev_state, started_new_identity)
+
+        # --- Faz 2.4: faz geçişi tetikleyicisi ---
+        # KIRILIM_DENEMESI, RETEST_BEKLENIYOR ve RETEST_EDILIYOR geçişlerinin
+        # KENDİ olayı yok (yalnızca state değişir). Bu yüzden history'de
+        # "retest evresi başladı" görünmüyordu. FAZ değişimini ayrı bir
+        # tetikleyici olarak kullanıyoruz: OLAY ÜRETMEZ (Telegram/alert akışı
+        # değişmez), yalnızca snapshot'ı yakalar.
+        if (_faz(next_state) != _faz(prev_state)
+                and _faz(next_state) in ("kirilim", "retest")):
+            self._p2_geometri_yakala()
         self.last_pattern_state = self.pattern_state
 
     # ---------- lifecycle alt adımları ----------
@@ -1061,13 +1087,24 @@ class ArgentEngine:
             "bar_time": bar_time,
             "state": self.pattern_state,
         }
-        # 1) Her anlamlı geçişte: o andaki geometri.
-        self._p2_geo.append(dict(temel, tur="geometri",
-                                 **schema.geometri_snapshot(a, bar_time=bar_time)))
-        # 2) Kırılım teyidinde: kırılım anında dondurulmuş geometri.
-        if self.pattern_state == ST_BREAK_CONFIRMED:
+        # Faz 2.4: snapshot turu yasam dongusu FAZINDAN gelir.
+        faz = _faz(self.pattern_state)
+        if faz == "kirilim":
+            # Kırılım anı: o andaki geometri + kırılımda DONDURULMUŞ bağlam.
+            # İkisi FARKLI alan kümeleridir (STATE vs BREAKOUT) -> kopyalanma
+            # değil, aynı anın iki görünümü.
+            self._p2_geo.append(dict(temel, tur="geometri",
+                                     **schema.geometri_snapshot(a, bar_time=bar_time)))
             self._p2_geo.append(dict(temel, tur="kirilim",
                                      **schema.kirilim_snapshot(a, bar_time=bar_time)))
+        elif faz == "retest":
+            # Retest evresi: tur="retest" ile AYRI etiketlenir. Aynı bar'a
+            # "geometri" de YAZILMAZ -- iki tür aynı alanları taşıyor olurdu.
+            self._p2_geo.append(dict(temel, tur="retest",
+                                     **schema.geometri_snapshot(a, bar_time=bar_time)))
+        else:
+            self._p2_geo.append(dict(temel, tur="geometri",
+                                     **schema.geometri_snapshot(a, bar_time=bar_time)))
 
 
 # --- YÖNETİCİ (eski PatternLifecycleManager API'sini korur) ---
@@ -1160,7 +1197,7 @@ class PatternLifecycleManager:
                     degisti = True
             if olaylar and fh.olay_ekle(defter, olaylar):
                 degisti = True
-            # --- Faz 2.3: geometry evolution snapshot'ları ---
+            # --- Faz 2.3/2.4: geometry / kırılım / retest snapshot'ları ---
             # (tur, bar_time) dedup'ı sayesinde tam_yeniden replay'de ve kayan
             # pencerede AYNI fiziksel an için ikinci kayıt yazılmaz.
             for y in geo:
@@ -1171,6 +1208,16 @@ class PatternLifecycleManager:
                                     ek={"state": y.get("state"),
                                         "bar": y.get("bar")}):
                     degisti = True
+            # --- Faz 2.4: yaşam döngüsü fazı (açık -> kırılım -> retest) ---
+            # Monotonik: faz asla geriye gitmez (bkz. fh.durum_guncelle).
+            # Terminal fazı aşağıda `terminal_ekle` ile yazılır ve o en üsttedir.
+            aktif = getattr(snap, "active", None)
+            faz_sid = (aktif.stable_id
+                       if aktif is not None and getattr(aktif, "valid", False)
+                       else None)
+            if faz_sid and fh.durum_guncelle(defter, faz_sid,
+                                             fh.kirilim_turu(snap.state)):
+                degisti = True
             if terminal:
                 sid = (getattr(snap, "active", None).stable_id
                        if getattr(snap, "active", None) is not None
