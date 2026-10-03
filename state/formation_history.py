@@ -386,7 +386,7 @@ def snapshot_ekle(
 ) -> bool:
     """Bir kayda anlamlı bir snapshot ekler (birth hariç).
 
-    `tur`: "geometri" | "kirilim" | "terminal"
+    `tur`: "geometri" | "kirilim" | "retest" | "terminal"
     Aynı (tur, bar_time) tekrar yazılmaz -> tam_yeniden replay'de şişmez.
     `ek`: snapshot'a eklenecek bağlamsal alanlar (örn. `state`). Alan adları
     `tur`/`bar_time`/`alanlar` ile ÇAKIŞMAZ; JSON-safe indirgenir.
@@ -486,12 +486,20 @@ def terminal_durumu(state: Optional[str]) -> bool:
 
 def terminal_ekle(defter: Dict[str, Any], stable_id: Optional[str], state: Optional[str],
                   snapshot: Optional[Dict[str, Any]] = None) -> bool:
-    """Kaydı terminal işaretler ve terminal snapshot'ını ekler."""
+    """Kaydı terminal işaretler ve terminal snapshot'ını ekler.
+
+    Faz 2.4: terminal snapshot'ı da `stable_id` ve `state` taşır. Diğer türler
+    (`geometri`/`kirilim`/`retest`) bu alanları zaten payload'ında bulundurur;
+    terminal taşımadığı için snapshot "hangi formation'a ait" bilgisini
+    yalnızca kayıt içindeki yerleşimden alıyordu. Artık snapshot KENDİNİ
+    tanımlar — çoklu-formasyon ayırlığı testi tüm türlerde doğrulanabilir.
+    """
     rec = kayit_getir(defter, stable_id)
     if rec is None or not terminal_durumu(state):
         return False
     if snapshot:
-        snapshot_ekle(defter, stable_id, "terminal", snapshot)
+        snapshot_ekle(defter, stable_id, "terminal", snapshot,
+                      ek={"stable_id": stable_id, "state": state})
     rec["durum"] = DURUM_TERMINAL
     rec["terminal_state"] = state
     rec["terminal_zamani"] = _simdi()

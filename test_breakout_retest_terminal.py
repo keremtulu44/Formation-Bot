@@ -124,6 +124,83 @@ def _kirilim_retest_zinciri(df, key="ASELS_1h"):
     return mgr, durumlar
 
 
+def _zincir_surdur(mgr, seri, key="ASELS_1h"):
+    """Mevcut motorla mevcut seriyi kırılım → teyit → retest → terminal'e sürdür.
+
+    MATEMATİK DEĞİŞMEZ: yalnızca BİRİKİMLı bar verir; tüm kararları
+    motorun kendi state makinesi verir. Dönen `(mgr, seri, durumlar, terminal_oldu)`.
+    """
+    durumlar = []
+    snap = mgr.scan(key, seri)
+    durumlar.append(snap.state)
+    a = snap.active
+    if a is None or not a.valid:
+        return mgr, seri, durumlar, False
+    atr = max(a.geometry_atr or 1.0, 0.01)
+
+    ust = a.upper_now
+    seri = _ekle(seri, ust - 0.1, ust + 1.5 * atr, ust - 0.3 * atr,
+                 ust + 1.2 * atr, 2_500_000)
+    snap = mgr.scan(key, seri); durumlar.append(snap.state)
+    if snap.active is None:
+        return mgr, seri, durumlar, False
+
+    u2 = snap.active.upper_now
+    seri = _ekle(seri, u2 + 0.2, u2 + 1.0 * atr, u2 + 0.1,
+                 u2 + 0.8 * atr, 2_500_000)
+    snap = mgr.scan(key, seri); durumlar.append(snap.state)
+    if snap.active is None:
+        return mgr, seri, durumlar, False
+
+    s3 = snap.active.upper_now
+    seri = _ekle(seri, s3 + 0.5, s3 + 0.9, s3 - 0.4, s3 + 0.4, 1_500_000)
+    snap = mgr.scan(key, seri); durumlar.append(snap.state)
+    for i in range(12):
+        if snap.active is None:
+            break
+        base = snap.active.upper_now + 0.5 + i * 0.2
+        seri = _ekle(seri, base - 0.1, base + 0.4, base - 0.3,
+                     base + 0.2, 1_200_000)
+        snap = mgr.scan(key, seri); durumlar.append(snap.state)
+        if snap.state == "FORMASYON_TAMAMLANDI":
+            break
+    return mgr, seri, durumlar, durumlar[-1] == "FORMASYON_TAMAMLANDI"
+
+
+def _iki_tam_zincir(key="ASELS_1h"):
+    """TEK (stock,tf) içinde İKİ formation'ın IKISI de tam zinciri yaşar.
+
+    Neden özel bir üretici: hazır `_iki_formasyon()` üreticisi retest evresine
+    hiç ulaşmıyor, bu yüzden çoklu-formasyon izolasyonu retest için
+    ölçülemiyordu. Burada formasyon 1 terminal'e ulaştıktan sonra ikinci bir
+    pennant eklenir ve yeni formasyon da kendi zincirini yaşar.
+
+    MATEMATİK DEĞİŞMEZ: sadece fiyat serisi üretilir ve mevcut motora
+    verilir; kırılım/retest/terminal kararlarını motor verir.
+    """
+    mgr = PatternLifecycleManager(profile="Dengeli")
+    # --- Formasyon 1 ---
+    seri = _kanalli_pennant(n_bars=60, seed=8)
+    mgr, seri, d1, ok1 = _zincir_surdur(mgr, seri, key)
+    assert ok1, "formasyon 1 terminal'e ulaşmadı: %r" % d1
+    defter = fh.yukle(_STOCK, _TF)
+    terminal_sid_1 = {r["stable_id"] for r in fh.kayitlar(defter)
+                      if r.get("durum") == fh.DURUM_TERMINAL}
+    assert terminal_sid_1, "formasyon 1 terminal kaydı üretmedi"
+
+    # --- Formasyon 2: yeni bir pennant, fiyat kayması hizalanmış ---
+    son = seri["close"].iloc[-1]
+    p2 = _kanalli_pennant(n_bars=60, seed=3) + son
+    p2.index = pd.date_range(seri.index[-1] + pd.Timedelta(hours=1),
+                             periods=len(p2), freq="h")
+    seri = pd.concat([seri, p2])
+    mgr, seri, d2, _ = _zincir_surdur(mgr, seri, key)
+
+    defter = fh.yukle(_STOCK, _TF)
+    kayitlar = fh.kayitlar(defter)
+    return mgr, seri, kayitlar, terminal_sid_1, (d1, d2)
+
+
 @pytest.fixture
 def ortam(tmp_path, monkeypatch):
     """Karne ve history AYNI dizine yazsın (karne DATA_DIR'i import anında kopyalar)."""
@@ -335,17 +412,32 @@ def test_terminal_kaydi_sonradan_okunabilir(ortam):
 # =====================================================================
 
 def test_iki_formation_kirilim_retest_terminal_karismaz(ortam):
-    """Aynı (stock,tf) içinde iki formation -> breakout/retest/terminal ayrık."""
-    from test_stable_identity import _iki_formasyon
-    df = _iki_formasyon()
-    mgr = PatternLifecycleManager(profile="Dengeli")
-    for i in range(30, len(df) + 1):
-        mgr.scan("ASELS_1h", df.iloc[:i])
+    """Aynı (stock,tf) içinde İKİ formation -> breakout/retest/terminal AYRIK.
 
-    defter = fh.yukle(_STOCK, _TF)
-    kayitlar = fh.kayitlar(defter)
-    assert len(kayitlar) >= 2, "iki ayrı formation bekleniyordu"
+    BU TESTİN ASIL GÜCÜ: hazır `_iki_formasyon()` üreticisi retest evresine hiç
+    ulaşmadığı için çoklu-formasyon izolasyonu retest için ölçülemiyordu.
+    Burada İKİ formation'ın IKISI de tam zinciri (kirilim + retest + terminal)
+    yaşar; böylece A'nın kırılım/retest/terminal verisinin B'ye düşmediği
+    TÜM fazlar için kanıtlanır.
+    """
+    mgr, seri, kayitlar, _, _ = _iki_tam_zincir()
+    assert len(kayitlar) >= 2, "iki ayrı formation bekleniyordu: %d" % len(kayitlar)
 
+    # 1) HER iki kayıt da tam zinciri yaşamış olmalı (testin anlamı bu)
+    tam_zincir = 0
+    for r in kayitlar:
+        turlar = {s.get("tur") for s in r.get("snapshotlar", [])}
+        if {"kirilim", "retest", "terminal"} <= turlar:
+            tam_zincir += 1
+    assert tam_zincir >= 2, (
+        "iki formation da tam zinciri yaşamamış: %d/%d"
+        % (tam_zincir, len(kayitlar)))
+
+    # 2) SID'ler birbirinden farklı
+    sidler = [r["stable_id"] for r in kayitlar]
+    assert len(set(sidler)) == len(sidler), "SID'ler tekrar ediyor"
+
+    # 3) Cross-contamination = 0 — TÜM türlerde
     kumeler = []
     for r in kayitlar:
         kume = {(s.get("tur"), s.get("bar_time"))
@@ -359,6 +451,58 @@ def test_iki_formation_kirilim_retest_terminal_karismaz(ortam):
             assert not kesisim, (
                 "İki formation aynı snapshot'ı paylaşıyor (cross-contamination): %r"
                 % sorted(kesisim)[:3])
+
+    # 4) Her kaydın kendi snapshot'ı kendi stable_id'sini taşımalı
+    #    (başka bir formation'a yazılmış olsa sid uyuşmazdı)
+    for r in kayitlar:
+        for sn in r.get("snapshotlar", []):
+            assert sn.get("stable_id") == r["stable_id"], (
+                "snapshot başka bir kayda ait: %s != %s"
+                % (sn.get("stable_id"), r["stable_id"]))
+
+
+def test_terminal_sonrasi_yeni_formation_gercekten_farkli_sid(ortam):
+    """Terminal olmuş formasyondan SONRA yeni bir formasyon DOĞAR ve farklı SID alır.
+
+    Önceki test yalnızca MEVCUT kayıtların SID kümelerinin ayrık olduğunu
+    söylüyordu; bu test terminal anını YAKALAYIP sonra yeni bir formasyon
+    üretir ve SID'nin gerçekten devralınmadığını kanıtlar.
+    """
+    mgr, seri, kayitlar, terminal_sid_1, _ = _iki_tam_zincir()
+
+    # Formasyon 1'in terminal SID'i kayıt anında yakalanmıştı
+    assert terminal_sid_1, "formasyon 1 terminal SID'i kaydedilmedi"
+
+    # Formasyon 2 farklı bir SID ile doğmuş olmalı
+    yeni_sidler = {r["stable_id"] for r in kayitlar} - terminal_sid_1
+    assert yeni_sidler, (
+        "terminal sonrası hiç yeni formasyon doğmadı (test senaryosu geçersiz)")
+    assert not (yeni_sidler & terminal_sid_1), (
+        "YENİ FORMATION ESKİ TERMİNAL SID'İNİ DEVRALDI: %r"
+        % sorted(s[:8] for s in (yeni_sidler & terminal_sid_1)))
+
+    # Terminal kaydı hâlâ terminal; yeni kayıt terminal olsa bile kendi zincirinden
+    for r in kayitlar:
+        if r["stable_id"] in terminal_sid_1:
+            assert r.get("durum") == fh.DURUM_TERMINAL, (
+                "eski terminal kaydı terminal olmaktan çıktı")
+            assert [s for s in r.get("snapshotlar", [])
+                    if s.get("tur") == "terminal"], "eski terminal snapshot'ı kayboldu"
+
+
+def test_iki_farkli_terminal_anlami_kaybolmuyor(ortam):
+    """İki formation farklı terminal nedenleriyle bitebilir; ikisi de korunur."""
+    mgr, seri, kayitlar, _, _ = _iki_tam_zincir()
+    term = [r for r in kayitlar if r.get("durum") == fh.DURUM_TERMINAL]
+    assert len(term) >= 2, "iki terminal kayıt bekleniyordu: %d" % len(term)
+
+    # Terminal snapshot'ları sadece kendi kaydında ve en fazla 1 kez
+    for r in term:
+        ts = [s for s in r.get("snapshotlar", []) if s.get("tur") == "terminal"]
+        assert len(ts) == 1, (
+            "terminal snapshot sayısı != 1: %d (%s)" % (len(ts), r["stable_id"][:8]))
+        assert ts[0].get("stable_id") == r["stable_id"], (
+            "terminal snapshot başka kayda ait")
 
 
 def test_snapshot_ekle_yalnizca_verilen_kayda_yazar(ortam):

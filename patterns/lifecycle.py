@@ -1204,8 +1204,14 @@ class PatternLifecycleManager:
                 sid = y.get("stable_id")
                 if not sid:
                     continue
+                # Faz 2.4: snapshot KENDİ stable_id'sini de taşır. Böylece
+                # dört tür (geometri/kirilim/retest/terminal) de aynı sahiplik
+                # bilgisini payload'ında bulundurur; çoklu-formasyon ayırlığı
+                # "kayıt içindeki yerleşim"e değil, snapshot'ın kendi
+                # beyanına göre da doğrulanabilir.
                 if fh.snapshot_ekle(defter, sid, y.get("tur") or "geometri", y,
-                                    ek={"state": y.get("state"),
+                                    ek={"stable_id": y.get("stable_id") or sid,
+                                        "state": y.get("state"),
                                         "bar": y.get("bar")}):
                     degisti = True
             # --- Faz 2.4: yaşam döngüsü fazı (açık -> kırılım -> retest) ---
