@@ -402,6 +402,11 @@ def simule_et(args) -> dict:
     _BITIS[0] = config.ISTANBUL_TZ.localize(bitis)
     _HIZ[0] = max(1.0, float(args.hiz))
     sanal_zaman_kur()
+    # Üretimde modül import'u gerçek saatle olur; sim'de import gerçek tarihte
+    # yapıldığı için `last_reset` yanlış güne düşer ve gün değişimi sıfırlaması
+    # kendiliğinden tetiklenir. Süreç sim gününde başlamış gibi eşitlenir:
+    # bu, canlı davranışın birebir kopyasıdır (restart değil, temiz başlangıç).
+    main_mod.daily_stats["last_reset"] = _SIMDI[0].date()
 
     # Ağ katmanları: veri beslemesi + pacing + komut/webhook katmanı kapatılır.
     main_mod.fetch_yfinance_1h = feed.fetch_1h

@@ -19,6 +19,9 @@ from config import (ACTIVE_STOCKS, DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAA
 # Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
 # katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
 from reporting.format import STATE_TR
+# Günlük public durumu (bütçe sayaçları + gönderilememiş kuyruk) restart'ta
+# korunsun diye kalıcılık katmanı kullanılır (canlı denetim: ikisi de kayboluyordu).
+from state import persistence as _state_persistence
 
 logger = logging.getLogger(__name__)
 
@@ -358,6 +361,13 @@ class TelegramNotifier:
         self.son_public_gonderim = None
 
         self.public_enabled = bool(self.token and self.public_chat_id)
+        # Kanal hedefi doğrulamasının önbelleği (main açılışta bir kez doldurur;
+        # heartbeat ağa çıkmadan bunu okur).
+        self.public_hedef_bilgi: Dict = {}
+        # Restart gün sürekliliği: bütçe sayaçları ve gönderilememiş kuyruk
+        # (canlı denetimde ölçüldü: restart'ta ikisi de sıfırlanıyordu -> günlük
+        # tavan aşılabiliyor ve bültendeki olaylar sessizce kayboluyordu).
+        self._public_durum_yukle()
         if not self.token:
             logger.warning("Telegram token env'de yok - notifier pasif (test modu)")
             self.enabled = False
@@ -444,6 +454,64 @@ class TelegramNotifier:
             logger.error(f"Telegram bağlantı hatası (token yanlış olabilir): {e}")
         return False
 
+    def check_public_connection(self) -> Dict:
+        """Public hedefi (kanal/grup) açılışta doğrular ve önbelleğe alır.
+
+        NEDEN: canlıdaki en olası hata "bot kanalda yönetici değil / mesaj
+        gönderme izni kapalı". Bu durumda her gönderim 403 döner ve kullanıcı
+        sebebi ancak loglara bakınca anlar. Açılışta tek isteklerle kontrol
+        edilir, sonuç heartbeat'e yazılır (`public_hedef`).
+        Döner: {"hedef","baslik","tip","yonetici","can_post","hata"} (ağ hatası
+        botu durdurmaz, hata alanına yazılır).
+        """
+        bilgi: Dict = {"hedef": self.public_chat_id, "baslik": None, "tip": None,
+                       "yonetici": None, "can_post": None, "hata": ""}
+        if not self.public_enabled:
+            bilgi["hata"] = "public hedef tanımlı değil"
+            self.public_hedef_bilgi = bilgi
+            return bilgi
+        try:
+            import requests
+            temel = f"https://api.telegram.org/bot{self.token}"
+
+            def _cagri(method, **params):
+                yanit = requests.post(f"{temel}/{method}", json=params, timeout=10)
+                veri = yanit.json() if yanit.status_code == 200 else {}
+                return veri.get("result") if veri.get("ok") else None, yanit
+
+            ben, _ = _cagri("getMe")
+            sohbet, yanit = _cagri("getChat", chat_id=self.public_chat_id)
+            if sohbet is None:
+                ipucu = telegram_hata_ipucu(yanit.status_code, getattr(yanit, "text", ""))
+                bilgi["hata"] = f"getChat başarısız ({getattr(yanit, 'status_code', '?')}) {ipucu}"
+                logger.error(
+                    "❌ Public hedef doğrulanamadı (%s): %s. Kanal/grup kimliğini ve botun "
+                    "hedefe eklenmiş olduğunu kontrol et.", self.public_chat_id, bilgi["hata"])
+                self.public_hedef_bilgi = bilgi
+                return bilgi
+            bilgi["baslik"] = sohbet.get("title") or sohbet.get("username")
+            bilgi["tip"] = sohbet.get("type")
+            uye, _ = _cagri("getChatMember", chat_id=self.public_chat_id,
+                            user_id=(ben or {}).get("id"))
+            durum = str((uye or {}).get("status") or "")
+            bilgi["yonetici"] = durum in ("administrator", "creator")
+            # Kanallarda 'can_post_messages' alanı; gruplarda yokluğu "serbest" demek.
+            bilgi["can_post"] = bool((uye or {}).get("can_post_messages")) or (
+                bilgi["tip"] != "channel" and bilgi["yonetici"])
+            if bilgi["tip"] == "channel" and not bilgi["can_post"]:
+                logger.error(
+                    "❌ Public hedef '%s' bir KANAL ve bot yönetici değil ya da 'Mesaj "
+                    "gönderme' izni kapalı. Kanal → Yöneticiler → bot → Mesaj gönderme.",
+                    bilgi["baslik"])
+            else:
+                logger.info("✅ Public hedef doğrulandı: %s (%s) · yönetici=%s · mesaj gönderme=%s",
+                            bilgi["baslik"], bilgi["tip"], bilgi["yonetici"], bilgi["can_post"])
+        except Exception as exc:  # noqa: BLE001 - ağ hatası botu durdurmaz
+            bilgi["hata"] = f"{type(exc).__name__}: {exc}"
+            logger.warning("Public hedef doğrulanamadı (ağ): %s", bilgi["hata"])
+        self.public_hedef_bilgi = bilgi
+        return bilgi
+
     def should_send_to_public(self, data: Dict) -> bool:
         """Public kanala gönderilsin mi? (DM'den bağımsız filtre)
 
@@ -477,11 +545,58 @@ class TelegramNotifier:
     # DM yolundan tamamen bağımsızdır: kendi bütçesi, kendi sayaçları, kendi
     # hata durumu vardır. DM kapalıyken de çalışır.
 
+    def _public_durum_yukle(self) -> None:
+        """Aynı güne ait public bütçe + kuyruğu diskten geri yükler."""
+        try:
+            veri = _state_persistence.gunluk_durum_yukle() or {}
+        except Exception as hata:  # noqa: BLE001
+            logger.debug("Public günlük durum okunamadı: %s", hata)
+            return
+        public = veri.get("public") or {}
+        if not isinstance(public, dict):
+            return
+        try:
+            self._public_gun_sayac = int(public.get("gun_sayac") or 0)
+        except (TypeError, ValueError):
+            self._public_gun_sayac = 0
+        saatlik = []
+        for damga in list(public.get("saatlik_ts") or []):
+            try:
+                saatlik.append(datetime.fromisoformat(str(damga)))
+            except (TypeError, ValueError):
+                continue
+        self._public_saatlik = saatlik
+        kuyruk = public.get("kuyruk")
+        if isinstance(kuyruk, list):
+            temiz = [k for k in kuyruk if isinstance(k, dict)
+                     and k.get("stock_name") and k.get("state")]
+            if temiz:
+                self._public_kuyruk = temiz[:self.public_kuyruk_limit]
+                logger.info("Public kuyruk restart'tan geri yüklendi: %d olay", len(self._public_kuyruk))
+        if self._public_gun_sayac or self._public_kuyruk:
+            logger.info("Public günlük bütçe geri yüklendi: %d/%d gönderim (kuyruk %d)",
+                        self._public_gun_sayac, self.public_max_gunluk,
+                        len(self._public_kuyruk))
+
+    def _public_durum_kaydet(self) -> None:
+        """Public bütçe + kuyruğu GÜN damgalı yazar (I/O hatası gönderimi bozmaz)."""
+        try:
+            with self._public_lck:
+                kuyruk = [dict(k) for k in self._public_kuyruk]
+            _state_persistence.gunluk_durum_guncelle({"public": {
+                "gun_sayac": self._public_gun_sayac,
+                "saatlik_ts": [t.isoformat() for t in self._public_saatlik],
+                "kuyruk": kuyruk,
+            }})
+        except Exception as hata:  # noqa: BLE001
+            logger.debug("Public günlük durum yazılamadı: %s", hata)
+
     def _public_gun_sifirla_gerekirse(self, simdi: datetime) -> None:
         if simdi.date() != self._public_gun:
             self._public_gun = simdi.date()
             self._public_gun_sayac = 0
             self._public_saatlik = []
+            self._public_durum_kaydet()
 
     def _public_kap_gec(self) -> bool:
         """Saatlik/günlük public bütçesi müsait mi? (DM kapılarından AYRI)"""
@@ -533,6 +648,7 @@ class TelegramNotifier:
                     self._public_gun_sayac += 1
                     self.public_gonderilen += 1
                     self.son_public_gonderim = datetime.now(ISTANBUL_TZ).isoformat()
+                    self._public_durum_kaydet()
                     logger.info("Telegram public hedefe gönderildi: %s", self.public_chat_id)
                     return True
                 if resp.status_code == 429 and deneme_no < max(0, int(deneme)):
@@ -588,6 +704,7 @@ class TelegramNotifier:
                                self.public_kuyruk_limit, anahtar)
                 return False
             self._public_kuyruk.append(kayit)
+        self._public_durum_kaydet()
         return True
 
     def public_bosalt(self, azami: int = 12) -> int:
@@ -612,6 +729,7 @@ class TelegramNotifier:
         if gonderilen:
             with self._public_lck:
                 self._public_kuyruk = self._public_kuyruk[gonderilen:]
+            self._public_durum_kaydet()
             logger.info("Public bülten gönderildi: %d olay (%d mesaj)",
                         gonderilen, max(1, (gonderilen + azami - 1) // azami))
         return gonderilen

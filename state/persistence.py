@@ -12,6 +12,7 @@ durdurmaz; iki kopyadan en yeni kayıt zamanlı olan seçilir.
 import json
 import logging
 import os
+import threading
 from datetime import datetime
 
 from config import ISTANBUL_TZ
@@ -243,3 +244,70 @@ def gonderim_durumu_kaydet(guncelleme: dict, data_dir=None) -> bool:
     except Exception as exc:  # noqa: BLE001 - I/O hatası botu durdurmaz
         logger.warning("Gönderim durumu yazılamadı (%s): %s", GONDERIM_DURUMU_DOSYA, exc)
         return False
+
+
+# === GÜNLÜK DURUM (restart gün sürekliliği) ===============================
+# NEDEN VAR (canlı denetim, 02.10.2026): Render'da gün ortasında restart/deploy
+# olunca şunlar kayboluyordu:
+#   1) günlük sayaçlar -> 18:45 kanal özeti "❌ 8 başarısız / 8 tarama" diyordu,
+#      gerçek gün ise "❌ 9 / 10 tarama" (deneyle ölçüldü).
+#   2) özet işaretleri -> restart 09:55'ten sonra olursa sabah notu İKİ KEZ
+#      gidiyordu (deneyle doğrulandı).
+#   3) public bütçe sayaçları -> günlük/saatlik tavan sıfırlanıp spam koruması
+#      zayıflıyordu.
+#   4) public olay kuyruğu -> tur ortasında restart'ta bültendeki olaylar
+#      sessizce kayboluyordu.
+# Hepsi tek dosyada, GÜN damgalı tutulur; gün değişince otomatik sıfırlanır.
+_GUNLUK_KILIT = threading.Lock()
+
+
+def _bugun_iso(gun=None) -> str:
+    if gun is None:
+        return datetime.now(ISTANBUL_TZ).date().isoformat()
+    if isinstance(gun, datetime):
+        return gun.date().isoformat()
+    return str(gun)
+
+
+def gunluk_durum_yukle(gun=None, data_dir=None) -> dict:
+    """Bugüne ait kalıcı gün durumu; kayıt başka güne aitse/bozuksa {} döner.
+
+    Dönen sözlük: {"gun": ISO, "sayaclar": {...}, "ozet_gunleri": {...}, "public": {...}}
+    """
+    bugun = _bugun_iso(gun)
+    try:
+        veri = gonderim_durumu_yukle(data_dir).get("gunluk") or {}
+        if not isinstance(veri, dict) or veri.get("gun") != bugun:
+            return {}
+        return veri
+    except Exception as exc:  # noqa: BLE001 - I/O hatası botu durdurmaz
+        logger.debug("Günlük durum okunamadı: %s", exc)
+        return {}
+
+
+def gunluk_durum_guncelle(patch: dict, gun=None, data_dir=None) -> bool:
+    """Günlük durumun verilen alt sözlüklerini günceller (atomik + kilitli).
+
+    Gün değiştiyse kayıt SIFIRDAN kurulur (dünün sayaçları bugüne taşınmaz).
+    `patch` içindeki anahtarlar üst düzeyde birleştirilir; iç sözlükler çağıranın
+    sahipliğindedir (örn. notifier "public" alt ağacını kendisi yönetir).
+    """
+    bugun = _bugun_iso(gun)
+    with _GUNLUK_KILIT:
+        try:
+            dosya = gonderim_durumu_yukle(data_dir)
+            mevcut = dosya.get("gunluk") or {}
+            if not isinstance(mevcut, dict) or mevcut.get("gun") != bugun:
+                mevcut = {"gun": bugun}
+            mevcut.update(patch or {})
+            dosya["gunluk"] = mevcut
+            yol = gonderim_durumu_yolu(data_dir)
+            os.makedirs(os.path.dirname(yol), exist_ok=True)
+            gecici = yol + ".tmp"
+            with open(gecici, "w", encoding="utf-8") as cikti:
+                json.dump(dosya, cikti, ensure_ascii=False, indent=2, default=str)
+            os.replace(gecici, yol)
+            return True
+        except Exception as exc:  # noqa: BLE001 - I/O hatası botu durdurmaz
+            logger.warning("Günlük durum yazılamadı: %s", exc)
+            return False

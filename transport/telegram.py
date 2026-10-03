@@ -190,7 +190,16 @@ def komut_katmanini_kur(notifier, isleyici=None, *, komutlar, yardim_metni, tara
     `isleyici` yalnızca testler için verilir (ağa çıkmayan sahte dinleyici).
     """
     if notifier is None or not getattr(notifier, "enabled", False):
-        logger.info("Telegram komut dinleyicisi başlatılmadı (token/chat_id yok)")
+        # PUBLIC hedef varsa yayın sürer ama KOMUTLAR çalışmaz: komut yalnız DM'den
+        # okunur (kanala üye mesaj yazamaz). Kullanıcı "bot çalışıyor ama /durum
+        # cevap vermiyor" durumunu ancak bu satırdan anlayabilir.
+        if getattr(notifier, "public_enabled", False):
+            logger.warning(
+                "Telegram komutları KAPALI: TELEGRAM_CHAT_ID (DM) tanımlı değil. "
+                "Public hedefe yayın sürer ama /panel,/durum gibi komutlar çalışmaz; "
+                "komutlar için DM chat_id ekle.")
+        else:
+            logger.info("Telegram komut dinleyicisi başlatılmadı (token/chat_id yok)")
         return {"mod": "kapali", "listener": None, "processor": None}
     if isleyici is None:
         isleyici = listener_factory(

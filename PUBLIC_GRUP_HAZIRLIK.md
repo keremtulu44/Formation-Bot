@@ -459,3 +459,19 @@ Tam tablo ve bültenlerin birebir metni: `raporlar/02EKIM_KANAL_DONUSUMU.md` (ü
 
 **Dağılım kuralı:** tur başına TEK bülten; bir turda 12'den çok uygun olay olursa
 `public_bosalt(azami=12)` bülteni ikiye böler (tek mesaj 4000 karakterde kırpılır).
+
+## 14) Canlı öncesi ayrıntılı kontrol (02–03.10.2026) — özet
+
+Tam rapor: `raporlar/CANLI_ONCESI_KONTROL.md`. Bulunan ve **düzeltilen** hatalar:
+
+| # | Bulgu | Kanıt | Düzeltme |
+|---|---|---|---|
+| A | 09:55 sabah notu restart sonrası **tekrar** gidiyordu | `/tmp/morning-sim`: 09:30–10:05 sonrası 09:50 restart → not ikinci kez | Özet işaretleri (DM + `public:`) gün damgalı olarak `gonderim_durumu.json → gunluk.ozet_gunleri` |
+| B | 18:45 kapanışı restart'ta eksik sayı basıyordu ("❌ 8 / 8 tarama") | `/tmp/restart-sim`: sürekli 9/9 ↔ bölünmüş 8/8 | Günlük sayaçlar kalıcı; restart'ta geri yüklenir |
+| C | `render.yaml`'da `TELEGRAM_GROUP_ID` yoktu | blueprint env listesi | Değişken eklendi (Bulgu C kapandı) |
+| D | Public bütçe + kuyruk restart'ta sıfırlanıyordu | kod incelemesi | İkisi de `gunluk.public` altında kalıcı |
+| E | Bot kanalda yönetici değilse hata ilk gönderimde görülüyordu | canlı açılış senaryosu | Açılışta `check_public_connection()` + heartbeat `public_hedef` |
+
+**Doğrulama:** 25.09 tam-gün A/B — sürekli koşum ↔ 10:01'de restart'lı koşum birebir aynı
+(11 kanal mesajı, "❌ 9 kırılım başarısız", "9 tarama"). Test sayısı 433 → **448**
+(`test_restart_surekliligi.py`, 15 test).

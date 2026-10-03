@@ -45,6 +45,10 @@ bağlı tartışma grubu** en esnek yol.
    * **Bilgiyi değiştir** — bot açıklamayı kendisi yazsın istersen (yoksa metni elle yapıştır)
 4. **`.env`'e hedefi yaz:** `TELEGRAM_GROUP_ID=@bisthisseveri`
    (botun DM tarafı `TELEGRAM_CHAT_ID` kalır; DM özetleri de çalışmaya devam eder).
+   **Render'da:** `render.yaml` blueprint'inde `TELEGRAM_GROUP_ID` tanımlı (`sync: false`);
+   değeri Render → Environment → `TELEGRAM_GROUP_ID` alanına yaz. Blueprint'i
+   güncellemeden çalışan servislerde alanı elle eklemek gerekir: canlı denetimde
+   bu değişkenin eksik olduğu ölçülmüştü (Bulgu C).
 5. **Botu yeniden başlat**, sonra kontrol et:
    ```bash
    .venv/bin/python kanal_acilis.py --durum
@@ -132,7 +136,9 @@ yayınlıyor; sabit mesaj bunu baştan söylediği için kötü hafta sürpriz o
 - [ ] Kanal açıldı, kullanıcı adı alındı
 - [ ] Bot kanala **yönetici** eklendi (mesaj gönderme ✅)
 - [ ] Sabitleme izni açık (sabit mesaj için)
-- [ ] `.env` → `TELEGRAM_GROUP_ID=@…` yazıldı, bot yeniden başlatıldı
+- [ ] `.env` / Render → `TELEGRAM_GROUP_ID=@…` yazıldı, bot yeniden başlatıldı
+- [ ] Açılış logunda `✅ Public hedef doğrulandı: <kanal> (channel) · yönetici=True · mesaj gönderme=True`
+      satırı var (yoksa `❌` satırı sorunu söyler; heartbeat `public_hedef` alanı da taşır)
 - [ ] `kanal_acilis.py --durum` → yönetici ✅, izinler ✅
 - [ ] `kanal_acilis.py --uygula` → açıklama + sabit mesaj yerinde
 - [ ] İlk bülten düştü (bir sonraki mum kapanışından sonra)
@@ -141,7 +147,22 @@ yayınlıyor; sabit mesaj bunu baştan söylediği için kötü hafta sürpriz o
 
 ---
 
-## 7) Notlar
+## 7) Restart dayanıklılığı (canlı denetim sonrası)
+
+Render gün ortasında yeniden başlatıldığında (deploy/restart) yayın **kaldığı yerden**
+devam eder; günlük durum `DATA_DIR/gonderim_durumu.json` içinde `gunluk` anahtarıyla tutulur:
+
+| Korunan | Ne olurdu (düzeltme öncesi) |
+|---|---|
+| Günlük sayaçlar (`tarama_sayisi`, `basarisiz_kirilim`, `alerts_sent`, `stocks_scanned`) | 18:45 kanal özeti eksik sayı basardı ("❌ 8 / 8 tarama") |
+| Özet işaretleri (`09:55`, `18:45` + `public:` kopyaları) | 09:55 sabah notu restart sonrası **ikinci kez** giderdi |
+| Public bütçe (`gun_sayac`, `saatlik_ts`) | Günlük/saatlik tavan sıfırlanır, spam koruması zayıflardı |
+| Gönderilememiş bülten kuyruğu | Tur ortasında restart'ta bültendeki olaylar kaybolurdu |
+
+Gün değişince kayıt kendiliğinden sıfırlanır (dünün sayaçları bugüne taşınmaz).
+"Aynı anda iki örnek" koruması için ayrıca Supabase tekil örnek kontrolü vardır.
+
+## 8) Notlar
 
 - **Bildirim gürültüsü:** Sabitleme `disable_notification=True` ile yapılır; sabit
   mesaj abonelere ekstra bildirim atmaz.

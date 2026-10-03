@@ -303,10 +303,75 @@ def _note_basarisiz_kirilim(stock: str, timeframe: str, bar_time=None) -> None:
     if anahtar in _daily_basarisiz_keys:
         return
     _daily_basarisiz_keys.add(anahtar)
-    daily_stats['basarisiz_kirilim'] = len(_daily_basarisiz_keys)
+    # Restart tabanı varsa sayı onun üstüne eklenir (çift sayım olmaz).
+    yeni = len(_daily_basarisiz_keys) - (
+        1 if "__restart_tabani__" in _daily_basarisiz_keys else 0)
+    daily_stats['basarisiz_kirilim'] = _daily_basarisiz_tabani + yeni
+    _gunluk_sayac_kaydet()
+
+# --- GÜNLÜK SAYAÇ KALICILIĞI (restart gün sürekliliği) ---------------------
+# Canlı denetimde ölçüldü: gün ortasında restart olunca 18:45 kanal özeti
+# "❌ 8 başarısız / 8 tarama" diyordu; gerçek gün "❌ 9 / 10 tarama" idi.
+# Sayaçlar artık GÜN damgalı olarak diske yazılır, aynı gün restart'ta geri yüklenir.
+_KALICI_SAYACLAR = ('basarisiz_kirilim', 'tarama_sayisi', 'alerts_sent', 'stocks_scanned')
+# Restart anında devralınan "başarısız kırılım" sayısı: olay detayı saklanmadığı
+# için yalnız SAYI taşınır, yeni olaylar bu tabanın üstüne eklenir.
+_daily_basarisiz_tabani = 0
+
+
+def _gunluk_sayac_kaydet() -> None:
+    """Günlük sayaçların kalıcı kopyasını yazar (I/O hatası botu durdurmaz)."""
+    try:
+        patch = {"sayaclar": {ad: daily_stats.get(ad, 0) for ad in _KALICI_SAYACLAR}}
+        if not _state_persistence.gunluk_durum_yukle():
+            # Gün döndü: yeni günün kaydı kurulurken dünün özet işaretleri
+            # geçersiz sayılır (gunluk_durum_guncelle kaydı yeniden kurar).
+            patch["ozet_gunleri"] = {}
+        _state_persistence.gunluk_durum_guncelle(patch)
+    except Exception as hata:  # noqa: BLE001
+        logger.debug("Günlük sayaç kaydı yazılamadı: %s", hata)
+
+
+def _gunluk_sayac_yukle() -> None:
+    """Aynı güne ait kalıcı sayaçları geri yükler (restart gün sürekliliği)."""
+    try:
+        veri = _state_persistence.gunluk_durum_yukle()
+    except Exception as hata:  # noqa: BLE001
+        logger.debug("Günlük sayaç okunamadı: %s", hata)
+        return
+    # Aynı güne ait kayıt varsa gün değişimi sıfırlaması TETİKLENMESİN: restart
+    # eden süreç, günün sayaçlarını devraldığı için "yeni gün" değildir.
+    try:
+        daily_stats['last_reset'] = datetime.now(ISTANBUL_TZ).date()
+    except Exception:  # noqa: BLE001
+        pass
+    sayaclar = (veri or {}).get("sayaclar") or {}
+    if not sayaclar:
+        return
+    yuklenen = {}
+    for ad in _KALICI_SAYACLAR:
+        try:
+            deger = int(sayaclar.get(ad) or 0)
+        except (TypeError, ValueError):
+            continue
+        if deger:
+            daily_stats[ad] = deger
+            yuklenen[ad] = deger
+    # Başarısız kırılım tekilleştirmesi gün içinde tekrar saymasın: anahtar
+    # kümesi dolu olamaz (olay detayı saklanmaz) ama sayaç tabanı korunur.
+    global _daily_basarisiz_tabani
+    if yuklenen.get('basarisiz_kirilim'):
+        _daily_basarisiz_keys.add("__restart_tabani__")
+        _daily_basarisiz_tabani = max(
+            _daily_basarisiz_tabani, int(yuklenen['basarisiz_kirilim']))
+        daily_stats['basarisiz_kirilim'] = _daily_basarisiz_tabani
+    if yuklenen:
+        logger.info("Günlük sayaçlar restart'tan geri yüklendi: %s", yuklenen)
+
 
 def reset_daily_if_needed():
     """Gün değiştiyse günlük sayacı sıfırla"""
+    global _daily_basarisiz_tabani
     today = datetime.now(ISTANBUL_TZ).date()
     if today != daily_stats['last_reset']:
         logger.info(f"=== GÜNLÜK ÖZET {daily_stats['last_reset']} ===")
@@ -343,6 +408,10 @@ def reset_daily_if_needed():
         daily_stats['son_tarama_suresi_dk'] = None
         daily_stats['gunluk_bar_sayisi'] = None
         daily_stats['last_reset'] = today
+        # Yeni gün: sayaçlar sıfırlanır. Kalıcı kayda DOKUNULMAZ; gunluk_durum_*
+        # katmanı gün damgasını kendisi denetler ve ilk yazımda yeni günün
+        # kaydını kurar (aynı güne ait özet işaretleri yanlışlıkla silinmesin).
+        _gunluk_sayac_kaydet()
 
 def create_yahoo_pacer() -> YahooRequestPacer:
     """Her Yahoo isteğine uygulanan seri pacing ayarları."""
@@ -541,6 +610,10 @@ def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
             # token/chat_id yokluğu, son başarılı gönderim, son hata ve engel sayaçları.
             "notifier_enabled": (notifier.enabled if notifier is not None
                                  else (getattr(_notifier_ref, "enabled", None) if _notifier_ref else None)),
+            # Public hedef doğrulaması (açılışta bir kez yapılır; buradan ağa çıkılmaz)
+            "public_hedef": (getattr(notifier, "public_hedef_bilgi", None)
+                             if notifier is not None
+                             else getattr(_notifier_ref, "public_hedef_bilgi", None)),
             "telegram_gonderim": (notifier.gonderim_durumu() if notifier is not None
                                   else (getattr(_notifier_ref, "gonderim_durumu", lambda: None)()
                                         if _notifier_ref else None)),
@@ -1154,6 +1227,51 @@ def _komut_kirilim(arguman: str) -> str:
 # /panel evrenin tamamını (ACTIVE_STOCKS x 4 TF) tek bakışta gösterir: doluluk
 # sayıları + kompozit puana göre en anlamlı 12 aday.
 WATCH_CONTEXT_HAVUZU = 12    # acil mesaja eklenecek adayların seçildiği havuz (gönderilen: en fazla 3)
+def _ozet_isaretlerini_yukle() -> tuple:
+    """Kalıcı özet işaretlerini okur: (dm_isaretleri, public_isaretleri).
+
+    Anahtarlar `{"09:55": date}` biçimindedir; public işaretleri dosyada
+    "public:" önekiyle ayrılır (aynı slot adı iki yayın yolunda da var).
+    Bozuk kayıtlar sessizce atlanır; hiçbir okuma hatası botu durdurmaz.
+    """
+    dm: Dict[str, object] = {}
+    public: Dict[str, object] = {}
+    try:
+        ham = (_state_persistence.gunluk_durum_yukle() or {}).get("ozet_gunleri") or {}
+        for anahtar, deger in ham.items():
+            try:
+                gun = datetime.fromisoformat(str(deger)).date()
+            except (TypeError, ValueError):
+                continue
+            ad = str(anahtar)
+            if ad.startswith("public:"):
+                public[ad.split(":", 1)[1]] = gun
+            else:
+                dm[ad] = gun
+        if dm or public:
+            logger.info("Günlük özet işaretleri geri yüklendi: DM=%s public=%s",
+                        sorted(dm), sorted(public))
+    except Exception as hata:  # noqa: BLE001 - kalıcılık hatası botu durdurmaz
+        logger.warning("Özet işaretleri okunamadı: %s", hata)
+    return dm, public
+
+
+def _ozet_isaret_kaydet(slot: str, gun, public: bool = False) -> None:
+    """'Şu özet gönderildi' işaretini GÜN damgalı olarak diske yazar.
+
+    Restart sonrası aynı özetin ikinci kez gitmesini engeller (canlı denetimde
+    09:55 sabah notu için duplike ölçülmüştü).
+    """
+    try:
+        anahtar = f"public:{slot}" if public else str(slot)
+        veri = _state_persistence.gunluk_durum_yukle() or {}
+        isaretler = dict(veri.get("ozet_gunleri") or {})
+        isaretler[anahtar] = str(getattr(gun, "isoformat", lambda: gun)())
+        _state_persistence.gunluk_durum_guncelle({"ozet_gunleri": isaretler})
+    except Exception as hata:  # noqa: BLE001
+        logger.debug("Özet işareti yazılamadı (%s): %s", slot, hata)
+
+
 def _public_turu_kapat(notifier) -> None:
     """Tarama turu sonu: tur sayacını artır + public kuyruğunu bültende boşalt.
 
@@ -1161,6 +1279,7 @@ def _public_turu_kapat(notifier) -> None:
     geçersiz kılmamalı); hata yalnız loglanır, kayıtlar kuyrukta kalır.
     """
     daily_stats['tarama_sayisi'] = int(daily_stats.get('tarama_sayisi') or 0) + 1
+    _gunluk_sayac_kaydet()
     try:
         if notifier is not None:
             notifier.public_bosalt()
@@ -2495,6 +2614,10 @@ def main_loop():
     _notifier_ref = notifier
     # Telegram token/chat_id teşhisi: mesaj göndermeden getMe ile doğrular.
     notifier.check_connection()
+    # Public hedef (kanal/grup) doğrulaması: bot yönetici değilse/izin yoksa
+    # ilk gönderimde 403 almak yerine AÇILIŞTA net uyarı verilir.
+    if notifier.public_enabled:
+        notifier.check_public_connection()
 
     # İki yönlü Telegram: komutları (panel/canli/formasyonlar/durum/tara/yardim)
     # dinleyen katman. İki mod var, AYNI ANDA YALNIZCA BİRİ açılır:
@@ -2580,6 +2703,12 @@ def main_loop():
     post_close_analysis_time = _parse_post_close_analysis_time()
     last_summary_sent = {}  # DM özeti: "09:55" -> date
     last_summary_public_sent = {}  # public (grup) özeti ayrı izlenir; DM retry gruba kopya üretmesin
+    # Restart gün sürekliliği: aynı gün daha önce gönderilmiş özetler diske yazılır.
+    # Aksi halde 09:55 sabah notu, restart sonrası (10 dk telafi penceresi içinde)
+    # İKİNCİ kez gidiyordu — canlı denetimde deneyle doğrulandı.
+    _dm_isaretler, _public_isaretler = _ozet_isaretlerini_yukle()
+    last_summary_sent.update(_dm_isaretler)
+    last_summary_public_sent.update(_public_isaretler)
     # Gün sonu analizi damgası KALICI okunur: yalnız bellekte tutulunca süreç
     # yeniden başlayınca aynı gün ikinci kez çalışıyor ve panel mesajı
     # tekrarlanıyordu (02.10: 20:05 ve 21:49 iki panel).
@@ -2592,6 +2721,9 @@ def main_loop():
     last_maintenance_date = None
     last_preload_date = None
     son_kuyruk_bosaltma = 0.0  # engellenen acil olaylar bu aralıkla yeniden denenir
+    # Restart gün sürekliliği: bugün zaten sayaç biriktirilmişse geri yükle
+    # (aksi halde 18:45 kanal özeti günün gerçek toplamını eksik gösterir).
+    _gunluk_sayac_yukle()
     
     while not _shutdown_requested:
         try:
@@ -2639,12 +2771,19 @@ def main_loop():
                     ozet_zamani = now >= hedef and (
                         sh == deferred_alert_digest_time or gecikme_sn < 600
                     )
-                    # Kapanış özeti kalıcı tampon taşır: restart sonrası aynı
-                    # özet ikinci kez gönderilmesin (state:digest_pending).
-                    if (ozet_zamani and sh == deferred_alert_digest_time
-                            and _digest_son_gonderim_gun == now.date().isoformat()):
-                        ozet_zamani = False
-                    if not ozet_zamani:
+                    # Kapanış özeti kalıcı tampon taşır: restart sonrası aynı DM
+                    # özeti ikinci kez gönderilmesin (state:digest_pending).
+                    # NOT: bu bayrak yalnız DM yolunu kapatır. Kanala kapanış
+                    # gitmeden süreç öldüyse (DM gitti + kanal gitmedi) kanal
+                    # kendi KALICI işaretinden (public:18:45) devam eder; yani
+                    # eksik kalan mesaj restart sonrası tamamlanır.
+                    dm_gonderildi = (sh == deferred_alert_digest_time
+                                     and _digest_son_gonderim_gun == now.date().isoformat())
+                    dm_hedefi = (ozet_zamani and not dm_gonderildi
+                                 and last_summary_sent.get(sh_str) != now.date())
+                    public_hedefi = (ozet_zamani and notifier.public_enabled
+                                     and last_summary_public_sent.get(sh_str) != now.date())
+                    if not dm_hedefi and not public_hedefi:
                         continue
                     aktif = _build_active_formations_for_summary(lifecycle_manager)
                     ozet = notifier.format_daily_summary(aktif, daily_stats)
@@ -2671,7 +2810,7 @@ def main_loop():
                         if karne_metni_eklendi:
                             dm_ozet += "\n\n" + karne_metni_eklendi
 
-                    if last_summary_sent.get(sh_str) != now.date():
+                    if dm_hedefi:
                         if notifier.enabled:
                             # Parça bazlı sonuç: ana özet ve karne AYRI izlenir.
                             # Böylece (a) karne parçası gitmezse yalnız karne, 20:00
@@ -2681,6 +2820,7 @@ def main_loop():
                                 notifier, dm_ozet, karne_metni_eklendi)
                             if ana_ok:
                                 last_summary_sent[sh_str] = now.date()
+                                _ozet_isaret_kaydet(sh_str, now.date())
                                 if bekleyen:
                                     _deferred_alert_buffer.mark_reported(bekleyen, now)
                                 if sh == deferred_alert_digest_time:
@@ -2713,6 +2853,7 @@ def main_loop():
                         )
                         if notifier.send_to_public(grup_ozet):
                             last_summary_public_sent[sh_str] = now.date()
+                            _ozet_isaret_kaydet(sh_str, now.date(), public=True)
             except Exception as e:
                 logger.debug(f"Özet gönderim hatası: {e}")
 
