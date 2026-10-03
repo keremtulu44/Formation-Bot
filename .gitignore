@@ -53,5 +53,11 @@ bot_data/*.pkl
 # OKUMA yedeğidir (SEED_DATA_DIR) ve canlı sunucuda git pull artık çakışmaz. Yukarıdaki
 # runtime kalıpları, biri DATA_DIR=./bot_data seçerse diye korunuyor.
 
+# Faz 2.1: çoklu formasyon history defteri. (stock,tf) başına bir dosya olan
+# bu dizin CANLI durumdur (her taramada büyür), seed verisi değildir.
+# Repodaki bot_data/ yalnızca okuma yedeğidir (SEED_DATA_DIR); canlı sunucuda
+# git pull çakışmasını önlemek için runtime kalıpları yok sayılır.
+bot_data/formation_history/
+
 # Simülasyon raporları (üretilen çıktı)
 raporlar/

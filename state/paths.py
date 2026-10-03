@@ -86,3 +86,15 @@ GONDERIM_DURUMU_DOSYA = "gonderim_durumu.json"
 def gonderim_durumu_yolu(data_dir=None) -> str:
     from config import DATA_DIR
     return os.path.join(data_dir or DATA_DIR, GONDERIM_DURUMU_DOSYA)
+
+
+# Faz 2.1: çoklu formasyon history defteri — (stock,tf) başına bir dosya.
+# `bot_data/{STOCK}.json` yazım kuralı taklit edilir; tek slot'lu
+# formation_identity.json yerine birden fazla formasyonu taşıyabilir.
+FORMATION_HISTORY_ALT_DOSYA = "formation_history"
+
+
+def formation_history_yolu(stock, tf, data_dir=None) -> str:
+    from config import DATA_DIR
+    return os.path.join(data_dir or DATA_DIR, FORMATION_HISTORY_ALT_DOSYA,
+                        "{}_{}.json".format(stock, tf))

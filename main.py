@@ -1507,6 +1507,32 @@ def son_tarama_yukle(store=None, data_dir=None) -> int:
         data_dir=data_dir,
     )
 
+
+def _formation_history_baslangic_kontrolu() -> dict:
+    """Faz 2.1: startup'ta çoklu formasyon history defterlerinin sağlık raporu.
+
+    ZORUNLU DEĞİL: registry tarama anında lazy okunur, bu adım olmadan da
+    history korunur. Amacı operatöre görünürlük vermek ve BOZUK defterleri
+    loga düşürmektir. Bot hiçbir koşulda bu adım yüzünden durmaz.
+    """
+    try:
+        from state import formation_history as fh
+        rapor = fh.saglik_raporu()
+    except Exception as exc:  # pragma: no cover - savunma amaçlı
+        logger.warning("Formation history raporu alınamadı (bot çalışmaya devam ediyor): %s", exc)
+        return {}
+    if rapor.get("dosya"):
+        logger.info(
+            "Formation history: %d defter, %d kayıt (dizin %s)",
+            rapor["dosya"], rapor["kayit"], rapor.get("yol"))
+    if rapor.get("bozuk"):
+        # Bozuk defter: `yukle()` boş defter döner, tarama Faz 1 yoluyla devam
+        # eder. Yeni kimlik üretimi olur ama bot ÇALIŞIR.
+        logger.warning(
+            "Formation history: %d bozuk defer atlandı (yeni kimlik üretilir, bot çalışıyor): %s",
+            len(rapor["bozuk"]), ", ".join(rapor["bozuk"][:10]))
+    return rapor
+
 # === TELEGRAM WEBHOOK (Render) ===
 # Neden: Render Free bir web servistir; uyku/restart döngüsüne girer. Yoklama
 # (getUpdates) modunda uzun yoklama bağlantısı her restart'ta yeniden kurulur ve
@@ -2638,6 +2664,12 @@ def main_loop():
     # yerel dosyanın EN YENİ kopyası). Bu çağrı olmadan /panel, /canli, /durum ve
     # sabah özeti her yeniden başlatmada boş görünür; kalıcılık yazılır ama okunmaz.
     son_tarama_yukle(supabase_store)
+    # Faz 2.1: çoklu formasyon history defteri. Registry lazy okunur (tarama
+    # anında doğum eşleşmesi için diskten yüklenir), bu yüzden bu adım ZORUNLU
+    # değildir — yalnızca startup'ta sağlık raporu üretir. Bozuk bir defter
+    # botu DURDURMAZ: `yukle()` bozuk dosyada boş defter döner ve tarama
+    # Faz 1 yoluyla devam eder.
+    _formation_history_baslangic_kontrolu()
     # Çoklu kopya koruması: aynı anahtarlarla başka bir canlı örnek var mı?
     _tekil_ornek_kontrolu(supabase_store, force=True)
     # Bekleyen gün içi aday tamponu da kalıcıdır (Batch 5): 18:45'ten önce

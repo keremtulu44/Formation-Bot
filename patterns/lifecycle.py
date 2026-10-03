@@ -97,6 +97,34 @@ def _match_persisted_anchor(engine, candidate: "PatternCandidate") -> Optional[s
     return None
 
 
+def _match_registry(engine, candidate: "PatternCandidate") -> Optional[str]:
+    """Faz 2.1: history defterinden candidate ile aynı formation'ın stable_id'si.
+
+    Faz 1'in tek slot'lu anchor'una kıyasla iki iyileştirme taşır:
+      1) (stock,tf) başına birden fazla kayıt -> aynı penceredeki 2. formasyon
+         doğru kimliğine ulaşır,
+      2) bar-time alignment -> pencere kaydıkça bar indeksleri kayar;
+         kayıtlar doğum barının MUTLAK zamanından hizalanır.
+
+    Eşleşme kuralları AYNEN korunur (eşik DEĞİŞTİRİLMEDİ):
+      * identity_compatible (family + classic_dir)
+      * continuity_score >= 60
+    Ek güvenlik: terminal kayıtlar asla eşleşmez ve doğum barı pencerede
+    olmayan kayıtlar atlanır. Registry boş/bozuk/hatalı ise None döner ve
+    çağıran Faz 1 anchor yoluna düşer.
+    """
+    try:
+        from state import formation_history as fh
+    except Exception:
+        return None
+    key = getattr(engine, "_key", None)
+    if not key:
+        return None
+    stock, tf = _parse_stock_tf(key)
+    kullanilan = getattr(engine, "_p2_kullanilan", None)
+    return fh.eslestir(engine, candidate, kullanilan=kullanilan, stock=stock, tf=tf)
+
+
 def _save_formation_anchor(engine, candidate: "PatternCandidate") -> None:
     """Mevcut formation'ın minimum anchor'unu (stock,tf) anahtarıyla sakla."""
     key = getattr(engine, "_key", None)
@@ -245,6 +273,12 @@ class ArgentEngine:
         self._last_index_value = None
         self.events: List[Dict] = []
         self.index_values = None
+        # --- Faz 2.2: history defteri için scan kapsamlı takip ---
+        # `_p2_births`: bu scan'de doğan formation'lar (doğum snapshot'ı için).
+        # `_p2_kullanilan`: bu scan'de bağlanmış stable_id'ler. Aynı stable_id
+        # iki farklı candidate'a atanamaz (deterministik "ilk gelen alır").
+        self._p2_births: List["PatternCandidate"] = []
+        self._p2_kullanilan: set = set()
 
     # ---------- yüksek seviye API ----------
 
@@ -307,6 +341,11 @@ class ArgentEngine:
 
         prev_state = self.pattern_state
         new_events: List[Dict] = []
+        # Faz 2.2: her process() çağrısı yeni bir scan kapsamı açar. Doğum
+        # kayıtları ve kullanılmış stable_id'ler bu scan'a özgüdür; böylece
+        # aynı stable_id iki farklı candidate'a atanamaz.
+        self._p2_births = []
+        self._p2_kullanilan = set()
         for b in range(start, len(df)):
             before = len(self.events)
             self._process_bar(b)
@@ -511,14 +550,37 @@ class ArgentEngine:
                         # kabul ediliyor yaşar (terminal olanın / daha zayıf olanın
                         # yerine geçiyor). Terminal olmuş eski formation'ın
                         # stable_id'si ASLA buraya taşınmaz — her zaman yeni üretilir.
-                        if not self.active.valid:
-                            yeni_stable = _match_persisted_anchor(self, best) or _new_stable_id()
-                        else:
-                            yeni_stable = _new_stable_id()
+                        # --- Faz 2.1: çoklu formasyon registry'si ---
+                        # Registry (stock,tf) başına TEK slot yerine birden fazla
+                        # kayıt taşır; böylece aynı pencere içindeki 2. formasyon
+                        # doğru kimliğine ulaşır. Eşleşme DEĞİŞTİRİLMEMİŞ
+                        # `identity_compatible` + `continuity_score` ile yapılır;
+                        # eklenen tek şey bar-time alignment (pencere offset'i).
+                        #
+                        # NEDEN HER DOĞUMDA: `tam_yeniden=True` tam replay'de
+                        # motor `self.active`'ini sıfırlamaz; önceki scan'den
+                        # geçerli bir formation taşır. Eşleşmeyi yalnızca
+                        # `not self.active.valid` anında denemek, replay'deki
+                        # DOĞRUMU formasyonları da yeni UUID'ye düşürürdü.
+                        # Aynı mı farklı mı olduğuna karar veren `continuity_score`
+                        # olduğu için bu güvenlidir.
+                        #
+                        # Registry boş/bozuksa veya eşleşme yoksa Faz 1 davranışı
+                        # AYNEN devrede kalır (anchor -> yeni UUID).
+                        yeni_stable = _match_registry(self, best)
+                        if not yeni_stable:
+                            if not self.active.valid:
+                                yeni_stable = _match_persisted_anchor(self, best)
+                            if not yeni_stable:
+                                yeni_stable = _new_stable_id()
+                        if yeni_stable:
+                            self._p2_kullanilan.add(yeni_stable)
                         self.next_pattern_identity += 1
                         self.active = best
                         self.active.identity = self.next_pattern_identity
                         self.active.stable_id = yeni_stable
+                        # Faz 2.2: doğum kaydı (manager scan sonunda diske yazar).
+                        self._p2_births.append(self.active)
                         reset_quality_snapshot(self.active)
                         self.lock_used_pivots(self.active)
                         _save_formation_anchor(self, self.active)
@@ -910,6 +972,11 @@ class ArgentEngine:
             "time": self.index_values[self.bar_index] if self.index_values is not None
                     and 0 <= self.bar_index < len(self.index_values) else None,
             "state": self.pattern_state,
+            # Faz 2.2: olayin ait oldugu formation. `stable_id` dogumdan
+            # terminal'e kadar ayni kalir; boylece history defteri olayi dogru
+            # kayda baglar. Anahtar adlari DEGISTIRILMEDI, yalnizca eklendi.
+            "stable_id": (self.active.stable_id
+                          if getattr(self.active, "valid", False) else None),
         }
         ev.update(extra)
         self.events.append(ev)
@@ -977,7 +1044,61 @@ class PatternLifecycleManager:
         engine = self.get_engine(key)
         snap = engine.process(df, tam_yeniden=tam_yeniden)
         self.last_snapshots[key] = snap
+        self._history_kaydet(key, engine, snap)
         return snap
+
+    # ---------- Faz 2.1/2.2: history defteri yazımı ----------
+
+    def _history_kaydet(self, key: str, engine, snap: EngineSnapshot) -> None:
+        """Scan sonunda history defterini ANLAMLI olaylara göre günceller.
+
+        Yazma tetikleyicileri (per-bar dump YOK):
+          * doğum  -> engine._p2_births
+          * olay   -> snap.events (state geçişleri)
+          * terminal -> snap.state terminal ise
+
+        Tek taramada tek save: defter bir kez yüklenir, tüm mutasyonlar
+        uygulanır, en fazla bir kez yazılır.
+
+        Bu fonksiyon MOTOR DAVRANIŞINI DEĞİŞTİRMEZ ve botu asla durdurmaz:
+        herhangi bir hatta sessizce geri döner.
+        """
+        try:
+            from state import formation_history as fh
+            stock, tf = _parse_stock_tf(key)
+            dogumlar = list(getattr(engine, "_p2_births", None) or [])
+            olaylar = list(getattr(snap, "events", None) or [])
+            terminal = fh.terminal_durumu(snap.state)
+            if not dogumlar and not olaylar and not terminal:
+                return
+            defter = fh.yukle(stock, tf)
+            degisti = False
+            for aday in dogumlar:
+                if fh.dogum_ekle(defter, aday, engine) is not None:
+                    degisti = True
+            if olaylar and fh.olay_ekle(defter, olaylar):
+                degisti = True
+            if terminal:
+                sid = (getattr(snap, "active", None).stable_id
+                       if getattr(snap, "active", None) is not None
+                       and getattr(snap.active, "valid", False) else None)
+                if sid and fh.terminal_ekle(defter, sid, snap.state):
+                    degisti = True
+                elif sid:
+                    # Terminal geçişi bu turda yakalanmasa bile (replay'de
+                    # zaten terminal ise) durumu güncelle.
+                    rec = fh.kayit_getir(defter, sid)
+                    if rec is not None and rec.get("durum") != fh.DURUM_TERMINAL:
+                        rec["durum"] = fh.DURUM_TERMINAL
+                        rec["terminal_state"] = snap.state
+                        rec["terminal_zamani"] = fh._simdi()
+                        degisti = True
+            if degisti:
+                fh.kaydet(defter)
+        except Exception:
+            # History yazılamazsa bot çalışmaya devam eder (ölü kod değil,
+            # bilinçli güvenlik sınırı).
+            return
 
     def update(self, key: str, df: pd.DataFrame, candidate=None) -> Tuple[str, int, str]:
         """Eski 3'lü imza. `candidate` parametresi artık kullanılmaz — motor adayı kendisi bulur."""

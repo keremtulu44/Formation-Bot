@@ -132,3 +132,108 @@ maddesi** olacak.
 
 Mevcut test sonuçları korunmuştur: `pytest -q` → 512 passed,
 `python3 test_tarama_zamani.py` → 102/102.
+
+---
+
+## 5. Faz 2.0 / 2.1 / 2.2 Uygulaması (bu commit)
+
+Hedef: **"Formasyonun tüm yaşam döngüsünü hatırlayan motor."** Uygulanan
+sıra, değerlendirmede önerilen yol haritasıdır: P2.0 → P2.1 → (P2.5 sonra) →
+P2.2 → P2.3 → P2.4. Bu commit P2.0, P2.1 ve P2.2'yi kapsar.
+
+### 5.1 Faz 2.0 — Field & Event Contract (`state/formation_schema.py`)
+
+Model icat edilmedi; motora gömülü 85 alan sınıflandırıldı:
+
+| Sınıf | Alan | Anlam |
+|---|---|---|
+| `IDENTITY` | 32 | Doğumda sabit: kimlik, doğum geometrisi, direk (pole) |
+| `STATE` | 18 | Zaman içinde değişir: sınır, genişlik, dokunuş, kalite bileşenleri |
+| `BREAKOUT` | 20 | `freeze_pattern_quality` anında dondurulanlar (Faz 2.4'te serileştirilir) |
+| `TRANSIENT` | 16 | Türetilmiş/önbellek: **asla** history'ye yazılmaz |
+
+Doğrulanan: 85/85 alan sınıflandırıldı, eksik/fazla yok. Tek bilinçli
+çakışma `raw_quality` (doğum değeri IDENTITY, anlık değer STATE).
+
+`PERSISTED_TODAY` (21 alan) disk üzerinde ölçüldü (anchor 14 + `formasyon_kaydi`
+7 ek alan). `INCELENMELI` = sınıflandırılmış ama bugün yazılmayan **48 alan** —
+tahmin değil, ölçüm.
+
+### 5.2 Faz 2.1 — Formation History Registry (`state/formation_history.py`)
+
+`(stock, timeframe) → birden fazla kayıt → stable_id → history`.
+Dosya düzeni: `bot_data/formation_history/{STOCK}_{TF}.json`
+(`bot_data/{STOCK}.json` yazım kuralı taklit edilir).
+
+**Bar-time alignment — en kritik tasarım kararı.** Tüm bar indeksleri
+pencere-relatiftir ve her taramada ~1 birim kayar. Ham indeks karşılaştırması
+kaymaya açıktır. Bu yüzden defter doğum anının **mutlak zamanını** saklar ve
+eşleştirmede:
+
+```
+delta = bugünkü_konum(doğum_bar_zamanı) - kayıtlı_doğum_indeksi
+```
+
+hesaplayıp kaydın bar indekslerini `delta` ile taşır; **fiyatlara dokunmaz**.
+Böylece `identity_compatible` ve `continuity_score` (60 eşiği dahil)
+**DEĞİŞTİRİLMEDEN** aynı pencere koordinat sisteminde çalışır.
+
+Güvenlik kuralları (öncelik sırası):
+1. **Yanlış birleşme asla olmamalı.** Doğum barı pencerede değilse kayıt
+   atlanır; eşleşme olmaması tercih edilir.
+2. Gereksiz yeni ID en aza indirilir.
+3. Bir scan'de aynı `stable_id` iki farklı candidate'a atanamaz
+   (`_p2_kullanilan` kümesi, deterministik "ilk gelen alır").
+4. Terminal kayıt asla eşleşmez (kayıt durumuna göre — motor belleğine göre
+   eleme KATI olarak güvenlidir, çoklu formasyonda motor belleği yanıltıcıdır).
+
+### 5.3 Faz 2.2 — Olaylar `stable_id` taşır (`patterns/lifecycle.py`)
+
+`_emit` tek bir additif anahtar kazandı: `stable_id`. Mevcut anahtar adları
+(`type`, `name`, `bar`, `time`, `state`) **değişmedi**.
+
+Yazma yalnızca anlamlı olaylarda tetiklenir (per-bar dump YOK): doğum, olay,
+terminal. Tek taramada tek save: defter bir kez yüklenir, tüm mutasyonlar
+uygulanır, en fazla bir kez yazılır.
+
+### 5.4 Ölçüm — gerçek BIST verisi (28 hisse × 4 TF)
+
+| Senaryo | Faz 1 (önce) | Faz 2.1 (sonra) |
+|---|---|---|
+| Kayan pencere, tek formation | `ortak=1, yeni=6, kayip=6` | `ortak=7, yeni=0, kayip=0` |
+| Kayan pencere, 3 formation | kayıt sayısı `2 → 4 → 6` | kayıt sayısı `2 → 3 → 3` |
+| Gerçek bot yolu (collective_test) | — | 9 defter, 36 kayıt, 257 olay |
+
+Bar-time alignment'ın doğrulaması: pencere kaydığında translate edilmiş kaydın
+pivotları adayla **birebir** örtüşüyor (`pivot_overlap_count = 4`,
+`start_distance = 0`, fiyatlar aynı). Kimlik değişimi yalnızca
+Flama→Üçgen **yeniden sınıflandırmasında** oluyor — bu §3'te dokümante edilmiş
+ve kabul edilmiş davranıştır (`identity_compatible` matematiktir, değiştirilmez).
+
+### 5.5 Değiştirilmeyenler (doğrulandı)
+
+- formasyon matematiği, geometri, kalite, threshold'lar
+- `identity_compatible`, `continuity_score` (60 eşiği dahil)
+- lifecycle state makinesi ve geçişleri
+- Faz 1 `formation_identity.py` — geriye dönük uyumluluk korunur; registry
+  boşken davranış birebir aynıdır
+- karne yazımı ve `sinyal_sonucu`
+- olay sözlüğü anahtar adları
+
+### 5.6 Testler
+
+`test_formation_history.py` — 37 test (sözleşme, registry, kimlik, çoklu
+formasyon, yanlış eşleşme güvenliği, terminal, olay, retention, **mutasyon**).
+
+Mutasyon kanıtı: `_match_registry` çağrısı devre dışı bırakıldığında 3 test
+başarısız olur (`test_coklu_formasyon_kayan_pencerede_kimlik_korunur`,
+`test_kayan_pencerede_kayit_sayisi_kontrolsuz_artmaz`,
+`test_aktif_formation_sid_kayan_pencerede_sabit`) — düzeltme gerçekten
+gereklidir.
+
+### 5.7 Doğrulama
+
+- `pytest -q` → **549 passed** (512 + 37 yeni)
+- `python3 test_tarama_zamani.py` → **102/102**
+- `python3 collective_test.py` (gerçek BIST verisi) → 9 pattern, 9 defter üretildi
+- Bozuk defter senaryosu: startup raporu bozuk dosyayı tespit eder, bot çalışmaya devam eder
