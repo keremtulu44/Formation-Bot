@@ -1920,7 +1920,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             )
                         else:
                             _karne_olay_kaydet(stock, tf_name, state, active.pattern_type, q,
-                                               df_tf.index[-1],
+                                               df_tf.index[-1], df_tf=df_tf,
                                                stable_id=getattr(active, "stable_id", None))
                     except Exception as karne_hata:  # noqa: BLE001 - tarama asla durmasın
                         logger.debug("Karne kaydı atlandı (%s %s): %s", stock, tf_name, karne_hata)
@@ -2330,8 +2330,33 @@ def _karne_olay_kaydet(stock: str, tf: str, state: str, pattern: str, quality: f
         elif state in ("RETEST_BASARILI", "FORMASYON_TAMAMLANDI", "BASARISIZ_KIRILIM"):
             defter.olay_kaydet(stock=stock, tf=tf, state=state, bar_zamani=bar_zamani,
                                stable_id=stable_id)
+        # --- Faz 2.5: outcome linkage (okuma tarafı) ---
+        # Karne matematiği DEĞİŞMEZ: burada yalnızca mevcut `sinyal_sonucu()`
+        # çağrılır ve sonucu `stable_id` üzerinden formation history'ye bağlanır.
+        # Yeni kırılım yoksa da çağrılır: ufuk dolduğunda `bekliyor` -> çözümlenmiş
+        # geçişini yakalamak için (yazma yalnızca sonuç değiştiğinde olur).
+        _karne_outcome_bagla(stock, tf, stable_id, df_tf)
     except Exception as exc:  # noqa: BLE001
         logger.debug("Karne kaydı yazılamadı (%s %s %s): %s", stock, tf, state, exc)
+
+
+def _karne_outcome_bagla(stock: str, tf: str, stable_id, df_tf=None):
+    """Faz 2.5: outcome'ı formation history'ye bağlar (mevcut motoru kullanır).
+
+    stable_id yoksa (eski kayıt) hiçbir şey yapmaz — geriye dönük uyumluluk.
+    Seri sağlayıcı olarak bu slotun kendi df_tf'i verilir; `sinyal_sonucu`
+    tam olarak `karne_hesapla`'nın yaptığı gibi çağrılır.
+    """
+    if not stable_id:
+        return None
+    try:
+        from state import outcome_link
+        defter = _karne_al()
+        return outcome_link.bagla(defter, stock, tf, stable_id,
+                                  saglayici=lambda s, t: df_tf)
+    except Exception as exc:  # noqa: BLE001 - linkage taramayi asla durdurmaz
+        logger.debug("Outcome bağlantısı kurulamadı (%s %s): %s", stock, tf, exc)
+        return None
 
 
 def _karne_dolu(defter: KarneDefteri, now: datetime) -> bool:
