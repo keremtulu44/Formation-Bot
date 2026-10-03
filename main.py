@@ -435,6 +435,9 @@ def reset_daily_if_needed():
         daily_stats['patterns_found'] = 0
         _daily_pattern_keys.clear()
         daily_stats['basarisiz_kirilim'] = 0
+        # Restart tabanı yalnızca AYNI günün devralınan sayısıdır; yeni güne
+        # sıfırla (yoksa eski günün sayısı yeni güne taşınır ve sayaç şişer).
+        _daily_basarisiz_tabani = 0
         _daily_basarisiz_keys.clear()
         daily_stats['tarama_sayisi'] = 0
         daily_stats['alerts_sent'] = 0
@@ -1504,6 +1507,32 @@ def son_tarama_yukle(store=None, data_dir=None) -> int:
         data_dir=data_dir,
     )
 
+
+def _formation_history_baslangic_kontrolu() -> dict:
+    """Faz 2.1: startup'ta çoklu formasyon history defterlerinin sağlık raporu.
+
+    ZORUNLU DEĞİL: registry tarama anında lazy okunur, bu adım olmadan da
+    history korunur. Amacı operatöre görünürlük vermek ve BOZUK defterleri
+    loga düşürmektir. Bot hiçbir koşulda bu adım yüzünden durmaz.
+    """
+    try:
+        from state import formation_history as fh
+        rapor = fh.saglik_raporu()
+    except Exception as exc:  # pragma: no cover - savunma amaçlı
+        logger.warning("Formation history raporu alınamadı (bot çalışmaya devam ediyor): %s", exc)
+        return {}
+    if rapor.get("dosya"):
+        logger.info(
+            "Formation history: %d defter, %d kayıt (dizin %s)",
+            rapor["dosya"], rapor["kayit"], rapor.get("yol"))
+    if rapor.get("bozuk"):
+        # Bozuk defter: `yukle()` boş defter döner, tarama Faz 1 yoluyla devam
+        # eder. Yeni kimlik üretimi olur ama bot ÇALIŞIR.
+        logger.warning(
+            "Formation history: %d bozuk defer atlandı (yeni kimlik üretilir, bot çalışıyor): %s",
+            len(rapor["bozuk"]), ", ".join(rapor["bozuk"][:10]))
+    return rapor
+
 # === TELEGRAM WEBHOOK (Render) ===
 # Neden: Render Free bir web servistir; uyku/restart döngüsüne girer. Yoklama
 # (getUpdates) modunda uzun yoklama bağlantısı her restart'ta yeniden kurulur ve
@@ -1887,10 +1916,12 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 stock, tf_name, state, active.pattern_type, q,
                                 df_tf.index[-1], kirilim=True, dir=int(break_dir),
                                 entry=float(df_tf["close"].iloc[-1]), df_tf=df_tf,
+                                stable_id=getattr(active, "stable_id", None),
                             )
                         else:
                             _karne_olay_kaydet(stock, tf_name, state, active.pattern_type, q,
-                                               df_tf.index[-1])
+                                               df_tf.index[-1], df_tf=df_tf,
+                                               stable_id=getattr(active, "stable_id", None))
                     except Exception as karne_hata:  # noqa: BLE001 - tarama asla durmasın
                         logger.debug("Karne kaydı atlandı (%s %s): %s", stock, tf_name, karne_hata)
                     
@@ -1910,6 +1941,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         'quality': float(q),
                         'state': state,
                         'break_dir': break_dir,
+                        # Phase 1: kalıcı formation kimliği (doğumdan terminal'e).
+                        # Motor-içi `identity`'den ayrıdır; restart sonrası re-attach
+                        # ile aynı formation aynı stable_id'yi taşımaya devam eder.
+                        'stable_id': getattr(active, 'stable_id', None),
                         'upper': getattr(active, 'upper_now', None),
                         'lower': getattr(active, 'lower_now', None),
                         'critical_price': (active.upper_now if break_dir == 1 else active.lower_now),
@@ -2276,7 +2311,8 @@ def _karne_seri_saglayici(deque_manager):
 
 def _karne_olay_kaydet(stock: str, tf: str, state: str, pattern: str, quality: float,
                        bar_zamani, *, kirilim: bool = False, dir: int = 0,
-                       entry=None, df_tf=None, mtf_destek: bool = False) -> None:
+                       entry=None, df_tf=None, mtf_destek: bool = False,
+                       stable_id=None) -> None:
     """Tarama sırasında karne defterine kayıt düşer (hatalar taramayı durdurmaz)."""
     try:
         defter = _karne_al()
@@ -2284,16 +2320,43 @@ def _karne_olay_kaydet(stock: str, tf: str, state: str, pattern: str, quality: f
             defter.kirilim_kaydet(
                 stock=stock, tf=tf, pattern=pattern, state=state, dir=dir,
                 entry=entry, atr=atr_hesapla(df_tf), quality=quality,
-                bar_zamani=bar_zamani, mtf_destek=mtf_destek,
+                bar_zamani=bar_zamani, mtf_destek=mtf_destek, stable_id=stable_id,
             )
         elif state == "FORMASYON_TANIMLANDI" or state in ("SIKISMA_GUCLENIYOR", "KIRILIM_HAZIRLIGI"):
             # Yalnız anlamlı olgunluk eşiği: her aday state'i sayılmaz.
             defter.formasyon_kaydet(stock=stock, tf=tf, pattern=pattern, state=state,
-                                    quality=quality, bar_zamani=bar_zamani)
+                                    quality=quality, bar_zamani=bar_zamani,
+                                    stable_id=stable_id)
         elif state in ("RETEST_BASARILI", "FORMASYON_TAMAMLANDI", "BASARISIZ_KIRILIM"):
-            defter.olay_kaydet(stock=stock, tf=tf, state=state, bar_zamani=bar_zamani)
+            defter.olay_kaydet(stock=stock, tf=tf, state=state, bar_zamani=bar_zamani,
+                               stable_id=stable_id)
+        # --- Faz 2.5: outcome linkage (okuma tarafı) ---
+        # Karne matematiği DEĞİŞMEZ: burada yalnızca mevcut `sinyal_sonucu()`
+        # çağrılır ve sonucu `stable_id` üzerinden formation history'ye bağlanır.
+        # Yeni kırılım yoksa da çağrılır: ufuk dolduğunda `bekliyor` -> çözümlenmiş
+        # geçişini yakalamak için (yazma yalnızca sonuç değiştiğinde olur).
+        _karne_outcome_bagla(stock, tf, stable_id, df_tf)
     except Exception as exc:  # noqa: BLE001
         logger.debug("Karne kaydı yazılamadı (%s %s %s): %s", stock, tf, state, exc)
+
+
+def _karne_outcome_bagla(stock: str, tf: str, stable_id, df_tf=None):
+    """Faz 2.5: outcome'ı formation history'ye bağlar (mevcut motoru kullanır).
+
+    stable_id yoksa (eski kayıt) hiçbir şey yapmaz — geriye dönük uyumluluk.
+    Seri sağlayıcı olarak bu slotun kendi df_tf'i verilir; `sinyal_sonucu`
+    tam olarak `karne_hesapla`'nın yaptığı gibi çağrılır.
+    """
+    if not stable_id:
+        return None
+    try:
+        from state import outcome_link
+        defter = _karne_al()
+        return outcome_link.bagla(defter, stock, tf, stable_id,
+                                  saglayici=lambda s, t: df_tf)
+    except Exception as exc:  # noqa: BLE001 - linkage taramayi asla durdurmaz
+        logger.debug("Outcome bağlantısı kurulamadı (%s %s): %s", stock, tf, exc)
+        return None
 
 
 def _karne_dolu(defter: KarneDefteri, now: datetime) -> bool:
@@ -2626,6 +2689,12 @@ def main_loop():
     # yerel dosyanın EN YENİ kopyası). Bu çağrı olmadan /panel, /canli, /durum ve
     # sabah özeti her yeniden başlatmada boş görünür; kalıcılık yazılır ama okunmaz.
     son_tarama_yukle(supabase_store)
+    # Faz 2.1: çoklu formasyon history defteri. Registry lazy okunur (tarama
+    # anında doğum eşleşmesi için diskten yüklenir), bu yüzden bu adım ZORUNLU
+    # değildir — yalnızca startup'ta sağlık raporu üretir. Bozuk bir defter
+    # botu DURDURMAZ: `yukle()` bozuk dosyada boş defter döner ve tarama
+    # Faz 1 yoluyla devam eder.
+    _formation_history_baslangic_kontrolu()
     # Çoklu kopya koruması: aynı anahtarlarla başka bir canlı örnek var mı?
     _tekil_ornek_kontrolu(supabase_store, force=True)
     # Bekleyen gün içi aday tamponu da kalıcıdır (Batch 5): 18:45'ten önce

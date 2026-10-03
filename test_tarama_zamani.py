@@ -404,8 +404,8 @@ kontrol("tatil günü bekleme > 0 (0 sn uyku fırtınası yok)",
 kontrol("29 Eki tatil -> sonraki açılış 30 Eki 09:50",
         abs(data_mod.time_until_next_open(_acik_29)
             - (_hedef_30 - _acik_29).total_seconds()) < 1)
-kontrol("29 Ekim (tatil) is_bist_open hâlâ True (kapsam notu: is_bist_open takvim bilmez)",
-        data_mod.is_bist_open(_acik_29))
+kontrol("29 Ekim (tatil) is_bist_open False (tatil artık takvimden biliniyor)",
+        not data_mod.is_bist_open(_acik_29))
 kontrol("30 Ekim 09:00 (tatil ertesi, seans öncesi) -> bugün 09:50",
         abs(data_mod.time_until_next_open(t(2026, 10, 30, 9, 0))
             - (t(2026, 10, 30, 9, 50) - t(2026, 10, 30, 9, 0)).total_seconds()) < 1)

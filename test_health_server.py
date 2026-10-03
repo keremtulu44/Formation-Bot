@@ -1,8 +1,16 @@
 import json
 from urllib.error import HTTPError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from health_server import start_render_health_server
+
+
+def _test_url(port, path, key=None):
+    """/test anahtarı A7 sonrası varsayılan olarak BAŞLIKTAN okunur
+    (X-Test-Key). query-string (?k=) yalnız TELEGRAM_TEST_KEY_QUERY=1 ile
+    çalışır. Bu yardımcı, varsayılan güvenli yolu (başlık) kullanır."""
+    headers = {"X-Test-Key": key} if key else {}
+    return Request(f"http://127.0.0.1:{port}{path}", headers=headers)
 
 
 def test_health_server_binds_and_answers_render_probe():
@@ -37,14 +45,14 @@ def test_health_server_returns_404_for_unknown_path():
         server.server_close()
 
 
-def _get(port, path):
-    with urlopen(f"http://127.0.0.1:{port}{path}", timeout=2) as response:
+def _get(port, path, key=None):
+    with urlopen(_test_url(port, path, key), timeout=2) as response:
         return response.status, json.loads(response.read().decode("utf-8"))
 
 
-def _get_expecting_error(port, path):
+def _get_expecting_error(port, path, key=None):
     try:
-        urlopen(f"http://127.0.0.1:{port}{path}", timeout=2)
+        urlopen(_test_url(port, path, key), timeout=2)
     except HTTPError as exc:
         return exc.code, json.loads(exc.read().decode("utf-8"))
     raise AssertionError(f"{path} should have returned an HTTP error")
@@ -96,7 +104,7 @@ def test_test_route_sends_with_correct_key():
     )
     try:
         port = server.server_address[1]
-        code, body = _get(port, "/test?k=gizli")
+        code, body = _get(port, "/test", key="gizli")
         assert code == 200
         assert body == {"ok": True, "detail": "mesaj gonderildi"}
         assert len(calls) == 1
@@ -112,7 +120,7 @@ def test_test_route_reports_sender_failure_as_bad_gateway():
     )
     try:
         port = server.server_address[1]
-        code, body = _get_expecting_error(port, "/test?k=gizli")
+        code, body = _get_expecting_error(port, "/test", key="gizli")
         assert code == 502
         assert "403" in body["detail"]
     finally:
@@ -135,8 +143,10 @@ def test_health_ignores_query_string_and_trailing_slash():
 
 
 def test_test_route_query_string_ile_calisir():
+    # Bu test ÖZELLEŞTİRİLMİŞ query-string yolunu deniyor; o yüzden
+    # TELEGRAM_TEST_KEY_QUERY=1 ile açıyoruz (varsayılan kapalıdır, A7).
     server = start_render_health_server(
-        {"PORT": "0", "TELEGRAM_TEST_KEY": "k7m2x9"},
+        {"PORT": "0", "TELEGRAM_TEST_KEY": "k7m2x9", "TELEGRAM_TEST_KEY_QUERY": "1"},
         test_sender=lambda text: (True, "mesaj gonderildi"),
     )
     try:

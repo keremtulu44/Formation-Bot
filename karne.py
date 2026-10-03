@@ -189,7 +189,8 @@ class KarneDefteri:
         return True
 
     def formasyon_kaydet(self, stock: str, tf: str, pattern: str, state: str,
-                         quality: float, bar_zamani, now: datetime = None) -> bool:
+                         quality: float, bar_zamani, now: datetime = None,
+                         stable_id: Optional[str] = None) -> bool:
         """Canlı formasyonu sayar. Aynı hisse/TF/formasyon TTL içinde tekrar sayılmaz."""
         now = now or datetime.now(ISTANBUL_TZ)
         anahtar = f"{stock}|{tf}|{pattern}"
@@ -214,6 +215,9 @@ class KarneDefteri:
             "bar_time": str(bar_zamani),
             "kayit_zaman": now.isoformat(),
             "hafta": hafta_damgasi(now),
+            # Phase 1: kalıcı formation kimliği (None = eski kayıt / kimlik yok).
+            # Outcome hesabı (MFE/MAE, horizon, hedef/stop) bu alanı KULLANMAZ.
+            "stable_id": stable_id,
         })
         if eklendi:
             self.kaydet()
@@ -221,7 +225,8 @@ class KarneDefteri:
 
     def kirilim_kaydet(self, stock: str, tf: str, pattern: str, state: str, dir: int,
                        entry: Optional[float], atr: Optional[float], quality: float,
-                       bar_zamani, mtf_destek: bool = False, now: datetime = None) -> bool:
+                       bar_zamani, mtf_destek: bool = False, now: datetime = None,
+                       stable_id: Optional[str] = None) -> bool:
         """Kırılım teyidini (performans ölçülecek sinyal) kaydeder."""
         if dir not in (1, -1) or entry in (None, 0):
             return False
@@ -241,13 +246,15 @@ class KarneDefteri:
             "bar_time": bar_iso,
             "kayit_zaman": now.isoformat(),
             "hafta": hafta_damgasi(now),
+            # Phase 1: kırılımı doğuran formation'ın kalıcı kimliği.
+            "stable_id": stable_id,
         })
         if eklendi:
             self.kaydet()
         return eklendi
 
     def olay_kaydet(self, stock: str, tf: str, state: str, bar_zamani,
-                    now: datetime = None) -> bool:
+                    now: datetime = None, stable_id: Optional[str] = None) -> bool:
         """Huni olayı: retest / tamamlandı / başarısız (performans ölçülmez)."""
         now = now or datetime.now(ISTANBUL_TZ)
         bar_iso = istanbul(bar_zamani).isoformat()
@@ -259,6 +266,8 @@ class KarneDefteri:
             "bar_time": bar_iso,
             "kayit_zaman": now.isoformat(),
             "hafta": hafta_damgasi(now),
+            # Phase 1: olayın bağlı olduğu formation'ın kalıcı kimliği.
+            "stable_id": stable_id,
         })
         if eklendi:
             self.kaydet()
