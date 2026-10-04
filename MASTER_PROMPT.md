@@ -184,7 +184,7 @@ Formation-Bot/
 ├── YAPILACAKLAR.md                 # A (düzeltme) / B (iyileştirme) / C (şablon) — tam iş listesi,
 │                                  # öncelik (★★★/★★/★), efor (1s / K / O / B)
 ├── SORUN_RAPORU.md                 # Ölçümlü teşhis; S1-S11 + ek bulgular; üretim→Telegram hunisi
-├── DOGRULAMA_RAPORU.md             # Dış teşhis bağımsız doğrulaması (TRUE / FALSE / PARTIAL)
+├── docs/archive/DOGRULAMA_RAPORU.md  # Dış teşhis bağımsız doğrulaması (TRUE / FALSE / PARTIAL) — arşivde
 │
 ├── config.py                      # Merkezi yapılandırma (TEK KAYNAK):
 │                                  # - BIST_50 = [48 sembol; KOZAL/KOZAA çıkarıldı]
