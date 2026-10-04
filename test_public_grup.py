@@ -5,6 +5,7 @@ Bu dosya ağa ÇIKMAZ: `requests` modülü sahte bir modülle değiştirilir.
 
 import json
 import sys
+import time
 import types
 
 import pytest
@@ -224,7 +225,9 @@ def test_karne_kisa_metni_teknik_dokum_icermez():
 
 def _grup_guncellemesi(update_id, metin, tip="supergroup", chat_id=-1001234567890):
     return {"update_id": update_id,
-            "message": {"message_id": update_id, "date": 1,
+            # Gerçekçi tarih: `date` istemciden değil Telegram'dan gelir; eski
+            # (epoch) bir tarih artık "bot uykudaydı" kuralına takılır.
+            "message": {"message_id": update_id, "date": int(time.time()),
                         "chat": {"id": chat_id, "type": tip}, "text": metin}}
 
 

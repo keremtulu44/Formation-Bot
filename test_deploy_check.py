@@ -263,3 +263,68 @@ def test_dm_yoksa_uyari(monkeypatch):
     monkeypatch.setattr("requests.post", lambda *a, **k: cevaplar.pop(0))
     D.kontrol_public_hedef("123456789:AAAA", "@kanal", "")
     assert any(s == D.WARN and "komutlar kapalı" in b for s, b in kayit)
+
+
+# --- Komut yolu (webhook ↔ yoklama) ------------------------------------------
+# NEDEN: "DM'den komut yazıyorum, cevap gelmiyor" şikâyetinde ilk bakılacak yer:
+# Telegram'da webhook kayıtlı mı, teslim hatası var mı, güncelleme birikmiş mi?
+
+
+def test_webhook_sir_gizle_eski_bicim_maskeler():
+    assert D._webhook_sir_gizle(
+        "https://x.onrender.com/webhook/s3cr3t-abc") == "https://x.onrender.com/webhook/***"
+    # Hata metni içinde geçen URL de maskelenir, metnin kalanı korunur.
+    gizli = D._webhook_sir_gizle("Wrong response from the webhook: https://x.onrender.com/webhook/s3cr3t\nmore")
+    assert "s3cr3t" not in gizli and "Wrong response" in gizli
+
+
+def test_webhook_kayitli_ama_yoklama_modunda_hata(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit(
+        {"ok": True, "result": {"url": "https://x.onrender.com/webhook"}}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=False)
+    assert any(s == D.FAIL and "yoklama modunda" in b for s, b in kayit)
+    assert not any(s == D.FAIL and "yoklama modunda" not in b for s, b in kayit)
+
+
+def test_webhook_yok_yoklama_modunda_bilgi(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit(
+        {"ok": True, "result": {"url": ""}}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=False)
+    assert any(s == D.OK and "yoklama" in b for s, b in kayit)
+    assert not any(s == D.FAIL for s, _ in kayit)
+
+
+def test_webhook_teslim_hatasi_yeni_ise_hata(monkeypatch):
+    import time as _t
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit({"ok": True, "result": {
+        "url": "https://x.onrender.com/webhook",
+        "last_error_message": "Wrong response from the webhook: 500",
+        "last_error_date": int(_t.time()) - 60,
+    }}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=True)
+    assert any(s == D.FAIL and "teslim hatası" in b for s, b in kayit)
+
+
+def test_webhook_teslim_hatasi_eski_ise_uyari(monkeypatch):
+    import time as _t
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit({"ok": True, "result": {
+        "url": "https://x.onrender.com/webhook",
+        "last_error_message": "Connection timed out",
+        "last_error_date": int(_t.time()) - 4 * 3600,
+    }}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=True)
+    assert any(s == D.WARN and "eski" in b for s, b in kayit)
+    assert not any(s == D.FAIL for s, _ in kayit)
+
+
+def test_bekleyen_guncelleme_uyarir(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit({"ok": True, "result": {
+        "url": "https://x.onrender.com/webhook", "pending_update_count": 7,
+    }}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=True)
+    assert any(s == D.WARN and "7" in b for s, b in kayit)

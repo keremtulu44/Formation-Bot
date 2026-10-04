@@ -17,7 +17,10 @@ Ne yapar:
   3. Supabase varsa: tablo gerçekten var mı? (404 -> SQL çalıştırılmamış,
      401/403 -> anahtar yanlış, 200 -> hazır) ve bot canlı mı (state:heartbeat
      yaşı); yoksa analiz yine çalışır.
-  4. Telegram: getMe ile token; istenirse gerçek test mesajı.
+  4. Telegram: getMe ile token; istenirse gerçek test mesajı. Ardından
+     getWebhookInfo ile KOMUT YOLU: webhook kayıtlı mı, teslim hatası
+     (`last_error_message`) var mı, bekleyen güncelleme birikmiş mi? —
+     "DM'den komut yazıyorum, cevap gelmiyor" sorusunun ilk bakılacak yeri.
   5. Render: https://<servis>.onrender.com/health ayakta mı; /test ucu açık mı.
 
 Çıkış kodu 0 = kritik hata yok, 1 = en az bir HATA var (uyarılar kodu bozmaz).
@@ -221,6 +224,8 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("TELEGRAM_BOT_TOKEN", True, "@BotFather → /newbot → 'Use this token'"),
         ("TELEGRAM_CHAT_ID", True, "@userinfobot'un verdiği Id (kendine mesaj için pozitif sayı; KOMUTLAR buna bağlı)"),
         ("TELEGRAM_GROUP_ID", False, "PUBLIC KANAL hedefi (@bisthisseveri veya -100…): kanal yayını bununla açılır (eski adı TELEGRAM_CHANNEL_ID)"),
+        ("TELEGRAM_WEBHOOK_SECRET", False, "İsteğe bağlı: webhook modunu açar (komutlar Telegram → /webhook ile gelir; uyuyan servisi Telegram uyandırır)"),
+        ("RENDER_EXTERNAL_URL", False, "Render otomatik verir (webhook adresi buradan üretilir); render.yaml'de tanımlıdır"),
         ("BOT_PROFILE", False, "Dengeli / Hassas / Seçici"),
         ("TELEGRAM_TEST_KEY", False, "İsteğe bağlı: /test ucunu açar (telefondan Telegram testi)"),
         ("SUPABASE_STORE_PREFIX", False, "Varsayılan formation-bot: ; aynı tabloyu paylaşan 2. kopya için değiştirin"),
@@ -485,6 +490,113 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
         satir(FAIL, f"sendMessage başarısız (HTTP {r.status_code})", aciklama + ipucu)
 
 
+def _webhook_sir_gizle(metin: str) -> str:
+    """`…/webhook/<sır>` geçen metinlerde sırrı maskeler.
+
+    Telegram'ın `last_error_message` alanı kayıtlı adresi içerebilir; eski
+    biçimde adresin son parçası sırdır ve ekrana/loglara düşmemelidir.
+    """
+    metin = str(metin or "")
+    if "/webhook/" not in metin:
+        return metin
+    cikti: list = []
+    kalan = metin
+    while "/webhook/" in kalan:
+        bas, _, kalan = kalan.partition("/webhook/")
+        cikti.append(bas + "/webhook/")
+        i = 0
+        while i < len(kalan) and kalan[i] not in " \t\r\n\"'),;":
+            i += 1
+        if i > 0:
+            cikti.append("***")
+            kalan = kalan[i:]
+    cikti.append(kalan)
+    return "".join(cikti)
+
+
+def _webhook_adres_gizle(url: str) -> str:
+    """Eski biçimdeki sırlı yolu (…/webhook/<secret>) maskeler; sır ekrana düşmez."""
+    return _kisa(_webhook_sir_gizle((url or "").strip()), 120)
+
+
+def kontrol_telegram_yol(token: str, webhook_secret_tanimli: bool) -> None:
+    """Komutların gerçekten hangi yoldan geldiğini Telegram tarafından doğrular.
+
+    NEDEN: "DM'den /yardim yazıyorum, cevap gelmiyor" şikâyetinin en sık iki
+    sebebi yalnız buradan görülür:
+
+      1. **409 çakışması**: Telegram'da webhook kayıtlı ama bot `getUpdates`
+         yoklaması kullanıyor → güncellemeler hiç gelmez.
+      2. **Teslim hatası**: Webhook kayıtlı ama Telegram `last_error_message`
+         ile teslim edemiyor (servis 5xx döndü, adres yanlış, sır uyuşmuyor…).
+
+    Ayrıca bekleyen güncelleme sayısı, komutların birikip birikmediğini gösterir
+    (servis uykudayken Telegram mesajları kuyrukta tutar, 24 saat sonra atar).
+    """
+    if not token:
+        return
+    try:
+        import requests
+    except ImportError:
+        return
+
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{token}/getWebhookInfo", timeout=12)
+    except Exception as exc:  # noqa: BLE001
+        satir(WARN, "Webhook durumu okunamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+        return
+    if getattr(r, "status_code", 0) != 200:
+        satir(WARN, f"getWebhookInfo beklenmeyen yanıt (HTTP {getattr(r, 'status_code', '?')})",
+              _kisa(getattr(r, "text", ""), 160))
+        return
+    try:
+        bilgi = ((r.json() or {}).get("result") or {})
+    except Exception:  # noqa: BLE001
+        satir(WARN, "getWebhookInfo gövdesi çözümlenemedi", "")
+        return
+
+    url = (bilgi.get("url") or "").strip()
+    bekleyen = bilgi.get("pending_update_count")
+    son_hata = (bilgi.get("last_error_message") or "").strip()
+    hata_zamani = bilgi.get("last_error_date")
+
+    if url and not webhook_secret_tanimli:
+        satir(FAIL, "Webhook kayıtlı ama bot yoklama modunda",
+              "TELEGRAM_WEBHOOK_SECRET tanımlı değil; getUpdates 409 Conflict alır ve DM "
+              "komutları çalışmaz. Ya secret'ı tanımlayın ya da webhook'u silin "
+              f"(deleteWebhook). Kayıtlı adres: {_webhook_adres_gizle(url)}")
+    elif url:
+        satir(OK, f"Webhook kayıtlı: {_webhook_adres_gizle(url)}",
+              "Komutlar Telegram → /webhook üzerinden gelir (sunucu ayakta olmalı).")
+    elif webhook_secret_tanimli:
+        satir(WARN, "Webhook bekleniyor ama kayıtlı değil",
+              "Bot açılışta setWebhook yapamamış (RENDER_EXTERNAL_URL/HTTPS?). Komutlar "
+              "getUpdates yoklamasına düşer; servis uykudaysa yanıt gelmez.")
+    else:
+        satir(OK, "Webhook yok; komutlar getUpdates yoklamasıyla gelir",
+              "Bu yolda 15 dakikadan eski komutlar açılışta atlanır; servis uykuya "
+              "girdiyse komut saatler sonra işlenmez.")
+
+    if bekleyen:
+        satir(WARN, f"Telegram'da bekleyen güncelleme: {bekleyen}",
+              "Bot bunları işlemiyor: servis uykuda/çökmüş ya da webhook adresi hatalı "
+              "olabilir. /health → komut alanına ve Render loglarına bakın.")
+
+    if son_hata:
+        yas = None
+        if hata_zamani:
+            try:
+                yas = max(0, int(time.time() - float(hata_zamani)))
+            except (TypeError, ValueError):
+                yas = None
+        yas_metni = "" if yas is None else f" ({yas // 60} dk önce)"
+        gizli_hata = _kisa(_webhook_sir_gizle(son_hata), 160)
+        if yas is not None and yas > 3600:
+            satir(WARN, f"Telegram webhook teslim hatası (eski){yas_metni}", gizli_hata)
+        else:
+            satir(FAIL, f"Telegram webhook teslim hatası{yas_metni}", gizli_hata)
+
+
 def kontrol_public_hedef(token: str, grup_id: str, chat_id: str = "") -> bool:
     """Kanal/grup hedefini doğrular: bot orada mı, yönetici mi, mesaj yazabilir mi?
 
@@ -712,6 +824,12 @@ def main() -> int:
             degerler.get("TELEGRAM_BOT_TOKEN", ""),
             degerler.get("TELEGRAM_CHAT_ID", ""),
             args.send_test_message,
+        )
+        # Komut yolu: webhook mı yoklama mı, Telegram tarafında ne kayıtlı?
+        # (DM komutlarının çalışmaması en çok buradan anlaşılır.)
+        kontrol_telegram_yol(
+            degerler.get("TELEGRAM_BOT_TOKEN", ""),
+            bool(degerler.get("TELEGRAM_WEBHOOK_SECRET", "")),
         )
         public_hazir = kontrol_public_hedef(
             degerler.get("TELEGRAM_BOT_TOKEN", ""),

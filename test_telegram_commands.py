@@ -200,11 +200,67 @@ def test_bayat_backlog_atlanir_ve_eski_komut_calismaz():
         ],
     )
     calisti = []
-    dinleyici = _dinleyici(session, handlers={"tara": lambda _a: calisti.append(1) or "tarandi"})
+    dinleyici = TelegramCommandListener(
+        token="111:AAA", allowed_chat_id=CHAT_ID,
+        handlers={"tara": lambda _a: calisti.append(1) or "tarandi"},
+        session=session, bayat_bildirim=False,   # sessiz mod: bildirim kapalı
+    )
     dinleyici._backlog_atla()
     assert dinleyici._offset == 43
     assert calisti == []
     assert session.post_cagrilari == []
+
+
+def test_bayat_backlog_bildirimi_gonderilir():
+    """Atlanan bayat mesaj SESSİZ kaybolmamalı: kullanıcı nedenini görmeli."""
+    bayat = _guncelleme(42, "/tara", tarih=time.time() - 3 * 3600)
+    session = SahteSession(
+        get_yanitlari=[
+            SahteYanit(200, {"ok": True, "result": [bayat]}),
+            SahteYanit(200, {"ok": True, "result": []}),
+        ],
+    )
+    dinleyici = _dinleyici(session)
+    dinleyici._backlog_atla()
+    assert len(session.post_cagrilari) == 1
+    assert "uyanık değildi" in session.gonderilenler[0]
+    assert dinleyici.durum()["bayat_atlanan"] == 1
+
+
+def test_gec_gelen_tara_calistirilmaz_ve_neden_soylenir():
+    """Bot uykudayken yazılan /tara saatler sonra teslim edilirse çalışmamalı."""
+    session = SahteSession()
+    calisti = []
+    dinleyici = _dinleyici(session, handlers={"tara": lambda _a: calisti.append(1) or "tarandi"})
+    cevap = dinleyici.handle_update(_guncelleme(5, "/tara", tarih=time.time() - 2 * 3600))
+    assert cevap is not None and "uykudaydı" in cevap
+    assert "tekrar gönderin" in cevap
+    assert calisti == []
+    assert session.post_cagrilari != []      # kullanıcı sessiz kalmaz
+
+
+def test_gec_gelen_yardim_gecikme_notuyla_yanitlanir():
+    """/yardim gibi okuma komutları bot uyanınca da olsa yanıtlanır (kullanıcı cevapsız kalmasın)."""
+    session = SahteSession()
+    dinleyici = _dinleyici(session, handlers={"yardim": lambda _a: "komut listesi"})
+    cevap = dinleyici.handle_update(_guncelleme(6, "/yardim", tarih=time.time() - 90 * 60))
+    assert cevap is not None
+    assert "uykudaydı" in cevap and "komut listesi" in cevap
+    assert dinleyici.durum()["islenen"] == 1
+
+
+def test_durum_sayaclari_teshis_icerir():
+    """`/health` için: mod, sayaçlar ve maskeli yetkisiz sohbet kimliği."""
+    session = SahteSession()
+    dinleyici = _dinleyici(session, handlers={"durum": lambda _a: "ok"})
+    dinleyici.handle_update(_guncelleme(1, "/durum", chat_id="999999"))
+    dinleyici.handle_update(_guncelleme(2, "/durum"))
+    durum = dinleyici.durum()
+    assert durum["yetkisiz_sohbet"] == 1
+    assert durum["son_yetkisiz_sohbet"] == "…9999"   # tam kimlik yazılmaz
+    assert durum["islenen"] == 1
+    assert durum["son_komut"] == "durum"
+    assert durum["calisiyor"] is False               # thread başlatılmadı
 
 
 def test_taze_backlog_korunur():
@@ -374,18 +430,24 @@ def test_tara_bilinmeyen_hisseyi_tarama_baslatmadan_reddeder(monkeypatch):
     assert not main_mod._scan_istegi.is_set()
 
 
-def test_tarama_isinde_tum_komutlar_sessizce_yok_sayilir():
+def test_tarama_isinde_komutlar_calismaz_ama_bilgi_mesaji_alir():
+    """Analiz sürerken komut kuyruğa alınmaz; yine de SESSİZ kalınmaz (kullanıcı görsün)."""
     main_mod._scan_job_active.set()
     session = SahteSession()
+    calisti = []
     dinleyici = TelegramCommandListener(
         token="111:AAA", allowed_chat_id=CHAT_ID,
-        handlers={"durum": lambda _a: "durum", "panel": lambda _a: "panel"},
+        handlers={"durum": lambda _a: calisti.append("durum") or "durum",
+                  "panel": lambda _a: calisti.append("panel") or "panel"},
         session=session,
         komutlari_yoksay=lambda: main_mod._scan_job_active.is_set(),
     )
-    assert dinleyici.handle_update(_guncelleme(100, "/durum")) is None
-    assert dinleyici.handle_update(_guncelleme(101, "/panel")) is None
-    assert session.post_cagrilari == []
+    cevap = dinleyici.handle_update(_guncelleme(100, "/durum"))
+    assert cevap is not None and "Analiz sürüyor" in cevap
+    assert dinleyici.handle_update(_guncelleme(101, "/panel")) is not None
+    assert calisti == []                                    # iş kuyruğa alınmadı
+    assert len(session.post_cagrilari) == 2                 # ama kullanıcı bilgilendirildi
+    assert dinleyici.durum()["mesgul_atlanan"] == 2
 
 
 def test_post_close_saat_istanbul_zamanini_cozer(monkeypatch):
@@ -703,3 +765,21 @@ def test_kismi_tarama_bos_sonucu_tam_evrende_bos_gibi_yazilmaz(monkeypatch):
     assert "1 hisselik kısmi kapsamdaydı" in cevap
     assert "tam evrende formasyon olmadığı sonucu çıkarılamaz" in cevap
     assert "48 hisse ve 4 zaman diliminde uygun canlı formasyon bulunmadı" not in cevap
+
+
+def test_yardim_metni_tum_komut_adlarini_listeler():
+    """`/yardim` gerçeği anlatsın: tablodaki HER ad (alias'lar dahil) metinde geçmeli.
+
+    NEDEN: `/yardim` yalnız 23 adı sayarken tabloda 34 ad vardı; kullanıcı
+    `/liste`, `/karnem`, `/gunluk` gibi çalışan komutları keşfedemiyordu.
+    """
+    eksik = [ad for ad in main_mod.TELEGRAM_KOMUTLARI
+             if f"/{ad}" not in main_mod.KOMUT_YARDIM.lower()]
+    assert eksik == [], f"/yardim'da listelenmeyen komut adları: {eksik}"
+
+
+def test_yardim_metni_dm_kilidini_ve_kanal_kuralini_soyler():
+    metin = main_mod.KOMUT_YARDIM
+    assert "TELEGRAM_CHAT_ID" in metin and "kayıtlı DM sohbetinden" in metin
+    assert "komut KABUL ETMEZ" in metin          # public grup/kanal hedefi
+    assert "TELEGRAM_GROUP_ID" in metin

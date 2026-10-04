@@ -99,9 +99,20 @@ olmadığı için build kaynak koddan derlemeye düşüp patlıyor.
 Render `PORT` değişkenini verdiğinde bot `0.0.0.0:$PORT` üzerinde `/health` endpoint'i açar;
 monitör yalnızca liveness JSON'u görür, token/anahtar veya portföy verisi döndürülmez.
 Yanıt canlılık alanları da taşır (`heartbeat_age_s`, `heartbeat_stale`,
-`tarama_suruyor`, `seans_acik`): Render'ın kendi health check'i sorgusuz çağırdığı
-için **her zaman 200** alır, ama `GET /health?strict=1` heartbeat bayatken **503**
-döner — UptimeRobot/cron-job.org gibi bir monitörü bu adrese bağlarsan "bot dondu"
+`tarama_suruyor`, `seans_acik`) ve komut katmanını raporlar:
+
+```json
+"komut": {"mod": "webhook|yoklama|kapali", "dinleyici_canli": true,
+          "islenen": 3, "yetkisiz_sohbet": 0, "bayat_atlanan": 12, "mesgul_atlanan": 4,
+          "son_komut_sn_once": 240, "son_yetkisiz_sohbet": "…1234"}
+```
+
+Yani "bot ayakta görünüyor ama DM komutları cevap vermiyor" durumunun sebebi
+(yanlış `chat_id` → `yetkisiz_sohbet`, uyku → `bayat_atlanan`, kapalı katman →
+`mod: kapali`, ölü dinleyici → `dinleyici_canli: false`) tek bakışta görülür.
+Render'ın kendi health check'i sorgusuz çağırdığı için `/health` **her zaman
+200** alır, ama `GET /health?strict=1` heartbeat bayatken **503** döner —
+UptimeRobot/cron-job.org gibi bir monitörü bu adrese bağlarsan "bot dondu"
 durumu sessizce geçmez.
 
 `TELEGRAM_TEST_KEY` tanımlıysa `GET /test?k=<anahtar>` gerçek bir Telegram test
@@ -115,7 +126,10 @@ ucunu açar ve Telegram komutları webhook ile gelir (adres `RENDER_EXTERNAL_URL
 yoklamasını kullanır. Detay: `RENDER_DEPLOY.md` §4.6.
 
 Bot artık **iki yönlüdür**: Telegram'dan gelen komutları yanıtlar. Komutlar
-yalnızca `TELEGRAM_CHAT_ID`'den kabul edilir:
+yalnızca `TELEGRAM_CHAT_ID`'den (DM) kabul edilir; public grup/kanal hedefi
+(`TELEGRAM_GROUP_ID`) yalnız yayın alır. Kanal mesajları Telegram'da
+`channel_post` türünde gelir ve bot yalnız `message` güncellemelerini dinlediği
+için **kanalda komut yolu yoktur**:
 
 | Komut | Ne yapar |
 |---|---|
@@ -128,12 +142,18 @@ yalnızca `TELEGRAM_CHAT_ID`'den kabul edilir:
 | `/tara [HISSE]` | Şimdi analiz et (seans dışı da; mum kapanışını beklemez). Son tamamlanmış mumun zamanı/veri yaşı raporlanır. |
 | `/yardim` | Komut listesi |
 
-`/panel` ve `/tara [HISSE]` yeni analiz işini kuyruğa alır ve bitince raporlar. Analiz sırasında gelen slash komutları cevapsız bırakılır ve kuyruğa eklenmez. İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan 20:00) anında ayrı bir tam evren analizi yapılır.
+`/panel` ve `/tara [HISSE]` yeni analiz işini kuyruğa alır ve bitince raporlar. Analiz sırasında gelen slash komutları kuyruğa eklenmez ama sessiz de bırakılmaz: kısa bir "⏳ Analiz sürüyor" mesajıyla yanıtlanır. İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan 20:00) anında ayrı bir tam evren analizi yapılır.
 
 Komutlar varsayılan olarak `getUpdates` uzun yoklamasıyla ayrı bir thread'de
 toplanır; aynı token'la ikinci bir kopya (Termux/PC) çalışıyorsa `409 Conflict`
 alır — o kopyayı kapatın, yoksa komutlar çalışmaz. Webhook modunda (`§4.6`)
 yoklama kapanır, çakışma olmaz. Detay: `RENDER_DEPLOY.md` §4.5.
+
+Bot uykudayken yazılan komutlar sessizce kaybolmaz: 15 dakikadan eski komutlar
+çalıştırılmaz ama atlandıkları tek bir mesajla bildirilir; gecikmeli teslim
+edilen `/yardim`, `/durum` gibi okuma komutları "bot uykudaydı" notuyla
+yanıtlanır. Komut katmanının canlı durumu `/health` içindeki `komut` alanındadır
+(`mod`, `dinleyici_canli`, `yetkisiz_sohbet`, `bayat_atlanan`, `son_komut_sn_once`).
 
 Kurulumun neresinde takıldığını tek komutla görmek için:
 
@@ -149,12 +169,21 @@ anahtar değerleri hiçbir zaman ekrana basılmaz. Özet satırı üç durumu ay
 tarafındadır: `.github/workflows/ci.yml` her push'ta aynı Python 3.12 sürümüyle
 kurulumu, testleri ve `PORT` verilip `/health`'in 200 döndüğünü doğrular.
 
-Keep-alive iş akışı (`.github/workflows/keepalive.yml`) **5 dakikada bir**, her gün
-İstanbul saatiyle 08:00–23:00 arasında `/health`'e istek atar. Pencere, BIST
-seansını ve akşam komut kullanımını kapsar; gece servis uyur (Render Free'nin
-750 instance saat/ay kotası korunur: 15 sa/gün ≈ 450–465 sa/ay, 7/24 ≈ 730 sa/ay).
-7/24 ayakta tutmak için Actions → Variables → `KEEPALIVE_ALWAYS=true`
-(bkz. `RENDER_DEPLOY.md` §5).
+Keep-alive iş akışı (`.github/workflows/keepalive.yml`) **5 dakikada bir** olacak
+şekilde tanımlıdır ve her gün İstanbul saatiyle 08:00–23:00 arasında `/health`'e
+istek atar. Pencere, BIST seansını ve akşam komut kullanımını kapsar; gece servis
+uyur (Render Free'nin 750 instance saat/ay kotası korunur: 15 sa/gün ≈ 450–465
+sa/ay, 7/24 ≈ 730 sa/ay). 7/24 ayakta tutmak için Actions → Variables →
+`KEEPALIVE_ALWAYS=true` (bkz. `RENDER_DEPLOY.md` §5).
+
+> ⚠️ **Ölçüldü (Ekim 2026):** GitHub bu repoda cron koşularını seyrek tetikledi —
+> `*/5` tanımına rağmen günde 4–6 koşu (beklenen 288), çoğu pencere dışı olduğu
+> için **günde 0–3 gerçek ping**. Yani servis saatlerce uyuyabiliyor ve o sırada
+> yazılan DM komutları yanıtsız kalıyor. Tek kontrol:
+> `gh run list --workflow keepalive.yml --limit 20`. Bu yüzden **dış monitör
+> (cron-job.org / UptimeRobot) birincil yol olmalı**; DM komutlarının uyku
+> sırasında da çalışması için **webhook modu** en etkilisidir
+> (`TELEGRAM_WEBHOOK_SECRET`, §4.6 — Telegram POST'u servisi uyandırır).
 
 İki çalışma seçeneği:
 

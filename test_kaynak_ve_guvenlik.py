@@ -722,6 +722,33 @@ def test_saglik_ozeti_heartbeat_yoksa_bilinmiyor_der(tmp_path, monkeypatch):
     assert ozet["heartbeat_stale"] is None
 
 
+def test_saglik_ozeti_komut_katmanini_raporlar(tmp_path, monkeypatch):
+    """/health "ok" derken DM komutlarının durumu da görünmeli (mod + sayaçlar)."""
+    import config as cfg
+    import telegram_commands as tc
+    monkeypatch.setattr(cfg, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(main_mod, "is_bist_open", lambda now=None: False)
+    monkeypatch.setattr(main_mod._live_state, "status", lambda: {"tarama_suruyor": False})
+
+    class SahteSession:
+        def post(self, *a, **k):
+            raise AssertionError("ağa çıkılmamalı")
+
+    dinleyici = tc.TelegramCommandListener(
+        token="111:AAA", allowed_chat_id="42", handlers={}, session=SahteSession())
+    monkeypatch.setattr(main_mod, "_telegram_listener_ref", dinleyici)
+    monkeypatch.setattr(main_mod, "_komut_modu", "yoklama")
+
+    ozet = main_mod._saglik_ozeti()
+    assert ozet["komut"]["mod"] == "yoklama"
+    assert ozet["komut"]["islenen"] == 0
+    assert ozet["komut"]["yetkisiz_sohbet"] == 0
+
+    monkeypatch.setattr(main_mod, "_telegram_listener_ref", None)
+    monkeypatch.setattr(main_mod, "_komut_modu", "kapali")
+    assert main_mod._saglik_ozeti()["komut"]["mod"] == "kapali"
+
+
 def test_health_ucu_main_uzerinden_canli_veri_dondurur(tmp_path, monkeypatch):
     """/health uçtan uca: main'in enjekte ettiği özet JSON'a düşer."""
     import config as cfg

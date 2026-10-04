@@ -204,6 +204,9 @@ _telegram_update_processor_ref = None
 # tekrarı olabilir) komut işleme serileştirilir: dinleyicinin hız sınırı/tekrar
 # kümesi kilitli bir bölgede kullanılır.
 _telegram_webhook_kilidi = threading.Lock()
+# Komut katmanı modu: "webhook" / "yoklama" / "kapali" (ya da başlangıçta None).
+# /health bunu raporlar: "komutlar neden gelmiyor?" sorusunun ilk cevabı budur.
+_komut_modu = None
 # Render PORT'unda çalışan küçük HTTP sunucusu (webhook + /health + /test).
 _health_server_ref = None
 
@@ -755,6 +758,26 @@ def _heartbeat_yasi_sn(simdi: datetime = None) -> float:
         return None
 
 
+def _komut_durumu() -> dict:
+    """`/health` için komut katmanı özeti (mod + sayaçlar).
+
+    NEDEN: /health "status: ok" derken DM komutlarının hiç çalışmaması mümkündü;
+    bu blok modu (webhook/yoklama/kapali), dinleyicinin canlı olup olmadığını ve
+    gelen komut sayaçlarını gösterir. Kişisel sohbet kimliği maskelenir.
+    """
+    dinleyici = _telegram_listener_ref or _telegram_update_processor_ref
+    ozet: dict = {
+        "mod": _komut_modu,
+        "hedef_tanimli": bool(getattr(_notifier_ref, "chat_id", "")),
+    }
+    try:
+        if dinleyici is not None and hasattr(dinleyici, "durum"):
+            ozet.update(dinleyici.durum() or {})
+    except Exception as exc:  # noqa: BLE001 - /health asla düşmesin
+        ozet["hata"] = f"{type(exc).__name__}: {exc}"[:120]
+    return ozet
+
+
 def _saglik_ozeti() -> dict:
     """GET /health için canlılık alanları (denetim B-4).
 
@@ -792,42 +815,54 @@ def _saglik_ozeti() -> dict:
         "seans_acik": seans_acik,
         "evren": len(ACTIVE_STOCKS),
         "instance_id": INSTANCE_ID,
+        "komut": _komut_durumu(),
     }
 
 # === TELEGRAM KOMUTLARI (iki yönlü) ===
 # Bot alarm gönderir; bu bölüm Telegram'dan GELEN komutları yanıtlar. Komutlar
 # yalnızca TELEGRAM_CHAT_ID'den kabul edilir (yetki kontrolü telegram_commands.py
 # içinde). Yanıtlar getUpdates uzun yoklamasıyla ayrı bir thread'de toplanır.
-KOMUT_YARDIM = """🤖 Formation-Bot komutları
+KOMUT_YARDIM = """🤖 Formation-Bot komutları (DM)
 
 /formasyonlar — günün canlı formasyonları (detaylı)
+   diğer adlar: /formasyon · /liste
    filtre: /formasyonlar 1h   ·   /formasyonlar THYAO
 /canli veya /c — canlı formasyonlar tek mesajda kompakt (kısayol)
 /panel veya /p — 48 hisse x 4 zaman dilimi paneli + puanı en yüksek 12 aday
    diğer adlar: /genel · /tablo
    filtre: /panel 1h  ·  /panel THYAO  ·  /panel 1h THYAO  ·  /panel kirilim
 /ozet veya /o — günlük özet tek mesajda (tamamlanan/retest/sıkışan)
+   diğer ad: /gunluk
 /sikisanlar veya /s — sadece sıkışması güçlenenler
-/tamamlanan veya /t — sadece tamamlananlar
+   diğer adlar: /sikisan · /sıkışanlar · /sıkışan
+/tamamlanan veya /t — sadece tamamlananlar (diğer ad: /tamam)
 /retest veya /r — retest bekleyen/başarılı
-/kirilim veya /k — kırılım adayı/teyitli
+/kirilim veya /k — kırılım adayı/teyitli (diğer ad: /kırılım)
 /durum — bot, piyasa ve veri sağlığı özeti
 /karne [gün] — doğruluk karnesi: formasyon/kırılım sayıları + kırılım sonrası
    performans (varsayılan bu hafta; /karne 30 ile son 30 gün). Cuma gün sonu
    mesajının altında otomatik gelir. Veriler yerel dosyada (Supabase gerekmez).
+   diğer ad: /karnem
 /backtest [gün] [detay] — FAZ 3 tarihsel sonuç analizi (salt-okunur): kayıtlı
    outcome'ların tip/TF/kalite/bileşen kırılımı; /backtest 90 · /bt · "detay"
    bileşen + geometri + vaka bloklarını ekler. Hiçbir şey yazılmaz/değiştirilmez.
 /tara [HISSE] — şimdi analiz et (seans dışı da çalışır)
-/yardim — bu liste
+/yardim — bu liste (diğer adlar: /help · /start)
 
 Notlar:
-• Komutlar yalnızca kayıtlı sohbetten (TELEGRAM_CHAT_ID) kabul edilir.
+• Komutlar YALNIZCA kayıtlı DM sohbetinden (TELEGRAM_CHAT_ID) kabul edilir.
+  Public grup/kanal hedefi (TELEGRAM_GROUP_ID) komut KABUL ETMEZ: orası yalnız
+  yayın alır. Kanalda komut istiyorsan TELEGRAM_CHAT_ID'yi kanal/grup kimliği
+  yapmalısın — o zaman kendi DM komutların susar (tek sohbet kilidi).
 • Bu bir AL/SAT aracı değildir: formasyon durumu ve kalite skoru bildirir.
 • /panel tüm evreni yeniden hesaplar; /tara [HISSE] istenen kapsamı yeniden analiz eder.
-• Analiz bitince sonucu otomatik gönderir; çalışma sırasında diğer komutlar sessizce yok sayılır.
-• Public kanal için: /canli, /panel ve /ozet en verimli kısayollar.
-• Komutlar webhook (Render) ya da yoklama ile gelir; ikisi aynı anda açık olmaz."""
+• Analiz bitince sonucu otomatik gönderir; çalışma sırasında gelen komutlar sessiz kalmaz:
+  "⏳ Analiz sürüyor" mesajıyla yanıtlanır (kuyruğa alınmaz, aynı anda tek iş).
+• Public hedefe (grup/kanal) giden yayın bu komutları ÇALIŞTIRMAZ; alarm/özet
+  otomatik gider. Kanal mesajları Telegram'da `channel_post` türünde gelir ve bot
+  yalnız `message` güncellemelerini dinler — yani kanalda komut yolu yoktur.
+• Komutlar webhook (Render) ya da yoklama ile gelir; ikisi aynı anda açık olmaz.
+  Bot ayrıca 15 dk'dan eski komutları çalıştırmaz ("bot uyanık değildi" mesajı gelir)."""
 
 def _komut_yardim(_arguman: str) -> str:
     return KOMUT_YARDIM
@@ -877,7 +912,7 @@ def _komut_durum(_arguman: str) -> str:
         f"Piyasa: {piyasa}",
     ]
     if _scan_job_active.is_set() or st.get("tarama_suruyor"):
-        satirlar.append("⏳ Analiz sürüyor; diğer komutlar iş bitene kadar yok sayılır.")
+        satirlar.append("⏳ Analiz sürüyor; gelen komutlar iş bitene kadar kısa bir bilgi mesajıyla yanıtlanır.")
     elif status == "basarisiz":
         satirlar.append("⚠️ Son analiz başarısız; boş sonuç olarak yayımlanmadı.")
     elif status == "yok":
@@ -1626,7 +1661,7 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
 
     `isleyici` yalnızca testler için verilir (ağa çıkmayan sahte dinleyici).
     """
-    global _telegram_listener_ref, _telegram_update_processor_ref
+    global _telegram_listener_ref, _telegram_update_processor_ref, _komut_modu
     sonuc = _transport_telegram.komut_katmanini_kur(
         notifier, isleyici,
         komutlar=TELEGRAM_KOMUTLARI, yardim_metni=KOMUT_YARDIM,
@@ -1639,6 +1674,7 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
         set_webhook_fn=_telegram_set_webhook,
         delete_webhook_fn=_telegram_delete_webhook,
     )
+    _komut_modu = sonuc["mod"]
     if sonuc["mod"] == "webhook":
         _telegram_update_processor_ref = sonuc["processor"]
     elif sonuc["mod"] == "yoklama":
