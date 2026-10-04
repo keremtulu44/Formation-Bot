@@ -430,18 +430,24 @@ def test_tara_bilinmeyen_hisseyi_tarama_baslatmadan_reddeder(monkeypatch):
     assert not main_mod._scan_istegi.is_set()
 
 
-def test_tarama_isinde_tum_komutlar_sessizce_yok_sayilir():
+def test_tarama_isinde_komutlar_calismaz_ama_bilgi_mesaji_alir():
+    """Analiz sürerken komut kuyruğa alınmaz; yine de SESSİZ kalınmaz (kullanıcı görsün)."""
     main_mod._scan_job_active.set()
     session = SahteSession()
+    calisti = []
     dinleyici = TelegramCommandListener(
         token="111:AAA", allowed_chat_id=CHAT_ID,
-        handlers={"durum": lambda _a: "durum", "panel": lambda _a: "panel"},
+        handlers={"durum": lambda _a: calisti.append("durum") or "durum",
+                  "panel": lambda _a: calisti.append("panel") or "panel"},
         session=session,
         komutlari_yoksay=lambda: main_mod._scan_job_active.is_set(),
     )
-    assert dinleyici.handle_update(_guncelleme(100, "/durum")) is None
-    assert dinleyici.handle_update(_guncelleme(101, "/panel")) is None
-    assert session.post_cagrilari == []
+    cevap = dinleyici.handle_update(_guncelleme(100, "/durum"))
+    assert cevap is not None and "Analiz sürüyor" in cevap
+    assert dinleyici.handle_update(_guncelleme(101, "/panel")) is not None
+    assert calisti == []                                    # iş kuyruğa alınmadı
+    assert len(session.post_cagrilari) == 2                 # ama kullanıcı bilgilendirildi
+    assert dinleyici.durum()["mesgul_atlanan"] == 2
 
 
 def test_post_close_saat_istanbul_zamanini_cozer(monkeypatch):
@@ -759,3 +765,21 @@ def test_kismi_tarama_bos_sonucu_tam_evrende_bos_gibi_yazilmaz(monkeypatch):
     assert "1 hisselik kısmi kapsamdaydı" in cevap
     assert "tam evrende formasyon olmadığı sonucu çıkarılamaz" in cevap
     assert "48 hisse ve 4 zaman diliminde uygun canlı formasyon bulunmadı" not in cevap
+
+
+def test_yardim_metni_tum_komut_adlarini_listeler():
+    """`/yardim` gerçeği anlatsın: tablodaki HER ad (alias'lar dahil) metinde geçmeli.
+
+    NEDEN: `/yardim` yalnız 23 adı sayarken tabloda 34 ad vardı; kullanıcı
+    `/liste`, `/karnem`, `/gunluk` gibi çalışan komutları keşfedemiyordu.
+    """
+    eksik = [ad for ad in main_mod.TELEGRAM_KOMUTLARI
+             if f"/{ad}" not in main_mod.KOMUT_YARDIM.lower()]
+    assert eksik == [], f"/yardim'da listelenmeyen komut adları: {eksik}"
+
+
+def test_yardim_metni_dm_kilidini_ve_kanal_kuralini_soyler():
+    metin = main_mod.KOMUT_YARDIM
+    assert "TELEGRAM_CHAT_ID" in metin and "kayıtlı DM sohbetinden" in metin
+    assert "komut KABUL ETMEZ" in metin          # public grup/kanal hedefi
+    assert "TELEGRAM_GROUP_ID" in metin

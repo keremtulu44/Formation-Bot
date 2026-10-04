@@ -23,6 +23,8 @@ kararları ve gerekçeleri:
   durur ve logda net söylenir — sonsuz hata döngüsüne girmez.
 - **401**: Token geçersiz; dinleyici durur (tekrar denemek anlamsız).
 - **Ağ hatası**: 5 → 60 sn üstel geri çekilme, sonra devam.
+- **Analiz sürerken**: komut kuyruğa alınmaz (aynı anda tek iş) ama sessiz de
+  kalınmaz; kısa bir "⏳ Analiz sürüyor" bilgi mesajı gider.
 - **İşleyici hatası**: Kullanıcıya kısa bir hata mesajı gider, dinleyici devam eder.
 """
 
@@ -100,7 +102,7 @@ class TelegramCommandListener:
         # bayat diye atıldı — hepsi dışarıdan okunabilsin.
         self.bayat_sinir_sn = max(0, int(bayat_sinir_sn))
         self.bayat_bildirim = bool(bayat_bildirim)
-        self._sayac = {"islenen": 0, "yetkisiz": 0, "bayat": 0, "hata": 0}
+        self._sayac = {"islenen": 0, "yetkisiz": 0, "bayat": 0, "hata": 0, "mesgul": 0}
         self._son_komut_adi: Optional[str] = None
         self._son_komut_ts: Optional[float] = None
         self._son_yetkisiz_chat = ""
@@ -152,6 +154,7 @@ class TelegramCommandListener:
             "islenen": self._sayac["islenen"],
             "yetkisiz_sohbet": self._sayac["yetkisiz"],
             "bayat_atlanan": self._sayac["bayat"],
+            "mesgul_atlanan": self._sayac["mesgul"],
             "isleyici_hatasi": self._sayac["hata"],
             "son_yetkisiz_sohbet": self._maskele(self._son_yetkisiz_chat),
         }
@@ -372,14 +375,22 @@ class TelegramCommandListener:
                 )
             gecikme_notu = self._bayat_uyarisi(komut, yas_sn) + " Yine de yanıtlanıyor.\n\n"
 
-        # Uzun analiz sırasında komut update'i tüketilir ama cevap verilmez ve
-        # iş kuyruğuna konmaz. Aynı kontrol webhook ve getUpdates yollarında çalışır.
+        # Uzun analiz sırasında komut iş kuyruğuna KONMAZ (aynı anda tek iş) ama
+        # artık sessiz de kalınmaz: kullanıcı "komut çalışmıyor" sanmasın diye
+        # kısa bir bilgi mesajı gider. Aynı kontrol webhook ve getUpdates
+        # yollarında çalışır.
         try:
-            if self.komutlari_yoksay is not None and self.komutlari_yoksay():
-                logger.info(f"Telegram /{komut}: analiz sürerken sessizce yok sayıldı")
-                return None
+            mesgul = bool(self.komutlari_yoksay is not None and self.komutlari_yoksay())
         except Exception as exc:
             logger.warning(f"Telegram komut meşguliyet kontrolü başarısız: {exc}")
+            mesgul = False
+        if mesgul:
+            self._sayac["mesgul"] += 1
+            logger.info(f"Telegram /{komut}: analiz sürerken yok sayıldı (bilgi mesajı gönderildi)")
+            return self._cevapla(
+                f"⏳ Analiz sürüyor; /{komut} şu an çalıştırılmadı (aynı anda tek iş çalışır).\n"
+                "Sonuç bitince bu sohbete gelecek — sonra komutu yeniden gönderin."
+            )
 
         simdi = time.monotonic()
         son = self._son_komut_zamani.get(komut, 0.0)

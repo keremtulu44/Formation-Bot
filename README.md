@@ -103,7 +103,7 @@ Yanıt canlılık alanları da taşır (`heartbeat_age_s`, `heartbeat_stale`,
 
 ```json
 "komut": {"mod": "webhook|yoklama|kapali", "dinleyici_canli": true,
-          "islenen": 3, "yetkisiz_sohbet": 0, "bayat_atlanan": 12,
+          "islenen": 3, "yetkisiz_sohbet": 0, "bayat_atlanan": 12, "mesgul_atlanan": 4,
           "son_komut_sn_once": 240, "son_yetkisiz_sohbet": "…1234"}
 ```
 
@@ -126,7 +126,10 @@ ucunu açar ve Telegram komutları webhook ile gelir (adres `RENDER_EXTERNAL_URL
 yoklamasını kullanır. Detay: `RENDER_DEPLOY.md` §4.6.
 
 Bot artık **iki yönlüdür**: Telegram'dan gelen komutları yanıtlar. Komutlar
-yalnızca `TELEGRAM_CHAT_ID`'den kabul edilir:
+yalnızca `TELEGRAM_CHAT_ID`'den (DM) kabul edilir; public grup/kanal hedefi
+(`TELEGRAM_GROUP_ID`) yalnız yayın alır. Kanal mesajları Telegram'da
+`channel_post` türünde gelir ve bot yalnız `message` güncellemelerini dinlediği
+için **kanalda komut yolu yoktur**:
 
 | Komut | Ne yapar |
 |---|---|
@@ -139,7 +142,7 @@ yalnızca `TELEGRAM_CHAT_ID`'den kabul edilir:
 | `/tara [HISSE]` | Şimdi analiz et (seans dışı da; mum kapanışını beklemez). Son tamamlanmış mumun zamanı/veri yaşı raporlanır. |
 | `/yardim` | Komut listesi |
 
-`/panel` ve `/tara [HISSE]` yeni analiz işini kuyruğa alır ve bitince raporlar. Analiz sırasında gelen slash komutları cevapsız bırakılır ve kuyruğa eklenmez. İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan 20:00) anında ayrı bir tam evren analizi yapılır.
+`/panel` ve `/tara [HISSE]` yeni analiz işini kuyruğa alır ve bitince raporlar. Analiz sırasında gelen slash komutları kuyruğa eklenmez ama sessiz de bırakılmaz: kısa bir "⏳ Analiz sürüyor" mesajıyla yanıtlanır. İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan 20:00) anında ayrı bir tam evren analizi yapılır.
 
 Komutlar varsayılan olarak `getUpdates` uzun yoklamasıyla ayrı bir thread'de
 toplanır; aynı token'la ikinci bir kopya (Termux/PC) çalışıyorsa `409 Conflict`

@@ -537,7 +537,7 @@ def _sahte_formasyonlar(durum, adet=4):
 
 
 def test_webhook_panel_analizini_kuyruga_alir_ve_diger_komutlari_yok_sayar(monkeypatch):
-    """Webhook /panel başlangıcını yanıtlar; iş sürerken diğer komutlar sessizdir."""
+    """Webhook /panel başlangıcını yanıtlar; iş sürerken diğer komutlara bilgi mesajı gider."""
     monkeypatch.setattr(main_mod, "_scan_job_active", __import__("threading").Event())
     monkeypatch.setattr(main_mod, "_scan_istegi", __import__("threading").Event())
     monkeypatch.setattr(main_mod, "_scan_job_request", None)
@@ -568,7 +568,8 @@ def test_webhook_panel_analizini_kuyruga_alir_ve_diger_komutlari_yok_sayar(monke
         onceki = len(session.post_cagrilari)
         kod2, _ = _post(port, f"{WEBHOOK_YOL_ONEK}{SECRET}", _guncelleme(2, "/canli"))
         assert kod2 == 200
-        assert len(session.post_cagrilari) == onceki
+        assert len(session.post_cagrilari) == onceki + 1     # sessiz kalmaz
+        assert "Analiz sürüyor" in session.gonderilenler[-1]
     finally:
         main_mod._scan_job_active.clear()
         main_mod._scan_istegi.clear()

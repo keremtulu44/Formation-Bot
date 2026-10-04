@@ -456,6 +456,14 @@ komutları okuyup yanıtlar. Komutlar yoklama (`getUpdates`, varsayılan) ya da
 webhook (§4.6) ile toplanır; **yalnızca `TELEGRAM_CHAT_ID`** komut verebilir,
 başka sohbetlerden gelen mesajlar sessizce yok sayılır.
 
+> 📣 **Kanal/grup komut kabul etmez.** Yukarıdaki komutlar yalnızca
+> `TELEGRAM_CHAT_ID` (DM) sohbetinde çalışır; `TELEGRAM_GROUP_ID` yalnız yayın
+> alır. Ayrıca Telegram, **kanal** mesajlarını `channel_post` türünde teslim eder
+> ve bot yalnız `message` güncellemelerini dinler — yani `TELEGRAM_CHAT_ID`'yi
+> kanal kimliği yapsan bile kanalda komut yolu yoktur (grup kimliği verilirse
+> grup yöneticilerinin mesajları `message` olarak gelir ve çalışır; ama o zaman
+> kendi DM komutların susar, bkz. tek sohbet kilidi).
+
 | Komut | Ne yapar |
 |---|---|
 | `/formasyonlar` | Günün canlı formasyonları (hisse, TF, tip, kalite, state, üst/alt seviye) |
@@ -492,7 +500,8 @@ değildir; yalnızca OHLCV önbelleği/geçmiş kaydı için opsiyoneldir.
 > snapshot'ı güncel kabul edilmez; `/panel` yeni veriyle hesaplama başlatır.
 > İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan `20:00`) anında
 > bağımsız bir tam evren analizi ve ayrı rapor çalışır. Analiz sürerken gelen
-> slash komutları cevapsız bırakılır, kuyruklanmaz.
+> slash komutları kuyruklanmaz ama sessiz de kalmaz: "⏳ Analiz sürüyor" bilgi
+> mesajıyla yanıtlanır.
 
 > ⚠️ **Tek tüketici kuralı:** Telegram aynı token için **iki süreç** aynı anda
 > `getUpdates` yaparsa ikincisi `409 Conflict` alır. Termux/PC'de açık kalmış
@@ -511,7 +520,8 @@ açılır. Token/chat_id yoksa bot eskisi gibi yalnızca alarm gönderir.
 > gibi okuma komutları için gecikme notlu yanıt gönderilir.
 > Sebebi ve modu **`/health`** çıktısındaki `komut` alanından okuyabilirsin:
 > `{"mod": "webhook|yoklama|kapali", "dinleyici_canli": true, "islenen": 3,
-> "yetkisiz_sohbet": 0, "bayat_atlanan": 12, "son_komut_sn_once": 240}`.
+> "yetkisiz_sohbet": 0, "bayat_atlanan": 12, "mesgul_atlanan": 4,
+> "son_komut_sn_once": 240}`.
 > `yetkisiz_sohbet > 0` ise komutlar başka bir sohbetten (yanlış `chat_id`)
 > geliyordur; `mod: kapali` ise token/chat_id tanımlı değildir.
 > Telegram tarafını (webhook kaydı, teslim hatası, bekleyen güncelleme) tek
