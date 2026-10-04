@@ -815,6 +815,9 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 /karne [gün] — doğruluk karnesi: formasyon/kırılım sayıları + kırılım sonrası
    performans (varsayılan bu hafta; /karne 30 ile son 30 gün). Cuma gün sonu
    mesajının altında otomatik gelir. Veriler yerel dosyada (Supabase gerekmez).
+/backtest [gün] [detay] — FAZ 3 tarihsel sonuç analizi (salt-okunur): kayıtlı
+   outcome'ların tip/TF/kalite/bileşen kırılımı; /backtest 90 · /bt · "detay"
+   bileşen + geometri + vaka bloklarını ekler. Hiçbir şey yazılmaz/değiştirilmez.
 /tara [HISSE] — şimdi analiz et (seans dışı da çalışır)
 /yardim — bu liste
 
@@ -1129,6 +1132,24 @@ def _komut_karne(arguman: str) -> str:
     # NOT: "📁 Kayıt: /tmp/..." satırı kaldırıldı; dosya yolu iç işletim bilgisidir
     # ve komut çıktısı kopyalanıp paylaşıldığında dışarı sızıyordu.
     return metin
+
+
+def _komut_backtest(arguman: str) -> str:
+    """FAZ 3 Backtest V1 — salt-okunur tarihsel outcome raporu.
+
+    Kullanım: /backtest · /backtest 30 · /backtest 90 detay.
+    Yalnızca KAYITLI veriler okunur (Formation History + outcome link + Karne
+    defteri); yeniden hesaplama yoktur, hiçbir yere yazılmaz, eşik/scoring/
+    matematik değiştirilmez. Ağırlaştırılmış iş yükü istememek için tarama
+    kilidiyle etkileşime girmez (yalnız dosya okur).
+    """
+    try:
+        from analytics.backtest import komut as _bt_komut
+        return _bt_komut(arguman or "", simdi=datetime.now(ISTANBUL_TZ),
+                         store=_supabase_store_ref)
+    except Exception as exc:  # noqa: BLE001 - komut asla çökmesin
+        logger.error("Backtest üretilemedi: %s", exc, exc_info=True)
+        return "⚠️ Backtest üretilemedi; ayrıntı için bot loglarına bakın."
 
 
 def _komut_ozet(arguman: str) -> str:
@@ -1464,6 +1485,8 @@ TELEGRAM_KOMUTLARI = {
     "k": _komut_kirilim,
     "karne": _komut_karne,
     "karnem": _komut_karne,
+    "backtest": _komut_backtest,
+    "bt": _komut_backtest,
     "panel": _komut_panel,
     "p": _komut_panel,
     "genel": _komut_panel,
