@@ -493,16 +493,27 @@ def terminal_ekle(defter: Dict[str, Any], stable_id: Optional[str], state: Optio
     terminal taşımadığı için snapshot "hangi formation'a ait" bilgisini
     yalnızca kayıt içindeki yerleşimden alıyordu. Artık snapshot KENDİNİ
     tanımlar — çoklu-formasyon ayırlığı testi tüm türlerde doğrulanabilir.
+
+    Faz 2.6: Write amplification çözümü — kayıt zaten terminal ise ve
+    yeni bir snapshot eklenmediyse, sahte değişiklik yapılmaz ve False döner.
+    `terminal_zamani` yalnızca ilk terminal geçişinde belirlenir (IS NULL ise).
     """
     rec = kayit_getir(defter, stable_id)
     if rec is None or not terminal_durumu(state):
         return False
+    snapshot_eklendi = False
     if snapshot:
-        snapshot_ekle(defter, stable_id, "terminal", snapshot,
-                      ek={"stable_id": stable_id, "state": state})
+        snapshot_eklendi = snapshot_ekle(defter, stable_id, "terminal", snapshot,
+                                         ek={"stable_id": stable_id, "state": state})
+
+    zaten_terminal = (rec.get("durum") == DURUM_TERMINAL and rec.get("terminal_state") == state)
+    if zaten_terminal and not snapshot_eklendi:
+        return False
+
     rec["durum"] = DURUM_TERMINAL
     rec["terminal_state"] = state
-    rec["terminal_zamani"] = _simdi()
+    if not rec.get("terminal_zamani"):
+        rec["terminal_zamani"] = _simdi()
     rec["son_gorulme"] = _simdi()
     return True
 

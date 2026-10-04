@@ -1250,10 +1250,16 @@ class PatternLifecycleManager:
                     if rec is not None and rec.get("durum") != fh.DURUM_TERMINAL:
                         rec["durum"] = fh.DURUM_TERMINAL
                         rec["terminal_state"] = snap.state
-                        rec["terminal_zamani"] = fh._simdi()
+                        if not rec.get("terminal_zamani"):
+                            rec["terminal_zamani"] = fh._simdi()
                         degisti = True
             if degisti:
                 fh.kaydet(defter)
+                try:
+                    from state.formation_mirror import mirror_kaydet
+                    mirror_kaydet(defter)
+                except Exception:
+                    pass
         except Exception:
             # History yazılamazsa bot çalışmaya devam eder (ölü kod değil,
             # bilinçli güvenlik sınırı).

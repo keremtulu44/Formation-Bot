@@ -197,16 +197,22 @@ class SupabaseStore:
     def enabled(self) -> bool:
         return self._disabled_reason is None
 
-    def _request(self, method: str, *, params=None, json=None):
+    def request_table(self, table_name: str, method: str, *, params=None, json=None, headers=None):
+        """Herhangi bir PostgREST tablosuna istek atar (f2_* tabloları ve bot_store)."""
         if not self.enabled or time.monotonic() < self._retry_after:
             return None
+
+        url = f"{self.project_url}/rest/v1/{table_name}"
+        req_headers = dict(self._headers)
+        if headers:
+            req_headers.update(headers)
 
         for attempt in range(2):
             try:
                 response = self._session.request(
                     method,
-                    self.rest_url,
-                    headers=self._headers,
+                    url,
+                    headers=req_headers,
                     params=params,
                     json=json,
                     timeout=self.REQUEST_TIMEOUT_SEC,
@@ -229,23 +235,25 @@ class SupabaseStore:
 
             detail = (getattr(response, "text", "") or "")[:300]
             if 400 <= response.status_code < 500 and response.status_code != 429:
-                # Bad key, missing table, or invalid schema is not recoverable by
-                # retrying every candle write. Keep the bot running in local mode.
-                self._disabled_reason = f"HTTP {response.status_code}"
+                if table_name == self.TABLE:
+                    self._disabled_reason = f"HTTP {response.status_code}"
                 self._warn_once(
-                    "configuration",
-                    f"Supabase tablo/anahtar/izin hatası (HTTP {response.status_code}); "
-                    f"bu süreçte Supabase yazımı durduruldu: {detail}",
+                    f"config_{table_name}",
+                    f"Supabase {table_name} tablo/anahtar/izin hatası (HTTP {response.status_code}); "
+                    f"yerel cache kullanılacak: {detail}",
                 )
             else:
                 self._retry_after = time.monotonic() + (60 if response.status_code == 429 else 30)
                 self._warn_once(
-                    "server",
-                    f"Supabase isteği başarısız (HTTP {response.status_code}); "
+                    f"server_{table_name}",
+                    f"Supabase {table_name} isteği başarısız (HTTP {response.status_code}); "
                     f"yerel cache kullanılacak: {detail}",
                 )
             return None
         return None
+
+    def _request(self, method: str, *, params=None, json=None):
+        return self.request_table(self.TABLE, method, params=params, json=json)
 
     def _warn_once(self, category: str, message: str) -> None:
         if category not in self._warned:

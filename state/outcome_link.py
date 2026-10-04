@@ -335,6 +335,11 @@ def bagla(defter, stock: str, tf: str, stable_id: Optional[str],
             return None  # değişiklik yok -> yazma
         if fh.sonuc_bagla(defter_h, stable_id, yeni):
             fh.kaydet(defter_h, data_dir)
+            try:
+                from state.formation_mirror import mirror_kaydet
+                mirror_kaydet(defter_h, data_dir=data_dir)
+            except Exception:
+                pass
             return ozet
     except Exception:  # noqa: BLE001 - linkage botu asla durdurmaz
         logger.debug("Outcome bağlantısı yazılamadı (%s %s %s)", stock, tf, stable_id,

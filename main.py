@@ -2695,6 +2695,13 @@ def main_loop():
     # botu DURDURMAZ: `yukle()` bozuk dosyada boş defter döner ve tarama
     # Faz 1 yoluyla devam eder.
     _formation_history_baslangic_kontrolu()
+    # Faz 2.6: Local history boşsa ve Supabase store varsa hydrate et
+    if supabase_store is not None:
+        try:
+            from state.formation_mirror import hydrate_all_open
+            hydrate_all_open(store=supabase_store)
+        except Exception as _hyd_err:
+            logger.debug("Startup hydration sessizce atlandı: %s", _hyd_err)
     # Çoklu kopya koruması: aynı anahtarlarla başka bir canlı örnek var mı?
     _tekil_ornek_kontrolu(supabase_store, force=True)
     # Bekleyen gün içi aday tamponu da kalıcıdır (Batch 5): 18:45'ten önce
@@ -3088,6 +3095,13 @@ def main_loop():
                     digest_tamponu_kaydet()
                     # Karne defteri yedeği (varsa Supabase; aralıklı, en fazla 5 dk'da bir).
                     _karne_uzak_kaydet()
+                    # Faz 2.6: Formation mirror kuyruğunu Supabase'e flush et
+                    if _supabase_store_ref is not None:
+                        try:
+                            from state.formation_mirror import get_mirror_queue
+                            get_mirror_queue().flush(_supabase_store_ref)
+                        except Exception:
+                            pass
                     time.sleep(5)  # aynı saniyede tekrar girmesin
                     continue
                 
@@ -3159,6 +3173,13 @@ def main_loop():
         son_tarama_kaydet()
         # Bekleyen gün içi adaylar kapanışta da kaybolmasın (Batch 5 / B3).
         digest_tamponu_kaydet()
+        # Faz 2.6: Kapanışta bekleyen mirror kuyruğunu flush et (SIGTERM/SIGINT)
+        if _supabase_store_ref is not None:
+            try:
+                from state.formation_mirror import get_mirror_queue
+                get_mirror_queue().flush(_supabase_store_ref)
+            except Exception:
+                pass
         write_heartbeat(force=True)
     except Exception as e:
         logger.error(f"Kapanış kayıt hatası: {e}")
