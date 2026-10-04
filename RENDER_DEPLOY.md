@@ -503,6 +503,20 @@ değildir; yalnızca OHLCV önbelleği/geçmiş kaydı için opsiyoneldir.
 Komut listesi `.env` değişkeni gerektirmez; token/chat_id doğruysa otomatik
 açılır. Token/chat_id yoksa bot eskisi gibi yalnızca alarm gönderir.
 
+> 😴 **Servis uykudayken komut:** Render Free 15 dakika inbound istek almazsa
+> uyur; uyuyan servis DM komutunu göremez (Telegram mesajı HTTP isteği değildir).
+> Bot uyandığında 15 dakikadan eski komutları **çalıştırmaz** (dünkü `/tara`
+> yanlış sonuç üretmesin diye) ama artık sessiz de kalmaz: atlanan komutlar için
+> tek bir "bot uyanık değildi" mesajı, geç teslim edilen `/yardim`, `/durum`
+> gibi okuma komutları için gecikme notlu yanıt gönderilir.
+> Sebebi ve modu **`/health`** çıktısındaki `komut` alanından okuyabilirsin:
+> `{"mod": "webhook|yoklama|kapali", "dinleyici_canli": true, "islenen": 3,
+> "yetkisiz_sohbet": 0, "bayat_atlanan": 12, "son_komut_sn_once": 240}`.
+> `yetkisiz_sohbet > 0` ise komutlar başka bir sohbetten (yanlış `chat_id`)
+> geliyordur; `mod: kapali` ise token/chat_id tanımlı değildir.
+> Telegram tarafını (webhook kaydı, teslim hatası, bekleyen güncelleme) tek
+> komutla görmek için: `python deploy_check.py --url https://<servis>.onrender.com`.
+
 Gönderim tarafını yine 4.4'teki `/test` ucuyla doğrula. Gerçek alarm akışı ise
 bir formasyon tetiklendiğinde devreye girer: 48 hisse × 4 zaman dilimi
 tarandığı için ilk alarm birkaç gün sürebilir — bu arada `/formasyonlar` ya da
@@ -572,7 +586,25 @@ uyanması ~1 dakika sürer, o dakika boyunca tarama yapılmaz. Telegram'a 15
 dakikada bir mesaj gelmesi de kendiliğinden koruma sağlamaz, çünkü mesaj
 **outbound** bir istektir.
 
-### Seçenek A — GitHub Actions (public repoda ücretsiz, önerilen) ✅
+> ⚠️ **Ölçüm (Ekim 2026) — Actions cron'u 5 dakikada bir ÇALIŞMIYOR.**
+> Bu repoda `*/5 * * * *` yazmasına rağmen GitHub koşuları seyrek tetikledi:
+> 29 Eylül – 4 Ekim arasında **günde yalnızca 4–6 koşu** düştü (beklenen 288),
+> bunların da çoğu pencere dışı olduğu için **günde 0–3 gerçek ping**. Sonuç:
+> servis gün içinde saatlerce uyuyor ve o sırada yazılan `/yardim`, `/durum`
+> gibi DM komutları SESSİZCE yanıtsız kalıyor — Telegram mesajı Render'a gelen
+> bir HTTP isteği olmadığı için servisi uyandırmaz.
+> Ölçümü istediğin an tekrarla:
+>
+> ```bash
+> gh run list --workflow keepalive.yml --limit 20
+> ```
+>
+> Bu yüzden **Seçenek B (dış monitör) birincil yol olmalı**; Actions tek başına
+> yeterli değildir. Komutların uyku sırasında da çalışması için **§4.6 webhook
+> modu** en etkili çözümdür (Telegram'un POST'u gerçek bir inbound istektir ve
+> servisi uyandırır).
+
+### Seçenek A — GitHub Actions (public repoda ücretsiz; tek başına YETERSİZ) ⚠️
 
 Repo içinde `.github/workflows/keepalive.yml` hazır. **5 dakikada bir**
 `/health` adresine istek atar. Neden 5 ve neden sadece gündüz:
@@ -660,13 +692,22 @@ GitHub, `schedule` tetikleyicisini **yalnızca repo'nun varsayılan branch'inde*
 Bu, `.python-version` için de geçerli: Render hangi branch'i deploy ediyorsa
 oraya merge edilmesi gerekir. İkisi de tek seferde çözülür.
 
-### Seçenek B — cron-job.org / UptimeRobot (ücretsiz, daha basit)
+### Seçenek B — cron-job.org / UptimeRobot (ücretsiz — ÖNERİLEN BİRİNCİL YOL) ✅
 
 `https://cron-job.org` veya UptimeRobot'a üye ol, `https://<servis>.onrender.com/health`
 adresini **her 5 dakikada bir** GET ile çağrılan monitör olarak tanımla
 (gün/gece ayrımı yapmıyorsa da çalışır, sadece 750 saat kotasını daha hızlı
-tüketir). Repo aktivitesi, Actions kotası veya 60 gün kuralıyla hiç işi yoktur;
-GitHub tarafı tamamen kopsa bile çalışır. İkisini birlikte kurmak en sağlamıdır.
+tüketir). Repo aktivitesi, Actions kotası, cron gecikmesi veya 60 gün kuralıyla
+hiç işi yoktur; GitHub tarafı tamamen kopsa bile çalışır. Actions'ı yedek olarak
+bırakmak en sağlamıdır.
+
+### Seçenek B2 — Webhook modu (komutların uykuyu uyandırması, §4.6)
+
+`TELEGRAM_WEBHOOK_SECRET` tanımlıysa Telegram güncellemeyi doğrudan servise
+POST eder. Bu **inbound** bir istek olduğu için uyuyan servisi uyandırır:
+DM'den `/yardim` yazınca servis ~1 dakikada açılır ve komut yanıtlanır
+(Telegram teslim edemezse birkaç saat boyunca tekrar dener). Keep-alive hiç
+çalışmasa bile DM komutları kaybolmaz; yalnızca ilk yanıt gecikir.
 
 ### Seçenek C — Background Worker (ücretli, ama en sağlam)
 
@@ -787,7 +828,9 @@ Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 | Merge ettim ama davranış değişmedi | Render yeni commit'i deploy etmemiş olabilir: `deploy_check.py` canlı sürümü (`/health` içindeki `commit`) yerel HEAD ile karşılaştırır. Dashboard → Events → yoksa **Manual Deploy → Deploy latest commit**; Auto-Deploy'un açık olduğundan emin ol (B8) |
 | Sayfa "Render is loading..." | Free instance uyuyor, ~1 dk sonra düzelir (keep-alive kurulmadıysa) |
 | Telegram mesajleri gelmiyor | Logda `Telegram bağlantısı OK` yok → token/chat_id hatalı; bot'a `/start` atılmamış olabilir |
-| Bot komutlara cevap vermiyor | Logda `Telegram komut dinleyicisi başladı` (yoklama) ya da `Telegram komutları WEBHOOK modunda` var mı? `HTTP 409` varsa aynı token'ı başka bir kopya (Termux/PC) dinliyor → onu kapatın |
+| Bot komutlara cevap vermiyor | Önce `/health` içindeki `komut` alanına bak: `mod`, `dinleyici_canli`, `yetkisiz_sohbet`, `bayat_atlanan`, `son_komut_sn_once`. Sonra `python deploy_check.py --url https://<servis>.onrender.com` → webhook kaydı/teslim hatası/bekleyen güncelleme. Logda `Telegram komut dinleyicisi başladı` (yoklama) ya da `Telegram komutları WEBHOOK modunda` var mı? `HTTP 409` varsa aynı token'ı başka bir kopya (Termux/PC) dinliyor → onu kapatın |
+| DM'den komut yazıyorum, hiç cevap yok (gece/hafta sonu) | Servis uyuyor (Render Free 15 dk). Telegram mesajı servisi uyandırmaz. Keep-alive'ı dış monitörle güçlendir (§5 Seçenek B) veya webhook moduna geç (§4.6); ölçüm: `gh run list --workflow keepalive.yml --limit 20` — günde 288 değil 4-6 koşu görürsen GitHub cron'u beklediğin gibi çalışmıyor |
+| Komut yanıtı "Bot uyanık değildi…" diyor | Komut 15 dakikadan eski teslim edilmiş (servis o sırada uyuyordu). Durum değiştiren komutlar geç çalıştırılmaz; güncel sonuç için yeniden gönderin. `/yardim`,`/durum` gibi okuma komutları gecikme notuyla yanıtlanır |
 | Webhook adresi 404 döndürüyor | `TELEGRAM_WEBHOOK_SECRET` tanımlı değil (ya da deploy edilmedi). §4.6 |
 | `/test` 429 döndürüyor | Dakikalık istek limiti aşıldı (`HEALTH_RATE_LIMIT_PER_MIN`); bir dakika bekleyin |
 | Webhook adresi 403 döndürüyor | `X-Telegram-Bot-Api-Secret-Token` başlığı eksik/yanlış (sırsız yolda zorunlu). Eski `<secret>` yolunda adresteki secret Render'daki değerle birebir aynı olmalı |

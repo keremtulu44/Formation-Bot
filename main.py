@@ -204,6 +204,9 @@ _telegram_update_processor_ref = None
 # tekrarı olabilir) komut işleme serileştirilir: dinleyicinin hız sınırı/tekrar
 # kümesi kilitli bir bölgede kullanılır.
 _telegram_webhook_kilidi = threading.Lock()
+# Komut katmanı modu: "webhook" / "yoklama" / "kapali" (ya da başlangıçta None).
+# /health bunu raporlar: "komutlar neden gelmiyor?" sorusunun ilk cevabı budur.
+_komut_modu = None
 # Render PORT'unda çalışan küçük HTTP sunucusu (webhook + /health + /test).
 _health_server_ref = None
 
@@ -755,6 +758,26 @@ def _heartbeat_yasi_sn(simdi: datetime = None) -> float:
         return None
 
 
+def _komut_durumu() -> dict:
+    """`/health` için komut katmanı özeti (mod + sayaçlar).
+
+    NEDEN: /health "status: ok" derken DM komutlarının hiç çalışmaması mümkündü;
+    bu blok modu (webhook/yoklama/kapali), dinleyicinin canlı olup olmadığını ve
+    gelen komut sayaçlarını gösterir. Kişisel sohbet kimliği maskelenir.
+    """
+    dinleyici = _telegram_listener_ref or _telegram_update_processor_ref
+    ozet: dict = {
+        "mod": _komut_modu,
+        "hedef_tanimli": bool(getattr(_notifier_ref, "chat_id", "")),
+    }
+    try:
+        if dinleyici is not None and hasattr(dinleyici, "durum"):
+            ozet.update(dinleyici.durum() or {})
+    except Exception as exc:  # noqa: BLE001 - /health asla düşmesin
+        ozet["hata"] = f"{type(exc).__name__}: {exc}"[:120]
+    return ozet
+
+
 def _saglik_ozeti() -> dict:
     """GET /health için canlılık alanları (denetim B-4).
 
@@ -792,6 +815,7 @@ def _saglik_ozeti() -> dict:
         "seans_acik": seans_acik,
         "evren": len(ACTIVE_STOCKS),
         "instance_id": INSTANCE_ID,
+        "komut": _komut_durumu(),
     }
 
 # === TELEGRAM KOMUTLARI (iki yönlü) ===
@@ -1626,7 +1650,7 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
 
     `isleyici` yalnızca testler için verilir (ağa çıkmayan sahte dinleyici).
     """
-    global _telegram_listener_ref, _telegram_update_processor_ref
+    global _telegram_listener_ref, _telegram_update_processor_ref, _komut_modu
     sonuc = _transport_telegram.komut_katmanini_kur(
         notifier, isleyici,
         komutlar=TELEGRAM_KOMUTLARI, yardim_metni=KOMUT_YARDIM,
@@ -1639,6 +1663,7 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
         set_webhook_fn=_telegram_set_webhook,
         delete_webhook_fn=_telegram_delete_webhook,
     )
+    _komut_modu = sonuc["mod"]
     if sonuc["mod"] == "webhook":
         _telegram_update_processor_ref = sonuc["processor"]
     elif sonuc["mod"] == "yoklama":

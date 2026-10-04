@@ -7,7 +7,14 @@ kararları ve gerekçeleri:
 - **Yetki**: Başka bir sohbetten gelen mesajlar sessizce yok sayılır (loglanır,
   cevap verilmez). Böylece token'ı bilen biri botu kurcalayamaz.
 - **Backlog atlama**: Açılışta eski mesajlar TÜKETİLMEZ, atlanır. Aksi halde
-  servis 3 gün uyuduktan sonra dünkü "/tara" komutu yeniden çalışırdı.
+  servis 3 gün uyuduktan sonra dünkü "/tara" komutu yeniden çalışırdı. Atlanan
+  mesaj varsa kullanıcıya TEK bir bilgi mesajı gider ("bot uyanık değildi") —
+  sessiz kaybolma, "komutlar çalışmıyor" şikâyetinin en büyük sebebiydi.
+- **Geç teslim**: Webhook tekrarı ya da açılış nedeniyle 15 dakikadan eski bir
+  komut gelirse durum değiştirenler (tara/panel) çalıştırılmaz; yalnızca okuma
+  komutları (yardim/durum) gecikme notuyla yanıtlanır.
+- **Teşhis**: `durum()` sayaçları `/health` alanına girer (islenen, yetkisiz,
+  bayat, son komut yaşı) — "bot çalışıyor ama komut yok" farkı dışarıdan görünür.
 - **Onay (offset)**: Her güncelleme işlendikten hemen sonra `offset = id + 1`
   ile onaylanır; `update_id` için küçük bir küme tutulur (restart sonrası aynı
   komutun iki kez çalışmaması için).
@@ -32,6 +39,13 @@ API_BASE = "https://api.telegram.org"
 MAX_MESSAGE_LEN = 4000          # Telegram sınırı 4096; pay bırakıyoruz
 MIN_KOMUT_ARALIK_SN = 1.0       # aynı sohbetten saniyede 1 komut
 BACKLOG_SINIR_SN = 15 * 60      # açılışta bundan eski mesajlar yok sayılır
+
+# Eski komutlar: bot uykudayken (Render Free 15 dk hareketsizlikte uyur) yazılan
+# komutlar Telegram tarafından saatler sonra teslim edilebilir. Durum değiştiren
+# komutlar (tara/panel) eski veriyle yanlış sonuç üretmesin diye ÇALIŞTIRILMAZ;
+# yalnızca okuma amaçlı komutlar gecikmeli de olsa yanıtlanır — böylece kullanıcı
+# "hiç cevap gelmedi" yerine "bot uyuyordu" bilgisini alır.
+BAYAT_GUVENLI_KOMUTLAR = frozenset({"yardim", "help", "start", "durum"})
 
 
 def kirp(text: str, sinir: int = MAX_MESSAGE_LEN) -> str:
@@ -65,6 +79,8 @@ class TelegramCommandListener:
         poll_timeout: int = 25,
         stop_event: Optional[threading.Event] = None,
         komutlari_yoksay: Optional[Callable[[], bool]] = None,
+        bayat_sinir_sn: int = BACKLOG_SINIR_SN,
+        bayat_bildirim: bool = True,
     ) -> None:
         self.token = (token or "").strip()
         self.allowed_chat_id = str(allowed_chat_id or "").strip()
@@ -79,6 +95,15 @@ class TelegramCommandListener:
         self._stop = stop_event or threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._backoff = 5.0
+        # Teşhis sayaçları (/health'te görünür): "komutlar çalışmıyor" şikâyetinde
+        # bot ayakta mı, komut geldi mi, yetkisiz sohbetten mi geldi, kaç komut
+        # bayat diye atıldı — hepsi dışarıdan okunabilsin.
+        self.bayat_sinir_sn = max(0, int(bayat_sinir_sn))
+        self.bayat_bildirim = bool(bayat_bildirim)
+        self._sayac = {"islenen": 0, "yetkisiz": 0, "bayat": 0, "hata": 0}
+        self._son_komut_adi: Optional[str] = None
+        self._son_komut_ts: Optional[float] = None
+        self._son_yetkisiz_chat = ""
 
     # --- yaşam döngüsü -------------------------------------------------
     @property
@@ -102,6 +127,39 @@ class TelegramCommandListener:
     @property
     def stopped(self) -> bool:
         return self._stop.is_set()
+
+    # --- teşhis ---------------------------------------------------------
+    @staticmethod
+    def _maskele(kimlik: str) -> str:
+        """Sohbet kimliğini loga/health'e tam yazmadan son 4 hanesiyle gösterir."""
+        kimlik = str(kimlik or "")
+        if not kimlik:
+            return ""
+        return ("…" + kimlik[-4:]) if len(kimlik) > 4 else "…"
+
+    def durum(self) -> Dict[str, Any]:
+        """Komut katmanının son hali (`/health` alanı).
+
+        NEDEN: "DM'den hiçbir komut çalışmıyor ama /health tamam diyor" farkı
+        ancak buradan görülür. Kişisel veri yazılmaz: son komutun ADI ve yaşı,
+        sayaçlar ve maskelenmiş yetkisiz sohbet kimliği döner.
+        """
+        son = self._son_komut_ts
+        return {
+            "calisiyor": bool(self._thread is not None and self._thread.is_alive()),
+            "son_komut": self._son_komut_adi,
+            "son_komut_sn_once": None if son is None else int(max(0.0, time.time() - son)),
+            "islenen": self._sayac["islenen"],
+            "yetkisiz_sohbet": self._sayac["yetkisiz"],
+            "bayat_atlanan": self._sayac["bayat"],
+            "isleyici_hatasi": self._sayac["hata"],
+            "son_yetkisiz_sohbet": self._maskele(self._son_yetkisiz_chat),
+        }
+
+    def _bayat_uyarisi(self, komut: str, yas_sn: float) -> str:
+        dk = int(max(0.0, yas_sn) // 60)
+        return (f"🕓 /{komut} yaklaşık {dk} dk önce gönderilmişti; bot bu sırada "
+                "uykudaydı/kapalıydı (servis 15 dk hareketsizlikte uyur).")
 
     # --- HTTP ----------------------------------------------------------
     def _session_obj(self):
@@ -185,7 +243,17 @@ class TelegramCommandListener:
         if atlanan:
             if offset is not None:
                 self._offset = offset
+            self._sayac["bayat"] += atlanan
             logger.info(f"Telegram komut dinleyicisi: {atlanan} bayat mesaj atlandı (offset={self._offset})")
+            # Sessiz kaybolmasın: kullanıcı "neden hiç cevap gelmedi?" diye
+            # düşünmek yerine servisin uyuduğunu ve komutun yanıtlanmadığını görsün.
+            if self.bayat_bildirim:
+                self._cevapla(
+                    f"😴 Bot uyanık değildi: {atlanan} eski komut yanıtlanmadı "
+                    "(eskimiş /tara,/panel yanlış sonuç üretmesin diye çalıştırılmaz).\n"
+                    f"{int(BACKLOG_SINIR_SN // 60)} dakikadan eski mesajlar açılışta atlanır; "
+                    "güncel komutu yeniden gönderin."
+                )
         else:
             logger.info("Telegram komut dinleyicisi: bekleyen mesaj yok")
 
@@ -262,8 +330,14 @@ class TelegramCommandListener:
         metin = mesaj.get("text")
 
         if str(sohbet_id) != self.allowed_chat_id:
+            # Sayaç + maskeli kimlik: "DM'imden yazıyorum ama cevap yok" durumunun
+            # en sık sebebi, gelen sohbetin TELEGRAM_CHAT_ID ile eşleşmemesidir.
+            self._sayac["yetkisiz"] += 1
+            self._son_yetkisiz_chat = sohbet_id
             logger.warning(
-                f"Telegram komutu yetkisiz sohbetten geldi (chat_id={sohbet_id or '?'}) — yok sayıldı"
+                "Telegram komutu yetkisiz sohbetten geldi (chat_id=%s, tip=%s, beklenen=%s) — yok sayıldı",
+                sohbet_id or "?", (mesaj.get("chat") or {}).get("type") or "?",
+                self.allowed_chat_id or "?",
             )
             return None
         if not metin:
@@ -280,6 +354,23 @@ class TelegramCommandListener:
                              sohbet_id or "?")
                 return None
             return self._cevapla(self.help_text or "Komut listesi için /yardim yazın.")
+
+        # Geç teslim edilen komut (bot uykudayken yazıldı; webhook tekrarı ya da
+        # açılış) → durum değiştiren komutlar çalıştırılmaz, okuma komutları
+        # gecikme notuyla yanıtlanır. Aksi halde dünkü "/tara" bugün sessizce
+        # çalışıp yanlış/geç sonuç üretebilirdi.
+        yas_sn = self._mesaj_yasi_sn(mesaj)
+        gecikme_notu = ""
+        if yas_sn is not None and self.bayat_sinir_sn > 0 and yas_sn > self.bayat_sinir_sn:
+            self._sayac["bayat"] += 1
+            if komut not in BAYAT_GUVENLI_KOMUTLAR:
+                logger.info("Telegram /%s: %.0f dk gecikmeli geldi, çalıştırılmadı",
+                            komut, yas_sn / 60)
+                return self._cevapla(
+                    self._bayat_uyarisi(komut, yas_sn)
+                    + " Eski komut yeniden çalıştırılmaz; güncel sonuç için şimdi tekrar gönderin."
+                )
+            gecikme_notu = self._bayat_uyarisi(komut, yas_sn) + " Yine de yanıtlanıyor.\n\n"
 
         # Uzun analiz sırasında komut update'i tüketilir ama cevap verilmez ve
         # iş kuyruğuna konmaz. Aynı kontrol webhook ve getUpdates yollarında çalışır.
@@ -308,10 +399,25 @@ class TelegramCommandListener:
             cevap = isleyici(arguman)
         except Exception as exc:  # noqa: BLE001 - kullanıcıya sade hata
             logger.error(f"/{komut} işleyicisi hata verdi: {exc}", exc_info=True)
+            self._sayac["hata"] += 1
             cevap = f"❌ /{komut} çalıştırılamadı: {str(exc)[:200]}"
         if not cevap:
             return None
-        return self._cevapla(cevap)
+        self._sayac["islenen"] += 1
+        self._son_komut_adi = komut
+        self._son_komut_ts = time.time()
+        return self._cevapla(gecikme_notu + cevap)
+
+    @staticmethod
+    def _mesaj_yasi_sn(mesaj: Dict[str, Any]) -> Optional[float]:
+        """Mesajın yaşı (saniye); `date` yoksa/geçersizse None.
+
+        Telegram `date` alanı sunucu tarafında üretilir; istemci saati güvenilmez.
+        """
+        tarih = mesaj.get("date")
+        if not isinstance(tarih, (int, float)):
+            return None
+        return max(0.0, time.time() - float(tarih))
 
     def _cevapla(self, text: str) -> Optional[str]:
         govde = kirp(text)

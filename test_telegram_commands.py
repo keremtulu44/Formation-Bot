@@ -200,11 +200,67 @@ def test_bayat_backlog_atlanir_ve_eski_komut_calismaz():
         ],
     )
     calisti = []
-    dinleyici = _dinleyici(session, handlers={"tara": lambda _a: calisti.append(1) or "tarandi"})
+    dinleyici = TelegramCommandListener(
+        token="111:AAA", allowed_chat_id=CHAT_ID,
+        handlers={"tara": lambda _a: calisti.append(1) or "tarandi"},
+        session=session, bayat_bildirim=False,   # sessiz mod: bildirim kapalı
+    )
     dinleyici._backlog_atla()
     assert dinleyici._offset == 43
     assert calisti == []
     assert session.post_cagrilari == []
+
+
+def test_bayat_backlog_bildirimi_gonderilir():
+    """Atlanan bayat mesaj SESSİZ kaybolmamalı: kullanıcı nedenini görmeli."""
+    bayat = _guncelleme(42, "/tara", tarih=time.time() - 3 * 3600)
+    session = SahteSession(
+        get_yanitlari=[
+            SahteYanit(200, {"ok": True, "result": [bayat]}),
+            SahteYanit(200, {"ok": True, "result": []}),
+        ],
+    )
+    dinleyici = _dinleyici(session)
+    dinleyici._backlog_atla()
+    assert len(session.post_cagrilari) == 1
+    assert "uyanık değildi" in session.gonderilenler[0]
+    assert dinleyici.durum()["bayat_atlanan"] == 1
+
+
+def test_gec_gelen_tara_calistirilmaz_ve_neden_soylenir():
+    """Bot uykudayken yazılan /tara saatler sonra teslim edilirse çalışmamalı."""
+    session = SahteSession()
+    calisti = []
+    dinleyici = _dinleyici(session, handlers={"tara": lambda _a: calisti.append(1) or "tarandi"})
+    cevap = dinleyici.handle_update(_guncelleme(5, "/tara", tarih=time.time() - 2 * 3600))
+    assert cevap is not None and "uykudaydı" in cevap
+    assert "tekrar gönderin" in cevap
+    assert calisti == []
+    assert session.post_cagrilari != []      # kullanıcı sessiz kalmaz
+
+
+def test_gec_gelen_yardim_gecikme_notuyla_yanitlanir():
+    """/yardim gibi okuma komutları bot uyanınca da olsa yanıtlanır (kullanıcı cevapsız kalmasın)."""
+    session = SahteSession()
+    dinleyici = _dinleyici(session, handlers={"yardim": lambda _a: "komut listesi"})
+    cevap = dinleyici.handle_update(_guncelleme(6, "/yardim", tarih=time.time() - 90 * 60))
+    assert cevap is not None
+    assert "uykudaydı" in cevap and "komut listesi" in cevap
+    assert dinleyici.durum()["islenen"] == 1
+
+
+def test_durum_sayaclari_teshis_icerir():
+    """`/health` için: mod, sayaçlar ve maskeli yetkisiz sohbet kimliği."""
+    session = SahteSession()
+    dinleyici = _dinleyici(session, handlers={"durum": lambda _a: "ok"})
+    dinleyici.handle_update(_guncelleme(1, "/durum", chat_id="999999"))
+    dinleyici.handle_update(_guncelleme(2, "/durum"))
+    durum = dinleyici.durum()
+    assert durum["yetkisiz_sohbet"] == 1
+    assert durum["son_yetkisiz_sohbet"] == "…9999"   # tam kimlik yazılmaz
+    assert durum["islenen"] == 1
+    assert durum["son_komut"] == "durum"
+    assert durum["calisiyor"] is False               # thread başlatılmadı
 
 
 def test_taze_backlog_korunur():
