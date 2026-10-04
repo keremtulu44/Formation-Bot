@@ -25,8 +25,15 @@ services:
       # Telegram — @BotFather'dan alınan token, Secret olarak işaretlenir
       - key: TELEGRAM_BOT_TOKEN
         sync: false
-      # Kendi Telegram user id'n (ör. @userinfobot)
+      # Kendi Telegram user id'n (ör. @userinfobot). DM özetleri/alarmları için.
       - key: TELEGRAM_CHAT_ID
+        sync: false
+      # PUBLIC HEDEF (kanal ÖNERİLİR): @kanal_adi ya da -100… kimliği.
+      # Bot bu hedefte YÖNETİCİ olmalı (en az "Mesaj gönderme"; sabit karşılama
+      # için "Mesajları sabitle", açıklamayı bot yazsın istersen "Bilgiyi değiştir").
+      # DM (TELEGRAM_CHAT_ID) boş olsa bile bu hedef çalışır.
+      # Kurulum: KANAL_ACILIS_PAKETI.md · kontrol: python kanal_acilis.py --durum
+      - key: TELEGRAM_GROUP_ID
         sync: false
       # Supabase — Settings > API bölümünden
       - key: SUPABASE_URL

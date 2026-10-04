@@ -128,7 +128,7 @@
   `repo_teshis.py`, `logrotate.conf`, `setup.ps1`, `local_test.ps1` git'ten çıkarıldı;
   `LOCAL_SETUP.md` güncellendi (ölü referanslar, eski dal adı, `patterns/` paket yapısı).
 - Dokümanlar: `.env.example`, `render.yaml`, `RENDER_DEPLOY.md` env tablosu ve `README.md`
-  Batch 7 satırı; `TESHIS_RAPORU.md`'ye aracın kaldırıldığına dair not.
+  Batch 7 satırı; `docs/archive/TESHIS_RAPORU.md`'ye aracın kaldırıldığına dair not.
 
 ## BATCH 8 — ✅ Tamamlandı: `main.py` katmanlara ayırma (yapısal)
 

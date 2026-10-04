@@ -248,10 +248,42 @@ HEARTBEAT_UZAK_ARALIK_SN = _env_int("HEARTBEAT_UZAK_ARALIK_SN", 300)   # Supabas
 ACIL_KUYRUK_LIMIT = _env_int("ACIL_KUYRUK_LIMIT", 20)          # kuyrukta en fazla olay
 ACIL_KUYRUK_TTL_DK = _env_int("ACIL_KUYRUK_TTL_DK", 180)       # bu süreden eski kayıt atılır
 ACIL_KUYRUK_BOSALTMA_ARALIK_SN = _env_int("ACIL_KUYRUK_BOSALTMA_ARALIK_SN", 60)  # ana döngü denemesi
-PUBLIC_MIN_QUALITY = _env_int("PUBLIC_MIN_QUALITY", 80)
-PUBLIC_STATES = [s.strip() for s in os.getenv("PUBLIC_STATES", "FORMASYON_TAMAMLANDI,RETEST_BASARILI").split(",") if s.strip()]
+# Ek TABAN (0 = kapalı; kalite kapısı TF bazlı PUBLIC_MIN_QUALITY_TF ile işler).
+# _env_int 0'ı 1'e yuvarladığı için float okunur.
+PUBLIC_MIN_QUALITY = _env_float("PUBLIC_MIN_QUALITY", 0)
+PUBLIC_STATES = [s.strip() for s in os.getenv(
+    "PUBLIC_STATES", "KIRILIM_TEYITLI,RETEST_BASARILI,FORMASYON_TAMAMLANDI").split(",") if s.strip()]
 # Kanal için günlük SIKISMA özetinde min daralma
 PUBLIC_SIKISMA_MIN_CONTRACTION = _env_float("PUBLIC_SIKISMA_MIN_CONTRACTION", 0.80)
+
+# --- PUBLIC GRUP (Faz 1) ---------------------------------------------------
+# Grup, DM'den BAĞIMSIZ hedeftir: TELEGRAM_GROUP_ID tanımlıysa DM kapalı olsa
+# bile yayın sürer. Kanal kullanacaksan TELEGRAM_CHANNEL_ID de aynı role düşer
+# (grup önceliklidir). Değer @kullanici_adi ya da -100... sayısal ID olabilir.
+TELEGRAM_GROUP_ID = os.getenv("TELEGRAM_GROUP_ID", "").strip()
+
+# Public kalite eşiği TF bazlıdır ve DM alarm eşikleriyle AYNI (tek kaynak):
+# 1h 80 · 2h 78 · 4h 75 · 1d 70. Env ile geçersiz kılmak için "1h:82,4h:78".
+def _tf_esiklerini_coz(ham: str, varsayilan: dict) -> dict:
+    esikler = dict(varsayilan)
+    for parca in str(ham or "").split(","):
+        if ":" not in parca:
+            continue
+        tf, _, deger = parca.partition(":")
+        try:
+            esikler[tf.strip().lower()] = float(deger.strip())
+        except ValueError:
+            continue
+    return esikler
+
+
+# NOT: PUBLIC_MIN_QUALITY_TF, ALERT_MIN_QUALITY tanımından SONRA kurulur
+# (aşağıda, "ALARM / KANAL POLİTİKASI" bloğunun hemen ardında) — tek kaynak orası.
+
+# Public bütçe + tempo: DM kapılarından AYRI (grup başına 20 mesaj/dk sınırı var).
+PUBLIC_MAX_MESAJ_SAAT = _env_int("PUBLIC_MAX_MESAJ_SAAT", 6)
+PUBLIC_MAX_MESAJ_GUN = _env_int("PUBLIC_MAX_MESAJ_GUN", 25)
+PUBLIC_MIN_ARALIK_SN = _env_float("PUBLIC_MIN_ARALIK_SN", 1.2)
 
 # --- FAILURE PENALTY ---
 FAILED_PATTERN_PENALTY_BARS = _env_int("FAILED_PATTERN_PENALTY_BARS", 24)
@@ -347,6 +379,12 @@ ALERT_MIN_QUALITY = {
     "1d": 70,
 }
 ALERT_MIN_QUALITY_GLOBAL = 75
+
+# Public (grup) kalite eşiği: DM alarm eşikleriyle AYNI kalsın diye buradan
+# türetilir; env ile TF bazında geçersiz kılınabilir ("1h:82,4h:78").
+PUBLIC_MIN_QUALITY_TF = _tf_esiklerini_coz(
+    os.getenv("PUBLIC_MIN_QUALITY_TF", ""), ALERT_MIN_QUALITY)
+
 # --- ALARM / KANAL POLİTİKASI (TEK KAYNAK) ----------------------------------
 # KURAL: Aşağıdaki listeler BİRBİRİNDEN AYRIDIR (aynı state iki listede olamaz)
 # ve tüm state adları `patterns/constants.py`'de tanımlıdır; test bunu doğrular.

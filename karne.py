@@ -189,7 +189,8 @@ class KarneDefteri:
         return True
 
     def formasyon_kaydet(self, stock: str, tf: str, pattern: str, state: str,
-                         quality: float, bar_zamani, now: datetime = None) -> bool:
+                         quality: float, bar_zamani, now: datetime = None,
+                         stable_id: Optional[str] = None) -> bool:
         """Canlı formasyonu sayar. Aynı hisse/TF/formasyon TTL içinde tekrar sayılmaz."""
         now = now or datetime.now(ISTANBUL_TZ)
         anahtar = f"{stock}|{tf}|{pattern}"
@@ -214,6 +215,9 @@ class KarneDefteri:
             "bar_time": str(bar_zamani),
             "kayit_zaman": now.isoformat(),
             "hafta": hafta_damgasi(now),
+            # Phase 1: kalıcı formation kimliği (None = eski kayıt / kimlik yok).
+            # Outcome hesabı (MFE/MAE, horizon, hedef/stop) bu alanı KULLANMAZ.
+            "stable_id": stable_id,
         })
         if eklendi:
             self.kaydet()
@@ -221,7 +225,8 @@ class KarneDefteri:
 
     def kirilim_kaydet(self, stock: str, tf: str, pattern: str, state: str, dir: int,
                        entry: Optional[float], atr: Optional[float], quality: float,
-                       bar_zamani, mtf_destek: bool = False, now: datetime = None) -> bool:
+                       bar_zamani, mtf_destek: bool = False, now: datetime = None,
+                       stable_id: Optional[str] = None) -> bool:
         """Kırılım teyidini (performans ölçülecek sinyal) kaydeder."""
         if dir not in (1, -1) or entry in (None, 0):
             return False
@@ -241,13 +246,15 @@ class KarneDefteri:
             "bar_time": bar_iso,
             "kayit_zaman": now.isoformat(),
             "hafta": hafta_damgasi(now),
+            # Phase 1: kırılımı doğuran formation'ın kalıcı kimliği.
+            "stable_id": stable_id,
         })
         if eklendi:
             self.kaydet()
         return eklendi
 
     def olay_kaydet(self, stock: str, tf: str, state: str, bar_zamani,
-                    now: datetime = None) -> bool:
+                    now: datetime = None, stable_id: Optional[str] = None) -> bool:
         """Huni olayı: retest / tamamlandı / başarısız (performans ölçülmez)."""
         now = now or datetime.now(ISTANBUL_TZ)
         bar_iso = istanbul(bar_zamani).isoformat()
@@ -259,6 +266,8 @@ class KarneDefteri:
             "bar_time": bar_iso,
             "kayit_zaman": now.isoformat(),
             "hafta": hafta_damgasi(now),
+            # Phase 1: olayın bağlı olduğu formation'ın kalıcı kimliği.
+            "stable_id": stable_id,
         })
         if eklendi:
             self.kaydet()
@@ -636,6 +645,32 @@ def karne_metni(metrik: dict, baslik: str = "HAFTALIK DOĞRULUK KARNESİ",
 
 
 _KALITE_SIRA = {"q≥80": 0, "q70–79": 1, "q<70": 2}
+
+
+def karne_kisa_metni(metrik: dict, pencere_metni: str = "") -> str:
+    """PUBLIC (grup) sürümü: 4-5 satır. Teknik döküm, dosya yolu ve küçük-n
+    uyarısı bilerek yok — grup için özet ve dürüst, ama iç muhasebe değil."""
+    satirlar = ["📊 Haftalık doğruluk" + (f" · {pencere_metni}" if pencere_metni else "")]
+    kirilim = int(metrik.get("kirilim_toplam") or 0)
+    degerlendirilen = int(metrik.get("degerlendirilen") or 0)
+    if kirilim and degerlendirilen:
+        oran = (metrik.get("pozitif") or 0) * 100.0 / degerlendirilen
+        satirlar.append(f"Kırılım sinyali {kirilim} · {KARNE_HORIZON_BAR} bar içinde yönünde "
+                        f"kapatan {metrik.get('pozitif', 0)}/{degerlendirilen} (%{oran:.0f})")
+        if metrik.get("ort_mfe_pct") is not None and metrik.get("ort_mae_pct") is not None:
+            satirlar.append(f"Ort. maks. lehte +%{metrik['ort_mfe_pct']:.1f} · "
+                            f"alehte −%{metrik['ort_mae_pct']:.1f}")
+    elif kirilim:
+        satirlar.append(f"Kırılım sinyali {kirilim} · sonuçlar için yeterli bar henüz oluşmadı")
+    else:
+        satirlar.append("Kırılım sinyali: 0 (bu hafta teyitli kırılım yok)")
+    huni = metrik.get("huni") or {}
+    tamamlanan = sum(n for s, n in huni.items() if s == "FORMASYON_TAMAMLANDI")
+    retest = sum(n for s, n in huni.items() if s == "RETEST_BASARILI")
+    if tamamlanan or retest:
+        satirlar.append(f"Tamamlanan {tamamlanan} · retest başarılı {retest}")
+    satirlar.append("ℹ️ Geçmiş performans, gelecek getirinin garantisi değildir")
+    return "\n".join(satirlar)
 _TF_TR = {"1h": "1 saatlik", "2h": "2 saatlik", "4h": "4 saatlik", "1d": "günlük"}
 _STATE_TR = {
     "KIRILIM_TEYITLI": "teyitli kırılım",

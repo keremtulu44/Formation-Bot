@@ -143,7 +143,9 @@ python deploy_check.py --url https://<servis-adin>.onrender.com --test-key <TELE
 ```
 
 Her satır ✅/⚠️/❌ ile biter, ❌ satırının altında ne yapılacağı yazar; token ve
-anahtar değerleri hiçbir zaman ekrana basılmaz. Deploy öncesi kontrol ise GitHub
+anahtar değerleri hiçbir zaman ekrana basılmaz. Özet satırı üç durumu ayrı söyler:
+`ÖZET: Telegram HAZIR · Kanal HAZIR|YOK|HEDEF VAR, IZIN YOK · Supabase HAZIR|YOK`
+— kanal adımı (bot yönetici mi, mesaj izni açık mı) aynı komutla doğrulanır. Deploy öncesi kontrol ise GitHub
 tarafındadır: `.github/workflows/ci.yml` her push'ta aynı Python 3.12 sürümüyle
 kurulumu, testleri ve `PORT` verilip `/health`'in 200 döndüğünü doğrular.
 
@@ -207,7 +209,7 @@ sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 | `bot_data/` | Hisse cache'leri — **bilerek git-tracked** (kullanıcı isteği) |
 | `PINE_FARK_ANALIZI.md` | **Çalışma defteri:** Pine ile fark analizi, doğrulama listesi, fikir defteri |
 | `FORMASYON_MANTIGI.md` | Pine v0.4.6 Türkçe dökümanı (formasyon koşulları, kalite formülleri) |
-| `TESHIS_RAPORU.md` | Dış teşhis raporunun bağımsız doğrulaması (TRUE/FALSE/PARTIAL) |
+| `docs/archive/TESHIS_RAPORU.md` | Dış teşhis raporunun bağımsız doğrulaması (TRUE/FALSE/PARTIAL) — arşiv |
 | `SORUN_RAPORU.md` | Ölçümlü teşhis: üretim→Telegram hunisi, bastırılan adaylar, S1-S11 + ek bulgular |
 | `YAPILACAKLAR.md` | A (düzeltme) / B (iyileştirme) / C (şablon) tam iş listesi, öncelik ve efor |
 | `KODLAMA_PLANI.md` | Batch'li uygulama planı; her batch için kapsam/dosya/test/kabul kriteri |
@@ -274,10 +276,23 @@ Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölç
    maddeleri davranışı değiştirmeden tek yerde toplandı —
    `ALERT_STATES` (anında push edilen 4 kritik olay), `WATCH_STATES` (18:45 kapanış
    özetine ertelenen 6 izleme state'i; `telegram_alert_flow.WATCH_STATES` bu listeye
-   bağlıdır) ve `PUBLIC_STATES` + `PUBLIC_MIN_QUALITY` + `PUBLIC_SIKISMA_MIN_CONTRACTION`
-   (public kanal akışı; B9). Kesişim/çift bildirim `config._politika_hatalari` ile
+   bağlıdır) ve `PUBLIC_STATES` + `PUBLIC_MIN_QUALITY_TF` + `PUBLIC_SIKISMA_MIN_CONTRACTION`
+   (public grup/kanal akışı; B9). Kesişim/çift bildirim `config._politika_hatalari` ile
    import anında yakalanır, testler bunu doğrular. Politikayı değiştirmek için sadece
-   bu üç yeri düzenle; kodda başka yerde kopya liste yok. Evren 48'in üzerine çıkarsa
+   bu üç yeri düzenle; kodda başka yerde kopya liste yok.
+
+   **Public grup (Faz 1, 02.10.2026):** `TELEGRAM_GROUP_ID` tanımlıysa bot, DM'den
+   **bağımsız** olarak gruba yayın yapar (DM kapalıyken de çalışır). Olaylar tarama turu
+   boyunca kuyrukta toplanır ve tur sonunda **tek bültende** gider; bütçe DM'den ayrıdır
+   (`PUBLIC_MAX_MESAJ_SAAT=6`, `PUBLIC_MAX_MESAJ_GUN=25`, `PUBLIC_MIN_ARALIK_SN=1.2`) ve
+   429 `retry_after` desteklenir. Grup metni sadedir: iç izleme notu, `/panel`, `/durum`,
+   dosya yolu, ❌ tek tek olaylar gruba **gitmez**; başarısız kırılımlar 18:45 özetinde
+   sayı olarak ve Cuma karnesinin kısa sürümünde görünür. Gruba yönetici bot, komut
+   olmayan grup mesajlarına **cevap vermez** (yalnız DM'de yardım metni döner).
+
+   **Kanal/grup açılışı:** hedef bir **kanal** da olabilir (önerilen); açıklama ve
+   sabitlenmiş karşılama metinleri `KANAL_ACILIS_PAKETI.md`'de, uygulama aracı
+   `python kanal_acilis.py --durum|--uygula` (varsayılan kuru çalışma, yazmaz). Evren 48'in üzerine çıkarsa
    `EVREN_BUYUME_UYARI_ESIGI` ile açılışta tek satır uyarı loglanır (pacing/digest/panel
    limitleri yeniden ölçülmeli).
 9. **Veri dizini artık repo dışında (batch-7 / C4):** yazımlar `DATA_DIR`'e gider; sırayla

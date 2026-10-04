@@ -42,6 +42,11 @@ STATE_TR = {
     "RETEST_EDILIYOR": "Retest ediliyor",
     "RETEST_BASARILI": "Retest başarılı",
     "FORMASYON_TAMAMLANDI": "Formasyon tamamlandı",
+    # Kapanış durumları: eskiden ham enum ("BASARISIZ_KIRILIM") görünüyordu.
+    "BASARISIZ_KIRILIM": "Kırılım başarısız",
+    "BASARISIZ_RETEST": "Retest başarısız",
+    "FORMASYON_GECERSIZ": "Formasyon geçersiz",
+    "GECERSIZ": "Geçersiz",
 }
 
 def gecen_sure(iso_zaman):
@@ -178,6 +183,28 @@ def panel_sembol(state) -> str:
     if s.startswith("BASARISIZ") or s.endswith("GECERSIZ"):
         return "⛔"
     return "•"
+
+
+# Slot tablosundaki tek harflik işaretlerin anlamı. Panelde yalnızca GÖRÜNEN
+# işaretler açıklanır: "87⛔" satırının anlamı artık okuyucuya sorulmuyor.
+PANEL_SEMBOL_ANLAMI = {
+    "🚀": "kırılım",
+    "🎯": "retest",
+    "🏁": "tamamlandı",
+    "⚡": "sıkışma",
+    "⛔": "başarısız/geçersiz",
+}
+
+
+def panel_sembol_anahtari(kayitlar) -> str:
+    """Panelde görünen işaretlerin tek satırlık açıklaması (yoksa boş)."""
+    kayitlar = list(kayitlar or [])
+    gorunen = [f"{s} {PANEL_SEMBOL_ANLAMI[s]}"
+               for s in PANEL_SEMBOL_ANLAMI
+               if any(panel_sembol((k or {}).get("state")) == s for k in kayitlar)]
+    if not gorunen:
+        return ""
+    return "🔑 " + " · ".join(gorunen)
 
 
 def panel_hucre(kayit, tf: str) -> str:

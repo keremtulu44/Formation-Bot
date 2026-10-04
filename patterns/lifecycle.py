@@ -13,8 +13,9 @@
 # bunun yerine Python dostu `events` listesi üretilir (notifier kullanır).
 
 import math
+import uuid
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -38,6 +39,122 @@ from .selection import (candidate_preferred, continuity_score, identity_compatib
                         quality_priority_gap, replacement_margin, same_completed_structure,
                         selection_score)
 from .violation import MAX_ACCEPTED_VIOLATION, ViolationCache
+
+# === PHASE 1: Persistent Formation Identity yardımcıları ====================
+# Formation matematiğine, geometriye, kaliteye, continuity_score eşiklerine
+# veya lifecycle state geçişlerine DOKUNMAZ. Yalnız mevcut `identity_compatible`
+# + `continuity_score` (değiştirilmemiş eşiklerle) ile restart re-attach yapar.
+
+def _new_stable_id() -> str:
+    """Yeni formation için benzersiz, restart-safe UUID (motor-içi `identity` ayrıdır)."""
+    return str(uuid.uuid4())
+
+
+def _parse_stock_tf(key: str):
+    """Manager anahtarı ``STOCK_TF`` -> (stock, tf). Sembol '_' içermez varsayımı."""
+    stock, tf = key.rsplit("_", 1)
+    return stock, tf
+
+
+def _match_persisted_anchor(engine, candidate: "PatternCandidate") -> Optional[str]:
+    """Restart sonrası: (stock,tf) anchor'ıyla `candidate`'ı eşleştir.
+
+    Eşleşme için mevcut kurallar kullanılır (eşik DEĞİŞTİRİLMEDİ):
+      * identity_compatible (family + classic_dir)
+      * continuity_score >= 60
+    Uyum sağlanırsa eski stable_id döner, yoksa None.
+    """
+    key = getattr(engine, "_key", None)
+    if not key:
+        return None
+    stock, tf = _parse_stock_tf(key)
+    from state import formation_identity as fid
+    anchor = fid.load_anchor(stock, tf)
+    if not anchor:
+        return None
+    # Eksik/bozuk anchor (eski yazım, elle düzenleme): eşleştirme denenmez,
+    # formation gerçekten yeni kabul edilir. `continuity_score` bar farkı
+    # hesabı yaptığı için start_bar şart; family ise identity_compatible şartı.
+    if not anchor.get("stable_id") or not anchor.get("family"):
+        return None
+    if not isinstance(anchor.get("start_bar"), int):
+        return None
+    prev = PatternCandidate()
+    prev.valid = True
+    prev.family = anchor.get("family")
+    prev.classic_dir = anchor.get("classic_dir") or 0
+    prev.pattern_type = anchor.get("pattern_type")
+    prev.start_bar = anchor.get("start_bar")
+    prev.apex_bar = anchor.get("apex_bar")
+    prev.hb1, prev.hb2 = anchor.get("hb1"), anchor.get("hb2")
+    prev.lb1, prev.lb2 = anchor.get("lb1"), anchor.get("lb2")
+    prev.hp1, prev.hp2 = anchor.get("hp1"), anchor.get("hp2")
+    prev.lp1, prev.lp2 = anchor.get("lp1"), anchor.get("lp2")
+    if not identity_compatible(prev, candidate):
+        return None
+    if continuity_score(engine, prev, candidate) >= 60.0:
+        return anchor.get("stable_id")
+    return None
+
+
+def _match_registry(engine, candidate: "PatternCandidate") -> Optional[str]:
+    """Faz 2.1: history defterinden candidate ile aynı formation'ın stable_id'si.
+
+    Faz 1'in tek slot'lu anchor'una kıyasla iki iyileştirme taşır:
+      1) (stock,tf) başına birden fazla kayıt -> aynı penceredeki 2. formasyon
+         doğru kimliğine ulaşır,
+      2) bar-time alignment -> pencere kaydıkça bar indeksleri kayar;
+         kayıtlar doğum barının MUTLAK zamanından hizalanır.
+
+    Eşleşme kuralları AYNEN korunur (eşik DEĞİŞTİRİLMEDİ):
+      * identity_compatible (family + classic_dir)
+      * continuity_score >= 60
+    Ek güvenlik: terminal kayıtlar asla eşleşmez ve doğum barı pencerede
+    olmayan kayıtlar atlanır. Registry boş/bozuk/hatalı ise None döner ve
+    çağıran Faz 1 anchor yoluna düşer.
+    """
+    try:
+        from state import formation_history as fh
+    except Exception:
+        return None
+    key = getattr(engine, "_key", None)
+    if not key:
+        return None
+    stock, tf = _parse_stock_tf(key)
+    kullanilan = getattr(engine, "_p2_kullanilan", None)
+    return fh.eslestir(engine, candidate, kullanilan=kullanilan, stock=stock, tf=tf)
+
+
+def _save_formation_anchor(engine, candidate: "PatternCandidate") -> None:
+    """Mevcut formation'ın minimum anchor'unu (stock,tf) anahtarıyla sakla."""
+    key = getattr(engine, "_key", None)
+    if not key or not candidate.valid or not candidate.stable_id:
+        return
+    stock, tf = _parse_stock_tf(key)
+    birth_bar_time = None
+    try:
+        sb = candidate.start_bar
+        if sb is not None and getattr(engine, "index_values", None) is not None \
+                and 0 <= sb < len(engine.index_values):
+            birth_bar_time = str(engine.index_values[sb])
+    except Exception:
+        birth_bar_time = None
+    from state import formation_identity as fid
+    fid.save_anchor({
+        "stable_id": candidate.stable_id,
+        "stock": stock,
+        "timeframe": tf,
+        "family": candidate.family,
+        "classic_dir": candidate.classic_dir,
+        "pattern_type": candidate.pattern_type,
+        "start_bar": candidate.start_bar,
+        "apex_bar": candidate.apex_bar,
+        "hb1": candidate.hb1, "hb2": candidate.hb2,
+        "lb1": candidate.lb1, "lb2": candidate.lb2,
+        "hp1": candidate.hp1, "hp2": candidate.hp2,
+        "lp1": candidate.lp1, "lp2": candidate.lp2,
+        "birth_bar_time": birth_bar_time,
+    })
 
 try:
     from config import get_profile_params
@@ -63,12 +180,29 @@ class EngineSnapshot:
     retest_seen: bool = False
 
 
+# --- Faz 2.4: yaşam döngüsü fazları ---
+# Snapshot turu bu fazlardan gelir: `geometri` (ön-kırılım), `kirilim`
+# (kırılım anında dondurulmuş), `retest` (retest evresi), `terminal`.
+_FAZ_KIRILIM = (ST_BREAK_CANDIDATE, ST_BREAK_ATTEMPT, ST_BREAK_CONFIRMED)
+_FAZ_RETEST = (ST_RETEST_WAIT, ST_RETESTING, ST_RETEST_OK)
+
+
+def _faz(state: Optional[str]) -> str:
+    """Motor state'inin yaşam döngüsü fazi."""
+    if state in _FAZ_KIRILIM:
+        return "kirilim"
+    if state in _FAZ_RETEST:
+        return "retest"
+    return "diger"
+
+
 class ArgentEngine:
     """Tek hisse-tek timeframe için Pine v0.4.6 karar çekirdeği."""
 
     def __init__(self, profile: str = "Dengeli", mintick: float = 0.01,
                  use_breakout_quality_filter: bool = True):
         from config import TERMINAL_TAZE_BAR, FAILED_PATTERN_PENALTY_BARS
+        self._key = None  # Phase 1: (stock,tf) anahtarı manager tarafından atanır
         self.terminal_taze_bar = TERMINAL_TAZE_BAR
         self.failed_penalty_bars = FAILED_PATTERN_PENALTY_BARS
         self.profile = profile
@@ -155,12 +289,34 @@ class ArgentEngine:
         self._last_index_value = None
         self.events: List[Dict] = []
         self.index_values = None
+        # --- Faz 2.2: history defteri için scan kapsamlı takip ---
+        # `_p2_births`: bu scan'de doğan formation'lar (doğum snapshot'ı için).
+        # `_p2_kullanilan`: bu scan'de bağlanmış stable_id'ler. Aynı stable_id
+        # iki farklı candidate'a atanamaz (deterministik "ilk gelen alır").
+        self._p2_births: List["PatternCandidate"] = []
+        self._p2_kullanilan: set = set()
+        # --- Faz 2.3: geometry evolution snapshot'ları ---
+        # `_p2_geo`: bu scan'de ANLAMLI state geçişlerinde yakalanan geometry
+        # snapshot'ları. Per-bar DEĞİL: yalnızca lifecycle'nin kendi "anlamlı
+        # aşama" tespiti (prev_state != state) tetikler. Böylece disk yazımı
+        # state geçişi sayısıyla sınırlı kalır.
+        self._p2_geo: List[Dict[str, Any]] = []
 
     # ---------- yüksek seviye API ----------
 
     def reset(self) -> None:
         """Tüm kalıcı state'i sıfırla (yeni/bozulan veri akışı)."""
+        # Phase 1: `_key`, motorun formation/lifecycle state'i DEĞİL — manager'ın
+        # bu motoru hangi (stock, timeframe) kaydına bağladığını tutan metadata'dır.
+        # Reset tüm formation state'ini (aktif aday, state makinesi, sayaçlar,
+        # pivot kilitleri) __init__ ile tamamen temizler; bu metadata ise korunur.
+        # Korunmasaydı `tam_yeniden=True` taramasında (process -> reset -> __init__)
+        # anahtar silinir ve `_match_persisted_anchor` / `_save_formation_anchor`
+        # erken çıkarak restart re-attach'i ve anchor yazımını sessizce devre
+        # dışı bırakır (her turda yeni stable_id üretilir).
+        anahtar = getattr(self, "_key", None)
         self.__init__(self.profile, self.mintick, self.use_breakout_quality_filter)
+        self._key = anahtar
 
     def process(self, df: pd.DataFrame, tam_yeniden: bool = False) -> EngineSnapshot:
         """DataFrame'i (artabilir) motora ver. Yeni barlar sırayla işlenir.
@@ -207,6 +363,15 @@ class ArgentEngine:
 
         prev_state = self.pattern_state
         new_events: List[Dict] = []
+        # Faz 2.2: her process() çağrısı yeni bir scan kapsamı açar. Doğum
+        # kayıtları ve kullanılmış stable_id'ler bu scan'a özgüdür; böylece
+        # aynı stable_id iki farklı candidate'a atanamaz.
+        self._p2_births = []
+        self._p2_kullanilan = set()
+        # Faz 2.3: geometry snapshot'ları da bu scan'a özgüdür (tam_yeniden
+        # replay'de tekrar yakalanır; yazım tarafında (tur, bar_time) dedup'ı
+        # gereksiz çoğalmayı engeller).
+        self._p2_geo = []
         for b in range(start, len(df)):
             before = len(self.events)
             self._process_bar(b)
@@ -381,8 +546,10 @@ class ArgentEngine:
                 identity_ok = self.active.valid and identity_compatible(self.active, best)
                 if identity_ok and lifecycle_can_update and continuity >= 60.0:
                     preserved = self.active.identity
+                    preserved_stable = getattr(self.active, "stable_id", None)
                     self.active = best
                     self.active.identity = preserved
+                    self.active.stable_id = preserved_stable
                     reset_quality_snapshot(self.active)
                     self.lock_used_pivots(self.active)
                 else:
@@ -397,11 +564,52 @@ class ArgentEngine:
                                        or self.pattern_state == ST_NONE
                                        or (lifecycle_can_update and (materially_better or context_wins)))
                     if replace_current:
+                        # Phase 1 — yeni formation doğumu: stable_id burada üretilir.
+                        #
+                        # `self.active` GEÇERSİZ ise motor hiç formation doğurmamıştır
+                        # (taze motor / restart). Bu tek durumda diske yazılmış
+                        # (stock,tf) anchor'u ile eşleştirme denenir; eşleşirse eski
+                        # stable_id korunur (restart re-attach), eşleşme yoksa yeni
+                        # UUID üretilir.
+                        #
+                        # `self.active` GEÇERLİ ise burada gerçekten YENİ bir formation
+                        # kabul ediliyor yaşar (terminal olanın / daha zayıf olanın
+                        # yerine geçiyor). Terminal olmuş eski formation'ın
+                        # stable_id'si ASLA buraya taşınmaz — her zaman yeni üretilir.
+                        # --- Faz 2.1: çoklu formasyon registry'si ---
+                        # Registry (stock,tf) başına TEK slot yerine birden fazla
+                        # kayıt taşır; böylece aynı pencere içindeki 2. formasyon
+                        # doğru kimliğine ulaşır. Eşleşme DEĞİŞTİRİLMEMİŞ
+                        # `identity_compatible` + `continuity_score` ile yapılır;
+                        # eklenen tek şey bar-time alignment (pencere offset'i).
+                        #
+                        # NEDEN HER DOĞUMDA: `tam_yeniden=True` tam replay'de
+                        # motor `self.active`'ini sıfırlamaz; önceki scan'den
+                        # geçerli bir formation taşır. Eşleşmeyi yalnızca
+                        # `not self.active.valid` anında denemek, replay'deki
+                        # DOĞRUMU formasyonları da yeni UUID'ye düşürürdü.
+                        # Aynı mı farklı mı olduğuna karar veren `continuity_score`
+                        # olduğu için bu güvenlidir.
+                        #
+                        # Registry boş/bozuksa veya eşleşme yoksa Faz 1 davranışı
+                        # AYNEN devrede kalır (anchor -> yeni UUID).
+                        yeni_stable = _match_registry(self, best)
+                        if not yeni_stable:
+                            if not self.active.valid:
+                                yeni_stable = _match_persisted_anchor(self, best)
+                            if not yeni_stable:
+                                yeni_stable = _new_stable_id()
+                        if yeni_stable:
+                            self._p2_kullanilan.add(yeni_stable)
                         self.next_pattern_identity += 1
                         self.active = best
                         self.active.identity = self.next_pattern_identity
+                        self.active.stable_id = yeni_stable
+                        # Faz 2.2: doğum kaydı (manager scan sonunda diske yazar).
+                        self._p2_births.append(self.active)
                         reset_quality_snapshot(self.active)
                         self.lock_used_pivots(self.active)
+                        _save_formation_anchor(self, self.active)
                         started_new_identity = True
                         self.pattern_state = ST_CANDIDATE
                         self.invalid_reason = "Yok"
@@ -610,6 +818,16 @@ class ArgentEngine:
 
         # --- olaylar (Pine alertcondition karşılıkları; alert() çağrısı YOK) ---
         self._emit_state_events(prev_state, started_new_identity)
+
+        # --- Faz 2.4: faz geçişi tetikleyicisi ---
+        # KIRILIM_DENEMESI, RETEST_BEKLENIYOR ve RETEST_EDILIYOR geçişlerinin
+        # KENDİ olayı yok (yalnızca state değişir). Bu yüzden history'de
+        # "retest evresi başladı" görünmüyordu. FAZ değişimini ayrı bir
+        # tetikleyici olarak kullanıyoruz: OLAY ÜRETMEZ (Telegram/alert akışı
+        # değişmez), yalnızca snapshot'ı yakalar.
+        if (_faz(next_state) != _faz(prev_state)
+                and _faz(next_state) in ("kirilim", "retest")):
+            self._p2_geometri_yakala()
         self.last_pattern_state = self.pattern_state
 
     # ---------- lifecycle alt adımları ----------
@@ -790,6 +1008,11 @@ class ArgentEngine:
             "time": self.index_values[self.bar_index] if self.index_values is not None
                     and 0 <= self.bar_index < len(self.index_values) else None,
             "state": self.pattern_state,
+            # Faz 2.2: olayin ait oldugu formation. `stable_id` dogumdan
+            # terminal'e kadar ayni kalir; boylece history defteri olayi dogru
+            # kayda baglar. Anahtar adlari DEGISTIRILMEDI, yalnizca eklendi.
+            "stable_id": (self.active.stable_id
+                          if getattr(self.active, "valid", False) else None),
         }
         ev.update(extra)
         self.events.append(ev)
@@ -804,6 +1027,10 @@ class ArgentEngine:
         def maybe(cond: bool, ev_type: str, name: str, direction: int = 0, q: Optional[float] = None):
             if cond:
                 self._emit(ev_type, name, direction, q if q is not None else eff_q, price)
+                # Faz 2.3: anlamlı state geçişinde geometry snapshot'ı yakala.
+                # Matematik DEĞİŞTİRMEZ — mevcut candidate'ın halihazırda
+                # hesaplanmış alanları okunur (schema.geometri_snapshot).
+                self._p2_geometri_yakala()
 
         if not a.valid:
             return
@@ -831,8 +1058,85 @@ class ArgentEngine:
               self.invalid_reason if False else None)
         maybe(s == ST_INVALID and prev_state != ST_INVALID, "INVALID", "Formasyon geçersiz", a.classic_dir)
 
+    def _p2_geometri_yakala(self) -> None:
+        """Faz 2.3: anlamlı state geçişinde geometry snapshot'ı yakalar.
+
+        NEDEN BURADA: lifecycle zaten "anlamlı aşama" kavramını kendi state
+        makinesiyle tanımlıyor (`prev_state != state`). Yeni ve yapay bir
+        eşik/scoring sistemi icat ETMEK YERİNE bu mevcut sinyal kullanılır;
+        böylece snapshot'lar bar sayısıyla değil, gerçek anlamlı geçişlerle
+        sınırlı kalır (per-bar persistence olmaz).
+
+        Matematik DEĞİŞMEZ: `schema.geometri_snapshot` mevcut candidate'ın
+        halihazırda hesaplanmış STATE alanlarını okur; hiçbir geometri yeniden
+        hesaplanmaz.
+        """
+        a = self.active
+        if not getattr(a, "valid", False) or not getattr(a, "stable_id", None):
+            return
+        bar_time = None
+        if self.index_values is not None and 0 <= self.bar_index < len(self.index_values):
+            bar_time = self.index_values[self.bar_index]
+        bar_time = str(bar_time) if bar_time is not None else None
+
+        from state import formation_schema as schema
+
+        temel = {
+            "stable_id": a.stable_id,
+            "bar": self.bar_index,
+            "bar_time": bar_time,
+            "state": self.pattern_state,
+        }
+        # Faz 2.4: snapshot turu yasam dongusu FAZINDAN gelir.
+        faz = _faz(self.pattern_state)
+        if faz == "kirilim":
+            # Kırılım anı: o andaki geometri + kırılımda DONDURULMUŞ bağlam.
+            # İkisi FARKLI alan kümeleridir (STATE vs BREAKOUT) -> kopyalanma
+            # değil, aynı anın iki görünümü.
+            self._p2_geo.append(dict(temel, tur="geometri",
+                                     **schema.geometri_snapshot(a, bar_time=bar_time)))
+            self._p2_geo.append(dict(temel, tur="kirilim",
+                                     **schema.kirilim_snapshot(a, bar_time=bar_time)))
+        elif faz == "retest":
+            # Retest evresi: tur="retest" ile AYRI etiketlenir. Aynı bar'a
+            # "geometri" de YAZILMAZ -- iki tür aynı alanları taşıyor olurdu.
+            self._p2_geo.append(dict(temel, tur="retest",
+                                     **schema.geometri_snapshot(a, bar_time=bar_time)))
+        else:
+            self._p2_geo.append(dict(temel, tur="geometri",
+                                     **schema.geometri_snapshot(a, bar_time=bar_time)))
+
 
 # --- YÖNETİCİ (eski PatternLifecycleManager API'sini korur) ---
+
+def _terminal_snapshotu(engine, snap: EngineSnapshot) -> Optional[Dict[str, Any]]:
+    """Faz 2.3: terminal anındaki SON anlamlı geometry snapshot'ı.
+
+    Terminal formation'ın son geometrisi history'de `tur="terminal"` ile
+    saklanır. Matematik DEĞİŞTİRMEZ: mevcut candidate'ın halihazırda
+    hesaplanmış alanları okunur. Kırılım sonrası terminal ise kırılım anında
+    DONDURULMUŞ geometri (BREAKOUT alanları) daha anlamlıdır; değilse o anki
+    geometry (STATE alanları) kullanılır.
+
+    Bar zamanı MUTLAK olmalı: pencere-koordinat bar indeksleri yalnızca bu
+    zamana göre yorumlanabilir (bkz. formation_history BAR-TIME ALIGNMENT).
+    """
+    aktif = getattr(snap, "active", None)
+    if aktif is None or not getattr(aktif, "valid", False):
+        return None
+    idx = getattr(engine, "index_values", None)
+    b = getattr(engine, "bar_index", None)
+    if idx is None or b is None or not (0 <= b < len(idx)):
+        return None
+    try:
+        from state import formation_schema as schema
+        bar_time = str(idx[b])
+        if snap.state in ("FORMASYON_TAMAMLANDI", "RETEST_BASARILI"):
+            return schema.kirilim_snapshot(aktif, bar_time=bar_time)
+        return schema.geometri_snapshot(aktif, bar_time=bar_time)
+    except Exception:  # noqa: BLE001 - snapshot üretilemezse terminal yine yazılır
+        return None
+
 
 class PatternLifecycleManager:
     """
@@ -849,13 +1153,117 @@ class PatternLifecycleManager:
     def get_engine(self, key: str) -> ArgentEngine:
         if key not in self.engines:
             self.engines[key] = ArgentEngine(self.profile, self.mintick)
+        # Phase 1: restart re-attach için motorun (stock,tf) anahtarını taşı.
+        self.engines[key]._key = key
         return self.engines[key]
 
     def scan(self, key: str, df: pd.DataFrame, tam_yeniden: bool = False) -> EngineSnapshot:
         engine = self.get_engine(key)
         snap = engine.process(df, tam_yeniden=tam_yeniden)
         self.last_snapshots[key] = snap
+        self._history_kaydet(key, engine, snap)
         return snap
+
+    # ---------- Faz 2.1/2.2: history defteri yazımı ----------
+
+    def _history_kaydet(self, key: str, engine, snap: EngineSnapshot) -> None:
+        """Scan sonunda history defterini ANLAMLI olaylara göre günceller.
+
+        Yazma tetikleyicileri (per-bar dump YOK):
+          * doğum  -> engine._p2_births
+          * olay   -> snap.events (state geçişleri)
+          * geometri -> engine._p2_geo (anlamlı state geçişlerinde yakalanan)
+          * terminal -> snap.state terminal ise
+
+        Tek taramada tek save: defter bir kez yüklenir, tüm mutasyonlar
+        uygulanır, en fazla bir kez yazılır.
+
+        Bu fonksiyon MOTOR DAVRANIŞINI DEĞİŞTİRMEZ ve botu asla durdurmaz:
+        herhangi bir hatta sessizce geri döner.
+        """
+        try:
+            from state import formation_history as fh
+            stock, tf = _parse_stock_tf(key)
+            dogumlar = list(getattr(engine, "_p2_births", None) or [])
+            olaylar = list(getattr(snap, "events", None) or [])
+            geo = list(getattr(engine, "_p2_geo", None) or [])
+            terminal = fh.terminal_durumu(snap.state)
+            if not dogumlar and not olaylar and not terminal and not geo:
+                return
+            defter = fh.yukle(stock, tf)
+            degisti = False
+            for aday in dogumlar:
+                if fh.dogum_ekle(defter, aday, engine) is not None:
+                    degisti = True
+            if olaylar and fh.olay_ekle(defter, olaylar):
+                degisti = True
+            # --- Faz 2.3/2.4: geometry / kırılım / retest snapshot'ları ---
+            # (tur, bar_time) dedup'ı sayesinde tam_yeniden replay'de ve kayan
+            # pencerede AYNI fiziksel an için ikinci kayıt yazılmaz.
+            for y in geo:
+                sid = y.get("stable_id")
+                if not sid:
+                    continue
+                # Faz 2.4: snapshot KENDİ stable_id'sini de taşır. Böylece
+                # dört tür (geometri/kirilim/retest/terminal) de aynı sahiplik
+                # bilgisini payload'ında bulundurur; çoklu-formasyon ayırlığı
+                # "kayıt içindeki yerleşim"e değil, snapshot'ın kendi
+                # beyanına göre da doğrulanabilir.
+                if fh.snapshot_ekle(defter, sid, y.get("tur") or "geometri", y,
+                                    ek={"stable_id": y.get("stable_id") or sid,
+                                        "state": y.get("state"),
+                                        "bar": y.get("bar")}):
+                    degisti = True
+            # --- Faz 2.4: yaşam döngüsü fazı (açık -> kırılım -> retest) ---
+            # Monotonik: faz asla geriye gitmez (bkz. fh.durum_guncelle).
+            # Terminal fazı aşağıda `terminal_ekle` ile yazılır ve o en üsttedir.
+            aktif = getattr(snap, "active", None)
+            faz_sid = (aktif.stable_id
+                       if aktif is not None and getattr(aktif, "valid", False)
+                       else None)
+            if faz_sid and fh.durum_guncelle(defter, faz_sid,
+                                             fh.kirilim_turu(snap.state)):
+                degisti = True
+            if terminal:
+                sid = (getattr(snap, "active", None).stable_id
+                       if getattr(snap, "active", None) is not None
+                       and getattr(snap.active, "valid", False) else None)
+                # Faz 2.3: terminal geometry BİR KEZ yazılır. Terminal
+                # formation'ın geometrisi donmuştur; tazelik penceresi
+                # içinde her taramada yenisini yazmak gereksiz snapshot
+                # çoğaltır ve MAX_SNAPSHOT altındaki gerçek geometry
+                # evrimini dışarı iter.
+                terminal_snap = None
+                if sid:
+                    rec_t = fh.kayit_getir(defter, sid)
+                    if rec_t is not None and not any(
+                            x.get("tur") == "terminal"
+                            for x in rec_t.get("snapshotlar", [])):
+                        terminal_snap = _terminal_snapshotu(engine, snap)
+                if sid and fh.terminal_ekle(defter, sid, snap.state,
+                                            snapshot=terminal_snap):
+                    degisti = True
+                elif sid:
+                    # Terminal geçişi bu turda yakalanmasa bile (replay'de
+                    # zaten terminal ise) durumu güncelle.
+                    rec = fh.kayit_getir(defter, sid)
+                    if rec is not None and rec.get("durum") != fh.DURUM_TERMINAL:
+                        rec["durum"] = fh.DURUM_TERMINAL
+                        rec["terminal_state"] = snap.state
+                        if not rec.get("terminal_zamani"):
+                            rec["terminal_zamani"] = fh._simdi()
+                        degisti = True
+            if degisti:
+                fh.kaydet(defter)
+                try:
+                    from state.formation_mirror import mirror_kaydet
+                    mirror_kaydet(defter)
+                except Exception:
+                    pass
+        except Exception:
+            # History yazılamazsa bot çalışmaya devam eder (ölü kod değil,
+            # bilinçli güvenlik sınırı).
+            return
 
     def update(self, key: str, df: pd.DataFrame, candidate=None) -> Tuple[str, int, str]:
         """Eski 3'lü imza. `candidate` parametresi artık kullanılmaz — motor adayı kendisi bulur."""

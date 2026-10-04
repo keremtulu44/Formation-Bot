@@ -117,6 +117,11 @@ def is_bist_open(now: Optional[datetime] = None) -> bool:
     if now.weekday() >= 5:  # 5=Cumartesi, 6=Pazar
         return False
     
+    # Resmî tatil kontrolü (A2 düzeltmesi): tarama_penceresi_acik_mi() ile tutarlı
+    tatil = bist_tatil_adi(now)
+    if tatil:
+        return False
+
     # Saat kontrolü
     current_time = now.time()
     return BIST_OPEN <= current_time <= BIST_CLOSE
@@ -156,6 +161,28 @@ def tarama_penceresi_acik_mi(now: Optional[datetime] = None) -> bool:
     pencere_sonu = (now.replace(hour=kapanis.hour, minute=kapanis.minute, second=0, microsecond=0)
                     + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN + 5))
     return BIST_OPEN <= current_time <= pencere_sonu.time()
+
+def islem_gunu_mu(now: Optional[datetime] = None) -> bool:
+    """Bugün BIST işlem günü mü? (hafta içi VE resmî tatil değil)
+
+    NEDEN AYRI: günlük özetler ve gün sonu analizi seans saatine bağlı değildir
+    (09:55/18:45/20:00 hedefleri piyasa kapalıyken de saati gelir). Bu kontrol
+    olmadan cumartesi/pazar ve resmî tatillerde kanala "öne çıkan formasyon
+    olmadı" mesajı gidiyor, gece analizi boşuna tam evren taraması yapıyordu.
+
+    Not: tarama kararı bu fonksiyona değil `tarama_animi_mi`'ye bağlıdır; burada
+    yalnız "takvim işlem günü mü" sorusu cevaplanır.
+    """
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    elif now.tzinfo is None:
+        now = ISTANBUL_TZ.localize(now)
+    else:
+        now = now.astimezone(ISTANBUL_TZ)
+    if now.weekday() >= 5:
+        return False
+    return bist_tatil_adi(now) is None
+
 
 def sonraki_islem_gunu(baslangic) -> date:
     """Hafta sonu ve resmî tatilleri atlayarak bir sonraki işlem gününü bulur.

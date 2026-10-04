@@ -21,6 +21,9 @@ class PatternCandidate:
     """Pine: type PatternCandidate — alan adları eşleşecek şekilde."""
     valid: bool = False
     identity: int = 0
+    # Phase 1: kalıcı formation kimliği (motor-içi `identity`'den ayrı kavram).
+    # Doğumda UUID ile üretilir; restart sonrası re-attach ile korunur.
+    stable_id: Optional[str] = None
     pattern_type: str = "Yok"
     family: str = "Yok"
     classic_dir: int = 0
@@ -402,7 +405,21 @@ def build_candidate(engine, hi_a: int, hi_b: int, lo_a: int, lo_b: int,
     lower_slope_norm = lower_slope / geometry_atr
     slope_gap_norm = upper_slope_norm - lower_slope_norm
     slope_gap = upper_slope - lower_slope
-    apex_float = float(start_bar) - start_width / slope_gap if abs(slope_gap) > mintick * 0.0001 else None
+    # GÖREV 2: Apex hesabı — slope_gap işaret/geometry guard
+    # Raw slope_gap (unnormalized) ile normalized slope_gap_norm tutarlı olmalı.
+    # Sadece geometrik olarak anlamlı (converging yönlü) yapılarda apex hesaplanır;
+    # diverging veya paralel yapılarda yanlış apex üretimi önlenir.
+    # Guard: hem raw büyüklük hem normalized büyüklük yeterli olmalı;
+    # slope_gap'in işareti (konverjans için negatif) de kontrol edilir.
+    slope_gap_sign_consistent = (slope_gap < 0)  # converging için slope_gap negatif olmalı (geometry_atr > 0)
+    raw_magnitude_ok = abs(slope_gap) > mintick * 0.0001
+    # Normalized magnitude: raw / geometry_atr; geometry_atr >= mintick*10 olduğundan
+    # bu guard, raw guard'a göre daha sıkı bir tutarlılık kontrolü sağlar.
+    norm_magnitude_ok = abs(slope_gap_norm) > mintick * 0.0001 / max(geometry_atr, mintick * 10.0)
+    if raw_magnitude_ok and norm_magnitude_ok and slope_gap_sign_consistent and start_width > mintick:
+        apex_float = float(start_bar) - start_width / slope_gap
+    else:
+        apex_float = None
     apex_bar = None if apex_float is None else int(round(apex_float))
     contraction = (start_width - current_width) / start_width if start_width > mintick else None
     apex_ok = (apex_bar is not None and apex_bar > b

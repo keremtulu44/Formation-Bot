@@ -45,7 +45,7 @@ cp .env.example .env
 # Test
 python -c "import pandas, numpy, yfinance; print('ok')"
 python test_triangle.py
-python collective_test.py
+PYTHONPATH=. python scripts/diagnostics/collective_test.py
 ```
 
 **Borsapy opsiyonel (gerek yok):**

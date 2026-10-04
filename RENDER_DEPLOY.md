@@ -710,7 +710,8 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | BotFather token'ı | Evet |
 | `TELEGRAM_CHAT_ID` | Kendi Telegram id'n (owner DM) | Evet |
-| `TELEGRAM_CHANNEL_ID` | Public kanal ID'si `-100...` (botu kanala admin ekle) | Evet |
+| `TELEGRAM_GROUP_ID` | **Public kanal hedefi (ÖNERİLEN ad):** `@bisthisseveri` veya `-100...`. Bot kanalda **yönetici** olmalı (Mesaj gönderme; sabit mesaj için Mesajları sabitle). DM olmadan da yayın çalışır. Kontrol: `python deploy_check.py` ve `python kanal_acilis.py --durum` | Evet |
+| `TELEGRAM_CHANNEL_ID` | Aynı şeyin eski adı (hâlâ desteklenir; ikisi de kanal/grup için çalışır) | Evet |
 | `SUPABASE_URL` | `https://<ref>.supabase.co` (opsiyonel uzak cache/state) | Hayır (plain) |
 | `SUPABASE_SERVICE_ROLE_KEY` | `sb_secret_...` veya `eyJ...` | Evet |
 | `BOT_PROFILE` | `Dengeli` / `Hassas` / `Seçici` | Hayır |

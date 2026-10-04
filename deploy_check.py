@@ -219,7 +219,8 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("SUPABASE_URL", False, "İsteğe bağlı: Supabase → Settings → API → Project URL (sonda /rest/v1 OLMADAN)"),
         ("SUPABASE_SERVICE_ROLE_KEY", False, "İsteğe bağlı uzak cache/state için service_role JWT veya sb_secret_... anahtarı"),
         ("TELEGRAM_BOT_TOKEN", True, "@BotFather → /newbot → 'Use this token'"),
-        ("TELEGRAM_CHAT_ID", True, "@userinfobot'un verdiği Id (kendine mesaj için pozitif sayı)"),
+        ("TELEGRAM_CHAT_ID", True, "@userinfobot'un verdiği Id (kendine mesaj için pozitif sayı; KOMUTLAR buna bağlı)"),
+        ("TELEGRAM_GROUP_ID", False, "PUBLIC KANAL hedefi (@bisthisseveri veya -100…): kanal yayını bununla açılır (eski adı TELEGRAM_CHANNEL_ID)"),
         ("BOT_PROFILE", False, "Dengeli / Hassas / Seçici"),
         ("TELEGRAM_TEST_KEY", False, "İsteğe bağlı: /test ucunu açar (telefondan Telegram testi)"),
         ("SUPABASE_STORE_PREFIX", False, "Varsayılan formation-bot: ; aynı tabloyu paylaşan 2. kopya için değiştirin"),
@@ -484,6 +485,87 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
         satir(FAIL, f"sendMessage başarısız (HTTP {r.status_code})", aciklama + ipucu)
 
 
+def kontrol_public_hedef(token: str, grup_id: str, chat_id: str = "") -> bool:
+    """Kanal/grup hedefini doğrular: bot orada mı, yönetici mi, mesaj yazabilir mi?
+
+    NEDEN: Public yayın DM'den bağımsız çalışır; hedef yanlışsa bot çalışır ama
+    kanala hiçbir şey düşmez ve bunu ancak loglardan anlarsınız. Bu kontrol
+    kurulumun en kritik adımını (yönetici + mesaj izni) tek komutla doğrular.
+    Döner: hedef hazır mı (özet satırı için).
+    """
+    if not token:
+        # Token yoksa Telegram bölümü zaten uyarı verdi.
+        return False
+    ready = False
+    try:
+        import requests
+    except ImportError:
+        return False
+    if not grup_id:
+        satir(WARN, "Public kanal hedefi yok (TELEGRAM_GROUP_ID)",
+              "Kanal yayını kapalı: yalnız DM çalışır. Kanal açtıysanız KANAL_ACILIS_PAKETI.md "
+              "adımlarını izleyin: TELEGRAM_GROUP_ID=@kanal_adi + bot YÖNETİCİ.")
+        return False
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{token}/getChat",
+                          json={"chat_id": grup_id}, timeout=12)
+    except Exception as exc:  # noqa: BLE001
+        satir(FAIL, "Public hedefe ulaşılamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+        return False
+    veri = (r.json() or {}) if r.status_code == 200 else {}
+    sohbet = veri.get("result") or {}
+    if not sohbet:
+        ipucu = "Bot hedefe ekli değil ya da adres yanlış (@... / -100...)."
+        if "channel" in (r.text or "") or "chat not found" in (r.text or "").lower():
+            ipucu = "Bot kanala eklenmeli ve YÖNETİCİ yapılmalı (kanal → Yöneticiler → Bot Ekle)."
+        satir(FAIL, f"Public hedef bulunamadı ({grup_id})", ipucu)
+        return False
+    baslik = sohbet.get("title") or sohbet.get("username") or grup_id
+    tip = sohbet.get("type", "?")
+    satir(OK, f"Public hedef bulundu: {baslik} ({tip})")
+
+    # Bot kimliği + üyelik durumu
+    uye = {}
+    try:
+        ben = requests.post(f"https://api.telegram.org/bot{token}/getMe", timeout=12)
+        bot_id = ((ben.json() or {}).get("result") or {}).get("id")
+        if bot_id:
+            ru = requests.post(f"https://api.telegram.org/bot{token}/getChatMember",
+                               json={"chat_id": grup_id, "user_id": bot_id}, timeout=12)
+            if ru.status_code == 200:
+                uye = (ru.json() or {}).get("result") or {}
+    except Exception as exc:  # noqa: BLE001
+        satir(WARN, "Üyelik durumu okunamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+
+    durum = str(uye.get("status") or "?")
+    if durum in ("administrator", "creator"):
+        satir(OK, "Bot hedefte YÖNETİCİ", "Kanal listesinde 1 mesaj/gün yerine kalıcı görünür.")
+        if tip == "channel":
+            if uye.get("can_post_messages"):
+                satir(OK, "Kanal izni var: Mesaj gönderme", "Yayın açık.")
+                ready = True
+            else:
+                satir(FAIL, "Kanal izni KAPALI: Mesaj gönderme",
+                      "Kanal → Yöneticiler → bot → 'Mesaj gönderme' açık olmalı; yoksa gönderim 403 döner.")
+        else:
+            satir(OK, "Grup: mesaj gönderme serbest", "Yönetici bot grup ayarlarından etkilenmez.")
+            ready = True
+    elif durum == "left":
+        satir(FAIL, "Bot hedefte YOK (left)",
+              "Botu kanala/grupa ekleyin; kanalda ayrıca YÖNETİCİ yapın (Mesaj gönderme izni).")
+    else:
+        satir(FAIL, f"Bot yönetici değil (status={durum})",
+              "Kanal → Yöneticiler → Bot Ekle → 'Mesaj gönderme' (+ sabit mesaj için 'Mesajları sabitle').")
+
+    if tip == "channel" and uye and not uye.get("can_post_messages"):
+        satir(WARN, "Sabit karşılama için 'Mesajları sabitle' izni",
+              "İzin yoksa kanal_acilis.py --uygula yalnız açıklama yazar.")
+    if not chat_id:
+        satir(WARN, "DM chat_id yok: komutlar kapalı",
+              "Public yayın sürer ama /panel,/durum çalışmaz. Komutlar için TELEGRAM_CHAT_ID ekleyin.")
+    return ready
+
+
 def _health_hedefi(url: str) -> str:
     temiz = _anahtari_temizle(url).rstrip("/")
     if temiz.endswith("/health") or temiz.endswith("/"):
@@ -567,7 +649,12 @@ def kontrol_render(url: str, test_key: str) -> None:
         return
 
     try:
-        r = requests.get(hedef.rsplit("/health", 1)[0] + "/test", params={"k": test_key}, timeout=60)
+        # A7 sonrası /test anahtarı varsayılan BAŞLIKTAN okunur (X-Test-Key).
+        r = requests.get(
+            hedef.rsplit("/health", 1)[0] + "/test",
+            headers={"X-Test-Key": test_key},
+            timeout=60,
+        )
     except Exception as exc:  # noqa: BLE001
         satir(FAIL, "/test çağrısı başarısız", f"{type(exc).__name__}: {_kisa(exc)}")
         return
@@ -614,6 +701,7 @@ def main() -> int:
     kontrol_repo()
     degerler = kontrol_env(dosya_env, canli_mod=canli_mod)
 
+    public_hazir = False
     if args.skip_network:
         bolum("AĞ KONTROLLERİ")
         satir(WARN, "--skip-network verildi", "Supabase/Telegram/Render kontrolleri atlandı.")
@@ -625,15 +713,25 @@ def main() -> int:
             degerler.get("TELEGRAM_CHAT_ID", ""),
             args.send_test_message,
         )
+        public_hazir = kontrol_public_hedef(
+            degerler.get("TELEGRAM_BOT_TOKEN", ""),
+            degerler.get("TELEGRAM_GROUP_ID", "") or degerler.get("TELEGRAM_CHANNEL_ID", ""),
+            degerler.get("TELEGRAM_CHAT_ID", ""),
+        )
         kontrol_render(args.url or "", args.test_key or degerler.get("TELEGRAM_TEST_KEY", ""))
 
     bolum("ÖZET")
     # Yeni istenen satır: ÖZET: Telegram HAZIR|YOK · Supabase HAZIR|YOK
     telegram_hazir = bool(degerler.get("TELEGRAM_BOT_TOKEN") and degerler.get("TELEGRAM_CHAT_ID"))
     supabase_hazir = bool(degerler.get("SUPABASE_URL") and degerler.get("SUPABASE_SERVICE_ROLE_KEY"))
+    kanal_hedefi = (degerler.get("TELEGRAM_GROUP_ID", "") or degerler.get("TELEGRAM_CHANNEL_ID", ""))
     ozet_telegram = "HAZIR" if telegram_hazir else "YOK"
     ozet_supabase = "HAZIR" if supabase_hazir else "YOK"
-    print(f"ÖZET: Telegram {ozet_telegram} · Supabase {ozet_supabase}")
+    # Kanal: hedef tanımlı + (ağ kontrolü yapıldıysa) gerçekten yazabiliyor olmalı.
+    ozet_kanal = "YOK"
+    if kanal_hedefi:
+        ozet_kanal = "HAZIR" if (args.skip_network or public_hazir) else "HEDEF VAR, IZIN YOK"
+    print(f"ÖZET: Telegram {ozet_telegram} · Kanal {ozet_kanal} · Supabase {ozet_supabase}")
     print(f"✅ {_sayac[OK]} tamam   ⚠️  {_sayac[WARN]} uyarı   ❌ {_sayac[FAIL]} hata")
     if _sayac[FAIL] == 0 and _sayac[WARN] == 0:
         print("Her şey yerinde: Render tarafı hazır.")
