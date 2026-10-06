@@ -1649,6 +1649,66 @@ def _bekle_veya_tarama(seconds: float) -> bool:
     return False
 
 
+_domain_runner_loaded = False
+_domain_runner_function = None
+
+
+def _load_domain_runner():
+    """Load optional domain runtime without making Formation startup depend on it."""
+    global _domain_runner_loaded, _domain_runner_function
+    if _domain_runner_loaded:
+        return _domain_runner_function
+    try:
+        from domain_engines.runner import run_domain_engines
+    except Exception:
+        # Leave the loaded flag false so a later scan can retry the import.
+        _domain_runner_function = None
+        logger.exception("Domain engine runner yüklenemedi; Formation taraması devam edecek")
+        return None
+    _domain_runner_function = run_domain_engines
+    _domain_runner_loaded = True
+    return _domain_runner_function
+
+
+def _safe_completed_domain_frame(
+    stock: str,
+    timeframe: str,
+    frame: object,
+    *,
+    already_completed: bool = False,
+):
+    """Prepare a domain-only copy; malformed frames are skipped without affecting Formation."""
+    if frame is None:
+        return None
+    try:
+        completed = frame if already_completed else tamamlanmis_mumlar(frame, timeframe)
+        return completed.copy(deep=True) if completed is not None else None
+    except Exception:
+        logger.exception(
+            "Domain frame preparation failed for %s/%s; domain timeframe is skipped and Formation continues",
+            stock,
+            timeframe,
+        )
+        return None
+
+
+def _run_domain_engines_for_symbol(stock: str, completed_frames: Dict[str, object]) -> None:
+    """Run each domain on the same completed input, behind an isolated boundary."""
+    runner = _load_domain_runner()
+    if runner is None:
+        return
+    for timeframe, frame in completed_frames.items():
+        if frame is None or getattr(frame, "empty", True):
+            continue
+        try:
+            runner(stock, timeframe, frame, profile=PROFILE)
+        except Exception:
+            # Adapter/runtime failures must not turn a successful Formation scan
+            # into a per-symbol scanner failure. Engine-level errors are isolated
+            # and logged by domain_engines.runner itself.
+            logger.exception("Domain runner hata verdi: %s/%s; Formation sonucu korunuyor", stock, timeframe)
+
+
 def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: PatternLifecycleManager, notifier: TelegramNotifier, manuel: bool = False, stocks=None, send_alerts: bool = True):
     """
     Aktif tarama evrenini tara; Yahoo verisi seri ve gruplu alınır, analiz ardından yapılır.
@@ -1830,11 +1890,21 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             
             # Her TF için: yarım (devam eden) mumu çıkar, TAMAMLANMIŞ mumları besle
             hisse_formasyonlari = []
+            domain_completed_frames = {}
             for tf_name, df_tf in all_tfs.items():
                 if df_tf is None or len(df_tf) < 30:
+                    # Formation'ın mevcut 30-bar kapısı aynen korunur. Domain
+                    # motorları kısa geçmişte kendi warm-up sonucunu üretebilir.
+                    if df_tf is not None and len(df_tf) > 0:
+                        domain_completed_frames[tf_name] = _safe_completed_domain_frame(
+                            stock, tf_name, df_tf
+                        )
                     logger.debug(f"{stock} {tf_name} için yeterli veri yok")
                     continue
                 df_tf = tamamlanmis_mumlar(df_tf, tf_name)
+                domain_completed_frames[tf_name] = _safe_completed_domain_frame(
+                    stock, tf_name, df_tf, already_completed=True
+                )
                 if df_tf is None or len(df_tf) < 30:
                     logger.debug(f"{stock} {tf_name}: tamamlanmış mum kalmadı (seans içi erken tarama)")
                     continue
@@ -1959,6 +2029,11 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         and teyit.state not in ("FORMASYON_GECERSIZ", "Yok", "ST_NONE")
                     )
                     _live_state.record_formation(formasyon_kaydi)
+
+            # Bağımsız domain dalı: aynı sembol/timeframe için tamamlanmış
+            # OHLCV frame'leri kullanır. Formation ve mevcut bildirim sonuçlarına
+            # domain çıktısı eklenmez.
+            _run_domain_engines_for_symbol(stock, domain_completed_frames)
 
             daily_stats['stocks_scanned'] += 1
             tur_taranan += 1
