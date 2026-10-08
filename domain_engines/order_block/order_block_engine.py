@@ -94,6 +94,103 @@ class OrderBlockEngine(BaseEngine):
         self._records = []
         self._snapshot = None
 
+    def slide_window(self, drop_count: int) -> None:
+        """Rebase native records when an identical rolling prefix is discarded.
+
+        This is state bookkeeping only: detection, fill, cancel, and imbalance
+        transitions still run through ``update`` unchanged. Records sourced
+        before the new frame's first row are pruned. A record sourced exactly at
+        the new left edge is retained only when the first two retained rows can
+        produce that same source record under the native pair-detection path.
+        Remaining records get frame-relative indexes rebased.
+        """
+        if isinstance(drop_count, bool) or not isinstance(drop_count, int):
+            raise TypeError("drop_count must be an integer")
+        if drop_count < 0 or drop_count > len(self._rows):
+            raise ValueError("drop_count is outside the current engine window")
+        if drop_count == 0:
+            return
+        if drop_count == len(self._rows):
+            self._reset()
+            return
+
+        retained_rows = self._rows[drop_count:]
+        boundary_records = [
+            record for record in self._records if record.source_index == drop_count
+        ]
+        boundary_candidates: tuple[OrderBlockRecord, ...] = ()
+        if boundary_records and len(retained_rows) >= 2:
+            # A source at the left edge may either have been created using the
+            # now-evicted prior bar, or be reproducible from retained rows 0/1.
+            # Ask the unchanged native detector which case applies rather than
+            # inferring it from the rebased integer index.
+            probe = OrderBlockEngine(config=self.config)
+            for row in retained_rows[:2]:
+                probe.update(row)
+            boundary_candidates = probe.records
+
+        rebased_records: list[OrderBlockRecord] = []
+        for record in self._records:
+            if record.source_index < 0 or record.source_index >= len(self._rows):
+                raise ValueError("record source index is outside the current engine window")
+            source_row = self._rows[record.source_index]
+            if record.source_time is not None and source_row.get("timestamp") != record.source_time:
+                raise ValueError("record source timestamp does not match its frame-relative index")
+            if record.source_index < drop_count:
+                continue
+
+            rebased = replace(
+                record,
+                source_index=record.source_index - drop_count,
+                imbalance_end_index=record.imbalance_end_index - drop_count,
+            )
+            if record.source_index == drop_count and not any(
+                self._same_creation_identity(rebased, candidate)
+                for candidate in boundary_candidates
+            ):
+                continue
+            rebased_records.append(rebased)
+
+        self._rows = retained_rows
+        self._records = rebased_records
+        self._snapshot = self._build_result(self._rows[-1].get("timestamp"))
+
+    @staticmethod
+    def _same_creation_identity(
+        rebased: OrderBlockRecord,
+        candidate: OrderBlockRecord,
+    ) -> bool:
+        """Compare only source-time/geometry fields set at native creation.
+
+        Lifecycle fields such as imbalance confirmation and fill boundary have
+        advanced in the live record and intentionally do not participate.
+        """
+        fields = (
+            "source_index",
+            "source_time",
+            "top",
+            "bottom",
+            "bullish",
+            "base_score",
+            "anchor_high",
+            "anchor_low",
+            "imbalance_end_index",
+        )
+        for name in fields:
+            left = getattr(rebased, name)
+            right = getattr(candidate, name)
+            try:
+                left_missing = bool(pd.isna(left))
+                right_missing = bool(pd.isna(right))
+            except (TypeError, ValueError):
+                left_missing = right_missing = False
+            if left_missing or right_missing:
+                if left_missing != right_missing:
+                    return False
+            elif left != right:
+                return False
+        return True
+
     def replay(self, frame: pd.DataFrame) -> list[EngineResult]:
         self._reset()
         out: list[EngineResult] = []

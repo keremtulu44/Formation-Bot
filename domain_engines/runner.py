@@ -7,6 +7,7 @@ signal, decision, or score.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 import logging
 import threading
@@ -21,6 +22,7 @@ from .fvg import (
     FvgEngulfingEngine,
     SensitivityProfile,
 )
+from .incremental import IncrementalDecision, IncrementalEngineState
 from .market_structure import MarketStructureConfig, MarketStructureEngine
 from .order_block import OrderBlockEngine
 from .volume_participation import VolumeParticipationEngine
@@ -49,6 +51,49 @@ class DomainRunResult:
 
 _latest_lock = threading.RLock()
 _latest_by_series: dict[tuple[str, str], dict[str, DomainRunResult]] = {}
+
+# OB/FVG native state is process-local and independent by symbol/timeframe and
+# domain. A changed engine configuration replaces only that domain's state.
+_state_registry_lock = threading.RLock()
+_incremental_states_by_series: dict[
+    tuple[str, str],
+    dict[str, tuple[tuple[Any, ...], IncrementalEngineState]],
+] = {}
+_series_state_locks: dict[tuple[str, str], threading.RLock] = {}
+
+
+def _advance_incremental_engine(
+    symbol: str,
+    timeframe: str,
+    domain: str,
+    config_signature: tuple[Any, ...],
+    frame: pd.DataFrame,
+    engine_factory: Callable[[], Any],
+) -> tuple[IncrementalEngineState, IncrementalDecision]:
+    """Advance one in-memory engine cursor; serialize only its own series."""
+    key = (symbol, timeframe)
+    with _state_registry_lock:
+        series_lock = _series_state_locks.setdefault(key, threading.RLock())
+    with series_lock:
+        with _state_registry_lock:
+            states = _incremental_states_by_series.setdefault(key, {})
+            stored = states.get(domain)
+            if stored is None or stored[0] != config_signature:
+                state = IncrementalEngineState(domain, engine_factory())
+                states[domain] = (config_signature, state)
+            else:
+                state = stored[1]
+        decision = state.advance(frame)
+        logger.debug(
+            "%s incremental processing for %s/%s: mode=%s updated_bars=%d reason=%s",
+            domain,
+            symbol,
+            timeframe,
+            decision.mode,
+            decision.updated_bars,
+            decision.reason,
+        )
+        return state, decision
 
 
 def _execute_domain(
@@ -161,12 +206,20 @@ def _run_fvg(
     profile: str,
 ) -> DomainRunResult:
     sensitivity = SensitivityProfile(profile)
-    engine = FvgEngulfingEngine(
-        config=FvgEngulfingConfig(sensitivity=sensitivity, timeframe=timeframe)
+    config = FvgEngulfingConfig(sensitivity=sensitivity, timeframe=timeframe)
+    state, _ = _advance_incremental_engine(
+        symbol,
+        timeframe,
+        "fvg",
+        (sensitivity.value, timeframe),
+        frame,
+        lambda: FvgEngulfingEngine(config=config),
     )
-    engine.replay(frame)
-    result = engine.snapshot
-    export = engine.export
+    engine = state.engine
+    # The last engine result retains the native timestamp even when the frame
+    # was unchanged; never substitute frame[-1] or manufacture one here.
+    result = state.last_result
+    export = deepcopy(engine.export)
     data_quality = engine.last_data_quality
 
     if data_quality is FvgEngulfingDataQuality.WARMUP:
@@ -192,12 +245,12 @@ def _run_fvg(
         export=export,
         data_quality=data_quality,
         details={
-            "fvg_formations": engine.fvg_formations,
-            "engulfing_formations": engine.engulfing_formations,
-            "active_bullish_fvg": engine.active_bullish_fvg,
-            "active_bearish_fvg": engine.active_bearish_fvg,
-            "completed_fvg": engine.completed_fvg,
-            "completed_engulfing": engine.completed_engulfing,
+            "fvg_formations": deepcopy(engine.fvg_formations),
+            "engulfing_formations": deepcopy(engine.engulfing_formations),
+            "active_bullish_fvg": deepcopy(engine.active_bullish_fvg),
+            "active_bearish_fvg": deepcopy(engine.active_bearish_fvg),
+            "completed_fvg": deepcopy(engine.completed_fvg),
+            "completed_engulfing": deepcopy(engine.completed_engulfing),
         },
     )
 
@@ -207,10 +260,17 @@ def _run_order_block(
     timeframe: str,
     frame: pd.DataFrame,
 ) -> DomainRunResult:
-    engine = OrderBlockEngine()
-    engine.replay(frame)
+    state, _ = _advance_incremental_engine(
+        symbol,
+        timeframe,
+        "order_block",
+        (),
+        frame,
+        OrderBlockEngine,
+    )
+    engine = state.engine
     result = engine.snapshot()
-    export = engine.export
+    export = deepcopy(engine.export)
     data_quality = engine.last_data_quality
 
     if data_quality.value != "OK":
@@ -229,24 +289,26 @@ def _run_order_block(
         export=export,
         data_quality=data_quality,
         details={
-            "records": engine.records,
-            "active_records": engine.active_records,
+            "records": deepcopy(engine.records),
+            "active_records": deepcopy(engine.active_records),
         },
     )
 
 
-def run_domain_engines(
+def _run_domain_engines_locked(
     symbol: str,
     timeframe: str,
     frame: pd.DataFrame,
     *,
     profile: str = "Dengeli",
 ) -> dict[str, DomainRunResult]:
-    """Replay each applicable domain independently on one symbol/timeframe.
+    """Run each applicable domain independently on one symbol/timeframe.
 
-    A fresh public engine instance is used for each call and each domain. The
-    caller is responsible for passing only the intended completed-bar window;
-    this function never fetches data or resamples it.
+    Market Structure and Volume retain their replay contract. OB and FVG keep
+    isolated in-memory cursors per symbol/timeframe and use safe updates only
+    when their current native frame alignment is verified; otherwise they replay
+    the supplied frame. The caller remains responsible for completed bars; this
+    function never fetches data or resamples it.
     """
     tf = str(timeframe).strip().lower()
     if tf not in ALL_DOMAIN_TIMEFRAMES:
@@ -297,6 +359,25 @@ def run_domain_engines(
     with _latest_lock:
         _latest_by_series[(symbol, tf)] = dict(output)
     return dict(output)
+
+
+
+def run_domain_engines(
+    symbol: str,
+    timeframe: str,
+    frame: pd.DataFrame,
+    *,
+    profile: str = "Dengeli",
+) -> dict[str, DomainRunResult]:
+    """Run all domains as one serialized update for a symbol/timeframe."""
+    tf = str(timeframe).strip().lower()
+    if tf not in ALL_DOMAIN_TIMEFRAMES:
+        raise ValueError(f"unsupported Formation-Bot timeframe: {timeframe!r}")
+    key = (symbol, tf)
+    with _state_registry_lock:
+        series_lock = _series_state_locks.setdefault(key, threading.RLock())
+    with series_lock:
+        return _run_domain_engines_locked(symbol, tf, frame, profile=profile)
 
 
 def get_latest_domain_results(

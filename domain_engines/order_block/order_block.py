@@ -73,6 +73,14 @@ class OrderBlockEngine(_CoreOrderBlockEngine):
         self._export = OrderBlockExport()
         self._last_data_quality = OrderBlockDataQuality.OK
 
+    def slide_window(self, drop_count: int) -> None:
+        """Rebase the frame-relative native state and refresh the same export."""
+        super().slide_window(drop_count)
+        if self._rows:
+            self._export = self._select_export(float(self._rows[-1]["close"]))
+        else:
+            self._export = OrderBlockExport()
+
     def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
         row = dict(bar)
         if not bool(row.get("is_closed", True)):
