@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import builtins
+import copy
 import logging
 import types
 
 import pandas as pd
+import pytest
 
 
 def _valid_frame(count: int = 4) -> pd.DataFrame:
@@ -30,7 +32,6 @@ def _valid_frame(count: int = 4) -> pd.DataFrame:
 def test_broken_short_domain_frame_does_not_skip_next_formation_timeframe(
     monkeypatch, caplog
 ):
-    import copy
     from types import SimpleNamespace
 
     import main as main_module
@@ -195,3 +196,177 @@ def test_domain_import_failure_is_logged_and_retried_on_next_scan(
     assert len(attempts) == 2
     assert main_module._domain_runner_loaded is True
     assert [call[1] for call in runner_calls] == ["2h"]
+
+
+@pytest.mark.parametrize("domain_fails", [False, True])
+def test_formation_alert_waits_for_domain_runner_and_ignores_stale_results(
+    monkeypatch, domain_fails
+):
+    from types import SimpleNamespace
+
+    import domain_engines.runner as domain_runner_module
+    import main as main_module
+
+    events = []
+    alerts = []
+    runner_frames = []
+    stale_lookups = []
+    frame = _valid_frame(40)
+    hourly_cache = _valid_frame(50)
+    all_timeframes = {
+        "1h": pd.DataFrame(),
+        "2h": frame,
+        "4h": pd.DataFrame(),
+        "1d": pd.DataFrame(),
+    }
+    active = SimpleNamespace(
+        raw_quality=92.0,
+        pattern_type="Simetrik Üçgen",
+        upper_now=20.0,
+        lower_now=10.0,
+        start_bar=4,
+        break_strength=91.0,
+        contraction=0.6,
+        upper_touches=3,
+        lower_touches=2,
+    )
+
+    class FakeLiveState:
+        def begin_scan(self, *args, **kwargs):
+            return None
+
+        def record_formation(self, *args, **kwargs):
+            return None
+
+        def mark_alert_sent(self, *args, **kwargs):
+            return None
+
+        def finish_scan(self, *args, **kwargs):
+            return None
+
+        def fail_scan(self, *args, **kwargs):
+            raise AssertionError("domain failure must not fail the Formation scan")
+
+    class FakeLifecycle:
+        def scan(self, key, _frame, *, tam_yeniden):
+            assert key == "AUDIT_2h"
+            assert tam_yeniden is True
+            events.append("formation.scan")
+            return SimpleNamespace(
+                state="KIRILIM_TEYITLI",
+                break_dir=1,
+                log="immediate formation alert",
+                active=active,
+                effective_quality=92.0,
+                bar_index=39,
+                retest_seen=True,
+            )
+
+        def get_snapshot(self, _key):
+            return None
+
+    class FakeDeferredAlerts:
+        def observe(self, *args, **kwargs):
+            return None
+
+        def items(self, *args, **kwargs):
+            events.append("payload.context_captured")
+            return []
+
+        def mark_reported(self, *args, **kwargs):
+            return None
+
+    class FakeNotifier:
+        def send(self, alert_data):
+            events.append("telegram.send")
+            alerts.append(alert_data.copy())
+            return True
+
+    class FakeDequeManager:
+        sureklilik_sorunlari = {}
+
+        def to_dataframe(self, _stock):
+            return hourly_cache.copy(deep=True)
+
+        def gunluk_veri_eksik_mi(self, _stock, _now):
+            return False
+
+        def to_gunluk_dataframe(self, _stock):
+            return None
+
+        def save_to_disk(self, _stock):
+            return None
+
+    def fake_domain_runner(symbol, timeframe, completed_frame, *, profile):
+        events.append("domain.start")
+        runner_frames.append((symbol, timeframe, completed_frame.copy(deep=True), profile))
+        if domain_fails:
+            events.append("domain.failure")
+            raise RuntimeError("simulated domain engine failure")
+        events.append("domain.finish")
+        return {"domain_result": "fresh-run-result"}
+
+    def stale_domain_lookup(*args, **kwargs):
+        stale_lookups.append((args, kwargs))
+        return {"domain_result": "stale-previous-scan-result"}
+
+    # Make any accidental read of the domain runner's latest-result cache visible.
+    monkeypatch.setattr(domain_runner_module, "get_latest_domain_results", stale_domain_lookup)
+    monkeypatch.setattr(main_module, "get_latest_domain_results", stale_domain_lookup, raising=False)
+    fresh_stats = copy.deepcopy(main_module.daily_stats)
+    for key, value in fresh_stats.items():
+        if isinstance(value, bool):
+            fresh_stats[key] = False
+        elif isinstance(value, (int, float)):
+            fresh_stats[key] = 0
+
+    monkeypatch.setattr(main_module, "daily_stats", fresh_stats)
+    monkeypatch.setattr(main_module, "last_run_stats", {}, raising=False)
+    monkeypatch.setattr(main_module, "_live_state", FakeLiveState())
+    monkeypatch.setattr(main_module, "_deferred_alert_buffer", FakeDeferredAlerts())
+    monkeypatch.setattr(main_module, "_load_domain_runner", lambda: fake_domain_runner)
+    monkeypatch.setattr(main_module, "fetch_1h_stocks_paced", lambda *a, **k: ({}, {}, 0, 0))
+    monkeypatch.setattr(main_module, "create_yahoo_pacer", lambda: object())
+    monkeypatch.setattr(main_module, "select_yfinance_1h_period", lambda *_: "5d")
+    monkeypatch.setattr(main_module, "resample_all_timeframes", lambda _frame: all_timeframes)
+    monkeypatch.setattr(main_module, "tarama_penceresi_acik_mi", lambda *_: False)
+    monkeypatch.setattr(main_module, "_cache_verisi_kullanilabilir", lambda *a, **k: True)
+    monkeypatch.setattr(main_module, "reset_daily_if_needed", lambda: None)
+    monkeypatch.setattr(main_module, "write_heartbeat", lambda **kwargs: None)
+    monkeypatch.setattr(main_module, "son_tarama_kaydet", lambda: None)
+    monkeypatch.setattr(main_module, "_shutdown_requested", False)
+
+    result = main_module.scan_all_stocks(
+        FakeDequeManager(),
+        FakeLifecycle(),
+        FakeNotifier(),
+        stocks=["AUDIT"],
+        send_alerts=True,
+    )
+
+    assert result["status"] == "tamamlandi"
+    assert [call[:2] for call in runner_frames] == [("AUDIT", "2h")]
+    assert float(runner_frames[0][2]["close"].iloc[-1]) == float(frame["close"].iloc[-1])
+    assert len(alerts) == 1
+    assert alerts[0]["state"] == "KIRILIM_TEYITLI"
+    assert alerts[0]["watch_context"] == []
+    assert alerts[0]["dm_context"] == {}
+    assert "domain_result" not in alerts[0]
+    assert stale_lookups == []
+
+    if domain_fails:
+        assert events == [
+            "formation.scan",
+            "payload.context_captured",
+            "domain.start",
+            "domain.failure",
+            "telegram.send",
+        ]
+    else:
+        assert events == [
+            "formation.scan",
+            "payload.context_captured",
+            "domain.start",
+            "domain.finish",
+            "telegram.send",
+        ]

@@ -41,8 +41,9 @@ from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   select_yfinance_1h_period, tamamlanmis_mumlar)
 from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
-from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
+from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES, STATE_TR
 from notifier import TelegramNotifier
+from formation_dm_context import build_formation_dm_context
 from supabase_store import SupabaseStore
 from health_server import start_render_health_server, WEBHOOK_YOL_ONEK
 from live_state import LiveState
@@ -88,8 +89,6 @@ _notifier_ref = None
 _supabase_store_ref = None
 _deferred_alert_buffer = DeferredAlertBuffer()
 IMMEDIATE_ALERT_STATES = frozenset(ALERT_STATES)
-
-
 def son_bar_yasi_dakika_str(dk: float) -> str:
     """Dakikayı insan okunur yapar: 95 -> '1sa 35dk', 1500 -> '1g 1sa'."""
     dk = max(0, int(round(dk)))
@@ -217,6 +216,46 @@ def reset_daily_if_needed():
         daily_stats['son_tarama_suresi_dk'] = None
         daily_stats['gunluk_bar_sayisi'] = None
         daily_stats['last_reset'] = today
+
+def _persist_watch_buffer(notifier, now, *, remote: bool = False) -> bool:
+    """Persist the current-day deferred state after each mutation/symbol."""
+    if notifier is None or not hasattr(notifier, "persist_watch_state"):
+        return False
+    try:
+        return bool(notifier.persist_watch_state(_deferred_alert_buffer.snapshot(now), remote=remote))
+    except Exception:
+        logger.exception("Deferred watch snapshot persistence failed")
+        return False
+
+
+def _apply_recovered_deliveries(notifier, now=None) -> int:
+    """Apply durable outbox acknowledgements to live/digest bookkeeping."""
+    now = now or datetime.now(ISTANBUL_TZ)
+    try:
+        delivered = notifier.drain_outbox(max_items=10)
+    except Exception:
+        logger.exception("Telegram outbox drain failed; pending records remain recoverable")
+        return 0
+    recovered = 0
+    for item in delivered:
+        if item.get("kind") != "formation" or item.get("destination") != "dm":
+            continue
+        _deferred_alert_buffer.mark_reported(item.get("watch_context") or [], now)
+        if not _persist_watch_buffer(notifier, now, remote=True):
+            logger.error("Outbox app-ack deferred: watch state could not be durably persisted")
+            continue
+        _live_state.mark_alert_sent(item.get("stock", ""), item.get("timeframe", ""))
+        if not notifier.acknowledge_delivery(item.get("id", "")):
+            logger.error("Outbox app-ack persistence failed for id=%s", item.get("id", "")[:12])
+            continue
+        daily_stats["alerts_sent"] += 1
+        recovered += 1
+        logger.info(
+            "Telegram outbox DM recovered: %s %s %s (id=%s)",
+            item.get("stock"), item.get("timeframe"), item.get("state"), item.get("id", "")[:12],
+        )
+    return recovered
+
 
 def create_yahoo_pacer() -> YahooRequestPacer:
     """Her Yahoo isteğine uygulanan seri pacing ayarları."""
@@ -382,21 +421,45 @@ Notlar:
 • Public kanal için: /canli, /panel ve /ozet en verimli kısayollar.
 • Komutlar webhook (Render) ya da yoklama ile gelir; ikisi aynı anda açık olmaz."""
 
-STATE_TR = {
-    "ADAY_OLUSUYOR": "Aday oluşuyor",
-    "GEOMETRI_ADAYI": "Geometri adayı",
-    "FORMASYON_TANIMLANDI": "Formasyon tanımlandı",
-    "OLGUNLASIYOR": "Olgunlaşıyor",
-    "SIKISMA_GUCLENIYOR": "Sıkışma güçleniyor",
-    "KIRILIM_HAZIRLIGI": "Kırılım hazırlığı",
-    "KIRILIM_DENEMESI": "Kırılım denemesi",
-    "KIRILIM_ADAYI": "Kırılım adayı",
-    "KIRILIM_TEYITLI": "Kırılım teyitli",
-    "RETEST_BEKLENIYOR": "Retest bekleniyor",
-    "RETEST_EDILIYOR": "Retest ediliyor",
-    "RETEST_BASARILI": "Retest başarılı",
-    "FORMASYON_TAMAMLANDI": "Formasyon tamamlandı",
+_ALERT_EVENT_TYPES = {
+    "KIRILIM_TEYITLI": {"BREAK_CONFIRMED", "COUNTER_BREAK"},
+    "RETEST_BASARILI": {"RETEST_OK"},
+    "FORMASYON_TAMAMLANDI": {"COMPLETED"},
+    "BASARISIZ_KIRILIM": {"BREAK_FAILED"},
 }
+
+
+def _formation_alert_event_id(snapshot, state: str):
+    """Return a stable identity for an immediate lifecycle transition, if present.
+
+    The lifecycle manager replays completed bars, so the same event is present
+    in successive snapshots. Using its native timestamp (or bar index when no
+    timestamp exists) prevents a prolonged state from becoming a new Telegram
+    event merely because the four-hour cooldown elapsed.
+    """
+    accepted_types = _ALERT_EVENT_TYPES.get(str(state or ""))
+    if not accepted_types:
+        return None
+    for event in reversed(getattr(snapshot, "events", ()) or ()):
+        if not isinstance(event, dict):
+            continue
+        if event.get("state") != state or event.get("type") not in accepted_types:
+            continue
+        event_time = event.get("time")
+        if event_time is not None:
+            if hasattr(event_time, "isoformat"):
+                event_time = event_time.isoformat()
+            else:
+                event_time = str(event_time)
+            return f"{event.get('type')}:{event_time}"
+        bar_index = event.get("bar")
+        if bar_index is not None:
+            return f"{event.get('type')}:bar:{bar_index}"
+    return None
+
+
+# STATE_TR artık telegram_alert_flow içindeki ortak sözlükten gelir (notifier ile
+# aynı terminoloji); buradaki kopya kaldırıldı.
 
 def _gecen_sure(iso_zaman):
     """'12 dk önce' gibi kısa yaş metni."""
@@ -1692,21 +1755,26 @@ def _safe_completed_domain_frame(
         return None
 
 
-def _run_domain_engines_for_symbol(stock: str, completed_frames: Dict[str, object]) -> None:
-    """Run each domain on the same completed input, behind an isolated boundary."""
+def _run_domain_engines_for_symbol(
+    stock: str, completed_frames: Dict[str, object]
+) -> Dict[str, Dict[str, object]]:
+    """Run domains on current completed frames; return only those run outputs."""
+    outputs: Dict[str, Dict[str, object]] = {}
     runner = _load_domain_runner()
     if runner is None:
-        return
+        return outputs
     for timeframe, frame in completed_frames.items():
         if frame is None or getattr(frame, "empty", True):
             continue
         try:
-            runner(stock, timeframe, frame, profile=PROFILE)
+            result = runner(stock, timeframe, frame, profile=PROFILE)
+            if isinstance(result, dict):
+                outputs[timeframe] = result
         except Exception:
             # Adapter/runtime failures must not turn a successful Formation scan
-            # into a per-symbol scanner failure. Engine-level errors are isolated
-            # and logged by domain_engines.runner itself.
+            # into a per-symbol scanner failure. No previous runner cache is read.
             logger.exception("Domain runner hata verdi: %s/%s; Formation sonucu korunuyor", stock, timeframe)
+    return outputs
 
 
 def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: PatternLifecycleManager, notifier: TelegramNotifier, manuel: bool = False, stocks=None, send_alerts: bool = True):
@@ -1779,8 +1847,18 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             df_1h = deque_manager.to_dataframe(stock)
             taze = taze_1h_verileri.get(stock)
             if taze is not None:
-                deque_manager.append_dataframe(stock, taze)
-                df_1h = deque_manager.to_dataframe(stock)
+                birlesti = deque_manager.append_dataframe(stock, taze)
+                if birlesti:
+                    df_1h = deque_manager.to_dataframe(stock)
+                else:
+                    # Geçersiz girdi deque'ye yazılmadı; eski cache tazelik
+                    # kurallarıyla değerlendirilir (seans içi >120 dk -> atlanır).
+                    logger.error(
+                        f"{stock}: taze 1H veri geçersiz OHLCV; deque güncellenmedi - "
+                        "eski veri tazelik kurallarıyla kullanılacak"
+                    )
+                    taze = None
+                    df_1h = deque_manager.to_dataframe(stock)
             else:
                 logger.warning(
                     f"{stock}: taze 1H veri yok ({fetch_hatalari.get(stock, 'fetch yapılmadı')}); "
@@ -1880,8 +1958,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     taze_gunluk = fetch_yfinance_1d(stock)
                 deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
                 if taze_gunluk is not None and len(taze_gunluk) >= 30:
-                    deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
-                    logger.info(f"{stock}: günlük veri tazelendi ({len(taze_gunluk)} bar)")
+                    if deque_manager.append_gunluk_dataframe(stock, taze_gunluk):
+                        logger.info(f"{stock}: günlük veri tazelendi ({len(taze_gunluk)} bar)")
+                    else:
+                        logger.warning(f"{stock}: günlük derin veri geçersiz OHLCV - resample kullanılacak")
                 else:
                     logger.warning(f"{stock}: günlük derin veri çekilemedi - resample kullanılacak")
             df_gunluk = deque_manager.to_gunluk_dataframe(stock)
@@ -1891,6 +1971,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             # Her TF için: yarım (devam eden) mumu çıkar, TAMAMLANMIŞ mumları besle
             hisse_formasyonlari = []
             domain_completed_frames = {}
+            pending_formation_alerts = []
             for tf_name, df_tf in all_tfs.items():
                 if df_tf is None or len(df_tf) < 30:
                     # Formation'ın mevcut 30-bar kapısı aynen korunur. Domain
@@ -1957,6 +2038,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         _deferred_alert_buffer.observe(stock, tf_name, formasyon_kaydi, simdiki_zaman)
                     else:
                         _deferred_alert_buffer.observe(stock, tf_name, None, simdiki_zaman)
+                    _persist_watch_buffer(notifier, simdiki_zaman, remote=False)
                     if q < min_q:
                         logger.debug(f"{stock} {tf_name} kalite {q:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
                     elif send_alerts and state in WATCH_STATES:
@@ -1989,6 +2071,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'timeframe': tf_name,
                             'pattern_name': active.pattern_type,
                             'state': state,
+                            'lifecycle_event_id': _formation_alert_event_id(snap, state),
                             'confidence_score': q,
                             'critical_price_level': active.upper_now if break_dir == 1 else active.lower_now,
                             'upper_now': active.upper_now,
@@ -2008,14 +2091,25 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 if not (item.get('stock') == stock and item.get('timeframe') == tf_name)
                             ][:3],
                         }
-                        if notifier.send(alert_data):
-                            daily_stats['alerts_sent'] += 1
-                            _deferred_alert_buffer.mark_reported(alert_data['watch_context'], simdiki_zaman)
-                            _live_state.mark_alert_sent(stock, tf_name)
-                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
+                        # Keep this exact scan's payload and watch context local;
+                        # notifier policy is applied only after domain work ends.
+                        # The last completed Formation bar close is the native
+                        # reference for zone-side/distance selection; it is not
+                        # the pattern's critical breakout level.
+                        # Commit a Formation-only fallback to durable storage
+                        # before domain engines/context selection can fail or the
+                        # process can exit. Same-process delivery waits until the
+                        # current scan's context has been attached.
+                        prepare_event = getattr(notifier, "prepare_formation", None)
+                        if callable(prepare_event):
+                            prepare_event(alert_data)
+                        pending_formation_alerts.append(
+                            (alert_data, df_tf['close'].iloc[-1])
+                        )
                 else:
                     # Başarılı TF taramasında aday kaybolduysa bekleyen kaydı kaldır.
                     _deferred_alert_buffer.observe(stock, tf_name, None, simdiki_zaman)
+                    _persist_watch_buffer(notifier, simdiki_zaman, remote=False)
                     # Canlı formasyon yok (terminal state'ler ve kalite kapısı dahil)
                     logger.debug(f"{stock} {tf_name} - Canlı formasyon yok: {snap.log}")
             
@@ -2030,11 +2124,73 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     )
                     _live_state.record_formation(formasyon_kaydi)
 
-            # Bağımsız domain dalı: aynı sembol/timeframe için tamamlanmış
-            # OHLCV frame'leri kullanır. Formation ve mevcut bildirim sonuçlarına
-            # domain çıktısı eklenmez.
-            _run_domain_engines_for_symbol(stock, domain_completed_frames)
+            # Same-scan as-of values come only from the completed frames passed
+            # to this symbol's runner. No latest-result/cache fallback is allowed.
+            domain_asof_by_tf = {}
+            for timeframe, frame in domain_completed_frames.items():
+                try:
+                    if frame is not None and not getattr(frame, "empty", True):
+                        domain_asof_by_tf[timeframe] = frame.index[-1]
+                except Exception:
+                    logger.exception(
+                        "%s %s completed-frame as-of unavailable; its DM context is skipped",
+                        stock,
+                        timeframe,
+                    )
+            try:
+                scan_asof = max(domain_asof_by_tf.values()) if domain_asof_by_tf else None
+            except Exception:
+                logger.exception("%s scan as-of could not be compared; DM context is skipped", stock)
+                scan_asof = None
+            domain_results_by_tf = {}
+            # Domain failure must not suppress the already-prepared Formation DM.
+            try:
+                domain_results_by_tf = _run_domain_engines_for_symbol(
+                    stock, domain_completed_frames
+                )
+            except Exception as e:
+                logger.error(
+                    f"{stock} domain runner hatası; Formation bildirimleri sürdürülecek: {e}",
+                    exc_info=True,
+                )
 
+            # Context is derived from only this scan's runner return values. If a
+            # selector fails or a domain has no usable result, send Formation alone.
+            for alert_data, reference_price in pending_formation_alerts:
+                try:
+                    alert_data["dm_context"] = build_formation_dm_context(
+                        domain_results_by_tf,
+                        domain_asof_by_tf,
+                        symbol=stock,
+                        formation_timeframe=alert_data["timeframe"],
+                        reference_price=reference_price,
+                        scan_as_of=scan_asof,
+                    )
+                except Exception:
+                    alert_data["dm_context"] = {}
+                    logger.exception(
+                        "%s %s DM context selection failed; sending Formation only",
+                        stock,
+                        alert_data["timeframe"],
+                    )
+                if notifier.send(alert_data):
+                    daily_stats['alerts_sent'] += 1
+                    _deferred_alert_buffer.mark_reported(alert_data['watch_context'], simdiki_zaman)
+                    watch_persisted = _persist_watch_buffer(notifier, simdiki_zaman, remote=True)
+                    if watch_persisted:
+                        delivery_id = notifier.event_delivery_id(alert_data)
+                        if delivery_id:
+                            notifier.acknowledge_delivery(delivery_id)
+                    _live_state.mark_alert_sent(alert_data['stock_name'], alert_data['timeframe'])
+                    logger.info(
+                        f"📨 Telegram gönderildi: {alert_data['stock_name']} "
+                        f"{alert_data['timeframe']} {alert_data['state']} "
+                        f"kalite {alert_data['confidence_score']:.0f} "
+                        f"touches={alert_data['upper_touches']}/{alert_data['lower_touches']} "
+                        f"age={alert_data['age_bars']} mtf={alert_data['mtf_destek']}"
+                    )
+
+            _persist_watch_buffer(notifier, simdiki_zaman, remote=True)
             daily_stats['stocks_scanned'] += 1
             tur_taranan += 1
             
@@ -2048,6 +2204,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
         except Exception as e:
             daily_stats['errors'] += 1
             tur_hata += 1
+            activate_fallbacks = getattr(notifier, "activate_prepared_fallbacks", None)
+            if callable(activate_fallbacks):
+                activate_fallbacks(stock=stock)
             logger.error(f"{stock} tarama hatası: {e} - devam ediliyor", exc_info=True)
             continue
     
@@ -2291,7 +2450,11 @@ def evening_maintenance(deque_manager, lifecycle_manager):
             if _notifier_ref and _notifier_ref.enabled:
                 aktif = _build_active_formations_for_summary(lifecycle_manager)
                 ozet = _notifier_ref.format_daily_summary(aktif, daily_stats)
-                _notifier_ref.send_text(f"📋 Gün Sonu Bakım Raporu\n{ozet}")
+                maintenance_day = datetime.now(ISTANBUL_TZ).date().isoformat()
+                _notifier_ref.send_text(
+                    f"📋 Gün Sonu Bakım Raporu\n{ozet}",
+                    idempotency_key=f"evening-maintenance:dm:{maintenance_day}",
+                )
         except Exception as e:
             logger.warning(f"Gün sonu raporu hatası: {e}")
 
@@ -2357,6 +2520,7 @@ def main_loop():
             "state:daily_fetch_attempts",
             "state:telegram_cooldowns",
             "state:telegram_caps",
+            "state:telegram_delivery",
         ]
         remote_rows = supabase_store.get_many(remote_keys)
         if remote_rows is not None:
@@ -2368,6 +2532,11 @@ def main_loop():
         initial_store_data=remote_rows,
     )
     _notifier_ref = notifier
+    watch_snapshot = notifier.load_watch_state()
+    restored_watch = _deferred_alert_buffer.restore(watch_snapshot, datetime.now(ISTANBUL_TZ))
+    logger.info("Deferred watch restart restore: %d pending candidate(s)", restored_watch)
+    # Recover durable notifications before potentially slow cache warm-up.
+    _apply_recovered_deliveries(notifier)
     # Telegram token/chat_id teşhisi: mesaj göndermeden getMe ile doğrular.
     notifier.check_connection()
 
@@ -2402,9 +2571,13 @@ def main_loop():
     for stock in cache_eksik_hisseler:
         taze = ilk_veriler.get(stock)
         if taze is not None:
-            deque_manager.append_dataframe(stock, taze)
-            deque_manager.save_to_disk(stock)
-            logger.info(f"{stock}: {len(taze)} mum çekildi ve diske kaydedildi")
+            if deque_manager.append_dataframe(stock, taze):
+                deque_manager.save_to_disk(stock)
+                logger.info(f"{stock}: {len(taze)} mum çekildi ve diske kaydedildi")
+            else:
+                logger.warning(
+                    f"{stock}: ilk veri geçersiz OHLCV; diske yazılmadı - canlı taramada tekrar denenecek"
+                )
         else:
             logger.warning(
                 f"{stock}: ilk veri çekilemedi ({ilk_hatalar.get(stock, 'veri yok')}); "
@@ -2420,9 +2593,11 @@ def main_loop():
                 taze_gunluk = fetch_yfinance_1d(stock)
             deque_manager.gunluk_fetch_denemesi_kaydet(stock)
             if taze_gunluk is not None and len(taze_gunluk) >= 30:
-                deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
-                deque_manager.save_gunluk_to_disk(stock)
-                logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
+                if deque_manager.append_gunluk_dataframe(stock, taze_gunluk):
+                    deque_manager.save_gunluk_to_disk(stock)
+                    logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
+                else:
+                    logger.warning(f"{stock}: ilk günlük veri geçersiz OHLCV - resample kullanılacak")
             else:
                 logger.warning(f"{stock}: ilk günlük veri çekilemedi - resample kullanılacak")
     
@@ -2442,6 +2617,7 @@ def main_loop():
     while not _shutdown_requested:
         try:
             now = datetime.now(ISTANBUL_TZ)
+            _apply_recovered_deliveries(notifier, now)
             # Kullanıcı isteği seans saatinden bağımsız olarak ilk fırsatta çalışır.
             if _scan_istegi.is_set():
                 if _calistir_istek_taramasi(deque_manager, lifecycle_manager, notifier):
@@ -2479,12 +2655,14 @@ def main_loop():
 
                     if last_summary_sent.get(sh_str) != now.date():
                         if notifier.enabled:
-                            gonderildi, hata = notifier.send_text(dm_ozet)
+                            summary_key = f"daily-summary:dm:{now.date().isoformat()}:{sh_str}"
+                            gonderildi, hata = notifier.send_text(dm_ozet, idempotency_key=summary_key)
                             if gonderildi:
                                 last_summary_sent[sh_str] = now.date()
                                 if bekleyen:
                                     _deferred_alert_buffer.mark_reported(bekleyen, now)
-                                logger.info(f"Günlük DM özeti gönderildi: {sh_str}")
+                                    _persist_watch_buffer(notifier, now, remote=True)
+                                logger.info(f"Günlük DM özeti gönderildi/already delivered: {sh_str}")
                             else:
                                 logger.warning(f"Günlük DM özeti gönderilemedi ({sh_str}): {hata}")
                         else:
@@ -2493,7 +2671,8 @@ def main_loop():
 
                     if (notifier.channel_id
                             and last_summary_channel_sent.get(sh_str) != now.date()):
-                        if notifier.send_to_channel(ozet):
+                        channel_key = f"daily-summary:channel:{now.date().isoformat()}:{sh_str}"
+                        if notifier.send_to_channel(ozet, idempotency_key=channel_key):
                             last_summary_channel_sent[sh_str] = now.date()
             except Exception as e:
                 logger.debug(f"Özet gönderim hatası: {e}")
@@ -2517,11 +2696,15 @@ def main_loop():
                             )
                         if result.get("status") == "tamamlandi":
                             rapor = _panel_raporu("", tamamlandi=True)
-                            notifier.send_text("🌙 GÜN SONU ANALİZİ\n" + rapor)
+                            notifier.send_text(
+                                "🌙 GÜN SONU ANALİZİ\n" + rapor,
+                                idempotency_key=f"post-close:success:{now.date().isoformat()}",
+                            )
                         else:
                             notifier.send_text(
                                 "⚠️ Gün sonu analizi tamamlanamadı; eski sonuç yeni sonuç gibi "
-                                "gösterilmedi. Ayrıntı için bot loglarını kontrol edin."
+                                "gösterilmedi. Ayrıntı için bot loglarını kontrol edin.",
+                                idempotency_key=f"post-close:failure:{now.date().isoformat()}",
                             )
                     finally:
                         _scan_job_active.clear()

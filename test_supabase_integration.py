@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from config import ISTANBUL_TZ
 import notifier as notifier_module
 from data import StockDequeManager
 from notifier import TelegramNotifier
@@ -45,7 +46,7 @@ def test_manager_hydrates_hourly_daily_and_attempt_state(tmp_path):
 def test_notifier_loads_and_persists_remote_states(tmp_path, monkeypatch):
     monkeypatch.setattr(notifier_module, "DATA_DIR", str(tmp_path / "bot_data"))
     store = RecordingStore()
-    now = datetime.now().replace(microsecond=0)
+    now = datetime.now(ISTANBUL_TZ).replace(microsecond=0)
     remote = {
         "state:telegram_cooldowns": {"THYAO_pattern_1h_state": now.isoformat()},
         "state:telegram_caps": {
@@ -59,7 +60,7 @@ def test_notifier_loads_and_persists_remote_states(tmp_path, monkeypatch):
     notifier._cooldown_kaydet()
     notifier._kap_kaydet()
 
-    assert notifier.last_sent["THYAO_pattern_1h_state"] == now
+    assert notifier.last_sent["THYAO_pattern_1h_state"] == now.replace(tzinfo=None)
     assert notifier._gunluk_sayac == 3
     assert {key for key, _ in store.writes} == {
         "state:telegram_cooldowns",

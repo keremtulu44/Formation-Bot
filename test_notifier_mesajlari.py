@@ -1,5 +1,17 @@
 from datetime import datetime
+
+import pytest
+
+import notifier as notifier_module
 from notifier import TelegramNotifier
+
+
+@pytest.fixture(autouse=True)
+def _izole_data_dir(tmp_path, monkeypatch):
+    """TelegramNotifier gerçek bot_data'ya dokunmasın: outbox/delivery dosyaları
+    test süresince tmp dizinine yönlendirilir (runtime state koruması)."""
+    monkeypatch.setattr(notifier_module, "DATA_DIR", str(tmp_path / "bot_data"))
+    yield
 
 
 def _base_data(**override):

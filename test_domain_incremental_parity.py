@@ -100,7 +100,11 @@ def _assert_fvg_native_state_equal(left, right) -> None:
         "_bear_engulf_event",
     ):
         _assert_exact(getattr(left, attribute), getattr(right, attribute), attribute)
-    _assert_exact(left._calculate_atr_series(), right._calculate_atr_series(), "atr_series")
+    # Both engine implementations expose detector metrics through
+    # _calculate_series(); neither public engine has _calculate_atr_series().
+    # The series includes the prior/formation ATR-derived values (and is compared
+    # exactly below), so do not invent a test-only ATR helper that production does
+    # not implement.
     _assert_exact(left._calculate_series(), right._calculate_series(), "detector_series")
     for index in range(len(left._rows)):
         _assert_exact(

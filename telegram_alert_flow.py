@@ -20,6 +20,25 @@ WATCH_STATES = frozenset({
     "RETEST_EDILIYOR",
 })
 
+# Yaşam döngüsü durumlarının Türkçe görüntüleme adları (TEK ORTAK KAYNAK).
+# main.py (panel/digest) ve notifier.py (DM izleme satırları) aynı sözlüğü
+# kullanır; bilinmeyen durum kodu karşılıksız bırakılır, uydurulmaz.
+STATE_TR = {
+    "ADAY_OLUSUYOR": "Aday oluşuyor",
+    "GEOMETRI_ADAYI": "Geometri adayı",
+    "FORMASYON_TANIMLANDI": "Formasyon tanımlandı",
+    "OLGUNLASIYOR": "Olgunlaşıyor",
+    "SIKISMA_GUCLENIYOR": "Sıkışma güçleniyor",
+    "KIRILIM_HAZIRLIGI": "Kırılım hazırlığı",
+    "KIRILIM_DENEMESI": "Kırılım denemesi",
+    "KIRILIM_ADAYI": "Kırılım adayı",
+    "KIRILIM_TEYITLI": "Kırılım teyitli",
+    "RETEST_BEKLENIYOR": "Retest bekleniyor",
+    "RETEST_EDILIYOR": "Retest ediliyor",
+    "RETEST_BASARILI": "Retest başarılı",
+    "FORMASYON_TAMAMLANDI": "Formasyon tamamlandı",
+}
+
 AlertKey = Tuple[str, str, str, str]
 
 
@@ -102,6 +121,45 @@ class DeferredAlertBuffer:
             key = _key(record)
             self._reported.add(key)
             self._pending.pop(key, None)
+
+    def snapshot(self, now: datetime) -> dict:
+        """Serialize only current-day watch state; records remain Formation-native."""
+        self._ensure_day(now)
+        return {
+            "date": self._date.isoformat(),
+            "pending": [dict(record) for record in self._pending.values()],
+            "reported": [list(key) for key in sorted(self._reported)],
+        }
+
+    def restore(self, snapshot: Optional[dict], now: datetime) -> int:
+        """Restore a same-day snapshot; reject malformed/stale schema safely."""
+        self.clear(now)
+        if not isinstance(snapshot, dict) or snapshot.get("date") != now.date().isoformat():
+            return 0
+        restored = 0
+        raw_pending = snapshot.get("pending", ())
+        raw_reported = snapshot.get("reported", ())
+        if not isinstance(raw_pending, (list, tuple)):
+            raw_pending = ()
+        if not isinstance(raw_reported, (list, tuple)):
+            raw_reported = ()
+        for record in raw_pending:
+            if not isinstance(record, dict):
+                continue
+            key = _key(record)
+            if not key[0] or not key[1] or key[3] not in WATCH_STATES:
+                continue
+            stored = dict(record)
+            stored.update(stock=key[0], timeframe=key[1], state=key[3])
+            self._pending[key] = stored
+            restored += 1
+        for raw_key in raw_reported:
+            if not isinstance(raw_key, (list, tuple)) or len(raw_key) != 4:
+                continue
+            key = tuple(str(part) for part in raw_key)
+            if key[3] in WATCH_STATES:
+                self._reported.add(key)  # type: ignore[arg-type]
+        return restored
 
     def clear(self, now: datetime) -> None:
         """Gün değişiminde çağrılabilir; asıl sıfırlama _ensure_day ile yapılır."""

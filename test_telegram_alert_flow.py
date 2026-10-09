@@ -20,6 +20,25 @@ def _record(stock="THYAO", tf="1h", state="SIKISMA_GUCLENIYOR", quality=84):
     }
 
 
+def test_immediate_event_identity_is_stable_and_state_specific():
+    event = {
+        "type": "RETEST_OK",
+        "state": "RETEST_BASARILI",
+        "time": datetime(2026, 9, 25, 18, 30),
+        "bar": 217,
+    }
+    first = main_mod._formation_alert_event_id(type("Snap", (), {"events": [event]})(), "RETEST_BASARILI")
+    replayed = main_mod._formation_alert_event_id(type("Snap", (), {"events": [dict(event)]})(), "RETEST_BASARILI")
+
+    assert first == replayed == "RETEST_OK:2026-09-25T18:30:00"
+    assert main_mod._formation_alert_event_id(
+        type("Snap", (), {"events": [event]})(), "RETEST_BEKLENIYOR"
+    ) is None
+    assert main_mod._formation_alert_event_id(
+        type("Snap", (), {"events": [{**event, "time": None}]})(), "RETEST_BASARILI"
+    ) == "RETEST_OK:bar:217"
+
+
 def test_watchlist_guncel_durumu_slot_basina_tutar():
     buf = DeferredAlertBuffer()
     now = TZ.localize(datetime(2026, 9, 30, 17, 0))
@@ -31,6 +50,30 @@ def test_watchlist_guncel_durumu_slot_basina_tutar():
     assert len(items) == 2
     assert items[0]["stock"] == "GARAN"
     assert next(x for x in items if x["stock"] == "THYAO")["quality"] == 87
+
+
+def test_watch_snapshot_same_day_restart_and_day_change_restore():
+    now = TZ.localize(datetime(2026, 9, 30, 17, 0))
+    source = DeferredAlertBuffer()
+    source.observe("THYAO", "1h", _record(), now)
+    source.mark_reported([_record("GARAN", "4h")], now)
+    snapshot = source.snapshot(now)
+
+    restarted = DeferredAlertBuffer()
+    assert restarted.restore(snapshot, now) == 1
+    assert [(item["stock"], item["timeframe"]) for item in restarted.items(now)] == [("THYAO", "1h")]
+    same_day = restarted.snapshot(now)
+    assert same_day["reported"] == [["GARAN", "4h", "Simetrik Üçgen", "SIKISMA_GUCLENIYOR"]]
+
+    assert restarted.restore(snapshot, now + timedelta(days=1)) == 0
+    assert restarted.items(now + timedelta(days=1)) == []
+
+
+def test_watch_restore_ignores_malformed_collections_and_candidates():
+    buffer_ = DeferredAlertBuffer()
+    now = TZ.localize(datetime(2026, 9, 30, 17, 0))
+    assert buffer_.restore({"date": now.date().isoformat(), "pending": None, "reported": "bad"}, now) == 0
+    assert buffer_.items(now) == []
 
 
 def test_acil_duruma_gecis_veya_slotun_sonlanmasi_bekleyeni_siler():

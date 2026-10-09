@@ -310,6 +310,14 @@ kontrol("limitler makul", 5 <= TELEGRAM_MAX_MESAJ_SAAT <= 100 and 50 <= TELEGRAM
 kontrol("kritik state'ler tanımlı", 'KIRILIM_ADAYI' in KRITIK_STATELER
         and 'FORMASYON_TAMAMLANDI' in KRITIK_STATELER)
 
+# Runtime-state koruması (Aşama 4): betik-style bu test gerçek ./bot_data'ya
+# yazmamalı. Notifier'ın DATA_DIR'ı geçici dizine yönlendirilir; soguma/kap/
+# delivery dosyaları orada oluşur. Aşağıdaki telegram_kap.json remove'ları
+# no-op kalır, test davranışı değişmez.
+import tempfile as _tempfile
+import notifier as _notifier_mod
+_notifier_mod.DATA_DIR = os.path.join(_tempfile.mkdtemp(prefix="fb_tarama_zamani_"), "bot_data")
+
 nt_test = TelegramNotifier()
 for _f in ('bot_data/telegram_kap.json',):
     if os.path.exists(_f):

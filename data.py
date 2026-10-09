@@ -311,6 +311,62 @@ def veri_yok_modu_acik_mi(now: Optional[datetime] = None,
 
 # === DEQUE YÖNETİMİ ===
 
+def ohlcv_girdi_sorunlari(df) -> List[str]:
+    """Sağlayıcıdan gelen OHLCV frame'ini analiz öncesi doğrula (TEK SINIR).
+
+    Doğrulama sınırı append kapısıdır: `append_dataframe` ve
+    `append_gunluk_dataframe` geçersiz frame'i deque'ye HİÇ yazmaz; böylece
+    formation ve domain motorları ile disk/Supabase kalıcılığı bozuk veriden
+    korunur. Kural sözleşmesi:
+      - Sıfır hacim GEÇERLİDİR (Yahoo .IS ilk bar sözleşmesi; ölçüm: 28 sembol
+        x 360 barda 1.083 satır 09:30 sıfır hacim, OHLC gerçek).
+      - Negatif hacim, NaN/sonlu olmayan herhangi bir alan, imkânsız OHLC
+        ilişkisi (high<low, high<max(open,close), low>min(open,close)) ve
+        <=0 fiyatlar geçersizdir.
+      - Duplicate/sırasız timestamp burada REDDEDİLMEZ: append timestamp bazlı
+        tekilleştirir ve sıralar (idempotent birleştirme sözleşmesi korunur).
+      - Kapanmamış/gelecek mum burada elemeNMEZ: `tamamlanmis_mumlar` analiz
+        katmanında filtreler (çift doğrulama çoğaltması yapılmaz).
+    Dönen liste boşsa frame kabul edilir; doluysa sorun tiplerini verir.
+    """
+    if df is None or len(df) == 0:
+        return ["bos_frame"]
+    gerekli = ("open", "high", "low", "close", "volume")
+    eksik = [sutun for sutun in gerekli if sutun not in getattr(df, "columns", ())]
+    if eksik:
+        return ["eksik_sutun:" + ",".join(eksik)]
+    try:
+        o = pd.to_numeric(df["open"], errors="coerce").to_numpy(dtype=float)
+        h = pd.to_numeric(df["high"], errors="coerce").to_numpy(dtype=float)
+        l = pd.to_numeric(df["low"], errors="coerce").to_numpy(dtype=float)
+        c = pd.to_numeric(df["close"], errors="coerce").to_numpy(dtype=float)
+        v = pd.to_numeric(df["volume"], errors="coerce").to_numpy(dtype=float)
+    except (TypeError, ValueError, AttributeError):
+        return ["sayisal_olmayan"]
+
+    sorunlar: List[str] = []
+    fiyatlar = (o, h, l, c)
+    if any(int(np.isnan(dizi).sum()) for dizi in fiyatlar + (v,)):
+        sorunlar.append("nan_deger")
+    sonlu = fiyatlar + (v,)
+    if any(int(np.isinf(dizi).sum()) for dizi in sonlu):
+        sorunlar.append("sonsuza_deger")
+    if sorunlar:
+        # NaN/Inf ile geometri karşılaştırması güvenilir değil; önce bunlar raporlanır.
+        return sorted(sorunlar)
+    if int((h < l).sum()):
+        sorunlar.append("high_lt_low")
+    if int((h < np.maximum(o, c)).sum()):
+        sorunlar.append("high_tutarsiz")
+    if int((l > np.minimum(o, c)).sum()):
+        sorunlar.append("low_tutarsiz")
+    if any(int((dizi <= 0).sum()) for dizi in fiyatlar):
+        sorunlar.append("gecersiz_fiyat")
+    if int((v < 0).sum()):
+        sorunlar.append("negatif_hacim")
+    return sorted(sorunlar)
+
+
 class StockDequeManager:
     """
     Her hisse için 360 mumluk deque tutar
@@ -373,13 +429,23 @@ class StockDequeManager:
                             ts = ISTANBUL_TZ.localize(ts)
                         else:
                             ts = ts.tz_convert(ISTANBUL_TZ)
+                        o_, h_, l_, c_, v_ = (float(item[k]) for k in
+                                              ("open", "high", "low", "close", "volume"))
+                        if (not all(map(lambda x: x == x and abs(x) != float("inf"),
+                                        (o_, h_, l_, c_, v_)))
+                                or h_ < l_ or h_ < max(o_, c_) or l_ > min(o_, c_)
+                                or min(o_, h_, l_, c_) <= 0 or v_ < 0):
+                            logger.warning(
+                                f"{stock} 1D Supabase cache satırı geçersiz OHLCV; atlanıyor"
+                            )
+                            continue
                         bars.append({
                             "timestamp": ts,
-                            "open": float(item["open"]),
-                            "high": float(item["high"]),
-                            "low": float(item["low"]),
-                            "close": float(item["close"]),
-                            "volume": float(item.get("volume", 0)),
+                            "open": o_,
+                            "high": h_,
+                            "low": l_,
+                            "close": c_,
+                            "volume": v_,
                         })
                     except (TypeError, ValueError, KeyError, OverflowError):
                         logger.warning(f"{stock} 1D Supabase cache satırı bozuk; atlanıyor")
@@ -425,11 +491,25 @@ class StockDequeManager:
         dq = self.get_deque(stock)
         dq.append(candle)
     
-    def append_dataframe(self, stock: str, df: pd.DataFrame):
+    def append_dataframe(self, stock: str, df: pd.DataFrame) -> bool:
         """DataFrame'den toplu ekle — timestamp bazlı TEKİLLEŞTİRİLMİŞ (idempotent).
         Aynı zamana sahip mum varsa yeni değerler yazılır (taze kazınır),
         pencere taşarsa en eski düşer (maxlen FIFO). Böylece aynı 60d penceresi
-        tekrar çekilip eklense bile deque bozulmaz."""
+        tekrar çekilip eklense bile deque bozulmaz.
+        DÖNÜŞ: True = birleştirme yapıldı; False = frame geçersiz OHLCV içeriyor
+        (deque DOKUNULMADI; eski veri korundu). Geçerlilik sözleşmesi:
+        ohlcv_girdi_sorunlari()."""
+        girdi_sorunlari = ohlcv_girdi_sorunlari(df)
+        if girdi_sorunlari:
+            logger.error(
+                f"{stock}: gelen OHLCV frame geçersiz ({', '.join(girdi_sorunlari)}); "
+                "deque güncellenmedi, mevcut veri korundu"
+            )
+            self.sureklilik_sorunlari[stock] = [{
+                "tip": "gecersiz_girdi",
+                "mesaj": f"girdi doğrulaması: {', '.join(girdi_sorunlari)}",
+            }]
+            return False
         dq = self.get_deque(stock)
         birlesik: Dict[datetime, dict] = {c['timestamp']: c for c in dq}
         yeni = 0
@@ -476,6 +556,7 @@ class StockDequeManager:
                 )
         else:
             self.sureklilik_sorunlari.pop(stock, None)
+        return True
     
     def to_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
         """Deque'yi DataFrame'e çevir - pattern tespiti için"""
@@ -639,6 +720,7 @@ class StockDequeManager:
             dq.append(c)
         logger.info(f"{stock}: {yeni} yeni / {guncellenen} güncellenen GÜNLÜK mum "
                     f"(toplam {len(dq)} bar)")
+        return True
 
     def to_gunluk_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
         dq = self.get_gunluk_deque(stock)
