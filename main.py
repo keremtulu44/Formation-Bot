@@ -12,7 +12,7 @@ import logging
 import random
 import threading
 from datetime import datetime, timedelta, time as dt_time
-from typing import List, Dict
+from typing import List, Dict, Optional
 import pytz
 
 try:
@@ -22,7 +22,7 @@ except ImportError:
     pass
 
 from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR,
-                    ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES, BIST_OPEN,
+                    ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES,
                     SCAN_DELAY_AFTER_CLOSE_MIN, STALE_BAR_UYARI_DK, VERI_YOK_MODU_ESIK_DK,
                     OFFSESSION_CACHE_MAX_AGE_DAYS,
                     TARAMA_SURESI_UYARI_DK, SCAN_REQUEST_BATCH_SIZE,
@@ -39,6 +39,19 @@ from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_last_bar,
                   select_yfinance_1h_period, tamamlanmis_mumlar)
+from bist_calendar import (
+    SessionStatus,
+    as_istanbul_datetime,
+    bist_scan_due,
+    bist_scan_window_open,
+    bist_session_for,
+    current_session_data_issue,
+    current_session_timestamp_issue,
+    latest_session_checkpoint,
+    next_bist_scan_at,
+    seconds_until_next_bist_open,
+    should_run_post_close_analysis,
+)
 from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES, STATE_TR
@@ -490,14 +503,20 @@ def _komut_yardim(_arguman: str) -> str:
 def _komut_durum(_arguman: str) -> str:
     now = datetime.now(ISTANBUL_TZ)
     st = _live_state.status()
-    if tarama_penceresi_acik_mi(now):
-        piyasa = "AÇIK (tarama penceresi içinde)"
-    else:
+    session = bist_session_for(now)
+    if session.status is SessionStatus.UNKNOWN:
+        piyasa = "TAKVİM BİLİNMİYOR · otomatik tarama güvenlik nedeniyle kapalı"
+    elif session.status is SessionStatus.CLOSED:
         try:
-            kalan = time_until_next_open(now)
-            piyasa = f"KAPALI · açılışa {kalan / 3600:.1f} saat"
+            kalan = seconds_until_next_bist_open(now)
+            piyasa = (f"KAPALI ({session.reason}) · sonraki açılışa {kalan / 3600:.1f} saat"
+                      if kalan is not None else f"KAPALI ({session.reason})")
         except Exception:
-            piyasa = "KAPALI"
+            piyasa = f"KAPALI ({session.reason})"
+    elif bist_scan_window_open(now):
+        piyasa = "AÇIK (otomatik tarama penceresi içinde)"
+    else:
+        piyasa = "SEANS GÜNÜ · otomatik tarama penceresi dışında"
     formations = _live_state.formations()
     en_iyi = formations[0] if formations else None
     status = st.get("son_tarama_durumu", "yok")
@@ -531,6 +550,9 @@ def _komut_durum(_arguman: str) -> str:
         f"Profil: {PROFILE} · Evren: {len(ACTIVE_STOCKS)} hisse",
         f"Piyasa: {piyasa}",
     ]
+    tarih_notu = _sonuc_veri_tarihi_uyarisi(now)
+    if tarih_notu:
+        satirlar.append(tarih_notu)
     if _scan_job_active.is_set() or st.get("tarama_suruyor"):
         satirlar.append("⏳ Analiz sürüyor; diğer komutlar iş bitene kadar yok sayılır.")
     elif status == "basarisiz":
@@ -568,6 +590,48 @@ def _komut_durum(_arguman: str) -> str:
     return "\n".join(satirlar)
 
 
+def _sonuc_veri_tarihi_uyarisi(now=None) -> str:
+    """Persisted sonuçları duvar saati değil, gerçek veri zamanı ile etiketle."""
+    local_now = as_istanbul_datetime(now or datetime.now(ISTANBUL_TZ))
+    st = _live_state.status()
+    raw_asof = st.get("son_tarama_veri_zamani") or last_run_stats.get("data_asof")
+    if not raw_asof:
+        return ""
+    try:
+        data_asof = as_istanbul_datetime(datetime.fromisoformat(str(raw_asof)))
+    except (TypeError, ValueError, OverflowError):
+        return "⚠️ Kayıtlı veri zamanı doğrulanamadı; sonuçların güncelliği bilinmiyor."
+
+    session = bist_session_for(local_now)
+    zaman = data_asof.strftime("%d.%m.%Y %H:%M %Z")
+    if session.status is SessionStatus.UNKNOWN:
+        return (
+            f"⚠️ BIST takvimi {local_now:%d.%m.%Y} için bilinmiyor; otomatik güncel tarama "
+            f"doğrulanmadı. Gösterilen kayıtlar {zaman} verisine dayanıyor."
+        )
+    if session.status is SessionStatus.CLOSED:
+        return (
+            f"📅 Bugün BIST seansı yok ({session.reason}); gösterilen kayıtlar "
+            f"{zaman} verisine ait, bugün için yeni analiz değildir."
+        )
+    if data_asof.date() != local_now.date():
+        return (
+            f"⚠️ Bugünün ({local_now:%d.%m.%Y}) verisiyle tamamlanmış analiz yok; "
+            f"gösterilen kayıtlar {zaman} verisine dayanıyor."
+        )
+
+    requested = st.get("son_tarama_beklenen_hisse")
+    processed = st.get("son_tarama_hissesi")
+    if st.get("son_tarama_durumu") == "tamamlandi":
+        if requested != len(ACTIVE_STOCKS) or processed != requested:
+            return (
+                f"ℹ️ Son kayıtlar {zaman} verisine ait kısmi tarama; "
+                "taranmayan hisseler önceki başarılı sonuç olabilir."
+            )
+        return f"ℹ️ Son tam evren analizinin veri zamanı: {zaman}."
+    return f"ℹ️ Saklanan sonuçların son veri zamanı: {zaman}."
+
+
 def _sonuc_yok_mesaji(basarili_bos_mesaji: str, tamamlandi: bool = False) -> str:
     """İstenen filtrede sonuç yokken tarama kalitesini de doğru belirt."""
     st = _live_state.status()
@@ -575,11 +639,14 @@ def _sonuc_yok_mesaji(basarili_bos_mesaji: str, tamamlandi: bool = False) -> str
         return "⏳ Analiz sürüyor; tamamlanınca güncel sonuç gönderilecek."
     status = st.get("son_tarama_durumu", "yok")
     if status == "basarisiz":
-        return ("⚠️ Son analiz başarısız veya eksik; bunu 'sonuç yok' olarak "
-                "yorumlama. /durum ile kapsamı kontrol et.")
-    if status == "tamamlandi":
-        return basarili_bos_mesaji
-    return "ℹ️ Henüz başarılı analiz yok. Güncel hesaplama için /panel yaz."
+        message = ("⚠️ Son analiz başarısız veya eksik; bunu 'sonuç yok' olarak "
+                   "yorumlama. /durum ile kapsamı kontrol et.")
+    elif status == "tamamlandi":
+        message = basarili_bos_mesaji
+    else:
+        message = "ℹ️ Henüz başarılı analiz yok. Güncel hesaplama için /panel yaz."
+    tarih_notu = _sonuc_veri_tarihi_uyarisi()
+    return message + ("\n" + tarih_notu if tarih_notu else "")
 
 
 def _bos_analiz_mesaji(tamamlandi: bool = False) -> str:
@@ -594,10 +661,14 @@ def _bos_analiz_mesaji(tamamlandi: bool = False) -> str:
 
 
 def _onceki_sonuc_uyarisi() -> str:
-    """Son deneme başarısızsa yayınlanan listeyi önceki başarılı çalışmaya bağla."""
+    """Önceki sonuçları başarısız deneme ve açık veri-tarihi etiketiyle sun."""
+    parts = []
     if _live_state.status().get("son_tarama_durumu") == "basarisiz":
-        return "⚠️ Son analiz başarısız; aşağıdaki kayıtlar önceki başarılı analizdendir."
-    return ""
+        parts.append("⚠️ Son analiz başarısız; aşağıdaki kayıtlar önceki başarılı analizdendir.")
+    tarih_notu = _sonuc_veri_tarihi_uyarisi()
+    if tarih_notu:
+        parts.append(tarih_notu)
+    return "\n".join(parts)
 
 
 def _kismi_kapsam_notu() -> str:
@@ -1134,6 +1205,9 @@ def _panel_raporu(arguman: str = "", tamamlandi: bool = False) -> str:
         tarama += (f" · hesaplanan {st.get('son_tarama_hissesi', '—')}/"
                    f"{st.get('son_tarama_beklenen_hisse') or len(ACTIVE_STOCKS)} hisse")
     satirlar.append(f"{tarama} · dolu slot {len(slot)}/{toplam_slot}")
+    tarih_notu = _sonuc_veri_tarihi_uyarisi(now)
+    if tarih_notu:
+        satirlar.append(tarih_notu)
     veri_zamani = st.get("son_tarama_veri_zamani")
     if veri_zamani:
         satirlar.append(_veri_durumu_satiri(
@@ -1681,6 +1755,14 @@ def _calistir_istek_taramasi(deque_manager, lifecycle_manager, notifier) -> bool
         _scan_job_active.clear()
         return False
     try:
+        requested_stocks = request.get("hisseler") or ACTIVE_STOCKS
+        current_time = datetime.now(ISTANBUL_TZ)
+        scheduled_checkpoint = (
+            latest_session_checkpoint(current_time)
+            if (set(requested_stocks) == set(ACTIVE_STOCKS)
+                and bist_scan_due(current_time))
+            else None
+        )
         result = scan_all_stocks(
             deque_manager,
             lifecycle_manager,
@@ -1688,6 +1770,8 @@ def _calistir_istek_taramasi(deque_manager, lifecycle_manager, notifier) -> bool
             manuel=True,
             stocks=request.get("hisseler"),
             send_alerts=False,
+            require_current_session=scheduled_checkpoint is not None,
+            scheduled_checkpoint=scheduled_checkpoint,
         )
     except Exception as exc:
         logger.error("İstenen analiz çalışırken hata verdi: %s", exc, exc_info=True)
@@ -1777,7 +1861,17 @@ def _run_domain_engines_for_symbol(
     return outputs
 
 
-def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: PatternLifecycleManager, notifier: TelegramNotifier, manuel: bool = False, stocks=None, send_alerts: bool = True):
+def scan_all_stocks(
+    deque_manager: StockDequeManager,
+    lifecycle_manager: PatternLifecycleManager,
+    notifier: TelegramNotifier,
+    manuel: bool = False,
+    stocks=None,
+    send_alerts: bool = True,
+    require_current_session: bool = False,
+    after_close: bool = False,
+    scheduled_checkpoint: Optional[datetime] = None,
+):
     """
     Aktif tarama evrenini tara; Yahoo verisi seri ve gruplu alınır, analiz ardından yapılır.
     - Deque'den veri al
@@ -1789,6 +1883,26 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     simdiki_zaman = datetime.now(ISTANBUL_TZ)
     tarama_baslangici = time.monotonic()
     scan_stocks = list(dict.fromkeys(stocks or ACTIVE_STOCKS))
+    if require_current_session:
+        session = bist_session_for(simdiki_zaman)
+        schedule_ok = (
+            simdiki_zaman.time() >= session.close_time
+            if after_close and session.close_time is not None
+            else not after_close and bist_scan_window_open(simdiki_zaman)
+        )
+        if session.status is not SessionStatus.TRADING or not schedule_ok:
+            reason = session.reason or session.status.value
+            if session.status is SessionStatus.TRADING:
+                reason = "seans içi/kapanış tarama zaman penceresi dışında"
+            logger.error(
+                "Zamanlanmış tarama başlatılmadı: %s (%s)",
+                simdiki_zaman.date(), reason,
+            )
+            return _analiz_hatasi_kaydi(
+                RuntimeError(f"BIST işlem günü/zamanı doğrulanmadı: {reason}"),
+                len(scan_stocks),
+                "zamanlanmış tarama",
+            )
     tur_taranan = 0
     tur_formasyon = 0
     tur_hata = 0
@@ -1846,6 +1960,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             # Deque'den mevcut pencere; fetch aşaması yukarıda, retry dahil tamamlandı.
             df_1h = deque_manager.to_dataframe(stock)
             taze = taze_1h_verileri.get(stock)
+            provider_session_issue = None
+            if taze is not None and require_current_session:
+                provider_session_issue = current_session_data_issue(
+                    taze, simdiki_zaman, after_close=after_close,
+                )
+                if provider_session_issue:
+                    logger.error(
+                        "%s: sağlayıcı frame'i cache'e eklenmedi (%s)", stock,
+                        provider_session_issue,
+                    )
+                    taze = None
             if taze is not None:
                 birlesti = deque_manager.append_dataframe(stock, taze)
                 if birlesti:
@@ -1864,6 +1989,21 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     f"{stock}: taze 1H veri yok ({fetch_hatalari.get(stock, 'fetch yapılmadı')}); "
                     "cache varsa yalnız veri tazeliği uygunsa kullanılacak"
                 )
+            if require_current_session:
+                issue = provider_session_issue or current_session_data_issue(
+                    taze, simdiki_zaman, after_close=after_close,
+                )
+                if issue:
+                    tur_hata += 1
+                    daily_stats['stale_stocks'] += 1
+                    daily_stats['data_stale'] = True
+                    if not after_close:
+                        daily_stats['veri_yok_modu'] = True
+                    logger.error(
+                        "%s: zamanlanmış tarama atlandı; güncel sağlayıcı mumu yok (%s)",
+                        stock, issue,
+                    )
+                    continue
             
             if df_1h is None or len(df_1h) < 50:
                 logger.warning(f"{stock}: veri yok (fetch basarisiz + cache bos) - bu tur atlandi")
@@ -2246,6 +2386,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             son_tarama_fetch_hatasi=len(fetch_hatalari),
             son_tarama_formasyonu=tur_formasyon,
             son_tarama_veri_zamani=en_son_bar.isoformat() if en_son_bar is not None else None,
+            son_tarama_kapanis_checkpoint=(
+                as_istanbul_datetime(scheduled_checkpoint).isoformat()
+                if scheduled_checkpoint is not None else None
+            ),
             son_tarama_en_eski_veri_yasi_dk=en_eski_bar_yasi_dk,
         )
         son_tarama_kaydet()
@@ -2366,6 +2510,72 @@ def _parse_post_close_analysis_time() -> dt_time:
     except (AttributeError, TypeError, ValueError):
         logger.warning("POST_CLOSE_ANALYSIS_TIME geçersiz; 20:00 kullanılacak")
         return dt_time(20, 0)
+
+
+def _status_timestamp(value):
+    if not value:
+        return None
+    try:
+        return as_istanbul_datetime(datetime.fromisoformat(str(value)))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _persisted_full_scan_checkpoint(now=None):
+    """Return the exact persisted scheduled checkpoint after a successful full scan."""
+    local_now = as_istanbul_datetime(now or datetime.now(ISTANBUL_TZ))
+    if not bist_scan_window_open(local_now):
+        return None
+    st = _live_state.status()
+    if st.get("son_tarama_durumu") != "tamamlandi":
+        return None
+    try:
+        requested = int(st.get("son_tarama_beklenen_hisse"))
+        processed = int(st.get("son_tarama_hissesi"))
+    except (TypeError, ValueError):
+        return None
+    if requested != len(ACTIVE_STOCKS) or processed != requested:
+        return None
+    finished = _status_timestamp(st.get("son_tarama_bitis"))
+    asof = _status_timestamp(st.get("son_tarama_veri_zamani"))
+    checkpoint = _status_timestamp(st.get("son_tarama_kapanis_checkpoint"))
+    latest = latest_session_checkpoint(local_now)
+    if finished is None or asof is None or checkpoint is None or latest is None:
+        return None
+    due_at = checkpoint + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN)
+    if (finished.date() != local_now.date() or asof.date() != local_now.date()
+            or checkpoint.date() != local_now.date() or checkpoint > latest
+            or finished < due_at):
+        return None
+    return checkpoint
+
+
+def _persisted_post_close_scan_completed(now=None, scan_time=None) -> bool:
+    """Persisted success prevents duplicate post-close work after a process restart."""
+    local_now = as_istanbul_datetime(now or datetime.now(ISTANBUL_TZ))
+    st = _live_state.status()
+    if st.get("son_tarama_durumu") != "tamamlandi":
+        return False
+    try:
+        requested = int(st.get("son_tarama_beklenen_hisse"))
+        processed = int(st.get("son_tarama_hissesi"))
+    except (TypeError, ValueError):
+        return False
+    if requested != len(ACTIVE_STOCKS) or processed != requested:
+        return False
+    finished = _status_timestamp(st.get("son_tarama_bitis"))
+    asof = _status_timestamp(st.get("son_tarama_veri_zamani"))
+    if finished is None or asof is None:
+        return False
+    if current_session_timestamp_issue(asof, local_now, after_close=True):
+        return False
+    target_time = scan_time or _parse_post_close_analysis_time()
+    target = ISTANBUL_TZ.localize(datetime.combine(local_now.date(), target_time))
+    return (
+        finished.date() == local_now.date()
+        and finished >= target
+        and asof.date() == local_now.date()
+    )
 
 
 def _build_active_formations_for_summary(lifecycle_manager, min_quality: float = None) -> List[Dict]:
@@ -2601,9 +2811,9 @@ def main_loop():
             else:
                 logger.warning(f"{stock}: ilk günlük veri çekilemedi - resample kullanılacak")
     
-    # Aynı mum iki kez taranmasın (drift koruması). Restart'ta None -> bir sonraki
-    # kapanışta tazelenir, son mum gerekiyorsa bir kez daha taranır (zararsız).
-    son_taranan_kapanis = None
+    # Başarılı güncel tam tarama snapshot'ta varsa, restart sonrası aynı checkpoint'i
+    # tekrar fetch etme; başarısız/eskimiş snapshot ise fail-closed şekilde tekrar dene.
+    son_taranan_kapanis = _persisted_full_scan_checkpoint(datetime.now(ISTANBUL_TZ))
     # Özet ve bakım takibi (bedava kalma için)
     summary_hours = _effective_summary_hours()
     deferred_alert_digest_time = _parse_deferred_alert_digest_time()
@@ -2617,6 +2827,9 @@ def main_loop():
     while not _shutdown_requested:
         try:
             now = datetime.now(ISTANBUL_TZ)
+            # Reset daily counters at the Istanbul date boundary even if the
+            # exchange is closed and no symbol scan runs to trigger a reset.
+            reset_daily_if_needed()
             _apply_recovered_deliveries(notifier, now)
             # Kullanıcı isteği seans saatinden bağımsız olarak ilk fırsatta çalışır.
             if _scan_istegi.is_set():
@@ -2649,7 +2862,12 @@ def main_loop():
                         if sh == deferred_alert_digest_time else []
                     )
                     watch_summary = _format_deferred_alert_summary(bekleyen)
-                    dm_ozet = f"📋 Günlük Özet\n{ozet}"
+                    tarih_notu = _sonuc_veri_tarihi_uyarisi(now)
+                    dm_ozet = "📋 Günlük Özet\n"
+                    if tarih_notu:
+                        dm_ozet += tarih_notu + "\n"
+                    dm_ozet += ozet
+                    channel_ozet = (tarih_notu + "\n" if tarih_notu else "") + ozet
                     if watch_summary:
                         dm_ozet += "\n\n" + watch_summary
 
@@ -2672,7 +2890,7 @@ def main_loop():
                     if (notifier.channel_id
                             and last_summary_channel_sent.get(sh_str) != now.date()):
                         channel_key = f"daily-summary:channel:{now.date().isoformat()}:{sh_str}"
-                        if notifier.send_to_channel(ozet, idempotency_key=channel_key):
+                        if notifier.send_to_channel(channel_ozet, idempotency_key=channel_key):
                             last_summary_channel_sent[sh_str] = now.date()
             except Exception as e:
                 logger.debug(f"Özet gönderim hatası: {e}")
@@ -2680,36 +2898,51 @@ def main_loop():
             # --- GÜN SONU TAM EVREN ANALİZİ (varsayılan 20:00 İstanbul) ---
             try:
                 if now.time() >= post_close_analysis_time and last_post_close_analysis_date != now.date():
-                    logger.info("Gün sonu tam evren analizi başlıyor (%s)",
-                                post_close_analysis_time.strftime("%H:%M"))
-                    _scan_job_active.set()
-                    try:
-                        try:
-                            result = scan_all_stocks(
-                                deque_manager, lifecycle_manager, notifier,
-                                manuel=True, stocks=ACTIVE_STOCKS, send_alerts=False,
-                            )
-                        except Exception as exc:
-                            logger.error("Gün sonu analiz çalıştırması çöktü: %s", exc, exc_info=True)
-                            result = _analiz_hatasi_kaydi(
-                                exc, len(ACTIVE_STOCKS), "gün sonu analiz",
-                            )
-                        if result.get("status") == "tamamlandi":
-                            rapor = _panel_raporu("", tamamlandi=True)
-                            notifier.send_text(
-                                "🌙 GÜN SONU ANALİZİ\n" + rapor,
-                                idempotency_key=f"post-close:success:{now.date().isoformat()}",
-                            )
-                        else:
-                            notifier.send_text(
-                                "⚠️ Gün sonu analizi tamamlanamadı; eski sonuç yeni sonuç gibi "
-                                "gösterilmedi. Ayrıntı için bot loglarını kontrol edin.",
-                                idempotency_key=f"post-close:failure:{now.date().isoformat()}",
-                            )
-                    finally:
-                        _scan_job_active.clear()
+                    may_run, calendar_reason = should_run_post_close_analysis(now)
+                    if not may_run:
+                        logger.warning(
+                            "Gün sonu taraması atlandı: %s için BIST işlem günü doğrulanmadı (%s); "
+                            "saklı sonuçlar veri-zamanı etiketiyle sunulacak",
+                            now.date(), calendar_reason,
+                        )
                         last_post_close_analysis_date = now.date()
-                    continue
+                    elif _persisted_post_close_scan_completed(now, post_close_analysis_time):
+                        logger.info(
+                            "Gün sonu tam evren analizi bugün zaten başarıyla kaydedilmiş; tekrar çalıştırılmıyor"
+                        )
+                        last_post_close_analysis_date = now.date()
+                    else:
+                        logger.info("Gün sonu tam evren analizi başlıyor (%s)",
+                                    post_close_analysis_time.strftime("%H:%M"))
+                        _scan_job_active.set()
+                        try:
+                            try:
+                                result = scan_all_stocks(
+                                    deque_manager, lifecycle_manager, notifier,
+                                    manuel=True, stocks=ACTIVE_STOCKS, send_alerts=False,
+                                    require_current_session=True, after_close=True,
+                                )
+                            except Exception as exc:
+                                logger.error("Gün sonu analiz çalıştırması çöktü: %s", exc, exc_info=True)
+                                result = _analiz_hatasi_kaydi(
+                                    exc, len(ACTIVE_STOCKS), "gün sonu analiz",
+                                )
+                            if result.get("status") == "tamamlandi":
+                                rapor = _panel_raporu("", tamamlandi=True)
+                                notifier.send_text(
+                                    "🌙 GÜN SONU ANALİZİ\n" + rapor,
+                                    idempotency_key=f"post-close:success:{now.date().isoformat()}",
+                                )
+                            else:
+                                notifier.send_text(
+                                    "⚠️ Gün sonu analizi tamamlanamadı; eski sonuç yeni sonuç gibi "
+                                    "gösterilmedi. Ayrıntı için bot loglarını kontrol edin.",
+                                    idempotency_key=f"post-close:failure:{now.date().isoformat()}",
+                                )
+                        finally:
+                            _scan_job_active.clear()
+                            last_post_close_analysis_date = now.date()
+                        continue
             except Exception as e:
                 logger.error("Gün sonu analizi zamanlayıcısı hata verdi: %s", e, exc_info=True)
 
@@ -2732,55 +2965,73 @@ def main_loop():
                 logger.debug(f"Bakım kontrol hatası: {e}")
             
             
-            if tarama_penceresi_acik_mi(now):
-                if tarama_animi_mi(now, son_taranan_kapanis):
-                    # Tarama anı: en son kapanmış mum + 5 dk doldu.
-                    kapanis = son_kapanan_mum_ani(now)
-                    logger.info(f"TARAMA - {now.strftime('%H:%M:%S')} "
-                                f"(mum {kapanis.strftime('%H:%M')}'de kapandı, "
-                                f"günün {kapanis.hour - 9}. taraması)")
-                    _scan_job_active.set()
-                    try:
-                        scan_all_stocks(
-                            deque_manager, lifecycle_manager, notifier,
-                            manuel=False, stocks=ACTIVE_STOCKS, send_alerts=True,
+            session = bist_session_for(now)
+            if session.status is SessionStatus.UNKNOWN:
+                logger.warning(
+                    "XIST takvimi %s için bilinmiyor; otomatik tarama fail-closed durumda",
+                    now.date(),
+                )
+
+            if bist_scan_window_open(now):
+                checkpoint = latest_session_checkpoint(now)
+                if bist_scan_due(now, son_taranan_kapanis):
+                    if checkpoint is None:
+                        logger.error("Takvim açık görünse de geçerli tarama checkpoint'i yok; tarama atlandı")
+                        bekle = 300
+                    else:
+                        logger.info(
+                            "TARAMA - %s (son tamamlanmış checkpoint %s, %s)",
+                            now.strftime("%H:%M:%S"), checkpoint.strftime("%H:%M"),
+                            session.reason,
                         )
-                    finally:
-                        _scan_job_active.clear()
-                    son_taranan_kapanis = kapanis
-                    deque_manager.save_all()
-                    time.sleep(5)  # aynı saniyede tekrar girmesin
-                    continue
-                
-                # Henüz tarama anı değil: ne kadar bekleyeceğiz?
-                kapanis = son_kapanan_mum_ani(now)
-                if kapanis is None or kapanis.date() != now.date():
-                    # Bugün henüz mum kapanmadı (ilk kapanış 10:30) -> ilk tarama anını bekle
-                    hedef = (now.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute,
-                                         second=0, microsecond=0)
-                             + timedelta(minutes=40 + SCAN_DELAY_AFTER_CLOSE_MIN))
+                        _scan_job_active.set()
+                        try:
+                            scan_all_stocks(
+                                deque_manager, lifecycle_manager, notifier,
+                                manuel=False, stocks=ACTIVE_STOCKS, send_alerts=True,
+                                require_current_session=True, scheduled_checkpoint=checkpoint,
+                            )
+                        finally:
+                            _scan_job_active.clear()
+                        son_taranan_kapanis = checkpoint
+                        deque_manager.save_all()
+                        time.sleep(5)  # aynı saniyede tekrar girmesin
+                        continue
                 else:
-                    hedef = kapanis + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN)
-                bekle = max((hedef - now).total_seconds(), 30)
-                logger.info(f"Sonraki tarama {hedef.strftime('%H:%M')} -> {bekle/60:.1f} dk bekleniyor")
+                    hedef = next_bist_scan_at(now)
+                    bekle = max((hedef - now).total_seconds(), 30) if hedef else 300
+                    if hedef is not None:
+                        logger.info(
+                            "Sonraki BIST taraması %s -> %.1f dk bekleniyor",
+                            hedef.strftime("%H:%M"), bekle / 60,
+                        )
+                    else:
+                        logger.info("Bugün için başka tarama checkpoint'i yok; 5 dk sonra yeniden kontrol")
                 # Max 5dk uyu; /tara isteği gelirse uyku erken biter.
                 if _bekle_veya_tarama(min(bekle, 300)):
                     logger.info("Elle tarama isteği geldi, uyku kesildi")
                     continue
-                
             else:
-                # BIST kapalı
-                wait_open = time_until_next_open(now)
-                # 5dk'da bir kontrol et, ama açılışa kadar uyu
-                sleep_time = min(wait_open, 300)  # Max 5dk
-                if now.time() < post_close_analysis_time:
+                wait_open = seconds_until_next_bist_open(now)
+                sleep_time = min(wait_open, 300) if wait_open is not None else 300
+                if (session.status is SessionStatus.TRADING
+                        and now.time() < post_close_analysis_time):
                     rapor_anina = now.replace(
                         hour=post_close_analysis_time.hour,
                         minute=post_close_analysis_time.minute,
                         second=0, microsecond=0,
                     )
                     sleep_time = min(sleep_time, max(1.0, (rapor_anina - now).total_seconds()))
-                logger.info(f"BIST KAPALI - {now.strftime('%Y-%m-%d %H:%M:%S')} - {sleep_time/60:.1f}dk uyku (açılışa {wait_open/3600:.1f}sa)")
+                piyasa_etiketi = (
+                    f"TAKVİM BİLİNMİYOR ({session.reason})"
+                    if session.status is SessionStatus.UNKNOWN
+                    else f"SEANS DIŞI ({session.reason})"
+                )
+                acilisa = f"; açılışa {wait_open / 3600:.1f} sa" if wait_open is not None else ""
+                logger.info(
+                    "%s - %s - %.1f dk uyku%s",
+                    piyasa_etiketi, now.strftime("%Y-%m-%d %H:%M:%S"), sleep_time / 60, acilisa,
+                )
                 if _bekle_veya_tarama(sleep_time):
                     logger.info("Seans dışı analiz isteği geldi; ana döngü uyandırıldı")
                     continue
