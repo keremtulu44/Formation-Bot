@@ -83,6 +83,89 @@ def test_send_claim_is_durable_before_fake_transport_and_same_event_is_idempoten
     assert notifier._outbox.counts()["sent"] == 2
 
 
+def test_command_reply_outbox_is_persisted_and_update_id_is_idempotent(tmp_path):
+    notifier = _notifier(tmp_path)
+    sent = []
+    notifier._send_text_direct = lambda text, chat_id: sent.append((text, chat_id)) or _ok_transport(text, chat_id)
+
+    assert notifier.queue_command_reply(4102, "durum sonucu") is True
+    item_id = notifier._command_reply_item_id(4102)
+    item = notifier._outbox.get(item_id)
+    assert item["status"] == "sent"
+    assert item["kind"] == "command"
+    assert item["chat_id"] == "private-chat"
+    assert notifier.command_reply_exists(4102) is True
+
+    # Aynı Telegram update redelivery yeniden göndermez veya metni değiştirmez.
+    assert notifier.queue_command_reply(4102, "tekrar gelen farklı gövde") is True
+    assert sent == [("durum sonucu", "private-chat")]
+    assert notifier._outbox.get(item_id)["text"] == "durum sonucu"
+
+
+def test_dead_and_expired_command_reply_records_are_acknowledged_without_delivery(tmp_path):
+    """Audit evidence: terminal reply records suppress command replay and let the
+    inbound update advance, even though no user-visible reply was delivered.
+    Policy trade-off is reported for operator decision; this test makes no change.
+    """
+    from telegram_commands import TelegramCommandListener
+
+    now = datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
+    notifier = _notifier(tmp_path, clock=lambda: now)
+    notifier._send_text_direct = lambda *_args: (False, 400, "permanent rejection", None, True)
+
+    dead_id = 4201
+    assert notifier.queue_command_reply(dead_id, "dead reply") is True
+    assert notifier._outbox.get(notifier._command_reply_item_id(dead_id))["status"] == "dead"
+
+    expired_id = 4202
+    expired_item_id = notifier._command_reply_item_id(expired_id)
+    record, created = notifier._outbox.enqueue(expired_item_id, {
+        "kind": "command", "destination": "dm", "chat_id": "private-chat",
+        "text": "expired reply", "policy": False,
+    })
+    assert created and record is not None
+    notifier._outbox.state["items"][expired_item_id]["expires_at"] = (
+        now - timedelta(seconds=1)
+    ).isoformat()
+    assert notifier._outbox.due_items(limit=10) == []
+    assert notifier._outbox.get(expired_item_id)["status"] == "expired"
+
+    class _Response:
+        status_code = 200
+
+        def __init__(self, update):
+            self._update = update
+
+        def json(self):
+            return {"ok": True, "result": [self._update]}
+
+    class _Session:
+        def __init__(self, update):
+            self._update = update
+
+        def get(self, *_args, **_kwargs):
+            return _Response(self._update)
+
+    for update_id in (dead_id, expired_id):
+        update = {
+            "update_id": update_id,
+            "message": {"chat": {"id": "private-chat"}, "text": "/durum"},
+        }
+        handler_calls = []
+        listener = TelegramCommandListener(
+            token="123456:fake-token", allowed_chat_id="private-chat",
+            handlers={"durum": lambda _arg: handler_calls.append("called") or "reply"},
+            session=_Session(update),
+            response_sender=notifier.queue_command_reply,
+            response_exists=notifier.command_reply_exists,
+        )
+
+        assert listener.poll_once() is None
+        assert listener._offset == update_id + 1
+        assert handler_calls == []
+        assert listener.update_waiting_for_delivery(update_id) is False
+
+
 def test_formation_decision_is_durable_before_domain_context_and_restarts_with_fallback(tmp_path):
     notifier = _notifier(tmp_path)
     alert = _alert(state="KIRILIM_ADAYI")
@@ -437,6 +520,29 @@ def test_cooldown_and_cap_writers_persist_explicit_istanbul_timezone(tmp_path):
     assert saved_caps["timezone"] == "Europe/Istanbul"
     assert saved_caps["saatlik"][0].endswith("+03:00")
     assert saved_caps["updated_at"].endswith("+03:00")
+
+
+def test_remote_cap_and_cooldown_write_failures_do_not_block_outbox_ack(tmp_path, caplog):
+    notifier = _notifier(tmp_path)
+    notifier._cooldown_dosya = str(tmp_path / "cooldowns.json")
+    notifier._kap_dosya = str(tmp_path / "caps.json")
+    notifier._cooldown_kaydet = TelegramNotifier._cooldown_kaydet.__get__(notifier)
+    notifier._gonderim_kaydet = TelegramNotifier._gonderim_kaydet.__get__(notifier)
+    notifier._send_text_direct = _ok_transport
+
+    class FailingStore:
+        def upsert(self, _key, _payload):
+            raise RuntimeError("credential-bearing adapter detail must not be logged")
+
+    notifier.persistent_store = FailingStore()
+    notifier._outbox.persistent_store = notifier.persistent_store
+
+    assert notifier.send(_alert()) is True
+    assert notifier._outbox.counts()["sent"] == 2  # DM + channel were acknowledged
+    assert json.loads((tmp_path / "cooldowns.json").read_text(encoding="utf-8"))
+    assert json.loads((tmp_path / "caps.json").read_text(encoding="utf-8"))["gunluk_sayac"] == 1
+    assert "credential-bearing adapter detail" not in caplog.text
+    assert "RuntimeError" in caplog.text
 
 
 def test_legacy_cooldown_and_cap_sources_merge_without_stale_remote_override(tmp_path):

@@ -229,8 +229,13 @@ class NotificationOutbox:
                 remote_ok = bool(self.persistent_store.upsert(STATE_KEY, deepcopy(self.state)))
                 if not remote_ok:
                     logger.warning("Telegram delivery state Supabase upsert returned false; local copy=%s", local_ok)
-            except Exception:
-                logger.exception("Telegram delivery state Supabase persistence failed; local copy=%s", local_ok)
+            except Exception as exc:
+                # Do not include adapter exception text/traceback: request URLs can
+                # contain credentials. Local durability remains the source of truth.
+                logger.warning(
+                    "Telegram delivery state Supabase persistence failed (%s); local copy=%s",
+                    type(exc).__name__, local_ok,
+                )
         return local_ok or remote_ok
 
     @staticmethod

@@ -177,6 +177,59 @@ def test_ayni_update_id_iki_kez_islenmez():
     assert len(session.post_cagrilari) == 1
 
 
+def test_dayanikli_cevap_yazilamazsa_poll_offset_durur_handler_tekrarlanmaz():
+    update = _guncelleme(81, "/durum")
+    session = SahteSession(get_yanitlari=[
+        SahteYanit(200, {"ok": True, "result": [update]}),
+        SahteYanit(200, {"ok": True, "result": [update]}),
+    ])
+    handler_calls = []
+    queue_results = iter([False, True])
+    queue_calls = []
+
+    def queue_reply(update_id, text):
+        result = next(queue_results)
+        queue_calls.append((update_id, text, result))
+        return result
+
+    dinleyici = _dinleyici(
+        session,
+        handlers={"durum": lambda _a: handler_calls.append("durum") or "durum cevabi"},
+    )
+    dinleyici.response_sender = queue_reply
+
+    assert dinleyici.poll_once() is None
+    assert dinleyici._offset is None  # dayanıklı reply yokken update ACK edilmez
+    assert dinleyici._pending_reply == {81: "durum cevabi"}
+    assert handler_calls == ["durum"]
+
+    assert dinleyici.poll_once() is None
+    assert dinleyici._offset == 82
+    assert dinleyici._pending_reply == {}
+    assert handler_calls == ["durum"]  # retry yalnızca aynı cevabı kuyruğa alır
+    assert queue_calls == [
+        (81, "durum cevabi", False),
+        (81, "durum cevabi", True),
+    ]
+
+
+def test_restartte_kayitli_komut_cevabi_handleri_yeniden_calistirmaz():
+    session = SahteSession()
+    handler_calls = []
+    queue_calls = []
+    dinleyici = _dinleyici(
+        session,
+        handlers={"durum": lambda _a: handler_calls.append("durum") or "durum cevabi"},
+    )
+    dinleyici.response_exists = lambda update_id: update_id == 91
+    dinleyici.response_sender = lambda update_id, text: queue_calls.append((update_id, text)) or True
+
+    assert dinleyici.handle_update(_guncelleme(91, "/durum")) is None
+    assert handler_calls == []
+    assert queue_calls == [(91, "")]
+    assert session.post_cagrilari == []
+
+
 # --- getUpdates akışı ----------------------------------------------------
 def test_offset_son_update_id_artı_bir_olur():
     guncellemeler = [_guncelleme(10, "/durum"), _guncelleme(11, "/durum")]
@@ -581,10 +634,11 @@ def test_veri_durumu_zamani_ve_yasi_acikca_yazar():
 
     bar = datetime.now(main_mod.ISTANBUL_TZ) - timedelta(days=2, hours=1)
     cevap = main_mod._veri_durumu_satiri(bar.isoformat(), 3, 4, 1, 2 * 24 * 60 + 60)
-    assert "Son tamamlanmış mum:" in cevap
+    assert "Son cache mum etiketi:" in cevap
     assert "veri yaşı 2g 1sa" in cevap
     assert "en eski taranan veri yaşı 2g 1sa" in cevap
-    assert "başarılı fetch 3/4" in cevap and "fetch hatası 1" in cevap
+    assert "fetch yanıtı 3/4" in cevap and "taze fetch 3" in cevap
+    assert "fetch hatası 1" in cevap
 
 
 def test_gun_sonu_analiz_saatini_istanbul_saatiyle_parse_eder(monkeypatch):
@@ -674,7 +728,7 @@ def test_durum_basarisiz_deneme_icin_onceki_taze_fetch_sayisini_kullanmaz(monkey
 
     cevap = main_mod._komut_durum("")
     assert "kapsam: 0/1 hisse, süre: 2.0 dk" in cevap
-    assert "başarılı fetch 48/" not in cevap
+    assert "fetch yanıtı 48/" not in cevap
     assert "fetch hatası 0" not in cevap
 
 

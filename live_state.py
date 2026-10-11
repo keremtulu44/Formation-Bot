@@ -34,6 +34,9 @@ _SNAPSHOT_STATUS_ALANLARI = (
     "son_tarama_kapanis_checkpoint",
     "son_tarama_en_eski_veri_yasi_dk",
     "son_tarama_taze_veri",
+    "son_tarama_fetch_yanit",
+    "son_tarama_gecerli_fetch",
+    "son_tarama_analize_uygun",
     "son_tarama_fetch_hatasi",
     "son_is_baslangic",
     "son_is_bitis",
@@ -71,6 +74,9 @@ class LiveState:
             "son_tarama_kapanis_checkpoint": None,
             "son_tarama_en_eski_veri_yasi_dk": None,
             "son_tarama_taze_veri": 0,
+            "son_tarama_fetch_yanit": 0,
+            "son_tarama_gecerli_fetch": 0,
+            "son_tarama_analize_uygun": 0,
             "son_tarama_fetch_hatasi": 0,
             "manuel_tarama": False,
             "baslangic": None,
@@ -149,7 +155,8 @@ class LiveState:
 
     def fail_scan(self, hata: str, ts: Optional[datetime] = None,
                   hata_hisse: Optional[int] = None, islenen_hisse: Optional[int] = None,
-                  istek_hisse: Optional[int] = None, sure_dk: Optional[float] = None) -> None:
+                  istek_hisse: Optional[int] = None, sure_dk: Optional[float] = None,
+                  **extra: Any) -> None:
         """Başarısız taramada son geçerli sonuç korunur, başarısız boş liste yayımlanmaz."""
         with self._lock:
             self._pending = {}
@@ -168,6 +175,9 @@ class LiveState:
                 self._status["son_is_hisse_istek"] = int(istek_hisse)
             if sure_dk is not None:
                 self._status["son_is_suresi_dk"] = float(sure_dk)
+            for anahtar, deger in extra.items():
+                if deger is not None:
+                    self._status[anahtar] = deger
 
     # --- son tamamlanan taramanın kalıcı kopyası -----------------------
     def snapshot(self) -> dict:

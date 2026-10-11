@@ -10,9 +10,12 @@ import json
 import signal
 import logging
 import random
+import tempfile
 import threading
 from datetime import datetime, timedelta, time as dt_time
-from typing import List, Dict, Optional
+
+import pandas as pd
+from typing import Dict, List, Optional
 import pytz
 
 try:
@@ -31,14 +34,15 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     SCAN_BATCH_PAUSE_MIN_SEC, SCAN_BATCH_PAUSE_MAX_SEC,
                     SCAN_RETRY_BACKOFF_MIN_SEC, SCAN_RETRY_BACKOFF_MAX_SEC,
                     SUMMARY_HOURS, DEFERRED_ALERT_DIGEST_TIME, POST_CLOSE_ANALYSIS_TIME,
-                    PUBLIC_MIN_QUALITY, PUBLIC_STATES,
+                    PUBLIC_MIN_QUALITY, PUBLIC_STATES, LOG_LEVEL,
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL)
-from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
-                  son_kapanan_mum_ani, time_until_next_open,
+from data import (StockDequeManager, tarama_penceresi_acik_mi, time_until_next_open,
+                  son_kapanan_mum_ani,
                   resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_last_bar,
-                  select_yfinance_1h_period, tamamlanmis_mumlar)
+                  select_yfinance_1h_period, tamamlanmis_mumlar,
+                  ohlcv_girdi_sorunlari, _atomic_json_write)
 from bist_calendar import (
     SessionStatus,
     as_istanbul_datetime,
@@ -61,35 +65,46 @@ from supabase_store import SupabaseStore
 from health_server import start_render_health_server, WEBHOOK_YOL_ONEK
 from live_state import LiveState
 from telegram_commands import TelegramCommandListener, kirp
+from secrets_redaction import redact_sensitive_text
 
 # === LOGGING KURULUMU ===
 def setup_logging():
-    """Log hem console hem dosyaya - Türkçe mesajlar"""
-    # Local mi prod mu? LOG_DIR (/var/log/bist-bot) GERÇEKTEN yazılabilir mi?
-    # Not: /var/log'un kendisine bakmak yetmez (root dışında yazılamaz) -
-    # LOG_DIR'e yazma testi yapılmalı, yoksa sunucuda loglar ./logs'a düşer.
+    """Log hem console hem dosyaya - Türkçe mesajlar; LOG_LEVEL uygulanır."""
+    # LOG_DIR'e ait benzersiz probe kullan: sabit .write_test adlı mevcut dosyayı
+    # asla ezme/silme ve paralel süreçlerin probe'ları çakışmasın.
     log_dir = LOG_DIR
+    probe_path = None
     try:
         os.makedirs(log_dir, exist_ok=True)
-        test_path = os.path.join(log_dir, ".write_test")
-        with open(test_path, "w") as f:
-            f.write("test")
-        os.remove(test_path)
+        probe_fd, probe_path = tempfile.mkstemp(prefix=".write_test_", dir=log_dir)
+        with os.fdopen(probe_fd, "w", encoding="utf-8") as probe:
+            probe.write("test")
     except Exception:
         log_dir = LOCAL_LOG_DIR
         os.makedirs(log_dir, exist_ok=True)
-    
+    finally:
+        if probe_path:
+            try:
+                os.remove(probe_path)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
+
     log_file = os.path.join(log_dir, "bot.log")
-    
+    level = getattr(logging, LOG_LEVEL, logging.INFO)
     logging.basicConfig(
-        level=logging.INFO,
+        level=level,
         format='%(asctime)s [%(levelname)s] %(message)s',
         handlers=[
             logging.FileHandler(log_file, encoding='utf-8'),
             logging.StreamHandler(sys.stdout)
         ]
     )
-    
+    # pytest/host runtimes may already have handlers, in which case basicConfig
+    # does not apply a level. Respect configuration without replacing their sinks.
+    logging.getLogger().setLevel(level)
+
     logger = logging.getLogger(__name__)
     logger.info(f"Logging kuruldu - dosya: {log_file} - profil: {PROFILE}")
     return logger
@@ -114,12 +129,30 @@ def son_bar_yasi_dakika_str(dk: float) -> str:
 
 
 def _cache_verisi_kullanilabilir(yas_dk: float, taze_veri_var: bool, seans_acik: bool) -> bool:
-    """Fetch başarısızsa seans dışı son mumları yaş sınırına kadar kullan."""
-    if yas_dk > OFFSESSION_CACHE_MAX_AGE_DAYS * 24 * 60:
+    """Fetch başarısız/eskiyse mevcut seans dışı cache yaş politikasını uygula."""
+    if yas_dk < 0 or yas_dk > OFFSESSION_CACHE_MAX_AGE_DAYS * 24 * 60:
         return False
     if taze_veri_var:
         return True
     return not seans_acik or yas_dk <= STALE_BAR_UYARI_DK
+
+
+def _frame_son_bar_yasi_dk(frame, now: datetime) -> Optional[float]:
+    """Fetch frame'indeki son etiketin yaşını hesapla; bozuk/future index'i taze sayma."""
+    if frame is None or len(frame) == 0:
+        return None
+    try:
+        latest = pd.Timestamp(frame.index.max())
+        if pd.isna(latest):
+            return None
+        latest = (ISTANBUL_TZ.localize(latest.to_pydatetime())
+                  if latest.tzinfo is None else latest.tz_convert(ISTANBUL_TZ))
+        current = pd.Timestamp(now)
+        current = (ISTANBUL_TZ.localize(current.to_pydatetime())
+                   if current.tzinfo is None else current.tz_convert(ISTANBUL_TZ))
+        return (current - latest).total_seconds() / 60.0
+    except (TypeError, ValueError, OverflowError, AttributeError):
+        return None
 
 
 # === SİNYAL YÖNETİMİ (systemctl stop -> SIGTERM) ===
@@ -162,20 +195,31 @@ def _analiz_hatasi_kaydi(exc, istek_hisse: int, kaynak: str = "analiz") -> dict:
     """scan_all_stocks dışında fırlayan hataları da tutarlı başarısız durum yap."""
     global last_run_stats
     bitis = datetime.now(ISTANBUL_TZ).isoformat()
-    hata = f"{kaynak} hatası: {type(exc).__name__}: {exc}"
+    telegram_token = getattr(_notifier_ref, "token", "")
+    hata = redact_sensitive_text(
+        f"{kaynak} hatası: {type(exc).__name__}: {exc}",
+        telegram_token, _telegram_webhook_secret_ayikla(),
+    )
     _live_state.fail_scan(
         hata,
         datetime.now(ISTANBUL_TZ),
         hata_hisse=max(0, int(istek_hisse)),
         islenen_hisse=0,
         istek_hisse=max(0, int(istek_hisse)),
+        son_tarama_fetch_yanit=None,
+        son_tarama_gecerli_fetch=None,
+        son_tarama_taze_veri=None,
+        son_tarama_analize_uygun=0,
     )
     last_run_stats = {
         "status": "basarisiz",
         "requested": max(0, int(istek_hisse)),
         "processed": 0,
         "failed": max(0, int(istek_hisse)),
+        "fetch_returned": None,
+        "fetch_valid": None,
         "fresh_fetch": None,
+        "analysis_eligible": 0,
         "fetch_failures": None,
         "data_asof": None,
         "oldest_bar_age_minutes": None,
@@ -192,7 +236,11 @@ daily_stats = {
     # Veri sağlığı (FAZ 1): fetch başarısızlıkları artık SAYILIYOR ve görünür.
     # Önceden fetch başarısız olunca cache dolu olduğu için hiç log satırı yoktu
     # -> Yahoo saatlerce kapalıysa bot "sağlıklı" görünürken kör çalışıyordu.
-    'fetch_ok': 0,
+    'fetch_ok': 0,  # non-empty provider responses, not freshness/analysis eligibility
+    'fetch_valid': 0,
+    'fetch_fresh': 0,
+    'analysis_eligible': 0,
+    'future_bar_stocks': 0,
     'fetch_failures': 0,
     'fetch_retries': 0,
     'fetch_retry_recovered': 0,
@@ -218,6 +266,10 @@ def reset_daily_if_needed():
         daily_stats['alerts_sent'] = 0
         daily_stats['errors'] = 0
         daily_stats['fetch_ok'] = 0
+        daily_stats['fetch_valid'] = 0
+        daily_stats['fetch_fresh'] = 0
+        daily_stats['analysis_eligible'] = 0
+        daily_stats['future_bar_stocks'] = 0
         daily_stats['fetch_failures'] = 0
         daily_stats['fetch_retries'] = 0
         daily_stats['fetch_retry_recovered'] = 0
@@ -382,6 +434,10 @@ def write_heartbeat(data_dir: str = None, notifier=None):
             "active_stocks": len(ACTIVE_STOCKS),
             # --- veri sağlığı (FAZ 1) ---
             "fetch_ok": daily_stats['fetch_ok'],
+            "fetch_valid": daily_stats['fetch_valid'],
+            "fetch_fresh": daily_stats['fetch_fresh'],
+            "analysis_eligible": daily_stats['analysis_eligible'],
+            "future_bar_stocks": daily_stats['future_bar_stocks'],
             "fetch_failures": daily_stats['fetch_failures'],
             "fetch_retries": daily_stats['fetch_retries'],
             "fetch_retry_recovered": daily_stats['fetch_retry_recovered'],
@@ -400,8 +456,7 @@ def write_heartbeat(data_dir: str = None, notifier=None):
         }
         if _supabase_store_ref is not None:
             _supabase_store_ref.upsert("state:heartbeat", payload)
-        with open(heartbeat_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2, ensure_ascii=False)
+        _atomic_json_write(heartbeat_path, payload, indent=2)
     except Exception as e:
         logger.warning(f"Heartbeat yazılamadı: {e}")
 
@@ -531,17 +586,27 @@ def _komut_durum(_arguman: str) -> str:
         if processed is None:
             processed = last_run_stats.get("processed")
     fresh = st.get("son_tarama_taze_veri")
+    fetch_returned = st.get("son_tarama_fetch_yanit")
+    valid_fetch = st.get("son_tarama_gecerli_fetch")
+    analysis_eligible = st.get("son_tarama_analize_uygun")
     fetch_failures = st.get("son_tarama_fetch_hatasi")
     if status == "basarisiz":
-        # Son başarılı taramanın sayaçlarını başarısız son denemeye mal etme.
         fresh = last_run_stats.get("fresh_fetch")
+        fetch_returned = last_run_stats.get("fetch_returned")
+        valid_fetch = last_run_stats.get("fetch_valid")
+        analysis_eligible = last_run_stats.get("analysis_eligible")
         fetch_failures = last_run_stats.get("fetch_failures")
     elif status == "yok":
-        fresh = None
-        fetch_failures = None
+        fresh = fetch_returned = valid_fetch = analysis_eligible = fetch_failures = None
     else:
         if fresh is None:
             fresh = last_run_stats.get("fresh_fetch")
+        if fetch_returned is None:
+            fetch_returned = last_run_stats.get("fetch_returned")
+        if valid_fetch is None:
+            valid_fetch = last_run_stats.get("fetch_valid")
+        if analysis_eligible is None:
+            analysis_eligible = last_run_stats.get("analysis_eligible")
         if fetch_failures is None:
             fetch_failures = last_run_stats.get("fetch_failures")
 
@@ -577,6 +642,9 @@ def _komut_durum(_arguman: str) -> str:
             fresh, requested, fetch_failures,
             (last_run_stats.get("oldest_bar_age_minutes") if status == "basarisiz"
              else st.get("son_tarama_en_eski_veri_yasi_dk")),
+            fetch_returned=fetch_returned,
+            valid_fetch=valid_fetch,
+            analysis_eligible=analysis_eligible,
         ),
         f"Günlük toplam: {daily_stats['patterns_found']} formasyon kaydı, "
         f"{daily_stats['alerts_sent']} alarm, {daily_stats['errors']} hata",
@@ -1132,10 +1200,19 @@ def _panel_sigdir(grid_satirlari, butce: int):
 
 
 def _veri_durumu_satiri(data_asof, fresh_fetch=None, requested=None, fetch_failures=None,
-                        oldest_age_minutes=None) -> str:
-    """Son tamamlanmış mum zamanı/yaşı ve fetch durumunu tutarlı biçimde göster."""
+                        oldest_age_minutes=None, *, fetch_returned=None, valid_fetch=None,
+                        analysis_eligible=None) -> str:
+    """Mum yaşıyla birlikte provider yanıtı, OHLCV geçerliliği ve analiz uygunluğunu ayır."""
     if not data_asof:
-        return "📡 Son tamamlanmış mum: bu analizde veri zamanı yok"
+        base = "📡 Son cache mum etiketi: bu analizde veri zamanı yok"
+        if fetch_returned is not None:
+            base += (
+                f" · fetch yanıtı {fetch_returned}/{requested if requested is not None else '?'}"
+                f" · OHLCV geçerli {valid_fetch if valid_fetch is not None else '?'}"
+                f" · taze fetch {fresh_fetch if fresh_fetch is not None else '?'}"
+                f" · analiz için uygun {analysis_eligible if analysis_eligible is not None else '?'}"
+            )
+        return base
     try:
         bar = datetime.fromisoformat(str(data_asof))
         if bar.tzinfo is None:
@@ -1148,13 +1225,21 @@ def _veri_durumu_satiri(data_asof, fresh_fetch=None, requested=None, fetch_failu
     except (TypeError, ValueError, OverflowError):
         zaman, yas_metni = str(data_asof), "hesaplanamadı"
     fetch = ""
-    if fresh_fetch is not None:
+    returned = fetch_returned if fetch_returned is not None else fresh_fetch
+    if returned is not None:
         kapsam = requested if requested is not None else "?"
-        hata = f" · fetch hatası {fetch_failures}" if fetch_failures is not None else ""
-        fetch = f" · başarılı fetch {fresh_fetch}/{kapsam}{hata}"
+        fetch = f" · fetch yanıtı {returned}/{kapsam}"
+        if valid_fetch is not None:
+            fetch += f" · OHLCV geçerli {valid_fetch}"
+        if fresh_fetch is not None:
+            fetch += f" · taze fetch {fresh_fetch}"
+        if analysis_eligible is not None:
+            fetch += f" · analiz için uygun {analysis_eligible}"
+        if fetch_failures is not None:
+            fetch += f" · fetch hatası {fetch_failures}"
     eski = (f" · en eski taranan veri yaşı {son_bar_yasi_dakika_str(oldest_age_minutes)}"
             if oldest_age_minutes is not None else "")
-    return f"📡 Son tamamlanmış mum: {zaman} · veri yaşı {yas_metni}{eski}{fetch}"
+    return f"📡 Son cache mum etiketi: {zaman} · veri yaşı {yas_metni}{eski}{fetch}"
 
 
 def _panel_raporu(arguman: str = "", tamamlandi: bool = False) -> str:
@@ -1208,12 +1293,44 @@ def _panel_raporu(arguman: str = "", tamamlandi: bool = False) -> str:
     tarih_notu = _sonuc_veri_tarihi_uyarisi(now)
     if tarih_notu:
         satirlar.append(tarih_notu)
-    veri_zamani = st.get("son_tarama_veri_zamani")
-    if veri_zamani:
+    if durum == "basarisiz":
+        veri_zamani = last_run_stats.get("data_asof")
+        fetch_returned = last_run_stats.get("fetch_returned")
+        valid_fetch = last_run_stats.get("fetch_valid")
+        fresh_fetch = last_run_stats.get("fresh_fetch")
+        analysis_eligible = last_run_stats.get("analysis_eligible")
+        fetch_failures = last_run_stats.get("fetch_failures")
+        oldest_age = last_run_stats.get("oldest_bar_age_minutes")
+        requested_metrics = last_run_stats.get("requested")
+    elif durum == "tamamlandi":
+        # After restart, the persisted LiveState snapshot remains the source when
+        # current-process last_run_stats has not yet been populated.
+        if "fetch_returned" in last_run_stats:
+            veri_zamani = last_run_stats.get("data_asof")
+            fetch_returned = last_run_stats.get("fetch_returned")
+            valid_fetch = last_run_stats.get("fetch_valid")
+            fresh_fetch = last_run_stats.get("fresh_fetch")
+            analysis_eligible = last_run_stats.get("analysis_eligible")
+            fetch_failures = last_run_stats.get("fetch_failures")
+            oldest_age = last_run_stats.get("oldest_bar_age_minutes")
+            requested_metrics = last_run_stats.get("requested")
+        else:
+            veri_zamani = st.get("son_tarama_veri_zamani")
+            fetch_returned = st.get("son_tarama_fetch_yanit")
+            valid_fetch = st.get("son_tarama_gecerli_fetch")
+            fresh_fetch = st.get("son_tarama_taze_veri")
+            analysis_eligible = st.get("son_tarama_analize_uygun")
+            fetch_failures = st.get("son_tarama_fetch_hatasi")
+            oldest_age = st.get("son_tarama_en_eski_veri_yasi_dk")
+            requested_metrics = st.get("son_tarama_beklenen_hisse")
+    else:
+        veri_zamani = fetch_returned = valid_fetch = fresh_fetch = None
+        analysis_eligible = fetch_failures = oldest_age = requested_metrics = None
+    if veri_zamani or fetch_returned is not None:
         satirlar.append(_veri_durumu_satiri(
-            veri_zamani, st.get("son_tarama_taze_veri"),
-            st.get("son_tarama_beklenen_hisse"), st.get("son_tarama_fetch_hatasi"),
-            st.get("son_tarama_en_eski_veri_yasi_dk"),
+            veri_zamani, fresh_fetch, requested_metrics,
+            fetch_failures, oldest_age, fetch_returned=fetch_returned,
+            valid_fetch=valid_fetch, analysis_eligible=analysis_eligible,
         ))
     kapsam_notu = _kismi_kapsam_notu()
     if kapsam_notu:
@@ -1321,7 +1438,7 @@ def _manuel_tarama_tamamla(request: dict, result: dict, notifier) -> None:
                 f"Başarıyla hesaplanan: {result.get('processed', 0)}/"
                 f"{result.get('requested', 0)} hisse · hata/atlanan: "
                 f"{result.get('failed', 0)}.\n"
-                f"{_veri_durumu_satiri(result.get('data_asof'), result.get('fresh_fetch'), result.get('requested'), result.get('fetch_failures'), result.get('oldest_bar_age_minutes'))}\n"
+                f"{_veri_durumu_satiri(result.get('data_asof'), result.get('fresh_fetch'), result.get('requested'), result.get('fetch_failures'), result.get('oldest_bar_age_minutes'), fetch_returned=result.get('fetch_returned'), valid_fetch=result.get('fetch_valid'), analysis_eligible=result.get('analysis_eligible'))}\n"
                 "Ayrıntı için bot logundaki ilk 'tarama hatası' kaydına bakın."
             )
         elif request.get("tip") == "panel":
@@ -1331,7 +1448,7 @@ def _manuel_tarama_tamamla(request: dict, result: dict, notifier) -> None:
             mesaj = _komut_formasyonlar(filt, tamamlandi=True)
             mesaj = (f"✅ Tarama tamamlandı: {result.get('processed', 0)}/"
                      f"{result.get('requested', 0)} hisse.\n"
-                     f"{_veri_durumu_satiri(result.get('data_asof'), result.get('fresh_fetch'), result.get('requested'), result.get('fetch_failures'), result.get('oldest_bar_age_minutes'))}\n"
+                     f"{_veri_durumu_satiri(result.get('data_asof'), result.get('fresh_fetch'), result.get('requested'), result.get('fetch_failures'), result.get('oldest_bar_age_minutes'), fetch_returned=result.get('fetch_returned'), valid_fetch=result.get('fetch_valid'), analysis_eligible=result.get('analysis_eligible'))}\n"
                      + mesaj)
         if notifier is not None:
             notifier.send_text(mesaj)
@@ -1381,6 +1498,7 @@ TELEGRAM_KOMUTLARI = {
 # LiveState kilidinden yalnızca kopya alınır, disk/ağ I/O'su kilit dışında yapılır.
 SON_TARAMA_DOSYA = "son_tarama.json"
 SON_TARAMA_SUPABASE_KEY = "state:son_tarama"
+_SON_TARAMA_REMOTE_UNSET = object()
 
 
 def _son_tarama_data_dir(data_dir=None):
@@ -1463,7 +1581,7 @@ def son_tarama_kaydet(store=None, data_dir=None) -> bool:
         try:
             supabase_var = bool(store.upsert(SON_TARAMA_SUPABASE_KEY, veri))
         except Exception as exc:
-            logger.warning("Son tarama Supabase'e kaydedilemedi: %s", exc)
+            logger.warning("Son tarama Supabase'e kaydedilemedi (%s)", type(exc).__name__)
     logger.info(
         "Son tarama kaydedildi: %d formasyon (supabase=%s, dosya=%s)",
         formasyon_sayisi, "var" if supabase_var else "yok", "var" if dosya_var else "yok",
@@ -1471,11 +1589,21 @@ def son_tarama_kaydet(store=None, data_dir=None) -> bool:
     return dosya_var or supabase_var
 
 
-def son_tarama_yukle(store=None, data_dir=None) -> int:
-    """Supabase/yerel dosyanın en yenisini yükler; ilk kurulumda sessizce 0 döner."""
+def son_tarama_yukle(
+    store=None, data_dir=None, remote_rows=_SON_TARAMA_REMOTE_UNSET
+) -> int:
+    """Supabase/yerel dosyanın en yenisini yükler; ilk kurulumda sessizce 0 döner.
+
+    ``remote_rows`` is supplied by startup when its batched Supabase read already
+    included the snapshot key; passing ``None`` explicitly means remote state was
+    unavailable and avoids a redundant retry before local fallback.
+    """
     store = _supabase_store_ref if store is None else store
     uzak_veri, yerel_veri = None, None
-    if store is not None:
+    if remote_rows is not _SON_TARAMA_REMOTE_UNSET:
+        if isinstance(remote_rows, dict):
+            uzak_veri = remote_rows.get(SON_TARAMA_SUPABASE_KEY)
+    elif store is not None:
         try:
             satirlar = store.get_many([SON_TARAMA_SUPABASE_KEY])
             if isinstance(satirlar, dict):
@@ -1628,13 +1756,21 @@ def _telegram_set_webhook(url=None, secret=None, token=None) -> bool:
     try:
         yanit = _telegram_api_cagri("setWebhook", token, govde)
     except Exception as exc:  # noqa: BLE001 - ağ hatası botu düşürmesin
-        logger.error(f"Webhook kurulamadi (ag hatasi): {exc}")
+        logger.error(
+            "Webhook kurulamadi (ag hatasi): %s",
+            redact_sensitive_text(exc, token, secret),
+        )
         return False
     ok, aciklama = _telegram_yanit_oku(yanit)
+    aciklama = redact_sensitive_text(aciklama, token, secret)
     if ok:
-        logger.info(f"Telegram webhook kuruldu: {_webhook_adres_gizle(adres, secret)} ({aciklama})")
+        logger.info(
+            "Telegram webhook kuruldu: %s (%s)",
+            redact_sensitive_text(_webhook_adres_gizle(adres, secret), token, secret),
+            aciklama,
+        )
     else:
-        logger.error(f"Telegram webhook kurulamadi: {aciklama}")
+        logger.error("Telegram webhook kurulamadi: %s", aciklama)
     return ok
 
 
@@ -1651,13 +1787,17 @@ def _telegram_delete_webhook(token=None) -> bool:
     try:
         yanit = _telegram_api_cagri("deleteWebhook", token, {"drop_pending_updates": True})
     except Exception as exc:  # noqa: BLE001 - ağ hatası botu düşürmesin
-        logger.warning(f"Webhook kaldirilamadi (ag hatasi): {exc}")
+        logger.warning(
+            "Webhook kaldirilamadi (ag hatasi): %s",
+            redact_sensitive_text(exc, token, _telegram_webhook_secret_ayikla()),
+        )
         return False
     ok, aciklama = _telegram_yanit_oku(yanit)
+    aciklama = redact_sensitive_text(aciklama, token, _telegram_webhook_secret_ayikla())
     if ok:
-        logger.info(f"Telegram webhook kaldirildi ({aciklama})")
+        logger.info("Telegram webhook kaldirildi (%s)", aciklama)
     else:
-        logger.warning(f"Telegram webhook kaldirilamadi: {aciklama}")
+        logger.warning("Telegram webhook kaldirilamadi: %s", aciklama)
     return ok
 
 
@@ -1685,6 +1825,8 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
             handlers=TELEGRAM_KOMUTLARI,
             help_text=KOMUT_YARDIM,
             komutlari_yoksay=lambda: _scan_job_active.is_set(),
+            response_sender=getattr(notifier, "queue_command_reply", None),
+            response_exists=getattr(notifier, "command_reply_exists", None),
         )
     liste = ", ".join("/" + k for k in TELEGRAM_KOMUTLARI)
     webhook_url = _telegram_webhook_url_olustur()
@@ -1701,7 +1843,7 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
             logger.info(
                 "Telegram komutları WEBHOOK modunda: "
                 f"{_webhook_adres_gizle(webhook_url, _telegram_webhook_secret_ayikla())} "
-                f"(yalnızca chat_id {notifier.chat_id})"
+                "(yalnızca yapılandırılmış yetkili sohbet)"
             )
             return "webhook"
         else:
@@ -1710,8 +1852,10 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
     _telegram_delete_webhook(token=notifier.token)
     if isleyici.start():
         _telegram_listener_ref = isleyici
-        logger.info(f"Telegram komutları aktif (yoklama): {liste} "
-                    f"(yalnızca chat_id {notifier.chat_id})")
+        logger.info(
+            "Telegram komutları aktif (yoklama): %s (yalnızca yapılandırılmış yetkili sohbet)",
+            liste,
+        )
         return "yoklama"
     return "kapali"
 
@@ -1720,19 +1864,28 @@ def _telegram_webhook_isle(guncelleme):
     """health_server'ın /webhook ucundan gelen güncellemeyi işler (thread-safe).
 
     Dönen değer HTTP kodudur:
-      200 → işlendi (cevap sendMessage ile gitti),
-      503 → bot henüz komutları kurmadı (Telegram tekrar dener),
+      200 → işlendi veya komut cevabı dayanıklı outbox'a alındı,
+      503 → bot hazır değil ya da cevap dayanıklı kaydedilemedi (Telegram tekrar dener),
       500 → işleyici hatası (Telegram tekrar dener, güncelleme kaybolmaz).
     """
     isleyici = _telegram_update_processor_ref
     if isleyici is None:
         return 503
+    update_id = guncelleme.get("update_id") if isinstance(guncelleme, dict) else None
     with _telegram_webhook_kilidi:
         try:
             isleyici.handle_update(guncelleme)
         except Exception as exc:  # noqa: BLE001 - tek güncelleme sunucuyu düşürmesin
-            logger.error(f"Webhook guncellemesi islenemedi: {exc}", exc_info=True)
+            logger.error(
+                "Webhook guncellemesi islenemedi: %s",
+                redact_sensitive_text(
+                    exc, getattr(isleyici, "token", ""), _telegram_webhook_secret_ayikla()
+                ),
+            )
             return 500
+        retryable = getattr(isleyici, "update_waiting_for_delivery", None)
+        if callable(retryable) and retryable(update_id):
+            return 503
     return 200
 
 
@@ -1908,6 +2061,11 @@ def scan_all_stocks(
     tur_hata = 0
     en_son_bar = None
     en_eski_bar_yasi_dk = None
+    fetch_returned_count = 0
+    fetch_valid_count = 0
+    fresh_fetch_count = 0
+    analysis_eligible_count = 0
+    future_bar_count = 0
     _live_state.begin_scan(
         simdiki_zaman,
         manuel=manuel,
@@ -1942,7 +2100,8 @@ def scan_all_stocks(
     taze_1h_verileri, fetch_hatalari, retry_sayisi, retry_kurtarilan = fetch_1h_stocks_paced(
         scan_stocks, pacer, "MANUEL ANALİZ" if manuel else "CANLI TARAMA", periods=fetch_periods
     )
-    daily_stats['fetch_ok'] += len(taze_1h_verileri)
+    fetch_returned_count = len(taze_1h_verileri)
+    daily_stats['fetch_ok'] += fetch_returned_count
     daily_stats['fetch_failures'] += len(fetch_hatalari)
     daily_stats['fetch_retries'] += retry_sayisi
     daily_stats['fetch_retry_recovered'] += retry_kurtarilan
@@ -1960,34 +2119,56 @@ def scan_all_stocks(
             # Deque'den mevcut pencere; fetch aşaması yukarıda, retry dahil tamamlandı.
             df_1h = deque_manager.to_dataframe(stock)
             taze = taze_1h_verileri.get(stock)
+            provider_hata = fetch_hatalari.get(stock, "fetch yapılmadı")
+            provider_fetch_fresh = False
             provider_session_issue = None
             if taze is not None and require_current_session:
                 provider_session_issue = current_session_data_issue(
                     taze, simdiki_zaman, after_close=after_close,
                 )
                 if provider_session_issue:
-                    logger.error(
-                        "%s: sağlayıcı frame'i cache'e eklenmedi (%s)", stock,
-                        provider_session_issue,
-                    )
+                    provider_hata = f"güncel seans verisi doğrulama: {provider_session_issue}"
+                    logger.error("%s: sağlayıcı frame'i cache'e eklenmedi (%s)", stock, provider_hata)
                     taze = None
             if taze is not None:
-                birlesti = deque_manager.append_dataframe(stock, taze)
-                if birlesti:
-                    df_1h = deque_manager.to_dataframe(stock)
-                else:
-                    # Geçersiz girdi deque'ye yazılmadı; eski cache tazelik
-                    # kurallarıyla değerlendirilir (seans içi >120 dk -> atlanır).
-                    logger.error(
-                        f"{stock}: taze 1H veri geçersiz OHLCV; deque güncellenmedi - "
-                        "eski veri tazelik kurallarıyla kullanılacak"
-                    )
+                frame_issues = ohlcv_girdi_sorunlari(taze)
+                taze_frame_age = _frame_son_bar_yasi_dk(taze, simdiki_zaman)
+                if taze_frame_age is not None and taze_frame_age < 0:
+                    frame_issues = list(frame_issues) + ["gelecek_timestamp"]
+                elif taze_frame_age is None:
+                    frame_issues = list(frame_issues) + ["timestamp_yasi_hesaplanamadi"]
+                provider_fetch_fresh = (
+                    taze_frame_age is not None
+                    and 0 <= taze_frame_age <= STALE_BAR_UYARI_DK
+                )
+                if frame_issues:
+                    provider_fetch_fresh = False
+                    provider_hata = "OHLCV doğrulama: " + ", ".join(frame_issues)
+                    logger.error("%s: taze 1H fetch geçersiz (%s); cache değiştirilmedi",
+                                 stock, provider_hata)
                     taze = None
-                    df_1h = deque_manager.to_dataframe(stock)
-            else:
+                else:
+                    birlesti = deque_manager.append_dataframe(stock, taze)
+                    if birlesti:
+                        fetch_valid_count += 1
+                        daily_stats['fetch_valid'] += 1
+                        if provider_fetch_fresh:
+                            fresh_fetch_count += 1
+                            daily_stats['fetch_fresh'] += 1
+                        df_1h = deque_manager.to_dataframe(stock)
+                    else:
+                        provider_fetch_fresh = False
+                        provider_hata = "OHLCV birleştirme reddedildi"
+                        logger.error(
+                            f"{stock}: taze 1H veri deque'ye eklenmedi; "
+                            "önbellek tazelik kurallarıyla değerlendirilecek"
+                        )
+                        taze = None
+                        df_1h = deque_manager.to_dataframe(stock)
+            if taze is None:
                 logger.warning(
-                    f"{stock}: taze 1H veri yok ({fetch_hatalari.get(stock, 'fetch yapılmadı')}); "
-                    "cache varsa yalnız veri tazeliği uygunsa kullanılacak"
+                    f"{stock}: kullanılabilir taze 1H yanıt yok ({provider_hata}); "
+                    "cache varsa mevcut tazelik kurallarıyla değerlendirilecek"
                 )
             if require_current_session:
                 issue = provider_session_issue or current_session_data_issue(
@@ -2013,12 +2194,26 @@ def scan_all_stocks(
             # En yeni 1H mumun yaşı. Yahoo saatlerce kapalıysa bu değer büyür ve
             # bot eski veriyle (yanlış sinyalle) çalışmaya devam eder. Ölçüp
             # loglayıp heartbeat'e yazıyoruz ki kör çalışma görünür olsun.
-            son_bar = df_1h.index[-1]
-            son_bar = son_bar.tz_convert(ISTANBUL_TZ) if son_bar.tzinfo else ISTANBUL_TZ.localize(son_bar)
+            son_bar = pd.Timestamp(df_1h.index.max())
+            if pd.isna(son_bar):
+                logger.error("%s: cache son mum zamanı geçersiz; analiz atlandı", stock)
+                continue
+            son_bar = (son_bar.tz_convert(ISTANBUL_TZ) if son_bar.tzinfo
+                       else ISTANBUL_TZ.localize(son_bar.to_pydatetime()))
+            son_bar_yasi_dk = _frame_son_bar_yasi_dk(df_1h, simdiki_zaman)
+            if son_bar_yasi_dk is None:
+                logger.error("%s: cache son mum yaşı hesaplanamadı; analiz atlandı", stock)
+                continue
+            if son_bar_yasi_dk < 0:
+                future_bar_count += 1
+                daily_stats['future_bar_stocks'] += 1
+                logger.error(
+                    "%s: cache son mumu sistem saatinden %.1f dk ileride; "
+                    "gelecek timestamp ile analiz atlandı",
+                    stock, abs(son_bar_yasi_dk),
+                )
+                continue
             en_son_bar = max(en_son_bar, son_bar) if en_son_bar is not None else son_bar
-            son_bar_yasi_dk = (simdiki_zaman - df_1h.index[-1].tz_convert(ISTANBUL_TZ)
-                               if df_1h.index[-1].tzinfo else
-                               simdiki_zaman - ISTANBUL_TZ.localize(df_1h.index[-1])).total_seconds() / 60.0
             if daily_stats['max_bar_age_min'] is None or son_bar_yasi_dk > daily_stats['max_bar_age_min']:
                 daily_stats['max_bar_age_min'] = round(son_bar_yasi_dk, 1)
             if en_eski_bar_yasi_dk is None or son_bar_yasi_dk > en_eski_bar_yasi_dk:
@@ -2047,24 +2242,24 @@ def scan_all_stocks(
             # yalnızca piyasa açıkken VERİ YOK sayılır. Kapalı seanslarda son mum,
             # genel yaş sınırına kadar değerlendirilebilir.
             seans_acik = tarama_penceresi_acik_mi(simdiki_zaman)
-            if (taze is None and seans_acik and son_bar_yasi_dk is not None
+            if (not provider_fetch_fresh and seans_acik
                     and son_bar_yasi_dk > VERI_YOK_MODU_ESIK_DK):
                 daily_stats['veri_yok_modu'] = True
                 logger.info(
-                    f"{stock}: seans açıkken yeni veri yok (son mum "
-                    f"{son_bar_yasi_dakika_str(son_bar_yasi_dk)} önce, fetch başarısız) - analiz atlanıyor"
+                    f"{stock}: seans açıkken taze fetch barı yok (son mum "
+                    f"{son_bar_yasi_dakika_str(son_bar_yasi_dk)} önce; {provider_hata}) - analiz atlanıyor"
                 )
                 continue
 
             # Seans içinde fetch başarısızsa eski cache ile sinyal üretme. Seans
-            # dışında ise en son tamamlanmış mum, yapılandırılmış yaş sınırına
+            # dışında ise cache'in en yeni timestamp'i, yapılandırılmış yaş sınırına
             # (varsayılan 14 gün) kadar açıkça eski veri olarak kullanılabilir.
             if not _cache_verisi_kullanilabilir(
                     son_bar_yasi_dk, taze is not None, seans_acik):
                 daily_stats['stale_stocks'] += 1
                 daily_stats['data_stale'] = True
                 logger.warning(
-                    f"{stock}: son tamamlanmış mum {son_bar_yasi_dakika_str(son_bar_yasi_dk)} yaşında; "
+                    f"{stock}: son cache mum etiketi {son_bar_yasi_dakika_str(son_bar_yasi_dk)} yaşında; "
                     "bu hisse analiz dışı bırakıldı"
                 )
                 continue
@@ -2077,32 +2272,59 @@ def scan_all_stocks(
             if son_bar_yasi_dk > STALE_BAR_UYARI_DK and not erken_seans:
                 daily_stats['stale_stocks'] += 1
                 daily_stats['data_stale'] = True
+                provider_durumu = (
+                    "fetch başarısız/geçersiz" if taze is None else
+                    "sağlayıcı eski bar döndürdü" if not provider_fetch_fresh else
+                    "cache'in en yeni barı eski"
+                )
                 logger.warning(
                     f"{stock}: VERİ ESKİ - en yeni 1H mum {son_bar_yasi_dakika_str(son_bar_yasi_dk)} önce "
-                    f"(eşik {STALE_BAR_UYARI_DK} dk). yfinance çekimi "
-                    f"{'başarısız' if taze is None else 'veri gelmiyor'}, cache ile devam ediliyor - "
-                    f"formasyonlar eski veriyle hesaplanıyor!"
+                    f"(eşik {STALE_BAR_UYARI_DK} dk); {provider_durumu}. "
+                    "Mevcut veri politikasıyla analiz sürüyor; formasyonlar eski veriye dayanabilir."
                 )
-            
+
+            analysis_eligible_count += 1
+            daily_stats['analysis_eligible'] += 1
+
             # Tüm timeframe'leri üret
             all_tfs = resample_all_timeframes(df_1h)
             
             # --- 1D İÇİN DERİN VERİ (FAZ 2) ---
-            # Resample 1D sadece 1H penceresi kadar (~40 bar) derinlikte olur ve 1D
-            # formasyon penceresi (20-60 bar) marjinal kalıyordu (ölçüm: 40.0 bar).
+            # Resample 1D yalnızca eldeki 1H penceresi kadar derin olabilir; bu
+            # pencerenin işlem günü karşılığı provider/seans etiket sözleşmesine bağlıdır.
             # 1H penceresini büyütmek Pine uyumunu bozabileceği için günlük veriyi
             # AYRI ve DERİN (~2 yıl) çekiyoruz. Veri yoksa resample'e geri dönülür
             # (davranış asla kötüleşmez, sadece iyileşir).
             if deque_manager.gunluk_veri_eksik_mi(stock, simdiki_zaman):
                 with pacer.request(f"{stock} 1D"):
                     taze_gunluk = fetch_yfinance_1d(stock)
-                deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
                 if taze_gunluk is not None and len(taze_gunluk) >= 30:
                     if deque_manager.append_gunluk_dataframe(stock, taze_gunluk):
-                        logger.info(f"{stock}: günlük veri tazelendi ({len(taze_gunluk)} bar)")
+                        try:
+                            cache_kalici = bool(deque_manager.save_gunluk_to_disk(stock))
+                        except Exception as exc:
+                            cache_kalici = False
+                            logger.error(
+                                "%s: günlük veri bellekte kabul edildi ancak kalıcılık başarısız (%s)",
+                                stock, type(exc).__name__,
+                            )
+                        # Cache first, cooldown second. If the remote cache write failed,
+                        # keep only an in-memory cooldown so a restart can retry the fetch.
+                        deque_manager.gunluk_fetch_denemesi_kaydet(
+                            stock, simdiki_zaman, persist=cache_kalici
+                        )
+                        if cache_kalici:
+                            logger.info(f"{stock}: günlük veri tazelendi ({len(taze_gunluk)} bar)")
+                        else:
+                            logger.warning(
+                                "%s: günlük veri bellekte kabul edildi ancak kalıcılık doğrulanmadı; "
+                                "yeniden başlatma sonrası fetch tekrar denenebilir", stock,
+                            )
                     else:
+                        deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
                         logger.warning(f"{stock}: günlük derin veri geçersiz OHLCV - resample kullanılacak")
                 else:
+                    deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
                     logger.warning(f"{stock}: günlük derin veri çekilemedi - resample kullanılacak")
             df_gunluk = deque_manager.to_gunluk_dataframe(stock)
             if df_gunluk is not None and len(df_gunluk) >= 30:
@@ -2334,11 +2556,13 @@ def scan_all_stocks(
             daily_stats['stocks_scanned'] += 1
             tur_taranan += 1
             
-            # Her hisse sonrası diske kaydet (crash durumunda kayıp azalsın) + heartbeat
+            # Her hisse sonrası cache'i kaydet (crash durumunda kayıp azalsın) + heartbeat.
+            # save_to_disk kendi local/remote başarısızlıklarını loglar; hata bu
+            # hissenin analizini geri almaz.
             try:
                 deque_manager.save_to_disk(stock)
-            except Exception as e:
-                logger.warning(f"{stock} save_to_disk hatası: {e}")
+            except Exception as exc:
+                logger.warning("%s 1H cache kayıt hatası (%s)", stock, type(exc).__name__)
             write_heartbeat(notifier=notifier)
             
         except Exception as e:
@@ -2367,7 +2591,11 @@ def scan_all_stocks(
         "processed": tur_taranan,
         "failed": max(tur_hata, eksik),
         "patterns": tur_formasyon,
-        "fresh_fetch": len(taze_1h_verileri),
+        "fetch_returned": fetch_returned_count,
+        "fetch_valid": fetch_valid_count,
+        "fresh_fetch": fresh_fetch_count,
+        "analysis_eligible": analysis_eligible_count,
+        "future_bar_stocks": future_bar_count,
         "fetch_failures": len(fetch_hatalari),
         "duration_minutes": round(sure_dk, 1),
         "data_asof": en_son_bar.isoformat() if en_son_bar is not None else None,
@@ -2382,7 +2610,10 @@ def scan_all_stocks(
             son_tarama_hissesi=tur_taranan,
             son_tarama_beklenen_hisse=len(scan_stocks),
             son_tarama_hata_hisse=0,
-            son_tarama_taze_veri=len(taze_1h_verileri),
+            son_tarama_taze_veri=fresh_fetch_count,
+            son_tarama_fetch_yanit=fetch_returned_count,
+            son_tarama_gecerli_fetch=fetch_valid_count,
+            son_tarama_analize_uygun=analysis_eligible_count,
             son_tarama_fetch_hatasi=len(fetch_hatalari),
             son_tarama_formasyonu=tur_formasyon,
             son_tarama_veri_zamani=en_son_bar.isoformat() if en_son_bar is not None else None,
@@ -2403,6 +2634,11 @@ def scan_all_stocks(
             islenen_hisse=tur_taranan,
             istek_hisse=len(scan_stocks),
             sure_dk=round(sure_dk, 1),
+            son_tarama_taze_veri=fresh_fetch_count,
+            son_tarama_fetch_yanit=fetch_returned_count,
+            son_tarama_gecerli_fetch=fetch_valid_count,
+            son_tarama_analize_uygun=analysis_eligible_count,
+            son_tarama_fetch_hatasi=len(fetch_hatalari),
         )
         logger.error("Tarama sonucu yayımlanmadı; son başarılı snapshot korundu. %s", hata)
 
@@ -2421,23 +2657,28 @@ def scan_all_stocks(
             f"(ham seride fiyat sürekliliği ihlali). Detay: "
             f"{ {k: [x['tip'] for x in v] for k, v in deque_manager.sureklilik_sorunlari.items()} }"
         )
+    scan_health = (
+        f"fetch yanıtı {fetch_returned_count}/{len(scan_stocks)}, "
+        f"OHLCV geçerli {fetch_valid_count}, taze fetch {fresh_fetch_count}, "
+        f"analiz için uygun {analysis_eligible_count}"
+    )
     if daily_stats['veri_yok_modu']:
         logger.warning(
             f"VERİ YOK MODU: bugün için yeni piyasa verisi alınamadı "
-            f"(fetch hatası {daily_stats['fetch_failures']}/{len(ACTIVE_STOCKS)}, "
-            f"en eski mum {daily_stats['max_bar_age_min']} dk). Analiz yapılmadı - "
-            f"tatil veya veri kaynağı arızası olabilir."
+            f"({scan_health}; fetch hatası bu tarama {len(fetch_hatalari)}/{len(scan_stocks)}, "
+            f"bugünkü en eski mum {daily_stats['max_bar_age_min']} dk). "
+            f"Analiz yapılamayan hisseler veri kaynağı/tazelik nedeniyle atlandı."
         )
     elif daily_stats['fetch_failures'] > 0 or daily_stats['data_stale']:
         logger.warning(
-            f"VERİ SAĞLIĞI: taze veri {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse, "
-            f"fetch hatası {daily_stats['fetch_failures']}, eski veri {daily_stats['stale_stocks']} hisse, "
-            f"en eski mum {daily_stats['max_bar_age_min']} dk"
+            f"VERİ SAĞLIĞI: {scan_health}; fetch hatası bu tarama {len(fetch_hatalari)}, "
+            f"eski veri bugün {daily_stats['stale_stocks']} hissede, "
+            f"bugünkü en eski mum {daily_stats['max_bar_age_min']} dk"
         )
     else:
         logger.info(
-            f"VERİ SAĞLIĞI: taze veri {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse, "
-            f"en eski mum {daily_stats['max_bar_age_min']} dk"
+            f"VERİ SAĞLIĞI: {scan_health}; "
+            f"bugünkü en eski mum {daily_stats['max_bar_age_min']} dk"
         )
     write_heartbeat(notifier=notifier)
     return dict(last_run_stats)
@@ -2584,8 +2825,12 @@ def _build_active_formations_for_summary(lifecycle_manager, min_quality: float =
         min_quality = PUBLIC_MIN_QUALITY
     aktif = []
     try:
-        # _live_state içindeki son formasyon kayıtları
-        formations = _live_state.get_formations() if hasattr(_live_state, 'get_formations') else []
+        # LiveState'in public API'si formations(); eski test/entegrasyon
+        # adaptörleri için get_formations adı da geriye dönük kabul edilir.
+        getter = getattr(_live_state, "formations", None)
+        if not callable(getter):
+            getter = getattr(_live_state, "get_formations", None)
+        formations = getter() if callable(getter) else []
         # Eğer LiveState yoksa lifecycle_manager snapshots'tan topla
         if not formations:
             for key, snap in getattr(lifecycle_manager, 'last_snapshots', {}).items():
@@ -2727,6 +2972,7 @@ def main_loop():
             for stock in ACTIVE_STOCKS
             for key in (f"cache:1h:{stock}", f"cache:1d:{stock}")
         ] + [
+            SON_TARAMA_SUPABASE_KEY,
             "state:daily_fetch_attempts",
             "state:telegram_cooldowns",
             "state:telegram_caps",
@@ -2735,6 +2981,7 @@ def main_loop():
         remote_rows = supabase_store.get_many(remote_keys)
         if remote_rows is not None:
             deque_manager.hydrate_from_supabase(ACTIVE_STOCKS, remote_rows)
+    son_tarama_yukle(supabase_store, remote_rows=remote_rows)
     lifecycle_manager = PatternLifecycleManager(profile=PROFILE)
     _lifecycle_manager_ref = lifecycle_manager
     notifier = TelegramNotifier(
@@ -2782,8 +3029,8 @@ def main_loop():
         taze = ilk_veriler.get(stock)
         if taze is not None:
             if deque_manager.append_dataframe(stock, taze):
-                deque_manager.save_to_disk(stock)
-                logger.info(f"{stock}: {len(taze)} mum çekildi ve diske kaydedildi")
+                if deque_manager.save_to_disk(stock):
+                    logger.info(f"{stock}: {len(taze)} mum çekildi ve tüm cache depolarına kaydedildi")
             else:
                 logger.warning(
                     f"{stock}: ilk veri geçersiz OHLCV; diske yazılmadı - canlı taramada tekrar denenecek"
@@ -2801,14 +3048,31 @@ def main_loop():
         if deque_manager.gunluk_veri_eksik_mi(stock):
             with pacer.request(f"{stock} initial 1D"):
                 taze_gunluk = fetch_yfinance_1d(stock)
-            deque_manager.gunluk_fetch_denemesi_kaydet(stock)
             if taze_gunluk is not None and len(taze_gunluk) >= 30:
                 if deque_manager.append_gunluk_dataframe(stock, taze_gunluk):
-                    deque_manager.save_gunluk_to_disk(stock)
-                    logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
+                    try:
+                        cache_kalici = bool(deque_manager.save_gunluk_to_disk(stock))
+                    except Exception as exc:
+                        cache_kalici = False
+                        logger.error(
+                            "%s: ilk günlük cache kalıcılığı başarısız (%s)",
+                            stock, type(exc).__name__,
+                        )
+                    deque_manager.gunluk_fetch_denemesi_kaydet(
+                        stock, persist=cache_kalici
+                    )
+                    if cache_kalici:
+                        logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
+                    else:
+                        logger.warning(
+                            "%s: günlük cache kalıcılığı doğrulanmadı; "
+                            "yeniden başlatma sonrası fetch tekrar denenebilir", stock,
+                        )
                 else:
+                    deque_manager.gunluk_fetch_denemesi_kaydet(stock)
                     logger.warning(f"{stock}: ilk günlük veri geçersiz OHLCV - resample kullanılacak")
             else:
+                deque_manager.gunluk_fetch_denemesi_kaydet(stock)
                 logger.warning(f"{stock}: ilk günlük veri çekilemedi - resample kullanılacak")
     
     # Başarılı güncel tam tarama snapshot'ta varsa, restart sonrası aynı checkpoint'i
@@ -3088,4 +3352,11 @@ if __name__ == "__main__":
         webhook_handler=_telegram_webhook_isle,
         webhook_secret=TELEGRAM_WEBHOOK_SECRET,
     )
-    main_loop()
+    if os.getenv("BOT_HEALTH_SMOKE_ONLY") == "1":
+        # CI liveness smoke: keep only the HTTP server alive. Do not create a
+        # notifier, contact Telegram/Supabase, or fetch Yahoo data.
+        logger.info("Health smoke mode: provider and command loops disabled")
+        while not _shutdown_requested:
+            time.sleep(0.25)
+    else:
+        main_loop()

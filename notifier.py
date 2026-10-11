@@ -14,6 +14,7 @@ from config import DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_
 from notification_outbox import NotificationOutbox
 from telegram_alert_flow import STATE_TR
 from formation_dm_context import display_price
+from secrets_redaction import redact_sensitive_text
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,21 @@ def _atomic_json_write(path: str, payload: dict, *, indent=None) -> None:
             os.remove(temporary_path)
         except FileNotFoundError:
             pass
+
+
+def _best_effort_store_upsert(store, key: str, payload: dict, state_name: str) -> bool:
+    """Remote state mirrors cannot invalidate a locally persisted notification."""
+    if store is None:
+        return True
+    try:
+        saved = bool(store.upsert(key, payload))
+    except Exception as exc:
+        # Exception strings from adapters can contain credential-bearing URLs.
+        logger.warning("%s uzak saklayıcı yazımı başarısız (%s)", state_name, type(exc).__name__)
+        return False
+    if not saved:
+        logger.warning("%s uzak saklayıcı upsert başarısız", state_name)
+    return saved
 
 
 PATTERN_EMOJI = {
@@ -214,8 +230,8 @@ class TelegramNotifier:
         self._gunluk_sayac = 0
         self._gunluk_tarih = _local_now_naive().date()
         self._kap_uyarildi = False
-        self._cooldown_dosya = os.path.join(os.path.dirname(DATA_DIR) or ".", "bot_data", "telegram_soguma.json")
-        self._kap_dosya = os.path.join(os.path.dirname(self._cooldown_dosya), "telegram_kap.json")
+        self._cooldown_dosya = os.path.join(DATA_DIR, "telegram_soguma.json")
+        self._kap_dosya = os.path.join(DATA_DIR, "telegram_kap.json")
         self._delivery_interval_seconds = 1.0
         self._outbox = NotificationOutbox(
             os.path.join(DATA_DIR, "telegram_delivery.json"),
@@ -267,7 +283,9 @@ class TelegramNotifier:
                 pass
             if response.status_code == 200 and payload.get("ok") is True:
                 return True, 200, "Telegram confirmed ok=true", None, False
-            detail = (getattr(response, "text", "") or "")[:200]
+            detail = redact_sensitive_text(
+                getattr(response, "text", "") or "", self.token
+            )[:200]
             status = int(response.status_code)
             retry_after = None
             try:
@@ -277,7 +295,8 @@ class TelegramNotifier:
             permanent = 400 <= status < 500 and status != 429
             return False, status, detail or f"Telegram ok={payload.get('ok')}", retry_after, permanent
         except Exception as exc:
-            return False, 0, f"{type(exc).__name__}: {exc}"[:200], None, False
+            detail = redact_sensitive_text(f"{type(exc).__name__}: {exc}", self.token)
+            return False, 0, detail[:200], None, False
 
     def _cooldown_key_for_job(self, item: dict) -> str:
         return self._cooldown_key(
@@ -356,6 +375,7 @@ class TelegramNotifier:
             success, status, detail, retry_after, permanent = self._send_text_direct(
                 item["text"], item.get("chat_id", "")
             )
+            detail = redact_sensitive_text(detail, self.token)
             if success:
                 if item.get("policy"):
                     self.last_sent[self._cooldown_key_for_job(item)] = _local_now_naive()
@@ -418,6 +438,50 @@ class TelegramNotifier:
         return (latest.get("status") == "sent", "message sent" if latest.get("status") == "sent"
                 else f"pending retry ({latest.get('last_error') or 'delivery deferred'})")
 
+    def _command_reply_item_id(self, update_id: int) -> str:
+        return self._outbox.make_id(
+            f"telegram-command-update:{int(update_id)}", "dm"
+        )
+
+    def command_reply_exists(self, update_id: int) -> bool:
+        """Whether a Telegram update already has a durable command-reply record."""
+        try:
+            item_id = self._command_reply_item_id(update_id)
+        except (TypeError, ValueError, OverflowError):
+            return False
+        return self._outbox.get(item_id) is not None
+
+    def queue_command_reply(self, update_id: int, text: str) -> bool:
+        """Persist a command reply before the inbound Telegram update is ACKed.
+
+        Telegram has no idempotency key for sendMessage. The update_id is used as
+        the local outbox identity so webhook/getUpdates redelivery does not rerun
+        a command whose reply was already recorded. A terminal outbox record is
+        still considered handled; delivery failure remains visible in outbox logs.
+        """
+        if not self.enabled:
+            return False
+        try:
+            update_id = int(update_id)
+        except (TypeError, ValueError, OverflowError):
+            return False
+        identity = f"telegram-command-update:{update_id}"
+        item_id, item, _created = self._queue_text(
+            text,
+            destination="dm",
+            chat_id=self.chat_id,
+            identity=identity,
+            metadata={"kind": "command", "policy": False},
+        )
+        if item is None:
+            return False
+        status = item.get("status")
+        if status == "pending":
+            self.drain_outbox(max_items=1, only_ids={item_id})
+            item = self._outbox.get(item_id) or item
+            status = item.get("status")
+        return status in {"sent", "pending", "sending", "dead", "expired"}
+
     def persist_watch_state(self, snapshot: dict, *, remote: bool = True) -> bool:
         return self._outbox.set_watch(snapshot, remote=remote)
 
@@ -455,12 +519,24 @@ class TelegramNotifier:
             )
             if resp.status_code == 200:
                 username = (resp.json().get("result") or {}).get("username", "?")
-                logger.info(f"Telegram bağlantısı OK (bot: @{username}, chat_id: {self.chat_id})")
+                logger.info(
+                    "Telegram bağlantısı OK (bot: @%s, chat_id configured=%s)",
+                    username, bool(self.chat_id),
+                )
                 return True
-            ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
-            logger.error(f"Telegram token/chat_id reddedildi: HTTP {resp.status_code} {resp.text[:200]} | {ipucu}")
+            response_text = redact_sensitive_text(
+                getattr(resp, "text", "") or "", self.token
+            )[:200]
+            ipucu = telegram_hata_ipucu(resp.status_code, response_text)
+            logger.error(
+                "Telegram token/chat_id reddedildi: HTTP %s %s | %s",
+                resp.status_code, response_text, redact_sensitive_text(ipucu, self.token),
+            )
         except Exception as e:
-            logger.error(f"Telegram bağlantı hatası (token yanlış olabilir): {e}")
+            logger.error(
+                "Telegram bağlantı hatası (token yanlış olabilir): %s",
+                redact_sensitive_text(e, self.token),
+            )
         return False
 
     def should_send_to_public(self, data: Dict) -> bool:
@@ -503,9 +579,12 @@ class TelegramNotifier:
             return False
         success, status, detail, _retry_after, _permanent = self._send_text_direct(text, self.channel_id)
         if success:
-            logger.info(f"Telegram kanala gönderildi: {self.channel_id}")
+            logger.info("Telegram kanala gönderildi (kanal kimliği loglanmadı)")
             return True
-        logger.error(f"Telegram kanal hatası HTTP {status}: {detail}")
+        logger.error(
+            "Telegram kanal hatası HTTP %s: %s",
+            status, redact_sensitive_text(detail, self.token),
+        )
         return False
 
     def format_daily_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None) -> str:
@@ -619,8 +698,9 @@ class TelegramNotifier:
             _atomic_json_write(self._kap_dosya, payload)
         except Exception as e:
             logger.debug(f"Kap hafızası kaydedilemedi: {e}")
-        if self.persistent_store is not None:
-            self.persistent_store.upsert("state:telegram_caps", payload)
+        _best_effort_store_upsert(
+            self.persistent_store, "state:telegram_caps", payload, "Telegram gönderim limiti"
+        )
 
     def _gunu_sifirla_gerekirse(self):
         bugun = _local_now_naive().date()
@@ -701,8 +781,9 @@ class TelegramNotifier:
             _atomic_json_write(self._cooldown_dosya, payload, indent=0)
         except Exception as e:
             logger.warning(f"Cooldown kaydedilemedi (devam ediliyor): {e}")
-        if self.persistent_store is not None:
-            self.persistent_store.upsert("state:telegram_cooldowns", payload)
+        _best_effort_store_upsert(
+            self.persistent_store, "state:telegram_cooldowns", payload, "Telegram cooldown"
+        )
 
     def _cooldown_key(
         self,

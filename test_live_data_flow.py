@@ -30,8 +30,8 @@ from patterns import PatternLifecycleManager
 
 IST = config.ISTANBUL_TZ
 
-# GitHub'da bilinçli olarak tutulan 28 hisselik bot_data önbelleği
-# (git ls-files bot_data ile doğrulandı).
+# Sabit senaryo fixture'ı: testte cache'li kabul edilen 28 sembol listesi.
+# Bu test gerçek repository bot_data içeriğini açmaz veya doğrulamaz.
 CACHED_28 = [
     "AKBNK", "ALARK", "ASELS", "BIMAS", "DOHOL", "EKGYO", "EREGL", "FROTO",
     "GARAN", "GUBRF", "HALKB", "HEKTS", "ISCTR", "KCHOL", "KRDMD", "PETKM",
@@ -129,7 +129,8 @@ def sentetik_1h(n_bars, end_at, base=100.0):
 def sifirla_daily_stats(monkeypatch):
     fresh = copy.deepcopy(main_module.daily_stats)
     for key in ("stocks_scanned", "patterns_found", "alerts_sent", "errors",
-                "fetch_ok", "fetch_failures", "fetch_retries",
+                "fetch_ok", "fetch_valid", "fetch_fresh", "analysis_eligible",
+                "future_bar_stocks", "fetch_failures", "fetch_retries",
                 "fetch_retry_recovered", "stale_stocks", "split_atlanan"):
         fresh[key] = 0
     fresh["max_bar_age_min"] = None
@@ -186,8 +187,8 @@ def on_yukle(mgr, stocks, end_at, n_bars=55):
 
 
 # -------------------------------------------------------------------- testler -
-def test_aktif_evren_48_ve_repo_cache_28():
-    """Evren ACTIVE_STOCKS (48); repo'daki bot_data 28 hissedir; 20 sembol cache dışı."""
+def test_aktif_evren_48_ve_sentetik_cache_fiksturu():
+    """ACTIVE_STOCKS 48'dir; sentetik test fixture'ında 28 hit, 20 miss vardır."""
     assert len(config.ACTIVE_STOCKS) == 48
     assert len(set(config.ACTIVE_STOCKS)) == 48
     assert len(CACHED_28) == 28
@@ -455,17 +456,105 @@ def test_saglayici_eski_bar_donerse_analiz_devam_eder_ama_isaretlenir(
 
     assert result["status"] == "tamamlandi"
     assert result["processed"] == 1
+    assert result["fetch_returned"] == 1
+    assert result["fetch_valid"] == 1
+    assert result["fresh_fetch"] == 0
+    assert result["analysis_eligible"] == 1
+    assert stats["fetch_ok"] == 1 and stats["fetch_valid"] == 1
+    assert stats["fetch_fresh"] == 0 and stats["analysis_eligible"] == 1
     assert stats["stale_stocks"] == 1
     assert stats["data_stale"] is True
-    assert "formasyonlar eski veriyle hesaplanıyor" in caplog.text
+    assert "Mevcut veri politikasıyla analiz sürüyor" in caplog.text
+    assert "sağlayıcı eski bar döndürdü" in caplog.text
+    # Scan summary separates provider response, OHLCV acceptance, freshness and
+    # analysis eligibility; it must not call a non-fresh response "taze veri".
+    assert "fetch yanıtı 1/1" in caplog.text
+    assert "OHLCV geçerli 1" in caplog.text
+    assert "taze fetch 0" in caplog.text
+    assert "analiz için uygun 1" in caplog.text
+    assert "taze veri 1/48" not in caplog.text
     # data_asof eski mum; Telegram çıktıları bu zamanı 'veri yaşı' ile gösterir.
     beklenen_asof = sabit_simdi - timedelta(hours=8)
     assert datetime.fromisoformat(result["data_asof"]) == beklenen_asof
     satir = main_module._veri_durumu_satiri(
-        result["data_asof"], fresh_fetch=1, requested=1, fetch_failures=0,
+        result["data_asof"], fresh_fetch=result["fresh_fetch"], requested=1,
+        fetch_failures=result["fetch_failures"],
         oldest_age_minutes=result["oldest_bar_age_minutes"],
+        fetch_returned=result["fetch_returned"], valid_fetch=result["fetch_valid"],
+        analysis_eligible=result["analysis_eligible"],
     )
     assert "08.10.2026 06:00" in satir and "veri yaşı 8sa" in satir
+    assert "fetch yanıtı 1/1" in satir and "taze fetch 0" in satir
+    assert "OHLCV geçerli 1" in satir and "analiz için uygun 1" in satir
+
+
+def test_seans_disi_eski_provider_yaniti_14_gun_kuralini_asamaz(tmp_path, monkeypatch):
+    """Provider non-empty response is not the same as a fresh fetch; stale rows
+    older than the configured off-session cache limit stay ineligible.
+    """
+    live_state = FakeLiveState()
+    stats = sifirla_daily_stats(monkeypatch)
+    heartbeat = []
+    simdi = IST.localize(datetime(2026, 10, 8, 14, 0))
+
+    class SabitDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return simdi.astimezone(tz) if tz is not None else simdi.replace(tzinfo=None)
+
+    monkeypatch.setattr(main_module, "datetime", SabitDatetime)
+    stale_frame = sentetik_1h(60, simdi - pd.Timedelta(days=15))
+    temel_monkeypatch(monkeypatch, live_state, heartbeat, lambda _s, _p: stale_frame.copy())
+    monkeypatch.setattr(main_module, "tarama_penceresi_acik_mi", lambda *_: False)
+
+    mgr = StockDequeManager(data_dir=str(tmp_path / "bot_data"))
+    result = main_module.scan_all_stocks(
+        mgr, PatternLifecycleManager(profile=config.PROFILE), FakeNotifier(),
+        stocks=["THYAO"], send_alerts=False,
+    )
+
+    assert result["fetch_returned"] == 1
+    assert result["fetch_valid"] == 1
+    assert result["fresh_fetch"] == 0
+    assert result["analysis_eligible"] == 0
+    assert result["processed"] == 0
+    assert result["status"] == "basarisiz"
+    assert stats["analysis_eligible"] == 0
+
+
+def test_gelecek_timestampli_fetch_karantinaya_alinir(tmp_path, monkeypatch, caplog):
+    """Gelecekte etiketli OHLCV provider yanıtı cache'e yazılmaz ve analiz edilmez."""
+    live_state = FakeLiveState()
+    stats = sifirla_daily_stats(monkeypatch)
+    heartbeat = []
+    sabit_simdi = IST.localize(datetime(2026, 10, 8, 14, 0))
+
+    class SabitDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return sabit_simdi.astimezone(tz) if tz is not None else sabit_simdi.replace(tzinfo=None)
+
+    monkeypatch.setattr(main_module, "datetime", SabitDatetime)
+    future_frame = sentetik_1h(60, sabit_simdi + pd.Timedelta(hours=1))
+    temel_monkeypatch(monkeypatch, live_state, heartbeat, lambda _s, _p: future_frame.copy())
+    monkeypatch.setattr(main_module, "tarama_penceresi_acik_mi", lambda *_: True)
+
+    data_dir = tmp_path / "bot_data"
+    mgr = StockDequeManager(data_dir=str(data_dir))
+    result = main_module.scan_all_stocks(
+        mgr, PatternLifecycleManager(profile=config.PROFILE), FakeNotifier(),
+        stocks=["THYAO"], send_alerts=False,
+    )
+
+    assert result["fetch_returned"] == 1
+    assert result["fetch_valid"] == 0
+    assert result["fresh_fetch"] == 0
+    assert result["analysis_eligible"] == 0
+    assert result["processed"] == 0 and result["status"] == "basarisiz"
+    assert stats["fetch_ok"] == 1 and stats["fetch_valid"] == 0
+    assert mgr.to_dataframe("THYAO") is None
+    assert not list(data_dir.glob("*.pkl"))
+    assert "gelecek_timestamp" in caplog.text
 
 
 def test_eski_cache_ve_taze_canli_veri_birlesiminde_canli_kazanir(tmp_path, monkeypatch):
@@ -539,7 +628,13 @@ def test_kismi_basarisizlikta_kapsam_raporlanir(tmp_path, monkeypatch, caplog):
     assert result["processed"] == 26
     assert result["failed"] == 22
     assert result["fetch_failures"] == 22
+    assert result["fetch_returned"] == 26
+    assert result["fetch_valid"] == 26
+    assert result["fresh_fetch"] == 26
+    assert result["analysis_eligible"] == 26
     assert stats["fetch_ok"] == 26 and stats["fetch_failures"] == 22
+    assert stats["fetch_valid"] == 26 and stats["fetch_fresh"] == 26
+    assert stats["analysis_eligible"] == 26
 
     # Gerçek write_heartbeat, geçici data_dir ile gerçek payload üretir:
     monkeypatch.setattr(config, "DATA_DIR", str(data_dir))
@@ -548,6 +643,9 @@ def test_kismi_basarisizlikta_kapsam_raporlanir(tmp_path, monkeypatch, caplog):
     payload = (data_dir / "heartbeat.json").read_text(encoding="utf-8")
     assert '"fetch_failures": 22' in payload
     assert '"fetch_ok": 26' in payload
+    assert '"fetch_valid": 26' in payload
+    assert '"fetch_fresh": 26' in payload
+    assert '"analysis_eligible": 26' in payload
     assert '"active_stocks": 48' in payload
 
     # Telegram komut çıktısındaki veri durumu satırı eksik kapsamı gösterir:
@@ -555,8 +653,13 @@ def test_kismi_basarisizlikta_kapsam_raporlanir(tmp_path, monkeypatch, caplog):
         result["data_asof"], fresh_fetch=result["fresh_fetch"],
         requested=result["requested"], fetch_failures=result["fetch_failures"],
         oldest_age_minutes=result["oldest_bar_age_minutes"],
+        fetch_returned=result["fetch_returned"], valid_fetch=result["fetch_valid"],
+        analysis_eligible=result["analysis_eligible"],
     )
-    assert "başarılı fetch 26/48" in satir
+    assert "fetch yanıtı 26/48" in satir
+    assert "OHLCV geçerli 26" in satir
+    assert "taze fetch 26" in satir
+    assert "analiz için uygun 26" in satir
     assert "fetch hatası 22" in satir
     assert "Eksik tarama: 26/48" in caplog.text
 
@@ -587,3 +690,79 @@ def test_cache_yas_matrisi_sinirlari():
     assert f(180, False, False) is True              # seans dışı aynı değer kullanılır
     assert f(15 * 24 * 60, False, False) is False    # 14 gün üst sınır
     assert f(14 * 24 * 60 + 1, False, False) is False
+
+
+@pytest.mark.parametrize("remote_cache_write_succeeds", [True, False])
+def test_successful_deep_daily_fetch_is_durable_before_scan_returns(
+    tmp_path, monkeypatch, remote_cache_write_succeeds
+):
+    """Persist cache before cooldown; failed remote cache writes cannot leave a
+    durable cooldown that suppresses recovery after restart.
+    """
+    live_state = FakeLiveState()
+    sifirla_daily_stats(monkeypatch)
+    heartbeat = []
+    now = datetime.now(IST)
+    hourly = sentetik_1h(60, now - pd.Timedelta(minutes=100))
+    daily_index = pd.date_range(end=pd.Timestamp(now).normalize() - pd.Timedelta(days=1),
+                                periods=40, freq="B", tz=IST)
+    close = [100.0 + i * 0.1 for i in range(len(daily_index))]
+    daily = pd.DataFrame(
+        {"open": close, "high": [value + 0.2 for value in close],
+         "low": [value - 0.2 for value in close], "close": close,
+         "volume": [1000.0] * len(close)},
+        index=daily_index,
+    )
+    temel_monkeypatch(
+        monkeypatch, live_state, heartbeat,
+        lambda _stock, _period: hourly.copy(),
+        fetch_1d=lambda _stock: daily.copy(),
+    )
+    monkeypatch.setattr(main_module, "tarama_penceresi_acik_mi", lambda *_: False)
+
+    class FakeStore:
+        def __init__(self):
+            self.writes = []
+
+        def upsert(self, key, payload):
+            self.writes.append((key, payload))
+            if key == "cache:1d:THYAO":
+                return remote_cache_write_succeeds
+            return True
+
+    store = FakeStore()
+    data_dir = tmp_path / "daily-cache"
+    manager = StockDequeManager(data_dir=str(data_dir), persistent_store=store)
+    durability_order = []
+    save_daily = manager.save_gunluk_to_disk
+    save_attempt = manager.gunluk_fetch_denemesi_kaydet
+
+    def tracked_daily_save(stock):
+        durability_order.append("daily-cache")
+        return save_daily(stock)
+
+    def tracked_attempt_save(*args, **kwargs):
+        durability_order.append("fetch-attempt")
+        return save_attempt(*args, **kwargs)
+
+    monkeypatch.setattr(manager, "save_gunluk_to_disk", tracked_daily_save)
+    monkeypatch.setattr(manager, "gunluk_fetch_denemesi_kaydet", tracked_attempt_save)
+    result = main_module.scan_all_stocks(
+        manager, PatternLifecycleManager(profile=config.PROFILE), FakeNotifier(),
+        stocks=["THYAO"], send_alerts=False,
+    )
+
+    assert result["fetch_valid"] == 1
+    assert durability_order.index("daily-cache") < durability_order.index("fetch-attempt")
+    daily_path = data_dir / "THYAO_gunluk.json"
+    assert daily_path.is_file()
+    restored = StockDequeManager(data_dir=str(data_dir)).get_gunluk_deque("THYAO")
+    assert len(restored) == 40
+    attempt_keys = [key for key, _payload in store.writes]
+    if remote_cache_write_succeeds:
+        assert "state:daily_fetch_attempts" in attempt_keys
+        assert (data_dir / "gunluk_fetch_attempts.json").is_file()
+    else:
+        assert "state:daily_fetch_attempts" not in attempt_keys
+        assert not (data_dir / "gunluk_fetch_attempts.json").exists()
+        assert "THYAO" in manager._gunluk_fetch_attempts

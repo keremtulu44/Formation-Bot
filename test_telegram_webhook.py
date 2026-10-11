@@ -465,6 +465,27 @@ def test_webhook_isleyici_503_dondururse_aynen_iletilir():
         server.server_close()
 
 
+def test_webhook_reply_dayanikli_degilse_503_ve_komut_tek_kez_islenir(monkeypatch):
+    guncelleme = _guncelleme(92, "/durum")
+    yanitlar = iter([False, True])
+    handler_calls = []
+    listener = TelegramCommandListener(
+        token="111:AAA",
+        allowed_chat_id=CHAT_ID,
+        handlers={"durum": lambda _a: handler_calls.append("durum") or "durum cevabi"},
+        response_sender=lambda _update_id, _text: next(yanitlar),
+    )
+    monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", listener)
+
+    assert main_mod._telegram_webhook_isle(guncelleme) == 503
+    assert listener.update_waiting_for_delivery(92) is True
+    assert handler_calls == ["durum"]
+
+    assert main_mod._telegram_webhook_isle(guncelleme) == 200
+    assert listener.update_waiting_for_delivery(92) is False
+    assert handler_calls == ["durum"]
+
+
 def test_webhook_get_telefondan_durum_dondurur():
     server = _webhook_sunucusu(lambda u: 200)
     try:
