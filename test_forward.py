@@ -8,6 +8,29 @@ Mantık:
 - Sonraki 20 barda (340-360) kırılım oldu mu? Klasik yöne uydu mu? Fiyat gitti mi?
 """
 
+# This exploratory script reads a local test cache only when run directly. It is
+# not a deterministic unit test and must not touch bot_data during pytest collection.
+if __name__ != "__main__":
+    import pytest
+    pytest.skip("manual exploratory script; run with FORMATION_BOT_EXPLORATORY_DATA_DIR", allow_module_level=True)
+
+import os
+from pathlib import Path
+
+
+def _exploratory_data_dir():
+    raw = os.environ.get("FORMATION_BOT_EXPLORATORY_DATA_DIR", "").strip()
+    if not raw:
+        raise SystemExit("Set FORMATION_BOT_EXPLORATORY_DATA_DIR to an existing disposable test-cache directory.")
+    target = Path(raw).expanduser().resolve()
+    real_cache = (Path(__file__).resolve().parent / "bot_data").resolve()
+    if target == real_cache or real_cache in target.parents:
+        raise SystemExit("Refusing to read the repository's real bot_data cache.")
+    if not target.is_dir():
+        raise SystemExit("The explicit exploratory test-cache directory must already exist.")
+    return str(target)
+
+
 import pandas as pd
 from data import StockDequeManager, resample_all_timeframes
 from patterns import find_best_triangle_candidate, find_best_flag_candidate, calculate_atr
@@ -16,7 +39,7 @@ import logging
 
 logging.basicConfig(level=logging.WARNING)
 
-mgr = StockDequeManager(data_dir="./bot_data")
+mgr = StockDequeManager(data_dir=_exploratory_data_dir())
 params = get_profile_params("Dengeli")
 
 def check_forward(df_full, detection_bar=340, lookahead=20):
