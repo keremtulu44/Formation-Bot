@@ -11,6 +11,12 @@ from config import get_profile_params
 import os
 import tempfile
 
+if os.getenv("FORMATION_BOT_ALLOW_LIVE_YAHOO_RESEARCH") != "1":
+    raise SystemExit(
+        "This diagnostic fetches live Yahoo Finance data; set "
+        "FORMATION_BOT_ALLOW_LIVE_YAHOO_RESEARCH=1 to opt in explicitly."
+    )
+
 # 1. Veri çek - hangi timeframe?
 print("=== HANGİ TIMEFRAME ÇEKTİK? ===")
 print("Senin çektiğin: 60d 1h (yfinance interval='1h')")
