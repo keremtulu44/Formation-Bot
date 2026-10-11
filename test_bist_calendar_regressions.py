@@ -7,6 +7,8 @@ is complete or that provider timestamp labels are independently verified.
 
 from copy import deepcopy
 from datetime import datetime
+import inspect
+import threading
 from types import SimpleNamespace
 from contextlib import nullcontext
 
@@ -210,7 +212,244 @@ def test_restart_skips_successful_same_checkpoint_but_retries_failed_scan(monkey
 
     failed = _persisted_state(status="basarisiz")
     monkeypatch.setattr(main_module, "_live_state", failed)
-    assert main_module._persisted_full_scan_checkpoint(now) is None
+    restored_checkpoint = main_module._persisted_full_scan_checkpoint(now)
+    assert restored_checkpoint is None
+    assert bist_scan_due(now, restored_checkpoint) is True
+    assert main_module._scheduled_scan_retry_wait(
+        restored_checkpoint, retry_checkpoint=None, retry_at=None, now=100,
+    ) == 0  # süreç içi bekleme restart ile sıfırlanır; başarısız checkpoint yeniden denenir
+
+
+def test_scheduled_failure_keeps_checkpoint_and_installs_retry_backoff():
+    checkpoint = _local("2026-10-12 10:30")
+    failed = {"status": "basarisiz", "requested": 3, "processed": 2, "failed": 1}
+    calls = []
+
+    transition = main_module._execute_scheduled_scan_transition(
+        scan_callable=lambda: calls.append("scan") or failed,
+        checkpoint=checkpoint,
+        expected_stock_count=3,
+        retry_checkpoint=None,
+        retry_attempts=0,
+        retry_at=None,
+        monotonic=lambda: 100.0,
+    )
+
+    assert calls == ["scan"]
+    assert transition.scan_result is failed
+    assert transition.completed_checkpoint is None
+    assert transition.retry_checkpoint == checkpoint
+    assert transition.retry_attempts == 1
+    assert transition.retry_delay == 60.0
+    assert transition.retry_at == 160.0
+    assert main_module._scheduled_scan_retry_wait(
+        checkpoint, transition.retry_checkpoint, transition.retry_at, now=159.0,
+    ) == 1.0
+    assert main_module._scheduled_scan_retry_wait(
+        checkpoint, transition.retry_checkpoint, transition.retry_at, now=160.0,
+    ) == 0.0
+
+
+def test_scheduled_scan_exception_becomes_failure_and_installs_backoff(monkeypatch):
+    checkpoint = _local("2026-10-12 10:30")
+    monkeypatch.setattr(main_module, "_live_state", LiveState())
+    monkeypatch.setattr(main_module, "last_run_stats", {})
+
+    def scan_raises():
+        raise RuntimeError("synthetic scheduled failure")
+
+    transition = main_module._execute_scheduled_scan_transition(
+        scan_callable=scan_raises,
+        checkpoint=checkpoint,
+        expected_stock_count=3,
+        retry_checkpoint=None,
+        retry_attempts=0,
+        retry_at=None,
+        monotonic=lambda: 50.0,
+    )
+
+    assert transition.scan_result["status"] == "basarisiz"
+    assert transition.completed_checkpoint is None
+    assert transition.retry_checkpoint == checkpoint
+    assert transition.retry_attempts == 1
+    assert transition.retry_at == 110.0
+    assert transition.retry_delay == 60.0
+
+
+def test_scheduled_full_success_advances_checkpoint_and_resets_retry_state():
+    checkpoint = _local("2026-10-12 10:30")
+    success = {"status": "tamamlandi", "requested": 3, "processed": 3, "failed": 0}
+
+    transition = main_module._execute_scheduled_scan_transition(
+        scan_callable=lambda: success,
+        checkpoint=checkpoint,
+        expected_stock_count=3,
+        retry_checkpoint=checkpoint,
+        retry_attempts=4,
+        retry_at=999.0,
+        monotonic=lambda: 100.0,
+    )
+
+    assert transition.completed_checkpoint == checkpoint
+    assert transition.retry_checkpoint is None
+    assert transition.retry_attempts == 0
+    assert transition.retry_at is None
+    assert transition.retry_delay == 0.0
+
+
+def test_scheduled_scan_only_consumes_checkpoint_for_exact_full_success():
+    checkpoint = _local("2026-10-12 10:30")
+    incomplete_results = [
+        {"status": "tamamlandi", "requested": 3, "processed": 2, "failed": 0},
+        {"status": "tamamlandi", "requested": 3, "processed": 3, "failed": 1},
+        {"status": "tamamlandi", "requested": 2, "processed": 2, "failed": 0},
+    ]
+
+    for stats in incomplete_results:
+        transition = main_module._execute_scheduled_scan_transition(
+            scan_callable=lambda stats=stats: stats,
+            checkpoint=checkpoint,
+            expected_stock_count=3,
+            retry_checkpoint=None,
+            retry_attempts=0,
+            retry_at=None,
+            monotonic=lambda: 100.0,
+        )
+        assert transition.completed_checkpoint is None
+        assert transition.retry_checkpoint == checkpoint
+        assert transition.retry_delay == 60.0
+
+
+def _run_manual_full_scan_at(monkeypatch, start_time):
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return start_time.astimezone(tz) if tz else start_time.replace(tzinfo=None)
+
+    monkeypatch.setattr(main_module, "datetime", FrozenDatetime)
+    monkeypatch.setattr(main_module, "ACTIVE_STOCKS", ["A", "B"])
+    monkeypatch.setattr(main_module, "_scan_istegi", threading.Event())
+    main_module._scan_istegi.set()
+    monkeypatch.setattr(main_module, "_scan_job_request", {"hisseler": ["A", "B"]})
+    monkeypatch.setattr(main_module, "last_run_stats", {})
+    monkeypatch.setattr(main_module, "_manuel_tarama_tamamla", lambda *_args: None)
+    result = {"status": "tamamlandi", "requested": 2, "processed": 2, "failed": 0}
+    scan_kwargs = {}
+
+    def fake_scan(*_args, **kwargs):
+        scan_kwargs.update(kwargs)
+        main_module.last_run_stats = result
+        return result
+
+    monkeypatch.setattr(main_module, "scan_all_stocks", fake_scan)
+    ran, checkpoint = main_module._calistir_istek_taramasi(None, None, None)
+    return ran, checkpoint, scan_kwargs, result
+
+
+def test_manual_full_scan_before_due_does_not_consume_checkpoint(monkeypatch):
+    started_at = _local("2026-10-12 12:31")
+    checkpoint = _local("2026-10-12 12:30")
+    assert latest_session_checkpoint(started_at) == checkpoint
+    assert bist_scan_due(started_at) is False
+
+    ran, captured_checkpoint, scan_kwargs, result = _run_manual_full_scan_at(monkeypatch, started_at)
+
+    assert ran is True
+    assert captured_checkpoint is None
+    assert scan_kwargs["scheduled_checkpoint"] is None
+    assert scan_kwargs["require_current_session"] is False
+    retry_checkpoint = _local("2026-10-12 11:30")
+    retry_state = (retry_checkpoint, 2, 150.0)
+    transition = main_module._manual_scan_checkpoint_transition(
+        result, captured_checkpoint, retry_state[0], retry_state[1], retry_state[2],
+    )
+    assert transition == (None, *retry_state)
+    assert bist_scan_due(_local("2026-10-12 12:35"), retry_checkpoint) is True
+
+
+def test_long_manual_scan_consumes_only_checkpoint_captured_at_start(monkeypatch):
+    started_at = _local("2026-10-12 10:35")
+    captured_checkpoint = _local("2026-10-12 10:30")
+    ran, checkpoint, scan_kwargs, result = _run_manual_full_scan_at(monkeypatch, started_at)
+
+    assert ran is True
+    assert checkpoint == captured_checkpoint
+    assert scan_kwargs["scheduled_checkpoint"] == captured_checkpoint
+    assert scan_kwargs["require_current_session"] is True
+
+    finished_at = _local("2026-10-12 11:36")
+    later_checkpoint = latest_session_checkpoint(finished_at)
+    assert later_checkpoint == _local("2026-10-12 11:30")
+    transition = main_module._manual_scan_checkpoint_transition(
+        result, checkpoint, retry_checkpoint=captured_checkpoint,
+        retry_attempts=4, retry_at=999.0,
+    )
+    assert transition == (captured_checkpoint, None, 0, None)
+    assert transition[0] != later_checkpoint
+    assert bist_scan_due(finished_at, transition[0]) is True
+
+
+def test_successful_full_manual_scan_resets_scheduled_retry_state(monkeypatch):
+    checkpoint = _local("2026-10-12 10:30")
+    monkeypatch.setattr(main_module, "ACTIVE_STOCKS", ["A", "B", "C"])
+    result = {"status": "tamamlandi", "requested": 3}
+
+    transition = main_module._manual_scan_checkpoint_transition(
+        result, checkpoint, retry_checkpoint=checkpoint,
+        retry_attempts=5, retry_at=999.0,
+    )
+
+    assert transition == (checkpoint, None, 0, None)
+
+
+def test_failed_manual_scan_preserves_scheduled_retry_state():
+    retry_state = ("old-checkpoint", 3, 150.0)
+    transition = main_module._manual_scan_checkpoint_transition(
+        {"status": "basarisiz", "requested": 3}, _local("2026-10-12 10:30"),
+        retry_checkpoint=retry_state[0], retry_attempts=retry_state[1], retry_at=retry_state[2],
+    )
+
+    assert transition == (None, *retry_state)
+
+
+def test_scheduled_scan_backoff_is_exponential_bounded_and_checkpoint_scoped():
+    assert [main_module._scheduled_scan_retry_delay(attempt) for attempt in range(1, 7)] == [
+        60.0, 120.0, 240.0, 480.0, 900.0, 900.0,
+    ]
+    assert main_module._scheduled_scan_retry_wait(
+        checkpoint="checkpoint-a", retry_checkpoint="checkpoint-a",
+        retry_at=70, now=10,
+    ) == 60
+    assert main_module._scheduled_scan_retry_wait(
+        checkpoint="checkpoint-a", retry_checkpoint="checkpoint-a",
+        retry_at=10, now=10,
+    ) == 0
+    assert main_module._scheduled_scan_retry_wait(
+        checkpoint="checkpoint-b", retry_checkpoint="checkpoint-a",
+        retry_at=70, now=10,
+    ) == 0
+
+
+def test_main_loop_is_wired_to_scheduled_and_manual_checkpoint_transitions():
+    # A full main_loop run performs extensive startup/cache/network setup and is
+    # intentionally not exercised here; keep its transition-helper wiring explicit.
+    source = inspect.getsource(main_module.main_loop)
+
+    assert "retry_wait = _scheduled_scan_retry_wait(" in source
+    assert "transition = _execute_scheduled_scan_transition(" in source
+    assert "scheduled_retry_checkpoint = transition.retry_checkpoint" in source
+    assert "scheduled_retry_attempts = transition.retry_attempts" in source
+    assert "scheduled_retry_at = transition.retry_at" in source
+    assert "son_taranan_kapanis = completed_checkpoint" in source
+    assert "_manual_scan_checkpoint_transition(" in source
+
+    manual_flow = source[
+        source.index("if _scan_istegi.is_set():"):
+        source.index("# --- GÜNLÜK ÖZET", source.index("if _scan_istegi.is_set():"))
+    ]
+    assert "manual_scan_ran, manual_scheduled_checkpoint = _calistir_istek_taramasi(" in manual_flow
+    assert "last_run_stats, manual_scheduled_checkpoint," in manual_flow
+    assert "son_kapanan_mum_ani(" not in manual_flow
 
 
 def test_restart_skips_successful_post_close_scan_but_failed_scan_can_retry(monkeypatch):

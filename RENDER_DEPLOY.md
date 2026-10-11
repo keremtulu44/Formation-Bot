@@ -512,6 +512,16 @@ ve **yoklamayı kapatır** (aynı token'da `getUpdates` + webhook birlikte olmaz
 ikisi birlikte 409 Conflict üretir). Secret'i silip yeniden deploy ederseniz bot
 `deleteWebhook` çağırır ve yoklamaya döner — mod geçişi otomatik ve tek yönlüdür.
 
+**Bekleyen güncelleme politikası:** Her açılış/mod geçişinde webhook kurulurken
+`setWebhook`, polling'e dönülürken `deleteWebhook`, `drop_pending_updates=True`
+ile çağrılır. Telegram çağrıyı başarıyla onayladığında o anda bekleyen **tüm**
+güncellemeler (taze görünen komutlar dahil) bilerek atılır; bot yalnızca bu onaydan
+sonra gelen yeni güncellemeleri işler. Bu kasıtlı davranıştır; yeniden başlatma
+öncesi kuyruğun korunacağı varsayılmamalıdır. Polling'e geçişte Telegram bu silmeyi
+başarıyla onaylamazsa bot en çok beş kez artan aralıklarla (1, 2, 4, 8 sn) dener;
+onay yine alınamazsa eski update'leri çalıştırmamak için polling listener'ı başlatmaz
+ve hata loglar. Komut dinleyicisi bu başlangıçta kapalı kalır.
+
 Doğrulama (telefondan tarayıcıyla da yapılabilir):
 
 | Adres / komut | Beklenen |

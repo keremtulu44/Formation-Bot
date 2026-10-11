@@ -4,6 +4,7 @@ import json
 import logging
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -49,6 +50,17 @@ def _formasyon(stock="THYAO", timeframe="1h", quality=87.0, state="KIRILIM_TEYIT
         "min_quality": 75.0,
         "alert_gonderildi": True,
     }
+
+
+def _lifecycle_with_active_snapshot():
+    active = SimpleNamespace(pattern_type="Eski Formasyon", contraction=0.4)
+    snapshot = SimpleNamespace(
+        active=active,
+        effective_quality=90.0,
+        state="SIKISMA_GUCLENIYOR",
+        break_dir=1,
+    )
+    return SimpleNamespace(last_snapshots={"THYAO_1h": snapshot})
 
 
 def _tarama(kayitlar=None, durum=None):
@@ -488,3 +500,53 @@ def test_main_loop_restores_snapshot_from_startup_batch_for_summary(monkeypatch)
     assert len(live_state.formations()) == 2
     summaries = main_mod._build_active_formations_for_summary(object(), min_quality=75.0)
     assert {item["stock_name"] for item in summaries} == {"THYAO", "GARAN"}
+
+
+def test_empty_live_state_formations_do_not_fallback_to_old_lifecycle_snapshot(monkeypatch):
+    monkeypatch.setattr(main_mod, "_live_state", LiveState())
+
+    summaries = main_mod._build_active_formations_for_summary(
+        _lifecycle_with_active_snapshot(), min_quality=75.0,
+    )
+
+    assert summaries == []
+
+
+def test_live_state_provider_error_does_not_fallback_to_lifecycle_snapshot(monkeypatch):
+    class BrokenLiveState:
+        def formations(self):
+            raise OSError("synthetic provider failure")
+
+    monkeypatch.setattr(main_mod, "_live_state", BrokenLiveState())
+
+    summaries = main_mod._build_active_formations_for_summary(
+        _lifecycle_with_active_snapshot(), min_quality=75.0,
+    )
+
+    assert summaries == []
+
+
+def test_summary_keeps_lifecycle_fallback_when_live_state_provider_is_absent(monkeypatch):
+    monkeypatch.setattr(main_mod, "_live_state", object())
+
+    summaries = main_mod._build_active_formations_for_summary(
+        _lifecycle_with_active_snapshot(), min_quality=75.0,
+    )
+
+    assert len(summaries) == 1
+    assert summaries[0]["stock_name"] == "THYAO"
+    assert summaries[0]["pattern_name"] == "Eski Formasyon"
+
+
+def test_empty_legacy_get_formations_result_does_not_fallback_to_lifecycle(monkeypatch):
+    class LegacyLiveState:
+        def get_formations(self):
+            return []
+
+    monkeypatch.setattr(main_mod, "_live_state", LegacyLiveState())
+
+    summaries = main_mod._build_active_formations_for_summary(
+        _lifecycle_with_active_snapshot(), min_quality=75.0,
+    )
+
+    assert summaries == []

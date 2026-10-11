@@ -97,6 +97,48 @@ def _dinleyici(session, handlers=None, help_text="YARDIM METNI"):
     )
 
 
+class OffsetSahteSession(SahteSession):
+    """Telegram offset onayı/filtrelemesini taklit eden tamamen yerel test oturumu."""
+
+    def __init__(self, updates, fail_on_get_calls=()):
+        super().__init__()
+        self.pending_updates = list(updates)
+        self.fail_on_get_calls = set(fail_on_get_calls)
+
+    def get(self, url, params=None, timeout=None):
+        self.get_cagrilari.append((url, dict(params or {})))
+        call_number = len(self.get_cagrilari)
+        if call_number in self.fail_on_get_calls:
+            raise OSError("sentetik ağ hatası")
+        params = dict(params or {})
+        offset = params.get("offset")
+        if offset is not None:
+            self.pending_updates = [
+                update for update in self.pending_updates
+                if int(update["update_id"]) >= int(offset)
+            ]
+        limit = int(params.get("limit", 100))
+        return SahteYanit(200, {"ok": True, "result": self.pending_updates[:limit]})
+
+
+class SahteStopEvent:
+    """Gerçek bekleme olmadan listener.run_forever döngüsünü test eder."""
+
+    def __init__(self):
+        self.stopped = False
+        self.waits = []
+
+    def is_set(self):
+        return self.stopped
+
+    def set(self):
+        self.stopped = True
+
+    def wait(self, timeout=None):
+        self.waits.append(timeout)
+        return self.stopped
+
+
 # --- yardımcılar ---------------------------------------------------------
 def test_komut_coz_varyasyonlari():
     assert komut_coz("/formasyonlar") == ("formasyonlar", "")
@@ -276,6 +318,67 @@ def test_karisik_backlog_ilk_taze_mesajdan_devam_eder():
     dinleyici = _dinleyici(session)
     dinleyici._backlog_atla()
     assert dinleyici._offset == 71
+
+
+def test_cok_sayfali_karisik_backlog_bayat_prefixi_pollingden_atlar_taze_komutu_korur():
+    bayatlar = [_guncelleme(uid, "/tara", tarih=time.time() - 3600) for uid in range(1, 101)]
+    eski_tara = _guncelleme(101, "/tara", tarih=time.time() - 3600)
+    taze_durum = _guncelleme(102, "/durum", tarih=time.time() - 60)
+    session = OffsetSahteSession(bayatlar + [eski_tara, taze_durum])
+    islenen = []
+    dinleyici = _dinleyici(
+        session,
+        handlers={
+            "tara": lambda _arg: islenen.append("tara") or "tara cevabi",
+            "durum": lambda _arg: islenen.append("durum") or "durum cevabi",
+        },
+    )
+
+    assert dinleyici._backlog_atla() is True
+    assert dinleyici._offset == 102
+    assert [call[1].get("offset") for call in session.get_cagrilari] == [None, 101]
+
+    dinleyici.poll_once()
+
+    assert [call[1].get("offset") for call in session.get_cagrilari] == [None, 101, 102]
+    assert islenen == ["durum"]
+    assert dinleyici._offset == 103
+
+
+def test_backlog_ag_hatasi_normal_pollingden_once_tekrar_dener_eskiyi_atlayip_tazeyi_isler():
+    bayatlar = [_guncelleme(uid, "/tara", tarih=time.time() - 3600) for uid in range(1, 101)]
+    eski_tara = _guncelleme(101, "/tara", tarih=time.time() - 3600)
+    taze_durum = _guncelleme(102, "/durum", tarih=time.time() - 60)
+    session = OffsetSahteSession(bayatlar + [eski_tara, taze_durum], fail_on_get_calls={2})
+    stop = SahteStopEvent()
+    islenen = []
+
+    def islemle_durum(_arg):
+        islenen.append("durum")
+        stop.set()
+        return "durum cevabi"
+
+    def islemle_tara(_arg):
+        islenen.append("tara")
+        stop.set()
+        return "tara cevabi"
+
+    listener = TelegramCommandListener(
+        token="111:AAA",
+        allowed_chat_id=CHAT_ID,
+        handlers={"tara": islemle_tara, "durum": islemle_durum},
+        help_text="YARDIM METNI",
+        session=session,
+        poll_timeout=1,
+        stop_event=stop,
+    )
+
+    listener.run_forever()
+
+    assert stop.waits == [5.0]
+    assert [call[1].get("offset") for call in session.get_cagrilari] == [None, 101, 101, 102]
+    assert islenen == ["durum"]
+    assert listener._offset == 103
 
 
 def test_401_token_gecersiz_dinleyiciyi_durdurur():
