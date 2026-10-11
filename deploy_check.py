@@ -32,6 +32,9 @@ import os
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from secrets_redaction import redact_sensitive_text
 
 REPO_ROOT = Path(__file__).resolve().parent
 
@@ -42,10 +45,30 @@ FAIL = "HATA"
 _sayac = {OK: 0, WARN: 0, FAIL: 0}
 
 
-def _kisa(metin: str, sinir: int = 180) -> str:
-    """Uzun istisna metinlerini tek satira indirir (okunabilirlik)."""
-    tek = " ".join(str(metin).split())
+def _kisa(metin: str, sinir: int = 180, *secrets: str) -> str:
+    """Sırları çıkardıktan sonra uzun hata metinlerini tek satıra indir."""
+    guvenli = redact_sensitive_text(metin, *secrets)
+    tek = " ".join(guvenli.split())
     return tek if len(tek) <= sinir else tek[: sinir - 1] + "…"
+
+
+def _guvenli_url_kaynagi(url: str) -> str:
+    """Log için yalnızca origin'i döndür; userinfo, path, query ve fragment yok."""
+    try:
+        parsed = urlsplit(str(url))
+        host = parsed.hostname
+        if not parsed.scheme or not host:
+            return "[URL gizlendi]"
+        host = f"[{host}]" if ":" in host and not host.startswith("[") else host
+        try:
+            port = parsed.port
+        except ValueError:
+            port = None
+        if port is not None:
+            host = f"{host}:{port}"
+        return f"{parsed.scheme}://{host}"
+    except (TypeError, ValueError):
+        return "[URL gizlendi]"
 
 
 def satir(seviye: str, baslik: str, detay: str = "") -> None:
@@ -276,7 +299,8 @@ def kontrol_supabase(url: str, anahtar: str) -> None:
         satir(WARN, "SUPABASE_URL sonunda /rest/v1 var",
               "Kod bunu temizliyor, ama doğrusu: https://<ref>.supabase.co")
     if not temiz.startswith("https://"):
-        satir(WARN, "SUPABASE_URL https:// ile başlamıyor", f"Girilen: {temiz[:40]}")
+        satir(WARN, "SUPABASE_URL https:// ile başlamıyor",
+              f"Girilen kaynak: {_guvenli_url_kaynagi(temiz)}")
 
     basliklar = supabase_basliklari(anahtar)
     # Content-Type ve Prefer sadece yazma için, okuma için de ekleyelim zararsız
@@ -291,11 +315,13 @@ def kontrol_supabase(url: str, anahtar: str) -> None:
             timeout=12,
         )
     except Exception as exc:  # noqa: BLE001 - kullanıcıya tek satır özet yeter
-        satir(FAIL, "Supabase'e ulaşılamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+        satir(FAIL, "Supabase'e ulaşılamadı",
+              f"{type(exc).__name__}: {_kisa(exc, 180, anahtar, temiz)}")
         return
 
     if r.status_code == 200:
-        satir(OK, f"Supabase bağlantısı OK ({tur})", f"{temiz} · tablo: bot_store")
+        satir(OK, f"Supabase bağlantısı OK ({tur})",
+              f"{_guvenli_url_kaynagi(temiz)} · tablo: bot_store")
     elif r.status_code == 404:
         satir(FAIL, "Tablo yok (HTTP 404)",
               "Supabase → SQL Editor → New query → supabase_schema.sql içeriğini yapıştır → Run.")
@@ -316,7 +342,8 @@ def kontrol_supabase(url: str, anahtar: str) -> None:
         satir(FAIL, "İstek reddedildi (HTTP 400)",
               "URL biçimini kontrol edin: https://<ref>.supabase.co (sonda /rest/v1 olmadan).")
     else:
-        satir(FAIL, f"Beklenmeyen yanıt (HTTP {r.status_code})", _kisa(r.text))
+        satir(FAIL, f"Beklenmeyen yanıt (HTTP {r.status_code})",
+              _kisa(r.text, 180, anahtar, temiz))
         return
 
     # Şema gerçekten kullanılabilir mi: bir satır yazıp okuyalım (zararsız test anahtarı).
@@ -334,9 +361,11 @@ def kontrol_supabase(url: str, anahtar: str) -> None:
                 satir(OK, "Yazma izni var (service_role doğru)", "commit/replace politikası çalışıyor.")
             else:
                 satir(FAIL, f"Yazma başarısız (HTTP {yaz.status_code})",
-                      "service_role anahtarı kullanılmalı; yazma için upsert politikası şart. " + yaz.text[:160])
+                      "service_role anahtarı kullanılmalı; yazma için upsert politikası şart. "
+                      + _kisa(yaz.text, 160, anahtar, temiz))
         except Exception as exc:  # noqa: BLE001
-            satir(WARN, "Yazma testi yapılamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+            satir(WARN, "Yazma testi yapılamadı",
+                  f"{type(exc).__name__}: {_kisa(exc, 180, anahtar, temiz)}")
 
 
 def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
@@ -358,7 +387,8 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
     try:
         r = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=12)
     except Exception as exc:  # noqa: BLE001
-        satir(FAIL, "Telegram'a ulaşılamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+        satir(FAIL, "Telegram'a ulaşılamadı",
+              f"{type(exc).__name__}: {_kisa(exc, 180, token, chat_id)}")
         return
 
     if r.status_code == 200:
@@ -369,7 +399,8 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
               "BotFather token'ının tamamını kopyalayın; sızdıysa /revoke ile yenileyin.")
         return
     else:
-        satir(FAIL, f"getMe beklenmeyen yanıt (HTTP {r.status_code})", _kisa(r.text, 160))
+        satir(FAIL, f"getMe beklenmeyen yanıt (HTTP {r.status_code})",
+              _kisa(r.text, 160, token, chat_id))
         return
 
     if not chat_id:
@@ -395,13 +426,14 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
             timeout=15,
         )
     except Exception as exc:  # noqa: BLE001
-        satir(FAIL, "Test mesajı gönderilemedi", f"{type(exc).__name__}: {_kisa(exc)}")
+        satir(FAIL, "Test mesajı gönderilemedi",
+              f"{type(exc).__name__}: {_kisa(exc, 180, token, chat_id)}")
         return
 
     if r.status_code == 200:
         satir(OK, "Test mesajı gönderildi", "Telegram'ı açıp kontrol edin.")
     else:
-        aciklama = r.text[:200]
+        aciklama = _kisa(r.text, 200, token, chat_id)
         ipucu = ""
         if "chat not found" in aciklama:
             ipucu = " Kendi botunuza Telegram'da bir kez 'Start' yazın."
@@ -461,10 +493,12 @@ def kontrol_render(url: str, test_key: str) -> None:
         return
 
     hedef = _health_hedefi(url)
+    kaynak = _guvenli_url_kaynagi(hedef)
     try:
         r = requests.get(hedef, timeout=120)  # uyuyan Free servis ~1 dk'da uyanır
     except Exception as exc:  # noqa: BLE001
-        satir(FAIL, f"{hedef} yanıt vermedi", f"{type(exc).__name__}: {_kisa(exc)}")
+        satir(FAIL, f"{kaynak} yanıt vermedi",
+              f"{type(exc).__name__}: {_kisa(exc, 180, test_key, url, hedef)}")
         return
 
     if r.status_code == 200:
@@ -474,11 +508,12 @@ def kontrol_render(url: str, test_key: str) -> None:
             govde = {}
         if govde.get("status") == "ok":
             canli_commit = str(govde.get("commit") or "")
-            detay = hedef + (f" · canlı sürüm: {canli_commit}" if canli_commit else "")
+            detay = kaynak + (f" · canlı sürüm: {canli_commit}" if canli_commit else "")
             satir(OK, f"/health ayakta ({govde.get('service', '?')})", detay)
             _commit_karsilastir(canli_commit)
         else:
-            satir(WARN, "200 döndü ama gövde beklenen JSON değil", str(govde)[:160])
+            satir(WARN, "200 döndü ama gövde beklenen JSON değil",
+                  _kisa(govde, 160, test_key, url, hedef))
     elif r.status_code in (502, 503, 504):
         satir(WARN, f"Servis şu an uyanıyor/başlamadı (HTTP {r.status_code})",
               "30-60 sn sonra tekrar deneyin. Render → Logs'ta 'Render health endpoint ... başladı' satırını arayın.")
@@ -486,16 +521,19 @@ def kontrol_render(url: str, test_key: str) -> None:
         satir(FAIL, "HTTP 404 — yol yanlış ya da servis deploy edilmemiş",
               "Health Check Path '/health' olmalı; adres https://<servis>.onrender.com biçiminde olmalı.")
     else:
-        satir(FAIL, f"Beklenmeyen yanıt (HTTP {r.status_code})", _kisa(r.text))
+        satir(FAIL, f"Beklenmeyen yanıt (HTTP {r.status_code})",
+              _kisa(r.text, 180, test_key, url, hedef))
 
     if not test_key:
         satir(OK, "/test ucu denenmedi", "Göndermeyi doğrulamak için: --test-key <TELEGRAM_TEST_KEY>")
         return
 
     try:
-        r = requests.get(hedef.rsplit("/health", 1)[0] + "/test", params={"k": test_key}, timeout=60)
+        test_hedef = hedef.rsplit("/health", 1)[0] + "/test"
+        r = requests.get(test_hedef, params={"k": test_key}, timeout=60)
     except Exception as exc:  # noqa: BLE001
-        satir(FAIL, "/test çağrısı başarısız", f"{type(exc).__name__}: {_kisa(exc)}")
+        satir(FAIL, "/test çağrısı başarısız",
+              f"{type(exc).__name__}: {_kisa(exc, 180, test_key, url, hedef)}")
         return
 
     if r.status_code == 200 and r.json().get("ok"):
@@ -508,7 +546,8 @@ def kontrol_render(url: str, test_key: str) -> None:
     elif r.status_code == 503:
         satir(WARN, "Bot henüz başlamadı (HTTP 503)", "Servis uyanıyor; 30 sn sonra tekrar deneyin.")
     else:
-        satir(FAIL, f"/test beklenmeyen yanıt (HTTP {r.status_code})", r.text[:200])
+        satir(FAIL, f"/test beklenmeyen yanıt (HTTP {r.status_code})",
+              _kisa(r.text, 200, test_key, url, hedef))
 
 
 def main() -> int:

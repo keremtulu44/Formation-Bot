@@ -66,6 +66,22 @@ def test_ping_returns_false_and_keeps_running_on_missing_table():
     assert kwargs["params"] == {"select": "store_key", "limit": 1}
 
 
+def test_ping_does_not_log_credentials_embedded_in_project_url(caplog):
+    url_secret = "SYNTHETIC_SUPABASE_URL_SECRET"
+    service_secret = "SYNTHETIC_SUPABASE_SERVICE_SECRET"
+    project_url = f"https://demo.supabase.co?api_key={url_secret}"
+    store = SupabaseStore(
+        project_url, service_secret,
+        session=FakeSession([FakeResponse(status_code=200)]),
+    )
+
+    with caplog.at_level("INFO", logger="supabase_store"):
+        assert store.ping() is True
+
+    assert url_secret not in caplog.text
+    assert service_secret not in caplog.text
+
+
 def test_get_many_returns_payload_map_and_uses_in_filter():
     session = FakeSession([FakeResponse(payload=[
         {"store_key": "cache:1h:THYAO", "payload": [{"close": 1}]},
@@ -118,6 +134,23 @@ def test_transient_server_error_uses_circuit_breaker(monkeypatch):
     assert len(session.calls) == 2
     assert store.get_many(["state:heartbeat"]) is None
     assert len(session.calls) == 2
+
+
+def test_transient_server_error_redacts_credentials_in_project_url(monkeypatch, caplog):
+    monkeypatch.setattr(supabase_store_module.time, "sleep", lambda _seconds: None)
+    url_secret = "SYNTHETIC_SUPABASE_URL_CREDENTIAL"
+    project_url = f"https://demo.supabase.co?credential={url_secret}"
+    echoed_url = project_url
+    session = FakeSession([
+        FakeResponse(status_code=503, text=f"upstream rejected {echoed_url}"),
+        FakeResponse(status_code=503, text=f"upstream rejected {echoed_url}"),
+    ])
+    store = SupabaseStore(project_url, "SYNTHETIC_SUPABASE_SERVICE_KEY", session=session)
+
+    with caplog.at_level("WARNING", logger="supabase_store"):
+        assert store.get_many(["state:heartbeat"]) is None
+
+    assert url_secret not in caplog.text
 
 
 # --- Yeni anahtar formatı testleri ---

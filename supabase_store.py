@@ -15,6 +15,8 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import requests
 
+from secrets_redaction import redact_sensitive_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -211,7 +213,11 @@ class SupabaseStore:
                 time.sleep(0.5)
                 continue
 
-            detail = (getattr(response, "text", "") or "")[:300]
+            # Redact the full response before clipping; truncating first can
+            # expose a credential fragment that exact-value matching misses.
+            detail = redact_sensitive_text(
+                getattr(response, "text", "") or "", self._service_key, self.project_url
+            )[:300]
             if 400 <= response.status_code < 500 and response.status_code != 429:
                 # Bad key, missing table, or invalid schema is not recoverable by
                 # retrying every candle write. Keep the bot running in local mode.
@@ -234,7 +240,9 @@ class SupabaseStore:
     def _warn_once(self, category: str, message: str) -> None:
         if category not in self._warned:
             self._warned.add(category)
-            logger.warning(message)
+            logger.warning(
+                "%s", redact_sensitive_text(message, self._service_key, self.project_url)
+            )
 
     def ping(self) -> bool:
         """Başlangıçta bağlantı/tablo/anahtar doğrulaması (tek satır SELECT).
@@ -246,7 +254,7 @@ class SupabaseStore:
         response = self._request("GET", params={"select": "store_key", "limit": 1})
         if response is None:
             return False
-        logger.info(f"Supabase bağlantısı OK ({self.project_url}, tablo: {self.TABLE})")
+        logger.info("Supabase bağlantısı OK (tablo: %s)", self.TABLE)
         return True
 
     def get_many(self, store_keys: Iterable[str]) -> Optional[Dict[str, Any]]:
