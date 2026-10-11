@@ -71,7 +71,7 @@ yalnızca `TELEGRAM_CHAT_ID`'den kabul edilir:
 | Son tarama durumu | Başarısız/eksik analiz başarılı boş sonuçtan ayrılır; önceki başarılı adaylar hata durumunda korunur. Yeniden başlatılmış snapshot güncel kabul edilmez. Supabase yalnızca opsiyonel OHLCV cache/geçmiş kaydıdır. |
 | `/ozet`, `/o` | Günlük özet (tamamlanan/retest/sıkışan) |
 | `/durum` | Piyasa, son tarama yaşı, canlı sayı, veri sağlığı, günlük alarm/hata |
-| `/tara [HISSE]` | Şimdi analiz et (seans dışı da; mum kapanışını beklemez). Son tamamlanmış mumun zamanı/veri yaşı raporlanır. |
+| `/tara [HISSE]` | Şimdi analiz et (seans dışı da; mum kapanışını beklemez). Cache'teki en yeni mum timestamp'i/veri yaşı raporlanır; provider timestamp sözleşmesi doğrulanmadığı için bu, tamamlanmış mum garantisi değildir. |
 | `/yardim` | Komut listesi |
 
 `/panel` ve `/tara [HISSE]` yeni analiz işini kuyruğa alır ve bitince raporlar. Analiz sırasında gelen slash komutları cevapsız bırakılır ve kuyruğa eklenmez. İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan 20:00) anında ayrı bir tam evren analizi yapılır.
@@ -126,6 +126,24 @@ korunmasını sağlar. Bunlar olmadan da bot Yahoo Finance ve yerel cache ile an
 üretir; Render'ın ephemeral diski restart/deploy'da yerel geçmişi ve Telegram
 cooldown state'ini sıfırlayabilir. Yeniden başlatılan analiz snapshot'ı güncel
 sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
+
+### Takvim kaynağı ve sınırı
+
+`data.py` içindeki geleneksel saat/tatil yardımcılarında `config.py`'deki manuel
+`BIST_TATILLER` / `BIST_YARIM_GUNLER` ile 09:50 başlangıç politikası esas alınır.
+Ana otomatik scheduler ise ayrı olarak `bist_calendar.py` içindeki pinned,
+offline `exchange-calendars` XIST takvimini fail-closed kullanır. XIST resmî BIST
+API'si değildir; ek tatil/erken kapanışları veya seans başlangıcı statik data
+helper'larıyla farklı olabilir. Bu iki politikayı birleştirmeme kararı bilinçlidir;
+XIST'ten türetilen ek tarihleri manuel listeye taşımayın. Eşitlik, resmi equity
+seans saati veya canlı provider davranışı doğrulaması olarak yorumlanmamalıdır.
+
+2026 [Borsa İstanbul Official Holidays](https://www.borsaistanbul.com/en/official-holidays)
+sayfası 19 Mart, 26 Mayıs ve 28 Ekim'i 13:00'e kadar yarım gün gösterir.
+İncelenen [2026 tatil genelgesinin](https://borsaistanbul.com/files/41625-sayili-duyurumuz-ingilizce-04122025.pdf)
+Equity Market tablosu bu kapanış saatini ayrıca belirtmedi; 13:00 equity saati
+için pazar-özel teyit olarak sunulmamaktadır. Dini bayram tarihleri ve sonraki yıllar yıllık gözden
+geçirme gerektirir.
 
 ## Dosya haritası
 
