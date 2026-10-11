@@ -10,8 +10,10 @@ import pytz
 import time
 import random
 import logging
+import math
 import os
 import pickle
+import tempfile
 from typing import Dict, List, Optional, Tuple
 
 from config import (
@@ -21,34 +23,84 @@ from config import (
     STALE_BAR_UYARI_DK, TERMINAL_TAZE_BAR, BIST_TATILLER, BIST_YARIM_GUNLER,
     VERI_YOK_MODU_ESIK_DK, SPLIT_SUREKLILIK_ESIK_PCT, BAR_BOSLUK_ESIK_SAAT,
     GUNLUK_FETCH_PERIOD, GUNLUK_DEQUE_MAXLEN,
-    FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD, FULL_1H_FETCH_STALE_DAYS
+    FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD, FULL_1H_FETCH_STALE_DAYS,
+    ALLOW_TRUSTED_PICKLE_CACHE,
 )
 
 logger = logging.getLogger(__name__)
 
+
+def _atomic_write(path: str, mode: str, writer, *, encoding: Optional[str] = None) -> None:
+    """Write a sibling temp file, fsync it, and atomically replace one cache file."""
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(
+        prefix=f".{os.path.basename(path)}.", suffix=".tmp", dir=directory
+    )
+    fd_open = True
+    try:
+        if "b" in mode:
+            stream = os.fdopen(fd, mode)
+        else:
+            stream = os.fdopen(fd, mode, encoding=encoding or "utf-8")
+        fd_open = False
+        with stream:
+            writer(stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if fd_open:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        try:
+            os.remove(temp_path)
+        except FileNotFoundError:
+            pass
+
+
+def _atomic_json_write(path: str, payload, *, indent=None) -> None:
+    import json
+
+    _atomic_write(
+        path,
+        "w",
+        lambda stream: json.dump(payload, stream, ensure_ascii=False, indent=indent),
+        encoding="utf-8",
+    )
+
+
+def _atomic_pickle_write(path: str, payload) -> None:
+    _atomic_write(path, "wb", lambda stream: pickle.dump(payload, stream))
+
+
 # Timeframe -> pandas süre etiketi (tamamlanmis_mumlar filtresi için)
 TF_SURELERI = {"1h": "1h", "2h": "2h", "4h": "4h", "1d": "1D"}
-# Mum kapanış anı = etiket + bu süre. 1D İSTİSNA: günlük mum 00:00 etiketli ama gerçek
-# seans kapanışı 18:30'dur (ölçüldü: son 1H mum 17:30 etiketli, 18:30'da kapanıyor).
-# ESKİ HATA: 1D için de "etiket + 1 gün" kullanılıyordu -> 25 Eylül'ün günlük mumu
-# 26 Eylül 00:00'a kadar "yarım mum" sayılırdı, yani GÜN İÇİNDE HİÇ analiz edilmez,
-# günlük formasyonlar 24 saat gecikmeyle görülürdü (ölçüm: 18:35 taramasında son
-# tamamlanan 1D mum = 24 Eylül'dü).
+# 2h/4h resample kovaları için kapanış anı = sol etiket + timeframe süresi.
+# 1D barlar gün başlangıcıyla etiketlenir; tamamlanma sınırı mevcut statik takvimdeki
+# configured seans kapanışıdır. Sağlayıcı timestamp sözleşmesi ve resmî takvim bu
+# doğrulama turunda bağımsız/live kaynakla ölçülmemiştir.
 TF_KAPANIS_SURESI = {
+    # Keep the previously configured 30-minute post-label rule until the
+    # provider's 1H timestamp contract is independently verified. Do not infer
+    # start-vs-end semantics from a synthetic fixture or label spacing alone.
     "1h": timedelta(minutes=30),
     "2h": timedelta(hours=2),
     "4h": timedelta(hours=4),
 }
-GUNLUK_MUM_KAPANIS_SAATI = dt_time(18, 30)  # BIST seans kapanışı (1H ölçümünden)
+GUNLUK_MUM_KAPANIS_SAATI = dt_time(18, 30)  # configured normal-day close; calendar source verification pending
 
 # === BIST SAAT KONTROLÜ ===
 
 def bist_tatil_adi(d) -> Optional[str]:
-    """Verilen gün BIST resmî tatiliyse tatil adını, değilse None döner.
+    """Configured BIST_TATILLER girdisi varsa adını, yoksa None döner.
 
-    Neden? Tatil gününde (örn. 29 Ekim) Yahoo yeni mum üretmez. Bot bu bilgiyi
-    bilmezse: (a) 30 hisse x 9 tur boşuna fetch eder, (b) Faz 1'in tazelik uyarısı
-    tatil günü HER turda "VERİ ESKİ" der -> ölçüm: günde 270 satır gürültü.
+    Takvimin resmî doğruluğu burada doğrulanmaz. Kod tatil varsayımıyla Yahoo
+    fetch/tarama davranışını değiştirir; yıllık resmî takvim kontrolü gerekir.
+    Neden? Takvimde tatil olarak işaretlenen günlerde kod fetch/tarama yapmaz;
+    aksi durumda mevcut akış gereksiz istek ve eski-veri uyarısı üretebilir.
     Tatil takvimi bu iki sorunu birden keser.
     """
     return BIST_TATILLER.get(d.date() if isinstance(d, datetime) else d)
@@ -61,7 +113,7 @@ def yarim_gun_kapanisi(d) -> Optional[Tuple[str, dt_time]]:
 
 
 def seans_kapanis_saati(d=None) -> dt_time:
-    """O günün seans kapanış saati (yarım günde 13:00, normalde 18:30)."""
+    """Statik takvimdeki kapanış saati (yarım günde 13:00, normal gün varsayımı 18:30)."""
     if d is None:
         d = datetime.now(ISTANBUL_TZ)
     yg = yarim_gun_kapanisi(d)
@@ -84,26 +136,28 @@ def is_bist_open(now: Optional[datetime] = None) -> bool:
         else:
             now = now.astimezone(ISTANBUL_TZ)
     
-    # Hafta sonu mu?
-    if now.weekday() >= 5:  # 5=Cumartesi, 6=Pazar
+    # Hafta sonu veya statik takvimde configured tatil kaydı mı?
+    if now.weekday() >= 5 or bist_tatil_adi(now) is not None:
         return False
-    
-    # Saat kontrolü
+
+    # Yarım seans normal 18:10 sınırına kadar açık sayılmaz; gerçek kapanış
+    # günün takviminden alınır. Böylece kapalı günlerde main loop 0 sn bekleyip
+    # CPU'yu döndürmez.
     current_time = now.time()
-    return BIST_OPEN <= current_time <= BIST_CLOSE
+    kapanis = min(BIST_CLOSE, seans_kapanis_saati(now))
+    return BIST_OPEN <= current_time <= kapanis
 
 
 def tarama_penceresi_acik_mi(now: Optional[datetime] = None) -> bool:
     """
-    Bot şu an TARAMA yapmalı mı? (is_bist_open'tan farklı: seans kapandıktan SONRA
-    günün son mumunu analiz etmek için ek pay verir.)
+    Bot şu an TARAMA yapmalı mı? (is_bist_open'tan farklı: configured seans
+    kapanışı ve gecikmeden sonra son planlı tarama için ek pay verir.)
 
-    Neden ayrı fonksiyon? Yahoo'nun .IS 1H seansı 09:30-18:30 (ölçüldü). Günün son
-    mumu (17:30 etiketli) 18:30'da kapanır. ESKİ kodda pencere 18:10'da kapandığı
-    için BU MUM HİÇ ANALİZ EDİLMİYORDU. Şimdi pencere TARAMA_PENCERE_SONU'na
-    (18:40) kadar açık -> son mum 18:35 taramasında görülür.
+    Bu, yalnızca mevcut BIST_OPEN / statik tatil takvimi / CANDLE_CLOSE_MINUTE
+    ayarlarının aritmetiğini uygular. Yahoo .IS 1H start/end timestamp sözleşmesi
+    ve takvimin resmî doğruluğu bu checkout'ta bağımsız/live kaynakla doğrulanmadı.
 
-    Hafta içi + BIST_OPEN..TARAMA_PENCERE_SONU arası.
+    Hafta içi + BIST_OPEN..configured kapanış + gecikme/pay arası.
     """
     if now is None:
         now = datetime.now(ISTANBUL_TZ)
@@ -129,49 +183,38 @@ def tarama_penceresi_acik_mi(now: Optional[datetime] = None) -> bool:
     return BIST_OPEN <= current_time <= pencere_sonu.time()
 
 def time_until_next_open(now: Optional[datetime] = None) -> float:
-    """Bir sonraki açılışa kadar kaç saniye? Uyku için"""
+    """Bilinen tatil/yarım seansları atlayarak bir sonraki BIST açılışına kadar bekle."""
     if now is None:
         now = datetime.now(ISTANBUL_TZ)
     if now.tzinfo is None:
         now = ISTANBUL_TZ.localize(now)
     else:
         now = now.astimezone(ISTANBUL_TZ)
-    
-    # Eğer şu an açıksa 0 dön
+
     if is_bist_open(now):
         return 0.0
-    
-    # Sonraki iş gününü bul
-    next_day = now
-    while True:
-        next_day = next_day + timedelta(days=1)
-        if next_day.weekday() < 5:  # Hafta içi
-            break
-    
-    # O günün 09:50'si
-    next_open = next_day.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute, second=0, microsecond=0)
-    # Eğer bugün hafta içi ve saat 09:50'den önce ise, bugün açılacak
-    if now.weekday() < 5 and now.time() < BIST_OPEN:
-        next_open = now.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute, second=0, microsecond=0)
-    
-    delta = (next_open - now).total_seconds()
-    return max(delta, 0.0)
+
+    # Bugün geçerli bir işlem günü ve açılıştan önceyse bugünün açılışını seç;
+    # aksi halde bir sonraki takvim gününden başla. Resmî tatiller de atlanır.
+    aday = now.date()
+    bugun_islem_gunu = aday.weekday() < 5 and bist_tatil_adi(aday) is None
+    if not (bugun_islem_gunu and now.time() < BIST_OPEN):
+        aday += timedelta(days=1)
+
+    while aday.weekday() >= 5 or bist_tatil_adi(aday) is not None:
+        aday += timedelta(days=1)
+
+    next_open = ISTANBUL_TZ.localize(
+        datetime.combine(aday, BIST_OPEN)
+    )
+    return max((next_open - now).total_seconds(), 0.0)
 
 def time_until_next_candle_close(now: Optional[datetime] = None) -> float:
-    """
-    Bir sonraki TARAMA anına kadar kaç saniye? (mum kapanışı + 5 dk)
+    """Configured close-minute + delay'e göre bir sonraki taramaya kadar bekle.
 
-    ÖLÇÜLMÜŞ GERÇEKLİK (config.py'deki notlara bak): yfinance'in .IS 1H mumları
-    :30'da kapanır (09:30, 10:30, ... 17:30 etiketli, etiket = mum BAşı) ve günün
-    son mumu 18:30'da kapanır.
-
-    ESKİ HATA: "saat başı + 5 dk" (=:05) hesaplıyordu. Mum :30'da kapandığı için
-      - her tarama veriyi 35 DAKİKA geç gösteriyordu (11:05 taraması 09:30 mumunu
-        görüyordu, 10:30 mumu 11:30'da kapanıyordu), ve
-      - günün son mumu (18:30 kapanış) hiç analiz edilmiyordu.
-
-    YENİ: tarama = mum kapanışı + SCAN_DELAY_AFTER_CLOSE_MIN -> :35.
-    Günün son taraması: son mum 18:30 kapanır -> 18:35.
+    CANDLE_CLOSE_MINUTE mevcut :30 kuralını korur. Yahoo Finance 1H timestamp'inin
+    start/end etiket sözleşmesi bu checkout'ta bağımsız olarak doğrulanmadığından,
+    bu hesaplama provider davranışının kanıtı olarak yorumlanmamalıdır.
     """
     if now is None:
         now = datetime.now(ISTANBUL_TZ)
@@ -180,7 +223,7 @@ def time_until_next_candle_close(now: Optional[datetime] = None) -> float:
     else:
         now = now.astimezone(ISTANBUL_TZ)
 
-    # Bu saatin (veya bir sonraki saatin) :30'su = mum kapanışı
+    # Bu saatin (veya bir sonraki saatin) yapılandırılmış :30 checkpoint'i
     kapanis = now.replace(minute=0, second=0, microsecond=0) + timedelta(minutes=CANDLE_CLOSE_MINUTE)
     if kapanis <= now:
         kapanis += timedelta(hours=1)
@@ -188,8 +231,8 @@ def time_until_next_candle_close(now: Optional[datetime] = None) -> float:
     # Mum kapanışı + gecikme = tarama anı
     tarama = kapanis + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN)
 
-    # Günün SON taraması: son mum 18:30'da kapanır -> 18:35'te taranmalı.
-    # Eğer hesaplanan tarama bundan sonraysa ve son tarama henüz gelmediyse, ona çek.
+    # Mevcut yapılandırılmış son tarama hedefi (normal günde :35 varsayımı).
+    # Bu aritmetik sağlayıcının mum timestamp sözleşmesini kanıtlamaz.
     son_tarama = now.replace(hour=TARAMA_PENCERE_SONU.hour,
                              minute=TARAMA_PENCERE_SONU.minute - SCAN_DELAY_AFTER_CLOSE_MIN,
                              second=0, microsecond=0)
@@ -205,12 +248,10 @@ def time_until_next_candle_close(now: Optional[datetime] = None) -> float:
     return (tarama - now).total_seconds()
 
 def son_kapanan_mum_ani(now: Optional[datetime] = None) -> Optional[datetime]:
-    """
-    Bugün EN SON kapanmış 1H mumun kapanış anı. Hiç kapanmadıysa None.
+    """Mevcut configured :30 close-minute kuralındaki en son 1H kapanış anı.
 
-    Ölçülen seans: ilk mum 09:30 etiketli (09:30-10:30), son mum 17:30 etiketli
-    (17:30-18:30). Yani kapanış anları 10:30, 11:30, ..., 18:30.
-    09:30 "kapanışı" YOKTUR (ilk mum daha yeni açılmıştır) -> None döner.
+    Bu yardımcı provider label semantiğini kanıtlamaz; yfinance timestamp
+    sözleşmesi doğrulanana kadar var olan planlama davranışı korunur.
     """
     if now is None:
         now = datetime.now(ISTANBUL_TZ)
@@ -219,7 +260,11 @@ def son_kapanan_mum_ani(now: Optional[datetime] = None) -> Optional[datetime]:
     else:
         now = now.astimezone(ISTANBUL_TZ)
 
-    # Yarım günde seans 13:00'te kapanır: son mum 12:30 etiketli (12:00-13:00).
+    # Mevcut konfigürasyondaki ilk kapanış hedefi 10:30'dur; normal ve yarım
+    # seansın ikisi de bundan önce bir mumu/taramayı uygun saymaz.
+    ilk_kapanis = (now.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute, second=0, microsecond=0)
+                   + timedelta(minutes=40))
+    # Mevcut takvim yarım günü 13:00 olarak yapılandırır; :30 kuralında son etiket 12:30 olur.
     yg = yarim_gun_kapanisi(now)
     if yg:
         kapanis = now.replace(hour=yg[1].hour, minute=yg[1].minute, second=0, microsecond=0)
@@ -228,14 +273,13 @@ def son_kapanan_mum_ani(now: Optional[datetime] = None) -> Optional[datetime]:
                        + timedelta(minutes=CANDLE_CLOSE_MINUTE))
             if kapanis > now:
                 kapanis -= timedelta(hours=1)
+        if kapanis < ilk_kapanis:
+            return None
         return kapanis
 
     kapanis = now.replace(minute=0, second=0, microsecond=0) + timedelta(minutes=CANDLE_CLOSE_MINUTE)
     if kapanis > now:
         kapanis -= timedelta(hours=1)
-    # İlk gerçek kapanış 10:30'dur; ondan önceki "kapanış" bugün için geçerli değil.
-    ilk_kapanis = (now.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute, second=0, microsecond=0)
-                   + timedelta(minutes=40))
     if kapanis < ilk_kapanis:
         return None
     return kapanis
@@ -246,7 +290,8 @@ def tarama_animi_mi(now: Optional[datetime] = None,
     """
     Şu an tarama YAPILMALI MI?
 
-    Kural (ölçümden): mum :30'da kapanır, kapanış + 5 dk = tarama anı (:35).
+    Kural: configured CANDLE_CLOSE_MINUTE + gecikme ayarıyla tarama anı hesaplanır.
+    Sağlayıcı timestamp sözleşmesi doğrulanmadığından :30 bu kurulum varsayımıdır.
     Aynı kapanış iki kez taranmasın diye `son_taranan_kapanis` verilir.
 
     Ana döngü bunu kullanır: böylece eski "saat başı + 5 dk" mantığı (5 dk'lik uyku
@@ -263,7 +308,7 @@ def tarama_animi_mi(now: Optional[datetime] = None,
     if now.weekday() >= 5:
         return False
     if bist_tatil_adi(now):
-        return False  # resmî tatil: veri yok, tarama da yok
+        return False  # configured tatil: tarama yok (takvim doğruluğu harici kaynak gerektirir)
 
     kapanis = son_kapanan_mum_ani(now)
     if kapanis is None:
@@ -287,9 +332,9 @@ def veri_yok_modu_acik_mi(now: Optional[datetime] = None,
     Ne zaman True?
       - Takvimde tatil DEĞİL (tatil zaten tarama_penceresi_acik_mi'da elendi),
       - Seans içindeyiz,
-      - En yeni 1H mum VERI_YOK_MODU_ESIK_DK (20 saat) yaşında veya daha eski.
-        Normal seans içi bu değer < 60 dk'dır (ölçüm); gece/hafta sonu boşluğunda
-        15-60 saate çıkar ama o zaman pencere kapalıdır, bu fonksiyon çağrılmaz.
+      - En yeni cache 1H timestamp'i VERI_YOK_MODU_ESIK_DK (20 saat) yaşında veya daha eski.
+        Bu yaş hesabı etiketlere dayanır; provider etiketinin mum başlangıcı/sonu
+        olduğu ve seans içi gerçekliği bu doğrulama turunda canlı veride ölçülmedi.
 
     Neden gerekli? Faz 1 tazelik uyarısı tatillerde ve veri arızasında her turda
     bağırırdı (ölçüm: günde 270 satır). Bu modda tarama ATLANIR (gereksiz fetch de
@@ -318,8 +363,8 @@ def ohlcv_girdi_sorunlari(df) -> List[str]:
     `append_gunluk_dataframe` geçersiz frame'i deque'ye HİÇ yazmaz; böylece
     formation ve domain motorları ile disk/Supabase kalıcılığı bozuk veriden
     korunur. Kural sözleşmesi:
-      - Sıfır hacim GEÇERLİDİR (Yahoo .IS ilk bar sözleşmesi; ölçüm: 28 sembol
-        x 360 barda 1.083 satır 09:30 sıfır hacim, OHLC gerçek).
+      - Sıfır hacim mevcut doğrulama sözleşmesinde GEÇERLİDİR; bu kural tek başına
+        Yahoo .IS sağlayıcısının ilk-bar davranışını kanıtlamaz.
       - Negatif hacim, NaN/sonlu olmayan herhangi bir alan, imkânsız OHLC
         ilişkisi (high<low, high<max(open,close), low>min(open,close)) ve
         <=0 fiyatlar geçersizdir.
@@ -335,6 +380,19 @@ def ohlcv_girdi_sorunlari(df) -> List[str]:
     eksik = [sutun for sutun in gerekli if sutun not in getattr(df, "columns", ())]
     if eksik:
         return ["eksik_sutun:" + ",".join(eksik)]
+    try:
+        farkli_tz = set()
+        for raw_timestamp in df.index:
+            if not isinstance(raw_timestamp, (str, datetime, np.datetime64, pd.Timestamp)):
+                return ["gecersiz_timestamp"]
+            parsed_timestamp = pd.Timestamp(raw_timestamp)
+            if pd.isna(parsed_timestamp):
+                return ["gecersiz_timestamp"]
+            farkli_tz.add(parsed_timestamp.tzinfo is not None)
+        if len(farkli_tz) > 1:
+            return ["karisik_zaman_dilimi"]
+    except (TypeError, ValueError, OverflowError, AttributeError):
+        return ["gecersiz_timestamp"]
     try:
         o = pd.to_numeric(df["open"], errors="coerce").to_numpy(dtype=float)
         h = pd.to_numeric(df["high"], errors="coerce").to_numpy(dtype=float)
@@ -367,6 +425,183 @@ def ohlcv_girdi_sorunlari(df) -> List[str]:
     return sorted(sorunlar)
 
 
+def _ohlcv_kayit_sorunlari(candle: dict) -> List[str]:
+    """Validate one persisted/provider candle with the same OHLCV contract."""
+    if not isinstance(candle, dict):
+        return ["bozuk_kayit"]
+    if "timestamp" not in candle:
+        return ["gecersiz_timestamp"]
+    raw_timestamp = candle.get("timestamp")
+    if not isinstance(raw_timestamp, (str, datetime, np.datetime64, pd.Timestamp)):
+        return ["gecersiz_timestamp"]
+    try:
+        if pd.isna(pd.Timestamp(raw_timestamp)):
+            return ["gecersiz_timestamp"]
+        values = [float(candle[key]) for key in ("open", "high", "low", "close", "volume")]
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return ["eksik_veya_sayisal_olmayan_ohlcv"]
+    if not all(math.isfinite(value) for value in values):
+        return ["sonlu_olmayan_ohlcv"]
+    o, h, l, c, v = values
+    sorunlar = []
+    if h < l:
+        sorunlar.append("high_lt_low")
+    if h < max(o, c):
+        sorunlar.append("high_tutarsiz")
+    if l > min(o, c):
+        sorunlar.append("low_tutarsiz")
+    if min(o, h, l, c) <= 0:
+        sorunlar.append("gecersiz_fiyat")
+    if v < 0:
+        sorunlar.append("negatif_hacim")
+    return sorunlar
+
+
+def _karisik_timestamp_zaman_dilimi(bars: List[dict]) -> bool:
+    """Naive and timezone-aware labels cannot be safely sorted/merged together."""
+    aware = set()
+    for candle in bars:
+        try:
+            aware.add(pd.Timestamp(candle["timestamp"]).tzinfo is not None)
+        except (KeyError, TypeError, ValueError, OverflowError):
+            return True
+    return len(aware) > 1
+
+
+def _temiz_1h_cache_kayitlari(raw):
+    """Parse and filter untrusted persisted 1H JSON/pickle/Supabase records."""
+    if not isinstance(raw, (list, tuple, deque)):
+        return [], 1
+    valid, skipped = [], 0
+    for value in raw:
+        if not isinstance(value, dict):
+            skipped += 1
+            continue
+        timestamp = value.get("timestamp")
+        if not isinstance(timestamp, (str, datetime, np.datetime64, pd.Timestamp)):
+            skipped += 1
+            continue
+        try:
+            timestamp = pd.Timestamp(timestamp)
+            if pd.isna(timestamp):
+                raise ValueError("invalid timestamp")
+            if timestamp.tzinfo is not None:
+                timestamp = timestamp.tz_convert(ISTANBUL_TZ)
+            candle = {
+                "timestamp": timestamp,
+                "open": float(value["open"]),
+                "high": float(value["high"]),
+                "low": float(value["low"]),
+                "close": float(value["close"]),
+                "volume": float(value["volume"]),
+            }
+        except (KeyError, TypeError, ValueError, OverflowError):
+            skipped += 1
+            continue
+        if _ohlcv_kayit_sorunlari(candle):
+            skipped += 1
+            continue
+        valid.append(candle)
+    if _karisik_timestamp_zaman_dilimi(valid):
+        return [], skipped + len(valid)
+    try:
+        valid.sort(key=lambda candle: candle["timestamp"])
+    except (TypeError, ValueError):
+        return [], skipped + len(valid)
+    return valid, skipped
+
+
+def _temiz_1d_cache_kayitlari(raw):
+    """Parse daily cache rows, normalize labels to Istanbul, then validate OHLCV."""
+    if not isinstance(raw, (list, tuple, deque)):
+        return [], 1
+    valid, skipped = [], 0
+    for value in raw:
+        if not isinstance(value, dict):
+            skipped += 1
+            continue
+        raw_timestamp = value.get("timestamp")
+        if not isinstance(raw_timestamp, (str, datetime, np.datetime64, pd.Timestamp)):
+            skipped += 1
+            continue
+        try:
+            timestamp = pd.Timestamp(raw_timestamp)
+            if pd.isna(timestamp):
+                raise ValueError("invalid timestamp")
+            timestamp = (
+                ISTANBUL_TZ.localize(timestamp.to_pydatetime())
+                if timestamp.tzinfo is None else timestamp.tz_convert(ISTANBUL_TZ)
+            )
+            candle = {
+                "timestamp": timestamp,
+                "open": float(value["open"]),
+                "high": float(value["high"]),
+                "low": float(value["low"]),
+                "close": float(value["close"]),
+                "volume": float(value["volume"]),
+            }
+        except (KeyError, TypeError, ValueError, OverflowError):
+            skipped += 1
+            continue
+        if _ohlcv_kayit_sorunlari(candle):
+            skipped += 1
+            continue
+        valid.append(candle)
+    valid.sort(key=lambda candle: candle["timestamp"])
+    return valid, skipped
+
+
+def _cache_barlari_birlestir(remote_bars, local_bars, maxlen, stock, timeframe):
+    """Merge valid cache copies, letting the copy with the later tail win revisions.
+
+    Supabase is the tie-breaker when both copies end at the same candle. The
+    local copy wins overlapping timestamps only when its latest timestamp is
+    newer; this recovers locally persisted candles after a failed remote upsert
+    without changing normal Supabase precedence for equally fresh copies.
+    """
+    remote_bars = list(remote_bars or [])
+    local_bars = list(local_bars or [])
+    if not remote_bars:
+        return local_bars[-maxlen:]
+    if not local_bars:
+        return remote_bars[-maxlen:]
+    if _karisik_timestamp_zaman_dilimi(remote_bars + local_bars):
+        logger.warning(
+            "%s %s Supabase/yerel cache zaman dilimleri uyuşmuyor; "
+            "güvenli sıralama yapılamadığı için Supabase kopyası korundu",
+            stock, timeframe,
+        )
+        return remote_bars[-maxlen:]
+
+    try:
+        local_latest = max(bar["timestamp"] for bar in local_bars)
+        remote_latest = max(bar["timestamp"] for bar in remote_bars)
+        local_is_newer = local_latest > remote_latest
+    except (KeyError, TypeError, ValueError, OverflowError):
+        logger.warning(
+            "%s %s Supabase/yerel cache zamanları karşılaştırılamadı; "
+            "Supabase kopyası korundu",
+            stock, timeframe,
+        )
+        return remote_bars[-maxlen:]
+
+    preferred, secondary = (
+        (local_bars, remote_bars) if local_is_newer else (remote_bars, local_bars)
+    )
+    by_timestamp = {bar["timestamp"]: dict(bar) for bar in preferred}
+    for bar in secondary:
+        by_timestamp.setdefault(bar["timestamp"], dict(bar))
+    try:
+        merged = sorted(by_timestamp.values(), key=lambda bar: bar["timestamp"])
+    except (KeyError, TypeError, ValueError):
+        logger.warning(
+            "%s %s Supabase/yerel cache birleştirilemedi; Supabase kopyası korundu",
+            stock, timeframe,
+        )
+        return remote_bars[-maxlen:]
+    return merged[-maxlen:]
+
+
 class StockDequeManager:
     """
     Her hisse için 360 mumluk deque tutar
@@ -387,16 +622,58 @@ class StockDequeManager:
         # Günlük endpoint, tamamlanmamış seans mumunu aynı gün döndürmeyebilir.
         # Başarısız/henüz güncellenmemiş veriyi her saat tekrar istememek için cooldown.
         self._gunluk_fetch_attempts: Dict[str, datetime] = {}
+        self._gunluk_attempt_path = os.path.join(self.data_dir, "gunluk_fetch_attempts.json")
         # Son tespit edilen veri sorunları (split / bar boşluğu) - main.py okur
         self.sureklilik_sorunlari: Dict[str, List[Dict]] = {}
         
-        # Data dir oluştur
+        # Data dir oluştur ve yerel günlük fetch cooldown'unu restore et.
         os.makedirs(data_dir, exist_ok=True)
-        
+        self._gunluk_fetch_attempts_yukle()
+
         logger.info(f"Deque manager başlatıldı - maxlen={maxlen}, dir={data_dir}")
 
+    def _gunluk_fetch_attempts_yukle(self) -> None:
+        if not os.path.exists(self._gunluk_attempt_path):
+            return
+        try:
+            import json
+            from dateutil import parser as date_parser
+            with open(self._gunluk_attempt_path, "r", encoding="utf-8") as stream:
+                payload = json.load(stream)
+            if not isinstance(payload, dict):
+                raise ValueError("beklenen sözlük biçimi değil")
+            for stock, raw_time in payload.items():
+                if not isinstance(stock, str) or not isinstance(raw_time, str):
+                    continue
+                try:
+                    parsed = date_parser.isoparse(raw_time)
+                    self._gunluk_fetch_attempts[stock] = (
+                        ISTANBUL_TZ.localize(parsed) if parsed.tzinfo is None
+                        else parsed.astimezone(ISTANBUL_TZ)
+                    )
+                except (TypeError, ValueError, OverflowError):
+                    logger.warning("%s yerel günlük fetch zamanı bozuk; atlandı", stock)
+        except (OSError, ValueError, UnicodeError) as exc:
+            logger.warning("Yerel günlük fetch deneme kaydı okunamadı: %s", exc)
+
+    def _gunluk_fetch_attempts_kaydet(self) -> bool:
+        from datetime import timezone
+        payload = {
+            stock: (
+                value.astimezone(timezone.utc).isoformat()
+                if value.tzinfo is not None else value.isoformat()
+            )
+            for stock, value in self._gunluk_fetch_attempts.items()
+        }
+        try:
+            _atomic_json_write(self._gunluk_attempt_path, payload)
+            return True
+        except Exception as exc:
+            logger.error("Günlük fetch deneme zamanı yerel diske yazılamadı: %s", exc)
+            return False
+
     def hydrate_from_supabase(self, stocks, rows) -> None:
-        """Supabase satırlarını belleğe al; eksik anahtarlar yerel diske düşer."""
+        """Remote/local cache'i birleştir; en yeni mum yerel kopyayı da korur."""
         if not isinstance(rows, dict):
             return
         from dateutil import parser as date_parser
@@ -404,66 +681,63 @@ class StockDequeManager:
         for stock in stocks:
             hourly = rows.get(f"cache:1h:{stock}")
             if isinstance(hourly, list) and hourly:
-                bars = []
-                for item in hourly:
-                    try:
-                        candle = dict(item)
-                        ts = candle.get("timestamp")
-                        if isinstance(ts, str):
-                            candle["timestamp"] = date_parser.parse(ts)
-                        for field in ("open", "high", "low", "close", "volume"):
-                            candle[field] = float(candle.get(field, 0))
-                        bars.append(candle)
-                    except (TypeError, ValueError, KeyError, OverflowError):
-                        logger.warning(f"{stock} 1H Supabase cache satırı bozuk; atlanıyor")
-                if bars:
-                    self.deques[stock] = deque(bars[-self.maxlen:], maxlen=self.maxlen)
+                remote_bars, skipped = _temiz_1h_cache_kayitlari(hourly)
+                if skipped:
+                    logger.warning(
+                        "%s 1H Supabase cache: %d bozuk/geçersiz kayıt atlandı",
+                        stock, skipped,
+                    )
+                if remote_bars:
+                    local_deque = self.deques.get(stock)
+                    if not local_deque:
+                        local_deque = self.load_from_disk(stock)
+                    local_bars = list(local_deque) if local_deque else []
+                    bars = _cache_barlari_birlestir(
+                        remote_bars, local_bars, self.maxlen, stock, "1H"
+                    )
+                    self.deques[stock] = deque(bars, maxlen=self.maxlen)
 
             daily = rows.get(f"cache:1d:{stock}")
             if isinstance(daily, list) and daily:
-                bars = []
-                for item in daily:
-                    try:
-                        ts = pd.to_datetime(item["timestamp"])
-                        if ts.tzinfo is None:
-                            ts = ISTANBUL_TZ.localize(ts)
-                        else:
-                            ts = ts.tz_convert(ISTANBUL_TZ)
-                        o_, h_, l_, c_, v_ = (float(item[k]) for k in
-                                              ("open", "high", "low", "close", "volume"))
-                        if (not all(map(lambda x: x == x and abs(x) != float("inf"),
-                                        (o_, h_, l_, c_, v_)))
-                                or h_ < l_ or h_ < max(o_, c_) or l_ > min(o_, c_)
-                                or min(o_, h_, l_, c_) <= 0 or v_ < 0):
-                            logger.warning(
-                                f"{stock} 1D Supabase cache satırı geçersiz OHLCV; atlanıyor"
-                            )
-                            continue
-                        bars.append({
-                            "timestamp": ts,
-                            "open": o_,
-                            "high": h_,
-                            "low": l_,
-                            "close": c_,
-                            "volume": v_,
-                        })
-                    except (TypeError, ValueError, KeyError, OverflowError):
-                        logger.warning(f"{stock} 1D Supabase cache satırı bozuk; atlanıyor")
-                bars.sort(key=lambda candle: candle["timestamp"])
-                if bars:
+                remote_bars, skipped = _temiz_1d_cache_kayitlari(daily)
+                if skipped:
+                    logger.warning(
+                        "%s 1D Supabase cache: %d bozuk/geçersiz kayıt atlandı",
+                        stock, skipped,
+                    )
+                if remote_bars:
+                    local_deque = self.gunluk_deques.get(stock)
+                    if local_deque is None:
+                        local_deque = self.get_gunluk_deque(stock)
+                    bars = _cache_barlari_birlestir(
+                        remote_bars, list(local_deque), GUNLUK_DEQUE_MAXLEN,
+                        stock, "1D",
+                    )
                     self.gunluk_deques[stock] = deque(
-                        bars[-GUNLUK_DEQUE_MAXLEN:], maxlen=GUNLUK_DEQUE_MAXLEN
+                        bars, maxlen=GUNLUK_DEQUE_MAXLEN
                     )
 
         attempts = rows.get("state:daily_fetch_attempts")
+        remote_attempt_newer = False
         if isinstance(attempts, dict):
             for stock, iso_time in attempts.items():
-                if not isinstance(iso_time, str):
+                if not isinstance(stock, str) or not isinstance(iso_time, str):
                     continue
                 try:
-                    self._gunluk_fetch_attempts[stock] = date_parser.isoparse(iso_time)
+                    parsed = date_parser.isoparse(iso_time)
+                    if parsed.tzinfo is None:
+                        parsed = ISTANBUL_TZ.localize(parsed)
+                    # Preserve an aware remote offset (the Supabase payload is UTC
+                    # by convention); comparisons remain instant-aware, and disk
+                    # persistence serializes UTC separately.
+                    local = self._gunluk_fetch_attempts.get(stock)
+                    if local is None or parsed > local:
+                        self._gunluk_fetch_attempts[stock] = parsed
+                        remote_attempt_newer = True
                 except (TypeError, ValueError, OverflowError):
-                    logger.warning(f"{stock} günlük fetch zamanı Supabase'te bozuk; atlanıyor")
+                    logger.warning("%s Supabase günlük fetch zamanı bozuk; atlandı", stock)
+        if remote_attempt_newer:
+            self._gunluk_fetch_attempts_kaydet()
 
         logger.info(
             f"Supabase cache yüklendi: 1H={len(self.deques)}, 1D={len(self.gunluk_deques)}, "
@@ -483,13 +757,31 @@ class StockDequeManager:
                 logger.info(f"{stock} için yeni deque oluşturuldu")
         return self.deques[stock]
     
-    def append_candle(self, stock: str, candle: dict):
-        """
-        Yeni mum ekle
-        candle: {'open','high','low','close','volume','timestamp'}
-        """
+    def append_candle(self, stock: str, candle: dict) -> bool:
+        """Validate and append one canonicalized candle without bypassing the OHLCV boundary."""
+        sorunlar = _ohlcv_kayit_sorunlari(candle)
+        if sorunlar:
+            logger.error("%s tekil mum reddedildi (%s)", stock, ", ".join(sorunlar))
+            return False
+        try:
+            timestamp = pd.Timestamp(candle["timestamp"])
+            if pd.isna(timestamp):
+                raise ValueError("NaT timestamp")
+            if timestamp.tzinfo is not None:
+                timestamp = timestamp.tz_convert(ISTANBUL_TZ)
+            normalized = dict(candle)
+            normalized["timestamp"] = timestamp
+            for field in ("open", "high", "low", "close", "volume"):
+                normalized[field] = float(candle[field])
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            logger.error("%s tekil mum reddedildi (kanonikleştirme: %s)", stock, type(exc).__name__)
+            return False
         dq = self.get_deque(stock)
-        dq.append(candle)
+        if _karisik_timestamp_zaman_dilimi(list(dq) + [normalized]):
+            logger.error("%s tekil mum reddedildi (cache zaman dilimi karışık)", stock)
+            return False
+        dq.append(normalized)
+        return True
     
     def append_dataframe(self, stock: str, df: pd.DataFrame) -> bool:
         """DataFrame'den toplu ekle — timestamp bazlı TEKİLLEŞTİRİLMİŞ (idempotent).
@@ -529,6 +821,16 @@ class StockDequeManager:
             else:
                 yeni += 1
             birlesik[ts] = candle
+        if _karisik_timestamp_zaman_dilimi(list(birlesik.values())):
+            logger.error(
+                "%s: birleştirilen cache'te naive/aware timestamp karışımı; deque korunuyor",
+                stock,
+            )
+            self.sureklilik_sorunlari[stock] = [{
+                "tip": "gecersiz_girdi",
+                "mesaj": "timestamp zaman dilimi karışık",
+            }]
+            return False
         tumu = sorted(birlesik.values(), key=lambda c: c['timestamp'])
         dq.clear()
         for c in tumu[-self.maxlen:]:
@@ -577,89 +879,110 @@ class StockDequeManager:
         
         return df
     
-    def save_to_disk(self, stock: str):
-        """Diske kaydet - hem pickle hem json (senin isteğin both)"""
+    def save_to_disk(self, stock: str) -> bool:
+        """Save the JSON restart cache and report whether all configured stores succeeded."""
         if stock not in self.deques:
-            return
-        
-        # Pickle - hızlı
+            return False
+
         pkl_path = os.path.join(self.data_dir, f"{stock}.pkl")
-        # JSON - GitHub'da görünsün, human-readable
         json_path = os.path.join(self.data_dir, f"{stock}.json")
-        
+
         try:
             data_list = list(self.deques[stock])
-            
-            # Pickle
-            with open(pkl_path, 'wb') as f:
-                pickle.dump(data_list, f)
-            
-            # JSON - timestamp'i string'e çevir
+
+            # JSON is the default/safe restart format; build it before the optional
+            # legacy pickle so the canonical cache survives a pickle write failure.
             json_data = []
             for candle in data_list:
                 json_candle = candle.copy()
-                # Timestamp'i ISO format string yap
-                if 'timestamp' in json_candle:
-                    ts = json_candle['timestamp']
-                    if hasattr(ts, 'isoformat'):
-                        json_candle['timestamp'] = ts.isoformat()
-                    else:
-                        json_candle['timestamp'] = str(ts)
+                ts = json_candle.get("timestamp")
+                if ts is not None:
+                    json_candle["timestamp"] = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
                 json_data.append(json_candle)
-            
-            import json
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(json_data, f, indent=2, ensure_ascii=False)
 
+            _atomic_json_write(json_path, json_data, indent=2)
+            try:
+                _atomic_pickle_write(pkl_path, data_list)
+            except Exception as exc:
+                # JSON is already durable and remains the default load path.
+                logger.warning("%s optional pickle cache yazılamadı (%s)", stock, type(exc).__name__)
+
+            remote_saved = True
+            remote_error = None
             if self.persistent_store is not None:
-                self.persistent_store.upsert(f"cache:1h:{stock}", json_data)
+                try:
+                    remote_saved = bool(
+                        self.persistent_store.upsert(f"cache:1h:{stock}", json_data)
+                    )
+                except Exception as exc:
+                    remote_saved = False
+                    remote_error = type(exc).__name__
+                if not remote_saved:
+                    logger.warning(
+                        "%s 1H Supabase cache yazma başarısız%s; yerel JSON kopyası var",
+                        stock,
+                        f" ({remote_error})" if remote_error else "",
+                    )
 
-            logger.debug(f"{stock} deque diske kaydedildi - {pkl_path} + {json_path} ({len(data_list)} mum)")
-        except Exception as e:
-            logger.error(f"{stock} diske kaydedilemedi: {e}")
+            logger.debug(
+                "%s deque diske kaydedildi - %s + %s (%d mum)",
+                stock, pkl_path, json_path, len(data_list),
+            )
+            return remote_saved
+        except Exception as exc:
+            logger.error("%s yerel cache diske kaydedilemedi (%s)", stock, type(exc).__name__)
+            return False
     
     def load_from_disk(self, stock: str) -> Optional[deque]:
-        """Diskten yükle - önce pickle, yoksa json"""
+        """Load validated JSON first; legacy pickle is opt-in because unpickling executes code."""
         pkl_path = os.path.join(self.data_dir, f"{stock}.pkl")
         json_path = os.path.join(self.data_dir, f"{stock}.json")
-        
-        # Önce pickle dene (hızlı)
-        if os.path.exists(pkl_path):
-            try:
-                with open(pkl_path, 'rb') as f:
-                    data = pickle.load(f)
-                dq = deque(data, maxlen=self.maxlen)
-                logger.debug(f"{stock} pickle'dan yüklendi: {len(dq)} mum")
-                return dq
-            except Exception as e:
-                logger.warning(f"{stock} pickle yüklenemedi: {e}, json deneniyor")
-        
-        # Pickle yoksa json dene
+
         if os.path.exists(json_path):
             try:
                 import json
-                from dateutil import parser as date_parser
-                with open(json_path, 'r', encoding='utf-8') as f:
-                    json_data = json.load(f)
-                
-                data_list = []
-                for candle in json_data:
-                    # Timestamp'i geri çevir
-                    if 'timestamp' in candle and isinstance(candle['timestamp'], str):
-                        try:
-                            candle['timestamp'] = date_parser.parse(candle['timestamp'])
-                        except:
-                            pass
-                    data_list.append(candle)
-                
-                dq = deque(data_list, maxlen=self.maxlen)
-                logger.debug(f"{stock} json'dan yüklendi: {len(dq)} mum")
-                return dq
-            except Exception as e:
-                logger.warning(f"{stock} json'dan yüklenemedi: {e}")
-        
-        return None
-    
+                with open(json_path, "r", encoding="utf-8") as stream:
+                    raw = json.load(stream)
+                bars, skipped = _temiz_1h_cache_kayitlari(raw)
+                if skipped:
+                    logger.warning(
+                        "%s 1H JSON cache: %d bozuk/geçersiz kayıt atlandı",
+                        stock, skipped,
+                    )
+                logger.debug("%s JSON cache'ten yüklendi: %d mum", stock, len(bars))
+                return deque(bars[-self.maxlen:], maxlen=self.maxlen)
+            except (OSError, UnicodeError, ValueError) as exc:
+                logger.warning(
+                    "%s JSON cache okunamadı (%s)", stock, type(exc).__name__
+                )
+
+        if not os.path.exists(pkl_path):
+            return None
+        if not ALLOW_TRUSTED_PICKLE_CACHE:
+            logger.warning(
+                "%s için JSON cache yok/geçersiz; legacy pickle yüklemesi kapalı "
+                "(yalnızca güvenilir dosyalar için ALLOW_TRUSTED_PICKLE_CACHE=1)",
+                stock,
+            )
+            return None
+
+        # Opt-in only: pickle input must be fully trusted. Never use this path for
+        # downloaded/imported cache files; a pickle can execute arbitrary code.
+        try:
+            with open(pkl_path, "rb") as stream:
+                raw = pickle.load(stream)
+            bars, skipped = _temiz_1h_cache_kayitlari(raw)
+            if skipped:
+                logger.warning(
+                    "%s legacy pickle cache: %d bozuk/geçersiz kayıt atlandı",
+                    stock, skipped,
+                )
+            logger.debug("%s güvenilir pickle cache'ten yüklendi: %d mum", stock, len(bars))
+            return deque(bars[-self.maxlen:], maxlen=self.maxlen)
+        except Exception as exc:  # noqa: BLE001 - yalnızca açık trusted-cache opt-in
+            logger.warning("%s güvenilir pickle cache okunamadı (%s)", stock, type(exc).__name__)
+            return None
+
     def _gunluk_dosya(self, stock: str) -> str:
         return os.path.join(self.data_dir, f"{stock}_gunluk.json")
 
@@ -671,32 +994,38 @@ class StockDequeManager:
             if os.path.exists(yol):
                 try:
                     import json
-                    with open(yol, "r", encoding="utf-8") as f:
-                        ham = json.load(f)
-                    yuklenen = []
-                    for c in ham:
-                        ts = pd.to_datetime(c["timestamp"])
-                        if ts.tzinfo is None:
-                            ts = ISTANBUL_TZ.localize(ts)
-                        else:
-                            ts = ts.tz_convert(ISTANBUL_TZ)
-                        yuklenen.append({"timestamp": ts, "open": float(c["open"]),
-                                         "high": float(c["high"]), "low": float(c["low"]),
-                                         "close": float(c["close"]),
-                                         "volume": float(c.get("volume", 0))})
-                    yuklenen.sort(key=lambda c: c["timestamp"])
-                    dq = deque(yuklenen[-GUNLUK_DEQUE_MAXLEN:], maxlen=GUNLUK_DEQUE_MAXLEN)
-                    logger.info(f"{stock} günlük deque diskten yüklendi - {len(dq)} bar")
-                except Exception as e:
-                    logger.warning(f"{stock} günlük cache okunamadı ({e}) - yeniden çekilecek")
+                    with open(yol, "r", encoding="utf-8") as stream:
+                        raw = json.load(stream)
+                    yuklenen, skipped = _temiz_1d_cache_kayitlari(raw)
+                    if skipped:
+                        logger.warning(
+                            "%s günlük JSON cache: %d bozuk/geçersiz kayıt atlandı",
+                            stock, skipped,
+                        )
+                    dq = deque(
+                        yuklenen[-GUNLUK_DEQUE_MAXLEN:], maxlen=GUNLUK_DEQUE_MAXLEN
+                    )
+                    logger.info("%s günlük deque diskten yüklendi - %d bar", stock, len(dq))
+                except Exception as exc:
+                    logger.warning(
+                        "%s günlük cache okunamadı (%s) - yeniden çekilecek",
+                        stock, type(exc).__name__,
+                    )
                     dq = None
             if dq is None:
                 dq = deque(maxlen=GUNLUK_DEQUE_MAXLEN)
             self.gunluk_deques[stock] = dq
         return self.gunluk_deques[stock]
 
-    def append_gunluk_dataframe(self, stock: str, df: pd.DataFrame) -> None:
-        """1H ile aynı idempotent birleştirme (timestamp bazlı tekilleştirme)."""
+    def append_gunluk_dataframe(self, stock: str, df: pd.DataFrame) -> bool:
+        """1H ile aynı OHLCV kapısı ve idempotent timestamp birleştirmesi."""
+        sorunlar = ohlcv_girdi_sorunlari(df)
+        if sorunlar:
+            logger.error(
+                "%s: gelen günlük OHLCV frame geçersiz (%s); günlük deque korunuyor",
+                stock, ", ".join(sorunlar),
+            )
+            return False
         dq = self.get_gunluk_deque(stock)
         birlesik = {c["timestamp"]: c for c in dq}
         yeni = guncellenen = 0
@@ -788,8 +1117,14 @@ class StockDequeManager:
             return False
         return True
 
-    def gunluk_fetch_denemesi_kaydet(self, stock: str, now: Optional[datetime] = None) -> None:
-        """Başarılı veya başarısız günlük fetch denemesinin zamanını kaydet."""
+    def gunluk_fetch_denemesi_kaydet(self, stock: str, now: Optional[datetime] = None,
+                                      *, persist: bool = True) -> None:
+        """Başarılı veya başarısız günlük fetch denemesinin zamanını kaydet.
+
+        ``persist=False`` yalnızca bu süreçte tekrar fetch'i yavaşlatır. Yeni
+        günlük cache kalıcı yazılamadıysa, kalıcı cooldown yazmak yeniden
+        başlatma sonrası eksik verinin tekrar alınmasını yanlışlıkla engeller.
+        """
         if now is None:
             now = datetime.now(ISTANBUL_TZ)
         elif now.tzinfo is None:
@@ -797,6 +1132,9 @@ class StockDequeManager:
         else:
             now = now.astimezone(ISTANBUL_TZ)
         self._gunluk_fetch_attempts[stock] = now
+        if not persist:
+            return
+        self._gunluk_fetch_attempts_kaydet()
         if self.persistent_store is not None:
             from datetime import timezone
             attempts = {
@@ -804,19 +1142,38 @@ class StockDequeManager:
                 if value.tzinfo is not None else value.isoformat()
                 for key, value in self._gunluk_fetch_attempts.items()
             }
-            self.persistent_store.upsert("state:daily_fetch_attempts", attempts)
+            try:
+                remote_saved = self.persistent_store.upsert("state:daily_fetch_attempts", attempts)
+            except Exception as exc:
+                # The atomic local attempt snapshot is already the recovery source;
+                # a remote adapter failure must not turn a usable daily cache into
+                # a failed symbol scan. Avoid exception text: adapters may embed URLs.
+                logger.warning(
+                    "Günlük fetch deneme durumu uzak saklayıcıya yazılamadı (%s)",
+                    type(exc).__name__,
+                )
+            else:
+                if not remote_saved:
+                    logger.warning("Günlük fetch deneme durumu uzak saklayıcı tarafından reddedildi")
 
-    def save_gunluk_to_disk(self, stock: str):
+    def save_gunluk_to_disk(self, stock: str) -> bool:
+        """Save local JSON and report whether configured durable stores accepted it."""
         dq = self.get_gunluk_deque(stock)
         os.makedirs(self.data_dir, exist_ok=True)
-        import json
         payload = [{"timestamp": c["timestamp"].isoformat(), "open": c["open"],
                     "high": c["high"], "low": c["low"], "close": c["close"],
                     "volume": c["volume"]} for c in dq]
-        with open(self._gunluk_dosya(stock), "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False)
+        _atomic_json_write(self._gunluk_dosya(stock), payload)
         if self.persistent_store is not None:
-            self.persistent_store.upsert(f"cache:1d:{stock}", payload)
+            try:
+                remote_saved = bool(self.persistent_store.upsert(f"cache:1d:{stock}", payload))
+            except Exception as exc:
+                logger.warning("%s günlük Supabase cache yazılamadı (%s)", stock, type(exc).__name__)
+                return False
+            if not remote_saved:
+                logger.warning("%s günlük Supabase cache yazma başarısız; yerel kopya var", stock)
+                return False
+        return True
 
     def son_bar_yasi_dk(self, stock: str, now: Optional[datetime] = None) -> Optional[float]:
         """Bu hissenin cache'indeki en yeni 1H mumun yaşı (dakika). Veri yoksa None.
@@ -832,14 +1189,36 @@ class StockDequeManager:
         son = son.tz_convert(ISTANBUL_TZ) if son.tzinfo else ISTANBUL_TZ.localize(son)
         return (now - son).total_seconds() / 60.0
 
-    def save_all(self):
-        """Tümünü kaydet (1H + 1D)"""
-        for stock in self.deques:
-            self.save_to_disk(stock)
-        for stock in self.gunluk_deques:
-            self.save_gunluk_to_disk(stock)
-        logger.info(f"Tüm deque'ler kaydedildi - {len(self.deques)} hisse "
-                    f"(+{len(self.gunluk_deques)} günlük)")
+    def save_all(self) -> bool:
+        """Save all caches, isolating per-series errors and reporting durable failures."""
+        hourly_failed = 0
+        daily_failed = 0
+        for stock in list(self.deques):
+            try:
+                hourly_failed += not self.save_to_disk(stock)
+            except Exception as exc:
+                hourly_failed += 1
+                logger.error("%s 1H cache kayıt hatası (%s)", stock, type(exc).__name__)
+        for stock in list(self.gunluk_deques):
+            try:
+                daily_failed += not self.save_gunluk_to_disk(stock)
+            except Exception as exc:
+                daily_failed += 1
+                logger.error("%s 1D cache kayıt hatası (%s)", stock, type(exc).__name__)
+        failed = hourly_failed + daily_failed
+        if failed:
+            logger.warning(
+                "Cache kayıtları tamamlandı ancak %d/%d seri için tüm kalıcı "
+                "hedefler doğrulanmadı (1H=%d, 1D=%d)",
+                failed, len(self.deques) + len(self.gunluk_deques),
+                hourly_failed, daily_failed,
+            )
+            return False
+        logger.info(
+            "Tüm deque'ler kalıcı depolara kaydedildi - %d hisse (+%d günlük)",
+            len(self.deques), len(self.gunluk_deques),
+        )
+        return True
 
 # === VERİ SÜREKLİLİK / SPLIT KONTROLÜ ===
 
@@ -988,10 +1367,12 @@ def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 def tamamlanmis_mumlar(df: pd.DataFrame, tf: str, now: Optional[datetime] = None) -> pd.DataFrame:
-    """Devam eden (yarım) mumu çıkarır: kova etiketi + TF süresi > now ise o mum henüz
-    kapanmamıştır ve motor verilmemelidir. Yahoo'nun etiket hizalaması ne olursa olsun
-    güvenlidir — her mum kapanışından sonraki İLK taramada beslenir (Pine bar kapanışı
-    mantığıyla birebir). Resample sol-etiketli olduğu için etiket+TF = kova kapanışıdır."""
+    """Configured close-offset'e göre henüz tamamlanmamış mumları ayıkla.
+
+    Resample edilmiş sol-etiketli 2h/4h kovalarında etiket + TF süre kullanılır.
+    Ham 1H provider timestamp start/end semantiği bağımsız doğrulanmamıştır;
+    ``TF_KAPANIS_SURESI`` bu nedenle mevcut davranışını korur.
+    """
     if df is None or len(df) == 0:
         return df
     if now is None:
@@ -1003,10 +1384,15 @@ def tamamlanmis_mumlar(df: pd.DataFrame, tf: str, now: Optional[datetime] = None
         idx = idx.tz_convert(ISTANBUL_TZ)
     sinir = pd.Timestamp(now).tz_convert(ISTANBUL_TZ) if pd.Timestamp(now).tzinfo else ISTANBUL_TZ.localize(pd.Timestamp(now))
     if tf == "1d":
-        # Günlük mum 00:00 etiketli ama SEANS KAPANIŞINDA (18:30) tamamlanır.
-        # "Etiket + 1 gün" kuralı günlük mumu 24 saat yarım sayardı.
-        kapanis = idx.normalize() + pd.Timedelta(
-            hours=GUNLUK_MUM_KAPANIS_SAATI.hour, minutes=GUNLUK_MUM_KAPANIS_SAATI.minute)
+        # Günlük mum etiketi gün başlangıcıdır; mum o tarihin seans kapanışında
+        # tamamlanır. Yarım seans için takvimdeki 13:00 kapanışını uygula.
+        kapanis = pd.DatetimeIndex([
+            ts.normalize() + pd.Timedelta(
+                hours=seans_kapanis_saati(ts.date()).hour,
+                minutes=seans_kapanis_saati(ts.date()).minute,
+            )
+            for ts in idx
+        ])
     else:
         kapanis = idx + TF_KAPANIS_SURESI.get(tf, timedelta(minutes=30))
     tamam = kapanis <= sinir
@@ -1217,10 +1603,10 @@ def mock_fetch_60d_1h(stock: str, n_bars: int = 360) -> pd.DataFrame:
     close = base_price + np.cumsum(np.random.randn(n_bars) * 0.3)
     close = np.maximum(close, 1.0)  # Negatif olmasın
     
-    high = close + np.abs(np.random.randn(n_bars) * 0.2)
-    low = close - np.abs(np.random.randn(n_bars) * 0.2)
-    low = np.maximum(low, 0.5)
     open_ = close + np.random.randn(n_bars) * 0.1
+    high = np.maximum(open_, close) + np.abs(np.random.randn(n_bars) * 0.2)
+    low = np.minimum(open_, close) - np.abs(np.random.randn(n_bars) * 0.2)
+    low = np.maximum(low, 0.5)
     volume = np.random.randint(100000, 5000000, n_bars)
     
     df = pd.DataFrame({
@@ -1243,22 +1629,21 @@ if __name__ == "__main__":
     print(f"Sonraki açılışa: {time_until_next_open()/3600:.2f} saat")
     print(f"Sonraki mum kapanışına: {time_until_next_candle_close()/60:.1f} dk")
     
-    # Deque test
-    manager = StockDequeManager(maxlen=10, data_dir="./test_data")
-    df_mock = mock_fetch_60d_1h("THYAO", 20)
-    print(f"\nMock THYAO: {len(df_mock)} bar")
-    print(df_mock.tail(3))
-    
-    manager.append_dataframe("THYAO", df_mock)
-    df_from_deque = manager.to_dataframe("THYAO")
-    print(f"\nDeque'den DataFrame: {len(df_from_deque)} bar")
-    
-    # Resample test
-    resampled = resample_all_timeframes(df_from_deque)
-    for tf, df in resampled.items():
-        print(f"{tf}: {len(df)} bar")
-    
-    # Temizle
-    import shutil
-    shutil.rmtree("./test_data", ignore_errors=True)
-    print("\nTest bitti")
+    # Deque test: only this invocation's temporary cache is cleaned.
+    with tempfile.TemporaryDirectory(prefix="formation-bot-data-test-") as test_root:
+        test_data_dir = os.path.join(test_root, "cache")
+        manager = StockDequeManager(maxlen=10, data_dir=test_data_dir)
+        df_mock = mock_fetch_60d_1h("THYAO", 20)
+        print(f"\nMock THYAO: {len(df_mock)} bar")
+        print(df_mock.tail(3))
+
+        manager.append_dataframe("THYAO", df_mock)
+        df_from_deque = manager.to_dataframe("THYAO")
+        print(f"\nDeque'den DataFrame: {len(df_from_deque)} bar")
+
+        # Resample test
+        resampled = resample_all_timeframes(df_from_deque)
+        for tf, df in resampled.items():
+            print(f"{tf}: {len(df)} bar")
+
+    print("\nTest bitti (test-owned geçici cache temizlendi)")

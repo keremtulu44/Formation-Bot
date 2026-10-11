@@ -44,6 +44,22 @@ def cache_veri_al(manager: StockDequeManager, stock: str) -> pd.DataFrame:
     return df
 
 
+def _taze_framei_ekle_ve_cache_sec(manager: StockDequeManager, stock: str,
+                                   frame: pd.DataFrame):
+    """Return only a cache-backed frame; rejected provider data never escapes.
+
+    `append_dataframe` is the OHLCV validation boundary. Its False result means
+    the raw frame is not eligible for resampling, formation detection, or any
+    other analysis path; an existing validated cache may still be used.
+    """
+    if not manager.append_dataframe(stock, frame):
+        return cache_veri_al(manager, stock), "cache (fetch OHLCV reddedildi)"
+    merged = manager.to_dataframe(stock)
+    if merged is None or merged.empty:
+        raise ValueError("kabul edilen fetch sonrasi cache bos")
+    return merged, "yfinance(taze)"
+
+
 def main():
     force_cache = "--cache" in sys.argv
     deque_manager = StockDequeManager()
@@ -67,12 +83,14 @@ def main():
             if not force_cache:
                 try:
                     with pacer.request(f"{stock} 1H"):
-                        df_1h = taze_veri_cek(stock)
-                    kaynak = "yfinance(taze)"
-                    deque_manager.append_dataframe(stock, df_1h)
+                        fetched_1h = taze_veri_cek(stock)
                 except Exception as e:
                     df_1h = cache_veri_al(deque_manager, stock)
                     kaynak = f"cache (fetch basarisiz: {type(e).__name__})"
+                else:
+                    df_1h, kaynak = _taze_framei_ekle_ve_cache_sec(
+                        deque_manager, stock, fetched_1h
+                    )
             else:
                 df_1h = cache_veri_al(deque_manager, stock)
                 kaynak = "cache"
@@ -89,10 +107,22 @@ def main():
         if not force_cache and deque_manager.gunluk_veri_eksik_mi(stock):
             with pacer.request(f"{stock} 1D"):
                 taze_gunluk = fetch_yfinance_1d(stock)
-            deque_manager.gunluk_fetch_denemesi_kaydet(stock)
-            if taze_gunluk is not None and len(taze_gunluk) >= 30:
-                deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
-                deque_manager.save_gunluk_to_disk(stock)
+            if (taze_gunluk is not None and len(taze_gunluk) >= 30
+                    and deque_manager.append_gunluk_dataframe(stock, taze_gunluk)):
+                try:
+                    cache_kalici = bool(deque_manager.save_gunluk_to_disk(stock))
+                except Exception as exc:
+                    cache_kalici = False
+                    kaynak_notlari.append(
+                        f"{stock}: günlük cache yazımı başarısız ({type(exc).__name__})"
+                    )
+                deque_manager.gunluk_fetch_denemesi_kaydet(stock, persist=cache_kalici)
+                if not cache_kalici:
+                    kaynak_notlari.append(
+                        f"{stock}: günlük fetch cooldown yalnızca bellekte; kalıcı cache doğrulanmadı"
+                    )
+            else:
+                deque_manager.gunluk_fetch_denemesi_kaydet(stock)
         df_gunluk = deque_manager.to_gunluk_dataframe(stock)
         if df_gunluk is not None and len(df_gunluk) >= 30:
             tfs["1d"] = df_gunluk

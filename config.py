@@ -6,6 +6,22 @@ import os
 from datetime import date, datetime, time
 import pytz
 
+
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _resolve_app_path(value, default):
+    """Resolve relative storage/log paths against the application directory.
+
+    This keeps ``./bot_data`` and ``./logs`` stable when systemd, CI, or an
+    operator starts the process from a different working directory.
+    """
+    raw = str(value or "").strip() or str(default)
+    path = os.path.expanduser(raw)
+    if not os.path.isabs(path):
+        path = os.path.join(_APP_DIR, path)
+    return os.path.abspath(path)
+
 # .env desteği - local ve /etc/bist-bot.env için
 try:
     from dotenv import load_dotenv
@@ -72,34 +88,29 @@ ROUTINE_1H_FETCH_PERIOD = "5d"
 FULL_1H_FETCH_STALE_DAYS = 5
 
 ISTANBUL_TZ = pytz.timezone("Europe/Istanbul")
-BIST_OPEN = time(9, 50)     # gerçek BIST seans başlangıcı (Yahoo ilk mumu 09:30 etiketli)
-BIST_CLOSE = time(18, 10)   # gerçek BIST kapanışı + tampon
+BIST_OPEN = time(9, 50)     # configured scan-session start; official session/provider mapping pending
+BIST_CLOSE = time(18, 10)   # configured active-session cutoff; not independently verified here
 
-# --- CANLI TARAMA ZAMANLAMASI (yfinance .IS verisinden ÖLÇÜLDÜ, varsayım değil) ---
-# Ölçüm 1: 1H bar etiketleri 09:30, 10:30, ... 17:30 (günde 9 mum) ve barlar bitişik
-#           (close[i] == open[i+1])  ->  etiket = MUM BAŞI, mum :30'da kapanır.
-# Ölçüm 2: 17:30 etiketli (günün son) mumun hacmi ortalama mumun %91'i -> TAM mum,
-#           yani son mum 18:30'da kapanır (Yahoo'nun .IS seansı 09:30-18:30).
-# Ölçüm 3: 09:30 etiketli mumun hacmi ~0 (yfinance'nin bilinen ilk-bar hatası),
-#           OHLC'i gerçek -> filtrelemeye gerek yok, sadece hacim skoru nötr kalır.
-# ESKİ HATA: tetikleyici "saat başı + 5 dk" (=:05) idi. Mum :30'da kapandığı için
-#            her tarama veriyi 35 dk geç gösteriyordu ve günün son mumu (18:30
-#            kapanış) hiç analiz edilmiyordu (pencere 18:10'da kapanıyordu).
-CANDLE_CLOSE_MINUTE = 30          # 1H mumun kapanış dakikası (saat başından offset)
-SCAN_DELAY_AFTER_CLOSE_MIN = 5    # mum kapanışından kaç dk sonra taranacak
-TARAMA_PENCERE_SONU = time(18, 40)  # son mum 18:30 kapanır + 5 dk = 18:35 (+ pay)
+# --- CANLI TARAMA ZAMANLAMASI ---
+# Önceki yerel gözlemler Yahoo .IS 1H etiketlerinin dakikasını :30 olarak
+# göstermişti; sağlayıcının start/end timestamp sözleşmesi bu checkout'ta bağımsız
+# olarak kanıtlanamıyor. Bu nedenle mevcut :30 tetikleyiciyi koruyoruz ve
+# data.py'deki 1H kapanış filtresini değiştirmiyoruz.
+CANDLE_CLOSE_MINUTE = 30          # mevcut gözlenen tarama dakikası; sağlayıcı sözleşmesi doğrulanmalı
+SCAN_DELAY_AFTER_CLOSE_MIN = 5    # mevcut kapanış/tarama gecikmesi
+TARAMA_PENCERE_SONU = time(18, 40)  # mevcut son tarama penceresi (+ pay)
 STALE_BAR_UYARI_DK = 120          # en yeni 1H mum bu kadardır eskiyse "kör çalışma" uyarısı
 OFFSESSION_CACHE_MAX_AGE_DAYS = max(1, _env_int("OFFSESSION_CACHE_MAX_AGE_DAYS", 14))  # seans dışı son mevcut veriye izin
 TERMINAL_TAZE_BAR = 3             # terminal (ölü) formasyon bu kadar bar içindeyse haber ver
 
-# --- BIST RESMİ TATİL TAKVİMİ ---
-# Kaynak: https://www.borsaistanbul.com/en/official-holidays (resmî BIST takvimi),
-# 3 Türk aracı kaynakla çapraz doğrulandı (2026-09-27). markethours.io'nun İslami
-# bayram tarihleri YANLIŞTI (31 Mart / 7-10 Haziran), kullanılmadı.
-# YARIM GÜN: seans 13:00'te kapanır (son 1H mum 12:30 etiketli, 12:00-13:00).
-# DİKKAT: İslami bayram tarihleri HER YIL DEĞİŞİR - her yıl başında güncellenmeli.
-# Eksik takvime karşı koruma: veri kaynaklı "veri yok modu" (data.py) devrede -
-# takvimde olmasa bile veri gelmiyorsa bot tatil moduna geçer.
+# --- BIST TATİL TAKVİMİ (manuel data-layer politikası; exhaustive değildir) ---
+# Borsa İstanbul'un 2026 Official Holidays sayfası 19 Mar, 26 May ve 28 Eki yarım
+# günlerini 13:00'e kadar listeliyor. Genelgenin Equity Market tablosu kapanış
+# saatini vermediğinden 13:00 equity seans saati genel sayfayla sınırlı doğrulandı.
+# Bu tarih haritası manuel kalır; özellikle dini bayramlar her yıl gözden geçirilmelidir.
+# main.py'nin otomatik scheduler'ı ayrıca üçüncü taraf XIST takvimini kullanır;
+# iki kaynak arasındaki fark bilinçli olarak data katmanına birleştirilmemiştir.
+# Eksik statik kayıtlara karşı ana scheduler'ın XIST fail-closed kapısı ayrıdır.
 BIST_TATILLER = {
     date(2026, 1, 1): "Yılbaşı",
     date(2026, 3, 20): "Ramazan Bayramı 1. gün",
@@ -143,21 +154,22 @@ VERI_YOK_MODU_ESIK_DK = 20 * 60
 # dağılımı p50=%0.00, p99=%1.08, p99.9=%4.17, MAKS=%9.97 -> %10 eşiği normal gürültünün
 # çok üstünde, split'i ise yakalar.
 SPLIT_SUREKLILIK_ESIK_PCT = 10.0
-# Seans içi bar boşluğu: aynı gün 09:30-18:30 arasında 1H mum 1 saat aralıklı gelir.
-# 1 mum atlanınca 2 saat boşluk oluşur -> eşik 1.5 saat (normal aralık 1 saat).
+# Seans içi bar boşluğu eşiği: mevcut zamanlama varsayımı bir saatlik etiket aralığıdır.
+# Provider/seans label sözleşmesi canlı kaynakla bu turda doğrulanmamıştır.
 BAR_BOSLUK_ESIK_SAAT = 1.5
 # --- TARAMA DRİFT KORUMASI (FAZ 2) ---
 # Canlı tarama aktif 48 hisseyi seri fetch eder; istek pacing'i SCAN_* ayarlarıyla
-# sınırlandırılır. Mum kapanışları 60 dk arayla olduğu için tarama eşiği geniş
-# tutulur; Yahoo yavaşlarsa veya retry gerekirse drift görünür olur. Tarama bu eşiği
+# sınırlandırılır. Mevcut yapılandırma bir saatlik tarama aralığı varsayar; eşik
+# Yahoo yavaşlarsa veya retry gerekirse drift görünür olacak şekilde geniş tutulur. Tarama bu eşiği
 # aşarsa (Yahoo yavaşlar, motor yavaşlar) bir sonraki mumu kaçırma riski doğar.
 # Faz 1'deki "aynı mum iki kez taranmaz + kapanış bazlı tetik" yapısı sayesinde
 # atlanan mum OLMAZ (sonraki döngüde taranır) ama gecikme büyür - ölçüp uyarıyoruz.
 TARAMA_SURESI_UYARI_DK = 45
 
 # --- 1D DERİNLİK (FAZ 2) ---
-# 1H deque 360 bar = ~40 iş günü -> resample ile 1D sadece ~40 bar (ölçüm).
-# 1D üçgen/kama oluşumu 20-60 bar sürdüğü için bu pencere MARJINAL.
+# 360 adet 1H bar, yalnızca yaklaşık 9 bar/seans varsayımıyla ~40 seansa denk gelir;
+# provider bar üretimi canlı ölçülmeden kesin tarih derinliği olarak yorumlanmamalıdır.
+# 1D üçgen/kama oluşumu 20-60 bar sürdüğü için bu tahmini pencere MARJINAL.
 # DEQUE_MAXLEN'i artırmak (A) 1H penceresini de büyütür ve Pine ile birebir uyumu
 # bozabilir (Pine'da kaç bar kullanıldığı henüz bilinmiyor) -> REDDEDİLDİ.
 # Buna karşılık 1D verisini AYRI ve DERİN çekiyoruz (B): 1H/2h/4h Pine uyumu
@@ -301,7 +313,15 @@ ALERT_STATES = [
     "BASARISIZ_KIRILIM",
 ]
 
-LOG_DIR = "/var/log/bist-bot"
+LOG_DIR = _resolve_app_path(os.getenv("LOG_DIR"), "/var/log/bist-bot")
 LOG_FILE = "bot.log"
-LOCAL_LOG_DIR = "./logs"
-DATA_DIR = "./bot_data"
+LOCAL_LOG_DIR = _resolve_app_path(os.getenv("LOCAL_LOG_DIR"), "logs")
+DATA_DIR = _resolve_app_path(os.getenv("DATA_DIR"), "bot_data")
+
+_LOG_LEVELS = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
+_LOG_LEVEL_ENV = (os.getenv("LOG_LEVEL", "INFO") or "INFO").strip().upper()
+LOG_LEVEL = _LOG_LEVEL_ENV if _LOG_LEVEL_ENV in _LOG_LEVELS else "INFO"
+ALLOW_TRUSTED_PICKLE_CACHE = (
+    (os.getenv("ALLOW_TRUSTED_PICKLE_CACHE", "0") or "0").strip().lower()
+    in {"1", "true", "yes", "on"}
+)

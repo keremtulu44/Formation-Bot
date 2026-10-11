@@ -1,7 +1,8 @@
-"""Aşama 3 — Hafta sonu / resmî tatil davranış matrisi (davranışı BELİRLEYEN testler).
+"""Aşama 3 — Hafta sonu / configured-calendar davranış matrisi.
 
-Bu dosya YENİ politika kodlamaz; mevcut davranışı gerçek fonksiyonlarla kilitler
-ve hafta sonu risklerini kanıtlar. Politika kararı kullanıcıya raporla bırakıldı
+Bu dosya statik config kayıtlarının fonksiyonlara nasıl uygulandığını kilitler;
+resmî BIST takviminin doğruluğunu bağımsız olarak kanıtlamaz. Politika kararı
+kullanıcıya raporla bırakıldı
 (ASAMA4_CANLIYA_HAZIRLIK_PLANI.md). Senaryo → kanıt eşlemesi raporun Aşama 4
 bölümündedir; main_loop içi inline zamanlayıcı koşulları refactor gerektirmedikçe
 KOD kanıtıyla (satır referansı) belgelenir.
@@ -16,7 +17,9 @@ import config
 import main as main_module
 from data import (
     bist_tatil_adi,
+    is_bist_open,
     seans_kapanis_saati,
+    time_until_next_open,
     son_kapanan_mum_ani,
     tarama_animi_mi,
     tarama_penceresi_acik_mi,
@@ -37,11 +40,11 @@ from test_live_data_flow import (
 IST = config.ISTANBUL_TZ
 CUMARTESI = IST.localize(datetime(2026, 10, 10, 12, 35))   # 2026-10-10 Cumartesi
 PAZAR = IST.localize(datetime(2026, 10, 11, 12, 35))       # 2026-10-11 Pazar
-TATIL = IST.localize(datetime(2026, 10, 29, 12, 35))       # Cumhuriyet Bayramı (Perşembe)
-YARIM_GUN = IST.localize(datetime(2026, 10, 28, 12, 35))   # arefe, seans 13:00'te kapanır
+TATIL = IST.localize(datetime(2026, 10, 29, 12, 35))       # config'te tatil kaydı bulunan tarih
+YARIM_GUN = IST.localize(datetime(2026, 10, 28, 12, 35))   # config'te 13:00 kapanışlı kayıt
 YARIM_GUN_SONRASI = IST.localize(datetime(2026, 10, 28, 14, 35))
 NORMAL_GUN = IST.localize(datetime(2026, 10, 8, 12, 35))   # Perşembe, seans içi
-CUMA = IST.localize(datetime(2026, 10, 9, 17, 45))         # son mum 17:30, 18:30'da kapanır
+CUMA = IST.localize(datetime(2026, 10, 9, 17, 45))         # configured normal-day schedule
 
 
 def test_normal_islem_gunu_pencere_acik_ve_tarama_ani_hesaplanir():
@@ -61,14 +64,59 @@ def test_cumartesi_pazar_tarama_ve_veri_yok_modu_kapali():
         assert veri_yok_modu_acik_mi(hafta_sonu, 30 * 60) is False
 
 
-def test_resmi_tatil_ve_yarim_gun_penceresi():
-    """Senaryo 4-5: resmî tatilde tarama yok; yarım gün penceresi 13:00 kapanış +
-    5 dk tarama gecikmesi + pay ile kapanır (TARAMA_PENCERE_SONU yarım güne uyarlanır)."""
+def test_configured_tatil_ve_yarim_gun_penceresi():
+    """Senaryo 4-5: configured holiday closes scanning; configured half-day uses 13:00.
+
+    This asserts code behavior for static entries, not their official calendar accuracy.
+    """
     assert bist_tatil_adi(TATIL) == "Cumhuriyet Bayramı"
     assert tarama_penceresi_acik_mi(TATIL) is False
     assert seans_kapanis_saati(YARIM_GUN) == time(13, 0)
     assert tarama_penceresi_acik_mi(YARIM_GUN) is True            # 12:35 → hâlâ açık
     assert tarama_penceresi_acik_mi(YARIM_GUN_SONRASI) is False   # 14:35 → kapandı
+
+
+def test_market_open_holiday_weekend_and_half_day_edges():
+    normal_open = IST.localize(datetime(2026, 10, 8, 9, 50))
+    normal_closed = IST.localize(datetime(2026, 10, 8, 18, 11))
+    assert is_bist_open(normal_open) is True
+    assert is_bist_open(normal_closed) is False
+    assert is_bist_open(TATIL) is False
+    assert is_bist_open(CUMARTESI) is False
+    assert is_bist_open(IST.localize(datetime(2026, 10, 28, 12, 59))) is True
+    assert is_bist_open(IST.localize(datetime(2026, 10, 28, 13, 1))) is False
+
+
+def test_half_day_first_scan_waits_for_configured_first_close():
+    before_first_close = IST.localize(datetime(2026, 10, 28, 9, 50))
+    before_first_scan = IST.localize(datetime(2026, 10, 28, 10, 34))
+    first_scan = IST.localize(datetime(2026, 10, 28, 10, 35))
+
+    assert son_kapanan_mum_ani(before_first_close) is None
+    assert tarama_animi_mi(before_first_close, None) is False
+    assert son_kapanan_mum_ani(before_first_scan) == IST.localize(
+        datetime(2026, 10, 28, 10, 30)
+    )
+    assert tarama_animi_mi(before_first_scan, None) is False
+    assert son_kapanan_mum_ani(first_scan) == IST.localize(datetime(2026, 10, 28, 10, 30))
+    assert tarama_animi_mi(first_scan, None) is True
+
+
+def test_next_open_skips_weekend_holiday_and_uses_today_before_open():
+    before_open = IST.localize(datetime(2026, 10, 8, 9, 0))
+    assert time_until_next_open(before_open) == pytest.approx(50 * 60)
+
+    after_half_day_close = IST.localize(datetime(2026, 10, 28, 14, 0))
+    friday_open = IST.localize(datetime(2026, 10, 30, 9, 50))
+    assert time_until_next_open(after_half_day_close) == pytest.approx(
+        (friday_open - after_half_day_close).total_seconds()
+    )
+
+    friday_after_close = IST.localize(datetime(2026, 10, 9, 18, 11))
+    monday_open = IST.localize(datetime(2026, 10, 12, 9, 50))
+    assert time_until_next_open(friday_after_close) == pytest.approx(
+        (monday_open - friday_after_close).total_seconds()
+    )
 
 
 def test_pazar_gecisi_watch_bufferi_gun_degisimiyle_temizlenir():
@@ -110,9 +158,9 @@ def test_cuma_formasyonu_hafta_sonu_ozetinde_guncel_gibi_gorunur():
             }]
 
     live_state = CumartesiState()
-    sifirla_daily_stats(__import__("pytest").MonkeyPatch())  # daily_stats izolesi
     pytest_monkey = pytest.MonkeyPatch()
     try:
+        sifirla_daily_stats(pytest_monkey)  # Aynı test patch'iyle izole et ve geri al.
         temel_monkeypatch(pytest_monkey, live_state, [], lambda s, p: None)
         lifecycle = PatternLifecycleManager(profile=config.PROFILE)
         eski_live_state = main_module._live_state
@@ -127,7 +175,7 @@ def test_cuma_formasyonu_hafta_sonu_ozetinde_guncel_gibi_gorunur():
         pytest_monkey.undo()
 
 
-def test_post_close_zamanlayici_guardi_yok_kod_duzeysinde():
+def test_post_close_zamanlayici_guardi_yok_kod_duzeysinde(tmp_path):
     """Senaryo 6 (KOD kanıtı): 20:00 post-close bloğu main_loop içinde yalnızca
     'now.time() >= post_close_analysis_time' koşuluna bakar; weekday/tatil guard'ı
     yoktur (main.py: 'GÜN SONU TAM EVREN ANALİZİ' bloğu). scan_all_stocks'un kendisi
@@ -156,7 +204,7 @@ def test_post_close_zamanlayici_guardi_yok_kod_duzeysinde():
         temel_monkeypatch(pytest_monkey, live_state, [], sahte_1h)
         from test_live_data_flow import FakePacer
         from data import StockDequeManager
-        mgr = StockDequeManager(data_dir="/tmp/fb_takvim_postclose")
+        mgr = StockDequeManager(data_dir=str(tmp_path / "postclose-data"))
         result = main_module.scan_all_stocks(
             mgr, PatternLifecycleManager(profile=config.PROFILE), FakeNotifier(),
             send_alerts=False,

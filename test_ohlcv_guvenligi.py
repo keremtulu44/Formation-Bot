@@ -19,7 +19,12 @@ import pytest
 
 import config
 import main as main_module
-from data import ohlcv_girdi_sorunlari, tamamlanmis_mumlar, StockDequeManager
+from data import (
+    ohlcv_girdi_sorunlari,
+    tamamlanmis_mumlar,
+    StockDequeManager,
+    mock_fetch_60d_1h,
+)
 from patterns import PatternLifecycleManager
 
 from test_live_data_flow import (  # sahte scaffolding yeniden kullanılır
@@ -44,6 +49,11 @@ def bozuk_frame(degistirici):
     df = gecerli_frame()
     degistirici(df)
     return df
+
+
+def test_data_module_mock_fetch_produces_validator_safe_ohlcv():
+    """The standalone data.py smoke fixture must satisfy, not bypass, its gate."""
+    assert ohlcv_girdi_sorunlari(mock_fetch_60d_1h("SYNTHETIC", n_bars=55)) == []
 
 
 # ------------------------------------------------------- 1-12: validator matrisi
@@ -115,8 +125,8 @@ def test_10_negatif_hacim_reddedilir_sifir_hacim_gecerlidir():
     assert ohlcv_girdi_sorunlari(sifir) == []
 
 
-def test_11_duplicate_timestamp_kabul_idempotent():
-    mgr = StockDequeManager(data_dir="/tmp/fb_ohlcv_test11")
+def test_11_duplicate_timestamp_kabul_idempotent(tmp_path):
+    mgr = StockDequeManager(data_dir=str(tmp_path / "duplicate-cache"))
     df = gecerli_frame(60)
     assert mgr.append_dataframe("THYAO", df) is True
     ilk_uzunluk = len(mgr.to_dataframe("THYAO"))
@@ -129,8 +139,8 @@ def test_11_duplicate_timestamp_kabul_idempotent():
     assert float(birlesik["close"].iloc[-1]) == 999.0  # son yazan kazanır
 
 
-def test_12_sirasisiz_timestamp_kabul_siralanir():
-    mgr = StockDequeManager(data_dir="/tmp/fb_ohlcv_test12")
+def test_12_sirasisiz_timestamp_kabul_siralanir(tmp_path):
+    mgr = StockDequeManager(data_dir=str(tmp_path / "unsorted-cache"))
     df = gecerli_frame(60).sort_index(ascending=False)  # ters sıralı gelir
     assert ohlcv_girdi_sorunlari(df) == []
     assert mgr.append_dataframe("THYAO", df) is True
@@ -138,12 +148,12 @@ def test_12_sirasisiz_timestamp_kabul_siralanir():
     assert idx.is_monotonic_increasing
 
 
-def test_13_kapanmamis_mum_kapidan_gecer_analizden_elernir():
+def test_13_kapanmamis_mum_kapidan_gecer_analizden_elernir(tmp_path):
     """Tek kapı ilkesi: append tamlık kontrolü yapmaz; analiz katmanı eler."""
     simdi = datetime.now(IST)
     df = gecerli_frame(55, end=simdi - timedelta(minutes=10))  # son mum henüz kapanmadı
     assert ohlcv_girdi_sorunlari(df) == []                     # kapı reddetmez
-    mgr = StockDequeManager(data_dir="/tmp/fb_ohlcv_test13")
+    mgr = StockDequeManager(data_dir=str(tmp_path / "partial-cache"))
     mgr.append_dataframe("THYAO", df)
     ham = mgr.to_dataframe("THYAO")
     tam = tamamlanmis_mumlar(ham, "1h", simdi)
