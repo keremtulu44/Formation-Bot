@@ -21,6 +21,7 @@ from .fvg import (
     FvgEngulfingDataQuality,
     FvgEngulfingEngine,
     SensitivityProfile,
+    minimum_history_bars_for_timeframe,
 )
 from .incremental import IncrementalDecision, IncrementalEngineState
 from .market_structure import MarketStructureConfig, MarketStructureEngine
@@ -224,10 +225,11 @@ def _run_fvg(
 
     if data_quality is FvgEngulfingDataQuality.WARMUP:
         logger.info(
-            "FVG warm-up for %s/%s: bars=%d minimum_history=100",
+            "FVG warm-up for %s/%s: bars=%d minimum_history=%d",
             symbol,
             timeframe,
             len(frame),
+            minimum_history_bars_for_timeframe(timeframe),
         )
     elif data_quality is not FvgEngulfingDataQuality.OK:
         logger.info(
@@ -301,6 +303,7 @@ def _run_domain_engines_locked(
     frame: pd.DataFrame,
     *,
     profile: str = "Dengeli",
+    enable_2h_fvg: bool = False,
 ) -> dict[str, DomainRunResult]:
     """Run each applicable domain independently on one symbol/timeframe.
 
@@ -308,7 +311,8 @@ def _run_domain_engines_locked(
     isolated in-memory cursors per symbol/timeframe and use safe updates only
     when their current native frame alignment is verified; otherwise they replay
     the supplied frame. The caller remains responsible for completed bars; this
-    function never fetches data or resamples it.
+    function never fetches data or resamples it. 2H FVG is experimental and
+    skipped by default; offline/replay callers must opt in explicitly.
     """
     tf = str(timeframe).strip().lower()
     if tf not in ALL_DOMAIN_TIMEFRAMES:
@@ -332,7 +336,8 @@ def _run_domain_engines_locked(
         lambda: _run_volume(symbol, tf, domain_frame.copy(deep=True)),
     )
 
-    if tf in FVG_TIMEFRAMES:
+    fvg_enabled = tf in FVG_TIMEFRAMES and (tf != "2h" or enable_2h_fvg)
+    if fvg_enabled:
         output["fvg"] = _execute_domain(
             "fvg",
             symbol,
@@ -340,13 +345,18 @@ def _run_domain_engines_locked(
             lambda: _run_fvg(symbol, tf, domain_frame.copy(deep=True), profile),
         )
     else:
-        logger.debug("FVG skipped for unsupported timeframe %s/%s", symbol, tf)
+        reason = (
+            "2h FVG requires explicit offline/replay opt-in"
+            if tf == "2h" and not enable_2h_fvg
+            else "source supports only 2h, 4h, and 1d"
+        )
+        logger.debug("FVG skipped for %s/%s: %s", symbol, tf, reason)
         output["fvg"] = DomainRunResult(
             domain="fvg",
             symbol=symbol,
             timeframe=tf,
             skipped=True,
-            reason="source supports only 2h, 4h, and 1d",
+            reason=reason,
         )
 
     output["order_block"] = _execute_domain(
@@ -368,8 +378,9 @@ def run_domain_engines(
     frame: pd.DataFrame,
     *,
     profile: str = "Dengeli",
+    enable_2h_fvg: bool = False,
 ) -> dict[str, DomainRunResult]:
-    """Run all domains as one serialized update for a symbol/timeframe."""
+    """Run domains serially; keep experimental 2H FVG disabled unless opted in."""
     tf = str(timeframe).strip().lower()
     if tf not in ALL_DOMAIN_TIMEFRAMES:
         raise ValueError(f"unsupported Formation-Bot timeframe: {timeframe!r}")
@@ -377,7 +388,9 @@ def run_domain_engines(
     with _state_registry_lock:
         series_lock = _series_state_locks.setdefault(key, threading.RLock())
     with series_lock:
-        return _run_domain_engines_locked(symbol, tf, frame, profile=profile)
+        return _run_domain_engines_locked(
+            symbol, tf, frame, profile=profile, enable_2h_fvg=enable_2h_fvg
+        )
 
 
 def get_latest_domain_results(

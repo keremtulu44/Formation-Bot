@@ -6,6 +6,7 @@ from .fvg_engulfing_models import (
     FvgEngulfingConfig,
     FvgEngulfingDataQuality,
     SensitivityProfile,
+    minimum_history_bars_for_timeframe,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "FvgEngulfingEngine",
     "FvgEngulfingExport",
     "SensitivityProfile",
+    "minimum_history_bars_for_timeframe",
 ]

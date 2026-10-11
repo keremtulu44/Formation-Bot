@@ -19,7 +19,6 @@ from .fvg_engulfing_engine import (
     LARGE_GAP_BREAK_ATR,
     LARGE_GAP_REAL_PROGRESS_FACTOR,
     LOCAL_CONTEXT_LENGTH,
-    MINIMUM_HISTORY_BARS,
     PREVIOUS_ZONE_LOWER_SHARE,
     PREVIOUS_ZONE_UPPER_SHARE,
     REJECTION_CONFLICT_MARGIN,
@@ -44,7 +43,7 @@ from .fvg_engulfing_final import (
     FvgEngulfingEngine as _FinalFvgEngulfingEngine,
     _LifecycleMetrics,
 )
-from .fvg_engulfing_models import FvgDirection
+from .fvg_engulfing_models import FvgDirection, minimum_history_bars_for_timeframe
 
 
 class FvgEngulfingEngine(_FinalFvgEngulfingEngine):
@@ -165,7 +164,7 @@ class FvgEngulfingEngine(_FinalFvgEngulfingEngine):
             flow_ready = valid_range(i - FLOW_LENGTH, i)
             local_ready = valid_range(i - LOCAL_CONTEXT_LENGTH, i - 1)
             compression_ready = valid_range(i - 5, i)
-            minimum_history_ready = i >= MINIMUM_HISTORY_BARS - 1
+            minimum_history_ready = i >= minimum_history_bars_for_timeframe(self.config.timeframe) - 1
             atr_ready = atr[i] is not None and prior_atr is not None
             previous_ready = i >= 1 and self._valid[i - 1]
             data_ready = minimum_history_ready and atr_ready and previous_ready and flow_ready and compression_ready and local_ready

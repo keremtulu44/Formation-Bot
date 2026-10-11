@@ -371,7 +371,7 @@ def test_production_runner_reuses_isolated_ob_fvg_state_and_falls_back_exactly()
     assert other_states["fvg"][1] is not fvg_state
     assert other_states["order_block"][1] is not ob_state
 
-    runner.run_domain_engines(symbol, "2h", initial_window)
+    runner.run_domain_engines(symbol, "2h", initial_window, enable_2h_fvg=True)
     timeframe_states = runner._incremental_states_by_series[(symbol, "2h")]
     assert timeframe_states["fvg"][1] is not fvg_state
     assert timeframe_states["order_block"][1] is not ob_state

@@ -12,7 +12,8 @@ TIMEFRAMES = ("1h", "2h", "4h", "1d")
 _TIMEFRAME_LABELS = {"1h": "1H", "2h": "2H", "4h": "4H", "1d": "1D"}
 # Used only for exact distance ties, never as a distance override.
 _TIMEFRAME_TIE_RANK = {"1h": 1, "2h": 2, "4h": 3, "1d": 4}
-_FVG_TIMEFRAMES = frozenset({"2h", "4h", "1d"})
+# 2H FVG remains an offline/replay experiment and is excluded from live DMs.
+_FVG_TIMEFRAMES = frozenset({"4h", "1d"})
 _FVG_STATES = frozenset({"ACTIVE", "FIRST_TEST", "PARTIAL_FILL", "DEEP_TEST", "FAILED_REACTION"})
 _EVENT_LABELS = {"EVENT_BOS": "BOS", "EVENT_CHOCH": "CHoCH"}
 _VOLUME_LABELS = {

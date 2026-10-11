@@ -147,7 +147,12 @@ def test_same_scan_context_selects_native_structure_volume_and_nearest_zones():
             "fvg": _fvg_output("2h", top=99.0, bottom=98.0),
             "order_block": _ob_output("2h", [_ob(107.0, 106.0)]),
         },
-        "4h": {"market_structure": _market_output("4h")},
+        "4h": {
+            "market_structure": _market_output("4h"),
+            # 4H FVG remains an allowed live context source; it is farther than
+            # the experimental 2H FVG and should win only when 2H is excluded.
+            "fvg": _fvg_output("4h", top=97.0, bottom=96.0),
+        },
         "1d": {
             "market_structure": _market_output("1d"),
             "order_block": _ob_output("1d", [_ob(116.0, 115.0)]),
@@ -167,7 +172,7 @@ def test_same_scan_context_selects_native_structure_volume_and_nearest_zones():
     assert context["volume"] == "Yüksek"
     assert context["nearby_zones"] == [
         "↑ 1H OB · 101.50–103.00",
-        "↓ 2H FVG · 98.00–99.00",
+        "↓ 4H FVG · 96.00–97.00",
     ]
 
     message = TelegramNotifier.__new__(TelegramNotifier).format_dm_message(
@@ -185,11 +190,25 @@ def test_same_scan_context_selects_native_structure_volume_and_nearest_zones():
         "Hacim: Yüksek",
         "Yakın bölgeler",
         "↑ 1H OB · 101.50–103.00",
-        "↓ 2H FVG · 98.00–99.00",
+        "↓ 4H FVG · 96.00–97.00",
     ):
         assert expected in message
-    assert "98.00–99.00" in message
+    assert "98.00–99.00" not in message
+    assert "2H FVG" not in message
     assert "1H FVG" not in message
+
+
+def test_live_dm_context_does_not_show_2h_fvg_even_if_result_is_supplied():
+    context = build_formation_dm_context(
+        {"2h": {"fvg": _fvg_output("2h", top=99.0, bottom=98.0)}},
+        {"2h": AS_OF},
+        symbol="THYAO",
+        formation_timeframe="2h",
+        reference_price=100.0,
+        scan_as_of=AS_OF,
+    )
+
+    assert "nearby_zones" not in context
 
 
 def test_zone_labels_hide_binary_float_noise_without_mutating_native_bounds():
@@ -492,7 +511,7 @@ def test_dm_length_is_compact_relative_to_legacy_formation_message():
         dm_context={
             "structure": "1H BOS ↑ · 2H BOS ↑ · 4H — · 1D CHoCH ↓",
             "volume": "Yüksek",
-            "nearby_zones": ["↑ 1D OB · 101.50–103.00", "↓ 2H FVG · 98.00–99.00"],
+            "nearby_zones": ["↑ 1D OB · 101.50–103.00", "↓ 4H FVG · 96.00–97.00"],
         }
     )
     old_message = notifier.format_message({key: value for key, value in data.items() if key != "dm_context"})

@@ -14,6 +14,10 @@ from domain_engines.fvg import (
     FvgEngulfingEngine,
     FvgEngulfingExport,
     SensitivityProfile,
+    minimum_history_bars_for_timeframe,
+)
+from domain_engines.fvg.fvg_engulfing_engine import (
+    FvgEngulfingEngine as DetectorFvgEngulfingEngine,
 )
 from domain_engines.market_structure import MarketStructureEngine
 from domain_engines.order_block import OrderBlockEngine, OrderBlockExport
@@ -155,6 +159,46 @@ def test_fvg_source_config_accepts_only_supported_timeframes(timeframe):
     assert config.timeframe == timeframe
 
 
+@pytest.mark.parametrize(
+    ("timeframe", "minimum"),
+    [("2h", 100), ("4h", 100), ("1d", 40)],
+)
+def test_fvg_minimum_history_is_timeframe_specific(timeframe, minimum):
+    assert minimum_history_bars_for_timeframe(timeframe) == minimum
+
+
+@pytest.mark.parametrize(
+    "engine_class",
+    [FvgEngulfingEngine, DetectorFvgEngulfingEngine],
+)
+@pytest.mark.parametrize(
+    ("timeframe", "below_minimum", "at_minimum"),
+    [("2h", 99, 100), ("4h", 99, 100), ("1d", 39, 40)],
+)
+def test_fvg_warmup_boundary_uses_daily_40_and_keeps_other_timeframes_at_100(
+    engine_class, timeframe, below_minimum, at_minimum
+):
+    def daily_or_timeframe_frame(count):
+        frame = _ohlcv_frame(count)
+        freq = {"1d": "B", "2h": "2h", "4h": "4h"}[timeframe]
+        frame.index = pd.date_range(
+            "2025-01-02 09:30",
+            periods=count,
+            freq=freq,
+            tz="Europe/Istanbul",
+            name="timestamp",
+        )
+        return to_domain_frame(frame)
+
+    short_engine = engine_class(FvgEngulfingConfig(timeframe=timeframe))
+    short_engine.replay(daily_or_timeframe_frame(below_minimum))
+    assert short_engine.last_data_quality is FvgEngulfingDataQuality.WARMUP
+
+    ready_engine = engine_class(FvgEngulfingConfig(timeframe=timeframe))
+    ready_engine.replay(daily_or_timeframe_frame(at_minimum))
+    assert ready_engine.last_data_quality is FvgEngulfingDataQuality.OK
+
+
 def test_fvg_rejects_1h_and_public_fvg_engulfing_chain_runs():
     with pytest.raises(ValueError, match="only 2h, 4h, or 1d"):
         FvgEngulfingConfig(timeframe="1h")
@@ -218,7 +262,7 @@ def test_runner_gives_each_domain_an_independent_copy_of_the_same_bars(monkeypat
     monkeypatch.setattr(runner, "_run_fvg", stub("fvg"))
     monkeypatch.setattr(runner, "_run_order_block", stub("order_block"))
 
-    outputs = runner.run_domain_engines("TEST", "2h", source)
+    outputs = runner.run_domain_engines("TEST", "2h", source, enable_2h_fvg=True)
 
     assert all(output.error is None for output in outputs.values())
     assert len({id(frame) for frame in received.values()}) == 4
@@ -226,6 +270,32 @@ def test_runner_gives_each_domain_an_independent_copy_of_the_same_bars(monkeypat
     pd.testing.assert_frame_equal(received["fvg"], original)
     pd.testing.assert_frame_equal(received["order_block"], original)
     assert source["open"].tolist() == _ohlcv_frame(180)["open"].tolist()
+
+
+def test_2h_fvg_is_skipped_by_default_and_requires_replay_opt_in(monkeypatch):
+    import domain_engines.runner as runner
+
+    fvg_calls = []
+
+    def fake_fvg(symbol, timeframe, frame, profile):
+        fvg_calls.append((symbol, timeframe, frame.copy(), profile))
+        return DomainRunResult(domain="fvg", symbol=symbol, timeframe=timeframe)
+
+    monkeypatch.setattr(runner, "_run_fvg", fake_fvg)
+    frame = _ohlcv_frame(180)
+
+    live_outputs = runner.run_domain_engines("LIVE_TEST", "2h", frame)
+    assert live_outputs["fvg"].skipped is True
+    assert live_outputs["fvg"].reason == "2h FVG requires explicit offline/replay opt-in"
+    assert fvg_calls == []
+
+    replay_outputs = runner.run_domain_engines(
+        "REPLAY_TEST", "2h", frame, enable_2h_fvg=True
+    )
+    assert replay_outputs["fvg"].skipped is False
+    assert [(symbol, timeframe) for symbol, timeframe, *_ in fvg_calls] == [
+        ("REPLAY_TEST", "2h")
+    ]
 
 
 def test_main_domain_hook_isolates_timeframes(monkeypatch):

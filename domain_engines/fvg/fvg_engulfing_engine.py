@@ -23,8 +23,8 @@ from .fvg_engulfing_models import (
     EngulfingDirection,
     EngulfingState,
     LOCAL_CONTEXT_LENGTH,
-    MINIMUM_HISTORY_BARS,
     SensitivityProfile,
+    minimum_history_bars_for_timeframe,
 )
 from .models import Direction, EngineResult
 
@@ -446,7 +446,7 @@ class FvgEngulfingEngine:
             flow_ready = valid_range(i - FLOW_LENGTH, i)
             local_ready = valid_range(i - LOCAL_CONTEXT_LENGTH, i - 1)
             compression_ready = valid_range(i - 5, i)
-            minimum_history_ready = i >= MINIMUM_HISTORY_BARS - 1
+            minimum_history_ready = i >= minimum_history_bars_for_timeframe(self.config.timeframe) - 1
             atr_ready = atr[i] is not None and prior_atr is not None
             previous_ready = i >= 1 and self._valid[i - 1]
             data_ready = minimum_history_ready and atr_ready and previous_ready and flow_ready and compression_ready and local_ready

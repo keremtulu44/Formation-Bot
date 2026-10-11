@@ -60,7 +60,15 @@ SUPPORTED_TIMEFRAMES = frozenset({"2h", "4h", "1d"})
 ATR_LENGTH = 14
 FLOW_LENGTH = 4
 LOCAL_CONTEXT_LENGTH = 4
+# Keep the existing 100-bar gate for 2h/4h; the available daily cache is only
+# 40 bars, which is still above the detector's ATR/context lookback needs.
 MINIMUM_HISTORY_BARS = 100
+DAILY_MINIMUM_HISTORY_BARS = 40
+
+
+def minimum_history_bars_for_timeframe(timeframe: str) -> int:
+    """Return the native warm-up gate without changing any formation criteria."""
+    return DAILY_MINIMUM_HISTORY_BARS if timeframe.lower() == "1d" else MINIMUM_HISTORY_BARS
 
 SAFE_DENOMINATOR_FLOOR = 1e-10
 FVG_CANDIDATE_SIZE_FACTOR = 0.70
