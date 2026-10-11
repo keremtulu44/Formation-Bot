@@ -15,7 +15,7 @@ import threading
 from datetime import datetime, timedelta, time as dt_time
 
 import pandas as pd
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
 import pytz
 
 try:
@@ -1723,7 +1723,11 @@ def _telegram_yanit_oku(yanit):
         govde = yanit.json() or {}
     except Exception:
         govde = {}
-    ok = kod == 200 and bool(govde.get("ok"))
+    if not isinstance(govde, dict):
+        govde = {}
+    # setWebhook/deleteWebhook boolean `result` döndürür; HTTP 200 ve `ok`
+    # true olsa bile açıkça true olmayan bir result onay sayılmaz.
+    ok = kod == 200 and govde.get("ok") is True and govde.get("result") is True
     aciklama = str(govde.get("description") or "").strip() or f"HTTP {kod}"
     return ok, aciklama
 
@@ -1731,9 +1735,9 @@ def _telegram_yanit_oku(yanit):
 def _telegram_set_webhook(url=None, secret=None, token=None) -> bool:
     """setWebhook: komutlar Telegram → `/webhook/<secret>` ile gelsin.
 
-    - `drop_pending_updates=True`: bot kapalıyken biriken BAYAT komutlar (örn. dünkü
-      /tara) webhook kurulur kurulmaz çalışmasın. Yoklama modundaki "backlog atla"
-      kuralının (telegram_commands.BACKLOG_SINIR_SN) webhook karşılığıdır.
+    - `drop_pending_updates=True`: Telegram başarıyla onayladığında o anda bekleyen TÜM
+      güncellemeleri (taze komutlar dahil) bilerek atar; yalnızca onaydan sonra gelenler işlenir.
+      Polling moduna geçişteki deleteWebhook ile aynı başlangıç politikasını uygular.
     - `secret_token`: Telegram her istekte `X-Telegram-Bot-Api-Secret-Token`
       başlığını gönderir; health_server bu başlığı da doğrular (yol sırrına ek katman).
     """
@@ -1774,12 +1778,18 @@ def _telegram_set_webhook(url=None, secret=None, token=None) -> bool:
     return ok
 
 
+TELEGRAM_DELETE_WEBHOOK_MAX_ATTEMPTS = 5
+TELEGRAM_DELETE_WEBHOOK_RETRY_BASE_SECONDS = 1.0
+TELEGRAM_DELETE_WEBHOOK_RETRY_MAX_SECONDS = 8.0
+
+
 def _telegram_delete_webhook(token=None) -> bool:
-    """deleteWebhook: yoklama moduna dönmeden önce eski webhook kaydını siler.
+    """deleteWebhook: yalnızca Telegram onayını doğrulayınca True döndürür.
 
     Neden gerekli: webhook kurulu bir token'da `getUpdates` 409 Conflict alır, yani
     mod değişince (secret silindi / yerelde yoklama) eski kayıt kalırsa komutlar
-    sessizce çalışmaz. `drop_pending_updates=True` ile bayat güncellemeler de temizlenir.
+    sessizce çalışmaz. `drop_pending_updates=True` bekleyen tüm güncellemeleri
+    (taze görünenler dahil) bilerek atar; yalnızca başarılı yanıt sonrasında gelenler işlenir.
     """
     token = _telegram_token_al(token)
     if not token:
@@ -1797,8 +1807,28 @@ def _telegram_delete_webhook(token=None) -> bool:
     if ok:
         logger.info("Telegram webhook kaldirildi (%s)", aciklama)
     else:
-        logger.warning("Telegram webhook kaldirilamadi: %s", aciklama)
+        logger.warning("Telegram webhook kaldirilamadi veya API silmeyi onaylamadi: %s", aciklama)
     return ok
+
+
+def _telegram_delete_webhook_yeniden_dene(token=None) -> bool:
+    """Bounded exponential retry; a listener may start only after confirmed deletion."""
+    bekleme = TELEGRAM_DELETE_WEBHOOK_RETRY_BASE_SECONDS
+    for attempt in range(1, TELEGRAM_DELETE_WEBHOOK_MAX_ATTEMPTS + 1):
+        if _telegram_delete_webhook(token=token):
+            return True
+        if attempt < TELEGRAM_DELETE_WEBHOOK_MAX_ATTEMPTS:
+            logger.warning(
+                "Telegram pending update temizliği başarısız (%s/%s); %.0f sn sonra yeniden denenecek",
+                attempt, TELEGRAM_DELETE_WEBHOOK_MAX_ATTEMPTS, bekleme,
+            )
+            time.sleep(bekleme)
+            bekleme = min(bekleme * 2, TELEGRAM_DELETE_WEBHOOK_RETRY_MAX_SECONDS)
+    logger.error(
+        "Telegram pending update temizliği %s denemede doğrulanamadı; polling başlatılmayacak",
+        TELEGRAM_DELETE_WEBHOOK_MAX_ATTEMPTS,
+    )
+    return False
 
 
 def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
@@ -1808,9 +1838,9 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
       başarılı. Güncellemeler `/webhook/<secret>` ucundan gelir; yoklama thread'i
       AÇILMAZ (aynı token'da getUpdates 409 alır).
     - **yoklama**: eski davranış (getUpdates daemon thread). Webhook kapalıyken ya da
-      setWebhook başarısız olduğunda komutlar tamamen susmasın diye buraya düşülür;
-      önce eski webhook kaydı silinir (yoksa 409).
-    - **kapali**: token/chat_id yok - bot yalnızca alarm gönderir.
+      setWebhook başarısız olduğunda buraya düşülür; eski webhook ve pending update'ler
+      doğrulanarak silinmeden polling listener'ı başlatılmaz (yoksa 409/eski komut riski).
+    - **kapali**: token/chat_id yok veya pending cleanup doğrulanamadı; komut listener'ı kapalı kalır.
 
     `isleyici` yalnızca testler için verilir (ağa çıkmayan sahte dinleyici).
     """
@@ -1848,8 +1878,12 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
             return "webhook"
         else:
             logger.warning("Webhook kurulamadi - yoklama moduna donuluyor")
-    # Yoklama moduna dönerken eski webhook kaydı kalırsa getUpdates 409 alır.
-    _telegram_delete_webhook(token=notifier.token)
+    # Yoklama moduna geçişteki drop_pending_updates=True çağrısı başarıyla
+    # doğrulanmadan polling açılmaz; aksi halde eski pending update'ler çalışabilir.
+    _telegram_update_processor_ref = None
+    if not _telegram_delete_webhook_yeniden_dene(token=notifier.token):
+        logger.error("Telegram polling fail-closed: pending update temizliği doğrulanamadı")
+        return "kapali"
     if isleyici.start():
         _telegram_listener_ref = isleyici
         logger.info(
@@ -1898,15 +1932,18 @@ def _istek_tam_evrende_tamamlandi(result: dict, evren_boyutu: int = None) -> boo
     )
 
 
-def _calistir_istek_taramasi(deque_manager, lifecycle_manager, notifier) -> bool:
-    """Kuyruktaki kullanıcı isteğini seans saatinden bağımsız çalıştır."""
+def _calistir_istek_taramasi(
+    deque_manager, lifecycle_manager, notifier,
+) -> Tuple[bool, Optional[datetime]]:
+    """Çalıştırılan isteği ve başlangıçta due olan checkpoint'i döndür."""
     global _scan_job_request
     with _scan_request_lock:
         request = _scan_job_request
         _scan_istegi.clear()
     if not request:
         _scan_job_active.clear()
-        return False
+        return False, None
+    scheduled_checkpoint = None
     try:
         requested_stocks = request.get("hisseler") or ACTIVE_STOCKS
         current_time = datetime.now(ISTANBUL_TZ)
@@ -1930,7 +1967,7 @@ def _calistir_istek_taramasi(deque_manager, lifecycle_manager, notifier) -> bool
         logger.error("İstenen analiz çalışırken hata verdi: %s", exc, exc_info=True)
         result = _analiz_hatasi_kaydi(exc, len(request.get("hisseler") or []), "istenen analiz")
     _manuel_tarama_tamamla(request, result or {}, notifier)
-    return True
+    return True, scheduled_checkpoint
 
 
 def _bekle_veya_tarama(seconds: float) -> bool:
@@ -2791,6 +2828,105 @@ def _persisted_full_scan_checkpoint(now=None):
     return checkpoint
 
 
+# Scheduled full scans retry the same checkpoint with process-local bounded
+# exponential backoff. A different/new checkpoint is never held behind it.
+SCHEDULED_SCAN_RETRY_BASE_SECONDS = 60.0
+SCHEDULED_SCAN_RETRY_MAX_SECONDS = 15 * 60.0
+
+
+def _completed_scheduled_scan_checkpoint(stats, checkpoint, expected_stock_count):
+    """Return checkpoint only when stats prove the entire expected universe succeeded."""
+    if not isinstance(stats, dict) or checkpoint is None or stats.get("status") != "tamamlandi":
+        return None
+    try:
+        expected = int(expected_stock_count)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if expected <= 0:
+        return None
+    if (stats.get("requested") != expected or stats.get("processed") != expected
+            or stats.get("failed") != 0):
+        return None
+    return checkpoint
+
+
+def _scheduled_scan_retry_delay(failure_count):
+    """Bounded 60s, 120s, ... backoff for repeated failure of one checkpoint."""
+    try:
+        failures = max(1, int(failure_count))
+    except (TypeError, ValueError, OverflowError):
+        failures = 1
+    delay = SCHEDULED_SCAN_RETRY_BASE_SECONDS
+    for _ in range(failures - 1):
+        delay = min(delay * 2, SCHEDULED_SCAN_RETRY_MAX_SECONDS)
+        if delay >= SCHEDULED_SCAN_RETRY_MAX_SECONDS:
+            break
+    return delay
+
+
+def _scheduled_scan_retry_wait(checkpoint, retry_checkpoint, retry_at, now):
+    """Remaining process-local delay; a different checkpoint is immediately eligible."""
+    if retry_at is None or checkpoint != retry_checkpoint:
+        return 0.0
+    try:
+        return max(0.0, float(retry_at) - float(now))
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+
+
+class _ScheduledScanTransition(NamedTuple):
+    scan_result: object
+    completed_checkpoint: Optional[datetime]
+    retry_checkpoint: Optional[datetime]
+    retry_attempts: int
+    retry_at: Optional[float]
+    retry_delay: float
+
+
+def _execute_scheduled_scan_transition(
+    scan_callable: Callable[[], object], checkpoint, expected_stock_count: int,
+    retry_checkpoint, retry_attempts: int, retry_at: Optional[float],
+    monotonic: Callable[[], float] = time.monotonic,
+) -> _ScheduledScanTransition:
+    """Execute one scheduled scan and produce the exact checkpoint/retry state transition.
+
+    The main loop uses this same boundary, so return failures and raised exceptions
+    share one fail-closed checkpoint gate and one bounded retry policy.
+    """
+    try:
+        scan_result = scan_callable()
+    except Exception as exc:  # noqa: BLE001 - turn scan exceptions into retryable failure stats
+        scan_result = _analiz_hatasi_kaydi(
+            exc, expected_stock_count, "zamanlanmış tam tarama",
+        )
+
+    completed_checkpoint = _completed_scheduled_scan_checkpoint(
+        scan_result, checkpoint, expected_stock_count,
+    )
+    if completed_checkpoint is not None:
+        return _ScheduledScanTransition(
+            scan_result, completed_checkpoint, None, 0, None, 0.0,
+        )
+
+    if retry_checkpoint != checkpoint or retry_at is None:
+        retry_attempts = 0
+    retry_attempts += 1
+    retry_delay = _scheduled_scan_retry_delay(retry_attempts)
+    return _ScheduledScanTransition(
+        scan_result, None, checkpoint, retry_attempts,
+        float(monotonic()) + retry_delay, retry_delay,
+    )
+
+
+def _manual_scan_checkpoint_transition(
+    result, checkpoint, retry_checkpoint, retry_attempts: int, retry_at: Optional[float],
+):
+    """A successful full manual scan satisfies the checkpoint and clears process retry state."""
+    if checkpoint is None or not _istek_tam_evrende_tamamlandi(result):
+        return None, retry_checkpoint, retry_attempts, retry_at
+    return checkpoint, None, 0, None
+
+
 def _persisted_post_close_scan_completed(now=None, scan_time=None) -> bool:
     """Persisted success prevents duplicate post-close work after a process restart."""
     local_now = as_istanbul_datetime(now or datetime.now(ISTANBUL_TZ))
@@ -2830,9 +2966,23 @@ def _build_active_formations_for_summary(lifecycle_manager, min_quality: float =
         getter = getattr(_live_state, "formations", None)
         if not callable(getter):
             getter = getattr(_live_state, "get_formations", None)
-        formations = getter() if callable(getter) else []
-        # Eğer LiveState yoksa lifecycle_manager snapshots'tan topla
-        if not formations:
+        has_live_state_provider = callable(getter)
+        formations = getter() if has_live_state_provider else []
+        if has_live_state_provider:
+            # Boş liste de geçerli yayımlanmış sonuçtur; snapshot fallback'ini tetiklemez.
+            for f in formations or []:
+                if f.get('quality', 0) >= min_quality:
+                    aktif.append({
+                        'stock_name': f.get('stock'),
+                        'timeframe': f.get('timeframe'),
+                        'pattern_name': f.get('pattern_name'),
+                        'state': f.get('state'),
+                        'confidence_score': f.get('quality'),
+                        'contraction': None,
+                        'break_dir': f.get('break_dir', 0),
+                    })
+        else:
+            # Yalnızca LiveState sağlayıcısı yoksa lifecycle snapshot fallback'i kullan.
             for key, snap in getattr(lifecycle_manager, 'last_snapshots', {}).items():
                 if snap.active and snap.effective_quality and snap.effective_quality >= min_quality:
                     # stock_timeframe key'ini ayır
@@ -2847,18 +2997,6 @@ def _build_active_formations_for_summary(lifecycle_manager, min_quality: float =
                         'confidence_score': snap.effective_quality,
                         'contraction': getattr(snap.active, 'contraction', None),
                         'break_dir': snap.break_dir,
-                    })
-        else:
-            for f in formations:
-                if f.get('quality', 0) >= min_quality:
-                    aktif.append({
-                        'stock_name': f.get('stock'),
-                        'timeframe': f.get('timeframe'),
-                        'pattern_name': f.get('pattern_name'),
-                        'state': f.get('state'),
-                        'confidence_score': f.get('quality'),
-                        'contraction': None,
-                        'break_dir': f.get('break_dir', 0),
                     })
     except Exception as e:
         logger.debug(f"Özet için formasyon toplanamadı: {e}")
@@ -3078,6 +3216,9 @@ def main_loop():
     # Başarılı güncel tam tarama snapshot'ta varsa, restart sonrası aynı checkpoint'i
     # tekrar fetch etme; başarısız/eskimiş snapshot ise fail-closed şekilde tekrar dene.
     son_taranan_kapanis = _persisted_full_scan_checkpoint(datetime.now(ISTANBUL_TZ))
+    scheduled_retry_checkpoint = None
+    scheduled_retry_attempts = 0
+    scheduled_retry_at = None
     # Özet ve bakım takibi (bedava kalma için)
     summary_hours = _effective_summary_hours()
     deferred_alert_digest_time = _parse_deferred_alert_digest_time()
@@ -3097,13 +3238,19 @@ def main_loop():
             _apply_recovered_deliveries(notifier, now)
             # Kullanıcı isteği seans saatinden bağımsız olarak ilk fırsatta çalışır.
             if _scan_istegi.is_set():
-                if _calistir_istek_taramasi(deque_manager, lifecycle_manager, notifier):
-                    if _istek_tam_evrende_tamamlandi(last_run_stats):
-                        kapanis = son_kapanan_mum_ani(datetime.now(ISTANBUL_TZ))
-                        if kapanis is not None:
-                            # Manuel /panel aynı kapanış mumunu başarıyla hesapladı;
-                            # otomatik döngüde aynı tam evreni hemen tekrar tarama.
-                            son_taranan_kapanis = kapanis
+                manual_scan_ran, manual_scheduled_checkpoint = _calistir_istek_taramasi(
+                    deque_manager, lifecycle_manager, notifier,
+                )
+                if manual_scan_ran:
+                    (manual_checkpoint, scheduled_retry_checkpoint,
+                     scheduled_retry_attempts, scheduled_retry_at) = _manual_scan_checkpoint_transition(
+                        last_run_stats, manual_scheduled_checkpoint, scheduled_retry_checkpoint,
+                        scheduled_retry_attempts, scheduled_retry_at,
+                    )
+                    if manual_checkpoint is not None:
+                        # Manuel /panel aynı başlangıç checkpoint'ini başarıyla
+                        # hesapladı; otomatik döngüde o mumu tekrar tarama.
+                        son_taranan_kapanis = manual_checkpoint
                     deque_manager.save_all()
                     continue
             # --- GÜNLÜK ÖZET + ERTELENMİŞ ADAYLAR (akşam 18:45) ---
@@ -3243,24 +3390,63 @@ def main_loop():
                         logger.error("Takvim açık görünse de geçerli tarama checkpoint'i yok; tarama atlandı")
                         bekle = 300
                     else:
-                        logger.info(
-                            "TARAMA - %s (son tamamlanmış checkpoint %s, %s)",
-                            now.strftime("%H:%M:%S"), checkpoint.strftime("%H:%M"),
-                            session.reason,
+                        retry_wait = _scheduled_scan_retry_wait(
+                            checkpoint, scheduled_retry_checkpoint, scheduled_retry_at,
+                            time.monotonic(),
                         )
-                        _scan_job_active.set()
-                        try:
-                            scan_all_stocks(
-                                deque_manager, lifecycle_manager, notifier,
-                                manuel=False, stocks=ACTIVE_STOCKS, send_alerts=True,
-                                require_current_session=True, scheduled_checkpoint=checkpoint,
+                        if retry_wait > 0:
+                            bekle = min(retry_wait, 300)
+                            logger.info(
+                                "Checkpoint %s için başarısız tarama geri çekilmesi sürüyor; "
+                                "%.0f sn sonra yeniden denenecek",
+                                checkpoint.strftime("%H:%M"), retry_wait,
                             )
-                        finally:
-                            _scan_job_active.clear()
-                        son_taranan_kapanis = checkpoint
-                        deque_manager.save_all()
-                        time.sleep(5)  # aynı saniyede tekrar girmesin
-                        continue
+                        else:
+                            logger.info(
+                                "TARAMA - %s (son tamamlanmış checkpoint %s, %s)",
+                                now.strftime("%H:%M:%S"), checkpoint.strftime("%H:%M"),
+                                session.reason,
+                            )
+                            _scan_job_active.set()
+                            try:
+                                transition = _execute_scheduled_scan_transition(
+                                    scan_callable=lambda: scan_all_stocks(
+                                        deque_manager, lifecycle_manager, notifier,
+                                        manuel=False, stocks=ACTIVE_STOCKS, send_alerts=True,
+                                        require_current_session=True, scheduled_checkpoint=checkpoint,
+                                    ),
+                                    checkpoint=checkpoint,
+                                    expected_stock_count=len(ACTIVE_STOCKS),
+                                    retry_checkpoint=scheduled_retry_checkpoint,
+                                    retry_attempts=scheduled_retry_attempts,
+                                    retry_at=scheduled_retry_at,
+                                    monotonic=time.monotonic,
+                                )
+                            finally:
+                                _scan_job_active.clear()
+
+                            scan_result = transition.scan_result
+                            completed_checkpoint = transition.completed_checkpoint
+                            scheduled_retry_checkpoint = transition.retry_checkpoint
+                            scheduled_retry_attempts = transition.retry_attempts
+                            scheduled_retry_at = transition.retry_at
+                            if completed_checkpoint is not None:
+                                son_taranan_kapanis = completed_checkpoint
+                                deque_manager.save_all()
+                                time.sleep(5)  # aynı saniyede tekrar girmesin
+                                continue
+
+                            retry_delay = transition.retry_delay
+                            result_status = (
+                                scan_result.get("status") if isinstance(scan_result, dict) else None
+                            )
+                            logger.error(
+                                "Zamanlanmış tam tarama başarılı değil (status=%s); "
+                                "checkpoint %s tüketilmedi. %.0f sn sonra yeniden denenecek",
+                                result_status, checkpoint.strftime("%H:%M"), retry_delay,
+                            )
+                            deque_manager.save_all()
+                            bekle = retry_delay
                 else:
                     hedef = next_bist_scan_at(now)
                     bekle = max((hedef - now).total_seconds(), 30) if hedef else 300

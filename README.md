@@ -79,7 +79,11 @@ yalnızca `TELEGRAM_CHAT_ID`'den kabul edilir:
 Komutlar varsayılan olarak `getUpdates` uzun yoklamasıyla ayrı bir thread'de
 toplanır; aynı token'la ikinci bir kopya (Termux/PC) çalışıyorsa `409 Conflict`
 alır — o kopyayı kapatın, yoksa komutlar çalışmaz. Webhook modunda (`§4.6`)
-yoklama kapanır, çakışma olmaz. Detay: `RENDER_DEPLOY.md` §4.5.
+yoklama kapanır, çakışma olmaz. Başlangıç/mod geçişi API çağrısı başarıyla
+onaylandığında Telegram'da bekleyen tüm güncellemeler kasıtlı olarak atılır;
+yalnızca sonrasında gelenler işlenir. Polling'e geçişte Telegram silme onayı
+alınamazsa listener fail-closed kalır ve komutlar başlatılmaz. Detay:
+`RENDER_DEPLOY.md` §§4.5–4.6.
 
 Kurulumun neresinde takıldığını tek komutla görmek için:
 

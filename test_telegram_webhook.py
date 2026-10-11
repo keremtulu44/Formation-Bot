@@ -77,9 +77,11 @@ class SahteIsleyici:
 
     def __init__(self):
         self.basladi = False
+        self.start_calls = 0
         self.guncellemeler = []
 
     def start(self):
+        self.start_calls += 1
         self.basladi = True
         return True
 
@@ -180,13 +182,20 @@ def test_set_webhook_dogru_payload_gonderir(monkeypatch):
     assert payload["url"] == adres
     assert payload["secret_token"] == SECRET
     assert payload["allowed_updates"] == ["message"]
-    # Bayat komutlar (dünkü /tara) webhook kurulunca çalışmasın
+    # Bekleyen tüm update'ler (dünkü /tara dahil) webhook kurulumunda atılır.
     assert payload["drop_pending_updates"] is True
 
 
 def test_set_webhook_hatali_yanitta_false_doner(monkeypatch):
     monkeypatch.setattr(main_mod, "_telegram_api_cagri",
                         lambda *a, **k: SahteYanit(400, {"ok": False, "description": "Bad Request"}))
+    assert main_mod._telegram_set_webhook(url="https://x.onrender.com/webhook/s", secret="s",
+                                          token="111:AAA") is False
+
+    monkeypatch.setattr(
+        main_mod, "_telegram_api_cagri",
+        lambda *a, **k: SahteYanit(200, {"ok": True, "result": False, "description": "Not set"}),
+    )
     assert main_mod._telegram_set_webhook(url="https://x.onrender.com/webhook/s", secret="s",
                                           token="111:AAA") is False
 
@@ -221,6 +230,22 @@ def test_delete_webhook_payload_gonderir(monkeypatch):
     assert main_mod._telegram_delete_webhook(token="") is False
 
 
+def test_delete_webhook_olumsuz_api_yaniti_basarili_sayilmaz(monkeypatch):
+    yanitlar = iter([
+        SahteYanit(200, {"ok": False, "result": True, "description": "Rejected"}),
+        SahteYanit(200, {"ok": True, "result": False, "description": "Not removed"}),
+        SahteYanit(200, {"ok": True, "description": "Missing result"}),
+        SahteYanit(503, {"ok": True, "result": True, "description": "HTTP error"}),
+    ])
+    monkeypatch.setattr(
+        main_mod, "_telegram_api_cagri",
+        lambda *_args, **_kwargs: next(yanitlar),
+    )
+
+    for _ in range(4):
+        assert main_mod._telegram_delete_webhook(token="111:AAA") is False
+
+
 # --- mod seçimi: webhook VEYA yoklama ------------------------------------
 def test_komut_katmani_webhook_modunda_yoklamayi_kapatir(monkeypatch):
     monkeypatch.setattr(main_mod, "TELEGRAM_WEBHOOK_SECRET", SECRET)
@@ -230,17 +255,22 @@ def test_komut_katmani_webhook_modunda_yoklamayi_kapatir(monkeypatch):
     monkeypatch.setattr(main_mod, "_telegram_listener_ref", None)
     monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", None)
     cagrilar = []
+    delete_cagrilari = []
     monkeypatch.setattr(main_mod, "_telegram_set_webhook",
                         lambda url=None, secret=None, token=None: (
                             cagrilar.append((url, token)) or True))
+    monkeypatch.setattr(main_mod, "_telegram_delete_webhook",
+                        lambda token=None: delete_cagrilari.append(token) or False)
 
     isleyici = SahteIsleyici()
     mod = main_mod._telegram_komut_katmanini_kur(SahteNotifier(), isleyici)
 
     assert mod == "webhook"
     assert cagrilar == [(f"{RENDER_URL}{WEBHOOK_YOL_ONEK}{SECRET}", "111:AAA")]
+    assert delete_cagrilari == []
     assert main_mod._telegram_update_processor_ref is isleyici   # uç bu nesneyi kullanır
     assert isleyici.basladi is False                            # yoklama BAŞLAMAZ
+    assert isleyici.start_calls == 0
     assert main_mod._telegram_listener_ref is None
 
 
@@ -262,6 +292,89 @@ def test_komut_katmani_webhook_kurulamazsa_yoklamaya_duser(monkeypatch):
     assert isleyici.basladi is True
     assert silinenler == ["111:AAA"]        # eski webhook silindi (409 olmasın)
     assert main_mod._telegram_listener_ref is isleyici
+    assert isleyici.start_calls == 1
+
+
+def test_delete_webhook_gecici_hatadan_sonra_basariyla_pollingi_tek_kez_baslatir(monkeypatch):
+    monkeypatch.setattr(main_mod, "_telegram_webhook_url_olustur", lambda: "")
+    monkeypatch.setattr(main_mod, "_telegram_listener_ref", None)
+    monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", None)
+    beklemeler = []
+    monkeypatch.setattr(main_mod.time, "sleep", beklemeler.append)
+    api_cagrilari = []
+
+    def sahte_api(method, token, payload, timeout=15):
+        api_cagrilari.append((method, token, payload))
+        if len(api_cagrilari) == 1:
+            raise OSError("gecici ag hatasi")
+        return SahteYanit(200, {"ok": True, "result": True, "description": "Webhook was deleted"})
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", sahte_api)
+    isleyici = SahteIsleyici()
+
+    mod = main_mod._telegram_komut_katmanini_kur(SahteNotifier(), isleyici)
+
+    assert mod == "yoklama"
+    assert [call[0] for call in api_cagrilari] == ["deleteWebhook", "deleteWebhook"]
+    assert all(call[2]["drop_pending_updates"] is True for call in api_cagrilari)
+    assert beklemeler == [main_mod.TELEGRAM_DELETE_WEBHOOK_RETRY_BASE_SECONDS]
+    assert isleyici.start_calls == 1
+
+
+def test_delete_webhook_ok_false_sinira_kadar_tekrar_dener_ve_pollingi_acmaz(monkeypatch):
+    monkeypatch.setattr(main_mod, "_telegram_webhook_url_olustur", lambda: "")
+    monkeypatch.setattr(main_mod, "_telegram_listener_ref", None)
+    monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", None)
+    beklemeler = []
+    monkeypatch.setattr(main_mod.time, "sleep", beklemeler.append)
+    api_cagrilari = []
+
+    def sahte_api(method, token, payload, timeout=15):
+        api_cagrilari.append((method, token, payload))
+        return SahteYanit(200, {"ok": False, "result": True, "description": "Rejected"})
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", sahte_api)
+    isleyici = SahteIsleyici()
+
+    mod = main_mod._telegram_komut_katmanini_kur(SahteNotifier(), isleyici)
+
+    assert mod == "kapali"
+    assert len(api_cagrilari) == main_mod.TELEGRAM_DELETE_WEBHOOK_MAX_ATTEMPTS
+    assert beklemeler == [1.0, 2.0, 4.0, 8.0]
+    assert all(call[2]["drop_pending_updates"] is True for call in api_cagrilari)
+    assert isleyici.start_calls == 0
+    assert main_mod._telegram_listener_ref is None
+
+
+def test_webhook_fallback_pollinge_gecmeden_once_delete_basarisini_bekler(monkeypatch):
+    monkeypatch.setattr(main_mod, "TELEGRAM_WEBHOOK_SECRET", SECRET)
+    monkeypatch.setattr(main_mod, "TELEGRAM_WEBHOOK_URL", "")
+    monkeypatch.setattr(main_mod, "RENDER_EXTERNAL_URL", RENDER_URL)
+    monkeypatch.setattr(main_mod, "_health_server_ref", object())
+    monkeypatch.setattr(main_mod, "_telegram_listener_ref", None)
+    monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", None)
+    beklemeler = []
+    monkeypatch.setattr(main_mod.time, "sleep", beklemeler.append)
+    api_cagrilari = []
+
+    def sahte_api(method, token, payload, timeout=15):
+        api_cagrilari.append((method, token, payload))
+        if method == "setWebhook":
+            return SahteYanit(400, {"ok": False, "description": "Webhook unavailable"})
+        if len([call for call in api_cagrilari if call[0] == "deleteWebhook"]) == 1:
+            return SahteYanit(200, {"ok": False, "result": False, "description": "Transient"})
+        return SahteYanit(200, {"ok": True, "result": True, "description": "Webhook was deleted"})
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", sahte_api)
+    isleyici = SahteIsleyici()
+
+    mod = main_mod._telegram_komut_katmanini_kur(SahteNotifier(), isleyici)
+
+    assert mod == "yoklama"
+    assert [call[0] for call in api_cagrilari] == ["setWebhook", "deleteWebhook", "deleteWebhook"]
+    assert all(call[2]["drop_pending_updates"] is True for call in api_cagrilari)
+    assert beklemeler == [main_mod.TELEGRAM_DELETE_WEBHOOK_RETRY_BASE_SECONDS]
+    assert isleyici.start_calls == 1
 
 
 def test_komut_katmani_http_sunucusu_yoksa_yoklama(monkeypatch):
