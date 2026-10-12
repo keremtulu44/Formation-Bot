@@ -88,10 +88,15 @@ def f_breakout_strength(open_p: float, high_p: float, low_p: float, close_p: flo
     Döner: (strength, bodyScore, closeScore, penetrationScore, expansionScore, volumeScore)
     """
     candle_range = max(high_p - low_p, mintick)
+    # GÖREV 1: atr_value None / NaN koruması — crash önleme (matematik değişmeden)
+    if atr_value is None or (isinstance(atr_value, float) and math.isnan(atr_value)):
+        effective_atr = float(mintick) * 10.0 if mintick else float(mintick)
+    else:
+        effective_atr = float(atr_value)
     directional_body_ratio = (close_p - open_p) / candle_range if direction == 1 else (open_p - close_p) / candle_range
     close_location = (close_p - low_p) / candle_range if direction == 1 else (high_p - close_p) / candle_range
-    penetration_atr = ((close_p - boundary) if direction == 1 else (boundary - close_p)) / max(atr_value, mintick)
-    expansion_atr = candle_range / max(atr_value, mintick)
+    penetration_atr = ((close_p - boundary) if direction == 1 else (boundary - close_p)) / max(effective_atr, mintick)
+    expansion_atr = candle_range / max(effective_atr, mintick)
 
     volume_available = (volume is not None and not (volume_sma is None or math.isnan(volume_sma))
                         and volume > 0 and volume_sma > 0)

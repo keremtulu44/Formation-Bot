@@ -1,4 +1,7 @@
-import deploy_check as dc
+import json
+
+import deploy_check as dc  # noqa: F401 - eski testler bu adı kullanıyor
+import deploy_check as D
 from deploy_check import _anahtari_temizle, anahtar_turu, supabase_basliklari, _jwt_rolu
 
 
@@ -239,3 +242,174 @@ def test_kontrol_render_redacts_test_key_from_request_exception(monkeypatch, cap
     dc.kontrol_render("https://formation.invalid", test_key)
 
     assert test_key not in capsys.readouterr().out
+
+
+# --- Denetim B-4: heartbeat (canlılık) yardımcıları ---
+
+
+def test_store_onek_varsayilan_ve_kapali():
+    assert dc.store_onek("") == "formation-bot:"
+    assert dc.store_onek("  benim-ek:  ") == "benim-ek:"
+    for kapali in ("off", "none", "yok", "0", "OFF"):
+        assert dc.store_onek(kapali) == ""
+
+
+def test_heartbeat_seviyesi_esikleri():
+    assert dc.heartbeat_seviyesi(None)[0] == dc.WARN
+    assert dc.heartbeat_seviyesi(60)[0] == dc.OK
+    assert dc.heartbeat_seviyesi(5 * 3600)[0] == dc.WARN
+    assert dc.heartbeat_seviyesi(100 * 3600)[0] == dc.FAIL
+
+
+def test_heartbeat_seviyesi_metni_yas_icerir():
+    _, baslik_taze, _ = dc.heartbeat_seviyesi(120)
+    assert "2 dk" in baslik_taze
+    _, baslik_bayat, detay_bayat = dc.heartbeat_seviyesi(4 * 24 * 3600)
+    assert "bayat" in baslik_bayat.lower()
+    assert "Render" in detay_bayat
+
+
+# --- Public kanal hedefi (canlıya alma adımı) --------------------------------
+# NEDEN: public yayın DM'den bağımsız çalışır; hedef yanlış ya da bot yönetici
+# değilse bot çalışır ama kanala hiçbir şey düşmez. deploy_check bu adımı
+# doğrular (ağ çağrıları sahtelenir, gerçek Telegram isteği YOK).
+
+class _Yanit:
+    def __init__(self, payload=None, status_code=200):
+        self.status_code = status_code
+        self._payload = payload or {"ok": True}
+        self.text = json.dumps(self._payload)
+
+    def json(self):
+        return self._payload
+
+
+def _satirlari_tut(monkeypatch):
+    kayit = []
+    monkeypatch.setattr(D, "satir", lambda seviye, baslik, detay="": kayit.append((seviye, baslik)))
+    return kayit
+
+
+def test_public_hedef_yoksa_uyari(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    assert D.kontrol_public_hedef("123456789:AAAA", "", "12345") is False
+    assert kayit and kayit[0][0] == D.WARN and "Public kanal hedefi yok" in kayit[0][1]
+
+
+def test_token_yoksa_sessiz_atlanir(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    assert D.kontrol_public_hedef("", "@kanal") is False
+    assert kayit == []
+
+
+def test_kanal_yonetici_ve_izinliyse_hazir(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    cevaplar = [
+        _Yanit({"ok": True, "result": {"type": "channel", "title": "BIST Formasyon"}}),
+        _Yanit({"ok": True, "result": {"id": 42, "username": "bot"}}),
+        _Yanit({"ok": True, "result": {"status": "administrator", "can_post_messages": True}}),
+    ]
+    monkeypatch.setattr("requests.post", lambda *a, **k: cevaplar.pop(0))
+    assert D.kontrol_public_hedef("123456789:AAAA", "@bisthisseveri", "12345") is True
+    assert any("YÖNETİCİ" in b for _, b in kayit)
+
+
+def test_kanal_izin_kapaliysa_hata(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    cevaplar = [
+        _Yanit({"ok": True, "result": {"type": "channel", "title": "BIST Formasyon"}}),
+        _Yanit({"ok": True, "result": {"id": 42}}),
+        _Yanit({"ok": True, "result": {"status": "administrator", "can_post_messages": False}}),
+    ]
+    monkeypatch.setattr("requests.post", lambda *a, **k: cevaplar.pop(0))
+    assert D.kontrol_public_hedef("123456789:AAAA", "@bisthisseveri", "12345") is False
+    assert any(s == D.FAIL and "Mesaj gönderme" in b for s, b in kayit)
+
+
+def test_bot_hedefte_yoksa_hata(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    cevaplar = [
+        _Yanit({"ok": True, "result": {"type": "channel", "title": "Kanal"}}),
+        _Yanit({"ok": True, "result": {"id": 42}}),
+        _Yanit({"ok": True, "result": {"status": "left"}}),
+    ]
+    monkeypatch.setattr("requests.post", lambda *a, **k: cevaplar.pop(0))
+    assert D.kontrol_public_hedef("123456789:AAAA", "@kanal", "12345") is False
+    assert any(s == D.FAIL and "left" in b for s, b in kayit)
+
+
+def test_dm_yoksa_uyari(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    cevaplar = [
+        _Yanit({"ok": True, "result": {"type": "channel", "title": "Kanal"}}),
+        _Yanit({"ok": True, "result": {"id": 42}}),
+        _Yanit({"ok": True, "result": {"status": "administrator", "can_post_messages": True}}),
+    ]
+    monkeypatch.setattr("requests.post", lambda *a, **k: cevaplar.pop(0))
+    D.kontrol_public_hedef("123456789:AAAA", "@kanal", "")
+    assert any(s == D.WARN and "komutlar kapalı" in b for s, b in kayit)
+
+
+# --- Komut yolu (webhook ↔ yoklama) ------------------------------------------
+# NEDEN: "DM'den komut yazıyorum, cevap gelmiyor" şikâyetinde ilk bakılacak yer:
+# Telegram'da webhook kayıtlı mı, teslim hatası var mı, güncelleme birikmiş mi?
+
+
+def test_webhook_sir_gizle_eski_bicim_maskeler():
+    assert D._webhook_sir_gizle(
+        "https://x.onrender.com/webhook/s3cr3t-abc") == "https://x.onrender.com/webhook/***"
+    # Hata metni içinde geçen URL de maskelenir, metnin kalanı korunur.
+    gizli = D._webhook_sir_gizle("Wrong response from the webhook: https://x.onrender.com/webhook/s3cr3t\nmore")
+    assert "s3cr3t" not in gizli and "Wrong response" in gizli
+
+
+def test_webhook_kayitli_ama_yoklama_modunda_hata(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit(
+        {"ok": True, "result": {"url": "https://x.onrender.com/webhook"}}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=False)
+    assert any(s == D.FAIL and "yoklama modunda" in b for s, b in kayit)
+    assert not any(s == D.FAIL and "yoklama modunda" not in b for s, b in kayit)
+
+
+def test_webhook_yok_yoklama_modunda_bilgi(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit(
+        {"ok": True, "result": {"url": ""}}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=False)
+    assert any(s == D.OK and "yoklama" in b for s, b in kayit)
+    assert not any(s == D.FAIL for s, _ in kayit)
+
+
+def test_webhook_teslim_hatasi_yeni_ise_hata(monkeypatch):
+    import time as _t
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit({"ok": True, "result": {
+        "url": "https://x.onrender.com/webhook",
+        "last_error_message": "Wrong response from the webhook: 500",
+        "last_error_date": int(_t.time()) - 60,
+    }}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=True)
+    assert any(s == D.FAIL and "teslim hatası" in b for s, b in kayit)
+
+
+def test_webhook_teslim_hatasi_eski_ise_uyari(monkeypatch):
+    import time as _t
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit({"ok": True, "result": {
+        "url": "https://x.onrender.com/webhook",
+        "last_error_message": "Connection timed out",
+        "last_error_date": int(_t.time()) - 4 * 3600,
+    }}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=True)
+    assert any(s == D.WARN and "eski" in b for s, b in kayit)
+    assert not any(s == D.FAIL for s, _ in kayit)
+
+
+def test_bekleyen_guncelleme_uyarir(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit({"ok": True, "result": {
+        "url": "https://x.onrender.com/webhook", "pending_update_count": 7,
+    }}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=True)
+    assert any(s == D.WARN and "7" in b for s, b in kayit)

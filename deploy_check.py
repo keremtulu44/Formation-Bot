@@ -15,8 +15,12 @@ Ne yapar:
   2. Env: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (komutlar için gerekli),
      Supabase env'leri (opsiyonel) tanımlı mı? Değerleri ASLA yazdırmaz.
   3. Supabase varsa: tablo gerçekten var mı? (404 -> SQL çalıştırılmamış,
-     401/403 -> anahtar yanlış, 200 -> hazır); yoksa analiz yine çalışır.
-  4. Telegram: getMe ile token; istenirse gerçek test mesajı.
+     401/403 -> anahtar yanlış, 200 -> hazır) ve bot canlı mı (state:heartbeat
+     yaşı); yoksa analiz yine çalışır.
+  4. Telegram: getMe ile token; istenirse gerçek test mesajı. Ardından
+     getWebhookInfo ile KOMUT YOLU: webhook kayıtlı mı, teslim hatası
+     (`last_error_message`) var mı, bekleyen güncelleme birikmiş mi? —
+     "DM'den komut yazıyorum, cevap gelmiyor" sorusunun ilk bakılacak yeri.
   5. Render: https://<servis>.onrender.com/health ayakta mı; /test ucu açık mı.
 
 Çıkış kodu 0 = kritik hata yok, 1 = en az bir HATA var (uyarılar kodu bozmaz).
@@ -31,6 +35,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -240,9 +245,14 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("SUPABASE_URL", False, "İsteğe bağlı: Supabase → Settings → API → Project URL (sonda /rest/v1 OLMADAN)"),
         ("SUPABASE_SERVICE_ROLE_KEY", False, "İsteğe bağlı uzak cache/state için service_role JWT veya sb_secret_... anahtarı"),
         ("TELEGRAM_BOT_TOKEN", True, "@BotFather → /newbot → 'Use this token'"),
-        ("TELEGRAM_CHAT_ID", True, "@userinfobot'un verdiği Id (kendine mesaj için pozitif sayı)"),
+        ("TELEGRAM_CHAT_ID", True, "@userinfobot'un verdiği Id (kendine mesaj için pozitif sayı; KOMUTLAR buna bağlı)"),
+        ("TELEGRAM_GROUP_ID", False, "PUBLIC KANAL hedefi (@bisthisseveri veya -100…): kanal yayını bununla açılır (eski adı TELEGRAM_CHANNEL_ID)"),
+        ("TELEGRAM_WEBHOOK_SECRET", False, "İsteğe bağlı: webhook modunu açar (komutlar Telegram → /webhook ile gelir; uyuyan servisi Telegram uyandırır)"),
+        ("RENDER_EXTERNAL_URL", False, "Render otomatik verir (webhook adresi buradan üretilir); render.yaml'de tanımlıdır"),
         ("BOT_PROFILE", False, "Dengeli / Hassas / Seçici"),
         ("TELEGRAM_TEST_KEY", False, "İsteğe bağlı: /test ucunu açar (telefondan Telegram testi)"),
+        ("SUPABASE_STORE_PREFIX", False, "Varsayılan formation-bot: ; aynı tabloyu paylaşan 2. kopya için değiştirin"),
+        ("BOT_INSTANCE_ID", False, "Varsayılan hostname:pid ; ikinci canlı kopya varsa farklı ad verin (B10)"),
     ]
 
     degerler = {}
@@ -281,7 +291,73 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
     return degerler
 
 
-def kontrol_supabase(url: str, anahtar: str) -> None:
+def store_onek(deger: str = "") -> str:
+    """SUPABASE_STORE_PREFIX'i normalize eder (uygulamayla aynı kural).
+
+    Boş -> "formation-bot:" (uygulama varsayılanı); off/none/yok/0 -> öneksiz.
+    """
+    ham = (deger or "").strip()
+    if not ham:
+        return "formation-bot:"
+    if ham.lower() in ("off", "none", "yok", "0"):
+        return ""
+    return ham
+
+
+def heartbeat_seviyesi(yas_sn):
+    """Heartbeat yaşına göre (seviye, başlık, detay) döner; None = bilinmiyor.
+
+    Eşikler: <3 sa taze · <72 sa uyarı (seans dışı/tatil normal) · >=72 sa bayat.
+    """
+    if yas_sn is None:
+        return (WARN, "Heartbeat okunamadı",
+                "state:heartbeat kaydı yok ya da bozuk: bot henüz hiç tarama yapmamış olabilir.")
+    if yas_sn < 3 * 3600:
+        return (OK, f"Heartbeat taze ({yas_sn / 60:.0f} dk)",
+                "Bot canlı yazıyor; /health?strict=1 ile bu kontrol monitöre devredilebilir.")
+    if yas_sn < 72 * 3600:
+        return (WARN, f"Heartbeat {yas_sn / 3600:.1f} saat",
+                "Seans dışı/tatil için normaldir; seans içinde 30 dk'yı geçerse bot tıkanmış olabilir.")
+    return (FAIL, f"Heartbeat {yas_sn / 3600:.1f} saat (bayat)",
+            "Bot 3 gündür heartbeat yazmıyor: Render loglarını ve son deploy olayını kontrol edin.")
+
+
+def _heartbeat_kontrol(kok: str, basliklar: dict, onek: str) -> None:
+    """Supabase'deki state:heartbeat kaydından botun canlı olup olmadığını raporlar."""
+    try:
+        import requests
+    except ImportError:
+        return
+    anahtar = f"{onek}state:heartbeat"
+    try:
+        r = requests.get(
+            f"{kok}/rest/v1/bot_store",
+            headers=basliklar,
+            params={"select": "payload", "store_key": f"eq.{anahtar}", "limit": 1},
+            timeout=12,
+        )
+    except Exception as exc:  # noqa: BLE001
+        satir(WARN, "Heartbeat okunamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+        return
+    if r.status_code != 200:
+        satir(WARN, "Heartbeat okunamadı", f"HTTP {r.status_code}: {_kisa(r.text)}")
+        return
+    yas_sn = None
+    try:
+        satirlar = r.json()
+        payload = (satirlar[0] or {}).get("payload") if satirlar else None
+        ham = (payload or {}).get("last_scan") if isinstance(payload, dict) else None
+        if ham:
+            damga = datetime.fromisoformat(str(ham))
+            if damga.tzinfo is None:
+                damga = damga.replace(tzinfo=timezone.utc)
+            yas_sn = max(0.0, (datetime.now(timezone.utc) - damga).total_seconds())
+    except Exception:  # noqa: BLE001 - bozuk kayıt "bilinmiyor" sayılır
+        yas_sn = None
+    satir(*heartbeat_seviyesi(yas_sn))
+
+
+def kontrol_supabase(url: str, anahtar: str, onek: str = None) -> None:
     bolum("3) SUPABASE")
     if not url or not anahtar:
         satir(WARN, "Atlandı", "SUPABASE_URL ve SUPABASE_SERVICE_ROLE_KEY birlikte gerekli.")
@@ -367,6 +443,10 @@ def kontrol_supabase(url: str, anahtar: str) -> None:
             satir(WARN, "Yazma testi yapılamadı",
                   f"{type(exc).__name__}: {_kisa(exc, 180, anahtar, temiz)}")
 
+    # B-4: bot gerçekten yaşıyor mu? (heartbeat yaşı; /health?strict=1 ile aynı kaynak)
+    _heartbeat_kontrol(temiz, basliklar_okuma, store_onek(onek if onek is not None
+                                                          else os.environ.get("SUPABASE_STORE_PREFIX", "")))
+
 
 def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
     bolum("4) TELEGRAM")
@@ -440,6 +520,194 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
         elif "bot was blocked" in aciklama:
             ipucu = " Bot engellenmiş: sohbette Unblock yapın."
         satir(FAIL, f"sendMessage başarısız (HTTP {r.status_code})", aciklama + ipucu)
+
+
+def _webhook_sir_gizle(metin: str) -> str:
+    """`…/webhook/<sır>` geçen metinlerde sırrı maskeler.
+
+    Telegram'ın `last_error_message` alanı kayıtlı adresi içerebilir; eski
+    biçimde adresin son parçası sırdır ve ekrana/loglara düşmemelidir.
+    """
+    metin = str(metin or "")
+    if "/webhook/" not in metin:
+        return metin
+    cikti: list = []
+    kalan = metin
+    while "/webhook/" in kalan:
+        bas, _, kalan = kalan.partition("/webhook/")
+        cikti.append(bas + "/webhook/")
+        i = 0
+        while i < len(kalan) and kalan[i] not in " \t\r\n\"'),;":
+            i += 1
+        if i > 0:
+            cikti.append("***")
+            kalan = kalan[i:]
+    cikti.append(kalan)
+    return "".join(cikti)
+
+
+def _webhook_adres_gizle(url: str) -> str:
+    """Eski biçimdeki sırlı yolu (…/webhook/<secret>) maskeler; sır ekrana düşmez."""
+    return _kisa(_webhook_sir_gizle((url or "").strip()), 120)
+
+
+def kontrol_telegram_yol(token: str, webhook_secret_tanimli: bool) -> None:
+    """Komutların gerçekten hangi yoldan geldiğini Telegram tarafından doğrular.
+
+    NEDEN: "DM'den /yardim yazıyorum, cevap gelmiyor" şikâyetinin en sık iki
+    sebebi yalnız buradan görülür:
+
+      1. **409 çakışması**: Telegram'da webhook kayıtlı ama bot `getUpdates`
+         yoklaması kullanıyor → güncellemeler hiç gelmez.
+      2. **Teslim hatası**: Webhook kayıtlı ama Telegram `last_error_message`
+         ile teslim edemiyor (servis 5xx döndü, adres yanlış, sır uyuşmuyor…).
+
+    Ayrıca bekleyen güncelleme sayısı, komutların birikip birikmediğini gösterir
+    (servis uykudayken Telegram mesajları kuyrukta tutar, 24 saat sonra atar).
+    """
+    if not token:
+        return
+    try:
+        import requests
+    except ImportError:
+        return
+
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{token}/getWebhookInfo", timeout=12)
+    except Exception as exc:  # noqa: BLE001
+        satir(WARN, "Webhook durumu okunamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+        return
+    if getattr(r, "status_code", 0) != 200:
+        satir(WARN, f"getWebhookInfo beklenmeyen yanıt (HTTP {getattr(r, 'status_code', '?')})",
+              _kisa(getattr(r, "text", ""), 160))
+        return
+    try:
+        bilgi = ((r.json() or {}).get("result") or {})
+    except Exception:  # noqa: BLE001
+        satir(WARN, "getWebhookInfo gövdesi çözümlenemedi", "")
+        return
+
+    url = (bilgi.get("url") or "").strip()
+    bekleyen = bilgi.get("pending_update_count")
+    son_hata = (bilgi.get("last_error_message") or "").strip()
+    hata_zamani = bilgi.get("last_error_date")
+
+    if url and not webhook_secret_tanimli:
+        satir(FAIL, "Webhook kayıtlı ama bot yoklama modunda",
+              "TELEGRAM_WEBHOOK_SECRET tanımlı değil; getUpdates 409 Conflict alır ve DM "
+              "komutları çalışmaz. Ya secret'ı tanımlayın ya da webhook'u silin "
+              f"(deleteWebhook). Kayıtlı adres: {_webhook_adres_gizle(url)}")
+    elif url:
+        satir(OK, f"Webhook kayıtlı: {_webhook_adres_gizle(url)}",
+              "Komutlar Telegram → /webhook üzerinden gelir (sunucu ayakta olmalı).")
+    elif webhook_secret_tanimli:
+        satir(WARN, "Webhook bekleniyor ama kayıtlı değil",
+              "Bot açılışta setWebhook yapamamış (RENDER_EXTERNAL_URL/HTTPS?). Komutlar "
+              "getUpdates yoklamasına düşer; servis uykudaysa yanıt gelmez.")
+    else:
+        satir(OK, "Webhook yok; komutlar getUpdates yoklamasıyla gelir",
+              "Bu yolda 15 dakikadan eski komutlar açılışta atlanır; servis uykuya "
+              "girdiyse komut saatler sonra işlenmez.")
+
+    if bekleyen:
+        satir(WARN, f"Telegram'da bekleyen güncelleme: {bekleyen}",
+              "Bot bunları işlemiyor: servis uykuda/çökmüş ya da webhook adresi hatalı "
+              "olabilir. /health → komut alanına ve Render loglarına bakın.")
+
+    if son_hata:
+        yas = None
+        if hata_zamani:
+            try:
+                yas = max(0, int(time.time() - float(hata_zamani)))
+            except (TypeError, ValueError):
+                yas = None
+        yas_metni = "" if yas is None else f" ({yas // 60} dk önce)"
+        gizli_hata = _kisa(_webhook_sir_gizle(son_hata), 160)
+        if yas is not None and yas > 3600:
+            satir(WARN, f"Telegram webhook teslim hatası (eski){yas_metni}", gizli_hata)
+        else:
+            satir(FAIL, f"Telegram webhook teslim hatası{yas_metni}", gizli_hata)
+
+
+def kontrol_public_hedef(token: str, grup_id: str, chat_id: str = "") -> bool:
+    """Kanal/grup hedefini doğrular: bot orada mı, yönetici mi, mesaj yazabilir mi?
+
+    NEDEN: Public yayın DM'den bağımsız çalışır; hedef yanlışsa bot çalışır ama
+    kanala hiçbir şey düşmez ve bunu ancak loglardan anlarsınız. Bu kontrol
+    kurulumun en kritik adımını (yönetici + mesaj izni) tek komutla doğrular.
+    Döner: hedef hazır mı (özet satırı için).
+    """
+    if not token:
+        # Token yoksa Telegram bölümü zaten uyarı verdi.
+        return False
+    ready = False
+    try:
+        import requests
+    except ImportError:
+        return False
+    if not grup_id:
+        satir(WARN, "Public kanal hedefi yok (TELEGRAM_GROUP_ID)",
+              "Kanal yayını kapalı: yalnız DM çalışır. Kanal açtıysanız KANAL_ACILIS_PAKETI.md "
+              "adımlarını izleyin: TELEGRAM_GROUP_ID=@kanal_adi + bot YÖNETİCİ.")
+        return False
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{token}/getChat",
+                          json={"chat_id": grup_id}, timeout=12)
+    except Exception as exc:  # noqa: BLE001
+        satir(FAIL, "Public hedefe ulaşılamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+        return False
+    veri = (r.json() or {}) if r.status_code == 200 else {}
+    sohbet = veri.get("result") or {}
+    if not sohbet:
+        ipucu = "Bot hedefe ekli değil ya da adres yanlış (@... / -100...)."
+        if "channel" in (r.text or "") or "chat not found" in (r.text or "").lower():
+            ipucu = "Bot kanala eklenmeli ve YÖNETİCİ yapılmalı (kanal → Yöneticiler → Bot Ekle)."
+        satir(FAIL, f"Public hedef bulunamadı ({grup_id})", ipucu)
+        return False
+    baslik = sohbet.get("title") or sohbet.get("username") or grup_id
+    tip = sohbet.get("type", "?")
+    satir(OK, f"Public hedef bulundu: {baslik} ({tip})")
+
+    # Bot kimliği + üyelik durumu
+    uye = {}
+    try:
+        ben = requests.post(f"https://api.telegram.org/bot{token}/getMe", timeout=12)
+        bot_id = ((ben.json() or {}).get("result") or {}).get("id")
+        if bot_id:
+            ru = requests.post(f"https://api.telegram.org/bot{token}/getChatMember",
+                               json={"chat_id": grup_id, "user_id": bot_id}, timeout=12)
+            if ru.status_code == 200:
+                uye = (ru.json() or {}).get("result") or {}
+    except Exception as exc:  # noqa: BLE001
+        satir(WARN, "Üyelik durumu okunamadı", f"{type(exc).__name__}: {_kisa(exc)}")
+
+    durum = str(uye.get("status") or "?")
+    if durum in ("administrator", "creator"):
+        satir(OK, "Bot hedefte YÖNETİCİ", "Kanal listesinde 1 mesaj/gün yerine kalıcı görünür.")
+        if tip == "channel":
+            if uye.get("can_post_messages"):
+                satir(OK, "Kanal izni var: Mesaj gönderme", "Yayın açık.")
+                ready = True
+            else:
+                satir(FAIL, "Kanal izni KAPALI: Mesaj gönderme",
+                      "Kanal → Yöneticiler → bot → 'Mesaj gönderme' açık olmalı; yoksa gönderim 403 döner.")
+        else:
+            satir(OK, "Grup: mesaj gönderme serbest", "Yönetici bot grup ayarlarından etkilenmez.")
+            ready = True
+    elif durum == "left":
+        satir(FAIL, "Bot hedefte YOK (left)",
+              "Botu kanala/grupa ekleyin; kanalda ayrıca YÖNETİCİ yapın (Mesaj gönderme izni).")
+    else:
+        satir(FAIL, f"Bot yönetici değil (status={durum})",
+              "Kanal → Yöneticiler → Bot Ekle → 'Mesaj gönderme' (+ sabit mesaj için 'Mesajları sabitle').")
+
+    if tip == "channel" and uye and not uye.get("can_post_messages"):
+        satir(WARN, "Sabit karşılama için 'Mesajları sabitle' izni",
+              "İzin yoksa kanal_acilis.py --uygula yalnız açıklama yazar.")
+    if not chat_id:
+        satir(WARN, "DM chat_id yok: komutlar kapalı",
+              "Public yayın sürer ama /panel,/durum çalışmaz. Komutlar için TELEGRAM_CHAT_ID ekleyin.")
+    return ready
 
 
 def _health_hedefi(url: str) -> str:
@@ -529,8 +797,12 @@ def kontrol_render(url: str, test_key: str) -> None:
         return
 
     try:
-        test_hedef = hedef.rsplit("/health", 1)[0] + "/test"
-        r = requests.get(test_hedef, params={"k": test_key}, timeout=60)
+        # A7 sonrası /test anahtarı varsayılan BAŞLIKTAN okunur (X-Test-Key).
+        r = requests.get(
+            hedef.rsplit("/health", 1)[0] + "/test",
+            headers={"X-Test-Key": test_key},
+            timeout=60,
+        )
     except Exception as exc:  # noqa: BLE001
         satir(FAIL, "/test çağrısı başarısız",
               f"{type(exc).__name__}: {_kisa(exc, 180, test_key, url, hedef)}")
@@ -579,15 +851,28 @@ def main() -> int:
     kontrol_repo()
     degerler = kontrol_env(dosya_env, canli_mod=canli_mod)
 
+    public_hazir = False
     if args.skip_network:
         bolum("AĞ KONTROLLERİ")
         satir(WARN, "--skip-network verildi", "Supabase/Telegram/Render kontrolleri atlandı.")
     else:
-        kontrol_supabase(degerler.get("SUPABASE_URL", ""), degerler.get("SUPABASE_SERVICE_ROLE_KEY", ""))
+        kontrol_supabase(degerler.get("SUPABASE_URL", ""), degerler.get("SUPABASE_SERVICE_ROLE_KEY", ""),
+                         degerler.get("SUPABASE_STORE_PREFIX", ""))
         kontrol_telegram(
             degerler.get("TELEGRAM_BOT_TOKEN", ""),
             degerler.get("TELEGRAM_CHAT_ID", ""),
             args.send_test_message,
+        )
+        # Komut yolu: webhook mı yoklama mı, Telegram tarafında ne kayıtlı?
+        # (DM komutlarının çalışmaması en çok buradan anlaşılır.)
+        kontrol_telegram_yol(
+            degerler.get("TELEGRAM_BOT_TOKEN", ""),
+            bool(degerler.get("TELEGRAM_WEBHOOK_SECRET", "")),
+        )
+        public_hazir = kontrol_public_hedef(
+            degerler.get("TELEGRAM_BOT_TOKEN", ""),
+            degerler.get("TELEGRAM_GROUP_ID", "") or degerler.get("TELEGRAM_CHANNEL_ID", ""),
+            degerler.get("TELEGRAM_CHAT_ID", ""),
         )
         kontrol_render(args.url or "", args.test_key or degerler.get("TELEGRAM_TEST_KEY", ""))
 
@@ -595,9 +880,14 @@ def main() -> int:
     # Yeni istenen satır: ÖZET: Telegram HAZIR|YOK · Supabase HAZIR|YOK
     telegram_hazir = bool(degerler.get("TELEGRAM_BOT_TOKEN") and degerler.get("TELEGRAM_CHAT_ID"))
     supabase_hazir = bool(degerler.get("SUPABASE_URL") and degerler.get("SUPABASE_SERVICE_ROLE_KEY"))
+    kanal_hedefi = (degerler.get("TELEGRAM_GROUP_ID", "") or degerler.get("TELEGRAM_CHANNEL_ID", ""))
     ozet_telegram = "HAZIR" if telegram_hazir else "YOK"
     ozet_supabase = "HAZIR" if supabase_hazir else "YOK"
-    print(f"ÖZET: Telegram {ozet_telegram} · Supabase {ozet_supabase}")
+    # Kanal: hedef tanımlı + (ağ kontrolü yapıldıysa) gerçekten yazabiliyor olmalı.
+    ozet_kanal = "YOK"
+    if kanal_hedefi:
+        ozet_kanal = "HAZIR" if (args.skip_network or public_hazir) else "HEDEF VAR, IZIN YOK"
+    print(f"ÖZET: Telegram {ozet_telegram} · Kanal {ozet_kanal} · Supabase {ozet_supabase}")
     print(f"✅ {_sayac[OK]} tamam   ⚠️  {_sayac[WARN]} uyarı   ❌ {_sayac[FAIL]} hata")
     if _sayac[FAIL] == 0 and _sayac[WARN] == 0:
         print("Her şey yerinde: Render tarafı hazır.")

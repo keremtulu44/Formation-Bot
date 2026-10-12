@@ -5,10 +5,7 @@
 import pandas as pd
 import numpy as np
 from collections import deque
-from datetime import datetime, timedelta, time as dt_time
-import pytz
-import time
-import random
+from datetime import date, datetime, timedelta, time as dt_time
 import logging
 import math
 import os
@@ -18,9 +15,9 @@ from typing import Dict, List, Optional, Tuple
 
 from config import (
     ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN,
-    RATE_LIMIT_MIN, RATE_LIMIT_MAX, DATA_DIR, ACTIVE_STOCKS,
+    DATA_DIR, SEED_DATA_DIR, MARKET_SUFFIX,
     CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER_CLOSE_MIN, TARAMA_PENCERE_SONU,
-    STALE_BAR_UYARI_DK, TERMINAL_TAZE_BAR, BIST_TATILLER, BIST_YARIM_GUNLER,
+    BIST_TATILLER, BIST_YARIM_GUNLER,
     VERI_YOK_MODU_ESIK_DK, SPLIT_SUREKLILIK_ESIK_PCT, BAR_BOSLUK_ESIK_SAAT,
     GUNLUK_FETCH_PERIOD, GUNLUK_DEQUE_MAXLEN,
     FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD, FULL_1H_FETCH_STALE_DAYS,
@@ -78,19 +75,33 @@ def _atomic_pickle_write(path: str, payload) -> None:
 
 # Timeframe -> pandas süre etiketi (tamamlanmis_mumlar filtresi için)
 TF_SURELERI = {"1h": "1h", "2h": "2h", "4h": "4h", "1d": "1D"}
-# 2h/4h resample kovaları için kapanış anı = sol etiket + timeframe süresi.
-# 1D barlar gün başlangıcıyla etiketlenir; tamamlanma sınırı mevcut statik takvimdeki
-# configured seans kapanışıdır. Sağlayıcı timestamp sözleşmesi ve resmî takvim bu
-# doğrulama turunda bağımsız/live kaynakla ölçülmemiştir.
-TF_KAPANIS_SURESI = {
-    # Keep the previously configured 30-minute post-label rule until the
-    # provider's 1H timestamp contract is independently verified. Do not infer
-    # start-vs-end semantics from a synthetic fixture or label spacing alone.
-    "1h": timedelta(minutes=30),
+
+# --- MUM KAPANIŞ KURALI (P0 düzeltmesi, 2 Eki 2026) -------------------------
+# ÖLÇÜM (Yahoo chart API, THYAO.IS; meta.currentTradingPeriod.regular):
+#   * Seans 09:30–18:00, barlar SOL etiketli (etiket = bar BAŞI): 09:30, 10:30, ... 17:30.
+#   * Bir barın ömrü = etiket + TF süresi. GÜNÜN SON barı/kovası seans sonunda KESİLİR
+#     (17:30 etiketli kova 18:00'de kapanır; 4 saatlikte bu 30 dakikalık kovadır —
+#     TradingView'in BIST 4h grafiğinde de aynı).
+#
+# ESKİ HATA 1: 1h için "+30 dk" kullanılıyordu -> 10:30 barı 11:00'de "kapandı"
+#   sayılıyordu. Normal :35 taramaları doğru barı görüyordu ama :00–:29 arasında
+#   tetiklenen bir tarama (restart / kaçırılan tarama telafisi / çok uzun tur)
+#   HENÜZ KAPANMAMIŞ 1h mumunu kapanmış sayıp bildirim üretebiliyordu.
+# ESKİ HATA 2: 2h/4h için kesme yoktu -> günün son kovası (17:30) "+2sa/+4sa" kuralıyla
+#   19:30/21:30'a kadar "yarım" kalıyor, 18:35 taramasında hiç analiz edilmiyordu
+#   (ölçüm: 2h son kova 15:30, 4h son kova 13:30). Günün kapanış saati kayıptı.
+# ESKİ HATA 3: 1d mumu sabit 18:30'da tamamlanıyordu; yarım günde (arefe, 13:00 kapanış)
+#   mum 18:30'a kadar "yarım" kalıyor ve o gün günlük bildirim hiç gitmiyordu.
+TF_BAR_SURELERI = {
+    "1h": timedelta(hours=1),
     "2h": timedelta(hours=2),
     "4h": timedelta(hours=4),
 }
-GUNLUK_MUM_KAPANIS_SAATI = dt_time(18, 30)  # configured normal-day close; calendar source verification pending
+# Günlük (1d) mum: 00:00 etiketli, seans kapanışında tamamlanır (normal 18:30, yarım gün 13:00).
+GUNLUK_MUM_KAPANIS_SAATI = dt_time(18, 30)  # BIST seans kapanışı + takas payı (1H ölçümünden)
+# Seansın GERÇEK bitiş saati (intraday barların kesme sınırı): normal gün 18:00, yarım gün 13:00.
+# Ölçüm: Yahoo regular period 09:30–18:00; kapanış müzayedesi fiyatı ~18:09'da oluşur.
+INTRADAY_SEANS_SONU_SAATI = dt_time(18, 0)
 
 # === BIST SAAT KONTROLÜ ===
 
@@ -113,11 +124,28 @@ def yarim_gun_kapanisi(d) -> Optional[Tuple[str, dt_time]]:
 
 
 def seans_kapanis_saati(d=None) -> dt_time:
-    """Statik takvimdeki kapanış saati (yarım günde 13:00, normal gün varsayımı 18:30)."""
+    """O günün seans kapanış saati (yarım günde 13:00, normalde 18:30).
+
+    Günlük (1d) mumun tamamlanma saatidir: kapanış fiyatı/müzayede oturduktan
+    sonraki güvenli an.
+    """
     if d is None:
         d = datetime.now(ISTANBUL_TZ)
     yg = yarim_gun_kapanisi(d)
     return yg[1] if yg else GUNLUK_MUM_KAPANIS_SAATI
+
+
+def seans_sonu_saati(d=None) -> dt_time:
+    """Seansın GERÇEK bitiş saati (intraday barların kesme sınırı).
+
+    Normal gün 18:00 (Yahoo regular period end ölçümü), yarım gün 13:00.
+    Günlük mumdan farkı: 18:30 takas/müzayede payıdır; intraday bar 17:30'da
+    biter ve 18:00'de kesin kapanmıştır.
+    """
+    if d is None:
+        d = datetime.now(ISTANBUL_TZ)
+    yg = yarim_gun_kapanisi(d)
+    return yg[1] if yg else INTRADAY_SEANS_SONU_SAATI
 
 
 def is_bist_open(now: Optional[datetime] = None) -> bool:
@@ -182,8 +210,53 @@ def tarama_penceresi_acik_mi(now: Optional[datetime] = None) -> bool:
                     + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN + 5))
     return BIST_OPEN <= current_time <= pencere_sonu.time()
 
+def islem_gunu_mu(now: Optional[datetime] = None) -> bool:
+    """Bugün BIST işlem günü mü? (hafta içi VE resmî tatil değil)
+
+    NEDEN AYRI: günlük özetler ve gün sonu analizi seans saatine bağlı değildir
+    (09:55/18:45/20:00 hedefleri piyasa kapalıyken de saati gelir). Bu kontrol
+    olmadan cumartesi/pazar ve resmî tatillerde kanala "öne çıkan formasyon
+    olmadı" mesajı gidiyor, gece analizi boşuna tam evren taraması yapıyordu.
+
+    Not: tarama kararı bu fonksiyona değil `tarama_animi_mi`'ye bağlıdır; burada
+    yalnız "takvim işlem günü mü" sorusu cevaplanır.
+    """
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    elif now.tzinfo is None:
+        now = ISTANBUL_TZ.localize(now)
+    else:
+        now = now.astimezone(ISTANBUL_TZ)
+    if now.weekday() >= 5:
+        return False
+    return bist_tatil_adi(now) is None
+
+
+def sonraki_islem_gunu(baslangic) -> date:
+    """Hafta sonu ve resmî tatilleri atlayarak bir sonraki işlem gününü bulur.
+
+    Neden ayrı fonksiyon: ana döngü "BIST kapalı" dalında uyku süresini buradan
+    alıyor. Tatil günü `is_bist_open` (tatili bilmez) True döndüğü için uyku 0'a
+    düşüyor ve döngü boş dönüyordu (ölçüm: ~21.500 log satırı/sn; bir tatil günü
+    ~600 milyon satır). Tatil atlanarak uyku en az bir sonraki seansa kalır.
+    """
+    aday = baslangic.date() if isinstance(baslangic, datetime) else baslangic
+    for _ in range(60):  # takvim bozuksa bile sonsuz döngü olmasın
+        aday = aday + timedelta(days=1)
+        if aday.weekday() < 5 and bist_tatil_adi(aday) is None:
+            return aday
+    return aday
+
+
 def time_until_next_open(now: Optional[datetime] = None) -> float:
-    """Bilinen tatil/yarım seansları atlayarak bir sonraki BIST açılışına kadar bekle."""
+    """Bir sonraki açılışa kadar kaç saniye? Uyku için.
+
+    Sözleşme: tarama penceresi KAPALIYSA dönen değer HER ZAMAN > 0'dır ve gerçek
+    sonraki seansa işaret eder; pencere açıkken 0. Ana döngünün kapalı dalı bu
+    değerle uyuduğu için 0 dönmesi boş döngü (CPU + log fırtınası) demektir.
+    Tatil/hafta sonu atlanır; yarım günde pencere kapandıktan sonra da bir sonraki
+    işlem gününe atlanır.
+    """
     if now is None:
         now = datetime.now(ISTANBUL_TZ)
     if now.tzinfo is None:
@@ -191,7 +264,8 @@ def time_until_next_open(now: Optional[datetime] = None) -> float:
     else:
         now = now.astimezone(ISTANBUL_TZ)
 
-    if is_bist_open(now):
+    # Pencere açıkken beklenecek bir şey yok (ana döngü zaten tarama dalına girer).
+    if tarama_penceresi_acik_mi(now):
         return 0.0
 
     # Bugün geçerli bir işlem günü ve açılıştan önceyse bugünün açılışını seç;
@@ -602,6 +676,20 @@ def _cache_barlari_birlestir(remote_bars, local_bars, maxlen, stock, timeframe):
     return merged[-maxlen:]
 
 
+def _istanbul_zaman(ts):
+    """Timestamp'i İstanbul saatine çevirir; pandas Timestamp ve datetime uyumlu.
+
+    Neden: seri verisi farklı kaynaklardan gelebiliyor (pickle→Timestamp, JSON/
+    Supabase→datetime). Tek bir yardımcı, `tz_convert` varsayımından doğan
+    AttributeError sınıfını kapatır.
+    """
+    if isinstance(ts, datetime) and not hasattr(ts, "tz_convert"):
+        return ts.astimezone(ISTANBUL_TZ) if ts.tzinfo else ISTANBUL_TZ.localize(ts)
+    if hasattr(ts, "tz_convert"):
+        return ts.tz_convert(ISTANBUL_TZ) if ts.tzinfo else ts.tz_localize(ISTANBUL_TZ)
+    return ISTANBUL_TZ.localize(pd.Timestamp(ts))
+
+
 class StockDequeManager:
     """
     Her hisse için 360 mumluk deque tutar
@@ -625,6 +713,14 @@ class StockDequeManager:
         self._gunluk_attempt_path = os.path.join(self.data_dir, "gunluk_fetch_attempts.json")
         # Son tespit edilen veri sorunları (split / bar boşluğu) - main.py okur
         self.sureklilik_sorunlari: Dict[str, List[Dict]] = {}
+        # --- yazma amplifikasyonu koruması (Batch 6 / B5) ---
+        # Supabase'e aynı içerik ikinci kez gönderilmesin: son gönderilen verinin
+        # parmak izi (len, son bar zamanı, son kapanış). Disk yazımı her zaman
+        # yapılır (yerel kurtarma), uzak yazım yalnız içerik değiştiğinde.
+        self._uzak_ozet: Dict[str, tuple] = {}
+        self._gunluk_uzak_ozet: Dict[str, tuple] = {}
+        self.uzak_yazma_atlanan = 0   # telemetri: kaç UPSERT gereksizdi
+        self.uzak_yazma_yapilan = 0   # telemetri: kaç UPSERT gönderildi
         
         # Data dir oluştur ve yerel günlük fetch cooldown'unu restore et.
         os.makedirs(data_dir, exist_ok=True)
@@ -873,7 +969,15 @@ class StockDequeManager:
         df = pd.DataFrame(data_sorted)
         df.set_index('timestamp', inplace=True)
         df.sort_index(inplace=True)
-        
+
+        # Nihai sigorta: karışık tz sınıfları (ör. tarihsel Supabase hydrate
+        # verisi dateutil.tzoffset; taze Yahoo verisi pytz.Timestamp) set_index'te
+        # object-Index üretir; resample ve tamamlanmis_mumlar bu dizinle çöker
+        # (canlı 0/48 olayı). Tarihsel zehirli veriyi zararsız kılmak için dizin
+        # tek kova altında toplanır: UTC üzerinden okunup İstanbul'a basılır.
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index, utc=True).tz_convert(ISTANBUL_TZ)
+
         # Sütun sırası
         df = df[['open', 'high', 'low', 'close', 'volume']]
         
@@ -910,19 +1014,30 @@ class StockDequeManager:
             remote_saved = True
             remote_error = None
             if self.persistent_store is not None:
-                try:
-                    remote_saved = bool(
-                        self.persistent_store.upsert(f"cache:1h:{stock}", json_data)
-                    )
-                except Exception as exc:
-                    remote_saved = False
-                    remote_error = type(exc).__name__
-                if not remote_saved:
-                    logger.warning(
-                        "%s 1H Supabase cache yazma başarısız%s; yerel JSON kopyası var",
-                        stock,
-                        f" ({remote_error})" if remote_error else "",
-                    )
+                # İçerik değişmediyse UPSERT atlanır (tarama başına ~48 gereksiz
+                # istek + ~2 MB gidiyordu). Kapanış/timestamp değişince yazılır.
+                ozet = self._veri_ozeti(data_list)
+                remote_error = None
+                if self._uzak_ozet.get(stock) != ozet:
+                    try:
+                        remote_saved = bool(
+                            self.persistent_store.upsert(f"cache:1h:{stock}", json_data)
+                        )
+                    except Exception as exc:
+                        remote_saved = False
+                        remote_error = type(exc).__name__
+                    if remote_saved:
+                        self._uzak_ozet[stock] = ozet
+                        self.uzak_yazma_yapilan += 1
+                    else:
+                        logger.warning(
+                            "%s 1H Supabase cache yazma başarısız%s; yerel JSON kopyası var",
+                            stock,
+                            f" ({remote_error})" if remote_error else "",
+                        )
+                else:
+                    self.uzak_yazma_atlanan += 1
+
 
             logger.debug(
                 "%s deque diske kaydedildi - %s + %s (%d mum)",
@@ -989,7 +1104,8 @@ class StockDequeManager:
     def get_gunluk_deque(self, stock: str) -> deque:
         """1D (günlük) deque al, yoksa diskten yükle / oluştur."""
         if stock not in self.gunluk_deques:
-            yol = self._gunluk_dosya(stock)
+            # Yazma yolu DATA_DIR; okuma gerekirse repo seed'ine düşer (C4).
+            yol = self._okuma_yolu(f"{stock}_gunluk.json")
             dq = None
             if os.path.exists(yol):
                 try:
@@ -1057,6 +1173,9 @@ class StockDequeManager:
             return None
         df = pd.DataFrame(list(dq))
         df.set_index("timestamp", inplace=True)
+        # to_dataframe ile aynı tz sigortası (tarihsel karma-tz veri güvenliği)
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index, utc=True).tz_convert(ISTANBUL_TZ)
         return df
 
     def gunluk_veri_eksik_mi(self, stock: str, now: Optional[datetime] = None) -> bool:
@@ -1165,15 +1284,23 @@ class StockDequeManager:
                     "volume": c["volume"]} for c in dq]
         _atomic_json_write(self._gunluk_dosya(stock), payload)
         if self.persistent_store is not None:
-            try:
-                remote_saved = bool(self.persistent_store.upsert(f"cache:1d:{stock}", payload))
-            except Exception as exc:
-                logger.warning("%s günlük Supabase cache yazılamadı (%s)", stock, type(exc).__name__)
-                return False
-            if not remote_saved:
-                logger.warning("%s günlük Supabase cache yazma başarısız; yerel kopya var", stock)
-                return False
-        return True
+            # Günlük seri günde bir değişir; tarama başına 48 kez yazmak ~2,4 MB
+            # gereksiz trafikti. İçerik değişmediyse gönderilmez.
+            ozet = self._veri_ozeti(payload)
+            if self._gunluk_uzak_ozet.get(stock) == ozet:
+                self.uzak_yazma_atlanan += 1
+            else:
+                try:
+                    remote_saved = bool(self.persistent_store.upsert(f"cache:1d:{stock}", payload))
+                except Exception as exc:
+                    logger.warning("%s günlük Supabase cache yazılamadı (%s)", stock, type(exc).__name__)
+                    return False
+                if not remote_saved:
+                    logger.warning("%s günlük Supabase cache yazma başarısız; yerel kopya var", stock)
+                    return False
+                self._gunluk_uzak_ozet[stock] = ozet
+                self.uzak_yazma_yapilan += 1
+
 
     def son_bar_yasi_dk(self, stock: str, now: Optional[datetime] = None) -> Optional[float]:
         """Bu hissenin cache'indeki en yeni 1H mumun yaşı (dakika). Veri yoksa None.
@@ -1185,9 +1312,42 @@ class StockDequeManager:
             now = datetime.now(ISTANBUL_TZ)
         if now.tzinfo is None:
             now = ISTANBUL_TZ.localize(now)
-        son = df.index[-1]
-        son = son.tz_convert(ISTANBUL_TZ) if son.tzinfo else ISTANBUL_TZ.localize(son)
+        son = _istanbul_zaman(df.index[-1])
         return (now - son).total_seconds() / 60.0
+
+    # --- C4: veri dizini (repo dışı) + repo seed yedeği ---------------------
+    def _okuma_yolu(self, dosya_adi: str) -> str:
+        """Okuma için yol: DATA_DIR'de yoksa repodaki örnek veriye (SEED_DATA_DIR) bak.
+
+        Yalnız OKUMA içindir; yazımlar her zaman DATA_DIR'e gider, böylece canlı
+        sunucuda `git pull` repo içindeki veriyi ezmez/çakışmaz.
+        """
+        yol = os.path.join(self.data_dir, dosya_adi)
+        if os.path.exists(yol):
+            return yol
+        yedek = os.path.join(SEED_DATA_DIR, dosya_adi)
+        farkli = os.path.abspath(yedek) != os.path.abspath(yol)
+        if farkli and os.path.exists(yedek):
+            logger.debug(f"{dosya_adi}: veri dizininde yok, repo seed yedeği kullanılıyor")
+            return yedek
+        return yol
+
+    @staticmethod
+    def _veri_ozeti(data_list) -> tuple:
+        """Uzak yazım gerekip gerekmediğini anlamak için ucuz parmak izi."""
+        if not data_list:
+            return (0, None, None)
+        son = data_list[-1] if isinstance(data_list[-1], dict) else {}
+        return (len(data_list), str(son.get("timestamp")), son.get("close"))
+
+    def uzak_yazma_durumu(self) -> Dict:
+        """B5 telemetrisi: kaç uzak yazım yapıldı, kaçı gereksizdi."""
+        return {
+            "yapilan": self.uzak_yazma_yapilan,
+            "atlanan": self.uzak_yazma_atlanan,
+            "izlenen_1h": len(self._uzak_ozet),
+            "izlenen_1d": len(self._gunluk_uzak_ozet),
+        }
 
     def save_all(self) -> bool:
         """Save all caches, isolating per-series errors and reporting durable failures."""
@@ -1258,8 +1418,7 @@ def sureklilik_sorunlari_bul(dq) -> List[Dict]:
 
     onceki = None
     for c in dq:
-        ts = c['timestamp']
-        ts = ts.tz_convert(ISTANBUL_TZ) if ts.tzinfo else ISTANBUL_TZ.localize(ts)
+        ts = _istanbul_zaman(c['timestamp'])
         if onceki is not None:
             onceki_ts, onceki_kapanis, onceki_gun = onceki
             bosluk_saat = (ts - onceki_ts).total_seconds() / 3600.0
@@ -1366,37 +1525,113 @@ def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         logger.error(f"Resample hatası {timeframe}: {e}")
         return pd.DataFrame()
 
-def tamamlanmis_mumlar(df: pd.DataFrame, tf: str, now: Optional[datetime] = None) -> pd.DataFrame:
-    """Configured close-offset'e göre henüz tamamlanmamış mumları ayıkla.
+def _istanbul_dizin(idx) -> pd.DatetimeIndex:
+    """Dizini Europe/Istanbul tz'li DatetimeIndex'e normalize eder (savunmalı).
 
-    Resample edilmiş sol-etiketli 2h/4h kovalarında etiket + TF süre kullanılır.
-    Ham 1H provider timestamp start/end semantiği bağımsız doğrulanmamıştır;
-    ``TF_KAPANIS_SURESI`` bu nedenle mevcut davranışını korur.
+    Savunma: object/karma-tz dizin küp operasyonlarında AttributeError üretir
+    (idx.tz erişimi) — canlı 0/48 olayının kırılma noktası buydu. Yerel hata
+    yerine tek adımda normalleştirilir; tarihsel zehirli veriler yutulmaz,
+    dizin düzeltilip tarama tamamlanır.
+    """
+    if not isinstance(idx, pd.DatetimeIndex):
+        idx = pd.DatetimeIndex(pd.to_datetime(idx, utc=True))
+    if idx.tz is None:
+        idx = idx.tz_localize(ISTANBUL_TZ)
+    else:
+        idx = idx.tz_convert(ISTANBUL_TZ)
+    return idx
+
+
+def _gun_kapanis_damgalari(idx: pd.DatetimeIndex, gunluk: bool) -> pd.DatetimeIndex:
+    """Her barın kendi GÜNÜNE ait kapanış damgası (İstanbul tz).
+
+    gunluk=True  -> günlük mum kuralı (normal 18:30 / yarım gün 13:00)
+    gunluk=False -> seans sonu (normal 18:00 / yarım gün 13:00)
+    """
+    onbellek: Dict[date, dt_time] = {}
+    damgalar = []
+    for ts in idx:
+        gun = ts.date()
+        saat = onbellek.get(gun)
+        if saat is None:
+            saat = seans_kapanis_saati(gun) if gunluk else seans_sonu_saati(gun)
+            onbellek[gun] = saat
+        damgalar.append(ts.normalize() + pd.Timedelta(hours=saat.hour, minutes=saat.minute))
+    return pd.DatetimeIndex(damgalar)
+
+
+def mum_kapanis_anlari(idx, tf: str) -> pd.DatetimeIndex:
+    """Her mumun kapandığı anı hesaplar (TEK KAYNAK, P0 kapanış kuralı).
+
+    Kural: kapanış = etiket + TF süresi, ama o günün SEANS SONUNU aşamaz
+    (17:30 etiketli 4h kovası 18:00'de kapanır; yarım günde 13:00).
+    Günlük (1d) mum ise günün seans kapanışında (18:30 / yarım gün 13:00) tamamlanır.
+    """
+    idx = _istanbul_dizin(idx)
+    if len(idx) == 0:
+        return idx
+    if str(tf).lower() == "1d":
+        return _gun_kapanis_damgalari(idx, gunluk=True)
+    sure = TF_BAR_SURELERI.get(str(tf).lower())
+    if sure is None:
+        logger.warning(f"Bilinmeyen timeframe '{tf}' - 1h süresi varsayıldı")
+        sure = TF_BAR_SURELERI["1h"]
+    dogal = idx + sure
+    seans_sonu = _gun_kapanis_damgalari(idx, gunluk=False)
+    # Sadece seans sonunu AŞAN barlar kesilir (günün son 1h/2h/4h kovası).
+    kesilecek = dogal > seans_sonu
+    if bool(np.asarray(kesilecek, dtype=bool).any()):
+        dogal = dogal.where(~np.asarray(kesilecek, dtype=bool), seans_sonu)
+    return dogal
+
+
+def mum_kapanis_ani(ts, tf: str) -> Optional[pd.Timestamp]:
+    """Tek bir mumun (etiketli) kapandığı an. ts None ise None."""
+    if ts is None:
+        return None
+    idx = _istanbul_dizin(pd.DatetimeIndex([pd.Timestamp(ts)]))
+    kapanislar = mum_kapanis_anlari(idx, tf)
+    return None if len(kapanislar) == 0 else kapanislar[0]
+
+
+def bar_kapandi_mi(ts, tf: str, now: Optional[datetime] = None) -> bool:
+    """Bu mum, verilen ana kadar GERÇEKTEN kapandı mı? (bildirim güvenlik kapısı).
+
+    `tamamlanmis_mumlar` aynı kuralı kullanır; bu fonksiyon kapı/gösterim için
+    tek bar üzerinde aynı hesabı yapar (tek kaynak: `mum_kapanis_anlari`).
+    """
+    kapanis = mum_kapanis_ani(ts, tf)
+    if kapanis is None:
+        return False
+    sinir = pd.Timestamp(now) if now is not None else pd.Timestamp(datetime.now(ISTANBUL_TZ))
+    sinir = sinir.tz_convert(ISTANBUL_TZ) if sinir.tzinfo else ISTANBUL_TZ.localize(sinir)
+    return bool(kapanis <= sinir)
+
+
+def tamamlanmis_mumlar(df: pd.DataFrame, tf: str, now: Optional[datetime] = None) -> pd.DataFrame:
+    """Devam eden (yarım) mumu çıkarır; motoru yalnız KAPANMIŞ mumlarla besler.
+
+    Kapanış kuralı `mum_kapanis_anlari`'dır (tek kaynak):
+      * intraday: etiket + TF süresi, ama seans sonunu aşamaz
+        (1h: +1 saat; 17:30 etiketli 2h/4h kovası 18:00'de kapanır; yarım gün 13:00),
+      * günlük: günün seans kapanışı (normal 18:30 / yarım gün 13:00).
+
+    Böylece Yahoo'nun etiket hizalaması ne olursa olsun her mum kapanışından
+    sonraki İLK taramada beslenir (Pine bar kapanışı mantığıyla birebir) ve
+    :00–:29 arası tetiklenen taramalar (restart/telafi) kısmi mumu görmez.
     """
     if df is None or len(df) == 0:
         return df
     if now is None:
         now = datetime.now(ISTANBUL_TZ)
-    idx = df.index
-    if idx.tz is None:
-        idx = idx.tz_localize(ISTANBUL_TZ)
-    else:
-        idx = idx.tz_convert(ISTANBUL_TZ)
-    sinir = pd.Timestamp(now).tz_convert(ISTANBUL_TZ) if pd.Timestamp(now).tzinfo else ISTANBUL_TZ.localize(pd.Timestamp(now))
-    if tf == "1d":
-        # Günlük mum etiketi gün başlangıcıdır; mum o tarihin seans kapanışında
-        # tamamlanır. Yarım seans için takvimdeki 13:00 kapanışını uygula.
-        kapanis = pd.DatetimeIndex([
-            ts.normalize() + pd.Timedelta(
-                hours=seans_kapanis_saati(ts.date()).hour,
-                minutes=seans_kapanis_saati(ts.date()).minute,
-            )
-            for ts in idx
-        ])
-    else:
-        kapanis = idx + TF_KAPANIS_SURESI.get(tf, timedelta(minutes=30))
-    tamam = kapanis <= sinir
-    return df[np.asarray(tamam, dtype=bool)]
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df = df.copy()
+        df.index = pd.to_datetime(df.index, utc=True)
+    kapanis = mum_kapanis_anlari(df.index, tf)
+    sinir = pd.Timestamp(now)
+    sinir = sinir.tz_convert(ISTANBUL_TZ) if sinir.tzinfo else ISTANBUL_TZ.localize(sinir)
+    tamam = np.asarray(kapanis <= sinir, dtype=bool)
+    return df[tamam]
 
 
 def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
@@ -1417,33 +1652,6 @@ def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
 
 # === VERİ ÇEKME (MOCK + GERÇEK İSKELET) ===
 
-def fetch_with_rate_limit(stock: str, fetch_func, *args, **kwargs) -> Optional[pd.DataFrame]:
-    """
-    Eski genel amaçlı rate-limit wrapper'ı (canlı bot ana döngüsü kullanmaz).
-    - RATE_LIMIT_MIN/MAX kadar bekler
-    - Hata olursa logla, None dön, crash etme
-    Canlı tarama daha düşük tempolu grup pacing'i için YahooRequestPacer kullanır.
-    """
-    try:
-        # Rate limit bekleme
-        delay = random.uniform(RATE_LIMIT_MIN, RATE_LIMIT_MAX)
-        logger.info(f"{stock} için {delay:.1f}sn bekleniyor (rate limit)")
-        time.sleep(delay)
-        
-        # Veriyi çek
-        df = fetch_func(stock, *args, **kwargs)
-        
-        if df is None or len(df) == 0:
-            logger.warning(f"{stock} boş veri döndü, atlanıyor")
-            return None
-        
-        logger.info(f"{stock} için {len(df)} mum çekildi")
-        return df
-        
-    except Exception as e:
-        logger.error(f"{stock} veri çekme hatası: {e} - atlanıyor, bot devam ediyor")
-        return None
-
 def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional[pd.DataFrame]:
     """Günlük (1D) OHLCV çeker — DERİN geçmiş (varsayılan 2 yıl, ~500 bar).
 
@@ -1457,7 +1665,7 @@ def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional
         import contextlib
         import yfinance as yf
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            ham = yf.Ticker(stock + ".IS").history(period=period, interval="1d", auto_adjust=False)
+            ham = yf.Ticker(stock + MARKET_SUFFIX).history(period=period, interval="1d", auto_adjust=False)
         if ham is None or len(ham) == 0:
             return None
         df = ham.copy()
@@ -1552,7 +1760,7 @@ def fetch_yfinance_1h(
         import yfinance as yf
         captured = io.StringIO()
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(captured):
-            ham = yf.Ticker(stock + ".IS").history(period=period, interval="1h", auto_adjust=False)
+            ham = yf.Ticker(stock + MARKET_SUFFIX).history(period=period, interval="1h", auto_adjust=False)
         if ham is None or ham.empty:
             reason = captured.getvalue().strip() or "Yahoo boş veri döndürdü"
             return result(None, yfinance_error_is_retryable(reason), reason)
@@ -1622,9 +1830,9 @@ def mock_fetch_60d_1h(stock: str, n_bars: int = 360) -> pd.DataFrame:
 # === TEST ===
 
 if __name__ == "__main__":
-    print("=== Data.py Test ===")
-    
-    # BIST açık mı?
+    # C7: sahte veri üreticisi kaldırıldı; demo yalnız çevrimdışı yardımcıları
+    # ve deque turunu sınar (gerçek veri için fetch_yfinance_1h/1d).
+    print("=== Data.py duman testi (çevrimdışı) ===")
     print(f"BIST açık mı? {is_bist_open()}")
     print(f"Sonraki açılışa: {time_until_next_open()/3600:.2f} saat")
     print(f"Sonraki mum kapanışına: {time_until_next_candle_close()/60:.1f} dk")

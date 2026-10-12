@@ -8,23 +8,31 @@ kararları ve gerekçeleri:
   cevap verilmez). Böylece token'ı bilen biri botu kurcalayamaz.
 - **Backlog atlama**: Açılışta eski komutlar çalıştırılmadan offset ile atlanır;
   sayfalar doğru onaylanır ve ilk taze update korunur. Geçici ağ hatasında
-  backlog tamamlanana kadar normal polling başlamaz. Aksi halde servis 3 gün
-  uyuduktan sonra dünkü "/tara" komutu yeniden çalışırdı.
+  backlog tamamlanana kadar normal polling başlamaz (fail-closed). Atlanan
+  mesaj varsa kullanıcıya TEK bir bilgi mesajı gider ("bot uyanık değildi") —
+  sessiz kaybolma, "komutlar çalışmıyor" şikâyetinin en büyük sebebiydi.
+- **Geç teslim**: Webhook tekrarı ya da açılış nedeniyle 15 dakikadan eski bir
+  komut gelirse durum değiştirenler (tara/panel) çalıştırılmaz; yalnızca okuma
+  komutları (yardim/durum) gecikme notuyla yanıtlanır.
+- **Teşhis**: `durum()` sayaçları `/health` alanına girer (islenen, yetkisiz,
+  bayat, son komut yaşı) — "bot çalışıyor ama komut yok" farkı dışarıdan görünür.
 - **Onay (offset)**: Komut cevabı dayanıklı outbox'a yazıldıktan sonra
   `offset = id + 1` ile onaylanır. Aynı süreçte yazma başarısızsa cevap bellekte
   tutulur ve update yeniden denenir; restart sonrası outbox'taki `update_id`
-  kaydı handler'ın tekrar çalışmasını önler.
+  kaydı handler'ın tekrar çalışmasını önler. `update_id` için küçük bir küme de
+  tutulur (restart sonrası aynı komutun iki kez çalışmaması için).
 - **409 Conflict**: Aynı token'la başka bir süreç de `getUpdates` yapıyorsa
   (örn. Termux'ta açık kalmış ikinci kopya) Telegram bu kodu döner. Dinleyici
   durur ve logda net söylenir — sonsuz hata döngüsüne girmez.
 - **401**: Token geçersiz; dinleyici durur (tekrar denemek anlamsız).
 - **Ağ hatası**: 5 → 60 sn üstel geri çekilme, sonra devam.
+- **Analiz sürerken**: komut kuyruğa alınmaz (aynı anda tek iş) ama sessiz de
+  kalınmaz; kısa bir "⏳ Analiz sürüyor" bilgi mesajı gider.
 - **İşleyici hatası**: Kullanıcıya kısa bir hata mesajı gider, dinleyici devam eder.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 import time
@@ -38,6 +46,13 @@ API_BASE = "https://api.telegram.org"
 MAX_MESSAGE_LEN = 4000          # Telegram sınırı 4096; pay bırakıyoruz
 MIN_KOMUT_ARALIK_SN = 1.0       # aynı sohbetten saniyede 1 komut
 BACKLOG_SINIR_SN = 15 * 60      # açılışta bundan eski mesajlar yok sayılır
+
+# Eski komutlar: bot uykudayken (Render Free 15 dk hareketsizlikte uyur) yazılan
+# komutlar Telegram tarafından saatler sonra teslim edilebilir. Durum değiştiren
+# komutlar (tara/panel) eski veriyle yanlış sonuç üretmesin diye ÇALIŞTIRILMAZ;
+# yalnızca okuma amaçlı komutlar gecikmeli de olsa yanıtlanır — böylece kullanıcı
+# "hiç cevap gelmedi" yerine "bot uyuyordu" bilgisini alır.
+BAYAT_GUVENLI_KOMUTLAR = frozenset({"yardim", "help", "start", "durum"})
 
 
 def kirp(text: str, sinir: int = MAX_MESSAGE_LEN) -> str:
@@ -73,6 +88,8 @@ class TelegramCommandListener:
         komutlari_yoksay: Optional[Callable[[], bool]] = None,
         response_sender: Optional[Callable[[int, str], bool]] = None,
         response_exists: Optional[Callable[[int], bool]] = None,
+        bayat_sinir_sn: int = BACKLOG_SINIR_SN,
+        bayat_bildirim: bool = True,
     ) -> None:
         self.token = (token or "").strip()
         self.allowed_chat_id = str(allowed_chat_id or "").strip()
@@ -90,6 +107,15 @@ class TelegramCommandListener:
         self._stop = stop_event or threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._backoff = 5.0
+        # Teşhis sayaçları (/health'te görünür): "komutlar çalışmıyor" şikâyetinde
+        # bot ayakta mı, komut geldi mi, yetkisiz sohbetten mi geldi, kaç komut
+        # bayat diye atıldı — hepsi dışarıdan okunabilsin.
+        self.bayat_sinir_sn = max(0, int(bayat_sinir_sn))
+        self.bayat_bildirim = bool(bayat_bildirim)
+        self._sayac = {"islenen": 0, "yetkisiz": 0, "bayat": 0, "hata": 0, "mesgul": 0}
+        self._son_komut_adi: Optional[str] = None
+        self._son_komut_ts: Optional[float] = None
+        self._son_yetkisiz_chat = ""
 
     # --- yaşam döngüsü -------------------------------------------------
     @property
@@ -114,6 +140,40 @@ class TelegramCommandListener:
     def stopped(self) -> bool:
         return self._stop.is_set()
 
+    # --- teşhis ---------------------------------------------------------
+    @staticmethod
+    def _maskele(kimlik: str) -> str:
+        """Sohbet kimliğini loga/health'e tam yazmadan son 4 hanesiyle gösterir."""
+        kimlik = str(kimlik or "")
+        if not kimlik:
+            return ""
+        return ("…" + kimlik[-4:]) if len(kimlik) > 4 else "…"
+
+    def durum(self) -> Dict[str, Any]:
+        """Komut katmanının son hali (`/health` alanı).
+
+        NEDEN: "DM'den hiçbir komut çalışmıyor ama /health tamam diyor" farkı
+        ancak buradan görülür. Kişisel veri yazılmaz: son komutun ADI ve yaşı,
+        sayaçlar ve maskelenmiş yetkisiz sohbet kimliği döner.
+        """
+        son = self._son_komut_ts
+        return {
+            "calisiyor": bool(self._thread is not None and self._thread.is_alive()),
+            "son_komut": self._son_komut_adi,
+            "son_komut_sn_once": None if son is None else int(max(0.0, time.time() - son)),
+            "islenen": self._sayac["islenen"],
+            "yetkisiz_sohbet": self._sayac["yetkisiz"],
+            "bayat_atlanan": self._sayac["bayat"],
+            "mesgul_atlanan": self._sayac["mesgul"],
+            "isleyici_hatasi": self._sayac["hata"],
+            "son_yetkisiz_sohbet": self._maskele(self._son_yetkisiz_chat),
+        }
+
+    def _bayat_uyarisi(self, komut: str, yas_sn: float) -> str:
+        dk = int(max(0.0, yas_sn) // 60)
+        return (f"🕓 /{komut} yaklaşık {dk} dk önce gönderilmişti; bot bu sırada "
+                "uykudaydı/kapalıydı (servis 15 dk hareketsizlikte uyur).")
+
     # --- HTTP ----------------------------------------------------------
     def _session_obj(self):
         if self._session is None:
@@ -128,8 +188,8 @@ class TelegramCommandListener:
 
     # --- ana döngü -----------------------------------------------------
     def run_forever(self) -> None:
-        # Polling starts only after backlog classification is complete. A network
-        # failure must not turn the first ordinary poll into an unfiltered replay.
+        # Polling yalnızca backlog sınıflandırması BİTTİKTEN sonra başlar. Ağ
+        # hatasında ilk sıradan yoklama süzülmemiş bir tekrar oynatmasın.
         while not self._stop.is_set():
             try:
                 backlog_ready = self._backlog_atla()
@@ -168,7 +228,7 @@ class TelegramCommandListener:
                 return
         logger.info("Telegram komut dinleyicisi kapandı")
 
-    def _backlog_atla(self, azami_tur: int = 20) -> bool | str:
+    def _backlog_atla(self, azami_tur: int = 20):
         """Açılıştaki BAYAT komutları atla, yeni komutları koru.
 
         Neden: servis gece uyuyabilir. Sabah açıldığında dün akşam yazılmış
@@ -176,8 +236,8 @@ class TelegramCommandListener:
         kaybolmamalı. Kural: `BACKLOG_SINIR_SN`'den (15 dk) eski mesajlar
         onaylanıp geçilir; ilk taze mesajdan itibaren normal yoklama devralır.
         Başarılı sınıflandırmada True, geçici hatada False döner. Geçici hata
-        normal polling'i başlatmaz; aynı backlog offset'iyle geri çekilerek dener.
-        401/409 ise mevcut fatal polling davranışı korunarak hata metni döner.
+        normal polling'i başlatmaz (fail-closed); aynı backlog offset'iyle geri
+        çekilerek denenir. 401/409 fatal sayılır ve hata metni döner.
         """
         esik = time.time() - BACKLOG_SINIR_SN
         atlanan = 0
@@ -208,13 +268,7 @@ class TelegramCommandListener:
                 logger.warning("Telegram backlog getUpdates JSON çözümlenemedi")
                 return False
             if not guncellemeler:
-                if atlanan:
-                    logger.info(
-                        "Telegram komut dinleyicisi: %s bayat mesaj atlandı (offset=%s)",
-                        atlanan, self._offset,
-                    )
-                else:
-                    logger.info("Telegram komut dinleyicisi: bekleyen mesaj yok")
+                self._bayat_ozetle(atlanan)
                 return True
 
             taze_index = None
@@ -225,23 +279,19 @@ class TelegramCommandListener:
                     break
 
             if taze_index is not None:
-                # offset first-fresh ID acknowledges only the old prefix; Telegram
-                # still returns this update on the next poll.
+                # offset, ilk taze update'in ID'siyle yalnız bayat öneki onaylanır;
+                # Telegram bu update'i sonraki yoklamada yine getirir.
                 try:
                     taze_id = int(guncellemeler[taze_index].get("update_id", 0))
                 except (AttributeError, TypeError, ValueError):
                     return False
                 if self._offset is None or taze_id > self._offset:
                     self._offset = taze_id
-                if atlanan:
-                    logger.info(
-                        "Telegram komut dinleyicisi: %s bayat mesaj atlandı (offset=%s)",
-                        atlanan, self._offset,
-                    )
+                self._bayat_ozetle(atlanan)
                 return True
 
-            # The whole page is stale: advance/ACK it immediately so a later
-            # page or a transient network error cannot roll the offset backward.
+            # Partinin tamamı bayat: offset hemen ilerletilir ki sonraki sayfa ya
+            # da geçici bir ağ hatası offset'i geri alamazsın.
             try:
                 son_id = int(guncellemeler[-1].get("update_id", 0))
             except (AttributeError, TypeError, ValueError):
@@ -256,6 +306,26 @@ class TelegramCommandListener:
             azami_tur, self._offset,
         )
         return False
+
+    def _bayat_ozetle(self, atlanan: int) -> None:
+        """Backlog turu özeti: teşhis sayacı + kullanıcının gördüğü TEK mesaj."""
+        if not atlanan:
+            logger.info("Telegram komut dinleyicisi: bekleyen mesaj yok")
+            return
+        self._sayac["bayat"] += atlanan
+        logger.info(
+            "Telegram komut dinleyicisi: %s bayat mesaj atlandı (offset=%s)",
+            atlanan, self._offset,
+        )
+        # Sessiz kaybolmasın: kullanıcı "neden hiç cevap gelmedi?" diye
+        # düşünmek yerine servisin uyuduğunu ve komutun yanıtlanmadığını görsün.
+        if self.bayat_bildirim:
+            self._cevapla(
+                f"💤 Bot uyanık değildi: {atlanan} eski komut yanıtlanmadı "
+                "(eskimiş /tara,/panel yanlış sonuç üretmesin diye çalıştırılmaz).\n"
+                f"{int(BACKLOG_SINIR_SN // 60)} dakikadan eski mesajlar açılışta atlanır; "
+                "güncel komutu yeniden gönderin."
+            )
 
     def poll_once(self) -> Optional[str]:
         """Tek yoklama turu. Dönen değer: durdurma sebebi (yoksa None)."""
@@ -306,8 +376,8 @@ class TelegramCommandListener:
                     "Telegram komutu işlenemedi: %s",
                     redact_sensitive_text(exc, self.token),
                 )
-            # Reply outbox'a dayanıklı biçimde yazılamadıysa update'i ACK etme.
-            # Aynı süreçte saklanan cevap tekrar denenir; komut yan etkisi yeniden
+            # Cevap outbox'a dayanıklı biçimde yazılamadıysa update ACK edilmez:
+            # aynı süreçte saklanan cevap tekrar denenir, komut yan etkisi yeniden
             # çalıştırılmaz. Sonraki getUpdates turu aynı update_id'yi getirir.
             if isinstance(update_id, int) and update_id in self._pending_reply:
                 break
@@ -318,7 +388,7 @@ class TelegramCommandListener:
         return None
 
     def update_waiting_for_delivery(self, update_id) -> bool:
-        """Webhook/polling ACK'i bekletmesi gereken, dayanıklı cevap bekleyen update."""
+        """Webhook/polling ACK'ini bekletmesi gereken, outbox'ta cevabi bekleyen update."""
         return isinstance(update_id, int) and update_id in self._pending_reply
 
     def _islenenleri_temizle(self) -> None:
@@ -337,6 +407,8 @@ class TelegramCommandListener:
         update_id = update.get("update_id") if isinstance(update, dict) else None
         if isinstance(update_id, int):
             if update_id in self._pending_reply:
+                # Cevap bellekte bekliyor: handler YENİDEN çalıştırılmaz, yalnız
+                # teslim denenir.
                 return self._cevapla(self._pending_reply[update_id], update_id)
 
             if self.response_exists is not None:
@@ -349,6 +421,7 @@ class TelegramCommandListener:
                     )
                     reply_exists = False
                 if reply_exists:
+                    # Restart sonrası: cevap outbox'ta kayıtlı, komut tekrar çalışmaz.
                     self._gorulen[update_id] = time.time()
                     self._cevapla("", update_id)
                     return None
@@ -363,25 +436,69 @@ class TelegramCommandListener:
         metin = mesaj.get("text")
 
         if str(sohbet_id) != self.allowed_chat_id:
-            logger.warning("Yetkisiz sohbetten Telegram komutu yok sayıldı")
+            # Sayaç + maskeli kimlik: "DM'imden yazıyorum ama cevap yok" durumunun
+            # en sık sebebi, gelen sohbetin TELEGRAM_CHAT_ID ile eşleşmemesidir.
+            # Kimlik tam yazılmaz (kişisel veri), son 4 hane yeterli.
+            self._sayac["yetkisiz"] += 1
+            self._son_yetkisiz_chat = sohbet_id
+            logger.warning(
+                "Telegram komutu yetkisiz sohbetten geldi (chat_id=%s, tip=%s, beklenen=%s) — yok sayıldı",
+                self._maskele(sohbet_id) or "?",
+                (mesaj.get("chat") or {}).get("type") or "?",
+                self._maskele(self.allowed_chat_id) or "?",
+            )
             return None
         if not metin:
             return None
 
         komut, arguman = komut_coz(metin)
         if not komut:
+            # GRUPLARDA sohbete karışılmaz: admin bot tüm mesajları görür, ama
+            # yalnız komutlara cevap verir. (Eskiden komut olmayan HER metne
+            # /yardim basılıyordu; grup sohbetinde bot spam'i olurdu.)
+            sohbet_tipi = str((mesaj.get("chat") or {}).get("type") or "").lower()
+            if sohbet_tipi and sohbet_tipi != "private":
+                logger.debug("Grup sohbetinde komut olmayan mesaj yok sayıldı (chat_id=%s)",
+                             self._maskele(sohbet_id) or "?")
+                return None
             return self._cevapla(self.help_text or "Komut listesi için /yardim yazın.", update_id)
 
-        # Uzun analiz sırasında komut update'i tüketilir ama cevap verilmez ve
-        # iş kuyruğuna konmaz. Aynı kontrol webhook ve getUpdates yollarında çalışır.
+        # Geç teslim edilen komut (bot uykudayken yazıldı; webhook tekrarı ya da
+        # açılış) → durum değiştiren komutlar çalıştırılmaz, okuma komutları
+        # gecikme notuyla yanıtlanır. Aksi halde dünkü "/tara" bugün sessizce
+        # çalışıp yanlış/geç sonuç üretebilirdi.
+        yas_sn = self._mesaj_yasi_sn(mesaj)
+        gecikme_notu = ""
+        if yas_sn is not None and self.bayat_sinir_sn > 0 and yas_sn > self.bayat_sinir_sn:
+            self._sayac["bayat"] += 1
+            if komut not in BAYAT_GUVENLI_KOMUTLAR:
+                logger.info("Telegram /%s: %.0f dk gecikmeli geldi, çalıştırılmadı",
+                            komut, yas_sn / 60)
+                return self._cevapla(
+                    self._bayat_uyarisi(komut, yas_sn)
+                    + " Eski komut yeniden çalıştırılmaz; güncel sonuç için şimdi tekrar gönderin.",
+                    update_id,
+                )
+            gecikme_notu = self._bayat_uyarisi(komut, yas_sn) + " Yine de yanıtlanıyor.\n\n"
+
+        # Uzun analiz sırasında komut iş kuyruğuna KONMAZ (aynı anda tek iş) ama
+        # sessiz de kalınmaz: kullanıcı "komut çalışmıyor" sanmasın diye kısa bir
+        # bilgi mesajı gider. Aynı kontrol webhook ve getUpdates yollarında çalışır.
         try:
-            if self.komutlari_yoksay is not None and self.komutlari_yoksay():
-                logger.info("Telegram /%s: analiz sürerken sessizce yok sayıldı", komut)
-                return None
+            mesgul = bool(self.komutlari_yoksay is not None and self.komutlari_yoksay())
         except Exception as exc:
             logger.warning(
                 "Telegram komut meşguliyet kontrolü başarısız: %s",
                 redact_sensitive_text(exc, self.token, self.allowed_chat_id),
+            )
+            mesgul = False
+        if mesgul:
+            self._sayac["mesgul"] += 1
+            logger.info(f"Telegram /{komut}: analiz sürerken yok sayıldı (bilgi mesajı gönderildi)")
+            return self._cevapla(
+                f"\u23f3 Analiz sürüyor; /{komut} şu an çalıştırılmadı (aynı anda tek iş çalışır).\n"
+                "Sonuç bitince bu sohbete gelecek — sonra komutu yeniden gönderin.",
+                update_id,
             )
 
         simdi = time.monotonic()
@@ -398,20 +515,37 @@ class TelegramCommandListener:
                 update_id,
             )
 
+        # Argüman loglanmaz: komut adı teşhis için yeterli, sohbet kimliği/argüman
+        # loga sızmamalı.
         logger.info("Telegram komutu: /%s", komut)
         try:
             cevap = isleyici(arguman)
         except Exception as exc:  # noqa: BLE001 - kullanıcıya sade, maskelenmiş hata
             safe_error = redact_sensitive_text(exc, self.token, self.allowed_chat_id)
-            logger.error("/%s işleyicisi hata verdi: %s", komut, safe_error)
-            cevap = f"❌ /{komut} çalıştırılamadı: {safe_error[:200]}"
+            logger.error("/%s işleyicisi hata verdi: %s", komut, safe_error, exc_info=True)
+            self._sayac["hata"] += 1
+            cevap = f"\u274c /{komut} çalıştırılamadı: {safe_error[:200]}"
         if not cevap:
             return None
-        return self._cevapla(cevap, update_id)
+        self._sayac["islenen"] += 1
+        self._son_komut_adi = komut
+        self._son_komut_ts = time.time()
+        return self._cevapla(gecikme_notu + cevap, update_id)
+
+    @staticmethod
+    def _mesaj_yasi_sn(mesaj: Dict[str, Any]) -> Optional[float]:
+        """Mesajın yaşı (saniye); `date` yoksa/geçersizse None.
+
+        Telegram `date` alanı sunucu tarafında üretilir; istemci saati güvenilmez.
+        """
+        tarih = mesaj.get("date")
+        if not isinstance(tarih, (int, float)):
+            return None
+        return max(0.0, time.time() - float(tarih))
 
     def _cevapla(self, text: str, update_id=None) -> Optional[str]:
-        # Redact the complete source before clipping: a secret split by the
-        # Telegram-size boundary would otherwise evade exact-value matching.
+        # Kırpma ÖNCESİ redakte et: Telegram boyur sınırında bölünen bir sır
+        # bire-bir eşleştirmeden kaçabilirdi.
         govde = kirp(redact_sensitive_text(str(text), self.token))
         if self.response_sender is not None and isinstance(update_id, int):
             try:

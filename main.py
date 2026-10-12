@@ -10,13 +10,10 @@ import json
 import signal
 import logging
 import random
-import tempfile
+import socket
 import threading
 from datetime import datetime, timedelta, time as dt_time
-
-import pandas as pd
-from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
-import pytz
+from typing import List, Dict
 
 try:
     from dotenv import load_dotenv
@@ -25,7 +22,7 @@ except ImportError:
     pass
 
 from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_LOG_DIR, LOG_DIR,
-                    ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES,
+                    ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL, ALERT_STATES, BIST_OPEN,
                     SCAN_DELAY_AFTER_CLOSE_MIN, STALE_BAR_UYARI_DK, VERI_YOK_MODU_ESIK_DK,
                     OFFSESSION_CACHE_MAX_AGE_DAYS,
                     TARAMA_SURESI_UYARI_DK, SCAN_REQUEST_BATCH_SIZE,
@@ -33,126 +30,157 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD,
                     SCAN_BATCH_PAUSE_MIN_SEC, SCAN_BATCH_PAUSE_MAX_SEC,
                     SCAN_RETRY_BACKOFF_MIN_SEC, SCAN_RETRY_BACKOFF_MAX_SEC,
-                    SUMMARY_HOURS, DEFERRED_ALERT_DIGEST_TIME, POST_CLOSE_ANALYSIS_TIME,
-                    PUBLIC_MIN_QUALITY, PUBLIC_STATES, LOG_LEVEL,
-                    MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE,
+                    SUMMARY_HOURS, DEFERRED_ALERT_DIGEST_TIME, DEFERRED_ALERT_DIGEST_LIMIT,
+                    POST_CLOSE_ANALYSIS_TIME, ACIL_KUYRUK_BOSALTMA_ARALIK_SN,
+                    HEARTBEAT_MIN_ARALIK_SN, HEARTBEAT_UZAK_ARALIK_SN,
+                    PUBLIC_MIN_QUALITY,
+                    MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE, EVREN_BUYUME_UYARI_ESIGI,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL)
-from data import (StockDequeManager, tarama_penceresi_acik_mi, time_until_next_open,
-                  son_kapanan_mum_ani,
+from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
+                  islem_gunu_mu,
+                  son_kapanan_mum_ani, time_until_next_open, is_bist_open,
                   resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_last_bar,
                   select_yfinance_1h_period, tamamlanmis_mumlar,
-                  ohlcv_girdi_sorunlari, _atomic_json_write)
-from bist_calendar import (
-    SessionStatus,
-    as_istanbul_datetime,
-    bist_scan_due,
-    bist_scan_window_open,
-    bist_session_for,
-    current_session_data_issue,
-    current_session_timestamp_issue,
-    latest_session_checkpoint,
-    next_bist_scan_at,
-    seconds_until_next_bist_open,
-    should_run_post_close_analysis,
-)
+                  mum_kapanis_ani, bar_kapandi_mi)
 from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
-from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES, STATE_TR
+from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
 from notifier import TelegramNotifier
-from formation_dm_context import build_formation_dm_context
+from karne import (KarneDefteri, atr_hesapla, hafta_damgasi, karne_gunu_mu, karne_uret)
 from supabase_store import SupabaseStore
-from health_server import start_render_health_server, WEBHOOK_YOL_ONEK
+from health_server import start_render_health_server
 from live_state import LiveState
-from telegram_commands import TelegramCommandListener, kirp
-from secrets_redaction import redact_sensitive_text
+from telegram_commands import TelegramCommandListener
+
+# Batch 8 / C2: raporlama katmanı `reporting/format.py`'ye ayrıldı. Burada eski
+# iç adlar (`_sayi`, `_panel_*`) alias olarak korunuyor: main döngüsü ve testler
+# aynı isimlerle çalışmaya devam eder, davranış değişmez.
+from reporting.panel import panel_raporu
+from reporting.format import (
+    STATE_TR, PANEL_TIMEFRAMES, PANEL_MESAJ_SINIRI,
+    PANEL_DURUM_PUANI, PANEL_IPUCU, son_bar_yasi_dakika_str,
+    sayi as _sayi, gecen_sure as _gecen_sure,
+    filtrele_formasyonlar as _filtrele_formasyonlar, break_ok as _break_ok,
+    veri_durumu_satiri as _veri_durumu_satiri,
+    panel_kalite as _panel_kalite, panel_sembol as _panel_sembol,
+    panel_hucre as _panel_hucre, panel_aday_puani as _panel_aday_puani,
+    panel_kritik_anahtar as _panel_kritik_anahtar,
+    panel_filtre_coz as _panel_filtre_coz,
+    panel_durum_sayilari as _panel_durum_sayilari,
+    panel_kritik_listesi as _panel_kritik_listesi,
+    panel_sigdir as _panel_sigdir,
+    mum_kapanis_metni as _mum_bilgisi,
+    format_deferred_alert_summary as _format_deferred_alert_summary,
+)
 
 # === LOGGING KURULUMU ===
+# Batch 8 / C2: bu fonksiyon artık IMPORT anında ÇAĞRILMAZ (yan etki kaldırıldı:
+# modül import edildiğinde log dizini oluşturulmuyor/`/var/log` denenmiyordu).
+# `main_loop()` ve `python main.py` girişi kurulumu kendisi yapar.
+_logging_kuruldu = False
+
+
 def setup_logging():
-    """Log hem console hem dosyaya - Türkçe mesajlar; LOG_LEVEL uygulanır."""
-    # LOG_DIR'e ait benzersiz probe kullan: sabit .write_test adlı mevcut dosyayı
-    # asla ezme/silme ve paralel süreçlerin probe'ları çakışmasın.
+    """Log hem console hem dosyaya - Türkçe mesajlar (tek seferlik)."""
+    global _logging_kuruldu
+    if _logging_kuruldu:
+        return logging.getLogger(__name__)
+    # Local mi prod mu? LOG_DIR (/var/log/bist-bot) GERÇEKTEN yazılabilir mi?
+    # Not: /var/log'un kendisine bakmak yetmez (root dışında yazılamaz) -
+    # LOG_DIR'e yazma testi yapılmalı, yoksa sunucuda loglar ./logs'a düşer.
     log_dir = LOG_DIR
-    probe_path = None
     try:
         os.makedirs(log_dir, exist_ok=True)
-        probe_fd, probe_path = tempfile.mkstemp(prefix=".write_test_", dir=log_dir)
-        with os.fdopen(probe_fd, "w", encoding="utf-8") as probe:
-            probe.write("test")
+        test_path = os.path.join(log_dir, ".write_test")
+        with open(test_path, "w") as f:
+            f.write("test")
+        os.remove(test_path)
     except Exception:
         log_dir = LOCAL_LOG_DIR
         os.makedirs(log_dir, exist_ok=True)
-    finally:
-        if probe_path:
-            try:
-                os.remove(probe_path)
-            except FileNotFoundError:
-                pass
-            except OSError:
-                pass
-
+    
     log_file = os.path.join(log_dir, "bot.log")
-    level = getattr(logging, LOG_LEVEL, logging.INFO)
+    
     logging.basicConfig(
-        level=level,
+        level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(message)s',
         handlers=[
             logging.FileHandler(log_file, encoding='utf-8'),
             logging.StreamHandler(sys.stdout)
         ]
     )
-    # pytest/host runtimes may already have handlers, in which case basicConfig
-    # does not apply a level. Respect configuration without replacing their sinks.
-    logging.getLogger().setLevel(level)
-
+    
+    _logging_kuruldu = True
     logger = logging.getLogger(__name__)
     logger.info(f"Logging kuruldu - dosya: {log_file} - profil: {PROFILE}")
     return logger
 
-logger = setup_logging()
+# Import anında yalnız logger nesnesi alınır; handler'lar setup_logging() ile
+# bağlanır (yukarıdaki nota bakın).
+logger = logging.getLogger(__name__)
 
 # main_loop icinde olusturulan nesnelerin global referanslari (heartbeat icin)
 _deque_manager_ref = None
 _notifier_ref = None
+# İşlem günü değilken her döngüde aynı log satırını basmamak için gün damgası.
+_islem_gunu_loglandi = {"gun": None}
+# SESSİZ ARIZA BEKÇİSİ: üst üste başarısız tarama turu sayacı + son uyarı günü.
+# Neden: Yahoo/veri kaynağı bozulduğunda süreç ayakta kalır, kanal sessizleşir ve
+# sahibin bundan haberi olmaz (kullanıcı "bot öldü" sanır). En fazla günde 1 DM.
+_ardisik_basarisiz_tur = 0
+_son_tarama_uyari_gun = None
+TARAMA_UYARI_ESIK_TUR = 3
 _supabase_store_ref = None
 _deferred_alert_buffer = DeferredAlertBuffer()
+# Haftalık doğruluk karnesi defteri (yerel JSON; Supabase GEREKTİRMEZ).
+# Tembel kurulur: dosya yolu DATA_DIR'e bağlı, import anında I/O yapılmaz.
+_karne_defteri: "KarneDefteri | None" = None
+# Uzak yedeğe yazma aralığı (saniye): defter her tarama turunda birkaç kayıt alır;
+# her kayıtta tüm JSON'u Supabase'e yazmak gereksiz trafik olurdu.
+_karne_son_uzak_yazma = 0.0
+KARNE_UZAK_YAZMA_ARALIK_SN = 300
+
+# Bugüne ait 18:45 kapanış özetinin gönderilip gönderilmediği (ISO gün). Kalıcı
+# tamponla birlikte Supabase/diske yazılır; restart sonrası aynı özet iki kez gitmez.
+_digest_son_gonderim_gun = None
+# Politika tek kaynak: `config.ALERT_STATES` (anlık) / `config.WATCH_STATES`
+# (digest). Bu frozenset yalnız okuma kolaylığı içindir (B7 kararı config'te).
 IMMEDIATE_ALERT_STATES = frozenset(ALERT_STATES)
-def son_bar_yasi_dakika_str(dk: float) -> str:
-    """Dakikayı insan okunur yapar: 95 -> '1sa 35dk', 1500 -> '1g 1sa'."""
-    dk = max(0, int(round(dk)))
-    if dk >= 24 * 60:
-        gun, kalan = divmod(dk, 24 * 60)
-        return f"{gun}g {kalan // 60}sa"
-    if dk < 60:
-        return f"{dk} dk"
-    return f"{dk // 60}sa {dk % 60}dk"
+# Yaşam döngüsü "slotu sıfırlayan" state'ler: motor bu state'lerden birine
+# düştüğünde ilgili hisse/TF slotunun tek-seferlik mühürleri (notifier
+# son_alert) ve 4 saatlik zaman cooldown'ları temizlenir. Böylece aynı slotu
+# tekrar kaplayan yeni formasyon eski mühürle sessiz kalmadan, 4 saat
+# beklemeksizin anında bildirilebilir (tekrar alarm koruması, bkz. SORUN_RAPORU).
+TEKRAR_SIFIRLA_STATELER = frozenset({
+    "FORMASYON_YOK",
+    "FORMASYON_GECERSIZ",
+    "FORMASYON_ZAYIFLADI",
+    "KIRILIM_TEYIT_ALAMADI",
+})
+
+
+def _evren_olcek_uyarisi(evren=None) -> str:
+    """Evren eşiğin üzerindeyse pacing/panel/digest limitlerini hatırlatır.
+
+    Davranışı DEĞİŞTİRMEZ: yalnız loga tek satır uyarı düşer (rapor B8: evren
+    48'den büyürse önce pacing/digest/panel limitleri ölçülmeli).
+    """
+    hisseler = list(ACTIVE_STOCKS if evren is None else evren)
+    if len(hisseler) <= EVREN_BUYUME_UYARI_ESIGI:
+        return ""
+    return (f"⚠️ Evren {len(hisseler)} hisse (eşik {EVREN_BUYUME_UYARI_ESIGI}): pacing "
+            "(SCAN_*), panel mesaj bütçesi ve 18:45 digest limiti yeniden ölçülmeli "
+            "(KODLAMA_PLANI → 'Evren büyütme').")
 
 
 def _cache_verisi_kullanilabilir(yas_dk: float, taze_veri_var: bool, seans_acik: bool) -> bool:
-    """Fetch başarısız/eskiyse mevcut seans dışı cache yaş politikasını uygula."""
-    if yas_dk < 0 or yas_dk > OFFSESSION_CACHE_MAX_AGE_DAYS * 24 * 60:
+    """Fetch başarısızsa seans dışı son mumları yaş sınırına kadar kullan."""
+    if yas_dk > OFFSESSION_CACHE_MAX_AGE_DAYS * 24 * 60:
         return False
     if taze_veri_var:
         return True
     return not seans_acik or yas_dk <= STALE_BAR_UYARI_DK
-
-
-def _frame_son_bar_yasi_dk(frame, now: datetime) -> Optional[float]:
-    """Fetch frame'indeki son etiketin yaşını hesapla; bozuk/future index'i taze sayma."""
-    if frame is None or len(frame) == 0:
-        return None
-    try:
-        latest = pd.Timestamp(frame.index.max())
-        if pd.isna(latest):
-            return None
-        latest = (ISTANBUL_TZ.localize(latest.to_pydatetime())
-                  if latest.tzinfo is None else latest.tz_convert(ISTANBUL_TZ))
-        current = pd.Timestamp(now)
-        current = (ISTANBUL_TZ.localize(current.to_pydatetime())
-                   if current.tzinfo is None else current.tz_convert(ISTANBUL_TZ))
-        return (current - latest).total_seconds() / 60.0
-    except (TypeError, ValueError, OverflowError, AttributeError):
-        return None
 
 
 # === SİNYAL YÖNETİMİ (systemctl stop -> SIGTERM) ===
@@ -176,6 +204,9 @@ _telegram_update_processor_ref = None
 # tekrarı olabilir) komut işleme serileştirilir: dinleyicinin hız sınırı/tekrar
 # kümesi kilitli bir bölgede kullanılır.
 _telegram_webhook_kilidi = threading.Lock()
+# Komut katmanı modu: "webhook" / "yoklama" / "kapali" (ya da başlangıçta None).
+# /health bunu raporlar: "komutlar neden gelmiyor?" sorusunun ilk cevabı budur.
+_komut_modu = None
 # Render PORT'unda çalışan küçük HTTP sunucusu (webhook + /health + /test).
 _health_server_ref = None
 
@@ -195,31 +226,20 @@ def _analiz_hatasi_kaydi(exc, istek_hisse: int, kaynak: str = "analiz") -> dict:
     """scan_all_stocks dışında fırlayan hataları da tutarlı başarısız durum yap."""
     global last_run_stats
     bitis = datetime.now(ISTANBUL_TZ).isoformat()
-    telegram_token = getattr(_notifier_ref, "token", "")
-    hata = redact_sensitive_text(
-        f"{kaynak} hatası: {type(exc).__name__}: {exc}",
-        telegram_token, _telegram_webhook_secret_ayikla(),
-    )
+    hata = f"{kaynak} hatası: {type(exc).__name__}: {exc}"
     _live_state.fail_scan(
         hata,
         datetime.now(ISTANBUL_TZ),
         hata_hisse=max(0, int(istek_hisse)),
         islenen_hisse=0,
         istek_hisse=max(0, int(istek_hisse)),
-        son_tarama_fetch_yanit=None,
-        son_tarama_gecerli_fetch=None,
-        son_tarama_taze_veri=None,
-        son_tarama_analize_uygun=0,
     )
     last_run_stats = {
         "status": "basarisiz",
         "requested": max(0, int(istek_hisse)),
         "processed": 0,
         "failed": max(0, int(istek_hisse)),
-        "fetch_returned": None,
-        "fetch_valid": None,
         "fresh_fetch": None,
-        "analysis_eligible": 0,
         "fetch_failures": None,
         "data_asof": None,
         "oldest_bar_age_minutes": None,
@@ -228,19 +248,47 @@ def _analiz_hatasi_kaydi(exc, istek_hisse: int, kaynak: str = "analiz") -> dict:
     return dict(last_run_stats)
 
 
+# Aynı hisse/TF slotu gün içinde her taramada yeniden bulunur; "bugün kaç formasyon
+# buldun?" sorusunun doğru cevabı BENZERSİZ slot sayısıdır. Eskiden sayaç her
+# taramada yeniden artıyordu (9 tarama x 21 slot = 189) ve metrik şişiyordu.
+# Set, daily_stats içinde tutulmaz (JSON'a serileşmez/heartbeat'e sığmaz).
+_daily_pattern_keys: set = set()
+
+
+def _note_pattern_found(stock: str, timeframe: str) -> None:
+    """Günlük BENZERSİZ formasyon sayacını güncelle (aynı hisse bir kez sayılır; A9 düzeltmesi).
+    Mevcut TF davranışı (tarama, alert, digest) bozulmaz; sadece istatistik metrik düzeltilir.
+    Aynı hisse farklı TF'de (1h, 2h, 4h, 1d) aynı formasyon gösterirse, tekrar sayılmaz."""
+    # GÖREV 5 (A9): Multi-timeframe aynı formasyon tekrar sayılmasını önle
+    # Yalnızca hisse adı (TF'den bağımsız) anahtar olarak kullanılır
+    _daily_pattern_keys.add(f"{str(stock).upper()}")
+    daily_stats['patterns_found'] = len(_daily_pattern_keys)
+
+
 daily_stats = {
     'stocks_scanned': 0,
     'patterns_found': 0,
     'alerts_sent': 0,
     'errors': 0,
+    # --- ADAY HUNİSİ (kullanıcı isteği) ---
+    # "18 üretiliyor ama 3-5'inden bahsediliyor" sorusunun cevabı: her adayın
+    # akıbeti sayılır ve /durum'da tek satırda gösterilir. Hiçbir kayıt sessizce
+    # düşmez: ya gönderilir, ya ertelenir, ya da NEDENİ sayılır.
+    'alerts_attempted': 0,        # acil gönderim denemesi
+    'alerts_failed': 0,           # deneme başarısız (HTTP/ağ)
+    'alerts_deferred': 0,         # WATCH state: 18:45 digest'ine ertelendi
+    'alerts_below_threshold': 0,  # kalite eşiği altı (push üretmez)
+    'alerts_state_disabled': 0,   # state hiçbir push akışında değil (yalnız panel)
+    'alerts_bar_kapanmadi': 0,    # kapanmamış bar nedeniyle push ertelendi (P0 güvenlik kapısı)
+    'alerts_digest_overflow': 0,  # digest limiti nedeniyle gösterilmeyen aday
+    'alerts_kuyruk': 0,           # acil alarm engel yüzünden kuyruğa alındı (Batch 5 / B4)
+    'alerts_engel_cooldown': 0,   # cooldown nedeniyle gönderilemedi (B4 kuyruğuna girer)
+    'alerts_engel_kap': 0,        # saatlik/günlük kap nedeniyle gönderilemedi
+    'alerts_engel_tekrar': 0,     # aynı olay tekrar bastırıldı (tekrar mühürü; nihai red, kuyruğa girmez)
     # Veri sağlığı (FAZ 1): fetch başarısızlıkları artık SAYILIYOR ve görünür.
     # Önceden fetch başarısız olunca cache dolu olduğu için hiç log satırı yoktu
     # -> Yahoo saatlerce kapalıysa bot "sağlıklı" görünürken kör çalışıyordu.
-    'fetch_ok': 0,  # non-empty provider responses, not freshness/analysis eligibility
-    'fetch_valid': 0,
-    'fetch_fresh': 0,
-    'analysis_eligible': 0,
-    'future_bar_stocks': 0,
+    'fetch_ok': 0,
     'fetch_failures': 0,
     'fetch_retries': 0,
     'fetch_retry_recovered': 0,
@@ -251,11 +299,136 @@ daily_stats = {
     'split_atlanan': 0,
     'son_tarama_suresi_dk': None,
     'gunluk_bar_sayisi': None,
+    # Public grup kapanış özeti için: gün içinde kaç kırılım başarısız oldu
+    # (tek tek mesaj yerine özette tek satır) ve kaç tarama turu yapıldı
+    # ("432 hisse tarandı" = 48 hisse × 9 tarama; doğrusu tur sayısıdır).
+    'basarisiz_kirilim': 0,
+    'tarama_sayisi': 0,
     'last_reset': datetime.now(ISTANBUL_TZ).date()
 }
 
+
+# Gün içinde BENZERSİZ başarısız kırılım sayacı (hisse|TF|bar): aynı slot her
+# taramada yeniden üretildiği için ham sayım olayı şişirirdi.
+_daily_basarisiz_keys: set = set()
+
+
+def _note_basarisiz_kirilim(stock: str, timeframe: str, bar_time=None) -> None:
+    """Başarısız kırılımı günde bir kez sayar (public özet satırı için)."""
+    anahtar = f"{str(stock).upper()}|{str(timeframe).lower()}|{bar_time}"
+    if anahtar in _daily_basarisiz_keys:
+        return
+    _daily_basarisiz_keys.add(anahtar)
+    # Restart tabanı varsa sayı onun üstüne eklenir (çift sayım olmaz).
+    yeni = len(_daily_basarisiz_keys) - (
+        1 if "__restart_tabani__" in _daily_basarisiz_keys else 0)
+    daily_stats['basarisiz_kirilim'] = _daily_basarisiz_tabani + yeni
+    _gunluk_sayac_kaydet()
+
+# --- GÜNLÜK SAYAÇ KALICILIĞI (restart gün sürekliliği) ---------------------
+# Canlı denetimde ölçüldü: gün ortasında restart olunca 18:45 kanal özeti
+# "❌ 8 başarısız / 8 tarama" diyordu; gerçek gün "❌ 9 / 10 tarama" idi.
+# Sayaçlar artık GÜN damgalı olarak diske yazılır, aynı gün restart'ta geri yüklenir.
+_KALICI_SAYACLAR = ('basarisiz_kirilim', 'tarama_sayisi', 'alerts_sent', 'stocks_scanned')
+# Restart anında devralınan "başarısız kırılım" sayısı: olay detayı saklanmadığı
+# için yalnız SAYI taşınır, yeni olaylar bu tabanın üstüne eklenir.
+_daily_basarisiz_tabani = 0
+
+
+def _gunluk_sayac_kaydet() -> None:
+    """Günlük sayaçların kalıcı kopyasını yazar (I/O hatası botu durdurmaz)."""
+    try:
+        patch = {"sayaclar": {ad: daily_stats.get(ad, 0) for ad in _KALICI_SAYACLAR}}
+        if not _state_persistence.gunluk_durum_yukle():
+            # Gün döndü: yeni günün kaydı kurulurken dünün özet işaretleri
+            # geçersiz sayılır (gunluk_durum_guncelle kaydı yeniden kurar).
+            patch["ozet_gunleri"] = {}
+        _state_persistence.gunluk_durum_guncelle(patch)
+    except Exception as hata:  # noqa: BLE001
+        logger.debug("Günlük sayaç kaydı yazılamadı: %s", hata)
+
+
+def _gunluk_sayac_yukle() -> None:
+    """Aynı güne ait kalıcı sayaçları geri yükler (restart gün sürekliliği)."""
+    try:
+        veri = _state_persistence.gunluk_durum_yukle()
+    except Exception as hata:  # noqa: BLE001
+        logger.debug("Günlük sayaç okunamadı: %s", hata)
+        return
+    # Aynı güne ait kayıt varsa gün değişimi sıfırlaması TETİKLENMESİN: restart
+    # eden süreç, günün sayaçlarını devraldığı için "yeni gün" değildir.
+    try:
+        daily_stats['last_reset'] = datetime.now(ISTANBUL_TZ).date()
+    except Exception:  # noqa: BLE001
+        pass
+    sayaclar = (veri or {}).get("sayaclar") or {}
+    if not sayaclar:
+        return
+    yuklenen = {}
+    for ad in _KALICI_SAYACLAR:
+        try:
+            deger = int(sayaclar.get(ad) or 0)
+        except (TypeError, ValueError):
+            continue
+        if deger:
+            daily_stats[ad] = deger
+            yuklenen[ad] = deger
+    # Başarısız kırılım tekilleştirmesi gün içinde tekrar saymasın: anahtar
+    # kümesi dolu olamaz (olay detayı saklanmaz) ama sayaç tabanı korunur.
+    global _daily_basarisiz_tabani
+    if yuklenen.get('basarisiz_kirilim'):
+        _daily_basarisiz_keys.add("__restart_tabani__")
+        _daily_basarisiz_tabani = max(
+            _daily_basarisiz_tabani, int(yuklenen['basarisiz_kirilim']))
+        daily_stats['basarisiz_kirilim'] = _daily_basarisiz_tabani
+    if yuklenen:
+        logger.info("Günlük sayaçlar restart'tan geri yüklendi: %s", yuklenen)
+
+
+def _tarama_saglik_kontrolu(notifier) -> None:
+    """Tur sonucuna göre sessiz arıza bekçisi: üst üste başarısızsa sahibe DM.
+
+    Başarı ölçütü: tur "tamamlandi" VE en az bir hisse işlendi. Üst üste
+    TARAMA_UYARI_ESIK_TUR tur bu sağlanmazsa bir kez DM gider (günde en fazla
+    bir). Kanal sessizleşmeden sahip haberdar olur; başarılı turda sayaç sıfırlanır.
+    """
+    global _ardisik_basarisiz_tur, _son_tarama_uyari_gun
+    try:
+        durum = (last_run_stats or {}).get("status")
+        islenen = int((last_run_stats or {}).get("processed") or 0)
+    except Exception:  # noqa: BLE001
+        return
+    if durum == "tamamlandi" and islenen > 0:
+        if _ardisik_basarisiz_tur:
+            logger.info("Tarama sağlığı düzeldi (üst üste %d başarısız turdan sonra).",
+                        _ardisik_basarisiz_tur)
+        _ardisik_basarisiz_tur = 0
+        return
+    _ardisik_basarisiz_tur += 1
+    if _ardisik_basarisiz_tur < TARAMA_UYARI_ESIK_TUR:
+        return
+    bugun = datetime.now(ISTANBUL_TZ).date().isoformat()
+    if _son_tarama_uyari_gun == bugun:
+        return
+    _son_tarama_uyari_gun = bugun
+    logger.error("Tarama üst üste %d turdur başarısız; sahibe uyarı gönderiliyor.",
+                 _ardisik_basarisiz_tur)
+    if notifier is None or not getattr(notifier, "enabled", False):
+        return
+    try:
+        notifier.send_text(
+            "⚠️ Tarama üst üste %d turdur sonuç üretemedi.\n"
+            "Kanal sessiz kalabilir (veri kaynağı/bağlantı sorunu).\n"
+            "Durum: /durum · Panel: /panel\n"
+            "Botu yeniden başlatmak gerekirse Render → servis → Restart."
+            % _ardisik_basarisiz_tur)
+    except Exception as hata:  # noqa: BLE001
+        logger.debug("Tarama sağlık uyarısı gönderilemedi: %s", hata)
+
+
 def reset_daily_if_needed():
     """Gün değiştiyse günlük sayacı sıfırla"""
+    global _daily_basarisiz_tabani
     today = datetime.now(ISTANBUL_TZ).date()
     if today != daily_stats['last_reset']:
         logger.info(f"=== GÜNLÜK ÖZET {daily_stats['last_reset']} ===")
@@ -263,13 +436,27 @@ def reset_daily_if_needed():
         # Sıfırla
         daily_stats['stocks_scanned'] = 0
         daily_stats['patterns_found'] = 0
+        _daily_pattern_keys.clear()
+        daily_stats['basarisiz_kirilim'] = 0
+        # Restart tabanı yalnızca AYNI günün devralınan sayısıdır; yeni güne
+        # sıfırla (yoksa eski günün sayısı yeni güne taşınır ve sayaç şişer).
+        _daily_basarisiz_tabani = 0
+        _daily_basarisiz_keys.clear()
+        daily_stats['tarama_sayisi'] = 0
         daily_stats['alerts_sent'] = 0
+        daily_stats['alerts_attempted'] = 0
+        daily_stats['alerts_failed'] = 0
+        daily_stats['alerts_deferred'] = 0
+        daily_stats['alerts_below_threshold'] = 0
+        daily_stats['alerts_state_disabled'] = 0
+        daily_stats['alerts_bar_kapanmadi'] = 0
+        daily_stats['alerts_digest_overflow'] = 0
+        daily_stats['alerts_kuyruk'] = 0
+        daily_stats['alerts_engel_cooldown'] = 0
+        daily_stats['alerts_engel_kap'] = 0
+        daily_stats['alerts_engel_tekrar'] = 0
         daily_stats['errors'] = 0
         daily_stats['fetch_ok'] = 0
-        daily_stats['fetch_valid'] = 0
-        daily_stats['fetch_fresh'] = 0
-        daily_stats['analysis_eligible'] = 0
-        daily_stats['future_bar_stocks'] = 0
         daily_stats['fetch_failures'] = 0
         daily_stats['fetch_retries'] = 0
         daily_stats['fetch_retry_recovered'] = 0
@@ -281,46 +468,10 @@ def reset_daily_if_needed():
         daily_stats['son_tarama_suresi_dk'] = None
         daily_stats['gunluk_bar_sayisi'] = None
         daily_stats['last_reset'] = today
-
-def _persist_watch_buffer(notifier, now, *, remote: bool = False) -> bool:
-    """Persist the current-day deferred state after each mutation/symbol."""
-    if notifier is None or not hasattr(notifier, "persist_watch_state"):
-        return False
-    try:
-        return bool(notifier.persist_watch_state(_deferred_alert_buffer.snapshot(now), remote=remote))
-    except Exception:
-        logger.exception("Deferred watch snapshot persistence failed")
-        return False
-
-
-def _apply_recovered_deliveries(notifier, now=None) -> int:
-    """Apply durable outbox acknowledgements to live/digest bookkeeping."""
-    now = now or datetime.now(ISTANBUL_TZ)
-    try:
-        delivered = notifier.drain_outbox(max_items=10)
-    except Exception:
-        logger.exception("Telegram outbox drain failed; pending records remain recoverable")
-        return 0
-    recovered = 0
-    for item in delivered:
-        if item.get("kind") != "formation" or item.get("destination") != "dm":
-            continue
-        _deferred_alert_buffer.mark_reported(item.get("watch_context") or [], now)
-        if not _persist_watch_buffer(notifier, now, remote=True):
-            logger.error("Outbox app-ack deferred: watch state could not be durably persisted")
-            continue
-        _live_state.mark_alert_sent(item.get("stock", ""), item.get("timeframe", ""))
-        if not notifier.acknowledge_delivery(item.get("id", "")):
-            logger.error("Outbox app-ack persistence failed for id=%s", item.get("id", "")[:12])
-            continue
-        daily_stats["alerts_sent"] += 1
-        recovered += 1
-        logger.info(
-            "Telegram outbox DM recovered: %s %s %s (id=%s)",
-            item.get("stock"), item.get("timeframe"), item.get("state"), item.get("id", "")[:12],
-        )
-    return recovered
-
+        # Yeni gün: sayaçlar sıfırlanır. Kalıcı kayda DOKUNULMAZ; gunluk_durum_*
+        # katmanı gün damgasını kendisi denetler ve ilk yazımda yeni günün
+        # kaydını kurar (aynı güne ait özet işaretleri yanlışlıkla silinmesin).
+        _gunluk_sayac_kaydet()
 
 def create_yahoo_pacer() -> YahooRequestPacer:
     """Her Yahoo isteğine uygulanan seri pacing ayarları."""
@@ -411,10 +562,78 @@ def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=
     return fetched, failures, retry_count, recovered_count
 
 
+# === ÇOKLU ÖRNEK KORUMASI (Batch 6 / B10) ===
+# Aynı token + aynı Supabase anahtarıyla iki kopya çalışırsa: çift mesaj + cache
+# yarışı. Yoklama modunda Telegram 409 verir; webhook modunda hiçbir sinyal yoktu.
+# Sert kilit kurulmaz (kısa ağ kesintisinde botu durdurmak daha kötü olurdu):
+# durum loglanır, heartbeat ve /durum'a taşınır.
+INSTANCE_ID = (os.environ.get("BOT_INSTANCE_ID") or "").strip() or f"{socket.gethostname()}:{os.getpid()}"
+ORNEK_KONTROL_ARALIK_SN = 300
+_cift_ornek_durumu = {
+    "instance_id": INSTANCE_ID,
+    "son_kontrol": None,
+    "canli_digerleri": [],
+    "uyari": False,
+}
+
+
+def _tekil_ornek_kontrolu(store=None, force: bool = False) -> dict:
+    """Supabase'de başka canlı bot örneği var mı? (uyarı + heartbeat alanı)"""
+    global _cift_ornek_durumu
+    store = _supabase_store_ref if store is None else store
+    if store is None:
+        return _cift_ornek_durumu
+    simdi = datetime.now(ISTANBUL_TZ)
+    son = _cift_ornek_durumu.get("son_kontrol")
+    if not force and son is not None and (simdi - son).total_seconds() < ORNEK_KONTROL_ARALIK_SN:
+        return _cift_ornek_durumu
+    try:
+        sonuc = store.ornek_bildir(INSTANCE_ID, simdi.isoformat())
+    except Exception as exc:
+        logger.debug(f"Çoklu örnek kontrolü yapılamadı: {exc}")
+        return _cift_ornek_durumu
+    if not isinstance(sonuc, dict):
+        return _cift_ornek_durumu
+    digerleri = sonuc.get("canli_digerleri") or []
+    _cift_ornek_durumu = {
+        "instance_id": INSTANCE_ID,
+        "son_kontrol": simdi,
+        "canli_digerleri": digerleri,
+        "uyari": bool(digerleri),
+    }
+    if digerleri:
+        logger.error(
+            "⚠️ AYNI ANDA ÇALIŞAN BAŞKA BOT ÖRNEĞİ GÖRÜNÜYOR: %s — çift mesaj ve cache "
+            "yarışı riski. Fazladan kopyayı kapatın (Render'da tek instance olmalı).",
+            ", ".join(str(d.get("id")) for d in digerleri),
+        )
+    return _cift_ornek_durumu
+
+
 # === HEARTBEAT ===
-def write_heartbeat(data_dir: str = None, notifier=None):
+# Yazma amplifikasyonu koruması (Batch 6 / B5): heartbeat her hisse sonrası
+# çağrılıyordu (48 hisse × tarama = 48 Supabase UPSERT + 48 dosya yazımı).
+# Yeni kural:
+#   - yerel dosya: HEARTBEAT_MIN_ARALIK_SN'den sık yazılmaz (canlılık göstergesi
+#     olduğu için tamamen atlanmaz; force=True ile hemen yazılır),
+#   - Supabase: içerik değişmediyse veya HEARTBEAT_UZAK_ARALIK_SN dolmadıysa yazılmaz.
+_son_heartbeat_zamani = 0.0
+_son_heartbeat_icerik = None
+_son_heartbeat_uzak_zamani = 0.0
+
+
+def _heartbeat_icerik_ozeti(payload: dict) -> str:
+    """`last_scan` dışındaki alanların özeti: değişiklik tespiti için."""
+    return json.dumps({k: v for k, v in payload.items() if k != "last_scan"},
+                      ensure_ascii=False, sort_keys=True, default=str)
+
+
+def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
     """Botun yaşadığını dışarıdan anlamak için heartbeat dosyası.
     Dışarıdan izleme: `jq .last_scan bot_data/heartbeat.json` 2 saatten eskiyse bot takılmış/kapanmıştır."""
+    global _son_heartbeat_zamani, _son_heartbeat_icerik, _son_heartbeat_uzak_zamani
+    if not force and time.time() - _son_heartbeat_zamani < HEARTBEAT_MIN_ARALIK_SN:
+        return
     if data_dir is None:
         try:
             from config import DATA_DIR
@@ -434,10 +653,6 @@ def write_heartbeat(data_dir: str = None, notifier=None):
             "active_stocks": len(ACTIVE_STOCKS),
             # --- veri sağlığı (FAZ 1) ---
             "fetch_ok": daily_stats['fetch_ok'],
-            "fetch_valid": daily_stats['fetch_valid'],
-            "fetch_fresh": daily_stats['fetch_fresh'],
-            "analysis_eligible": daily_stats['analysis_eligible'],
-            "future_bar_stocks": daily_stats['future_bar_stocks'],
             "fetch_failures": daily_stats['fetch_failures'],
             "fetch_retries": daily_stats['fetch_retries'],
             "fetch_retry_recovered": daily_stats['fetch_retry_recovered'],
@@ -450,107 +665,204 @@ def write_heartbeat(data_dir: str = None, notifier=None):
             "gunluk_bar_sayisi": daily_stats['gunluk_bar_sayisi'],
             "telegram_kap": (notifier.kap_durumu() if notifier is not None
                              else (_notifier_ref.kap_durumu() if _notifier_ref else None)),
+            # --- GÖNDERİM SAĞLIĞI (A6) ---
+            # "Bot çalışıyor ama hiçbir mesaj gitmiyor" durumu dışarıdan görünsün:
+            # token/chat_id yokluğu, son başarılı gönderim, son hata ve engel sayaçları.
+            "notifier_enabled": (notifier.enabled if notifier is not None
+                                 else (getattr(_notifier_ref, "enabled", None) if _notifier_ref else None)),
+            # Public hedef doğrulaması (açılışta bir kez yapılır; buradan ağa çıkılmaz)
+            "public_hedef": (getattr(notifier, "public_hedef_bilgi", None)
+                             if notifier is not None
+                             else getattr(_notifier_ref, "public_hedef_bilgi", None)),
+            "telegram_gonderim": (notifier.gonderim_durumu() if notifier is not None
+                                  else (getattr(_notifier_ref, "gonderim_durumu", lambda: None)()
+                                        if _notifier_ref else None)),
+            # Bekleyen gün içi aday (18:45 digest) ve engellenen acil kuyruğu:
+            # restart/tıkanma durumunda "içeride ne var" dışarıdan görünsün.
+            "bekleyen_bildirim": len(_deferred_alert_buffer),
+            "digest_son_gonderim_gun": _digest_son_gonderim_gun,
+            "acil_kuyruk": (notifier.gonderim_durumu().get("acil_kuyruk")
+                            if notifier is not None
+                            else (getattr(_notifier_ref, "kuyruk_durumu", lambda: None)()
+                                  if _notifier_ref else None)),
+            # B5 telemetrisi: kaç uzak yazım yapıldı / kaçı gereksizdi
+            "uzak_yazma": (_deque_manager_ref.uzak_yazma_durumu()
+                           if _deque_manager_ref else None),
+            # --- ADAY HUNİSİ (B1) ---
+            "alerts_attempted": daily_stats['alerts_attempted'],
+            "alerts_failed": daily_stats['alerts_failed'],
+            "aday_hunisi": {
+                "push": daily_stats['alerts_sent'],
+                "digest_ertelenen": daily_stats['alerts_deferred'],
+                "state_kapsam_disi": daily_stats['alerts_state_disabled'],
+                "esik_alti": daily_stats['alerts_below_threshold'],
+                "bar_kapanmadi": daily_stats['alerts_bar_kapanmadi'],
+                "digest_tasmasi": daily_stats['alerts_digest_overflow'],
+                "engel_cooldown": daily_stats['alerts_engel_cooldown'],
+                "engel_kap": daily_stats['alerts_engel_kap'],
+                "kuyruga_alindi": daily_stats['alerts_kuyruk'],
+            },
+            "cift_ornek": {
+                "uyari": _cift_ornek_durumu.get("uyari", False),
+                "instance_id": INSTANCE_ID,
+                "canli_digerleri": _cift_ornek_durumu.get("canli_digerleri", []),
+                "son_kontrol": (_cift_ornek_durumu["son_kontrol"].isoformat()
+                                if _cift_ornek_durumu.get("son_kontrol") else None),
+            },
             "veri_sorunlari": ({k: [x['tip'] for x in v]
                                for k, v in _deque_manager_ref.sureklilik_sorunlari.items()}
                               if _deque_manager_ref else {}),
         }
-        if _supabase_store_ref is not None:
-            _supabase_store_ref.upsert("state:heartbeat", payload)
-        _atomic_json_write(heartbeat_path, payload, indent=2)
+        icerik = _heartbeat_icerik_ozeti(payload)
+        simdi = time.time()
+        if _supabase_store_ref is not None and (
+                force
+                or icerik != _son_heartbeat_icerik
+                or simdi - _son_heartbeat_uzak_zamani >= HEARTBEAT_UZAK_ARALIK_SN):
+            if _supabase_store_ref.upsert("state:heartbeat", payload):
+                _son_heartbeat_uzak_zamani = simdi
+        _son_heartbeat_icerik = icerik
+        with open(heartbeat_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        _son_heartbeat_zamani = simdi
     except Exception as e:
         logger.warning(f"Heartbeat yazılamadı: {e}")
+
+
+def _heartbeat_yolu() -> str:
+    """write_heartbeat ile AYNI dizin çözümlemesini kullanır (tek davranış)."""
+    try:
+        from config import DATA_DIR
+        data_dir = DATA_DIR
+    except ImportError:  # pragma: no cover - config her zaman var; güvenlik ağı
+        data_dir = "./bot_data"
+    return os.path.join(data_dir, "heartbeat.json")
+
+
+def _heartbeat_yasi_sn(simdi: datetime = None) -> float:
+    """heartbeat.json'daki `last_scan` damgasının yaşı (saniye); okunamazsa None.
+
+    Denetim B-4: /health artık botun canlı olup olmadığını bu değerle raporlar.
+    Dosya yoksa/bozuksa uydurma değer üretilmez, None döner ('bilinmiyor').
+    """
+    try:
+        with open(_heartbeat_yolu(), "r", encoding="utf-8") as f:
+            ham = json.load(f).get("last_scan")
+        if not ham:
+            return None
+        damga = datetime.fromisoformat(str(ham))
+        if damga.tzinfo is None:
+            damga = ISTANBUL_TZ.localize(damga)
+        return max(0.0, ((simdi or datetime.now(ISTANBUL_TZ)) - damga).total_seconds())
+    except Exception:
+        return None
+
+
+def _komut_durumu() -> dict:
+    """`/health` için komut katmanı özeti (mod + sayaçlar).
+
+    NEDEN: /health "status: ok" derken DM komutlarının hiç çalışmaması mümkündü;
+    bu blok modu (webhook/yoklama/kapali), dinleyicinin canlı olup olmadığını ve
+    gelen komut sayaçlarını gösterir. Kişisel sohbet kimliği maskelenir.
+    """
+    dinleyici = _telegram_listener_ref or _telegram_update_processor_ref
+    ozet: dict = {
+        "mod": _komut_modu,
+        "hedef_tanimli": bool(getattr(_notifier_ref, "chat_id", "")),
+    }
+    try:
+        if dinleyici is not None and hasattr(dinleyici, "durum"):
+            ozet.update(dinleyici.durum() or {})
+    except Exception as exc:  # noqa: BLE001 - /health asla düşmesin
+        ozet["hata"] = f"{type(exc).__name__}: {exc}"[:120]
+    return ozet
+
+
+def _saglik_ozeti() -> dict:
+    """GET /health için canlılık alanları (denetim B-4).
+
+    `/health` DAİMA 200 döner; Render'ın health check davranışı değişmez. Bu özet
+    "bot ayakta mı, tarama sürüyor mu, seans açık mı" sorusunu dışarıdan
+    cevaplanabilir yapar; `?strict=1` ile çağıran monitör heartbeat bayatken 503 alır.
+
+    Bayatlama eşiği:
+      - tarama sürüyorsa  → TARAMA_SURESI_UYARI_DK (uzun tam evren taraması yanlış
+        alarm üretmesin),
+      - seans açıkken     → 30 dk (tarama aralığı ~5 dk + gecikme payı),
+      - seans kapalıyken  → 72 sa (hafta sonu/tatil boşluğunda heartbeat üretilmez).
+    """
+    simdi = datetime.now(ISTANBUL_TZ)
+    try:
+        seans_acik = bool(is_bist_open(simdi))
+    except Exception:
+        seans_acik = None
+    try:
+        tarama_suruyor = bool(_live_state.status().get("tarama_suruyor"))
+    except Exception:
+        tarama_suruyor = None
+    if tarama_suruyor:
+        esik_sn = int(TARAMA_SURESI_UYARI_DK * 60)
+    elif seans_acik:
+        esik_sn = 1800
+    else:
+        esik_sn = 259200
+    yas = _heartbeat_yasi_sn(simdi)
+    return {
+        "heartbeat_age_s": None if yas is None else int(yas),
+        "heartbeat_stale": None if yas is None else bool(yas > esik_sn),
+        "heartbeat_stale_esik_s": esik_sn,
+        "tarama_suruyor": tarama_suruyor,
+        "seans_acik": seans_acik,
+        "evren": len(ACTIVE_STOCKS),
+        "instance_id": INSTANCE_ID,
+        "komut": _komut_durumu(),
+    }
 
 # === TELEGRAM KOMUTLARI (iki yönlü) ===
 # Bot alarm gönderir; bu bölüm Telegram'dan GELEN komutları yanıtlar. Komutlar
 # yalnızca TELEGRAM_CHAT_ID'den kabul edilir (yetki kontrolü telegram_commands.py
 # içinde). Yanıtlar getUpdates uzun yoklamasıyla ayrı bir thread'de toplanır.
-KOMUT_YARDIM = """🤖 Formation-Bot komutları
+KOMUT_YARDIM = """🤖 Formation-Bot komutları (DM)
 
 /formasyonlar — günün canlı formasyonları (detaylı)
+   diğer adlar: /formasyon · /liste
    filtre: /formasyonlar 1h   ·   /formasyonlar THYAO
 /canli veya /c — canlı formasyonlar tek mesajda kompakt (kısayol)
 /panel veya /p — 48 hisse x 4 zaman dilimi paneli + puanı en yüksek 12 aday
    diğer adlar: /genel · /tablo
    filtre: /panel 1h  ·  /panel THYAO  ·  /panel 1h THYAO  ·  /panel kirilim
 /ozet veya /o — günlük özet tek mesajda (tamamlanan/retest/sıkışan)
+   diğer ad: /gunluk
 /sikisanlar veya /s — sadece sıkışması güçlenenler
-/tamamlanan veya /t — sadece tamamlananlar
+   diğer adlar: /sikisan · /sıkışanlar · /sıkışan
+/tamamlanan veya /t — sadece tamamlananlar (diğer ad: /tamam)
 /retest veya /r — retest bekleyen/başarılı
-/kirilim veya /k — kırılım adayı/teyitli
+/kirilim veya /k — kırılım adayı/teyitli (diğer ad: /kırılım)
 /durum — bot, piyasa ve veri sağlığı özeti
+/karne [gün] — doğruluk karnesi: formasyon/kırılım sayıları + kırılım sonrası
+   performans (varsayılan bu hafta; /karne 30 ile son 30 gün). Cuma gün sonu
+   mesajının altında otomatik gelir. Veriler yerel dosyada (Supabase gerekmez).
+   diğer ad: /karnem
+/backtest [gün] [detay] — FAZ 3 tarihsel sonuç analizi (salt-okunur): kayıtlı
+   outcome'ların tip/TF/kalite/bileşen kırılımı; /backtest 90 · /bt · "detay"
+   bileşen + geometri + vaka bloklarını ekler. Hiçbir şey yazılmaz/değiştirilmez.
 /tara [HISSE] — şimdi analiz et (seans dışı da çalışır)
-/yardim — bu liste
+/yardim — bu liste (diğer adlar: /help · /start)
 
 Notlar:
-• Komutlar yalnızca kayıtlı sohbetten (TELEGRAM_CHAT_ID) kabul edilir.
+• Komutlar YALNIZCA kayıtlı DM sohbetinden (TELEGRAM_CHAT_ID) kabul edilir.
+  Public grup/kanal hedefi (TELEGRAM_GROUP_ID) komut KABUL ETMEZ: orası yalnız
+  yayın alır. Kanalda komut istiyorsan TELEGRAM_CHAT_ID'yi kanal/grup kimliği
+  yapmalısın — o zaman kendi DM komutların susar (tek sohbet kilidi).
 • Bu bir AL/SAT aracı değildir: formasyon durumu ve kalite skoru bildirir.
 • /panel tüm evreni yeniden hesaplar; /tara [HISSE] istenen kapsamı yeniden analiz eder.
-• Analiz bitince sonucu otomatik gönderir; çalışma sırasında diğer komutlar sessizce yok sayılır.
-• Public kanal için: /canli, /panel ve /ozet en verimli kısayollar.
-• Komutlar webhook (Render) ya da yoklama ile gelir; ikisi aynı anda açık olmaz."""
-
-_ALERT_EVENT_TYPES = {
-    "KIRILIM_TEYITLI": {"BREAK_CONFIRMED", "COUNTER_BREAK"},
-    "RETEST_BASARILI": {"RETEST_OK"},
-    "FORMASYON_TAMAMLANDI": {"COMPLETED"},
-    "BASARISIZ_KIRILIM": {"BREAK_FAILED"},
-}
-
-
-def _formation_alert_event_id(snapshot, state: str):
-    """Return a stable identity for an immediate lifecycle transition, if present.
-
-    The lifecycle manager replays completed bars, so the same event is present
-    in successive snapshots. Using its native timestamp (or bar index when no
-    timestamp exists) prevents a prolonged state from becoming a new Telegram
-    event merely because the four-hour cooldown elapsed.
-    """
-    accepted_types = _ALERT_EVENT_TYPES.get(str(state or ""))
-    if not accepted_types:
-        return None
-    for event in reversed(getattr(snapshot, "events", ()) or ()):
-        if not isinstance(event, dict):
-            continue
-        if event.get("state") != state or event.get("type") not in accepted_types:
-            continue
-        event_time = event.get("time")
-        if event_time is not None:
-            if hasattr(event_time, "isoformat"):
-                event_time = event_time.isoformat()
-            else:
-                event_time = str(event_time)
-            return f"{event.get('type')}:{event_time}"
-        bar_index = event.get("bar")
-        if bar_index is not None:
-            return f"{event.get('type')}:bar:{bar_index}"
-    return None
-
-
-# STATE_TR artık telegram_alert_flow içindeki ortak sözlükten gelir (notifier ile
-# aynı terminoloji); buradaki kopya kaldırıldı.
-
-def _gecen_sure(iso_zaman):
-    """'12 dk önce' gibi kısa yaş metni."""
-    if not iso_zaman:
-        return "—"
-    try:
-        an = datetime.fromisoformat(iso_zaman)
-    except (TypeError, ValueError):
-        return "—"
-    if an.tzinfo is None:
-        an = ISTANBUL_TZ.localize(an)
-    fark = (datetime.now(ISTANBUL_TZ) - an).total_seconds()
-    if fark < 90:
-        return f"{int(fark)} sn önce"
-    if fark < 5400:
-        return f"{int(fark // 60)} dk önce"
-    return f"{fark / 3600:.1f} sa önce"
-
-def _sayi(deger, basamak=2, varsayilan="—"):
-    try:
-        return f"{float(deger):.{basamak}f}"
-    except (TypeError, ValueError):
-        return varsayilan
+• Analiz bitince sonucu otomatik gönderir; çalışma sırasında gelen komutlar sessiz kalmaz:
+  "⏳ Analiz sürüyor" mesajıyla yanıtlanır (kuyruğa alınmaz, aynı anda tek iş).
+• Public hedefe (grup/kanal) giden yayın bu komutları ÇALIŞTIRMAZ; alarm/özet
+  otomatik gider. Kanal mesajları Telegram'da `channel_post` türünde gelir ve bot
+  yalnız `message` güncellemelerini dinler — yani kanalda komut yolu yoktur.
+• Komutlar webhook (Render) ya da yoklama ile gelir; ikisi aynı anda açık olmaz.
+  Bot ayrıca 15 dk'dan eski komutları çalıştırmaz ("bot uyanık değildi" mesajı gelir)."""
 
 def _komut_yardim(_arguman: str) -> str:
     return KOMUT_YARDIM
@@ -558,20 +870,14 @@ def _komut_yardim(_arguman: str) -> str:
 def _komut_durum(_arguman: str) -> str:
     now = datetime.now(ISTANBUL_TZ)
     st = _live_state.status()
-    session = bist_session_for(now)
-    if session.status is SessionStatus.UNKNOWN:
-        piyasa = "TAKVİM BİLİNMİYOR · otomatik tarama güvenlik nedeniyle kapalı"
-    elif session.status is SessionStatus.CLOSED:
-        try:
-            kalan = seconds_until_next_bist_open(now)
-            piyasa = (f"KAPALI ({session.reason}) · sonraki açılışa {kalan / 3600:.1f} saat"
-                      if kalan is not None else f"KAPALI ({session.reason})")
-        except Exception:
-            piyasa = f"KAPALI ({session.reason})"
-    elif bist_scan_window_open(now):
-        piyasa = "AÇIK (otomatik tarama penceresi içinde)"
+    if tarama_penceresi_acik_mi(now):
+        piyasa = "AÇIK (tarama penceresi içinde)"
     else:
-        piyasa = "SEANS GÜNÜ · otomatik tarama penceresi dışında"
+        try:
+            kalan = time_until_next_open(now)
+            piyasa = f"KAPALI · açılışa {kalan / 3600:.1f} saat"
+        except Exception:
+            piyasa = "KAPALI"
     formations = _live_state.formations()
     en_iyi = formations[0] if formations else None
     status = st.get("son_tarama_durumu", "yok")
@@ -586,27 +892,17 @@ def _komut_durum(_arguman: str) -> str:
         if processed is None:
             processed = last_run_stats.get("processed")
     fresh = st.get("son_tarama_taze_veri")
-    fetch_returned = st.get("son_tarama_fetch_yanit")
-    valid_fetch = st.get("son_tarama_gecerli_fetch")
-    analysis_eligible = st.get("son_tarama_analize_uygun")
     fetch_failures = st.get("son_tarama_fetch_hatasi")
     if status == "basarisiz":
+        # Son başarılı taramanın sayaçlarını başarısız son denemeye mal etme.
         fresh = last_run_stats.get("fresh_fetch")
-        fetch_returned = last_run_stats.get("fetch_returned")
-        valid_fetch = last_run_stats.get("fetch_valid")
-        analysis_eligible = last_run_stats.get("analysis_eligible")
         fetch_failures = last_run_stats.get("fetch_failures")
     elif status == "yok":
-        fresh = fetch_returned = valid_fetch = analysis_eligible = fetch_failures = None
+        fresh = None
+        fetch_failures = None
     else:
         if fresh is None:
             fresh = last_run_stats.get("fresh_fetch")
-        if fetch_returned is None:
-            fetch_returned = last_run_stats.get("fetch_returned")
-        if valid_fetch is None:
-            valid_fetch = last_run_stats.get("fetch_valid")
-        if analysis_eligible is None:
-            analysis_eligible = last_run_stats.get("analysis_eligible")
         if fetch_failures is None:
             fetch_failures = last_run_stats.get("fetch_failures")
 
@@ -615,11 +911,8 @@ def _komut_durum(_arguman: str) -> str:
         f"Profil: {PROFILE} · Evren: {len(ACTIVE_STOCKS)} hisse",
         f"Piyasa: {piyasa}",
     ]
-    tarih_notu = _sonuc_veri_tarihi_uyarisi(now)
-    if tarih_notu:
-        satirlar.append(tarih_notu)
     if _scan_job_active.is_set() or st.get("tarama_suruyor"):
-        satirlar.append("⏳ Analiz sürüyor; diğer komutlar iş bitene kadar yok sayılır.")
+        satirlar.append("⏳ Analiz sürüyor; gelen komutlar iş bitene kadar kısa bir bilgi mesajıyla yanıtlanır.")
     elif status == "basarisiz":
         satirlar.append("⚠️ Son analiz başarısız; boş sonuç olarak yayımlanmadı.")
     elif status == "yok":
@@ -642,13 +935,55 @@ def _komut_durum(_arguman: str) -> str:
             fresh, requested, fetch_failures,
             (last_run_stats.get("oldest_bar_age_minutes") if status == "basarisiz"
              else st.get("son_tarama_en_eski_veri_yasi_dk")),
-            fetch_returned=fetch_returned,
-            valid_fetch=valid_fetch,
-            analysis_eligible=analysis_eligible,
         ),
         f"Günlük toplam: {daily_stats['patterns_found']} formasyon kaydı, "
         f"{daily_stats['alerts_sent']} alarm, {daily_stats['errors']} hata",
     ]
+    # --- ADAY HUNİSİ: "kaç aday üretildi, kaçı nereye gitti?" ---
+    # Kullanıcı sorusu: "18 çıktı alıyoruz ama 3-5'inden bahsediyoruz". Bu satır
+    # her adayın akıbetini tek bakışta gösterir; düşen aday sessiz kalmaz.
+    huni = (f"🔎 Aday hunisi: {daily_stats['patterns_found']} üretildi · "
+            f"{daily_stats['alerts_sent']} push · {daily_stats['alerts_deferred']} digest · "
+            f"{daily_stats['alerts_state_disabled']} state dışı · "
+            f"{daily_stats['alerts_below_threshold']} eşik altı")
+    if daily_stats.get('alerts_digest_overflow'):
+        huni += f" · {daily_stats['alerts_digest_overflow']} digest taşması"
+    if daily_stats.get('alerts_kuyruk'):
+        huni += f" · {daily_stats['alerts_kuyruk']} kuyruğa alındı"
+    if daily_stats.get('alerts_bar_kapanmadi'):
+        # Güvenlik kapısı: kapanmamış bar ile push denenmedi, sonraki tura bırakıldı.
+        huni += f" · {daily_stats['alerts_bar_kapanmadi']} kapanmamış bar (ertelendi)"
+    satirlar.append(huni)
+    gosterim = None
+    gosterim_public = None
+    gonderim = getattr(_notifier_ref, "gonderim_durumu", None)
+    if callable(gonderim):
+        try:
+            gd = gonderim()
+            engel = gd.get("engeller") or {}
+            gosterim = (f"🚧 Gönderim engeli: {engel.get('cooldown', 0)} cooldown · "
+                        f"{engel.get('gunluk_kap', 0)} günlük kap · "
+                        f"{engel.get('saatlik_kap', 0)} saatlik kap · "
+                        f"{engel.get('tekrar', 0)} aynı-olay · "
+                        f"{gd.get('hatalar', 0)} hata")
+            if gd.get("public_enabled"):
+                gosterim_public = (f"📣 Public grup: {gd.get('public_gonderilen', 0)} gönderim · "
+                                   f"{gd.get('public_hatasi', 0)} hata · "
+                                   f"kuyruk {gd.get('public_kuyruk', 0)} · "
+                                   f"engel {gd.get('public_engel', 0)}")
+        except Exception as exc:  # noqa: BLE001 - komut asla çökmesin
+            logger.debug(f"Gönderim durumu okunamadı: {exc}")
+    if gosterim:
+        satirlar.append(gosterim)
+    if gosterim_public:
+        satirlar.append(gosterim_public)
+    # Notifier pasifse (token/chat_id yok) komut bunu açıkça söyler: aksi halde
+    # kullanıcı "hiç mesaj gelmiyor ama bot çalışıyor" durumunu ayırt edemez.
+    if _cift_ornek_durumu.get("uyari"):
+        kimlikler = ", ".join(str(d.get("id")) for d in _cift_ornek_durumu.get("canli_digerleri") or [])
+        satirlar.append(f"🚨 Çoklu örnek uyarısı: başka canlı kopya görünüyor ({kimlikler})")
+    if getattr(_notifier_ref, "enabled", None) is False:
+        satirlar.append("⚠️ Telegram PASİF: token/chat_id tanımlı değil, hiçbir bildirim gönderilmiyor.")
     if st.get("son_tarama_hatasi"):
         satirlar.append(f"⚠️ Son hata: {st['son_tarama_hatasi']}")
     kapsam_notu = _kismi_kapsam_notu()
@@ -658,48 +993,6 @@ def _komut_durum(_arguman: str) -> str:
     return "\n".join(satirlar)
 
 
-def _sonuc_veri_tarihi_uyarisi(now=None) -> str:
-    """Persisted sonuçları duvar saati değil, gerçek veri zamanı ile etiketle."""
-    local_now = as_istanbul_datetime(now or datetime.now(ISTANBUL_TZ))
-    st = _live_state.status()
-    raw_asof = st.get("son_tarama_veri_zamani") or last_run_stats.get("data_asof")
-    if not raw_asof:
-        return ""
-    try:
-        data_asof = as_istanbul_datetime(datetime.fromisoformat(str(raw_asof)))
-    except (TypeError, ValueError, OverflowError):
-        return "⚠️ Kayıtlı veri zamanı doğrulanamadı; sonuçların güncelliği bilinmiyor."
-
-    session = bist_session_for(local_now)
-    zaman = data_asof.strftime("%d.%m.%Y %H:%M %Z")
-    if session.status is SessionStatus.UNKNOWN:
-        return (
-            f"⚠️ BIST takvimi {local_now:%d.%m.%Y} için bilinmiyor; otomatik güncel tarama "
-            f"doğrulanmadı. Gösterilen kayıtlar {zaman} verisine dayanıyor."
-        )
-    if session.status is SessionStatus.CLOSED:
-        return (
-            f"📅 Bugün BIST seansı yok ({session.reason}); gösterilen kayıtlar "
-            f"{zaman} verisine ait, bugün için yeni analiz değildir."
-        )
-    if data_asof.date() != local_now.date():
-        return (
-            f"⚠️ Bugünün ({local_now:%d.%m.%Y}) verisiyle tamamlanmış analiz yok; "
-            f"gösterilen kayıtlar {zaman} verisine dayanıyor."
-        )
-
-    requested = st.get("son_tarama_beklenen_hisse")
-    processed = st.get("son_tarama_hissesi")
-    if st.get("son_tarama_durumu") == "tamamlandi":
-        if requested != len(ACTIVE_STOCKS) or processed != requested:
-            return (
-                f"ℹ️ Son kayıtlar {zaman} verisine ait kısmi tarama; "
-                "taranmayan hisseler önceki başarılı sonuç olabilir."
-            )
-        return f"ℹ️ Son tam evren analizinin veri zamanı: {zaman}."
-    return f"ℹ️ Saklanan sonuçların son veri zamanı: {zaman}."
-
-
 def _sonuc_yok_mesaji(basarili_bos_mesaji: str, tamamlandi: bool = False) -> str:
     """İstenen filtrede sonuç yokken tarama kalitesini de doğru belirt."""
     st = _live_state.status()
@@ -707,14 +1000,11 @@ def _sonuc_yok_mesaji(basarili_bos_mesaji: str, tamamlandi: bool = False) -> str
         return "⏳ Analiz sürüyor; tamamlanınca güncel sonuç gönderilecek."
     status = st.get("son_tarama_durumu", "yok")
     if status == "basarisiz":
-        message = ("⚠️ Son analiz başarısız veya eksik; bunu 'sonuç yok' olarak "
-                   "yorumlama. /durum ile kapsamı kontrol et.")
-    elif status == "tamamlandi":
-        message = basarili_bos_mesaji
-    else:
-        message = "ℹ️ Henüz başarılı analiz yok. Güncel hesaplama için /panel yaz."
-    tarih_notu = _sonuc_veri_tarihi_uyarisi()
-    return message + ("\n" + tarih_notu if tarih_notu else "")
+        return ("⚠️ Son analiz başarısız veya eksik; bunu 'sonuç yok' olarak "
+                "yorumlama. /durum ile kapsamı kontrol et.")
+    if status == "tamamlandi":
+        return basarili_bos_mesaji
+    return "ℹ️ Henüz başarılı analiz yok. Güncel hesaplama için /panel yaz."
 
 
 def _bos_analiz_mesaji(tamamlandi: bool = False) -> str:
@@ -729,14 +1019,10 @@ def _bos_analiz_mesaji(tamamlandi: bool = False) -> str:
 
 
 def _onceki_sonuc_uyarisi() -> str:
-    """Önceki sonuçları başarısız deneme ve açık veri-tarihi etiketiyle sun."""
-    parts = []
+    """Son deneme başarısızsa yayınlanan listeyi önceki başarılı çalışmaya bağla."""
     if _live_state.status().get("son_tarama_durumu") == "basarisiz":
-        parts.append("⚠️ Son analiz başarısız; aşağıdaki kayıtlar önceki başarılı analizdendir.")
-    tarih_notu = _sonuc_veri_tarihi_uyarisi()
-    if tarih_notu:
-        parts.append(tarih_notu)
-    return "\n".join(parts)
+        return "⚠️ Son analiz başarısız; aşağıdaki kayıtlar önceki başarılı analizdendir."
+    return ""
 
 
 def _kismi_kapsam_notu() -> str:
@@ -819,36 +1105,6 @@ def _komut_formasyonlar(arguman: str, tamamlandi: bool = False) -> str:
         satirlar.append(kapsam_notu)
     return "\n".join(satirlar)
 
-def _filtrele_formasyonlar(formations, filtre: str):
-    """Filtre: '1h', 'THYAO', '1h THYAO' gibi çoklu token destekler."""
-    filtre = (filtre or "").strip().lower()
-    if not filtre:
-        return formations
-    tokens = filtre.split()
-    result = formations
-    for tok in tokens:
-        if tok in ("1h", "2h", "4h", "1d"):
-            result = [f for f in result if str(f.get("timeframe", "")).lower() == tok]
-        else:
-            result = [f for f in result
-                      if tok in str(f.get("stock", "")).lower()
-                      or tok in str(f.get("pattern_name", "")).lower()
-                      or tok in str(f.get("state", "")).lower()]
-    return result
-
-
-def _break_ok(bd) -> str:
-    try:
-        bd = int(bd)
-    except Exception:
-        return "↔️"
-    if bd == 1:
-        return "⬆️"
-    if bd == -1:
-        return "⬇️"
-    return "↔️"
-
-
 def _komut_canli(arguman: str) -> str:
     """Kısayol: canlı hisselerde olan formasyonları tek mesajda kompakt at."""
     formations = _live_state.formations()
@@ -880,6 +1136,55 @@ def _komut_canli(arguman: str) -> str:
     satirlar.append("")
     satirlar.append("💡 /ozet günlük özet, /s sıkışanlar, /r retest, /k kırılım")
     return "\n".join(satirlar)
+
+
+def _komut_karne(arguman: str) -> str:
+    """Haftalık doğruluk karnesi: /karne · /karne 30 (son 30 gün).
+
+    Kaynak: yerel sinyal defteri (DATA_DIR/karne_defteri.json). Supabase gerekmez.
+    Cuma gün sonu mesajının altına otomatik eklenir; bu komut istenildiği an verir.
+    """
+    arguman = (arguman or "").strip()
+    gun_sayisi = None
+    if arguman:
+        try:
+            gun_sayisi = max(1, min(365, int(arguman.split()[0])))
+        except (TypeError, ValueError):
+            return ("Kullanım: /karne · /karne 30\n"
+                    "(sayı = kaç günlük karne; boş bırakılırsa bu hafta)")
+    defter = _karne_al()
+    if defter.boyut() == 0:
+        return ("📊 Doğruluk karnesi boş: henüz kayıtlı sinyal yok.\n"
+                "Defter tarama sırasında kendiliğinden dolar (yerel dosya; "
+                "Supabase gerekmez). Cuma günü gün sonu mesajının altında otomatik gelir.")
+    try:
+        metin = karne_uret(defter, _karne_seri_saglayici(_deque_manager_ref),
+                           gun_sayisi=gun_sayisi)
+    except Exception as exc:  # noqa: BLE001 - komut asla çökmesin
+        logger.error("Karne üretilemedi: %s", exc, exc_info=True)
+        return "⚠️ Karne üretilemedi; ayrıntı için bot loglarına bakın."
+    # Kayıtlar/tarih bilgisi: kullanıcı karnenin kaynağını ve yaşını görsün.
+    # NOT: "📁 Kayıt: /tmp/..." satırı kaldırıldı; dosya yolu iç işletim bilgisidir
+    # ve komut çıktısı kopyalanıp paylaşıldığında dışarı sızıyordu.
+    return metin
+
+
+def _komut_backtest(arguman: str) -> str:
+    """FAZ 3 Backtest V1 — salt-okunur tarihsel outcome raporu.
+
+    Kullanım: /backtest · /backtest 30 · /backtest 90 detay.
+    Yalnızca KAYITLI veriler okunur (Formation History + outcome link + Karne
+    defteri); yeniden hesaplama yoktur, hiçbir yere yazılmaz, eşik/scoring/
+    matematik değiştirilmez. Ağırlaştırılmış iş yükü istememek için tarama
+    kilidiyle etkileşime girmez (yalnız dosya okur).
+    """
+    try:
+        from analytics.backtest import komut as _bt_komut
+        return _bt_komut(arguman or "", simdi=datetime.now(ISTANBUL_TZ),
+                         store=_supabase_store_ref)
+    except Exception as exc:  # noqa: BLE001 - komut asla çökmesin
+        logger.error("Backtest üretilemedi: %s", exc, exc_info=True)
+        return "⚠️ Backtest üretilemedi; ayrıntı için bot loglarına bakın."
 
 
 def _komut_ozet(arguman: str) -> str:
@@ -1034,357 +1339,83 @@ def _komut_kirilim(arguman: str) -> str:
 # hissede hiç formasyon yok, hangi TF boş, toplam kaç slot dolu -> görünmez.
 # /panel evrenin tamamını (ACTIVE_STOCKS x 4 TF) tek bakışta gösterir: doluluk
 # sayıları + kompozit puana göre en anlamlı 12 aday.
-PANEL_TIMEFRAMES = ("1h", "2h", "4h", "1d")
-PANEL_TOP_KRITIK = 12        # analiz puanına göre en anlamlı 12 canlı aday
-PANEL_MESAJ_SINIRI = 3800    # Telegram 4096; kirp() kesmesin diye kendimiz sığdırırız
+WATCH_CONTEXT_HAVUZU = 12    # acil mesaja eklenecek adayların seçildiği havuz (gönderilen: en fazla 3)
+def _ozet_isaretlerini_yukle() -> tuple:
+    """Kalıcı özet işaretlerini okur: (dm_isaretleri, public_isaretleri).
 
-# Ham bileşenler: kalite ağırlığı 65; formasyonun teyit/durum aşaması en çok 24 puan;
-# iki taraflı temas en çok 9 puan; daralma en çok 5 puan; MTF teyidi en çok 5.
-# Bu bir AL/SAT skoru değil, tespit edilen adayları şeffaf biçimde sıralama kuralıdır.
-PANEL_DURUM_PUANI = {
-    "KIRILIM_TEYITLI": 24,
-    "RETEST_BASARILI": 22,
-    "KIRILIM_ADAYI": 21,
-    "RETEST_EDILIYOR": 19,
-    "RETEST_BEKLENIYOR": 18,
-    "KIRILIM_DENEMESI": 16,
-    "KIRILIM_HAZIRLIGI": 15,
-    "FORMASYON_TAMAMLANDI": 14,
-    "SIKISMA_GUCLENIYOR": 13,
-    "OLGUNLASIYOR": 10,
-    "FORMASYON_TANIMLANDI": 8,
-    "GEOMETRI_ADAYI": 5,
-    "ADAY_OLUSUYOR": 3,
-}
-
-PANEL_IPUCU = "💡 sıralama kalite + durum + temas + daralma + MTF teyidine dayanır · yatırım tavsiyesi değildir"
-
-def _panel_kalite(kayit) -> float:
-    """Kalite alanı bozuk/eksik gelse de panel çökmesin."""
-    try:
-        return float((kayit or {}).get("quality") or 0.0)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _panel_sembol(state) -> str:
-    """State -> tek işaret (slot hücresinde yer kazanmak için)."""
-    s = str(state or "").upper()
-    if s.startswith("KIRILIM"):
-        return "🚀"
-    if s.startswith("RETEST"):
-        return "🎯"
-    if s == "FORMASYON_TAMAMLANDI":
-        return "🏁"
-    if s == "SIKISMA_GUCLENIYOR":
-        return "⚡"
-    if s.startswith("BASARISIZ") or s.endswith("GECERSIZ"):
-        return "⛔"
-    return "•"
-
-
-def _panel_hucre(kayit, tf: str) -> str:
-    """Tek slot hücresi: '1h 87🚀' ya da boşsa '1h —'."""
-    if not kayit:
-        return f"{tf} —"
-    return f"{tf} {_panel_kalite(kayit):.0f}{_panel_sembol(kayit.get('state'))}"
-
-
-def _panel_aday_puani(kayit) -> float:
-    """Kalite, lifecycle teyidi ve geometrik destekten normalize 0-100 puan."""
-    kayit = kayit or {}
-    kalite = max(0.0, min(100.0, _panel_kalite(kayit)))
-    state = str(kayit.get("state") or "").upper()
-    durum = float(PANEL_DURUM_PUANI.get(state, 0))
-    try:
-        ust_temas = max(0.0, min(3.0, float(kayit.get("upper_touches") or 0)))
-    except (TypeError, ValueError):
-        ust_temas = 0.0
-    try:
-        alt_temas = max(0.0, min(3.0, float(kayit.get("lower_touches") or 0)))
-    except (TypeError, ValueError):
-        alt_temas = 0.0
-    try:
-        daralma = max(0.0, min(1.0, float(kayit.get("contraction") or 0)))
-    except (TypeError, ValueError):
-        daralma = 0.0
-    try:
-        mtf = 5.0 if kayit.get("mtf_destek") else 0.0
-    except Exception:
-        mtf = 0.0
-    toplam = 0.65 * kalite + durum + 1.5 * (ust_temas + alt_temas) + 5.0 * daralma + mtf
-    return round(min(100.0, toplam * 100.0 / 108.0), 1)
-
-
-def _panel_kritik_anahtar(kayit):
-    """En yüksek kompozit puan önce; kalite ve sembol deterministik tie-break."""
-    return (-_panel_aday_puani(kayit), -_panel_kalite(kayit),
-            str((kayit or {}).get("stock") or ""),
-            str((kayit or {}).get("timeframe") or ""))
-
-
-def _panel_filtre_coz(arguman: str):
-    """Argümanı (kolonlar, hisse_tokenlari) olarak ayırır.
-
-    - Zaman dilimi token'ları (1h/2h/4h/1d) gösterilecek SLOT sütunlarını seçer.
-    - Evrendeki bir hisseye (en az 3 karakter) uyan token'lar satırları daraltır.
-    - Kalan token'lar (kirilim, üçgen, KIRILIM_TEYITLI ...) sayıları ve top-12
-      listesini süzer (_filtrele_formasyonlar ile aynı sözdizimi).
+    Anahtarlar `{"09:55": date}` biçimindedir; public işaretleri dosyada
+    "public:" önekiyle ayrılır (aynı slot adı iki yayın yolunda da var).
+    Bozuk kayıtlar sessizce atlanır; hiçbir okuma hatası botu durdurmaz.
     """
-    tokens = [t for t in (arguman or "").replace(",", " ").split() if t]
-    kolonlar = tuple(t.lower() for t in tokens if t.lower() in PANEL_TIMEFRAMES)
-    hisse_tokenlari = []
-    for t in tokens:
-        tl = t.lower()
-        if tl in PANEL_TIMEFRAMES or len(tl) < 3:
-            continue
-        if any(tl in s.lower() for s in ACTIVE_STOCKS):
-            hisse_tokenlari.append(tl)
-    return (kolonlar or PANEL_TIMEFRAMES), hisse_tokenlari
-
-
-def _panel_durum_sayilari(kayitlar) -> str:
-    """State gruplarına göre sayılar: kırılım/retest/tamamlanan/sıkışma/diğer."""
-    kirilim = retest = tamam = sikis = diger = 0
-    for f in kayitlar:
-        s = str(f.get("state") or "").upper()
-        if s.startswith("KIRILIM"):
-            kirilim += 1
-        elif s.startswith("RETEST"):
-            retest += 1
-        elif s == "FORMASYON_TAMAMLANDI":
-            tamam += 1
-        elif s == "SIKISMA_GUCLENIYOR":
-            sikis += 1
-        else:
-            diger += 1
-    return (f"🚀 kırılım {kirilim} · 🎯 retest {retest} · 🏁 tamamlanan {tamam} · "
-            f"⚡ sıkışma {sikis} · • diğer {diger} · toplam {len(kayitlar)}")
-
-
-def _panel_kritik_listesi(kayitlar, adet: int = PANEL_TOP_KRITIK):
-    """Kompozit puana göre ilk `adet` kayıt (fiyat seviyesiyle)."""
-    sirali = sorted(kayitlar, key=_panel_kritik_anahtar)[:adet]
-    baslik = f"🔥 TOP {adet} ANLAMLI ADAY (puan)"
-    if len(kayitlar) > adet:
-        baslik += f" ({len(kayitlar)} kayıt içinden)"
-    satirlar = [baslik]
-    if not sirali:
-        satirlar.append("— (filtreye uyan formasyon yok)")
-        return satirlar
-    for i, f in enumerate(sirali, 1):
-        durum = STATE_TR.get(str(f.get("state")), str(f.get("state") or "—"))
-        satirlar.append(
-            f"{i:>2}) {f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} "
-            f"puan {_panel_aday_puani(f):.1f} · q{_sayi(f.get('quality'), 0)} "
-            f"{_panel_sembol(f.get('state'))} {durum}"
-            f" · kritik {_sayi(f.get('critical_price'))}"
-        )
-    return satirlar
-
-
-def _panel_sigdir(grid_satirlari, butce: int):
-    """Slotsatırlarını mesaj bütçesine sığdırır; sığmayan kuyruk tek satırda özetlenir."""
-    secilen = []
-    kullanilan = 0
-    for i, satir in enumerate(grid_satirlari):
-        uzunluk = len(satir) + 1
-        if kullanilan + uzunluk <= butce:
-            secilen.append(satir)
-            kullanilan += uzunluk
-            continue
-        kalan = len(grid_satirlari) - i
-        secilen.append(f"… ve {kalan} satır daha (filtre: /panel THYAO)")
-        break
-    return secilen
-
-
-def _veri_durumu_satiri(data_asof, fresh_fetch=None, requested=None, fetch_failures=None,
-                        oldest_age_minutes=None, *, fetch_returned=None, valid_fetch=None,
-                        analysis_eligible=None) -> str:
-    """Mum yaşıyla birlikte provider yanıtı, OHLCV geçerliliği ve analiz uygunluğunu ayır."""
-    if not data_asof:
-        base = "📡 Son cache mum etiketi: bu analizde veri zamanı yok"
-        if fetch_returned is not None:
-            base += (
-                f" · fetch yanıtı {fetch_returned}/{requested if requested is not None else '?'}"
-                f" · OHLCV geçerli {valid_fetch if valid_fetch is not None else '?'}"
-                f" · taze fetch {fresh_fetch if fresh_fetch is not None else '?'}"
-                f" · analiz için uygun {analysis_eligible if analysis_eligible is not None else '?'}"
-            )
-        return base
+    dm: Dict[str, object] = {}
+    public: Dict[str, object] = {}
     try:
-        bar = datetime.fromisoformat(str(data_asof))
-        if bar.tzinfo is None:
-            bar = ISTANBUL_TZ.localize(bar)
-        else:
-            bar = bar.astimezone(ISTANBUL_TZ)
-        yas = max(0.0, (datetime.now(ISTANBUL_TZ) - bar).total_seconds() / 60.0)
-        zaman = bar.strftime("%d.%m.%Y %H:%M %Z")
-        yas_metni = son_bar_yasi_dakika_str(yas)
-    except (TypeError, ValueError, OverflowError):
-        zaman, yas_metni = str(data_asof), "hesaplanamadı"
-    fetch = ""
-    returned = fetch_returned if fetch_returned is not None else fresh_fetch
-    if returned is not None:
-        kapsam = requested if requested is not None else "?"
-        fetch = f" · fetch yanıtı {returned}/{kapsam}"
-        if valid_fetch is not None:
-            fetch += f" · OHLCV geçerli {valid_fetch}"
-        if fresh_fetch is not None:
-            fetch += f" · taze fetch {fresh_fetch}"
-        if analysis_eligible is not None:
-            fetch += f" · analiz için uygun {analysis_eligible}"
-        if fetch_failures is not None:
-            fetch += f" · fetch hatası {fetch_failures}"
-    eski = (f" · en eski taranan veri yaşı {son_bar_yasi_dakika_str(oldest_age_minutes)}"
-            if oldest_age_minutes is not None else "")
-    return f"📡 Son cache mum etiketi: {zaman} · veri yaşı {yas_metni}{eski}{fetch}"
+        ham = (_state_persistence.gunluk_durum_yukle() or {}).get("ozet_gunleri") or {}
+        for anahtar, deger in ham.items():
+            try:
+                gun = datetime.fromisoformat(str(deger)).date()
+            except (TypeError, ValueError):
+                continue
+            ad = str(anahtar)
+            if ad.startswith("public:"):
+                public[ad.split(":", 1)[1]] = gun
+            else:
+                dm[ad] = gun
+        if dm or public:
+            logger.info("Günlük özet işaretleri geri yüklendi: DM=%s public=%s",
+                        sorted(dm), sorted(public))
+    except Exception as hata:  # noqa: BLE001 - kalıcılık hatası botu durdurmaz
+        logger.warning("Özet işaretleri okunamadı: %s", hata)
+    return dm, public
+
+
+def _ozet_isaret_kaydet(slot: str, gun, public: bool = False) -> None:
+    """'Şu özet gönderildi' işaretini GÜN damgalı olarak diske yazar.
+
+    Restart sonrası aynı özetin ikinci kez gitmesini engeller (canlı denetimde
+    09:55 sabah notu için duplike ölçülmüştü).
+    """
+    try:
+        anahtar = f"public:{slot}" if public else str(slot)
+        veri = _state_persistence.gunluk_durum_yukle() or {}
+        isaretler = dict(veri.get("ozet_gunleri") or {})
+        isaretler[anahtar] = str(getattr(gun, "isoformat", lambda: gun)())
+        _state_persistence.gunluk_durum_guncelle({"ozet_gunleri": isaretler})
+    except Exception as hata:  # noqa: BLE001
+        logger.debug("Özet işareti yazılamadı (%s): %s", slot, hata)
+
+
+def _public_turu_kapat(notifier) -> None:
+    """Tarama turu sonu: tur sayacını artır + public kuyruğunu bültende boşalt.
+
+    Bülten gönderimi taramayı ASLA durdurmaz (dış servis hatası tarama sonucunu
+    geçersiz kılmamalı); hata yalnız loglanır, kayıtlar kuyrukta kalır.
+    """
+    daily_stats['tarama_sayisi'] = int(daily_stats.get('tarama_sayisi') or 0) + 1
+    _gunluk_sayac_kaydet()
+    try:
+        if notifier is not None:
+            notifier.public_bosalt()
+    except Exception as public_hata:  # noqa: BLE001 - bülten hatası taramayı durdurmasın
+        logger.warning("Public bülten gönderilemedi: %s", public_hata)
 
 
 def _panel_raporu(arguman: str = "", tamamlandi: bool = False) -> str:
-    """48 hisse x 4 TF slot paneli: sayılar + puana göre top 12 aday. Filtre destekler.
+    """Panel metni (Batch 8 / 8.3): bağlam burada toplanır, üretim reporting'te.
 
-    Filtre: `/panel 1h` · `/panel THYAO` · `/panel 1h THYAO` · `/panel kirilim`
+    Global durumu okuyan tek yer burasıdır; metin üretimi saf fonksiyona taşındı.
     """
-    now = datetime.now(ISTANBUL_TZ)
-    st = _live_state.status()
-    formations = _live_state.formations()
-    kolonlar, hisse_tokenlari = _panel_filtre_coz(arguman)
-    satir_hisseler = list(ACTIVE_STOCKS)
-    if hisse_tokenlari:
-        satir_hisseler = [s for s in ACTIVE_STOCKS
-                          if any(t in s.lower() for t in hisse_tokenlari)]
-        if not satir_hisseler:
-            return (f"🔍 '{arguman.strip()}' filtresine uyan hisse yok "
-                    f"({len(ACTIVE_STOCKS)} hisse evreni).")
-    filtreli = _filtrele_formasyonlar(formations, arguman)
-
-    # Slot haritası: (HISSE, tf) -> kayıt. LiveState hisse|TF başına tek kayıt tutar,
-    # bu yüzden 48x4 = 192 slotun üzerine çıkılamaz (sayılar bu yüzden anlamlı).
-    slot = {}
-    for f in filtreli:
-        tf = str(f.get("timeframe", "")).lower()
-        hisse = str(f.get("stock", "")).upper()
-        if hisse and tf in kolonlar:
-            slot[(hisse, tf)] = f
-    toplam_slot = len(satir_hisseler) * len(kolonlar)
-
-    # --- başlık + sayılar (her modda tam görünür) ---
-    filtresiz = not arguman.strip()
-    kapsam = (f"{len(ACTIVE_STOCKS)} hisse x {len(PANEL_TIMEFRAMES)} TF" if filtresiz
-              else f"{len(satir_hisseler)}/{len(ACTIVE_STOCKS)} hisse · "
-                   f"{len(kolonlar)}/{len(PANEL_TIMEFRAMES)} TF")
-    satirlar = [f"📋 PANEL — {kapsam} — {now.strftime('%d.%m.%Y %H:%M')}"]
-    if not filtresiz:
-        satirlar.append(f"Filtre: {arguman.strip()}")
-    durum = st.get("son_tarama_durumu", "yok")
-    tarama = f"Son başarılı tarama: {_gecen_sure(st.get('son_tarama_bitis'))} · durum {durum}"
-    if st.get("tarama_suruyor") or (_scan_job_active.is_set() and not tamamlandi):
-        tarama = "Analiz sürüyor"
-    if durum == "basarisiz":
-        kapsam_is = (f"{last_run_stats.get('processed', st.get('son_is_hisse_basarili', 0))}/"
-                     f"{last_run_stats.get('requested', st.get('son_is_hisse_istek', len(ACTIVE_STOCKS)))}")
-        tarama += f" · son deneme başarısız ({kapsam_is} hisse hesaplandı)"
-    elif durum == "tamamlandi":
-        tarama += (f" · hesaplanan {st.get('son_tarama_hissesi', '—')}/"
-                   f"{st.get('son_tarama_beklenen_hisse') or len(ACTIVE_STOCKS)} hisse")
-    satirlar.append(f"{tarama} · dolu slot {len(slot)}/{toplam_slot}")
-    tarih_notu = _sonuc_veri_tarihi_uyarisi(now)
-    if tarih_notu:
-        satirlar.append(tarih_notu)
-    if durum == "basarisiz":
-        veri_zamani = last_run_stats.get("data_asof")
-        fetch_returned = last_run_stats.get("fetch_returned")
-        valid_fetch = last_run_stats.get("fetch_valid")
-        fresh_fetch = last_run_stats.get("fresh_fetch")
-        analysis_eligible = last_run_stats.get("analysis_eligible")
-        fetch_failures = last_run_stats.get("fetch_failures")
-        oldest_age = last_run_stats.get("oldest_bar_age_minutes")
-        requested_metrics = last_run_stats.get("requested")
-    elif durum == "tamamlandi":
-        # After restart, the persisted LiveState snapshot remains the source when
-        # current-process last_run_stats has not yet been populated.
-        if "fetch_returned" in last_run_stats:
-            veri_zamani = last_run_stats.get("data_asof")
-            fetch_returned = last_run_stats.get("fetch_returned")
-            valid_fetch = last_run_stats.get("fetch_valid")
-            fresh_fetch = last_run_stats.get("fresh_fetch")
-            analysis_eligible = last_run_stats.get("analysis_eligible")
-            fetch_failures = last_run_stats.get("fetch_failures")
-            oldest_age = last_run_stats.get("oldest_bar_age_minutes")
-            requested_metrics = last_run_stats.get("requested")
-        else:
-            veri_zamani = st.get("son_tarama_veri_zamani")
-            fetch_returned = st.get("son_tarama_fetch_yanit")
-            valid_fetch = st.get("son_tarama_gecerli_fetch")
-            fresh_fetch = st.get("son_tarama_taze_veri")
-            analysis_eligible = st.get("son_tarama_analize_uygun")
-            fetch_failures = st.get("son_tarama_fetch_hatasi")
-            oldest_age = st.get("son_tarama_en_eski_veri_yasi_dk")
-            requested_metrics = st.get("son_tarama_beklenen_hisse")
-    else:
-        veri_zamani = fetch_returned = valid_fetch = fresh_fetch = None
-        analysis_eligible = fetch_failures = oldest_age = requested_metrics = None
-    if veri_zamani or fetch_returned is not None:
-        satirlar.append(_veri_durumu_satiri(
-            veri_zamani, fresh_fetch, requested_metrics,
-            fetch_failures, oldest_age, fetch_returned=fetch_returned,
-            valid_fetch=valid_fetch, analysis_eligible=analysis_eligible,
-        ))
-    kapsam_notu = _kismi_kapsam_notu()
-    if kapsam_notu:
-        satirlar.append(kapsam_notu)
-    if st.get("snapshot_yuklendi"):
-        satirlar.append("♻️ Önceki kayıt gösteriliyor; güncel analiz için /panel çalıştırılıyor.")
-    satirlar.append("")
-    satirlar.append("📊 SAYILAR")
-    tf_parcalari = []
-    for tf in kolonlar:
-        kayitlar = [slot[(h, tf)] for h in satir_hisseler if (h, tf) in slot]
-        if kayitlar:
-            ort = sum(_panel_kalite(k) for k in kayitlar) / len(kayitlar)
-            tf_parcalari.append(f"{tf} {len(kayitlar)}/{len(satir_hisseler)} ort q{ort:.0f}")
-        else:
-            tf_parcalari.append(f"{tf} 0/{len(satir_hisseler)}")
-    satirlar.append(" · ".join(tf_parcalari))
-    satirlar.append(_panel_durum_sayilari(filtreli))
-    if st.get("son_tarama_durumu") == "basarisiz":
-        satirlar.append("⚠️ Son tarama eksik/başarısız; bu panel boşluğu sinyal yokluğu değildir.")
-    elif not formations:
-        satirlar.append(_bos_analiz_mesaji(tamamlandi=tamamlandi))
-    sabit_kuyruk = [""] + _panel_kritik_listesi(filtreli) + ["", PANEL_IPUCU]
-
-    # --- slot tablosu: önce tam (boş slotlar '—'), sığmazsa kompakt ---
-    grid_tam = [f"{h} " + " · ".join(_panel_hucre(slot.get((h, tf)), tf) for tf in kolonlar)
-                for h in satir_hisseler]
-    if not slot:
-        # Hiç dolu slot yok (taze kurulum ya da filtre hiçbir şeye uymadı): 48 satır
-        # '—' yazmak yerine tek satırda söyle; sayılar ve top 12 zaten durumu anlatıyor.
-        grid_tam = [f"— tüm slotlar boş ({len(satir_hisseler)} hisse x {len(kolonlar)} TF)"]
-    metin = "\n".join(satirlar + [""] + ["🗂 SLOTLAR (" + " · ".join(kolonlar) + ")"] +
-                      grid_tam + sabit_kuyruk)
-    if len(metin) > PANEL_MESAJ_SINIRI:
-        # Kompakt: boş slotlar yazılmaz, hiç slotu dolmayan hisseler tek satırda toplanır.
-        grid_kisa, bos = [], []
-        for h in satir_hisseler:
-            dolu = [_panel_hucre(slot[(h, tf)], tf) for tf in kolonlar if (h, tf) in slot]
-            if dolu:
-                grid_kisa.append(f"{h} " + " · ".join(dolu))
-            else:
-                bos.append(h)
-        if bos:
-            grid_kisa.append(f"boş ({len(bos)}): " + " ".join(bos))
-        govde = satirlar + [""] + ["🗂 SLOTLAR (kompakt)"] + grid_kisa + sabit_kuyruk
-        metin = "\n".join(govde)
-        if len(metin) > PANEL_MESAJ_SINIRI:
-            # Aşırı kalabalık gün: grid kırpılır, sayılar ve TOP 12 korunur.
-            sabit = satirlar + [""] + ["🗂 SLOTLAR (kompakt)"]
-            butce = PANEL_MESAJ_SINIRI - sum(len(s) + 1 for s in sabit + sabit_kuyruk)
-            metin = "\n".join(sabit + _panel_sigdir(grid_kisa, max(butce, 0)) + sabit_kuyruk)
-    # Son güvenlik: desen adları çok uzun olsa bile Telegram'ın 4096 sınırını aşma.
-    return kirp(metin, PANEL_MESAJ_SINIRI + 200)
-
+    return panel_raporu(
+        arguman,
+        durum=_live_state.status(),
+        formations=_live_state.formations(),
+        aktif_hisseler=list(ACTIVE_STOCKS),
+        tarama_suruyor=_scan_job_active.is_set(),
+        last_run_stats=last_run_stats,
+        tamamlandi=tamamlandi,
+        kapsam_notu=_kismi_kapsam_notu(),
+        bos_analiz_mesaji=_bos_analiz_mesaji(tamamlandi=tamamlandi),
+    )
 
 def _manuel_tarama_istegi(tip: str, arguman: str = "") -> str:
     """Analizi ana döngüye kuyruğa koy; Telegram işleyicisini bloklama."""
@@ -1438,7 +1469,7 @@ def _manuel_tarama_tamamla(request: dict, result: dict, notifier) -> None:
                 f"Başarıyla hesaplanan: {result.get('processed', 0)}/"
                 f"{result.get('requested', 0)} hisse · hata/atlanan: "
                 f"{result.get('failed', 0)}.\n"
-                f"{_veri_durumu_satiri(result.get('data_asof'), result.get('fresh_fetch'), result.get('requested'), result.get('fetch_failures'), result.get('oldest_bar_age_minutes'), fetch_returned=result.get('fetch_returned'), valid_fetch=result.get('fetch_valid'), analysis_eligible=result.get('analysis_eligible'))}\n"
+                f"{_veri_durumu_satiri(result.get('data_asof'), result.get('fresh_fetch'), result.get('requested'), result.get('fetch_failures'), result.get('oldest_bar_age_minutes'))}\n"
                 "Ayrıntı için bot logundaki ilk 'tarama hatası' kaydına bakın."
             )
         elif request.get("tip") == "panel":
@@ -1448,7 +1479,7 @@ def _manuel_tarama_tamamla(request: dict, result: dict, notifier) -> None:
             mesaj = _komut_formasyonlar(filt, tamamlandi=True)
             mesaj = (f"✅ Tarama tamamlandı: {result.get('processed', 0)}/"
                      f"{result.get('requested', 0)} hisse.\n"
-                     f"{_veri_durumu_satiri(result.get('data_asof'), result.get('fresh_fetch'), result.get('requested'), result.get('fetch_failures'), result.get('oldest_bar_age_minutes'), fetch_returned=result.get('fetch_returned'), valid_fetch=result.get('fetch_valid'), analysis_eligible=result.get('analysis_eligible'))}\n"
+                     f"{_veri_durumu_satiri(result.get('data_asof'), result.get('fresh_fetch'), result.get('requested'), result.get('fetch_failures'), result.get('oldest_bar_age_minutes'))}\n"
                      + mesaj)
         if notifier is not None:
             notifier.send_text(mesaj)
@@ -1487,6 +1518,10 @@ TELEGRAM_KOMUTLARI = {
     "kirilim": _komut_kirilim,
     "kırılım": _komut_kirilim,
     "k": _komut_kirilim,
+    "karne": _komut_karne,
+    "karnem": _komut_karne,
+    "backtest": _komut_backtest,
+    "bt": _komut_backtest,
     "panel": _komut_panel,
     "p": _komut_panel,
     "genel": _komut_panel,
@@ -1496,144 +1531,65 @@ TELEGRAM_KOMUTLARI = {
 # === SON TARAMA KALICILIĞI ===
 # Render'ın diski geçicidir; aynı liste mevcut bot_store tablosunda da tutulur.
 # LiveState kilidinden yalnızca kopya alınır, disk/ağ I/O'su kilit dışında yapılır.
-SON_TARAMA_DOSYA = "son_tarama.json"
-SON_TARAMA_SUPABASE_KEY = "state:son_tarama"
-_SON_TARAMA_REMOTE_UNSET = object()
+# Batch 8 / C2 (8.4): son tarama kalıcılığı `state/persistence.py`'ye taşındı.
+# Aşağıdaki fonksiyonlar eski imzalarını koruyan ince adaptörlerdir (global
+# durumu toplar, işi katmana bırakır).
+from state import persistence as _state_persistence
+from state import paths as _state_paths
 
-
-def _son_tarama_data_dir(data_dir=None):
-    if data_dir is None:
-        from config import DATA_DIR
-        return DATA_DIR
-    return data_dir
-
-
-def _son_tarama_yolu(data_dir=None):
-    return os.path.join(_son_tarama_data_dir(data_dir), SON_TARAMA_DOSYA)
-
-
-def _kayit_zamani(veri) -> datetime | None:
-    if not isinstance(veri, dict):
-        return None
-    try:
-        return datetime.fromisoformat(veri.get("kayit_zamani"))
-    except (TypeError, ValueError):
-        return None
-
-
-def _yeni_snapshot(*adaylar):
-    """Geçerli kopyalardan en yenisini seçer; bozuk kopya diğerini gölgelemez."""
-    secilen = None
-    for aday in adaylar:
-        if not isinstance(aday, dict) or not isinstance(aday.get("formations"), list):
-            continue
-        if secilen is None:
-            secilen = aday
-            continue
-        yeni_zaman, eski_zaman = _kayit_zamani(aday), _kayit_zamani(secilen)
-        if yeni_zaman is None:
-            continue
-        if eski_zaman is None:
-            secilen = aday
-            continue
-        try:
-            if yeni_zaman > eski_zaman:
-                secilen = aday
-        except TypeError:
-            # Eski naive kayıt ile timezone-aware kayıt karşılaştırılamazsa
-            # mevcut tercih korunur (aday sırası: Supabase, yerel dosya).
-            pass
-    return secilen
+# Eski iç adlar (testler ve main gövdesi) korunuyor: yol/snapshot yardımcıları
+# artık `state/paths.py`'de yaşıyor.
+_son_tarama_data_dir = _state_paths.son_tarama_data_dir
+_son_tarama_yolu = _state_paths.son_tarama_yolu
+_digest_pending_yolu = _state_paths.digest_pending_yolu
+_kayit_zamani = _state_paths.kayit_zamani
+_yeni_snapshot = _state_paths.yeni_snapshot
+SON_TARAMA_DOSYA = _state_paths.SON_TARAMA_DOSYA
+SON_TARAMA_SUPABASE_KEY = _state_paths.SON_TARAMA_SUPABASE_KEY
 
 
 def son_tarama_kaydet(store=None, data_dir=None) -> bool:
-    """Son listeyi iki yere bağımsız kaydeder; hiçbir I/O hatası botu durdurmaz."""
-    store = _supabase_store_ref if store is None else store
-    try:
-        veri = _live_state.snapshot()
-        formasyon_sayisi = len(veri["formations"])
-    except Exception as exc:
-        logger.warning("Son tarama kopyası alınamadı: %s", exc)
-        return False
-
-    dosya_var, supabase_var = False, False
-    gecici_yol = None
-    try:
-        yol = _son_tarama_yolu(data_dir)
-        os.makedirs(_son_tarama_data_dir(data_dir), exist_ok=True)
-        gecici_yol = yol + ".tmp"
-        with open(gecici_yol, "w", encoding="utf-8") as dosya:
-            json.dump(veri, dosya, ensure_ascii=False, indent=2)
-        os.replace(gecici_yol, yol)
-        dosya_var = True
-    except Exception as exc:
-        logger.warning("Son tarama dosyaya kaydedilemedi: %s", exc)
-    finally:
-        if gecici_yol is not None:
-            try:
-                os.remove(gecici_yol)
-            except FileNotFoundError:
-                pass  # Başarılı os.replace geçici dosyayı zaten kaldırır.
-            except Exception as exc:
-                logger.warning("Son tarama geçici dosyası temizlenemedi: %s", exc)
-
-    if store is not None:
-        try:
-            supabase_var = bool(store.upsert(SON_TARAMA_SUPABASE_KEY, veri))
-        except Exception as exc:
-            logger.warning("Son tarama Supabase'e kaydedilemedi (%s)", type(exc).__name__)
-    logger.info(
-        "Son tarama kaydedildi: %d formasyon (supabase=%s, dosya=%s)",
-        formasyon_sayisi, "var" if supabase_var else "yok", "var" if dosya_var else "yok",
+    """Son listeyi Supabase + diske kaydeder (bkz. state.persistence)."""
+    return _state_persistence.son_tarama_kaydet(
+        _live_state,
+        store=_supabase_store_ref if store is None else store,
+        data_dir=data_dir,
     )
-    return dosya_var or supabase_var
 
 
-def son_tarama_yukle(
-    store=None, data_dir=None, remote_rows=_SON_TARAMA_REMOTE_UNSET
-) -> int:
-    """Supabase/yerel dosyanın en yenisini yükler; ilk kurulumda sessizce 0 döner.
+def son_tarama_yukle(store=None, data_dir=None) -> int:
+    """Kayıtlı son taramayı yükler (bkz. state.persistence)."""
+    return _state_persistence.son_tarama_yukle(
+        _live_state,
+        store=_supabase_store_ref if store is None else store,
+        data_dir=data_dir,
+    )
 
-    ``remote_rows`` is supplied by startup when its batched Supabase read already
-    included the snapshot key; passing ``None`` explicitly means remote state was
-    unavailable and avoids a redundant retry before local fallback.
+
+def _formation_history_baslangic_kontrolu() -> dict:
+    """Faz 2.1: startup'ta çoklu formasyon history defterlerinin sağlık raporu.
+
+    ZORUNLU DEĞİL: registry tarama anında lazy okunur, bu adım olmadan da
+    history korunur. Amacı operatöre görünürlük vermek ve BOZUK defterleri
+    loga düşürmektir. Bot hiçbir koşulda bu adım yüzünden durmaz.
     """
-    store = _supabase_store_ref if store is None else store
-    uzak_veri, yerel_veri = None, None
-    if remote_rows is not _SON_TARAMA_REMOTE_UNSET:
-        if isinstance(remote_rows, dict):
-            uzak_veri = remote_rows.get(SON_TARAMA_SUPABASE_KEY)
-    elif store is not None:
-        try:
-            satirlar = store.get_many([SON_TARAMA_SUPABASE_KEY])
-            if isinstance(satirlar, dict):
-                uzak_veri = satirlar.get(SON_TARAMA_SUPABASE_KEY)
-        except Exception as exc:
-            logger.warning("Son tarama Supabase'den okunamadı: %s", exc)
     try:
-        with open(_son_tarama_yolu(data_dir), encoding="utf-8") as dosya:
-            yerel_veri = json.load(dosya)
-    except (FileNotFoundError, ValueError, UnicodeError):
-        pass  # İlk kurulum/bozuk JSON: diğer kopya varsa onu kullan.
-    except Exception as exc:
-        logger.warning("Son tarama dosyadan okunamadı: %s", exc)
-
-    try:
-        veri = _yeni_snapshot(uzak_veri, yerel_veri)
-        if veri is None:
-            return 0
-        sayi = _live_state.hydrate(veri)
-        if sayi or not veri["formations"]:
-            kaynak = "Supabase" if veri is uzak_veri else "yerel dosya"
-            logger.info(
-                "Kayıtlı son tarama yüklendi (%s): %d formasyon, tarama zamanı %s",
-                kaynak, sayi, _live_state.status().get("son_tarama_bitis") or "—",
-            )
-        return sayi
-    except Exception as exc:
-        logger.warning("Son tarama kaydı yüklenemedi: %s", exc)
-        return 0
-
+        from state import formation_history as fh
+        rapor = fh.saglik_raporu()
+    except Exception as exc:  # pragma: no cover - savunma amaçlı
+        logger.warning("Formation history raporu alınamadı (bot çalışmaya devam ediyor): %s", exc)
+        return {}
+    if rapor.get("dosya"):
+        logger.info(
+            "Formation history: %d defter, %d kayıt (dizin %s)",
+            rapor["dosya"], rapor["kayit"], rapor.get("yol"))
+    if rapor.get("bozuk"):
+        # Bozuk defter: `yukle()` boş defter döner, tarama Faz 1 yoluyla devam
+        # eder. Yeni kimlik üretimi olur ama bot ÇALIŞIR.
+        logger.warning(
+            "Formation history: %d bozuk defer atlandı (yeni kimlik üretilir, bot çalışıyor): %s",
+            len(rapor["bozuk"]), ", ".join(rapor["bozuk"][:10]))
+    return rapor
 
 # === TELEGRAM WEBHOOK (Render) ===
 # Neden: Render Free bir web servistir; uyku/restart döngüsüne girer. Yoklama
@@ -1646,189 +1602,50 @@ def son_tarama_yukle(
 # aynı anda açık olmaz: webhook açıkken getUpdates çağrılmaz (Telegram 409 verir),
 # yoklamaya dönülürken de webhook silinir.
 
+# === TELEGRAM (taşıma katmanı — Batch 8 / C2, 8.5) ===
+# Sır/adres çözümleme, Bot API çağrısı ve webhook kurulumu artık
+# `transport/telegram.py`'de. Buradaki adaptörler eski iç adları ve imzaları
+# korur; API fonksiyonları ÇAĞRI ANINDA main globalinden okunur, böylece
+# testlerdeki `monkeypatch.setattr(main_mod, "_telegram_api_cagri", ...)`
+# davranışı aynen çalışır.
+from transport import telegram as _transport_telegram
+
+_webhook_adres_gizle = _transport_telegram.webhook_adres_gizle
+_telegram_api_cagri = _transport_telegram.api_cagri
+_telegram_yanit_oku = _transport_telegram.yanit_oku
+
+
 def _telegram_webhook_secret_ayikla(secret=None) -> str:
-    """Parametre verilmediyse config'teki TELEGRAM_WEBHOOK_SECRET kullanılır."""
-    if secret is None:
-        secret = TELEGRAM_WEBHOOK_SECRET
-    return (secret or "").strip()
-
-
-def _webhook_adres_gizle(adres: str, secret: str = "") -> str:
-    """Log için: adresteki sırrı *** yapar (loglara sır düşmesin)."""
-    return adres.replace(secret, "***") if secret else adres
-
-
-def _telegram_webhook_url_olustur(secret=None, webhook_url=None, render_url=None) -> str:
-    """Telegram webhook adresini üretir; webhook modu kapalıysa boş döner.
-
-    Öncelik:
-      1. `TELEGRAM_WEBHOOK_URL` — tam adres. `/webhook/<secret>` içeriyorsa aynen
-         kullanılır, `/webhook` ile bitiyorsa sır eklenir, aksi halde taban adres sayılır.
-      2. `RENDER_EXTERNAL_URL` + `/webhook/<secret>`
-         (Render bunu otomatik verir: https://<servis>.onrender.com)
-
-    Secret boşsa mod kapalıdır (boş döner) ve bot yoklamaya devam eder. Telegram
-    webhook için HTTPS zorunlu kılar; http adres üretilirse kurulmaz, loga yazılır.
-    """
-    secret = _telegram_webhook_secret_ayikla(secret)
-    if not secret:
-        return ""
-    webhook_url = (TELEGRAM_WEBHOOK_URL if webhook_url is None else webhook_url or "").strip()
-    render_url = (RENDER_EXTERNAL_URL if render_url is None else render_url or "").strip()
-
-    if webhook_url:
-        adres = webhook_url.rstrip("/")
-        if WEBHOOK_YOL_ONEK in adres:
-            return adres                       # tam adres: sır zaten içinde
-        if adres.endswith("/webhook"):
-            adres = f"{adres}/{secret}"
-        else:
-            adres = f"{adres}{WEBHOOK_YOL_ONEK}{secret}"
-    elif render_url:
-        adres = f"{render_url.rstrip('/')}{WEBHOOK_YOL_ONEK}{secret}"
-    else:
-        logger.warning(
-            "TELEGRAM_WEBHOOK_SECRET tanimli ama taban adres yok "
-            "(TELEGRAM_WEBHOOK_URL veya RENDER_EXTERNAL_URL gerekli) - yoklama kullanilacak"
-        )
-        return ""
-
-    if not adres.startswith("https://"):
-        logger.warning(
-            "Webhook adresi https olmali (Telegram zorunlu): "
-            f"{_webhook_adres_gizle(adres, secret)} - webhook kurulmadi"
-        )
-        return ""
-    return adres
+    # config değeri ÇAĞRI ANINDA okunur: testlerdeki monkeypatch(main, ...) etkili olur.
+    return _transport_telegram.webhook_secret_ayikla(secret, varsayilan=TELEGRAM_WEBHOOK_SECRET)
 
 
 def _telegram_token_al(token=None) -> str:
-    """Token parametresi yoksa notifier'ın token'ı (main_loop kurduktan sonra dolu)."""
-    if token:
-        return str(token).strip()
-    return (getattr(_notifier_ref, "token", "") or "").strip()
+    return _transport_telegram.token_al(token, notifier=_notifier_ref)
 
 
-def _telegram_api_cagri(method: str, token: str, payload: dict, timeout: int = 15):
-    """Telegram Bot API POST çağrısı (test edilebilirlik için tek nokta)."""
-    import requests
-    return requests.post(f"https://api.telegram.org/bot{token}/{method}",
-                         json=payload, timeout=timeout)
-
-
-def _telegram_yanit_oku(yanit):
-    """(ok, aciklama) — Telegram yanıtından okunabilir sonuç çıkarır."""
-    kod = getattr(yanit, "status_code", 0)
-    try:
-        govde = yanit.json() or {}
-    except Exception:
-        govde = {}
-    if not isinstance(govde, dict):
-        govde = {}
-    # setWebhook/deleteWebhook boolean `result` döndürür; HTTP 200 ve `ok`
-    # true olsa bile açıkça true olmayan bir result onay sayılmaz.
-    ok = kod == 200 and govde.get("ok") is True and govde.get("result") is True
-    aciklama = str(govde.get("description") or "").strip() or f"HTTP {kod}"
-    return ok, aciklama
+def _telegram_webhook_url_olustur(secret=None, webhook_url=None, render_url=None) -> str:
+    return _transport_telegram.webhook_url_olustur(
+        secret=secret, webhook_url=webhook_url, render_url=render_url,
+        varsayilan_secret=TELEGRAM_WEBHOOK_SECRET,
+        varsayilan_url=TELEGRAM_WEBHOOK_URL,
+        varsayilan_render=RENDER_EXTERNAL_URL)
 
 
 def _telegram_set_webhook(url=None, secret=None, token=None) -> bool:
-    """setWebhook: komutlar Telegram → `/webhook/<secret>` ile gelsin.
-
-    - `drop_pending_updates=True`: Telegram başarıyla onayladığında o anda bekleyen TÜM
-      güncellemeleri (taze komutlar dahil) bilerek atar; yalnızca onaydan sonra gelenler işlenir.
-      Polling moduna geçişteki deleteWebhook ile aynı başlangıç politikasını uygular.
-    - `secret_token`: Telegram her istekte `X-Telegram-Bot-Api-Secret-Token`
-      başlığını gönderir; health_server bu başlığı da doğrular (yol sırrına ek katman).
-    """
-    secret = _telegram_webhook_secret_ayikla(secret)
-    token = _telegram_token_al(token)
-    adres = (url or "").strip() or _telegram_webhook_url_olustur(secret=secret)
-    if not token:
-        logger.warning("Webhook kurulmadi: Telegram token yok")
-        return False
-    if not adres:
-        logger.warning("Webhook kurulmadi: adres uretilemedi (secret/RENDER_EXTERNAL_URL eksik)")
-        return False
-    govde = {
-        "url": adres,
-        "allowed_updates": ["message"],
-        "drop_pending_updates": True,
-    }
-    if secret:
-        govde["secret_token"] = secret
-    try:
-        yanit = _telegram_api_cagri("setWebhook", token, govde)
-    except Exception as exc:  # noqa: BLE001 - ağ hatası botu düşürmesin
-        logger.error(
-            "Webhook kurulamadi (ag hatasi): %s",
-            redact_sensitive_text(exc, token, secret),
-        )
-        return False
-    ok, aciklama = _telegram_yanit_oku(yanit)
-    aciklama = redact_sensitive_text(aciklama, token, secret)
-    if ok:
-        logger.info(
-            "Telegram webhook kuruldu: %s (%s)",
-            redact_sensitive_text(_webhook_adres_gizle(adres, secret), token, secret),
-            aciklama,
-        )
-    else:
-        logger.error("Telegram webhook kurulamadi: %s", aciklama)
-    return ok
-
-
-TELEGRAM_DELETE_WEBHOOK_MAX_ATTEMPTS = 5
-TELEGRAM_DELETE_WEBHOOK_RETRY_BASE_SECONDS = 1.0
-TELEGRAM_DELETE_WEBHOOK_RETRY_MAX_SECONDS = 8.0
+    return _transport_telegram.set_webhook(
+        url=url, secret=secret, token=token,
+        api=_telegram_api_cagri, yanit_oku_fn=_telegram_yanit_oku,
+        secret_ayikla_fn=_telegram_webhook_secret_ayikla, token_al_fn=_telegram_token_al,
+        adres_olustur_fn=_telegram_webhook_url_olustur, gizle_fn=_webhook_adres_gizle,
+    )
 
 
 def _telegram_delete_webhook(token=None) -> bool:
-    """deleteWebhook: yalnızca Telegram onayını doğrulayınca True döndürür.
-
-    Neden gerekli: webhook kurulu bir token'da `getUpdates` 409 Conflict alır, yani
-    mod değişince (secret silindi / yerelde yoklama) eski kayıt kalırsa komutlar
-    sessizce çalışmaz. `drop_pending_updates=True` bekleyen tüm güncellemeleri
-    (taze görünenler dahil) bilerek atar; yalnızca başarılı yanıt sonrasında gelenler işlenir.
-    """
-    token = _telegram_token_al(token)
-    if not token:
-        return False
-    try:
-        yanit = _telegram_api_cagri("deleteWebhook", token, {"drop_pending_updates": True})
-    except Exception as exc:  # noqa: BLE001 - ağ hatası botu düşürmesin
-        logger.warning(
-            "Webhook kaldirilamadi (ag hatasi): %s",
-            redact_sensitive_text(exc, token, _telegram_webhook_secret_ayikla()),
-        )
-        return False
-    ok, aciklama = _telegram_yanit_oku(yanit)
-    aciklama = redact_sensitive_text(aciklama, token, _telegram_webhook_secret_ayikla())
-    if ok:
-        logger.info("Telegram webhook kaldirildi (%s)", aciklama)
-    else:
-        logger.warning("Telegram webhook kaldirilamadi veya API silmeyi onaylamadi: %s", aciklama)
-    return ok
-
-
-def _telegram_delete_webhook_yeniden_dene(token=None) -> bool:
-    """Bounded exponential retry; a listener may start only after confirmed deletion."""
-    bekleme = TELEGRAM_DELETE_WEBHOOK_RETRY_BASE_SECONDS
-    for attempt in range(1, TELEGRAM_DELETE_WEBHOOK_MAX_ATTEMPTS + 1):
-        if _telegram_delete_webhook(token=token):
-            return True
-        if attempt < TELEGRAM_DELETE_WEBHOOK_MAX_ATTEMPTS:
-            logger.warning(
-                "Telegram pending update temizliği başarısız (%s/%s); %.0f sn sonra yeniden denenecek",
-                attempt, TELEGRAM_DELETE_WEBHOOK_MAX_ATTEMPTS, bekleme,
-            )
-            time.sleep(bekleme)
-            bekleme = min(bekleme * 2, TELEGRAM_DELETE_WEBHOOK_RETRY_MAX_SECONDS)
-    logger.error(
-        "Telegram pending update temizliği %s denemede doğrulanamadı; polling başlatılmayacak",
-        TELEGRAM_DELETE_WEBHOOK_MAX_ATTEMPTS,
+    return _transport_telegram.delete_webhook(
+        token=token, api=_telegram_api_cagri, yanit_oku_fn=_telegram_yanit_oku,
+        token_al_fn=_telegram_token_al,
     )
-    return False
 
 
 def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
@@ -1838,88 +1655,49 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
       başarılı. Güncellemeler `/webhook/<secret>` ucundan gelir; yoklama thread'i
       AÇILMAZ (aynı token'da getUpdates 409 alır).
     - **yoklama**: eski davranış (getUpdates daemon thread). Webhook kapalıyken ya da
-      setWebhook başarısız olduğunda buraya düşülür; eski webhook ve pending update'ler
-      doğrulanarak silinmeden polling listener'ı başlatılmaz (yoksa 409/eski komut riski).
-    - **kapali**: token/chat_id yok veya pending cleanup doğrulanamadı; komut listener'ı kapalı kalır.
+      setWebhook başarısız olduğunda komutlar tamamen susmasın diye buraya düşülür;
+      önce eski webhook kaydı silinir (yoksa 409).
+    - **kapali**: token/chat_id yok - bot yalnızca alarm gönderir.
 
     `isleyici` yalnızca testler için verilir (ağa çıkmayan sahte dinleyici).
     """
-    global _telegram_listener_ref, _telegram_update_processor_ref
-    if notifier is None or not getattr(notifier, "enabled", False):
-        logger.info("Telegram komut dinleyicisi başlatılmadı (token/chat_id yok)")
-        return "kapali"
-    if isleyici is None:
-        isleyici = TelegramCommandListener(
-            token=notifier.token,
-            allowed_chat_id=notifier.chat_id,
-            handlers=TELEGRAM_KOMUTLARI,
-            help_text=KOMUT_YARDIM,
-            komutlari_yoksay=lambda: _scan_job_active.is_set(),
-            response_sender=getattr(notifier, "queue_command_reply", None),
-            response_exists=getattr(notifier, "command_reply_exists", None),
-        )
-    liste = ", ".join("/" + k for k in TELEGRAM_KOMUTLARI)
-    webhook_url = _telegram_webhook_url_olustur()
-    if webhook_url:
-        if _health_server_ref is None:
-            logger.warning(
-                "TELEGRAM_WEBHOOK_SECRET tanimli ama HTTP sunucusu yok "
-                "(PORT env yok ya da sunucu baslatilamadi) - yoklama moduna donuldu"
-            )
-        elif _telegram_set_webhook(url=webhook_url, token=notifier.token):
-            # Güncellemeler health_server thread'inden gelir; bu referans olmadan
-            # /webhook ucu 503 döner ve Telegram güncellemeyi tekrar dener.
-            _telegram_update_processor_ref = isleyici
-            logger.info(
-                "Telegram komutları WEBHOOK modunda: "
-                f"{_webhook_adres_gizle(webhook_url, _telegram_webhook_secret_ayikla())} "
-                "(yalnızca yapılandırılmış yetkili sohbet)"
-            )
-            return "webhook"
-        else:
-            logger.warning("Webhook kurulamadi - yoklama moduna donuluyor")
-    # Yoklama moduna geçişteki drop_pending_updates=True çağrısı başarıyla
-    # doğrulanmadan polling açılmaz; aksi halde eski pending update'ler çalışabilir.
-    _telegram_update_processor_ref = None
-    if not _telegram_delete_webhook_yeniden_dene(token=notifier.token):
-        logger.error("Telegram polling fail-closed: pending update temizliği doğrulanamadı")
-        return "kapali"
-    if isleyici.start():
-        _telegram_listener_ref = isleyici
-        logger.info(
-            "Telegram komutları aktif (yoklama): %s (yalnızca yapılandırılmış yetkili sohbet)",
-            liste,
-        )
-        return "yoklama"
-    return "kapali"
-
+    global _telegram_listener_ref, _telegram_update_processor_ref, _komut_modu
+    sonuc = _transport_telegram.komut_katmanini_kur(
+        notifier, isleyici,
+        komutlar=TELEGRAM_KOMUTLARI, yardim_metni=KOMUT_YARDIM,
+        tarama_suruyor=lambda: _scan_job_active.is_set(),
+        health_server_var=_health_server_ref is not None,
+        listener_factory=TelegramCommandListener,
+        adres_olustur=_telegram_webhook_url_olustur,
+        gizle=_webhook_adres_gizle,
+        secret_ayikla=_telegram_webhook_secret_ayikla,
+        set_webhook_fn=_telegram_set_webhook,
+        delete_webhook_fn=_telegram_delete_webhook,
+    )
+    _komut_modu = sonuc["mod"]
+    if sonuc["mod"] == "webhook":
+        _telegram_update_processor_ref = sonuc["processor"]
+    elif sonuc["mod"] == "yoklama":
+        _telegram_listener_ref = sonuc["listener"]
+    return sonuc["mod"]
 
 def _telegram_webhook_isle(guncelleme):
     """health_server'ın /webhook ucundan gelen güncellemeyi işler (thread-safe).
 
     Dönen değer HTTP kodudur:
-      200 → işlendi veya komut cevabı dayanıklı outbox'a alındı,
-      503 → bot hazır değil ya da cevap dayanıklı kaydedilemedi (Telegram tekrar dener),
+      200 → işlendi (cevap sendMessage ile gitti),
+      503 → bot henüz komutları kurmadı (Telegram tekrar dener),
       500 → işleyici hatası (Telegram tekrar dener, güncelleme kaybolmaz).
     """
     isleyici = _telegram_update_processor_ref
     if isleyici is None:
         return 503
-    update_id = guncelleme.get("update_id") if isinstance(guncelleme, dict) else None
     with _telegram_webhook_kilidi:
         try:
             isleyici.handle_update(guncelleme)
         except Exception as exc:  # noqa: BLE001 - tek güncelleme sunucuyu düşürmesin
-            logger.error(
-                "Webhook guncellemesi islenemedi: %s",
-                redact_sensitive_text(
-                    exc, getattr(isleyici, "token", ""), _telegram_webhook_secret_ayikla()
-                ),
-            )
+            logger.error(f"Webhook guncellemesi islenemedi: {exc}", exc_info=True)
             return 500
-        retryable = getattr(isleyici, "update_waiting_for_delivery", None)
-        if callable(retryable) and retryable(update_id):
-            return 503
     return 200
 
 
@@ -1932,27 +1710,15 @@ def _istek_tam_evrende_tamamlandi(result: dict, evren_boyutu: int = None) -> boo
     )
 
 
-def _calistir_istek_taramasi(
-    deque_manager, lifecycle_manager, notifier,
-) -> Tuple[bool, Optional[datetime]]:
-    """Çalıştırılan isteği ve başlangıçta due olan checkpoint'i döndür."""
-    global _scan_job_request
+def _calistir_istek_taramasi(deque_manager, lifecycle_manager, notifier) -> bool:
+    """Kuyruktaki kullanıcı isteğini seans saatinden bağımsız çalıştır."""
     with _scan_request_lock:
         request = _scan_job_request
         _scan_istegi.clear()
     if not request:
         _scan_job_active.clear()
-        return False, None
-    scheduled_checkpoint = None
+        return False
     try:
-        requested_stocks = request.get("hisseler") or ACTIVE_STOCKS
-        current_time = datetime.now(ISTANBUL_TZ)
-        scheduled_checkpoint = (
-            latest_session_checkpoint(current_time)
-            if (set(requested_stocks) == set(ACTIVE_STOCKS)
-                and bist_scan_due(current_time))
-            else None
-        )
         result = scan_all_stocks(
             deque_manager,
             lifecycle_manager,
@@ -1960,14 +1726,12 @@ def _calistir_istek_taramasi(
             manuel=True,
             stocks=request.get("hisseler"),
             send_alerts=False,
-            require_current_session=scheduled_checkpoint is not None,
-            scheduled_checkpoint=scheduled_checkpoint,
         )
     except Exception as exc:
         logger.error("İstenen analiz çalışırken hata verdi: %s", exc, exc_info=True)
         result = _analiz_hatasi_kaydi(exc, len(request.get("hisseler") or []), "istenen analiz")
     _manuel_tarama_tamamla(request, result or {}, notifier)
-    return True, scheduled_checkpoint
+    return True
 
 
 def _bekle_veya_tarama(seconds: float) -> bool:
@@ -1986,82 +1750,7 @@ def _bekle_veya_tarama(seconds: float) -> bool:
     return False
 
 
-_domain_runner_loaded = False
-_domain_runner_function = None
-
-
-def _load_domain_runner():
-    """Load optional domain runtime without making Formation startup depend on it."""
-    global _domain_runner_loaded, _domain_runner_function
-    if _domain_runner_loaded:
-        return _domain_runner_function
-    try:
-        from domain_engines.runner import run_domain_engines
-    except Exception:
-        # Leave the loaded flag false so a later scan can retry the import.
-        _domain_runner_function = None
-        logger.exception("Domain engine runner yüklenemedi; Formation taraması devam edecek")
-        return None
-    _domain_runner_function = run_domain_engines
-    _domain_runner_loaded = True
-    return _domain_runner_function
-
-
-def _safe_completed_domain_frame(
-    stock: str,
-    timeframe: str,
-    frame: object,
-    *,
-    already_completed: bool = False,
-):
-    """Prepare a domain-only copy; malformed frames are skipped without affecting Formation."""
-    if frame is None:
-        return None
-    try:
-        completed = frame if already_completed else tamamlanmis_mumlar(frame, timeframe)
-        return completed.copy(deep=True) if completed is not None else None
-    except Exception:
-        logger.exception(
-            "Domain frame preparation failed for %s/%s; domain timeframe is skipped and Formation continues",
-            stock,
-            timeframe,
-        )
-        return None
-
-
-def _run_domain_engines_for_symbol(
-    stock: str, completed_frames: Dict[str, object]
-) -> Dict[str, Dict[str, object]]:
-    """Run domains on current completed frames; return only those run outputs."""
-    outputs: Dict[str, Dict[str, object]] = {}
-    runner = _load_domain_runner()
-    if runner is None:
-        return outputs
-    for timeframe, frame in completed_frames.items():
-        if frame is None or getattr(frame, "empty", True):
-            continue
-        try:
-            result = runner(stock, timeframe, frame, profile=PROFILE)
-            if isinstance(result, dict):
-                outputs[timeframe] = result
-        except Exception:
-            # Adapter/runtime failures must not turn a successful Formation scan
-            # into a per-symbol scanner failure. No previous runner cache is read.
-            logger.exception("Domain runner hata verdi: %s/%s; Formation sonucu korunuyor", stock, timeframe)
-    return outputs
-
-
-def scan_all_stocks(
-    deque_manager: StockDequeManager,
-    lifecycle_manager: PatternLifecycleManager,
-    notifier: TelegramNotifier,
-    manuel: bool = False,
-    stocks=None,
-    send_alerts: bool = True,
-    require_current_session: bool = False,
-    after_close: bool = False,
-    scheduled_checkpoint: Optional[datetime] = None,
-):
+def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: PatternLifecycleManager, notifier: TelegramNotifier, manuel: bool = False, stocks=None, send_alerts: bool = True):
     """
     Aktif tarama evrenini tara; Yahoo verisi seri ve gruplu alınır, analiz ardından yapılır.
     - Deque'den veri al
@@ -2073,36 +1762,11 @@ def scan_all_stocks(
     simdiki_zaman = datetime.now(ISTANBUL_TZ)
     tarama_baslangici = time.monotonic()
     scan_stocks = list(dict.fromkeys(stocks or ACTIVE_STOCKS))
-    if require_current_session:
-        session = bist_session_for(simdiki_zaman)
-        schedule_ok = (
-            simdiki_zaman.time() >= session.close_time
-            if after_close and session.close_time is not None
-            else not after_close and bist_scan_window_open(simdiki_zaman)
-        )
-        if session.status is not SessionStatus.TRADING or not schedule_ok:
-            reason = session.reason or session.status.value
-            if session.status is SessionStatus.TRADING:
-                reason = "seans içi/kapanış tarama zaman penceresi dışında"
-            logger.error(
-                "Zamanlanmış tarama başlatılmadı: %s (%s)",
-                simdiki_zaman.date(), reason,
-            )
-            return _analiz_hatasi_kaydi(
-                RuntimeError(f"BIST işlem günü/zamanı doğrulanmadı: {reason}"),
-                len(scan_stocks),
-                "zamanlanmış tarama",
-            )
     tur_taranan = 0
     tur_formasyon = 0
     tur_hata = 0
     en_son_bar = None
     en_eski_bar_yasi_dk = None
-    fetch_returned_count = 0
-    fetch_valid_count = 0
-    fresh_fetch_count = 0
-    analysis_eligible_count = 0
-    future_bar_count = 0
     _live_state.begin_scan(
         simdiki_zaman,
         manuel=manuel,
@@ -2137,8 +1801,7 @@ def scan_all_stocks(
     taze_1h_verileri, fetch_hatalari, retry_sayisi, retry_kurtarilan = fetch_1h_stocks_paced(
         scan_stocks, pacer, "MANUEL ANALİZ" if manuel else "CANLI TARAMA", periods=fetch_periods
     )
-    fetch_returned_count = len(taze_1h_verileri)
-    daily_stats['fetch_ok'] += fetch_returned_count
+    daily_stats['fetch_ok'] += len(taze_1h_verileri)
     daily_stats['fetch_failures'] += len(fetch_hatalari)
     daily_stats['fetch_retries'] += retry_sayisi
     daily_stats['fetch_retry_recovered'] += retry_kurtarilan
@@ -2156,72 +1819,14 @@ def scan_all_stocks(
             # Deque'den mevcut pencere; fetch aşaması yukarıda, retry dahil tamamlandı.
             df_1h = deque_manager.to_dataframe(stock)
             taze = taze_1h_verileri.get(stock)
-            provider_hata = fetch_hatalari.get(stock, "fetch yapılmadı")
-            provider_fetch_fresh = False
-            provider_session_issue = None
-            if taze is not None and require_current_session:
-                provider_session_issue = current_session_data_issue(
-                    taze, simdiki_zaman, after_close=after_close,
-                )
-                if provider_session_issue:
-                    provider_hata = f"güncel seans verisi doğrulama: {provider_session_issue}"
-                    logger.error("%s: sağlayıcı frame'i cache'e eklenmedi (%s)", stock, provider_hata)
-                    taze = None
             if taze is not None:
-                frame_issues = ohlcv_girdi_sorunlari(taze)
-                taze_frame_age = _frame_son_bar_yasi_dk(taze, simdiki_zaman)
-                if taze_frame_age is not None and taze_frame_age < 0:
-                    frame_issues = list(frame_issues) + ["gelecek_timestamp"]
-                elif taze_frame_age is None:
-                    frame_issues = list(frame_issues) + ["timestamp_yasi_hesaplanamadi"]
-                provider_fetch_fresh = (
-                    taze_frame_age is not None
-                    and 0 <= taze_frame_age <= STALE_BAR_UYARI_DK
-                )
-                if frame_issues:
-                    provider_fetch_fresh = False
-                    provider_hata = "OHLCV doğrulama: " + ", ".join(frame_issues)
-                    logger.error("%s: taze 1H fetch geçersiz (%s); cache değiştirilmedi",
-                                 stock, provider_hata)
-                    taze = None
-                else:
-                    birlesti = deque_manager.append_dataframe(stock, taze)
-                    if birlesti:
-                        fetch_valid_count += 1
-                        daily_stats['fetch_valid'] += 1
-                        if provider_fetch_fresh:
-                            fresh_fetch_count += 1
-                            daily_stats['fetch_fresh'] += 1
-                        df_1h = deque_manager.to_dataframe(stock)
-                    else:
-                        provider_fetch_fresh = False
-                        provider_hata = "OHLCV birleştirme reddedildi"
-                        logger.error(
-                            f"{stock}: taze 1H veri deque'ye eklenmedi; "
-                            "önbellek tazelik kurallarıyla değerlendirilecek"
-                        )
-                        taze = None
-                        df_1h = deque_manager.to_dataframe(stock)
-            if taze is None:
+                deque_manager.append_dataframe(stock, taze)
+                df_1h = deque_manager.to_dataframe(stock)
+            else:
                 logger.warning(
-                    f"{stock}: kullanılabilir taze 1H yanıt yok ({provider_hata}); "
-                    "cache varsa mevcut tazelik kurallarıyla değerlendirilecek"
+                    f"{stock}: taze 1H veri yok ({fetch_hatalari.get(stock, 'fetch yapılmadı')}); "
+                    "cache varsa yalnız veri tazeliği uygunsa kullanılacak"
                 )
-            if require_current_session:
-                issue = provider_session_issue or current_session_data_issue(
-                    taze, simdiki_zaman, after_close=after_close,
-                )
-                if issue:
-                    tur_hata += 1
-                    daily_stats['stale_stocks'] += 1
-                    daily_stats['data_stale'] = True
-                    if not after_close:
-                        daily_stats['veri_yok_modu'] = True
-                    logger.error(
-                        "%s: zamanlanmış tarama atlandı; güncel sağlayıcı mumu yok (%s)",
-                        stock, issue,
-                    )
-                    continue
             
             if df_1h is None or len(df_1h) < 50:
                 logger.warning(f"{stock}: veri yok (fetch basarisiz + cache bos) - bu tur atlandi")
@@ -2231,26 +1836,12 @@ def scan_all_stocks(
             # En yeni 1H mumun yaşı. Yahoo saatlerce kapalıysa bu değer büyür ve
             # bot eski veriyle (yanlış sinyalle) çalışmaya devam eder. Ölçüp
             # loglayıp heartbeat'e yazıyoruz ki kör çalışma görünür olsun.
-            son_bar = pd.Timestamp(df_1h.index.max())
-            if pd.isna(son_bar):
-                logger.error("%s: cache son mum zamanı geçersiz; analiz atlandı", stock)
-                continue
-            son_bar = (son_bar.tz_convert(ISTANBUL_TZ) if son_bar.tzinfo
-                       else ISTANBUL_TZ.localize(son_bar.to_pydatetime()))
-            son_bar_yasi_dk = _frame_son_bar_yasi_dk(df_1h, simdiki_zaman)
-            if son_bar_yasi_dk is None:
-                logger.error("%s: cache son mum yaşı hesaplanamadı; analiz atlandı", stock)
-                continue
-            if son_bar_yasi_dk < 0:
-                future_bar_count += 1
-                daily_stats['future_bar_stocks'] += 1
-                logger.error(
-                    "%s: cache son mumu sistem saatinden %.1f dk ileride; "
-                    "gelecek timestamp ile analiz atlandı",
-                    stock, abs(son_bar_yasi_dk),
-                )
-                continue
+            son_bar = df_1h.index[-1]
+            son_bar = son_bar.tz_convert(ISTANBUL_TZ) if son_bar.tzinfo else ISTANBUL_TZ.localize(son_bar)
             en_son_bar = max(en_son_bar, son_bar) if en_son_bar is not None else son_bar
+            son_bar_yasi_dk = (simdiki_zaman - df_1h.index[-1].tz_convert(ISTANBUL_TZ)
+                               if df_1h.index[-1].tzinfo else
+                               simdiki_zaman - ISTANBUL_TZ.localize(df_1h.index[-1])).total_seconds() / 60.0
             if daily_stats['max_bar_age_min'] is None or son_bar_yasi_dk > daily_stats['max_bar_age_min']:
                 daily_stats['max_bar_age_min'] = round(son_bar_yasi_dk, 1)
             if en_eski_bar_yasi_dk is None or son_bar_yasi_dk > en_eski_bar_yasi_dk:
@@ -2279,24 +1870,24 @@ def scan_all_stocks(
             # yalnızca piyasa açıkken VERİ YOK sayılır. Kapalı seanslarda son mum,
             # genel yaş sınırına kadar değerlendirilebilir.
             seans_acik = tarama_penceresi_acik_mi(simdiki_zaman)
-            if (not provider_fetch_fresh and seans_acik
+            if (taze is None and seans_acik and son_bar_yasi_dk is not None
                     and son_bar_yasi_dk > VERI_YOK_MODU_ESIK_DK):
                 daily_stats['veri_yok_modu'] = True
                 logger.info(
-                    f"{stock}: seans açıkken taze fetch barı yok (son mum "
-                    f"{son_bar_yasi_dakika_str(son_bar_yasi_dk)} önce; {provider_hata}) - analiz atlanıyor"
+                    f"{stock}: seans açıkken yeni veri yok (son mum "
+                    f"{son_bar_yasi_dakika_str(son_bar_yasi_dk)} önce, fetch başarısız) - analiz atlanıyor"
                 )
                 continue
 
             # Seans içinde fetch başarısızsa eski cache ile sinyal üretme. Seans
-            # dışında ise cache'in en yeni timestamp'i, yapılandırılmış yaş sınırına
+            # dışında ise en son tamamlanmış mum, yapılandırılmış yaş sınırına
             # (varsayılan 14 gün) kadar açıkça eski veri olarak kullanılabilir.
             if not _cache_verisi_kullanilabilir(
                     son_bar_yasi_dk, taze is not None, seans_acik):
                 daily_stats['stale_stocks'] += 1
                 daily_stats['data_stale'] = True
                 logger.warning(
-                    f"{stock}: son cache mum etiketi {son_bar_yasi_dakika_str(son_bar_yasi_dk)} yaşında; "
+                    f"{stock}: son tamamlanmış mum {son_bar_yasi_dakika_str(son_bar_yasi_dk)} yaşında; "
                     "bu hisse analiz dışı bırakıldı"
                 )
                 continue
@@ -2309,59 +1900,30 @@ def scan_all_stocks(
             if son_bar_yasi_dk > STALE_BAR_UYARI_DK and not erken_seans:
                 daily_stats['stale_stocks'] += 1
                 daily_stats['data_stale'] = True
-                provider_durumu = (
-                    "fetch başarısız/geçersiz" if taze is None else
-                    "sağlayıcı eski bar döndürdü" if not provider_fetch_fresh else
-                    "cache'in en yeni barı eski"
-                )
                 logger.warning(
                     f"{stock}: VERİ ESKİ - en yeni 1H mum {son_bar_yasi_dakika_str(son_bar_yasi_dk)} önce "
-                    f"(eşik {STALE_BAR_UYARI_DK} dk); {provider_durumu}. "
-                    "Mevcut veri politikasıyla analiz sürüyor; formasyonlar eski veriye dayanabilir."
+                    f"(eşik {STALE_BAR_UYARI_DK} dk). yfinance çekimi "
+                    f"{'başarısız' if taze is None else 'veri gelmiyor'}, cache ile devam ediliyor - "
+                    f"formasyonlar eski veriyle hesaplanıyor!"
                 )
-
-            analysis_eligible_count += 1
-            daily_stats['analysis_eligible'] += 1
-
+            
             # Tüm timeframe'leri üret
             all_tfs = resample_all_timeframes(df_1h)
             
             # --- 1D İÇİN DERİN VERİ (FAZ 2) ---
-            # Resample 1D yalnızca eldeki 1H penceresi kadar derin olabilir; bu
-            # pencerenin işlem günü karşılığı provider/seans etiket sözleşmesine bağlıdır.
+            # Resample 1D sadece 1H penceresi kadar (~40 bar) derinlikte olur ve 1D
+            # formasyon penceresi (20-60 bar) marjinal kalıyordu (ölçüm: 40.0 bar).
             # 1H penceresini büyütmek Pine uyumunu bozabileceği için günlük veriyi
             # AYRI ve DERİN (~2 yıl) çekiyoruz. Veri yoksa resample'e geri dönülür
             # (davranış asla kötüleşmez, sadece iyileşir).
             if deque_manager.gunluk_veri_eksik_mi(stock, simdiki_zaman):
                 with pacer.request(f"{stock} 1D"):
                     taze_gunluk = fetch_yfinance_1d(stock)
+                deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
                 if taze_gunluk is not None and len(taze_gunluk) >= 30:
-                    if deque_manager.append_gunluk_dataframe(stock, taze_gunluk):
-                        try:
-                            cache_kalici = bool(deque_manager.save_gunluk_to_disk(stock))
-                        except Exception as exc:
-                            cache_kalici = False
-                            logger.error(
-                                "%s: günlük veri bellekte kabul edildi ancak kalıcılık başarısız (%s)",
-                                stock, type(exc).__name__,
-                            )
-                        # Cache first, cooldown second. If the remote cache write failed,
-                        # keep only an in-memory cooldown so a restart can retry the fetch.
-                        deque_manager.gunluk_fetch_denemesi_kaydet(
-                            stock, simdiki_zaman, persist=cache_kalici
-                        )
-                        if cache_kalici:
-                            logger.info(f"{stock}: günlük veri tazelendi ({len(taze_gunluk)} bar)")
-                        else:
-                            logger.warning(
-                                "%s: günlük veri bellekte kabul edildi ancak kalıcılık doğrulanmadı; "
-                                "yeniden başlatma sonrası fetch tekrar denenebilir", stock,
-                            )
-                    else:
-                        deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
-                        logger.warning(f"{stock}: günlük derin veri geçersiz OHLCV - resample kullanılacak")
+                    deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
+                    logger.info(f"{stock}: günlük veri tazelendi ({len(taze_gunluk)} bar)")
                 else:
-                    deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
                     logger.warning(f"{stock}: günlük derin veri çekilemedi - resample kullanılacak")
             df_gunluk = deque_manager.to_gunluk_dataframe(stock)
             if df_gunluk is not None and len(df_gunluk) >= 30:
@@ -2369,36 +1931,58 @@ def scan_all_stocks(
             
             # Her TF için: yarım (devam eden) mumu çıkar, TAMAMLANMIŞ mumları besle
             hisse_formasyonlari = []
-            domain_completed_frames = {}
-            pending_formation_alerts = []
             for tf_name, df_tf in all_tfs.items():
                 if df_tf is None or len(df_tf) < 30:
-                    # Formation'ın mevcut 30-bar kapısı aynen korunur. Domain
-                    # motorları kısa geçmişte kendi warm-up sonucunu üretebilir.
-                    if df_tf is not None and len(df_tf) > 0:
-                        domain_completed_frames[tf_name] = _safe_completed_domain_frame(
-                            stock, tf_name, df_tf
-                        )
                     logger.debug(f"{stock} {tf_name} için yeterli veri yok")
                     continue
                 df_tf = tamamlanmis_mumlar(df_tf, tf_name)
-                domain_completed_frames[tf_name] = _safe_completed_domain_frame(
-                    stock, tf_name, df_tf, already_completed=True
-                )
                 if df_tf is None or len(df_tf) < 30:
                     logger.debug(f"{stock} {tf_name}: tamamlanmış mum kalmadı (seans içi erken tarama)")
                     continue
+                # P0 güvenlik kapısı: motorun gördüğü SON bar gerçekten kapandı mı?
+                # tamamlanmis_mumlar aynı kuralı uygular; burada olay anındaki an ile
+                # yeniden doğrulanır (restart/telafi/saat kayması regresyonlarına karşı).
+                # Kapı "hayır" derse anlık push yapılmaz, sonraki taramaya bırakılır.
+                son_bar_kapanis = mum_kapanis_ani(df_tf.index[-1], tf_name)
+                son_bar_kapandi = bar_kapandi_mi(df_tf.index[-1], tf_name, now=simdiki_zaman)
+                if not son_bar_kapandi:
+                    logger.warning(
+                        f"{stock} {tf_name}: son bar ({df_tf.index[-1]}) henüz kapanmadı "
+                        f"(kapanış {son_bar_kapanis}) - bu tur bildirim üretilmeyecek"
+                    )
                 
                 # Motor adayı kendisi bulur ve kırılım anında dondurur (Pine v0.4.6 akışı).
                 # tam_yeniden=True: pencere her taramada sıfırdan deterministik oynatılır.
                 snap = lifecycle_manager.scan(stock + "_" + tf_name, df_tf, tam_yeniden=True)
                 state, break_dir, lifecycle_log = snap.state, snap.break_dir, snap.log
                 active = snap.active
+                # Yaşam döngüsü yok/geçersiz/zayıflama state'ine düştü: bu slotun
+                # "tekrar" mühürleri + 4 saatlik cooldown'ı temizlenir, aynı slotu
+                # tekrar kaplayan yeni formasyon anında bildirilebilir.
+                if state in TEKRAR_SIFIRLA_STATELER:
+                    notifier.son_alert_sifirla(stock, tf_name)
                 
                 if active:
                     q = snap.effective_quality if snap.effective_quality is not None else active.raw_quality
-                    daily_stats['patterns_found'] += 1
+                    _note_pattern_found(stock, tf_name)
                     logger.info(f"🔍 {stock} {tf_name} - {active.pattern_type} kalite {q:.0f} state {state} - {snap.log}")
+                    # --- HAFTALIK KARNE DEFTERİ (yerel; Supabase gerekmez) ---
+                    # Kırılım teyidi: performans ölçülecek sinyal (giriş = teyit
+                    # barının kapanışı). Diğer state'ler: formasyon sayımı + huni.
+                    try:
+                        if state == "KIRILIM_TEYITLI" and break_dir in (1, -1):
+                            _karne_olay_kaydet(
+                                stock, tf_name, state, active.pattern_type, q,
+                                df_tf.index[-1], kirilim=True, dir=int(break_dir),
+                                entry=float(df_tf["close"].iloc[-1]), df_tf=df_tf,
+                                stable_id=getattr(active, "stable_id", None),
+                            )
+                        else:
+                            _karne_olay_kaydet(stock, tf_name, state, active.pattern_type, q,
+                                               df_tf.index[-1], df_tf=df_tf,
+                                               stable_id=getattr(active, "stable_id", None))
+                    except Exception as karne_hata:  # noqa: BLE001 - tarama asla durmasın
+                        logger.debug("Karne kaydı atlandı (%s %s): %s", stock, tf_name, karne_hata)
                     
                     # Alert eşiği kontrolü - timeframe'e göre (effective_quality üzerinden)
                     min_q = ALERT_MIN_QUALITY.get(tf_name, ALERT_MIN_QUALITY_GLOBAL)
@@ -2416,6 +2000,10 @@ def scan_all_stocks(
                         'quality': float(q),
                         'state': state,
                         'break_dir': break_dir,
+                        # Phase 1: kalıcı formation kimliği (doğumdan terminal'e).
+                        # Motor-içi `identity`'den ayrıdır; restart sonrası re-attach
+                        # ile aynı formation aynı stable_id'yi taşımaya devam eder.
+                        'stable_id': getattr(active, 'stable_id', None),
                         'upper': getattr(active, 'upper_now', None),
                         'lower': getattr(active, 'lower_now', None),
                         'critical_price': (active.upper_now if break_dir == 1 else active.lower_now),
@@ -2426,6 +2014,14 @@ def scan_all_stocks(
                         'age_bars': yas_bar,
                         'mtf_destek': False,
                         'bar_time': str(df_tf.index[-1]),
+                        # Kapanan mumun damgası + güvenlik kapısı sonucu: mesajda
+                        # gösterilir ve push öncesi son kontrol olarak kullanılır.
+                        # ISO STRING: bu kayıt LiveState/son_tarama JSON'larına
+                        # yazılır; Timestamp nesnesi serileştirmeyi kırardı.
+                        'bar_kapanis': (son_bar_kapanis.isoformat()
+                                        if son_bar_kapanis is not None else None),
+                        'bar_kapandi': bool(son_bar_kapandi),
+                        'bar_metni': _mum_bilgisi(tf_name, df_tf.index[-1], son_bar_kapanis),
                         'min_quality': float(min_q),
                         'alert_gonderildi': False,
                     }
@@ -2437,12 +2033,28 @@ def scan_all_stocks(
                         _deferred_alert_buffer.observe(stock, tf_name, formasyon_kaydi, simdiki_zaman)
                     else:
                         _deferred_alert_buffer.observe(stock, tf_name, None, simdiki_zaman)
-                    _persist_watch_buffer(notifier, simdiki_zaman, remote=False)
+                    # Public kapanış özeti için: gün içinde kaç kırılım başarısız
+                    # oldu? (Gruba her ❌ tek tek gitmez; özet tek satır verir.)
+                    if send_alerts and state == "BASARISIZ_KIRILIM":
+                        _note_basarisiz_kirilim(stock, tf_name, df_tf.index[-1])
+                    # Aday hunisi: bu kaydın akıbeti sayılır (bkz. daily_stats notu).
                     if q < min_q:
+                        daily_stats['alerts_below_threshold'] += 1
                         logger.debug(f"{stock} {tf_name} kalite {q:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
                     elif send_alerts and state in WATCH_STATES:
+                        daily_stats['alerts_deferred'] += 1
                         logger.info(f"{stock} {tf_name} {state}: düşük öncelikli bildirim kapanış özetine ertelendi")
                     # Teyitli kırılım, başarılı retest, tamamlanma ve başarısız kırılım acildir.
+                    elif send_alerts and state in IMMEDIATE_ALERT_STATES and not son_bar_kapandi:
+                        # P0 güvenlik kapısı: bar kapanmadan anlık push yok. Bu dal
+                        # normalde HİÇ çalışmaz (tamamlanmis_mumlar aynı kuralı
+                        # uygular); saat/tarama kayması olursa sinyal yanlış
+                        # gönderilmek yerine bir sonraki taramaya bırakılır.
+                        daily_stats['alerts_bar_kapanmadi'] += 1
+                        logger.warning(
+                            f"⏸️ {stock} {tf_name} {state}: bar henüz kapanmadı "
+                            f"({df_tf.index[-1]} → {son_bar_kapanis}); push sonraki taramaya bırakıldı"
+                        )
                     elif send_alerts and state in IMMEDIATE_ALERT_STATES:
                         # Humanized mesaj için ek bilgiler - var olan veriyi kullan, ekstra hesaplama yok
                         upper_touches = getattr(active, 'upper_touches', None)
@@ -2470,13 +2082,21 @@ def scan_all_stocks(
                             'timeframe': tf_name,
                             'pattern_name': active.pattern_type,
                             'state': state,
-                            'lifecycle_event_id': _formation_alert_event_id(snap, state),
                             'confidence_score': q,
                             'critical_price_level': active.upper_now if break_dir == 1 else active.lower_now,
                             'upper_now': active.upper_now,
                             'lower_now': active.lower_now,
                             'contraction': getattr(active, 'contraction', None),
                             'timestamp': df_tf.index[-1],
+                            # Kapanan mum bilgisi: mesajda "hangi mum kapandı?" satırı
+                            # olarak görünür (bar_kapandi zaten yukarıda doğrulandı).
+                            # ISO string: engellenen alarm kuyruğa yazılırken JSON
+                            # serileştirmesi bozulmasın.
+                            'bar_time': df_tf.index[-1],
+                            'bar_kapanis': (son_bar_kapanis.isoformat()
+                                            if son_bar_kapanis is not None else None),
+                            'bar_kapandi': True,
+                            'bar_metni': _mum_bilgisi(tf_name, df_tf.index[-1], son_bar_kapanis),
                             'break_dir': break_dir,
                             'break_strength': getattr(active, 'break_strength', q),
                             'break_price': active.upper_now if break_dir == 1 else active.lower_now,
@@ -2485,30 +2105,57 @@ def scan_all_stocks(
                             'lower_touches': lower_touches,
                             'age_bars': age_bars,
                             'mtf_destek': mtf_destek,
+                            # Acil mesaja bağlam olarak en fazla 3 aday eklenir; havuz
+                            # (12) bu listenin seçildiği yerdir, gönderilen sayı değil.
                             'watch_context': [
-                                item for item in _deferred_alert_buffer.items(simdiki_zaman, limit=12)
+                                item for item in _deferred_alert_buffer.items(
+                                    simdiki_zaman, limit=WATCH_CONTEXT_HAVUZU)
                                 if not (item.get('stock') == stock and item.get('timeframe') == tf_name)
                             ][:3],
                         }
-                        # Keep this exact scan's payload and watch context local;
-                        # notifier policy is applied only after domain work ends.
-                        # The last completed Formation bar close is the native
-                        # reference for zone-side/distance selection; it is not
-                        # the pattern's critical breakout level.
-                        # Commit a Formation-only fallback to durable storage
-                        # before domain engines/context selection can fail or the
-                        # process can exit. Same-process delivery waits until the
-                        # current scan's context has been attached.
-                        prepare_event = getattr(notifier, "prepare_formation", None)
-                        if callable(prepare_event):
-                            prepare_event(alert_data)
-                        pending_formation_alerts.append(
-                            (alert_data, df_tf['close'].iloc[-1])
-                        )
+                        # Public (grup) kuyruğuna ekle: gönderim tarama turu sonunda
+                        # TEK bültende yapılır; DM engeli (cooldown/kap) grubu etkilemez.
+                        try:
+                            notifier.public_kuyruk(alert_data)
+                        except Exception as public_hata:  # noqa: BLE001
+                            logger.debug("Public kuyruğa eklenemedi (%s %s): %s",
+                                         stock, tf_name, public_hata)
+                        daily_stats['alerts_attempted'] += 1
+                        if notifier.send(alert_data):
+                            daily_stats['alerts_sent'] += 1
+                            _deferred_alert_buffer.mark_reported(alert_data['watch_context'], simdiki_zaman)
+                            _live_state.mark_alert_sent(stock, tf_name)
+                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
+                        else:
+                            # Neden gönderilemedi? cooldown/kap ise olay kaybolmasın
+                            # (Batch 5'te kuyruğa alınır); şimdilik sayılır.
+                            daily_stats['alerts_failed'] += 1
+                            if getattr(notifier, "_son_engel", ""):
+                                if notifier._son_engel == "cooldown":
+                                    daily_stats['alerts_engel_cooldown'] += 1
+                                elif notifier._son_engel == "tekrar":
+                                    # Nihai red: olay zaten bildirildi, kuyruğa girmez.
+                                    daily_stats['alerts_engel_tekrar'] += 1
+                                else:
+                                    daily_stats['alerts_engel_kap'] += 1
+                                # Olay kaybolmadı: kuyruğa alındı, engel kalkınca gider.
+                                if notifier.kuyrukta_mi(alert_data):
+                                    daily_stats['alerts_kuyruk'] += 1
+                                    logger.info(
+                                        f"📬 {stock} {tf_name} {state} engel nedeniyle kuyruğa alındı "
+                                        f"({notifier._son_engel})"
+                                    )
+                            logger.warning(
+                                f"⚠️ Telegram gönderilemedi: {stock} {tf_name} {state} "
+                                f"(engel: {getattr(notifier, '_son_engel', None) or 'gönderim hatası'})"
+                            )
+                    elif send_alerts:
+                        # Ne acil ne izleme: mevcut state politikasında push yok,
+                        # yalnız /panel ve /formasyonlar gösterir. Sessizce düşmesin.
+                        daily_stats['alerts_state_disabled'] += 1
                 else:
                     # Başarılı TF taramasında aday kaybolduysa bekleyen kaydı kaldır.
                     _deferred_alert_buffer.observe(stock, tf_name, None, simdiki_zaman)
-                    _persist_watch_buffer(notifier, simdiki_zaman, remote=False)
                     # Canlı formasyon yok (terminal state'ler ve kalite kapısı dahil)
                     logger.debug(f"{stock} {tf_name} - Canlı formasyon yok: {snap.log}")
             
@@ -2523,91 +2170,19 @@ def scan_all_stocks(
                     )
                     _live_state.record_formation(formasyon_kaydi)
 
-            # Same-scan as-of values come only from the completed frames passed
-            # to this symbol's runner. No latest-result/cache fallback is allowed.
-            domain_asof_by_tf = {}
-            for timeframe, frame in domain_completed_frames.items():
-                try:
-                    if frame is not None and not getattr(frame, "empty", True):
-                        domain_asof_by_tf[timeframe] = frame.index[-1]
-                except Exception:
-                    logger.exception(
-                        "%s %s completed-frame as-of unavailable; its DM context is skipped",
-                        stock,
-                        timeframe,
-                    )
-            try:
-                scan_asof = max(domain_asof_by_tf.values()) if domain_asof_by_tf else None
-            except Exception:
-                logger.exception("%s scan as-of could not be compared; DM context is skipped", stock)
-                scan_asof = None
-            domain_results_by_tf = {}
-            # Domain failure must not suppress the already-prepared Formation DM.
-            try:
-                domain_results_by_tf = _run_domain_engines_for_symbol(
-                    stock, domain_completed_frames
-                )
-            except Exception as e:
-                logger.error(
-                    f"{stock} domain runner hatası; Formation bildirimleri sürdürülecek: {e}",
-                    exc_info=True,
-                )
-
-            # Context is derived from only this scan's runner return values. If a
-            # selector fails or a domain has no usable result, send Formation alone.
-            for alert_data, reference_price in pending_formation_alerts:
-                try:
-                    alert_data["dm_context"] = build_formation_dm_context(
-                        domain_results_by_tf,
-                        domain_asof_by_tf,
-                        symbol=stock,
-                        formation_timeframe=alert_data["timeframe"],
-                        reference_price=reference_price,
-                        scan_as_of=scan_asof,
-                    )
-                except Exception:
-                    alert_data["dm_context"] = {}
-                    logger.exception(
-                        "%s %s DM context selection failed; sending Formation only",
-                        stock,
-                        alert_data["timeframe"],
-                    )
-                if notifier.send(alert_data):
-                    daily_stats['alerts_sent'] += 1
-                    _deferred_alert_buffer.mark_reported(alert_data['watch_context'], simdiki_zaman)
-                    watch_persisted = _persist_watch_buffer(notifier, simdiki_zaman, remote=True)
-                    if watch_persisted:
-                        delivery_id = notifier.event_delivery_id(alert_data)
-                        if delivery_id:
-                            notifier.acknowledge_delivery(delivery_id)
-                    _live_state.mark_alert_sent(alert_data['stock_name'], alert_data['timeframe'])
-                    logger.info(
-                        f"📨 Telegram gönderildi: {alert_data['stock_name']} "
-                        f"{alert_data['timeframe']} {alert_data['state']} "
-                        f"kalite {alert_data['confidence_score']:.0f} "
-                        f"touches={alert_data['upper_touches']}/{alert_data['lower_touches']} "
-                        f"age={alert_data['age_bars']} mtf={alert_data['mtf_destek']}"
-                    )
-
-            _persist_watch_buffer(notifier, simdiki_zaman, remote=True)
             daily_stats['stocks_scanned'] += 1
             tur_taranan += 1
             
-            # Her hisse sonrası cache'i kaydet (crash durumunda kayıp azalsın) + heartbeat.
-            # save_to_disk kendi local/remote başarısızlıklarını loglar; hata bu
-            # hissenin analizini geri almaz.
+            # Her hisse sonrası diske kaydet (crash durumunda kayıp azalsın) + heartbeat
             try:
                 deque_manager.save_to_disk(stock)
-            except Exception as exc:
-                logger.warning("%s 1H cache kayıt hatası (%s)", stock, type(exc).__name__)
+            except Exception as e:
+                logger.warning(f"{stock} save_to_disk hatası: {e}")
             write_heartbeat(notifier=notifier)
             
         except Exception as e:
             daily_stats['errors'] += 1
             tur_hata += 1
-            activate_fallbacks = getattr(notifier, "activate_prepared_fallbacks", None)
-            if callable(activate_fallbacks):
-                activate_fallbacks(stock=stock)
             logger.error(f"{stock} tarama hatası: {e} - devam ediliyor", exc_info=True)
             continue
     
@@ -2628,11 +2203,7 @@ def scan_all_stocks(
         "processed": tur_taranan,
         "failed": max(tur_hata, eksik),
         "patterns": tur_formasyon,
-        "fetch_returned": fetch_returned_count,
-        "fetch_valid": fetch_valid_count,
-        "fresh_fetch": fresh_fetch_count,
-        "analysis_eligible": analysis_eligible_count,
-        "future_bar_stocks": future_bar_count,
+        "fresh_fetch": len(taze_1h_verileri),
         "fetch_failures": len(fetch_hatalari),
         "duration_minutes": round(sure_dk, 1),
         "data_asof": en_son_bar.isoformat() if en_son_bar is not None else None,
@@ -2647,17 +2218,10 @@ def scan_all_stocks(
             son_tarama_hissesi=tur_taranan,
             son_tarama_beklenen_hisse=len(scan_stocks),
             son_tarama_hata_hisse=0,
-            son_tarama_taze_veri=fresh_fetch_count,
-            son_tarama_fetch_yanit=fetch_returned_count,
-            son_tarama_gecerli_fetch=fetch_valid_count,
-            son_tarama_analize_uygun=analysis_eligible_count,
+            son_tarama_taze_veri=len(taze_1h_verileri),
             son_tarama_fetch_hatasi=len(fetch_hatalari),
             son_tarama_formasyonu=tur_formasyon,
             son_tarama_veri_zamani=en_son_bar.isoformat() if en_son_bar is not None else None,
-            son_tarama_kapanis_checkpoint=(
-                as_istanbul_datetime(scheduled_checkpoint).isoformat()
-                if scheduled_checkpoint is not None else None
-            ),
             son_tarama_en_eski_veri_yasi_dk=en_eski_bar_yasi_dk,
         )
         son_tarama_kaydet()
@@ -2671,11 +2235,6 @@ def scan_all_stocks(
             islenen_hisse=tur_taranan,
             istek_hisse=len(scan_stocks),
             sure_dk=round(sure_dk, 1),
-            son_tarama_taze_veri=fresh_fetch_count,
-            son_tarama_fetch_yanit=fetch_returned_count,
-            son_tarama_gecerli_fetch=fetch_valid_count,
-            son_tarama_analize_uygun=analysis_eligible_count,
-            son_tarama_fetch_hatasi=len(fetch_hatalari),
         )
         logger.error("Tarama sonucu yayımlanmadı; son başarılı snapshot korundu. %s", hata)
 
@@ -2694,30 +2253,31 @@ def scan_all_stocks(
             f"(ham seride fiyat sürekliliği ihlali). Detay: "
             f"{ {k: [x['tip'] for x in v] for k, v in deque_manager.sureklilik_sorunlari.items()} }"
         )
-    scan_health = (
-        f"fetch yanıtı {fetch_returned_count}/{len(scan_stocks)}, "
-        f"OHLCV geçerli {fetch_valid_count}, taze fetch {fresh_fetch_count}, "
-        f"analiz için uygun {analysis_eligible_count}"
-    )
     if daily_stats['veri_yok_modu']:
         logger.warning(
             f"VERİ YOK MODU: bugün için yeni piyasa verisi alınamadı "
-            f"({scan_health}; fetch hatası bu tarama {len(fetch_hatalari)}/{len(scan_stocks)}, "
-            f"bugünkü en eski mum {daily_stats['max_bar_age_min']} dk). "
-            f"Analiz yapılamayan hisseler veri kaynağı/tazelik nedeniyle atlandı."
+            f"(fetch hatası {daily_stats['fetch_failures']}/{len(ACTIVE_STOCKS)}, "
+            f"en eski mum {daily_stats['max_bar_age_min']} dk). Analiz yapılmadı - "
+            f"tatil veya veri kaynağı arızası olabilir."
         )
     elif daily_stats['fetch_failures'] > 0 or daily_stats['data_stale']:
         logger.warning(
-            f"VERİ SAĞLIĞI: {scan_health}; fetch hatası bu tarama {len(fetch_hatalari)}, "
-            f"eski veri bugün {daily_stats['stale_stocks']} hissede, "
-            f"bugünkü en eski mum {daily_stats['max_bar_age_min']} dk"
+            f"VERİ SAĞLIĞI: taze veri {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse, "
+            f"fetch hatası {daily_stats['fetch_failures']}, eski veri {daily_stats['stale_stocks']} hisse, "
+            f"en eski mum {daily_stats['max_bar_age_min']} dk"
         )
     else:
         logger.info(
-            f"VERİ SAĞLIĞI: {scan_health}; "
-            f"bugünkü en eski mum {daily_stats['max_bar_age_min']} dk"
+            f"VERİ SAĞLIĞI: taze veri {daily_stats['fetch_ok']}/{len(ACTIVE_STOCKS)} hisse, "
+            f"en eski mum {daily_stats['max_bar_age_min']} dk"
         )
-    write_heartbeat(notifier=notifier)
+    # Tarama turu bitti: public (grup) kuyruğunda biriken olaylar TEK bültende
+    # gider. DM'den bağımsızdır; manuel taramalarda (send_alerts=False) kuyruk
+    # zaten boştur.
+    _public_turu_kapat(notifier)
+    # Tarama bitti: heartbeat kesin yazılsın (force), böylece per-hisse
+    # throttle'a takılan son durum dışarıdan anında görünür.
+    write_heartbeat(notifier=notifier, force=True)
     return dict(last_run_stats)
 
 
@@ -2750,6 +2310,217 @@ def _parse_deferred_alert_digest_time() -> dt_time:
         return dt_time(18, 45)
 
 
+# === HAFTALIK DOĞRULUK KARNESİ ============================================
+# Tasarım: sinyal defteri verileri tarama sırasında toplanır (scan_all_stocks),
+# karne metni Cuma gün sonu mesajının ALTINA eklenir. Defter ve ölçüm TAMAMEN
+# YERELDİR (DATA_DIR/karne_defteri.json) - Supabase/uzak store gerekmez.
+
+def _karne_al() -> KarneDefteri:
+    """Karne defterini (tembel) oluşturur; dosya okunamazsa da çalışır.
+
+    Opsiyonel uzak yedek (Supabase): kuruluysa yerel defterle BİRLEŞTİRİLİR
+    (Render'da DATA_DIR=/tmp olduğu için restart/redeploy yereli siler; yedek
+    haftalık karnenin boşalmasını engeller). Supabase yoksa hiçbir şey değişmez.
+    """
+    global _karne_defteri
+    if _karne_defteri is None:
+        _karne_defteri = KarneDefteri()
+        try:
+            _state_persistence.karne_defteri_yukle(_karne_defteri, _supabase_store_ref)
+        except Exception as exc:  # noqa: BLE001 - yedek sorunu karneyi engellemesin
+            logger.debug("Karne uzak yedeği yüklenemedi: %s", exc)
+    return _karne_defteri
+
+
+def _karne_uzak_kaydet(zorla: bool = False) -> bool:
+    """Defteri (varsa) uzak yedeğe yazar. Sık yazmamak için aralık uygulanır.
+
+    Yerel dosya her kayıtta zaten yazılır; bu yalnız dayanıklılık içindir.
+    """
+    global _karne_son_uzak_yazma
+    if _supabase_store_ref is None or _karne_defteri is None:
+        return False
+    simdi = time.monotonic()
+    if not zorla and (simdi - _karne_son_uzak_yazma) < KARNE_UZAK_YAZMA_ARALIK_SN:
+        return False
+    sonuc = _state_persistence.karne_defteri_kaydet(_karne_defteri, _supabase_store_ref)
+    if sonuc:
+        _karne_son_uzak_yazma = simdi
+    return sonuc
+
+
+def _karne_seri_saglayici(deque_manager):
+    """Karne ölçümü için seri sağlayıcı: yeni veri indirmez, cache'i okur.
+
+    Kırılım kaydı hangi TF'de alındıysa o TF'in serisi kullanılır (1d için derin
+    günlük deque, diğerleri için 1H deque).
+    """
+    def saglayici(stock: str, tf: str):
+        if deque_manager is None:
+            return None
+        try:
+            if str(tf).lower() == "1d":
+                return deque_manager.to_gunluk_dataframe(stock)
+            return deque_manager.to_dataframe(stock)
+        except Exception as exc:  # noqa: BLE001 - ölçüm hatası karneyi düşürmesin
+            logger.debug("Karne serisi alınamadı (%s %s): %s", stock, tf, exc)
+            return None
+    return saglayici
+
+
+def _karne_olay_kaydet(stock: str, tf: str, state: str, pattern: str, quality: float,
+                       bar_zamani, *, kirilim: bool = False, dir: int = 0,
+                       entry=None, df_tf=None, mtf_destek: bool = False,
+                       stable_id=None) -> None:
+    """Tarama sırasında karne defterine kayıt düşer (hatalar taramayı durdurmaz)."""
+    try:
+        defter = _karne_al()
+        if kirilim:
+            defter.kirilim_kaydet(
+                stock=stock, tf=tf, pattern=pattern, state=state, dir=dir,
+                entry=entry, atr=atr_hesapla(df_tf), quality=quality,
+                bar_zamani=bar_zamani, mtf_destek=mtf_destek, stable_id=stable_id,
+            )
+        elif state == "FORMASYON_TANIMLANDI" or state in ("SIKISMA_GUCLENIYOR", "KIRILIM_HAZIRLIGI"):
+            # Yalnız anlamlı olgunluk eşiği: her aday state'i sayılmaz.
+            defter.formasyon_kaydet(stock=stock, tf=tf, pattern=pattern, state=state,
+                                    quality=quality, bar_zamani=bar_zamani,
+                                    stable_id=stable_id)
+        elif state in ("RETEST_BASARILI", "FORMASYON_TAMAMLANDI", "BASARISIZ_KIRILIM"):
+            defter.olay_kaydet(stock=stock, tf=tf, state=state, bar_zamani=bar_zamani,
+                               stable_id=stable_id)
+        # --- Faz 2.5: outcome linkage (okuma tarafı) ---
+        # Karne matematiği DEĞİŞMEZ: burada yalnızca mevcut `sinyal_sonucu()`
+        # çağrılır ve sonucu `stable_id` üzerinden formation history'ye bağlanır.
+        # Yeni kırılım yoksa da çağrılır: ufuk dolduğunda `bekliyor` -> çözümlenmiş
+        # geçişini yakalamak için (yazma yalnızca sonuç değiştiğinde olur).
+        _karne_outcome_bagla(stock, tf, stable_id, df_tf)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Karne kaydı yazılamadı (%s %s %s): %s", stock, tf, state, exc)
+
+
+def _karne_outcome_bagla(stock: str, tf: str, stable_id, df_tf=None):
+    """Faz 2.5: outcome'ı formation history'ye bağlar (mevcut motoru kullanır).
+
+    stable_id yoksa (eski kayıt) hiçbir şey yapmaz — geriye dönük uyumluluk.
+    Seri sağlayıcı olarak bu slotun kendi df_tf'i verilir; `sinyal_sonucu`
+    tam olarak `karne_hesapla`'nın yaptığı gibi çağrılır.
+    """
+    if not stable_id:
+        return None
+    try:
+        from state import outcome_link
+        defter = _karne_al()
+        return outcome_link.bagla(defter, stock, tf, stable_id,
+                                  saglayici=lambda s, t: df_tf)
+    except Exception as exc:  # noqa: BLE001 - linkage taramayi asla durdurmaz
+        logger.debug("Outcome bağlantısı kurulamadı (%s %s): %s", stock, tf, exc)
+        return None
+
+
+def _karne_dolu(defter: KarneDefteri, now: datetime) -> bool:
+    """Bu hafta için karnede gösterilecek en az bir kayıt var mı?"""
+    try:
+        from karne import hafta_baslangici
+        return bool(defter.aralikta(hafta_baslangici(now), now))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _haftalik_karne_ekle(now: datetime, deque_manager, zorla: bool = False) -> str:
+    """Karne günüyse ve bu hafta gönderilmediyse karne metnini döner; yoksa ''.
+
+    `zorla=True` -> gün/hafta kapıları atlanır (yalnız açıkça isteyen çağrı için).
+    Karne, gün sonu mesajının ALTINA eklenir; burada gönderim YAPILMAZ.
+    """
+    try:
+        hafta = hafta_damgasi(now)
+        defter = _karne_al()
+        if not zorla:
+            if not karne_gunu_mu(now):
+                return ""
+            if defter.karne_gonderildi_mi(hafta):
+                return ""
+        if not _karne_dolu(defter, now):
+            # Hiç kayıt yoksa boş karne gönderme (hafta başı / yeni kurulum).
+            return ""
+        return karne_uret(defter, _karne_seri_saglayici(deque_manager), now=now)
+    except Exception as exc:  # noqa: BLE001 - karne hatası özeti engellemesin
+        logger.warning("Haftalık karne üretilemedi: %s", exc)
+        return ""
+
+
+def _haftalik_karne_kisa(now: datetime, deque_manager) -> str:
+    """Karne metninin PUBLIC (grup) sürümü: 4-5 satır.
+
+    Tam metin teknik döküm (defter satırı, hedef/nötr/stop, dosya yolu) taşır ve
+    gruba uygun değildir; kısa sürüm aynı ölçümü sade dille verir.
+    """
+    try:
+        defter = _karne_al()
+        if not _karne_dolu(defter, now):
+            return ""
+        from karne import hafta_baslangici, karne_hesapla, karne_kisa_metni, pencere
+        baslangic = hafta_baslangici(now)
+        kayitlar = defter.aralikta(baslangic, now)
+        metrik = karne_hesapla(kayitlar, _karne_seri_saglayici(deque_manager), now=now)
+        return karne_kisa_metni(metrik, pencere(baslangic, now))
+    except Exception as exc:  # noqa: BLE001 - kısa karne özeti engellemesin
+        logger.debug("Kısa karne üretilemedi: %s", exc)
+        return ""
+
+
+def _karne_gonderildi_isaretle(now: datetime) -> None:
+    """Karne başarıyla gönderildi -> bu hafta tekrar eklenmez (kalıcı)."""
+    try:
+        _karne_al().karne_gonderildi_isaretle(hafta_damgasi(now))
+        # Haftalık işaret + kayıtlar restart'ta kaybolmasın: yedeği hemen tazele.
+        _karne_uzak_kaydet(zorla=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Karne gönderim işareti yazılamadı: %s", exc)
+
+
+# Telegram tek mesaj sınırı 4096; `kirp()` sondan kestiği için karne (mesajın
+# ALTINDA) kaybolabilirdi. Bu sınırın üstünde karne ikinci mesaj olarak gider.
+_MESAJ_GUVENLI_SINIR = 3900
+
+
+def _karneyle_gonder(notifier, ana_mesaj: str, karne_ek: str = ""):
+    """Ana mesajı (ve varsa karneyi) Telegram sınırına takılmadan gönderir.
+
+    Karne normalde ana mesajın ALTINA eklenir; sığmıyorsa kesilmek yerine ayrı
+    mesaj olarak gönderilir.
+
+    Döner: (ana_gitti, karne_gitti, son_hata).
+    NEDEN parça bazlı: "karne iki kez gitti" hatasının kökü, gönderim sonucunun
+    tek bayrak olmasıydı. Karne ayrı mesajken başarısız olursa işaret konmuyor,
+    ana özet de "gitmedi" sayıldığı için döngü onu tekrar yolluyordu. Artık ana
+    özet ve karne AYRI izlenir; karne tekrarı imkânsız hale gelir.
+    """
+    if karne_ek and len(ana_mesaj) + len(karne_ek) + 2 <= _MESAJ_GUVENLI_SINIR:
+        parcalar = [(ana_mesaj + "\n\n" + karne_ek, "ikisi")]
+    elif karne_ek:
+        logger.info("Karne mesaj sınırını aştı; ayrı mesaj olarak gönderiliyor (%d + %d kr)",
+                    len(ana_mesaj), len(karne_ek))
+        parcalar = [(ana_mesaj, "ana"), (karne_ek, "karne")]
+    else:
+        parcalar = [(ana_mesaj, "ana")]
+    ana_ok, karne_ok, hata = False, False, ""
+    for parca, tur in parcalar:
+        ok, parca_hata = notifier.send_text(parca)
+        if ok:
+            if tur in ("ana", "ikisi"):
+                ana_ok = True
+            if tur in ("karne", "ikisi"):
+                karne_ok = True
+        else:
+            hata = parca_hata or hata
+            # Ana mesaj gitmediyse karneyi denemenin anlamı yok; parça sırası
+            # gereği burada zaten karne denenmemiş olur.
+            break
+    return ana_ok, karne_ok, hata
+
+
 def _effective_summary_hours() -> List[dt_time]:
     """Akşam özetini son tarama sonrasına al; eski 18:15 saatiyle çakıştırma."""
     digest_time = _parse_deferred_alert_digest_time()
@@ -2757,27 +2528,67 @@ def _effective_summary_hours() -> List[dt_time]:
     return sorted(set(morning_and_day + [digest_time]))
 
 
-def _format_deferred_alert_summary(records: List[dict]) -> str:
-    """Bekletilmiş düşük öncelikli adayları tek kısa kapanış bölümüne çevir."""
-    if not records:
+# Batch 8 / C2 (8.4): digest tamponu kalıcılığı da `state/persistence.py`'de.
+DIGEST_PENDING_SUPABASE_KEY = _state_persistence.DIGEST_PENDING_SUPABASE_KEY
+DIGEST_PENDING_DOSYA = _state_paths.DIGEST_PENDING_DOSYA
+
+
+def digest_tamponu_kaydet(store=None, data_dir=None) -> bool:
+    """Bekleyen gün içi adayları Supabase + diske yazar."""
+    return _state_persistence.digest_tamponu_kaydet(
+        _deferred_alert_buffer,
+        store=_supabase_store_ref if store is None else store,
+        data_dir=data_dir,
+        son_digest_gun=_digest_son_gonderim_gun,
+    )
+
+
+def digest_tamponu_yukle(store=None, data_dir=None) -> int:
+    """En yeni digest tamponunu yükler; yüklenen aday sayısını döner."""
+    global _digest_son_gonderim_gun
+    sayi, son_digest_gun = _state_persistence.digest_tamponu_yukle(
+        _deferred_alert_buffer,
+        store=_supabase_store_ref if store is None else store,
+        data_dir=data_dir,
+    )
+    if son_digest_gun is not None:
+        _digest_son_gonderim_gun = son_digest_gun
+    return sayi
+
+def _kacirilan_digest_ozeti(notifier, simdiki_zaman) -> str:
+    """Geçmiş günden kalan bekleyen adaylar için kaçırılan 18:45 telafisi.
+
+    Bot akşam 18:45'te kapalıysa tampon bir sonraki açılışa kadar bekler;
+    burada tek seferde gönderilir (aksi halde _ensure_day ilk taramada temizler).
+    """
+    global _digest_son_gonderim_gun
+    gun = _deferred_alert_buffer.gun()
+    if not _deferred_alert_buffer or gun is None or gun >= simdiki_zaman.date():
         return ""
-    lines = []
-    for record in records[:12]:
-        stock = str(record.get("stock") or "?")
-        timeframe = str(record.get("timeframe") or "")
-        pattern = str(record.get("pattern_name") or "formasyon")
-        state = STATE_TR.get(str(record.get("state") or ""), str(record.get("state") or "izlemede"))
-        try:
-            quality = f"kalite {float(record.get('quality') or 0):.0f}"
-        except (TypeError, ValueError):
-            quality = ""
-        contraction = record.get("contraction")
-        try:
-            contraction_text = f", daralma %{float(contraction) * 100:.0f}" if contraction is not None else ""
-        except (TypeError, ValueError):
-            contraction_text = ""
-        lines.append(f"• {stock} {timeframe} {pattern} — {state}, {quality}{contraction_text}".strip())
-    return "📡 Gün içi izleme adayları (en yüksek puanlılar)\n" + "\n".join(lines)
+    bekleyen = _deferred_alert_buffer.items(
+        ISTANBUL_TZ.localize(datetime.combine(gun, dt_time(23, 59))),
+        limit=DEFERRED_ALERT_DIGEST_LIMIT,
+    )
+    if not bekleyen:
+        return ""
+    watch_summary = _format_deferred_alert_summary(bekleyen, len(_deferred_alert_buffer))
+    metin = f"⏰ Kaçırılan kapanış özeti ({gun.strftime('%d.%m')} 18:45)\n{watch_summary}"
+    if notifier is None or not notifier.enabled:
+        # Pasif modda sessizce düşmesin: bir sonraki açılışta tekrar denenmeyecek,
+        # bu yüzden kayıt yine de temizlenir ve durum loglanır.
+        logger.warning("Kaçırılan kapanış özeti gönderilemedi (Telegram pasif): %d aday", len(bekleyen))
+    else:
+        gonderildi, hata = notifier.send_text(metin)
+        if gonderildi:
+            _deferred_alert_buffer.mark_reported(bekleyen, simdiki_zaman)
+            # Telafi edilen gün "gönderildi" sayılır; bugünün 18:45'i hâlâ bekliyor.
+            _digest_son_gonderim_gun = gun.isoformat()
+            logger.info("Kaçırılan kapanış özeti gönderildi: %d aday (%s)", len(bekleyen), gun)
+        else:
+            logger.warning("Kaçırılan kapanış özeti gönderilemedi: %s", hata)
+    _deferred_alert_buffer.clear(simdiki_zaman)
+    digest_tamponu_kaydet()
+    return metin
 
 
 def _parse_post_close_analysis_time() -> dt_time:
@@ -2790,199 +2601,19 @@ def _parse_post_close_analysis_time() -> dt_time:
         return dt_time(20, 0)
 
 
-def _status_timestamp(value):
-    if not value:
-        return None
-    try:
-        return as_istanbul_datetime(datetime.fromisoformat(str(value)))
-    except (TypeError, ValueError, OverflowError):
-        return None
-
-
-def _persisted_full_scan_checkpoint(now=None):
-    """Return the exact persisted scheduled checkpoint after a successful full scan."""
-    local_now = as_istanbul_datetime(now or datetime.now(ISTANBUL_TZ))
-    if not bist_scan_window_open(local_now):
-        return None
-    st = _live_state.status()
-    if st.get("son_tarama_durumu") != "tamamlandi":
-        return None
-    try:
-        requested = int(st.get("son_tarama_beklenen_hisse"))
-        processed = int(st.get("son_tarama_hissesi"))
-    except (TypeError, ValueError):
-        return None
-    if requested != len(ACTIVE_STOCKS) or processed != requested:
-        return None
-    finished = _status_timestamp(st.get("son_tarama_bitis"))
-    asof = _status_timestamp(st.get("son_tarama_veri_zamani"))
-    checkpoint = _status_timestamp(st.get("son_tarama_kapanis_checkpoint"))
-    latest = latest_session_checkpoint(local_now)
-    if finished is None or asof is None or checkpoint is None or latest is None:
-        return None
-    due_at = checkpoint + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN)
-    if (finished.date() != local_now.date() or asof.date() != local_now.date()
-            or checkpoint.date() != local_now.date() or checkpoint > latest
-            or finished < due_at):
-        return None
-    return checkpoint
-
-
-# Scheduled full scans retry the same checkpoint with process-local bounded
-# exponential backoff. A different/new checkpoint is never held behind it.
-SCHEDULED_SCAN_RETRY_BASE_SECONDS = 60.0
-SCHEDULED_SCAN_RETRY_MAX_SECONDS = 15 * 60.0
-
-
-def _completed_scheduled_scan_checkpoint(stats, checkpoint, expected_stock_count):
-    """Return checkpoint only when stats prove the entire expected universe succeeded."""
-    if not isinstance(stats, dict) or checkpoint is None or stats.get("status") != "tamamlandi":
-        return None
-    try:
-        expected = int(expected_stock_count)
-    except (TypeError, ValueError, OverflowError):
-        return None
-    if expected <= 0:
-        return None
-    if (stats.get("requested") != expected or stats.get("processed") != expected
-            or stats.get("failed") != 0):
-        return None
-    return checkpoint
-
-
-def _scheduled_scan_retry_delay(failure_count):
-    """Bounded 60s, 120s, ... backoff for repeated failure of one checkpoint."""
-    try:
-        failures = max(1, int(failure_count))
-    except (TypeError, ValueError, OverflowError):
-        failures = 1
-    delay = SCHEDULED_SCAN_RETRY_BASE_SECONDS
-    for _ in range(failures - 1):
-        delay = min(delay * 2, SCHEDULED_SCAN_RETRY_MAX_SECONDS)
-        if delay >= SCHEDULED_SCAN_RETRY_MAX_SECONDS:
-            break
-    return delay
-
-
-def _scheduled_scan_retry_wait(checkpoint, retry_checkpoint, retry_at, now):
-    """Remaining process-local delay; a different checkpoint is immediately eligible."""
-    if retry_at is None or checkpoint != retry_checkpoint:
-        return 0.0
-    try:
-        return max(0.0, float(retry_at) - float(now))
-    except (TypeError, ValueError, OverflowError):
-        return 0.0
-
-
-class _ScheduledScanTransition(NamedTuple):
-    scan_result: object
-    completed_checkpoint: Optional[datetime]
-    retry_checkpoint: Optional[datetime]
-    retry_attempts: int
-    retry_at: Optional[float]
-    retry_delay: float
-
-
-def _execute_scheduled_scan_transition(
-    scan_callable: Callable[[], object], checkpoint, expected_stock_count: int,
-    retry_checkpoint, retry_attempts: int, retry_at: Optional[float],
-    monotonic: Callable[[], float] = time.monotonic,
-) -> _ScheduledScanTransition:
-    """Execute one scheduled scan and produce the exact checkpoint/retry state transition.
-
-    The main loop uses this same boundary, so return failures and raised exceptions
-    share one fail-closed checkpoint gate and one bounded retry policy.
-    """
-    try:
-        scan_result = scan_callable()
-    except Exception as exc:  # noqa: BLE001 - turn scan exceptions into retryable failure stats
-        scan_result = _analiz_hatasi_kaydi(
-            exc, expected_stock_count, "zamanlanmış tam tarama",
-        )
-
-    completed_checkpoint = _completed_scheduled_scan_checkpoint(
-        scan_result, checkpoint, expected_stock_count,
-    )
-    if completed_checkpoint is not None:
-        return _ScheduledScanTransition(
-            scan_result, completed_checkpoint, None, 0, None, 0.0,
-        )
-
-    if retry_checkpoint != checkpoint or retry_at is None:
-        retry_attempts = 0
-    retry_attempts += 1
-    retry_delay = _scheduled_scan_retry_delay(retry_attempts)
-    return _ScheduledScanTransition(
-        scan_result, None, checkpoint, retry_attempts,
-        float(monotonic()) + retry_delay, retry_delay,
-    )
-
-
-def _manual_scan_checkpoint_transition(
-    result, checkpoint, retry_checkpoint, retry_attempts: int, retry_at: Optional[float],
-):
-    """A successful full manual scan satisfies the checkpoint and clears process retry state."""
-    if checkpoint is None or not _istek_tam_evrende_tamamlandi(result):
-        return None, retry_checkpoint, retry_attempts, retry_at
-    return checkpoint, None, 0, None
-
-
-def _persisted_post_close_scan_completed(now=None, scan_time=None) -> bool:
-    """Persisted success prevents duplicate post-close work after a process restart."""
-    local_now = as_istanbul_datetime(now or datetime.now(ISTANBUL_TZ))
-    st = _live_state.status()
-    if st.get("son_tarama_durumu") != "tamamlandi":
-        return False
-    try:
-        requested = int(st.get("son_tarama_beklenen_hisse"))
-        processed = int(st.get("son_tarama_hissesi"))
-    except (TypeError, ValueError):
-        return False
-    if requested != len(ACTIVE_STOCKS) or processed != requested:
-        return False
-    finished = _status_timestamp(st.get("son_tarama_bitis"))
-    asof = _status_timestamp(st.get("son_tarama_veri_zamani"))
-    if finished is None or asof is None:
-        return False
-    if current_session_timestamp_issue(asof, local_now, after_close=True):
-        return False
-    target_time = scan_time or _parse_post_close_analysis_time()
-    target = ISTANBUL_TZ.localize(datetime.combine(local_now.date(), target_time))
-    return (
-        finished.date() == local_now.date()
-        and finished >= target
-        and asof.date() == local_now.date()
-    )
-
-
 def _build_active_formations_for_summary(lifecycle_manager, min_quality: float = None) -> List[Dict]:
     """Özet için aktif formasyonları topla (canlı + taze terminal)."""
     if min_quality is None:
         min_quality = PUBLIC_MIN_QUALITY
     aktif = []
     try:
-        # LiveState'in public API'si formations(); eski test/entegrasyon
-        # adaptörleri için get_formations adı da geriye dönük kabul edilir.
-        getter = getattr(_live_state, "formations", None)
-        if not callable(getter):
-            getter = getattr(_live_state, "get_formations", None)
-        has_live_state_provider = callable(getter)
-        formations = getter() if has_live_state_provider else []
-        if has_live_state_provider:
-            # Boş liste de geçerli yayımlanmış sonuçtur; snapshot fallback'ini tetiklemez.
-            for f in formations or []:
-                if f.get('quality', 0) >= min_quality:
-                    aktif.append({
-                        'stock_name': f.get('stock'),
-                        'timeframe': f.get('timeframe'),
-                        'pattern_name': f.get('pattern_name'),
-                        'state': f.get('state'),
-                        'confidence_score': f.get('quality'),
-                        'contraction': None,
-                        'break_dir': f.get('break_dir', 0),
-                    })
-        else:
-            # Yalnızca LiveState sağlayıcısı yoksa lifecycle snapshot fallback'i kullan.
+        # Özet ile /panel AYNI kaynaktan beslenir: son başarılı taramanın canlı
+        # listesi. (Eski kod olmayan bir metodu -get_formations- hasattr ile
+        # yoklayıp her zaman lifecycle snapshots yoluna düşüyordu; sonuç: özet ile
+        # panel farklı listeler gösterebiliyordu.)
+        formations = _live_state.formations()
+        # LiveState boşsa (ilk tarama öncesi) lifecycle_manager snapshots'a düş.
+        if not formations:
             for key, snap in getattr(lifecycle_manager, 'last_snapshots', {}).items():
                 if snap.active and snap.effective_quality and snap.effective_quality >= min_quality:
                     # stock_timeframe key'ini ayır
@@ -2997,6 +2628,21 @@ def _build_active_formations_for_summary(lifecycle_manager, min_quality: float =
                         'confidence_score': snap.effective_quality,
                         'contraction': getattr(snap.active, 'contraction', None),
                         'break_dir': snap.break_dir,
+                    })
+        else:
+            for f in formations:
+                if f.get('quality', 0) >= min_quality:
+                    aktif.append({
+                        'stock_name': f.get('stock'),
+                        'timeframe': f.get('timeframe'),
+                        'pattern_name': f.get('pattern_name'),
+                        'state': f.get('state'),
+                        'confidence_score': f.get('quality'),
+                        # Daralma gerçek kayıttan gelir; eskiden sabit None
+                        # yazılıyordu ve özetin "⚡ SIKIŞANLAR" bölümü sessizce
+                        # boşalıyordu (karşılaştırma: contraction >= eşik).
+                        'contraction': f.get('contraction'),
+                        'break_dir': f.get('break_dir', 0),
                     })
     except Exception as e:
         logger.debug(f"Özet için formasyon toplanamadı: {e}")
@@ -3043,11 +2689,7 @@ def evening_maintenance(deque_manager, lifecycle_manager):
             if _notifier_ref and _notifier_ref.enabled:
                 aktif = _build_active_formations_for_summary(lifecycle_manager)
                 ozet = _notifier_ref.format_daily_summary(aktif, daily_stats)
-                maintenance_day = datetime.now(ISTANBUL_TZ).date().isoformat()
-                _notifier_ref.send_text(
-                    f"📋 Gün Sonu Bakım Raporu\n{ozet}",
-                    idempotency_key=f"evening-maintenance:dm:{maintenance_day}",
-                )
+                _notifier_ref.send_text(f"📋 Gün Sonu Bakım Raporu\n{ozet}")
         except Exception as e:
             logger.warning(f"Gün sonu raporu hatası: {e}")
 
@@ -3085,16 +2727,46 @@ def main_loop():
     3. Kapalıysa -> 5dk uyu, tekrar kontrol et
     Neden 24/7 çalışıp sadece seans saatlerinde CPU harcasın? Oracle Free'de kaynak kısıtlı
     """
+    setup_logging()   # Batch 8 / C2: handler'lar burada bağlanır (import yan etkisi yok)
     logger.info("=== BIST FORMASYON BOTU BAŞLATILIYOR ===")
     logger.info(f"Profil: {PROFILE}, Params: {PROFILE_PARAMS}")
     logger.info(f"Hisseler: {ACTIVE_STOCKS[:5]}... (toplam {len(ACTIVE_STOCKS)})")
+    evren_uyarisi = _evren_olcek_uyarisi()
+    if evren_uyarisi:
+        logger.warning(evren_uyarisi)
     
     global _deque_manager_ref, _notifier_ref, _supabase_store_ref, _telegram_update_processor_ref, _lifecycle_manager_ref
+    # Digest damgası main_loop içinde birden çok yerde okunur/yazılır; global
+    # bildirimi fonksiyon başında olmalı (Python kuralı).
+    global _digest_son_gonderim_gun
     supabase_store = SupabaseStore.from_env()
     _supabase_store_ref = supabase_store
     if supabase_store is not None:
         # Ortam değişkenleri yanlışsa teşhis loga düşsün; hata halinde bot durmaz.
         supabase_store.ping()
+    # Restart/uyku sonrası son başarılı tarama listesi geri yüklenir (Supabase ve
+    # yerel dosyanın EN YENİ kopyası). Bu çağrı olmadan /panel, /canli, /durum ve
+    # sabah özeti her yeniden başlatmada boş görünür; kalıcılık yazılır ama okunmaz.
+    son_tarama_yukle(supabase_store)
+    # Faz 2.1: çoklu formasyon history defteri. Registry lazy okunur (tarama
+    # anında doğum eşleşmesi için diskten yüklenir), bu yüzden bu adım ZORUNLU
+    # değildir — yalnızca startup'ta sağlık raporu üretir. Bozuk bir defter
+    # botu DURDURMAZ: `yukle()` bozuk dosyada boş defter döner ve tarama
+    # Faz 1 yoluyla devam eder.
+    _formation_history_baslangic_kontrolu()
+    # Faz 2.6: Local history boşsa ve Supabase store varsa hydrate et
+    if supabase_store is not None:
+        try:
+            from state.formation_mirror import hydrate_all_open
+            hydrate_all_open(store=supabase_store)
+        except Exception as _hyd_err:
+            logger.debug("Startup hydration sessizce atlandı: %s", _hyd_err)
+    # Çoklu kopya koruması: aynı anahtarlarla başka bir canlı örnek var mı?
+    _tekil_ornek_kontrolu(supabase_store, force=True)
+    # Bekleyen gün içi aday tamponu da kalıcıdır (Batch 5): 18:45'ten önce
+    # restart olursa adaylar kaybolmaz. Telafi gönderimi notifier kurulduktan
+    # hemen sonra yapılır (tampon günü eskiyse).
+    digest_tamponu_yukle(supabase_store)
     # Analiz snapshot'ı komutların güncel kaynağı değildir. Her /panel ve
     # /tara isteği yeni veriyle yeniden hesaplanır. OHLCV önbelleği Supabase
     # erişilemezse yerel disk/Yahoo üzerinden kurulabilir.
@@ -3110,16 +2782,18 @@ def main_loop():
             for stock in ACTIVE_STOCKS
             for key in (f"cache:1h:{stock}", f"cache:1d:{stock}")
         ] + [
-            SON_TARAMA_SUPABASE_KEY,
             "state:daily_fetch_attempts",
             "state:telegram_cooldowns",
             "state:telegram_caps",
-            "state:telegram_delivery",
+            # Depolanan durumlara ait kuyruk/mühür anahtarları: redploy'da
+            # acil kuyruk ve tek-seferlik mühürler kaybolmasın (kayıp çift
+            # mesaj / tekrar alarm kök nedenlerinden biri buydu).
+            "state:telegram_acil_kuyruk",
+            "state:telegram_son_alerts",
         ]
         remote_rows = supabase_store.get_many(remote_keys)
         if remote_rows is not None:
             deque_manager.hydrate_from_supabase(ACTIVE_STOCKS, remote_rows)
-    son_tarama_yukle(supabase_store, remote_rows=remote_rows)
     lifecycle_manager = PatternLifecycleManager(profile=PROFILE)
     _lifecycle_manager_ref = lifecycle_manager
     notifier = TelegramNotifier(
@@ -3127,13 +2801,12 @@ def main_loop():
         initial_store_data=remote_rows,
     )
     _notifier_ref = notifier
-    watch_snapshot = notifier.load_watch_state()
-    restored_watch = _deferred_alert_buffer.restore(watch_snapshot, datetime.now(ISTANBUL_TZ))
-    logger.info("Deferred watch restart restore: %d pending candidate(s)", restored_watch)
-    # Recover durable notifications before potentially slow cache warm-up.
-    _apply_recovered_deliveries(notifier)
     # Telegram token/chat_id teşhisi: mesaj göndermeden getMe ile doğrular.
     notifier.check_connection()
+    # Public hedef (kanal/grup) doğrulaması: bot yönetici değilse/izin yoksa
+    # ilk gönderimde 403 almak yerine AÇILIŞTA net uyarı verilir.
+    if notifier.public_enabled:
+        notifier.check_public_connection()
 
     # İki yönlü Telegram: komutları (panel/canli/formasyonlar/durum/tara/yardim)
     # dinleyen katman. İki mod var, AYNI ANDA YALNIZCA BİRİ açılır:
@@ -3141,6 +2814,15 @@ def main_loop():
     #                (Telegram → POST /webhook/<secret>, health_server taşır)
     #   - yoklama  : aksi halde getUpdates uzun yoklaması (daemon thread)
     # Token/chat_id yoksa hiçbiri başlatılmaz; bot eskisi gibi yalnızca alarm gönderir.
+    # 18:45 kapanış özeti kaçırıldıysa (bot akşam kapalıydı) ilk fırsatta telafi et.
+    _kacirilan_digest_ozeti(notifier, datetime.now(ISTANBUL_TZ))
+    # Kapanıştan önce engellenip kuyruğa giren acil olaylar varsa açılışta denensin.
+    try:
+        if notifier.enabled and notifier.kuyruk_durumu().get("bekleyen"):
+            notifier.kuyrugu_bosalt()
+    except Exception as _kuyruk_hata:
+        logger.debug(f"Açılış kuyruk boşaltma hatası: {_kuyruk_hata}")
+
     _telegram_komut_katmanini_kur(notifier)
     
     # İlk kurulum/preload de aynı hız sınırını kullanır; boş 1H cache'ler seri çekilir.
@@ -3166,13 +2848,9 @@ def main_loop():
     for stock in cache_eksik_hisseler:
         taze = ilk_veriler.get(stock)
         if taze is not None:
-            if deque_manager.append_dataframe(stock, taze):
-                if deque_manager.save_to_disk(stock):
-                    logger.info(f"{stock}: {len(taze)} mum çekildi ve tüm cache depolarına kaydedildi")
-            else:
-                logger.warning(
-                    f"{stock}: ilk veri geçersiz OHLCV; diske yazılmadı - canlı taramada tekrar denenecek"
-                )
+            deque_manager.append_dataframe(stock, taze)
+            deque_manager.save_to_disk(stock)
+            logger.info(f"{stock}: {len(taze)} mum çekildi ve diske kaydedildi")
         else:
             logger.warning(
                 f"{stock}: ilk veri çekilemedi ({ilk_hatalar.get(stock, 'veri yok')}); "
@@ -3186,75 +2864,105 @@ def main_loop():
         if deque_manager.gunluk_veri_eksik_mi(stock):
             with pacer.request(f"{stock} initial 1D"):
                 taze_gunluk = fetch_yfinance_1d(stock)
+            deque_manager.gunluk_fetch_denemesi_kaydet(stock)
             if taze_gunluk is not None and len(taze_gunluk) >= 30:
-                if deque_manager.append_gunluk_dataframe(stock, taze_gunluk):
-                    try:
-                        cache_kalici = bool(deque_manager.save_gunluk_to_disk(stock))
-                    except Exception as exc:
-                        cache_kalici = False
-                        logger.error(
-                            "%s: ilk günlük cache kalıcılığı başarısız (%s)",
-                            stock, type(exc).__name__,
-                        )
-                    deque_manager.gunluk_fetch_denemesi_kaydet(
-                        stock, persist=cache_kalici
-                    )
-                    if cache_kalici:
-                        logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
-                    else:
-                        logger.warning(
-                            "%s: günlük cache kalıcılığı doğrulanmadı; "
-                            "yeniden başlatma sonrası fetch tekrar denenebilir", stock,
-                        )
-                else:
-                    deque_manager.gunluk_fetch_denemesi_kaydet(stock)
-                    logger.warning(f"{stock}: ilk günlük veri geçersiz OHLCV - resample kullanılacak")
+                deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
+                deque_manager.save_gunluk_to_disk(stock)
+                logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
             else:
-                deque_manager.gunluk_fetch_denemesi_kaydet(stock)
                 logger.warning(f"{stock}: ilk günlük veri çekilemedi - resample kullanılacak")
     
-    # Başarılı güncel tam tarama snapshot'ta varsa, restart sonrası aynı checkpoint'i
-    # tekrar fetch etme; başarısız/eskimiş snapshot ise fail-closed şekilde tekrar dene.
-    son_taranan_kapanis = _persisted_full_scan_checkpoint(datetime.now(ISTANBUL_TZ))
-    scheduled_retry_checkpoint = None
-    scheduled_retry_attempts = 0
-    scheduled_retry_at = None
+    # Haftalık karne defteri: açılışta bir kez hazırlanır (uzak yedek varsa
+    # Supabase'den birleştirilir). Böylece tarama döngüsü içinde ağ beklemesi
+    # olmaz; Supabase yoksa yalnız yerel dosya okunur.
+    try:
+        kd = _karne_al()
+        kd.buda()
+        _karne_uzak_kaydet(zorla=True)
+        logger.info("Karne defteri hazır: %d kayıt (%s)", kd.boyut(), kd.dosya)
+    except Exception as e:
+        logger.warning(f"Karne defteri hazırlanamadı (devam ediliyor): {e}")
+
+    # Aynı mum iki kez taranmasın (drift koruması). Restart'ta None -> bir sonraki
+    # kapanışta tazelenir, son mum gerekiyorsa bir kez daha taranır (zararsız).
+    son_taranan_kapanis = None
     # Özet ve bakım takibi (bedava kalma için)
     summary_hours = _effective_summary_hours()
     deferred_alert_digest_time = _parse_deferred_alert_digest_time()
     post_close_analysis_time = _parse_post_close_analysis_time()
     last_summary_sent = {}  # DM özeti: "09:55" -> date
-    last_summary_channel_sent = {}  # kanal özeti ayrı izlenir; DM retry kanala kopya üretmesin
-    last_post_close_analysis_date = None
+    last_summary_public_sent = {}  # public (grup) özeti ayrı izlenir; DM retry gruba kopya üretmesin
+    # Restart gün sürekliliği: aynı gün daha önce gönderilmiş özetler diske yazılır.
+    # Aksi halde 09:55 sabah notu, restart sonrası (10 dk telafi penceresi içinde)
+    # İKİNCİ kez gidiyordu — canlı denetimde deneyle doğrulandı.
+    _dm_isaretler, _public_isaretler = _ozet_isaretlerini_yukle()
+    last_summary_sent.update(_dm_isaretler)
+    last_summary_public_sent.update(_public_isaretler)
+    # Gün sonu analizi damgası KALICI okunur: yalnız bellekte tutulunca süreç
+    # yeniden başlayınca aynı gün ikinci kez çalışıyor ve panel mesajı
+    # tekrarlanıyordu (02.10: 20:05 ve 21:49 iki panel).
+    try:
+        _pc_ham = (_state_persistence.gonderim_durumu_yukle() or {}).get("post_close_analizi_gun")
+        last_post_close_analysis_date = (
+            datetime.fromisoformat(str(_pc_ham)).date() if _pc_ham else None)
+    except (TypeError, ValueError):
+        last_post_close_analysis_date = None
     last_maintenance_date = None
     last_preload_date = None
+    son_kuyruk_bosaltma = 0.0  # engellenen acil olaylar bu aralıkla yeniden denenir
+    # Restart gün sürekliliği: bugün zaten sayaç biriktirilmişse geri yükle
+    # (aksi halde 18:45 kanal özeti günün gerçek toplamını eksik gösterir).
+    _gunluk_sayac_yukle()
     
     while not _shutdown_requested:
         try:
             now = datetime.now(ISTANBUL_TZ)
-            # Reset daily counters at the Istanbul date boundary even if the
-            # exchange is closed and no symbol scan runs to trigger a reset.
-            reset_daily_if_needed()
-            _apply_recovered_deliveries(notifier, now)
             # Kullanıcı isteği seans saatinden bağımsız olarak ilk fırsatta çalışır.
             if _scan_istegi.is_set():
-                manual_scan_ran, manual_scheduled_checkpoint = _calistir_istek_taramasi(
-                    deque_manager, lifecycle_manager, notifier,
-                )
-                if manual_scan_ran:
-                    (manual_checkpoint, scheduled_retry_checkpoint,
-                     scheduled_retry_attempts, scheduled_retry_at) = _manual_scan_checkpoint_transition(
-                        last_run_stats, manual_scheduled_checkpoint, scheduled_retry_checkpoint,
-                        scheduled_retry_attempts, scheduled_retry_at,
-                    )
-                    if manual_checkpoint is not None:
-                        # Manuel /panel aynı başlangıç checkpoint'ini başarıyla
-                        # hesapladı; otomatik döngüde o mumu tekrar tarama.
-                        son_taranan_kapanis = manual_checkpoint
+                if _calistir_istek_taramasi(deque_manager, lifecycle_manager, notifier):
+                    if _istek_tam_evrende_tamamlandi(last_run_stats):
+                        kapanis = son_kapanan_mum_ani(datetime.now(ISTANBUL_TZ))
+                        if kapanis is not None:
+                            # Manuel /panel aynı kapanış mumunu başarıyla hesapladı;
+                            # otomatik döngüde aynı tam evreni hemen tekrar tarama.
+                            son_taranan_kapanis = kapanis
                     deque_manager.save_all()
                     continue
-            # --- GÜNLÜK ÖZET + ERTELENMİŞ ADAYLAR (akşam 18:45) ---
+            # --- ENGELLENEN ACİL OLAYLAR (Batch 5 / B4) ---
+            # Cooldown/saatlik kap yüzünden gönderilemeyen teyitli kırılım gibi
+            # olaylar kuyrukta bekler; engel kalkınca en geç birkaç dakikada gider.
             try:
+                if (notifier.enabled and notifier.kuyruk_durumu().get("bekleyen")
+                        and time.time() - son_kuyruk_bosaltma >= ACIL_KUYRUK_BOSALTMA_ARALIK_SN):
+                    son_kuyruk_bosaltma = time.time()
+                    gonderilen_kuyruk = notifier.kuyrugu_bosalt()
+                    if gonderilen_kuyruk:
+                        logger.info(f"Engellenen acil kuyruğundan {gonderilen_kuyruk} olay gönderildi")
+            except Exception as e:
+                logger.debug(f"Acil kuyruk boşaltma hatası: {e}")
+
+            # --- ÇOKLU ÖRNEK KONTROLÜ (Batch 6 / B10) ---
+            # 5 dakikada bir: aynı Supabase anahtarlarını kullanan başka bir canlı
+            # kopya var mı? (webhook modunda 409 sinyali yok; bu onun yerini tutar)
+            try:
+                _tekil_ornek_kontrolu(supabase_store)
+            except Exception as e:
+                logger.debug(f"Çoklu örnek kontrol hatası: {e}")
+
+            # --- GÜNLÜK ÖZET + ERTELENMİŞ ADAYLAR (akşam 18:45) ---
+            # İŞLEM GÜNÜ KAPISI: hafta sonu ve resmî tatilde kanala özet GİTMEZ.
+            # Saat hedefleri (09:55/18:45) takvimden bağımsız geldiği için, kapı
+            # olmadan cumartesi günü "öne çıkan formasyon olmadı" mesajı gidiyordu;
+            # aynı şekilde 20:00 gün sonu analizi boşuna tam evren taraması yapıyordu.
+            # DM tarafı da kapanır: sahibe anlamsız "boş gün" özeti gitmez (tam detay
+            # istenirse /panel ve /durum komutları her zaman çalışır).
+            try:
+              if not islem_gunu_mu(now):
+                if not _islem_gunu_loglandi.get("gun") == now.date().isoformat():
+                    logger.info("İşlem günü değil (%s); günlük özetler ve gün sonu "
+                                "analizi atlanıyor.", now.date().isoformat())
+                    _islem_gunu_loglandi["gun"] = now.date().isoformat()
+              else:
                 for sh in summary_hours:
                     sh_str = sh.strftime("%H:%M")
                     hedef = ISTANBUL_TZ.localize(datetime.combine(now.date(), sh))
@@ -3264,96 +2972,143 @@ def main_loop():
                     ozet_zamani = now >= hedef and (
                         sh == deferred_alert_digest_time or gecikme_sn < 600
                     )
-                    if not ozet_zamani:
+                    # Kapanış özeti kalıcı tampon taşır: restart sonrası aynı DM
+                    # özeti ikinci kez gönderilmesin (state:digest_pending).
+                    # NOT: bu bayrak yalnız DM yolunu kapatır. Kanala kapanış
+                    # gitmeden süreç öldüyse (DM gitti + kanal gitmedi) kanal
+                    # kendi KALICI işaretinden (public:18:45) devam eder; yani
+                    # eksik kalan mesaj restart sonrası tamamlanır.
+                    dm_gonderildi = (sh == deferred_alert_digest_time
+                                     and _digest_son_gonderim_gun == now.date().isoformat())
+                    dm_hedefi = (ozet_zamani and not dm_gonderildi
+                                 and last_summary_sent.get(sh_str) != now.date())
+                    public_hedefi = (ozet_zamani and notifier.public_enabled
+                                     and last_summary_public_sent.get(sh_str) != now.date())
+                    if not dm_hedefi and not public_hedefi:
                         continue
                     aktif = _build_active_formations_for_summary(lifecycle_manager)
                     ozet = notifier.format_daily_summary(aktif, daily_stats)
                     bekleyen = (
-                        _deferred_alert_buffer.items(now, limit=12)
+                        _deferred_alert_buffer.items(now, limit=DEFERRED_ALERT_DIGEST_LIMIT)
                         if sh == deferred_alert_digest_time else []
                     )
-                    watch_summary = _format_deferred_alert_summary(bekleyen)
-                    tarih_notu = _sonuc_veri_tarihi_uyarisi(now)
-                    dm_ozet = "📋 Günlük Özet\n"
-                    if tarih_notu:
-                        dm_ozet += tarih_notu + "\n"
-                    dm_ozet += ozet
-                    channel_ozet = (tarih_notu + "\n" if tarih_notu else "") + ozet
+                    # Tampondaki gerçek aday sayısı: kesilenler özet metninde
+                    # "… N aday daha" satırıyla görünür ve sayaca yazılır.
+                    bekleyen_toplam = len(_deferred_alert_buffer) if bekleyen else 0
+                    if bekleyen and bekleyen_toplam > len(bekleyen):
+                        daily_stats['alerts_digest_overflow'] = bekleyen_toplam - len(bekleyen)
+                    watch_summary = _format_deferred_alert_summary(bekleyen, bekleyen_toplam)
+                    dm_ozet = f"📋 Günlük Özet\n{ozet}"
                     if watch_summary:
                         dm_ozet += "\n\n" + watch_summary
 
-                    if last_summary_sent.get(sh_str) != now.date():
+                    # --- HAFTALIK DOĞRULUK KARNESİ (gün sonu mesajının ALTINA) ---
+                    # Cuma günü 18:45 kapanış özetinin altına eklenir; haftada bir
+                    # kez gönderilir. Defter/ölçüm tamamen yereldir (Supabase yok).
+                    karne_metni_eklendi = ""
+                    if sh == deferred_alert_digest_time:
+                        karne_metni_eklendi = _haftalik_karne_ekle(now, deque_manager)
+                        if karne_metni_eklendi:
+                            dm_ozet += "\n\n" + karne_metni_eklendi
+
+                    if dm_hedefi:
                         if notifier.enabled:
-                            summary_key = f"daily-summary:dm:{now.date().isoformat()}:{sh_str}"
-                            gonderildi, hata = notifier.send_text(dm_ozet, idempotency_key=summary_key)
-                            if gonderildi:
+                            # Parça bazlı sonuç: ana özet ve karne AYRI izlenir.
+                            # Böylece (a) karne parçası gitmezse yalnız karne, 20:00
+                            # yolunda yeniden denenir; (b) ana özet gittiği halde
+                            # sayaç artmadığı için özet İKİ KEZ gönderilmez.
+                            ana_ok, karne_ok, hata = _karneyle_gonder(
+                                notifier, dm_ozet, karne_metni_eklendi)
+                            if ana_ok:
                                 last_summary_sent[sh_str] = now.date()
+                                _ozet_isaret_kaydet(sh_str, now.date())
                                 if bekleyen:
                                     _deferred_alert_buffer.mark_reported(bekleyen, now)
-                                    _persist_watch_buffer(notifier, now, remote=True)
-                                logger.info(f"Günlük DM özeti gönderildi/already delivered: {sh_str}")
+                                if sh == deferred_alert_digest_time:
+                                    _digest_son_gonderim_gun = now.date().isoformat()
+                                    digest_tamponu_kaydet()
+                                logger.info(f"Günlük DM özeti gönderildi: {sh_str}")
                             else:
                                 logger.warning(f"Günlük DM özeti gönderilemedi ({sh_str}): {hata}")
+                            if karne_metni_eklendi and karne_ok:
+                                _karne_gonderildi_isaretle(now)
+                                logger.info("Haftalık doğruluk karnesi gönderildi (18:45 özeti altında)")
                         else:
                             # Test/pasif modda döngü boyunca aynı özeti tekrar deneme.
                             last_summary_sent[sh_str] = now.date()
+                            if sh == deferred_alert_digest_time:
+                                _digest_son_gonderim_gun = now.date().isoformat()
 
-                    if (notifier.channel_id
-                            and last_summary_channel_sent.get(sh_str) != now.date()):
-                        channel_key = f"daily-summary:channel:{now.date().isoformat()}:{sh_str}"
-                        if notifier.send_to_channel(channel_ozet, idempotency_key=channel_key):
-                            last_summary_channel_sent[sh_str] = now.date()
+                    # --- PUBLIC GRUP: sade kapanış özeti (DM'den bağımsız) ---
+                    # DM kapalıyken de çalışır; iç izleme notu/dosya yolu taşımaz.
+                    if (notifier.public_enabled
+                            and last_summary_public_sent.get(sh_str) != now.date()):
+                        kisa_karne = ""
+                        if sh == deferred_alert_digest_time:
+                            kisa_karne = _haftalik_karne_kisa(now, deque_manager)
+                        kapanis_mi = (sh == deferred_alert_digest_time)
+                        grup_ozet = notifier.format_public_summary(
+                            aktif, daily_stats, izleme=bekleyen, karne_kisa=kisa_karne,
+                            tarama_turu=daily_stats.get('tarama_sayisi'),
+                            kapanis=kapanis_mi,
+                        )
+                        if notifier.send_to_public(grup_ozet):
+                            last_summary_public_sent[sh_str] = now.date()
+                            _ozet_isaret_kaydet(sh_str, now.date(), public=True)
             except Exception as e:
                 logger.debug(f"Özet gönderim hatası: {e}")
 
             # --- GÜN SONU TAM EVREN ANALİZİ (varsayılan 20:00 İstanbul) ---
+            # İşlem günü değilse (hafta sonu/tatil) gece analizi ÇALIŞMAZ: veri
+            # değişmediği için tam evren taraması boşuna kaynak harcar ve panel
+            # "değişmeyen gün" raporu üretirdi.
             try:
-                if now.time() >= post_close_analysis_time and last_post_close_analysis_date != now.date():
-                    may_run, calendar_reason = should_run_post_close_analysis(now)
-                    if not may_run:
-                        logger.warning(
-                            "Gün sonu taraması atlandı: %s için BIST işlem günü doğrulanmadı (%s); "
-                            "saklı sonuçlar veri-zamanı etiketiyle sunulacak",
-                            now.date(), calendar_reason,
-                        )
-                        last_post_close_analysis_date = now.date()
-                    elif _persisted_post_close_scan_completed(now, post_close_analysis_time):
-                        logger.info(
-                            "Gün sonu tam evren analizi bugün zaten başarıyla kaydedilmiş; tekrar çalıştırılmıyor"
-                        )
-                        last_post_close_analysis_date = now.date()
-                    else:
-                        logger.info("Gün sonu tam evren analizi başlıyor (%s)",
-                                    post_close_analysis_time.strftime("%H:%M"))
-                        _scan_job_active.set()
+                if (islem_gunu_mu(now)
+                        and now.time() >= post_close_analysis_time
+                        and last_post_close_analysis_date != now.date()):
+                    logger.info("Gün sonu tam evren analizi başlıyor (%s)",
+                                post_close_analysis_time.strftime("%H:%M"))
+                    _scan_job_active.set()
+                    try:
                         try:
-                            try:
-                                result = scan_all_stocks(
-                                    deque_manager, lifecycle_manager, notifier,
-                                    manuel=True, stocks=ACTIVE_STOCKS, send_alerts=False,
-                                    require_current_session=True, after_close=True,
-                                )
-                            except Exception as exc:
-                                logger.error("Gün sonu analiz çalıştırması çöktü: %s", exc, exc_info=True)
-                                result = _analiz_hatasi_kaydi(
-                                    exc, len(ACTIVE_STOCKS), "gün sonu analiz",
-                                )
-                            if result.get("status") == "tamamlandi":
-                                rapor = _panel_raporu("", tamamlandi=True)
-                                notifier.send_text(
-                                    "🌙 GÜN SONU ANALİZİ\n" + rapor,
-                                    idempotency_key=f"post-close:success:{now.date().isoformat()}",
-                                )
-                            else:
-                                notifier.send_text(
-                                    "⚠️ Gün sonu analizi tamamlanamadı; eski sonuç yeni sonuç gibi "
-                                    "gösterilmedi. Ayrıntı için bot loglarını kontrol edin.",
-                                    idempotency_key=f"post-close:failure:{now.date().isoformat()}",
-                                )
-                        finally:
-                            _scan_job_active.clear()
-                            last_post_close_analysis_date = now.date()
-                        continue
+                            result = scan_all_stocks(
+                                deque_manager, lifecycle_manager, notifier,
+                                manuel=True, stocks=ACTIVE_STOCKS, send_alerts=False,
+                            )
+                        except Exception as exc:
+                            logger.error("Gün sonu analiz çalıştırması çöktü: %s", exc, exc_info=True)
+                            result = _analiz_hatasi_kaydi(
+                                exc, len(ACTIVE_STOCKS), "gün sonu analiz",
+                            )
+                        if result.get("status") == "tamamlandi":
+                            rapor = _panel_raporu("", tamamlandi=True)
+                            mesaj = "🌙 GÜN SONU ANALİZİ\n" + rapor
+                            # Cuma karnesi 18:45 özetiyle gidemediyse (bot kapalıydı /
+                            # gönderim hatası) burada gün sonu analizinin altına eklenir.
+                            karne_ek = _haftalik_karne_ekle(now, deque_manager)
+                            ana_ok, karne_ok, _hata = _karneyle_gonder(notifier, mesaj, karne_ek)
+                            if ana_ok:
+                                logger.info("Gün sonu analizi gönderildi")
+                            if karne_ek and karne_ok:
+                                # İşaret KARNE parçası gerçekten gittiyse konur;
+                                # 18:45'te gönderilen karne burada ikinci kez çıkmaz.
+                                _karne_gonderildi_isaretle(now)
+                                logger.info("Haftalık doğruluk karnesi gönderildi (gün sonu analizi altında)")
+                        else:
+                            notifier.send_text(
+                                "⚠️ Gün sonu analizi tamamlanamadı; eski sonuç yeni sonuç gibi "
+                                "gösterilmedi. Ayrıntı için bot loglarını kontrol edin."
+                            )
+                    finally:
+                        _scan_job_active.clear()
+                        last_post_close_analysis_date = now.date()
+                        # Kalıcı damga: restart olsa bile aynı gün ikinci panel yok.
+                        try:
+                            _state_persistence.gonderim_durumu_kaydet(
+                                {"post_close_analizi_gun": now.date().isoformat()})
+                        except Exception as pc_hata:  # noqa: BLE001
+                            logger.debug("Gün sonu damgası yazılamadı: %s", pc_hata)
+                    continue
             except Exception as e:
                 logger.error("Gün sonu analizi zamanlayıcısı hata verdi: %s", e, exc_info=True)
 
@@ -3376,112 +3131,75 @@ def main_loop():
                 logger.debug(f"Bakım kontrol hatası: {e}")
             
             
-            session = bist_session_for(now)
-            if session.status is SessionStatus.UNKNOWN:
-                logger.warning(
-                    "XIST takvimi %s için bilinmiyor; otomatik tarama fail-closed durumda",
-                    now.date(),
-                )
-
-            if bist_scan_window_open(now):
-                checkpoint = latest_session_checkpoint(now)
-                if bist_scan_due(now, son_taranan_kapanis):
-                    if checkpoint is None:
-                        logger.error("Takvim açık görünse de geçerli tarama checkpoint'i yok; tarama atlandı")
-                        bekle = 300
-                    else:
-                        retry_wait = _scheduled_scan_retry_wait(
-                            checkpoint, scheduled_retry_checkpoint, scheduled_retry_at,
-                            time.monotonic(),
+            if tarama_penceresi_acik_mi(now):
+                if tarama_animi_mi(now, son_taranan_kapanis):
+                    # Tarama anı: en son kapanmış mum + 5 dk doldu.
+                    kapanis = son_kapanan_mum_ani(now)
+                    logger.info(f"TARAMA - {now.strftime('%H:%M:%S')} "
+                                f"(mum {kapanis.strftime('%H:%M')}'de kapandı, "
+                                f"günün {kapanis.hour - 9}. taraması)")
+                    _scan_job_active.set()
+                    try:
+                        scan_all_stocks(
+                            deque_manager, lifecycle_manager, notifier,
+                            manuel=False, stocks=ACTIVE_STOCKS, send_alerts=True,
                         )
-                        if retry_wait > 0:
-                            bekle = min(retry_wait, 300)
-                            logger.info(
-                                "Checkpoint %s için başarısız tarama geri çekilmesi sürüyor; "
-                                "%.0f sn sonra yeniden denenecek",
-                                checkpoint.strftime("%H:%M"), retry_wait,
-                            )
-                        else:
-                            logger.info(
-                                "TARAMA - %s (son tamamlanmış checkpoint %s, %s)",
-                                now.strftime("%H:%M:%S"), checkpoint.strftime("%H:%M"),
-                                session.reason,
-                            )
-                            _scan_job_active.set()
-                            try:
-                                transition = _execute_scheduled_scan_transition(
-                                    scan_callable=lambda: scan_all_stocks(
-                                        deque_manager, lifecycle_manager, notifier,
-                                        manuel=False, stocks=ACTIVE_STOCKS, send_alerts=True,
-                                        require_current_session=True, scheduled_checkpoint=checkpoint,
-                                    ),
-                                    checkpoint=checkpoint,
-                                    expected_stock_count=len(ACTIVE_STOCKS),
-                                    retry_checkpoint=scheduled_retry_checkpoint,
-                                    retry_attempts=scheduled_retry_attempts,
-                                    retry_at=scheduled_retry_at,
-                                    monotonic=time.monotonic,
-                                )
-                            finally:
-                                _scan_job_active.clear()
-
-                            scan_result = transition.scan_result
-                            completed_checkpoint = transition.completed_checkpoint
-                            scheduled_retry_checkpoint = transition.retry_checkpoint
-                            scheduled_retry_attempts = transition.retry_attempts
-                            scheduled_retry_at = transition.retry_at
-                            if completed_checkpoint is not None:
-                                son_taranan_kapanis = completed_checkpoint
-                                deque_manager.save_all()
-                                time.sleep(5)  # aynı saniyede tekrar girmesin
-                                continue
-
-                            retry_delay = transition.retry_delay
-                            result_status = (
-                                scan_result.get("status") if isinstance(scan_result, dict) else None
-                            )
-                            logger.error(
-                                "Zamanlanmış tam tarama başarılı değil (status=%s); "
-                                "checkpoint %s tüketilmedi. %.0f sn sonra yeniden denenecek",
-                                result_status, checkpoint.strftime("%H:%M"), retry_delay,
-                            )
-                            deque_manager.save_all()
-                            bekle = retry_delay
+                    finally:
+                        _scan_job_active.clear()
+                    _tarama_saglik_kontrolu(notifier)
+                    son_taranan_kapanis = kapanis
+                    deque_manager.save_all()
+                    # Tarama sonunda bekleyen aday tamponu kalıcılaştır (Batch 5 / B3):
+                    # restart tamponun tamamını kaybetmesin, tarama başına tek yazma.
+                    digest_tamponu_kaydet()
+                    # Karne defteri yedeği (varsa Supabase; aralıklı, en fazla 5 dk'da bir).
+                    _karne_uzak_kaydet()
+                    # Faz 2.6: Formation mirror kuyruğunu Supabase'e flush et
+                    if _supabase_store_ref is not None:
+                        try:
+                            from state.formation_mirror import get_mirror_queue
+                            get_mirror_queue().flush(_supabase_store_ref)
+                        except Exception:
+                            pass
+                    time.sleep(5)  # aynı saniyede tekrar girmesin
+                    continue
+                
+                # Henüz tarama anı değil: ne kadar bekleyeceğiz?
+                kapanis = son_kapanan_mum_ani(now)
+                if kapanis is None or kapanis.date() != now.date():
+                    # Bugün henüz mum kapanmadı (ilk kapanış 10:30) -> ilk tarama anını bekle
+                    hedef = (now.replace(hour=BIST_OPEN.hour, minute=BIST_OPEN.minute,
+                                         second=0, microsecond=0)
+                             + timedelta(minutes=40 + SCAN_DELAY_AFTER_CLOSE_MIN))
                 else:
-                    hedef = next_bist_scan_at(now)
-                    bekle = max((hedef - now).total_seconds(), 30) if hedef else 300
-                    if hedef is not None:
-                        logger.info(
-                            "Sonraki BIST taraması %s -> %.1f dk bekleniyor",
-                            hedef.strftime("%H:%M"), bekle / 60,
-                        )
-                    else:
-                        logger.info("Bugün için başka tarama checkpoint'i yok; 5 dk sonra yeniden kontrol")
+                    hedef = kapanis + timedelta(minutes=SCAN_DELAY_AFTER_CLOSE_MIN)
+                bekle = max((hedef - now).total_seconds(), 30)
+                logger.info(f"Sonraki tarama {hedef.strftime('%H:%M')} -> {bekle/60:.1f} dk bekleniyor")
                 # Max 5dk uyu; /tara isteği gelirse uyku erken biter.
                 if _bekle_veya_tarama(min(bekle, 300)):
                     logger.info("Elle tarama isteği geldi, uyku kesildi")
                     continue
+                
             else:
-                wait_open = seconds_until_next_bist_open(now)
-                sleep_time = min(wait_open, 300) if wait_open is not None else 300
-                if (session.status is SessionStatus.TRADING
-                        and now.time() < post_close_analysis_time):
+                # BIST kapalı
+                wait_open = time_until_next_open(now)
+                # 5dk'da bir kontrol et, ama açılışa kadar uyu
+                sleep_time = min(wait_open, 300)  # Max 5dk
+                if now.time() < post_close_analysis_time:
                     rapor_anina = now.replace(
                         hour=post_close_analysis_time.hour,
                         minute=post_close_analysis_time.minute,
                         second=0, microsecond=0,
                     )
                     sleep_time = min(sleep_time, max(1.0, (rapor_anina - now).total_seconds()))
-                piyasa_etiketi = (
-                    f"TAKVİM BİLİNMİYOR ({session.reason})"
-                    if session.status is SessionStatus.UNKNOWN
-                    else f"SEANS DIŞI ({session.reason})"
-                )
-                acilisa = f"; açılışa {wait_open / 3600:.1f} sa" if wait_open is not None else ""
-                logger.info(
-                    "%s - %s - %.1f dk uyku%s",
-                    piyasa_etiketi, now.strftime("%Y-%m-%d %H:%M:%S"), sleep_time / 60, acilisa,
-                )
+                # TABAN UYKU (regresyon koruması): tatil/yarım gün gibi "pencere
+                # kapalı ama is_bist_open True" durumlarında sleep_time 0'a düşüp
+                # ana döngü boş dönüyordu (ölçüm: ~21.500 log satırı/sn; tatil
+                # günü ~600 milyon satır). time_until_next_open artık tatili
+                # atlıyor; bu taban ikinci güvenlik ağı, hiçbir koşulda 0 sn uyku
+                # ile dönülmez (60 sn'de bir uyanıp durumu yeniden değerlendirir).
+                sleep_time = max(sleep_time, 60.0)
+                logger.info(f"BIST KAPALI - {now.strftime('%Y-%m-%d %H:%M:%S')} - {sleep_time/60:.1f}dk uyku (açılışa {wait_open/3600:.1f}sa)")
                 if _bekle_veya_tarama(sleep_time):
                     logger.info("Seans dışı analiz isteği geldi; ana döngü uyandırıldı")
                     continue
@@ -3494,7 +3212,7 @@ def main_loop():
             logger.error(f"Ana döngü hatası: {e} - 30sn sonra yeniden denenecek", exc_info=True)
             if _live_state.status().get('tarama_suruyor'):
                 _analiz_hatasi_kaydi(e, len(ACTIVE_STOCKS), "ana döngü")
-            write_heartbeat()
+            write_heartbeat(force=True)
             time.sleep(30)
             continue
     
@@ -3512,7 +3230,16 @@ def main_loop():
         if _deque_manager_ref is not None:
             _deque_manager_ref.save_all()
         son_tarama_kaydet()
-        write_heartbeat()
+        # Bekleyen gün içi adaylar kapanışta da kaybolmasın (Batch 5 / B3).
+        digest_tamponu_kaydet()
+        # Faz 2.6: Kapanışta bekleyen mirror kuyruğunu flush et (SIGTERM/SIGINT)
+        if _supabase_store_ref is not None:
+            try:
+                from state.formation_mirror import get_mirror_queue
+                get_mirror_queue().flush(_supabase_store_ref)
+            except Exception:
+                pass
+        write_heartbeat(force=True)
     except Exception as e:
         logger.error(f"Kapanış kayıt hatası: {e}")
     logger.info("Bot durdu")
@@ -3530,6 +3257,7 @@ def _render_test_sender(text):
 
 
 if __name__ == "__main__":
+    setup_logging()
     # HTTP sunucusu main_loop'tan ÖNCE başlar: Render'ın health check'i ilk veri
     # yüklemesi sürerken de yanıt verir. Webhook modunda güncellemeler bu sunucudan
     # gelir; bot komutları kurana kadar /webhook 503 döner (Telegram tekrar dener).
@@ -3537,12 +3265,7 @@ if __name__ == "__main__":
         test_sender=_render_test_sender,
         webhook_handler=_telegram_webhook_isle,
         webhook_secret=TELEGRAM_WEBHOOK_SECRET,
+        # Denetim B-4: /health botun canlılığını da raporlasın (heartbeat yaşı).
+        health_provider=_saglik_ozeti,
     )
-    if os.getenv("BOT_HEALTH_SMOKE_ONLY") == "1":
-        # CI liveness smoke: keep only the HTTP server alive. Do not create a
-        # notifier, contact Telegram/Supabase, or fetch Yahoo data.
-        logger.info("Health smoke mode: provider and command loops disabled")
-        while not _shutdown_requested:
-            time.sleep(0.25)
-    else:
-        main_loop()
+    main_loop()

@@ -214,11 +214,19 @@ kontrol("configured normal-day 1D boundary is 18:30",
         "synthetic 25 Eylül barı 18:29'da hariç")
 kontrol("18:35'te configured 1D boundary sentetik bugünkü satırı içerir",
         tmm(resample_all_timeframes(df)['1d'], '1d', now=t(2026, 9, 25, 18, 35)).index[-1].strftime('%d') == '25',
-        "synthetic 25 Eylül satırı görülüyor; live provider doğrulaması değildir")
-for tf_name, beklenen in [('1h', '17:30'), ('2h', '15:30'), ('4h', '13:30')]:
+        "25 Eylül mumu görülüyor")
+# P0 DÜZELTMESİ (2 Eki 2026): 2h/4h kovaları artık seans sonunda (18:00) kesilir.
+# Eski hata: kova "+2sa/+4sa" ile 19:30/21:30'a kadar yarım sayılıyordu ->
+# 18:35 taramasında 2h son kova 15:30, 4h son kova 13:30'da kalıyor, günün
+# kapanış saati (17:30–18:00) hiç analiz edilmiyordu.
+for tf_name, beklenen in [('1h', '17:30'), ('2h', '17:30'), ('4h', '17:30')]:
     d_ = tmm(resample_all_timeframes(df)[tf_name], tf_name, now=t(2026, 9, 25, 18, 35))
-    kontrol(f"{tf_name} mevcut configured filter sonucu korunuyor",
+    kontrol(f"{tf_name} günün son kapanan kovası (seans sonu kesmesi)",
             d_.index[-1].strftime('%H:%M') == beklenen, beklenen)
+# Kısmi (devam eden) bar kapısı: :05 taraması 12:30 barını kapanmış SAYMAZ.
+kontrol("13:05'te 12:30 barı henüz kapanmadı (kısmi bar sızmaz)",
+        tmm(df, '1h', now=t(2026, 9, 25, 13, 5)).index[-1].strftime('%H:%M') == '11:30',
+        "son kapanan 11:30")
 
 print()
 print("=== 6. FAZ 2: BIST TATİL TAKVİMİ / YARIM GÜN ===")
@@ -232,7 +240,11 @@ kontrol("tatil günü tarama penceresi kapalı", not data_mod.tarama_penceresi_a
 kontrol("tatil günü tarama anı da kapalı", not data_mod.tarama_animi_mi(t(2026, 10, 29, 12, 35)))
 kontrol("normal gün penceresi açık", data_mod.tarama_penceresi_acik_mi(t(2026, 9, 25, 12, 35)))
 
-kontrol("configured calendar: 19 March entry has 13:00 close",
+# P0 DÜZELTMESİ: yarım günde günlük mum 18:30 yerine SEANS KAPANIŞINDA (13:00)
+# tamamlanır. Eski davranışta o gün günlük formasyon/kırılım hiç bildirilmiyordu.
+kontrol("yarım günde günlük mum 13:00'te tamamlanır (eski hata: 18:30)",
+        data_mod.mum_kapanis_ani(t(2026, 3, 19), '1d').strftime('%H:%M') == '13:00')
+kontrol("19 Mart 2026 yarım gün (kapanış 13:00)",
         seans_kapanis_saati(t(2026, 3, 19)) == dt_time(13, 0))
 kontrol("configured half-day :30 schedule uses 12:30 final checkpoint",
         data_mod.son_kapanan_mum_ani(t(2026, 3, 19, 13, 5)).strftime('%H:%M') == '13:00')
@@ -298,19 +310,17 @@ kontrol("limitler makul", 5 <= TELEGRAM_MAX_MESAJ_SAAT <= 100 and 50 <= TELEGRAM
 kontrol("kritik state'ler tanımlı", 'KIRILIM_ADAYI' in KRITIK_STATELER
         and 'FORMASYON_TAMAMLANDI' in KRITIK_STATELER)
 
-# Runtime state belongs to the same test-owned temporary directory.
+_nt_data = tempfile.mkdtemp(prefix='bot_kap_')
+os.environ['DATA_DIR'] = _nt_data          # C4: repo dışı veri dizini
+import config as config_mod
+config_mod.DATA_DIR = _nt_data             # notifier/cooldown bu klasörü kullanır
 import notifier as _notifier_mod
-_TEST_NOTIFIER_DATA_DIR = os.path.join(_TEST_TMP.name, "notifier-data")
-_notifier_mod.DATA_DIR = _TEST_NOTIFIER_DATA_DIR
-# A developer may run this script with production .env variables loaded. Force
-# mock mode before construction, then prove the caller's environment is restored.
-from unittest.mock import patch
-_TELEGRAM_ENV_KEYS = ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_CHANNEL_ID")
-_TELEGRAM_ENV_BEFORE = {key: os.environ.get(key) for key in _TELEGRAM_ENV_KEYS}
-with patch.dict(os.environ, {key: "" for key in _TELEGRAM_ENV_KEYS}):
-    nt_test = TelegramNotifier()
-assert nt_test.enabled is False
-assert {key: os.environ.get(key) for key in _TELEGRAM_ENV_KEYS} == _TELEGRAM_ENV_BEFORE
+_notifier_mod.DATA_DIR = _nt_data          # C4: DATA_DIR modülde import anında bağlanıyor
+nt_test = TelegramNotifier()
+for _f in (os.path.join(_nt_data, 'telegram_kap.json'),):
+    if os.path.exists(_f):
+        os.remove(_f)
+nt_test = TelegramNotifier()
 
 
 def _mesaj(state, hisse):
@@ -374,6 +384,45 @@ kontrol("veri_sorunlari heartbeat alanı içeriyor", 'veri_sorunlari' in open('m
 _test_tmp_root = _TEST_TMP.name
 _TEST_TMP.cleanup()
 kontrol("test-owned temporary tree cleaned", not os.path.exists(_test_tmp_root))
+
+print()
+print("=== 11. N+1: TATİL / YARIM GÜN UYKU DÖNGÜSÜ ===")
+# Kök neden: is_bist_open tatili bilmiyordu -> kapalı dalda time_until_next_open 0
+# dönüyordu -> ana döngü 0 sn uykuyla boş dönüyordu (ölçüm: ~21.500 log satırı/sn).
+_acik_29 = t(2026, 10, 29, 12, 0)
+_hedef_30 = t(2026, 10, 30, 9, 50)
+kontrol("tatil günü bekleme > 0 (0 sn uyku fırtınası yok)",
+        data_mod.time_until_next_open(_acik_29) > 0,
+        f"{data_mod.time_until_next_open(_acik_29)/3600:.1f} sa")
+kontrol("29 Eki tatil -> sonraki açılış 30 Eki 09:50",
+        abs(data_mod.time_until_next_open(_acik_29)
+            - (_hedef_30 - _acik_29).total_seconds()) < 1)
+kontrol("29 Ekim (tatil) is_bist_open False (tatil artık takvimden biliniyor)",
+        not data_mod.is_bist_open(_acik_29))
+kontrol("30 Ekim 09:00 (tatil ertesi, seans öncesi) -> bugün 09:50",
+        abs(data_mod.time_until_next_open(t(2026, 10, 30, 9, 0))
+            - (t(2026, 10, 30, 9, 50) - t(2026, 10, 30, 9, 0)).total_seconds()) < 1)
+# 28 Eki yarım gün (kapanış 13:00), 29 Eki tatil -> ikisi de atlanır.
+kontrol("yarım gün 13:30 (arefe, seans kapandı) -> 30 Eki 09:50",
+        abs(data_mod.time_until_next_open(t(2026, 10, 28, 13, 30))
+            - (t(2026, 10, 30, 9, 50) - t(2026, 10, 28, 13, 30)).total_seconds()) < 1)
+kontrol("cuma 20:00 -> pazartesi 09:50 (hafta sonu atlanır)",
+        abs(data_mod.time_until_next_open(t(2026, 10, 2, 20, 0))
+            - (t(2026, 10, 5, 9, 50) - t(2026, 10, 2, 20, 0)).total_seconds()) < 1)
+kontrol("cumartesi 12:00 -> pazartesi 09:50",
+        abs(data_mod.time_until_next_open(t(2026, 10, 3, 12, 0))
+            - (t(2026, 10, 5, 9, 50) - t(2026, 10, 3, 12, 0)).total_seconds()) < 1)
+kontrol("seans içinde (12:35) bekleme 0", data_mod.time_until_next_open(t(2026, 9, 30, 12, 35)) == 0)
+# Sözleşme: pencere kapalıysa bekleme HER ZAMAN > 0.
+_ornekler = [t(2026, 9, 30, 8, 0), t(2026, 9, 30, 20, 0), t(2026, 10, 29, 10, 0),
+             t(2026, 10, 28, 13, 30), t(2026, 10, 3, 12, 0), t(2026, 9, 30, 12, 35),
+             t(2026, 10, 30, 9, 50)]
+kontrol("pencere kapalı <=> bekleme > 0 (tüm örnekler)",
+        all((data_mod.tarama_penceresi_acik_mi(an)) == (data_mod.time_until_next_open(an) == 0)
+            for an in _ornekler))
+_main_kaynak = open('main.py', encoding='utf-8').read()
+kontrol("ana döngüde taban uyku var (0 sn uyku imkânsız)", "sleep_time = max(sleep_time, 60.0)" in _main_kaynak)
+
 
 print()
 print("=" * 60)

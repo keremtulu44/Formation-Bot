@@ -3,6 +3,7 @@ from datetime import datetime
 from config import ISTANBUL_TZ
 import notifier as notifier_module
 from data import StockDequeManager
+from config import ISTANBUL_TZ
 from notifier import TelegramNotifier
 
 

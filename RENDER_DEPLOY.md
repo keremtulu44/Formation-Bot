@@ -40,7 +40,8 @@ Secret olmalı. `BOT_PROFILE` plain/isteğe bağlıdır.
 > #1/#2 ve SQL kurulum adımları atlanabilir.
 > #3'ün değeri: `8914822495:AAG...` biçiminde, iki nokta içeren tek satır.
 > #7'nin adresi (webhook için) `RENDER_EXTERNAL_URL`'den otomatik üretilir:
-> `https://<servis>.onrender.com/webhook/<secret>`. `RENDER_EXTERNAL_URL`'i elle
+> `https://<servis>.onrender.com/webhook` (sırsız; doğrulama secret_token
+> başlığıyla). `RENDER_EXTERNAL_URL`'i elle
 > **ekleme gerekmez**, Render Web Service'lerde otomatik tanımlıdır.
 
 Boş bırakırsan bot çalışır ama: #2 boşsa önbellek/Telegram state'i kaydedilmez,
@@ -139,9 +140,9 @@ Render health endpoint 0.0.0.0:____ üzerinde başladı (/health)
 Webhook modunu açtıysanız (§4.6) 4. satır da gelir:
 
 ```
-Telegram webhook ucu etkin (POST /webhook/<secret>, secret gizli)
-Telegram webhook kuruldu: https://<servis>.onrender.com/webhook/*** (Webhook was set)
-Telegram komutları WEBHOOK modunda: https://<servis>.onrender.com/webhook/*** (yalnızca chat_id __)
+Telegram webhook ucu etkin (POST /webhook, secret X-Telegram-Bot-Api-Secret-Token basliginda)
+Telegram webhook kuruldu: https://<servis>.onrender.com/webhook (Webhook was set)
+Telegram komutları WEBHOOK modunda: https://<servis>.onrender.com/webhook (yalnızca chat_id __)
 ```
 
 Webhook kapalıysa bunun yerine `Telegram webhook ucu kapali
@@ -221,6 +222,22 @@ Bot, Render'ın verdiği `PORT` değişkenini görünce `0.0.0.0:$PORT` üzerind
 `/health` endpoint'i açar. Bu endpoint sadece `{"status":"ok",...}` döner;
 token, anahtar veya portföy verisi sızmaz. Servis canlıysa tarayıcıda
 `https://<servis>.onrender.com/health` çalışıyor demektir.
+
+Yanıt ayrıca **canlılık alanları** taşır (denetim B-4) — bot donmuş mu, yoksa
+yalnız internet mi yavaş, dışarıdan görünür:
+
+| Alan | Anlamı |
+|---|---|
+| `heartbeat_age_s` | Son heartbeat yazımından bu yana geçen saniye |
+| `heartbeat_stale` | Eşiğe göre `true`/`false` (tarama sürerken 45 dk, seans açıkken 30 dk, seans kapalıyken 72 sa) |
+| `heartbeat_stale_esik_s` | O an geçerli eşik (saniye) |
+| `tarama_suruyor` / `seans_acik` | Anlık durum bayrakları |
+| `evren` / `instance_id` | Taranan hisse sayısı / örnek kimliği |
+
+Render'ın kendi health check'i sorgusuz `/health` çağırdığı için **her zaman 200**
+alır (davranış değişmedi). Gerçek izleme yapmak istersen UptimeRobot/cron-job.org
+adresini `/health?strict=1` yap: heartbeat bayatken uç **503** döner ve monitör
+alarm verir.
 
 > **Not:** Render Free disk kalıcı değildir. Her deploy/restart'ta `bot_data/`
 > sıfırlanabilir. Supabase bu yüzden **önerilen ama opsiyonel** uzak OHLCV cache'i
@@ -439,6 +456,14 @@ komutları okuyup yanıtlar. Komutlar yoklama (`getUpdates`, varsayılan) ya da
 webhook (§4.6) ile toplanır; **yalnızca `TELEGRAM_CHAT_ID`** komut verebilir,
 başka sohbetlerden gelen mesajlar sessizce yok sayılır.
 
+> 📣 **Kanal/grup komut kabul etmez.** Yukarıdaki komutlar yalnızca
+> `TELEGRAM_CHAT_ID` (DM) sohbetinde çalışır; `TELEGRAM_GROUP_ID` yalnız yayın
+> alır. Ayrıca Telegram, **kanal** mesajlarını `channel_post` türünde teslim eder
+> ve bot yalnız `message` güncellemelerini dinler — yani `TELEGRAM_CHAT_ID`'yi
+> kanal kimliği yapsan bile kanalda komut yolu yoktur (grup kimliği verilirse
+> grup yöneticilerinin mesajları `message` olarak gelir ve çalışır; ama o zaman
+> kendi DM komutların susar, bkz. tek sohbet kilidi).
+
 | Komut | Ne yapar |
 |---|---|
 | `/formasyonlar` | Günün canlı formasyonları (hisse, TF, tip, kalite, state, üst/alt seviye) |
@@ -476,7 +501,8 @@ değildir; yalnızca OHLCV önbelleği/geçmiş kaydı için opsiyoneldir.
 > snapshot'ı güncel kabul edilmez; `/panel` yeni veriyle hesaplama başlatır.
 > İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan `20:00`) anında
 > bağımsız bir tam evren analizi ve ayrı rapor çalışır. Analiz sürerken gelen
-> slash komutları cevapsız bırakılır, kuyruklanmaz.
+> slash komutları kuyruklanmaz ama sessiz de kalmaz: "⏳ Analiz sürüyor" bilgi
+> mesajıyla yanıtlanır.
 
 > ⚠️ **Tek tüketici kuralı:** Telegram aynı token için **iki süreç** aynı anda
 > `getUpdates` yaparsa ikincisi `409 Conflict` alır. Termux/PC'de açık kalmış
@@ -486,6 +512,21 @@ değildir; yalnızca OHLCV önbelleği/geçmiş kaydı için opsiyoneldir.
 
 Komut listesi `.env` değişkeni gerektirmez; token/chat_id doğruysa otomatik
 açılır. Token/chat_id yoksa bot eskisi gibi yalnızca alarm gönderir.
+
+> 😴 **Servis uykudayken komut:** Render Free 15 dakika inbound istek almazsa
+> uyur; uyuyan servis DM komutunu göremez (Telegram mesajı HTTP isteği değildir).
+> Bot uyandığında 15 dakikadan eski komutları **çalıştırmaz** (dünkü `/tara`
+> yanlış sonuç üretmesin diye) ama artık sessiz de kalmaz: atlanan komutlar için
+> tek bir "bot uyanık değildi" mesajı, geç teslim edilen `/yardim`, `/durum`
+> gibi okuma komutları için gecikme notlu yanıt gönderilir.
+> Sebebi ve modu **`/health`** çıktısındaki `komut` alanından okuyabilirsin:
+> `{"mod": "webhook|yoklama|kapali", "dinleyici_canli": true, "islenen": 3,
+> "yetkisiz_sohbet": 0, "bayat_atlanan": 12, "mesgul_atlanan": 4,
+> "son_komut_sn_once": 240}`.
+> `yetkisiz_sohbet > 0` ise komutlar başka bir sohbetten (yanlış `chat_id`)
+> geliyordur; `mod: kapali` ise token/chat_id tanımlı değildir.
+> Telegram tarafını (webhook kaydı, teslim hatası, bekleyen güncelleme) tek
+> komutla görmek için: `python deploy_check.py --url https://<servis>.onrender.com`.
 
 Gönderim tarafını yine 4.4'teki `/test` ucuyla doğrula. Gerçek alarm akışı ise
 bir formasyon tetiklendiğinde devreye girer: 48 hisse × 4 zaman dilimi
@@ -504,8 +545,14 @@ yazı. Başka hiçbir şey gerekmez; `RENDER_EXTERNAL_URL` Render tarafından
 otomatik verilir ve adres şöyle kurulur:
 
 ```
-https://formation-bot.onrender.com/webhook/<TELEGRAM_WEBHOOK_SECRET>
+https://formation-bot.onrender.com/webhook
 ```
+
+A7 (Batch 6): sır artık adresin içinde DEĞİL. Doğrulama, `setWebhook` sırasında
+bildirilen `secret_token` ile gelen `X-Telegram-Bot-Api-Secret-Token` başlığından
+yapılır; böylece sır Telegram sunucularına, proxy ve Render erişim loglarına
+düşmez. Eski kayıtlar (`…/webhook/<secret>`) geriye dönük kabul edilir ama sır
+loglara düşer ve bir sonraki açılışta sırsız adresle değiştirilir.
 
 Bot açılışta `setWebhook` çağırır, Telegram'a `secret_token` olarak da bildirir
 ve **yoklamayı kapatır** (aynı token'da `getUpdates` + webhook birlikte olmaz;
@@ -526,9 +573,9 @@ Doğrulama (telefondan tarayıcıyla da yapılabilir):
 
 | Adres / komut | Beklenen |
 |---|---|
-| `https://<servis>.onrender.com/webhook/<secret>` (GET, tarayıcı) | `{"ok": true, "webhook": "hazir", "bot_hazir": true, ...}` |
+| `https://<servis>.onrender.com/webhook` (GET, tarayıcı; eski `<secret>` yolu da çalışır) | `{"ok": true, "webhook": "hazir", "bot_hazir": true, ...}` |
 | `https://api.telegram.org/bot<token>/getWebhookInfo` | `"url"` sizin adres, `"pending_update_count"` düşük, `last_error_message` yok |
-| Render → Logs | `Telegram webhook kuruldu: https://.../webhook/***` ve `Telegram komutları WEBHOOK modunda` |
+| Render → Logs | `Telegram webhook kuruldu: https://.../webhook` ve `Telegram komutları WEBHOOK modunda` |
 
 | Cevap | Anlamı |
 |---|---|
@@ -542,7 +589,7 @@ Doğrulama (telefondan tarayıcıyla da yapılabilir):
 >   webhook kurmaz, logda söyler ve yoklama moduna döner.
 > - Uç, secret tanımlı değilken **404** döner (aynı `/test` kuralı): kurulu
 >   olmayan bir uç kendini belli etmez.
-> - Sır loglara **yazılmaz**; logda `.../webhook/***` görünür.
+> - Sır loglara **yazılmaz**; logda yalnız `.../webhook` görünür (sır başlıkta taşınır).
 > - Render Free uykuya geçerse webhook teslimatı başarısız olur; Telegram bunu
 >   birkaç saat boyunca artan aralıklarla **tekrar dener** (§5 keep-alive
 >   penceresi içinde kalırsanız pratikte kayıp olmaz). Uzun süren uykularda
@@ -560,7 +607,25 @@ uyanması ~1 dakika sürer, o dakika boyunca tarama yapılmaz. Telegram'a 15
 dakikada bir mesaj gelmesi de kendiliğinden koruma sağlamaz, çünkü mesaj
 **outbound** bir istektir.
 
-### Seçenek A — GitHub Actions (public repoda ücretsiz, önerilen) ✅
+> ⚠️ **Ölçüm (Ekim 2026) — Actions cron'u 5 dakikada bir ÇALIŞMIYOR.**
+> Bu repoda `*/5 * * * *` yazmasına rağmen GitHub koşuları seyrek tetikledi:
+> 29 Eylül – 4 Ekim arasında **günde yalnızca 4–6 koşu** düştü (beklenen 288),
+> bunların da çoğu pencere dışı olduğu için **günde 0–3 gerçek ping**. Sonuç:
+> servis gün içinde saatlerce uyuyor ve o sırada yazılan `/yardim`, `/durum`
+> gibi DM komutları SESSİZCE yanıtsız kalıyor — Telegram mesajı Render'a gelen
+> bir HTTP isteği olmadığı için servisi uyandırmaz.
+> Ölçümü istediğin an tekrarla:
+>
+> ```bash
+> gh run list --workflow keepalive.yml --limit 20
+> ```
+>
+> Bu yüzden **Seçenek B (dış monitör) birincil yol olmalı**; Actions tek başına
+> yeterli değildir. Komutların uyku sırasında da çalışması için **§4.6 webhook
+> modu** en etkili çözümdür (Telegram'un POST'u gerçek bir inbound istektir ve
+> servisi uyandırır).
+
+### Seçenek A — GitHub Actions (public repoda ücretsiz; tek başına YETERSİZ) ⚠️
 
 Repo içinde `.github/workflows/keepalive.yml` hazır. **5 dakikada bir**
 `/health` adresine istek atar. Neden 5 ve neden sadece gündüz:
@@ -648,13 +713,22 @@ GitHub, `schedule` tetikleyicisini **yalnızca repo'nun varsayılan branch'inde*
 Bu, `.python-version` için de geçerli: Render hangi branch'i deploy ediyorsa
 oraya merge edilmesi gerekir. İkisi de tek seferde çözülür.
 
-### Seçenek B — cron-job.org / UptimeRobot (ücretsiz, daha basit)
+### Seçenek B — cron-job.org / UptimeRobot (ücretsiz — ÖNERİLEN BİRİNCİL YOL) ✅
 
 `https://cron-job.org` veya UptimeRobot'a üye ol, `https://<servis>.onrender.com/health`
 adresini **her 5 dakikada bir** GET ile çağrılan monitör olarak tanımla
 (gün/gece ayrımı yapmıyorsa da çalışır, sadece 750 saat kotasını daha hızlı
-tüketir). Repo aktivitesi, Actions kotası veya 60 gün kuralıyla hiç işi yoktur;
-GitHub tarafı tamamen kopsa bile çalışır. İkisini birlikte kurmak en sağlamıdır.
+tüketir). Repo aktivitesi, Actions kotası, cron gecikmesi veya 60 gün kuralıyla
+hiç işi yoktur; GitHub tarafı tamamen kopsa bile çalışır. Actions'ı yedek olarak
+bırakmak en sağlamıdır.
+
+### Seçenek B2 — Webhook modu (komutların uykuyu uyandırması, §4.6)
+
+`TELEGRAM_WEBHOOK_SECRET` tanımlıysa Telegram güncellemeyi doğrudan servise
+POST eder. Bu **inbound** bir istek olduğu için uyuyan servisi uyandırır:
+DM'den `/yardim` yazınca servis ~1 dakikada açılır ve komut yanıtlanır
+(Telegram teslim edemezse birkaç saat boyunca tekrar dener). Keep-alive hiç
+çalışmasa bile DM komutları kaybolmaz; yalnızca ilk yanıt gecikir.
 
 ### Seçenek C — Background Worker (ücretli, ama en sağlam)
 
@@ -698,7 +772,8 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | BotFather token'ı | Evet |
 | `TELEGRAM_CHAT_ID` | Kendi Telegram id'n (owner DM) | Evet |
-| `TELEGRAM_CHANNEL_ID` | Public kanal ID'si `-100...` (botu kanala admin ekle) | Evet |
+| `TELEGRAM_GROUP_ID` | **Public kanal hedefi (ÖNERİLEN ad):** `@bisthisseveri` veya `-100...`. Bot kanalda **yönetici** olmalı (Mesaj gönderme; sabit mesaj için Mesajları sabitle). DM olmadan da yayın çalışır. Kontrol: `python deploy_check.py` ve `python kanal_acilis.py --durum` | Evet |
+| `TELEGRAM_CHANNEL_ID` | Aynı şeyin eski adı (hâlâ desteklenir; ikisi de kanal/grup için çalışır) | Evet |
 | `SUPABASE_URL` | `https://<ref>.supabase.co` (opsiyonel uzak cache/state) | Hayır (plain) |
 | `SUPABASE_SERVICE_ROLE_KEY` | `sb_secret_...` veya `eyJ...` | Evet |
 | `BOT_PROFILE` | `Dengeli` / `Hassas` / `Seçici` | Hayır |
@@ -707,17 +782,55 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `POST_CLOSE_ANALYSIS_TIME` | `20:00` (İstanbul, ayrı günlük tam evren analizi) | Hayır |
 | `OFFSESSION_CACHE_MAX_AGE_DAYS` | `14` (fetch yokken izin verilen en eski seans dışı cache) | Hayır |
 | `PUBLIC_MIN_QUALITY` | `80` (public kanala min kalite) | Hayır |
+| `PUBLIC_STATES` | `FORMASYON_TAMAMLANDI,RETEST_BASARILI` (public kanala giden state'ler) | Hayır |
+| `BOT_INSTANCE_ID` | Boş = `hostname:pid`. Aynı Supabase'i paylaşan ikinci kopya varsa farklı ad ver (B10) | Hayır |
 | `LOG_LEVEL` | `INFO` (varsayılan) | Hayır |
-| `TELEGRAM_TEST_KEY` | `/test?k=<değer>` için anahtar (bkz. §4.4) | Evet |
+| `TELEGRAM_TEST_KEY` | `/test` için anahtar; `X-Test-Key` başlığı (bkz. §4.4). `?k=` yalnız `TELEGRAM_TEST_KEY_QUERY=1` iken kabul edilir | Evet |
 | `TELEGRAM_WEBHOOK_SECRET` | Rastgele metin; doluysa komutlar webhook ile gelir (bkz. §4.6). Boş = yoklama | Evet |
-| `TELEGRAM_WEBHOOK_URL` | (Opsiyonel) Tam webhook adresi; boşsa `RENDER_EXTERNAL_URL` + `/webhook/<secret>` | Evet |
+| `TELEGRAM_WEBHOOK_URL` | (Opsiyonel) Tam webhook adresi; boşsa `RENDER_EXTERNAL_URL` + `/webhook` (sırsız) | Evet |
+| `HEALTH_RATE_LIMIT_PER_MIN` | `60` — public HTTP uçlarında IP başına dakikalık istek limiti (0 = kapalı) | Hayır |
+| `TELEGRAM_TEST_KEY_QUERY` | `1` — `/test?k=` sorgu anahtarı kabul edilsin mi (0 = yalnız başlık) | Hayır |
+| `HEARTBEAT_MIN_ARALIK_SN` | `60` — yerel heartbeat dosyası yazım aralığı (B5) | Hayır |
+| `HEARTBEAT_UZAK_ARALIK_SN` | `300` — heartbeat'in Supabase'e yazım aralığı (B5) | Hayır |
+| `PICKLE_CACHE` | `0` — 1 ise eski `.pkl` kopyası da yazılır (JSON birincil; A8) | Hayır |
+| `MARKET_SUFFIX` | `.IS` — Yahoo sembol eki (BIST). BIST dışı pazar izlerseniz değiştirin | Hayır |
+| `STOCK_UNIVERSE` | Virgülle ayrılmış semboller (`THYAO,GARAN`); boş = BIST 50 | Hayır |
+| `KARNE_GUNU` | `4` — karne gönderim günü (0=Pazartesi ... 4=Cuma) | Hayır |
+| `KARNE_HEDEF_ATR` | `1.5` — kırılım sonrası "hedef" sayılan lehte hareket (ATR katı) | Hayır |
+| `KARNE_STOP_ATR` | `1.0` — "stop" sayılan alehte hareket (ATR katı) | Hayır |
+| `KARNE_HORIZON_BAR` | `10` — sinyalden sonra izlenen bar sayısı | Hayır |
+| `DATA_DIR` | Kalıcı veri dizini. Render'da varsayılan `/tmp/formation-bot-data` (repo diski geçici; kalıcı veri Supabase'de). Kalıcı disk bağlarsanız buradan verin | Hayır |
+| `SEED_DATA_DIR` | `./bot_data` — DATA_DIR'de dosya yoksa **yalnız okuma** için kullanılan seed veri | Hayır |
+| `LOG_DIR` | `/var/log/bist-bot`; yazılamıyorsa otomatik `./logs` | Hayır |
+| `SUPABASE_STORE_PREFIX` | `formation-bot:` — `bot_store` tablosundaki anahtar ön eki (aynı tabloyu paylaşan ikinci örnekle çakışmayı önler; `off` = eski öneksiz davranış) | Hayır |
 | `RENDER_EXTERNAL_URL` | Render **otomatik** verir (`https://<servis>.onrender.com`); elle eklemeyin | Hayır |
 
 Bildirim akışı: teyitli kırılım, başarılı retest, tamamlanma ve başarısız kırılım
 anında gönderilir. Sıkışma/hazırlık/adayı/retest bekleme durumları slot başına
 bellekte güncellenir ve 18:45 DM kapanış özetinde en yüksek kalite puanlı en fazla
-12 aday olarak yer alır. Bu geçici kuyruk restart'ta sıfırlanır; 20:00 tam evren
+12 aday olarak yer alır. Bu kuyruk artık kalıcıdır (`state:digest_pending`): restart'ta
+kaybolmaz, 18:45 kaçırıldıysa açılışta telafi edilir. Engel nedeniyle gönderilemeyen
+acil alarmlar da kuyruğa girip (`state:telegram_acil_kuyruk`) engel kalkınca gider; 20:00 tam evren
 raporu ayrı kalır.
+
+### 6.1 Haftalık doğruluk karnesi (canlıda nasıl çalışır)
+
+* Karne **her Cuma** gün sonu mesajının altında gelir (18:45 `📋 Günlük Özet`;
+  gönderim kaçarsa 20:00 `🌙 GÜN SONU ANALİZİ` altında). Haftada bir kez gider.
+* Anında görmek için Telegram'dan `/karne` (bu hafta) veya `/karne 30` (son 30 gün).
+* Sinyal defteri **yerel dosyadadır**: `DATA_DIR/karne_defteri.json`. **Supabase
+  kurmak zorunlu değildir**; Supabase yoksa karne yine tam çalışır.
+* Render Free'de `DATA_DIR=/tmp/formation-bot-data` **geçicidir** (redeploy/restart
+  siler). Bu yüzden `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` tanımlıysa defter
+  `state:karne_defteri` anahtarına **yalnız yedek** olarak da yazılır ve açılışta
+  yerel defterle birleştirilir — haftalık karne restart'ta boşalmaz. Supabase
+  tanımlı değilse hiçbir uzak istek yapılmaz.
+* Karne içeriği: formasyon sayısı + zaman dilimi dağılımı, hisse listesi (adet),
+  kırılım sayısı (yukarı/aşağı), "N bar içinde hedef / nötr / stop", kırılım
+  yönünde kapatan oranı, ortalama lehte/aleyhte hareket, TF ve kalite performansı,
+  en iyi/en kötü sinyaller ve huni (`kırılım → retest → tamamlanan/başarısız`).
+* Mesaj sınırı: karne özetle birlikte 3900 karakteri aşarsa **ayrı mesaj** olarak
+  gönderilir (kesilmez).
 
 Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 (redeploy). Loglarını **Logs → Live logs** veya **Events** sekmesinden izle.
@@ -736,9 +849,12 @@ Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 | Merge ettim ama davranış değişmedi | Render yeni commit'i deploy etmemiş olabilir: `deploy_check.py` canlı sürümü (`/health` içindeki `commit`) yerel HEAD ile karşılaştırır. Dashboard → Events → yoksa **Manual Deploy → Deploy latest commit**; Auto-Deploy'un açık olduğundan emin ol (B8) |
 | Sayfa "Render is loading..." | Free instance uyuyor, ~1 dk sonra düzelir (keep-alive kurulmadıysa) |
 | Telegram mesajleri gelmiyor | Logda `Telegram bağlantısı OK` yok → token/chat_id hatalı; bot'a `/start` atılmamış olabilir |
-| Bot komutlara cevap vermiyor | Logda `Telegram komut dinleyicisi başladı` (yoklama) ya da `Telegram komutları WEBHOOK modunda` var mı? `HTTP 409` varsa aynı token'ı başka bir kopya (Termux/PC) dinliyor → onu kapatın |
+| Bot komutlara cevap vermiyor | Önce `/health` içindeki `komut` alanına bak: `mod`, `dinleyici_canli`, `yetkisiz_sohbet`, `bayat_atlanan`, `son_komut_sn_once`. Sonra `python deploy_check.py --url https://<servis>.onrender.com` → webhook kaydı/teslim hatası/bekleyen güncelleme. Logda `Telegram komut dinleyicisi başladı` (yoklama) ya da `Telegram komutları WEBHOOK modunda` var mı? `HTTP 409` varsa aynı token'ı başka bir kopya (Termux/PC) dinliyor → onu kapatın |
+| DM'den komut yazıyorum, hiç cevap yok (gece/hafta sonu) | Servis uyuyor (Render Free 15 dk). Telegram mesajı servisi uyandırmaz. Keep-alive'ı dış monitörle güçlendir (§5 Seçenek B) veya webhook moduna geç (§4.6); ölçüm: `gh run list --workflow keepalive.yml --limit 20` — günde 288 değil 4-6 koşu görürsen GitHub cron'u beklediğin gibi çalışmıyor |
+| Komut yanıtı "Bot uyanık değildi…" diyor | Komut 15 dakikadan eski teslim edilmiş (servis o sırada uyuyordu). Durum değiştiren komutlar geç çalıştırılmaz; güncel sonuç için yeniden gönderin. `/yardim`,`/durum` gibi okuma komutları gecikme notuyla yanıtlanır |
 | Webhook adresi 404 döndürüyor | `TELEGRAM_WEBHOOK_SECRET` tanımlı değil (ya da deploy edilmedi). §4.6 |
-| Webhook adresi 403 döndürüyor | Adresteki secret yanlış; Render'daki değerle birebir aynı olmalı (boşluk/kesme yok) |
+| `/test` 429 döndürüyor | Dakikalık istek limiti aşıldı (`HEALTH_RATE_LIMIT_PER_MIN`); bir dakika bekleyin |
+| Webhook adresi 403 döndürüyor | `X-Telegram-Bot-Api-Secret-Token` başlığı eksik/yanlış (sırsız yolda zorunlu). Eski `<secret>` yolunda adresteki secret Render'daki değerle birebir aynı olmalı |
 | Webhook adresi 503 döndürüyor | Normal: servis uyanıyor ya da bot komutları henüz kurmadı; Telegram tekrar dener |
 | `getWebhookInfo` `last_error_message` dolu | Adres yanlış/erişilemez ya da HTTPS değil. `TELEGRAM_WEBHOOK_URL`'i temizleyip `RENDER_EXTERNAL_URL` ile otomatik üretime dönün (§4.6) |
 | Webhook açtım, komutlar bir süre sonra durdu | Render Free uykuya geçmiş olabilir. Telegram başarısız teslimatı bir süre tekrar dener; keep-alive penceresini genişletin (`KEEPALIVE_ALWAYS=true`, §5) |
