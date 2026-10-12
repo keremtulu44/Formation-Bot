@@ -6,8 +6,9 @@ kararları ve gerekçeleri:
 
 - **Yetki**: Başka bir sohbetten gelen mesajlar sessizce yok sayılır (loglanır,
   cevap verilmez). Böylece token'ı bilen biri botu kurcalayamaz.
-- **Backlog atlama**: Açılışta eski mesajlar TÜKETİLMEZ, atlanır. Aksi halde
-  servis 3 gün uyuduktan sonra dünkü "/tara" komutu yeniden çalışırdı. Atlanan
+- **Backlog atlama**: Açılışta eski komutlar çalıştırılmadan offset ile atlanır;
+  sayfalar doğru onaylanır ve ilk taze update korunur. Geçici ağ hatasında
+  backlog tamamlanana kadar normal polling başlamaz (fail-closed). Atlanan
   mesaj varsa kullanıcıya TEK bir bilgi mesajı gider ("bot uyanık değildi") —
   sessiz kaybolma, "komutlar çalışmıyor" şikâyetinin en büyük sebebiydi.
 - **Geç teslim**: Webhook tekrarı ya da açılış nedeniyle 15 dakikadan eski bir
@@ -15,9 +16,11 @@ kararları ve gerekçeleri:
   komutları (yardim/durum) gecikme notuyla yanıtlanır.
 - **Teşhis**: `durum()` sayaçları `/health` alanına girer (islenen, yetkisiz,
   bayat, son komut yaşı) — "bot çalışıyor ama komut yok" farkı dışarıdan görünür.
-- **Onay (offset)**: Her güncelleme işlendikten hemen sonra `offset = id + 1`
-  ile onaylanır; `update_id` için küçük bir küme tutulur (restart sonrası aynı
-  komutun iki kez çalışmaması için).
+- **Onay (offset)**: Komut cevabı dayanıklı outbox'a yazıldıktan sonra
+  `offset = id + 1` ile onaylanır. Aynı süreçte yazma başarısızsa cevap bellekte
+  tutulur ve update yeniden denenir; restart sonrası outbox'taki `update_id`
+  kaydı handler'ın tekrar çalışmasını önler. `update_id` için küçük bir küme de
+  tutulur (restart sonrası aynı komutun iki kez çalışmaması için).
 - **409 Conflict**: Aynı token'la başka bir süreç de `getUpdates` yapıyorsa
   (örn. Termux'ta açık kalmış ikinci kopya) Telegram bu kodu döner. Dinleyici
   durur ve logda net söylenir — sonsuz hata döngüsüne girmez.
@@ -34,6 +37,8 @@ import logging
 import threading
 import time
 from typing import Any, Callable, Dict, Optional, Tuple
+
+from secrets_redaction import redact_sensitive_text
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +86,8 @@ class TelegramCommandListener:
         poll_timeout: int = 25,
         stop_event: Optional[threading.Event] = None,
         komutlari_yoksay: Optional[Callable[[], bool]] = None,
+        response_sender: Optional[Callable[[int, str], bool]] = None,
+        response_exists: Optional[Callable[[int], bool]] = None,
         bayat_sinir_sn: int = BACKLOG_SINIR_SN,
         bayat_bildirim: bool = True,
     ) -> None:
@@ -89,10 +96,13 @@ class TelegramCommandListener:
         self.handlers = dict(handlers or {})
         self.help_text = help_text
         self.komutlari_yoksay = komutlari_yoksay
+        self.response_sender = response_sender
+        self.response_exists = response_exists
         self.poll_timeout = max(1, int(poll_timeout))
         self._session = session
         self._offset: Optional[int] = None
         self._gorulen: Dict[int, float] = {}
+        self._pending_reply: Dict[int, str] = {}
         self._son_komut_zamani: Dict[str, float] = {}
         self._stop = stop_event or threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -178,12 +188,38 @@ class TelegramCommandListener:
 
     # --- ana döngü -----------------------------------------------------
     def run_forever(self) -> None:
-        self._backlog_atla()
+        # Polling yalnızca backlog sınıflandırması BİTTİKTEN sonra başlar. Ağ
+        # hatasında ilk sıradan yoklama süzülmemiş bir tekrar oynatmasın.
+        while not self._stop.is_set():
+            try:
+                backlog_ready = self._backlog_atla()
+            except Exception as exc:  # noqa: BLE001 - thread asla ölmemeli
+                logger.warning(
+                    "Telegram backlog yoklaması hata verdi: %s",
+                    redact_sensitive_text(exc, self.token),
+                )
+                backlog_ready = False
+            if isinstance(backlog_ready, str):
+                logger.error(f"Telegram komut dinleyicisi durdu: {backlog_ready}")
+                return
+            if backlog_ready:
+                self._backoff = 5.0
+                break
+            logger.warning(
+                "Telegram backlog henüz güvenle sınıflandırılamadı; %.0f sn sonra tekrar",
+                self._backoff,
+            )
+            self._stop.wait(self._backoff)
+            self._backoff = min(self._backoff * 2, 60.0)
+
         while not self._stop.is_set():
             try:
                 fatal = self.poll_once()
             except Exception as exc:  # noqa: BLE001 - thread asla ölmemeli
-                logger.warning(f"Telegram komut yoklaması hata verdi: {exc}")
+                logger.warning(
+                    "Telegram komut yoklaması hata verdi: %s",
+                    redact_sensitive_text(exc, self.token),
+                )
                 fatal = None
             if fatal:
                 logger.error(f"Telegram komut dinleyicisi durdu: {fatal}")
@@ -192,34 +228,48 @@ class TelegramCommandListener:
                 return
         logger.info("Telegram komut dinleyicisi kapandı")
 
-    def _backlog_atla(self, azami_tur: int = 20) -> None:
+    def _backlog_atla(self, azami_tur: int = 20):
         """Açılıştaki BAYAT komutları atla, yeni komutları koru.
 
         Neden: servis gece uyuyabilir. Sabah açıldığında dün akşam yazılmış
         "/tara" yeniden çalışmamalı, ama 3 dakika önce yazılmış komut
         kaybolmamalı. Kural: `BACKLOG_SINIR_SN`'den (15 dk) eski mesajlar
         onaylanıp geçilir; ilk taze mesajdan itibaren normal yoklama devralır.
+        Başarılı sınıflandırmada True, geçici hatada False döner. Geçici hata
+        normal polling'i başlatmaz (fail-closed); aynı backlog offset'iyle geri
+        çekilerek denenir. 401/409 fatal sayılır ve hata metni döner.
         """
         esik = time.time() - BACKLOG_SINIR_SN
-        offset = self._offset
         atlanan = 0
         for _ in range(azami_tur):
             params = {"timeout": 0, "limit": 100, "allowed_updates": '["message"]'}
-            if offset is not None:
-                params["offset"] = offset
+            if self._offset is not None:
+                params["offset"] = self._offset
             try:
                 yanit = self._api("getUpdates", params, timeout=15)
-            except Exception as exc:  # noqa: BLE001 - açılışta önemsiz
-                logger.debug(f"Backlog atlama yapılamadı: {exc}")
-                return
-            if getattr(yanit, "status_code", 0) != 200:
-                return
+            except Exception as exc:  # noqa: BLE001 - backlog tamamlanana dek fail-closed
+                logger.debug(
+                    "Backlog atlama yapılamadı: %s", redact_sensitive_text(exc, self.token)
+                )
+                return False
+
+            kod = getattr(yanit, "status_code", 0)
+            if kod == 401:
+                return "HTTP 401 — TELEGRAM_BOT_TOKEN geçersiz (BotFather'dan yenileyin)"
+            if kod == 409:
+                return ("HTTP 409 — aynı token'ı başka bir süreç de dinliyor; "
+                        "Termux/PC'de açık ikinci kopya varsa kapatın, aksi halde komutlar çalışmaz")
+            if kod != 200:
+                logger.warning("Telegram backlog getUpdates beklenmeyen yanıt: HTTP %s", kod)
+                return False
             try:
                 guncellemeler = (yanit.json() or {}).get("result") or []
-            except ValueError:
-                return
+            except (AttributeError, TypeError, ValueError):
+                logger.warning("Telegram backlog getUpdates JSON çözümlenemedi")
+                return False
             if not guncellemeler:
-                break
+                self._bayat_ozetle(atlanan)
+                return True
 
             taze_index = None
             for i, guncelleme in enumerate(guncellemeler):
@@ -228,37 +278,54 @@ class TelegramCommandListener:
                     taze_index = i
                     break
 
-            if taze_index is None:
-                # Partinin tamamı bayat: onayla, sonraki partiyi iste.
+            if taze_index is not None:
+                # offset, ilk taze update'in ID'siyle yalnız bayat öneki onaylanır;
+                # Telegram bu update'i sonraki yoklamada yine getirir.
+                try:
+                    taze_id = int(guncellemeler[taze_index].get("update_id", 0))
+                except (AttributeError, TypeError, ValueError):
+                    return False
+                if self._offset is None or taze_id > self._offset:
+                    self._offset = taze_id
+                self._bayat_ozetle(atlanan)
+                return True
+
+            # Partinin tamamı bayat: offset hemen ilerletilir ki sonraki sayfa ya
+            # da geçici bir ağ hatası offset'i geri alamazsın.
+            try:
                 son_id = int(guncellemeler[-1].get("update_id", 0))
-                atlanan += len(guncellemeler)
-                offset = son_id + 1
-                continue
+            except (AttributeError, TypeError, ValueError):
+                return False
+            yeni_offset = son_id + 1
+            if self._offset is None or yeni_offset > self._offset:
+                self._offset = yeni_offset
+            atlanan += len(guncellemeler)
 
-            # İlk taze mesajdan itibaren normal akış (bu mesaj tüketilmez).
-            self._offset = int(guncellemeler[taze_index].get("update_id", 0))
-            break
-        else:
-            self._offset = offset
-            logger.warning(f"Telegram backlog atlama {azami_tur} turda bitmedi; offset={self._offset}")
-            return
+        logger.warning(
+            "Telegram backlog atlama %s turda bitmedi; offset=%s",
+            azami_tur, self._offset,
+        )
+        return False
 
-        if atlanan:
-            if offset is not None:
-                self._offset = offset
-            self._sayac["bayat"] += atlanan
-            logger.info(f"Telegram komut dinleyicisi: {atlanan} bayat mesaj atlandı (offset={self._offset})")
-            # Sessiz kaybolmasın: kullanıcı "neden hiç cevap gelmedi?" diye
-            # düşünmek yerine servisin uyuduğunu ve komutun yanıtlanmadığını görsün.
-            if self.bayat_bildirim:
-                self._cevapla(
-                    f"😴 Bot uyanık değildi: {atlanan} eski komut yanıtlanmadı "
-                    "(eskimiş /tara,/panel yanlış sonuç üretmesin diye çalıştırılmaz).\n"
-                    f"{int(BACKLOG_SINIR_SN // 60)} dakikadan eski mesajlar açılışta atlanır; "
-                    "güncel komutu yeniden gönderin."
-                )
-        else:
+    def _bayat_ozetle(self, atlanan: int) -> None:
+        """Backlog turu özeti: teşhis sayacı + kullanıcının gördüğü TEK mesaj."""
+        if not atlanan:
             logger.info("Telegram komut dinleyicisi: bekleyen mesaj yok")
+            return
+        self._sayac["bayat"] += atlanan
+        logger.info(
+            "Telegram komut dinleyicisi: %s bayat mesaj atlandı (offset=%s)",
+            atlanan, self._offset,
+        )
+        # Sessiz kaybolmasın: kullanıcı "neden hiç cevap gelmedi?" diye
+        # düşünmek yerine servisin uyuduğunu ve komutun yanıtlanmadığını görsün.
+        if self.bayat_bildirim:
+            self._cevapla(
+                f"💤 Bot uyanık değildi: {atlanan} eski komut yanıtlanmadı "
+                "(eskimiş /tara,/panel yanlış sonuç üretmesin diye çalıştırılmaz).\n"
+                f"{int(BACKLOG_SINIR_SN // 60)} dakikadan eski mesajlar açılışta atlanır; "
+                "güncel komutu yeniden gönderin."
+            )
 
     def poll_once(self) -> Optional[str]:
         """Tek yoklama turu. Dönen değer: durdurma sebebi (yoksa None)."""
@@ -272,7 +339,10 @@ class TelegramCommandListener:
         try:
             yanit = self._api("getUpdates", params)
         except Exception as exc:  # noqa: BLE001 - ağ hatası: geri çekilme
-            logger.warning(f"Telegram getUpdates ağ hatası ({exc}); {self._backoff:.0f} sn sonra tekrar")
+            logger.warning(
+                "Telegram getUpdates ağ hatası (%s); %.0f sn sonra tekrar",
+                redact_sensitive_text(exc, self.token), self._backoff,
+            )
             self._stop.wait(self._backoff)
             self._backoff = min(self._backoff * 2, 60.0)
             return None
@@ -298,16 +368,28 @@ class TelegramCommandListener:
 
         for guncelleme in guncellemeler:
             self._islenenleri_temizle()
+            update_id = guncelleme.get("update_id") if isinstance(guncelleme, dict) else None
             try:
                 self.handle_update(guncelleme)
             except Exception as exc:  # noqa: BLE001 - tek güncelleme döngüyü bozmasın
-                logger.error(f"Telegram komutu işlenemedi: {exc}", exc_info=True)
-            finally:
-                try:
-                    self._offset = int(guncelleme.get("update_id", 0)) + 1
-                except (TypeError, ValueError):
-                    pass
+                logger.error(
+                    "Telegram komutu işlenemedi: %s",
+                    redact_sensitive_text(exc, self.token),
+                )
+            # Cevap outbox'a dayanıklı biçimde yazılamadıysa update ACK edilmez:
+            # aynı süreçte saklanan cevap tekrar denenir, komut yan etkisi yeniden
+            # çalıştırılmaz. Sonraki getUpdates turu aynı update_id'yi getirir.
+            if isinstance(update_id, int) and update_id in self._pending_reply:
+                break
+            try:
+                self._offset = int(update_id) + 1
+            except (TypeError, ValueError):
+                pass
         return None
+
+    def update_waiting_for_delivery(self, update_id) -> bool:
+        """Webhook/polling ACK'ini bekletmesi gereken, outbox'ta cevabi bekleyen update."""
+        return isinstance(update_id, int) and update_id in self._pending_reply
 
     def _islenenleri_temizle(self) -> None:
         if len(self._gorulen) < 500:
@@ -317,14 +399,35 @@ class TelegramCommandListener:
 
     # --- güncelleme işleme ---------------------------------------------
     def handle_update(self, update: Dict[str, Any]) -> Optional[str]:
-        """Yetki + hız kontrolünden geçen komutu işler, cevabı gönderir.
+        """Yetki + hız kontrolünden geçen komutu işler, cevabı gönderir/kuyruğa alır.
 
-        Dönen değer: gönderilen cevap metni (test edilebilirlik için) ya da None.
+        Dönen değer test için cevap metnidir; dayanıklı cevap kuyruğa alınamazsa
+        None döner ve polling/webhook katmanı update'i ACK etmez.
         """
-        update_id = update.get("update_id")
+        update_id = update.get("update_id") if isinstance(update, dict) else None
         if isinstance(update_id, int):
+            if update_id in self._pending_reply:
+                # Cevap bellekte bekliyor: handler YENİDEN çalıştırılmaz, yalnız
+                # teslim denenir.
+                return self._cevapla(self._pending_reply[update_id], update_id)
+
+            if self.response_exists is not None:
+                try:
+                    reply_exists = bool(self.response_exists(update_id))
+                except Exception as exc:  # noqa: BLE001 - kaynağı teşhis et, handler devam eder
+                    logger.warning(
+                        "Komut cevap kaydı sorgulanamadı: %s",
+                        redact_sensitive_text(exc, self.token, self.allowed_chat_id),
+                    )
+                    reply_exists = False
+                if reply_exists:
+                    # Restart sonrası: cevap outbox'ta kayıtlı, komut tekrar çalışmaz.
+                    self._gorulen[update_id] = time.time()
+                    self._cevapla("", update_id)
+                    return None
+
             if update_id in self._gorulen:
-                logger.debug(f"Telegram update {update_id} zaten işlenmişti, atlandı")
+                logger.debug("Telegram update %s zaten işlenmişti, atlandı", update_id)
                 return None
             self._gorulen[update_id] = time.time()
 
@@ -335,12 +438,14 @@ class TelegramCommandListener:
         if str(sohbet_id) != self.allowed_chat_id:
             # Sayaç + maskeli kimlik: "DM'imden yazıyorum ama cevap yok" durumunun
             # en sık sebebi, gelen sohbetin TELEGRAM_CHAT_ID ile eşleşmemesidir.
+            # Kimlik tam yazılmaz (kişisel veri), son 4 hane yeterli.
             self._sayac["yetkisiz"] += 1
             self._son_yetkisiz_chat = sohbet_id
             logger.warning(
                 "Telegram komutu yetkisiz sohbetten geldi (chat_id=%s, tip=%s, beklenen=%s) — yok sayıldı",
-                sohbet_id or "?", (mesaj.get("chat") or {}).get("type") or "?",
-                self.allowed_chat_id or "?",
+                self._maskele(sohbet_id) or "?",
+                (mesaj.get("chat") or {}).get("type") or "?",
+                self._maskele(self.allowed_chat_id) or "?",
             )
             return None
         if not metin:
@@ -354,9 +459,9 @@ class TelegramCommandListener:
             sohbet_tipi = str((mesaj.get("chat") or {}).get("type") or "").lower()
             if sohbet_tipi and sohbet_tipi != "private":
                 logger.debug("Grup sohbetinde komut olmayan mesaj yok sayıldı (chat_id=%s)",
-                             sohbet_id or "?")
+                             self._maskele(sohbet_id) or "?")
                 return None
-            return self._cevapla(self.help_text or "Komut listesi için /yardim yazın.")
+            return self._cevapla(self.help_text or "Komut listesi için /yardim yazın.", update_id)
 
         # Geç teslim edilen komut (bot uykudayken yazıldı; webhook tekrarı ya da
         # açılış) → durum değiştiren komutlar çalıştırılmaz, okuma komutları
@@ -371,53 +476,61 @@ class TelegramCommandListener:
                             komut, yas_sn / 60)
                 return self._cevapla(
                     self._bayat_uyarisi(komut, yas_sn)
-                    + " Eski komut yeniden çalıştırılmaz; güncel sonuç için şimdi tekrar gönderin."
+                    + " Eski komut yeniden çalıştırılmaz; güncel sonuç için şimdi tekrar gönderin.",
+                    update_id,
                 )
             gecikme_notu = self._bayat_uyarisi(komut, yas_sn) + " Yine de yanıtlanıyor.\n\n"
 
         # Uzun analiz sırasında komut iş kuyruğuna KONMAZ (aynı anda tek iş) ama
-        # artık sessiz de kalınmaz: kullanıcı "komut çalışmıyor" sanmasın diye
-        # kısa bir bilgi mesajı gider. Aynı kontrol webhook ve getUpdates
-        # yollarında çalışır.
+        # sessiz de kalınmaz: kullanıcı "komut çalışmıyor" sanmasın diye kısa bir
+        # bilgi mesajı gider. Aynı kontrol webhook ve getUpdates yollarında çalışır.
         try:
             mesgul = bool(self.komutlari_yoksay is not None and self.komutlari_yoksay())
         except Exception as exc:
-            logger.warning(f"Telegram komut meşguliyet kontrolü başarısız: {exc}")
+            logger.warning(
+                "Telegram komut meşguliyet kontrolü başarısız: %s",
+                redact_sensitive_text(exc, self.token, self.allowed_chat_id),
+            )
             mesgul = False
         if mesgul:
             self._sayac["mesgul"] += 1
             logger.info(f"Telegram /{komut}: analiz sürerken yok sayıldı (bilgi mesajı gönderildi)")
             return self._cevapla(
-                f"⏳ Analiz sürüyor; /{komut} şu an çalıştırılmadı (aynı anda tek iş çalışır).\n"
-                "Sonuç bitince bu sohbete gelecek — sonra komutu yeniden gönderin."
+                f"\u23f3 Analiz sürüyor; /{komut} şu an çalıştırılmadı (aynı anda tek iş çalışır).\n"
+                "Sonuç bitince bu sohbete gelecek — sonra komutu yeniden gönderin.",
+                update_id,
             )
 
         simdi = time.monotonic()
         son = self._son_komut_zamani.get(komut, 0.0)
         if simdi - son < MIN_KOMUT_ARALIK_SN:
-            logger.info(f"Telegram komutu çok sık geldi (/={komut}) — yok sayıldı")
+            logger.info("Telegram komutu çok sık geldi (/%s) — yok sayıldı", komut)
             return None
         self._son_komut_zamani[komut] = simdi
 
         isleyici = self.handlers.get(komut)
         if isleyici is None:
             return self._cevapla(
-                f"Bilinmeyen komut: /{komut}\n\n" + (self.help_text or "Komut listesi için /yardim yazın.")
+                f"Bilinmeyen komut: /{komut}\n\n" + (self.help_text or "Komut listesi için /yardim yazın."),
+                update_id,
             )
 
-        logger.info(f"Telegram komutu: /{komut} {arguman}".rstrip())
+        # Argüman loglanmaz: komut adı teşhis için yeterli, sohbet kimliği/argüman
+        # loga sızmamalı.
+        logger.info("Telegram komutu: /%s", komut)
         try:
             cevap = isleyici(arguman)
-        except Exception as exc:  # noqa: BLE001 - kullanıcıya sade hata
-            logger.error(f"/{komut} işleyicisi hata verdi: {exc}", exc_info=True)
+        except Exception as exc:  # noqa: BLE001 - kullanıcıya sade, maskelenmiş hata
+            safe_error = redact_sensitive_text(exc, self.token, self.allowed_chat_id)
+            logger.error("/%s işleyicisi hata verdi: %s", komut, safe_error, exc_info=True)
             self._sayac["hata"] += 1
-            cevap = f"❌ /{komut} çalıştırılamadı: {str(exc)[:200]}"
+            cevap = f"\u274c /{komut} çalıştırılamadı: {safe_error[:200]}"
         if not cevap:
             return None
         self._sayac["islenen"] += 1
         self._son_komut_adi = komut
         self._son_komut_ts = time.time()
-        return self._cevapla(gecikme_notu + cevap)
+        return self._cevapla(gecikme_notu + cevap, update_id)
 
     @staticmethod
     def _mesaj_yasi_sn(mesaj: Dict[str, Any]) -> Optional[float]:
@@ -430,8 +543,26 @@ class TelegramCommandListener:
             return None
         return max(0.0, time.time() - float(tarih))
 
-    def _cevapla(self, text: str) -> Optional[str]:
-        govde = kirp(text)
+    def _cevapla(self, text: str, update_id=None) -> Optional[str]:
+        # Kırpma ÖNCESİ redakte et: Telegram boyur sınırında bölünen bir sır
+        # bire-bir eşleştirmeden kaçabilirdi.
+        govde = kirp(redact_sensitive_text(str(text), self.token))
+        if self.response_sender is not None and isinstance(update_id, int):
+            try:
+                queued = bool(self.response_sender(update_id, govde))
+            except Exception as exc:  # noqa: BLE001 - cevap dayanıklı olana dek ACK etme
+                logger.warning(
+                    "Telegram cevap outbox'ı hata verdi: %s",
+                    redact_sensitive_text(exc, self.token, self.allowed_chat_id),
+                )
+                queued = False
+            if queued:
+                self._pending_reply.pop(update_id, None)
+                return govde
+            self._pending_reply[update_id] = govde
+            logger.error("Telegram update %s cevabı dayanıklı kuyruğa yazılamadı", update_id)
+            return None
+
         try:
             yanit = self._session_obj().post(
                 f"{API_BASE}/bot{self.token}/sendMessage",
@@ -439,9 +570,21 @@ class TelegramCommandListener:
                 timeout=20,
             )
             if getattr(yanit, "status_code", 0) != 200:
-                logger.warning(f"Telegram cevabı gönderilemedi: HTTP {getattr(yanit, 'status_code', '?')}")
+                logger.warning(
+                    "Telegram cevabı gönderilemedi: HTTP %s",
+                    getattr(yanit, "status_code", "?"),
+                )
+                if isinstance(update_id, int):
+                    self._pending_reply[update_id] = govde
                 return None
         except Exception as exc:  # noqa: BLE001
-            logger.warning(f"Telegram cevabı gönderilemedi: {exc}")
+            logger.warning(
+                "Telegram cevabı gönderilemedi: %s",
+                redact_sensitive_text(exc, self.token, self.allowed_chat_id),
+            )
+            if isinstance(update_id, int):
+                self._pending_reply[update_id] = govde
             return None
+        if isinstance(update_id, int):
+            self._pending_reply.pop(update_id, None)
         return govde

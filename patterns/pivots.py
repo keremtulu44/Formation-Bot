@@ -25,16 +25,20 @@ class PivotSide:
     def last_price(self) -> Optional[float]:
         return self.prices[-1] if self.prices else None
 
-    def add(self, price: float, source_bar: int, confirm_bar: int, same_open_type: bool) -> Tuple[bool, bool]:
-        """Pine: f_add_pivot — aynı tip pivotta daha ekstrem değer mevcut (kilitsiz) pivoru GÜNCELLER."""
+    def add(self, price: float, source_bar: int, confirm_bar: int, same_open_type: bool,
+            *, is_high: bool = True) -> Tuple[bool, bool]:
+        """Pine: f_add_pivot — yönüne göre daha ekstrem olan aynı tip pivotu günceller.
+
+        `is_high` defaults to the historical high-side behavior for legacy callers;
+        low-side callers pass False explicitly.
+        """
         accepted = False
         appended = False
         count = len(self.prices)
         if count > 0:
             last_price = self.prices[-1]
             last_locked = self.locked[-1]
-            stronger_extreme = price > last_price  # is_high ve is_low için aynı: ekstrem = "daha büyük üst" ya da "daha küçük alt"
-            # DİKKAT: Pine'da strongerExtreme isHigh ? price > last : price < last.
+            stronger_extreme = price > last_price if is_high else price < last_price
             if same_open_type:
                 if not last_locked and stronger_extreme:
                     self.prices[-1] = price

@@ -6,6 +6,22 @@ import os
 from datetime import date, time
 import pytz
 
+
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _resolve_app_path(value, default):
+    """Resolve relative storage/log paths against the application directory.
+
+    This keeps ``./bot_data`` and ``./logs`` stable when systemd, CI, or an
+    operator starts the process from a different working directory.
+    """
+    raw = str(value or "").strip() or str(default)
+    path = os.path.expanduser(raw)
+    if not os.path.isabs(path):
+        path = os.path.join(_APP_DIR, path)
+    return os.path.abspath(path)
+
 # .env desteği - local ve /etc/bist-bot.env için
 try:
     from dotenv import load_dotenv
@@ -106,14 +122,14 @@ STALE_BAR_UYARI_DK = 120          # en yeni 1H mum bu kadardır eskiyse "kör ç
 OFFSESSION_CACHE_MAX_AGE_DAYS = max(1, _env_int("OFFSESSION_CACHE_MAX_AGE_DAYS", 14))  # seans dışı son mevcut veriye izin
 TERMINAL_TAZE_BAR = 3             # terminal (ölü) formasyon bu kadar bar içindeyse haber ver
 
-# --- BIST RESMİ TATİL TAKVİMİ ---
-# Kaynak: https://www.borsaistanbul.com/en/official-holidays (resmî BIST takvimi),
-# 3 Türk aracı kaynakla çapraz doğrulandı (2026-09-27). markethours.io'nun İslami
-# bayram tarihleri YANLIŞTI (31 Mart / 7-10 Haziran), kullanılmadı.
-# YARIM GÜN: seans 13:00'te kapanır (son 1H mum 12:30 etiketli, 12:00-13:00).
-# DİKKAT: İslami bayram tarihleri HER YIL DEĞİŞİR - her yıl başında güncellenmeli.
-# Eksik takvime karşı koruma: veri kaynaklı "veri yok modu" (data.py) devrede -
-# takvimde olmasa bile veri gelmiyorsa bot tatil moduna geçer.
+# --- BIST TATİL TAKVİMİ (manuel data-layer politikası; exhaustive değildir) ---
+# Borsa İstanbul'un 2026 Official Holidays sayfası 19 Mar, 26 May ve 28 Eki yarım
+# günlerini 13:00'e kadar listeliyor. Genelgenin Equity Market tablosu kapanış
+# saatini vermediğinden 13:00 equity seans saati genel sayfayla sınırlı doğrulandı.
+# Bu tarih haritası manuel kalır; özellikle dini bayramlar her yıl gözden geçirilmelidir.
+# main.py'nin otomatik scheduler'ı ayrıca üçüncü taraf XIST takvimini kullanır;
+# iki kaynak arasındaki fark bilinçli olarak data katmanına birleştirilmemiştir.
+# Eksik statik kayıtlara karşı ana scheduler'ın XIST fail-closed kapısı ayrıdır.
 BIST_TATILLER = {
     date(2026, 1, 1): "Yılbaşı",
     date(2026, 3, 20): "Ramazan Bayramı 1. gün",
@@ -169,21 +185,22 @@ VERI_YOK_MODU_ESIK_DK = 20 * 60
 # dağılımı p50=%0.00, p99=%1.08, p99.9=%4.17, MAKS=%9.97 -> %10 eşiği normal gürültünün
 # çok üstünde, split'i ise yakalar.
 SPLIT_SUREKLILIK_ESIK_PCT = 10.0
-# Seans içi bar boşluğu: aynı gün 09:30-18:30 arasında 1H mum 1 saat aralıklı gelir.
-# 1 mum atlanınca 2 saat boşluk oluşur -> eşik 1.5 saat (normal aralık 1 saat).
+# Seans içi bar boşluğu eşiği: mevcut zamanlama varsayımı bir saatlik etiket aralığıdır.
+# Provider/seans label sözleşmesi canlı kaynakla bu turda doğrulanmamıştır.
 BAR_BOSLUK_ESIK_SAAT = 1.5
 # --- TARAMA DRİFT KORUMASI (FAZ 2) ---
 # Canlı tarama aktif 48 hisseyi seri fetch eder; istek pacing'i SCAN_* ayarlarıyla
-# sınırlandırılır. Mum kapanışları 60 dk arayla olduğu için tarama eşiği geniş
-# tutulur; Yahoo yavaşlarsa veya retry gerekirse drift görünür olur. Tarama bu eşiği
+# sınırlandırılır. Mevcut yapılandırma bir saatlik tarama aralığı varsayar; eşik
+# Yahoo yavaşlarsa veya retry gerekirse drift görünür olacak şekilde geniş tutulur. Tarama bu eşiği
 # aşarsa (Yahoo yavaşlar, motor yavaşlar) bir sonraki mumu kaçırma riski doğar.
 # Faz 1'deki "aynı mum iki kez taranmaz + kapanış bazlı tetik" yapısı sayesinde
 # atlanan mum OLMAZ (sonraki döngüde taranır) ama gecikme büyür - ölçüp uyarıyoruz.
 TARAMA_SURESI_UYARI_DK = 45
 
 # --- 1D DERİNLİK (FAZ 2) ---
-# 1H deque 360 bar = ~40 iş günü -> resample ile 1D sadece ~40 bar (ölçüm).
-# 1D üçgen/kama oluşumu 20-60 bar sürdüğü için bu pencere MARJINAL.
+# 360 adet 1H bar, yalnızca yaklaşık 9 bar/seans varsayımıyla ~40 seansa denk gelir;
+# provider bar üretimi canlı ölçülmeden kesin tarih derinliği olarak yorumlanmamalıdır.
+# 1D üçgen/kama oluşumu 20-60 bar sürdüğü için bu tahmini pencere MARJINAL.
 # DEQUE_MAXLEN'i artırmak (A) 1H penceresini de büyütür ve Pine ile birebir uyumu
 # bozabilir (Pine'da kaç bar kullanıldığı henüz bilinmiyor) -> REDDEDİLDİ.
 # Buna karşılık 1D verisini AYRI ve DERİN çekiyoruz (B): 1H/2h/4h Pine uyumu
@@ -424,9 +441,12 @@ if _ortak_state:
 # Evren büyürse pacing/panel/digest limitleri yeniden ölçülmeli (rapor B8).
 EVREN_BUYUME_UYARI_ESIGI = 48
 
-LOG_DIR = os.getenv("LOG_DIR", "/var/log/bist-bot").strip() or "/var/log/bist-bot"
+LOG_DIR = _resolve_app_path(os.getenv("LOG_DIR"), "/var/log/bist-bot")
 LOG_FILE = "bot.log"
-LOCAL_LOG_DIR = "./logs"
+# Göreli log dizini de uygulama köküne sabitlenir (cwd farkı logu kaybederdi).
+LOCAL_LOG_DIR = _resolve_app_path(os.getenv("LOCAL_LOG_DIR"), "logs")
+
+
 def _varsayilan_data_dir() -> str:
     """Veri dizini: repo DIŞI varsayılan (C4).
 
@@ -440,9 +460,11 @@ def _varsayilan_data_dir() -> str:
     Repodaki `bot_data/*.json` örnek/seed verisi README'de anlatıldığı gibi yalnız
     OKUMA yedeği olarak kullanılabilir (SEED_DATA_DIR).
     """
-    ortam = os.getenv("DATA_DIR", "").strip()
+    ortam = (os.getenv("DATA_DIR") or "").strip()
     if ortam:
-        return ortam
+        # Göreli yol verilirse süreç nereden başlatılırsa başlatılsın uygulama
+        # köküne sabitlenir (systemd/CI/Render cwd farkı).
+        return _resolve_app_path(ortam, ortam)
     if os.environ.get("RENDER"):
         return "/tmp/formation-bot-data"
     for aday in ("/var/lib/formation-bot/data",
@@ -453,9 +475,17 @@ def _varsayilan_data_dir() -> str:
                 return aday
         except OSError:
             continue
-    return "./bot_data"
+    return _resolve_app_path("", "bot_data")
 
 
 DATA_DIR = _varsayilan_data_dir()
 # Repodaki örnek veri: DATA_DIR'de dosya yoksa yalnız okuma için buraya bakılır.
-SEED_DATA_DIR = os.getenv("SEED_DATA_DIR", "./bot_data").strip() or "./bot_data"
+SEED_DATA_DIR = _resolve_app_path(os.getenv("SEED_DATA_DIR"), "./bot_data")
+
+_LOG_LEVELS = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
+_LOG_LEVEL_ENV = (os.getenv("LOG_LEVEL", "INFO") or "INFO").strip().upper()
+LOG_LEVEL = _LOG_LEVEL_ENV if _LOG_LEVEL_ENV in _LOG_LEVELS else "INFO"
+ALLOW_TRUSTED_PICKLE_CACHE = (
+    (os.getenv("ALLOW_TRUSTED_PICKLE_CACHE", "0") or "0").strip().lower()
+    in {"1", "true", "yes", "on"}
+)

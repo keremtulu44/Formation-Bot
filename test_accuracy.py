@@ -10,12 +10,37 @@ Manuel olmadan sistem ne kadar doğru?
 3. Shuffle - zaman sırası bozulunca pattern KALMAMALI (Pine-birebir S1 taramasının testi)
 """
 
+# This exploratory script reads a local test cache only when run directly. It is
+# not a deterministic unit test and must not touch bot_data during pytest collection.
+if __name__ != "__main__":
+    import pytest
+    pytest.skip("manual exploratory script; run with FORMATION_BOT_EXPLORATORY_DATA_DIR", allow_module_level=True)
+
+import os
+from pathlib import Path
+
+
+def _exploratory_data_dir():
+    raw = os.environ.get("FORMATION_BOT_EXPLORATORY_DATA_DIR", "").strip()
+    if not raw:
+        raise SystemExit("Set FORMATION_BOT_EXPLORATORY_DATA_DIR to an existing disposable test-cache directory.")
+    target = Path(raw).expanduser().resolve()
+    real_cache = (Path(__file__).resolve().parent / "bot_data").resolve()
+    if target == real_cache or real_cache in target.parents:
+        raise SystemExit("Refusing to read the repository's real bot_data cache.")
+    if not target.is_dir():
+        raise SystemExit("The explicit exploratory test-cache directory must already exist.")
+    return str(target)
+
+
 import pandas as pd
 import numpy as np
 from patterns import (find_best_triangle_candidate, find_best_flag_candidate, calculate_atr,
                       find_pivots, scan_for_first_detection, ArgentEngine)
 from config import get_profile_params
 import random
+
+EXPLORATORY_DATA_DIR = _exploratory_data_dir()
 
 # Test_triangle'daki fonksiyonları kopyala (import edemiyoruz çünkü orada random seed var)
 def create_perfect_symmetrical_triangle(n_bars=250, noise_level=0.0):
@@ -117,16 +142,16 @@ for _ in range(total_random):
 print(f"  Random {total_random} denemede {found_random} pattern bulundu ({found_random/total_random*100:.1f}%)")
 print(f"  Beklenen: <%5, ideal <%2 (şu anki sistem {found_random/total_random*100:.1f}%)")
 
-# 3. Shuffle test - gerçek BIST datasını karıştır
-print("\n3. Shuffle Test (gerçek data karıştırılınca pattern kalmamalı)\n")
+# 3. Shuffle test - yalnızca açıkça verilen test-cache frame'ini karıştır
+print("\n3. Shuffle Test (açıkça verilen cache frame'inde pattern kalmamalı)\n")
 from data import StockDequeManager
-mgr = StockDequeManager(data_dir="./bot_data")
-df_real = mgr.to_dataframe("THYAO")
-if df_real is not None:
+mgr = StockDequeManager(data_dir=EXPLORATORY_DATA_DIR)
+df_cache = mgr.to_dataframe("THYAO")
+if df_cache is not None:
     # Shuffle close fiyatlarını karıştır ama OHLC yapısını koru?
     # Basit: close'u karıştır, high/low ona göre ayarla
     for trial in range(5):
-        df_shuffled = df_real.copy()
+        df_shuffled = df_cache.copy()
         shuffled_close = df_shuffled['close'].values.copy()
         np.random.shuffle(shuffled_close)
         df_shuffled['close'] = shuffled_close
@@ -140,9 +165,9 @@ else:
 
 # 4. Stabilite testi - 360 vs 350 bar
 print("\n4. Stabilite Testi (360 vs 350 bar aynı pattern'i bulmalı)\n")
-if df_real is not None and len(df_real) >= 360:
-    df_360 = df_real.iloc[-360:]
-    df_350 = df_real.iloc[-350:]
+if df_cache is not None and len(df_cache) >= 360:
+    df_360 = df_cache.iloc[-360:]
+    df_350 = df_cache.iloc[-350:]
     cand_360, _ = find_best_triangle_candidate(df_360, profile="Dengeli", verbose=False)
     cand_350, _ = find_best_triangle_candidate(df_350, profile="Dengeli", verbose=False)
     if cand_360 and cand_350:

@@ -40,6 +40,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Lock, Thread
 from urllib.parse import parse_qs, urlparse
 
+from secrets_redaction import redact_sensitive_text
+
 logger = logging.getLogger(__name__)
 
 TEST_MESSAGE = (
@@ -152,8 +154,12 @@ class _HealthHandler(BaseHTTPRequestHandler):
             return
 
         ok, detail = sender(TEST_MESSAGE)
-        logger.info(f"/test Telegram denemesi: ok={ok} ({detail})")
-        self._send_json(200 if ok else 502, {"ok": ok, "detail": detail})
+        safe_detail = redact_sensitive_text(
+            detail, getattr(self.server, "test_key", ""),
+            getattr(self.server, "webhook_secret", ""),
+        )
+        logger.info("/test Telegram denemesi: ok=%s (%s)", ok, safe_detail)
+        self._send_json(200 if ok else 502, {"ok": ok, "detail": safe_detail})
 
     def _send_health(self):
         # Sorgu dizesini AT: uptime monitörleri ve keep-alive iş akışı
@@ -197,7 +203,12 @@ class _HealthHandler(BaseHTTPRequestHandler):
         try:
             return self.rfile.read(uzunluk)
         except Exception as exc:  # noqa: BLE001 - istemci yarım gönderip kopabilir
-            logger.warning(f"Webhook govdesi okunamadi: {exc}")
+            logger.warning(
+                "Webhook govdesi okunamadi: %s",
+                redact_sensitive_text(
+                    exc, self._webhook_secret(), getattr(self.server, "test_key", "")
+                ),
+            )
             self._send_json(400, {"ok": False, "error": "govde okunamadi"})
             return None
 
@@ -258,7 +269,12 @@ class _HealthHandler(BaseHTTPRequestHandler):
         try:
             guncelleme = json.loads(govde.decode("utf-8"))
         except (ValueError, UnicodeDecodeError) as exc:
-            logger.warning(f"Webhook JSON cozumlenemedi: {exc}")
+            logger.warning(
+                "Webhook JSON cozumlenemedi: %s",
+                redact_sensitive_text(
+                    exc, self._webhook_secret(), getattr(self.server, "test_key", "")
+                ),
+            )
             self._send_json(400, {"ok": False, "error": "JSON cozumlenemedi"})
             return
         if not isinstance(guncelleme, dict):
@@ -278,7 +294,12 @@ class _HealthHandler(BaseHTTPRequestHandler):
         try:
             kod = isleyici(guncelleme)
         except Exception as exc:  # noqa: BLE001 - tek güncelleme sunucuyu düşürmesin
-            logger.error(f"Webhook isleyicisi hata verdi: {exc}", exc_info=True)
+            logger.error(
+                "Webhook isleyicisi hata verdi: %s",
+                redact_sensitive_text(
+                    exc, self._webhook_secret(), getattr(self.server, "test_key", "")
+                ),
+            )
             self._send_json(500, {"ok": False, "error": "isleyici hatasi"})
             return
 
@@ -359,8 +380,17 @@ class _HealthHandler(BaseHTTPRequestHandler):
         self._send_health()
 
     def log_message(self, format, *args):
-        # Avoid one info log for each 5-minute monitor request.
-        logger.debug("Health HTTP: " + format, *args)
+        # Avoid one info log for each monitor request, and never store route keys.
+        try:
+            message = format % args if args else format
+        except Exception:
+            message = f"{format} {args}"
+        safe_message = redact_sensitive_text(
+            message,
+            getattr(self.server, "test_key", ""),
+            getattr(self.server, "webhook_secret", ""),
+        )
+        logger.debug("Health HTTP: %s", safe_message)
 
 
 def start_render_health_server(environ=None, test_sender=None,

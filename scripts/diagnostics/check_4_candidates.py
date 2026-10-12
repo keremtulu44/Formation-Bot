@@ -9,6 +9,13 @@ import pandas as pd
 from patterns import find_pivots, calculate_atr, f_build_triangle_candidate
 from config import get_profile_params
 import os
+import tempfile
+
+if os.getenv("FORMATION_BOT_ALLOW_LIVE_YAHOO_RESEARCH") != "1":
+    raise SystemExit(
+        "This diagnostic fetches live Yahoo Finance data; set "
+        "FORMATION_BOT_ALLOW_LIVE_YAHOO_RESEARCH=1 to opt in explicitly."
+    )
 
 # 1. Veri çek - hangi timeframe?
 print("=== HANGİ TIMEFRAME ÇEKTİK? ===")
@@ -109,39 +116,24 @@ print("  - THYAO.pkl (pickle, hızlı)")
 print("  - THYAO.json (json, GitHub'da görünür)")
 print()
 
-# Kalıcı kayıt testi
+# Kalıcı kayıt testi: only this invocation's temporary directory is removed.
 from data import StockDequeManager
-import shutil
 
-test_dir = "./bot_data_test"
-shutil.rmtree(test_dir, ignore_errors=True)
+with tempfile.TemporaryDirectory(prefix="formation-bot-candidate-test-") as test_dir:
+    mgr = StockDequeManager(maxlen=360, data_dir=test_dir)
+    # DataFrame'i deque'ye ekle
+    mgr.append_dataframe("THYAO", df_1h)
+    print(f"Deque'ye eklendi: {len(mgr.get_deque('THYAO'))} mum (maxlen 360, sen 531 çektin, son 360'ı tutar)")
 
-mgr = StockDequeManager(maxlen=360, data_dir=test_dir)
-# DataFrame'i deque'ye ekle
-mgr.append_dataframe("THYAO", df_1h)
-print(f"Deque'ye eklendi: {len(mgr.get_deque('THYAO'))} mum (maxlen 360, sen 531 çektin, son 360'ı tutar)")
+    # Kaydet
+    mgr.save_to_disk("THYAO")
+    print(f"Kaydedildi: {os.listdir(test_dir)}")
 
-# Kaydet
-mgr.save_to_disk("THYAO")
-print(f"Kaydedildi: {os.listdir(test_dir)}")
+    # Yükle
+    mgr2 = StockDequeManager(maxlen=360, data_dir=test_dir)
+    df_loaded = mgr2.to_dataframe("THYAO")
+    print(f"Yüklendi: {len(df_loaded)} bar")
 
-# Yükle
-mgr2 = StockDequeManager(maxlen=360, data_dir=test_dir)
-df_loaded = mgr2.to_dataframe("THYAO")
-print(f"Yüklendi: {len(df_loaded)} bar")
-
-# Temizle
-shutil.rmtree(test_dir, ignore_errors=True)
-
-print("\n=== SENİN PUSH İÇİN ===")
-print("Eğer kalıcı olarak GitHub'a pushlamak istiyorsan:")
-print("  1. bot_data/ klasöründe THYAO.json ve THYAO.pkl oluşacak")
-print("  2. Ama .gitignore'da bot_data/ ve *.pkl ignore'lı")
-print("  3. Force push için:")
-print("     git add -f bot_data/THYAO.json")
-print("     git add -f bot_data/THYAO.pkl  (istersen)")
-print("     git commit -m 'THYAO real data'")
-print("     git push origin arena/01a0dd9d-formation-bot")
-print("  4. Ben de çekip kullanabilirim")
-print()
-print("Veya ben sana save_real_data.py hazırlayayım, tüm BIST30'u çekip kaydetsin")
+print("\n=== YEREL ARAŞTIRMA SINIRI ===")
+print("Cache round-trip testi yalnızca geçici dizini kullandı; bu blok bittiğinde temizlendi.")
+print("Bot cache'ine canlı veri yazılmadı. Provider verisini veya rapor çıktısını Git'e eklemeyin.")

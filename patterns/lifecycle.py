@@ -964,14 +964,18 @@ class ArgentEngine:
                 self.open[src], self.high[src], self.low[src], self.close[src],
                 self.last_accepted_pivot_type, self.profile, self.mintick)
             if sel_type == 1:
-                accepted, _app = self.high_side.add(ph, src, b, self.last_accepted_pivot_type == 1)
+                accepted, _app = self.high_side.add(
+                    ph, src, b, self.last_accepted_pivot_type == 1, is_high=True,
+                )
                 if accepted:
                     if self.last_accepted_pivot_type == -1:
                         self.low_side.lock_previous_opposite()
                     self.last_accepted_pivot_type = 1
                     new_high = True
             elif sel_type == -1:
-                accepted, _app = self.low_side.add(pl, src, b, self.last_accepted_pivot_type == -1)
+                accepted, _app = self.low_side.add(
+                    pl, src, b, self.last_accepted_pivot_type == -1, is_high=False,
+                )
                 if accepted:
                     if self.last_accepted_pivot_type == 1:
                         self.high_side.lock_previous_opposite()
@@ -979,14 +983,18 @@ class ArgentEngine:
                     new_low = True
         else:
             if ph is not None:
-                accepted, _app = self.high_side.add(ph, src, b, self.last_accepted_pivot_type == 1)
+                accepted, _app = self.high_side.add(
+                    ph, src, b, self.last_accepted_pivot_type == 1, is_high=True,
+                )
                 if accepted:
                     if self.last_accepted_pivot_type == -1:
                         self.low_side.lock_previous_opposite()
                     self.last_accepted_pivot_type = 1
                     new_high = True
             if pl is not None:
-                accepted, _app = self.low_side.add(pl, src, b, self.last_accepted_pivot_type == -1)
+                accepted, _app = self.low_side.add(
+                    pl, src, b, self.last_accepted_pivot_type == -1, is_high=False,
+                )
                 if accepted:
                     if self.last_accepted_pivot_type == 1:
                         self.high_side.lock_previous_opposite()

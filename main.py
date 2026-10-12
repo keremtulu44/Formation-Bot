@@ -3268,4 +3268,13 @@ if __name__ == "__main__":
         # Denetim B-4: /health botun canlılığını da raporlasın (heartbeat yaşı).
         health_provider=_saglik_ozeti,
     )
-    main_loop()
+    if os.getenv("BOT_HEALTH_SMOKE_ONLY") == "1":
+        # CI liveness dumanı (Render parity): yalnız HTTP sunucusu ayakta kalsın.
+        # Notifier kurulmaz, Telegram/Supabase'e istek gitmez, Yahoo fetch ve ana
+        # tarama döngüsü BAŞLAMAZ — CI'nın dışa bağımlı olmadan gerçek entrypoint'ı
+        # denemesi için tek güvenlik kapısı budur.
+        logger.info("Health smoke mode: provider and command loops disabled")
+        while not _shutdown_requested:
+            time.sleep(0.25)
+    else:
+        main_loop()

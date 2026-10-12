@@ -1,0 +1,2836 @@
+DOMAIN: Market Structure
+ANA MOTOR: financial_dashboard.engines.market_structure_engine.MarketStructureEngine (public/integrated engine)
+ANA DOSYA: src/financial_dashboard/engines/market_structure_engine.py; swing core: src/financial_dashboard/engines/market_structure.py
+ANA CLASS/FUNCTION: MarketStructureEngine.update; inherited swing methods _process_scope / _accept_pivot / _promote / _classify; MarketStructureRuntime.process_scope; evaluate_break_candidate; finalize_confirmed_break
+GEREKLİ BAĞIMLILIKLAR: Aşağıda tam kaynakları verilen market_structure*, base.py ve models.py modülleri; harici olarak pandas
+VERİ GİRDİSİ: Her bar için timestamp, open, high, low, close. is_closed/is_complete isteğe bağlıdır ve false ise bar ilerletilmez. Volume kullanılmaz.
+ÇIKTI: EngineResult; external/internal SwingPoint listeleri; event_history; export_contract (MarketStructureExport ve scope/event kayıtları)
+
+DATA FLOW
+---------
+Market-data provider / canonical OHLCV input (bu dışa aktarıma dahil değil)
+    ↓ closed + complete, zaman sıralı OHLC satırları
+MarketStructureEngine.replay(frame) veya MarketStructureEngine.update(bar)
+    ↓ swing + break/state runtime
+EngineResult + swing collections + event_history/export_contract
+
+HESAPLAMA ÖZETİ
+---------------
+Swing teyidi kaynak pivot barının iki yanındaki pivot_len barı gördükten sonra yapılır; ATR, prominence, minimum ATR mesafesi, aday replace/merge ve dönüşümlü swing teyidi uygulanır. Sonraki katman HH/HL/LH/LL sınıflaması, rol/state güncellemesi, sweep ve BOS/CHOCH/transition/false-break olaylarını yürütür. Formüller ve eşikler aşağıdaki kaynak koddan aynen korunmuştur.
+
+PORTABILITY
+-----------
+Her SOURCE FILE bloğunu gösterilen göreli yola ayrı Python modülü olarak yerleştirmek, mevcut relative import zincirini korur. Bu TXT birleşik bir Python modülü değildir.
+
+========================================================================================
+EXTRACTED SOURCE CODE (each block preserves its original source file)
+========================================================================================
+
+
+SOURCE:
+src/financial_dashboard/engines/base.py
+
+EXTRACTED:
+BaseEngine abstract replay/update/snapshot contract
+
+```python
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+import pandas as pd
+
+from .models import EngineResult
+
+
+class BaseEngine(ABC):
+    """Common contract for replay and incremental/live engine implementations."""
+
+    @abstractmethod
+    def replay(self, frame: pd.DataFrame) -> list[EngineResult]:
+        """Rebuild deterministic engine history from ordered canonical candles."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
+        """Advance engine state with one new candle."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def snapshot(self) -> EngineResult | None:
+        """Return the current immutable public engine state."""
+        raise NotImplementedError
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/models.py
+
+EXTRACTED:
+Direction ve EngineResult çıktı modeli
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import IntEnum
+from typing import Any
+
+
+class Direction(IntEnum):
+    DOWN = -1
+    NEUTRAL = 0
+    UP = 1
+
+
+@dataclass(frozen=True, slots=True)
+class EngineResult:
+    engine: str
+    state: str
+    timestamp: Any
+    direction: Direction = Direction.NEUTRAL
+    score: float | None = None
+    quality: float | None = None
+    levels: dict[str, float] = field(default_factory=dict)
+    events: tuple[str, ...] = ()
+    reasons: tuple[str, ...] = ()
+    is_confirmed: bool = True
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/market_structure.py
+
+EXTRACTED:
+Swing discovery, pivot candidate/lifecycle, HH/HL/LH/LL classification ve swing çıktı seviyeleri
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from typing import Any, Iterable
+
+import pandas as pd
+
+from .base import BaseEngine
+from .models import Direction, EngineResult
+
+SCOPE_EXTERNAL = "EXTERNAL"
+SCOPE_INTERNAL = "INTERNAL"
+SIDE_HIGH = "HIGH"
+SIDE_LOW = "LOW"
+
+SWING_CANDIDATE = "SWING_CANDIDATE"
+SWING_CONFIRMED = "SWING_CONFIRMED"
+SWING_BROKEN = "SWING_BROKEN"
+SWING_ARCHIVED = "SWING_ARCHIVED"
+
+CLASS_PH = "PH"
+CLASS_PL = "PL"
+CLASS_HH = "HH"
+CLASS_HL = "HL"
+CLASS_LH = "LH"
+CLASS_LL = "LL"
+
+ROLE_NEUTRAL_HIGH = "NEUTRAL_HIGH"
+ROLE_NEUTRAL_LOW = "NEUTRAL_LOW"
+
+CANDIDATE_REJECT = 0
+CANDIDATE_NEW = 1
+CANDIDATE_REPLACE = 2
+CANDIDATE_MERGE = 3
+
+PROFILE_DISTANCE_MULT = {
+    "Hassas": 0.72,
+    "Dengeli": 1.0,
+    "Seçici": 1.42,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class MarketStructureConfig:
+    profile: str = "Dengeli"
+    external_pivot_len: int = 5
+    internal_pivot_len: int = 2
+    external_min_atr_distance: float = 0.45
+    internal_min_atr_distance: float = 0.20
+    equal_tolerance_atr: float = 0.16
+    atr_length: int = 14
+    min_tick: float = 0.01
+
+    def __post_init__(self) -> None:
+        if self.profile not in PROFILE_DISTANCE_MULT:
+            raise ValueError(f"unsupported profile: {self.profile}")
+        if self.external_pivot_len < 2:
+            raise ValueError("external_pivot_len must be >= 2")
+        if self.internal_pivot_len < 1:
+            raise ValueError("internal_pivot_len must be >= 1")
+        if self.atr_length < 1:
+            raise ValueError("atr_length must be >= 1")
+        if self.min_tick <= 0:
+            raise ValueError("min_tick must be > 0")
+
+    @property
+    def distance_multiplier(self) -> float:
+        return PROFILE_DISTANCE_MULT[self.profile]
+
+    @property
+    def effective_external_min_atr(self) -> float:
+        return self.external_min_atr_distance * self.distance_multiplier
+
+    @property
+    def effective_internal_min_atr(self) -> float:
+        return self.internal_min_atr_distance * self.distance_multiplier
+
+    @property
+    def mintick_tolerance(self) -> float:
+        return self.min_tick * 2.0
+
+
+@dataclass(frozen=True, slots=True)
+class SwingPoint:
+    valid: bool = False
+    identity: int = 0
+    scope: str = ""
+    side: str = ""
+    state: str = SWING_CANDIDATE
+    swing_class: str = ""
+    structural_role: str = ""
+    source_bar: int | None = None
+    confirm_bar: int | None = None
+    price: float | None = None
+    atr_at_source: float | None = None
+    prominence_atr: float | None = None
+    distance_atr: float | None = None
+    distance_pct: float | None = None
+    previous_same_side_identity: int = 0
+    previous_opposite_identity: int = 0
+    finalized: bool = False
+    locked: bool = False
+    broken: bool = False
+    broken_bar: int | None = None
+    quality: float | None = None
+    evidence_text: str = ""
+    invalid_reason: str = ""
+
+
+@dataclass(slots=True)
+class _ScopeState:
+    swings: list[SwingPoint]
+    high_candidate: SwingPoint
+    low_candidate: SwingPoint
+    last_confirmed_high_identity: int = 0
+    last_confirmed_low_identity: int = 0
+
+
+class MarketStructureEngine(BaseEngine):
+    """ARGENT Market Structure swing core, ported from Pine without visual state.
+
+    Turn 1 intentionally contains only deterministic swing discovery/lifecycle:
+    raw pivot confirmation, candidate replace/merge, alternating confirmation,
+    and HH/HL/LH/LL classification. Break/BOS/CHoCH roles are layered later.
+    """
+
+    name = "market_structure"
+
+    def __init__(self, config: MarketStructureConfig | None = None) -> None:
+        self.config = config or MarketStructureConfig()
+        self.reset()
+
+    def reset(self) -> None:
+        self._rows: list[dict[str, Any]] = []
+        self._atr_values: list[float | None] = []
+        self._tr_values: list[float] = []
+        self._next_swing_identity = 0
+        self._external = _ScopeState([], SwingPoint(), SwingPoint())
+        self._internal = _ScopeState([], SwingPoint(), SwingPoint())
+        self._snapshot: EngineResult | None = None
+
+    def replay(self, frame: pd.DataFrame) -> list[EngineResult]:
+        self.reset()
+        results: list[EngineResult] = []
+        for row in frame.to_dict("records"):
+            result = self.update(row)
+            if result is not None:
+                results.append(result)
+        return results
+
+    def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
+        row = dict(bar) if isinstance(bar, dict) else bar.to_dict()
+        if not bool(row.get("is_closed", True)) or not bool(row.get("is_complete", True)):
+            return self._snapshot
+
+        required = ("timestamp", "open", "high", "low", "close")
+        missing = [key for key in required if key not in row or pd.isna(row[key])]
+        if missing:
+            raise ValueError(f"market structure requires closed OHLC bars; missing {missing}")
+
+        clean = {
+            "timestamp": row["timestamp"],
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+        }
+        self._rows.append(clean)
+        self._append_atr(clean)
+        bar_index = len(self._rows) - 1
+
+        events: list[str] = []
+        events.extend(self._process_scope(self._external, SCOPE_EXTERNAL, self.config.external_pivot_len, self.config.effective_external_min_atr, bar_index))
+        events.extend(self._process_scope(self._internal, SCOPE_INTERNAL, self.config.internal_pivot_len, self.config.effective_internal_min_atr, bar_index))
+
+        levels = self._public_levels()
+        reasons = tuple(events)
+        state = "SWING_READY" if (self._external.swings or self._internal.swings) else "SWING_BUILDING"
+        self._snapshot = EngineResult(
+            engine=self.name,
+            state=state,
+            timestamp=clean["timestamp"],
+            direction=Direction.NEUTRAL,
+            levels=levels,
+            events=tuple(events),
+            reasons=reasons,
+            is_confirmed=True,
+        )
+        return self._snapshot
+
+    def snapshot(self) -> EngineResult | None:
+        return self._snapshot
+
+    @property
+    def external_swings(self) -> tuple[SwingPoint, ...]:
+        return tuple(self._external.swings)
+
+    @property
+    def internal_swings(self) -> tuple[SwingPoint, ...]:
+        return tuple(self._internal.swings)
+
+    @property
+    def external_candidates(self) -> tuple[SwingPoint, SwingPoint]:
+        return self._external.high_candidate, self._external.low_candidate
+
+    @property
+    def internal_candidates(self) -> tuple[SwingPoint, SwingPoint]:
+        return self._internal.high_candidate, self._internal.low_candidate
+
+    def _append_atr(self, row: dict[str, Any]) -> None:
+        idx = len(self._rows) - 1
+        previous_close = self._rows[idx - 1]["close"] if idx > 0 else None
+        tr = row["high"] - row["low"]
+        if previous_close is not None:
+            tr = max(tr, abs(row["high"] - previous_close), abs(row["low"] - previous_close))
+        self._tr_values.append(float(tr))
+
+        length = self.config.atr_length
+        if len(self._tr_values) < length:
+            atr = None
+        elif len(self._tr_values) == length:
+            atr = sum(self._tr_values[-length:]) / length
+        else:
+            previous_atr = self._atr_values[-1]
+            if previous_atr is None:
+                atr = sum(self._tr_values[-length:]) / length
+            else:
+                atr = (previous_atr * (length - 1) + tr) / length
+        self._atr_values.append(None if atr is None else float(atr))
+
+    def _process_scope(self, scope_state: _ScopeState, scope: str, pivot_len: int, min_atr_distance: float, bar_index: int) -> list[str]:
+        source_bar = bar_index - pivot_len
+        if source_bar < pivot_len or bar_index < pivot_len * 2:
+            return []
+
+        high_pivot = self._is_pivot_high(source_bar, pivot_len)
+        low_pivot = self._is_pivot_low(source_bar, pivot_len)
+        if not high_pivot and not low_pivot:
+            return []
+
+        source_atr = self._atr_at(source_bar)
+        window = self._rows[source_bar - pivot_len : source_bar + pivot_len + 1]
+        pivot_high = self._rows[source_bar]["high"]
+        pivot_low = self._rows[source_bar]["low"]
+        window_low = min(r["low"] for r in window)
+        window_high = max(r["high"] for r in window)
+        high_prominence = max(pivot_high - window_low, 0.0) / source_atr
+        low_prominence = max(window_high - pivot_low, 0.0) / source_atr
+
+        use_high = high_pivot and not low_pivot
+        use_low = low_pivot and not high_pivot
+        if high_pivot and low_pivot:
+            choice = self._choose_dual_pivot(scope_state.swings, high_prominence, low_prominence, self._rows[source_bar]["open"], self._rows[source_bar]["close"])
+            use_high = choice == 1
+            use_low = choice == -1
+
+        events: list[str] = []
+        if use_high:
+            events.extend(self._accept_pivot(scope_state, scope, SIDE_HIGH, source_bar, bar_index, pivot_high, source_atr, high_prominence, min_atr_distance, pivot_len))
+        if use_low:
+            events.extend(self._accept_pivot(scope_state, scope, SIDE_LOW, source_bar, bar_index, pivot_low, source_atr, low_prominence, min_atr_distance, pivot_len))
+        return events
+
+    def _accept_pivot(
+        self,
+        scope_state: _ScopeState,
+        scope: str,
+        side: str,
+        source_bar: int,
+        confirm_bar: int,
+        price: float,
+        source_atr: float,
+        prominence: float,
+        min_atr_distance: float,
+        pivot_len: int,
+    ) -> list[str]:
+        previous_high = self._last_historical(scope_state.swings, SIDE_HIGH)
+        previous_low = self._last_historical(scope_state.swings, SIDE_LOW)
+        previous_same = previous_high if side == SIDE_HIGH else previous_low
+        previous_opposite = previous_low if side == SIDE_HIGH else previous_high
+
+        if previous_opposite.valid and previous_opposite.price is not None:
+            distance_atr = abs(price - previous_opposite.price) / self._leg_reference_atr(source_atr, previous_opposite)
+            denominator = max(abs(previous_opposite.price if side == SIDE_HIGH else price), self.config.min_tick)
+            distance_pct = abs(price - previous_opposite.price) / denominator * 100.0
+        else:
+            distance_atr = min_atr_distance + 0.5
+            distance_pct = None
+
+        incoming = self._new_swing(
+            identity=self._next_swing_identity + 1,
+            scope=scope,
+            side=side,
+            source_bar=source_bar,
+            confirm_bar=confirm_bar,
+            price=price,
+            source_atr=source_atr,
+            prominence_atr=prominence,
+            distance_atr=distance_atr,
+            distance_pct=distance_pct,
+            previous_same=previous_same,
+            previous_opposite=previous_opposite,
+            evidence="raw pivot high" if side == SIDE_HIGH else "raw pivot low",
+        )
+
+        current_candidate = scope_state.high_candidate if side == SIDE_HIGH else scope_state.low_candidate
+        updated, action = self._candidate_update(current_candidate, incoming, locked_by_break=False)
+        if side == SIDE_HIGH:
+            scope_state.high_candidate = updated
+            opposite_candidate = scope_state.low_candidate
+        else:
+            scope_state.low_candidate = updated
+            opposite_candidate = scope_state.high_candidate
+
+        if action == CANDIDATE_NEW:
+            self._next_swing_identity += 1
+
+        last_any = self._last_historical_any(scope_state.swings)
+        min_leg_bars = max(3, pivot_len) if scope == SCOPE_EXTERNAL else max(2, pivot_len)
+        events: list[str] = []
+        if self._can_confirm(opposite_candidate, last_any, min_atr_distance, min_leg_bars):
+            opp_same = self._last_historical(scope_state.swings, opposite_candidate.side)
+            opp_other = self._last_historical(scope_state.swings, SIDE_LOW if opposite_candidate.side == SIDE_HIGH else SIDE_HIGH)
+            confirmed = self._promote(opposite_candidate, opp_same, opp_other, confirm_bar)
+            scope_state.swings.append(confirmed)
+            if confirmed.side == SIDE_HIGH:
+                scope_state.last_confirmed_high_identity = confirmed.identity
+                scope_state.high_candidate = SwingPoint()
+            else:
+                scope_state.last_confirmed_low_identity = confirmed.identity
+                scope_state.low_candidate = SwingPoint()
+            events.append(f"{scope}:SWING_CONFIRMED:{confirmed.side}:{confirmed.swing_class}:{confirmed.identity}")
+        return events
+
+    def _new_swing(
+        self,
+        *,
+        identity: int,
+        scope: str,
+        side: str,
+        source_bar: int,
+        confirm_bar: int,
+        price: float,
+        source_atr: float,
+        prominence_atr: float,
+        distance_atr: float,
+        distance_pct: float | None,
+        previous_same: SwingPoint,
+        previous_opposite: SwingPoint,
+        evidence: str,
+    ) -> SwingPoint:
+        quality = min(100.0, 34.0 + min(max(prominence_atr, 0.0), 3.0) * 12.0 + min(max(distance_atr, 0.0), 3.0) * 14.0)
+        return SwingPoint(
+            valid=True,
+            identity=identity,
+            scope=scope,
+            side=side,
+            structural_role=ROLE_NEUTRAL_HIGH if side == SIDE_HIGH else ROLE_NEUTRAL_LOW,
+            source_bar=source_bar,
+            confirm_bar=confirm_bar,
+            price=float(price),
+            atr_at_source=float(source_atr),
+            prominence_atr=float(prominence_atr),
+            distance_atr=float(distance_atr),
+            distance_pct=distance_pct,
+            previous_same_side_identity=previous_same.identity if previous_same.valid else 0,
+            previous_opposite_identity=previous_opposite.identity if previous_opposite.valid else 0,
+            quality=quality,
+            evidence_text=evidence,
+        )
+
+    def _candidate_update(self, candidate: SwingPoint, incoming: SwingPoint, locked_by_break: bool) -> tuple[SwingPoint, int]:
+        if not candidate.valid:
+            return incoming, CANDIDATE_NEW
+
+        tolerance = max(self._pair_reference_atr(candidate, incoming) * self.config.equal_tolerance_atr, self.config.mintick_tolerance)
+        stronger = incoming.price > candidate.price if incoming.side == SIDE_HIGH else incoming.price < candidate.price
+        clearly_stronger = incoming.price > candidate.price + tolerance if incoming.side == SIDE_HIGH else incoming.price < candidate.price - tolerance
+        same_area = abs(float(incoming.price) - float(candidate.price)) <= tolerance
+
+        if locked_by_break:
+            if clearly_stronger or (same_area and stronger):
+                return replace(incoming, evidence_text="candidate fork: prior identity locked by break"), CANDIDATE_NEW
+            return candidate, CANDIDATE_REJECT
+
+        if clearly_stronger:
+            return replace(
+                incoming,
+                identity=candidate.identity,
+                quality=max(incoming.quality or 0.0, (candidate.quality or 0.0) * 0.92),
+                prominence_atr=max(incoming.prominence_atr or 0.0, candidate.prominence_atr or 0.0),
+                evidence_text="candidate replace: stronger extreme",
+            ), CANDIDATE_REPLACE
+
+        if same_area:
+            if stronger:
+                merged = replace(
+                    incoming,
+                    identity=candidate.identity,
+                    quality=max(incoming.quality or 0.0, candidate.quality or 0.0),
+                    prominence_atr=max(incoming.prominence_atr or 0.0, candidate.prominence_atr or 0.0),
+                    evidence_text="candidate merge: stronger extreme",
+                )
+            else:
+                merged = replace(
+                    candidate,
+                    confirm_bar=incoming.confirm_bar,
+                    prominence_atr=max(candidate.prominence_atr or 0.0, incoming.prominence_atr or 0.0),
+                    quality=max(candidate.quality or 0.0, (incoming.quality or 0.0) * 0.95),
+                    evidence_text="candidate merge: existing extreme kept",
+                )
+            return merged, CANDIDATE_MERGE
+
+        return candidate, CANDIDATE_REJECT
+
+    def _promote(self, candidate: SwingPoint, previous_same: SwingPoint, previous_opposite: SwingPoint, confirm_bar: int) -> SwingPoint:
+        promoted_quality = (
+            36.0
+            + min(max(candidate.prominence_atr or 0.0, 0.0), 3.0) * 12.0
+            + min(max(candidate.distance_atr or 0.0, 0.0), 3.0) * 14.0
+            + (8.0 if previous_opposite.valid else 0.0)
+        )
+        return replace(
+            candidate,
+            state=SWING_CONFIRMED,
+            confirm_bar=confirm_bar,
+            finalized=True,
+            locked=True,
+            swing_class=self._classify(candidate, previous_same),
+            previous_same_side_identity=previous_same.identity if previous_same.valid else 0,
+            previous_opposite_identity=previous_opposite.identity if previous_opposite.valid else 0,
+            quality=min(100.0, max(candidate.quality or 0.0, promoted_quality)),
+            invalid_reason="",
+            evidence_text="confirmed by opposite pivot",
+        )
+
+    def _classify(self, candidate: SwingPoint, previous_same: SwingPoint) -> str:
+        cls = CLASS_PH if candidate.side == SIDE_HIGH else CLASS_PL
+        if not previous_same.valid:
+            return cls
+        tolerance = max(self._pair_reference_atr(candidate, previous_same) * self.config.equal_tolerance_atr, self.config.mintick_tolerance)
+        if candidate.side == SIDE_HIGH:
+            if candidate.price > previous_same.price + tolerance:
+                return CLASS_HH
+            if candidate.price < previous_same.price - tolerance:
+                return CLASS_LH
+            return CLASS_PH
+        if candidate.price < previous_same.price - tolerance:
+            return CLASS_LL
+        if candidate.price > previous_same.price + tolerance:
+            return CLASS_HL
+        return CLASS_PL
+
+    def _can_confirm(self, candidate: SwingPoint, last_confirmed: SwingPoint, min_atr_distance: float, min_leg_bars: int) -> bool:
+        if not candidate.valid:
+            return False
+        alternates = not last_confirmed.valid or last_confirmed.side != candidate.side
+        if not alternates:
+            return False
+
+        first_historical = not last_confirmed.valid
+        reference_atr = max(candidate.atr_at_source or self.config.min_tick, self.config.min_tick) if first_historical else self._pair_reference_atr(candidate, last_confirmed)
+        leg_distance_atr = min_atr_distance + 1.0 if first_historical else abs(candidate.price - last_confirmed.price) / reference_atr
+        leg_bars = min_leg_bars if first_historical else abs(int(candidate.source_bar) - int(last_confirmed.source_bar))
+        full_distance = leg_distance_atr >= min_atr_distance
+        prominence_floor = max(0.20, min_atr_distance * 0.55) if candidate.scope == SCOPE_EXTERNAL else max(0.12, min_atr_distance * 0.55)
+        near_distance = leg_distance_atr >= min_atr_distance * 0.90
+        supported_near = near_distance and leg_bars >= min_leg_bars and (candidate.prominence_atr or 0.0) >= prominence_floor
+        return first_historical or full_distance or supported_near
+
+    def _pair_reference_atr(self, first: SwingPoint, second: SwingPoint) -> float:
+        values = [value for value in (first.atr_at_source if first.valid else None, second.atr_at_source if second.valid else None) if value is not None]
+        if values:
+            return max(sum(values) / len(values), self.config.min_tick)
+        latest = next((value for value in reversed(self._atr_values) if value is not None), self.config.min_tick)
+        return max(float(latest), self.config.min_tick)
+
+    def _leg_reference_atr(self, source_atr: float, opposite: SwingPoint) -> float:
+        opposite_atr = opposite.atr_at_source if opposite.valid and opposite.atr_at_source is not None else source_atr
+        return max((source_atr + float(opposite_atr)) * 0.5, self.config.min_tick)
+
+    def _choose_dual_pivot(self, swings: Iterable[SwingPoint], high_prominence: float, low_prominence: float, source_open: float, source_close: float) -> int:
+        last = self._last_historical_any(list(swings))
+        if last.valid:
+            return 1 if last.side == SIDE_LOW else -1
+        difference = high_prominence - low_prominence
+        if abs(difference) > 0.05:
+            return 1 if difference > 0.0 else -1
+        return 1 if source_close >= source_open else -1
+
+    def _is_pivot_high(self, source: int, length: int) -> bool:
+        value = self._rows[source]["high"]
+        window = [row["high"] for row in self._rows[source - length : source + length + 1]]
+        return value == max(window)
+
+    def _is_pivot_low(self, source: int, length: int) -> bool:
+        value = self._rows[source]["low"]
+        window = [row["low"] for row in self._rows[source - length : source + length + 1]]
+        return value == min(window)
+
+    def _atr_at(self, source_bar: int) -> float:
+        value = self._atr_values[source_bar]
+        if value is not None:
+            return max(value, self.config.min_tick)
+        current = next((v for v in reversed(self._atr_values) if v is not None), None)
+        if current is not None:
+            return max(current, self.config.min_tick)
+        true_range = self._tr_values[source_bar] if source_bar < len(self._tr_values) else self.config.min_tick
+        return max(true_range, self.config.min_tick)
+
+    @staticmethod
+    def _last_historical(swings: list[SwingPoint], side: str) -> SwingPoint:
+        for swing in reversed(swings):
+            if swing.valid and swing.finalized and swing.side == side and swing.state in {SWING_CONFIRMED, SWING_BROKEN}:
+                return swing
+        return SwingPoint()
+
+    @staticmethod
+    def _last_historical_any(swings: list[SwingPoint]) -> SwingPoint:
+        for swing in reversed(swings):
+            if swing.valid and swing.finalized and swing.state in {SWING_CONFIRMED, SWING_BROKEN}:
+                return swing
+        return SwingPoint()
+
+    def _public_levels(self) -> dict[str, float]:
+        levels: dict[str, float] = {}
+        for prefix, state in (("external", self._external), ("internal", self._internal)):
+            high = self._last_historical(state.swings, SIDE_HIGH)
+            low = self._last_historical(state.swings, SIDE_LOW)
+            if high.valid and high.price is not None:
+                levels[f"{prefix}_confirmed_high"] = float(high.price)
+            if low.valid and low.price is not None:
+                levels[f"{prefix}_confirmed_low"] = float(low.price)
+            if state.high_candidate.valid and state.high_candidate.price is not None:
+                levels[f"{prefix}_candidate_high"] = float(state.high_candidate.price)
+            if state.low_candidate.valid and state.low_candidate.price is not None:
+                levels[f"{prefix}_candidate_low"] = float(state.low_candidate.price)
+        return levels
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/market_structure_state.py
+
+EXTRACTED:
+BreakConfig, StructureContext, break evaluation/finalization, role ve event hesaplama yardımcıları
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from enum import StrEnum
+
+from .market_structure import (
+    ROLE_NEUTRAL_HIGH,
+    ROLE_NEUTRAL_LOW,
+    SCOPE_EXTERNAL,
+    SIDE_HIGH,
+    SIDE_LOW,
+    SWING_BROKEN,
+    SWING_CONFIRMED,
+    SwingPoint,
+)
+
+ROLE_PROTECTED_HIGH = "PROTECTED_HIGH"
+ROLE_PROTECTED_LOW = "PROTECTED_LOW"
+ROLE_STRONG_HIGH = "STRONG_HIGH"
+ROLE_STRONG_LOW = "STRONG_LOW"
+ROLE_WEAK_HIGH = "WEAK_HIGH"
+ROLE_WEAK_LOW = "WEAK_LOW"
+
+EVENT_NONE = "EVENT_NONE"
+EVENT_BOS = "EVENT_BOS"
+EVENT_CHOCH = "EVENT_CHOCH"
+EVENT_TRANSITION_FAIL = "EVENT_TRANSITION_FAIL"
+EVENT_SWEEP = "EVENT_SWEEP"
+EVENT_FALSE_BREAK = "EVENT_FALSE_BREAK"
+
+EVIDENCE_INITIAL_STRUCTURE_BREAK_CONFIRMED = "INITIAL_STRUCTURE_BREAK_CONFIRMED"
+
+
+class BosMaturity(StrEnum):
+    """Typed maturity of a confirmed BOS event.
+
+    Initial structure establishes the first observed direction from a neutral
+    context.  It is deliberately distinct from both a BOS that confirms a known
+    transition and a continuation BOS in an already directional structure.
+    """
+
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    INITIAL_STRUCTURE = "INITIAL_STRUCTURE"
+    TRANSITION_CONFIRMATION = "TRANSITION_CONFIRMATION"
+    CONTINUATION = "CONTINUATION"
+
+
+STATE_NEUTRAL = "STATE_NEUTRAL"
+STATE_BULLISH = "STATE_BULLISH"
+STATE_BEARISH = "STATE_BEARISH"
+STATE_TRANSITION_UP = "STATE_TRANSITION_UP"
+STATE_TRANSITION_DOWN = "STATE_TRANSITION_DOWN"
+
+BREAK_NONE = "BREAK_NONE"
+BREAK_CANDIDATE = "BREAK_CANDIDATE"
+BREAK_CONFIRMED = "BREAK_CONFIRMED"
+BREAK_FAILED = "BREAK_FAILED"
+
+
+@dataclass(slots=True)
+class StructureContext:
+    valid: bool = True
+    scope: str = SCOPE_EXTERNAL
+    direction: int = 0
+    state: str = STATE_NEUTRAL
+    last_confirmed_high_identity: int = 0
+    last_confirmed_low_identity: int = 0
+    protected_high_identity: int = 0
+    protected_low_identity: int = 0
+    strong_high_identity: int = 0
+    strong_low_identity: int = 0
+    weak_high_identity: int = 0
+    weak_low_identity: int = 0
+    last_bos_identity: int = 0
+    last_choch_identity: int = 0
+    quality: float = 0.0
+    evidence_text: str = ""
+    conflict_text: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class StructureEvent:
+    valid: bool = False
+    identity: int = 0
+    scope: str = ""
+    event_type: str = EVENT_NONE
+    direction: int = 0
+    event_bar: int | None = None
+    broken_swing_identity: int = 0
+    broken_source_bar: int | None = None
+    origin_swing_identity: int = 0
+    origin_source_bar: int | None = None
+    level: float | None = None
+    origin_price: float | None = None
+    quality: float = 0.0
+    evidence_text: str = ""
+    candidate_bar: int | None = None
+    bos_maturity: BosMaturity = BosMaturity.NOT_APPLICABLE
+
+
+@dataclass(slots=True)
+class BreakCandidate:
+    valid: bool = False
+    identity: int = 0
+    scope: str = ""
+    side: str = ""
+    intended_event_type: str = EVENT_NONE
+    direction: int = 0
+    status: str = BREAK_NONE
+    candidate_bar: int = 0
+    expiry_bar: int = 0
+    level: float = 0.0
+    buffer: float = 0.0
+    candidate_atr: float = 1.0
+    candidate_close: float = 0.0
+    first_close_distance_atr: float = 0.0
+    initial_quality: float = 0.0
+    broken_swing_identity: int = 0
+    broken_source_bar: int = 0
+    broken_quality: float = 50.0
+    broken_side: str = ""
+    origin_swing_identity: int = 0
+    origin_source_bar: int = 0
+    origin_quality: float = 50.0
+    origin_side: str = ""
+    current_evidence: int = 0
+    required_evidence: int = 0
+    status_text: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class BreakConfig:
+    profile: str = "Dengeli"
+    min_tick: float = 0.01
+    break_buffer_atr: float = 0.10
+    break_confirm_window: int = 3
+    min_confirm_body_atr: float = 0.10
+    min_confirm_close_location: float = 0.53
+    min_follow_through_atr: float = 0.00
+    min_confirm_evidence: int = 2
+    require_directional_confirm_candle: bool = False
+    allow_immediate_confirm: bool = True
+    immediate_body_atr: float = 0.22
+    immediate_close_location: float = 0.65
+    immediate_excess_atr: float = 0.16
+    immediate_min_evidence: int = 3
+    min_acceptance_atr: float = 0.03
+    false_break_reversal_atr: float = 0.06
+    shallow_reentry_atr: float = 0.04
+    external_confirm_mult: float = 1.06
+    internal_confirm_mult: float = 0.92
+    bos_confirm_mult: float = 1.00
+    choch_confirm_mult: float = 1.12
+    transition_fail_confirm_mult: float = 1.08
+
+    @property
+    def profile_break_mult(self) -> float:
+        return 0.78 if self.profile == "Hassas" else 1.35 if self.profile == "Seçici" else 1.0
+
+    def event_confirm_multiplier(self, scope: str, event_type: str) -> float:
+        scope_mult = self.external_confirm_mult if scope == "EXTERNAL" else self.internal_confirm_mult
+        event_mult = (
+            self.choch_confirm_mult if event_type == EVENT_CHOCH else
+            self.transition_fail_confirm_mult if event_type == EVENT_TRANSITION_FAIL else
+            self.bos_confirm_mult
+        )
+        return scope_mult * event_mult
+
+
+@dataclass(frozen=True, slots=True)
+class BreakBarEvaluation:
+    confirmed: bool
+    failed: bool
+    false_break: bool
+    evidence_count: int
+    required_evidence: int
+    acceptance: float
+    follow_through: float | None
+    final_quality: float | None
+    status_text: str
+
+
+def _neutral_role(side: str) -> str:
+    return ROLE_NEUTRAL_HIGH if side == SIDE_HIGH else ROLE_NEUTRAL_LOW
+
+
+def _index_by_id(swings: list[SwingPoint], identity: int) -> int | None:
+    for idx, swing in enumerate(swings):
+        if swing.identity == identity:
+            return idx
+    return None
+
+
+def active_by_id(swings: list[SwingPoint], identity: int) -> SwingPoint:
+    idx = _index_by_id(swings, identity)
+    if idx is None:
+        return SwingPoint()
+    s = swings[idx]
+    if not s.valid or s.broken or s.state == SWING_BROKEN:
+        return SwingPoint()
+    return s
+
+
+def _replace(swings: list[SwingPoint], swing: SwingPoint) -> None:
+    idx = _index_by_id(swings, swing.identity)
+    if idx is None:
+        raise KeyError(f"swing identity not found: {swing.identity}")
+    swings[idx] = swing
+
+
+def clear_role_if_matches(swings: list[SwingPoint], identity: int, role: str) -> None:
+    idx = _index_by_id(swings, identity)
+    if idx is None:
+        return
+    s = swings[idx]
+    if s.structural_role == role:
+        swings[idx] = replace(s, structural_role=_neutral_role(s.side))
+
+
+def set_unique_role(swings: list[SwingPoint], identity: int, role: str) -> None:
+    target = active_by_id(swings, identity)
+    if not target.valid:
+        return
+    for idx, s in enumerate(swings):
+        if s.structural_role == role and s.identity != identity:
+            swings[idx] = replace(s, structural_role=_neutral_role(s.side))
+    _replace(swings, replace(target, structural_role=role))
+
+
+def latest_active_after(swings: list[SwingPoint], side: str, anchor_bar: int) -> SwingPoint:
+    candidates = [
+        s for s in swings
+        if s.valid and not s.broken and s.state == SWING_CONFIRMED and s.side == side
+        and s.source_bar is not None and s.source_bar > anchor_bar
+    ]
+    if not candidates:
+        return SwingPoint()
+    return max(candidates, key=lambda s: (s.source_bar or -1, s.identity))
+
+
+def assign_strong_level(swings: list[SwingPoint], ctx: StructureContext, identity: int, side: str) -> StructureContext:
+    out = replace_context(ctx)
+    target = active_by_id(swings, identity)
+    if not target.valid or target.side != side:
+        return out
+    role = ROLE_STRONG_HIGH if side == SIDE_HIGH else ROLE_STRONG_LOW
+    set_unique_role(swings, identity, role)
+    if side == SIDE_HIGH:
+        out.strong_high_identity = identity
+    else:
+        out.strong_low_identity = identity
+    return out
+
+
+def assign_weak_level(swings: list[SwingPoint], ctx: StructureContext, identity: int, side: str) -> StructureContext:
+    out = replace_context(ctx)
+    assigning_high = side == SIDE_HIGH
+    role = ROLE_WEAK_HIGH if assigning_high else ROLE_WEAK_LOW
+    previous = out.weak_high_identity if assigning_high else out.weak_low_identity
+    anchor_identity = out.protected_low_identity if assigning_high else out.protected_high_identity
+    if previous and previous != identity:
+        clear_role_if_matches(swings, previous, role)
+
+    target = active_by_id(swings, identity)
+    anchor = active_by_id(swings, anchor_identity)
+    valid = (
+        target.valid and anchor.valid and target.side == side
+        and target.source_bar is not None and anchor.source_bar is not None
+        and target.source_bar > anchor.source_bar
+    )
+    if valid:
+        set_unique_role(swings, identity, role)
+        if assigning_high:
+            out.weak_high_identity = identity
+        else:
+            out.weak_low_identity = identity
+    else:
+        if identity:
+            clear_role_if_matches(swings, identity, role)
+        if assigning_high:
+            out.weak_high_identity = 0
+        else:
+            out.weak_low_identity = 0
+    return out
+
+
+def assign_protected_level(
+    swings: list[SwingPoint], ctx: StructureContext, identity: int, side: str, promote_previous: bool
+) -> StructureContext:
+    out = replace_context(ctx)
+    assigning_high = side == SIDE_HIGH
+    new_anchor = active_by_id(swings, identity)
+    if not new_anchor.valid or new_anchor.side != side:
+        out.conflict_text = "INVALID_PROTECTED_HIGH_ORIGIN" if assigning_high else "INVALID_PROTECTED_LOW_ORIGIN"
+        return out
+
+    previous_same = out.protected_high_identity if assigning_high else out.protected_low_identity
+    previous_opposite = out.protected_low_identity if assigning_high else out.protected_high_identity
+    same_role = ROLE_PROTECTED_HIGH if assigning_high else ROLE_PROTECTED_LOW
+    opposite_role = ROLE_PROTECTED_LOW if assigning_high else ROLE_PROTECTED_HIGH
+    previous_swing = active_by_id(swings, previous_same)
+
+    if previous_opposite:
+        clear_role_if_matches(swings, previous_opposite, opposite_role)
+    if previous_same and previous_same != identity:
+        clear_role_if_matches(swings, previous_same, same_role)
+
+    if assigning_high:
+        out.protected_low_identity = 0
+        out.protected_high_identity = identity
+        if out.strong_high_identity == identity:
+            clear_role_if_matches(swings, identity, ROLE_STRONG_HIGH)
+            out.strong_high_identity = 0
+    else:
+        out.protected_high_identity = 0
+        out.protected_low_identity = identity
+        if out.strong_low_identity == identity:
+            clear_role_if_matches(swings, identity, ROLE_STRONG_LOW)
+            out.strong_low_identity = 0
+
+    set_unique_role(swings, identity, same_role)
+    if promote_previous and previous_swing.valid and previous_swing.identity != identity:
+        out = assign_strong_level(swings, out, previous_swing.identity, side)
+    return out
+
+
+def normalize_directional_roles(swings: list[SwingPoint], ctx: StructureContext) -> StructureContext:
+    out = replace_context(ctx)
+    bullish = out.state in (STATE_BULLISH, STATE_TRANSITION_UP)
+    bearish = out.state in (STATE_BEARISH, STATE_TRANSITION_DOWN)
+    if bullish:
+        if out.strong_high_identity:
+            clear_role_if_matches(swings, out.strong_high_identity, ROLE_STRONG_HIGH)
+        if out.weak_low_identity:
+            clear_role_if_matches(swings, out.weak_low_identity, ROLE_WEAK_LOW)
+        out.strong_high_identity = 0
+        out.weak_low_identity = 0
+        anchor = active_by_id(swings, out.protected_low_identity)
+        weak = latest_active_after(swings, SIDE_HIGH, anchor.source_bar) if anchor.valid else SwingPoint()
+        out = assign_weak_level(swings, out, weak.identity if weak.valid else 0, SIDE_HIGH)
+    elif bearish:
+        if out.strong_low_identity:
+            clear_role_if_matches(swings, out.strong_low_identity, ROLE_STRONG_LOW)
+        if out.weak_high_identity:
+            clear_role_if_matches(swings, out.weak_high_identity, ROLE_WEAK_HIGH)
+        out.strong_low_identity = 0
+        out.weak_high_identity = 0
+        anchor = active_by_id(swings, out.protected_high_identity)
+        weak = latest_active_after(swings, SIDE_LOW, anchor.source_bar) if anchor.valid else SwingPoint()
+        out = assign_weak_level(swings, out, weak.identity if weak.valid else 0, SIDE_LOW)
+    else:
+        for identity, role in (
+            (out.strong_high_identity, ROLE_STRONG_HIGH), (out.strong_low_identity, ROLE_STRONG_LOW),
+            (out.weak_high_identity, ROLE_WEAK_HIGH), (out.weak_low_identity, ROLE_WEAK_LOW),
+        ):
+            if identity:
+                clear_role_if_matches(swings, identity, role)
+        out.strong_high_identity = out.strong_low_identity = 0
+        out.weak_high_identity = out.weak_low_identity = 0
+    return out
+
+
+def mark_broken(swings: list[SwingPoint], identity: int, bar_index: int) -> None:
+    idx = _index_by_id(swings, identity)
+    if idx is None:
+        return
+    s = swings[idx]
+    swings[idx] = replace(s, state=SWING_BROKEN, broken=True, broken_bar=bar_index, structural_role=_neutral_role(s.side))
+
+
+def finalize_confirmed_break(
+    swings: list[SwingPoint],
+    ctx: StructureContext,
+    candidate: BreakCandidate,
+    *,
+    event_identity: int,
+    event_bar: int,
+    acceptance: float,
+    follow_through: float | None,
+) -> tuple[StructureContext, StructureEvent]:
+    broken = active_by_id(swings, candidate.broken_swing_identity)
+    origin = active_by_id(swings, candidate.origin_swing_identity)
+    if not broken.valid or not origin.valid:
+        raise ValueError("confirmed break references must still be active")
+    if broken.source_bar != candidate.broken_source_bar or origin.source_bar != candidate.origin_source_bar:
+        raise ValueError("break reference identity/source mismatch")
+    if origin.source_bar is None or broken.source_bar is None or not (broken.source_bar < origin.source_bar < candidate.candidate_bar):
+        raise ValueError("break origin chronology invalid")
+
+    q = break_final_quality(candidate, acceptance, follow_through)
+    initial = (
+        candidate.intended_event_type == EVENT_BOS
+        and ctx.state == STATE_NEUTRAL
+        and ctx.direction == 0
+    )
+    bos_maturity = (
+        BosMaturity.INITIAL_STRUCTURE
+        if initial
+        else BosMaturity.TRANSITION_CONFIRMATION
+        if candidate.intended_event_type == EVENT_BOS
+        and ctx.state in (STATE_TRANSITION_UP, STATE_TRANSITION_DOWN)
+        else BosMaturity.CONTINUATION
+        if candidate.intended_event_type == EVENT_BOS
+        else BosMaturity.NOT_APPLICABLE
+    )
+    evidence = (
+        EVIDENCE_INITIAL_STRUCTURE_BREAK_CONFIRMED
+        if bos_maturity is BosMaturity.INITIAL_STRUCTURE
+        else "TRANSITION_BOS_CONFIRMED"
+        if bos_maturity is BosMaturity.TRANSITION_CONFIRMATION
+        else "BOS_CONFIRMED"
+        if bos_maturity is BosMaturity.CONTINUATION
+        else "CHOCH_CONFIRMED"
+        if candidate.intended_event_type == EVENT_CHOCH
+        else "TRANSITION_FAILED"
+    )
+    event = StructureEvent(
+        valid=True, identity=event_identity, scope=candidate.scope,
+        event_type=candidate.intended_event_type, direction=candidate.direction,
+        candidate_bar=candidate.candidate_bar, event_bar=event_bar,
+        broken_swing_identity=broken.identity, broken_source_bar=broken.source_bar,
+        origin_swing_identity=origin.identity, origin_source_bar=origin.source_bar,
+        level=broken.price,
+        origin_price=origin.price,
+        quality=q,
+        evidence_text=evidence,
+        bos_maturity=bos_maturity,
+    )
+
+    out = replace_context(ctx)
+    mark_broken(swings, broken.identity, event_bar)
+
+    if candidate.intended_event_type == EVENT_CHOCH:
+        if candidate.direction == 1:
+            if out.weak_low_identity:
+                clear_role_if_matches(swings, out.weak_low_identity, ROLE_WEAK_LOW)
+            out.weak_low_identity = 0
+            out = assign_protected_level(swings, out, origin.identity, SIDE_LOW, False)
+            out.state = STATE_TRANSITION_UP
+            out.evidence_text = "CHOCH_UP_WAITING_BOS"
+        else:
+            if out.weak_high_identity:
+                clear_role_if_matches(swings, out.weak_high_identity, ROLE_WEAK_HIGH)
+            out.weak_high_identity = 0
+            out = assign_protected_level(swings, out, origin.identity, SIDE_HIGH, False)
+            out.state = STATE_TRANSITION_DOWN
+            out.evidence_text = "CHOCH_DOWN_WAITING_BOS"
+        out.direction = 0
+        out.last_choch_identity = event.identity
+
+    elif candidate.intended_event_type == EVENT_TRANSITION_FAIL:
+        if candidate.direction == 1:
+            out.weak_high_identity = 0
+            out = assign_protected_level(swings, out, origin.identity, SIDE_LOW, False)
+            out.direction = 1
+            out.state = STATE_BULLISH
+            out.evidence_text = "TRANSITION_DOWN_FAILED"
+        else:
+            out.weak_low_identity = 0
+            out = assign_protected_level(swings, out, origin.identity, SIDE_HIGH, False)
+            out.direction = -1
+            out.state = STATE_BEARISH
+            out.evidence_text = "TRANSITION_UP_FAILED"
+
+    else:
+        confirming_transition = (
+            (out.state == STATE_TRANSITION_UP and candidate.direction == 1)
+            or (out.state == STATE_TRANSITION_DOWN and candidate.direction == -1)
+        )
+        if candidate.direction == 1:
+            out.weak_high_identity = 0
+            out = assign_protected_level(swings, out, origin.identity, SIDE_LOW, not initial)
+            out.direction = 1
+            out.state = STATE_BULLISH
+        else:
+            out.weak_low_identity = 0
+            out = assign_protected_level(swings, out, origin.identity, SIDE_HIGH, not initial)
+            out.direction = -1
+            out.state = STATE_BEARISH
+        out.last_bos_identity = event.identity
+        out.evidence_text = "INITIAL_STRUCTURE_ESTABLISHED" if initial else "TRANSITION_CONFIRMED_BY_BOS" if confirming_transition else "BOS_CONFIRMED"
+
+    out.quality = q
+    out.conflict_text = ""
+    out = normalize_directional_roles(swings, out)
+    return out, event
+
+
+def close_location(direction: int, high: float, low: float, close: float, min_tick: float) -> float:
+    spread = max(high - low, min_tick)
+    return (close - low) / spread if direction == 1 else (high - close) / spread
+
+
+def break_impulse_quality(
+    direction: int, level: float, buffer: float, frozen_atr: float,
+    *, open_: float, high: float, low: float, close: float, min_tick: float,
+) -> float:
+    safe_atr = max(frozen_atr, min_tick)
+    directional_distance = close - level if direction == 1 else level - close
+    buffer_atr = max(buffer / safe_atr, 0.01)
+    excess_atr = max(directional_distance - buffer, 0.0) / safe_atr
+    body_atr = abs(close - open_) / safe_atr
+    location = close_location(direction, high, low, close, min_tick)
+    body_score = min(100.0, max(0.0, body_atr / 0.70 * 100.0))
+    location_score = min(100.0, max(0.0, (location - 0.50) / 0.35 * 100.0))
+    excess_score = min(100.0, max(0.0, excess_atr / max(buffer_atr * 1.25, 0.08) * 100.0))
+    direction_score = 100.0 if (close > open_ if direction == 1 else close < open_) else 25.0
+    return round(min(100.0, max(0.0, body_score * 0.30 + location_score * 0.25 + excess_score * 0.35 + direction_score * 0.10)))
+
+
+def break_final_quality(candidate: BreakCandidate, acceptance: float, follow_through: float | None) -> float:
+    structural = min(100.0, max(0.0, (candidate.broken_quality + candidate.origin_quality) * 0.50))
+    if follow_through is None:
+        q = candidate.initial_quality * 0.60 + structural * 0.40
+    else:
+        q = candidate.initial_quality * 0.25 + structural * 0.25 + acceptance * 0.25 + follow_through * 0.25
+    return round(min(100.0, max(0.0, q)))
+
+
+def evaluate_break_candidate(
+    candidate: BreakCandidate,
+    config: BreakConfig,
+    *, bar_index: int, open_: float, high: float, low: float, close: float,
+) -> BreakBarEvaluation:
+    atr = max(candidate.candidate_atr, config.min_tick)
+    direction = candidate.direction
+    beyond = close > candidate.level + candidate.buffer if direction == 1 else close < candidate.level - candidate.buffer
+    holds = close > candidate.level if direction == 1 else close < candidate.level
+    hold_margin = max(candidate.buffer * 0.20, config.min_tick * 2.0)
+    holds_margin = close > candidate.level + hold_margin if direction == 1 else close < candidate.level - hold_margin
+    back_inside = not holds
+    within = bar_index <= candidate.expiry_bar
+    after = bar_index > candidate.candidate_bar
+    same = bar_index == candidate.candidate_bar
+
+    excess_distance = close - (candidate.level + candidate.buffer) if direction == 1 else (candidate.level - candidate.buffer) - close
+    progress_distance = close - candidate.candidate_close if direction == 1 else candidate.candidate_close - close
+    excess_atr = max(excess_distance, 0.0) / atr
+    progress_atr = progress_distance / atr
+    body_atr = abs(close - open_) / atr
+    location = close_location(direction, high, low, close, config.min_tick)
+    directional = close > open_ if direction == 1 else close < open_
+
+    strictness = max(0.85, min(1.20, 0.75 + config.event_confirm_multiplier(candidate.scope, candidate.intended_event_type) * 0.25))
+    body_threshold = config.min_confirm_body_atr * config.profile_break_mult * strictness
+    close_threshold = max(0.50, min(0.92, config.min_confirm_close_location + (strictness - 1.0) * 0.18))
+    acceptance_threshold = config.min_acceptance_atr * config.profile_break_mult * strictness
+    min_evidence = max(1, min(4, config.min_confirm_evidence + (1 if strictness >= 1.06 else -1 if strictness <= 0.94 else 0)))
+    evidence = int(body_atr >= body_threshold) + int(location >= close_threshold) + int(excess_atr >= acceptance_threshold) + int(directional)
+
+    strong_initial = candidate.first_close_distance_atr >= config.break_buffer_atr * config.event_confirm_multiplier(candidate.scope, candidate.intended_event_type) * 1.15
+    acceptance_zone_ok = beyond or (holds_margin and strong_initial)
+    candle_direction_ok = (not config.require_directional_confirm_candle) or directional
+
+    immediate_min = max(2, min(4, config.immediate_min_evidence + (1 if strictness >= 1.06 else -1 if strictness <= 0.94 else 0)))
+    immediate_location = min(0.92, config.immediate_close_location + (strictness - 1.0) * 0.16)
+    immediate_evidence = (
+        int(body_atr >= config.immediate_body_atr * config.profile_break_mult * strictness)
+        + int(location >= immediate_location)
+        + int(excess_atr >= config.immediate_excess_atr * config.profile_break_mult * strictness)
+        + int(directional)
+    )
+    immediate = config.allow_immediate_confirm and same and beyond and immediate_evidence >= immediate_min
+    normal = after and within and acceptance_zone_ok and evidence >= min_evidence and candle_direction_ok
+
+    buffer_atr = candidate.buffer / atr
+    acceptance_distance = max((close - candidate.level) if direction == 1 else (candidate.level - close), 0.0) / atr if holds else 0.0
+    acceptance_target = max(0.06, buffer_atr * 1.50, acceptance_threshold * 2.0)
+    acceptance = min(100.0, max(0.0, acceptance_distance / acceptance_target * 100.0)) if holds else 0.0
+    ft_target = max(0.10, buffer_atr, config.min_follow_through_atr * strictness * 2.0)
+    follow = min(100.0, max(0.0, max(progress_atr, 0.0) / ft_target * 100.0)) if after and acceptance_zone_ok else None
+
+    reversal_distance = candidate.level - close if direction == 1 else close - candidate.level
+    reversal_atr = max(reversal_distance, 0.0) / atr
+    opposite = close < open_ if direction == 1 else close > open_
+    opposite_location = 1.0 - close_location(direction, high, low, close, config.min_tick)
+    meaningful_reversal = back_inside and reversal_atr >= config.false_break_reversal_atr * config.profile_break_mult and (opposite or opposite_location >= 0.55)
+    deep_reentry = back_inside and reversal_atr > config.shallow_reentry_atr * config.profile_break_mult
+    failed = not (immediate or normal) and (meaningful_reversal or (bar_index > candidate.expiry_bar and deep_reentry))
+    confirmed = immediate or normal
+    quality = break_final_quality(candidate, acceptance, follow) if confirmed else None
+    status = "confirmed" if confirmed else "false break" if meaningful_reversal else "inside risk" if back_inside else "acceptance pending"
+    return BreakBarEvaluation(confirmed, failed, meaningful_reversal, immediate_evidence if same else evidence, immediate_min if same else min_evidence, acceptance, follow, quality, status)
+
+
+def is_sweep(side: str, level: float, buffer: float, *, high: float, low: float, close: float) -> bool:
+    return high > level + buffer and close <= level if side == SIDE_HIGH else low < level - buffer and close >= level
+
+
+def export_state_code(state: str) -> float:
+    return 2.0 if state == STATE_BULLISH else 1.0 if state == STATE_TRANSITION_UP else -2.0 if state == STATE_BEARISH else -1.0 if state == STATE_TRANSITION_DOWN else 0.0
+
+
+def export_directional_level(state: str, bullish_level: float | None, bearish_level: float | None) -> float | None:
+    if state in (STATE_BULLISH, STATE_TRANSITION_UP):
+        return bullish_level
+    if state in (STATE_BEARISH, STATE_TRANSITION_DOWN):
+        return bearish_level
+    return None
+
+
+def replace_context(ctx: StructureContext) -> StructureContext:
+    return StructureContext(**{field: getattr(ctx, field) for field in StructureContext.__dataclass_fields__})
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/market_structure_events.py
+
+EXTRACTED:
+Public event record/scope modelleri ve event ledger
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from enum import StrEnum
+from typing import Any, Iterable, Sequence
+
+from .market_structure_state import (
+    BosMaturity,
+    EVENT_BOS,
+    EVENT_CHOCH,
+    EVENT_FALSE_BREAK,
+    EVENT_TRANSITION_FAIL,
+    StructureContext,
+    StructureEvent,
+)
+from .models import Direction
+
+
+class StructureEventConfirmation(StrEnum):
+    """How the closed-bar event entered the public ledger."""
+
+    CONFIRMED = "CONFIRMED"
+    CANDIDATE_FAILED = "CANDIDATE_FAILED"
+
+
+class StructureEventValidity(StrEnum):
+    """Whether a previously confirmed structural thesis still completed normally."""
+
+    VALID = "VALID"
+    FAILED = "FAILED"
+
+
+class StructureEventRelevance(StrEnum):
+    """Current relevance without deleting historical facts."""
+
+    CURRENT = "CURRENT"
+    SUPERSEDED = "SUPERSEDED"
+    HISTORICAL = "HISTORICAL"
+
+
+class StructureEventOutcome(StrEnum):
+    """Follow-up state for events that require or receive later evidence."""
+
+    PENDING = "PENDING"
+    FOLLOW_THROUGH_CONFIRMED = "FOLLOW_THROUGH_CONFIRMED"
+    FAILED = "FAILED"
+    OBSERVED = "OBSERVED"
+
+
+@dataclass(frozen=True, slots=True)
+class MarketStructureEventRecord:
+    """Immutable, replay-stable public record for one Market Structure event.
+
+    Native event identities are scope-local. ``event_uid`` is therefore local while
+    the record belongs to a single engine. ``with_namespace`` adds symbol and
+    timeframe when independent engines are assembled into an MTF snapshot.
+    """
+
+    event_uid: str
+    identity: int
+    scope: str
+    event_type: str
+    direction: Direction
+    candidate_bar: int | None
+    event_bar: int
+    candidate_at: Any
+    confirmed_at: Any
+    broken_swing_identity: int
+    broken_source_bar: int | None
+    broken_source_at: Any
+    broken_level: float | None
+    origin_swing_identity: int
+    origin_source_bar: int | None
+    origin_source_at: Any
+    origin_price: float | None
+    quality: float
+    evidence_text: str
+    confirmation_status: StructureEventConfirmation
+    validity: StructureEventValidity
+    relevance: StructureEventRelevance
+    outcome: StructureEventOutcome
+    confirmed_by_event_uid: str | None = None
+    failed_by_event_uid: str | None = None
+    age_bars: int = 0
+    symbol: str | None = None
+    timeframe: str | None = None
+    confirmation_high: float | None = None
+    confirmation_low: float | None = None
+    confirmation_close: float | None = None
+    bos_maturity: BosMaturity = BosMaturity.NOT_APPLICABLE
+
+    @property
+    def is_initial_structure(self) -> bool:
+        return self.bos_maturity is BosMaturity.INITIAL_STRUCTURE
+
+    @property
+    def is_active(self) -> bool:
+        return (
+            self.validity is StructureEventValidity.VALID
+            and self.relevance is StructureEventRelevance.CURRENT
+        )
+
+    def with_namespace(self, *, symbol: str, timeframe: str) -> MarketStructureEventRecord:
+        normalized_timeframe = timeframe.strip().lower()
+        prefix = f"{symbol}:{normalized_timeframe}:"
+
+        def qualify(reference: str | None) -> str | None:
+            return f"{prefix}{reference}" if reference else None
+
+        return replace(
+            self,
+            event_uid=f"{prefix}{self.event_uid}",
+            confirmed_by_event_uid=qualify(self.confirmed_by_event_uid),
+            failed_by_event_uid=qualify(self.failed_by_event_uid),
+            symbol=symbol,
+            timeframe=normalized_timeframe,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class MarketStructureScopeSnapshot:
+    """Immutable public copy of one internal or external structure context."""
+
+    scope: str
+    state: str
+    direction: Direction
+    quality: float
+    evidence_text: str
+    conflict_text: str
+    last_confirmed_high_identity: int
+    last_confirmed_low_identity: int
+    protected_high_identity: int
+    protected_low_identity: int
+    strong_high_identity: int
+    strong_low_identity: int
+    weak_high_identity: int
+    weak_low_identity: int
+    last_bos_identity: int
+    last_choch_identity: int
+    latest_event: MarketStructureEventRecord | None = None
+
+    @classmethod
+    def from_context(
+        cls,
+        context: StructureContext,
+        *,
+        latest_event: MarketStructureEventRecord | None = None,
+    ) -> "MarketStructureScopeSnapshot":
+        direction = (
+            Direction.UP
+            if context.direction > 0
+            else Direction.DOWN
+            if context.direction < 0
+            else Direction.NEUTRAL
+        )
+        return cls(
+            scope=context.scope,
+            state=context.state,
+            direction=direction,
+            quality=context.quality,
+            evidence_text=context.evidence_text,
+            conflict_text=context.conflict_text,
+            last_confirmed_high_identity=context.last_confirmed_high_identity,
+            last_confirmed_low_identity=context.last_confirmed_low_identity,
+            protected_high_identity=context.protected_high_identity,
+            protected_low_identity=context.protected_low_identity,
+            strong_high_identity=context.strong_high_identity,
+            strong_low_identity=context.strong_low_identity,
+            weak_high_identity=context.weak_high_identity,
+            weak_low_identity=context.weak_low_identity,
+            last_bos_identity=context.last_bos_identity,
+            last_choch_identity=context.last_choch_identity,
+            latest_event=latest_event,
+        )
+
+
+class MarketStructureEventLedger:
+    """Append-only event chronology with immutable lifecycle annotations.
+
+    Records are never deleted. Later BOS/transition-failure events annotate an older
+    CHoCH as followed-through or failed while retaining the original confirmation
+    time and price references.
+    """
+
+    def __init__(self) -> None:
+        self._records: list[MarketStructureEventRecord] = []
+
+    def reset(self) -> None:
+        self._records = []
+
+    @staticmethod
+    def _timestamp(rows: Sequence[dict[str, Any]], index: int | None) -> Any:
+        if index is None or index < 0 or index >= len(rows):
+            return None
+        return rows[index].get("timestamp")
+
+    @staticmethod
+    def _price(rows: Sequence[dict[str, Any]], index: int | None, field: str) -> float | None:
+        if index is None or index < 0 or index >= len(rows):
+            return None
+        value = rows[index].get(field)
+        return None if value is None else float(value)
+
+    @staticmethod
+    def _direction(value: int) -> Direction:
+        if value > 0:
+            return Direction.UP
+        if value < 0:
+            return Direction.DOWN
+        return Direction.NEUTRAL
+
+    def append(self, event: StructureEvent, rows: Sequence[dict[str, Any]]) -> MarketStructureEventRecord:
+        if not event.valid or event.event_bar is None:
+            raise ValueError("only valid, confirmed-time structure events can enter the ledger")
+
+        event_uid = f"{event.scope}:{event.identity}"
+        if any(record.event_uid == event_uid for record in self._records):
+            raise ValueError(f"duplicate Market Structure event identity: {event_uid}")
+
+        candidate_failed = event.event_type == EVENT_FALSE_BREAK
+        outcome = (
+            StructureEventOutcome.PENDING
+            if event.event_type == EVENT_CHOCH
+            else StructureEventOutcome.FAILED
+            if candidate_failed
+            else StructureEventOutcome.OBSERVED
+        )
+        record = MarketStructureEventRecord(
+            event_uid=event_uid,
+            identity=event.identity,
+            scope=event.scope,
+            event_type=event.event_type,
+            direction=self._direction(event.direction),
+            candidate_bar=event.candidate_bar,
+            event_bar=event.event_bar,
+            candidate_at=self._timestamp(rows, event.candidate_bar),
+            confirmed_at=self._timestamp(rows, event.event_bar),
+            broken_swing_identity=event.broken_swing_identity,
+            broken_source_bar=event.broken_source_bar,
+            broken_source_at=self._timestamp(rows, event.broken_source_bar),
+            broken_level=None if event.level is None else float(event.level),
+            origin_swing_identity=event.origin_swing_identity,
+            origin_source_bar=event.origin_source_bar,
+            origin_source_at=self._timestamp(rows, event.origin_source_bar),
+            origin_price=None if event.origin_price is None else float(event.origin_price),
+            quality=float(event.quality),
+            evidence_text=event.evidence_text,
+            confirmation_status=(
+                StructureEventConfirmation.CANDIDATE_FAILED
+                if candidate_failed
+                else StructureEventConfirmation.CONFIRMED
+            ),
+            validity=(
+                StructureEventValidity.FAILED
+                if candidate_failed
+                else StructureEventValidity.VALID
+            ),
+            relevance=StructureEventRelevance.CURRENT,
+            outcome=outcome,
+            confirmation_high=self._price(rows, event.event_bar, "high"),
+            bos_maturity=event.bos_maturity,
+            confirmation_low=self._price(rows, event.event_bar, "low"),
+            confirmation_close=self._price(rows, event.event_bar, "close"),
+        )
+        self._records.append(record)
+        return record
+
+    def extend(
+        self,
+        events: Iterable[StructureEvent],
+        rows: Sequence[dict[str, Any]],
+    ) -> tuple[MarketStructureEventRecord, ...]:
+        return tuple(self.append(event, rows) for event in events)
+
+    def snapshot(self, *, current_bar: int) -> tuple[MarketStructureEventRecord, ...]:
+        """Return annotations in one chronological pass without mutating facts."""
+
+        annotated: list[MarketStructureEventRecord] = []
+        latest_current: dict[tuple[str, str, int], int] = {}
+        pending_choch: dict[tuple[str, int], list[int]] = {}
+
+        def current_key(record: MarketStructureEventRecord) -> tuple[str, str, int]:
+            return (record.scope, record.event_type, int(record.direction))
+
+        def clear_current(index: int) -> None:
+            key = current_key(annotated[index])
+            if latest_current.get(key) == index:
+                latest_current.pop(key, None)
+
+        for base_record in self._records:
+            key = current_key(base_record)
+            same_index = latest_current.get(key)
+            if same_index is not None:
+                annotated[same_index] = replace(
+                    annotated[same_index],
+                    relevance=StructureEventRelevance.SUPERSEDED,
+                )
+                latest_current.pop(key, None)
+
+            if base_record.event_type == EVENT_BOS:
+                pending_key = (base_record.scope, int(base_record.direction))
+                stack = pending_choch.get(pending_key)
+                if stack:
+                    choch_index = stack.pop()
+                    annotated[choch_index] = replace(
+                        annotated[choch_index],
+                        relevance=StructureEventRelevance.HISTORICAL,
+                        outcome=StructureEventOutcome.FOLLOW_THROUGH_CONFIRMED,
+                        confirmed_by_event_uid=base_record.event_uid,
+                    )
+                    clear_current(choch_index)
+
+            if base_record.event_type == EVENT_TRANSITION_FAIL:
+                pending_key = (base_record.scope, -int(base_record.direction))
+                stack = pending_choch.get(pending_key)
+                if stack:
+                    choch_index = stack.pop()
+                    annotated[choch_index] = replace(
+                        annotated[choch_index],
+                        validity=StructureEventValidity.FAILED,
+                        relevance=StructureEventRelevance.HISTORICAL,
+                        outcome=StructureEventOutcome.FAILED,
+                        failed_by_event_uid=base_record.event_uid,
+                    )
+                    clear_current(choch_index)
+
+            index = len(annotated)
+            annotated.append(base_record)
+            latest_current[key] = index
+            if (
+                base_record.event_type == EVENT_CHOCH
+                and base_record.validity is StructureEventValidity.VALID
+                and base_record.outcome is StructureEventOutcome.PENDING
+            ):
+                pending_choch.setdefault(
+                    (base_record.scope, int(base_record.direction)), []
+                ).append(index)
+
+        return tuple(
+            replace(record, age_bars=max(0, current_bar - record.event_bar))
+            for record in annotated
+        )
+
+    def latest(
+        self,
+        *,
+        current_bar: int,
+        scope: str | None = None,
+        event_type: str | None = None,
+        direction: Direction | None = None,
+    ) -> MarketStructureEventRecord | None:
+        records = self.snapshot(current_bar=current_bar)
+        for record in reversed(records):
+            if scope is not None and record.scope != scope:
+                continue
+            if event_type is not None and record.event_type != event_type:
+                continue
+            if direction is not None and record.direction is not direction:
+                continue
+            return record
+        return None
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/market_structure_evidence.py
+
+EXTRACTED:
+MarketStructureExport ve domain içi structure evidence score hesabı
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from .market_structure import SwingPoint
+from .market_structure_events import MarketStructureEventRecord, MarketStructureScopeSnapshot
+from .market_structure_state import (
+    EVENT_BOS,
+    EVENT_CHOCH,
+    EVENT_FALSE_BREAK,
+    EVENT_TRANSITION_FAIL,
+    STATE_BEARISH,
+    STATE_BULLISH,
+    STATE_TRANSITION_DOWN,
+    STATE_TRANSITION_UP,
+    StructureContext,
+    StructureEvent,
+    active_by_id,
+    export_state_code,
+)
+
+HANDSHAKE = 314159.0
+
+
+@dataclass(frozen=True, slots=True)
+class MarketStructureExport:
+    external_state: float | None
+    internal_state: float | None
+    evidence_score: float | None
+    external_protected_low: float | None
+    external_protected_high: float | None
+    external_weak_low: float | None
+    external_weak_high: float | None
+    internal_protected_low: float | None
+    internal_protected_high: float | None
+    internal_weak_low: float | None
+    internal_weak_high: float | None
+    handshake: float = HANDSHAKE
+    contract_version: int = 3
+    events: tuple[MarketStructureEventRecord, ...] = ()
+    latest_external_event: MarketStructureEventRecord | None = None
+    latest_internal_event: MarketStructureEventRecord | None = None
+    external_scope: MarketStructureScopeSnapshot | None = None
+    internal_scope: MarketStructureScopeSnapshot | None = None
+
+
+def _latest_event(external: StructureEvent | None, internal: StructureEvent | None) -> StructureEvent | None:
+    if external and external.valid and internal and internal.valid:
+        ext_bar = external.event_bar if external.event_bar is not None else -1
+        int_bar = internal.event_bar if internal.event_bar is not None else -1
+        return internal if (int_bar, internal.identity) > (ext_bar, external.identity) else external
+    if external and external.valid:
+        return external
+    if internal and internal.valid:
+        return internal
+    return None
+
+
+def structure_score(
+    external: StructureContext,
+    internal: StructureContext,
+    external_event: StructureEvent | None,
+    internal_event: StructureEvent | None,
+    *,
+    bar_index: int,
+) -> float:
+    external_transition = external.state in (STATE_TRANSITION_UP, STATE_TRANSITION_DOWN)
+    transition_direction = 1 if external.state == STATE_TRANSITION_UP else -1 if external.state == STATE_TRANSITION_DOWN else 0
+    expected_direction = transition_direction if external_transition else external.direction
+
+    if external_transition:
+        structure_evidence = external.quality if external.quality else 55.0
+    elif external.direction == 0:
+        structure_evidence = 35.0
+    else:
+        structure_evidence = external.quality if external.quality else 65.0
+
+    has_protected = (
+        external.protected_low_identity != 0 if external.state in (STATE_BULLISH, STATE_TRANSITION_UP)
+        else external.protected_high_identity != 0 if external.state in (STATE_BEARISH, STATE_TRANSITION_DOWN)
+        else False
+    )
+    has_weak = (
+        external.weak_high_identity != 0 if external.state in (STATE_BULLISH, STATE_TRANSITION_UP)
+        else external.weak_low_identity != 0 if external.state in (STATE_BEARISH, STATE_TRANSITION_DOWN)
+        else False
+    )
+    role_integrity = 92.0 if has_protected and has_weak else 68.0 if has_protected else 42.0 if external.direction == 0 and not external_transition else 25.0
+    swing_integrity = 82.0 if external.last_confirmed_high_identity and external.last_confirmed_low_identity else 48.0
+
+    if external_transition:
+        relation = 60.0 if internal.direction == 0 else 82.0 if internal.direction == transition_direction else 48.0
+    elif external.direction == 0:
+        relation = 45.0
+    else:
+        relation = 60.0 if internal.direction == 0 else 90.0 if external.direction == internal.direction else 58.0
+
+    freshest = _latest_event(external_event, internal_event)
+    if freshest is not None and freshest.event_bar is not None:
+        freshness = max(20.0, 100.0 - (bar_index - freshest.event_bar) * 3.0)
+    else:
+        freshness = 45.0
+
+    raw = structure_evidence * 0.40 + role_integrity * 0.25 + swing_integrity * 0.15 + relation * 0.15 + freshness * 0.05
+
+    if freshest is not None:
+        key_event = freshest.event_type in (EVENT_BOS, EVENT_CHOCH, EVENT_TRANSITION_FAIL)
+        opposes = key_event and expected_direction != 0 and freshest.direction != 0 and freshest.direction != expected_direction
+        if opposes:
+            raw -= 6.0
+        if freshest.event_type == EVENT_FALSE_BREAK:
+            raw -= 10.0
+        if freshest.event_type == EVENT_TRANSITION_FAIL:
+            raw -= 4.0
+    if external.conflict_text:
+        raw -= 12.0
+
+    if external.direction == 0 and not external_transition:
+        raw = min(raw, 60.0)
+        if internal.direction != 0:
+            raw = min(raw, 55.0)
+    if external_transition:
+        raw = min(raw, 79.0)
+    return round(max(0.0, min(100.0, raw)))
+
+
+def _price(swings: list[SwingPoint], identity: int) -> float | None:
+    swing = active_by_id(swings, identity)
+    return swing.price if swing.valid and not swing.broken else None
+
+
+def export_snapshot(
+    external_swings: list[SwingPoint],
+    internal_swings: list[SwingPoint],
+    external: StructureContext,
+    internal: StructureContext,
+    *,
+    evidence_score: float,
+    engine_enabled: bool = True,
+) -> MarketStructureExport:
+    external_safe = engine_enabled and external.conflict_text == ""
+    internal_safe = engine_enabled and internal.conflict_text == ""
+    score_safe = external_safe and internal_safe
+    return MarketStructureExport(
+        external_state=export_state_code(external.state) if external_safe else None,
+        internal_state=export_state_code(internal.state) if internal_safe else None,
+        evidence_score=evidence_score if score_safe else None,
+        external_protected_low=_price(external_swings, external.protected_low_identity) if external_safe else None,
+        external_protected_high=_price(external_swings, external.protected_high_identity) if external_safe else None,
+        external_weak_low=_price(external_swings, external.weak_low_identity) if external_safe else None,
+        external_weak_high=_price(external_swings, external.weak_high_identity) if external_safe else None,
+        internal_protected_low=_price(internal_swings, internal.protected_low_identity) if internal_safe else None,
+        internal_protected_high=_price(internal_swings, internal.protected_high_identity) if internal_safe else None,
+        internal_weak_low=_price(internal_swings, internal.weak_low_identity) if internal_safe else None,
+        internal_weak_high=_price(internal_swings, internal.weak_high_identity) if internal_safe else None,
+    )
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/market_structure_runtime.py
+
+EXTRACTED:
+External/internal BOS/CHOCH/sweep/break chronology ve export wiring
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from .market_structure import SCOPE_EXTERNAL, SCOPE_INTERNAL, SIDE_HIGH, SIDE_LOW, SWING_CANDIDATE, SWING_CONFIRMED, SwingPoint
+from .market_structure_evidence import MarketStructureExport, export_snapshot, structure_score
+from .market_structure_state import (
+    BREAK_NONE,
+    EVENT_BOS,
+    EVENT_CHOCH,
+    EVENT_FALSE_BREAK,
+    EVENT_SWEEP,
+    EVENT_TRANSITION_FAIL,
+    ROLE_PROTECTED_HIGH,
+    ROLE_PROTECTED_LOW,
+    STATE_BEARISH,
+    STATE_BULLISH,
+    STATE_NEUTRAL,
+    STATE_TRANSITION_DOWN,
+    STATE_TRANSITION_UP,
+    BreakCandidate,
+    BreakConfig,
+    StructureContext,
+    StructureEvent,
+    active_by_id,
+    break_impulse_quality,
+    evaluate_break_candidate,
+    finalize_confirmed_break,
+    is_sweep,
+    normalize_directional_roles,
+)
+
+
+@dataclass(slots=True)
+class _RuntimeScope:
+    context: StructureContext
+    candidate: BreakCandidate
+    last_event: StructureEvent | None = None
+    last_broken_high: int = 0
+    last_broken_low: int = 0
+    next_candidate_id: int = 0
+    next_event_id: int = 0
+
+
+class MarketStructureRuntime:
+    """Wires the validated swing, break/state, and evidence/export layers.
+
+    This class owns only runtime chronology/state. It intentionally delegates the
+    already-tested swing math and break-quality math to their existing modules.
+    """
+
+    def __init__(self, break_config: BreakConfig | None = None) -> None:
+        self.break_config = break_config or BreakConfig()
+        self.external = _RuntimeScope(StructureContext(scope=SCOPE_EXTERNAL), BreakCandidate())
+        self.internal = _RuntimeScope(StructureContext(scope=SCOPE_INTERNAL), BreakCandidate())
+
+    def reset(self) -> None:
+        self.external = _RuntimeScope(StructureContext(scope=SCOPE_EXTERNAL), BreakCandidate())
+        self.internal = _RuntimeScope(StructureContext(scope=SCOPE_INTERNAL), BreakCandidate())
+
+    def scope(self, scope: str) -> _RuntimeScope:
+        return self.external if scope == SCOPE_EXTERNAL else self.internal
+
+    def locks_candidate(self, scope: str, candidate: SwingPoint) -> bool:
+        if not candidate.valid:
+            return False
+        runtime = self.scope(scope)
+        bc = runtime.candidate
+        if not bc.valid:
+            return False
+        return candidate.identity in {bc.broken_swing_identity, bc.origin_swing_identity}
+
+    @staticmethod
+    def _latest_confirmed(swings: list[SwingPoint], side: str) -> SwingPoint:
+        eligible = [s for s in swings if s.valid and s.finalized and s.state == SWING_CONFIRMED and not s.broken and s.side == side]
+        return max(eligible, key=lambda s: (s.source_bar if s.source_bar is not None else -1, s.identity)) if eligible else SwingPoint()
+
+    @staticmethod
+    def _latest_confirmed_after(swings: list[SwingPoint], side: str, anchor_bar: int) -> SwingPoint:
+        eligible = [
+            s for s in swings
+            if s.valid and s.finalized and s.state == SWING_CONFIRMED and not s.broken and s.side == side
+            and s.source_bar is not None and s.source_bar > anchor_bar
+        ]
+        return max(eligible, key=lambda s: (s.source_bar or -1, s.identity)) if eligible else SwingPoint()
+
+    def _provisional_gate(self, s: SwingPoint, scope: str, bar_index: int, origin_role: bool) -> bool:
+        if not s.valid or s.state != SWING_CANDIDATE or s.source_bar is None:
+            return False
+        scope_min = 0.45 if scope == SCOPE_EXTERNAL else 0.20
+        if self.break_config.profile == "Hassas":
+            scope_min *= 0.72
+        elif self.break_config.profile == "Seçici":
+            scope_min *= 1.42
+        min_prominence = max(0.15 if scope == SCOPE_EXTERNAL else 0.10, scope_min * 0.45)
+        min_distance = scope_min * 0.55
+        min_quality = 42.0 if scope == SCOPE_EXTERNAL else 39.0
+        min_age = 1 if origin_role else 1
+        age = bar_index - s.source_bar
+        return (
+            age >= min_age
+            and (s.quality or 0.0) >= min_quality
+            and ((s.prominence_atr or 0.0) >= min_prominence or (s.distance_atr or 0.0) >= min_distance)
+        )
+
+    def _find_origin(
+        self,
+        swings: list[SwingPoint],
+        candidate_origin: SwingPoint,
+        required_side: str,
+        broken_source_bar: int,
+        break_bar: int,
+        scope: str,
+    ) -> SwingPoint:
+        eligible = [
+            s for s in swings
+            if s.valid and s.finalized and s.state == SWING_CONFIRMED and not s.broken
+            and s.side == required_side and s.source_bar is not None
+            and broken_source_bar < s.source_bar < break_bar
+        ]
+        out = max(eligible, key=lambda s: (s.source_bar or -1, s.identity)) if eligible else SwingPoint()
+        candidate_ok = (
+            candidate_origin.valid and candidate_origin.side == required_side and candidate_origin.source_bar is not None
+            and broken_source_bar < candidate_origin.source_bar < break_bar
+            and self._provisional_gate(candidate_origin, scope, break_bar, True)
+        )
+        if candidate_ok and (not out.valid or (candidate_origin.source_bar or -1) > (out.source_bar or -1)):
+            out = candidate_origin
+        return out
+
+    def _buffer(self, scope: str, event_type: str, safe_atr: float) -> float:
+        base = max(safe_atr * self.break_config.break_buffer_atr * self.break_config.profile_break_mult, self.break_config.min_tick * 3.0)
+        return max(base * self.break_config.event_confirm_multiplier(scope, event_type), self.break_config.min_tick * 3.0)
+
+    @staticmethod
+    def _breaks_level(direction: int, level: float, buffer: float, close: float) -> bool:
+        return close > level + buffer if direction == 1 else close < level - buffer
+
+    def _new_candidate(
+        self,
+        runtime: _RuntimeScope,
+        *,
+        scope: str,
+        event_type: str,
+        direction: int,
+        broken: SwingPoint,
+        origin: SwingPoint,
+        bar_index: int,
+        close: float,
+        safe_atr: float,
+        open_: float,
+        high: float,
+        low: float,
+    ) -> BreakCandidate:
+        runtime.next_candidate_id += 1
+        buffer = self._buffer(scope, event_type, safe_atr)
+        initial_quality = break_impulse_quality(
+            direction,
+            float(broken.price),
+            buffer,
+            safe_atr,
+            open_=open_,
+            high=high,
+            low=low,
+            close=close,
+            min_tick=self.break_config.min_tick,
+        )
+        distance = (close - float(broken.price)) / safe_atr if direction == 1 else (float(broken.price) - close) / safe_atr
+        return BreakCandidate(
+            valid=True,
+            identity=runtime.next_candidate_id,
+            scope=scope,
+            side=broken.side,
+            intended_event_type=event_type,
+            direction=direction,
+            status="BREAK_CANDIDATE",
+            candidate_bar=bar_index,
+            expiry_bar=bar_index + self.break_config.break_confirm_window,
+            level=float(broken.price),
+            buffer=buffer,
+            candidate_atr=safe_atr,
+            candidate_close=close,
+            first_close_distance_atr=distance,
+            initial_quality=initial_quality,
+            broken_swing_identity=broken.identity,
+            broken_source_bar=int(broken.source_bar),
+            broken_quality=broken.quality or 50.0,
+            broken_side=broken.side,
+            origin_swing_identity=origin.identity,
+            origin_source_bar=int(origin.source_bar),
+            origin_quality=origin.quality or 50.0,
+            origin_side=origin.side,
+        )
+
+    def _candidate_target(
+        self,
+        runtime: _RuntimeScope,
+        swings: list[SwingPoint],
+        high_candidate: SwingPoint,
+        low_candidate: SwingPoint,
+        *,
+        scope: str,
+        bar_index: int,
+        close: float,
+        safe_atr: float,
+        open_: float,
+        high: float,
+        low: float,
+    ) -> BreakCandidate:
+        ctx = runtime.context
+        last_high = active_by_id(swings, ctx.last_confirmed_high_identity)
+        last_low = active_by_id(swings, ctx.last_confirmed_low_identity)
+        protected_high = active_by_id(swings, ctx.protected_high_identity)
+        protected_low = active_by_id(swings, ctx.protected_low_identity)
+        weak_high = active_by_id(swings, ctx.weak_high_identity)
+        weak_low = active_by_id(swings, ctx.weak_low_identity)
+
+        # Priority 1: transition failure restores the old main direction.
+        if ctx.state == STATE_TRANSITION_DOWN and protected_high.valid:
+            buffer = self._buffer(scope, EVENT_TRANSITION_FAIL, safe_atr)
+            if self._breaks_level(1, float(protected_high.price), buffer, close) and protected_high.identity != runtime.last_broken_high:
+                origin = self._find_origin(swings, low_candidate, SIDE_LOW, int(protected_high.source_bar), bar_index, scope)
+                if origin.valid:
+                    return self._new_candidate(runtime, scope=scope, event_type=EVENT_TRANSITION_FAIL, direction=1, broken=protected_high, origin=origin, bar_index=bar_index, close=close, safe_atr=safe_atr, open_=open_, high=high, low=low)
+        if ctx.state == STATE_TRANSITION_UP and protected_low.valid:
+            buffer = self._buffer(scope, EVENT_TRANSITION_FAIL, safe_atr)
+            if self._breaks_level(-1, float(protected_low.price), buffer, close) and protected_low.identity != runtime.last_broken_low:
+                origin = self._find_origin(swings, high_candidate, SIDE_HIGH, int(protected_low.source_bar), bar_index, scope)
+                if origin.valid:
+                    return self._new_candidate(runtime, scope=scope, event_type=EVENT_TRANSITION_FAIL, direction=-1, broken=protected_low, origin=origin, bar_index=bar_index, close=close, safe_atr=safe_atr, open_=open_, high=high, low=low)
+
+        # Priority 2: CHoCH only breaks the protected anchor of the main direction.
+        if ctx.state == STATE_BEARISH and ctx.direction == -1 and protected_high.valid:
+            buffer = self._buffer(scope, EVENT_CHOCH, safe_atr)
+            if self._breaks_level(1, float(protected_high.price), buffer, close) and protected_high.identity != runtime.last_broken_high:
+                origin = self._find_origin(swings, low_candidate, SIDE_LOW, int(protected_high.source_bar), bar_index, scope)
+                if origin.valid:
+                    return self._new_candidate(runtime, scope=scope, event_type=EVENT_CHOCH, direction=1, broken=protected_high, origin=origin, bar_index=bar_index, close=close, safe_atr=safe_atr, open_=open_, high=high, low=low)
+        if ctx.state == STATE_BULLISH and ctx.direction == 1 and protected_low.valid:
+            buffer = self._buffer(scope, EVENT_CHOCH, safe_atr)
+            if self._breaks_level(-1, float(protected_low.price), buffer, close) and protected_low.identity != runtime.last_broken_low:
+                origin = self._find_origin(swings, high_candidate, SIDE_HIGH, int(protected_low.source_bar), bar_index, scope)
+                if origin.valid:
+                    return self._new_candidate(runtime, scope=scope, event_type=EVENT_CHOCH, direction=-1, broken=protected_low, origin=origin, bar_index=bar_index, close=close, safe_atr=safe_atr, open_=open_, high=high, low=low)
+
+        # Priority 3: BOS. Weak is preferred, then latest confirmed after protected,
+        # then a gated provisional candidate.
+        neutral = ctx.state == STATE_NEUTRAL and ctx.direction == 0
+        bullish_allowed = ctx.direction == 1 or ctx.state == STATE_TRANSITION_UP or neutral
+        bearish_allowed = ctx.direction == -1 or ctx.state == STATE_TRANSITION_DOWN or neutral
+
+        bullish_fallback = self._latest_confirmed_after(swings, SIDE_HIGH, int(protected_low.source_bar)) if protected_low.valid else SwingPoint()
+        bearish_fallback = self._latest_confirmed_after(swings, SIDE_LOW, int(protected_high.source_bar)) if protected_high.valid else SwingPoint()
+        bullish_provisional = high_candidate if (
+            high_candidate.valid and (neutral or (protected_low.valid and high_candidate.source_bar is not None and high_candidate.source_bar > int(protected_low.source_bar)))
+            and self._provisional_gate(high_candidate, scope, bar_index, False)
+        ) else SwingPoint()
+        bearish_provisional = low_candidate if (
+            low_candidate.valid and (neutral or (protected_high.valid and low_candidate.source_bar is not None and low_candidate.source_bar > int(protected_high.source_bar)))
+            and self._provisional_gate(low_candidate, scope, bar_index, False)
+        ) else SwingPoint()
+
+        bullish_target = (weak_high if weak_high.valid else bullish_fallback if bullish_fallback.valid else bullish_provisional) if (ctx.direction == 1 or ctx.state == STATE_TRANSITION_UP) else (last_high if last_high.valid else bullish_provisional)
+        bearish_target = (weak_low if weak_low.valid else bearish_fallback if bearish_fallback.valid else bearish_provisional) if (ctx.direction == -1 or ctx.state == STATE_TRANSITION_DOWN) else (last_low if last_low.valid else bearish_provisional)
+
+        bullish_break = False
+        bearish_break = False
+        bos_buffer = self._buffer(scope, EVENT_BOS, safe_atr)
+        if bullish_allowed and bullish_target.valid and bullish_target.identity != runtime.last_broken_high:
+            bullish_break = self._breaks_level(1, float(bullish_target.price), bos_buffer, close)
+        if bearish_allowed and bearish_target.valid and bearish_target.identity != runtime.last_broken_low:
+            bearish_break = self._breaks_level(-1, float(bearish_target.price), bos_buffer, close)
+
+        bullish_excess = (close - float(bullish_target.price)) / safe_atr if bullish_break else -1.0
+        bearish_excess = (float(bearish_target.price) - close) / safe_atr if bearish_break else -1.0
+        choose_bullish = bullish_break and (not bearish_break or bullish_excess >= bearish_excess)
+        choose_bearish = bearish_break and not choose_bullish
+
+        if choose_bullish:
+            origin = self._find_origin(swings, low_candidate, SIDE_LOW, int(bullish_target.source_bar), bar_index, scope)
+            if origin.valid:
+                return self._new_candidate(runtime, scope=scope, event_type=EVENT_BOS, direction=1, broken=bullish_target, origin=origin, bar_index=bar_index, close=close, safe_atr=safe_atr, open_=open_, high=high, low=low)
+        if choose_bearish:
+            origin = self._find_origin(swings, high_candidate, SIDE_HIGH, int(bearish_target.source_bar), bar_index, scope)
+            if origin.valid:
+                return self._new_candidate(runtime, scope=scope, event_type=EVENT_BOS, direction=-1, broken=bearish_target, origin=origin, bar_index=bar_index, close=close, safe_atr=safe_atr, open_=open_, high=high, low=low)
+        return BreakCandidate()
+
+    def process_scope(
+        self,
+        *,
+        scope: str,
+        swings: list[SwingPoint],
+        high_candidate: SwingPoint,
+        low_candidate: SwingPoint,
+        bar_index: int,
+        open_: float,
+        high: float,
+        low: float,
+        close: float,
+        safe_atr: float,
+    ) -> list[StructureEvent]:
+        runtime = self.scope(scope)
+        ctx = runtime.context
+        latest_high = self._latest_confirmed(swings, SIDE_HIGH)
+        latest_low = self._latest_confirmed(swings, SIDE_LOW)
+        ctx.last_confirmed_high_identity = latest_high.identity if latest_high.valid else ctx.last_confirmed_high_identity
+        ctx.last_confirmed_low_identity = latest_low.identity if latest_low.valid else ctx.last_confirmed_low_identity
+        ctx = normalize_directional_roles(swings, ctx)
+        runtime.context = ctx
+
+        events: list[StructureEvent] = []
+
+        # Sweep remains an event, not a structural direction change.
+        protected_high = active_by_id(swings, ctx.protected_high_identity)
+        protected_low = active_by_id(swings, ctx.protected_low_identity)
+        weak_high = active_by_id(swings, ctx.weak_high_identity)
+        weak_low = active_by_id(swings, ctx.weak_low_identity)
+        high_target = protected_high if protected_high.valid else weak_high if weak_high.valid else latest_high
+        low_target = protected_low if protected_low.valid else weak_low if weak_low.valid else latest_low
+        sweep_buffer = max(safe_atr * self.break_config.break_buffer_atr * self.break_config.profile_break_mult, self.break_config.min_tick * 3.0)
+        if high_target.valid and is_sweep(SIDE_HIGH, float(high_target.price), sweep_buffer, high=high, low=low, close=close):
+            runtime.next_event_id += 1
+            events.append(StructureEvent(valid=True, identity=runtime.next_event_id, scope=scope, event_type=EVENT_SWEEP, direction=-1, candidate_bar=bar_index, event_bar=bar_index, broken_swing_identity=high_target.identity, level=high_target.price, quality=45.0, evidence_text="HIGH_SWEEP"))
+        elif low_target.valid and is_sweep(SIDE_LOW, float(low_target.price), sweep_buffer, high=high, low=low, close=close):
+            runtime.next_event_id += 1
+            events.append(StructureEvent(valid=True, identity=runtime.next_event_id, scope=scope, event_type=EVENT_SWEEP, direction=1, candidate_bar=bar_index, event_bar=bar_index, broken_swing_identity=low_target.identity, level=low_target.price, quality=45.0, evidence_text="LOW_SWEEP"))
+
+        if not runtime.candidate.valid:
+            runtime.candidate = self._candidate_target(runtime, swings, high_candidate, low_candidate, scope=scope, bar_index=bar_index, close=close, safe_atr=safe_atr, open_=open_, high=high, low=low)
+
+        if runtime.candidate.valid:
+            evaluation = evaluate_break_candidate(runtime.candidate, self.break_config, bar_index=bar_index, open_=open_, high=high, low=low, close=close)
+            runtime.candidate.current_evidence = evaluation.evidence_count
+            runtime.candidate.required_evidence = evaluation.required_evidence
+            runtime.candidate.status_text = evaluation.status_text
+            if evaluation.confirmed:
+                runtime.next_event_id += 1
+                new_ctx, event = finalize_confirmed_break(
+                    swings,
+                    runtime.context,
+                    runtime.candidate,
+                    event_identity=runtime.next_event_id,
+                    event_bar=bar_index,
+                    acceptance=evaluation.acceptance,
+                    follow_through=evaluation.follow_through,
+                )
+                runtime.context = new_ctx
+                runtime.last_event = event
+                if runtime.candidate.direction == 1:
+                    runtime.last_broken_high = runtime.candidate.broken_swing_identity
+                else:
+                    runtime.last_broken_low = runtime.candidate.broken_swing_identity
+                runtime.candidate = BreakCandidate()
+                events.append(event)
+            elif evaluation.failed:
+                runtime.next_event_id += 1
+                event = StructureEvent(
+                    valid=True,
+                    identity=runtime.next_event_id,
+                    scope=scope,
+                    event_type=EVENT_FALSE_BREAK,
+                    direction=-runtime.candidate.direction,
+                    candidate_bar=runtime.candidate.candidate_bar,
+                    event_bar=bar_index,
+                    broken_swing_identity=runtime.candidate.broken_swing_identity,
+                    broken_source_bar=runtime.candidate.broken_source_bar,
+                    origin_swing_identity=runtime.candidate.origin_swing_identity,
+                    origin_source_bar=runtime.candidate.origin_source_bar,
+                    level=runtime.candidate.level,
+                    quality=runtime.candidate.initial_quality,
+                    evidence_text=evaluation.status_text,
+                )
+                runtime.last_event = event
+                runtime.candidate = BreakCandidate()
+                events.append(event)
+
+        return events
+
+    def score(self, *, bar_index: int) -> float:
+        return structure_score(self.external.context, self.internal.context, self.external.last_event, self.internal.last_event, bar_index=bar_index)
+
+    def export(self, external_swings: list[SwingPoint], internal_swings: list[SwingPoint], *, bar_index: int) -> MarketStructureExport:
+        score = self.score(bar_index=bar_index)
+        return export_snapshot(external_swings, internal_swings, self.external.context, self.internal.context, evidence_score=score)
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/market_structure_runtime_bridge.py
+
+EXTRACTED:
+Provisional swing referanslarını onaylanmış break akışına bağlayan runtime bridge
+
+```python
+from __future__ import annotations
+
+from collections.abc import Callable
+
+from .market_structure import SIDE_HIGH, SwingPoint
+from .market_structure_runtime import MarketStructureRuntime as _BaseRuntime
+from .market_structure_state import active_by_id
+
+
+CommitProvisional = Callable[[SwingPoint, int, str, float], SwingPoint]
+
+
+class MarketStructureRuntime(_BaseRuntime):
+    """Runtime bridge for Pine's provisional target/origin commit step.
+
+    Tur 2's finalize function intentionally accepts confirmed references only.
+    Pine may let a gated live swing candidate become structural *because* the
+    break confirms it. This bridge performs that commit immediately before the
+    already-validated finalize path, without changing break/state math.
+    """
+
+    @staticmethod
+    def _matching_candidate(
+        high_candidate: SwingPoint,
+        low_candidate: SwingPoint,
+        identity: int,
+        source_bar: int,
+    ) -> SwingPoint:
+        for candidate in (high_candidate, low_candidate):
+            if (
+                candidate.valid
+                and candidate.identity == identity
+                and candidate.source_bar == source_bar
+            ):
+                return candidate
+        return SwingPoint()
+
+    def _commit_missing_reference(
+        self,
+        *,
+        swings: list[SwingPoint],
+        candidate_snapshot: SwingPoint,
+        scope: str,
+        bar_index: int,
+        origin_role: bool,
+        commit_provisional: CommitProvisional | None,
+    ) -> bool:
+        if not candidate_snapshot.valid or commit_provisional is None:
+            return False
+        if not self._provisional_gate(candidate_snapshot, scope, bar_index, origin_role):
+            return False
+        evidence = "confirmed by structure break" if origin_role else "confirmed as broken structural target"
+        quality_floor = 55.0 if origin_role else 52.0
+        committed = commit_provisional(candidate_snapshot, bar_index, evidence, quality_floor)
+        return committed.valid
+
+    def process_scope(
+        self,
+        *,
+        scope: str,
+        swings: list[SwingPoint],
+        high_candidate: SwingPoint,
+        low_candidate: SwingPoint,
+        bar_index: int,
+        open_: float,
+        high: float,
+        low: float,
+        close: float,
+        safe_atr: float,
+        commit_provisional: CommitProvisional | None = None,
+    ):
+        try:
+            return super().process_scope(
+                scope=scope,
+                swings=swings,
+                high_candidate=high_candidate,
+                low_candidate=low_candidate,
+                bar_index=bar_index,
+                open_=open_,
+                high=high,
+                low=low,
+                close=close,
+                safe_atr=safe_atr,
+            )
+        except ValueError as exc:
+            if str(exc) != "confirmed break references must still be active":
+                raise
+
+            runtime = self.scope(scope)
+            bc = runtime.candidate
+            if not bc.valid:
+                raise
+
+            broken = active_by_id(swings, bc.broken_swing_identity)
+            if not broken.valid:
+                snapshot = self._matching_candidate(
+                    high_candidate,
+                    low_candidate,
+                    bc.broken_swing_identity,
+                    bc.broken_source_bar,
+                )
+                if not self._commit_missing_reference(
+                    swings=swings,
+                    candidate_snapshot=snapshot,
+                    scope=scope,
+                    bar_index=bc.candidate_bar,
+                    origin_role=False,
+                    commit_provisional=commit_provisional,
+                ):
+                    raise
+
+            origin = active_by_id(swings, bc.origin_swing_identity)
+            if not origin.valid:
+                snapshot = self._matching_candidate(
+                    high_candidate,
+                    low_candidate,
+                    bc.origin_swing_identity,
+                    bc.origin_source_bar,
+                )
+                if not self._commit_missing_reference(
+                    swings=swings,
+                    candidate_snapshot=snapshot,
+                    scope=scope,
+                    bar_index=bc.candidate_bar,
+                    origin_role=True,
+                    commit_provisional=commit_provisional,
+                ):
+                    raise
+
+            # Retry the same closed bar after provisional references have been
+            # committed. The candidate remains frozen from the first attempt.
+            return super().process_scope(
+                scope=scope,
+                swings=swings,
+                high_candidate=high_candidate,
+                low_candidate=low_candidate,
+                bar_index=bar_index,
+                open_=open_,
+                high=high,
+                low=low,
+                close=close,
+                safe_atr=safe_atr,
+            )
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/market_structure_event_runtime.py
+
+EXTRACTED:
+Event ledger runtime cache/lifecycle yardımcıları
+
+```python
+from __future__ import annotations
+
+from dataclasses import replace
+
+from .market_structure_events import (
+    MarketStructureEventLedger,
+    MarketStructureEventRecord,
+    StructureEventOutcome,
+    StructureEventRelevance,
+    StructureEventValidity,
+)
+from .market_structure_state import EVENT_BOS, EVENT_CHOCH, EVENT_TRANSITION_FAIL
+
+
+class RuntimeMarketStructureEventLedger(MarketStructureEventLedger):
+    """Event ledger with exact annotation parity and lazy dynamic ages.
+
+    Event lifecycle annotations change only when a new Structure event is appended.
+    The static annotation graph is therefore cached across ordinary bars. Dynamic
+    ``age_bars`` values are materialized only for external reads that require them.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._static_cache: tuple[MarketStructureEventRecord, ...] | None = ()
+        self._latest_by_scope: dict[str, MarketStructureEventRecord] = {}
+        self._snapshot_bar: int | None = None
+        self._snapshot_cache: tuple[MarketStructureEventRecord, ...] = ()
+
+    def reset(self) -> None:
+        super().reset()
+        self._static_cache = ()
+        self._latest_by_scope = {}
+        self._snapshot_bar = None
+        self._snapshot_cache = ()
+
+    def append(self, event, rows):
+        record = super().append(event, rows)
+        self._static_cache = None
+        self._latest_by_scope = {}
+        self._snapshot_bar = None
+        self._snapshot_cache = ()
+        return record
+
+    def _static_snapshot(self) -> tuple[MarketStructureEventRecord, ...]:
+        if self._static_cache is not None:
+            return self._static_cache
+
+        annotated: list[MarketStructureEventRecord] = []
+        latest_current: dict[tuple[str, str, int], int] = {}
+        pending_choch: dict[tuple[str, int], list[int]] = {}
+
+        def current_key(record: MarketStructureEventRecord) -> tuple[str, str, int]:
+            return (record.scope, record.event_type, int(record.direction))
+
+        def clear_current(index: int) -> None:
+            key = current_key(annotated[index])
+            if latest_current.get(key) == index:
+                latest_current.pop(key, None)
+
+        for base_record in self._records:
+            key = current_key(base_record)
+            same_index = latest_current.get(key)
+            if same_index is not None:
+                annotated[same_index] = replace(
+                    annotated[same_index],
+                    relevance=StructureEventRelevance.SUPERSEDED,
+                )
+                latest_current.pop(key, None)
+
+            if base_record.event_type == EVENT_BOS:
+                stack = pending_choch.get((base_record.scope, int(base_record.direction)))
+                if stack:
+                    choch_index = stack.pop()
+                    annotated[choch_index] = replace(
+                        annotated[choch_index],
+                        relevance=StructureEventRelevance.HISTORICAL,
+                        outcome=StructureEventOutcome.FOLLOW_THROUGH_CONFIRMED,
+                        confirmed_by_event_uid=base_record.event_uid,
+                    )
+                    clear_current(choch_index)
+
+            if base_record.event_type == EVENT_TRANSITION_FAIL:
+                stack = pending_choch.get((base_record.scope, -int(base_record.direction)))
+                if stack:
+                    choch_index = stack.pop()
+                    annotated[choch_index] = replace(
+                        annotated[choch_index],
+                        validity=StructureEventValidity.FAILED,
+                        relevance=StructureEventRelevance.HISTORICAL,
+                        outcome=StructureEventOutcome.FAILED,
+                        failed_by_event_uid=base_record.event_uid,
+                    )
+                    clear_current(choch_index)
+
+            index = len(annotated)
+            annotated.append(base_record)
+            latest_current[key] = index
+            if (
+                base_record.event_type == EVENT_CHOCH
+                and base_record.validity is StructureEventValidity.VALID
+                and base_record.outcome is StructureEventOutcome.PENDING
+            ):
+                pending_choch.setdefault(
+                    (base_record.scope, int(base_record.direction)), []
+                ).append(index)
+
+        self._static_cache = tuple(annotated)
+        latest_by_scope: dict[str, MarketStructureEventRecord] = {}
+        for record in reversed(self._static_cache):
+            latest_by_scope.setdefault(record.scope, record)
+        self._latest_by_scope = latest_by_scope
+        return self._static_cache
+
+    def static_snapshot(self) -> tuple[MarketStructureEventRecord, ...]:
+        """Return annotated records without recomputing dynamic ``age_bars``."""
+        return self._static_snapshot()
+
+    def latest_static(self, *, scope: str) -> MarketStructureEventRecord | None:
+        self._static_snapshot()
+        return self._latest_by_scope.get(scope)
+
+    @staticmethod
+    def _with_age(
+        record: MarketStructureEventRecord | None,
+        *,
+        current_bar: int,
+    ) -> MarketStructureEventRecord | None:
+        if record is None:
+            return None
+        age = max(0, current_bar - record.event_bar)
+        if record.age_bars == age:
+            return record
+        return replace(record, age_bars=age)
+
+    def latest_for_scope(
+        self,
+        *,
+        current_bar: int,
+        scope: str,
+    ) -> MarketStructureEventRecord | None:
+        return self._with_age(self.latest_static(scope=scope), current_bar=current_bar)
+
+    def snapshot(self, *, current_bar: int) -> tuple[MarketStructureEventRecord, ...]:
+        if self._snapshot_bar == current_bar:
+            return self._snapshot_cache
+        static = self._static_snapshot()
+        self._snapshot_cache = tuple(
+            record
+            if record.age_bars == max(0, current_bar - record.event_bar)
+            else replace(record, age_bars=max(0, current_bar - record.event_bar))
+            for record in static
+        )
+        self._snapshot_bar = current_bar
+        return self._snapshot_cache
+
+
+__all__ = ["RuntimeMarketStructureEventLedger"]
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/market_structure_engine.py
+
+EXTRACTED:
+Public integrated MarketStructureEngine
+
+```python
+from __future__ import annotations
+
+from dataclasses import replace
+from typing import Any
+
+import pandas as pd
+
+from .market_structure import (
+    SCOPE_EXTERNAL,
+    SCOPE_INTERNAL,
+    SIDE_HIGH,
+    SIDE_LOW,
+    MarketStructureConfig,
+    MarketStructureEngine as _SwingCoreEngine,
+    SwingPoint,
+)
+from .market_structure_event_runtime import RuntimeMarketStructureEventLedger
+from .market_structure_events import (
+    MarketStructureEventRecord,
+    MarketStructureScopeSnapshot,
+)
+from .market_structure_runtime_bridge import MarketStructureRuntime
+from .market_structure_state import BreakConfig
+from .models import Direction, EngineResult
+
+
+class MarketStructureEngine(_SwingCoreEngine):
+    """Integrated ARGENT Market Structure engine.
+
+    The swing detector remains the validated Tur 1 implementation. The runtime
+    layer adds Tur 2 BOS/CHoCH/transition/role/break lifecycle and evidence/export
+    without mixing TradingView visual state into the math path.
+    """
+
+    def __init__(
+        self,
+        config: MarketStructureConfig | None = None,
+        break_config: BreakConfig | None = None,
+    ) -> None:
+        self.break_config = break_config or BreakConfig(
+            profile=(config.profile if config is not None else "Dengeli"),
+            min_tick=(config.min_tick if config is not None else 0.01),
+        )
+        super().__init__(config)
+
+    def reset(self) -> None:
+        super().reset()
+        self._runtime = MarketStructureRuntime(self.break_config)
+        self._event_ledger = RuntimeMarketStructureEventLedger()
+        self._export = None
+        self._public_export_bar: int | None = None
+        self._public_export_cache = None
+
+    def _candidate_update(self, candidate, incoming, locked_by_break: bool):
+        runtime_lock = self._runtime.locks_candidate(incoming.scope, candidate) if hasattr(self, "_runtime") else False
+        return super()._candidate_update(candidate, incoming, locked_by_break=locked_by_break or runtime_lock)
+
+    def _commit_provisional(self, scope_state, snapshot: SwingPoint, confirm_bar: int, evidence: str, quality_floor: float) -> SwingPoint:
+        if not snapshot.valid:
+            return SwingPoint()
+        previous_same = self._last_historical(scope_state.swings, snapshot.side)
+        previous_opposite = self._last_historical(scope_state.swings, SIDE_LOW if snapshot.side == SIDE_HIGH else SIDE_HIGH)
+        confirmed = self._promote(snapshot, previous_same, previous_opposite, confirm_bar)
+        confirmed = replace(
+            confirmed,
+            evidence_text=evidence,
+            quality=max(confirmed.quality or 0.0, quality_floor),
+        )
+        scope_state.swings.append(confirmed)
+        if confirmed.side == SIDE_HIGH:
+            scope_state.last_confirmed_high_identity = confirmed.identity
+            if scope_state.high_candidate.valid and scope_state.high_candidate.identity == confirmed.identity and scope_state.high_candidate.source_bar == confirmed.source_bar:
+                scope_state.high_candidate = SwingPoint()
+        else:
+            scope_state.last_confirmed_low_identity = confirmed.identity
+            if scope_state.low_candidate.valid and scope_state.low_candidate.identity == confirmed.identity and scope_state.low_candidate.source_bar == confirmed.source_bar:
+                scope_state.low_candidate = SwingPoint()
+        return confirmed
+
+    def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
+        row = dict(bar) if isinstance(bar, dict) else bar.to_dict()
+        if not bool(row.get("is_closed", True)) or not bool(row.get("is_complete", True)):
+            return self._snapshot
+
+        base = super().update(row)
+        if base is None:
+            return None
+
+        bar_index = len(self._rows) - 1
+        clean = self._rows[-1]
+        previous_atr = self._atr_values[-2] if len(self._atr_values) >= 2 else None
+        current_atr = self._atr_values[-1] if self._atr_values else None
+        safe_atr = max(float(previous_atr or current_atr or self._tr_values[-1]), self.config.min_tick)
+
+        structure_events = []
+        structure_events.extend(
+            self._runtime.process_scope(
+                scope="EXTERNAL",
+                swings=self._external.swings,
+                high_candidate=self._external.high_candidate,
+                low_candidate=self._external.low_candidate,
+                bar_index=bar_index,
+                open_=clean["open"],
+                high=clean["high"],
+                low=clean["low"],
+                close=clean["close"],
+                safe_atr=safe_atr,
+                commit_provisional=lambda snapshot, confirm_bar, evidence, quality_floor: self._commit_provisional(
+                    self._external, snapshot, confirm_bar, evidence, quality_floor
+                ),
+            )
+        )
+        structure_events.extend(
+            self._runtime.process_scope(
+                scope="INTERNAL",
+                swings=self._internal.swings,
+                high_candidate=self._internal.high_candidate,
+                low_candidate=self._internal.low_candidate,
+                bar_index=bar_index,
+                open_=clean["open"],
+                high=clean["high"],
+                low=clean["low"],
+                close=clean["close"],
+                safe_atr=safe_atr,
+                commit_provisional=lambda snapshot, confirm_bar, evidence, quality_floor: self._commit_provisional(
+                    self._internal, snapshot, confirm_bar, evidence, quality_floor
+                ),
+            )
+        )
+
+        self._event_ledger.extend(structure_events, self._rows)
+
+        score = self._runtime.score(bar_index=bar_index)
+        runtime_export = self._runtime.export(
+            self._external.swings,
+            self._internal.swings,
+            bar_index=bar_index,
+        )
+        # Keep the hot per-bar path on static annotations. Dynamic ``age_bars`` is
+        # materialized lazily by export_contract/event_history only when a consumer
+        # actually reads the public event history.
+        event_history = self._event_ledger.static_snapshot()
+        latest_external = self._event_ledger.latest_static(scope=SCOPE_EXTERNAL)
+        latest_internal = self._event_ledger.latest_static(scope=SCOPE_INTERNAL)
+        external = self._runtime.external.context
+        internal = self._runtime.internal.context
+        self._export = replace(
+            runtime_export,
+            events=event_history,
+            latest_external_event=latest_external,
+            latest_internal_event=latest_internal,
+            external_scope=MarketStructureScopeSnapshot.from_context(
+                external,
+                latest_event=latest_external,
+            ),
+            internal_scope=MarketStructureScopeSnapshot.from_context(
+                internal,
+                latest_event=latest_internal,
+            ),
+        )
+        self._public_export_bar = None
+        self._public_export_cache = None
+
+        if external.direction > 0:
+            direction = Direction.UP
+        elif external.direction < 0:
+            direction = Direction.DOWN
+        else:
+            direction = Direction.NEUTRAL
+
+        levels = self._public_levels()
+        export_levels = {
+            "external_protected_low": self._export.external_protected_low,
+            "external_protected_high": self._export.external_protected_high,
+            "external_weak_low": self._export.external_weak_low,
+            "external_weak_high": self._export.external_weak_high,
+            "internal_protected_low": self._export.internal_protected_low,
+            "internal_protected_high": self._export.internal_protected_high,
+            "internal_weak_low": self._export.internal_weak_low,
+            "internal_weak_high": self._export.internal_weak_high,
+        }
+        levels.update({key: float(value) for key, value in export_levels.items() if value is not None})
+
+        event_names = list(base.events)
+        event_names.extend(f"{event.scope}:{event.event_type}:{event.direction}:{event.identity}" for event in structure_events)
+        reasons = [event.evidence_text for event in structure_events if event.evidence_text]
+        if external.evidence_text:
+            reasons.append(external.evidence_text)
+        if external.conflict_text:
+            reasons.append(external.conflict_text)
+
+        self._snapshot = EngineResult(
+            engine=self.name,
+            state=external.state,
+            timestamp=clean["timestamp"],
+            direction=direction,
+            score=score,
+            quality=external.quality if external.quality else None,
+            levels=levels,
+            events=tuple(event_names),
+            reasons=tuple(reasons),
+            is_confirmed=True,
+        )
+        return self._snapshot
+
+    @property
+    def event_history(self) -> tuple[MarketStructureEventRecord, ...]:
+        if not self._rows:
+            return ()
+        return self._event_ledger.snapshot(current_bar=len(self._rows) - 1)
+
+    @property
+    def latest_external_event(self) -> MarketStructureEventRecord | None:
+        if not self._rows:
+            return None
+        return self._event_ledger.latest_for_scope(
+            current_bar=len(self._rows) - 1,
+            scope=SCOPE_EXTERNAL,
+        )
+
+    @property
+    def latest_internal_event(self) -> MarketStructureEventRecord | None:
+        if not self._rows:
+            return None
+        return self._event_ledger.latest_for_scope(
+            current_bar=len(self._rows) - 1,
+            scope=SCOPE_INTERNAL,
+        )
+
+    @property
+    def external_context(self):
+        return self._runtime.external.context
+
+    @property
+    def internal_context(self):
+        return self._runtime.internal.context
+
+    @property
+    def export_contract(self):
+        if self._export is None or not self._rows:
+            return self._export
+        current_bar = len(self._rows) - 1
+        if self._public_export_bar == current_bar and self._public_export_cache is not None:
+            return self._public_export_cache
+
+        event_history = self._event_ledger.snapshot(current_bar=current_bar)
+        latest_external = self._event_ledger.latest_for_scope(
+            current_bar=current_bar,
+            scope=SCOPE_EXTERNAL,
+        )
+        latest_internal = self._event_ledger.latest_for_scope(
+            current_bar=current_bar,
+            scope=SCOPE_INTERNAL,
+        )
+        external = self._runtime.external.context
+        internal = self._runtime.internal.context
+        self._public_export_cache = replace(
+            self._export,
+            events=event_history,
+            latest_external_event=latest_external,
+            latest_internal_event=latest_internal,
+            external_scope=MarketStructureScopeSnapshot.from_context(
+                external,
+                latest_event=latest_external,
+            ),
+            internal_scope=MarketStructureScopeSnapshot.from_context(
+                internal,
+                latest_event=latest_internal,
+            ),
+        )
+        self._public_export_bar = current_bar
+        return self._public_export_cache
+
+    @property
+    def external_break_candidate(self):
+        return self._runtime.external.candidate
+
+    @property
+    def internal_break_candidate(self):
+        return self._runtime.internal.candidate
+```
+
+
+NOTES / POTENTIAL ISSUES
+- market_structure.py içindeki MarketStructureEngine yalnızca swing core katmanıdır; tek başına BOS/CHOCH runtime’ını içermez. Public import olan market_structure_engine.MarketStructureEngine iki katmanı birleştirir.
+- MarketStructureEngine.replay input sırasını kendisi sort etmez; timestamp sıralaması caller/data pipeline sorumluluğundadır.
+- MarketStructureExport içindeki evidence_score ve EngineResult.score Market Structure’ın kendi export/evidence hesabıdır; ayrı genel karar motoru dışa aktarılmamıştır.
+- market_structure_history.py, market_structure_parity.py, structure_location.py, UI/replay ve decision kodları bu pakete alınmadı.
+
+DEPENDENCIES
+------------
+Required:
+- Python standard library (dataclasses, enum, typing, collections.abc).
+- pandas (DataFrame/Series input ve isna kontrolleri).
+- Bu dosyada tam kaynakları bulunan base.py, models.py ve market_structure*.py modülleri.
+
+Optional:
+- Canonical OHLCV hazırlayan data pipeline/provider; engine bu katmana doğrudan import ile bağlı değildir.
+- market_structure_history.py / market_structure_parity.py yalnızca ayrı history/parity kullanımları içindir; ana motoru çalıştırmak için gerekmez.
+
+External:
+- pandas.
+
+Source files:
+- src/financial_dashboard/engines/base.py
+- src/financial_dashboard/engines/models.py
+- src/financial_dashboard/engines/market_structure.py
+- src/financial_dashboard/engines/market_structure_state.py
+- src/financial_dashboard/engines/market_structure_events.py
+- src/financial_dashboard/engines/market_structure_evidence.py
+- src/financial_dashboard/engines/market_structure_runtime.py
+- src/financial_dashboard/engines/market_structure_runtime_bridge.py
+- src/financial_dashboard/engines/market_structure_event_runtime.py
+- src/financial_dashboard/engines/market_structure_engine.py

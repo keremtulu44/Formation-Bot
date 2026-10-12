@@ -1,0 +1,1792 @@
+DOMAIN: Volume / Participation
+ANA MOTOR: financial_dashboard.engines.volume_participation_final.VolumeParticipationEngine (public standalone participation engine)
+ANA DOSYA: src/financial_dashboard/engines/volume_participation_final.py; core math: src/financial_dashboard/engines/volume_participation_engine.py; lifecycle: src/financial_dashboard/engines/volume_participation_lifecycle.py
+ANA CLASS/FUNCTION: VolumeParticipationEngine.update; core entrypoints _append_runtime_series and _calculate; lifecycle entrypoints _update_participation_lifecycle / _update_absorption / _update_break; final resolver _resolve_final
+GEREKLİ BAĞIMLILIKLAR: Aşağıda tam kaynakları verilen volume_participation_engine.py, volume_participation_lifecycle.py, volume_participation_final.py, base.py ve models.py; harici olarak pandas
+VERİ GİRDİSİ: Her kapalı/tam bar için open, high, low, close, volume. timestamp opsiyoneldir (çıktıda kullanılır). Data provider motor tarafından çağrılmaz.
+ÇIKTI: EngineResult; metrics_history; export_contract (core); lifecycle_export; final_export (UnifiedParticipationExport)
+
+DATA FLOW
+---------
+Provider / canonical OHLCV pipeline (ayrı katman; bu motorun import bağımlılığı değil)
+    ↓ open, high, low, close, volume (+ opsiyonel timestamp/is_closed/is_complete)
+VolumeParticipationEngine.update(bar) / replay(frame)
+    ↓ VolumeParticipationEngine._calculate + lifecycle + final state/export
+EngineResult + VolumeParticipationMetrics + export_contract/lifecycle_export/final_export
+
+HESAPLAMA ÖZETİ
+---------------
+Core katman volume/traded-value serileri, RVOL/RTV, z-score, percent rank, slope/regime, directional volume/capital share, pressure, ATR-normalized progress/efficiency ve katılım aday/teyitlerini hesaplar. Lifecycle katmanı confirmed participation, pivot referansları, absorption ve break-participation durumlarını izler; final katmanı mevcut metrik/lifecycle durumunu son export state’ine çözer. Varsayılanlar ve bütün eşikler kaynak kodda aynen bırakılmıştır.
+
+DATA INPUT / VERİ ÇEKME SINIRI
+------------------------------
+Hesaplama motoru yalnızca verilen satırı okur; API, tvDatafeed, yfinance veya başka sağlayıcı çağırmaz. Repo data boundary’sinde canonical OHLCV hazırlanır. TvDatafeedProvider volume kolonu eksik gelirse mevcut kod 0.0 ile doldurur ve last_volume_status alanında durumu kaydeder; volume motorunun minimum_nonzero_volume_share varsayılanı 0.70 olduğundan pozitif hacimli bar payı %70’in altında kalırsa volume_usable false olur. Bu mevcut davranış raporlanmıştır; düzeltilmemiş ve yeni provider eklenmemiştir.
+
+========================================================================================
+EXTRACTED SOURCE CODE (each block preserves its original source file)
+========================================================================================
+
+
+SOURCE:
+src/financial_dashboard/engines/base.py
+
+EXTRACTED:
+BaseEngine abstract replay/update/snapshot contract
+
+```python
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+import pandas as pd
+
+from .models import EngineResult
+
+
+class BaseEngine(ABC):
+    """Common contract for replay and incremental/live engine implementations."""
+
+    @abstractmethod
+    def replay(self, frame: pd.DataFrame) -> list[EngineResult]:
+        """Rebuild deterministic engine history from ordered canonical candles."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
+        """Advance engine state with one new candle."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def snapshot(self) -> EngineResult | None:
+        """Return the current immutable public engine state."""
+        raise NotImplementedError
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/models.py
+
+EXTRACTED:
+Direction ve EngineResult çıktı modeli
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import IntEnum
+from typing import Any
+
+
+class Direction(IntEnum):
+    DOWN = -1
+    NEUTRAL = 0
+    UP = 1
+
+
+@dataclass(frozen=True, slots=True)
+class EngineResult:
+    engine: str
+    state: str
+    timestamp: Any
+    direction: Direction = Direction.NEUTRAL
+    score: float | None = None
+    quality: float | None = None
+    levels: dict[str, float] = field(default_factory=dict)
+    events: tuple[str, ...] = ()
+    reasons: tuple[str, ...] = ()
+    is_confirmed: bool = True
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/volume_participation_engine.py
+
+EXTRACTED:
+VolumeParticipationConfig/Metrics/Export, yardımcı matematik fonksiyonları, core OHLCV serileri ve katılım hesaplamaları
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+from math import sqrt
+from typing import Any
+
+import pandas as pd
+
+from .base import BaseEngine
+from .models import Direction, EngineResult
+
+
+class VolumeLevel(StrEnum):
+    UNAVAILABLE = "UNAVAILABLE"
+    VERY_LOW = "VERY_LOW"
+    LOW = "LOW"
+    NORMAL = "NORMAL"
+    RISING = "RISING"
+    HIGH = "HIGH"
+    ABNORMAL = "ABNORMAL"
+
+
+class ParticipationState(StrEnum):
+    PENDING = "PARTICIPATION_PENDING"
+    VOLUME_UNAVAILABLE = "PARTICIPATION_VOLUME_UNAVAILABLE"
+    NEUTRAL = "PARTICIPATION_NEUTRAL"
+    UP_CANDIDATE = "PARTICIPATION_UP_CANDIDATE"
+    DOWN_CANDIDATE = "PARTICIPATION_DOWN_CANDIDATE"
+    UP_CONFIRMED = "PARTICIPATION_UP_CONFIRMED"
+    DOWN_CONFIRMED = "PARTICIPATION_DOWN_CONFIRMED"
+    CONFLICT = "PARTICIPATION_CONFLICT"
+
+
+class EffortResultClass(StrEnum):
+    NEUTRAL = "NEUTRAL"
+    RISING_EFFORT_STRONG_RESULT = "RISING_EFFORT_STRONG_RESULT"
+    HIGH_EFFORT_STRONG_RESULT = "HIGH_EFFORT_STRONG_RESULT"
+    HIGH_EFFORT_WEAK_RESULT = "HIGH_EFFORT_WEAK_RESULT"
+    VERY_HIGH_EFFORT_WEAK_RESULT = "VERY_HIGH_EFFORT_WEAK_RESULT"
+
+
+@dataclass(frozen=True, slots=True)
+class VolumeParticipationConfig:
+    minimum_history: int = 150
+    atr_length: int = 14
+    volume_short_length: int = 5
+    volume_average_length: int = 20
+    volume_long_length: int = 50
+    percentile_length: int = 100
+    slope_lookback: int = 3
+    persistence_length: int = 5
+    flow_short_length: int = 5
+    flow_medium_length: int = 10
+    progress_lookback: int = 3
+    minimum_nonzero_volume_share: float = 0.70
+
+    very_low_rvol: float = 0.60
+    low_rvol: float = 0.75
+    rising_rvol: float = 1.20
+    high_rvol: float = 1.50
+    abnormal_rvol: float = 2.25
+    high_volume_z: float = 1.25
+    abnormal_volume_z: float = 2.25
+    high_percent_rank: float = 80.0
+    abnormal_percent_rank: float = 95.0
+    minimum_volume_slope: float = 0.025
+
+    very_low_rtv: float = 0.60
+    low_rtv: float = 0.75
+    rising_rtv: float = 1.16
+    high_rtv: float = 1.48
+    abnormal_rtv: float = 2.20
+    high_capital_z: float = 1.20
+    abnormal_capital_z: float = 2.20
+    minimum_capital_slope: float = 0.025
+
+    minimum_capital_pressure: float = 0.13
+    minimum_directional_share: float = 0.60
+    minimum_progress_atr: float = 0.45
+    minimum_efficiency: float = 0.52
+    minimum_body_atr: float = 0.40
+    up_close_location: float = 0.65
+    down_close_location: float = 0.35
+    maximum_directional_wick_ratio: float = 0.30
+    minimum_directional_close_share: float = 0.60
+    participation_minimum_evidence: int = 6
+    participation_confirmation_bars: int = 2
+    confirmation_minimum_rvol: float = 0.92
+    confirmation_minimum_rtv: float = 0.92
+    weak_result_progress_limit: float = 0.28
+    weak_result_efficiency_limit: float = 0.38
+
+
+@dataclass(frozen=True, slots=True)
+class VolumeParticipationMetrics:
+    data_ready: bool = False
+    volume_usable: bool = False
+    capital_usable: bool = False
+    rvol: float | None = None
+    volume_z_score: float | None = None
+    volume_percent_rank: float | None = None
+    volume_slope: float | None = None
+    volume_regime: int = 0
+    volume_level: VolumeLevel = VolumeLevel.UNAVAILABLE
+    rtv: float | None = None
+    capital_z_score: float | None = None
+    capital_percent_rank: float | None = None
+    capital_slope: float | None = None
+    capital_regime: int = 0
+    capital_level: VolumeLevel = VolumeLevel.UNAVAILABLE
+    up_volume_share_5: float | None = None
+    down_volume_share_5: float | None = None
+    up_capital_share_10: float | None = None
+    down_capital_share_10: float | None = None
+    directional_value_pressure_5: float | None = None
+    directional_value_pressure_10: float | None = None
+    net_progress_atr: float | None = None
+    path_distance_atr: float | None = None
+    directional_efficiency: float | None = None
+    volume_result_efficiency: float | None = None
+    capital_result_efficiency: float | None = None
+    effort_result_class: EffortResultClass = EffortResultClass.NEUTRAL
+    up_evidence_count: int = 0
+    down_evidence_count: int = 0
+    up_candidate: bool = False
+    down_candidate: bool = False
+    up_confirmed: bool = False
+    down_confirmed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ParticipationExport:
+    state: str | None = None
+    direction: int = 0
+    quality: float | None = None
+    magnitude_quality: float | None = None
+    rvol: float | None = None
+    volume_level: str | None = None
+    volume_regime: int = 0
+    relative_traded_value: float | None = None
+    capital_level: str | None = None
+    capital_regime: int = 0
+    directional_value_pressure_5: float | None = None
+    directional_value_pressure_10: float | None = None
+    up_capital_share_10: float | None = None
+    down_capital_share_10: float | None = None
+    net_progress_atr: float | None = None
+    directional_efficiency: float | None = None
+    volume_result_efficiency: float | None = None
+    capital_result_efficiency: float | None = None
+    effort_result_class: str | None = None
+    up_evidence_count: int = 0
+    down_evidence_count: int = 0
+
+
+def _safe_div(num: float, den: float, default: float = 0.0) -> float:
+    return default if abs(den) <= 1e-12 else num / den
+
+
+def _clamp(value: float, low: float, high: float) -> float:
+    return max(low, min(high, value))
+
+
+def _sma(values: list[float], length: int) -> float | None:
+    if len(values) < length:
+        return None
+    return sum(values[-length:]) / length
+
+
+def _ema_series(values: list[float], length: int) -> list[float]:
+    if not values:
+        return []
+    alpha = 2.0 / (length + 1.0)
+    out = [values[0]]
+    for value in values[1:]:
+        out.append(alpha * value + (1.0 - alpha) * out[-1])
+    return out
+
+
+def _population_std(values: list[float], length: int) -> float | None:
+    if len(values) < length:
+        return None
+    sample = values[-length:]
+    mean = sum(sample) / length
+    return sqrt(sum((value - mean) ** 2 for value in sample) / length)
+
+
+def _percent_rank(values: list[float], length: int) -> float | None:
+    if len(values) < length:
+        return None
+    sample = values[-length:]
+    current = sample[-1]
+    if length <= 1:
+        return 100.0
+    count = sum(1 for value in sample[:-1] if value <= current)
+    return count / (length - 1) * 100.0
+
+
+def _rma(values: list[float], length: int) -> list[float | None]:
+    out: list[float | None] = [None] * len(values)
+    if len(values) < length:
+        return out
+    seed = sum(values[:length]) / length
+    out[length - 1] = seed
+    previous = seed
+    for index in range(length, len(values)):
+        previous = (previous * (length - 1) + values[index]) / length
+        out[index] = previous
+    return out
+
+
+def _rolling_relative(values: list[float], length: int) -> list[float | None]:
+    """Reference batch implementation kept for parity tests and audit."""
+
+    out: list[float | None] = []
+    for end in range(1, len(values) + 1):
+        average = _sma(values[:end], length)
+        out.append(_safe_div(values[end - 1], average) if average else None)
+    return out
+
+
+def _classify_level(
+    value: float,
+    slope: float,
+    z_score: float,
+    percentile: float,
+    *,
+    very_low: float,
+    low: float,
+    rising: float,
+    high: float,
+    abnormal: float,
+    high_z: float,
+    abnormal_z: float,
+    high_percentile: float,
+    abnormal_percentile: float,
+    minimum_slope: float,
+) -> VolumeLevel:
+    if value >= abnormal and (z_score >= abnormal_z or percentile >= abnormal_percentile):
+        return VolumeLevel.ABNORMAL
+    if value >= high and (z_score >= high_z or percentile >= high_percentile):
+        return VolumeLevel.HIGH
+    if value >= rising and slope >= minimum_slope:
+        return VolumeLevel.RISING
+    if value < very_low:
+        return VolumeLevel.VERY_LOW
+    if value < low:
+        return VolumeLevel.LOW
+    return VolumeLevel.NORMAL
+
+
+def _regime(short_long_ratio: float, slope: float, minimum_slope: float) -> int:
+    if short_long_ratio >= 1.20 and slope > 0.0:
+        return 2
+    if short_long_ratio >= 1.05 or slope > minimum_slope:
+        return 1
+    if short_long_ratio <= 0.85 and slope < 0.0:
+        return -2
+    if short_long_ratio < 0.95 or slope < -minimum_slope:
+        return -1
+    return 0
+
+
+class VolumeParticipationEngine(BaseEngine):
+    name = "volume_participation_absorption"
+
+    def __init__(self, config: VolumeParticipationConfig | None = None) -> None:
+        self.config = config or VolumeParticipationConfig()
+        self._rows: list[dict[str, Any]] = []
+        self._metrics_history: list[VolumeParticipationMetrics] = []
+        self._snapshot: EngineResult | None = None
+        self.export_contract = ParticipationExport()
+        self._reset_runtime_series()
+
+    def _reset_runtime_series(self) -> None:
+        self._open_values: list[float] = []
+        self._high_values: list[float] = []
+        self._low_values: list[float] = []
+        self._close_values: list[float] = []
+        self._volume_values: list[float] = []
+        self._traded_values: list[float] = []
+        self._true_range_values: list[float] = []
+        self._atr_values: list[float | None] = []
+        self._volume_ema_values: list[float] = []
+        self._capital_ema_values: list[float] = []
+        self._rvol_values: list[float | None] = []
+        self._rtv_values: list[float | None] = []
+        self._nonzero_volume_flags: list[float] = []
+        self._close_locations: list[float] = []
+        self._signed_traded_values: list[float] = []
+        self._up_volume_values: list[float] = []
+        self._down_volume_values: list[float] = []
+        self._up_capital_values: list[float] = []
+        self._down_capital_values: list[float] = []
+        self._higher_close_flags: list[float] = []
+        self._lower_close_flags: list[float] = []
+
+    def _reset(self) -> None:
+        self._rows = []
+        self._metrics_history = []
+        self._snapshot = None
+        self.export_contract = ParticipationExport()
+        self._reset_runtime_series()
+
+    @staticmethod
+    def _append_ema(history: list[float], value: float, length: int) -> None:
+        if not history:
+            history.append(value)
+            return
+        alpha = 2.0 / (length + 1.0)
+        history.append(alpha * value + (1.0 - alpha) * history[-1])
+
+    @staticmethod
+    def _append_relative(history: list[float | None], values: list[float], length: int) -> None:
+        average = _sma(values, length)
+        history.append(_safe_div(values[-1], average) if average else None)
+
+    def _append_runtime_series(self, row: dict[str, Any]) -> None:
+        open_ = float(row["open"])
+        high = float(row["high"])
+        low = float(row["low"])
+        close = float(row["close"])
+        volume = float(row["volume"])
+        previous_close = self._close_values[-1] if self._close_values else None
+
+        self._open_values.append(open_)
+        self._high_values.append(high)
+        self._low_values.append(low)
+        self._close_values.append(close)
+        self._volume_values.append(volume)
+
+        traded_value = volume * ((high + low + close) / 3.0)
+        self._traded_values.append(traded_value)
+
+        tr = high - low
+        if previous_close is not None:
+            tr = max(tr, abs(high - previous_close), abs(low - previous_close))
+        self._true_range_values.append(tr)
+
+        atr_length = self.config.atr_length
+        count = len(self._true_range_values)
+        if count < atr_length:
+            atr = None
+        elif count == atr_length:
+            atr = sum(self._true_range_values[:atr_length]) / atr_length
+        else:
+            previous_atr = self._atr_values[-1]
+            if previous_atr is None:
+                atr = sum(self._true_range_values[-atr_length:]) / atr_length
+            else:
+                atr = (previous_atr * (atr_length - 1) + tr) / atr_length
+        self._atr_values.append(atr)
+
+        self._append_ema(self._volume_ema_values, volume, self.config.volume_short_length)
+        self._append_ema(self._capital_ema_values, traded_value, self.config.volume_short_length)
+        self._append_relative(self._rvol_values, self._volume_values, self.config.volume_average_length)
+        self._append_relative(self._rtv_values, self._traded_values, self.config.volume_average_length)
+        self._nonzero_volume_flags.append(1.0 if volume > 0.0 else 0.0)
+
+        close_location = _safe_div(close - low, high - low, 0.5)
+        self._close_locations.append(close_location)
+        self._signed_traded_values.append(
+            traded_value * _clamp(close_location * 2.0 - 1.0, -1.0, 1.0)
+        )
+
+        up = previous_close is not None and close > previous_close
+        down = previous_close is not None and close < previous_close
+        self._up_volume_values.append(volume if up else 0.0)
+        self._down_volume_values.append(volume if down else 0.0)
+        self._up_capital_values.append(traded_value if up else 0.0)
+        self._down_capital_values.append(traded_value if down else 0.0)
+        self._higher_close_flags.append(1.0 if up else 0.0)
+        self._lower_close_flags.append(1.0 if down else 0.0)
+
+    def _calculate(self) -> VolumeParticipationMetrics:
+        c = self.config
+        n = len(self._rows)
+        if not n:
+            return VolumeParticipationMetrics()
+
+        opens = self._open_values
+        highs = self._high_values
+        lows = self._low_values
+        closes = self._close_values
+        volumes = self._volume_values
+        traded_values = self._traded_values
+        atr_series = self._atr_values
+        volume_ema = self._volume_ema_values
+        capital_ema = self._capital_ema_values
+        rvol_series = self._rvol_values
+        rtv_series = self._rtv_values
+
+        atr = atr_series[-1]
+        prior_atr = atr_series[-2] if n > 1 else None
+
+        volume_average = _sma(volumes, c.volume_average_length)
+        volume_long_average = _sma(volumes, c.volume_long_length)
+        volume_std = _population_std(volumes, c.volume_long_length)
+        volume_percentile = _percent_rank(volumes, c.percentile_length)
+        volume_slope = (
+            None
+            if not volume_average or len(volume_ema) <= c.slope_lookback
+            else _safe_div(volume_ema[-1] - volume_ema[-1 - c.slope_lookback], volume_average)
+        )
+        nonzero_share = _sma(self._nonzero_volume_flags, c.volume_average_length)
+        volume_usable = bool(
+            volume_average
+            and volume_average > 0.0
+            and nonzero_share is not None
+            and nonzero_share >= c.minimum_nonzero_volume_share
+        )
+
+        capital_average = _sma(traded_values, c.volume_average_length)
+        capital_long_average = _sma(traded_values, c.volume_long_length)
+        capital_std = _population_std(traded_values, c.volume_long_length)
+        capital_percentile = _percent_rank(traded_values, c.percentile_length)
+        capital_slope = (
+            None
+            if not capital_average or len(capital_ema) <= c.slope_lookback
+            else _safe_div(capital_ema[-1] - capital_ema[-1 - c.slope_lookback], capital_average)
+        )
+        capital_usable = bool(
+            volume_usable
+            and capital_average
+            and capital_average > 0.0
+            and capital_long_average
+            and capital_long_average > 0.0
+        )
+
+        history_ready = (
+            n >= c.minimum_history
+            and atr is not None
+            and prior_atr is not None
+            and n > c.progress_lookback
+        )
+        metrics_ready = all(
+            value is not None
+            for value in (
+                volume_average,
+                volume_long_average,
+                volume_std,
+                volume_percentile,
+                volume_slope,
+                capital_average,
+                capital_long_average,
+                capital_std,
+                capital_percentile,
+                capital_slope,
+            )
+        )
+        data_ready = bool(history_ready and metrics_ready and volume_usable and capital_usable)
+        if not data_ready:
+            return VolumeParticipationMetrics(
+                volume_usable=volume_usable,
+                capital_usable=capital_usable,
+            )
+
+        assert volume_average is not None
+        assert volume_long_average is not None
+        assert volume_std is not None
+        assert volume_percentile is not None
+        assert volume_slope is not None
+        assert capital_average is not None
+        assert capital_long_average is not None
+        assert capital_std is not None
+        assert capital_percentile is not None
+        assert capital_slope is not None
+        assert atr is not None and prior_atr is not None
+
+        rvol = rvol_series[-1] or 0.0
+        rtv = rtv_series[-1] or 0.0
+        volume_z = _safe_div(volumes[-1] - volume_long_average, volume_std) if volume_std > 1e-12 else 0.0
+        capital_z = _safe_div(traded_values[-1] - capital_long_average, capital_std) if capital_std > 1e-12 else 0.0
+        volume_short_long = _safe_div(volume_ema[-1], volume_long_average)
+        capital_short_long = _safe_div(capital_ema[-1], capital_long_average)
+
+        volume_level = _classify_level(
+            rvol,
+            volume_slope,
+            volume_z,
+            volume_percentile,
+            very_low=c.very_low_rvol,
+            low=c.low_rvol,
+            rising=c.rising_rvol,
+            high=c.high_rvol,
+            abnormal=c.abnormal_rvol,
+            high_z=c.high_volume_z,
+            abnormal_z=c.abnormal_volume_z,
+            high_percentile=c.high_percent_rank,
+            abnormal_percentile=c.abnormal_percent_rank,
+            minimum_slope=c.minimum_volume_slope,
+        )
+        capital_level = _classify_level(
+            rtv,
+            capital_slope,
+            capital_z,
+            capital_percentile,
+            very_low=c.very_low_rtv,
+            low=c.low_rtv,
+            rising=c.rising_rtv,
+            high=c.high_rtv,
+            abnormal=c.abnormal_rtv,
+            high_z=c.high_capital_z,
+            abnormal_z=c.abnormal_capital_z,
+            high_percentile=c.high_percent_rank,
+            abnormal_percentile=c.abnormal_percent_rank,
+            minimum_slope=c.minimum_capital_slope,
+        )
+        volume_regime = _regime(volume_short_long, volume_slope, c.minimum_volume_slope)
+        capital_regime = _regime(capital_short_long, capital_slope, c.minimum_capital_slope)
+
+        volume5 = _sma(volumes, c.flow_short_length) or 0.0
+        capital5 = _sma(traded_values, c.flow_short_length) or 0.0
+        capital10 = _sma(traded_values, c.flow_medium_length) or 0.0
+        up_volume_share5 = _safe_div(
+            _sma(self._up_volume_values, c.flow_short_length) or 0.0,
+            volume5,
+            0.50,
+        )
+        down_volume_share5 = _safe_div(
+            _sma(self._down_volume_values, c.flow_short_length) or 0.0,
+            volume5,
+            0.50,
+        )
+        up_capital_share10 = _safe_div(
+            _sma(self._up_capital_values, c.flow_medium_length) or 0.0,
+            capital10,
+            0.50,
+        )
+        down_capital_share10 = _safe_div(
+            _sma(self._down_capital_values, c.flow_medium_length) or 0.0,
+            capital10,
+            0.50,
+        )
+        pressure5 = _clamp(
+            _safe_div(_sma(self._signed_traded_values, c.flow_short_length) or 0.0, capital5),
+            -1.0,
+            1.0,
+        )
+        pressure10 = _clamp(
+            _safe_div(_sma(self._signed_traded_values, c.flow_medium_length) or 0.0, capital10),
+            -1.0,
+            1.0,
+        )
+
+        recent_atrs = [value for value in atr_series[-c.progress_lookback :] if value is not None]
+        progress_atr_reference = (
+            sum(recent_atrs) / len(recent_atrs) if recent_atrs else prior_atr
+        )
+        net_progress = closes[-1] - closes[-1 - c.progress_lookback]
+        net_progress_atr = _safe_div(net_progress, progress_atr_reference)
+        absolute_path = sum(
+            abs(closes[i] - closes[i - 1])
+            for i in range(n - c.progress_lookback, n)
+        )
+        path_distance_atr = _safe_div(absolute_path, progress_atr_reference)
+        directional_efficiency = _clamp(
+            _safe_div(abs(net_progress), absolute_path),
+            0.0,
+            1.0,
+        )
+
+        progress_rvol_values = [
+            value for value in rvol_series[-c.progress_lookback :] if value is not None
+        ]
+        progress_rtv_values = [
+            value for value in rtv_series[-c.progress_lookback :] if value is not None
+        ]
+        progress_rvol = (
+            sum(progress_rvol_values) / len(progress_rvol_values)
+            if progress_rvol_values
+            else rvol
+        )
+        progress_rtv = (
+            sum(progress_rtv_values) / len(progress_rtv_values)
+            if progress_rtv_values
+            else rtv
+        )
+        volume_result_efficiency = _safe_div(abs(net_progress_atr), max(progress_rvol, 0.10))
+        capital_result_efficiency = _safe_div(abs(net_progress_atr), max(progress_rtv, 0.10))
+
+        close_location = self._close_locations[-1]
+        total_range = highs[-1] - lows[-1]
+        body_to_atr = _safe_div(abs(closes[-1] - opens[-1]), prior_atr)
+        upper_wick_ratio = _safe_div(highs[-1] - max(opens[-1], closes[-1]), total_range)
+        lower_wick_ratio = _safe_div(min(opens[-1], closes[-1]) - lows[-1], total_range)
+        higher_close_share = _sma(self._higher_close_flags, c.flow_short_length) or 0.0
+        lower_close_share = _sma(self._lower_close_flags, c.flow_short_length) or 0.0
+
+        up_progress = net_progress_atr >= c.minimum_progress_atr
+        down_progress = net_progress_atr <= -c.minimum_progress_atr
+        efficiency_ok = directional_efficiency >= c.minimum_efficiency
+        up_close = close_location >= c.up_close_location
+        down_close = close_location <= c.down_close_location
+        bullish = closes[-1] > opens[-1]
+        bearish = closes[-1] < opens[-1]
+        body_strong = body_to_atr >= c.minimum_body_atr
+        limited_upper = upper_wick_ratio <= c.maximum_directional_wick_ratio
+        limited_lower = lower_wick_ratio <= c.maximum_directional_wick_ratio
+        higher_persistence = higher_close_share >= c.minimum_directional_close_share
+        lower_persistence = lower_close_share >= c.minimum_directional_close_share
+        positive_slope = net_progress > 0.0
+        negative_slope = net_progress < 0.0
+        up_proxy = (
+            up_capital_share10 >= c.minimum_directional_share
+            and pressure5 >= c.minimum_capital_pressure
+        )
+        down_proxy = (
+            down_capital_share10 >= c.minimum_directional_share
+            and pressure5 <= -c.minimum_capital_pressure
+        )
+
+        up_direction_group = (
+            net_progress_atr > 0.0
+            and (up_progress or higher_persistence)
+            and positive_slope
+        )
+        down_direction_group = (
+            net_progress_atr < 0.0
+            and (down_progress or lower_persistence)
+            and negative_slope
+        )
+        up_candle_group = (
+            up_close
+            and (bullish or closes[-1] > closes[-2])
+            and (limited_upper or body_strong)
+        )
+        down_candle_group = (
+            down_close
+            and (bearish or closes[-1] < closes[-2])
+            and (limited_lower or body_strong)
+        )
+        up_efficiency_group = efficiency_ok and (
+            up_progress or path_distance_atr >= c.minimum_progress_atr
+        )
+        down_efficiency_group = efficiency_ok and (
+            down_progress or path_distance_atr >= c.minimum_progress_atr
+        )
+
+        up_evidence = sum(
+            bool(value)
+            for value in (
+                up_progress,
+                efficiency_ok,
+                up_close,
+                bullish,
+                body_strong,
+                limited_upper,
+                higher_persistence,
+                positive_slope,
+                up_proxy,
+            )
+        )
+        down_evidence = sum(
+            bool(value)
+            for value in (
+                down_progress,
+                efficiency_ok,
+                down_close,
+                bearish,
+                body_strong,
+                limited_lower,
+                lower_persistence,
+                negative_slope,
+                down_proxy,
+            )
+        )
+
+        persistence_window = [
+            value for value in rvol_series[-c.persistence_length :] if value is not None
+        ]
+        elevated_share = sum(
+            1 for value in persistence_window if value >= c.rising_rvol
+        ) / max(len(persistence_window), 1)
+        volume_persistence = (
+            len(persistence_window) == c.persistence_length
+            and elevated_share >= 0.60
+            and volume_slope >= -c.minimum_volume_slope
+        )
+        participation_magnitude_rising = (
+            volume_level in {VolumeLevel.RISING, VolumeLevel.HIGH, VolumeLevel.ABNORMAL}
+            or volume_persistence
+        )
+
+        up_candidate = (
+            participation_magnitude_rising
+            and up_direction_group
+            and up_candle_group
+            and up_efficiency_group
+            and up_proxy
+            and up_evidence >= c.participation_minimum_evidence
+            and down_evidence < c.participation_minimum_evidence
+        )
+        down_candidate = (
+            participation_magnitude_rising
+            and down_direction_group
+            and down_candle_group
+            and down_efficiency_group
+            and down_proxy
+            and down_evidence >= c.participation_minimum_evidence
+            and up_evidence < c.participation_minimum_evidence
+        )
+        if up_candidate and down_candidate:
+            if up_evidence > down_evidence and net_progress_atr > 0.0:
+                down_candidate = False
+            elif down_evidence > up_evidence and net_progress_atr < 0.0:
+                up_candidate = False
+            else:
+                up_candidate = False
+                down_candidate = False
+
+        previous_candidates = (
+            self._metrics_history[-(c.participation_confirmation_bars - 1) :]
+            if c.participation_confirmation_bars > 1
+            else []
+        )
+        up_consecutive = (
+            up_candidate
+            and len(previous_candidates) == c.participation_confirmation_bars - 1
+            and all(metrics.up_candidate for metrics in previous_candidates)
+        )
+        down_consecutive = (
+            down_candidate
+            and len(previous_candidates) == c.participation_confirmation_bars - 1
+            and all(metrics.down_candidate for metrics in previous_candidates)
+        )
+        strong_counter_down = bearish and body_strong and down_close
+        strong_counter_up = bullish and body_strong and up_close
+        up_retention = (
+            net_progress_atr > 0.0
+            and directional_efficiency >= c.minimum_efficiency * 0.75
+            and rvol >= c.confirmation_minimum_rvol
+            and rtv >= c.confirmation_minimum_rtv
+            and close_location >= 0.50
+            and pressure5 >= -c.minimum_capital_pressure * 0.25
+            and not strong_counter_down
+        )
+        down_retention = (
+            net_progress_atr < 0.0
+            and directional_efficiency >= c.minimum_efficiency * 0.75
+            and rvol >= c.confirmation_minimum_rvol
+            and rtv >= c.confirmation_minimum_rtv
+            and close_location <= 0.50
+            and pressure5 <= c.minimum_capital_pressure * 0.25
+            and not strong_counter_up
+        )
+        up_confirmed = up_consecutive and up_retention
+        down_confirmed = down_consecutive and down_retention
+        if up_confirmed and down_confirmed:
+            up_confirmed = False
+            down_confirmed = False
+
+        result_weak = (
+            abs(net_progress_atr) <= c.weak_result_progress_limit
+            or directional_efficiency <= c.weak_result_efficiency_limit
+        )
+        effort_rising = progress_rvol >= c.rising_rvol
+        effort_high = progress_rvol >= c.high_rvol
+        effort_very_high = effort_high and progress_rtv >= c.high_rtv
+        strong_result = (
+            up_direction_group and up_candle_group and up_efficiency_group
+        ) or (
+            down_direction_group and down_candle_group and down_efficiency_group
+        )
+        if effort_very_high and result_weak:
+            effort_class = EffortResultClass.VERY_HIGH_EFFORT_WEAK_RESULT
+        elif effort_high and result_weak:
+            effort_class = EffortResultClass.HIGH_EFFORT_WEAK_RESULT
+        elif effort_high and strong_result:
+            effort_class = EffortResultClass.HIGH_EFFORT_STRONG_RESULT
+        elif effort_rising and strong_result:
+            effort_class = EffortResultClass.RISING_EFFORT_STRONG_RESULT
+        else:
+            effort_class = EffortResultClass.NEUTRAL
+
+        return VolumeParticipationMetrics(
+            data_ready=True,
+            volume_usable=True,
+            capital_usable=True,
+            rvol=rvol,
+            volume_z_score=volume_z,
+            volume_percent_rank=volume_percentile,
+            volume_slope=volume_slope,
+            volume_regime=volume_regime,
+            volume_level=volume_level,
+            rtv=rtv,
+            capital_z_score=capital_z,
+            capital_percent_rank=capital_percentile,
+            capital_slope=capital_slope,
+            capital_regime=capital_regime,
+            capital_level=capital_level,
+            up_volume_share_5=up_volume_share5,
+            down_volume_share_5=down_volume_share5,
+            up_capital_share_10=up_capital_share10,
+            down_capital_share_10=down_capital_share10,
+            directional_value_pressure_5=pressure5,
+            directional_value_pressure_10=pressure10,
+            net_progress_atr=net_progress_atr,
+            path_distance_atr=path_distance_atr,
+            directional_efficiency=directional_efficiency,
+            volume_result_efficiency=volume_result_efficiency,
+            capital_result_efficiency=capital_result_efficiency,
+            effort_result_class=effort_class,
+            up_evidence_count=up_evidence,
+            down_evidence_count=down_evidence,
+            up_candidate=up_candidate,
+            down_candidate=down_candidate,
+            up_confirmed=up_confirmed,
+            down_confirmed=down_confirmed,
+        )
+
+    @staticmethod
+    def _resolve(metrics: VolumeParticipationMetrics) -> tuple[ParticipationState, Direction]:
+        if not metrics.data_ready:
+            if metrics.volume_usable or metrics.capital_usable:
+                return ParticipationState.PENDING, Direction.NEUTRAL
+            return ParticipationState.VOLUME_UNAVAILABLE, Direction.NEUTRAL
+        if metrics.up_confirmed and metrics.down_confirmed:
+            return ParticipationState.CONFLICT, Direction.NEUTRAL
+        if metrics.up_confirmed:
+            return ParticipationState.UP_CONFIRMED, Direction.UP
+        if metrics.down_confirmed:
+            return ParticipationState.DOWN_CONFIRMED, Direction.DOWN
+        if metrics.up_candidate and metrics.down_candidate:
+            return ParticipationState.CONFLICT, Direction.NEUTRAL
+        if metrics.up_candidate:
+            return ParticipationState.UP_CANDIDATE, Direction.NEUTRAL
+        if metrics.down_candidate:
+            return ParticipationState.DOWN_CANDIDATE, Direction.NEUTRAL
+        return ParticipationState.NEUTRAL, Direction.NEUTRAL
+
+    def _quality(self, metrics: VolumeParticipationMetrics) -> tuple[float, float]:
+        if not metrics.data_ready or metrics.rvol is None or metrics.rtv is None:
+            return 0.0, 0.0
+        dominant = max(metrics.up_evidence_count, metrics.down_evidence_count)
+        separation = abs(metrics.up_evidence_count - metrics.down_evidence_count)
+        quality = _clamp(
+            dominant / 9.0 * 70.0 + separation / 9.0 * 30.0,
+            0.0,
+            100.0,
+        )
+        magnitude = _clamp(
+            metrics.rvol / self.config.high_rvol * 70.0
+            + metrics.rtv / self.config.high_rtv * 20.0,
+            0.0,
+            100.0,
+        )
+        return quality, magnitude
+
+    def update(self, bar: Any) -> EngineResult | None:
+        row = dict(bar) if not isinstance(bar, dict) else bar.copy()
+        if row.get("is_closed") is False or row.get("is_complete") is False:
+            return self._snapshot
+        required = ("open", "high", "low", "close", "volume")
+        if any(key not in row or pd.isna(row[key]) for key in required):
+            raise ValueError("volume participation engine requires complete OHLCV bars")
+
+        self._rows.append(row)
+        self._append_runtime_series(row)
+        metrics = self._calculate()
+        self._metrics_history.append(metrics)
+        state, direction = self._resolve(metrics)
+        quality, magnitude_quality = self._quality(metrics)
+
+        result = EngineResult(
+            engine=self.name,
+            state=state.value,
+            timestamp=row.get("timestamp"),
+            direction=direction,
+            score=quality,
+            quality=quality,
+            levels={},
+            events=(),
+            reasons=(
+                f"RVOL={metrics.rvol:.3f}" if metrics.rvol is not None else "RVOL unavailable",
+                f"RTV={metrics.rtv:.3f}" if metrics.rtv is not None else "RTV unavailable",
+                f"evidence up/down={metrics.up_evidence_count}/{metrics.down_evidence_count}",
+                f"effort_result={metrics.effort_result_class.value}",
+            ),
+            is_confirmed=True,
+        )
+        self._snapshot = result
+        self.export_contract = ParticipationExport(
+            state=state.value,
+            direction=int(direction),
+            quality=quality,
+            magnitude_quality=magnitude_quality,
+            rvol=metrics.rvol,
+            volume_level=metrics.volume_level.value,
+            volume_regime=metrics.volume_regime,
+            relative_traded_value=metrics.rtv,
+            capital_level=metrics.capital_level.value,
+            capital_regime=metrics.capital_regime,
+            directional_value_pressure_5=metrics.directional_value_pressure_5,
+            directional_value_pressure_10=metrics.directional_value_pressure_10,
+            up_capital_share_10=metrics.up_capital_share_10,
+            down_capital_share_10=metrics.down_capital_share_10,
+            net_progress_atr=metrics.net_progress_atr,
+            directional_efficiency=metrics.directional_efficiency,
+            volume_result_efficiency=metrics.volume_result_efficiency,
+            capital_result_efficiency=metrics.capital_result_efficiency,
+            effort_result_class=metrics.effort_result_class.value,
+            up_evidence_count=metrics.up_evidence_count,
+            down_evidence_count=metrics.down_evidence_count,
+        )
+        return result
+
+    def replay(self, data: pd.DataFrame) -> list[EngineResult | None]:
+        self._reset()
+        return [self.update(row) for row in data.to_dict("records")]
+
+    def snapshot(self) -> EngineResult | None:
+        return self._snapshot
+
+    @property
+    def metrics_history(self) -> tuple[VolumeParticipationMetrics, ...]:
+        return tuple(self._metrics_history)
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/volume_participation_lifecycle.py
+
+EXTRACTED:
+Core engine subclass; participation, pivot, absorption ve break lifecycle
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from enum import StrEnum
+from typing import Any
+
+from .models import EngineResult
+from .volume_participation_engine import (
+    EffortResultClass,
+    VolumeParticipationConfig,
+    VolumeParticipationEngine as CoreVolumeParticipationEngine,
+    VolumeParticipationMetrics,
+    _safe_div,
+)
+
+
+class LifecycleStage(StrEnum):
+    NONE = "NONE"
+    CONFIRMED = "CONFIRMED"
+    PROTECTED = "PROTECTED"
+    WEAKENING = "WEAKENING"
+    CLOSED = "CLOSED"
+
+
+class AbsorptionSide(StrEnum):
+    NONE = "NONE"
+    UPPER = "UPPER"
+    LOWER = "LOWER"
+
+
+class AbsorptionStage(StrEnum):
+    NONE = "NONE"
+    CANDIDATE = "CANDIDATE"
+    CONFIRMED = "CONFIRMED"
+    INVALIDATED = "INVALIDATED"
+    EXPIRED = "EXPIRED"
+
+
+class BreakStage(StrEnum):
+    NONE = "NONE"
+    DEVELOPING = "DEVELOPING"
+    SUPPORTED = "SUPPORTED"
+    PROTECTED = "PROTECTED"
+    UNSUPPORTED = "UNSUPPORTED"
+    RECLAIMED = "RECLAIMED"
+
+
+@dataclass(frozen=True, slots=True)
+class ParticipationLifecycleConfig:
+    recent_context_length: int = 8
+    pivot_length: int = 4
+    minimum_pivot_range_atr: float = 1.35
+    minimum_pivot_bar_distance: int = 4
+    recent_level_lookback: int = 20
+    important_level_proximity_atr: float = 0.25
+    break_buffer_atr: float = 0.08
+    breakout_confirmation_bars: int = 2
+    absorption_minimum_wick_ratio: float = 0.36
+    absorption_minimum_evidence: int = 4
+    absorption_confirmation_window: int = 4
+    weakening_rvol_drop_factor: float = 0.85
+    weakening_rtv_drop_factor: float = 0.85
+    weakening_minimum_evidence: int = 4
+
+
+@dataclass(frozen=True, slots=True)
+class ConfirmedParticipationPivot:
+    side: str
+    price: float
+    origin_index: int
+    known_index: int
+    atr_at_source: float
+
+
+@dataclass(frozen=True, slots=True)
+class AbsorptionEvent:
+    side: AbsorptionSide = AbsorptionSide.NONE
+    stage: AbsorptionStage = AbsorptionStage.NONE
+    candidate_index: int | None = None
+    reference_level: float | None = None
+    reference_source: str | None = None
+    candidate_high: float | None = None
+    candidate_low: float | None = None
+    candidate_mid: float | None = None
+    frozen_atr: float | None = None
+    frozen_buffer: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BreakParticipationEvent:
+    direction: int = 0
+    stage: BreakStage = BreakStage.NONE
+    start_index: int | None = None
+    level: float | None = None
+    reference_source: str | None = None
+    frozen_atr: float | None = None
+    frozen_buffer: float | None = None
+    reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ParticipationLifecycleExport:
+    participation_direction: int = 0
+    participation_stage: str = LifecycleStage.NONE.value
+    controlled_pullback: bool = False
+    controlled_reaction: bool = False
+    absorption_side: str = AbsorptionSide.NONE.value
+    absorption_stage: str = AbsorptionStage.NONE.value
+    absorption_reference_level: float | None = None
+    absorption_reference_source: str | None = None
+    absorption_frozen_atr: float | None = None
+    absorption_frozen_buffer: float | None = None
+    break_direction: int = 0
+    break_stage: str = BreakStage.NONE.value
+    break_level: float | None = None
+    break_reference_source: str | None = None
+    break_frozen_atr: float | None = None
+    break_frozen_buffer: float | None = None
+    last_pivot_high: float | None = None
+    last_pivot_high_known_index: int | None = None
+    last_pivot_low: float | None = None
+    last_pivot_low_known_index: int | None = None
+
+
+class VolumeParticipationEngine(CoreVolumeParticipationEngine):
+    """Tur-2 lifecycle wrapper. Tur-1 math remains untouched."""
+
+    def __init__(self, config: VolumeParticipationConfig | None = None, lifecycle_config: ParticipationLifecycleConfig | None = None) -> None:
+        super().__init__(config)
+        self.lifecycle_config = lifecycle_config or ParticipationLifecycleConfig()
+        self._init_lifecycle()
+
+    def _init_lifecycle(self) -> None:
+        self.lifecycle_export = ParticipationLifecycleExport()
+        self._participation_direction = 0
+        self._participation_stage = LifecycleStage.NONE
+        self._participation_confirmed_index: int | None = None
+        self._absorption = AbsorptionEvent()
+        self._absorption_hold_until = -1
+        self._break = BreakParticipationEvent()
+        self._accepted_pivot: ConfirmedParticipationPivot | None = None
+        self._last_high_pivot: ConfirmedParticipationPivot | None = None
+        self._last_low_pivot: ConfirmedParticipationPivot | None = None
+        self._lifecycle_snapshot: EngineResult | None = None
+
+    def _reset(self) -> None:
+        super()._reset()
+        self._init_lifecycle()
+
+    def _atr_series(self) -> list[float | None]:
+        """Return the core engine's incrementally maintained Wilder ATR series."""
+
+        return self._atr_values
+
+    def _accept_pivot(self, pivot: ConfirmedParticipationPivot) -> None:
+        self._accepted_pivot = pivot
+        if pivot.side == "HIGH":
+            self._last_high_pivot = pivot
+        else:
+            self._last_low_pivot = pivot
+
+    def _update_pivot(self, index: int) -> None:
+        p = self.lifecycle_config.pivot_length
+        origin = index - p
+        if origin < p or index < 2 * p:
+            return
+        highs = self._high_values
+        lows = self._low_values
+        high_window = highs[origin - p : origin + p + 1]
+        low_window = lows[origin - p : origin + p + 1]
+        is_high = highs[origin] == max(high_window) and high_window.count(highs[origin]) == 1
+        is_low = lows[origin] == min(low_window) and low_window.count(lows[origin]) == 1
+        if is_high == is_low:
+            return
+        atr = self._atr_values[origin]
+        if atr is None or atr <= 0:
+            return
+        pivot = ConfirmedParticipationPivot("HIGH" if is_high else "LOW", highs[origin] if is_high else lows[origin], origin, index, float(atr))
+        previous = self._accepted_pivot
+        if previous is None:
+            self._accept_pivot(pivot)
+            return
+        if pivot.side == previous.side:
+            more_extreme = pivot.price > previous.price if pivot.side == "HIGH" else pivot.price < previous.price
+            if more_extreme:
+                self._accept_pivot(pivot)
+            return
+        if pivot.origin_index - previous.origin_index < self.lifecycle_config.minimum_pivot_bar_distance:
+            return
+        if _safe_div(abs(pivot.price - previous.price), pivot.atr_at_source) < self.lifecycle_config.minimum_pivot_range_atr:
+            return
+        self._accept_pivot(pivot)
+
+    def _flow_shares_5(self) -> tuple[float, float, float, float]:
+        length = self.config.flow_short_length
+        n = len(self._rows)
+        if n < length:
+            return 0.5, 0.5, 0.5, 0.5
+        start = n - length
+        uv = dv = uc = dc = tv = tc = 0.0
+        for i in range(start, n):
+            volume = self._volume_values[i]
+            capital = self._traded_values[i]
+            tv += volume
+            tc += capital
+            if i > 0 and self._close_values[i] > self._close_values[i - 1]:
+                uv += volume; uc += capital
+            elif i > 0 and self._close_values[i] < self._close_values[i - 1]:
+                dv += volume; dc += capital
+        return _safe_div(uv, tv, 0.5), _safe_div(dv, tv, 0.5), _safe_div(uc, tc, 0.5), _safe_div(dc, tc, 0.5)
+
+    def _update_participation_lifecycle(self, index: int, metrics: VolumeParticipationMetrics) -> tuple[bool, bool]:
+        if not metrics.data_ready:
+            return False, False
+        if metrics.up_confirmed:
+            self._participation_direction, self._participation_stage, self._participation_confirmed_index = 1, LifecycleStage.CONFIRMED, index
+        elif metrics.down_confirmed:
+            self._participation_direction, self._participation_stage, self._participation_confirmed_index = -1, LifecycleStage.CONFIRMED, index
+        if self._participation_confirmed_index is None:
+            return False, False
+        if index - self._participation_confirmed_index > self.lifecycle_config.recent_context_length:
+            self._participation_direction, self._participation_stage = 0, LifecycleStage.CLOSED
+            return False, False
+
+        up_v, down_v, up_c, down_c = self._flow_shares_5()
+        close = self._close_values[index]
+        prev_close = self._close_values[index - 1]
+        rvol, rtv, pressure = metrics.rvol or 0.0, metrics.rtv or 0.0, metrics.directional_value_pressure_5 or 0.0
+        controlled_up = self._participation_direction == 1 and close < prev_close and metrics.down_evidence_count < self.config.participation_minimum_evidence and down_v < self.config.minimum_directional_share and down_c < self.config.minimum_directional_share and rvol <= 1.05 and rtv <= 1.05 and pressure > -self.config.minimum_capital_pressure
+        controlled_down = self._participation_direction == -1 and close > prev_close and metrics.up_evidence_count < self.config.participation_minimum_evidence and up_v < self.config.minimum_directional_share and up_c < self.config.minimum_directional_share and rvol <= 1.05 and rtv <= 1.05 and pressure < self.config.minimum_capital_pressure
+        if controlled_up or controlled_down:
+            self._participation_stage = LifecycleStage.PROTECTED
+
+        if len(self._metrics_history) >= 2 and self._participation_direction:
+            prev = self._metrics_history[-2]
+            if prev.data_ready:
+                prev_rvol, prev_rtv = prev.rvol or rvol, prev.rtv or rtv
+                evidence = 0
+                evidence += int(rvol < prev_rvol * self.lifecycle_config.weakening_rvol_drop_factor and (metrics.volume_slope or 0.0) < 0.0)
+                evidence += int(rtv < prev_rtv * self.lifecycle_config.weakening_rtv_drop_factor and (metrics.capital_slope or 0.0) < 0.0)
+                evidence += int((metrics.directional_efficiency or 0.0) < (prev.directional_efficiency or 0.0) and (metrics.directional_efficiency or 0.0) < self.config.minimum_efficiency)
+                if self._participation_direction == 1:
+                    evidence += int((metrics.net_progress_atr or 0.0) < (prev.net_progress_atr or 0.0) and (metrics.net_progress_atr or 0.0) < self.config.minimum_progress_atr * 0.60)
+                    evidence += int(metrics.down_evidence_count >= self.config.participation_minimum_evidence - 1)
+                else:
+                    evidence += int((metrics.net_progress_atr or 0.0) > (prev.net_progress_atr or 0.0) and (metrics.net_progress_atr or 0.0) > -self.config.minimum_progress_atr * 0.60)
+                    evidence += int(metrics.up_evidence_count >= self.config.participation_minimum_evidence - 1)
+                if evidence >= self.lifecycle_config.weakening_minimum_evidence:
+                    self._participation_stage = LifecycleStage.WEAKENING
+        return controlled_up, controlled_down
+
+    def _nearest_reference(self, upper: bool, index: int) -> tuple[float | None, float | None, str | None]:
+        atr = self._atr_values[index]
+        if atr is None:
+            return None, None, None
+        price = self._high_values[index] if upper else self._low_values[index]
+        candidates: list[tuple[float, float, str]] = []
+        pivot = self._last_high_pivot if upper else self._last_low_pivot
+        if pivot:
+            candidates.append((pivot.price, pivot.atr_at_source, "PIVOT"))
+        start = max(0, index - self.lifecycle_config.recent_level_lookback)
+        if index > start:
+            recent = max(self._high_values[start:index]) if upper else min(self._low_values[start:index])
+            candidates.append((recent, float(atr), "RECENT_20"))
+        if not candidates:
+            return None, None, None
+        level, ref_atr, source = min(candidates, key=lambda item: abs(price - item[0]))
+        if abs(price - level) <= ref_atr * self.lifecycle_config.important_level_proximity_atr:
+            return level, ref_atr, source
+        return None, None, None
+
+    def _update_absorption(self, index: int, metrics: VolumeParticipationMetrics) -> None:
+        if not metrics.data_ready or index == 0:
+            return
+        cfg = self.lifecycle_config
+        row, prev_row = self._rows[index], self._rows[index - 1]
+        o, h, l, c = map(float, (row["open"], row["high"], row["low"], row["close"]))
+        span = h - l
+        close_loc = _safe_div(c - l, span, 0.5)
+        upper_wick = _safe_div(h - max(o, c), span)
+        lower_wick = _safe_div(min(o, c) - l, span)
+        previous = self._metrics_history[-2] if len(self._metrics_history) >= 2 else metrics
+        upper_deteriorating = (metrics.net_progress_atr or 0.0) < (previous.net_progress_atr or 0.0) or (metrics.directional_efficiency or 0.0) < (previous.directional_efficiency or 0.0)
+        lower_deteriorating = (metrics.net_progress_atr or 0.0) > (previous.net_progress_atr or 0.0) or (metrics.directional_efficiency or 0.0) < (previous.directional_efficiency or 0.0)
+        effort_mismatch = metrics.effort_result_class in {EffortResultClass.HIGH_EFFORT_WEAK_RESULT, EffortResultClass.VERY_HIGH_EFFORT_WEAK_RESULT}
+        upper_ref, upper_atr, upper_source = self._nearest_reference(True, index)
+        lower_ref, lower_atr, lower_source = self._nearest_reference(False, index)
+        upper_evidence = sum((upper_wick >= cfg.absorption_minimum_wick_ratio, close_loc < 0.60, (metrics.directional_efficiency or 0.0) <= self.config.weak_result_efficiency_limit, abs(metrics.net_progress_atr or 0.0) <= self.config.weak_result_progress_limit, upper_deteriorating, (metrics.directional_value_pressure_5 or 0.0) < self.config.minimum_capital_pressure))
+        lower_evidence = sum((lower_wick >= cfg.absorption_minimum_wick_ratio, close_loc > 0.40, (metrics.directional_efficiency or 0.0) <= self.config.weak_result_efficiency_limit, abs(metrics.net_progress_atr or 0.0) <= self.config.weak_result_progress_limit, lower_deteriorating, (metrics.directional_value_pressure_5 or 0.0) > -self.config.minimum_capital_pressure))
+        upper_signal = effort_mismatch and upper_ref is not None and h >= float(prev_row["high"]) and (c > o or (metrics.net_progress_atr or 0.0) >= 0.0) and (upper_wick >= cfg.absorption_minimum_wick_ratio or close_loc < 0.60) and upper_evidence >= cfg.absorption_minimum_evidence
+        lower_signal = effort_mismatch and lower_ref is not None and l <= float(prev_row["low"]) and (c < o or (metrics.net_progress_atr or 0.0) <= 0.0) and (lower_wick >= cfg.absorption_minimum_wick_ratio or close_loc > 0.40) and lower_evidence >= cfg.absorption_minimum_evidence
+
+        active = self._absorption
+        if active.stage == AbsorptionStage.CANDIDATE and active.candidate_index is not None:
+            age = index - active.candidate_index
+            if active.side == AbsorptionSide.UPPER:
+                invalid = c > float(active.candidate_high) + float(active.frozen_buffer) and metrics.up_evidence_count >= self.config.participation_minimum_evidence
+                confirm = index > active.candidate_index and age <= cfg.absorption_confirmation_window and h <= float(active.candidate_high) + float(active.frozen_buffer) and c <= float(active.candidate_mid)
+            else:
+                invalid = c < float(active.candidate_low) - float(active.frozen_buffer) and metrics.down_evidence_count >= self.config.participation_minimum_evidence
+                confirm = index > active.candidate_index and age <= cfg.absorption_confirmation_window and l >= float(active.candidate_low) - float(active.frozen_buffer) and c >= float(active.candidate_mid)
+            if invalid:
+                self._absorption = replace(active, stage=AbsorptionStage.INVALIDATED); return
+            if confirm:
+                self._absorption = replace(active, stage=AbsorptionStage.CONFIRMED); self._absorption_hold_until = index + 2; return
+            if age > cfg.absorption_confirmation_window:
+                self._absorption = replace(active, stage=AbsorptionStage.EXPIRED); return
+
+        if self._absorption.stage == AbsorptionStage.CONFIRMED and index <= self._absorption_hold_until:
+            return
+        if index <= self._absorption_hold_until:
+            return
+        if upper_signal and lower_signal:
+            if upper_wick > lower_wick and close_loc < 0.50: lower_signal = False
+            elif lower_wick > upper_wick and close_loc > 0.50: upper_signal = False
+            else: upper_signal = lower_signal = False
+        if upper_signal:
+            assert upper_ref is not None and upper_atr is not None
+            self._absorption = AbsorptionEvent(AbsorptionSide.UPPER, AbsorptionStage.CANDIDATE, index, upper_ref, upper_source, h, l, (h + l) / 2.0, upper_atr, upper_atr * cfg.break_buffer_atr)
+        elif lower_signal:
+            assert lower_ref is not None and lower_atr is not None
+            self._absorption = AbsorptionEvent(AbsorptionSide.LOWER, AbsorptionStage.CANDIDATE, index, lower_ref, lower_source, h, l, (h + l) / 2.0, lower_atr, lower_atr * cfg.break_buffer_atr)
+
+    def _crossed_reference(self, index: int) -> tuple[int, float | None, float | None, str | None]:
+        if index == 0:
+            return 0, None, None, None
+        close, prev = self._close_values[index], self._close_values[index - 1]
+        candidates: list[tuple[int, float, float, str]] = []
+        if self._last_high_pivot and prev <= self._last_high_pivot.price < close:
+            candidates.append((1, self._last_high_pivot.price, self._last_high_pivot.atr_at_source, "PIVOT"))
+        if self._last_low_pivot and prev >= self._last_low_pivot.price > close:
+            candidates.append((-1, self._last_low_pivot.price, self._last_low_pivot.atr_at_source, "PIVOT"))
+        start = max(0, index - self.lifecycle_config.recent_level_lookback)
+        atr = self._atr_values[index]
+        if index > start and atr is not None:
+            rh = max(self._high_values[start:index]); rl = min(self._low_values[start:index])
+            if prev <= rh < close: candidates.append((1, rh, float(atr), "RECENT_20"))
+            if prev >= rl > close: candidates.append((-1, rl, float(atr), "RECENT_20"))
+        if not candidates:
+            return 0, None, None, None
+        return min(candidates, key=lambda item: abs(close - item[1]))
+
+    def _update_break(self, index: int, metrics: VolumeParticipationMetrics) -> None:
+        if not metrics.data_ready:
+            return
+        if self._break.stage in {BreakStage.UNSUPPORTED, BreakStage.RECLAIMED}:
+            self._break = BreakParticipationEvent()
+        if self._break.stage == BreakStage.NONE:
+            direction, level, atr, source = self._crossed_reference(index)
+            if direction and level is not None and atr is not None:
+                row = self._rows[index]
+                loc = _safe_div(float(row["close"]) - float(row["low"]), float(row["high"]) - float(row["low"]), 0.5)
+                valid = direction == 1 and loc >= 0.55 and (metrics.net_progress_atr or 0.0) > 0.0 or direction == -1 and loc <= 0.45 and (metrics.net_progress_atr or 0.0) < 0.0
+                if valid:
+                    self._break = BreakParticipationEvent(direction, BreakStage.DEVELOPING, index, level, source, atr, atr * self.lifecycle_config.break_buffer_atr)
+            return
+        active = self._break
+        assert active.start_index is not None and active.level is not None and active.frozen_buffer is not None
+        close = self._close_values[index]
+        if active.direction == 1 and close < active.level or active.direction == -1 and close > active.level:
+            self._break = replace(active, stage=BreakStage.RECLAIMED, reason="level reclaimed"); return
+        age = index - active.start_index
+        accepted = close >= active.level + active.frozen_buffer if active.direction == 1 else close <= active.level - active.frozen_buffer
+        result_ok = metrics.up_evidence_count >= self.config.participation_minimum_evidence if active.direction == 1 else metrics.down_evidence_count >= self.config.participation_minimum_evidence
+        support = (metrics.rvol or 0.0) >= self.config.rising_rvol and (metrics.rtv or 0.0) >= self.config.rising_rtv and result_ok
+        if active.stage == BreakStage.DEVELOPING and index > active.start_index and age <= self.lifecycle_config.breakout_confirmation_bars and accepted and support:
+            self._break = replace(active, stage=BreakStage.SUPPORTED); return
+        if active.stage == BreakStage.DEVELOPING and age > self.lifecycle_config.breakout_confirmation_bars:
+            self._break = replace(active, stage=BreakStage.UNSUPPORTED, reason="participation support incomplete"); return
+        if active.stage == BreakStage.SUPPORTED:
+            row = self._rows[index]
+            low_participation = (metrics.rvol or 0.0) <= 1.05 and (metrics.rtv or 0.0) <= 1.05
+            retest = float(row["low"]) <= active.level + active.frozen_buffer if active.direction == 1 else float(row["high"]) >= active.level - active.frozen_buffer
+            accepted_side = close >= active.level if active.direction == 1 else close <= active.level
+            if retest and accepted_side and low_participation:
+                self._break = replace(active, stage=BreakStage.PROTECTED)
+
+    def _sync_lifecycle_export(self, controlled_up: bool, controlled_down: bool) -> None:
+        self.lifecycle_export = ParticipationLifecycleExport(
+            self._participation_direction, self._participation_stage.value, controlled_up, controlled_down,
+            self._absorption.side.value, self._absorption.stage.value, self._absorption.reference_level, self._absorption.reference_source, self._absorption.frozen_atr, self._absorption.frozen_buffer,
+            self._break.direction, self._break.stage.value, self._break.level, self._break.reference_source, self._break.frozen_atr, self._break.frozen_buffer,
+            self._last_high_pivot.price if self._last_high_pivot else None, self._last_high_pivot.known_index if self._last_high_pivot else None,
+            self._last_low_pivot.price if self._last_low_pivot else None, self._last_low_pivot.known_index if self._last_low_pivot else None,
+        )
+
+    def update(self, bar: Any) -> EngineResult | None:
+        row = dict(bar) if not isinstance(bar, dict) else bar.copy()
+        if row.get("is_closed") is False or row.get("is_complete") is False:
+            return self._lifecycle_snapshot or self._snapshot
+        result = super().update(row)
+        if result is None:
+            return None
+        index, metrics = len(self._rows) - 1, self._metrics_history[-1]
+        self._update_pivot(index)
+        controlled_up, controlled_down = self._update_participation_lifecycle(index, metrics)
+        self._update_absorption(index, metrics)
+        self._update_break(index, metrics)
+        self._sync_lifecycle_export(controlled_up, controlled_down)
+        events = list(result.events)
+        if controlled_up: events.append("CONTROLLED_UP_PULLBACK")
+        if controlled_down: events.append("CONTROLLED_DOWN_REACTION")
+        if self._absorption.stage != AbsorptionStage.NONE: events.append(f"ABSORPTION_{self._absorption.side.value}_{self._absorption.stage.value}")
+        if self._break.stage != BreakStage.NONE: events.append(f"BREAK_{self._break.direction}_{self._break.stage.value}")
+        enriched = EngineResult(result.engine, result.state, result.timestamp, result.direction, result.score, result.quality, result.levels, tuple(events), result.reasons + (f"participation_stage={self._participation_stage.value}", f"absorption={self._absorption.side.value}/{self._absorption.stage.value}", f"break={self._break.direction}/{self._break.stage.value}"), True)
+        self._snapshot = self._lifecycle_snapshot = enriched
+        return enriched
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/volume_participation_final.py
+
+EXTRACTED:
+Public final engine subclass; final resolver ve UnifiedParticipationExport
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any
+
+from .models import Direction, EngineResult
+from .volume_participation_engine import VolumeLevel, VolumeParticipationConfig, VolumeParticipationMetrics, _safe_div
+from .volume_participation_lifecycle import (
+    AbsorptionSide,
+    AbsorptionStage,
+    BreakStage,
+    LifecycleStage,
+    ParticipationLifecycleConfig,
+    VolumeParticipationEngine as LifecycleVolumeParticipationEngine,
+)
+
+
+class FinalParticipationState(StrEnum):
+    PENDING = "PARTICIPATION_PENDING"
+    VOLUME_UNAVAILABLE = "PARTICIPATION_VOLUME_UNAVAILABLE"
+    NEUTRAL = "PARTICIPATION_NEUTRAL"
+    LOW_PARTICIPATION = "PARTICIPATION_LOW"
+    RISING_PARTICIPATION = "PARTICIPATION_RISING"
+    ABNORMAL_VOLUME = "PARTICIPATION_ABNORMAL_VOLUME"
+    ABNORMAL_CAPITAL = "PARTICIPATION_ABNORMAL_CAPITAL"
+    ONE_BAR_SHOCK = "PARTICIPATION_ONE_BAR_SHOCK"
+    UP_CANDIDATE = "PARTICIPATION_UP_CANDIDATE"
+    DOWN_CANDIDATE = "PARTICIPATION_DOWN_CANDIDATE"
+    UP_CONFIRMED = "PARTICIPATION_UP_CONFIRMED"
+    DOWN_CONFIRMED = "PARTICIPATION_DOWN_CONFIRMED"
+    UP_PROTECTED = "PARTICIPATION_UP_PROTECTED"
+    DOWN_PROTECTED = "PARTICIPATION_DOWN_PROTECTED"
+    UP_WEAKENING = "PARTICIPATION_UP_WEAKENING"
+    DOWN_WEAKENING = "PARTICIPATION_DOWN_WEAKENING"
+    UP_ENDED = "PARTICIPATION_UP_ENDED"
+    DOWN_ENDED = "PARTICIPATION_DOWN_ENDED"
+    UPPER_ABSORPTION_CANDIDATE = "PARTICIPATION_UPPER_ABSORPTION_CANDIDATE"
+    LOWER_ABSORPTION_CANDIDATE = "PARTICIPATION_LOWER_ABSORPTION_CANDIDATE"
+    UPPER_ABSORPTION_CONFIRMED = "PARTICIPATION_UPPER_ABSORPTION_CONFIRMED"
+    LOWER_ABSORPTION_CONFIRMED = "PARTICIPATION_LOWER_ABSORPTION_CONFIRMED"
+    UPPER_ABSORPTION_INVALIDATED = "PARTICIPATION_UPPER_ABSORPTION_INVALIDATED"
+    LOWER_ABSORPTION_INVALIDATED = "PARTICIPATION_LOWER_ABSORPTION_INVALIDATED"
+    UP_BREAK_SUPPORTED = "PARTICIPATION_UP_BREAK_SUPPORTED"
+    DOWN_BREAK_SUPPORTED = "PARTICIPATION_DOWN_BREAK_SUPPORTED"
+    UP_BREAK_UNSUPPORTED = "PARTICIPATION_UP_BREAK_UNSUPPORTED"
+    DOWN_BREAK_UNSUPPORTED = "PARTICIPATION_DOWN_BREAK_UNSUPPORTED"
+    UP_BREAK_RECLAIMED = "PARTICIPATION_UP_BREAK_RECLAIMED"
+    DOWN_BREAK_RECLAIMED = "PARTICIPATION_DOWN_BREAK_RECLAIMED"
+    CONFLICT = "PARTICIPATION_CONFLICT"
+
+
+@dataclass(frozen=True, slots=True)
+class UnifiedParticipationExport:
+    state: str | None = None
+    support_direction: int = 0
+    engine_direction: int = 0
+    quality: float | None = None
+    magnitude_quality: float | None = None
+    rvol: float | None = None
+    relative_traded_value: float | None = None
+    volume_level: str | None = None
+    capital_level: str | None = None
+    volume_regime: int = 0
+    capital_regime: int = 0
+    directional_value_pressure_5: float | None = None
+    directional_value_pressure_10: float | None = None
+    net_progress_atr: float | None = None
+    directional_efficiency: float | None = None
+    effort_result_class: str | None = None
+    participation_direction: int = 0
+    participation_stage: str = LifecycleStage.NONE.value
+    controlled_pullback: bool = False
+    controlled_reaction: bool = False
+    break_direction: int = 0
+    break_stage: str = BreakStage.NONE.value
+    break_level: float | None = None
+    break_reference_source: str | None = None
+    break_frozen_atr: float | None = None
+    break_frozen_buffer: float | None = None
+    absorption_side: str = AbsorptionSide.NONE.value
+    absorption_stage: str = AbsorptionStage.NONE.value
+    absorption_reference_level: float | None = None
+    absorption_reference_source: str | None = None
+    absorption_frozen_atr: float | None = None
+    absorption_frozen_buffer: float | None = None
+    last_pivot_high: float | None = None
+    last_pivot_high_known_index: int | None = None
+    last_pivot_low: float | None = None
+    last_pivot_low_known_index: int | None = None
+    heavy_conflict: bool = False
+    one_bar_shock: bool = False
+    shock_direction: int = 0
+
+
+class VolumeParticipationEngine(LifecycleVolumeParticipationEngine):
+    """Final resolver/export layer over the Tur-1 math and Tur-2 lifecycle."""
+
+    def __init__(
+        self,
+        config: VolumeParticipationConfig | None = None,
+        lifecycle_config: ParticipationLifecycleConfig | None = None,
+    ) -> None:
+        super().__init__(config, lifecycle_config)
+        self.final_export = UnifiedParticipationExport()
+
+    def _reset(self) -> None:
+        super()._reset()
+        self.final_export = UnifiedParticipationExport()
+
+    def _shock(self, metrics: VolumeParticipationMetrics) -> tuple[bool, int]:
+        if not metrics.data_ready or len(self._rows) < 2:
+            return False, 0
+        atr_series = self._atr_series()
+        prior_atr = atr_series[-2] if len(atr_series) >= 2 else None
+        if prior_atr is None or prior_atr <= 0:
+            return False, 0
+        row = self._rows[-1]
+        o, h, l, c = map(float, (row["open"], row["high"], row["low"], row["close"]))
+        span = h - l
+        close_location = _safe_div(c - l, span, 0.5)
+        range_to_atr = _safe_div(max(h - l, abs(h - float(self._rows[-2]["close"])), abs(l - float(self._rows[-2]["close"]))), prior_atr)
+        body_to_atr = _safe_div(abs(c - o), prior_atr)
+        extreme = range_to_atr >= 2.30 or body_to_atr >= 1.50
+        abnormal = metrics.volume_level == VolumeLevel.ABNORMAL or (
+            metrics.volume_level == VolumeLevel.HIGH and metrics.capital_level == VolumeLevel.ABNORMAL
+        )
+        prior_developing = False
+        if len(self._metrics_history) >= 2:
+            prev = self._metrics_history[-2]
+            prior_developing = prev.volume_level in {VolumeLevel.RISING, VolumeLevel.HIGH, VolumeLevel.ABNORMAL} or prev.capital_level in {VolumeLevel.RISING, VolumeLevel.HIGH, VolumeLevel.ABNORMAL}
+        shock = abnormal and extreme and not prior_developing
+        if not shock:
+            return False, 0
+        if c > o and close_location >= self.config.up_close_location and (metrics.net_progress_atr or 0.0) > 0.0:
+            return True, 1
+        if c < o and close_location <= self.config.down_close_location and (metrics.net_progress_atr or 0.0) < 0.0:
+            return True, -1
+        return True, 0
+
+    def _heavy_conflict(self, metrics: VolumeParticipationMetrics) -> bool:
+        if not metrics.data_ready:
+            return False
+        pressure = abs(metrics.directional_value_pressure_5 or 0.0)
+        directional_proxy = (
+            metrics.up_evidence_count >= self.config.participation_minimum_evidence
+            and metrics.down_evidence_count >= self.config.participation_minimum_evidence
+            and abs(metrics.up_evidence_count - metrics.down_evidence_count) <= 1
+            and pressure <= self.config.minimum_capital_pressure
+        )
+        confirmed_absorption = (
+            (metrics.up_confirmed and self._absorption.side == AbsorptionSide.UPPER and self._absorption.stage == AbsorptionStage.CONFIRMED)
+            or (metrics.down_confirmed and self._absorption.side == AbsorptionSide.LOWER and self._absorption.stage == AbsorptionStage.CONFIRMED)
+        )
+        breakout_absorption = (
+            (self._break.direction == 1 and self._break.stage in {BreakStage.SUPPORTED, BreakStage.PROTECTED} and self._absorption.side == AbsorptionSide.UPPER and self._absorption.stage == AbsorptionStage.CONFIRMED)
+            or (self._break.direction == -1 and self._break.stage in {BreakStage.SUPPORTED, BreakStage.PROTECTED} and self._absorption.side == AbsorptionSide.LOWER and self._absorption.stage == AbsorptionStage.CONFIRMED)
+        )
+        direction_breakout = (
+            (metrics.up_confirmed and self._break.direction == -1 and self._break.stage in {BreakStage.SUPPORTED, BreakStage.PROTECTED})
+            or (metrics.down_confirmed and self._break.direction == 1 and self._break.stage in {BreakStage.SUPPORTED, BreakStage.PROTECTED})
+        )
+        near_high = self._nearest_reference(True, len(self._rows) - 1)[0] is not None
+        near_low = self._nearest_reference(False, len(self._rows) - 1)[0] is not None
+        capital_price = (
+            metrics.effort_result_class.value == "VERY_HIGH_EFFORT_WEAK_RESULT"
+            and metrics.up_evidence_count >= self.config.participation_minimum_evidence - 1
+            and metrics.down_evidence_count >= self.config.participation_minimum_evidence - 1
+            and pressure <= self.config.minimum_capital_pressure * 0.50
+            and not near_high
+            and not near_low
+        )
+        return directional_proxy or confirmed_absorption or breakout_absorption or direction_breakout or capital_price
+
+    def _resolve_final(self, metrics: VolumeParticipationMetrics, shock: bool) -> FinalParticipationState:
+        if not metrics.data_ready:
+            return FinalParticipationState.PENDING if metrics.volume_usable or metrics.capital_usable else FinalParticipationState.VOLUME_UNAVAILABLE
+        if self._heavy_conflict(metrics):
+            return FinalParticipationState.CONFLICT
+        if self._absorption.stage == AbsorptionStage.CONFIRMED:
+            return FinalParticipationState.UPPER_ABSORPTION_CONFIRMED if self._absorption.side == AbsorptionSide.UPPER else FinalParticipationState.LOWER_ABSORPTION_CONFIRMED
+        if self._absorption.stage == AbsorptionStage.INVALIDATED:
+            return FinalParticipationState.UPPER_ABSORPTION_INVALIDATED if self._absorption.side == AbsorptionSide.UPPER else FinalParticipationState.LOWER_ABSORPTION_INVALIDATED
+        if self._break.stage == BreakStage.RECLAIMED:
+            return FinalParticipationState.UP_BREAK_RECLAIMED if self._break.direction == 1 else FinalParticipationState.DOWN_BREAK_RECLAIMED
+        if self._break.stage == BreakStage.UNSUPPORTED:
+            return FinalParticipationState.UP_BREAK_UNSUPPORTED if self._break.direction == 1 else FinalParticipationState.DOWN_BREAK_UNSUPPORTED
+        if self._break.stage in {BreakStage.SUPPORTED, BreakStage.PROTECTED}:
+            return FinalParticipationState.UP_BREAK_SUPPORTED if self._break.direction == 1 else FinalParticipationState.DOWN_BREAK_SUPPORTED
+        if metrics.up_confirmed:
+            return FinalParticipationState.UP_CONFIRMED
+        if metrics.down_confirmed:
+            return FinalParticipationState.DOWN_CONFIRMED
+        if self._participation_stage == LifecycleStage.PROTECTED:
+            return FinalParticipationState.UP_PROTECTED if self._participation_direction == 1 else FinalParticipationState.DOWN_PROTECTED
+        if shock:
+            return FinalParticipationState.ONE_BAR_SHOCK
+        if self._absorption.stage == AbsorptionStage.CANDIDATE:
+            return FinalParticipationState.UPPER_ABSORPTION_CANDIDATE if self._absorption.side == AbsorptionSide.UPPER else FinalParticipationState.LOWER_ABSORPTION_CANDIDATE
+        if metrics.up_candidate:
+            return FinalParticipationState.UP_CANDIDATE
+        if metrics.down_candidate:
+            return FinalParticipationState.DOWN_CANDIDATE
+        if self._participation_stage == LifecycleStage.WEAKENING:
+            return FinalParticipationState.UP_WEAKENING if self._participation_direction == 1 else FinalParticipationState.DOWN_WEAKENING
+        if self._participation_stage == LifecycleStage.CLOSED:
+            return FinalParticipationState.UP_ENDED if self._participation_direction == 1 else FinalParticipationState.DOWN_ENDED
+        if metrics.volume_level == VolumeLevel.ABNORMAL:
+            return FinalParticipationState.ABNORMAL_VOLUME
+        if metrics.capital_level == VolumeLevel.ABNORMAL and metrics.volume_level in {VolumeLevel.RISING, VolumeLevel.HIGH, VolumeLevel.ABNORMAL}:
+            return FinalParticipationState.ABNORMAL_CAPITAL
+        if metrics.volume_level in {VolumeLevel.RISING, VolumeLevel.HIGH, VolumeLevel.ABNORMAL}:
+            return FinalParticipationState.RISING_PARTICIPATION
+        if metrics.volume_level in {VolumeLevel.VERY_LOW, VolumeLevel.LOW} and metrics.capital_level in {VolumeLevel.VERY_LOW, VolumeLevel.LOW}:
+            return FinalParticipationState.LOW_PARTICIPATION
+        return FinalParticipationState.NEUTRAL
+
+    @staticmethod
+    def _support_direction(state: FinalParticipationState) -> int:
+        if state in {FinalParticipationState.UP_CONFIRMED, FinalParticipationState.UP_PROTECTED, FinalParticipationState.UP_BREAK_SUPPORTED, FinalParticipationState.LOWER_ABSORPTION_CONFIRMED}:
+            return 2
+        if state in {FinalParticipationState.UP_CANDIDATE, FinalParticipationState.LOWER_ABSORPTION_CANDIDATE}:
+            return 1
+        if state in {FinalParticipationState.DOWN_CONFIRMED, FinalParticipationState.DOWN_PROTECTED, FinalParticipationState.DOWN_BREAK_SUPPORTED, FinalParticipationState.UPPER_ABSORPTION_CONFIRMED}:
+            return -2
+        if state in {FinalParticipationState.DOWN_CANDIDATE, FinalParticipationState.UPPER_ABSORPTION_CANDIDATE}:
+            return -1
+        return 0
+
+    @staticmethod
+    def _engine_direction(state: FinalParticipationState) -> Direction:
+        if state in {FinalParticipationState.UP_CONFIRMED, FinalParticipationState.UP_PROTECTED, FinalParticipationState.UP_BREAK_SUPPORTED, FinalParticipationState.LOWER_ABSORPTION_CONFIRMED}:
+            return Direction.UP
+        if state in {FinalParticipationState.DOWN_CONFIRMED, FinalParticipationState.DOWN_PROTECTED, FinalParticipationState.DOWN_BREAK_SUPPORTED, FinalParticipationState.UPPER_ABSORPTION_CONFIRMED}:
+            return Direction.DOWN
+        return Direction.NEUTRAL
+
+    def _build_final_export(self, state: FinalParticipationState, engine_direction: Direction, shock: bool, shock_direction: int) -> UnifiedParticipationExport:
+        core = self.export_contract
+        life = self.lifecycle_export
+        return UnifiedParticipationExport(
+            state=state.value,
+            support_direction=self._support_direction(state),
+            engine_direction=int(engine_direction),
+            quality=core.quality,
+            magnitude_quality=core.magnitude_quality,
+            rvol=core.rvol,
+            relative_traded_value=core.relative_traded_value,
+            volume_level=core.volume_level,
+            capital_level=core.capital_level,
+            volume_regime=core.volume_regime,
+            capital_regime=core.capital_regime,
+            directional_value_pressure_5=core.directional_value_pressure_5,
+            directional_value_pressure_10=core.directional_value_pressure_10,
+            net_progress_atr=core.net_progress_atr,
+            directional_efficiency=core.directional_efficiency,
+            effort_result_class=core.effort_result_class,
+            participation_direction=life.participation_direction,
+            participation_stage=life.participation_stage,
+            controlled_pullback=life.controlled_pullback,
+            controlled_reaction=life.controlled_reaction,
+            break_direction=life.break_direction,
+            break_stage=life.break_stage,
+            break_level=life.break_level,
+            break_reference_source=life.break_reference_source,
+            break_frozen_atr=life.break_frozen_atr,
+            break_frozen_buffer=life.break_frozen_buffer,
+            absorption_side=life.absorption_side,
+            absorption_stage=life.absorption_stage,
+            absorption_reference_level=life.absorption_reference_level,
+            absorption_reference_source=life.absorption_reference_source,
+            absorption_frozen_atr=life.absorption_frozen_atr,
+            absorption_frozen_buffer=life.absorption_frozen_buffer,
+            last_pivot_high=life.last_pivot_high,
+            last_pivot_high_known_index=life.last_pivot_high_known_index,
+            last_pivot_low=life.last_pivot_low,
+            last_pivot_low_known_index=life.last_pivot_low_known_index,
+            heavy_conflict=state == FinalParticipationState.CONFLICT,
+            one_bar_shock=shock,
+            shock_direction=shock_direction,
+        )
+
+    def update(self, bar: Any) -> EngineResult | None:
+        row = dict(bar) if not isinstance(bar, dict) else bar.copy()
+        if row.get("is_closed") is False or row.get("is_complete") is False:
+            return self._snapshot
+        base_result = super().update(row)
+        if base_result is None:
+            return None
+        metrics = self._metrics_history[-1]
+        shock, shock_direction = self._shock(metrics)
+        state = self._resolve_final(metrics, shock)
+        direction = self._engine_direction(state)
+        final = EngineResult(
+            engine=base_result.engine,
+            state=state.value,
+            timestamp=base_result.timestamp,
+            direction=direction,
+            score=base_result.score,
+            quality=base_result.quality,
+            levels=base_result.levels,
+            events=base_result.events + ((f"SHOCK_{shock_direction}",) if shock else ()),
+            reasons=base_result.reasons + (f"final_state={state.value}", f"support_direction={self._support_direction(state)}"),
+            is_confirmed=True,
+        )
+        self.final_export = self._build_final_export(state, direction, shock, shock_direction)
+        self._snapshot = self._lifecycle_snapshot = final
+        return final
+```
+
+
+NOTES / POTENTIAL ISSUES
+- Public standalone VolumeParticipationEngine, core → lifecycle → final class zinciridir. Yalnız volume_participation_engine.py core sınıfı bu final/lifecycle davranışını içermez.
+- Ayrı VolumeEvidenceEngine (volume_evidence.py) ve volume_round2 katmanı Market Structure eventlerine/MTF yapısına bağlanır; supporting_replay_runtime.py ve volume_mtf_replay.py içinden kullanılır. Domainleri bağlamama kuralı nedeniyle bu cross-domain runtime dışarı aktarılmadı.
+- TvDatafeedProvider, volume alanı yoksa 0.0 atar; engine veri çekmediği için bu sorunu gizlemez veya telafi etmez. YahooFinanceDailyProvider ise Volume sütunu yoksa hata verir ve günlük timeframe ile sınırlıdır. Provider kodları değiştirilmedi/dışa aktarılmadı.
+- Motor volume alanını zorunlu tutar; bar kapalı/tam değilse güncelleme yapmadan önceki snapshot’ı döndürür. Varsayılan minimum_history=150 koşulu sağlanana kadar metrikler data_ready olmaz.
+- volume_behavior projection, cross-domain evidence ve decision/score/fusion kodları dışarıda bırakıldı. AL/SAT veya trade kararı üretilmez.
+
+DEPENDENCIES
+------------
+Required:
+- Python standard library (dataclasses, enum, math, typing).
+- pandas (DataFrame/Series input ve missing-value kontrolü).
+- Bu dosyada tam kaynakları bulunan base.py, models.py ve volume_participation_* modülleri.
+
+Optional:
+- src/financial_dashboard/data/schema.py, pipeline.py, engine_input.py ve bir provider: yalnız input hazırlama/çekme katmanı; hesaplama motorunun import bağımlılığı değildir.
+- src/financial_dashboard/engines/volume_evidence.py, volume_round2.py, volume_round2_runtime.py ve volume_structure_link_runtime.py: MTF/structure-linked evidence; bu ayrık export için gerekli değildir ve dahil edilmemiştir.
+
+External:
+- pandas.
+- Veri çekilecekse repo tarafındaki sağlayıcı ekleri (ör. tvDatafeed veya yfinance) ayrı kurulum/konfigürasyon ister; bu TXT motoru bunları import etmez.
+
+Source files:
+- src/financial_dashboard/engines/base.py
+- src/financial_dashboard/engines/models.py
+- src/financial_dashboard/engines/volume_participation_engine.py
+- src/financial_dashboard/engines/volume_participation_lifecycle.py
+- src/financial_dashboard/engines/volume_participation_final.py

@@ -228,7 +228,7 @@ def _sahte_snap():
                            bar_index=30, retest_seen=True, invalid_reason="Yok")
 
 
-def test_kapanmamis_barla_push_yok(monkeypatch):
+def test_kapanmamis_barla_push_yok(monkeypatch, tarama_deque_manager):
     """Kapı 'bar kapanmadı' derse anlık push üretilmez, sayaç artar.
 
     Gerçek akışta bu dal HİÇ çalışmaz (tamamlanmis_mumlar aynı kuralı uygular);
@@ -249,7 +249,7 @@ def test_kapanmamis_barla_push_yok(monkeypatch):
 
     yedek = dict(M.daily_stats)
     try:
-        M.scan_all_stocks(StockDequeManager(), lm, notifier,
+        M.scan_all_stocks(tarama_deque_manager, lm, notifier,
                           stocks=["THYAO"], send_alerts=True)
         assert gonderilen == [], "kapanmamış bar ile push üretildi"
         assert M.daily_stats['alerts_bar_kapanmadi'] >= 1
@@ -262,7 +262,7 @@ def test_kapanmamis_barla_push_yok(monkeypatch):
         M._live_state.finish_scan()
 
 
-def test_kapanmis_barla_push_uretilir(monkeypatch):
+def test_kapanmis_barla_push_uretilir(monkeypatch, tarama_deque_manager):
     """Kapı açıkken (bar kapandı) aynı senaryo push ÜRETİR: kapı fazla elemez."""
     import main as M
     from data import StockDequeManager
@@ -279,7 +279,7 @@ def test_kapanmis_barla_push_uretilir(monkeypatch):
 
     yedek = dict(M.daily_stats)
     try:
-        M.scan_all_stocks(StockDequeManager(), lm, notifier,
+        M.scan_all_stocks(tarama_deque_manager, lm, notifier,
                           stocks=["THYAO"], send_alerts=True)
         assert gonderilen, "kapanmış barla push üretilmedi"
         veri = gonderilen[0]

@@ -49,26 +49,63 @@ jobs:
 
       - name: Unit testler (pytest)
         run: python -m pytest -q
+        env:
+          DATA_DIR: ${{ runner.temp }}/formation-bot-unit-data
+          LOG_DIR: ${{ runner.temp }}/formation-bot-unit-logs
+          LOCAL_LOG_DIR: ${{ runner.temp }}/formation-bot-unit-logs-fallback
+          TELEGRAM_BOT_TOKEN: ""
+          TELEGRAM_CHAT_ID: ""
+          TELEGRAM_CHANNEL_ID: ""
+          TELEGRAM_TEST_KEY: ""
+          TELEGRAM_WEBHOOK_SECRET: ""
+          SUPABASE_URL: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
 
-      - name: Zamanlama / ölü formasyon regresyonu (100 kontrol)
+      - name: Zamanlama / ölü formasyon regresyonu
         run: python test_tarama_zamani.py
+        env:
+          DATA_DIR: ${{ runner.temp }}/formation-bot-timing-data
+          LOG_DIR: ${{ runner.temp }}/formation-bot-timing-logs
+          LOCAL_LOG_DIR: ${{ runner.temp }}/formation-bot-timing-logs-fallback
+          TELEGRAM_BOT_TOKEN: ""
+          TELEGRAM_CHAT_ID: ""
+          TELEGRAM_CHANNEL_ID: ""
+          TELEGRAM_TEST_KEY: ""
+          TELEGRAM_WEBHOOK_SECRET: ""
+          SUPABASE_URL: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
 
-      # Render Start Command'i ("python main.py") burada birebir denenir:
-      # PORT verilince /health açılmalı, TELEGRAM_TEST_KEY yokken /test 404
-      # dönmeli ve Telegram'a hiç istek gitmemeli.
+      # Entry point + gerçek HTTP liveness yüzeyi denenir. BOT_HEALTH_SMOKE_ONLY
+      # ana tarama döngüsünü kapatır; böylece CI Yahoo/Telegram/Supabase'e çıkmaz.
+      # /test ve kapalı webhook sözleşmeleri gerçek entrypoint üzerinden doğrulanır.
       - name: Render duman testi (/health ayakta mı?)
         run: |
           set -uo pipefail
+          ROOT="$RUNNER_TEMP/formation-bot-health-smoke"
+          mkdir -p "$ROOT"
           # Render'ın deploy sırasında enjekte ettiği değişkenler (sürüm görünürlüğü)
           export RENDER_GIT_COMMIT=deadbeefcafe
           export RENDER_GIT_BRANCH=main
-          PORT=10000 python main.py > /tmp/bot.log 2>&1 &
+          export BOT_HEALTH_SMOKE_ONLY=1
+          export DATA_DIR="$RUNNER_TEMP/formation-bot-health-smoke/data"
+          export LOG_DIR="$RUNNER_TEMP/formation-bot-health-smoke/logs"
+          export LOCAL_LOG_DIR="$RUNNER_TEMP/formation-bot-health-smoke/logs-fallback"
+          export TELEGRAM_BOT_TOKEN=
+          export TELEGRAM_CHAT_ID=
+          export TELEGRAM_CHANNEL_ID=
+          export TELEGRAM_TEST_KEY=
+          export TELEGRAM_WEBHOOK_SECRET=
+          PORT=10000 python main.py > "$ROOT/bot.log" 2>&1 &
           BOT_PID=$!
-          trap 'kill "$BOT_PID" 2>/dev/null || true' EXIT
+          cleanup() {
+            kill "$BOT_PID" 2>/dev/null || true
+            wait "$BOT_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
 
           up=0
           for i in $(seq 1 30); do
-            if curl -fsS -m 5 -o /tmp/health.json http://127.0.0.1:10000/health; then
+            if curl -fsS -m 5 -o "$ROOT/health.json" http://127.0.0.1:10000/health; then
               up=1
               break
             fi
@@ -76,34 +113,34 @@ jobs:
           done
 
           echo "--- /health ---"
-          cat /tmp/health.json 2>/dev/null || true
+          cat "$ROOT/health.json" 2>/dev/null || true
           echo
 
           if [ "$up" != "1" ]; then
             echo "::error title=/health açılmadı::PORT verildiği halde 60 sn içinde /health yanıt vermedi."
-            tail -40 /tmp/bot.log
+            tail -40 "$ROOT/bot.log"
             exit 1
           fi
 
-          grep -q '"status": "ok"' /tmp/health.json \
+          grep -q '"status": "ok"' "$ROOT/health.json" \
             || { echo "::error::/health gövdesi beklenen JSON değil"; exit 1; }
 
           # Keep-alive iş akışı önbellek kırıcı parametre ekler (/health?ka=...).
           # Sorgu dizesi 404'e yol açarsa ping "servis ölü" sanılır - burada kilitliyoruz.
-          kod_q=$(curl -s -o /tmp/health_q.json -w "%{http_code}" "http://127.0.0.1:10000/health?ka=1")
+          kod_q=$(curl -s -o "$ROOT/health_q.json" -w "%{http_code}" "http://127.0.0.1:10000/health?ka=1")
           echo "--- /health?ka=1 -> HTTP $kod_q ---"
           if [ "$kod_q" != "200" ]; then
             echo "::error title=Sorgu dizesi /health'i bozuyor::/health?ka=1 HTTP $kod_q döndü; sorgu dizesi (ve sondaki slash) yok sayılmalı."
             exit 1
           fi
-          grep -q '"commit": "deadbee"' /tmp/health_q.json \
+          grep -q '"commit": "deadbee"' "$ROOT/health_q.json" \
             || { echo "::error::/health canlı sürüm (RENDER_GIT_COMMIT) bilgisini döndürmeli"; exit 1; }
           echo "✅ /health sorgu dizesiyle 200 ve sürüm bilgisi (commit) içeriyor"
 
-          code=$(curl -s -o /tmp/test.json -w "%{http_code}" \
+          code=$(curl -s -o "$ROOT/test.json" -w "%{http_code}" \
                  "http://127.0.0.1:10000/test?k=yanlis-anahtar" || echo "000")
           echo "--- /test (TELEGRAM_TEST_KEY tanımsız) -> HTTP $code ---"
-          cat /tmp/test.json; echo
+          cat "$ROOT/test.json"; echo
           if [ "$code" != "404" ]; then
             echo "::error title=/test kapalı değil::TELEGRAM_TEST_KEY tanımsızken /test 404 dönmeli (Telegram'a istek gitmemeli). Dönen kod: $code"
             exit 1
@@ -113,17 +150,24 @@ jobs:
           # kendini belli etmez (aynı /test kuralı). Webhook'un uçtan uca akışı
           # (secret doğrulama + JSON parse + komut cevabı) pytest'te koşar:
           # test_telegram_webhook.py
-          code=$(curl -s -o /tmp/webhook.json -w "%{http_code}" -X POST \
+          code=$(curl -s -o "$ROOT/webhook.json" -w "%{http_code}" -X POST \
                  -H "Content-Type: application/json" -d '{"update_id":1}' \
                  "http://127.0.0.1:10000/webhook/deneme" || echo "000")
           echo "--- /webhook/deneme (TELEGRAM_WEBHOOK_SECRET tanımsız) -> HTTP $code ---"
-          cat /tmp/webhook.json; echo
+          cat "$ROOT/webhook.json"; echo
           if [ "$code" != "404" ]; then
             echo "::error title=Webhook ucu kapalı değil::TELEGRAM_WEBHOOK_SECRET tanımsızken POST /webhook/<secret> 404 dönmeli. Dönen kod: $code"
             exit 1
           fi
           echo "✅ webhook ucu secret tanımsızken 404 (kapalı)"
 
+          grep -Fq 'Health smoke mode: provider and command loops disabled' "$ROOT/bot.log" \
+            || { echo "::error::health-smoke-only guard çalışmadı"; tail -40 "$ROOT/bot.log"; exit 1; }
+          if grep -Eq 'TARAMA BAŞLIYOR|Yahoo pacing:|1H fetch penceresi' "$ROOT/bot.log"; then
+            echo "::error::health smoke tarama/fetch akışına girdi"; tail -40 "$ROOT/bot.log"; exit 1
+          fi
+          echo "✅ Health smoke yalnız HTTP liveness çalıştırdı; tarama/Yahoo fetch izi yok"
+
           echo "--- bot logu (ilk 25 satır) ---"
-          head -25 /tmp/bot.log
+          head -25 "$ROOT/bot.log"
           echo "OK: start command ayakta ve /health 200 döndü"

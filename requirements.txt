@@ -5,6 +5,7 @@
 yfinance==1.7.0
 pandas==2.2.2
 numpy==1.26.4
+exchange-calendars==4.13.2  # XIST session/holiday/half-day calendar; unknown dates fail closed
 
 # Alternatif BIST kütüphanesi (tvdatafeed yerine) OPSIYONELDIR ve deploy
 # zincirinden cikarildi: agir C/Rust bagimlilik zinciri getiriyor, hicbir kod

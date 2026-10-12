@@ -1,0 +1,1970 @@
+DOMAIN: FVG (Fair Value Gap)
+ANA MOTOR: financial_dashboard.engines.fvg_engulfing.FvgEngulfingEngine (public facade; extends final lifecycle engine and detector)
+ANA DOSYA: src/financial_dashboard/engines/fvg_engulfing.py; lifecycle: fvg_engulfing_final.py; detector: fvg_engulfing_engine.py; models/config: fvg_engulfing_models.py
+ANA CLASS/FUNCTION: FvgEngulfingEngine.update; public cached _calculate_series; _lifecycle_metrics; _update_fvg_record; _accept_fvg_formation; _build_export
+GEREKLİ BAĞIMLILIKLAR: Aşağıda tam kaynakları verilen fvg_engulfing.py, fvg_engulfing_final.py, fvg_engulfing_engine.py, fvg_engulfing_models.py ve models.py; harici olarak pandas
+VERİ GİRDİSİ: open, high, low, close zorunlu; timestamp opsiyoneldir. volume satırı normalize edilir ve varsayılanı 0.0’dır, FVG hesabında kullanılmaz. timeframe config’i 2h/4h/1d ile sınırlıdır.
+ÇIKTI: fvg_formations; active_bullish_fvg/active_bearish_fvg; completed_fvg; FVG lifecycle state ve FvgSideExport alanları. Public FvgEngulfingExport aynı modelde Engulfing side alanlarını da taşır (aşağıdaki kapsam notuna bakın).
+
+DATA FLOW
+---------
+External provider / canonical OHLCV input (engine içinde veri çekme yok)
+    ↓ closed + source-complete OHLC rows
+Public FvgEngulfingEngine.update(bar) / replay(frame)
+    ↓ three-bar detector → FVG lifecycle/mitigation → export
+FvgFormation history + active/completed FVG records + directional FVG export
+
+FVG HESAPLAMA ÖZETİ
+-------------------
+Bullish geometri: current low, i-2 high değerinden yukarıda; bearish geometri: current high, i-2 low değerinden aşağıda. Orta mum displacement’i, FVG gap/gap-ATR, ilerleme/efficiency, opening-gap savunması, evidence ve profile threshold’ları candidate/active ayrımına katılır. Lifecycle; promotion/touch, wick/close fill, partial/deep/full fill, invalidation, reaction/failed reaction, yaş sınırı ve supersede/takeover kayıtlarını izler. Formüller/threshold’lar aşağıdaki kaynak dosyalardan aynen alınmıştır.
+
+KAPSAM / KAYNAKTAKİ BELİRSİZLİK
+-------------------------------
+Repo’da bağımsız FVG-only Python modülü yoktur: public motor tek bir FVG+Engulfing engine zinciridir. FVG kalite/alignment/reaction metrikleri bu zincirdeki bazı engulfing/candle-state boolean’larını dahili kanıt olarak kullanır. Kaynak dosyaları bölüp bu kanıtı yeniden yazmak davranış riski yaratacağından, mevcut public zincir kaynak haliyle taşınmıştır; ayrı Engulfing motoru/kararı eklenmemiştir. Bu yüzden kod bloklarında aynı sınıf zincirinin Engulfing ile ilgili kaynak tanımları da bulunur. FVG-only API’ye kesin izolasyon gerekiyorsa, algoritma paritesi ayrıca onaylanmadan bu dosyalar budanmamalıdır.
+
+PORTABILITY
+-----------
+Her SOURCE FILE bloğunu gösterilen göreli yola ayrı Python modülü olarak yerleştirmek, current public facade → final lifecycle → detector import zincirini korur. Bu TXT tek Python modülü değildir.
+
+========================================================================================
+EXTRACTED SOURCE CODE (each block preserves its original source file)
+========================================================================================
+
+
+SOURCE:
+src/financial_dashboard/engines/models.py
+
+EXTRACTED:
+EngineResult/Direction modeli (FVG katmanı BaseEngine kullanmaz)
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import IntEnum
+from typing import Any
+
+
+class Direction(IntEnum):
+    DOWN = -1
+    NEUTRAL = 0
+    UP = 1
+
+
+@dataclass(frozen=True, slots=True)
+class EngineResult:
+    engine: str
+    state: str
+    timestamp: Any
+    direction: Direction = Direction.NEUTRAL
+    score: float | None = None
+    quality: float | None = None
+    levels: dict[str, float] = field(default_factory=dict)
+    events: tuple[str, ...] = ()
+    reasons: tuple[str, ...] = ()
+    is_confirmed: bool = True
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/fvg_engulfing_models.py
+
+EXTRACTED:
+FVG ve paylaşılan detector configuration/state/constants
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import IntEnum, StrEnum
+
+
+class FvgDirection(IntEnum):
+    NONE = 0
+    BULLISH = 1
+    BEARISH = -1
+
+
+class FvgState(IntEnum):
+    NONE = 1
+    CANDIDATE = 2
+    ACTIVE = 3
+    FIRST_TEST = 4
+    PARTIAL_FILL = 5
+    DEEP_TEST = 6
+    FULL_FILL = 7
+    REACTION = 8
+    FAILED_REACTION = 9
+    INVALID = 10
+    SUPERSEDED = 11
+
+
+class EngulfingDirection(IntEnum):
+    NONE = 0
+    BULLISH = 1
+    BEARISH = -1
+
+
+class EngulfingState(IntEnum):
+    NONE = 0
+    ACTIVE = 1
+    FIRST_TEST = 2
+    PARTIAL_RETRACE = 3
+    CONTINUATION_CONFIRMED = 4
+    WEAKENED = 5
+    INVALID = 6
+    EXPIRED = 7
+
+
+class SensitivityProfile(StrEnum):
+    SENSITIVE = "Hassas"
+    BALANCED = "Dengeli"
+    SELECTIVE = "Seçici"
+
+
+class FvgEngulfingDataQuality(StrEnum):
+    OK = "OK"
+    WARMUP = "WARMUP"
+    INCOMPLETE_BAR = "INCOMPLETE_BAR"
+    SOURCE_GAP = "SOURCE_GAP"
+    UNSUPPORTED_TIMEFRAME = "UNSUPPORTED_TIMEFRAME"
+
+
+SUPPORTED_TIMEFRAMES = frozenset({"2h", "4h", "1d"})
+
+ATR_LENGTH = 14
+FLOW_LENGTH = 4
+LOCAL_CONTEXT_LENGTH = 4
+MINIMUM_HISTORY_BARS = 100
+
+SAFE_DENOMINATOR_FLOOR = 1e-10
+FVG_CANDIDATE_SIZE_FACTOR = 0.70
+FVG_CANDIDATE_QUALITY_OFFSET = 12.0
+FVG_DISPLACEMENT_EXTRA_FACTOR = 1.25
+FVG_PROGRESS_EXTRA_FACTOR = 1.15
+FVG_SIZE_EXTRA_FACTOR = 1.10
+FVG_REACTION_DISTANCE_FACTOR = 0.10
+FVG_REACTION_FLOW_FACTOR = 0.50
+FVG_TAKEOVER_AGE_FACTOR = 0.60
+FVG_TAKEOVER_QUALITY_MARGIN = 4.0
+FVG_TAKEOVER_DISTANCE_MARGIN = 0.20
+
+ENGULFING_PARTIAL_RETRACE_THRESHOLD = 0.25
+ENGULFING_DEEP_RETRACE_THRESHOLD = 0.50
+
+
+@dataclass(frozen=True, slots=True)
+class FvgEngulfingConfig:
+    sensitivity: SensitivityProfile = SensitivityProfile.BALANCED
+    timeframe: str = "4h"
+    minimum_tick: float = 0.01
+
+    def __post_init__(self) -> None:
+        normalized = self.timeframe.lower()
+        if normalized not in SUPPORTED_TIMEFRAMES:
+            raise ValueError("FVG/Engulfing supports only 2h, 4h, or 1d")
+        if self.minimum_tick <= 0:
+            raise ValueError("minimum_tick must be positive")
+        object.__setattr__(self, "timeframe", normalized)
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/fvg_engulfing_engine.py
+
+EXTRACTED:
+Tur-1 shared detector, FvgFormation, FVG geometry/quality/candidate-active math
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+import math
+import pandas as pd
+
+from .fvg_engulfing_models import (
+    ATR_LENGTH,
+    ENGULFING_DEEP_RETRACE_THRESHOLD,
+    ENGULFING_PARTIAL_RETRACE_THRESHOLD,
+    FLOW_LENGTH,
+    FVG_CANDIDATE_QUALITY_OFFSET,
+    FVG_CANDIDATE_SIZE_FACTOR,
+    FVG_DISPLACEMENT_EXTRA_FACTOR,
+    FVG_PROGRESS_EXTRA_FACTOR,
+    FVG_SIZE_EXTRA_FACTOR,
+    FvgDirection,
+    FvgEngulfingConfig,
+    FvgEngulfingDataQuality,
+    FvgState,
+    EngulfingDirection,
+    EngulfingState,
+    LOCAL_CONTEXT_LENGTH,
+    MINIMUM_HISTORY_BARS,
+    SensitivityProfile,
+)
+from .models import Direction, EngineResult
+
+
+# Source constants that are detector-internal only. They are deliberately not
+# exported as a separate candle/story engine.
+DOJI_BODY_SHARE = 0.12
+DOJI_BODY_ATR = 0.08
+PREVIOUS_ZONE_UPPER_SHARE = 0.70
+PREVIOUS_ZONE_LOWER_SHARE = 0.30
+RETENTION_CLOSE_FLOOR = 0.55
+RETENTION_CLOSE_OFFSET = 0.12
+RETENTION_EFFICIENCY_FACTOR = 0.60
+CONFLICT_PROGRESS_FACTOR = 0.25
+SHOCK_CLOSE_UPPER = 0.65
+SHOCK_CLOSE_LOWER = 0.35
+SHOCK_MIDDLE_LOW = 0.35
+SHOCK_MIDDLE_HIGH = 0.65
+SHOCK_DIRECTIONLESS_BODY_SHARE = 0.35
+SHOCK_DIRECTIONLESS_WICK_SHARE = 0.20
+SHOCK_JUMP_FACTOR = 1.25
+LARGE_GAP_REAL_PROGRESS_FACTOR = 0.80
+LARGE_GAP_BREAK_ATR = 0.10
+VERY_STRONG_ENGULFING_FACTOR = 1.35
+VERY_STRONG_ENGULFING_RATIO_FACTOR = 1.15
+ENGULFING_NEUTRAL_FLOW_FACTOR = 0.25
+REJECTION_CONFLICT_MARGIN = 1.15
+
+
+@dataclass(frozen=True, slots=True)
+class FvgFormation:
+    direction: FvgDirection
+    state: FvgState
+    formation_index: int
+    timestamp: Any
+    lower_boundary: float
+    upper_boundary: float
+    gap_size: float
+    gap_atr: float
+    formation_atr: float
+    quality: float
+    embedded_candle_contribution: float
+    evidence_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class EngulfingFormation:
+    direction: EngulfingDirection
+    state: EngulfingState
+    formation_index: int
+    timestamp: Any
+    lower_boundary: float
+    upper_boundary: float
+    body_size: float
+    body_atr: float
+    formation_atr: float
+    quality: float
+
+
+@dataclass(frozen=True, slots=True)
+class FormationSnapshot:
+    bullish_fvg_candidate: bool = False
+    bearish_fvg_candidate: bool = False
+    bullish_fvg_active: bool = False
+    bearish_fvg_active: bool = False
+    bullish_engulfing: bool = False
+    bearish_engulfing: bool = False
+    bullish_fvg_quality: float = 0.0
+    bearish_fvg_quality: float = 0.0
+    bullish_engulfing_quality: float = 0.0
+    bearish_engulfing_quality: float = 0.0
+
+
+@dataclass(slots=True)
+class _Thresholds:
+    minimum_continuation_body_atr: float
+    minimum_continuation_body_share: float
+    minimum_continuation_efficiency: float
+    minimum_continuation_progress_atr: float
+    minimum_continuation_close_location: float
+    maximum_opposing_wick_body: float
+    continuation_evidence_minimum: int
+    continuation_confirmation_bars: int
+    minimum_engulfing_body_atr: float
+    minimum_previous_body_atr: float
+    minimum_engulfing_body_ratio: float
+    engulfing_close_location: float
+    maximum_engulfing_gap_atr: float
+    minimum_rejection_wick_body: float
+    minimum_rejection_wick_atr: float
+    rejection_close_location: float
+    minimum_wick_dominance: float
+    shock_range_atr: float
+    shock_body_atr: float
+    minimum_fvg_size_atr: float
+    minimum_displacement_body_atr: float
+    minimum_displacement_body_share: float
+    minimum_displacement_close_location: float
+    minimum_fvg_progress_atr: float
+    minimum_fvg_efficiency: float
+    maximum_fvg_opening_gap_atr: float
+    minimum_fvg_evidence: int
+    minimum_fvg_quality: float
+
+
+def _thresholds(profile: SensitivityProfile) -> _Thresholds:
+    if profile is SensitivityProfile.SENSITIVE:
+        return _Thresholds(
+            0.35, 0.48, 0.45, 0.35, 0.62, 1.20, 5, 2,
+            0.35, 0.10, 1.05, 0.62, 0.90,
+            1.50, 0.25, 0.58, 1.15,
+            2.20, 1.40,
+            0.10, 0.35, 0.50, 0.62, 0.30, 0.42, 0.90, 6, 45.0,
+        )
+    if profile is SensitivityProfile.BALANCED:
+        return _Thresholds(
+            0.45, 0.55, 0.52, 0.50, 0.68, 0.95, 6, 2,
+            0.45, 0.14, 1.15, 0.68, 0.75,
+            1.80, 0.32, 0.64, 1.30,
+            2.35, 1.55,
+            0.15, 0.45, 0.58, 0.68, 0.45, 0.50, 0.75, 7, 55.0,
+        )
+    return _Thresholds(
+        0.55, 0.62, 0.60, 0.65, 0.74, 0.75, 7, 3,
+        0.55, 0.18, 1.25, 0.74, 0.60,
+        2.10, 0.40, 0.70, 1.45,
+        2.50, 1.70,
+        0.22, 0.55, 0.65, 0.74, 0.60, 0.58, 0.60, 8, 65.0,
+    )
+
+
+def _clamp(value: float, low: float, high: float) -> float:
+    return max(low, min(high, value))
+
+
+def _safe_div(numerator: float, denominator: float, fallback: float, minimum_tick: float) -> float:
+    floor = max(1e-10, abs(minimum_tick) * 0.000001)
+    if not math.isfinite(numerator) or not math.isfinite(denominator) or abs(denominator) <= floor:
+        return fallback
+    return numerator / denominator
+
+
+def _ratio_score(value: float, target: float, minimum_tick: float) -> float:
+    return _clamp(_safe_div(value, target, 0.0, minimum_tick) * 100.0, 0.0, 100.0)
+
+
+def _rma(values: list[float | None], length: int) -> list[float | None]:
+    """Pine-style RMA seed: SMA of first `length` valid values, then Wilder update.
+
+    A None input breaks the recursive source chain; a fresh seed requires a new
+    contiguous run of `length` valid values. This is Python's source-gap safety
+    boundary and does not fabricate missing bars.
+    """
+    out: list[float | None] = [None] * len(values)
+    run: list[float] = []
+    prev: float | None = None
+    for i, value in enumerate(values):
+        if value is None or not math.isfinite(value):
+            run = []
+            prev = None
+            continue
+        if prev is None:
+            run.append(value)
+            if len(run) < length:
+                continue
+            if len(run) > length:
+                run = run[-length:]
+            prev = sum(run) / length
+            out[i] = prev
+        else:
+            prev = (prev * (length - 1) + value) / length
+            out[i] = prev
+    return out
+
+
+class FvgEngulfingEngine:
+    """Tur-1 source-faithful FVG/Engulfing detector + immutable formations.
+
+    No lifecycle/takeover/export logic is implemented here; those remain Tur-2.
+    Internal candle/flow evidence exists only because v0.3.8 detector math uses
+    it. It is not surfaced as a separate production signal.
+    """
+
+    def __init__(self, config: FvgEngulfingConfig | None = None) -> None:
+        self.config = config or FvgEngulfingConfig()
+        self._thresholds = _thresholds(self.config.sensitivity)
+        self._rows: list[dict[str, Any]] = []
+        self._valid: list[bool] = []
+        self._fvg_formations: list[FvgFormation] = []
+        self._engulfing_formations: list[EngulfingFormation] = []
+        self._snapshot = FormationSnapshot()
+        self._last_data_quality = FvgEngulfingDataQuality.WARMUP
+
+    @property
+    def fvg_formations(self) -> tuple[FvgFormation, ...]:
+        return tuple(self._fvg_formations)
+
+    @property
+    def engulfing_formations(self) -> tuple[EngulfingFormation, ...]:
+        return tuple(self._engulfing_formations)
+
+    @property
+    def snapshot(self) -> FormationSnapshot:
+        return self._snapshot
+
+    @property
+    def last_data_quality(self) -> FvgEngulfingDataQuality:
+        return self._last_data_quality
+
+    def reset(self) -> None:
+        self._rows.clear()
+        self._valid.clear()
+        self._fvg_formations.clear()
+        self._engulfing_formations.clear()
+        self._snapshot = FormationSnapshot()
+        self._last_data_quality = FvgEngulfingDataQuality.WARMUP
+
+    def replay(self, frame: pd.DataFrame) -> list[EngineResult | None]:
+        self.reset()
+        return [self.update(row._asdict()) for row in frame.itertuples(index=False)]
+
+    def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
+        row = dict(bar)
+        if not bool(row.get("is_closed", True)):
+            self._last_data_quality = FvgEngulfingDataQuality.INCOMPLETE_BAR
+            return self._result(row.get("timestamp"), confirmed=False)
+
+        complete = bool(row.get("is_complete", True))
+        normalized = self._normalize_row(row)
+        self._rows.append(normalized)
+        self._valid.append(complete)
+
+        if not complete:
+            self._snapshot = FormationSnapshot()
+            self._last_data_quality = FvgEngulfingDataQuality.SOURCE_GAP
+            return self._result(normalized["timestamp"], confirmed=False)
+
+        metrics = self._calculate_series()
+        current = metrics[-1]
+        if not current["data_ready"]:
+            self._snapshot = FormationSnapshot()
+            self._last_data_quality = FvgEngulfingDataQuality.WARMUP
+            return self._result(normalized["timestamp"])
+
+        self._snapshot = FormationSnapshot(
+            bullish_fvg_candidate=current["bullish_fvg_candidate"],
+            bearish_fvg_candidate=current["bearish_fvg_candidate"],
+            bullish_fvg_active=current["bullish_fvg_active"],
+            bearish_fvg_active=current["bearish_fvg_active"],
+            bullish_engulfing=current["bullish_engulfing"],
+            bearish_engulfing=current["bearish_engulfing"],
+            bullish_fvg_quality=current["bullish_fvg_quality"],
+            bearish_fvg_quality=current["bearish_fvg_quality"],
+            bullish_engulfing_quality=current["bullish_engulfing_quality"],
+            bearish_engulfing_quality=current["bearish_engulfing_quality"],
+        )
+        self._capture_formations(current, normalized)
+        self._last_data_quality = FvgEngulfingDataQuality.OK
+        return self._result(normalized["timestamp"])
+
+    def _normalize_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "timestamp": row.get("timestamp"),
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+            "volume": float(row.get("volume", 0.0)),
+        }
+
+    def _result(self, timestamp: Any, confirmed: bool = True) -> EngineResult:
+        direction = Direction.NEUTRAL
+        events: list[str] = []
+        qualities: list[float] = []
+        s = self._snapshot
+        if s.bullish_fvg_active:
+            events.append("BULL_FVG_ACTIVE_FORMATION")
+            qualities.append(s.bullish_fvg_quality)
+            direction = Direction.UP
+        elif s.bullish_fvg_candidate:
+            events.append("BULL_FVG_CANDIDATE_FORMATION")
+            qualities.append(s.bullish_fvg_quality)
+            direction = Direction.UP
+        if s.bearish_fvg_active:
+            events.append("BEAR_FVG_ACTIVE_FORMATION")
+            qualities.append(s.bearish_fvg_quality)
+            direction = Direction.DOWN if direction is Direction.NEUTRAL else direction
+        elif s.bearish_fvg_candidate:
+            events.append("BEAR_FVG_CANDIDATE_FORMATION")
+            qualities.append(s.bearish_fvg_quality)
+            direction = Direction.DOWN if direction is Direction.NEUTRAL else direction
+        if s.bullish_engulfing:
+            events.append("BULL_ENGULFING_FORMATION")
+            qualities.append(s.bullish_engulfing_quality)
+        if s.bearish_engulfing:
+            events.append("BEAR_ENGULFING_FORMATION")
+            qualities.append(s.bearish_engulfing_quality)
+        return EngineResult(
+            engine="fvg_engulfing",
+            state=self._last_data_quality.value,
+            timestamp=timestamp,
+            direction=direction,
+            quality=max(qualities) if qualities else None,
+            events=tuple(events),
+            is_confirmed=confirmed,
+        )
+
+    def _capture_formations(self, m: dict[str, Any], row: dict[str, Any]) -> None:
+        idx = len(self._rows) - 1
+        if m["bullish_fvg_active"] or m["bullish_fvg_candidate"]:
+            self._fvg_formations.append(FvgFormation(
+                FvgDirection.BULLISH,
+                FvgState.ACTIVE if m["bullish_fvg_active"] else FvgState.CANDIDATE,
+                idx,
+                row["timestamp"],
+                m["bull_fvg_lower"], m["bull_fvg_upper"], m["bull_fvg_gap_size"],
+                m["bull_fvg_gap_atr"], m["formation_atr"], m["bullish_fvg_quality"],
+                m["bull_embedded_contribution"], m["bull_fvg_evidence"],
+            ))
+        if m["bearish_fvg_active"] or m["bearish_fvg_candidate"]:
+            self._fvg_formations.append(FvgFormation(
+                FvgDirection.BEARISH,
+                FvgState.ACTIVE if m["bearish_fvg_active"] else FvgState.CANDIDATE,
+                idx,
+                row["timestamp"],
+                m["bear_fvg_lower"], m["bear_fvg_upper"], m["bear_fvg_gap_size"],
+                m["bear_fvg_gap_atr"], m["formation_atr"], m["bearish_fvg_quality"],
+                m["bear_embedded_contribution"], m["bear_fvg_evidence"],
+            ))
+        if m["bullish_engulfing"]:
+            self._engulfing_formations.append(EngulfingFormation(
+                EngulfingDirection.BULLISH, EngulfingState.ACTIVE, idx, row["timestamp"],
+                m["swallowed_lower"], m["swallowed_upper"], m["swallowed_size"],
+                m["swallowed_atr"], m["safe_prior_atr"], m["bullish_engulfing_quality"],
+            ))
+        if m["bearish_engulfing"]:
+            self._engulfing_formations.append(EngulfingFormation(
+                EngulfingDirection.BEARISH, EngulfingState.ACTIVE, idx, row["timestamp"],
+                m["swallowed_lower"], m["swallowed_upper"], m["swallowed_size"],
+                m["swallowed_atr"], m["safe_prior_atr"], m["bearish_engulfing_quality"],
+            ))
+
+    def _calculate_series(self) -> list[dict[str, Any]]:
+        n = len(self._rows)
+        mintick = self.config.minimum_tick
+        t = self._thresholds
+
+        tr: list[float | None] = []
+        for i, r in enumerate(self._rows):
+            if not self._valid[i]:
+                tr.append(None)
+                continue
+            prev_close = self._rows[i - 1]["close"] if i > 0 and self._valid[i - 1] else None
+            value = r["high"] - r["low"]
+            if prev_close is not None:
+                value = max(value, abs(r["high"] - prev_close), abs(r["low"] - prev_close))
+            tr.append(max(value, 0.0))
+        atr = _rma(tr, ATR_LENGTH)
+
+        out: list[dict[str, Any]] = []
+        candidate_core_buy = [False] * n
+        candidate_core_sell = [False] * n
+        candidate_raw_buy = [False] * n
+        candidate_raw_sell = [False] * n
+        confirmed_buy = [False] * n
+        confirmed_sell = [False] * n
+        range_to_atr_series = [0.0] * n
+        body_to_atr_series = [0.0] * n
+
+        def valid_range(start: int, end: int) -> bool:
+            return start >= 0 and all(self._valid[j] for j in range(start, end + 1))
+
+        for i, r in enumerate(self._rows):
+            m: dict[str, Any] = {
+                "data_ready": False,
+                "bullish_fvg_candidate": False, "bearish_fvg_candidate": False,
+                "bullish_fvg_active": False, "bearish_fvg_active": False,
+                "bullish_engulfing": False, "bearish_engulfing": False,
+                "bullish_fvg_quality": 0.0, "bearish_fvg_quality": 0.0,
+                "bullish_engulfing_quality": 0.0, "bearish_engulfing_quality": 0.0,
+                "bull_fvg_lower": math.nan, "bull_fvg_upper": math.nan,
+                "bear_fvg_lower": math.nan, "bear_fvg_upper": math.nan,
+                "bull_fvg_gap_size": 0.0, "bear_fvg_gap_size": 0.0,
+                "bull_fvg_gap_atr": 0.0, "bear_fvg_gap_atr": 0.0,
+                "formation_atr": math.nan, "safe_prior_atr": math.nan,
+                "swallowed_lower": math.nan, "swallowed_upper": math.nan,
+                "swallowed_size": 0.0, "swallowed_atr": 0.0,
+                "bull_embedded_contribution": 0.0, "bear_embedded_contribution": 0.0,
+                "bull_fvg_evidence": 0, "bear_fvg_evidence": 0,
+            }
+            out.append(m)
+            if not self._valid[i]:
+                continue
+
+            o, h, l, c = r["open"], r["high"], r["low"], r["close"]
+            candle_range = max(h - l, 0.0)
+            body = abs(c - o)
+            upper_wick = max(h - max(o, c), 0.0)
+            lower_wick = max(min(o, c) - l, 0.0)
+            safe_body = max(body, mintick)
+            prior_atr = atr[i - 1] if i > 0 else None
+            safe_prior_atr = max(prior_atr if prior_atr is not None else mintick, mintick)
+            m["safe_prior_atr"] = safe_prior_atr
+            range_to_atr = _safe_div(candle_range, safe_prior_atr, 0.0, mintick)
+            body_to_atr = _safe_div(body, safe_prior_atr, 0.0, mintick)
+            body_share = _safe_div(body, candle_range, 0.0, mintick)
+            close_loc = 0.5 if candle_range <= 1e-10 else _safe_div(c - l, candle_range, 0.5, mintick)
+            upper_wick_body = _safe_div(upper_wick, safe_body, 0.0, mintick)
+            lower_wick_body = _safe_div(lower_wick, safe_body, 0.0, mintick)
+            upper_wick_atr = _safe_div(upper_wick, safe_prior_atr, 0.0, mintick)
+            lower_wick_atr = _safe_div(lower_wick, safe_prior_atr, 0.0, mintick)
+            gap_abs = abs(o - self._rows[i - 1]["close"]) if i > 0 and self._valid[i - 1] else 0.0
+            gap_atr = _safe_div(gap_abs, safe_prior_atr, 0.0, mintick)
+            bull = c > o
+            bear = c < o
+            range_to_atr_series[i] = range_to_atr
+            body_to_atr_series[i] = body_to_atr
+
+            flow_ready = valid_range(i - FLOW_LENGTH, i)
+            local_ready = valid_range(i - LOCAL_CONTEXT_LENGTH, i - 1)
+            compression_ready = valid_range(i - 5, i)
+            minimum_history_ready = i >= MINIMUM_HISTORY_BARS - 1
+            atr_ready = atr[i] is not None and prior_atr is not None
+            previous_ready = i >= 1 and self._valid[i - 1]
+            data_ready = minimum_history_ready and atr_ready and previous_ready and flow_ready and compression_ready and local_ready
+            imbalance_ready = data_ready and i >= 2 and self._valid[i - 2] and atr[i - 2] is not None
+            m["data_ready"] = data_ready
+            if not data_ready:
+                continue
+
+            green_share = sum(self._rows[j]["close"] > self._rows[j]["open"] for j in range(i - 3, i + 1)) / 4.0
+            red_share = sum(self._rows[j]["close"] < self._rows[j]["open"] for j in range(i - 3, i + 1)) / 4.0
+            higher_close_share = sum(self._rows[j]["close"] > self._rows[j - 1]["close"] for j in range(i - 3, i + 1)) / 4.0
+            lower_close_share = sum(self._rows[j]["close"] < self._rows[j - 1]["close"] for j in range(i - 3, i + 1)) / 4.0
+            net_progress = c - self._rows[i - FLOW_LENGTH]["close"]
+            net_progress_atr = _safe_div(net_progress, atr[i] or mintick, 0.0, mintick)
+            path = sum(abs(self._rows[j]["close"] - self._rows[j - 1]["close"]) for j in range(i - 3, i + 1))
+            directional_efficiency = _safe_div(abs(net_progress), path, 0.0, mintick)
+            prev_local_high = max(self._rows[j]["high"] for j in range(i - LOCAL_CONTEXT_LENGTH, i))
+            prev_local_low = min(self._rows[j]["low"] for j in range(i - LOCAL_CONTEXT_LENGTH, i))
+            new_local_high = h >= prev_local_high
+            new_local_low = l <= prev_local_low
+
+            primitive_lower = (
+                lower_wick_body >= t.minimum_rejection_wick_body and
+                lower_wick_atr >= t.minimum_rejection_wick_atr and
+                close_loc >= t.rejection_close_location and
+                lower_wick >= upper_wick * t.minimum_wick_dominance and
+                new_local_low
+            )
+            primitive_upper = (
+                upper_wick_body >= t.minimum_rejection_wick_body and
+                upper_wick_atr >= t.minimum_rejection_wick_atr and
+                close_loc <= 1.0 - t.rejection_close_location and
+                upper_wick >= lower_wick * t.minimum_wick_dominance and
+                new_local_high
+            )
+            strong_buy = bull and body_to_atr >= t.minimum_continuation_body_atr and close_loc >= t.minimum_continuation_close_location and net_progress_atr > 0.0
+            strong_sell = bear and body_to_atr >= t.minimum_continuation_body_atr and close_loc <= 1.0 - t.minimum_continuation_close_location and net_progress_atr < 0.0
+
+            prev_range = max(self._rows[i - 1]["high"] - self._rows[i - 1]["low"], 0.0)
+            prev_upper_zone = self._rows[i - 1]["low"] + prev_range * PREVIOUS_ZONE_UPPER_SHARE
+            prev_lower_zone = self._rows[i - 1]["low"] + prev_range * PREVIOUS_ZONE_LOWER_SHARE
+
+            buy_evidence = [
+                bull,
+                body_to_atr >= t.minimum_continuation_body_atr,
+                body_share >= t.minimum_continuation_body_share,
+                close_loc >= t.minimum_continuation_close_location,
+                upper_wick_body <= t.maximum_opposing_wick_body,
+                net_progress_atr >= t.minimum_continuation_progress_atr,
+                directional_efficiency >= t.minimum_continuation_efficiency,
+                higher_close_share >= 0.50,
+                green_share >= 0.50,
+                c > self._rows[i - 1]["close"],
+                c >= self._rows[i - 1]["high"] or c >= prev_upper_zone,
+            ]
+            sell_evidence = [
+                bear,
+                body_to_atr >= t.minimum_continuation_body_atr,
+                body_share >= t.minimum_continuation_body_share,
+                close_loc <= 1.0 - t.minimum_continuation_close_location,
+                lower_wick_body <= t.maximum_opposing_wick_body,
+                net_progress_atr <= -t.minimum_continuation_progress_atr,
+                directional_efficiency >= t.minimum_continuation_efficiency,
+                lower_close_share >= 0.50,
+                red_share >= 0.50,
+                c < self._rows[i - 1]["close"],
+                c <= self._rows[i - 1]["low"] or c <= prev_lower_zone,
+            ]
+            buy_veto = primitive_upper or strong_sell
+            sell_veto = primitive_lower or strong_buy
+            buy_flow_count = sum(buy_evidence[5:])
+            sell_flow_count = sum(sell_evidence[5:])
+            buy_base = bull and (buy_evidence[1] or buy_evidence[2]) and (buy_evidence[3] or (close_loc >= RETENTION_CLOSE_FLOOR and buy_evidence[4])) and buy_flow_count >= 2 and sum(buy_evidence) >= t.continuation_evidence_minimum and not buy_veto
+            sell_base = bear and (sell_evidence[1] or sell_evidence[2]) and (sell_evidence[3] or (close_loc <= 1.0 - RETENTION_CLOSE_FLOOR and sell_evidence[4])) and sell_flow_count >= 2 and sum(sell_evidence) >= t.continuation_evidence_minimum and not sell_veto
+            if buy_base and sell_base:
+                conflict_threshold = t.minimum_continuation_progress_atr * CONFLICT_PROGRESS_FACTOR
+                if net_progress_atr > conflict_threshold:
+                    sell_base = False
+                elif net_progress_atr < -conflict_threshold:
+                    buy_base = False
+                else:
+                    buy_base = sell_base = False
+            candidate_core_buy[i] = buy_base
+            candidate_core_sell[i] = sell_base
+
+            extreme = range_to_atr >= t.shock_range_atr or body_to_atr >= t.shock_body_atr
+            upper_wick_range = _safe_div(upper_wick, candle_range, 0.0, mintick)
+            lower_wick_range = _safe_div(lower_wick, candle_range, 0.0, mintick)
+            shock_up = extreme and bull and close_loc >= SHOCK_CLOSE_UPPER and net_progress_atr > 0
+            shock_down = extreme and bear and close_loc <= SHOCK_CLOSE_LOWER and net_progress_atr < 0
+            shock_directionless = extreme and body_share <= SHOCK_DIRECTIONLESS_BODY_SHARE and upper_wick_range >= SHOCK_DIRECTIONLESS_WICK_SHARE and lower_wick_range >= SHOCK_DIRECTIONLESS_WICK_SHARE and SHOCK_MIDDLE_LOW <= close_loc <= SHOCK_MIDDLE_HIGH
+            prior_range_max = max(range_to_atr_series[max(0, i - 3):i], default=0.0)
+            prior_body_max = max(body_to_atr_series[max(0, i - 3):i], default=0.0)
+            abrupt = range_to_atr >= prior_range_max * SHOCK_JUMP_FACTOR or body_to_atr >= prior_body_max * SHOCK_JUMP_FACTOR
+            pre_buy = any(candidate_core_buy[max(0, i - 3):i])
+            pre_sell = any(candidate_core_sell[max(0, i - 3):i])
+            one_bar_shock = (shock_up and abrupt and not pre_buy) or (shock_down and abrupt and not pre_sell) or (shock_directionless and abrupt and not pre_buy and not pre_sell)
+            candidate_raw_buy[i] = buy_base and not one_bar_shock
+            candidate_raw_sell[i] = sell_base and not one_bar_shock
+
+            confirm_n = t.continuation_confirmation_bars
+            buy_sequence = i >= confirm_n - 1 and all(candidate_raw_buy[i - k] for k in range(confirm_n))
+            sell_sequence = i >= confirm_n - 1 and all(candidate_raw_sell[i - k] for k in range(confirm_n))
+            buy_retention_close = max(RETENTION_CLOSE_FLOOR, t.minimum_continuation_close_location - RETENTION_CLOSE_OFFSET)
+            sell_retention_close = 1.0 - buy_retention_close
+            retention_eff = t.minimum_continuation_efficiency * RETENTION_EFFICIENCY_FACTOR
+            hard_seller = bear and body_to_atr >= t.minimum_continuation_body_atr and close_loc <= 1.0 - t.minimum_continuation_close_location
+            hard_buyer = bull and body_to_atr >= t.minimum_continuation_body_atr and close_loc >= t.minimum_continuation_close_location
+            buy_retention = net_progress_atr > 0 and close_loc >= buy_retention_close and directional_efficiency >= retention_eff and not primitive_upper and not hard_seller and not candidate_raw_sell[i]
+            sell_retention = net_progress_atr < 0 and close_loc <= sell_retention_close and directional_efficiency >= retention_eff and not primitive_lower and not hard_buyer and not candidate_raw_buy[i]
+            confirmed_buy[i] = buy_sequence and buy_retention
+            confirmed_sell[i] = sell_sequence and sell_retention
+            if confirmed_buy[i] and confirmed_sell[i]:
+                conflict_threshold = t.minimum_continuation_progress_atr * CONFLICT_PROGRESS_FACTOR
+                if net_progress_atr > conflict_threshold:
+                    confirmed_sell[i] = False
+                elif net_progress_atr < -conflict_threshold:
+                    confirmed_buy[i] = False
+                else:
+                    confirmed_buy[i] = confirmed_sell[i] = False
+
+            prev_body = abs(self._rows[i - 1]["close"] - self._rows[i - 1]["open"])
+            safe_prev_body = max(prev_body, mintick)
+            prev_body_atr = _safe_div(prev_body, safe_prior_atr, 0.0, mintick)
+            prev_body_range = _safe_div(prev_body, prev_range, 0.0, mintick)
+            previous_bull = self._rows[i - 1]["close"] > self._rows[i - 1]["open"]
+            previous_bear = self._rows[i - 1]["close"] < self._rows[i - 1]["open"]
+            previous_doji = prev_body_range <= DOJI_BODY_SHARE or prev_body_atr <= DOJI_BODY_ATR
+            body_ratio = _safe_div(body, safe_prev_body, 0.0, mintick)
+            body_progress_ex_gap = max(body - gap_abs, 0.0)
+            bull_coverage = o <= self._rows[i - 1]["close"] and c >= self._rows[i - 1]["open"]
+            bear_coverage = o >= self._rows[i - 1]["close"] and c <= self._rows[i - 1]["open"]
+            bull_large_gap_progress = body_progress_ex_gap >= prev_body * LARGE_GAP_REAL_PROGRESS_FACTOR and c >= self._rows[i - 1]["open"] + safe_prior_atr * LARGE_GAP_BREAK_ATR
+            bear_large_gap_progress = body_progress_ex_gap >= prev_body * LARGE_GAP_REAL_PROGRESS_FACTOR and c <= self._rows[i - 1]["open"] - safe_prior_atr * LARGE_GAP_BREAK_ATR
+            bull_gap_quality = gap_atr <= t.maximum_engulfing_gap_atr or bull_large_gap_progress
+            bear_gap_quality = gap_atr <= t.maximum_engulfing_gap_atr or bear_large_gap_progress
+            very_strong_bull_engulf = bull and body_to_atr >= t.minimum_engulfing_body_atr * VERY_STRONG_ENGULFING_FACTOR and body_ratio >= t.minimum_engulfing_body_ratio * VERY_STRONG_ENGULFING_RATIO_FACTOR and close_loc >= t.engulfing_close_location and directional_efficiency >= retention_eff
+            very_strong_bear_engulf = bear and body_to_atr >= t.minimum_engulfing_body_atr * VERY_STRONG_ENGULFING_FACTOR and body_ratio >= t.minimum_engulfing_body_ratio * VERY_STRONG_ENGULFING_RATIO_FACTOR and close_loc <= 1.0 - t.engulfing_close_location and directional_efficiency >= retention_eff
+            prev_bull_quality = prev_body_atr >= t.minimum_previous_body_atr or very_strong_bear_engulf
+            prev_bear_quality = prev_body_atr >= t.minimum_previous_body_atr or very_strong_bull_engulf
+            bull_micro = not previous_doji or very_strong_bull_engulf
+            bear_micro = not previous_doji or very_strong_bear_engulf
+            bull_context = net_progress_atr <= t.minimum_continuation_progress_atr * ENGULFING_NEUTRAL_FLOW_FACTOR or new_local_low or primitive_lower or very_strong_bull_engulf
+            bear_context = net_progress_atr >= -t.minimum_continuation_progress_atr * ENGULFING_NEUTRAL_FLOW_FACTOR or new_local_high or primitive_upper or very_strong_bear_engulf
+            bull_engulf = previous_bear and bull and bull_coverage and body_to_atr >= t.minimum_engulfing_body_atr and prev_bear_quality and body_ratio >= t.minimum_engulfing_body_ratio and close_loc >= t.engulfing_close_location and bull_gap_quality and bull_micro and bull_context
+            bear_engulf = previous_bull and bear and bear_coverage and body_to_atr >= t.minimum_engulfing_body_atr and prev_bull_quality and body_ratio >= t.minimum_engulfing_body_ratio and close_loc <= 1.0 - t.engulfing_close_location and bear_gap_quality and bear_micro and bear_context
+            m["bullish_engulfing"] = bull_engulf
+            m["bearish_engulfing"] = bear_engulf
+            if bull_engulf:
+                m["bullish_engulfing_quality"] = _clamp(
+                    _ratio_score(body_to_atr, t.minimum_engulfing_body_atr, mintick) * 0.25 +
+                    _ratio_score(body_ratio, t.minimum_engulfing_body_ratio, mintick) * 0.20 +
+                    _clamp(close_loc * 100.0, 0.0, 100.0) * 0.20 +
+                    15.0 + 10.0 + 10.0, 0.0, 100.0)
+            if bear_engulf:
+                m["bearish_engulfing_quality"] = _clamp(
+                    _ratio_score(body_to_atr, t.minimum_engulfing_body_atr, mintick) * 0.25 +
+                    _ratio_score(body_ratio, t.minimum_engulfing_body_ratio, mintick) * 0.20 +
+                    _clamp((1.0 - close_loc) * 100.0, 0.0, 100.0) * 0.20 +
+                    15.0 + 10.0 + 10.0, 0.0, 100.0)
+            swallowed_lower = min(self._rows[i - 1]["open"], self._rows[i - 1]["close"])
+            swallowed_upper = max(self._rows[i - 1]["open"], self._rows[i - 1]["close"])
+            swallowed_size = swallowed_upper - swallowed_lower
+            m["swallowed_lower"], m["swallowed_upper"], m["swallowed_size"] = swallowed_lower, swallowed_upper, swallowed_size
+            m["swallowed_atr"] = _safe_div(swallowed_size, safe_prior_atr, 0.0, mintick)
+
+            # Resolved wick evidence used by FVG embedded candle contribution.
+            lower_rejection = primitive_lower and not strong_sell and not confirmed_sell[i] and close_loc > SHOCK_CLOSE_LOWER
+            upper_rejection = primitive_upper and not strong_buy and not confirmed_buy[i] and close_loc < SHOCK_CLOSE_UPPER
+            if lower_rejection and upper_rejection:
+                lower_dom = lower_wick >= upper_wick * REJECTION_CONFLICT_MARGIN
+                upper_dom = upper_wick >= lower_wick * REJECTION_CONFLICT_MARGIN
+                if lower_dom and not upper_dom:
+                    upper_rejection = False
+                elif upper_dom and not lower_dom:
+                    lower_rejection = False
+                else:
+                    lower_rejection = upper_rejection = False
+
+            if not imbalance_ready:
+                continue
+            bull_geom = l > self._rows[i - 2]["high"]
+            bear_geom = h < self._rows[i - 2]["low"]
+            bull_lower = self._rows[i - 2]["high"] if bull_geom else math.nan
+            bull_upper = l if bull_geom else math.nan
+            bear_lower = h if bear_geom else math.nan
+            bear_upper = self._rows[i - 2]["low"] if bear_geom else math.nan
+            bull_gap_size = bull_upper - bull_lower if bull_geom else 0.0
+            bear_gap_size = bear_upper - bear_lower if bear_geom else 0.0
+            formation_atr = atr[i - 1] or mintick
+            safe_formation_atr = max(formation_atr, mintick)
+            m["formation_atr"] = formation_atr
+            bull_gap_atr = _safe_div(bull_gap_size, safe_formation_atr, 0.0, mintick)
+            bear_gap_atr = _safe_div(bear_gap_size, safe_formation_atr, 0.0, mintick)
+            middle = self._rows[i - 1]
+            middle_range = max(middle["high"] - middle["low"], 0.0)
+            middle_body = abs(middle["close"] - middle["open"])
+            middle_body_atr = _safe_div(middle_body, safe_formation_atr, 0.0, mintick)
+            middle_body_share = _safe_div(middle_body, middle_range, 0.0, mintick)
+            middle_close_loc = 0.5 if middle_range <= 1e-10 else _safe_div(middle["close"] - middle["low"], middle_range, 0.5, mintick)
+            middle_bull = middle["close"] > middle["open"]
+            middle_bear = middle["close"] < middle["open"]
+            three_progress = c - self._rows[i - 2]["close"]
+            three_progress_atr = _safe_div(three_progress, safe_formation_atr, 0.0, mintick)
+            three_path = abs(middle["close"] - self._rows[i - 2]["close"]) + abs(c - middle["close"])
+            three_eff = _safe_div(abs(three_progress), three_path, 0.0, mintick)
+            opening_gap = abs(middle["open"] - self._rows[i - 2]["close"])
+            opening_gap_atr = _safe_div(opening_gap, safe_formation_atr, 0.0, mintick)
+            large_open_gap = opening_gap_atr > t.maximum_fvg_opening_gap_atr
+            bull_size_pass = bull_gap_atr >= t.minimum_fvg_size_atr
+            bear_size_pass = bear_gap_atr >= t.minimum_fvg_size_atr
+            body_atr_pass = middle_body_atr >= t.minimum_displacement_body_atr
+            body_share_pass = middle_body_share >= t.minimum_displacement_body_share
+            bull_middle_close = middle_close_loc >= t.minimum_displacement_close_location
+            bear_middle_close = middle_close_loc <= 1.0 - t.minimum_displacement_close_location
+            bull_displacement = middle_bull and body_atr_pass and body_share_pass and bull_middle_close
+            bear_displacement = middle_bear and body_atr_pass and body_share_pass and bear_middle_close
+            bull_progress_pass = three_progress_atr >= t.minimum_fvg_progress_atr
+            bear_progress_pass = three_progress_atr <= -t.minimum_fvg_progress_atr
+            eff_pass = three_eff >= t.minimum_fvg_efficiency
+            bull_accept = bull_geom and c >= bull_upper
+            bear_accept = bear_geom and c <= bear_lower
+            bull_invalid = bull_geom and c <= bull_lower
+            bear_invalid = bear_geom and c >= bear_upper
+            bull_direction = bull_progress_pass and eff_pass and bull_accept
+            bear_direction = bear_progress_pass and eff_pass and bear_accept
+            bull_extra = middle_body_atr >= t.minimum_displacement_body_atr * FVG_DISPLACEMENT_EXTRA_FACTOR and three_progress_atr >= t.minimum_fvg_progress_atr * FVG_PROGRESS_EXTRA_FACTOR and bull_gap_atr >= t.minimum_fvg_size_atr * FVG_SIZE_EXTRA_FACTOR and bull_accept
+            bear_extra = middle_body_atr >= t.minimum_displacement_body_atr * FVG_DISPLACEMENT_EXTRA_FACTOR and three_progress_atr <= -t.minimum_fvg_progress_atr * FVG_PROGRESS_EXTRA_FACTOR and bear_gap_atr >= t.minimum_fvg_size_atr * FVG_SIZE_EXTRA_FACTOR and bear_accept
+            bull_defense = not large_open_gap or bull_extra
+            bear_defense = not large_open_gap or bear_extra
+            bull_evidence = sum([bull_geom, bull_size_pass, middle_bull, body_atr_pass, body_share_pass, bull_middle_close, bull_progress_pass, eff_pass, bull_accept, not bull_invalid]) if bull_geom else 0
+            bear_evidence = sum([bear_geom, bear_size_pass, middle_bear, body_atr_pass, body_share_pass, bear_middle_close, bear_progress_pass, eff_pass, bear_accept, not bear_invalid]) if bear_geom else 0
+            bull_disp_evidence = sum([middle_bull, body_atr_pass, body_share_pass, bull_middle_close])
+            bear_disp_evidence = sum([middle_bear, body_atr_pass, body_share_pass, bear_middle_close])
+            bull_alignment = confirmed_buy[i] or bull_engulf or lower_rejection or (bull and close_loc >= t.minimum_continuation_close_location)
+            bear_alignment = confirmed_sell[i] or bear_engulf or upper_rejection or (bear and close_loc <= 1.0 - t.minimum_continuation_close_location)
+            bull_counter_absent = not confirmed_sell[i] and not bear_engulf and not upper_rejection
+            bear_counter_absent = not confirmed_buy[i] and not bull_engulf and not lower_rejection
+            bull_embedded = (5.0 if bull_alignment else 0.0) + (5.0 if bull_counter_absent else 0.0) if bull_geom else 0.0
+            bear_embedded = (5.0 if bear_alignment else 0.0) + (5.0 if bear_counter_absent else 0.0) if bear_geom else 0.0
+
+            def fvg_quality(is_bull: bool) -> float:
+                geom = bull_geom if is_bull else bear_geom
+                if not geom:
+                    return 0.0
+                gap_metric = bull_gap_atr if is_bull else bear_gap_atr
+                close_metric = middle_close_loc if is_bull else 1.0 - middle_close_loc
+                progress_metric = max(three_progress_atr, 0.0) if is_bull else max(-three_progress_atr, 0.0)
+                defense = bull_defense if is_bull else bear_defense
+                invalid = bull_invalid if is_bull else bear_invalid
+                alignment = bull_alignment if is_bull else bear_alignment
+                counter_absent = bull_counter_absent if is_bull else bear_counter_absent
+                return _clamp(
+                    _ratio_score(gap_metric, t.minimum_fvg_size_atr, mintick) * 0.15 +
+                    _ratio_score(middle_body_atr, t.minimum_displacement_body_atr, mintick) * 0.15 +
+                    _ratio_score(middle_body_share, t.minimum_displacement_body_share, mintick) * 0.12 +
+                    _ratio_score(close_metric, t.minimum_displacement_close_location, mintick) * 0.12 +
+                    _ratio_score(progress_metric, t.minimum_fvg_progress_atr, mintick) * 0.12 +
+                    _ratio_score(three_eff, t.minimum_fvg_efficiency, mintick) * 0.12 +
+                    (12.0 if defense and not invalid else 0.0) +
+                    (5.0 if alignment else 0.0) +
+                    (5.0 if counter_absent else 0.0),
+                    0.0, 100.0,
+                )
+
+            bull_quality = fvg_quality(True)
+            bear_quality = fvg_quality(False)
+            min_candidate_evidence = max(t.minimum_fvg_evidence - 1, 5)
+            min_candidate_quality = max(t.minimum_fvg_quality - FVG_CANDIDATE_QUALITY_OFFSET, 30.0)
+            bull_candidate_size = bull_gap_atr >= t.minimum_fvg_size_atr * FVG_CANDIDATE_SIZE_FACTOR
+            bear_candidate_size = bear_gap_atr >= t.minimum_fvg_size_atr * FVG_CANDIDATE_SIZE_FACTOR
+            bull_candidate_direction = three_progress_atr > 0.0 and bull_accept
+            bear_candidate_direction = three_progress_atr < 0.0 and bear_accept
+            bull_active = imbalance_ready and bull_geom and bull_size_pass and bull_displacement and bull_direction and bull_defense and not bull_invalid and bull_evidence >= t.minimum_fvg_evidence and bull_quality >= t.minimum_fvg_quality
+            bear_active = imbalance_ready and bear_geom and bear_size_pass and bear_displacement and bear_direction and bear_defense and not bear_invalid and bear_evidence >= t.minimum_fvg_evidence and bear_quality >= t.minimum_fvg_quality
+            bull_candidate = imbalance_ready and bull_geom and not bull_active and bull_candidate_size and bull_disp_evidence >= 3 and bull_candidate_direction and bull_defense and not bull_invalid and bull_evidence >= min_candidate_evidence and bull_quality >= min_candidate_quality
+            bear_candidate = imbalance_ready and bear_geom and not bear_active and bear_candidate_size and bear_disp_evidence >= 3 and bear_candidate_direction and bear_defense and not bear_invalid and bear_evidence >= min_candidate_evidence and bear_quality >= min_candidate_quality
+
+            m.update({
+                "bullish_fvg_active": bull_active,
+                "bearish_fvg_active": bear_active,
+                "bullish_fvg_candidate": bull_candidate,
+                "bearish_fvg_candidate": bear_candidate,
+                "bullish_fvg_quality": bull_quality,
+                "bearish_fvg_quality": bear_quality,
+                "bull_fvg_lower": bull_lower,
+                "bull_fvg_upper": bull_upper,
+                "bear_fvg_lower": bear_lower,
+                "bear_fvg_upper": bear_upper,
+                "bull_fvg_gap_size": bull_gap_size,
+                "bear_fvg_gap_size": bear_gap_size,
+                "bull_fvg_gap_atr": bull_gap_atr,
+                "bear_fvg_gap_atr": bear_gap_atr,
+                "bull_embedded_contribution": bull_embedded,
+                "bear_embedded_contribution": bear_embedded,
+                "bull_fvg_evidence": bull_evidence,
+                "bear_fvg_evidence": bear_evidence,
+            })
+
+        return out
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/fvg_engulfing_final.py
+
+EXTRACTED:
+FVG lifecycle, fill/mitigation/invalidation/reaction/takeover ve export; mevcut combined FVG/Engulfing final sınıfı
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from typing import Any
+import math
+
+import pandas as pd
+
+from .fvg_engulfing_engine import (
+    FvgEngulfingEngine as _DetectorEngine,
+    FvgFormation,
+    EngulfingFormation,
+    _clamp,
+    _safe_div,
+    _rma,
+    ATR_LENGTH,
+    FVG_CANDIDATE_QUALITY_OFFSET,
+    FVG_CANDIDATE_SIZE_FACTOR,
+    FVG_DISPLACEMENT_EXTRA_FACTOR,
+    FVG_PROGRESS_EXTRA_FACTOR,
+    FVG_SIZE_EXTRA_FACTOR,
+    RETENTION_CLOSE_FLOOR,
+    RETENTION_EFFICIENCY_FACTOR,
+    SHOCK_CLOSE_UPPER,
+    SHOCK_CLOSE_LOWER,
+    SHOCK_MIDDLE_LOW,
+    SHOCK_MIDDLE_HIGH,
+    SHOCK_DIRECTIONLESS_BODY_SHARE,
+    SHOCK_DIRECTIONLESS_WICK_SHARE,
+    SHOCK_JUMP_FACTOR,
+    CONFLICT_PROGRESS_FACTOR,
+)
+from .fvg_engulfing_models import (
+    ENGULFING_DEEP_RETRACE_THRESHOLD,
+    ENGULFING_PARTIAL_RETRACE_THRESHOLD,
+    FLOW_LENGTH,
+    FVG_REACTION_DISTANCE_FACTOR,
+    FVG_REACTION_FLOW_FACTOR,
+    FVG_TAKEOVER_AGE_FACTOR,
+    FVG_TAKEOVER_DISTANCE_MARGIN,
+    FVG_TAKEOVER_QUALITY_MARGIN,
+    FvgDirection,
+    FvgEngulfingConfig,
+    FvgEngulfingDataQuality,
+    FvgState,
+    EngulfingDirection,
+    EngulfingState,
+    SensitivityProfile,
+)
+
+
+@dataclass(slots=True)
+class FvgLifecycleRecord:
+    direction: FvgDirection
+    state: FvgState
+    lower_boundary: float
+    upper_boundary: float
+    gap_size: float
+    gap_atr: float
+    formation_atr: float
+    invalidation_buffer: float
+    formation_index: int
+    formation_time: Any
+    quality: float
+    evidence_count: int
+    tested: bool = False
+    first_test_index: int | None = None
+    wick_fill_ratio: float = 0.0
+    close_fill_ratio: float = 0.0
+    maximum_fill_ratio: float = 0.0
+    reaction_evidence_count: int = 0
+    reaction_confirmed: bool = False
+    failed_reaction: bool = False
+    full_fill: bool = False
+    invalid: bool = False
+    invalid_reason: str = "YOK"
+    invalid_close_count: int = 0
+
+
+@dataclass(slots=True)
+class EngulfingLifecycleRecord:
+    direction: EngulfingDirection
+    state: EngulfingState
+    lower_boundary: float
+    upper_boundary: float
+    body_size: float
+    body_atr: float
+    formation_high: float
+    formation_low: float
+    formation_index: int
+    formation_time: Any
+    quality: float
+    tested: bool = False
+    first_test_index: int | None = None
+    maximum_retrace_ratio: float = 0.0
+    continuation_evidence_count: int = 0
+    continuation_confirmed: bool = False
+    weakened: bool = False
+    weakened_index: int | None = None
+    invalid: bool = False
+    completion_reason: str = "YOK"
+
+
+@dataclass(frozen=True, slots=True)
+class FvgSideExport:
+    state: int | None = None
+    top: float | None = None
+    bottom: float | None = None
+    quality: float | None = None
+    fill: float | None = None
+    event: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EngulfingSideExport:
+    state: int | None = None
+    top: float | None = None
+    bottom: float | None = None
+    quality: float | None = None
+    retrace: float | None = None
+    event: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FvgEngulfingExport:
+    bull_fvg: FvgSideExport = FvgSideExport()
+    bear_fvg: FvgSideExport = FvgSideExport()
+    bull_engulf: EngulfingSideExport = EngulfingSideExport()
+    bear_engulf: EngulfingSideExport = EngulfingSideExport()
+
+
+@dataclass(frozen=True, slots=True)
+class _LifecycleMetrics:
+    close: float
+    low: float
+    high: float
+    candle_bullish: bool
+    candle_bearish: bool
+    close_location: float
+    body_to_prior_atr: float
+    net_progress_atr: float
+    directional_efficiency: float
+    higher_close_share: float
+    lower_close_share: float
+    buy_continuation_candidate: bool
+    sell_continuation_candidate: bool
+    buy_continuation_confirmed: bool
+    sell_continuation_confirmed: bool
+    lower_rejection: bool
+    upper_rejection: bool
+    bullish_engulfing: bool
+    bearish_engulfing: bool
+
+
+class FvgEngulfingEngine(_DetectorEngine):
+    """Final v0.3.8 facade: detector + closed-bar lifecycle + Export Contract v1."""
+
+    def __init__(self, config: FvgEngulfingConfig | None = None) -> None:
+        super().__init__(config)
+        self._bull_fvg: FvgLifecycleRecord | None = None
+        self._bear_fvg: FvgLifecycleRecord | None = None
+        self._bull_engulf: EngulfingLifecycleRecord | None = None
+        self._bear_engulf: EngulfingLifecycleRecord | None = None
+        self._bull_fvg_event: tuple[int, FvgState] | None = None
+        self._bear_fvg_event: tuple[int, FvgState] | None = None
+        self._bull_engulf_event: tuple[int, EngulfingState] | None = None
+        self._bear_engulf_event: tuple[int, EngulfingState] | None = None
+        self._export = FvgEngulfingExport()
+        self._completed_fvg: list[FvgLifecycleRecord] = []
+        self._completed_engulfing: list[EngulfingLifecycleRecord] = []
+
+    @property
+    def export(self) -> FvgEngulfingExport:
+        return self._export
+
+    @property
+    def active_bullish_fvg(self) -> FvgLifecycleRecord | None:
+        return self._bull_fvg
+
+    @property
+    def active_bearish_fvg(self) -> FvgLifecycleRecord | None:
+        return self._bear_fvg
+
+    @property
+    def active_bullish_engulfing(self) -> EngulfingLifecycleRecord | None:
+        return self._bull_engulf
+
+    @property
+    def active_bearish_engulfing(self) -> EngulfingLifecycleRecord | None:
+        return self._bear_engulf
+
+    @property
+    def completed_fvg(self) -> tuple[FvgLifecycleRecord, ...]:
+        return tuple(self._completed_fvg)
+
+    @property
+    def completed_engulfing(self) -> tuple[EngulfingLifecycleRecord, ...]:
+        return tuple(self._completed_engulfing)
+
+    def reset(self) -> None:
+        super().reset()
+        self._bull_fvg = None
+        self._bear_fvg = None
+        self._bull_engulf = None
+        self._bear_engulf = None
+        self._bull_fvg_event = None
+        self._bear_fvg_event = None
+        self._bull_engulf_event = None
+        self._bear_engulf_event = None
+        self._export = FvgEngulfingExport()
+        self._completed_fvg = []
+        self._completed_engulfing = []
+
+    def update(self, bar: pd.Series | dict[str, Any]):
+        row = dict(bar)
+        if not bool(row.get("is_closed", True)):
+            return super().update(row)
+
+        before_fvg = len(self._fvg_formations)
+        before_engulf = len(self._engulfing_formations)
+        result = super().update(row)
+
+        if self.last_data_quality is not FvgEngulfingDataQuality.OK:
+            # SOURCE_GAP/WARMUP do not advance confirmed lifecycle or overwrite export.
+            return result
+
+        idx = len(self._rows) - 1
+        metrics = self._lifecycle_metrics(idx)
+        self._repair_candidate_alignment(idx, metrics)
+
+        # Source order: update existing records first, then evaluate new formations/takeover.
+        self._update_fvg_record(True, idx, metrics)
+        self._update_fvg_record(False, idx, metrics)
+        self._update_engulfing_record(True, idx, metrics)
+        self._update_engulfing_record(False, idx, metrics)
+
+        for formation in self._fvg_formations[before_fvg:]:
+            self._accept_fvg_formation(formation, idx, metrics)
+        for formation in self._engulfing_formations[before_engulf:]:
+            self._accept_engulfing_formation(formation, idx)
+
+        self._export = self._build_export(idx)
+        return result
+
+    def _profile_lifecycle_values(self) -> tuple[int, int, int, int, float, int, int, int]:
+        p = self.config.sensitivity
+        if p is SensitivityProfile.SENSITIVE:
+            return 30, 2, 1, 2, 0.03, 1, 3, 1
+        if p is SensitivityProfile.BALANCED:
+            return 45, 3, 2, 3, 0.05, 2, 5, 2
+        return 60, 4, 2, 3, 0.08, 2, 6, 2
+
+    def _repair_candidate_alignment(self, idx: int, metrics: _LifecycleMetrics) -> None:
+        """Close Tur-1 parity edge: continuation candidate shares candle-state family in Pine."""
+        if not self._fvg_formations:
+            return
+        candidates = [f for f in self._fvg_formations if f.formation_index == idx]
+        for formation in candidates:
+            add = False
+            if formation.direction is FvgDirection.BULLISH:
+                add = metrics.buy_continuation_candidate and formation.embedded_candle_contribution < 10.0
+            else:
+                add = metrics.sell_continuation_candidate and formation.embedded_candle_contribution < 10.0
+            if not add:
+                continue
+            pos = self._fvg_formations.index(formation)
+            self._fvg_formations[pos] = replace(
+                formation,
+                quality=min(100.0, formation.quality + 5.0),
+                embedded_candle_contribution=min(10.0, formation.embedded_candle_contribution + 5.0),
+            )
+
+    def _lifecycle_metrics(self, i: int) -> _LifecycleMetrics:
+        rows = self._rows
+        t = self._thresholds
+        tick = self.config.minimum_tick
+        r = rows[i]
+        o, h, l, c = r["open"], r["high"], r["low"], r["close"]
+        candle_range = max(h - l, 0.0)
+        body = abs(c - o)
+        bull, bear = c > o, c < o
+        close_loc = 0.5 if candle_range <= 1e-10 else _safe_div(c - l, candle_range, 0.5, tick)
+
+        tr: list[float | None] = []
+        for j, bar in enumerate(rows):
+            if not self._valid[j]:
+                tr.append(None)
+                continue
+            prev = rows[j - 1]["close"] if j > 0 and self._valid[j - 1] else None
+            value = bar["high"] - bar["low"]
+            if prev is not None:
+                value = max(value, abs(bar["high"] - prev), abs(bar["low"] - prev))
+            tr.append(max(value, 0.0))
+        atr = _rma(tr, ATR_LENGTH)
+        prior_atr = atr[i - 1] if i > 0 and atr[i - 1] is not None else tick
+        safe_prior_atr = max(prior_atr, tick)
+        body_to_atr = _safe_div(body, safe_prior_atr, 0.0, tick)
+
+        net_progress = c - rows[i - FLOW_LENGTH]["close"]
+        net_progress_atr = _safe_div(net_progress, atr[i] or tick, 0.0, tick)
+        path = sum(abs(rows[j]["close"] - rows[j - 1]["close"]) for j in range(i - 3, i + 1))
+        efficiency = _safe_div(abs(net_progress), path, 0.0, tick)
+        higher_share = sum(rows[j]["close"] > rows[j - 1]["close"] for j in range(i - 3, i + 1)) / 4.0
+        lower_share = sum(rows[j]["close"] < rows[j - 1]["close"] for j in range(i - 3, i + 1)) / 4.0
+
+        current_series = super()._calculate_series()
+        m = current_series[i]
+        bull_engulf = bool(m["bullish_engulfing"])
+        bear_engulf = bool(m["bearish_engulfing"])
+
+        # Candidate raw is re-evaluated solely to restore Pine candle-state family parity.
+        upper_wick = max(h - max(o, c), 0.0)
+        lower_wick = max(min(o, c) - l, 0.0)
+        safe_body = max(body, tick)
+        upper_wick_body = _safe_div(upper_wick, safe_body, 0.0, tick)
+        lower_wick_body = _safe_div(lower_wick, safe_body, 0.0, tick)
+        upper_wick_atr = _safe_div(upper_wick, safe_prior_atr, 0.0, tick)
+        lower_wick_atr = _safe_div(lower_wick, safe_prior_atr, 0.0, tick)
+        prev_high = max(rows[j]["high"] for j in range(i - 4, i))
+        prev_low = min(rows[j]["low"] for j in range(i - 4, i))
+        primitive_lower = lower_wick_body >= t.minimum_rejection_wick_body and lower_wick_atr >= t.minimum_rejection_wick_atr and close_loc >= t.rejection_close_location and lower_wick >= upper_wick * t.minimum_wick_dominance and l <= prev_low
+        primitive_upper = upper_wick_body >= t.minimum_rejection_wick_body and upper_wick_atr >= t.minimum_rejection_wick_atr and close_loc <= 1.0 - t.rejection_close_location and upper_wick >= lower_wick * t.minimum_wick_dominance and h >= prev_high
+        strong_buy = bull and body_to_atr >= t.minimum_continuation_body_atr and close_loc >= t.minimum_continuation_close_location and net_progress_atr > 0
+        strong_sell = bear and body_to_atr >= t.minimum_continuation_body_atr and close_loc <= 1.0 - t.minimum_continuation_close_location and net_progress_atr < 0
+        prev = rows[i - 1]
+        prev_range = max(prev["high"] - prev["low"], 0.0)
+        body_share = _safe_div(body, candle_range, 0.0, tick)
+        green_share = sum(rows[j]["close"] > rows[j]["open"] for j in range(i - 3, i + 1)) / 4.0
+        red_share = sum(rows[j]["close"] < rows[j]["open"] for j in range(i - 3, i + 1)) / 4.0
+        buy_e = [bull, body_to_atr >= t.minimum_continuation_body_atr, body_share >= t.minimum_continuation_body_share, close_loc >= t.minimum_continuation_close_location, upper_wick_body <= t.maximum_opposing_wick_body, net_progress_atr >= t.minimum_continuation_progress_atr, efficiency >= t.minimum_continuation_efficiency, higher_share >= .5, green_share >= .5, c > prev["close"], c >= prev["high"] or c >= prev["low"] + prev_range * .70]
+        sell_e = [bear, body_to_atr >= t.minimum_continuation_body_atr, body_share >= t.minimum_continuation_body_share, close_loc <= 1.0 - t.minimum_continuation_close_location, lower_wick_body <= t.maximum_opposing_wick_body, net_progress_atr <= -t.minimum_continuation_progress_atr, efficiency >= t.minimum_continuation_efficiency, lower_share >= .5, red_share >= .5, c < prev["close"], c <= prev["low"] or c <= prev["low"] + prev_range * .30]
+        buy_base = bull and (buy_e[1] or buy_e[2]) and (buy_e[3] or (close_loc >= RETENTION_CLOSE_FLOOR and buy_e[4])) and sum(buy_e[5:]) >= 2 and sum(buy_e) >= t.continuation_evidence_minimum and not (primitive_upper or strong_sell)
+        sell_base = bear and (sell_e[1] or sell_e[2]) and (sell_e[3] or (close_loc <= 1.0 - RETENTION_CLOSE_FLOOR and sell_e[4])) and sum(sell_e[5:]) >= 2 and sum(sell_e) >= t.continuation_evidence_minimum and not (primitive_lower or strong_buy)
+        if buy_base and sell_base:
+            threshold = t.minimum_continuation_progress_atr * CONFLICT_PROGRESS_FACTOR
+            if net_progress_atr > threshold: sell_base = False
+            elif net_progress_atr < -threshold: buy_base = False
+            else: buy_base = sell_base = False
+        # The full shock veto is intentionally conservative here: only clear candidates on source shock extremes.
+        extreme = (candle_range / safe_prior_atr >= t.shock_range_atr) or (body_to_atr >= t.shock_body_atr)
+        one_bar_shock = extreme and ((bull and close_loc >= SHOCK_CLOSE_UPPER and net_progress_atr > 0) or (bear and close_loc <= SHOCK_CLOSE_LOWER and net_progress_atr < 0) or (body_share <= SHOCK_DIRECTIONLESS_BODY_SHARE and SHOCK_MIDDLE_LOW <= close_loc <= SHOCK_MIDDLE_HIGH))
+        buy_candidate = buy_base and not one_bar_shock
+        sell_candidate = sell_base and not one_bar_shock
+
+        # Confirmation family is observable through previous/current detector context; for lifecycle
+        # promotion/reaction only current source state is needed. Candidate counts as same candle family.
+        buy_confirmed = buy_candidate and close_loc >= max(RETENTION_CLOSE_FLOOR, t.minimum_continuation_close_location - .12) and efficiency >= t.minimum_continuation_efficiency * RETENTION_EFFICIENCY_FACTOR and net_progress_atr > 0
+        sell_confirmed = sell_candidate and close_loc <= 1.0 - max(RETENTION_CLOSE_FLOOR, t.minimum_continuation_close_location - .12) and efficiency >= t.minimum_continuation_efficiency * RETENTION_EFFICIENCY_FACTOR and net_progress_atr < 0
+
+        lower_rejection, upper_rejection = primitive_lower, primitive_upper
+        return _LifecycleMetrics(c, l, h, bull, bear, close_loc, body_to_atr, net_progress_atr, efficiency, higher_share, lower_share, buy_candidate, sell_candidate, buy_confirmed, sell_confirmed, lower_rejection, upper_rejection, bull_engulf, bear_engulf)
+
+    def _update_fvg_record(self, bullish: bool, idx: int, m: _LifecycleMetrics) -> None:
+        rec = self._bull_fvg if bullish else self._bear_fvg
+        if rec is None:
+            return
+        max_age, max_candidate_age, min_reaction, failed_window, _, invalid_close_bars, _, _ = self._profile_lifecycle_values()
+        age = idx - rec.formation_index
+        completed = False
+        if rec.state is FvgState.CANDIDATE:
+            close_lost = m.close < rec.lower_boundary - rec.invalidation_buffer if bullish else m.close > rec.upper_boundary + rec.invalidation_buffer
+            touched = idx > rec.formation_index and (m.low <= rec.upper_boundary if bullish else m.high >= rec.lower_boundary)
+            evidence = sum([
+                m.close >= rec.upper_boundary if bullish else m.close <= rec.lower_boundary,
+                m.candle_bullish if bullish else m.candle_bearish,
+                m.net_progress_atr > 0 if bullish else m.net_progress_atr < 0,
+                m.higher_close_share >= .5 if bullish else m.lower_close_share >= .5,
+                not m.sell_continuation_confirmed if bullish else not m.buy_continuation_confirmed,
+            ])
+            min_quality = max(self._thresholds.minimum_fvg_quality - FVG_CANDIDATE_QUALITY_OFFSET, 30.0)
+            promotion = 1 <= age <= max_candidate_age and rec.quality >= min_quality and evidence >= 3 and (m.close >= rec.upper_boundary if bullish else m.close <= rec.lower_boundary) and not close_lost
+            if close_lost:
+                rec.state, rec.invalid, rec.invalid_reason, completed = FvgState.INVALID, True, "Kapanışla geçersizlik", True
+            elif promotion:
+                if touched:
+                    fill = _clamp(_safe_div(rec.upper_boundary - m.low if bullish else m.high - rec.lower_boundary, rec.gap_size, 0.0, self.config.minimum_tick), 0.0, 1.0)
+                    rec.tested = True; rec.first_test_index = idx; rec.wick_fill_ratio = max(rec.wick_fill_ratio, fill); rec.maximum_fill_ratio = max(rec.maximum_fill_ratio, rec.wick_fill_ratio); rec.state = FvgState.FIRST_TEST
+                else:
+                    rec.state = FvgState.ACTIVE
+            elif touched or age > max_candidate_age:
+                rec.state, rec.invalid, rec.invalid_reason, completed = FvgState.INVALID, True, "Kalite yetersizliği", True
+        else:
+            eligible = idx > rec.formation_index
+            touch = eligible and (m.low <= rec.upper_boundary if bullish else m.high >= rec.lower_boundary)
+            if touch:
+                wick = _clamp(_safe_div(rec.upper_boundary - m.low if bullish else m.high - rec.lower_boundary, rec.gap_size, 0.0, self.config.minimum_tick), 0.0, 1.0)
+                close_fill = _clamp(_safe_div(rec.upper_boundary - m.close if bullish else m.close - rec.lower_boundary, rec.gap_size, 0.0, self.config.minimum_tick), 0.0, 1.0)
+                rec.wick_fill_ratio = max(rec.wick_fill_ratio, wick); rec.close_fill_ratio = max(rec.close_fill_ratio, close_fill); rec.maximum_fill_ratio = max(rec.maximum_fill_ratio, rec.wick_fill_ratio)
+                if not rec.tested: rec.tested = True; rec.first_test_index = idx
+            beyond = m.close < rec.lower_boundary - rec.invalidation_buffer if bullish else m.close > rec.upper_boundary + rec.invalidation_buffer
+            rec.invalid_close_count = rec.invalid_close_count + 1 if beyond else 0
+            close_invalid = rec.invalid_close_count >= invalid_close_bars
+            age_invalid = age > max_age
+            full_fill = eligible and (m.low <= rec.lower_boundary if bullish else m.high >= rec.upper_boundary)
+            since_test = idx - rec.first_test_index if rec.tested and rec.first_test_index is not None else 0
+            away = rec.tested and (m.close > rec.upper_boundary + rec.gap_size * FVG_REACTION_DISTANCE_FACTOR if bullish else m.close < rec.lower_boundary - rec.gap_size * FVG_REACTION_DISTANCE_FACTOR)
+            candle_reaction = (m.buy_continuation_candidate or m.bullish_engulfing or m.lower_rejection) if bullish else (m.sell_continuation_candidate or m.bearish_engulfing or m.upper_rejection)
+            flow_reaction = (m.net_progress_atr > self._thresholds.minimum_fvg_progress_atr * FVG_REACTION_FLOW_FACTOR if bullish else m.net_progress_atr < -self._thresholds.minimum_fvg_progress_atr * FVG_REACTION_FLOW_FACTOR) and m.directional_efficiency >= self._thresholds.minimum_fvg_efficiency * RETENTION_EFFICIENCY_FACTOR
+            held = m.close > rec.lower_boundary if bullish else m.close < rec.upper_boundary
+            rec.reaction_evidence_count = sum([away, candle_reaction, flow_reaction, held])
+            reaction = rec.tested and away and held and rec.reaction_evidence_count >= 2 and (since_test >= min_reaction or rec.reaction_evidence_count >= 3)
+            opposing = (m.sell_continuation_candidate or m.bearish_engulfing or m.upper_rejection) if bullish else (m.buy_continuation_candidate or m.bullish_engulfing or m.lower_rejection)
+            failed = rec.tested and not reaction and since_test >= failed_window and (rec.maximum_fill_ratio >= .50 or opposing or (m.net_progress_atr < 0 if bullish else m.net_progress_atr > 0))
+            if age_invalid: rec.state, rec.invalid, rec.invalid_reason, completed = FvgState.INVALID, True, "Yaş sınırı", True
+            elif close_invalid: rec.state, rec.invalid, rec.invalid_reason, completed = FvgState.INVALID, True, "Kapanışla geçersizlik", True
+            elif full_fill: rec.state, rec.full_fill, rec.invalid_reason, completed = FvgState.FULL_FILL, True, "Tam dolum", True
+            elif reaction: rec.state, rec.reaction_confirmed, rec.invalid_reason, completed = FvgState.REACTION, True, "Tepki üretti", True
+            elif failed: rec.state, rec.failed_reaction, rec.invalid_reason = FvgState.FAILED_REACTION, True, "Tepki üretmedi"
+            elif rec.tested: rec.state = FvgState.DEEP_TEST if rec.maximum_fill_ratio >= .50 else FvgState.PARTIAL_FILL if rec.maximum_fill_ratio >= .25 else FvgState.FIRST_TEST
+            else: rec.state = FvgState.ACTIVE
+        if completed:
+            self._complete_fvg(rec, idx)
+            if bullish: self._bull_fvg = None
+            else: self._bear_fvg = None
+
+    def _complete_fvg(self, rec: FvgLifecycleRecord, idx: int) -> None:
+        self._completed_fvg.append(replace(rec))
+        if rec.direction is FvgDirection.BULLISH: self._bull_fvg_event = (idx, rec.state)
+        else: self._bear_fvg_event = (idx, rec.state)
+
+    def _accept_fvg_formation(self, formation: FvgFormation, idx: int, m: _LifecycleMetrics) -> None:
+        bullish = formation.direction is FvgDirection.BULLISH
+        existing = self._bull_fvg if bullish else self._bear_fvg
+        accept = existing is None
+        if existing is not None and formation.state is FvgState.ACTIVE:
+            max_age, _, _, _, buffer_factor, _, _, _ = self._profile_lifecycle_values()
+            atr_now = max(formation.formation_atr, self.config.minimum_tick)
+            existing_distance = abs(m.close - (existing.upper_boundary if bullish else existing.lower_boundary)) / atr_now
+            new_distance = abs(m.close - (formation.upper_boundary if bullish else formation.lower_boundary)) / atr_now
+            existing_candidate = existing.state is FvgState.CANDIDATE
+            clearly_better = formation.quality >= existing.quality + FVG_TAKEOVER_QUALITY_MARGIN
+            aged = idx - existing.formation_index >= round(max_age * FVG_TAKEOVER_AGE_FACTOR) and formation.quality >= existing.quality - 2.0
+            closer = new_distance + FVG_TAKEOVER_DISTANCE_MARGIN < existing_distance and formation.quality >= existing.quality
+            accept = existing_candidate or clearly_better or aged or closer
+        if not accept:
+            return
+        if existing is not None:
+            existing.state = FvgState.SUPERSEDED; existing.invalid_reason = "Yeni bullish FVG tarafından devralındı" if bullish else "Yeni bearish FVG tarafından devralındı"; self._complete_fvg(existing, idx)
+        _, _, _, _, buffer_factor, _, _, _ = self._profile_lifecycle_values()
+        rec = FvgLifecycleRecord(formation.direction, formation.state, formation.lower_boundary, formation.upper_boundary, formation.gap_size, formation.gap_atr, formation.formation_atr, formation.formation_atr * buffer_factor, formation.formation_index, formation.timestamp, formation.quality, formation.evidence_count)
+        if bullish: self._bull_fvg = rec
+        else: self._bear_fvg = rec
+
+    def _update_engulfing_record(self, bullish: bool, idx: int, m: _LifecycleMetrics) -> None:
+        rec = self._bull_engulf if bullish else self._bear_engulf
+        if rec is None: return
+        _, _, _, _, _, _, max_age, continuation_window = self._profile_lifecycle_values()
+        age = idx - rec.formation_index
+        eligible = age > 0
+        test = eligible and (m.low <= rec.upper_boundary if bullish else m.high >= rec.lower_boundary)
+        if test:
+            if not rec.tested: rec.first_test_index = idx
+            rec.tested = True
+            retrace = _clamp(_safe_div(rec.upper_boundary - m.low if bullish else m.high - rec.lower_boundary, rec.body_size, 0.0, self.config.minimum_tick), 0.0, 1.0)
+            rec.maximum_retrace_ratio = max(rec.maximum_retrace_ratio, retrace)
+        continuation_break = m.close > rec.formation_high if bullish else m.close < rec.formation_low
+        acceptance = m.candle_bullish and m.close_location >= self._thresholds.engulfing_close_location if bullish else m.candle_bearish and m.close_location <= 1.0 - self._thresholds.engulfing_close_location
+        progress = m.net_progress_atr > 0 if bullish else m.net_progress_atr < 0
+        efficiency = m.directional_efficiency >= self._thresholds.minimum_continuation_efficiency
+        evidence = sum([continuation_break, acceptance, progress, efficiency]); rec.continuation_evidence_count = evidence
+        continuation = eligible and continuation_break and evidence >= 3
+        invalid = eligible and (m.close < rec.lower_boundary if bullish else m.close > rec.upper_boundary)
+        strong_opposing = m.candle_bearish and m.body_to_prior_atr >= self._thresholds.minimum_engulfing_body_atr and m.close_location <= 1.0 - self._thresholds.engulfing_close_location and m.net_progress_atr < 0 if bullish else m.candle_bullish and m.body_to_prior_atr >= self._thresholds.minimum_engulfing_body_atr and m.close_location >= self._thresholds.engulfing_close_location and m.net_progress_atr > 0
+        opposing = (m.bearish_engulfing if bullish else m.bullish_engulfing) or strong_opposing
+        weakened_now = rec.tested and not continuation and age >= continuation_window and (rec.maximum_retrace_ratio >= ENGULFING_DEEP_RETRACE_THRESHOLD or opposing or (m.net_progress_atr < 0 if bullish else m.net_progress_atr > 0))
+        grace_expired = rec.state is EngulfingState.WEAKENED and rec.weakened_index is not None and idx > rec.weakened_index
+        expired = age > max_age or grace_expired
+        terminal = False
+        if invalid: rec.state, rec.invalid, rec.completion_reason, terminal = EngulfingState.INVALID, True, "Gövde altı kapanış" if bullish else "Gövde üstü kapanış", True
+        elif continuation: rec.state, rec.continuation_confirmed, rec.completion_reason, terminal = EngulfingState.CONTINUATION_CONFIRMED, True, "Devam teyidi", True
+        elif expired: rec.state, rec.completion_reason, terminal = EngulfingState.EXPIRED, "Zayıflama sonrası izleme süresi doldu" if grace_expired else "Yaş sınırı doldu", True
+        elif weakened_now:
+            rec.state, rec.weakened = EngulfingState.WEAKENED, True
+            if rec.weakened_index is None: rec.weakened_index = idx
+        elif rec.maximum_retrace_ratio >= ENGULFING_PARTIAL_RETRACE_THRESHOLD: rec.state = EngulfingState.PARTIAL_RETRACE
+        elif rec.tested: rec.state = EngulfingState.FIRST_TEST
+        else: rec.state = EngulfingState.ACTIVE
+        if terminal:
+            self._completed_engulfing.append(replace(rec))
+            if bullish: self._bull_engulf_event = (idx, rec.state); self._bull_engulf = None
+            else: self._bear_engulf_event = (idx, rec.state); self._bear_engulf = None
+
+    def _accept_engulfing_formation(self, formation: EngulfingFormation, idx: int) -> None:
+        bullish = formation.direction is EngulfingDirection.BULLISH
+        existing = self._bull_engulf if bullish else self._bear_engulf
+        accept = existing is None or (idx > existing.formation_index and formation.quality >= existing.quality)
+        if not accept: return
+        if existing is not None:
+            existing.state = EngulfingState.EXPIRED; existing.completion_reason = "Yeni bullish engulfing tarafından devralındı" if bullish else "Yeni bearish engulfing tarafından devralındı"; self._completed_engulfing.append(replace(existing))
+            if bullish: self._bull_engulf_event = (idx, EngulfingState.EXPIRED)
+            else: self._bear_engulf_event = (idx, EngulfingState.EXPIRED)
+        row = self._rows[idx]
+        rec = EngulfingLifecycleRecord(formation.direction, EngulfingState.ACTIVE, formation.lower_boundary, formation.upper_boundary, formation.body_size, formation.body_atr, row["high"], row["low"], formation.formation_index, formation.timestamp, formation.quality)
+        if bullish: self._bull_engulf = rec
+        else: self._bear_engulf = rec
+
+    def _build_export(self, idx: int) -> FvgEngulfingExport:
+        def fvg(rec: FvgLifecycleRecord | None, event: tuple[int, FvgState] | None, bearish: bool) -> FvgSideExport:
+            if rec is None:
+                return FvgSideExport(event=(-int(event[1]) if bearish else int(event[1])) if event and event[0] == idx else None)
+            fill = _clamp(rec.maximum_fill_ratio, 0.0, 1.0)
+            top = rec.upper_boundary if bearish else max(rec.lower_boundary, rec.upper_boundary - rec.gap_size * fill)
+            bottom = min(rec.upper_boundary, rec.lower_boundary + rec.gap_size * fill) if bearish else rec.lower_boundary
+            return FvgSideExport(-int(rec.state) if bearish else int(rec.state), top, bottom, rec.quality, fill, (-int(event[1]) if bearish else int(event[1])) if event and event[0] == idx else None)
+        active_engulf_states = {EngulfingState.ACTIVE, EngulfingState.FIRST_TEST, EngulfingState.PARTIAL_RETRACE, EngulfingState.WEAKENED}
+        def engulf(rec: EngulfingLifecycleRecord | None, event: tuple[int, EngulfingState] | None, bearish: bool) -> EngulfingSideExport:
+            visible = rec is not None and rec.state in active_engulf_states
+            ev = (-int(event[1]) if bearish else int(event[1])) if event and event[0] == idx else None
+            if not visible: return EngulfingSideExport(event=ev)
+            return EngulfingSideExport(-int(rec.state) if bearish else int(rec.state), rec.upper_boundary, rec.lower_boundary, rec.quality, _clamp(rec.maximum_retrace_ratio, 0.0, 1.0), ev)
+        return FvgEngulfingExport(fvg(self._bull_fvg, self._bull_fvg_event, False), fvg(self._bear_fvg, self._bear_fvg_event, True), engulf(self._bull_engulf, self._bull_engulf_event, False), engulf(self._bear_engulf, self._bear_engulf_event, True))
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/fvg_engulfing.py
+
+EXTRACTED:
+Package public facade: prefix-stable detector cache/parity behavior; engines.__init__ buradan import eder
+
+```python
+from __future__ import annotations
+
+from dataclasses import replace
+from typing import Any
+import math
+
+from .fvg_engulfing_engine import (
+    ATR_LENGTH,
+    CONFLICT_PROGRESS_FACTOR,
+    DOJI_BODY_ATR,
+    DOJI_BODY_SHARE,
+    ENGULFING_NEUTRAL_FLOW_FACTOR,
+    FLOW_LENGTH,
+    FVG_CANDIDATE_QUALITY_OFFSET,
+    FVG_CANDIDATE_SIZE_FACTOR,
+    FVG_DISPLACEMENT_EXTRA_FACTOR,
+    FVG_PROGRESS_EXTRA_FACTOR,
+    FVG_SIZE_EXTRA_FACTOR,
+    LARGE_GAP_BREAK_ATR,
+    LARGE_GAP_REAL_PROGRESS_FACTOR,
+    LOCAL_CONTEXT_LENGTH,
+    MINIMUM_HISTORY_BARS,
+    PREVIOUS_ZONE_LOWER_SHARE,
+    PREVIOUS_ZONE_UPPER_SHARE,
+    REJECTION_CONFLICT_MARGIN,
+    RETENTION_CLOSE_FLOOR,
+    RETENTION_CLOSE_OFFSET,
+    RETENTION_EFFICIENCY_FACTOR,
+    SHOCK_CLOSE_LOWER,
+    SHOCK_CLOSE_UPPER,
+    SHOCK_DIRECTIONLESS_BODY_SHARE,
+    SHOCK_DIRECTIONLESS_WICK_SHARE,
+    SHOCK_JUMP_FACTOR,
+    SHOCK_MIDDLE_HIGH,
+    SHOCK_MIDDLE_LOW,
+    VERY_STRONG_ENGULFING_FACTOR,
+    VERY_STRONG_ENGULFING_RATIO_FACTOR,
+    _clamp,
+    _ratio_score,
+    _rma,
+    _safe_div,
+)
+from .fvg_engulfing_final import (
+    FvgEngulfingEngine as _FinalFvgEngulfingEngine,
+    _LifecycleMetrics,
+)
+from .fvg_engulfing_models import FvgDirection
+
+
+class FvgEngulfingEngine(_FinalFvgEngulfingEngine):
+    """Final public facade with prefix-stable detector replay caches.
+
+    Detector metrics for bar ``i`` depend only on rows ``<= i``. Retaining those
+    rows removes the historical full-series recomputation that previously happened
+    on every append. True-range/RMA is intentionally rebuilt as a cheap reference
+    series so source-gap reset semantics remain byte-for-byte canonical.
+    """
+
+    def _reset_runtime_detector(self) -> None:
+        self._runtime_series_cache: list[dict[str, Any]] = []
+        self._runtime_candidate_core_buy: list[bool] = []
+        self._runtime_candidate_core_sell: list[bool] = []
+        self._runtime_candidate_raw_buy: list[bool] = []
+        self._runtime_candidate_raw_sell: list[bool] = []
+        self._runtime_confirmed_buy: list[bool] = []
+        self._runtime_confirmed_sell: list[bool] = []
+        self._runtime_range_to_atr: list[float] = []
+        self._runtime_body_to_atr: list[float] = []
+
+    def reset(self) -> None:
+        super().reset()
+        self._reset_runtime_detector()
+
+    def _calculate_series(self) -> list[dict[str, Any]]:
+        n = len(self._rows)
+        if not hasattr(self, "_runtime_series_cache"):
+            self._reset_runtime_detector()
+        if len(self._runtime_series_cache) > n:
+            self._reset_runtime_detector()
+        if len(self._runtime_series_cache) == n:
+            return self._runtime_series_cache
+
+        mintick = self.config.minimum_tick
+        t = self._thresholds
+        tr: list[float | None] = []
+        for index, row in enumerate(self._rows):
+            if not self._valid[index]:
+                tr.append(None)
+                continue
+            prev_close = self._rows[index - 1]["close"] if index > 0 and self._valid[index - 1] else None
+            value = row["high"] - row["low"]
+            if prev_close is not None:
+                value = max(value, abs(row["high"] - prev_close), abs(row["low"] - prev_close))
+            tr.append(max(value, 0.0))
+        atr = _rma(tr, ATR_LENGTH)
+
+        out = self._runtime_series_cache
+        candidate_core_buy = self._runtime_candidate_core_buy
+        candidate_core_sell = self._runtime_candidate_core_sell
+        candidate_raw_buy = self._runtime_candidate_raw_buy
+        candidate_raw_sell = self._runtime_candidate_raw_sell
+        confirmed_buy = self._runtime_confirmed_buy
+        confirmed_sell = self._runtime_confirmed_sell
+        range_to_atr_series = self._runtime_range_to_atr
+        body_to_atr_series = self._runtime_body_to_atr
+
+        def valid_range(start: int, end: int) -> bool:
+            return start >= 0 and all(self._valid[j] for j in range(start, end + 1))
+
+        for i in range(len(out), n):
+            r = self._rows[i]
+            m: dict[str, Any] = {
+                "data_ready": False,
+                "bullish_fvg_candidate": False, "bearish_fvg_candidate": False,
+                "bullish_fvg_active": False, "bearish_fvg_active": False,
+                "bullish_engulfing": False, "bearish_engulfing": False,
+                "bullish_fvg_quality": 0.0, "bearish_fvg_quality": 0.0,
+                "bullish_engulfing_quality": 0.0, "bearish_engulfing_quality": 0.0,
+                "bull_fvg_lower": math.nan, "bull_fvg_upper": math.nan,
+                "bear_fvg_lower": math.nan, "bear_fvg_upper": math.nan,
+                "bull_fvg_gap_size": 0.0, "bear_fvg_gap_size": 0.0,
+                "bull_fvg_gap_atr": 0.0, "bear_fvg_gap_atr": 0.0,
+                "formation_atr": math.nan, "safe_prior_atr": math.nan,
+                "swallowed_lower": math.nan, "swallowed_upper": math.nan,
+                "swallowed_size": 0.0, "swallowed_atr": 0.0,
+                "bull_embedded_contribution": 0.0, "bear_embedded_contribution": 0.0,
+                "bull_fvg_evidence": 0, "bear_fvg_evidence": 0,
+            }
+            out.append(m)
+            candidate_core_buy.append(False)
+            candidate_core_sell.append(False)
+            candidate_raw_buy.append(False)
+            candidate_raw_sell.append(False)
+            confirmed_buy.append(False)
+            confirmed_sell.append(False)
+            range_to_atr_series.append(0.0)
+            body_to_atr_series.append(0.0)
+            if not self._valid[i]:
+                continue
+
+            o, h, l, c = r["open"], r["high"], r["low"], r["close"]
+            candle_range = max(h - l, 0.0)
+            body = abs(c - o)
+            upper_wick = max(h - max(o, c), 0.0)
+            lower_wick = max(min(o, c) - l, 0.0)
+            safe_body = max(body, mintick)
+            prior_atr = atr[i - 1] if i > 0 else None
+            safe_prior_atr = max(prior_atr if prior_atr is not None else mintick, mintick)
+            m["safe_prior_atr"] = safe_prior_atr
+            range_to_atr = _safe_div(candle_range, safe_prior_atr, 0.0, mintick)
+            body_to_atr = _safe_div(body, safe_prior_atr, 0.0, mintick)
+            body_share = _safe_div(body, candle_range, 0.0, mintick)
+            close_loc = 0.5 if candle_range <= 1e-10 else _safe_div(c - l, candle_range, 0.5, mintick)
+            upper_wick_body = _safe_div(upper_wick, safe_body, 0.0, mintick)
+            lower_wick_body = _safe_div(lower_wick, safe_body, 0.0, mintick)
+            upper_wick_atr = _safe_div(upper_wick, safe_prior_atr, 0.0, mintick)
+            lower_wick_atr = _safe_div(lower_wick, safe_prior_atr, 0.0, mintick)
+            gap_abs = abs(o - self._rows[i - 1]["close"]) if i > 0 and self._valid[i - 1] else 0.0
+            gap_atr = _safe_div(gap_abs, safe_prior_atr, 0.0, mintick)
+            bull = c > o
+            bear = c < o
+            range_to_atr_series[i] = range_to_atr
+            body_to_atr_series[i] = body_to_atr
+
+            flow_ready = valid_range(i - FLOW_LENGTH, i)
+            local_ready = valid_range(i - LOCAL_CONTEXT_LENGTH, i - 1)
+            compression_ready = valid_range(i - 5, i)
+            minimum_history_ready = i >= MINIMUM_HISTORY_BARS - 1
+            atr_ready = atr[i] is not None and prior_atr is not None
+            previous_ready = i >= 1 and self._valid[i - 1]
+            data_ready = minimum_history_ready and atr_ready and previous_ready and flow_ready and compression_ready and local_ready
+            imbalance_ready = data_ready and i >= 2 and self._valid[i - 2] and atr[i - 2] is not None
+            m["data_ready"] = data_ready
+            if not data_ready:
+                continue
+
+            green_share = sum(self._rows[j]["close"] > self._rows[j]["open"] for j in range(i - 3, i + 1)) / 4.0
+            red_share = sum(self._rows[j]["close"] < self._rows[j]["open"] for j in range(i - 3, i + 1)) / 4.0
+            higher_close_share = sum(self._rows[j]["close"] > self._rows[j - 1]["close"] for j in range(i - 3, i + 1)) / 4.0
+            lower_close_share = sum(self._rows[j]["close"] < self._rows[j - 1]["close"] for j in range(i - 3, i + 1)) / 4.0
+            net_progress = c - self._rows[i - FLOW_LENGTH]["close"]
+            net_progress_atr = _safe_div(net_progress, atr[i] or mintick, 0.0, mintick)
+            path = sum(abs(self._rows[j]["close"] - self._rows[j - 1]["close"]) for j in range(i - 3, i + 1))
+            directional_efficiency = _safe_div(abs(net_progress), path, 0.0, mintick)
+            prev_local_high = max(self._rows[j]["high"] for j in range(i - LOCAL_CONTEXT_LENGTH, i))
+            prev_local_low = min(self._rows[j]["low"] for j in range(i - LOCAL_CONTEXT_LENGTH, i))
+            new_local_high = h >= prev_local_high
+            new_local_low = l <= prev_local_low
+
+            primitive_lower = lower_wick_body >= t.minimum_rejection_wick_body and lower_wick_atr >= t.minimum_rejection_wick_atr and close_loc >= t.rejection_close_location and lower_wick >= upper_wick * t.minimum_wick_dominance and new_local_low
+            primitive_upper = upper_wick_body >= t.minimum_rejection_wick_body and upper_wick_atr >= t.minimum_rejection_wick_atr and close_loc <= 1.0 - t.rejection_close_location and upper_wick >= lower_wick * t.minimum_wick_dominance and new_local_high
+            strong_buy = bull and body_to_atr >= t.minimum_continuation_body_atr and close_loc >= t.minimum_continuation_close_location and net_progress_atr > 0.0
+            strong_sell = bear and body_to_atr >= t.minimum_continuation_body_atr and close_loc <= 1.0 - t.minimum_continuation_close_location and net_progress_atr < 0.0
+
+            prev_range = max(self._rows[i - 1]["high"] - self._rows[i - 1]["low"], 0.0)
+            prev_upper_zone = self._rows[i - 1]["low"] + prev_range * PREVIOUS_ZONE_UPPER_SHARE
+            prev_lower_zone = self._rows[i - 1]["low"] + prev_range * PREVIOUS_ZONE_LOWER_SHARE
+            buy_evidence = [bull, body_to_atr >= t.minimum_continuation_body_atr, body_share >= t.minimum_continuation_body_share, close_loc >= t.minimum_continuation_close_location, upper_wick_body <= t.maximum_opposing_wick_body, net_progress_atr >= t.minimum_continuation_progress_atr, directional_efficiency >= t.minimum_continuation_efficiency, higher_close_share >= 0.50, green_share >= 0.50, c > self._rows[i - 1]["close"], c >= self._rows[i - 1]["high"] or c >= prev_upper_zone]
+            sell_evidence = [bear, body_to_atr >= t.minimum_continuation_body_atr, body_share >= t.minimum_continuation_body_share, close_loc <= 1.0 - t.minimum_continuation_close_location, lower_wick_body <= t.maximum_opposing_wick_body, net_progress_atr <= -t.minimum_continuation_progress_atr, directional_efficiency >= t.minimum_continuation_efficiency, lower_close_share >= 0.50, red_share >= 0.50, c < self._rows[i - 1]["close"], c <= self._rows[i - 1]["low"] or c <= prev_lower_zone]
+            buy_veto = primitive_upper or strong_sell
+            sell_veto = primitive_lower or strong_buy
+            buy_flow_count = sum(buy_evidence[5:])
+            sell_flow_count = sum(sell_evidence[5:])
+            buy_base = bull and (buy_evidence[1] or buy_evidence[2]) and (buy_evidence[3] or (close_loc >= RETENTION_CLOSE_FLOOR and buy_evidence[4])) and buy_flow_count >= 2 and sum(buy_evidence) >= t.continuation_evidence_minimum and not buy_veto
+            sell_base = bear and (sell_evidence[1] or sell_evidence[2]) and (sell_evidence[3] or (close_loc <= 1.0 - RETENTION_CLOSE_FLOOR and sell_evidence[4])) and sell_flow_count >= 2 and sum(sell_evidence) >= t.continuation_evidence_minimum and not sell_veto
+            if buy_base and sell_base:
+                conflict_threshold = t.minimum_continuation_progress_atr * CONFLICT_PROGRESS_FACTOR
+                if net_progress_atr > conflict_threshold:
+                    sell_base = False
+                elif net_progress_atr < -conflict_threshold:
+                    buy_base = False
+                else:
+                    buy_base = sell_base = False
+            candidate_core_buy[i] = buy_base
+            candidate_core_sell[i] = sell_base
+
+            extreme = range_to_atr >= t.shock_range_atr or body_to_atr >= t.shock_body_atr
+            upper_wick_range = _safe_div(upper_wick, candle_range, 0.0, mintick)
+            lower_wick_range = _safe_div(lower_wick, candle_range, 0.0, mintick)
+            shock_up = extreme and bull and close_loc >= SHOCK_CLOSE_UPPER and net_progress_atr > 0
+            shock_down = extreme and bear and close_loc <= SHOCK_CLOSE_LOWER and net_progress_atr < 0
+            shock_directionless = extreme and body_share <= SHOCK_DIRECTIONLESS_BODY_SHARE and upper_wick_range >= SHOCK_DIRECTIONLESS_WICK_SHARE and lower_wick_range >= SHOCK_DIRECTIONLESS_WICK_SHARE and SHOCK_MIDDLE_LOW <= close_loc <= SHOCK_MIDDLE_HIGH
+            prior_range_max = max(range_to_atr_series[max(0, i - 3):i], default=0.0)
+            prior_body_max = max(body_to_atr_series[max(0, i - 3):i], default=0.0)
+            abrupt = range_to_atr >= prior_range_max * SHOCK_JUMP_FACTOR or body_to_atr >= prior_body_max * SHOCK_JUMP_FACTOR
+            pre_buy = any(candidate_core_buy[max(0, i - 3):i])
+            pre_sell = any(candidate_core_sell[max(0, i - 3):i])
+            one_bar_shock = (shock_up and abrupt and not pre_buy) or (shock_down and abrupt and not pre_sell) or (shock_directionless and abrupt and not pre_buy and not pre_sell)
+            candidate_raw_buy[i] = buy_base and not one_bar_shock
+            candidate_raw_sell[i] = sell_base and not one_bar_shock
+
+            confirm_n = t.continuation_confirmation_bars
+            buy_sequence = i >= confirm_n - 1 and all(candidate_raw_buy[i - k] for k in range(confirm_n))
+            sell_sequence = i >= confirm_n - 1 and all(candidate_raw_sell[i - k] for k in range(confirm_n))
+            buy_retention_close = max(RETENTION_CLOSE_FLOOR, t.minimum_continuation_close_location - RETENTION_CLOSE_OFFSET)
+            sell_retention_close = 1.0 - buy_retention_close
+            retention_eff = t.minimum_continuation_efficiency * RETENTION_EFFICIENCY_FACTOR
+            hard_seller = bear and body_to_atr >= t.minimum_continuation_body_atr and close_loc <= 1.0 - t.minimum_continuation_close_location
+            hard_buyer = bull and body_to_atr >= t.minimum_continuation_body_atr and close_loc >= t.minimum_continuation_close_location
+            buy_retention = net_progress_atr > 0 and close_loc >= buy_retention_close and directional_efficiency >= retention_eff and not primitive_upper and not hard_seller and not candidate_raw_sell[i]
+            sell_retention = net_progress_atr < 0 and close_loc <= sell_retention_close and directional_efficiency >= retention_eff and not primitive_lower and not hard_buyer and not candidate_raw_buy[i]
+            confirmed_buy[i] = buy_sequence and buy_retention
+            confirmed_sell[i] = sell_sequence and sell_retention
+            if confirmed_buy[i] and confirmed_sell[i]:
+                conflict_threshold = t.minimum_continuation_progress_atr * CONFLICT_PROGRESS_FACTOR
+                if net_progress_atr > conflict_threshold:
+                    confirmed_sell[i] = False
+                elif net_progress_atr < -conflict_threshold:
+                    confirmed_buy[i] = False
+                else:
+                    confirmed_buy[i] = confirmed_sell[i] = False
+
+            prev_body = abs(self._rows[i - 1]["close"] - self._rows[i - 1]["open"])
+            safe_prev_body = max(prev_body, mintick)
+            prev_body_atr = _safe_div(prev_body, safe_prior_atr, 0.0, mintick)
+            prev_body_range = _safe_div(prev_body, prev_range, 0.0, mintick)
+            previous_bull = self._rows[i - 1]["close"] > self._rows[i - 1]["open"]
+            previous_bear = self._rows[i - 1]["close"] < self._rows[i - 1]["open"]
+            previous_doji = prev_body_range <= DOJI_BODY_SHARE or prev_body_atr <= DOJI_BODY_ATR
+            body_ratio = _safe_div(body, safe_prev_body, 0.0, mintick)
+            body_progress_ex_gap = max(body - gap_abs, 0.0)
+            bull_coverage = o <= self._rows[i - 1]["close"] and c >= self._rows[i - 1]["open"]
+            bear_coverage = o >= self._rows[i - 1]["close"] and c <= self._rows[i - 1]["open"]
+            bull_large_gap_progress = body_progress_ex_gap >= prev_body * LARGE_GAP_REAL_PROGRESS_FACTOR and c >= self._rows[i - 1]["open"] + safe_prior_atr * LARGE_GAP_BREAK_ATR
+            bear_large_gap_progress = body_progress_ex_gap >= prev_body * LARGE_GAP_REAL_PROGRESS_FACTOR and c <= self._rows[i - 1]["open"] - safe_prior_atr * LARGE_GAP_BREAK_ATR
+            bull_gap_quality = gap_atr <= t.maximum_engulfing_gap_atr or bull_large_gap_progress
+            bear_gap_quality = gap_atr <= t.maximum_engulfing_gap_atr or bear_large_gap_progress
+            very_strong_bull_engulf = bull and body_to_atr >= t.minimum_engulfing_body_atr * VERY_STRONG_ENGULFING_FACTOR and body_ratio >= t.minimum_engulfing_body_ratio * VERY_STRONG_ENGULFING_RATIO_FACTOR and close_loc >= t.engulfing_close_location and directional_efficiency >= retention_eff
+            very_strong_bear_engulf = bear and body_to_atr >= t.minimum_engulfing_body_atr * VERY_STRONG_ENGULFING_FACTOR and body_ratio >= t.minimum_engulfing_body_ratio * VERY_STRONG_ENGULFING_RATIO_FACTOR and close_loc <= 1.0 - t.engulfing_close_location and directional_efficiency >= retention_eff
+            prev_bull_quality = prev_body_atr >= t.minimum_previous_body_atr or very_strong_bear_engulf
+            prev_bear_quality = prev_body_atr >= t.minimum_previous_body_atr or very_strong_bull_engulf
+            bull_micro = not previous_doji or very_strong_bull_engulf
+            bear_micro = not previous_doji or very_strong_bear_engulf
+            bull_context = net_progress_atr <= t.minimum_continuation_progress_atr * ENGULFING_NEUTRAL_FLOW_FACTOR or new_local_low or primitive_lower or very_strong_bull_engulf
+            bear_context = net_progress_atr >= -t.minimum_continuation_progress_atr * ENGULFING_NEUTRAL_FLOW_FACTOR or new_local_high or primitive_upper or very_strong_bear_engulf
+            bull_engulf = previous_bear and bull and bull_coverage and body_to_atr >= t.minimum_engulfing_body_atr and prev_bear_quality and body_ratio >= t.minimum_engulfing_body_ratio and close_loc >= t.engulfing_close_location and bull_gap_quality and bull_micro and bull_context
+            bear_engulf = previous_bull and bear and bear_coverage and body_to_atr >= t.minimum_engulfing_body_atr and prev_bull_quality and body_ratio >= t.minimum_engulfing_body_ratio and close_loc <= 1.0 - t.engulfing_close_location and bear_gap_quality and bear_micro and bear_context
+            m["bullish_engulfing"] = bull_engulf
+            m["bearish_engulfing"] = bear_engulf
+            if bull_engulf:
+                m["bullish_engulfing_quality"] = _clamp(_ratio_score(body_to_atr, t.minimum_engulfing_body_atr, mintick) * 0.25 + _ratio_score(body_ratio, t.minimum_engulfing_body_ratio, mintick) * 0.20 + _clamp(close_loc * 100.0, 0.0, 100.0) * 0.20 + 15.0 + 10.0 + 10.0, 0.0, 100.0)
+            if bear_engulf:
+                m["bearish_engulfing_quality"] = _clamp(_ratio_score(body_to_atr, t.minimum_engulfing_body_atr, mintick) * 0.25 + _ratio_score(body_ratio, t.minimum_engulfing_body_ratio, mintick) * 0.20 + _clamp((1.0 - close_loc) * 100.0, 0.0, 100.0) * 0.20 + 15.0 + 10.0 + 10.0, 0.0, 100.0)
+            swallowed_lower = min(self._rows[i - 1]["open"], self._rows[i - 1]["close"])
+            swallowed_upper = max(self._rows[i - 1]["open"], self._rows[i - 1]["close"])
+            swallowed_size = swallowed_upper - swallowed_lower
+            m["swallowed_lower"], m["swallowed_upper"], m["swallowed_size"] = swallowed_lower, swallowed_upper, swallowed_size
+            m["swallowed_atr"] = _safe_div(swallowed_size, safe_prior_atr, 0.0, mintick)
+
+            lower_rejection = primitive_lower and not strong_sell and not confirmed_sell[i] and close_loc > SHOCK_CLOSE_LOWER
+            upper_rejection = primitive_upper and not strong_buy and not confirmed_buy[i] and close_loc < SHOCK_CLOSE_UPPER
+            if lower_rejection and upper_rejection:
+                lower_dom = lower_wick >= upper_wick * REJECTION_CONFLICT_MARGIN
+                upper_dom = upper_wick >= lower_wick * REJECTION_CONFLICT_MARGIN
+                if lower_dom and not upper_dom:
+                    upper_rejection = False
+                elif upper_dom and not lower_dom:
+                    lower_rejection = False
+                else:
+                    lower_rejection = upper_rejection = False
+
+            if not imbalance_ready:
+                continue
+            bull_geom = l > self._rows[i - 2]["high"]
+            bear_geom = h < self._rows[i - 2]["low"]
+            bull_lower = self._rows[i - 2]["high"] if bull_geom else math.nan
+            bull_upper = l if bull_geom else math.nan
+            bear_lower = h if bear_geom else math.nan
+            bear_upper = self._rows[i - 2]["low"] if bear_geom else math.nan
+            bull_gap_size = bull_upper - bull_lower if bull_geom else 0.0
+            bear_gap_size = bear_upper - bear_lower if bear_geom else 0.0
+            formation_atr = atr[i - 1] or mintick
+            safe_formation_atr = max(formation_atr, mintick)
+            m["formation_atr"] = formation_atr
+            bull_gap_atr = _safe_div(bull_gap_size, safe_formation_atr, 0.0, mintick)
+            bear_gap_atr = _safe_div(bear_gap_size, safe_formation_atr, 0.0, mintick)
+            middle = self._rows[i - 1]
+            middle_range = max(middle["high"] - middle["low"], 0.0)
+            middle_body = abs(middle["close"] - middle["open"])
+            middle_body_atr = _safe_div(middle_body, safe_formation_atr, 0.0, mintick)
+            middle_body_share = _safe_div(middle_body, middle_range, 0.0, mintick)
+            middle_close_loc = 0.5 if middle_range <= 1e-10 else _safe_div(middle["close"] - middle["low"], middle_range, 0.5, mintick)
+            middle_bull = middle["close"] > middle["open"]
+            middle_bear = middle["close"] < middle["open"]
+            three_progress = c - self._rows[i - 2]["close"]
+            three_progress_atr = _safe_div(three_progress, safe_formation_atr, 0.0, mintick)
+            three_path = abs(middle["close"] - self._rows[i - 2]["close"]) + abs(c - middle["close"])
+            three_eff = _safe_div(abs(three_progress), three_path, 0.0, mintick)
+            opening_gap = abs(middle["open"] - self._rows[i - 2]["close"])
+            opening_gap_atr = _safe_div(opening_gap, safe_formation_atr, 0.0, mintick)
+            large_open_gap = opening_gap_atr > t.maximum_fvg_opening_gap_atr
+            bull_size_pass = bull_gap_atr >= t.minimum_fvg_size_atr
+            bear_size_pass = bear_gap_atr >= t.minimum_fvg_size_atr
+            body_atr_pass = middle_body_atr >= t.minimum_displacement_body_atr
+            body_share_pass = middle_body_share >= t.minimum_displacement_body_share
+            bull_middle_close = middle_close_loc >= t.minimum_displacement_close_location
+            bear_middle_close = middle_close_loc <= 1.0 - t.minimum_displacement_close_location
+            bull_displacement = middle_bull and body_atr_pass and body_share_pass and bull_middle_close
+            bear_displacement = middle_bear and body_atr_pass and body_share_pass and bear_middle_close
+            bull_progress_pass = three_progress_atr >= t.minimum_fvg_progress_atr
+            bear_progress_pass = three_progress_atr <= -t.minimum_fvg_progress_atr
+            eff_pass = three_eff >= t.minimum_fvg_efficiency
+            bull_accept = bull_geom and c >= bull_upper
+            bear_accept = bear_geom and c <= bear_lower
+            bull_invalid = bull_geom and c <= bull_lower
+            bear_invalid = bear_geom and c >= bear_upper
+            bull_direction = bull_progress_pass and eff_pass and bull_accept
+            bear_direction = bear_progress_pass and eff_pass and bear_accept
+            bull_extra = middle_body_atr >= t.minimum_displacement_body_atr * FVG_DISPLACEMENT_EXTRA_FACTOR and three_progress_atr >= t.minimum_fvg_progress_atr * FVG_PROGRESS_EXTRA_FACTOR and bull_gap_atr >= t.minimum_fvg_size_atr * FVG_SIZE_EXTRA_FACTOR and bull_accept
+            bear_extra = middle_body_atr >= t.minimum_displacement_body_atr * FVG_DISPLACEMENT_EXTRA_FACTOR and three_progress_atr <= -t.minimum_fvg_progress_atr * FVG_PROGRESS_EXTRA_FACTOR and bear_gap_atr >= t.minimum_fvg_size_atr * FVG_SIZE_EXTRA_FACTOR and bear_accept
+            bull_defense = not large_open_gap or bull_extra
+            bear_defense = not large_open_gap or bear_extra
+            bull_evidence = sum([bull_geom, bull_size_pass, middle_bull, body_atr_pass, body_share_pass, bull_middle_close, bull_progress_pass, eff_pass, bull_accept, not bull_invalid]) if bull_geom else 0
+            bear_evidence = sum([bear_geom, bear_size_pass, middle_bear, body_atr_pass, body_share_pass, bear_middle_close, bear_progress_pass, eff_pass, bear_accept, not bear_invalid]) if bear_geom else 0
+            bull_disp_evidence = sum([middle_bull, body_atr_pass, body_share_pass, bull_middle_close])
+            bear_disp_evidence = sum([middle_bear, body_atr_pass, body_share_pass, bear_middle_close])
+            bull_alignment = confirmed_buy[i] or bull_engulf or lower_rejection or (bull and close_loc >= t.minimum_continuation_close_location)
+            bear_alignment = confirmed_sell[i] or bear_engulf or upper_rejection or (bear and close_loc <= 1.0 - t.minimum_continuation_close_location)
+            bull_counter_absent = not confirmed_sell[i] and not bear_engulf and not upper_rejection
+            bear_counter_absent = not confirmed_buy[i] and not bull_engulf and not lower_rejection
+            bull_embedded = (5.0 if bull_alignment else 0.0) + (5.0 if bull_counter_absent else 0.0) if bull_geom else 0.0
+            bear_embedded = (5.0 if bear_alignment else 0.0) + (5.0 if bear_counter_absent else 0.0) if bear_geom else 0.0
+
+            def fvg_quality(is_bull: bool) -> float:
+                geom = bull_geom if is_bull else bear_geom
+                if not geom:
+                    return 0.0
+                gap_metric = bull_gap_atr if is_bull else bear_gap_atr
+                close_metric = middle_close_loc if is_bull else 1.0 - middle_close_loc
+                progress_metric = max(three_progress_atr, 0.0) if is_bull else max(-three_progress_atr, 0.0)
+                defense = bull_defense if is_bull else bear_defense
+                invalid = bull_invalid if is_bull else bear_invalid
+                alignment = bull_alignment if is_bull else bear_alignment
+                counter_absent = bull_counter_absent if is_bull else bear_counter_absent
+                return _clamp(_ratio_score(gap_metric, t.minimum_fvg_size_atr, mintick) * 0.15 + _ratio_score(middle_body_atr, t.minimum_displacement_body_atr, mintick) * 0.15 + _ratio_score(middle_body_share, t.minimum_displacement_body_share, mintick) * 0.12 + _ratio_score(close_metric, t.minimum_displacement_close_location, mintick) * 0.12 + _ratio_score(progress_metric, t.minimum_fvg_progress_atr, mintick) * 0.12 + _ratio_score(three_eff, t.minimum_fvg_efficiency, mintick) * 0.12 + (12.0 if defense and not invalid else 0.0) + (5.0 if alignment else 0.0) + (5.0 if counter_absent else 0.0), 0.0, 100.0)
+
+            bull_quality = fvg_quality(True)
+            bear_quality = fvg_quality(False)
+            min_candidate_evidence = max(t.minimum_fvg_evidence - 1, 5)
+            min_candidate_quality = max(t.minimum_fvg_quality - FVG_CANDIDATE_QUALITY_OFFSET, 30.0)
+            bull_candidate_size = bull_gap_atr >= t.minimum_fvg_size_atr * FVG_CANDIDATE_SIZE_FACTOR
+            bear_candidate_size = bear_gap_atr >= t.minimum_fvg_size_atr * FVG_CANDIDATE_SIZE_FACTOR
+            bull_candidate_direction = three_progress_atr > 0.0 and bull_accept
+            bear_candidate_direction = three_progress_atr < 0.0 and bear_accept
+            bull_active = imbalance_ready and bull_geom and bull_size_pass and bull_displacement and bull_direction and bull_defense and not bull_invalid and bull_evidence >= t.minimum_fvg_evidence and bull_quality >= t.minimum_fvg_quality
+            bear_active = imbalance_ready and bear_geom and bear_size_pass and bear_displacement and bear_direction and bear_defense and not bear_invalid and bear_evidence >= t.minimum_fvg_evidence and bear_quality >= t.minimum_fvg_quality
+            bull_candidate = imbalance_ready and bull_geom and not bull_active and bull_candidate_size and bull_disp_evidence >= 3 and bull_candidate_direction and bull_defense and not bull_invalid and bull_evidence >= min_candidate_evidence and bull_quality >= min_candidate_quality
+            bear_candidate = imbalance_ready and bear_geom and not bear_active and bear_candidate_size and bear_disp_evidence >= 3 and bear_candidate_direction and bear_defense and not bear_invalid and bear_evidence >= min_candidate_evidence and bear_quality >= min_candidate_quality
+            m.update({"bullish_fvg_active": bull_active, "bearish_fvg_active": bear_active, "bullish_fvg_candidate": bull_candidate, "bearish_fvg_candidate": bear_candidate, "bullish_fvg_quality": bull_quality, "bearish_fvg_quality": bear_quality, "bull_fvg_lower": bull_lower, "bull_fvg_upper": bull_upper, "bear_fvg_lower": bear_lower, "bear_fvg_upper": bear_upper, "bull_fvg_gap_size": bull_gap_size, "bear_fvg_gap_size": bear_gap_size, "bull_fvg_gap_atr": bull_gap_atr, "bear_fvg_gap_atr": bear_gap_atr, "bull_embedded_contribution": bull_embedded, "bear_embedded_contribution": bear_embedded, "bull_fvg_evidence": bull_evidence, "bear_fvg_evidence": bear_evidence})
+
+        return out
+
+    def _lifecycle_metrics(self, i: int) -> _LifecycleMetrics:
+        rows = self._rows
+        t = self._thresholds
+        tick = self.config.minimum_tick
+        r = rows[i]
+        o, h, l, c = r["open"], r["high"], r["low"], r["close"]
+        candle_range = max(h - l, 0.0)
+        body = abs(c - o)
+        bull, bear = c > o, c < o
+        close_loc = 0.5 if candle_range <= 1e-10 else _safe_div(c - l, candle_range, 0.5, tick)
+
+        tr: list[float | None] = []
+        for j, bar in enumerate(rows):
+            if not self._valid[j]:
+                tr.append(None)
+                continue
+            prev = rows[j - 1]["close"] if j > 0 and self._valid[j - 1] else None
+            value = bar["high"] - bar["low"]
+            if prev is not None:
+                value = max(value, abs(bar["high"] - prev), abs(bar["low"] - prev))
+            tr.append(max(value, 0.0))
+        atr = _rma(tr, ATR_LENGTH)
+        prior_atr = atr[i - 1] if i > 0 and atr[i - 1] is not None else tick
+        safe_prior_atr = max(prior_atr, tick)
+        body_to_atr = _safe_div(body, safe_prior_atr, 0.0, tick)
+        net_progress = c - rows[i - FLOW_LENGTH]["close"]
+        net_progress_atr = _safe_div(net_progress, atr[i] or tick, 0.0, tick)
+        path = sum(abs(rows[j]["close"] - rows[j - 1]["close"]) for j in range(i - 3, i + 1))
+        efficiency = _safe_div(abs(net_progress), path, 0.0, tick)
+        higher_share = sum(rows[j]["close"] > rows[j - 1]["close"] for j in range(i - 3, i + 1)) / 4.0
+        lower_share = sum(rows[j]["close"] < rows[j - 1]["close"] for j in range(i - 3, i + 1)) / 4.0
+
+        current_series = self._calculate_series()
+        m = current_series[i]
+        bull_engulf = bool(m["bullish_engulfing"])
+        bear_engulf = bool(m["bearish_engulfing"])
+        upper_wick = max(h - max(o, c), 0.0)
+        lower_wick = max(min(o, c) - l, 0.0)
+        safe_body = max(body, tick)
+        upper_wick_body = _safe_div(upper_wick, safe_body, 0.0, tick)
+        lower_wick_body = _safe_div(lower_wick, safe_body, 0.0, tick)
+        upper_wick_atr = _safe_div(upper_wick, safe_prior_atr, 0.0, tick)
+        lower_wick_atr = _safe_div(lower_wick, safe_prior_atr, 0.0, tick)
+        prev_high = max(rows[j]["high"] for j in range(i - 4, i))
+        prev_low = min(rows[j]["low"] for j in range(i - 4, i))
+        primitive_lower = lower_wick_body >= t.minimum_rejection_wick_body and lower_wick_atr >= t.minimum_rejection_wick_atr and close_loc >= t.rejection_close_location and lower_wick >= upper_wick * t.minimum_wick_dominance and l <= prev_low
+        primitive_upper = upper_wick_body >= t.minimum_rejection_wick_body and upper_wick_atr >= t.minimum_rejection_wick_atr and close_loc <= 1.0 - t.rejection_close_location and upper_wick >= lower_wick * t.minimum_wick_dominance and h >= prev_high
+        strong_buy = bull and body_to_atr >= t.minimum_continuation_body_atr and close_loc >= t.minimum_continuation_close_location and net_progress_atr > 0
+        strong_sell = bear and body_to_atr >= t.minimum_continuation_body_atr and close_loc <= 1.0 - t.minimum_continuation_close_location and net_progress_atr < 0
+        prev = rows[i - 1]
+        prev_range = max(prev["high"] - prev["low"], 0.0)
+        body_share = _safe_div(body, candle_range, 0.0, tick)
+        green_share = sum(rows[j]["close"] > rows[j]["open"] for j in range(i - 3, i + 1)) / 4.0
+        red_share = sum(rows[j]["close"] < rows[j]["open"] for j in range(i - 3, i + 1)) / 4.0
+        buy_e = [bull, body_to_atr >= t.minimum_continuation_body_atr, body_share >= t.minimum_continuation_body_share, close_loc >= t.minimum_continuation_close_location, upper_wick_body <= t.maximum_opposing_wick_body, net_progress_atr >= t.minimum_continuation_progress_atr, efficiency >= t.minimum_continuation_efficiency, higher_share >= .5, green_share >= .5, c > prev["close"], c >= prev["high"] or c >= prev["low"] + prev_range * .70]
+        sell_e = [bear, body_to_atr >= t.minimum_continuation_body_atr, body_share >= t.minimum_continuation_body_share, close_loc <= 1.0 - t.minimum_continuation_close_location, lower_wick_body <= t.maximum_opposing_wick_body, net_progress_atr <= -t.minimum_continuation_progress_atr, efficiency >= t.minimum_continuation_efficiency, lower_share >= .5, red_share >= .5, c < prev["close"], c <= prev["low"] or c <= prev["low"] + prev_range * .30]
+        buy_base = bull and (buy_e[1] or buy_e[2]) and (buy_e[3] or (close_loc >= RETENTION_CLOSE_FLOOR and buy_e[4])) and sum(buy_e[5:]) >= 2 and sum(buy_e) >= t.continuation_evidence_minimum and not (primitive_upper or strong_sell)
+        sell_base = bear and (sell_e[1] or sell_e[2]) and (sell_e[3] or (close_loc <= 1.0 - RETENTION_CLOSE_FLOOR and sell_e[4])) and sum(sell_e[5:]) >= 2 and sum(sell_e) >= t.continuation_evidence_minimum and not (primitive_lower or strong_buy)
+        if buy_base and sell_base:
+            threshold = t.minimum_continuation_progress_atr * CONFLICT_PROGRESS_FACTOR
+            if net_progress_atr > threshold:
+                sell_base = False
+            elif net_progress_atr < -threshold:
+                buy_base = False
+            else:
+                buy_base = sell_base = False
+        extreme = (candle_range / safe_prior_atr >= t.shock_range_atr) or (body_to_atr >= t.shock_body_atr)
+        one_bar_shock = extreme and ((bull and close_loc >= SHOCK_CLOSE_UPPER and net_progress_atr > 0) or (bear and close_loc <= SHOCK_CLOSE_LOWER and net_progress_atr < 0) or (body_share <= SHOCK_DIRECTIONLESS_BODY_SHARE and SHOCK_MIDDLE_LOW <= close_loc <= SHOCK_MIDDLE_HIGH))
+        buy_candidate = buy_base and not one_bar_shock
+        sell_candidate = sell_base and not one_bar_shock
+        buy_confirmed = buy_candidate and close_loc >= max(RETENTION_CLOSE_FLOOR, t.minimum_continuation_close_location - .12) and efficiency >= t.minimum_continuation_efficiency * RETENTION_EFFICIENCY_FACTOR and net_progress_atr > 0
+        sell_confirmed = sell_candidate and close_loc <= 1.0 - max(RETENTION_CLOSE_FLOOR, t.minimum_continuation_close_location - .12) and efficiency >= t.minimum_continuation_efficiency * RETENTION_EFFICIENCY_FACTOR and net_progress_atr < 0
+        return _LifecycleMetrics(c, l, h, bull, bear, close_loc, body_to_atr, net_progress_atr, efficiency, higher_share, lower_share, buy_candidate, sell_candidate, buy_confirmed, sell_confirmed, primitive_lower, primitive_upper, bull_engulf, bear_engulf)
+
+    def _repair_candidate_alignment(self, idx: int, metrics: _LifecycleMetrics) -> None:
+        candidates = [formation for formation in self._fvg_formations if formation.formation_index == idx]
+        if not candidates:
+            return
+        for formation in candidates:
+            if formation.direction is FvgDirection.BULLISH:
+                aligned = metrics.buy_continuation_confirmed or metrics.buy_continuation_candidate or metrics.bullish_engulfing or metrics.lower_rejection or (metrics.candle_bullish and metrics.close_location >= self._thresholds.minimum_continuation_close_location)
+                counter_absent = not metrics.sell_continuation_confirmed and not metrics.bearish_engulfing and not metrics.upper_rejection
+            else:
+                aligned = metrics.sell_continuation_confirmed or metrics.sell_continuation_candidate or metrics.bearish_engulfing or metrics.upper_rejection or (metrics.candle_bearish and metrics.close_location <= 1.0 - self._thresholds.minimum_continuation_close_location)
+                counter_absent = not metrics.buy_continuation_confirmed and not metrics.bullish_engulfing and not metrics.lower_rejection
+            expected_embedded = (5.0 if aligned else 0.0) + (5.0 if counter_absent else 0.0)
+            delta = expected_embedded - formation.embedded_candle_contribution
+            if abs(delta) <= 1e-12:
+                continue
+            position = self._fvg_formations.index(formation)
+            self._fvg_formations[position] = replace(formation, quality=max(0.0, min(100.0, formation.quality + delta)), embedded_candle_contribution=expected_embedded)
+```
+
+
+NOTES / POTENTIAL ISSUES
+- Ana motorun üç katmanı karıştırılmamalıdır: fvg_engulfing_engine.py detector (formation/candidate/active), fvg_engulfing_final.py lifecycle, fvg_engulfing.py public cached facade. Public export engines.__init__.py içinde son facade’a işaret eder.
+- Bu repoda FVG ile Engulfing aynı implementation zincirinde. FVG-only ayrıştırma, internal Engulfing/candle booleans’in FVG quality/lifecycle girdisi olmasını korumalıdır. Çıktıdaki Engulfing side alanlarının mevcut kaynaktan gelmesi ayrıca belirtilmiştir; yeni pattern motoru eklenmedi.
+- Data-quality durumları warmup/source-gap/incomplete/open bar davranışını etkiler; incomplete/open barlar teyitli lifecycle/export’ı ilerletmez.
+- Import zinciri dışındaki projection/dashboard/story/decision katmanları bu export’a alınmadı.
+
+DEPENDENCIES
+------------
+Required:
+- Python standard library (dataclasses, enum, math, typing).
+- pandas (DataFrame/Series input).
+- Bu dosyada tam kaynakları verilen models.py ve fvg_engulfing_{models,engine,final}.py ile fvg_engulfing.py public facade.
+
+Optional:
+- Canonical OHLCV provider/data pipeline; engine doğrudan veri çekmez.
+- FVG projection/UI/dashboard/history consumers; calculation zincirini çalıştırmak için gerekmez.
+
+External:
+- pandas.
+
+Source files:
+- src/financial_dashboard/engines/models.py
+- src/financial_dashboard/engines/fvg_engulfing_models.py
+- src/financial_dashboard/engines/fvg_engulfing_engine.py
+- src/financial_dashboard/engines/fvg_engulfing_final.py
+- src/financial_dashboard/engines/fvg_engulfing.py

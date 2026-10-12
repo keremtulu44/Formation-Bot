@@ -1,0 +1,516 @@
+DOMAIN: Order Block (OB)
+ANA MOTOR: financial_dashboard.engines.order_block.OrderBlockEngine (public facade)
+ANA DOSYA: src/financial_dashboard/engines/order_block.py; detection/lifecycle core: src/financial_dashboard/engines/order_block_engine.py
+ANA CLASS/FUNCTION: OrderBlockEngine.update; _create_from_pair; _append_candidate; _update_existing; public export _select_export
+GEREKLİ BAĞIMLILIKLAR: Aşağıda tam kaynakları verilen order_block.py, order_block_engine.py, base.py ve models.py; harici olarak pandas
+VERİ GİRDİSİ: open, high, low, close, volume alanları zorunludur. timestamp replay sıralaması ve source_time için kullanılır. volume alanı normalizer’da zorunlu olsa da OB formüllerinde kullanılmaz. is_closed/is_complete opsiyoneldir.
+ÇIKTI: OrderBlockRecord tuple’ları (records/active_records), EngineResult, OrderBlockDataQuality ve public OrderBlockExport (bull/bear en yakın aktif kalan bölge alanları).
+
+DATA FLOW
+---------
+External provider / canonical OHLCV input (engine içinde provider çağrısı yok)
+    ↓ ordered bars
+OrderBlockEngine.replay(frame) veya OrderBlockEngine.update(bar)
+    ↓ A/B pair source selection → imbalance confirmation → fill/invalidation lifecycle
+OrderBlockRecord history + active_records + OrderBlockExport
+
+OB HESAPLAMA ÖZETİ
+------------------
+Core, zıt renkli ardışık mum çiftinden A/B kaynak mumunu seçer; korunan wick koşuluna göre source bar belirlenir. Source-local 3.–5. bar aralığında minimum tick büyüklüğünde imbalance aranır. Mevcut OB’ler sonraki barlarda güncellenir; gap-through, fill boundary/fill_ratio, fill_cancel_threshold ve imbalance süresinin dolması kaydın kaldırılmasını belirler. Varsayılanlar ve sıra korunmuştur.
+
+========================================================================================
+EXTRACTED SOURCE CODE (each block preserves its original source file)
+========================================================================================
+
+
+SOURCE:
+src/financial_dashboard/engines/base.py
+
+EXTRACTED:
+BaseEngine abstract replay/update/snapshot contract
+
+```python
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+import pandas as pd
+
+from .models import EngineResult
+
+
+class BaseEngine(ABC):
+    """Common contract for replay and incremental/live engine implementations."""
+
+    @abstractmethod
+    def replay(self, frame: pd.DataFrame) -> list[EngineResult]:
+        """Rebuild deterministic engine history from ordered canonical candles."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
+        """Advance engine state with one new candle."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def snapshot(self) -> EngineResult | None:
+        """Return the current immutable public engine state."""
+        raise NotImplementedError
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/models.py
+
+EXTRACTED:
+Direction ve EngineResult çıktı modeli
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import IntEnum
+from typing import Any
+
+
+class Direction(IntEnum):
+    DOWN = -1
+    NEUTRAL = 0
+    UP = 1
+
+
+@dataclass(frozen=True, slots=True)
+class EngineResult:
+    engine: str
+    state: str
+    timestamp: Any
+    direction: Direction = Direction.NEUTRAL
+    score: float | None = None
+    quality: float | None = None
+    levels: dict[str, float] = field(default_factory=dict)
+    events: tuple[str, ...] = ()
+    reasons: tuple[str, ...] = ()
+    is_confirmed: bool = True
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/order_block_engine.py
+
+EXTRACTED:
+OrderBlockConfig/Record ve source-faithful OB candidate, imbalance, fill/removal core
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from typing import Any
+
+import pandas as pd
+
+from .base import BaseEngine
+from .models import Direction, EngineResult
+
+
+@dataclass(frozen=True, slots=True)
+class OrderBlockConfig:
+    imbalance_max_candle: int = 5
+    fill_cancel_threshold: float = 0.70
+    minimum_tick: float = 0.01
+
+    def __post_init__(self) -> None:
+        if self.imbalance_max_candle not in {3, 4, 5}:
+            raise ValueError("imbalance_max_candle must be 3, 4, or 5")
+        if not 0.10 <= self.fill_cancel_threshold <= 1.0:
+            raise ValueError("fill_cancel_threshold must be between 0.10 and 1.0")
+        if self.minimum_tick <= 0:
+            raise ValueError("minimum_tick must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class OrderBlockRecord:
+    source_index: int
+    source_time: Any
+    top: float
+    bottom: float
+    bullish: bool
+    base_score: int
+    has_imbalance: bool
+    anchor_high: float
+    anchor_low: float
+    imbalance_end_index: int
+    fill_boundary: float
+
+    @property
+    def score(self) -> int:
+        return self.base_score + (1 if self.has_imbalance else 0)
+
+    @property
+    def fill_ratio(self) -> float:
+        height = self.top - self.bottom
+        if height <= 0:
+            return 0.0
+        raw = (self.top - self.fill_boundary) / height if self.bullish else (self.fill_boundary - self.bottom) / height
+        return min(1.0, max(0.0, raw))
+
+    @property
+    def active(self) -> bool:
+        return self.has_imbalance and self.score == 3
+
+
+class OrderBlockEngine(BaseEngine):
+    """Source-faithful Tur-1 port of ORDER BLOCK Fill Debug v0.4.23.
+
+    Scope is intentionally limited to the supplied Pine contract:
+    A/B source selection, wick replacement, source-local 3rd-5th candle
+    imbalance search, pre-confirm fill accumulation, and fill cancellation.
+    No BOS/CHoCH, trend, pivot, liquidity, AL/SAT, MTF, or time deletion is
+    introduced.
+    """
+
+    def __init__(self, config: OrderBlockConfig | None = None) -> None:
+        self.config = config or OrderBlockConfig()
+        self._rows: list[dict[str, Any]] = []
+        self._records: list[OrderBlockRecord] = []
+        self._snapshot: EngineResult | None = None
+
+    @staticmethod
+    def _normalize_bar(bar: pd.Series | dict[str, Any]) -> dict[str, Any]:
+        row = dict(bar)
+        for key in ("open", "high", "low", "close", "volume"):
+            if key not in row:
+                raise ValueError(f"missing required field: {key}")
+        row.setdefault("is_closed", True)
+        row.setdefault("is_complete", True)
+        return row
+
+    @property
+    def records(self) -> tuple[OrderBlockRecord, ...]:
+        return tuple(self._records)
+
+    @property
+    def active_records(self) -> tuple[OrderBlockRecord, ...]:
+        return tuple(record for record in self._records if record.active)
+
+    def _reset(self) -> None:
+        self._rows = []
+        self._records = []
+        self._snapshot = None
+
+    def replay(self, frame: pd.DataFrame) -> list[EngineResult]:
+        self._reset()
+        out: list[EngineResult] = []
+        for bar in frame.sort_values("timestamp", kind="stable").to_dict("records"):
+            before = len(self._rows)
+            result = self.update(bar)
+            if len(self._rows) > before and result is not None:
+                out.append(result)
+        return out
+
+    def snapshot(self) -> EngineResult | None:
+        return self._snapshot
+
+    def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
+        row = self._normalize_bar(bar)
+        if not bool(row.get("is_closed", True)) or not bool(row.get("is_complete", True)):
+            return self._snapshot
+
+        self._rows.append(row)
+        index = len(self._rows) - 1
+
+        # Pine order is exact: update existing candidates/OBs first, then create
+        # a new A/B candidate from [1]/[0].
+        self._update_existing(index, row)
+        self._create_from_pair(index)
+        self._snapshot = self._build_result(row.get("timestamp"))
+        return self._snapshot
+
+    def _update_existing(self, index: int, row: dict[str, Any]) -> None:
+        updated: list[OrderBlockRecord] = []
+        for record in self._records:
+            current = record
+            remove = False
+            zone_height = current.top - current.bottom
+            fill_start = current.source_index + 2
+
+            if index >= fill_start and zone_height > 0:
+                bullish_gap_through = current.bullish and float(row["high"]) < current.bottom
+                bearish_gap_through = (not current.bullish) and float(row["low"]) > current.top
+                if bullish_gap_through or bearish_gap_through:
+                    remove = True
+                else:
+                    entered = float(row["low"]) <= current.top and float(row["high"]) >= current.bottom
+                    if entered:
+                        if current.bullish:
+                            penetrated_low = max(current.bottom, min(current.top, float(row["low"])))
+                            boundary = min(current.fill_boundary, penetrated_low)
+                        else:
+                            penetrated_high = min(current.top, max(current.bottom, float(row["high"])))
+                            boundary = max(current.fill_boundary, penetrated_high)
+                        if boundary != current.fill_boundary:
+                            current = replace(current, fill_boundary=boundary)
+                        if current.fill_ratio >= self.config.fill_cancel_threshold:
+                            remove = True
+
+            imbalance_start = current.source_index + 2
+            if (
+                not remove
+                and not current.has_imbalance
+                and imbalance_start <= index <= current.imbalance_end_index
+            ):
+                bullish_gap = current.bullish and float(row["low"]) - current.anchor_high >= self.config.minimum_tick
+                bearish_gap = (not current.bullish) and current.anchor_low - float(row["high"]) >= self.config.minimum_tick
+                if bullish_gap or bearish_gap:
+                    current = replace(current, has_imbalance=True)
+
+            if not remove and current.has_imbalance and current.fill_ratio >= self.config.fill_cancel_threshold:
+                remove = True
+
+            if not remove and not current.has_imbalance and index > current.imbalance_end_index:
+                remove = True
+
+            if not remove:
+                updated.append(current)
+
+        self._records = updated
+
+    def _create_from_pair(self, index: int) -> None:
+        if index < 1:
+            return
+        previous = self._rows[index - 1]
+        current = self._rows[index]
+
+        bearish_pair = float(previous["close"]) > float(previous["open"]) and float(current["close"]) < float(current["open"])
+        if bearish_pair:
+            protected = float(current["high"]) <= float(previous["high"])
+            self._append_candidate(
+                source_index=index - 1 if protected else index,
+                bullish=False,
+                source=previous if protected else current,
+            )
+
+        bullish_pair = float(previous["close"]) < float(previous["open"]) and float(current["close"]) > float(current["open"])
+        if bullish_pair:
+            protected = float(current["low"]) >= float(previous["low"])
+            self._append_candidate(
+                source_index=index - 1 if protected else index,
+                bullish=True,
+                source=previous if protected else current,
+            )
+
+    def _append_candidate(self, *, source_index: int, bullish: bool, source: dict[str, Any]) -> None:
+        if any(r.source_index == source_index and r.bullish == bullish for r in self._records):
+            return
+        top = float(source["high"])
+        bottom = float(source["low"])
+        record = OrderBlockRecord(
+            source_index=source_index,
+            source_time=source.get("timestamp"),
+            top=top,
+            bottom=bottom,
+            bullish=bullish,
+            base_score=2,
+            has_imbalance=False,
+            anchor_high=top,
+            anchor_low=bottom,
+            imbalance_end_index=source_index + self.config.imbalance_max_candle - 1,
+            fill_boundary=top if bullish else bottom,
+        )
+        self._records.append(record)
+
+    def _build_result(self, timestamp: Any) -> EngineResult:
+        active = self.active_records
+        bull = sum(1 for r in active if r.bullish)
+        bear = sum(1 for r in active if not r.bullish)
+        candidates = len(self._records) - len(active)
+        direction = Direction.UP if bull and not bear else Direction.DOWN if bear and not bull else Direction.NEUTRAL
+        state = "ACTIVE_OB" if active else "CANDIDATE_ONLY" if self._records else "NO_OB"
+        return EngineResult(
+            engine="ORDER_BLOCK",
+            state=state,
+            timestamp=timestamp,
+            direction=direction,
+            score=None,
+            quality=None,
+            levels={},
+            events=(),
+            reasons=(f"active_bull={bull}", f"active_bear={bear}", f"candidates={candidates}"),
+            is_confirmed=True,
+        )
+```
+
+
+SOURCE:
+src/financial_dashboard/engines/order_block.py
+
+EXTRACTED:
+Public data-quality/export facade; nearest remaining bull/bear OB selection
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any
+
+import pandas as pd
+
+from .models import EngineResult
+from .order_block_engine import (
+    OrderBlockConfig,
+    OrderBlockEngine as _CoreOrderBlockEngine,
+    OrderBlockRecord,
+)
+
+
+class OrderBlockDataQuality(StrEnum):
+    """Python-side audit status; deliberately separate from Pine OB math."""
+
+    OK = "OK"
+    INCOMPLETE_BAR = "INCOMPLETE_BAR"
+    SOURCE_GAP = "SOURCE_GAP"
+
+
+@dataclass(frozen=True, slots=True)
+class OrderBlockSideExport:
+    state: float | None = None
+    top: float | None = None
+    bottom: float | None = None
+    fill: float | None = None
+    source_bar: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class OrderBlockExport:
+    """ARGENT Export Contract v1: nearest active OB snapshot per direction."""
+
+    bull: OrderBlockSideExport = OrderBlockSideExport()
+    bear: OrderBlockSideExport = OrderBlockSideExport()
+
+
+class OrderBlockEngine(_CoreOrderBlockEngine):
+    """Final v0.4.23 engine facade with the persistent v0.4.22 export contract.
+
+    The supplied v0.4.23 TIME FIX source changes drawing coordinates to source
+    time but contains no physical export block despite its EXPORT title. The
+    export contract therefore comes only from the supplied v0.4.22 FINAL
+    EXPORT source/diff and is applied to the unchanged v0.4.23 lifecycle.
+
+    Export rules are source-faithful:
+    - only confirmed 3-evidence, not-fully-used records are eligible;
+    - bullish and bearish sides are selected independently;
+    - distance is measured to the ACTIVE REMAINING zone;
+    - nearest wins; ties within minimum_tick choose newer source_index;
+    - open/incomplete bars freeze the last confirmed export snapshot.
+    """
+
+    def __init__(self, config: OrderBlockConfig | None = None) -> None:
+        super().__init__(config)
+        self._export = OrderBlockExport()
+        self._last_data_quality = OrderBlockDataQuality.OK
+
+    @property
+    def export(self) -> OrderBlockExport:
+        return self._export
+
+    @property
+    def last_data_quality(self) -> OrderBlockDataQuality:
+        return self._last_data_quality
+
+    def _reset(self) -> None:
+        super()._reset()
+        self._export = OrderBlockExport()
+        self._last_data_quality = OrderBlockDataQuality.OK
+
+    def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
+        row = dict(bar)
+        if not bool(row.get("is_closed", True)):
+            self._last_data_quality = OrderBlockDataQuality.INCOMPLETE_BAR
+            return self.snapshot()
+        if not bool(row.get("is_complete", True)):
+            self._last_data_quality = OrderBlockDataQuality.SOURCE_GAP
+            return self.snapshot()
+
+        result = super().update(row)
+        self._last_data_quality = OrderBlockDataQuality.OK
+        self._export = self._select_export(float(row["close"]))
+        return result
+
+    def _select_export(self, close: float) -> OrderBlockExport:
+        best_bull: tuple[float, int, OrderBlockSideExport] | None = None
+        best_bear: tuple[float, int, OrderBlockSideExport] | None = None
+
+        for record in self.records:
+            if not record.active or record.fill_ratio >= self.config.fill_cancel_threshold:
+                continue
+
+            active_top, active_bottom = self._active_remaining_zone(record)
+            distance = close - active_top if close > active_top else active_bottom - close if close < active_bottom else 0.0
+            side = OrderBlockSideExport(
+                state=1.0 if record.bullish else -1.0,
+                top=active_top,
+                bottom=active_bottom,
+                fill=record.fill_ratio,
+                source_bar=float(record.source_index),
+            )
+            candidate = (distance, record.source_index, side)
+
+            if record.bullish:
+                if self._is_better(candidate, best_bull):
+                    best_bull = candidate
+            elif self._is_better(candidate, best_bear):
+                best_bear = candidate
+
+        return OrderBlockExport(
+            bull=best_bull[2] if best_bull is not None else OrderBlockSideExport(),
+            bear=best_bear[2] if best_bear is not None else OrderBlockSideExport(),
+        )
+
+    def _is_better(
+        self,
+        candidate: tuple[float, int, OrderBlockSideExport],
+        incumbent: tuple[float, int, OrderBlockSideExport] | None,
+    ) -> bool:
+        if incumbent is None:
+            return True
+        distance, source_index, _ = candidate
+        best_distance, best_source_index, _ = incumbent
+        if distance < best_distance:
+            return True
+        tie = abs(distance - best_distance) <= self.config.minimum_tick
+        return tie and source_index > best_source_index
+
+    @staticmethod
+    def _active_remaining_zone(record: OrderBlockRecord) -> tuple[float, float]:
+        if record.bullish:
+            return record.fill_boundary, record.bottom
+        return record.top, record.fill_boundary
+```
+
+
+NOTES / POTENTIAL ISSUES
+- order_block_engine.py core, volume alanını zorunlu doğrular fakat hesapta kullanmaz; bunu değiştirmedim.
+- Mitigation core anlamı fill_boundary/fill_ratio ve configured threshold aşılınca kaydı kaldırmaktır. order_block_behavior.py ayrıca interaction/visit/reaction read-model’i sağlar; bu core OB tespiti/iptali için zorunlu olmadığı için eklenmedi.
+- update tek bar çağrısında timestamp zorunlu değildir; replay ise timestamp kolonu ile stable sort yapar.
+- OB behavior projection, targeting, context, UI ve karar katmanları dışarıda bırakıldı. AL/SAT veya trade kararı üretilmez.
+
+DEPENDENCIES
+------------
+Required:
+- Python standard library (dataclasses, enum, typing).
+- pandas (Series/DataFrame input ve replay sort).
+- Bu dosyada tam kaynakları verilen base.py, models.py, order_block_engine.py ve order_block.py.
+
+Optional:
+- src/financial_dashboard/engines/order_block_behavior.py: ayrı interaction/mitigation-visit read-model’i; temel OB engine’i çalıştırmak için gerekli değildir.
+- Canonical OHLCV provider/data pipeline: dış input hazırlama katmanı.
+
+External:
+- pandas.
+
+Source files:
+- src/financial_dashboard/engines/base.py
+- src/financial_dashboard/engines/models.py
+- src/financial_dashboard/engines/order_block_engine.py
+- src/financial_dashboard/engines/order_block.py

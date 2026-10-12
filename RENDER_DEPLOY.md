@@ -478,7 +478,7 @@ başka sohbetlerden gelen mesajlar sessizce yok sayılır.
 | `/ozet` veya `/o` | Günlük özet tek mesajda (tamamlanan/retest/sıkışan sayıları) |
 | `/sikisanlar` · `/tamamlanan` · `/retest` · `/kirilim` | Kısa listeler (kısayollar: `/s`, `/t`, `/r`, `/k`) |
 | `/durum` | Profil, piyasa açık/kapalı, son tarama yaşı, canlı sayı, veri sağlığı, günlük alarm/hata sayacı |
-| `/tara [HISSE]` | Yeni veriyi çekerek analiz eder (seans dışı da; son tamamlanmış mum/veri yaşı raporlanır) |
+| `/tara [HISSE]` | Yeni veriyi çekerek analiz eder (seans dışı da; cache'teki en yeni timestamp/veri yaşı raporlanır; timestamp'in tamamlanmış mum anlamı provider sözleşmesine bağlıdır) |
 | `/yardim`, `/start` | Komut listesi |
 
 Panel nasıl okunur (tek satır = bir hisse, hücreler `TF kalite` + işaret):
@@ -489,9 +489,10 @@ THYAO 1h 87🚀 · 2h — · 4h 75⚡ · 1d —
 ```
 
 Akış: `/panel` tüm 48 hisseyi, `/tara [HISSE]` istenen kapsamı kuyruğa alır.
-Ana döngü uyandırılır ve iş tamamlanınca kapsam, son tamamlanmış mum zamanı,
-veri yaşı ve sonuç tek mesajda raporlanır. Seans dışı sonuçlar en son bulunan
-mumla hesaplanır; bu veri canlı olmayabilir. Supabase sonuç üretmek için zorunlu
+Ana döngü uyandırılır ve iş tamamlanınca kapsam, cache'teki en yeni mum timestamp'i,
+veri yaşı ve sonuç tek mesajda raporlanır. Bu timestamp'in tamamlanmış mum anlamı
+provider sözleşmesine bağlıdır ve bu doğrulama turunda canlı provider'da ölçülmemiştir;
+seans dışı veri ayrıca canlı olmayabilir. Supabase sonuç üretmek için zorunlu
 değildir; yalnızca OHLCV önbelleği/geçmiş kaydı için opsiyoneldir.
 
 > ⚠️ **Sonuç güvenliği:** Eksik/başarısız tarama başarılı boş sonuç sayılmaz ve
@@ -557,6 +558,16 @@ Bot açılışta `setWebhook` çağırır, Telegram'a `secret_token` olarak da b
 ve **yoklamayı kapatır** (aynı token'da `getUpdates` + webhook birlikte olmaz;
 ikisi birlikte 409 Conflict üretir). Secret'i silip yeniden deploy ederseniz bot
 `deleteWebhook` çağırır ve yoklamaya döner — mod geçişi otomatik ve tek yönlüdür.
+
+**Bekleyen güncelleme politikası:** Her açılış/mod geçişinde webhook kurulurken
+`setWebhook`, polling'e dönülürken `deleteWebhook`, `drop_pending_updates=True`
+ile çağrılır. Telegram çağrıyı başarıyla onayladığında o anda bekleyen **tüm**
+güncellemeler (taze görünen komutlar dahil) bilerek atılır; bot yalnızca bu onaydan
+sonra gelen yeni güncellemeleri işler. Bu kasıtlı davranıştır; yeniden başlatma
+öncesi kuyruğun korunacağı varsayılmamalıdır. Polling'e geçişte Telegram bu silmeyi
+başarıyla onaylamazsa bot en çok beş kez artan aralıklarla (1, 2, 4, 8 sn) dener;
+onay yine alınamazsa eski update'leri çalıştırmamak için polling listener'ı başlatmaz
+ve hata loglar. Komut dinleyicisi bu başlangıçta kapalı kalır.
 
 Doğrulama (telefondan tarayıcıyla da yapılabilir):
 
@@ -847,7 +858,7 @@ Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 | Webhook adresi 503 döndürüyor | Normal: servis uyanıyor ya da bot komutları henüz kurmadı; Telegram tekrar dener |
 | `getWebhookInfo` `last_error_message` dolu | Adres yanlış/erişilemez ya da HTTPS değil. `TELEGRAM_WEBHOOK_URL`'i temizleyip `RENDER_EXTERNAL_URL` ile otomatik üretime dönün (§4.6) |
 | Webhook açtım, komutlar bir süre sonra durdu | Render Free uykuya geçmiş olabilir. Telegram başarısız teslimatı bir süre tekrar dener; keep-alive penceresini genişletin (`KEEPALIVE_ALWAYS=true`, §5) |
-| `/tara` sonucu eski görünüyor | Seans dışı veri canlı değildir; rapordaki son tamamlanmış mum zamanı ve veri yaşını kontrol edin |
+| `/tara` sonucu eski görünüyor | Seans dışı veri canlı olmayabilir; rapordaki en yeni cache timestamp'ini/veri yaşını kontrol edin (tamamlanmışlık provider sözleşmesine bağlıdır) |
 | `/panel` boş geliyor | Üstteki tarama durumunu kontrol et: “henüz başarılı analiz yok”, “eksik/başarısız” ve “başarılı ama aday yok” birbirinden ayrıdır. `/panel` yeni tam evren analizi başlatır |
 | Komut cevabı 1 dk gecikiyor | Servis uyuyorsa ilk istek onu uyandırır (~1 dk); keep-alive penceresi bunu seans içinde engeller |
 | Supabase bağlantısı yok | Zorunlu değildir; bot Yahoo verisi ve yerel cache ile analiz yapar. Supabase yalnızca opsiyonel OHLCV cache/geçmiş kaydıdır |
