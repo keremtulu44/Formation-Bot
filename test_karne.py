@@ -276,7 +276,7 @@ def test_main_komut_tablosunda_karne_var():
     assert "/karne" in M.KOMUT_YARDIM
 
 
-def test_tarama_sirasinda_defter_kaydi(monkeypatch, tmp_path):
+def test_tarama_sirasinda_defter_kaydi(monkeypatch, tmp_path, tarama_deque_manager):
     """scan_all_stocks, kırılım teyidinde deftere performans kaydı düşer."""
     import main as M
     from data import StockDequeManager
@@ -301,7 +301,7 @@ def test_tarama_sirasinda_defter_kaydi(monkeypatch, tmp_path):
 
     yedek = dict(M.daily_stats)
     try:
-        M.scan_all_stocks(StockDequeManager(), lm, notifier, stocks=["THYAO"], send_alerts=True)
+        M.scan_all_stocks(tarama_deque_manager, lm, notifier, stocks=["THYAO"], send_alerts=True)
     finally:
         M.daily_stats.clear()
         M.daily_stats.update(yedek)

@@ -142,9 +142,35 @@ python test_tarama_zamani.py                   # CI parity
 
 | Koşum | Sonuç |
 |---|---|
-| `pytest -q` | **836 passed, 48 skipped, 3 failed** — 3'ü main'de de kırmızı olan tarih-bağımlı testler (`test_mum_kapanis_penceresi` ×2, `test_karne` ×1) |
+| `pytest -q` (taze boş `DATA_DIR`, CI ile aynı) | **839 passed, 48 skipped, 0 failed** |
 | `python test_tarama_zamani.py` | 102/102 GEÇTİ |
 | Render dumanı (`PORT=… BOT_HEALTH_SMOKE_ONLY=1 python main.py`) | `/health` 200 + `commit`, `/health?ka=1` 200, `/test` ve `/webhook/<secret>` 404, smoke guard loglandı, tarama sızıntısı yok |
 
 Yani: **main'e göre davranış regresyonu yok**, dalın izole edilebilir değeri alındı,
 alarm hattı kararı görünür şekilde ertelendi.
+
+## 8. main'de miras kalan 3 kırmızının kökü ve kapatılması (12 Eki)
+
+Merge sonrası yeşile çevirirken 3 kırmızının **tarih-bağımlı olmadığı**, *veri yaşı*
+bağımlı olduğu çıktı:
+
+- `test_mum_kapanis_penceresi.py::test_kapanmamis_barla_push_yok` /
+  `::test_kapanmis_barla_push_uretilir` ve `test_karne.py::test_tarama_sirasinda_defter_kaydi`
+  `M.scan_all_stocks`'ı gerçek akışla koşturuyor ve veriyi commit'lenmiş `bot_data/THYAO.json`
+  seed'inden alıyordu.
+- `main.py::_cache_verisi_kullanilabilir` ilk satırda `OFFSESSION_CACHE_MAX_AGE_DAYS = 14`
+  günü aşıyı `return False` yapıyor. Seed 25 Eyl'de üretildiği için **9 Eki'den beri**
+  bu kapı her koşumda kapanıyor → hisse analiz dışı → push üretilemiyor. `origin/main`
+  worktree'sinde aynı 3 test bugün aynı sebeple kırmızı (51 passed, 3 failed), yani
+  kırmızının merge ile ilgisi yok; CI'da `set -e` olduğu için tüm job'ı deviriyor.
+- Çözüm test tarafında: `conftest.py`'ye `sentetik_1h_mumlar()` + `tarama_deque_manager`
+  fixture'ı eklendi — seans içi (10:00–17:00) 360 barlık sentetik seri, en yeni mumu en
+  yakın iş gününde. Testin konusu veri tazeliği değil, mum kapanış kapısı olduğu için
+  tazelik eşikleri (`STALE_BAR_UYARI_DK`, `VERI_YOK_MODU_ESIK_DK`,
+  `OFFSESSION_CACHE_MAX_AGE_DAYS`) fixture içinde gevşetiliyor.
+- Kalıcılık tuzağı: fixture'ın yöneticisi `DATA_DIR`'e yazınca sentetik seri, sonra
+  `bot_data` okuyan testlerin fixture'ına sızdı (9 yeni sahte kırmızı). Bu yüzden manager
+  testin kendi geçici dizinine (`tmp_path/tarama-cache`) bağlandı.
+
+Böylece suite saate, güne ve seed bayatlığına bağlı olmaktan çıktı; `pytest -q` boş
+`DATA_DIR` ile **839 passed, 48 skipped, 0 failed**.
