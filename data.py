@@ -1005,11 +1005,14 @@ class StockDequeManager:
                 json_data.append(json_candle)
 
             _atomic_json_write(json_path, json_data, indent=2)
-            try:
-                _atomic_pickle_write(pkl_path, data_list)
-            except Exception as exc:
-                # JSON is already durable and remains the default load path.
-                logger.warning("%s optional pickle cache yazılamadı (%s)", stock, type(exc).__name__)
+            # Pickle yalnız açıkça istendiğinde (varsayılan: kapalı) — pickle
+            # yüklemek kod çalıştırabilir, bu yüzden repoda tutulmaz.
+            if os.environ.get("PICKLE_CACHE", "").strip().lower() in ("1", "true", "yes", "on"):
+                try:
+                    _atomic_pickle_write(pkl_path, data_list)
+                except Exception as exc:
+                    # JSON is already durable and remains the default load path.
+                    logger.warning("%s optional pickle cache yazılamadı (%s)", stock, type(exc).__name__)
 
             remote_saved = True
             remote_error = None
@@ -1049,10 +1052,15 @@ class StockDequeManager:
             return False
     
     def load_from_disk(self, stock: str) -> Optional[deque]:
-        """Load validated JSON first; legacy pickle is opt-in because unpickling executes code."""
-        pkl_path = os.path.join(self.data_dir, f"{stock}.pkl")
-        json_path = os.path.join(self.data_dir, f"{stock}.json")
+        """Load validated JSON first; legacy pickle is opt-in because unpickling executes code.
 
+        Okuma yolu `_okuma_yolu` üzerinden gider: DATA_DIR'de yoksa repodaki seed
+        (SEED_DATA_DIR) yalnız OKUMA için kullanılır, yazımlar hep DATA_DIR'e gider.
+        """
+        json_path = self._okuma_yolu(f"{stock}.json")
+        pkl_path = self._okuma_yolu(f"{stock}.pkl")
+
+        # JSON birincil (A8): pickle yalnızca açık opt-in ile okunan yedek biçimdir.
         if os.path.exists(json_path):
             try:
                 import json
@@ -1092,7 +1100,7 @@ class StockDequeManager:
                     "%s legacy pickle cache: %d bozuk/geçersiz kayıt atlandı",
                     stock, skipped,
                 )
-            logger.debug("%s güvenilir pickle cache'ten yüklendi: %d mum", stock, len(bars))
+            logger.info("%s eski pickle dosyasından yüklendi: %d mum (JSON yok)", stock, len(bars))
             return deque(bars[-self.maxlen:], maxlen=self.maxlen)
         except Exception as exc:  # noqa: BLE001 - yalnızca açık trusted-cache opt-in
             logger.warning("%s güvenilir pickle cache okunamadı (%s)", stock, type(exc).__name__)
@@ -1300,7 +1308,7 @@ class StockDequeManager:
                     return False
                 self._gunluk_uzak_ozet[stock] = ozet
                 self.uzak_yazma_yapilan += 1
-
+        return True
 
     def son_bar_yasi_dk(self, stock: str, now: Optional[datetime] = None) -> Optional[float]:
         """Bu hissenin cache'indeki en yeni 1H mumun yaşı (dakika). Veri yoksa None.

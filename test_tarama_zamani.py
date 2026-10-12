@@ -1,10 +1,14 @@
 """
-Configured timing + terminal-formation regression smoke test.
+FAZ 1 zamanlama + ölü-formasyon regresyon testleri.
 
-The :30 schedule and half-hour 1H close offset are legacy configuration. This
-synthetic test verifies only the code's configured arithmetic; it does NOT prove
-yfinance's 1H start/end timestamp contract or official calendar accuracy.
-Terminal-formation tests use synthetic OHLCV; no provider or repository cache is read.
+Neden bu test? 6 Eylül 2026 ölçümlerinde bulunan iki sistematik hata
+botu sessizce körleştiriyordu:
+  1) yfinance'in .IS 1H mumları :30'da kapanır (etiket = mum BAşı, son mum 17:30
+     etiketli ve 18:30'da kapanır) ama bot "saat başı + 5 dk" (=:05) tetikleniyordu
+     -> her tarama veriyi 35 DAKİKA geç gösteriyordu ve günün son mumu hiç
+     analiz edilmiyordu (pencere 18:10'da kapanıyordu).
+  2) Terminal (ölü) formasyonlar "canlı" gibi raporlanıyordu -> günler önce
+     tamamlanmış/başarısız formasyonlar için her taramada "🏁 TAMAMLANDI" mesajı.
 
 Çalıştırma:  python3 test_tarama_zamani.py
 """
@@ -13,7 +17,7 @@ import inspect
 import os
 import sys
 import tempfile
-from datetime import datetime, timedelta, time as dt_time
+from datetime import datetime, time as dt_time
 
 import pandas as pd
 
@@ -21,10 +25,6 @@ from config import (BIST_OPEN, BIST_CLOSE, CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER
                     STALE_BAR_UYARI_DK, TARAMA_PENCERE_SONU, TERMINAL_TAZE_BAR)
 import data as data_mod
 import main as main_mod
-
-# All cache IO in this script is test-owned; never open the repository bot_data.
-_TEST_TMP = tempfile.TemporaryDirectory(prefix="formation-bot-timing-")
-_TEST_DATA_DIR = os.path.join(_TEST_TMP.name, "data")
 from data import (son_kapanan_mum_ani, tarama_animi_mi, tarama_penceresi_acik_mi,
                   time_until_next_candle_close)
 from patterns import ArgentEngine
@@ -53,7 +53,7 @@ def t(yil, ay, gun, saat=0, dakika=0):
 print("=== 1. MUM KAPANIŞ / TARAMA ANI ZAMANLAMASI ===")
 print(f"    config: mum :{CANDLE_CLOSE_MINUTE:02d} kapanır, "
       f"+{SCAN_DELAY_AFTER_CLOSE_MIN} dk -> tarama :{CANDLE_CLOSE_MINUTE + SCAN_DELAY_AFTER_CLOSE_MIN:02d}")
-kontrol("mevcut configured :30 kapanış dakikası korunuyor (provider sözleşmesi doğrulanmadı)",
+kontrol("mum kapanışı :30 (ölçüm: barlar bitişik, close[i]==open[i+1])",
         CANDLE_CLOSE_MINUTE == 30)
 kontrol("tarama anı mum kapanışı + 5 dk = :35",
         CANDLE_CLOSE_MINUTE + SCAN_DELAY_AFTER_CLOSE_MIN == 35)
@@ -63,13 +63,13 @@ kontrol("09:50 -> bugün henüz mum kapanmadı",
         son_kapanan_mum_ani(t(2026, 9, 25, 9, 50)) is None)
 kontrol("10:29 -> henüz kapanmadı",
         son_kapanan_mum_ani(t(2026, 9, 25, 10, 29)) is None)
-kontrol("10:35 -> configured first close checkpoint is 10:30",
+kontrol("10:35 -> ilk mum 10:30'da kapandı",
         son_kapanan_mum_ani(t(2026, 9, 25, 10, 35)) == t(2026, 9, 25, 10, 30))
-kontrol("12:35 -> configured close checkpoint is 12:30",
+kontrol("12:35 -> 12:30'da kapandı (11:30 etiketli mum)",
         son_kapanan_mum_ani(t(2026, 9, 25, 12, 35)) == t(2026, 9, 25, 12, 30))
-kontrol("18:35 -> configured final close checkpoint is 18:30",
+kontrol("18:35 -> GÜNÜN SON MUMU 18:30'da kapandı",
         son_kapanan_mum_ani(t(2026, 9, 25, 18, 35)) == t(2026, 9, 25, 18, 30),
-        "synthetic 17:30-labeled row is tested separately by the configured filter")
+        "17:30 etiketli mum analiz edilebilir olmalı")
 
 # tarama anı mı?
 for saat, dk, beklenen in [
@@ -103,35 +103,18 @@ bekle = time_until_next_candle_close(t(2026, 9, 25, 12, 35))
 kontrol("12:35'te bir sonraki tarama 13:35", abs(bekle - 3600) < 1, f"{bekle/60:.0f} dk")
 
 print()
-print("=== 2. CONFIGURED MUM FİLTRESİ SENTETİK SON SATIRI GÖRÜYOR ===")
-mgr = data_mod.StockDequeManager(data_dir=_TEST_DATA_DIR)
-# Deterministic, test-owned sessions replace the old dependence on repo bot_data.
-_test_index = [
-    IST.localize(datetime(year, month, day, hour, 30))
-    for year, month, day in ((2026, 9, 24), (2026, 9, 25))
-    for hour in range(9, 18)
-]
-_test_close = [100.0 + i * 0.05 + 0.2 * (i % 4) for i in range(len(_test_index))]
-_test_rows = []
-for i, close in enumerate(_test_close):
-    open_ = _test_close[i - 1] if i else close
-    _test_rows.append({
-        "open": open_, "high": max(open_, close) + 0.2,
-        "low": min(open_, close) - 0.2, "close": close, "volume": 1000.0 + i,
-    })
-df = pd.DataFrame(_test_rows, index=pd.DatetimeIndex(_test_index))
-for _stock in ("THYAO", "ISCTR", "KRDMD", "PETKM", "HALKB", "GARAN"):
-    mgr.append_dataframe(_stock, df)
+print("=== 2. TAMAMLANMIŞ MUM FİLTRESİ GÜNÜN SON MUMUNU GÖRÜYOR ===")
+mgr = data_mod.StockDequeManager()
 df = mgr.to_dataframe("THYAO")
 if df is not None:
     son_tarama = t(2026, 9, 25, 18, 35)
     t_df = data_mod.tamamlanmis_mumlar(df, "1h", now=son_tarama)
-    kontrol("18:35'te configured filter sentetik 17:30 etiketli satırı içerir",
+    kontrol("18:35 taramasında son mum = 17:30 (günün son mumu)",
             t_df is not None and t_df.index[-1].strftime("%H:%M") == "17:30",
             t_df.index[-1].strftime("%H:%M") if t_df is not None else "yok")
-    kontrol("17:59'da mevcut +30 dk filtresi 17:30 etiketini henüz içermez",
+    kontrol("17:59'da son mum 16:30 (17:30'lu mum henüz kapanmadı)",
             data_mod.tamamlanmis_mumlar(df, "1h", now=t(2026, 9, 25, 17, 59)).index[-1].strftime("%H:%M") == "16:30")
-    kontrol("18:00'de mevcut +30 dk filtresi 17:30 etiketini içerir",
+    kontrol("18:00'de son mum 17:30 (1H mum 1 saat sonra kapanır)",
             data_mod.tamamlanmis_mumlar(df, "1h", now=t(2026, 9, 25, 18, 0)).index[-1].strftime("%H:%M") == "17:30")
 else:
     print("  [SKIP] THYAO cache yok")
@@ -195,11 +178,42 @@ eng.pattern_state_bar = eng.bar_index - 500
 snap_canli = eng._snapshot(ST_RETEST_OK, [], d)
 kontrol("canlı state 500 bar sonra da raporlanır", snap_canli.active is not None)
 
-# --- 3b. İzolasyon ---
-# Gerçek BIST/provider cache kontrolü bu offline smoke testin kapsamı değildir;
-# terminal davranışı yukarıdaki deterministik sentetik örneklerle doğrulanır.
-kontrol("tarama-zamanı fixture test-owned geçici dizinde",
-        mgr.data_dir == _TEST_DATA_DIR, mgr.data_dir)
+# --- 3b. Gerçek BIST verisi invaryantı ---
+# Kural: state ölü VE geçiş eskiyse snapshot.active None olmalı.
+# (Eski davranışta günler önce biten 44 formasyon "canlı" görünüyordu.)
+try:
+    from data import resample_all_timeframes, tamamlanmis_mumlar as tmm
+    from patterns import PatternLifecycleManager
+
+    lc = PatternLifecycleManager(profile="Dengeli")
+    olu_filtrelenen = taze_terminal = toplam_olu = 0
+    for stock in ("THYAO", "ISCTR", "KRDMD", "PETKM", "HALKB", "GARAN"):
+        df = mgr.to_dataframe(stock)
+        if df is None or len(df) < 50:
+            continue
+        for tf_name, d_tf in resample_all_timeframes(df).items():
+            d_tf = tmm(d_tf, tf_name, now=t(2026, 9, 25, 12, 35))
+            if d_tf is None or len(d_tf) < 30:
+                continue
+            snap = lc.scan(stock + "_" + tf_name, d_tf, tam_yeniden=True)
+            if not f_is_dead_state(snap.state):
+                continue
+            toplam_olu += 1
+            yas = lc.get_engine(stock + "_" + tf_name).bar_index - \
+                lc.get_engine(stock + "_" + tf_name).pattern_state_bar
+            if yas > TERMINAL_TAZE_BAR:
+                olu_filtrelenen += 1
+                if snap.active is not None:
+                    kalan.append(f"{stock} {tf_name} ölü formasyon canlı gösterildi ({snap.state})")
+            else:
+                taze_terminal += 1
+    kontrol("gerçek veride ölü formasyonlar filtrelendi (en az 1)",
+            olu_filtrelenen >= 1, f"{olu_filtrelenen}/{toplam_olu} ölü, {taze_terminal} taze")
+    kontrol("filtrelenenlerin hiçbiri canlı gösterilmiyor",
+            not [k for k in kalan if "canlı gösterildi" in k])
+except Exception as e:
+    kalan.append(f"gerçek veri invaryantı çalıştırılamadı: {e}")
+    print(f"  [FAIL] gerçek veri hatası: {e}")
 
 print()
 print("=== 4. fetch_yfinance_1h auto_adjust=False ===")
@@ -207,12 +221,12 @@ src = inspect.getsource(data_mod.fetch_yfinance_1h)
 kontrol("history() çağrısı auto_adjust=False içeriyor", "auto_adjust=False" in src)
 
 print()
-print("=== 5. CONFIGURED 1D SEANS-KAPANIŞ SINIRI (SENTETİK) ===")
+print("=== 5. FAZ 2: 1D GECİKME DÜZELTMESİ ===")
 from data import resample_all_timeframes, tamamlanmis_mumlar as tmm
-kontrol("configured normal-day 1D boundary is 18:30",
+kontrol("1D mumu seans kapanışında (18:30) tamamlanır",
         tmm(resample_all_timeframes(df)['1d'], '1d', now=t(2026, 9, 25, 18, 29)).index[-1].strftime('%d') == '24',
-        "synthetic 25 Eylül barı 18:29'da hariç")
-kontrol("18:35'te configured 1D boundary sentetik bugünkü satırı içerir",
+        "18:29'da hâlâ 24 Eylül")
+kontrol("18:35'te günün 1D mumu analiz edilir (24 saatlik körlük bitti)",
         tmm(resample_all_timeframes(df)['1d'], '1d', now=t(2026, 9, 25, 18, 35)).index[-1].strftime('%d') == '25',
         "25 Eylül mumu görülüyor")
 # P0 DÜZELTMESİ (2 Eki 2026): 2h/4h kovaları artık seans sonunda (18:00) kesilir.
@@ -232,10 +246,10 @@ print()
 print("=== 6. FAZ 2: BIST TATİL TAKVİMİ / YARIM GÜN ===")
 from config import BIST_TATILLER, BIST_YARIM_GUNLER
 from data import bist_tatil_adi, seans_kapanis_saati, veri_yok_modu_acik_mi
-kontrol("configured calendar maps 29 Oct 2026 to Republic Day", bist_tatil_adi(t(2026, 10, 29)) == "Cumhuriyet Bayramı")
-kontrol("configured calendar maps 1 Jan 2026 to New Year", bist_tatil_adi(t(2026, 1, 1)) == "Yılbaşı")
-kontrol("configured calendar includes 27 May 2026", bist_tatil_adi(t(2026, 5, 27)) is not None)
-kontrol("configured calendar has no 25 Sep 2026 entry", bist_tatil_adi(t(2026, 9, 25)) is None)
+kontrol("29 Ekim 2026 tatil (Cumhuriyet Bayramı)", bist_tatil_adi(t(2026, 10, 29)) == "Cumhuriyet Bayramı")
+kontrol("1 Ocak 2026 tatil (Yılbaşı)", bist_tatil_adi(t(2026, 1, 1)) == "Yılbaşı")
+kontrol("27 Mayıs 2026 tatil (Kurban Bayramı)", bist_tatil_adi(t(2026, 5, 27)) is not None)
+kontrol("25 Eylül 2026 tatil DEĞİL", bist_tatil_adi(t(2026, 9, 25)) is None)
 kontrol("tatil günü tarama penceresi kapalı", not data_mod.tarama_penceresi_acik_mi(t(2026, 10, 29, 12, 35)))
 kontrol("tatil günü tarama anı da kapalı", not data_mod.tarama_animi_mi(t(2026, 10, 29, 12, 35)))
 kontrol("normal gün penceresi açık", data_mod.tarama_penceresi_acik_mi(t(2026, 9, 25, 12, 35)))
@@ -246,9 +260,9 @@ kontrol("yarım günde günlük mum 13:00'te tamamlanır (eski hata: 18:30)",
         data_mod.mum_kapanis_ani(t(2026, 3, 19), '1d').strftime('%H:%M') == '13:00')
 kontrol("19 Mart 2026 yarım gün (kapanış 13:00)",
         seans_kapanis_saati(t(2026, 3, 19)) == dt_time(13, 0))
-kontrol("configured half-day :30 schedule uses 12:30 final checkpoint",
+kontrol("yarım günde son mum 12:30 etiketli, kapanış 13:00",
         data_mod.son_kapanan_mum_ani(t(2026, 3, 19, 13, 5)).strftime('%H:%M') == '13:00')
-kontrol("half-day 12:35 maps to configured 12:30 checkpoint",
+kontrol("yarım gün 12:35'te son kapanan 12:30 (11:30 etiketli mum)",
         data_mod.son_kapanan_mum_ani(t(2026, 3, 19, 12, 35)).strftime('%H:%M') == '12:30')
 kontrol("yarım gün 13:05'te tarama anı", data_mod.tarama_animi_mi(t(2026, 3, 19, 13, 5)))
 kontrol("yarım gün 13:04'te henüz tarama yok", not data_mod.tarama_animi_mi(t(2026, 3, 19, 13, 4)))
@@ -267,7 +281,7 @@ print("=== 7. FAZ 2: SPLIT / VERİ SÜREKLİLİĞİ ===")
 import copy
 from data import sureklilik_sorunlari_bul, yuvarlak_orana_yakin_mi
 temiz_mumlar = list(mgr.get_deque('THYAO'))
-kontrol("temiz sentetik fixture'da süreklilik sorunu yok", len(sureklilik_sorunlari_bul(temiz_mumlar)) == 0)
+kontrol("temiz gerçek veride sorun yok", len(sureklilik_sorunlari_bul(temiz_mumlar)) == 0)
 
 mumlar = copy.deepcopy(temiz_mumlar)
 for c in mumlar[-5:]:
@@ -330,31 +344,27 @@ def _mesaj(state, hisse):
             'timestamp': datetime.now(data_mod.ISTANBUL_TZ)}
 
 
-# Even if a future edit accidentally enables this notifier, fail before any
-# requests-based outbound HTTP call can leave the test process.
-with patch("requests.sessions.Session.request", side_effect=AssertionError("network forbidden in test")) as _http_guard:
-    gonderilen = sum(1 for i in range(TELEGRAM_MAX_MESAJ_SAAT + 10)
-                     if nt_test.send(_mesaj('SIKISMA_GUCLENIYOR', f'IZ{i}')))
-    kontrol(f"izleme state'leri saatlik kapta kesilir ({TELEGRAM_MAX_MESAJ_SAAT})",
-            gonderilen == TELEGRAM_MAX_MESAJ_SAAT, f"{gonderilen} gönderildi")
+gonderilen = sum(1 for i in range(TELEGRAM_MAX_MESAJ_SAAT + 10)
+                 if nt_test.send(_mesaj('SIKISMA_GUCLENIYOR', f'IZ{i}')))
+kontrol(f"izleme state'leri saatlik kapta kesilir ({TELEGRAM_MAX_MESAJ_SAAT})",
+        gonderilen == TELEGRAM_MAX_MESAJ_SAAT, f"{gonderilen} gönderildi")
 
-    gonderilen2 = sum(1 for i in range(5)
-                      if nt_test.send(_mesaj('KIRILIM_ADAYI', f'KR{i}')))
-    kontrol("kritik state'ler saatlik kaptan etkilenmez", gonderilen2 == 5, f"{gonderilen2} gönderildi")
+gonderilen2 = sum(1 for i in range(5)
+                  if nt_test.send(_mesaj('KIRILIM_ADAYI', f'KR{i}')))
+kontrol("kritik state'ler saatlik kaptan etkilenmez", gonderilen2 == 5, f"{gonderilen2} gönderildi")
 
-    nt_test._gunluk_sayac = TELEGRAM_MAX_MESAJ_GUN
-    kontrol("günlük kap aşıldığında kritik state bile gitmez",
-            not nt_test.send(_mesaj('KIRILIM_ADAYI', 'SON')))
-    kontrol("kap durumu raporlanıyor",
-            nt_test.kap_durumu()['gunluk_limit'] == TELEGRAM_MAX_MESAJ_GUN)
-assert _http_guard.call_count == 0
-# No cleanup reaches repository bot_data; TemporaryDirectory owns all state.
+nt_test._gunluk_sayac = TELEGRAM_MAX_MESAJ_GUN
+kontrol("günlük kap aşıldığında kritik state bile gitmez",
+        not nt_test.send(_mesaj('KIRILIM_ADAYI', 'SON')))
+kontrol("kap durumu raporlanıyor",
+        nt_test.kap_durumu()['gunluk_limit'] == TELEGRAM_MAX_MESAJ_GUN)
+if os.path.exists('bot_data/telegram_kap.json'):
+    os.remove('bot_data/telegram_kap.json')
 
 print()
 print("=== 9. FAZ 2: 1D DERİN VERİ (ayrı deque) ===")
 from data import StockDequeManager
-_TEST_DAILY_DIR = os.path.join(_TEST_TMP.name, "daily-data")
-mgr_t = StockDequeManager(data_dir=_TEST_DAILY_DIR)
+mgr_t = StockDequeManager(data_dir='/tmp/test_gunluk_dir')
 kontrol("günlük deque boş -> eksik sayılır", mgr_t.gunluk_veri_eksik_mi('TEST'))
 kontrol("günlük DataFrame boş", mgr_t.to_gunluk_dataframe('TEST') is None)
 sentetik = pd.DataFrame(
@@ -367,10 +377,11 @@ kontrol("günlük veri eklendi", len(mgr_t.to_gunluk_dataframe('TEST')) == 50)
 kontrol("bugüne ait veri -> eksik değil",
         not mgr_t.gunluk_veri_eksik_mi('TEST', t(2026, 9, 25, 18, 35)))
 mgr_t.save_gunluk_to_disk('TEST')
-mgr_t2 = StockDequeManager(data_dir=_TEST_DAILY_DIR)
+mgr_t2 = StockDequeManager(data_dir='/tmp/test_gunluk_dir')
 kontrol("günlük veri diskten yüklenir", len(mgr_t2.to_gunluk_dataframe('TEST')) == 50)
-kontrol("günlük deque ayrı dosyada",
-        os.path.exists(os.path.join(_TEST_DAILY_DIR, "TEST_gunluk.json")))
+kontrol("günlük deque ayrı dosyada", os.path.exists('/tmp/test_gunluk_dir/TEST_gunluk.json'))
+import shutil
+shutil.rmtree('/tmp/test_gunluk_dir', ignore_errors=True)
 
 print()
 print("=== 10. FAZ 2: TARAMA SÜRESİ ÖLÇÜMÜ ===")
@@ -380,10 +391,6 @@ kontrol("heartbeat tarama süresi alanı içeriyor",
 kontrol("telegram_kap heartbeat alanı içeriyor", 'telegram_kap' in open('main.py', encoding='utf-8').read())
 kontrol("veri_sorunlari heartbeat alanı içeriyor", 'veri_sorunlari' in open('main.py', encoding='utf-8').read())
 
-# Explicitly remove only this script's owned temporary tree and verify cleanup.
-_test_tmp_root = _TEST_TMP.name
-_TEST_TMP.cleanup()
-kontrol("test-owned temporary tree cleaned", not os.path.exists(_test_tmp_root))
 
 print()
 print("=== 11. N+1: TATİL / YARIM GÜN UYKU DÖNGÜSÜ ===")

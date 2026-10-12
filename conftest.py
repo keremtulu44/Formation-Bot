@@ -15,6 +15,15 @@ import pytest
 import config as config_mod
 import notifier as notifier_mod
 
+# Repo seed'i (bot_data/*.json + *.pkl) testlere sızmamalı: `_okuma_yolu` DATA_DIR'de
+# dosya bulamazsa SEED_DATA_DIR'e bakar ve geçici dizinli testler 360 satırlık örnek
+# seriyle kirlenir. Seed'i de aynı geçici dizine bağlıyoruz; seed'i BİLEN test
+# (test_kaynak_ve_guvenlik) zaten kendi monkeypatch'ini kuruyor.
+try:
+    import data as data_mod
+except Exception:  # pragma: no cover - data import edilemezse izolasyon yine çalışır
+    data_mod = None
+
 
 @pytest.fixture(autouse=True)
 def _izole_veri_dizini(tmp_path, monkeypatch):
@@ -22,4 +31,7 @@ def _izole_veri_dizini(tmp_path, monkeypatch):
     veri.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(config_mod, "DATA_DIR", str(veri), raising=False)
     monkeypatch.setattr(notifier_mod, "DATA_DIR", str(veri), raising=False)
+    monkeypatch.setattr(config_mod, "SEED_DATA_DIR", str(veri), raising=False)
+    if data_mod is not None:
+        monkeypatch.setattr(data_mod, "SEED_DATA_DIR", str(veri), raising=False)
     yield veri

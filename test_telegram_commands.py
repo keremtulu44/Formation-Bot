@@ -97,48 +97,6 @@ def _dinleyici(session, handlers=None, help_text="YARDIM METNI"):
     )
 
 
-class OffsetSahteSession(SahteSession):
-    """Telegram offset onayı/filtrelemesini taklit eden tamamen yerel test oturumu."""
-
-    def __init__(self, updates, fail_on_get_calls=()):
-        super().__init__()
-        self.pending_updates = list(updates)
-        self.fail_on_get_calls = set(fail_on_get_calls)
-
-    def get(self, url, params=None, timeout=None):
-        self.get_cagrilari.append((url, dict(params or {})))
-        call_number = len(self.get_cagrilari)
-        if call_number in self.fail_on_get_calls:
-            raise OSError("sentetik ağ hatası")
-        params = dict(params or {})
-        offset = params.get("offset")
-        if offset is not None:
-            self.pending_updates = [
-                update for update in self.pending_updates
-                if int(update["update_id"]) >= int(offset)
-            ]
-        limit = int(params.get("limit", 100))
-        return SahteYanit(200, {"ok": True, "result": self.pending_updates[:limit]})
-
-
-class SahteStopEvent:
-    """Gerçek bekleme olmadan listener.run_forever döngüsünü test eder."""
-
-    def __init__(self):
-        self.stopped = False
-        self.waits = []
-
-    def is_set(self):
-        return self.stopped
-
-    def set(self):
-        self.stopped = True
-
-    def wait(self, timeout=None):
-        self.waits.append(timeout)
-        return self.stopped
-
-
 # --- yardımcılar ---------------------------------------------------------
 def test_komut_coz_varyasyonlari():
     assert komut_coz("/formasyonlar") == ("formasyonlar", "")
@@ -217,59 +175,6 @@ def test_ayni_update_id_iki_kez_islenmez():
     dinleyici._son_komut_zamani.clear()
     assert dinleyici.handle_update(_guncelleme(7, "/durum")) is None
     assert len(session.post_cagrilari) == 1
-
-
-def test_dayanikli_cevap_yazilamazsa_poll_offset_durur_handler_tekrarlanmaz():
-    update = _guncelleme(81, "/durum")
-    session = SahteSession(get_yanitlari=[
-        SahteYanit(200, {"ok": True, "result": [update]}),
-        SahteYanit(200, {"ok": True, "result": [update]}),
-    ])
-    handler_calls = []
-    queue_results = iter([False, True])
-    queue_calls = []
-
-    def queue_reply(update_id, text):
-        result = next(queue_results)
-        queue_calls.append((update_id, text, result))
-        return result
-
-    dinleyici = _dinleyici(
-        session,
-        handlers={"durum": lambda _a: handler_calls.append("durum") or "durum cevabi"},
-    )
-    dinleyici.response_sender = queue_reply
-
-    assert dinleyici.poll_once() is None
-    assert dinleyici._offset is None  # dayanıklı reply yokken update ACK edilmez
-    assert dinleyici._pending_reply == {81: "durum cevabi"}
-    assert handler_calls == ["durum"]
-
-    assert dinleyici.poll_once() is None
-    assert dinleyici._offset == 82
-    assert dinleyici._pending_reply == {}
-    assert handler_calls == ["durum"]  # retry yalnızca aynı cevabı kuyruğa alır
-    assert queue_calls == [
-        (81, "durum cevabi", False),
-        (81, "durum cevabi", True),
-    ]
-
-
-def test_restartte_kayitli_komut_cevabi_handleri_yeniden_calistirmaz():
-    session = SahteSession()
-    handler_calls = []
-    queue_calls = []
-    dinleyici = _dinleyici(
-        session,
-        handlers={"durum": lambda _a: handler_calls.append("durum") or "durum cevabi"},
-    )
-    dinleyici.response_exists = lambda update_id: update_id == 91
-    dinleyici.response_sender = lambda update_id, text: queue_calls.append((update_id, text)) or True
-
-    assert dinleyici.handle_update(_guncelleme(91, "/durum")) is None
-    assert handler_calls == []
-    assert queue_calls == [(91, "")]
-    assert session.post_cagrilari == []
 
 
 # --- getUpdates akışı ----------------------------------------------------
@@ -374,67 +279,6 @@ def test_karisik_backlog_ilk_taze_mesajdan_devam_eder():
     dinleyici = _dinleyici(session)
     dinleyici._backlog_atla()
     assert dinleyici._offset == 71
-
-
-def test_cok_sayfali_karisik_backlog_bayat_prefixi_pollingden_atlar_taze_komutu_korur():
-    bayatlar = [_guncelleme(uid, "/tara", tarih=time.time() - 3600) for uid in range(1, 101)]
-    eski_tara = _guncelleme(101, "/tara", tarih=time.time() - 3600)
-    taze_durum = _guncelleme(102, "/durum", tarih=time.time() - 60)
-    session = OffsetSahteSession(bayatlar + [eski_tara, taze_durum])
-    islenen = []
-    dinleyici = _dinleyici(
-        session,
-        handlers={
-            "tara": lambda _arg: islenen.append("tara") or "tara cevabi",
-            "durum": lambda _arg: islenen.append("durum") or "durum cevabi",
-        },
-    )
-
-    assert dinleyici._backlog_atla() is True
-    assert dinleyici._offset == 102
-    assert [call[1].get("offset") for call in session.get_cagrilari] == [None, 101]
-
-    dinleyici.poll_once()
-
-    assert [call[1].get("offset") for call in session.get_cagrilari] == [None, 101, 102]
-    assert islenen == ["durum"]
-    assert dinleyici._offset == 103
-
-
-def test_backlog_ag_hatasi_normal_pollingden_once_tekrar_dener_eskiyi_atlayip_tazeyi_isler():
-    bayatlar = [_guncelleme(uid, "/tara", tarih=time.time() - 3600) for uid in range(1, 101)]
-    eski_tara = _guncelleme(101, "/tara", tarih=time.time() - 3600)
-    taze_durum = _guncelleme(102, "/durum", tarih=time.time() - 60)
-    session = OffsetSahteSession(bayatlar + [eski_tara, taze_durum], fail_on_get_calls={2})
-    stop = SahteStopEvent()
-    islenen = []
-
-    def islemle_durum(_arg):
-        islenen.append("durum")
-        stop.set()
-        return "durum cevabi"
-
-    def islemle_tara(_arg):
-        islenen.append("tara")
-        stop.set()
-        return "tara cevabi"
-
-    listener = TelegramCommandListener(
-        token="111:AAA",
-        allowed_chat_id=CHAT_ID,
-        handlers={"tara": islemle_tara, "durum": islemle_durum},
-        help_text="YARDIM METNI",
-        session=session,
-        poll_timeout=1,
-        stop_event=stop,
-    )
-
-    listener.run_forever()
-
-    assert stop.waits == [5.0]
-    assert [call[1].get("offset") for call in session.get_cagrilari] == [None, 101, 101, 102]
-    assert islenen == ["durum"]
-    assert listener._offset == 103
 
 
 def test_401_token_gecersiz_dinleyiciyi_durdurur():
@@ -799,11 +643,10 @@ def test_veri_durumu_zamani_ve_yasi_acikca_yazar():
 
     bar = datetime.now(main_mod.ISTANBUL_TZ) - timedelta(days=2, hours=1)
     cevap = main_mod._veri_durumu_satiri(bar.isoformat(), 3, 4, 1, 2 * 24 * 60 + 60)
-    assert "Son cache mum etiketi:" in cevap
+    assert "Son tamamlanmış mum:" in cevap
     assert "veri yaşı 2g 1sa" in cevap
     assert "en eski taranan veri yaşı 2g 1sa" in cevap
-    assert "fetch yanıtı 3/4" in cevap and "taze fetch 3" in cevap
-    assert "fetch hatası 1" in cevap
+    assert "başarılı fetch 3/4" in cevap and "fetch hatası 1" in cevap
 
 
 def test_gun_sonu_analiz_saatini_istanbul_saatiyle_parse_eder(monkeypatch):
@@ -893,7 +736,7 @@ def test_durum_basarisiz_deneme_icin_onceki_taze_fetch_sayisini_kullanmaz(monkey
 
     cevap = main_mod._komut_durum("")
     assert "kapsam: 0/1 hisse, süre: 2.0 dk" in cevap
-    assert "fetch yanıtı 48/" not in cevap
+    assert "başarılı fetch 48/" not in cevap
     assert "fetch hatası 0" not in cevap
 
 

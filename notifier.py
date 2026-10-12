@@ -23,6 +23,8 @@ from reporting.format import STATE_TR
 # korunsun diye kalıcılık katmanı kullanılır (canlı denetim: ikisi de kayboluyordu).
 from state import persistence as _state_persistence
 
+from secrets_redaction import redact_sensitive_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -254,7 +256,9 @@ def telegram_hata_ipucu(status_code: int, response_text: str = "") -> str:
             "Termux/PC'de açık kalan ikinci kopyayı kapat, Render'da tek instance çalışmalı. "
             "getUpdates aynı anda iki süreçten çağrılamaz."
         )
-    return f"Telegram hatası HTTP {status_code}: {response_text[:200]}"
+    # Kaynak METNİN TAMAMI kırpılmadan önce maskelenir: 200 karakter sınırında
+    # bölünen bir token bire-bir eşleştirmeden kaçabilirdi.
+    return f"Telegram hatası HTTP {status_code}: {redact_sensitive_text(response_text)[:200]}"
 
 
 class TelegramNotifier:
@@ -446,8 +450,12 @@ class TelegramNotifier:
                     # Ana günlük/saatlik sayaç (mevcut budget) alert için korunur;
                     # diğer kategoriler ayrı sayaçta takip edilir.
                     return True, "mesaj gonderildi"
-                ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
-                son_hata = f"HTTP {resp.status_code}: {resp.text[:200]} | {ipucu}"
+                # Önce maskele, sonra kırp: ipucu metni ham yanıtın kesitini taşıyor;
+                # token 200. karakterden sonra başlıyorsa kırpma secret'ı korumazdı.
+                ipucu = telegram_hata_ipucu(resp.status_code,
+                                             redact_sensitive_text(resp.text, self.token))
+                son_hata = (f"HTTP {resp.status_code}: "
+                            f"{redact_sensitive_text(resp.text, self.token)[:200]} | {ipucu}")
                 if 400 <= resp.status_code < 500 and resp.status_code != 429:
                     break  # kalıcı hata: tekrar denemek anlamsız
                 logger.warning(f"Telegram gönderimi başarısız (deneme {i + 1}/{deneme}): HTTP {resp.status_code}")
@@ -471,8 +479,10 @@ class TelegramNotifier:
                 username = (resp.json().get("result") or {}).get("username", "?")
                 logger.info(f"Telegram bağlantısı OK (bot: @{username}, chat_id: {self.chat_id})")
                 return True
-            ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
-            logger.error(f"Telegram token/chat_id reddedildi: HTTP {resp.status_code} {resp.text[:200]} | {ipucu}")
+            ipucu = telegram_hata_ipucu(resp.status_code,
+                                                 redact_sensitive_text(resp.text, self.token))
+            logger.error("Telegram token/chat_id reddedildi: HTTP %s %s | %s",
+                         resp.status_code, redact_sensitive_text(resp.text, self.token)[:200], ipucu)
         except Exception as e:
             logger.error(f"Telegram bağlantı hatası (token yanlış olabilir): {e}")
         return False
@@ -505,7 +515,8 @@ class TelegramNotifier:
             ben, _ = _cagri("getMe")
             sohbet, yanit = _cagri("getChat", chat_id=self.public_chat_id)
             if sohbet is None:
-                ipucu = telegram_hata_ipucu(yanit.status_code, getattr(yanit, "text", ""))
+                ipucu = telegram_hata_ipucu(yanit.status_code,
+                                     redact_sensitive_text(getattr(yanit, "text", ""), self.token))
                 bilgi["hata"] = f"getChat başarısız ({getattr(yanit, 'status_code', '?')}) {ipucu}"
                 logger.error(
                     "❌ Public hedef doğrulanamadı (%s): %s. Kanal/grup kimliğini ve botun "
@@ -683,8 +694,10 @@ class TelegramNotifier:
                     logger.warning("Public 429: %.0f sn sonra tekrar denenecek", bekle)
                     time.sleep(max(0.0, min(bekle, 20.0)))
                     continue
-                ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
-                logger.error("Telegram public hata: %s | %s", resp.text[:200], ipucu)
+                ipucu = telegram_hata_ipucu(resp.status_code,
+                                                 redact_sensitive_text(resp.text, self.token))
+                logger.error("Telegram public hata: %s | %s",
+                             redact_sensitive_text(resp.text, self.token)[:200], ipucu)
                 break
             self.public_hatasi += 1
             self._gonderim_sagligi_kaydet(basari=False, hata="public: gönderim başarısız")
@@ -1715,7 +1728,8 @@ class TelegramNotifier:
                 # bültende gider; DM başarısız olsa bile grup yayını etkilenmez.
                 return True
             else:
-                ipucu = telegram_hata_ipucu(resp.status_code, resp.text)
+                ipucu = telegram_hata_ipucu(resp.status_code,
+                                                 redact_sensitive_text(resp.text, self.token))
                 logger.error(f"Telegram hatası: {resp.text} | {ipucu}")
                 self._gonderim_sagligi_kaydet(basari=False, hata=ipucu)
                 return False

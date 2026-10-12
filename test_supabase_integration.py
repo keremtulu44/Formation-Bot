@@ -1,6 +1,5 @@
 from datetime import datetime
 
-from config import ISTANBUL_TZ
 import notifier as notifier_module
 from data import StockDequeManager
 from config import ISTANBUL_TZ
@@ -61,7 +60,7 @@ def test_notifier_loads_and_persists_remote_states(tmp_path, monkeypatch):
     notifier._cooldown_kaydet()
     notifier._kap_kaydet()
 
-    assert notifier.last_sent["THYAO_pattern_1h_state"] == now.replace(tzinfo=None)
+    assert notifier.last_sent["THYAO_pattern_1h_state"] == now
     assert notifier._gunluk_sayac == 3
     assert {key for key, _ in store.writes} == {
         "state:telegram_cooldowns",

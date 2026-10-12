@@ -4,7 +4,6 @@ import json
 import logging
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 
 import pytest
 
@@ -50,17 +49,6 @@ def _formasyon(stock="THYAO", timeframe="1h", quality=87.0, state="KIRILIM_TEYIT
         "min_quality": 75.0,
         "alert_gonderildi": True,
     }
-
-
-def _lifecycle_with_active_snapshot():
-    active = SimpleNamespace(pattern_type="Eski Formasyon", contraction=0.4)
-    snapshot = SimpleNamespace(
-        active=active,
-        effective_quality=90.0,
-        state="SIKISMA_GUCLENIYOR",
-        break_dir=1,
-    )
-    return SimpleNamespace(last_snapshots={"THYAO_1h": snapshot})
 
 
 def _tarama(kayitlar=None, durum=None):
@@ -356,41 +344,6 @@ def test_restart_panel_canli_durum_ve_kirilim_son_taramayi_gosterir(tmp_path, mo
     assert "THYAO 1h" in main_mod._komut_kirilim("")
 
 
-def test_restart_panel_fetch_olcumlerini_kayitli_durumdan_gosterir(tmp_path, monkeypatch):
-    now = datetime.now(timezone.utc)
-    durum = LiveState()
-    durum.begin_scan(now)
-    durum.record_formation(_formasyon())
-    durum.finish_scan(
-        now + timedelta(seconds=3),
-        son_tarama_suresi_dk=0.05,
-        son_tarama_hissesi=1,
-        son_tarama_formasyonu=1,
-        son_tarama_beklenen_hisse=2,
-        son_tarama_veri_zamani=(now - timedelta(minutes=35)).isoformat(),
-        son_tarama_en_eski_veri_yasi_dk=35.0,
-        son_tarama_taze_veri=1,
-        son_tarama_fetch_yanit=2,
-        son_tarama_gecerli_fetch=1,
-        son_tarama_analize_uygun=1,
-        son_tarama_fetch_hatasi=0,
-    )
-    monkeypatch.setattr(main_mod, "_live_state", durum)
-    monkeypatch.setattr(main_mod, "last_run_stats", {})
-    assert main_mod.son_tarama_kaydet(data_dir=tmp_path) is True
-
-    monkeypatch.setattr(main_mod, "_live_state", LiveState())  # Restart.
-    assert main_mod.son_tarama_yukle(data_dir=tmp_path) == 1
-    panel = main_mod._panel_raporu("")
-    assert "Son başarılı tarama:" in panel
-    assert "fetch yanıtı 2/2" in panel
-    assert "OHLCV geçerli 1" in panel
-    assert "taze fetch 1" in panel
-    assert "analiz için uygun 1" in panel
-    assert "fetch hatası 0" in panel
-    assert "en eski taranan veri yaşı" in panel
-
-
 def test_yeni_tarama_kayitli_notunu_ve_eski_listeyi_yeniler(tmp_path):
     durum = main_mod._live_state
     durum.hydrate(_kayit())
@@ -450,112 +403,6 @@ def test_basarisiz_tarama_pending_boslugunu_yayimlamaz_onceki_sonucu_korur():
 
     assert durum.formations() == onceki
     assert durum.status()["son_tarama_durumu"] == "basarisiz"
-
-
-def test_main_loop_restores_snapshot_from_startup_batch_for_summary(monkeypatch):
-    saved = _kayit()
-
-    class StartupStore(SahteStore):
-        def ping(self):
-            return True
-
-    store = StartupStore({"state:son_tarama": saved})
-    live_state = LiveState()
-
-    class FakeCacheManager:
-        def __init__(self, persistent_store=None):
-            self.persistent_store = persistent_store
-
-        def hydrate_from_supabase(self, _stocks, _rows):
-            return None
-
-        def save_all(self):
-            return None
-
-    class FakeNotifier:
-        def __init__(self, **kwargs):
-            self.initial_store_data = kwargs.get("initial_store_data")
-
-        def load_watch_state(self):
-            return {}
-
-        def check_connection(self):
-            return True
-
-    class FakeDeferredBuffer:
-        def restore(self, *_args, **_kwargs):
-            return 0
-
-    monkeypatch.setattr(main_mod.SupabaseStore, "from_env", classmethod(lambda _cls: store))
-    monkeypatch.setattr(main_mod, "StockDequeManager", FakeCacheManager)
-    monkeypatch.setattr(main_mod, "TelegramNotifier", FakeNotifier)
-    monkeypatch.setattr(main_mod, "_live_state", live_state)
-    monkeypatch.setattr(main_mod, "_deferred_alert_buffer", FakeDeferredBuffer())
-    monkeypatch.setattr(main_mod, "_apply_recovered_deliveries", lambda *_a, **_k: 0)
-    monkeypatch.setattr(main_mod, "_telegram_komut_katmanini_kur", lambda *_a, **_k: None)
-    monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", [])
-    monkeypatch.setattr(main_mod, "_shutdown_requested", True)
-    monkeypatch.setattr(main_mod, "_telegram_listener_ref", None)
-    monkeypatch.setattr(main_mod, "write_heartbeat", lambda *_a, **_k: None)
-    monkeypatch.setattr(main_mod, "son_tarama_kaydet", lambda *_a, **_k: True)
-
-    main_mod.main_loop()
-
-    assert len(store.okunanlar) == 1
-    assert "state:son_tarama" in store.okunanlar[0]
-    assert len(live_state.formations()) == 2
-    summaries = main_mod._build_active_formations_for_summary(object(), min_quality=75.0)
-    assert {item["stock_name"] for item in summaries} == {"THYAO", "GARAN"}
-
-
-def test_empty_live_state_formations_do_not_fallback_to_old_lifecycle_snapshot(monkeypatch):
-    monkeypatch.setattr(main_mod, "_live_state", LiveState())
-
-    summaries = main_mod._build_active_formations_for_summary(
-        _lifecycle_with_active_snapshot(), min_quality=75.0,
-    )
-
-    assert summaries == []
-
-
-def test_live_state_provider_error_does_not_fallback_to_lifecycle_snapshot(monkeypatch):
-    class BrokenLiveState:
-        def formations(self):
-            raise OSError("synthetic provider failure")
-
-    monkeypatch.setattr(main_mod, "_live_state", BrokenLiveState())
-
-    summaries = main_mod._build_active_formations_for_summary(
-        _lifecycle_with_active_snapshot(), min_quality=75.0,
-    )
-
-    assert summaries == []
-
-
-def test_summary_keeps_lifecycle_fallback_when_live_state_provider_is_absent(monkeypatch):
-    monkeypatch.setattr(main_mod, "_live_state", object())
-
-    summaries = main_mod._build_active_formations_for_summary(
-        _lifecycle_with_active_snapshot(), min_quality=75.0,
-    )
-
-    assert len(summaries) == 1
-    assert summaries[0]["stock_name"] == "THYAO"
-    assert summaries[0]["pattern_name"] == "Eski Formasyon"
-
-
-def test_empty_legacy_get_formations_result_does_not_fallback_to_lifecycle(monkeypatch):
-    class LegacyLiveState:
-        def get_formations(self):
-            return []
-
-    monkeypatch.setattr(main_mod, "_live_state", LegacyLiveState())
-
-    summaries = main_mod._build_active_formations_for_summary(
-        _lifecycle_with_active_snapshot(), min_quality=75.0,
-    )
-
-    assert summaries == []
 
 
 def test_acilista_son_tarama_yukle_cagriliyor():

@@ -105,3 +105,46 @@ git merge --no-commit --no-ff origin/main     # 12 dosyada conflict
 python -m pytest -q                            # hedef: yalnız 3 önceden-kırmızı
 python test_tarama_zamani.py                   # CI parity
 ```
+
+## 7. PR-A olarak girenler (bu merge'in kapsamı)
+
+**Kod (main'in canlı mimarisi korunarak birleştirildi):**
+- §3'teki tüm çözümler (`config.py`, `data.py`, `telegram_commands.py`, `deploy_check.py`,
+  `.env.example`, `ci.yml`)
+- `data.py`: `load_from_disk` artık `_okuma_yolu` üzerinden okuyor (C4 seed yedeği
+  düzgün çalışıyor), JSON birincil; **pickle yazımı** main'in `PICKLE_CACHE` opt-in'ine,
+  **pickle okuması** dalın `ALLOW_TRUSTED_PICKLE_CACHE` kapısına bağlandı;
+  `save_gunluk_to_disk` durumu bool döndürüyor; Supabase UPSERT'leri içerik-hash ile
+  atlanır + yazma hatası loglanır
+- `notifier.py`: Telegram hata metinleri **maskelendikten sonra** kırpılıyor
+  (`check_connection`, gönderim denemeleri, public hata, `telegram_hata_ipucu` girdileri) —
+  secret, 200 karakter sınırında bölünüp redaksiyondan kaçamıyor
+- `main.py`: `BOT_HEALTH_SMOKE_ONLY=1` giriş kapısı taşındı (CI'nın gerçek entrypoint'ı
+  Yahoo/Telegram/Supabase'e çıkmadan denemesi için) — dalın `ci.yml`'daki assert'i bu satırı istiyor
+- `conftest.py`: `SEED_DATA_DIR` de test başına geçici dizine bağlanıyor; repo
+  `bot_data/*.json|pkl` dosyaları artık testleri kirletmiyor (14 sahte pozitif bundan geliyordu)
+- Dalın bağımsız modülleri ve testleri: `domain_engines/`, `zone_scoring.py`,
+  `directional_zone_replay.py` + `run_directional_zone_replay.py`, `bist_calendar.py`,
+  `secrets_redaction.py`, `canli_tarama.py`, `repo_teshis.py`, `scan_pacer.py` + yeşil testleri
+
+**Kapsam dışı bırakılanlar (bilinçli, PR-B/PR-C):**
+- `notification_outbox.py` + `formation_dm_context.py` ve bu ikisinin test dosyaları
+  (`test_telegram_notification_delivery.py`, `test_formation_dm_context.py`,
+  `test_dm_mesaj_kalitesi.py`) — main'in digest/public-pace hattıyla aynı sınıfın rakip
+  tasarımı; alarm hattı kararıyla birlikte gelir
+- 48 test `@pytest.mark.skip` ile işaretlendi (silinmedi, dosyada gerekçesi yazıyor):
+  PR-B = outbox/doman-hook bağımlılığı (`test_live_data_flow`, `test_domain_*`,
+  `test_ohlcv_guvenligi`, `test_secrets_redaction`, `test_persistence_safety`,
+  `test_telegram_alert_flow`), PR-C = seans/takvim sözleşmesi
+  (`test_bist_calendar_regressions`, `test_takvim_politikasi`)
+
+**Ölçüm (bu merge sonrası):**
+
+| Koşum | Sonuç |
+|---|---|
+| `pytest -q` | **836 passed, 48 skipped, 3 failed** — 3'ü main'de de kırmızı olan tarih-bağımlı testler (`test_mum_kapanis_penceresi` ×2, `test_karne` ×1) |
+| `python test_tarama_zamani.py` | 102/102 GEÇTİ |
+| Render dumanı (`PORT=… BOT_HEALTH_SMOKE_ONLY=1 python main.py`) | `/health` 200 + `commit`, `/health?ka=1` 200, `/test` ve `/webhook/<secret>` 404, smoke guard loglandı, tarama sızıntısı yok |
+
+Yani: **main'e göre davranış regresyonu yok**, dalın izole edilebilir değeri alındı,
+alarm hattı kararı görünür şekilde ertelendi.

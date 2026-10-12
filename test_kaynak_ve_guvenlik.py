@@ -141,6 +141,9 @@ def test_eski_pickle_yedek_olarak_okunur(tmp_path, monkeypatch):
     from collections import deque
     # C4 seed yedeği devrede olmasın: repo bot_data/ dosyaları testi kirletmesin.
     monkeypatch.setattr("data.SEED_DATA_DIR", str(tmp_path / "seed"))
+    # PR-A güvenlik kapısı: pickle okuma kod çalıştırabildiği için artık opt-in
+    # (ALLOW_TRUSTED_PICKLE_CACHE). Test "güvenilir eski yedek" senaryosunu kurar.
+    monkeypatch.setattr("data.ALLOW_TRUSTED_PICKLE_CACHE", True)
     mgr = StockDequeManager(data_dir=str(tmp_path))
     veri = [_mum(datetime(2026, 9, 1, 10, 0, tzinfo=ISTANBUL_TZ), 101)]
     (tmp_path / "GARAN.pkl").write_bytes(pickle.dumps(veri))
