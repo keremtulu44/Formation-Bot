@@ -121,7 +121,7 @@ Renk tek başına bilgi taşımaz: her bölge/katman bir de **yazı** taşır.
 | Market structure | `output["market_structure"].details` | `external_swings`, `event_history` (filtreli çizim §0.12i), `latest_external_event`, `broken_level`, `event_bar`, `swing_class` |
 | Katılım | `output["volume_participation"]` | `ParticipationExport(state, rvol, volume_level, volume_regime, quality, effort_result_class, capital_level, up/down_evidence_count, net_progress_atr)`; şerit için `rvol = hacim / SMA(hacim, 20)` |
 | TF etiketi | `notification_context.py:15` | `TIMEFRAME_LABELS = {"1h":"1s","2h":"2s","4h":"4s","1d":"1g"}` — yeni eşleme icat edilmez |
-| State metni | `notifier.py:667 PUBLIC_STATE_ETIKET`, `_bulleten_olay` `:1385`, `STATE_TR` | `KIRILIM_TEYITLI / RETEST_BASARILI / KIRILIM_GECERSIZLESTI` |
+| State metni | `notifier.py:661 PUBLIC_STATE_ETIKET` (+ `_bulleten_olay` `:1381`); **`STATE_TR` adında bir tablo YOK** (G1'de düzeltildi) | `KIRILIM_TEYITLI / RETEST_BASARILI / KIRILIM_GECERSIZLESTI` |
 
 Kural: `source_bar` / `formation_index` / `event_bar` **resample edilmiş
 çerçeveyi** indeksler → grafik aynı `resample_ohlcv()` çağrısının çıktısını ve
@@ -340,7 +340,7 @@ Kapandı: kota/pacing kararı (§16.1.1-2), hook noktası, `use("Agg")`,
 `/durum` sayaçları, `.gitignore` (`bot_data/*_gunluk.json` zaten ignore'da ✓;
 `*.png` kuralı G1'de eklenecek), 1g yıl etiketi, "bölge yoksa `eksik:` yazılmaz".
 Açık/karar bekleyen: `--pano` (v1 yok), `GRAFİK_META` (v1 yok, §13), geriye dönük
-yeniden çizim (yok), renk paletinin renk-körlüğü kontrolü (G1'de bakılacak).
+yeniden çizim (yok). Renk paletinin renk-körlüğü kontrolü **G1'de yapıldı** (§22.6).
 
 ## 13 · İleride istenecek ama şimdiden yazılmayan: meta JSONL
 
@@ -428,17 +428,22 @@ CPU değil · **14** budama merdiveni tek kurala indi.
 
 1. FVG/MS/temas/formasyon çizgileri hiç çizilmedi → "en kalabalık kare" ölçümü
    eksik; §2.2.1 olay cap'i G3'te sayılarak doğrulanacak.
-2. Alarm mumu sentetikti (son bar) → gerçek `cift` alanlarıyla hizalama testi
-   G1'in ilk işi.
+2. ~~Alarm mumu sentetikti~~ → **G1**: alan adları `patterns/candidate.py` ve
+   `main.py:2487-2500`'den okundu; `start/end/apex` hizası ve nesne↔sözlük yolu
+   testte kilitli (`test_isaretler_...`, `test_aday_nesnesi_ile_sozluk_...`).
 3. Zone sıralamasında ATR yerine mesafe/son-kapanış proxy'si kullanıldı →
    G2'de `gap_atr`/motor ATR'siyle yazılacak (proxy düşük volatiliteli hissede
    kutuları olduğundan yakın gösterir).
 4. FVG `fill`/`gap_size` gölgesi hiç test edilmedi (G2).
-5. Yarım seans/tatil (`exchange-calendars`) ve açık-bar paritesi (§14.3) ölçülmedi.
-6. 1g ~500 bar kadrajı lokal simde yok → G1 `_gunluk.json` seed'i.
+5. Yarım seans/tatil (`exchange-calendars`) ölçülmedi (G3'e kaldı); **açık-bar
+   paritesi G1'de ölçüldü**: 17:30 etiketli 1s mumu 18:00'de kapanıyor; kapalı
+   değilse son bar çizime girmiyor (`test_yalniz_kapanmis_mumlar_cizilir`).
+6. 1g ~500 bar kadrajı lokal simde yok → G1 seed'i `bot_data/`a **yazmadı**
+   (canlı bot aynı dizini okuyor); sentetik derin çerçeve testte/CLI'da (§22.2.4).
 7. Albüm/reply/multipart denenmedi (G4 canlı smoke).
-8. Çökme modunda `fill_between` PNG'yi 98 KB'a çıkardı → basamaklı çizgi
-   denenecek; şerit kulvarı ile fiyat bölgesi 360 barda hafif çakışıyor.
+8. Çökme modunda `fill_between` PNG'yi 98 KB'a çıkardı → **G1'de basamaklı
+   çizgi denendi**: 299 bar @1440 → 116 KB (§22.4); şerit kulvarı olmadığı için
+   çakışma G3'te yeniden bakılacak.
 
 ## 20 · Kayıt/izleme borçları
 
@@ -478,3 +483,123 @@ Kalan G0 borcu (bilinçli, ertelenmedi — kapsam dışı karar): `%`/`×` ekli
 yerel `.replace()` kalıpları (§19 "dokunulmayanlar" satırı). Kart/özet baytları
 değişmedi; değişenler `/durum`, `/panel` `puan`, `/formasyonlar` fiyatları,
 legacy alarm gövdesi ve backtest raporu.
+
+---
+
+## 22 · G1 UYGULANDI (2026-10-13) — kayıt
+
+**Kod:** `grafik.py` (yeni — `SABITLER`, `PALET`, `anlik_goruntu()`, `ciz()`,
+`_kare_ciz`, `_lejant_satirlar`, `_meta_kur`, `girdi_ozeti`, `_pyplot_getir()`
+[lazzy import + `use("Agg")` + `MPLCONFIGDIR=/tmp/...` + `plt.close()`]),
+`grafik_uret.py` (CLI: `--hisse --tf --mum --cikti --formasyon --alarm-turu
+--serit-yok --etiket-detay --tum-tf --demo --json --veri-dizin`),
+`test_grafik_iskelet.py` (25 test), `requirements.txt` (+`matplotlib==3.11.2`),
+`.gitignore` (+`*.png`/`*.jpg`; repoda zaten tek PNG takipli değildi),
+`YAPILACAKLAR.md` (+G bölümü). Suite: **925 passed / 44 skipped** (900 taban + 25 yeni test).
+
+### 22.1 Sözleşme uyumu (§2)
+* `anlik_goruntu(cift, tf, cerceve, *, sonuclar, alarm_turu, alarm_bar, sembol,
+  zaman_damgasi, simdi, kare_mum) -> dict` ve
+  `ciz(goruntu, tf, secenekler) -> (png_yolu, meta)`. Çizim yolu motoru yeniden
+  çağırmaz, deque'a dokunmaz (§14.2); hata hiçbir durumda alarmı engellemez —
+  `(None, meta)` döner (§4).
+* `meta` §2'deki adlarla: `sem, tf, mum_sayisi, bar_basina_px, temas, cizgiler,
+  zone, olay, serit, budama, eksik_katmanlar, hacimsiz_bar, son_bar_ts, sure_ms,
+  png_kb, uyarilar` + G1 ekleri: `kare{genislik,yukseklik,sol,sag,dpi,cekme}`,
+  `temas_isaret`, `isaretler`, `notlar`, `metin{baslik,sag,satirlar,lejant,
+  lejant_punto,lejant_atlanan,dipnotlar,notlar,kesilen,butce,genislik}`, `cekme`,
+  `girdi_ozeti`, `red`, `surum`. Testler piksel hash'ine değil buna bakıyor (§6.1,
+  §12.19): `test_meta_belirleyici_ayni_girdi_ayni_kare` uçucu alanları
+  (`sure_ms, png_kb, yol, girdi_ozeti`) düşürüp tamamını karşılaştırır.
+* Kadraj `sol = max(0, min(bas_bar-8, n-GRAFIK_MUM_MAKS))`, `sag = n`;
+  `genislik = clamp(bar×6 px, 1080, 1440)`, `yukseklik = 810`, `dpi = 100` — üç
+  durum da testte (120→1080 taban, 180→1080, 300→1440 + `px/bar 4,8 < 5` çökme).
+* X ekseni **bar indeksi**; tick'ler seans başlarından (günlük karede ay
+  başlarından), en fazla 8 (§17.7). Saat yazılmıyor: seans başlığı her gün aynı
+  saat (09:30) olduğu için bilgiyi tekrarlıyordu — etiket `GG Ay` biçiminde,
+  gün değişimi ayrıksı bilgiyi zaten taşıyor (§17.7'den bilinçli sadeleşme;
+  ölçümde 360 barın 32 aralığı 16 s'ti, saat yazmak kadrajı boşuna şişiriyor).
+
+### 22.2 Bu turda verilen kararlar (ilk kez burada yazılı)
+1. **Temas tanımı.** Motor tekil temas mumu listesi vermiyor (yalnız
+   `upper_touches/lower_touches` sayısı + `_touch_episodes` aralıkları). Kural
+   uydurulmadı: `zone_scoring._touch_episodes`'ın satır içi tanımı
+   (`low ≤ ust and high ≥ alt`) `grafik._bant_temaslari()`nda aynen kullanıldı ve
+   `test_temas_kurali_zone_scoring_kuraliyla_ayni` iki yolu birebir eşitliyor.
+   Kutuda **iki sayı birlikte**: `bant teması N · üst X · alt Y` — kartın sayısı
+   sınır-teğeti (toleranslı), kare'niki bant-delmesi; farklı tanımlar birbirinin
+   yerine konmaz.
+2. **İkinci budama kuralı** (§2.2'nin tek kuralına eklendi):
+   `temas_isaret_maks = 24` — bant çok mumu sardıysa yalnız en yeni 24'ü
+   işaretlenir; **sayı asla saklanmaz**, `budama`'ya
+   `temas işareti 24'e indirildi (bant 170 mumu sardı)` yazılır.
+3. **Bant çizgisi düz çizilir.** `upper_slope/lower_slope` birimi (TL/mum)
+   yeniden üretilmedi — §2 "çizim hesap yapmaz". Eğim yazısı kare etiketinden de
+   çıkarıldı (300 px'lik etiket bütçesinin ~%40'ını yiyor, kartta yok).
+4. **`_gunluk.json` seed'i `bot_data/`a yazılmadı** (§3/§18.6'dan sapma): o dizin
+   canlı botun OKUMA yedeği (`SEED_DATA_DIR`); sentetik derin çerçeve testte
+   (`_cerceve`) ve CLI'da (`--demo`) üretiliyor. CLI `1d` için önce
+   `StockDequeManager.to_gunluk_dataframe()` deniyor → sunucuda gerçek ~500 bar.
+5. **`eksik:` satırı çizimden SONRA kurulur:** katmanın patladığı ancak o an
+   biliniyor. Alt blok iki kez hesaplanır (yerleşim baştan, içerik sondan);
+   `_alt_yerlesim()` bu yüzden 2 satır fazla pay bırakır.
+   `test_katman_hatasi_eksik_yazisiyla_gecer` bunu kilitler.
+6. **Açık bar dipnot DEĞİL:** kapalı olmayan son bar atılır ve `meta["notlar"]`a
+   yazılır (§0.12w: dipnot yalnız veri bozuksa). Alarm mumu kadraj dışında
+   kalırsa bilgi kaybı sayılır → `uyarilar` + `meta.cizgiler.alarm.bar_disarida`.
+7. **`grafik.py` import yüzeyi ucuz:** `data.bar_kapandi_mi`,
+   `notifier.PUBLIC_STATE_ETIKET`/`_tr_tarih`, `notification_context.TIMEFRAME_LABELS`
+   `try/except` ile alınır (tarih biçimi yeniden kullanıldı, tablo çoğaltılmadı);
+   matplotlib yalnız `_pyplot_getir()` içinde → `TELEGRAM_GRAFIK=yok` iken bot
+   süreci matplotlib/pillow import etmez (§7). `kare_mum_tavani()` env'i **çağrı
+   anında** okur (`config.py` import'ta donduğu için §6.1 testleri böyle çevrilir).
+8. **Kod adları ASCII:** `kare_mum_tavani`, `anlik_goruntu`, `ciz`, `SABITLER`,
+   `PALET` (Türkçe ama ASCII) — `grafik.py` içinde noktalı ad yok.
+
+### 22.3 Yazı bütçesi (§2.2'nin kare ölçeğe çevrilmişi)
+* Metrik `telegram_measure.genislik()` (DejaVu 16 px tabanlı); kare içi yazı
+  9-10,5 pt = 12,5-14,6 px → çarpan `metin_carpani = 0,82`.
+* Kare içi tek etiket: `min(etiket_maks_px=300, %28 × genişlik)`; başlık
+  `×0,52`, sağ üst `×0,40`, bilgi satırları `×0,88`; sığmayan **`…` ile kırpılır**
+  ve `meta["metin"]["kesilen"]`e yazılır.
+* Lejant (karenin altında tek gri satır, §0.12v): sığmazsa sırayla punto
+  9,0→7,0 → `bol()` ile 2 satır → sondan madde düşür (`lejant: N madde sığmadı`
+  dipnotu). 40 maddelik stres senaryosunda test edildi.
+
+### 22.4 Ölçüm (matplotlib 3.11.2 + numpy 1.26.4 — §17 ile aynı sürümler)
+| kare | bar | px/bar | süre | PNG |
+|---|---|---|---|---|
+| sentetik 1g + bant/temas/alarm | 180 | 6,0 | 746 ms (import dahil) → ~250 ms | 76,8 KB |
+| gerçek AKBNK 1s (CLI, `bot_data`) | 180 | 6,0 | 454-471 ms | 50,5 KB |
+| stres: 299 bar @1440 → çizgi+alan | 299 | 4,8 | ~300 ms | 115,7 KB |
+
+§17'nin 40-99 KB bandıyla uyumlu (§6.5 tavanı 500 KB, JPEG/boyut merdiveni yok).
+İlk çağrı matplotlib + font-cache import'unu da içeriyor; bot tarafında tekil
+kare ~0,25-0,45 s (§17.13'ün 1,2-1,7 s / 4 kare tahminiyle tutarlı).
+
+### 22.5 Belgede düzeltilenler
+* §1'de geçen `STATE_TR` **yok** → doğru kaynak `notifier.PUBLIC_STATE_ETIKET`
+  (`KIRILIM_TEYITLI / RETEST_BASARILI / KIRILIM_GECERSIZLESTI`). Tablo dışı iç
+  duruma etiket **uydurulmaz** (`alarm.etiket = None`; test edildi).
+* §2.1 `FVG_TIMEFRAMES` = `{2h,4h,1d}` (kod: `zone_scoring.py:20`) — `2h` listede
+  var ama `enable_2h_fvg=False` olduğu için canlıda üretilmiyor; `grafik._FVG_TIMEFRAMES`
+  G2'de motorun export'u boşsa zaten çizmeyecek (§0.12l).
+
+### 22.6 Renk körlüğü kontrolü (§12'nin açık maddesi — G1'de kapandı)
+Viénot protan/deuteran dönüşümü + göreli parlaklık farkı (Δ, 0-1):
+`OB #2bb673`↔`ihlal #ef5350` deuteran **0,019**; `FVG #42a5f5`↔`şerit #80cbc4`
+protan **0,000**; `formasyon`↔`temas` 0,03; `olay #ff8a65`↔`ihlal` 0,048. Yani
+**bazı çiftlerde renk tek başına bilgi taşımıyor** — §0.4.1'in kuralı
+gevşetilmeyecek: ayrım şekille (kutuya `OB↑/OB↓` yazısı, `!` glifi, FVG taraması,
+engulfing kesiklisi) ve kulvarla (şerit ayrı üst kulvarda, §17.4) redundant
+veriliyor. Palet bu haliyle kabul; **yeni renk eklenirken aynı Δ kontrolü
+tekrarlanacak**.
+
+### 22.7 G2'ye devir
+`anlik_goruntu(sonuclar=...)` ve `SABITLER["zone_ust/zone_alt"]` hazır; `sonuclar`
+doluysa kare şu an yalnız `bölge/yapı verisi bu fazda çizilmedi (G2/G3)` notunu
+düşürüyor (sessiz kabahat yok). G2 işleri: `_zone_sec` (mesafe/ATR sıralaması —
+§18.3 proxy reddi), OB kutuları (`source_index` kalın kenar, `OB↑/OB↓` + `bbox`),
+FVG kutuları (`formation_index`, `gap_size`, state→solid/mitigated/hatched;
+`1s/2s` yok), engulfing (mor kesikli), doluluk yalnız motorun verdiği kutuda
+(§0.12k), `meta["zone"] = {cizilen, elenen}` dolu gelecek şekilde.

@@ -177,5 +177,24 @@ README: test sayıları `90/90` ve `6/6` (gerçek: 199 passed), eski dal adı `a
 2. **Bu hafta:** B1, B2, B6, A4, A5, A9.
 3. **Sonraki:** B3, B4, B5, A6, A7, A10, B7, B8.
 4. **Şablon öncesi:** C1, C2, C3, C4, C7 (+ B9, B10).
+""
+---
 
-*Bu liste teşhis amaçlıdır; uygulanmadı. A1-A2-B1-B2 hariç hepsi mevcut davranışı koruyan iyileştirmelerdir.*
+## G) GRAFİK FAZLARI (G0 → G5) — sözleşme: `GRAFIK_TASARIM.md`
+
+Kullanıcı isteği: "kartta ne varsa karede de o olsun" (bant nereden başlıyor, hangi
+mumlara dokundu, yapı nerede kırıldı). Her faz tek commit + tam test yeşil (§3/§6.8).
+
+| ID | Durum | İş | Faz | Not |
+|---|---|---|---|---|
+| G0 | ✅ `c0c9183` | Sayı biçimi: her yüzeyde Türkçe virgül (`sayi()` tek standart) | §15/§19 | 900 test yeşil; kart baytları değişmedi |
+| G1 | ✅ bu commit | `grafik.py` iskeleti: kapalı mumlar, formasyon bandı + start/bitiş/apex, temas, alarm çizgisi + gerçek state metni, başlık/lejant/dipnot, `meta`, çökme modu, CLI + `matplotlib` pini | §2/§3 | 23 test (`test_grafik_iskelet.py`) |
+| G2 | ☐ | Zone'lar: OB kutuları (yakınlık cap'i, `source_index` kalın kenar, `OB↑/OB↓`), FVG kutuları (`1s/2s` yok), engulfing (mor kesikli), doluluk yalnız motorun verdiği kutuda | §3 | `anlik_goruntu(sonuclar=...)` argümanı hazır; `zone_ust/zone_alt` cap'leri `SABITLER`'de |
+| G3 | ☐ | Yapı + şerit + bütçe: external PH/PL + `HH/HL/LH/LL`, en yeni 6 BOS/CHoCH, `kritik` çizgisi, `rvol(20)` kulvarı (4s `yerel hesap`), `!` son 15 mum, `evidence_text` yalnız `--etiket-detay` | §3 | `serit`/`olay` alanları `meta`'da yer tutuyor |
+| G4 | ☐ | Teslim: `transport/telegram.py:foto_gonder`, `notifier._gonder` kuyruğu, `payload['grafik_verisi']` köprüsü, 4 env anahtarı + `.env.example`/`deploy_check`, `/grafik` (3 yüzey) | §4/§5 | 1 olay = 1 mesaj kuralı metinde değişmez |
+| G5 | ☐ (ops.) | `/karne` ısı haritası; `GRAFİK_META` JSONL | §13/§3 | v1'de yazılmadı, alan adı hazır |
+| K1/K2 | ☐ | Grup kanalının kökten iptali (grafikle ilgisi yok, ayrı commit'ler) | §9 | |
+
+*G1'de bilinçli ertelenenler:* `_gunluk.json` seed'i `bot_data/`a YAZILMADI (canlı
+bot aynı dizini okuyor) → sentetik derin çerçeve testte/CLI'da (`--demo`); yarım
+gün/tatil paritesi (`exchange-calendars`) hâlâ ölçülmedi (§18.5).

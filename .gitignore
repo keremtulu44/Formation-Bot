@@ -61,3 +61,9 @@ bot_data/formation_history/
 
 # Simülasyon raporları (üretilen çıktı)
 raporlar/
+
+# G1: grafik kareleri üretilen çıktılardır — /tmp'de üretilir, gönderim sonrası
+# silinir (§0.12p). Repoda PNG/JPG beklenmiyor; yine de kaza ile eklenmesin.
+*.png
+*.jpg
+*.jpeg
