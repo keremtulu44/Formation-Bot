@@ -51,7 +51,10 @@ from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
 from notifier import TelegramNotifier
-from notification_context import format_domain_context
+import config
+from notification_context import (
+    format_domain_context, domain_bolumleri, karsi_deliller,
+)
 from karne import (KarneDefteri, atr_hesapla, hafta_damgasi, karne_gunu_mu, karne_uret)
 from supabase_store import SupabaseStore
 from health_server import start_render_health_server
@@ -2450,6 +2453,16 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             age_bars = snap.bar_index - active.start_bar if hasattr(active, 'start_bar') and snap.bar_index >= 0 else None
                         except Exception:
                             age_bars = None
+                        # Bandın izlenme başlangıcı: "96 bar" tek başına kullanıcıya
+                        # gün söylemez. Bar indeksi DataFrame indeksinden okunur; okunamazsa
+                        # alan hiç yazılmaz (varsayım/gün hesabı uydurulmaz).
+                        band_baslangic = None
+                        try:
+                            _bas_indeks = int(getattr(active, 'start_bar', -1))
+                            if _bas_indeks >= 0 and _bas_indeks < len(df_tf.index):
+                                band_baslangic = df_tf.index[_bas_indeks]
+                        except Exception:
+                            band_baslangic = None
                         # Çoklu zaman teyidi: 1h kırılımında 4h destekliyor mu?
                         mtf_destek = False
                         try:
@@ -2494,6 +2507,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'upper_touches': upper_touches,
                             'lower_touches': lower_touches,
                             'age_bars': age_bars,
+                            'band_baslangic': band_baslangic,
                             'mtf_destek': mtf_destek,
                             # Acil mesaj kısa kalsın; izleme adayları 18:45 digest'inde
                             # gösterilir, bu nedenle burada bağlam eklenmez/tüketilmez.
@@ -2515,6 +2529,32 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                     outputs,
                                     reference_price=candle_close_price,
                                 )
+                                # Kart biçimleyicisi bölümleri AYRI ister: kendi
+                                # bölümünü kendi başlığıyla basabilsin ve imza
+                                # (değişmedi kontrolü) yalnız bağlamı görsün.
+                                # AYRI try/except: kart hazırlığı patlarsa klasik
+                                # bağlam metni de kaybolsun istemeyiz (25 Eyl testinde
+                                # tek bloktaki hata domain_context'i boşaltıyordu).
+                                if getattr(config, "TELEGRAM_ALERT_STYLE", "kart") != "klasik":
+                                    try:
+                                        payload['domain_bolumleri'] = domain_bolumleri(
+                                            outputs,
+                                            reference_price=candle_close_price,
+                                            stil="kart",
+                                            alarm_tf=tf_name,
+                                        )
+                                        payload['domain_karsi'] = karsi_deliller(
+                                            outputs,
+                                            alarm_tf=tf_name,
+                                            break_dir=break_dir,
+                                            mtf_destek=payload.get('mtf_destek'),
+                                            retest_seen=payload.get('retest_seen'),
+                                        )
+                                    except Exception as kart_hata:  # noqa: BLE001
+                                        logger.warning(
+                                            "Kart bağlamı hazırlanamadı (%s %s): %s",
+                                            stock, tf_name, kart_hata,
+                                        )
                             except Exception as exc:  # noqa: BLE001 - bağlam alarmı düşürmesin
                                 payload['domain_context'] = ""
                                 logger.warning(
@@ -2534,6 +2574,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             alert_sent = notifier.send(alert_data)
                         if alert_sent:
                             daily_stats['alerts_sent'] += 1
+                            _gun_sayacini_gonderimle_hizala(
+                                stock, tf_name, notification_state)
                             _live_state.mark_alert_sent(stock, tf_name)
                             logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {notification_state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
                         else:
@@ -2950,6 +2992,35 @@ def _is_full_universe_scan(stocks) -> bool:
         return False
 
 
+def _gun_sayacini_gonderimle_hizala(stock, timeframe, state):
+    """Gönderilen alarmın state'ini gün sayacına yansıt (yalnız eksikse).
+
+    Neden: sayaçlar yalnız o günkü lifecycle OLAY listesinden doldurulur
+    (`_record_daily_lifecycle_events`). Önceki güne ait bir teyidin retesti
+    bugün gönderildiğinde (25 Eyl: HALKB 4s RETEST BAŞARILI) olay listesinde
+    karşılığı yoktur ve özet "0 başarılı retest" yazıp aynı gün alarm göndermiş
+    olurdu. Burada yalnız "bugün için hiç sayılmamışsa" tek artış yapılır;
+    aynı (hisse, TF, state) için ikinci gönderim sayacı şişirmez.
+    """
+    anahtar = f"GONDERIM|{stock}|{timeframe}|{state}"
+    if anahtar in _daily_lifecycle_event_keys:
+        return
+    counter = _LIFECYCLE_EVENT_COUNTERS.get(str(state or "").strip().upper())
+    if not counter:
+        return
+    # Olay yolunun yazdığı anahtar: STOCK|tf|kimlik|state|tür|zaman
+    for kayit in _daily_lifecycle_event_keys:
+        parcalar = str(kayit).split("|")
+        if len(parcalar) < 4 or parcalar[0] == "GONDERIM":
+            continue
+        if (parcalar[0] == str(stock).upper() and parcalar[1] == str(timeframe).lower()
+                and parcalar[3] == str(state or "").strip().upper()):
+            return
+    _daily_lifecycle_event_keys.add(anahtar)
+    daily_stats[counter] = int(daily_stats.get(counter) or 0) + 1
+    _gunluk_sayac_kaydet()
+
+
 def _daily_summary_payload(now=None) -> dict:
     """Daily counters plus freshness metadata for Telegram summaries."""
     now = now or datetime.now(ISTANBUL_TZ)
@@ -2973,6 +3044,17 @@ def _daily_summary_payload(now=None) -> dict:
     payload["son_basarili_tam_tarama"] = full_at
     payload["tam_tarama_guncel"] = _successful_full_scan_today(now)
     payload["son_tarama_durumu"] = status.get("son_tarama_durumu")
+    # "N bildirim" satırı yalnız tarama turunda gidenleri sayıyordu; cooldown/kap
+    # yüzünden kuyruğa giren ve sonra gönderilen alarm sayılmıyordu (25 Eyl:
+    # 6 mesaj gönderildi, özet "5 bildirim" dedi). Kuyruk sayacı da eklenir.
+    # payload kopya olduğu için /durum ve kalıcı sayaç davranışı değişmez.
+    try:
+        _nref = _notifier_ref
+        kuyruk_giden = int(getattr(_nref, "kuyruk_gonderildi", 0) or 0) if _nref else 0
+    except Exception:  # noqa: BLE001 - özet, sayaç yüzünden düşmez
+        kuyruk_giden = 0
+    if kuyruk_giden:
+        payload["alerts_sent"] = int(payload.get("alerts_sent") or 0) + kuyruk_giden
     return payload
 
 
@@ -3499,8 +3581,12 @@ def main_loop():
                     karne_metni_eklendi = ""
                     if sh == deferred_alert_digest_time:
                         karne_metni_eklendi = _haftalik_karne_ekle(now, deque_manager)
-                        if karne_metni_eklendi:
-                            dm_ozet += "\n\n" + karne_metni_eklendi
+                        # KARNE buraya DİZİLMEZ: _karneyle_gonder() karneyi ya ana
+                        # mesajın sonuna ekler ya da sığmıyorsa ayrı mesaj yapar.
+                        # Eskiden hem buraya eklenip hem parametre olarak geçtiği
+                        # için blok İKİ KEZ gidiyordu (25 Eyl: 798 kr × 2, özetin
+                        # %58'i kopya metindi).
+                        
 
                     if dm_hedefi:
                         if notifier.enabled:
