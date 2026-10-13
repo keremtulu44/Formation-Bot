@@ -47,49 +47,10 @@ def test_kirilim_adayi_asagi_ustunde_yazmamali():
     assert "üstünde kapanış" not in msg
 
 
-def test_tamamlandi_retest_var():
+def test_tamamlandi_basarısiz_ve_deneme_mesaji_bastirilir():
     notifier = TelegramNotifier()
-    data = _base_data(state='FORMASYON_TAMAMLANDI', break_dir=1, retest_seen=True)
-    msg = notifier.format_message(data)
-    assert "TAMAMLANDI" in msg
-    assert "retest başarılı" in msg.lower()
-
-
-def test_tamamlandi_retest_yok():
-    notifier = TelegramNotifier()
-    data = _base_data(state='FORMASYON_TAMAMLANDI', break_dir=-1, retest_seen=False)
-    msg = notifier.format_message(data)
-    assert "TAMAMLANDI" in msg
-    # Retest görülmediyse mesajda bu ifade olmalı
-    assert "retest olmadan ilerledi" in msg
-    assert "geri dönmedi" in msg
-
-
-def test_tamamlandi_retest_yok_yukari():
-    notifier = TelegramNotifier()
-    data = _base_data(state='FORMASYON_TAMAMLANDI', break_dir=1, retest_seen=False)
-    msg = notifier.format_message(data)
-    assert "retest olmadan ilerledi" in msg
-    assert "yukarı kırılım" in msg.lower()
-
-
-def test_tamamlandi_retest_yok_asagi():
-    notifier = TelegramNotifier()
-    data = _base_data(state='FORMASYON_TAMAMLANDI', break_dir=-1, retest_seen=False)
-    msg = notifier.format_message(data)
-    assert "aşağı kırılım" in msg.lower()
-    assert "retest olmadan" in msg.lower()
-
-
-def test_tamamlandi_default_retest_var():
-    notifier = TelegramNotifier()
-    # retest_seen alanı yoksa varsayılan True gibi davranmalı (eski uyumluluk)
-    data = _base_data(state='FORMASYON_TAMAMLANDI', break_dir=1)
-    # retest_seen'i sil
-    data.pop('retest_seen', None)
-    msg = notifier.format_message(data)
-    # Varsayılan True ise retest başarılı yazar
-    assert "TAMAMLANDI" in msg
+    for state in ("FORMASYON_TAMAMLANDI", "BASARISIZ_KIRILIM", "KIRILIM_DENEMESI"):
+        assert notifier.format_message(_base_data(state=state)) == ""
 
 
 def test_kirilim_teyitli_yon():
@@ -116,7 +77,8 @@ def test_retest_basarili_mesaji():
     data = _base_data(state='RETEST_BASARILI', break_dir=1)
     msg = notifier.format_message(data)
     assert "RETEST BAŞARILI" in msg
-    assert "retest tuttu" in msg.lower()
+    assert "kapanışta korundu" in msg
+    assert "Kırılım seviyesi: 302,00 TL" in msg
 
 
 def test_aday_oluyor_mesaji():
@@ -144,15 +106,34 @@ def test_kirilim_denemesi_yon():
     notifier = TelegramNotifier()
     data = _base_data(state='KIRILIM_DENEMESI', break_dir=1, upper_now=310)
     msg = notifier.format_message(data)
-    assert "deneme" in msg.lower()
-    assert "yukarı" in msg.lower() or "aşağı" in msg.lower()
+    assert msg == ""
 
 
 def test_basarısız_kirilim_mesaji():
     notifier = TelegramNotifier()
     data = _base_data(state='BASARISIZ_KIRILIM')
     msg = notifier.format_message(data)
-    assert "başarısız" in msg.lower()
+    assert msg == ""
+
+
+def test_sonraki_teyitli_gecersizlesme_ayri_bildirim_mesaji():
+    notifier = TelegramNotifier()
+    msg = notifier.format_message(_base_data(
+        state="KIRILIM_GECERSIZLESTI",
+        break_dir=1,
+        break_price=302.0,
+        candle_close_price=299.5,
+        bar_metni="Mum: 2026-10-12 15:30 kapandı",
+        confidence_score=82,
+        upper_touches=3,
+        lower_touches=2,
+    ))
+    assert "KIRILIM GEÇERSİZLEŞTİ" in msg
+    assert "önceki teyitli yukarı kırılım" in msg
+    assert "Son kapanmış mum kapanışı: 299,50 TL" in msg
+    assert "Kırılım seviyesi: 302,00 TL" in msg
+    assert "Temas: üst 3 / alt 2" in msg
+    assert "başarısız kırılım" not in msg.lower()
 
 
 def test_formasyon_gecersiz_mesaji():
@@ -280,15 +261,18 @@ def test_mesajlar_telefona_sigar_boyutta():
 def test_mesajlar_ayni_iskeleti_paylasir():
     # Her mesaj: "emoji HISSE tf · desen" başlığı ile başlar (tek bakışta ne olduğu anlaşılır).
     for state in _TUM_STATELER:
-        ilk_satir = _mesaj(state).splitlines()[0]
+        msg = _mesaj(state)
+        if not msg:  # tekil push politikası dışında kalan lifecycle state'leri
+            continue
+        ilk_satir = msg.splitlines()[0]
         assert "THYAO" in ilk_satir, state
-        assert "saatlik" in ilk_satir, state
+        assert "saatlik" in ilk_satir or "1 saat" in ilk_satir, state
         assert "Yükselen Üçgen" in ilk_satir, state
 
 
 def test_mesajlar_tek_sabit_footer_tasir():
     # Eskiden üç cümleden biri rastgele ekleniyordu; artık tek ve sabit footer var.
-    for state in ("KIRILIM_ADAYI", "KIRILIM_TEYITLI", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI"):
+    for state in ("KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI"):
         msg = _mesaj(state)
         assert msg.count("Formasyon takibi · yatırım tavsiyesi değildir") == 1, state
 
@@ -297,7 +281,7 @@ def test_ozet_tek_sabit_footer_ve_turkce_tarih():
     n = TelegramNotifier()
     ozet = n.format_daily_summary([
         {"stock_name": "THYAO", "timeframe": "1h", "pattern_name": "Yükselen Üçgen",
-         "state": "FORMASYON_TAMAMLANDI", "confidence_score": 86, "contraction": 0.7, "break_dir": 1},
+         "state": "KIRILIM_TEYITLI", "confidence_score": 86, "contraction": 0.7, "break_dir": 1},
     ], {"stocks_scanned": 48, "alerts_sent": 1})
     assert "kanalı takipte kal" not in ozet
     assert "Takipteyim" not in ozet
@@ -310,7 +294,7 @@ def test_ozet_tum_bolumlerde_kalite_gorunur():
     n = TelegramNotifier()
     aktif = [
         {"stock_name": "THYAO", "timeframe": "1h", "pattern_name": "Yükselen Üçgen",
-         "state": "FORMASYON_TAMAMLANDI", "confidence_score": 86, "contraction": 0.7, "break_dir": 1},
+         "state": "KIRILIM_TEYITLI", "confidence_score": 86, "contraction": 0.7, "break_dir": 1},
         {"stock_name": "ISMEN", "timeframe": "2h", "pattern_name": "Alçalan Üçgen",
          "state": "RETEST_BASARILI", "confidence_score": 84, "contraction": 0.7, "break_dir": -1},
         {"stock_name": "ISCTR", "timeframe": "4h", "pattern_name": "Alçalan Üçgen",
@@ -318,6 +302,41 @@ def test_ozet_tum_bolumlerde_kalite_gorunur():
     ]
     ozet = n.format_daily_summary(aktif, {"stocks_scanned": 48, "alerts_sent": 1})
     # Üç bölüm de aynı madde biçimini kullanır: hisse · desen · tf · kalite
-    assert "THYAO Yükselen Üçgen 1h · kalite 86" in ozet
+    assert "THYAO Yükselen Üçgen 1h · yukarı yön · kalite 86" in ozet
+    assert "TEYİTLİ KIRILIM" in ozet
     assert "ISMEN Alçalan Üçgen 2h · aşağı yön · kalite 84" in ozet
     assert "ISCTR Alçalan Üçgen 4h · %81 daralma" in ozet
+
+
+
+def test_dogrulanmis_olay_fiyat_kalite_temas_ve_domain_context_icerir():
+    notifier = TelegramNotifier()
+    msg = notifier.format_message(_base_data(
+        state="KIRILIM_TEYITLI",
+        confidence_score=87,
+        break_dir=1,
+        break_price=302.0,
+        bar_metni="Mum: 2026-10-12 15:30 kapandı",
+        candle_close_price=303.25,
+        upper_touches=4,
+        lower_touches=3,
+        domain_context="🏗 Market Structure\n• 1h yapı: dış yükseliş",
+    ))
+    assert "THYAO" in msg and "1 saat" in msg and "Yükselen Üçgen" in msg
+    assert "KIRILIM TEYİTLİ: yukarı kırılım" in msg
+    assert "Son kapanmış mum kapanışı: 303,25 TL" in msg
+    assert "Kalite: 87/100" in msg and "Çok güçlü" in msg
+    assert "Temas: üst 4 / alt 3" in msg
+    assert "Market Structure" in msg and "dış yükseliş" in msg
+
+
+def test_gunluk_ozet_terminal_ve_basarisiz_statei_gostermez():
+    notifier = TelegramNotifier()
+    msg = notifier.format_daily_summary([
+        {"stock_name": "THYAO", "timeframe": "1h", "pattern_name": "Üçgen",
+         "state": "FORMASYON_TAMAMLANDI", "confidence_score": 90},
+        {"stock_name": "GARAN", "timeframe": "2h", "pattern_name": "Kama",
+         "state": "BASARISIZ_KIRILIM", "confidence_score": 88},
+    ], {"tarama_sayisi": 1, "alerts_sent": 0})
+    assert "THYAO" not in msg and "GARAN" not in msg
+    assert "TAMAMLANDI" not in msg and "başarısız" not in msg.lower()

@@ -150,7 +150,9 @@ def test_12_sirasisiz_timestamp_kabul_siralanir(tmp_path):
 
 def test_13_kapanmamis_mum_kapidan_gecer_analizden_elernir(tmp_path):
     """Tek kapı ilkesi: append tamlık kontrolü yapmaz; analiz katmanı eler."""
-    simdi = datetime.now(IST)
+    # Sabit seans içi saat: duvar saati 18:00'i geçince BIST'in son barı
+    # kapanışa kırpılır ve "henüz kapanmadı" varsayımı yanlış olur.
+    simdi = IST.localize(datetime(2026, 8, 3, 14, 0))
     df = gecerli_frame(55, end=simdi - timedelta(minutes=10))  # son mum henüz kapanmadı
     assert ohlcv_girdi_sorunlari(df) == []                     # kapı reddetmez
     mgr = StockDequeManager(data_dir=str(tmp_path / "partial-cache"))

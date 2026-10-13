@@ -60,7 +60,7 @@ def _aktif(monkeypatch, cevaplar=None):
     return n, gonderilenler
 
 
-def _veri(state="FORMASYON_TAMAMLANDI", stock="THYAO", pattern_name="Yükselen Üçgen"):
+def _veri(state="KIRILIM_TEYITLI", stock="THYAO", pattern_name="Yükselen Üçgen"):
     """Acil (ALERT_STATES) bir olay; aynı slot = THYAO + Yükselen Üçgen + 1h."""
     return {"stock_name": stock, "pattern_name": pattern_name, "timeframe": "1h",
             "state": state, "confidence_score": 84, "upper_now": 302.0, "lower_now": 294.0,
@@ -71,13 +71,13 @@ def _veri(state="FORMASYON_TAMAMLANDI", stock="THYAO", pattern_name="Yükselen �
 
 def test_ayni_olay_cooldown_bitse_de_tekrarlanmaz(monkeypatch):
     n, gonderilenler = _aktif(monkeypatch)
-    veri = _veri("FORMASYON_TAMAMLANDI")
+    veri = _veri("KIRILIM_TEYITLI")
     assert n.send(veri) is True
     assert len(gonderilenler) == 1
 
     # 4 saatlik zaman cooldown'u dolmuş gibi last_sent'i 5 saat geri çek:
     # eski dünyada tam bu noktada kopya mesaj basılıyordu.
-    key = n._cooldown_key("THYAO", "Yükselen Üçgen", "1h", "FORMASYON_TAMAMLANDI")
+    key = n._cooldown_key("THYAO", "Yükselen Üçgen", "1h", "KIRILIM_TEYITLI")
     n.last_sent[key] = datetime.now(ISTANBUL_TZ) - timedelta(hours=5)
     assert (datetime.now(ISTANBUL_TZ) - n.last_sent[key]) > timedelta(hours=n.cooldown_hours)
 
@@ -92,16 +92,16 @@ def test_ayni_olay_cooldown_bitse_de_tekrarlanmaz(monkeypatch):
 
 def test_state_ilemesi_serbest_kalir(monkeypatch):
     n, gonderilenler = _aktif(monkeypatch)
-    # Aynı slot için TEYITLI -> RETEST_BASARILI -> TAMAMLANDI: her biri bir kez.
-    for durum in ("KIRILIM_TEYITLI", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI"):
+    # Kapanışla doğrulanmış kırılım -> başarılı retest: her olay bir kez.
+    for durum in ("KIRILIM_TEYITLI", "RETEST_BASARILI"):
         assert n.send(_veri(durum)) is True, f"{durum} bildirilmeli"
-    assert len(gonderilenler) == 3
+    assert len(gonderilenler) == 2
     assert n.engeller["tekrar"] == 0, "ilerleme tekrar sayılmamalı"
 
     # Ama son state'in AYNI olayı tekrar: sessizce düşer.
-    assert n.send(_veri("FORMASYON_TAMAMLANDI")) is False
+    assert n.send(_veri("RETEST_BASARILI")) is False
     assert n._son_engel == "tekrar"
-    assert len(gonderilenler) == 3
+    assert len(gonderilenler) == 2
 
 
 # --- c) slot sıfırlama (flicker): aynı gün tekrar bildirim YOK ------------
@@ -115,8 +115,8 @@ def test_state_ilemesi_serbest_kalir(monkeypatch):
 
 def test_slot_sifirlaninca_ayni_olay_tekrar_gonderilmez(monkeypatch):
     n, gonderilenler = _aktif(monkeypatch)
-    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is True
-    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="GARAN")) is True
+    assert n.send(_veri("KIRILIM_TEYITLI", stock="THYAO")) is True
+    assert n.send(_veri("KIRILIM_TEYITLI", stock="GARAN")) is True
 
     # Yaşam döngüsü THYAO slotunu sıfırladı (örn. FORMASYON_GECERSIZ):
     n.son_alert_sifirla("THYAO", "1h")
@@ -124,16 +124,16 @@ def test_slot_sifirlaninca_ayni_olay_tekrar_gonderilmez(monkeypatch):
     assert not any(k.startswith("THYAO_") and "_1h_" in k for k in n.last_sent), \
         "slot sıfırlama cooldown anahtarlarını silmeli"
     # ...AMA mühür KORUNUR: aynı gün içinde aynı olay bir daha basılmaz.
-    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is False
+    assert n.send(_veri("KIRILIM_TEYITLI", stock="THYAO")) is False
     assert n._son_engel == "tekrar"
-    muhur = n._son_alert.get(n._son_alert_key("THYAO", "1h", "FORMASYON_TAMAMLANDI"))
+    muhur = n._son_alert.get(n._son_alert_key("THYAO", "1h", "KIRILIM_TEYITLI"))
     assert muhur is not None, "muhur korunmali"
-    assert muhur.get("state") == "FORMASYON_TAMAMLANDI"
+    assert muhur.get("state") == "KIRILIM_TEYITLI"
     assert muhur.get("tf") == "1h" and muhur.get("zaman")
     assert len(gonderilenler) == 2, "kopya mesaj gitmemeli"
 
     # Başka slotun (GARAN) mührü de korunur: kopyası hâlâ düşer.
-    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="GARAN")) is False
+    assert n.send(_veri("KIRILIM_TEYITLI", stock="GARAN")) is False
     assert n._son_engel == "tekrar"
     assert len(gonderilenler) == 2
 
@@ -141,7 +141,7 @@ def test_slot_sifirlaninca_ayni_olay_tekrar_gonderilmez(monkeypatch):
     # mühür silinip kopya basılıyordu).
     for _ in range(3):
         n.son_alert_sifirla("THYAO", "1h")
-        assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is False
+        assert n.send(_veri("KIRILIM_TEYITLI", stock="THYAO")) is False
     assert len(gonderilenler) == 2
 
     # Yeni formasyonun FARKLI state'i (ilerleme) yine bildirilir.
@@ -155,8 +155,8 @@ def test_pattern_etiketi_degisince_ayni_olay_tekrar_sayilmaz(monkeypatch):
     Mühür anahtarında pattern OLMAYINCA iki etiket = iki mesaj olmuyor.
     """
     n, gonderilenler = _aktif(monkeypatch)
-    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="PETKM")) is True
-    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="PETKM",
+    assert n.send(_veri("KIRILIM_TEYITLI", stock="PETKM")) is True
+    assert n.send(_veri("KIRILIM_TEYITLI", stock="PETKM",
                         pattern_name="Alçalan Üçgen")) is False
     assert n._son_engel == "tekrar"
     assert len(gonderilenler) == 1
@@ -164,17 +164,17 @@ def test_pattern_etiketi_degisince_ayni_olay_tekrar_sayilmaz(monkeypatch):
 
 def test_muhr_ttl_dolunca_bayalar_tekrar_bildirim_serbest(monkeypatch):
     n, gonderilenler = _aktif(monkeypatch)
-    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is True
-    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is False
+    assert n.send(_veri("KIRILIM_TEYITLI", stock="THYAO")) is True
+    assert n.send(_veri("KIRILIM_TEYITLI", stock="THYAO")) is False
 
     # TTL dolunca mühür bayatlar (1h TF: 3 bar + 1 saat pay = 4 saat),
     # aynı olay tekrar bildirilebilir.
     bayat = (datetime.now(ISTANBUL_TZ) - timedelta(hours=10)).isoformat()
-    n._son_alert[n._son_alert_key("THYAO", "1h", "FORMASYON_TAMAMLANDI")] = \
-        {"state": "FORMASYON_TAMAMLANDI", "zaman": bayat, "tf": "1h"}
+    n._son_alert[n._son_alert_key("THYAO", "1h", "KIRILIM_TEYITLI")] = \
+        {"state": "KIRILIM_TEYITLI", "zaman": bayat, "tf": "1h"}
     n.last_sent.pop(n._cooldown_key("THYAO", "Yükselen Üçgen", "1h",
-                                    "FORMASYON_TAMAMLANDI"), None)
-    assert n.send(_veri("FORMASYON_TAMAMLANDI", stock="THYAO")) is True
+                                    "KIRILIM_TEYITLI"), None)
+    assert n.send(_veri("KIRILIM_TEYITLI", stock="THYAO")) is True
     assert len(gonderilenler) == 2
 
 
@@ -183,17 +183,17 @@ def test_eski_bicim_muhurler_acilista_tasinir(monkeypatch):
 
     Amaç: deploy anında kopya mesaj dalgası çıkmasın.
     """
-    eski = {"THYAO_Yükselen Üçgen_1h": "FORMASYON_TAMAMLANDI",
+    eski = {"THYAO_Yükselen Üçgen_1h": "KIRILIM_TEYITLI",
             "GARAN_Alçalan Kama_4h": "RETEST_BASARILI"}
     yeni = TelegramNotifier(initial_store_data={"state:telegram_son_alerts": eski})
-    kayit = yeni._son_alert.get("THYAO_1h_FORMASYON_TAMAMLANDI")
-    assert kayit and kayit.get("state") == "FORMASYON_TAMAMLANDI"
+    kayit = yeni._son_alert.get("THYAO_1h_KIRILIM_TEYITLI")
+    assert kayit and kayit.get("state") == "KIRILIM_TEYITLI"
     assert kayit.get("tf") == "1h" and kayit.get("zaman")
     kayit2 = yeni._son_alert.get("GARAN_4h_RETEST_BASARILI")
     assert kayit2 and kayit2.get("state") == "RETEST_BASARILI"
     assert kayit2.get("tf") == "4h" and kayit2.get("zaman")
     # Eski biçim taşındığı için aynı olay bugün tekrar basılmaz.
-    assert yeni.can_send("THYAO", "Yükselen Üçgen", "1h", "FORMASYON_TAMAMLANDI") is False
+    assert yeni.can_send("THYAO", "Yükselen Üçgen", "1h", "KIRILIM_TEYITLI") is False
     assert yeni._son_engel == "tekrar"
 
 
@@ -201,7 +201,7 @@ def test_eski_bicim_muhurler_acilista_tasinir(monkeypatch):
 
 def test_muher_restartta_kalicidir(monkeypatch):
     n, _ = _aktif(monkeypatch)
-    assert n.send(_veri("FORMASYON_TAMAMLANDI")) is True
+    assert n.send(_veri("KIRILIM_TEYITLI")) is True
     muherler = json.loads(json.dumps(n._son_alert))
     assert muherler, "başarılı gönderim mühür basmalı"
 
@@ -211,12 +211,12 @@ def test_muher_restartta_kalicidir(monkeypatch):
     assert yeni._son_alert == muherler
 
     # Aynı state hâlâ mühürlü: zaman cooldown'undan bağımsız nihai red.
-    key = yeni._cooldown_key("THYAO", "Yükselen Üçgen", "1h", "FORMASYON_TAMAMLANDI")
+    key = yeni._cooldown_key("THYAO", "Yükselen Üçgen", "1h", "KIRILIM_TEYITLI")
     yeni.last_sent.pop(key, None)  # cooldown'u tamamen kaldır; yalnız mühür kalsın
-    assert yeni.can_send("THYAO", "Yükselen Üçgen", "1h", "FORMASYON_TAMAMLANDI") is False
+    assert yeni.can_send("THYAO", "Yükselen Üçgen", "1h", "KIRILIM_TEYITLI") is False
     assert yeni._son_engel == "tekrar"
     # Mühür yalnız AYNI state'i susturur; yaşam döngüsü ilerlemesi serbest.
-    assert yeni.can_send("THYAO", "Yükselen Üçgen", "1h", "KIRILIM_TEYITLI") is True
+    assert yeni.can_send("THYAO", "Yükselen Üçgen", "1h", "RETEST_BASARILI") is True
 
 
 # --- e) kuyruktaki tekrar-mühürlü bayat kopya sessizce düşer ----------------
@@ -225,13 +225,13 @@ def test_kuyruktaki_tekrar_muherli_bayat_kopya_duser(monkeypatch):
     n, gonderilenler = _aktif(monkeypatch)
     # Olay normal yoldan gönderildi (mühür basıldı); aynı olayın bayat kopyası
     # kuyruktaymış (örn. redploy'da kuyruk kalıcı state'ten geri yüklendi).
-    assert n.send(_veri("FORMASYON_TAMAMLANDI")) is True
+    assert n.send(_veri("KIRILIM_TEYITLI")) is True
     simdi = datetime.now(ISTANBUL_TZ)
     n._acil_kuyruk.append({
         "kuyruk_zaman": simdi.isoformat(),
         "son_deneme": simdi.isoformat(),
         "son_engel": "cooldown",
-        "veri": dict(_veri("FORMASYON_TAMAMLANDI")),
+        "veri": dict(_veri("KIRILIM_TEYITLI")),
     })
     assert n.kuyruk_durumu()["bekleyen"] == 1
 
@@ -271,38 +271,38 @@ def _muhur_yaz(n, stock, tf, state, saat_once):
 def test_muhur_ttl_1d_uc_gun_gecerli_kalir(monkeypatch):
     """1 günlük grafikte 3 bar = 3 gün: dün basılan mühür bugün de geçerli."""
     n, gonderilenler = _aktif(monkeypatch)
-    veri = _veri("FORMASYON_TAMAMLANDI")
+    veri = _veri("KIRILIM_TEYITLI")
     veri["timeframe"] = "1d"
-    _muhur_yaz(n, "THYAO", "1d", "FORMASYON_TAMAMLANDI", saat_once=20)
-    assert n.can_send("THYAO", "Yükselen Üçgen", "1d", "FORMASYON_TAMAMLANDI") is False
+    _muhur_yaz(n, "THYAO", "1d", "KIRILIM_TEYITLI", saat_once=20)
+    assert n.can_send("THYAO", "Yükselen Üçgen", "1d", "KIRILIM_TEYITLI") is False
     assert n._son_engel == "tekrar"
 
     # 3 bar + pay = 73 saat geçmişse bayat sayılır.
-    _muhur_yaz(n, "THYAO", "1d", "FORMASYON_TAMAMLANDI", saat_once=80)
-    assert n.can_send("THYAO", "Yükselen Üçgen", "1d", "FORMASYON_TAMAMLANDI") is True
+    _muhur_yaz(n, "THYAO", "1d", "KIRILIM_TEYITLI", saat_once=80)
+    assert n.can_send("THYAO", "Yükselen Üçgen", "1d", "KIRILIM_TEYITLI") is True
     assert gonderilenler == []
 
 
 def test_muhur_ttl_4s_ertesi_sabah_gecerli_kalir(monkeypatch):
     """4 saatlikte 3 bar = 12 saat: akşam basılan mühür ertesi sabah da geçerli."""
     n, _ = _aktif(monkeypatch)
-    _muhur_yaz(n, "THYAO", "4h", "FORMASYON_TAMAMLANDI", saat_once=12)
-    assert n.can_send("THYAO", "Yükselen Üçgen", "4h", "FORMASYON_TAMAMLANDI") is False
+    _muhur_yaz(n, "THYAO", "4h", "KIRILIM_TEYITLI", saat_once=12)
+    assert n.can_send("THYAO", "Yükselen Üçgen", "4h", "KIRILIM_TEYITLI") is False
     assert n._son_engel == "tekrar"
 
 
 def test_muhur_ttl_1s_dort_saat_sonra_bayat(monkeypatch):
     """1 saatlikte 3 bar = 3 saat (+1 pay): 5 saat önce basılan mühür bayattır."""
     n, _ = _aktif(monkeypatch)
-    _muhur_yaz(n, "THYAO", "1h", "FORMASYON_TAMAMLANDI", saat_once=5)
-    assert n.can_send("THYAO", "Yükselen Üçgen", "1h", "FORMASYON_TAMAMLANDI") is True
+    _muhur_yaz(n, "THYAO", "1h", "KIRILIM_TEYITLI", saat_once=5)
+    assert n.can_send("THYAO", "Yükselen Üçgen", "1h", "KIRILIM_TEYITLI") is True
 
 
 def test_muhur_kaydi_yeni_muhur_su_an_ile_damgalanir():
     """Yeni mühür ŞU AN ile damgalanmalı (eski hata: gün başına damgalanıp
     1 saatlik TTL anında bayatıyordu)."""
-    kayit = TelegramNotifier._muhur_kaydi("FORMASYON_TAMAMLANDI", "1d")
-    assert kayit["state"] == "FORMASYON_TAMAMLANDI" and kayit["tf"] == "1d"
+    kayit = TelegramNotifier._muhur_kaydi("KIRILIM_TEYITLI", "1d")
+    assert kayit["state"] == "KIRILIM_TEYITLI" and kayit["tf"] == "1d"
     basma = datetime.fromisoformat(kayit["zaman"])
     yas_dk = (datetime.now(ISTANBUL_TZ) - basma).total_seconds() / 60
     assert 0 <= yas_dk < 1, "yeni mühür şu an ile damgalanmali"
@@ -310,6 +310,86 @@ def test_muhur_kaydi_yeni_muhur_su_an_ile_damgalanir():
 
 def test_muhur_kaydi_eski_gun_bicimi_gece_yarisina_donusur():
     """Gün bazlı eski kayıt o günün 00:00'ine çevrilir (deploy dalgası çıkmasın)."""
-    kayit = TelegramNotifier._muhur_kaydi("FORMASYON_TAMAMLANDI", "1h", gun="2026-10-01")
+    kayit = TelegramNotifier._muhur_kaydi("KIRILIM_TEYITLI", "1h", gun="2026-10-01")
     basma = datetime.fromisoformat(kayit["zaman"])
     assert basma.hour == 0 and basma.minute == 0 and basma.day == 1
+
+
+
+def test_tamamlanma_basarisizlik_ve_deneme_push_edilmez(monkeypatch):
+    n, gonderilenler = _aktif(monkeypatch)
+    for state in ("FORMASYON_TAMAMLANDI", "BASARISIZ_KIRILIM", "KIRILIM_DENEMESI",
+                  "KIRILIM_ADAYI", "KIRILIM_HAZIRLIGI",
+                  "RETEST_BEKLENIYOR", "RETEST_EDILIYOR"):
+        assert n.send(_veri(state)) is False
+        assert not n.kuyrukta_mi(_veri(state))
+    assert gonderilenler == []
+
+
+def test_domain_prepare_only_runs_for_an_unsent_allowed_event(monkeypatch):
+    n, gonderilenler = _aktif(monkeypatch)
+    calls = []
+
+    def prepare(payload):
+        calls.append(payload["state"])
+        payload["domain_context"] = "fresh"
+
+    allowed = _veri("KIRILIM_TEYITLI")
+    assert n.send_with_prepare(allowed, before_send=prepare) is True
+    assert calls == ["KIRILIM_TEYITLI"]
+    assert "fresh" in gonderilenler[0]["text"]
+
+    # Same sealed event is rejected before expensive domain preparation.
+    assert n.send_with_prepare(allowed, before_send=prepare) is False
+    assert calls == ["KIRILIM_TEYITLI"]
+    disallowed = _veri("KIRILIM_DENEMESI")
+    assert n.send_with_prepare(disallowed, before_send=prepare) is False
+    assert calls == ["KIRILIM_TEYITLI"]
+
+
+def test_confirmed_break_invalidation_has_its_own_one_time_seal(monkeypatch):
+    n, sent = _aktif(monkeypatch)
+    assert n.send(_veri("BASARISIZ_KIRILIM")) is False
+    assert sent == []
+
+    invalidation = _veri("KIRILIM_GECERSIZLESTI")
+    invalidation["formation_id"] = "stable-formation-invalidation"
+    assert n.send(invalidation) is True
+    assert len(sent) == 1
+    assert "KIRILIM GEÇERSİZLEŞTİ" in sent[0]["text"]
+    assert n.send(invalidation) is False
+    assert len(sent) == 1
+
+
+def test_domain_prepare_error_does_not_suppress_alert(monkeypatch):
+    n, gonderilenler = _aktif(monkeypatch)
+
+    def fail_context(_payload):
+        raise RuntimeError("simulated formatter failure")
+
+    assert n.send_with_prepare(
+        _veri("KIRILIM_TEYITLI"), before_send=fail_context
+    ) is True
+    assert len(gonderilenler) == 1
+    assert "Market Structure" not in gonderilenler[0]["text"]
+
+
+def test_same_formation_event_remains_sealed_past_legacy_bar_ttl(monkeypatch):
+    n, _ = _aktif(monkeypatch)
+    old_time = (datetime.now(ISTANBUL_TZ) - timedelta(days=4)).isoformat()
+    formation_id = "stable-formation-42"
+    key = n._son_alert_key("THYAO", "4h", "RETEST_BASARILI", formation_id)
+    n._son_alert[key] = n._muhur_kaydi(
+        "RETEST_BASARILI", "4h", zaman=old_time, formation_id=formation_id
+    )
+
+    # 4 days is far beyond the old 4h repeat TTL, but this same retest must not
+    # become a second Telegram alert. A genuinely new formation may alert.
+    assert n.can_send(
+        "THYAO", "Yükselen Üçgen", "4h", "RETEST_BASARILI",
+        formation_id=formation_id,
+    ) is False
+    assert n.can_send(
+        "THYAO", "Yükselen Üçgen", "4h", "RETEST_BASARILI",
+        formation_id="stable-formation-43",
+    ) is True

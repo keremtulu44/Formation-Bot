@@ -321,8 +321,9 @@ print("=== 8. FAZ 2: TELEGRAM GLOBAL KAPANI ===")
 from config import TELEGRAM_MAX_MESAJ_SAAT, TELEGRAM_MAX_MESAJ_GUN
 from notifier import TelegramNotifier, KRITIK_STATELER
 kontrol("limitler makul", 5 <= TELEGRAM_MAX_MESAJ_SAAT <= 100 and 50 <= TELEGRAM_MAX_MESAJ_GUN <= 1000)
-kontrol("kritik state'ler tanımlı", 'KIRILIM_ADAYI' in KRITIK_STATELER
-        and 'FORMASYON_TAMAMLANDI' in KRITIK_STATELER)
+kontrol("kapanış teyitli state'ler kritik", 'KIRILIM_TEYITLI' in KRITIK_STATELER
+        and 'RETEST_BASARILI' in KRITIK_STATELER
+        and 'FORMASYON_TAMAMLANDI' not in KRITIK_STATELER)
 
 _nt_data = tempfile.mkdtemp(prefix='bot_kap_')
 os.environ['DATA_DIR'] = _nt_data          # C4: repo dışı veri dizini
@@ -346,16 +347,15 @@ def _mesaj(state, hisse):
 
 gonderilen = sum(1 for i in range(TELEGRAM_MAX_MESAJ_SAAT + 10)
                  if nt_test.send(_mesaj('SIKISMA_GUCLENIYOR', f'IZ{i}')))
-kontrol(f"izleme state'leri saatlik kapta kesilir ({TELEGRAM_MAX_MESAJ_SAAT})",
-        gonderilen == TELEGRAM_MAX_MESAJ_SAAT, f"{gonderilen} gönderildi")
+kontrol("izleme state'leri tekil push edilmez", gonderilen == 0, f"{gonderilen} gönderildi")
 
 gonderilen2 = sum(1 for i in range(5)
-                  if nt_test.send(_mesaj('KIRILIM_ADAYI', f'KR{i}')))
-kontrol("kritik state'ler saatlik kaptan etkilenmez", gonderilen2 == 5, f"{gonderilen2} gönderildi")
+                  if nt_test.send(_mesaj('KIRILIM_TEYITLI', f'KR{i}')))
+kontrol("kapanışla teyitli state'ler saatlik kaptan etkilenmez", gonderilen2 == 5, f"{gonderilen2} gönderildi")
 
 nt_test._gunluk_sayac = TELEGRAM_MAX_MESAJ_GUN
-kontrol("günlük kap aşıldığında kritik state bile gitmez",
-        not nt_test.send(_mesaj('KIRILIM_ADAYI', 'SON')))
+kontrol("günlük kap aşıldığında teyitli state bile gitmez",
+        not nt_test.send(_mesaj('KIRILIM_TEYITLI', 'SON')))
 kontrol("kap durumu raporlanıyor",
         nt_test.kap_durumu()['gunluk_limit'] == TELEGRAM_MAX_MESAJ_GUN)
 if os.path.exists('bot_data/telegram_kap.json'):
