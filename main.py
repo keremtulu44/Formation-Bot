@@ -1043,7 +1043,7 @@ def _komut_durum(_arguman: str) -> str:
     else:
         try:
             kalan = time_until_next_open(now)
-            piyasa = f"KAPALI · açılışa {kalan / 3600:.1f} saat"
+            piyasa = f"KAPALI · açılışa {_sayi(kalan / 3600, 1)} saat"
         except Exception:
             piyasa = "KAPALI"
     formations = _live_state.formations()

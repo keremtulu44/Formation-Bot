@@ -11,6 +11,8 @@ from collections.abc import Mapping
 from math import isfinite
 from typing import Any
 
+from reporting.format import sayi
+
 TIMEFRAME_ORDER = ("1h", "2h", "4h", "1d")
 TIMEFRAME_LABELS = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
 
@@ -38,8 +40,13 @@ def _number(value: Any) -> float | None:
 
 
 def _price(value: Any) -> str:
+    """Fiyat metni: biçim `reporting.format.sayi`den (G0 tek standardı).
+
+    Kart zaten virgül basıyordu; buradaki `.replace()` yerine aynı yardımcının
+    çağrılması iki kuralın zamanla ayrışmasını engeller. Çıktı baytı değişmedi.
+    """
     number = _number(value)
-    return f"{number:.2f}".replace(".", ",") if number is not None else ""
+    return sayi(number) if number is not None else ""
 
 
 def _usable_export(result: Any):

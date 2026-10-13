@@ -25,7 +25,7 @@ from telegram_measure import (SATIR_BUTCE, bol as _satir_bol,
                               genislik, genislik as _satir_px, metni_sigdir)
 # Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
 # katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
-from reporting.format import STATE_TR
+from reporting.format import STATE_TR, sayi as _format_sayi
 # Günlük public durumu (bütçe sayaçları + gönderilememiş kuyruk) restart'ta
 # korunsun diye kalıcılık katmanı kullanılır (canlı denetim: ikisi de kayboluyordu).
 from state import persistence as _state_persistence
@@ -98,13 +98,12 @@ def _yon_metni(break_dir) -> str:
 
 
 def _format_price(value) -> str:
-    try:
-        number = float(value)
-    except (TypeError, ValueError, OverflowError):
-        return ""
-    if not (number == number and abs(number) != float("inf")):
-        return ""
-    return f"{number:.2f}"
+    """Fiyat metni (Türkçe ondalık). Boşta hiçbir sayı basılmaz: `""`.
+
+    Biçim tek kaynaktan gelir (`reporting.format.sayi`); G0 öncesi burada
+    nokta kalıp kartta virgül çıkıyordu — aynı sayı iki görünümde okunuyordu.
+    """
+    return _sayı(value)
 
 
 def quality_emoji(q: float) -> str:
@@ -121,7 +120,7 @@ def quality_emoji(q: float) -> str:
 def _format_price_tl(value) -> str:
     """BIST fiyatını Türkçe ondalık ayırıcı ve TL ekiyle biçimlendir."""
     formatted = _format_price(value)
-    return f"{formatted.replace('.', ',')} TL" if formatted else ""
+    return f"{formatted} TL" if formatted else ""
 
 
 def _quality_grade(value) -> str:
@@ -186,13 +185,8 @@ def _satir(çıktı: List[str], metin: str, girinti: str = "   ") -> None:
 
 
 def _sayı(value, basamak: int = 2) -> str:
-    try:
-        number = float(value)
-    except (TypeError, ValueError, OverflowError):
-        return ""
-    if number != number or abs(number) == float("inf"):
-        return ""
-    return f"{number:.{basamak}f}".replace(".", ",")
+    """Yerel kısayol: biçimi `reporting.format.sayi` verir (boşta `""`)."""
+    return _format_sayi(value, basamak, varsayilan="")
 
 
 def _yuzde(value, basamak: int = 1) -> str:
@@ -2242,7 +2236,7 @@ class TelegramNotifier:
                         kalite_str]
             if detay_str:
                 satirlar.append(detay_str)
-            satirlar.append(f"Bant: {lower:.2f} - {upper:.2f}")
+            satirlar.append(f"Bant: {_sayı(lower)} - {_sayı(upper)}")
 
         elif state == "GEOMETRI_ADAYI":
             satirlar = [f"{emoji} {stock} {tf_human} · {pattern}",
@@ -2250,7 +2244,7 @@ class TelegramNotifier:
                         kalite_str]
             if detay_str:
                 satirlar.append(detay_str)
-            satirlar.append(f"Bant: {lower:.2f} - {upper:.2f} · olgunlaşma bekleniyor")
+            satirlar.append(f"Bant: {_sayı(lower)} - {_sayı(upper)} · olgunlaşma bekleniyor")
 
         elif state == "FORMASYON_TANIMLANDI":
             satirlar = [f"📋 {stock} {tf_human} · {pattern}",
@@ -2258,7 +2252,7 @@ class TelegramNotifier:
                         kalite_str]
             if detay_str:
                 satirlar.append(detay_str)
-            satirlar.append(f"Üst: {upper:.2f} / Alt: {lower:.2f}")
+            satirlar.append(f"Üst: {_sayı(upper)} / Alt: {_sayı(lower)}")
 
         elif state == "SIKISMA_GUCLENIYOR":
             satirlar = [f"⚡ {stock} {tf_human} · {pattern}",
@@ -2266,7 +2260,7 @@ class TelegramNotifier:
                         kalite_str]
             if detay_str:
                 satirlar.append(detay_str)
-            satirlar.append(f"Bant: {lower:.2f} - {upper:.2f} · kırılım yakın")
+            satirlar.append(f"Bant: {_sayı(lower)} - {_sayı(upper)} · kırılım yakın")
 
         elif state == "KIRILIM_HAZIRLIGI":
             satirlar = [f"⚠️ {stock} {tf_human} · {pattern}",
@@ -2274,14 +2268,14 @@ class TelegramNotifier:
                         kalite_str]
             if detay_str:
                 satirlar.append(detay_str)
-            satirlar.append(f"Kritik seviyeler: {lower:.2f} / {upper:.2f}")
+            satirlar.append(f"Kritik seviyeler: {_sayı(lower)} / {_sayı(upper)}")
 
         elif state == "KIRILIM_DENEMESI":
             direction = "yukarı" if break_dir == 1 else "aşağı" if break_dir == -1 else ""
             level = upper if break_dir == 1 else lower
             yon_eki = f"{direction} yönde " if direction else ""
             satirlar = [f"🔥 {stock} {tf_human} · {pattern}",
-                        f"Kırılım denemesi · {yon_eki}{level:.2f} zorlanıyor",
+                        f"Kırılım denemesi · {yon_eki}{_sayı(level)} zorlanıyor",
                         kalite_str]
             if detay_str:
                 satirlar.append(detay_str)
@@ -2296,7 +2290,7 @@ class TelegramNotifier:
             # Eskiden iki şablon rastgele seçiliyordu (🚀 KIRIYOR / 💥 kırılım adayı);
             # aynı olay iki farklı metinle gidiyordu. Artık tek metin.
             satirlar = [f"🚀 {stock} {tf_human} · {pattern}",
-                        f"{baslik_eki}kırılım adayı · {level:.2f} {kapanis_yonu} kapanış",
+                        f"{baslik_eki}kırılım adayı · {_sayı(level)} {kapanis_yonu} kapanış",
                         f"Kırılım gücü {power:.0f} {q_emoji} · teyit mumu bekleniyor"]
 
         elif state == "KIRILIM_TEYITLI":
@@ -2313,7 +2307,7 @@ class TelegramNotifier:
         elif state == "RETEST_BEKLENIYOR":
             level = data.get('break_price', price)
             satirlar = [f"⏳ {stock} {tf_human} · {pattern}",
-                        f"Retest bekleniyor · {level:.2f}'e dönüş olabilir",
+                        f"Retest bekleniyor · {_sayı(level)}'e dönüş olabilir",
                         kalite_str]
             if detay_str:
                 satirlar.append(detay_str)
@@ -2350,7 +2344,7 @@ class TelegramNotifier:
             satirlar = [f"{emoji} {stock} {tf_human} · {pattern}",
                         f"Durum: {state}",
                         kalite_str,
-                        f"Seviye: {price:.2f} · {time_str}"]
+                        f"Seviye: {_sayı(price)} · {time_str}"]
 
         # Kapanan mum satırı (P0): anlık olay mesajlarında "hangi mum kapandı?"
         # sorusu mesajın içinde cevaplanır. İzleme/digest akışına eklenmez

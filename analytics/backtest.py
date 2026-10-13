@@ -579,9 +579,11 @@ def _s(v, birim="", yuzde=False):
     except (TypeError, ValueError):
         return "—"
     if yuzde:
-        return f"{v:+.1f}%"
+        return f"{v:+.1f}%".replace(".", ",")
+    # Önce sondaki sıfırlar kırpılır (ayraç nokta iken), sonra virgüle çevrilir:
+    # ters sırada `46,00` → `46,` kalırdı. G0 biçim standardı, GRAFIK_TASARIM.md §19.
     t = f"{v:.2f}".rstrip("0").rstrip(".")
-    return t + birim
+    return t.replace(".", ",") + birim
 
 
 def _satir(ozet) -> str:

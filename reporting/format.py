@@ -6,10 +6,14 @@ main döngüsünden bağımsız test edilebilir hale gelir; `main.py` ince
 orkestratöre doğru küçülür.
 
 Davranış değişmedi: metinler birebir aynı (yalnız taşıma).
+
+G0 (2026-10-13): `sayi()` kullanıcıya dönük tüm metinler için tek sayı
+standardıdır — ondalık ayıracı Türkçe virgül. Bkz. GRAFIK_TASARIM.md §15/§19.
 """
 
 import logging
 from datetime import datetime
+from math import isfinite
 from typing import List
 
 from config import ISTANBUL_TZ, ACTIVE_STOCKS
@@ -102,7 +106,7 @@ def gecen_sure(iso_zaman):
         return f"{int(fark)} sn önce"
     if fark < 5400:
         return f"{int(fark // 60)} dk önce"
-    return f"{fark / 3600:.1f} sa önce"
+    return f"{sayi(fark / 3600, 1)} sa önce"
 
 # Zaman dilimi adları (Telegram metinleri): notifier'daki TF_HUMAN ile aynı dil.
 # reporting katmanı notifier'ı import ETMEZ (ters yön: notifier -> reporting), bu
@@ -146,10 +150,23 @@ def tf_kisa(tf) -> str:
 
 
 def sayi(deger, basamak=2, varsayilan="—"):
+    """Kullanıcıya dönük sayı metni: ondalık ayıracı Türkçe virgül (`46,37`).
+
+    Neden tek nokta: kart, günlük özet, /panel, /formasyonlar ve backtest aynı
+    kuralı kullanmalı; ayraç yüzeyler arasında farklı olunca aynı fiyat iki
+    görünümde çıkıyordu (G0).
+    Binlik ayracı bilinçli olarak YOK: sayaçlar (`360 bar`) ve telefon satır
+    bütçesi (≤283 px testi) bundan etkilenmemeli; ayrıca `50,00` ondalığı
+    kırpılmaz (bilgi kaybı olmaz).
+    NaN/sonsuza da `varsayilan` döner: kullanıcı metninde `nan` görünmez.
+    """
     try:
-        return f"{float(deger):.{basamak}f}"
-    except (TypeError, ValueError):
+        deger_sayi = float(deger)
+    except (TypeError, ValueError, OverflowError):
         return varsayilan
+    if not isfinite(deger_sayi):
+        return varsayilan
+    return f"{deger_sayi:.{basamak}f}".replace(".", ",")
 
 
 def filtrele_formasyonlar(formations, filtre: str):
@@ -349,7 +366,7 @@ def panel_kritik_listesi(kayitlar, adet: int = PANEL_TOP_KRITIK):
         durum = STATE_TR.get(str(f.get("state")), str(f.get("state") or "—"))
         satirlar.append(
             f"{i:>2}) {f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} "
-            f"puan {panel_aday_puani(f):.1f} · q{sayi(f.get('quality'), 0)} "
+            f"puan {sayi(panel_aday_puani(f), 1)} · q{sayi(f.get('quality'), 0)} "
             f"{panel_sembol(f.get('state'))} {durum}"
             f" · kritik {sayi(f.get('critical_price'))}"
         )

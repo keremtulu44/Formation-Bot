@@ -445,3 +445,36 @@ CPU değil · **14** budama merdiveni tek kurala indi.
 - Bu dosya repoda tutulur; her fazın commit mesajı ilgili § numarasını anır.
 - `YAPILACAKLAR.md`'ye G0-G5 maddeleri G1 commit'iyle eklenir.
 - Spike çıktıları depo dışında (`~/grafik-spike/`) tutulur, commit edilmez.
+
+## 21 · G0 UYGULANDI (2026-10-13) — kayıt
+
+Kod: `reporting/format.py` (`sayi()` + `gecen_sure` + panel `puan`),
+`notifier.py` (`_format_price`, `_format_price_tl`, `_sayı`, legacy gövde
+9 satır), `notification_context.py` (`_price` → `sayi()`), `main.py`
+(`/durum` açılış süresi), `analytics/backtest.py` (`_s()` — kırpma önce,
+virgül sonra). Toplam **6 dosya, +55/−35 satır** + yeni `test_sayi_bicimi.py`
+(11 test: ayraç, binlik yok, sıfır kırpma yok, NaN/None, kart/gövde/backtest
+yüzeyleri, yardımcıların aynı kuralı üretmesi).
+
+Test beklemeleri: `test_telegram_commands.py` iki satır (`süre: 2,0 dk`,
+`kritik 100,00`). Suite: **900 passed / 44 skipped**.
+
+Doğrulanan "dokunulmayan" iddiaları (grep ile, varsayım değil):
+- Kalan `:.1f/:.2f` kullanımları ya `.replace(".", ",")` ile zaten virgül
+  (`notifier.py:274,328`; `notification_context.py:491,494,604,657,659`) ya da
+  **log/konsol** metni (`main.py:701,2148,2708` → `logger.*`; `data.py:1438-1461`
+  süreklilik mesajları → yalnız `x['tip']` Telegram'a taşıyor; `deploy_check.py`,
+  `canli_tarama.py`, `gun_simulasyonu.py` CLI).
+- Motorun `evidence_text` satırları (`RVOL=0.876`) hiçbir Telegram yüzeyine
+  girmiyor (grep: `notification_context`/`notifier` içimde kullanım yok) →
+  **G1 notu:** grafik `--etiket-detay` modunda bu metni AYNEN basarsa nokta
+  ondalık görünebilir; motor metnine dokunulmaz, grafiğin kendi ürettiği
+  sayılar `sayi()` ile yazılır.
+- `karne.py:371` ve `analytics/backtest.py:80`'deki `_sayi` birer float'a
+  çevirme yardımcısıydı; §15'teki "backtest/karne otomatik virgüle geçer"
+  satırım yanlıştı — gerçek metin biçimleyici `analytics/backtest.py:_s()`.
+
+Kalan G0 borcu (bilinçli, ertelenmedi — kapsam dışı karar): `%`/`×` ekli
+yerel `.replace()` kalıpları (§19 "dokunulmayanlar" satırı). Kart/özet baytları
+değişmedi; değişenler `/durum`, `/panel` `puan`, `/formasyonlar` fiyatları,
+legacy alarm gövdesi ve backtest raporu.
