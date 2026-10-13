@@ -202,7 +202,8 @@ def test_notifier_anlik_mesaja_mum_satiri_ekler():
         'bar_metni': "🕒 4 saatlik mum 25.09 13:30 → 17:30 kapandı",
     }
     mesaj = n.format_message(veri)
-    assert "4 saatlik mum 25.09 13:30 → 17:30 kapandı" in mesaj
+    # Kart biçimi: aynı verinin kısa damgası (satır telefonda sarmasın diye).
+    assert "25.09 13:30→17:30 mumu" in mesaj
     # İzleme (digest) mesajına eklenmez: yer bütçesi orada farklı.
     veri_izleme = dict(veri, state='SIKISMA_GUCLENIYOR')
     assert "kapandı" not in n.format_message(veri_izleme)

@@ -212,6 +212,28 @@ GUNLUK_DEQUE_MAXLEN = 500
 TELEGRAM_MAX_MESAJ_SAAT = 20
 TELEGRAM_MAX_MESAJ_GUN = 120
 
+# --- ALARM MESAJ STİLİ (telefon kartı) ---
+# "kart": düz metin telefon kartı (emoji + BÜYÜK HARF hiyerarşisi, satır ≤ 283 px,
+#         olay başına ≤ TELEGRAM_ALERT_MAX_KARAKTER). parse_mode KULLANILMAZ.
+# "klasik": 25 Eyl canlı akışındaki uzun biçim (geri dönüş/a/B karşılaştırması için).
+TELEGRAM_ALERT_STYLE = os.getenv("TELEGRAM_ALERT_STYLE", "kart").strip().lower()
+# Telefon sohbetinde metne ayrılan genişlik (px, 360 px ekran). telegram_measure.py
+# bu bütçeyle satır böler; 0 = bölme yok (satır uzunluğu serbest).
+# not: _env_int 0'ı 1'e yuvarlar; sıfır "bölme yok" demek olabildiği için float okunur.
+TELEGRAM_SATIR_PX = max(0, int(_env_float("TELEGRAM_SATIR_PX", 283)))
+# Bir alarm kartının üst sınırı (karakter). 25 Eyl ölçümü: 1358-1559 kr/olay;
+# kart hedefi 850-905 kr. Aşan mesaj gönderilir ama logda uyarıya yazılır.
+TELEGRAM_ALERT_MAX_KARAKTER = max(0, int(_env_float("TELEGRAM_ALERT_MAX_KARAKTER", 1100)))
+# DM içerik kapısı: aynı hisse+TF+state için bağlam imzası değişmediyse kopya
+# mesaj gitmez; yalnız kapanış/marj değiştiyse tek satırlık güncelleme gider.
+# (25 Eyl: TOASO 10:40 ve 15:10 mesajlarının 35 satırının 30'u birebir aynıydı.)
+TELEGRAM_DM_DEGISIM_KAPISI = os.getenv(
+    "TELEGRAM_DM_DEGISIM_KAPISI", "1").strip().lower() not in {"0", "false", "kapali", "kapalı"}
+# Kanala "geçersizleşti" yalnızca ÖNCEKİ teyitli mesaj gerçekten kanala
+# gönderildiyse gider (grup/kanalda "geçersiz geçersiz" gidip gelmesin).
+TELEGRAM_KANAL_GECERSIZ_KAPISI = os.getenv(
+    "TELEGRAM_KANAL_GECERSIZ_KAPISI", "1").strip().lower() not in {"0", "false", "kapali", "kapalı"}
+
 # --- TELEGRAM WEBHOOK (Render) ---
 # Varsayılan mod YOKLAMA'dır (getUpdates): yerel/systemd kurulumunda inbound HTTP
 # gerekmez. Render gibi bir web serviste komutları webhook ile almak için:

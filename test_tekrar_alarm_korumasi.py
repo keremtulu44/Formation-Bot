@@ -356,7 +356,8 @@ def test_confirmed_break_invalidation_has_its_own_one_time_seal(monkeypatch):
     invalidation["formation_id"] = "stable-formation-invalidation"
     assert n.send(invalidation) is True
     assert len(sent) == 1
-    assert "KIRILIM GEÇERSİZLEŞTİ" in sent[0]["text"]
+    # Kart başlığı olayı ilk satırda söyler (bildirim önizlemesi okunabilsin).
+    assert "GEÇERSİZLEŞTİ" in sent[0]["text"]
     assert n.send(invalidation) is False
     assert len(sent) == 1
 

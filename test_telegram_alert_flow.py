@@ -136,7 +136,8 @@ def test_acil_mesaj_baglaminda_en_fazla_uc_ertelenmis_aday_gosterilir():
         "watch_context": watch_context,
     })
 
-    assert "Diğer izleme adayları" in message
+    # Kart biçimi: başlık kısa, adaylar "▸ HISSE tf · durum" satırları (≤3).
+    assert "izleme adayları" in message
     assert "H00" in message and "H02" in message
     assert "H03" not in message
 

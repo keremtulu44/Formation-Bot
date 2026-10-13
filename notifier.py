@@ -11,11 +11,17 @@ from typing import Dict, List
 
 from config import (ACTIVE_STOCKS, DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT,
                     TELEGRAM_MAX_MESAJ_GUN,
+                    TELEGRAM_ALERT_STYLE, TELEGRAM_ALERT_MAX_KARAKTER, TELEGRAM_SATIR_PX,
+                    TELEGRAM_DM_DEGISIM_KAPISI, TELEGRAM_KANAL_GECERSIZ_KAPISI,
                     ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK, ALERT_STATES, WATCH_STATES,
                     TERMINAL_TAZE_BAR,
                     ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL,
                     PUBLIC_MAX_MESAJ_SAAT, PUBLIC_MAX_MESAJ_GUN, PUBLIC_MIN_ARALIK_SN,
                     PUBLIC_MIN_QUALITY_TF)
+# Telefon satır bütçesi ölçeri (bağımlılıksız, PIL yok). Eski "satır ≤ 70 karakter"
+# kuralı Türkçe/rakam genişliklerini hesaba katmadığı için 25 Eyl akışında 120
+# satır telefonda sarmalanmıştı; artık piksel bütçesi kullanılıyor.
+from telegram_measure import bol as _satir_bol, genislik as _satir_px
 # Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
 # katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
 from reporting.format import STATE_TR
@@ -133,8 +139,301 @@ def _quality_grade(value) -> str:
     return "Zayıf"
 
 
-def _format_lifecycle_alert(data: Dict) -> str:
-    """The stable, sample-shaped body for confirmed lifecycle push events."""
+# Günlük engel sayaçları: /durum ve teşhis bu anahtarları gösterir. Yeni engel
+# eklendiğinde TEK yerde dursun diye tuple; `_gunu_sifirla_gerekirse` de bunu kullanır.
+_ENGEL_SAYACLAR = {
+    "cooldown": 0, "gunluk_kap": 0, "saatlik_kap": 0, "tekrar": 0,
+    # "baglam_degismedi": bağlam bloğu birebir aynıysa kart kısaltıldı (kopya blok basılmadı).
+    "baglam_degismedi": 0,
+}
+
+# --- TELEFON KARTI (düz metin; parse_mode yok) ----------------------------
+# 25 Eyl canlı akışında alarm başına 1358-1559 karakter / 47-54 görsel satır
+# oluşuyordu ve 120 satır telefonda sarmalanıyordu. Kart kuralları:
+#   1 satır = 1 bilgi grubu · satır ≤ TELEGRAM_SATIR_PX (px) · gruplar boş satırla
+#   ayrılır · olay ilk satırda (bildirim önizlemesi okunabilsin) · hizalama için
+#   boşluk kullanılmaz (orantılı yazı tipinde bozulur) · bilgi kesilmez, sığmıyorsa
+#   devam satırına taşınır.
+_KART_YON = {1: "YUKARI", -1: "AŞAĞI"}
+_KART_OLAY = {
+    # İkinci satırdaki kısa not, ilk satırda söylenmeyeni söyler: RETEST BAŞARILI
+    # zaten "seviye korundu" demek olduğu için orada ek not yoktur (yer boşa gitmez).
+    "KIRILIM_TEYITLI": ("TEYİTLİ", "kapanışla"),
+    "RETEST_BASARILI": ("RETEST BAŞARILI", ""),
+    "KIRILIM_GECERSIZLESTI": ("GEÇERSİZLEŞTİ", "bandına dönüş"),
+}
+# mtf_destek yalnız 1h→4h ve 4h→1g için hesaplanır (main.py); etiket bu yüzden
+# alarm TF'sine göre yazılır. Eskiden her durumda "4h destekliyor" deniyordu.
+_KART_UST_TF = {"1h": "4s", "2h": "4s", "4h": "1g"}
+TF_KISA = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
+
+
+def _px_butce():
+    """Kart satır bütçesi; 0 = bölme yok."""
+    try:
+        butce = float(TELEGRAM_SATIR_PX)
+    except (TypeError, ValueError):
+        return None
+    return butce if butce > 0 else None
+
+
+def _satir(çıktı: List[str], metin: str, girinti: str = "   ") -> None:
+    """Satırı bütçeye sığdırıp ekler; sığmıyorsa böler (bilgi düşmez)."""
+    for satir in _satir_bol(metin, _px_butce(), girinti=girinti):
+        if satir.strip():
+            çıktı.append(satir)
+
+
+def _sayı(value, basamak: int = 2) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return ""
+    if number != number or abs(number) == float("inf"):
+        return ""
+    return f"{number:.{basamak}f}".replace(".", ",")
+
+
+def _yuzde(value, basamak: int = 1) -> str:
+    metin = _sayı(value, basamak)
+    return f"%{metin}" if metin else ""
+
+
+def _kart_mum_damgasi(data: Dict) -> str:
+    """Kapanan mumun damgası: hangi mumun kapandığı mesajın ilk üç satırında."""
+    for alan in ("bar_time", "bar_kapanis"):
+        deger = data.get(alan)
+        if not deger:
+            continue
+        try:
+            zaman = deger if isinstance(deger, datetime) else datetime.fromisoformat(str(deger))
+        except (TypeError, ValueError):
+            continue
+        bitis = data.get("bar_kapanis")
+        try:
+            bitis_zaman = (bitis if isinstance(bitis, datetime)
+                           else datetime.fromisoformat(str(bitis))) if bitis else None
+        except (TypeError, ValueError):
+            bitis_zaman = None
+        bas = f"{zaman.day:02d}.{zaman.month:02d} {zaman:%H:%M}"
+        if bitis_zaman is not None and bitis_zaman != zaman:
+            bas += f"→{bitis_zaman:%H:%M}"
+        return f"🕒 {bas} mumu"
+    metin = str(data.get("bar_metni") or "").strip()
+    if not metin:
+        return ""
+    # bar_metni eski biçimde uzun bir cümle: "🕒 4 saatlik mum 25.09 13:30 → 17:30
+    # kapandı". Kart için aynı verinin kısa yazımı yeterli (satır bütçesi 283 px).
+    eslesme = re.search(r"(\d{2}\.\d{2})\s+(\d{2}:\d{2})\s*→\s*(\d{2}:\d{2})", metin)
+    if eslesme:
+        return f"🕒 {eslesme.group(1)} {eslesme.group(2)}→{eslesme.group(3)} mumu"
+    return metin[:64]
+
+
+def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False) -> str:
+    stock = str(data.get("stock_name") or "Bilinmiyor").upper()
+    timeframe = str(data.get("timeframe") or "1h").lower()
+    state = str(data.get("state") or "").strip().upper()
+    # Desen adı geldiği gibi yazılır: Python'un str.upper()'i Türkçe "i"yi "I"ya
+    # çeviriyor (Simetrik → SIMETRIK). Vurgu zaten ◆ sembolüyle kuruluyor.
+    pattern = str(data.get("pattern_name") or "Formasyon")
+    tf_label = TF_KISA.get(timeframe, TF_EVENT_HUMAN.get(timeframe, TF_HUMAN.get(timeframe, timeframe)))
+    try:
+        yon = int(data.get("break_dir") or 0)
+    except (TypeError, ValueError):
+        yon = 0
+    ok = "▲" if yon > 0 else ("▼" if yon < 0 else "◆")
+    olay, kisalt = _KART_OLAY.get(state, ("OLAY", ""))
+    yon_etiketi = _KART_YON.get(yon, "")
+    olay_metni = f"{yon_etiketi} {olay}".strip() if state == "KIRILIM_TEYITLI" else olay
+
+    level = data.get("break_price")
+    if level is None:
+        level = data.get("critical_price_level")
+    kirilan = _sayı(level)
+    close = data.get("candle_close_price")
+    if close is None:
+        close = data.get("close_price")
+    kapanis = _sayı(close)
+
+    satirlar = [f"{ok} {stock} {tf_label} · {olay_metni}"]
+    _satir(satirlar, f"◆ {pattern}" + (f" · {kisalt}" if kisalt else ""))
+    damga = _kart_mum_damgasi(data)
+    if damga:
+        _satir(satirlar, damga)
+
+    # --- olay künyesi: yalnız payload'da olan veri, uydurma yok ---
+    künye: List[str] = []
+    if kirilan:
+        _satir(künye, f"▪ kırılan {kirilan}")
+    if kapanis:
+        marj = ""
+        try:
+            kirilan_say = float(data.get("break_price") or data.get("critical_price_level") or 0)
+            kapanis_say = float(data.get("candle_close_price") or data.get("close_price") or 0)
+            if kirilan_say > 0 and kapanis_say > 0:
+                oran = (kapanis_say - kirilan_say) / kirilan_say * 100.0
+                if oran == oran:
+                    # Yönu "aştı/kaldı" kelimesi zaten söylüyor; +/− işareti yer
+                    # çalmasın (25 Eyl biçimindeki "%1,3" gösterimi de buydu).
+                    marj = f" · %{abs(oran):.1f}".replace(".", ",")
+                    marj += " aştı" if oran >= 0 else " kaldı"
+        except (TypeError, ValueError):
+            marj = ""
+        _satir(künye, f"▪ kapanış {kapanis}{marj}")
+    kalite = _sayı(data.get("confidence_score"), 0)
+    güç = _sayı(data.get("break_strength"), 0)
+    if kalite:
+        # "Kalite" eskiden formasyonun o anki kalitesiydi (main.py: snap.effective_quality);
+        # alarmı geçiren sayı ile mesajda okunan sayı karışmasın diye etiket açık.
+        _satir(künye, f"▪ kalite {kalite}/100 (formasyon)"
+                      + (f" · kırılma gücü {güç}" if güç else ""))
+    temas = []
+    if data.get("upper_touches") is not None and data.get("lower_touches") is not None:
+        temas.append(f"temas üst {data.get('upper_touches')} / alt {data.get('lower_touches')}")
+    temas.append("retest var" if data.get("retest_seen") else "retest yok")
+    _satir(künye, "▪ " + " · ".join(t for t in temas if t))
+    ust_tf = _KART_UST_TF.get(timeframe)
+    if ust_tf:
+        _satir(künye, f"▪ MTF: {ust_tf} onayı "
+                      + ("var" if data.get("mtf_destek") else "yok"))
+    yas = data.get("age_bars")
+    dogum = data.get("band_baslangic")
+    yas_metni = ""
+    try:
+        if yas is not None and int(yas) >= 0:
+            yas_metni = f"▪ bant {int(yas)} bar"
+            if dogum:
+                zaman = (dogum if isinstance(dogum, datetime)
+                         else datetime.fromisoformat(str(dogum)))
+                yas_metni += f" · izlenme {zaman.day:02d}.{zaman.month:02d} {zaman:%H:%M}"
+    except (TypeError, ValueError, OverflowError):
+        yas_metni = ""
+    if yas_metni:
+        _satir(künye, yas_metni)
+    daralma = _yuzde((float(data.get("contraction")) * 100) if data.get("contraction") is not None else None, 0)
+    if daralma:
+        _satir(künye, f"▪ daralma {daralma}")
+    if künye:
+        satirlar.append("")
+        satirlar.extend(künye)
+
+    # --- geçersizleşme eşiği: kural güncel bandı okur, dondurulmuş seviyeyi değil ---
+    esik = None
+    try:
+        if yon > 0:
+            esik = float(data.get("upper_now") or 0) or None
+        elif yon < 0:
+            esik = float(data.get("lower_now") or 0) or None
+    except (TypeError, ValueError):
+        esik = None
+    if esik:
+        # Kural güncel bandı okur; mesaj da bandı yazar (dondurulmuş kırılım
+        # seviyesini değil) — aksi halde "ne olursa teyit düşer" bilgisi yanlış olur.
+        esik_metin = f"{esik:.2f}".replace(".", ",")
+        _satir(satirlar, f"× geçersiz: {esik_metin} "
+                        + ("altı" if yon > 0 else "üstü") + " kapanış")
+
+    if guncelleme:
+        # Bağlam (piyasa yapısı/bölge/hacim) önceki mesajla birebir aynı: kopya
+        # 1400 karakter yerine tek satırlık güncelleme gider.
+        satirlar.append("▪ yapı/bölge/hacim değişmedi (önceki kartta)")
+        satirlar.append(f"› /tara {stock}")
+        satirlar.append("• yatırım tavsiyesi değildir")
+        return "\n".join(satirlar)
+
+    bolumler = data.get("domain_bolumleri")
+    if isinstance(bolumler, dict) and bolumler:
+        bolge = [*(bolumler.get("ust") or []), *(bolumler.get("alt") or [])]
+        gruplar = [
+            list(bolumler.get("yapi") or []),
+            bolge,
+            list(bolumler.get("hacim") or []),
+        ]
+        for grup in gruplar:
+            if not grup:
+                continue
+            satirlar.append("")
+            for satir in grup:
+                _satir(satirlar, str(satir))
+    else:
+        baglam = str(data.get("domain_context") or "").strip()
+        if baglam:
+            satirlar.extend(["", baglam])
+    adaylik = []
+    for aday in (data.get("watch_context") or [])[:3]:
+        if not isinstance(aday, dict):
+            continue
+        aday_satir = (f"▸ {aday.get('stock') or '?'} "
+                      f"{TF_KISA.get(str(aday.get('timeframe') or '').lower(), str(aday.get('timeframe') or ''))}"
+                      f" · {STATE_TR.get(str(aday.get('state') or '').strip().upper(), 'izlemede')}")
+        adaylik.append(aday_satir)
+    if adaylik:
+        satirlar.append("")
+        satirlar.append("▪ izleme adayları")
+        satirlar.extend(adaylik)
+
+    karsi = data.get("domain_karsi") or []
+    if karsi:
+        _satir(satirlar, "! karşı delil: " + " · ".join(str(x) for x in karsi[:3]))
+    # CTA + yasal satır: tek satırda birleştirince 323 px'a çıkıyordu (sarar),
+    # bu yüzden iki kısa satır. "yatırım tavsiyesi değildir" ifadesi korunur.
+    satirlar.append(f"› /tara {stock}")
+    satirlar.append("• yatırım tavsiyesi değildir")
+    return "\n".join(satirlar)
+
+
+# --- DM içerik kapısı ---------------------------------------------------------
+# 25 Eyl akışında TOASO'nun 10:40 ve 15:10 mesajlarının 35 satırının 30'u
+# birebir aynıydı: piyasa yapısı, bölgeler ve hacim hiç değişmemişti.
+# Kural (bilinçli olarak yalnız KISALTMA): mesaj her durumda gider, çünkü
+# "aynı olayı ikinci kez gönderme" kararının tek sahibi mühürdür (_son_alert_key).
+# Bu kapı mesaj keserse mühürle çift kontrol doğar ve "kuyrukta beklerken bağlamı
+# değişen" olayların mührü yenilenmez (test_tekrar_alarm_koruması bu yüzden patladı).
+# Kapı yalnızca: imza aynıysa bağlam bloğunun yerine tek satır basar.
+def _dm_anahtar(data: Dict) -> str:
+    stock = str(data.get("stock_name") or "").strip().upper()
+    tf = str(data.get("timeframe") or "").strip().lower()
+    # State Anahtarda YOK: bağlam (yapı/bölge/hacim) hisse+TF'nin özelliğidir,
+    # state'ten bağımsız. 25 Eyl'de TOASO 1s 10:40 (geçersizleşti) ve 15:10
+    # (teyitli) kartlarının 30 satırı birebir aynıydı; state'i ayırınca kapı
+    # hiçbir şey yakalamıyordu. Olaya özel veri (seviye, kapanış, state) kartın
+    # kendi satırlarında durduğu için kısaltma bilgi kaybettirmiyor.
+    return f"{stock}|{tf}"
+
+
+def _dm_imza(data: Dict) -> str:
+    """Bağlamın değişim imzası (hash): kart bölümleri ya da klasik bağlam metni.
+
+    Yalnız bağlam ölçülür; seviye/kapanış/state kartın kendi satırlarında zaten
+    yazılıyor. "Aynı olayı ikinci kez basma" kararı mühre (_son_alert_key) aittir,
+    bu kapı yalnız DEĞİŞMEYEN BAĞLAMI kısaltır.
+    """
+    import hashlib
+    parcalar: list[str] = []
+    bolumler = data.get("domain_bolumleri")
+    if isinstance(bolumler, dict) and bolumler:
+        # Anahtar adı yazılmıyor (satır içeriği zaten başlık taşıyor); sıralı
+        # dolaşılır ki yeni bir bölüm eklendiğinde imza kendiliğinden kapsasın.
+        for anahtar in sorted(bolumler):
+            parcalar.append("|".join(str(x) for x in (bolumler.get(anahtar) or [])))
+    else:
+        parcalar.append(str(data.get("domain_context") or ""))
+    return hashlib.sha1("\n".join(parcalar).encode("utf-8")).hexdigest()[:16]
+
+
+
+def _format_lifecycle_alert(data: Dict, *, guncelleme: bool = False) -> str:
+    """Onaylı yaşam döngüsü olaylarının mesajı. Stil: TELEGRAM_ALERT_STYLE."""
+    stil = str(TELEGRAM_ALERT_STYLE or "kart").strip().lower()
+    if stil == "klasik":
+        return _format_lifecycle_alert_klasik(data)
+    return _format_lifecycle_alert_kart(data, guncelleme=guncelleme)
+
+
+
+def _format_lifecycle_alert_klasik(data: Dict) -> str:
+    """Legacy (verbose) body for confirmed lifecycle push events."""
     state = str(data.get("state") or "").strip().upper()
     stock = str(data.get("stock_name") or "Bilinmiyor")
     timeframe = str(data.get("timeframe") or "1h").lower()
@@ -440,7 +739,10 @@ class TelegramNotifier:
         # Gönderilemeyen alarmların SEBEP sayaçları (gün içi, gün değişiminde sıfırlanır).
         # Neden: can_send False döndüğünde olay hiçbir yerde görünmüyordu; kullanıcı
         # "kaç tanesi bastırıldı" sorusunun cevabını /durum'da görebilmeli.
-        self.engeller = {"cooldown": 0, "gunluk_kap": 0, "saatlik_kap": 0, "tekrar": 0}
+        self.engeller = dict(_ENGEL_SAYACLAR)
+        # DM içerik kapısı durumu: anahtar -> {"imza","kapanis","gün"}
+        self._dm_imzalar: Dict[str, Dict] = {}
+        self._dm_imza_lck = threading.Lock()
         self.gonderim_hatasi = 0
         self.gonderilen_alarm = 0
         # Son can_send çağrısının engel sebebi (None = engel yok). Çağıran taraf
@@ -941,6 +1243,25 @@ class TelegramNotifier:
                    str(kayit["timeframe"] or "").lower(),
                    str(kayit["state"] or "").strip().upper())
         event_key = self._public_event_key(kayit)
+        # Kanal/grup: "geçersizleşti" YALNIZCA önceki teyitli mesaj gerçekten bu
+        # kanala gittiyse gider. Kanalda görmemiş bir teyidin geri alınması
+        # okuyucu için anlamsızdır ve "geçersiz geçersiz" gidip gelmesi üretir.
+        # DM tarafı bu kapıdan etkilenmez (oradaki seri kendi içinde okunur).
+        if (TELEGRAM_KANAL_GECERSIZ_KAPISI
+                and str(kayit.get("state") or "").strip().upper() == "KIRILIM_GECERSIZLESTI"):
+            teyit_key = self._public_event_key({**kayit, "state": "KIRILIM_TEYITLI"})
+            onek = "%s|%s|KIRILIM_TEYITLI|" % (
+                str(kayit.get("stock_name") or "").strip().upper(),
+                str(kayit.get("timeframe") or "").strip().lower())
+            with self._public_lck:
+                gonderilmis = bool(
+                    (teyit_key and teyit_key in self._public_alert_markers)
+                    or any(str(k).startswith(onek) for k in self._public_alert_markers)
+                )
+            if not gonderilmis:
+                logger.info("Public geçersizleşme atlandı (%s): önceki teyitli mesaj bu "
+                            "kanala gönderilmemiş", onek.rstrip("|"))
+                return False
         with self._public_lck:
             self._public_alert_muhurlerini_temizle()
             if event_key and event_key in self._public_alert_markers:
@@ -1241,9 +1562,43 @@ class TelegramNotifier:
             self._gunluk_tarih = bugun
             self._kap_uyarildi = False
             # Engel/hata sayaçları da günlüktür; yoksa /durum dünün engelini gösterir.
-            self.engeller = {"cooldown": 0, "gunluk_kap": 0, "saatlik_kap": 0, "tekrar": 0}
+            self.engeller = dict(_ENGEL_SAYACLAR)
             self.gonderim_hatasi = 0
             self.gonderilen_alarm = 0
+
+    def _dm_degisim_durumu(self, data: Dict) -> str:
+        """'yeni' | 'guncelleme' — bağlam önceki kartla birebir aynıysa kısalt.
+
+        Tam susturma YAPILMAZ: kopya olayı zaten mühür keser. Buradaki amaç,
+        mührü farklı bir olaya değse bile (25 Eyl TOASO: 10:40 → 15:10, 35 satırın
+        30'u aynı) değişmemiş 600-800 kr'luk bağlam bloğunu tekrar basmamak.
+        """
+        anahtar = _dm_anahtar(data)
+        if not anahtar.strip("|"):
+            return "yeni"
+        if not isinstance(data.get("domain_bolumleri"), dict) or not data.get("domain_bolumleri"):
+            return "yeni"        # bağlam zaten yok → kısaltılacak bir şey yok
+        imza = _dm_imza(data)
+        with self._dm_imza_lck:
+            kayit = self._dm_imzalar.get(anahtar) or {}
+        return "guncelleme" if str(kayit.get("imza") or "") == imza else "yeni"
+
+    def _dm_imza_kaydet(self, data: Dict) -> None:
+        anahtar = _dm_anahtar(data)
+        if not anahtar.strip("|"):
+            return
+        with self._dm_imza_lck:
+            self._dm_imzalar[anahtar] = {
+                "imza": _dm_imza(data),
+                "gun": datetime.now(ISTANBUL_TZ).date().isoformat(),
+            }
+            # Gün değişince imzalar düşer: ertesi gün aynı bağlam bile olsa yeni
+            # bir seans bilgisidir.
+            gunler = {v.get("gun") for v in self._dm_imzalar.values()}
+            if len(gunler) > 1:
+                guncel = datetime.now(ISTANBUL_TZ).date().isoformat()
+                self._dm_imzalar = {k: v for k, v in self._dm_imzalar.items()
+                                    if v.get("gun") == guncel}
 
     def _saatligi_temizle(self):
         sinir = datetime.now(ISTANBUL_TZ) - timedelta(hours=1)
@@ -1739,7 +2094,9 @@ class TelegramNotifier:
         if state in {"KIRILIM_DENEMESI", "BASARISIZ_KIRILIM", "FORMASYON_TAMAMLANDI"}:
             return ""
         if state in {"KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI"}:
-            return _format_lifecycle_alert(data)
+            return _format_lifecycle_alert(
+                data, guncelleme=bool(data.get("_dm_bağlam_değişmedi"))
+            )
         quality = data.get('confidence_score', 0)
         price = data.get('critical_price_level', 0)
         timestamp = data.get('timestamp', datetime.now())
@@ -2016,7 +2373,20 @@ class TelegramNotifier:
             return False
 
         prepare_context()
-        return self._gonder(data)
+        # İçerik kapısı: bağlam ve kapanış önceki mesajla birebir aynıysa kopya
+        # gitmez; yalnız kapanış/marj değiştiyse kısa güncelleme gider.
+        if TELEGRAM_DM_DEGISIM_KAPISI and state in ALERT_STATES:
+            durum = self._dm_degisim_durumu(data)
+            data["_dm_bağlam_değişmedi"] = (durum == "guncelleme")
+            if durum == "guncelleme":
+                self.engeller["baglam_degismedi"] = int(self.engeller.get("baglam_degismedi", 0)) + 1
+                logger.info("%s %s %s - bağlam önceki kartla aynı: yapı/bölge/hacim bloğu "
+                            "kısaltıldı (%d kez bugün)", stock, timeframe, state,
+                            self.engeller["baglam_degismedi"])
+        ok = self._gonder(data)
+        if ok:
+            self._dm_imza_kaydet(data)
+        return ok
 
     def _gonder(self, data: Dict) -> bool:
         """can_send kapısı geçildikten sonraki gerçek gönderim (kuyruk bunu çağırır)."""
@@ -2026,6 +2396,18 @@ class TelegramNotifier:
         state = data.get('state', '')
 
         message = self.format_message(data)
+        # Güvenlik: 4096 kr üzeri istek Telegram'da 400 döner ve mesaj tamamen
+        # kaybolurdu. Artık sınırına kırpılır ve logda iz bırakır.
+        if len(message) > _PUBLIC_MAX_METIN:
+            logger.warning("Alarm mesajı Telegram sınırını aştı (%d kr) → kırpıldı", len(message))
+            message = _kirp(message)
+        elif TELEGRAM_ALERT_MAX_KARAKTER and len(message) > TELEGRAM_ALERT_MAX_KARAKTER:
+            logger.warning("Alarm kartı hedefin üstünde: %s %s %s · %d kr (hedef %d)",
+                           stock, timeframe, state, len(message), TELEGRAM_ALERT_MAX_KARAKTER)
+        asiyan = [satir for satir in message.splitlines() if _satir_px(satir) > (_px_butce() or 1e9)]
+        if asiyan:
+            logger.warning("Alarm kartında %d satır telefon bütçesini aşıyor (%s %s)",
+                           len(asiyan), stock, timeframe)
 
         if not self.enabled:
             logger.info(f"[MOCK TELEGRAM {state}]\n{message}\n")
