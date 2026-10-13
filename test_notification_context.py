@@ -63,12 +63,18 @@ def test_domain_context_renders_existing_exports_and_omits_empty_domains():
 
     assert "🏗 Piyasa Yapısı" in context
     assert "1s yapı: dış yükseliş · iç yatay" in context
-    assert "BOS ↑ 101,50 · dış · teyitli geçerli güncel" in context
+    # `teyitli` bilinçli olarak basılmaz: filtre yalnız CONFIRMED olayları bırakır,
+    # yani kelime her satırda aynı sabit metindir (bilgi taşımaz).
+    assert "BOS ↑ 101,50 · dış · geçerli güncel" in context
+    assert "· teyitli geçerli" not in context  # MS satırındaki sabit kelime kaldırıldı
     assert "PH 110,00 (korunan, güncel)" in context
     assert "🧱 Order Block" in context and "Üst: 1s boğa OB 102,00–104,00 TL" in context
     assert "%25 dolu" in context
     assert "🟪 Fair Value Gap" in context and "Alt: 2s boğa FVG 96,00–98,00 TL" in context
-    assert "aktif" in context and "%50 dolu" in context
+    # `aktif` yalnız FVG'nin gerçek yaşam döngüsü kodundan gelir; OB tarafının
+    # state alanı ±1 işaret olduğu için orada sabit süs olarak basılmaz.
+    assert "boğa FVG 96,00–98,00 TL · aktif · %50 dolu" in context
+    assert "boğa OB 102,00–104,00 TL · %25 dolu" in context
     assert "📊 Hacim / Katılım" in context
     assert "yukarı katılım teyitli" in context
     assert "Son mum hacmi / 20 mumluk ortalama: 1,70× (RVOL)" in context
