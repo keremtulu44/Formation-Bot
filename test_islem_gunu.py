@@ -59,7 +59,8 @@ def test_kapali_gun_ozetleri_bilgi_verir(monkeypatch):
     kapanis = n.format_public_summary([], bos, kapanis=True, tarama_turu=0)
     sabah = n.format_public_summary([], bos, kapanis=False, tarama_turu=0)
     assert kapanis.strip() and sabah.strip()
-    assert "öne çıkan formasyon olmadı" in kapanis
+    # "…olmadı." satırı bütçeyi aşıp ortadan bölünüyordu; kısa hali tek satırda.
+    assert "öne çıkan formasyon yok" in kapanis
 
 
 # --- ana döngü kapısı: kapalı günde döngü bloğu özet GÖNDERMEZ --------------

@@ -383,8 +383,8 @@ def test_panel_metinleri_tasima_sonrasi_ayni():
          "upper_touches": 1, "lower_touches": 1, "contraction": 0.5},
     ]
     ozet = main_mod._format_deferred_alert_summary(kayitlar, toplam=21)
-    assert "(2/21 gösteriliyor)" in ozet
-    assert "… 19 aday daha (tam liste: /formasyonlar)" in ozet
+    assert "2/21 gösteriliyor" in ozet
+    assert "… 19 aday daha" in ozet and "tam liste: /formasyonlar" in ozet
     satirlar = main_mod._panel_kritik_listesi(kayitlar)
     assert satirlar[0].startswith("🔥 TOP 12")
     assert "THYAO 1h Yükselen Üçgen" in satirlar[1], "kompozit puan sıralaması bozulmamalı"

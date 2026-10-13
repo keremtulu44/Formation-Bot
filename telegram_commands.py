@@ -39,6 +39,7 @@ import time
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from secrets_redaction import redact_sensitive_text
+from telegram_measure import metni_sigdir
 
 logger = logging.getLogger(__name__)
 
@@ -546,7 +547,10 @@ class TelegramCommandListener:
     def _cevapla(self, text: str, update_id=None) -> Optional[str]:
         # Kırpma ÖNCESİ redakte et: Telegram boyur sınırında bölünen bir sır
         # bire-bir eşleştirmeden kaçabilirdi.
-        govde = kirp(redact_sensitive_text(str(text), self.token))
+        # Satır bütçesi: komut yanıtları tek satıra diziliyor ve telefonda
+        # sarmalanıyordu (916-1 130 px). Yalnız satır sonu eklenir, bilgi düşmez.
+        govde = kirp(metni_sigdir(redact_sensitive_text(str(text), self.token),
+                                guvenlik=1.0))
         if self.response_sender is not None and isinstance(update_id, int):
             try:
                 queued = bool(self.response_sender(update_id, govde))

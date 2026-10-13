@@ -44,10 +44,16 @@ _GENISLIK = {
     "×": 13.0, "≈": 13.0, "+": 11.0, "−": 8.0, "=": 11.0, "!": 5.5, "?": 10.0,
     "↑": 13.0, "↓": 13.0, "→": 16.0, "←": 16.0,
     "▪": 11.0, "▸": 8.0, "▤": 15.0, "◆": 12.0, "◇": 12.0, "▲": 12.0, "▼": 12.0,
-    "◈": 12.0, "•": 6.0, "★": 15.0,
+    "◈": 12.0, "•": 9.0, "★": 15.0, "◉": 14.0, "▣": 15.0,
+    # Kutu çizgileri (özet ayracı "─" * 24): DejaVu'da 10 px — tablo dışına
+    # düşerse 13 px sayılıp gereksiz yere ikiye bölünüyordu.
+    "─": 10.0, "│": 10.0, "━": 10.0,
 }
 _VARSAYILAN = 11.0     # tablo dışı karakterler için kötümser varsayılan
-_EMOJI = 16.0          # Telegram'da ~1 em
+# Emoji: DejaVu'da glifi yok (PIL .notdef kutusu 10 px veriyor), Telegram ise
+# gerçek emojiyi ~1 em (=16 px) olarak çizer → tablo 16 kullanır; yani emojide
+# tahmin PIL'den BÜYÜK, bilinçli olarak (sapma payı değil, doğru ölçüm).
+_EMOJI = 16.0
 _GUVENLIK = 0.95       # ölçüm hatası payı: bütçenin %5 altında sığdırıyoruz
 
 
@@ -102,8 +108,19 @@ def _paketle(parcalar, ara, sinir, sinir_diger=None):
     return satirlar
 
 
+def butce_carpani(guvenlik: float | None = None) -> float:
+    """Satır bütçesine uygulanacak çarpan.
+
+    Alarm kartı `_GUVENLIK` payıyla (%5 altında) çalışır; liste/özet gibi
+    bildirimler ölçüm hatasına rağmen bölünse de okunur olduğundan tam bütçeyi
+    kullanır — `guvenlik=1.0`.
+    """
+    return _GUVENLIK if guvenlik is None else float(guvenlik)
+
+
 def bol(metin: str, butce: float | None = None, girinti: str = "   ",
-        ayraclar: Iterable[str] = (" · ", " ")) -> List[str]:
+        ayraclar: Iterable[str] = (" · ", " "),
+        guvenlik: float | None = None) -> List[str]:
     """Metni satır bütçesine sığdırır; sığmıyorsa böler (bilgi kesilmez).
 
     Bölme önceliği: önce ` · ` ayraçları (her satır tek bilgi olur), sonra
@@ -114,10 +131,22 @@ def bol(metin: str, butce: float | None = None, girinti: str = "   ",
     `_GUVENLIK` payı: ölçüm tablosu ±%3 civarı hata taşıyor; %5 pay bırakmak
     "sarmaz" sözünün gerçek hayatta da tutmasını sağlar.
     """
+    # `guvenlik`: alarm kartı 0.95 ile çalışır (ölçüm hatasına karşı pay). Liste ve
+    # özet satırlarında ise kelime kaybetmemek daha önemli: orada bütçenin tamamı
+    # kullanılır (1.0), çünkü satırlar kelime sınırında paketlenir.
+    _carpan = butce_carpani(guvenlik)
     metin = str(metin or "").rstrip()
     if not metin:
         return []
-    sinir = satir_butcesi(butce) * _GUVENLIK
+    # Satır başındaki girinti (devam satırlarının hizası) bölme sırasında
+    # kaybolmasın: boşluklara göre bölersek [p for p in split(" ") if p] onu
+    # siler; bu yüzden önek ayrılıp ilk parçaya geri verilir.
+    onek = metin[:len(metin) - len(metin.lstrip())]
+    if onek:
+        govde = metin[len(onek):]
+        parcalar = bol(govde, butce, girinti, ayraclar)
+        return [f"{onek}{x}" if i == 0 else x for i, x in enumerate(parcalar)]
+    sinir = satir_butcesi(butce) * _carpan
     if genislik(metin) <= sinir:
         return [metin]
     satirlar = [metin]
@@ -130,10 +159,15 @@ def bol(metin: str, butce: float | None = None, girinti: str = "   ",
                 yeni.append(satir)
                 continue
             parcalar = [p for p in satir.split(ara) if p]
+            # Devam satırı ayraçla başlar: " · " yutulursa iki bilgi çarpışır
+            # ("Sıkışma güçleniyor daralma %72" gibi). Tek boşlukta gerek yok.
+            one = f"{ara.strip()} " if len(ara) > 1 else ""
             paketlenmisler = _paketle(parcalar, ara, sinir,
-                                      sinir_diger=sinir - genislik(girinti))
+                                      sinir_diger=(sinir - genislik(girinti)
+                                                    - genislik(one)))
             for indeks, paketlenmis in enumerate(paketlenmisler):
-                yeni.append(paketlenmis if indeks == 0 else f"{girinti}{paketlenmis}")
+                yeni.append(paketlenmis if indeks == 0
+                            else f"{girinti}{one}{paketlenmis}")
         if len(yeni) > len(satirlar):
             satirlar = yeni
     return satirlar
@@ -143,3 +177,44 @@ def satirlar_asiyor_mu(metin: str, butce: float | None = None) -> List[str]:
     """Bütçeyi aşan satırların listesi (test ve teşhis için)."""
     sinir = satir_butcesi(butce)
     return [satir for satir in str(metin or "").splitlines() if genislik(satir) > sinir]
+
+
+def metni_sigdir(metin, butce: float | None = None, girinti: str = "   ",
+                 guvenlik: float | None = None) -> str:
+    """Metindeki her satırı satır bütçesine sığdırır; bilgi düşürmez.
+
+    Uzun satırlar `bol()` ile bölünür (kelime/ibare ortası kesilmez, devam
+    satırı girintilenir). Alarm kartı kendi satırlarını üretirken zaten bu
+    bütçeyi uyguluyor; bu fonksiyon biçimlendiricisi ayrı olan mesajlar için
+    (bülten, özetler, komut yanıtları, karne) tek noktadan güvenlik ağıdır:
+    telefonda kayan bir satır, satırın kendisi kadar bilgiyi okunmaz kılar.
+    """
+    if metin is None:
+        return ""
+    sinir = satir_butcesi(butce) * butce_carpani(guvenlik)
+    out: List[str] = []
+    for satir in str(metin).splitlines():
+        if not satir.strip():
+            out.append(satir.rstrip())
+            continue
+        for i, parca in enumerate(bol(satir, butce, girinti=girinti,
+                                      guvenlik=guvenlik)):
+            parca = (parca if i == 0 or parca.startswith(girinti)
+                     else f"{girinti}{parca}")
+            # `bol` ayraç/paket hesabında bütçeyi kaçırırsa (nadir de olsa olur)
+            # burada sert açılı sözcük paketleyici devreye girer: buradan çıkan
+            # her satır bütçeye kesin olarak uyar.
+            if genislik(parca) <= sinir:
+                out.append(parca)
+                continue
+            prefix = "" if i == 0 else girinti
+            kelimeler = parca.lstrip().split(" ")
+            satir_govde = (prefix if i else "") + (kelimeler[0] if kelimeler else "")
+            for kel in kelimeler[1:]:
+                if genislik(satir_govde + " " + kel) <= sinir:
+                    satir_govde += " " + kel
+                else:
+                    out.append(satir_govde)
+                    satir_govde = prefix + "  " + kel
+            out.append(satir_govde)
+    return "\n".join(out)

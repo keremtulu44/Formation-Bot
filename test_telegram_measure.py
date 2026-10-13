@@ -4,8 +4,8 @@ Bu modül kart biçimleyicisinin tek ölçütünü taşıyor: "satır telefonda 
 Ölçer yanlışsa tüm boyut garantileri (≤SATIR_BUTCE px, sıfır sarma) yanlış olur,
 o yüzden biçimden bağımsız olarak tek başına test ediliyor.
 """
-from telegram_measure import (SATIR_BUTCE, bol, genislik, satirlar_asiyor_mu,
-                              sigar_mi)
+from telegram_measure import (SATIR_BUTCE, bol, genislik, metni_sigdir,
+                              satirlar_asiyor_mu, sigar_mi)
 
 
 def test_bos_metin_sifir_genislik():
@@ -34,11 +34,28 @@ def test_bol_butce_ustune_cikmaz():
 
 
 def test_bol_ibareleri_bolerken_ayraci_kaybetmez():
+    """Bölünen satırda bilgi birebir korunur; ayraç devam satırının başında kalır."""
     metin = "bir · iki · üç · dört · beş"
     satirlar = bol(metin, 60, ayraclar=(" · ",))
     assert len(satirlar) > 1
-    birlesik = " · ".join(s.strip() for s in satirlar)
-    assert birlesik.replace(" ", "") == metin.replace(" ", "")
+    birlesik = " ".join(s.strip() for s in satirlar)
+    assert birlesik.replace(" ", "").replace("·", "") == metin.replace(" ", "").replace("·", "")
+    # Ayraç yutulursa "iki üç" gibi çarpışan kelimeler çıkar; devam satırı
+    # ayraçla başlar ki okur iki bilginin ayrı olduğunu anlasın.
+    assert any(s.lstrip().startswith("·") for s in satirlar[1:])
+
+
+def test_metni_sigdir_butceyi_asmaz_bilgi_dusurmez():
+    """Güvenlik ağı: hangi builder'dan gelirse gelsin satırlar bütçeye uyar."""
+    metin = ("📡 Gün içi izleme adayları\n"
+             "   12/21 gösteriliyor · en yüksek puanlılar\n"
+             "• ISCTR 1h Alçalan Üçgen q89 · Sıkışma güçleniyor · daralma %72 · 312.50\n"
+             "📈 Gün: 9 tarama · 48 hisse × 4 zaman dilimi · 28 bildirim\n"
+             "⚡ Kırılım: 3 · yukarı 1 · aşağı 2")
+    sigar = metni_sigdir(metin, guvenlik=1.0)
+    assert not satirlar_asiyor_mu(sigar)
+    # kelime torbası aynı kalmalı (bilgi kaybı yok)
+    assert sorted(sigar.replace("\n", " ").split()) == sorted(metin.split())
 
 
 def test_bol_parcalanamayan_tokeni_kesmez_bilgi_kaybetmez():

@@ -49,7 +49,43 @@ STATE_TR = {
     "BASARISIZ_RETEST": "Retest başarısız",
     "FORMASYON_GECERSIZ": "Formasyon geçersiz",
     "GECERSIZ": "Geçersiz",
+    # /canli çıktısında ham enum olarak görünen üç state (bkz. patterns/constants):
+    "FORMASYON_YOK": "Formasyon yok",
+    "KIRILIM_TEYIT_ALAMADI": "Kırılım teyit alamadı",
+    "FORMASYON_ZAYIFLADI": "Formasyon zayıfladı",
 }
+
+# Kompakt listeler (/canli) için kısa durum. Uzun hali okumak zor, ham enum ise
+# hiç okunamaz; satır bütçesi de kısa adı zorunlu kılıyor.
+KISA_DURUM = {
+    "FORMASYON_YOK": "—",
+    "ADAY_OLUSUYOR": "aday",
+    "GEOMETRI_ADAYI": "geometri",
+    "FORMASYON_TANIMLANDI": "tanımlandı",
+    "OLGUNLASIYOR": "olgunlaşıyor",
+    "SIKISMA_GUCLENIYOR": "sıkışma",
+    "KIRILIM_HAZIRLIGI": "hazırlık",
+    "KIRILIM_DENEMESI": "deneme",
+    "KIRILIM_ADAYI": "kırılım adayı",
+    "KIRILIM_TEYITLI": "teyitli",
+    "KIRILIM_GECERSIZLESTI": "geçersizleşti",
+    "KIRILIM_TEYIT_ALAMADI": "teyitsiz",
+    "RETEST_BEKLENIYOR": "retest bekliyor",
+    "RETEST_EDILIYOR": "retestte",
+    "RETEST_BASARILI": "retest başarılı",
+    "BASARISIZ_KIRILIM": "kırılım başarısız",
+    "BASARISIZ_RETEST": "retest başarısız",
+    "FORMASYON_TAMAMLANDI": "tamamlandı",
+    "FORMASYON_ZAYIFLADI": "zayıfladı",
+    "FORMASYON_GECERSIZ": "geçersiz",
+    "GECERSIZ": "geçersiz",
+}
+
+
+def kisa_durum(state) -> str:
+    """State'i Türkçe ve kısa yazar; bilinmiyorsa STATE_TR, o da yoksa ham değeri."""
+    anahtar = str(state or "").strip().upper()
+    return KISA_DURUM.get(anahtar) or STATE_TR.get(anahtar) or (str(state or "—") or "—")
 
 def gecen_sure(iso_zaman):
     """'12 dk önce' gibi kısa yaş metni."""
@@ -99,6 +135,14 @@ def mum_kapanis_metni(tf_name: str, bar_zamani=None, bar_kapanis=None) -> str:
         return f"🕒 {ad} mum {baslangic} kapandı"
     except (AttributeError, ValueError, TypeError):
         return ""
+
+
+_TF_KISA = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
+
+
+def tf_kisa(tf) -> str:
+    """Alarm kartındaki kısaltma (1s/2s/4s/1g): aynı bilgi, liste satırında yer açar."""
+    return _TF_KISA.get(str(tf or "").strip().lower(), str(tf or ""))
 
 
 def sayi(deger, basamak=2, varsayilan="—"):
@@ -351,7 +395,11 @@ def veri_durumu_satiri(data_asof, fresh_fetch=None, requested=None, fetch_failur
         fetch = f" · başarılı fetch {fresh_fetch}/{kapsam}{hata}"
     eski = (f" · en eski taranan veri yaşı {son_bar_yasi_dakika_str(oldest_age_minutes)}"
             if oldest_age_minutes is not None else "")
-    return f"📡 Son tamamlanmış mum: {zaman} · veri yaşı {yas_metni}{eski}{fetch}"
+    # Tek satıra dizilince 900+ px ediyordu (telefonda 3-4 satıra sarıyordu);
+    # veri yaşı/fetch bilgisi ayrı satıra iner, içerik aynı kalır.
+    govde = f"📡 Son tamamlanmış mum: {zaman} · veri yaşı {yas_metni}"
+    ayrinti = " · ".join(p for p in (eski.strip(" ·"), fetch.strip(" ·")) if p)
+    return govde + (f"\n   {ayrinti}" if ayrinti else "")
 
 
 def format_deferred_alert_summary(records: List[dict], toplam: int = None) -> str:
@@ -371,27 +419,66 @@ def format_deferred_alert_summary(records: List[dict], toplam: int = None) -> st
     except (TypeError, ValueError):
         toplam_sayi = gosterilen
     toplam_sayi = max(toplam_sayi, gosterilen)
+    # Başlık + alt not ayrı satırlar: "… (12/21 gösteriliyor)" tek satırda
+    # 370 px'e çıkıp parça parça kayıyordu.
     baslik = "📡 Gün içi izleme adayları"
     if toplam_sayi > gosterilen:
-        baslik += f" ({gosterilen}/{toplam_sayi} gösteriliyor)"
+        # Ayraçla birleştirme: 300 px'ı geçip ortadan ikiye iniyor — her bilgi
+        # kendi satırında okunur.
+        baslik += f"\n   {gosterilen}/{toplam_sayi} gösteriliyor\n   en yüksek puanlılar"
     else:
-        baslik += " (en yüksek puanlılar)"
+        baslik += "\n   en yüksek puanlılar"
+    # Politika gereği buffer yalnız WATCH_STATES'teki adayları tutar; state her
+    # satırda tekrarlanınca 10 satırlık listede 10 kez aynı kelime okunuyordu.
+    # Tek durum varsa başlıkta söylenir, satırlardan düşürülür.
+    tek_state = ""
+    durumlar = {str(r.get("state") or "") for r in records}
+    if len(durumlar) == 1:
+        tek_state = STATE_TR.get(durumlar.pop(), "")
+    if tek_state:
+        baslik += f"\n   {tek_state.lower()}"
     lines = []
     for record in records:
         stock = str(record.get("stock") or "?")
-        timeframe = str(record.get("timeframe") or "")
+        timeframe = _TF_KISA.get(str(record.get("timeframe") or "").lower(),
+                                 str(record.get("timeframe") or ""))
         pattern = str(record.get("pattern_name") or "formasyon")
-        state = STATE_TR.get(str(record.get("state") or ""), str(record.get("state") or "izlemede"))
+        state = "" if tek_state else STATE_TR.get(str(record.get("state") or ""),
+                                                  str(record.get("state") or "izlemede"))
         try:
             quality = f"kalite {float(record.get('quality') or 0):.0f}"
         except (TypeError, ValueError):
             quality = ""
         contraction = record.get("contraction")
         try:
-            contraction_text = f", daralma %{float(contraction) * 100:.0f}" if contraction is not None else ""
+            contraction_text = f"daralma %{float(contraction) * 100:.0f}" if contraction is not None else ""
         except (TypeError, ValueError):
             contraction_text = ""
-        lines.append(f"• {stock} {timeframe} {pattern} — {state}, {quality}{contraction_text}".strip())
+        # Ayraç her yerde " · " (eskiden "—", "," ve " · " karışıktı: aynı
+        # uygulamada üç farklı madde biçimi okunurluğu bozuyor).
+        # /canli satır biçimi: "HISSE TF DESEN q<KALİTE> · <durum>". Başa "• " ve
+        # araya fazladan " · " eklemek satırı 300 px'ın üstüne taşıyıp ikiye
+        # bölüyordu; liste zaten tek satırda okunuyor.
+        quality = quality.replace("kalite ", "q")
+        # Madde iki satıra tasarlanır: "hisse + TF + desen + puan" birinci satırda,
+        # "durum + daralma + kritik" ikincide. Tek satırda 359 px'a çıkıyordu ve
+        # otomatik bölme ayraçları yutunca kelimeler çarpışıyordu.
+        ust = " ".join(p for p in ("• " + f"{stock} {timeframe}".strip(), pattern) if p)
+        if quality:
+            ust += f" {quality}"
+        try:
+            _kritik = float(record.get("critical_price") or 0)
+        except (TypeError, ValueError):
+            _kritik = 0.0
+        alt = " · ".join(p for p in ("" if tek_state
+                                     else kisa_durum(str(record.get("state") or "")),
+                                     contraction_text,
+                                     sayi(_kritik) if _kritik > 0 else "")
+                        if p)
+        lines.append(ust)
+        if alt:
+            lines.append(f"   {alt}")
     if toplam_sayi > gosterilen:
-        lines.append(f"… {toplam_sayi - gosterilen} aday daha (tam liste: /formasyonlar)")
+        lines.append(f"… {toplam_sayi - gosterilen} aday daha")
+        lines.append("   tam liste: /formasyonlar")
     return baslik + "\n" + "\n".join(lines)

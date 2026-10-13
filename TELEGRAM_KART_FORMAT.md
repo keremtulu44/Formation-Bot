@@ -19,14 +19,26 @@ yeniden üretilebilir ölçüm sonuçlarıyla. Amaç formatı beğenmek/beğenme
    böler, gönderim `_gonder()` içinde `satirlar_asiyor_mu()` ile denetlenir ve
    aşım WARNING olarak loglanır. Karakter limiti (70 kr) tek başına yetmiyor:
    `ı` ile `m` aynı değil.
-4. **Mesaj bütçesi: ≤ 1100 karakter.** 4096'lık Telegram tavanı değil, tek
+   Kart dışı yüzeyler (bülten, özet, komut yanıtları, karne) için aynı bütçe
+   **üç merkezi gönderim noktasında** uygulanır: `notifier.send_text`,
+   `notifier.send_to_public`, `telegram_commands._cevapla` →
+   `metni_sigdir(metin, guvenlik=1.0)`. `guvenlik=1.0` liste/özet yüzeyleri
+   için: ölçüm tablosu ±%3 hata taşıyor, alarm kartı `%5` payla (`_GUVENLIK`)
+   çalışıyor; liste satırı 1 px taşarsa tek kelime iner, kartta ise taşma kartın
+   dengesini bozduğu için pay bırakılıyor.
+4. **Sarmayan satır ≠ düzeltilmiş satır.** Bölünme kelime/ibare ortasına
+   düşüyorsa (başlık ikiye yarılmış, son kelimeler havada kalmış) sorun
+   çözülmemiştir: satır **kelime düzeyinde kısaltılarak** tek başına okunan bir
+   birime dönüştürülür (`q88`, `%72`, `1s`, `⚡ Kırılım: 3 · …`). Bilgi
+   düşürülmez — alan adını kısaltır, veriyi silmeyiz.
+5. **Mesaj bütçesi: ≤ 1100 karakter.** 4096'lık Telegram tavanı değil, tek
    ekran sözümüzdür. 1100'ün altındaki boşluk "daha çok yazı" anlamına gelmez.
-5. **Kaynakta olmayan veri yazılmaz.** `olay kalitesi`, `deneme sayısı`, OB
+6. **Kaynakta olmayan veri yazılmaz.** `olay kalitesi`, `deneme sayısı`, OB
    yaşam döngüsü etiketi gibi motorun üretmediği alanlar kartta yok (motor OB
    için yalnız `state = ±1` veriyor — `domain_engines/order_block/order_block.py`).
-6. **Bilgi kaybı yok.** Kartta çıkarılan her satır `/tara SEMBOL` çıktısında
+7. **Bilgi kaybı yok.** Kartta çıkarılan her satır `/tara SEMBOL` çıktısında
    duruyor; `! karşı delil` satırı bu yüzden kartta.
-7. **Klasik yol byte-byte duruyor.** `TELEGRAM_ALERT_STYLE=klasik` → 25 Eyl
+8. **Klasik yol byte-byte duruyor.** `TELEGRAM_ALERT_STYLE=klasik` → 25 Eyl
    öncesi biçim. A/B karşılaştırma ve geri alma hakkı için korundu; kartta
    yapılan düzeltme klasik biçime uygulanmaz.
 
@@ -120,5 +132,11 @@ Kart, tahmin edilen 850–900 kr bandının tamamında (816–966 kr).
 - **Kısmi bağlam diff'i**: `değişmedi` kapısı tam eşleşme ister; 5 satırdan 1'i
   değişince blok tamamı basılır (25 Eyl TOASO çifti böyle çalıştı: kısaltma
   devreye girmedi, yanılma payı bırakılmadı).
-- **Grup bülteni satırları** klasik biçimde kaldı (en uzun satır 1 089 px); px
-  kuralı yaşam döngüsü alarmlarına uygulanıyor. Group bülteni ayrı iş.
+- **Klasik (`kart=0`) şablon** kelime kısaltmalarından faydalanmaz; satır
+  bütçesi güvenlik ağı olarak yine uygulanır (A/B referansı bozulmasın diye
+  `_gonder()` yolu kendi biçimleyicisini kullanır).
+- **On-demand listeler 1100 kr'ı aşabilir** (`/yardim` 2 641, `/formasyonlar`
+  2 140 kr): 1100 kr alarm başlığıdır; liste tek mesajda tam kalmalıdır. Koruma
+  `kirp()` + Telegram'ın 4096 tavanı.
+- **Ölü `format_message` şablonu** (329–361 px satırlar) silinmedi; hiçbir akış
+  oradan geçmiyor, temizliği ayrı commit.

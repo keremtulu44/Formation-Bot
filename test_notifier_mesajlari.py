@@ -209,12 +209,17 @@ def test_gun_sonu_ozeti_yon_ve_daralma_okunabilir():
     ozet = n.format_daily_summary(aktif, {"stocks_scanned": 96, "alerts_sent": 2})
     # Ham yön değeri ve çift tire görünmemeli
     assert "- -1 yön" not in ozet and "- 1 yön" not in ozet
-    assert "yukarı" in ozet and "aşağı" in ozet
-    # Zaman dilimi üç bölümde de görünür (tutarlılık)
-    assert "ISMEN Alçalan Üçgen 2h" in ozet
-    assert "AKSEN Alçalan Kama 1d" in ozet
+    # Yön liste satırlarında okla veriliyor (↑/↓): "yukarı yön" kelimesi satırı
+    # 350 px'a çıkarıp her maddeyi ikiye bölüyordu. Ham değer yine basılmamalı.
+    assert "↑" in ozet and "↓" in ozet
+    # Zaman dilimi üç bölümde de görünür (tutarlılık) ve desen adı korunur
+    assert "↓ ISMEN 2h Alçalan Üçgen" in ozet
+    assert "↑ AKSEN 1d Alçalan Kama" in ozet
     # Sıkışanlar: hisse önce, daralma sonra
-    assert "ISCTR Alçalan Üçgen 4h · %81 daralma" in ozet
+    # Uzun madde satırı " · " üzerinden ikiye iner (telefonda sarmaması için).
+    # Madde tek satıra sığıyor: "↔ ISCTR 4h Alçalan Üçgen q88 · %81" yerine kısa
+    # biçim ("ISCTR 4h Alçalan Üçgen q88 %81") — veri aynı, satır ikiye bölünmüyor.
+    assert "ISCTR 4h Alçalan Üçgen" in ozet and "%81" in ozet
 
 
 # --- Mesaj kalitesi: ton, sabit metin, telefon uyumu -------------------------
@@ -387,9 +392,11 @@ def test_ozet_tek_sabit_footer_ve_turkce_tarih():
     ], {"stocks_scanned": 48, "alerts_sent": 1})
     assert "kanalı takipte kal" not in ozet
     assert "Takipteyim" not in ozet
-    assert ozet.rstrip().endswith("Formasyon takibi · yatırım tavsiyesi değildir")
-    # Türkçe ay kısaltması: strftime('%b') İngilizce basıyordu.
-    assert " BIST Formasyon Özeti · " in ozet
+    assert ozet.rstrip().endswith("📌 yatırım tavsiyesi değildir")
+    # Türkçe ay kısaltması: strftime('%b') İngilizce basıyordu. Başlık artık iki
+    # satır (tek satır 310 px'tı), tarih girintili devam satırında.
+    assert "📊 BIST Formasyon Özeti\n   " in ozet
+    assert "Eki" in ozet
 
 
 def test_ozet_tum_bolumlerde_kalite_gorunur():
@@ -404,10 +411,13 @@ def test_ozet_tum_bolumlerde_kalite_gorunur():
     ]
     ozet = n.format_daily_summary(aktif, {"stocks_scanned": 48, "alerts_sent": 1})
     # Üç bölüm de aynı madde biçimini kullanır: hisse · desen · tf · kalite
-    assert "THYAO Yükselen Üçgen 1h · yukarı yön · kalite 86" in ozet
+    assert "THYAO 1h Yükselen Üçgen" in ozet and "q86" in ozet
     assert "TEYİTLİ KIRILIM" in ozet
-    assert "ISMEN Alçalan Üçgen 2h · aşağı yön · kalite 84" in ozet
-    assert "ISCTR Alçalan Üçgen 4h · %81 daralma" in ozet
+    assert "↓ ISMEN 2h Alçalan Üçgen" in ozet and "q84" in ozet
+    # Uzun madde satırı " · " üzerinden ikiye iner (telefonda sarmaması için).
+    # Madde tek satıra sığıyor: "↔ ISCTR 4h Alçalan Üçgen q88 · %81" yerine kısa
+    # biçim ("ISCTR 4h Alçalan Üçgen q88 %81") — veri aynı, satır ikiye bölünmüyor.
+    assert "ISCTR 4h Alçalan Üçgen" in ozet and "%81" in ozet
 
 
 
@@ -447,3 +457,41 @@ def test_gunluk_ozet_terminal_ve_basarisiz_statei_gostermez():
     ], {"tarama_sayisi": 1, "alerts_sent": 0})
     assert "THYAO" not in msg and "GARAN" not in msg
     assert "TAMAMLANDI" not in msg and "başarısız" not in msg.lower()
+
+
+def test_ozet_ve_bulten_satirlari_sarmaz():
+    """Özet/bülten satırları da kartla aynı satır bütçesine uyar.
+
+    Alarm kartı ≤283 px sözü veriyor; özet ve bülten aynı sohbete düşüyor ve
+    oradaki 400-1 160 px'lık satırlar kartın okunurluğunu sıfırlıyordu.
+    """
+    from telegram_measure import genislik
+    n = TelegramNotifier()
+    kayit = {"stock_name": "TOASO", "timeframe": "1h", "pattern_name": "Yükselen Üçgen",
+             "state": "KIRILIM_GECERSIZLESTI", "break_dir": -1, "critical_price_level": 281.88,
+             "confidence_score": 88.0, "candle_close_price": 285.50,
+             "upper_touches": 2, "lower_touches": 2,
+             "bar_metni": "25.09 09:30 → 13:30 kapanış mumu · 4 mum · gövde %78"}
+    aktif = [kayit, dict(kayit, stock_name="BIMAS", timeframe="4h", state="KIRILIM_TEYITLI")]
+    gun = {"tarama_sayisi": 4, "alerts_sent": 6, "stocks_scanned": 28, "tam_tarama_guncel": True,
+           "kirilim_teyitli_olay_sayisi": 3, "retest_basarili_olay_sayisi": 1,
+           "kirilim_gecersizlesti_olay_sayisi": 2, "son_tarama_bitis": "2026-09-25T16:38:20+03:00"}
+    metinler = [n.format_public_batch(aktif), n.format_daily_summary(aktif, gun),
+                n.format_public_summary(aktif, gun, izleme=[{"stock": "FROTO", "timeframe": "1h",
+                                                              "pattern_name": "Alçalan Kama",
+                                                              "quality": 82}], kapanis=True)]
+    asan = [satir for metin in metinler for satir in metin.splitlines()
+            if genislik(satir) > 283]
+    assert not asan, asan[:3]
+
+
+def test_metin_sigdir_bilgi_dusurmez():
+    """Bölme yalnız satır sonu ekler: kelimeler aynen durur (ayraç hariç)."""
+    n = TelegramNotifier()
+    uzun = {"stock_name": "DOHOL", "timeframe": "2h", "pattern_name": "Alçalan Üçgen",
+             "state": "KIRILIM_TEYITLI", "break_dir": 1, "critical_price_level": 21.28,
+             "confidence_score": 87.0, "candle_close_price": 21.90,
+             "upper_touches": 2, "lower_touches": 2}
+    metin = n.format_public_batch([uzun])
+    kelimeler = " ".join(metin.split())
+    assert "DOHOL" in kelimeler and "21,28" in kelimeler and "kalite 87" in kelimeler

@@ -560,12 +560,32 @@ def karne_hesapla(kayitlar: List[dict], saglayici: Callable[[str, str], Optional
     }
 
 
-def _sar(tokens: List[str], genislik: int = 64) -> List[str]:
-    """Token listesini satır genişliğine göre paketler (Telegram'da okunur kalsın)."""
+# Telegram'ın tek satır bütçesi (telegram_measure.SATIR_BUTCE). Karne mesajları
+# send_text/send_to_public üzerinden 1.0 çarpanla gönderildiği için tam bütçe
+# kullanılıyor; ölçüm biriminin tek kaynağı olduğu için sabit burada tutuluyor.
+_SATIR_GUVENLI = 283.0
+
+
+def _px(metin: str) -> float:
+    try:
+        from telegram_measure import genislik
+        return float(genislik(metin))
+    except Exception:  # noqa: BLE001 - karne metriği ölçüm hatasına teslim edilmez
+        return float(len(str(metin))) * 8.0
+
+
+def _sar(tokens: List[str], butce_px: float | None = None) -> List[str]:
+    """Token listesini SATIR BÜTÇESİNE (px) göre paketler.
+
+    Eskiden karakter sayıyordu (64 kr); 64 karakterlik Türkçe satır telefonda
+    400-600 px edip sarmalanıyordu. Ölçüm tek kaynaktan (telegram_measure) gelir:
+    kartlarla aynı kural, farklı biçimleyicide iki ayrı "uzunluk" tanımı olmaz.
+    """
+    sinir = float(butce_px) if butce_px else _SATIR_GUVENLI
     satirlar, mevcut = [], ""
     for tok in tokens:
         aday = f"{mevcut} · {tok}" if mevcut else tok
-        if len(aday) > genislik and mevcut:
+        if _px(aday) > sinir and mevcut:
             satirlar.append(mevcut)
             mevcut = tok
         else:
@@ -575,72 +595,128 @@ def _sar(tokens: List[str], genislik: int = 64) -> List[str]:
     return satirlar
 
 
+def _blok(etiket: str, parcalar: List[str]) -> List[str]:
+    """`etiket` + token listesi: sığıyorsa tek satır, sığmıysa etiket satırı ve
+    altına bütçeye göre paketlenmiş token satırları gelir.
+
+    " · " ile uzun tek satır kurmak, satır bölününce ortaya tek kelime
+    ("3", "gösterilmedi") düşürüyordu; burada bölünme bizim tasarımımızda olur.
+    """
+    if not any(parcalar):
+        return [etiket]
+    bag = " " if etiket.rstrip().endswith(":") else " · "
+    tek = f"{etiket}{bag}{' · '.join(p for p in parcalar if p)}"
+    if _px(tek) <= _SATIR_GUVENLI:
+        return [tek]
+    govde = _sar([p for p in parcalar if p], butce_px=_SATIR_GUVENLI - _px("   "))
+    if not govde:
+        return [etiket]
+    ilk = f"{etiket} {govde[0]}"
+    if _px(ilk) <= _SATIR_GUVENLI:
+        return [ilk] + ["   " + x for x in govde[1:]]
+    return [etiket] + ["   " + x for x in govde]
+
+
+def _pct_tr(deger, basamak: int = 1) -> str:
+    """Türkçe yüzde biçimi: `−%0,2` / `+%0,3`.
+
+    Eskiden `%-0.2` yazılıyordu (eksi yüzdeden sonra, nokta ondalık) — kartta
+    kullandığımız `−%0,2` ile aynı olmalı: aynı sayı, iki farklı görünüm
+    "farklı veri mi?" şüphesi doğuruyor.
+    """
+    try:
+        sayi = float(deger)
+    except (TypeError, ValueError):
+        return ""
+    isaret = "+" if sayi >= 0 else "−"
+    return f"{isaret}%{abs(sayi):.{basamak}f}".replace(".", ",")
+
+
 def karne_metni(metrik: dict, baslik: str = "HAFTALIK DOĞRULUK KARNESİ",
                 pencere_metni: str = "", gun_sayisi: int = 5) -> str:
     """Metrikleri Telegram mesajına çevirir (gün sonu mesajının altına eklenir)."""
-    satirlar = [f"📊 {baslik}" + (f" · {pencere_metni}" if pencere_metni else ""),
-                f"{gun_sayisi} seans · defter: {metrik['kayit_sayisi']} kayıt (yerel dosya)"]
+    # Başlık üç satıra tasarlandı: "📊 BAŞLIK · 21.09–25.09.2026" 429 px'a çıkıp
+    # ortadan ikiye düşüyordu (kalan "25.09.2026" havada kalıyordu). Her satır
+    # tek başına okunan bir birim.
+    satirlar = [f"📊 {baslik}"]
+    _ust = f"{pencere_metni} · " if pencere_metni else ""
+    satirlar.append(f"   {_ust}{gun_sayisi} seans")
+    satirlar.append(f"   defter: {metrik['kayit_sayisi']} kayıt (yerel dosya)")
 
     # --- formasyon ---
     satirlar.append("")
     satirlar.append(f"🔍 Formasyon tespiti: {metrik['formasyon_toplam']}")
     if metrik["formasyon_toplam"]:
-        tf_metin = " · ".join(f"{_tf_tr(tf)} {adet}" for tf, adet in
-                              sorted(metrik["tf_sayilari"].items(), key=lambda x: -x[1]))
-        satirlar.append(" " + tf_metin)
+        tf_parca = [f"{_tf_tr(tf)} {adet}" for tf, adet in
+                    sorted(metrik["tf_sayilari"].items(), key=lambda x: -x[1])]
+        satirlar.extend(_blok(" TF:", tf_parca))
         hisse_tokenlari = [f"{h} {n}" for h, n in
                            sorted(metrik["hisse_sayilari"].items(), key=lambda x: (-x[1], x[0]))]
-        satirlar.append(" Hisse: " + f"({metrik['hisse_cesidi']} hisse)")
-        satirlar.extend(" " + s for s in _sar(hisse_tokenlari))
+        satirlar.extend(_blok(f" Hisse dağılımı ({metrik['hisse_cesidi']} hisse):",
+                              hisse_tokenlari))
 
     # --- kırılım performansı ---
     satirlar.append("")
     if metrik["kirilim_toplam"] == 0:
-        satirlar.append("⚡ Kırılım sinyali: 0 (bu pencerede teyitli kırılım yok)")
+        satirlar.append("⚡ Kırılım: 0 · bu aralıkta teyit yok")
     else:
-        satirlar.append(f"⚡ Kırılım sinyali: {metrik['kirilim_toplam']} "
-                        f"(yukarı {metrik['yon_yukari']} · aşağı {metrik['yon_asagi']})")
+        satirlar.append(f"⚡ Kırılım: {metrik['kirilim_toplam']} · "
+                        f"yukarı {metrik['yon_yukari']} · aşağı {metrik['yon_asagi']}")
         if metrik["degerlendirilen"]:
-            satirlar.append(f" {KARNE_HORIZON_BAR} bar içinde: hedef {metrik['hedef']} · "
+            satirlar.append(f" {KARNE_HORIZON_BAR} bar: hedef {metrik['hedef']} · "
                             f"nötr {metrik['notr']} · stop {metrik['stop']}")
             oran = metrik['pozitif'] * 100.0 / metrik["degerlendirilen"]
-            satirlar.append(f" Kırılım yönünde kapatan: {metrik['pozitif']}/"
-                            f"{metrik['degerlendirilen']} (%{oran:.0f}) · "
-                            f"ters {metrik['negatif']} · yatay {metrik['yatay']}")
+            # "Kırılım yönünde kapatan: 1/3 (%33) · ters 1 · yatay 1" 426 px'tı;
+            # oran ile dağılım ayrı satırlarda.
+            satirlar.append(f" ✅ Yönünde kapanan: {metrik['pozitif']}/"
+                            f"{metrik['degerlendirilen']} (%{oran:.0f})")
+            _dagilim = " · ".join(p for p in (f"ters {metrik['negatif']}",
+                                              f"yatay {metrik['yatay']}"
+                                              if metrik['yatay'] else "") if p)
+            if _dagilim:
+                satirlar.append(f"   {_dagilim}")
             if metrik["ort_mfe_pct"] is not None:
-                satirlar.append(f" Ort. maks. lehte +%{metrik['ort_mfe_pct']:.1f} · "
-                                f"alehte −%{metrik['ort_mae_pct']:.1f}")
+                satirlar.append("   ort. lehte " + _pct_tr(metrik['ort_mfe_pct'])
+                                + " · aleyhte " + _pct_tr(metrik['ort_mae_pct']))
         if metrik["bekleyen"]:
-            satirlar.append(f" ⏳ {metrik['bekleyen']} sinyal henüz {KARNE_HORIZON_BAR} barı doldurmadı")
+            satirlar.append(f" ⏳ {metrik['bekleyen']} sinyal için "
+                            f"{KARNE_HORIZON_BAR} bar dolmadı")
         if metrik["olculemedi"]:
-            satirlar.append(f" ℹ️ {metrik['olculemedi']} sinyal ölçülemedi (seri cache'te yok)")
+            satirlar.append(f" ℹ️ {metrik['olculemedi']} sinyal ölçülemedi (seri yok)")
         if metrik["tf_performans"]:
             parcalar = [f"{_tf_tr(tf)} {v['poz']}/{v['n']}" for tf, v in
                         sorted(metrik["tf_performans"].items())]
-            satirlar.append(" TF (yönünde/n): " + " · ".join(parcalar))
+            satirlar.extend(_blok(" ⚡ TF (yönünde/n):", parcalar))
         if metrik["kalite_performans"]:
             sirali_kalite = sorted(metrik["kalite_performans"].items(),
                                    key=lambda kv: _KALITE_SIRA.get(kv[0], 9))
             parcalar = [f"{etiket} {v['poz']}/{v['n']}" for etiket, v in sirali_kalite]
-            satirlar.append(" Kalite: " + " · ".join(parcalar))
+            satirlar.extend(_blok(" Kalite:", parcalar))
         for etiket, grup in (("En iyi", metrik["en_iyi"]), ("En kötü", metrik["en_kotu"])):
             if grup:
-                parcalar = [f"{k['stock']} {k['tf']} {'%+' if s['son_pct'] >= 0 else '%-'}"
-                            f"{abs(s['son_pct']):.1f}" for k, s in grup]
-                satirlar.append(f" {etiket}: " + " · ".join(parcalar))
+                parcalar = [f"{k['stock']} {_tf_tr(k['tf'])} {_pct_tr(s['son_pct'])}"
+                            for k, s in grup]
+                # Etiket + paketlenmiş tokenlar (`_blok`): " · " ile tek uzun
+                # satır kurmak ortada tek bir token bırakıyordu (347 px).
+                satirlar.extend(_blok(f" {etiket}:", parcalar))
 
     # --- huni ---
     if metrik["huni"]:
         parcalar = [f"{_state_tr(s)} {n}" for s, n in
                     sorted(metrik["huni"].items(), key=lambda x: -x[1])]
         satirlar.append("")
-        satirlar.append(f"🔁 Huni: kırılım {metrik['kirilim_toplam']} → " + " · ".join(parcalar))
+        # "Huni: kırılım 3 → tamamlanan 10" okuyucuda "10 > 3, bir şey ters"
+        # şüphesi doğuruyordu: huni defterdeki TÜM olayları sayar, kırılım sayısı
+        # bu aralıktaki teyitli kırılımları — ardışık aşama değil, ayrı kümeler.
+        olaylar = [f"teyitli kırılım {metrik['kirilim_toplam']}"] + parcalar
+        satirlar.extend(_blok("🔁 Olaylar (bu aralık):", olaylar))
 
     # --- uyarı ---
     if metrik["degerlendirilen"] and metrik["degerlendirilen"] < 30:
         satirlar.append("")
-        satirlar.append(f"⚠️ n={metrik['degerlendirilen']} küçük: oranlar için 30+ sinyal birikmeli")
-    satirlar.append("ℹ️ Veriler yerel dosyada (Supabase gerekmez) · /karne ile istediğin an al")
+        satirlar.append(f"⚠️ n={metrik['degerlendirilen']} küçük · 30+ sinyal gerek")
+    satirlar.extend(_blok("ℹ️ Veriler yerel dosyada (Supabase gerekmez)",
+                           ["/karne ile istediğin an al"]))
     return "\n".join(satirlar)
 
 
@@ -650,28 +726,37 @@ _KALITE_SIRA = {"q≥80": 0, "q70–79": 1, "q<70": 2}
 def karne_kisa_metni(metrik: dict, pencere_metni: str = "") -> str:
     """PUBLIC (grup) sürümü: 4-5 satır. Teknik döküm, dosya yolu ve küçük-n
     uyarısı bilerek yok — grup için özet ve dürüst, ama iç muhasebe değil."""
-    satirlar = ["📊 Haftalık doğruluk" + (f" · {pencere_metni}" if pencere_metni else "")]
+    satirlar = ["📊 Haftalık doğruluk"]
+    if pencere_metni:
+        # Pencere etiketi başlıkla birleşince 429 px'a çıkıp ortadan ikiye
+        # düşüyordu; ayrı satırda okunaklı ve sığar.
+        satirlar.append(f"   {pencere_metni}")
     kirilim = int(metrik.get("kirilim_toplam") or 0)
     degerlendirilen = int(metrik.get("degerlendirilen") or 0)
     if kirilim and degerlendirilen:
         oran = (metrik.get("pozitif") or 0) * 100.0 / degerlendirilen
-        satirlar.append(f"Kırılım sinyali {kirilim} · {KARNE_HORIZON_BAR} bar içinde yönünde "
-                        f"kapatan {metrik.get('pozitif', 0)}/{degerlendirilen} (%{oran:.0f})")
-        if metrik.get("ort_mfe_pct") is not None and metrik.get("ort_mae_pct") is not None:
-            satirlar.append(f"Ort. maks. lehte +%{metrik['ort_mfe_pct']:.1f} · "
-                            f"alehte −%{metrik['ort_mae_pct']:.1f}")
+        satirlar.extend(_blok(f"⚡ Kırılım {kirilim} · {KARNE_HORIZON_BAR} bar sonucu:",
+                              [f"yönünde kapanan {metrik.get('pozitif', 0)}/{degerlendirilen} "
+                               f"(%{oran:.0f})",
+                               "ort. lehte " + _pct_tr(metrik['ort_mfe_pct'])
+                               + " · aleyhte " + _pct_tr(metrik['ort_mae_pct'])
+                               if metrik.get("ort_mfe_pct") is not None
+                               and metrik.get("ort_mae_pct") is not None else ""]))
     elif kirilim:
-        satirlar.append(f"Kırılım sinyali {kirilim} · sonuçlar için yeterli bar henüz oluşmadı")
+        satirlar.append(f"⚡ Kırılım {kirilim} · bar sonucu bekleniyor")
     else:
-        satirlar.append("Kırılım sinyali: 0 (bu hafta teyitli kırılım yok)")
+        satirlar.append("⚡ Kırılım 0 · bu hafta teyit yok")
     huni = metrik.get("huni") or {}
     tamamlanan = sum(n for s, n in huni.items() if s == "FORMASYON_TAMAMLANDI")
     retest = sum(n for s, n in huni.items() if s == "RETEST_BASARILI")
     if tamamlanan or retest:
-        satirlar.append(f"Tamamlanan {tamamlanan} · retest başarılı {retest}")
-    satirlar.append("ℹ️ Geçmiş performans, gelecek getirinin garantisi değildir")
+        satirlar.extend(_blok("🔁 Olaylar:", [f"Tamamlanan {tamamlanan}",
+                                              f"retest başarılı {retest}"]))
+    satirlar.append("ℹ️ Geçmiş sonuçlar garanti değil")
     return "\n".join(satirlar)
-_TF_TR = {"1h": "1 saatlik", "2h": "2 saatlik", "4h": "4 saatlik", "1d": "günlük"}
+# Kart/bülten/liste yüzeylerinin kısaltmalarıyla aynı dil (1s/2s/4s/1g):
+# "1 saatlik" yazınca satır 11 px aşıp "· 2 saatlik 3" havada kalıyordu.
+_TF_TR = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
 _STATE_TR = {
     "KIRILIM_TEYITLI": "teyitli kırılım",
     "RETEST_BASARILI": "retest başarılı",

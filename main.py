@@ -71,6 +71,7 @@ from reporting.format import (
     sayi as _sayi, gecen_sure as _gecen_sure,
     filtrele_formasyonlar as _filtrele_formasyonlar, break_ok as _break_ok,
     veri_durumu_satiri as _veri_durumu_satiri,
+    kisa_durum as _kisa_durum, tf_kisa as _tf_kisa,
     panel_kalite as _panel_kalite, panel_sembol as _panel_sembol,
     panel_hucre as _panel_hucre, panel_aday_puani as _panel_aday_puani,
     panel_kritik_anahtar as _panel_kritik_anahtar,
@@ -1295,10 +1296,12 @@ def _komut_canli(arguman: str) -> str:
     for f in sirali:
         q = f.get("quality") or 0
         ok = _break_ok(f.get("break_dir"))
-        durum = f.get("state") or "—"
-        # kısa durum: ilk kelimeyi koru, TR map varsa kısa kullan
+        # Yorum "TR map varsa kısa kullan" diyordu ama ham enum basılıyordu:
+        # /canli çıktısında SIKISMA_GUCLENIYOR / KIRILIM_TEYITLI okunamıyordu.
+        durum = _kisa_durum(f.get("state"))
+        tf = _tf_kisa(f.get("timeframe"))
         satirlar.append(
-            f"{f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} q{float(q):.0f} {ok} {durum}"
+            f"{f.get('stock')} {tf} {f.get('pattern_name')} q{float(q):.0f} {ok} {durum}"
         )
     if len(formations) > 20:
         satirlar.append(f"... ve {len(formations)-20} daha (/formasyonlar ile hepsi)")
@@ -2968,6 +2971,7 @@ def _karneyle_gonder(notifier, ana_mesaj: str, karne_ek: str = ""):
         parcalar = [(ana_mesaj, "ana")]
     ana_ok, karne_ok, hata = False, False, ""
     for parca, tur in parcalar:
+        # Satır bütçesi `notifier.send_text` içinde uygulanır (tek nokta).
         ok, parca_hata = notifier.send_text(parca)
         if ok:
             if tur in ("ana", "ikisi"):
