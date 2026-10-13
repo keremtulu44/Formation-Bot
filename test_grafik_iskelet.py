@@ -13,6 +13,7 @@ import json
 import math
 import re
 import struct
+from pathlib import Path
 import unittest.mock as mock
 from datetime import datetime, timedelta, timezone
 
@@ -272,7 +273,11 @@ def test_meta_sozlesmesi_ve_png_olcusu(tmp_path):
     assert meta["sem"] == "AKBNK" and meta["tf"] == "1s"
     assert meta["kare"]["yukseklik"] == 810 and meta["mum_sayisi"] == 180
     assert meta["cizgiler"]["alarm"]["deger"] == pytest.approx(52.5)
-    assert meta["zone"] == {"cizilen": 0, "elenen": 0}
+    # G2: `zone` alanı biçimini sabit tuttu (boşken de aynı anahtarlar; §13)
+    assert meta["zone"]["cizilen"] == 0 and meta["zone"]["elenen"] == 0
+    assert meta["zone"]["sirala"] == "zone verisi yok"
+    assert set(meta["zone"]) >= {"cizilen", "elenen", "tip", "kaynak_disi", "kapak",
+                                 "sirala", "atr", "hata", "kayitlar"}
     assert meta["olay"] == {"cizilen": 0, "elenen": 0}
     assert meta["serit"] == {"acik": False, "esik": None, "spike": []}
     assert _png_olcu(meta["yol"]) == (1080, 810) and meta["png_kb"] <= 500     # §6.5
@@ -402,6 +407,26 @@ def test_aday_nesnesi_ile_sozone_sozluğu_ayni_cizilir():
 
 
 # ------------------------------------------------------------------- CLI
+
+
+def test_cli_veri_dizin_bayragi_okunur(tmp_path, capsys):
+    """`--veri-dizin` bayrağı yolu kullanır (regresyon: yanlış değişken adı NameError
+    veriyordu — yalnız bayrak verildiğinde görünen bir yoldu)."""
+    import shutil
+
+    import grafik_uret
+
+    kopya = tmp_path / "veri"
+    kopya.mkdir()
+    kaynak = Path(__file__).resolve().parent / "bot_data" / "AKBNK.json"
+    if not kaynak.exists():
+        pytest.skip("bot_data önbelleği yok")
+    shutil.copy(kaynak, kopya / "AKBNK.json")
+    hedef = tmp_path / "vd.png"
+    kod = grafik_uret.main(["--hisse", "AKBNK", "--tf", "1h", "--veri-dizin", str(kopya),
+                            "--mum", "60", "--cikti", str(hedef)])
+    assert kod == 0 and hedef.exists()
+    assert "kaynak: bot_data" in capsys.readouterr().out
 
 
 def test_cli_cache_veya_demo_ile_kare_uretir(tmp_path):

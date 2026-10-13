@@ -33,7 +33,7 @@ TF_LISTESI = ("1h", "2h", "4h", "1d")
 
 def _veri_dizini(secenek: str | None) -> str:
     if secenek:
-        return str(Path(sekenek).expanduser())
+        return str(Path(secenek).expanduser())
     return os.environ.get("DATA_DIR") or str(Path(__file__).resolve().parent / "bot_data")
 
 
@@ -123,6 +123,9 @@ def main(giris: list[str] | None = None) -> int:
                              help="kart payload'ı biçiminde JSON: bant/işaret/alarm verisi")
     ayristirici.add_argument("--alarm-turu", default=None,
                              choices=["aday", "kritik", "teyit", "retest", "gecersiz", "ihlal"])
+    ayristirici.add_argument("--zone", action="store_true",
+                             help="OB/FVG/engulfing kutuları için domain motorlarını ÇALIŞTIR"
+                                  " (yalnız bu CLI: botun çizim yolu motoru yeniden çağırmaz, §14.2)")
     ayristirici.add_argument("--serit-yok", action="store_true", help="katılım kulvarını kapat")
     ayristirici.add_argument("--etiket-detay", action="store_true",
                              help="motorun `evidence_text` satırını da yaz (§2.6)")
@@ -141,8 +144,14 @@ def main(giris: list[str] | None = None) -> int:
     for tf in tfler:
         cerceve, kaynak = _cerceve_yukle(secenek.hisse, tf, veri_dizin, secenek.demo)
         formasyon, uyarilar = _formasyon_yukle(secenek.formasyon, cerceve)
+        sonuclar = None
+        if secenek.zone:
+            from domain_engines.runner import run_domain_engines
+
+            sonuclar = run_domain_engines(secenek.hisse.upper().replace(".IS", ""), tf,
+                                          cerceve.copy(deep=True))
         goruntu = grafik.anlik_goruntu(formasyon, tf, cerceve, sembol=secenek.hisse,
-                                       alarm_turu=secenek.alarm_turu,
+                                       alarm_turu=secenek.alarm_turu, sonuclar=sonuclar,
                                        kare_mum=secenek.mum)
         for u in uyarilar:
             goruntu["uyarilar"].append(u)

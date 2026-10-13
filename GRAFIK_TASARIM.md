@@ -603,3 +603,104 @@ düşürüyor (sessiz kabahat yok). G2 işleri: `_zone_sec` (mesafe/ATR sıralam
 FVG kutuları (`formation_index`, `gap_size`, state→solid/mitigated/hatched;
 `1s/2s` yok), engulfing (mor kesikli), doluluk yalnız motorun verdiği kutuda
 (§0.12k), `meta["zone"] = {cizilen, elenen}` dolu gelecek şekilde.
+
+---
+
+## 23 · G2 UYGULANDI (2026-10-13) — bölge kutuları (OB / FVG / engulfing)
+
+### 23.1 Motor gerçeği (tahmin değil — `run_domain_engines` ile ölçüldü)
+
+Çerçeve: AKBNK `1s` ve `4s`, `profile="Dengeli"`, `enable_2h_fvg=False`.
+
+- **OB.** `sonuclar["order_block"].export = OrderBlockExport(bull, bear)`;
+  `OrderBlockSideExport(state, top, bottom, fill, source_bar)`. `fill` **yalnız en
+  yakın aktif taraf için** dolu; `export.fill = record.fill_ratio` ve `order_block.py:103-112`
+  eşleşmesi `source_bar` üzerinden yapılıyor. `details = {"records", "active_records"}`
+  (AKBNK/1s ölçümü: 5 / 4). Kutu `details["records"]`dan alınıyor:
+  `OrderBlockRecord(source_index, source_time, top, bottom, bullish, base_score,
+  anchor_high, anchor_low, imbalance_end_index, fill_boundary)` — **bu kayıtta doluluk
+  alanı yok**, o yüzden `%` yalnız export eşleşirse yazılıyor (§0.12k).
+- **FVG / engulfing.** `details["fvg_formations"]` → `FvgLifecycleRecord(...)`
+  (`lower_boundary/upper_boundary/formation_index/formation_time/state/quality/
+  close_fill_ratio/gap_size/...`), `details["engulfing_formations"]` →
+  `EngulfingLifecycleRecord(... formation_low/formation_high ...)`. Ölçüm: **`1s`
+  için `fvg.export is None` ve `details == {}`** → §0.12l gerçek veride doğrulandı;
+  karede ayrıca `_FVG_YOK_TFLAR = {"1h","2h"}` ile katman çizilmiyor (kayıt yinede
+  uydurulmuyor).
+- Enum alanları `IntEnum` → **ada göre** eşleştiriliyor (`_BOLGE_DOLU` / `_BOLGE_ARA`);
+  sayı sabitleri yazılmadı. `direction` enum olarak gelebildiği için `_yon()` `.value`
+  okuyor (sahte nesne testi bunu yakaladı).
+
+### 23.2 Bu turda verilen kararlar (ilk kez burada yazılı)
+
+- **Sıralama (§0.8).** Motor çıktısında OB için ATR yok → `_wilder_atr(cerceve)` =
+  `zone_scoring.wilder_atr(cerceve, ATR_LENGTH)` son değeri (saf fonksiyon; §14.2
+  bozulmadı, `zone_scoring` canlı yolda hiç kullanılmıyor — grep ile doğrulandı).
+  ATR hesaplanamazsa ham fiyat mesafesi ve `meta["zone"]["sirala"] =
+  "mesafe (ATR yok → ham fiyat)"`.
+- **Tek havuz + kapak.** OB + FVG + engulfing aynı havuzda, son kapanışa yakınlığa
+  göre; kapak `SABITLER["zone_ust"]/["zone_alt"]`: 1s 3+3 · 2s 3+3 · 4s 2+2 · 1g 1+1.
+  Eşit mesafede **daha yeni `kaynak`** kazanır. Taraf: kutu merkezi kapanışın
+  üstündeyse "üst".
+- **Kalın kenar (§0.12r) çizimden değil veriden:** seçim turunda `vurgu = "alt"|"ust"`
+  kayda yazılıyor, `_zone_ciz` yalnız okuyor (boğada alt kenar, ayıda üst kenar).
+- **Motorlar çizim yolunda çağrılmaz.** `anlik_goruntu(..., sonuclar=...)` hazır
+  sözlüğü okuyor; `run_domain_engines` çağıran tek yer `grafik_uret.py --zone`
+  (CLI). Alan adı regresyonu, CLI'ı **alt süreçte** çalıştıran testle kapandı
+  (`test_grafik_bolgeler.py::test_cli_zone_...`) — pytest sürecinde motor çağırmak
+  `test_domain_incremental_parity.py` durumunu bozardı.
+- **Etiket yerleşimi.** Kutu başına TEK yazı, sol kenarda: `OB↑ %70`, `FVG↑ q95`.
+  Çakışan yazı atlanır ve `meta["zone"]["etiket_atlandi"]` sayılır (kutunun kendisi,
+  dolgusu, kalın kenarı çizili kalır → bilgi gizlenmez). Geometri `ax.get_position()`
+  × figür pikselinden; `transData` çizim turundan önce güvenilmez (ölçüm: 2,8 birimlik
+  fiyat farkı 6 px çıktı, tüm etiketler çakışık sayıldı). Ölçü alınamazsa filtre
+  kapatılır ve hepsi yazılır (yanlış eleme > üst üste binme).
+- **`meta["zone"]` biçimi sabit:** bölge yokken de aynı anahtar seti döner
+  (`sirala: "zone verisi yok"`) — §13 JSONL okuyucusu dalgalanmasın.
+- **Sağ nefes payı:** bölge çizildiğinde x-ekseni `n-0.4+6` bar; son mumun
+  kesilmediği `meta["kare"]["x_siniri"]` ile test ediliyor (§0.13).
+
+### 23.3 Ölçüm (gerçek önbellek + gerçek motor)
+
+| kare | çizilen | elenen | etiket atlandı | PNG | süre |
+|---|---|---|---|---|---|
+| AKBNK 4s · 110 mum | 4 | 9 | 2 | 59,7 KB | ~410 ms |
+| AKBNK 1s · 180 mum | 5 (`tip.fvg = 0`) | 0 | 0 | ~63 KB | ~490 ms |
+| THYAO 4s · 110 | 4 | 13 | 2 | 58 KB | — |
+| GARAN 4s · 110 | 4 | 4 | 1 | 69,3 KB | — |
+
+Doluluk: 4s AKBNK'ta 4 kutudan 1'i `%70` (`doluluk=0,6957`) aldı, diğerleri `—`
+(motor vermedi) → §0.12k beklendiği gibi. Kapak nedeniyle atılanlar dipnotta sayı
+olarak görülüyor (`bölge: 9 kutu kapak dışında (üst 2 · alt 2)`).
+Tam kapı: `942 passed, 44 skipped in 136 s`.
+
+### 23.4 Belgede/kodda düzeltilenler
+
+- YAPILACAKLAR'daki G1 test sayısı **23 değil 25**ti; G2 sonrası **26** (CLI
+  `--veri-dizin` testi eklendi).
+- `grafik_uret.py::_veri_dizini()` `sekenek` yazıyordu → `--veri-dizin` verildiğinde
+  `NameError` (G1'de test edilmemiş yoldu). Düzeltildi + regresyon testi yazıldı.
+- Havuz sıralaması `mesafe` **azalan** tutulmuştu → kapaklar en UZAK kutuları
+  tutuyordu; `mesafeler == sorted(mesafeler)` iddiası yakaladı. Düzeltildi.
+- `SABITLER["doldurma"]` hem §17.6 adlarını (`golge`, `golge_ince`) hem katman
+  adlarını (`ob`, `fvg`, `eng`, `ince`) taşıyor; aynı değerler — §17.6 izlenebilirliği
+  için bilinçli tekrar.
+
+### 23.5 G3'e devir (ölçülmüş alan adları)
+
+`ms.details` (AKBNK/1s ölçümü): `external_swings` (48) · `internal_swings` (77) ·
+`external_candidates` (2) · `internal_candidates` (2) · `event_history` (98) ·
+`latest_external_event` · `latest_internal_event` · `external_context` ·
+`internal_context`.
+`SwingPoint(valid, identity, scope, side HIGH|LOW, state, swing_class, structural_role,
+source_bar, confirm_bar, price, atr_at_source, prominence_atr, distance_atr,
+distance_pct, previous_same_side_identity, previous_opposite_identity, finalized,
+locked, broken, broken_bar, quality, evidence_text, invalid_reason)`;
+`MarketStructureEventRecord(event_uid, identity, scope, event_type EVENT_CHOCH|
+EVENT_SWEEP, direction, candidate_bar, event_bar, candidate_at, confirmed_at,
+broken_swing_identity, broken_source_bar, broken_source_at, broken_level, origin_*,
+quality, evidence_text, confirmation_status, validity, relevance, outcome, age_bars,
+confirmation_high/low/close, bos_maturity)`.
+G3 işleri: `kritik` çizgisi `broken_level`/`origin_level`dan; `!` yalnız son 15 mum;
+`evidence_text` yalnız `--etiket-detay`; `rvol(20)` kulvarı `vp.export`tan ve 4s için
+`yerel hesap` etiketiyle; yapı etiketleri **aynı çakışma filtresiyle** yazılacak.

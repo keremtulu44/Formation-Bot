@@ -117,7 +117,10 @@ SABITLER: dict[str, Any] = {
     "isaret_boyut": 5.4,
     "cizgi_kalinlik": {"formasyon": 1.6, "alarm_kritik": 2.2, "alarm_normal": 1.1,
                        "projeksiyon": 1.1, "grid": 0.7},
-    "doldurma": {"golge_esik_orani": 0.18, "golge": 0.14, "golge_ince": 0.05},
+    "doldurma": {"golge_esik_orani": 0.18, "golge": 0.14, "golge_ince": 0.05,
+                 "ob": 0.14, "fvg": 0.12, "eng": 0.0, "ince": 0.05},
+    "zone_kalinlik": {"kenar": 0.9, "vurgu": 2.0},
+    "zone_yazi_pt": 8.0,        # kutu etiketi; çakışma ölçümü de bu puntoyu kullanır
     # yazı bütçesi (§22'de kaydı: kart satır bütçesinin kare ölçeğe çevrilmişi)
     "metin_carpani": 0.82,            # genislik() 16 px tabanlı; kare içi yazı 13,2 px
     "etiket_maks_px": 300.0,          # kare içi etiket tavanı (~%28 kare genişliği)
@@ -146,6 +149,17 @@ PALET = {
 }
 
 # Alarm çizgisinin kalınlığı durumdndan gelir (§2.6): halka açık durumlar kalın.
+# §0.12l: `1s` ve `2s` karelerinde FVG çizilmez — `zone_scoring.FVG_TIMEFRAMES`
+# {2h,4h,1d} + `enable_2h_fvg=False`: canlı yolda `2s`de de FVG üretilmiyor.
+_FVG_YOK_TFLAR = frozenset({"1h", "2h"})
+
+# Kutu dolgusu motorun durumundan gelir (§3: state → solid/mitigated/hatched).
+# Enum SAYISI değil ADI kullanılıyor: motor değerleri kaydırsa çizim yanlış
+# anlama düşmesin (bilinmeyen ad = kontur, uydurma dolgu yok).
+_BOLGE_DOLU = frozenset({"ACTIVE", "FIRST_TEST", "DEEP_TEST", "REACTION",
+                         "CONTINUATION_CONFIRMED"})
+_BOLGE_ARA = frozenset({"CANDIDATE", "PARTIAL_FILL", "PARTIAL_RETRACE", "WEAKENED"})
+
 _ALARM_KALIN = {
     "KIRILIM_TEYITLI": "alarm_kritik",
     "RETEST_BASARILI": "alarm_kritik",
@@ -364,6 +378,205 @@ def _bant_temaslari(yuksek: Sequence[Optional[float]], dusuk: Sequence[Optional[
     return bulun
 
 
+# --------------------------------------------------------------- bölge havuzu (G2)
+
+
+def _wilder_atr(cerceve: Any) -> Optional[float]:
+    """Çerçevenin son ATR'si — `zone_scoring.wilder_atr` ile AYNI tanım (14 bar).
+
+    Neden bu: §0.8 mesafeyi ATR'ye böler; motor OB kayıtlarında ATR vermiyor
+    (§17.12). Depoda tek ATR tanımı `zone_scoring`'de ve SAF bir fonksiyon —
+    motor durumu ilerletmiyor, yani §14.2 yasağı ihlal edilmiyor. Uzunluk
+    `zone_scoring.ATR_LENGTH`'ten alınır (sayı kopyalanmaz). Okunamazsa None
+    dönür ve sıra ham fiyat mesafesine düşer (kare bunu `sirala` ile söyler).
+    """
+    try:
+        from zone_scoring import ATR_LENGTH, wilder_atr
+    except Exception:  # pragma: no cover - bağımlılık yoksa mesafe ham kalır
+        return None
+    try:
+        import pandas as pd
+        if isinstance(cerceve, pd.DataFrame):
+            frame = cerceve
+        elif isinstance(cerceve, Mapping):
+            frame = pd.DataFrame({"high": cerceve.get("yuksek") or cerceve.get("high"),
+                                  "low": cerceve.get("dusuk") or cerceve.get("low"),
+                                  "close": cerceve.get("kapanis") or cerceve.get("close")})
+        else:
+            frame = pd.DataFrame(list(cerceve or []))
+        seri = wilder_atr(frame, ATR_LENGTH)
+        for deger in reversed(list(seri)):
+            x = _gercek(deger)
+            if x is not None and x > 0:
+                return x
+    except Exception as hata:  # pragma: no cover - veri biçimi şaşırtırsa mesafe ham
+        log.debug("grafik: ATR okunamadı (%s)", hata)
+    return None
+
+
+def _bolge(tip: str, yon: int, alt: float, ust: float, kaynak: Optional[int],
+           durum: Optional[str] = None, skor: Optional[float] = None,
+           doluluk: Optional[float] = None, zaman: Any = None,
+           gap: Optional[float] = None) -> Optional[dict[str, Any]]:
+    """Tek bir bölge kaydı (§1): motorun verdiği sınırlar, uydurma yok."""
+    if alt is None or ust is None:
+        return None
+    if alt > ust:
+        alt, ust = ust, alt
+    return {"tip": tip, "yon": 1 if yon >= 0 else -1, "alt": float(alt), "ust": float(ust),
+            "kaynak": kaynak, "durum": durum, "skor": skor, "doluluk": doluluk,
+            "zaman": _tarih(zaman).isoformat() if _tarih(zaman) else None, "gap": gap}
+
+
+def _yon(deger: Any, varsayilan: int = 1) -> int:
+    """Yön: `Direction`/`FvgDirection` (IntEnum) veya sayı → +1 / -1.
+
+    Motor enum nesnesi verebilir; `.value` okunur ki sayıya gömülü kalmayalım
+    (bilinmeyen → varsayılan, uydurma değil).
+    """
+    deger = getattr(deger, "value", deger)
+    try:
+        return -1 if int(deger) < 0 else 1
+    except (TypeError, ValueError):
+        return 1 if varsayilan >= 0 else -1
+
+
+def _durum_adi(deger: Any) -> Optional[str]:
+    ad = getattr(deger, "name", None)
+    if ad:
+        return str(ad)
+    metin = str(deger or "").strip()
+    return metin or None
+
+
+def _zone_havuzu(sonuclar: Optional[Mapping[str, Any]], tf: str, son_kapanis: Optional[float],
+                 sol: int, sag: int, cerceve: Any = None) -> dict[str, Any]:
+    """OB + FVG + engulfing TEK HAVUZDA, son kapanışa yakınlığa göre (§0.8/§0.9).
+
+    Kapak TF'ye göre (`zone_ust`/`zone_alt`): 1s 3+3 · 2s 3+3 · 4s 2+2 · 1g 1+1.
+    Eşitlikte daha yeni `kaynak` kazanır. Kapanışa göre taraf: kutu merkezi
+    kapanışın üstündeyse "üst", altındaysa "alt".
+    """
+    havuz: list[dict[str, Any]] = []
+    hata: list[str] = []
+    cikarim = {"ob": 0, "fvg": 0, "eng": 0}
+    if not sonuclar:
+        return {}
+    atr = _wilder_atr(cerceve)
+
+    ob = sonuclar.get("order_block") if isinstance(sonuclar, Mapping) else _alan(sonuclar, "order_block")
+    if ob is not None:
+        try:
+            detay = _alan(ob, "details", {}) or {}
+            kayitlar = list(_alan(detay, "records", []) or [])
+            cikarim["ob"] = len(kayitlar)
+            export = _alan(ob, "export")
+            dolular = {}
+            for taraf in ("bull", "bear"):
+                yan = _alan(export, taraf) if export is not None else None
+                kaynak = _tam(_alan(yan, "source_bar"))
+                if kaynak is not None:
+                    dolular[kaynak] = _gercek(_alan(yan, "fill"))
+            for kayit in kayitlar:
+                kaynak = _tam(_alan(kayit, "source_index"))
+                bolge = _bolge("ob", 1 if _alan(kayit, "bullish") else -1,
+                               _gercek(_alan(kayit, "bottom")), _gercek(_alan(kayit, "top")),
+                               kaynak, skor=_gercek(_alan(kayit, "base_score")),
+                               doluluk=dolular.get(kaynak) if kaynak is not None else None,
+                               zaman=_alan(kayit, "source_time"))
+                if bolge:
+                    havuz.append(bolge)
+        except Exception as h:
+            log.warning("grafik: OB bölgeleri okunamadı (%s)", h)
+            hata.append("ob")
+
+    fvg = sonuclar.get("fvg") if isinstance(sonuclar, Mapping) else _alan(sonuclar, "fvg")
+    if fvg is not None and str(tf) not in _FVG_YOK_TFLAR:
+        try:
+            detay = _alan(fvg, "details", {}) or {}
+            kayitlar = list(_alan(detay, "fvg_formations", []) or [])
+            cikarim["fvg"] = len(kayitlar)
+            for kayit in kayitlar:
+                bolge = _bolge("fvg", _yon(_alan(kayit, "direction")), 
+                               _gercek(_alan(kayit, "lower_boundary")),
+                               _gercek(_alan(kayit, "upper_boundary")),
+                               _tam(_alan(kayit, "formation_index")),
+                               durum=_durum_adi(_alan(kayit, "state")),
+                               skor=_gercek(_alan(kayit, "quality")),
+                               doluluk=_gercek(_alan(kayit, "close_fill_ratio")),
+                               zaman=_alan(kayit, "formation_time"),
+                               gap=_gercek(_alan(kayit, "gap_size")))
+                if bolge:
+                    havuz.append(bolge)
+            eng = list(_alan(detay, "engulfing_formations", []) or [])
+            cikarim["eng"] = len(eng)
+            for kayit in eng:
+                alt = _gercek(_alan(kayit, "formation_low"))
+                ust = _gercek(_alan(kayit, "formation_high"))
+                if alt is None or ust is None:
+                    alt, ust = _gercek(_alan(kayit, "lower_boundary")), _gercek(_alan(kayit, "upper_boundary"))
+                bolge = _bolge("eng", _yon(_alan(kayit, "direction")), alt, ust,
+                               _tam(_alan(kayit, "formation_index")),
+                               durum=_durum_adi(_alan(kayit, "state")),
+                               skor=_gercek(_alan(kayit, "quality")),
+                               zaman=_alan(kayit, "formation_time"))
+                if bolge:
+                    havuz.append(bolge)
+        except Exception as h:
+            log.warning("grafik: FVG/engulfing bölgeleri okunamadı (%s)", h)
+            hata.append("fvg")
+    elif fvg is not None:
+        # §0.12l: 1s/2s karesinde FVG katmanı çizilmez (motor da üretmiyor).
+        cikarim["fvg_tf_yok"] = 1
+
+    if not havuz:
+        return {"cizilen": [], "elenen": 0, "kaynak_disi": 0, "kapak": dict(
+            _kapak_sayilari(tf)), "sirala": "bölge yok", "cikarim": cikarim,
+            "hata": sorted(set(hata))}
+
+    for b in havuz:
+        merkez = (b["alt"] + b["ust"]) / 2.0
+        b["merkez"] = merkez
+        b["taraf"] = "ust" if (son_kapanis is None or merkez >= son_kapanis) else "alt"
+        b["mesafe"] = abs(merkez - son_kapanis) if son_kapanis is not None else 0.0
+        b["mesafe_atr"] = (b["mesafe"] / atr) if (atr and son_kapanis is not None) else None
+    # EN YAKIN önce: `-mesafe` değil `mesafe` sırası — ters çevirmek kapakların
+    # en uzak kutuları tutmasına yol açardı (testte yakalandı). Eşitlikte yeni
+    # `kaynak` kazanır (§0.8).
+    anahtar = (lambda b: (b["mesafe_atr"] if b["mesafe_atr"] is not None else b["mesafe"],
+                          -(b["kaynak"] if b["kaynak"] is not None else -1)))
+    havuz.sort(key=anahtar)
+    ust_k, alt_k = _kapak_sayilari(tf)["ust"], _kapak_sayilari(tf)["alt"]
+    secilen, elenen = [], 0
+    sayac = {"ust": 0, "alt": 0}
+    for b in havuz:
+        taraf = b["taraf"]
+        kapasite = ust_k if taraf == "ust" else alt_k
+        if sayac[taraf] >= kapasite:
+            elenen += 1
+            continue
+        sayac[taraf] += 1
+        b["vurgu"] = "alt" if int(b["yon"]) >= 0 else "ust"   # §0.12r (kayatta karar)
+        b["x0"], b["x1"] = 0, max(0, int(sag) - int(sol) - 1)
+        if b["kaynak"] is not None:
+            b["x0"] = max(0, min(int(b["kaynak"]) - int(sol), b["x1"]))
+        secilen.append(b)
+    # Çizim/rapor sırası: taraf, sonra yakınlık (meta okunur kalsın)
+    secilen.sort(key=lambda b: (b["taraf"], b["mesafe"], int(b["kaynak"] or 0)))
+    return {"cizilen": secilen, "elenen": elenen,
+            "kaynak_disi": sum(1 for b in secilen if b["kaynak"] is not None
+                               and int(b["kaynak"]) < int(sol)),
+            "kapak": {"ust": ust_k, "alt": alt_k},
+            "sirala": ("mesafe/ATR" if atr else "mesafe (ATR yok → ham fiyat)"),
+            "atr": atr, "cikarim": cikarim, "hata": sorted(set(hata))}
+
+
+def _kapak_sayilari(tf: str) -> dict[str, int]:
+    ust = SABITLER["zone_ust"].get(str(tf), 3)
+    alt = SABITLER["zone_alt"].get(str(tf), 3)
+    return {"ust": int(ust), "alt": int(alt)}
+
+
 # --------------------------------------------------------------- anlık görüntü
 
 
@@ -445,9 +658,13 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
             f"kadraj: formasyon {yas} barlık → GRAFIK_MUM_MAKS={kare} kaldırıldı")
     if _alan(cift, "violation_history_truncated"):
         goruntu["uyarilar"].append("ihlal geçmişi kırpılmış: sayılar eksik görünebilir")
+    goruntu["zone"] = _zone_havuzu(sonuclar, tf, goruntu["son_kapanis"], sol, sag, cerceve)
+    if goruntu["zone"].get("hata"):
+        goruntu["eksik_katmanlar"] = sorted(set(goruntu["eksik_katmanlar"])
+                                            | set(goruntu["zone"]["hata"]))
     if sonuclar:
-        # G2/G3 bu veriyi kullanacak; G1'de çizilmiyor → dürüstçe not (sessiz kabahat yok).
-        goruntu["uyarilar"].append("bölge/yapı verisi bu fazda çizilmedi (G2/G3)")
+        # Bölge katmanı G2'de çiziliyor; yapı/şerit G3'ün işi (sessiz kabahat yok).
+        goruntu["uyarilar"].append("yapı/şerit verisi bu fazda çizilmedi (G3)")
     if not n or not sag:
         goruntu["uyarilar"].append("kare boş: çizim yok")
         return goruntu
@@ -788,11 +1005,27 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                 ek_y.append(float(formasyon[ad]))
         if alarm.get("deger") is not None:
             ek_y.append(float(alarm["deger"]))
+        zone = goruntu.get("zone") or {}
+        for b in (zone.get("cizilen") or []):
+            ek_y.extend([float(b["alt"]), float(b["ust"])])
         aralik = _yatay_aralik(kapanis + yuksek + dusuk, ek_y)
         ax.set_ylim(*aralik)
-        ax.set_xlim(-0.6, n - 0.4)
+        meta["kare"]["y_araligi"] = [round(aralik[0], 6), round(aralik[1], 6)]
+        # Bölge etiketleri sağa taşabiliyor → eksene NEFES PAYI eklenir (veri
+        # kırpılmaz; son mum her zaman görünür kalır, §0.13).
+        sag_bosluk = 6.0 if (zone.get("cizilen") or []) else 0.0
+        ax.set_xlim(-0.6, n - 0.4 + sag_bosluk)
+        meta["kare"]["x_siniri"] = [-0.6, round(n - 0.4 + sag_bosluk, 3)]
         butce = _butce_px(genislik)
         cap = max(0.6, olcu["px_bar"] * float(SABITLER["mum_genislik_orani"]))
+
+        # --- bölge kutuları mumların ARDINDA (bilgi zemini; §0.4.1) ---
+        if not yalnizca_mumlar and (zone.get("cizilen") or []):
+            try:
+                meta["zone"]["etiket_atlandi"] = _zone_ciz(ax, zone, n, aralik)
+            except Exception as hata:
+                log.warning("grafik: bölge katmanı çizilemedi (%s)", hata)
+                eksik.append("zone")
 
         # --- mumlar: yükselen içi boş, düşen dolu (§0.4.1) ---
         if olcu["cekme"] or yalnizca_mumlar:
@@ -885,6 +1118,124 @@ def _cizgi_ve_alan(ax, kapanis, aralik: Sequence[float]) -> None:
     ys = [kapanis[i] for i in xs]
     ax.plot(xs, ys, color=PALET["mum_yukselen"], linewidth=0.9, zorder=3)
     ax.fill_between(xs, aralik[0], ys, step="mid", color=PALET["golge"], alpha=0.05, zorder=1)
+
+
+def _zone_ciz(ax, zone: Mapping[str, Any], n: int, aralik: Sequence[float]) -> int:
+    """→ yerleşemeyen etiket sayısı (0 = hepsi çizildi)."""
+    """OB/FVG/engulfing kutuları: §0.4.1 renkleri, §0.12r kalın kenar, §0.12k doluluk.
+
+    Kalın kenar boğada ALT, ayıda ÜST kenarda (boğa/ayı ayrımı renk değiştirmeden
+    okunsun). Dolgu, kutu görünür aralığın %18'ini aşarsa seyrekleşir (§17.6);
+    doluluk yazısı YALNIZ motorun verdiği kutuda (`fill` / `close_fill_ratio`) —
+    yoksa kutu kontur kalır ve `%` uydurulmaz. Durum adı tanınmıyorsa kontur.
+    """
+    from matplotlib.patches import Rectangle
+
+    renk = {"ob": PALET["ob"], "fvg": PALET["fvg"], "eng": PALET["engulf"]}
+    etiket = {"ob": "OB", "fvg": "FVG", "eng": "ENG"}
+    gorunur = max(1e-9, float(aralik[1]) - float(aralik[0]))
+    dolgu = SABITLER["doldurma"]
+    kalinlik = SABITLER["zone_kalinlik"]
+    for b in (zone.get("cizilen") or []):
+        alt, ust = float(b["alt"]), float(b["ust"])
+        x0, x1 = int(b.get("x0") or 0), int(b.get("x1", n - 1))
+        genislik_cizgi = max(1.0, x1 - x0 + 1.0)
+        yukseklik = max(ust - alt, gorunur * 0.0015)
+        durum = str(b.get("durum") or "")
+        if b["tip"] == "eng":
+            saydam, tarama = 0.0, None
+        elif yukseklik / gorunur > float(dolgu["golge_esik_orani"]):
+            saydam, tarama = float(dolgu["ince"]), ("/" if b["tip"] == "fvg" else None)
+        elif durum and durum not in _BOLGE_DOLU:
+            saydam = float(dolgu["ob"] if b["tip"] == "ob" else dolgu["fvg"]) * 0.5
+            tarama = "/" if (durum in _BOLGE_ARA or b["tip"] == "fvg") else "\\"
+        else:
+            saydam = float(dolgu["ob"] if b["tip"] == "ob" else dolgu["fvg"])
+            tarama = None
+        ax.add_patch(Rectangle((x0 - 0.5, alt), genislik_cizgi, yukseklik,
+                               facecolor=renk[b["tip"]], alpha=saydam,
+                               edgecolor=renk[b["tip"]], linewidth=float(kalinlik["kenar"]),
+                               linestyle=(0, (4, 3)) if b["tip"] == "eng" else "solid",
+                               hatch=tarama, zorder=1))
+        y_vurgu = alt if b.get("vurgu", "alt") == "alt" else ust   # §0.12r
+        ax.plot([x0 - 0.5, x0 - 0.5 + genislik_cizgi], [y_vurgu, y_vurgu],
+                color=renk[b["tip"]], linewidth=float(kalinlik["vurgu"]),
+                solid_capstyle="butt", zorder=2)
+    # Etiketler ayrı turda: iç içe kutularda yazılar çakışabiliyor (§0.13 okunur
+    # kalmalı), en yakın kutunun etiketi önce yerleşir.
+    return _zone_etiketleri(ax, zone)
+
+
+def _zone_etiketleri(ax, zone: Mapping[str, Any]) -> int:
+    """Kutu etiketlerini çakışmayacak şekilde yerleştirir; yerleşmeyeni sayar.
+
+    TEK etiket kutunun SOL kenarına yazılır (`OB↑ %70`, `FVG↑ q93`). İç içe
+    kutularda yazılar çakışabiliyor → `cizilen` sırası (en yakın önce) denenir,
+    çakışan yazı ATLANIR; kutunun kendisi, dolgusu ve kalın kenarı yine çizili
+    olduğundan bilgi gizlenmez, sayı `meta["zone"]["etiket_atlandi"]` ile okunur.
+
+    Geometri `ax.get_position()` × figür pikselinden hesaplanıyor: `transData`
+    çizim turundan ÖNCE yerleşimi yansıtmıyordu (ölçüm: 2,8 birimlik fark 6 px
+    çıktı → tüm etiketler çakışık sayıldı). Ölçü birimi burada bar/fiyat değil
+    piksel, çünkü eşik yazı boyutuyla ilgili.
+    """
+    adaylar: list[tuple[float, float, str]] = []
+    ad = {"ob": "OB", "fvg": "FVG", "eng": "ENG"}
+    for b in (zone.get("cizilen") or []):
+        x0 = float(int(b.get("x0") or 0))
+        parca = []
+        if b.get("doluluk") is not None:
+            parca.append(f"%{sayi(float(b['doluluk']) * 100.0, 0)}")
+        if b.get("skor") is not None and b["tip"] != "ob":
+            parca.append(f"q{int(round(float(b['skor'])))}")
+        metin = f"{ad.get(b['tip'], b['tip'])}{'↑' if int(b['yon']) >= 0 else '↓'}"
+        if parca:
+            metin += " " + " ".join(parca)
+        adaylar.append((x0, (float(b["alt"]) + float(b["ust"])) / 2.0, metin))
+
+    try:
+        rect = ax.get_position()
+        fig = ax.figure
+        boyut = fig.get_size_inches()          # ndarray: [genişlik, yükseklik] inç
+        dpi = float(fig.dpi)
+        pt = float(SABITLER["zone_yazi_pt"]) * dpi / 72.0
+        genislik_px = float(boyut[0]) * dpi * float(rect.width)
+        yukseklik_px = float(boyut[1]) * dpi * float(rect.height)
+        x_sol, x_sag = (float(v) for v in ax.get_xlim())
+        y_sol, y_sag = (float(v) for v in ax.get_ylim())
+        px_bar = genislik_px / max(1e-9, x_sag - x_sol)
+        px_birim = yukseklik_px / max(1e-9, abs(y_sag - y_sol))
+    except Exception:
+        px_bar = px_birim = pt = 0.0
+    if px_bar <= 0 or px_birim <= 0:
+        # Ölçü alınamadı: çakışma filtresi olmadan hepsini yaz (yanlış eleme
+        # yapmaktansa üst üste binme yeğlenir; §2.9 "eksik katman" değil).
+        for x0, y, metin in adaylar:
+            ax.annotate(metin, xy=(x0 - 0.2, y), xytext=(1, 0), textcoords="offset points",
+                        ha="left", va="center", fontsize=float(SABITLER["zone_yazi_pt"]),
+                        color=PALET["metin"], zorder=7, annotation_clip=False)
+        return 0
+
+    yerlesim: list[tuple[float, float, float, float]] = []
+    atlanan = 0
+    for x0, y, metin in adaylar:
+        px = (x0 - x_sol) * px_bar
+        py = (y - min(y_sol, y_sag)) * px_birim
+        genislik = _genislik_16(metin) * 1.02 + 2.0 * pt * 0.8
+        yukseklik = pt * 1.45 + 2.0 * pt * 0.8
+        kutu = (px, py - yukseklik / 2.0, px + genislik, py + yukseklik / 2.0)
+        cakisan = next((i for i, q in enumerate(yerlesim)
+                        if not (kutu[2] < q[0] or kutu[0] > q[2] or kutu[3] < q[1]
+                                or kutu[1] > q[3])), None)
+        if cakisan is not None:
+            atlanan += 1
+            continue
+        yerlesim.append(kutu)
+        ax.annotate(metin, xy=(x0 - 0.2, y), xytext=(1, 0), textcoords="offset points",
+                    ha="left", va="center", fontsize=float(SABITLER["zone_yazi_pt"]),
+                    color=PALET["metin"], zorder=7, annotation_clip=False,
+                    bbox=dict(facecolor=PALET["zemin"], edgecolor="none", alpha=0.8, pad=0.8))
+    return atlanan
 
 
 def _formasyon_ciz(ax, goruntu: Mapping[str, Any], n: int, butce: float,
@@ -1038,7 +1389,10 @@ def _serit_ciz(ax, goruntu: Mapping[str, Any], n: int) -> None:
     serit = goruntu.get("serit") or {}
     degerler = [None if v is None else float(v) for v in list(serit.get("degerler") or [])[:n]]
     ax.set_yticks([])
-    ax.set_xlim(-0.6, n - 0.4)
+    # Şerit, mum ekseniyle AYNI x sınırını kullanmalı (dikey hizalama); bölge
+    # etiketleri için ayrılan nefes payı burada da korunur (§0.13).
+    zone_pay = 6.0 if ((goruntu.get("zone") or {}).get("cizilen") or []) else 0.0
+    ax.set_xlim(-0.6, n - 0.4 + zone_pay)
     if not any(v is not None for v in degerler):
         return
     esik = float(serit.get("esik") or SABITLER["serit_esik"])
@@ -1136,6 +1490,13 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
         if uyari and str(uyari) not in dipnotlar:
             dipnotlar.append(str(uyari))
     notlar = [str(b) for b in (goruntu.get("budama") or []) if b]
+    zone = goruntu.get("zone") or {}
+    if int(zone.get("elenen") or 0) > 0:
+        kapak = zone.get("kapak") or {}
+        notlar.append(f"bölge: {zone['elenen']} kutu kapak dışında "
+                      f"(üst {kapak.get('ust')} · alt {kapak.get('alt')})")
+    if zone.get("kaynak_disi"):
+        notlar.append(f"bölge: {zone['kaynak_disi']} kutunun başlangıcı kadraj dışında")
     notlar += [str(n) for n in (goruntu.get("notlar") or []) if n]
     if yalnizca_mumlar:
         notlar.append("yalnızca mumlar: katman çizilemedi")
@@ -1169,8 +1530,15 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool) -> list[str]:
         oge.append("│ alarm mumu")
     if alarm.get("deger") is not None:
         oge.append("─ seviye")
-    if goruntu.get("zone"):
-        oge.append("OB yeşil · FVG mavi · 4s/1g")
+    zone = goruntu.get("zone") or {}
+    if zone.get("cizilen"):
+        _sira = {"ob": 0, "fvg": 1, "eng": 2}
+        adlar = sorted({str(b.get("tip")) for b in (zone.get("cizilen") or [])},
+                       key=lambda a: _sira.get(a, 9))
+        oge.append("kutular (mumların ardında): " + " ".join(
+            {"ob": "OB", "fvg": "FVG", "eng": "ENG"}.get(a, str(a)) for a in adlar))
+        if str(goruntu.get("tf")) in _FVG_YOK_TFLAR:
+            oge.append("FVG · 4s/1g")
     if goruntu.get("serit"):
         oge.append("şerit: rvol(20) · yerel hesap")
     return oge
@@ -1202,6 +1570,27 @@ def _metin_ciz(fig, metin: Mapping[str, Any], sol_kenar: float, sag_kenar: float
                  color=PALET["ihlal"], fontsize=SABITLER["dipnot_pt"])
 
 
+def _zone_meta(zone: Optional[Mapping[str, Any]]) -> dict[str, Any]:
+    """`meta["zone"]`: §2'deki `{cizilen, elenen}` + G2 izleri (test yüzeyi)."""
+    # Alanlar her durumda AYNI biçimde döner (§13 JSONL okuyucusu dalgalanmasın):
+    # boşsa sayaçlar 0, `sirala` "zone verisi yok" (motorlar hiç çağrılmadı).
+    if not zone:
+        return {"cizilen": 0, "elenen": 0, "tip": {"ob": 0, "fvg": 0, "eng": 0},
+                "kaynak_disi": 0, "kapak": {}, "sirala": "zone verisi yok", "atr": None,
+                "hata": [], "kayitlar": [], "etiket_atlandi": 0}
+    kayitlar = list(zone.get("cizilen") or [])
+    return {"cizilen": len(kayitlar), "elenen": int(zone.get("elenen") or 0),
+            "tip": {t: sum(1 for b in kayitlar if b["tip"] == t) for t in ("ob", "fvg", "eng")},
+            "kaynak_disi": int(zone.get("kaynak_disi") or 0),
+            "kapak": dict(zone.get("kapak") or {}), "sirala": zone.get("sirala"),
+            "atr": zone.get("atr"), "hata": list(zone.get("hata") or []),
+            "etiket_atlandi": int(zone.get("etiket_atlandi") or 0),
+            "kayitlar": [{k: b.get(k) for k in ("tip", "yon", "alt", "ust", "kaynak",
+                                                "taraf", "durum", "doluluk", "x0", "x1",
+                                                "mesafe", "mesafe_atr", "vurgu")}
+                         for b in kayitlar]}
+
+
 def _meta_kur(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any]) -> dict[str, Any]:
     """§2'deki `meta` iskeleti — testler piksele değil bu sözlüğe bakıyor (§6.1)."""
     formasyon = goruntu.get("formasyon") or {}
@@ -1223,7 +1612,7 @@ def _meta_kur(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any]) -> d
                       "bar_disarida": bool(alarm.get("bar_disarida"))},
             "kritik": None,        # G3 (§0.12f)
         },
-        "zone": goruntu.get("zone") or {"cizilen": 0, "elenen": 0},
+        "zone": _zone_meta(goruntu.get("zone")),
         "olay": goruntu.get("olay") or {"cizilen": 0, "elenen": 0},
         "serit": goruntu.get("serit") or {"acik": False, "esik": None, "spike": []},
         "budama": list(goruntu.get("budama") or []),
