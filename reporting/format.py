@@ -38,6 +38,8 @@ STATE_TR = {
     "KIRILIM_DENEMESI": "Kırılım denemesi",
     "KIRILIM_ADAYI": "Kırılım adayı",
     "KIRILIM_TEYITLI": "Kırılım teyitli",
+    # Bildirim katmanı alias'ı; patterns/lifecycle state'ini değiştirmez.
+    "KIRILIM_GECERSIZLESTI": "Kırılım geçersizleşti",
     "RETEST_BEKLENIYOR": "Retest bekleniyor",
     "RETEST_EDILIYOR": "Retest ediliyor",
     "RETEST_BASARILI": "Retest başarılı",

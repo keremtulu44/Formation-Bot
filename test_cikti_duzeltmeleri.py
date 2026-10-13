@@ -16,7 +16,7 @@ def notifier(monkeypatch):
     return notifier_mod.TelegramNotifier()
 
 
-def _formasyon(state="FORMASYON_TAMAMLANDI", stock="ISMEN", tf="4h", q=87):
+def _formasyon(state="KIRILIM_TEYITLI", stock="ISMEN", tf="4h", q=87):
     return {"stock_name": stock, "timeframe": tf, "pattern_name": "Alçalan Üçgen",
             "state": state, "confidence_score": q, "contraction": 0.8}
 
@@ -37,18 +37,18 @@ def test_gun_satiri_sabah_yoksa_henuz_der(notifier):
     assert "0 hisse tarandı" not in metin
 
 
-# --- "TAMAMLANAN (6)" ama 3 satır -------------------------------------------
+# --- Teyitli kırılım listesi: başlık ile görünen satır sayısı ----------------
 
 def test_ozet_basligi_kac_satir_listelendigini_soyler(notifier):
     aktif = [_formasyon(stock=f"SYM{i}") for i in range(6)]
     metin = notifier.format_daily_summary(aktif)
-    assert "TAMAMLANAN (6 · ilk 3)" in metin
+    assert "TEYİTLİ KIRILIM (6 · ilk 3)" in metin
     assert len([s for s in metin.splitlines() if s.startswith("•")]) == 3
 
 
 def test_ozet_basligi_az_sayida_ek_vermez(notifier):
     metin = notifier.format_daily_summary([_formasyon(), _formasyon(stock="GARAN")])
-    assert "TAMAMLANAN (2)" in metin
+    assert "TEYİTLİ KIRILIM (2)" in metin
 
 
 # --- Başarısız kırılım günde bir sayılır ------------------------------------

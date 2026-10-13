@@ -61,6 +61,21 @@ def test_tampon_bossa_digest_metni_cikmaz():
     assert main_mod._format_deferred_alert_summary([], toplam=5) == ""
 
 
+def test_bekleme_deneme_basarisizlik_ve_tamamlanma_digestte_gizli():
+    now = datetime.now(config.ISTANBUL_TZ)
+    buffer_ = DeferredAlertBuffer()
+    gizli_durumler = (
+        "KIRILIM_HAZIRLIGI", "KIRILIM_DENEMESI", "KIRILIM_ADAYI",
+        "RETEST_BEKLENIYOR", "RETEST_EDILIYOR", "BASARISIZ_KIRILIM",
+        "FORMASYON_TAMAMLANDI",
+    )
+    for index, state in enumerate(gizli_durumler):
+        assert state not in config.WATCH_STATES
+        buffer_.observe(f"SYM{index}", "1h", _kayit(f"SYM{index}", "1h", state=state), now)
+    assert buffer_.items(now) == []
+    assert main_mod._format_deferred_alert_summary(buffer_.items(now)) == ""
+
+
 # --- A3: özet ile panel aynı kaynaktan ------------------------------------
 
 class _SahteLifecycle:
@@ -131,19 +146,21 @@ def test_kanal_filtresi_public_states_disi_statelari_gondermez():
     n = notifier_mod.TelegramNotifier()
     n.public_states = {"FORMASYON_TAMAMLANDI", "RETEST_BASARILI"}
     n.public_min_quality = 80
-    # SIKISMA varsayılan PUBLIC_STATES'te yok -> kanala gitmez (ölü dal kaldırıldı;
-    # davranış aynı, karar artık env ile veriliyor).
+    # Attempt/wait/completed state'leri env ya da mutable set ile açılmaz.
+    assert n.should_send_to_public({"state": "KIRILIM_DENEMESI", "confidence_score": 95}) is False
     assert n.should_send_to_public({"state": "SIKISMA_GUCLENIYOR", "confidence_score": 95,
                                     "contraction": 0.95}) is False
+    assert n.should_send_to_public({"state": "FORMASYON_TAMAMLANDI", "confidence_score": 95}) is False
     assert n.should_send_to_public({"state": "RETEST_BASARILI", "confidence_score": 85}) is True
     assert n.should_send_to_public({"state": "RETEST_BASARILI", "confidence_score": 79}) is False
 
 
-def test_kanal_filtresi_sikisma_env_ile_acilabilir():
+def test_kanal_filtresi_env_ile_attempt_ve_izleme_acilamaz():
     n = notifier_mod.TelegramNotifier()
-    n.public_states = {"SIKISMA_GUCLENIYOR"}
+    n.public_states = {"SIKISMA_GUCLENIYOR", "KIRILIM_DENEMESI", "RETEST_BEKLENIYOR"}
     n.public_min_quality = 80
-    assert n.should_send_to_public({"state": "SIKISMA_GUCLENIYOR", "confidence_score": 88}) is True
+    for state in ("SIKISMA_GUCLENIYOR", "KIRILIM_DENEMESI", "RETEST_BEKLENIYOR"):
+        assert n.should_send_to_public({"state": state, "confidence_score": 95}) is False
 
 
 # --- A3d: ölü [:10] kalıntısı geri gelmesin ------------------------------
@@ -151,7 +168,7 @@ def test_kanal_filtresi_sikisma_env_ile_acilabilir():
 def test_daily_summary_olu_onluk_liste_icermez():
     kaynak = open(notifier_mod.__file__, encoding="utf-8").read()
     assert "reverse=True)[:10]" not in kaynak, "kullanılmayan [:10] ölü kodu geri gelmiş"
-    assert "reverse=True)[:3]" in kaynak or "for f in tamamlanan[:3]" in kaynak
+    assert "for f in teyitli[:3]" in kaynak
 
 
 # --- A9: günlük benzersiz formasyon sayacı --------------------------------

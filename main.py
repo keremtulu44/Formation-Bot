@@ -9,11 +9,14 @@ import time
 import json
 import signal
 import logging
+import math
 import random
 import socket
 import threading
 from datetime import datetime, timedelta, time as dt_time
 from typing import List, Dict
+
+import pandas as pd
 
 try:
     from dotenv import load_dotenv
@@ -35,7 +38,8 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     HEARTBEAT_MIN_ARALIK_SN, HEARTBEAT_UZAK_ARALIK_SN,
                     PUBLIC_MIN_QUALITY,
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE, EVREN_BUYUME_UYARI_ESIGI,
-                    TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL)
+                    TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL,
+                    TERMINAL_TAZE_BAR)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   islem_gunu_mu,
                   son_kapanan_mum_ani, time_until_next_open, is_bist_open,
@@ -47,6 +51,7 @@ from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
 from notifier import TelegramNotifier
+from notification_context import format_domain_context
 from karne import (KarneDefteri, atr_hesapla, hafta_damgasi, karne_gunu_mu, karne_uret)
 from supabase_store import SupabaseStore
 from health_server import start_render_health_server
@@ -245,6 +250,7 @@ def _analiz_hatasi_kaydi(exc, istek_hisse: int, kaynak: str = "analiz") -> dict:
         "oldest_bar_age_minutes": None,
         "finished_at": bitis,
     }
+    son_tarama_kaydet()
     return dict(last_run_stats)
 
 
@@ -280,6 +286,7 @@ daily_stats = {
     'alerts_below_threshold': 0,  # kalite eşiği altı (push üretmez)
     'alerts_state_disabled': 0,   # state hiçbir push akışında değil (yalnız panel)
     'alerts_bar_kapanmadi': 0,    # kapanmamış bar nedeniyle push ertelendi (P0 güvenlik kapısı)
+    'alerts_break_close_invalid': 0,  # confirmation/retest close sınırı doğrulamadı
     'alerts_digest_overflow': 0,  # digest limiti nedeniyle gösterilmeyen aday
     'alerts_kuyruk': 0,           # acil alarm engel yüzünden kuyruğa alındı (Batch 5 / B4)
     'alerts_engel_cooldown': 0,   # cooldown nedeniyle gönderilemedi (B4 kuyruğuna girer)
@@ -299,10 +306,13 @@ daily_stats = {
     'split_atlanan': 0,
     'son_tarama_suresi_dk': None,
     'gunluk_bar_sayisi': None,
-    # Public grup kapanış özeti için: gün içinde kaç kırılım başarısız oldu
-    # (tek tek mesaj yerine özette tek satır) ve kaç tarama turu yapıldı
-    # ("432 hisse tarandı" = 48 hisse × 9 tarama; doğrusu tur sayısıdır).
+    # Lifecycle olayları günlük tekilleştirilmiş olarak tutulur; başarısız
+    # teyitsiz denemeler, teyitli kırılım geçersizleşmesi sayacına girmez.
     'basarisiz_kirilim': 0,
+    'kirilim_teyitli_olay_sayisi': 0,
+    'retest_basarili_olay_sayisi': 0,
+    'kirilim_gecersizlesti_olay_sayisi': 0,
+    # Tarama turu sayısı; 48 hisse × 9 tur = 432 hisse tarandı şeklinde yazılmaz.
     'tarama_sayisi': 0,
     'last_reset': datetime.now(ISTANBUL_TZ).date()
 }
@@ -311,6 +321,148 @@ daily_stats = {
 # Gün içinde BENZERSİZ başarısız kırılım sayacı (hisse|TF|bar): aynı slot her
 # taramada yeniden üretildiği için ham sayım olayı şişirirdi.
 _daily_basarisiz_keys: set = set()
+_daily_lifecycle_event_keys: set[str] = set()
+_LIFECYCLE_CONFIRMATION_TYPES = frozenset({"BREAK_CONFIRMED", "COUNTER_BREAK"})
+_CONFIRMED_INVALIDATION_REASONS = frozenset({
+    "Kırılım sonrası formasyon alanına dönüldü",
+    "Başarılı retest sonrası yapı içine dönüldü",
+})
+_LIFECYCLE_EVENT_COUNTERS = {
+    "KIRILIM_TEYITLI": "kirilim_teyitli_olay_sayisi",
+    "RETEST_BASARILI": "retest_basarili_olay_sayisi",
+    "KIRILIM_GECERSIZLESTI": "kirilim_gecersizlesti_olay_sayisi",
+}
+
+
+def _event_field(event, name, default=None):
+    return event.get(name, default) if isinstance(event, dict) else getattr(event, name, default)
+
+
+def _event_bar_number(event):
+    try:
+        return int(_event_field(event, "bar"))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _event_local_time(event, fallback=None):
+    raw = _event_field(event, "time")
+    if raw is None:
+        raw = fallback
+    if raw is None:
+        return None
+    try:
+        if isinstance(raw, datetime):
+            value = raw
+        else:
+            value = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if value.tzinfo is None:
+            return ISTANBUL_TZ.localize(value)
+        return value.astimezone(ISTANBUL_TZ)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _classified_lifecycle_events(snap, fallback_bar_time=None):
+    """Map existing lifecycle event rows to Telegram-summary event categories.
+
+    The engine keeps one terminal BREAK_FAILED type for both unconfirmed
+    attempts and later invalidations. A failure only qualifies as invalidation
+    when a prior same-formation, same-direction BREAK_CONFIRMED event exists.
+    """
+    events = getattr(snap, "events", None) or []
+    if not isinstance(events, (list, tuple)):
+        return []
+    ordered = sorted(
+        (event for event in events if isinstance(event, dict)),
+        key=lambda event: (_event_bar_number(event) if _event_bar_number(event) is not None else -1),
+    )
+    confirmed: Dict[tuple, List[tuple[int, int]]] = {}
+    classified = []
+    for event in ordered:
+        event_type = str(_event_field(event, "type", "") or "").strip().upper()
+        event_state = str(_event_field(event, "state", "") or "").strip().upper()
+        stable_id = str(_event_field(event, "stable_id", "") or "").strip()
+        bar = _event_bar_number(event)
+        direction = _event_field(event, "direction", 0)
+        try:
+            direction = int(direction)
+        except (TypeError, ValueError, OverflowError):
+            direction = 0
+
+        if event_state == "KIRILIM_TEYITLI" and event_type in _LIFECYCLE_CONFIRMATION_TYPES:
+            if stable_id and bar is not None and direction in (-1, 1):
+                confirmed.setdefault((stable_id, direction), []).append((bar, len(classified)))
+            classified.append(("KIRILIM_TEYITLI", event))
+            continue
+        if event_state == "RETEST_BASARILI" and event_type == "RETEST_OK":
+            prior = confirmed.get((stable_id, direction), ())
+            if stable_id and bar is not None and any(confirm_bar < bar for confirm_bar, _ in prior):
+                classified.append(("RETEST_BASARILI", event))
+            continue
+        if event_state == "BASARISIZ_KIRILIM" and event_type == "BREAK_FAILED":
+            prior = confirmed.get((stable_id, direction), ())
+            if stable_id and bar is not None and any(confirm_bar < bar for confirm_bar, _ in prior):
+                classified.append(("KIRILIM_GECERSIZLESTI", event))
+                continue
+    # Materialize fallback event time only for the latest-bar event. Older rows
+    # need their own timestamps for daily bucketing and are never guessed.
+    output = []
+    latest_bar = getattr(snap, "bar_index", None)
+    for state, event in classified:
+        fallback = fallback_bar_time if _event_bar_number(event) == latest_bar else None
+        output.append((state, event, _event_local_time(event, fallback)))
+    return output
+
+
+def _record_daily_lifecycle_events(stock, timeframe, snap, fallback_bar_time=None):
+    """Count today's real transitions once; never count pre-confirmation failures."""
+    changed = False
+    for event_state, event, event_time in _classified_lifecycle_events(snap, fallback_bar_time):
+        if event_time is None or event_time.date() != datetime.now(ISTANBUL_TZ).date():
+            continue
+        event_type = str(_event_field(event, "type", "") or "").strip().upper()
+        event_bar = _event_bar_number(event)
+        stable_id = str(_event_field(event, "stable_id", "") or "").strip()
+        event_identity = stable_id or str(event_bar if event_bar is not None else event_time.isoformat())
+        key = "|".join((str(stock).upper(), str(timeframe).lower(), event_identity,
+                        event_state, event_type, event_time.isoformat()))
+        if key in _daily_lifecycle_event_keys:
+            continue
+        _daily_lifecycle_event_keys.add(key)
+        changed = True
+        counter = _LIFECYCLE_EVENT_COUNTERS[event_state]
+        daily_stats[counter] = int(daily_stats.get(counter) or 0) + 1
+
+    if changed:
+        _gunluk_sayac_kaydet()
+
+
+def _invalidation_event_for_snapshot(snap, active):
+    """Return only a fresh, post-confirmation return-inside transition."""
+    if (getattr(snap, "state", None) != "BASARISIZ_KIRILIM"
+            or getattr(snap, "invalid_reason", None) not in _CONFIRMED_INVALIDATION_REASONS
+            or active is None):
+        return None
+    stable_id = str(getattr(active, "stable_id", "") or "").strip()
+    if not stable_id:
+        return None
+    latest_bar = getattr(snap, "bar_index", None)
+    failures = []
+    for event_state, event, _event_time_value in _classified_lifecycle_events(snap):
+        if event_state != "KIRILIM_GECERSIZLESTI":
+            continue
+        if str(_event_field(event, "stable_id", "") or "").strip() != stable_id:
+            continue
+        event_bar = _event_bar_number(event)
+        if event_bar is None or latest_bar is None or event_bar > latest_bar:
+            continue
+        if latest_bar - event_bar > max(0, int(TERMINAL_TAZE_BAR)):
+            continue
+        failures.append(event)
+    if not failures:
+        return None
+    return max(failures, key=lambda event: _event_bar_number(event) or -1)
 
 
 def _note_basarisiz_kirilim(stock: str, timeframe: str, bar_time=None) -> None:
@@ -329,7 +481,7 @@ def _note_basarisiz_kirilim(stock: str, timeframe: str, bar_time=None) -> None:
 # Canlı denetimde ölçüldü: gün ortasında restart olunca 18:45 kanal özeti
 # "❌ 8 başarısız / 8 tarama" diyordu; gerçek gün "❌ 9 / 10 tarama" idi.
 # Sayaçlar artık GÜN damgalı olarak diske yazılır, aynı gün restart'ta geri yüklenir.
-_KALICI_SAYACLAR = ('basarisiz_kirilim', 'tarama_sayisi', 'alerts_sent', 'stocks_scanned')
+_KALICI_SAYACLAR = ('basarisiz_kirilim', 'kirilim_teyitli_olay_sayisi', 'retest_basarili_olay_sayisi', 'kirilim_gecersizlesti_olay_sayisi', 'tarama_sayisi', 'alerts_sent', 'stocks_scanned')
 # Restart anında devralınan "başarısız kırılım" sayısı: olay detayı saklanmadığı
 # için yalnız SAYI taşınır, yeni olaylar bu tabanın üstüne eklenir.
 _daily_basarisiz_tabani = 0
@@ -338,7 +490,10 @@ _daily_basarisiz_tabani = 0
 def _gunluk_sayac_kaydet() -> None:
     """Günlük sayaçların kalıcı kopyasını yazar (I/O hatası botu durdurmaz)."""
     try:
-        patch = {"sayaclar": {ad: daily_stats.get(ad, 0) for ad in _KALICI_SAYACLAR}}
+        patch = {
+            "sayaclar": {ad: daily_stats.get(ad, 0) for ad in _KALICI_SAYACLAR},
+            "olay_muhurlari": sorted(_daily_lifecycle_event_keys),
+        }
         if not _state_persistence.gunluk_durum_yukle():
             # Gün döndü: yeni günün kaydı kurulurken dünün özet işaretleri
             # geçersiz sayılır (gunluk_durum_guncelle kaydı yeniden kurar).
@@ -361,6 +516,10 @@ def _gunluk_sayac_yukle() -> None:
         daily_stats['last_reset'] = datetime.now(ISTANBUL_TZ).date()
     except Exception:  # noqa: BLE001
         pass
+    event_keys = (veri or {}).get("olay_muhurlari")
+    if isinstance(event_keys, list):
+        _daily_lifecycle_event_keys.clear()
+        _daily_lifecycle_event_keys.update(str(key) for key in event_keys if key)
     sayaclar = (veri or {}).get("sayaclar") or {}
     if not sayaclar:
         return
@@ -438,6 +597,9 @@ def reset_daily_if_needed():
         daily_stats['patterns_found'] = 0
         _daily_pattern_keys.clear()
         daily_stats['basarisiz_kirilim'] = 0
+        for counter in _LIFECYCLE_EVENT_COUNTERS.values():
+            daily_stats[counter] = 0
+        _daily_lifecycle_event_keys.clear()
         # Restart tabanı yalnızca AYNI günün devralınan sayısıdır; yeni güne
         # sıfırla (yoksa eski günün sayısı yeni güne taşınır ve sayaç şişer).
         _daily_basarisiz_tabani = 0
@@ -450,6 +612,7 @@ def reset_daily_if_needed():
         daily_stats['alerts_below_threshold'] = 0
         daily_stats['alerts_state_disabled'] = 0
         daily_stats['alerts_bar_kapanmadi'] = 0
+        daily_stats['alerts_break_close_invalid'] = 0
         daily_stats['alerts_digest_overflow'] = 0
         daily_stats['alerts_kuyruk'] = 0
         daily_stats['alerts_engel_cooldown'] = 0
@@ -697,6 +860,7 @@ def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
                 "state_kapsam_disi": daily_stats['alerts_state_disabled'],
                 "esik_alti": daily_stats['alerts_below_threshold'],
                 "bar_kapanmadi": daily_stats['alerts_bar_kapanmadi'],
+                "kapanis_teyidi_yok": daily_stats['alerts_break_close_invalid'],
                 "digest_tasmasi": daily_stats['alerts_digest_overflow'],
                 "engel_cooldown": daily_stats['alerts_engel_cooldown'],
                 "engel_kap": daily_stats['alerts_engel_kap'],
@@ -953,6 +1117,8 @@ def _komut_durum(_arguman: str) -> str:
     if daily_stats.get('alerts_bar_kapanmadi'):
         # Güvenlik kapısı: kapanmamış bar ile push denenmedi, sonraki tura bırakıldı.
         huni += f" · {daily_stats['alerts_bar_kapanmadi']} kapanmamış bar (ertelendi)"
+    if daily_stats.get('alerts_break_close_invalid'):
+        huni += f" · {daily_stats['alerts_break_close_invalid']} kapanış teyidi yok"
     satirlar.append(huni)
     gosterim = None
     gosterim_public = None
@@ -1192,7 +1358,19 @@ def _komut_ozet(arguman: str) -> str:
     try:
         formations = _live_state.formations()
         formations = _filtrele_formasyonlar(formations, arguman)
+        summary_payload = _daily_summary_payload()
         if not formations:
+            # Restart'tan kalan snapshotı "bugünkü canlı sonuç" gibi sunma.
+            # Güncel tam tarama yoksa mevcut summary formatı eski aday listesini
+            # gizler ve son başarılı tam tarama zamanını açıkça gösterir.
+            if not summary_payload.get("tam_tarama_guncel"):
+                notifier = _notifier_ref
+                if notifier and hasattr(notifier, "format_daily_summary"):
+                    bos = notifier.format_daily_summary([], summary_payload)
+                    if arguman.strip():
+                        bos = (f"Filtre '{arguman.strip()}' için güncel tam tarama yok; "
+                               "önceki sonuç kullanılmadı.\n" + bos)
+                    return bos
             st = _live_state.status()
             if not arguman.strip():
                 bos = _bos_analiz_mesaji()
@@ -1216,7 +1394,7 @@ def _komut_ozet(arguman: str) -> str:
                     "contraction": f.get("contraction"),
                     "break_dir": f.get("break_dir", 0),
                 })
-            ozet = notifier.format_daily_summary(aktif, daily_stats)
+            ozet = notifier.format_daily_summary(aktif, summary_payload)
             uyarilar = [x for x in (_onceki_sonuc_uyarisi(), _kismi_kapsam_notu()) if x]
             return "\n".join(uyarilar + [ozet]) if uyarilar else ozet
         if not formations:
@@ -1339,7 +1517,12 @@ def _komut_kirilim(arguman: str) -> str:
 # hissede hiç formasyon yok, hangi TF boş, toplam kaç slot dolu -> görünmez.
 # /panel evrenin tamamını (ACTIVE_STOCKS x 4 TF) tek bakışta gösterir: doluluk
 # sayıları + kompozit puana göre en anlamlı 12 aday.
-WATCH_CONTEXT_HAVUZU = 12    # acil mesaja eklenecek adayların seçildiği havuz (gönderilen: en fazla 3)
+WATCH_CONTEXT_HAVUZU = 12    # geçmiş uyumluluğu; acil bildirimlere aday eklenmez
+
+
+SUMMARY_MARKERS_SUPABASE_KEY = "state:daily_summary_markers"
+
+
 def _ozet_isaretlerini_yukle() -> tuple:
     """Kalıcı özet işaretlerini okur: (dm_isaretleri, public_isaretleri).
 
@@ -1361,6 +1544,23 @@ def _ozet_isaretlerini_yukle() -> tuple:
                 public[ad.split(":", 1)[1]] = gun
             else:
                 dm[ad] = gun
+        # Ephemeral instance restart/replace durumlarında da slot mühürü kalsın.
+        store = _supabase_store_ref
+        if store is not None and hasattr(store, "get_many"):
+            remote = store.get_many([SUMMARY_MARKERS_SUPABASE_KEY])
+            remote_markers = (remote or {}).get(SUMMARY_MARKERS_SUPABASE_KEY)
+            if isinstance(remote_markers, dict):
+                for anahtar, deger in remote_markers.items():
+                    try:
+                        gun = datetime.fromisoformat(str(deger)).date()
+                    except (TypeError, ValueError):
+                        continue
+                    ad = str(anahtar)
+                    if ad.startswith("public:"):
+                        slot = ad.split(":", 1)[1]
+                        public[slot] = max(public.get(slot, gun), gun)
+                    else:
+                        dm[ad] = max(dm.get(ad, gun), gun)
         if dm or public:
             logger.info("Günlük özet işaretleri geri yüklendi: DM=%s public=%s",
                         sorted(dm), sorted(public))
@@ -1369,18 +1569,56 @@ def _ozet_isaretlerini_yukle() -> tuple:
     return dm, public
 
 
-def _ozet_isaret_kaydet(slot: str, gun, public: bool = False) -> None:
-    """'Şu özet gönderildi' işaretini GÜN damgalı olarak diske yazar.
+def _ozet_slot_gonderilmeli(isaretler: dict, slot: str, gun) -> bool:
+    """Aynı DM/public özet slotunu aynı İstanbul gününde ikinci kez gönderme."""
+    gun_tarihi = gun.date() if isinstance(gun, datetime) else gun
+    isaret = (isaretler or {}).get(str(slot))
+    if isinstance(isaret, str):
+        try:
+            isaret = datetime.fromisoformat(isaret).date()
+        except (TypeError, ValueError):
+            isaret = None
+    elif isinstance(isaret, datetime):
+        isaret = isaret.date()
+    return isaret != gun_tarihi
 
-    Restart sonrası aynı özetin ikinci kez gitmesini engeller (canlı denetimde
-    09:55 sabah notu için duplike ölçülmüştü).
+
+def _ozet_isaret_kaydet(slot: str, gun, public: bool = False) -> None:
+    """'Şu özet gönderildi' işaretini diske ve varsa Supabase'a yazar.
+
+    Restart/instance replacement sonrası aynı slot özetinin ikinci kez gitmesini
+    önlemek için yerel ve uzak işaret birlikte tutulur.
     """
     try:
         anahtar = f"public:{slot}" if public else str(slot)
         veri = _state_persistence.gunluk_durum_yukle() or {}
         isaretler = dict(veri.get("ozet_gunleri") or {})
-        isaretler[anahtar] = str(getattr(gun, "isoformat", lambda: gun)())
+        deger = str(getattr(gun, "isoformat", lambda: gun)())
+        isaretler[anahtar] = deger
         _state_persistence.gunluk_durum_guncelle({"ozet_gunleri": isaretler})
+        store = _supabase_store_ref
+        if store is not None and hasattr(store, "upsert"):
+            remote_markers = dict(isaretler)
+            try:
+                remote = store.get_many([SUMMARY_MARKERS_SUPABASE_KEY]) if hasattr(store, "get_many") else None
+                existing = (remote or {}).get(SUMMARY_MARKERS_SUPABASE_KEY)
+                if isinstance(existing, dict):
+                    for remote_key, remote_value in existing.items():
+                        remote_key = str(remote_key)
+                        try:
+                            remote_date = datetime.fromisoformat(str(remote_value)).date()
+                            local_date = datetime.fromisoformat(
+                                str(remote_markers.get(remote_key) or remote_value)
+                            ).date()
+                        except (TypeError, ValueError):
+                            remote_markers.setdefault(remote_key, remote_value)
+                            continue
+                        remote_markers[remote_key] = max(local_date, remote_date).isoformat()
+            except Exception as remote_error:  # noqa: BLE001 - yerel işaret korunur
+                logger.debug("Supabase özet işareti okunamadı: %s", remote_error)
+            remote_markers[anahtar] = deger
+            if not store.upsert(SUMMARY_MARKERS_SUPABASE_KEY, remote_markers):
+                logger.debug("Supabase özet işareti yazılamadı (%s)", slot)
     except Exception as hata:  # noqa: BLE001
         logger.debug("Özet işareti yazılamadı (%s): %s", slot, hata)
 
@@ -1750,6 +1988,126 @@ def _bekle_veya_tarama(seconds: float) -> bool:
     return False
 
 
+_domain_runner_cache = None
+_DOMAIN_TIMEFRAMES = ("1h", "2h", "4h", "1d")
+
+
+def _load_domain_runner():
+    """Domain runner'ı yalnızca teyitli bir Telegram olayı gerektiğinde yükle.
+
+    Import hatası cache'lenmez; sonraki tarama/olayda yeniden denenebilir.
+    Domain kaynaklarına dokunulmaz ve sonuç cache'lerinden eski çıktı okunmaz.
+    """
+    global _domain_runner_cache
+    if _domain_runner_cache is not None:
+        return _domain_runner_cache
+    try:
+        from domain_engines.runner import run_domain_engines
+    except Exception as exc:  # noqa: BLE001 - opsiyonel bağlam taramayı durdurmaz
+        logger.warning("Domain runner yüklenemedi; formation alert domain bağlamı boş kalacak: %s", exc)
+        return None
+    _domain_runner_cache = run_domain_engines
+    return _domain_runner_cache
+
+
+def _completed_domain_frames(all_timeframes, now):
+    """Runner'a yalnızca timestamp'li, kapanmış ve yeterli uzunluktaki frame'leri ver."""
+    prepared = {}
+    if not isinstance(all_timeframes, dict):
+        return prepared
+    for timeframe in _DOMAIN_TIMEFRAMES:
+        frame = all_timeframes.get(timeframe)
+        if frame is None:
+            continue
+        if not isinstance(frame, pd.DataFrame):
+            logger.error("Domain frame preparation failed for %s: expected DataFrame", timeframe)
+            continue
+        if len(frame) == 0:
+            continue
+        if not isinstance(frame.index, pd.DatetimeIndex):
+            logger.error(
+                "Domain frame preparation failed for %s: %s index must be DatetimeIndex",
+                timeframe,
+                type(frame.index).__name__,
+            )
+            continue
+        required = {"open", "high", "low", "close", "volume"}
+        if not required.issubset(set(frame.columns)):
+            eksik = sorted(required - set(frame.columns))
+            logger.error("Domain frame preparation failed for %s: missing columns %s", timeframe, eksik)
+            continue
+        try:
+            closed = tamamlanmis_mumlar(frame, timeframe, now=now)
+            if closed is None or len(closed) < 30:
+                continue
+            if not bar_kapandi_mi(closed.index[-1], timeframe, now=now):
+                continue
+            prepared[timeframe] = closed.copy(deep=True)
+        except Exception as exc:  # noqa: BLE001 - bozuk domain frame diğer TF'leri engellemesin
+            logger.error("Domain frame preparation failed for %s: %s", timeframe, exc)
+    return prepared
+
+
+def _domain_results_for_notification(stock, all_timeframes, now, cache):
+    """Bu scan turunda sembol başına bir kez taze domain sonucu üret."""
+    if stock in cache:
+        return cache[stock]
+    runner = _load_domain_runner()
+    if runner is None:
+        cache[stock] = {}
+        return cache[stock]
+    frames = _completed_domain_frames(all_timeframes, now)
+    results = {}
+    for timeframe, frame in frames.items():
+        try:
+            output = runner(stock, timeframe, frame, profile=PROFILE)
+            if isinstance(output, dict):
+                results[timeframe] = output
+            else:
+                logger.warning("Domain runner %s/%s beklenmeyen sonuç döndürdü", stock, timeframe)
+        except Exception as exc:  # noqa: BLE001 - domain hatası formation uyarısını bastırmasın
+            logger.warning("Domain runner hatası %s/%s: %s", stock, timeframe, exc)
+    cache[stock] = results
+    return results
+
+
+def _alert_break_level(active, break_dir, state):
+    """Kapanış teyidi/retest için kırılım anındaki dondurulmuş sınırı seç."""
+    if state in {"KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI"}:
+        frozen_name = "frozen_upper_boundary_at_break" if break_dir == 1 else "frozen_lower_boundary_at_break"
+        frozen = getattr(active, frozen_name, None)
+        try:
+            if frozen is not None and math.isfinite(float(frozen)):
+                return float(frozen)
+        except (TypeError, ValueError, OverflowError):
+            pass
+    raw = getattr(active, "upper_now", None) if break_dir == 1 else getattr(active, "lower_now", None)
+    try:
+        number = float(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _closed_formation_event_confirmed(state, break_dir, close_price, break_level):
+    """KIRILIM/RETEST push'u ancak mum kapanışı ilgili sınırın ötesindeyse geçer."""
+    if state not in {"KIRILIM_TEYITLI", "RETEST_BASARILI"}:
+        return True
+    try:
+        close = float(close_price)
+        level = float(break_level)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    if not (math.isfinite(close) and math.isfinite(level)):
+        return False
+    strict_break = state == "KIRILIM_TEYITLI"
+    if break_dir == 1:
+        return close > level if strict_break else close >= level
+    if break_dir == -1:
+        return close < level if strict_break else close <= level
+    return False
+
+
 def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: PatternLifecycleManager, notifier: TelegramNotifier, manuel: bool = False, stocks=None, send_alerts: bool = True):
     """
     Aktif tarama evrenini tara; Yahoo verisi seri ve gruplu alınır, analiz ardından yapılır.
@@ -1767,6 +2125,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     tur_hata = 0
     en_son_bar = None
     en_eski_bar_yasi_dk = None
+    # Teyitli bir olay aynı sembolde birden çok TF'de çıkarsa, alan çıktıları
+    # bu scan turunda taze biçimde yalnızca bir kez hesaplanır.
+    domain_results_by_stock = {}
     _live_state.begin_scan(
         simdiki_zaman,
         manuel=manuel,
@@ -1956,6 +2317,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 snap = lifecycle_manager.scan(stock + "_" + tf_name, df_tf, tam_yeniden=True)
                 state, break_dir, lifecycle_log = snap.state, snap.break_dir, snap.log
                 active = snap.active
+                invalidation_event = _invalidation_event_for_snapshot(snap, active)
+                notification_state = (
+                    "KIRILIM_GECERSIZLESTI" if invalidation_event is not None else state
+                )
                 # Yaşam döngüsü yok/geçersiz/zayıflama state'ine düştü: bu slotun
                 # "tekrar" mühürleri + 4 saatlik cooldown'ı temizlenir, aynı slotu
                 # tekrar kaplayan yeni formasyon anında bildirilebilir.
@@ -1964,8 +2329,19 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 
                 if active:
                     q = snap.effective_quality if snap.effective_quality is not None else active.raw_quality
+                    try:
+                        candle_close_price = float(df_tf["close"].iloc[-1])
+                    except (KeyError, IndexError, TypeError, ValueError, OverflowError):
+                        candle_close_price = None
+                    break_price = _alert_break_level(active, break_dir, notification_state)
+                    _record_daily_lifecycle_events(
+                        stock, tf_name, snap, fallback_bar_time=df_tf.index[-1]
+                    )
                     _note_pattern_found(stock, tf_name)
-                    logger.info(f"🔍 {stock} {tf_name} - {active.pattern_type} kalite {q:.0f} state {state} - {snap.log}")
+                    logger.info(
+                        f"🔍 {stock} {tf_name} - {active.pattern_type} kalite {q:.0f} "
+                        f"state {state} / bildirim {notification_state} - {snap.log}"
+                    )
                     # --- HAFTALIK KARNE DEFTERİ (yerel; Supabase gerekmez) ---
                     # Kırılım teyidi: performans ölçülecek sinyal (giriş = teyit
                     # barının kapanışı). Diğer state'ler: formasyon sayımı + huni.
@@ -1999,6 +2375,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         'pattern_name': active.pattern_type,
                         'quality': float(q),
                         'state': state,
+                        'notification_state': notification_state,
                         'break_dir': break_dir,
                         # Phase 1: kalıcı formation kimliği (doğumdan terminal'e).
                         # Motor-içi `identity`'den ayrıdır; restart sonrası re-attach
@@ -2022,6 +2399,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                         if son_bar_kapanis is not None else None),
                         'bar_kapandi': bool(son_bar_kapandi),
                         'bar_metni': _mum_bilgisi(tf_name, df_tf.index[-1], son_bar_kapanis),
+                        'candle_close_price': candle_close_price,
                         'min_quality': float(min_q),
                         'alert_gonderildi': False,
                     }
@@ -2045,17 +2423,26 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         daily_stats['alerts_deferred'] += 1
                         logger.info(f"{stock} {tf_name} {state}: düşük öncelikli bildirim kapanış özetine ertelendi")
                     # Teyitli kırılım, başarılı retest, tamamlanma ve başarısız kırılım acildir.
-                    elif send_alerts and state in IMMEDIATE_ALERT_STATES and not son_bar_kapandi:
+                    elif send_alerts and notification_state in IMMEDIATE_ALERT_STATES and not son_bar_kapandi:
                         # P0 güvenlik kapısı: bar kapanmadan anlık push yok. Bu dal
                         # normalde HİÇ çalışmaz (tamamlanmis_mumlar aynı kuralı
                         # uygular); saat/tarama kayması olursa sinyal yanlış
                         # gönderilmek yerine bir sonraki taramaya bırakılır.
                         daily_stats['alerts_bar_kapanmadi'] += 1
                         logger.warning(
-                            f"⏸️ {stock} {tf_name} {state}: bar henüz kapanmadı "
+                            f"⏸️ {stock} {tf_name} {notification_state}: bar henüz kapanmadı "
                             f"({df_tf.index[-1]} → {son_bar_kapanis}); push sonraki taramaya bırakıldı"
                         )
-                    elif send_alerts and state in IMMEDIATE_ALERT_STATES:
+                    elif (send_alerts and notification_state in IMMEDIATE_ALERT_STATES
+                          and not _closed_formation_event_confirmed(
+                              notification_state, break_dir, candle_close_price, break_price)):
+                        daily_stats['alerts_break_close_invalid'] += 1
+                        logger.warning(
+                            "⏸️ %s %s %s: kapanış teyit seviyesi dışında; Telegram push atlandı "
+                            "(close=%s, level=%s)",
+                            stock, tf_name, notification_state, candle_close_price, break_price,
+                        )
+                    elif send_alerts and notification_state in IMMEDIATE_ALERT_STATES:
                         # Humanized mesaj için ek bilgiler - var olan veriyi kullan, ekstra hesaplama yok
                         upper_touches = getattr(active, 'upper_touches', None)
                         lower_touches = getattr(active, 'lower_touches', None)
@@ -2081,9 +2468,12 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'stock_name': stock,
                             'timeframe': tf_name,
                             'pattern_name': active.pattern_type,
-                            'state': state,
+                            'state': notification_state,
+                            'formation_id': getattr(active, 'stable_id', None),
                             'confidence_score': q,
-                            'critical_price_level': active.upper_now if break_dir == 1 else active.lower_now,
+                            'critical_price_level': break_price,
+                            'candle_close_price': candle_close_price,
+                            'close_price': candle_close_price,
                             'upper_now': active.upper_now,
                             'lower_now': active.lower_now,
                             'contraction': getattr(active, 'contraction', None),
@@ -2099,19 +2489,15 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'bar_metni': _mum_bilgisi(tf_name, df_tf.index[-1], son_bar_kapanis),
                             'break_dir': break_dir,
                             'break_strength': getattr(active, 'break_strength', q),
-                            'break_price': active.upper_now if break_dir == 1 else active.lower_now,
+                            'break_price': break_price,
                             'retest_seen': getattr(snap, 'retest_seen', False),
                             'upper_touches': upper_touches,
                             'lower_touches': lower_touches,
                             'age_bars': age_bars,
                             'mtf_destek': mtf_destek,
-                            # Acil mesaja bağlam olarak en fazla 3 aday eklenir; havuz
-                            # (12) bu listenin seçildiği yerdir, gönderilen sayı değil.
-                            'watch_context': [
-                                item for item in _deferred_alert_buffer.items(
-                                    simdiki_zaman, limit=WATCH_CONTEXT_HAVUZU)
-                                if not (item.get('stock') == stock and item.get('timeframe') == tf_name)
-                            ][:3],
+                            # Acil mesaj kısa kalsın; izleme adayları 18:45 digest'inde
+                            # gösterilir, bu nedenle burada bağlam eklenmez/tüketilmez.
+                            'watch_context': [],
                         }
                         # Public (grup) kuyruğuna ekle: gönderim tarama turu sonunda
                         # TEK bültende yapılır; DM engeli (cooldown/kap) grubu etkilemez.
@@ -2120,12 +2506,36 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         except Exception as public_hata:  # noqa: BLE001
                             logger.debug("Public kuyruğa eklenemedi (%s %s): %s",
                                          stock, tf_name, public_hata)
+                        def _attach_domain_context(payload):
+                            try:
+                                outputs = _domain_results_for_notification(
+                                    stock, all_tfs, simdiki_zaman, domain_results_by_stock
+                                )
+                                payload['domain_context'] = format_domain_context(
+                                    outputs,
+                                    reference_price=candle_close_price,
+                                )
+                            except Exception as exc:  # noqa: BLE001 - bağlam alarmı düşürmesin
+                                payload['domain_context'] = ""
+                                logger.warning(
+                                    "Bildirim domain bağlamı atlandı (%s %s): %s",
+                                    stock, tf_name, exc,
+                                )
+
                         daily_stats['alerts_attempted'] += 1
-                        if notifier.send(alert_data):
+                        send_with_prepare = getattr(notifier, "send_with_prepare", None)
+                        if callable(send_with_prepare):
+                            alert_sent = send_with_prepare(
+                                alert_data, before_send=_attach_domain_context
+                            )
+                        else:
+                            # Test/custom notifier adapters may expose only send().
+                            _attach_domain_context(alert_data)
+                            alert_sent = notifier.send(alert_data)
+                        if alert_sent:
                             daily_stats['alerts_sent'] += 1
-                            _deferred_alert_buffer.mark_reported(alert_data['watch_context'], simdiki_zaman)
                             _live_state.mark_alert_sent(stock, tf_name)
-                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
+                            logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {notification_state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
                         else:
                             # Neden gönderilemedi? cooldown/kap ise olay kaybolmasın
                             # (Batch 5'te kuyruğa alınır); şimdilik sayılır.
@@ -2146,7 +2556,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                         f"({notifier._son_engel})"
                                     )
                             logger.warning(
-                                f"⚠️ Telegram gönderilemedi: {stock} {tf_name} {state} "
+                                f"⚠️ Telegram gönderilemedi: {stock} {tf_name} {notification_state} "
                                 f"(engel: {getattr(notifier, '_son_engel', None) or 'gönderim hatası'})"
                             )
                     elif send_alerts:
@@ -2197,6 +2607,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     eksik = max(len(scan_stocks) - tur_taranan, 0)
     global last_run_stats
     run_status = "tamamlandi" if tur_taranan == len(scan_stocks) and tur_hata == 0 else "basarisiz"
+    finished_at = datetime.now(ISTANBUL_TZ)
+    full_universe_success = run_status == "tamamlandi" and _is_full_universe_scan(scan_stocks)
     last_run_stats = {
         "status": run_status,
         "requested": len(scan_stocks),
@@ -2208,11 +2620,14 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
         "duration_minutes": round(sure_dk, 1),
         "data_asof": en_son_bar.isoformat() if en_son_bar is not None else None,
         "oldest_bar_age_minutes": en_eski_bar_yasi_dk,
-        "finished_at": datetime.now(ISTANBUL_TZ).isoformat(),
+        "finished_at": finished_at.isoformat(),
     }
     if run_status == "tamamlandi":
+        finish_fields = {}
+        if full_universe_success:
+            finish_fields["son_basarili_tam_tarama"] = finished_at.isoformat()
         _live_state.finish_scan(
-            datetime.now(ISTANBUL_TZ),
+            finished_at,
             son_tarama_durumu="tamamlandi",
             son_tarama_suresi_dk=round(sure_dk, 1),
             son_tarama_hissesi=tur_taranan,
@@ -2223,6 +2638,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             son_tarama_formasyonu=tur_formasyon,
             son_tarama_veri_zamani=en_son_bar.isoformat() if en_son_bar is not None else None,
             son_tarama_en_eski_veri_yasi_dk=en_eski_bar_yasi_dk,
+            **finish_fields,
         )
         son_tarama_kaydet()
     else:
@@ -2237,6 +2653,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             sure_dk=round(sure_dk, 1),
         )
         logger.error("Tarama sonucu yayımlanmadı; son başarılı snapshot korundu. %s", hata)
+        # Formasyon listesini değiştirmeden başarısızlık/son başarılı tam tarama
+        # metadatasını da kaydet; restart sonrası eski veri güncel sanılmasın.
+        son_tarama_kaydet()
 
     # --- TARAMA DRİFT KORUMASI (FAZ 2) ---
     if sure_dk > TARAMA_SURESI_UYARI_DK:
@@ -2521,6 +2940,69 @@ def _karneyle_gonder(notifier, ana_mesaj: str, karne_ek: str = ""):
     return ana_ok, karne_ok, hata
 
 
+def _is_full_universe_scan(stocks) -> bool:
+    """Whether a scan covers each configured symbol exactly once."""
+    try:
+        expected = {str(stock).upper() for stock in ACTIVE_STOCKS}
+        requested = [str(stock).upper() for stock in (stocks or [])]
+        return bool(expected) and len(requested) == len(expected) and set(requested) == expected
+    except Exception:  # noqa: BLE001 - guard helper should fail closed
+        return False
+
+
+def _daily_summary_payload(now=None) -> dict:
+    """Daily counters plus freshness metadata for Telegram summaries."""
+    now = now or datetime.now(ISTANBUL_TZ)
+    payload = dict(daily_stats)
+    try:
+        status = _live_state.status() or {}
+    except Exception:  # noqa: BLE001 - summary still works without live status
+        status = {}
+    full_at = status.get("son_basarili_tam_tarama")
+    # Backward compatibility with snapshots created before the dedicated stamp.
+    if not full_at:
+        try:
+            expected = int(status.get("son_tarama_beklenen_hisse") or 0)
+            processed = int(status.get("son_tarama_hissesi") or 0)
+            if (status.get("son_tarama_durumu") == "tamamlandi"
+                    and expected >= len(ACTIVE_STOCKS)
+                    and processed >= len(ACTIVE_STOCKS)):
+                full_at = status.get("son_tarama_bitis")
+        except (TypeError, ValueError, OverflowError):
+            full_at = None
+    payload["son_basarili_tam_tarama"] = full_at
+    payload["tam_tarama_guncel"] = _successful_full_scan_today(now)
+    payload["son_tarama_durumu"] = status.get("son_tarama_durumu")
+    return payload
+
+
+def _successful_full_scan_today(now: datetime) -> bool:
+    """True only when the latest full-universe scan completed today."""
+    try:
+        status = _live_state.status()
+        if status.get("son_tarama_durumu") != "tamamlandi":
+            return False
+        expected = int(status.get("son_tarama_beklenen_hisse") or
+                      status.get("son_is_hisse_istek") or 0)
+        processed = int(status.get("son_tarama_hissesi") or
+                        status.get("son_is_hisse_basarili") or 0)
+        if expected < len(ACTIVE_STOCKS) or processed < len(ACTIVE_STOCKS):
+            return False
+        raw_finished = status.get("son_tarama_bitis") or status.get("son_is_bitis")
+        if not raw_finished:
+            return False
+        finished = datetime.fromisoformat(str(raw_finished).replace("Z", "+00:00"))
+        if finished.tzinfo is None:
+            finished = ISTANBUL_TZ.localize(finished)
+        else:
+            finished = finished.astimezone(ISTANBUL_TZ)
+        local_now = (ISTANBUL_TZ.localize(now) if now.tzinfo is None
+                     else now.astimezone(ISTANBUL_TZ))
+        return finished.date() == local_now.date()
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        return False
+
+
 def _effective_summary_hours() -> List[dt_time]:
     """Akşam özetini son tarama sonrasına al; eski 18:15 saatiyle çakıştırma."""
     digest_time = _parse_deferred_alert_digest_time()
@@ -2685,11 +3167,10 @@ def evening_maintenance(deque_manager, lifecycle_manager):
         try:
             rapor = _live_state.status() if hasattr(_live_state, 'status') else {}
             logger.info(f"GÜN SONU RAPORU: {rapor}")
-            # Telegram DM'e gün sonu özeti (sadece owner)
-            if _notifier_ref and _notifier_ref.enabled:
-                aktif = _build_active_formations_for_summary(lifecycle_manager)
-                ozet = _notifier_ref.format_daily_summary(aktif, daily_stats)
-                _notifier_ref.send_text(f"📋 Gün Sonu Bakım Raporu\n{ozet}")
+            # Telegram özeti burada GÖNDERİLMEZ: 18:45 scheduler aynı günün
+            # tek DM/public özetini başarıyla tamamlanmış tarama sonrasında yollar.
+            # Bakım sonucu log'da kalır; aksi halde 18:10-18:59 aralığında ikinci
+            # ve tarama öncesi bir "Gün Sonu Bakım Raporu" oluşuyordu.
         except Exception as e:
             logger.warning(f"Gün sonu raporu hatası: {e}")
 
@@ -2972,6 +3453,13 @@ def main_loop():
                     ozet_zamani = now >= hedef and (
                         sh == deferred_alert_digest_time or gecikme_sn < 600
                     )
+                    # Akşam DM/public özeti aynı gün tam evren taraması başarıyla
+                    # bitmeden gönderilmez; sonraki döngüde (18:45 penceresi
+                    # kapanmadan) yeniden denenir. Sabah slotu bu kapıdan bağımsızdır.
+                    if (sh == deferred_alert_digest_time and ozet_zamani
+                            and not _successful_full_scan_today(now)):
+                        logger.info("18:45 özeti bekletildi: bugün başarılı tam tarama yok")
+                        continue
                     # Kapanış özeti kalıcı tampon taşır: restart sonrası aynı DM
                     # özeti ikinci kez gönderilmesin (state:digest_pending).
                     # NOT: bu bayrak yalnız DM yolunu kapatır. Kanala kapanış
@@ -2981,13 +3469,16 @@ def main_loop():
                     dm_gonderildi = (sh == deferred_alert_digest_time
                                      and _digest_son_gonderim_gun == now.date().isoformat())
                     dm_hedefi = (ozet_zamani and not dm_gonderildi
-                                 and last_summary_sent.get(sh_str) != now.date())
+                                 and _ozet_slot_gonderilmeli(last_summary_sent, sh_str, now.date()))
                     public_hedefi = (ozet_zamani and notifier.public_enabled
-                                     and last_summary_public_sent.get(sh_str) != now.date())
+                                     and _ozet_slot_gonderilmeli(
+                                         last_summary_public_sent, sh_str, now.date()
+                                     ))
                     if not dm_hedefi and not public_hedefi:
                         continue
                     aktif = _build_active_formations_for_summary(lifecycle_manager)
-                    ozet = notifier.format_daily_summary(aktif, daily_stats)
+                    summary_payload = _daily_summary_payload(now)
+                    ozet = notifier.format_daily_summary(aktif, summary_payload)
                     bekleyen = (
                         _deferred_alert_buffer.items(now, limit=DEFERRED_ALERT_DIGEST_LIMIT)
                         if sh == deferred_alert_digest_time else []
@@ -3042,13 +3533,15 @@ def main_loop():
                     # --- PUBLIC GRUP: sade kapanış özeti (DM'den bağımsız) ---
                     # DM kapalıyken de çalışır; iç izleme notu/dosya yolu taşımaz.
                     if (notifier.public_enabled
-                            and last_summary_public_sent.get(sh_str) != now.date()):
+                            and _ozet_slot_gonderilmeli(
+                                last_summary_public_sent, sh_str, now.date()
+                            )):
                         kisa_karne = ""
                         if sh == deferred_alert_digest_time:
                             kisa_karne = _haftalik_karne_kisa(now, deque_manager)
                         kapanis_mi = (sh == deferred_alert_digest_time)
                         grup_ozet = notifier.format_public_summary(
-                            aktif, daily_stats, izleme=bekleyen, karne_kisa=kisa_karne,
+                            aktif, summary_payload, izleme=bekleyen, karne_kisa=kisa_karne,
                             tarama_turu=daily_stats.get('tarama_sayisi'),
                             kapanis=kapanis_mi,
                         )

@@ -263,11 +263,19 @@ def test_kapanmamis_barla_push_yok(monkeypatch, tarama_deque_manager):
 
 
 def test_kapanmis_barla_push_uretilir(monkeypatch, tarama_deque_manager):
-    """Kapı açıkken (bar kapandı) aynı senaryo push ÜRETİR: kapı fazla elemez."""
+    """Push kısa kalır; başka izleme adayları 18:45 digest'inde tutulur."""
     import main as M
     from data import StockDequeManager
     from patterns import PatternLifecycleManager
+    from telegram_alert_flow import DeferredAlertBuffer
 
+    bekleyen = DeferredAlertBuffer()
+    simdi = datetime.now(IST)
+    bekleyen.observe("GARAN", "4h", {
+        "stock": "GARAN", "timeframe": "4h", "pattern_name": "Simetrik Üçgen",
+        "state": "SIKISMA_GUCLENIYOR", "quality": 84,
+    }, simdi)
+    monkeypatch.setattr(M, "_deferred_alert_buffer", bekleyen)
     monkeypatch.setattr(M, "fetch_1h_stocks_paced", lambda *a, **k: ({}, {}, 0, 0))
     monkeypatch.setattr(M, "bar_kapandi_mi", lambda *a, **k: True)
     lm = PatternLifecycleManager()
@@ -275,7 +283,15 @@ def test_kapanmis_barla_push_uretilir(monkeypatch, tarama_deque_manager):
 
     gonderilen = []
     notifier = M.TelegramNotifier()
-    monkeypatch.setattr(notifier, "send", lambda data, kuyrukla=True: gonderilen.append(data) or True)
+
+    def sahte_gonderim(data, before_send=None, kuyrukla=True):
+        if before_send:
+            before_send(data)
+        gonderilen.append(data)
+        return True
+
+    monkeypatch.setattr(notifier, "send_with_prepare", sahte_gonderim)
+    monkeypatch.setattr(M, "_load_domain_runner", lambda: (lambda *a, **k: {}))
 
     yedek = dict(M.daily_stats)
     try:
@@ -283,6 +299,9 @@ def test_kapanmis_barla_push_uretilir(monkeypatch, tarama_deque_manager):
                           stocks=["THYAO"], send_alerts=True)
         assert gonderilen, "kapanmış barla push üretilmedi"
         veri = gonderilen[0]
+        assert veri.get('watch_context') == []
+        assert "Diğer izleme adayları" not in notifier.format_message(veri)
+        assert any(item["stock"] == "GARAN" for item in bekleyen.items(datetime.now(IST)))
         assert veri.get('bar_kapandi') is True
         assert veri.get('bar_metni', "").startswith("🕒")
         assert veri.get('bar_kapanis') and isinstance(veri['bar_kapanis'], str)

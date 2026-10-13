@@ -63,7 +63,7 @@ def _veri(state="KIRILIM_TEYITLI", stock="THYAO"):
 
 # --- B3: digest tamponu kalıcılığı ---------------------------------------
 
-def _kayit(state="KIRILIM_ADAYI", stock="GARAN", kalite=80, timeframe="1h"):
+def _kayit(state="SIKISMA_GUCLENIYOR", stock="GARAN", kalite=80, timeframe="1h"):
     return {"stock": stock, "timeframe": timeframe, "pattern_name": "Simetrik Üçgen",
             "state": state, "quality": kalite}
 

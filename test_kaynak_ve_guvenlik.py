@@ -630,12 +630,15 @@ def test_alarm_politikasi_tek_kaynaktan_gelir():
 
 
 def test_alarm_politikasi_state_adlari_gecerli():
-    """Politikadaki tüm state adları patterns/constants.py'de tanımlı olmalı."""
+    """Lifecycle adları motor state'idir; invalidation bildirimi yalnızca alias'tır."""
     import config as cfg
     from patterns import constants as pc
     bilinen = {v for k, v in vars(pc).items() if k.startswith("ST_") and isinstance(v, str)}
-    tanimsiz = (set(cfg.ALERT_STATES) | set(cfg.WATCH_STATES) | set(cfg.PUBLIC_STATES)) - bilinen
+    bildirim_aliaslari = {"KIRILIM_GECERSIZLESTI"}
+    tanimsiz = ((set(cfg.ALERT_STATES) | set(cfg.WATCH_STATES) | set(cfg.PUBLIC_STATES))
+                - bilinen - bildirim_aliaslari)
     assert not tanimsiz, f"tanımsız state adları: {sorted(tanimsiz)}"
+    assert bildirim_aliaslari.isdisjoint(bilinen), "bildirim alias'ı domain state'ine eklenmemeli"
 
 
 def test_public_kanal_politikasi_config_ten_okunur():

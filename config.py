@@ -269,7 +269,7 @@ ACIL_KUYRUK_BOSALTMA_ARALIK_SN = _env_int("ACIL_KUYRUK_BOSALTMA_ARALIK_SN", 60) 
 # _env_int 0'ı 1'e yuvarladığı için float okunur.
 PUBLIC_MIN_QUALITY = _env_float("PUBLIC_MIN_QUALITY", 0)
 PUBLIC_STATES = [s.strip() for s in os.getenv(
-    "PUBLIC_STATES", "KIRILIM_TEYITLI,RETEST_BASARILI,FORMASYON_TAMAMLANDI").split(",") if s.strip()]
+    "PUBLIC_STATES", "KIRILIM_TEYITLI,RETEST_BASARILI,KIRILIM_GECERSIZLESTI").split(",") if s.strip()]
 # Kanal için günlük SIKISMA özetinde min daralma
 PUBLIC_SIKISMA_MIN_CONTRACTION = _env_float("PUBLIC_SIKISMA_MIN_CONTRACTION", 0.80)
 
@@ -403,28 +403,26 @@ PUBLIC_MIN_QUALITY_TF = _tf_esiklerini_coz(
     os.getenv("PUBLIC_MIN_QUALITY_TF", ""), ALERT_MIN_QUALITY)
 
 # --- ALARM / KANAL POLİTİKASI (TEK KAYNAK) ----------------------------------
-# KURAL: Aşağıdaki listeler BİRBİRİNDEN AYRIDIR (aynı state iki listede olamaz)
-# ve tüm state adları `patterns/constants.py`'de tanımlıdır; test bunu doğrular.
+# KURAL: Aşağıdaki listeler BİRBİRİNDEN AYRIDIR (aynı state iki listede olamaz).
+# Lifecycle state adları patterns/constants.py'de tanımlıdır.
+# KIRILIM_GECERSIZLESTI yalnız bildirim katmanı alias'ıdır; motor state'i değildir
+# ve main.py bunu sadece önceden teyit edilmiş kırılımın sonraki kapanışta
+# formasyon içine döndüğü olay için üretir.
 #
 # 1) ANINDA iletilen (gecikmeden push) kritik olaylar:
 ALERT_STATES = [
+    # Yalnızca kapanışta doğrulanmış olaylar anlık gönderilir.
     "KIRILIM_TEYITLI",
     "RETEST_BASARILI",
-    "FORMASYON_TAMAMLANDI",
-    "BASARISIZ_KIRILIM",
+    "KIRILIM_GECERSIZLESTI",
 ]
 
-# 2) 18:45 kapanış özetine (digest) ERTELENEN izleme state'leri. Hazırlık/adayı/
-# sıkışma/retest bekleme burada; main tarafı `IMMEDIATE_ALERT_STATES` ile anlık,
-# kalanı `DeferredAlertBuffer` + `WATCH_STATES` ile toplu bildirir.
-# Politikayı değiştirmek için SADECE bu listeyi düzenle (B7 kararı burada).
+# 2) 18:45 kapanış özetine (digest) ertelenen düşük öncelikli yapılar.
+# Kırılım hazırlığı ve retest bekleme/deneme state'leri, digest dahil hiçbir
+# Telegram bildiriminde gösterilmez; teyitli olay veya sıkışma oluşana kadar
+# sessiz kalınır. Politikayı değiştirmek için SADECE bu listeyi düzenle.
 WATCH_STATES = frozenset({
     "SIKISMA_GUCLENIYOR",
-    "KIRILIM_HAZIRLIGI",
-    "KIRILIM_ADAYI",
-    "KIRILIM_DENEMESI",
-    "RETEST_BEKLENIYOR",
-    "RETEST_EDILIYOR",
 })
 
 # 3) PUBLIC KANAL akışı: yalnız bu state'ler ve eşikleri geçen kayıtlar kanala

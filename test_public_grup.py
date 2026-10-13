@@ -96,9 +96,22 @@ def test_public_tf_esikleri_dm_ile_ayni(grup_notifier):
 
 
 def test_public_basarisiz_kirilim_gruba_gitmez(grup_notifier):
-    """Politika: ❌ tek tek gruba gitmez; 18:45 özetinde sayı olarak görünür."""
+    """Politika: başarısızlık tek tek gruba ya da public kuyruğa gitmez."""
     n = grup_notifier
     assert n.should_send_to_public(_olay(state="BASARISIZ_KIRILIM", q=95)) is False
+
+
+def test_public_legacy_completed_queue_entry_is_discarded(monkeypatch, grup_notifier):
+    n = grup_notifier
+    n.public_states = {"FORMASYON_TAMAMLANDI", "KIRILIM_TEYITLI"}
+    n._public_kuyruk.append(_olay(state="FORMASYON_TAMAMLANDI", q=95))
+    sahte = _SahteRequests()
+    monkeypatch.setitem(sys.modules, "requests", sahte)
+
+    assert n.should_send_to_public(_olay(state="FORMASYON_TAMAMLANDI", q=95)) is False
+    assert n.public_bosalt() == 0
+    assert n._public_kuyruk == []
+    assert sahte.cagrilar == []
 
 
 # --- 3) Bülten: toplama + tekilleştirme ------------------------------------
@@ -110,11 +123,54 @@ def test_public_kuyruk_tekillestirir(grup_notifier):
     assert len(n._public_kuyruk) == 1
 
 
+def test_public_bulten_muhur_aynı_oluşumu_tekrar_gondermez(monkeypatch, grup_notifier):
+    n = grup_notifier
+    n._public_durum_kaydet = lambda: None
+    event = _olay(formation_id="stable-formation-42")
+    assert n.public_kuyruk(event) is True
+    sahte = _SahteRequests()
+    monkeypatch.setitem(sys.modules, "requests", sahte)
+    assert n.public_bosalt() == 1
+
+    # Retest state birkaç kapanmış mum boyunca sürebilir; aynı stable formation
+    # ikinci bir public bültene alınmaz, fakat yeni oluşum yine alınabilir.
+    assert n.public_kuyruk(event) is False
+    assert n.public_kuyruk(_olay(formation_id="stable-formation-43")) is True
+
+
+def test_public_event_muhru_restartta_kalici(monkeypatch, grup_notifier):
+    n = grup_notifier
+    saved = {}
+    monkeypatch.setattr(
+        notifier_mod._state_persistence,
+        "gunluk_durum_yukle",
+        lambda: dict(saved),
+    )
+    monkeypatch.setattr(
+        notifier_mod._state_persistence,
+        "gunluk_durum_guncelle",
+        lambda updates: saved.update(updates),
+    )
+    n._public_kuyruk = []
+    n._public_alert_markers = {}
+    event = _olay(formation_id="persisted-formation-unique")
+    assert n.public_kuyruk(event) is True
+
+    sahte = _SahteRequests()
+    monkeypatch.setitem(sys.modules, "requests", sahte)
+    assert n.public_bosalt() == 1
+
+    restarted = notifier_mod.TelegramNotifier()
+    assert restarted._public_alert_markers
+    assert restarted.public_kuyruk(event) is False
+    assert len(sahte.cagrilar) == 1
+
+
 def test_public_bulten_tek_mesajda_birlesir(monkeypatch, grup_notifier):
     n = grup_notifier
     for i, stock in enumerate(["ISMEN", "GARAN", "TTRAK"]):
         assert n.public_kuyruk(_olay(stock=stock, tf="4h" if i != 2 else "1h",
-                                     state="FORMASYON_TAMAMLANDI", q=80 + i))
+                                     state="KIRILIM_TEYITLI", q=80 + i))
     sahte = _SahteRequests()
     monkeypatch.setitem(sys.modules, "requests", sahte)
     assert n.public_bosalt() == 3
@@ -171,13 +227,13 @@ def test_public_uzun_mesaj_kirpilir(monkeypatch, grup_notifier):
 def test_public_ozet_sade_ve_dogru_satirlar(grup_notifier):
     n = grup_notifier
     aktif = [
-        {"stock_name": "ISMEN", "timeframe": "4h", "state": "FORMASYON_TAMAMLANDI",
+        {"stock_name": "ISMEN", "timeframe": "4h", "state": "KIRILIM_TEYITLI",
          "confidence_score": 87},
-        {"stock_name": "GARAN", "timeframe": "4h", "state": "FORMASYON_TAMAMLANDI",
+        {"stock_name": "GARAN", "timeframe": "4h", "state": "KIRILIM_TEYITLI",
          "confidence_score": 86},
-        {"stock_name": "TTRAK", "timeframe": "1h", "state": "FORMASYON_TAMAMLANDI",
+        {"stock_name": "TTRAK", "timeframe": "1h", "state": "KIRILIM_TEYITLI",
          "confidence_score": 83},
-        {"stock_name": "KCHOL", "timeframe": "4h", "state": "FORMASYON_TAMAMLANDI",
+        {"stock_name": "KCHOL", "timeframe": "4h", "state": "KIRILIM_TEYITLI",
          "confidence_score": 84},
         {"stock_name": "AKSEN", "timeframe": "1d", "state": "RETEST_BASARILI",
          "confidence_score": 85},
@@ -188,9 +244,8 @@ def test_public_ozet_sade_ve_dogru_satirlar(grup_notifier):
                "quality": 85 - i} for i in range(8)]
     metin = n.format_public_summary(aktif, {"basarisiz_kirilim": 3}, izleme=izleme,
                                     tarama_turu=9)
-    assert "Tamamlanan 4 (ilk 3)" in metin
+    assert "Teyitli kırılım 4" in metin
     assert "Retest başarılı 1" in metin
-    assert "❌ 3 kırılım başarısız oldu" in metin
     assert "Sıkışan 1" in metin and "GUBRF" in metin
     assert "Yarının izleme listesi (ilk 5)" in metin
     assert metin.count("• SYM") == 5          # listede yalnız ilk 5
@@ -284,9 +339,10 @@ def test_sabah_notu_kapanis_gibi_konusmaz(grup_notifier):
     ]
     metin = n.format_public_summary(aktif, {"basarisiz_kirilim": 3}, kapanis=False)
     assert "sabah notu" in metin
-    assert "Bugünün izleme listesi (ilk 2)" in metin
-    assert "• GARAN" in metin and "• KCHOL" in metin
-    # ⚡ Sıkışan satırında yazan hisse izleme listesinde TEKRAR etmez.
+    # Bekleme/hazırlık state'i sabah listesinden ve Telegram özetinden gizli.
+    assert "Bugünün izleme listesi" not in metin
+    assert "GARAN" not in metin and "KCHOL" not in metin
+    # ⚡ Sıkışma satırı kalır, fakat aynı hisse ayrı izleme listesine düşmez.
     assert "⚡ Sıkışan 1: ISMEN 1h" in metin and "• ISMEN" not in metin
     assert "AKBNK" not in metin          # WATCH_STATES dışı -> izleme listesine girmez
     assert "Yarının" not in metin

@@ -52,16 +52,23 @@ PATTERN_EMOJI = {
     "Ayı Flaması": "🎏🐻",
 }
 
-KRITIK_STATELER = (
-    "KIRILIM_ADAYI", "KIRILIM_TEYITLI", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI",
-    "KIRILIM_DENEMESI", "BASARISIZ_KIRILIM",
-)
+CONFIRMED_PUBLIC_STATES = frozenset({
+    "KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI",
+})
+
+KRITIK_STATELER = tuple(sorted(CONFIRMED_PUBLIC_STATES))
 
 TF_HUMAN = {
     "1h": "saatlik",
     "2h": "2 saatlik",
     "4h": "4 saatlik",
     "1d": "günlük",
+}
+TF_EVENT_HUMAN = {
+    "1h": "1 saat",
+    "2h": "2 saat",
+    "4h": "4 saat",
+    "1d": "1 gün",
 }
 
 def quality_comment(q: float) -> str:
@@ -83,6 +90,16 @@ def _yon_metni(break_dir) -> str:
     return "belirsiz"
 
 
+def _format_price(value) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return ""
+    if not (number == number and abs(number) != float("inf")):
+        return ""
+    return f"{number:.2f}"
+
+
 def quality_emoji(q: float) -> str:
     if q >= 85:
         return "⭐⭐⭐"
@@ -92,6 +109,110 @@ def quality_emoji(q: float) -> str:
         return "⭐"
     else:
         return "〰️"
+
+
+def _format_price_tl(value) -> str:
+    """BIST fiyatını Türkçe ondalık ayırıcı ve TL ekiyle biçimlendir."""
+    formatted = _format_price(value)
+    return f"{formatted.replace('.', ',')} TL" if formatted else ""
+
+
+def _quality_grade(value) -> str:
+    try:
+        quality = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return ""
+    if not (quality == quality and abs(quality) != float("inf")):
+        return ""
+    if quality >= 85:
+        return "Çok güçlü"
+    if quality >= 75:
+        return "Güçlü"
+    if quality >= 65:
+        return "Orta"
+    return "Zayıf"
+
+
+def _format_lifecycle_alert(data: Dict) -> str:
+    """The stable, sample-shaped body for confirmed lifecycle push events."""
+    state = str(data.get("state") or "").strip().upper()
+    stock = str(data.get("stock_name") or "Bilinmiyor")
+    timeframe = str(data.get("timeframe") or "1h").lower()
+    pattern = str(data.get("pattern_name") or "Formasyon")
+    direction = _yon_metni(data.get("break_dir"))
+    direction_text = direction if direction != "belirsiz" else ""
+    tf_label = TF_EVENT_HUMAN.get(timeframe, TF_HUMAN.get(timeframe, timeframe))
+    emoji = PATTERN_EMOJI.get(pattern, "📈")
+
+    if state == "KIRILIM_TEYITLI":
+        direction_part = f"{direction_text} kırılım" if direction_text else "kırılım"
+        event_line = f"KIRILIM TEYİTLİ: {direction_part} (kapanışla teyit)"
+    elif state == "RETEST_BASARILI":
+        event_line = (
+            f"RETEST BAŞARILI: {direction_text + ' ' if direction_text else ''}"
+            "kırılım seviyesi kapanışta korundu"
+        )
+    else:
+        event_line = (
+            f"KIRILIM GEÇERSİZLEŞTİ: önceki teyitli {direction_text + ' ' if direction_text else ''}"
+            "kırılım sonrası kapanış formasyon bandına döndü"
+        )
+
+    lines = [f"{emoji} {stock} · {tf_label} · {pattern}", event_line]
+    level = data.get("break_price")
+    if level is None:
+        level = data.get("critical_price_level")
+    level_text = _format_price_tl(level)
+    if level_text:
+        lines.append(f"Kırılım seviyesi: {level_text}")
+
+    close = data.get("candle_close_price")
+    if close is None:
+        close = data.get("close_price")
+    close_text = _format_price_tl(close)
+    if close_text:
+        lines.append(f"Son kapanmış mum kapanışı: {close_text}")
+
+    bar_text = str(data.get("bar_metni") or "").strip()
+    if bar_text:
+        lines.append(bar_text)
+
+    try:
+        quality = float(data.get("confidence_score"))
+        if quality == quality and abs(quality) != float("inf"):
+            grade = _quality_grade(quality)
+            lines.append(f"Kalite: {quality:.0f}/100" + (f" · {grade}" if grade else ""))
+    except (TypeError, ValueError, OverflowError):
+        pass
+
+    upper_touches = data.get("upper_touches")
+    lower_touches = data.get("lower_touches")
+    if upper_touches is not None and lower_touches is not None:
+        lines.append(f"Temas: üst {upper_touches} / alt {lower_touches}")
+
+    domain_context = str(data.get("domain_context") or "").strip()
+    if domain_context:
+        lines.extend(["", domain_context])
+
+    # Preserve the legacy optional watch list only when an adapter explicitly
+    # supplies it; the live scanner leaves it empty for concise push alerts.
+    watch_context = data.get("watch_context") or []
+    context_lines = []
+    for candidate in watch_context[:3]:
+        if not isinstance(candidate, dict):
+            continue
+        candidate_stock = str(candidate.get("stock") or "?")
+        candidate_tf = TF_HUMAN.get(candidate.get("timeframe"), candidate.get("timeframe", ""))
+        candidate_pattern = str(candidate.get("pattern_name") or "formasyon")
+        candidate_state = STATE_TR.get(
+            str(candidate.get("state") or "").strip().upper(), "izlemede"
+        )
+        context_lines.append(f"• {candidate_stock} {candidate_tf} {candidate_pattern}: {candidate_state}")
+    if context_lines:
+        lines.extend(["", "👀 Diğer izleme adayları", *context_lines])
+
+    lines.extend(["", "📌 Formasyon takibi · yatırım tavsiyesi değildir"])
+    return "\n".join(lines)
 
 
 # Türkçe ay kısaltmaları: strftime('%b') sistem yerelinden İngilizce basıyordu
@@ -105,6 +226,44 @@ _AY_KISALTMALARI = {
 def _tr_tarih(dt: datetime) -> str:
     """Kısa Türkçe tarih: '02 Eki 20:05'. Gün/ay/saat hizalı kalır (telefonda düzgün görünür)."""
     return f"{dt.day:02d} {_AY_KISALTMALARI.get(dt.month, '')} {dt:%H:%M}"
+
+
+def _summary_int(gun_ozeti: Dict, key: str) -> int:
+    try:
+        return max(0, int((gun_ozeti or {}).get(key) or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _summary_lifecycle_counts(gun_ozeti: Dict) -> str:
+    if not isinstance(gun_ozeti, dict):
+        return ""
+    confirmed = _summary_int(gun_ozeti, "kirilim_teyitli_olay_sayisi")
+    retests = _summary_int(gun_ozeti, "retest_basarili_olay_sayisi")
+    invalidated = _summary_int(gun_ozeti, "kirilim_gecersizlesti_olay_sayisi")
+    return ("🔎 Bugün: "
+            f"{confirmed} teyitli kırılım · {retests} başarılı retest · "
+            f"{invalidated} teyit sonrası geçersizleşme")
+
+
+def _summary_last_full_scan(gun_ozeti: Dict) -> str:
+    if not isinstance(gun_ozeti, dict):
+        return ""
+    raw = gun_ozeti.get("son_basarili_tam_tarama")
+    if not raw:
+        return "🕒 Son başarılı tam tarama: kayıt yok"
+    try:
+        value = raw if isinstance(raw, datetime) else datetime.fromisoformat(
+            str(raw).replace("Z", "+00:00")
+        )
+        value = _istanbul(value)
+        when = _tr_tarih(value)
+    except (TypeError, ValueError, OverflowError):
+        return "🕒 Son başarılı tam tarama: zaman bilgisi okunamadı"
+    if gun_ozeti.get("tam_tarama_guncel") is True:
+        return f"🕒 Son başarılı tam tarama: {when} · güncel"
+    return (f"🕒 Son başarılı tam tarama: {when} · bugün güncel tam tarama yok; "
+            "önceki formasyon listesi gösterilmedi")
 
 
 def _public_izleme_adaylari(aktif: List[Dict], adet: int = 5, haric=None) -> List[Dict]:
@@ -133,6 +292,7 @@ def _public_izleme_adaylari(aktif: List[Dict], adet: int = 5, haric=None) -> Lis
 # Zaman dilimi -> bir bar kaç saat? Tek-seferlik mühürün bayatma süresi buna
 # göre ölçeklenir (bkz. _muhur_ttl_saat).
 _TF_BAR_SAAT = {"1h": 1, "2h": 2, "4h": 4, "1d": 24}
+_FORMATION_ALERT_MUHR_TTL_SAAT = 7 * 24
 
 
 def _muhur_ttl_saat(timeframe: str) -> float:
@@ -177,9 +337,9 @@ def _kirp(metin: str, sinir: int = _PUBLIC_MAX_METIN) -> str:
 # Public grup için SADE durum etiketleri: iç izleme notları ("teyit bekleniyor",
 # "retest tutarsa yapı güçlenir") gruba taşınmaz.
 PUBLIC_STATE_ETIKET = {
-    "KIRILIM_TEYITLI": "kırılım teyitli",
-    "RETEST_BASARILI": "retest başarılı",
-    "FORMASYON_TAMAMLANDI": "tamamlandı",
+    "KIRILIM_TEYITLI": "kapanışla teyitli kırılım",
+    "RETEST_BASARILI": "kapanışla başarılı retest",
+    "KIRILIM_GECERSIZLESTI": "önceki teyitli kırılım geçersizleşti",
 }
 
 
@@ -330,12 +490,14 @@ class TelegramNotifier:
         try:
             from config import PUBLIC_MIN_QUALITY, PUBLIC_STATES, PUBLIC_SIKISMA_MIN_CONTRACTION
             self.public_min_quality = PUBLIC_MIN_QUALITY
-            self.public_states = set(PUBLIC_STATES)
+            # Public anlık bildirim de yalnızca kapanışla doğrulanan olayları
+            # alır; eski/env kaynaklı attempt/fail/wait/complete state'leri
+            # public kuyruğa yanlışlıkla taşınamaz.
+            self.public_states = set(PUBLIC_STATES) & CONFIRMED_PUBLIC_STATES
             self.public_sikisma_min = PUBLIC_SIKISMA_MIN_CONTRACTION
         except Exception:
             self.public_min_quality = 0
-            self.public_states = {"FORMASYON_TAMAMLANDI", "RETEST_BASARILI",
-                                  "KIRILIM_TEYITLI"}
+            self.public_states = set(CONFIRMED_PUBLIC_STATES)
             self.public_sikisma_min = 0.80
         # TF bazlı public eşik: DM alarm eşikleriyle AYNI (tek kaynak ALERT_MIN_QUALITY);
         # `public_min_quality` sıfırdan büyükse ek taban olarak uygulanır.
@@ -349,6 +511,7 @@ class TelegramNotifier:
         # sonunda TEK bülten olarak gönderilir (mum kapanışında 9 ayrı mesaj
         # yerine 1 mesaj). Bütçe DM'den ayrıdır: grup için saatte/günde sınır.
         self._public_kuyruk: List[dict] = []
+        self._public_alert_markers: Dict[str, str] = {}
         self._public_lck = threading.Lock()
         self._public_saatlik: List[datetime] = []
         self._public_gun_sayac = 0
@@ -561,7 +724,7 @@ class TelegramNotifier:
         """
         state = data.get('state', '')
         quality = data.get('confidence_score', 0)
-        if state not in self.public_states:
+        if state not in CONFIRMED_PUBLIC_STATES or state not in self.public_states:
             return False
         try:
             q = float(quality or 0)
@@ -579,8 +742,38 @@ class TelegramNotifier:
     # DM yolundan tamamen bağımsızdır: kendi bütçesi, kendi sayaçları, kendi
     # hata durumu vardır. DM kapalıyken de çalışır.
 
+    @staticmethod
+    def _public_event_key(data: Dict) -> str:
+        """Kalıcı public tekrar mührü: aynı formation/state ikinci bültene girmez."""
+        formation_id = str(data.get("formation_id") or "").strip()
+        if not formation_id:
+            return ""
+        stock = str(data.get("stock_name") or "").strip().upper()
+        timeframe = str(data.get("timeframe") or "").strip().lower()
+        state = str(data.get("state") or "").strip().upper()
+        if not stock or not timeframe or state not in CONFIRMED_PUBLIC_STATES:
+            return ""
+        return f"{stock}|{timeframe}|{state}|{formation_id}"
+
+    def _public_alert_muhurlerini_temizle(self, now=None) -> bool:
+        """7 günden eski public event mühürlerini buda; harita sınırlı kalsın."""
+        now = now or datetime.now(ISTANBUL_TZ)
+        degisti = False
+        for key, raw_time in list(self._public_alert_markers.items()):
+            try:
+                sent_at = _istanbul(datetime.fromisoformat(str(raw_time)))
+            except (TypeError, ValueError):
+                del self._public_alert_markers[key]
+                degisti = True
+                continue
+            age_hours = (now - sent_at).total_seconds() / 3600.0
+            if age_hours < 0 or age_hours >= _FORMATION_ALERT_MUHR_TTL_SAAT:
+                del self._public_alert_markers[key]
+                degisti = True
+        return degisti
+
     def _public_durum_yukle(self) -> None:
-        """Aynı güne ait public bütçe + kuyruğu diskten geri yükler."""
+        """Aynı güne ait public bütçe, kuyruk ve olay mühürlerini geri yükler."""
         try:
             veri = _state_persistence.gunluk_durum_yukle() or {}
         except Exception as hata:  # noqa: BLE001
@@ -589,6 +782,13 @@ class TelegramNotifier:
         public = veri.get("public") or {}
         if not isinstance(public, dict):
             return
+        raw_markers = public.get("alert_muhurlari")
+        if isinstance(raw_markers, dict):
+            self._public_alert_markers = {
+                str(key): str(value) for key, value in raw_markers.items()
+                if key and value
+            }
+        markers_changed = self._public_alert_muhurlerini_temizle()
         try:
             self._public_gun_sayac = int(public.get("gun_sayac") or 0)
         except (TypeError, ValueError):
@@ -603,10 +803,18 @@ class TelegramNotifier:
         kuyruk = public.get("kuyruk")
         if isinstance(kuyruk, list):
             temiz = [k for k in kuyruk if isinstance(k, dict)
-                     and k.get("stock_name") and k.get("state")]
+                     and k.get("stock_name")
+                     and str(k.get("state") or "").strip().upper() in CONFIRMED_PUBLIC_STATES
+                     and str(k.get("state") or "").strip().upper() in self.public_states]
             if temiz:
                 self._public_kuyruk = temiz[:self.public_kuyruk_limit]
                 logger.info("Public kuyruk restart'tan geri yüklendi: %d olay", len(self._public_kuyruk))
+            if len(temiz) != len(kuyruk):
+                logger.info("Public kuyruktan yeni politikaya kapalı %d eski olay temizlendi",
+                            len(kuyruk) - len(temiz))
+                self._public_durum_kaydet()
+        if markers_changed:
+            self._public_durum_kaydet()
         if self._public_gun_sayac or self._public_kuyruk:
             logger.info("Public günlük bütçe geri yüklendi: %d/%d gönderim (kuyruk %d)",
                         self._public_gun_sayac, self.public_max_gunluk,
@@ -616,11 +824,14 @@ class TelegramNotifier:
         """Public bütçe + kuyruğu GÜN damgalı yazar (I/O hatası gönderimi bozmaz)."""
         try:
             with self._public_lck:
+                self._public_alert_muhurlerini_temizle()
                 kuyruk = [dict(k) for k in self._public_kuyruk]
+                markers = dict(self._public_alert_markers)
             _state_persistence.gunluk_durum_guncelle({"public": {
                 "gun_sayac": self._public_gun_sayac,
                 "saatlik_ts": [t.isoformat() for t in self._public_saatlik],
                 "kuyruk": kuyruk,
+                "alert_muhurlari": markers,
             }})
         except Exception as hata:  # noqa: BLE001
             logger.debug("Public günlük durum yazılamadı: %s", hata)
@@ -724,15 +935,23 @@ class TelegramNotifier:
             return False
         kayit = {k: data.get(k) for k in (
             "stock_name", "timeframe", "pattern_name", "state", "confidence_score",
-            "critical_price_level", "break_price", "break_dir", "contraction", "bar_metni")}
+            "critical_price_level", "break_price", "break_dir", "contraction", "bar_metni",
+            "candle_close_price", "upper_touches", "lower_touches", "formation_id")}
         anahtar = (str(kayit["stock_name"] or "").upper(),
                    str(kayit["timeframe"] or "").lower(),
-                   str(kayit["state"] or ""))
+                   str(kayit["state"] or "").strip().upper())
+        event_key = self._public_event_key(kayit)
         with self._public_lck:
-            for k in self._public_kuyruk:
-                if (str(k.get("stock_name") or "").upper(),
-                        str(k.get("timeframe") or "").lower(),
-                        str(k.get("state") or "")) == anahtar:
+            self._public_alert_muhurlerini_temizle()
+            if event_key and event_key in self._public_alert_markers:
+                return False
+            for queued in self._public_kuyruk:
+                if event_key:
+                    if self._public_event_key(queued) == event_key:
+                        return False
+                elif (str(queued.get("stock_name") or "").upper(),
+                      str(queued.get("timeframe") or "").lower(),
+                      str(queued.get("state") or "").strip().upper()) == anahtar:
                     return False
             if len(self._public_kuyruk) >= self.public_kuyruk_limit:
                 self.public_kuyruk_tasmasi += 1
@@ -746,10 +965,20 @@ class TelegramNotifier:
     def public_bosalt(self, azami: int = 12) -> int:
         """Kuyruğu tek bülten(ler) halinde gönderir; engel varsa kayıtlar bekler."""
         with self._public_lck:
+            original_count = len(self._public_kuyruk)
+            self._public_kuyruk = [
+                kayit for kayit in self._public_kuyruk
+                if str(kayit.get("state") or "").strip().upper() in CONFIRMED_PUBLIC_STATES
+                and str(kayit.get("state") or "").strip().upper() in self.public_states
+            ]
+            queue_changed = len(self._public_kuyruk) != original_count
             kuyruk = list(self._public_kuyruk)
+        if queue_changed:
+            self._public_durum_kaydet()
         if not kuyruk or not self.public_enabled:
             return 0
         gonderilen = 0
+        basarili_kayitlar = []
         kalan = list(kuyruk)
         while kalan:
             parca = kalan[:max(1, int(azami))]
@@ -761,10 +990,17 @@ class TelegramNotifier:
                 # Bütçe/ağ engeli: kayıtlar kuyrukta kalır, sonraki turda denenir.
                 break
             gonderilen += len(parca)
+            basarili_kayitlar.extend(parca)
             kalan = kalan[len(parca):]
         if gonderilen:
+            damga = datetime.now(ISTANBUL_TZ).isoformat()
             with self._public_lck:
                 self._public_kuyruk = self._public_kuyruk[gonderilen:]
+                for kayit in basarili_kayitlar:
+                    event_key = self._public_event_key(kayit)
+                    if event_key:
+                        self._public_alert_markers[event_key] = damga
+                self._public_alert_muhurlerini_temizle()
             self._public_durum_kaydet()
             logger.info("Public bülten gönderildi: %d olay (%d mesaj)",
                         gonderilen, max(1, (gonderilen + azami - 1) // azami))
@@ -772,7 +1008,11 @@ class TelegramNotifier:
 
     def format_public_batch(self, kayitlar: List[Dict]) -> str:
         """Grup sürümü bülten: sade satırlar, iç izleme notu ve kuyruk yok."""
-        kayitlar = [k for k in (kayitlar or []) if isinstance(k, dict)]
+        kayitlar = [
+            k for k in (kayitlar or [])
+            if isinstance(k, dict)
+            and str(k.get("state") or "").strip().upper() in CONFIRMED_PUBLIC_STATES
+        ]
         if not kayitlar:
             return ""
         satirlar = [f"📊 Formasyon bülteni · {_tr_tarih(datetime.now(ISTANBUL_TZ))} "
@@ -793,9 +1033,17 @@ class TelegramNotifier:
             except (TypeError, ValueError):
                 pass
             try:
-                satir += f" · q{float(k.get('confidence_score') or 0):.0f}"
+                quality = float(k.get('confidence_score') or 0)
+                satir += f" · kalite {quality:.0f} ({quality_comment(quality)})"
             except (TypeError, ValueError):
                 pass
+            close_price = _format_price(k.get("candle_close_price"))
+            if close_price:
+                satir += f" · mum kapanışı {close_price}"
+            upper_touches = k.get("upper_touches")
+            lower_touches = k.get("lower_touches")
+            if upper_touches is not None and lower_touches is not None:
+                satir += f" · temas üst/alt {upper_touches}/{lower_touches}"
             mum = str(k.get("bar_metni") or "").strip().splitlines()
             if mum:
                 satir += f"\n   {mum[-1]}" if len(mum) > 1 else ""
@@ -815,25 +1063,22 @@ class TelegramNotifier:
         """
         simdi = datetime.now(ISTANBUL_TZ)
         aktif = [f for f in (aktif_formasyonlar or []) if isinstance(f, dict)]
+        freshness_known = isinstance(gun_ozeti, dict) and "tam_tarama_guncel" in gun_ozeti
+        scan_current = (bool(gun_ozeti.get("tam_tarama_guncel"))
+                        if freshness_known else True)
+        if freshness_known and not scan_current:
+            aktif = []
+            izleme = []
         baslik = (f"📊 {_tr_tarih(simdi)} kapanış · BIST formasyon özeti" if kapanis
                   else f"📊 {_tr_tarih(simdi)} sabah notu · BIST formasyon takibi")
         satirlar = [baslik]
-        tamamlanan = [f for f in aktif if f.get('state') == 'FORMASYON_TAMAMLANDI']
         retest = [f for f in aktif if f.get('state') == 'RETEST_BASARILI']
         teyitli = [f for f in aktif if f.get('state') == 'KIRILIM_TEYITLI']
         sikisan = [f for f in aktif if f.get('state') == 'SIKISMA_GUCLENIYOR'
                    and (f.get('contraction') or 0) >= self.public_sikisma_min]
-        if tamamlanan:
-            ilk = " · ".join(f"{f.get('stock_name')} {f.get('timeframe') or ''}".strip()
-                             for f in tamamlanan[:3])
-            ek = f" (ilk {min(3, len(tamamlanan))})" if len(tamamlanan) > 3 else ""
-            satirlar.append(f"🏁 Tamamlanan {len(tamamlanan)}{ek}: {ilk}")
         if retest or teyitli:
             satirlar.append(f"🎯 Retest başarılı {len(retest)} · "
                             f"✅ Teyitli kırılım {len(teyitli)}")
-        basarisiz = int((gun_ozeti or {}).get('basarisiz_kirilim') or 0)
-        if basarisiz and kapanis:
-            satirlar.append(f"❌ {basarisiz} kırılım başarısız oldu")
         if sikisan:
             ilk = " · ".join(f"{f.get('stock_name')} {f.get('timeframe') or ''} "
                              f"(%{(f.get('contraction') or 0) * 100:.0f})" for f in sikisan[:3])
@@ -856,9 +1101,12 @@ class TelegramNotifier:
                     kalite = ""
                 satirlar.append(f"• {k.get('stock')} {tf} {k.get('pattern_name') or 'formasyon'}"
                                 f"{kalite}")
-        if not aktif and not izleme:
-            satirlar.append("Bugün öne çıkan formasyon olmadı." if kapanis
-                            else "Şu an izlenen formasyon yok.")
+        if not (retest or teyitli or sikisan) and not izleme:
+            if freshness_known and not scan_current:
+                satirlar.append("Bugün güncel tam tarama yok; eski formasyon listesi gösterilmedi.")
+            else:
+                satirlar.append("Bugün öne çıkan formasyon olmadı." if kapanis
+                                else "Şu an izlenen formasyon yok.")
         try:
             tur = int(tarama_turu) if tarama_turu is not None else 0
         except (TypeError, ValueError):
@@ -867,6 +1115,13 @@ class TelegramNotifier:
         satirlar.append(f"{len(ACTIVE_STOCKS)} hisse × 4 zaman dilimi"
                         + (f" · {tur} tarama" if tur else "")
                         + ("" if kapanis else " · gün yeni başlıyor"))
+        if freshness_known and kapanis:
+            event_counts = _summary_lifecycle_counts(gun_ozeti)
+            if event_counts:
+                satirlar.append(event_counts)
+        scan_line = _summary_last_full_scan(gun_ozeti)
+        if scan_line:
+            satirlar.append(scan_line)
         if karne_kisa:
             satirlar += ["", karne_kisa]
         satirlar.append("📌 Formasyon takibi · yatırım tavsiyesi değildir")
@@ -877,26 +1132,24 @@ class TelegramNotifier:
         # Türkçe ay kısaltması + tek ayırıcı: "📊 BIST Formasyon Özeti · 02 Eki 20:05"
         baslik = f"📊 BIST Formasyon Özeti · {_tr_tarih(now)}\n"
         baslik += "─" * 30 + "\n"
-        if not aktif_formasyonlar:
-            baslik += "Şu an aktif yüksek kaliteli formasyon yok.\n"
-            return baslik
-        # NOT: Burada eskiden hesaplanıp hiç kullanılmayan bir `[:10]` sıralaması
-        # vardı (ölü kod). Özet gövdesi bilerek bölüm bazlı ve sınırlıdır:
-        # tamamlanan [:3], retest [:3], sıkışan [:5]. Eksik kalan adaylar için
-        # 18:45 digest'i ve /formasyonlar komutu kullanılır.
-        tamamlanan = [f for f in aktif_formasyonlar if f.get('state') == 'FORMASYON_TAMAMLANDI']
-        retest = [f for f in aktif_formasyonlar if f.get('state') == 'RETEST_BASARILI']
-        sikisan = [f for f in aktif_formasyonlar if f.get('state') == 'SIKISMA_GUCLENIYOR' and (f.get('contraction', 0) or 0) >= self.public_sikisma_min]
-        if tamamlanan:
-            # Başlık toplamı, gövde ise ilk 3'ü listeler; "(6)" ile 3 satır
-            # görmek kafa karıştırıyordu → "6 · ilk 3".
-            baslik += (f"\n🏁 TAMAMLANAN ({len(tamamlanan)}"
-                       f"{' · ilk 3' if len(tamamlanan) > 3 else ''}):\n")
-            for f in tamamlanan[:3]:
-                # Diğer bölümlerle aynı madde biçimi: hisse · desen · tf · kalite
+        # Yalnızca doğrulanmış kırılım/retest ve yüksek sıkışma özetlenir.
+        # Tamamlandı/başarısız/deneme state'leri scheduled Telegram özetine girmez.
+        freshness_known = isinstance(gun_ozeti, dict) and "tam_tarama_guncel" in gun_ozeti
+        scan_current = (bool(gun_ozeti.get("tam_tarama_guncel"))
+                        if freshness_known else True)
+        snapshot = [f for f in (aktif_formasyonlar or []) if isinstance(f, dict)]
+        if freshness_known and not scan_current:
+            snapshot = []
+        retest = [f for f in snapshot if f.get('state') == 'RETEST_BASARILI']
+        teyitli = [f for f in snapshot if f.get('state') == 'KIRILIM_TEYITLI']
+        sikisan = [f for f in snapshot if f.get('state') == 'SIKISMA_GUCLENIYOR' and (f.get('contraction', 0) or 0) >= self.public_sikisma_min]
+        if teyitli:
+            baslik += (f"\n✅ TEYİTLİ KIRILIM ({len(teyitli)}"
+                       f"{' · ilk 3' if len(teyitli) > 3 else ''}):\n")
+            for f in teyitli[:3]:
                 baslik += (f"• {f.get('stock_name')} {f.get('pattern_name')} "
-                           f"{f.get('timeframe') or ''} · kalite "
-                           f"{f.get('confidence_score', 0):.0f}\n").replace("  ", " ")
+                           f"{f.get('timeframe') or ''} · {_yon_metni(f.get('break_dir', 0))} yön"
+                           f" · kalite {f.get('confidence_score', 0):.0f}\n").replace("  ", " ")
         if retest:
             baslik += (f"\n🎯 RETEST BAŞARILI ({len(retest)}"
                        f"{' · ilk 3' if len(retest) > 3 else ''}):\n")
@@ -912,6 +1165,11 @@ class TelegramNotifier:
                 baslik += (f"• {f.get('stock_name')} {f.get('pattern_name')} "
                            f"{f.get('timeframe') or ''} · %{(f.get('contraction', 0) * 100):.0f} "
                            f"daralma\n").replace("  ", " ")
+        if not (teyitli or retest or sikisan):
+            if freshness_known and not scan_current:
+                baslik += "Güncel tam tarama yok; önceki formasyon listesi gösterilmedi.\n"
+            else:
+                baslik += "Şu an öne çıkan teyitli olay veya yüksek sıkışma yok.\n"
         if gun_ozeti:
             # "432 hisse tarandı" = 48 hisse × 9 tarama; yanıltıcıydı.
             # Doğru okuma: kaç tur tarandı + evren büyüklüğü.
@@ -924,6 +1182,13 @@ class TelegramNotifier:
             else:
                 baslik += (f"\n📈 Gün: {tur} tarama · {len(ACTIVE_STOCKS)} hisse × "
                            f"4 zaman dilimi · {gun_ozeti.get('alerts_sent', 0)} bildirim\n")
+            if freshness_known:
+                event_counts = _summary_lifecycle_counts(gun_ozeti)
+                if event_counts:
+                    baslik += event_counts + "\n"
+        scan_line = _summary_last_full_scan(gun_ozeti)
+        if scan_line:
+            baslik += scan_line + "\n"
         baslik += "\n📌 Formasyon takibi · yatırım tavsiyesi değildir"
         return baslik
 
@@ -1032,8 +1297,9 @@ class TelegramNotifier:
         return f"{stock}_{pattern}_{timeframe}_{state}"
 
     # --- tek-seferlik olay hafızası (repeat-guard) --------------------------
-    # Mühür (hisse + TF + state) anahtarlı ve ZAMAN damgalı bayatlar (TTL,
-    # bkz. _muhur_ttl_saat). Üç kök neden düzeltildi:
+    # Mühür (hisse + TF + state + varsa formation ID) anahtarlıdır. Kimliksiz
+    # eski olaylar bar süresine göre TTL ile; yeni stable-ID olaylar 7 gün ile
+    # sınırlandırılır. Üç kök neden düzeltildi:
     #   1) pattern anahtardan ÇİKARILDI: motor aynı slotta bazen "Simetrik
     #      Üçgen", bazen "Alçalan Üçgen" etiketi üretebiliyordu; iki farklı
     #      anahtar = iki ayrı mesaj (örn. PETKM 4h iki kez TAMAMLANDI).
@@ -1045,22 +1311,29 @@ class TelegramNotifier:
     #      (1 günlük grafikte 3 gün, 4 saatlikte ertesi sabah) tekrar
     #      bildiriliyordu. Artık TTL bar süresine göre ölçekleniyor.
     # Aynı hisse+TF+state, motorun aynı olay penceresi içinde en fazla BİR kez bildirilir.
-    def _son_alert_key(self, stock: str, timeframe: str, state: str) -> str:
-        """Slot anahtarı: hisse + zaman dilimi + state (pattern GİRMEZ)."""
-        return f"{stock}_{timeframe}_{state}"
+    def _son_alert_key(self, stock: str, timeframe: str, state: str,
+                       formation_id=None) -> str:
+        """Olay anahtarı: hisse + TF + state; varsa formasyon kimliğiyle tekilleştir."""
+        base = f"{stock}_{timeframe}_{state}"
+        event_id = str(formation_id or "").strip()
+        return f"{base}_formation_{event_id}" if event_id else base
 
     @classmethod
-    def _muhr_gecerli_mi(cls, muhur, state: str, timeframe: str = "") -> bool:
+    def _muhr_gecerli_mi(cls, muhur, state: str, timeframe: str = "",
+                         formation_id=None) -> bool:
         """Mühür hâlâ geçerliyse True (olay zaten bildirildi, tekrar basma).
 
-        Bayatlık ölçütü TTL: motor terminal formasyonu TERMINAL_TAZE_BAR bar
-        boyunca taze sayar, mühür de en az o kadar süre (bkz. _muhur_ttl_saat)
-        geçerli kalır. Gün bazlı ölçüt 1 günlük grafikte aynı haberi 3 gün
-        daha tekrar bastırıyordu.
+        Formation ID varsa aynı teyitli olayı 7 gün boyunca tekilleştir; bu
+        süre 1 günlük TF'deki retest tutunma penceresini de kapsar. Kimliksiz
+        eski kayıtlar, geriye dönük uyum için bar süresi tabanlı TTL kullanır.
         """
         if not muhur or not isinstance(muhur, dict):
             return False
         if muhur.get("state") != state:
+            return False
+        incoming_id = str(formation_id or "").strip()
+        stored_id = str(muhur.get("formation_id") or "").strip()
+        if incoming_id and stored_id and incoming_id != stored_id:
             return False
         zaman = muhur.get("zaman")
         if not isinstance(zaman, str):
@@ -1072,11 +1345,15 @@ class TelegramNotifier:
         if basma.tzinfo is None:
             basma = ISTANBUL_TZ.localize(basma)
         yas_saat = (datetime.now(ISTANBUL_TZ) - basma).total_seconds() / 3600.0
-        return 0 <= yas_saat < _muhur_ttl_saat(muhur.get("tf") or timeframe)
+        ttl = (_FORMATION_ALERT_MUHR_TTL_SAAT
+               if incoming_id and stored_id == incoming_id
+               else _muhur_ttl_saat(muhur.get("tf") or timeframe))
+        return 0 <= yas_saat < ttl
 
     @staticmethod
-    def _muhur_kaydi(state: str, timeframe: str, gun: str = None, zaman: str = None) -> Dict:
-        """Mühür kaydı üretir: {"state", "zaman" (ISO), "tf"}.
+    def _muhur_kaydi(state: str, timeframe: str, gun: str = None,
+                     zaman: str = None, formation_id=None) -> Dict:
+        """Mühür kaydı üretir; oluşum kimliği varsa olay bazında saklar.
 
         Yeni mühür ŞU AN ile damgalanır. Yalnız ESKİ (gün bazlı) kayıtlar
         dönüştürülürken o günün 00:00'i kullanılır: böylece deploy öncesi
@@ -1091,7 +1368,11 @@ class TelegramNotifier:
                     zaman = datetime.now(ISTANBUL_TZ).isoformat()
             else:
                 zaman = datetime.now(ISTANBUL_TZ).isoformat()
-        return {"state": state, "zaman": zaman, "tf": timeframe}
+        kayit = {"state": state, "zaman": zaman, "tf": timeframe}
+        event_id = str(formation_id or "").strip()
+        if event_id:
+            kayit["formation_id"] = event_id
+        return kayit
 
     @staticmethod
     def _anahtardan_tf(anahtar: str) -> str:
@@ -1136,16 +1417,25 @@ class TelegramNotifier:
                         # Yeni biçim: zaman damgası korunur (bayatsa _muhr_gecerli_mi reddeder).
                         self._son_alert[k] = self._muhur_kaydi(
                             v["state"], v.get("tf") or self._anahtardan_tf(k),
-                            gun=v.get("gun"), zaman=v.get("zaman"))
+                            gun=v.get("gun"), zaman=v.get("zaman"),
+                            formation_id=v.get("formation_id"))
             logger.info(f"Son-alert mühürleri {kaynak} yüklendi: {len(self._son_alert)} kayıt")
         except Exception as e:
             logger.warning(f"Son-alert mühürleri yüklenemedi (devam ediliyor): {e}")
 
     def _son_alert_kaydet(self):
-        # Bayat (TTL dolmuş) mühürler diske/Supabase'a taşınmaz; sözlük şişmesin.
-        for anahtar in [k for k, v in self._son_alert.items()
-                        if not self._muhr_gecerli_mi(v, v.get("state", ""), v.get("tf", ""))]:
-            del self._son_alert[anahtar]
+        # TTL'si dolmuş mühürler diske/Supabase'a taşınmaz; sözlük şişmesin.
+        bayat_anahtarlar = [
+            key for key, marker in self._son_alert.items()
+            if not self._muhr_gecerli_mi(
+                marker,
+                marker.get("state", ""),
+                marker.get("tf", ""),
+                marker.get("formation_id"),
+            )
+        ]
+        for key in bayat_anahtarlar:
+            del self._son_alert[key]
         payload = {k: dict(v) for k, v in self._son_alert.items()}
         try:
             import json
@@ -1160,18 +1450,20 @@ class TelegramNotifier:
             except Exception as e:
                 logger.debug(f"Son-alert mühürleri Supabase'e kaydedilemedi: {e}")
 
-    def _tek_seferlik_isle(self, stock: str, pattern: str, timeframe: str, state: str) -> None:
-        """Başarılı gönderim sonrası acil (ALERT_STATES) olaya tek-seferlik mühür basar.
+    def _tek_seferlik_isle(self, stock: str, pattern: str, timeframe: str,
+                           state: str, formation_id=None) -> None:
+        """Başarılı gönderim sonrası teyitli olaya tek-seferlik mühür basar.
 
-        Mühür yalnız AYNI state'i susturur; yaşam döngüsü ilerlemesi
-        (TEYITLI -> RETEST_BASARILI -> TAMAMLANDI) her biri bir kez bildirilebilir.
-        `pattern` bilinçli olarak anahtara girmez: aynı slotta motorun ürettiği
-        farklı formasyon etiketleri aynı olayın kopyasıdır.
+        Deneme, bekleme, başarısızlık ve tamamlanma state'leri push politikasında
+        değildir. Formation ID varsa aynı state'in aynı oluşumdan tekrar çıkmasını
+        engeller; kimlik yoksa geriye dönük slot/TTL mührü kullanılır.
         """
         if state not in ALERT_STATES:
             return
-        self._son_alert[self._son_alert_key(stock, timeframe, state)] = \
-            self._muhur_kaydi(state, timeframe)
+        key = self._son_alert_key(stock, timeframe, state, formation_id)
+        self._son_alert[key] = self._muhur_kaydi(
+            state, timeframe, formation_id=formation_id
+        )
         self._son_alert_kaydet()
 
     def son_alert_sifirla(self, stock: str, timeframe: str) -> None:
@@ -1303,6 +1595,12 @@ class TelegramNotifier:
             if gonderilen >= max(1, int(max_adet)):
                 break
             veri = kayit.get("veri") or {}
+            if str(veri.get("state") or "").strip().upper() not in ALERT_STATES:
+                # Eski deploy'lardan kalan deneme/başarısız/tamamlandı kuyrukları
+                # yeni bildirim politikasında kesinlikle gönderme.
+                self._acil_kuyruk.remove(kayit)
+                degisti = True
+                continue
             try:
                 kuyruk_zamani = _istanbul(datetime.fromisoformat(kayit.get("kuyruk_zaman")))
             except (TypeError, ValueError):
@@ -1317,7 +1615,9 @@ class TelegramNotifier:
                 )
                 continue
             key = self._kuyruk_key(veri)
-            if not self.can_send(key[0], key[1], key[2], key[3]):
+            if not self.can_send(
+                key[0], key[1], key[2], key[3], formation_id=veri.get("formation_id")
+            ):
                 if self._son_engel == "tekrar":
                     # Mühür bu olayın zaten gönderildiğini söylüyor; kuyruktaki
                     # bayat kopya gereksiz -> sessizce düşür (cooldown dalından önce).
@@ -1344,7 +1644,8 @@ class TelegramNotifier:
             self._kuyruk_kaydet()
         return gonderilen
 
-    def can_send(self, stock: str, pattern: str, timeframe: str, state: str = "") -> bool:
+    def can_send(self, stock: str, pattern: str, timeframe: str, state: str = "",
+                 formation_id=None) -> bool:
         """Gönderim yapılabilir mi? Hayırsa SEBEBİ sayaca yazılır (bkz. self.engeller)."""
         # Her çağrı temiz başlar: kritik state'in kapıyı geçmesi bir önceki
         # engelin sebebini taşımaz (yanlış "kuyruğa al" kararı olmasın).
@@ -1355,9 +1656,16 @@ class TelegramNotifier:
         # derse olay NİHAİ reddir (kuyruğa alınmaz, beklenmez). Slot sıfırlama
         # (flicker) mühürü artık silmez; bayatlık yalnız gün değişiminde.
         if state in ALERT_STATES:
-            if self._muhr_gecerli_mi(
-                    self._son_alert.get(self._son_alert_key(stock, timeframe, state)),
-                    state, timeframe):
+            marker_key = self._son_alert_key(stock, timeframe, state, formation_id)
+            marker = self._son_alert.get(marker_key)
+            # Deploy öncesi mühürler kimliksizdir; kısa legacy TTL süresince
+            # yeni anahtara taşınırken yinelenen push'u da engellesin.
+            if (not marker and formation_id
+                    and self._muhr_gecerli_mi(
+                        self._son_alert.get(self._son_alert_key(stock, timeframe, state)),
+                        state, timeframe, formation_id)):
+                marker = self._son_alert.get(self._son_alert_key(stock, timeframe, state))
+            if self._muhr_gecerli_mi(marker, state, timeframe, formation_id):
                 self.engeller["tekrar"] += 1
                 self._son_engel = "tekrar"
                 return False
@@ -1425,6 +1733,13 @@ class TelegramNotifier:
         timeframe = data.get('timeframe', '1h')
         pattern = data.get('pattern_name', 'Formasyon')
         state = data.get('state', 'ADAY_OLUSUYOR')
+        # Raw failure/attempt/completed lifecycle states remain suppressed. A
+        # separate notification-only alias is created only after a prior
+        # confirmed breakout later closes back inside the formation band.
+        if state in {"KIRILIM_DENEMESI", "BASARISIZ_KIRILIM", "FORMASYON_TAMAMLANDI"}:
+            return ""
+        if state in {"KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI"}:
+            return _format_lifecycle_alert(data)
         quality = data.get('confidence_score', 0)
         price = data.get('critical_price_level', 0)
         timestamp = data.get('timestamp', datetime.now())
@@ -1468,7 +1783,7 @@ class TelegramNotifier:
 
         temas_str = ""
         if upper_touches is not None and lower_touches is not None:
-            temas_str = f"{upper_touches + lower_touches} temas"
+            temas_str = f"Temas üst/alt {upper_touches}/{lower_touches}"
         yas_str = f"{age_bars} bar" if age_bars else ""
 
         kalite_str = f"Kalite {quality:.0f} {q_emoji} ({q_comment})"
@@ -1546,15 +1861,14 @@ class TelegramNotifier:
 
         elif state == "KIRILIM_TEYITLI":
             direction = "yukarı" if break_dir == 1 else "aşağı" if break_dir == -1 else ""
-            level = data.get('break_price', upper if break_dir==1 else lower)
-            yon = f"{direction} kırılım" if direction else "Kırılım"
-            rol = "destek" if break_dir == 1 else "direnç" if break_dir == -1 else "kritik seviye"
-            satirlar = [f"✅ {stock} {tf_human} · {pattern}",
-                        f"{yon} teyitli · {level:.2f}",
-                        kalite_str]
+            level = _format_price(data.get('break_price', upper if break_dir == 1 else lower))
+            yon = f"{direction} " if direction else ""
+            event_line = f"Kapanışla teyitli {yon}kırılım"
+            if level:
+                event_line += f" · seviye {level}"
+            satirlar = [f"✅ {stock} {tf_human} · {pattern}", event_line, kalite_str]
             if detay_str:
                 satirlar.append(detay_str)
-            satirlar.append(f"Retest bekleniyor · {level:.2f} artık {rol}")
 
         elif state == "RETEST_BEKLENIYOR":
             level = data.get('break_price', price)
@@ -1575,33 +1889,15 @@ class TelegramNotifier:
 
         elif state == "RETEST_BASARILI":
             direction = "yukarı" if break_dir == 1 else "aşağı" if break_dir == -1 else ""
-            yon = f"{direction} kırılım" if direction else "Kırılım"
-            satirlar = [f"🎯 {stock} {tf_human} · {pattern}",
-                        f"RETEST BAŞARILI · {yon} sonrası retest tuttu",
-                        kalite_str]
+            yon = f"{direction} kırılım" if direction else "kırılım"
+            level = _format_price(data.get('break_price', price))
+            event_line = f"Kapanışla başarılı retest · {yon}"
+            satirlar = [f"🎯 {stock} {tf_human} · {pattern}", event_line]
+            if level:
+                satirlar.append(f"Seviye {level} korundu")
+            satirlar.append(kalite_str)
             if detay_str:
                 satirlar.append(detay_str)
-            satirlar.append("Formasyon tamamlanmaya yakın")
-
-        elif state == "FORMASYON_TAMAMLANDI":
-            direction = "yukarı" if break_dir == 1 else "aşağı" if break_dir == -1 else ""
-            yon = f"{direction} kırılım" if direction else "Kırılım"
-            if retest_seen:
-                satirlar = [f"🏁 {stock} {tf_human} · {pattern}",
-                            f"TAMAMLANDI · {yon} + retest başarılı",
-                            kalite_str]
-            else:
-                satirlar = [f"🏁 {stock} {tf_human} · {pattern}",
-                            f"TAMAMLANDI · {yon}, retest olmadan ilerledi",
-                            "Fiyat kırılan seviyeye geri dönmedi",
-                            kalite_str]
-            if detay_str:
-                satirlar.append(detay_str)
-
-        elif state == "BASARISIZ_KIRILIM":
-            satirlar = [f"❌ {stock} {tf_human} · {pattern}",
-                        "Kırılım başarısız · formasyon alanına dönüldü",
-                        "Sahte kırılım olabilir · yeniden sıkışma bekleniyor"]
 
         elif state == "FORMASYON_GECERSIZ":
             # Bu şablon bilerek korunuyor: ölü formasyonlar alarm akışından
@@ -1620,19 +1916,27 @@ class TelegramNotifier:
         # sorusu mesajın içinde cevaplanır. İzleme/digest akışına eklenmez
         # (orada yer bütçesi farklı ve o adaylar zaten kapanış özetiyle gider).
         mum_str = str(data.get('bar_metni') or "").strip()
-        if mum_str and state in ("KIRILIM_TEYITLI", "RETEST_BASARILI",
-                                 "FORMASYON_TAMAMLANDI", "BASARISIZ_KIRILIM"):
-            satirlar.insert(1, mum_str)
+        if state in ("KIRILIM_TEYITLI", "RETEST_BASARILI"):
+            insert_at = 2
+            if mum_str:
+                satirlar.insert(insert_at, mum_str)
+                insert_at += 1
+            close_price = _format_price(
+                data.get("candle_close_price", data.get("close_price"))
+            )
+            if close_price:
+                satirlar.insert(insert_at, f"Mum kapanışı: {close_price}")
 
         msg = "\n".join(satirlar)
 
-        # Tek ve sabit footer: eskiden üç cümleden biri rastgele ekleniyordu —
-        # hem mesajı gereksiz uzatıyordu hem de aynı olay iki farklı metinle
-        # gidiyordu. Tavsiye veren cümleler ("kendi analizini yap", "acele etme")
-        # kaldırıldı; kanal dili birebir aynı kalıyor.
-        if state in ("KIRILIM_ADAYI", "KIRILIM_TEYITLI", "RETEST_BASARILI", "FORMASYON_TAMAMLANDI"):
-            msg += "\n\n📌 Formasyon takibi · yatırım tavsiyesi değildir"
+        # Domain başlıkları yalnızca formatlayıcının ürettiği gerçek bulgular
+        # varsa görünür; boş bir Market Structure/OB/FVG/hacim başlığı eklenmez.
+        domain_context = str(data.get("domain_context") or "").strip()
+        if domain_context:
+            msg += "\n\n" + domain_context
 
+        # Eski kuyruk kayıtları için alanı okumaya devam et; yeni acil mesajlarda
+        # izleme adayları bu alana eklenmez ve kapanış digest'inde tutulur.
         # Acil olay mesajına, ayrı alarm olarak henüz gönderilmemiş en fazla üç
         # kısa izleme adayı bağlamı eklenir. Adaylar kendi başlarına gönderilmez.
         watch_context = data.get("watch_context") or []
@@ -1660,29 +1964,58 @@ class TelegramNotifier:
         if context_lines:
             msg += "\n\n👀 Diğer izleme adayları\n" + "\n".join(context_lines)
 
+        if state in ("KIRILIM_TEYITLI", "RETEST_BASARILI"):
+            msg += "\n\n📌 Formasyon takibi · yatırım tavsiyesi değildir"
         return msg
 
     def send(self, data: Dict, kuyrukla: bool = True) -> bool:
-        """Acil alarm gönderir; engel varsa olay kuyruğa alınır (Batch 5 / B4).
+        """Kapanışta teyitli alarm gönder; diğer lifecycle state'lerini reddet."""
+        return self.send_with_prepare(data, before_send=None, kuyrukla=kuyrukla)
 
-        `kuyrukla=False` kuyruktan gelen gönderimlerde kullanılır (aynı olay
-        tekrar kuyruğa girmesin).
+    def send_with_prepare(self, data: Dict, before_send=None, kuyrukla: bool = True) -> bool:
+        """Gönderim kapısını geçince bağlamı hazırla, sonra tek kez gönder.
+
+        ``before_send`` scanner'ın yalnızca gerçekten gönderilecek/yedeklenecek
+        olay için taze domain çıktısı eklemesini sağlar. Repeat mührü olan eski
+        olaylarda domain motorları hiç çalıştırılmaz. Cooldown/kap nedeniyle
+        kuyruğa girecek yeni olayın bağlamı da kuyruk kaydına alınır.
         """
-        stock = data.get('stock_name', '')
-        pattern = data.get('pattern_name', '')
-        timeframe = data.get('timeframe', '')
-        state = data.get('state', '')
+        stock = data.get("stock_name", "")
+        pattern = data.get("pattern_name", "")
+        timeframe = data.get("timeframe", "")
+        state = str(data.get("state", "") or "").strip().upper()
+        if state not in ALERT_STATES:
+            self._son_engel = "state_disabled"
+            logger.info("%s %s %s %s - state bildirim politikasında kapalı",
+                        stock, pattern, timeframe, state)
+            return False
+        data["state"] = state
+        if data.get("formation_id") is not None:
+            data["formation_id"] = str(data["formation_id"])
 
-        if not self.can_send(stock, pattern, timeframe, state):
+        def prepare_context():
+            if not callable(before_send):
+                return
+            try:
+                before_send(data)
+            except Exception as exc:  # noqa: BLE001 - domain bağlamı alarmı düşürmesin
+                data["domain_context"] = ""
+                logger.warning("Bildirim bağlamı hazırlanamadı (%s %s): %s",
+                               stock, timeframe, exc)
+
+        if not self.can_send(
+            stock, pattern, timeframe, state, formation_id=data.get("formation_id")
+        ):
             engel = self._son_engel or "cooldown"
-            # "tekrar" engeli nihai reddir: olay zaten gönderildi (mühür var),
-            # bayat kopyası kuyrukta birikip sonra çift mesaj üretmesin.
+            # "tekrar" nihai reddir: mühürlü olay için ne kuyruk ne de domain işi.
             if kuyrukla and self.enabled and engel != "tekrar":
-                # Kaybolmasın: kap/cooldown açılınca kuyruktan gönderilir.
+                prepare_context()
                 self._kuyruga_ekle(data, engel)
-            logger.info(f"{stock} {pattern} {timeframe} {state} - {engel}, gönderilmiyor")
+            logger.info("%s %s %s %s - %s, gönderilmiyor",
+                        stock, pattern, timeframe, state, engel)
             return False
 
+        prepare_context()
         return self._gonder(data)
 
     def _gonder(self, data: Dict) -> bool:
@@ -1704,7 +2037,9 @@ class TelegramNotifier:
             self._gonderim_kaydet()
             self.gonderilen_alarm += 1
             self._gonderim_sagligi_kaydet(basari=True)
-            self._tek_seferlik_isle(stock, pattern, timeframe, state)
+            self._tek_seferlik_isle(
+                stock, pattern, timeframe, state, formation_id=data.get("formation_id")
+            )
             return True
 
         try:
@@ -1722,7 +2057,9 @@ class TelegramNotifier:
                 self._gonderim_sagligi_kaydet(basari=True)
                 # Tek-seferlik mühür: DM ve public hedef aynı kapıdan geçtiği
                 # için her ikisi de tekilleşir.
-                self._tek_seferlik_isle(stock, pattern, timeframe, state)
+                self._tek_seferlik_isle(
+                    stock, pattern, timeframe, state, formation_id=data.get("formation_id")
+                )
                 # NOT: Public (grup) gönderimi burada YAPILMAZ. Olaylar tarama
                 # turu boyunca `public_kuyruk()` ile toplanır ve tur sonunda tek
                 # bültende gider; DM başarısız olsa bile grup yayını etkilenmez.
