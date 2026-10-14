@@ -249,14 +249,15 @@ def test_public_ozet_sade_ve_dogru_satirlar(grup_notifier):
     assert "Sıkışan 1" in metin and "GUBRF" in metin
     assert "Yarının izleme listesi (ilk 5)" in metin
     assert metin.count("• SYM") == 5          # listede yalnız ilk 5
-    assert "48 hisse × 4 zaman dilimi · 9 tarama" in metin
+    # Satır bütçesi (≤283 px) " · " ayracından böler: bilgi aynı, iki kısa satır.
+    assert "48 hisse × 4 zaman dilimi" in metin and "9 tarama" in metin
     # Grup metninde iç teknik döküm olmamalı
     assert "defter" not in metin and "n=" not in metin and "/tmp" not in metin
 
 
 def test_public_ozet_bossa_bos_mesaj_vermez(grup_notifier):
     metin = grup_notifier.format_public_summary([], {}, tarama_turu=0)
-    assert "öne çıkan formasyon olmadı" in metin
+    assert "öne çıkan formasyon yok" in metin
     assert "henüz" not in metin or "tarama" in metin
 
 
@@ -268,10 +269,12 @@ def test_karne_kisa_metni_teknik_dokum_icermez():
               "huni": {"FORMASYON_TAMAMLANDI": 45, "RETEST_BASARILI": 12,
                        "BASARISIZ_KIRILIM": 47}}
     metin = K.karne_kisa_metni(metrik, "28.09–02.10.2026")
-    assert "Haftalık doğruluk · 28.09–02.10.2026" in metin
+    # Başlık/pencere ve olay sayaçları ayrı satırlarda: birleşik halleri 283 px'lık
+    # satır bütçesini aşıp ortadan ikiye düşüyordu. Bilgilerin hepsi duruyor.
+    assert "Haftalık doğruluk" in metin and "28.09–02.10.2026" in metin
     assert "6/10 (%60)" in metin
-    assert "Tamamlanan 45 · retest başarılı 12" in metin
-    assert "garantisi değildir" in metin
+    assert "Tamamlanan 45" in metin and "retest başarılı 12" in metin
+    assert "garanti" in metin
     for yasak in ("defter", "n=", "/tmp", "hedef", "nötr"):
         assert yasak not in metin
 

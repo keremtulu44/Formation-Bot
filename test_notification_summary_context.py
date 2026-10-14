@@ -47,9 +47,17 @@ def test_daily_summary_counts_transitions_and_does_not_present_stale_formations(
     message = notifier.format_daily_summary(_old_formations(), _stale_summary())
 
     assert "THYAO" not in message and "GARAN" not in message
-    assert "önceki formasyon listesi gösterilmedi" in message
-    assert "3 teyitli kırılım · 2 başarılı retest · 1 teyit sonrası geçersizleşme" in message
-    assert "Son başarılı tam tarama: 11 Eki 18:00" in message
+    # İki tasarlanmış satır: tek satır 396 px'a çıkıp ortadan ikiye düşüyordu.
+    assert "Güncel tam tarama yok;" in message
+    assert "eski formasyonlar gösterilmedi" in message
+    # 🔎 satırı 426 px'lık tek satırdı; şimdi iki kısa satıra tasarlanmış bölünür,
+    # o yüzden üç sayı ayrı ayrı aranıyor (hepsi mesajda duruyor).
+    assert "🔎 Bugün:" in message
+    assert "3 teyitli" in message and "2 retest başarılı" in message
+    assert "1 geçersizleşme" in message
+    # Etiket ve değer iki satıra tasarlandı (tek satır 335 px); ikisi de mesajda.
+    assert "Son başarılı tam tarama:" in message
+    assert "11 Eki 18:00" in message
     assert "güncel tam tarama yok" in message
     assert "yatırım tavsiyesi değildir" in message
 
@@ -61,9 +69,16 @@ def test_public_daily_summary_reports_counts_and_hides_stale_snapshot():
     )
 
     assert "THYAO" not in message and "GARAN" not in message
-    assert "eski formasyon listesi gösterilmedi" in message
-    assert "3 teyitli kırılım · 2 başarılı retest · 1 teyit sonrası geçersizleşme" in message
-    assert "Son başarılı tam tarama: 11 Eki 18:00" in message
+    assert "Bugün güncel tam tarama yok;" in message
+    assert "eski formasyonlar gösterilmedi" in message
+    # 🔎 satırı 426 px'lık tek satırdı; şimdi iki kısa satıra tasarlanmış bölünür,
+    # o yüzden üç sayı ayrı ayrı aranıyor (hepsi mesajda duruyor).
+    assert "🔎 Bugün:" in message
+    assert "3 teyitli" in message and "2 retest başarılı" in message
+    assert "1 geçersizleşme" in message
+    # Etiket ve değer iki satıra tasarlandı (tek satır 335 px); ikisi de mesajda.
+    assert "Son başarılı tam tarama:" in message
+    assert "11 Eki 18:00" in message
 
 
 def test_current_daily_summary_labels_fresh_full_scan_and_keeps_current_results():
@@ -81,5 +96,8 @@ def test_current_daily_summary_labels_fresh_full_scan_and_keeps_current_results(
     message = notifier.format_daily_summary(_old_formations(), payload)
 
     assert "THYAO" in message
-    assert "· güncel" in message
-    assert "0 teyitli kırılım · 0 başarılı retest · 0 teyit sonrası geçersizleşme" in message
+    # Tazeliği artık ✓ işaretliyor (kelime satırı 340 px'a taşıyordu).
+    assert "Son başarılı tam tarama" in message and "✓" in message
+    assert "🔎 Bugün:" in message
+    assert "0 teyitli" in message and "0 retest başarılı" in message
+    assert "0 geçersizleşme" in message

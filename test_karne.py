@@ -181,15 +181,25 @@ def test_karne_metni_istenen_ciktilar(defter):
     metin = K.karne_uret(d, _saglayici, now=t(2026, 10, 2, 18, 45))
     assert "HAFTALIK DOĞRULUK KARNESİ" in metin
     assert "Formasyon tespiti: 5" in metin
-    assert "1 saatlik 2" in metin and "4 saatlik 1" in metin and "günlük 1" in metin
-    assert "Hisse: (4 hisse)" in metin
+    # TF kısaltmaları kart/bültenle aynı dilde (1s/2s/4s/1g).
+    assert "1s 2" in metin and "4s 1" in metin and "1g 1" in metin
+    assert "Hisse dağılımı (4 hisse):" in metin
     assert "THYAO 2" in metin and "ASELS 1" in metin
-    assert "Kırılım sinyali: 2" in metin
+    # Satırlar tek satıra sığacak biçimde kısaltıldı (bkz. telegram_measure,
+    # 283 px); sayıların kendisi aynı bilgileri veriyor.
+    assert "Kırılım: 2" in metin
     assert "hedef 1" in metin and "stop 1" in metin
-    assert "Kırılım yönünde kapatan: 1/2" in metin
+    assert "Yönünde kapanan: 1/2" in metin
     assert "Kalite: q≥80 1/1 · q70–79 0/1" in metin
-    assert "Huni: kırılım 2 → tamamlanan 1" in metin
+    # Huni satırı "kırılım 2 → tamamlanan 1" diye ardışık aşama gibi okunuyordu
+    # (sayılar ayrı kümeler). Yeni biçim:
+    # Uzun satır ortadan bölünmesin diye olaylar etiketli blok; sayımlar duruyor.
+    assert "Olaylar (bu aralık):" in metin
+    assert "teyitli kırılım 2" in metin and "tamamlanan 1" in metin
     assert "Supabase gerekmez" in metin
+    # Yüzde biçimi karttakile aynı: işaret yüzde önünde, ondalık virgüllü.
+    assert "%-" not in metin
+    assert "−%" in metin
 
 
 def test_karne_gun_sayisi_penceresi(defter):
@@ -204,7 +214,7 @@ def test_karne_gun_sayisi_penceresi(defter):
 def test_bos_defter_metni(defter):
     metin = K.karne_uret(defter, _saglayici, now=t(2026, 10, 2, 18, 45))
     assert "Formasyon tespiti: 0" in metin
-    assert "Kırılım sinyali: 0" in metin
+    assert "Kırılım: 0" in metin
 
 
 # === 4) CUMA KAPISI + GÖNDERİM TEKİLLİĞİ =================================

@@ -531,7 +531,7 @@ def test_panel_komutu_top12_kritik_sirasini_uygular(monkeypatch):
     # Composite puan: kalite %65 + lifecycle durumu + geometrik destek.
     sira = [s for s in cevap.splitlines() if re.match(r"^\s*\d+\)", s)]
     assert "H00" in sira[0] and "Formasyon tamamlandı" in sira[0]
-    assert "puan " in sira[0] and "· kritik 100.00" in sira[0]
+    assert "puan " in sira[0] and "· kritik 100,00" in sira[0]
 
 
 def test_panel_komutu_top12_ile_sinirlidir(monkeypatch):
@@ -735,7 +735,7 @@ def test_durum_basarisiz_deneme_icin_onceki_taze_fetch_sayisini_kullanmaz(monkey
     })
 
     cevap = main_mod._komut_durum("")
-    assert "kapsam: 0/1 hisse, süre: 2.0 dk" in cevap
+    assert "kapsam: 0/1 hisse, süre: 2,0 dk" in cevap
     assert "başarılı fetch 48/" not in cevap
     assert "fetch hatası 0" not in cevap
 

@@ -109,6 +109,49 @@ def yanit_oku(yanit):
     return ok, aciklama
 
 
+def foto_gonder(yol, chat_id=None, token=None, notifier=None, caption="", *,
+                timeout: int = 20, api=None):
+    """`sendPhoto` ile tek kare gönderir: `(ok, aciklama)` (G4, §4).
+
+    Neden ayrı fonksiyon: mesaj yolu `api_cagri`yı (JSON gövde) kullanıyor; fotoğraf
+    multipart gövde ister, o yüzden burada `files` ile ayrı bir istek kurulur. Kaynak
+    `notifier`dan okunur (token/chat_id anaLoop sonrası dolu olabilir) — aynı
+    `token_al` deseni. Hata metni kırpılır ve token içermesin diye çağıran taraf
+    `redact_sensitive_text` kullanır; burada ham açıklama döner.
+
+    Görsel gönderimi hiçbir koşulda alarmı düşürmez: çağıran taraf sonucu yalnız
+    sayaça yazar.
+    """
+    import os
+
+    if not yol or not os.path.exists(yol):
+        return False, "png yok"
+    metin_token = token_al(token=token, notifier=notifier)
+    hedef = chat_id if chat_id is not None else getattr(notifier, "chat_id", "")
+    if not metin_token or not hedef:
+        return False, "token/chat_id yok"
+    cagri = api or _multipart_cagri
+    try:
+        with open(yol, "rb") as akis:
+            yanit = cagri("sendPhoto", metin_token, {
+                "chat_id": hedef,
+                "caption": str(caption or "")[:1024],
+            }, {"photo": (os.path.basename(yol), akis.read(), "image/png")},
+                timeout=timeout)
+    except Exception as hata:   # ağ hatası: çağıran taraf sayar, alarm sürer
+        return False, f"istek hatasi: {type(hata).__name__}"[:200]
+    return yanit_oku(yanit)
+
+
+def _multipart_cagri(method: str, token: str, alanlar: dict, dosyalar: dict,
+                     timeout: int = 20):
+    """`api_cagri`nın çok-parçalı kardeşi (test noktası: tek yerden çıkış)."""
+    import requests
+
+    return requests.post(f"https://api.telegram.org/bot{token}/{method}",
+                         data=alanlar, files=dosyalar, timeout=timeout)
+
+
 def set_webhook(url=None, secret=None, token=None, *, api=None, yanit_oku_fn=None,
                 secret_ayikla_fn=None, token_al_fn=None, adres_olustur_fn=None,
                 gizle_fn=None) -> bool:

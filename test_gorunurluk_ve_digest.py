@@ -27,14 +27,17 @@ def test_digest_basligi_kac_aday_gosterildigini_soyler():
     kayitlar = [_kayit(f"SYM{i:02d}", "1h") for i in range(12)]
     metin = main_mod._format_deferred_alert_summary(kayitlar, toplam=21)
     assert "12/21 gösteriliyor" in metin
-    assert "… 9 aday daha (tam liste: /formasyonlar)" in metin
+    assert "… 9 aday daha" in metin and "tam liste: /formasyonlar" in metin in metin
     assert len([s for s in metin.splitlines() if s.startswith("•")]) == 12
 
 
 def test_digest_toplam_verilmezse_eski_baslik_korunur():
     kayitlar = [_kayit("THYAO", "1h"), _kayit("GARAN", "4h")]
     metin = main_mod._format_deferred_alert_summary(kayitlar)
-    assert metin.startswith("📡 Gün içi izleme adayları (en yüksek puanlılar)")
+    # Başlık ve alt not ayrı satırlar (tek satır 370 px'a çıkıp ortadan iniyordu).
+    assert metin.startswith("📡 Gün içi izleme adayları\nen yüksek puanlılar") or \
+        metin.splitlines()[0] == "📡 Gün içi izleme adayları" \
+        and metin.splitlines()[1].strip() == "en yüksek puanlılar"
     assert "aday daha" not in metin
 
 

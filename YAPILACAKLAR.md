@@ -177,5 +177,83 @@ README: test sayıları `90/90` ve `6/6` (gerçek: 199 passed), eski dal adı `a
 2. **Bu hafta:** B1, B2, B6, A4, A5, A9.
 3. **Sonraki:** B3, B4, B5, A6, A7, A10, B7, B8.
 4. **Şablon öncesi:** C1, C2, C3, C4, C7 (+ B9, B10).
+""
+---
 
-*Bu liste teşhis amaçlıdır; uygulanmadı. A1-A2-B1-B2 hariç hepsi mevcut davranışı koruyan iyileştirmelerdir.*
+## G) GRAFİK FAZLARI (G0 → G5) — sözleşme: `GRAFIK_TASARIM.md`
+
+Kullanıcı isteği: "kartta ne varsa karede de o olsun" (bant nereden başlıyor, hangi
+mumlara dokundu, yapı nerede kırıldı). Her faz tek commit + tam test yeşil (§3/§6.8).
+
+| ID | Durum | İş | Faz | Not |
+|---|---|---|---|---|
+| G0 | ✅ `c0c9183` | Sayı biçimi: her yüzeyde Türkçe virgül (`sayi()` tek standart) | §15/§19 | 900 test yeşil; kart baytları değişmedi |
+| G1 | ✅ `4fe9dd6` | `grafik.py` iskeleti: kapalı mumlar, formasyon bandı + start/bitiş/apex, temas, alarm çizgisi + gerçek state metni, başlık/lejant/dipnot, `meta`, çökme modu, CLI + `matplotlib` pini | §2/§3 | 26 test (`test_grafik_iskelet.py`) |
+| G2 | ✅ bu commit | Bölge kutuları: OB/FVG/engulfing TEK havuzda yakınlık sırasıyla (1s 3+3 · 2s 3+3 · 4s 2+2 · 1g 1+1), `source_index` başlangıç + kalın kenar (boğada alt/ayıda üst), `1s/2s`de FVG yok, doluluk yalnız motorun verdiği kutuda, çakışan etiket atlanır | §3/§23 | `test_grafik_bolgeler.py` (16 test); motorlar yalnız `grafik_uret.py --zone`da; kayıt §23 |
+| G3 | ✅ bu commit | Yapı + şerit + bütçe: external PH/PL + `HH/HL/LH/LL`, en yeni 6 BOS/CHoCH, `kritik` çizgisi, `rvol(20)` kulvarı (4s `yerel hesap`), `!` son 15 mum, `evidence_text` yalnız `--etiket-detay` | §3 | `test_grafik_yapi.py` (18 test); `▲`/`×N`/`kritik` ölçümleri §24 |
+| G4 | ✅ bu commit | Teslim: `transport/telegram.py::foto_gonder` (multipart `sendPhoto`), `notifier.grafik_kuyruga_ekle/grafikleri_gonder/grafik_dosya_gonder` (tur sonu kuyruğu, tek noktadan silme), `main._grafik_koprusu` (`payload['grafik_verisi']`), `grafik_uret.kare_uret` (CLI+komut tek yol), 4 env anahtarı + `.env.example`/`deploy_check`, `/grafik` (4 yüzey) | §4/§5 | `test_grafik_teslim.py` (51 test); duman ölçümü §25.3; 1 olay = 1 mesaj kuralı metinde değişmedi |
+| G5 | ☐ (ops.) | `/karne` ısı haritası; `GRAFİK_META` JSONL | §13/§3 | v1'de yazılmadı, alan adı hazır |
+| K1/K2 | ☐ | Grup kanalının kökten iptali (grafikle ilgisi yok, ayrı commit'ler) | §9 | |
+
+*G1'de bilinçli ertelenenler:* `_gunluk.json` seed'i `bot_data/`a YAZILMADI (canlı
+bot aynı dizini okuyor) → sentetik derin çerçeve testte/CLI'da (`--demo`); yarım
+gün/tatil paritesi (`exchange-calendars`) hâlâ ölçülmedi (§18.5).
+
+## Test kapısı ortam notu (ölçüldü — 2026-10-14)
+
+Tam kapı her commit öncesi: `mkdir -p /tmp/fbdata && DATA_DIR=/tmp/fbdata
+.venv/bin/python -m pytest -q`. **`/tmp/fbdata` VAR ve BOŞ olmalı**: içine önceki
+koşulardan kalan önbellek dosyaları sızarsa `test_domain_integration_regressions.py`
+veri bağımlılığı yüzünden 2 sahte hata veriyor (kodla ilgisi yok, boş dizinde 7/7
+yeşil). Kum fırlatması yeniden kurulursa `.venv` kaybolur:
+`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
+(matplotlib 3,11,2 + pandas 2,2,2). Dal yeniden klonlanıp `main`'e düşebilir —
+`git fetch origin arena/<dal>` + `git reset --soft FETCH_HEAD` + `git reset` ile
+tarih geri alınır; çalışma ağacındaki dosyalar korunur. **Büyük turları erken
+commit'le** (G3, kum yeniden kurulmadan hemen önce işlenmemişti; dosyalar
+kurtarıldı ama tarih `origin`'den çekildi).
+
+*G4'te bilinçli ertelenenler / kararlar:* kareler **yalnız DM** (public bülteni
+metinde kalır); **ayrı görsel kotası yok** — tek sınır `TELEGRAM_GRAFIK_ADET`,
+kesilen kare `grafik_atlanan_kota`da sayılır; gönderim **tur sonunda** (metin
+beklemez) ve `sendMediaGroup`/`reply_parameters` v2'ye bırakıldı (canlı duman
+gerekiyor). `grafik_verisi` bellek içi: acil kuyruk JSON'undan
+`_kuyruk_verisi()` ile arındırılıyor. Duman dört gerçek kusur çıkardı (limit OLAY
+değil KARE sayıyordu; `sonuclar` iç içe biçimde katmanlar sessizce boşalıyordu;
+bant/alarm diğer TF'nin kadrajına taşınıp uydurma „bant teması 266" üretiyordu;
+parite satırı bandın kenar çizgisinin üstüne biniyordu) — hepsi düzeltildi ve
+teste bağlandı (§25.2).
+
+*G3'te bilinçli ertelenenler:* `evidence_text` yalnız `--etiket-detay`da (kart
+metninin tekrarı olmaması için); `▲` yüzdelik işareti yalnız motor serisi varsa —
+yerel rvol'da percentile iddiası yok; spike kapağı (12) dipnot değil, `meta` sayacı.
+
+*G2'de bilinçli ertelenenler:* köprü (`payload["grafik_verisi"]`) henüz bağlı
+değil → bölge verisi canlı kartta G4'te görünecek (şimdilik yalnız CLI `--zone`);
+OB tarafında motor `details["records"]` kullanılıyor (`active_records` değil) —
+dolan/geçersizleşen kutular yakınlık kapağıyla eleniyor, kayıp bilgi dipnotta
+sayı olarak yazılı (§23.2). Kapak dışı elenen kutuların listesi karede değil
+yalnız `meta`da (§13 JSONL'e kadar öyle kalacak).
+
+## L) CANLI HAZIRLIK DENETİMİ (2026-10-14) — G4 sonrası uçtan uca
+
+Kod tarafı bitti (detay + ölçümler: `GRAFIK_TASARIM.md` §26). Tablo = "canlıya
+alınca nerede kırılır" sorusunun cevabı; **senin yapacağın 3 satır** işaretli.
+
+| # | Risk | Durum | Kanıt / ne yapıyor |
+|---|---|---|---|
+| L1 | `TELEGRAM_GRAFIK*` env'leri `render.yaml`da yoktu | ✅ kapandı | 4 anahtar blueprinte yazıldı; varsayılan `yok` → açmazsan bugünkü davranışın birebir aynısı |
+| L2 | matplotlib kaynaktan derlenip Render build'ini patlatması | ✅ elendi | cp312 manylinux tekerleği var (`pip download --python-version 312 --only-binary=:all:`) |
+| L3 | Kare kotası mesaj haklarını yer | ✅ yok | görseller `max_gunluk/max_saatlik` saymaz; metin 200 aldıktan sonra kuyruğa girer (1 olay = 1 mesaj) |
+| L4 | Aynı kare 2 kez gider (bağlam güncellemesinde) | ✅ düzeldi | `_dm_bağlam_değişmedi` → `grafik_kuyruga_ekle` 0 döner; `/durum`'da `N bağlam güncellemesi` |
+| L5 | Kare giderken alarm düşer | ✅ yok | üretim/gönderim hataları yutulur + `grafik_atlanan_hata`; karttan sonra geliyor |
+| L6 | Disk dolar / dosya kalır | ✅ kontrol altında | <200 MB → üretim yok; `/tmp/fb_grafik_*` gönderim sonrası silinir, açılışta TTL süpürmesi |
+| L7 | Tur uzar (Free 512 MB, 4 kare) | ⚠ ölçüldü | 4 kare ≈ **1,3 sn**, tepe **+52 MB (129 MB)**; gerekirse `TELEGRAM_GRAFIK_ADET=1` |
+| L8 | Kurulumda "kare gitmiyor" sessiz kalır | ✅ kapandı | `deploy_check.py --grafik-test [--send-test-message]` (çevrimdışı çizim + isteğe bağlı sendPhoto) |
+| L9 | Restart'ta sayaç/cooldown sıfır | ❗ SENDEN | Supabase bağla (`SUPABASE_URL`/`SUPABASE_ANON_KEY`); grafik bundan bağımsız |
+| L10 | Canlı DM'de sıra/animasyon beklentisi | ❗ SENDEN | runbook **4.7** dumanı; media group/reply (v2) ancak bundan sonra |
+| L11 | Karttaki motor durumunun karede okunmaması | ✅ kapandı | karenin üst bloğunda kartın kendi `yapi` satırı (`domain_bolumleri` çıktısı, yalnız `• ` imi düşüyor); 3. satır eksen rezerviyle, yer yoksa `kesilen`de — GRAFIK_TASARIM §27 |
+| L12 | `1d` karesi yüzeysel (40 mum) | ℹ kabul | §18.6; alarm 1d ise kadraj tavanı kalkıyor, bant sığar |
+
+Yol haritası satırları: G4 teslim `a80524d` + denetim turu (L1-L8) + L11 (§27);
+**G5 = ısı haritası + §13 JSONL + v2 teslim (media group/reply, canlı duman şartıyla)**.

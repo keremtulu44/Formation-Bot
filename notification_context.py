@@ -11,6 +11,8 @@ from collections.abc import Mapping
 from math import isfinite
 from typing import Any
 
+from reporting.format import sayi
+
 TIMEFRAME_ORDER = ("1h", "2h", "4h", "1d")
 TIMEFRAME_LABELS = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
 
@@ -38,8 +40,13 @@ def _number(value: Any) -> float | None:
 
 
 def _price(value: Any) -> str:
+    """Fiyat metni: biçim `reporting.format.sayi`den (G0 tek standardı).
+
+    Kart zaten virgül basıyordu; buradaki `.replace()` yerine aynı yardımcının
+    çağrılması iki kuralın zamanla ayrışmasını engeller. Çıktı baytı değişmedi.
+    """
     number = _number(value)
-    return f"{number:.2f}".replace(".", ",") if number is not None else ""
+    return sayi(number) if number is not None else ""
 
 
 def _usable_export(result: Any):
@@ -69,25 +76,43 @@ def _direction(value: Any) -> str:
 
 
 def _structure_state(scope: Any, exported_code: Any) -> str:
+    state = _structure_token(scope, exported_code)
+    return _STRUCTURE_LABELS.get(state, "")
+
+
+def _structure_token(scope: Any, exported_code: Any) -> str:
+    """Engine state name ('STATE_BULLISH' ...) for a scope, falling back to code."""
     state = _token(_field(scope, "state"))
-    if not state:
-        code = _number(exported_code)
-        if code is None:
-            return ""
-        state = {
-            2.0: "STATE_BULLISH",
-            1.0: "STATE_TRANSITION_UP",
-            -2.0: "STATE_BEARISH",
-            -1.0: "STATE_TRANSITION_DOWN",
-            0.0: "STATE_NEUTRAL",
-        }.get(code, "")
+    if state:
+        return state
+    code = _number(exported_code)
+    if code is None:
+        return ""
     return {
-        "STATE_BULLISH": "yükseliş",
-        "STATE_BEARISH": "düşüş",
-        "STATE_TRANSITION_UP": "yukarı geçiş",
-        "STATE_TRANSITION_DOWN": "aşağı geçiş",
-        "STATE_NEUTRAL": "yatay",
-    }.get(state, "")
+        2.0: "STATE_BULLISH",
+        1.0: "STATE_TRANSITION_UP",
+        -2.0: "STATE_BEARISH",
+        -1.0: "STATE_TRANSITION_DOWN",
+        0.0: "STATE_NEUTRAL",
+    }.get(code, "")
+
+
+# Kart stili: telefon satırı bütçesi dar olduğu için durum kelimesi yön okuyla
+# yazılır (veri aynı, metin kısa).
+_STRUCTURE_LABELS = {
+    "STATE_BULLISH": "yükseliş",
+    "STATE_BEARISH": "düşüş",
+    "STATE_TRANSITION_UP": "yukarı geçiş",
+    "STATE_TRANSITION_DOWN": "aşağı geçiş",
+    "STATE_NEUTRAL": "yatay",
+}
+_STRUCTURE_SHORT = {
+    "STATE_BULLISH": "↑",
+    "STATE_BEARISH": "↓",
+    "STATE_TRANSITION_UP": "↑geçiş",
+    "STATE_TRANSITION_DOWN": "↓geçiş",
+    "STATE_NEUTRAL": "–",
+}
 
 
 def _event_rows(export: Any) -> list[Any]:
@@ -117,35 +142,27 @@ def _event_rows(export: Any) -> list[Any]:
     return output
 
 
-def _format_market_structure(results_by_timeframe: Any) -> list[str]:
-    lines: list[str] = []
-    level_fields = (
-        ("PH", "external_protected_high", "korunan"),
-        ("PL", "external_protected_low", "korunan"),
-        ("WH", "external_weak_high", "zayıf"),
-        ("WL", "external_weak_low", "zayıf"),
-    )
+_SEVIYE_ALANLARI = (
+    ("PH", "external_protected_high", "korunan"),
+    ("PL", "external_protected_low", "korunan"),
+    ("WH", "external_weak_high", "zayıf"),
+    ("WL", "external_weak_low", "zayıf"),
+)
 
+
+def _market_structure_rows(results_by_timeframe: Any) -> list[dict]:
+    """Per-timeframe current structure: states, confirmed events, swing levels.
+
+    Returns a plain structure so the verbose (legacy) renderer and the compact
+    card renderer share exactly the same filtering: an event counts as current
+    only when it is confirmed, valid, and not superseded/historical.
+    """
+    rows: list[dict] = []
     for timeframe in TIMEFRAME_ORDER:
         result = _domain(results_by_timeframe, timeframe, "market_structure")
         export = _usable_export(result)
         if export is None:
             continue
-
-        tf_label = TIMEFRAME_LABELS[timeframe]
-        state_parts = []
-        external_state = _structure_state(
-            _field(export, "external_scope"), _field(export, "external_state")
-        )
-        internal_state = _structure_state(
-            _field(export, "internal_scope"), _field(export, "internal_state")
-        )
-        if external_state:
-            state_parts.append(f"dış {external_state}")
-        if internal_state:
-            state_parts.append(f"iç {internal_state}")
-        if state_parts:
-            lines.append(f"• {tf_label} yapı: " + " · ".join(state_parts))
 
         current_events = []
         for event in _event_rows(export):
@@ -173,33 +190,111 @@ def _format_market_structure(results_by_timeframe: Any) -> list[str]:
             prior_bar = _number(_field(prior, "event_bar")) if prior is not None else None
             if prior is None or (event_bar is not None and (prior_bar is None or event_bar >= prior_bar)):
                 latest_by_scope[scope] = event
-        for event in latest_by_scope.values():
+
+        # The same fact is often reported by both scopes with the same level and
+        # direction (25 Eyl akışında 4 satır/gün böyle kopyaydı). Tek satırda
+        # "dış+iç" olarak birleştirilir; bilgi düşmez.
+        olan: dict[tuple, dict] = {}
+        for scope, event in latest_by_scope.items():
             raw_type = _token(_field(event, "event_type"))
-            label = "CHoCH" if "CHOCH" in raw_type else "BOS"
-            direction = _direction(_field(event, "direction"))
-            level = _price(_field(event, "broken_level"))
-            scope = _token(_field(event, "scope"))
-            scope_label = "dış" if scope == "EXTERNAL" else "iç" if scope == "INTERNAL" else ""
-            status_parts = []
-            if _token(_field(event, "confirmation_status")) == "CONFIRMED":
-                status_parts.append("teyitli")
+            anahtar = (
+                "CHoCH" if "CHOCH" in raw_type else "BOS",
+                _direction(_field(event, "direction")),
+                _price(_field(event, "broken_level")),
+            )
+            giris = olan.setdefault(anahtar, {"kapsam": [], "gecerli": False, "guncel": False})
+            giris["kapsam"].append(
+                "dış" if scope == "EXTERNAL" else "iç" if scope == "INTERNAL" else ""
+            )
             if _token(_field(event, "validity")) == "VALID":
-                status_parts.append("geçerli")
+                giris["gecerli"] = True
             if _token(_field(event, "relevance")) == "CURRENT":
-                status_parts.append("güncel")
-            details = [part for part in (scope_label, " ".join(status_parts)) if part]
-            suffix = f" · {' · '.join(details)}" if details else ""
-            level_text = f" {level}" if level else ""
-            lines.append(f"  {label} {direction}{level_text}{suffix}")
+                giris["guncel"] = True
 
-        levels = []
-        for label, field_name, role in level_fields:
-            level = _price(_field(export, field_name))
-            if level:
-                levels.append(f"{label} {level} ({role}, güncel)")
-        if levels:
-            lines.append("  " + " · ".join(levels))
+        olaylar = [
+            {
+                "etiket": etiket, "yon": yon, "seviye": seviye,
+                "kapsam": "+".join(sorted({k for k in giris["kapsam"] if k})),
+                "gecerli": giris["gecerli"], "guncel": giris["guncel"],
+            }
+            for (etiket, yon, seviye), giris in olan.items()
+        ]
+        salinim = [
+            {"etiket": etiket, "seviye": _price(_field(export, alan)), "rol": rol}
+            for etiket, alan, rol in _SEVIYE_ALANLARI
+            if _price(_field(export, alan))
+        ]
+        rows.append({
+            "timeframe": timeframe,
+            "etiket": TIMEFRAME_LABELS[timeframe],
+            "dis": _structure_token(_field(export, "external_scope"), _field(export, "external_state")),
+            "ic": _structure_token(_field(export, "internal_scope"), _field(export, "internal_state")),
+            "olaylar": olaylar,
+            "salinim": salinim,
+        })
+    return rows
 
+
+def _format_market_structure(rows: list[dict]) -> list[str]:
+    """Verbose (legacy) rendering: full words, one line per event and swing."""
+    lines: list[str] = []
+    for satir in rows:
+        state_parts = [
+            part for part in (
+                f"dış {_STRUCTURE_LABELS.get(satir['dis'], '')}" if satir["dis"] else "",
+                f"iç {_STRUCTURE_LABELS.get(satir['ic'], '')}" if satir["ic"] else "",
+            ) if part
+        ]
+        if state_parts:
+            lines.append(f"• {satir['etiket']} yapı: " + " · ".join(state_parts))
+        for olay in satir["olaylar"]:
+            # `teyitli` basılmaz: filtre yalnız CONFIRMED olayları buraya bırakır,
+            # yani kelime her satırda aynı sabit metindir (bilgi taşımaz).
+            durum = " ".join(part for part in (
+                "geçerli" if olay["gecerli"] else "",
+                "güncel" if olay["guncel"] else "",
+            ) if part)
+            parcalar = [p for p in (olay["kapsam"], durum) if p]
+            suffix = (" · " + " · ".join(parcalar)) if parcalar else ""
+            seviye = f" {olay['seviye']}" if olay["seviye"] else ""
+            lines.append(f"  {olay['etiket']} {olay['yon']}{seviye}{suffix}")
+        if satir["salinim"]:
+            lines.append("  " + " · ".join(
+                f"{x['etiket']} {x['seviye']} ({x['rol']}, güncel)" for x in satir["salinim"]
+            ))
+    return lines
+
+
+def _kart_market_structure(rows: list[dict], alarm_tf: str) -> list[str]:
+    """Card rendering: alert timeframe lists its events, others one line each.
+
+    Neden böyle: canlı akışta aynı hissenin iki farklı TF alarmındaki piyasa
+    yapısı bloğu birebir aynıydı (638 kr kopya metin) — blok alarm TF'sine göre
+    süzülmüyordu. Kart, alarm TF'sini ayırır; diğer TF'ler durum + tek salınım
+    seviyesi olarak özetlenir (olay seviyeleri /tara'da).
+    """
+    # Alarm TF en üstte: kullanıcı önce kırılımın kendi zaman diliminin yapısını okur.
+    rows = sorted(rows, key=lambda r: 0 if r["timeframe"] == alarm_tf else 1)
+    lines: list[str] = []
+    for satir in rows:
+        dis = _STRUCTURE_SHORT.get(satir["dis"], "")
+        ic = _STRUCTURE_SHORT.get(satir["ic"], "")
+        if satir["timeframe"] == alarm_tf:
+            parcalar = [p for p in (f"dış {dis}" if dis else "", f"iç {ic}" if ic else "") if p]
+            baslik = f"◈ {satir['etiket']} yapı: " + " · ".join(parcalar)
+            lines.append(baslik)
+            for olay in satir["olaylar"]:
+                parca = [
+                    olay["kapsam"],
+                    f"{olay['etiket']} {olay['yon']} {olay['seviye']}".strip(),
+                    "geçerli" if olay["gecerli"] else "geçersiz",
+                ]
+                lines.append("   " + " · ".join(p for p in parca if p))
+        else:
+            durum = "/".join(p for p in (dis, ic) if p) or "–"
+            ilk = satir["salinim"][:1]
+            ek = f" · {ilk[0]['etiket']} {ilk[0]['seviye']}" if ilk else ""
+            lines.append(f"▸ {satir['etiket']} {durum}{ek}")
     return lines
 
 
@@ -243,8 +338,14 @@ def _format_order_blocks(results_by_timeframe: Any, reference_price: float | Non
                 f"{TIMEFRAME_LABELS[timeframe]} {side_label} "
                 f"{_price(bottom)}–{_price(top)} TL"
             ]
-            if state is not None and state != 0:
-                parts.append("aktif")
+            # OB tarafının `state` alanı yaşam döngüsü kodu değil, boğa/ayı
+            # işaretidir (domain_engines/order_block/order_block.py:109 →
+            # state = ±1.0). Eskiden "state != 0" her zaman true olduğu için her
+            # OB satırına sabit "aktif" yazılıyordu: sıfır bilgi, ~7 kr/şer satır.
+            # Artık yalnız gerçek bir yaşam döngüsü kodu gelirse etiketlenir.
+            etiket = _OB_STATE_LABELS.get(abs(int(state))) if state is not None else None
+            if etiket:
+                parts.append(etiket)
             if fill is not None:
                 parts.append(f"%{max(0, min(100, round(fill * 100)))} dolu")
             candidates[group].append((distance, " · ".join(parts)))
@@ -259,6 +360,11 @@ def _format_order_blocks(results_by_timeframe: Any, reference_price: float | Non
             lines.append(f"• {label}: {text}")
     return lines
 
+
+# OrderBlock tarafı için geçerli olabilecek yaşam döngüsü kodları; motor şu an
+# yalnız ±1 gönderdiği için pratikte boş kalır (bilgi taşımayan "aktif" kelimesi
+# bu yüzden basılmaz). Motor ileride gerçek state üretirse kart da otomatik gösterir.
+_OB_STATE_LABELS: dict[int, str] = {}
 
 _FVG_STATE_LABELS = {
     2: "aday",
@@ -433,29 +539,280 @@ def _market_structure_failed(results_by_timeframe: Any) -> bool:
     return False
 
 
-def format_domain_context(results_by_timeframe: Any, reference_price: Any = None) -> str:
+# --- Kart (telefon) stili -------------------------------------------------
+# Kurallar: tek satır = tek bilgi grubu, satır ≤ 283 px (telefonda sarmaz),
+# bilgi kaybolursa satıra çıkartılır (kesilmez). Simgeler tofu riski olmayan
+# geometrik karakterlerden seçildi.
+
+def _kart_zones(results_by_timeframe: Any, reference: float | None) -> dict[str, list[str]]:
+    """OB + FVG tek listede, tarafa göre: ▲ üst (engel) / ▼ alt (destek).
+
+    Döner: {"ust": [...], "alt": [...]} — satırların kendisi ▲/▼ ile başlar.
+
+    Eskiden OB ve FVG ayrı bölümlerde kendi başına "en yakın/en kaliteli" bölgeyi
+    seçiyordu; aynı bölge iki başlıkta iki kez görünebiliyordu. Kart taraf
+    (üst/alt) temel alır ve mesafeye göre sıralar — kullanıcı hangi bölgenin
+    gerçekten yakın olduğunu tek bakışta görür.
+    """
+    adaylar: dict[str, list[tuple[float, str]]] = {"içinde": [], "üst": [], "alt": []}
+    if reference is None or reference <= 0:
+        return {"ust": [], "alt": []}
+
+    for timeframe in TIMEFRAME_ORDER:
+        tf_label = TIMEFRAME_LABELS[timeframe]
+        for alan, tip, yanlar in (
+            ("order_block", "OB", (("bull", "boğa"), ("bear", "ayı"))),
+            ("fvg", "FVG", (("bull_fvg", "boğa"), ("bear_fvg", "ayı"))),
+        ):
+            export = _usable_export(_domain(results_by_timeframe, timeframe, alan))
+            if export is None:
+                continue
+            for yan_anahtar, yan_etiket in yanlar:
+                yan = _field(export, yan_anahtar)
+                top = _number(_field(yan, "top"))
+                bottom = _number(_field(yan, "bottom"))
+                if top is None or bottom is None or top < bottom:
+                    continue
+                durumlar: list[str] = []
+                if tip == "FVG":
+                    kod = _number(_field(yan, "state"))
+                    if kod is None:
+                        continue
+                    kod = abs(int(kod))
+                    if kod in _FVG_TERMINAL_STATES or kod not in _FVG_STATE_LABELS:
+                        continue
+                    durumlar.append(_FVG_STATE_LABELS[kod])
+                else:
+                    etiket = _OB_STATE_LABELS.get(abs(int(_number(_field(yan, "state")) or 0)))
+                    if etiket:
+                        durumlar.append(etiket)
+                dolus = _number(_field(yan, "fill"))
+                if dolus is not None:
+                    durumlar.append(f"%{max(0, min(100, round(dolus * 100)))} dolu")
+                konum = _zone_location(top, bottom, reference)
+                if konum is None:
+                    continue
+                grup, mesafe = konum
+                ok = {"üst": "▲", "alt": "▼", "içinde": "◉"}[grup]
+                if grup == "içinde":
+                    # Fiyat bandın içinde: mesafe yok, ama "şu an bu bölgedeyiz"
+                    # bilgisi üst/alt listesinden daha karar vericidir → önce o basılır.
+                    durumlar.append("fiyat bandın içinde")
+                else:
+                    marj = mesafe / reference * 100.0
+                    isaret = "+" if grup == "üst" else "−"
+                    durumlar.append(f"{isaret}%{marj:.1f}".replace(".", ","))
+                baslik = (
+                    f"{ok} {tip} {tf_label} {yan_etiket} · {_price(bottom)}–{_price(top)}"
+                )
+                adaylar[grup].append((mesafe, baslik, " · ".join(durumlar)))
+
+    kisa_ad = {"içinde": "içinde", "üst": "ust", "alt": "alt"}
+    bölgeler: dict[str, list[str]] = {"içinde": [], "ust": [], "alt": []}
+    for grup, satirlar in adaylar.items():
+        hedef = kisa_ad[grup]
+        for mesafe, baslik, künye in sorted(satirlar, key=lambda x: x[0])[:2]:
+            bölgeler[hedef].append(baslik)
+            if künye:
+                bölgeler[hedef].append(f"   {künye}")
+    return bölgeler
+
+
+def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None) -> list[str]:
+    """Hacim/katılım: alarm TF'sinin yargısı veri olmasa da tek satır görünür.
+
+    Düzeltme: klasik yol `if findings:` dediği için export boşsa satır HİÇ
+    basılmıyordu — 4s/1d alarmlarında kırılımın kendi zaman diliminde hacim
+    desteği var mı, yok mu, yoksa veri mi hazır değil ayırt edilemiyordu.
+    """
+    lines: list[str] = []
+    for timeframe in TIMEFRAME_ORDER:
+        tf_label = TIMEFRAME_LABELS[timeframe]
+        result = _domain(results_by_timeframe, timeframe, "volume_participation")
+        export = _usable_export(result)
+        if export is None:
+            if timeframe == alarm_tf:
+                hata = _token(_field(result, "error")) if result is not None else ""
+                lines.append(
+                    f"▤ {tf_label} hacim: {'analiz yapılamadı' if hata else 'yargı yok (veri bekleniyor)'}"
+                )
+            continue
+        hata = ""
+        durum = _token(_field(export, "state"))
+        if durum in {"", "PARTICIPATION_PENDING", "PARTICIPATION_VOLUME_UNAVAILABLE",
+                     "PARTICIPATION_NEUTRAL"}:
+            durum = ""
+        parcalar: list[str] = []
+        etiket = _VOLUME_STATE_LABELS.get(durum, "") if durum else ""
+        if etiket:
+            parcalar.append(etiket)
+
+        rvol = _number(_field(export, "rvol"))
+        dv = _number(_field(export, "relative_traded_value"))
+        sayilar: list[str] = []
+        ayni_dv = (rvol is not None and rvol > 0 and dv is not None and dv > 0
+                   and abs(rvol - dv) <= 0.02)
+        if rvol is not None and rvol > 0:
+            ek = " ≈DV" if ayni_dv else ""
+            sayilar.append(f"RVOL {rvol:.2f}×{ek}".replace(".", ","))
+        if dv is not None and dv > 0 and not ayni_dv:
+            sayilar.append(f"DV {dv:.2f}×".replace(".", ","))
+        hacim_seviye = _VOLUME_LEVEL_LABELS.get(_token(_field(export, "volume_level")))
+        sermaye_seviye = _VOLUME_LEVEL_LABELS.get(_token(_field(export, "capital_level")))
+        if hacim_seviye and _token(_field(export, "volume_level")) != "NORMAL":
+            if sermaye_seviye and hacim_seviye == sermaye_seviye:
+                sayilar.append(f"hacim/işlem değeri {hacim_seviye}")
+            else:
+                sayilar.append(f"hacim {hacim_seviye}")
+        if sermaye_seviye and _token(_field(export, "capital_level")) != "NORMAL" \
+                and sermaye_seviye != hacim_seviye:
+            sayilar.append(f"işlem değeri {sermaye_seviye}")
+
+        ek_satir: list[str] = []
+        absorption_asama = _token(_field(export, "absorption_stage"))
+        absorption_yan = _token(_field(export, "absorption_side"))
+        if absorption_asama == "CONFIRMED" and absorption_yan in {"UPPER", "LOWER"}:
+            seviye = _price(_field(export, "absorption_reference_level"))
+            ek_satir.append(("üstte satış" if absorption_yan == "UPPER" else "altta alış")
+                            + " emilimi teyitli" + (f" {seviye}" if seviye else ""))
+        kirilim_asama = _token(_field(export, "break_stage"))
+        kirilim_yon = _direction(_field(export, "break_direction"))
+        kirilim_etiketleri = {
+            "SUPPORTED": "katılım desteği var",
+            "PROTECTED": "katılım desteği korunuyor",
+            "UNSUPPORTED": "katılım desteği yok",
+            "RECLAIMED": "kırılım seviyesi geri alındı",
+        }
+        if kirilim_asama in kirilim_etiketleri:
+            metin = kirilim_etiketleri[kirilim_asama]
+            if kirilim_yon:
+                metin = f"{kirilim_yon} yönde {metin}"
+            seviye = _price(_field(export, "break_level"))
+            ek_satir.append(metin + (f" ({seviye})" if seviye else ""))
+
+        # 1. satır = yalnızca yargı, 2. satır = sayılar, 3. satır = emilim/kırılım
+        # katkısı. Uzun tek satır yerine üç kısa satır: telefonda sarmıyor ve her
+        # satırda tek bilgi var (kartın genel kuralı).
+        if parcalar or sayilar or ek_satir:
+            lines.append("▤ " + " ".join([tf_label] + parcalar))
+            if sayilar:
+                lines.append("   " + " · ".join(sayilar))
+            if ek_satir:
+                lines.append("   " + " · ".join(ek_satir))
+        elif timeframe == alarm_tf:
+            # Alarmın kendi TF'sinde veri yoksa bu da görünür (sessiz "veri yok"
+            # ile "yargı yok" ayrımı kullanıcının kararı için gerekli).
+            lines.append(f"▤ {tf_label}: hacim verisi bekleniyor")
+    return lines
+
+
+def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
+                     stil: str = "klasik", alarm_tf: str | None = None) -> dict:
+    """Domain bağlamını bölüm bölüm döndürür (kart biçimleyicisi için).
+
+    `stil="kart"`: `yapi`/`ust`/`alt`/`hacim` anahtarlarında hazır satırlar.
+    `stil="klasik"`: eski başlıksız satırlar (`ob`/`fvg` ayrı), mesaj metni
+    `format_domain_context` ile aynı kalır.
+    """
+    reference = _number(reference_price)
+    satirlar = _market_structure_rows(results_by_timeframe)
+    hata = ""
+    if _market_structure_failed(results_by_timeframe):
+        hata = "⚠️ Piyasa yapısı analizi tamamlanamadı"
+    # Bölüm anahtarları ASCII: kart biçimleyicisi bunları sözlük anahtarı olarak
+    # okur (mesaj metnindeki Türkçe karakterlerden bağımsız kalsın).
+    bolumler: dict[str, list[str]] = {"yapi": [], "ob": [], "fvg": [], "hacim": [],
+                                      "içinde": [], "ust": [], "alt": []}
+    if stil == "kart":
+        bolumler["yapi"] = _kart_market_structure(satirlar, str(alarm_tf or "").lower())
+        bolumler.update(_kart_zones(results_by_timeframe, reference))
+        bolumler["hacim"] = _kart_volume(results_by_timeframe, str(alarm_tf or "").lower())
+        if hata:
+            bolumler["yapi"].append(hata)
+        return {k: v for k, v in bolumler.items() if v}
+    bolumler["yapi"] = _format_market_structure(satirlar)
+    if hata:
+        bolumler["yapi"].append(hata)
+    bolumler["ob"] = _format_order_blocks(results_by_timeframe, reference)
+    bolumler["fvg"] = _format_fvgs(results_by_timeframe, reference)
+    bolumler["hacim"] = _format_volume(results_by_timeframe)
+    return {k: v for k, v in bolumler.items() if v}
+
+
+# --- karşı delil (tek satır) -----------------------------------------------
+# Kart, "lehine ne var" değil "aleyhine ne var" bilgisini de taşır: kullanıcı bir
+# teyitli kırılımda hangi kanalların ters olduğunu tek satırda görsün. Yalnız
+# mevcut export'lardan üretilir; veri yoksa madde de yoktur (uydurma yok).
+def karsi_deliller(results_by_timeframe: Any, alarm_tf: Any = None, break_dir: Any = None,
+                   mtf_destek: Any = None, retest_seen: Any = None) -> list[str]:
+    try:
+        yon = int(break_dir or 0)
+    except (TypeError, ValueError):
+        yon = 0
+    tf = str(alarm_tf or "").lower()
+    bulgular: list[str] = []
+    rows = {row["timeframe"]: row for row in _market_structure_rows(results_by_timeframe)}
+    satir = rows.get(tf)
+    if satir is not None and yon:
+        ters = {"STATE_BEARISH": "↓", "STATE_TRANSITION_DOWN": "↓geçiş",
+                "STATE_BULLISH": "↑", "STATE_TRANSITION_UP": "↑geçiş"}.get(satir["ic"], "")
+        istenen = "↑" if yon > 0 else "↓"
+        if ters and ters[0] != istenen and ters != "–":
+            bulgular.append(f"iç yapı {ters}")
+        dis = {"STATE_BEARISH": "↓", "STATE_BULLISH": "↑"}.get(satir["dis"], "")
+        if dis and dis != istenen:
+            bulgular.append(f"dış yapı {dis}")
+    export = _usable_export(_domain(results_by_timeframe, tf, "volume_participation")) if tf else None
+    if export is None:
+        # Alarm TF'sinde veri yoksa kartta "▤ {tf}: hacim verisi bekleniyor" zaten
+        # yazılıyor; burada tekrarlamak yerine boş bırak.
+        pass
+    else:
+        asama = _token(_field(export, "break_stage"))
+        if asama == "UNSUPPORTED":
+            bulgular.append("hacim desteği yok")
+        elif asama == "RECLAIMED":
+            bulgular.append("kırılım seviyesi geri alındı")
+        elif not _VOLUME_STATE_LABELS.get(_token(_field(export, "state")), ""):
+            bulgular.append("hacim teyitsiz")
+    # `mtf_destek` ve `retest_seen` bilinçli olarak karşı delil sayılmaz: kartta
+    # "▪ MTF: … onayı yok" ve "▪ … retest yok" satırları zaten basılıyor. Aynı
+    # bilgiyi iki kez yazmak 25 Eyl biçiminin asıl şişkinliğiydi (yer değil, dikkat
+    # kaybı). Parametreler imza uyumu için duruyor.
+    return bulgular[:3]
+
+
+def format_domain_context(results_by_timeframe: Any, reference_price: Any = None, *,
+                          stil: str = "klasik", alarm_tf: str | None = None) -> str:
     """Render concise, read-only context from fresh domain-engine exports.
 
     Candidate scores are selection-only. Missing/skipped results are omitted;
     a real Market Structure execution error is explicitly identified instead of
     being made to look like a successful analysis with no findings.
-    """
-    reference = _number(reference_price)
-    market_lines = _format_market_structure(results_by_timeframe)
-    if _market_structure_failed(results_by_timeframe):
-        failure = "⚠️ Piyasa yapısı analizi tamamlanamadı"
-        if market_lines:
-            market_lines.append(failure)
-        else:
-            market_lines = [failure]
 
-    sections = []
-    for heading, lines in (
-        ("🏗 Piyasa Yapısı", market_lines),
-        ("🧱 Order Block (OB)", _format_order_blocks(results_by_timeframe, reference)),
-        ("🟪 Fair Value Gap (FVG)", _format_fvgs(results_by_timeframe, reference)),
-        ("📊 Hacim / Katılım", _format_volume(results_by_timeframe)),
+    `stil="kart"` kompakt telefon kartını (alarm TF odaklı) üretir; varsayılan
+    davranış (klasik) önceki biçimlerle birebir aynıdır.
+    """
+    bolumler = domain_bolumleri(results_by_timeframe, reference_price,
+                                stil=stil, alarm_tf=alarm_tf)
+    if stil == "kart":
+        parcalar = []
+        if bolumler.get("yapi"):
+            parcalar.append("\n".join(bolumler["yapi"]))
+        bolge = [*bolumler.get("ust", []), *bolumler.get("alt", [])]
+        if bolge:
+            parcalar.append("\n".join(bolge))
+        if bolumler.get("hacim"):
+            parcalar.append("\n".join(bolumler["hacim"]))
+        return "\n\n".join(parcalar)
+    bölümler = []
+    for baslik, anahtar in (
+        ("🏗 Piyasa Yapısı", "yapi"),
+        ("🧱 Order Block (OB)", "ob"),
+        ("🟪 Fair Value Gap (FVG)", "fvg"),
+        ("📊 Hacim / Katılım", "hacim"),
     ):
-        if lines:
-            sections.append(heading + "\n" + "\n".join(lines))
-    return "\n\n".join(sections)
+        satirlar = bolumler.get(anahtar) or []
+        if satirlar:
+            bölümler.append(baslik + "\n" + "\n".join(satirlar))
+    return "\n\n".join(bölümler)

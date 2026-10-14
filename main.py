@@ -4,6 +4,7 @@
 # Türkçe yorumlar: Neden uyuyor, neden tarıyor?
 
 import os
+import re
 import sys
 import time
 import json
@@ -51,7 +52,10 @@ from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
 from notifier import TelegramNotifier
-from notification_context import format_domain_context
+import config
+from notification_context import (
+    format_domain_context, domain_bolumleri, karsi_deliller,
+)
 from karne import (KarneDefteri, atr_hesapla, hafta_damgasi, karne_gunu_mu, karne_uret)
 from supabase_store import SupabaseStore
 from health_server import start_render_health_server
@@ -68,6 +72,7 @@ from reporting.format import (
     sayi as _sayi, gecen_sure as _gecen_sure,
     filtrele_formasyonlar as _filtrele_formasyonlar, break_ok as _break_ok,
     veri_durumu_satiri as _veri_durumu_satiri,
+    kisa_durum as _kisa_durum, tf_kisa as _tf_kisa,
     panel_kalite as _panel_kalite, panel_sembol as _panel_sembol,
     panel_hucre as _panel_hucre, panel_aday_puani as _panel_aday_puani,
     panel_kritik_anahtar as _panel_kritik_anahtar,
@@ -618,6 +623,9 @@ def reset_daily_if_needed():
         daily_stats['alerts_engel_cooldown'] = 0
         daily_stats['alerts_engel_kap'] = 0
         daily_stats['alerts_engel_tekrar'] = 0
+        # Görsel sayaçları (§4): metin kotasından ayrı izlenir, gün sonunda sıfırlanır.
+        daily_stats['grafik_kare'] = 0
+        daily_stats['grafik_hata'] = 0
         daily_stats['errors'] = 0
         daily_stats['fetch_ok'] = 0
         daily_stats['fetch_failures'] = 0
@@ -1011,6 +1019,10 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları (DM)
    outcome'ların tip/TF/kalite/bileşen kırılımı; /backtest 90 · /bt · "detay"
    bileşen + geometri + vaka bloklarını ekler. Hiçbir şey yazılmaz/değiştirilmez.
 /tara [HISSE] — şimdi analiz et (seans dışı da çalışır)
+/grafik [HISSE] [1s|2s|4s|1g] — mum karesini gönder (diğer ad: /g)
+   sembol yazılmazsa son işlenen hisse denenir; zaman dilimi yazılmazsa 4 TF gönderilir.
+   Veri yalnız önbellekten okunur — canlı çekme yapılmaz; kare alarmın devamıdır,
+   ayrı mesaj/olay sayılmaz (TELEGRAM_GRAFIK kapalıyken de bu komut çalışır).
 /yardim — bu liste (diğer adlar: /help · /start)
 
 Notlar:
@@ -1039,7 +1051,7 @@ def _komut_durum(_arguman: str) -> str:
     else:
         try:
             kalan = time_until_next_open(now)
-            piyasa = f"KAPALI · açılışa {kalan / 3600:.1f} saat"
+            piyasa = f"KAPALI · açılışa {_sayi(kalan / 3600, 1)} saat"
         except Exception:
             piyasa = "KAPALI"
     formations = _live_state.formations()
@@ -1122,6 +1134,7 @@ def _komut_durum(_arguman: str) -> str:
     satirlar.append(huni)
     gosterim = None
     gosterim_public = None
+    gosterim_grafik = None
     gonderim = getattr(_notifier_ref, "gonderim_durumu", None)
     if callable(gonderim):
         try:
@@ -1137,12 +1150,24 @@ def _komut_durum(_arguman: str) -> str:
                                    f"{gd.get('public_hatasi', 0)} hata · "
                                    f"kuyruk {gd.get('public_kuyruk', 0)} · "
                                    f"engel {gd.get('public_engel', 0)}")
+            # Görsel sayaçları (§4): metin kotasından AYRIDIR — karışmasın diye
+            # tek satırda, yalnız kill-switch açıksa gösterilir.
+            if gd.get("grafik_gonderilen") or gd.get("grafik_kuyruk") or gd.get("grafik_atlanan_hata"):
+                gosterim_grafik = (f"🖼 Grafik karesi: {gd.get('grafik_gonderilen', 0)} gönderildi · "
+                                   f"{gd.get('grafik_atlanan_hata', 0)} hata · "
+                                   f"{gd.get('grafik_atlanan_kota', 0)} adet sınırında kesildi · "
+                                   f"kuyruk {gd.get('grafik_kuyruk', 0)} · "
+                                   f"ort {gd.get('grafik_ort_ms', 0)} ms"
+                                   + (f" · {gd['grafik_atlanan_baglam']} bağlam güncellemesi"
+                                      if gd.get("grafik_atlanan_baglam") else ""))
         except Exception as exc:  # noqa: BLE001 - komut asla çökmesin
             logger.debug(f"Gönderim durumu okunamadı: {exc}")
     if gosterim:
         satirlar.append(gosterim)
     if gosterim_public:
         satirlar.append(gosterim_public)
+    if gosterim_grafik:
+        satirlar.append(gosterim_grafik)
     # Notifier pasifse (token/chat_id yok) komut bunu açıkça söyler: aksi halde
     # kullanıcı "hiç mesaj gelmiyor ama bot çalışıyor" durumunu ayırt edemez.
     if _cift_ornek_durumu.get("uyari"):
@@ -1155,7 +1180,7 @@ def _komut_durum(_arguman: str) -> str:
     kapsam_notu = _kismi_kapsam_notu()
     if kapsam_notu:
         satirlar.append(kapsam_notu)
-    satirlar += ["", "Komutlar: /panel · /tara [HISSE] · /formasyonlar · /durum · /yardim"]
+    satirlar += ["", "Komutlar: /panel · /tara [HISSE] · /formasyonlar · /grafik [HISSE] · /durum · /yardim"]
     return "\n".join(satirlar)
 
 
@@ -1292,10 +1317,12 @@ def _komut_canli(arguman: str) -> str:
     for f in sirali:
         q = f.get("quality") or 0
         ok = _break_ok(f.get("break_dir"))
-        durum = f.get("state") or "—"
-        # kısa durum: ilk kelimeyi koru, TR map varsa kısa kullan
+        # Yorum "TR map varsa kısa kullan" diyordu ama ham enum basılıyordu:
+        # /canli çıktısında SIKISMA_GUCLENIYOR / KIRILIM_TEYITLI okunamıyordu.
+        durum = _kisa_durum(f.get("state"))
+        tf = _tf_kisa(f.get("timeframe"))
         satirlar.append(
-            f"{f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} q{float(q):.0f} {ok} {durum}"
+            f"{f.get('stock')} {tf} {f.get('pattern_name')} q{float(q):.0f} {ok} {durum}"
         )
     if len(formations) > 20:
         satirlar.append(f"... ve {len(formations)-20} daha (/formasyonlar ile hepsi)")
@@ -1692,6 +1719,75 @@ def _komut_panel(arguman: str) -> str:
     return _manuel_tarama_istegi("panel", arguman)
 
 
+# /grafik argümanı: sembol + isteğe bağlı zaman dilimi. desen bilinçli dar —
+# bilerek bozuk girdi (boşluk, path, uzun metin) Telegram'a hiç gitmemeli.
+_GRAFIK_SEMBOL = re.compile(r"^([A-Z][A-Z0-9]{1,9})(?:\.IS)?$")
+_GRAFIK_TF = {"1s": "1h", "1h": "1h", "2s": "2h", "2h": "2h",
+              "4s": "4h", "4h": "4h", "1g": "1d", "1d": "1d"}
+
+
+def _komut_grafik(arguman: str) -> str:
+    """`/grafik [HISSE] [1s|2s|4s|1g]` — kare(ler) üretir ve gönderir (G4 / §4).
+
+    Neden ayrı komut: alarm kareleri yalnız `TELEGRAM_GRAFIK=alarm` iken gidiyor;
+    kullanıcı istediği zaman bakabilsin diye kapıdan bağımsız bir yüzey lazım.
+    Veri YALNIZ önbellkten okunur (`grafik_uret.kare_uret`); canlı çekme yok —
+    komutun tarama temposuna/ kota'ya dokunmaması için (§4).
+    """
+    parcalar = (arguman or "").split()
+    if not parcalar:
+        return ("Kullanım: /grafik THYAO · /grafik THYAO 4s\n"
+                "Zaman dilimi yazılmazsa 1s/2s/4s/1g sırayla denenir.")
+    hisse = parcalar[0].strip().upper()
+    eslesme = _GRAFIK_SEMBOL.match(hisse)
+    if not eslesme:
+        return "Geçersiz sembol yazımı. Örnek: /grafik THYAO 4s"
+    hisse = eslesme.group(1)
+    if len(parcalar) > 1:
+        tf = _GRAFIK_TF.get(parcalar[1].strip().lower())
+        if tf is None:
+            return f"Zaman dilimi tanınmadı: {parcalar[1]} (1s · 2s · 4s · 1g)"
+        tfler = (tf,)
+    else:
+        tfler = ("1h", "2h", "4h", "1d")
+
+    notifier = _notifier_ref
+    if notifier is None or not getattr(notifier, "enabled", False):
+        return "Telegram gönderimi kapalı: kare üretilemiyor."
+    try:
+        import config as _cfg
+        import grafik_uret
+    except Exception as hata:  # matplotlib kurulu değilse net mesaj (G4 §7)
+        return f"Grafik katmanı hazır değil: {type(hata).__name__}"
+
+    ozetler = []
+    for tf in tfler:
+        try:
+            sonuc = grafik_uret.kare_uret(hisse, tf, zone=True)
+        except SystemExit as hata:
+            return f"{hisse} {tf}: {hata}"
+        except Exception as hata:
+            logger.warning("/grafik üretimi başarısız (%s %s): %s", hisse, tf, hata)
+            return f"{hisse} {tf}: kare üretilemedi ({type(hata).__name__})"
+        yol, meta = sonuc.get("yol"), sonuc.get("meta") or {}
+        if not yol:
+            uyari = " · ".join(meta.get("uyarilar") or []) or sonuc.get("hata") or "çizilmedi"
+            return f"{hisse} {_tf_kisa(tf)}: {uyari}"
+        baslik = (f"{hisse} · {_tf_kisa(tf)} · {meta.get('mum_sayisi', '?')} mum")
+        ok, _ = notifier.grafik_dosya_gonder(yol, caption=baslik)
+        if not ok:
+            ozetler.append(f"{_tf_kisa(tf)} ✗ gönderilemedi")
+            continue
+        parca = [f"{_tf_kisa(tf)} ✓ {meta.get('mum_sayisi', '?')} mum"]
+        if meta.get("png_kb"):
+            parca.append(f"{meta['png_kb']} KB")
+        eksik = " · ".join(str(x) for x in (meta.get("eksik_katmanlar") or []))
+        if eksik:
+            parca.append(f"eksik: {eksik}")
+        ozetler.append(" · ".join(parca))
+    return f"{hisse} · " + " | ".join(ozetler)
+
+
 def _komut_tara(arguman: str) -> str:
     """İstenen hisseyi (yoksa evreni) seans saatinden bağımsız analiz eder."""
     return _manuel_tarama_istegi("tara", arguman)
@@ -1762,6 +1858,8 @@ TELEGRAM_KOMUTLARI = {
     "bt": _komut_backtest,
     "panel": _komut_panel,
     "p": _komut_panel,
+    "grafik": _komut_grafik,
+    "g": _komut_grafik,
     "genel": _komut_panel,
     "tablo": _komut_panel,
 }
@@ -2450,6 +2548,16 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             age_bars = snap.bar_index - active.start_bar if hasattr(active, 'start_bar') and snap.bar_index >= 0 else None
                         except Exception:
                             age_bars = None
+                        # Bandın izlenme başlangıcı: "96 bar" tek başına kullanıcıya
+                        # gün söylemez. Bar indeksi DataFrame indeksinden okunur; okunamazsa
+                        # alan hiç yazılmaz (varsayım/gün hesabı uydurulmaz).
+                        band_baslangic = None
+                        try:
+                            _bas_indeks = int(getattr(active, 'start_bar', -1))
+                            if _bas_indeks >= 0 and _bas_indeks < len(df_tf.index):
+                                band_baslangic = df_tf.index[_bas_indeks]
+                        except Exception:
+                            band_baslangic = None
                         # Çoklu zaman teyidi: 1h kırılımında 4h destekliyor mu?
                         mtf_destek = False
                         try:
@@ -2494,6 +2602,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'upper_touches': upper_touches,
                             'lower_touches': lower_touches,
                             'age_bars': age_bars,
+                            'band_baslangic': band_baslangic,
                             'mtf_destek': mtf_destek,
                             # Acil mesaj kısa kalsın; izleme adayları 18:45 digest'inde
                             # gösterilir, bu nedenle burada bağlam eklenmez/tüketilmez.
@@ -2506,7 +2615,36 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         except Exception as public_hata:  # noqa: BLE001
                             logger.debug("Public kuyruğa eklenemedi (%s %s): %s",
                                          stock, tf_name, public_hata)
+                        def _grafik_koprusu(payload, outputs):
+                            # G4 KÖPRÜSÜ (§4): kareler kartla BİREBİR aynı veriden.
+                            # Motor burada YENİDEN çağrılmaz — `outputs` bu turda
+                            # `_domain_results_for_notification`da üretildi; kare
+                            # yalnız kopyalar (§14.2). `grafik_verisi` bellek içidir
+                            # ve acil kuyruk kaydından arındırılır (notifier).
+                            try:
+                                import grafik
+                                if not grafik.grafik_aktif_mi():
+                                    return
+                                taze = _completed_domain_frames(all_tfs, simdiki_zaman)
+                                alarm_bar = getattr(snap, 'bar_index', -1)
+                                veri = grafik.kare_listesi(
+                                    active, tf_name,
+                                    taze.get(tf_name) if taze.get(tf_name) is not None else df_tf,
+                                    sonuclar=outputs,
+                                    ek_cerceveler={k: v for k, v in taze.items() if k != tf_name},
+                                    alarm_turu=grafik.alarm_turu_bul(notification_state),
+                                    alarm_bar=(int(alarm_bar) if alarm_bar is not None
+                                               and int(alarm_bar) >= 0 else None),
+                                    sembol=stock, zaman_damgasi=df_tf.index[-1],
+                                    simdi=simdiki_zaman)
+                                if veri.get("goruntular"):
+                                    payload['grafik_verisi'] = veri
+                            except Exception as grafik_hata:  # noqa: BLE001 - görsel alarmı düşürmesin
+                                logger.debug("grafik köprüsü atlandı (%s %s): %s",
+                                             stock, tf_name, type(grafik_hata).__name__)
+
                         def _attach_domain_context(payload):
+                            outputs = None     # köprü hata durumunda da None görsün
                             try:
                                 outputs = _domain_results_for_notification(
                                     stock, all_tfs, simdiki_zaman, domain_results_by_stock
@@ -2515,12 +2653,40 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                     outputs,
                                     reference_price=candle_close_price,
                                 )
+                                # Kart biçimleyicisi bölümleri AYRI ister: kendi
+                                # bölümünü kendi başlığıyla basabilsin ve imza
+                                # (değişmedi kontrolü) yalnız bağlamı görsün.
+                                # AYRI try/except: kart hazırlığı patlarsa klasik
+                                # bağlam metni de kaybolsun istemeyiz (25 Eyl testinde
+                                # tek bloktaki hata domain_context'i boşaltıyordu).
+                                if getattr(config, "TELEGRAM_ALERT_STYLE", "kart") != "klasik":
+                                    try:
+                                        payload['domain_bolumleri'] = domain_bolumleri(
+                                            outputs,
+                                            reference_price=candle_close_price,
+                                            stil="kart",
+                                            alarm_tf=tf_name,
+                                        )
+                                        payload['domain_karsi'] = karsi_deliller(
+                                            outputs,
+                                            alarm_tf=tf_name,
+                                            break_dir=break_dir,
+                                            mtf_destek=payload.get('mtf_destek'),
+                                            retest_seen=payload.get('retest_seen'),
+                                        )
+                                    except Exception as kart_hata:  # noqa: BLE001
+                                        logger.warning(
+                                            "Kart bağlamı hazırlanamadı (%s %s): %s",
+                                            stock, tf_name, kart_hata,
+                                        )
                             except Exception as exc:  # noqa: BLE001 - bağlam alarmı düşürmesin
                                 payload['domain_context'] = ""
                                 logger.warning(
                                     "Bildirim domain bağlamı atlandı (%s %s): %s",
                                     stock, tf_name, exc,
                                 )
+                            _grafik_koprusu(payload, outputs)
+
 
                         daily_stats['alerts_attempted'] += 1
                         send_with_prepare = getattr(notifier, "send_with_prepare", None)
@@ -2534,6 +2700,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             alert_sent = notifier.send(alert_data)
                         if alert_sent:
                             daily_stats['alerts_sent'] += 1
+                            _gun_sayacini_gonderimle_hizala(
+                                stock, tf_name, notification_state)
                             _live_state.mark_alert_sent(stock, tf_name)
                             logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {notification_state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
                         else:
@@ -2694,10 +2862,39 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     # gider. DM'den bağımsızdır; manuel taramalarda (send_alerts=False) kuyruk
     # zaten boştur.
     _public_turu_kapat(notifier)
+    _grafikleri_tur_sonunda(notifier)
     # Tarama bitti: heartbeat kesin yazılsın (force), böylece per-hisse
     # throttle'a takılan son durum dışarıdan anında görünür.
     write_heartbeat(notifier=notifier, force=True)
     return dict(last_run_stats)
+
+
+def _grafikleri_tur_sonunda(notifier) -> None:
+    """Biriken kareleri gönderir (§4: alarm METNİ çoktan gitmiştir).
+
+    Neden tur sonu: kare başına ~0,5 s üretim + 4 kare gönderimi; bunu `_gonder`
+    içinde yapmak sonraki hisselerin taramasını ve alarm metnini geciktirirdi
+    (§7 „metni bekletmemek için kuyruk şart"). Hata hiçbir şeyi durdurmaz.
+    """
+    gonder = getattr(notifier, "grafikleri_gonder", None)
+    if not callable(gonder):        # test/özel notifier'lar: sessizce yok say
+        return
+    try:
+        ozet = gonder() or {}
+    except Exception as hata:  # noqa: BLE001 - görsel taramayı düşürmesin
+        logger.warning("Grafik kareleri gönderilemedi: %s: %s", type(hata).__name__, hata)
+        return
+    if int(ozet.get("kare") or 0) or int(ozet.get("atlanan") or 0):
+        logger.info("📈 Grafik kareleri: %d/%d gönderildi · hata %d · atlanan %d",
+                    int(ozet.get("gonderilen") or 0), int(ozet.get("kare") or 0),
+                    int(ozet.get("hata") or 0), int(ozet.get("atlanan") or 0))
+        try:
+            daily_stats['grafik_kare'] = int(daily_stats.get('grafik_kare') or 0) + int(
+                ozet.get("gonderilen") or 0)
+            daily_stats['grafik_hata'] = int(daily_stats.get('grafik_hata') or 0) + int(
+                ozet.get("hata") or 0)
+        except Exception:  # pragma: no cover - sayaç hiç akışı bozmasın
+            pass
 
 
 def _parse_summary_hours() -> List[dt_time]:
@@ -2926,6 +3123,7 @@ def _karneyle_gonder(notifier, ana_mesaj: str, karne_ek: str = ""):
         parcalar = [(ana_mesaj, "ana")]
     ana_ok, karne_ok, hata = False, False, ""
     for parca, tur in parcalar:
+        # Satır bütçesi `notifier.send_text` içinde uygulanır (tek nokta).
         ok, parca_hata = notifier.send_text(parca)
         if ok:
             if tur in ("ana", "ikisi"):
@@ -2948,6 +3146,35 @@ def _is_full_universe_scan(stocks) -> bool:
         return bool(expected) and len(requested) == len(expected) and set(requested) == expected
     except Exception:  # noqa: BLE001 - guard helper should fail closed
         return False
+
+
+def _gun_sayacini_gonderimle_hizala(stock, timeframe, state):
+    """Gönderilen alarmın state'ini gün sayacına yansıt (yalnız eksikse).
+
+    Neden: sayaçlar yalnız o günkü lifecycle OLAY listesinden doldurulur
+    (`_record_daily_lifecycle_events`). Önceki güne ait bir teyidin retesti
+    bugün gönderildiğinde (25 Eyl: HALKB 4s RETEST BAŞARILI) olay listesinde
+    karşılığı yoktur ve özet "0 başarılı retest" yazıp aynı gün alarm göndermiş
+    olurdu. Burada yalnız "bugün için hiç sayılmamışsa" tek artış yapılır;
+    aynı (hisse, TF, state) için ikinci gönderim sayacı şişirmez.
+    """
+    anahtar = f"GONDERIM|{stock}|{timeframe}|{state}"
+    if anahtar in _daily_lifecycle_event_keys:
+        return
+    counter = _LIFECYCLE_EVENT_COUNTERS.get(str(state or "").strip().upper())
+    if not counter:
+        return
+    # Olay yolunun yazdığı anahtar: STOCK|tf|kimlik|state|tür|zaman
+    for kayit in _daily_lifecycle_event_keys:
+        parcalar = str(kayit).split("|")
+        if len(parcalar) < 4 or parcalar[0] == "GONDERIM":
+            continue
+        if (parcalar[0] == str(stock).upper() and parcalar[1] == str(timeframe).lower()
+                and parcalar[3] == str(state or "").strip().upper()):
+            return
+    _daily_lifecycle_event_keys.add(anahtar)
+    daily_stats[counter] = int(daily_stats.get(counter) or 0) + 1
+    _gunluk_sayac_kaydet()
 
 
 def _daily_summary_payload(now=None) -> dict:
@@ -2973,6 +3200,17 @@ def _daily_summary_payload(now=None) -> dict:
     payload["son_basarili_tam_tarama"] = full_at
     payload["tam_tarama_guncel"] = _successful_full_scan_today(now)
     payload["son_tarama_durumu"] = status.get("son_tarama_durumu")
+    # "N bildirim" satırı yalnız tarama turunda gidenleri sayıyordu; cooldown/kap
+    # yüzünden kuyruğa giren ve sonra gönderilen alarm sayılmıyordu (25 Eyl:
+    # 6 mesaj gönderildi, özet "5 bildirim" dedi). Kuyruk sayacı da eklenir.
+    # payload kopya olduğu için /durum ve kalıcı sayaç davranışı değişmez.
+    try:
+        _nref = _notifier_ref
+        kuyruk_giden = int(getattr(_nref, "kuyruk_gonderildi", 0) or 0) if _nref else 0
+    except Exception:  # noqa: BLE001 - özet, sayaç yüzünden düşmez
+        kuyruk_giden = 0
+    if kuyruk_giden:
+        payload["alerts_sent"] = int(payload.get("alerts_sent") or 0) + kuyruk_giden
     return payload
 
 
@@ -3499,8 +3737,12 @@ def main_loop():
                     karne_metni_eklendi = ""
                     if sh == deferred_alert_digest_time:
                         karne_metni_eklendi = _haftalik_karne_ekle(now, deque_manager)
-                        if karne_metni_eklendi:
-                            dm_ozet += "\n\n" + karne_metni_eklendi
+                        # KARNE buraya DİZİLMEZ: _karneyle_gonder() karneyi ya ana
+                        # mesajın sonuna ekler ya da sığmıyorsa ayrı mesaj yapar.
+                        # Eskiden hem buraya eklenip hem parametre olarak geçtiği
+                        # için blok İKİ KEZ gidiyordu (25 Eyl: 798 kr × 2, özetin
+                        # %58'i kopya metindi).
+                        
 
                     if dm_hedefi:
                         if notifier.enabled:

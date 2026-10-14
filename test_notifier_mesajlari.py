@@ -1,5 +1,11 @@
 from datetime import datetime
+
+import notifier as notifier_mod
+from config import TELEGRAM_ALERT_MAX_KARAKTER, TELEGRAM_SATIR_PX
 from notifier import TelegramNotifier
+from telegram_measure import genislik
+
+_LIFECYCLE = ("KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI")
 
 
 def _base_data(**override):
@@ -54,14 +60,13 @@ def test_tamamlandi_basarısiz_ve_deneme_mesaji_bastirilir():
 
 
 def test_kirilim_teyitli_yon():
+    # Kart: yön ve olay İLK satırda — Telegram bildirimi yalnız ilk satırı gösterir.
     notifier = TelegramNotifier()
-    data_yukari = _base_data(state='KIRILIM_TEYITLI', break_dir=1)
-    msg_yukari = notifier.format_message(data_yukari)
-    assert "yukarı kırılım" in msg_yukari.lower()
+    msg_yukari = notifier.format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=1))
+    assert msg_yukari.splitlines()[0] == "▲ THYAO 1s · YUKARI TEYİTLİ"
 
-    data_asagi = _base_data(state='KIRILIM_TEYITLI', break_dir=-1)
-    msg_asagi = notifier.format_message(data_asagi)
-    assert "aşağı kırılım" in msg_asagi.lower()
+    msg_asagi = notifier.format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=-1))
+    assert msg_asagi.splitlines()[0] == "▼ THYAO 1s · AŞAĞI TEYİTLİ"
 
 
 def test_sikisma_mesaji():
@@ -74,11 +79,12 @@ def test_sikisma_mesaji():
 
 def test_retest_basarili_mesaji():
     notifier = TelegramNotifier()
-    data = _base_data(state='RETEST_BASARILI', break_dir=1)
-    msg = notifier.format_message(data)
+    msg = notifier.format_message(_base_data(state='RETEST_BASARILI', break_dir=1))
     assert "RETEST BAŞARILI" in msg
-    assert "kapanışta korundu" in msg
-    assert "Kırılım seviyesi: 302,00 TL" in msg
+    # "seviye korundu" ilk satırda zaten söylendiği için ek not basılmaz
+    # (25 Eyl biçiminde aynı bilgi iki satırda tekrarlanıyordu).
+    assert "seviye korundu" not in msg
+    assert "kırılan 302,00" in msg
 
 
 def test_aday_oluyor_mesaji():
@@ -128,11 +134,13 @@ def test_sonraki_teyitli_gecersizlesme_ayri_bildirim_mesaji():
         upper_touches=3,
         lower_touches=2,
     ))
-    assert "KIRILIM GEÇERSİZLEŞTİ" in msg
-    assert "önceki teyitli yukarı kırılım" in msg
-    assert "Son kapanmış mum kapanışı: 299,50 TL" in msg
-    assert "Kırılım seviyesi: 302,00 TL" in msg
-    assert "Temas: üst 3 / alt 2" in msg
+    assert "GEÇERSİZLEŞTİ" in msg
+    assert "bandına dönüş" in msg
+    # Marj kartın kendi satırında: bugünkü uzun biçimde "kapanış seviyenin üstünde
+    # kaldı" bilgisi YOKTU, okuyucu 2 kuruşluk geri dönüşü %5'lik aşmayla karıştırıyordu.
+    assert "kapanış 299,50" in msg and "kaldı" in msg
+    assert "kırılan 302,00" in msg
+    assert "temas üst 3 / alt 2" in msg
     assert "başarısız kırılım" not in msg.lower()
 
 
@@ -201,12 +209,17 @@ def test_gun_sonu_ozeti_yon_ve_daralma_okunabilir():
     ozet = n.format_daily_summary(aktif, {"stocks_scanned": 96, "alerts_sent": 2})
     # Ham yön değeri ve çift tire görünmemeli
     assert "- -1 yön" not in ozet and "- 1 yön" not in ozet
-    assert "yukarı" in ozet and "aşağı" in ozet
-    # Zaman dilimi üç bölümde de görünür (tutarlılık)
-    assert "ISMEN Alçalan Üçgen 2h" in ozet
-    assert "AKSEN Alçalan Kama 1d" in ozet
+    # Yön liste satırlarında okla veriliyor (↑/↓): "yukarı yön" kelimesi satırı
+    # 350 px'a çıkarıp her maddeyi ikiye bölüyordu. Ham değer yine basılmamalı.
+    assert "↑" in ozet and "↓" in ozet
+    # Zaman dilimi üç bölümde de görünür (tutarlılık) ve desen adı korunur
+    assert "↓ ISMEN 2h Alçalan Üçgen" in ozet
+    assert "↑ AKSEN 1d Alçalan Kama" in ozet
     # Sıkışanlar: hisse önce, daralma sonra
-    assert "ISCTR Alçalan Üçgen 4h · %81 daralma" in ozet
+    # Uzun madde satırı " · " üzerinden ikiye iner (telefonda sarmaması için).
+    # Madde tek satıra sığıyor: "↔ ISCTR 4h Alçalan Üçgen q88 · %81" yerine kısa
+    # biçim ("ISCTR 4h Alçalan Üçgen q88 %81") — veri aynı, satır ikiye bölünmüyor.
+    assert "ISCTR 4h Alçalan Üçgen" in ozet and "%81" in ozet
 
 
 # --- Mesaj kalitesi: ton, sabit metin, telefon uyumu -------------------------
@@ -248,33 +261,127 @@ def test_mesajlar_deterministik_ayni_olay_hep_aynı_metin():
             assert _mesaj(state) == birinci, f"{state}: metin kararsız üretiliyor"
 
 
+# Kart biçiminde bağlam bloğunun gerçek boyutu test edilsin diye 25 Eyl akışından
+# ölçülmüş bir örnek (3 bölge + 4 TF durum satırı + 3 hacim satırı).
+_BAGLAM = {
+    "yapi": [
+        "◈ 4s yapı: dış ↓geçiş · iç ↓ · PH 437,50 · WL 410,75",
+        "   dış · CHoCH ↓ 411,75 · geçerli",
+        "   iç · BOS ↓ 429,00 · geçerli",
+        "▸ 1s ↓/↑ · PH 437,50",
+        "▸ 2s ↓geçiş/↑ · WL 410,75",
+        "▸ 1g ↑/↑ · PL 399,25",
+    ],
+    "ust": [
+        "▲ OB 1s ayı · 432,25–435,75",
+        "   %0 dolu · +%0,9",
+        "▲ FVG 4s ayı · 429,00–433,50",
+        "   ilk temas · %22 dolu · +%0,2",
+    ],
+    "alt": [
+        "▼ OB 2s boğa · 423,00–425,50",
+        "   %0 dolu · −%0,6",
+    ],
+    "hacim": [
+        "▤ 4s hacim: yargı yok (veri bekleniyor)",
+        "▤ 2s katılım düşük · RVOL 0,72× ≈DV",
+        "▤ 1s alt bölge emilimi geçersizleşti · RVOL 0,53×",
+    ],
+}
+
+
+def _olay_verisi(state, **override):
+    data = _base_data(state=state, **override)
+    data.setdefault("candle_close_price", 303.25)
+    data.setdefault("upper_touches", 2)
+    data.setdefault("lower_touches", 2)
+    data.setdefault("age_bars", 96)
+    data.setdefault("mtf_destek", False)
+    data.setdefault("retest_seen", False)
+    data.setdefault("contraction", 0.79)
+    return data
+
+
 def test_mesajlar_telefona_sigar_boyutta():
+    # Kural yeniden ölçeklendi (kart batch'i): eski "≤400 kr ve satır ≤70 karakter"
+    # kuralı domain bağlamını HİÇ ölçmüyor, karakter saydığı için de sarmalayan
+    # satırları yakalamıyordu (25 Eyl: 1358-1559 kr, 120 sarmalayan satır).
+    # Piksel bütçesi push edilen üç state için zorunludur (ALERT_STATES); diğer
+    # state'ler yalnız klasik/digest yollarında kullanılır ve eski karakter
+    # kuralıyla izlenir — kart onlara dokunmaz.
     for state in _TUM_STATELER:
         for varyant in ({}, {"break_dir": -1}, {"retest_seen": False}, {"contraction": 0.93}):
             msg = _mesaj(state, **varyant)
-            assert len(msg) <= 400, f"{state}: {len(msg)} karakter (telefon için fazla uzun)"
+            sinir = TELEGRAM_ALERT_MAX_KARAKTER if state in _LIFECYCLE else 400
+            assert len(msg) <= sinir, f"{state}: {len(msg)} karakter (telefon için fazla uzun)"
             for satir in msg.splitlines():
-                # Tek satıra sığmayan satır telefonda sarar; hiçbir satır sarmalanmamalı.
-                assert len(satir) <= 70, f"{state}: {len(satir)} karakterlik satır sarar"
+                if state in _LIFECYCLE:
+                    assert genislik(satir) <= TELEGRAM_SATIR_PX, (
+                        f"{state}: {satir!r} satırı {genislik(satir):.0f}px — telefonda sarar")
+                else:
+                    assert len(satir) <= 70, f"{state}: {len(satir)} karakterlik satır sarar"
+
+
+def test_kart_baglamla_birlikte_tavanin_altinda_kalir():
+    # Domain bağlamı DAHİL: olay başına ≤ 1100 kr, satır ≤ 283 px, sarma yok.
+    notifier = TelegramNotifier()
+    for state in _LIFECYCLE:
+        for varyant in ({}, {"break_dir": -1}):
+            msg = notifier.format_message(_olay_verisi(
+                state, domain_bolumleri=_BAGLAM,
+                domain_karsi=["iç yapı ↓", "hacim teyitsiz"], **varyant))
+            assert len(msg) <= TELEGRAM_ALERT_MAX_KARAKTER, (
+                f"{state}: kart {len(msg)} kr (tavan {TELEGRAM_ALERT_MAX_KARAKTER})")
+            for satir in msg.splitlines():
+                assert genislik(satir) <= TELEGRAM_SATIR_PX, f"{state}: {satir!r}"
+            assert "▸ /tara" not in msg and "/tara THYAO" in msg, state
+            assert msg.count("yatırım tavsiyesi değildir") == 1, state
+            assert len(msg.splitlines()) <= 44, f"{state}: {len(msg.splitlines())} satır"
+
+
+def test_kart_uzun_satiri_boler_bilgi_dusmez():
+    # Uzun RVOL cümlesi satır bütçesini aşarsa bölünür; hiçbir sayı kaybolmaz.
+    notifier = TelegramNotifier()
+    baglam = {"hacim": ["• 2s: katılım düşük · Son mum hacmi / 20 mumluk ortalama: 0,46× (RVOL) "
+                        "· göreli işlem değeri 0,46× · hacim çok düşük"]}
+    msg = notifier.format_message(_olay_verisi("KIRILIM_TEYITLI", domain_bolumleri=baglam))
+    for parca in ("0,46×", "katılım düşük", "hacim çok düşük"):
+        assert parca in msg, parca
+    for satir in msg.splitlines():
+        assert genislik(satir) <= TELEGRAM_SATIR_PX, satir
+
+
+def test_klasik_stil_eski_biçimi_korur(monkeypatch):
+    # Geri dönüş anahtarı: TELEGRAM_ALERT_STYLE=klasik → 25 Eyl biçimi aynen üretilir.
+    monkeypatch.setattr(notifier_mod, "TELEGRAM_ALERT_STYLE", "klasik")
+    msg = TelegramNotifier().format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=1))
+    assert "KIRILIM TEYİTLİ: yukarı kırılım" in msg
+    assert "Kalite: 85/100" in msg
 
 
 def test_mesajlar_ayni_iskeleti_paylasir():
-    # Her mesaj: "emoji HISSE tf · desen" başlığı ile başlar (tek bakışta ne olduğu anlaşılır).
+    # Kart iskeleti: 1. satır "olay + hisse + TF" (önizlemede okunsun), 2. satır desen.
+    # Klasik yol eski sırayı korur (desen 1. satırda).
     for state in _TUM_STATELER:
         msg = _mesaj(state)
         if not msg:  # tekil push politikası dışında kalan lifecycle state'leri
             continue
         ilk_satir = msg.splitlines()[0]
         assert "THYAO" in ilk_satir, state
-        assert "saatlik" in ilk_satir or "1 saat" in ilk_satir, state
-        assert "Yükselen Üçgen" in ilk_satir, state
+        assert "1s" in ilk_satir or "1 saat" in ilk_satir or "saatlik" in ilk_satir, state
+        assert "Yükselen Üçgen" in msg or "YÜKSELEN ÜÇGEN" in msg, state  # kart deseni olduğu gibi yazar
+        if state in _LIFECYCLE:
+            assert any(kelime in ilk_satir for kelime in
+                       ("TEYİTLİ", "RETEST BAŞARILI", "GEÇERSİZLEŞTİ")), state
 
 
 def test_mesajlar_tek_sabit_footer_tasir():
     # Eskiden üç cümleden biri rastgele ekleniyordu; artık tek ve sabit footer var.
-    for state in ("KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI"):
+    # Kart sürümü: yasal satırın üstünde tek bir CTA (`› /tara HISSE`) durur.
+    for state in _LIFECYCLE:
         msg = _mesaj(state)
-        assert msg.count("Formasyon takibi · yatırım tavsiyesi değildir") == 1, state
+        assert msg.count("yatırım tavsiyesi değildir") == 1, state
+        assert msg.count("/tara THYAO") == 1, state
 
 
 def test_ozet_tek_sabit_footer_ve_turkce_tarih():
@@ -285,9 +392,11 @@ def test_ozet_tek_sabit_footer_ve_turkce_tarih():
     ], {"stocks_scanned": 48, "alerts_sent": 1})
     assert "kanalı takipte kal" not in ozet
     assert "Takipteyim" not in ozet
-    assert ozet.rstrip().endswith("Formasyon takibi · yatırım tavsiyesi değildir")
-    # Türkçe ay kısaltması: strftime('%b') İngilizce basıyordu.
-    assert " BIST Formasyon Özeti · " in ozet
+    assert ozet.rstrip().endswith("📌 yatırım tavsiyesi değildir")
+    # Türkçe ay kısaltması: strftime('%b') İngilizce basıyordu. Başlık artık iki
+    # satır (tek satır 310 px'tı), tarih girintili devam satırında.
+    assert "📊 BIST Formasyon Özeti\n   " in ozet
+    assert "Eki" in ozet
 
 
 def test_ozet_tum_bolumlerde_kalite_gorunur():
@@ -302,10 +411,13 @@ def test_ozet_tum_bolumlerde_kalite_gorunur():
     ]
     ozet = n.format_daily_summary(aktif, {"stocks_scanned": 48, "alerts_sent": 1})
     # Üç bölüm de aynı madde biçimini kullanır: hisse · desen · tf · kalite
-    assert "THYAO Yükselen Üçgen 1h · yukarı yön · kalite 86" in ozet
+    assert "THYAO 1h Yükselen Üçgen" in ozet and "q86" in ozet
     assert "TEYİTLİ KIRILIM" in ozet
-    assert "ISMEN Alçalan Üçgen 2h · aşağı yön · kalite 84" in ozet
-    assert "ISCTR Alçalan Üçgen 4h · %81 daralma" in ozet
+    assert "↓ ISMEN 2h Alçalan Üçgen" in ozet and "q84" in ozet
+    # Uzun madde satırı " · " üzerinden ikiye iner (telefonda sarmaması için).
+    # Madde tek satıra sığıyor: "↔ ISCTR 4h Alçalan Üçgen q88 · %81" yerine kısa
+    # biçim ("ISCTR 4h Alçalan Üçgen q88 %81") — veri aynı, satır ikiye bölünmüyor.
+    assert "ISCTR 4h Alçalan Üçgen" in ozet and "%81" in ozet
 
 
 
@@ -322,11 +434,16 @@ def test_dogrulanmis_olay_fiyat_kalite_temas_ve_domain_context_icerir():
         lower_touches=3,
         domain_context="🏗 Market Structure\n• 1h yapı: dış yükseliş",
     ))
-    assert "THYAO" in msg and "1 saat" in msg and "Yükselen Üçgen" in msg
-    assert "KIRILIM TEYİTLİ: yukarı kırılım" in msg
-    assert "Son kapanmış mum kapanışı: 303,25 TL" in msg
-    assert "Kalite: 87/100" in msg and "Çok güçlü" in msg
-    assert "Temas: üst 4 / alt 3" in msg
+    assert "THYAO" in msg and "1s" in msg and "Yükselen Üçgen" in msg
+    assert "▲ THYAO 1s · YUKARI TEYİTLİ" in msg
+    # Kırılan/kapanış/marj ayrı satırlarda; "Çok güçlü" gibi türetilmiş notlar yok.
+    assert "kırılan 302,00" in msg
+    assert "kapanış 303,25" in msg and "aştı" in msg
+    assert "kalite 87/100 (formasyon)" in msg
+    assert "Güçlü" not in msg and "Çok güçlü" not in msg
+    assert "temas üst 4 / alt 3" in msg
+    assert "retest yok" in msg  # payload'da retest_seen yok → motor "görülmedi" der
+    assert "Mum: 2026-10-12 15:30 kapandı" in msg
     assert "Market Structure" in msg and "dış yükseliş" in msg
 
 
@@ -340,3 +457,41 @@ def test_gunluk_ozet_terminal_ve_basarisiz_statei_gostermez():
     ], {"tarama_sayisi": 1, "alerts_sent": 0})
     assert "THYAO" not in msg and "GARAN" not in msg
     assert "TAMAMLANDI" not in msg and "başarısız" not in msg.lower()
+
+
+def test_ozet_ve_bulten_satirlari_sarmaz():
+    """Özet/bülten satırları da kartla aynı satır bütçesine uyar.
+
+    Alarm kartı ≤283 px sözü veriyor; özet ve bülten aynı sohbete düşüyor ve
+    oradaki 400-1 160 px'lık satırlar kartın okunurluğunu sıfırlıyordu.
+    """
+    from telegram_measure import genislik
+    n = TelegramNotifier()
+    kayit = {"stock_name": "TOASO", "timeframe": "1h", "pattern_name": "Yükselen Üçgen",
+             "state": "KIRILIM_GECERSIZLESTI", "break_dir": -1, "critical_price_level": 281.88,
+             "confidence_score": 88.0, "candle_close_price": 285.50,
+             "upper_touches": 2, "lower_touches": 2,
+             "bar_metni": "25.09 09:30 → 13:30 kapanış mumu · 4 mum · gövde %78"}
+    aktif = [kayit, dict(kayit, stock_name="BIMAS", timeframe="4h", state="KIRILIM_TEYITLI")]
+    gun = {"tarama_sayisi": 4, "alerts_sent": 6, "stocks_scanned": 28, "tam_tarama_guncel": True,
+           "kirilim_teyitli_olay_sayisi": 3, "retest_basarili_olay_sayisi": 1,
+           "kirilim_gecersizlesti_olay_sayisi": 2, "son_tarama_bitis": "2026-09-25T16:38:20+03:00"}
+    metinler = [n.format_public_batch(aktif), n.format_daily_summary(aktif, gun),
+                n.format_public_summary(aktif, gun, izleme=[{"stock": "FROTO", "timeframe": "1h",
+                                                              "pattern_name": "Alçalan Kama",
+                                                              "quality": 82}], kapanis=True)]
+    asan = [satir for metin in metinler for satir in metin.splitlines()
+            if genislik(satir) > 283]
+    assert not asan, asan[:3]
+
+
+def test_metin_sigdir_bilgi_dusurmez():
+    """Bölme yalnız satır sonu ekler: kelimeler aynen durur (ayraç hariç)."""
+    n = TelegramNotifier()
+    uzun = {"stock_name": "DOHOL", "timeframe": "2h", "pattern_name": "Alçalan Üçgen",
+             "state": "KIRILIM_TEYITLI", "break_dir": 1, "critical_price_level": 21.28,
+             "confidence_score": 87.0, "candle_close_price": 21.90,
+             "upper_touches": 2, "lower_touches": 2}
+    metin = n.format_public_batch([uzun])
+    kelimeler = " ".join(metin.split())
+    assert "DOHOL" in kelimeler and "21,28" in kelimeler and "kalite 87" in kelimeler

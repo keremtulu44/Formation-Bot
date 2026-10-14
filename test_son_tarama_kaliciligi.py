@@ -336,8 +336,8 @@ def test_restart_panel_canli_durum_ve_kirilim_son_taramayi_gosterir(tmp_path, mo
     assert "♻️ Önceki kayıt gösteriliyor" in panel
     assert "Henüz tamamlanmış tarama yok" not in panel
     canli = main_mod._komut_canli("")
-    assert "THYAO 1h Simetrik Üçgen q87" in canli
-    assert "GARAN 4h Simetrik Üçgen q76" in canli
+    assert "THYAO 1s Simetrik Üçgen q87" in canli
+    assert "GARAN 4s Simetrik Üçgen q76" in canli
     durum = main_mod._komut_durum("")
     assert "Piyasa: KAPALI" in durum and "Sonuçtaki formasyon: 2" in durum
     assert "Son başarılı analiz:" in durum
@@ -354,7 +354,7 @@ def test_yeni_tarama_kayitli_notunu_ve_eski_listeyi_yeniler(tmp_path):
     assert "♻️" not in main_mod._panel_raporu("")
     assert "Son başarılı analiz:" in main_mod._komut_durum("")
     assert "dolu slot 1/8" in main_mod._panel_raporu("")
-    assert "THYAO 2h Simetrik Üçgen q90" in main_mod._komut_canli("")
+    assert "THYAO 2s Simetrik Üçgen q90" in main_mod._komut_canli("")
     assert "GARAN" not in main_mod._komut_canli("")
     veri = json.loads((tmp_path / "son_tarama.json").read_text(encoding="utf-8"))
     assert len(veri["formations"]) == 1
