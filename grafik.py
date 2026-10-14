@@ -95,6 +95,10 @@ SABITLER: dict[str, Any] = {
     "hacim_uzunluk": 20,
     "serit_kulvar_orani": 0.143,      # 1/7 — §17.4 ayrı üst kulvar
     "son_mum_isaret": 15,             # §0.12a: `!` yalnız son 15 mum
+    # yapı (G3, §2.2): onaylı+geçerli en yeni 6 BOS/CHoCH; swing etiketi kapaklı
+    "olay_maks": 6,
+    "swing_maks": 10,
+    "yapi_alpha": {"teyitli": 1.0, "kirik": 0.2, "aday": 0.45},   # §0.4.1 satırı
     # ortak
     "dipnot": "sorun",                # §0.12w: dipnot yalnız veri sorunu varsa
     "lejant": True,                   # §0.12v: her karede tek gri satır
@@ -148,7 +152,7 @@ PALET = {
     "golge": "#ffffff",
 }
 
-# Alarm çizgisinin kalınlığı durumdndan gelir (§2.6): halka açık durumlar kalın.
+# Alarm çizgisinin kalınlığı durumundan gelir (§2.6): halka açık durumlar kalın.
 # §0.12l: `1s` ve `2s` karelerinde FVG çizilmez — `zone_scoring.FVG_TIMEFRAMES`
 # {2h,4h,1d} + `enable_2h_fvg=False`: canlı yolda `2s`de de FVG üretilmiyor.
 _FVG_YOK_TFLAR = frozenset({"1h", "2h"})
@@ -441,6 +445,13 @@ def _yon(deger: Any, varsayilan: int = 1) -> int:
         return 1 if varsayilan >= 0 else -1
 
 
+def _ad(deger: Any) -> str:
+    """Enum/str karışık alanları düz isimle oku (`HIGH`, `EVENT_BOS`, `True`)."""
+    if deger is None:
+        return ""
+    return str(getattr(deger, "name", deger))
+
+
 def _durum_adi(deger: Any) -> Optional[str]:
     ad = getattr(deger, "name", None)
     if ad:
@@ -585,7 +596,8 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
                   alarm_turu: Optional[str] = None, alarm_bar: Optional[int] = None,
                   sembol: str = "", zaman_damgasi: Any = None,
                   simdi: Optional[datetime] = None,
-                  kare_mum: Optional[int] = None) -> dict[str, Any]:
+                  kare_mum: Optional[int] = None,
+                  etiket_detay: Optional[bool] = None) -> dict[str, Any]:
     """Tarama anındaki veriyi çizilebilir sözlüğe kopyalar (§2, §14.1).
 
     `cift`: kartın beslendiği formasyon kaydı (`PatternCandidate` veya payload
@@ -593,6 +605,8 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
     not edilir (G2 zone'ları, G3 yapı/şerit buradan okunur); motor çağrılmaz.
     `alarm_turu` `aday/kritik/teyit/retest/gecersiz/ihlal`, `alarm_bar` çerçeve
     değeri mum indeksi. Hiçbiri zorunlu değil: verisi olmayan katman çizilmez.
+    `etiket_detay` None ise `SABITLER["etiket_detay"]` (§2.6: `evidence_text`
+    ancak istenirse karenin içine yazılır).
     """
     tf = str(tf or "1h")
     veri = _cerceve_ayristir(cerceve)
@@ -662,9 +676,23 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
     if goruntu["zone"].get("hata"):
         goruntu["eksik_katmanlar"] = sorted(set(goruntu["eksik_katmanlar"])
                                             | set(goruntu["zone"]["hata"]))
-    if sonuclar:
-        # Bölge katmanı G2'de çiziliyor; yapı/şerit G3'ün işi (sessiz kabahat yok).
-        goruntu["uyarilar"].append("yapı/şerit verisi bu fazda çizilmedi (G3)")
+    # Şerit çerçeveden TÜRETİLİR (yerel rvol için motor gerekmez); motor serisi
+    # varsa o kullanılır (§2.1). Yapı katmanı `sonuclar` olmadan var olamaz.
+    if n and sag:
+        try:
+            goruntu["serit"] = _serit_verisi(sonuclar, sutun["hacim"], sol, sag, n)
+        except Exception as hata:
+            log.warning("grafik: şerit katmanı kurulamadı (%s)", hata)
+            goruntu["eksik_katmanlar"].append("serit")
+    goruntu["olay"] = _olay_verisi(sonuclar, sol, sag,
+                                  bool(SABITLER["etiket_detay"]) if etiket_detay is None
+                                  else bool(etiket_detay))
+    if (goruntu["olay"] or {}).get("hata"):
+        goruntu["eksik_katmanlar"] = sorted(set(goruntu["eksik_katmanlar"])
+                                            | set(goruntu["olay"]["hata"]))
+    # `sonuclar` yoksa bölge/yapı katmanları YOKTUR — bu veri bozukluğu değil
+    # (§0.12w: dipnot yalnız veri sorununa); izi `meta["zone"]["sirala"]` ve
+    # `meta["olay"]` sıfırlarında taşınır.
     if not n or not sag:
         goruntu["uyarilar"].append("kare boş: çizim yok")
         return goruntu
@@ -1008,6 +1036,14 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         zone = goruntu.get("zone") or {}
         for b in (zone.get("cizilen") or []):
             ek_y.extend([float(b["alt"]), float(b["ust"])])
+        # yapı uçları da aralığa girsin: swing noktası / kritik çizgisi kesilmesin
+        _olay_src = goruntu.get("olay") or {}
+        for b in (list(_olay_src.get("swinglar") or []) + list(_olay_src.get("olaylar") or [])):
+            v = _gercek(b.get("fiyat") if b.get("fiyat") is not None else b.get("seviye"))
+            if v is not None:
+                ek_y.append(v)
+        if (_olay_src.get("kritik") or {}).get("seviye") is not None:
+            ek_y.append(float(_olay_src["kritik"]["seviye"]))
         aralik = _yatay_aralik(kapanis + yuksek + dusuk, ek_y)
         ax.set_ylim(*aralik)
         meta["kare"]["y_araligi"] = [round(aralik[0], 6), round(aralik[1], 6)]
@@ -1026,6 +1062,23 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
             except Exception as hata:
                 log.warning("grafik: bölge katmanı çizilemedi (%s)", hata)
                 eksik.append("zone")
+
+        # --- yapı katmanı: swing + BOS/CHoCH + kritik (§2.2) ---
+        olay_ozet = {"swing": 0, "etiket_atlandi": 0, "kritik": 0, "kritik_atlandi": 0,
+                     "capa": 0}
+        if not yalnizca_mumlar and (goruntu.get("olay") or {}):
+            try:
+                olay_ozet.update(_olay_ciz(ax, goruntu, n) or {})
+            except Exception as hata:
+                log.warning("grafik: yapı katmanı çizilemedi (%s)", hata)
+                eksik.append("ms")
+                olay_ozet["hata"] = "cizim"
+        meta["olay"] = _olay_meta(goruntu.get("olay"), olay_ozet)
+        # `cizgiler["kritik"]` §2'nin seviye sözleşmesidir: çizgi GERÇEKTEN çizildiyse
+        # sayısı taşır (alarm çizgisiyle çakışıp çizilmediyse None kalır).
+        _kritik = (goruntu.get("olay") or {}).get("kritik") or {}
+        meta["cizgiler"]["kritik"] = (_gercek(_kritik.get("seviye"))
+                                      if meta["olay"].get("kritik_cizildi") else None)
 
         # --- mumlar: yükselen içi boş, düşen dolu (§0.4.1) ---
         if olcu["cekme"] or yalnizca_mumlar:
@@ -1056,15 +1109,21 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         ax.set_axisbelow(True)
         from matplotlib.ticker import FuncFormatter
         ax.yaxis.set_major_formatter(FuncFormatter(lambda _v, _p: sayi(_v)))
+        # `acik` = kulvar gerçekten çizildi mi (`--serit-yok`/katman hatası → False)
+        meta["serit"]["acik"] = ax_serit is not None
         if ax_serit is not None:
             _serit_ciz(ax_serit, goruntu, n)
         metin = _metinler(goruntu, meta, genislik, eksik, yalnizca_mumlar, etiket_detay)
         _, _, y_gri, y_kirmizi = _alt_yerlesim(len(metin["dipnotlar"]),
                                               len(metin.get("notlar") or []),
                                               len(metin["lejant"]))
-        metin["_y"] = {"lejant": alt_yerlesimi, "gri": [alt_yerlesimi - 0.0235 * (i + 1)
-                                                        for i in range(len(y_gri))],
-                       "kirmizi": [alt_yerlesimi - 0.0235 * (len(y_gri) + i + 1)
+        # Gri/kırmızı blok LEJANT bloğunun ALTINA başlar: çok satırlı lejant ile
+        # dipnot çakışması ölçüldü (0,0215 adımla 0,0235 adımlık rezerv uyuşmuyordu).
+        _lejant_uzunluk = max(1, len(metin["lejant"]))
+        _taban = alt_yerlesimi - _ALT_ADIM * (_lejant_uzunluk - 1)
+        metin["_y"] = {"lejant": alt_yerlesimi,
+                       "gri": [_taban - _ALT_ADIM * (i + 1) for i in range(len(y_gri))],
+                       "kirmizi": [_taban - _ALT_ADIM * (len(y_gri) + i + 1)
                                    for i in range(len(y_kirmizi))]}
         _metin_ciz(fig, metin, sol_kenar, sag_kenar, ust)
 
@@ -1166,6 +1225,62 @@ def _zone_ciz(ax, zone: Mapping[str, Any], n: int, aralik: Sequence[float]) -> i
     return _zone_etiketleri(ax, zone)
 
 
+def _yazi_olcu(ax) -> Optional[tuple[float, float, float, float, float]]:
+    """(px/bar, px/birim, x_sol, y_alt, punto) — eksen ölçüsü.
+
+    `ax.get_position()` × figür pikseli; `transData` çizim turundan ÖNCE
+    yerleşimi yansıtmıyor (ölçüm: 2,8 birimlik fark 6 px çıkıyordu).
+    """
+    try:
+        rect = ax.get_position()
+        fig = ax.figure
+        boyut = fig.get_size_inches()
+        dpi = float(fig.dpi)
+        x_sol, x_sag = (float(v) for v in ax.get_xlim())
+        y_alt, y_ust = (float(v) for v in ax.get_ylim())
+        pt = float(SABITLER["zone_yazi_pt"]) * dpi / 72.0
+        return (float(boyut[0]) * dpi * float(rect.width) / max(1e-9, x_sag - x_sol),
+                float(boyut[1]) * dpi * float(rect.height) / max(1e-9, abs(y_ust - y_alt)),
+                x_sol, min(y_alt, y_ust), pt)
+    except Exception:
+        return None
+
+
+def _yazi_yerlestir(ax, adaylar: Sequence[tuple[float, float, str, str]]) -> int:
+    """(x_bar, y_fiyat, metin, renk) listesinde çakışmayanları yazar; atlananı sayar.
+
+    Yazı atlamak bilgiyi gizlemez: işaretin kendisi (kutu/marker/çizgi) çizili
+    kalır, sayı meta'ya yazılır. Ölçü alınamazsa filtre kapatılır ve hepsi
+    yazılır — yanlış eleme, üst üste binmeden daha kötü.
+    """
+    olcu = _yazi_olcu(ax)
+    if olcu is None:
+        for x, y, metin, renk in adaylar:
+            ax.annotate(metin, xy=(x - 0.2, y), xytext=(1, 0), textcoords="offset points",
+                        ha="left", va="center", fontsize=float(SABITLER["zone_yazi_pt"]),
+                        color=renk, zorder=7, annotation_clip=False)
+        return 0
+    px_bar, px_birim, x_sol, y_alt, pt = olcu
+    yerlesim: list[tuple[float, float, float, float]] = []
+    atlanan = 0
+    for x, y, metin, renk in adaylar:
+        px = (x - x_sol) * px_bar
+        py = (y - y_alt) * px_birim
+        genislik = _genislik_16(metin) * 1.02 + 2.0 * pt * 0.8
+        yukseklik = pt * 1.45 + 2.0 * pt * 0.8
+        kutu = (px, py - yukseklik / 2.0, px + genislik, py + yukseklik / 2.0)
+        if any(not (kutu[2] < q[0] or kutu[0] > q[2] or kutu[3] < q[1] or kutu[1] > q[3])
+               for q in yerlesim):
+            atlanan += 1
+            continue
+        yerlesim.append(kutu)
+        ax.annotate(metin, xy=(x - 0.2, y), xytext=(1, 0), textcoords="offset points",
+                    ha="left", va="center", fontsize=float(SABITLER["zone_yazi_pt"]),
+                    color=renk, zorder=7, annotation_clip=False,
+                    bbox=dict(facecolor=PALET["zemin"], edgecolor="none", alpha=0.8, pad=0.8))
+    return atlanan
+
+
 def _zone_etiketleri(ax, zone: Mapping[str, Any]) -> int:
     """Kutu etiketlerini çakışmayacak şekilde yerleştirir; yerleşmeyeni sayar.
 
@@ -1173,11 +1288,8 @@ def _zone_etiketleri(ax, zone: Mapping[str, Any]) -> int:
     kutularda yazılar çakışabiliyor → `cizilen` sırası (en yakın önce) denenir,
     çakışan yazı ATLANIR; kutunun kendisi, dolgusu ve kalın kenarı yine çizili
     olduğundan bilgi gizlenmez, sayı `meta["zone"]["etiket_atlandi"]` ile okunur.
-
-    Geometri `ax.get_position()` × figür pikselinden hesaplanıyor: `transData`
-    çizim turundan ÖNCE yerleşimi yansıtmıyordu (ölçüm: 2,8 birimlik fark 6 px
-    çıktı → tüm etiketler çakışık sayıldı). Ölçü birimi burada bar/fiyat değil
-    piksel, çünkü eşik yazı boyutuyla ilgili.
+    Ölçü hesabı `_yazi_yerlestir`de (`get_position()` × figür pikseli; `transData`
+    çizim turundan önce güvenilmez — ölçüm: 2,8 birim = 6 px).
     """
     adaylar: list[tuple[float, float, str]] = []
     ad = {"ob": "OB", "fvg": "FVG", "eng": "ENG"}
@@ -1193,49 +1305,9 @@ def _zone_etiketleri(ax, zone: Mapping[str, Any]) -> int:
             metin += " " + " ".join(parca)
         adaylar.append((x0, (float(b["alt"]) + float(b["ust"])) / 2.0, metin))
 
-    try:
-        rect = ax.get_position()
-        fig = ax.figure
-        boyut = fig.get_size_inches()          # ndarray: [genişlik, yükseklik] inç
-        dpi = float(fig.dpi)
-        pt = float(SABITLER["zone_yazi_pt"]) * dpi / 72.0
-        genislik_px = float(boyut[0]) * dpi * float(rect.width)
-        yukseklik_px = float(boyut[1]) * dpi * float(rect.height)
-        x_sol, x_sag = (float(v) for v in ax.get_xlim())
-        y_sol, y_sag = (float(v) for v in ax.get_ylim())
-        px_bar = genislik_px / max(1e-9, x_sag - x_sol)
-        px_birim = yukseklik_px / max(1e-9, abs(y_sag - y_sol))
-    except Exception:
-        px_bar = px_birim = pt = 0.0
-    if px_bar <= 0 or px_birim <= 0:
-        # Ölçü alınamadı: çakışma filtresi olmadan hepsini yaz (yanlış eleme
-        # yapmaktansa üst üste binme yeğlenir; §2.9 "eksik katman" değil).
-        for x0, y, metin in adaylar:
-            ax.annotate(metin, xy=(x0 - 0.2, y), xytext=(1, 0), textcoords="offset points",
-                        ha="left", va="center", fontsize=float(SABITLER["zone_yazi_pt"]),
-                        color=PALET["metin"], zorder=7, annotation_clip=False)
-        return 0
+    # Ölçü/çakışma hesabı ortak: `_yazi_yerlestir` (ölçü alınamazsa orada filtre kapanır).
 
-    yerlesim: list[tuple[float, float, float, float]] = []
-    atlanan = 0
-    for x0, y, metin in adaylar:
-        px = (x0 - x_sol) * px_bar
-        py = (y - min(y_sol, y_sag)) * px_birim
-        genislik = _genislik_16(metin) * 1.02 + 2.0 * pt * 0.8
-        yukseklik = pt * 1.45 + 2.0 * pt * 0.8
-        kutu = (px, py - yukseklik / 2.0, px + genislik, py + yukseklik / 2.0)
-        cakisan = next((i for i, q in enumerate(yerlesim)
-                        if not (kutu[2] < q[0] or kutu[0] > q[2] or kutu[3] < q[1]
-                                or kutu[1] > q[3])), None)
-        if cakisan is not None:
-            atlanan += 1
-            continue
-        yerlesim.append(kutu)
-        ax.annotate(metin, xy=(x0 - 0.2, y), xytext=(1, 0), textcoords="offset points",
-                    ha="left", va="center", fontsize=float(SABITLER["zone_yazi_pt"]),
-                    color=PALET["metin"], zorder=7, annotation_clip=False,
-                    bbox=dict(facecolor=PALET["zemin"], edgecolor="none", alpha=0.8, pad=0.8))
-    return atlanan
+    return _yazi_yerlestir(ax, [(x0, y, metin, PALET["metin"]) for x0, y, metin in adaylar])
 
 
 def _formasyon_ciz(ax, goruntu: Mapping[str, Any], n: int, butce: float,
@@ -1341,13 +1413,16 @@ def _lejant_satirlar(oge: Sequence[str], kare_genislik: float) -> tuple[list[str
     return _bol(" · ".join(oge), butce)[:2], 7.0, atlanan
 
 
+_ALT_ADIM = 0.0235      # kare altındaki yazı bloğunun satır adımı (figür kesiri)
+
+
 def _alt_yerlesim(kirmizi: int, gri: int, lejant_satir: int = 1) -> tuple[float, float, list[float], list[float]]:
     """Kare altındaki yazı bloğunun yerleşimi: lejant → gri notlar → kırmızı uyarılar.
 
     Neden tek yer: lejant ile dipnotların üst üste binmesi ilk çizimde görüldü;
     aks payı artık burada hesaplanır, eksen alta oraya göre çekilir.
     """
-    adim = 0.0235
+    adim = _ALT_ADIM
     y_lejant = 0.046 + adim * (kirmizi + gri + max(0, lejant_satir - 1))
     y_gri = [y_lejant - adim * (i + 1) for i in range(gri)]
     y_kirmizi = [y_gri[-1] - adim * (i + 1) if gri else y_lejant - adim * (i + 1)
@@ -1384,6 +1459,92 @@ def _alarm_ciz(ax, alarm: Mapping[str, Any], n: int, butce: float) -> None:
                 bbox=dict(facecolor=PALET["zemin"], edgecolor="none", alpha=0.75, pad=1.2))
 
 
+def _olay_ciz(ax, goruntu: Mapping[str, Any], n: int) -> dict[str, int]:
+    """Yapı katmanı (§2.2): swing işaretleri + BOS/CHoCH okları + `kritik` çizgisi.
+
+    Renkler §0.4.1: `swing` #90a4ae (α: teyitli 1,0 · kırık 0,2 · aday 0,45),
+    `olay` #ff8a65. Kalın kenar gibi burada da karar veride: `durum` alanı
+    `anlik_goruntu`da okundu. `kritik`, seçilen son olayın `broken_level`ıdır;
+    alarm seviyesiyle aynı sayıysa ÇİZİLMEZ (tek çizgi, çift çizgi yanıltmasın)
+    ve bu `budama`ya yazılır. `!` işaretleri şeritten gelir (son 15 bar kuralı
+    orada), buraya mumların altına çizilir.
+    """
+    olay = goruntu.get("olay") or {}
+    swinglar = list(olay.get("swinglar") or [])
+    olaylar = list(olay.get("olaylar") or [])
+    alarm = goruntu.get("alarm") or {}
+    sayac = {"swing": 0, "etiket": 0, "kritik_atlandi": 0}
+    kritik_eslesdi = False
+    if not swinglar and not olaylar and not (olay.get("kritik") or {}):
+        return sayac
+    zamanlar = list(goruntu.get("zamanlar") or [])
+    dusuk = [float(v) for v in (list(goruntu.get("dusuk") or [])[:n])]
+    adaylar: list[tuple[float, float, str, str]] = []
+    for b in swinglar:
+        x, y = float(b["bar"]), _gercek(b.get("fiyat"))
+        if y is None:
+            continue
+        alpha = float(SABITLER["yapi_alpha"].get(str(b.get("durum")), 1.0))
+        isaret = "^" if b.get("yon") == "ust" else "v"
+        ax.plot([x], [y], marker=isaret, ms=4.5, linestyle="none",
+                color=PALET["swing"], alpha=alpha, zorder=6)
+        sinif = str(b.get("sinif") or "")
+        if sinif and b.get("durum") != "kirik":       # kırık swingde yazı okunmaz
+            adaylar.append((x, y + (0.0 if b.get("yon") == "ust" else 0.0), sinif,
+                            PALET["sinif"]))
+        sayac["swing"] += 1
+    kritik_bilgi = olay.get("kritik") or {}
+    kritik_bar = _tam(kritik_bilgi.get("bar"))
+    kritik_seviye = _gercek(kritik_bilgi.get("seviye"))
+    kritik_eslesdi = False
+    for b in olaylar:
+        x, seviye = float(b["bar"]), _gercek(b.get("seviye"))
+        if seviye is None:
+            continue
+        yon_ust = b.get("yon") == "ust"
+        etiket = f"{b.get('tur') or 'BOS'}{'↑' if yon_ust else '↓'}"
+        vurgu = (kritik_bar is not None and kritik_seviye is not None
+                 and int(b["bar"]) == kritik_bar and abs(seviye - kritik_seviye) < 1e-9)
+        if vurgu:
+            kritik_eslesdi = True
+            etiket += f" · kritik {sayi(seviye, 2)}"
+        ax.plot([x], [seviye], marker="^" if yon_ust else "v", ms=6.0, linestyle="none",
+                color=PALET["olay"], zorder=6)
+        ax.plot([x, float(n - 1)], [seviye, seviye], color=PALET["olay"],
+                linewidth=1.4 if vurgu else 0.9, linestyle=(0, (3, 2)),
+                alpha=0.9 if vurgu else 0.6, zorder=3 if vurgu else 2)
+        adaylar.append((x, seviye, etiket, PALET["olay"]))
+    # `kritik` = son seçilen olayın seviyesi, yani ZATEN o olayın çizgisidir.
+    # Ayrı çizgi çizmek aynı yere iki çizgi koymak olurdu → eşleşen olayın çizgisi
+    # kalınlaştırılıp etiketi `... · kritik 67,20` yapılır; ayrı çizgi yalnız
+    # olay çizgisi çizilemediğinde (kadraj dışı vb.) devreye girer.
+    kritik = olay.get("kritik") or {}
+    kritik_cizildi = bool(kritik.get("seviye") is not None)
+    if kritik_cizildi and not kritik_eslesdi:
+        seviye = float(kritik["seviye"])
+        ayni = alarm.get("deger") is not None and abs(float(alarm["deger"]) - seviye) < 1e-9
+        if ayni:
+            sayac["kritik_atlandi"] = 1
+            kritik_cizildi = False
+        else:
+            ax.axhline(seviye, color=PALET["olay"], linewidth=1.3, linestyle=(0, (6, 3)),
+                       alpha=0.85, zorder=3)
+            adaylar.append((max(0.0, float(n - 1) - 12.0), seviye,
+                            f"kritik {sayi(seviye, 2)}", PALET["olay"]))
+    sayac["etiket"] = _yazi_yerlestir(ax, adaylar)
+    # `!` (çaba var-sonuç yok, son 15 bar) — şerit katmanının verisinden
+    serit = goruntu.get("serit") or {}
+    for i in (serit.get("capa") or []):
+        if 0 <= int(i) < n:
+            y = dusuk[int(i)] if int(i) < len(dusuk) else None
+            ax.annotate("!", xy=(float(i), (y if y is not None else 0.0)), xytext=(0, -9),
+                        textcoords="offset points", ha="center", va="top", fontsize=9.5,
+                        color=PALET["ihlal"], zorder=7, annotation_clip=False)
+    return {"swing": sayac["swing"], "etiket_atlandi": sayac["etiket"],
+            "kritik": 1 if kritik_cizildi else 0,
+            "kritik_atlandi": sayac["kritik_atlandi"], "capa": len(serit.get("capa") or [])}
+
+
 def _serit_ciz(ax, goruntu: Mapping[str, Any], n: int) -> None:
     """Katılım şeridi kulvarı (G3'te dolar, §2.1): yalnız spike'lar çizilir."""
     serit = goruntu.get("serit") or {}
@@ -1396,11 +1557,25 @@ def _serit_ciz(ax, goruntu: Mapping[str, Any], n: int) -> None:
     if not any(v is not None for v in degerler):
         return
     esik = float(serit.get("esik") or SABITLER["serit_esik"])
-    spike = [i for i, v in enumerate(degerler) if v is not None and v >= esik]
+    # `spike` anlık görünümde seçildi (eşik + en sert `serit_maks`); çizim yeniden
+    # eleme yapmaz — §14.2 (hesap yok, kopya var).
+    spike = [int(i) for i in (serit.get("spike") or []) if 0 <= int(i) < len(degerler)]
     taban = max((v for v in degerler if v is not None), default=1.0)
     ax.set_ylim(0.0, max(esik * 1.15, taban * 1.25))
     if spike:
         ax.bar(spike, [degerler[i] for i in spike], width=0.62, color=PALET["serit"], zorder=3)
+    for i in (serit.get("yildiz") or []):
+        if 0 <= int(i) < len(degerler) and degerler[int(i)] is not None:
+            ax.annotate("▲", xy=(float(i), degerler[int(i)]), xytext=(0, 2),
+                        textcoords="offset points", ha="center", va="bottom", fontsize=7.5,
+                        color=PALET["serit"], zorder=6)
+    tepe = _gercek(serit.get("tepe"))
+    if tepe is not None and spike:
+        # TEK sayı etiketi (§17.3): en sert spike'ın çarpanı, her bara yazılmaz.
+        ax.annotate(f"×{sayi(tepe, 1)}", xy=(float(max(spike, key=lambda i: degerler[i])), tepe),
+                    xytext=(0, 11), textcoords="offset points", ha="center", va="bottom",
+                    fontsize=float(SABITLER["etiket_pt"]), color=PALET["serit"], zorder=7,
+                    annotation_clip=False)
     ax.axhline(esik, color=PALET["serit"], linestyle=":", linewidth=0.8, alpha=0.7)
 
 
@@ -1490,6 +1665,11 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
         if uyari and str(uyari) not in dipnotlar:
             dipnotlar.append(str(uyari))
     notlar = [str(b) for b in (goruntu.get("budama") or []) if b]
+    serit = goruntu.get("serit") or {}
+    if int(serit.get("hacimsiz") or 0) > 0:
+        notlar.append(f"veri: {serit['hacimsiz']} bar hacimsiz")
+    if serit.get("yetersiz"):
+        notlar.append("şerit: geçmiş yetersiz (motor minimum_history=150 düşürülmedi)")
     zone = goruntu.get("zone") or {}
     if int(zone.get("elenen") or 0) > 0:
         kapak = zone.get("kapak") or {}
@@ -1539,8 +1719,16 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool) -> list[str]:
             {"ob": "OB", "fvg": "FVG", "eng": "ENG"}.get(a, str(a)) for a in adlar))
         if str(goruntu.get("tf")) in _FVG_YOK_TFLAR:
             oge.append("FVG · 4s/1g")
-    if goruntu.get("serit"):
-        oge.append("şerit: rvol(20) · yerel hesap")
+    serit = goruntu.get("serit") or {}
+    if serit.get("spike"):
+        # `yerel hesap` YALNIZ yerel hesaplandığında yazılır (kullanıcı onayı,
+        # tur 9); motor serisi gelirse kaynak adı yeter.
+        oge.append("şerit: rvol(%s)%s" % (
+            sayi(float(serit.get("uzunluk") or SABITLER["hacim_uzunluk"]), 0),
+            " · yerel hesap" if serit.get("yerel") else " · motor"))
+    olay = goruntu.get("olay") or {}
+    if olay.get("swinglar") or olay.get("olaylar"):
+        oge.append("yapı: ▲▼ PH/PL · ┄ BOS/CHoCH · ━ kritik")
     return oge
 
 
@@ -1559,7 +1747,7 @@ def _metin_ciz(fig, metin: Mapping[str, Any], sol_kenar: float, sag_kenar: float
         y -= 0.031
     y = metin.get("_y") or {"lejant": 0.055, "gri": [], "kirmizi": []}
     for i, satir in enumerate(metin["lejant"]):
-        fig.text(0.5, float(y["lejant"]) - i * 0.0215, satir, ha="center", va="top",
+        fig.text(0.5, float(y["lejant"]) - i * _ALT_ADIM, satir, ha="center", va="top",
                  color=PALET["eksen"], fontsize=float(metin.get("lejant_punto",
                                                                 SABITLER["lejant_pt"])))
     for i, satir in enumerate(metin.get("notlar") or []):
@@ -1568,6 +1756,174 @@ def _metin_ciz(fig, metin: Mapping[str, Any], sol_kenar: float, sag_kenar: float
     for i, satir in enumerate(metin["dipnotlar"]):
         fig.text(0.5, float(y["kirmizi"][i]), satir, ha="center", va="top",
                  color=PALET["ihlal"], fontsize=SABITLER["dipnot_pt"])
+
+
+def _serit_verisi(sonuclar: Optional[Mapping[str, Any]], hacimler: Sequence[Any],
+                  sol: int, sag: int, n: int) -> dict[str, Any]:
+    """Katılım şeridi (§2.1) — kaynak motorun BAR BAR serisi, yoksa yerel rvol.
+
+    `vp.details["metrics_history"]` her bar için `VolumeParticipationMetrics`
+    veriyor (ölçüm: 1s 360/360 dolu; `rvol`, `volume_level`, `effort_result_class`
+    alanları var). Motor serisi hazır değilse (4s ölçümü: `data_ready=False`,
+    export `rvol=None`) `hacim / SMA(hacim, 20)` YEREL hesaplanır ve karede
+    `rvol · yerel hesap` yazılır — kullanıcı onayı bu etiketi şart koşuyor.
+    Kurallar: yalnız spike (≥ `serit_esik`, en sert `serit_maks`); `▲` yalnız
+    motorun `volume_level` dayanağıyla; `!` yalnız son `son_mum_isaret` (15) barda
+    `HIGH/VERY_HIGH_EFFORT_WEAK_RESULT`; `hacim ≤ 0` bar çizilmez ve sayılır.
+    `minimum_history=150` DÜŞÜRÜLMEZ — o yüzden 4s/1g karesinde motor serisi
+    gelmeyebilir; bu "yetersiz geçmiş" olarak bildirilir, eşik düşürülmez.
+    Dizinler GÖRÜNÜNE göre döner (`sol` çıkarılır): `_serit_ciz` görünüyü kullanır.
+    """
+    hacimler = list(hacimler or [])
+    n = max(n, len(hacimler))
+    uzunluk = int(SABITLER["hacim_uzunluk"])
+    rvol_yerel: list[Optional[float]] = [None] * n
+    pencere: list[float] = []
+    toplam = 0.0
+    for i in range(n):
+        v = _gercek(hacimler[i]) if i < len(hacimler) else None
+        pencere.append(v if v is not None else 0.0)
+        toplam += v if v is not None else 0.0
+        if len(pencere) > uzunluk:
+            toplam -= pencere.pop(0)
+        ortalama = toplam / len(pencere) if pencere else 0.0
+        if v is not None and ortalama > 0:
+            rvol_yerel[i] = v / ortalama
+
+    motor: list[Optional[float]] = []
+    seviye: list[str] = []
+    capa: list[int] = []
+    veri_hazir = False
+    vp = (sonuclar.get("volume_participation") if isinstance(sonuclar, Mapping)
+          else _alan(sonuclar, "volume_participation")) if sonuclar else None
+    if vp is not None:
+        try:
+            gecmis = list(_alan(_alan(vp, "details", {}) or {}, "metrics_history", ()) or ())
+            motor = [None] * len(gecmis)
+            seviye = [""] * len(gecmis)
+            for i, m in enumerate(gecmis):
+                if bool(_alan(m, "data_ready", False)):
+                    veri_hazir = True
+                motor[i] = _gercek(_alan(m, "rvol"))
+                seviye[i] = _ad(_alan(m, "volume_level"))
+                if _ad(_alan(m, "effort_result_class")) in ("HIGH_EFFORT_WEAK_RESULT",
+                                                            "VERY_HIGH_EFFORT_WEAK_RESULT"):
+                    capa.append(i)
+        except Exception as hata:
+            log.warning("grafik: şerit serisi okunamadı (%s)", hata)
+            motor, seviye, capa = [], [], []
+    kaynak = ("motor" if (motor and veri_hazir) else
+              "yerel hesap" if any(v is not None for v in rvol_yerel) else "yok")
+    ham = list(motor) if kaynak == "motor" else list(rvol_yerel)
+    ham = (ham + [None] * n)[:n]
+    degerler = ham[sol:sag]
+    esik = float(SABITLER["serit_esik"])
+    tum = [i for i, v in enumerate(degerler) if v is not None and float(v) >= esik]
+    spike = sorted(sorted(tum, key=lambda i: (-float(degerler[i]), -i))
+                   [: int(SABITLER["serit_maks"])])
+    yildiz = [i for i in spike if kaynak == "motor" and (sol + i) < len(seviye)
+              and seviye[sol + i] in ("HIGH", "ABNORMAL")]
+    capa = [i - sol for i in capa if i >= sag - int(SABITLER["son_mum_isaret"])
+            and sol <= i < sag]
+    hacimsiz = 0
+    for i in range(sol, sag):
+        v = _gercek(hacimler[i]) if i < len(hacimler) else None
+        if v is None or v <= 0.0:
+            hacimsiz += 1
+    tepe = max((float(degerler[i]) for i in spike), default=None) if spike else None
+    return {"degerler": degerler, "esik": esik, "spike": spike, "yildiz": yildiz,
+            "capa": capa, "kaynak": kaynak, "hacimsiz": hacimsiz,
+            "yetersiz": kaynak == "yok", "yerel": kaynak == "yerel hesap",
+            "tepe": tepe, "elenen_spike": max(0, len(tum) - len(spike)),
+            "uzunluk": uzunluk}
+
+
+def _olay_verisi(sonuclar: Optional[Mapping[str, Any]], sol: int, sag: int,
+                 etiket_detay: bool = False) -> dict[str, Any]:
+    """Yapı katmanı (§2.2): yalnız EXTERNAL swing'ler + onaylı/geçerli BOS·CHoCH.
+
+    Ölçüm (AKBNK): `external_swings` 1ste 48 · 4s 8; pencereye düşen 10 ve 7 →
+    kapak `swing_maks`. `event_history`te EVENT_SWEEP/FALSE_BREAK/TRANSITION_FAIL
+    de var (4s dağılımı: BOS 7 · CHoCH 3 · SWEEP 21 · FALSE_BREAK 4 ·
+    TRANSITION_FAIL 1) — kart yalnız BOS/CHoCH gösterdiği için filtre:
+    `scope==EXTERNAL`, `event_type∈{EVENT_BOS, EVENT_CHOCH}`,
+    `confirmation_status==CONFIRMED`, `validity==VALID`, en yeni `olay_maks`.
+    `kritik` = seçilen son olayın `broken_level`ı (motor alanı; `origin_level`
+    diye bir alan YOK, gerçek ad `origin_price` — §24 düzeltmesi).
+    """
+    ms = (sonuclar.get("market_structure") if isinstance(sonuclar, Mapping)
+          else _alan(sonuclar, "market_structure")) if sonuclar else None
+    if ms is None:
+        return {}
+    try:
+        detay = _alan(ms, "details", {}) or {}
+    except Exception as hata:
+        log.warning("grafik: yapı verisi okunamadı (%s)", hata)
+        return {"hata": ["ms"]}
+    swinglar: list[dict[str, Any]] = []
+    for kaynak_ad, durum in (("external_swings", None), ("external_candidates", "aday")):
+        for b in (_alan(detay, kaynak_ad, ()) or ()):
+            bar = _tam(_alan(b, "source_bar"))
+            if bar is None or not (sol <= bar < sag):
+                continue
+            ham_durum = _ad(_alan(b, "state"))
+            durum_ = durum or ("kirik" if "BROKEN" in ham_durum or _alan(b, "broken")
+                               else "teyitli")
+            swinglar.append({
+                # `bar` ÇİZİM (görünüm) indeksi; `kaynak_bar` çerçeve indeksi
+                "bar": bar - sol, "kaynak_bar": bar,
+                "onay": (_tam(_alan(b, "confirm_bar")) - sol)
+                        if _tam(_alan(b, "confirm_bar")) is not None else None,
+                "fiyat": _gercek(_alan(b, "price")),
+                "yon": "ust" if _ad(_alan(b, "side")).endswith("HIGH") else "alt",
+                "sinif": _ad(_alan(b, "swing_class")), "durum": durum_,
+                "rol": _ad(_alan(b, "structural_role")),
+                "kalite": _gercek(_alan(b, "quality")),
+                "kimlik": _tam(_alan(b, "identity")),
+                "kanit": str(_alan(b, "evidence_text") or "") if etiket_detay else ""})
+    # en Yeni N: `bar` büyük olan önce; çizim bar sırasına döner
+    swinglar.sort(key=lambda b: -int(b["bar"]))
+    elenen = max(0, len(swinglar) - int(SABITLER["swing_maks"]))
+    swinglar = sorted(swinglar[: int(SABITLER["swing_maks"])], key=lambda b: int(b["bar"]))
+
+    olaylar: list[dict[str, Any]] = []
+    for b in (_alan(detay, "event_history", ()) or ()):
+        if _ad(_alan(b, "scope")) != "EXTERNAL":
+            continue
+        tur = _ad(_alan(b, "event_type")).replace("EVENT_", "")
+        if tur not in ("BOS", "CHOCH"):
+            continue
+        if _ad(_alan(b, "confirmation_status")) != "CONFIRMED":
+            continue
+        if _ad(_alan(b, "validity")) != "VALID":
+            continue
+        bar = _tam(_alan(b, "event_bar"))
+        if bar is None:
+            continue
+        olaylar.append({"bar": bar - sol, "kaynak_bar": bar,
+                        "aday_bar": (_tam(_alan(b, "candidate_bar")) - sol)
+                        if _tam(_alan(b, "candidate_bar")) is not None else None,
+                        "tur": "BOS" if tur == "BOS" else "CHoCH",
+                        "yon": "ust" if _ad(_alan(b, "direction")).startswith("UP") else "alt",
+                        "seviye": _gercek(_alan(b, "broken_level")),
+                        "kimlik": _tam(_alan(b, "identity")),
+                        "nitelik": _gercek(_alan(b, "quality")),
+                        "yas": _tam(_alan(b, "age_bars")),
+                        "kanit": str(_alan(b, "evidence_text") or "") if etiket_detay else ""})
+    olaylar.sort(key=lambda b: -int(b["bar"]))
+    olay_elenen = max(0, len(olaylar) - int(SABITLER["olay_maks"]))
+    olaylar = sorted(olaylar[: int(SABITLER["olay_maks"])], key=lambda b: int(b["bar"]))
+    kritik = None
+    if olaylar:
+        son_olay = olaylar[-1]
+        if son_olay.get("seviye") is not None:
+            kritik = {"seviye": son_olay["seviye"], "bar": son_olay["bar"],
+                     "kaynak_bar": son_olay.get("kaynak_bar"), "tur": son_olay["tur"],
+                     "yon": son_olay["yon"]}
+    return {"swinglar": swinglar, "olaylar": olaylar, "kritik": kritik,
+            "cizilen": len(swinglar) + len(olaylar), "elenen": elenen + olay_elenen,
+            "kapak": {"swing": int(SABITLER["swing_maks"]), "olay": int(SABITLER["olay_maks"])},
+            "hata": []}
 
 
 def _zone_meta(zone: Optional[Mapping[str, Any]]) -> dict[str, Any]:
@@ -1589,6 +1945,40 @@ def _zone_meta(zone: Optional[Mapping[str, Any]]) -> dict[str, Any]:
                                                 "taraf", "durum", "doluluk", "x0", "x1",
                                                 "mesafe", "mesafe_atr", "vurgu")}
                          for b in kayitlar]}
+
+
+def _olay_meta(olay: Optional[Mapping[str, Any]], ozet: Optional[Mapping[str, Any]] = None) -> dict[str, Any]:
+    """`meta["olay"]`: §2'deki `{cizilen, elenen}` + G3 izleri (§13 biçimi)."""
+    ozet = dict(ozet or {})
+    if not olay:
+        return {"cizilen": 0, "elenen": 0, "swing": 0, "bos_choc": 0, "kritik": None,
+                "kapak": {}, "etiket_atlandi": 0, "kritik_cizildi": False,
+                "kritik_atlandi": 0, "capa": 0, "hata": []}
+    return {"cizilen": int(olay.get("cizilen") or 0), "elenen": int(olay.get("elenen") or 0),
+            "swing": len(olay.get("swinglar") or []),
+            "bos_choc": len(olay.get("olaylar") or []),
+            "kritik": (olay.get("kritik") or {}).get("seviye"),
+            "kapak": dict(olay.get("kapak") or {}),
+            "olay_barlari": [b.get("kaynak_bar") for b in (olay.get("olaylar") or [])],
+            "etiket_atlandi": int(ozet.get("etiket_atlandi") or 0),
+            "kritik_cizildi": bool(ozet.get("kritik")),
+            "kritik_atlandi": int(ozet.get("kritik_atlandi") or 0),
+            "capa": int(ozet.get("capa") or 0),
+            "hata": list(olay.get("hata") or [])}
+
+
+def _serit_meta(serit: Optional[Mapping[str, Any]]) -> dict[str, Any]:
+    """`meta["serit"]`: `{acik, esik, spike}` (§2) + kaynak/hacimsiz izleri."""
+    if not serit:
+        return {"acik": False, "esik": None, "spike": [], "kaynak": "yok", "yerel": False,
+                "hacimsiz": 0, "elenen_spike": 0, "capa": 0, "yetersiz": False,
+                "uzunluk": None}
+    return {"acik": True, "esik": serit.get("esik"), "spike": list(serit.get("spike") or []),
+            "kaynak": serit.get("kaynak"), "yerel": bool(serit.get("yerel")),
+            "hacimsiz": int(serit.get("hacimsiz") or 0),
+            "elenen_spike": int(serit.get("elenen_spike") or 0),
+            "capa": len(serit.get("capa") or []), "yetersiz": bool(serit.get("yetersiz")),
+            "tepe": serit.get("tepe"), "uzunluk": serit.get("uzunluk")}
 
 
 def _meta_kur(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any]) -> dict[str, Any]:
@@ -1613,8 +2003,8 @@ def _meta_kur(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any]) -> d
             "kritik": None,        # G3 (§0.12f)
         },
         "zone": _zone_meta(goruntu.get("zone")),
-        "olay": goruntu.get("olay") or {"cizilen": 0, "elenen": 0},
-        "serit": goruntu.get("serit") or {"acik": False, "esik": None, "spike": []},
+        "olay": _olay_meta(goruntu.get("olay")),
+        "serit": _serit_meta(goruntu.get("serit")),
         "budama": list(goruntu.get("budama") or []),
         "notlar": list(goruntu.get("notlar") or []),
         "eksik_katmanlar": sorted(set(goruntu.get("eksik_katmanlar") or [])),

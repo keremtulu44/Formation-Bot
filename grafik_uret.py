@@ -124,7 +124,7 @@ def main(giris: list[str] | None = None) -> int:
     ayristirici.add_argument("--alarm-turu", default=None,
                              choices=["aday", "kritik", "teyit", "retest", "gecersiz", "ihlal"])
     ayristirici.add_argument("--zone", action="store_true",
-                             help="OB/FVG/engulfing kutuları için domain motorlarını ÇALIŞTIR"
+                             help="domain motorlarını ÇALIŞTIR: bölge kutuları + yapı (swing/BOS/CHoCH/kritik)"
                                   " (yalnız bu CLI: botun çizim yolu motoru yeniden çağırmaz, §14.2)")
     ayristirici.add_argument("--serit-yok", action="store_true", help="katılım kulvarını kapat")
     ayristirici.add_argument("--etiket-detay", action="store_true",

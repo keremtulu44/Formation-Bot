@@ -278,8 +278,15 @@ def test_meta_sozlesmesi_ve_png_olcusu(tmp_path):
     assert meta["zone"]["sirala"] == "zone verisi yok"
     assert set(meta["zone"]) >= {"cizilen", "elenen", "tip", "kaynak_disi", "kapak",
                                  "sirala", "atr", "hata", "kayitlar"}
-    assert meta["olay"] == {"cizilen": 0, "elenen": 0}
-    assert meta["serit"] == {"acik": False, "esik": None, "spike": []}
+    # G3: `olay`/`serit` de sabit biçimde döner (§13 okuyucusu dalgalanmasın)
+    assert meta["olay"]["cizilen"] == 0 and meta["olay"]["bos_choc"] == 0
+    assert set(meta["olay"]) >= {"cizilen", "elenen", "swing", "bos_choc", "kritik",
+                                 "kapak", "etiket_atlandi", "hata"}
+    assert set(meta["serit"]) >= {"acik", "esik", "spike", "kaynak", "yerel", "hacimsiz"}
+    # G3'ten beri şerit çerçeveden TÜRETİLİR (yerel rvol) → kulvar boş değilse
+    # `acik` True; `--serit-yok`testinde False. Boş karede spike listesi boştur.
+    assert meta["serit"]["acik"] is True and isinstance(meta["serit"]["spike"], list)
+    assert meta["serit"]["kaynak"] in ("motor", "yerel hesap", "yok")
     assert _png_olcu(meta["yol"]) == (1080, 810) and meta["png_kb"] <= 500     # §6.5
 
 

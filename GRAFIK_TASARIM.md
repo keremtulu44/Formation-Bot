@@ -704,3 +704,88 @@ confirmation_high/low/close, bos_maturity)`.
 G3 işleri: `kritik` çizgisi `broken_level`/`origin_level`dan; `!` yalnız son 15 mum;
 `evidence_text` yalnız `--etiket-detay`; `rvol(20)` kulvarı `vp.export`tan ve 4s için
 `yerel hesap` etiketiyle; yapı etiketleri **aynı çakışma filtresiyle** yazılacak.
+
+---
+
+## 24 · G3 UYGULANDI (2026-10-13) — yapı (swing/BOS/CHoCH/kritik) + katılım şeridi
+
+### 24.1 Motor gerçeği (ölçüldü — `run_domain_engines`, AKBNK 1s/4s, `Dengeli`)
+
+- **Şerit.** `vp.details["metrics_history"]` **bar bar** seri (1s: 360/360 dolu):
+  `VolumeParticipationMetrics(data_ready, rvol, volume_z_score, volume_percent_rank,
+  volume_level, effort_result_class, ...)`. 4s ölçümü: `data_ready=False`,
+  export `rvol=None`, `state=PARTICIPATION_PENDING` → motor serisi YOK.
+  `effort_result_class` dağılımı (AKBNK/1s, 360 bar): `NEUTRAL` 337 ·
+  `HIGH_EFFORT_STRONG_RESULT` 11 · `RISING_EFFORT_STRONG_RESULT` 10 ·
+  `HIGH_EFFORT_WEAK_RESULT` 1 · `VERY_HIGH_EFFORT_WEAK_RESULT` 1 → `!` zaten
+  seyrek bir işaret (§0.12a), son 15 bar filtresiyle çoğu karede 0 olur.
+- **Yapı.** `ms.details`: `external_swings` (1s 48 · 4s 8), `external_candidates` (2/2),
+  `event_history` (1s 98 · 4s 37). Swing: `side HIGH|LOW`, `state SWING_CONFIRMED|
+  SWING_BROKEN`, `swing_class PH|PL|HH|HL|LH|LL`, `structural_role`, `source_bar`,
+  `confirm_bar`, `price`, `prominence_atr`, `finalized/locked/broken`, `quality`.
+  Olay: `scope EXTERNAL|INTERNAL`, `event_type EVENT_BOS|EVENT_CHOCH|EVENT_SWEEP|
+  EVENT_FALSE_BREAK|EVENT_TRANSITION_FAIL`, `confirmation_status CONFIRMED|
+  CANDIDATE_FAILED`, `validity VALID|FAILED`, `relevance CURRENT|SUPERSEDED`,
+  `outcome PENDING|OBSERVED`, `event_bar`, `broken_level`, `age_bars`, `quality`.
+  4s olay dağılımı: BOS 7 · CHoCH 3 · SWEEP 21 · FALSE_BREAK 4 · TRANSITION_FAIL 1
+  → kart yalnız BOS/CHoCH gösterdiği için Süpürge/FALSE_BREAK kareye GİRMEZ.
+
+### 24.2 Uygulanan kararlar (ilk kez burada yazılı)
+
+- **Şerit kaynağı:** motor serisi `data_ready` barlarda varsa `kaynak="motor"`,
+  yoksa `hacim / SMA(hacim, 20)` (`hacim_uzunluk=20`) ve `kaynak="yerel hesap"`.
+  `▲` **yalnız motor serisinde** (`volume_level ∈ {HIGH, ABNORMAL}`) — yerel
+  hesapla percentile iddiası yok. `minimum_history=150` düşürülmedi (§2.1).
+- **`yerel hesap` etiketinin ölçütü** (kullanıcı kuralı `state` yokken, tur 9):
+  `state` tek başına yanıltıyor — 4s motorunda `state=PARTICIPATION_PENDING`
+  **var** ama `rvol` yok. Ölçüt „değerler yerel mi” olarak alındı; etiket o
+  durumda yazılıyor, motor serisi gelince „· motor”a düşüyor.
+- **Spike bütçesi:** `≥ serit_esik (1,5)` içinden en sert `serit_maks (12)` çubuk;
+  gerisi `meta["serit"]["elenen_spike"]`ta sayılır (dipnot DEĞİL — bu bir
+  gösterim limiti, veri kusuru değil). Şeritte TEK sayı: en sert spike`ın
+  `×2,9` çarpanı (§17.3).
+- **Yapı filtreleri:** swing = `external_swings` + `external_candidates`
+  (aday → α 0,45; `SWING_BROKEN`/`broken` → „kırık” α 0,2 ve YAZISIZ), olay =
+  `scope==EXTERNAL` ∧ `event_type ∈ {BOS, CHOCH}` ∧ `CONFIRMED` ∧ `VALID`,
+  en yeni `olay_maks=6` · swing `swing_maks=10`. Kapak **en yakınları değil en
+  yenileri** tutar (yapı zamanla ilerler; §0.8’deki yakınlık kuralı bölge
+  kutularına ait).
+- **`kritik` çizgisi = son seçilen olayın `broken_level`ı.** O olayın kendi
+  kesikli çizgisiyle AYNI seviyede olduğu için ikinci bir çizgi ÇİZİLMEZ:
+  eşleşen olayın çizgisi kalınlaşır (1,4 px) ve etiketi `CHoCH↓ · kritik 67,20`
+  olur. Ayrı çizgi yalnız olay çizgisi çizilemediğinde devreye girer; alarm
+  seviyesiyle birebir aynıysa o zaman da atlanır (`kritik_atlandi=1`).
+  `cizgiler["kritik"]` §2 sözleşmesi gibi yalnız ÇİZİLDİYSE sayı taşır.
+- **`_ALT_ADIM = 0,0235`** tek satır adımı: lejant çok satıra düştüğünde gri
+  dipnot lejantın üstüne biniyordu (ölçüm: lejant adımı 0,0215 ile rezerv
+  0,0235 uyuşmuyordu) → gri/kırmızı blok artık lejant bloğunun ALTINDA başlıyor.
+- **Alan adları:** swing/olay `bar`ı ÇİZİM (görünüm) indeksi, `kaynak_bar`ı
+  çerçeve indeksi; `meta["olay"]["olay_barlari"]` kart↔kare hizasını denetler.
+  §23.5’te yazdığım `origin_level` alanı YOK — gerçek ad `origin_price` (düzeltme).
+- **Pencere:** `[sol, sag)` — `sag` kadrajın sağ ucu; `source_bar == sag` olan
+  swing çizilmez (testte ölçüldü: `sol=59, sag=239`).
+
+### 24.3 Ölçüm (gerçek önbellek + gerçek motor, `--zone`)
+
+| kare | katmanlar | PNG | süre |
+|---|---|---|---|
+| AKBNK 4s · 110 (yalnız yapı+şerit+bölge) | 8 swing · 3 olay · 12 spike | 72,3 KB | 452 ms |
+| AKBNK 4s · 110 + bant + alarm (tam yığın) | + 28 temas (24’e indirildi) · bölge 4/9 | 96,4 KB | 507 ms |
+| AKBNK 1s · 180 | 5 OB kutusu, şerit `motor` | ~63 KB | ~490 ms |
+
+Kritik eşik: tam yığın kare bile 500 KB tavanının beşte biri (§6.3 kapandı).
+Etiket çakışması: `etiket_atlandi` 0 (bantlı karede 1) — G2’deki 2 değerinden
+iyi, çünkü `kritik` yazısı olay etiketiyle birleşti.
+Tam kapı: `960 passed, 44 skipped in 143 s` (`test_grafik_yapi.py` 18 test).
+
+### 24.4 G4’e devir
+
+- Köprü: `payload["grafik_verisi"]` → `anlik_goruntu(cift, tf, cerceve, sonuclar=...)`
+  (motorlar tarama sürecinde ÇAĞRILI, kare yalnız kopyayı okur — §14.2).
+- `transport/telegram.py:foto_gonder` + `notifier._gonder` kuyruğu; 1 olay = 1 mesaj
+  kuralı metinde değişmez, görsel sonra eklenir; `--tum-tf` sıralı 4 `sendPhoto`.
+- 4 env anahtarı + `.env.example` + `deploy_check.py:489`; `GRAFIK_OLAY_MAKS` gibi
+  kapak sayıları `SABITLER`den okunuyor, env’e çıkmadı (§5’ten farklı: v1’de 4
+  anahtar dışındaki her şey sabit).
+- `evidence_text` kareye yalnız `--etiket-detay` ile yazılıyor (varsayılan kapalı) —
+  G4’te kart metninin tekrarı olmamasına dikkat.

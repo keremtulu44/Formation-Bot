@@ -190,7 +190,7 @@ mumlara dokundu, yapı nerede kırıldı). Her faz tek commit + tam test yeşil 
 | G0 | ✅ `c0c9183` | Sayı biçimi: her yüzeyde Türkçe virgül (`sayi()` tek standart) | §15/§19 | 900 test yeşil; kart baytları değişmedi |
 | G1 | ✅ `4fe9dd6` | `grafik.py` iskeleti: kapalı mumlar, formasyon bandı + start/bitiş/apex, temas, alarm çizgisi + gerçek state metni, başlık/lejant/dipnot, `meta`, çökme modu, CLI + `matplotlib` pini | §2/§3 | 26 test (`test_grafik_iskelet.py`) |
 | G2 | ✅ bu commit | Bölge kutuları: OB/FVG/engulfing TEK havuzda yakınlık sırasıyla (1s 3+3 · 2s 3+3 · 4s 2+2 · 1g 1+1), `source_index` başlangıç + kalın kenar (boğada alt/ayıda üst), `1s/2s`de FVG yok, doluluk yalnız motorun verdiği kutuda, çakışan etiket atlanır | §3/§23 | `test_grafik_bolgeler.py` (16 test); motorlar yalnız `grafik_uret.py --zone`da; kayıt §23 |
-| G3 | ☐ | Yapı + şerit + bütçe: external PH/PL + `HH/HL/LH/LL`, en yeni 6 BOS/CHoCH, `kritik` çizgisi, `rvol(20)` kulvarı (4s `yerel hesap`), `!` son 15 mum, `evidence_text` yalnız `--etiket-detay` | §3 | `serit`/`olay` alanları `meta`'da yer tutuyor |
+| G3 | ✅ bu commit | Yapı + şerit + bütçe: external PH/PL + `HH/HL/LH/LL`, en yeni 6 BOS/CHoCH, `kritik` çizgisi, `rvol(20)` kulvarı (4s `yerel hesap`), `!` son 15 mum, `evidence_text` yalnız `--etiket-detay` | §3 | `test_grafik_yapi.py` (18 test); `▲`/`×N`/`kritik` ölçümleri §24 |
 | G4 | ☐ | Teslim: `transport/telegram.py:foto_gonder`, `notifier._gonder` kuyruğu, `payload['grafik_verisi']` köprüsü, 4 env anahtarı + `.env.example`/`deploy_check`, `/grafik` (3 yüzey) | §4/§5 | 1 olay = 1 mesaj kuralı metinde değişmez |
 | G5 | ☐ (ops.) | `/karne` ısı haritası; `GRAFİK_META` JSONL | §13/§3 | v1'de yazılmadı, alan adı hazır |
 | K1/K2 | ☐ | Grup kanalının kökten iptali (grafikle ilgisi yok, ayrı commit'ler) | §9 | |
@@ -198,6 +198,10 @@ mumlara dokundu, yapı nerede kırıldı). Her faz tek commit + tam test yeşil 
 *G1'de bilinçli ertelenenler:* `_gunluk.json` seed'i `bot_data/`a YAZILMADI (canlı
 bot aynı dizini okuyor) → sentetik derin çerçeve testte/CLI'da (`--demo`); yarım
 gün/tatil paritesi (`exchange-calendars`) hâlâ ölçülmedi (§18.5).
+
+*G3'te bilinçli ertelenenler:* `evidence_text` yalnız `--etiket-detay`da (kart
+metninin tekrarı olmaması için); `▲` yüzdelik işareti yalnız motor serisi varsa —
+yerel rvol'da percentile iddiası yok; spike kapağı (12) dipnot değil, `meta` sayacı.
 
 *G2'de bilinçli ertelenenler:* köprü (`payload["grafik_verisi"]`) henüz bağlı
 değil → bölge verisi canlı kartta G4'te görünecek (şimdilik yalnız CLI `--zone`);
