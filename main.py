@@ -60,7 +60,7 @@ from karne import (KarneDefteri, atr_hesapla, hafta_damgasi, karne_gunu_mu, karn
 from supabase_store import SupabaseStore
 from health_server import start_render_health_server
 from live_state import LiveState
-from telegram_commands import TelegramCommandListener
+from telegram_commands import TelegramCommandListener, ArkaPlanYaniti
 
 # Batch 8 / C2: raporlama katmanı `reporting/format.py`'ye ayrıldı. Burada eski
 # iç adlar (`_sayi`, `_panel_*`) alias olarak korunuyor: main döngüsü ve testler
@@ -1020,9 +1020,10 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları (DM)
    bileşen + geometri + vaka bloklarını ekler. Hiçbir şey yazılmaz/değiştirilmez.
 /tara [HISSE] — şimdi analiz et (seans dışı da çalışır)
 /grafik [HISSE] [1s|2s|4s|1g] — mum karesini gönder (diğer ad: /g)
-   sembol yazılmazsa son işlenen hisse denenir; zaman dilimi yazılmazsa 4 TF gönderilir.
-   Veri yalnız önbellekten okunur — canlı çekme yapılmaz; kare alarmın devamıdır,
-   ayrı mesaj/olay sayılmaz (TELEGRAM_GRAFIK kapalıyken de bu komut çalışır).
+   sembol zorunlu; TF yazılmazsa yalnız o sembolün 4 TF karesi denenir.
+   Hemen kabul yanıtı gelir, iş arka planda çalışır; sonuç/görsel DM’e gider.
+   Veri mevcut bellek/cache katmanından; eksik/eski cache açık hatadır, canlı fetch yok.
+   TELEGRAM_GRAFIK kapalıyken de çalışır; görseller alarm metin kotasını tüketmez.
 /yardim — bu liste (diğer adlar: /help · /start)
 
 Notlar:
@@ -1760,7 +1761,8 @@ def _komut_grafik(arguman: str) -> str:
 
     Neden ayrı komut: alarm kareleri yalnız `TELEGRAM_GRAFIK=alarm` iken gidiyor;
     kullanıcı istediği zaman bakabilsin diye kapıdan bağımsız bir yüzey lazım.
-    Veri YALNIZ önbellkten okunur (`grafik_uret.kare_uret`); canlı çekme yok —
+    Kabul cevabından sonra sınırlı arka plan işi çalışır. Veri mevcut bellek/cache
+    katmanından okunur (`grafik_uret.kare_uret`); canlı çekme yok —
     komutun tarama temposuna/ kota'ya dokunmaması için (§4).
     """
     parcalar = (arguman or "").split()
@@ -1783,38 +1785,157 @@ def _komut_grafik(arguman: str) -> str:
     notifier = _notifier_ref
     if notifier is None or not getattr(notifier, "enabled", False):
         return "Telegram gönderimi kapalı: kare üretilemiyor."
-    try:
-        import config as _cfg
-        import grafik_uret
-    except Exception as hata:  # matplotlib kurulu değilse net mesaj (G4 §7)
-        return f"Grafik katmanı hazır değil: {type(hata).__name__}"
+    if len(parcalar) > 2:
+        return "Kullanım: /grafik THYAO 4s (tek sembol ve isteğe bağlı TF)"
+    # Tek aktif manuel grafik işi: çakışan TF'ler ve sınırsız thread/kuyruk yok.
+    with _grafik_is_kilidi:
+        if _grafik_aktif_is:
+            cakisma = _grafik_aktif_is["hisse"] == hisse and bool(
+                set(tfler) & set(_grafik_aktif_is["tfler"]))
+            return ("⏳ Aynı sembol/TF grafik isteği zaten hazırlanıyor." if cakisma else
+                    "⏳ Başka grafik isteği hazırlanıyor; bitince yeniden deneyin.")
+        istek = {"hisse": hisse, "tfler": tfler, "asama": "kabul yanıtı bekleniyor"}
+        _grafik_aktif_is.update(istek)
 
-    ozetler = []
-    for tf in tfler:
+    def baslat():
         try:
-            sonuc = grafik_uret.kare_uret(hisse, tf, zone=True)
-        except SystemExit as hata:
-            return f"{hisse} {tf}: {hata}"
+            threading.Thread(target=_grafik_isi_calistir,
+                             args=(istek, notifier, _deque_manager_ref),
+                             name="grafik-istegi", daemon=True).start()
+        except Exception:
+            with _grafik_is_kilidi:
+                _grafik_aktif_is.clear()
+            raise
+
+    return ArkaPlanYaniti(
+        f"⏳ Grafik isteği alındı, hazırlanıyor: {hisse} · "
+        + "/".join(_tf_kisa(tf) for tf in tfler)
+        + ". Hedef yaklaşık 1 dakika; sonuç ve görsel DM'e gelecek.", baslat)
+
+
+_grafik_is_kilidi = threading.Lock()
+_grafik_aktif_is = {}
+_GRAFIK_HEDEF_SN = 60
+
+
+def _grafik_isi_calistir(istek, notifier, yonetici):
+    # Import/bağımlılık/timer kurulumu bile başarısız olsa rezervasyon bırakılmaz.
+    try:
+        _grafik_isi_yurut(istek, notifier, yonetici)
+    except (Exception, SystemExit) as hata:
+        logger.warning("/grafik iş kurulumu başarısız: %s", type(hata).__name__)
+        try:
+            notifier.send_text(f"❌ Grafik isteği tamamlanamadı: {istek['hisse']} · "
+                               f"iş kurulumu/bağımlılık: {type(hata).__name__}")
+        except Exception:
+            pass
+    finally:
+        with _grafik_is_kilidi:
+            _grafik_aktif_is.clear()
+
+
+def _grafik_isi_yurut(istek, notifier, yonetici):
+    """Yalnız seçilen sembol/TF; mevcut cache, kopya frame, DM teslimi.
+
+    Sağlayıcı fetch'i burada yok: tarama pacer'ı süreç-geneli değil, yeni bir
+    pacer eşzamanlı rate-limit güvenliği sağlamaz. Eksik/eski veri açık hatadır.
+    """
+    import grafik
+    import grafik_uret
+    from secrets_redaction import redact_sensitive_text
+
+    baslangic = time.monotonic()
+    tamam = threading.Event()
+    bildirim_kilidi = threading.Lock()
+    asama = {"ad": "cache yükleme"}
+    ozetler = []
+    basarili = 0
+
+    def durum(ad):
+        asama["ad"] = ad
+        logger.info("/grafik %s aşama: %s", istek["hisse"], ad)
+
+    def bildir(metin):
+        try:
+            ok, neden = notifier.send_text(metin)
+            if not ok:
+                logger.warning("/grafik durum teslimi başarısız: %s",
+                               redact_sensitive_text(str(neden), getattr(notifier, "token", ""))[:160])
         except Exception as hata:
-            logger.warning("/grafik üretimi başarısız (%s %s): %s", hisse, tf, hata)
-            return f"{hisse} {tf}: kare üretilemedi ({type(hata).__name__})"
-        yol, meta = sonuc.get("yol"), sonuc.get("meta") or {}
-        if not yol:
-            uyari = " · ".join(meta.get("uyarilar") or []) or sonuc.get("hata") or "çizilmedi"
-            return f"{hisse} {_tf_kisa(tf)}: {uyari}"
-        baslik = (f"{hisse} · {_tf_kisa(tf)} · {meta.get('mum_sayisi', '?')} mum")
-        ok, _ = notifier.grafik_dosya_gonder(yol, caption=baslik)
-        if not ok:
-            ozetler.append(f"{_tf_kisa(tf)} ✗ gönderilemedi")
-            continue
-        parca = [f"{_tf_kisa(tf)} ✓ {meta.get('mum_sayisi', '?')} mum"]
-        if meta.get("png_kb"):
-            parca.append(f"{meta['png_kb']} KB")
-        eksik = " · ".join(str(x) for x in (meta.get("eksik_katmanlar") or []))
-        if eksik:
-            parca.append(f"eksik: {eksik}")
-        ozetler.append(" · ".join(parca))
-    return f"{hisse} · " + " | ".join(ozetler)
+            logger.warning("/grafik durum teslimi başarısız: %s", type(hata).__name__)
+
+    def gecikme():
+        with bildirim_kilidi:
+            if not tamam.is_set():
+                bildir(f"⏳ {istek['hisse']}: 1 dakika hedefi aşıldı; "
+                       f"henüz bitmedi. Aşama: {asama['ad']}. Sonuç ayrıca bildirilecek.")
+
+    zamanlayici = threading.Timer(_GRAFIK_HEDEF_SN, gecikme)
+    zamanlayici.daemon = True
+    zamanlayici.start()
+    try:
+        for tf in istek["tfler"]:
+            hedef = grafik.kare_yolu(istek["hisse"], tf)
+            yol = None
+            try:
+                def tazelik(frame, kaynak):
+                    now = datetime.now(ISTANBUL_TZ)
+                    kapanis = mum_kapanis_ani(frame.index[-1], tf)
+                    yas = (now - kapanis).total_seconds() / 60.0
+                    if not _cache_verisi_kullanilabilir(
+                            yas, False, tarama_penceresi_acik_mi(now)):
+                        raise grafik_uret.VeriYok(
+                            f"cache eski: son kapanmış mum {frame.index[-1].isoformat()} "
+                            f"(kapanış yaşı {yas:.0f} dk). Kaynak: {kaynak}. "
+                            "Güvenli bağımsız fetch yok; botun veri yüklemesini kontrol edin.")
+
+                sonuc = grafik_uret.kare_uret(
+                    istek["hisse"], tf, zone=True, yonetici=yonetici,
+                    veri_dizin=yonetici.data_dir if yonetici is not None else None,
+                    cikti=hedef, asama=lambda ad: durum(f"{_tf_kisa(tf)}: {ad}"),
+                    tazelik_kontrol=tazelik)
+                yol, meta = sonuc.get("yol"), sonuc.get("meta") or {}
+                if not yol:
+                    neden = sonuc.get("hata") or " · ".join(meta.get("uyarilar") or []) or "çizim reddi"
+                    ozetler.append(f"{_tf_kisa(tf)} ✗ {neden}")
+                    continue
+                durum(f"{_tf_kisa(tf)}: DM sendPhoto")
+                ok, neden = notifier.grafik_dosya_gonder(
+                    yol, caption=f"{istek['hisse']} · {_tf_kisa(tf)} · "
+                    f"{meta.get('mum_sayisi', '?')} mum · son kapanan {meta.get('son_bar_ts')}")
+                if not ok:
+                    ozetler.append(f"{_tf_kisa(tf)} ✗ sendPhoto: {neden}")
+                    continue
+                basarili += 1
+                satir = (f"{_tf_kisa(tf)} ✓ {meta.get('mum_sayisi', '?')} mum · "
+                         f"son bar {meta.get('son_bar_ts')} · kaynak: {sonuc.get('kaynak')}")
+                eksik = meta.get("eksik_katmanlar") or []
+                uyarilar = meta.get("uyarilar") or []
+                if eksik or uyarilar:
+                    satir += " · uyarı: " + " · ".join(list(eksik) + list(uyarilar))
+                ozetler.append(satir)
+            except (Exception, SystemExit) as hata:
+                ozetler.append(f"{_tf_kisa(tf)} ✗ aşama {asama['ad']}: {type(hata).__name__}")
+                logger.warning("/grafik iş hatası (%s %s): %s", istek["hisse"], tf,
+                               type(hata).__name__)
+            finally:
+                # Adaptör de siler; üretim/gönderim istisnası ve kısmi PNG için son güvence.
+                for dosya in {hedef, yol} - {None}:
+                    try:
+                        os.remove(dosya)
+                    except OSError:
+                        pass
+        baslik = ("✅ Bitti" if basarili == len(istek["tfler"]) else
+                  "⚠️ Grafik isteği kısmen tamamlandı" if basarili else
+                  "❌ Grafik isteği tamamlanamadı")
+        with bildirim_kilidi:
+            tamam.set()
+            bildir(redact_sensitive_text(
+                f"{baslik}: {istek['hisse']} · {time.monotonic() - baslangic:.1f} sn\n"
+                + "\n".join(ozetler), getattr(notifier, "token", "")))
+    finally:
+        tamam.set()
+        zamanlayici.cancel()
 
 
 def _komut_tara(arguman: str) -> str:

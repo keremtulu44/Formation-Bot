@@ -537,77 +537,84 @@ def test_komut_grafik_notifier_pasifse_uretim_yok(monkeypatch, tmp_path):
     assert "kapalı" in M._komut_grafik("AKBNK 4s")
 
 
-def test_komut_grafik_onbellekte_veri_yoksa_canli_cekme_yok(monkeypatch):
-    """§4: cache'te olmayan sembol için 'veri yok' yazılır, ağa çıkılmaz."""
+def _komut_testini_bitir(monkeypatch, arguman, sahte):
+    """Kabulü sonra arka plan işi başlat; testte thread'i deterministik join et."""
+    import threading
     import main as M
-
-    class Sahte:
-        enabled = True
-
-        def __init__(self):
-            self.gonderen = []
-
-        def grafik_dosya_gonder(self, yol, caption=""):
-            self.gonderen.append(caption)
-            return True, ""
-
-    sahte = Sahte()
+    asil = threading.Thread
+    threadler = []
+    class kur(asil):
+        def __init__(self, *args, **kwargs):
+            asil.__init__(self, *args, **kwargs)
+            if kwargs.get("name") == "grafik-istegi":
+                threadler.append(self)
+    monkeypatch.setattr(M.threading, "Thread", kur)
     monkeypatch.setattr(M, "_notifier_ref", sahte)
-    metin = M._komut_grafik("ZZZZQQ 4s")
-    assert "veri yok" in metin and sahte.gonderen == []
+    monkeypatch.setattr(M, "_deque_manager_ref", None)
+    cevap = M._komut_grafik(arguman)
+    assert "isteği alındı" in cevap
+    assert not threadler
+    cevap.baslat()
+    for t in threadler:
+        t.join(30)
+        assert not t.is_alive()
+    assert not M._grafik_aktif_is
+    return sahte.metinler[-1]
+
+
+def test_komut_grafik_onbellekte_veri_yoksa_canli_cekme_yok(monkeypatch):
+    import main as M
+    import data
+    from types import SimpleNamespace
+    def yasak(*args, **kwargs):
+        raise AssertionError("sağlayıcıya çıkılamaz")
+    monkeypatch.setattr(data, "fetch_yfinance_1h", yasak)
+    monkeypatch.setattr(data, "fetch_yfinance_1d", yasak)
+    metinler, gorseller = [], []
+    sahte = SimpleNamespace(enabled=True, metinler=metinler,
+        send_text=lambda m: (metinler.append(m) or True, ""),
+        grafik_dosya_gonder=lambda *a, **k: gorseller.append(a))
+    metin = _komut_testini_bitir(monkeypatch, "ZZZZQQ 4s", sahte)
+    assert "veri yok" in metin and "tamamlanamadı" in metin and not gorseller
 
 
 def test_komut_grafik_gercek_onbellkten_kare_gonderir(monkeypatch):
-    """Tek TF (4s) gerçek önbellekle: özet satırı + caption + silinmiş dosya."""
+    """Gerçek kayıtlı cache, yaş kapısını bu teslim testinde ayrıca devre dışı bırak."""
     import main as M
-
-    class Sahte:
-        enabled = True
-
-        def __init__(self):
-            self.yollar = []
-
-        def grafik_dosya_gonder(self, yol, caption=""):
-            self.yollar.append((yol, caption, os.path.exists(yol)))
-            try:
-                os.remove(yol)
-            except OSError:
-                pass
-            return True, ""
-
-    sahte = Sahte()
-    monkeypatch.setattr(M, "_notifier_ref", sahte)
-    monkeypatch.setenv("DATA_DIR", str(KOK / "bot_data"))
-    metin = M._komut_grafik("AKBNK 4s")
-    assert "✓" in metin and "mum" in metin and sahte.yollar
-    yol, caption, var_mi = sahte.yollar[0]
-    assert var_mi is True and caption.startswith("AKBNK · 4s")
+    import config
+    from types import SimpleNamespace
+    monkeypatch.setattr(config, "DATA_DIR", str(KOK / "bot_data"))
+    monkeypatch.setattr(M, "_cache_verisi_kullanilabilir", lambda *a: True)
+    yollar, metinler = [], []
+    def foto(yol, caption=""):
+        yollar.append((yol, caption, os.path.exists(yol)))
+        return True, ""
+    sahte = SimpleNamespace(enabled=True, metinler=metinler,
+        send_text=lambda m: (metinler.append(m) or True, ""),
+        grafik_dosya_gonder=foto)
+    metin = _komut_testini_bitir(monkeypatch, "AKBNK 4s", sahte)
+    assert "Bitti" in metin and "✓" in metin and "mum" in metin
+    yol, caption, var_mi = yollar[0]
+    assert var_mi and caption.startswith("AKBNK · 4s")
     assert not os.path.exists(yol)
 
 
 def test_komut_grafik_dort_tf_tek_olay_ozeti(monkeypatch):
-    """Zaman dilimi yazılmazsa 4 kare, ama özet TEK mesaj satırı (§4: 1 olay = 1 metin)."""
     import main as M
-
-    class Sahte:
-        enabled = True
-
-        def __init__(self):
-            self.sayi = 0
-
-        def grafik_dosya_gonder(self, yol, caption=""):
-            self.sayi += 1
-            try:
-                os.remove(yol)
-            except OSError:
-                pass
-            return True, ""
-
-    sahte = Sahte()
-    monkeypatch.setattr(M, "_notifier_ref", sahte)
-    monkeypatch.setenv("DATA_DIR", str(KOK / "bot_data"))
-    metin = M._komut_grafik("AKBNK")
-    assert sahte.sayi == 4 and metin.count("|") == 3 and metin.count("\n") == 0
+    import config
+    from types import SimpleNamespace
+    monkeypatch.setattr(config, "DATA_DIR", str(KOK / "bot_data"))
+    monkeypatch.setattr(M, "_cache_verisi_kullanilabilir", lambda *a: True)
+    yollar, metinler = [], []
+    def foto(yol, caption=""):
+        yollar.append(yol)
+        return True, ""
+    sahte = SimpleNamespace(enabled=True, metinler=metinler,
+        send_text=lambda m: (metinler.append(m) or True, ""),
+        grafik_dosya_gonder=foto)
+    metin = _komut_testini_bitir(monkeypatch, "AKBNK", sahte)
+    assert len(yollar) == 4 and len(metinler) == 1 and metin.count("✓") == 4
+    assert all(not os.path.exists(yol) for yol in yollar)
 
 
 def test_yardim_yuzeyleri_grafik_icerir():
@@ -975,3 +982,46 @@ def test_gerçek_motorda_kart_satırı_karede_de_var(tf):
     assert veri["kart"], veri
     assert veri["kart"][0] in (f"• {kare[0]}", kare[0]), (kare, veri["kart"])
 
+
+@pytest.mark.parametrize("kod", [200, 403])
+def test_alarm_metni_basarisi_sonrasi_kuyruk_tur_sonu_ayri_dm_fotografi(
+        notifier, grafik_acik, monkeypatch, kod):
+    """Gerçek notifier akışı, ağ monkeypatch: fotoğraf yalnız metin başarısından sonra."""
+    import requests
+    import main as M
+    siralama = []
+    def post(url, **kw):
+        assert url.endswith("/sendMessage")
+        assert kw["json"]["chat_id"] == notifier.chat_id
+        siralama.append("sendMessage")
+        return type("Yanit", (), {"status_code": kod, "text": "test yanıtı"})()
+    monkeypatch.setattr(requests, "post", post)
+    fotolar = _veri(notifier, monkeypatch)
+    monkeypatch.setattr(notifier, "format_message", lambda d: "alarm metni aynı")
+    veri = {"stock_name": "AKBNK", "timeframe": "4h", "state": "KIRILIM_TEYITLI",
+            "pattern_name": "Yükselen Üçgen", "grafik_verisi": {
+                "sembol": "AKBNK", "goruntular": [{"tf": "4h", "goruntu": _goruntu(tf="4h")}]
+            }}
+    assert notifier._gonder(veri) is (kod == 200)
+    assert siralama == ["sendMessage"] and not fotolar
+    assert len(notifier._grafik_kuyruk) == (1 if kod == 200 else 0)
+    once = (notifier._gunluk_sayac, list(notifier._saatlik_zamanlar))
+    M._grafikleri_tur_sonunda(notifier)
+    assert len(fotolar) == (1 if kod == 200 else 0)
+    if fotolar:
+        assert fotolar[0]["notifier"].chat_id == "42"
+        assert not os.path.exists(fotolar[0]["yol"])
+    assert once == (notifier._gunluk_sayac, list(notifier._saatlik_zamanlar))
+    assert not notifier._grafik_kuyruk
+
+@pytest.mark.parametrize("chat", ["-100123", "@public", "42"])
+def test_grafik_public_veya_grup_chat_id_yapilandirmasinda_reddedilir(
+        notifier, monkeypatch, tmp_path, chat):
+    notifier.chat_id = chat
+    notifier.public_chat_id = "42" if chat == "42" else "-100123"
+    cagrilar = _veri(notifier, monkeypatch)
+    yol = tmp_path / "publice-gitmez.png"
+    yol.write_bytes(b"png")
+    ok, neden = notifier.grafik_dosya_gonder(str(yol))
+    assert not ok and "yalnız DM" in neden
+    assert not cagrilar and not yol.exists()

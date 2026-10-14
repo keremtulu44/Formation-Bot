@@ -2633,6 +2633,16 @@ class TelegramNotifier:
         try:
             if not self.enabled:
                 return False, "Telegram notifier pasif (token/chat_id env'de yok)"
+            # Fotoğraf hedefi gerçekten DM olmalı. CHAT_ID yanlışlıkla public
+            # grupla eşlenmişse metin politikasına dokunmadan görseli reddet.
+            try:
+                dm_kimligi = int(str(self.chat_id).strip()) > 0
+            except (ValueError, TypeError):
+                dm_kimligi = False
+            public_hedef = str(getattr(self, "public_chat_id", "") or "").strip()
+            if not dm_kimligi or (public_hedef and public_hedef == str(self.chat_id).strip()):
+                self.grafik_atlanan_hata += 1
+                return False, "görseller yalnız DM'e gönderilir; hedef private DM değil"
             from transport.telegram import foto_gonder
 
             self._grafik_pace()

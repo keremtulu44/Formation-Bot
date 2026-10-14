@@ -31,6 +31,8 @@ import shutil
 import tempfile
 import time
 import uuid
+import threading
+from functools import wraps
 from datetime import datetime
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
@@ -907,6 +909,19 @@ def _yatay_aralik(degerler: Iterable[Optional[float]], ek: Iterable[Optional[flo
     return alt - pay, ust + pay
 
 
+_CIZIM_KILIDI = threading.RLock()
+
+
+def _seri_cizim(fn):
+    @wraps(fn)
+    def kilitli(*args, **kwargs):
+        # pyplot global durumu thread-safe değil: otomatik/manuel çizimler seri.
+        with _CIZIM_KILIDI:
+            return fn(*args, **kwargs)
+    return kilitli
+
+
+@_seri_cizim
 def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
         secenekler: Optional[Mapping[str, Any]] = None) -> tuple[Optional[str], dict[str, Any]]:
     """Kareyi üretir: `(png_yolu, meta)`. Yol `None` → görsel yok, metin yine gider.
@@ -2076,9 +2091,15 @@ def _atom_yaz(yol: str, veri: bytes) -> None:
     klasor = os.path.dirname(os.path.abspath(yol)) or "."
     os.makedirs(klasor, exist_ok=True)
     gecici = os.path.join(klasor, f".{os.path.basename(yol)}.{os.getpid()}.tmp")
-    with open(gecici, "wb") as akis:
-        akis.write(veri)
-    os.replace(gecici, yol)
+    try:
+        with open(gecici, "wb") as akis:
+            akis.write(veri)
+        os.replace(gecici, yol)
+    finally:
+        try:
+            os.remove(gecici)
+        except OSError:
+            pass
 
 
 def girdi_ozeti(goruntu: Mapping[str, Any]) -> str:
@@ -2275,14 +2296,17 @@ def kareyi_yaz(goruntu: Mapping[str, Any], tf: str, *, serit: bool = True,
     asla engellemez (§4). Yol çağrıandan gelir: gönderim sonrası O siler.
     """
     hedef = kare_yolu(goruntu.get("sembol"), tf)
-    yol, meta = ciz(goruntu, tf, secenekler={
-        "cikti": hedef,
-        "serit": serit,
-        "beklenen_son_bar_ts": beklenen_son_bar_ts,
-    })
-    if yol is None:
-        try:
-            os.remove(hedef)
-        except OSError:
-            pass
-    return yol, meta
+    yol = None
+    try:
+        yol, meta = ciz(goruntu, tf, secenekler={
+            "cikti": hedef,
+            "serit": serit,
+            "beklenen_son_bar_ts": beklenen_son_bar_ts,
+        })
+        return yol, meta
+    finally:
+        if yol is None:
+            try:
+                os.remove(hedef)
+            except OSError:
+                pass
