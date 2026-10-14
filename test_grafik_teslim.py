@@ -16,6 +16,7 @@ TESLİM zinciri, piksel değil.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -493,10 +494,13 @@ def test_kart_metni_grafik_verisi_ile_bayt_bayt_ayni(notifier):
 
 def test_gonderim_durumu_gorsel_sayaclarini_gosterir(notifier):
     durum = notifier.gonderim_durumu()
-    for anahtar in ("grafik_gonderilen", "grafik_kuyruk", "grafik_atlanan_hata",
-                    "grafik_atlanan_kota", "grafik_ort_ms"):
+    for anahtar in ("grafik_acik", "grafik_olay", "grafik_olay_karesiz",
+                    "grafik_kopru_hata", "grafik_son_neden", "grafik_gonderilen",
+                    "grafik_kuyruk", "grafik_atlanan_hata", "grafik_atlanan_kota",
+                    "grafik_atlanan_baglam", "grafik_ort_ms"):
         assert anahtar in durum, anahtar
     assert durum["grafik_ort_ms"] == 0.0                # kare yok → ortalama yok
+    assert durum["grafik_olay"] == 0 and durum["grafik_olay_karesiz"] == 0
 
 
 def test_ortalama_sure_uretim_suresinden_okunur(notifier, grafik_acik, monkeypatch):
@@ -704,42 +708,125 @@ def test_tur_sonu_boslatici_hata_taramayi_durdurmaz(monkeypatch):
 
 # ---------------------------------------------------------------- /durum satırı
 
-class _DurumNotifier:
-    enabled = True
+def _durum_icin_gunluk_sayaclar(monkeypatch, M):
+    """`/durum`ın yalnız bu testteki sözlüğü görmesini sağla; globali temizleme."""
+    monkeypatch.setattr(M, "daily_stats", {
+        "patterns_found": 0,
+        "alerts_sent": 0,
+        "errors": 0,
+        "alerts_deferred": 0,
+        "alerts_state_disabled": 0,
+        "alerts_below_threshold": 0,
+        "alerts_digest_overflow": 0,
+        "alerts_kuyruk": 0,
+        "alerts_bar_kapanmadi": 0,
+        "alerts_break_close_invalid": 0,
+    })
 
-    def __init__(self, durum):
-        self._durum = durum
 
-    def gonderim_durumu(self):
-        return dict(self._durum)
-
-    def kap_durumu(self):
-        return None
-
-
-def test_durum_gorsel_satirini_yalniz_veri_varsa_yazar(monkeypatch):
-    """§4: görsel sayaçları `/durum`da TEK satır — sıfırken gürültü üretmesin."""
+def test_durum_gorsel_satiri_dort_durum(monkeypatch, notifier):
+    """Kapalı/açık, sıfır/zengin sayaç sözleşmesi dört durumda da sabittir."""
     import main as M
 
-    import datetime as _dt
+    _durum_icin_gunluk_sayaclar(monkeypatch, M)
+    monkeypatch.setattr(M, "_notifier_ref", notifier)
 
-    M.daily_stats["last_reset"] = _dt.date(2000, 1, 1)
-    M.reset_daily_if_needed()          # günlük sayaçların gerçek başlangıcı
-    assert M.daily_stats["grafik_kare"] == 0 and M.daily_stats["grafik_hata"] == 0
+    monkeypatch.setenv("TELEGRAM_GRAFIK", "yok")
+    assert "Grafik karesi" not in M._komut_durum("")
 
-    temel = {"enabled": True, "gonderilen_alarm": 3, "hatalar": 0, "engeller": {},
-             "public_enabled": False, "grafik_gonderilen": 0, "grafik_kuyruk": 0,
-             "grafik_atlanan_hata": 0, "grafik_atlanan_kota": 0, "grafik_ort_ms": 0.0}
-    monkeypatch.setattr(M, "_notifier_ref", _DurumNotifier(temel))
-    sessiz = M._komut_durum("")
-    assert "Grafik karesi" not in sessiz
+    monkeypatch.setenv("TELEGRAM_GRAFIK", "alarm")
+    sifir = M._komut_durum("")
+    assert "🖼 Grafik karesi: 0 alarm kartı" in sifir
+    assert "0 kare gönderildi · 0 hata · kuyruk 0 · ort 0.0 ms" in sifir
+    assert sifir.count("Grafik karesi") == 1
 
-    monkeypatch.setattr(M, "_notifier_ref", _DurumNotifier({
-        **temel, "grafik_gonderilen": 6, "grafik_atlanan_hata": 1,
-        "grafik_atlanan_kota": 2, "grafik_ort_ms": 512.4}))
-    acik = M._komut_durum("")
-    assert "Grafik karesi: 6 gönderildi" in acik and "ort 512.4 ms" in acik
-    assert acik.count("Grafik karesi") == 1
+    notifier.grafik_olay = 8
+    notifier.grafik_gonderilen = 5
+    notifier.grafik_atlanan_hata = 2
+    notifier._grafik_kuyruk = [{}, {}]
+    notifier.grafik_toplam_ms = 1250
+    notifier.grafik_kare_sayisi = 2
+    notifier.grafik_atlanan_kota = 3
+    notifier.grafik_atlanan_baglam = 4
+    notifier.grafik_olay_karesiz = 5
+    notifier.grafik_kopru_hata = 6
+    notifier.grafik_son_neden = "RuntimeError: çerçeve bozuk (AKBNK 4h)"
+    zengin = M._komut_durum("")
+    satirlar = [satir for satir in zengin.splitlines() if "Grafik karesi" in satir]
+    assert len(satirlar) == 1
+    satir = satirlar[0]
+    for parca in (
+        "Grafik karesi: 8 alarm kartı",
+        "5 kare gönderildi · 2 hata · kuyruk 2 · ort 625.0 ms",
+        "3 adet sınırda kesildi",
+        "4 bağlam güncellemesi",
+        "5 karesiz (tarama anında şalter kapalı ya da köprü atladı)",
+        "köprü hatası 6 · son neden: RuntimeError: çerçeve bozuk (AKBNK 4h)",
+    ):
+        assert parca in satir, parca
+
+    # Kapalı şalterde geçmiş görsel sayaçları kalır ama açıkça işaretlenir.
+    monkeypatch.setenv("TELEGRAM_GRAFIK", "yok")
+    notifier.grafik_gonderilen = 1
+    kapali = M._komut_durum("")
+    satirlar = [satir for satir in kapali.splitlines() if "Grafik karesi" in satir]
+    assert len(satirlar) == 1
+    assert "(şalter kapalı)" in satirlar[0]
+    assert "1 kare gönderildi" in satirlar[0]
+
+
+def test_grafik_kopru_hatasi_sadece_ilk_olayda_uyari_loglar(notifier, caplog):
+    """İlk köprü hatası INFO seviyesinde görünür; sonraki hatalar logu şişirmez."""
+    with caplog.at_level(logging.DEBUG, logger="notifier"):
+        notifier.grafik_kopru_hatasi("RuntimeError: " + "x" * 180)
+        notifier.grafik_kopru_hatasi("ValueError: ikinci hata")
+
+    assert notifier.grafik_kopru_hata == 2
+    assert len(notifier.grafik_son_neden) <= 120
+    kayitlar = [r for r in caplog.records if "grafik köprüsü" in r.getMessage()]
+    assert [r.levelno for r in kayitlar] == [logging.WARNING, logging.DEBUG]
+    assert "RuntimeError" in kayitlar[0].getMessage()
+
+
+def test_grafik_olay_karesiz_sayimi_salter_payload_ve_acil_kuyrugu(
+        notifier, monkeypatch, grafik_acik):
+    """Kapalı/open ve emergency marker kuralları; kuyruk kaydı karesiz sayılmaz."""
+    monkeypatch.setenv("TELEGRAM_GRAFIK", "yok")
+    assert notifier.grafik_kuyruga_ekle({"stock_name": "AKBNK"}) == 0
+    assert notifier.grafik_olay == 0 and notifier.grafik_olay_karesiz == 0
+
+    monkeypatch.setenv("TELEGRAM_GRAFIK", "alarm")
+    assert notifier.grafik_kuyruga_ekle({"stock_name": "AKBNK"}) == 0
+    assert notifier.grafik_kuyruga_ekle(
+        {"stock_name": "THYAO", "grafik_verisi": {"goruntular": []}}
+    ) == 0
+    assert notifier.grafik_olay == 2 and notifier.grafik_olay_karesiz == 2
+
+    # Acil kuyruk kaydı görsel verisi taşımaz; işaretliyse karesiz sayılmaz.
+    assert notifier.grafik_kuyruga_ekle(
+        {"stock_name": "GARAN", "_kuyruktan": True}
+    ) == 0
+    simdi = datetime.now(IST).isoformat()
+    notifier._acil_kuyruk = [{
+        "kuyruk_zaman": simdi,
+        "son_deneme": simdi,
+        "son_engel": "gunluk_kap",
+        "veri": {"stock_name": "AKBNK", "pattern_name": "Simetrik Üçgen",
+                 "timeframe": "4h", "state": "KIRILIM_TEYITLI"},
+    }]
+    monkeypatch.setattr(notifier, "can_send", lambda *a, **k: True)
+    gonderilen = []
+
+    def sahte_gonder(veri):
+        gonderilen.append(veri.get("_kuyruktan"))
+        notifier.grafik_kuyruga_ekle(veri)
+        return True
+
+    monkeypatch.setattr(notifier, "_gonder", sahte_gonder)
+    assert notifier.kuyrugu_bosalt() == 1
+    assert gonderilen == [True]
+    assert notifier.grafik_olay == 2 and notifier.grafik_olay_karesiz == 2
+
 
 def _vp_sonuc(n: int = 40):
     """Şeridi „motor" kaynağına bağlayan en küçük sahte motor çıktısı."""
@@ -778,6 +865,7 @@ def test_kare_listesi_tanimayan_bicimde_uyari_birakir(grafik_acik):
     assert cikti["goruntular"][0]["goruntu"]["serit"]["kaynak"] != "motor"
     assert any("tanınamadı" in x for x in cikti["uyarilar"])
 
+
 def test_bağlam_güncellemesi_kare_getirmez(notifier, grafik_acik, monkeypatch):
     """DM içerik kapısı kısa güncelleme üretiyorsa aynı olayın kareleri YİNE gitmez."""
     cagrilar = _veri(notifier, monkeypatch)
@@ -788,6 +876,7 @@ def test_bağlam_güncellemesi_kare_getirmez(notifier, grafik_acik, monkeypatch)
     assert notifier.grafik_kuyruga_ekle(olay) == 0
     assert notifier._grafik_kuyruk == []
     assert notifier.grafik_atlanan_baglam == 1
+    assert notifier.grafik_olay == 1 and notifier.grafik_olay_karesiz == 0
     assert notifier.gonderim_durumu()["grafik_atlanan_baglam"] == 1
     # Aynı olay bağlam değişmişse kareler normal şekilde kuyruğa girer.
     olay.pop("_dm_bağlam_değişmedi")

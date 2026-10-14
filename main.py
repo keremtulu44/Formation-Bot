@@ -1150,16 +1150,45 @@ def _komut_durum(_arguman: str) -> str:
                                    f"{gd.get('public_hatasi', 0)} hata · "
                                    f"kuyruk {gd.get('public_kuyruk', 0)} · "
                                    f"engel {gd.get('public_engel', 0)}")
-            # Görsel sayaçları (§4): metin kotasından AYRIDIR — karışmasın diye
-            # tek satırda, yalnız kill-switch açıksa gösterilir.
-            if gd.get("grafik_gonderilen") or gd.get("grafik_kuyruk") or gd.get("grafik_atlanan_hata"):
-                gosterim_grafik = (f"🖼 Grafik karesi: {gd.get('grafik_gonderilen', 0)} gönderildi · "
-                                   f"{gd.get('grafik_atlanan_hata', 0)} hata · "
-                                   f"{gd.get('grafik_atlanan_kota', 0)} adet sınırında kesildi · "
-                                   f"kuyruk {gd.get('grafik_kuyruk', 0)} · "
-                                   f"ort {gd.get('grafik_ort_ms', 0)} ms"
-                                   + (f" · {gd['grafik_atlanan_baglam']} bağlam güncellemesi"
-                                      if gd.get("grafik_atlanan_baglam") else ""))
+            # Görsel sayaçları (§4): metin kotasından AYRIDIR. Açık şalterde
+            # sıfır sonuç da teşhis için görünür; kapalıyken yalnız eski/bugünkü
+            # görsel etkinliği varsa satır kalır ve bunu başında belirtir.
+            grafik_acik = bool(gd.get("grafik_acik", False))
+            grafik_hareketi = any(gd.get(anahtar) for anahtar in (
+                "grafik_olay", "grafik_olay_karesiz", "grafik_kopru_hata",
+                "grafik_gonderilen", "grafik_kuyruk", "grafik_atlanan_hata",
+                "grafik_atlanan_kota", "grafik_atlanan_baglam", "grafik_ort_ms",
+            ))
+            if grafik_acik or grafik_hareketi:
+                grafik_satiri = (
+                    ("🖼 Grafik karesi: " if grafik_acik else
+                     "🖼 (şalter kapalı) Grafik karesi: ")
+                    + f"{gd.get('grafik_olay', 0)} alarm kartı · "
+                    + f"{gd.get('grafik_gonderilen', 0)} kare gönderildi · "
+                    + f"{gd.get('grafik_atlanan_hata', 0)} hata · "
+                    + f"kuyruk {gd.get('grafik_kuyruk', 0)} · "
+                    + f"ort {gd.get('grafik_ort_ms', 0)} ms"
+                )
+                grafik_ekleri = []
+                if gd.get("grafik_atlanan_kota"):
+                    grafik_ekleri.append(
+                        f"{gd['grafik_atlanan_kota']} adet sınırda kesildi")
+                if gd.get("grafik_atlanan_baglam"):
+                    grafik_ekleri.append(
+                        f"{gd['grafik_atlanan_baglam']} bağlam güncellemesi")
+                if gd.get("grafik_olay_karesiz"):
+                    grafik_ekleri.append(
+                        f"{gd['grafik_olay_karesiz']} karesiz "
+                        "(tarama anında şalter kapalı ya da köprü atladı)")
+                if gd.get("grafik_kopru_hata"):
+                    kopru = f"köprü hatası {gd['grafik_kopru_hata']}"
+                    son_neden = str(gd.get("grafik_son_neden") or "").strip()
+                    if son_neden:
+                        kopru += f" · son neden: {son_neden}"
+                    grafik_ekleri.append(kopru)
+                if grafik_ekleri:
+                    grafik_satiri += " · " + " · ".join(grafik_ekleri)
+                gosterim_grafik = grafik_satiri
         except Exception as exc:  # noqa: BLE001 - komut asla çökmesin
             logger.debug(f"Gönderim durumu okunamadı: {exc}")
     if gosterim:
@@ -2640,8 +2669,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 if veri.get("goruntular"):
                                     payload['grafik_verisi'] = veri
                             except Exception as grafik_hata:  # noqa: BLE001 - görsel alarmı düşürmesin
-                                logger.debug("grafik köprüsü atlandı (%s %s): %s",
-                                             stock, tf_name, type(grafik_hata).__name__)
+                                # Sayaç/diagnostic kodu da alarm akışını durduramaz.
+                                try:
+                                    notifier.grafik_kopru_hatasi(
+                                        f"{type(grafik_hata).__name__}: "
+                                        f"{str(grafik_hata)[:90]} ({stock} {tf_name})"
+                                    )
+                                except Exception as sayac_hata:  # noqa: BLE001
+                                    logger.debug(
+                                        "grafik köprüsü hata sayacı yazılamadı (%s %s): %s",
+                                        stock, tf_name, type(sayac_hata).__name__,
+                                    )
 
                         def _attach_domain_context(payload):
                             outputs = None     # köprü hata durumunda da None görsün
