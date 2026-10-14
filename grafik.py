@@ -119,7 +119,9 @@ SABITLER: dict[str, Any] = {
     "lejant_pt": 9.0,
     "dipnot_pt": 9.0,
     # çizim incelikleri (spike ölçümü, §17)
-    "mum_genislik_orani": 0.62,
+    "mum_genislik_orani": 0.62,       # gövde genişliği, bar aralığının oranı (veri birimi)
+    "fitil_pt": 0.85,
+    "govde_kenar_pt": 0.7,
     "temas_radyus": 4.2,
     "temas_isaret_maks": 24,     # kalabalık karede yalnız en yeni N temas işaretlenir
     "isaret_boyut": 5.4,
@@ -1078,7 +1080,10 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         ax.set_xlim(-0.6, n - 0.4 + sag_bosluk)
         meta["kare"]["x_siniri"] = [-0.6, round(n - 0.4 + sag_bosluk, 3)]
         butce = _butce_px(genislik)
-        cap = max(0.6, olcu["px_bar"] * float(SABITLER["mum_genislik_orani"]))
+        # Mum gövde genişliği VERİ birimindedir (x = bar indeksi, komşu barlar
+        # arası 1,0). Eskiden `px_bar × 0,62` yazılıyordu: px/bar = 6 iken gövde
+        # 3,7 bar genişliğinde çiziliyor, komşu mumların üstüne biniyordu.
+        cap = float(SABITLER["mum_genislik_orani"])
 
         # --- bölge kutuları mumların ARDINDA (bilgi zemini; §0.4.1) ---
         if not yalnizca_mumlar and (zone.get("cizilen") or []):
@@ -1186,12 +1191,14 @@ def _mumlar_ciz(ax, acilis, yuksek, dusuk, kapanis, cap: float,
             continue
         yukselen = k >= a
         renk = PALET["mum_yukselen"] if yukselen else PALET["mum_dusen"]
-        ax.plot([i, i], [d, y], color=renk, linewidth=max(0.6, cap * 0.16),
+        # Fitil kalınlığı sabit ~1,2 px (0,85 pt @ 100 dpi): gövdeyle orantılı
+        # değil, okunurluk için sabit; gövde kenarı ~1 px.
+        ax.plot([i, i], [d, y], color=renk, linewidth=float(SABITLER["fitil_pt"]),
                 solid_capstyle="butt", zorder=2)
         taban, tavan = sorted((a, k))
         ax.bar([i], [max(tavan - taban, min_govde)], bottom=taban, width=cap,
                facecolor=(PALET["zemin"] if yukselen else renk), edgecolor=renk,
-               linewidth=0.9, zorder=3)
+               linewidth=float(SABITLER["govde_kenar_pt"]), zorder=3)
 
 
 def _cizgi_ve_alan(ax, kapanis, aralik: Sequence[float]) -> None:
@@ -1704,8 +1711,8 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
             dipnotlar.append(str(uyari))
     notlar = [str(b) for b in (goruntu.get("budama") or []) if b]
     serit = goruntu.get("serit") or {}
-    if int(serit.get("hacimsiz") or 0) > 0:
-        notlar.append(f"veri: {serit['hacimsiz']} bar hacimsiz")
+    # Hacimsiz bar sayısı yukarıdaki dipnotta zaten yazılı (aynı pencere, aynı
+    # sayı); burada ikinci kez yazılmaz.
     if serit.get("yetersiz"):
         notlar.append("şerit: geçmiş yetersiz (motor minimum_history=150 düşürülmedi)")
     zone = goruntu.get("zone") or {}

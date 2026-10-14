@@ -109,3 +109,24 @@ Değişen dosyalar: `grafik_uret.py`, `grafik.py`, `main.py`, `telegram_commands
 - İş/callback süreç içidir: restart sırasında yarım grafik isteğinin tamamlanması için dayanıklı job outbox eklenmedi. Telegram durum mesajı da dış servis arızasında ulaşamayabilir; hata loglanır, sahte teslim başarısı üretilmez.
 - Yöneticiden frame alırken tarama eşzamanlı deque değiştirirse okuma istisnası açık aşama/tür hatası olarak sonuçlanır; tarama verisine veya cache'e grafik için yazılmaz.
 - Gerçek cache okuma ve local render doğrulandı; canlı provider tazeliği ve gerçek DM teslimi bu oturumun güvenlik kapsamı dışında bırakıldı.
+
+## 7. Görsel inceleme düzeltmeleri (ek)
+
+Tarih: 14 Ekim 2026 (aynı oturum). Kaynak: gerçek `bot_data` önbelleği (AKBNK, ALARK); yalnız yerel çizim, canlı Telegram/Yahoo yok.
+
+Görsel incelemede bulunan ve düzeltilen sorunlar:
+
+| Sorun | Kök neden | Düzeltme |
+|---|---|---|
+| Mumlar üst üste biniyor, okunmuyor | `_kare_ciz` gövde genişliğini `px_bar × 0,62` (piksel türevi) olarak **veri birimine** veriyordu: 1s/180 mumda 3,7 bar, 4s/120 mumda 5,6 bar genişlik | Gövde genişliği = `0,62` bar aralığı (`SABITLER["mum_genislik_orani"]`); fitil sabit `0,85 pt` (~1,2 px), gövde kenarı `0,7 pt` |
+| Hacimsiz uyarısı iki kez basılıyor | `meta.hacimsiz_bar` (dipnot) ve `serit.hacimsiz` (not) aynı pencereyi sayıyor | Not satırı kaldırıldı; sayı tek dipnotta |
+| Formasyon hiç çizilmiyor, "formasyon verisi verilmedi" | CLI `--formasyon` JSON'u olmadan formasyon aramıyordu | `--formasyon-tara`: `ArgentEngine(config.PROFILE, 0.01).process(çerçeve)` + `patterns.detect._usable_active(snap, TRIANGLE_FAMILIES + SPECIALIZED_FAMILIES)`; canlı yolun kapısıyla aynı. Lifecycle geçmiş defterine yazılmaz. |
+
+Ölçüm (yerel): AKBNK 1s (180 mum) için kare artık ayrışık mumlarla okunuyor. Aynı çerçevede motor `KIRILIM_ADAYI` durumunda bir üçgen buluyor ancak botun kullanılabilirlik kapısı bunu geçirmiyor; CLI bunu uydurmadan "kullanılabilir formasyon yok" diye yazar. ALARK 4s (120 mum) için botun kapısı "Alçalan Üçgen, daralma %77" formasyonunu geçiriyor; bant, temas, BOS/HL/LL, OB/FVG kutuları çiziliyor.
+
+Yeni testler: `test_grafik_gorsel_duzeltme.py` (8 test). Gövde genişliği testi `_kare_ciz` içinde `_mumlar_ciz`'e giden değeri dinler; eski kodda 4 test kırılır, yeni kodda geçer. Tam paket: `DATA_DIR=/tmp/fbdata pytest -q` → 1046 passed, 44 skipped.
+
+Açık kalanlar (bilinçli, bu turda yapılmadı):
+- Bazı zone etiketleri (`OB↓ %41`, `FVG↓ q100`, `CHoCH↓ · kritik`) mum gövdelerinin üstüne binebiliyor; etiket yerleşimi ayrı bir iş.
+- Canlı botun formasyon kaydı `PatternLifecycleManager` geçmişiyle geldiği için CLI sonucu (tek seferlik yeniden oynatma) ile canlı alarm formasyonu aynı olmayabilir; bu fark ölçülmedi.
+- Kare, mum renkleri ve yazı boyutları gözle doğrulandı; piksel-hash testi yok (tasarım gereği).

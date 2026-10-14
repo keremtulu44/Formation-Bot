@@ -11,6 +11,11 @@ kaydı `--formasyon` ile verilmezse kare mumlarla çizilir ve `uyarilar` bunu ya
     python grafik_uret.py --hisse AKBNK --tf 1h --mum 180 --cikti /tmp/a.png
     python grafik_uret.py --hisse THYAO --tum-tf --json
     python grafik_uret.py --hisse AKBNK --tf 1d --demo --mum 180
+    python grafik_uret.py --hisse ALARK --tf 4h --zone --formasyon-tara
+
+`--formasyon-tara`: formasyonu botun canlı tarama motoru ve kullanılabilirlik
+kapısıyla bulur (profil `config.PROFILE`). Bulunmazsa uydurma yapılmaz; kare
+"tarama: … formasyon yok" uyarısıyla çizilir.
 
 `--demo`: cache okumadan, ayrı render→PNG doğrulaması için (bu depo `bot_data/*_gunluk.json`
 içermez) 500 barlık GüNLÜK çerçeveyi sentetik üretir. Neden `bot_data/` içine
@@ -25,6 +30,7 @@ import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 ISTANBUL_TZ = timezone(timedelta(hours=3))
 TF_LISTESI = ("1h", "2h", "4h", "1d")
@@ -104,6 +110,7 @@ def _cikti_yolu(cikti: str | None, hisse: str, tf: str, tfler: tuple) -> str:
 def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool = False,
               mum: int | None = None, serit: bool = True, etiket_detay: bool = False,
               formasyon_yol: str | None = None, formasyon: dict | None = None,
+              formasyon_tara: bool = False,
               alarm_turu: str | None = None, cikti: str | None = None,
               demo: bool = False, yonetici=None, asama=None,
               tazelik_kontrol=None) -> dict:
@@ -138,7 +145,10 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
                 "hata": str(hata)}
     uyari: list[str] = []
     if formasyon is None:
-        formasyon, uyarilar = _formasyon_yukle(formasyon_yol, cerceve)
+        if formasyon_tara:
+            formasyon, uyarilar = _formasyon_tara(cerceve)
+        else:
+            formasyon, uyarilar = _formasyon_yukle(formasyon_yol, cerceve)
         uyari += list(uyarilar)
     sonuclar = None
     if zone:
@@ -194,6 +204,27 @@ def _demo_cerceve(bar_sayisi: int):
     return df
 
 
+def _formasyon_tara(cerceve) -> tuple[Any, list[str]]:
+    """Botun canlı taramasıyla AYNI motor ve AYNI kullanılabilirlik kapısı.
+
+    Canlı yol `canli_tarama`/`main` → `PatternLifecycleManager.scan` →
+    `ArgentEngine.process(df)`; kapı `patterns.detect._usable_active(snap,
+    TRIANGLE_FAMILIES + SPECIALIZED_FAMILIES)`. Burada motor doğrudan kurulur:
+    lifecycle'ın geçmiş defterine yazması CLI'da istenmez. Profil ve mintick
+    botla aynıdır (`config.PROFILE`, varsayılan mintick 0,01). Çerçeve kopyalanır.
+    Dönüş: `(PatternCandidate | None, uyarılar)`; formasyon yoksa uydurma yok.
+    """
+    from config import PROFILE
+    from patterns.detect import SPECIALIZED_FAMILIES, TRIANGLE_FAMILIES, _usable_active
+    from patterns.lifecycle import ArgentEngine
+
+    snap = ArgentEngine(PROFILE, 0.01).process(cerceve.copy(deep=True))
+    aday = _usable_active(snap, TRIANGLE_FAMILIES + SPECIALIZED_FAMILIES)
+    if aday is None:
+        return None, ["tarama: bu karede kullanılabilir formasyon yok (canlı tarama kapısı)"]
+    return aday, []
+
+
 def _formasyon_yukle(yol: str | None, cerceve) -> tuple[dict | None, list[str]]:
     """`--formasyon` JSON'unu okur; yoksa None + uyarı (sessiz kabahat yok)."""
     if not yol:
@@ -223,6 +254,9 @@ def main(giris: list[str] | None = None) -> int:
     ayristirici.add_argument("--veri-dizin", default=None, help="önbellek dizini (DATA_DIR)")
     ayristirici.add_argument("--formasyon", default=None,
                              help="kart payload'ı biçiminde JSON: bant/işaret/alarm verisi")
+    ayristirici.add_argument("--formasyon-tara", action="store_true",
+                             help="formasyonu botun canlı tarama motoru ve kapısıyla bul "
+                                  "(--formasyon yerine; uydurma yok, bulunmazsa uyarı yazar)")
     ayristirici.add_argument("--alarm-turu", default=None,
                              choices=["aday", "kritik", "teyit", "retest", "gecersiz", "ihlal"])
     ayristirici.add_argument("--zone", action="store_true",
@@ -249,7 +283,7 @@ def main(giris: list[str] | None = None) -> int:
             sonuc = kare_uret(secenek.hisse, tf, veri_dizin=veri_dizin, zone=secenek.zone,
                               mum=secenek.mum, serit=not secenek.serit_yok,
                               etiket_detay=secenek.etiket_detay,
-                              formasyon_yol=secenek.formasyon,
+                              formasyon_yol=secenek.formasyon, formasyon_tara=secenek.formasyon_tara,
                               alarm_turu=secenek.alarm_turu, demo=secenek.demo,
                               cikti=_cikti_yolu(secenek.cikti, secenek.hisse, tf, tfler))
         except SystemExit as hata:        # `_cerceve_yukle` uyumluluğu
