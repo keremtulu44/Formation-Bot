@@ -741,13 +741,43 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
     return goruntu
 
 
+# Formasyon durumu → kısa Türkçe etiket (başlık ve /grafik altyazısı). Bilinmeyen
+# durum etiketsiz kalır; ham motor adı kullanıcıya yazılmaz.
+FORMASYON_DURUM_ETIKET = {
+    "ADAY_OLUSUYOR": "aday oluşuyor",
+    "GEOMETRI_ADAYI": "geometri adayı",
+    "FORMASYON_TANIMLANDI": "tanımlandı",
+    "OLGUNLASIYOR": "olgunlaşıyor",
+    "SIKISMA_GUCLENIYOR": "sıkışma güçleniyor",
+    "KIRILIM_HAZIRLIGI": "kırılım hazırlığı",
+    "KIRILIM_DENEMESI": "kırılım denemesi",
+    "KIRILIM_ADAYI": "kırılım adayı",
+    "KIRILIM_TEYITLI": "kırılım teyitli",
+    "RETEST_BEKLENIYOR": "retest bekleniyor",
+    "RETEST_EDILIYOR": "retest ediliyor",
+    "RETEST_BASARILI": "retest başarılı",
+    "FORMASYON_TAMAMLANDI": "tamamlandı",
+    "BASARISIZ_KIRILIM": "kırılım başarısız",
+    "KIRILIM_TEYIT_ALAMADI": "teyit alınamadı",
+    "FORMASYON_ZAYIFLADI": "zayıfladı",
+    "FORMASYON_GECERSIZ": "geçersiz",
+}
+
+
+def formasyon_durum_etiketi(durum: Any) -> str:
+    """Durum kodunun Türkçe etiketi; bilinmiyorsa boş (ham kod yazılmaz)."""
+    return FORMASYON_DURUM_ETIKET.get(str(durum or "").strip().upper(), "")
+
+
 _FORMASYON_METIN = ("pattern_name", "pattern_type", "state", "frozen_pattern_type",
                     "evidence_text")
 _FORMASYON_SAYI = ("quality", "effective_quality", "contraction", "start_bar", "end_bar",
                     "apex_bar", "known_bar", "upper_now", "lower_now", "upper_slope",
                     "lower_slope", "upper_touches", "lower_touches", "break_price",
                     "critical_price_level", "candle_close_price", "close_price",
-                    "direction", "break_dir", "progress", "start_width", "current_width")
+                    "direction", "break_dir", "progress", "start_width", "current_width",
+                    "hb1", "hp1", "hb2", "hp2", "lb1", "lp1", "lb2", "lp2")
+_CAPA_TAM = ("hb1", "hb2", "lb1", "lb2")   # bar indeksleri; fiyatlar float kalır
 
 
 def _formasyon_kopyala(cift: Any) -> dict[str, Any]:
@@ -759,7 +789,7 @@ def _formasyon_kopyala(cift: Any) -> dict[str, Any]:
             cikti[ad] = str(deger)
     for ad in _FORMASYON_SAYI:
         ham = _alan(cift, ad)
-        tamsayi_mi = ad.endswith(("_bar", "_touches", "direction", "break_dir"))
+        tamsayi_mi = ad.endswith(("_bar", "_touches", "direction", "break_dir")) or ad in _CAPA_TAM
         deger = _tam(ham) if tamsayi_mi else _gercek(ham)
         if deger is not None:
             cikti[ad] = deger
@@ -1454,11 +1484,11 @@ def _formasyon_ciz(ax, goruntu: Mapping[str, Any], n: int, butce: float,
                    metin: dict[str, Any]) -> None:
     """Bant sınırları + son muma projeksiyon + start/bitiş/apex + temas işaretleri.
 
-    Neden yatay çizgi: motorun bant değeri `upper_now/lower_now` "şu an"ki
-    değerdir; geçmişteki eğimi yalnız `upper_slope/lower_slope` veriyor ve birim
-    dönüşümünü (TL/mum) yeniden üretmek §2'nin "hesap yapma" yasağını ihlal
-    eder. Bu yüzden sınır solda `start_bar`'dan itibaren düz çizilir ve
-    `eğim` yazısı gerçek sayıyla etiketlenir (uydurma geometri yok).
+    Eğim: önceden sınır düz çizilirdi (yalnız "şu anki" değer biliniyordu), bu
+    yanıltıcıydı (yükselen üçgenin alt sınırı yükselirken yatay görünüyordu). Şimdi
+    motorun iki çapa noktasından (`hb1/hp1/hb2/hp2`, `lb1/lp1/lb2/lp2`) geçen
+    doğrusu `f_line_price` ile her bar için değerlendirilir: yeni geometri
+    üretilmez, motorun kendi doğrusu çizilir. Çapa yoksa yatay yedek kullanılır.
     """
     formasyon = goruntu.get("formasyon") or {}
     ust, alt = formasyon.get("upper_now"), formasyon.get("lower_now")
@@ -1474,13 +1504,25 @@ def _formasyon_ciz(ax, goruntu: Mapping[str, Any], n: int, butce: float,
     if bas is not None and bas - sol >= 0:
         x0 = min(int(bas) - sol, max(0, n - 1))
     kalin = SABITLER["cizgi_kalinlik"]["formasyon"]
-    for deger in (ust, alt):
+    # Gerçek eğim: motorun kendi çizgi denklemi (`f_line_price`, iki çapa noktasından)
+    # her bar için değerlendirilir; çapa yoksa eski yatay çizgiye düşülür.
+    from patterns.mathutil import f_line_price
+    for deger, ust_mu in ((ust, True), (alt, False)):
         if deger is None:
             continue
-        ax.plot([x0, n - 1], [float(deger), float(deger)], color=PALET["formasyon"],
-                linewidth=kalin, solid_capstyle="butt", zorder=4)
-        if x0 > 0:      # projeksiyon değil: bant öncesi yok → kesikli uzantı (§0.12e)
-            ax.plot([0, x0], [float(deger), float(deger)], color=PALET["formasyon"],
+        ca = ("hb1", "hp1", "hb2", "hp2") if ust_mu else ("lb1", "lp1", "lb2", "lp2")
+        capa = [formasyon.get(k) for k in ca]
+        def cizgi(xs):
+            if any(v is None for v in capa):
+                return [float(deger)] * len(xs)
+            b1, p1, b2, p2 = capa
+            return [f_line_price(int(b1), float(p1), int(b2), float(p2), i + sol) for i in xs]
+        xs = list(range(x0, n))
+        ax.plot(xs, cizgi(xs), color=PALET["formasyon"], linewidth=kalin,
+                solid_capstyle="butt", zorder=4)
+        if x0 > 0:      # bant öncesi: aynı doğrunun geriye kesikli uzantısı (§0.12e)
+            xs0 = list(range(0, x0 + 1))
+            ax.plot(xs0, cizgi(xs0), color=PALET["formasyon"],
                     linewidth=SABITLER["cizgi_kalinlik"]["projeksiyon"],
                     linestyle=(0, (3, 3)), alpha=0.75, zorder=4)
     # başlangıç / bitiş / apex işaretleri (§2.3) — mumun KAPANIŞına sabitlenir,
@@ -1801,6 +1843,9 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
     bilgi: list[str] = []
     if formasyon.get("ad"):
         bilgi.append(str(formasyon["ad"]))
+        etiket = formasyon_durum_etiketi(formasyon.get("state"))
+        if etiket:
+            bilgi.append(etiket)
     q = formasyon.get("quality")
     if q is None:
         q = formasyon.get("effective_quality")

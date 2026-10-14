@@ -144,9 +144,10 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
         return {"tf": tf, "yol": None, "meta": {}, "kaynak": "", "uyarilar": [],
                 "hata": str(hata)}
     uyari: list[str] = []
+    durum = None
     if formasyon is None:
         if formasyon_tara:
-            formasyon, uyarilar = _formasyon_tara(cerceve)
+            formasyon, durum, uyarilar = _formasyon_tara_ayrintili(cerceve)
         else:
             formasyon, uyarilar = _formasyon_yukle(formasyon_yol, cerceve)
         uyari += list(uyarilar)
@@ -161,6 +162,10 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
     goruntu = grafik.anlik_goruntu(formasyon, tf, cerceve, sembol=str(hisse).upper(),
                                    alarm_turu=alarm_turu, sonuclar=sonuclar,
                                    kare_mum=mum, etiket_detay=etiket_detay)
+    # Durum yalnız başlık/altyazı için: `anlik_goruntu` içinde `state` alarm türünü
+    # belirler (`_ALARM_TURU`); bu yüzden görüntü kurulduktan SONRA eklenir.
+    if durum and isinstance(goruntu.get("formasyon"), dict):
+        goruntu["formasyon"]["state"] = durum
     for u in uyari:
         goruntu["uyarilar"].append(u)
     if asama:
@@ -173,6 +178,7 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
     meta["kaynak"] = kaynak
     # Altyazı için: çizilen formasyonun adı (yoksa None). Kart/alarm yolu bunu kullanmaz.
     meta["formasyon_ad"] = (goruntu.get("formasyon") or {}).get("ad") or None
+    meta["formasyon_durum"] = (goruntu.get("formasyon") or {}).get("state") or None
     return {"tf": tf, "yol": yol, "meta": meta, "kaynak": kaynak,
             "uyarilar": list(meta.get("uyarilar") or []), "hata": None}
 
@@ -206,7 +212,35 @@ def _demo_cerceve(bar_sayisi: int):
     return df
 
 
+def _grafik_formasyonu_bul(snap):
+    """Grafik kapısı: motorun raporladığı aktif formasyon, durumdan bağımsız.
+
+    Karar: `/grafik` formasyon varsa çizer (sıkışma, kırılım denemesi, başarısız
+    kırılım dâhil). Durum etiketi başlıkta ve altyazıda yazar, böylece kullanıcı ne
+    olduğunu görür. Yalnız motorun kendi geçerlilik ölçütleri uygulanır: aktif
+    aday, kalite eşiği ve Üçgen/Kama/Bayrak/Flama ailesi. Alarm kapısı
+    (`patterns.detect._usable_active`) ayrı kalır; burada ona dokunulmaz.
+    """
+    from patterns.detect import SPECIALIZED_FAMILIES, TRIANGLE_FAMILIES
+    a = snap.active
+    if a is None:
+        return None
+    min_q = (snap.min_specialized_quality if a.family in SPECIALIZED_FAMILIES
+             else snap.min_raw_quality)
+    if snap.effective_quality is None or snap.effective_quality < min_q:
+        return None
+    if a.family not in TRIANGLE_FAMILIES + SPECIALIZED_FAMILIES:
+        return None
+    return a
+
+
 def _formasyon_tara(cerceve) -> tuple[Any, list[str]]:
+    """`_formasyon_tara_ayrintili`nin durumsuz biçimi (eski çağıranlar için)."""
+    aday, _durum, uyarilar = _formasyon_tara_ayrintili(cerceve)
+    return aday, uyarilar
+
+
+def _formasyon_tara_ayrintili(cerceve) -> tuple[Any, Any, list[str]]:
     """Botun canlı taramasıyla AYNI motor ve AYNI kullanılabilirlik kapısı.
 
     Canlı yol `canli_tarama`/`main` → `PatternLifecycleManager.scan` →
@@ -217,17 +251,16 @@ def _formasyon_tara(cerceve) -> tuple[Any, list[str]]:
     Dönüş: `(PatternCandidate | None, uyarılar)`; formasyon yoksa uydurma yok.
     """
     from config import PROFILE
-    from patterns.detect import SPECIALIZED_FAMILIES, TRIANGLE_FAMILIES, _usable_active
     from patterns.lifecycle import ArgentEngine
 
     try:
         snap = ArgentEngine(PROFILE, 0.01).process(cerceve.copy(deep=True))
-        aday = _usable_active(snap, TRIANGLE_FAMILIES + SPECIALIZED_FAMILIES)
+        aday = _grafik_formasyonu_bul(snap)
     except Exception as hata:  # noqa: BLE001 - tarama hatası kareyi düşürmesin
-        return None, [f"tarama hatası ({type(hata).__name__}): formasyonsuz çizildi"]
+        return None, None, [f"tarama hatası ({type(hata).__name__}): formasyonsuz çizildi"]
     if aday is None:
-        return None, ["tarama: bu karede kullanılabilir formasyon yok (canlı tarama kapısı)"]
-    return aday, []
+        return None, None, ["tarama: bu karede kullanılabilir formasyon yok (canlı tarama kapısı)"]
+    return aday, str(snap.state), []
 
 
 def _formasyon_yukle(yol: str | None, cerceve) -> tuple[dict | None, list[str]]:

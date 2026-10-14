@@ -1967,7 +1967,13 @@ def _kare_altyazisi(hisse: str, tf: str, meta: dict) -> str:
     parcalar = [hisse, _tf_kisa(tf)]
     if mum:
         parcalar.append(f"{mum} mum")
-    parcalar.append(str(meta.get("formasyon_ad") or "formasyon yok"))
+    if meta.get("formasyon_ad"):
+        import grafik as _grafik_etiket
+        durum = _grafik_etiket.formasyon_durum_etiketi(meta.get("formasyon_durum"))
+        parcalar.append(f"{meta['formasyon_ad']} ({durum})" if durum
+                        else str(meta["formasyon_ad"]))
+    else:
+        parcalar.append("formasyon yok")
     if ts:
         parcalar.append(f"son kapanan {ts}")
     return " · ".join(parcalar)
