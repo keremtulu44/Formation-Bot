@@ -252,8 +252,8 @@ alınca nerede kırılır" sorusunun cevabı; **senin yapacağın 3 satır** iş
 | L8 | Kurulumda "kare gitmiyor" sessiz kalır | ✅ kapandı | `deploy_check.py --grafik-test [--send-test-message]` (çevrimdışı çizim + isteğe bağlı sendPhoto) |
 | L9 | Restart'ta sayaç/cooldown sıfır | ❗ SENDEN | Supabase bağla (`SUPABASE_URL`/`SUPABASE_ANON_KEY`); grafik bundan bağımsız |
 | L10 | Canlı DM'de sıra/animasyon beklentisi | ❗ SENDEN | runbook **4.7** dumanı; media group/reply (v2) ancak bundan sonra |
-| L11 | Karttaki motor durumunun karede okunmaması | ❗ KALDI (G5) | ayak yazısına etiket beslemesi = çizim plumbing'i; bilinçli ertelendi, yarımkod yok |
+| L11 | Karttaki motor durumunun karede okunmaması | ✅ kapandı | karenin üst bloğunda kartın kendi `yapi` satırı (`domain_bolumleri` çıktısı, yalnız `• ` imi düşüyor); 3. satır eksen rezerviyle, yer yoksa `kesilen`de — GRAFIK_TASARIM §27 |
 | L12 | `1d` karesi yüzeysel (40 mum) | ℹ kabul | §18.6; alarm 1d ise kadraj tavanı kalkıyor, bant sığar |
 
-Yol haritası satırları: G4 teslim `a80524d` + bu denetim turu; **G5 = ısı haritası +
-§13 JSONL + L11 + v2 teslim**.
+Yol haritası satırları: G4 teslim `a80524d` + denetim turu (L1-L8) + L11 (§27);
+**G5 = ısı haritası + §13 JSONL + v2 teslim (media group/reply, canlı duman şartıyla)**.

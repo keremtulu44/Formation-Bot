@@ -966,8 +966,56 @@ açılmayacak. Not: `1d` kadrajı 40 mum (bu depo için yüzeysel, §18.6).
 3. Canlı duman (runbook **4.7**): `python deploy_check.py --grafik-test
    --send-test-message` → DM'de `sendPhoto kabul edildi`; sonra gerçek bir alarmda
    "metin sonra kare" sırasını ve `/durum`'daki `🖼` satırını gözle doğrula.
-4. **G5'e bırakılan iki şey**: (a) v2 teslim biçimi (media group/reply), (b) alarm
-   KARTINDAKİ motor durum satırının (`🟢 aktif · 5/100 temas`) karenin ayak
-   yazısına taşınması — `kareyi_yaz`/`ciz` ayak alanına etiket beslemesi gerekiyor,
-   yani çizim plumbing'i + §4 sözleşme satırı + görsel onay; G4 kapsamına sığmadı
-   ve YARIM bırakılmadı (kod yazılmadı). Isı haritası + §13 JSONL de G5'te.
+4. **G5'e bırakılan**: v2 teslim biçimi (media group/reply), ısı haritası ve
+   §13 JSONL. (Kartın yapı satırının kareye taşınması bu turda BİTTİ → §27.)
+
+---
+
+## 27 · KARTIN YAPI SATIRI KARENİN ÜSTÜNDE (2026-10-14) — §26.4'ün L11 maddesi
+
+Kare ile kart arasındaki tek gerçek eksik buydu: kutu/markaj çiziliyor ama motorun
+**durum cümlesi** (ör. `• 4s yapı: dış aşağı geçiş · iç aşağı geçiş`, `CHoCH ↓ 72,20 ·
+iç · geçerli güncel`) yalnız mesajda vardı. Bu turda o satır karenin üst bloğuna
+taşındı. (Not: OB doluluk yüzdesi §23'ten beri zaten kutu etiketinde — `%24 dolu`
+kartta ne yazıyorsa karede de o; şerit ve `bant teması` paritesi §24/§25'te ölçüldü.)
+
+### 27.1 Sözleşme: uydurma cümle yok, kartın biçimleyicisi çağrılıyor
+
+- `grafik._yapı_satırı(sonuclar, tf, son_kapanis)` → `notification_context.domain_bolumleri(
+  {tf: sonuclar}, son_kapanis, stil="klasik", alarm_tf=tf)["yapi"][0]`. Yani kare,
+  **kartın kendi satırını** yazıyor; tek fark madde imi: baştaki `• ` düşürülür
+  (karenin diğer satırları imsiz). Sayı, kelime, zaman dilimi adı (`4s`) kartla
+  birebir aynı — teste de bu bağlandı (`test_gerçek_motorda_kart_satırı_karede_de_var`:
+  çizilen satır, kart satırının `• ` önekiyle geri eklenmiş haliyle eşit).
+- Motor yok / biçimleyici yok / istisna → `''` ve **dipnot yazılmaz** (§0.12w: yokluk
+  veri kusuru değil; izi `meta["eksik_katmanlar"]`da `ms` olarak zaten var).
+  Biçimlendirme hatası kareyi ASLA düşürmüyor (test: `Kırık` biçimleyiciyle bile
+  `kareyi_yaz` yol üretiyor).
+- `yalnızca_mumlar` kipi satırı çizmez (o kip hiçbir yorum satırı çizmiyor).
+
+### 27.2 Yerleşim kuralı (ölçüldü)
+
+Üst blok satırları `y = 1 − 0,032 − 0,040 − 0,031·i` ile iniyor; eksen tepesi
+`ust = 0,855` sabitti, yani **3. satır eksene değiyordu** (y=0,866 → 9 pt'lik metin
+0,851'e iniyor). Kural: `ust = 0,855 − 0,031 · max(0, satır_sayısı − 2)` — iki satır
+ve altında **hiçbir şey değişmez** (bayt kararlılığı + geometri testleri yeşil), üç
+satırda eksen 0,031 iner. Dördüncü satıra yer yok: yapı satırı SONDA eklenir ve
+`len(satirlar) < 3` değilse çizilmez, `metin["kesilen"]`e yazılır (sessiz kayıp yok).
+Sıra: `alarm:` → `formasyon · q · daralma · seviye` → `--etiket-detay` satırı →
+yapı satırı.
+
+### 27.3 Ölçüm
+
+`grafik_uret.py --hisse AKBNK --tf 4h --zone --mum 120` → satır çizildi, `kesilen:[]`,
+`dipnot:[]`; kare **72,4 → 75,0 KB** (+2,6 KB), süre 302 → ~555 ms (aynı koşuda
+ilk ölçüm 302 ms: süreç ısınması; kare başına 0,3-0,6 s bandı §26.1'de duruyor).
+Köprü biçiminde (`kare_listesi` + `_cift()` bandı, 3 satır dolu):
+`['alarm: kapanışla teyitli kırılım', 'Simetrik Üçgen · q88 · daralma %42 · seviye 52,50',
+'4s yapı: dış aşağı geçiş · iç aşağı geçiş']` · 85,8 KB · 1080×810 — görsel kontrol
+yapıldı, `bant teması 93` yazısıyla çakışma yok. Ek ikincil kare kendi TF'sinin
+satırını alıyor (`{tf: sonuclar}` çözümlemesi kare başına), yani birincil kartin
+cümlesi diğer kareye taşınmıyor.
+
+Test: `test_grafik_teslim.py` → 57 (4 yeni: biçimleyici paritesi, hata yutma,
+kapasite, gerçek motor ×2 parametrizasyon). Kapı: §26 ile birlikte 1012 → bu turda
+yeşil (aşağıda).

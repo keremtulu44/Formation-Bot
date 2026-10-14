@@ -807,8 +807,9 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 
 `TELEGRAM_GRAFIK=alarm` iken her alarmın METNİNDEN SONRA, tarama turunun sonunda
 hissenin mum karesi gider (1 olay = 1 metin + kareler; görseller mesaj kotasını
-yemez, grup/kanala hiç görsel gitmez). Kare kartla AYNI veriyi çizer: formasyon
-bandı + temaslar, OB/FVG kutuları, BOS/CHoCH + `kritik` seviyesi, `rvol` şeridi.
+yemez, grup/kanala hiç görsel gitmez). Kare kartla AYNI veriyi çizer: formasyon bandı + temaslar, OB/FVG kutuları
+(doluluk %'siyle), BOS/CHoCH + `kritik` seviyesi, `rvol` şeridi ve kartın yapı satırı
+(`4s yapı: …` — kelimeleri mesajdaki satırla birebir aynı, §27).
 
 Kurulum sonrası tek komutla duman (çizim çevrimdışıdır; fotoğraf da göndermek için
 `--send-test-message` ekleyin):

@@ -699,6 +699,11 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
         goruntu["uyarilar"].append("kare boş: çizim yok")
         return goruntu
 
+    # --- kartın yapı satırı (L11): üst blokta gri satır olarak çizilir. Metin
+    # `notification_context`ten GELİYOR (kartın kendi biçimleyicisi), burada yeni
+    # cümle kurulmuyor → kare ile kart ayrışamaz.
+    goruntu["yapı_satırı"] = _yapı_satırı(sonuclar, tf, goruntu.get("son_kapanis"))
+
     # --- temas mumları (§2.4) — bant verisi varsa.
     alt, ust = formasyon.get("lower_now"), formasyon.get("upper_now")
     if alt is not None and ust is not None:
@@ -989,7 +994,10 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         # için, ikincisi ÇİZİM bittikten sonra (bir katmanın çizimi patlarsa `eksik:`
         # yazısı ancak o zaman bilinir — §2.9 dipnotu bu yüzden sondan kurulur).
         metin = _metinler(goruntu, meta, genislik, eksik, yalnizca_mumlar, etiket_detay)
-        ust = 0.855 if metin["satirlar"] else 0.885
+        # Üst blok satır başına 0,031 yiyor: iki satır bugün olduğu yer (0,855),
+        # üçüncü satır (L11 yapı satırı) eksene değmesin diye eksen 0,031 daha iner.
+        ust = (0.855 if metin["satirlar"] else 0.885) - 0.031 * max(
+            0, len(metin["satirlar"]) - 2)
         sol_kenar, sag_kenar = 0.075, 0.985
         alt, y_lejant, _, _ = _alt_yerlesim(len(metin["dipnotlar"]) + 2,
                                            len(metin.get("notlar") or []),
@@ -1661,6 +1669,15 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
     detay = str(formasyon.get("evidence_text") or "").strip()
     if detay and not yalnizca_mumlar and etiket_detay:
         satirlar.append(_kirp(detay, genislik * 0.88)[0])
+    # L11: yapı satırı SONRA gelir ve ÜÇÜNCÜ satırla kapanır — dördüncü satır üst
+    # bloğu eksenlere taşırırdı (ölçüm: y=0,844 < `ust`=0,855), o yüzden yer yoksa
+    # çizilmez ve `kesilen`de görünür (sessiz kayıp yok).
+    motor = str(goruntu.get("yapı_satırı") or "").strip()
+    if motor and not yalnizca_mumlar and len(satirlar) < 3:
+        yeni_satir, k = _kirp(motor, genislik * 0.88)
+        satirlar.append(yeni_satir)
+        if k:
+            kesilen.append(yeni_satir)
     # §2.9: dipnot YALNIZ veri bozuksa. Kalabalık/budama/gri not satırıdır.
     dipnotlar: list[str] = []
     if eksik:
@@ -1762,6 +1779,27 @@ def _metin_ciz(fig, metin: Mapping[str, Any], sol_kenar: float, sag_kenar: float
     for i, satir in enumerate(metin["dipnotlar"]):
         fig.text(0.5, float(y["kirmizi"][i]), satir, ha="center", va="top",
                  color=PALET["ihlal"], fontsize=SABITLER["dipnot_pt"])
+
+
+def _yapı_satırı(sonuclar: Any, tf: str, son_kapanis: Optional[float]) -> str:
+    """Kartın `🏗 Piyasa Yapısı` bloğunun İLK satırı, birebir (yalnız `• ` öneki düşer).
+
+    Neden biçimleyiciyi yeniden kullanıyoruz: karenin karttan farklı bir cümle
+    kurmaması gerekiyor (§14.1 "uydurma alan yok"). Motor hiç yoksa/ayrıksa `''`
+    döner ve DIPNOT YAZILMAZ — yokluk zaten `meta["eksik_katmanlar"]`da (`ms`).
+    Biçimlendirme hatası kareyi asla düşürmez (§2.9).
+    """
+    if not sonuclar:
+        return ""
+    try:
+        from notification_context import domain_bolumleri
+
+        satirlar = domain_bolumleri({tf: sonuclar}, son_kapanis, stil="klasik",
+                                     alarm_tf=tf).get("yapi") or []
+    except Exception as hata:  # noqa: BLE001 - kart satırı kareyi engellemez
+        log.debug("grafik: yapı satırı alınamadı (%s: %s)", type(hata).__name__, hata)
+        return ""
+    return str(satirlar[0]).lstrip("• ").strip() if satirlar else ""
 
 
 def _serit_verisi(sonuclar: Optional[Mapping[str, Any]], hacimler: Sequence[Any],

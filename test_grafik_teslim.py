@@ -794,3 +794,95 @@ def test_bağlam_güncellemesi_kare_getirmez(notifier, grafik_acik, monkeypatch)
     assert notifier.grafik_kuyruga_ekle(olay) == 1
     notifier.grafikleri_gonder()
     assert len(cagrilar) == 1
+
+
+# --------------------------------------------------- kartın yapı satırı karenin üstünde (L11)
+
+def test_yapı_satırı_kart_biçimleyicisinden_birebir_alınır(monkeypatch):
+    """Kare kendi cümlesini KURMAZ: kartın satırı gelir, yalnız `• ` öneki düşer."""
+    görülen: dict = {}
+
+    class Sahte:
+        @staticmethod
+        def domain_bolumleri(sonuclar, referans, *, stil, alarm_tf):
+            görülen.update(sonuclar=sonuclar, referans=referans, stil=stil, alarm_tf=alarm_tf)
+            return {"yapi": ["• 4s yapı: dış ↓geçiş · iç ↓geçiş", "  CHoCH ↓ 72,20 · iç"]}
+
+    monkeypatch.setitem(sys.modules, "notification_context", Sahte)
+    assert grafik._yapı_satırı({"market_structure": object()}, "4h", 70.9) == \
+        "4s yapı: dış ↓geçiş · iç ↓geçiş"
+    assert görülen["stil"] == "klasik" and görülen["alarm_tf"] == "4h"
+    assert görülen["referans"] == 70.9
+    assert list(görülen["sonuclar"]) == ["4h"]      # {tf: çıktı} sarmalayıcısı veriliyor
+
+
+def test_yapı_satırı_alınamazsa_boş_döner_ve_kareyi_düşürmez(monkeypatch, tmp_path):
+    class Kırık:
+        @staticmethod
+        def domain_bolumleri(*_a, **_k):
+            raise RuntimeError("biçimleyici yok")
+
+    monkeypatch.setitem(sys.modules, "notification_context", Kırık)
+    assert grafik._yapı_satırı({"market_structure": object()}, "4h", 1.0) == ""
+    assert grafik._yapı_satırı(None, "4h", 1.0) == ""          # motor hiç yok
+    goruntu = _goruntu()
+    goruntu["yapı_satırı"] = ""
+    yol, meta = grafik.kareyi_yaz(goruntu, "4h")
+    try:
+        assert yol and (meta.get("metin") or {}).get("satirlar") is not None
+        assert not any("yapı:" in x for x in (meta["metin"]["satirlar"] or []))
+        assert not any("yapı satırı" in str(x) for x in (meta.get("dipnotlar") or []))
+    finally:
+        if yol:
+            os.remove(yol)
+
+
+def test_yapı_satırı_üst_bloğu_taşırma(monkeypatch):
+    """Üst blok 3 satırdan fazlasını kaldırmıyor (dördüncü eksene binerdi)."""
+    g = {"sembol": "AKBNK", "tf": "4h", "tf_kisa": "4s", "son_bar_ts": None,
+         "son_kapanis": 70.95, "alarm": {"etiket": "KIRILIM_TEYITLI", "deger": 70.95},
+         "formasyon": {"ad": "bull_flag", "quality": 78,
+                       "evidence_text": "kırılım hacimle teyitli edildi"},
+         "yapı_satırı": "4s yapı: dış ↓geçiş · iç ↓geçiş",
+         "uyarilar": [], "budama": [], "notlar": []}
+    tasma = grafik._metinler(g, {"mum_sayisi": 120}, 1080, [], False, True)
+    assert len(tasma["satirlar"]) == 3
+    assert not any("yapı:" in x for x in tasma["satirlar"])      # yer yok → çizilmedi
+    detaysiz = grafik._metinler({**g, "formasyon": {"ad": "bull_flag", "quality": 78}},
+                               {"mum_sayisi": 120}, 1080, [], False, False)
+    assert detaysiz["satirlar"][-1] == "4s yapı: dış ↓geçiş · iç ↓geçiş"
+    assert detaysiz["kesilen"] == []                             # sığan satır kesilmez
+
+
+@pytest.mark.parametrize("tf", ["1h", "4h"])
+def test_gerçek_motorda_kart_satırı_karede_de_var(tf):
+    """Alt süreçte gerçek motor + gerçek önbellek: çizilen satır kartta da var."""
+    if not (KOK / "bot_data" / "AKBNK.json").exists():
+        pytest.skip("bot_data önbelleği yok")
+    kod = (
+        "import json, sys; sys.path.insert(0, '.');"
+        "from notification_context import domain_bolumleri;"
+        "from domain_engines.runner import run_domain_engines;"
+        "from grafik_uret import cerceve_getir, kare_uret;"
+        f"tf = {tf!r};"
+        "fr, _ = cerceve_getir('AKBNK', tf, 'bot_data', False);"
+        "res = run_domain_engines('AKBNK', tf, fr.copy(deep=True));"
+        "kap = domain_bolumleri({tf: res}, float(fr['close'].iloc[-1]), stil='klasik',"
+        " alarm_tf=tf).get('yapi') or [];"
+        f"out = kare_uret('AKBNK', tf, veri_dizin='bot_data', zone=True, mum=120,"
+        " cikti='/tmp/fb_test_yapi.png');"
+        "print(json.dumps({'kart': [x.strip() for x in kap], "
+        "'kare': (out['meta'].get('metin') or {}).get('satirlar')}))"
+    )
+    cevap = subprocess.run([sys.executable, "-c", kod], cwd=str(KOK), capture_output=True,
+                           text=True, timeout=300,
+                           env={"PATH": "/usr/bin:/bin", "DATA_DIR": "/tmp/fbdata",
+                                "PYTHONPATH": str(KOK)})
+    assert cevap.returncode == 0, cevap.stderr[-600:]
+    veri = json.loads(cevap.stdout.strip().splitlines()[-1])
+    kare = [x for x in (veri["kare"] or []) if "yapı:" in x]
+    assert kare, veri
+    # Tek fark sözleşmeli: kart `• ` ile madde imi basıyor, kare imi atmıyor.
+    assert veri["kart"], veri
+    assert veri["kart"][0] in (f"• {kare[0]}", kare[0]), (kare, veri["kart"])
+
