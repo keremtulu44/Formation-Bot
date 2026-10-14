@@ -789,3 +789,96 @@ Tam kapı: `960 passed, 44 skipped in 143 s` (`test_grafik_yapi.py` 18 test).
   anahtar dışındaki her şey sabit).
 - `evidence_text` kareye yalnız `--etiket-detay` ile yazılıyor (varsayılan kapalı) —
   G4’te kart metninin tekrarı olmamasına dikkat.
+
+## 25 · G4 UYGULANDI (2026-10-14) — teslim: köprü, kuyruk, `sendPhoto`, `/grafik`
+
+Kullanıcı onayı (bu turun başında, 4 soru): **kareler tarama turu sonunda** gider
+(metin bekletilmez) · **görsel kotası = yalnız `TELEGRAM_GRAFIK_ADET`** (ayrı
+günlük/saatlik tavan YOK) · **kareler YALNIZ DM** (public/kanal metinde kalır) ·
+**`/grafik` önbellekteki her sembolü çizer** (canlı çekme yok, ek hız sınırı yok).
+
+### 25.1 Yüzeyler (tek kod yolu)
+
+- `transport/telegram.py::foto_gonder(yol, *, chat_id/token/notifier, caption, api)`
+  → `sendPhoto` multipart; dosya yoksa `"png yok"`, token/chat_id yoksa
+  `"token/chat_id yok"`, ağ hatası `“istek hatasi: <tür>”` olarak YUTULUR. Test
+  enjeksiyon noktası `_multipart_cagri` (`api_cagri` JSON gönderdiği için görselde
+  kullanılamaz — §4’te belirtilen ayrım).
+- `notifier.grafik_kuyruga_ekle(data)` → `_gonder`’in BAŞARI dalından çağrılır
+  (metin 200 aldıktan sonra); `grafikleri_gonder(sinir=None)` tur sonunda boşaltır;
+  `grafik_dosya_gonder(yol, caption)` aynı gönderimi `/grafik` için anında yapar ve
+  dosyayı HER YOLDA siler. Sayaçlar: `grafik_gonderilen`, `grafik_atlanan_hata`,
+  `grafik_atlanan_kota`, `grafik_kare_sayisi/toplam_ms` → `gonderim_durumu()`
+  (`grafik_ort_ms`) → `/durum`’da TEK satır (`🖼 Grafik karesi: …`), yalnız bir şey
+  olduysa yazılır.
+- `main.py::_grafik_koprusu(payload, outputs)` — `anlik_goruntu`yu tarama anında
+  çağırır, `payload['grafik_verisi']`nın içine koyar; `_grafikleri_tur_sonunda`
+  public bülteniyle aynı yerde flush eder ve `daily_stats['grafik_kare/‍hata']`nı
+  besler. Motor burada ÇAĞRILMAZ: `outputs` zaten `_domain_results_for_notification`
+  çıktısı (§14.2).
+- `/grafik <SEM> [1s|2s|4s|1g]` — `TELEGRAM_KOMUTLARI` + `KOMUT_YARDIM` + `/durum`
+  komut satırı + `deploy_check` “Komutlar açık” satırı (dört yüzey birden); sembol
+  desene uymazsa reddeder, önbellekte yoksa “veri yok” der (canlı çekmez). CLI ve
+  komut AYNI `grafik_uret.kare_uret()`i çağırır (`cerceve_getir` `VeriYok` kaldırır;
+  CLI onu `SystemExit`e çevirir) — iki yüzeyin ayrışmaması için.
+- Config: §5’teki 4 anahtar `config.py`de (varsayılanlar `yok/4/180/6`),
+  `.env.example`a ve `deploy_check` beklenti tablosuna yazıldı; `TELEGRAM_GRAFIK`
+  açıksa `deploy_check` matplotlib/`grafik` katmanını da yokluyor (kurulu değilse
+  FAIL + “kare alarmı engellemez, yalnız eksik gider” notu).
+
+### 25.2 Dumanın yakaladığı DÖRT gerçek kusur (test + düzeltme)
+
+1. **`sinir = len(kuyruk)`** → limit OLAY sayısını sayıyordu; tek olay iki kare
+   taşıyınca ikincisi kuyrukta kalıyordu. Düzeltme: `sinir` KARE sayısıdır,
+   `None` → sınırsız; aşan kısım kuyruğa geri yazılır.
+2. **`sonuclar` biçimi** — tarama turu `{tf: çıktı}` taşıyor, `anlik_goruntu` ise
+   TEK TF’nin çıktısını bekliyor. Birincil kare iç içe sözlüğü alınca bölge/yapı
+   katmanları SESİZCE boş kaldı (kare çizildi, içinde hiçbir şey yoktu). Çözüm:
+   `grafik._sonuc_sec()` iki biçimi de tanır; hiçbiri tutmazsa kare çizilir ama
+   `uyarilar`a `“motor çıktıları tanınamadı”` satırı düşer (sessiz boş kare yok).
+3. **Bant/alarm diğer TF’ye taşınıyordu** — `alarm_bar`/`start_bar` birincil
+   çerçevenin MUM İNDEKSLERİDİR; 1s karesine konulunca 273 mumluk kadrajda
+   “bant teması 266” gibi uydurma bir sayı ve yanlış yerlerde kesikli çizgiler
+   üretiyordu. Düzeltme: `kare_listesi` formasyonu ve alarmı YALNIZ birincil
+   kareye verir; diğer karelere `“bant/alarm diğer zaman dilimine ait: bu karede
+   çizilmedi (§14.1)”` notu kalır (kadraj tavanı da kalkar: 273 → 180 mum,
+   126,4 → 79,2 KB).
+4. **Kart paritesi satırı bandın sağ kesikli kenarının ÜSTÜNE biniyordu** —
+   yarı saydam zemin (`alpha 0,6`) çizgiyi metnin içine basıyordu; kutu opağa
+   çevrildi (`alpha 0,95`, `pad 1,4`, `-3 pt`).
+
+### 25.3 Ölçüm (gerçek önbellek + gerçek motor, `/tmp/g4_smoke.py`)
+
+AKBNK, `TELEGRAM_GRAFIK=alarm`, sahte `foto_gonder`: 2 kare gönderildi ·
+**4s · 120 mum · 99,1 KB** (bant + alarm + bölge + yapı + şerit) ve
+**1s · 180 mum · 79,2 KB** (bant/alarm yok, kendi OB/şeridi var) ·
+üretim ort **533 ms/kare**, flush toplamı **1,07 s** · `atlanan_hata 0`,
+`atlanan_kota 0`, kuyruk gönderimden sonra boş, `/tmp`de kalan `fb_grafik_*`
+dosyası YOK (gönderim sonrası siliniyor, açılışta `bayat_kareleri_supur()` TTL’i
+aşanları topluyor — taze dosyaya dokunmaz, eşzamanlı ikinci kopya koruması).
+
+### 25.4 Sözleşme notları (ilerde değiştirmeyecek olanlar)
+
+- `grafik_verisi` BELLEK İÇİDİR: acil kuyruk kaydına yazılmadan önce
+  `notifier._kuyruk_verisi()` ile silinir (`json.dump(..., default=str)` bir
+  çerçeveyi okunamaz yığınına çevirirdi); `public_kuyruk` zaten alan beyaz
+  listesiyle çalıştığı için sızmaz. Test: `test_kuyruk_jsonu_grafik_verisi_tasimaz`.
+- `grafik_verisi` OLSA DA kart metni DEĞİŞMEZ (`test_kart_metni_grafik_verisi_ile_
+  bayt_bayt_ayni`) ve `TELEGRAM_GRAFIK=yok` iken `matplotlib`/`grafik` HİÇ import
+  edilmez (alt süreçte `sys.modules` kontrolü).
+- Caption = `SEM · <tf_kısa> · <N> mum` (ÜÇ parça, kart jargonu/ondalık yok;
+  `px/mum` ve `KB` karenin içinde ve `meta`da). Görsel METİN değildir: satır
+  bütçesi/soft-wrap caption’a uygulanmaz (§6.7 — teste yazıldı).
+- `grafik_uret.kare_uret()` `VeriYok`/çizim reddini `{"yol": None, "hata": …}`
+  olarak döndürür; hata fırlatmaz — `/grafik` bunu mesaja çevirir, CLI çıkış kodu.
+- §5’ten tek sapma: `GRAFIK_OLAY_MAKS` gerçekten env’den okunuyor (`_olay_verisi` →
+  `_ortam_sayi`), `swing_maks` ise bilinçli olarak SABİT’te kaldı (5. anahtar
+  uydurulmadı; sapma §24’te de notlu).
+
+### 25.5 Kalanlar
+
+- **v2:** `sendMediaGroup` + `reply_parameters` (ilk kare metni yanıtlar) — canlı
+  Telegram’da dumanla doğrulanacak (§4); v1 sıralı `sendPhoto` ile çalışıyor.
+- **canlı smoke:** `TELEGRAM_GRAFIK=alarm` ile gerçek bir alarmda uçtan uca deneme
+  (token/DM bu ortamda yok); `deploy_check` grafik satırı bunu hazırlıyor.
+- **G5 (opsiyonel):** ısı haritası ve §13 JSONL (yalnız kayıt, gönderimle ilgisiz).

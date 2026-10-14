@@ -253,6 +253,11 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("TELEGRAM_TEST_KEY", False, "İsteğe bağlı: /test ucunu açar (telefondan Telegram testi)"),
         ("SUPABASE_STORE_PREFIX", False, "Varsayılan formation-bot: ; aynı tabloyu paylaşan 2. kopya için değiştirin"),
         ("BOT_INSTANCE_ID", False, "Varsayılan hostname:pid ; ikinci canlı kopya varsa farklı ad verin (B10)"),
+        ("TELEGRAM_GRAFIK", False, "İsteğe bağlı: 'alarm' → her alarm metninin ALTINA mum karesi ekler "
+                                   "(varsayılan 'yok': gönderim bugünküyle birebir aynı)"),
+        ("TELEGRAM_GRAFIK_ADET", False, "İsteğe bağlı: alarm başına en fazla kare (1-4, varsayılan 4)"),
+        ("GRAFIK_MUM_MAKS", False, "İsteğe bağlı: kadraj tavanı — kaç mum çizilsin (varsayılan 180)"),
+        ("GRAFIK_OLAY_MAKS", False, "İsteğe bağlı: kareye çizilen onaylı BOS/CHoCH sayısı (varsayılan 6)"),
     ]
 
     degerler = {}
@@ -267,6 +272,20 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         else:
             satir(OK, f"{anahtar} tanımlı değil (opsiyonel)", aciklama)
 
+    # Grafik karesi: anahtar açıksa bağımlılık da şart (matplotlib import edilmezse
+    # kare sessizce düşer; kullanıcı "neden resim yok"u log'dan bulamazdı).
+    grafik_anahtari = (degerler.get("TELEGRAM_GRAFIK") or "").strip().lower()
+    if grafik_anahtari not in {"", "yok", "false", "kapali", "kapalı"}:
+        try:
+            import matplotlib  # noqa: F401
+            import grafik as _grafik_mod
+            satir(OK, f"Grafik karesi açık ({grafik_anahtari})",
+                  f"kadraj {int(degerler.get('GRAFIK_MUM_MAKS') or _grafik_mod.SABITLER['kare_mum'])} mum"
+                  " · /grafik komutu da bu katmanı kullanır")
+        except Exception as hata:  # noqa: BLE001
+            satir(FAIL, "TELEGRAM_GRAFIK tanımlı ama grafik katmanı çalışmıyor",
+                  f"{type(hata).__name__}: {str(hata)[:120]} — `pip install -r requirements.txt` "
+                  "sonra botu yeniden başlatın (kare alarmı engellemez, yalnız eksik gider).")
     if not degerler.get("TELEGRAM_BOT_TOKEN") and not degerler.get("TELEGRAM_CHAT_ID"):
         seviye = FAIL if canli_mod else WARN
         satir(seviye, "Telegram kapalı olacak", "Token/chat_id yoksa bot çalışır ama hiç mesaj göndermez (log: 'notifier pasif').")
@@ -486,7 +505,7 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
     if not chat_id:
         satir(WARN, "chat_id yok", "Telegram'a gönderim için TELEGRAM_CHAT_ID şart (@userinfobot).")
         return
-    satir(OK, "Komutlar açık: /formasyonlar · /durum · /tara · /yardim",
+    satir(OK, "Komutlar açık: /formasyonlar · /durum · /tara · /grafik · /yardim",
           "Komutlar yalnızca bu chat_id'den kabul edilir. Aynı token'ı ikinci bir kopya "
           "(Termux/PC) da dinlerse Telegram 409 Conflict verir ve komutlar çalışmaz.")
     if not chat_id.lstrip("-").isdigit():

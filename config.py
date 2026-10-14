@@ -234,6 +234,25 @@ TELEGRAM_DM_DEGISIM_KAPISI = os.getenv(
 TELEGRAM_KANAL_GECERSIZ_KAPISI = os.getenv(
     "TELEGRAM_KANAL_GECERSIZ_KAPISI", "1").strip().lower() not in {"0", "false", "kapali", "kapalı"}
 
+# --- GRAFİK KARESİ (G4 / GRAFIK_TASARIM.md §5) — v1'de YALNIZ 4 anahtar ---
+# `yok` (varsayılan) → hiçbir kare üretilmez, gönderim yolu bayt bayt bugünküle
+# aynıdır ve matplotlib HİÇ import edilmez (§6.7). `alarm` → metin gittikten SONRA
+# kareler eklenir (görsel metin kotasını YEMEZ, §4).
+TELEGRAM_GRAFIK = os.getenv("TELEGRAM_GRAFIK", "yok").strip().lower()
+# `/grafik` komutu kill-switch'ten BAĞIMSIZDIR (§4): anahtar kapalıyken de tek tek
+# kare üretir — kapatılan şey alarmın ardına eklenen otomatik karelerdir.
+if TELEGRAM_GRAFIK in {"1", "acik", "açık", "true", "on", "evet"}:
+    TELEGRAM_GRAFIK = "alarm"          # yaygın yanlış yazım tolere edilir
+# Alarm başına en fazla kare (1-4): birincil TF her zaman ilk karedir.
+TELEGRAM_GRAFIK_ADET = min(4, max(1, int(_env_float("TELEGRAM_GRAFIK_ADET", 4))))
+# Kadraj tavanı (mum). Formasyon bantı sığıyorsa tavan kalkar (§0.12b).
+GRAFIK_MUM_MAKS = max(2, int(_env_float("GRAFIK_MUM_MAKS", 180)))
+# Kareye çizilen onaylı+geçerli BOS/CHoCH sayısı.
+GRAFIK_OLAY_MAKS = max(0, int(_env_float("GRAFIK_OLAY_MAKS", 6)))
+# NOT: `grafik.py` bu dört anahtarı İMPORT ANINDA değil ÇAĞRI ANINDA env'den okur
+# (§6.1 testleri ve canlıda anahtar değişimi için); buradaki sabitler yalnız
+# `deploy_check` raporu ve `/durum` içindir — sapma olmasın diye aynı okuma.
+
 # --- TELEGRAM WEBHOOK (Render) ---
 # Varsayılan mod YOKLAMA'dır (getUpdates): yerel/systemd kurulumunda inbound HTTP
 # gerekmez. Render gibi bir web serviste komutları webhook ile almak için:

@@ -37,8 +37,17 @@ def _veri_dizini(secenek: str | None) -> str:
     return os.environ.get("DATA_DIR") or str(Path(__file__).resolve().parent / "bot_data")
 
 
-def _cerceve_yukle(hisse: str, tf: str, veri_dizin: str, demo: bool):
-    """Önbellekten (veya --demo) çizim çerçevesini getirir.
+class VeriYok(Exception):
+    """Çizilecek çerçeve önbellekte yok.
+
+    Neden ayrı tür: `/grafik` komutu bu durumu kullanıcıya „önbellekte veri yok"
+    diye ANLATMAK zorunda (§4: canlı çekme YOK); CLI ise çıkış kodu ile düşmeli.
+    Aynı okumayı iki yüzeyin ayrı ayrı yapmaması için tek yerde tanımlı.
+    """
+
+
+def cerceve_getir(hisse: str, tf: str, veri_dizin: str, demo: bool = False):
+    """Önbellekten (veya demo) çerçeve: `(df, kaynak)`; yoksa `VeriYok` kaldırır.
 
     `1d` için `to_gunluk_dataframe` (derin, ~500 bar) denenir; yoksa 1s
     önbelleğinden `resample_ohlcv` ile üretilir — ölçüm: 360 × 1s → ~44 bar,
@@ -55,12 +64,75 @@ def _cerceve_yukle(hisse: str, tf: str, veri_dizin: str, demo: bool):
             return df_1g, "bot_data/günlük"
     if df_1s is None or len(df_1s) < 5:
         if not demo:
-            raise SystemExit(f"veri yok: {veri_dizin}/{anahtar}.json okunamadı "
-                             f"(--demo ile sentetik çerçeve çizilir)")
+            raise VeriYok(f"veri yok: {veri_dizin}/{anahtar}.json okunamadı "
+                          f"(--demo ile sentetik çerçeve çizilir)")
         return _demo_cerceve(500 if tf == "1d" else 360), "demo"
     if tf == "1h":
         return df_1s, "bot_data/1s"
     return resample_ohlcv(df_1s, tf), f"resample({tf})"
+
+
+def _cerceve_yukle(hisse: str, tf: str, veri_dizin: str, demo: bool):
+    """CLI uyumluluğu: `VeriYok` çıkış koduna dönüşür (testler bu adı çağırıyor)."""
+    try:
+        return cerceve_getir(hisse, tf, veri_dizin, demo)
+    except VeriYok as hata:
+        raise SystemExit(str(hata))
+
+
+def _cikti_yolu(cikti: str | None, hisse: str, tf: str, tfler: tuple) -> str:
+    """PNG yolu: birden çok TF çiziliyorsa ad zaman dilimiyle ayrışır."""
+    yol = cikti or f"/tmp/grafik_{str(hisse).upper()}_{tf}.png"
+    if len(tfler) > 1:
+        return str(Path(yol).with_name(f"{Path(yol).stem}_{tf}.png"))
+    return yol
+
+
+def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool = False,
+              mum: int | None = None, serit: bool = True, etiket_detay: bool = False,
+              formasyon_yol: str | None = None, formasyon: dict | None = None,
+              alarm_turu: str | None = None, cikti: str | None = None,
+              demo: bool = False) -> dict:
+    """Tek kare üretir: önbellek → (istersen domain motorları) → PNG.
+
+    `main()` (CLI) ve `/grafik` komutu AYNI bu fonksiyonu çağırır — iki yüzeyin
+    kadraj/motor/çizim davranışının ayrışmaması için (§14.2 kuralı burada da
+    geçerli: motorlar ancak `zone=True` ile ve ÇERÇEVENİN KOPYASI üzerinde çalışır).
+
+    Hata fırlatmaz: çerçeve yoksa `{"hata": "veri yok: ..."}`, çizim reddedilirse
+    `yol=None` + `meta["uyarilar"]`. `veri_dizin` None → `DATA_DIR`/`bot_data`.
+    """
+    import grafik
+
+    dizin = _veri_dizini(veri_dizin)
+    try:
+        cerceve, kaynak = cerceve_getir(hisse, tf, dizin, demo)
+    except VeriYok as hata:
+        return {"tf": tf, "yol": None, "meta": {}, "kaynak": "", "uyarilar": [],
+                "hata": str(hata)}
+    uyari: list[str] = []
+    if formasyon is None:
+        formasyon, uyarilar = _formasyon_yukle(formasyon_yol, cerceve)
+        uyari += list(uyarilar)
+    sonuclar = None
+    if zone:
+        from domain_engines.runner import run_domain_engines
+
+        sonuclar = run_domain_engines(str(hisse).upper().replace(".IS", ""), tf,
+                                       cerceve.copy(deep=True))
+    goruntu = grafik.anlik_goruntu(formasyon, tf, cerceve, sembol=str(hisse).upper(),
+                                   alarm_turu=alarm_turu, sonuclar=sonuclar,
+                                   kare_mum=mum, etiket_detay=etiket_detay)
+    for u in uyari:
+        goruntu["uyarilar"].append(u)
+    yol, meta = grafik.ciz(goruntu, tf, secenekler={
+        "cikti": cikti or f"/tmp/grafik_{str(hisse).upper()}_{tf}.png",
+        "serit": serit,
+        "etiket_detay": etiket_detay,
+    })
+    meta["kaynak"] = kaynak
+    return {"tf": tf, "yol": yol, "meta": meta, "kaynak": kaynak,
+            "uyarilar": list(meta.get("uyarilar") or []), "hata": None}
 
 
 def _demo_cerceve(bar_sayisi: int):
@@ -136,42 +208,36 @@ def main(giris: list[str] | None = None) -> int:
     ayristirici.add_argument("--json", action="store_true", help="meta çıktısını yazdır")
     secenek = ayristirici.parse_args(giris)
 
-    import grafik
-
     veri_dizin = _veri_dizini(secenek.veri_dizin)
     tfler = TF_LISTESI if secenek.tum_tf else (secenek.tf,)
     durum = 0
     for tf in tfler:
-        cerceve, kaynak = _cerceve_yukle(secenek.hisse, tf, veri_dizin, secenek.demo)
-        formasyon, uyarilar = _formasyon_yukle(secenek.formasyon, cerceve)
-        sonuclar = None
-        if secenek.zone:
-            from domain_engines.runner import run_domain_engines
-
-            sonuclar = run_domain_engines(secenek.hisse.upper().replace(".IS", ""), tf,
-                                          cerceve.copy(deep=True))
-        goruntu = grafik.anlik_goruntu(formasyon, tf, cerceve, sembol=secenek.hisse,
-                                       alarm_turu=secenek.alarm_turu, sonuclar=sonuclar,
-                                       kare_mum=secenek.mum)
-        for u in uyarilar:
-            goruntu["uyarilar"].append(u)
-        cikti = secenek.cikti or f"/tmp/grafik_{secenek.hisse.upper()}_{tf}.png"
-        if secenek.tum_tf or len(tfler) > 1:
-            cikti = str(Path(cikti).with_name(f"{Path(cikti).stem}_{tf}.png"))
-        yol, meta = grafik.ciz(goruntu, tf, secenekler={
-            "cikti": cikti,
-            "serit": not secenek.serit_yok,
-            "etiket_detay": secenek.etiket_detay,
-        })
-        meta["kaynak"] = kaynak
+        # Tek yol: `/grafik` komutu da AYNI `kare_uret`i çağırır; CLI yalnız çıktıyı
+        # biçimlendirir. Böylece kadraj/motor/çizim davranışı iki yüzeyde
+        # ayrışamaz (ayrı kopyalar G1'de gerçekten ayrışmıştı).
+        try:
+            sonuc = kare_uret(secenek.hisse, tf, veri_dizin=veri_dizin, zone=secenek.zone,
+                              mum=secenek.mum, serit=not secenek.serit_yok,
+                              etiket_detay=secenek.etiket_detay,
+                              formasyon_yol=secenek.formasyon,
+                              alarm_turu=secenek.alarm_turu, demo=secenek.demo,
+                              cikti=_cikti_yolu(secenek.cikti, secenek.hisse, tf, tfler))
+        except SystemExit as hata:        # `_cerceve_yukle` uyumluluğu
+            print(hata, file=sys.stderr)
+            return 2
+        meta = sonuc.get("meta") or {}
+        if sonuc.get("hata"):
+            print(sonuc["hata"], file=sys.stderr)
+            return 2
         if secenek.json:
             print(json.dumps(meta, ensure_ascii=False, indent=2, default=str))
-        if yol:
-            print(f"{yol}  ·  {meta['mum_sayisi']} mum  ·  {meta['png_kb']} KB  ·  "
-                  f"{meta['sure_ms']} ms  ·  kaynak: {kaynak}")
+        if sonuc.get("yol"):
+            print(f"{sonuc['yol']}  ·  {meta['mum_sayisi']} mum  ·  {meta['png_kb']} KB"
+                  f"  ·  {meta['sure_ms']} ms  ·  kaynak: {sonuc['kaynak']}")
         else:
             durum = 2
-            print(f"çizilmedi ({tf}): " + " · ".join(meta["uyarilar"]), file=sys.stderr)
+            print(f"çizilmedi ({tf}): " + " · ".join(meta.get("uyarilar") or []),
+                  file=sys.stderr)
     return durum
 
 

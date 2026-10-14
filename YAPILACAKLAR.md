@@ -191,7 +191,7 @@ mumlara dokundu, yapı nerede kırıldı). Her faz tek commit + tam test yeşil 
 | G1 | ✅ `4fe9dd6` | `grafik.py` iskeleti: kapalı mumlar, formasyon bandı + start/bitiş/apex, temas, alarm çizgisi + gerçek state metni, başlık/lejant/dipnot, `meta`, çökme modu, CLI + `matplotlib` pini | §2/§3 | 26 test (`test_grafik_iskelet.py`) |
 | G2 | ✅ bu commit | Bölge kutuları: OB/FVG/engulfing TEK havuzda yakınlık sırasıyla (1s 3+3 · 2s 3+3 · 4s 2+2 · 1g 1+1), `source_index` başlangıç + kalın kenar (boğada alt/ayıda üst), `1s/2s`de FVG yok, doluluk yalnız motorun verdiği kutuda, çakışan etiket atlanır | §3/§23 | `test_grafik_bolgeler.py` (16 test); motorlar yalnız `grafik_uret.py --zone`da; kayıt §23 |
 | G3 | ✅ bu commit | Yapı + şerit + bütçe: external PH/PL + `HH/HL/LH/LL`, en yeni 6 BOS/CHoCH, `kritik` çizgisi, `rvol(20)` kulvarı (4s `yerel hesap`), `!` son 15 mum, `evidence_text` yalnız `--etiket-detay` | §3 | `test_grafik_yapi.py` (18 test); `▲`/`×N`/`kritik` ölçümleri §24 |
-| G4 | ☐ | Teslim: `transport/telegram.py:foto_gonder`, `notifier._gonder` kuyruğu, `payload['grafik_verisi']` köprüsü, 4 env anahtarı + `.env.example`/`deploy_check`, `/grafik` (3 yüzey) | §4/§5 | 1 olay = 1 mesaj kuralı metinde değişmez |
+| G4 | ✅ bu commit | Teslim: `transport/telegram.py::foto_gonder` (multipart `sendPhoto`), `notifier.grafik_kuyruga_ekle/grafikleri_gonder/grafik_dosya_gonder` (tur sonu kuyruğu, tek noktadan silme), `main._grafik_koprusu` (`payload['grafik_verisi']`), `grafik_uret.kare_uret` (CLI+komut tek yol), 4 env anahtarı + `.env.example`/`deploy_check`, `/grafik` (4 yüzey) | §4/§5 | `test_grafik_teslim.py` (51 test); duman ölçümü §25.3; 1 olay = 1 mesaj kuralı metinde değişmedi |
 | G5 | ☐ (ops.) | `/karne` ısı haritası; `GRAFİK_META` JSONL | §13/§3 | v1'de yazılmadı, alan adı hazır |
 | K1/K2 | ☐ | Grup kanalının kökten iptali (grafikle ilgisi yok, ayrı commit'ler) | §9 | |
 
@@ -212,6 +212,17 @@ yeşil). Kum fırlatması yeniden kurulursa `.venv` kaybolur:
 tarih geri alınır; çalışma ağacındaki dosyalar korunur. **Büyük turları erken
 commit'le** (G3, kum yeniden kurulmadan hemen önce işlenmemişti; dosyalar
 kurtarıldı ama tarih `origin`'den çekildi).
+
+*G4'te bilinçli ertelenenler / kararlar:* kareler **yalnız DM** (public bülteni
+metinde kalır); **ayrı görsel kotası yok** — tek sınır `TELEGRAM_GRAFIK_ADET`,
+kesilen kare `grafik_atlanan_kota`da sayılır; gönderim **tur sonunda** (metin
+beklemez) ve `sendMediaGroup`/`reply_parameters` v2'ye bırakıldı (canlı duman
+gerekiyor). `grafik_verisi` bellek içi: acil kuyruk JSON'undan
+`_kuyruk_verisi()` ile arındırılıyor. Duman dört gerçek kusur çıkardı (limit OLAY
+değil KARE sayıyordu; `sonuclar` iç içe biçimde katmanlar sessizce boşalıyordu;
+bant/alarm diğer TF'nin kadrajına taşınıp uydurma „bant teması 266" üretiyordu;
+parite satırı bandın kenar çizgisinin üstüne biniyordu) — hepsi düzeltildi ve
+teste bağlandı (§25.2).
 
 *G3'te bilinçli ertelenenler:* `evidence_text` yalnız `--etiket-detay`da (kart
 metninin tekrarı olmaması için); `▲` yüzdelik işareti yalnız motor serisi varsa —

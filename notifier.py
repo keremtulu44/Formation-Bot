@@ -7,7 +7,7 @@ import re
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from config import (ACTIVE_STOCKS, DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT,
                     TELEGRAM_MAX_MESAJ_GUN,
@@ -33,6 +33,42 @@ from state import persistence as _state_persistence
 from secrets_redaction import redact_sensitive_text
 
 logger = logging.getLogger(__name__)
+
+
+KUYRUK_HARICI_ANAHTARLAR = ("grafik_verisi",)
+
+
+def _kuyruk_verisi(data: Dict) -> Dict:
+    """Acil kuyruk kaydına girecek sözlüğün kopyası — bellek içi alanlar çıkarılır.
+
+    Neden: kuyruk diske JSON yazılıyor (`json.dump(..., default=str)`) ve
+    `grafik_verisi` çerçeve kopyaları + motor çıktıları taşıyor; `default=str`
+    onu okunamaz bir yığına dönüştürüp kuyruk dosyasını şişirirdi. Görsel, kuyrukta
+    bekleyen olay için zaten geçersizdir (kadraj değişir) → atılır, kaydı loglanır.
+    """
+    kayit = dict(data or {})
+    atilan = [ad for ad in KUYRUK_HARICI_ANAHTARLAR if kayit.pop(ad, None) is not None]
+    if atilan:
+        logger.debug("kuyruk kaydından çıkarıldı: %s", ", ".join(atilan))
+    return kayit
+
+
+def _grafik_basligi(olay: Dict, kare: Dict, meta: Dict) -> str:
+    """Kare altındaki tek satır kimlik (§4): kart metni TEKRARLANMAZ.
+
+    Neden kısa: caption Telegram'da AYRI mesaj gövdesi olur; kartın satırlarını
+    buraya koymak „1 olay = 1 mesaj" kuralını deler. Yalnız hangi hisse, hangi
+    zaman dilimi ve kaç mum — sayı/px ayrıntısı karenin kendisinde ve `meta`da.
+    Kartla aynı dil: TF kısaltması 4s/1s (ham kod değil), sayı virgüllü (`sayi`).
+    """
+    sembol = str(olay.get("sembol") or "").strip().upper() or "?"
+    # Kartta hangi etiket görünüyorsa karede de o: 4h → 4s (ham TF kodu değil).
+    tf = str((kare.get("goruntu") or {}).get("tf_kisa") or kare.get("tf") or "1h")
+    parcalar = [sembol, tf]
+    mum = meta.get("mum_sayisi")
+    if mum:
+        parcalar.append(f"{_format_sayi(mum, 0)} mum")
+    return " · ".join(parcalar)
 
 
 def _istanbul(dt: datetime) -> datetime:
@@ -797,6 +833,21 @@ class TelegramNotifier:
         self.kuyruk_zaman_asimi = 0
         self.kuyruk_tasmasi = 0
         self._kuyruk_yukle()
+        # --- grafik karesi kuyruğu (G4 / §4) ---
+        # Neden kuyruk: kare üretimi 0,5-0,7 s sürüyor; alarm metnini bekletmemek
+        # için gönderim tarama turu SONUNA bırakılır (§7 „metni bekletmemek için
+        # kuyruk şart"). Kuyruk bellek içidir: `grafik_verisi` çerçeve/kayıt
+        # referansı taşıdığı için diske YAZILMAZ (§7) — yazan tek yer `_gonderim_
+        # kaydet` değil, o yüzden buraya hiç serialize edilmiyor.
+        self._grafik_kuyruk: List[dict] = []
+        self._grafik_lck = threading.Lock()
+        self._son_grafik_ts = None
+        self._grafik_supuruldu = False   # bayat dosya süpürmesi süreçte bir kez
+        self.grafik_gonderilen = 0
+        self.grafik_atlanan_hata = 0
+        self.grafik_atlanan_kota = 0
+        self.grafik_toplam_ms = 0
+        self.grafik_kare_sayisi = 0
         # --- tek-seferlik olay hafızası (repeat-guard) ---
         # Neden: motor tam_yeniden=True ile pencereyi her taramada baştan oynatır;
         # terminal/acil state'ler her tur yeniden üretilir ve eski tek koruma
@@ -1977,7 +2028,7 @@ class TelegramNotifier:
             if self._kuyruk_key(kayit.get("veri") or {}) == key:
                 # Aynı sinyal zaten kuyrukta: veriyi tazele, kuyrukta bekleme süresi
                 # ilk girişten sayılmaya devam etsin (TTL şişmesin).
-                kayit["veri"] = dict(data)
+                kayit["veri"] = _kuyruk_verisi(data)
                 kayit["son_deneme"] = simdi.isoformat()
                 kayit["son_engel"] = engel
                 self._kuyruk_kaydet()
@@ -1989,7 +2040,7 @@ class TelegramNotifier:
             "kuyruk_zaman": simdi.isoformat(),
             "son_deneme": simdi.isoformat(),
             "son_engel": engel,
-            "veri": dict(data),
+            "veri": _kuyruk_verisi(data),
         })
         logger.info(f"📬 Acil olay kuyruğa alındı ({engel}): {key[0]} {key[2]} {key[3]} "
                     f"(kuyruk: {len(self._acil_kuyruk)})")
@@ -2155,6 +2206,13 @@ class TelegramNotifier:
             "public_gonderilen": self.public_gonderilen,
             "public_hatasi": self.public_hatasi,
             "public_engel": self.public_engel,
+            # Görsel kuyruğu (§4): metin kotasından bağımsız sayaçlar.
+            "grafik_gonderilen": self.grafik_gonderilen,
+            "grafik_kuyruk": len(self._grafik_kuyruk),
+            "grafik_atlanan_hata": self.grafik_atlanan_hata,
+            "grafik_atlanan_kota": self.grafik_atlanan_kota,
+            "grafik_ort_ms": (round(self.grafik_toplam_ms / self.grafik_kare_sayisi, 1)
+                              if self.grafik_kare_sayisi else 0.0),
             "public_kuyruk": len(self._public_kuyruk),
             "public_kuyruk_tasmasi": self.public_kuyruk_tasmasi,
             "son_public_gonderim": self.son_public_gonderim,
@@ -2465,6 +2523,172 @@ class TelegramNotifier:
             self._dm_imza_kaydet(data)
         return ok
 
+    # --- grafik karesi teslimi (G4 / §4) -----------------------------------
+
+    def grafik_kuyruga_ekle(self, data: Dict) -> int:
+        """`data["grafik_verisi"]`ni gönderim kuyruğuna alır; eklenen kare sayısı.
+
+        Neden burada: kart metni gitmiş oldu — kare ALARMIN devamıdır, ayrı olay
+        değildir (§4: 1 olay = 1 metin + kareler). Kill-switch kapalıysa veya
+        tarayıcı köprüyü kurmadıysa sessiz 0; hiçbir hata alarmı etkilemez.
+        """
+        veri = data.get("grafik_verisi") if isinstance(data, dict) else None
+        if not isinstance(veri, dict):
+            return 0
+        goruntular = veri.get("goruntular") or []
+        if not goruntular:
+            return 0
+        try:
+            import grafik
+            if not grafik.grafik_aktif_mi():
+                return 0
+        except Exception as hata:  # pragma: no cover - bağımlılık yoksa görsel yok
+            logger.debug("grafik modülü hazır değil: %s", hata)
+            return 0
+        with self._grafik_lck:
+            self._grafik_kuyruk.append({
+                "anahtar": (str(data.get("stock_name") or ""),
+                            str(data.get("timeframe") or ""),
+                            str(data.get("state") or "")),
+                "sembol": veri.get("sembol") or data.get("stock_name") or "",
+                "goruntular": list(goruntular),
+                "kota": int(veri.get("kota") or 0),
+            })
+            if veri.get("kota"):
+                self.grafik_atlanan_kota += int(veri.get("kota"))
+        return len(goruntular)
+
+    def grafik_dosya_gonder(self, yol, caption: str = "") -> tuple:
+        """Bir PNG'yi DM'e gönderir ve dosyayı SİLER (§4); `(ok, aciklama)`.
+
+        Neden ayrı metod: `/grafik` komutu kareyi kullanıcının kendisi istediği için
+        sıraya bekletmeden gönderir; alarm kuyruğu da aynı gönderimi kullanır. Dosya
+        her durumda silinir (kalan tek şey disk çöpü olurdu), geçici yol
+        `grafik.kare_yolu`ndan gelir — `DATA_DIR` dışı.
+        """
+        ok, aciklama = False, "gönderim denenmedi"
+        try:
+            if not self.enabled:
+                return False, "Telegram notifier pasif (token/chat_id env'de yok)"
+            from transport.telegram import foto_gonder
+
+            self._grafik_pace()
+            ok, aciklama = foto_gonder(yol, notifier=self, caption=caption)
+            self._son_grafik_ts = time.monotonic()
+            if ok:
+                self.grafik_gonderilen += 1
+            else:
+                self.grafik_atlanan_hata += 1
+                logger.warning("grafik karesi gönderilemedi: %s",
+                               redact_sensitive_text(str(aciklama), self.token)[:160])
+        except Exception as hata:  # noqa: BLE001 - görsel hiçbir akışı düşürmesin
+            ok, aciklama = False, f"{type(hata).__name__}"[:120]
+            self.grafik_atlanan_hata += 1
+        finally:
+            try:
+                os.remove(yol)
+            except (OSError, TypeError):
+                pass
+        return ok, aciklama
+
+    def _grafik_pace(self) -> None:
+        """Kareler arası kısa bekleme: §4 mevcut pacing yardımcısını kullanır.
+
+        `public_min_aralik_sn` yeniden okunur ama kendi zaman damgasımız tutulur:
+        grup bülteni ile görseller birbirinin temposunu bozmasın.
+        """
+        try:
+            ara = float(self.public_min_aralik_sn or 0)
+        except (TypeError, ValueError):
+            ara = 0.0
+        if ara <= 0 or self._son_grafik_ts is None:
+            return
+        bekle = ara - (time.monotonic() - self._son_grafik_ts)
+        if bekle > 0:
+            time.sleep(min(bekle, 5.0))
+
+    def grafikleri_gonder(self, sinir: Optional[int] = None) -> Dict:
+        """Kuyruğu boşaltır: kare → PNG → `sendPhoto` (tarama turu sonunda çağrılır).
+
+        Sıra §4'teki gibi: önce alarm METNİ gitmiştir; kareler onun altında, olay
+        sırasında ve tek tek gider (`sendMediaGroup` v2'de, §4). Görsel hiçbir
+        koşulda metni/alamı engellemez: her hata sayılır ve sıradaki kareye geçilir.
+        Üretilen geçici PNG gönderimden sonra silinir (§4).
+        """
+        with self._grafik_lck:
+            kuyruk = list(self._grafik_kuyruk)
+            self._grafik_kuyruk.clear()
+        ozet = {"gonderilen": 0, "hata": 0, "kare": 0, "sure_ms": 0, "atlanan": 0}
+        if not kuyruk or not self.enabled:
+            return ozet
+        try:
+            import grafik
+            from transport.telegram import foto_gonder
+        except Exception as hata:  # pragma: no cover - matplotlib yoksa görsel yok
+            logger.warning("grafik teslimi kapatıldı (%s): %s", type(hata).__name__, hata)
+            ozet["atlanan"] = sum(len(k["goruntular"]) for k in kuyruk)
+            self.grafik_atlanan_hata += ozet["atlanan"]
+            return ozet
+        if not grafik.disk_uygun_mu():
+            logger.warning("diskte %d MB altında yer var: kareler üretilmedi",
+                           grafik.DISK_MIN_BOS_MB)
+            ozet["atlanan"] = sum(len(k["goruntular"]) for k in kuyruk)
+            self.grafik_atlanan_hata += ozet["atlanan"]
+            return ozet
+        if not self._grafik_supuruldu:
+            self._grafik_supuruldu = True
+            silinen = grafik.bayat_kareleri_supur()
+            if silinen:
+                logger.info("grafik: %d bayat kare dosyası silindi", silinen)
+        # `sinir` KARE sayısısıdır, OLAY sayısı değil (bir olay 4 kare taşıyabilir;
+        # ilk sürümde `len(kuyruk)` kullanıldığı için ikinci kare kuyrukta kalıyordu).
+        limit = -1 if sinir is None else max(0, int(sinir))
+        kalan = []
+        for olay in kuyruk:
+            for kare in olay["goruntular"]:
+                if 0 <= limit <= ozet["kare"]:
+                    kalan.append({"olay": olay, "kare": kare})
+                    continue
+                ozet["kare"] += 1
+                yol, meta = None, {}
+                try:
+                    yol, meta = grafik.kareyi_yaz(kare.get("goruntu") or {},
+                                                   kare.get("tf") or "1h")
+                except Exception as hata:  # noqa: BLE001 - görsel alarmı düşürmesin
+                    logger.warning("grafik: kare üretilemedi (%s %s): %s",
+                                   olay["sembol"], kare.get("tf"), hata)
+                    self.grafik_atlanan_hata += 1
+                    ozet["hata"] += 1
+                    continue
+                if not yol:
+                    # Çizim reddi (kadraj/uyuşmazlık): meta'da nedeni var, sessiz olmasın.
+                    logger.info("grafik: kare çizilmedi (%s %s): %s", olay["sembol"],
+                                kare.get("tf"), " · ".join(meta.get("uyarilar") or []))
+                    self.grafik_atlanan_hata += 1
+                    ozet["hata"] += 1
+                    continue
+                ok, aciklama = self.grafik_dosya_gonder(
+                    yol, caption=_grafik_basligi(olay, kare, meta))
+                # Sayaçları `grafik_dosya_gonder` tutuyor (aynı yol iki yüzeyde);
+                # burada yalnız tur özeti ve süre ortalaması biriktirilir.
+                if ok:
+                    self.grafik_kare_sayisi += 1
+                    self.grafik_toplam_ms += float(meta.get("sure_ms") or 0)
+                    ozet["gonderilen"] += 1
+                    ozet["sure_ms"] += int(meta.get("sure_ms") or 0)
+                else:
+                    logger.debug("grafik karesi gitmedi (%s): %s", olay["sembol"],
+                                 str(aciklama)[:120])
+                    ozet["hata"] += 1
+        if kalan:
+            with self._grafik_lck:
+                for parca in reversed(kalan):
+                    self._grafik_kuyruk.insert(0, {
+                        "anahtar": parca["olay"]["anahtar"], "sembol": parca["olay"]["sembol"],
+                        "goruntular": [parca["kare"]], "kota": 0})
+            ozet["atlanan"] = len(kalan)
+        return ozet
+
     def _gonder(self, data: Dict) -> bool:
         """can_send kapısı geçildikten sonraki gerçek gönderim (kuyruk bunu çağırır)."""
         stock = data.get('stock_name', '')
@@ -2522,6 +2746,9 @@ class TelegramNotifier:
                 # NOT: Public (grup) gönderimi burada YAPILMAZ. Olaylar tarama
                 # turu boyunca `public_kuyruk()` ile toplanır ve tur sonunda tek
                 # bültende gider; DM başarısız olsa bile grup yayını etkilenmez.
+                # Görsel de DM'e gider (§4: public kare YOK) ama burada DEĞİL —
+                # metni bekletmemek için kuyruğa alınır, tur sonunda gönderilir.
+                self.grafik_kuyruga_ekle(data)
                 return True
             else:
                 ipucu = telegram_hata_ipucu(resp.status_code,
