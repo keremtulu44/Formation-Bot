@@ -35,6 +35,16 @@ from secrets_redaction import redact_sensitive_text
 logger = logging.getLogger(__name__)
 
 
+def _grafik_salteri_acik() -> bool:
+    """Grafik kill-switch'ini grafik modülünü içe aktarmadan oku.
+
+    `grafik.grafik_aktif_mi()` ile aynı env sözleşmesi: eksik/boş/`yok` kapalı,
+    diğer değerler açık. Bu kontrol, kill-switch kapalıyken grafik katmanını
+    gereksiz yere yüklememek için notifier içinde tutulur.
+    """
+    return (os.environ.get("TELEGRAM_GRAFIK") or "yok").strip().lower() != "yok"
+
+
 KUYRUK_HARICI_ANAHTARLAR = ("grafik_verisi",)
 
 
@@ -847,6 +857,10 @@ class TelegramNotifier:
         self.grafik_atlanan_hata = 0
         self.grafik_atlanan_kota = 0
         self.grafik_atlanan_baglam = 0   # „bağlam değişmedi" güncellemesi → kare yok
+        self.grafik_olay = 0             # grafik açıkken gönderilmiş alarm kartı
+        self.grafik_olay_karesiz = 0     # açıkken köprüden kare alamayan alarm kartı
+        self.grafik_kopru_hata = 0
+        self.grafik_son_neden = None
         self.grafik_toplam_ms = 0
         self.grafik_kare_sayisi = 0
         # --- tek-seferlik olay hafızası (repeat-guard) ---
@@ -2078,7 +2092,7 @@ class TelegramNotifier:
         for kayit in list(self._acil_kuyruk):
             if gonderilen >= max(1, int(max_adet)):
                 break
-            veri = kayit.get("veri") or {}
+            veri = dict(kayit.get("veri") or {})
             if str(veri.get("state") or "").strip().upper() not in ALERT_STATES:
                 # Eski deploy'lardan kalan deneme/başarısız/tamamlandı kuyrukları
                 # yeni bildirim politikasında kesinlikle gönderme.
@@ -2115,6 +2129,9 @@ class TelegramNotifier:
                         degisti = True
                         continue
                 break  # engel sürüyor: sırayı bozmadan bekle
+            # Acil kuyrukta `grafik_verisi` bilerek yoktur; bunu normal bir
+            # köprü atlaması gibi sayıp karesiz sayaçlarını şişirmeyelim.
+            veri["_kuyruktan"] = True
             if self._gonder(veri):
                 self._acil_kuyruk.remove(kayit)
                 self.kuyruk_gonderildi += 1
@@ -2208,6 +2225,11 @@ class TelegramNotifier:
             "public_hatasi": self.public_hatasi,
             "public_engel": self.public_engel,
             # Görsel kuyruğu (§4): metin kotasından bağımsız sayaçlar.
+            "grafik_acik": _grafik_salteri_acik(),
+            "grafik_olay": self.grafik_olay,
+            "grafik_olay_karesiz": self.grafik_olay_karesiz,
+            "grafik_kopru_hata": self.grafik_kopru_hata,
+            "grafik_son_neden": self.grafik_son_neden,
             "grafik_gonderilen": self.grafik_gonderilen,
             "grafik_kuyruk": len(self._grafik_kuyruk),
             "grafik_atlanan_hata": self.grafik_atlanan_hata,
@@ -2527,14 +2549,43 @@ class TelegramNotifier:
 
     # --- grafik karesi teslimi (G4 / §4) -----------------------------------
 
+    def grafik_kopru_hatasi(self, neden: str) -> None:
+        """Tarayıcı-kare köprüsü hatasını say ve ilkini görünür biçimde logla."""
+        neden_kisa = " ".join(
+            redact_sensitive_text(str(neden), self.token).split()
+        )[:120]
+        with self._grafik_lck:
+            self.grafik_kopru_hata += 1
+            self.grafik_son_neden = neden_kisa
+            sayi = self.grafik_kopru_hata
+        if sayi == 1:
+            # Bir kere WARNING: Render'ın varsayılan INFO loglarında teşhis görünür.
+            logger.warning("grafik köprüsü ilk hatası: %s", neden_kisa)
+        else:
+            # Tekrarlayan tarama hataları sayılır, fakat log akışını doldurmaz.
+            logger.debug("grafik köprüsü hatası #%d: %s", sayi, neden_kisa)
+
     def grafik_kuyruga_ekle(self, data: Dict) -> int:
         """`data["grafik_verisi"]`ni gönderim kuyruğuna alır; eklenen kare sayısı.
 
         Neden burada: kart metni gitmiş oldu — kare ALARMIN devamıdır, ayrı olay
-        değildir (§4: 1 olay = 1 metin + kareler). Kill-switch kapalıysa veya
-        tarayıcı köprüyü kurmadıysa sessiz 0; hiçbir hata alarmı etkilemez.
+        değildir (§4: 1 olay = 1 metin + kareler). Şalter açıkken köprüden görsel
+        alamayan olaylar sayılır; acil kuyruktan gelen kartlar bu sayımlara girmez.
         """
-        veri = data.get("grafik_verisi") if isinstance(data, dict) else None
+        if not isinstance(data, dict):
+            return 0
+        grafik_acik = _grafik_salteri_acik()
+        kuyruktan = bool(data.get("_kuyruktan"))
+        if grafik_acik and not kuyruktan:
+            veri_sayac = data.get("grafik_verisi")
+            goruntu_sayac = (veri_sayac.get("goruntular")
+                             if isinstance(veri_sayac, dict) else None)
+            with self._grafik_lck:
+                self.grafik_olay += 1
+                if not goruntu_sayac:
+                    self.grafik_olay_karesiz += 1
+
+        veri = data.get("grafik_verisi")
         if not isinstance(veri, dict):
             return 0
         goruntular = veri.get("goruntular") or []
@@ -2547,6 +2598,8 @@ class TelegramNotifier:
             self.grafik_atlanan_baglam += 1
             logger.debug("grafik: bağlam güncellemesi olduğu için kare eklenmedi (%s %s)",
                          data.get("stock_name"), data.get("timeframe"))
+            return 0
+        if not grafik_acik:
             return 0
         try:
             import grafik

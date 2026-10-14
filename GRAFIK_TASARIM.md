@@ -809,8 +809,9 @@ günlük/saatlik tavan YOK) · **kareler YALNIZ DM** (public/kanal metinde kalı
   `grafik_dosya_gonder(yol, caption)` aynı gönderimi `/grafik` için anında yapar ve
   dosyayı HER YOLDA siler. Sayaçlar: `grafik_gonderilen`, `grafik_atlanan_hata`,
   `grafik_atlanan_kota`, `grafik_kare_sayisi/toplam_ms` → `gonderim_durumu()`
-  (`grafik_ort_ms`) → `/durum`’da TEK satır (`🖼 Grafik karesi: …`), yalnız bir şey
-  olduysa yazılır.
+  (`grafik_ort_ms`) → `/durum`’da TEK satır (`🖼 Grafik karesi: …`): şalter açıkken
+  sayaçlar sıfır olsa da görünür; kapalı + sıfırda gizlenir, geçmiş/bugünkü aktivite
+  varsa `(şalter kapalı)` önekiyle gösterilir (§28).
 - `main.py::_grafik_koprusu(payload, outputs)` — `anlik_goruntu`yu tarama anında
   çağırır, `payload['grafik_verisi']`nın içine koyar; `_grafikleri_tur_sonunda`
   public bülteniyle aynı yerde flush eder ve `daily_stats['grafik_kare/‍hata']`nı
@@ -1019,3 +1020,42 @@ cümlesi diğer kareye taşınmıyor.
 Test: `test_grafik_teslim.py` → 57 (4 yeni: biçimleyici paritesi, hata yutma,
 kapasite, gerçek motor ×2 parametrizasyon). Kapı: §26 ile birlikte 1012 → bu turda
 yeşil (aşağıda).
+
+---
+
+## 28 · GÖRSEL YOK TEŞHİSİ (2026-10-14)
+
+Alarm metni ulaşıp kare ulaşmadığında `/durum` artık şalter durumunu, kareye
+aday alarm sayısını ve kare üretme köprüsündeki kayıpları ayırır. Ana satır
+şalter açıkken sıfırlarda da görünür:
+
+`🖼 Grafik karesi: N alarm kartı · N kare gönderildi · N hata · kuyruk N · ort N ms`
+
+Sıfır olmayan ekler: `N adet sınırda kesildi`, `N bağlam güncellemesi`,
+`N karesiz (tarama anında şalter kapalı ya da köprü atladı)`,
+`köprü hatası N · son neden: …`. Şalter kapalı ve tüm sayaçlar sıfırsa satır
+yazılmaz; kapalıyken önceki görsel aktivitesi varsa `(şalter kapalı)` önekiyle
+aynı sayaçlar görünür. `grafik_olay` yalnız şalter açıkken normal DM alarmı
+başarıyla gönderildikten sonra sayılır; `grafik_olay_karesiz` bunun içinden
+köprüden `grafik_verisi`/`goruntular` alamayanları gösterir. Görsel metin kotasına
+girmez; mesaj metni ve `1 olay = 1 mesaj` sözleşmesi değişmez.
+
+| Neden | Artık nasıl görünür / ne anlama gelir |
+|---|---|
+| **Şalter yok/kapalı** (`TELEGRAM_GRAFIK` tanımsız veya `yok`) | Otomatik alarm karesi bilinçli olarak üretilmez. Hiç görsel aktivitesi yoksa `/durum` satırı da yoktur; şalter açılmışken sıfırlar dâhil satır görünür. `/grafik` komutu bu şalterden bağımsızdır. |
+| **Tarama anında kapalı** | Köprü `grafik_verisi` eklemeden döner. Gönderim anında şalter açıksa olay `N karesiz (tarama anında şalter kapalı ya da köprü atladı)` altında sayılır; şalter hâlâ kapalı ve sayaçlar sıfırsa satır gizlidir. Render env değişikliği restart gerektirir. |
+| **Köprü istisnası** | Alarm yine gönderilir; `grafik_kopru_hata` artar, `grafik_son_neden` tür/mesaj/sembol/TF ile en fazla 120 karakter tutulur ve `/durum`'da görünür. İlk köprü hatası `WARNING` (Render `INFO` logunda görünür), sonrakiler `DEBUG` olur. Olay kare kuyruğuna ulaştıysa karesiz sayacı da artabilir. |
+| **Acil kuyruk** | Diskteki acil kayıt `grafik_verisi` taşımaz; kuyruğu boşaltırken `_kuyruktan=True` işaretlenir ve bu kayıt olay/karesiz sayaçlarını şişirmez. Kareyi yeniden çizmek bilerek denenmez (kadraj bayat olur); `/durum`'daki aday hunisinin `N kuyruğa alındı` ve gönderim engeli sayaçları alarm yolunu gösterir. |
+| **DM dışı hedef** | Görseller yalnız `TELEGRAM_CHAT_ID` özel sohbetine gönderilir; public grup/kanalda metin olması, orada kare de bekleneceği anlamına gelmez. Fotoğrafı kayıtlı DM'de kontrol et; grup için görsel sayaçları ayrı hedef sayılmaz. |
+| **Bağlam güncellemesi** | `_dm_bağlam_değişmedi` olan kısa metin güncellemesi aynı olayın karelerini tekrar göndermez. `/durum`'da `N bağlam güncellemesi` görünür; bu karesiz köprü hatası değildir. |
+
+### Canlı teşhis sırası
+
+1. Render → **Shell**: `python deploy_check.py --grafik-test` — matplotlib ve
+   yerel kare üretimini doğrula; bu test ağa çıkmadan çalışır.
+2. Env gerekiyorsa mevcut `TELEGRAM_GRAFIK=alarm` değerini ayarla ve servisi
+   **restart et** (env değişikliği çalışan sürece uygulanmaz; yeni anahtar yok).
+3. Kayıtlı Telegram DM'sinde `/grafik SEM 4s` gönder — cache'ten kare üretimi ve
+   doğrudan `sendPhoto` yolunu alarm şalterinden bağımsız test et.
+4. Aynı DM'de `/durum` çalıştır — `alarm kartı`, `karesiz`, `köprü hatası · son
+   neden`, kare gönderimi ve gerekiyorsa `(şalter kapalı)` önekini birlikte oku.
