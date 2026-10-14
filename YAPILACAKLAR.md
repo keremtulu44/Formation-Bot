@@ -199,6 +199,20 @@ mumlara dokundu, yapı nerede kırıldı). Her faz tek commit + tam test yeşil 
 bot aynı dizini okuyor) → sentetik derin çerçeve testte/CLI'da (`--demo`); yarım
 gün/tatil paritesi (`exchange-calendars`) hâlâ ölçülmedi (§18.5).
 
+## Test kapısı ortam notu (ölçüldü — 2026-10-14)
+
+Tam kapı her commit öncesi: `mkdir -p /tmp/fbdata && DATA_DIR=/tmp/fbdata
+.venv/bin/python -m pytest -q`. **`/tmp/fbdata` VAR ve BOŞ olmalı**: içine önceki
+koşulardan kalan önbellek dosyaları sızarsa `test_domain_integration_regressions.py`
+veri bağımlılığı yüzünden 2 sahte hata veriyor (kodla ilgisi yok, boş dizinde 7/7
+yeşil). Kum fırlatması yeniden kurulursa `.venv` kaybolur:
+`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
+(matplotlib 3,11,2 + pandas 2,2,2). Dal yeniden klonlanıp `main`'e düşebilir —
+`git fetch origin arena/<dal>` + `git reset --soft FETCH_HEAD` + `git reset` ile
+tarih geri alınır; çalışma ağacındaki dosyalar korunur. **Büyük turları erken
+commit'le** (G3, kum yeniden kurulmadan hemen önce işlenmemişti; dosyalar
+kurtarıldı ama tarih `origin`'den çekildi).
+
 *G3'te bilinçli ertelenenler:* `evidence_text` yalnız `--etiket-detay`da (kart
 metninin tekrarı olmaması için); `▲` yüzdelik işareti yalnız motor serisi varsa —
 yerel rvol'da percentile iddiası yok; spike kapağı (12) dipnot değil, `meta` sayacı.
