@@ -846,6 +846,7 @@ class TelegramNotifier:
         self.grafik_gonderilen = 0
         self.grafik_atlanan_hata = 0
         self.grafik_atlanan_kota = 0
+        self.grafik_atlanan_baglam = 0   # „bağlam değişmedi" güncellemesi → kare yok
         self.grafik_toplam_ms = 0
         self.grafik_kare_sayisi = 0
         # --- tek-seferlik olay hafızası (repeat-guard) ---
@@ -2211,6 +2212,7 @@ class TelegramNotifier:
             "grafik_kuyruk": len(self._grafik_kuyruk),
             "grafik_atlanan_hata": self.grafik_atlanan_hata,
             "grafik_atlanan_kota": self.grafik_atlanan_kota,
+            "grafik_atlanan_baglam": self.grafik_atlanan_baglam,
             "grafik_ort_ms": (round(self.grafik_toplam_ms / self.grafik_kare_sayisi, 1)
                               if self.grafik_kare_sayisi else 0.0),
             "public_kuyruk": len(self._public_kuyruk),
@@ -2538,6 +2540,14 @@ class TelegramNotifier:
         goruntular = veri.get("goruntular") or []
         if not goruntular:
             return 0
+        if data.get("_dm_bağlam_değişmedi"):
+            # Kısa güncelleme kartı (§DM içerik kapısı): bağlam birebir aynıysa tek
+            # satır gider. Aynı olayın 4 karesini yeniden göndermek „1 olay = 1 mesaj
+            # + kareleri" kuralını şişirir ve medyayı yorar → kare eklenmez.
+            self.grafik_atlanan_baglam += 1
+            logger.debug("grafik: bağlam güncellemesi olduğu için kare eklenmedi (%s %s)",
+                         data.get("stock_name"), data.get("timeframe"))
+            return 0
         try:
             import grafik
             if not grafik.grafik_aktif_mi():
@@ -2622,8 +2632,7 @@ class TelegramNotifier:
         if not kuyruk or not self.enabled:
             return ozet
         try:
-            import grafik
-            from transport.telegram import foto_gonder
+            import grafik  # noqa: F401 - yoksa katman zaten çalışmaz
         except Exception as hata:  # pragma: no cover - matplotlib yoksa görsel yok
             logger.warning("grafik teslimi kapatıldı (%s): %s", type(hata).__name__, hata)
             ozet["atlanan"] = sum(len(k["goruntular"]) for k in kuyruk)

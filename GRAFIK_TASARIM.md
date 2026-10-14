@@ -882,3 +882,92 @@ aşanları topluyor — taze dosyaya dokunmaz, eşzamanlı ikinci kopya korumas�
 - **canlı smoke:** `TELEGRAM_GRAFIK=alarm` ile gerçek bir alarmda uçtan uca deneme
   (token/DM bu ortamda yok); `deploy_check` grafik satırı bunu hazırlıyor.
 - **G5 (opsiyonel):** ısı haritası ve §13 JSONL (yalnız kayıt, gönderimle ilgisiz).
+
+---
+
+## 26 · CANLIYA ÇIKIŞ DENETİMİ (2026-10-14) — G4'ten sonra uçtan uca gezinme
+
+Kullanıcının isteği: *"akışı baştan sona izle, canlıya alınca nerede kırılıyor bul."*
+Kod değişikliği İKİ yerle sınırlı (aşağıda); kalanı ölçüm, doküman ve kullanıcıda
+kalacak işlerin listesi. v2 (`sendMediaGroup` + `reply_parameters`) bu turda da
+açılmadı — canlı DM dumanı görilmeden dokunulmayacak (§4).
+
+### 26.1 Ölçülen gerçek maliyet (bu depo, gerçek önbellek)
+
+`python grafik_uret.py --hisse AKBNK --tum-tf --zone` → dört kare de çizildi:
+
+| TF | mum | PNG | süre | kaynak |
+|---|---|---|---|---|
+| 1h | 180 | 78,1 KB | 568 ms | `bot_data/1s` |
+| 2h | 180 | 75,8 KB | 301 ms | `resample(2h)` |
+| 4h | 120 | 72,4 KB | 302 ms | `resample(4h)` |
+| 1d | 40 | 52,0 KB | 134 ms | `resample(1d)` |
+
+**4 kare ≈ 1,3 sn** (planlama 14 ms dahil) ve süreç tepesi **129 MB** (çizim
+sırasında +52 MB). `grafik_aktif_mi()` `yok` iken taze süreçte `matplotlib`
+modülü YÜKLENMİYOR (ölçüldü) → kapalıyken sıfır maliyet iddiası duruyor.
+Kare başına 27-78 KB, §6.3'teki 500 KB tavanının hâlâ 6-19 katı altında → o kapı
+açılmayacak. Not: `1d` kadrajı 40 mum (bu depo için yüzeysel, §18.6).
+
+### 26.2 Denetimin bulduğu ve kapanan İKİ kusur
+
+1. **Bağlam güncellemesi kareyi yeniden gönderiyordu** — aynı olayın kartı
+   güncellenince (`_dm_bağlam_değişmedi` yolu) `_gonder` tekrar başarılı sayılıyor
+   ve `grafik_kuyruga_ekle` AYNI kareyi (bazen 4 tanesini) ikinci kez kuyruğa
+   alıyordu: aynı mumların bayat kopyası, kota israfı. Düzeltme: o bayrakta `0`
+   döner; sayaç `grafik_atlanan_baglam` → `gonderim_durumu()` → `/durum`'daki
+   `🖼` satırında `· N bağlam güncellemesi` (yalnız sıfır değilken). Test:
+   `test_bağlam_güncellemesi_kare_getirmez`.
+2. **`deploy_check`te grafik dumanı yoktu** — matplotlib kurulu mu diye BAKILIYORDU
+   ama hiçbir kare ÜRETİLMİYORDU, yani canlıda "kare gitmiyor" sessiz kalırdı.
+   Eklendi: `kontrol_grafik(...)` + `--grafik-test`; ağdan BAĞIMSIZ (çizim yerel),
+   `--send-test-message` olmadan `sendPhoto`ya dokunmaz. Beklenen: `Grafik katmanı
+   import edildi (matplotlib 3.11.x)` → `Kare üretildi: AKBNK 4h · 120 mum ·
+   ~72 KB · ~300 ms` → `Fotoğraf gönderilmedi`. Sembole veri yoksa FAIL değil
+   **WARN** (`veri yok: bot_data/….json okunamadı`) — ilk tarama öncesi normal.
+
+### 26.3 Denetlenip TEMİZ çıkan yerler (neden güvenli — kayıt)
+
+- **env**: `render.yaml` `envVars`ına 4 anahtar EKLENDİ (önce yoktu; blueprint'i
+  olan serviste env'i Render dashboard yönetir, yani kullanıcı da elle ekleyecek).
+- **build/kütüphane**: matplotlib 3.11.2 cp312 manylinux tekerleği var (kaynak
+  derleme → Render build tuzağı yok). Sandbox 3.11.2, Render 3.12 — iki tarafa da
+  tekerlek var. Sandbox'ta `numpy 1.26.4` + `matplotlib 3.11.2` birlikte kuruluyor
+  (pinned setiyle test kapısı yeşil).
+- **kota/huni**: görseller `max_gunluk`/`max_saatlik`i SAYMAZ; `grafik_kuyruga_ekle`
+  yalnız metin 200 ALDIKTAN SONRA çağrılıyor → 1 olay = 1 mesaj bozulmadı.
+- **acil kuyruk**: `_kuyruk_verisi()` `grafik_verisi`ni düşürdüğü için kuyruktan
+  boşalan kartların karesi ÜRETİLMEZ (bilinçli: bayat kadraj çizmek yerine hiç
+  çizmemek). `/durum`'da bundan doğan kayıp sayacı yok — kart zaten gitmiş oluyor.
+- **grup/kanal**: `foto_gonder` yalnız `notifier.chat_id`yi (DM) kullanır; public
+  bülten ve grup yollarına görsel kodu girmiyor.
+- **disk**: `disk_uygun_mu()` < 200 MB → üretim wholly atlanır ve kuyruk
+  `atlanan`da sayılır; yol `DATA_DIR` DIŞINDA `/tmp/fb_grafik_<SEM>_<tf>_<uid8>.png`,
+  gönderimden sonra silinir, açılışta `bayat_kareleri_supur()` TTL'i aşanı toplar.
+- **restart**: kare kuyruğu bellek içi → restart'ta kaybolur (kart gitmiştir, kopya
+  doğmaz); `grafik_dosya_gonder` dosyayı HER yolda siler, `/tmp` süpürmesi de var.
+- **komut çakışması**: tarama sürerken komutlar `tarama_suruyor` kapısına takılır;
+  `/grafik`in 0,1-0,6 sn'lik çizimi komut thread'indedir, tarama temposuna
+  dokunmaz, kota/hunyayı tüketmez.
+- **TF kelime listesi**: tarama/kart `1h/2h/4h/1d`, kullanıcı görünümü `_TF_KISA`
+  ile `1s/2s/4s/1g`; `kare_listesi`/`_sonuc_sec` YALNIZ kanonik adı tanır —
+  `/grafik` iki yazımı da `_GRAFIK_TF` ile kanonikleştiriyor (görünür adı elle
+  yazmak katmansız kare üretirdi; bu yüzden CLI/komut tek yerden geçiyor).
+- **diskte kalıntı**: `--tum-tf` CLI çıktısı `/tmp/grafik_*.png` yazıyor (gönderim
+  yolu değil, insan provası) — gönderim yolundaki dosyalar siliniyor.
+
+### 26.4 Kullanıcıda kalanlar (kod tarafı bitti)
+
+1. Render dashboard → 4 env anahtarı (`TELEGRAM_GRAFIK=alarm`, `..._ADET=1`,
+   `GRAFIK_MUM_MAKS=180`, `GRAFIK_OLAY_MAKS=6`). Free planda ADET=1: 4 kare ~1,3 sn
+   + ~52 MB tepe demek, çok alarmın olduğu turda tur uzar.
+2. Supabase'i bağla (`SUPABASE_URL`/`ANON_KEY`): yoksa restart'ta günlük sayaçlar
+   ve cooldown sıfırlanır (görselden bağımsız ama aynı denetimin parçası).
+3. Canlı duman (runbook **4.7**): `python deploy_check.py --grafik-test
+   --send-test-message` → DM'de `sendPhoto kabul edildi`; sonra gerçek bir alarmda
+   "metin sonra kare" sırasını ve `/durum`'daki `🖼` satırını gözle doğrula.
+4. **G5'e bırakılan iki şey**: (a) v2 teslim biçimi (media group/reply), (b) alarm
+   KARTINDAKİ motor durum satırının (`🟢 aktif · 5/100 temas`) karenin ayak
+   yazısına taşınması — `kareyi_yaz`/`ciz` ayak alanına etiket beslemesi gerekiyor,
+   yani çizim plumbing'i + §4 sözleşme satırı + görsel onay; G4 kapsamına sığmadı
+   ve YARIM bırakılmadı (kod yazılmadı). Isı haritası + §13 JSONL de G5'te.

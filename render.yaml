@@ -71,3 +71,18 @@ services:
       # C3: `bot_store` tablosunu paylaşan ikinci örnek anahtar çakışmasın diye.
       - key: SUPABASE_STORE_PREFIX
         value: "formation-bot:"
+      # --- ALARM KARELERİ (grafik; ops.) ---
+      # `yok` = hiçbir kare üretilmez (gönderim önceden nasılsa öyle; matplotlib
+      # hiç import edilmez). `alarm` = alarm METNİ gittikten sonra tarama turu
+      # sonunda hissenin mum karesi eklenir. Görseller mesaj kotasını YEMEZ.
+      # Not: `/grafik` komutu bu anahtardan bağımsız çalışır.
+      - key: TELEGRAM_GRAFIK
+        value: "yok"
+      # Alarm başına en fazla kare (1-4); Render Free için 1-2 önerilir (§26).
+      - key: TELEGRAM_GRAFIK_ADET
+        value: "4"
+      # Kadraj tavanı (mum) ve kareye çizilen onaylı BOS/CHoCH sayısı.
+      - key: GRAFIK_MUM_MAKS
+        value: "180"
+      - key: GRAFIK_OLAY_MAKS
+        value: "6"

@@ -234,3 +234,26 @@ OB tarafında motor `details["records"]` kullanılıyor (`active_records` değil
 dolan/geçersizleşen kutular yakınlık kapağıyla eleniyor, kayıp bilgi dipnotta
 sayı olarak yazılı (§23.2). Kapak dışı elenen kutuların listesi karede değil
 yalnız `meta`da (§13 JSONL'e kadar öyle kalacak).
+
+## L) CANLI HAZIRLIK DENETİMİ (2026-10-14) — G4 sonrası uçtan uca
+
+Kod tarafı bitti (detay + ölçümler: `GRAFIK_TASARIM.md` §26). Tablo = "canlıya
+alınca nerede kırılır" sorusunun cevabı; **senin yapacağın 3 satır** işaretli.
+
+| # | Risk | Durum | Kanıt / ne yapıyor |
+|---|---|---|---|
+| L1 | `TELEGRAM_GRAFIK*` env'leri `render.yaml`da yoktu | ✅ kapandı | 4 anahtar blueprinte yazıldı; varsayılan `yok` → açmazsan bugünkü davranışın birebir aynısı |
+| L2 | matplotlib kaynaktan derlenip Render build'ini patlatması | ✅ elendi | cp312 manylinux tekerleği var (`pip download --python-version 312 --only-binary=:all:`) |
+| L3 | Kare kotası mesaj haklarını yer | ✅ yok | görseller `max_gunluk/max_saatlik` saymaz; metin 200 aldıktan sonra kuyruğa girer (1 olay = 1 mesaj) |
+| L4 | Aynı kare 2 kez gider (bağlam güncellemesinde) | ✅ düzeldi | `_dm_bağlam_değişmedi` → `grafik_kuyruga_ekle` 0 döner; `/durum`'da `N bağlam güncellemesi` |
+| L5 | Kare giderken alarm düşer | ✅ yok | üretim/gönderim hataları yutulur + `grafik_atlanan_hata`; karttan sonra geliyor |
+| L6 | Disk dolar / dosya kalır | ✅ kontrol altında | <200 MB → üretim yok; `/tmp/fb_grafik_*` gönderim sonrası silinir, açılışta TTL süpürmesi |
+| L7 | Tur uzar (Free 512 MB, 4 kare) | ⚠ ölçüldü | 4 kare ≈ **1,3 sn**, tepe **+52 MB (129 MB)**; gerekirse `TELEGRAM_GRAFIK_ADET=1` |
+| L8 | Kurulumda "kare gitmiyor" sessiz kalır | ✅ kapandı | `deploy_check.py --grafik-test [--send-test-message]` (çevrimdışı çizim + isteğe bağlı sendPhoto) |
+| L9 | Restart'ta sayaç/cooldown sıfır | ❗ SENDEN | Supabase bağla (`SUPABASE_URL`/`SUPABASE_ANON_KEY`); grafik bundan bağımsız |
+| L10 | Canlı DM'de sıra/animasyon beklentisi | ❗ SENDEN | runbook **4.7** dumanı; media group/reply (v2) ancak bundan sonra |
+| L11 | Karttaki motor durumunun karede okunmaması | ❗ KALDI (G5) | ayak yazısına etiket beslemesi = çizim plumbing'i; bilinçli ertelendi, yarımkod yok |
+| L12 | `1d` karesi yüzeysel (40 mum) | ℹ kabul | §18.6; alarm 1d ise kadraj tavanı kalkıyor, bant sığar |
+
+Yol haritası satırları: G4 teslim `a80524d` + bu denetim turu; **G5 = ısı haritası +
+§13 JSONL + L11 + v2 teslim**.

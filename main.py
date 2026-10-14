@@ -1157,7 +1157,9 @@ def _komut_durum(_arguman: str) -> str:
                                    f"{gd.get('grafik_atlanan_hata', 0)} hata · "
                                    f"{gd.get('grafik_atlanan_kota', 0)} adet sınırında kesildi · "
                                    f"kuyruk {gd.get('grafik_kuyruk', 0)} · "
-                                   f"ort {gd.get('grafik_ort_ms', 0)} ms")
+                                   f"ort {gd.get('grafik_ort_ms', 0)} ms"
+                                   + (f" · {gd['grafik_atlanan_baglam']} bağlam güncellemesi"
+                                      if gd.get("grafik_atlanan_baglam") else ""))
         except Exception as exc:  # noqa: BLE001 - komut asla çökmesin
             logger.debug(f"Gönderim durumu okunamadı: {exc}")
     if gosterim:

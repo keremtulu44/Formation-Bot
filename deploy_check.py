@@ -253,8 +253,8 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("TELEGRAM_TEST_KEY", False, "İsteğe bağlı: /test ucunu açar (telefondan Telegram testi)"),
         ("SUPABASE_STORE_PREFIX", False, "Varsayılan formation-bot: ; aynı tabloyu paylaşan 2. kopya için değiştirin"),
         ("BOT_INSTANCE_ID", False, "Varsayılan hostname:pid ; ikinci canlı kopya varsa farklı ad verin (B10)"),
-        ("TELEGRAM_GRAFIK", False, "İsteğe bağlı: 'alarm' → her alarm metninin ALTINA mum karesi ekler "
-                                   "(varsayılan 'yok': gönderim bugünküyle birebir aynı)"),
+        ("TELEGRAM_GRAFIK", False, ("İsteğe bağlı: 'alarm' → her alarm metninin ALTINA mum karesi ekler "
+                                     "(varsayılan 'yok': gönderim bugünküyle birebir aynı)")),
         ("TELEGRAM_GRAFIK_ADET", False, "İsteğe bağlı: alarm başına en fazla kare (1-4, varsayılan 4)"),
         ("GRAFIK_MUM_MAKS", False, "İsteğe bağlı: kadraj tavanı — kaç mum çizilsin (varsayılan 180)"),
         ("GRAFIK_OLAY_MAKS", False, "İsteğe bağlı: kareye çizilen onaylı BOS/CHoCH sayısı (varsayılan 6)"),
@@ -570,6 +570,76 @@ def _webhook_adres_gizle(url: str) -> str:
     return _kisa(_webhook_sir_gizle((url or "").strip()), 120)
 
 
+def kontrol_grafik(token: str, chat_id: str, mesaj_gonder: bool, *,
+                   hisse: str = "AKBNK", tf: str = "4h") -> None:
+    """Grafik katmanının canlı dumanı (G4): kare üret, isteğe bağlı gönder.
+
+    Neden `deploy_check` içinde: alarm kareleri `TELEGRAM_GRAFIK=alarm` ile açılıyor
+    ve tek hata kaynağı (matplotlib yok / önbellek boş / 413 boyut / yanlış chat)
+    log'da kayboluyor. Bu kontrol hepsini tek bakışta ayırıyor. Çizim **yalnız
+    önbellekten** veri okur — canlı çekme yapmaz (§4), bu yüzden ilk tarama
+    öncesi „veri yok" normaldir (UYARI, hata değil).
+    """
+    bolum("2c) GRAFİK KARESİ DUMANI")
+    try:
+        import grafik  # noqa: F401
+        import matplotlib  # noqa: F401
+        satir(OK, f"Grafik katmanı import edildi (matplotlib {matplotlib.__version__})")
+    except Exception as exc:  # noqa: BLE001
+        satir(FAIL, "Grafik katmanı yüklenemedi",
+              f"{type(exc).__name__}: {_kisa(exc, 160, token, chat_id)} · "
+              "`pip install -r requirements.txt` (matplotlib 3.11.x) sonra yeniden başlat.")
+        return
+    if not mesaj_gonder and os.environ.get("TELEGRAM_GRAFIK", "yok").strip().lower() == "yok":
+        satir(OK, "TELEGRAM_GRAFIK=yok", "Alarm kareleri kapalı; /grafik komutu yine çalışır. "
+                                        "Kareyi denemek için: --grafik-test --send-test-message")
+    try:
+        import grafik_uret
+
+        sonuc = grafik_uret.kare_uret(hisse, tf, zone=True)
+    except SystemExit as exc:               # `_cerceve_yukle` uyumluluğu
+        satir(WARN, "Kare çizilmedi", f"{_kisa(exc, 160, token, chat_id)} · "
+              "ilk tarama öncesi önbellek boş olabilir (normal).")
+        return
+    except Exception as exc:  # noqa: BLE001
+        satir(FAIL, "Kare üretimi çöktü", f"{type(exc).__name__}: {_kisa(exc, 160, token, chat_id)}")
+        return
+    if not sonuc.get("yol"):
+        satir(WARN, "Kare çizilmedi",
+              " · ".join((sonuc.get("meta") or {}).get("uyarilar") or [])
+              or sonuc.get("hata") or "neden bilinmiyor")
+        return
+    meta = sonuc.get("meta") or {}
+    kb = float(meta.get("png_kb") or 0)
+    satir(OK, f"Kare üretildi: {hisse} {tf} · {meta.get('mum_sayisi')} mum · {kb} KB · "
+              f"{meta.get('sure_ms')} ms · kaynak: {sonuc.get('kaynak')}",
+          "Boyut tavanı 500 KB (§6.3); eksik katman varsa kartta da yoktur.")
+    eksik = list(meta.get("eksik_katmanlar") or [])
+    if eksik:
+        satir(WARN, "Karede eksik katman var", " · ".join(str(x) for x in eksik))
+    if kb > 500:
+        satir(FAIL, "Kare Telegram boyut riskinde", f"{kb} KB > 500 KB — kadrajı küçült "
+              "(GRAFIK_MUM_MAKS) veya bölge/şerit katmanlarını kapat.")
+    if not mesaj_gonder:
+        satir(OK, "Fotoğraf gönderilmedi", "Denemek için: --grafik-test --send-test-message")
+        return
+    if not (token and chat_id):
+        satir(FAIL, "chat_id/token yok", "sendPhoto denenemedi.")
+        return
+    from transport.telegram import foto_gonder
+
+    ok, aciklama = foto_gonder(sonuc["yol"], chat_id=chat_id, token=token,
+                               caption=f"{hisse} · {tf} · kurulum dumanı")
+    try:
+        os.remove(sonuc["yol"])
+    except OSError:
+        pass
+    if ok:
+        satir(OK, "sendPhoto kabul edildi", "Telegram medya akışı çalışıyor (caption + foto).")
+    else:
+        satir(FAIL, "sendPhoto reddedildi", _kisa(aciklama, 160, token, chat_id))
+
+
 def kontrol_telegram_yol(token: str, webhook_secret_tanimli: bool) -> None:
     """Komutların gerçekten hangi yoldan geldiğini Telegram tarafından doğrular.
 
@@ -851,6 +921,9 @@ def main() -> int:
     ap.add_argument("--env-file", default=".env", help="Okunacak .env dosyası (varsayılan: .env)")
     ap.add_argument("--send-test-message", action="store_true",
                     help="Telegram'a gerçek bir test mesajı gönder")
+    ap.add_argument("--grafik-test", action="store_true",
+                    help="Kare üretimini dene (önbellekten çiz; --send-test-message ile "
+                         "fotoğrafı gerçekten gönder)")
     ap.add_argument("--skip-network", action="store_true",
                     help="Supabase/Telegram/Render çağrılarını atla (sadece dosya + env)")
     args = ap.parse_args()
@@ -894,6 +967,13 @@ def main() -> int:
             degerler.get("TELEGRAM_CHAT_ID", ""),
         )
         kontrol_render(args.url or "", args.test_key or degerler.get("TELEGRAM_TEST_KEY", ""))
+
+    if args.grafik_test:
+        # Çizim çevrimdışı çalışır (yalnız önbellek okunur); fotoğraf gönderimi
+        # `--send-test-message` ile ağa çıkar — o yüzden ağ dalının dışında.
+        kontrol_grafik(degerler.get("TELEGRAM_BOT_TOKEN", ""),
+                       degerler.get("TELEGRAM_CHAT_ID", ""),
+                       args.send_test_message and not args.skip_network)
 
     bolum("ÖZET")
     # Yeni istenen satır: ÖZET: Telegram HAZIR|YOK · Supabase HAZIR|YOK

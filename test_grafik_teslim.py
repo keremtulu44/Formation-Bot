@@ -777,3 +777,20 @@ def test_kare_listesi_tanimayan_bicimde_uyari_birakir(grafik_acik):
     cikti = grafik.kare_listesi(None, "4h", cerceve, sonuclar={"2s": {}}, sembol="AKBNK")
     assert cikti["goruntular"][0]["goruntu"]["serit"]["kaynak"] != "motor"
     assert any("tanınamadı" in x for x in cikti["uyarilar"])
+
+def test_bağlam_güncellemesi_kare_getirmez(notifier, grafik_acik, monkeypatch):
+    """DM içerik kapısı kısa güncelleme üretiyorsa aynı olayın kareleri YİNE gitmez."""
+    cagrilar = _veri(notifier, monkeypatch)
+    veri = {"sembol": "AKBNK", "goruntular": [{"tf": "4h", "goruntu": _goruntu(tf="4h")}],
+            "kota": 0, "uyarilar": []}
+    olay = {"stock_name": "AKBNK", "timeframe": "4h", "state": "KIRILIM_TEYITLI",
+            "grafik_verisi": veri, "_dm_bağlam_değişmedi": True}
+    assert notifier.grafik_kuyruga_ekle(olay) == 0
+    assert notifier._grafik_kuyruk == []
+    assert notifier.grafik_atlanan_baglam == 1
+    assert notifier.gonderim_durumu()["grafik_atlanan_baglam"] == 1
+    # Aynı olay bağlam değişmişse kareler normal şekilde kuyruğa girer.
+    olay.pop("_dm_bağlam_değişmedi")
+    assert notifier.grafik_kuyruga_ekle(olay) == 1
+    notifier.grafikleri_gonder()
+    assert len(cagrilar) == 1

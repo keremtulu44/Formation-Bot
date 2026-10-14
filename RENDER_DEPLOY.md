@@ -798,6 +798,41 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `KARNE_GUNU` | `4` — karne gönderim günü (0=Pazartesi ... 4=Cuma) | Hayır |
 | `KARNE_HEDEF_ATR` | `1.5` — kırılım sonrası "hedef" sayılan lehte hareket (ATR katı) | Hayır |
 | `KARNE_STOP_ATR` | `1.0` — "stop" sayılan alehte hareket (ATR katı) | Hayır |
+| `TELEGRAM_GRAFIK` | `yok` (varsayılan) / `alarm` — alarm metninin altına mum karesi ekler (§6.1) | Hayır |
+| `TELEGRAM_GRAFIK_ADET` | `4` — alarm başına kare sayısı (1-4). Free planda `1-2` | Hayır |
+| `GRAFIK_MUM_MAKS` | `180` — karenin kadraj tavanı (formasyon sığmıyorsa tavan kalkar) | Hayır |
+| `GRAFIK_OLAY_MAKS` | `6` — kareye çizilen onaylı BOS/CHoCH sayısı | Hayır |
+
+### 6.1 Alarm kareleri (isteğe bağlı; kapalıyken hiçbir şey değişmez)
+
+`TELEGRAM_GRAFIK=alarm` iken her alarmın METNİNDEN SONRA, tarama turunun sonunda
+hissenin mum karesi gider (1 olay = 1 metin + kareler; görseller mesaj kotasını
+yemez, grup/kanala hiç görsel gitmez). Kare kartla AYNI veriyi çizer: formasyon
+bandı + temaslar, OB/FVG kutuları, BOS/CHoCH + `kritik` seviyesi, `rvol` şeridi.
+
+Kurulum sonrası tek komutla duman (çizim çevrimdışıdır; fotoğraf da göndermek için
+`--send-test-message` ekleyin):
+
+```bash
+python deploy_check.py --grafik-test                     # sadece üret: boyut/süre
+python deploy_check.py --grafik-test --send-test-message # sendPhoto'yu da dener
+```
+
+Beklenen satırlar: `Grafik katmanı import edildi (matplotlib 3.11.x)`,
+`Kare üretildi: AKBNK 4h · 120 mum · ~72 KB · ~450 ms`, ardından
+`Fotoğraf gönderilmedi` / `sendPhoto kabul edildi`. `veri yok` uyarısı İLK
+tarama öncesi normaldir (kare yalnız önbelleği okur, canlı çekmez).
+
+Ölçülen maliyet (`python grafik_uret.py --hisse AKBNK --tum-tf --zone`, gerçek önbellek
++ gerçek motorlar, 2026-10-14): kare **başına 134-568 ms** ve 52-78 KB → **4 kare ≈
+1,3 sn**; süreç tepesi 129 MB (çizim sırasında +52 MB). Render Free 512 MB için
+kabul edilebilir, ama aynı turda 10 alarm varsa tura ~13 sn ekler; gerekirse
+`TELEGRAM_GRAFIK_ADET=1`. Kare
+üretilemezse alarm DÜŞMEZ; yalnız `/durum`'daki `🖼 Grafik karesi: … hata N` sayacı
+artar. Build: matplotlib 3.11.2'nin cp312 manylinux tekerleği VAR (kaynak derleme
+yok; `pip download --python-version 312 --only-binary=:all:` ile doğrulandı) —
+§1'deki "wheel yoksa build patlar" tuzağına girmez. `TELEGRAM_GRAFIK=yok` iken
+`matplotlib` HİÇ import edilmez (taze süreçte ölçüldü).
 | `KARNE_HORIZON_BAR` | `10` — sinyalden sonra izlenen bar sayısı | Hayır |
 | `DATA_DIR` | Kalıcı veri dizini. Render'da varsayılan `/tmp/formation-bot-data` (repo diski geçici; kalıcı veri Supabase'de). Kalıcı disk bağlarsanız buradan verin | Hayır |
 | `SEED_DATA_DIR` | `./bot_data` — DATA_DIR'de dosya yoksa **yalnız okuma** için kullanılan seed veri | Hayır |
