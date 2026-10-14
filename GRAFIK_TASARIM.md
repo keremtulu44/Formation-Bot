@@ -1090,3 +1090,12 @@ Bu tur §0.4.1, §0.12, §14–§17 ile çelişen veya onları somutlaştıran k
 
 - Olay yoğunluğu (DOHOL 1s'de 7 etiket) için `GRAFIK_OLAY_MAKS` kararı ayrı tur; kullanıcı onayı beklenir.
 - Veri 2026-09-25'te bitiyor; bu sözleşme yalnız çizimi kapsar, veri tazeliğini değil.
+
+## 30 · TESLİM: ALBÜM + ALARM DURUMU (2026-10-14) — §4'ün "sendMediaGroup v2" maddesi kapandı
+
+- **Karar:** `/grafik HİSSE` ve alarm karelerinin tamamı tek **albüm** (`sendMediaGroup`) olarak gider. Tek kare → `sendPhoto`. Albüm reddedilirse kareler tek tek yeniden denenir (kare kaybı yok).
+- **Araya metin yok:** başarıda ayrı "✅ Bitti" metni kaldırıldı; kabul metni (`⏳ isteği alındı`) ve yalnız gerçek başarısızlıkta özet metin kalır. Üretilemeyen TF'ler albümün ilk altyazısına `⚠` satırı olarak yazılır.
+- **Altyazı:** `HİSSE · 1s · 180 mum · son kapanan 25.09.2026 17:30` (ISO tarih ve yerel dosya yolu kullanıcıya gösterilmez).
+- **Formasyon uyarısı kaldırıldı:** `/grafik` formasyon dosyası istemez; "formasyon verisi verilmedi" satırı kullanıcıya hata gibi görünüyordu. Formasyon bulunamayınca açık neden yalnız `--formasyon-tara` yolunda yazılır.
+- **Alarm:** alarm kareleri olay başına tek albüm. Kill-switch `TELEGRAM_GRAFIK=yok` (varsayılan, `config.py`, `render.yaml`, `.env.example`) iken alarm görseli üretilmez; yalnız `alarm` iken çalışır.
+- **Test kapsamı:** `test_grafik_album.py` (9 test), `test_grafik_teslim.py` ve `test_grafik_istegi.py` yeni sözleşmeye çevrildi.

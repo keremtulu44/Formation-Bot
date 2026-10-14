@@ -178,3 +178,38 @@ Dürüst not: yama 1 öncesi çakışma sayısı **kaydedilmedi** (ölçüm bu t
 - `GRAFIK_OLAY_MAKS` (6) ve olay yoğunluğu için karar ayrı tur (sayılar kullanıcıya sorulmalı).
 - Formasyon bulma kapısı (`--formasyon-tara`) değişmedi; AKBNK 1s için botun kapısı formasyonu geçirmiyor (önceki bölüm 7).
 - Canlı Telegram/Render çıktısı bu turda doğrulanmadı.
+
+## 9. Teslim turu: albüm, alarm durumu, mum tarzı araştırması (ek)
+
+Tarih: 14 Ekim 2026. Yerel ölçüm; canlı Telegram çağrısı yok (ağ sınırlı). Ölçüm: `/tmp/sim_grafik.py` gerçek `TelegramNotifier` + kaydedici `_multipart_cagri`.
+
+### 9.1 `/grafik AKBNK` — önce / sonra (Telegram çağrı sırası)
+
+| Önce (2efd896) | Sonra (bu tur) |
+|---|---|
+| `sendPhoto` 1s · `sendPhoto` 2s · `sendPhoto` 4s · `sendPhoto` 1g | `sendMediaGroup` ×1 (4 öğe, her birinin altyazısı) |
+| metin: `✅ Bitti: AKBNK · 1.8 sn … kaynak: /home/…/AKBNK.json · uyarı: formasyon verisi` | ayrı metin yok (başarıda) |
+
+Hata senaryoları (sim): albüm reddedilince 4 kare tek tek gitti, sayaç 4/0. Tüm TF'ler bozukken tek metin: `❌ Grafik isteği tamamlanamadı`.
+
+### 9.2 Alarm görselleri
+
+- Alarm kareleri **yalnız `TELEGRAM_GRAFIK=alarm`** iken üretilir. Varsayılan `yok` (`config.py`, `render.yaml`, `.env.example`). Yani canlıda şu an alarm tetiklenince görsel **gelmez**; bu bilinçli bir kill-switch.
+- Açıkken: alarm metni → aynı tur sonunda olay başına tek albüm (bu turda sendPhoto döngüsünden albüme çevrildi).
+- Kalan karar: canlıda açılacak mı? (Free plan kotası için `TELEGRAM_GRAFIK_ADET` 1-2 öneriliyor, bkz. RENDER_DEPLOY.md.)
+
+### 9.3 Mum rengi ve arka plan — araştırma özeti
+
+Kaynak taraması (forum ve eğitim sayfaları; kesin standart yok, kullanıcı tercihine bağlı):
+- Klasik kural: **boş (hollow) = yükselen, dolu = düşen**. Renkten bağımsız okunur; renk körlüğünde de çalışır. Bizdeki monokrom gövde (`#e3e6e8` boş / `#8d949a` dolu) bu kurala uyuyor.
+- Koyu arka plan + açık gri/beyaz mum, göz yorgunluğunu azaltıyor; beyaz zemin "agresif" bulunuyor (kullanıcı yorumları).
+- Renk körlüğü için önerilen palet: mavi-turuncu, ya da siyah zeminde beyaz-gri tonları. Bizim palette FVG mavi (`#42a5f5`), BOS turuncu (`#ff8a65`) zaten ayrık.
+- Yeşil/kırmızı yerine tek renk ailesi ("renk psikolojiyi bozar" yorumu) bazı kullanıcılarda daha az dikkat dağıtıcı.
+
+Sonuç: mevcut mum tarzı (monokrom, boş/dolu) bu araştırmayla uyumlu; bu turda **değiştirilmedi**. Yeşil/kırmızı moda geçmek kullanıcı tercihi olduğundan ayrı karar gerektirir.
+
+### 9.4 Açık kalanlar
+
+- Canlıda alarm görseli: env kararı (`alarm` mı `yok` mu) kullanıcıya bağlı.
+- `/grafik` formasyon taraması kullanmıyor (`--formasyon-tara` yalnız CLI). Bant/işaret `/grafik`'te görünmez; istenirse eklenir (ek ~1 sn/TF).
+- Yerel ortam bu turda yeniden kuruldu (önceki venv kaybolmuştu); tam test paketi: 1064 passed, 44 skipped.

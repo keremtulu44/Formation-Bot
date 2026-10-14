@@ -2717,11 +2717,11 @@ class TelegramNotifier:
         limit = -1 if sinir is None else max(0, int(sinir))
         kalan = []
         for olay in kuyruk:
+            paketler = []          # (yol, caption, meta) — olay başına TEK albüm
             for kare in olay["goruntular"]:
-                if 0 <= limit <= ozet["kare"]:
+                if 0 <= limit <= ozet["kare"] + len(paketler):
                     kalan.append({"olay": olay, "kare": kare})
                     continue
-                ozet["kare"] += 1
                 yol, meta = None, {}
                 try:
                     yol, meta = grafik.kareyi_yaz(kare.get("goruntu") or {},
@@ -2731,6 +2731,7 @@ class TelegramNotifier:
                                    olay["sembol"], kare.get("tf"), hata)
                     self.grafik_atlanan_hata += 1
                     ozet["hata"] += 1
+                    ozet["kare"] += 1
                     continue
                 if not yol:
                     # Çizim reddi (kadraj/uyuşmazlık): meta'da nedeni var, sessiz olmasın.
@@ -2738,19 +2739,21 @@ class TelegramNotifier:
                                 kare.get("tf"), " · ".join(meta.get("uyarilar") or []))
                     self.grafik_atlanan_hata += 1
                     ozet["hata"] += 1
+                    ozet["kare"] += 1
                     continue
-                ok, aciklama = self.grafik_dosya_gonder(
-                    yol, caption=_grafik_basligi(olay, kare, meta))
-                # Sayaçları `grafik_dosya_gonder` tutuyor (aynı yol iki yüzeyde);
-                # burada yalnız tur özeti ve süre ortalaması biriktirilir.
+                paketler.append((yol, _grafik_basligi(olay, kare, meta), meta))
+            ozet["kare"] += len(paketler)
+            if not paketler:
+                continue
+            sonuc = self.grafik_toplu_gonder([(y, c) for y, c, _m in paketler])
+            for (_y, _c, meta), ok in zip(paketler, sonuc):
+                # Sayaçları `grafik_toplu_gonder` tutuyor; burada yalnız tur özeti ve süre.
                 if ok:
                     self.grafik_kare_sayisi += 1
                     self.grafik_toplam_ms += float(meta.get("sure_ms") or 0)
                     ozet["gonderilen"] += 1
                     ozet["sure_ms"] += int(meta.get("sure_ms") or 0)
                 else:
-                    logger.debug("grafik karesi gitmedi (%s): %s", olay["sembol"],
-                                 str(aciklama)[:120])
                     ozet["hata"] += 1
         if kalan:
             with self._grafik_lck:
@@ -2760,6 +2763,79 @@ class TelegramNotifier:
                         "goruntular": [parca["kare"]], "kota": 0})
             ozet["atlanan"] = len(kalan)
         return ozet
+
+    def grafik_toplu_gonder(self, paketler) -> list:
+        """`[(yol, caption)]` → kare başına başarı listesi; geçici dosyaları SİLER.
+
+        Tek kare → `sendPhoto` (`grafik_dosya_gonder`). 2–10 kare → TEK albüm
+        (`sendMediaGroup`): kareler arasına metin girmez. Albüm reddedilirse kareler
+        tek tek yeniden denenir (kare kaybı olmasın). Her yol, sonuçtan bağımsız
+        olarak bu fonksiyonda silinir (§4).
+        """
+        paketler = [(y, c) for y, c in (paketler or []) if y]
+        sonuc = [False] * len(paketler)
+        try:
+            if not paketler:
+                return sonuc
+            if not self.enabled:
+                self.grafik_atlanan_hata += len(paketler)
+                return sonuc
+            try:
+                dm_kimligi = int(str(self.chat_id).strip()) > 0
+            except (ValueError, TypeError):
+                dm_kimligi = False
+            public_hedef = str(getattr(self, "public_chat_id", "") or "").strip()
+            if not dm_kimligi or (public_hedef and public_hedef == str(self.chat_id).strip()):
+                self.grafik_atlanan_hata += len(paketler)
+                logger.warning("grafik: görseller yalnız DM'e gönderilir; hedef private DM değil")
+                return sonuc
+            if len(paketler) == 1:
+                ok, aciklama = self.grafik_dosya_gonder(paketler[0][0], caption=paketler[0][1])
+                sonuc[0] = ok
+                return sonuc
+            from transport.telegram import medya_grubu_gonder
+
+            self._grafik_pace()
+            ok, aciklama = medya_grubu_gonder(
+                [y for y, _c in paketler], captions=[c for _y, c in paketler],
+                notifier=self)
+            self._son_grafik_ts = time.monotonic()
+            if ok:
+                self.grafik_gonderilen += len(paketler)
+                return [True] * len(paketler)
+            logger.warning("grafik albümü gönderilemedi, kare kare deneniyor: %s",
+                           redact_sensitive_text(str(aciklama), self.token)[:160])
+            # Yedek: albüm reddedildiyse kareleri tek tek dene (kare kaybı olmasın).
+            # `grafik_dosya_gonder` dosyayı siler; önce kopya gerekmez, yalnız bir kez denenir.
+            for k, (yol, caption) in enumerate(paketler):
+                sonuc[k] = self._tekil_gonder_dosyasiz(yol, caption)
+            return sonuc
+        finally:
+            for yol, _c in paketler:
+                try:
+                    os.remove(yol)
+                except (OSError, TypeError):
+                    pass
+
+    def _tekil_gonder_dosyasiz(self, yol, caption: str) -> bool:
+        """`grafik_dosya_gonder` ile aynı, ama dosyayı silmez (toplu çağıran siler)."""
+        try:
+            from transport.telegram import foto_gonder
+
+            self._grafik_pace()
+            ok, aciklama = foto_gonder(yol, notifier=self, caption=caption)
+            self._son_grafik_ts = time.monotonic()
+            if ok:
+                self.grafik_gonderilen += 1
+            else:
+                self.grafik_atlanan_hata += 1
+                logger.warning("grafik karesi gönderilemedi: %s",
+                               redact_sensitive_text(str(aciklama), self.token)[:160])
+            return bool(ok)
+        except Exception as hata:  # noqa: BLE001 - görsel hiçbir akışı düşürmesin
+            self.grafik_atlanan_hata += 1
+            logger.debug("grafik yedek gönderimi: %s", type(hata).__name__)
+            return False
 
     def _gonder(self, data: Dict) -> bool:
         """can_send kapısı geçildikten sonraki gerçek gönderim (kuyruk bunu çağırır)."""

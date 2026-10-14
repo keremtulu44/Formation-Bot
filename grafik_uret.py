@@ -226,9 +226,14 @@ def _formasyon_tara(cerceve) -> tuple[Any, list[str]]:
 
 
 def _formasyon_yukle(yol: str | None, cerceve) -> tuple[dict | None, list[str]]:
-    """`--formasyon` JSON'unu okur; yoksa None + uyarı (sessiz kabahat yok)."""
+    """`--formasyon` JSON'unu okur; verilmediyse None, uyarısız.
+
+    Neden uyarısız: `/grafik` formasyon dosyası hiç istemez; "formasyon verisi
+    verilmedi" satırı kullanıcıya hata gibi görünüp kafa karıştırıyordu. Formasyon
+    bulunamayınca açık neden `--formasyon-tara` yolunda yazılır.
+    """
     if not yol:
-        return None, ["formasyon verisi verilmedi: bant/işaret çizilmedi"]
+        return None, []
     dosya = Path(yol).expanduser()
     if not dosya.exists():
         return None, [f"formasyon dosyası yok: {dosya}"]

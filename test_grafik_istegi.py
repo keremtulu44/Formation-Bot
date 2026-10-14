@@ -1,5 +1,6 @@
 """Demo render, gerçek cache okuma ve asenkron DM teslimi ayrı sözleşmelerdir."""
 import json
+import os
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,9 +28,23 @@ def is_ortami(monkeypatch, tmp_path):
         assert Path(yol).exists()
         fotolar.append((yol, caption))
         return True, ""
+    def toplu(paketler):
+        # Üretim `grafik_toplu_gonder` sözleşmesi: kareleri sırayla `grafik_dosya_gonder`
+        # ile yollar (test yüzeyi kare başına kaydı tutar) ve her dosyayı siler.
+        sonuc = []
+        for yol, caption in paketler:
+            try:
+                ok, _aciklama = n.grafik_dosya_gonder(yol, caption=caption)
+            finally:
+                try:
+                    os.remove(yol)
+                except OSError:
+                    pass
+            sonuc.append(bool(ok))
+        return sonuc
     n = SimpleNamespace(enabled=True, token="test-secret",
                         send_text=lambda m: (metinler.append(m) or True, ""),
-                        grafik_dosya_gonder=foto)
+                        grafik_dosya_gonder=foto, grafik_toplu_gonder=toplu)
     monkeypatch.setattr(M, "_notifier_ref", n)
     monkeypatch.setattr(M, "_deque_manager_ref", None)
     monkeypatch.setattr(grafik, "kare_yolu", lambda *a: str(tmp_path / "tek.png"))
@@ -108,8 +123,9 @@ def test_bellek_disk_olmayan_sembol_icin_kullanilir(is_ortami, monkeypatch, tmp_
     assert "isteği alındı" in yanit and not fotolar and not threadler
     bitir(yanit, threadler)
     assert cagrilar == [("SEM", "4h")]
-    assert "Bitti" in metinler[-1] and "bellek/1h" in metinler[-1]
+    assert metinler == []                    # başarıda ayrı metin yok (albüm yanıttır)
     assert len(fotolar) == 1 and not Path(fotolar[0][0]).exists()
+    assert fotolar[0][1].startswith("SEM · 4s")
     assert not (tmp_path / "live/SEM.json").exists()
 
 
