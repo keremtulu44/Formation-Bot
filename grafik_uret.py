@@ -171,6 +171,8 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
         "etiket_detay": etiket_detay,
     })
     meta["kaynak"] = kaynak
+    # Altyazı için: çizilen formasyonun adı (yoksa None). Kart/alarm yolu bunu kullanmaz.
+    meta["formasyon_ad"] = (goruntu.get("formasyon") or {}).get("ad") or None
     return {"tf": tf, "yol": yol, "meta": meta, "kaynak": kaynak,
             "uyarilar": list(meta.get("uyarilar") or []), "hata": None}
 
@@ -218,8 +220,11 @@ def _formasyon_tara(cerceve) -> tuple[Any, list[str]]:
     from patterns.detect import SPECIALIZED_FAMILIES, TRIANGLE_FAMILIES, _usable_active
     from patterns.lifecycle import ArgentEngine
 
-    snap = ArgentEngine(PROFILE, 0.01).process(cerceve.copy(deep=True))
-    aday = _usable_active(snap, TRIANGLE_FAMILIES + SPECIALIZED_FAMILIES)
+    try:
+        snap = ArgentEngine(PROFILE, 0.01).process(cerceve.copy(deep=True))
+        aday = _usable_active(snap, TRIANGLE_FAMILIES + SPECIALIZED_FAMILIES)
+    except Exception as hata:  # noqa: BLE001 - tarama hatası kareyi düşürmesin
+        return None, [f"tarama hatası ({type(hata).__name__}): formasyonsuz çizildi"]
     if aday is None:
         return None, ["tarama: bu karede kullanılabilir formasyon yok (canlı tarama kapısı)"]
     return aday, []

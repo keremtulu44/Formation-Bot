@@ -211,5 +211,15 @@ Sonuç: mevcut mum tarzı (monokrom, boş/dolu) bu araştırmayla uyumlu; bu tur
 ### 9.4 Açık kalanlar
 
 - Canlıda alarm görseli: env kararı (`alarm` mı `yok` mu) kullanıcıya bağlı.
-- `/grafik` formasyon taraması kullanmıyor (`--formasyon-tara` yalnız CLI). Bant/işaret `/grafik`'te görünmez; istenirse eklenir (ek ~1 sn/TF).
+- ~~`/grafik` formasyon taraması kullanmıyor~~ → düzeltildi (bkz. §10): `/grafik` artık botun tarama kapısını kullanır.
 - Yerel ortam bu turda yeniden kuruldu (önceki venv kaybolmuştu); tam test paketi: 1064 passed, 44 skipped.
+
+## 10. `/grafik` formasyon taraması (ek)
+
+Sorun: `/grafik` `kare_uret`i `formasyon_tara=True` olmadan çağırıyordu; formasyon bandı hiç çizilmiyordu. "Formasyon verisi verilmedi" uyarısını kaldırınca sorun görünmez oldu ama düzelmedi.
+
+Düzeltme: `/grafik` artık `formasyon_tara=True` ile çağrılır (canlı tarama motoru + `_usable_active` kapısı). Altyazıda formasyon adı ya da `formasyon yok` yazar. `_formasyon_tara` istisnada kareyi düşürmez, uyarı yazar.
+
+Ölçüm (gerçek önbellek, TF başına süre): tarama 0,2–0,6 sn; AKBNK, THYAO için 1s/2s/4s/1g'de formasyon yok; ALARK 4s'de "Alçalan Üçgen, daralma %77" bulundu ve görsel olarak bant çizildi.
+
+Test: `test_grafik_album.py` (+3 test: tarama açık, ad altyazıda, tarama hatası). Tam paket sonucu commit mesajında ve bu turun özetinde.

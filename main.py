@@ -1892,7 +1892,7 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
                             "Güvenli bağımsız fetch yok; botun veri yüklemesini kontrol edin.")
 
                 sonuc = grafik_uret.kare_uret(
-                    istek["hisse"], tf, zone=True, yonetici=yonetici,
+                    istek["hisse"], tf, zone=True, formasyon_tara=True, yonetici=yonetici,
                     veri_dizin=yonetici.data_dir if yonetici is not None else None,
                     cikti=hedef, asama=lambda ad: durum(f"{_tf_kisa(tf)}: {ad}"),
                     tazelik_kontrol=tazelik)
@@ -1957,7 +1957,7 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
 
 
 def _kare_altyazisi(hisse: str, tf: str, meta: dict) -> str:
-    """Albüm öğesinin altyazısı: `HİSSE · 1s · 180 mum · son kapanan 25.09.2026 17:30`."""
+    """Albüm öğesinin altyazısı: `HİSSE · 1s · 180 mum · formasyon/yok · son kapanan …`."""
     ts = str(meta.get("son_bar_ts") or "")
     try:
         ts = datetime.fromisoformat(ts).strftime("%d.%m.%Y %H:%M")
@@ -1967,6 +1967,7 @@ def _kare_altyazisi(hisse: str, tf: str, meta: dict) -> str:
     parcalar = [hisse, _tf_kisa(tf)]
     if mum:
         parcalar.append(f"{mum} mum")
+    parcalar.append(str(meta.get("formasyon_ad") or "formasyon yok"))
     if ts:
         parcalar.append(f"son kapanan {ts}")
     return " · ".join(parcalar)

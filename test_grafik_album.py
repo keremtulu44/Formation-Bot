@@ -150,6 +150,47 @@ def test_kare_altyazisi_tarih_ve_mum(monkeypatch):
     import main as M
     alt = M._kare_altyazisi("AKBNK", "4h", {"mum_sayisi": 120,
                                             "son_bar_ts": "2026-09-25T17:30:00+03:00"})
-    assert alt == "AKBNK · 4s · 120 mum · son kapanan 25.09.2026 17:30"
+    assert alt == "AKBNK · 4s · 120 mum · formasyon yok · son kapanan 25.09.2026 17:30"
     alt2 = M._kare_altyazisi("THYAO", "1d", {"son_bar_ts": "bozuk"})
-    assert alt2 == "THYAO · 1g · son kapanan bozuk"
+    assert alt2 == "THYAO · 1g · formasyon yok · son kapanan bozuk"
+
+
+def test_kare_altyazisi_formasyon_adini_yazar():
+    import main as M
+    alt = M._kare_altyazisi("ALARK", "4h", {"mum_sayisi": 120, "formasyon_ad": "Alçalan Üçgen",
+                                            "son_bar_ts": "2026-09-25T17:30:00+03:00"})
+    assert alt == "ALARK · 4s · 120 mum · Alçalan Üçgen · son kapanan 25.09.2026 17:30"
+
+
+def test_komut_grafik_taramayi_acar(monkeypatch):
+    """`/grafik` formasyonu bulmak için botun kapısını kullanır (eskiden hiç çağrılmıyordu)."""
+    import main as M
+    import grafik_uret as U
+    from types import SimpleNamespace
+    cagri = []
+    def uret(hisse, tf, **k):
+        cagri.append(k.get("formasyon_tara"))
+        return {"yol": None, "meta": {"uyarilar": ["çizim reddi"]}, "hata": "test"}
+    monkeypatch.setattr(U, "kare_uret", uret)
+    monkeypatch.setattr(M, "_cache_verisi_kullanilabilir", lambda *a: True)
+    sahte = SimpleNamespace(enabled=True, metinler=[], send_text=lambda m: (True, ""))
+    monkeypatch.setattr(M, "_notifier_ref", sahte)
+    monkeypatch.setattr(M, "_deque_manager_ref", None)
+    M._grafik_isi_yurut({"hisse": "AKBNK", "tfler": ("4h",), "asama": "x"}, sahte, None)
+    assert cagri == [True]
+
+
+def test_formasyon_tara_hatasi_kareyi_dusurmez(monkeypatch):
+    """Tarama istisnası → uyarı + formasyonsuz kare; /grafik akışı bozulmaz."""
+    import grafik_uret as U
+    import patterns.lifecycle as L
+    class Patlar:
+        def __init__(self, *a, **k): pass
+        def process(self, *a, **k): raise RuntimeError("motor patladı")
+    monkeypatch.setattr(L, "ArgentEngine", Patlar)
+    import pandas as pd
+    df = pd.DataFrame({"open": [1.0], "high": [1.0], "low": [1.0], "close": [1.0],
+                       "volume": [1.0]})
+    aday, uyarilar = U._formasyon_tara(df)
+    assert aday is None
+    assert uyarilar and "tarama hatası" in uyarilar[0]
