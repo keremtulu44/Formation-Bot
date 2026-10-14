@@ -12,7 +12,7 @@ kaydı `--formasyon` ile verilmezse kare mumlarla çizilir ve `uyarilar` bunu ya
     python grafik_uret.py --hisse THYAO --tum-tf --json
     python grafik_uret.py --hisse AKBNK --tf 1d --demo --mum 180
 
-`--demo`: önbellekte derin günlük veri yokken (bu depo `bot_data/*_gunluk.json`
+`--demo`: cache okumadan, ayrı render→PNG doğrulaması için (bu depo `bot_data/*_gunluk.json`
 içermez) 500 barlık GüNLÜK çerçeveyi sentetik üretir. Neden `bot_data/` içine
 dosya yazmıyoruz: o dizin canlı botun okuduğu önbellektir, sentetik veri oraya
 karışırsa gerçek taramayı zehirler (§22'de kayıtlı sapma).
@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,9 +31,12 @@ TF_LISTESI = ("1h", "2h", "4h", "1d")
 
 
 def _veri_dizini(secenek: str | None) -> str:
+    import config
+
+    # Aynı çözümleyici: Render varsayılanı ve göreli yol/cwd sözleşmesi ayrışmaz.
     if secenek:
-        return str(Path(secenek).expanduser())
-    return os.environ.get("DATA_DIR") or str(Path(__file__).resolve().parent / "bot_data")
+        return config._resolve_app_path(secenek, secenek)
+    return str(config.DATA_DIR)
 
 
 class VeriYok(Exception):
@@ -46,7 +48,8 @@ class VeriYok(Exception):
     """
 
 
-def cerceve_getir(hisse: str, tf: str, veri_dizin: str, demo: bool = False):
+def cerceve_getir(hisse: str, tf: str, veri_dizin: str, demo: bool = False, *,
+                  yonetici=None):
     """Önbellekten (veya demo) çerçeve: `(df, kaynak)`; yoksa `VeriYok` kaldırır.
 
     `1d` için `to_gunluk_dataframe` (derin, ~500 bar) denenir; yoksa 1s
@@ -55,21 +58,31 @@ def cerceve_getir(hisse: str, tf: str, veri_dizin: str, demo: bool = False):
     """
     from data import StockDequeManager, resample_ohlcv
 
-    yonetici = StockDequeManager(data_dir=veri_dizin)
+    # Demo bilinçli ayrı yol: gerçek cache'i ne okur ne yazar.
+    if demo:
+        return _demo_cerceve(500 if tf == "1d" else 360), "demo (sentetik)"
+    yonetici = yonetici if yonetici is not None else StockDequeManager(data_dir=veri_dizin)
     anahtar = hisse.upper().replace(".IS", "")   # önbellek adı: AKBNK.json
-    df_1s = yonetici.to_dataframe(anahtar)
+    def kaynak(gunluk=False):
+        bellek = yonetici.gunluk_deques if gunluk else yonetici.deques
+        dosya = anahtar + ("_gunluk.json" if gunluk else ".json")
+        return (f"bellek/{'1d' if gunluk else '1h'} ({yonetici.data_dir})"
+                if anahtar in bellek else yonetici._okuma_yolu(dosya))
+
+    saatlik_kaynak, gunluk_kaynak = kaynak(), kaynak(True)
     if tf == "1d":
         df_1g = yonetici.to_gunluk_dataframe(anahtar)
         if df_1g is not None and len(df_1g) > 1:
-            return df_1g, "bot_data/günlük"
+            return df_1g.copy(deep=True), gunluk_kaynak
+    df_1s = yonetici.to_dataframe(anahtar)
     if df_1s is None or len(df_1s) < 5:
-        if not demo:
-            raise VeriYok(f"veri yok: {veri_dizin}/{anahtar}.json okunamadı "
-                          f"(--demo ile sentetik çerçeve çizilir)")
-        return _demo_cerceve(500 if tf == "1d" else 360), "demo"
+        raise VeriYok(f"veri yok: {saatlik_kaynak} okunamadı veya yetersiz; "
+                      "grafik için güvenli bağımsız canlı fetch yolu yok. "
+                      "Botun mevcut veri yüklemesini kontrol edin.")
+    df_1s = df_1s.copy(deep=True)
     if tf == "1h":
-        return df_1s, "bot_data/1s"
-    return resample_ohlcv(df_1s, tf), f"resample({tf})"
+        return df_1s, saatlik_kaynak
+    return resample_ohlcv(df_1s, tf), f"resample({tf}) ← {saatlik_kaynak}"
 
 
 def _cerceve_yukle(hisse: str, tf: str, veri_dizin: str, demo: bool):
@@ -92,7 +105,8 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
               mum: int | None = None, serit: bool = True, etiket_detay: bool = False,
               formasyon_yol: str | None = None, formasyon: dict | None = None,
               alarm_turu: str | None = None, cikti: str | None = None,
-              demo: bool = False) -> dict:
+              demo: bool = False, yonetici=None, asama=None,
+              tazelik_kontrol=None) -> dict:
     """Tek kare üretir: önbellek → (istersen domain motorları) → PNG.
 
     `main()` (CLI) ve `/grafik` komutu AYNI bu fonksiyonu çağırır — iki yüzeyin
@@ -100,13 +114,25 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
     geçerli: motorlar ancak `zone=True` ile ve ÇERÇEVENİN KOPYASI üzerinde çalışır).
 
     Hata fırlatmaz: çerçeve yoksa `{"hata": "veri yok: ..."}`, çizim reddedilirse
-    `yol=None` + `meta["uyarilar"]`. `veri_dizin` None → `DATA_DIR`/`bot_data`.
+    `yol=None` + `meta["uyarilar"]`. `veri_dizin` None → `config.DATA_DIR`; opsiyonel mevcut `yonetici`.
     """
     import grafik
 
     dizin = _veri_dizini(veri_dizin)
+    if demo and cikti and "bot_data" in Path(cikti).expanduser().resolve().parts[:-1]:
+        return {"tf": tf, "yol": None, "meta": {}, "kaynak": "demo (sentetik)",
+                "hata": "sentetik çıktı bot_data içine yazılamaz"}
     try:
-        cerceve, kaynak = cerceve_getir(hisse, tf, dizin, demo)
+        if asama:
+            asama("cache yükleme/resample")
+        cerceve, kaynak = cerceve_getir(hisse, tf, dizin, demo, yonetici=yonetici)
+        from data import tamamlanmis_mumlar
+        if not demo:
+            cerceve = tamamlanmis_mumlar(cerceve, tf).copy(deep=True)
+        if cerceve is None or len(cerceve) < 2:
+            raise VeriYok("veri yok: en az iki kapanmış mum gerekli")
+        if tazelik_kontrol:
+            tazelik_kontrol(cerceve, kaynak)
     except VeriYok as hata:
         return {"tf": tf, "yol": None, "meta": {}, "kaynak": "", "uyarilar": [],
                 "hata": str(hata)}
@@ -116,6 +142,8 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
         uyari += list(uyarilar)
     sonuclar = None
     if zone:
+        if asama:
+            asama("seçilen TF domain motorları")
         from domain_engines.runner import run_domain_engines
 
         sonuclar = run_domain_engines(str(hisse).upper().replace(".IS", ""), tf,
@@ -125,6 +153,8 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
                                    kare_mum=mum, etiket_detay=etiket_detay)
     for u in uyari:
         goruntu["uyarilar"].append(u)
+    if asama:
+        asama("PNG çizimi (ortak çizim kilidi dahil)")
     yol, meta = grafik.ciz(goruntu, tf, secenekler={
         "cikti": cikti or f"/tmp/grafik_{str(hisse).upper()}_{tf}.png",
         "serit": serit,
@@ -204,7 +234,7 @@ def main(giris: list[str] | None = None) -> int:
     ayristirici.add_argument("--tum-tf", action="store_true",
                              help="1s/2s/4s/1g için ayrı ayrı kare üret (/grafik provası)")
     ayristirici.add_argument("--demo", action="store_true",
-                             help="önbellek yoksa deterministik sentetik çerçeve kullan")
+                             help="cache okumadan deterministik sentetik render→PNG testi")
     ayristirici.add_argument("--json", action="store_true", help="meta çıktısını yazdır")
     secenek = ayristirici.parse_args(giris)
 

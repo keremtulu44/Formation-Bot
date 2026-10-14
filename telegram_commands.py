@@ -74,6 +74,27 @@ def komut_coz(text: str) -> Tuple[str, str]:
     return komut, arguman
 
 
+class ArkaPlanYaniti(str):
+    """Kabul cevabı teslim/kuyruk onayından SONRA sınırlı işi başlat.
+
+    Metin alt sınıfı mevcut handler sözleşmesini korur. Başlatma idempotenttir;
+    cevap teslimi yeniden denendiğinde aynı iş ikinci kez çalışmaz.
+    """
+    def __new__(cls, metin, baslat):
+        nesne = super().__new__(cls, metin)
+        nesne._baslat = baslat
+        nesne._kilit = threading.Lock()
+        nesne._basladi = False
+        return nesne
+
+    def baslat(self):
+        with self._kilit:
+            if self._basladi:
+                return
+            self._baslat()
+            self._basladi = True
+
+
 class TelegramCommandListener:
     """`getUpdates` uzun yoklaması + komut dağıtımı (daemon thread)."""
 
@@ -493,7 +514,7 @@ class TelegramCommandListener:
                 redact_sensitive_text(exc, self.token, self.allowed_chat_id),
             )
             mesgul = False
-        if mesgul:
+        if mesgul and komut not in {"grafik", "g"}:
             self._sayac["mesgul"] += 1
             logger.info(f"Telegram /{komut}: analiz sürerken yok sayıldı (bilgi mesajı gönderildi)")
             return self._cevapla(
@@ -531,7 +552,8 @@ class TelegramCommandListener:
         self._sayac["islenen"] += 1
         self._son_komut_adi = komut
         self._son_komut_ts = time.time()
-        return self._cevapla(gecikme_notu + cevap, update_id)
+        return self._cevapla(cevap if isinstance(cevap, ArkaPlanYaniti)
+                             else gecikme_notu + cevap, update_id)
 
     @staticmethod
     def _mesaj_yasi_sn(mesaj: Dict[str, Any]) -> Optional[float]:
@@ -562,8 +584,10 @@ class TelegramCommandListener:
                 queued = False
             if queued:
                 self._pending_reply.pop(update_id, None)
+                if isinstance(text, ArkaPlanYaniti):
+                    text.baslat()
                 return govde
-            self._pending_reply[update_id] = govde
+            self._pending_reply[update_id] = text
             logger.error("Telegram update %s cevabı dayanıklı kuyruğa yazılamadı", update_id)
             return None
 
@@ -579,7 +603,7 @@ class TelegramCommandListener:
                     getattr(yanit, "status_code", "?"),
                 )
                 if isinstance(update_id, int):
-                    self._pending_reply[update_id] = govde
+                    self._pending_reply[update_id] = text
                 return None
         except Exception as exc:  # noqa: BLE001
             logger.warning(
@@ -587,8 +611,10 @@ class TelegramCommandListener:
                 redact_sensitive_text(exc, self.token, self.allowed_chat_id),
             )
             if isinstance(update_id, int):
-                self._pending_reply[update_id] = govde
+                self._pending_reply[update_id] = text
             return None
         if isinstance(update_id, int):
             self._pending_reply.pop(update_id, None)
+        if isinstance(text, ArkaPlanYaniti):
+            text.baslat()
         return govde

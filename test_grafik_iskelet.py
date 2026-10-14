@@ -433,7 +433,7 @@ def test_cli_veri_dizin_bayragi_okunur(tmp_path, capsys):
     kod = grafik_uret.main(["--hisse", "AKBNK", "--tf", "1h", "--veri-dizin", str(kopya),
                             "--mum", "60", "--cikti", str(hedef)])
     assert kod == 0 and hedef.exists()
-    assert "kaynak: bot_data" in capsys.readouterr().out
+    assert str(kopya / "AKBNK.json") in capsys.readouterr().out
 
 
 def test_cli_cache_veya_demo_ile_kare_uretir(tmp_path):
