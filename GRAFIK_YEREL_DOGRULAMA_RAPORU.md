@@ -201,7 +201,12 @@ Hata senaryoları (sim): albüm reddedilince 4 kare tek tek gitti, sayaç 4/0. T
 ### 9.3 Mum rengi ve arka plan — araştırma özeti
 
 Kaynak taraması (forum ve eğitim sayfaları; kesin standart yok, kullanıcı tercihine bağlı):
-- Klasik kural: **boş (hollow) = yükselen, dolu = düşen**. Renkten bağımsız okunur; renk körlüğünde de çalışır. Bizdeki monokrom gövde (`#e3e6e8` boş / `#8d949a` dolu) bu kurala uyuyor.
+- Klasik kural: **boş (hollow) = yükselen, dolu = düşen**. Renkten bağımsız okunur; renk körlüğünde de çalışır.
+- Görsel-2'de bu kural monokrom gövdeyle uygulanıyordu (`#e3e6e8` boş / `#8d949a` dolu).
+  **Görsel-3 (2026-10-14) güncellemesi:** gövde kuralı AYNEN korunur, üstüne renk
+  geldi — yükselen `#31b184` (içi boş), düşen `#e05c58` (dolu). Doluluk farkı
+  ikinci kanal olduğu için renk körlüğünde de okunur; gerekçe ve ölçümler
+  `GRAFIK_TASARIM.md` §31'de.
 - Koyu arka plan + açık gri/beyaz mum, göz yorgunluğunu azaltıyor; beyaz zemin "agresif" bulunuyor (kullanıcı yorumları).
 - Renk körlüğü için önerilen palet: mavi-turuncu, ya da siyah zeminde beyaz-gri tonları. Bizim palette FVG mavi (`#42a5f5`), BOS turuncu (`#ff8a65`) zaten ayrık.
 - Yeşil/kırmızı yerine tek renk ailesi ("renk psikolojiyi bozar" yorumu) bazı kullanıcılarda daha az dikkat dağıtıcı.

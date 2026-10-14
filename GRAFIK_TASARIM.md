@@ -53,23 +53,34 @@ alan yok:** çizilen her etiket motorun gerçek çıktısına dayanmak zorunda (
     ayracı yok. Bu **G0** commit'idir ve grafik kodundan ÖNCE gelir (§15, §19).
 17. Katmanlar faz faz gelir; her faz tek commit + tam test yeşil (§3).
 
-### 0.4.1 Kalıcı palet (koyu zemin `#101418`, metin/eksen `#e8e8e8`)
+### 0.4.1 Kalıcı palet (koyu zemin `#0f151c`, metin/eksen `#e9eef5`)
+
+**GÖRSEL-3 (2026-10-14):** yükselen mum YEŞİL, düşen mum KIRMIZI (neon değil:
+iki ton da orta doygunlukta); mum dışı katmanlar nötr grid üstünde koyu **çip**
+(panel) ile şeride yazılır. Renk tek başına bilgi taşımaz — doluluk farkı,
+işaret ve yazı ikinci kanaldır.
 
 | Katman | Renk | Çizim |
 |---|---|---|
-| Mum (yükselen) | `#e3e6e8` | içi boş gövde + fitil |
-| Mum (düşen) | `#8d949a` | dolu gövde + fitil |
-| Order Block | `#2bb673` | %14 dolgu (kutunun yüksekliği görünür aralığın %18'ini aşarsa 0,05'e iner §17.6) + `source_index`'te kalın kenar |
-| FVG | `#42a5f5` | %12 dolgu + tarama (hatch) + `formation_index`'te kalın kenar |
-| Engulfing | `#b388ff` | kesikli kontur |
-| Formasyon çizgileri | `#f5f5f5` | 1,6 pt; son muma kadar projeksiyon; `apex`'te `x` |
-| Temas mumları | `#e8e8e8` | açık `o` işareti + temas sayısı |
-| PH/PL | `#90a4ae` | aday α.45 / teyitli tam / kırık α.2 |
-| HH/HL/LH/LL | `#b0bec5` | küçük yazı |
-| BOS/CHoCH | `#ff8a65` | ok + kesikli seviye çizgisi + `BOS↑/CHoCH↓` |
-| Katılım şeridi | `#80cbc4` | §2.1 |
+| Mum (yükselen) | `#31b184` kenar + `#134237` dolgu | içi BOŞ gövde (koyu yeşil dolgu) + yeşil fitil |
+| Mum (düşen) | `#e05c58` | DOLU gövde + kırmızı fitil |
+| Order Block | `#2bb673` | %9 dolgu (kutunun yüksekliği görünür aralığın %18'ini aşarsa 0,04'e iner §17.6) + `source_index`'te kalın kenar |
+| FVG | `#3f9dec` | %8 dolgu + tarama (hatch) + `formation_index`'te kalın kenar |
+| Engulfing | `#a78bfa` | kesikli kontur |
+| Formasyon çizgileri | `#e0b96a` | 1,6 pt; bant arası α.06 dolgu; son muma kadar projeksiyon; `apex`'te `x` |
+| Temas mumları | `#f0d9a8` | açık `o` işareti + temas sayısı (bant 24'ü aşarsa kırpılır, kare not yazar) |
+| PH/PL | `#8ba0b4` | aday α.45 / teyitli tam / kırık α.2 |
+| HH/HL/LH/LL | `#9fb0c0` | küçük yazı |
+| BOS/CHoCH | `#f0885c` | ok + kesikli seviye çizgisi + `BOS↑/CHoCH↓` |
+| Katılım şeridi (yükselen spike) | `#2f9e8a` | §2.1; spike MUMUN yönünde renklenir |
+| Katılım şeridi (düşen spike) | `#cf5f5f` | §2.1 |
 | İhlal / `!` | `#ef5350` | `!` (çaba var-sonuç yok, son 15 mum) ve ihlal işaretleri |
-| Izgara | `#2a2f35` | yalnız yatay, kesikli (§17.7 kalabalığı) |
+| Izgara | `#212c39` | yalnız yatay, kesikli (§17.7 kalabalığı) |
+| Sağ şerit paneli | `#151d27` / kenar `#243040` | etiket çipleri: `#111922` dolgu + katman renginde kenar/yazı |
+| Son fiyat çipi | dolu çip | renk SON MUMUN yönünden (yeşil/kırmızı), koyu yazı, kalın |
+
+Kare zemini `#0f151c`, şerit kulvarı `#151d27` (panel); ikisini `#243040` ince
+çizgi ayırır. Başlık bloğunun altında `#243040` yatay ayraç vardır.
 
 Renk tek başına bilgi taşımaz: her bölge/katman bir de **yazı** taşır.
 
@@ -1077,7 +1088,8 @@ Bu tur §0.4.1, §0.12, §14–§17 ile çelişen veya onları somutlaştıran k
 
 ### 29.2 §0.4.1 paleti için not
 
-- Renkler değişmedi. Etiket rengi yalnız metin olarak tekrarlandı; kadraj dışı seviye çizilmediği için palette yeni katman yok.
+- Bu turda renkler değişmedi (görsel-2). Etiket rengi yalnız metin olarak tekrarlandı; kadraj dışı seviye çizilmediği için palette yeni katman yok.
+- **Sonradan (görsel-3, §31) değişti:** monokrom mum paleti yerine yeşil/kırmızı mum şeması geldi; buradaki eski `#e3e6e8`/`#8d949a` değerleri geçersizdir.
 
 ### 29.3 Ölçülebilir kurallar (testler)
 
@@ -1099,3 +1111,61 @@ Bu tur §0.4.1, §0.12, §14–§17 ile çelişen veya onları somutlaştıran k
 - **Formasyon uyarısı kaldırıldı:** `/grafik` formasyon dosyası istemez; "formasyon verisi verilmedi" satırı kullanıcıya hata gibi görünüyordu. Formasyon bulunamayınca açık neden yalnız `--formasyon-tara` yolunda yazılır.
 - **Alarm:** alarm kareleri olay başına tek albüm. Kill-switch `TELEGRAM_GRAFIK=yok` (varsayılan, `config.py`, `render.yaml`, `.env.example`) iken alarm görseli üretilmez; yalnız `alarm` iken çalışır.
 - **Test kapsamı:** `test_grafik_album.py` (9 test), `test_grafik_teslim.py` ve `test_grafik_istegi.py` yeni sözleşmeye çevrildi.
+
+## 31 · GÖRSEL-3 TURU (2026-10-14) — mum renkleri, çipler, kalabalık denetimi
+
+Kullanıcı geri bildirimi: "artan mumları yeşil, düşen kırmızı yapıp neon yapmamalıyız;
+diğer katmanlar çok nötr kalmış; sağdaki yazılar alakasız olabiliyor; görselliği
+güçlendir". Bu tur yalnız ÇİZİM katmanını değiştirir: kadraj, veri sözleşmesi,
+motor çağrısı ve sayı biçimi aynı kalır (§14.2/§15).
+
+### 31.1 Karar değişiklikleri
+
+- **Mum rengi (§0.4.1 tablosu güncellendi):** yükselen `#31b184` + içi BOŞ
+  (koyu yeşil `#134237` dolgu), düşen `#e05c58` + DOLU. Eski monokrom palet
+  (`#e3e6e8` boş / `#8d949a` dolu) kalktı; doluluk farkı renk körlüğünde ikinci
+  kanaldır ve lejantta yazılır (`yeşil boş = yükselen · kırmızı dolu = düşen`).
+- **Son fiyat çizgisi ve çipi** son mumun yönünde renklenir (eskiden her zaman
+  yükselen rengindeydi → düşen kapanışta yanlış ima).
+- **Katılım şeridi spike'ları** mumun yönünde renklenir (`#2f9e8a` / `#cf5f5f`);
+  `1×` referans çizgisi etiketsiz, `1,5×` eşiği etiketli (kulvar içinde, solda).
+- **Formasyon bandı** `#e0b96a` (sıcak kum) + bant arası α.06 dolgu; bant
+  teması işaretleri `#f0d9a8`. Gerekçe: beyaz/somon mum katmanından ayrışsın,
+  ama kutu katmanlarının yeşil/mavi/mor kodlarıyla karışmasın.
+- **Sağ şerit paneli** (`#151d27`, kenar `#243040`): etiketler koyu çip içinde
+  (`#111922` dolgu + katman renginde kenar/yazı); kutu etiketleri kutunun sağ
+  kenarından çıkan ince kesikli KILAVUZ çizgisiyle bağlanır ve "son fiyata en
+  yakın 3 kutu" ile sınırlanır → yazı ile kutu arasındaki ilişki görünür, liste
+  alakasız görünmez. Şerit kulvarı `#151d27` panel zeminli, iki kulvarı ince
+  çizgi ayırır.
+- **Şerit kalabalık denetimi (`sag_etiket_maks`):** kaynak başına azami etiket
+  zone 3 · olay 3 · alarm 1; seçim = öncelik (son > alarm > kritik > yapı >
+  kutu) → son kapanışa yakınlık → yenilik. Elenen adaylar silinmez:
+  `meta["sag"]["eledi_kaynak"]`ta sayılır (sessiz kayıp yok). Ölçüm: GARAN 1s
+  karesi 13 etiketten 7'ye indi.
+- **Başlık ayracı:** başlık bloğunun altında `#243040` ince yatay çizgi.
+- **Izgara** bir ton açıldı (`#212c39`) ve zemin `#0f151c` oldu; kutu dolguları
+  seyrekleşti (OB .14→.09, FVG .12→.08) — mumlar öne çıksın.
+- **Çökme modu (px/bar < 5)** çizgisi NÖTR (`#e9eef5`): bu modda yön bilgisi
+  mumdan gelmediği için renk yön ima etmez.
+
+### 31.2 Önce/sonra kanıtı
+
+`docs/ornek_kare_karsilastirma.png` — aynı veri (GARAN 4s, 120 mum, `--zone`):
+üstte eski monokrom palet, altta görsel-3 paleti. Kare, `git archive HEAD` ile
+alınan eski ağaçta `grafik_uret.py` çalıştırılarak üretildi (yeniden çizim değil,
+gerçek eski çıktı).
+
+### 31.3 Ölçülebilir kurallar (testler)
+
+- `test_grafik_gorsel_kalite.py`: yükselen yeşil+boş / düşen kırmızı+dolu; iki
+  ton da orta doygunlukta (neon tavanı: kanal max ≤ 240, doygunluk 0,35–0,8);
+  son fiyat çipi mumun yönünde; şerit spike rengi mumun yönünden; lejant renk
+  şemasını yazar; kaynak başına etiket sınırı ve `eledi_kaynak` sayımı.
+- `mum_cakisan == 0` kapısı korunur (çipler/kılavuzlar yazı–mum çakışması
+  üretmez: `_mum_cakisma_say` çip kutularını da kapsar).
+
+### 31.4 Açık kalanlar
+
+- `GRAFIK_OLAY_MAKS` (§29.4) hâlâ kullanıcı onayı bekliyor; görsel-3 şerit
+  tarafını `sag_etiket_maks` ile sınırladı, çizgi tarafına dokunmadı.
