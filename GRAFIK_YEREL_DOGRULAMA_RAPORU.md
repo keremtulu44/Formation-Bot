@@ -164,7 +164,7 @@ Tarih: 14 Ekim 2026. Kaynak: gerçek `bot_data` önbelleği (AKBNK 1s/4s, THYAO 
 
 Dürüst not: yama 1 öncesi çakışma sayısı **kaydedilmedi** (ölçüm bu turda eklendi). Eski HEAD'de `meta["kalite"]` alanı yok; yeni testler eski kodda "alan yok" nedeniyle düşer, çakışma sayısı kanıtı değildir. Ölçülen önce/sonra farkı yalnız yama 1 → yama 2 aralığındadır.
 
-**Testler:** yeni `test_grafik_gorsel_kalite.py` (16 test kapsamında): altı gerçek karede `mum_cakisan == 0`; sağ şeritte etiket aralığı ≥ yükseklik ve atlanan = 0; bant teması işaretinin doğru fitil ucunda olması (alt banda yakın → 99,5; üst banda yakın → 111,0 — eski kodda 101,0 ile düşer). Tam paket: `DATA_DIR=/tmp/fbdata pytest -q` → **1055 passed, 44 skipped**.
+**Testler:** yeni `test_grafik_gorsel_kalite.py` (8 test): altı gerçek karede `mum_cakisan == 0`; sağ şeritte etiket aralığı ≥ yükseklik ve atlanan = 0; bant teması işaretinin doğru fitil ucunda olması (alt banda yakın → 99,5; üst banda yakın → 111,0 — eski kodda 101,0 ile düşer). Tam paket: `DATA_DIR=/tmp/fbdata pytest -q` → **1055 passed, 44 skipped**.
 
 ### 8.3 Görsel kontrol (tam kare ve kırpma, tek tek)
 
