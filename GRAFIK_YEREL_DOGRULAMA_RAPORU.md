@@ -130,3 +130,51 @@ Açık kalanlar (bilinçli, bu turda yapılmadı):
 - Bazı zone etiketleri (`OB↓ %41`, `FVG↓ q100`, `CHoCH↓ · kritik`) mum gövdelerinin üstüne binebiliyor; etiket yerleşimi ayrı bir iş.
 - Canlı botun formasyon kaydı `PatternLifecycleManager` geçmişiyle geldiği için CLI sonucu (tek seferlik yeniden oynatma) ile canlı alarm formasyonu aynı olmayabilir; bu fark ölçülmedi.
 - Kare, mum renkleri ve yazı boyutları gözle doğrulandı; piksel-hash testi yok (tasarım gereği).
+
+## 8. Görsel-2 turu: çakışma, şerit, kadraj, bant teması (ek)
+
+Tarih: 14 Ekim 2026. Kaynak: gerçek `bot_data` önbelleği (AKBNK 1s/4s, THYAO 1s, BIMAS 4s, ALARK 4s, DOHOL 1s); yalnız yerel çizim. Veri son mumu **2026-09-25 17:30** (bugün 2026-10-14) — grafiklerdeki "son kapanış" bu tarihi gösterir; canlı veri değildir.
+
+### 8.1 Yapılanlar (görsel sorun → kök neden → düzeltme)
+
+| Sorun | Kök neden | Düzeltme |
+|---|---|---|
+| Zone/olay/alarm yazıları mumların üstüne biniyor (`OB↓ %41`, `CHoCH↓ · kritik`) | Yazılar veri alanının içinde, mum gövdesi/fitili ile aynı konumda | Sağda sabit genişlikte **fiyat şeridi** (`sag_serit_px=150`, `_sag_ciz`); etiket ekseni geçmez, şerit dışına taşmaz |
+| Aynı seviyedeki etiketler birbirini siliyor/üst üste biniyor | Önceki sürüm çakışanı atlıyordu (bilgi kaybı) | Çakışan etiket **dikeyde itilir** (`meta["sag"]` yerlesen/atlanan). Altı kare: yerlesen 8–13, atlanan 0 |
+| Ok uçları mumların üstünden geçiyor | Ok başlangıcı mum merkezindeydi | Ok başlangıcı eksen kenarına (`x=n-0.4`); çizgi yalnız şerit içinde |
+| PH/PL/HL/LH yazıları aynı barda üst üste (`LHPH`) | Basamaklama yoktu | `_swing_ofseti`: 14 px içinde aynı yönlü etiketler bir satır basamaklanır |
+| Kadraj dışındaki BOS/CHoCH/kritik seviyeleri eksen aralığını genişletiyor, grafik seyrekleşiyor | Seviye filtresi yoktu | Kadraj = mum aralığı + bölge + formasyon + alarm + PH/PL uçları, %6 pay. Dışarıdakiler çizilmez, `meta["olay"]["kadraj_disi"]` ile sayılır (THYAO 1s: 2) |
+| `CHoCH↓ · kritik 41…` sağda kesiliyor | Metin şerit genişliğini aşıyor | `kritik X` ayrı şerit etiketi |
+| Son fiyat okunmuyor | Yoktu | Son kapanış için kesikli yatay çizgi + sağda fiyat etiketi |
+| Bant teması işaretleri (`o`) fitil ucunda değil, kalabalık | Işaret sabit yükseklikteydi | Temas işareti, temasın olduğu banda yakın tarafın fitil ucunda (üst banda yakınsa tepe, alt banda yakınsa dip); 24 işaret sınırı, fazlası "temas işareti 24'e indirildi" dipnotu |
+| Başlıkta bant teması sayısı yok | — | Başlık satırına `bant teması N` ve alarm kapanış farkı (`üstünde/altında`) |
+
+### 8.2 Ölçümler
+
+**Yazı–mum çakışması** (`meta["kalite"]["mum_cakisan"]`, gerçek piksel kutuları; `_mum_cakisma_say`):
+
+| Kare | Yazı sayısı | Çakışan mum (yama 1 sonrası) | Çakışan mum (yama 2 sonrası, şimdi) | Sağ şerit atlanan |
+|---|---|---|---|---|
+| AKBNK 1s (180) | 20 | 1 | 0 | 0 |
+| AKBNK 4s (120) | 14 | 0 | 0 | 0 |
+| THYAO 1s (180) | 18 | 0 | 0 | 0 |
+| BIMAS 4s (120) | 17 | 1 | 0 | 0 |
+| ALARK 4s (120) | 17 | 0 | 0 | 0 |
+| DOHOL 1s (180) | 21 | 0 | 0 | 0 |
+
+Dürüst not: yama 1 öncesi çakışma sayısı **kaydedilmedi** (ölçüm bu turda eklendi). Eski HEAD'de `meta["kalite"]` alanı yok; yeni testler eski kodda "alan yok" nedeniyle düşer, çakışma sayısı kanıtı değildir. Ölçülen önce/sonra farkı yalnız yama 1 → yama 2 aralığındadır.
+
+**Testler:** yeni `test_grafik_gorsel_kalite.py` (16 test kapsamında): altı gerçek karede `mum_cakisan == 0`; sağ şeritte etiket aralığı ≥ yükseklik ve atlanan = 0; bant teması işaretinin doğru fitil ucunda olması (alt banda yakın → 99,5; üst banda yakın → 111,0 — eski kodda 101,0 ile düşer). Tam paket: `DATA_DIR=/tmp/fbdata pytest -q` → **1055 passed, 44 skipped**.
+
+### 8.3 Görsel kontrol (tam kare ve kırpma, tek tek)
+
+- DOHOL 1s (son hâl): gutter etiketleri okunur, `kritik 21,66` tam; `LHPH` birleşmesi 14 px eşikle ayrıştı (kırpmada görülen "kritik 21" kesikliği yalnız kırpma sınırından; tam karede tam).
+- AKBNK 4s: zone kutuları ve şerit ayrık; mumlar okunur.
+- Kalan gözlem: DOHOL 1s'de gutter'da 7 olay etiketi üst üste (BOS↑/BOS↓ çoklu). Okunuyor ama yoğun; olay sayısı sınırı (`GRAFIK_OLAY_MAKS`) bu kararla değişmedi.
+
+### 8.4 Açık kalanlar
+
+- Veri 2026-09-25'te bitiyor; bugünkü piyasa verisi yok. Görseller eski kapanışı gösterir.
+- `GRAFIK_OLAY_MAKS` (6) ve olay yoğunluğu için karar ayrı tur (sayılar kullanıcıya sorulmalı).
+- Formasyon bulma kapısı (`--formasyon-tara`) değişmedi; AKBNK 1s için botun kapısı formasyonu geçirmiyor (önceki bölüm 7).
+- Canlı Telegram/Render çıktısı bu turda doğrulanmadı.

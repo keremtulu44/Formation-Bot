@@ -205,15 +205,20 @@ def test_bilinmeyen_durum_adi_dolgu_uydurmaz(tmp_path):
     assert meta["zone"]["tip"]["fvg"] == 1
 
 
-def test_cakisan_etiket_atlanir_kutu_cizili_kalir(tmp_path):
-    """Aynı fiyat bandında iki kutu (merkezleri çakışık) → ikinci yazı ATLANIR."""
+def test_cakisan_etiket_kaydirilir_atlanmaz(tmp_path):
+    """Aynı fiyat bandında iki kutu → iki etiket de sağ şeritte, dikeyde AYRIŞIK.
+
+    Eski davranış (yazıyı atmak) bilgi kaybıydı; görsel incelemede kullanıcı
+    \"yazı mumun üstüne biniyor\" dedi. Şimdi etiket kaydırılır, atılmaz.
+    """
     cerceve = _cerceve(240, "4h", taban=60.0, yon=0.0)
     # Aynı bant, 1 bar arayla → yazılar zorunlu olarak üst üste biniyor
     g = _goruntu_zone(cerceve, [_ob(200, 59.0, 60.0), _ob(201, 59.2, 59.8)], tf="4h")
     assert len(g["zone"]["cizilen"]) == 2
     _, meta = grafik.ciz(g, "4h", {"cikti": str(tmp_path / "capisma.png")})
     assert meta["zone"]["cizilen"] == 2               # kutular korunur
-    assert meta["zone"]["etiket_atlandi"] >= 1        # yazı çakışması elenir
+    assert meta["zone"]["etiket_atlandi"] == 0        # hiçbir etiket atılmaz
+    assert meta["sag"]["yerlesen"] >= 2               # iki etiket de şeritte
     assert "zone" not in meta["eksik_katmanlar"]      # katman düşmez (§2.9)
 
 
