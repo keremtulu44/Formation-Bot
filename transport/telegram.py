@@ -143,6 +143,50 @@ def foto_gonder(yol, chat_id=None, token=None, notifier=None, caption="", *,
     return yanit_oku(yanit)
 
 
+def medya_grubu_gonder(yollar, captions=None, chat_id=None, token=None, notifier=None, *,
+                       timeout: int = 40, api=None):
+    """`sendMediaGroup` ile kareleri TEK albüm olarak gönderir: `(ok, aciklama)`.
+
+    Neden: 4 kare ayrı `sendPhoto` ile gidince araya metin ve mesaj parçalanması
+    giriyordu; albüm tek mesaj gibi görünür. Telegram albümü 2–10 öğe ister; tek
+    kare için çağıran taraf `foto_gonder` kullanır. Her öğenin caption'ı kendi
+    karesinin altında görünür (1024 karakter sınırı, kırpılır). Dosyalar bu
+    fonksiyonda okunur; silme çağıran tarafın sorumluluğundadır.
+    """
+    import json
+    import os
+
+    yollar = [y for y in (yollar or []) if y]
+    if not (2 <= len(yollar) <= 10):
+        return False, "albüm 2-10 kare ister"
+    if not all(os.path.exists(y) for y in yollar):
+        return False, "png yok"
+    metin_token = token_al(token=token, notifier=notifier)
+    hedef = chat_id if chat_id is not None else getattr(notifier, "chat_id", "")
+    if not metin_token or not hedef:
+        return False, "token/chat_id yok"
+    caps = list(captions or [])
+    caps += [""] * (len(yollar) - len(caps))
+    medya, dosyalar = [], {}
+    try:
+        for i, yol in enumerate(yollar):
+            ad = f"photo{i}"
+            medya.append({"type": "photo", "media": f"attach://{ad}",
+                          "caption": str(caps[i] or "")[:1024]})
+            with open(yol, "rb") as akis:
+                dosyalar[ad] = (os.path.basename(yol), akis.read(), "image/png")
+    except OSError as hata:
+        return False, f"dosya okunamadı: {type(hata).__name__}"[:200]
+    cagri = api or _multipart_cagri
+    try:
+        yanit = cagri("sendMediaGroup", metin_token,
+                      {"chat_id": hedef, "media": json.dumps(medya, ensure_ascii=False)},
+                      dosyalar, timeout=timeout)
+    except Exception as hata:   # ağ hatası: çağıran taraf sayar, alarm sürer
+        return False, f"istek hatasi: {type(hata).__name__}"[:200]
+    return yanit_oku(yanit)
+
+
 def _multipart_cagri(method: str, token: str, alanlar: dict, dosyalar: dict,
                      timeout: int = 20):
     """`api_cagri`nın çok-parçalı kardeşi (test noktası: tek yerden çıkış)."""

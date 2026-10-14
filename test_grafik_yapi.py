@@ -220,18 +220,42 @@ def _goruntu_yapi(sonuclar, tf="4h"):
 
 
 def test_yapi_cizimi_meta_ve_y_araligi(tmp_path):
-    olaylar = [_olay(210, 90.0, tur="EVENT_BOS"), _olay(230, 20.0, tur="EVENT_CHOCH",
+    # Seviyeler kadraj içinde (LL=25 ile PH=95 arası): çizim kuralı gereği çizilir
+    olaylar = [_olay(210, 90.0, tur="EVENT_BOS"), _olay(230, 30.0, tur="EVENT_CHOCH",
                                                         yon="DOWN", kimlik=7)]
     g = _goruntu_yapi(_ms(swingler=[_swing(220, 95.0), _swing(225, 25.0, yon="LOW",
                                                              sinif="LL")],
                           olaylar=olaylar))
     _, meta = grafik.ciz(g, "4h", {"cikti": str(tmp_path / "yapi.png")})
     assert meta["olay"]["swing"] == 2 and meta["olay"]["bos_choc"] == 2
-    assert meta["olay"]["kritik"] == 20.0               # en yeni olayın seviyesi
+    assert meta["olay"]["kritik"] == 30.0               # en yeni olayın seviyesi
     assert meta["olay"]["kritik_cizildi"] is True
-    assert meta["cizgiler"]["kritik"] == pytest.approx(20.0)   # §2 seviye sözleşmesi
+    assert meta["cizgiler"]["kritik"] == pytest.approx(30.0)   # §2 seviye sözleşmesi
     alt, ust = meta["kare"]["y_araligi"]
-    assert alt <= 20.0 and ust >= 95.0                  # çizgiler kesilmez (§0.13)
+    assert alt <= 25.0 and ust >= 95.0                  # çizilen uçlar kesilmez (§0.13)
+    assert meta["olay"]["kadraj_disi"] == 0
+
+
+def test_kadraj_disi_seviye_cizilmez_ve_sayilir(tmp_path):
+    """Uzak BOS/CHoCH seviyesi (kadraj dışı) grafiği SIKIŞTIRMAZ: çizilmez, sayılır.
+
+    Gerekçe (görsel inceleme): 3 hafta önceki kırılım seviyesi %8 üstte kalıp
+    tüm mumları dikeyde ezebiliyordu. Yapı ucu (PH/PL) yine de aralığa girer.
+    """
+    olaylar = [_olay(210, 90.0, tur="EVENT_BOS"), _olay(230, 20.0, tur="EVENT_CHOCH",
+                                                        yon="DOWN", kimlik=7)]
+    g = _goruntu_yapi(_ms(swingler=[_swing(220, 95.0), _swing(225, 25.0, yon="LOW",
+                                                             sinif="LL")],
+                          olaylar=olaylar))
+    _, meta = grafik.ciz(g, "4h", {"cikti": str(tmp_path / "uzak.png")})
+    # Aralık PH=95 ve LL=25 ile belirlenir (+%6 pay → ~20,8'e kadar): 90 içeride
+    # çizilir, 20 (CHoCH) ve onun `kritik` kopyası dışarıda sayılır.
+    assert meta["olay"]["bos_choc"] == 1
+    assert meta["olay"]["olay_barlari"] == [210]
+    assert meta["olay"]["kadraj_disi"] == 2
+    assert meta["olay"]["kritik_cizildi"] is False
+    alt, ust = meta["kare"]["y_araligi"]
+    assert alt > 20.0                                   # uzak seviye aralığı genişletmez
     assert any("yapı:" in satir for satir in meta["metin"]["lejant"])
     assert meta["png_kb"] <= 500
 

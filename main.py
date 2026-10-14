@@ -1873,6 +1873,8 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
     zamanlayici = threading.Timer(_GRAFIK_HEDEF_SN, gecikme)
     zamanlayici.daemon = True
     zamanlayici.start()
+    paketler = []        # (tf, yol, caption): kareler TEK albümde gider (metin araya girmez)
+    ozetler = []         # üretilemeyen kareler: albüm başlığına eklenir / yalnız hiç kare yoksa metin
     try:
         for tf in istek["tfler"]:
             hedef = grafik.kare_yolu(istek["hisse"], tf)
@@ -1890,7 +1892,7 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
                             "Güvenli bağımsız fetch yok; botun veri yüklemesini kontrol edin.")
 
                 sonuc = grafik_uret.kare_uret(
-                    istek["hisse"], tf, zone=True, yonetici=yonetici,
+                    istek["hisse"], tf, zone=True, formasyon_tara=True, yonetici=yonetici,
                     veri_dizin=yonetici.data_dir if yonetici is not None else None,
                     cikti=hedef, asama=lambda ad: durum(f"{_tf_kisa(tf)}: {ad}"),
                     tazelik_kontrol=tazelik)
@@ -1899,43 +1901,82 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
                     neden = sonuc.get("hata") or " · ".join(meta.get("uyarilar") or []) or "çizim reddi"
                     ozetler.append(f"{_tf_kisa(tf)} ✗ {neden}")
                     continue
-                durum(f"{_tf_kisa(tf)}: DM sendPhoto")
-                ok, neden = notifier.grafik_dosya_gonder(
-                    yol, caption=f"{istek['hisse']} · {_tf_kisa(tf)} · "
-                    f"{meta.get('mum_sayisi', '?')} mum · son kapanan {meta.get('son_bar_ts')}")
-                if not ok:
-                    ozetler.append(f"{_tf_kisa(tf)} ✗ sendPhoto: {neden}")
-                    continue
-                basarili += 1
-                satir = (f"{_tf_kisa(tf)} ✓ {meta.get('mum_sayisi', '?')} mum · "
-                         f"son bar {meta.get('son_bar_ts')} · kaynak: {sonuc.get('kaynak')}")
-                eksik = meta.get("eksik_katmanlar") or []
-                uyarilar = meta.get("uyarilar") or []
-                if eksik or uyarilar:
-                    satir += " · uyarı: " + " · ".join(list(eksik) + list(uyarilar))
-                ozetler.append(satir)
+                paketler.append((tf, yol, _kare_altyazisi(istek["hisse"], tf, meta)))
             except (Exception, SystemExit) as hata:
                 ozetler.append(f"{_tf_kisa(tf)} ✗ aşama {asama['ad']}: {type(hata).__name__}")
                 logger.warning("/grafik iş hatası (%s %s): %s", istek["hisse"], tf,
                                type(hata).__name__)
             finally:
-                # Adaptör de siler; üretim/gönderim istisnası ve kısmi PNG için son güvence.
-                for dosya in {hedef, yol} - {None}:
+                if yol is None:
+                    # Yalnız üretilemeyen kare: yazılmış kısmi PNG varsa temizlenir.
                     try:
-                        os.remove(dosya)
+                        os.remove(hedef)
                     except OSError:
                         pass
-        baslik = ("✅ Bitti" if basarili == len(istek["tfler"]) else
-                  "⚠️ Grafik isteği kısmen tamamlandı" if basarili else
-                  "❌ Grafik isteği tamamlanamadı")
+        basarili = 0
+        if paketler:
+            if ozetler:
+                # Üretilemeyen TF'ler albümün ilk karesinin altına tek satır olarak yazılır.
+                paketler[0] = (paketler[0][0], paketler[0][1],
+                               paketler[0][2] + "\n⚠ " + " · ".join(ozetler))
+            durum(f"albüm: {len(paketler)} kare")
+            # `grafik_toplu_gonder` dosyaları kendisi siler (albüm de tek tek de).
+            try:
+                sonuc_ok = notifier.grafik_toplu_gonder([(y, c) for _t, y, c in paketler])
+            except Exception as hata:  # noqa: BLE001 - görsel süreci düşürmesin
+                logger.warning("/grafik albüm gönderimi istisna: %s", type(hata).__name__)
+                sonuc_ok = [False] * len(paketler)
+                for _t, y, _c in paketler:
+                    try:
+                        os.remove(y)
+                    except OSError:
+                        pass
+            basarili = sum(1 for ok in sonuc_ok if ok)
+            if basarili < len(paketler):
+                ozetler.extend(f"{_tf_kisa(t)} ✗ sendPhoto" for (t, _y, _c), ok
+                               in zip(paketler, sonuc_ok) if not ok)
         with bildirim_kilidi:
             tamam.set()
-            bildir(redact_sensitive_text(
-                f"{baslik}: {istek['hisse']} · {time.monotonic() - baslangic:.1f} sn\n"
-                + "\n".join(ozetler), getattr(notifier, "token", "")))
+            if not paketler or basarili == 0:
+                bildir(redact_sensitive_text(
+                    f"❌ Grafik isteği tamamlanamadı: {istek['hisse']} · "
+                    f"{time.monotonic() - baslangic:.1f} sn\n" + "\n".join(ozetler),
+                    getattr(notifier, "token", "")))
+            elif basarili < len(paketler):
+                bildir(redact_sensitive_text(
+                    f"⚠️ Grafik isteği kısmen tamamlandı: {istek['hisse']} · "
+                    f"{time.monotonic() - baslangic:.1f} sn\n" + "\n".join(ozetler),
+                    getattr(notifier, "token", "")))
+            # Hepsi başarılıysa ayrı metin yok: albüm kendi başına yanıttır.
+            logger.info("/grafik %s bitti: %d/%d kare, %.1f sn", istek["hisse"], basarili,
+                        len(istek["tfler"]), time.monotonic() - baslangic)
     finally:
-        tamam.set()
         zamanlayici.cancel()
+        with bildirim_kilidi:
+            tamam.set()
+
+
+def _kare_altyazisi(hisse: str, tf: str, meta: dict) -> str:
+    """Albüm öğesinin altyazısı: `HİSSE · 1s · 180 mum · formasyon/yok · son kapanan …`."""
+    ts = str(meta.get("son_bar_ts") or "")
+    try:
+        ts = datetime.fromisoformat(ts).strftime("%d.%m.%Y %H:%M")
+    except (TypeError, ValueError):
+        pass
+    mum = meta.get("mum_sayisi")
+    parcalar = [hisse, _tf_kisa(tf)]
+    if mum:
+        parcalar.append(f"{mum} mum")
+    if meta.get("formasyon_ad"):
+        import grafik as _grafik_etiket
+        durum = _grafik_etiket.formasyon_durum_etiketi(meta.get("formasyon_durum"))
+        parcalar.append(f"{meta['formasyon_ad']} ({durum})" if durum
+                        else str(meta["formasyon_ad"]))
+    else:
+        parcalar.append("formasyon yok")
+    if ts:
+        parcalar.append(f"son kapanan {ts}")
+    return " · ".join(parcalar)
 
 
 def _komut_tara(arguman: str) -> str:

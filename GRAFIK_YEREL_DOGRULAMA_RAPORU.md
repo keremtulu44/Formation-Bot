@@ -109,3 +109,117 @@ Değişen dosyalar: `grafik_uret.py`, `grafik.py`, `main.py`, `telegram_commands
 - İş/callback süreç içidir: restart sırasında yarım grafik isteğinin tamamlanması için dayanıklı job outbox eklenmedi. Telegram durum mesajı da dış servis arızasında ulaşamayabilir; hata loglanır, sahte teslim başarısı üretilmez.
 - Yöneticiden frame alırken tarama eşzamanlı deque değiştirirse okuma istisnası açık aşama/tür hatası olarak sonuçlanır; tarama verisine veya cache'e grafik için yazılmaz.
 - Gerçek cache okuma ve local render doğrulandı; canlı provider tazeliği ve gerçek DM teslimi bu oturumun güvenlik kapsamı dışında bırakıldı.
+
+## 7. Görsel inceleme düzeltmeleri (ek)
+
+Tarih: 14 Ekim 2026 (aynı oturum). Kaynak: gerçek `bot_data` önbelleği (AKBNK, ALARK); yalnız yerel çizim, canlı Telegram/Yahoo yok.
+
+Görsel incelemede bulunan ve düzeltilen sorunlar:
+
+| Sorun | Kök neden | Düzeltme |
+|---|---|---|
+| Mumlar üst üste biniyor, okunmuyor | `_kare_ciz` gövde genişliğini `px_bar × 0,62` (piksel türevi) olarak **veri birimine** veriyordu: 1s/180 mumda 3,7 bar, 4s/120 mumda 5,6 bar genişlik | Gövde genişliği = `0,62` bar aralığı (`SABITLER["mum_genislik_orani"]`); fitil sabit `0,85 pt` (~1,2 px), gövde kenarı `0,7 pt` |
+| Hacimsiz uyarısı iki kez basılıyor | `meta.hacimsiz_bar` (dipnot) ve `serit.hacimsiz` (not) aynı pencereyi sayıyor | Not satırı kaldırıldı; sayı tek dipnotta |
+| Formasyon hiç çizilmiyor, "formasyon verisi verilmedi" | CLI `--formasyon` JSON'u olmadan formasyon aramıyordu | `--formasyon-tara`: `ArgentEngine(config.PROFILE, 0.01).process(çerçeve)` + `patterns.detect._usable_active(snap, TRIANGLE_FAMILIES + SPECIALIZED_FAMILIES)`; canlı yolun kapısıyla aynı. Lifecycle geçmiş defterine yazılmaz. |
+
+Ölçüm (yerel): AKBNK 1s (180 mum) için kare artık ayrışık mumlarla okunuyor. Aynı çerçevede motor `KIRILIM_ADAYI` durumunda bir üçgen buluyor ancak botun kullanılabilirlik kapısı bunu geçirmiyor; CLI bunu uydurmadan "kullanılabilir formasyon yok" diye yazar. ALARK 4s (120 mum) için botun kapısı "Alçalan Üçgen, daralma %77" formasyonunu geçiriyor; bant, temas, BOS/HL/LL, OB/FVG kutuları çiziliyor.
+
+Yeni testler: `test_grafik_gorsel_duzeltme.py` (8 test). Gövde genişliği testi `_kare_ciz` içinde `_mumlar_ciz`'e giden değeri dinler; eski kodda 4 test kırılır, yeni kodda geçer. Tam paket: `DATA_DIR=/tmp/fbdata pytest -q` → 1046 passed, 44 skipped.
+
+Açık kalanlar (bilinçli, bu turda yapılmadı):
+- Bazı zone etiketleri (`OB↓ %41`, `FVG↓ q100`, `CHoCH↓ · kritik`) mum gövdelerinin üstüne binebiliyor; etiket yerleşimi ayrı bir iş.
+- Canlı botun formasyon kaydı `PatternLifecycleManager` geçmişiyle geldiği için CLI sonucu (tek seferlik yeniden oynatma) ile canlı alarm formasyonu aynı olmayabilir; bu fark ölçülmedi.
+- Kare, mum renkleri ve yazı boyutları gözle doğrulandı; piksel-hash testi yok (tasarım gereği).
+
+## 8. Görsel-2 turu: çakışma, şerit, kadraj, bant teması (ek)
+
+Tarih: 14 Ekim 2026. Kaynak: gerçek `bot_data` önbelleği (AKBNK 1s/4s, THYAO 1s, BIMAS 4s, ALARK 4s, DOHOL 1s); yalnız yerel çizim. Veri son mumu **2026-09-25 17:30** (bugün 2026-10-14) — grafiklerdeki "son kapanış" bu tarihi gösterir; canlı veri değildir.
+
+### 8.1 Yapılanlar (görsel sorun → kök neden → düzeltme)
+
+| Sorun | Kök neden | Düzeltme |
+|---|---|---|
+| Zone/olay/alarm yazıları mumların üstüne biniyor (`OB↓ %41`, `CHoCH↓ · kritik`) | Yazılar veri alanının içinde, mum gövdesi/fitili ile aynı konumda | Sağda sabit genişlikte **fiyat şeridi** (`sag_serit_px=150`, `_sag_ciz`); etiket ekseni geçmez, şerit dışına taşmaz |
+| Aynı seviyedeki etiketler birbirini siliyor/üst üste biniyor | Önceki sürüm çakışanı atlıyordu (bilgi kaybı) | Çakışan etiket **dikeyde itilir** (`meta["sag"]` yerlesen/atlanan). Altı kare: yerlesen 8–13, atlanan 0 |
+| Ok uçları mumların üstünden geçiyor | Ok başlangıcı mum merkezindeydi | Ok başlangıcı eksen kenarına (`x=n-0.4`); çizgi yalnız şerit içinde |
+| PH/PL/HL/LH yazıları aynı barda üst üste (`LHPH`) | Basamaklama yoktu | `_swing_ofseti`: 14 px içinde aynı yönlü etiketler bir satır basamaklanır |
+| Kadraj dışındaki BOS/CHoCH/kritik seviyeleri eksen aralığını genişletiyor, grafik seyrekleşiyor | Seviye filtresi yoktu | Kadraj = mum aralığı + bölge + formasyon + alarm + PH/PL uçları, %6 pay. Dışarıdakiler çizilmez, `meta["olay"]["kadraj_disi"]` ile sayılır (THYAO 1s: 2) |
+| `CHoCH↓ · kritik 41…` sağda kesiliyor | Metin şerit genişliğini aşıyor | `kritik X` ayrı şerit etiketi |
+| Son fiyat okunmuyor | Yoktu | Son kapanış için kesikli yatay çizgi + sağda fiyat etiketi |
+| Bant teması işaretleri (`o`) fitil ucunda değil, kalabalık | Işaret sabit yükseklikteydi | Temas işareti, temasın olduğu banda yakın tarafın fitil ucunda (üst banda yakınsa tepe, alt banda yakınsa dip); 24 işaret sınırı, fazlası "temas işareti 24'e indirildi" dipnotu |
+| Başlıkta bant teması sayısı yok | — | Başlık satırına `bant teması N` ve alarm kapanış farkı (`üstünde/altında`) |
+
+### 8.2 Ölçümler
+
+**Yazı–mum çakışması** (`meta["kalite"]["mum_cakisan"]`, gerçek piksel kutuları; `_mum_cakisma_say`):
+
+| Kare | Yazı sayısı | Çakışan mum (yama 1 sonrası) | Çakışan mum (yama 2 sonrası, şimdi) | Sağ şerit atlanan |
+|---|---|---|---|---|
+| AKBNK 1s (180) | 20 | 1 | 0 | 0 |
+| AKBNK 4s (120) | 14 | 0 | 0 | 0 |
+| THYAO 1s (180) | 18 | 0 | 0 | 0 |
+| BIMAS 4s (120) | 17 | 1 | 0 | 0 |
+| ALARK 4s (120) | 17 | 0 | 0 | 0 |
+| DOHOL 1s (180) | 21 | 0 | 0 | 0 |
+
+Dürüst not: yama 1 öncesi çakışma sayısı **kaydedilmedi** (ölçüm bu turda eklendi). Eski HEAD'de `meta["kalite"]` alanı yok; yeni testler eski kodda "alan yok" nedeniyle düşer, çakışma sayısı kanıtı değildir. Ölçülen önce/sonra farkı yalnız yama 1 → yama 2 aralığındadır.
+
+**Testler:** yeni `test_grafik_gorsel_kalite.py` (8 test): altı gerçek karede `mum_cakisan == 0`; sağ şeritte etiket aralığı ≥ yükseklik ve atlanan = 0; bant teması işaretinin doğru fitil ucunda olması (alt banda yakın → 99,5; üst banda yakın → 111,0 — eski kodda 101,0 ile düşer). Tam paket: `DATA_DIR=/tmp/fbdata pytest -q` → **1055 passed, 44 skipped**.
+
+### 8.3 Görsel kontrol (tam kare ve kırpma, tek tek)
+
+- DOHOL 1s (son hâl): gutter etiketleri okunur, `kritik 21,66` tam; `LHPH` birleşmesi 14 px eşikle ayrıştı (kırpmada görülen "kritik 21" kesikliği yalnız kırpma sınırından; tam karede tam).
+- AKBNK 4s: zone kutuları ve şerit ayrık; mumlar okunur.
+- Kalan gözlem: DOHOL 1s'de gutter'da 7 olay etiketi üst üste (BOS↑/BOS↓ çoklu). Okunuyor ama yoğun; olay sayısı sınırı (`GRAFIK_OLAY_MAKS`) bu kararla değişmedi.
+
+### 8.4 Açık kalanlar
+
+- Veri 2026-09-25'te bitiyor; bugünkü piyasa verisi yok. Görseller eski kapanışı gösterir.
+- `GRAFIK_OLAY_MAKS` (6) ve olay yoğunluğu için karar ayrı tur (sayılar kullanıcıya sorulmalı).
+- Formasyon bulma kapısı (`--formasyon-tara`) değişmedi; AKBNK 1s için botun kapısı formasyonu geçirmiyor (önceki bölüm 7).
+- Canlı Telegram/Render çıktısı bu turda doğrulanmadı.
+
+## 9. Teslim turu: albüm, alarm durumu, mum tarzı araştırması (ek)
+
+Tarih: 14 Ekim 2026. Yerel ölçüm; canlı Telegram çağrısı yok (ağ sınırlı). Ölçüm: `/tmp/sim_grafik.py` gerçek `TelegramNotifier` + kaydedici `_multipart_cagri`.
+
+### 9.1 `/grafik AKBNK` — önce / sonra (Telegram çağrı sırası)
+
+| Önce (2efd896) | Sonra (bu tur) |
+|---|---|
+| `sendPhoto` 1s · `sendPhoto` 2s · `sendPhoto` 4s · `sendPhoto` 1g | `sendMediaGroup` ×1 (4 öğe, her birinin altyazısı) |
+| metin: `✅ Bitti: AKBNK · 1.8 sn … kaynak: /home/…/AKBNK.json · uyarı: formasyon verisi` | ayrı metin yok (başarıda) |
+
+Hata senaryoları (sim): albüm reddedilince 4 kare tek tek gitti, sayaç 4/0. Tüm TF'ler bozukken tek metin: `❌ Grafik isteği tamamlanamadı`.
+
+### 9.2 Alarm görselleri
+
+- Alarm kareleri **yalnız `TELEGRAM_GRAFIK=alarm`** iken üretilir. Varsayılan `yok` (`config.py`, `render.yaml`, `.env.example`). Yani canlıda şu an alarm tetiklenince görsel **gelmez**; bu bilinçli bir kill-switch.
+- Açıkken: alarm metni → aynı tur sonunda olay başına tek albüm (bu turda sendPhoto döngüsünden albüme çevrildi).
+- Kalan karar: canlıda açılacak mı? (Free plan kotası için `TELEGRAM_GRAFIK_ADET` 1-2 öneriliyor, bkz. RENDER_DEPLOY.md.)
+
+### 9.3 Mum rengi ve arka plan — araştırma özeti
+
+Kaynak taraması (forum ve eğitim sayfaları; kesin standart yok, kullanıcı tercihine bağlı):
+- Klasik kural: **boş (hollow) = yükselen, dolu = düşen**. Renkten bağımsız okunur; renk körlüğünde de çalışır. Bizdeki monokrom gövde (`#e3e6e8` boş / `#8d949a` dolu) bu kurala uyuyor.
+- Koyu arka plan + açık gri/beyaz mum, göz yorgunluğunu azaltıyor; beyaz zemin "agresif" bulunuyor (kullanıcı yorumları).
+- Renk körlüğü için önerilen palet: mavi-turuncu, ya da siyah zeminde beyaz-gri tonları. Bizim palette FVG mavi (`#42a5f5`), BOS turuncu (`#ff8a65`) zaten ayrık.
+- Yeşil/kırmızı yerine tek renk ailesi ("renk psikolojiyi bozar" yorumu) bazı kullanıcılarda daha az dikkat dağıtıcı.
+
+Sonuç: mevcut mum tarzı (monokrom, boş/dolu) bu araştırmayla uyumlu; bu turda **değiştirilmedi**. Yeşil/kırmızı moda geçmek kullanıcı tercihi olduğundan ayrı karar gerektirir.
+
+### 9.4 Açık kalanlar
+
+- Canlıda alarm görseli: env kararı (`alarm` mı `yok` mu) kullanıcıya bağlı.
+- ~~`/grafik` formasyon taraması kullanmıyor~~ → düzeltildi (bkz. §10): `/grafik` artık botun tarama kapısını kullanır.
+- Yerel ortam bu turda yeniden kuruldu (önceki venv kaybolmuştu); tam test paketi: 1064 passed, 44 skipped.
+
+## 10. `/grafik` formasyon taraması (ek)
+
+Sorun: `/grafik` `kare_uret`i `formasyon_tara=True` olmadan çağırıyordu; formasyon bandı hiç çizilmiyordu. "Formasyon verisi verilmedi" uyarısını kaldırınca sorun görünmez oldu ama düzelmedi.
+
+Düzeltme: `/grafik` artık `formasyon_tara=True` ile çağrılır (canlı tarama motoru + `_usable_active` kapısı). Altyazıda formasyon adı ya da `formasyon yok` yazar. `_formasyon_tara` istisnada kareyi düşürmez, uyarı yazar.
+
+Ölçüm (gerçek önbellek, TF başına süre): tarama 0,2–0,6 sn; AKBNK, THYAO için 1s/2s/4s/1g'de formasyon yok; ALARK 4s'de "Alçalan Üçgen, daralma %77" bulundu ve görsel olarak bant çizildi.
+
+Test: `test_grafik_album.py` (+3 test: tarama açık, ad altyazıda, tarama hatası). Tam paket sonucu commit mesajında ve bu turun özetinde.

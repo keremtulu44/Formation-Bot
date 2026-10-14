@@ -1059,3 +1059,43 @@ girmez; mesaj metni ve `1 olay = 1 mesaj` sözleşmesi değişmez.
    doğrudan `sendPhoto` yolunu alarm şalterinden bağımsız test et.
 4. Aynı DM'de `/durum` çalıştır — `alarm kartı`, `karesiz`, `köprü hatası · son
    neden`, kare gönderimi ve gerekiyorsa `(şalter kapalı)` önekini birlikte oku.
+
+## 29 · GÖRSEL-2 TURU (2026-10-14) — şerit, kadraj, bant teması (sözleşme güncellemesi)
+
+Bu tur §0.4.1, §0.12, §14–§17 ile çelişen veya onları somutlaştıran kararları kayda geçirir. Ayrıntılı ölçüm: `GRAFIK_YEREL_DOGRULAMA_RAPORU.md` §8.
+
+### 29.1 Karar değişiklikleri (önceki sözleşmeye göre)
+
+- **Etiket yerleşimi (§0.12-c, §2):** zone/olay/alarm/son-fiyat etiketleri veri alanında değil, sağ **fiyat şeridinde** (`sag_serit_px=150`). Ok uçları eksen kenarında (`x=n-0.4`); ok mum gövdesi/fitili üstünden geçmez.
+- **Çakışma politikası:** çakışan etiket atılmaz, **dikeyde itilir**. Atılan etiket yalnız şerit dolduğunda olur ve `meta["sag"]["atlanan"]` ile görünür. Atlama sessiz değildir.
+- **PH/PL basamaklama:** 14 px'de aynı yönlü etiketler bir satır basamaklanır (`_swing_ofseti`).
+- **Kadraj (§17 ölçek ile uyum):** kadraj = mum aralığı + bölge + formasyon + alarm + PH/PL uçları, %6 pay. Dışarıdaki BOS/CHoCH/kritik çizilmez ve `kadraj_disi` ile sayılır. Gerekçe: dışarıdaki seviye eksen aralığını genişleterek mumları küçültüyordu.
+- **Kritik (§0.4.1 "kritik" yazımı):** `kritik X` ayrı şerit etiketi; CHoCH metninden ayrıldı (kesilme önlemi).
+- **Son fiyat:** kesikli yatay çizgi + sağda etiket (son kapanış, veri tarihi başlıkta).
+- **Bant teması (§0.4.1 "temas mumları" satırı güncellendi):** `o` işareti temasın olduğu banda yakın tarafın fitil ucunda; 24 işaret sınırı.
+- **Başlık:** `bant teması N` ve alarm kapanış farkı (üstünde/altında).
+
+### 29.2 §0.4.1 paleti için not
+
+- Renkler değişmedi. Etiket rengi yalnız metin olarak tekrarlandı; kadraj dışı seviye çizilmediği için palette yeni katman yok.
+
+### 29.3 Ölçülebilir kurallar (testler)
+
+- `mum_cakisan == 0` gerçek önbellekte altı örnek karede (`test_grafik_gorsel_kalite.py`).
+- Şerit etiketleri dikeyde üst üste binmez ve şerit yeterliyken atlanmaz.
+- Bant teması işareti doğru fitil ucunda.
+- Kadraj dışı seviye çizilmez ve sayılır (`test_grafik_yapi.py::test_kadraj_disi_seviye_cizilmez_ve_sayilir`).
+
+### 29.4 Açık kalanlar
+
+- Olay yoğunluğu (DOHOL 1s'de 7 etiket) için `GRAFIK_OLAY_MAKS` kararı ayrı tur; kullanıcı onayı beklenir.
+- Veri 2026-09-25'te bitiyor; bu sözleşme yalnız çizimi kapsar, veri tazeliğini değil.
+
+## 30 · TESLİM: ALBÜM + ALARM DURUMU (2026-10-14) — §4'ün "sendMediaGroup v2" maddesi kapandı
+
+- **Karar:** `/grafik HİSSE` ve alarm karelerinin tamamı tek **albüm** (`sendMediaGroup`) olarak gider. Tek kare → `sendPhoto`. Albüm reddedilirse kareler tek tek yeniden denenir (kare kaybı yok).
+- **Araya metin yok:** başarıda ayrı "✅ Bitti" metni kaldırıldı; kabul metni (`⏳ isteği alındı`) ve yalnız gerçek başarısızlıkta özet metin kalır. Üretilemeyen TF'ler albümün ilk altyazısına `⚠` satırı olarak yazılır.
+- **Altyazı:** `HİSSE · 1s · 180 mum · son kapanan 25.09.2026 17:30` (ISO tarih ve yerel dosya yolu kullanıcıya gösterilmez).
+- **Formasyon uyarısı kaldırıldı:** `/grafik` formasyon dosyası istemez; "formasyon verisi verilmedi" satırı kullanıcıya hata gibi görünüyordu. Formasyon bulunamayınca açık neden yalnız `--formasyon-tara` yolunda yazılır.
+- **Alarm:** alarm kareleri olay başına tek albüm. Kill-switch `TELEGRAM_GRAFIK=yok` (varsayılan, `config.py`, `render.yaml`, `.env.example`) iken alarm görseli üretilmez; yalnız `alarm` iken çalışır.
+- **Test kapsamı:** `test_grafik_album.py` (9 test), `test_grafik_teslim.py` ve `test_grafik_istegi.py` yeni sözleşmeye çevrildi.

@@ -559,7 +559,8 @@ def _komut_testini_bitir(monkeypatch, arguman, sahte):
         t.join(30)
         assert not t.is_alive()
     assert not M._grafik_aktif_is
-    return sahte.metinler[-1]
+    # Başarılı tur metin üretmez (albüm yanıttır); boş dönüş bunu açıkça temsil eder.
+    return sahte.metinler[-1] if sahte.metinler else ""
 
 
 def test_komut_grafik_onbellekte_veri_yoksa_canli_cekme_yok(monkeypatch):
@@ -586,16 +587,19 @@ def test_komut_grafik_gercek_onbellkten_kare_gonderir(monkeypatch):
     monkeypatch.setattr(config, "DATA_DIR", str(KOK / "bot_data"))
     monkeypatch.setattr(M, "_cache_verisi_kullanilabilir", lambda *a: True)
     yollar, metinler = [], []
-    def foto(yol, caption=""):
-        yollar.append((yol, caption, os.path.exists(yol)))
-        return True, ""
+    def toplu(paketler):
+        # Tek kare de olsa teslim `grafik_toplu_gonder` üzerinden: dosya gönderim anında var.
+        for yol, caption in paketler:
+            yollar.append((yol, caption, os.path.exists(yol)))
+            os.remove(yol)
+        return [True] * len(paketler)
     sahte = SimpleNamespace(enabled=True, metinler=metinler,
         send_text=lambda m: (metinler.append(m) or True, ""),
-        grafik_dosya_gonder=foto)
-    metin = _komut_testini_bitir(monkeypatch, "AKBNK 4s", sahte)
-    assert "Bitti" in metin and "✓" in metin and "mum" in metin
+        grafik_toplu_gonder=toplu)
+    _komut_testini_bitir(monkeypatch, "AKBNK 4s", sahte)
+    assert metinler == []                    # başarıda ayrı metin yok
     yol, caption, var_mi = yollar[0]
-    assert var_mi and caption.startswith("AKBNK · 4s")
+    assert var_mi and caption.startswith("AKBNK · 4s") and "mum" in caption
     assert not os.path.exists(yol)
 
 
@@ -605,15 +609,21 @@ def test_komut_grafik_dort_tf_tek_olay_ozeti(monkeypatch):
     from types import SimpleNamespace
     monkeypatch.setattr(config, "DATA_DIR", str(KOK / "bot_data"))
     monkeypatch.setattr(M, "_cache_verisi_kullanilabilir", lambda *a: True)
-    yollar, metinler = [], []
-    def foto(yol, caption=""):
-        yollar.append(yol)
-        return True, ""
+    yollar, metinler, albumler = [], [], []
+    def toplu(paketler):
+        albumler.append([caption for _yol, caption in paketler])
+        for yol, _caption in paketler:
+            yollar.append(yol)
+            os.remove(yol)
+        return [True] * len(paketler)
     sahte = SimpleNamespace(enabled=True, metinler=metinler,
         send_text=lambda m: (metinler.append(m) or True, ""),
-        grafik_dosya_gonder=foto)
-    metin = _komut_testini_bitir(monkeypatch, "AKBNK", sahte)
-    assert len(yollar) == 4 and len(metinler) == 1 and metin.count("✓") == 4
+        grafik_toplu_gonder=toplu)
+    _komut_testini_bitir(monkeypatch, "AKBNK", sahte)
+    # 4 TF → TEK albüm (araya metin girmez); başarıda ayrı metin yok
+    assert len(albumler) == 1 and len(albumler[0]) == 4
+    assert len(yollar) == 4 and metinler == []
+    assert [c.split(" · ")[1] for c in albumler[0]] == ["1s", "2s", "4s", "1g"]
     assert all(not os.path.exists(yol) for yol in yollar)
 
 
