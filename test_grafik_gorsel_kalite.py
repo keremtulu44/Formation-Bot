@@ -51,8 +51,13 @@ def test_gercek_karelerde_yazi_mumun_ustune_binmez(tmp_path, hisse, tf, mum):
     assert kalite["mum_cakisan"] == 0, kalite["cakisan"]
 
 
-def test_sag_serit_etiketleri_dikeyde_ust_uste_binmez(tmp_path):
-    """Aynı seviyedeki dört etiket ayrışır; hiçbiri atılmaz (şerit yeterliyse)."""
+def test_sag_serit_etiketleri_birlesir_ve_dikeyde_binmez(tmp_path):
+    """GÖRSEL-5: aynı seviyedeki zone çipleri TEK çipe iner; farklı seviyeler ayrışır.
+
+    Eskiden dört aynı seviye etiket dikeyde itilerek ayrıştırılıyordu; kullanıcı
+    geri bildirimi (şerit yığılması) sonrası aynı seviyedekiler birleşiyor.
+    Hiçbir etiket kaybolmaz: birleşme `birlesen_kutu`, atılan `atlanan` ile sayılır.
+    """
     from matplotlib.figure import Figure
 
     fig = Figure(figsize=(10.8, 8.1), dpi=100)
@@ -61,17 +66,24 @@ def test_sag_serit_etiketleri_dikeyde_ust_uste_binmez(tmp_path):
     ax.set_ylim(*aralik)
     ax.set_xlim(-0.6, 179.6)
     adaylar = [
-        {"kaynak": "zone", "x": 179.6, "y": 55.0, "metin": f"OB↑ %{k}",
-         "renk": "#2bb673", "sabit": False, "oncelik": 2, "bg": None}
-        for k in (10, 20, 30, 40)
+        {"kaynak": "zone", "x": 179.6, "y": 55.0 + 0.05 * i, "metin": f"OB↑ %{k}",
+         "renk": "#2bb673", "sabit": False, "oncelik": 2, "bg": None, "yeni": 50.0 - i}
+        for i, k in enumerate((10, 20, 30, 40))
     ]
+    # Farklı seviyeler ayrı kalır (57 ve 59 ayrı çipler).
+    adaylar += [{"kaynak": "zone", "x": 179.6, "y": y, "metin": f"FVG↓ %{int(y)}",
+                 "renk": "#3f9dec", "sabit": False, "oncelik": 2, "bg": None, "yeni": 10.0}
+                for y in (57.0, 59.0)]
     adaylar.append({"kaynak": "son", "x": 179.6, "y": 55.0, "metin": "55,00",
                     "renk": "#101418", "bg": "#e3e6e8", "sabit": True, "oncelik": 9})
     ozet = grafik._sag_ciz(ax, fig, adaylar, 180, aralik)
-    assert ozet["atlanan"] == 0 and ozet["yerlesen"] == 5
-    yy = sorted(a["yy"] for a in adaylar)
-    # etiket yüksekliği: 8 pt @100 dpi, 1,45 satır; eksen yüksekliği 0,8 × 810 px
-    h = 8.0 * 100 / 72.0 * 1.45 / ((0.8 * 810) / 10.0)
+    assert ozet["atlanan"] == 0
+    # Dört aynı seviye: çip başına en fazla 3 kutu → 3'lü çip + tek kalan çip.
+    assert ozet["birlesen_kutu"] == 2
+    assert ozet["yerlesen"] == 5                      # 2 zone çipi + 2 ayrı + son
+    yy = sorted(a["yy"] for a in adaylar if a.get("yy") is not None)
+    # etiket yüksekliği: 8,5 pt @100 dpi, 1,75 satır; eksen yüksekliği 0,8 × 810 px
+    h = 8.5 * 100 / 72.0 * 1.75 / ((0.8 * 810) / 10.0)
     for a, b in zip(yy, yy[1:]):
         assert b - a >= h * 0.999, (a, b, h)
     # sabit son fiyat yerinde kalır

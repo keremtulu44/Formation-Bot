@@ -1260,7 +1260,10 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
             sag_ozet = _sag_ciz(ax, fig, sag_adaylar, n, aralik)
             sag_ozet["eledi_kaynak"] = elenen
         meta["sag"] = {"yerlesen": sag_ozet["yerlesen"], "atlanan": sag_ozet["atlanan"],
-                       "eledi_kaynak": dict(sag_ozet.get("eledi_kaynak") or {})}
+                       "eledi_kaynak": dict(sag_ozet.get("eledi_kaynak") or {}),
+                       # GÖRSEL-5: aynı seviyedeki kutu çipleri tek çipte birleşti.
+                       "birlesik": int(sag_ozet.get("birlesik") or 0),
+                       "birlesen_kutu": int(sag_ozet.get("birlesen_kutu") or 0)}
         meta["zone"]["etiket_atlandi"] = int(sag_ozet["atlanan_kaynak"].get("zone", 0))
         meta["olay"]["etiket_atlandi"] = int(sag_ozet["atlanan_kaynak"].get("olay", 0))
         _tik_etiketleri(ax, zamanlar, str(goruntu.get("tf") or tf))
@@ -1680,7 +1683,7 @@ def _sag_ciz(ax, fig, adaylar: Sequence[dict[str, Any]], n: int,
     Yazı genişliği şerit içine kırpılır (`…`), mum alanına taşmaz.
     """
     sonuc: dict[str, Any] = {"yerlesen": 0, "atlanan": 0, "atlanan_kaynak": {},
-                             "eledi_kaynak": {}}
+                             "eledi_kaynak": {}, "birlesik": 0, "birlesen_kutu": 0}
     adaylar = [a for a in adaylar if not a.get("elendi")]   # kalabalık denetimi
     if not adaylar:
         return sonuc
@@ -1698,6 +1701,44 @@ def _sag_ciz(ax, fig, adaylar: Sequence[dict[str, Any]], n: int,
     sabit = [a for a in adaylar if a.get("sabit")]
     diger = sorted((a for a in adaylar if not a.get("sabit")),
                    key=lambda a: (-int(a.get("oncelik", 0)), float(a["y"])))
+    # GÖRSEL-5 (okunurluk): AYNI seviyedeki kutu çipleri TEK çipte birleşir
+    # (`OB↓ · FVG↑ %38`). Kutu bölgeleri komşu olduğunda şeritte üst üste binen
+    # iki-üç çip yerine tek satır kalır. Yalnız `zone` kaynağı birleşir; `kritik`,
+    # `alarm` ve son fiyat kendi çipinde kalır (anlamları ayrı).
+    _birlesik: list[dict[str, Any]] = []
+    for a in diger:
+        if str(a.get("kaynak")) != "zone" or a.get("elendi"):
+            _birlesik.append(a)
+            continue
+        hedef = None
+        for b in _birlesik:
+            if (str(b.get("kaynak")) == "zone" and not b.get("_birlesik_dolu")
+                    and abs(float(b["y"]) - float(a["y"])) <= h * 0.75):
+                hedef = b
+                break
+        if hedef is None:
+            a["_parcalar"] = [str(a.get("metin"))]
+            a["_sayi"] = 1
+            _birlesik.append(a)
+        else:
+            hedef["_parcalar"].append(str(a.get("metin")))
+            hedef["_sayi"] = int(hedef.get("_sayi", 1)) + 1
+            # Birleşen çip kutuların ORTASINA oturur (kılavuz çizgisi ortak).
+            hedef["y"] = (float(hedef["y"]) + float(a["y"])) / 2.0
+            if hedef.get("_sayi", 0) >= 3:
+                hedef["_birlesik_dolu"] = True
+    for a in _birlesik:
+        if a.get("_sayi", 1) > 1:
+            sonuc["birlesik"] = int(sonuc["birlesik"]) + 1
+            sonuc["birlesen_kutu"] = int(sonuc["birlesen_kutu"]) + int(a["_sayi"]) - 1
+            metin = " · ".join(a["_parcalar"])
+            # Aynı tip birden fazla kez geçiyorsa sayıyla kısalt: `OB↓ · OB↑ ×2`.
+            if len(set(a["_parcalar"])) < len(a["_parcalar"]):
+                ilk = sorted(set(a["_parcalar"]))[0]
+                metin = f"{ilk} · … ×{len(a['_parcalar'])}"
+            a["metin"] = metin
+            a["birlesik"] = int(a["_sayi"])
+    diger = _birlesik
     yerlesik: list[float] = []
     for a in sabit:
         a["yy"] = float(a["y"])
@@ -2201,6 +2242,10 @@ def _olay_ciz(ax, goruntu: Mapping[str, Any], n: int,
     kritik_seviye = _gercek(kritik_bilgi.get("seviye"))
     kritik_eslesdi = False
     etiket_ic = 0
+    # Yaş kademesi: en YENİ olay 0. sırada (solma buna göre).
+    _bar_sirali = sorted({int(b["bar"]) for b in olaylar if b.get("bar") is not None},
+                         reverse=True)
+    olay_sirasi = {bar: i for i, bar in enumerate(_bar_sirali)}
     for b in olaylar:
         x, seviye = float(b["bar"]), _gercek(b.get("seviye"))
         if seviye is None:
@@ -2220,9 +2265,22 @@ def _olay_ciz(ax, goruntu: Mapping[str, Any], n: int,
                             "yeni": float(b["bar"])})
         ax.plot([x], [seviye], marker="^" if yon_ust else "v", ms=6.0, linestyle="none",
                 color=PALET["olay"], zorder=6)
+        # GÖRSEL-5 (okunurluk): BOS kesikli, CHoCH NOKTALI — iki olay türü aynı
+        # görünümde değil; ayrıca alfa olayın YAŞINA göre azalır (en yeni en koyu),
+        # böylece "hangi kırılım yeni?" sorusu çizginin renginden okunur.
+        # CHoCH NOKTALI (`":"`), BOS kesikli: matplotlib dash demetlerini içeride
+        # `'--'`e normalleştirdiği için stil ayrımı ancak adlandırılmış desenle
+        # hem görünür hem ölçülebilir oluyor.
+        _stil = ":" if str(b.get("tur") or "BOS").upper().startswith("CHO") else (0, (3, 2))
+        if vurgu:
+            _alfa = 0.9
+        else:
+            _sira = int(olay_sirasi.get(int(b["bar"]), 0))
+            _toplam = max(1, len(olay_sirasi) - 1)
+            _alfa = max(0.38, 0.85 - 0.5 * (_sira / float(_toplam)))
         ax.plot([x, float(n - 1)], [seviye, seviye], color=PALET["olay"],
-                linewidth=1.4 if vurgu else 0.9, linestyle=(0, (3, 2)),
-                alpha=0.9 if vurgu else 0.6, zorder=3 if vurgu else 2)
+                linewidth=1.4 if vurgu else 0.9, linestyle=_stil,
+                alpha=_alfa, zorder=3 if vurgu else 2)
         # GÖRSEL-4 kullanıcı kararı: BOS/CHoCH için FİYAT değil MUM KONUMU önemli
         # → etiket sağ fiyat şeridine değil, olayın mumuna ilişir. Yerleşim
         # 2 boyutlu aranır (`_olay_yazi_yeri`): önce kırılımın ters tarafı, olmazsa
@@ -2463,6 +2521,13 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool) -> list[str]:
     alarm = goruntu.get("alarm") or {}
     # Renk şeması lejantta AÇIKÇA yazılır (GÖRSEL-3): yeşil boş / kırmızı dolu.
     oge = ["kapanmış mum", "yeşil boş = yükselen", "kırmızı dolu = düşen"]
+    # GÖRSEL-5: olay çizgileri stil olarak ayrıştı; lejant da ayrı yazar (hangisi
+    # görünüyorsa o madde çıkar — uydurma yok).
+    _olaylar = list((goruntu.get("olay") or {}).get("olaylar") or [])
+    if any(str(b.get("tur") or "").upper().startswith("CHO") for b in _olaylar):
+        oge.append("┈ CHoCH")
+    if any(not str(b.get("tur") or "").upper().startswith("CHO") for b in _olaylar):
+        oge.append("┄ BOS")
     if formasyon.get("upper_now") is not None or formasyon.get("lower_now") is not None:
         oge.append("— formasyon bandı")
         if int(goruntu.get("sol") or 0) > 0:

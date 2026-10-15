@@ -167,3 +167,110 @@ def test_kare_uret_sayaclari_ve_cakisma_olcumu(hisse):
     assert z["dolgu"] <= z["cizilen"] and z["orta"] <= z["cizilen"]
     assert grafik.SABITLER["sag_serit_px"] > 0
     assert sonuc["meta"]["kalite"]["mum_cakisan"] == 0
+
+
+# ============================ Paket 2: okunurluk =============================
+# Ölçüm: kritik dışı BOS/CHoCH çizgileri aynı stil/alfada olduğu için üst üste
+# iki soluk çizgi ayırt edilemiyordu; şeritte aynı seviyedeki kutu çipleri
+# yığılıyordu (TCELL'de 3 kutu + son fiyat).
+
+
+def _olay_goruntusu(olaylar):
+    from datetime import datetime, timedelta, timezone
+
+    ist = timezone(timedelta(hours=3))
+    return {
+        "sembol": "TEST", "tf": "1h", "tf_kisa": "1s", "acilis": [100.0] * 60,
+        "yuksek": [101.0] * 60, "dusuk": [99.0] * 60, "kapanis": [100.5] * 60,
+        "zamanlar": [datetime(2026, 9, 1, 9, 30, tzinfo=ist) + timedelta(hours=i)
+                     for i in range(60)],
+        "formasyon": {}, "alarm": {}, "zone": {}, "temas": [], "isaretler": [], "serit": {},
+        "olay": {"swinglar": [], "olaylar": olaylar, "kritik": {}},
+    }
+
+
+def test_choch_noktali_bos_kesikli():
+    """İki olay türü stil olarak ayrışır (arşivde `:` ve `--` olarak ölçülür)."""
+    fig, ax = _eksen()
+    goruntu = _olay_goruntusu([
+        {"bar": 20, "seviye": 104.0, "yon": "ust", "tur": "BOS"},
+        {"bar": 35, "seviye": 102.0, "yon": "alt", "tur": "CHoCH"},
+    ])
+    grafik._olay_ciz(ax, goruntu, 60, [])
+    stil = {}
+    for ln in ax.get_lines():
+        y = ln.get_ydata()
+        if len(y) == 2 and y[0] == y[1] and abs(ln.get_linewidth() - 0.9) < 0.01:
+            stil[float(y[0])] = str(ln.get_linestyle())
+    assert stil[104.0] == "--"      # BOS kesikli
+    assert stil[102.0] == ":"       # CHoCH noktalı
+
+
+def test_olay_cizgisi_yasla_soler():
+    """En yeni olay en koyu; eski olaylar daha soluk (aynı stil içinde kademe)."""
+    fig, ax = _eksen()
+    goruntu = _olay_goruntusu([
+        {"bar": 10, "seviye": 106.0, "yon": "ust", "tur": "BOS"},
+        {"bar": 25, "seviye": 104.0, "yon": "alt", "tur": "BOS"},
+        {"bar": 45, "seviye": 102.0, "yon": "ust", "tur": "BOS"},
+    ])
+    grafik._olay_ciz(ax, goruntu, 60, [])
+    alfa = {float(ln.get_ydata()[0]): float(ln.get_alpha() or 1.0)
+            for ln in ax.get_lines()
+            if len(ln.get_ydata()) == 2 and ln.get_ydata()[0] == ln.get_ydata()[1]
+            and abs(ln.get_linewidth() - 0.9) < 0.01}
+    assert alfa[102.0] > alfa[104.0] > alfa[106.0]     # yeni → eski soluklaşır
+    assert alfa[106.0] >= 0.38                          # taban okunur kalır
+
+
+def test_ayni_seviyedeki_kutu_cipleri_birlesir():
+    fig, ax = _eksen()
+    adaylar = [
+        {"kaynak": "zone", "x": 59.6, "y": 105.0, "metin": "OB↑", "renk": "#2bb673",
+         "sabit": False, "oncelik": 2, "bg": None, "yeni": 50.0},
+        {"kaynak": "zone", "x": 59.6, "y": 105.2, "metin": "FVG↓", "renk": "#3f9dec",
+         "sabit": False, "oncelik": 2, "bg": None, "yeni": 48.0},
+    ]
+    ozet = grafik._sag_ciz(ax, fig, adaylar, 60, (90.0, 120.0))
+    metinler = [str(t.get_text()) for t in ax.texts if t.get_bbox_patch() is not None]
+    assert len(metinler) == 1, metinler              # tek çip
+    assert " · " in metinler[0] and "OB↑" in metinler[0] and "FVG↓" in metinler[0]
+    assert ozet["birlesik"] == 1 and ozet["birlesen_kutu"] == 1
+
+
+def test_kritik_ve_son_fiyat_birlesmez():
+    """Anlamı ayrı olan çipler birleşmez: `kritik X` ve son fiyat kendi çipinde."""
+    fig, ax = _eksen()
+    adaylar = [
+        {"kaynak": "olay", "x": 59.6, "y": 105.0, "metin": "kritik 105,00", "renk": "#f0885c",
+         "sabit": False, "oncelik": 5, "bg": None, "yeni": 50.0},
+        {"kaynak": "zone", "x": 59.6, "y": 105.1, "metin": "OB↑", "renk": "#2bb673",
+         "sabit": False, "oncelik": 2, "bg": None, "yeni": 50.0},
+        {"kaynak": "son", "x": 59.6, "y": 105.15, "metin": "105,05", "renk": "#31b184",
+         "sabit": True, "oncelik": 9, "bg": "#134237", "yeni": 60.0},
+    ]
+    ozet = grafik._sag_ciz(ax, fig, adaylar, 60, (90.0, 120.0))
+    metinler = sorted(str(t.get_text()) for t in ax.texts if t.get_bbox_patch() is not None)
+    assert metinler == ["105,05", "OB↑", "kritik 105,00"]      # birleşme YOK
+    assert ozet["birlesik"] == 0
+
+
+def test_uc_kutu_birlesince_dordu_dolmaz():
+    """Üç kutu çipi bir çipte toplanır; kılavuz çizgisi tek kalır."""
+    fig, ax = _eksen()
+    adaylar = [{"kaynak": "zone", "x": 59.6, "y": 105.0 + 0.05 * i, "metin": f"OB↑ {i}",
+                "renk": "#2bb673", "sabit": False, "oncelik": 2, "bg": None,
+                "yeni": 50.0 - i} for i in range(3)]
+    ozet = grafik._sag_ciz(ax, fig, adaylar, 60, (90.0, 120.0))
+    metinler = [str(t.get_text()) for t in ax.texts if t.get_bbox_patch() is not None]
+    assert len(metinler) == 1
+    assert ozet["birlesen_kutu"] == 2
+
+
+def test_lejant_bos_ve_choch_ayri_yazar():
+    goruntu = {"olay": {"olaylar": [{"tur": "BOS"}, {"tur": "CHoCH"}]}}
+    oge = grafik._lejant(goruntu, False)
+    assert "┄ BOS" in oge and "┈ CHoCH" in oge
+    # Yalnız BOS varsa CHoCH maddesi ÇIKMAZ (çizilmeyen şey lejantta yazılmaz).
+    oge2 = grafik._lejant({"olay": {"olaylar": [{"tur": "BOS"}]}}, False)
+    assert "┈ CHoCH" not in oge2
