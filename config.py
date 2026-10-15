@@ -217,6 +217,13 @@ TELEGRAM_MAX_MESAJ_GUN = 120
 #         olay başına ≤ TELEGRAM_ALERT_MAX_KARAKTER). parse_mode KULLANILMAZ.
 # "klasik": 25 Eyl canlı akışındaki uzun biçim (geri dönüş/a/B karşılaştırması için).
 TELEGRAM_ALERT_STYLE = os.getenv("TELEGRAM_ALERT_STYLE", "kart").strip().lower()
+# GÖRSEL-7 (2026-10-15) kart süzgeci: kârenin zaten çizdiği satırlar (kırılan/
+# kapanış/kalite/daralma/temas/yapı/kutular) metinden DÜŞÜLÜR; metin yalnız
+# kârede görünmeyeni söyler (eşik, bant yaşı, MTF, retest, katılım yorumu, karşı
+# delil). Ölçüm: geçersiz kart 31 satır/636 kr → 9 satır/219 kr, teyitli kart
+# 45/980 → 10/244. "0" yazılırsa 25 Eyl biçimi (tam kart) aynen geri gelir.
+TELEGRAM_KART_SUZGEC = os.getenv("TELEGRAM_KART_SUZGEC", "1").strip().lower() not in {
+    "0", "false", "kapali", "kapalı", "yok", "hayir", "hayır"}
 # Telefon sohbetinde metne ayrılan genişlik (px, 360 px ekran). telegram_measure.py
 # bu bütçeyle satır böler; 0 = bölme yok (satır uzunluğu serbest).
 # not: _env_int 0'ı 1'e yuvarlar; sıfır "bölme yok" demek olabildiği için float okunur.

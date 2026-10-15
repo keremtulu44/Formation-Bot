@@ -618,93 +618,111 @@ def _kart_zones(results_by_timeframe: Any, reference: float | None) -> dict[str,
     return bölgeler
 
 
-def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None) -> list[str]:
-    """Hacim/katılım: alarm TF'sinin yargısı veri olmasa da tek satır görünür.
+# GÖRSEL-7 kısa sözlükler: kart satırı `katılım 1s destekliyor` gibi TEK yargı taşır.
+# Eski biçim TF başına 3 satır basıyordu (yargı · sayılar · katkı) ve kart 11 satıra
+# çıkıyordu; kâre şeritte RVOL çubuklarını zaten çiziyor, metin YORUMU taşır.
+_KART_BREAK_KISA = {
+    "SUPPORTED": "destekliyor",
+    "PROTECTED": "destek korunuyor",
+    "UNSUPPORTED": "destek yok",
+    "RECLAIMED": "kırılım geri alındı",
+}
+_KART_STATE_KISA = {
+    "PARTICIPATION_LOW": "düşük",
+    "PARTICIPATION_RISING": "artıyor",
+    "PARTICIPATION_ABNORMAL_VOLUME": "anormal hacim",
+    "PARTICIPATION_ABNORMAL_CAPITAL": "anormal işlem değeri",
+    "PARTICIPATION_ONE_BAR_SHOCK": "tek mumda şok",
+    "PARTICIPATION_UP_CONFIRMED": "yukarı teyitli",
+    "PARTICIPATION_DOWN_CONFIRMED": "aşağı teyitli",
+    "PARTICIPATION_UP_PROTECTED": "yukarı korunuyor",
+    "PARTICIPATION_DOWN_PROTECTED": "aşağı korunuyor",
+    "PARTICIPATION_UP_WEAKENING": "yukarı zayıflıyor",
+    "PARTICIPATION_DOWN_WEAKENING": "aşağı zayıflıyor",
+    "PARTICIPATION_UP_CANDIDATE": "yukarı aday",
+    "PARTICIPATION_DOWN_CANDIDATE": "aşağı aday",
+    "PARTICIPATION_UPPER_ABSORPTION_CONFIRMED": "üstte satış emilimi",
+    "PARTICIPATION_LOWER_ABSORPTION_CONFIRMED": "altta alış emilimi",
+    "PARTICIPATION_UPPER_ABSORPTION_CANDIDATE": "üstte emilim adayı",
+    "PARTICIPATION_LOWER_ABSORPTION_CANDIDATE": "altta emilim adayı",
+    "PARTICIPATION_UPPER_ABSORPTION_INVALIDATED": "üst emilim işareti düştü",
+    "PARTICIPATION_LOWER_ABSORPTION_INVALIDATED": "alt emilim işareti düştü",
+    "PARTICIPATION_CONFLICT": "hacim/işlem çelişkili",
+}
 
-    Düzeltme: klasik yol `if findings:` dediği için export boşsa satır HİÇ
-    basılmıyordu — 4s/1d alarmlarında kırılımın kendi zaman diliminde hacim
-    desteği var mı, yok mu, yoksa veri mi hazır değil ayırt edilemiyordu.
+
+def _kart_oran(deger: Any) -> str:
+    """RVOL sayısı kart dilinde: `0,42` (nokta değil virgül)."""
+    sayi_deger = _number(deger)
+    if sayi_deger is None or sayi_deger <= 0:
+        return ""
+    return f"{sayi_deger:.2f}".replace(".", ",")
+
+
+def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None) -> list[str]:
+    """Katılım bölümü: satır = `katılım {tf} {kısa yargı}`, en fazla 2 satır.
+
+    Neden bu biçim (GÖRSEL-7 ölçümü): eski hâl TF başına 3 satır ve 4 TF için
+    11 satır üretiyordu; kartın %40'ı girintili devam satırıydı. Kârede hacim
+    şeridi çizili olduğu için metin yalnız YARGIYI taşır:
+
+      1. satır: alarm TF'sinin yargısı (kırılımın kendi zaman diliminde katılım
+         var mı, korunuyor mu, yok mu) — veri yoksa bu da yazılır (sessiz geçilmez).
+      2. satır: diğer TF'lerden EN DİKKAT ÇEKİCİ olanı — katılım bitti ise
+         `0,52 ile bitti`, değilse RVOL'ü en düşük olan `0,42 zayıf`.
     """
-    lines: list[str] = []
+    kayitlar: list[dict] = []
     for timeframe in TIMEFRAME_ORDER:
         tf_label = TIMEFRAME_LABELS[timeframe]
         result = _domain(results_by_timeframe, timeframe, "volume_participation")
         export = _usable_export(result)
         if export is None:
-            if timeframe == alarm_tf:
+            if timeframe == str(alarm_tf or "").lower():
                 hata = _token(_field(result, "error")) if result is not None else ""
-                lines.append(
-                    f"▤ {tf_label} hacim: {'analiz yapılamadı' if hata else 'yargı yok (veri bekleniyor)'}"
-                )
+                kayitlar.append({"tf": timeframe, "etiket": tf_label, "yargi": "",
+                                 "rvol": "", "bitti": False,
+                                 "bos": "analiz yapılamadı" if hata else "veri yok"})
             continue
-        hata = ""
         durum = _token(_field(export, "state"))
-        if durum in {"", "PARTICIPATION_PENDING", "PARTICIPATION_VOLUME_UNAVAILABLE",
+        if durum in {"PARTICIPATION_PENDING", "PARTICIPATION_VOLUME_UNAVAILABLE",
                      "PARTICIPATION_NEUTRAL"}:
             durum = ""
-        parcalar: list[str] = []
-        etiket = _VOLUME_STATE_LABELS.get(durum, "") if durum else ""
-        if etiket:
-            parcalar.append(etiket)
+        yargi = _KART_BREAK_KISA.get(_token(_field(export, "break_stage")), "")
+        if not yargi:
+            yargi = _KART_STATE_KISA.get(durum, "")
+        kayitlar.append({
+            "tf": timeframe,
+            "etiket": tf_label,
+            "yargi": yargi,
+            "rvol": _kart_oran(_field(export, "rvol")),
+            "bitti": durum.endswith("_ENDED"),
+            "bos": "",
+        })
 
-        rvol = _number(_field(export, "rvol"))
-        dv = _number(_field(export, "relative_traded_value"))
-        sayilar: list[str] = []
-        ayni_dv = (rvol is not None and rvol > 0 and dv is not None and dv > 0
-                   and abs(rvol - dv) <= 0.02)
-        if rvol is not None and rvol > 0:
-            ek = " ≈DV" if ayni_dv else ""
-            sayilar.append(f"RVOL {rvol:.2f}×{ek}".replace(".", ","))
-        if dv is not None and dv > 0 and not ayni_dv:
-            sayilar.append(f"DV {dv:.2f}×".replace(".", ","))
-        hacim_seviye = _VOLUME_LEVEL_LABELS.get(_token(_field(export, "volume_level")))
-        sermaye_seviye = _VOLUME_LEVEL_LABELS.get(_token(_field(export, "capital_level")))
-        if hacim_seviye and _token(_field(export, "volume_level")) != "NORMAL":
-            if sermaye_seviye and hacim_seviye == sermaye_seviye:
-                sayilar.append(f"hacim/işlem değeri {hacim_seviye}")
-            else:
-                sayilar.append(f"hacim {hacim_seviye}")
-        if sermaye_seviye and _token(_field(export, "capital_level")) != "NORMAL" \
-                and sermaye_seviye != hacim_seviye:
-            sayilar.append(f"işlem değeri {sermaye_seviye}")
+    if not kayitlar:
+        return []
+    alarm_key = str(alarm_tf or "").lower()
+    birincil = next((k for k in kayitlar if k["tf"] == alarm_key), kayitlar[0])
+    satirlar: list[str] = []
+    if birincil["yargi"]:
+        satirlar.append(f"katılım {birincil['etiket']} {birincil['yargi']}")
+    elif birincil["rvol"]:
+        satirlar.append(f"katılım {birincil['etiket']} RVOL {birincil['rvol']}")
+    else:
+        satirlar.append(f"katılım {birincil['etiket']} {birincil['bos'] or 'veri yok'}")
 
-        ek_satir: list[str] = []
-        absorption_asama = _token(_field(export, "absorption_stage"))
-        absorption_yan = _token(_field(export, "absorption_side"))
-        if absorption_asama == "CONFIRMED" and absorption_yan in {"UPPER", "LOWER"}:
-            seviye = _price(_field(export, "absorption_reference_level"))
-            ek_satir.append(("üstte satış" if absorption_yan == "UPPER" else "altta alış")
-                            + " emilimi teyitli" + (f" {seviye}" if seviye else ""))
-        kirilim_asama = _token(_field(export, "break_stage"))
-        kirilim_yon = _direction(_field(export, "break_direction"))
-        kirilim_etiketleri = {
-            "SUPPORTED": "katılım desteği var",
-            "PROTECTED": "katılım desteği korunuyor",
-            "UNSUPPORTED": "katılım desteği yok",
-            "RECLAIMED": "kırılım seviyesi geri alındı",
-        }
-        if kirilim_asama in kirilim_etiketleri:
-            metin = kirilim_etiketleri[kirilim_asama]
-            if kirilim_yon:
-                metin = f"{kirilim_yon} yönde {metin}"
-            seviye = _price(_field(export, "break_level"))
-            ek_satir.append(metin + (f" ({seviye})" if seviye else ""))
-
-        # 1. satır = yalnızca yargı, 2. satır = sayılar, 3. satır = emilim/kırılım
-        # katkısı. Uzun tek satır yerine üç kısa satır: telefonda sarmıyor ve her
-        # satırda tek bilgi var (kartın genel kuralı).
-        if parcalar or sayilar or ek_satir:
-            lines.append("▤ " + " ".join([tf_label] + parcalar))
-            if sayilar:
-                lines.append("   " + " · ".join(sayilar))
-            if ek_satir:
-                lines.append("   " + " · ".join(ek_satir))
-        elif timeframe == alarm_tf:
-            # Alarmın kendi TF'sinde veri yoksa bu da görünür (sessiz "veri yok"
-            # ile "yargı yok" ayrımı kullanıcının kararı için gerekli).
-            lines.append(f"▤ {tf_label}: hacim verisi bekleniyor")
-    return lines
-
+    digerleri = [k for k in kayitlar if k is not birincil]
+    bitenler = [k for k in digerleri if k["bitti"] and k["rvol"]]
+    if bitenler:
+        k = bitenler[0]
+        satirlar.append(f"katılım {k['etiket']} {k['rvol']} ile bitti")
+    else:
+        zayiflar = [k for k in digerleri if k["rvol"] and _number(str(k["rvol"]).replace(",", ".")) is not None
+                    and float(str(k["rvol"]).replace(",", ".")) < 0.6]
+        if zayiflar:
+            k = min(zayiflar, key=lambda x: float(str(x["rvol"]).replace(",", ".")))
+            satirlar.append(f"katılım {k['etiket']} {k['rvol']} zayıf")
+    return satirlar
 
 def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
                      stil: str = "klasik", alarm_tf: str | None = None,

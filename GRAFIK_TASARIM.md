@@ -1350,3 +1350,83 @@ OB renkleri tam belirgin değil yani onun şeffaflığını biraz azaltır mıs�
 - Cetvel şu an kaynak sırasına göre diziliyor (son fiyat/alarm/kritik/PH-PL/kutu);
   istenirse başlıklı gruplara ayrılabilir ("SEVİYELER" / "BÖLGELER").
 - `GRAFIK_OLAY_MAKS` (§29.4) hâlâ onay bekliyor.
+
+## 35 · GÖRSEL-7 (2026-10-15) — kart metni sadeleşti + geçersizleşme kâresinde üç işaret
+
+Kullanıcı: *"mesaj aşırı karışık / nokta nokta / okunabilirlik kötü"*, ardından
+*"iki farklı örnek yazı: biri normal alarm, biri geçersizleşme — geçersizleşmenin görsel
+formatı nasıl olacak?"* → onay: **"Tamamdır onaylandı"**. Kart **düz Telegram metni**
+kalır (HTML/`parse_mode`/link/hizalama YOK — kullanıcı kararı) ve hedef **8-11 satır**.
+
+### 35.1 Sade kart (`TELEGRAM_KART_SUZGEC`, varsayılan açık)
+
+Ölçülen sorun (gerçek payload, `telegram_measure`): bugünkü kart **34 satır · 735 kr ·
+8 girintili devam satırı · 23 `·` · 7 `▪`**; DOMAIN grupları (`◈ yapı`, `▲ OB`, `▤ hacim`,
+`▸ TF`) satırların yarısını yiyor ve hepsi aynı görsel ağırlıkta.
+
+- İş bölümü: **kâre ana okuma; metin yalnız kârede OLMAYANI söyler.** Metinden düşen:
+  kırılan seviye satırı, temas üst/alt, daralma, `◈ yapı` blokları, `▲ OB/FVG` kutu
+  listeleri, `▤ hacim` blokları, `▸ TF` satırları, mum damgası (kâre üst şeridi
+  `son kapanan <tarih> · <fiyat>` yazar).
+- Metinde kalan ve kârede görünmeyen: **bozulma/teyit sınırı** (`bozulur 38,79 üstü kapanış`),
+  **bant yaşı + izlenme başlangıcı** (`bant 94 bar — 30.09'dan beri`), **retest + MTF onayı**,
+  **katılım yargısı** (kârede çubuk var, yorum yok) ve **karşı delil**.
+- Satır kuralları: satır = TEK konu (≤2 öğe) · `·` zinciri yok, çift ayırıcı `—` ·
+  girintili devam satırı yok · her satır ≤283 px (güvenli sınır 269 px). Satır sığmazsa
+  `_kart_esik_px()` eşiği devreye girer: `Yükselen Üçgen — bandına dönüş` (270,5 px)
+  yerine kısa tire (260,5 px) — **bölünme yoksa girinti de yok**.
+- Geçersizleşme kartı: yalnız formasyon + geçersizleşen TF + `teyit sınırı 38,79 üstü`
+  (eski `× geçersiz:` cümlesi pozitifleşti). Katılım bölümünden en çok 2 satır gelir.
+- Güncelleme kartı: `değişiklik yok — yapı/bölge/hacim aynı` + CTA.
+- **İzleme adayları bloğu korundu** (acil mesaj bağlamı; adaptör doldurur): başlık +
+  en çok 3 aday satırı. Mum damgası gibi kâreye taşınamaz — bilgi düşürülmedi.
+- Kill-switch: `TELEGRAM_KART_SUZGEC=0` → 25 Eyl biçimi (tam kart) aynen geri gelir.
+
+### 35.2 Geçersizleşme kâresi: üç işaret
+
+1. **`✕ geçersizleştiren mum`** — teyidi düşüren mumun işareti (mum eksenin alt
+   yarısındaysa 10 px ÜSTÜNE, üst yarısındaysa 17 px ALTINA). Punto `durum_pt × 1,5`
+   (9,5 pt küçük kalıyordu) + zemin renkli kontur → mum gövdesi üstünde okunur.
+2. **`┈ teyit sınırı`** — noktalı turuncu yatay kılavuz + sağ çip `× 38,79 üstü kapanış`
+   (kaynak `gecersiz`, öncelik 5, renk `olay`). Kural **güncel bandı** okur
+   (`upper_now`/`lower_now`) — `notifier`deki `× geçersiz` satırıyla birebir aynı.
+   Yön bilinmiyorsa eşik ÇİZİLMEZ (uydurma seviye yok).
+3. **`✕ eski seviye <kırılan>`** — kırılan dondurulmuş sınır artık geçersiz: çizgi
+   soluk (α 0,55) + kesik `(0,(2,4))`, çip metni `✕ eski seviye 70,75`, rengi `eksen`.
+   **Ölçülü kural:** iki seviye `0,02 × y-aralığı`ndan (≈12 px) yakınsa soluk çizgi
+   ÇİZİLMEZ — üst üste binen iki çizgi okunmaz (AKBNK 4s ölçümü: 70,75 / 70,84 = 1,4 px).
+- Lejant: `✕ geçersizleştiren mum` / `✕ eski seviye (artık geçerli değil)` / `┈ teyit sınırı`
+  eklenir; teyitli alarmda eski dil (`│ alarm mumu`, `─ seviye`) korunur.
+
+### 35.3 Lejant taşması + şerit etiketi (teknik borç kapandı)
+
+- Taşmada artık **uzun ve düşük öncelikli** maddeler düşer (`yapı:`, `şerit:`, `kutular:`,
+  `FVG`, `bant öncesi`, `▨ dolan`); **`✕` / `┈` maddeleri hiçbir koşulda düşmez** (yoksa
+  kâre açıklamasız işaret bırakır). Hepsi korunmuşsa en sondan düşülür.
+- Kareye yazılan `+N madde sığmadı` ve kırmızı `lejant: N madde sığmadı` dipnotu
+  **kaldırıldı**; sayı `meta["lejant_atlanan"]`da durur (sessiz kayıp yok).
+- Şeritteki çıplak `×2,9` çipi kendini anlatmıyordu → **`rvol ×2,9`**.
+
+### 35.4 Ölçüm ve kanıt
+
+| | satır | kr | en geniş | girinti | 3+ zincir |
+|---|---|---|---|---|---|
+| ÖNCE (süzgeç kapalı) | 34 | 735 | — | 8 (%23) | var |
+| SONRA normal | 11 | 278 | 242 px | 0 | 0 |
+| SONRA geçersizleşme | 9-10 | 228-252 | 260 px | 0 | 0 |
+
+- `docs/ornek_kart_gorsel7.png` — aynı payload'ın eski/yeni metni (satır satır px ölçüsüyle).
+- `docs/ornek_kare_gorsel7.png` — gerçek AKBNK 4s zinciri (onay barı 95 → geçersizleşme
+  barı 101, `PatternLifecycleManager.scan` bar bar oynatıldı): önce/sonra kâresi + Gelecek Metin.
+- Testler: `test_kart_metin.py` (10) · `test_grafik_gorsel7.py` (9). Güncellenen sözleşmeler:
+  `test_grafik_iskelet.py` (lejant taşması artık kareye yazılmaz), `test_notifier_mesajlari.py`
+  (4 test yeni karta), `test_telegram_alert_flow.py` + `test_tekrar_alarm_korumasi.py`
+  (hazırlık çıktısı `domain_bolumleri`), `test_mum_kapanis_penceresi.py` (damga kâre başlığında).
+- Tam süit: **1152 passed / 44 skipped**.
+
+### 35.5 Sonraki adım (P1 — veri zenginleştirme)
+
+Kart kısaldı; elde kullanılmayan veri duruyor (`net_progress_atr`, `directional_efficiency`,
+`volume/capital_regime`, `break_reference_source`, `evidence_text`, `age_bars`,
+`bos_maturity`, `break_frozen_*`) — sıradaki tur **görselde** bu alanları okunur kılacak
+(şerit tonu, ilerleme/verim çubuğu, olay kanıtının Türkçesi), metin yine yalnız görünmeyeni söyleyecek.

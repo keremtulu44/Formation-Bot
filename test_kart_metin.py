@@ -1,0 +1,150 @@
+# -*- coding: utf-8 -*-
+"""Kart metni sözleşmesi (GÖRSEL-7): sade 9-11 satır, zincirsiz, taşmasız.
+
+Kullanıcı şikâyeti (2026-10-15): "mesaj aşırı karışık / nokta nokta / okunabilirlik
+kötü". Ölçülen kaynak: bugünkü kart 40-45 satır, ~%40'ı girintili DEVAM satırı,
+7 satır aynı `▪` ile başlıyor, satır başına 1,6 öğe ama 44 `·` karakteri var.
+
+Yeni sözleşme:
+  * satır = TEK konu, en çok 2 öğe (`·` zinciri yok; çift ayırıcı `—`),
+  * girintili devam satırı YOK (satır bölünmesi = `_kart_esik_px` eşiği),
+  * 8-11 satır (uyarı satırı dâhil),
+  * kârenin taşıdığı bilgi (kutular/yapı/kırılan seviye/daralma/temas) metinde
+    TEKRARLANMAZ; `TELEGRAM_KART_SUZGEC=0` eski tam kartı geri getirir.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+import notifier
+import telegram_measure as tm
+
+
+def _payload(**ek):
+    veri = {
+        "stock_name": "SISE", "timeframe": "1h", "state": "KIRILIM_TEYITLI",
+        "pattern_name": "Yükselen Üçgen", "break_dir": -1, "break_price": 39.26,
+        "critical_price_level": 39.26, "candle_close_price": 39.18,
+        "confidence_score": 81, "break_strength": 100, "age_bars": 94,
+        "band_baslangic": "2026-09-30T16:30:00+03:00", "retest_seen": False,
+        "mtf_destek": True, "upper_now": 39.96, "lower_now": 38.79,
+        "domain_bolumleri": {"hacim": ["katılım 1s destekliyor", "katılım 2s 0,42 zayıf"]},
+    }
+    veri.update(ek)
+    return veri
+
+
+def _satirlar(metin: str) -> list[str]:
+    return metin.splitlines()
+
+
+def _tasma(satirlar: list[str]) -> list[str]:
+    """Bütçenin güvenli sınırını aşan satırlar (`_satir` bölerdi)."""
+    return [s for s in satirlar if tm.genislik(s) > notifier._kart_esik_px()]
+
+
+# ------------------------------------------------------------------ normal kart
+
+
+def test_teyitli_kart_9_11_satir_ve_tasmaz():
+    satirlar = _satirlar(notifier._format_lifecycle_alert_kart(_payload()))
+    assert 8 <= len(satirlar) <= 11, satirlar
+    assert not _tasma(satirlar), _tasma(satirlar)
+    assert not [s for s in satirlar if s.startswith(" ")], "girintili devam satırı yok"
+    assert not [s for s in satirlar if s.count("·") >= 2], "3+ öğeli zincir yok"
+    assert satirlar[0].startswith("▼ SISE 1s AŞAĞI TEYİTLİ")
+    assert satirlar[-1] == "• yatırım tavsiyesi değildir"
+    assert satirlar[-2] == "› /tara SISE"
+
+
+def test_teyitli_kart_karenin_taşıdığı_bilgiyi_tekrarlamaz():
+    metin = notifier._format_lifecycle_alert_kart(_payload(domain_bolumleri={
+        "yapi": ["🏗 1s yapı: HH→LH ↓ / LL→HL ↓"],
+        "ust": ["▲ OB 1s 44,14-44,86 (▼) · %0"],
+        "alt": ["▲ OB 1s 42,98-43,40 (▼) · %0"],
+        "hacim": ["katılım 1s destekliyor"],
+    }))
+    for yasak in ("◈", "▸", "▤", "▪", "OB 1s", "%0"):
+        assert yasak not in metin, yasak
+
+
+def test_kalicilik_ve_esik_yonu_dogru():
+    """Eşik GÜNCEL bant sınırıdır: aşağı kırılımı alt sınırın üstü bozar."""
+    metin = notifier._format_lifecycle_alert_kart(_payload())
+    assert "bozulur 38,79 üstü kapanış" in metin
+    yukari = notifier._format_lifecycle_alert_kart(_payload(
+        break_dir=1, break_price=40.10, candle_close_price=40.25,
+        upper_now=40.44, lower_now=39.10, state="KIRILIM_TEYITLI"))
+    assert "bozulur 40,44 altı kapanış" in yukari
+
+
+# ------------------------------------------------------------- geçersizleşme
+
+
+def test_gecersizlesme_karti_formasyon_ve_tf_ile_sinirli():
+    satirlar = _satirlar(notifier._format_lifecycle_alert_kart(_payload(
+        state="KIRILIM_GECERSIZLESTI", domain_bolumleri={
+            "yapi": ["🏗 1s yapı: HH→LH ↓ / LL→HL ↓"],
+            "ust": ["▲ OB 1s 44,14-44,86 (▼) · %0"],
+            "hacim": ["katılım 1s destekliyor"],
+        })))
+    assert 8 <= len(satirlar) <= 11, satirlar
+    assert not _tasma(satirlar)
+    assert satirlar[0] == "▼ SISE 1s GEÇERSİZLEŞTİ"
+    assert satirlar[1] == "Yükselen Üçgen - bandına dönüş"
+    assert any(s.startswith("teyit sınırı 38,79 üstü") for s in satirlar)
+    assert "× geçersiz" not in "\n".join(satirlar)
+    assert "◈" not in "\n".join(satirlar) and "OB 1s" not in "\n".join(satirlar)
+
+
+def test_gecersizlesmede_katilim_tek_satir_kalir():
+    """Geçersizleşme gövdesi kısa kalır: katılım bölümünden en çok 2 satır gelir."""
+    metin = notifier._format_lifecycle_alert_kart(_payload(
+        state="KIRILIM_GECERSIZLESTI", domain_bolumleri={
+            "hacim": ["katılım 1s destek yok", "katılım 1g 0,52 ile bitti",
+                      "katılım 4s veri yok"]}))
+    satirlar = _satirlar(metin)
+    assert len([s for s in satirlar if s.startswith("katılım ")]) <= 2
+    assert len(satirlar) <= 11
+
+
+# ---------------------------------------------------------- güncelleme + süzgeç
+
+
+def test_guncelleme_karti_kisa_ve_ayni_kadrajda():
+    tam = _satirlar(notifier._format_lifecycle_alert_kart(_payload()))
+    guncel = _satirlar(notifier._format_lifecycle_alert_kart(_payload(), guncelleme=True))
+    assert len(guncel) < len(tam)
+    assert any("değişiklik yok" in s for s in guncel)
+    assert guncel[-1] == "• yatırım tavsiyesi değildir"
+    assert not _tasma(guncel)
+
+
+def test_suzgec_kapatilinca_eski_tam_kart_doner(monkeypatch):
+    """Kill-switch: `TELEGRAM_KART_SUZGEC=0` → 25 Eyl biçimi (geri dönüş yolu)."""
+    monkeypatch.setattr(notifier, "TELEGRAM_KART_SUZGEC", 0)
+    eski = notifier._format_lifecycle_alert_kart(_payload(
+        contraction=0.52, band_kaynak="zone", kalite=81,
+        domain_bolumleri={"yapi": ["🏗 1s yapı: HH→LH ↓ / LL→HL ↓"],
+                          "ust": ["▲ OB 1s 44,14-44,86 (▼) · %0"],
+                          "hacim": ["katılım 1s destekliyor"]}))
+    assert "◈" in eski or "▪" in eski
+    assert "teyit sınırı" not in eski
+
+
+def test_suzgec_kapaliyken_de_patlamaz_veri_eksikse(monkeypatch):
+    monkeypatch.setattr(notifier, "TELEGRAM_KART_SUZGEC", 0)
+    metin = notifier._format_lifecycle_alert_kart({"stock_name": "X", "timeframe": "1h",
+                                                  "state": "KIRILIM_TEYITLI"})
+    assert metin.strip()
+
+
+@pytest.mark.parametrize("durum", ["KIRILIM_TEYITLI", "KIRILIM_GECERSIZLESTI"])
+def test_eksik_alanlarla_da_uretilir(durum):
+    metin = notifier._format_lifecycle_alert_kart({"stock_name": "THYAO", "timeframe": "4h",
+                                                   "state": durum, "pattern_name": "Üçgen",
+                                                   "break_dir": -1})
+    satirlar = _satirlar(metin)
+    assert satirlar[0].startswith(("▲", "▼")) and satirlar[-1].startswith("• ")
+    assert not _tasma(satirlar)

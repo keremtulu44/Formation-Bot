@@ -1017,9 +1017,34 @@ def _alarm_kopyala(cift: Any, alarm_turu: Optional[str], alarm_bar: Optional[int
     if bar is not None and not (sol <= bar < sag):
         disarida = True
         bar = None
+    try:
+        yon = int(_alan(cift, "break_dir") or 0)
+    except (TypeError, ValueError):
+        yon = 0
+    if yon == 0:
+        # Motor yön vermediyse durum adından çıkarılır (`AŞAĞI TEYİTLİ` gibi);
+        # çıkarılamazsa 0 kalır ve teyit sınırı ÇİZİLMEZ (uydurma yok).
+        _durum = durum.upper()
+        if "ASAGI" in _durum or "AŞAĞI" in _durum:
+            yon = -1
+        elif "YUKARI" in _durum or "YÜKSELİŞ" in _durum:
+            yon = 1
+    # Geçersizleşme eşiği KURAL GÜNCEL BANDI okur — `notifier`daki `× geçersiz`
+    # satırıyla birebir aynı kural: yukarı kırılım için bant üstü, aşağı kırılım
+    # için bant altı sınırı; ikisi de kırılan sınırın kendisidir, yönle seçilir.
+    _formasyon = dict(goruntu.get("formasyon") or {})
+    # Yön BİLİNMİYORSA eşik de çizilmez: "hangi sınır" sorusunun cevabı yoksa
+    # tahmin yürütmek yanlış seviye gösterir (uydurma yok kuralı).
+    _teyit = None
+    if yon > 0:
+        _teyit = _gercek(_formasyon.get("upper_now"))
+    elif yon < 0:
+        _teyit = _gercek(_formasyon.get("lower_now"))
     return {
         "tur": tur or _ALARM_TURU.get(durum),
         "deger": deger,
+        "yon": yon,
+        "teyit_siniri": _teyit,
         "bar": bar,
         "bar_kaynak": bar_kaynak if bar is not None else None,
         "bar_disarida": disarida,
@@ -1409,6 +1434,11 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
             except Exception as hata:
                 log.warning("grafik: alarm katmanı çizilemedi (%s)", hata)
                 eksik.append("alarm")
+            try:
+                _gecersiz_katmani(ax, goruntu, alarm, sag_adaylar, n)
+            except Exception as hata:
+                log.warning("grafik: geçersizlik katmanı çizilemedi (%s)", hata)
+                eksik.append("geçersizlik")
         else:
             eksik = sorted(set(eksik) | {"formasyon", "alarm", "temas"})
 
@@ -2061,6 +2091,69 @@ def _sag_panel(fig, ax, sol_fig: float, sag_fig: float, *,
         log.debug("grafik: sağ panel çizilemedi (%s)", hata)
 
 
+def _gecersiz_katmani(ax, goruntu: Mapping[str, Any], alarm: Mapping[str, Any],
+                      sag: Optional[list], n: int) -> None:
+    """Geçersizleşme karesinin İKİ yeni işareti (GÖRSEL-7).
+
+    Neden gerekli: kart "teyit sınırı 38,79 üstü kapanış" diyordu ama kare bu
+    sınırı ve onu kapatan mumu göstermiyordu — okuyucu "hangi mum, hangi seviye"
+    sorusunu metinden kurmak zorundaydı. Kare ana okuma, metin yalnız görünmeyeni
+    söyler kuralı gereği ikisi de BURADA çizilir:
+
+    1. `┈ teyit sınırı`: noktalı yatay kılavuz + sağ çip `× 38,79 üstü kapanış`
+       (alarm turuncusu; bant amberiyle karışmaz — bant zaten amber kalır).
+    2. `✕ geçersizleştiren mum`: sınırı kapatan mumun işareti; mum eksenin alt
+       yarısındaysa ÜSTÜNE, üst yarısındaysa ALTINA yazılır (kırpılmaz, mum
+       gövdesine değmez).
+
+    Alarm turu `gecersiz` değilse HİÇBİR ŞEY çizilmez (normal alarmda sınır
+    çizilmez — henüz geçersizleşme olayı yok).
+    """
+    if str(alarm.get("tur") or "") != "gecersiz":
+        return
+    teyit = alarm.get("teyit_siniri")
+    if teyit is not None:
+        try:
+            teyit = float(teyit)
+            ax.axhline(teyit, color=PALET["olay"], linestyle=(0, (1, 3)),
+                       linewidth=0.9, alpha=0.9, zorder=4)
+            if sag is not None:
+                yon = int(alarm.get("yon") or 0)
+                sag.append({"kaynak": "gecersiz", "x": float(n) - 0.4, "y": teyit,
+                            "metin": f"× {sayi(teyit)} {'altı' if yon > 0 else 'üstü'} kapanış",
+                            "renk": PALET["olay"], "sabit": False, "oncelik": 5,
+                            "bg": None, "yeni": float(n)})
+        except (TypeError, ValueError):
+            pass
+    bar = alarm.get("bar")
+    if bar is None:
+        return
+    try:
+        bar = int(bar)
+        dusukler = [float(v) for v in (goruntu.get("dusuk") or [])]
+        yuksekler = [float(v) for v in (goruntu.get("yuksek") or [])]
+        if not (0 <= bar < len(dusukler)):
+            return
+        alt, ust = ax.get_ylim()
+        orta = (float(alt) + float(ust)) / 2.0
+        asagi = dusukler[bar] <= orta          # mum alt yarıda → işaret ÜSTÜNE
+        y = yuksekler[bar] if asagi else dusukler[bar]
+        efekt = None
+        try:
+            from matplotlib import patheffects
+            efekt = [patheffects.withStroke(linewidth=2.2, foreground=PALET["zemin"])]
+        except Exception:  # pragma: no cover - süs; işaret yine çizilir
+            efekt = None
+        ax.annotate("✕", (bar, y), xytext=(0, 10 if asagi else -17),
+                    textcoords="offset points", ha="center",
+                    va="bottom" if asagi else "top", color=PALET["olay"],
+                    fontsize=float(SABITLER["durum_pt"]) * 1.5, fontweight="bold",
+                    zorder=6, clip_on=False, annotation_clip=False,
+                    path_effects=efekt)
+    except Exception as hata:  # pragma: no cover - işaret süsü kareyi düşürmez
+        log.debug("grafik: geçersizleştiren mum işareti çizilemedi (%s)", hata)
+
+
 def _formasyon_ciz(ax, goruntu: Mapping[str, Any], n: int, butce: float,
                    metin: dict[str, Any]) -> None:
     """Bant sınırları + son muma projeksiyon + start/bitiş/apex + temas işaretleri.
@@ -2163,6 +2256,14 @@ def _formasyon_ciz(ax, goruntu: Mapping[str, Any], n: int, butce: float,
                 fillstyle="none", markeredgecolor=PALET["temas"], markeredgewidth=0.8,
                 zorder=5, clip_on=False)
 
+_LEJANT_DUSUK = ("yapı:", "şerit:", "kutular:", "FVG ·", "bant öncesi", "▨ dolan")
+# GÖRSEL-7: geçersizleşme maddeleri DÜŞÜRÜLMEZ. Kare yalnız iki satır taşıyabildiği
+# için sıra önemli: altta kalan madde kaybolurken `✕ geçersizleştiren mum` /
+# `┈ teyit sınırı` gibi karenin YENİ işaretleri her koşulda okunmalı — yoksa kare
+# açıklamasız bir işaret bırakır (lejant = çizileni anlatır kuralı, §0.12v).
+_LEJANT_KORU = ("✕", "┈", "│")
+
+
 def _lejant_satirlar(oge: Sequence[str], kare_genislik: float) -> tuple[list[str], float, int]:
     """Lejantı kareye sığdır: (satırlar, punto, düşürülen madde sayısı).
 
@@ -2187,11 +2288,22 @@ def _lejant_satirlar(oge: Sequence[str], kare_genislik: float) -> tuple[list[str
         satirlar = [s.strip() for s in _bol(metin, butce)]
         if len(satirlar) <= 2:
             return satirlar, punto, atlanan
+    # GÖRSEL-7: taşmada ÖNCE uzun ve düşük öncelikli bilgi satırları düşer
+    # (`yapı:`/`şerit:`/`kutular:`); renk şeması, bant, seviye ve geçersizleşme
+    # işaretleri her koşulda kalır. Kareye `+N madde sığmadı` YAZILMAZ: okunurluğu
+    # bozan bir geliştirici notuydu (ölçüm: `+6 madde sığmadı`); sayı
+    # `meta["lejant_atlanan"]`da durur, sessiz kayıp yok.
     while len(oge) > 2 and _genislik_16(" · ".join(oge)) > butce * 1.02:
-        oge = oge[:-1]
+        korunan = [i for i, x in enumerate(oge) if str(x).startswith(_LEJANT_KORU)]
+        serbest = [i for i in range(len(oge)) if i not in korunan]
+        dusuk = [i for i in serbest if str(oge[i]).startswith(_LEJANT_DUSUK)]
+        if dusuk:
+            oge.pop(max(dusuk, key=lambda i: _genislik_16(oge[i])))
+        elif serbest:
+            oge.pop(max(serbest, key=lambda i: _genislik_16(oge[i])))
+        else:                        # hepsi korunmuş: en sondan düşürülür
+            oge.pop()
         atlanan += 1
-    if atlanan:
-        oge = list(oge) + [f"+{atlanan} madde sığmadı"]
     return _bol(" · ".join(oge), butce)[:2], max(7.0, _taban_pt * 0.76), atlanan
 
 
@@ -2233,10 +2345,29 @@ def _alarm_ciz(ax, alarm: Mapping[str, Any], n: int, butce: float,
     deger = alarm.get("deger")
     if deger is None:
         return
-    ax.axhline(float(deger), color=PALET["alarm"], linestyle=(0, (5, 4)), linewidth=kalin, zorder=4)
+    # GÖRSEL-7: teyit geçersizleştiyse kırılan seviye ARTIK GEÇERLİ DEĞİL; çizgi
+    # soluk + kesik, çip metni `✕ eski seviye …`. Aksi hâlde kare, "hâlâ geçerli
+    # bir seviye" yanılgısı veriyordu (kullanıcı şikâyeti: anlamsız `× 3,5`).
+    gecersiz = str(alarm.get("tur") or "") == "gecersiz"
+    _cizgi = True
+    if gecersiz:
+        try:
+            _teyit = float(alarm.get("teyit_siniri"))
+            _alt_y, _ust_y = (float(v) for v in ax.get_ylim())
+            # Kare yüksekliği 0,02 ≈ 12 px (810 px'lik karede): bu aralıktan yakın iki
+            # yatay çizgi tek kalın çizgi gibi görünür, ayrımı okuyucu kaybeder.
+            _cizgi = abs(float(deger) - _teyit) >= (_ust_y - _alt_y) * 0.02
+        except (TypeError, ValueError):
+            _cizgi = True
+    if _cizgi:
+        ax.axhline(float(deger), color=PALET["alarm"],
+                   linestyle=(0, (2, 4)) if gecersiz else (0, (5, 4)),
+                   linewidth=kalin, alpha=0.55 if gecersiz else None, zorder=4)
     if sag is not None:
         sag.append({"kaynak": "alarm", "x": float(n) - 0.4, "y": float(deger),
-                    "metin": f"alarm {sayi(deger)}", "renk": PALET["alarm"],
+                    "metin": (f"✕ eski seviye {sayi(deger)}" if gecersiz
+                              else f"alarm {sayi(deger)}"),
+                    "renk": PALET["eksen"] if gecersiz else PALET["alarm"],
                     "sabit": False, "oncelik": 6, "bg": None, "yeni": float(n)})
 
 
@@ -2587,7 +2718,7 @@ def _serit_ciz(ax, goruntu: Mapping[str, Any], n: int) -> None:
     if tepe is not None and spike:
         # TEK sayı etiketi (§17.3): en sert spike'ın çarpanı, her bara yazılmaz.
         # Çip: yazı mum/fitil üstüne binse de okunur kalır.
-        ax.annotate(f"×{sayi(tepe, 1)}", xy=(float(max(spike, key=lambda i: degerler[i])), tepe),
+        ax.annotate(f"rvol ×{sayi(tepe, 1)}", xy=(float(max(spike, key=lambda i: degerler[i])), tepe),
                     xytext=(0, 9), textcoords="offset points", ha="center", va="bottom",
                     fontsize=float(SABITLER["etiket_pt"]), color=PALET["metin"], zorder=7,
                     annotation_clip=False,
@@ -2725,10 +2856,11 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
     notlar += [str(n) for n in (goruntu.get("notlar") or []) if n]
     if yalnizca_mumlar:
         notlar.append("yalnızca mumlar: katman çizilemedi")
+    # GÖRSEL-7: `lejant: N madde sığmadı` kırmızı dipnotu KALDIRILDI. Kareye
+    # yazılan bu not okuyucuya hiçbir şey söylemiyordu (madde zaten çizilmemiş);
+    # sayı `meta["lejant_atlanan"]`da makine okunur biçimde durur.
     lejantlar, lejant_punto, lejant_atlanan = _lejant_satirlar(
         _lejant(goruntu, yalnizca_mumlar), genislik)
-    if lejant_atlanan:
-        dipnotlar.append(f"lejant: {lejant_atlanan} madde sığmadı")
     return {"baslik": baslik, "sag": sag, "satirlar": satirlar,
             "lejant": lejantlar, "lejant_punto": lejant_punto,
             "lejant_atlanan": lejant_atlanan,
@@ -2770,10 +2902,14 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool) -> list[str]:
     if any(str(b.get("sinif")) in ("PH", "PL") for b in ((goruntu.get("olay") or {})
                                                          .get("swinglar") or [])):
         oge.append("┈ seviye (PH/PL sağda)")
+    # GÖRSEL-7: geçersizleşme karesi kendi dilini yazar (soluk seviye + sınır).
+    _gecersiz = str(alarm.get("tur") or "") == "gecersiz"
     if alarm.get("bar") is not None:
-        oge.append("│ alarm mumu")
+        oge.append("✕ geçersizleştiren mum" if _gecersiz else "│ alarm mumu")
     if alarm.get("deger") is not None:
-        oge.append("─ seviye")
+        oge.append("✕ eski seviye (artık geçerli değil)" if _gecersiz else "─ seviye")
+    if _gecersiz and alarm.get("teyit_siniri") is not None:
+        oge.append("┈ teyit sınırı")
     zone = goruntu.get("zone") or {}
     if zone.get("cizilen"):
         _sira = {"ob": 0, "fvg": 1, "eng": 2}

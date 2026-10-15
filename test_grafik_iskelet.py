@@ -246,7 +246,17 @@ def test_lejant_sigmiyorsa_bolunur_veya_madde_dusurulur():
     oge = [f"madde {i} aciklamasi" for i in range(40)]
     satirlar, punto, atlanan = grafik._lejant_satirlar(oge, 1080)
     assert len(satirlar) <= 2 and punto <= float(grafik.SABITLER["lejant_pt"])
-    assert atlanan == 0 or any("sığmadı" in s for s in satirlar)
+    # GÖRSEL-7: düşürülen madde sayısı kareye YAZILMAZ ("+N madde sığmadı" notu
+    # okunurluğu bozan bir geliştirici notuydu); sayaç `meta["lejant_atlanan"]`da
+    # ve `atlanan` dönüşünde durur — sessiz kayıp yok. Kareye yazılan metin ise
+    # her zaman sığan maddelerden oluşur.
+    assert not any("sığmadı" in s for s in satirlar)
+    assert atlanan == 0 or len("".join(satirlar)) < len(" · ".join(oge))
+    # Düşürme en uzun maddeden başlar: kısa/önemli maddeler ayakta kalır.
+    if atlanan:
+        kalan = [x for x in oge if any(x[:9] in s for s in satirlar)]
+        atilan = [x for x in oge if x not in kalan]
+        assert min(len(x) for x in atilan) >= max(len(x) for x in kalan) - 2
     # kısa içerik tek satır ve tam punto kalır
     tek, punto2, _ = grafik._lejant_satirlar(["mum: yalnız kapalı"], 1080)
     assert tek == ["mum: yalnız kapalı"] and punto2 == float(grafik.SABITLER["lejant_pt"])
