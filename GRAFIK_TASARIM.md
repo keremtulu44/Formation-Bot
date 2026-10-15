@@ -668,8 +668,10 @@ FVG kutuları (`formation_index`, `gap_size`, state→solid/mitigated/hatched;
   kapatılır ve hepsi yazılır (yanlış eleme > üst üste binme).
 - **`meta["zone"]` biçimi sabit:** bölge yokken de aynı anahtar seti döner
   (`sirala: "zone verisi yok"`) — §13 JSONL okuyucusu dalgalanmasın.
-- **Sağ nefes payı:** bölge çizildiğinde x-ekseni `n-0.4+6` bar; son mumun
-  kesilmediği `meta["kare"]["x_siniri"]` ile test ediliyor (§0.13).
+- **Sağ nefes payı** *(bu madde GÖRSEL-2'den beri geçerli değil: etiketler sağ şeride
+  taşındı, pay `0` kaldı; sağ boşluk §37'de yeniden tanımlandı)*: bölge çizildiğinde
+  x-ekseni `n-0.4+6` bar; son mumun kesilmediği `meta["kare"]["x_siniri"]` ile test
+  ediliyor (§0.13).
 
 ### 23.3 Ölçüm (gerçek önbellek + gerçek motor)
 
@@ -1462,3 +1464,96 @@ sadece ton yönü döndü.
   GÖRSEL-6 sayı sözleşmesi (0,14–0,20 ve kenar/vurgu) korunuyor.
 - `docs/ornek_kutu_tonu.png` — iki farklı hisse (GARAN 1s, AKBNK 1s), önce/sonra,
   ölçülen ton değerleriyle.
+
+## 37 · SAĞ BOŞLUK (2026-10-15) — son mumlar kenara yapışmasın, çizimler devam etsin
+
+Kullanıcı: son mumlar sağ kenarda aniden bitiyor, çizimler son mumda kesiliyor; sağda
+~10 mum boşluk bırakılsın. Sonraki kararları: çizimler boşluğa **devam etsin**; boşluk
+"tam 10 mum" olmasın, **görsel pay** olsun ("yalancıktan"); devam **kesikli olmasın**.
+
+### 37.1 Neden böyleydi (kodla doğrulandı)
+
+- `_kare_ciz`'de `sag_bosluk = 0.0`, `_serit_ciz`'de `zone_pay = 0.0` vardı. GÖRSEL-2'de
+  (§29) etiketler sağ fiyat şeridine taşınınca pay sıfırlanmış; §23.2'deki `n-0.4+6`
+  maddesi o günden beri güncel değildi (o madde işaretlendi).
+- Yalnız `axhline` seviyeleri (alarm / kritik / son fiyat) kenara kadar uzuyordu. Bant
+  çizgileri, OB/FVG kutuları ve BOS/CHoCH çizgileri son mumda (`n-1`) bitiyordu.
+- **Tek satırlık düzeltme işe yaramaz.** Katılım şeridi `sharex` ile ana eksene bağlıdır
+  ve EN SON çizilirken `set_xlim`'ini kendi payıyla (0) yeniden yazar: yalnız
+  `_kare_ciz`'deki payı değiştirmek `meta["kare"]["x_siniri"]`'nı değiştirir ama şerit
+  açıkken piksel AYNI kalır; şerit kapalıyken de çipler boşluğun içine düşer. Ana eksen,
+  şerit ve çip kenarı aynı değeri kullanmak zorunda. (`meta` testleri bunu yakalayamaz →
+  §37.5: yeni testler çizilmiş eksenleri okur.)
+
+### 37.2 Kararlar
+
+| Konu | Karar |
+|---|---|
+| Boşluğun ölçüsü | Eksen genişliğinin **%5,3'ü** (`SABITLER["sag_bosluk_yuzde"]`), tam bara yuvarlanır: 180 mumluk karede **10 bar**, 120 mumluk (4s) karede **7 bar**. Sabit 10 bar 4s'de mumları %7,7 daraltırdı, oranla %5,5. Tam sayı bar: kutu/çizgi geometrisi bar ızgarasında kalır. |
+| Devam eden çizimler | Son muma uzanan **OB/FVG kutuları**, **BOS/CHoCH çizgileri** ve **bant çizgileri + bant dolgusu**. Son muma uzanmayan (`x1 < n-1`) kutular uzamaz. |
+| Devam biçimi | **Kesiksiz, aynı çizgi** (kullanıcı kararı: kesikli olmasın). Bant doğrusu motorun kendi denklemiyle (`f_line_price`) sürer, yeni geometri üretilmez. "Bant öncesi" geriye doğru kesikli uzantı (§0.12e) ayrı bir özelliktir, dokunulmadı. |
+| Apex | Daralan bantta çizgiler apex'te kesişir; **uzatma orada biter** (kesişmeyi aşıp ters dönen çizgi uydurma olurdu). Apex geride kaldıysa uzatma yok. Apex boşluğa düşerse ✕ iki doğrunun kesiştiği noktaya konur (veri katmanı mumsuz bar için işaret üretemez). Apex boşluktan uzaktaysa çizgiler boşluğun sonuna kadar gider. |
+| Etiketler | Sağ paneldeki çipler eksenin yeni kenarına (`n-0.4+boşluk`) bağlanır; boşluğun içine girmez. |
+| Ayar / kapatma | `GRAFIK_SAG_BOSLUK` = yüzde (varsayılan `5.3`, üst sınır 15). `0` → eski görünüm, **PNG bayt bayt aynı**. Sonsuz/NaN/bozuk değer varsayılana düşer, çizim asla engellenmez. |
+| Tuval | 1080×810 **değişmedi** (§0.12q, 4:3). Mumlar yaklaşık %5 daralır (aşağıda ölçüm). Boşlukta zaman etiketi yok: gelecek zamanı iddia etmez. |
+
+### 37.3 Kodda ne değişti (`grafik.py`)
+
+- `sag_bosluk_mum(n)`: env'i çağrı anında okur (`_ortam_sayi`; `config.py` değişmedi).
+  `g = p·(n+0,2)/(1−p)`, tam sayıya yuvarlanır, `p` 0–15 aralığına kıstırılır.
+- `_kare_ciz` payı hesaplar, `set_xlim(-0.6, n-0.4+g)` yazar ve `meta["kare"]` içine
+  `sag_bosluk` (bar) ile `sag_bosluk_yuzde` ekler (`x_siniri` zaten vardı).
+- `_zone_ciz`, `_olay_ciz`, `_formasyon_ciz`, `_serit_ciz` anahtar-sözcüklü
+  `sag_bosluk: int = 0`, `_sag_ciz` ise `x_kenar` alır. **Varsayılanlar eski davranıştır**:
+  mevcut çağrılar ve testler değişmedi.
+- Yazısı kutuya sığmayıp sağ şeride çip olarak giden kutuya (`seride`) **uzamış** `x1`
+  yazılır; yoksa uzamış kutunun üstüne yersiz kılavuz çizgisi çizilirdi (prototipte görüldü).
+- Değişmeyenler: `isaretler` veri katmanı ve meta'sı, lejant, PNG boyutu (1080×810).
+
+### 37.4 Ölçüm (gerçek önbellek, aynı veri; önce = `git archive 8e6862a`)
+
+| kare | mum | boşluk | mum başına px (önce → sonra) | PNG (önce → sonra) |
+|---|---|---|---|---|
+| AKBNK 1s | 180 | 10 bar | 4,58 → 4,34 (−%5,3) | 117,3 → 118,4 KB |
+| YKBNK 1s | 180 | 10 bar | 4,58 → 4,34 | 105,9 → 107,1 KB |
+| SISE 4s | 120 | 7 bar | 6,86 → 6,48 (−%5,5) | 94,7 → 95,5 KB |
+| GARAN 4s | 120 | 7 bar | 6,86 → 6,48 | 89,8 → 90,2 KB |
+
+- Apex: SISE 4s'te apex son mumun **+6 bar** ilerisinde, YKBNK 1s'te **+4**: çizgiler
+  orada birleşip duruyor, ✕ oraya konuyor. HALKB 4s'te apex **5 bar geride** (bar 114/120):
+  uzatma yok, kutular kenara uzanıyor. AKBNK 1s'te apex yok: çizgiler boşluğun sonuna kadar.
+- `GRAFIK_SAG_BOSLUK=0`: 8 karenin 8'i **bayt bayt aynı** PNG (AKBNK/YKBNK/THYAO/DOHOL 1s,
+  SAHOL 2s, SISE/GARAN/HALKB 4s); apex işareti görünür aralıkta olan iki kare (HALKB 4s,
+  SAHOL 2s) dahil.
+- `docs/ornek_sag_bosluk.png` — üstte `git archive 8e6862a` ağacıyla üretilen gerçek önce
+  karesi, altta sonrası (aynı veri: AKBNK 1s 180 mum, `--zone --formasyon-tara`).
+- PNG tavanı (`deploy_check`, 500 KB) etkilenmedi: artış ≈ 1 KB.
+
+### 37.5 Testler
+
+- `test_grafik_sag_bosluk.py` (**36 test**) çizilmiş eksenleri okur, `meta`'yı değil
+  (`_metin_ciz` sarılıp `savefig`den önce figür yakalanır; eksen kapanıştan sonra da
+  okunabilir). Kapsam: boşluk ölçüsü ve env tablosu (`0`/`-4` → 0; boş/bozuk/NaN/sonsuz →
+  varsayılan; `10` → 20 bar; `99` → %15 tavanı); ana eksen **ve** şerit aynı `xlim`'i
+  taşır (1s/4s × şerit açık / `serit=False` / `sade`); formasyon katmanı çökse de boşluk
+  kalır; PNG 1080×810 kalır; mum başına piksel oranı ≥ 0,93 (sabit 10 bar'ı eler);
+  kutu / BOS / çip / bant çizgisi / bant dolgusu geometrisi; bant çizgisi **kesiksiz**
+  (kesikli çizgiler yalnız geriye doğru "bant öncesi" olanlar); apex kuralları (apex
+  boşlukta → çizgiler orada biter + tek ✕; apex uzakta → boşluğun sonuna kadar; apex geride
+  ya da `GRAFIK_SAG_BOSLUK=0` → uzatma ve ✕ yok); tam karede mutlak apex barının x'e dönüşümü.
+- **Mutasyon denetimi:** 11 bilinçli bozma (şerit `zone_pay=0` tuzağı, kutu uzamıyor, BOS
+  çizgisi son mumda bitiyor, çipler eski konumda, şerit yedeği kılavuzu sızıyor, apex ✕
+  yok, çizgi apex'i aşıyor, sabit 10 bar, kesikli ayrı devam, bant dolgusu uzamıyor,
+  `0` kapatmıyor) — her biri en az bir testi kırdı.
+- Mevcut 243 grafik testi hem varsayılan boşlukla hem `GRAFIK_SAG_BOSLUK=0` ile geçiyor
+  (yeni dosyayla 279 test). Tam süit: **1189 passed / 44 skipped** (181 sn).
+
+### 37.6 Açık kalanlar / bilinçli tercihler
+
+- Boşlukta **zaman etiketi yok**: x ekseni son mumun tarihinde biter.
+- `render.yaml` ve `deploy_check.py` anahtar listelerine eklenmedi (§33'ün `GRAFIK_SADE`,
+  `GRAFIK_RENK_KORUGU`, `GRAFIK_YAZI` anahtarları gibi): `.env.example`, `RENDER_DEPLOY.md` ve
+  bu belgede yazılı.
+- ✕ glifi mevcut tasarımda zemin renkli kenarla çiziliyor (çok soluk); boşluktaki ✕ aynı
+  çizimi kullanıyor, asıl görünen ucundaki ~9 pt'lik işaret çizgisi. İstenirse ayrı iş olarak
+  belirginleştirilebilir.
