@@ -64,8 +64,8 @@ işaret ve yazı ikinci kanaldır.
 |---|---|---|
 | Mum (yükselen) | `#31b184` kenar + `#134237` dolgu | içi BOŞ gövde (koyu yeşil dolgu) + yeşil fitil |
 | Mum (düşen) | `#e05c58` | DOLU gövde + kırmızı fitil |
-| Order Block | `#2bb673` | %9 dolgu (kutunun yüksekliği görünür aralığın %18'ini aşarsa 0,04'e iner §17.6) + `source_index`'te kalın kenar |
-| FVG | `#3f9dec` | %8 dolgu + tarama (hatch) + `formation_index`'te kalın kenar |
+| Order Block | `#2bb673` | %9 dolgu (kutunun yüksekliği görünür aralığın %18'ini aşarsa 0,04'e iner §17.6) + `source_index`'te kalın kenar (1,3 pt, GÖRSEL-4) |
+| FVG | `#3f9dec` | %8 dolgu (TARAMA YOK, GÖRSEL-4) + `formation_index`'te kalın kenar |
 | Engulfing | `#a78bfa` | kesikli kontur |
 | Formasyon çizgileri | `#e0b96a` | 1,6 pt; bant arası α.06 dolgu; son muma kadar projeksiyon; `apex`'te `x` |
 | Temas mumları | `#f0d9a8` | açık `o` işareti + temas sayısı (bant 24'ü aşarsa kırpılır, kare not yazar) |
@@ -89,7 +89,7 @@ Renk tek başına bilgi taşımaz: her bölge/katman bir de **yazı** taşır.
 - **a** Alarm barı: gri düşey çizgi + `TEYIT/RETEST/…` yerine **gerçek state metni** (z).
 - **b** 180 bar tavanı formasyon eskiyse kalkar; `genişlik = bar × 6 px`,
   taban 1080 / tavan 1440, çökme modu yedek.
-- **c** Bölge kutusu yazısı minimal (12).
+- **c** Bölge kutusu yazısı minimal (12) — **GÖRSEL-4:** yazı artık kutunun İÇİNDE; sığmazsa sağ şeride yedeklenir (§32).
 - **d** Yalnız kapalı bar (6) · **e** formasyon çizgileri son muma kadar uzatılır
   (apex'e değil) · **f** `kritik` seviye çizgisi VAR, hedef/stop YOK
   (kartta kalıyor; kalabalık gerekçesi) · **g** doluluk = gölge + kısa sayı, ek
@@ -1151,10 +1151,12 @@ motor çağrısı ve sayı biçimi aynı kalır (§14.2/§15).
 
 ### 31.2 Önce/sonra kanıtı
 
-`docs/ornek_kare_karsilastirma.png` — aynı veri (GARAN 4s, 120 mum, `--zone`):
-üstte eski monokrom palet, altta görsel-3 paleti. Kare, `git archive HEAD` ile
-alınan eski ağaçta `grafik_uret.py` çalıştırılarak üretildi (yeniden çizim değil,
-gerçek eski çıktı).
+`docs/ornek_kare_gorsel4.png` — aynı veri (GARAN 4s, 140 mum, `--zone`): üstte
+görsel-3 (taramalı kutular + şerit etiketleri), altta görsel-4 (sade kutular +
+kutu içi yazı, BOS/CHoCH grafikte). Kare, `git archive HEAD` ile alınan eski
+ağaçta `grafik_uret.py` çalıştırılarak üretildi (yeniden çizim değil, gerçek
+eski çıktı); görsel-3 turunun ayrı kanıt dosyası bu turda bu tek dosyada
+birleştirildi.
 
 ### 31.3 Ölçülebilir kurallar (testler)
 
@@ -1169,3 +1171,54 @@ gerçek eski çıktı).
 
 - `GRAFIK_OLAY_MAKS` (§29.4) hâlâ kullanıcı onayı bekliyor; görsel-3 şerit
   tarafını `sag_etiket_maks` ile sınırladı, çizgi tarafına dokunmadı.
+
+## 32 · GÖRSEL-4 TURU (2026-10-15) — kutu içi yazı, olay etiketi grafikte, geçersizleşme akışı
+
+Kullanıcı geri bildirimi ve kararları (birebir):
+  1. "FBG tarafında bir problem vardı… doldurulan yerleri değişik bir çizim alıyordu"
+  2. "sağ taraftaki yazılar bazen saçma oluyor"
+  3. "önce metin geliyor, 4-5 metin sonra görseller; bir metin → görsel → metin olmalı"
+  4. "formasyon geçersizleştiğinde tüm domainlerden bahsedilmesin, sadece formasyon
+     infosu gelsin; görsel de sadece geçersizleşen timeframede gelecek"
+  5. "OB/FVG için dikdörtgenin İÇİNE yazabiliyor muyuz… BOS/CHoCH için fiyat değil
+     mum konumu önemli; PH/PL/korunan seviyeler için fiyat önemli"
+
+### 32.1 Karar değişiklikleri
+
+- **Kutu çizimi sadeleşti:** eğik tarama (hatch) KALKTI (büyük FVG kutularında
+  "değişik doldurulmuş alan" görüntüsünün kaynağıydı), vurgu kenarı 2,0 → 1,3 pt.
+- **Etiket KUTUNUN İÇİNDE:** `OB↓ %70` / `FVG↑ q95` yazısı kutunun ortasına
+  yazılır (koyu kontur ile). Sığmazsa (ince/dar kutu) sağ şeride YEDEKLENİR —
+  hiçbir etiket sessizce düşmez. Ölçüm: `meta["zone"]["etiket_ic"/"etiket_serit"]`.
+- **BOS/CHoCH etiketi şeritten GRAFİĞE taşındı:** kullanıcı kararı gereği bu
+  etiketler olayın MUMUNA ilişir (yukarı kırılımda seviyenin altına, aşağıda
+  üstüne; çakışırsa basamaklanır). Fiyat şeridinde artık yalnız `kritik X`,
+  alarm ve son fiyat kalır → "saçma/çift" görünen dublike etiket kaynağı kapandı.
+- **PH/PL etiketlerine FİYAT eklendi** (`PH 290,50` / `PL 282,50`): korunan uçlar
+  için seviye karar verici. İç yapı etiketleri (`HH/HL/LH/LL`) kısa kalır.
+- **Metin → hemen o olayın görselleri (teslim akışı):** `_gonder` metni yazdıktan
+  sonra kare kuyruğu ARKA PLAN işçisiyle boşaltılır (`notifier._grafik_gonderim_*`);
+  tarama bekletilmez, olay sırası korunur (`metin₁ → görsel₁ → metin₂ → görsel₂`).
+  Tur sonu boşaltma yedek olarak kalır (kuyruk zaten boşsa hiçbir şey yapmaz).
+- **Geçersizleşme (`KIRILIM_GECERSIZLESTI`) kartı:** `domain_bolumleri(...,
+  yalniz_tf=True)` — yalnız geçersizleşen TF'nin yapı/bölge/hacim satırları
+  (ölçüm: 23 satır → 10 satır). `format_domain_context` de aynı bayrağı alır.
+- **Geçersizleşme GÖRSELİ tek kare:** `kare_listesi` `alarm_turu="gecersiz"` iken
+  `ek_cerceveler` yok sayılır (diğer TF karelerinde bant/alarm çizilmiyordu →
+  neredeyse boş görseller gidiyordu).
+- **Çakışma ölçümü iki kanallı:** bilinçli katman yazıları (`kutu-ici`, `olay-ici`)
+  kapıdan muaf, ayrı sayılır (`meta["kalite"]["katman_cakisan"]`); şerit/başlık
+  yazıları için `mum_cakisan == 0` kapısı aynen yürürlükte.
+
+### 32.2 Önce/sonra kanıtı
+
+`docs/ornek_kare_gorsel4.png` (aynı dosya §31.2'de de anılır): üst satır GÖRSEL-3,
+alt satır GÖRSEL-4. Fark: kutularda tarama yok, etiket kutunun İÇİNDE (`OB↑ %31`),
+`BOS↑`/`CHoCH↓` etiketleri mumun yanında, `PH 290,50` fiyatlı.
+
+### 32.3 Açık kalanlar
+
+- Kutu içi yazının mumla çakışması için sert bir kapı yok: yerleşim `min(|Δy|)`
+  kuralına bırakıldı (`_zone_ciz`). Çakışan yazı sayısı `katman_cakisan`da görünür;
+  gerekirse sonraki turda dikey ofset kuralı eklenir.
+- `GRAFIK_OLAY_MAKS` (§29.4) hâlâ kullanıcı onayı bekliyor.

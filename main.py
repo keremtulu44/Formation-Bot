@@ -2818,11 +2818,19 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                     return
                                 taze = _completed_domain_frames(all_tfs, simdiki_zaman)
                                 alarm_bar = getattr(snap, 'bar_index', -1)
+                                # GÖRSEL-4: geçersizleşmede TEK kare (geçersizleşen TF).
+                                # `ek_cerceveler` bu durumda boş geçirilir: diğer TF
+                                # karelerinde bant/alarm çizilmiyor, neredeyse boş
+                                # görseller gönderiliyordu.
+                                tek_kare = (notification_state
+                                            == "KIRILIM_GECERSIZLESTI")
                                 veri = grafik.kare_listesi(
                                     active, tf_name,
                                     taze.get(tf_name) if taze.get(tf_name) is not None else df_tf,
                                     sonuclar=outputs,
-                                    ek_cerceveler={k: v for k, v in taze.items() if k != tf_name},
+                                    ek_cerceveler=({} if tek_kare else
+                                                   {k: v for k, v in taze.items()
+                                                    if k != tf_name}),
                                     alarm_turu=grafik.alarm_turu_bul(notification_state),
                                     alarm_bar=(int(alarm_bar) if alarm_bar is not None
                                                and int(alarm_bar) >= 0 else None),
@@ -2852,6 +2860,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 payload['domain_context'] = format_domain_context(
                                     outputs,
                                     reference_price=candle_close_price,
+                                    alarm_tf=tf_name,
+                                    yalniz_tf=(notification_state
+                                               == "KIRILIM_GECERSIZLESTI"),
                                 )
                                 # Kart biçimleyicisi bölümleri AYRI ister: kendi
                                 # bölümünü kendi başlığıyla basabilsin ve imza
@@ -2866,6 +2877,12 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             reference_price=candle_close_price,
                                             stil="kart",
                                             alarm_tf=tf_name,
+                                            # GÖRSEL-4: geçersizleşme kartı yalnız
+                                            # formasyon + geçersizleşen TF'nin bilgisi
+                                            # (diğer TF'lerin yapı/bölge/hacim dökümü
+                                            # 23 satıra çıkıyordu — kullanıcı kararı).
+                                            yalniz_tf=(notification_state
+                                                       == "KIRILIM_GECERSIZLESTI"),
                                         )
                                         payload['domain_karsi'] = karsi_deliller(
                                             outputs,

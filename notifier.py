@@ -836,6 +836,11 @@ class TelegramNotifier:
         # --- engellenen acil olay kuyruğu (Batch 5 / B4) ---
         # Neden: cooldown/kap yüzünden gönderilemeyen teyitli kırılım gibi acil
         # olaylar tamamen kayboluyordu; artık engel kalkınca gönderilir.
+        # GÖRSEL-4 (kullanıcı kararı): "bir metin geldi, ardından o metnin görselleri".
+        # Görseller artık tur sonunu beklemez; `_gonder` metni yazdıktan sonra bu
+        # kuyruk bir ARKA PLAN işçisiyle sırayla boşaltılır (taramayı bekletmez).
+        self._grafik_kuyruk: List[dict] = []
+        self._grafik_gonderim_lck = threading.Lock()
         self._acil_kuyruk: List[dict] = []  # en eski kayıt önce
         self._kuyruk_dosya = os.path.join(os.path.dirname(self._cooldown_dosya),
                                           "telegram_acil_kuyruk.json")
@@ -849,7 +854,6 @@ class TelegramNotifier:
         # kuyruk şart"). Kuyruk bellek içidir: `grafik_verisi` çerçeve/kayıt
         # referansı taşıdığı için diske YAZILMAZ (§7) — yazan tek yer `_gonderim_
         # kaydet` değil, o yüzden buraya hiç serialize edilmiyor.
-        self._grafik_kuyruk: List[dict] = []
         self._grafik_lck = threading.Lock()
         self._son_grafik_ts = None
         self._grafik_supuruldu = False   # bayat dosya süpürmesi süreçte bir kez
@@ -2231,7 +2235,7 @@ class TelegramNotifier:
             "grafik_kopru_hata": self.grafik_kopru_hata,
             "grafik_son_neden": self.grafik_son_neden,
             "grafik_gonderilen": self.grafik_gonderilen,
-            "grafik_kuyruk": len(self._grafik_kuyruk),
+            "grafik_kuyruk": len(getattr(self, "_grafik_kuyruk", []) or []),
             "grafik_atlanan_hata": self.grafik_atlanan_hata,
             "grafik_atlanan_kota": self.grafik_atlanan_kota,
             "grafik_atlanan_baglam": self.grafik_atlanan_baglam,
@@ -2565,8 +2569,13 @@ class TelegramNotifier:
             # Tekrarlayan tarama hataları sayılır, fakat log akışını doldurmaz.
             logger.debug("grafik köprüsü hatası #%d: %s", sayi, neden_kisa)
 
-    def grafik_kuyruga_ekle(self, data: Dict) -> int:
+    def grafik_kuyruga_ekle(self, data: Dict, *, gonder: bool = False) -> int:
         """`data["grafik_verisi"]`ni gönderim kuyruğuna alır; eklenen kare sayısı.
+
+        `gonder=True` (canlı akış, GÖRSEL-4): kuyruğa ekledikten sonra boşta
+        bir gönderim işçisi başlatılır — kareler metnin hemen ardından gider ve
+        tur sonu toplu gönderimi tekrar tetiklemez. Test/mock yolları bayrağı
+        vermez; eski davranış (tur sonunda boşaltma) korunur.
 
         Neden burada: kart metni gitmiş oldu — kare ALARMIN devamıdır, ayrı olay
         değildir (§4: 1 olay = 1 metin + kareler). Şalter açıkken köprüden görsel
@@ -2619,7 +2628,36 @@ class TelegramNotifier:
             })
             if veri.get("kota"):
                 self.grafik_atlanan_kota += int(veri.get("kota"))
+        if gonder:
+            self._grafik_gonderim_baslat()
         return len(goruntular)
+
+    def _grafik_gonderim_baslat(self) -> None:
+        """Boşta işçi yoksa bir tane başlatır (her çağrı thread AÇMAZ).
+
+        Neden tek işçi: medya gönderimi SIRALI olmalı — kullanıcının istediği
+        akış "bir metin, ardından o metnin görselleri". Kuyruk boşalınca işçi
+        çıkar; yeni kare geldiğinde yeni bir işçi başlar.
+        """
+        with self._grafik_gonderim_lck:
+            mevcut = getattr(self, "_grafik_gonderim_isi", None)
+            if mevcut is not None and mevcut.is_alive():
+                return
+            is_ = threading.Thread(target=self._grafik_gonderim_dongusu,
+                                   name="grafik-gonderim", daemon=True)
+            self._grafik_gonderim_isi = is_
+            is_.start()
+
+    def _grafik_gonderim_dongusu(self) -> None:
+        """İşçi gövdesi: kuyruk boşalana kadar parça parça gönderir; sızdırmaz."""
+        try:
+            while True:
+                ozet = self.grafikleri_gonder()
+                if int(ozet.get("kare") or 0) == 0:
+                    return
+        except Exception as hata:  # noqa: BLE001 - metin/görsel akışını düşürmesin
+            logger.warning("grafik arka plan gönderimi durdu: %s: %s",
+                           type(hata).__name__, hata)
 
     def grafik_dosya_gonder(self, yol, caption: str = "") -> tuple:
         """Bir PNG'yi DM'e gönderir ve dosyayı SİLER (§4); `(ok, aciklama)`.
@@ -2688,7 +2726,7 @@ class TelegramNotifier:
         koşulda metni/alamı engellemez: her hata sayılır ve sıradaki kareye geçilir.
         Üretilen geçici PNG gönderimden sonra silinir (§4).
         """
-        with self._grafik_lck:
+        with self._grafik_gonderim_lck:
             kuyruk = list(self._grafik_kuyruk)
             self._grafik_kuyruk.clear()
         ozet = {"gonderilen": 0, "hata": 0, "kare": 0, "sure_ms": 0, "atlanan": 0}
@@ -2756,7 +2794,7 @@ class TelegramNotifier:
                 else:
                     ozet["hata"] += 1
         if kalan:
-            with self._grafik_lck:
+            with self._grafik_gonderim_lck:
                 for parca in reversed(kalan):
                     self._grafik_kuyruk.insert(0, {
                         "anahtar": parca["olay"]["anahtar"], "sembol": parca["olay"]["sembol"],
@@ -2896,7 +2934,9 @@ class TelegramNotifier:
                 # bültende gider; DM başarısız olsa bile grup yayını etkilenmez.
                 # Görsel de DM'e gider (§4: public kare YOK) ama burada DEĞİL —
                 # metni bekletmemek için kuyruğa alınır, tur sonunda gönderilir.
-                self.grafik_kuyruga_ekle(data)
+                # Metin gitti; kareler ARKA PLANDA, bu olay sırasında gönderilir
+                # (GÖRSEL-4). Kuyruk boşsa işçi başlatılır; tarama beklemez.
+                self.grafik_kuyruga_ekle(data, gonder=True)
                 return True
             else:
                 ipucu = telegram_hata_ipucu(resp.status_code,

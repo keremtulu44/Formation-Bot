@@ -707,14 +707,23 @@ def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None) -> list[str]:
 
 
 def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
-                     stil: str = "klasik", alarm_tf: str | None = None) -> dict:
+                     stil: str = "klasik", alarm_tf: str | None = None,
+                     yalniz_tf: bool = False) -> dict:
     """Domain bağlamını bölüm bölüm döndürür (kart biçimleyicisi için).
 
     `stil="kart"`: `yapi`/`ust`/`alt`/`hacim` anahtarlarında hazır satırlar.
     `stil="klasik"`: eski başlıksız satırlar (`ob`/`fvg` ayrı), mesaj metni
     `format_domain_context` ile aynı kalır.
+    `yalniz_tf=True` (GÖRSEL-4): yalnız `alarm_tf` bölümleri üretilir. Kullanıcı
+    kararı: "geçersizleşince sadece formasyon bilgisi gelsin" — teyitli kırılım
+    banda geri döndüğünde 4 zaman diliminin yapı/bölge/hacim dökümü gereksizdi.
     """
     reference = _number(reference_price)
+    if yalniz_tf and alarm_tf:
+        hedef = str(alarm_tf).lower()
+        if isinstance(results_by_timeframe, dict):
+            results_by_timeframe = {k: v for k, v in results_by_timeframe.items()
+                                    if str(k).lower() == hedef}
     satirlar = _market_structure_rows(results_by_timeframe)
     hata = ""
     if _market_structure_failed(results_by_timeframe):
@@ -783,7 +792,8 @@ def karsi_deliller(results_by_timeframe: Any, alarm_tf: Any = None, break_dir: A
 
 
 def format_domain_context(results_by_timeframe: Any, reference_price: Any = None, *,
-                          stil: str = "klasik", alarm_tf: str | None = None) -> str:
+                          stil: str = "klasik", alarm_tf: str | None = None,
+                          yalniz_tf: bool = False) -> str:
     """Render concise, read-only context from fresh domain-engine exports.
 
     Candidate scores are selection-only. Missing/skipped results are omitted;
@@ -794,7 +804,7 @@ def format_domain_context(results_by_timeframe: Any, reference_price: Any = None
     davranış (klasik) önceki biçimlerle birebir aynıdır.
     """
     bolumler = domain_bolumleri(results_by_timeframe, reference_price,
-                                stil=stil, alarm_tf=alarm_tf)
+                                stil=stil, alarm_tf=alarm_tf, yalniz_tf=yalniz_tf)
     if stil == "kart":
         parcalar = []
         if bolumler.get("yapi"):
