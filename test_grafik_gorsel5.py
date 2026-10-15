@@ -275,10 +275,10 @@ def test_uc_kutu_birlesince_dordu_dolmaz():
     assert ozet["birlesen_kutu"] == 2
 
 
-def test_lejant_bos_ve_choch_ayri_yazar():
+def test_lejant_bos_ve_choch_dis_scope_ayri_yazar():
     goruntu = {"olay": {"olaylar": [{"tur": "BOS"}, {"tur": "CHoCH"}]}}
     oge = grafik._lejant(goruntu, False)
-    assert "┄ BOS" in oge and "┈ CHoCH" in oge
+    assert "┄ BOS dış" in oge and "┈ CHoCH dış" in oge
     # Yalnız BOS varsa CHoCH maddesi ÇIKMAZ (çizilmeyen şey lejantta yazılmaz).
     oge2 = grafik._lejant({"olay": {"olaylar": [{"tur": "BOS"}]}}, False)
     assert "┈ CHoCH" not in oge2
@@ -433,17 +433,23 @@ def test_ph_pl_sag_seritte_cetvel_olarak_durur():
         "yuksek": [101.0] * 60, "dusuk": [99.0] * 60, "kapanis": [100.5] * 60,
         "formasyon": {}, "alarm": {}, "zone": {}, "temas": [], "isaretler": [], "serit": {},
         "olay": {"swinglar": [
-            {"bar": 10, "fiyat": 104.5, "yon": "ust", "sinif": "PH", "durum": "teyitli"},
-            {"bar": 20, "fiyat": 96.25, "yon": "alt", "sinif": "PL", "durum": "teyitli"},
             {"bar": 30, "fiyat": 103.0, "yon": "ust", "sinif": "HL", "durum": "teyitli"},
+        ], "seviyeler": [
+            {"bar": 10, "kaynak_bar": 10, "fiyat": 104.5, "etiket": "PH",
+             "rol": "PROTECTED_HIGH"},
+            {"bar": 20, "kaynak_bar": 20, "fiyat": 96.25, "etiket": "PL",
+             "rol": "PROTECTED_LOW"},
         ], "olaylar": [], "kritik": {}},
+
     }
     sag: list = []
     ozet = grafik._olay_ciz(ax, goruntu, 60, sag)
     assert ozet["phpl_serit"] == 2
     assert sorted(a["metin"] for a in sag) == ["PH 104,50", "PL 96,25"]
-    # cetvel çizgisi kutu kılavuzundan belirgin ama kritik kadar kalın değil
-    assert all(a["kilavuz_stil"]["lw"] == 0.8 for a in sag)
+    # Role seviyeleri kendi yatay kılavuzunu taşır; iç HL etiketi grafikte kalır.
+    assert all("kilavuz_x" not in a for a in sag)
+    kilavuzlar = [ln for ln in ax.lines if ln.get_color() == grafik.PALET["sinif"]]
+    assert len(kilavuzlar) == 2
     yazilar = [str(t.get_text()) for t in ax.texts if str(t.get_text()).strip()]
     assert "HL" in yazilar and not any(y.startswith(("PH", "PL")) for y in yazilar)
 

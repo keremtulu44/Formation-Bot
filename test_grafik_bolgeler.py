@@ -7,9 +7,10 @@ taklit ediliyor; alan adları koddan doğrulandı:
    anchor_high, anchor_low, imbalance_end_index, fill_boundary)` (domain_engines/
    order_block), `OrderBlockSideExport(state, top, bottom, fill, source_bar)`,
   `FvgLifecycleRecord(direction, state, lower_boundary, upper_boundary, gap_size,
-   gap_atr, formation_atr, formation_index, formation_time, quality,
-   close_fill_ratio, ...)` ve `EngulfingLifecycleRecord(... formation_low/high,
-   formation_index, state, quality ...)` (domain_engines/fvg/fvg_engulfing_final.py).
+   formation_index, formation_time, quality, maximum_fill_ratio, ...)` ve
+`EngulfingLifecycleRecord(lower_boundary, upper_boundary, formation_low/high,
+   formation_index, state, quality ...)`; OB çizimi için `active_records`
+(`domain_engines/` — yalnız şema doğrulama, motor değişikliği yok).
 Motoru ÇAĞIRAN tek test alt süreçte (`grafik_uret.py --zone`) çalışır:
 `_advance_incremental_engine` sembol+TF durumunu ilerlettiği için pytest sürecinde
 motor çağırmak parite testlerini bozar (§14.2).
@@ -99,6 +100,19 @@ def test_ob_ve_fvg_ayni_yarisi_kazaniyor():
     assert {b["taraf"] for b in g["zone"]["cizilen"]} == {"ust"}
 
 
+def test_aktif_fvg_yakin_ob_kutulari_tarafindan_kapatilmaz():
+    oblar = [_ob(30, 61.0, 62.0), _ob(31, 61.2, 62.2)]
+    fvg = _fvg(25, 64.0, 65.0, durum="ACTIVE")
+    cerceve = _cerceve(60, "4h", taban=60.0, yon=0.0)
+    g = grafik.anlik_goruntu(None, "4h", cerceve,
+                            sonuclar=_sonuclar(ob_kayitlari=oblar, fvg_kayitlari=[fvg]),
+                            simdi=ZAMAN)
+    secilen = g["zone"]["cizilen"]
+    assert sum(b["tip"] == "fvg" for b in secilen) == 1
+    assert sum(b["tip"] == "ob" for b in secilen) == 1
+    assert g["zone"]["elenen"] == 1
+
+
 def test_esitlikte_daha_yeni_kaynak_kazanir():
     ayni = [_ob(10, 70.0, 71.0, bullish=False), _ob(40, 70.0, 71.0, bullish=False)]
     cerceve = _cerceve(60, "1d", taban=60.0, yon=0.0)
@@ -106,6 +120,111 @@ def test_esitlikte_daha_yeni_kaynak_kazanir():
                             simdi=ZAMAN)
     secilen = g["zone"]["cizilen"]
     assert len(secilen) == 1 and secilen[0]["kaynak"] == 40      # §0.8 eşitlik kuralı
+
+
+def test_ob_cizimi_active_records_kullanir_ve_tam_ayin_geometrisini_tekillestirir():
+    pasif = _ob(10, 54.0, 55.0)
+    aktif = _ob(20, 60.0, 61.0)
+    ob = SimpleNamespace(export=None, details={"records": [pasif, aktif],
+                                                "active_records": [aktif, aktif]})
+    cerceve = _cerceve(60, "4h", taban=60.0, yon=0.0)
+    g = grafik.anlik_goruntu(None, "4h", cerceve, sonuclar={"order_block": ob}, simdi=ZAMAN)
+    zone = g["zone"]
+    assert [(b["kaynak"], b["alt"], b["ust"]) for b in zone["cizilen"]] == [(20, 60.0, 61.0)]
+    assert zone["cikarim"]["ob_source"] == "active_records"
+    assert zone["cikarim"]["duplicates_removed"] == 1
+
+
+def test_ob_legacy_fallback_only_when_active_records_field_missing():
+    ob = _ob(20, 60.0, 61.0)
+    cerceve = _cerceve(60, "4h", taban=60.0, yon=0.0)
+    eski = SimpleNamespace(export=None, details={"records": [ob]})
+    g = grafik.anlik_goruntu(None, "4h", cerceve, sonuclar={"order_block": eski}, simdi=ZAMAN)
+    assert len(g["zone"]["cizilen"]) == 1
+    assert g["zone"]["cikarim"]["ob_source"] == "records_legacy"
+
+    bos_aktif = SimpleNamespace(export=None, details={"records": [ob], "active_records": []})
+    g = grafik.anlik_goruntu(None, "4h", cerceve,
+                            sonuclar={"order_block": bos_aktif}, simdi=ZAMAN)
+    assert g["zone"]["cizilen"] == []  # alan var ama boşsa records'tan diriltilmez
+    assert g["zone"]["cikarim"]["ob_source"] == "active_records"
+
+
+def test_fvg_lifecycle_kaydi_raw_listeden_ustundur_ve_doluluk_orani_dogrudur():
+    aktif = SimpleNamespace(
+        direction=SimpleNamespace(value=1), state=SimpleNamespace(name="ACTIVE"),
+        lower_boundary=64.0, upper_boundary=66.0, formation_index=24,
+        formation_time=ZAMAN, quality=83.0, gap_size=2.0,
+        maximum_fill_ratio=0.42, close_fill_ratio=0.0,
+    )
+    # Ham kayıt kasıtlı olarak başka fiyat/indekste: lifecycle varsa çizilmemeli.
+    raw = _fvg(35, 60.1, 60.5, doluluk=0.95)
+    fvg = SimpleNamespace(details={
+        "fvg_formations": [raw], "active_bullish_fvg": aktif,
+        "active_bearish_fvg": None, "completed_fvg": (),
+        "engulfing_formations": [],
+    })
+    cerceve = _cerceve(60, "4h", taban=60.0, yon=0.0)
+    g = grafik.anlik_goruntu(None, "4h", cerceve, sonuclar={"fvg": fvg}, simdi=ZAMAN)
+    fvg_bolgeleri = [b for b in g["zone"]["cizilen"] if b["tip"] == "fvg"]
+    assert len(fvg_bolgeleri) == 1
+    assert (fvg_bolgeleri[0]["kaynak"], fvg_bolgeleri[0]["alt"],
+            fvg_bolgeleri[0]["ust"]) == (24, 64.0, 66.0)
+    assert fvg_bolgeleri[0]["doluluk"] == pytest.approx(0.42)
+    assert fvg_bolgeleri[0]["kayit_kaynagi"] == "active_lifecycle"
+    assert g["zone"]["cikarim"]["fvg_source"] == "lifecycle"
+    assert g["zone"]["cikarim"]["fvg_raw"] == 0
+
+
+def test_engulfing_kutusu_lifecycle_body_sinirini_kullanir_mum_fitilini_degil():
+    aktif = SimpleNamespace(
+        direction=SimpleNamespace(value=-1), state=SimpleNamespace(name="ACTIVE"),
+        lower_boundary=55.0, upper_boundary=56.0, formation_index=30,
+        formation_low=50.0, formation_high=61.0, formation_time=ZAMAN, quality=72.0,
+    )
+    fvg = SimpleNamespace(details={
+        "engulfing_formations": [], "active_bullish_engulfing": None,
+        "active_bearish_engulfing": aktif, "completed_engulfing": (),
+    })
+    cerceve = _cerceve(60, "4h", taban=60.0, yon=0.0)
+    g = grafik.anlik_goruntu(None, "4h", cerceve, sonuclar={"fvg": fvg}, simdi=ZAMAN)
+    eng = next(b for b in g["zone"]["cizilen"] if b["tip"] == "eng")
+    assert (eng["alt"], eng["ust"]) == (55.0, 56.0)
+    assert (eng["mum_alt"], eng["mum_ust"]) == (50.0, 61.0)
+    assert eng["kayit_kaynagi"] == "active_lifecycle"
+
+
+def test_tamamlanmis_engulfing_lifecycle_kaybi_korunur():
+    tamamlanmis = SimpleNamespace(
+        direction=SimpleNamespace(value=1), state=SimpleNamespace(name="CONTINUATION_CONFIRMED"),
+        lower_boundary=416.0, upper_boundary=420.75, formation_index=106,
+        formation_low=415.0, formation_high=433.5, formation_time=ZAMAN, quality=97.5,
+    )
+    fvg = SimpleNamespace(details={
+        "engulfing_formations": [], "active_bullish_engulfing": None,
+        "active_bearish_engulfing": None, "completed_engulfing": [tamamlanmis],
+    })
+    cerceve = _cerceve(60, "4h", taban=60.0, yon=0.0)
+    g = grafik.anlik_goruntu(None, "4h", cerceve, sonuclar={"fvg": fvg}, simdi=ZAMAN)
+    eng = next(b for b in g["zone"]["cizilen"] if b["tip"] == "eng")
+    assert (eng["alt"], eng["ust"]) == (416.0, 420.75)
+    assert eng["tamamlandi"] is True
+    assert eng["durum"] == "CONTINUATION_CONFIRMED"
+    assert eng["kayit_kaynagi"] == "completed_lifecycle"
+
+
+def test_engulf_raw_fallback_da_boundary_alanini_tercih_eder():
+    raw = SimpleNamespace(
+        direction=SimpleNamespace(value=-1), state=SimpleNamespace(name="ACTIVE"),
+        formation_index=29, formation_time=ZAMAN, formation_low=50.0, formation_high=61.0,
+        lower_boundary=55.0, upper_boundary=56.0, quality=68.0,
+    )
+    cerceve = _cerceve(60, "4h", taban=60.0, yon=0.0)
+    g = grafik.anlik_goruntu(None, "4h", cerceve,
+                            sonuclar=_sonuclar(eng_kayitlari=[raw]), simdi=ZAMAN)
+    eng = next(b for b in g["zone"]["cizilen"] if b["tip"] == "eng")
+    assert (eng["alt"], eng["ust"]) == (55.0, 56.0)
+    assert eng["kayit_kaynagi"] == "raw_formation"
 
 
 def test_1s_ve_2s_karelerinde_fvg_cizilmez():

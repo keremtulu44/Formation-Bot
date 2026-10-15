@@ -100,9 +100,13 @@ def _olay_goruntusu():
         "serit": {},
         "olay": {
             "swinglar": [
-                {"bar": 10, "fiyat": 104.5, "yon": "ust", "sinif": "PH", "durum": "teyitli"},
-                {"bar": 20, "fiyat": 96.25, "yon": "alt", "sinif": "PL", "durum": "teyitli"},
                 {"bar": 30, "fiyat": 103.0, "yon": "ust", "sinif": "LH", "durum": "teyitli"},
+            ],
+            "seviyeler": [
+                {"bar": 10, "kaynak_bar": 10, "fiyat": 104.5, "etiket": "PH",
+                 "rol": "PROTECTED_HIGH"},
+                {"bar": 20, "kaynak_bar": 20, "fiyat": 96.25, "etiket": "PL",
+                 "rol": "PROTECTED_LOW"},
             ],
             "olaylar": [
                 {"bar": 40, "seviye": 102.0, "yon": "ust", "tur": "BOS"},
@@ -122,11 +126,10 @@ def test_bos_choch_etiketi_seride_degil_mumun_yaninda():
     olay_yazilari = [t for t in ax.texts if str(t.get_gid() or "") == "olay-ici"]
     assert sorted(str(t.get_text()) for t in olay_yazilari) == ["BOS↑", "CHoCH↓"]
     assert ozet["etiket_ic"] == 2
-    # GÖRSEL-6: şeride yalnız KORUNAN UÇLAR (PH/PL) cetvel çipi olarak gider;
-    # BOS/CHoCH grafikte kalır (bu görüntüde 2 swing, 2 olay var).
+    # Dış PH/PL rol seviyeleri cetvele gider; iç LH etiketi grafikte kalır.
     assert {a["kaynak"] for a in sag} == {"swing"}
     assert sorted(a["metin"] for a in sag) == ["PH 104,50", "PL 96,25"]
-    assert all("kilavuz_x" in a for a in sag)
+    assert all("kilavuz_x" not in a for a in sag)  # çizgi katmanı ayrı çizildi
 
 
 def test_ph_pl_cetvelde_fiyat_tasir_ic_yapi_kisa_kalir():

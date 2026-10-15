@@ -46,11 +46,11 @@ def _vp(seri, export_rvol=None):
 
 
 def _swing(bar, fiyat, yon="HIGH", sinif="HH", durum="SWING_CONFIRMED", kimlik=1,
-           broken=False, bozuk=False):
-    return SimpleNamespace(valid=not bozuk, identity=kimlik, scope="EXTERNAL",
+           broken=False, bozuk=False, kapsam="INTERNAL", rol="NEUTRAL_HIGH"):
+    return SimpleNamespace(valid=not bozuk, identity=kimlik, scope=kapsam,
                            side=yon, state=SimpleNamespace(name=durum),
                            swing_class=SimpleNamespace(name=sinif),
-                           structural_role="NEUTRAL_HIGH", source_bar=bar,
+                           structural_role=rol, source_bar=bar,
                            confirm_bar=bar + 1, price=fiyat, prominence_atr=2.0,
                            distance_atr=1.0, distance_pct=1.0, finalized=True,
                            locked=True, broken=broken or durum == "SWING_BROKEN",
@@ -71,10 +71,21 @@ def _olay(bar, seviye, tur="EVENT_BOS", yon="UP", kapsam="EXTERNAL", onay="CONFI
                            evidence_text="kırılım", bos_maturity="NOT_APPLICABLE")
 
 
-def _ms(swingler=(), adaylar=(), olaylar=()):
-    ms = SimpleNamespace(details={"external_swings": tuple(swingler),
-                                  "external_candidates": tuple(adaylar),
-                                  "event_history": tuple(olaylar)})
+def _ms(swingler=(), adaylar=(), olaylar=(), export=None):
+    def scope(kayit):
+        deger = getattr(kayit, "scope", "INTERNAL")
+        return str(getattr(deger, "name", deger)).upper()
+
+    details = {
+        "external_swings": tuple(x for x in swingler if scope(x) == "EXTERNAL"),
+        "external_candidates": tuple(x for x in adaylar if scope(x) == "EXTERNAL"),
+        "internal_swings": tuple(x for x in swingler if scope(x) == "INTERNAL"),
+        "internal_candidates": tuple(x for x in adaylar if scope(x) == "INTERNAL"),
+        "event_history": tuple(olaylar),
+    }
+    ms = SimpleNamespace(details=details)
+    if export is not None:
+        ms.export = export
     return {"market_structure": ms, "volume_participation": None}
 
 
@@ -177,6 +188,43 @@ def test_yapi_filtreler():
     assert olay["kritik"]["bar"] == 60 - g["sol"]          # çizim indeksi
     assert olay["kritik"]["tur"] == "CHoCH"
     assert len(olay["swinglar"]) == 1 and olay["cizilen"] == 3
+
+
+def test_yapi_oklari_ic_swingden_gelir_dis_roller_cetvele_ayrilir():
+    ic = _swing(210, 71.0, sinif="HL", kimlik=1)
+    dis_rol = _swing(205, 72.0, sinif="PH", kimlik=2, kapsam="EXTERNAL",
+                     rol="PROTECTED_HIGH")
+    dis_nor = _swing(215, 73.0, sinif="HH", kimlik=3, kapsam="EXTERNAL",
+                     rol="NEUTRAL_HIGH")
+    olay = _goruntu_yapi(_ms(swingler=[dis_rol, dis_nor, ic]))["olay"]
+
+    assert [(b["kaynak_bar"], b["sinif"]) for b in olay["swinglar"]] == [(210, "HL")]
+    assert [(b["etiket"], b["fiyat"], b["kaynak_bar"])
+            for b in olay["seviyeler"]] == [("PH", 72.0, 205)]
+    # İç pivotun sınıfı PH/PL olsa bile protected-level anlamı verilip cetvele taşınmaz.
+    ic_ph = _swing(211, 70.0, sinif="PH", kimlik=4)
+    olay = _goruntu_yapi(_ms(swingler=[ic_ph]))["olay"]
+    assert olay["swinglar"][0]["sinif"] == "PH" and olay["seviyeler"] == []
+
+
+def test_yapi_export_none_disi_role_seviyesini_gizler():
+    dis = _swing(210, 72.0, sinif="PH", kapsam="EXTERNAL", rol="PROTECTED_HIGH")
+    export = SimpleNamespace(external_protected_high=None)
+    olay = _goruntu_yapi(_ms(swingler=[dis], export=export))["olay"]
+    assert olay["seviyeler"] == []  # safety-gated export tek doğruluk kaynağı
+
+
+def test_yapi_tum_dis_rol_etiketleri_eslenir():
+    roller = [("PROTECTED_HIGH", "PH", "external_protected_high", 108.0),
+              ("PROTECTED_LOW", "PL", "external_protected_low", 92.0),
+              ("WEAK_HIGH", "WH", "external_weak_high", 112.0),
+              ("WEAK_LOW", "WL", "external_weak_low", 88.0)]
+    swingler = [_swing(200 + i, fiyat, kapsam="EXTERNAL", rol=rol, kimlik=i)
+                for i, (rol, _, _, fiyat) in enumerate(roller)]
+    export = SimpleNamespace(**{alan: fiyat for _, _, alan, fiyat in roller})
+    olay = _goruntu_yapi(_ms(swingler=swingler, export=export))["olay"]
+    assert {b["etiket"] for b in olay["seviyeler"]} == {"PH", "PL", "WH", "WL"}
+    assert {b["fiyat"] for b in olay["seviyeler"]} == {88.0, 92.0, 108.0, 112.0}
 
 
 def test_yapi_kapaklar_ve_sirasi():

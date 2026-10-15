@@ -6,7 +6,7 @@
 > tutuluyordu; 2026-10-13 19:23'te sandbox yeniden kurulunca o klasör ve
 > `.venv` silindi, doküman kayboldu, git geçmişi uzaktan (`e4b451a`) geri alındı.
 > Kural: tasarım/ölçüm dokümanları depo içinde, ölçüm çıktıları (PNG vb.) depo dışında.
-> **Kod değişikliği yoktur; bu doküman tek kaynaktır.** Uygulama sırası §3.
+> Bu belge tarihli tasarım kararlarını ve uygulamayı taşır; güncel yapı scope'u §38, bölge/temas denetimi §39'dadır.
 
 Amaç (kullanıcının cümlesiyle): kartın söylediği her şey grafikte de görünsün —
 her OB hangi mumdan başlıyor, her FVG nerede başlıyor, formasyon hangi mumlara
@@ -30,18 +30,19 @@ alan yok:** çizilen her etiket motorun gerçek çıktısına dayanmak zorunda (
 5. **Veri dürüstlüğü:** kaynakta olmayan hiçbir değer çizilmez. Motor `fill`
    vermediyse kutu kontur kalır, `%` uydurulmaz (§0.12k).
 6. **Yalnız kapanmış mumlar** çizilir; sağ üstte `son kapanan 25 Eyl 17:30 · 70,95`.
-7. **Piyasa yapısı = yalnız external swing'ler** + BOS/CHoCH (internal/half-swing yok).
-8. **Zone seçimi:** OB ve FVG **tek havuzda**, son kapanışa uzaklık ATR'ye
-   bölünerek sıralanır (confluence birlikte değerlendirilir); eşitlikte daha yeni
-   `source_index` kazanır.
+7. **Yapı kapsamları ayrıdır:** ▲/▼ swing okları internal swing'leri; PH/PL/WH/WL cetveli dış rol seviyelerini; BOS/CHoCH çizgileri external olayları gösterir (§38).
+8. **Zone seçimi:** OB + FVG + engulfing tek havuzda; OB kaynağı varsa `active_records`,
+   FVG/ENG kaynağı varsa lifecycle kayıtlarıdır. Aktif → aday → tamamlanmış sırası,
+   yakınlık/ATR ve eşitlikte yeni `source_index` kuralıyla seçilir.
 9. **Zone sayısı TF'ye göre:** `1s 3+3 · 2s 3+3 · 4s 2+2 · 1g 1+1` (üst/alt).
-   Sabit sayı yerine bar sayısıyla ölçeklenir.
-10. **Engulfing kutuları çizilir** (mor kesikli) — motor `bull_engulf/bear_engulf`
-    üretiyor, kartta da var.
+   4s'de yan başına en az iki slot varsa tamamlanmamış FVG/ENG için birer görünürlük
+   payı ayrılır; kalan slotlar havuz yakınlığıyla doldurulur (§39).
+10. **Engulfing kutuları** (mor kesikli) lifecycle `lower_boundary/upper_boundary`
+    alanlarını kullanır; olay mumunun `formation_low/high` fitil aralığı kutu sınırı değildir.
 11. **Alarm mumu:** gri kesikli düşey çizgi + state yazısı **başlık altında**
     (`alarm: kapanışla teyitli kırılım`), `STATE_TR`/`PUBLIC_STATE_ETIKET` metniyle.
-12. **Kutu yazısı minimal:** kutunun içinde yalnız `OB↑/OB↓/FVG↑/FVG↓/ENG`;
-    `%doluluk` ve `qNN` kutunun dışında, koyu `bbox` ile.
+12. **Kutu yazısı minimal:** kutu içinde `OB↑/FVG↑/ENG↑` + varsa `%doluluk`;
+    qNN yoktur. Aday `?` ile, tamamlanan kayıt soluk kesikli konturla işaretlenir.
 13. **Dikey kadraj:** çizilen her şey görünür (hiçbir kutu/çizgi kesilmez),
     ±%4 pay.
 14. **Bar başına piksel korunur:** `genişlik = bar × 6 px`, taban 1080,
@@ -68,9 +69,9 @@ işaret ve yazı ikinci kanaldır.
 | FVG | `#3f9dec` | %8 dolgu (TARAMA YOK, GÖRSEL-4) + `formation_index`'te kalın kenar |
 | Engulfing | `#a78bfa` | kesikli kontur |
 | Formasyon çizgileri | `#e0b96a` | 1,6 pt; bant arası α.06 dolgu; son muma kadar projeksiyon; `apex`'te `x` |
-| Temas mumları | `#f0d9a8` | açık `o` işareti + temas sayısı (bant 24'ü aşarsa kırpılır, kare not yazar) |
-| PH/PL | `#8ba0b4` | aday α.45 / teyitli tam / kırık α.2 |
-| HH/HL/LH/LL | `#9fb0c0` | küçük yazı |
+| Bant temasları | — | temas sayısı/metadata korunur; mum üstü daire işareti çizilmez (§39) |
+| İç ▲/▼ swing + HH/HL/LH/LL | `#8ba0b4` / `#9fb0c0` | aday α.45 / teyitli tam / kırık α.2; oklar `internal_swings` kaynağından |
+| Dış PH/PL/WH/WL | `#8ba0b4` | aktif rol seviyesi, ince noktalı yatay kılavuz + sağ cetvel çipi |
 | BOS/CHoCH | `#f0885c` | ok + kesikli seviye çizgisi + `BOS↑/CHoCH↓` |
 | Katılım şeridi (yükselen spike) | `#2f9e8a` | §2.1; spike MUMUN yönünde renklenir |
 | Katılım şeridi (düşen spike) | `#cf5f5f` | §2.1 |
@@ -129,7 +130,7 @@ Renk tek başına bilgi taşımaz: her bölge/katman bir de **yazı** taşır.
 | Order Block | `domain_engines/runner.py` → `output["order_block"]` | `export.bull/bear → state, top, bottom, fill, source_bar`; tam liste `details["records"]/["active_records"]` → `OrderBlockRecord(source_index, source_time, top, bottom, bullish, base_score, has_imbalance, anchor_high, anchor_low, imbalance_end_index, fill_boundary)` — **record'da `fill` YOK** (§17.12) |
 | FVG + engulfing | `output["fvg"].details` | `fvg_formations`, `engulfing_formations`, `active_bullish_fvg/active_bearish_fvg`, `completed_*`; `FvgLifecycleRecord(direction, state, formation_index, timestamp, lower_boundary, upper_boundary, gap_size, gap_atr, formation_atr, quality, embedded_candle_contribution, evidence_count)`; export `bull_fvg/bear_fvg/bull_engulf/bear_engulf` |
 | FVG TF kısıtı | `runner.py:33, :339` | `1s`/`2s`de FVG üretilmez; lejantta `FVG · 4s/1g` |
-| Market structure | `output["market_structure"].details` | `external_swings`, `event_history` (filtreli çizim §0.12i), `latest_external_event`, `broken_level`, `event_bar`, `swing_class` |
+| Market structure | `output["market_structure"].details` + `export` | Oklar: `internal_swings`/`internal_candidates`; seviye cetveli: `export.external_protected_*`/`external_weak_*` (rol kaydı `external_swings`); BOS/CHoCH: `event_history` (`scope=EXTERNAL`, onaylı/geçerli), `broken_level`, `event_bar` |
 | Katılım | `output["volume_participation"]` | `ParticipationExport(state, rvol, volume_level, volume_regime, quality, effort_result_class, capital_level, up/down_evidence_count, net_progress_atr)`; şerit için `rvol = hacim / SMA(hacim, 20)` |
 | TF etiketi | `notification_context.py:15` | `TIMEFRAME_LABELS = {"1h":"1s","2h":"2s","4h":"4s","1d":"1g"}` — yeni eşleme icat edilmez |
 | State metni | `notifier.py:661 PUBLIC_STATE_ETIKET` (+ `_bulleten_olay` `:1381`); **`STATE_TR` adında bir tablo YOK** (G1'de düzeltildi) | `KIRILIM_TEYITLI / RETEST_BASARILI / KIRILIM_GECERSIZLESTI` |
@@ -228,14 +229,14 @@ yalnız ondalık ayracı.
 `matplotlib.use("Agg")`, `plt.close`, `MPLCONFIGDIR`), `grafik_uret.py` CLI
 (`--hisse --tf --mum --cikti`), `requirements.txt`'e `matplotlib==3.11.2` pin'i,
 sim'e `_gunluk.json` seed'i. İçerik: kapalı mumlar, formasyon çizgileri + son muma
-projeksiyon, `start/end/apex`, temas mumları (`o` + sayı), alarm çizgisi + state
-metni, başlık/`son kapanan`, lejant, dipnot, çökme modu, `meta`. `eksik_katmanlar`
+projeksiyon, `start/end/apex`, bant temas sayısı (mum üstü daire yok; §39), alarm
+çizgisi + state metni, başlık/`son kapanan`, lejant, dipnot, çökme modu, `meta`. `eksik_katmanlar`
 ve `budama` satırları bu fazda.
 
-**G2 — zone'lar:** OB kutuları (tam liste, yakınlık cap'i, `source_index` kalın
-kenar, `OB↑/OB↓` + `bbox`), FVG kutuları (`fvg_formations`, `formation_index`
-kenarı, `gap_size`, `state` → solid/mitigated/hatched; `1s/2s` yok), engulfing
-kutuları (mor kesikli), doluluk yalnız motorun verdiği kutuda.
+**G2 — zone'lar:** OB kutuları (aktif liste, yakınlık cap'i, `source_index` kalın
+kenar), FVG/engulfing lifecycle geometrisi ve durumu, motorun verdiği doluluk.
+Ham formation listeleri yalnız eski/harici sonuç şekillerinde fallback'tir; çizim
+kaynağı/indeks eşleşmesi, tekrarlar ve durum çizgileri §39'da denetlenir.
 
 **G3 — yapı + şerit + bütçe:** external PH/PL + `HH/HL/LH/LL` (aday α.45 /
 teyitli tam / kırık α.2), onaylı+geçerli en yeni 6 BOS/CHoCH (ok + kesikli seviye
@@ -540,10 +541,9 @@ legacy alarm gövdesi ve backtest raporu.
    Kutuda **iki sayı birlikte**: `bant teması N · üst X · alt Y` — kartın sayısı
    sınır-teğeti (toleranslı), kare'niki bant-delmesi; farklı tanımlar birbirinin
    yerine konmaz.
-2. **İkinci budama kuralı** (§2.2'nin tek kuralına eklendi):
-   `temas_isaret_maks = 24` — bant çok mumu sardıysa yalnız en yeni 24'ü
-   işaretlenir; **sayı asla saklanmaz**, `budama`'ya
-   `temas işareti 24'e indirildi (bant 170 mumu sardı)` yazılır.
+2. **Tarihsel ikinci budama kuralı:** `temas_isaret_maks = 24` — o sürümde bant
+   temasları daireyle işaretleniyor, en yeni 24'e kırpılıyordu. Bu çizim katmanı ve
+   budama kuralı **§39'da kaldırıldı**; temas hesabı/sayısı korunur, daire çizilmez.
 3. **Bant çizgisi düz çizilir.** `upper_slope/lower_slope` birimi (TL/mum)
    yeniden üretilmedi — §2 "çizim hesap yapmaz". Eğim yazısı kare etiketinden de
    çıkarıldı (300 px'lik etiket bütçesinin ~%40'ını yiyor, kartta yok).
@@ -1557,3 +1557,110 @@ Kullanıcı: son mumlar sağ kenarda aniden bitiyor, çizimler son mumda kesiliy
 - ✕ glifi mevcut tasarımda zemin renkli kenarla çiziliyor (çok soluk); boşluktaki ✕ aynı
   çizimi kullanıyor, asıl görünen ucundaki ~9 pt'lik işaret çizgisi. İstenirse ayrı iş olarak
   belirginleştirilebilir.
+
+## 38 · YAPI SCOPE DÜZELTMESİ (2026-10-15) — oklar iç, rol cetveli dış
+
+Kullanıcı, grafikte “iç yapı” diye gösterilen okların doğru olmadığını düşündüğünü
+belirtti. Kod incelemesinde eski `_olay_verisi`'nin `external_swings` ve
+`external_candidates` kayıtlarını `▲/▼` olarak çizdiği, buna karşın lejantın “iç yapı”
+dediği görüldü. Bu bir görsel sözleşme/veri seçimi tutarsızlığıydı; motorun iç swing
+hesaplamadığı anlamına gelmiyordu.
+
+### 38.1 Güncel çizim sözleşmesi
+
+- **▲/▼ okları ve kısa HH/HL/LH/LL etiketleri:** yalnız `internal_swings` +
+  `internal_candidates`; external swing'ler bu marker listesine karışmaz. İç pivotlar
+  motorun internal scope'undan gelir (`internal_pivot_len=2`). Ok `source_bar`'a,
+  yani pivotun oluştuğu muma konur; `confirm_bar` daha sonra teyit zamanını belirtir.
+- **PH/PL/WH/WL:** dış scope'un aktif rol seviyeleri; önce safety-gated
+  `export.external_protected_high/low` ve `export.external_weak_high/low` kullanılır.
+  Eski/yalın çıktı nesnelerinde export yoksa yalnız `external_swings.structural_role`
+  açıkça eşleşen kayıtlar yedek kaynaktır. `swing_class=PH/PL` tek başına protected
+  seviye sayılmaz. Seviye yatay ince kılavuz ve sağ cetvel çipiyle gösterilir.
+- **BOS/CHoCH:** mevcut seçim korunur — `event_history` içinde `scope=EXTERNAL`,
+  `CONFIRMED` ve `VALID`; lejant artık bunları “dış” olarak adlandırır.
+- **Bütçe:** iç oklar için en yeni 10 pivot; sağ cetvel dört dış rolün tamamını
+  (PH/PL/WH/WL) taşıyabilir. İç oklar cetvel çip kotasını tüketmez. Son fiyatla aynı
+  seviyedeki dış rol çipi bastırılırsa `meta.sag.atlanan_kaynak.swing` bunu sayar;
+  seviye çizgisi kalır.
+- **Meta:** `olay.swing` internal marker sayısıdır; `olay.dis_seviye` aktif dış rol
+  seviyelerini sayar; `phpl_serit` ve `whwl_serit` cetveldeki rol etiketlerini izler.
+- `grafik.py` çizimi, `test_grafik_yapi.py` kaynak/scope ve seviye seçimini, görsel
+  testleri oklar/etiketler/kılavuzları sınar. Bu değişiklik Telegram kart metinlerine
+  dokunmaz.
+
+### 38.2 Not
+
+Bu bölüm §0 karar 7, §24.2'deki eski “swing = external” çizim seçimi ve §34.1'deki
+PH/PL sınıfına dayalı cetvel açıklamasını günceller. Tarihsel ölçümler o tarihteki
+eski uygulamayı tarif eder; güncel davranış bu bölümdeki kaynak ve scope ayrımıdır.
+
+## 39 · GRAFİK DENETİMİ (2026-10-15) — temas işaretleri, zone kaynağı ve lifecycle
+
+Bu bölüm, mevcut PNG çizimini gerçek önbellek verisiyle inceleyip doğruladıktan
+sonra yapılan **yalnız grafik katmanı** düzeltmelerini kaydeder. Engine algoritmaları,
+Telegram/kart metinleri ve sinyal üretimi değiştirilmedi.
+
+### 39.1 Görsel ve veri kaynağı sözleşmesi
+
+- **Bant temas daireleri kaldırıldı.** Temas hesap listesi, üst/alt sayıları ve
+  meta/girdi özeti korunur; `temas_isaret` geriye uyumluluk için boş liste kalır.
+  Temas noktası başına mum üstüne marker çizilmez, lejantta da daire maddesi yoktur.
+- **OB kaynağı:** `order_block.details.active_records`. Bu alan mevcut ama boşsa
+  eski `records` listesine düşülmez; yalnız eski/harici şemada `active_records`
+  alanı hiç yoksa `records` fallback'i kullanılır. `export.bull/bear.fill` yalnız
+  aynı `source_bar` ile eşleştiğinde OB doluluk oranına bağlanır.
+- **FVG/engulfing kaynağı:** lifecycle alanları varsa aktif yön kayıtları ve
+  `completed_*` listeleri kullanılır; `fvg_formations` / `engulfing_formations`
+  ham listeleriyle üst üste karıştırılmaz. Lifecycle alanı olmayan eski sonuçlarda
+  raw formation kontrollü fallback'tir.
+- **FVG doluluğu:** `maximum_fill_ratio` → yoksa `wick_fill_ratio` → eski şemada
+  `close_fill_ratio`. Böylece ham FVG'deki eksik `close_fill_ratio`, lifecycle
+  doluluğunu silmez; değerin görsel aralığı 0–100% ile sınırlanır.
+- **Engulfing geometrisi:** dikdörtgen `lower_boundary/upper_boundary` (yutulan
+  önceki gövde) kullanır. `formation_low/high` engulfing mumunun kendi fitil
+  aralığıdır; kutu sınırı değildir, yalnız denetim meta'sında ayrı tutulur.
+  Bilinmeyen/`NONE` yön bullish varsayılmaz.
+- **Tekrar ve seçim:** aynı tip/yön/fiyat sınırı/kaynak indeksiyle yinelenen kayıt
+  tek kutuya indirilir; aynı fiyat bandının farklı kaynak barlardaki oluşumları
+  ayrı kayıt olarak kalır. Aktif → aday → tamamlanmış sırası korunur. 4s yan
+  kapasitesi en az iki ise tamamlanmamış FVG ve ENG'den en yakınına birer slot
+  ayrılır; kalanlar ATR yakınlığıyla doldurulur. Kapasite sayıları değişmedi.
+- **Durum stili:** aktif kutu solid; aday kutu noktalı ve `?`; tamamlanmış kutu
+  soluk/kesik. ENG dolgusuz kalır ama mor sınır artık görünürdür. Kutu etiketinin
+  konumu mumlara, mevcut zone etiketlerine, son fiyata, kritik/yapı/alarm
+  seviyelerine göre seçilir; bir yatay çizgi metnin içinden geçirilmez.
+
+### 39.2 Gerçek veriyle doğrulama
+
+`.venv/bin/python` ve `bot_data` ile 10 sembolün (`AKBNK`, `THYAO`, `SISE`,
+`GARAN`, `EREGL`, `DOHOL`, `TUPRS`, `BIMAS`, `ASELS`, `FROTO`) 4s/1g kareleri
+oluşturuldu; her `meta.zone.kayitlar` satırında fiyat sınırı, kaynak indeks, durum,
+doluluk ve `kayit_kaynagi` karşılaştırıldı. Örnek PNG'ler `/tmp`'de tutuldu, Git'e
+alınmadı.
+
+- **AKBNK 4s:** lifecycle aktif FVG kaydı `source=100`, sınır `65,20–68,85`,
+  `maximum_fill_ratio=0` olarak eşleşti; ham formation listesinden seçilmiş yakın
+  fakat farklı aday kutular çizim kaynağı yapılmadı. Kutu çizimde gösterildi ve
+  `%0` etiketi doğru; kritik `67,20` çizgisi etiketten kaçırıldı.
+- **BIMAS 4s:** tamamlanan FVG `source=107`, `423,50–430,75`, doluluk `≈%24`
+  olarak lifecycle kaydından geldi ve soluk/kesik biçimde gösterildi. Tamamlanmış
+  ENG kaydı `source=106` için yutulan gövde sınırı ile engulfing mumunun kendi
+  high/low aralığı meta'da ayrı doğrulandı.
+- **ASELS 4s:** aktif FVG'lerin durum/dolulukları ve OB kaynakları doğru fiyat
+  sınırlarıyla gösterildi; çizim bölgesi sayısı kapakla sınırlı kaldı. Aynı kaynak
+  kimliğiyle gelen yinelenen kayıtlar için tekilleştirme testi eklendi.
+- Bu karelerde `meta.zone.cikarim` ham/lifecycle kaynak türünü ve aktif/tamamlanan
+  sayıları raporlar; `meta.zone.kayitlar` ise çizilen her kutunun gerçek fiyat
+  aralığını ve indeksini taşır. Tamamlanmış kayıt kapak doluysa bilinçli olarak
+  elenebilir; `elenen` sayacı bunu görünür kılar.
+
+### 39.3 Testler ve kapsam
+
+- `test_grafik_bolgeler.py`: aktif OB listesi/fallback, duplicate, FVG lifecycle
+  doluluğu, FVG'nin yakın OB'lerce tamamen örtülmemesi, ENG boundary-high/low
+  ayrımı, kaynak/indeks ve gerçek CLI şekli.
+- `test_grafik_gorsel_kalite.py`: temas dairesi yok, ENG konturu görünür, tamamlanan
+  kutu soluk/kesik, yatay seviye kutu etiketinden kaçıyor.
+- Bu bölümün eklenmesi sırasında mesaj/kart metni ve `domain_engines/` dosyaları
+  değiştirilmedi. Önceki iç swing okları/dış yapı ayrımı §38'deki gibi korunur.
