@@ -82,6 +82,7 @@ from reporting.format import (
     panel_sigdir as _panel_sigdir,
     mum_kapanis_metni as _mum_bilgisi,
     format_deferred_alert_summary as _format_deferred_alert_summary,
+    format_urgent_alert_queue_summary as _format_urgent_queue_summary,
 )
 
 # === LOGGING KURULUMU ===
@@ -1019,9 +1020,9 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları (DM)
    outcome'ların tip/TF/kalite/bileşen kırılımı; /backtest 90 · /bt · "detay"
    bileşen + geometri + vaka bloklarını ekler. Hiçbir şey yazılmaz/değiştirilmez.
 /tara [HISSE] — şimdi analiz et (seans dışı da çalışır)
-/grafik [HISSE] [1s|2s|4s|1g] — mum karesini gönder (diğer ad: /g)
-   sembol zorunlu; TF yazılmazsa yalnız o sembolün 4 TF karesi denenir.
-   Hemen kabul yanıtı gelir, iş arka planda çalışır; sonuç/görsel DM’e gider.
+/grafik HISSE [1s|2s|4s|1g] [sade|detay] — mum karesini gönder (diğer ad: /g)
+   Örnek: /grafik THYAO 4s sade · mum/bant/kritik fiyatı öne çıkarır.
+   TF yazılmazsa o sembolün 4 TF karesi denenir; kabul yanıtı hemen, görsel DM’e gelir.
    Veri mevcut bellek/cache katmanından; eksik/eski cache açık hatadır, canlı fetch yok.
    TELEGRAM_GRAFIK kapalıyken de çalışır; görseller alarm metin kotasını tüketmez.
 /yardim — bu liste (diğer adlar: /help · /start)
@@ -1749,44 +1750,55 @@ def _komut_panel(arguman: str) -> str:
     return _manuel_tarama_istegi("panel", arguman)
 
 
-# /grafik argümanı: sembol + isteğe bağlı zaman dilimi. desen bilinçli dar —
-# bilerek bozuk girdi (boşluk, path, uzun metin) Telegram'a hiç gitmemeli.
+# /grafik argümanı: sembol + isteğe bağlı zaman dilimi + isteğe bağlı görünüm.
+# Desen bilinçli dar — bozuk girdi (path, uzun metin) Telegram'a hiç gitmemeli.
 _GRAFIK_SEMBOL = re.compile(r"^([A-Z][A-Z0-9]{1,9})(?:\.IS)?$")
 _GRAFIK_TF = {"1s": "1h", "1h": "1h", "2s": "2h", "2h": "2h",
               "4s": "4h", "4h": "4h", "1g": "1d", "1d": "1d"}
+_GRAFIK_GORUNUM = {"sade": True, "detay": False}
 
 
 def _komut_grafik(arguman: str) -> str:
-    """`/grafik [HISSE] [1s|2s|4s|1g]` — kare(ler) üretir ve gönderir (G4 / §4).
+    """`/grafik [HISSE] [TF] [sade|detay]` — kare(ler) üretir (G4 / §4).
 
     Neden ayrı komut: alarm kareleri yalnız `TELEGRAM_GRAFIK=alarm` iken gidiyor;
     kullanıcı istediği zaman bakabilsin diye kapıdan bağımsız bir yüzey lazım.
-    Kabul cevabından sonra sınırlı arka plan işi çalışır. Veri mevcut bellek/cache
-    katmanından okunur (`grafik_uret.kare_uret`); canlı çekme yok —
-    komutun tarama temposuna/ kota'ya dokunmaması için (§4).
+    `sade`, mum/bant/kritik fiyat hiyerarşisini öne çıkarır; `detay` bütün
+    domain işaretlerini gösterir. Kabul cevabından sonra sınırlı arka plan işi
+    çalışır. Veri mevcut bellek/cache katmanından okunur; canlı çekme yok.
     """
     parcalar = (arguman or "").split()
     if not parcalar:
-        return ("Kullanım: /grafik THYAO · /grafik THYAO 4s\n"
-                "Zaman dilimi yazılmazsa 1s/2s/4s/1g sırayla denenir.")
+        return ("Kullanım: /grafik HISSE [1s|2s|4s|1g] [sade|detay]\n"
+                "Örnek: /grafik THYAO 4s sade. TF yazılmazsa 4 TF karesi denenir.")
+    if len(parcalar) > 3:
+        return "Kullanım: /grafik THYAO [1s|2s|4s|1g] [sade|detay]"
     hisse = parcalar[0].strip().upper()
     eslesme = _GRAFIK_SEMBOL.match(hisse)
     if not eslesme:
-        return "Geçersiz sembol yazımı. Örnek: /grafik THYAO 4s"
+        return "Geçersiz sembol yazımı. Örnek: /grafik THYAO 4s sade"
     hisse = eslesme.group(1)
-    if len(parcalar) > 1:
-        tf = _GRAFIK_TF.get(parcalar[1].strip().lower())
-        if tf is None:
-            return f"Zaman dilimi tanınmadı: {parcalar[1]} (1s · 2s · 4s · 1g)"
-        tfler = (tf,)
-    else:
-        tfler = ("1h", "2h", "4h", "1d")
+
+    tf = None
+    sade = None
+    for secim in parcalar[1:]:
+        secim = secim.strip().lower()
+        if secim in _GRAFIK_GORUNUM:
+            if sade is not None:
+                return "Görünüm yalnız bir kez seçilebilir: sade veya detay."
+            sade = _GRAFIK_GORUNUM[secim]
+            continue
+        if secim in _GRAFIK_TF:
+            if tf is not None:
+                return "Yalnızca bir zaman dilimi seçin: 1s · 2s · 4s · 1g."
+            tf = _GRAFIK_TF[secim]
+            continue
+        return f"Zaman dilimi tanınmadı: {secim} (1s · 2s · 4s · 1g; görünüm sade|detay)"
+    tfler = (tf,) if tf else ("1h", "2h", "4h", "1d")
 
     notifier = _notifier_ref
     if notifier is None or not getattr(notifier, "enabled", False):
         return "Telegram gönderimi kapalı: kare üretilemiyor."
-    if len(parcalar) > 2:
-        return "Kullanım: /grafik THYAO 4s (tek sembol ve isteğe bağlı TF)"
     # Tek aktif manuel grafik işi: çakışan TF'ler ve sınırsız thread/kuyruk yok.
     with _grafik_is_kilidi:
         if _grafik_aktif_is:
@@ -1794,7 +1806,8 @@ def _komut_grafik(arguman: str) -> str:
                 set(tfler) & set(_grafik_aktif_is["tfler"]))
             return ("⏳ Aynı sembol/TF grafik isteği zaten hazırlanıyor." if cakisma else
                     "⏳ Başka grafik isteği hazırlanıyor; bitince yeniden deneyin.")
-        istek = {"hisse": hisse, "tfler": tfler, "asama": "kabul yanıtı bekleniyor"}
+        istek = {"hisse": hisse, "tfler": tfler, "sade": sade,
+                 "asama": "kabul yanıtı bekleniyor"}
         _grafik_aktif_is.update(istek)
 
     def baslat():
@@ -1807,9 +1820,10 @@ def _komut_grafik(arguman: str) -> str:
                 _grafik_aktif_is.clear()
             raise
 
+    gorunum = (f" · {'sade' if sade else 'detay'} görünüm" if sade is not None else "")
     return ArkaPlanYaniti(
         f"⏳ Grafik isteği alındı, hazırlanıyor: {hisse} · "
-        + "/".join(_tf_kisa(tf) for tf in tfler)
+        + "/".join(_tf_kisa(tf) for tf in tfler) + gorunum
         + ". Hedef yaklaşık 1 dakika; sonuç ve görsel DM'e gelecek.", baslat)
 
 
@@ -1894,6 +1908,7 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
                 sonuc = grafik_uret.kare_uret(
                     istek["hisse"], tf, zone=True, formasyon_tara=True, yonetici=yonetici,
                     veri_dizin=yonetici.data_dir if yonetici is not None else None,
+                    sade=istek.get("sade"),
                     cikti=hedef, asama=lambda ad: durum(f"{_tf_kisa(tf)}: {ad}"),
                     tazelik_kontrol=tazelik)
                 yol, meta = sonuc.get("yol"), sonuc.get("meta") or {}
@@ -1965,6 +1980,15 @@ def _kare_altyazisi(hisse: str, tf: str, meta: dict) -> str:
         pass
     mum = meta.get("mum_sayisi")
     parcalar = [hisse, _tf_kisa(tf)]
+    mod = meta.get("mod")
+    if isinstance(mod, dict) and mod.get("sade"):
+        parcalar.append("sade")
+    try:
+        lejant_gizli = max(0, int(meta.get("lejant_atlanan") or 0))
+    except (TypeError, ValueError, OverflowError):
+        lejant_gizli = 0
+    if lejant_gizli:
+        parcalar.append(f"lejant kısaltıldı (+{lejant_gizli})")
     if mum:
         parcalar.append(f"{mum} mum")
     if meta.get("formasyon_ad"):
@@ -3465,6 +3489,40 @@ def _effective_summary_hours() -> List[dt_time]:
     return sorted(set(morning_and_day + [digest_time]))
 
 
+def _acil_kuyruk_gonderim_penceresi_acik(simdi: datetime, digest_saati: dt_time) -> bool:
+    """Acil kuyruğu digest'ten 2 dk önce kapat; ağ kuyruğu özeti geciktirmesin."""
+    try:
+        yerel = (ISTANBUL_TZ.localize(simdi) if simdi.tzinfo is None
+                 else simdi.astimezone(ISTANBUL_TZ))
+        kesim = datetime.combine(yerel.date(), digest_saati) - timedelta(minutes=2)
+        return yerel.replace(tzinfo=None) < kesim
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
+def _acil_kuyruk_acilista_isle(notifier, simdi: datetime, digest_saati: dt_time,
+                                kapanis_ozeti_gonderildi: bool = False) -> int:
+    """Açılışta kuyruğu aç; digest sonrası eski push'ı bireysel gönderme."""
+    try:
+        if (notifier is None or not getattr(notifier, "enabled", False)
+                or not notifier.kuyruk_durumu().get("bekleyen")):
+            return 0
+        if _acil_kuyruk_gonderim_penceresi_acik(simdi, digest_saati):
+            return int(notifier.kuyrugu_bosalt() or 0)
+        if kapanis_ozeti_gonderildi:
+            temizle = getattr(notifier, "kuyruk_tumunu_temizle", None)
+            atlanan = int(temizle() or 0) if callable(temizle) else 0
+            if atlanan:
+                logger.warning(
+                    "Kapanış özeti zaten gönderilmiş; %d bekleyen acil bildirim "
+                    "geç saatte ayrı push olmasın diye kuyruktan çıkarıldı.", atlanan)
+        # Kapanış özeti henüz gönderilmediyse olaylar özete eklenmek üzere tutulur.
+        return 0
+    except Exception as hata:  # noqa: BLE001 - kuyruk hatası açılışı düşürmesin
+        logger.debug("Açılış kuyruk politikası uygulanamadı: %s", hata)
+        return 0
+
+
 # Batch 8 / C2 (8.4): digest tamponu kalıcılığı da `state/persistence.py`'de.
 DIGEST_PENDING_SUPABASE_KEY = _state_persistence.DIGEST_PENDING_SUPABASE_KEY
 DIGEST_PENDING_DOSYA = _state_paths.DIGEST_PENDING_DOSYA
@@ -3752,12 +3810,17 @@ def main_loop():
     # Token/chat_id yoksa hiçbiri başlatılmaz; bot eskisi gibi yalnızca alarm gönderir.
     # 18:45 kapanış özeti kaçırıldıysa (bot akşam kapalıydı) ilk fırsatta telafi et.
     _kacirilan_digest_ozeti(notifier, datetime.now(ISTANBUL_TZ))
-    # Kapanıştan önce engellenip kuyruğa giren acil olaylar varsa açılışta denensin.
-    try:
-        if notifier.enabled and notifier.kuyruk_durumu().get("bekleyen"):
-            notifier.kuyrugu_bosalt()
-    except Exception as _kuyruk_hata:
-        logger.debug(f"Açılış kuyruk boşaltma hatası: {_kuyruk_hata}")
+    # Özet işaretini ilk preload/fetch'ten önce al: seans öncesi kuyruk engeli
+    # açılışta hemen çözülsün; kapanış özeti sonrası eski kuyruk ayrı push olmasın.
+    _dm_isaretler, _public_isaretler = _ozet_isaretlerini_yukle()
+    _acilis_zamani = datetime.now(ISTANBUL_TZ)
+    _acilis_digest_saati = _parse_deferred_alert_digest_time()
+    _ozet_slotu = _acilis_digest_saati.strftime("%H:%M")
+    _acil_kuyruk_acilista_isle(
+        notifier, _acilis_zamani, _acilis_digest_saati,
+        kapanis_ozeti_gonderildi=not _ozet_slot_gonderilmeli(
+            _dm_isaretler, _ozet_slotu, _acilis_zamani.date()),
+    )
 
     _telegram_komut_katmanini_kur(notifier)
     
@@ -3828,10 +3891,8 @@ def main_loop():
     post_close_analysis_time = _parse_post_close_analysis_time()
     last_summary_sent = {}  # DM özeti: "09:55" -> date
     last_summary_public_sent = {}  # public (grup) özeti ayrı izlenir; DM retry gruba kopya üretmesin
-    # Restart gün sürekliliği: aynı gün daha önce gönderilmiş özetler diske yazılır.
-    # Aksi halde 09:55 sabah notu, restart sonrası (10 dk telafi penceresi içinde)
-    # İKİNCİ kez gidiyordu — canlı denetimde deneyle doğrulandı.
-    _dm_isaretler, _public_isaretler = _ozet_isaretlerini_yukle()
+    # Özet işaretleri ilk preload'dan önce yüklenmişti; aynı gün restartında aynı
+    # slot tekrarlanmaz ve açılış kuyruğu politikası da bu kaydı kullanır.
     last_summary_sent.update(_dm_isaretler)
     last_summary_public_sent.update(_public_isaretler)
     # Gün sonu analizi damgası KALICI okunur: yalnız bellekte tutulunca süreç
@@ -3865,10 +3926,12 @@ def main_loop():
                     deque_manager.save_all()
                     continue
             # --- ENGELLENEN ACİL OLAYLAR (Batch 5 / B4) ---
-            # Cooldown/saatlik kap yüzünden gönderilemeyen teyitli kırılım gibi
-            # olaylar kuyrukta bekler; engel kalkınca en geç birkaç dakikada gider.
+            # Teyitli olaylar engel kalkınca birkaç dakikada gönderilir; ancak
+            # kapanış digest saatinden sonra bireysel push yapılmaz. Bekleyenler
+            # 18:45 özetine katılır, böylece özetin arkasından geç alarm gelmez.
             try:
-                if (notifier.enabled and notifier.kuyruk_durumu().get("bekleyen")
+                if (_acil_kuyruk_gonderim_penceresi_acik(now, deferred_alert_digest_time)
+                        and notifier.enabled and notifier.kuyruk_durumu().get("bekleyen")
                         and time.time() - son_kuyruk_bosaltma >= ACIL_KUYRUK_BOSALTMA_ARALIK_SN):
                     son_kuyruk_bosaltma = time.time()
                     gonderilen_kuyruk = notifier.kuyrugu_bosalt()
@@ -3909,8 +3972,8 @@ def main_loop():
                         sh == deferred_alert_digest_time or gecikme_sn < 600
                     )
                     # Akşam DM/public özeti aynı gün tam evren taraması başarıyla
-                    # bitmeden gönderilmez; sonraki döngüde (18:45 penceresi
-                    # kapanmadan) yeniden denenir. Sabah slotu bu kapıdan bağımsızdır.
+                    # bitmeden gönderilmez; tarama uzarsa aynı gün ilk uygun döngüde
+                    # yeniden denenir. Sabah slotu bu kapıdan bağımsızdır.
                     if (sh == deferred_alert_digest_time and ozet_zamani
                             and not _successful_full_scan_today(now)):
                         logger.info("18:45 özeti bekletildi: bugün başarılı tam tarama yok")
@@ -3932,7 +3995,21 @@ def main_loop():
                     if not dm_hedefi and not public_hedefi:
                         continue
                     aktif = _build_active_formations_for_summary(lifecycle_manager)
+                    acil_bekleyen = []
+                    if sh == deferred_alert_digest_time and dm_hedefi and notifier.enabled:
+                        try:
+                            kuyruk_ozeti = getattr(notifier, "kuyruk_ozet_kayitlari", None)
+                            if callable(kuyruk_ozeti):
+                                acil_bekleyen = kuyruk_ozeti(now=now) or []
+                        except Exception as kuyruk_hata:  # noqa: BLE001 - özet kuyruk yüzünden düşmesin
+                            logger.warning("Kapanış kuyruğu özetlenemedi: %s", kuyruk_hata)
+                            acil_bekleyen = []
                     summary_payload = _daily_summary_payload(now)
+                    # Kapanış özetinde görünen kuyruk olayları da kullanıcıya bildirildi
+                    # sayılır; "Gün: N bildirim" satırı bunları eksik bırakmasın.
+                    if acil_bekleyen:
+                        summary_payload["alerts_sent"] = int(
+                            summary_payload.get("alerts_sent") or 0) + len(acil_bekleyen)
                     ozet = notifier.format_daily_summary(aktif, summary_payload)
                     bekleyen = (
                         _deferred_alert_buffer.items(now, limit=DEFERRED_ALERT_DIGEST_LIMIT)
@@ -3944,9 +4021,12 @@ def main_loop():
                     if bekleyen and bekleyen_toplam > len(bekleyen):
                         daily_stats['alerts_digest_overflow'] = bekleyen_toplam - len(bekleyen)
                     watch_summary = _format_deferred_alert_summary(bekleyen, bekleyen_toplam)
+                    acil_kuyruk_ozeti = _format_urgent_queue_summary(acil_bekleyen)
                     dm_ozet = f"📋 Günlük Özet\n{ozet}"
                     if watch_summary:
                         dm_ozet += "\n\n" + watch_summary
+                    if acil_kuyruk_ozeti:
+                        dm_ozet += "\n\n" + acil_kuyruk_ozeti
 
                     # --- HAFTALIK DOĞRULUK KARNESİ (gün sonu mesajının ALTINA) ---
                     # Cuma günü 18:45 kapanış özetinin altına eklenir; haftada bir
@@ -3970,6 +4050,16 @@ def main_loop():
                             ana_ok, karne_ok, hata = _karneyle_gonder(
                                 notifier, dm_ozet, karne_metni_eklendi)
                             if ana_ok:
+                                if acil_bekleyen:
+                                    try:
+                                        tuket = getattr(notifier, "kuyruk_ozetleneni_tuket", None)
+                                        tuketilen = int(tuket(acil_bekleyen) or 0) if callable(tuket) else 0
+                                        if tuketilen:
+                                            logger.info(
+                                                "Kapanış özetinde %d engellenmiş teyitli olay bildirildi; "
+                                                "kuyruktan tüketildi.", tuketilen)
+                                    except Exception as kuyruk_hata:  # noqa: BLE001 - teslim işareti best effort
+                                        logger.warning("Özetlenen acil kuyruk tüketilemedi: %s", kuyruk_hata)
                                 last_summary_sent[sh_str] = now.date()
                                 _ozet_isaret_kaydet(sh_str, now.date())
                                 if bekleyen:

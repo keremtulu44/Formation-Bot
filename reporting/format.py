@@ -499,3 +499,64 @@ def format_deferred_alert_summary(records: List[dict], toplam: int = None) -> st
         lines.append(f"… {toplam_sayi - gosterilen} aday daha")
         lines.append("   tam liste: /formasyonlar")
     return baslik + "\n" + "\n".join(lines)
+
+
+def _istanbul_zamani(ham):
+    """Kuyruk JSON'undaki ISO damgayı İstanbul'a normalize et; bozuksa None."""
+    if ham is None:
+        return None
+    try:
+        zaman = ham if isinstance(ham, datetime) else datetime.fromisoformat(
+            str(ham).replace("Z", "+00:00"))
+        return (ISTANBUL_TZ.localize(zaman) if zaman.tzinfo is None
+                else zaman.astimezone(ISTANBUL_TZ))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def format_urgent_alert_queue_summary(records: List[dict]) -> str:
+    """Kapanışta bekleyen teyitli alarmları tek, tarih/saatli bölüme çevir.
+
+    Kuyruktaki olaylar ayrı ayrı gönderilmez; kapanış özeti başarılı olursa bu
+    bölümde bir kez gösterilir. Mum damgası olayın zamanını, kuyruk damgası ise
+    bildirim engelinin ne zaman başladığını ayırt eder.
+    """
+    if not records:
+        return ""
+    lines = []
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        data = item.get("veri")
+        if not isinstance(data, dict):
+            continue
+        stock = str(data.get("stock_name") or "?").strip().upper()
+        timeframe = tf_kisa(data.get("timeframe"))
+        state_key = str(data.get("state") or "").strip().upper()
+        state = STATE_TR.get(state_key) or kisa_durum(state_key)
+        pattern = str(data.get("pattern_name") or "formasyon").strip()
+        try:
+            quality = f"q{float(data.get('confidence_score')):.0f}" \
+                if data.get("confidence_score") is not None else ""
+        except (TypeError, ValueError, OverflowError):
+            quality = ""
+        satir = f"• {stock} {timeframe} · {pattern} · {state}"
+        if quality:
+            satir += f" · {quality}"
+        lines.append(satir)
+
+        ayrinti = str(data.get("bar_metni") or "").strip()
+        if not ayrinti:
+            bar = _istanbul_zamani(data.get("bar_time") or data.get("timestamp"))
+            kapanis = _istanbul_zamani(data.get("bar_kapanis"))
+            if bar is not None:
+                ayrinti = mum_kapanis_metni(str(data.get("timeframe") or ""), bar, kapanis)
+        kuyruk = _istanbul_zamani(item.get("kuyruk_zaman"))
+        if kuyruk is not None:
+            ayrinti = " · ".join(x for x in (ayrinti, f"kuyruk {kuyruk:%H:%M}") if x)
+        if ayrinti:
+            lines.append(f"   {ayrinti}")
+    if not lines:
+        return ""
+    return ("📬 Kapanışta özete eklenen teyitli bildirimler\n"
+            "   Kota/cooldown nedeniyle beklemişti.\n" + "\n".join(lines))

@@ -371,6 +371,7 @@ def test_main_aliaslari_raporlama_katmanini_gosterir():
     assert main_mod._sayi is fmt.sayi
     assert main_mod._panel_aday_puani is fmt.panel_aday_puani
     assert main_mod._format_deferred_alert_summary is fmt.format_deferred_alert_summary
+    assert main_mod._format_urgent_queue_summary is fmt.format_urgent_alert_queue_summary
 
 
 def test_panel_metinleri_tasima_sonrasi_ayni():

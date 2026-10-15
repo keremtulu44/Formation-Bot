@@ -519,11 +519,13 @@ def test_komut_grafik_kullim_ve_girdi_kapilari(monkeypatch):
 
     monkeypatch.setattr(M, "_notifier_ref", None)
     metin = M._komut_grafik("")
-    assert "/grafik THYAO 4s" in metin and "1s/2s/4s/1g" in metin
+    assert "/grafik THYAO 4s sade" in metin and "sade|detay" in metin
     assert M._komut_grafik("TÜRKİYE").startswith("Geçersiz sembol")
     assert M._komut_grafik("A").startswith("Geçersiz sembol")
     assert M._komut_grafik("AKBNK/../x").startswith("Geçersiz sembol")
     assert "tanınmadı" in M._komut_grafik("AKBNK 9x")
+    assert "bir zaman dilimi" in M._komut_grafik("AKBNK 1s 4s")
+    assert "bir kez" in M._komut_grafik("AKBNK sade detay")
     assert M._komut_grafik("akbnk 4s").startswith("Telegram gönderimi kapalı")
 
 

@@ -356,13 +356,17 @@ def test_normal_mod_sade_ile_ayni_veriyi_korur():
 
 
 def test_env_anahtarlari_cli_bayragini_ezmez(monkeypatch):
-    """`GRAFIK_SADE=1` env ile açılır; CLI bayrağı verilirse yine açık kalır."""
+    """Env varsayılanı korur; açık True/False tercihi env'i ezer."""
     import grafik_uret
 
     monkeypatch.setenv("GRAFIK_SADE", "1")
     d = grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True, mum=140,
                               cikti="/tmp/kare/_p3_env.png")
     assert d["meta"]["mod"]["sade"] is True
+    detay = grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True,
+                                  mum=140, sade=False,
+                                  cikti="/tmp/kare/_p3_env_detay.png")
+    assert detay["meta"]["mod"]["sade"] is False
     monkeypatch.delenv("GRAFIK_SADE")
     monkeypatch.setenv("GRAFIK_YAZI", "1,5")             # virgüllü ondalık da okunur
     d2 = grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True, mum=140,

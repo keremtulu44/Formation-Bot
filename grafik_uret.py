@@ -112,7 +112,7 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
               formasyon_yol: str | None = None, formasyon: dict | None = None,
               formasyon_tara: bool = False,
               alarm_turu: str | None = None, cikti: str | None = None,
-              demo: bool = False, sade: bool = False, renk_korugu: bool = False,
+              demo: bool = False, sade: bool | None = None, renk_korugu: bool = False,
               buyuk_yazi: bool = False,
               yonetici=None, asama=None,
               tazelik_kontrol=None) -> dict:
@@ -177,10 +177,11 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
         "serit": serit,
         "etiket_detay": etiket_detay,
     }
-    # GÖRSEL-5 modları: bayrak verilmezse anahtar HİÇ eklenmez → env devreye girer
-    # (`GRAFIK_SADE`, `GRAFIK_RENK_KORUGU`, `GRAFIK_YAZI`); bayrak env'i EZER.
-    if sade:
-        secenekler["sade"] = True
+    # GÖRSEL-5 modları: bayrak None ise anahtar HİÇ eklenmez → env devreye girer
+    # (`GRAFIK_SADE`, `GRAFIK_RENK_KORUGU`, `GRAFIK_YAZI`); True/False açıkça
+    # verildiyse kullanıcı tercihi env'i ezer (Telegram'daki `sade`/`detay`).
+    if sade is not None:
+        secenekler["sade"] = bool(sade)
     if renk_korugu:
         secenekler["renk_korugu"] = True
     if buyuk_yazi:
@@ -305,9 +306,9 @@ def main(giris: list[str] | None = None) -> int:
     ayristirici.add_argument("--mum", type=int, default=None,
                              help=f"kadraj tavanı (varsayılan grafik.SABİTLER['kare_mum'])")
     ayristirici.add_argument("--cikti", default=None, help="PNG yolu (vars: /tmp/...)")
-    # GÖRSEL-5 okuma modları (varsayılan kapalı; env karşılıkları: GRAFIK_SADE,
-    # GRAFIK_RENK_KORUGU, GRAFIK_YAZI).
-    ayristirici.add_argument("--sade", action="store_true",
+    # GÖRSEL-5 okuma modları (env karşılıkları: GRAFIK_SADE,
+    # GRAFIK_RENK_KORUGU, GRAFIK_YAZI). None varsayılanı env davranışını korur.
+    ayristirici.add_argument("--sade", action="store_true", default=None,
                              help="yalnız mum + formasyon bandı + kritik/son fiyat")
     ayristirici.add_argument("--renk-korugu", action="store_true", dest="renk_korugu",
                              help="mum/şerit renkleri mavi-turuncu (deuteranopia)")
@@ -347,7 +348,7 @@ def main(giris: list[str] | None = None) -> int:
                               etiket_detay=secenek.etiket_detay,
                               formasyon_yol=secenek.formasyon, formasyon_tara=secenek.formasyon_tara,
                               alarm_turu=secenek.alarm_turu, demo=secenek.demo,
-                              sade=bool(getattr(secenek, "sade", False)),
+                              sade=getattr(secenek, "sade", None),
                               renk_korugu=bool(getattr(secenek, "renk_korugu", False)),
                               buyuk_yazi=bool(getattr(secenek, "buyuk_yazi", False)),
                               cikti=_cikti_yolu(secenek.cikti, secenek.hisse, tf, tfler))

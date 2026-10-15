@@ -162,6 +162,27 @@ def test_kare_altyazisi_formasyon_adini_yazar():
     assert alt == "ALARK · 4s · 120 mum · Alçalan Üçgen · son kapanan 25.09.2026 17:30"
 
 
+def test_kare_altyazisi_sade_gorunumu_belirtir():
+    import main as M
+    alt = M._kare_altyazisi("THYAO", "1h", {"mum_sayisi": 180,
+        "mod": {"sade": True}, "son_bar_ts": "2026-10-15T18:00:00+03:00"})
+    assert alt.startswith("THYAO · 1s · sade · 180 mum")
+
+
+def test_kare_altyazisi_lejant_kisaltmasini_bildirir():
+    import main as M
+    alt = M._kare_altyazisi("AKBNK", "4h", {"lejant_atlanan": 3})
+    assert "lejant kısaltıldı (+3)" in alt
+
+
+def test_alarm_kare_altyazisi_lejant_kisaltmasini_bildirir():
+    from notifier import _grafik_basligi
+    alt = _grafik_basligi({"sembol": "AKBNK"},
+                          {"goruntu": {"tf_kisa": "4s"}},
+                          {"mum_sayisi": 120, "lejant_atlanan": 2})
+    assert alt == "AKBNK · 4s · 120 mum · lejant kısaltıldı (+2)"
+
+
 def test_komut_grafik_taramayi_acar(monkeypatch):
     """`/grafik` formasyonu bulmak için botun kapısını kullanır (eskiden hiç çağrılmıyordu)."""
     import main as M
