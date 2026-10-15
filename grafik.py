@@ -1176,10 +1176,17 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         cap = float(SABITLER["mum_genislik_orani"])
 
         sag_adaylar: list[dict[str, Any]] = []
+        # Mum kutuları (piksel) bir kez: kutu içi yazı ve olay etiketi yerleşimi
+        # aynı ölçümü kullanır (GÖRSEL-4).
+        try:
+            mum_kutulari = _mum_kutulari_px(ax, acilis, yuksek, dusuk, kapanis, cap)
+        except Exception:
+            mum_kutulari = None
         # --- bölge kutuları mumların ARDINDA (bilgi zemini; §0.4.1) ---
         if not yalnizca_mumlar and (zone.get("cizilen") or []):
             try:
-                zone_ozet = _zone_ciz(ax, zone, n, aralik, sag_adaylar) or {}
+                zone_ozet = _zone_ciz(ax, zone, n, aralik, sag_adaylar,
+                                      kutular=mum_kutulari) or {}
                 meta["zone"]["etiket_ic"] = int(zone_ozet.get("ic") or 0)
                 meta["zone"]["etiket_serit"] = int(zone_ozet.get("serit") or 0)
             except Exception as hata:
@@ -1191,7 +1198,8 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                      "capa": 0}
         if not yalnizca_mumlar and (goruntu.get("olay") or {}):
             try:
-                olay_ozet.update(_olay_ciz(ax, goruntu, n, sag_adaylar) or {})
+                olay_ozet.update(_olay_ciz(ax, goruntu, n, sag_adaylar,
+                                           kutular=mum_kutulari) or {})
             except Exception as hata:
                 log.warning("grafik: yapı katmanı çizilemedi (%s)", hata)
                 eksik.append("ms")
@@ -1447,8 +1455,72 @@ def _kutu_yazisi_sigar(ax, b: Mapping[str, Any], x0: int, x1: int, n: int,
     return kutu_yuk_px >= punto_px + 5.0
 
 
+def _kutu_yazisi_koy(ax, b: Mapping[str, Any], x0: int, x1: int, n: int,
+                     aralik: Sequence[float], metin: str, renk: str,
+                     kutular: Any = None) -> bool:
+    """Kutu içi yazıyı kutuya koyar; mumla çakışmayan noktayı ölçerek seçer.
+
+    Adaylar kutunun İÇİNDE kalır (yatay: sol/orta/sağ; dikey: orta ve kenara
+    yakın). Gerçek genişlik `get_window_extent` ile okunur; kutuya sığmayan aday
+    elenir. Hiçbiri çakışmasız değilse EN AZ çakışan seçilir, hiçbiri sığmıyorsa
+    `False` döner → etiket sağ şeride yedeklenir (sessiz kayıp yok).
+    """
+    from matplotlib import patheffects
+
+    def _yaz(xa: float, ya: float, ha: str) -> Any:
+        return ax.text(xa, ya, metin, ha=ha, va="center", gid="kutu-ici",
+                       fontsize=float(SABITLER["zone_yazi_pt"]),
+                       color=renk, zorder=5, clip_on=False,
+                       path_effects=[patheffects.withStroke(linewidth=2.0,
+                                                            foreground=PALET["zemin"])])
+
+    alt, ust = float(b["alt"]), float(b["ust"])
+    orta = (alt + ust) / 2.0
+    y_aday = [orta, alt + (ust - alt) * 0.32, ust - (ust - alt) * 0.32]
+    x_aday = [((x0 + x1) / 2.0, "center"), (x0 + 0.1, "left"), (x1 - 0.1, "right")]
+    try:
+        renderer = ax.figure.canvas.get_renderer()
+        kx0, ky0 = ax.transData.transform((float(x0) - 0.5, alt))
+        kx1, ky1 = ax.transData.transform((float(x1) + 0.5, ust))
+        kutu = (min(kx0, kx1), min(ky0, ky1), max(kx0, kx1), max(ky0, ky1))
+    except Exception:
+        renderer, kutu = None, None
+    en_iyi = None
+    for ya in y_aday:
+        for xa, ha in x_aday:
+            yazi = _yaz(xa, ya, ha)
+            if renderer is None:
+                return True                      # ölçüm yok: ilk aday (orta) yeter
+            try:
+                bb = yazi.get_window_extent(renderer)
+            except Exception:
+                return True
+            # kutuya sığmıyor mu? (kenarları aşan aday elenir)
+            if kutu is not None and (bb.x0 < kutu[0] - 1.0 or bb.x1 > kutu[2] + 1.0
+                                     or bb.y0 < kutu[1] - 1.0 or bb.y1 > kutu[3] + 1.0):
+                yazi.remove()
+                continue
+            alan = 0.0
+            if kutular is not None and len(kutular):
+                for cx0, cy0, cx1, cy1 in kutular:
+                    ow = max(0.0, min(bb.x1, cx1) - max(bb.x0, cx0))
+                    oh = max(0.0, min(bb.y1, cy1) - max(bb.y0, cy0))
+                    alan += ow * oh
+            if alan <= 0.0:
+                return True
+            if en_iyi is None or alan < en_iyi[0]:
+                en_iyi = (alan, xa, ya, ha)
+            yazi.remove()
+    if en_iyi is None:
+        return False                             # hiçbir aday kutuya sığmadı
+    _, xa, ya, ha = en_iyi
+    _yaz(xa, ya, ha)
+    return True
+
+
 def _zone_ciz(ax, zone: Mapping[str, Any], n: int, aralik: Sequence[float],
-              sag: Optional[list] = None) -> dict[str, int]:
+              sag: Optional[list] = None,
+              kutular: Any = None) -> dict[str, int]:
     """OB/FVG/engulfing kutuları + KUTU İÇİ yazı (§GÖRSEL-4). Dönüş: sayaç sözlüğü.
 
     Çizim sadeleşti: eğik tarama (hatch) KALKTI — büyük FVG kutularında
@@ -1460,6 +1532,10 @@ def _zone_ciz(ax, zone: Mapping[str, Any], n: int, aralik: Sequence[float],
 
     Kalın kenar boğada ALT, ayıda ÜST kenarda (§0.12r): boğa/ayı ayrımı renk
     değiştirmeden de okunur.
+
+    `kutular` verilirse (mum piksel kutuları) yazının YERİ kutu içinde ölçülerek
+    seçilir: mum gövdesiyle çakışmayan nokta tercih edilir, hepsi doluysa en az
+    çakışan (ölçüm: `katman_cakisan`). Verilmezse kutu ortası kullanılır.
     """
     from matplotlib.patches import Rectangle
 
@@ -1494,14 +1570,8 @@ def _zone_ciz(ax, zone: Mapping[str, Any], n: int, aralik: Sequence[float],
                 solid_capstyle="butt", zorder=2)
         # --- kutu İÇİ etiket (GÖRSEL-4): "hangi kutu, ne kadar dolu" kutuda yazılı ---
         metin = _zone_metni(b)
-        if _kutu_yazisi_sigar(ax, b, x0, x1, n, aralik, metin):
-            from matplotlib import patheffects
-            ax.text((x0 + x1) / 2.0, (alt + ust) / 2.0, metin,
-                    ha="center", va="center", gid="kutu-ici",
-                    fontsize=float(SABITLER["zone_yazi_pt"]), color=renk[b["tip"]],
-                    zorder=5, clip_on=False,
-                    path_effects=[patheffects.withStroke(linewidth=2.0,
-                                                         foreground=PALET["zemin"])])
+        if _kutu_yazisi_sigar(ax, b, x0, x1, n, aralik, metin) and _kutu_yazisi_koy(
+                ax, b, x0, x1, n, aralik, metin, renk[b["tip"]], kutular):
             ic += 1
         else:
             seride.append(b)
@@ -1879,8 +1949,125 @@ def _swing_ofseti(ax, x: float, yukari: bool, yerlesik: list, n: int,
     return ofs if yukari else -ofs
 
 
+def _mum_kutulari_px(ax, acilis, yuksek, dusuk, kapanis, cap: float):
+    """Mum gövde+fitil kutuları PİKSEL olarak (Nx4: x0,y0,x1,y1); numpy gerekir."""
+    import numpy as np
+
+    govde, fitil = [], []
+    for i, (a, k, y, d) in enumerate(zip(acilis, kapanis, yuksek, dusuk)):
+        if None in (a, k, y, d):
+            continue
+        govde.append((i - cap / 2.0, min(a, k), i + cap / 2.0, max(a, k)))
+        fitil.append((i - 0.25, d, i + 0.25, y))
+    def _kutu(liste):
+        if not liste:
+            return np.zeros((0, 4))
+        arr = np.array(liste, dtype=float)
+        p0 = ax.transData.transform(arr[:, 0:2])
+        p1 = ax.transData.transform(arr[:, 2:4])
+        return np.hstack([np.minimum(p0, p1), np.maximum(p0, p1)])
+    return np.vstack([_kutu(govde), _kutu(fitil)]) if (govde or fitil) else np.zeros((0, 4))
+
+
+def _olay_yazi_koy(ax, x: float, seviye: float, yon_ust: bool, metin: str,
+                   kutular, yerlesik: list, n: int) -> bool:
+    """Olay etiketini çakışmasız en iyi adaya koyar (GÖRSEL-4 ölçüm düzeltmesi).
+
+    Neden: etiket olayın mumuna iliştiğinde (GÖRSEL-4) bazı kırılımlarda mumun
+    üstüne biniyordu — ölçüm `katman_cakisan`da 4 yazı gösterdi. Aday ölçüsü
+    piksel, ama GERÇEK genişlik `get_window_extent` ile okunur (tahmin 1–2 px
+    sapabiliyor): adaylar denendikçe yazı ölçülür, çakışmasız ilk adayda kalınır,
+    hiçbiri boş değilse EN AZ çakışan aday korunur (yazı asla kaybolmaz).
+    """
+    try:
+        import numpy as np
+        dpi = float(ax.figure.dpi)
+        bar_px = max(2.0, float(ax.get_window_extent().width) / max(1.0, float(n)))
+        px, py = ax.transData.transform((float(x), float(seviye)))
+    except Exception:
+        dpi, bar_px, px, py = 100.0, 6.0, 0.0, 0.0
+        np = None
+
+    punto_px = float(SABITLER["olay_yazi_pt"]) * dpi / 72.0
+    g = max(6.0, _genislik_16(metin) * punto_px / 16.0) + 3.0   # güvenlik payı
+    yuk = punto_px + 3.0
+    adim = punto_px * 1.7
+    # Kırılım yönünün TERSİ önce: yukarı kırılımda fiyat seviyenin üstünde kalır.
+    ilk = -1.0 if yon_ust else 1.0
+    # Aday sırası: önce kırılımın TERS tarafı (kademeli uzaklaşarak), sonra karşı
+    # taraf. Yoğun mum bölgesinde tek yön yetmeyebiliyor (ölçüm: CHoCH↓).
+    dyler = ([ilk * (yuk + i * adim) for i in range(4)]
+             + [-ilk * (yuk + i * adim) for i in range(3)])
+    dxler = [0.0] + [float(k) * bar_px * 1.4 * yon
+                     for k in (1, 2, 3, 4) for yon in (1, -1)]
+
+    engel_kutu = np if (np is not None and kutular is not None and len(kutular)) else None
+    from matplotlib import patheffects
+    try:
+        renderer = ax.figure.canvas.get_renderer()
+    except Exception:
+        renderer = None
+
+    def _olc(kutu) -> float:
+        """Kutunun mum kutuları + yerleşik yazılarla çakışma alanı (px²)."""
+        x0, y0, x1, y1 = kutu
+        alan = 0.0
+        if engel_kutu is not None:
+            for kx0, ky0, kx1, ky1 in kutular:
+                ow = max(0.0, min(x1, kx1) - max(x0, kx0))
+                oh = max(0.0, min(y1, ky1) - max(y0, ky0))
+                alan += ow * oh
+        for (ox0, oy0, ox1, oy1) in yerlesik:          # diğer olay etiketleri
+            ow = max(0.0, min(x1, ox1) - max(x0, ox0))
+            oh = max(0.0, min(y1, oy1) - max(y0, oy0))
+            alan += 0.35 * ow * oh                      # yazı–yazı çakışması daha ucuz
+        return alan
+
+    def _yaz(dx: float, dy: float, va: str):
+        return ax.annotate(metin, xy=(x, seviye),
+                           xytext=(dx * 72.0 / dpi, dy * 72.0 / dpi),
+                           textcoords="offset points", ha="center", va=va,
+                           fontsize=float(SABITLER["olay_yazi_pt"]), color=PALET["olay"],
+                           zorder=7, annotation_clip=False, gid="olay-ici",
+                           path_effects=[patheffects.withStroke(
+                               linewidth=2.2, foreground=PALET["zemin"])])
+
+    def _tahmin(dx: float, dy: float, va: str) -> tuple[float, float, float, float]:
+        x0, x1 = px + dx - g / 2.0, px + dx + g / 2.0
+        y0, y1 = ((py + dy - yuk, py + dy) if va == "top"
+                  else (py + dy, py + dy + yuk))
+        return x0, y0, x1, y1
+
+    en_iyi = None
+    for dy in dyler:
+        for dx in dxler:
+            va = "top" if dy < 0 else "bottom"
+            yazi = _yaz(dx, dy, va)
+            if renderer is None:
+                yerlesik.append(_tahmin(dx, dy, va))
+                return True
+            try:
+                bb = yazi.get_window_extent(renderer)
+                kutu = (bb.x0 - 1.0, bb.y0 - 1.0, bb.x1 + 1.0, bb.y1 + 1.0)
+            except Exception:
+                kutu = _tahmin(dx, dy, va)
+            alan = _olc(kutu)
+            if alan <= 0.0:
+                yerlesik.append(kutu)
+                return True
+            if en_iyi is None or alan < en_iyi[0]:
+                en_iyi = (alan, dx, dy, va, kutu)
+            yazi.remove()
+    if en_iyi is None:                    # aday üretilemedi (savunma)
+        return False
+    _, dx, dy, va, kutu = en_iyi
+    _yaz(dx, dy, va)
+    yerlesik.append(kutu)
+    return True
+
+
 def _olay_ciz(ax, goruntu: Mapping[str, Any], n: int,
-              sag: Optional[list] = None) -> dict[str, int]:
+              sag: Optional[list] = None, kutular: Any = None) -> dict[str, int]:
     """Yapı katmanı (§2.2): swing işaretleri + BOS/CHoCH okları + `kritik` çizgisi.
 
     Renkler §0.4.1: `swing` #90a4ae (α: teyitli 1,0 · kırık 0,2 · aday 0,45),
@@ -1896,12 +2083,24 @@ def _olay_ciz(ax, goruntu: Mapping[str, Any], n: int,
     alarm = goruntu.get("alarm") or {}
     sayac = {"swing": 0, "etiket": 0, "kritik_atlandi": 0}
     yerlesik_swing: list[tuple[float, bool, float]] = []
-    yerlesik_olay: list[tuple[float, bool, float]] = []
+    yerlesik_olay: list[tuple[float, float, float, float]] = []   # piksel kutular
     kritik_eslesdi = False
     if not swinglar and not olaylar and not (olay.get("kritik") or {}):
         return sayac
     zamanlar = list(goruntu.get("zamanlar") or [])
     dusuk = [float(v) for v in (list(goruntu.get("dusuk") or [])[:n])]
+    # Olay etiketi yerleşimi için mum kutuları (gövde+fitil, piksel). Çağıran
+    # (`_kare_ciz`) zaten hesapladıysa tekrar hesaplanmaz.
+    mum_kutulari = kutular
+    if olaylar and mum_kutulari is None:
+        try:
+            mum_kutulari = _mum_kutulari_px(
+                ax, [float(v) for v in (list(goruntu.get("acilis") or [])[:n])],
+                [float(v) for v in (list(goruntu.get("yuksek") or [])[:n])], dusuk,
+                [float(v) for v in (list(goruntu.get("kapanis") or [])[:n])],
+                float(SABITLER["mum_genislik_orani"]))
+        except Exception:
+            mum_kutulari = None
     for b in swinglar:
         x, y = float(b["bar"]), _gercek(b.get("fiyat"))
         if y is None:
@@ -1956,27 +2155,13 @@ def _olay_ciz(ax, goruntu: Mapping[str, Any], n: int,
                 linewidth=1.4 if vurgu else 0.9, linestyle=(0, (3, 2)),
                 alpha=0.9 if vurgu else 0.6, zorder=3 if vurgu else 2)
         # GÖRSEL-4 kullanıcı kararı: BOS/CHoCH için FİYAT değil MUM KONUMU önemli
-        # → etiket sağ fiyat şeridine değil, olayın mumuna ilişir. Yerleşim:
-        # yukarı kırılımda seviyenin ALTINA (fiyat üstte kaldığı için mumlar orada),
-        # aşağı kırılımda ÜSTÜNE yazılır; koyu kontur sayesinde mum üstünde okunur.
-        yazi_ofs = 11.0
-        # `_swing_ofseti` işareti yönü taşır: yukarı kırılımda etiket AŞAĞI
-        # (fiyat üstte kaldı), aşağı kırılımda YUKARI yazılır; basamaklama aynı
-        # yönde daha da uzaklaştırır.
-        ofs = _swing_ofseti(ax, x, not yon_ust, yerlesik_olay, n,
-                            _genislik_16(etiket) * (float(SABITLER["olay_yazi_pt"])
-                                                    * float(SABITLER["dpi"]) / 72.0) / 16.0)
-        toplam = (ofs - yazi_ofs) if yon_ust else (ofs + yazi_ofs)
-        from matplotlib import patheffects
-        ax.annotate(etiket, xy=(x, seviye),
-                    xytext=(0, toplam),
-                    textcoords="offset points", ha="center",
-                    va="top" if yon_ust else "bottom",
-                    fontsize=float(SABITLER["olay_yazi_pt"]), color=PALET["olay"],
-                    zorder=7, annotation_clip=False, gid="olay-ici",
-                    path_effects=[patheffects.withStroke(linewidth=2.2,
-                                                         foreground=PALET["zemin"])])
-        etiket_ic += 1
+        # → etiket sağ fiyat şeridine değil, olayın mumuna ilişir. Yerleşim
+        # 2 boyutlu aranır (`_olay_yazi_yeri`): önce kırılımın ters tarafı, olmazsa
+        # yana kaydırma — mum kutusuyla çakışmayan ilk aday; hepsi doluysa en az
+        # çakışan (yazı asla kaybolmaz). Koyu kontur okunabilirliği tamamlar.
+        if _olay_yazi_koy(ax, x, seviye, yon_ust, etiket,
+                          mum_kutulari, yerlesik_olay, n):
+            etiket_ic += 1
     # `kritik` = son seçilen olayın seviyesi, yani ZATEN o olayın çizgisidir.
     # Ayrı çizgi çizmek aynı yere iki çizgi koymak olurdu → eşleşen olayın çizgisi
     # kalınlaştırılıp etiketi `... · kritik 67,20` yapılır; ayrı çizgi yalnız

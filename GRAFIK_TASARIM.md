@@ -1209,6 +1209,12 @@ Kullanıcı geri bildirimi ve kararları (birebir):
 - **Çakışma ölçümü iki kanallı:** bilinçli katman yazıları (`kutu-ici`, `olay-ici`)
   kapıdan muaf, ayrı sayılır (`meta["kalite"]["katman_cakisan"]`); şerit/başlık
   yazıları için `mum_cakisan == 0` kapısı aynen yürürlükte.
+- **2 boyutlu yerleşim (ölçüm düzeltmesi):** katman yazıları mum kutusuyla
+  çakışmasın diye aday konumlar GERÇEK `get_window_extent` ile ölçülür
+  (`_olay_yazi_koy`, `_kutu_yazisi_koy`): çakışmasız ilk aday seçilir, hiçbiri boş
+  değilse EN AZ çakışan korunur (yazı asla kaybolmaz). Ölçüm: 20 karede BOS/CHoCH
+  çakışması 4 → 0; kutu içi yazı çakışması azaldı. Kutu içi adaylar kutunun
+  DIŞINA çıkmaz; sığmıyorsa etiket yine sağ şeride gider.
 
 ### 32.2 Önce/sonra kanıtı
 
@@ -1218,7 +1224,8 @@ alt satır GÖRSEL-4. Fark: kutularda tarama yok, etiket kutunun İÇİNDE (`OB�
 
 ### 32.3 Açık kalanlar
 
-- Kutu içi yazının mumla çakışması için sert bir kapı yok: yerleşim `min(|Δy|)`
-  kuralına bırakıldı (`_zone_ciz`). Çakışan yazı sayısı `katman_cakisan`da görünür;
-  gerekirse sonraki turda dikey ofset kuralı eklenir.
+- Kutu içi yazı, kutu İNCE olduğunda hâlâ mumun üstüne binebiliyor (kutu alanı
+  mumlarla dolu; adaylar kutunun içinde kalmak zorunda). Çakışan yazı sayısı
+  `katman_cakisan`da görünür; istenirse sonraki turda "çakışıyorsa şeride" kuralı
+  sertleştirilir (bugünkü davranış: etiket kutuda kalır, koyu kontur okunur kılar).
 - `GRAFIK_OLAY_MAKS` (§29.4) hâlâ kullanıcı onayı bekliyor.

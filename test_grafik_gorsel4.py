@@ -276,3 +276,33 @@ def test_gecersizlesme_bolumleri_yalniz_alarm_tf():
     assert "4s yapı" in yalniz
     for yabanci in ("1s yapı", "2s yapı", "1g yapı"):
         assert yabanci not in yalniz, yalniz
+
+
+# ------------------------------------------- 2B yerleşim: katman yazıları muma binmez
+# Ölçüm (20 kare, önce): `katman_cakisan`da 4 olay etiketi + birkaç kutu etiketi
+# mum gövdesiyle çakışıyordu. Yerleşim artık gerçek `get_window_extent` ile
+# ölçülüp çakışmasız aday aranıyor.
+
+
+def test_olay_etiketi_mum_cakismasi_olcumu_sifir():
+    """BOS/CHoCH etiketleri mum kutusuyla çakışmaz (bilinçli ölçüm kanalı)."""
+    import grafik_uret
+
+    sonuc = grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True,
+                                  mum=140, cikti="/tmp/kare/_gorsel4_olay.png")
+    kalite = sonuc["meta"]["kalite"]
+    assert kalite["mum_cakisan"] == 0            # şerit/başlık kapısı katı kalır
+    olay_cakisan = [y for y in kalite["katman_cakisan"] if y.startswith(("BOS", "CHoCH"))]
+    assert olay_cakisan == [], kalite["katman_cakisan"]
+
+
+def test_kutu_yazisi_mum_cakismasini_azaltir():
+    """Kutu içi yazı yerleşimi ölçümle seçilir: aynı karede yazı sayısı korunur."""
+    import grafik_uret
+
+    sonuc = grafik_uret.kare_uret("TUPRS", "4h", veri_dizin="bot_data", zone=True,
+                                  mum=150, cikti="/tmp/kare/_gorsel4_kutu.png")
+    zone = sonuc["meta"]["zone"]
+    assert zone["etiket_ic"] + zone["etiket_serit"] == zone["cizilen"]
+    # Ölçüm alanı her zaman döner (bilinçli katman yazıları ayrı sayılır).
+    assert "katman_cakisan" in sonuc["meta"]["kalite"]
