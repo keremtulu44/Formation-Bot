@@ -426,15 +426,17 @@ def test_figur_yazilari_tasmaz_ve_cakismaz(buyuk):
 
 
 def test_ph_pl_sag_seritte_cetvel_olarak_durur():
-    """Korunan uçlar (PH/PL) şerit cetveline gider; iç yapı grafikte kalır."""
+    """PH/PL ROLÜ şerit cetveline fiyatıyla gider; grafikte okla kısa etiket kalır (§38)."""
     fig, ax = _eksen()
     goruntu = {
         "sembol": "T", "tf": "1h", "tf_kisa": "1s", "acilis": [100.0] * 60,
         "yuksek": [101.0] * 60, "dusuk": [99.0] * 60, "kapanis": [100.5] * 60,
         "formasyon": {}, "alarm": {}, "zone": {}, "temas": [], "isaretler": [], "serit": {},
         "olay": {"swinglar": [
-            {"bar": 10, "fiyat": 104.5, "yon": "ust", "sinif": "PH", "durum": "teyitli"},
-            {"bar": 20, "fiyat": 96.25, "yon": "alt", "sinif": "PL", "durum": "teyitli"},
+            {"bar": 10, "fiyat": 104.5, "yon": "ust", "sinif": "LH", "seviye": "PH",
+             "seviye_kapsam": "dis", "durum": "teyitli"},
+            {"bar": 20, "fiyat": 96.25, "yon": "alt", "sinif": "HL", "seviye": "PL",
+             "seviye_kapsam": "dis", "durum": "teyitli"},
             {"bar": 30, "fiyat": 103.0, "yon": "ust", "sinif": "HL", "durum": "teyitli"},
         ], "olaylar": [], "kritik": {}},
     }
@@ -442,10 +444,11 @@ def test_ph_pl_sag_seritte_cetvel_olarak_durur():
     ozet = grafik._olay_ciz(ax, goruntu, 60, sag)
     assert ozet["phpl_serit"] == 2
     assert sorted(a["metin"] for a in sag) == ["PH 104,50", "PL 96,25"]
-    # cetvel çizgisi kutu kılavuzundan belirgin ama kritik kadar kalın değil
-    assert all(a["kilavuz_stil"]["lw"] == 0.8 for a in sag)
+    # §38: çizgiyi katman kendisi çizer (sağa kesikli); çip ayrıca kılavuz çizgisi taşımaz
+    assert all("kilavuz_stil" not in a for a in sag)
     yazilar = [str(t.get_text()) for t in ax.texts if str(t.get_text()).strip()]
-    assert "HL" in yazilar and not any(y.startswith(("PH", "PL")) for y in yazilar)
+    assert {"PH", "PL", "HL"} <= set(yazilar)         # okla kısa etiket (rol adı)
+    assert not any(y.startswith(("PH ", "PL ")) for y in yazilar)   # fiyat grafikte yazılmaz
 
 
 def test_ph_pl_son_fiyatla_ayni_bantta_ise_atlanir_ve_sayilir():
