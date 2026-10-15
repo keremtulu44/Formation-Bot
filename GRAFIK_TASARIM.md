@@ -1229,3 +1229,77 @@ alt satır GÖRSEL-4. Fark: kutularda tarama yok, etiket kutunun İÇİNDE (`OB�
   `katman_cakisan`da görünür; istenirse sonraki turda "çakışıyorsa şeride" kuralı
   sertleştirilir (bugünkü davranış: etiket kutuda kalır, koyu kontur okunur kılar).
 - `GRAFIK_OLAY_MAKS` (§29.4) hâlâ kullanıcı onayı bekliyor.
+
+## 33 · GÖRSEL-5 TURU (2026-10-15) — doluluk cetveli, okunurluk, okuma modları
+
+Tur, kullanıcının "daha iyi yapılabilir hissiyatı" sorusuna **ölçümle** cevap
+verilerek açıldı (hiç kod değiştirmeden 15–20 kare tarandı):
+
+| Ölçüm | Bulgu |
+|---|---|
+| Çizilen 56 kutu etiketi | 21'i `qNN`, 23'ü ÇIPLAK (`OB↑`), 12'si yüzde |
+| Kutuların içine sığan etiket | 23/56 (%41) — gerisi sağ şerit yedeğinde |
+| Olay çizgileri | kritik dışı BOS/CHoCH aynı stil + aynı alfa (ayırt edilemiyor) |
+| Şerit çipleri | 3 kutu çipi + son fiyat aynı bantta yığılıyor (TCELL 4s) |
+
+Kullanıcı kararları: (1) "hem cetvel hem %", (2) "`qNN` tamamen kaldır",
+(3) "hepsi, bu sırayla" (üç paket).
+
+### 33.1 Paket 1 — kutu bilgisi
+
+- `qNN` KALDIRILDI (`_zone_metni`); etiket = tip + yön + (varsa) `%doluluk`.
+- **Doluluk cetveli:** dolan kısım daha koyu bant + sınır çizgisi. Geometri
+  MOTORUN dolgu yönüyle aynıdır ve koddan doğrulandı:
+  OB `fill_ratio = (top - fill_boundary)/height` (boğa) → **üstten aşağı**;
+  FVG `wick_fill_ratio = (upper - low)/gap` (boğa) → aynı kural; ayıda tersi.
+  %2–%98 arası çizilir (uçlarda kutu zaten o hâli anlatıyor).
+- **FVG %50 orta çizgisi** (consequent encroachment) yalnız ≥8 px yükseklikte.
+- **Kutu künyesi** `16 Eyl` (OB `source_time` / FVG `formation_time`) ikinci satır;
+  iki satır sığmazsa tek satıra düşer (`_kutu_yazisi_sigar` satır sayısını ölçer).
+- Lejant yeni dili yalnız çizildiğinde yazar: `▨ dolan kısım`, `┈ %50 ortası`.
+- `meta["zone"]`: `dolgu`, `orta`, `kunye` sayaçları (boş dönüşte de var).
+
+### 33.2 Paket 2 — okunurluk
+
+- **Olay çizgisi dili:** CHoCH NOKTALI (`":"`), BOS kesikli. Matplotlib dash
+  demetlerini `'--'`e normalleştirdiği için stil ayrımı adlandırılmış desenle
+  yapıldı (arşiv ölçümü: 26 `--` + 3 `:`).
+- **Yaş solması:** kritik dışı çizginin alfası olay yaşıyla azalır (0,85 → 0,38).
+- **Şerit çip birleştirme:** aynı seviyedeki `zone` çipleri tek çipte toplanır
+  (`OB↑ · FVG↓`; çip başına en fazla 3 kutu, fazlası yeni çip). `kritik`, `alarm`
+  ve son fiyat kendi çipinde kalır. Kılavuz çizgisi ortaktır.
+  `meta["sag"]`: `birlesik`, `birlesen_kutu` (kayıp yok).
+- **Lejant:** `┄ BOS` ve `┈ CHoCH` ayrı yazar, yalnız GÖRÜNEN tür için madde çıkar.
+- Ölçüldü: kutu içi yazı ↔ şerit çipi çakışması 8 karede 0 px².
+
+### 33.3 Paket 3 — okuma modları
+
+Mod kapsamı **thread-local** (`_ModKapsami`): `PALET[...]`/`SABITLER[...]` çağrı
+yerleri değişmedi, tablolar sarmalayıcıdan okunuyor. Global mutasyon olsaydı
+tarama thread'i ile görsel gönderim işçisi birbirinin modunu sızdırırdı.
+
+- `--sade`: veriden keser → yalnız mum + formasyon bandı + kritik/son fiyat.
+  Kesilen katman `eksik`e yazılmaz; `meta["mod"]["atlanan_kutu"]` kaç kutunun
+  mod nedeniyle çizilmediğini söyler.
+- `--renk-korugu`: mum/şerit/son-fiyat renkleri mavi-turuncu (deuteranopia);
+  şekil kanalı korunur (yükselen BOŞ / düşen DOLU). Lejant renk ADINI da değişir.
+- `--buyuk-yazi`: yalnız `*_pt` ×1,25; dpi/kalınlık/kadraj sabit. Lejant bütçesi
+  ölçeği hesaba katar, alt blok satır adımı büyür → taşma/çakışma 0.
+- ENV: `GRAFIK_SADE`, `GRAFIK_RENK_KORUGU`, `GRAFIK_YAZI` (canlı akış için);
+  CLI bayrağı env'i ezer, bayrak yoksa env devreye girer.
+
+### 33.4 Önce/sonra kanıtı
+
+`docs/ornek_kare_gorsel5.png` — üst satır `git archive d8720cc` ağacıyla üretilen
+GERÇEK GÖRSEL-4 çıktısı, alt satır GÖRSEL-5 (aynı veri: GARAN 4s 140 mum `--zone`).
+Fark: `q100` kod etiketi gitti, `%doluluk` + cetvel + künye geldi, BOS kesikli /
+CHoCH noktalı ayrıştı, aynı seviyedeki kutu çipleri (`FVG↓ · OB↑`) birleşti.
+Kanıt kareleri ayrıca modlarla birlikte alındı: `--sade`, `--renk-korugu`,
+`--buyuk-yazi` (`/tmp/kare/p3g_*.png`, kalıcı değil).
+
+### 33.5 Açık kalanlar
+
+- Paket 1'de önerilen **kutu künyesi genişletmesi** (kaç kez test edildi) ve
+  **seviye cetveli / karar satırı** uygulanmadı — kullanıcı üç paketi seçti.
+- `GRAFIK_OLAY_MAKS` (§29.4) hâlâ onay bekliyor.
+- Kutu içi yazı ince kutuda mumla kısmen örtüşebilir (bkz. §32.3).
