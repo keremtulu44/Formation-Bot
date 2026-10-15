@@ -506,8 +506,10 @@ def test_dolan_kisim_acik_doldurulmamis_kalan_koyu():
     from matplotlib.patches import Rectangle
 
     d = grafik.SABITLER["doldurma"]
-    assert 0.0 < float(d["dolan_orani"]) < 1.0
-    assert 0.0 < float(d["dolan_taban"]) < float(d["ob"]) / 2.0
+    # Kullanıcı: "arttır biraz görünsün ama soluk olsun dolmayana göre" → dolan bant
+    # kalan alanın YARISI kadar koyu: görünür (≥ 0,35) ama soluk (≤ 0,70).
+    assert 0.35 <= float(d["dolan_orani"]) <= 0.70
+    assert 0.02 <= float(d["dolan_taban"]) < float(d["ob"]) / 2.0
     fig, ax = _eksen()
     grafik._zone_ciz(ax, {"cizilen": [_zone_kayit(doluluk=0.30)]}, 60, (90.0, 120.0), [])
     dolgulu = [p for p in ax.patches

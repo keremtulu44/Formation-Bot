@@ -248,9 +248,11 @@ SABITLER_TABAN: dict[str, Any] = {
     # renkli taraf doldurulmamış taraf — tam tersi olmasını istiyorum." Ton yönü
     # döndü: KUTU (doldurulmamış kalan alan) KOYU, DOLAN KISIM AÇIK.
     # `dolan_orani`: dolan bandın alfası = kutu alfası × oran (taban `dolan_taban`).
+    # Kullanıcı: "arttır biraz görünsün ama soluk olsun dolmayana göre" → oran 0,50
+    # (dolan bant = kalan alanın YARISI: görünür ama belirgin şekilde soluk).
     "doldurma": {"golge_esik_orani": 0.18, "golge": 0.07, "golge_ince": 0.04,
                  "ob": 0.16, "fvg": 0.15, "eng": 0.0, "ince": 0.07,
-                 "dolan_orani": 0.32, "dolan_taban": 0.03},
+                 "dolan_orani": 0.50, "dolan_taban": 0.03},
     # GÖRSEL-4: 2,0 pt kalın vurgu "havada çubuk" gibiydi → 1,3. GÖRSEL-6: kenar
     # 0,8 → 0,9 (kutu sınırı bir tık daha belirgin; vurgu çubuğu değişmedi).
     "zone_kalinlik": {"kenar": 0.9, "vurgu": 1.3},

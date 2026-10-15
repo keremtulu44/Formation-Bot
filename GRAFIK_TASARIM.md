@@ -1442,8 +1442,9 @@ sadece ton yönü döndü.
 - Eskiden: kutu tek parça (`ob 0,16` / `fvg 0,15`) + **dolan kısım üstüne `+0,12` alfa**
   → dolan taraf koyulaşıyordu. Yeni: kutu **iki ayrı dolgu** olarak çizilir —
   **doldurulmamış kalan alan KOYU** (`ob 0,16` / `fvg 0,15`), **dolan bant AÇIK**
-  (`alfa = kutu × 0,32`, taban `0,03`).
-- Ölçülen tonlar (GARAN 1s · OB↓ %64 dolu): dolan kısım `(23,67,52) → (16,29,32)`,
+  (`alfa = kutu × 0,50`, taban `0,03`). Kullanıcı ölçüsü: *"arttır biraz görünsün ama
+  soluk olsun dolmayana göre"* → dolan bant kalan alanın **yarısı** kadar koyu.
+- Ölçülen tonlar (GARAN 1s · OB↓ %64 dolu): dolan kısım `(23,67,52) → (17,33,34)`,
   kalan alan `(19,46,41)` **değişmedi**. Geometri aynı: boğa kutuda dolgu üstten aşağı,
   ayı kutuda alttan yukarı (motorun `fill_ratio` formülüyle birebir).
 - Dolan bandın **sınır çizgisi** (1,0 pt · α 0,90) ve `%X` etiketi duruyor — dolan
