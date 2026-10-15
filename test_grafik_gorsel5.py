@@ -51,14 +51,20 @@ def test_qnn_etiketi_kalkti_doluluk_kaldi():
 
 
 def _dolgu_bandi(ax):
-    """Kutu dolgusundan DAHA KOYU ikinci dikdörtgeni (dolan kısım) bulur."""
+    """DOLAN kısmı bulur — GÖRSEL-8: dolan kısım AÇIK tonda çizilir.
+
+    Kullanıcı kararı: "koyu taraf = doldurulmamış, açık taraf = dolan kısım".
+    Kutu çerçevesi dolgusuz bir dikdörtgendir (`facecolor="none"`); ölçüme
+    yalnız DOLGULU dikdörtgenler girer, en düşük alfa = dolan bant.
+    """
     from matplotlib.patches import Rectangle
 
-    kutular = [p for p in ax.patches if isinstance(p, Rectangle)]
+    kutular = [p for p in ax.patches
+               if isinstance(p, Rectangle) and p.get_facecolor()[3] > 0]
     alpha = [(p.get_alpha() or 0.0, p.get_xy(), p.get_height()) for p in kutular]
     if len(alpha) < 2:
         return None
-    return max(alpha, key=lambda x: x[0])          # en opak olan = dolan kısım
+    return min(alpha, key=lambda x: x[0])          # en AÇIK olan = dolan kısım
 
 
 def test_boga_kutusunda_dolgu_ustten_asagi():
@@ -90,7 +96,9 @@ def test_doluluk_sifir_veya_tam_ise_ek_bant_cizilmez():
         grafik._zone_ciz(ax, {"cizilen": [_zone_kayit(doluluk=deger)]}, 60,
                          (90.0, 120.0), [])
         from matplotlib.patches import Rectangle
-        assert len([p for p in ax.patches if isinstance(p, Rectangle)]) == 1
+        dolgulu = [p for p in ax.patches
+                   if isinstance(p, Rectangle) and p.get_facecolor()[3] > 0]
+        assert len(dolgulu) == 1, "uç değerde kutu tek parça koyu kalmalı"
 
 
 def test_fvg_orta_cizgisi_yalniz_yeterince_yuksek_kutuda():
@@ -480,12 +488,43 @@ def test_ph_pl_son_fiyattan_uzaksa_ikisi_de_kalir():
 
 
 def test_kutu_dolgusu_belirginlesti_ama_neon_degil():
-    """Kullanıcı: 'şeffaflığı biraz azalt ama çok abartma' → ölçülü artış."""
+    """GÖRSEL-6 sayı sözleşmesi korunur: 'şeffaflığı azalt ama abartma'."""
     d = grafik.SABITLER["doldurma"]
-    assert 0.14 <= float(d["ob"]) <= 0.20          # eski 0.09, "abartma" tavanı
-    assert 0.13 <= float(d["fvg"]) <= 0.20         # eski 0.08
+    assert 0.14 <= float(d["ob"]) <= 0.20          # doldurulmamış alanın tonu
+    assert 0.13 <= float(d["fvg"]) <= 0.20
     assert float(grafik.SABITLER["zone_kalinlik"]["kenar"]) == 0.9
     assert float(grafik.SABITLER["zone_kalinlik"]["vurgu"]) == 1.3   # vurgu değişmedi
+
+
+def test_dolan_kisim_acik_doldurulmamis_kalan_koyu():
+    """GÖRSEL-8 (kullanıcı): "koyu taraf = doldurulmamış, açık taraf = DOLAN".
+
+    Ölçüm: aynı kutuda iki dolgu dikdörtgeni vardır; DOLAN bandın alfası kalan
+    alandan KÜÇÜK olmalı (daha açık ton), rengi (hue) aynı kalmalı ve bant
+    tabanın altına düşmemeli (görünmez olmasın).
+    """
+    from matplotlib.patches import Rectangle
+
+    d = grafik.SABITLER["doldurma"]
+    assert 0.0 < float(d["dolan_orani"]) < 1.0
+    assert 0.0 < float(d["dolan_taban"]) < float(d["ob"]) / 2.0
+    fig, ax = _eksen()
+    grafik._zone_ciz(ax, {"cizilen": [_zone_kayit(doluluk=0.30)]}, 60, (90.0, 120.0), [])
+    dolgulu = [p for p in ax.patches
+               if isinstance(p, Rectangle) and p.get_facecolor()[3] > 0]
+    assert len(dolgulu) == 2, "dolan + kalan: iki ayrı ton"
+    alfa = sorted(round(float(p.get_alpha()), 6) for p in dolgulu)
+    acik, koyu = alfa[0], alfa[1]
+    assert acik < koyu, "dolan kısım DAHA AÇIK olmalı (kullanıcı kararı)"
+    assert acik >= float(d["dolan_taban"]) - 1e-9
+    assert koyu <= 0.20 + 1e-9, "neon yok: kalan alan yarı saydam kalır"
+    # hue korunur: iki dikdörtgen de kutunun kendi rengi
+    renkler = {tuple(round(c, 4) for c in p.get_facecolor()[:3]) for p in dolgulu}
+    assert len(renkler) == 1
+    # doluluk sınırı çizgisi (cetvel) duruyor mu?
+    sinirlar = [ln for ln in ax.get_lines()
+                if len(ln.get_ydata()) == 2 and abs(ln.get_ydata()[0] - 107.0) < 1e-6]
+    assert sinirlar and abs(float(sinirlar[0].get_alpha()) - 0.9) < 1e-6
 
 
 def test_kutu_dolgusu_kutu_ici_yazi_okunurlugunu_bozmaz():

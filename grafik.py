@@ -244,8 +244,13 @@ SABITLER_TABAN: dict[str, Any] = {
     # azalt, ama çok abartma"): dolgu %9/%8 → %16/%15 (≈1,8×). Neon DEĞİL: kutu
     # dolgusu hâlâ yarı saydam, mum okunurluğu korunur; kalın/ince kutu kademesi
     # (`ince`) ve pasif yarıya inme kuralı aynen sürer.
+    # GÖRSEL-8 (kullanıcı): "OB'nin koyu tarafı doldurulmuş taraf oluyor, açık
+    # renkli taraf doldurulmamış taraf — tam tersi olmasını istiyorum." Ton yönü
+    # döndü: KUTU (doldurulmamış kalan alan) KOYU, DOLAN KISIM AÇIK.
+    # `dolan_orani`: dolan bandın alfası = kutu alfası × oran (taban `dolan_taban`).
     "doldurma": {"golge_esik_orani": 0.18, "golge": 0.07, "golge_ince": 0.04,
-                 "ob": 0.16, "fvg": 0.15, "eng": 0.0, "ince": 0.07},
+                 "ob": 0.16, "fvg": 0.15, "eng": 0.0, "ince": 0.07,
+                 "dolan_orani": 0.32, "dolan_taban": 0.03},
     # GÖRSEL-4: 2,0 pt kalın vurgu "havada çubuk" gibiydi → 1,3. GÖRSEL-6: kenar
     # 0,8 → 0,9 (kutu sınırı bir tık daha belirgin; vurgu çubuğu değişmedi).
     "zone_kalinlik": {"kenar": 0.9, "vurgu": 1.3},
@@ -1801,11 +1806,47 @@ def _zone_ciz(ax, zone: Mapping[str, Any], n: int, aralik: Sequence[float],
             saydam = float(dolgu["ob"] if b["tip"] == "ob" else dolgu["fvg"]) * 0.5
         else:
             saydam = float(dolgu["ob"] if b["tip"] == "ob" else dolgu["fvg"])
+        # --- GÖRSEL-8 · TON YÖNÜ -------------------------------------------
+        # Kutu artık TEK parça dolgu değil: doldurulmamış (kalan) alan KOYU tonda,
+        # DOLAN bant AÇIK tonda çizilir. Çerçeve dolgusuz ayrı bir dikdörtgen.
+        # Uçlarda (%0 / %100) bant yoktur; kutu tek parça koyu kalır.
+        acik = max(float(dolgu["dolan_taban"]), saydam * float(dolgu["dolan_orani"]))
+        yuk_span = max(ust - alt, gorunur * 0.0015)
+        dol = _gercek(b.get("doluluk"))
+        bolunur = (dol is not None and b["tip"] != "eng" and 0.02 <= dol <= 0.98)
+        parcalar: list[tuple[float, float, float]] = []
+        sinir = None
+        if bolunur:
+            if int(b.get("yon") or 1) >= 0:            # boğa: dolgu ÜSTTEN aşağı
+                d_alt, d_ust = ust - yuk_span * dol, ust
+                sinir = d_alt
+                parcalar = [(d_alt, d_ust, acik), (alt, d_alt, saydam)]
+            else:                                      # ayı: dolgu ALTTAN yukarı
+                d_alt, d_ust = alt, alt + yuk_span * dol
+                sinir = d_ust
+                parcalar = [(d_alt, d_ust, acik), (d_ust, ust, saydam)]
+        else:
+            parcalar = [(alt, ust, saydam)]
+        for p_alt, p_ust, p_alfa in parcalar:
+            if p_ust - p_alt <= 0:
+                continue
+            ax.add_patch(Rectangle((x0 - 0.5, p_alt), genislik_cizgi,
+                                   max(p_ust - p_alt, gorunur * 0.0008),
+                                   facecolor=renk[b["tip"]], alpha=p_alfa,
+                                   edgecolor="none", zorder=1))
+        # Çerçeve: eskiden kutunun kendi alfasıyla çiziliyordu (`alpha=saydam`);
+        # görünüm birebir korunsun diye alfa aynen geçirilir — KALINLIK/RENK
+        # değişmedi, yalnız ton yönü döndü (kullanıcı: "başka değişiklik istemiyorum").
         ax.add_patch(Rectangle((x0 - 0.5, alt), genislik_cizgi, yukseklik,
-                               facecolor=renk[b["tip"]], alpha=saydam,
-                               edgecolor=renk[b["tip"]], linewidth=float(kalinlik["kenar"]),
+                               facecolor="none", edgecolor=renk[b["tip"]],
+                               linewidth=float(kalinlik["kenar"]), alpha=saydam,
                                linestyle=(0, (4, 3)) if b["tip"] == "eng" else "solid",
-                               zorder=1))
+                               zorder=1.05))
+        # Dolan bandın SINIR çizgisi: "%X dolu" bilgisinin geometrisi (cetvel).
+        if sinir is not None:
+            ax.plot([x0 - 0.5, x0 - 0.5 + genislik_cizgi], [sinir, sinir],
+                    color=renk[b["tip"]], linewidth=1.0, alpha=0.9,
+                    solid_capstyle="butt", zorder=1.6)
         y_vurgu = alt if b.get("vurgu", "alt") == "alt" else ust   # §0.12r
         ax.plot([x0 - 0.5, x0 - 0.5 + genislik_cizgi], [y_vurgu, y_vurgu],
                 color=renk[b["tip"]], linewidth=float(kalinlik["vurgu"]),
@@ -1815,22 +1856,8 @@ def _zone_ciz(ax, zone: Mapping[str, Any], n: int, aralik: Sequence[float],
         # modül başlığı: OB `fill_ratio`, FVG `wick_fill_ratio` formülleri).
         # Dolan kısım daha koyu tonda + sınır ÇİZGİSİ: "%X dolu" bilgisi hem
         # sayı hem GEOMETRİ olarak görünür (kullanıcı: "hem cetvel hem %").
-        dol = _gercek(b.get("doluluk"))
-        if dol is not None and 0.02 <= dol <= 0.98:
-            yuk_span = max(ust - alt, gorunur * 0.0015)
-            if int(b.get("yon") or 1) >= 0:
-                d_alt, d_ust = ust - yuk_span * dol, ust
-                sinir = d_alt
-            else:
-                d_alt, d_ust = alt, alt + yuk_span * dol
-                sinir = d_ust
-            ax.add_patch(Rectangle((x0 - 0.5, d_alt), genislik_cizgi,
-                                   max(d_ust - d_alt, gorunur * 0.0008),
-                                   facecolor=renk[b["tip"]], alpha=min(0.55, saydam + 0.12),
-                                   edgecolor="none", zorder=1.2))
-            ax.plot([x0 - 0.5, x0 - 0.5 + genislik_cizgi], [sinir, sinir],
-                    color=renk[b["tip"]], linewidth=1.0, alpha=0.9,
-                    solid_capstyle="butt", zorder=1.6)
+        # (GÖRSEL-8) Dolan bant + sınır çizgisi yukarıda çizildi; burada sayaç.
+        if bolunur:
             dolgu_sayisi += 1
         # --- %50 ORTA ÇİZGİSİ (FVG): bölgenin yarısı "consequent encroachment" ---
         # Yalnız okunabilecek kadar yüksek FVG kutularında; ince kutuda gürültü olur.

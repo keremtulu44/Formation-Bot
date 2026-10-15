@@ -1430,3 +1430,34 @@ Kart kısaldı; elde kullanılmayan veri duruyor (`net_progress_atr`, `direction
 `volume/capital_regime`, `break_reference_source`, `evidence_text`, `age_bars`,
 `bos_maturity`, `break_frozen_*`) — sıradaki tur **görselde** bu alanları okunur kılacak
 (şerit tonu, ilerleme/verim çubuğu, olay kanıtının Türkçesi), metin yine yalnız görünmeyeni söyleyecek.
+
+## 36 · GÖRSEL-8 (2026-10-15) — OB/FVG dolgu tonu tersine döndü
+
+Kullanıcı: *"OB'nin koyu tarafı doldurulmuş taraf oluyor, açık renk olan tarafı
+doldurulmamış taraf. Tam tersi olmasını istiyorum."* — **başka değişiklik istenmedi**,
+sadece ton yönü döndü.
+
+### 36.1 Ne değişti
+
+- Eskiden: kutu tek parça (`ob 0,16` / `fvg 0,15`) + **dolan kısım üstüne `+0,12` alfa**
+  → dolan taraf koyulaşıyordu. Yeni: kutu **iki ayrı dolgu** olarak çizilir —
+  **doldurulmamış kalan alan KOYU** (`ob 0,16` / `fvg 0,15`), **dolan bant AÇIK**
+  (`alfa = kutu × 0,32`, taban `0,03`).
+- Ölçülen tonlar (GARAN 1s · OB↓ %64 dolu): dolan kısım `(23,67,52) → (16,29,32)`,
+  kalan alan `(19,46,41)` **değişmedi**. Geometri aynı: boğa kutuda dolgu üstten aşağı,
+  ayı kutuda alttan yukarı (motorun `fill_ratio` formülüyle birebir).
+- Dolan bandın **sınır çizgisi** (1,0 pt · α 0,90) ve `%X` etiketi duruyor — dolan
+  kısmın geometrisi hâlâ okunur, ton tek bilgi kanalı değil.
+- Çerçeve artık dolgusuz ayrı bir dikdörtgen; alfası eskisi gibi `saydam` (görünüm
+  birebir korundu), kalınlık `0,9 pt` ve vurgu çubuğu `1,3 pt` **değişmedi**.
+- Uçlarda (%0 / %100) bant çizilmez: kutu tek parça koyu kalır (eski davranış).
+
+### 36.2 Testler
+
+- `test_grafik_gorsel5.py`: `_dolgu_bandi` artık **en AÇIK** dolgulu dikdörtgeni bulur
+  (çerçeve `facecolor="none"` olduğu için ölçüme girmez); uç değer testi yalnız DOLGULU
+  dikdörtgeni sayar. Yeni test: `test_dolan_kisim_acik_doldurulmamis_kalan_koyu`
+  (iki ton, dolan < kalan, taban/neon tavanı, hue aynı, sınır çizgisi α 0,90).
+  GÖRSEL-6 sayı sözleşmesi (0,14–0,20 ve kenar/vurgu) korunuyor.
+- `docs/ornek_kutu_tonu.png` — iki farklı hisse (GARAN 1s, AKBNK 1s), önce/sonra,
+  ölçülen ton değerleriyle.
