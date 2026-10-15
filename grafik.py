@@ -1189,6 +1189,10 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                                       kutular=mum_kutulari) or {}
                 meta["zone"]["etiket_ic"] = int(zone_ozet.get("ic") or 0)
                 meta["zone"]["etiket_serit"] = int(zone_ozet.get("serit") or 0)
+                # GÖRSEL-5: bilgi artık geometride de var — sayaçlar sessiz kayıp olmasın.
+                meta["zone"]["dolgu"] = int(zone_ozet.get("dolgu") or 0)
+                meta["zone"]["orta"] = int(zone_ozet.get("orta") or 0)
+                meta["zone"]["kunye"] = int(zone_ozet.get("kunye") or 0)
             except Exception as hata:
                 log.warning("grafik: bölge katmanı çizilemedi (%s)", hata)
                 eksik.append("zone")
@@ -1412,27 +1416,45 @@ def _cizgi_ve_alan(ax, kapanis, aralik: Sequence[float]) -> None:
 
 
 def _zone_metni(b: Mapping[str, Any]) -> str:
-    """Kutu etiketi TEK kaynaktan: `OB↓ %70` / `FVG↑ q95` / `ENG↑`.
+    """Kutu etiketi TEK kaynaktan: `OB↓ %70` / `FVG↑ %38` / `ENG↑`.
 
-    Doluluk motorun verdiği alandan (`fill` / `close_fill_ratio`); yoksa OB'de
-    yazılmaz, FVG'de kalite (`qNN`) yazılır, o da yoksa yalnız tip+yön kalır.
-    Hem kutu içi yazı hem şerit yedeği bu metni kullanır (iki yerde ayrışmasın).
+    Doluluk motorun verdiği alandan (`fill` / `close_fill_ratio`); yoksa yalnız
+    tip+yön kalır. **GÖRSEL-5:** `qNN` etiketi KALDIRILDI — lejantta açıklaması
+    olmayan bir koddu (ölçüm: çizilen 56 kutu etiketinin 21'i `qNN`di); kalite
+    bilgisi mesaj tarafında `kalite 84/100` olarak zaten yazılı, kutu etiketi ise
+    "hangi kutu, ne kadarı dolu" sorusunu cevaplar. Hem kutu içi yazı hem şerit
+    yedeği bu metni kullanır (iki yerde ayrışmasın).
     """
     ad = {"ob": "OB", "fvg": "FVG", "eng": "ENG"}.get(str(b.get("tip")), str(b.get("tip")).upper())
     metin = f"{ad}{'↑' if int(b.get('yon') or 1) >= 0 else '↓'}"
     if b.get("doluluk") is not None:
         metin += f" %{sayi(float(b['doluluk']) * 100.0, 0)}"
-    elif b.get("skor") is not None and b.get("tip") != "ob":
-        metin += f" q{int(round(float(b['skor'])))}"
     return metin
+
+
+def _zone_kunye(b: Mapping[str, Any]) -> str:
+    """Kutu künyesi: oluşum tarihi (`12 Eyl`) — bölgenin yaşı karar vericidir.
+
+    Motor alanı `source_time` (OB) / `formation_time` (FVG). Alan yoksa boş döner
+    ve kutu tek satır etiketle çizilir (uydurma tarih yazılmaz).
+    """
+    ham = b.get("zaman")
+    if not ham:
+        return ""
+    try:
+        dt = datetime.fromisoformat(str(ham))
+    except (TypeError, ValueError):
+        return ""
+    return f"{dt.day:02d} {_AY.get(dt.month, '')}".strip()
 
 
 def _kutu_yazisi_sigar(ax, b: Mapping[str, Any], x0: int, x1: int, n: int,
                        aralik: Sequence[float], metin: str) -> bool:
     """Kutu içi yazı kutuya sığar mı? (piksel ölçümü; sığmazsa şerit yedeği devreye girer.)
 
-    Yatay: yazı genişliği kutu genişliğinden küçük olmalı (kutu kenarlarını aşmasın).
-    Dikey: kutu yüksekliği bir satır yazıyı almalı (ince FVG'lerde yazı taşardı).
+    Yatay: en GENİŞ satır kutu genişliğinden küçük olmalı (kutu kenarlarını aşmasın).
+    Dikey: kutu yüksekliği satır sayısını almalı (ince FVG'lerde yazı taşardı).
+    Çok satırlı metin (künye satırı) desteklenir — satır sayısı kadar yer ister.
     Ölçüm hata verirse `False` döner → güvenli taraf: şerit yedeği kullanılır.
     """
     try:
@@ -1444,7 +1466,8 @@ def _kutu_yazisi_sigar(ax, b: Mapping[str, Any], x0: int, x1: int, n: int,
     genislik_px = max(1.0, float(x1 - x0 + 1)) * bar_px
     # Yazı genişliği kart metriğinden (16 px taban) kutu puntosuna çevrilir.
     punto_px = float(SABITLER["zone_yazi_pt"]) * float(SABITLER["dpi"]) / 72.0
-    tahmin_px = _genislik_16(metin) * punto_px / 16.0
+    satirlar = str(metin).split("\n") or [""]
+    tahmin_px = max(_genislik_16(satir) for satir in satirlar) * punto_px / 16.0
     if tahmin_px + 6.0 > genislik_px:
         return False
     try:
@@ -1452,7 +1475,7 @@ def _kutu_yazisi_sigar(ax, b: Mapping[str, Any], x0: int, x1: int, n: int,
         kutu_yuk_px = (float(b["ust"]) - float(b["alt"])) * aralik_px
     except Exception:
         return False
-    return kutu_yuk_px >= punto_px + 5.0
+    return kutu_yuk_px >= punto_px * len(satirlar) + 5.0
 
 
 def _kutu_yazisi_koy(ax, b: Mapping[str, Any], x0: int, x1: int, n: int,
@@ -1545,6 +1568,13 @@ def _zone_ciz(ax, zone: Mapping[str, Any], n: int, aralik: Sequence[float],
     dolgu = SABITLER["doldurma"]
     kalinlik = SABITLER["zone_kalinlik"]
     ic, seride = 0, []
+    dolgu_sayisi, orta_sayisi, kunye_sayisi = 0, 0, 0
+    # Kutu yüksekliği PİKSEL cinsinden ölçülür (orta çizgi/ince kutu kararı).
+    try:
+        _ax_px = ax.get_window_extent()
+        _px_birim = float(_ax_px.height) / max(1e-9, gorunur)
+    except Exception:
+        _px_birim = 0.0
     for b in (zone.get("cizilen") or []):
         alt, ust = float(b["alt"]), float(b["ust"])
         x0, x1 = int(b.get("x0") or 0), int(b.get("x1", n - 1))
@@ -1568,16 +1598,55 @@ def _zone_ciz(ax, zone: Mapping[str, Any], n: int, aralik: Sequence[float],
         ax.plot([x0 - 0.5, x0 - 0.5 + genislik_cizgi], [y_vurgu, y_vurgu],
                 color=renk[b["tip"]], linewidth=float(kalinlik["vurgu"]),
                 solid_capstyle="butt", zorder=2)
+        # --- DOLULUK CETVELİ (GÖRSEL-5): motorun dolgu yönüyle AYNI geometri ---
+        # Boğa kutuda dolgu üstten aşağı, ayı kutuda alttan yukarı ilerler (bkz.
+        # modül başlığı: OB `fill_ratio`, FVG `wick_fill_ratio` formülleri).
+        # Dolan kısım daha koyu tonda + sınır ÇİZGİSİ: "%X dolu" bilgisi hem
+        # sayı hem GEOMETRİ olarak görünür (kullanıcı: "hem cetvel hem %").
+        dol = _gercek(b.get("doluluk"))
+        if dol is not None and 0.02 <= dol <= 0.98:
+            yuk_span = max(ust - alt, gorunur * 0.0015)
+            if int(b.get("yon") or 1) >= 0:
+                d_alt, d_ust = ust - yuk_span * dol, ust
+                sinir = d_alt
+            else:
+                d_alt, d_ust = alt, alt + yuk_span * dol
+                sinir = d_ust
+            ax.add_patch(Rectangle((x0 - 0.5, d_alt), genislik_cizgi,
+                                   max(d_ust - d_alt, gorunur * 0.0008),
+                                   facecolor=renk[b["tip"]], alpha=min(0.55, saydam + 0.12),
+                                   edgecolor="none", zorder=1.2))
+            ax.plot([x0 - 0.5, x0 - 0.5 + genislik_cizgi], [sinir, sinir],
+                    color=renk[b["tip"]], linewidth=1.0, alpha=0.9,
+                    solid_capstyle="butt", zorder=1.6)
+            dolgu_sayisi += 1
+        # --- %50 ORTA ÇİZGİSİ (FVG): bölgenin yarısı "consequent encroachment" ---
+        # Yalnız okunabilecek kadar yüksek FVG kutularında; ince kutuda gürültü olur.
+        if b["tip"] == "fvg" and _px_birim and (yukseklik * _px_birim) >= 8.0:
+            yorta = (alt + ust) / 2.0
+            ax.plot([x0 - 0.5, x0 - 0.5 + genislik_cizgi], [yorta, yorta],
+                    color=renk[b["tip"]], linewidth=0.6, alpha=0.4,
+                    linestyle=(0, (1, 2)), zorder=1.5)
+            orta_sayisi += 1
         # --- kutu İÇİ etiket (GÖRSEL-4): "hangi kutu, ne kadar dolu" kutuda yazılı ---
         metin = _zone_metni(b)
-        if _kutu_yazisi_sigar(ax, b, x0, x1, n, aralik, metin) and _kutu_yazisi_koy(
-                ax, b, x0, x1, n, aralik, metin, renk[b["tip"]], kutular):
+        kunye = _zone_kunye(b)
+        # Künye (oluşum tarihi) ikinci satıra YALNIZ sığıyorsa girer; sığmıyorsa
+        # tek satırla devam edilir — yazı hiçbir durumda kutudan taşmaz.
+        iki = f"{metin}\n{kunye}" if kunye else ""
+        if iki and _kutu_yazisi_sigar(ax, b, x0, x1, n, aralik, iki):
+            kunye_sayisi += 1
+        else:
+            iki = metin
+        if _kutu_yazisi_sigar(ax, b, x0, x1, n, aralik, iki) and _kutu_yazisi_koy(
+                ax, b, x0, x1, n, aralik, iki, renk[b["tip"]], kutular):
             ic += 1
         else:
             seride.append(b)
     if sag is not None:
         sag.extend(_zone_sag_adaylari(zone, n, yalniz=seride))
-    return {"ic": ic, "serit": len(seride)}
+    return {"ic": ic, "serit": len(seride), "dolgu": dolgu_sayisi,
+            "orta": orta_sayisi, "kunye": kunye_sayisi}
 
 
 def _zone_sag_adaylari(zone: Mapping[str, Any], n: int,
@@ -2415,6 +2484,12 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool) -> list[str]:
             {"ob": "OB", "fvg": "FVG", "eng": "ENG"}.get(a, str(a)) for a in adlar))
         if str(goruntu.get("tf")) in _FVG_YOK_TFLAR:
             oge.append("FVG · 4s/1g")
+        # GÖRSEL-5: dolgu cetveli ve %50 orta çizgisi yalnız ÇİZİLDİĞİNDE yazılır.
+        _kayitlar = list(zone.get("cizilen") or [])
+        if any(_gercek(b.get("doluluk")) not in (None, 0.0, 1.0) for b in _kayitlar):
+            oge.append("▨ dolan kısım")
+        if any(str(b.get("tip")) == "fvg" for b in _kayitlar):
+            oge.append("┈ %50 ortası")
     serit = goruntu.get("serit") or {}
     if serit.get("spike"):
         # `yerel hesap` YALNIZ yerel hesaplandığında yazılır (kullanıcı onayı,
@@ -2667,7 +2742,8 @@ def _zone_meta(zone: Optional[Mapping[str, Any]]) -> dict[str, Any]:
         return {"cizilen": 0, "elenen": 0, "tip": {"ob": 0, "fvg": 0, "eng": 0},
                 "kaynak_disi": 0, "kapak": {}, "sirala": "zone verisi yok", "atr": None,
                 "hata": [], "kayitlar": [], "etiket_atlandi": 0,
-                "etiket_ic": 0, "etiket_serit": 0}
+                "etiket_ic": 0, "etiket_serit": 0,
+                "dolgu": 0, "orta": 0, "kunye": 0}
     kayitlar = list(zone.get("cizilen") or [])
     return {"cizilen": len(kayitlar), "elenen": int(zone.get("elenen") or 0),
             "tip": {t: sum(1 for b in kayitlar if b["tip"] == t) for t in ("ob", "fvg", "eng")},
@@ -2679,9 +2755,13 @@ def _zone_meta(zone: Optional[Mapping[str, Any]]) -> dict[str, Any]:
             # için sağ şerit yedeğine mi taşındı (`etiket_serit`)?
             "etiket_ic": int(zone.get("etiket_ic") or 0),
             "etiket_serit": int(zone.get("etiket_serit") or 0),
+            # GÖRSEL-5: doluluk cetveli / %50 orta çizgisi / künye sayaçları.
+            "dolgu": int(zone.get("dolgu") or 0),
+            "orta": int(zone.get("orta") or 0),
+            "kunye": int(zone.get("kunye") or 0),
             "kayitlar": [{k: b.get(k) for k in ("tip", "yon", "alt", "ust", "kaynak",
                                                 "taraf", "durum", "doluluk", "x0", "x1",
-                                                "mesafe", "mesafe_atr", "vurgu")}
+                                                "mesafe", "mesafe_atr", "vurgu", "zaman")}
                          for b in kayitlar]}
 
 
