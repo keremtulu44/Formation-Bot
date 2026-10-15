@@ -53,23 +53,34 @@ alan yok:** çizilen her etiket motorun gerçek çıktısına dayanmak zorunda (
     ayracı yok. Bu **G0** commit'idir ve grafik kodundan ÖNCE gelir (§15, §19).
 17. Katmanlar faz faz gelir; her faz tek commit + tam test yeşil (§3).
 
-### 0.4.1 Kalıcı palet (koyu zemin `#101418`, metin/eksen `#e8e8e8`)
+### 0.4.1 Kalıcı palet (koyu zemin `#0f151c`, metin/eksen `#e9eef5`)
+
+**GÖRSEL-3 (2026-10-14):** yükselen mum YEŞİL, düşen mum KIRMIZI (neon değil:
+iki ton da orta doygunlukta); mum dışı katmanlar nötr grid üstünde koyu **çip**
+(panel) ile şeride yazılır. Renk tek başına bilgi taşımaz — doluluk farkı,
+işaret ve yazı ikinci kanaldır.
 
 | Katman | Renk | Çizim |
 |---|---|---|
-| Mum (yükselen) | `#e3e6e8` | içi boş gövde + fitil |
-| Mum (düşen) | `#8d949a` | dolu gövde + fitil |
-| Order Block | `#2bb673` | %14 dolgu (kutunun yüksekliği görünür aralığın %18'ini aşarsa 0,05'e iner §17.6) + `source_index`'te kalın kenar |
-| FVG | `#42a5f5` | %12 dolgu + tarama (hatch) + `formation_index`'te kalın kenar |
-| Engulfing | `#b388ff` | kesikli kontur |
-| Formasyon çizgileri | `#f5f5f5` | 1,6 pt; son muma kadar projeksiyon; `apex`'te `x` |
-| Temas mumları | `#e8e8e8` | açık `o` işareti + temas sayısı |
-| PH/PL | `#90a4ae` | aday α.45 / teyitli tam / kırık α.2 |
-| HH/HL/LH/LL | `#b0bec5` | küçük yazı |
-| BOS/CHoCH | `#ff8a65` | ok + kesikli seviye çizgisi + `BOS↑/CHoCH↓` |
-| Katılım şeridi | `#80cbc4` | §2.1 |
+| Mum (yükselen) | `#31b184` kenar + `#134237` dolgu | içi BOŞ gövde (koyu yeşil dolgu) + yeşil fitil |
+| Mum (düşen) | `#e05c58` | DOLU gövde + kırmızı fitil |
+| Order Block | `#2bb673` | %9 dolgu (kutunun yüksekliği görünür aralığın %18'ini aşarsa 0,04'e iner §17.6) + `source_index`'te kalın kenar (1,3 pt, GÖRSEL-4) |
+| FVG | `#3f9dec` | %8 dolgu (TARAMA YOK, GÖRSEL-4) + `formation_index`'te kalın kenar |
+| Engulfing | `#a78bfa` | kesikli kontur |
+| Formasyon çizgileri | `#e0b96a` | 1,6 pt; bant arası α.06 dolgu; son muma kadar projeksiyon; `apex`'te `x` |
+| Temas mumları | `#f0d9a8` | açık `o` işareti + temas sayısı (bant 24'ü aşarsa kırpılır, kare not yazar) |
+| PH/PL | `#8ba0b4` | aday α.45 / teyitli tam / kırık α.2 |
+| HH/HL/LH/LL | `#9fb0c0` | küçük yazı |
+| BOS/CHoCH | `#f0885c` | ok + kesikli seviye çizgisi + `BOS↑/CHoCH↓` |
+| Katılım şeridi (yükselen spike) | `#2f9e8a` | §2.1; spike MUMUN yönünde renklenir |
+| Katılım şeridi (düşen spike) | `#cf5f5f` | §2.1 |
 | İhlal / `!` | `#ef5350` | `!` (çaba var-sonuç yok, son 15 mum) ve ihlal işaretleri |
-| Izgara | `#2a2f35` | yalnız yatay, kesikli (§17.7 kalabalığı) |
+| Izgara | `#212c39` | yalnız yatay, kesikli (§17.7 kalabalığı) |
+| Sağ şerit paneli | `#151d27` / kenar `#243040` | etiket çipleri: `#111922` dolgu + katman renginde kenar/yazı |
+| Son fiyat çipi | dolu çip | renk SON MUMUN yönünden (yeşil/kırmızı), koyu yazı, kalın |
+
+Kare zemini `#0f151c`, şerit kulvarı `#151d27` (panel); ikisini `#243040` ince
+çizgi ayırır. Başlık bloğunun altında `#243040` yatay ayraç vardır.
 
 Renk tek başına bilgi taşımaz: her bölge/katman bir de **yazı** taşır.
 
@@ -78,7 +89,7 @@ Renk tek başına bilgi taşımaz: her bölge/katman bir de **yazı** taşır.
 - **a** Alarm barı: gri düşey çizgi + `TEYIT/RETEST/…` yerine **gerçek state metni** (z).
 - **b** 180 bar tavanı formasyon eskiyse kalkar; `genişlik = bar × 6 px`,
   taban 1080 / tavan 1440, çökme modu yedek.
-- **c** Bölge kutusu yazısı minimal (12).
+- **c** Bölge kutusu yazısı minimal (12) — **GÖRSEL-4:** yazı artık kutunun İÇİNDE; sığmazsa sağ şeride yedeklenir (§32).
 - **d** Yalnız kapalı bar (6) · **e** formasyon çizgileri son muma kadar uzatılır
   (apex'e değil) · **f** `kritik` seviye çizgisi VAR, hedef/stop YOK
   (kartta kalıyor; kalabalık gerekçesi) · **g** doluluk = gölge + kısa sayı, ek
@@ -1077,7 +1088,8 @@ Bu tur §0.4.1, §0.12, §14–§17 ile çelişen veya onları somutlaştıran k
 
 ### 29.2 §0.4.1 paleti için not
 
-- Renkler değişmedi. Etiket rengi yalnız metin olarak tekrarlandı; kadraj dışı seviye çizilmediği için palette yeni katman yok.
+- Bu turda renkler değişmedi (görsel-2). Etiket rengi yalnız metin olarak tekrarlandı; kadraj dışı seviye çizilmediği için palette yeni katman yok.
+- **Sonradan (görsel-3, §31) değişti:** monokrom mum paleti yerine yeşil/kırmızı mum şeması geldi; buradaki eski `#e3e6e8`/`#8d949a` değerleri geçersizdir.
 
 ### 29.3 Ölçülebilir kurallar (testler)
 
@@ -1099,3 +1111,354 @@ Bu tur §0.4.1, §0.12, §14–§17 ile çelişen veya onları somutlaştıran k
 - **Formasyon uyarısı kaldırıldı:** `/grafik` formasyon dosyası istemez; "formasyon verisi verilmedi" satırı kullanıcıya hata gibi görünüyordu. Formasyon bulunamayınca açık neden yalnız `--formasyon-tara` yolunda yazılır.
 - **Alarm:** alarm kareleri olay başına tek albüm. Kill-switch `TELEGRAM_GRAFIK=yok` (varsayılan, `config.py`, `render.yaml`, `.env.example`) iken alarm görseli üretilmez; yalnız `alarm` iken çalışır.
 - **Test kapsamı:** `test_grafik_album.py` (9 test), `test_grafik_teslim.py` ve `test_grafik_istegi.py` yeni sözleşmeye çevrildi.
+
+## 31 · GÖRSEL-3 TURU (2026-10-14) — mum renkleri, çipler, kalabalık denetimi
+
+Kullanıcı geri bildirimi: "artan mumları yeşil, düşen kırmızı yapıp neon yapmamalıyız;
+diğer katmanlar çok nötr kalmış; sağdaki yazılar alakasız olabiliyor; görselliği
+güçlendir". Bu tur yalnız ÇİZİM katmanını değiştirir: kadraj, veri sözleşmesi,
+motor çağrısı ve sayı biçimi aynı kalır (§14.2/§15).
+
+### 31.1 Karar değişiklikleri
+
+- **Mum rengi (§0.4.1 tablosu güncellendi):** yükselen `#31b184` + içi BOŞ
+  (koyu yeşil `#134237` dolgu), düşen `#e05c58` + DOLU. Eski monokrom palet
+  (`#e3e6e8` boş / `#8d949a` dolu) kalktı; doluluk farkı renk körlüğünde ikinci
+  kanaldır ve lejantta yazılır (`yeşil boş = yükselen · kırmızı dolu = düşen`).
+- **Son fiyat çizgisi ve çipi** son mumun yönünde renklenir (eskiden her zaman
+  yükselen rengindeydi → düşen kapanışta yanlış ima).
+- **Katılım şeridi spike'ları** mumun yönünde renklenir (`#2f9e8a` / `#cf5f5f`);
+  `1×` referans çizgisi etiketsiz, `1,5×` eşiği etiketli (kulvar içinde, solda).
+- **Formasyon bandı** `#e0b96a` (sıcak kum) + bant arası α.06 dolgu; bant
+  teması işaretleri `#f0d9a8`. Gerekçe: beyaz/somon mum katmanından ayrışsın,
+  ama kutu katmanlarının yeşil/mavi/mor kodlarıyla karışmasın.
+- **Sağ şerit paneli** (`#151d27`, kenar `#243040`): etiketler koyu çip içinde
+  (`#111922` dolgu + katman renginde kenar/yazı); kutu etiketleri kutunun sağ
+  kenarından çıkan ince kesikli KILAVUZ çizgisiyle bağlanır ve "son fiyata en
+  yakın 3 kutu" ile sınırlanır → yazı ile kutu arasındaki ilişki görünür, liste
+  alakasız görünmez. Şerit kulvarı `#151d27` panel zeminli, iki kulvarı ince
+  çizgi ayırır.
+- **Şerit kalabalık denetimi (`sag_etiket_maks`):** kaynak başına azami etiket
+  zone 3 · olay 3 · alarm 1; seçim = öncelik (son > alarm > kritik > yapı >
+  kutu) → son kapanışa yakınlık → yenilik. Elenen adaylar silinmez:
+  `meta["sag"]["eledi_kaynak"]`ta sayılır (sessiz kayıp yok). Ölçüm: GARAN 1s
+  karesi 13 etiketten 7'ye indi.
+- **Başlık ayracı:** başlık bloğunun altında `#243040` ince yatay çizgi.
+- **Izgara** bir ton açıldı (`#212c39`) ve zemin `#0f151c` oldu; kutu dolguları
+  seyrekleşti (OB .14→.09, FVG .12→.08) — mumlar öne çıksın.
+- **Çökme modu (px/bar < 5)** çizgisi NÖTR (`#e9eef5`): bu modda yön bilgisi
+  mumdan gelmediği için renk yön ima etmez.
+
+### 31.2 Önce/sonra kanıtı
+
+`docs/ornek_kare_gorsel4.png` — aynı veri (GARAN 4s, 140 mum, `--zone`): üstte
+görsel-3 (taramalı kutular + şerit etiketleri), altta görsel-4 (sade kutular +
+kutu içi yazı, BOS/CHoCH grafikte). Kare, `git archive HEAD` ile alınan eski
+ağaçta `grafik_uret.py` çalıştırılarak üretildi (yeniden çizim değil, gerçek
+eski çıktı); görsel-3 turunun ayrı kanıt dosyası bu turda bu tek dosyada
+birleştirildi.
+
+### 31.3 Ölçülebilir kurallar (testler)
+
+- `test_grafik_gorsel_kalite.py`: yükselen yeşil+boş / düşen kırmızı+dolu; iki
+  ton da orta doygunlukta (neon tavanı: kanal max ≤ 240, doygunluk 0,35–0,8);
+  son fiyat çipi mumun yönünde; şerit spike rengi mumun yönünden; lejant renk
+  şemasını yazar; kaynak başına etiket sınırı ve `eledi_kaynak` sayımı.
+- `mum_cakisan == 0` kapısı korunur (çipler/kılavuzlar yazı–mum çakışması
+  üretmez: `_mum_cakisma_say` çip kutularını da kapsar).
+
+### 31.4 Açık kalanlar
+
+- `GRAFIK_OLAY_MAKS` (§29.4) hâlâ kullanıcı onayı bekliyor; görsel-3 şerit
+  tarafını `sag_etiket_maks` ile sınırladı, çizgi tarafına dokunmadı.
+
+## 32 · GÖRSEL-4 TURU (2026-10-15) — kutu içi yazı, olay etiketi grafikte, geçersizleşme akışı
+
+Kullanıcı geri bildirimi ve kararları (birebir):
+  1. "FBG tarafında bir problem vardı… doldurulan yerleri değişik bir çizim alıyordu"
+  2. "sağ taraftaki yazılar bazen saçma oluyor"
+  3. "önce metin geliyor, 4-5 metin sonra görseller; bir metin → görsel → metin olmalı"
+  4. "formasyon geçersizleştiğinde tüm domainlerden bahsedilmesin, sadece formasyon
+     infosu gelsin; görsel de sadece geçersizleşen timeframede gelecek"
+  5. "OB/FVG için dikdörtgenin İÇİNE yazabiliyor muyuz… BOS/CHoCH için fiyat değil
+     mum konumu önemli; PH/PL/korunan seviyeler için fiyat önemli"
+
+### 32.1 Karar değişiklikleri
+
+- **Kutu çizimi sadeleşti:** eğik tarama (hatch) KALKTI (büyük FVG kutularında
+  "değişik doldurulmuş alan" görüntüsünün kaynağıydı), vurgu kenarı 2,0 → 1,3 pt.
+- **Etiket KUTUNUN İÇİNDE:** `OB↓ %70` / `FVG↑ q95` yazısı kutunun ortasına
+  yazılır (koyu kontur ile). Sığmazsa (ince/dar kutu) sağ şeride YEDEKLENİR —
+  hiçbir etiket sessizce düşmez. Ölçüm: `meta["zone"]["etiket_ic"/"etiket_serit"]`.
+- **BOS/CHoCH etiketi şeritten GRAFİĞE taşındı:** kullanıcı kararı gereği bu
+  etiketler olayın MUMUNA ilişir (yukarı kırılımda seviyenin altına, aşağıda
+  üstüne; çakışırsa basamaklanır). Fiyat şeridinde artık yalnız `kritik X`,
+  alarm ve son fiyat kalır → "saçma/çift" görünen dublike etiket kaynağı kapandı.
+- **PH/PL etiketlerine FİYAT eklendi** (`PH 290,50` / `PL 282,50`): korunan uçlar
+  için seviye karar verici. İç yapı etiketleri (`HH/HL/LH/LL`) kısa kalır.
+- **Metin → hemen o olayın görselleri (teslim akışı):** `_gonder` metni yazdıktan
+  sonra kare kuyruğu ARKA PLAN işçisiyle boşaltılır (`notifier._grafik_gonderim_*`);
+  tarama bekletilmez, olay sırası korunur (`metin₁ → görsel₁ → metin₂ → görsel₂`).
+  Tur sonu boşaltma yedek olarak kalır (kuyruk zaten boşsa hiçbir şey yapmaz).
+- **Geçersizleşme (`KIRILIM_GECERSIZLESTI`) kartı:** `domain_bolumleri(...,
+  yalniz_tf=True)` — yalnız geçersizleşen TF'nin yapı/bölge/hacim satırları
+  (ölçüm: 23 satır → 10 satır). `format_domain_context` de aynı bayrağı alır.
+- **Geçersizleşme GÖRSELİ tek kare:** `kare_listesi` `alarm_turu="gecersiz"` iken
+  `ek_cerceveler` yok sayılır (diğer TF karelerinde bant/alarm çizilmiyordu →
+  neredeyse boş görseller gidiyordu).
+- **Çakışma ölçümü iki kanallı:** bilinçli katman yazıları (`kutu-ici`, `olay-ici`)
+  kapıdan muaf, ayrı sayılır (`meta["kalite"]["katman_cakisan"]`); şerit/başlık
+  yazıları için `mum_cakisan == 0` kapısı aynen yürürlükte.
+- **2 boyutlu yerleşim (ölçüm düzeltmesi):** katman yazıları mum kutusuyla
+  çakışmasın diye aday konumlar GERÇEK `get_window_extent` ile ölçülür
+  (`_olay_yazi_koy`, `_kutu_yazisi_koy`): çakışmasız ilk aday seçilir, hiçbiri boş
+  değilse EN AZ çakışan korunur (yazı asla kaybolmaz). Ölçüm: 20 karede BOS/CHoCH
+  çakışması 4 → 0; kutu içi yazı çakışması azaldı. Kutu içi adaylar kutunun
+  DIŞINA çıkmaz; sığmıyorsa etiket yine sağ şeride gider.
+
+### 32.2 Önce/sonra kanıtı
+
+`docs/ornek_kare_gorsel4.png` (aynı dosya §31.2'de de anılır): üst satır GÖRSEL-3,
+alt satır GÖRSEL-4. Fark: kutularda tarama yok, etiket kutunun İÇİNDE (`OB↑ %31`),
+`BOS↑`/`CHoCH↓` etiketleri mumun yanında, `PH 290,50` fiyatlı.
+
+### 32.3 Açık kalanlar
+
+- Kutu içi yazı, kutu İNCE olduğunda hâlâ mumun üstüne binebiliyor (kutu alanı
+  mumlarla dolu; adaylar kutunun içinde kalmak zorunda). Çakışan yazı sayısı
+  `katman_cakisan`da görünür; istenirse sonraki turda "çakışıyorsa şeride" kuralı
+  sertleştirilir (bugünkü davranış: etiket kutuda kalır, koyu kontur okunur kılar).
+- `GRAFIK_OLAY_MAKS` (§29.4) hâlâ kullanıcı onayı bekliyor.
+
+## 33 · GÖRSEL-5 TURU (2026-10-15) — doluluk cetveli, okunurluk, okuma modları
+
+Tur, kullanıcının "daha iyi yapılabilir hissiyatı" sorusuna **ölçümle** cevap
+verilerek açıldı (hiç kod değiştirmeden 15–20 kare tarandı):
+
+| Ölçüm | Bulgu |
+|---|---|
+| Çizilen 56 kutu etiketi | 21'i `qNN`, 23'ü ÇIPLAK (`OB↑`), 12'si yüzde |
+| Kutuların içine sığan etiket | 23/56 (%41) — gerisi sağ şerit yedeğinde |
+| Olay çizgileri | kritik dışı BOS/CHoCH aynı stil + aynı alfa (ayırt edilemiyor) |
+| Şerit çipleri | 3 kutu çipi + son fiyat aynı bantta yığılıyor (TCELL 4s) |
+
+Kullanıcı kararları: (1) "hem cetvel hem %", (2) "`qNN` tamamen kaldır",
+(3) "hepsi, bu sırayla" (üç paket).
+
+### 33.1 Paket 1 — kutu bilgisi
+
+- `qNN` KALDIRILDI (`_zone_metni`); etiket = tip + yön + (varsa) `%doluluk`.
+- **Doluluk cetveli:** dolan kısım daha koyu bant + sınır çizgisi. Geometri
+  MOTORUN dolgu yönüyle aynıdır ve koddan doğrulandı:
+  OB `fill_ratio = (top - fill_boundary)/height` (boğa) → **üstten aşağı**;
+  FVG `wick_fill_ratio = (upper - low)/gap` (boğa) → aynı kural; ayıda tersi.
+  %2–%98 arası çizilir (uçlarda kutu zaten o hâli anlatıyor).
+- **FVG %50 orta çizgisi** (consequent encroachment) yalnız ≥8 px yükseklikte.
+- **Kutu künyesi** `16 Eyl` (OB `source_time` / FVG `formation_time`) ikinci satır;
+  iki satır sığmazsa tek satıra düşer (`_kutu_yazisi_sigar` satır sayısını ölçer).
+- Lejant yeni dili yalnız çizildiğinde yazar: `▨ dolan kısım`, `┈ %50 ortası`.
+- `meta["zone"]`: `dolgu`, `orta`, `kunye` sayaçları (boş dönüşte de var).
+
+### 33.2 Paket 2 — okunurluk
+
+- **Olay çizgisi dili:** CHoCH NOKTALI (`":"`), BOS kesikli. Matplotlib dash
+  demetlerini `'--'`e normalleştirdiği için stil ayrımı adlandırılmış desenle
+  yapıldı (arşiv ölçümü: 26 `--` + 3 `:`).
+- **Yaş solması:** kritik dışı çizginin alfası olay yaşıyla azalır (0,85 → 0,38).
+- **Şerit çip birleştirme:** aynı seviyedeki `zone` çipleri tek çipte toplanır
+  (`OB↑ · FVG↓`; çip başına en fazla 3 kutu, fazlası yeni çip). `kritik`, `alarm`
+  ve son fiyat kendi çipinde kalır. Kılavuz çizgisi ortaktır.
+  `meta["sag"]`: `birlesik`, `birlesen_kutu` (kayıp yok).
+- **Lejant:** `┄ BOS` ve `┈ CHoCH` ayrı yazar, yalnız GÖRÜNEN tür için madde çıkar.
+- Ölçüldü: kutu içi yazı ↔ şerit çipi çakışması 8 karede 0 px².
+
+### 33.3 Paket 3 — okuma modları
+
+Mod kapsamı **thread-local** (`_ModKapsami`): `PALET[...]`/`SABITLER[...]` çağrı
+yerleri değişmedi, tablolar sarmalayıcıdan okunuyor. Global mutasyon olsaydı
+tarama thread'i ile görsel gönderim işçisi birbirinin modunu sızdırırdı.
+
+- `--sade`: veriden keser → yalnız mum + formasyon bandı + kritik/son fiyat.
+  Kesilen katman `eksik`e yazılmaz; `meta["mod"]["atlanan_kutu"]` kaç kutunun
+  mod nedeniyle çizilmediğini söyler.
+- `--renk-korugu`: mum/şerit/son-fiyat renkleri mavi-turuncu (deuteranopia);
+  şekil kanalı korunur (yükselen BOŞ / düşen DOLU). Lejant renk ADINI da değişir.
+- `--buyuk-yazi`: yalnız `*_pt` ×1,25; dpi/kalınlık/kadraj sabit. Lejant bütçesi
+  ölçeği hesaba katar, alt blok satır adımı büyür → taşma/çakışma 0.
+- ENV: `GRAFIK_SADE`, `GRAFIK_RENK_KORUGU`, `GRAFIK_YAZI` (canlı akış için);
+  CLI bayrağı env'i ezer, bayrak yoksa env devreye girer.
+
+### 33.4 Önce/sonra kanıtı
+
+`docs/ornek_kare_gorsel5.png` — üst satır `git archive d8720cc` ağacıyla üretilen
+GERÇEK GÖRSEL-4 çıktısı, alt satır GÖRSEL-5 (aynı veri: GARAN 4s 140 mum `--zone`).
+Fark: `q100` kod etiketi gitti, `%doluluk` + cetvel + künye geldi, BOS kesikli /
+CHoCH noktalı ayrıştı, aynı seviyedeki kutu çipleri (`FVG↓ · OB↑`) birleşti.
+Kanıt kareleri ayrıca modlarla birlikte alındı: `--sade`, `--renk-korugu`,
+`--buyuk-yazi` (`/tmp/kare/p3g_*.png`, kalıcı değil).
+
+### 33.5 Açık kalanlar
+
+- Paket 1'de önerilen **kutu künyesi genişletmesi** (kaç kez test edildi) ve
+  **seviye cetveli / karar satırı** uygulanmadı — kullanıcı üç paketi seçti.
+- `GRAFIK_OLAY_MAKS` (§29.4) hâlâ onay bekliyor.
+- Kutu içi yazı ince kutuda mumla kısmen örtüşebilir (bkz. §32.3).
+
+## 34 · GÖRSEL-6 (2026-10-15) — PH/PL seviye cetveli + kutu dolgusu belirginliği
+
+Kullanıcı: *"sadece ben sağ şeritte seviye cetveli istiyorum PH PL için, bir de FVG ile
+OB renkleri tam belirgin değil yani onun şeffaflığını biraz azaltır mısın ama çok abartma"*.
+
+### 34.1 PH/PL → sağ şerit seviye cetveli
+
+- Korunan uçlar (`PH`/`PL`) artık **grafikte yazı değil**: fiyat, seviyesiyle hizalı
+  tek yerde — sağ şeritteki cetvel çipinde (`PH 290,50`) okunur. Grafikte yalnız ince
+  seviye çizgisi kalır; aynı metin iki yerde tekrarlanmaz.
+- Çip `oncelik=4` (son fiyat 9 > alarm 6 > kritik 5 > **PH/PL 4** > BOS/CHoCH 3 > kutu 2),
+  kaynak başına sınır `sag_etiket_maks["swing"] = 2`.
+- Kılavuz çizgisi kutu kılavuzundan **belirgin** (0,8 pt · α 0,38 · `(0,(1,3))`) ama
+  kritik/alarm çizgisi kadar kalın değil — uyarı tonu taşımaz.
+- **Aynı seviye çifti bastırılır:** son fiyatla aynı bantta kalan PH/PL çipi atlanır
+  (ölçüm: THYAO 1s'te `PH 290,50` ile son fiyat `290,50` üst üste biniyordu). Atlama
+  `meta["sag"]["atlanan_kaynak"]["swing"]` ile SAYILIR — sessiz kayıp yok.
+- İç yapı etiketleri (`HH`/`HL`/`LH`/`LL`) grafikte kısa hâliyle kalır.
+- Lejant: `┈ seviye (PH/PL sağda)` + yapı satırı `▲▼ iç yapı · ┄ BOS/CHoCH · ━ kritik · PH/PL sağda`.
+- `meta["olay"]["phpl_serit"]` cetvele taşınan PH/PL sayısını verir.
+
+### 34.2 Kutu dolgusu (OB/FVG)
+
+- Kullanıcı isteği: "şeffaflığını biraz azalt, ama çok abartma". Ölçülü artış:
+  `doldurma.ob 0.09 → 0.16`, `fvg 0.08 → 0.15` (≈1,8×); kalın/ince kutu kademesi
+  `ince 0.04 → 0.07`. Neon DEĞİL: dolgu hâlâ yarı saydam, mum okunurluğu korunur.
+- Kenar `0.8 → 0.9 pt` (kutu sınırı bir tık belirgin); vurgu çubuğu 1,3 pt **değişmedi**
+  ("havada çubuk" görüntüsü geri gelmesin).
+
+### 34.3 Ölçüm ve kanıt
+
+- 20 kare: cetvele taşınan PH/PL **19**, şeritte 80 çip, atlanan 1 (son fiyat çakışması),
+  `mum_cakisan` 0. Kutu dolgu alfa dağılımı: 0,16/0,15 (ana), 0,28 (dolan kısım),
+  0,07/0,075 (ince kutu kademesi).
+- `docs/ornek_kare_gorsel6.png` — üstte `git archive 9196cce` ağacıyla üretilen gerçek
+  önce karesi, altta sonrası (aynı veri: THYAO 1s 180 mum `--zone`).
+- Testler: `test_grafik_gorsel5.py` +5 test (cetvel çipi + kılavuz stili, son fiyat
+  bastırması ve sayacı, uzak seviyede ikisinin de kalması, dolgu aralığı/neon tavanı,
+  kutu içi yazının konturel okunurluğu); GÖRSEL-4'ün PH/PL testleri yeni sözleşmeye
+  çevrildi. Tam süit: 1133 passed / 44 skipped.
+
+### 34.4 Açık kalanlar
+
+- Cetvel şu an kaynak sırasına göre diziliyor (son fiyat/alarm/kritik/PH-PL/kutu);
+  istenirse başlıklı gruplara ayrılabilir ("SEVİYELER" / "BÖLGELER").
+- `GRAFIK_OLAY_MAKS` (§29.4) hâlâ onay bekliyor.
+
+## 35 · GÖRSEL-7 (2026-10-15) — kart metni sadeleşti + geçersizleşme kâresinde üç işaret
+
+Kullanıcı: *"mesaj aşırı karışık / nokta nokta / okunabilirlik kötü"*, ardından
+*"iki farklı örnek yazı: biri normal alarm, biri geçersizleşme — geçersizleşmenin görsel
+formatı nasıl olacak?"* → onay: **"Tamamdır onaylandı"**. Kart **düz Telegram metni**
+kalır (HTML/`parse_mode`/link/hizalama YOK — kullanıcı kararı) ve hedef **8-11 satır**.
+
+### 35.1 Sade kart (`TELEGRAM_KART_SUZGEC`, varsayılan açık)
+
+Ölçülen sorun (gerçek payload, `telegram_measure`): bugünkü kart **34 satır · 735 kr ·
+8 girintili devam satırı · 23 `·` · 7 `▪`**; DOMAIN grupları (`◈ yapı`, `▲ OB`, `▤ hacim`,
+`▸ TF`) satırların yarısını yiyor ve hepsi aynı görsel ağırlıkta.
+
+- İş bölümü: **kâre ana okuma; metin yalnız kârede OLMAYANI söyler.** Metinden düşen:
+  kırılan seviye satırı, temas üst/alt, daralma, `◈ yapı` blokları, `▲ OB/FVG` kutu
+  listeleri, `▤ hacim` blokları, `▸ TF` satırları, mum damgası (kâre üst şeridi
+  `son kapanan <tarih> · <fiyat>` yazar).
+- Metinde kalan ve kârede görünmeyen: **bozulma/teyit sınırı** (`bozulur 38,79 üstü kapanış`),
+  **bant yaşı + izlenme başlangıcı** (`bant 94 bar — 30.09'dan beri`), **retest + MTF onayı**,
+  **katılım yargısı** (kârede çubuk var, yorum yok) ve **karşı delil**.
+- Satır kuralları: satır = TEK konu (≤2 öğe) · `·` zinciri yok, çift ayırıcı `—` ·
+  girintili devam satırı yok · her satır ≤283 px (güvenli sınır 269 px). Satır sığmazsa
+  `_kart_esik_px()` eşiği devreye girer: `Yükselen Üçgen — bandına dönüş` (270,5 px)
+  yerine kısa tire (260,5 px) — **bölünme yoksa girinti de yok**.
+- Geçersizleşme kartı: yalnız formasyon + geçersizleşen TF + `teyit sınırı 38,79 üstü`
+  (eski `× geçersiz:` cümlesi pozitifleşti). Katılım bölümünden en çok 2 satır gelir.
+- Güncelleme kartı: `değişiklik yok — yapı/bölge/hacim aynı` + CTA.
+- **İzleme adayları bloğu korundu** (acil mesaj bağlamı; adaptör doldurur): başlık +
+  en çok 3 aday satırı. Mum damgası gibi kâreye taşınamaz — bilgi düşürülmedi.
+- Kill-switch: `TELEGRAM_KART_SUZGEC=0` → 25 Eyl biçimi (tam kart) aynen geri gelir.
+
+### 35.2 Geçersizleşme kâresi: üç işaret
+
+1. **`✕ geçersizleştiren mum`** — teyidi düşüren mumun işareti (mum eksenin alt
+   yarısındaysa 10 px ÜSTÜNE, üst yarısındaysa 17 px ALTINA). Punto `durum_pt × 1,5`
+   (9,5 pt küçük kalıyordu) + zemin renkli kontur → mum gövdesi üstünde okunur.
+2. **`┈ teyit sınırı`** — noktalı turuncu yatay kılavuz + sağ çip `× 38,79 üstü kapanış`
+   (kaynak `gecersiz`, öncelik 5, renk `olay`). Kural **güncel bandı** okur
+   (`upper_now`/`lower_now`) — `notifier`deki `× geçersiz` satırıyla birebir aynı.
+   Yön bilinmiyorsa eşik ÇİZİLMEZ (uydurma seviye yok).
+3. **`✕ eski seviye <kırılan>`** — kırılan dondurulmuş sınır artık geçersiz: çizgi
+   soluk (α 0,55) + kesik `(0,(2,4))`, çip metni `✕ eski seviye 70,75`, rengi `eksen`.
+   **Ölçülü kural:** iki seviye `0,02 × y-aralığı`ndan (≈12 px) yakınsa soluk çizgi
+   ÇİZİLMEZ — üst üste binen iki çizgi okunmaz (AKBNK 4s ölçümü: 70,75 / 70,84 = 1,4 px).
+- Lejant: `✕ geçersizleştiren mum` / `✕ eski seviye (artık geçerli değil)` / `┈ teyit sınırı`
+  eklenir; teyitli alarmda eski dil (`│ alarm mumu`, `─ seviye`) korunur.
+
+### 35.3 Lejant taşması + şerit etiketi (teknik borç kapandı)
+
+- Taşmada artık **uzun ve düşük öncelikli** maddeler düşer (`yapı:`, `şerit:`, `kutular:`,
+  `FVG`, `bant öncesi`, `▨ dolan`); **`✕` / `┈` maddeleri hiçbir koşulda düşmez** (yoksa
+  kâre açıklamasız işaret bırakır). Hepsi korunmuşsa en sondan düşülür.
+- Kareye yazılan `+N madde sığmadı` ve kırmızı `lejant: N madde sığmadı` dipnotu
+  **kaldırıldı**; sayı `meta["lejant_atlanan"]`da durur (sessiz kayıp yok).
+- Şeritteki çıplak `×2,9` çipi kendini anlatmıyordu → **`rvol ×2,9`**.
+
+### 35.4 Ölçüm ve kanıt
+
+| | satır | kr | en geniş | girinti | 3+ zincir |
+|---|---|---|---|---|---|
+| ÖNCE (süzgeç kapalı) | 34 | 735 | — | 8 (%23) | var |
+| SONRA normal | 11 | 278 | 242 px | 0 | 0 |
+| SONRA geçersizleşme | 9-10 | 228-252 | 260 px | 0 | 0 |
+
+- `docs/ornek_kart_gorsel7.png` — aynı payload'ın eski/yeni metni (satır satır px ölçüsüyle).
+- `docs/ornek_kare_gorsel7.png` — gerçek AKBNK 4s zinciri (onay barı 95 → geçersizleşme
+  barı 101, `PatternLifecycleManager.scan` bar bar oynatıldı): önce/sonra kâresi + Gelecek Metin.
+- Testler: `test_kart_metin.py` (10) · `test_grafik_gorsel7.py` (9). Güncellenen sözleşmeler:
+  `test_grafik_iskelet.py` (lejant taşması artık kareye yazılmaz), `test_notifier_mesajlari.py`
+  (4 test yeni karta), `test_telegram_alert_flow.py` + `test_tekrar_alarm_korumasi.py`
+  (hazırlık çıktısı `domain_bolumleri`), `test_mum_kapanis_penceresi.py` (damga kâre başlığında).
+- Tam süit: **1152 passed / 44 skipped**.
+
+### 35.5 Sonraki adım (P1 — veri zenginleştirme)
+
+Kart kısaldı; elde kullanılmayan veri duruyor (`net_progress_atr`, `directional_efficiency`,
+`volume/capital_regime`, `break_reference_source`, `evidence_text`, `age_bars`,
+`bos_maturity`, `break_frozen_*`) — sıradaki tur **görselde** bu alanları okunur kılacak
+(şerit tonu, ilerleme/verim çubuğu, olay kanıtının Türkçesi), metin yine yalnız görünmeyeni söyleyecek.
+
+## 36 · GÖRSEL-8 (2026-10-15) — OB/FVG dolgu tonu tersine döndü
+
+Kullanıcı: *"OB'nin koyu tarafı doldurulmuş taraf oluyor, açık renk olan tarafı
+doldurulmamış taraf. Tam tersi olmasını istiyorum."* — **başka değişiklik istenmedi**,
+sadece ton yönü döndü.
+
+### 36.1 Ne değişti
+
+- Eskiden: kutu tek parça (`ob 0,16` / `fvg 0,15`) + **dolan kısım üstüne `+0,12` alfa**
+  → dolan taraf koyulaşıyordu. Yeni: kutu **iki ayrı dolgu** olarak çizilir —
+  **doldurulmamış kalan alan KOYU** (`ob 0,16` / `fvg 0,15`), **dolan bant AÇIK**
+  (`alfa = kutu × 0,50`, taban `0,03`). Kullanıcı ölçüsü: *"arttır biraz görünsün ama
+  soluk olsun dolmayana göre"* → dolan bant kalan alanın **yarısı** kadar koyu.
+- Ölçülen tonlar (GARAN 1s · OB↓ %64 dolu): dolan kısım `(23,67,52) → (17,33,34)`,
+  kalan alan `(19,46,41)` **değişmedi**. Geometri aynı: boğa kutuda dolgu üstten aşağı,
+  ayı kutuda alttan yukarı (motorun `fill_ratio` formülüyle birebir).
+- Dolan bandın **sınır çizgisi** (1,0 pt · α 0,90) ve `%X` etiketi duruyor — dolan
+  kısmın geometrisi hâlâ okunur, ton tek bilgi kanalı değil.
+- Çerçeve artık dolgusuz ayrı bir dikdörtgen; alfası eskisi gibi `saydam` (görünüm
+  birebir korundu), kalınlık `0,9 pt` ve vurgu çubuğu `1,3 pt` **değişmedi**.
+- Uçlarda (%0 / %100) bant çizilmez: kutu tek parça koyu kalır (eski davranış).
+
+### 36.2 Testler
+
+- `test_grafik_gorsel5.py`: `_dolgu_bandi` artık **en AÇIK** dolgulu dikdörtgeni bulur
+  (çerçeve `facecolor="none"` olduğu için ölçüme girmez); uç değer testi yalnız DOLGULU
+  dikdörtgeni sayar. Yeni test: `test_dolan_kisim_acik_doldurulmamis_kalan_koyu`
+  (iki ton, dolan < kalan, taban/neon tavanı, hue aynı, sınır çizgisi α 0,90).
+  GÖRSEL-6 sayı sözleşmesi (0,14–0,20 ve kenar/vurgu) korunuyor.
+- `docs/ornek_kutu_tonu.png` — iki farklı hisse (GARAN 1s, AKBNK 1s), önce/sonra,
+  ölçülen ton değerleriyle.

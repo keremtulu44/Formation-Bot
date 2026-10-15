@@ -12,6 +12,7 @@ from typing import Dict, List, Optional
 from config import (ACTIVE_STOCKS, DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT,
                     TELEGRAM_MAX_MESAJ_GUN,
                     TELEGRAM_ALERT_STYLE, TELEGRAM_ALERT_MAX_KARAKTER, TELEGRAM_SATIR_PX,
+                    TELEGRAM_KART_SUZGEC,
                     TELEGRAM_DM_DEGISIM_KAPISI, TELEGRAM_KANAL_GECERSIZ_KAPISI,
                     ACIL_KUYRUK_LIMIT, ACIL_KUYRUK_TTL_DK, ALERT_STATES, WATCH_STATES,
                     TERMINAL_TAZE_BAR,
@@ -271,7 +272,196 @@ def _kart_mum_damgasi(data: Dict) -> str:
     return metin[:64]
 
 
+def _kart_suzgec_aktif() -> bool:
+    """GÖRSEL-7 süzgeci (2026-10-15): kârenin zaten taşıdığı satırlar metinden düşülür.
+
+    Neden: gerçek motor çıktısıyla ölçüldü — teyitli kart 45 satır/980 kr, geçersiz
+    kart 31/636; satırların %40'ı girintili DEVAM satırıydı ve 7 satır aynı `▪` ile
+    başlıyordu. Kâre aynı bilgiyi (kırılan/kapanış/kalite/daralma/temas/yapı/kutular)
+    çiziyor. Kapatmak için `TELEGRAM_KART_SUZGEC=0` → bugünkü tam kart geri döner.
+    """
+    try:
+        return bool(TELEGRAM_KART_SUZGEC)
+    except NameError:  # pragma: no cover - import sırası bozulursa süzgeç AÇIK
+        return True
+
+
+def _kart_esik_px() -> float:
+    """Satırın güvenle sığdığı piksel eşiği (`telegram_measure` güvenlik payıyla).
+
+    `_satir` bütçeyi %5 güvenlik payıyla uygular; bu eşik o payın ALTINDA kalır,
+    böylece kart satırı kendiliğinden bölünmez (bölünme = girintili devam satırı).
+    """
+    try:
+        return float(SATIR_BUTCE) * 0.95 - 6.0
+    except (TypeError, ValueError):
+        return 260.0
+
+
+def _kart_yas_metni(data: Dict) -> str:
+    """`bant 94 bar — 30.09'dan beri`: yaş ve izlenme başlangıcı tek satırda.
+
+    Kârede bant çizili ama yaşı yok; bu yüzden satır metinde kalır (§GÖRSEL-7 iş
+    bölümü). Başlangıç damgası yoksa yalnız yaş yazılır (uydurma tarih yok).
+    """
+    yas = data.get("age_bars")
+    try:
+        yas_say = int(yas) if yas is not None and int(yas) >= 0 else None
+    except (TypeError, ValueError, OverflowError):
+        yas_say = None
+    if yas_say is None:
+        return ""
+    metin = f"bant {yas_say} bar"
+    dogum = data.get("band_baslangic")
+    if dogum:
+        try:
+            zaman = dogum if isinstance(dogum, datetime) else datetime.fromisoformat(str(dogum))
+            metin += f" — {zaman.day:02d}.{zaman.month:02d}'dan beri"
+        except (TypeError, ValueError):
+            pass
+    return metin
+
+
+def _kart_esik(data: Dict, yon: int) -> tuple:
+    """(eşik fiyatı, yön eki) — kural GÜNCEL bandı okur, dondurulmuş seviyeyi değil."""
+    esik = None
+    try:
+        if yon > 0:
+            esik = float(data.get("upper_now") or 0) or None
+        elif yon < 0:
+            esik = float(data.get("lower_now") or 0) or None
+    except (TypeError, ValueError):
+        esik = None
+    return esik, ("altı" if yon > 0 else "üstü")
+
+
+def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -> str:
+    """Sade kart (GÖRSEL-7): satır = tek konu, `·` zinciri yok, girinti yok.
+
+    Hedef 8-10 satır. Kârenin taşıdığı bilgi (kırılan/kapanış/kalite/daralma/
+    temas/◈ yapı/kutular) TEKRARLANMAZ; yalnız kârede görünmeyenler yazılır:
+    eşik (bozulma/teyit sınırı), bant yaşı+izlenme, MTF onayı, retest durumu,
+    katılım yorumu ve karşı delil. Ölçüm: 219-244 kr, en geniş satır 270 px
+    (bütçe 283 px) — `telegram_measure` ile doğrulandı.
+    """
+    stock = str(data.get("stock_name") or "Bilinmiyor").upper()
+    timeframe = str(data.get("timeframe") or "1h").lower()
+    state = str(data.get("state") or "").strip().upper()
+    pattern = str(data.get("pattern_name") or "Formasyon")
+    tf_label = TF_KISA.get(timeframe, TF_EVENT_HUMAN.get(timeframe, TF_HUMAN.get(timeframe, timeframe)))
+    gecersiz = state == "KIRILIM_GECERSIZLESTI"
+    try:
+        yon = int(data.get("break_dir") or 0)
+    except (TypeError, ValueError):
+        yon = 0
+    ok = "▲" if yon > 0 else ("▼" if yon < 0 else "◆")
+    olay, kisalt = _KART_OLAY.get(state, ("OLAY", ""))
+    yon_etiketi = _KART_YON.get(yon, "")
+    olay_metni = f"{yon_etiketi} {olay}".strip() if state == "KIRILIM_TEYITLI" else olay
+
+    level = data.get("break_price")
+    if level is None:
+        level = data.get("critical_price_level")
+    kirilan = _sayı(level)
+    close = data.get("candle_close_price")
+    if close is None:
+        close = data.get("close_price")
+    kapanis = _sayı(close)
+    esik, yon_eki = _kart_esik(data, yon)
+
+    # 1-2. satır: kimlik + formasyon. `·` yerine `—` (nokta zinciri okunurluğu bozuyor).
+    satirlar: List[str] = [f"{ok} {stock} {tf_label} {olay_metni}".strip()]
+    # Formasyon satırı: `—` tercih edilir, sığmazsa `-` (satır BÖLÜNMESİN: bölününce
+    # "girintili devam satırı" doğar ve kart tam da o yüzden karışıktı).
+    if kisalt:
+        aday = f"{pattern} — {kisalt}"
+        if genislik(aday) > _kart_esik_px():
+            aday = f"{pattern} - {kisalt}"
+        _satir(satirlar, aday)
+    else:
+        _satir(satirlar, pattern)
+
+    # 3. satır: olayın ölçüsü. Geçersizleşmede "ne olursa teyit düşerdi" sınırı,
+    # teyitlilerde kapanış + seviye (kârede ikisi de var ama bu tek satır olayın
+    # tek cümlesi: onsuz kart "ne oldu"yu söylemiyor).
+    if gecersiz:
+        if esik:
+            _satir(satirlar, f"teyit sınırı {_sayı(esik)} {yon_eki}")
+        elif kapanis:
+            _satir(satirlar, f"kapanış {kapanis}")
+    elif kapanis and kirilan:
+        _satir(satirlar, f"kapanış {kapanis} (seviye {kirilan})")
+    elif kapanis:
+        _satir(satirlar, f"kapanış {kapanis}")
+    elif kirilan:
+        _satir(satirlar, f"seviye {kirilan}")
+
+    kalite = _sayı(data.get("confidence_score"), 0)
+    güç = _sayı(data.get("break_strength"), 0)
+    if kalite and güç:
+        _satir(satirlar, f"kalite {kalite}/100 — güç {güç}")
+    elif kalite:
+        _satir(satirlar, f"kalite {kalite}/100")
+
+    yas_metni = _kart_yas_metni(data)
+    if yas_metni:
+        _satir(satirlar, yas_metni)
+
+    retest = "retest var" if data.get("retest_seen") else "retest yok"
+    ust_tf = _KART_UST_TF.get(timeframe)
+    if ust_tf:
+        mtf = f"MTF {ust_tf} onaylı" if data.get("mtf_destek") else f"MTF {ust_tf} onayı yok"
+        _satir(satirlar, f"{retest} — {mtf}")
+    else:
+        _satir(satirlar, retest)
+
+    if guncelleme:
+        # Güncelleme yolu: künye zaten gitti, yalnız değişmeyen bağlam + CTA.
+        _satir(satirlar, "değişiklik yok — yapı/bölge/hacim aynı")
+        satirlar.append(f"› /tara {stock}")
+        satirlar.append("• yatırım tavsiyesi değildir")
+        return "\n".join(satirlar)
+
+    # --- katılım: kârede şerit var, YORUM yok → metinde kalır (en fazla 2 satır) ---
+    bolumler = data.get("domain_bolumleri")
+    hacim = list(bolumler.get("hacim") or []) if isinstance(bolumler, dict) else []
+    for satir in hacim[:2]:
+        _satir(satirlar, str(satir))
+
+    # --- eşik: teyitlide "bozulur", geçersizleşmede 3. satırda yazıldı ---
+    if esik and not gecersiz:
+        _satir(satirlar, f"bozulur {_sayı(esik)} {yon_eki} kapanış")
+
+    karsi = [str(x) for x in (data.get("domain_karsi") or []) if str(x).strip()]
+    if karsi:
+        _satir(satirlar, "karşı delil: " + " — ".join(karsi[:2]))
+
+    # İzleme adayları: acil mesaj bağlamı (adaptör doldurur; canlı tarayıcı boş
+    # bırakır). Bu blok geldiğinde satır sayısı hedefi aşılabilir — ama bilgi
+    # düşürülmez: başlık + en çok 3 aday satırı, hepsi kendi satırında.
+    adaylar: List[str] = []
+    for aday in list(data.get("watch_context") or [])[:3]:
+        if not isinstance(aday, dict):
+            continue
+        aday_tf = TF_KISA.get(str(aday.get("timeframe") or "").lower(),
+                              str(aday.get("timeframe") or ""))
+        adaylar.append(f"▸ {aday.get('stock') or '?'} {aday_tf} — "
+                       + STATE_TR.get(str(aday.get("state") or "").strip().upper(), "izlemede"))
+    if adaylar:
+        _satir(satirlar, "izleme adayları")
+        for aday_satir in adaylar:
+            _satir(satirlar, aday_satir)
+
+    satirlar.append(f"› /tara {stock}")
+    satirlar.append("• yatırım tavsiyesi değildir")
+    return "\n".join(satirlar)
+
+
 def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False) -> str:
+    # GÖRSEL-7: süzgeç açıkken sade kart döner (kârenin taşıdığı satırlar düşer).
+    # Kapatmak için `TELEGRAM_KART_SUZGEC=0` → aşağıdaki 25 Eyl biçimi aynen çalışır.
+    if _kart_suzgec_aktif():
+        return _format_lifecycle_alert_kart_sade(data, guncelleme=guncelleme)
     stock = str(data.get("stock_name") or "Bilinmiyor").upper()
     timeframe = str(data.get("timeframe") or "1h").lower()
     state = str(data.get("state") or "").strip().upper()
@@ -836,6 +1026,11 @@ class TelegramNotifier:
         # --- engellenen acil olay kuyruğu (Batch 5 / B4) ---
         # Neden: cooldown/kap yüzünden gönderilemeyen teyitli kırılım gibi acil
         # olaylar tamamen kayboluyordu; artık engel kalkınca gönderilir.
+        # GÖRSEL-4 (kullanıcı kararı): "bir metin geldi, ardından o metnin görselleri".
+        # Görseller artık tur sonunu beklemez; `_gonder` metni yazdıktan sonra bu
+        # kuyruk bir ARKA PLAN işçisiyle sırayla boşaltılır (taramayı bekletmez).
+        self._grafik_kuyruk: List[dict] = []
+        self._grafik_gonderim_lck = threading.Lock()
         self._acil_kuyruk: List[dict] = []  # en eski kayıt önce
         self._kuyruk_dosya = os.path.join(os.path.dirname(self._cooldown_dosya),
                                           "telegram_acil_kuyruk.json")
@@ -849,7 +1044,6 @@ class TelegramNotifier:
         # kuyruk şart"). Kuyruk bellek içidir: `grafik_verisi` çerçeve/kayıt
         # referansı taşıdığı için diske YAZILMAZ (§7) — yazan tek yer `_gonderim_
         # kaydet` değil, o yüzden buraya hiç serialize edilmiyor.
-        self._grafik_kuyruk: List[dict] = []
         self._grafik_lck = threading.Lock()
         self._son_grafik_ts = None
         self._grafik_supuruldu = False   # bayat dosya süpürmesi süreçte bir kez
@@ -2231,7 +2425,7 @@ class TelegramNotifier:
             "grafik_kopru_hata": self.grafik_kopru_hata,
             "grafik_son_neden": self.grafik_son_neden,
             "grafik_gonderilen": self.grafik_gonderilen,
-            "grafik_kuyruk": len(self._grafik_kuyruk),
+            "grafik_kuyruk": len(getattr(self, "_grafik_kuyruk", []) or []),
             "grafik_atlanan_hata": self.grafik_atlanan_hata,
             "grafik_atlanan_kota": self.grafik_atlanan_kota,
             "grafik_atlanan_baglam": self.grafik_atlanan_baglam,
@@ -2565,8 +2759,13 @@ class TelegramNotifier:
             # Tekrarlayan tarama hataları sayılır, fakat log akışını doldurmaz.
             logger.debug("grafik köprüsü hatası #%d: %s", sayi, neden_kisa)
 
-    def grafik_kuyruga_ekle(self, data: Dict) -> int:
+    def grafik_kuyruga_ekle(self, data: Dict, *, gonder: bool = False) -> int:
         """`data["grafik_verisi"]`ni gönderim kuyruğuna alır; eklenen kare sayısı.
+
+        `gonder=True` (canlı akış, GÖRSEL-4): kuyruğa ekledikten sonra boşta
+        bir gönderim işçisi başlatılır — kareler metnin hemen ardından gider ve
+        tur sonu toplu gönderimi tekrar tetiklemez. Test/mock yolları bayrağı
+        vermez; eski davranış (tur sonunda boşaltma) korunur.
 
         Neden burada: kart metni gitmiş oldu — kare ALARMIN devamıdır, ayrı olay
         değildir (§4: 1 olay = 1 metin + kareler). Şalter açıkken köprüden görsel
@@ -2619,7 +2818,36 @@ class TelegramNotifier:
             })
             if veri.get("kota"):
                 self.grafik_atlanan_kota += int(veri.get("kota"))
+        if gonder:
+            self._grafik_gonderim_baslat()
         return len(goruntular)
+
+    def _grafik_gonderim_baslat(self) -> None:
+        """Boşta işçi yoksa bir tane başlatır (her çağrı thread AÇMAZ).
+
+        Neden tek işçi: medya gönderimi SIRALI olmalı — kullanıcının istediği
+        akış "bir metin, ardından o metnin görselleri". Kuyruk boşalınca işçi
+        çıkar; yeni kare geldiğinde yeni bir işçi başlar.
+        """
+        with self._grafik_gonderim_lck:
+            mevcut = getattr(self, "_grafik_gonderim_isi", None)
+            if mevcut is not None and mevcut.is_alive():
+                return
+            is_ = threading.Thread(target=self._grafik_gonderim_dongusu,
+                                   name="grafik-gonderim", daemon=True)
+            self._grafik_gonderim_isi = is_
+            is_.start()
+
+    def _grafik_gonderim_dongusu(self) -> None:
+        """İşçi gövdesi: kuyruk boşalana kadar parça parça gönderir; sızdırmaz."""
+        try:
+            while True:
+                ozet = self.grafikleri_gonder()
+                if int(ozet.get("kare") or 0) == 0:
+                    return
+        except Exception as hata:  # noqa: BLE001 - metin/görsel akışını düşürmesin
+            logger.warning("grafik arka plan gönderimi durdu: %s: %s",
+                           type(hata).__name__, hata)
 
     def grafik_dosya_gonder(self, yol, caption: str = "") -> tuple:
         """Bir PNG'yi DM'e gönderir ve dosyayı SİLER (§4); `(ok, aciklama)`.
@@ -2688,7 +2916,7 @@ class TelegramNotifier:
         koşulda metni/alamı engellemez: her hata sayılır ve sıradaki kareye geçilir.
         Üretilen geçici PNG gönderimden sonra silinir (§4).
         """
-        with self._grafik_lck:
+        with self._grafik_gonderim_lck:
             kuyruk = list(self._grafik_kuyruk)
             self._grafik_kuyruk.clear()
         ozet = {"gonderilen": 0, "hata": 0, "kare": 0, "sure_ms": 0, "atlanan": 0}
@@ -2756,7 +2984,7 @@ class TelegramNotifier:
                 else:
                     ozet["hata"] += 1
         if kalan:
-            with self._grafik_lck:
+            with self._grafik_gonderim_lck:
                 for parca in reversed(kalan):
                     self._grafik_kuyruk.insert(0, {
                         "anahtar": parca["olay"]["anahtar"], "sembol": parca["olay"]["sembol"],
@@ -2896,7 +3124,9 @@ class TelegramNotifier:
                 # bültende gider; DM başarısız olsa bile grup yayını etkilenmez.
                 # Görsel de DM'e gider (§4: public kare YOK) ama burada DEĞİL —
                 # metni bekletmemek için kuyruğa alınır, tur sonunda gönderilir.
-                self.grafik_kuyruga_ekle(data)
+                # Metin gitti; kareler ARKA PLANDA, bu olay sırasında gönderilir
+                # (GÖRSEL-4). Kuyruk boşsa işçi başlatılır; tarama beklemez.
+                self.grafik_kuyruga_ekle(data, gonder=True)
                 return True
             else:
                 ipucu = telegram_hata_ipucu(resp.status_code,

@@ -112,7 +112,9 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
               formasyon_yol: str | None = None, formasyon: dict | None = None,
               formasyon_tara: bool = False,
               alarm_turu: str | None = None, cikti: str | None = None,
-              demo: bool = False, yonetici=None, asama=None,
+              demo: bool = False, sade: bool = False, renk_korugu: bool = False,
+              buyuk_yazi: bool = False,
+              yonetici=None, asama=None,
               tazelik_kontrol=None) -> dict:
     """Tek kare üretir: önbellek → (istersen domain motorları) → PNG.
 
@@ -170,11 +172,20 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
         goruntu["uyarilar"].append(u)
     if asama:
         asama("PNG çizimi (ortak çizim kilidi dahil)")
-    yol, meta = grafik.ciz(goruntu, tf, secenekler={
+    secenekler = {
         "cikti": cikti or f"/tmp/grafik_{str(hisse).upper()}_{tf}.png",
         "serit": serit,
         "etiket_detay": etiket_detay,
-    })
+    }
+    # GÖRSEL-5 modları: bayrak verilmezse anahtar HİÇ eklenmez → env devreye girer
+    # (`GRAFIK_SADE`, `GRAFIK_RENK_KORUGU`, `GRAFIK_YAZI`); bayrak env'i EZER.
+    if sade:
+        secenekler["sade"] = True
+    if renk_korugu:
+        secenekler["renk_korugu"] = True
+    if buyuk_yazi:
+        secenekler["yazi_olcek"] = 1.25
+    yol, meta = grafik.ciz(goruntu, tf, secenekler=secenekler)
     meta["kaynak"] = kaynak
     # Altyazı için: çizilen formasyonun adı (yoksa None). Kart/alarm yolu bunu kullanmaz.
     meta["formasyon_ad"] = (goruntu.get("formasyon") or {}).get("ad") or None
@@ -294,6 +305,14 @@ def main(giris: list[str] | None = None) -> int:
     ayristirici.add_argument("--mum", type=int, default=None,
                              help=f"kadraj tavanı (varsayılan grafik.SABİTLER['kare_mum'])")
     ayristirici.add_argument("--cikti", default=None, help="PNG yolu (vars: /tmp/...)")
+    # GÖRSEL-5 okuma modları (varsayılan kapalı; env karşılıkları: GRAFIK_SADE,
+    # GRAFIK_RENK_KORUGU, GRAFIK_YAZI).
+    ayristirici.add_argument("--sade", action="store_true",
+                             help="yalnız mum + formasyon bandı + kritik/son fiyat")
+    ayristirici.add_argument("--renk-korugu", action="store_true", dest="renk_korugu",
+                             help="mum/şerit renkleri mavi-turuncu (deuteranopia)")
+    ayristirici.add_argument("--buyuk-yazi", action="store_true", dest="buyuk_yazi",
+                             help="yazı puntoları ×1,25 (telefon okunurluğu)")
     ayristirici.add_argument("--veri-dizin", default=None, help="önbellek dizini (DATA_DIR)")
     ayristirici.add_argument("--formasyon", default=None,
                              help="kart payload'ı biçiminde JSON: bant/işaret/alarm verisi")
@@ -328,6 +347,9 @@ def main(giris: list[str] | None = None) -> int:
                               etiket_detay=secenek.etiket_detay,
                               formasyon_yol=secenek.formasyon, formasyon_tara=secenek.formasyon_tara,
                               alarm_turu=secenek.alarm_turu, demo=secenek.demo,
+                              sade=bool(getattr(secenek, "sade", False)),
+                              renk_korugu=bool(getattr(secenek, "renk_korugu", False)),
+                              buyuk_yazi=bool(getattr(secenek, "buyuk_yazi", False)),
                               cikti=_cikti_yolu(secenek.cikti, secenek.hisse, tf, tfler))
         except SystemExit as hata:        # `_cerceve_yukle` uyumluluğu
             print(hata, file=sys.stderr)

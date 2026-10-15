@@ -332,7 +332,10 @@ def test_domain_prepare_only_runs_for_an_unsent_allowed_event(monkeypatch):
 
     def prepare(payload):
         calls.append(payload["state"])
-        payload["domain_context"] = "fresh"
+        # GÖRSEL-7 kartı `domain_context` metin bloğunu değil, AYRI bölümleri
+        # (`domain_bolumleri`) okur — canlı `_attach_domain_context` de ikisini
+        # birden yazar. Test "hazırlık çıktısı mesaja ulaştı mı" sorusunu sürer.
+        payload["domain_bolumleri"] = {"hacim": ["katılım 1s fresh"]}
 
     allowed = _veri("KIRILIM_TEYITLI")
     assert n.send_with_prepare(allowed, before_send=prepare) is True

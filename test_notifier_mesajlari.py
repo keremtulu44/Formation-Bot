@@ -62,11 +62,13 @@ def test_tamamlandi_basarısiz_ve_deneme_mesaji_bastirilir():
 def test_kirilim_teyitli_yon():
     # Kart: yön ve olay İLK satırda — Telegram bildirimi yalnız ilk satırı gösterir.
     notifier = TelegramNotifier()
+    # GÖRSEL-7: `·` ayırıcısı kalktı — satır = TEK konu (≤2 öğe) kuralı; ilk satır
+    # yön + hisse + TF + olay taşır ve öyle kalır.
     msg_yukari = notifier.format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=1))
-    assert msg_yukari.splitlines()[0] == "▲ THYAO 1s · YUKARI TEYİTLİ"
+    assert msg_yukari.splitlines()[0] == "▲ THYAO 1s YUKARI TEYİTLİ"
 
     msg_asagi = notifier.format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=-1))
-    assert msg_asagi.splitlines()[0] == "▼ THYAO 1s · AŞAĞI TEYİTLİ"
+    assert msg_asagi.splitlines()[0] == "▼ THYAO 1s AŞAĞI TEYİTLİ"
 
 
 def test_sikisma_mesaji():
@@ -84,7 +86,10 @@ def test_retest_basarili_mesaji():
     # "seviye korundu" ilk satırda zaten söylendiği için ek not basılmaz
     # (25 Eyl biçiminde aynı bilgi iki satırda tekrarlanıyordu).
     assert "seviye korundu" not in msg
-    assert "kırılan 302,00" in msg
+    # GÖRSEL-7: seviye kârede çizili; metinde TEK satır olarak ve kırılan seviye
+    # adıyla kalır (`kırılan` sözcüğü değil, sayı).
+    assert "seviye 302,00" in msg
+    assert "bozulur 302,00 altı kapanış" in msg
 
 
 def test_aday_oluyor_mesaji():
@@ -136,11 +141,12 @@ def test_sonraki_teyitli_gecersizlesme_ayri_bildirim_mesaji():
     ))
     assert "GEÇERSİZLEŞTİ" in msg
     assert "bandına dönüş" in msg
-    # Marj kartın kendi satırında: bugünkü uzun biçimde "kapanış seviyenin üstünde
-    # kaldı" bilgisi YOKTU, okuyucu 2 kuruşluk geri dönüşü %5'lik aşmayla karıştırıyordu.
-    assert "kapanış 299,50" in msg and "kaldı" in msg
-    assert "kırılan 302,00" in msg
-    assert "temas üst 3 / alt 2" in msg
+    # GÖRSEL-7 iş bölümü: geçersizleşme metni YALNIZ formasyon + TF + "ne olursa
+    # teyit düşerdi" sınırını söyler. Kapanış/marj/temas/kırılan seviye kârede
+    # çizili (ölçüm: bugünkü kart 34 satırdı, %40'ı girintili devam satırı).
+    assert "teyit sınırı 302,00 altı" in msg
+    assert "kırılan" not in msg and "temas" not in msg and "kaldı" not in msg
+    assert "× geçersiz" not in msg
     assert "başarısız kırılım" not in msg.lower()
 
 
@@ -421,7 +427,7 @@ def test_ozet_tum_bolumlerde_kalite_gorunur():
 
 
 
-def test_dogrulanmis_olay_fiyat_kalite_temas_ve_domain_context_icerir():
+def test_dogrulanmis_olay_kimlik_fiyat_kalite_tasir_kare_detayini_tekrarlamaz():
     notifier = TelegramNotifier()
     msg = notifier.format_message(_base_data(
         state="KIRILIM_TEYITLI",
@@ -435,16 +441,18 @@ def test_dogrulanmis_olay_fiyat_kalite_temas_ve_domain_context_icerir():
         domain_context="🏗 Market Structure\n• 1h yapı: dış yükseliş",
     ))
     assert "THYAO" in msg and "1s" in msg and "Yükselen Üçgen" in msg
-    assert "▲ THYAO 1s · YUKARI TEYİTLİ" in msg
-    # Kırılan/kapanış/marj ayrı satırlarda; "Çok güçlü" gibi türetilmiş notlar yok.
-    assert "kırılan 302,00" in msg
-    assert "kapanış 303,25" in msg and "aştı" in msg
-    assert "kalite 87/100 (formasyon)" in msg
+    assert "▲ THYAO 1s YUKARI TEYİTLİ" in msg
+    # Olayın ölçüsü tek satırda: kapanış + o an geçerli seviye ("Çok güçlü" gibi
+    # türetilmiş sıfatlar hâlâ yasak).
+    assert "kapanış 303,25 (seviye 302,00)" in msg
+    assert "kalite 87/100 — güç 80" in msg
     assert "Güçlü" not in msg and "Çok güçlü" not in msg
-    assert "temas üst 4 / alt 3" in msg
     assert "retest yok" in msg  # payload'da retest_seen yok → motor "görülmedi" der
-    assert "Mum: 2026-10-12 15:30 kapandı" in msg
-    assert "Market Structure" in msg and "dış yükseliş" in msg
+    # GÖRSEL-7: kârede ÇİZİLEN bilgi metinde tekrarlanmaz (temas işaretleri, yapı
+    # satırı, mum damgası kâre başlığında). Metin yalnız görünmeyeni söyler.
+    assert "temas üst" not in msg
+    assert "Market Structure" not in msg
+    assert "Mum: 2026-10-12 15:30 kapandı" not in msg
 
 
 def test_gunluk_ozet_terminal_ve_basarisiz_statei_gostermez():

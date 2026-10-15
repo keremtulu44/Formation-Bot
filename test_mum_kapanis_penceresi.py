@@ -191,7 +191,13 @@ def test_mesaj_mum_satiri_metinleri():
     assert mum_kapanis_metni("1h", "metin-degil", None) == ""
 
 
-def test_notifier_anlik_mesaja_mum_satiri_ekler():
+def test_mum_damgasi_metinde_degil_karede_okunur():
+    """GÖRSEL-7 iş bölümü: "hangi mum kapandı" bilgisi KÂRE BAŞLIĞINDA yazılı.
+
+    Neden metinden çıktı: kullanıcı kararı "görsel ana okuma, metin yalnız görselde
+    OLMAYAN bilgiyi söyler". Kâre üst şeridi `son kapanan <tarih> · <fiyat>` yazar;
+    aynı damgayı metinde tekrarlamak 8-11 satır hedefinden bir satır yiyordu.
+    """
     from notifier import TelegramNotifier
     n = TelegramNotifier()
     veri = {
@@ -202,11 +208,17 @@ def test_notifier_anlik_mesaja_mum_satiri_ekler():
         'bar_metni': "🕒 4 saatlik mum 25.09 13:30 → 17:30 kapandı",
     }
     mesaj = n.format_message(veri)
-    # Kart biçimi: aynı verinin kısa damgası (satır telefonda sarmasın diye).
-    assert "25.09 13:30→17:30 mumu" in mesaj
-    # İzleme (digest) mesajına eklenmez: yer bütçesi orada farklı.
+    assert "25.09 13:30→17:30 mumu" not in mesaj and "kapandı" not in mesaj
+    # İzleme (digest) mesajına da eklenmez: yer bütçesi orada farklı.
     veri_izleme = dict(veri, state='SIKISMA_GUCLENIYOR')
     assert "kapandı" not in n.format_message(veri_izleme)
+
+    # Bilgi kaybolmadı: damga kârenin üst şeridinde (ölçülen yer).
+    import grafik_uret
+    d = grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True, mum=140,
+                              cikti="/tmp/kare/_p7_mum_damgasi.png")
+    sag = str(((d.get("meta") or {}).get("metin") or {}).get("sag") or "")
+    assert "son kapanan" in sag
 
 
 # --- 6) main.py güvenlik kapısı: kapanmamış barla push YOK ---------------

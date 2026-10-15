@@ -994,9 +994,13 @@ def test_gerçek_motorda_kart_satırı_karede_de_var(tf):
 
 
 @pytest.mark.parametrize("kod", [200, 403])
-def test_alarm_metni_basarisi_sonrasi_kuyruk_tur_sonu_ayri_dm_fotografi(
+def test_alarm_metni_basarisi_sonrasi_fotograf_hemen_arka_planda(
         notifier, grafik_acik, monkeypatch, kod):
-    """Gerçek notifier akışı, ağ monkeypatch: fotoğraf yalnız metin başarısından sonra."""
+    """GÖRSEL-4: metin gider, ARDINDAN o olayın görseli (arka plan işçisi) gider.
+
+    Kullanıcı kararı: "bir metin geldi ardından görsel, sonra bir metin ...".
+    Fotoğraf yalnız metin başarısından sonra; kuyruk tur sonunu beklemez.
+    """
     import requests
     import main as M
     siralama = []
@@ -1013,14 +1017,24 @@ def test_alarm_metni_basarisi_sonrasi_kuyruk_tur_sonu_ayri_dm_fotografi(
                 "sembol": "AKBNK", "goruntular": [{"tf": "4h", "goruntu": _goruntu(tf="4h")}]
             }}
     assert notifier._gonder(veri) is (kod == 200)
-    assert siralama == ["sendMessage"] and not fotolar
-    assert len(notifier._grafik_kuyruk) == (1 if kod == 200 else 0)
-    once = (notifier._gunluk_sayac, list(notifier._saatlik_zamanlar))
-    M._grafikleri_tur_sonunda(notifier)
+    assert siralama == ["sendMessage"]
+    # Metin başarısızsa görsel de yok; başarılıysa arka plan işçisi hemen gönderir.
+    for _ in range(100):
+        if fotolar or kod != 200:
+            break
+        time.sleep(0.02)
     assert len(fotolar) == (1 if kod == 200 else 0)
     if fotolar:
         assert fotolar[0]["notifier"].chat_id == "42"
         assert not os.path.exists(fotolar[0]["yol"])
+        assert notifier._grafik_kuyruk == []       # kare tüketildi
+    else:
+        assert notifier._grafik_kuyruk == []
+    # Tur sonu boşaltma ARTIK ek bir gönderim üretmez (kuyruk zaten boş) ve
+    # günlük/saatlik sayaçlara dokunmaz.
+    once = (notifier._gunluk_sayac, list(notifier._saatlik_zamanlar))
+    M._grafikleri_tur_sonunda(notifier)
+    assert len(fotolar) == (1 if kod == 200 else 0)
     assert once == (notifier._gunluk_sayac, list(notifier._saatlik_zamanlar))
     assert not notifier._grafik_kuyruk
 
