@@ -1303,3 +1303,50 @@ Kanıt kareleri ayrıca modlarla birlikte alındı: `--sade`, `--renk-korugu`,
   **seviye cetveli / karar satırı** uygulanmadı — kullanıcı üç paketi seçti.
 - `GRAFIK_OLAY_MAKS` (§29.4) hâlâ onay bekliyor.
 - Kutu içi yazı ince kutuda mumla kısmen örtüşebilir (bkz. §32.3).
+
+## 34 · GÖRSEL-6 (2026-10-15) — PH/PL seviye cetveli + kutu dolgusu belirginliği
+
+Kullanıcı: *"sadece ben sağ şeritte seviye cetveli istiyorum PH PL için, bir de FVG ile
+OB renkleri tam belirgin değil yani onun şeffaflığını biraz azaltır mısın ama çok abartma"*.
+
+### 34.1 PH/PL → sağ şerit seviye cetveli
+
+- Korunan uçlar (`PH`/`PL`) artık **grafikte yazı değil**: fiyat, seviyesiyle hizalı
+  tek yerde — sağ şeritteki cetvel çipinde (`PH 290,50`) okunur. Grafikte yalnız ince
+  seviye çizgisi kalır; aynı metin iki yerde tekrarlanmaz.
+- Çip `oncelik=4` (son fiyat 9 > alarm 6 > kritik 5 > **PH/PL 4** > BOS/CHoCH 3 > kutu 2),
+  kaynak başına sınır `sag_etiket_maks["swing"] = 2`.
+- Kılavuz çizgisi kutu kılavuzundan **belirgin** (0,8 pt · α 0,38 · `(0,(1,3))`) ama
+  kritik/alarm çizgisi kadar kalın değil — uyarı tonu taşımaz.
+- **Aynı seviye çifti bastırılır:** son fiyatla aynı bantta kalan PH/PL çipi atlanır
+  (ölçüm: THYAO 1s'te `PH 290,50` ile son fiyat `290,50` üst üste biniyordu). Atlama
+  `meta["sag"]["atlanan_kaynak"]["swing"]` ile SAYILIR — sessiz kayıp yok.
+- İç yapı etiketleri (`HH`/`HL`/`LH`/`LL`) grafikte kısa hâliyle kalır.
+- Lejant: `┈ seviye (PH/PL sağda)` + yapı satırı `▲▼ iç yapı · ┄ BOS/CHoCH · ━ kritik · PH/PL sağda`.
+- `meta["olay"]["phpl_serit"]` cetvele taşınan PH/PL sayısını verir.
+
+### 34.2 Kutu dolgusu (OB/FVG)
+
+- Kullanıcı isteği: "şeffaflığını biraz azalt, ama çok abartma". Ölçülü artış:
+  `doldurma.ob 0.09 → 0.16`, `fvg 0.08 → 0.15` (≈1,8×); kalın/ince kutu kademesi
+  `ince 0.04 → 0.07`. Neon DEĞİL: dolgu hâlâ yarı saydam, mum okunurluğu korunur.
+- Kenar `0.8 → 0.9 pt` (kutu sınırı bir tık belirgin); vurgu çubuğu 1,3 pt **değişmedi**
+  ("havada çubuk" görüntüsü geri gelmesin).
+
+### 34.3 Ölçüm ve kanıt
+
+- 20 kare: cetvele taşınan PH/PL **19**, şeritte 80 çip, atlanan 1 (son fiyat çakışması),
+  `mum_cakisan` 0. Kutu dolgu alfa dağılımı: 0,16/0,15 (ana), 0,28 (dolan kısım),
+  0,07/0,075 (ince kutu kademesi).
+- `docs/ornek_kare_gorsel6.png` — üstte `git archive 9196cce` ağacıyla üretilen gerçek
+  önce karesi, altta sonrası (aynı veri: THYAO 1s 180 mum `--zone`).
+- Testler: `test_grafik_gorsel5.py` +5 test (cetvel çipi + kılavuz stili, son fiyat
+  bastırması ve sayacı, uzak seviyede ikisinin de kalması, dolgu aralığı/neon tavanı,
+  kutu içi yazının konturel okunurluğu); GÖRSEL-4'ün PH/PL testleri yeni sözleşmeye
+  çevrildi. Tam süit: 1133 passed / 44 skipped.
+
+### 34.4 Açık kalanlar
+
+- Cetvel şu an kaynak sırasına göre diziliyor (son fiyat/alarm/kritik/PH-PL/kutu);
+  istenirse başlıklı gruplara ayrılabilir ("SEVİYELER" / "BÖLGELER").
+- `GRAFIK_OLAY_MAKS` (§29.4) hâlâ onay bekliyor.

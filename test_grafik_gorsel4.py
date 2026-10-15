@@ -122,17 +122,25 @@ def test_bos_choch_etiketi_seride_degil_mumun_yaninda():
     olay_yazilari = [t for t in ax.texts if str(t.get_gid() or "") == "olay-ici"]
     assert sorted(str(t.get_text()) for t in olay_yazilari) == ["BOS↑", "CHoCH↓"]
     assert ozet["etiket_ic"] == 2
-    # şeride yalnız yapı dışı etiketler kalır (bu görüntüde hiç etiket yok)
-    assert sag == []
+    # GÖRSEL-6: şeride yalnız KORUNAN UÇLAR (PH/PL) cetvel çipi olarak gider;
+    # BOS/CHoCH grafikte kalır (bu görüntüde 2 swing, 2 olay var).
+    assert {a["kaynak"] for a in sag} == {"swing"}
+    assert sorted(a["metin"] for a in sag) == ["PH 104,50", "PL 96,25"]
+    assert all("kilavuz_x" in a for a in sag)
 
 
-def test_ph_pl_etiketi_fiyat_tasir_ic_yapi_kisa_kalir():
+def test_ph_pl_cetvelde_fiyat_tasir_ic_yapi_kisa_kalir():
+    """GÖRSEL-6: PH/PL fiyatı SAĞ ŞERİT cetvelinde; grafikte yalnız iç yapı kısa yazı."""
     fig, ax = _eksen()
-    grafik._olay_ciz(ax, _olay_goruntusu(), 60, [])
+    sag: list = []
+    grafik._olay_ciz(ax, _olay_goruntusu(), 60, sag)
     yazilar = [str(t.get_text()) for t in ax.texts if str(t.get_text()).strip()]
-    assert "PH 104,50" in yazilar and "PL 96,25" in yazilar     # korunan uç: seviye
     assert "LH" in yazilar                                       # iç yapı: kısa
     assert not any(y.startswith("LH ") for y in yazilar)
+    # PH/PL grafikte YAZI DEĞİL (çift okuma yok), şeritte cetvel çipi:
+    assert not any(y.startswith(("PH ", "PL ")) for y in yazilar)
+    assert sorted(a["metin"] for a in sag) == ["PH 104,50", "PL 96,25"]
+    assert all(a["kaynak"] == "swing" and a["oncelik"] == 4 for a in sag)
 
 
 def test_kritik_yazisi_tek_kopya_kalir():

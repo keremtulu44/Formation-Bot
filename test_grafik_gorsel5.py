@@ -412,3 +412,93 @@ def test_figur_yazilari_tasmaz_ve_cakismaz(buyuk):
         for fignum in plt.get_fignums():
             plt.figure(fignum).clear()
         plt.close("all")
+
+
+# ============ GÖRSEL-6: PH/PL seviye cetveli + kutu dolgusu belirginliği ========
+
+
+def test_ph_pl_sag_seritte_cetvel_olarak_durur():
+    """Korunan uçlar (PH/PL) şerit cetveline gider; iç yapı grafikte kalır."""
+    fig, ax = _eksen()
+    goruntu = {
+        "sembol": "T", "tf": "1h", "tf_kisa": "1s", "acilis": [100.0] * 60,
+        "yuksek": [101.0] * 60, "dusuk": [99.0] * 60, "kapanis": [100.5] * 60,
+        "formasyon": {}, "alarm": {}, "zone": {}, "temas": [], "isaretler": [], "serit": {},
+        "olay": {"swinglar": [
+            {"bar": 10, "fiyat": 104.5, "yon": "ust", "sinif": "PH", "durum": "teyitli"},
+            {"bar": 20, "fiyat": 96.25, "yon": "alt", "sinif": "PL", "durum": "teyitli"},
+            {"bar": 30, "fiyat": 103.0, "yon": "ust", "sinif": "HL", "durum": "teyitli"},
+        ], "olaylar": [], "kritik": {}},
+    }
+    sag: list = []
+    ozet = grafik._olay_ciz(ax, goruntu, 60, sag)
+    assert ozet["phpl_serit"] == 2
+    assert sorted(a["metin"] for a in sag) == ["PH 104,50", "PL 96,25"]
+    # cetvel çizgisi kutu kılavuzundan belirgin ama kritik kadar kalın değil
+    assert all(a["kilavuz_stil"]["lw"] == 0.8 for a in sag)
+    yazilar = [str(t.get_text()) for t in ax.texts if str(t.get_text()).strip()]
+    assert "HL" in yazilar and not any(y.startswith(("PH", "PL")) for y in yazilar)
+
+
+def test_ph_pl_son_fiyatla_ayni_bantta_ise_atlanir_ve_sayilir():
+    """Son fiyat aynı seviyeyi söylüyorsa PH/PL çipi tekrar yazılmaz (sayılır)."""
+    from matplotlib.figure import Figure
+
+    fig = Figure(figsize=(10.8, 8.1), dpi=100)
+    ax = fig.add_axes([0.075, 0.1, 0.8, 0.8])
+    aralik = (90.0, 120.0)
+    ax.set_ylim(*aralik)
+    adaylar = [
+        {"kaynak": "swing", "x": 59.6, "y": 100.0, "metin": "PH 100,00", "renk": "#8ba0b4",
+         "sabit": False, "oncelik": 4, "bg": None, "yeni": 40.0},
+        {"kaynak": "son", "x": 59.6, "y": 100.0, "metin": "100,00", "renk": "#101418",
+         "bg": "#31b184", "sabit": True, "oncelik": 9},
+    ]
+    ozet = grafik._sag_ciz(ax, fig, adaylar, 60, aralik)
+    metinler = [str(t.get_text()) for t in ax.texts if t.get_bbox_patch() is not None]
+    assert metinler == ["100,00"]                 # PH tekrarı yok
+    assert ozet["atlanan_kaynak"].get("swing") == 1 and ozet["atlanan"] == 1
+
+
+def test_ph_pl_son_fiyattan_uzaksa_ikisi_de_kalir():
+    from matplotlib.figure import Figure
+
+    fig = Figure(figsize=(10.8, 8.1), dpi=100)
+    ax = fig.add_axes([0.075, 0.1, 0.8, 0.8])
+    aralik = (90.0, 120.0)
+    ax.set_ylim(*aralik)
+    adaylar = [
+        {"kaynak": "swing", "x": 59.6, "y": 96.0, "metin": "PL 96,00", "renk": "#8ba0b4",
+         "sabit": False, "oncelik": 4, "bg": None, "yeni": 40.0},
+        {"kaynak": "son", "x": 59.6, "y": 110.0, "metin": "110,00", "renk": "#101418",
+         "bg": "#31b184", "sabit": True, "oncelik": 9},
+    ]
+    ozet = grafik._sag_ciz(ax, fig, adaylar, 60, aralik)
+    metinler = sorted(str(t.get_text()) for t in ax.texts if t.get_bbox_patch() is not None)
+    assert metinler == ["110,00", "PL 96,00"]
+    assert ozet["atlanan"] == 0
+
+
+def test_kutu_dolgusu_belirginlesti_ama_neon_degil():
+    """Kullanıcı: 'şeffaflığı biraz azalt ama çok abartma' → ölçülü artış."""
+    d = grafik.SABITLER["doldurma"]
+    assert 0.14 <= float(d["ob"]) <= 0.20          # eski 0.09, "abartma" tavanı
+    assert 0.13 <= float(d["fvg"]) <= 0.20         # eski 0.08
+    assert float(grafik.SABITLER["zone_kalinlik"]["kenar"]) == 0.9
+    assert float(grafik.SABITLER["zone_kalinlik"]["vurgu"]) == 1.3   # vurgu değişmedi
+
+
+def test_kutu_dolgusu_kutu_ici_yazi_okunurlugunu_bozmaz():
+    """Dolgu koyulaştı ama kutu içi yazı/kontur aynen duruyor."""
+    from matplotlib.figure import Figure
+
+    fig = Figure(figsize=(10.8, 8.1), dpi=100)
+    ax = fig.add_axes([0.075, 0.1, 0.8, 0.8])
+    ax.set_xlim(-0.6, 59.6)
+    ax.set_ylim(90.0, 120.0)
+    kayit = {"tip": "ob", "yon": 1, "alt": 100.0, "ust": 106.0, "x0": 10, "x1": 40,
+             "durum": "ACTIVE", "vurgu": "alt", "doluluk": 0.31, "zaman": None}
+    grafik._zone_ciz(ax, {"cizilen": [kayit]}, 60, (90.0, 120.0), [])
+    yazilar = [t for t in ax.texts if str(t.get_gid() or "") == "kutu-ici"]
+    assert len(yazilar) == 1 and "%31" in str(yazilar[0].get_text())
+    assert yazilar[0].get_path_effects()            # koyu kontur korunuyor
