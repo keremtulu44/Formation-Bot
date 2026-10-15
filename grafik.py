@@ -76,7 +76,120 @@ def _ortam_sayi(ad: str, varsayilan: float) -> float:
 
 
 # §5'teki sabit bloğun birebir hali; sayılar §17 ölçümlerinden.
-SABITLER: dict[str, Any] = {
+class _ModKapsami(threading.local):
+    """Mod kapsamı (thread-local): renk körü paleti + yazı ölçeği + sade mod.
+
+    Neden `threading.local`: aynı anda iki kare çizilebilir (tarama + gönderim
+    işçisi); global mutasyon birinin rengini diğerine sızdırırdı.
+    """
+
+    def __init__(self) -> None:
+        self.palet: Optional[dict[str, str]] = None
+        self.yazi_olcek: float = 1.0
+        self.sade: bool = False
+
+
+_MOD = _ModKapsami()
+
+# Renk körü (deuteranopia) modu: mum/şerit/katılım renkleri mavi-turuncu çiftine
+# geçer. Şekil kanalı KORUNUR (yükselen BOŞ, düşen DOLU) — renk körlüğünde tek
+# ayrım renk olmasın kuralı (GÖRSEL-3) burada da geçerli.
+_PALET_RENK_KORUGU: dict[str, str] = {
+    "mum_yukselen": "#4da3ff", "mum_yukselen_ic": "#12395c",
+    "mum_dusen": "#f5a05a", "mum_dusen_ic": "#f5a05a",
+    "serit_yuk": "#3f8fd0", "serit_dus": "#d98b4a",
+    "son_yuk": "#4da3ff", "son_dus": "#f5a05a",
+}
+
+
+def _mod_kapsami(secenekler: Optional[Mapping[str, Any]] = None):
+    """`with _mod_kapsami(secenekler):` — modları ayarlar, çıkışta temizler."""
+    import contextlib
+
+    @contextlib.contextmanager
+    def _kapsam():
+        onceki = (_MOD.palet, _MOD.yazi_olcek, _MOD.sade)
+        sec = dict(secenekler or {})
+        _MOD.palet = dict(_PALET_RENK_KORUGU) if sec.get("renk_korugu") else None
+        try:
+            olcek = float(sec.get("yazi_olcek") or 1.0)
+        except (TypeError, ValueError):
+            olcek = 1.0
+        _MOD.yazi_olcek = min(2.0, max(1.0, olcek))
+        _MOD.sade = bool(sec.get("sade"))
+        try:
+            yield
+        finally:
+            _MOD.palet, _MOD.yazi_olcek, _MOD.sade = onceki
+
+    return _kapsam()
+
+
+class _PaletSarmalayici(Mapping):
+    """`PALET[...]` okumalarını mod kapsamına göre yönlendirir (çağrı yeri değişmez)."""
+
+    def __init__(self, taban: dict[str, Any]) -> None:
+        self._taban = taban
+
+    def _birlesik(self) -> dict[str, Any]:
+        if not _MOD.palet:
+            return self._taban
+        return {**self._taban, **_MOD.palet}
+
+    def __getitem__(self, anahtar: str) -> Any:
+        aktif = _MOD.palet
+        if aktif and anahtar in aktif:
+            return aktif[anahtar]
+        return self._taban[anahtar]
+
+    def get(self, anahtar: str, varsayilan: Any = None) -> Any:
+        try:
+            return self[anahtar]
+        except KeyError:
+            return varsayilan
+
+    def __iter__(self):
+        return iter(self._birlesik())
+
+    def __len__(self) -> int:
+        return len(self._birlesik())
+
+
+class _SabitlerSarmalayici(Mapping):
+    """`SABITLER[...]` + `--buyuk-yazi` ölçeği (`*_pt` anahtarları).
+
+    Ölçek yalnız yazı puntolarına uygulanır; dpi/kalınlık/kadraj gibi ölçülere
+    dokunulmaz (kare geometrisi değişmez, yalnız metin büyür).
+    """
+
+    _OLCEKLI_SONEK = "_pt"
+
+    def __init__(self, taban: dict[str, Any]) -> None:
+        self._taban = taban
+
+    def __getitem__(self, anahtar: str) -> Any:
+        deger = self._taban[anahtar]
+        olcek = _MOD.yazi_olcek
+        if (olcek != 1.0 and isinstance(anahtar, str)
+                and anahtar.endswith(self._OLCEKLI_SONEK)
+                and isinstance(deger, (int, float)) and not isinstance(deger, bool)):
+            return float(deger) * olcek
+        return deger
+
+    def get(self, anahtar: str, varsayilan: Any = None) -> Any:
+        try:
+            return self[anahtar]
+        except KeyError:
+            return varsayilan
+
+    def __iter__(self):
+        return iter(self._taban)
+
+    def __len__(self) -> int:
+        return len(self._taban)
+
+
+SABITLER_TABAN: dict[str, Any] = {
     # kare ölçüleri (§17.1-2: bar_px 4→6, tavan 2160→1440; §0.12q oran 4:3)
     "genislik_taban": 1080,
     "yukseklik": 810,
@@ -147,6 +260,7 @@ SABITLER: dict[str, Any] = {
     "ust_ayrac": True,                # başlık bloğunun altında ince ayraç çizgisi
     "formasyon_dolgu_alpha": 0.06,    # bant arası dolgu (§0.4.1: renk tek başına bilgi taşımaz)
 }
+SABITLER = _SabitlerSarmalayici(SABITLER_TABAN)
 
 # §0.4.1 kalıcı palet — renk tek başına bilgi taşımaz, her katmanın yazısı da var.
 #
@@ -154,7 +268,7 @@ SABITLER: dict[str, Any] = {
 # da orta doygunlukta (teal-yeşil / tuğla kırmızı), zemin koyu slate. Bilgi ikinci
 # kanaldan da taşınır: yükselen içi BOŞ (saydam yeşil dolgu), düşen DOLU — renk
 # körlüğünde de okunur (§0.4.1 kuralı: "renk tek başına bilgi taşımaz").
-PALET = {
+PALET_TABAN = {
     # zemin / panel: mum alanı ile şerit kulvarları birbirinden ayrılsın
     "zemin": "#0f151c",
     "panel": "#151d27",
@@ -186,6 +300,7 @@ PALET = {
     "golge": "#8fa8c8",
     "chip_zemin": "#111922",
 }
+PALET = _PaletSarmalayici(PALET_TABAN)
 
 # Alarm çizgisinin kalınlığı durumundan gelir (§2.6): halka açık durumlar kalın.
 # §0.12l: `1s` ve `2s` karelerinde FVG çizilmez — `zone_scoring.FVG_TIMEFRAMES`
@@ -226,6 +341,14 @@ def grafik_kare_adedi() -> int:
     """`TELEGRAM_GRAFIK_ADET` (1-4, §5): alarm başına en fazla kare."""
     adet = int(_ortam_sayi("TELEGRAM_GRAFIK_ADET", 4))
     return max(1, min(4, adet))
+
+
+def _ortam_bayrak(ad: str, varsayilan: bool = False) -> bool:
+    """`GRAFIK_*` bayrağı: 1/true/evet/açık → True; boş/tanımsız → varsayılan."""
+    ham = str(os.environ.get(ad, "")).strip().lower()
+    if not ham:
+        return bool(varsayilan)
+    return ham in ("1", "true", "evet", "açık", "acik", "yes", "on")
 
 
 def kare_mum_tavani(tf: str) -> int:
@@ -993,6 +1116,17 @@ def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
     """
     baslangic = time.perf_counter()
     secenekler = dict(secenekler or {})
+    # Canlı akış modları ENV'den de açılabilir (telefonda okunurluk): GRAFIK_SADE=1,
+    # GRAFIK_RENK_KORUGU=1, GRAFIK_YAZI=1.25. CLI bayrağı env'i EZER (açık istek kazanır).
+    if "sade" not in secenekler:
+        secenekler["sade"] = _ortam_bayrak("GRAFIK_SADE")
+    if "renk_korugu" not in secenekler:
+        secenekler["renk_korugu"] = _ortam_bayrak("GRAFIK_RENK_KORUGU")
+    if "yazi_olcek" not in secenekler and os.environ.get("GRAFIK_YAZI"):
+        try:
+            secenekler["yazi_olcek"] = float(str(os.environ["GRAFIK_YAZI"]).replace(",", "."))
+        except (TypeError, ValueError):
+            pass
     tf = str(tf or goruntu.get("tf") or "1h")
     olcu = _kare_olcu(goruntu)
     meta = _meta_kur(goruntu, tf, olcu)
@@ -1019,7 +1153,8 @@ def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
         tempfile.gettempdir(), f"formation_bot_grafik_{goruntu.get('sembol') or 'sembol'}_{tf}.png")
     ek: dict[str, Any] = {}
     try:
-        bayt, ek = _kare_ciz(goruntu, tf, olcu, meta, secenekler, yalnizca_mumlar=False)
+        bayt, ek = _kare_ciz_modlu(goruntu, tf, olcu, meta, secenekler,
+                                   yalnizca_mumlar=False)
     except Exception as hata:
         # §4: görsel hiçbir koşulda alarmı engellemez → hata yutulur, kat çöker.
         log.warning("grafik: tam çizim başarısız (%s: %s)", type(hata).__name__, hata)
@@ -1029,7 +1164,8 @@ def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
     if bayt is None:
         meta["uyarilar"] = list(meta["uyarilar"]) + ["çökme modu: yalnız mumlar çizildi"]
         try:
-            bayt, ek2 = _kare_ciz(goruntu, tf, olcu, meta, secenekler, yalnizca_mumlar=True)
+            bayt, ek2 = _kare_ciz_modlu(goruntu, tf, olcu, meta, secenekler,
+                                        yalnizca_mumlar=True)
         except Exception as hata:
             log.warning("grafik: çökme modu da başarısız (%s)", hata)
             bayt, ek2 = None, {"hata": f"{type(hata).__name__}: {hata}"}
@@ -1052,15 +1188,44 @@ def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
     return bitir(str(hedef))
 
 
+def _kare_ciz_modlu(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
+                    meta: Mapping[str, Any], secenekler: Mapping[str, Any], *,
+                    yalnizca_mumlar: bool):
+    """Mod kapsamı içinde çizer (GÖRSEL-5): `--renk-korugu`, `--buyuk-yazi`, `--sade`.
+
+    Neden burada: `PALET`/`SABITLER` çizim boyunca onlarca yerden okunuyor; kapsam
+    thread-local olduğu için iki paralel kare (tarama + gönderim işçisi) birbirinin
+    modunu görmez. Çökme modu (`yalnizca_mumlar`) da aynı kapsamdan geçer.
+    """
+    with _mod_kapsami(secenekler):
+        return _kare_ciz(goruntu, tf, olcu, meta, secenekler,
+                         yalnizca_mumlar=yalnizca_mumlar)
+
+
 def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
               meta: Mapping[str, Any], secenekler: Mapping[str, Any], *,
               yalnizca_mumlar: bool) -> tuple[Optional[bytes], dict[str, Any]]:
     """Asıl çizim → `(png_baytı, meta_ekleri)`. Dosyaya yazmak `ciz`'in işi."""
     eksik: list[str] = list(meta.get("eksik_katmanlar") or [])
     budama: list[str] = list(meta.get("budama") or [])
+    # GÖRSEL-5 `--sade`: yalnız mum + formasyon bandı + kritik/son fiyat kalır.
+    # Katmanlar VERİDEN kesilir (çizim fonksiyonları koşul yığınıyla şişmesin);
+    # kesilen katman `eksik`e YAZILMAZ — bu bilinçli bir okuma modu, veri kusuru değil.
+    sade = bool(secenekler.get("sade"))
+    _sade_atlanan = 0
+    if sade:
+        # meta DÜRÜST kalır: "4 kutu vardı, sade modda çizilmedi" (0 çizildi ama
+        # atlanan sayısı görünür → sessiz kayıp yok).
+        _sade_atlanan = int((meta.get("zone") or {}).get("cizilen") or 0)
+        meta["zone"] = _zone_meta(None)
+        goruntu = {**goruntu, "zone": {}, "serit": {}, "temas": [], "isaretler": [],
+                   "sade": True}
+        _olay_sade = dict(goruntu.get("olay") or {})
+        goruntu["olay"] = {**_olay_sade, "swinglar": [], "olaylar": []}
     n = int(olcu["bar"])
     etiket_detay = bool(secenekler.get("etiket_detay", SABITLER["etiket_detay"]))
-    serit_istendi = bool(secenekler.get("serit", True)) and bool(goruntu.get("serit"))
+    serit_istendi = (bool(secenekler.get("serit", True)) and bool(goruntu.get("serit"))
+                     and not sade)
     plt, fig = None, None
     kalite = None
     try:
@@ -1259,6 +1424,9 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
             elenen = _sag_ele(sag_adaylar, _son_kapanis)
             sag_ozet = _sag_ciz(ax, fig, sag_adaylar, n, aralik)
             sag_ozet["eledi_kaynak"] = elenen
+        meta["mod"] = {"sade": bool(sade), "renk_korugu": bool(_MOD.palet),
+                       "yazi_olcek": round(float(_MOD.yazi_olcek), 3),
+                       "atlanan_kutu": int(_sade_atlanan)}
         meta["sag"] = {"yerlesen": sag_ozet["yerlesen"], "atlanan": sag_ozet["atlanan"],
                        "eledi_kaynak": dict(sag_ozet.get("eledi_kaynak") or {}),
                        # GÖRSEL-5: aynı seviyedeki kutu çipleri tek çipte birleşti.
@@ -1974,10 +2142,15 @@ def _lejant_satirlar(oge: Sequence[str], kare_genislik: float) -> tuple[list[str
     kareye yazılır ve `meta`'ya geçer — kare, çizdiği şeyin adını saklamaz.
     """
     from telegram_measure import bol as _bol
-    butce = kare_genislik * 0.94 / float(SABITLER["metin_carpani"])
+    # Yazı ölçeği (GÖRSEL-5 `--buyuk-yazi`) bütçeyi KÜÇÜLTÜR: punto büyürse aynı
+    # piksele daha az karakter sığar. Ölçek hesaba katılmazsa lejant kareden taşar.
+    olcek = max(1.0, float(getattr(_MOD, "yazi_olcek", 1.0)))
+    butce = kare_genislik * 0.94 / (float(SABITLER["metin_carpani"]) * olcek)
     oge = [str(x) for x in oge if x]
     atlanan = 0
-    for punto in (float(SABITLER["lejant_pt"]), 8.5, 8.0, 7.5, 7.0):
+    _taban_pt = float(SABITLER["lejant_pt"])
+    for punto in (_taban_pt, _taban_pt * 0.94, _taban_pt * 0.88, _taban_pt * 0.82,
+                  max(7.0, _taban_pt * 0.76)):
         metin = " · ".join(oge)
         if _genislik_16(metin) <= butce:
             return [metin], punto, atlanan
@@ -1989,7 +2162,7 @@ def _lejant_satirlar(oge: Sequence[str], kare_genislik: float) -> tuple[list[str
         atlanan += 1
     if atlanan:
         oge = list(oge) + [f"+{atlanan} madde sığmadı"]
-    return _bol(" · ".join(oge), butce)[:2], 7.0, atlanan
+    return _bol(" · ".join(oge), butce)[:2], max(7.0, _taban_pt * 0.76), atlanan
 
 
 _ALT_ADIM = 0.0235      # kare altındaki yazı bloğunun satır adımı (figür kesiri)
@@ -2001,7 +2174,9 @@ def _alt_yerlesim(kirmizi: int, gri: int, lejant_satir: int = 1) -> tuple[float,
     Neden tek yer: lejant ile dipnotların üst üste binmesi ilk çizimde görüldü;
     aks payı artık burada hesaplanır, eksen alta oraya göre çekilir.
     """
-    adim = _ALT_ADIM
+    # Yazı ölçeği satır adımını da büyütür (aksi hâlde lejant/dipnot satırları
+    # üst üste biner — GÖRSEL-5 büyük yazı modu).
+    adim = _ALT_ADIM * max(1.0, float(getattr(_MOD, "yazi_olcek", 1.0)) * 0.9)
     y_lejant = 0.046 + adim * (kirmizi + gri + max(0, lejant_satir - 1))
     y_gri = [y_lejant - adim * (i + 1) for i in range(gri)]
     y_kirmizi = [y_gri[-1] - adim * (i + 1) if gri else y_lejant - adim * (i + 1)
@@ -2517,10 +2692,17 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool) -> list[str]:
     """Çizilen ne ise o (§0.12v); uydurma etiket yok — katman yoksa madde de yok."""
     if yalnizca_mumlar:
         return ["yalnızca mumlar (çökme modu)"]
+    if goruntu.get("sade"):
+        return ["sade mod: yalnız mum + formasyon bandı + kritik/son fiyat"]
     formasyon = goruntu.get("formasyon") or {}
     alarm = goruntu.get("alarm") or {}
     # Renk şeması lejantta AÇIKÇA yazılır (GÖRSEL-3): yeşil boş / kırmızı dolu.
-    oge = ["kapanmış mum", "yeşil boş = yükselen", "kırmızı dolu = düşen"]
+    # Renk adları MODDAN gelir: renk körü modunda "yeşil/kırmızı" yazmak yalan
+    # olurdu (lejant çizileni anlatır kuralı — §0.12v).
+    if _MOD.palet:
+        oge = ["kapanmış mum", "mavi boş = yükselen", "turuncu dolu = düşen"]
+    else:
+        oge = ["kapanmış mum", "yeşil boş = yükselen", "kırmızı dolu = düşen"]
     # GÖRSEL-5: olay çizgileri stil olarak ayrıştı; lejant da ayrı yazar (hangisi
     # görünüyorsa o madde çıkar — uydurma yok).
     _olaylar = list((goruntu.get("olay") or {}).get("olaylar") or [])

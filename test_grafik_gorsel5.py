@@ -274,3 +274,141 @@ def test_lejant_bos_ve_choch_ayri_yazar():
     # Yalnız BOS varsa CHoCH maddesi ÇIKMAZ (çizilmeyen şey lejantta yazılmaz).
     oge2 = grafik._lejant({"olay": {"olaylar": [{"tur": "BOS"}]}}, False)
     assert "┈ CHoCH" not in oge2
+
+
+# ========================= Paket 3: okuma modları ============================
+# `--sade` (mum + formasyon + kritik/son fiyat), `--renk-korugu` (mavi-turuncu),
+# `--buyuk-yazi` (×1,25). Mod kapsamı THREAD-LOCAL: tarama ile görsel gönderim
+# işçisi aynı anda çizerse birbirinin modunu görmemeli.
+
+
+def test_renk_korugu_kapsami_mum_renklerini_degistirir():
+    normal = grafik.PALET["mum_yukselen"]
+    with grafik._mod_kapsami({"renk_korugu": True}):
+        assert grafik.PALET["mum_yukselen"] == "#4da3ff"
+        assert grafik.PALET["mum_dusen"] == "#f5a05a"
+        assert grafik.PALET["ob"] == "#2bb673"        # katman renkleri değişmez
+    assert grafik.PALET["mum_yukselen"] == normal     # kapsam çıkışında geri döner
+
+
+def test_buyuk_yazi_yalniz_puntolari_buyutur():
+    with grafik._mod_kapsami({"yazi_olcek": 1.25}):
+        assert grafik.SABITLER["eksen_pt"] == pytest.approx(9.0 * 1.25)
+        assert grafik.SABITLER["zone_yazi_pt"] == pytest.approx(8.0 * 1.25)
+        assert grafik.SABITLER["dpi"] == 100                        # geometri sabit
+        assert grafik.SABITLER["zone_kalinlik"]["vurgu"] == 1.3     # kalınlık sabit
+
+
+def test_mod_kapsami_thread_izole():
+    """Ana thread'in modu işçi thread'e SIZMAZ (paralel çizim güvenliği)."""
+    import threading
+
+    sonuc = {}
+
+    def isci():
+        with grafik._mod_kapsami({"renk_korugu": True}):
+            sonuc["isci"] = grafik.PALET["mum_yukselen"]
+        sonuc["isci_sonra"] = grafik.PALET["mum_yukselen"]
+
+    with grafik._mod_kapsami({"renk_korugu": False}):
+        t = threading.Thread(target=isci)
+        t.start()
+        t.join()
+        assert grafik.PALET["mum_yukselen"] == "#31b184"     # ana thread etkilenmez
+    assert sonuc["isci"] == "#4da3ff"
+    assert sonuc["isci_sonra"] == "#31b184"
+
+
+def test_sade_mod_katmanlari_kapatir_ama_veri_kusuru_yazmaz():
+    import grafik_uret
+
+    d = grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True, mum=140,
+                              sade=True, cikti="/tmp/kare/_p3_sade.png")
+    meta = d["meta"]
+    assert meta["mod"]["sade"] is True
+    assert meta["zone"]["cizilen"] == 0 and meta["zone"]["etiket_ic"] == 0
+    # Sessiz kayıp yok: kaç kutunun mod nedeniyle çizilmediği yazılır.
+    assert meta["mod"]["atlanan_kutu"] >= 1
+    assert "zone" not in meta["eksik_katmanlar"]         # bilinçli mod, kusur değil
+    assert meta["metin"]["lejant"] == [
+        "sade mod: yalnız mum + formasyon bandı + kritik/son fiyat"]
+    assert meta["sag"]["yerlesen"] <= 2                  # yalnız kritik + son fiyat
+
+
+def test_normal_mod_sade_ile_ayni_veriyi_korur():
+    """Sade mod yalnız ÇİZİM kapsamını kapatır; kare verisi değişmez."""
+    import grafik_uret
+
+    normal = grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True,
+                                   mum=140, cikti="/tmp/kare/_p3_normal.png")
+    sade = grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True,
+                                 mum=140, sade=True, cikti="/tmp/kare/_p3_sade2.png")
+    assert normal["meta"]["mum_sayisi"] == sade["meta"]["mum_sayisi"]
+    assert normal["meta"]["mod"]["sade"] is False and sade["meta"]["mod"]["sade"] is True
+
+
+def test_env_anahtarlari_cli_bayragini_ezmez(monkeypatch):
+    """`GRAFIK_SADE=1` env ile açılır; CLI bayrağı verilirse yine açık kalır."""
+    import grafik_uret
+
+    monkeypatch.setenv("GRAFIK_SADE", "1")
+    d = grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True, mum=140,
+                              cikti="/tmp/kare/_p3_env.png")
+    assert d["meta"]["mod"]["sade"] is True
+    monkeypatch.delenv("GRAFIK_SADE")
+    monkeypatch.setenv("GRAFIK_YAZI", "1,5")             # virgüllü ondalık da okunur
+    d2 = grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True, mum=140,
+                               cikti="/tmp/kare/_p3_env2.png")
+    assert d2["meta"]["mod"]["yazi_olcek"] == pytest.approx(1.5)
+
+
+# ------------------- modlar: lejant dürüstlüğü + taşma kapısı -------------------
+
+
+def test_renk_korugu_modunda_lejant_renk_adi_degisir():
+    """Lejant çizileni anlatır: mavi/turuncu modda "yeşil/kırmızı" yazmaz."""
+    oge = grafik._lejant({"zone": {"cizilen": []}}, False)
+    assert any("yeşil boş" in x for x in oge)
+    with grafik._mod_kapsami({"renk_korugu": True}):
+        oge2 = grafik._lejant({"zone": {"cizilen": []}}, False)
+    assert any("mavi boş" in x for x in oge2)
+    assert not any("yeşil" in x for x in oge2)
+
+
+@pytest.mark.parametrize("buyuk", [False, True])
+def test_figur_yazilari_tasmaz_ve_cakismaz(buyuk):
+    """Alt/üst blok yazıları kare içinde kalır; satırlar üst üste binmez."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import grafik_uret
+
+    kapat_sonra = []
+    gercek_close = plt.close
+
+    def sahte_close(*a, **k):        # figürü ölçüm için açık tut
+        kapat_sonra.append((a, k))
+
+    plt.close = sahte_close
+    try:
+        grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True, mum=140,
+                              buyuk_yazi=buyuk, cikti="/tmp/kare/_p3_tasma.png")
+        fig = plt.figure(plt.get_fignums()[-1])
+        fig.canvas.draw()
+        r = fig.canvas.get_renderer()
+        w, h = fig.canvas.get_width_height()
+        kutular = []
+        for t in fig.texts:
+            bb = t.get_window_extent(r)
+            assert bb.x0 >= -0.5 and bb.x1 <= w + 0.5, str(t.get_text())[:32]
+            assert bb.y0 >= -0.5 and bb.y1 <= h + 0.5, str(t.get_text())[:32]
+            kutular.append((str(t.get_text())[:20], bb))
+        for i, (a1, b1) in enumerate(kutular):
+            for a2, b2 in kutular[i + 1:]:
+                assert not (b1.x0 < b2.x1 and b1.x1 > b2.x0
+                            and b1.y0 < b2.y1 and b1.y1 > b2.y0), (a1, a2)
+    finally:
+        plt.close = gercek_close
+        for fignum in plt.get_fignums():
+            plt.figure(fignum).clear()
+        plt.close("all")
