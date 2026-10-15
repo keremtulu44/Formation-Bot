@@ -105,7 +105,7 @@ def test_kadraj_formasyon_penceresine_sabitlenir():
     assert (g["sol"], g["sag"]) == (60, 240)
     assert len(g["zamanlar"]) == 180
     assert g["tavan_kalkti"] is False
-    # kadraj budaması yok (temas işareti tavanı ayrı bir satırdır, §2.2.4)
+    # kadraj budaması yok (temas dairesi katmanı kaldırıldı, adet meta'da kalır)
     assert not any("GRAFIK_MUM_MAKS" in b for b in g["budama"])
 
 
@@ -171,14 +171,13 @@ def test_temas_kurali_zone_scoring_kuraliyla_ayni():
     assert bulunan                                             # boş küme test olmasın
 
 
-def test_temas_isareti_budalanir_sayi_saklanmaz():
+def test_temas_adedi_korunur_daire_isaretleri_cizimden_kaldirildi():
     cerceve = _cerceve(240, yon=1.2)
     g = grafik.anlik_goruntu(_cift(start_bar=200, upper_now=54.0, lower_now=47.0), "1h",
                              cerceve, simdi=ZAMAN)
-    assert len(g["temas"]) > int(grafik.SABITLER["temas_isaret_maks"])
-    assert len(g["temas_isaret"]) == int(grafik.SABITLER["temas_isaret_maks"])
-    assert g["temas_isaret"] == g["temas"][-int(grafik.SABITLER["temas_isaret_maks"]):]
-    assert any("temas işareti" in b for b in g["budama"])          # sayı saklanmaz
+    assert g["temas"]                                  # adet kaynağı korunur
+    assert g["temas_isaret"] == []                    # mum üstü daireler kaldırıldı
+    assert not any("temas işareti" in b for b in g["budama"])
 
 
 def test_kadraj_disindaki_alarm_mumu_yazilir():

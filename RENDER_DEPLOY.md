@@ -802,6 +802,7 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `TELEGRAM_GRAFIK_ADET` | `4` — alarm başına kare sayısı (1-4). Free planda `1-2` | Hayır |
 | `GRAFIK_MUM_MAKS` | `180` — karenin kadraj tavanı (formasyon sığmıyorsa tavan kalkar) | Hayır |
 | `GRAFIK_OLAY_MAKS` | `6` — kareye çizilen onaylı BOS/CHoCH sayısı | Hayır |
+| `GRAFIK_SAG_BOSLUK` | `5.3` — son mumun sağındaki boş alan, eksen genişliğinin % değeri (≈180 mumluk karede 10 mum; bant/kutu/BOS çizgileri buraya uzar). `0` = kapalı (eski görünüm) | Hayır |
 | `KARNE_HORIZON_BAR` | `10` — sinyalden sonra izlenen bar sayısı | Hayır |
 | `DATA_DIR` | Kalıcı veri dizini. Render'da varsayılan `/tmp/formation-bot-data` (repo diski geçici; kalıcı veri Supabase'de). Kalıcı disk bağlarsanız buradan verin | Hayır |
 | `SEED_DATA_DIR` | `./bot_data` — DATA_DIR'de dosya yoksa **yalnız okuma** için kullanılan seed veri | Hayır |

@@ -119,14 +119,40 @@ def test_bellek_disk_olmayan_sembol_icin_kullanilir(is_ortami, monkeypatch, tmp_
     cagrilar = []
     monkeypatch.setattr(R, "run_domain_engines", lambda s, tf, frame: cagrilar.append((s, tf)) or {})
     n, metinler, fotolar, threadler = is_ortami
-    yanit = M._komut_grafik("SEM 4s")
-    assert "isteği alındı" in yanit and not fotolar and not threadler
+    yanit = M._komut_grafik("SEM 4s sade")
+    assert "isteği alındı" in yanit and "sade görünüm" in yanit
+    assert not fotolar and not threadler
     bitir(yanit, threadler)
     assert cagrilar == [("SEM", "4h")]
     assert metinler == []                    # başarıda ayrı metin yok (albüm yanıttır)
     assert len(fotolar) == 1 and not Path(fotolar[0][0]).exists()
-    assert fotolar[0][1].startswith("SEM · 4s")
+    assert fotolar[0][1].startswith("SEM · 4s · sade")
     assert not (tmp_path / "live/SEM.json").exists()
+
+
+@pytest.mark.parametrize(("arguman", "beklenen"), [
+    ("SEM 4s sade", True),
+    ("SEM 4s detay", False),
+    ("SEM 4s", None),
+])
+def test_telegram_grafik_gorunum_secimini_ureticiye_aktarir(
+        is_ortami, monkeypatch, arguman, beklenen):
+    n, metinler, fotolar, threadler = is_ortami
+    gorunumler = []
+
+    def uret(_hisse, _tf, **secenekler):
+        gorunumler.append(secenekler.get("sade"))
+        yol = secenekler["cikti"]
+        Path(yol).write_bytes(b"png")
+        return {"yol": yol, "meta": {"mum_sayisi": 20,
+                                      "son_bar_ts": "2026-10-15T18:00:00+03:00",
+                                      "mod": {"sade": secenekler.get("sade") is True}}}
+
+    monkeypatch.setattr(U, "kare_uret", uret)
+    bitir(M._komut_grafik(arguman), threadler)
+    assert gorunumler == [beklenen]
+    assert len(fotolar) == 1 and not metinler
+    assert (" · sade" in fotolar[0][1]) is (beklenen is True)
 
 
 def test_eksik_cache_kabulden_sonra_acik_hata(is_ortami):

@@ -5,8 +5,7 @@ Kurallar:
   1. Yazı mumun üstüne binmez: gerçek önbellekteki örnek karelerde
      `meta["kalite"]["mum_cakisan"] == 0` (ölçüm: `_mum_cakisma_say`).
   2. Sağ fiyat şeridindeki etiketler dikeyde üst üste binmez ve hiçbiri atılmaz.
-  3. Bant teması işareti, temasın gerçekten olduğu bandın tarafındaki fitil
-     ucunda çizilir (üst banda yakın mum → tepe, alt banda yakın mum → dip).
+  3. Temas adedi/metadata korunur; bant temas noktalarına daire işareti çizilmez.
   4. GÖRSEL-3 renk sözleşmesi: yükselen mum YEŞİL ve içi BOŞ, düşen mum KIRMIZI
      ve DOLU (neon değil: iki ton da orta doygunlukta); şerit spike'ı mumun
      yönünde renklenir; lejant renk şemasını yazar.
@@ -91,21 +90,15 @@ def test_sag_serit_etiketleri_birlesir_ve_dikeyde_binmez(tmp_path):
     assert son["yy"] == pytest.approx(55.0)
 
 
-def test_bant_temasi_dogru_fitil_ucunda(tmp_path):
-    """Alt banda yakın temas → dip (low); üst banda yakın temas → tepe (high)."""
+def test_formasyon_temas_daireleri_cizilmez():
+    """Bant temas adetleri kalsa da mum üstü daire işaretleri çizilmez."""
     from matplotlib.figure import Figure
 
     n = 10
-    yuksek = [101.0] * n
-    dusuk = [99.0] * n
-    # 3. mum: alt banda (100) yakın → dip 99.5 seçilmeli (tepe 101 değil)
-    yuksek[3], dusuk[3] = 101.0, 99.5
-    # 6. mum: üst banda (110) yakın → tepe 111 seçilmeli
-    yuksek[6], dusuk[6] = 111.0, 109.0
     goruntu = {
         "formasyon": {"upper_now": 110.0, "lower_now": 100.0, "start_bar": 0},
-        "yuksek": yuksek, "dusuk": dusuk,
-        "temas": [3, 6], "temas_isaret": [3, 6],
+        "yuksek": [111.0] * n, "dusuk": [99.0] * n,
+        "temas": [3, 6], "temas_isaret": [],
         "isaretler": [], "sol": 0,
     }
     fig = Figure(figsize=(10.8, 8.1), dpi=100)
@@ -113,12 +106,55 @@ def test_bant_temasi_dogru_fitil_ucunda(tmp_path):
     ax.set_xlim(-0.6, n - 0.4)
     ax.set_ylim(90.0, 120.0)
     grafik._formasyon_ciz(ax, goruntu, n, 300.0, {})
-    # temas daireleri: marker='o' ve fillstyle='none' olan çizgiler
-    daireler = [ln for ln in ax.lines if ln.get_marker() == "o"
-                and ln.get_fillstyle() == "none"]
-    veri = {int(ln.get_xdata()[0]): float(ln.get_ydata()[0]) for ln in daireler}
-    assert veri[3] == pytest.approx(99.5)
-    assert veri[6] == pytest.approx(111.0)
+    daireler = [ln for ln in ax.lines if ln.get_marker() == "o"]
+    assert daireler == []
+
+
+def test_zone_etiketi_yatay_yapi_seviyesinden_kacir():
+    """Kritik/rol çizgisi kutu içi yazının içinden geçmez."""
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    fig = Figure(figsize=(10.8, 8.1), dpi=100)
+    FigureCanvasAgg(fig)
+    ax = fig.add_axes([0.075, 0.1, 0.8, 0.8])
+    ax.set_xlim(-0.6, 9.6)
+    ax.set_ylim(95.0, 110.0)
+    zone = {"cizilen": [{
+        "tip": "fvg", "yon": 1, "alt": 100.0, "ust": 104.0,
+        "x0": 1, "x1": 9, "vurgu": "alt", "durum": "ACTIVE",
+        "tamamlandi": False, "doluluk": None, "kaynak": 1,
+    }]}
+    grafik._zone_ciz(ax, zone, 10, (95.0, 110.0), engel_y=[102.0])
+    assert len(ax.texts) == 1
+    assert ax.texts[0].get_position()[1] != pytest.approx(102.0)
+
+
+def test_engulf_kutusu_konturu_gorunur_tamamlanan_kutu_soluktur():
+    """ENG dolgusu şeffaf kalsa da konturu görünür; terminal FVG kesik/soluk olur."""
+    from matplotlib.figure import Figure
+
+    fig = Figure(figsize=(10.8, 8.1), dpi=100)
+    ax = fig.add_axes([0.075, 0.1, 0.8, 0.8])
+    ax.set_xlim(-0.6, 9.6)
+    ax.set_ylim(95.0, 110.0)
+    zone = {"cizilen": [
+        {"tip": "eng", "yon": 1, "alt": 100.0, "ust": 103.0,
+         "x0": 2, "x1": 8, "vurgu": "alt", "durum": "ACTIVE",
+         "tamamlandi": False, "doluluk": None, "kaynak": 2},
+        {"tip": "fvg", "yon": -1, "alt": 105.0, "ust": 109.0,
+         "x0": 2, "x1": 8, "vurgu": "ust", "durum": "REACTION",
+         "tamamlandi": True, "doluluk": 0.4, "kaynak": 3},
+    ]}
+    grafik._zone_ciz(ax, zone, 10, (95.0, 110.0))
+    # Matplotlib importu grafik.py yerel kullandığından görünürlüğü alpha ve
+    # kontur stilinden doğrula; test rengin kendisine bağlanmasın.
+    assert any(p.get_alpha() is not None and p.get_alpha() > 0.8
+               and p.get_facecolor()[3] == 0.0 for p in ax.patches)
+    tamamlanan = [p for p in ax.patches if p.get_alpha() is not None
+                  and 0.0 < p.get_alpha() < 0.5 and p.get_facecolor()[3] == 0.0]
+    assert tamamlanan
+    assert any(p.get_linestyle() != "solid" for p in tamamlanan)
 
 
 # ------------------------------------------------- GÖRSEL-3: renk sözleşmesi
@@ -226,11 +262,12 @@ def test_lejant_renk_semasini_yazar():
         "sembol": "TEST", "tf": "1h", "tf_kisa": "1s", "sol": 0, "sag": 60,
         "zamanlar": [], "acilis": [], "yuksek": [], "dusuk": [], "kapanis": [],
         "formasyon": {}, "alarm": {}, "zone": {}, "olay": {}, "serit": {},
-        "temas": [], "isaretler": [],
+        "temas": [10], "temas_isaret": [], "isaretler": [],
     }
     lejant = " ".join(grafik._lejant(g, False))
     assert "yeşil" in lejant and "yükselen" in lejant
     assert "kırmızı" in lejant and "düşen" in lejant
+    assert "bant teması" not in lejant and "○" not in lejant
 
 
 # --------------------------------------------- GÖRSEL-3: şerit kalabalık denetimi

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dt_time
 
 import main as main_module
 from config import ISTANBUL_TZ
@@ -77,6 +77,53 @@ def test_summary_slot_guard_allows_once_per_day_and_retries_only_on_later_day():
     assert main_module._ozet_slot_gonderilmeli({"18:45": today.isoformat()}, "18:45", today) is False
     assert main_module._ozet_slot_gonderilmeli({"18:45": yesterday}, "18:45", today) is True
     assert main_module._ozet_slot_gonderilmeli({"09:55": today}, "18:45", today) is True
+
+
+def test_acil_kuyruk_bireysel_gonderimi_digestten_once_kapanir():
+    digest = dt_time(18, 45)
+    once = ISTANBUL_TZ.localize(datetime(2026, 10, 15, 18, 42, 59))
+    kesim = ISTANBUL_TZ.localize(datetime(2026, 10, 15, 18, 43, 0))
+    digest_ani = ISTANBUL_TZ.localize(datetime(2026, 10, 15, 18, 45, 0))
+    sonraki = ISTANBUL_TZ.localize(datetime(2026, 10, 16, 9, 0))
+
+    assert main_module._acil_kuyruk_gonderim_penceresi_acik(once, digest) is True
+    assert main_module._acil_kuyruk_gonderim_penceresi_acik(kesim, digest) is False
+    assert main_module._acil_kuyruk_gonderim_penceresi_acik(digest_ani, digest) is False
+    # Ertesi iş günü kuyruğun normal TTL kapısı çalışmaya devam eder.
+    assert main_module._acil_kuyruk_gonderim_penceresi_acik(sonraki, digest) is True
+
+
+def test_acilis_kuyrugu_ozet_sonrasinda_gondermez_ve_tuketir():
+    class FakeNotifier:
+        enabled = True
+
+        def __init__(self):
+            self.flushes = 0
+            self.clears = 0
+
+        def kuyruk_durumu(self):
+            return {"bekleyen": 1}
+
+        def kuyrugu_bosalt(self):
+            self.flushes += 1
+            return 1
+
+        def kuyruk_tumunu_temizle(self):
+            self.clears += 1
+            return 1
+
+    notifier = FakeNotifier()
+    once = ISTANBUL_TZ.localize(datetime(2026, 10, 15, 18, 42))
+    sonra = ISTANBUL_TZ.localize(datetime(2026, 10, 15, 18, 46))
+
+    assert main_module._acil_kuyruk_acilista_isle(notifier, once, dt_time(18, 45)) == 1
+    assert notifier.flushes == 1 and notifier.clears == 0
+    assert main_module._acil_kuyruk_acilista_isle(
+        notifier, sonra, dt_time(18, 45), kapanis_ozeti_gonderildi=False) == 0
+    assert notifier.flushes == 1 and notifier.clears == 0  # özete bırakılır
+    assert main_module._acil_kuyruk_acilista_isle(
+        notifier, sonra, dt_time(18, 45), kapanis_ozeti_gonderildi=True) == 0
+    assert notifier.flushes == 1 and notifier.clears == 1
 
 
 def test_ozet_command_does_not_present_old_empty_snapshot_as_current(monkeypatch):

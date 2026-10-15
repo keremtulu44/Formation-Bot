@@ -193,6 +193,58 @@ def test_engel_kalkinca_kuyruk_gonderilir(monkeypatch):
     assert n.last_sent  # cooldown kaydı da yazıldı
 
 
+def test_kapanis_ozeti_kuyruk_alarmini_bildirir_ve_tekrarini_muhurler(monkeypatch):
+    n, _ = _aktif(monkeypatch)
+    n.max_gunluk = 0
+    veri = _veri()
+    veri.update({
+        "formation_id": "formation-123",
+        "bar_time": "2026-10-15T17:00:00+03:00",
+        "bar_kapanis": "2026-10-15T18:00:00+03:00",
+        "bar_metni": "🕒 1 saatlik mum 15.10 17:00 → 18:00 kapandı",
+    })
+    assert n.send(veri) is False
+    kayitlar = n.kuyruk_ozet_kayitlari()
+    assert len(kayitlar) == 1
+
+    metin = main_mod._format_urgent_queue_summary(kayitlar)
+    assert "THYAO 1s" in metin and "Kırılım teyitli" in metin
+    assert "15.10 17:00" in metin and "kuyruk " in metin
+
+    assert n.kuyruk_ozetleneni_tuket(kayitlar) == 1
+    assert n.kuyruk_durumu()["bekleyen"] == 0
+    assert not n.can_send("THYAO", "Yükselen Üçgen", "1h", "KIRILIM_TEYITLI",
+                          formation_id="formation-123")
+    assert n._son_engel == "tekrar"
+
+
+def test_kuyruk_ozetinde_bayat_alarm_gosterilmez(monkeypatch):
+    n, _ = _aktif(monkeypatch)
+    now = datetime.now(ISTANBUL_TZ)
+    n._acil_kuyruk.append({
+        "kuyruk_zaman": (now - timedelta(minutes=notifier_mod.ACIL_KUYRUK_TTL_DK + 1)).isoformat(),
+        "son_engel": "gunluk_kap",
+        "veri": _veri(stock="ESKI"),
+    })
+    assert n.kuyruk_ozet_kayitlari(now=now) == []
+
+
+def test_onceki_gunden_kalan_kuyruk_ttl_uzun_olsa_da_gonderilmez(monkeypatch):
+    n, _ = _aktif(monkeypatch)
+    monkeypatch.setattr(notifier_mod, "ACIL_KUYRUK_TTL_DK", 24 * 60)
+    n._acil_kuyruk.append({
+        "kuyruk_zaman": "2026-10-15T18:44:00+03:00",
+        "son_engel": "gunluk_kap",
+        "veri": _veri(stock="DUN"),
+    })
+    now = ISTANBUL_TZ.localize(datetime(2026, 10, 16, 9, 0))
+
+    assert n.kuyruk_ozet_kayitlari(now=now) == []
+    assert n.kuyrugu_bosalt(now=now) == 0
+    assert n.kuyruk_durumu()["bekleyen"] == 0
+    assert n.kuyruk_zaman_asimi == 1
+
+
 def test_kuyruktan_gonderilen_tekrar_kuyruklanmaz(monkeypatch):
     """Kuyruk gönderimi başarısız olursa (ağ hatası) kayıt korunur, çoğalmaz."""
     n, _ = _aktif(monkeypatch, cevaplar=_Yanit(500, "server error"))

@@ -79,6 +79,12 @@ def _grafik_basligi(olay: Dict, kare: Dict, meta: Dict) -> str:
     mum = meta.get("mum_sayisi")
     if mum:
         parcalar.append(f"{_format_sayi(mum, 0)} mum")
+    try:
+        lejant_gizli = max(0, int(meta.get("lejant_atlanan") or 0))
+    except (TypeError, ValueError, OverflowError):
+        lejant_gizli = 0
+    if lejant_gizli:
+        parcalar.append(f"lejant kısaltıldı (+{lejant_gizli})")
     return " · ".join(parcalar)
 
 
@@ -1024,8 +1030,9 @@ class TelegramNotifier:
         self._cooldown_yukle()
         self._kap_yukle()
         # --- engellenen acil olay kuyruğu (Batch 5 / B4) ---
-        # Neden: cooldown/kap yüzünden gönderilemeyen teyitli kırılım gibi acil
-        # olaylar tamamen kayboluyordu; artık engel kalkınca gönderilir.
+        # Neden: cooldown/kap yüzünden gönderilemeyen teyitli olaylar kaybolmasın.
+        # Engel digest saatinden önce kalkarsa gönderilir; kapanıştan sonra kalanlar
+        # ayrı push yapılmaz, 18:45 DM özetine eklenir (main loop zaman kapısı).
         # GÖRSEL-4 (kullanıcı kararı): "bir metin geldi, ardından o metnin görselleri".
         # Görseller artık tur sonunu beklemez; `_gonder` metni yazdıktan sonra bu
         # kuyruk bir ARKA PLAN işçisiyle sırayla boşaltılır (taramayı bekletmez).
@@ -2269,9 +2276,90 @@ class TelegramNotifier:
             "tasma": self.kuyruk_tasmasi,
         }
 
-    def kuyrugu_bosalt(self, max_adet: int = 5) -> int:
-        """Engel kalkınca kuyruktaki acil olayları sırayla gönderir (Batch 5 / B4).
+    def kuyruk_ozet_kayitlari(self, now: Optional[datetime] = None) -> List[dict]:
+        """Kapanış özetinde gösterilebilecek taze, henüz bildirilmemiş olayları kopyala.
 
+        Bu yöntem hiçbir şeyi tüketmez. Özet Telegram'a başarıyla teslim olduktan
+        sonra çağıran `kuyruk_ozetleneni_tuket()` ile yalnızca gösterilenleri alır.
+        """
+        simdi = _istanbul(now) if now is not None else datetime.now(ISTANBUL_TZ)
+        ttl_siniri = simdi - timedelta(minutes=max(1, ACIL_KUYRUK_TTL_DK))
+        sonuc = []
+        for kayit in self._acil_kuyruk:
+            veri = dict(kayit.get("veri") or {})
+            state = str(veri.get("state") or "").strip().upper()
+            if state not in ALERT_STATES:
+                continue
+            try:
+                kuyruk_zamani = _istanbul(datetime.fromisoformat(kayit.get("kuyruk_zaman")))
+            except (TypeError, ValueError):
+                kuyruk_zamani = simdi
+            if kuyruk_zamani < ttl_siniri or kuyruk_zamani.date() != simdi.date():
+                continue
+            stock, pattern, timeframe, _state = self._kuyruk_key(veri)
+            formation_id = veri.get("formation_id")
+            marker = self._son_alert.get(
+                self._son_alert_key(stock, timeframe, state, formation_id))
+            if (not marker and formation_id):
+                marker = self._son_alert.get(self._son_alert_key(stock, timeframe, state))
+            if self._muhr_gecerli_mi(marker, state, timeframe, formation_id):
+                continue
+            sonuc.append({"kuyruk_zaman": kayit.get("kuyruk_zaman"), "veri": veri})
+        return sonuc
+
+    def kuyruk_ozetleneni_tuket(self, kayitlar: List[dict]) -> int:
+        """Başarıyla iletilen kapanış özetindeki olayları tüket ve tekilleştir.
+
+        Özetin Telegram kabulü, olayın kullanıcıya görünür teslimidir. Böylece
+        aynı formation/state ertesi turda ayrı bir acil mesaj olarak yinelenmez.
+        """
+        imzalar = set()
+        for kayit in kayitlar or []:
+            if not isinstance(kayit, dict) or not isinstance(kayit.get("veri"), dict):
+                continue
+            imzalar.add((self._kuyruk_key(kayit["veri"]),
+                         str(kayit.get("kuyruk_zaman") or "")))
+        if not imzalar:
+            return 0
+        kalan = []
+        tuketilen = []
+        for kayit in self._acil_kuyruk:
+            imza = (self._kuyruk_key(kayit.get("veri") or {}),
+                    str(kayit.get("kuyruk_zaman") or ""))
+            (tuketilen if imza in imzalar else kalan).append(kayit)
+        if not tuketilen:
+            return 0
+        self._acil_kuyruk = kalan
+        muhur_degisti = False
+        for kayit in tuketilen:
+            veri = kayit.get("veri") or {}
+            state = str(veri.get("state") or "").strip().upper()
+            if state not in ALERT_STATES:
+                continue
+            stock, pattern, timeframe, _state = self._kuyruk_key(veri)
+            muhur_anahtari = self._son_alert_key(
+                stock, timeframe, state, veri.get("formation_id"))
+            self._son_alert[muhur_anahtari] = self._muhur_kaydi(
+                state, timeframe, formation_id=veri.get("formation_id"))
+            muhur_degisti = True
+        if muhur_degisti:
+            self._son_alert_kaydet()
+        self._kuyruk_kaydet()
+        return len(tuketilen)
+
+    def kuyruk_tumunu_temizle(self) -> int:
+        """Kapanış özeti daha önce gönderildiyse eski kuyruğu post-digest push'tan al."""
+        adet = len(self._acil_kuyruk)
+        if adet:
+            self._acil_kuyruk.clear()
+            self._kuyruk_kaydet()
+        return adet
+
+    def kuyrugu_bosalt(self, max_adet: int = 5, now: Optional[datetime] = None) -> int:
+        """Çağıran zaman kapısı açıksa, engel kalkınca acil olayları sırayla gönder.
+
+        Main loop bunu kapanış digest saatinden önce çağırır; daha geç saatlerde
+        bekleyen kayıtlar DM kapanış özetine katılır.
         - TTL'yi aşan kayıtlar gönderilmez, atılır (bayat sinyal zarar verir).
         - Aynı sinyal sonradan gönderilmişse kuyruk kopyası sessizce düşürülür.
         - Kap/cooldown sürüyorsa sıradaki tura kadar beklenir; ağ hatasında
@@ -2279,7 +2367,7 @@ class TelegramNotifier:
         """
         if not self.enabled or not self._acil_kuyruk:
             return 0
-        simdi = datetime.now(ISTANBUL_TZ)
+        simdi = _istanbul(now) if now is not None else datetime.now(ISTANBUL_TZ)
         ttl_siniri = simdi - timedelta(minutes=max(1, ACIL_KUYRUK_TTL_DK))
         gonderilen = 0
         degisti = False
@@ -2297,6 +2385,15 @@ class TelegramNotifier:
                 kuyruk_zamani = _istanbul(datetime.fromisoformat(kayit.get("kuyruk_zaman")))
             except (TypeError, ValueError):
                 kuyruk_zamani = simdi
+            if kuyruk_zamani.date() != simdi.date():
+                self._acil_kuyruk.remove(kayit)
+                self.kuyruk_zaman_asimi += 1
+                degisti = True
+                logger.warning(
+                    "📬 Önceki İstanbul gününde kalan acil olay ayrı push yapılmadı: %s %s",
+                    self._kuyruk_key(veri)[0], veri.get("state"),
+                )
+                continue
             if kuyruk_zamani < ttl_siniri:
                 self._acil_kuyruk.remove(kayit)
                 self.kuyruk_zaman_asimi += 1
