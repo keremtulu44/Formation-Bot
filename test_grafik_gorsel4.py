@@ -100,8 +100,11 @@ def _olay_goruntusu():
         "serit": {},
         "olay": {
             "swinglar": [
-                {"bar": 10, "fiyat": 104.5, "yon": "ust", "sinif": "PH", "durum": "teyitli"},
-                {"bar": 20, "fiyat": 96.25, "yon": "alt", "sinif": "PL", "durum": "teyitli"},
+                # §38: PH/PL motorun korunan ROL'üdür (`seviye`); `sinif` (HH/LH/…) ayrı alandır.
+                {"bar": 10, "fiyat": 104.5, "yon": "ust", "sinif": "LH", "seviye": "PH",
+                 "seviye_kapsam": "dis", "durum": "teyitli"},
+                {"bar": 20, "fiyat": 96.25, "yon": "alt", "sinif": "HL", "seviye": "PL",
+                 "seviye_kapsam": "dis", "durum": "teyitli"},
                 {"bar": 30, "fiyat": 103.0, "yon": "ust", "sinif": "LH", "durum": "teyitli"},
             ],
             "olaylar": [
@@ -122,23 +125,23 @@ def test_bos_choch_etiketi_seride_degil_mumun_yaninda():
     olay_yazilari = [t for t in ax.texts if str(t.get_gid() or "") == "olay-ici"]
     assert sorted(str(t.get_text()) for t in olay_yazilari) == ["BOS↑", "CHoCH↓"]
     assert ozet["etiket_ic"] == 2
-    # GÖRSEL-6: şeride yalnız KORUNAN UÇLAR (PH/PL) cetvel çipi olarak gider;
-    # BOS/CHoCH grafikte kalır (bu görüntüde 2 swing, 2 olay var).
+    # GÖRSEL-6/§38: şeride yalnız SEVİYE (PH/PL rolü) cetvel çipi olarak gider;
+    # BOS/CHoCH grafikte kalır (bu görüntüde 2 rol, 2 olay var).
     assert {a["kaynak"] for a in sag} == {"swing"}
     assert sorted(a["metin"] for a in sag) == ["PH 104,50", "PL 96,25"]
-    assert all("kilavuz_x" in a for a in sag)
+    # çizgiyi (sağa kesikli) katman kendisi çizer → çip ayrıca kılavuz çizgisi taşımaz
+    assert all("kilavuz_x" not in a for a in sag)
 
 
-def test_ph_pl_cetvelde_fiyat_tasir_ic_yapi_kisa_kalir():
-    """GÖRSEL-6: PH/PL fiyatı SAĞ ŞERİT cetvelinde; grafikte yalnız iç yapı kısa yazı."""
+def test_seviye_rolu_okla_ayni_bicimde_fiyat_seritte():
+    """§38: PH/PL (rol) HH/LH ile AYNI okla etiketlenir; fiyat yalnız SAĞ ŞERİT cetvelinde."""
     fig, ax = _eksen()
     sag: list = []
     grafik._olay_ciz(ax, _olay_goruntusu(), 60, sag)
     yazilar = [str(t.get_text()) for t in ax.texts if str(t.get_text()).strip()]
-    assert "LH" in yazilar                                       # iç yapı: kısa
-    assert not any(y.startswith("LH ") for y in yazilar)
-    # PH/PL grafikte YAZI DEĞİL (çift okuma yok), şeritte cetvel çipi:
-    assert not any(y.startswith(("PH ", "PL ")) for y in yazilar)
+    assert {"PH", "PL", "LH"} <= set(yazilar)        # rol etiketi sınıf etiketiyle aynı kısa biçim
+    # fiyat grafikte YAZI DEĞİL (çift okuma yok), şeritte cetvel çipi:
+    assert not any(y.startswith(("PH ", "PL ", "LH ")) for y in yazilar)
     assert sorted(a["metin"] for a in sag) == ["PH 104,50", "PL 96,25"]
     assert all(a["kaynak"] == "swing" and a["oncelik"] == 4 for a in sag)
 

@@ -30,7 +30,9 @@ alan yok:** çizilen her etiket motorun gerçek çıktısına dayanmak zorunda (
 5. **Veri dürüstlüğü:** kaynakta olmayan hiçbir değer çizilmez. Motor `fill`
    vermediyse kutu kontur kalır, `%` uydurulmaz (§0.12k).
 6. **Yalnız kapanmış mumlar** çizilir; sağ üstte `son kapanan 25 Eyl 17:30 · 70,95`.
-7. **Piyasa yapısı = yalnız external swing'ler** + BOS/CHoCH (internal/half-swing yok).
+7. **Piyasa yapısı = external swing'ler + BOS/CHoCH; iç yapı (internal) da dışla AYNI okla
+   çizilir** (etiket öneki `i`, §38 — kullanıcı kararıyla eski "yalnız external" kuralı kalktı;
+   half-swing hâlâ yok).
 8. **Zone seçimi:** OB ve FVG **tek havuzda**, son kapanışa uzaklık ATR'ye
    bölünerek sıralanır (confluence birlikte değerlendirilir); eşitlikte daha yeni
    `source_index` kazanır.
@@ -68,10 +70,10 @@ işaret ve yazı ikinci kanaldır.
 | FVG | `#3f9dec` | %8 dolgu (TARAMA YOK, GÖRSEL-4) + `formation_index`'te kalın kenar |
 | Engulfing | `#a78bfa` | kesikli kontur |
 | Formasyon çizgileri | `#e0b96a` | 1,6 pt; bant arası α.06 dolgu; son muma kadar projeksiyon; `apex`'te `x` |
-| Temas mumları | `#f0d9a8` | açık `o` işareti + temas sayısı (bant 24'ü aşarsa kırpılır, kare not yazar) |
-| PH/PL | `#8ba0b4` | aday α.45 / teyitli tam / kırık α.2 |
-| HH/HL/LH/LL | `#9fb0c0` | küçük yazı |
-| BOS/CHoCH | `#f0885c` | ok + kesikli seviye çizgisi + `BOS↑/CHoCH↓` |
+| Temas mumları | — | **KALDIRILDI (§38):** daire çizilmez; temas sayısı yalnız başlıkta (`bant teması N`) ve `meta["temas"]`'da |
+| PH/PL/WH/WL | `#8ba0b4` ok · `#9fb0c0` çizgi | ok: aday α.45 / teyitli tam / kırık α.2; **§38:** motorun korunan/zayıf seviye rolü, HH/LH ile aynı ok biçimi + sağa kesikli çizgi (dış α.85 · iç α.55) |
+| HH/HL/LH/LL | `#9fb0c0` | küçük yazı (iç yapıda `i` öneki: `iHL`, §38) |
+| BOS/CHoCH | `#f0885c` | ok + kesikli seviye çizgisi + `BOS↑/CHoCH↓` (iç yapıda aynı biçim: `iBOS↑`/`iCHoCH↓`, §38) |
 | Katılım şeridi (yükselen spike) | `#2f9e8a` | §2.1; spike MUMUN yönünde renklenir |
 | Katılım şeridi (düşen spike) | `#cf5f5f` | §2.1 |
 | İhlal / `!` | `#ef5350` | `!` (çaba var-sonuç yok, son 15 mum) ve ihlal işaretleri |
@@ -228,7 +230,7 @@ yalnız ondalık ayracı.
 `matplotlib.use("Agg")`, `plt.close`, `MPLCONFIGDIR`), `grafik_uret.py` CLI
 (`--hisse --tf --mum --cikti`), `requirements.txt`'e `matplotlib==3.11.2` pin'i,
 sim'e `_gunluk.json` seed'i. İçerik: kapalı mumlar, formasyon çizgileri + son muma
-projeksiyon, `start/end/apex`, temas mumları (`o` + sayı), alarm çizgisi + state
+projeksiyon, `start/end/apex`, temas mumları (`o` + sayı; §38'de kaldırıldı), alarm çizgisi + state
 metni, başlık/`son kapanan`, lejant, dipnot, çökme modu, `meta`. `eksik_katmanlar`
 ve `budama` satırları bu fazda.
 
@@ -543,7 +545,8 @@ legacy alarm gövdesi ve backtest raporu.
 2. **İkinci budama kuralı** (§2.2'nin tek kuralına eklendi):
    `temas_isaret_maks = 24` — bant çok mumu sardıysa yalnız en yeni 24'ü
    işaretlenir; **sayı asla saklanmaz**, `budama`'ya
-   `temas işareti 24'e indirildi (bant 170 mumu sardı)` yazılır.
+   `temas işareti 24'e indirildi (bant 170 mumu sardı)` yazılır. **§38'de kaldırıldı:** daire çizilmediği
+   için bu kural ve notu yok; `bant teması N` sayısı olduğu gibi duruyor.
 3. **Bant çizgisi düz çizilir.** `upper_slope/lower_slope` birimi (TL/mum)
    yeniden üretilmedi — §2 "çizim hesap yapmaz". Eğim yazısı kare etiketinden de
    çıkarıldı (300 px'lik etiket bütçesinin ~%40'ını yiyor, kartta yok).
@@ -1085,7 +1088,7 @@ Bu tur §0.4.1, §0.12, §14–§17 ile çelişen veya onları somutlaştıran k
 - **Kadraj (§17 ölçek ile uyum):** kadraj = mum aralığı + bölge + formasyon + alarm + PH/PL uçları, %6 pay. Dışarıdaki BOS/CHoCH/kritik çizilmez ve `kadraj_disi` ile sayılır. Gerekçe: dışarıdaki seviye eksen aralığını genişleterek mumları küçültüyordu.
 - **Kritik (§0.4.1 "kritik" yazımı):** `kritik X` ayrı şerit etiketi; CHoCH metninden ayrıldı (kesilme önlemi).
 - **Son fiyat:** kesikli yatay çizgi + sağda etiket (son kapanış, veri tarihi başlıkta).
-- **Bant teması (§0.4.1 "temas mumları" satırı güncellendi):** `o` işareti temasın olduğu banda yakın tarafın fitil ucunda; 24 işaret sınırı.
+- **Bant teması (§0.4.1 "temas mumları" satırı güncellendi):** `o` işareti temasın olduğu banda yakın tarafın fitil ucunda; 24 işaret sınırı. **§38'de KALDIRILDI** (daire çizilmez).
 - **Başlık:** `bant teması N` ve alarm kapanış farkı (üstünde/altında).
 
 ### 29.2 §0.4.1 paleti için not
@@ -1097,7 +1100,7 @@ Bu tur §0.4.1, §0.12, §14–§17 ile çelişen veya onları somutlaştıran k
 
 - `mum_cakisan == 0` gerçek önbellekte altı örnek karede (`test_grafik_gorsel_kalite.py`).
 - Şerit etiketleri dikeyde üst üste binmez ve şerit yeterliyken atlanmaz.
-- Bant teması işareti doğru fitil ucunda.
+- Bant teması işareti doğru fitil ucunda. *(§38: kaldırıldı; test tersine çevrildi — daire çizilmez.)*
 - Kadraj dışı seviye çizilmez ve sayılır (`test_grafik_yapi.py::test_kadraj_disi_seviye_cizilmez_ve_sayilir`).
 
 ### 29.4 Açık kalanlar
@@ -1317,14 +1320,15 @@ OB renkleri tam belirgin değil yani onun şeffaflığını biraz azaltır mıs�
   tek yerde — sağ şeritteki cetvel çipinde (`PH 290,50`) okunur. Grafikte yalnız ince
   seviye çizgisi kalır; aynı metin iki yerde tekrarlanmaz.
 - Çip `oncelik=4` (son fiyat 9 > alarm 6 > kritik 5 > **PH/PL 4** > BOS/CHoCH 3 > kutu 2),
-  kaynak başına sınır `sag_etiket_maks["swing"] = 2`.
+  kaynak başına sınır `sag_etiket_maks["swing"] = 2` *(§38: 4)*.
 - Kılavuz çizgisi kutu kılavuzundan **belirgin** (0,8 pt · α 0,38 · `(0,(1,3))`) ama
   kritik/alarm çizgisi kadar kalın değil — uyarı tonu taşımaz.
 - **Aynı seviye çifti bastırılır:** son fiyatla aynı bantta kalan PH/PL çipi atlanır
   (ölçüm: THYAO 1s'te `PH 290,50` ile son fiyat `290,50` üst üste biniyordu). Atlama
   `meta["sag"]["atlanan_kaynak"]["swing"]` ile SAYILIR — sessiz kayıp yok.
-- İç yapı etiketleri (`HH`/`HL`/`LH`/`LL`) grafikte kısa hâliyle kalır.
+- İç yapı etiketleri (`HH`/`HL`/`LH`/`LL`) grafikte kısa hâliyle kalır. *(§38: iç yapı artık çizilir; `i` önekiyle, dışla aynı biçimde.)*
 - Lejant: `┈ seviye (PH/PL sağda)` + yapı satırı `▲▼ iç yapı · ┄ BOS/CHoCH · ━ kritik · PH/PL sağda`.
+  **§38'de değişti:** `yapı: ▲▼ swing · i = iç yapı · PH/PL korunan · WH/WL zayıf · ━ kritik` (bkz. §38.4).
 - `meta["olay"]["phpl_serit"]` cetvele taşınan PH/PL sayısını verir.
 
 ### 34.2 Kutu dolgusu (OB/FVG)
@@ -1557,3 +1561,120 @@ Kullanıcı: son mumlar sağ kenarda aniden bitiyor, çizimler son mumda kesiliy
 - ✕ glifi mevcut tasarımda zemin renkli kenarla çiziliyor (çok soluk); boşluktaki ✕ aynı
   çizimi kullanıyor, asıl görünen ucundaki ~9 pt'lik işaret çizgisi. İstenirse ayrı iş olarak
   belirginleştirilebilir.
+
+## 38 · İÇ YAPI + PH/PL/WH/WL OKU (2026-10-15) — iç yapı dışla aynı okla, seviye rolleri sağa kesikli çizgiyle, temas dairesi yok
+
+Kullanıcı: "İç yapı çizilsin ama okla aynı formatta; PH PL WH WL olsun, sağa doğru kesikli çizgi
+ile gitsin; ayrıca formasyon temas noktası için yuvarlak konuyor, onu silelim."
+
+### 38.1 Neden böyleydi (kodla ve gerçek önbellekle doğrulandı — 28 sembol × 1s/4s = 56 kare)
+
+- Grafik yalnız **external** yapıyı çiziyordu (§0.7). Lejanttaki `▲▼ iç yapı` ifadesi yanlıştı:
+  çizilen şey dış yapıydı. Kart ise iç yapı olaylarını da yazıyor: 48 karede yalnız-iç olay vardı,
+  45'i grafikte yoktu.
+- Şerit çipindeki `PH/PL` motorun **`swing_class`** değerinden geliyordu (ilk/eşit uç demek).
+  Korunan/zayıf seviye değil. Gerçek roller motorun `external_context`/`internal_context`
+  kimliklerinde (`protected_high/low_identity`, `weak_high/low_identity`; dışa aktarımda
+  `external_protected_*`/`external_weak_*`). Bu yüzden WH/WL hiç çizilmiyordu.
+- Bant teması dairesi 24 mumla sınırlıydı; THYAO 1s'te lejant yazısını küçülten ve
+  `temas işareti 24'e indirildi` notunu doğuran buydu.
+
+### 38.2 Kararlar (kullanıcı)
+
+1. **İç yapı çizilir** — internal swing ve BOS/CHoCH, dış yapıyla AYNI ok/etiket/çizgi biçiminde
+   (soluk değil). Tek fark etiket öneki `i`: `iHL`, `iLH`, `iBOS↑`, `iCHoCH↓`.
+2. **PH/PL/WH/WL** motorun rolleridir; okla (HH/LH ile aynı biçim) etiketlenir ve swing mumundan
+   **sağa kesikli çizgiyle** gider (sağ boşluğun sonuna kadar, §37). Fiyatı şeritte çip olarak da yazılır.
+3. **Bant teması dairesi silindi.**
+
+### 38.3 Yorum kararları (kullanıcı onayına açık, kolay geri alınır)
+
+- **Rol okları:** dış rol `PH`/`PL`/`WH`/`WL`, iç rol `iPH`/`iPL`/`iWH`/`iWL`. Rol, motorun kimliğiyle
+  (`*_identity`) eşleşen swing'e verilir; yalnız geçerli, kırılmamış ve durumu `BROKEN` olmayan swing
+  rol alır. İç rolün swing'i dış yapıdaki bir pivotla çakışıyorsa ok bir kez çizilir: dışın kendi
+  rolü varsa o kazanır, yoksa iç rol dış kayda kopyalanır.
+- Motorun `swing_class` PH/PL'si (ilk/eşit uç) artık **yazısız ok**: rol sanılmasın.
+- Rol taşıyan uç `swing_maks` kapağına takılmaz (seviye çizgisi her zaman çizilir). Pencere dışındaki
+  rol çizilmez, `meta["olay"]["seviye_pencere_disi"]` ile SAYILIR.
+- **Kapaklar:** dış 10 swing / 6 olay (değişmedi); iç **8 swing / 3 olay** (`SABITLER["ic_swing_maks"]`,
+  `["ic_olay_maks"]`), en yeniler kalır. İç olay yalnız INTERNAL + CONFIRMED + VALID BOS/CHoCH;
+  dış olayla aynı `(bar, seviye)` ise tekrar çizilmez. Dış yapıyla çakışan iç swing tekrar çizilmez.
+- **Kritik** yalnız dış son olay (değişmedi). Kadraj dışındaki iç olay çizilmez ve
+  `meta["olay"]["ic_kadraj_disi"]` ile sayılır.
+- **Kapatma anahtarı:** `GRAFIK_IC_YAPI=0` iç swing/olayı kapatır; rol okları ve çizgileri yine çizilir.
+  Etiket öneki `i` yalnız `_olay_ciz` içinde üretilir (swing rolü, swing sınıfı ve olay etiketi:
+  3 satır); kaldırılmak istenirse oradan.
+- Kapsam dışı (istenmedi, yapılmadı): kart başlığındaki seviye satırı, okların ilk kırılım mumuna
+  taşınması, `swing_maks` 10 → 16.
+
+### 38.4 Kodda ne değişti (`grafik.py`)
+
+- `_olay_verisi` yeniden yazıldı (+ `_SEVIYE_ROLLERI`, `_swing_kayitlari`, `_seviye_ata`,
+  `_olay_kayitlari`, `_en_yeniler`). Dış sözleşme aynı (`swinglar/olaylar/kritik/cizilen/elenen/kapak`);
+  yeni anahtarlar: `ic_swinglar, ic_olaylar, ic_cizilen, ic_elenen, ic_kapak, seviye_pencere_disi`.
+  Swing kayıtlarına `kapsam` (dis/ic), `seviye` (PH/PL/WH/WL ya da None) ve `seviye_kapsam` eklendi.
+  Bağlam yoksa rol yok (eski motor çıktıları ve test mock'ları bozulmaz).
+- `_olay_ciz`: iç ve dış aynı ▲/▼ + etiket + yaşa göre solma; rol çizgisi `(0,(5,3))`, 1,0 pt,
+  `PALET["sinif"]`, α .85 dış / .55 iç, swing mumundan `n-1+sag_bosluk`'a (`gid="seviye-cizgisi"`);
+  şerit çipi `kaynak="swing"`, `oncelik` 4 dış / 3 iç; `sag_etiket_maks["swing"]` 2 → 4.
+- `_swing_etiketi_ayir` + `_yazi_kutulari`: swing etiketi başka yazıyla çakışırsa en çok 3 adım dışarı
+  kayar; yerleşen kutular olay etiketlerine engel olarak verilir (iç yapı yazıları eklenince çakışma
+  çıkmasın diye).
+- `_kare_ciz`: sade modda iç yapı temizlenir; iç olaylar kadraja bağlıdır.
+- `_lejant`: `yapı: ▲▼ swing · i = iç yapı · PH/PL korunan · WH/WL zayıf · ━ kritik` — yalnız çizilen
+  roller yazılır, `i = iç yapı` yalnız iç yapı varsa; eski `○ bant teması` ve
+  `┈ seviye (PH/PL sağda)` maddeleri yok.
+- **Kaldırıldı:** temas dairesi çizimi, `SABITLER["temas_radyus"]`, `["temas_isaret_maks"]`,
+  `PALET["temas"]`, bütçe notu `temas işareti 24'e indirildi`. Kalanlar: `goruntu["temas"]`,
+  başlıkta `bant teması N`, `meta["temas"]` (sayı hâlâ dürüst); `meta["temas_isaret"]` her zaman `[]`.
+- `meta["olay"]` yeni: `ic_swing, ic_bos_choc, ic_cizilen, ic_elenen, ic_kapak, ic_olay_barlari, seviye,
+  seviye_ic, seviye_pencere_disi, ic_kadraj_disi`.
+- Ortam: `GRAFIK_IC_YAPI` (`.env.example`, `RENDER_DEPLOY.md`; `render.yaml` ve `deploy_check.py`'ye
+  eklenmedi — §37.6 ile aynı gerekçe).
+
+### 38.5 Ölçüm (56 kare, aynı veri; önce = `git archive 1c626a1`)
+
+| | önce | sonra |
+|---|---|---|
+| çizilen dış swing oku | 544 | 546 (rol taşıyan uçlar kapağı aşar) |
+| çizilen iç swing oku | 0 | 440 |
+| dış BOS/CHoCH oku | 237 | 237 |
+| iç BOS/CHoCH oku | 0 | 166 |
+| rol oku + kesikli çizgi (PH/PL/WH/WL) | yok (yalnız `swing_class` PH/PL çipi) | 164 (66'sı iç kapsamda) + 4 pencere dışı (sayıldı) |
+| lejantta `yapı:` maddesi | 47/56 | 56/56 |
+| lejanttan atılan madde | 58 | 0 |
+| etiket çakışması (>4 px²): swing×olay / swing×diğer / olay×diğer | 7 / 3 / 1 | 0 / 0 / 0 |
+| karelerdeki toplam yazı | 758 | 1209 |
+| en büyük PNG | 125,1 KB | 135,6 KB |
+
+Hiçbir karede eksik katman yok (`eksik_katman` 0). Ek ölçümler:
+
+- Dış rolle **aynı fiyatta** iç rol: 4/164 (4 kare). Bunlar gerçekten ayrı pivotlar (çift tepe/dip);
+  iki ok çizilir, kesikli çizgiler üst üste biner.
+- Şeritte yer kalmadığı için **12 rol çipi 11 karede düştü** (en düşük öncelikli; ok, etiket ve kesikli
+  çizgi yine çiziliyor; `meta["sag"]["atlanan_kaynak"]["swing"]` ile sayılır).
+- Görsel: `docs/ornek_ic_yapi.png` (THYAO 1s, önce/sonra — 24 temas dairesinin gidişi dahil).
+
+### 38.6 Testler
+
+- Yeni `test_grafik_ic_yapi.py` (48 test): `_olay_verisi` (iç anahtarlar, tekilleştirme, kapaklar,
+  roller, pencere dışı rol, kapatma anahtarı, bağlamsız mock), `_olay_ciz` (aynı ok biçimi,
+  `seviye-cizgisi` kesikli çizgi, çipler ve öncelikler, `i` öneki, yaşa göre solma), Agg çizicide
+  etiket kaçınma (kontrollü: kaçınma kapatılınca çakışma gerçekten çıkıyor), `_lejant` metinleri,
+  uçtan uca `anlik_goruntu` + `ciz` meta'sı, `GRAFIK_SADE`, `GRAFIK_IC_YAPI=0`, temas dairesinin yokluğu.
+  Ortamdaki `GRAFIK_IC_YAPI` değeri testleri etkilemez (autouse fikstür).
+- Eski sözleşmeyi taşıyan 5 test yeni sözleşmeye göre güncellendi (`test_grafik_gorsel4.py`,
+  `test_grafik_gorsel5.py`, `test_grafik_gorsel_kalite.py`, `test_grafik_iskelet.py`); yeniden adlananlar:
+  `test_seviye_rolu_okla_ayni_bicimde_fiyat_seritte`, `test_bant_temasi_daire_cizilmez`,
+  `test_temas_sayisi_saklanir_daire_isareti_yok`.
+- Tam paket: **1237 geçti, 44 atlandı** (önce 1189 / 44).
+
+### 38.7 Açık kalanlar / bilinçli tercihler
+
+- Dış ve iç rol aynı fiyatta iki ayrı pivotsa ikisi de çizilir (örn. YKBNK 1s: `WH` + `iWH`).
+- Eksenin üst kenarına çok yakın swing etiketi kenara değebilir (`HH`/`LH` ile aynı, eskiden de vardı).
+- Kart (`TELEGRAM_KART_FORMAT.md`) bu işte değişmedi; kartta ve grafikte hangi seviyelerin görüneceği
+  ayrı kararla hizalanabilir.
+- Okların ilk kırılım mumuna taşınması ve `swing_maks` 10 → 16 yapılmadı (istenmedi).
+- Lejantın `yapı:` maddesi düşük öncelik grubunda; çok dar karede taşarsa ilk düşenlerden olabilir
+  (56/56 karede sığdı).

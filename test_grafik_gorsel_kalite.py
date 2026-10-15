@@ -5,7 +5,8 @@ Kurallar:
   1. Yazı mumun üstüne binmez: gerçek önbellekteki örnek karelerde
      `meta["kalite"]["mum_cakisan"] == 0` (ölçüm: `_mum_cakisma_say`).
   2. Sağ fiyat şeridindeki etiketler dikeyde üst üste binmez ve hiçbiri atılmaz.
-  3. Bant teması işareti, temasın gerçekten olduğu bandın tarafındaki fitil
+  3. (§38'de KALDIRILDI: bant teması dairesi artık çizilmiyor; sayı başlıkta kalır.)
+     Eski madde: bant teması işareti, temasın gerçekten olduğu bandın tarafındaki fitil
      ucunda çizilir (üst banda yakın mum → tepe, alt banda yakın mum → dip).
   4. GÖRSEL-3 renk sözleşmesi: yükselen mum YEŞİL ve içi BOŞ, düşen mum KIRMIZI
      ve DOLU (neon değil: iki ton da orta doygunlukta); şerit spike'ı mumun
@@ -91,8 +92,13 @@ def test_sag_serit_etiketleri_birlesir_ve_dikeyde_binmez(tmp_path):
     assert son["yy"] == pytest.approx(55.0)
 
 
-def test_bant_temasi_dogru_fitil_ucunda(tmp_path):
-    """Alt banda yakın temas → dip (low); üst banda yakın temas → tepe (high)."""
+def test_bant_temasi_daire_cizilmez(tmp_path):
+    """§38 (kullanıcı kararı): bant temasına DAİRE konmaz.
+
+    Eski `test_bant_temasi_dogru_fitil_ucunda` dairenin konumunu (alt banda yakın → dip,
+    üst banda yakın → tepe) sınıyordu; daire kalktığı için artık tersi sınanır: temas
+    barları verilse bile eksende `o` işareti yoktur.
+    """
     from matplotlib.figure import Figure
 
     n = 10
@@ -113,12 +119,8 @@ def test_bant_temasi_dogru_fitil_ucunda(tmp_path):
     ax.set_xlim(-0.6, n - 0.4)
     ax.set_ylim(90.0, 120.0)
     grafik._formasyon_ciz(ax, goruntu, n, 300.0, {})
-    # temas daireleri: marker='o' ve fillstyle='none' olan çizgiler
-    daireler = [ln for ln in ax.lines if ln.get_marker() == "o"
-                and ln.get_fillstyle() == "none"]
-    veri = {int(ln.get_xdata()[0]): float(ln.get_ydata()[0]) for ln in daireler}
-    assert veri[3] == pytest.approx(99.5)
-    assert veri[6] == pytest.approx(111.0)
+    # eski daireler: marker='o' ve fillstyle='none' olan çizgiler — hiçbiri kalmadı
+    assert [ln for ln in ax.lines if ln.get_marker() == "o"] == []
 
 
 # ------------------------------------------------- GÖRSEL-3: renk sözleşmesi
