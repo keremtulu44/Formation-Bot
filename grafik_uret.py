@@ -108,7 +108,8 @@ def _cikti_yolu(cikti: str | None, hisse: str, tf: str, tfler: tuple) -> str:
 
 
 def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool = False,
-              mum: int | None = None, serit: bool = True, etiket_detay: bool = False,
+              mum: int | None = None, serit: bool | None = None,
+              etiket_detay: bool = False,
               formasyon_yol: str | None = None, formasyon: dict | None = None,
               formasyon_tara: bool = False,
               alarm_turu: str | None = None, cikti: str | None = None,
@@ -174,6 +175,8 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
         asama("PNG çizimi (ortak çizim kilidi dahil)")
     secenekler = {
         "cikti": cikti or f"/tmp/grafik_{str(hisse).upper()}_{tf}.png",
+        # FAZ 1: `None` → varsayılan (hacim paneli KAPALI, RVOL mum altı ⚡ rozetinde);
+        # True/False yalnız açık istekle (CLI `--hacim-paneli` / `--serit-yok`).
         "serit": serit,
         "etiket_detay": etiket_detay,
     }
@@ -325,7 +328,10 @@ def main(giris: list[str] | None = None) -> int:
     ayristirici.add_argument("--zone", action="store_true",
                              help="domain motorlarını ÇALIŞTIR: bölge kutuları + yapı (swing/BOS/CHoCH/kritik)"
                                   " (yalnız bu CLI: botun çizim yolu motoru yeniden çağırmaz, §14.2)")
-    ayristirici.add_argument("--serit-yok", action="store_true", help="katılım kulvarını kapat")
+    ayristirici.add_argument("--serit-yok", action="store_true",
+                            help="hacim kulvarını kapat (varsayılan: kapalı, FAZ 1)")
+    ayristirici.add_argument("--hacim-paneli", action="store_true",
+                            help="eski alt hacim kulvarını çiz (RVOL paneli)")
     ayristirici.add_argument("--etiket-detay", action="store_true",
                              help="motorun `evidence_text` satırını da yaz (§2.6)")
     ayristirici.add_argument("--tum-tf", action="store_true",
@@ -344,7 +350,9 @@ def main(giris: list[str] | None = None) -> int:
         # ayrışamaz (ayrı kopyalar G1'de gerçekten ayrışmıştı).
         try:
             sonuc = kare_uret(secenek.hisse, tf, veri_dizin=veri_dizin, zone=secenek.zone,
-                              mum=secenek.mum, serit=not secenek.serit_yok,
+                              mum=secenek.mum,
+                              serit=(True if secenek.hacim_paneli
+                                     else (False if secenek.serit_yok else None)),
                               etiket_detay=secenek.etiket_detay,
                               formasyon_yol=secenek.formasyon, formasyon_tara=secenek.formasyon_tara,
                               alarm_turu=secenek.alarm_turu, demo=secenek.demo,

@@ -882,7 +882,10 @@ aşanları topluyor — taze dosyaya dokunmaz, eşzamanlı ikinci kopya korumas�
   edilmez (alt süreçte `sys.modules` kontrolü).
 - Caption = `SEM · <tf_kısa> · <N> mum` (ÜÇ parça, kart jargonu/ondalık yok;
   `px/mum` ve `KB` karenin içinde ve `meta`da). Görsel METİN değildir: satır
-  bütçesi/soft-wrap caption’a uygulanmaz (§6.7 — teste yazıldı).
+  bütçesi/soft-wrap caption’a uygulanmaz (§6.7 — teste yazıldı). **§40.1 FAZ 1
+  güncellemesi:** kareden çıkarılan veri dipnotları (`veri: N bar hacimsiz`,
+  `bölge: N kutu kapak dışında`, `eksik: …`) caption’ın İKİNCİ satırına eklenir
+  (`ℹ️ …`, ≤200 karakter, `notifier._grafik_dipnotu`); kimlik satırı üç parça kalır.
 - `grafik_uret.kare_uret()` `VeriYok`/çizim reddini `{"yol": None, "hata": …}`
   olarak döndürür; hata fırlatmaz — `/grafik` bunu mesaja çevirir, CLI çıkış kodu.
 - §5’ten tek sapma: `GRAFIK_OLAY_MAKS` gerçekten env’den okunuyor (`_olay_verisi` →
@@ -1664,3 +1667,102 @@ alınmadı.
   kutu soluk/kesik, yatay seviye kutu etiketinden kaçıyor.
 - Bu bölümün eklenmesi sırasında mesaj/kart metni ve `domain_engines/` dosyaları
   değiştirilmedi. Önceki iç swing okları/dış yapı ayrımı §38'deki gibi korunur.
+
+---
+
+## 40 · FAZ 1-4: KULLANICI GÖRSEL PLANI UYGULANDI (2026-10-15)
+
+Kullanıcının dört fazlı görsel planı (temizlik → kadraj → SMC motoru → fintech
+cila) uygulandı. Bu bölüm planın her maddesini koddaki karşılığı, ölçülmüş
+sonucu ve kapatma testiyle eşler. **Motorlara (`domain_engines/`) yazılmadı**:
+mitigation oranı motorun kendi `fill_boundary` alanından hesaplanır; kırılım
+çizgisinin başlangıcı motorun kendi `origin_source_bar` alanıdır.
+
+### 40.1 FAZ 1 — Temizlik ve alan kazanımı
+
+- **Geliştirici metinleri kareden ÇIKTI.** `veri: N bar hacimsiz`, `bölge: N kutu
+  kapak dışında`, `eksik: zone`, lejant satırları artık kareye basılmaz; aynı
+  metinler `meta["metin"]`den **kare altı caption dipnotuna** taşınır
+  (`notifier._grafik_dipnotu`, tek satır, `ℹ️` öneki, ≤200 karakter). Kazanılan
+  dikey alan mumlara kalır: eksen alt kenarı `0,075 → 0,028`.
+- **Alt hacim paneli kaldırıldı.** `meta["serit"]["panel"] is False` ve figürde
+  TEK eksen kalır. `GRAFIK_HACIM_PANELI=1` eski iki kulvarlı görünümü geri getirir
+  (8 karede bayt bayt aynı PNG — kaçış kapısı korunur).
+- **RVOL rozeti.** `RVOL > 2,0×` olan mumların altına `⚡ x2,5` yazılır
+  (`_rvol_rozetleri`). Üst üste binme denetimleri ölçülmüştür: aynı bölgede en sert
+  hacim kalır (en az 7 bar aralık), pivot etiketi olan mumda rozet fitilin ÜSTÜNE
+  taşınır, alt kenara yakın mumda x ekseni etiketine binmesin diye yukarı alınır.
+- Kapatma: `test_grafik_faz_kullanici.py::test_faz1_*`, `test_grafik_iskelet.py::test_meta_sozlesmesi_ve_png_olcusu`.
+
+### 40.2 FAZ 2 — Akıllı kadraj
+
+| TF | Formasyon yok (mum) | Formasyon var |
+| :--- | :--- | :--- |
+| 1g | 62 | formasyon + 10 mum sol tampon, 35-85 arasına kırpılır |
+| 4s | 68 | aynı kural |
+| 2s | 74 | aynı kural |
+| 1s | 80 | aynı kural |
+
+- `SABITLER["kadraj_cerceve"]` TF matrisi; `kare_mum_tavani()` artık TF'e
+  duyarlıdır (eskiden dört TF'de de 180'di).
+- **Sağ boşluk** artık eksen yüzdesi değil **mum sayısıdır**: varsayılan 15
+  (plan: 12-15). `GRAFIK_SAG_BOSLUK_MUM` yeni anahtar; eski `GRAFIK_SAG_BOSLUK`
+  (oran) yalnız o tanımlıysa kullanılır — mevcut dağıtım ayarı boşa düşmez.
+- Ölçüm: 80 mumluk 1s karesinde px/bar 10,8 → 9,1 (≈%84 korunur); 4s'te 7,3.
+- Kapatma: `test_grafik_sag_bosluk.py`, `test_grafik_iskelet.py::test_formasyon_*`.
+
+### 40.3 FAZ 3 — SMC motoru ve çizim revizyonu
+
+- **`mitigated_percentage`** OB kaydına eklendi: boğa `(top − boundary)/yük`,
+  ayı `(boundary − bottom)/yük` — `OrderBlockRecord.fill_ratio` ile birebir
+  aynı formül. Kaynak sırası: export `fill` → kaydın `fill_boundary`si → yok
+  (o zaman `%` yazılmaz). `meta["zone"]["kayitlar"]` alanı taşır.
+- **İkili kutu çizimi:** TAZE OB (doluluk ≤ %2) canlı dolgu %25 + düz çizgi;
+  KISMEN DOLMUŞ OB'de kalan alan %12 canlı renkte, DOLAN bant mat gri (`#9CA3AF`,
+  %8) ve kesikli kontur; KIRILMIŞ/GEÇERSİZ OB'de iç boşalır (%-2 silik iz).
+  Dolan bant her durumda kalan alandan soluk kalır (`dolan ≤ kalan × 0,75`).
+- **Renk paleti:** OB boğa `#10B981` / ayı `#EF4444`; FVG boğa `#06B6D4` /
+  ayı `#8B5CF6`; FVG'de doluluk hesabı YOK (tek ton, ince kesikli kontur) —
+  OB ile karışmaz. Ayrım ayrıca kontur stilinde taşınır (düz / kesikli).
+- **Doluluk etiketi OB'de anlamlıdır:** `OB↑ · taze` · `OB↓ %41 dolu` ·
+  `OB↑ · tükendi`. FVG etiketi yalnız tip + yön (plan §1.B).
+- **Line Truncation:** BOS/CHoCH çizgisi motorun pivot barından (`origin_source_bar`)
+  başlar ve fiyatın seviyeyi kırdığı mumda biter; **yalnız aktif hedef**
+  (en güncel kritik olay) sağ boşluğa kadar uzar. Pivot alanı yoksa çizgi kırılım
+  mumundan başlar (uydurma başlangıç yok).
+- Kapatma: `test_grafik_faz_kullanici.py::test_faz3_*`, `test_grafik_gorsel5.py::test_dolan_*`, `test_grafik_bolgeler.py::test_mitigated_*`.
+
+### 40.4 FAZ 4 — Fintech cila
+
+- **Pills (rozetler):** sol üst artık düz metin değil, yarı saydam yuvarlatılmış
+  çipler: `◆ SEMBOL · TF` · `◈ Formasyon (%q)` · `durum`. Rozet genişliği GERÇEK
+  renderer ölçümünden gelir (tahmin 3 rozette üst üste bindiriyordu).
+- **Kare içi ikonlar font kapsamasına göre seçilir** (`_ikon`): DejaVu Sans'ta
+  📈/📐/🎯 YOK — çizilse "tofu" kutusu olurdu. Font emojiyi taşıyorsa emoji,
+  taşımıyorsa `◆ ◈ ◎` kullanılır. Kare böylece her ortamda okunur kalır.
+- **Sağ ray Y-Offset + lider çizgisi:** çakışan etiketler dikeyde itilir ve
+  gerçek seviyeye **kesikli lider çizgisiyle** bağlanır
+  (`meta["sag"]["kaydirilan"]`, `meta["sag"]["lider"]`).
+- **Pivot etiketleri:** HH/HL/LH/LL taban ofseti 5 → **11 px** (plan: 10-15 px),
+  komşu etiketle basamaklanır.
+- **🎯 Hedef projeksiyonu:** TEYİTLİ alarmda hedef = kırılan seviye + yön ×
+  formasyon yüksekliği (`current_width`/`start_width`; yoksa çizilmez). Sağ
+  boşlukta kesikli çerçeve + `◎ Hedef 55,82` kutusu ve seviyeden hedefe kesikli ok.
+- **Formasyon dolgusu** `0,06 → 0,03` (iç alan karartılmaz), sınır çizgileri
+  `1,6 → 2,0 pt` (plan §5).
+- Kapatma: `test_grafik_faz_kullanici.py::test_faz4_*`.
+
+### 40.5 Doğrulama
+
+- 15 sembolün gerçek `bot_data` önbelleğiyle 1s/4s/1g kareleri üretildi;
+  `meta["kalite"]["mum_cakisan"] == 0` (yazı hiçbir mumun üstüne binmiyor),
+  `mum_cakisan` kapısı RVOL rozetleri eklendikten sonra da tutuyor.
+- Tam paket: `pytest -q` → 1249 geçti, 44 atlandı (333 grafik testi dahil).
+  Kare süresi ölçümü: 1s ≈ 590 ms (eski ≈ 540 ms; rozet ölçümü farkı),
+  PNG ≈ 55-70 KB.
+- Görsel önizleme aracı: `scripts/grafik_onizleme.py` (sentetik veri, motor
+  çalıştırmaz, önbelleğe yazmaz) — tasarım turlarında kare bakmak için.
+- Turun örnek kareleri: `docs/ornek_kare_faz1_4_1s.png` (GARAN 1s, 80 mum,
+  taze/dolmuş OB + kritik + PH/WL cetveli) ve `docs/ornek_kare_faz1_4_4s.png`
+  (AKBNK 4s, 68 mum, RVOL rozeti). Ölçüm çıktıları (diğer PNG'ler) depo dışında
+  tutulur (§0 kural); yalnız tasarım referansı olan bu iki kare repoda kalır.

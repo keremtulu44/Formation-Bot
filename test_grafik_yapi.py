@@ -354,7 +354,8 @@ def test_yapi_bicimi_bos_ken_de_sabit(tmp_path):
                                  "kritik_atlandi", "capa", "hata"}
     assert meta["olay"]["cizilen"] == 0 and meta["olay"]["swing"] == 0
     assert meta["olay"]["kritik"] is None and meta["olay"]["kritik_cizildi"] is False
-    assert meta["serit"]["acik"] is True
+    # FAZ 1: hacim PANELİ varsayılan kapalı; veri mum altı ⚡ rozetinde yaşar.
+    assert meta["serit"]["acik"] is False and "rozet" in meta["serit"]
     assert "yapı:" not in " ".join(meta["metin"]["lejant"])
 
 
@@ -388,7 +389,8 @@ def test_cli_zone_yapi_ve_seriti_dolduruyor(tmp_path, tf):
     assert meta["olay"]["swing"] >= 1
     assert meta["olay"]["bos_choc"] >= 1
     assert meta["serit"]["kaynak"] in ("motor", "yerel hesap")
-    assert meta["serit"]["acik"] is True
+    # FAZ 1: hacim PANELİ varsayılan kapalı; veri mum altı ⚡ rozetinde yaşar.
+    assert meta["serit"]["acik"] is False and "rozet" in meta["serit"]
     assert "yapı:" in " ".join(meta["metin"]["lejant"])
     if meta["serit"]["kaynak"] == "yerel hesap":
         assert "yerel hesap" in " ".join(meta["metin"]["lejant"])   # §0.12a etiketi

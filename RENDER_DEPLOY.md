@@ -800,9 +800,11 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `KARNE_STOP_ATR` | `1.0` — "stop" sayılan alehte hareket (ATR katı) | Hayır |
 | `TELEGRAM_GRAFIK` | `yok` (varsayılan) / `alarm` — alarm metninin altına mum karesi ekler (§6.2) | Hayır |
 | `TELEGRAM_GRAFIK_ADET` | `4` — alarm başına kare sayısı (1-4). Free planda `1-2` | Hayır |
-| `GRAFIK_MUM_MAKS` | `180` — karenin kadraj tavanı (formasyon sığmıyorsa tavan kalkar) | Hayır |
+| `GRAFIK_MUM_MAKS` | `80` — formasyon YOKKEN gösterilen mum sayısı (üst sınır). Varsayılan TF matrisi: 1s 80 · 2s 74 · 4s 68 · 1g 62; formasyon varsa kadraj formasyona odaklanır (formasyon + 10 mum tampon, 35-85 arası) | Hayır |
 | `GRAFIK_OLAY_MAKS` | `6` — kareye çizilen onaylı BOS/CHoCH sayısı | Hayır |
-| `GRAFIK_SAG_BOSLUK` | `5.3` — son mumun sağındaki boş alan, eksen genişliğinin % değeri (≈180 mumluk karede 10 mum; bant/kutu/BOS çizgileri buraya uzar). `0` = kapalı (eski görünüm) | Hayır |
+| `GRAFIK_SAG_BOSLUK_MUM` | `15` — son mumun sağındaki boş alan (MUM sayısı; önerilen 12-15). Fiyat etiketleri ve 🎯 hedef kutusu buraya çizilir, bant/kutu/aktif BOS çizgileri buraya uzar. `0` = kapalı | Hayır |
+| `GRAFIK_HACIM_PANELI` | `0` (kapalı) — kaldırılan alt hacim kulvarını geri getirir; hacim yalnız RVOL > 2,0× mumların altında `⚡ x2,5` rozetiyle gösterilir | Hayır |
+| `GRAFIK_LEJANT_KARE` | `0` (kapalı) — lejant/dipnot bloğunu kare içine geri koyar (varsayılan: bu bilgiler kare altı caption dipnotuna gider) | Hayır |
 | `KARNE_HORIZON_BAR` | `10` — sinyalden sonra izlenen bar sayısı | Hayır |
 | `DATA_DIR` | Kalıcı veri dizini. Render'da varsayılan `/tmp/formation-bot-data` (repo diski geçici; kalıcı veri Supabase'de). Kalıcı disk bağlarsanız buradan verin | Hayır |
 | `SEED_DATA_DIR` | `./bot_data` — DATA_DIR'de dosya yoksa **yalnız okuma** için kullanılan seed veri | Hayır |

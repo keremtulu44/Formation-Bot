@@ -39,10 +39,15 @@ def _eksen(n=60, alt=90.0, ust=120.0):
 
 
 def test_qnn_etiketi_kalkti_doluluk_kaldi():
-    """`qNN` artık ÜRETİLMEZ; doluluk varsa `%X`, yoksa yalnız tip+yön."""
+    """`qNN` artık ÜRETİLMEZ. FAZ 3: OB'de `%X dolu` / `taze` yazılır; FVG doluluk
+    HESABI YAPMAZ (plan §1.B) — orada yalnız tip + yön görünür."""
     assert grafik._zone_metni(_zone_kayit(tip="fvg", skor=95)) == "FVG↑"   # eski: 'FVG↑ q95'
-    assert grafik._zone_metni(_zone_kayit(tip="fvg", doluluk=0.38)) == "FVG↑ %38"
-    assert grafik._zone_metni(_zone_kayit(tip="ob", yon=-1, doluluk=0.7)) == "OB↓ %70"
+    assert grafik._zone_metni(_zone_kayit(tip="fvg", doluluk=0.38)) == "FVG↑"
+    assert grafik._zone_metni(_zone_kayit(doluluk=0.38)) == "OB↑ %38 dolu"
+    assert grafik._zone_metni(_zone_kayit(doluluk=0.41)) == "OB↑ %41 dolu"
+    assert grafik._zone_metni(_zone_kayit(doluluk=0.0)) == "OB↑ · taze"
+    assert grafik._zone_metni(_zone_kayit(doluluk=1.0)) == "OB↑ · tükendi"
+    assert grafik._zone_metni(_zone_kayit(tip="ob", yon=-1, doluluk=0.7)) == "OB↓ %70 dolu"
     assert grafik._zone_metni(_zone_kayit(tip="eng", skor=88)) == "ENG↑"
     assert "q" not in grafik._zone_metni(_zone_kayit(tip="fvg", skor=100))
 
@@ -51,9 +56,8 @@ def test_qnn_etiketi_kalkti_doluluk_kaldi():
 
 
 def _dolgu_bandi(ax):
-    """DOLAN kısmı bulur — GÖRSEL-8: dolan kısım AÇIK tonda çizilir.
+    """DOLAN kısmı bulur — FAZ 3 §2: dolan kısım MAT GRİ (en soluk) tondadır.
 
-    Kullanıcı kararı: "koyu taraf = doldurulmamış, açık taraf = dolan kısım".
     Kutu çerçevesi dolgusuz bir dikdörtgendir (`facecolor="none"`); ölçüme
     yalnız DOLGULU dikdörtgenler girer, en düşük alfa = dolan bant.
     """
@@ -65,6 +69,12 @@ def _dolgu_bandi(ax):
     if len(alpha) < 2:
         return None
     return min(alpha, key=lambda x: x[0])          # en AÇIK olan = dolan kısım
+
+
+def _rgba(hex_kod):
+    """`#RRGGBB` → 0-1 aralığında (r, g, b) — palet karşılaştırmaları için."""
+    h = str(hex_kod).lstrip("#")
+    return tuple(int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
 
 
 def test_boga_kutusunda_dolgu_ustten_asagi():
@@ -506,33 +516,39 @@ def test_kutu_dolgusu_belirginlesti_ama_neon_degil():
     assert float(grafik.SABITLER["zone_kalinlik"]["vurgu"]) == 1.3   # vurgu değişmedi
 
 
-def test_dolan_kisim_acik_doldurulmamis_kalan_koyu():
-    """GÖRSEL-8 (kullanıcı): "koyu taraf = doldurulmamış, açık taraf = DOLAN".
+def test_dolan_kisim_gri_kalan_canli_renkte():
+    """FAZ 3 §2 paleti: dolan bant MAT GRİ, kalan açık alan CANLI renkte kalır.
 
-    Ölçüm: aynı kutuda iki dolgu dikdörtgeni vardır; DOLAN bandın alfası kalan
-    alandan KÜÇÜK olmalı (daha açık ton), rengi (hue) aynı kalmalı ve bant
-    tabanın altına düşmemeli (görünmez olmasın).
+    Ölçüm: aynı kutuda iki dolgu dikdörtgeni vardır — kalan `ob_kalan` (0,12),
+    dolan `ob_dolan` (0,08) gri. Dolan bant her zaman daha soluk kalır ve
+    kutu rengi (yeşil boğa / kırmızı ayı) yalnız KALAN alanda görünür.
     """
     from matplotlib.patches import Rectangle
 
     d = grafik.SABITLER["doldurma"]
-    # Kullanıcı: "arttır biraz görünsün ama soluk olsun dolmayana göre" → dolan bant
-    # kalan alanın YARISI kadar koyu: görünür (≥ 0,35) ama soluk (≤ 0,70).
-    assert 0.35 <= float(d["dolan_orani"]) <= 0.70
-    assert 0.02 <= float(d["dolan_taban"]) < float(d["ob"]) / 2.0
+    assert float(d["ob_taze"]) == pytest.approx(0.25)     # taze OB canlı
+    assert float(d["ob_kalan"]) == pytest.approx(0.12)    # kısmen dolmuş: kalan
+    assert float(d["ob_dolan"]) == pytest.approx(0.08)    # dolan: mat gri
+    assert float(d["fvg"]) == pytest.approx(0.15)         # FVG tek ton
+    assert grafik.PALET["ob_bull"] == "#10B981" and grafik.PALET["ob_bear"] == "#EF4444"
+    assert grafik.PALET["fvg_bull"] == "#06B6D4" and grafik.PALET["fvg_bear"] == "#8B5CF6"
+    assert grafik.PALET["dolan"] == "#9CA3AF"
     fig, ax = _eksen()
     grafik._zone_ciz(ax, {"cizilen": [_zone_kayit(doluluk=0.30)]}, 60, (90.0, 120.0), [])
     dolgulu = [p for p in ax.patches
                if isinstance(p, Rectangle) and p.get_facecolor()[3] > 0]
     assert len(dolgulu) == 2, "dolan + kalan: iki ayrı ton"
-    alfa = sorted(round(float(p.get_alpha()), 6) for p in dolgulu)
-    acik, koyu = alfa[0], alfa[1]
-    assert acik < koyu, "dolan kısım DAHA AÇIK olmalı (kullanıcı kararı)"
-    assert acik >= float(d["dolan_taban"]) - 1e-9
-    assert koyu <= 0.20 + 1e-9, "neon yok: kalan alan yarı saydam kalır"
-    # hue korunur: iki dikdörtgen de kutunun kendi rengi
-    renkler = {tuple(round(c, 4) for c in p.get_facecolor()[:3]) for p in dolgulu}
-    assert len(renkler) == 1
+    gri_beklenen = tuple(round(c, 3) for c in _rgba(grafik.PALET["dolan"]))
+    gri = [p for p in dolgulu
+           if tuple(round(c, 3) for c in p.get_facecolor()[:3]) == gri_beklenen]
+    canli = [p for p in dolgulu if p not in gri]
+    assert len(gri) == 1 and len(canli) == 1
+    # dolan bant ÜSTTE (boğa OB), kalan alan altta canlı renkte
+    gri_y = gri[0].get_xy()[1] + gri[0].get_height()
+    assert abs(gri_y - 110.0) < 1e-6
+    assert gri[0].get_alpha() < canli[0].get_alpha()      # dolan daha soluk
+    for _b, _h in zip(canli[0].get_facecolor()[:3], _rgba(grafik.PALET["ob_bull"])):
+        assert abs(float(_b) - float(_h)) < 1e-3        # canlı renk: OB boğa yeşili
     # doluluk sınırı çizgisi (cetvel) duruyor mu?
     sinirlar = [ln for ln in ax.get_lines()
                 if len(ln.get_ydata()) == 2 and abs(ln.get_ydata()[0] - 107.0) < 1e-6]

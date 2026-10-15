@@ -56,7 +56,8 @@ def test_kutu_etiketi_kutunun_icinde_ve_tarama_yok():
     etiketler = [t for t in ax.texts if str(t.get_gid() or "") == "kutu-ici"]
     assert len(etiketler) == 1
     metin = str(etiketler[0].get_text())
-    assert metin.startswith("FVG↑") and "%70" in metin            # doluluk tek kaynaktan
+    # FAZ 3 §1.B: FVG doluluk HESABI YAPMAZ — etiket yalnız tip + yön (yüzde yok).
+    assert metin.startswith("FVG↑") and "%" not in metin
     from matplotlib.patches import Rectangle
     kutular = [p for p in ax.patches if isinstance(p, Rectangle)]
     assert kutular and all((p.get_hatch() is None) for p in kutular)   # eğik tarama kalktı

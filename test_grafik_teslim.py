@@ -387,13 +387,18 @@ def test_caption_ondalik_ve_kart_sozcuğu_tasimaz(notifier, grafik_acik, monkeyp
     _kare_ekle(notifier, grafik_acik, adet=1)
     notifier.grafikleri_gonder()
     caption = cagrilar[0]["caption"]
-    assert not re.search(r"\d[.,]\d", caption)      # ondalık sayı yok (G0)
-    parcalar = [x.strip() for x in caption.split("·")]
-    assert parcalar == ["AKBNK", "4s", "180 mum"] or (
-        parcalar[0] == "AKBNK" and parcalar[1] == "4s" and parcalar[-1].endswith("mum"))
-    # teknik ayrıntı karenin içinde/`meta`da; caption'da yeri yok: üç parça kadar.
+    kimlik, _, dipnot = caption.partition("\n")       # FAZ 1: 2. satır veri dipnotu
+    assert not re.search(r"\d[.,]\d", kimlik)          # ondalık sayı yok (G0)
+    parcalar = [x.strip() for x in kimlik.split("·")]
+    assert parcalar[0] == "AKBNK" and parcalar[1] == "4s" and parcalar[-1].endswith("mum")
+    # teknik ayrıntı karenin içinde/`meta`da; kimlik satırında yeri yok: üç parça.
     assert len(parcalar) == 3
     assert "px" not in parcalar[-1] and "KB" not in parcalar[-1]
+    # Veri dipnotu (varsa) kareden çıkarılan geliştirici metinleridir: tek satır,
+    # `ℹ️` ile başlar ve px/KB gibi çizim ayrıntısı taşımaz.
+    if dipnot:
+        assert dipnot.startswith("ℹ️ ") and "\n" not in dipnot and len(dipnot) <= 200
+        assert "px" not in dipnot and "KB" not in dipnot
 
 
 def test_caption_kimlik_satiridir_kart_metnini_tekrarlamaz(notifier, grafik_acik,
@@ -402,11 +407,12 @@ def test_caption_kimlik_satiridir_kart_metnini_tekrarlamaz(notifier, grafik_acik
     _kare_ekle(notifier, grafik_acik, adet=1)
     notifier.grafikleri_gonder()
     caption = cagrilar[0]["caption"]
-    assert caption == "AKBNK · 4s · %s mum" % caption.split("· ")[-1].split()[0]
-    assert caption.count("·") == 2 and caption.startswith("AKBNK · 4s · ")
-    assert "," not in caption and "." not in caption        # tam sayı: ayraç yok
-    for yasak in ("KIRILIM", "TEYIT", "FORMASYON", "kalite", "bant"):
-        assert yasak not in caption.upper()
+    kimlik = caption.split("\n")[0]                          # 1. satır: kimlik
+    assert kimlik == "AKBNK · 4s · %s mum" % kimlik.split("· ")[-1].split()[0]
+    assert kimlik.count("·") == 2 and kimlik.startswith("AKBNK · 4s · ")
+    assert "," not in kimlik and "." not in kimlik          # tam sayı: ayraç yok
+    for yasak in ("KIRILIM", "TEYIT", "FORMASYON", "kalite"):
+        assert yasak not in kimlik.upper()
 
 
 def test_cizim_reddi_gonderimi_vurmaz(notifier, grafik_acik, monkeypatch):

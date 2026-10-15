@@ -100,30 +100,55 @@ def _png_olcu(yol: str) -> tuple[int, int]:
 
 
 def test_kadraj_formasyon_penceresine_sabitlenir():
+    """FAZ 2 Kural A: formasyon + 10 mum sol tampon, 35-85 mum aralığına kırpılır."""
     g = _goruntu()
-    # sol = max(0, min(200-8, 240-180)) = 60 → 180 mumluk kadraj
-    assert (g["sol"], g["sag"]) == (60, 240)
-    assert len(g["zamanlar"]) == 180
+    # start_bar 200, n 240 → istenen 10+10=20 → alt sınır 35 → sol = 200-10 = 190
+    assert (g["sol"], g["sag"]) == (190, 240)
+    assert len(g["zamanlar"]) == 50 and g["kare_mum"] == 80
     assert g["tavan_kalkti"] is False
-    # kadraj budaması yok (temas dairesi katmanı kaldırıldı, adet meta'da kalır)
-    assert not any("GRAFIK_MUM_MAKS" in b for b in g["budama"])
+    assert not any("kadraj:" in b for b in g["budama"])
 
 
-def test_formasyon_eskiyse_tavan_kalkar_ve_budamaya_yazilir():
+def test_formasyon_yoksa_tf_matrisi_kullanilir():
+    """FAZ 2 Kural B: formasyon yokken TF matrisi (1g 62 · 4s 68 · 2s 74 · 1s 80)."""
+    for tf, beklenen in (("1h", 80), ("2h", 74), ("4h", 68), ("1d", 62)):
+        g = _goruntu(_cerceve(240, tf), tf=tf, cift=None)
+        assert g["kare_mum"] == beklenen, tf
+        assert len(g["zamanlar"]) == beklenen
+        assert (g["sol"], g["sag"]) == (g["bar_sayisi"] - beklenen, g["bar_sayisi"])
+    assert grafik.kare_mum_tavani("1d") == 62
+
+
+def test_formasyon_85_mumdan_uzunsa_pencere_kirpilir():
+    """Kural A üst sınırı 85: daha uzun formasyonda sağ (güncel) taraf gösterilir."""
     g = _goruntu(_cerceve(300), cift=_cift(start_bar=10, end_bar=299))
     assert g["tavan_kalkti"] is True
-    assert g["sol"] == max(0, 10 - int(grafik.SABITLER["kare_once_pay"]))
-    assert "GRAFIK_MUM_MAKS" in g["budama"][0]
-    assert len(g["zamanlar"]) == 300 - g["sol"]
+    assert (g["sol"], g["sag"]) == (300 - 85, 300)
+    assert len(g["zamanlar"]) == 85 and "85 mumluk pencereye" in g["budama"][0]
+
+
+def test_formasyon_yokken_tf_matrisi_kirpilmaz():
+    """Kural B pencere boyu kadraj tavanından gelir; formasyon yoksa budama yazılmaz."""
+    g = _goruntu(_cerceve(300), cift=None)
+    assert (g["sol"], g["sag"]) == (300 - 80, 300)
+    assert g["tavan_kalkti"] is False and g["budama"] == []
+
+
+def test_formasyon_kisa_ise_alt_sinir_35_mum(monkeypatch):
+    """Kural A alt sınırı 35: 3 mumluk formasyon 35 mumluk pencereye oturur."""
+    monkeypatch.setenv("GRAFIK_MUM_MAKS", "100")
+    g = _goruntu(_cerceve(240), cift=_cift(start_bar=237))
+    assert g["kare_mum"] == 100 and (g["sol"], g["sag"]) == (205, 240)
+    assert len(g["zamanlar"]) == 35
 
 
 def test_kare_mum_tavani_env_anahtarindan_okunur(monkeypatch):
     monkeypatch.setenv("GRAFIK_MUM_MAKS", "100")
     assert grafik.kare_mum_tavani("1h") == 100
-    g = _goruntu(cift=_cift(start_bar=230))
+    g = _goruntu(cift=None)                          # formasyon yok → Kural B
     assert g["kare_mum"] == 100 and (g["sol"], g["sag"]) == (140, 240)
     monkeypatch.setenv("GRAFIK_MUM_MAKS", "bozuk")     # yutulur, varsayılana düşer
-    assert grafik.kare_mum_tavani("1h") == int(grafik.SABITLER["kare_mum"])
+    assert grafik.kare_mum_tavani("1h") == int(grafik.SABITLER["kadraj_cerceve"]["1h"])
 
 
 def test_genislik_bar_sayisiyla_buyur_ve_tavana_dayanir():
@@ -280,7 +305,7 @@ def test_meta_sozlesmesi_ve_png_olcusu(tmp_path):
                  "sure_ms", "png_kb", "uyarilar"):
         assert alan in meta, alan
     assert meta["sem"] == "AKBNK" and meta["tf"] == "1s"
-    assert meta["kare"]["yukseklik"] == 810 and meta["mum_sayisi"] == 180
+    assert meta["kare"]["yukseklik"] == 810 and meta["mum_sayisi"] == 50
     assert meta["cizgiler"]["alarm"]["deger"] == pytest.approx(52.5)
     # G2: `zone` alanı biçimini sabit tuttu (boşken de aynı anahtarlar; §13)
     assert meta["zone"]["cizilen"] == 0 and meta["zone"]["elenen"] == 0
@@ -292,9 +317,11 @@ def test_meta_sozlesmesi_ve_png_olcusu(tmp_path):
     assert set(meta["olay"]) >= {"cizilen", "elenen", "swing", "bos_choc", "kritik",
                                  "kapak", "etiket_atlandi", "hata"}
     assert set(meta["serit"]) >= {"acik", "esik", "spike", "kaynak", "yerel", "hacimsiz"}
-    # G3'ten beri şerit çerçeveden TÜRETİLİR (yerel rvol) → kulvar boş değilse
-    # `acik` True; `--serit-yok`testinde False. Boş karede spike listesi boştur.
-    assert meta["serit"]["acik"] is True and isinstance(meta["serit"]["spike"], list)
+    # FAZ 1: hacim PANELİ varsayılan olarak çizilmez (dikey alan mumlara kalır);
+    # RVOL verisi `spike` listesinde ve mum altı ⚡ rozetinde yaşar (`rozet` sayacı).
+    # `GRAFIK_HACIM_PANELI=1` eski kulvarı geri getirir (ayrı test).
+    assert meta["serit"]["acik"] is False and meta["serit"]["panel"] is False
+    assert isinstance(meta["serit"]["spike"], list) and "rozet" in meta["serit"]
     assert meta["serit"]["kaynak"] in ("motor", "yerel hesap", "yok")
     assert _png_olcu(meta["yol"]) == (1080, 810) and meta["png_kb"] <= 500     # §6.5
 
@@ -350,10 +377,11 @@ def test_butun_cizim_cokerse_yalnizca_mumlar_denendigi_yazilir(tmp_path):
     assert "yalnızca mumlar" in meta["metin"]["lejant"][0]         # §2.9 etiket dürüst
 
 
-def test_cizgi_ve_alan_modu_kullanilirken_budamaya_yazilir(tmp_path):
-    g = _goruntu(_cerceve(600), tf="1h",
-                 cift=_cift(start_bar=0, end_bar=599, apex_bar=..., upper_now=...,
-                            lower_now=...), alarm_bar=599)
+def test_cizgi_ve_alan_modu_kullanilirken_budamaya_yazilir(tmp_path, monkeypatch):
+    """Çekme modu: FAZ 2'de pencere 85 mumu geçemez → ayrıntı için penceresi
+    büyütülmüş kare (Kural B + `GRAFIK_MUM_MAKS`) kullanılır (§17.14)."""
+    monkeypatch.setenv("GRAFIK_MUM_MAKS", "700")
+    g = _goruntu(_cerceve(600), tf="1h", cift=None, alarm_bar=599)
     yol, meta = grafik.ciz(g, "1h", {"cikti": str(tmp_path / "cizgi.png")})
     assert meta["kare"]["genislik"] == 1440 and meta["kare"]["cekme"] is True
     assert any("çizgi + alan" in b for b in meta["budama"])

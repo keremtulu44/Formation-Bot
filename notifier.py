@@ -65,12 +65,17 @@ def _kuyruk_verisi(data: Dict) -> Dict:
 
 
 def _grafik_basligi(olay: Dict, kare: Dict, meta: Dict) -> str:
-    """Kare altındaki tek satır kimlik (§4): kart metni TEKRARLANMAZ.
+    """Kare altındaki tek satır kimlik + veri dipnotu (§4, FAZ 1).
 
     Neden kısa: caption Telegram'da AYRI mesaj gövdesi olur; kartın satırlarını
     buraya koymak „1 olay = 1 mesaj" kuralını deler. Yalnız hangi hisse, hangi
     zaman dilimi ve kaç mum — sayı/px ayrıntısı karenin kendisinde ve `meta`da.
     Kartla aynı dil: TF kısaltması 4s/1s (ham kod değil), sayı virgüllü (`sayi`).
+
+    FAZ 1: kareden ÇIKARILAN geliştirici metinleri (`veri: N bar hacimsiz`,
+    `bölge: N kutu kapak dışında`, `eksik: …`) artık karenin altında değil, kartın
+    altında tek satır dipnot olarak gider — karede kazanılan dikey alan mumlara
+    kalır, bilgi kaybolmaz. Dipnot 200 karakterle sınırlıdır (caption bütçesi).
     """
     sembol = str(olay.get("sembol") or "").strip().upper() or "?"
     # Kartta hangi etiket görünüyorsa karede de o: 4h → 4s (ham TF kodu değil).
@@ -85,7 +90,30 @@ def _grafik_basligi(olay: Dict, kare: Dict, meta: Dict) -> str:
         lejant_gizli = 0
     if lejant_gizli:
         parcalar.append(f"lejant kısaltıldı (+{lejant_gizli})")
-    return " · ".join(parcalar)
+    baslik = " · ".join(parcalar)
+    dipnot = _grafik_dipnotu(meta)
+    return f"{baslik}\n{dipnot}" if dipnot else baslik
+
+
+def _grafik_dipnotu(meta: Dict) -> str:
+    """Kareden çıkarılan veri dipnotları (FAZ 1): kartın altında tek satır.
+
+    Sıra: veri sorunları (eksik katman/kırmızı uyarı) → gri notlar (kadraj
+    budaması, kapak dışı kutular) → kısaltma izleri. Hiçbiri yoksa boş döner ve
+    caption tek satır kalır (uydurma metin yazılmaz). En fazla 200 karakter:
+    caption bütçesi (Telegram 1024) medya grubunda paylaşılır.
+    """
+    metin = (meta or {}).get("metin") if isinstance(meta, dict) else None
+    if not isinstance(metin, dict):
+        return ""
+    parcalar: List[str] = []
+    for satir in list(metin.get("dipnotlar") or []) + list(metin.get("notlar") or []):
+        temiz = " ".join(str(satir).split())
+        if temiz and temiz not in parcalar:
+            parcalar.append(temiz)
+    if not parcalar:
+        return ""
+    return ("ℹ️ " + " · ".join(parcalar))[:200]
 
 
 def _istanbul(dt: datetime) -> datetime:

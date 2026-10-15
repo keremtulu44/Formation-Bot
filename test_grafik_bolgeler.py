@@ -35,10 +35,18 @@ ZAMAN = datetime(2026, 12, 1, 9, 0, tzinfo=IST)
 REPO = Path(__file__).resolve().parent
 
 
-def _ob(index, alt, ust, bullish=True, skor=2):
+def _ob(index, alt, ust, bullish=True, skor=2, dolan=0.0):
+    """Sentetik `OrderBlockRecord` — `fill_boundary` motorla AYNI kural:
+
+    `order_block_engine` kaydı `fill_boundary=top if bullish else bottom` ile açar
+    ve fiyat kutunun içine girdikçe sınırı taşır. `dolan` oranı bu yüzden
+    sınırdan hesaplanır (FAZ 3 §A: `mitigated_percentage` bu alandan türetilir).
+    """
+    yuk = float(ust) - float(alt)
+    sinir = (float(ust) - yuk * float(dolan)) if bullish else (float(alt) + yuk * float(dolan))
     return SimpleNamespace(source_index=index, source_time=None, top=ust, bottom=alt,
                            bullish=bullish, base_score=skor, anchor_high=ust,
-                           anchor_low=alt, imbalance_end_index=None, fill_boundary=alt)
+                           anchor_low=alt, imbalance_end_index=None, fill_boundary=sinir)
 
 
 def _fvg(index, alt, ust, direction=1, durum="ACTIVE", kalite=88.0, doluluk=0.0, gap=1.5):
@@ -239,20 +247,38 @@ def test_1s_ve_2s_karelerinde_fvg_cizilmez():
     assert len(g4["zone"]["cizilen"]) == 1
 
 
-def test_doluluk_yalniz_motorun_verdigi_kutuda():
-    """§0.12k: export'ta `fill` varsa yazılır; yoksa `%` UYDURULMAZ."""
+def test_doluluk_motor_kaynagindan_gelir_uydurulmaz():
+    """§0.12k + FAZ 3 §A: doluluk ÖNCE export'un `fill`i, sonra kaydın kendi
+    `fill_boundary`si olur; her ikisi de motordan gelir (uydurma oran yok)."""
     export = SimpleNamespace(
         bull=SimpleNamespace(source_bar=11, fill=0.4285, top=62.5, bottom=61.5, state=1.0),
         bear=SimpleNamespace(source_bar=None, fill=None, top=None, bottom=None, state=None))
-    ob_kayitlari = [_ob(11, 61.5, 62.5), _ob(12, 63.0, 64.0)]
+    # 11: export fill'i var (0,4285) · 12: export yok, kayıt taze (boundary = top)
+    # 13: export yok, ayı kaydı %40 dolu (fill_boundary = bottom + %40 × yük);
+    # kapanış 60'ın ALTINDA olduğu için "alt" taraf seçimine girer (kapak 2/2).
+    ob_kayitlari = [_ob(11, 61.5, 62.5), _ob(12, 63.0, 64.0),
+                    _ob(13, 56.0, 57.0, bullish=False, dolan=0.4)]
     cerceve = _cerceve(60, "4h", taban=60.0, yon=0.0)
     g = grafik.anlik_goruntu(None, "4h", cerceve,
                             sonuclar=_sonuclar(ob_kayitlari=ob_kayitlari, export=export),
                             simdi=ZAMAN)
     kayitlar = {b["kaynak"]: b for b in g["zone"]["cizilen"]}
     assert kayitlar[11]["doluluk"] == pytest.approx(0.4285)
-    assert kayitlar[12]["doluluk"] is None
+    assert kayitlar[11]["mitigated_percentage"] == pytest.approx(42.9, abs=0.05)
+    assert kayitlar[12]["doluluk"] == pytest.approx(0.0)          # taze: %0
+    assert kayitlar[13]["doluluk"] == pytest.approx(0.4)
+    assert kayitlar[13]["mitigated_percentage"] == pytest.approx(40.0, abs=0.1)
     assert g["zone"]["hata"] == []
+
+
+def test_mitigated_yuzdesi_motorun_formuluyle_ayni():
+    """FAZ 3 §A: `(top - boundary)/yük` (boğa) ve `(boundary - bottom)/yük` (ayı)."""
+    assert grafik._ob_mitigated(_ob(1, 100.0, 110.0, dolan=0.25), 100.0, 110.0) == 25.0
+    assert grafik._ob_mitigated(_ob(2, 100.0, 110.0, bullish=False, dolan=0.6),
+                                100.0, 110.0) == 60.0
+    # boundary yok → oran da yok (uydurulmaz), kutu tek parça çizilir
+    bos = SimpleNamespace(source_index=3, top=110.0, bottom=100.0, bullish=True)
+    assert grafik._ob_mitigated(bos, 100.0, 110.0) is None
 
 
 # ------------------------------------------------------------------- hizalama
