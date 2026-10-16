@@ -66,10 +66,11 @@ def _ortam_sayi(ad: str, varsayilan: float) -> float:
 
     Neden: §6.1 kadraj testleri `os.environ` ile oynar; import zamanında okunan
     değer bunu göremezdi. Bozuk değer varsayılana düşer — grafik alarmı asla
-    engellemez (§4).
+    engellemez (§4). Türkçe ondalık virgülü de kabul edilir (`1,5` = `1.5`):
+    dağıtım arayüzünde değer virgülle yazılabiliyor (`GRAFIK_YAZI` ile aynı kural).
     """
     try:
-        ham = (os.environ.get(ad) or "").strip()
+        ham = (os.environ.get(ad) or "").strip().replace(",", ".")
         return float(ham) if ham else float(varsayilan)
     except (TypeError, ValueError):
         return float(varsayilan)
@@ -229,8 +230,11 @@ SABITLER_TABAN: dict[str, Any] = {
     "lejant": True,                   # metin listesi meta'da üretilir (çizim: kare_lejant)
     "kare_lejant": False,             # kare içine lejant çizilsin mi (eski görünüm)
     "hacim_paneli": False,            # alt hacim kulvarı çizilsin mi (eski görünüm)
-    "rvol_rozet_esik": 2.0,           # ⚡ rozeti: RVOL bu eşiğin üstündeyse mum altına
-    "rvol_rozet_maks": 8,             # kareyi rozet kalabalığına boğma
+    "rvol_rozet_esik": 2.0,           # ⚡↑ rozeti: RVOL bu eşiğin ÜSTÜNDEYSE mum altına
+    # 2026-10-16 (kullanıcı): rozet artık İKİ YÖNLÜ. `⚡↑ x2,5` hacim patlaması,
+    # `⚡↓ x0,5` hacim kuruması. Yön oku metnin kendisinde (renk tek kanal değil).
+    "rvol_rozet_esik_dusuk": 0.5,     # ⚡↓ rozeti: RVOL bu eşiğin ALTINDA veya EŞİTSE
+    "rvol_rozet_maks": 8,             # kareyi rozet kalabalığına boğma (iki yön toplamı)
     "rvol_rozet_ara": 7,              # iki rozet arasında en az bar (üst üste binmesin)
     "katmanlar": ("formasyon", "ob", "fvg", "ms", "serit"),
     "etiket_detay": False,            # §2.6: evidence_text ancak istenirse
@@ -1726,7 +1730,7 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         meta["kare"]["sag_bosluk_yuzde"] = round(
             100.0 * sag_bosluk / (n + 0.2 + sag_bosluk), 2)
         butce = _butce_px(genislik)
-        sayac_rozet = 0
+        sayac_rozet: dict[str, int] = {"artis": 0, "dusus": 0}
         # Mum gövde genişliği VERİ birimindedir (x = bar indeksi, komşu barlar
         # arası 1,0). Eskiden `px_bar × 0,62` yazılıyordu: px/bar = 6 iken gövde
         # 3,7 bar genişliğinde çiziliyor, komşu mumların üstüne biniyordu.
@@ -1784,11 +1788,12 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                           else "çizgi + alan: katman hatası (çökme modu)")
         else:
             _mumlar_ciz(ax, acilis, yuksek, dusuk, kapanis, cap, aralik)
-            # FAZ 1: hacim paneli kaldırıldı — sıra dışı hacim (RVOL > 2,0×) mumun
-            # ALTINA `⚡ x2,5` rozetiyle yazılır. Panelin %20'lik dikey alanı ana
-            # grafiğe kaldı; bilgi kaybı yok (RVOL sayısı rozette okunur).
+            # FAZ 1: hacim paneli kaldırıldı — sıra dışı hacim mumun ALTINA yönlü
+            # rozetle yazılır: `⚡↑ x2,5` patlama (RVOL > 2,0×), `⚡↓ x0,5` kuruma
+            # (RVOL ≤ 0,5×). Panelin %20'lik dikey alanı ana grafiğe kaldı; bilgi
+            # kaybı yok (RVOL sayısı ve YÖNÜ rozette okunur).
             try:
-                sayac_rozet = _rvol_rozetleri(ax, goruntu, n, dusuk, yuksek)
+                sayac_rozet = _rvol_rozetleri(ax, goruntu, n, dusuk, yuksek, fig=fig)
             except Exception as hata:
                 log.debug("grafik: rvol rozetleri çizilemedi (%s)", hata)
 
@@ -1856,9 +1861,13 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         ax.yaxis.set_major_formatter(FuncFormatter(lambda _v, _p: sayi(_v)))
         # `acik` = kulvar gerçekten çizildi mi (`--serit-yok`/katman hatası → False)
         meta["serit"]["acik"] = ax_serit is not None
-        # FAZ 1: hacim verisi artık kulvarda değil mum altındaki ⚡ rozetinde yaşar;
-        # panel kapalıyken veri yine meta'da (RVOL eşiği geçen mum sayısı) durur.
-        meta["serit"]["rozet"] = int(sayac_rozet)
+        # FAZ 1 (2026-10-16 güncellemesi): hacim verisi artık kulvarda değil mum
+        # altındaki YÖNLÜ ⚡ rozetinde yaşar — `rozet` toplamı, `rozet_artis`
+        # (patlama) ve `rozet_dusus` (kuruma) sayaçları meta'da durur.
+        meta["serit"]["rozet"] = int(sayac_rozet.get("artis", 0)
+                                       + sayac_rozet.get("dusus", 0))
+        meta["serit"]["rozet_artis"] = int(sayac_rozet.get("artis", 0))
+        meta["serit"]["rozet_dusus"] = int(sayac_rozet.get("dusus", 0))
         meta["serit"]["panel"] = bool(ax_serit is not None)
         if ax_serit is not None:
             _serit_ciz(ax_serit, goruntu, n, sag_bosluk=sag_bosluk)
@@ -1902,20 +1911,53 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                   "serit_acik": serit_istendi, "hata": None}
 
 
+def _rvol_katı(deger: float) -> str:
+    """Rozet katı metni: `x2,5` — 2 basamak yazılır, gereksiz sıfır kırpılır.
+
+    Neden 1 basamak yetmiyor: `x0,96` tek basamakta `x1,0` olurdu, yani hacim
+    KURUMASI "normal" görünürdü (yanlış bilgi). 2 basamak + sıfır kırpma hem
+    kısa kalır (`x2,5` · `x0,5`) hem de 2,04 gibi eşik üstünü `x2,0` diye
+    yazıp eşikle çelişmez.
+    """
+    tam, _, ondalik = sayi(deger, 2).partition(",")
+    while len(ondalik) > 1 and ondalik.endswith("0"):
+        ondalik = ondalik[:-1]
+    return f"{tam},{ondalik}"
+
+
 def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
                     dusuk: Sequence[Optional[float]],
-                    yuksek: Sequence[Optional[float]] = ()) -> int:
-    """RVOL patlaması olan mumların altına `⚡ x2,5` rozeti basar (FAZ 1).
+                    yuksek: Sequence[Optional[float]] = (),
+                    fig: Any = None) -> dict[str, int]:
+    """Sıra dışı hacim mumlarının altına YÖNLÜ RVOL rozeti basar (FAZ 1 + 2026-10-16).
 
-    Eşik `SABITLER["rvol_rozet_esik"]` (2,0×): altındaki hacim "sıra dışı" değil,
-    rozet kalabalık yapardı. Değerler görünüm penceresine hizalıdır (0 = ilk görünen
-    mum). En sert `rvol_rozet_maks` mum işaretlenir; rozet mumun DÜŞÜĞünün 12 px
-    altına oturur (gövde/fitil okunurluğu bozulmaz). Dönen: çizilen rozet sayısı —
-    sessiz kayıp yok, `meta["serit"]["rozet"]`e yazılır.
+    İki yön, iki eşik:
+      * `⚡↑ x2,5` — RVOL > `rvol_rozet_esik` (2,0×): hacim PATLAMASI (bolluk, teyit).
+      * `⚡↓ x0,5` — RVOL ≤ `rvol_rozet_esik_dusuk` (0,5×): hacim KURUMASI (ilgi yok).
+    Yön yalnız okla taşınır; renk (yeşil/kırmızı) ikinci kanaldır (§0.4.1: renk
+    tek başına bilgi taşımaz). Hacimsiz bar (`v = 0`/None) rozetlenmez — o bilgi
+    kare altı dipnotunda (`veri: N bar hacimsiz`) durur, uydurma sayı yazılmaz.
+
+    Sıralama `|log(RVOL)|` mantığıyla yapılır: patlamada `v`, kurumada `1/v`
+    "sertlik"tir; en sert `rvol_rozet_maks` mum işaretlenir (iki yön toplamı).
+    Değerler görünüm penceresine hizalıdır (0 = ilk görünen mum). Rozet mumun
+    DÜŞÜĞünün 12 px altına oturur (gövde/fitil okunurluğu bozulmaz).
+
+    Komşuluk yarıçapı BAR'dan değil PİKSELDEN hesaplanır: rozet ≈56 px, 120
+    mumluk karede px/bar ≈ 5,8 → rozet ±5 barı kapsar. Sabit ±4 bar kullanılınca
+    kutunun kenarı komşu gövdenin 1 px yanına düşüyor ve `mum_cakisan` kapısı
+    haklı olarak kırmızı yanıyordu (ölçüm: GARAN 4s `⚡↓ x0,13` · TUPRS 4s).
+
+    Dönen: `{"artis": n, "dusus": m}` — sessiz kayıp yok, sayaçlar
+    `meta["serit"]["rozet_artis"] / ["rozet_dusus"]`e yazılır.
     """
     serit = goruntu.get("serit") or {}
     degerler = list(serit.get("degerler") or [])
-    esik = float(SABITLER["rvol_rozet_esik"])
+    # Eşikler ortamla ayarlanabilir (`GRAFIK_OLAY_MAKS` ile aynı desen): dağıtımda
+    # 0,5× çok gürültülü gelirse operatör tek değişkenle sıkılaştırır.
+    esik = float(_ortam_sayi("GRAFIK_RVOL_ROZET_ESIK", float(SABITLER["rvol_rozet_esik"])))
+    esik_dusuk = float(_ortam_sayi("GRAFIK_RVOL_ROZET_ESIK_DUSUK",
+                                   float(SABITLER["rvol_rozet_esik_dusuk"])))
     maks = int(SABITLER["rvol_rozet_maks"])
     # Rozet genişliği ~40 px ≙ 6-7 bar (1080 px / 80 mum); 7 bar aralık yeter.
     min_ara = max(4, int(SABITLER["rvol_rozet_ara"]))
@@ -1927,12 +1969,49 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
             _pivot_bar.add(int(b.get("bar")))
         except (TypeError, ValueError):
             continue
-    adaylar = [(float(v), i) for i, v in enumerate(degerler[:n])
-               if _gercek(v) is not None and float(v) > esik]
-    adaylar.sort(key=lambda t: (-t[0], t[1]))
+    # Komşuluk yarıçapı: rozetin yatay yarısı (px) ÷ px/bar, üstüne 1 bar emniyet.
+    # Ölçüm (fig) yoksa sabit 5 bar: eski ±4'ten geniş, rozet genişliğini kapsar.
+    _genis_px = 56.0
+    if fig is not None:
+        try:
+            _genis_px = max(_genis_px, float(_metin_px(fig, "⚡↑ x12,34", 8.0)))
+        except Exception:                     # pragma: no cover - ölçüm süsü
+            pass
+    try:
+        _sol, _sag = ax.get_xlim()
+        _px_bar = float(ax.get_window_extent().width) / max(1e-6, float(_sag - _sol))
+    except Exception:                         # pragma: no cover
+        _px_bar = 9.0
+    yaricap = max(4, int(math.ceil(0.5 * _genis_px / max(1e-6, _px_bar))) + 1)
+
+    artislar: list[tuple[float, int, float, int]] = []
+    dususler: list[tuple[float, int, float, int]] = []
+    for i, v in enumerate(degerler[:n]):
+        ham = _gercek(v)
+        if ham is None or ham <= 0.0:      # hacimsiz bar: dipnotta bildirilir
+            continue
+        if ham > esik:
+            artislar.append((float(ham), i, float(ham), 1))
+        elif ham <= esik_dusuk:
+            dususler.append((1.0 / float(ham), i, float(ham), -1))
+    artislar.sort(key=lambda t: (-t[0], t[1]))
+    dususler.sort(key=lambda t: (-t[0], t[1]))
+    # Bütçe payı: en sert `maks // 2` patlama ve `maks // 2` kuruma YER AYIRT EDİLİR.
+    # Neden: tamamen sertliğe göre sıralansa sakin bir penceredeki 8 kuruma
+    # (x0,15 ≈ sertlik 6,7) belirgin bir hacim patlamasını (x2,2) kareden atardı —
+    # asıl sinyal kaybolurdu. Kalan yer yine en sert sapmalara gider.
+    # Sıra: önce ayrılan pay (en sert sapmalar), sonra kalan havuz. HAVUZ
+    # KIRPILMAZ — aralık kuralı adayları eledikçe sırada başka mum bulunmalı
+    # (kırpma + aralık birlikte aday yokluğundan rozet sayısını 8'den 2'ye
+    # düşürüyordu: komşu 8 mum seçilip 7 bar aralık hepsini eliyordu).
+    pay = max(1, maks // 2)
+    ilk = sorted(artislar[:pay] + dususler[:pay], key=lambda t: (-t[0], t[1]))
+    kalan = sorted(artislar[pay:] + dususler[pay:], key=lambda t: (-t[0], t[1]))
+    adaylar = ilk + kalan
     cizilen = 0
+    sayac = {"artis": 0, "dusus": 0}
     yerlesik: list[int] = []
-    for deger, i in adaylar:
+    for sertlik, i, deger, yon in adaylar:
         if cizilen >= maks:
             break
         # Bitişik mumlarda rozetler yatayda üst üste biner (ölçüm: iki komşu bar
@@ -1945,12 +2024,13 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
         # diye referans, komşu mumların (±2 bar) EN DÜŞÜK fitili — komşu fitil
         # rozetin üstüne binmez (ölçüm: 7 rozet çakışıyordu).
         # Rozet ~40 px geniş: komşuluk yatayda ±4 bar (4s karesinde ~8 bar yer kaplar).
-        komsu = [float(v) for v in dusuk[max(0, i - 4):i + 5] if v is not None]
+        komsu = [float(v) for v in dusuk[max(0, i - yaricap):i + yaricap + 1]
+                 if v is not None]
         if not komsu:
             continue
         ustte = any(abs(i - pb) <= 1 for pb in _pivot_bar)
         if ustte and len(yuksek) > i:
-            _kom_y = [float(v) for v in yuksek[max(0, i - 4):i + 5]
+            _kom_y = [float(v) for v in yuksek[max(0, i - yaricap):i + yaricap + 1]
                       if v is not None]
             if not _kom_y:
                 continue
@@ -1965,20 +2045,26 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
             _y_px = float(ax.transData.transform((float(i), float(y)))[1])
             _alt_px = float(ax.patch.get_window_extent().y0)
             if va == "top" and (_y_px - 32.0) < _alt_px:
-                _kom_y = [float(v) for v in (yuksek or dusuk)[max(0, i - 4):i + 5]
+                _kom_y = [float(v) for v in (yuksek or dusuk)[max(0, i - yaricap):
+                                                             i + yaricap + 1]
                           if v is not None]
                 if _kom_y:
                     y, ofs_y, va = max(_kom_y), 13, "bottom"
         except Exception:      # pragma: no cover - ölçüm süsü rozeti düşürmez
             pass
-        ax.annotate(f"⚡ x{sayi(deger, 1)}", xy=(float(i), float(y)),
+        ax.annotate(f"⚡{'↑' if yon > 0 else '↓'} x{_rvol_katı(deger)}",
+                    xy=(float(i), float(y)),
                     xytext=(0, ofs_y), textcoords="offset points", ha="center",
-                    va=va, fontsize=8.0, color=PALET["metin"], zorder=7,
-                    annotation_clip=False,
+                    va=va, fontsize=8.0,
+                    color=PALET["mum_yukselen"] if yon > 0 else PALET["mum_dusen"],
+                    zorder=7, annotation_clip=False,
                     bbox=dict(boxstyle="round,pad=0.18", facecolor=PALET["chip_zemin"],
-                              edgecolor=PALET["panel_kenar"], linewidth=0.5, alpha=0.9))
+                              edgecolor=(PALET["mum_yukselen"] if yon > 0
+                                         else PALET["mum_dusen"]),
+                              linewidth=0.6, alpha=0.9))
         cizilen += 1
-    return cizilen
+        sayac["artis" if yon > 0 else "dusus"] += 1
+    return sayac
 
 
 def _mum_cakisma_say(fig, ax, acilis, yuksek, dusuk, kapanis, cap: float) -> dict[str, Any]:

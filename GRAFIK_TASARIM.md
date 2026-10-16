@@ -1688,9 +1688,10 @@ mitigation oranı motorun kendi `fill_boundary` alanından hesaplanır; kırıl�
 - **Alt hacim paneli kaldırıldı.** `meta["serit"]["panel"] is False` ve figürde
   TEK eksen kalır. `GRAFIK_HACIM_PANELI=1` eski iki kulvarlı görünümü geri getirir
   (8 karede bayt bayt aynı PNG — kaçış kapısı korunur).
-- **RVOL rozeti.** `RVOL > 2,0×` olan mumların altına `⚡ x2,5` yazılır
-  (`_rvol_rozetleri`). Üst üste binme denetimleri ölçülmüştür: aynı bölgede en sert
-  hacim kalır (en az 7 bar aralık), pivot etiketi olan mumda rozet fitilin ÜSTÜNE
+- **RVOL rozeti (2026-10-16'da İKİ YÖNLÜ oldu, §42).** `RVOL > 2,0×` olan mumların
+  altına artık `⚡↑ x2,5` (patlama), `RVOL ≤ 0,5×` olanlara `⚡↓ x0,5` (kuruma)
+  yazılır (`_rvol_rozetleri`). Üst üste binme denetimleri ölçülmüştür: aynı
+  bölgede en sert hacim kalır, pivot etiketi olan mumda rozet fitilin ÜSTÜNE
   taşınır, alt kenara yakın mumda x ekseni etiketine binmesin diye yukarı alınır.
 - Kapatma: `test_grafik_faz_kullanici.py::test_faz1_*`, `test_grafik_iskelet.py::test_meta_sozlesmesi_ve_png_olcusu`.
 
@@ -1811,4 +1812,51 @@ Boşluk artık **eksen genişliğinin yüzdesi**; sabit mum sayısı değil.
   Turun çıktısı: `docs/ornek_sag_bosluk_oran.png` (üç oran × iki kare);
   `docs/ornek_kare_faz1_4_1s.png` ve `_4s.png` yeni varsayılanla yenilendi
   (14 ve 12 mum boşluk, `mum_cakisan == 0`).
+
+## 42 · YÖNLÜ RVOL ROZETİ (2026-10-16) — `⚡↑` patlama / `⚡↓` kuruma
+
+Kullanıcı: *"hacim olayını yukarda gösteriyoruz ya, onun pozitif artış veya negatif
+olduğunu anlaşılacak şekilde bir düzeltme de yapar mısın … ani artış olduğunda
+sadece x3.0 yazıyor ama ani düşüş olduğunda x0.5 yazmıyor"*. Doğru tespit: rozet
+tek yönlüydü (yalnız `RVOL > 2,0`), hacim KURUMASI karede hiç görünmüyordu.
+
+### 42.1 Kural
+
+| Durum | Koşul | Rozet | Renk |
+| :--- | :--- | :--- | :--- |
+| Hacim patlaması | `RVOL > 2,0` (`rvol_rozet_esik`) | `⚡↑ x2,5` | `#31b184` (yeşil) |
+| Hacim kuruması | `RVOL ≤ 0,5` (`rvol_rozet_esik_dusuk`) | `⚡↓ x0,5` | `#e05c58` (kırmızı) |
+| Hacimsiz bar | `v = 0` / `None` | rozet YOK | — (kart dipnotu: `veri: N bar hacimsiz`) |
+
+- **Yön okla taşınır, renk yalnız pekiştirir** (§0.4.1: renk tek başına bilgi
+  taşımaz). Çipin kenarlığı da yön rengini alır.
+- **Metin 2 basamak + sıfır kırpma** (`_rvol_katı`): `x2,5` · `x0,5` · `x0,96`.
+  Tek basamak `x0,96`ı `x1,0` yapardı — kuruma "normal" görünürdü (yanlış bilgi);
+  `x2,04` de eşikle çelişmesin diye `x2,0` değil `x2,04` yazılır.
+- **Bütçe iki yöne paylaştırılır.** Sıra: her yöne `maks // 2` şer pay ayrılır,
+  kalan yer en sert sapmalara gider (sertlik: patlamada `v`, kurumada `1/v`).
+  Neden: tamamen sertliğe göre sıralamada 8 kuruma (x0,1 ≈ sertlik 10) belirgin bir
+  hacim patlamasını (x2,2) kareden atıyordu — asıl sinyal (kırılımı hacmin teyidi)
+  kaybolurdu. Havuz KIRPILMAZ: aralık kuralı eledikçe sıradaki mum devreye girer
+  (kırpma + aralık birlikte rozet sayısını 8'den 2'ye düşürüyordu).
+- **Komşuluk yarıçapı bar değil piksel:** `ceil(0,5 × rozet_px / px_per_bar) + 1`.
+  Sabit ±4 bar, 120 mumluk 4s karesinde (px/bar ≈ 5,8) rozeti komşu gövdenin 1 px
+  yanına koyuyordu ve `mum_cakisan` kapısı kırmızı yanıyordu.
+- **Eşikler ortamla ayarlanır:** `GRAFIK_RVOL_ROZET_ESIK` (2,0) ve
+  `GRAFIK_RVOL_ROZET_ESIK_DUSUK` (0,5). Kuruma rozeti gürültülü gelirse 0,35 yapın.
+- **Sağ boşluk %15'te kalıyor** (kullanıcı onayı): `sag_bosluk_orani` 0,15;
+  pencere %10-20 yalnız otomatik kuralda kırpar.
+
+`meta["serit"]`: `rozet` (toplam) + `rozet_artis` + `rozet_dusus` sayaçları —
+hangi yönden kaç rozet çıktığı sessizce kaybolmaz, ölçümle doğrulanır.
+
+### 42.2 Doğrulama
+
+- `pytest -q` → **1267 geçti, 44 atlandı** (yeni: iki yön, eşik sınırı, hacimsiz
+  bar, metin yuvarlaması, bütçe payı, ortam eşikleri).
+- Gerçek önbellek: GARAN 1s `↑3 ↓3` · GARAN 4s `↑3 ↓5` · TUPRS 4s `↑3 ↓5` ·
+  AKBNK 4s `↑1 ↓7` · THYAO 4s `↑1 ↓6` · SASA 1s `↑3 ↓5` — hepsinde
+  `mum_cakisan == 0`.
+- Yakın plan doğrulama sayfası: rozetler 1s karede okunur, çipler mumların üstüne
+  binmiyor (komşuluk yarıçapı düzeltmesi öncesi/sonrası ölçüldü).
 

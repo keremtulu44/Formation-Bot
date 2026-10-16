@@ -8,7 +8,8 @@ sözleşmeye bağlar:
     * kırmızı/gri geliştirici metinleri ve lejant kareden ÇIKTI (kart dipnotuna
       taşındı, `notifier._grafik_dipnotu`),
     * alt hacim paneli kaldırıldı; `meta["serit"]["panel"] is False`,
-    * RVOL > 2,0 olan mumların altına `⚡ x[RVOL]` rozeti bağlanır.
+    * sıra dışı hacim mum altına YÖNLÜ rozetle bağlanır: `⚡↑ x2,5` patlama
+      (RVOL > 2,0), `⚡↓ x0,5` kuruma (RVOL ≤ 0,5; 2026-10-16 kullanıcı isteği).
 
   FAZ 2 — Akıllı kadraj
     * TF matrisi (`1G 62 · 4S 68 · 2S 74 · 1S 80`) formasyon yokken geçerli,
@@ -117,27 +118,133 @@ def test_faz1_gelistirici_metinleri_karede_yok(tmp_path):
     assert not any("yeşil boş" in y for y in yazilar)
 
 
+def _rozetler(ax):
+    return [str(t.get_text()) for t in ax.texts if str(t.get_text()).startswith("⚡")]
+
+
 def test_faz1_rvol_rozeti_esik_ustu_mumlara_baglanir():
-    """⚡ rozeti yalnız RVOL > 2,0 mumlara ve mumun ALTINA (fitil altı) konur."""
+    """⚡↑ rozeti yalnız RVOL > 2,0 mumlara ve mumun ALTINA (fitil altı) konur."""
     fig, ax = _eksen(60)
     goruntu = {"serit": {"degerler": [1.0] * 59 + [3.4]}, "acilis": [100.0] * 60,
                "kapanis": [100.0] * 60}
     dusuk = [99.0] * 59 + [98.0]
-    sayi = grafik._rvol_rozetleri(ax, goruntu, 60, dusuk)
-    assert sayi == 1
+    sayac = grafik._rvol_rozetleri(ax, goruntu, 60, dusuk)
+    assert sayac == {"artis": 1, "dusus": 0}
     rozet = [t for t in ax.texts if str(t.get_text()).startswith("⚡")]
-    assert len(rozet) == 1 and "x3,4" in str(rozet[0].get_text())
+    assert len(rozet) == 1 and str(rozet[0].get_text()) == "⚡↑ x3,4"
     assert rozet[0].xy[1] <= 98.0                   # mumun altında (düşük fitil)
+
+
+def test_faz1_rozet_iki_yonlu_artis_ve_dusus(monkeypatch):
+    """2026-10-16 kullanıcı: `⚡↑ x3,0` patlama, `⚡↓ x0,5` kuruma — YÖN okla yazılır.
+
+    Eski davranış tek yönlüydü: yalnız eşik üstü işaretlenirdi, hacim kuruması
+    (x0,5) karede hiç görünmüyordu. Renk tek kanal değil (§0.4.1): yön oktan,
+    büyüklük sayıdan okunur; renk (yeşil/kırmızı) yalnız pekiştirir.
+    """
+    fig, ax = _eksen(60)
+    degerler = [1.0] * 60
+    degerler[10] = 3.0                              # patlama
+    degerler[40] = 0.5                              # kuruma
+    goruntu = {"serit": {"degerler": degerler}}
+    sayac = grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60)
+    assert sayac == {"artis": 1, "dusus": 1}
+    assert sorted(_rozetler(ax)) == ["⚡↑ x3,0", "⚡↓ x0,5"]
+    renkler = {str(t.get_text())[1]: t.get_color() for t in ax.texts
+               if str(t.get_text()).startswith("⚡")}
+    assert renkler["↑"] == grafik.PALET["mum_yukselen"]
+    assert renkler["↓"] == grafik.PALET["mum_dusen"]
+
+
+def test_faz1_rozet_dusus_esigi_ve_hacimsiz_bar(monkeypatch):
+    """Kuruma rozeti `≤ 0,5×`; hacimsiz bar (0/None) rozetlenmez (dipnotta bildirilir)."""
+    esik_dusuk = float(grafik.SABITLER["rvol_rozet_esik_dusuk"])
+    assert esik_dusuk == pytest.approx(0.5)
+    fig, ax = _eksen(60)
+    degerler = [1.0] * 60
+    degerler[5] = esik_dusuk + 0.01                 # eşiğin hemen üstü: rozet yok
+    degerler[30] = esik_dusuk                       # eşitlik: rozet var
+    degerler[50] = 0.0                              # hacimsiz bar: rozet YOK
+    goruntu = {"serit": {"degerler": degerler}}
+    sayac = grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60)
+    assert sayac == {"artis": 0, "dusus": 1}
+    assert _rozetler(ax) == ["⚡↓ x0,5"]
+    fig2, ax2 = _eksen(60)
+    assert grafik._rvol_rozetleri(ax2, {"serit": {"degerler": [0.0, None] + [1.0] * 58}},
+                                  60, [99.0] * 60) == {"artis": 0, "dusus": 0}
+
+
+def test_faz1_rozet_esikleri_ortamla_ayarlanabilir(monkeypatch):
+    """`GRAFIK_RVOL_ROZET_ESIK` / `_ESIK_DUSUK` (varsayılan 2,0 / 0,5; bozuk → varsayılan)."""
+    fig, ax = _eksen(60)
+    degerler = [1.0] * 60
+    degerler[10] = 1.5                               # varsayılanda rozet YOK
+    goruntu = {"serit": {"degerler": degerler}}
+    assert grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60) == {"artis": 0, "dusus": 0}
+    monkeypatch.setenv("GRAFIK_RVOL_ROZET_ESIK", "1,2")      # Türkçe virgül de okunur
+    fig2, ax2 = _eksen(60)
+    assert grafik._rvol_rozetleri(ax2, goruntu, 60, [99.0] * 60) == {"artis": 1, "dusus": 0}
+    monkeypatch.setenv("GRAFIK_RVOL_ROZET_ESIK_DUSUK", "abc")  # bozuk → varsayılan (0,5)
+    fig3, ax3 = _eksen(60)
+    assert grafik._rvol_rozetleri(ax3, {"serit": {"degerler": [0.6] * 60}},
+                                  60, [99.0] * 60) == {"artis": 0, "dusus": 0}
+
+
+def test_faz1_rozet_metni_yuvarlamada_yanlis_yon_gostermez():
+    """`x0,96` tek basamakta `x1,0` olurdu (kuruma "normal" görünürdü) — 2 basamak."""
+    assert grafik._rvol_katı(0.96) == "0,96"
+    assert grafik._rvol_katı(0.5) == "0,5"
+    assert grafik._rvol_katı(2.04) == "2,04"          # eşik üstü `x2,0` yazmaz
+    assert grafik._rvol_katı(3.4) == "3,4"
+    assert grafik._rvol_katı(12.0) == "12,0"
+
+
+def test_faz1_rozet_butcesi_iki_yone_yer_ayirir():
+    """Bütçe payı: sakin penceredeki sert kurumalar hacim PATLAMASINI kareden atamaz.
+
+    Neden: sertliğe göre tam sıralamada 8 kuruma (x0,1 ≈ sertlik 10) belirgin bir
+    patlamayı (x2,2 = sertlik 2,2) tamamen dışarıda bırakıyordu — asıl sinyal
+    (kırılımı hacmin teyit etmesi) kaybolurdu. `maks // 2` şer payı her yöne
+    ayrılır, kalan yer en sert sapmalara gider.
+    """
+    fig, ax = _eksen(60)
+    degerler = [1.0] * 60
+    for i in range(0, 56, 7):                        # 8 sert kuruma (x0,1)
+        degerler[i] = 0.1
+    degerler[57] = 2.2                               # tek ve zayıf patlama
+    sayac = grafik._rvol_rozetleri(ax, {"serit": {"degerler": degerler}},
+                                   60, [99.0] * 60)
+    assert sayac["artis"] == 1 and sayac["dusus"] >= 1
+    assert "⚡↑ x2,2" in _rozetler(ax)
 
 
 def test_faz1_rozet_kapak_ve_esik_alti_cizilmez():
     fig, ax = _eksen(60)
     goruntu = {"serit": {"degerler": [1.9] * 60}}    # eşik altı: hiç rozet yok
-    assert grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60) == 0
+    assert grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60) == {"artis": 0, "dusus": 0}
     fig2, ax2 = _eksen(60)
     cok = {"serit": {"degerler": [5.0] * 60}}
     maks = int(grafik.SABITLER["rvol_rozet_maks"])
-    assert grafik._rvol_rozetleri(ax2, cok, 60, [99.0] * 60) == maks
+    assert grafik._rvol_rozetleri(ax2, cok, 60, [99.0] * 60) == {"artis": maks, "dusus": 0}
+
+
+def test_faz1_rozet_kapak_iki_yonu_birlikte_sayar():
+    """Tek bütçe + sertlik sırası: `|log(RVOL)|` büyük olan önce yazılır.
+
+    Patlama sertliği `v`, kuruma sertliği `1/v` (x0,25 → 4,0 = x4,0 patlama kadar
+    sert). İkisi de eşiği aşarsa aynı bütçeyi paylaşırlar; toplam `rvol_rozet_maks`.
+    """
+    fig, ax = _eksen(60)
+    degerler = [1.0] * 60
+    for i in (0, 7, 14, 21):                         # 4 patlama (sertlik 9,0)
+        degerler[i] = 9.0
+    degerler[40] = 0.25                              # kuruma (sertlik 4,0)
+    goruntu = {"serit": {"degerler": degerler}}
+    maks = int(grafik.SABITLER["rvol_rozet_maks"])
+    sayac = grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60)
+    assert sayac == {"artis": 4, "dusus": 1}
+    assert sayac["artis"] + sayac["dusus"] <= maks          # bütçe iki yönün TOPLAMI
+    assert "⚡↓ x0,25" in _rozetler(ax)                     # eşiği aşan kuruma da girdi
 
 
 # ------------------------------------------------------------- FAZ 2: akıllı kadraj

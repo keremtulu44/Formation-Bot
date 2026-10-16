@@ -804,7 +804,9 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `GRAFIK_OLAY_MAKS` | `6` — kareye çizilen onaylı BOS/CHoCH sayısı | Hayır |
 | `GRAFIK_SAG_BOSLUK_ORANI` | `0.15` — son mumun sağındaki boş alan, **eksen genişliğinin yüzdesi** (%15; kabul penceresi %10-20, otomatik kural bu aralığa kırpılır). Fiyat etiketleri ve 🎯 hedef kutusu buraya çizilir, bant/kutu/aktif BOS çizgileri buraya uzar. `0` = kapalı | Hayır |
 | `GRAFIK_SAG_BOSLUK_MUM` | tanımsız — verilirse üstteki yüzde kuralını ezer ve boşluğu SABİT MUM sayısı yapar (eski yol; `0` = kapalı) | Hayır |
-| `GRAFIK_HACIM_PANELI` | `0` (kapalı) — kaldırılan alt hacim kulvarını geri getirir; hacim yalnız RVOL > 2,0× mumların altında `⚡ x2,5` rozetiyle gösterilir | Hayır |
+| `GRAFIK_HACIM_PANELI` | `0` (kapalı) — kaldırılan alt hacim kulvarını geri getirir; hacim yalnız sıra dışı mumların altında YÖNLÜ rozetle gösterilir: `⚡↑ x2,5` patlama (RVOL > 2,0×), `⚡↓ x0,5` kuruma (RVOL ≤ 0,5×) | Hayır |
+| `GRAFIK_RVOL_ROZET_ESIK` | `2.0` — bu RVOL üstü mumlara `⚡↑` rozeti (patlama) | Hayır |
+| `GRAFIK_RVOL_ROZET_ESIK_DUSUK` | `0.5` — bu RVOL altı/eşit mumlara `⚡↓` rozeti (kuruma); `0` yazarsanız kapatır | Hayır |
 | `GRAFIK_LEJANT_KARE` | `0` (kapalı) — lejant/dipnot bloğunu kare içine geri koyar (varsayılan: bu bilgiler kare altı caption dipnotuna gider) | Hayır |
 | `KARNE_HORIZON_BAR` | `10` — sinyalden sonra izlenen bar sayısı | Hayır |
 | `DATA_DIR` | Kalıcı veri dizini. Render'da varsayılan `/tmp/formation-bot-data` (repo diski geçici; kalıcı veri Supabase'de). Kalıcı disk bağlarsanız buradan verin | Hayır |

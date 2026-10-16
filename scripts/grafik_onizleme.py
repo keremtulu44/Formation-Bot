@@ -102,7 +102,8 @@ def main(argv=None) -> int:
     print("pill:", [p["metin"] for p in (meta["metin"].get("pill_listesi") or [])])
     print("dipnot:", meta["metin"]["dipnotlar"], meta["metin"]["notlar"])
     print("serit:", meta["serit"].get("panel"), "panel · rozet",
-          meta["serit"].get("rozet"))
+          meta["serit"].get("rozet"),
+          "(↑%s ↓%s)" % (meta["serit"].get("rozet_artis"), meta["serit"].get("rozet_dusus")))
     print("sag:", {k: meta["sag"].get(k) for k in ("yerlesen", "kaydirilan", "lider")})
     return 0 if yol else 1
 
