@@ -40,10 +40,17 @@ def make_pacer(clock, batch_size=10):
 
 
 def test_active_universe_excludes_yahoo_unsupported_symbols():
-    assert len(BIST_50) == 48
-    assert len(set(BIST_50)) == 48
+    from config import yahoo_ticker_for_symbol
+
+    assert len(BIST_50) == 51
+    assert len(set(BIST_50)) == 51
     assert "KOZAL" not in BIST_50
     assert "KOZAA" not in BIST_50
+    assert {"XU100", "XU30", "BRENT"}.issubset(BIST_50)
+    assert yahoo_ticker_for_symbol("THYAO") == "THYAO.IS"
+    assert yahoo_ticker_for_symbol("XU100") == "XU100.IS"
+    assert yahoo_ticker_for_symbol("XU30") == "XU030.IS"
+    assert yahoo_ticker_for_symbol("BRENT") == "BZ=F"
     assert ACTIVE_STOCKS == BIST_50
 
 

@@ -43,12 +43,33 @@ if PROFILE not in ("Hassas", "Dengeli", "Seçici"):
 # başka bir borsa) uyarlamak için kod içindeki ".IS" aramak gerekmez.
 MARKET_SUFFIX = os.getenv("MARKET_SUFFIX", ".IS").strip() or ".IS"
 
+# Sağlayıcı sembol eşlemesi: standart BIST hisseleri `sembol + MARKET_SUFFIX`
+# (örn. THYAO -> THYAO.IS) kullanırken endeks ve emtia sembolleri doğrudan Yahoo
+# karşılıklarına çevrilir.
+PROVIDER_SYMBOL_MAP = {
+    "XU100": "XU100.IS",
+    "XU30": "XU030.IS",
+    "XU030": "XU030.IS",
+    "BRENT": "BZ=F",
+}
+
+
+def yahoo_ticker_for_symbol(stock: str) -> str:
+    key = str(stock or "").strip().upper()
+    if key in PROVIDER_SYMBOL_MAP:
+        return PROVIDER_SYMBOL_MAP[key]
+    if any(ch in key for ch in ("=", "^", ".")):
+        return key
+    return key + MARKET_SUFFIX
+
+
 BIST_50 = [
     "THYAO", "GARAN", "AKBNK", "ISCTR", "YKBNK", "KCHOL", "SAHOL", "EREGL", "SISE", "BIMAS",
     "ASELS", "TUPRS", "FROTO", "TOASO", "KRDMD", "PETKM", "PGSUS", "SASA", "HEKTS", "GUBRF",
     "EKGYO", "HALKB", "VAKBN", "TCELL", "TTKOM", "TAVHL", "DOHOL", "ALARK",
     "ARCLK", "ENKAI", "ODAS", "ASTOR", "KONTR", "SMRTG", "CWENE", "SNGYO", "ISMEN", "SKBNK",
-    "TSKB", "TTRAK", "OTKAR", "AKSA", "AKSEN", "AYDEM", "BRSAN", "CIMSA", "DOAS", "EGEEN"
+    "TSKB", "TTRAK", "OTKAR", "AKSA", "AKSEN", "AYDEM", "BRSAN", "CIMSA", "DOAS", "EGEEN",
+    "XU100", "XU30", "BRENT",
 ]
 BIST_30 = BIST_50[:30]
 # Canlı tarama evreni: mevcut BIST 50 listesinden Yahoo verisi sorunlu KOZAL/KOZAA çıkarıldı (48 sembol).
@@ -489,8 +510,8 @@ _ortak_state = set(ALERT_STATES) & set(WATCH_STATES)
 if _ortak_state:
     _politika_hatalari.append(f"ALERT_STATES ve WATCH_STATES kesişiyor: {sorted(_ortak_state)}")
 
-# Evren büyürse pacing/panel/digest limitleri yeniden ölçülmeli (rapor B8).
-EVREN_BUYUME_UYARI_ESIGI = 48
+# Evren büyürse pacing/panel/digest limitleri yeniden ölçülmeli (rapor B8; 48 hisse + XU100/XU30/BRENT = 51).
+EVREN_BUYUME_UYARI_ESIGI = 51
 
 LOG_DIR = _resolve_app_path(os.getenv("LOG_DIR"), "/var/log/bist-bot")
 LOG_FILE = "bot.log"

@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Tuple
 
 from config import (
     ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN,
-    DATA_DIR, SEED_DATA_DIR, MARKET_SUFFIX,
+    DATA_DIR, SEED_DATA_DIR, MARKET_SUFFIX, yahoo_ticker_for_symbol,
     CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER_CLOSE_MIN, TARAMA_PENCERE_SONU,
     BIST_TATILLER, BIST_YARIM_GUNLER,
     VERI_YOK_MODU_ESIK_DK, SPLIT_SUREKLILIK_ESIK_PCT, BAR_BOSLUK_ESIK_SAAT,
@@ -1586,8 +1586,9 @@ def mum_kapanis_anlari(idx, tf: str) -> pd.DatetimeIndex:
         sure = TF_BAR_SURELERI["1h"]
     dogal = idx + sure
     seans_sonu = _gun_kapanis_damgalari(idx, gunluk=False)
-    # Sadece seans sonunu AŞAN barlar kesilir (günün son 1h/2h/4h kovası).
-    kesilecek = dogal > seans_sonu
+    # Sadece seans içinde başlayıp seans sonunu AŞAN barlar kesilir (günün son 1h/2h/4h kovası);
+    # 24 saatlik enstrümanlarda (örn. BRENT / BZ=F) 18:00 sonrasında başlayan barlar geri çekilmez.
+    kesilecek = (idx < seans_sonu) & (dogal > seans_sonu)
     if bool(np.asarray(kesilecek, dtype=bool).any()):
         dogal = dogal.where(~np.asarray(kesilecek, dtype=bool), seans_sonu)
     return dogal
@@ -1673,7 +1674,7 @@ def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional
         import contextlib
         import yfinance as yf
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            ham = yf.Ticker(stock + MARKET_SUFFIX).history(period=period, interval="1d", auto_adjust=False)
+            ham = yf.Ticker(yahoo_ticker_for_symbol(stock)).history(period=period, interval="1d", auto_adjust=False)
         if ham is None or len(ham) == 0:
             return None
         df = ham.copy()
@@ -1768,7 +1769,7 @@ def fetch_yfinance_1h(
         import yfinance as yf
         captured = io.StringIO()
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(captured):
-            ham = yf.Ticker(stock + MARKET_SUFFIX).history(period=period, interval="1h", auto_adjust=False)
+            ham = yf.Ticker(yahoo_ticker_for_symbol(stock)).history(period=period, interval="1h", auto_adjust=False)
         if ham is None or ham.empty:
             reason = captured.getvalue().strip() or "Yahoo boş veri döndürdü"
             return result(None, yfinance_error_is_retryable(reason), reason)
