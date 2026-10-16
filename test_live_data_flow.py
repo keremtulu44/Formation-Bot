@@ -188,12 +188,12 @@ def on_yukle(mgr, stocks, end_at, n_bars=55):
 
 # -------------------------------------------------------------------- testler -
 def test_aktif_evren_48_ve_sentetik_cache_fiksturu():
-    """ACTIVE_STOCKS 48'dir; sentetik test fixture'ında 28 hit, 20 miss vardır."""
-    assert len(config.ACTIVE_STOCKS) == 48
-    assert len(set(config.ACTIVE_STOCKS)) == 48
+    """ACTIVE_STOCKS 51'dir (48 hisse + XU100/XU30/BRENT); sentetik test fixture'ında 28 hit, 23 miss vardır."""
+    assert len(config.ACTIVE_STOCKS) == 51
+    assert len(set(config.ACTIVE_STOCKS)) == 51
     assert len(CACHED_28) == 28
     assert set(CACHED_28).issubset(set(config.ACTIVE_STOCKS))
-    assert len(MISSING_20) == 20
+    assert len(MISSING_20) == len(config.ACTIVE_STOCKS) - len(CACHED_28)
 
 
 @pytest.mark.skip(reason="PR-A kapsami disinda: durable outbox teslim hatti + domain scanner hook'u main'in canli mimarisine tasinmadi (MERGE_MAIN_CELISKI_RAPORU.md §5, PR-B)")

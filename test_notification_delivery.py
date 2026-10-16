@@ -297,3 +297,430 @@ def test_prepared_legacy_engulf_png_is_refreshed_without_repeating_text(tmp_path
     assert row["text_sent"] is True and not events
     box.prepare(row)
     assert renderer == ["1h"]  # new policy is checkpointed, no endless regeneration
+
+
+def _setup_retest_engine(direction=1, tf="1h", atr=2.0):
+    e = ArgentEngine(timeframe=tf)
+    e.active.stable_id = "formation-tur2"
+    e.active.upper_now, e.active.lower_now = 110.0, 100.0
+    e.active.geometry_atr = atr
+    e.safe_atr = atr
+    e.break_candidate_dir = direction
+    e.break_candidate_bar, e.break_confirmed_bar = 0, 1
+    boundary = 110.0 if direction == 1 else 100.0
+    e.break_line_x1, e.break_line_x2 = 0, 1
+    e.break_line_y1 = e.break_line_y2 = boundary
+    return e
+
+
+@pytest.mark.parametrize("direction", [-1, 1])
+def test_tur2_inside_outside_inside_does_not_invalidate_while_three_deep_closes_do(direction):
+    e = _setup_retest_engine(direction=direction, tf="1h", atr=2.0)
+    deep_close = 108.0 if direction == 1 else 102.0      # 1.0 ATR inside (>= 0.3 * 2.0)
+    outside_close = 112.0 if direction == 1 else 98.0    # recovery outside band
+    e.close = [112.0 if direction == 1 else 98.0,
+               112.0 if direction == 1 else 98.0,
+               deep_close, outside_close, deep_close, deep_close, deep_close]
+    e.high = [c + 0.5 for c in e.close]
+    e.low = [c - 0.5 for c in e.close]
+
+    # (i) teyit -> 1 bar içeri -> dışarı -> 1 bar içeri = geçersizleşme ÜRETİLMEZ
+    assert e._retest_step(2) == ST_RETESTING
+    assert e._retest_step(3) != ST_BREAK_FAILED
+    assert e._retest_step(4) == ST_RETESTING
+    assert e._inside_run == 1
+
+    # (ii) teyit -> 3 derin kapanış içerde (bar 4, 5, 6) = ÜRETİLİR
+    assert e._retest_step(5) == ST_RETESTING
+    assert e._retest_step(6) == ST_BREAK_FAILED
+    assert e.last_failed_bar == 6
+
+
+@pytest.mark.parametrize("direction", [-1, 1])
+def test_tur2b_superficial_graze_does_not_increment_counter_and_switch_restores_legacy(
+    monkeypatch, direction
+):
+    e = _setup_retest_engine(direction=direction, tf="1h", atr=2.0)
+    # 0.1 ATR inside (< 0.3 * 2.0 = 0.6), still past hold_buffer
+    shallow_close = 109.8 if direction == 1 else 100.2
+    e.close = [shallow_close] * 7
+    e.high = [shallow_close + 0.3] * 7
+    e.low = [shallow_close - 0.3] * 7
+
+    for bar in (2, 3, 4, 5):
+        assert e._retest_step(bar) == ST_RETESTING
+        assert e._inside_run == 0
+
+    # Also verify _break_attempt_or_candidate_step superficial graze does not advance counter
+    e_cand = _setup_retest_engine(direction=direction, tf="1h", atr=2.0)
+    e_cand.close = [shallow_close] * 6
+    e_cand.high = [shallow_close + 0.3] * 6
+    e_cand.low = [shallow_close - 0.3] * 6
+    e_cand.vol_sma = [1000.0] * 6
+    e_cand.volume = [1000.0] * 6
+    e_cand.open = [shallow_close] * 6
+    assert e_cand._break_attempt_or_candidate_step(2, is_attempt=False) != ST_BREAK_FAILED
+    assert e_cand._inside_run == 0
+
+    # Supap: INVALIDATION_MIN_DEPTH_ATR=0 disables depth filter
+    import config
+    monkeypatch.setattr(config, "INVALIDATION_MIN_DEPTH_ATR", 0.0)
+    e_off = _setup_retest_engine(direction=direction, tf="1h", atr=2.0)
+    e_off.close = [shallow_close] * 6
+    e_off.high = [shallow_close + 0.3] * 6
+    e_off.low = [shallow_close - 0.3] * 6
+    assert e_off._retest_step(2) == ST_RETESTING
+    assert e_off._retest_step(3) == ST_RETESTING
+    assert e_off._retest_step(4) == ST_BREAK_FAILED
+
+
+def test_tur2c_timeframe_specific_confirm_bars_and_fallback(monkeypatch):
+    import config
+    from patterns.lifecycle import PatternLifecycleManager
+
+    mgr = PatternLifecycleManager()
+    eng_1h = mgr.get_engine("THYAO_1h")
+    eng_4h = mgr.get_engine("THYAO_4h")
+    eng_1d = mgr.get_engine("THYAO_1d")
+    assert eng_1h._invalidation_confirm_bars() == 3
+    assert eng_4h._invalidation_confirm_bars() == 2
+    assert eng_1d._invalidation_confirm_bars() == 2
+
+    # 4h invalidates in 2 deep bars instead of 3
+    e4 = _setup_retest_engine(direction=1, tf="4h", atr=1.0)
+    e4.close = [105.0] * 5
+    e4.high, e4.low = [106.0] * 5, [104.0] * 5
+    assert e4._retest_step(2) == ST_RETESTING
+    assert e4._retest_step(3) == ST_BREAK_FAILED
+
+    # Fallback when TF map is disabled or TF is unknown
+    monkeypatch.setattr(config, "INVALIDATION_CONFIRM_BARS_TF", "")
+    monkeypatch.setattr(config, "INVALIDATION_CONFIRM_BARS", 4)
+    assert eng_4h._invalidation_confirm_bars() == 4
+
+
+def test_tur2a_unannounced_confirmation_skips_instant_push_and_adds_summary_line(
+    tmp_path, monkeypatch
+):
+    import config
+    import main as main_module
+    from reporting.format import format_urgent_alert_queue_summary
+
+    monkeypatch.setenv("TELEGRAM_GRAFIK", "yok")
+    events = []
+    box = DeliveryOutbox(owner(events), tmp_path)
+    fake_notifier = SimpleNamespace(_delivery=box)
+
+    # Confirmation not yet delivered -> gate blocks instant invalidation push
+    assert not box.confirmation_delivered("unannounced-fid")
+    assert not main_module._invalidation_confirmation_delivered(fake_notifier, "unannounced-fid")
+
+    monkeypatch.setattr(main_module, "_daily_unannounced_invalidation_keys", set())
+    monkeypatch.setitem(main_module.daily_stats, "sessiz_gecersizlesme_sayisi", 0)
+    monkeypatch.setattr(main_module, "_gunluk_sayac_kaydet", lambda: None)
+
+    main_module._note_unannounced_invalidation("TCELL", "1h", "unannounced-fid")
+    main_module._note_unannounced_invalidation("TCELL", "1h", "unannounced-fid")  # dedup
+    assert main_module.daily_stats["sessiz_gecersizlesme_sayisi"] == 1
+
+    ozet_satiri = format_urgent_alert_queue_summary(
+        [], sessiz_gecersizlesme=main_module.daily_stats["sessiz_gecersizlesme_sayisi"]
+    )
+    assert "1 geçersizleşme" in ozet_satiri
+    assert "anlık push atlandı" in ozet_satiri
+
+    # Once KIRILIM_TEYITLI is delivered in rows, invalidation push is permitted
+    assert box.submit(alert(identity="announced-fid"))
+    assert box.confirmation_delivered("announced-fid")
+    assert main_module._invalidation_confirmation_delivered(fake_notifier, "announced-fid")
+
+    # Supap: INVALIDATION_REQUIRE_DELIVERED_CONFIRM=False restores instant push without check
+    monkeypatch.setattr(config, "INVALIDATION_REQUIRE_DELIVERED_CONFIRM", False)
+    assert main_module._invalidation_confirmation_delivered(fake_notifier, "unannounced-fid")
+
+
+def test_tur2a_scan_all_stocks_suppresses_invalidation_when_confirmation_not_delivered(
+    tmp_path, monkeypatch
+):
+    import copy
+    import pandas as pd
+    import main as main_module
+    from config import ISTANBUL_TZ
+
+    formation_frame = pd.DataFrame(
+        {
+            "open": [10.0 + i for i in range(40)],
+            "high": [10.5 + i for i in range(40)],
+            "low": [9.5 + i for i in range(40)],
+            "close": [10.2 + i for i in range(40)],
+            "volume": [1000.0 + i for i in range(40)],
+        },
+        index=pd.date_range(
+            "2025-01-02 09:30", periods=40, freq="1h", tz="Europe/Istanbul", name="timestamp"
+        ),
+    )
+    hourly_cache = pd.DataFrame(
+        {
+            "open": [10.0 + i for i in range(50)],
+            "high": [10.5 + i for i in range(50)],
+            "low": [9.5 + i for i in range(50)],
+            "close": [10.2 + i for i in range(50)],
+            "volume": [1000.0 + i for i in range(50)],
+        },
+        index=pd.date_range(
+            "2025-01-02 09:30", periods=50, freq="1h", tz="Europe/Istanbul", name="timestamp"
+        ),
+    )
+    all_timeframes = {
+        "1h": pd.DataFrame(),
+        "2h": formation_frame,
+        "4h": pd.DataFrame(),
+        "1d": pd.DataFrame(),
+    }
+    active = SimpleNamespace(
+        raw_quality=92.0,
+        pattern_type="Simetrik Üçgen",
+        upper_now=60.0,
+        lower_now=10.0,
+        frozen_upper_boundary_at_break=50.0,
+        frozen_lower_boundary_at_break=10.0,
+        stable_id="unannounced-slot-1",
+        start_bar=4,
+        break_strength=91.0,
+        contraction=0.6,
+        upper_touches=3,
+        lower_touches=2,
+    )
+
+    class _FakeLiveState:
+        def begin_scan(self, *_a, **_k):
+            return None
+
+        def record_formation(self, *_a, **_k):
+            return None
+
+        def mark_alert_sent(self, *_a, **_k):
+            return None
+
+        def finish_scan(self, *_a, **_k):
+            return None
+
+        def fail_scan(self, *_a, **_k):
+            return None
+
+    class _FakeLifecycle:
+        def scan(self, key, _frame, *, tam_yeniden):
+            now = datetime.now(ISTANBUL_TZ)
+            lifecycle_events = [
+                {
+                    "type": "BREAK_CONFIRMED", "state": "KIRILIM_TEYITLI",
+                    "bar": 38, "time": (now - pd.Timedelta(minutes=5)).isoformat(),
+                    "stable_id": active.stable_id, "direction": 1,
+                    "quality": 92.0, "price": 51.0,
+                },
+                {
+                    "type": "BREAK_FAILED", "state": "BASARISIZ_KIRILIM",
+                    "bar": 39, "time": now.isoformat(),
+                    "stable_id": active.stable_id, "direction": 1,
+                    "quality": 92.0, "price": float(formation_frame["close"].iloc[-1]),
+                },
+            ]
+            return SimpleNamespace(
+                state="BASARISIZ_KIRILIM",
+                invalid_reason="Kırılım sonrası formasyon alanına dönüldü",
+                events=lifecycle_events,
+                break_dir=1,
+                log="immediate formation alert",
+                active=active,
+                effective_quality=92.0,
+                bar_index=39,
+                retest_seen=False,
+            )
+
+        def get_snapshot(self, _key):
+            return None
+
+    class _FakeDeferredAlerts:
+        def observe(self, *_a, **_k):
+            return None
+
+    class _FakeDequeManager:
+        sureklilik_sorunlari = {}
+
+        def to_dataframe(self, _stock):
+            return hourly_cache.copy(deep=True)
+
+        def gunluk_veri_eksik_mi(self, _stock, _now):
+            return False
+
+        def to_gunluk_dataframe(self, _stock):
+            return None
+
+        def save_to_disk(self, _stock):
+            return None
+
+    sent_payloads = []
+    delivered_ids = set()
+
+    class _FakeGateNotifier:
+        def teyit_teslim_edildi_mi(self, fid):
+            return str(fid) in delivered_ids
+
+        def send(self, alert_data):
+            sent_payloads.append(dict(alert_data))
+            return True
+
+        def public_bosalt(self):
+            return 0
+
+    fresh_stats = copy.deepcopy(main_module.daily_stats)
+    for k, v in fresh_stats.items():
+        if isinstance(v, bool):
+            fresh_stats[k] = False
+        elif isinstance(v, (int, float)):
+            fresh_stats[k] = 0
+    monkeypatch.setattr(main_module, "ACTIVE_STOCKS", ["AUDIT"])
+    monkeypatch.setattr(main_module, "daily_stats", fresh_stats)
+    monkeypatch.setattr(main_module, "last_run_stats", {}, raising=False)
+    monkeypatch.setattr(main_module, "_live_state", _FakeLiveState())
+    monkeypatch.setattr(main_module, "_deferred_alert_buffer", _FakeDeferredAlerts())
+    monkeypatch.setattr(main_module, "_load_domain_runner", lambda: None)
+    monkeypatch.setattr(main_module, "fetch_1h_stocks_paced", lambda *_a, **_k: ({}, {}, 0, 0))
+    monkeypatch.setattr(main_module, "create_yahoo_pacer", lambda: object())
+    monkeypatch.setattr(main_module, "select_yfinance_1h_period", lambda *_: "5d")
+    monkeypatch.setattr(main_module, "resample_all_timeframes", lambda _f: all_timeframes)
+    monkeypatch.setattr(main_module, "tarama_penceresi_acik_mi", lambda *_: False)
+    monkeypatch.setattr(main_module, "_cache_verisi_kullanilabilir", lambda *_a, **_k: True)
+    monkeypatch.setattr(main_module, "reset_daily_if_needed", lambda: None)
+    monkeypatch.setattr(main_module, "write_heartbeat", lambda **_k: None)
+    monkeypatch.setattr(main_module, "son_tarama_kaydet", lambda: None)
+    monkeypatch.setattr(main_module, "_shutdown_requested", False)
+    monkeypatch.setattr(main_module, "_daily_pattern_keys", set())
+    monkeypatch.setattr(main_module, "_daily_lifecycle_event_keys", set())
+    monkeypatch.setattr(main_module, "_daily_basarisiz_keys", set())
+    monkeypatch.setattr(main_module, "_daily_unannounced_invalidation_keys", set())
+    monkeypatch.setattr(main_module, "_gunluk_sayac_kaydet", lambda: None)
+
+    main_module.scan_all_stocks(
+        _FakeDequeManager(),
+        _FakeLifecycle(),
+        _FakeGateNotifier(),
+        stocks=["AUDIT"],
+        send_alerts=True,
+    )
+    assert sent_payloads == []
+    assert fresh_stats["sessiz_gecersizlesme_sayisi"] == 1
+
+    # Once the confirmation id is marked delivered, instant invalidation push succeeds
+    delivered_ids.add("unannounced-slot-1")
+    main_module.scan_all_stocks(
+        _FakeDequeManager(),
+        _FakeLifecycle(),
+        _FakeGateNotifier(),
+        stocks=["AUDIT"],
+        send_alerts=True,
+    )
+    assert len(sent_payloads) == 1
+    assert sent_payloads[0]["state"] == "KIRILIM_GECERSIZLESTI"
+
+
+def test_tur4_family_based_mtf_merge_and_kill_switch(tmp_path, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_GRAFIK", "yok")
+    events = []
+    box = DeliveryOutbox(owner(events), tmp_path)
+
+    # 1h Boğa Bayrağı ("direkli") delivered -> 4h Boğa Flaması ("direkli") same dir/state suppressed
+    first = alert(stock="THYAO", tf="1h", identity="flag-1h", direction=1)
+    first["pattern_name"] = "Boğa Bayrağı"
+    assert box.submit(first)
+
+    same_family = alert(stock="THYAO", tf="4h", identity="pennant-4h", direction=1)
+    same_family["pattern_name"] = "Boğa Flaması"
+    assert not box.submit(same_family)
+    assert len(box.state["rows"][0].get("aliases", [])) == 1
+
+    # Different family ("ucgen" vs "direkli") is NOT suppressed
+    diff_family = alert(stock="THYAO", tf="4h", identity="tri-4h", direction=1)
+    diff_family["pattern_name"] = "Yükselen Üçgen"
+    assert box.submit(diff_family)
+
+    # Same "ucgen" family on another TF IS suppressed and increments aliases
+    same_tri_family = alert(stock="THYAO", tf="2h", identity="sym-tri-2h", direction=1)
+    same_tri_family["pattern_name"] = "Simetrik Üçgen"
+    assert not box.submit(same_tri_family)
+    assert len(box.state["rows"][1].get("aliases", [])) == 1
+
+    # Opposite direction is NOT suppressed
+    opposite_dir = alert(stock="THYAO", tf="2h", identity="bear-tri-2h", direction=-1)
+    opposite_dir["pattern_name"] = "Alçalan Üçgen"
+    assert box.submit(opposite_dir)
+
+    # Different state (RETEST_BASARILI vs KIRILIM_TEYITLI) is NOT suppressed
+    diff_state = alert(stock="THYAO", tf="2h", identity="retest-2h", direction=1)
+    diff_state["pattern_name"] = "Yükselen Üçgen"
+    diff_state["state"] = "RETEST_BASARILI"
+    assert box.submit(diff_state)
+
+    # Supap: MTF_FAMILY_MATCH=False restores exact pattern_name matching
+    import config
+    monkeypatch.setattr(config, "MTF_FAMILY_MATCH", False)
+    wedge_1h = alert(stock="GARAN", tf="1h", identity="wedge-1h", direction=1)
+    wedge_1h["pattern_name"] = "Alçalan Kama"
+    wedge_4h = alert(stock="GARAN", tf="4h", identity="wedge-4h", direction=1)
+    wedge_4h["pattern_name"] = "Yükselen Kama"
+    assert box.submit(wedge_1h)
+    assert box.submit(wedge_4h)
+
+
+def test_v1_v2_summary_hours_default_and_post_close_diff_formatting(monkeypatch):
+    from datetime import time as dt_time
+    import config
+    import main as main_module
+
+    # V1: default SUMMARY_HOURS is 18:45 only in code
+    assert main_module._parse_summary_hours() == [dt_time(18, 45)]
+    monkeypatch.setattr(main_module, "SUMMARY_HOURS", "09:55,18:45")
+    assert main_module._parse_summary_hours() == [dt_time(9, 55), dt_time(18, 45)]
+
+    # V2: baseline capture + diff report formatting
+    monkeypatch.setattr(main_module, "_gunluk_sayac_kaydet", lambda: None)
+    monkeypatch.setattr(
+        main_module,
+        "_daily_lifecycle_event_keys",
+        {"THYAO|1h|fid1|KIRILIM_TEYITLI|BREAK_CONFIRMED|2026-10-16T17:30:00+03:00"},
+    )
+    main_module._capture_digest_lifecycle_baseline()
+    assert main_module._digest_event_keys_snapshot == {
+        "THYAO|1h|fid1|KIRILIM_TEYITLI|BREAK_CONFIRMED|2026-10-16T17:30:00+03:00"
+    }
+
+    # No new events since 18:45 -> empty diff
+    diff_none = set(main_module._daily_lifecycle_event_keys) - main_module._digest_event_keys_snapshot
+    assert main_module._format_post_close_diff_report(diff_none) == ""
+
+    # New confirmation/invalidation after 18:45 -> concise diff report
+    main_module._daily_lifecycle_event_keys.add(
+        "GARAN|4h|fid2|KIRILIM_TEYITLI|BREAK_CONFIRMED|2026-10-16T18:30:00+03:00"
+    )
+    main_module._daily_lifecycle_event_keys.add(
+        "AKBNK|1h|fid3|KIRILIM_GECERSIZLESTI|BREAK_FAILED|2026-10-16T18:30:00+03:00"
+    )
+    diff_new = sorted(
+        set(main_module._daily_lifecycle_event_keys) - main_module._digest_event_keys_snapshot
+    )
+    rapor = main_module._format_post_close_diff_report(
+        diff_new,
+        active_formations=[
+            {"stock_name": "GARAN", "timeframe": "4h", "pattern_name": "Yükselen Üçgen"},
+            {"stock_name": "AKBNK", "timeframe": "1h", "pattern_name": "Boğa Bayrağı"},
+        ],
+    )
+    assert "18:45 Sonrası Fark (2 gelişme)" in rapor
+    assert "GARAN 4h · Yükselen Üçgen · 🏁 Kırılım teyitli" in rapor
+    assert "AKBNK 1h · Boğa Bayrağı · ❌ Kırılım geçersizleşti" in rapor
+
+    # Supap: POST_CLOSE_ONLY_ON_DIFF=False disables diff-only mode
+    assert config.post_close_only_on_diff_enabled() is True
+    monkeypatch.setattr(config, "POST_CLOSE_ONLY_ON_DIFF", False)
+    assert config.post_close_only_on_diff_enabled() is False
+

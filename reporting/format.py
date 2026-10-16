@@ -514,17 +514,23 @@ def _istanbul_zamani(ham):
         return None
 
 
-def format_urgent_alert_queue_summary(records: List[dict]) -> str:
+def format_urgent_alert_queue_summary(
+    records: List[dict], sessiz_gecersizlesme: int = 0
+) -> str:
     """Kapanışta bekleyen teyitli alarmları tek, tarih/saatli bölüme çevir.
 
     Kuyruktaki olaylar ayrı ayrı gönderilmez; kapanış özeti başarılı olursa bu
     bölümde bir kez gösterilir. Mum damgası olayın zamanını, kuyruk damgası ise
     bildirim engelinin ne zaman başladığını ayırt eder.
     """
-    if not records:
+    try:
+        sessiz_adet = max(0, int(sessiz_gecersizlesme or 0))
+    except (TypeError, ValueError, OverflowError):
+        sessiz_adet = 0
+    if not records and sessiz_adet <= 0:
         return ""
     lines = []
-    for item in records:
+    for item in records or []:
         if not isinstance(item, dict):
             continue
         data = item.get("veri")
@@ -556,7 +562,14 @@ def format_urgent_alert_queue_summary(records: List[dict]) -> str:
             ayrinti = " · ".join(x for x in (ayrinti, f"kuyruk {kuyruk:%H:%M}") if x)
         if ayrinti:
             lines.append(f"   {ayrinti}")
-    if not lines:
-        return ""
-    return ("📬 Kapanışta özete eklenen teyitli bildirimler\n"
-            "   Kota/cooldown nedeniyle beklemişti.\n" + "\n".join(lines))
+    parcalar = []
+    if lines:
+        parcalar.append(
+            "📬 Kapanışta özete eklenen teyitli bildirimler\n"
+            "   Kota/cooldown nedeniyle beklemişti.\n" + "\n".join(lines)
+        )
+    if sessiz_adet > 0:
+        parcalar.append(
+            f"ℹ️ Bildirilmemiş teyit iptali: {sessiz_adet} geçersizleşme (anlık push atlandı)"
+        )
+    return "\n\n".join(parcalar)

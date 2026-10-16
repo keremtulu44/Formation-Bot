@@ -3209,6 +3209,10 @@ class TelegramNotifier:
     def teslimleri_dene(self) -> int:
         return self._delivery.flush() if self.enabled else 0
 
+    def teyit_teslim_edildi_mi(self, formation_id) -> bool:
+        """Aynı formation_id'li KIRILIM_TEYITLI teslim kuyruğunda gerçekten gitti mi?"""
+        return bool(self._delivery.confirmation_delivered(formation_id))
+
     def _gonder_metin(self, data: Dict) -> bool:
         """can_send kapısı geçildikten sonraki gerçek gönderim (kuyruk bunu çağırır)."""
         stock = data.get('stock_name', '')

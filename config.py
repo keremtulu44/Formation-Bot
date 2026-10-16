@@ -43,12 +43,33 @@ if PROFILE not in ("Hassas", "Dengeli", "Seçici"):
 # başka bir borsa) uyarlamak için kod içindeki ".IS" aramak gerekmez.
 MARKET_SUFFIX = os.getenv("MARKET_SUFFIX", ".IS").strip() or ".IS"
 
+# Sağlayıcı sembol eşlemesi: standart BIST hisseleri `sembol + MARKET_SUFFIX`
+# (örn. THYAO -> THYAO.IS) kullanırken endeks ve emtia sembolleri doğrudan Yahoo
+# karşılıklarına çevrilir.
+PROVIDER_SYMBOL_MAP = {
+    "XU100": "XU100.IS",
+    "XU30": "XU030.IS",
+    "XU030": "XU030.IS",
+    "BRENT": "BZ=F",
+}
+
+
+def yahoo_ticker_for_symbol(stock: str) -> str:
+    key = str(stock or "").strip().upper()
+    if key in PROVIDER_SYMBOL_MAP:
+        return PROVIDER_SYMBOL_MAP[key]
+    if any(ch in key for ch in ("=", "^", ".")):
+        return key
+    return key + MARKET_SUFFIX
+
+
 BIST_50 = [
     "THYAO", "GARAN", "AKBNK", "ISCTR", "YKBNK", "KCHOL", "SAHOL", "EREGL", "SISE", "BIMAS",
     "ASELS", "TUPRS", "FROTO", "TOASO", "KRDMD", "PETKM", "PGSUS", "SASA", "HEKTS", "GUBRF",
     "EKGYO", "HALKB", "VAKBN", "TCELL", "TTKOM", "TAVHL", "DOHOL", "ALARK",
     "ARCLK", "ENKAI", "ODAS", "ASTOR", "KONTR", "SMRTG", "CWENE", "SNGYO", "ISMEN", "SKBNK",
-    "TSKB", "TTRAK", "OTKAR", "AKSA", "AKSEN", "AYDEM", "BRSAN", "CIMSA", "DOAS", "EGEEN"
+    "TSKB", "TTRAK", "OTKAR", "AKSA", "AKSEN", "AYDEM", "BRSAN", "CIMSA", "DOAS", "EGEEN",
+    "XU100", "XU30", "BRENT",
 ]
 BIST_30 = BIST_50[:30]
 # Canlı tarama evreni: mevcut BIST 50 listesinden Yahoo verisi sorunlu KOZAL/KOZAA çıkarıldı (48 sembol).
@@ -282,7 +303,7 @@ RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip()
 
 # --- PUBLIC KANAL ve ÖZET ---
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()
-SUMMARY_HOURS = os.getenv("SUMMARY_HOURS", "09:55,18:45").strip()  # İstanbul saati, virgülle ayrılmış
+SUMMARY_HOURS = "18:45"  # İstanbul saati, virgülle ayrılmış (V1: yalnız 18:45 kapanış özeti)
 DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").strip()
 # 18:45 erteleme özetinde gösterilecek EN FAZLA aday. Kalan adaylar kaybolmaz:
 # başlıkta "12/21 gösteriliyor" ve altta "… 9 aday daha (tam liste: /formasyonlar)"
@@ -290,6 +311,8 @@ DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").st
 #   DEFERRED_ALERT_DIGEST_LIMIT=20
 DEFERRED_ALERT_DIGEST_LIMIT = _env_int("DEFERRED_ALERT_DIGEST_LIMIT", 12)
 POST_CLOSE_ANALYSIS_TIME = os.getenv("POST_CLOSE_ANALYSIS_TIME", "20:00").strip()  # gün sonu tam evren taraması
+# V2: 20:00 taraması her işlem günü çalışır; mesaj yalnız 18:45 sonrası yeni teyit/iptal varsa gider (False=her zaman tam panel).
+POST_CLOSE_ONLY_ON_DIFF = True
 
 # --- HAFTALIK DOĞRULUK KARNESİ (yerel dosya; Supabase GEREKTİRMEZ) ---
 # Cuma gün sonu mesajının (18:45 özeti; gönderilemezse 20:00 gün sonu analizi)
@@ -487,8 +510,8 @@ _ortak_state = set(ALERT_STATES) & set(WATCH_STATES)
 if _ortak_state:
     _politika_hatalari.append(f"ALERT_STATES ve WATCH_STATES kesişiyor: {sorted(_ortak_state)}")
 
-# Evren büyürse pacing/panel/digest limitleri yeniden ölçülmeli (rapor B8).
-EVREN_BUYUME_UYARI_ESIGI = 48
+# Evren büyürse pacing/panel/digest limitleri yeniden ölçülmeli (rapor B8; 48 hisse + XU100/XU30/BRENT = 51).
+EVREN_BUYUME_UYARI_ESIGI = 51
 
 LOG_DIR = _resolve_app_path(os.getenv("LOG_DIR"), "/var/log/bist-bot")
 LOG_FILE = "bot.log"
@@ -541,4 +564,64 @@ ALLOW_TRUSTED_PICKLE_CACHE = (
 
 # Consecutive closed bars before a return inside invalidates a breakout.
 INVALIDATION_CONFIRM_BARS = max(1, _env_int("INVALIDATION_CONFIRM_BARS", 3))
+INVALIDATION_CONFIRM_BARS_TF = "1h:3,2h:2,4h:2,1d:2"
+# Minimum depth inside broken band (in ATR multiples) to advance invalidation counter (0 = off).
+INVALIDATION_MIN_DEPTH_ATR = 0.3
+# Only push instant KIRILIM_GECERSIZLESTI when prior KIRILIM_TEYITLI for the same formation_id was delivered.
+INVALIDATION_REQUIRE_DELIVERED_CONFIRM = True
 MTF_ALERT_MERGE_HOURS = max(0.0, _env_float("MTF_ALERT_MERGE_HOURS", 4.0))
+# Family-level pattern matching across TFs in related() (False restores exact pattern_name match).
+MTF_FAMILY_MATCH = True
+
+
+def _parse_tf_int_map(raw) -> dict:
+    if isinstance(raw, dict):
+        out = {}
+        for k, v in raw.items():
+            try:
+                out[str(k).strip().lower()] = max(1, int(v))
+            except (TypeError, ValueError):
+                continue
+        return out
+    text = str(raw or "").strip()
+    if not text or text.lower() in {"0", "false", "no", "off", "kapali", "kapalı", "yok"}:
+        return {}
+    out = {}
+    for part in text.split(","):
+        if ":" not in part:
+            continue
+        tf, _, val = part.partition(":")
+        try:
+            out[tf.strip().lower()] = max(1, int(val.strip()))
+        except ValueError:
+            continue
+    return out
+
+
+def invalidation_confirm_bars_for_tf(tf=None) -> int:
+    fallback = max(1, int(INVALIDATION_CONFIRM_BARS))
+    if not tf:
+        return fallback
+    tf_map = _parse_tf_int_map(INVALIDATION_CONFIRM_BARS_TF)
+    return tf_map.get(str(tf).strip().lower(), fallback)
+
+
+def invalidation_min_depth_atr() -> float:
+    try:
+        return max(0.0, float(INVALIDATION_MIN_DEPTH_ATR))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def invalidation_require_delivered_confirm() -> bool:
+    return bool(INVALIDATION_REQUIRE_DELIVERED_CONFIRM)
+
+
+def mtf_family_match_enabled() -> bool:
+    return bool(MTF_FAMILY_MATCH)
+
+
+def post_close_only_on_diff_enabled() -> bool:
+    return bool(POST_CLOSE_ONLY_ON_DIFF)
+
+

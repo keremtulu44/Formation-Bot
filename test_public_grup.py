@@ -250,7 +250,8 @@ def test_public_ozet_sade_ve_dogru_satirlar(grup_notifier):
     assert "Yarının izleme listesi (ilk 5)" in metin
     assert metin.count("• SYM") == 5          # listede yalnız ilk 5
     # Satır bütçesi (≤283 px) " · " ayracından böler: bilgi aynı, iki kısa satır.
-    assert "48 hisse × 4 zaman dilimi" in metin and "9 tarama" in metin
+    import config
+    assert f"{len(config.ACTIVE_STOCKS)} hisse × 4 zaman dilimi" in metin and "9 tarama" in metin
     # Grup metninde iç teknik döküm olmamalı
     assert "defter" not in metin and "n=" not in metin and "/tmp" not in metin
 
