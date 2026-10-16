@@ -282,7 +282,7 @@ RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip()
 
 # --- PUBLIC KANAL ve ÖZET ---
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()
-SUMMARY_HOURS = os.getenv("SUMMARY_HOURS", "09:55,18:45").strip()  # İstanbul saati, virgülle ayrılmış
+SUMMARY_HOURS = os.getenv("SUMMARY_HOURS", "18:45").strip()  # İstanbul saati, virgülle ayrılmış (V1: yalnız 18:45)
 DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").strip()
 # 18:45 erteleme özetinde gösterilecek EN FAZLA aday. Kalan adaylar kaybolmaz:
 # başlıkta "12/21 gösteriliyor" ve altta "… 9 aday daha (tam liste: /formasyonlar)"
@@ -290,6 +290,11 @@ DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").st
 #   DEFERRED_ALERT_DIGEST_LIMIT=20
 DEFERRED_ALERT_DIGEST_LIMIT = _env_int("DEFERRED_ALERT_DIGEST_LIMIT", 12)
 POST_CLOSE_ANALYSIS_TIME = os.getenv("POST_CLOSE_ANALYSIS_TIME", "20:00").strip()  # gün sonu tam evren taraması
+# V2: 20:00 taraması her işlem günü çalışır; mesaj yalnız 18:45 sonrası yeni teyit/iptal varsa gider (0=her zaman tam panel).
+POST_CLOSE_ONLY_ON_DIFF = (
+    (os.getenv("POST_CLOSE_ONLY_ON_DIFF", "1") or "1").strip().lower()
+    not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}
+)
 
 # --- HAFTALIK DOĞRULUK KARNESİ (yerel dosya; Supabase GEREKTİRMEZ) ---
 # Cuma gün sonu mesajının (18:45 özeti; gönderilemezse 20:00 gün sonu analizi)
@@ -624,4 +629,12 @@ def mtf_family_match_enabled() -> bool:
     if raw is not None:
         return raw.strip().lower() not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}
     return bool(MTF_FAMILY_MATCH)
+
+
+def post_close_only_on_diff_enabled() -> bool:
+    raw = os.getenv("POST_CLOSE_ONLY_ON_DIFF")
+    if raw is not None:
+        return raw.strip().lower() not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}
+    return bool(POST_CLOSE_ONLY_ON_DIFF)
+
 

@@ -330,6 +330,7 @@ daily_stats = {
 _daily_basarisiz_keys: set = set()
 _daily_unannounced_invalidation_keys: set = set()
 _daily_lifecycle_event_keys: set[str] = set()
+_digest_event_keys_snapshot: set[str] | None = None
 _LIFECYCLE_CONFIRMATION_TYPES = frozenset({"BREAK_CONFIRMED", "COUNTER_BREAK"})
 _CONFIRMED_INVALIDATION_REASONS = frozenset({
     "Kırılım sonrası formasyon alanına dönüldü",
@@ -535,6 +536,8 @@ def _gunluk_sayac_kaydet() -> None:
             "sayaclar": {ad: daily_stats.get(ad, 0) for ad in _KALICI_SAYACLAR},
             "olay_muhurlari": sorted(_daily_lifecycle_event_keys),
         }
+        if _digest_event_keys_snapshot is not None:
+            patch["digest_olay_muhurlari"] = sorted(_digest_event_keys_snapshot)
         if not _state_persistence.gunluk_durum_yukle():
             # Gün döndü: yeni günün kaydı kurulurken dünün özet işaretleri
             # geçersiz sayılır (gunluk_durum_guncelle kaydı yeniden kurar).
@@ -561,6 +564,10 @@ def _gunluk_sayac_yukle() -> None:
     if isinstance(event_keys, list):
         _daily_lifecycle_event_keys.clear()
         _daily_lifecycle_event_keys.update(str(key) for key in event_keys if key)
+    global _digest_event_keys_snapshot
+    digest_keys = (veri or {}).get("digest_olay_muhurlari")
+    if isinstance(digest_keys, list):
+        _digest_event_keys_snapshot = {str(key) for key in digest_keys if key}
     sayaclar = (veri or {}).get("sayaclar") or {}
     if not sayaclar:
         return
@@ -643,6 +650,8 @@ def reset_daily_if_needed():
             daily_stats[counter] = 0
         _daily_lifecycle_event_keys.clear()
         _daily_unannounced_invalidation_keys.clear()
+        global _digest_event_keys_snapshot
+        _digest_event_keys_snapshot = None
         # Restart tabanı yalnızca AYNI günün devralınan sayısıdır; yeni güne
         # sıfırla (yoksa eski günün sayısı yeni güne taşınır ve sayaç şişer).
         _daily_basarisiz_tabani = 0
@@ -3657,6 +3666,57 @@ def _parse_post_close_analysis_time() -> dt_time:
         return dt_time(20, 0)
 
 
+_POST_CLOSE_DIFF_LABELS = {
+    "KIRILIM_TEYITLI": "🏁 Kırılım teyitli",
+    "RETEST_BASARILI": "🔁 Retest başarılı",
+    "KIRILIM_GECERSIZLESTI": "❌ Kırılım geçersizleşti",
+}
+
+
+def _capture_digest_lifecycle_baseline() -> None:
+    """18:45 özeti gönderildiğinde mevcut teyit/geçersizleşme mühürlerini baz al (V2)."""
+    global _digest_event_keys_snapshot
+    _digest_event_keys_snapshot = set(_daily_lifecycle_event_keys)
+    _gunluk_sayac_kaydet()
+
+
+def _format_post_close_diff_report(new_event_keys, active_formations=None) -> str:
+    """V2: 18:45 özeti sonrasında oluşan yeni teyit/geçersizleşmeler için kısa fark raporu."""
+    keys = [str(k) for k in (new_event_keys or []) if k]
+    if not keys:
+        return ""
+    pattern_lookup = {}
+    for item in (active_formations or []):
+        if not isinstance(item, dict):
+            continue
+        st = str(item.get("stock_name") or item.get("stock") or "").strip().upper()
+        tf = str(item.get("timeframe") or "").strip().lower()
+        pat = str(item.get("pattern_name") or "").strip()
+        if st and tf and pat:
+            pattern_lookup[(st, tf)] = pat
+    satirlar = []
+    gorulen = set()
+    for raw_key in sorted(keys):
+        parcalar = raw_key.split("|")
+        if len(parcalar) < 4:
+            continue
+        stock, tf, ident, state_key = parcalar[0], parcalar[1], parcalar[2], parcalar[3]
+        dedup_k = (stock, tf, ident, state_key)
+        if dedup_k in gorulen:
+            continue
+        gorulen.add(dedup_k)
+        etiket = _POST_CLOSE_DIFF_LABELS.get(state_key, state_key)
+        pat = pattern_lookup.get((stock, tf))
+        orta = f" · {pat}" if pat else ""
+        satirlar.append(f"• {stock} {tf}{orta} · {etiket}")
+    if not satirlar:
+        return ""
+    return (
+        f"🌙 GÜN SONU ANALİZİ · 18:45 Sonrası Fark ({len(satirlar)} gelişme)\n"
+        + "\n".join(satirlar)
+    )
+
+
 def _build_active_formations_for_summary(lifecycle_manager, min_quality: float = None) -> List[Dict]:
     """Özet için aktif formasyonları topla (canlı + taze terminal)."""
     if min_quality is None:
@@ -4141,6 +4201,7 @@ def main_loop():
                                     _deferred_alert_buffer.mark_reported(bekleyen, now)
                                 if sh == deferred_alert_digest_time:
                                     _digest_son_gonderim_gun = now.date().isoformat()
+                                    _capture_digest_lifecycle_baseline()
                                     digest_tamponu_kaydet()
                                 logger.info(f"Günlük DM özeti gönderildi: {sh_str}")
                             else:
@@ -4153,6 +4214,7 @@ def main_loop():
                             last_summary_sent[sh_str] = now.date()
                             if sh == deferred_alert_digest_time:
                                 _digest_son_gonderim_gun = now.date().isoformat()
+                                _capture_digest_lifecycle_baseline()
 
                     # --- PUBLIC GRUP: sade kapanış özeti (DM'den bağımsız) ---
                     # DM kapalıyken de çalışır; iç izleme notu/dosya yolu taşımaz.
@@ -4185,6 +4247,16 @@ def main_loop():
                         and last_post_close_analysis_date != now.date()):
                     logger.info("Gün sonu tam evren analizi başlıyor (%s)",
                                 post_close_analysis_time.strftime("%H:%M"))
+                    digest_sh_str = deferred_alert_digest_time.strftime("%H:%M")
+                    kapanis_ozeti_gitti = (
+                        _digest_son_gonderim_gun == now.date().isoformat()
+                        or last_summary_sent.get(digest_sh_str) == now.date()
+                    )
+                    baseline_keys = (
+                        set(_digest_event_keys_snapshot)
+                        if _digest_event_keys_snapshot is not None
+                        else set(_daily_lifecycle_event_keys)
+                    )
                     _scan_job_active.set()
                     try:
                         try:
@@ -4198,19 +4270,53 @@ def main_loop():
                                 exc, len(ACTIVE_STOCKS), "gün sonu analiz",
                             )
                         if result.get("status") == "tamamlandi":
-                            rapor = _panel_raporu("", tamamlandi=True)
-                            mesaj = "🌙 GÜN SONU ANALİZİ\n" + rapor
-                            # Cuma karnesi 18:45 özetiyle gidemediyse (bot kapalıydı /
-                            # gönderim hatası) burada gün sonu analizinin altına eklenir.
+                            from config import post_close_only_on_diff_enabled
                             karne_ek = _haftalik_karne_ekle(now, deque_manager)
-                            ana_ok, karne_ok, _hata = _karneyle_gonder(notifier, mesaj, karne_ek)
-                            if ana_ok:
-                                logger.info("Gün sonu analizi gönderildi")
-                            if karne_ek and karne_ok:
-                                # İşaret KARNE parçası gerçekten gittiyse konur;
-                                # 18:45'te gönderilen karne burada ikinci kez çıkmaz.
-                                _karne_gonderildi_isaretle(now)
-                                logger.info("Haftalık doğruluk karnesi gönderildi (gün sonu analizi altında)")
+                            if post_close_only_on_diff_enabled() and kapanis_ozeti_gitti:
+                                yeni_olaylar = sorted(
+                                    set(_daily_lifecycle_event_keys) - baseline_keys
+                                )
+                                if yeni_olaylar:
+                                    aktif_f = _build_active_formations_for_summary(lifecycle_manager)
+                                    mesaj = _format_post_close_diff_report(yeni_olaylar, aktif_f)
+                                    ana_ok, karne_ok, _hata = _karneyle_gonder(
+                                        notifier, mesaj, karne_ek
+                                    )
+                                    if ana_ok:
+                                        logger.info(
+                                            "Gün sonu fark raporu gönderildi (%d yeni gelişme)",
+                                            len(yeni_olaylar),
+                                        )
+                                    if karne_ek and karne_ok:
+                                        _karne_gonderildi_isaretle(now)
+                                        logger.info(
+                                            "Haftalık doğruluk karnesi gönderildi (gün sonu farkı altında)"
+                                        )
+                                elif karne_ek:
+                                    karne_ok, _hata = notifier.send_text(karne_ek.strip())
+                                    if karne_ok:
+                                        _karne_gonderildi_isaretle(now)
+                                        logger.info(
+                                            "Haftalık doğruluk karnesi gönderildi (20:00 telafisi)"
+                                        )
+                                else:
+                                    logger.info(
+                                        "Gün sonu analizi tamamlandı; 18:45 sonrası yeni "
+                                        "teyit/geçersizleşme yok, 20:00 mesajı atlandı"
+                                    )
+                            else:
+                                rapor = _panel_raporu("", tamamlandi=True)
+                                mesaj = "🌙 GÜN SONU ANALİZİ\n" + rapor
+                                # Cuma karnesi 18:45 özetiyle gidemediyse (bot kapalıydı /
+                                # gönderim hatası) burada gün sonu analizinin altına eklenir.
+                                ana_ok, karne_ok, _hata = _karneyle_gonder(notifier, mesaj, karne_ek)
+                                if ana_ok:
+                                    logger.info("Gün sonu analizi gönderildi")
+                                if karne_ek and karne_ok:
+                                    # İşaret KARNE parçası gerçekten gittiyse konur;
+                                    # 18:45'te gönderilen karne burada ikinci kez çıkmaz.
+                                    _karne_gonderildi_isaretle(now)
+                                    logger.info("Haftalık doğruluk karnesi gönderildi (gün sonu analizi altında)")
                         else:
                             notifier.send_text(
                                 "⚠️ Gün sonu analizi tamamlanamadı; eski sonuç yeni sonuç gibi "

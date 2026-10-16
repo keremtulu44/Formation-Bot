@@ -668,3 +668,56 @@ def test_tur4_family_based_mtf_merge_and_kill_switch(tmp_path, monkeypatch):
     assert box.submit(wedge_1h)
     assert box.submit(wedge_4h)
 
+
+def test_v1_v2_summary_hours_default_and_post_close_diff_formatting(monkeypatch):
+    from datetime import time as dt_time
+    import config
+    import main as main_module
+
+    # V1: default SUMMARY_HOURS is 18:45 only; env override still supports 09:55,18:45
+    assert main_module._parse_summary_hours() == [dt_time(18, 45)]
+    monkeypatch.setattr(main_module, "SUMMARY_HOURS", "09:55,18:45")
+    assert main_module._parse_summary_hours() == [dt_time(9, 55), dt_time(18, 45)]
+
+    # V2: baseline capture + diff report formatting
+    monkeypatch.setattr(main_module, "_gunluk_sayac_kaydet", lambda: None)
+    monkeypatch.setattr(
+        main_module,
+        "_daily_lifecycle_event_keys",
+        {"THYAO|1h|fid1|KIRILIM_TEYITLI|BREAK_CONFIRMED|2026-10-16T17:30:00+03:00"},
+    )
+    main_module._capture_digest_lifecycle_baseline()
+    assert main_module._digest_event_keys_snapshot == {
+        "THYAO|1h|fid1|KIRILIM_TEYITLI|BREAK_CONFIRMED|2026-10-16T17:30:00+03:00"
+    }
+
+    # No new events since 18:45 -> empty diff
+    diff_none = set(main_module._daily_lifecycle_event_keys) - main_module._digest_event_keys_snapshot
+    assert main_module._format_post_close_diff_report(diff_none) == ""
+
+    # New confirmation/invalidation after 18:45 -> concise diff report
+    main_module._daily_lifecycle_event_keys.add(
+        "GARAN|4h|fid2|KIRILIM_TEYITLI|BREAK_CONFIRMED|2026-10-16T18:30:00+03:00"
+    )
+    main_module._daily_lifecycle_event_keys.add(
+        "AKBNK|1h|fid3|KIRILIM_GECERSIZLESTI|BREAK_FAILED|2026-10-16T18:30:00+03:00"
+    )
+    diff_new = sorted(
+        set(main_module._daily_lifecycle_event_keys) - main_module._digest_event_keys_snapshot
+    )
+    rapor = main_module._format_post_close_diff_report(
+        diff_new,
+        active_formations=[
+            {"stock_name": "GARAN", "timeframe": "4h", "pattern_name": "Yükselen Üçgen"},
+            {"stock_name": "AKBNK", "timeframe": "1h", "pattern_name": "Boğa Bayrağı"},
+        ],
+    )
+    assert "18:45 Sonrası Fark (2 gelişme)" in rapor
+    assert "GARAN 4h · Yükselen Üçgen · 🏁 Kırılım teyitli" in rapor
+    assert "AKBNK 1h · Boğa Bayrağı · ❌ Kırılım geçersizleşti" in rapor
+
+    # Supap: POST_CLOSE_ONLY_ON_DIFF=0 disables diff-only mode
+    assert config.post_close_only_on_diff_enabled() is True
+    monkeypatch.setenv("POST_CLOSE_ONLY_ON_DIFF", "0")
+    assert config.post_close_only_on_diff_enabled() is False
+
