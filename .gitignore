@@ -67,6 +67,9 @@ raporlar/
 *.png
 *.jpg
 *.jpeg
+# İstisna: docs/ornek_galeri örnek kareleri bilerek izlenir (mevcut docs/ornek_*.png
+# gibi). scripts/ornek_gorsel_uret.py ile her zaman yeniden üretilebilirler.
+!docs/ornek_galeri/*.png
 
 # Durable notification delivery state (includes rendered PNG bytes).
 **/notification_delivery.json

@@ -264,6 +264,8 @@ geçirme gerektirir.
 | `SORUN_RAPORU.md` | Ölçümlü teşhis: üretim→Telegram hunisi, bastırılan adaylar, S1-S11 + ek bulgular |
 | `YAPILACAKLAR.md` | A (düzeltme) / B (iyileştirme) / C (şablon) tam iş listesi, öncelik ve efor |
 | `KODLAMA_PLANI.md` | Batch'li uygulama planı; her batch için kapsam/dosya/test/kabul kriteri |
+| `scripts/ornek_gorsel_uret.py` | **Örnek görsel üretim sistemi:** sentetik veriyle, botun kendi çizim zinciriyle DEMO alarm kartı karesi üretir (6 senaryo; `bot_data`'ya yazmaz). Çıktılar ve katalog: `docs/ornek_galeri/` |
+| `GENEL_INCELEME_VE_YOL_HARITASI_2026-10-16.md` | Genel inceleme + yol haritası: güçlü/zayıf yönler, neler eklenebilir, önceliklendirilmiş iş listesi (Y1–Y16) |
 
 ## Canlı tarama raporu nasıl okunur (Pine karşılaştırması)
 
