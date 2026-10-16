@@ -256,7 +256,8 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("TELEGRAM_GRAFIK", False, ("İsteğe bağlı: 'alarm' → her alarm metninin ALTINA mum karesi ekler "
                                      "(varsayılan 'yok': gönderim bugünküyle birebir aynı)")),
         ("TELEGRAM_GRAFIK_ADET", False, "İsteğe bağlı: alarm başına en fazla kare (1-4, varsayılan 4)"),
-        ("GRAFIK_MUM_MAKS", False, "İsteğe bağlı: kadraj tavanı — kaç mum çizilsin (varsayılan 180)"),
+        ("GRAFIK_MUM_MAKS", False, "İsteğe bağlı: kadraj tavanı — kaç mum çizilsin "
+                                   "(varsayılan TF matrisi: 1s 80 · 2s 74 · 4s 68 · 1g 62)"),
         ("GRAFIK_OLAY_MAKS", False, "İsteğe bağlı: kareye çizilen onaylı BOS/CHoCH sayısı (varsayılan 6)"),
     ]
 

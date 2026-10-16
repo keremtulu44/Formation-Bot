@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
-"""Sağ boşluk (GRAFIK_TASARIM §37): son mumun sağında eksen genişliğinin ~%5,3'ü.
+"""Sağ boşluk: son mumun sağında EKSEN GENİŞLİĞİNİN %10-20'si (varsayılan %15).
 
-Kararlar (2026-10-15; 1-3 kullanıcı isteği, 4 onaylanan öneri):
-  1. Son mumlar eksen kenarına yapışmasın; sağda ~10 mumluk boş pay kalsın.
-  2. Pay "matematiksel 10 mum" değil GÖRSEL pay: sabit bar sayısı yerine eksen
-     genişliğinin oranı (180 mumluk karede ≈10, 120 mumluk karede ≈7 bar).
-  3. Bant çizgileri, OB/FVG kutuları ve BOS/CHoCH çizgileri boşluğa DEVAM eder;
+Kararlar (2026-10-16 kullanıcı kararı; 2026-10-15 "sabit 12-15 mum" kuralının yerine):
+  1. Boşluk artık eksen genişliğinin YÜZDESİDİR: hedef %15, pencere %10-20.
+     Sabit mum sayısı kareye göre kayıyordu (80 mumda %16, 35 mumluk formasyon
+     karesinde %30). Yüzde kuralı her karede aynı görsel oranı verir.
+  2. Fiyat etiketleri, seviye çizgileri, 🎯 hedef kutusu ve AKTİF BOS/CHoCH
+     hedefi bu alana çizilir — mumların üzerine yazı binmez.
+  3. Bant çizgileri, OB/FVG kutuları ve bant işaretleri boşluğa DEVAM eder;
      devam KESİKLİ değildir (bant çizgisinin kendisi, tek parça).
-  4. `GRAFIK_SAG_BOSLUK=0` eski görünümü geri getirir.
+  4. Öncelik: `GRAFIK_SAG_BOSLUK_MUM` (sabit mum; 0 → kapanır) >
+     `GRAFIK_SAG_BOSLUK` (eski oran yolu) > `GRAFIK_SAG_BOSLUK_ORANI` (yeni
+     yüzde; açıkça verilirse kırpılmaz) > varsayılan (%15, %10-20 penceresi).
+     Eski iki anahtar yalnız tanımlıysa kullanılır (geri uyumluluk).
 
 Asıl ölçü GERÇEK eksen sınırıdır: `meta` tek başına yetmez. Şerit (sharex) en son
 çizilip ortak x sınırını sıfırlayabildiği için `meta` doğru, piksel yanlış olabilir
@@ -31,8 +36,10 @@ from test_grafik_iskelet import _cerceve, _cift, _goruntu, _png_olcu
 
 @pytest.fixture(autouse=True)
 def _ortam_temiz(monkeypatch):
-    """Dışarıdan gelen `GRAFIK_SAG_BOSLUK` varsayılan ölçümleri bozmasın."""
+    """Dışarıdan gelen boşluk anahtarları varsayılan ölçümleri bozmasın."""
     monkeypatch.delenv("GRAFIK_SAG_BOSLUK", raising=False)
+    monkeypatch.delenv("GRAFIK_SAG_BOSLUK_MUM", raising=False)
+    monkeypatch.delenv("GRAFIK_SAG_BOSLUK_ORANI", raising=False)
 
 
 def _kareyi_ciz(g, tf, tmp_path, **secenek):
@@ -53,24 +60,73 @@ def _kareyi_ciz(g, tf, tmp_path, **secenek):
 # ------------------------------------------------------------ boşluğun tanımı
 
 
-def test_bosluk_sabit_bar_degil_eksen_orani():
-    """180 mumluk karede ≈10, 120 mumluk karede ≈7 bar; oran ≈%5,3 kalır."""
-    assert grafik.sag_bosluk_mum(180) == 10
-    assert grafik.sag_bosluk_mum(120) == 7
-    for n in (60, 90, 120, 150, 180, 240):
+def test_bosluk_eksen_yuzdesi_penceresi_10_20():
+    """Boşluk eksen genişliğinin %10-20'si; varsayılan hedef %15.
+
+    Kareler 35-85 mum arasında geziniyor; hepsinde oran pencere içinde kalmalı ve
+    mum sayısıyla KAYMAMALI (eski sabit-15-mum kuralının asıl kusuru buydu).
+    """
+    assert 0.10 <= float(grafik.SABITLER["sag_bosluk_orani_min"]) < \
+        float(grafik.SABITLER["sag_bosluk_orani"]) < \
+        float(grafik.SABITLER["sag_bosluk_orani_maks"]) <= 0.20
+    assert float(grafik.SABITLER["sag_bosluk_orani"]) == pytest.approx(0.15)
+    oranlar = []
+    for n in (35, 45, 62, 68, 74, 80, 85, 180, 240):
         g = grafik.sag_bosluk_mum(n)
-        oran = g / (n + 0.2 + g)                 # eksen n + 0,2 + g bar genişliğinde
-        assert abs(oran - 0.053) < 0.012, (n, g, oran)      # tam sayıya yuvarlama payı
-    degerler = [grafik.sag_bosluk_mum(n) for n in range(30, 300, 10)]
-    assert degerler == sorted(degerler)          # kare uzadıkça boşluk (bar) azalmaz
+        oran = 100.0 * g / (n + 0.2 + g)
+        assert 10.0 <= oran <= 20.0, (n, g, oran)
+        oranlar.append(oran)
+    assert max(oranlar) - min(oranlar) < 1.0        # her karede aynı görsel oran
 
 
 @pytest.mark.parametrize("ham, beklenen", [
-    ("0", 0), ("-4", 0),                         # kapalı: eski görünüm
-    ("", 10), ("abc", 10), ("nan", 10), ("inf", 10),     # bozuk → varsayılan, çizim engellenmez
-    ("10", 20), ("99", 32),                      # fazlası %15'e kırpılır
+    ("0", 0), ("-2", 0),                          # kapalı: eski görünüm
+    ("", 14), ("abc", 14), ("nan", 14), ("inf", 14),     # bozuk → varsayılan (%15)
+    ("0.10", 9), ("0.20", 20),                    # açıkça verilen oran kırpılmaz
 ])
-def test_env_degerleri(monkeypatch, ham, beklenen):
+def test_env_degerleri_oran_anahtari(monkeypatch, ham, beklenen):
+    """`GRAFIK_SAG_BOSLUK_ORANI` (yüzde) açıkça verilirse kırpılmaz."""
+    monkeypatch.setenv("GRAFIK_SAG_BOSLUK_ORANI", ham)
+    assert grafik.sag_bosluk_mum(80) == beklenen
+
+
+@pytest.mark.parametrize("ham, pencerede", [("0.02", False), ("0.10", True),
+                                            ("0.20", True), ("0.35", False)])
+def test_env_oran_penceresi_yoksa_kirpilir(monkeypatch, ham, pencerede):
+    """Otomatik kural penceresi: `GRAFIK_SAG_BOSLUK_ORANI` verilirse kırpma YOK."""
+    monkeypatch.setenv("GRAFIK_SAG_BOSLUK_ORANI", ham)
+    n = 80
+    g = grafik.sag_bosluk_mum(n)
+    oran = 100.0 * g / (n + 0.2 + g)
+    assert (10.0 <= oran <= 20.0) is pencerede
+
+
+def test_ortam_anahtarlari_oncelik_sirasi(monkeypatch):
+    """Sabit mum anahtarı yüzde anahtarlarından üstündür (eski kurulum bozulmaz)."""
+    monkeypatch.setenv("GRAFIK_SAG_BOSLUK_ORANI", "0.20")
+    monkeypatch.setenv("GRAFIK_SAG_BOSLUK", "5.3")
+    assert grafik.sag_bosluk_mum(80) == 4                    # eski oran yolu
+    monkeypatch.setenv("GRAFIK_SAG_BOSLUK_MUM", "15")
+    assert grafik.sag_bosluk_mum(80) == 15                   # sabit mum yolu
+
+
+@pytest.mark.parametrize("ham, beklenen", [
+    ("0", 0), ("-4", 0),                          # kapalı: eski görünüm
+    ("", 15), ("abc", 15), ("nan", 15), ("inf", 15),     # bozuk → varsayılan, çizim engellenmez
+    ("12", 12), ("99", 40),                       # üst sınır 40 bar
+])
+def test_env_degerleri_mum_anahtari(monkeypatch, ham, beklenen):
+    monkeypatch.setenv("GRAFIK_SAG_BOSLUK_MUM", ham)
+    assert grafik.sag_bosluk_mum(180) == beklenen
+
+
+@pytest.mark.parametrize("ham, beklenen", [
+    ("0", 0),                                    # eski oran anahtarı: kapatır
+    ("5.3", 10),                                 # 180 mumda ≈10 bar (eski davranış korunur)
+    ("abc", 10),                                 # bozuk oran → oran varsayılanı (5,3)
+])
+def test_eski_oran_anahtari_geri_uyumlu(monkeypatch, ham, beklenen):
+    """`GRAFIK_SAG_BOSLUK` (eski oran) yalnız tanımlıysa kullanılır."""
     monkeypatch.setenv("GRAFIK_SAG_BOSLUK", ham)
     assert grafik.sag_bosluk_mum(180) == beklenen
 
@@ -83,19 +139,24 @@ def test_mum_yoksa_bosluk_yok():
 # --------------------------------------------- GERÇEK eksen sınırı (tam kare)
 
 
-@pytest.mark.parametrize("n_cerceve, tf, bosluk", [(240, "1h", 10), (120, "4h", 7)])
-@pytest.mark.parametrize("secenek, eksen_sayisi", [({}, 2), ({"serit": False}, 1),
-                                                    ({"sade": True}, 1)],
-                         ids=["serit-acik", "serit-yok", "sade"])
-def test_gercek_eksen_sinirinda_bosluk_var(tmp_path, n_cerceve, tf, bosluk, secenek,
+@pytest.mark.parametrize("n_cerceve, tf", [(240, "1h"), (120, "4h")])
+@pytest.mark.parametrize("secenek, eksen_sayisi", [({}, 1), ({"serit": True}, 2),
+                                                   ({"serit": False}, 1),
+                                                   ({"sade": True}, 1)],
+                         ids=["varsayilan", "panel-acik", "serit-yok", "sade"])
+def test_gercek_eksen_sinirinda_bosluk_var(tmp_path, n_cerceve, tf, secenek,
                                            eksen_sayisi):
     """Ana eksen VE şerit aynı sınırı taşır; `meta` ile piksel birbirinden kopmaz."""
     g = _goruntu(_cerceve(n_cerceve, tf), tf, cift=None)
     fig, meta, _ = _kareyi_ciz(g, tf, tmp_path, **secenek)
-    n = meta["mum_sayisi"]                       # 4s çerçevede açık son mum düşer (119)
-    assert meta["kare"]["sag_bosluk"] == bosluk == grafik.sag_bosluk_mum(n)
+    n = meta["mum_sayisi"]                       # FAZ 2: pencere TF matrisinden (80/68)
+    assert n in (80, 68)
+    bosluk = grafik.sag_bosluk_mum(n)
+    assert meta["kare"]["sag_bosluk"] == bosluk
+    # Kullanıcı penceresi: eksen genişliğinin %10-20'si (varsayılan %15).
+    assert 10.0 <= meta["kare"]["sag_bosluk_yuzde"] <= 20.0
     beklenen = (-0.6, n - 0.4 + bosluk)
-    assert len(fig.axes) == eksen_sayisi         # sade modda şerit hiç kurulmaz
+    assert len(fig.axes) == eksen_sayisi     # panel kapalı: tek eksen (FAZ 1)
     for ax in fig.axes:
         assert ax.get_xlim() == pytest.approx(beklenen)
     assert meta["kare"]["x_siniri"] == pytest.approx(list(beklenen))
@@ -104,7 +165,7 @@ def test_gercek_eksen_sinirinda_bosluk_var(tmp_path, n_cerceve, tf, bosluk, sece
 
 
 def test_env_sifir_eski_gorunumu_geri_getirir(tmp_path, monkeypatch):
-    monkeypatch.setenv("GRAFIK_SAG_BOSLUK", "0")
+    monkeypatch.setenv("GRAFIK_SAG_BOSLUK_MUM", "0")
     g = _goruntu(_cerceve(240, "1h"), "1h", _cift(apex_bar=244))
     fig, meta, _ = _kareyi_ciz(g, "1h", tmp_path)
     n = meta["mum_sayisi"]
@@ -121,8 +182,10 @@ def test_katman_hatasinda_bosluk_korunur(tmp_path):
     with mock.patch.object(grafik, "_formasyon_ciz", side_effect=RuntimeError("test")):
         fig, meta, _ = _kareyi_ciz(g, "1h", tmp_path)
     assert "formasyon" in meta["eksik_katmanlar"]
+    n = meta["mum_sayisi"]
+    beklenen = grafik.sag_bosluk_mum(n)
     for ax in fig.axes:
-        assert ax.get_xlim() == pytest.approx((-0.6, 180 - 0.4 + 10))
+        assert ax.get_xlim() == pytest.approx((-0.6, n - 0.4 + beklenen))
 
 
 def test_kare_boyutu_degismez(tmp_path):
@@ -133,14 +196,15 @@ def test_kare_boyutu_degismez(tmp_path):
 
 @pytest.mark.parametrize("n_cerceve, tf", [(240, "1h"), (120, "4h")])
 def test_mumlar_gereginden_fazla_daralmaz(tmp_path, monkeypatch, n_cerceve, tf):
-    """Mum başına piksel eski görünümün en az %93'ü kalır.
+    """Boşluk mumları fazla daraltmaz: px/bar eski (boşluksuz) görünümün %80'inde.
 
-    Sabit 10 bar 120 mumluk karede %92,3'e düşerdi; oran bazlı pay iki karede de
-    ≈%94,5'te tutar — testin eşiği bu farkı ayırır.
+    %15 boşlukta kayıp ≈%15 (px/bar ≈ 1/1,176 = %85); %20 üst sınırda bile %83
+    kalır. Eşik %80: kullanıcı penceresi (%10-20) korunduğu sürece rahat geçer,
+    oran bozulursa (ör. 80 mumda %33 kayıp) kırmızı olur.
     """
     g = _goruntu(_cerceve(n_cerceve, tf), tf, cift=None)
     fig_yeni, _, _ = _kareyi_ciz(g, tf, tmp_path)
-    monkeypatch.setenv("GRAFIK_SAG_BOSLUK", "0")
+    monkeypatch.setenv("GRAFIK_SAG_BOSLUK_MUM", "0")
     fig_eski, _, _ = _kareyi_ciz(g, tf, tmp_path)
 
     def px_bar(fig):
@@ -148,7 +212,7 @@ def test_mumlar_gereginden_fazla_daralmaz(tmp_path, monkeypatch, n_cerceve, tf):
         sol, sag = ax.get_xlim()
         return ax.get_window_extent().width / (sag - sol)
 
-    assert px_bar(fig_yeni) / px_bar(fig_eski) >= 0.93
+    assert px_bar(fig_yeni) / px_bar(fig_eski) >= 0.80
 
 
 # ----------------------------------------------------------------- OB/FVG kutuları
@@ -220,21 +284,34 @@ def _yatay_cizgiler(ax):
             if len(ln.get_ydata()) == 2 and ln.get_ydata()[0] == ln.get_ydata()[1]}
 
 
-def test_bos_choch_cizgisi_bosluga_kadar_uzanir():
+def test_bos_choch_cizgisi_pivot_baslar_ve_hedefe_uzanir():
+    """FAZ 3 §4.2: çizgi PİVOT noktasından başlar, kırılım mumunda biter; yalnız
+    AKTİF hedef (kritik olay) sağdaki boşluğa kadar uzar."""
     n, bosluk = 60, 4
     fig, ax = _eksen(n)
     ax.set_xlim(-0.6, n - 0.4 + bosluk)
-    grafik._olay_ciz(ax, _olay_goruntusu(), n, [], sag_bosluk=bosluk)
+    goruntu = _olay_goruntusu()
+    for b in goruntu["olay"]["olaylar"]:
+        b["pivot_bar"] = 12                        # motorun `origin_source_bar`ı
+    goruntu["olay"]["kritik"] = {"seviye": 98.0, "bar": 50, "pivot_bar": 12,
+                                 "tur": "CHoCH", "yon": "alt"}
+    grafik._olay_ciz(ax, goruntu, n, [], sag_bosluk=bosluk)
     cizgiler = _yatay_cizgiler(ax)
-    assert cizgiler[102.0] == [40.0, n - 1 + bosluk]      # BOS
-    assert cizgiler[98.0] == [50.0, n - 1 + bosluk]       # CHoCH
+    assert cizgiler[102.0] == [12.0, 40.0]         # BOS: pivot → kırılım mumu, uzatma YOK
+    assert cizgiler[98.0] == [12.0, n - 1 + bosluk]     # CHoCH = aktif hedef: sağa uzar
 
 
-def test_bosluk_yokken_bos_cizgisi_son_mumda_biter():
+def test_bosluk_yokken_aktif_hedef_son_mumda_biter():
+    """Boşluk kapalıyken de kural aynı: pivot → kırılım mumu / aktif hedefte son mum."""
     n = 60
     fig, ax = _eksen(n)
-    grafik._olay_ciz(ax, _olay_goruntusu(), n, [])
-    assert _yatay_cizgiler(ax)[102.0] == [40.0, n - 1.0]
+    goruntu = _olay_goruntusu()
+    for b in goruntu["olay"]["olaylar"]:
+        b["pivot_bar"] = 12
+    goruntu["olay"]["kritik"] = {"seviye": 98.0, "bar": 50, "pivot_bar": 12,
+                                 "tur": "CHoCH", "yon": "alt"}
+    grafik._olay_ciz(ax, goruntu, n, [])
+    assert _yatay_cizgiler(ax)[98.0] == [12.0, n - 1.0]
 
 
 # ---------------------------------------------------------------- sağ fiyat şeridi

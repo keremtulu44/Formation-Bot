@@ -252,8 +252,11 @@ if TELEGRAM_GRAFIK in {"1", "acik", "açık", "true", "on", "evet"}:
     TELEGRAM_GRAFIK = "alarm"          # yaygın yanlış yazım tolere edilir
 # Alarm başına en fazla kare (1-4): birincil TF her zaman ilk karedir.
 TELEGRAM_GRAFIK_ADET = min(4, max(1, int(_env_float("TELEGRAM_GRAFIK_ADET", 4))))
-# Kadraj tavanı (mum). Formasyon bantı sığıyorsa tavan kalkar (§0.12b).
-GRAFIK_MUM_MAKS = max(2, int(_env_float("GRAFIK_MUM_MAKS", 180)))
+# Kadraj (FAZ 2): formasyon YOKKEN gösterilecek mum sayısı — TF matrisi
+# `grafik.SABITLER["kadraj_cerceve"]` (1g 62 · 4s 68 · 2s 74 · 1s 80).
+# Formasyon varsa kadraj formasyona odaklanır (formasyon + 10 mum sol tampon,
+# 35-85 aralığı; bkz. `grafik._kadrajla`), sağında her zaman 15 mumluk boşluk kalır.
+GRAFIK_MUM_MAKS = max(2, int(_env_float("GRAFIK_MUM_MAKS", 80)))
 # Kareye çizilen onaylı+geçerli BOS/CHoCH sayısı.
 GRAFIK_OLAY_MAKS = max(0, int(_env_float("GRAFIK_OLAY_MAKS", 6)))
 # NOT: `grafik.py` bu dört anahtarı İMPORT ANINDA değil ÇAĞRI ANINDA env'den okur
