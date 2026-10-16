@@ -67,3 +67,9 @@ raporlar/
 *.png
 *.jpg
 *.jpeg
+
+# Durable notification delivery state (includes rendered PNG bytes).
+**/notification_delivery.json
+**/notification_delivery.tmp
+
+.pytest-full.log

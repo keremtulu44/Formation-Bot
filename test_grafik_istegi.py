@@ -248,3 +248,18 @@ def test_listener_kabul_tesliminden_sonra_baslatir_ve_retry_tekildir(is_ortami, 
     assert siralama == ["kabul", "kabul", "iş"]
     listener.handle_update(update)
     assert len(threadler) == 1
+
+
+
+def test_bolge_gorunumu_ve_mobil_ureticiye_aktarilir(is_ortami, monkeypatch):
+    import grafik_uret
+    calls = []
+    def uret(_hisse, _tf, **options):
+        calls.append(options)
+        Path(options["cikti"]).write_bytes(b"png")
+        return {"yol": options["cikti"], "meta": {"mum_sayisi": 20}}
+    monkeypatch.setattr(grafik_uret, "kare_uret", uret)
+    _n, _metin, photos, threads = is_ortami
+    bitir(M._komut_grafik("SEM 4s baglam mobil"), threads)
+    assert calls[0]["gorunum"] == "baglam" and calls[0]["mobil"] is True
+    assert len(photos) == 1

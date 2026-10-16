@@ -162,20 +162,19 @@ def test_pattern_etiketi_degisince_ayni_olay_tekrar_sayilmaz(monkeypatch):
     assert len(gonderilenler) == 1
 
 
-def test_muhr_ttl_dolunca_bayalar_tekrar_bildirim_serbest(monkeypatch):
+def test_muhr_ttl_dolsa_da_teslim_edilmis_olay_tekrarlanmaz(monkeypatch):
     n, gonderilenler = _aktif(monkeypatch)
     assert n.send(_veri("KIRILIM_TEYITLI", stock="THYAO")) is True
     assert n.send(_veri("KIRILIM_TEYITLI", stock="THYAO")) is False
 
-    # TTL dolunca mühür bayatlar (1h TF: 3 bar + 1 saat pay = 4 saat),
-    # aynı olay tekrar bildirilebilir.
+    # A completed durable delivery still prevents replay when the older seal expires.
     bayat = (datetime.now(ISTANBUL_TZ) - timedelta(hours=10)).isoformat()
     n._son_alert[n._son_alert_key("THYAO", "1h", "KIRILIM_TEYITLI")] = \
         {"state": "KIRILIM_TEYITLI", "zaman": bayat, "tf": "1h"}
     n.last_sent.pop(n._cooldown_key("THYAO", "Yükselen Üçgen", "1h",
                                     "KIRILIM_TEYITLI"), None)
-    assert n.send(_veri("KIRILIM_TEYITLI", stock="THYAO")) is True
-    assert len(gonderilenler) == 2
+    assert n.send(_veri("KIRILIM_TEYITLI", stock="THYAO")) is False
+    assert len(gonderilenler) == 1
 
 
 def test_eski_bicim_muhurler_acilista_tasinir(monkeypatch):

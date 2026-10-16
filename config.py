@@ -538,3 +538,7 @@ ALLOW_TRUSTED_PICKLE_CACHE = (
     (os.getenv("ALLOW_TRUSTED_PICKLE_CACHE", "0") or "0").strip().lower()
     in {"1", "true", "yes", "on"}
 )
+
+# Consecutive closed bars before a return inside invalidates a breakout.
+INVALIDATION_CONFIRM_BARS = max(1, _env_int("INVALIDATION_CONFIRM_BARS", 3))
+MTF_ALERT_MERGE_HOURS = max(0.0, _env_float("MTF_ALERT_MERGE_HOURS", 4.0))

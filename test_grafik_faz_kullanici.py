@@ -112,7 +112,7 @@ def test_faz1_gelistirici_metinleri_karede_yok(tmp_path):
     assert "veri: 3 bar hacimsiz" in metin["dipnotlar"]      # bilgi korunur (kartta)
     assert metin["lejant"] and metin.get("_y") is None       # kareye yerleşim YOK
     yazilar = [str(t.get_text()) for t in fig.texts]
-    assert not any("hacimsiz" in y for y in yazilar)
+    assert any("Veri uyarısı:" in y and "hacimsiz" in y for y in yazilar)
     assert not any("bar hacimsiz" in y for y in yazilar)
     # lejant satırı da kareye basılmaz (uzun `·` listesi yalnız meta'da)
     assert not any("yeşil boş" in y for y in yazilar)
@@ -376,7 +376,7 @@ def test_faz3_fvg_doluluk_hesabi_yapmaz_ve_turkuaz_mor():
     assert tuple(round(float(c), 2) for c in dolgular[0].get_facecolor()[:3]) == beklenen
     kenar = [p for p in ax.patches if isinstance(p, Rectangle) and p.get_facecolor()[3] == 0]
     assert kenar and all(p.get_linestyle() not in ("-", "solid") for p in kenar)
-    assert grafik._zone_metni({"tip": "fvg", "yon": 1, "doluluk": 0.62}) == "FVG↑"
+    assert grafik._zone_metni({"tip": "fvg", "yon": 1, "doluluk": 0.62}) == "FVG↑ · durum bilinmiyor"
 
     fig, ax = _eksen(60)
     grafik._zone_ciz(ax, {"cizilen": [_bolge(tip="fvg", yon=-1, alt=100.0, ust=102.0,
@@ -427,8 +427,8 @@ def test_faz3_pivot_yoksa_kirilim_mumundan_baslar():
 
 
 def test_faz3_mitigated_yuzdesi_kutu_metnine_girer():
-    assert grafik._zone_metni({"tip": "ob", "yon": 1, "doluluk": 0.41}) == "OB↑ %41 dolu"
-    assert grafik._zone_metni({"tip": "ob", "yon": 1, "doluluk": 0.0}) == "OB↑ · taze"
+    assert grafik._zone_metni({"tip": "ob", "yon": 1, "doluluk": 0.41}) == "OB↑ · durum bilinmiyor · dolum %41"
+    assert grafik._zone_metni({"tip": "ob", "yon": 1, "doluluk": 0.0}) == "OB↑ · durum bilinmiyor · dolum %0"
 
 
 # ----------------------------------------------------------- FAZ 4: fintech cila
@@ -440,7 +440,7 @@ def test_faz4_baslik_rozetleri_yarisaydam_pills():
                              [], False)
     rozetler = metin["pill_listesi"]
     assert rozetler and rozetler[0]["metin"].endswith("· 1S")
-    assert "Simetrik Üçgen" in rozetler[1]["metin"] and "(%88)" in rozetler[1]["metin"]
+    assert "Simetrik Üçgen" in rozetler[1]["metin"] and "kalite 88/100" in rozetler[1]["metin"]
     assert all(r.get("dolgu") and r.get("kenar") for r in rozetler)
 
 
@@ -483,11 +483,8 @@ def test_faz4_pivot_etiketleri_fitilden_10_15_px_uzak():
     fig, ax = _eksen(60)
     ax.set_ylim(45.0, 55.0)
     grafik._olay_ciz(ax, g, 60, [])
-    etiket = [t for t in ax.texts if str(t.get_text()) == "HH"][0]
-    ofs = float(etiket.xyann[1]) if isinstance(etiket.xyann, tuple) else 0.0
-    taban = max(11.0, float(grafik.SABITLER["swing_etiket_ofset_px"]))
-    assert ofs == pytest.approx(taban)
-    assert 10.0 <= taban <= 15.0
+    assert not [t for t in ax.texts if t.get_text() in ("HH", "HL", "LH", "LL")]
+    assert not [ln for ln in ax.lines if ln.get_marker() in ("^", "v")]
 
 
 def test_faz4_hedef_kutusu_teyitli_alarmda_cizilir():

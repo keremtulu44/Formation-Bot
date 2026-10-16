@@ -116,7 +116,9 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
               demo: bool = False, sade: bool | None = None, renk_korugu: bool = False,
               buyuk_yazi: bool = False,
               yonetici=None, asama=None,
-              tazelik_kontrol=None) -> dict:
+              tazelik_kontrol=None, gorunum: str | None = None,
+              mobil: bool = False, tarihsel: bool = False,
+              ayrinti_yol: str | None = None, simdi=None) -> dict:
     """Tek kare üretir: önbellek → (istersen domain motorları) → PNG.
 
     `main()` (CLI) ve `/grafik` komutu AYNI bu fonksiyonu çağırır — iki yüzeyin
@@ -138,7 +140,7 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
         cerceve, kaynak = cerceve_getir(hisse, tf, dizin, demo, yonetici=yonetici)
         from data import tamamlanmis_mumlar
         if not demo:
-            cerceve = tamamlanmis_mumlar(cerceve, tf).copy(deep=True)
+            cerceve = tamamlanmis_mumlar(cerceve, tf, now=simdi).copy(deep=True)
         if cerceve is None or len(cerceve) < 2:
             raise VeriYok("veri yok: en az iki kapanmış mum gerekli")
         if tazelik_kontrol:
@@ -164,7 +166,8 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
                                        cerceve.copy(deep=True))
     goruntu = grafik.anlik_goruntu(formasyon, tf, cerceve, sembol=str(hisse).upper(),
                                    alarm_turu=alarm_turu, sonuclar=sonuclar,
-                                   kare_mum=mum, etiket_detay=etiket_detay)
+                                   kare_mum=mum, etiket_detay=etiket_detay, simdi=simdi,
+                                   veri_kaynagi=kaynak, tarihsel=tarihsel or demo)
     # Durum yalnız başlık/altyazı için: `anlik_goruntu` içinde `state` alarm türünü
     # belirler (`_ALARM_TURU`); bu yüzden görüntü kurulduktan SONRA eklenir.
     if durum and isinstance(goruntu.get("formasyon"), dict):
@@ -189,12 +192,23 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
         secenekler["renk_korugu"] = True
     if buyuk_yazi:
         secenekler["yazi_olcek"] = 1.25
+    if gorunum is not None:
+        secenekler["gorunum"] = gorunum
+    if mobil:
+        secenekler["mobil"] = True
     yol, meta = grafik.ciz(goruntu, tf, secenekler=secenekler)
+    ayrinti = None
+    if yol and ayrinti_yol:
+        try:
+            from chart_report import write_report
+            ayrinti = write_report(ayrinti_yol, goruntu, tf, secenekler, yol, meta)
+        except Exception as hata:
+            meta["ayrinti_hata"] = type(hata).__name__
     meta["kaynak"] = kaynak
     # Altyazı için: çizilen formasyonun adı (yoksa None). Kart/alarm yolu bunu kullanmaz.
     meta["formasyon_ad"] = (goruntu.get("formasyon") or {}).get("ad") or None
     meta["formasyon_durum"] = (goruntu.get("formasyon") or {}).get("state") or None
-    return {"tf": tf, "yol": yol, "meta": meta, "kaynak": kaynak,
+    return {"tf": tf, "yol": yol, "ayrinti_yol": ayrinti, "meta": meta, "kaynak": kaynak,
             "uyarilar": list(meta.get("uyarilar") or []), "hata": None}
 
 
@@ -317,6 +331,11 @@ def main(giris: list[str] | None = None) -> int:
                              help="mum/şerit renkleri mavi-turuncu (deuteranopia)")
     ayristirici.add_argument("--buyuk-yazi", action="store_true", dest="buyuk_yazi",
                              help="yazı puntoları ×1,25 (telefon okunurluğu)")
+    ayristirici.add_argument("--gorunum", choices=["odak", "baglam"], default=None,
+                             help="odak: yakın aktif bölgeler; baglam: geçmiş/uzak bölgeler")
+    ayristirici.add_argument("--mobil", action="store_true", help="780×1100, büyük yazılı mobil çıktı")
+    ayristirici.add_argument("--tarihsel", action="store_true", help="tarihsel/offline inceleme etiketi")
+    ayristirici.add_argument("--ayrinti", default=None, help="bölge ve dış olay ayrıntısı HTML yolu")
     ayristirici.add_argument("--veri-dizin", default=None, help="önbellek dizini (DATA_DIR)")
     ayristirici.add_argument("--formasyon", default=None,
                              help="kart payload'ı biçiminde JSON: bant/işaret/alarm verisi")
@@ -359,11 +378,17 @@ def main(giris: list[str] | None = None) -> int:
                               sade=getattr(secenek, "sade", None),
                               renk_korugu=bool(getattr(secenek, "renk_korugu", False)),
                               buyuk_yazi=bool(getattr(secenek, "buyuk_yazi", False)),
+                              gorunum=secenek.gorunum, mobil=secenek.mobil, tarihsel=secenek.tarihsel,
+                              ayrinti_yol=(_cikti_yolu(secenek.ayrinti, secenek.hisse, tf, tfler)
+                                           if secenek.ayrinti else None),
                               cikti=_cikti_yolu(secenek.cikti, secenek.hisse, tf, tfler))
         except SystemExit as hata:        # `_cerceve_yukle` uyumluluğu
             print(hata, file=sys.stderr)
             return 2
         meta = sonuc.get("meta") or {}
+        if secenek.ayrinti and not sonuc.get("ayrinti_yol") and not sonuc.get("hata"):
+            print("Ayrıntı HTML üretilemedi", file=sys.stderr)
+            return 1
         if sonuc.get("hata"):
             print(sonuc["hata"], file=sys.stderr)
             return 2

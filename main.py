@@ -1769,10 +1769,10 @@ def _komut_grafik(arguman: str) -> str:
     """
     parcalar = (arguman or "").split()
     if not parcalar:
-        return ("Kullanım: /grafik HISSE [1s|2s|4s|1g] [sade|detay]\n"
+        return ("Kullanım: /grafik HISSE [1s|2s|4s|1g] [sade|detay] [odak|baglam] [mobil]\n"
                 "Örnek: /grafik THYAO 4s sade. TF yazılmazsa 4 TF karesi denenir.")
-    if len(parcalar) > 3:
-        return "Kullanım: /grafik THYAO [1s|2s|4s|1g] [sade|detay]"
+    if len(parcalar) > 5:
+        return "Kullanım: /grafik THYAO [1s|2s|4s|1g] [sade|detay] [odak|baglam] [mobil]"
     hisse = parcalar[0].strip().upper()
     eslesme = _GRAFIK_SEMBOL.match(hisse)
     if not eslesme:
@@ -1781,8 +1781,20 @@ def _komut_grafik(arguman: str) -> str:
 
     tf = None
     sade = None
+    bolge_gorunumu = None
+    mobil = False
     for secim in parcalar[1:]:
         secim = secim.strip().lower()
+        if secim in {"odak", "baglam", "bağlam"}:
+            if bolge_gorunumu is not None:
+                return "Bölge görünümü yalnız bir kez seçilebilir: odak veya baglam."
+            bolge_gorunumu = "odak" if secim == "odak" else "baglam"
+            continue
+        if secim == "mobil":
+            if mobil:
+                return "Mobil görünüm yalnız bir kez seçilebilir."
+            mobil = True
+            continue
         if secim in _GRAFIK_GORUNUM:
             if sade is not None:
                 return "Görünüm yalnız bir kez seçilebilir: sade veya detay."
@@ -1807,6 +1819,7 @@ def _komut_grafik(arguman: str) -> str:
             return ("⏳ Aynı sembol/TF grafik isteği zaten hazırlanıyor." if cakisma else
                     "⏳ Başka grafik isteği hazırlanıyor; bitince yeniden deneyin.")
         istek = {"hisse": hisse, "tfler": tfler, "sade": sade,
+                 "gorunum": bolge_gorunumu, "mobil": mobil,
                  "asama": "kabul yanıtı bekleniyor"}
         _grafik_aktif_is.update(istek)
 
@@ -1821,6 +1834,7 @@ def _komut_grafik(arguman: str) -> str:
             raise
 
     gorunum = (f" · {'sade' if sade else 'detay'} görünüm" if sade is not None else "")
+    gorunum += (" · " + bolge_gorunumu if bolge_gorunumu else "") + (" · mobil" if mobil else "")
     return ArkaPlanYaniti(
         f"⏳ Grafik isteği alındı, hazırlanıyor: {hisse} · "
         + "/".join(_tf_kisa(tf) for tf in tfler) + gorunum
@@ -1908,7 +1922,8 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
                 sonuc = grafik_uret.kare_uret(
                     istek["hisse"], tf, zone=True, formasyon_tara=True, yonetici=yonetici,
                     veri_dizin=yonetici.data_dir if yonetici is not None else None,
-                    sade=istek.get("sade"),
+                    sade=istek.get("sade"), gorunum=istek.get("gorunum"),
+                    mobil=istek.get("mobil", False),
                     cikti=hedef, asama=lambda ad: durum(f"{_tf_kisa(tf)}: {ad}"),
                     tazelik_kontrol=tazelik)
                 yol, meta = sonuc.get("yol"), sonuc.get("meta") or {}
@@ -3111,12 +3126,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
 
 
 def _grafikleri_tur_sonunda(notifier) -> None:
-    """Biriken kareleri gönderir (§4: alarm METNİ çoktan gitmiştir).
-
-    Neden tur sonu: kare başına ~0,5 s üretim + 4 kare gönderimi; bunu `_gonder`
-    içinde yapmak sonraki hisselerin taramasını ve alarm metnini geciktirirdi
-    (§7 „metni bekletmemek için kuyruk şart"). Hata hiçbir şeyi durdurmaz.
-    """
+    """Retry the durable alert FIFO, then drain legacy command/test pictures."""
+    teslim = getattr(notifier, "teslimleri_dene", None)
+    if callable(teslim):
+        teslim()
     gonder = getattr(notifier, "grafikleri_gonder", None)
     if not callable(gonder):        # test/özel notifier'lar: sessizce yok say
         return
@@ -3782,6 +3795,7 @@ def main_loop():
             # Depolanan durumlara ait kuyruk/mühür anahtarları: redploy'da
             # acil kuyruk ve tek-seferlik mühürler kaybolmasın (kayıp çift
             # mesaj / tekrar alarm kök nedenlerinden biri buydu).
+            "state:notification_delivery",
             "state:telegram_acil_kuyruk",
             "state:telegram_son_alerts",
         ]
@@ -3914,6 +3928,13 @@ def main_loop():
     while not _shutdown_requested:
         try:
             now = datetime.now(ISTANBUL_TZ)
+            # Durable delivery is not tied to the next candle or market hours.
+            # Media failures must also recover after the closing scan/restart.
+            try:
+                notifier.teslimleri_dene()
+            except Exception as teslim_hata:
+                logger.warning("Bekleyen bildirim teslimi denenemedi: %s", type(teslim_hata).__name__)
+
             # Kullanıcı isteği seans saatinden bağımsız olarak ilk fırsatta çalışır.
             if _scan_istegi.is_set():
                 if _calistir_istek_taramasi(deque_manager, lifecycle_manager, notifier):

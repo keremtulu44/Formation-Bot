@@ -184,7 +184,7 @@ def test_fvg_lifecycle_kaydi_raw_listeden_ustundur_ve_doluluk_orani_dogrudur():
     assert g["zone"]["cikarim"]["fvg_raw"] == 0
 
 
-def test_engulfing_kutusu_lifecycle_body_sinirini_kullanir_mum_fitilini_degil():
+def test_aktif_engulfing_grafige_alinmaz():
     aktif = SimpleNamespace(
         direction=SimpleNamespace(value=-1), state=SimpleNamespace(name="ACTIVE"),
         lower_boundary=55.0, upper_boundary=56.0, formation_index=30,
@@ -196,13 +196,11 @@ def test_engulfing_kutusu_lifecycle_body_sinirini_kullanir_mum_fitilini_degil():
     })
     cerceve = _cerceve(60, "4h", taban=60.0, yon=0.0)
     g = grafik.anlik_goruntu(None, "4h", cerceve, sonuclar={"fvg": fvg}, simdi=ZAMAN)
-    eng = next(b for b in g["zone"]["cizilen"] if b["tip"] == "eng")
-    assert (eng["alt"], eng["ust"]) == (55.0, 56.0)
-    assert (eng["mum_alt"], eng["mum_ust"]) == (50.0, 61.0)
-    assert eng["kayit_kaynagi"] == "active_lifecycle"
+    assert not any(b["tip"] == "eng" for b in g["zone"]["cizilen"])
+    assert g["zone"]["cikarim"]["eng"] == 0
 
 
-def test_tamamlanmis_engulfing_lifecycle_kaybi_korunur():
+def test_tamamlanmis_engulfing_grafige_alinmaz():
     tamamlanmis = SimpleNamespace(
         direction=SimpleNamespace(value=1), state=SimpleNamespace(name="CONTINUATION_CONFIRMED"),
         lower_boundary=416.0, upper_boundary=420.75, formation_index=106,
@@ -214,14 +212,11 @@ def test_tamamlanmis_engulfing_lifecycle_kaybi_korunur():
     })
     cerceve = _cerceve(60, "4h", taban=60.0, yon=0.0)
     g = grafik.anlik_goruntu(None, "4h", cerceve, sonuclar={"fvg": fvg}, simdi=ZAMAN)
-    eng = next(b for b in g["zone"]["cizilen"] if b["tip"] == "eng")
-    assert (eng["alt"], eng["ust"]) == (416.0, 420.75)
-    assert eng["tamamlandi"] is True
-    assert eng["durum"] == "CONTINUATION_CONFIRMED"
-    assert eng["kayit_kaynagi"] == "completed_lifecycle"
+    assert not any(b["tip"] == "eng" for b in g["zone"]["cizilen"])
+    assert g["zone"]["cikarim"]["eng_completed"] == 0
 
 
-def test_engulf_raw_fallback_da_boundary_alanini_tercih_eder():
+def test_engulf_raw_fallback_grafige_alinmaz():
     raw = SimpleNamespace(
         direction=SimpleNamespace(value=-1), state=SimpleNamespace(name="ACTIVE"),
         formation_index=29, formation_time=ZAMAN, formation_low=50.0, formation_high=61.0,
@@ -230,9 +225,8 @@ def test_engulf_raw_fallback_da_boundary_alanini_tercih_eder():
     cerceve = _cerceve(60, "4h", taban=60.0, yon=0.0)
     g = grafik.anlik_goruntu(None, "4h", cerceve,
                             sonuclar=_sonuclar(eng_kayitlari=[raw]), simdi=ZAMAN)
-    eng = next(b for b in g["zone"]["cizilen"] if b["tip"] == "eng")
-    assert (eng["alt"], eng["ust"]) == (55.0, 56.0)
-    assert eng["kayit_kaynagi"] == "raw_formation"
+    assert not any(b["tip"] == "eng" for b in g["zone"]["cizilen"])
+    assert g["zone"]["cikarim"]["eng_raw"] == 0
 
 
 def test_1s_ve_2s_karelerinde_fvg_cizilmez():
@@ -315,7 +309,7 @@ def test_kadraj_disinda_baslayan_kutu_sol_kenardan_cizilir(tmp_path):
     kutu = g["zone"]["cizilen"][0]
     assert kutu["kaynak"] < g["sol"]
     assert kutu["x0"] == 0 and g["zone"]["kaynak_disi"] >= 1
-    _, meta = grafik.ciz(g, "1h", {"cikti": str(tmp_path / "kaynak.png")})
+    _, meta = grafik.ciz(g, "1h", {"cikti": str(tmp_path / "kaynak.png"), "gorunum": "baglam"})
     assert any("kadraj dışında" in n for n in meta["metin"]["notlar"])
 
 
@@ -332,7 +326,7 @@ def test_y_araligi_kutulari_icerir(tmp_path):
     """§0.13: hiçbir kutu kesilmez — yatay aralık bölge uçlarını da kapsar."""
     cerceve = _cerceve(240, "1h", yon=0.05)
     g = _goruntu_zone(cerceve, [_ob(200, 90.0, 95.0, bullish=False), _ob(210, 20.0, 25.0)])
-    yol, meta = grafik.ciz(g, "1h", {"cikti": str(tmp_path / "zone.png")})
+    yol, meta = grafik.ciz(g, "1h", {"cikti": str(tmp_path / "zone.png"), "gorunum": "baglam"})
     assert yol
     alt, ust = meta["kare"]["y_araligi"]
     assert alt <= 20.0 and ust >= 95.0
@@ -360,7 +354,7 @@ def test_cakisan_etiket_kaydirilir_atlanmaz(tmp_path):
     # Aynı bant, 1 bar arayla → yazılar zorunlu olarak üst üste biniyor
     g = _goruntu_zone(cerceve, [_ob(200, 59.0, 60.0), _ob(201, 59.2, 59.8)], tf="4h")
     assert len(g["zone"]["cizilen"]) == 2
-    _, meta = grafik.ciz(g, "4h", {"cikti": str(tmp_path / "capisma.png")})
+    _, meta = grafik.ciz(g, "4h", {"cikti": str(tmp_path / "capisma.png"), "gorunum": "baglam"})
     assert meta["zone"]["cizilen"] == 2               # kutular korunur
     assert meta["zone"]["etiket_atlandi"] == 0        # hiçbir etiket atılmaz
     assert meta["sag"]["yerlesen"] >= 2               # iki etiket de şeritte
@@ -399,7 +393,7 @@ def test_meta_zone_alanlari_dolu(tmp_path):
     cerceve = _cerceve(240, "1h", yon=0.05)
     g = _goruntu_zone(cerceve, [_ob(201, 55.0, 56.0), _ob(202, 44.0, 45.0, bullish=False)],
                       tf="1h")
-    _, meta = grafik.ciz(g, "1h", {"cikti": str(tmp_path / "zmeta.png")})
+    _, meta = grafik.ciz(g, "1h", {"cikti": str(tmp_path / "zmeta.png"), "gorunum": "baglam"})
     zone = meta["zone"]
     assert set(zone) >= {"cizilen", "elenen", "tip", "kaynak_disi", "kapak", "sirala",
                          "atr", "hata", "kayitlar"}

@@ -116,15 +116,6 @@ class DeferredAlertBuffer:
             self._reported.add(key)
             self._pending.pop(key, None)
 
-    def snapshot(self, now: datetime) -> dict:
-        """Serialize only current-day watch state; records remain Formation-native."""
-        self._ensure_day(now)
-        return {
-            "date": self._date.isoformat(),
-            "pending": [dict(record) for record in self._pending.values()],
-            "reported": [list(key) for key in sorted(self._reported)],
-        }
-
     def restore(self, snapshot: Optional[dict], now: datetime) -> int:
         """Restore a same-day snapshot; reject malformed/stale schema safely."""
         self.clear(now)
@@ -168,7 +159,12 @@ class DeferredAlertBuffer:
 
     SURUM = 1
 
-    def snapshot(self) -> dict:
+    def snapshot(self, now: Optional[datetime] = None) -> dict:
+        if now is not None:
+            self._ensure_day(now)
+            return {"date": self._date.isoformat(),
+                    "pending": [dict(r) for r in self._pending.values()],
+                    "reported": [list(k) for k in sorted(self._reported)]}
         return {
             "surum": self.SURUM,
             "gun": self._date.isoformat() if self._date else None,
