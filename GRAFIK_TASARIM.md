@@ -1705,9 +1705,11 @@ mitigation oranı motorun kendi `fill_boundary` alanından hesaplanır; kırıl�
 
 - `SABITLER["kadraj_cerceve"]` TF matrisi; `kare_mum_tavani()` artık TF'e
   duyarlıdır (eskiden dört TF'de de 180'di).
-- **Sağ boşluk** artık eksen yüzdesi değil **mum sayısıdır**: varsayılan 15
-  (plan: 12-15). `GRAFIK_SAG_BOSLUK_MUM` yeni anahtar; eski `GRAFIK_SAG_BOSLUK`
-  (oran) yalnız o tanımlıysa kullanılır — mevcut dağıtım ayarı boşa düşmez.
+- **Sağ boşluk:** bu turda 15 mumluk sabit alan eklendi (plan: 12-15). **Aynı gün
+  §41 ile değişti**: boşluk artık eksen genişliğinin %10-20'si (varsayılan %15);
+  sabit mum sayısı kareye göre kayıyordu (80 mumda %16, 35 mumluk formasyon
+  karesinde %30). `GRAFIK_SAG_BOSLUK_MUM` yalnız açıkça verilirse sabit mum yolunu
+  kullanır; eski `GRAFIK_SAG_BOSLUK` (oran) da yalnız o tanımlıysa geçerlidir.
 - Ölçüm: 80 mumluk 1s karesinde px/bar 10,8 → 9,1 (≈%84 korunur); 4s'te 7,3.
 - Kapatma: `test_grafik_sag_bosluk.py`, `test_grafik_iskelet.py::test_formasyon_*`.
 
@@ -1766,3 +1768,47 @@ mitigation oranı motorun kendi `fill_boundary` alanından hesaplanır; kırıl�
   taze/dolmuş OB + kritik + PH/WL cetveli) ve `docs/ornek_kare_faz1_4_4s.png`
   (AKBNK 4s, 68 mum, RVOL rozeti). Ölçüm çıktıları (diğer PNG'ler) depo dışında
   tutulur (§0 kural); yalnız tasarım referansı olan bu iki kare repoda kalır.
+
+## 41 · SAĞ BOŞLUK YÜZDE KURALI (2026-10-16) — %10-20, varsayılan %15
+
+Kullanıcı kararı: *"görselde sağ boşluk diye bir olay var, o şu an %10 %20 yapıp"*.
+Boşluk artık **eksen genişliğinin yüzdesi**; sabit mum sayısı değil.
+
+### 41.1 Kural
+
+| Kare | Eski (sabit 15 mum) | Yeni (%15) | Fark |
+| :--- | :--- | :--- | :--- |
+| 1s 80 mum | 15 mum → %15,8 | 14 mum → %14,9 | −1 mum |
+| 4s 68 mum | 15 mum → %18,0 | 12 mum → %15,0 | −3 mum |
+| 2s 74 mum | 15 mum → %16,8 | 13 mum → %14,9 | −2 mum |
+| 1g 62 mum | 15 mum → %19,5 | 11 mum → %15,0 | −4 mum |
+| formasyon 35 mum | 15 mum → **%29,9** | 6 mum → %14,6 | −9 mum |
+
+- `SABITLER["sag_bosluk_orani"] = 0,15`; pencere `sag_bosluk_orani_min = 0,10` /
+  `sag_bosluk_orani_maks = 0,20`. Otomatik kural bu pencereye **kırpılır**; oran
+  açıkça (`GRAFIK_SAG_BOSLUK_ORANI`) verilirse kırpılmaz (kaçış kapısı).
+- Formül: `g = round(o × (n + 0,2) / (1 − o))` bar; eksen `n + 0,2 + g` bar,
+  yani boşluğun eksendeki payı tam olarak `o`. Gerçek oran `meta["kare"]["sag_bosluk_yuzde"]`de.
+- Öncelik sırası (hepsi yalnız **açıkça verilirse**): `GRAFIK_SAG_BOSLUK_MUM`
+  (sabit mum, `0` = kapalı) > `GRAFIK_SAG_BOSLUK` (eski oran) >
+  `GRAFIK_SAG_BOSLUK_ORANI` (yeni yüzde) > varsayılan (%15, pencereli).
+- Kazanç: formasyon karelerinde 9 muma kadar alan mumlara döndü; **her karede aynı
+  görsel oran** (oranlar arası sapma < 1 puan), yani TF/TF gezerken boşluk "zıplamıyor".
+- Değişmeyenler: fiyat etiketleri/seviye çizgileri/🎯 hedef kutusu bu alana çizilir,
+  OB/FVG kutuları ve bant çizgileri buraya kadar uzar, tuval 1080×810 kalır.
+
+### 41.2 Doğrulama
+
+- `pytest -q` → **1262 geçti, 44 atlandı** (yeni: `test_grafik_sag_bosluk.py`
+  yüzde penceresi + öncelik sırası testleri; `test_grafik_faz_kullanici.py`
+  `test_faz2_sag_bosluk_eksenin_yuzde_10_20`).
+- Gerçek önbellekle ölçüm: GARAN 1s %10 → 9 mum (%10,1) · %15 → 14 mum (%14,9) ·
+  %20 → 20 mum (%20,0); AKBNK 4s %10 → 8 mum (%10,5) · %15 → 12 mum (%15,0) ·
+  %20 → 17 mum (%19,9). Üç oranda da `mum_cakisan == 0`.
+- Karşılaştırma aracı: `scripts/grafik_sag_bosluk_karsilastirma.py`
+  (`--kare GARAN:1h --kare AKBNK:4h --oranlar 0.10,0.15,0.20`) — botun kendi
+  `kare_uret` yolunu çağırır, satır = oran / kolon = kare tek sayfa üretir.
+  Turun çıktısı: `docs/ornek_sag_bosluk_oran.png` (üç oran × iki kare);
+  `docs/ornek_kare_faz1_4_1s.png` ve `_4s.png` yeni varsayılanla yenilendi
+  (14 ve 12 mum boşluk, `mum_cakisan == 0`).
+

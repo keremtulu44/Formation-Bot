@@ -13,7 +13,8 @@ sözleşmeye bağlar:
   FAZ 2 — Akıllı kadraj
     * TF matrisi (`1G 62 · 4S 68 · 2S 74 · 1S 80`) formasyon yokken geçerli,
     * formasyon varsa kadraj formasyona odaklanır: +10 mum sol tampon, 35-85 arası,
-    * sağda her zaman 12-15 mumluk boş alan (`sag_bosluk_mum`).
+    * sağda her zaman eksen genişliğinin %10-20'si kadar boş alan
+      (`sag_bosluk_orani`; 2026-10-16 kullanıcı kararı).
 
   FAZ 3 — SMC motoru ve çizim revizyonu
     * OB kaydında `mitigated_percentage` (motorun `fill_boundary`si),
@@ -163,11 +164,17 @@ def test_faz2_formasyon_kadraji_tampon_ve_sinirlar(genislik, beklenen):
     assert len(g["zamanlar"]) == beklenen
 
 
-def test_faz2_sag_bosluk_12_15_mum():
-    """Plan: her grafiğin sağında 12-15 mumluk boş alan kalır (varsayılan 15)."""
-    varsayilan = int(grafik.SABITLER["sag_bosluk_mum"])
-    assert 12 <= varsayilan <= 15
-    assert grafik.sag_bosluk_mum(80) == varsayilan == grafik.sag_bosluk_mum(62)
+def test_faz2_sag_bosluk_eksenin_yuzde_10_20():
+    """Kullanıcı (2026-10-16): sağ boşluk eksen genişliğinin %10-20'si (hedef %15).
+
+    Eski "sabit 12-15 mum" kuralı kareye göre kayıyordu (80 mumda %16, 35 mumluk
+    formasyon karesinde %30); yüzde kuralı her karede aynı oranı verir.
+    """
+    assert float(grafik.SABITLER["sag_bosluk_orani"]) == pytest.approx(0.15)
+    for n in (35, 62, 68, 74, 80, 85):
+        g = grafik.sag_bosluk_mum(n)
+        oran = 100.0 * g / (n + 0.2 + g)
+        assert 10.0 <= oran <= 20.0, (n, g, oran)
 
 
 # --------------------------------------------------- FAZ 3: SMC motoru ve çizim

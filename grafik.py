@@ -289,10 +289,20 @@ SABITLER_TABAN: dict[str, Any] = {
     # koru, iç swing okları sağ şeridi tüketmez.
     "sag_etiket_maks": {"zone": 3, "olay": 3, "alarm": 1, "swing": 4},
     "kadraj_pay_orani": 0.06,         # yapı seviyesi: candle aralığının bu oranı dışındaysa çizilmez
-    # Sağ boşluk (FAZ 2 §"Sağ Boşluk Kuralı"): son mumun sağında HER ZAMAN 12-15
-    # mumluk boş alan. Sabit mum sayısıdır (varsayılan 15) — fiyat etiketleri,
-    # seviye çizgileri ve 🎯 hedef kutusu mumların üzerine değil bu alana çizilir.
-    # Bant çizgileri, OB/FVG kutuları ve aktif BOS/CHoCH hedefi buraya kadar uzar.
+    # Sağ boşluk: son mumun sağında kalan boş alan. Fiyat etiketleri, seviye
+    # çizgileri ve 🎯 hedef kutusu mumların üzerine değil bu alana çizilir; bant
+    # çizgileri, OB/FVG kutuları ve aktif BOS/CHoCH hedefi buraya kadar uzar.
+    #
+    # 2026-10-16 (kullanıcı): boşluk artık EKSEN GENİŞLİĞİNİN YÜZDESİ — hedef
+    # %15, kabul penceresi %10-20 (`sag_bosluk_orani_min/maks`). Sabit mum
+    # sayısı pencereyi mum sayısına göre kaydırıyordu: 80 mumluk 1s karesinde 15
+    # mum %16, 35 mumluk formasyon karesinde ise %30 oluyordu (aşırı boş).
+    # Yüzde kuralı her karede aynı görsel oranı verir.
+    "sag_bosluk_orani": 0.15,
+    "sag_bosluk_orani_min": 0.10,     # aşağı kırpma: etiketler sığsın
+    "sag_bosluk_orani_maks": 0.20,    # yukarı kırpma: mumlar daralmasın
+    # Yalnız `GRAFIK_SAG_BOSLUK_MUM` verilirse kullanılan sabit mum sayısı ve
+    # bozuk değerde düşülen varsayılan.
     "sag_bosluk_mum": 15,
     "sag_bosluk_yuzde": 5.3,          # eski oran yolu: `GRAFIK_SAG_BOSLUK` verilirse
 
@@ -411,15 +421,22 @@ def _ortam_bayrak(ad: str, varsayilan: bool = False) -> bool:
 def sag_bosluk_mum(n: int) -> int:
     """Son mumun sağındaki BOŞ alan, bar sayısı olarak; 0 = kapalı, eski görünüm.
 
-    FAZ 2 ("Sağ Boşluk Kuralı"): her grafiğin sağında **12-15 mumluk** boş alan
-    bırakılır; varsayılan 15 bar. Fiyat etiketleri, seviye çizgileri, 🎯 hedef
-    kutusu ve aktif kırılım çizgileri mumların üzerine değil bu alana çizilir.
+    Kural (2026-10-16, kullanıcı kararı): boşluk **eksen genişliğinin yüzdesidir**.
+    Hedef %15, kabul penceresi %10-20 (`sag_bosluk_orani_min/maks`). Her karede aynı
+    görsel oran çıkar: 80 mumluk 1s karesinde ≈14 mum, 35 mumluk formasyon karesinde
+    ≈6 mum. (Eski sabit "15 mum" kuralı formasyon karesinde %30'a çıkıyordu.)
 
-    `GRAFIK_SAG_BOSLUK_MUM` sabit bar sayısını verir (0 → eski görünüm).
-    Eski `GRAFIK_SAG_BOSLUK` (eksen GENİŞLİĞİNİN yüzdesi) yalnız o değişken
-    tanımlıysa kullanılır — mevcut dağıtımların ayarı boşa düşmesin.
-    Eksen `n + 0,2 + g` bar genişliğindedir (xlim −0,6 … n−0,4+g).
-    Bozuk/uç değer asla çizimi engellemez: NaN varsayılana, fazlası 40 bara düşer.
+    Fiyat etiketleri, seviye çizgileri, 🎯 hedef kutusu ve aktif kırılım çizgileri
+    mumların üzerine değil bu alana çizilir.
+
+    Öncelik sırası (hepsi ortam değişkeniyle, açıkça verilirse):
+      1. `GRAFIK_SAG_BOSLUK_MUM`  → sabit mum sayısı (0 → eski görünüm)
+      2. `GRAFIK_SAG_BOSLUK`      → eski oran yolu (eksen yüzdesi, kırpılmaz)
+      3. `GRAFIK_SAG_BOSLUK_ORANI`→ yeni yüzde kuralı (açıkça verilirse kırpılmaz)
+      4. varsayılan               → %15, [%10, %20] penceresine kırpılır
+
+    Eksen `n + 0,2 + g` bar genişliğindedir (xlim −0,6 … n−0,4+g); oran `g / (n + 0,2 + g)`.
+    Bozuk/uç değer asla çizimi engellemez: NaN varsayılana, fazlası en yakın sınıra düşer.
     """
     if int(n) <= 0:
         return 0
@@ -436,7 +453,19 @@ def sag_bosluk_mum(n: int) -> int:
         if pay <= 0.0:
             return 0
         return max(1, int(round(pay * (int(n) + 0.2) / (1.0 - pay))))
-    return max(0, min(40, int(SABITLER["sag_bosluk_mum"])))
+    # Yeni varsayılan yol: eksen yüzdesi, %10-20 penceresine kırpılır.
+    acik = "GRAFIK_SAG_BOSLUK_ORANI" in os.environ
+    oran = _ortam_sayi("GRAFIK_SAG_BOSLUK_ORANI", float(SABITLER["sag_bosluk_orani"]))
+    if not math.isfinite(oran):
+        oran = float(SABITLER["sag_bosluk_orani"])
+        acik = False
+    if not acik:                                   # yalnız otomatik kuralda kırp
+        oran = min(max(oran, float(SABITLER["sag_bosluk_orani_min"])),
+                   float(SABITLER["sag_bosluk_orani_maks"]))
+    oran = max(0.0, min(0.80, oran))
+    if oran <= 0.0:
+        return 0
+    return max(1, int(round(oran * (int(n) + 0.2) / (1.0 - oran))))
 
 
 def kare_mum_tavani(tf: str) -> int:
