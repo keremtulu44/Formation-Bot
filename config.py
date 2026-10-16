@@ -282,7 +282,7 @@ RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip()
 
 # --- PUBLIC KANAL ve ÖZET ---
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()
-SUMMARY_HOURS = os.getenv("SUMMARY_HOURS", "18:45").strip()  # İstanbul saati, virgülle ayrılmış (V1: yalnız 18:45)
+SUMMARY_HOURS = "18:45"  # İstanbul saati, virgülle ayrılmış (V1: yalnız 18:45 kapanış özeti)
 DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").strip()
 # 18:45 erteleme özetinde gösterilecek EN FAZLA aday. Kalan adaylar kaybolmaz:
 # başlıkta "12/21 gösteriliyor" ve altta "… 9 aday daha (tam liste: /formasyonlar)"
@@ -290,11 +290,8 @@ DEFERRED_ALERT_DIGEST_TIME = os.getenv("DEFERRED_ALERT_DIGEST_TIME", "18:45").st
 #   DEFERRED_ALERT_DIGEST_LIMIT=20
 DEFERRED_ALERT_DIGEST_LIMIT = _env_int("DEFERRED_ALERT_DIGEST_LIMIT", 12)
 POST_CLOSE_ANALYSIS_TIME = os.getenv("POST_CLOSE_ANALYSIS_TIME", "20:00").strip()  # gün sonu tam evren taraması
-# V2: 20:00 taraması her işlem günü çalışır; mesaj yalnız 18:45 sonrası yeni teyit/iptal varsa gider (0=her zaman tam panel).
-POST_CLOSE_ONLY_ON_DIFF = (
-    (os.getenv("POST_CLOSE_ONLY_ON_DIFF", "1") or "1").strip().lower()
-    not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}
-)
+# V2: 20:00 taraması her işlem günü çalışır; mesaj yalnız 18:45 sonrası yeni teyit/iptal varsa gider (False=her zaman tam panel).
+POST_CLOSE_ONLY_ON_DIFF = True
 
 # --- HAFTALIK DOĞRULUK KARNESİ (yerel dosya; Supabase GEREKTİRMEZ) ---
 # Cuma gün sonu mesajının (18:45 özeti; gönderilemezse 20:00 gün sonu analizi)
@@ -546,22 +543,14 @@ ALLOW_TRUSTED_PICKLE_CACHE = (
 
 # Consecutive closed bars before a return inside invalidates a breakout.
 INVALIDATION_CONFIRM_BARS = max(1, _env_int("INVALIDATION_CONFIRM_BARS", 3))
-INVALIDATION_CONFIRM_BARS_TF = os.getenv(
-    "INVALIDATION_CONFIRM_BARS_TF", "1h:3,2h:2,4h:2,1d:2"
-).strip()
+INVALIDATION_CONFIRM_BARS_TF = "1h:3,2h:2,4h:2,1d:2"
 # Minimum depth inside broken band (in ATR multiples) to advance invalidation counter (0 = off).
-INVALIDATION_MIN_DEPTH_ATR = max(0.0, _env_float("INVALIDATION_MIN_DEPTH_ATR", 0.3))
+INVALIDATION_MIN_DEPTH_ATR = 0.3
 # Only push instant KIRILIM_GECERSIZLESTI when prior KIRILIM_TEYITLI for the same formation_id was delivered.
-INVALIDATION_REQUIRE_DELIVERED_CONFIRM = (
-    (os.getenv("INVALIDATION_REQUIRE_DELIVERED_CONFIRM", "1") or "1").strip().lower()
-    not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}
-)
+INVALIDATION_REQUIRE_DELIVERED_CONFIRM = True
 MTF_ALERT_MERGE_HOURS = max(0.0, _env_float("MTF_ALERT_MERGE_HOURS", 4.0))
-# Family-level pattern matching across TFs in related() ("0" restores exact pattern_name match).
-MTF_FAMILY_MATCH = (
-    (os.getenv("MTF_FAMILY_MATCH", "1") or "1").strip().lower()
-    not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}
-)
+# Family-level pattern matching across TFs in related() (False restores exact pattern_name match).
+MTF_FAMILY_MATCH = True
 
 
 def _parse_tf_int_map(raw) -> dict:
@@ -589,28 +578,14 @@ def _parse_tf_int_map(raw) -> dict:
 
 
 def invalidation_confirm_bars_for_tf(tf=None) -> int:
-    raw_default = os.getenv("INVALIDATION_CONFIRM_BARS")
-    if raw_default is not None:
-        try:
-            fallback = max(1, int(raw_default))
-        except (TypeError, ValueError):
-            fallback = max(1, int(INVALIDATION_CONFIRM_BARS))
-    else:
-        fallback = max(1, int(INVALIDATION_CONFIRM_BARS))
+    fallback = max(1, int(INVALIDATION_CONFIRM_BARS))
     if not tf:
         return fallback
-    raw_tf = os.getenv("INVALIDATION_CONFIRM_BARS_TF")
-    tf_map = _parse_tf_int_map(raw_tf if raw_tf is not None else INVALIDATION_CONFIRM_BARS_TF)
+    tf_map = _parse_tf_int_map(INVALIDATION_CONFIRM_BARS_TF)
     return tf_map.get(str(tf).strip().lower(), fallback)
 
 
 def invalidation_min_depth_atr() -> float:
-    raw = os.getenv("INVALIDATION_MIN_DEPTH_ATR")
-    if raw is not None:
-        try:
-            return max(0.0, float(raw))
-        except (TypeError, ValueError):
-            return 0.0
     try:
         return max(0.0, float(INVALIDATION_MIN_DEPTH_ATR))
     except (TypeError, ValueError):
@@ -618,23 +593,14 @@ def invalidation_min_depth_atr() -> float:
 
 
 def invalidation_require_delivered_confirm() -> bool:
-    raw = os.getenv("INVALIDATION_REQUIRE_DELIVERED_CONFIRM")
-    if raw is not None:
-        return raw.strip().lower() not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}
     return bool(INVALIDATION_REQUIRE_DELIVERED_CONFIRM)
 
 
 def mtf_family_match_enabled() -> bool:
-    raw = os.getenv("MTF_FAMILY_MATCH")
-    if raw is not None:
-        return raw.strip().lower() not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}
     return bool(MTF_FAMILY_MATCH)
 
 
 def post_close_only_on_diff_enabled() -> bool:
-    raw = os.getenv("POST_CLOSE_ONLY_ON_DIFF")
-    if raw is not None:
-        return raw.strip().lower() not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}
     return bool(POST_CLOSE_ONLY_ON_DIFF)
 
 

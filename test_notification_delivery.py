@@ -363,7 +363,8 @@ def test_tur2b_superficial_graze_does_not_increment_counter_and_switch_restores_
     assert e_cand._inside_run == 0
 
     # Supap: INVALIDATION_MIN_DEPTH_ATR=0 disables depth filter
-    monkeypatch.setenv("INVALIDATION_MIN_DEPTH_ATR", "0")
+    import config
+    monkeypatch.setattr(config, "INVALIDATION_MIN_DEPTH_ATR", 0.0)
     e_off = _setup_retest_engine(direction=direction, tf="1h", atr=2.0)
     e_off.close = [shallow_close] * 6
     e_off.high = [shallow_close + 0.3] * 6
@@ -374,6 +375,7 @@ def test_tur2b_superficial_graze_does_not_increment_counter_and_switch_restores_
 
 
 def test_tur2c_timeframe_specific_confirm_bars_and_fallback(monkeypatch):
+    import config
     from patterns.lifecycle import PatternLifecycleManager
 
     mgr = PatternLifecycleManager()
@@ -392,14 +394,15 @@ def test_tur2c_timeframe_specific_confirm_bars_and_fallback(monkeypatch):
     assert e4._retest_step(3) == ST_BREAK_FAILED
 
     # Fallback when TF map is disabled or TF is unknown
-    monkeypatch.setenv("INVALIDATION_CONFIRM_BARS_TF", "0")
-    monkeypatch.setenv("INVALIDATION_CONFIRM_BARS", "4")
+    monkeypatch.setattr(config, "INVALIDATION_CONFIRM_BARS_TF", "")
+    monkeypatch.setattr(config, "INVALIDATION_CONFIRM_BARS", 4)
     assert eng_4h._invalidation_confirm_bars() == 4
 
 
 def test_tur2a_unannounced_confirmation_skips_instant_push_and_adds_summary_line(
     tmp_path, monkeypatch
 ):
+    import config
     import main as main_module
     from reporting.format import format_urgent_alert_queue_summary
 
@@ -431,8 +434,8 @@ def test_tur2a_unannounced_confirmation_skips_instant_push_and_adds_summary_line
     assert box.confirmation_delivered("announced-fid")
     assert main_module._invalidation_confirmation_delivered(fake_notifier, "announced-fid")
 
-    # Supap: INVALIDATION_REQUIRE_DELIVERED_CONFIRM=0 restores instant push without check
-    monkeypatch.setenv("INVALIDATION_REQUIRE_DELIVERED_CONFIRM", "0")
+    # Supap: INVALIDATION_REQUIRE_DELIVERED_CONFIRM=False restores instant push without check
+    monkeypatch.setattr(config, "INVALIDATION_REQUIRE_DELIVERED_CONFIRM", False)
     assert main_module._invalidation_confirmation_delivered(fake_notifier, "unannounced-fid")
 
 
@@ -597,7 +600,6 @@ def test_tur2a_scan_all_stocks_suppresses_invalidation_when_confirmation_not_del
     monkeypatch.setattr(main_module, "_daily_basarisiz_keys", set())
     monkeypatch.setattr(main_module, "_daily_unannounced_invalidation_keys", set())
     monkeypatch.setattr(main_module, "_gunluk_sayac_kaydet", lambda: None)
-    monkeypatch.setenv("INVALIDATION_REQUIRE_DELIVERED_CONFIRM", "1")
 
     main_module.scan_all_stocks(
         _FakeDequeManager(),
@@ -659,8 +661,9 @@ def test_tur4_family_based_mtf_merge_and_kill_switch(tmp_path, monkeypatch):
     diff_state["state"] = "RETEST_BASARILI"
     assert box.submit(diff_state)
 
-    # Supap: MTF_FAMILY_MATCH=0 restores exact pattern_name matching
-    monkeypatch.setenv("MTF_FAMILY_MATCH", "0")
+    # Supap: MTF_FAMILY_MATCH=False restores exact pattern_name matching
+    import config
+    monkeypatch.setattr(config, "MTF_FAMILY_MATCH", False)
     wedge_1h = alert(stock="GARAN", tf="1h", identity="wedge-1h", direction=1)
     wedge_1h["pattern_name"] = "Alçalan Kama"
     wedge_4h = alert(stock="GARAN", tf="4h", identity="wedge-4h", direction=1)
@@ -674,7 +677,7 @@ def test_v1_v2_summary_hours_default_and_post_close_diff_formatting(monkeypatch)
     import config
     import main as main_module
 
-    # V1: default SUMMARY_HOURS is 18:45 only; env override still supports 09:55,18:45
+    # V1: default SUMMARY_HOURS is 18:45 only in code
     assert main_module._parse_summary_hours() == [dt_time(18, 45)]
     monkeypatch.setattr(main_module, "SUMMARY_HOURS", "09:55,18:45")
     assert main_module._parse_summary_hours() == [dt_time(9, 55), dt_time(18, 45)]
@@ -716,8 +719,8 @@ def test_v1_v2_summary_hours_default_and_post_close_diff_formatting(monkeypatch)
     assert "GARAN 4h · Yükselen Üçgen · 🏁 Kırılım teyitli" in rapor
     assert "AKBNK 1h · Boğa Bayrağı · ❌ Kırılım geçersizleşti" in rapor
 
-    # Supap: POST_CLOSE_ONLY_ON_DIFF=0 disables diff-only mode
+    # Supap: POST_CLOSE_ONLY_ON_DIFF=False disables diff-only mode
     assert config.post_close_only_on_diff_enabled() is True
-    monkeypatch.setenv("POST_CLOSE_ONLY_ON_DIFF", "0")
+    monkeypatch.setattr(config, "POST_CLOSE_ONLY_ON_DIFF", False)
     assert config.post_close_only_on_diff_enabled() is False
 
