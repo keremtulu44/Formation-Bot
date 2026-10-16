@@ -46,22 +46,14 @@ def _grafik_salteri_acik() -> bool:
     return (os.environ.get("TELEGRAM_GRAFIK") or "yok").strip().lower() != "yok"
 
 
-KUYRUK_HARICI_ANAHTARLAR = ("grafik_verisi",)
-
-
 def _kuyruk_verisi(data: Dict) -> Dict:
-    """Acil kuyruk kaydına girecek sözlüğün kopyası — bellek içi alanlar çıkarılır.
+    """Persist a detached chart snapshot as well as the text context.
 
-    Neden: kuyruk diske JSON yazılıyor (`json.dump(..., default=str)`) ve
-    `grafik_verisi` çerçeve kopyaları + motor çıktıları taşıyor; `default=str`
-    onu okunamaz bir yığına dönüştürüp kuyruk dosyasını şişirirdi. Görsel, kuyrukta
-    bekleyen olay için zaten geçersizdir (kadraj değişir) → atılır, kaydı loglanır.
+    These are plain chart dictionaries, not DataFrames or engine instances.
+    The tagged JSON codec preserves their timestamps across restarts.
     """
-    kayit = dict(data or {})
-    atilan = [ad for ad in KUYRUK_HARICI_ANAHTARLAR if kayit.pop(ad, None) is not None]
-    if atilan:
-        logger.debug("kuyruk kaydından çıkarıldı: %s", ", ".join(atilan))
-    return kayit
+    from notification_delivery import freeze
+    return freeze(data or {})
 
 
 def _grafik_basligi(olay: Dict, kare: Dict, meta: Dict) -> str:
@@ -81,6 +73,8 @@ def _grafik_basligi(olay: Dict, kare: Dict, meta: Dict) -> str:
     # Kartta hangi etiket görünüyorsa karede de o: 4h → 4s (ham TF kodu değil).
     tf = str((kare.get("goruntu") or {}).get("tf_kisa") or kare.get("tf") or "1h")
     parcalar = [sembol, tf]
+    if olay.get("state") == "KIRILIM_GECERSIZLESTI" or ((kare.get("goruntu") or {}).get("alarm") or {}).get("tur") == "gecersiz":
+        return " · ".join(parcalar)
     mum = meta.get("mum_sayisi")
     if mum:
         parcalar.append(f"{_format_sayi(mum, 0)} mum")
@@ -345,12 +339,14 @@ def _kart_yas_metni(data: Dict) -> str:
         yas_say = None
     if yas_say is None:
         return ""
-    metin = f"bant {yas_say} bar"
+    metin = f"· bant {yas_say} bar"
     dogum = data.get("band_baslangic")
     if dogum:
         try:
             zaman = dogum if isinstance(dogum, datetime) else datetime.fromisoformat(str(dogum))
-            metin += f" — {zaman.day:02d}.{zaman.month:02d}'dan beri"
+            aylar = ("Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
+            ekler = ("tan", "tan", "tan", "dan", "tan", "dan", "dan", "tan", "den", "den", "dan", "tan")
+            metin += f" — {zaman.day} {aylar[zaman.month - 1]}'{ekler[zaman.month - 1]} beri"
         except (TypeError, ValueError):
             pass
     return metin
@@ -420,26 +416,27 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
     # tek cümlesi: onsuz kart "ne oldu"yu söylemiyor).
     if gecersiz:
         if esik:
-            _satir(satirlar, f"teyit sınırı {_sayı(esik)} {yon_eki}")
+            _satir(satirlar, f"· teyit sınırı {_sayı(esik)} {yon_eki}")
         elif kapanis:
-            _satir(satirlar, f"kapanış {kapanis}")
+            _satir(satirlar, f"· kapanış {kapanis}")
     elif kapanis and kirilan:
-        _satir(satirlar, f"kapanış {kapanis} (seviye {kirilan})")
+        _satir(satirlar, f"· kapanış {kapanis} (seviye {kirilan})")
     elif kapanis:
-        _satir(satirlar, f"kapanış {kapanis}")
+        _satir(satirlar, f"· kapanış {kapanis}")
     elif kirilan:
-        _satir(satirlar, f"seviye {kirilan}")
+        _satir(satirlar, f"· seviye {kirilan}")
 
     kalite = _sayı(data.get("confidence_score"), 0)
     güç = _sayı(data.get("break_strength"), 0)
     if kalite and güç:
-        _satir(satirlar, f"kalite {kalite}/100 — güç {güç}")
+        _satir(satirlar, f"· kalite {kalite}/100 — güç {güç}")
     elif kalite:
-        _satir(satirlar, f"kalite {kalite}/100")
+        _satir(satirlar, f"· kalite {kalite}/100")
 
     yas_metni = _kart_yas_metni(data)
     if yas_metni:
-        _satir(satirlar, yas_metni)
+        for parca in yas_metni.split(" — "):
+            _satir(satirlar, parca if parca.startswith("·") else "· " + parca)
 
     retest = "retest var" if data.get("retest_seen") else "retest yok"
     ust_tf = _KART_UST_TF.get(timeframe)
@@ -464,7 +461,7 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
 
     # --- eşik: teyitlide "bozulur", geçersizleşmede 3. satırda yazıldı ---
     if esik and not gecersiz:
-        _satir(satirlar, f"bozulur {_sayı(esik)} {yon_eki} kapanış")
+        _satir(satirlar, f"· bozulur {_sayı(esik)} {yon_eki} kapanış")
 
     karsi = [str(x) for x in (data.get("domain_karsi") or []) if str(x).strip()]
     if karsi:
@@ -1061,9 +1058,9 @@ class TelegramNotifier:
         # Neden: cooldown/kap yüzünden gönderilemeyen teyitli olaylar kaybolmasın.
         # Engel digest saatinden önce kalkarsa gönderilir; kapanıştan sonra kalanlar
         # ayrı push yapılmaz, 18:45 DM özetine eklenir (main loop zaman kapısı).
-        # GÖRSEL-4 (kullanıcı kararı): "bir metin geldi, ardından o metnin görselleri".
-        # Görseller artık tur sonunu beklemez; `_gonder` metni yazdıktan sonra bu
-        # kuyruk bir ARKA PLAN işçisiyle sırayla boşaltılır (taramayı bekletmez).
+        # Live alerts now use a durable, event-locked text+album FIFO.
+        from notification_delivery import DeliveryOutbox
+        self._delivery = DeliveryOutbox(self, DATA_DIR)
         self._grafik_kuyruk: List[dict] = []
         self._grafik_gonderim_lck = threading.Lock()
         self._acil_kuyruk: List[dict] = []  # en eski kayıt önce
@@ -1073,12 +1070,8 @@ class TelegramNotifier:
         self.kuyruk_zaman_asimi = 0
         self.kuyruk_tasmasi = 0
         self._kuyruk_yukle()
-        # --- grafik karesi kuyruğu (G4 / §4) ---
-        # Neden kuyruk: kare üretimi 0,5-0,7 s sürüyor; alarm metnini bekletmemek
-        # için gönderim tarama turu SONUNA bırakılır (§7 „metni bekletmemek için
-        # kuyruk şart"). Kuyruk bellek içidir: `grafik_verisi` çerçeve/kayıt
-        # referansı taşıdığı için diske YAZILMAZ (§7) — yazan tek yer `_gonderim_
-        # kaydet` değil, o yüzden buraya hiç serialize edilmiyor.
+        # Legacy picture-only adapters remain for explicit command/test callers.
+        # They are not the live alert delivery path; that is self._delivery.
         self._grafik_lck = threading.Lock()
         self._son_grafik_ts = None
         self._grafik_supuruldu = False   # bayat dosya süpürmesi süreçte bir kez
@@ -1557,6 +1550,8 @@ class TelegramNotifier:
         except Exception as exc:  # noqa: BLE001 - kuyruk hatası taramayı durdurmasın
             logger.debug("Public filtre hatası: %s", exc)
             return False
+        if self._delivery.public_duplicate(data):
+            return False
         kayit = {k: data.get(k) for k in (
             "stock_name", "timeframe", "pattern_name", "state", "confidence_score",
             "critical_price_level", "break_price", "break_dir", "contraction", "bar_metni",
@@ -1603,6 +1598,7 @@ class TelegramNotifier:
                 return False
             self._public_kuyruk.append(kayit)
         self._public_durum_kaydet()
+        self._delivery.remember_public(data)
         return True
 
     def public_bosalt(self, azami: int = 12) -> int:
@@ -2242,18 +2238,24 @@ class TelegramNotifier:
                     ham = json.load(f)
             if not isinstance(ham, list):
                 return
+            from notification_delivery import _decode
+            ham = json.loads(json.dumps(ham), object_hook=_decode)
             self._acil_kuyruk = [k for k in ham if isinstance(k, dict) and isinstance(k.get("veri"), dict)]
             logger.info(f"Telegram acil kuyruğu {kaynak} yüklendi: {len(self._acil_kuyruk)} olay")
         except Exception as e:
             logger.debug(f"Acil kuyruk yüklenemedi (ilk çalışma olabilir): {e}")
 
     def _kuyruk_kaydet(self):
-        kayitlar = [dict(k) for k in self._acil_kuyruk]
+        import json
+        from notification_delivery import _encode
+        kayitlar = json.loads(json.dumps(self._acil_kuyruk, default=_encode))
         try:
-            import json
             os.makedirs(os.path.dirname(self._kuyruk_dosya), exist_ok=True)
-            with open(self._kuyruk_dosya, "w", encoding="utf-8") as f:
-                json.dump(kayitlar, f, ensure_ascii=False, default=str)
+            with open(self._kuyruk_dosya + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(kayitlar, f, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(self._kuyruk_dosya + ".tmp", self._kuyruk_dosya)
         except Exception as e:
             logger.debug(f"Acil kuyruk dosyaya kaydedilemedi: {e}")
         if self.persistent_store is not None:
@@ -2534,6 +2536,7 @@ class TelegramNotifier:
             "son_gonderme_hatasi": self.son_gonderme_hatasi,
             # Engellenen acil olaylar: kaç tanesi bekliyor / kaçı gönderildi.
             "acil_kuyruk": len(self._acil_kuyruk),
+            "teslim_kuyrugu": self._delivery.status(),
             "kuyruk_gonderildi": self.kuyruk_gonderildi,
             "kuyruk_zaman_asimi": self.kuyruk_zaman_asimi,
             "kuyruk_tasmasi": self.kuyruk_tasmasi,
@@ -2825,6 +2828,10 @@ class TelegramNotifier:
                         stock, pattern, timeframe, state)
             return False
         data["state"] = state
+        if self.enabled and (self._delivery.already_done(data) or self._delivery.is_cross_duplicate(data)):
+            self._son_engel = "tekrar"
+            self.engeller["tekrar"] += 1
+            return False
         if data.get("formation_id") is not None:
             data["formation_id"] = str(data["formation_id"])
 
@@ -3191,13 +3198,25 @@ class TelegramNotifier:
             return False
 
     def _gonder(self, data: Dict) -> bool:
+        if self.enabled:
+            try:
+                return self._delivery.submit(data)
+            except Exception as exc:
+                logger.error("Bildirim kalıcı kuyruğa alınamadı: %s", type(exc).__name__)
+                return False
+        return self._gonder_metin(data)
+
+    def teslimleri_dene(self) -> int:
+        return self._delivery.flush() if self.enabled else 0
+
+    def _gonder_metin(self, data: Dict) -> bool:
         """can_send kapısı geçildikten sonraki gerçek gönderim (kuyruk bunu çağırır)."""
         stock = data.get('stock_name', '')
         pattern = data.get('pattern_name', '')
         timeframe = data.get('timeframe', '')
         state = data.get('state', '')
 
-        message = self.format_message(data)
+        message = data.get("_delivery_message") or self.format_message(data)
         # Güvenlik: 4096 kr üzeri istek Telegram'da 400 döner ve mesaj tamamen
         # kaybolurdu. Artık sınırına kırpılır ve logda iz bırakır.
         if len(message) > _PUBLIC_MAX_METIN:
@@ -3247,11 +3266,8 @@ class TelegramNotifier:
                 # NOT: Public (grup) gönderimi burada YAPILMAZ. Olaylar tarama
                 # turu boyunca `public_kuyruk()` ile toplanır ve tur sonunda tek
                 # bültende gider; DM başarısız olsa bile grup yayını etkilenmez.
-                # Görsel de DM'e gider (§4: public kare YOK) ama burada DEĞİL —
-                # metni bekletmemek için kuyruğa alınır, tur sonunda gönderilir.
-                # Metin gitti; kareler ARKA PLANDA, bu olay sırasında gönderilir
-                # (GÖRSEL-4). Kuyruk boşsa işçi başlatılır; tarama beklemez.
-                self.grafik_kuyruga_ekle(data, gonder=True)
+                # Prepared media is sent synchronously by the durable FIFO.
+                # This method only acknowledges the text component.
                 return True
             else:
                 ipucu = telegram_hata_ipucu(resp.status_code,

@@ -51,8 +51,8 @@ def test_kutu_etiketi_kutunun_icinde_ve_tarama_yok():
     zone = {"cizilen": [_bolge(doluluk=0.7, skor=95)]}
     sag: list = []
     ozet = grafik._zone_ciz(ax, zone, 60, (90.0, 115.0), sag)
-    assert ozet["ic"] == 1 and ozet["serit"] == 0
-    assert sag == [], "sığan etiket şeride de yazılmamalı"
+    assert ozet["ic"] == 1 and ozet["serit"] == 1
+    assert len(sag) == 1 and sag[0]["fiyat_araligi"] == (100.0, 102.0)
     etiketler = [t for t in ax.texts if str(t.get_gid() or "") == "kutu-ici"]
     assert len(etiketler) == 1
     metin = str(etiketler[0].get_text())
@@ -84,7 +84,7 @@ def test_meta_kutu_ici_ve_serit_sayaclarini_tasir(tmp_path):
     assert sonuc.get("hata") is None
     zone = sonuc["meta"]["zone"]
     assert set(zone) >= {"etiket_ic", "etiket_serit"}
-    assert int(zone["etiket_ic"]) + int(zone["etiket_serit"]) == int(zone["cizilen"])
+    assert int(zone["etiket_serit"]) == int(zone["cizilen"])
 
 
 # --------------------------------------------------- BOS/CHoCH ve PH/PL yazısı
@@ -139,7 +139,7 @@ def test_ph_pl_cetvelde_fiyat_tasir_ic_yapi_kisa_kalir():
     sag: list = []
     grafik._olay_ciz(ax, _olay_goruntusu(), 60, sag)
     yazilar = [str(t.get_text()) for t in ax.texts if str(t.get_text()).strip()]
-    assert "LH" in yazilar                                       # iç yapı: kısa
+    assert "LH" not in yazilar                                       # iç yapı: kısa
     assert not any(y.startswith("LH ") for y in yazilar)
     # PH/PL grafikte YAZI DEĞİL (çift okuma yok), şeritte cetvel çipi:
     assert not any(y.startswith(("PH ", "PL ")) for y in yazilar)
@@ -155,7 +155,7 @@ def test_kritik_yazisi_tek_kopya_kalir():
     goruntu["olay"]["kritik"] = {"bar": 50, "seviye": 98.0, "tur": "CHoCH"}
     grafik._olay_ciz(ax, goruntu, 60, sag)
     metinler = [a["metin"] for a in sag]
-    assert "kritik 98,00" in metinler
+    assert "kritik 98,00\nCHoCH referansı" in metinler
     assert "CHoCH↓" not in metinler          # olay etiketi grafikte, şeritte değil
 
 
@@ -315,6 +315,6 @@ def test_kutu_yazisi_mum_cakismasini_azaltir():
     sonuc = grafik_uret.kare_uret("TUPRS", "4h", veri_dizin="bot_data", zone=True,
                                   mum=150, cikti="/tmp/kare/_gorsel4_kutu.png")
     zone = sonuc["meta"]["zone"]
-    assert zone["etiket_ic"] + zone["etiket_serit"] == zone["cizilen"]
+    assert zone["etiket_serit"] == zone["cizilen"]
     # Ölçüm alanı her zaman döner (bilinçli katman yazıları ayrı sayılır).
     assert "katman_cakisan" in sonuc["meta"]["kalite"]

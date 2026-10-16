@@ -130,8 +130,8 @@ def test_zone_etiketi_yatay_yapi_seviyesinden_kacir():
     assert ax.texts[0].get_position()[1] != pytest.approx(102.0)
 
 
-def test_engulf_kutusu_konturu_gorunur_tamamlanan_kutu_soluktur():
-    """ENG dolgusu şeffaf kalsa da konturu görünür; terminal FVG kesik/soluk olur."""
+def test_engulf_gizli_kalir_tamamlanan_fvg_kutusu_soluktur():
+    """Legacy ENG records must not draw anything; terminal FVG remains visible."""
     from matplotlib.figure import Figure
 
     fig = Figure(figsize=(10.8, 8.1), dpi=100)
@@ -149,8 +149,8 @@ def test_engulf_kutusu_konturu_gorunur_tamamlanan_kutu_soluktur():
     grafik._zone_ciz(ax, zone, 10, (95.0, 110.0))
     # Matplotlib importu grafik.py yerel kullandığından görünürlüğü alpha ve
     # kontur stilinden doğrula; test rengin kendisine bağlanmasın.
-    assert any(p.get_alpha() is not None and p.get_alpha() > 0.8
-               and p.get_facecolor()[3] == 0.0 for p in ax.patches)
+    assert not any("ENG" in t.get_text() for t in ax.texts)
+    assert all(p.get_y() >= 105.0 for p in ax.patches)
     tamamlanan = [p for p in ax.patches if p.get_alpha() is not None
                   and 0.0 < p.get_alpha() < 0.5 and p.get_facecolor()[3] == 0.0]
     assert tamamlanan

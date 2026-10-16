@@ -181,13 +181,12 @@ def test_yapi_filtreler():
     ]
     g = _goruntu_yapi(_ms(swingler=[_swing(200, 72.0)], olaylar=olaylar))
     olay = g["olay"]
-    assert olay["swinglar"][0]["bar"] == 200 - g["sol"]      # görünüm indeksi
-    assert olay["swinglar"][0]["kaynak_bar"] == 200          # çerçeve indeksi
+    assert olay["swinglar"] == []
     assert [b["tur"] for b in olay["olaylar"]] == ["BOS", "CHoCH"]
     assert olay["kritik"]["kaynak_bar"] == 60 and olay["kritik"]["seviye"] == 66.0
     assert olay["kritik"]["bar"] == 60 - g["sol"]          # çizim indeksi
     assert olay["kritik"]["tur"] == "CHoCH"
-    assert len(olay["swinglar"]) == 1 and olay["cizilen"] == 3
+    assert len(olay["swinglar"]) == 0 and olay["cizilen"] == 2
 
 
 def test_yapi_oklari_ic_swingden_gelir_dis_roller_cetvele_ayrilir():
@@ -198,13 +197,13 @@ def test_yapi_oklari_ic_swingden_gelir_dis_roller_cetvele_ayrilir():
                      rol="NEUTRAL_HIGH")
     olay = _goruntu_yapi(_ms(swingler=[dis_rol, dis_nor, ic]))["olay"]
 
-    assert [(b["kaynak_bar"], b["sinif"]) for b in olay["swinglar"]] == [(210, "HL")]
+    assert [(b["kaynak_bar"], b["sinif"]) for b in olay["swinglar"]] == []
     assert [(b["etiket"], b["fiyat"], b["kaynak_bar"])
             for b in olay["seviyeler"]] == [("PH", 72.0, 205)]
     # İç pivotun sınıfı PH/PL olsa bile protected-level anlamı verilip cetvele taşınmaz.
     ic_ph = _swing(211, 70.0, sinif="PH", kimlik=4)
     olay = _goruntu_yapi(_ms(swingler=[ic_ph]))["olay"]
-    assert olay["swinglar"][0]["sinif"] == "PH" and olay["seviyeler"] == []
+    assert olay["swinglar"] == [] and olay["seviyeler"] == []
 
 
 def test_yapi_export_none_disi_role_seviyesini_gizler():
@@ -231,13 +230,13 @@ def test_yapi_kapaklar_ve_sirasi():
     swinglar = [_swing(200 + i, 60.0 + i, kimlik=i) for i in range(14)]
     olaylar = [_olay(150 + i, 65.0 + i, kimlik=100 + i) for i in range(9)]
     g = _goruntu_yapi(_ms(swingler=swinglar, olaylar=olaylar))
-    assert len(g["olay"]["swinglar"]) == int(grafik.SABITLER["swing_maks"]) == 10
+    assert g["olay"]["swinglar"] == []
     assert len(g["olay"]["olaylar"]) == int(grafik.SABITLER["olay_maks"]) == 6
-    assert g["olay"]["elenen"] == (14 - 10) + (9 - 6)
+    assert g["olay"]["elenen"] == (9 - 6)
     assert [b["kaynak_bar"] for b in g["olay"]["swinglar"]] == sorted(
         b["kaynak_bar"] for b in g["olay"]["swinglar"])
     # kapak EN YENİLERİ tutar
-    assert max(b["kaynak_bar"] for b in g["olay"]["swinglar"]) == 213
+    assert g["olay"]["kapak"]["swing"] == 0
 
 
 def test_yapi_aday_ve_kirik_swing_durumu():
@@ -245,7 +244,7 @@ def test_yapi_aday_ve_kirik_swing_durumu():
                                     _swing(231, 61.0, kimlik=2)],
                           adaylar=[_swing(232, 62.0, durum="SWING_PENDING", kimlik=3)]))
     durumlar = {b["kimlik"]: b["durum"] for b in g["olay"]["swinglar"]}
-    assert durumlar == {1: "kirik", 2: "teyitli", 3: "aday"}
+    assert durumlar == {}
 
 
 def test_yapi_pencere_disi_swing_alinmaz():
@@ -257,7 +256,7 @@ def test_yapi_pencere_disi_swing_alinmaz():
                                    _swing(sag, 62.0, kimlik=8),
                                    _swing(sag + 400, 63.0, kimlik=9)]))
     kaynaktan = [b["kaynak_bar"] for b in g["olay"]["swinglar"]]
-    assert kaynaktan == [sag - 1]                             # 0, sag, ötesi dışarıda
+    assert kaynaktan == []                             # 0, sag, ötesi dışarıda
     assert all(0 <= b["bar"] < (g["sag"] - g["sol"]) for b in g["olay"]["swinglar"])
 
 
@@ -271,11 +270,12 @@ def test_yapi_cizimi_meta_ve_y_araligi(tmp_path):
     # Seviyeler kadraj içinde (LL=25 ile PH=95 arası): çizim kuralı gereği çizilir
     olaylar = [_olay(210, 90.0, tur="EVENT_BOS"), _olay(230, 30.0, tur="EVENT_CHOCH",
                                                         yon="DOWN", kimlik=7)]
-    g = _goruntu_yapi(_ms(swingler=[_swing(220, 95.0), _swing(225, 25.0, yon="LOW",
-                                                             sinif="LL")],
+    g = _goruntu_yapi(_ms(swingler=[_swing(220, 95.0, kapsam="EXTERNAL", rol="PROTECTED_HIGH"),
+                                      _swing(225, 25.0, yon="LOW", sinif="PL",
+                                             kapsam="EXTERNAL", rol="PROTECTED_LOW")],
                           olaylar=olaylar))
-    _, meta = grafik.ciz(g, "4h", {"cikti": str(tmp_path / "yapi.png")})
-    assert meta["olay"]["swing"] == 2 and meta["olay"]["bos_choc"] == 2
+    _, meta = grafik.ciz(g, "4h", {"cikti": str(tmp_path / "yapi.png"), "gorunum": "baglam"})
+    assert meta["olay"]["swing"] == 0 and meta["olay"]["bos_choc"] == 2
     assert meta["olay"]["kritik"] == 30.0               # en yeni olayın seviyesi
     assert meta["olay"]["kritik_cizildi"] is True
     assert meta["cizgiler"]["kritik"] == pytest.approx(30.0)   # §2 seviye sözleşmesi
@@ -292,10 +292,11 @@ def test_kadraj_disi_seviye_cizilmez_ve_sayilir(tmp_path):
     """
     olaylar = [_olay(210, 90.0, tur="EVENT_BOS"), _olay(230, 20.0, tur="EVENT_CHOCH",
                                                         yon="DOWN", kimlik=7)]
-    g = _goruntu_yapi(_ms(swingler=[_swing(220, 95.0), _swing(225, 25.0, yon="LOW",
-                                                             sinif="LL")],
+    g = _goruntu_yapi(_ms(swingler=[_swing(220, 95.0, kapsam="EXTERNAL", rol="PROTECTED_HIGH"),
+                                      _swing(225, 25.0, yon="LOW", sinif="PL",
+                                             kapsam="EXTERNAL", rol="PROTECTED_LOW")],
                           olaylar=olaylar))
-    _, meta = grafik.ciz(g, "4h", {"cikti": str(tmp_path / "uzak.png")})
+    _, meta = grafik.ciz(g, "4h", {"cikti": str(tmp_path / "uzak.png"), "gorunum": "baglam"})
     # Aralık PH=95 ve LL=25 ile belirlenir (+%6 pay → ~20,8'e kadar): 90 içeride
     # çizilir, 20 (CHoCH) ve onun `kritik` kopyası dışarıda sayılır.
     assert meta["olay"]["bos_choc"] == 1
@@ -386,7 +387,7 @@ def test_cli_zone_yapi_ve_seriti_dolduruyor(tmp_path, tf):
     assert sonuc.returncode == 0, sonuc.stderr[-800:]
     meta = json.loads(sonuc.stdout[sonuc.stdout.index("{"):sonuc.stdout.rindex("}") + 1])
     assert cikti.exists()
-    assert meta["olay"]["swing"] >= 1
+    assert meta["olay"]["swing"] == 0
     assert meta["olay"]["bos_choc"] >= 1
     assert meta["serit"]["kaynak"] in ("motor", "yerel hesap")
     # FAZ 1: hacim PANELİ varsayılan kapalı; veri mum altı ⚡ rozetinde yaşar.

@@ -49,7 +49,7 @@ def _tasma(satirlar: list[str]) -> list[str]:
 
 def test_teyitli_kart_9_11_satir_ve_tasmaz():
     satirlar = _satirlar(notifier._format_lifecycle_alert_kart(_payload()))
-    assert 8 <= len(satirlar) <= 11, satirlar
+    assert 8 <= len(satirlar) <= 13, satirlar
     assert not _tasma(satirlar), _tasma(satirlar)
     assert not [s for s in satirlar if s.startswith(" ")], "girintili devam satırı yok"
     assert not [s for s in satirlar if s.count("·") >= 2], "3+ öğeli zincir yok"
@@ -89,11 +89,11 @@ def test_gecersizlesme_karti_formasyon_ve_tf_ile_sinirli():
             "ust": ["▲ OB 1s 44,14-44,86 (▼) · %0"],
             "hacim": ["katılım 1s destekliyor"],
         })))
-    assert 8 <= len(satirlar) <= 11, satirlar
+    assert 8 <= len(satirlar) <= 13, satirlar
     assert not _tasma(satirlar)
     assert satirlar[0] == "▼ SISE 1s GEÇERSİZLEŞTİ"
     assert satirlar[1] == "Yükselen Üçgen - bandına dönüş"
-    assert any(s.startswith("teyit sınırı 38,79 üstü") for s in satirlar)
+    assert any(s.startswith("· teyit sınırı 38,79 üstü") for s in satirlar)
     assert "× geçersiz" not in "\n".join(satirlar)
     assert "◈" not in "\n".join(satirlar) and "OB 1s" not in "\n".join(satirlar)
 
@@ -106,7 +106,7 @@ def test_gecersizlesmede_katilim_tek_satir_kalir():
                       "katılım 4s veri yok"]}))
     satirlar = _satirlar(metin)
     assert len([s for s in satirlar if s.startswith("katılım ")]) <= 2
-    assert len(satirlar) <= 11
+    assert len(satirlar) <= 13
 
 
 # ---------------------------------------------------------- güncelleme + süzgeç

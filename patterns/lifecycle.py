@@ -259,6 +259,9 @@ class ArgentEngine:
         self.break_line_y2: Optional[float] = None
         self.retest_success_bar: Optional[int] = None
         self._retest_seen: bool = False
+        self._inside_run = 0
+        self._inside_last_bar = -1
+        self._inside_identity = None
         self.last_failed_bar: int = -9999
         self.completed_type = "Yok"
         self.completed_start_bar: Optional[int] = None
@@ -861,7 +864,7 @@ class ArgentEngine:
             attempt_retest = self.high[b] >= boundary - rtol and self.close[b] < boundary - hold_buffer
         back_inside = (self.close[b] < projected_upper - hold_buffer) if d == 1 else (self.close[b] > projected_lower + hold_buffer)
         age = b - self.break_candidate_bar
-        if back_inside and b > self.break_candidate_bar:
+        if self._inside_confirmed(b, back_inside) and b > self.break_candidate_bar:
             self.invalid_reason = "Kırılım denemesi formasyon içine döndü" if is_attempt else "Teyitsiz kırılım formasyon içine döndü"
             self.last_failed_bar = b
             return ST_BREAK_FAILED
@@ -869,10 +872,28 @@ class ArgentEngine:
             self.break_confirmed_bar = b
             active.break_confirmation_strength = confirmation_strength
             return ST_BREAK_CONFIRMED
+        if back_inside:
+            return self.pattern_state
         if age > self.confirm_window:
             self.invalid_reason = "Kırılım denemesi güçlenmedi" if is_attempt else "Kırılım teyit alamadı"
             return ST_BREAK_TIMEOUT
         return self.pattern_state
+
+    def _inside_confirmed(self, b: int, inside: bool) -> bool:
+        """Consecutive CLOSED bars, idempotent per bar and isolated per breakout.
+
+        Three bars naturally means three hours on 1h, twelve on 4h, etc.
+        A recovery cancels the pending invalidation, not just its notification.
+        """
+        from config import INVALIDATION_CONFIRM_BARS
+        identity = (getattr(self.active, "stable_id", None), self.break_candidate_bar)
+        if getattr(self, "_inside_identity", None) != identity:
+            self._inside_identity = identity
+            self._inside_run, self._inside_last_bar = 0, -1
+        if b != self._inside_last_bar:
+            self._inside_run = (self._inside_run + 1 if b == self._inside_last_bar + 1 else 1) if inside else 0
+            self._inside_last_bar = b
+        return inside and self._inside_run >= INVALIDATION_CONFIRM_BARS
 
     def _retest_step(self, b: int) -> str:
         active = self.active
@@ -890,10 +911,12 @@ class ArgentEngine:
             retest_touch = self.high[b] >= boundary - rtol and self.low[b] <= boundary + rtol
             retest_held = retest_touch and self.close[b] < boundary - hold_buffer
         confirmed_age = b - self.break_confirmed_bar
-        if returned_inside:
+        if self._inside_confirmed(b, returned_inside):
             self.invalid_reason = "Kırılım sonrası formasyon alanına dönüldü"
             self.last_failed_bar = b
             return ST_BREAK_FAILED
+        if returned_inside:
+            return ST_RETESTING
         if retest_held:
             self.retest_success_bar = b
             self._retest_seen = True
@@ -917,10 +940,12 @@ class ArgentEngine:
         projected_lower = active.lower_now
         returned_inside = (self.close[b] < projected_upper - hold_buffer) if d == 1 else (self.close[b] > projected_lower + hold_buffer)
         retest_hold_age = b - self.retest_success_bar
-        if returned_inside:
+        if self._inside_confirmed(b, returned_inside):
             self.invalid_reason = "Başarılı retest sonrası yapı içine dönüldü"
             self.last_failed_bar = b
             return ST_BREAK_FAILED
+        if returned_inside:
+            return ST_RETESTING
         if retained and retest_hold_age >= self.retest_hold_window:
             self._retest_seen = True
             self._capture_completed()

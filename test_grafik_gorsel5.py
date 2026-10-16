@@ -41,14 +41,14 @@ def _eksen(n=60, alt=90.0, ust=120.0):
 def test_qnn_etiketi_kalkti_doluluk_kaldi():
     """`qNN` artık ÜRETİLMEZ. FAZ 3: OB'de `%X dolu` / `taze` yazılır; FVG doluluk
     HESABI YAPMAZ (plan §1.B) — orada yalnız tip + yön görünür."""
-    assert grafik._zone_metni(_zone_kayit(tip="fvg", skor=95)) == "FVG↑"   # eski: 'FVG↑ q95'
-    assert grafik._zone_metni(_zone_kayit(tip="fvg", doluluk=0.38)) == "FVG↑"
-    assert grafik._zone_metni(_zone_kayit(doluluk=0.38)) == "OB↑ %38 dolu"
-    assert grafik._zone_metni(_zone_kayit(doluluk=0.41)) == "OB↑ %41 dolu"
-    assert grafik._zone_metni(_zone_kayit(doluluk=0.0)) == "OB↑ · taze"
-    assert grafik._zone_metni(_zone_kayit(doluluk=1.0)) == "OB↑ · tükendi"
-    assert grafik._zone_metni(_zone_kayit(tip="ob", yon=-1, doluluk=0.7)) == "OB↓ %70 dolu"
-    assert grafik._zone_metni(_zone_kayit(tip="eng", skor=88)) == "ENG↑"
+    assert grafik._zone_metni(_zone_kayit(tip="fvg", skor=95)) == "FVG↑ · aktif"   # eski: 'FVG↑ q95'
+    assert grafik._zone_metni(_zone_kayit(tip="fvg", doluluk=0.38)) == "FVG↑ · aktif"
+    assert grafik._zone_metni(_zone_kayit(doluluk=0.38)) == "OB↑ · aktif · dolum %38"
+    assert grafik._zone_metni(_zone_kayit(doluluk=0.41)) == "OB↑ · aktif · dolum %41"
+    assert grafik._zone_metni(_zone_kayit(doluluk=0.0)) == "OB↑ · aktif · dolum %0"
+    assert grafik._zone_metni(_zone_kayit(doluluk=1.0)) == "OB↑ · aktif · dolum %100"
+    assert grafik._zone_metni(_zone_kayit(tip="ob", yon=-1, doluluk=0.7)) == "OB↓ · aktif · dolum %70"
+    assert grafik._zone_metni(_zone_kayit(tip="eng", skor=88)) == ""
     assert "q" not in grafik._zone_metni(_zone_kayit(tip="fvg", skor=100))
 
 
@@ -465,7 +465,7 @@ def test_ph_pl_sag_seritte_cetvel_olarak_durur():
     kilavuzlar = [ln for ln in ax.lines if ln.get_color() == grafik.PALET["sinif"]]
     assert len(kilavuzlar) == 2
     yazilar = [str(t.get_text()) for t in ax.texts if str(t.get_text()).strip()]
-    assert "HL" in yazilar and not any(y.startswith(("PH", "PL")) for y in yazilar)
+    assert "HL" not in yazilar and not any(y.startswith(("PH", "PL")) for y in yazilar)
 
 
 def test_ph_pl_son_fiyatla_ayni_bantta_ise_atlanir_ve_sayilir():

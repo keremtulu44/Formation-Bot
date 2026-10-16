@@ -466,8 +466,8 @@ def test_grafik_dosya_gonder_dosya_olmasa_da_patlamaz(notifier, monkeypatch):
     assert notifier.grafik_atlanan_hata == 1
 
 
-def test_kuyruk_jsonu_grafik_verisi_tasimaz(notifier, tmp_path):
-    """DataFrame/çizim sözlüğü kalıcı kuyruğa yazılırsa dosya okunamaz hâle gelir."""
+def test_kuyruk_jsonu_grafik_snapshotini_korur(notifier, tmp_path):
+    """Plain chart snapshots now survive deferred delivery and restarts."""
     veri = {"sembol": "AKBNK", "goruntular": [{"tf": "4h", "goruntu": _goruntu(tf="4h")}],
             "kota": 0, "uyarilar": []}
     data = {"stock_name": "AKBNK", "pattern_name": "Simetrik Üçgen", "timeframe": "4h",
@@ -476,7 +476,7 @@ def test_kuyruk_jsonu_grafik_verisi_tasimaz(notifier, tmp_path):
     notifier._kuyruga_ekle(data, "cooldown")
     dosya = tmp_path / "telegram_acil_kuyruk.json"
     icerik = dosya.read_text(encoding="utf-8")
-    assert "grafik_verisi" not in icerik
+    assert "grafik_verisi" in icerik
     assert "kart bağlamı" in icerik                    # kalan alanlar aynen yazılır
     kayit = json.loads(icerik)[0]["veri"]
     assert list(kayit) and "domain_context" in kayit
@@ -924,7 +924,7 @@ def test_yapı_satırı_kart_biçimleyicisinden_birebir_alınır(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "notification_context", Sahte)
     assert grafik._yapı_satırı({"market_structure": object()}, "4h", 70.9) == \
-        "4s yapı: dış ↓geçiş · iç ↓geçiş"
+        "4s yapı: dış ↓geçiş"
     assert görülen["stil"] == "klasik" and görülen["alarm_tf"] == "4h"
     assert görülen["referans"] == 70.9
     assert list(görülen["sonuclar"]) == ["4h"]      # {tf: çıktı} sarmalayıcısı veriliyor
@@ -964,7 +964,7 @@ def test_yapı_satırı_üst_bloğu_taşırma(monkeypatch):
     assert not any("yapı:" in x for x in tasma["satirlar"])      # yer yok → çizilmedi
     detaysiz = grafik._metinler({**g, "formasyon": {"ad": "bull_flag", "quality": 78}},
                                {"mum_sayisi": 120}, 1080, [], False, False)
-    assert detaysiz["satirlar"][-1] == "4s yapı: dış ↓geçiş · iç ↓geçiş"
+    assert detaysiz["satirlar"][-1] == "4s yapı: dış ↓geçiş"
     assert detaysiz["kesilen"] == []                             # sığan satır kesilmez
 
 
@@ -998,7 +998,8 @@ def test_gerçek_motorda_kart_satırı_karede_de_var(tf):
     assert kare, veri
     # Tek fark sözleşmeli: kart `• ` ile madde imi basıyor, kare imi atmıyor.
     assert veri["kart"], veri
-    assert veri["kart"][0] in (f"• {kare[0]}", kare[0]), (kare, veri["kart"])
+    assert grafik._grafik_yapi_metni(veri["kart"][0].lstrip("• ")) == kare[0]
+    assert "iç " not in kare[0]
 
 
 @pytest.mark.parametrize("kod", [200, 403])

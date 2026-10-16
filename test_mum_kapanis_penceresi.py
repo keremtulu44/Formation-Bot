@@ -218,7 +218,7 @@ def test_mum_damgasi_metinde_degil_karede_okunur():
     d = grafik_uret.kare_uret("GARAN", "4h", veri_dizin="bot_data", zone=True, mum=140,
                               cikti="/tmp/kare/_p7_mum_damgasi.png")
     sag = str(((d.get("meta") or {}).get("metin") or {}).get("sag") or "")
-    assert "son kapanan" in sag
+    assert "son mum" in sag and "2026" in sag and "TSİ" in sag
 
 
 # --- 6) main.py güvenlik kapısı: kapanmamış barla push YOK ---------------
