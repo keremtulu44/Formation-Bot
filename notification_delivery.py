@@ -45,11 +45,26 @@ def event_id(data):
     return hashlib.sha256(json.dumps(fields, default=str).encode()).hexdigest()
 
 
+def _pattern_family(name):
+    from config import mtf_family_match_enabled
+    if not mtf_family_match_enabled():
+        return name
+    from patterns.constants import PATTERN_TYPE_MAP, f_is_specialized
+    if f_is_specialized(name):
+        return "direkli"
+    code = PATTERN_TYPE_MAP.get(name)
+    if code in (1, 2, 3):
+        return "ucgen"
+    if code in (4, 5):
+        return "kama"
+    return name
+
+
 def related(a, b):
     """Same directional development on another TF, not an opposite/new-slot event."""
     return (a.get("timeframe") != b.get("timeframe")
-            and all(a.get(k) == b.get(k) for k in
-                    ("stock_name", "state", "break_dir", "pattern_name"))
+            and all(a.get(k) == b.get(k) for k in ("stock_name", "state", "break_dir"))
+            and _pattern_family(a.get("pattern_name")) == _pattern_family(b.get("pattern_name"))
             and a.get("break_dir") in (-1, 1))
 
 
@@ -106,6 +121,21 @@ class DeliveryOutbox:
     def already_done(self, data):
         with self.lock:
             return any(r["done"] and r["id"] == event_id(data) for r in self.state["rows"])
+
+    def confirmation_delivered(self, data_or_id):
+        fid = data_or_id.get("formation_id") if isinstance(data_or_id, dict) else data_or_id
+        if not fid:
+            return False
+        fid = str(fid)
+        with self.lock:
+            return any(
+                (r.get("done") or r.get("text_sent"))
+                and r.get("data", {}).get("state") == "KIRILIM_TEYITLI"
+                and str(r.get("data", {}).get("formation_id") or "") == fid
+                for r in self.state["rows"]
+            )
+
+    has_delivered_confirmation = confirmation_delivered
 
     def is_cross_duplicate(self, data):
         with self.lock:

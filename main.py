@@ -318,6 +318,7 @@ daily_stats = {
     'kirilim_teyitli_olay_sayisi': 0,
     'retest_basarili_olay_sayisi': 0,
     'kirilim_gecersizlesti_olay_sayisi': 0,
+    'sessiz_gecersizlesme_sayisi': 0,
     # Tarama turu sayısı; 48 hisse × 9 tur = 432 hisse tarandı şeklinde yazılmaz.
     'tarama_sayisi': 0,
     'last_reset': datetime.now(ISTANBUL_TZ).date()
@@ -327,6 +328,7 @@ daily_stats = {
 # Gün içinde BENZERSİZ başarısız kırılım sayacı (hisse|TF|bar): aynı slot her
 # taramada yeniden üretildiği için ham sayım olayı şişirirdi.
 _daily_basarisiz_keys: set = set()
+_daily_unannounced_invalidation_keys: set = set()
 _daily_lifecycle_event_keys: set[str] = set()
 _LIFECYCLE_CONFIRMATION_TYPES = frozenset({"BREAK_CONFIRMED", "COUNTER_BREAK"})
 _CONFIRMED_INVALIDATION_REASONS = frozenset({
@@ -483,11 +485,44 @@ def _note_basarisiz_kirilim(stock: str, timeframe: str, bar_time=None) -> None:
     daily_stats['basarisiz_kirilim'] = _daily_basarisiz_tabani + yeni
     _gunluk_sayac_kaydet()
 
+
+def _invalidation_confirmation_delivered(notifier, formation_id) -> bool:
+    """Tur 2a: KIRILIM_GECERSIZLESTI push'undan önce aynı formation_id'li
+    KIRILIM_TEYITLI kaydının gerçekten teslim edilip edilmediğini doğrula."""
+    from config import invalidation_require_delivered_confirm
+    if not invalidation_require_delivered_confirm():
+        return True
+    if not formation_id:
+        return False
+    kontrol = getattr(notifier, "teyit_teslim_edildi_mi", None)
+    if callable(kontrol):
+        return bool(kontrol(formation_id))
+    delivery = getattr(notifier, "_delivery", None)
+    if delivery is not None and callable(getattr(delivery, "confirmation_delivered", None)):
+        return bool(delivery.confirmation_delivered(formation_id))
+    return True
+
+
+def _note_unannounced_invalidation(
+    stock: str, timeframe: str, formation_id=None, bar_time=None
+) -> None:
+    """Teslim edilmemiş teyidin geçersizleşmesini günde bir kez say (18:45 özeti için)."""
+    kimlik = str(formation_id or bar_time or "").strip()
+    anahtar = f"{str(stock).upper()}|{str(timeframe).lower()}|{kimlik}"
+    if anahtar in _daily_unannounced_invalidation_keys:
+        return
+    _daily_unannounced_invalidation_keys.add(anahtar)
+    daily_stats['sessiz_gecersizlesme_sayisi'] = int(
+        daily_stats.get('sessiz_gecersizlesme_sayisi') or 0
+    ) + 1
+    _gunluk_sayac_kaydet()
+
+
 # --- GÜNLÜK SAYAÇ KALICILIĞI (restart gün sürekliliği) ---------------------
 # Canlı denetimde ölçüldü: gün ortasında restart olunca 18:45 kanal özeti
 # "❌ 8 başarısız / 8 tarama" diyordu; gerçek gün "❌ 9 / 10 tarama" idi.
 # Sayaçlar artık GÜN damgalı olarak diske yazılır, aynı gün restart'ta geri yüklenir.
-_KALICI_SAYACLAR = ('basarisiz_kirilim', 'kirilim_teyitli_olay_sayisi', 'retest_basarili_olay_sayisi', 'kirilim_gecersizlesti_olay_sayisi', 'tarama_sayisi', 'alerts_sent', 'stocks_scanned')
+_KALICI_SAYACLAR = ('basarisiz_kirilim', 'kirilim_teyitli_olay_sayisi', 'retest_basarili_olay_sayisi', 'kirilim_gecersizlesti_olay_sayisi', 'sessiz_gecersizlesme_sayisi', 'tarama_sayisi', 'alerts_sent', 'stocks_scanned')
 # Restart anında devralınan "başarısız kırılım" sayısı: olay detayı saklanmadığı
 # için yalnız SAYI taşınır, yeni olaylar bu tabanın üstüne eklenir.
 _daily_basarisiz_tabani = 0
@@ -603,9 +638,11 @@ def reset_daily_if_needed():
         daily_stats['patterns_found'] = 0
         _daily_pattern_keys.clear()
         daily_stats['basarisiz_kirilim'] = 0
+        daily_stats['sessiz_gecersizlesme_sayisi'] = 0
         for counter in _LIFECYCLE_EVENT_COUNTERS.values():
             daily_stats[counter] = 0
         _daily_lifecycle_event_keys.clear()
+        _daily_unannounced_invalidation_keys.clear()
         # Restart tabanı yalnızca AYNI günün devralınan sayısıdır; yeni güne
         # sıfırla (yoksa eski günün sayısı yeni güne taşınır ve sayaç şişer).
         _daily_basarisiz_tabani = 0
@@ -2770,6 +2807,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             "(close=%s, level=%s)",
                             stock, tf_name, notification_state, candle_close_price, break_price,
                         )
+                    elif (send_alerts and notification_state == "KIRILIM_GECERSIZLESTI"
+                          and not _invalidation_confirmation_delivered(
+                              notifier, getattr(active, "stable_id", None))):
+                        _note_unannounced_invalidation(
+                            stock, tf_name, getattr(active, "stable_id", None), df_tf.index[-1]
+                        )
+                        logger.info(
+                            "⏸️ %s %s %s: önceki KIRILIM_TEYITLI teslim edilmemiş; "
+                            "anlık push atlandı, 18:45 özetine eklendi",
+                            stock, tf_name, notification_state,
+                        )
                     elif send_alerts and notification_state in IMMEDIATE_ALERT_STATES:
                         # Humanized mesaj için ek bilgiler - var olan veriyi kullan, ekstra hesaplama yok
                         upper_touches = getattr(active, 'upper_touches', None)
@@ -4042,7 +4090,13 @@ def main_loop():
                     if bekleyen and bekleyen_toplam > len(bekleyen):
                         daily_stats['alerts_digest_overflow'] = bekleyen_toplam - len(bekleyen)
                     watch_summary = _format_deferred_alert_summary(bekleyen, bekleyen_toplam)
-                    acil_kuyruk_ozeti = _format_urgent_queue_summary(acil_bekleyen)
+                    sessiz_iptal = (
+                        daily_stats.get("sessiz_gecersizlesme_sayisi", 0)
+                        if sh == deferred_alert_digest_time else 0
+                    )
+                    acil_kuyruk_ozeti = _format_urgent_queue_summary(
+                        acil_bekleyen, sessiz_gecersizlesme=sessiz_iptal
+                    )
                     dm_ozet = f"📋 Günlük Özet\n{ozet}"
                     if watch_summary:
                         dm_ozet += "\n\n" + watch_summary

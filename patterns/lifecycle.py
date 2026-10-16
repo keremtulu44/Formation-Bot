@@ -200,9 +200,11 @@ class ArgentEngine:
     """Tek hisse-tek timeframe için Pine v0.4.6 karar çekirdeği."""
 
     def __init__(self, profile: str = "Dengeli", mintick: float = 0.01,
-                 use_breakout_quality_filter: bool = True):
+                 use_breakout_quality_filter: bool = True,
+                 timeframe: Optional[str] = None):
         from config import TERMINAL_TAZE_BAR, FAILED_PATTERN_PENALTY_BARS
         self._key = None  # Phase 1: (stock,tf) anahtarı manager tarafından atanır
+        self.timeframe = str(timeframe).strip().lower() if timeframe else None
         self.terminal_taze_bar = TERMINAL_TAZE_BAR
         self.failed_penalty_bars = FAILED_PATTERN_PENALTY_BARS
         self.profile = profile
@@ -318,7 +320,8 @@ class ArgentEngine:
         # erken çıkarak restart re-attach'i ve anchor yazımını sessizce devre
         # dışı bırakır (her turda yeni stable_id üretilir).
         anahtar = getattr(self, "_key", None)
-        self.__init__(self.profile, self.mintick, self.use_breakout_quality_filter)
+        tf = getattr(self, "timeframe", None)
+        self.__init__(self.profile, self.mintick, self.use_breakout_quality_filter, timeframe=tf)
         self._key = anahtar
 
     def process(self, df: pd.DataFrame, tam_yeniden: bool = False) -> EngineSnapshot:
@@ -879,21 +882,67 @@ class ArgentEngine:
             return ST_BREAK_TIMEOUT
         return self.pattern_state
 
+    def _effective_timeframe(self) -> Optional[str]:
+        tf = getattr(self, "timeframe", None)
+        if tf:
+            return str(tf).strip().lower()
+        key = getattr(self, "_key", None)
+        if key and "_" in str(key):
+            return _parse_stock_tf(str(key))[1].strip().lower()
+        return None
+
+    def _invalidation_confirm_bars(self) -> int:
+        from config import invalidation_confirm_bars_for_tf
+        return invalidation_confirm_bars_for_tf(self._effective_timeframe())
+
+    def _inside_depth_satisfied(self, b: int) -> bool:
+        from config import invalidation_min_depth_atr
+        depth_mult = invalidation_min_depth_atr()
+        if depth_mult <= 0.0:
+            return True
+        if not (0 <= b < len(self.close)) or self.break_candidate_dir not in (-1, 1):
+            return True
+        active = self.active
+        if active is None:
+            return True
+        band = active.upper_now if self.break_candidate_dir == 1 else active.lower_now
+        if band is None:
+            return True
+        geom_atr = getattr(active, "geometry_atr", None)
+        atr = (
+            geom_atr
+            if (geom_atr is not None and not (isinstance(geom_atr, float) and math.isnan(geom_atr)) and geom_atr > 0)
+            else self.safe_atr
+        )
+        min_depth = depth_mult * max(atr, self.mintick * 10.0)
+        depth = (band - self.close[b]) if self.break_candidate_dir == 1 else (self.close[b] - band)
+        return depth >= min_depth - 1e-12
+
     def _inside_confirmed(self, b: int, inside: bool) -> bool:
         """Consecutive CLOSED bars, idempotent per bar and isolated per breakout.
 
-        Three bars naturally means three hours on 1h, twelve on 4h, etc.
+        Three bars naturally means three hours on 1h, two on 2h/4h/1d (per TF config).
         A recovery cancels the pending invalidation, not just its notification.
+        Superficial closes shallower than INVALIDATION_MIN_DEPTH_ATR * ATR do not
+        advance the counter.
         """
-        from config import INVALIDATION_CONFIRM_BARS
+        required_bars = self._invalidation_confirm_bars()
         identity = (getattr(self.active, "stable_id", None), self.break_candidate_bar)
         if getattr(self, "_inside_identity", None) != identity:
             self._inside_identity = identity
             self._inside_run, self._inside_last_bar = 0, -1
+        deep_inside = inside and self._inside_depth_satisfied(b)
         if b != self._inside_last_bar:
-            self._inside_run = (self._inside_run + 1 if b == self._inside_last_bar + 1 else 1) if inside else 0
+            if not inside:
+                self._inside_run = 0
+            elif deep_inside:
+                self._inside_run = (
+                    self._inside_run + 1
+                    if self._inside_run > 0 and b == self._inside_last_bar + 1
+                    else 1
+                )
             self._inside_last_bar = b
-        return inside and self._inside_run >= INVALIDATION_CONFIRM_BARS
+        return deep_inside and self._inside_run >= required_bars
 
     def _retest_step(self, b: int) -> str:
         active = self.active
@@ -1183,15 +1232,19 @@ class PatternLifecycleManager:
         self.engines: Dict[str, ArgentEngine] = {}
         self.last_snapshots: Dict[str, EngineSnapshot] = {}
 
-    def get_engine(self, key: str) -> ArgentEngine:
+    def get_engine(self, key: str, timeframe: Optional[str] = None) -> ArgentEngine:
+        tf = timeframe or (_parse_stock_tf(key)[1] if key and "_" in str(key) else None)
         if key not in self.engines:
-            self.engines[key] = ArgentEngine(self.profile, self.mintick)
+            self.engines[key] = ArgentEngine(self.profile, self.mintick, timeframe=tf)
         # Phase 1: restart re-attach için motorun (stock,tf) anahtarını taşı.
         self.engines[key]._key = key
+        if tf:
+            self.engines[key].timeframe = str(tf).strip().lower()
         return self.engines[key]
 
-    def scan(self, key: str, df: pd.DataFrame, tam_yeniden: bool = False) -> EngineSnapshot:
-        engine = self.get_engine(key)
+    def scan(self, key: str, df: pd.DataFrame, tam_yeniden: bool = False,
+             timeframe: Optional[str] = None) -> EngineSnapshot:
+        engine = self.get_engine(key, timeframe=timeframe)
         snap = engine.process(df, tam_yeniden=tam_yeniden)
         self.last_snapshots[key] = snap
         self._history_kaydet(key, engine, snap)
