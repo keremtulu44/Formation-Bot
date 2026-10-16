@@ -1237,7 +1237,7 @@ def formasyon_durum_etiketi(durum: Any) -> str:
 
 _FORMASYON_METIN = ("pattern_name", "pattern_type", "state", "frozen_pattern_type",
                     "evidence_text")
-_FORMASYON_SAYI = ("quality", "effective_quality", "contraction", "start_bar", "end_bar",
+_FORMASYON_SAYI = ("quality", "effective_quality", "raw_quality", "contraction", "start_bar", "end_bar",
                     "apex_bar", "known_bar", "upper_now", "lower_now", "upper_slope",
                     "lower_slope", "upper_touches", "lower_touches", "break_price",
                     "critical_price_level", "candle_close_price", "close_price",
@@ -3681,6 +3681,8 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
     q = formasyon.get("quality")
     if q is None:
         q = formasyon.get("effective_quality")
+    if q is None:
+        q = formasyon.get("raw_quality")
     _sembol_pill = str(goruntu.get("sembol") or "—").upper()
     _tf_pill = str(goruntu.get("tf_kisa") or goruntu.get("tf") or "").upper()
     pill_listesi.append({"metin": f"{_sembol_pill} · {_tf_pill}", "ikon": "sembol",
@@ -3979,14 +3981,20 @@ def _metin_ciz(fig, metin: Mapping[str, Any], sol_kenar: float, sag_kenar: float
     """
     y = 1.0 - 0.032
     rozetler = list(metin.get("pill_listesi") or [])
+    x = float(sol_kenar)
     if rozetler:
-        x = float(sol_kenar)
         for kayit in rozetler[:4]:
             x = _rozet_ciz(fig, x, y, kayit, SABITLER["baslik_pt"])
     else:
         fig.text(sol_kenar, y, metin["baslik"], ha="left", va="top", color=PALET["metin"],
                  fontsize=SABITLER["baslik_pt"], fontweight="bold")
-    fig.text(sag_kenar, y, metin["sag"], ha="right", va="top", color=PALET["eksen"],
+    try:
+        fig_px = float(fig.get_size_inches()[0]) * float(fig.dpi)
+        sag_gen = (_metin_px(fig, str(metin.get("sag") or ""), SABITLER["durum_pt"]) + 12.0) / max(1.0, fig_px)
+    except Exception:
+        sag_gen = 0.22
+    y_sag = (y - 0.040) if (rozetler and x > float(sag_kenar) - sag_gen - 0.015) else y
+    fig.text(sag_kenar, y_sag, metin["sag"], ha="right", va="top", color=PALET["eksen"],
              fontsize=SABITLER["durum_pt"])
     y -= 0.040
     for satir in metin["satirlar"]:

@@ -152,7 +152,7 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
     durum = None
     if formasyon is None:
         if formasyon_tara:
-            formasyon, durum, uyarilar = _formasyon_tara_ayrintili(cerceve)
+            formasyon, durum, uyarilar = _formasyon_tara_ayrintili(cerceve, tf=tf)
         else:
             formasyon, uyarilar = _formasyon_yukle(formasyon_yol, cerceve)
         uyari += list(uyarilar)
@@ -263,13 +263,13 @@ def _grafik_formasyonu_bul(snap):
     return a
 
 
-def _formasyon_tara(cerceve) -> tuple[Any, list[str]]:
+def _formasyon_tara(cerceve, tf: str | None = None) -> tuple[Any, list[str]]:
     """`_formasyon_tara_ayrintili`nin durumsuz biçimi (eski çağıranlar için)."""
-    aday, _durum, uyarilar = _formasyon_tara_ayrintili(cerceve)
+    aday, _durum, uyarilar = _formasyon_tara_ayrintili(cerceve, tf=tf)
     return aday, uyarilar
 
 
-def _formasyon_tara_ayrintili(cerceve) -> tuple[Any, Any, list[str]]:
+def _formasyon_tara_ayrintili(cerceve, tf: str | None = None) -> tuple[Any, Any, list[str]]:
     """Botun canlı taramasıyla AYNI motor ve AYNI kullanılabilirlik kapısı.
 
     Canlı yol `canli_tarama`/`main` → `PatternLifecycleManager.scan` →
@@ -283,8 +283,13 @@ def _formasyon_tara_ayrintili(cerceve) -> tuple[Any, Any, list[str]]:
     from patterns.lifecycle import ArgentEngine
 
     try:
-        snap = ArgentEngine(PROFILE, 0.01).process(cerceve.copy(deep=True))
+        snap = ArgentEngine(PROFILE, 0.01, timeframe=tf).process(cerceve.copy(deep=True))
         aday = _grafik_formasyonu_bul(snap)
+        if aday is not None and snap.effective_quality is not None:
+            try:
+                aday.effective_quality = float(snap.effective_quality)
+            except Exception:
+                pass
     except Exception as hata:  # noqa: BLE001 - tarama hatası kareyi düşürmesin
         return None, None, [f"tarama hatası ({type(hata).__name__}): formasyonsuz çizildi"]
     if aday is None:

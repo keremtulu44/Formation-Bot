@@ -281,6 +281,10 @@ def _senaryo_ucgen_teyit():
             "quality": 87.5, "contraction": 0.26, "start_bar": baslangic,
             "end_bar": 130, "apex_bar": 143, "upper_now": round(ust_bant(130), 2),
             "lower_now": round(alt_bant(130), 2), "upper_touches": 4, "lower_touches": 4,
+            "hb1": baslangic, "hp1": round(ust_bant(baslangic), 2),
+            "hb2": 130, "hp2": round(ust_bant(130), 2),
+            "lb1": baslangic, "lp1": round(alt_bant(baslangic), 2),
+            "lb2": 130, "lp2": round(alt_bant(130), 2),
             "break_price": round(ust_bant(130), 2), "candle_close_price": teyit_kapanis,
             "break_dir": 1, "progress": 0.79,
             "evidence_text": "üst bant 4 · alt bant 4 temas · daralma %74 · "
@@ -351,10 +355,13 @@ def _senaryo_bayrak_aday():
         kapanis = min(ust - 0.06, 37.60 + 0.55 * i + ek)
         y.mum(kapanis - 0.09, kapanis, 1_500_000 + 260_000 * i, fitil=0.13)
 
+    ust_bas, alt_bas = kanal(173)
     ust_simdi, alt_simdi = kanal(209)
     cift = {"pattern_name": "Boğa Bayrağı", "state": "KIRILIM_ADAYI",
             "quality": 79.0, "contraction": 0.33, "start_bar": 173, "end_bar": 209,
             "upper_now": round(ust_simdi, 2), "lower_now": round(alt_simdi, 2),
+            "hb1": 173, "hp1": round(ust_bas, 2), "hb2": 209, "hp2": round(ust_simdi, 2),
+            "lb1": 173, "lp1": round(alt_bas, 2), "lb2": 209, "lp2": round(alt_simdi, 2),
             "upper_touches": 3, "lower_touches": 3, "direction": 1,
             "critical_price_level": round(ust_simdi, 2), "progress": 0.68,
             "evidence_text": "direk +%19 · kanal daralması %33 · son 4 bar üst banda"}
@@ -409,7 +416,9 @@ def _senaryo_flama_teyit():
 
     cift = {"pattern_name": "Boğa Flaması", "state": "KIRILIM_TEYITLI",
             "quality": 83.0, "contraction": 0.22, "start_bar": 75, "end_bar": 111,
-            "apex_bar": 134, "upper_now": ust_teyit, "lower_now": 47.20,
+            "apex_bar": 168, "upper_now": ust_teyit, "lower_now": 47.20,
+            "hb1": 75, "hp1": 47.88, "hb2": 111, "hp2": ust_teyit,
+            "lb1": 75, "lp1": 47.00, "lb2": 111, "lp2": 47.20,
             "upper_touches": 3, "lower_touches": 3, "break_price": ust_teyit,
             "candle_close_price": teyit, "break_dir": 1, "direction": 1,
             "progress": 0.74, "evidence_text": "flama 36 bar · teyit RVOL 3,1"}
@@ -453,6 +462,8 @@ def _senaryo_kama_hazirlik():
     cift = {"pattern_name": "Yükselen Kama", "state": "KIRILIM_HAZIRLIGI",
             "quality": 74.0, "contraction": 0.38, "start_bar": 60, "end_bar": 129,
             "apex_bar": 131, "upper_now": ust_simdi, "lower_now": alt_simdi,
+            "hb1": 60, "hp1": 36.50, "hb2": 129, "hp2": ust_simdi,
+            "lb1": 60, "lp1": 30.50, "lb2": 129, "lp2": alt_simdi,
             "upper_touches": 4, "lower_touches": 5,
             "critical_price_level": alt_simdi, "progress": 0.94,
             "evidence_text": "apex'e 2 bar · daralma %62"}
@@ -499,6 +510,8 @@ def _senaryo_ucgen_gecersiz():
     cift = {"pattern_name": "Alçalan Üçgen", "state": "KIRILIM_GECERSIZLESTI",
             "quality": 71.0, "contraction": 0.31, "start_bar": 75, "end_bar": 128,
             "apex_bar": 147, "upper_now": ust_kirilim, "lower_now": 51.00,
+            "hb1": 75, "hp1": 57.00, "hb2": 128, "hp2": ust_kirilim,
+            "lb1": 75, "lp1": 51.00, "lb2": 128, "lp2": 51.00,
             "upper_touches": 4, "lower_touches": 5, "break_price": ust_kirilim,
             "candle_close_price": 52.62, "break_dir": 1,
             "evidence_text": "teyit sonrası 3 ardışık kapanış bant altında"}
@@ -548,6 +561,8 @@ def _senaryo_ucgen_retest():
     cift = {"pattern_name": "Yükselen Üçgen", "state": "RETEST_BASARILI",
             "quality": 85.0, "contraction": 0.29, "start_bar": 80, "end_bar": 150,
             "apex_bar": 165, "upper_now": 45.80, "lower_now": 45.42,
+            "hb1": 80, "hp1": 45.80, "hb2": 150, "hp2": 45.80,
+            "lb1": 80, "lp1": 41.50, "lb2": 150, "lp2": 45.84,
             "upper_touches": 5, "lower_touches": 4, "break_price": 45.80,
             "candle_close_price": 46.42, "break_dir": 1,
             "evidence_text": "retest kapanışı 46,14 > 45,80 · dip 45,86 tutundu"}

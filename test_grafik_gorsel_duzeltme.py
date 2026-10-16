@@ -118,3 +118,21 @@ def test_formasyon_tara_cli_png_uretir(tmp_path):
                             "--veri-dizin", "bot_data", "--cikti", str(cikti)])
     assert kod == 0
     assert cikti.exists() and cikti.stat().st_size > 1000
+
+
+def test_grafik_hisse_formasyon_rozetinde_kalite_puani_gorunur():
+    """`/grafik hisse` yolu (`_formasyon_tara_ayrintili`) üst rozette `kalite XX/100` taşır."""
+    df, _kaynak = grafik_uret.cerceve_getir("ALARK", "4h", "bot_data")
+    from data import tamamlanmis_mumlar
+
+    df = tamamlanmis_mumlar(df, "4h").copy(deep=True)
+    aday, durum, uyari = grafik_uret._formasyon_tara_ayrintili(df, tf="4h")
+    assert aday is not None and not uyari
+    assert getattr(aday, "effective_quality", None) is not None
+    goruntu = grafik.anlik_goruntu(aday, "4h", df, sembol="ALARK")
+    if durum and isinstance(goruntu.get("formasyon"), dict):
+        goruntu["formasyon"]["state"] = durum
+    metin = grafik._metinler(goruntu, {"mum_sayisi": goruntu["bar_sayisi"]}, 1280, [], False)
+    rozet_metinleri = [p["metin"] for p in metin["pill_listesi"]]
+    assert any("kalite " in m and "/100" in m for m in rozet_metinleri), rozet_metinleri
+
