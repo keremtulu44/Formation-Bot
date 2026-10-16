@@ -1867,4 +1867,36 @@ hangi yönden kaç rozet çıktığı sessizce kaybolmaz, ölçümle doğrulanı
   sayısı 8 → 3-6'ya indi (kullanıcı: "çok fazla etiket olmamalı").
 - Yakın plan doğrulama sayfası: rozetler 1s karede okunur, çipler mumların üstüne
   binmiyor (komşuluk yarıçapı düzeltmesi öncesi/sonrası ölçüldü).
+### 42.3 Tazelik önceliği (2026-10-16, ikinci tur)
+
+Kullanıcı: *"bu sistem sadece geçmişi filtreler, yeni geleni geciktirebilir, onu bir
+sisteme oturt, yine 3-6 kalsın"*. Doğru teşhis: seçim tamamen sertlik sıralamasıydı,
+yani pencereye yeni giren mum eskilerin arasında kaybolabiliyordu.
+
+**Kural:** her yönün **EN YENİ** uygun mumu rozet alır; eskiler kalan yerleri
+sertliğe göre doldurur. Taze aday yerleşim listesinde ÖNDE olduğu için onu ne
+`rvol_rozet_ara` (aralık) ne `rvol_rozet_maks` (bütçe) düşürebilir.
+
+| Ölçüm | Kural öncesi | Kural sonrası |
+| :--- | :--- | :--- |
+| GARAN 4s (68 mum) | son uygun bar **çizilmedi** (son bar x0,16) | taze ↓ bar 67 = son bar, çizildi |
+| THYAO 4s | son uygun bar **çizilmedi** (x0,18) | taze ↓ bar 67 çizildi |
+| AKBNK 4s | son uygun bar **çizilmedi** (x0,17) | taze ↓ bar 67 çizildi |
+| GARAN 1s | son uygun bar **çizilmedi** (x0,47) | taze ↓ bar 75 çizildi |
+
+- Ölçüm kanıtı kodda: `_rvol_rozetleri` çizilen barları küme olarak tutar ve
+  `meta["serit"]["rozet_taze_artis"] / ["rozet_taze_dusus"]` alanlarına **gerçekten
+  çizilen** taze barı yazar (varsayım değil, ölçüm).
+- Taze kuruma kotaya uyar: `GRAFIK_RVOL_ROZET_DUSUS_MAKS=0` ise kuruma rozeti
+  (taze olan dahil) yazılmaz — kaçış kapısı sürpriz üretmez.
+- **Toplam tavan 8 → 6** (`rvol_rozet_maks`): tazelik garantisi bir rozet daha
+  eklediği için ölçülen üst sınır 7'ye çıkmıştı (AKBNK 4s 120 mum). Yeni tavanla
+  kare başına rozet **3-6** aralığında kalıyor (kullanıcı: "yine 3-6 kalsın").
+- Ölçüm (11 gerçek kare, hepsinde `mum_cakisan == 0`): GARAN 4s 6 · TUPRS 4s 6 ·
+  AKBNK 4s (120 mum) 6 · GARAN 1s 5 · AKBNK 4s 4 · THYAO 4s 3 · SASA 1s 6 ·
+  EREGL 1g 2 · KCHOL 1s 4 · BIMAS 4s 4 · PGSUS 4s 5. Taze izler: GARAN 1s ↑18 ↓75 ·
+  AKBNK 4s ↑33 ↓67 · THYAO 4s ↑48 ↓67.
+- Kapatma: `test_grafik_faz_kullanici.py::test_faz1_taze_*` (5 test) ve
+  `test_faz1_gercek_karede_son_mumun_rozeti_cizilir` (canlı önbellek kapısı);
+  tam paket `pytest -q` → **1275 geçti, 44 atlandı**.
 

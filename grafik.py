@@ -239,7 +239,10 @@ SABITLER_TABAN: dict[str, Any] = {
     # karesinde ↓7'ye kadar çıkıp kare rozet kalabalığına dönüyordu); en sert
     # iki kuruma seçilir. Patlamalar kalan yeri doldurur (`rvol_rozet_maks`).
     "rvol_rozet_dusus_maks": 2,
-    "rvol_rozet_maks": 8,             # kareyi rozet kalabalığına boğma (iki yön toplamı)
+    # Toplam tavan 8 → 6 (kullanıcı, 2026-10-16: "yine 3-6 kalsın"). Tazelik
+    # garantisi bir rozet daha ekleyebildiği için ölçülen üst sınır 7'ye çıkmıştı
+    # (AKBNK 4s 120 mum); tavan 6 ile kare başına rozet 3-6 aralığında kalır.
+    "rvol_rozet_maks": 6,
     "rvol_rozet_ara": 7,              # iki rozet arasında en az bar (üst üste binmesin)
     "katmanlar": ("formasyon", "ob", "fvg", "ms", "serit"),
     "etiket_detay": False,            # §2.6: evidence_text ancak istenirse
@@ -1735,7 +1738,8 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         meta["kare"]["sag_bosluk_yuzde"] = round(
             100.0 * sag_bosluk / (n + 0.2 + sag_bosluk), 2)
         butce = _butce_px(genislik)
-        sayac_rozet: dict[str, int] = {"artis": 0, "dusus": 0}
+        sayac_rozet: dict[str, Any] = {"artis": 0, "dusus": 0,
+                                       "taze_artis": None, "taze_dusus": None}
         # Mum gövde genişliği VERİ birimindedir (x = bar indeksi, komşu barlar
         # arası 1,0). Eskiden `px_bar × 0,62` yazılıyordu: px/bar = 6 iken gövde
         # 3,7 bar genişliğinde çiziliyor, komşu mumların üstüne biniyordu.
@@ -1873,6 +1877,9 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                                        + sayac_rozet.get("dusus", 0))
         meta["serit"]["rozet_artis"] = int(sayac_rozet.get("artis", 0))
         meta["serit"]["rozet_dusus"] = int(sayac_rozet.get("dusus", 0))
+        # Tazelik önceliği izleri: en yeni uygun mumun rozeti çizildiyse barı.
+        meta["serit"]["rozet_taze_artis"] = sayac_rozet.get("taze_artis")
+        meta["serit"]["rozet_taze_dusus"] = sayac_rozet.get("taze_dusus")
         meta["serit"]["panel"] = bool(ax_serit is not None)
         if ax_serit is not None:
             _serit_ciz(ax_serit, goruntu, n, sag_bosluk=sag_bosluk)
@@ -1955,8 +1962,16 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
 
     Kuruma rozeti TAVANLIDIR: `rvol_rozet_dusus_maks` (2) — kullanıcı isteği
     ("çok fazla etiket olmamalı"). En sert iki kuruma yazılır; patlamalar kalan
-    yeri doldurur. Dönen: `{"artis": n, "dusus": m}` — sessiz kayıp yok,
-    sayaçlar `meta["serit"]["rozet_artis"] / ["rozet_dusus"]`e yazılır.
+    yeri doldurur.
+
+    TAZELİK ÖNCELİĞİ (kullanıcı, 2026-10-16): rozet yalnız geçmişi filtrelemez —
+    HER YÖNÜN **EN TAZE** uygun mumu rozet alır. Yerleşim sırasında önde olduğu
+    için onu ne aralık kuralı ne bütçe düşürebilir. Ölçüm (kural öncesi): son
+    mumun rozeti dört gerçek karede de düşüyordu (GARAN 4s son bar x0,16 ·
+    THYAO x0,18 · AKBNK x0,17) — yani yeni gelen sinyal gecikiyordu.
+
+    Dönen: `{"artis": n, "dusus": m, "taze_artis": bar|None, "taze_dusus": bar|None}`
+    — sessiz kayıp yok; sayaçlar `meta["serit"]`e yazılır.
     """
     serit = goruntu.get("serit") or {}
     degerler = list(serit.get("degerler") or [])
@@ -2003,21 +2018,34 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
             dususler.append((1.0 / float(ham), i, float(ham), -1))
     artislar.sort(key=lambda t: (-t[0], t[1]))
     dususler.sort(key=lambda t: (-t[0], t[1]))
-    # Bütçe iki kurala bağlı:
-    #   1. Kuruma rozeti kare başına `rvol_rozet_dusus_maks` (2) TAVANI — kullanıcı:
-    #      "çok fazla etiket olmamalı, en fazla 2 tane ekleyebiliriz" (ölçüm: sakin
-    #      4s karesinde ↓7'ye çıkıyordu). En sert iki kuruma seçilir.
-    #   2. Toplam `rvol_rozet_maks` (8) — patlamalar kalan yeri doldurur, böylece
-    #      birkaç sert kuruma belirgin bir hacim patlamasını kareden atamaz.
-    # Havuzda sıra sertliğe göre (patlamada `v`, kurumada `1/v`); HAVUZ KIRPILMAZ,
-    # çünkü aralık kuralı adayları eledikçe sıradaki mum devreye girmeli (kırpma +
+    # --- TAZELİK ÖNCELİĞİ ---------------------------------------------------------
+    # Kullanıcı: "bu sistem sadece geçmişi filtreler, yeni geleni geciktirebilir".
+    # Kural: her yönün EN TAZE uygun mumu rozet alır; eskiler kalan yerleri
+    # sertliğe göre doldurur. Taze adaylar listede ÖNDE olduğu için ne aralık
+    # kuralı ne bütçe onları düşürebilir (aralık çakışmasında düşen ESKİ olur).
+    taze_artis = max(artislar, key=lambda t: t[1]) if artislar else None
+    taze_dusus = max(dususler, key=lambda t: t[1]) if dususler else None
+    artislar = [t for t in artislar if t is not taze_artis]
+    dususler = [t for t in dususler if t is not taze_dusus]
+    # Bütçe: kuruma kotası `rvol_rozet_dusus_maks` (kullanıcı: "en fazla 2") —
+    # taze kuruma kota içinde GARANTİ; kalan yerler en sert ESKİ kurumalara.
+    # Toplam `rvol_rozet_maks`: patlamalar kalan yeri doldurur, böylece birkaç
+    # sert kuruma belirgin bir hacim patlamasını kareden atamaz. HAVUZ KIRPILMAZ:
+    # aralık kuralı adayları eledikçe sıradaki mum devreye girmeli (kırpma +
     # aralık birlikte rozet sayısını 8'den 2'ye düşürüyordu).
     dusus_maks = max(0, int(_ortam_sayi("GRAFIK_RVOL_ROZET_DUSUS_MAKS",
                                         float(SABITLER["rvol_rozet_dusus_maks"]))))
-    adaylar = sorted(artislar + dususler[:dusus_maks], key=lambda t: (-t[0], t[1]))
+    # Kota 0 = "kuruma rozeti kapalı": tazelik garantisi de kotaya uyar (kapalıyken
+    # taze kuruma da yazılmaz) — kaçış kapısı sürpriz üretmez.
+    taze_dusus_kota = taze_dusus if dusus_maks > 0 else None
+    kalan_dusus = max(0, dusus_maks - (1 if taze_dusus_kota is not None else 0))
+    taze = [t for t in (taze_artis, taze_dusus_kota) if t is not None]
+    adaylar = taze + sorted(artislar + dususler[:kalan_dusus],
+                            key=lambda t: (-t[0], t[1]))
     cizilen = 0
     sayac = {"artis": 0, "dusus": 0}
     yerlesik: list[int] = []
+    cizilen_bar: set[int] = set()
     for sertlik, i, deger, yon in adaylar:
         if cizilen >= maks:
             break
@@ -2070,8 +2098,15 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
                                          else PALET["mum_dusen"]),
                               linewidth=0.6, alpha=0.9))
         cizilen += 1
+        cizilen_bar.add(int(i))
         sayac["artis" if yon > 0 else "dusus"] += 1
-    return sayac
+    # Taze rozet GERÇEKTEN çizildi mi: yerleşim sırası önde olduğu için beklenen
+    # "evet"; yine de varsayım değil ÖLÇÜM — çizilen bar kümesinden okunur.
+    return {"artis": sayac["artis"], "dusus": sayac["dusus"],
+            "taze_artis": (int(taze_artis[1]) if taze_artis is not None
+                           and int(taze_artis[1]) in cizilen_bar else None),
+            "taze_dusus": (int(taze_dusus[1]) if taze_dusus is not None
+                           and int(taze_dusus[1]) in cizilen_bar else None)}
 
 
 def _mum_cakisma_say(fig, ax, acilis, yuksek, dusuk, kapanis, cap: float) -> dict[str, Any]:
@@ -4211,7 +4246,8 @@ def _serit_meta(serit: Optional[Mapping[str, Any]]) -> dict[str, Any]:
     if not serit:
         return {"acik": False, "esik": None, "spike": [], "kaynak": "yok", "yerel": False,
                 "hacimsiz": 0, "elenen_spike": 0, "capa": 0, "yetersiz": False,
-                "uzunluk": None}
+                "uzunluk": None, "rozet": 0, "rozet_artis": 0, "rozet_dusus": 0,
+                "rozet_taze_artis": None, "rozet_taze_dusus": None}
     return {"acik": True, "esik": serit.get("esik"), "spike": list(serit.get("spike") or []),
             "kaynak": serit.get("kaynak"), "yerel": bool(serit.get("yerel")),
             "hacimsiz": int(serit.get("hacimsiz") or 0),

@@ -122,6 +122,11 @@ def _rozetler(ax):
     return [str(t.get_text()) for t in ax.texts if str(t.get_text()).startswith("⚡")]
 
 
+def _yon_sayaci(sayac):
+    """Yön sayaçları: dönüş sözleşmesi artık tazelik izlerini de taşır (2026-10-16)."""
+    return {k: sayac[k] for k in ("artis", "dusus")}
+
+
 def test_faz1_rvol_rozeti_esik_ustu_mumlara_baglanir():
     """⚡↑ rozeti yalnız RVOL > 2,0 mumlara ve mumun ALTINA (fitil altı) konur."""
     fig, ax = _eksen(60)
@@ -129,7 +134,7 @@ def test_faz1_rvol_rozeti_esik_ustu_mumlara_baglanir():
                "kapanis": [100.0] * 60}
     dusuk = [99.0] * 59 + [98.0]
     sayac = grafik._rvol_rozetleri(ax, goruntu, 60, dusuk)
-    assert sayac == {"artis": 1, "dusus": 0}
+    assert _yon_sayaci(sayac) == {"artis": 1, "dusus": 0}
     rozet = [t for t in ax.texts if str(t.get_text()).startswith("⚡")]
     assert len(rozet) == 1 and str(rozet[0].get_text()) == "⚡↑ x3,4"
     assert rozet[0].xy[1] <= 98.0                   # mumun altında (düşük fitil)
@@ -148,7 +153,7 @@ def test_faz1_rozet_iki_yonlu_artis_ve_dusus(monkeypatch):
     degerler[40] = 0.5                              # kuruma
     goruntu = {"serit": {"degerler": degerler}}
     sayac = grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60)
-    assert sayac == {"artis": 1, "dusus": 1}
+    assert _yon_sayaci(sayac) == {"artis": 1, "dusus": 1}
     assert sorted(_rozetler(ax)) == ["⚡↑ x3,0", "⚡↓ x0,5"]
     renkler = {str(t.get_text())[1]: t.get_color() for t in ax.texts
                if str(t.get_text()).startswith("⚡")}
@@ -167,11 +172,11 @@ def test_faz1_rozet_dusus_esigi_ve_hacimsiz_bar(monkeypatch):
     degerler[50] = 0.0                              # hacimsiz bar: rozet YOK
     goruntu = {"serit": {"degerler": degerler}}
     sayac = grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60)
-    assert sayac == {"artis": 0, "dusus": 1}
+    assert _yon_sayaci(sayac) == {"artis": 0, "dusus": 1}
     assert _rozetler(ax) == ["⚡↓ x0,5"]
     fig2, ax2 = _eksen(60)
-    assert grafik._rvol_rozetleri(ax2, {"serit": {"degerler": [0.0, None] + [1.0] * 58}},
-                                  60, [99.0] * 60) == {"artis": 0, "dusus": 0}
+    assert _yon_sayaci(grafik._rvol_rozetleri(ax2, {"serit": {"degerler": [0.0, None] + [1.0] * 58}},
+                                  60, [99.0] * 60)) == {"artis": 0, "dusus": 0}
 
 
 def test_faz1_rozet_esikleri_ortamla_ayarlanabilir(monkeypatch):
@@ -180,14 +185,14 @@ def test_faz1_rozet_esikleri_ortamla_ayarlanabilir(monkeypatch):
     degerler = [1.0] * 60
     degerler[10] = 1.5                               # varsayılanda rozet YOK
     goruntu = {"serit": {"degerler": degerler}}
-    assert grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60) == {"artis": 0, "dusus": 0}
+    assert _yon_sayaci(grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60)) == {"artis": 0, "dusus": 0}
     monkeypatch.setenv("GRAFIK_RVOL_ROZET_ESIK", "1,2")      # Türkçe virgül de okunur
     fig2, ax2 = _eksen(60)
-    assert grafik._rvol_rozetleri(ax2, goruntu, 60, [99.0] * 60) == {"artis": 1, "dusus": 0}
+    assert _yon_sayaci(grafik._rvol_rozetleri(ax2, goruntu, 60, [99.0] * 60)) == {"artis": 1, "dusus": 0}
     monkeypatch.setenv("GRAFIK_RVOL_ROZET_ESIK_DUSUK", "abc")  # bozuk → varsayılan (0,5)
     fig3, ax3 = _eksen(60)
-    assert grafik._rvol_rozetleri(ax3, {"serit": {"degerler": [0.6] * 60}},
-                                  60, [99.0] * 60) == {"artis": 0, "dusus": 0}
+    assert _yon_sayaci(grafik._rvol_rozetleri(ax3, {"serit": {"degerler": [0.6] * 60}},
+                                  60, [99.0] * 60)) == {"artis": 0, "dusus": 0}
 
 
 def test_faz1_rozet_metni_yuvarlamada_yanlis_yon_gostermez():
@@ -225,6 +230,7 @@ def test_faz1_kuruma_rozeti_en_fazla_iki(monkeypatch):
     karesinde ↓7'ye çıkıyordu). Patlamalar kalan bütçeyi doldurur.
     """
     tavan = int(grafik.SABITLER["rvol_rozet_dusus_maks"])
+    maks = int(grafik.SABITLER["rvol_rozet_maks"])
     assert tavan == 2
     fig, ax = _eksen(60)
     degerler = [1.0] * 60
@@ -233,7 +239,7 @@ def test_faz1_kuruma_rozeti_en_fazla_iki(monkeypatch):
     degerler[55] = 0.05                              # en sert kuruma (sertlik 20)
     sayac = grafik._rvol_rozetleri(ax, {"serit": {"degerler": degerler}},
                                    60, [99.0] * 60)
-    assert sayac == {"artis": 0, "dusus": tavan}
+    assert _yon_sayaci(sayac) == {"artis": 0, "dusus": tavan}
     metinler = _rozetler(ax)
     assert len(metinler) == tavan
     assert "⚡↓ x0,05" in metinler                    # EN SERT kuruma her zaman girer
@@ -242,18 +248,18 @@ def test_faz1_kuruma_rozeti_en_fazla_iki(monkeypatch):
     fig2, ax2 = _eksen(60)
     karisik = [3.0] * 60
     karisik[10] = 0.2
-    assert grafik._rvol_rozetleri(ax2, {"serit": {"degerler": karisik}},
-                                  60, [99.0] * 60) == {"artis": 8, "dusus": 0}
+    assert _yon_sayaci(grafik._rvol_rozetleri(ax2, {"serit": {"degerler": karisik}},
+                                  60, [99.0] * 60)) == {"artis": maks, "dusus": 0}
 
 
 def test_faz1_rozet_kapak_ve_esik_alti_cizilmez():
     fig, ax = _eksen(60)
     goruntu = {"serit": {"degerler": [1.9] * 60}}    # eşik altı: hiç rozet yok
-    assert grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60) == {"artis": 0, "dusus": 0}
+    assert _yon_sayaci(grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60)) == {"artis": 0, "dusus": 0}
     fig2, ax2 = _eksen(60)
     cok = {"serit": {"degerler": [5.0] * 60}}
     maks = int(grafik.SABITLER["rvol_rozet_maks"])
-    assert grafik._rvol_rozetleri(ax2, cok, 60, [99.0] * 60) == {"artis": maks, "dusus": 0}
+    assert _yon_sayaci(grafik._rvol_rozetleri(ax2, cok, 60, [99.0] * 60)) == {"artis": maks, "dusus": 0}
 
 
 def test_faz1_rozet_kapak_iki_yonu_birlikte_sayar():
@@ -270,7 +276,7 @@ def test_faz1_rozet_kapak_iki_yonu_birlikte_sayar():
     goruntu = {"serit": {"degerler": degerler}}
     maks = int(grafik.SABITLER["rvol_rozet_maks"])
     sayac = grafik._rvol_rozetleri(ax, goruntu, 60, [99.0] * 60)
-    assert sayac == {"artis": 4, "dusus": 1}
+    assert _yon_sayaci(sayac) == {"artis": 4, "dusus": 1}
     assert sayac["artis"] + sayac["dusus"] <= maks          # bütçe iki yönün TOPLAMI
     assert "⚡↓ x0,25" in _rozetler(ax)                     # eşiği aşan kuruma da girdi
 
@@ -527,3 +533,106 @@ def test_faz4_ikon_tofu_cizmez():
     # Seçilen işaret AKTİF fontta bulunmalı (yoksa çizimde kutu/tofu olurdu).
     assert grafik._font_emoji_var(sembol) and grafik._font_emoji_var(formasyon)
     assert grafik._font_emoji_var(grafik._ikon("hedef"))
+
+def test_faz1_taze_rozet_gecikmez_dusus():
+    """Kullanıcı (2026-10-16): "bu sistem sadece geçmişi filtreler, yeni geleni
+    geciktirebilir".
+
+    Ölçüm (kural öncesi, gerçek önbellek): son mumun rozeti DÖRT karede de
+    düşüyordu — GARAN 4s son bar RVOL 0,16 · THYAO 4s 0,18 · AKBNK 4s 0,17 ·
+    GARAN 1s 0,47 (hepsi kuruma eşiğinin altında). Yeni kural: her yönün en taze
+    uygun mumu rozet alır; eskiler kalan yerleri doldurur.
+    """
+    fig, ax = _eksen(60)
+    degerler = [0.10] * 40                            # eski, çok sert kurumalar
+    degerler += [1.0] * 19
+    degerler.append(0.45)                             # SON mum: hafif kuruma
+    sayac = grafik._rvol_rozetleri(ax, {"serit": {"degerler": degerler}},
+                                   60, [99.0] * 60)
+    assert sayac["taze_dusus"] == 59                  # taze rozet ÇİZİLDİ
+    assert 59 in {int(round(float(t.xy[0]))) for t in ax.texts
+                  if str(t.get_text()).startswith("⚡")}
+    assert "⚡↓ x0,45" in _rozetler(ax)               # son mumun kendi değeri yazıldı
+    assert _yon_sayaci(sayac) == {"artis": 0, "dusus": 2}   # taze + bir eski = tavan
+
+
+def test_faz1_taze_rozet_gecikmez_artis():
+    """Taze PATLAMA da garanti: 8 sert eski patlama bütçeyi doldursa bile son mum girer."""
+    fig, ax = _eksen(60)
+    degerler = [9.0] * 8 + [1.0] * 51
+    degerler.append(2.05)                             # SON mum: hafif patlama
+    sayac = grafik._rvol_rozetleri(ax, {"serit": {"degerler": degerler}},
+                                   60, [99.0] * 60)
+    assert sayac["taze_artis"] == 59
+    assert "⚡↑ x2,05" in _rozetler(ax)
+    assert sayac["artis"] + sayac["dusus"] <= int(grafik.SABITLER["rvol_rozet_maks"])
+
+
+def test_faz1_taze_rozet_aralik_cakismasinda_eski_duser():
+    """Taze rozet ile eski aday arasında `min_ara`'dan az bar varsa DÜŞEN ESKİ olur."""
+    fig, ax = _eksen(60)
+    degerler = [1.0] * 60
+    degerler[55] = 0.05                               # çok sert eski kuruma
+    degerler[58] = 0.40                               # taze ile komşu kuruma
+    degerler[59] = 0.45                               # taze kuruma
+    sayac = grafik._rvol_rozetleri(ax, {"serit": {"degerler": degerler}},
+                                   60, [99.0] * 60)
+    barlar = {int(round(float(t.xy[0]))) for t in ax.texts
+              if str(t.get_text()).startswith("⚡")}
+    assert 59 in barlar                               # taze (en yeni) yazıldı
+    assert 55 not in barlar                           # aralık çakışmasında eski düştü
+    assert sayac["taze_dusus"] == 59
+
+
+def test_faz1_taze_uygun_mum_yoksa_izler_none():
+    """Pencerede taze uygun mum yoksa davranış eskisi gibi (sertlik sırası), izler None."""
+    fig, ax = _eksen(60)
+    degerler = [1.0] * 60
+    degerler[10] = 3.0
+    degerler[30] = 0.4
+    sayac = grafik._rvol_rozetleri(ax, {"serit": {"degerler": degerler}},
+                                   60, [99.0] * 60)
+    assert _yon_sayaci(sayac) == {"artis": 1, "dusus": 1}
+    assert sayac["taze_artis"] == 10 and sayac["taze_dusus"] == 30   # tek uygun onlar
+
+
+def test_faz1_taze_kuruma_kapatilinca_patlama_korunur():
+    """Kuruma tavanı 0'a çekilse bile TAZE PATLAMA yer bulur (garanti bütçeden bağımsız)."""
+    fig, ax = _eksen(60)
+    degerler = [1.0] * 60
+    for i in range(8):
+        degerler[i] = 9.0
+    degerler[59] = 2.1
+    sayac = grafik._rvol_rozetleri(ax, {"serit": {"degerler": degerler}},
+                                   60, [99.0] * 60)
+    assert sayac["taze_artis"] == 59 and sayac["dusus"] == 0
+
+
+def test_faz1_gercek_karede_son_mumun_rozeti_cizilir():
+    """Gerçek önbellek: 4s karelerinde son mum kuruma eşiğinin altındaysa rozeti ÇIKAR.
+
+    Bu, "yeni gelen sinyal gecikmesin" kuralının canlı veriyle kapısıdır: kural
+    öncesi GARAN/THYAO/AKBNK 4s karelerinde son mumun rozeti hiç çizilmiyordu.
+    """
+    import grafik_uret
+
+    kare = 0
+    for hisse in ("GARAN", "THYAO", "AKBNK"):
+        sonuc = grafik_uret.kare_uret(hisse, "4h", veri_dizin="bot_data", zone=True,
+                                      cikti=f"/tmp/kare/_taze_{hisse}.png")
+        m = sonuc["meta"]["serit"]
+        if m["kaynak"] == "yok":
+            continue
+        kare += 1
+        esik_dusuk = float(grafik.SABITLER["rvol_rozet_esik_dusuk"])
+        esik = float(grafik.SABITLER["rvol_rozet_esik"])
+        mum = sonuc["meta"]["mum_sayisi"]
+        son = m["rozet_taze_dusus"]
+        if son is None and m["rozet_taze_artis"] is not None:
+            continue                                  # son uygun mum patlamaydı
+        assert son is not None, (f"{hisse}: taze rozet düşmüş "
+                                 f"(artis={m['rozet_taze_artis']}, dusus={m['rozet_taze_dusus']})")
+        assert 0 <= son < mum
+        assert esik_dusuk < esik
+    assert kare > 0, "hiç gerçek kare üretilemedi"
+
