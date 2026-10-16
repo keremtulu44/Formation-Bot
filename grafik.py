@@ -234,6 +234,11 @@ SABITLER_TABAN: dict[str, Any] = {
     # 2026-10-16 (kullanıcı): rozet artık İKİ YÖNLÜ. `⚡↑ x2,5` hacim patlaması,
     # `⚡↓ x0,5` hacim kuruması. Yön oku metnin kendisinde (renk tek kanal değil).
     "rvol_rozet_esik_dusuk": 0.5,     # ⚡↓ rozeti: RVOL bu eşiğin ALTINDA veya EŞİTSE
+    # Kullanıcı (2026-10-16): "çok fazla etiket olmamalı, en fazla 2 tane
+    # ekleyebiliriz". Kuruma rozeti kare başına 2'yi geçmez (ölçüm: sakin 4s
+    # karesinde ↓7'ye kadar çıkıp kare rozet kalabalığına dönüyordu); en sert
+    # iki kuruma seçilir. Patlamalar kalan yeri doldurur (`rvol_rozet_maks`).
+    "rvol_rozet_dusus_maks": 2,
     "rvol_rozet_maks": 8,             # kareyi rozet kalabalığına boğma (iki yön toplamı)
     "rvol_rozet_ara": 7,              # iki rozet arasında en az bar (üst üste binmesin)
     "katmanlar": ("formasyon", "ob", "fvg", "ms", "serit"),
@@ -1948,8 +1953,10 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
     kutunun kenarı komşu gövdenin 1 px yanına düşüyor ve `mum_cakisan` kapısı
     haklı olarak kırmızı yanıyordu (ölçüm: GARAN 4s `⚡↓ x0,13` · TUPRS 4s).
 
-    Dönen: `{"artis": n, "dusus": m}` — sessiz kayıp yok, sayaçlar
-    `meta["serit"]["rozet_artis"] / ["rozet_dusus"]`e yazılır.
+    Kuruma rozeti TAVANLIDIR: `rvol_rozet_dusus_maks` (2) — kullanıcı isteği
+    ("çok fazla etiket olmamalı"). En sert iki kuruma yazılır; patlamalar kalan
+    yeri doldurur. Dönen: `{"artis": n, "dusus": m}` — sessiz kayıp yok,
+    sayaçlar `meta["serit"]["rozet_artis"] / ["rozet_dusus"]`e yazılır.
     """
     serit = goruntu.get("serit") or {}
     degerler = list(serit.get("degerler") or [])
@@ -1996,18 +2003,18 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
             dususler.append((1.0 / float(ham), i, float(ham), -1))
     artislar.sort(key=lambda t: (-t[0], t[1]))
     dususler.sort(key=lambda t: (-t[0], t[1]))
-    # Bütçe payı: en sert `maks // 2` patlama ve `maks // 2` kuruma YER AYIRT EDİLİR.
-    # Neden: tamamen sertliğe göre sıralansa sakin bir penceredeki 8 kuruma
-    # (x0,15 ≈ sertlik 6,7) belirgin bir hacim patlamasını (x2,2) kareden atardı —
-    # asıl sinyal kaybolurdu. Kalan yer yine en sert sapmalara gider.
-    # Sıra: önce ayrılan pay (en sert sapmalar), sonra kalan havuz. HAVUZ
-    # KIRPILMAZ — aralık kuralı adayları eledikçe sırada başka mum bulunmalı
-    # (kırpma + aralık birlikte aday yokluğundan rozet sayısını 8'den 2'ye
-    # düşürüyordu: komşu 8 mum seçilip 7 bar aralık hepsini eliyordu).
-    pay = max(1, maks // 2)
-    ilk = sorted(artislar[:pay] + dususler[:pay], key=lambda t: (-t[0], t[1]))
-    kalan = sorted(artislar[pay:] + dususler[pay:], key=lambda t: (-t[0], t[1]))
-    adaylar = ilk + kalan
+    # Bütçe iki kurala bağlı:
+    #   1. Kuruma rozeti kare başına `rvol_rozet_dusus_maks` (2) TAVANI — kullanıcı:
+    #      "çok fazla etiket olmamalı, en fazla 2 tane ekleyebiliriz" (ölçüm: sakin
+    #      4s karesinde ↓7'ye çıkıyordu). En sert iki kuruma seçilir.
+    #   2. Toplam `rvol_rozet_maks` (8) — patlamalar kalan yeri doldurur, böylece
+    #      birkaç sert kuruma belirgin bir hacim patlamasını kareden atamaz.
+    # Havuzda sıra sertliğe göre (patlamada `v`, kurumada `1/v`); HAVUZ KIRPILMAZ,
+    # çünkü aralık kuralı adayları eledikçe sıradaki mum devreye girmeli (kırpma +
+    # aralık birlikte rozet sayısını 8'den 2'ye düşürüyordu).
+    dusus_maks = max(0, int(_ortam_sayi("GRAFIK_RVOL_ROZET_DUSUS_MAKS",
+                                        float(SABITLER["rvol_rozet_dusus_maks"]))))
+    adaylar = sorted(artislar + dususler[:dusus_maks], key=lambda t: (-t[0], t[1]))
     cizilen = 0
     sayac = {"artis": 0, "dusus": 0}
     yerlesik: list[int] = []

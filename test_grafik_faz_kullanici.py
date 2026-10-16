@@ -200,12 +200,11 @@ def test_faz1_rozet_metni_yuvarlamada_yanlis_yon_gostermez():
 
 
 def test_faz1_rozet_butcesi_iki_yone_yer_ayirir():
-    """Bütçe payı: sakin penceredeki sert kurumalar hacim PATLAMASINI kareden atamaz.
+    """Sakin penceredeki sert kurumalar hacim PATLAMASINI kareden atamaz.
 
     Neden: sertliğe göre tam sıralamada 8 kuruma (x0,1 ≈ sertlik 10) belirgin bir
     patlamayı (x2,2 = sertlik 2,2) tamamen dışarıda bırakıyordu — asıl sinyal
-    (kırılımı hacmin teyit etmesi) kaybolurdu. `maks // 2` şer payı her yöne
-    ayrılır, kalan yer en sert sapmalara gider.
+    (kırılımı hacmin teyit etmesi) kaybolurdu.
     """
     fig, ax = _eksen(60)
     degerler = [1.0] * 60
@@ -214,8 +213,37 @@ def test_faz1_rozet_butcesi_iki_yone_yer_ayirir():
     degerler[57] = 2.2                               # tek ve zayıf patlama
     sayac = grafik._rvol_rozetleri(ax, {"serit": {"degerler": degerler}},
                                    60, [99.0] * 60)
-    assert sayac["artis"] == 1 and sayac["dusus"] >= 1
+    assert sayac["artis"] == 1
+    assert 1 <= sayac["dusus"] <= int(grafik.SABITLER["rvol_rozet_dusus_maks"])
     assert "⚡↑ x2,2" in _rozetler(ax)
+
+
+def test_faz1_kuruma_rozeti_en_fazla_iki(monkeypatch):
+    """Kullanıcı (2026-10-16): "çok fazla etiket olmamalı, en fazla 2 tane".
+
+    Kuruma rozeti kare başına 2 TAVAN; en sert iki kuruma seçilir (sakin 4s
+    karesinde ↓7'ye çıkıyordu). Patlamalar kalan bütçeyi doldurur.
+    """
+    tavan = int(grafik.SABITLER["rvol_rozet_dusus_maks"])
+    assert tavan == 2
+    fig, ax = _eksen(60)
+    degerler = [1.0] * 60
+    for i in range(0, 56, 7):                        # 8 kuruma, farklı sertlikte
+        degerler[i] = 0.1 + 0.01 * (i // 7)
+    degerler[55] = 0.05                              # en sert kuruma (sertlik 20)
+    sayac = grafik._rvol_rozetleri(ax, {"serit": {"degerler": degerler}},
+                                   60, [99.0] * 60)
+    assert sayac == {"artis": 0, "dusus": tavan}
+    metinler = _rozetler(ax)
+    assert len(metinler) == tavan
+    assert "⚡↓ x0,05" in metinler                    # EN SERT kuruma her zaman girer
+    # Tavan ortamla değiştirilebilir; 0 → kuruma rozeti kapanır, patlama kalır.
+    monkeypatch.setenv("GRAFIK_RVOL_ROZET_DUSUS_MAKS", "0")
+    fig2, ax2 = _eksen(60)
+    karisik = [3.0] * 60
+    karisik[10] = 0.2
+    assert grafik._rvol_rozetleri(ax2, {"serit": {"degerler": karisik}},
+                                  60, [99.0] * 60) == {"artis": 8, "dusus": 0}
 
 
 def test_faz1_rozet_kapak_ve_esik_alti_cizilmez():

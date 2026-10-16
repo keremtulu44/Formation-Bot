@@ -1833,17 +1833,24 @@ tek yönlüydü (yalnız `RVOL > 2,0`), hacim KURUMASI karede hiç görünmüyor
 - **Metin 2 basamak + sıfır kırpma** (`_rvol_katı`): `x2,5` · `x0,5` · `x0,96`.
   Tek basamak `x0,96`ı `x1,0` yapardı — kuruma "normal" görünürdü (yanlış bilgi);
   `x2,04` de eşikle çelişmesin diye `x2,0` değil `x2,04` yazılır.
-- **Bütçe iki yöne paylaştırılır.** Sıra: her yöne `maks // 2` şer pay ayrılır,
-  kalan yer en sert sapmalara gider (sertlik: patlamada `v`, kurumada `1/v`).
-  Neden: tamamen sertliğe göre sıralamada 8 kuruma (x0,1 ≈ sertlik 10) belirgin bir
-  hacim patlamasını (x2,2) kareden atıyordu — asıl sinyal (kırılımı hacmin teyidi)
+- **Kuruma rozeti TAVANLI: `rvol_rozet_dusus_maks` = 2.** Kullanıcı ikinci turda
+  sınırı koydu: *"çok fazla etiket olmamalı, bu sebepten en fazla 2 tane
+  ekleyebiliriz"*. Ölçüm haklıydı: kural ilk yazıldığında sakin 4s karelerinde
+  ↓7'ye kadar çıkıyordu (GARAN/TUPRS/AKBNK 4s). En sert iki kuruma seçilir,
+  patlamalar kalan bütçeyi doldurur.
+- **Bütçe paylaşımı.** Aday havuzu: tüm patlamalar + en sert 2 kuruma; sıra
+  `|log(RVOL)|` mantığıyla sertliğe göre (patlamada `v`, kurumada `1/v`). Neden
+  sertlik sırası: tamamen kuruma ağırlıklı bir sıralamada belirgin bir hacim
+  patlaması (x2,2) kareden atılıyordu — asıl sinyal (kırılımı hacmin teyidi)
   kaybolurdu. Havuz KIRPILMAZ: aralık kuralı eledikçe sıradaki mum devreye girer
   (kırpma + aralık birlikte rozet sayısını 8'den 2'ye düşürüyordu).
 - **Komşuluk yarıçapı bar değil piksel:** `ceil(0,5 × rozet_px / px_per_bar) + 1`.
   Sabit ±4 bar, 120 mumluk 4s karesinde (px/bar ≈ 5,8) rozeti komşu gövdenin 1 px
   yanına koyuyordu ve `mum_cakisan` kapısı kırmızı yanıyordu.
-- **Eşikler ortamla ayarlanır:** `GRAFIK_RVOL_ROZET_ESIK` (2,0) ve
-  `GRAFIK_RVOL_ROZET_ESIK_DUSUK` (0,5). Kuruma rozeti gürültülü gelirse 0,35 yapın.
+- **Eşikler ve tavan ortamla ayarlanır:** `GRAFIK_RVOL_ROZET_ESIK` (2,0),
+  `GRAFIK_RVOL_ROZET_ESIK_DUSUK` (0,5), `GRAFIK_RVOL_ROZET_DUSUS_MAKS` (2;
+  `0` = kuruma rozeti kapalı). Kuruma rozeti yine gürültülü gelirse eşiği 0,35
+  yapın ya da tavanı 1'e indirin.
 - **Sağ boşluk %15'te kalıyor** (kullanıcı onayı): `sag_bosluk_orani` 0,15;
   pencere %10-20 yalnız otomatik kuralda kırpar.
 
@@ -1854,9 +1861,10 @@ hangi yönden kaç rozet çıktığı sessizce kaybolmaz, ölçümle doğrulanı
 
 - `pytest -q` → **1267 geçti, 44 atlandı** (yeni: iki yön, eşik sınırı, hacimsiz
   bar, metin yuvarlaması, bütçe payı, ortam eşikleri).
-- Gerçek önbellek: GARAN 1s `↑3 ↓3` · GARAN 4s `↑3 ↓5` · TUPRS 4s `↑3 ↓5` ·
-  AKBNK 4s `↑1 ↓7` · THYAO 4s `↑1 ↓6` · SASA 1s `↑3 ↓5` — hepsinde
-  `mum_cakisan == 0`.
+- Gerçek önbellek (tavan sonrası), 11 karede `mum_cakisan == 0`: GARAN 1s `↑3 ↓2` ·
+  GARAN 4s `↑4 ↓2` · TUPRS 4s `↑4 ↓2` · AKBNK 4s `↑1 ↓2` · THYAO 4s `↑1 ↓2` ·
+  SASA 1s `↑5 ↓1` · KCHOL 1s `↑3 ↓1` · EREGL 1g `↑0 ↓2`. Kare başına rozet
+  sayısı 8 → 3-6'ya indi (kullanıcı: "çok fazla etiket olmamalı").
 - Yakın plan doğrulama sayfası: rozetler 1s karede okunur, çipler mumların üstüne
   binmiyor (komşuluk yarıçapı düzeltmesi öncesi/sonrası ölçüldü).
 

@@ -807,6 +807,7 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `GRAFIK_HACIM_PANELI` | `0` (kapalı) — kaldırılan alt hacim kulvarını geri getirir; hacim yalnız sıra dışı mumların altında YÖNLÜ rozetle gösterilir: `⚡↑ x2,5` patlama (RVOL > 2,0×), `⚡↓ x0,5` kuruma (RVOL ≤ 0,5×) | Hayır |
 | `GRAFIK_RVOL_ROZET_ESIK` | `2.0` — bu RVOL üstü mumlara `⚡↑` rozeti (patlama) | Hayır |
 | `GRAFIK_RVOL_ROZET_ESIK_DUSUK` | `0.5` — bu RVOL altı/eşit mumlara `⚡↓` rozeti (kuruma); `0` yazarsanız kapatır | Hayır |
+| `GRAFIK_RVOL_ROZET_DUSUS_MAKS` | `2` — kuruma (`⚡↓`) rozeti kare başına en fazla kaç mumda görünür (en sert kurumalar seçilir); `0` = kuruma rozeti kapalı | Hayır |
 | `GRAFIK_LEJANT_KARE` | `0` (kapalı) — lejant/dipnot bloğunu kare içine geri koyar (varsayılan: bu bilgiler kare altı caption dipnotuna gider) | Hayır |
 | `KARNE_HORIZON_BAR` | `10` — sinyalden sonra izlenen bar sayısı | Hayır |
 | `DATA_DIR` | Kalıcı veri dizini. Render'da varsayılan `/tmp/formation-bot-data` (repo diski geçici; kalıcı veri Supabase'de). Kalıcı disk bağlarsanız buradan verin | Hayır |
