@@ -18,6 +18,7 @@ dolayısıyla ``backfill_data/`` olmadan da koşar.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import math
 import sys
@@ -738,3 +739,89 @@ def test_gercek_veride_rol_araliklari_birden_uzun() -> None:
     assert sum(1 for s in sureler if s > 1) / len(sureler) > 0.2, (
         "aralıkların en az %20'si birden uzun olmalı"
     )
+
+
+# ---------------------------------------------------------------------------
+# Eşzamanlı koşu kilidi ve çift kayıt bekçisi
+# ---------------------------------------------------------------------------
+def test_kilit_ikinci_ornek_engeller(tmp_path: Path) -> None:
+    """Aynı çıktı dizinine ikinci bir koşu başlatılamamalı.
+
+    Gerçek olay: `stop_process` bir koşuyu durdurmuş *göründü* ama süreç
+    yaşadı; düzeltilmiş ikinci koşu başlatılınca ikisi aynı JSONL dosyalarına
+    ekledi. 704 işin 501'i çift yazıldı ve çiftlerin yarısı hatalı kodun
+    çıktısıydı. Agregasyon bunu yakalamadı çünkü her satır tek başına
+    geçerliydi.
+    """
+    import os
+
+    cli = _cli_modulu()
+    cikti = tmp_path / "cikti"
+    kilit_yolu = cli._kilit_yolu(cikti)
+
+    with cli._Kilit(kilit_yolu):
+        assert kilit_yolu.exists()
+        assert int(kilit_yolu.read_text(encoding="utf-8")) == os.getpid()
+        # Kendi pid'imiz kilitteyse ikinci giriş bayat sayılıp devralınır;
+        # bu yüzden gerçek çakışmayı yaşayan başka bir pid ile taklit edilir.
+        kilit_yolu.write_text("1", encoding="utf-8")  # pid 1 (init) daima yaşar
+        with pytest.raises(SystemExit) as bilgi:
+            with cli._Kilit(kilit_yolu):
+                pass
+        assert "BAŞKA BİR KOŞU" in str(bilgi.value)
+    assert not kilit_yolu.exists(), "kilit çıkışta serbest bırakılmalı"
+
+
+def test_kilit_bayat_kilidi_devralir(tmp_path: Path) -> None:
+    """Sahibi ölmüş kilit devralınmalı, yoksa koşu bir daha hiç başlamaz."""
+    cli = _cli_modulu()
+    kilit_yolu = tmp_path / "cikti.kilit"
+    kilit_yolu.write_text("999999", encoding="utf-8")  # var olmayan pid
+    assert not cli._pid_yasamda(999999)
+    with cli._Kilit(kilit_yolu) as k:
+        assert k.alindi
+    assert not kilit_yolu.exists()
+
+
+def test_kilit_yolu_cikti_dizininin_kardesi(tmp_path: Path) -> None:
+    """`--zorla` çıktı dizinini siler; kilit içinde olsaydı koruma kaybolurdu."""
+    cli = _cli_modulu()
+    cikti = tmp_path / "arastirma_cikti"
+    assert cli._kilit_yolu(cikti) == tmp_path / ".arastirma_cikti.kilit"
+    assert cli._kilit_yolu(cikti).parent != cikti
+
+
+def test_agregasyon_cift_kayitta_durmali(tmp_path: Path) -> None:
+    """Yinelenen (symbol, timeframe) raporu üretmek yerine koşuyu durdurmalı."""
+    import pandas as pd
+
+    cli = _cli_modulu()
+    cikti = tmp_path / "cikti"
+    cikti.mkdir()
+    cli._ekle(cikti / "meta.jsonl", [
+        {"symbol": "AAA", "timeframe": "1h", "bar_sayisi": 100},
+        {"symbol": "AAA", "timeframe": "1h", "bar_sayisi": 100},
+    ])
+    args = argparse.Namespace(
+        cikti=str(cikti), rapor=str(tmp_path / "r.md"), csv_atla=True, havuz_disi_dahil=False,
+    )
+    with pytest.raises(SystemExit) as bilgi:
+        cli.agregasyon(args)
+    assert "ÇİFT KAYIT" in str(bilgi.value)
+    assert not (tmp_path / "r.md").exists(), "kirli veriden rapor üretilmemeli"
+
+
+def test_agregasyon_tek_kayitta_calisir(tmp_path: Path) -> None:
+    """Bekçi yanlış pozitif üretmemeli: temiz çıktı raporlanabilmeli."""
+    cli = _cli_modulu()
+    cikti = tmp_path / "cikti"
+    cikti.mkdir()
+    cli._ekle(cikti / "meta.jsonl", [
+        {"symbol": "AAA", "timeframe": "1h", "bar_sayisi": 100, "zone_sayisi": 3},
+        {"symbol": "AAA", "timeframe": "2h", "bar_sayisi": 50, "zone_sayisi": 2},
+    ])
+    args = argparse.Namespace(
+        cikti=str(cikti), rapor=str(tmp_path / "r.md"), csv_atla=True, havuz_disi_dahil=False,
+    )
+    assert cli.agregasyon(args) == 0
+    assert (tmp_path / "r.md").exists()

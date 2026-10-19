@@ -542,17 +542,36 @@ def rapor_uret(
         # "symbol" gibi metin kolonlarında "-" üretir. Burada doğru olan
         # değer *ayrık sembol sayısı*dır.
         kapsam_satirlari: list[list[Any]] = []
+
+        def _toplam(alt: pd.DataFrame, kolon: str) -> int | None:
+            """Eksik/tamamı-NaN kolonda çökmek yerine ``None`` döndürür.
+
+            ``int(NaN)`` ``ValueError`` verir ve tek bir eksik alan tüm raporu
+            düşürürdü. Meta satırları farklı koşu sürümlerinden gelebileceği
+            için kolon yokluğu normal bir durumdur.
+            """
+            if kolon not in alt.columns:
+                return None
+            seri = pd.to_numeric(alt[kolon], errors="coerce").dropna()
+            return int(seri.sum()) if len(seri) else None
+
+        def _ortalama(alt: pd.DataFrame, kolon: str) -> int | None:
+            if kolon not in alt.columns:
+                return None
+            seri = pd.to_numeric(alt[kolon], errors="coerce").dropna()
+            return int(seri.mean()) if len(seri) else None
+
         for tf, alt in _grupla(meta, ["timeframe"]):
             ms_hatali = int(alt["ms_hata"].notna().sum()) if "ms_hata" in alt.columns else 0
             kapsam_satirlari.append([
                 tf,
                 alt["symbol"].nunique() if "symbol" in alt.columns else None,
-                int(pd.to_numeric(alt.get("bar_sayisi"), errors="coerce").mean()) if "bar_sayisi" in alt.columns else None,
-                int(pd.to_numeric(alt.get("zone_sayisi"), errors="coerce").sum()),
-                int(pd.to_numeric(alt.get("epizot_sayisi"), errors="coerce").sum()),
-                int(pd.to_numeric(alt.get("swing_sayisi"), errors="coerce").sum()),
-                int(pd.to_numeric(alt.get("event_sayisi"), errors="coerce").sum()),
-                int(pd.to_numeric(alt.get("rol_araligi_sayisi"), errors="coerce").sum()),
+                _ortalama(alt, "bar_sayisi"),
+                _toplam(alt, "zone_sayisi"),
+                _toplam(alt, "epizot_sayisi"),
+                _toplam(alt, "swing_sayisi"),
+                _toplam(alt, "event_sayisi"),
+                _toplam(alt, "rol_araligi_sayisi"),
                 ms_hatali,
             ])
         bolumler.append(_tablo(

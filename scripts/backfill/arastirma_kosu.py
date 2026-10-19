@@ -106,6 +106,89 @@ def _tamamlananlar(cikti: Path) -> set[tuple[str, str]]:
     return {(r.get("symbol"), r.get("timeframe")) for r in _jsonl_oku(cikti / "meta.jsonl")}
 
 
+def _kilit_yolu(cikti: Path) -> Path:
+    """Kilit dosyası çıktı dizininin KARDEŞİDİR.
+
+    Sebep: ``--zorla`` çıktı dizinini ``rmtree`` ile siler. Kilit içeride
+    olsaydı silinir ve koruma ortadan kalkardı.
+    """
+    return cikti.parent / f".{cikti.name}.kilit"
+
+
+def _pid_yasamda(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        import os
+
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+class _Kilit:
+    """Tek örnek kilidi: aynı çıktı dizinine eşzamanlı iki koşuyu engeller.
+
+    Bu koruma gerçek bir olaydan sonra eklendi. Bir koşu ``stop_process`` ile
+    durdurulmuş *göründü* ama süreç hayatta kaldı ve düzeltilmiş ikinci koşu
+    başlatıldı; iki süreç aynı JSONL dosyalarına ekledi. Sonuç: 704 işin
+    501'i çift yazıldı ve çiftlerin yarısı düzeltilmemiş kodun çıktısıydı.
+    Agregasyon bunu fark etmedi çünkü satırlar tek tek geçerliydi.
+
+    Kilit ``O_CREAT|O_EXCL`` ile atomik alınır; bayat kilit (sahibi ölmüş)
+    otomatik devralınır.
+    """
+
+    def __init__(self, yol: Path) -> None:
+        self.yol = yol
+        self.alindi = False
+
+    def __enter__(self) -> "_Kilit":
+        import os
+
+        self.yol.parent.mkdir(parents=True, exist_ok=True)
+        for _ in range(2):
+            try:
+                fd = os.open(str(self.yol), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+                with os.fdopen(fd, "w", encoding="utf-8") as dosya:
+                    dosya.write(str(os.getpid()))
+                self.alindi = True
+                return self
+            except FileExistsError:
+                sahip = 0
+                try:
+                    sahip = int(self.yol.read_text(encoding="utf-8").strip() or 0)
+                except (OSError, ValueError):
+                    sahip = 0
+                if sahip and sahip != os.getpid() and _pid_yasamda(sahip):
+                    raise SystemExit(
+                        f"BAŞKA BİR KOŞU ZATEN ÇALIŞIYOR (pid {sahip}).\n"
+                        f"  kilit: {self.yol}\n"
+                        f"  İki eşzamanlı koşu aynı JSONL dosyalarına ekler ve\n"
+                        f"  satırları çift sayar. Bitmesini bekleyin ya da o süreci\n"
+                        f"  gerçekten öldürdüğünüzü doğrulayın (pgrep -f arastirma_kosu).\n"
+                        f"  Sahip öldüyse kilidi elle silin: rm {self.yol}"
+                    )
+                # Bayat kilit: sahibi ölmüş, devral.
+                try:
+                    self.yol.unlink()
+                except OSError:
+                    pass
+        raise SystemExit(f"kilit alınamadı: {self.yol}")
+
+    def __exit__(self, *exc: Any) -> None:
+        if self.alindi:
+            try:
+                self.yol.unlink()
+            except OSError:
+                pass
+
+
 def _koşu_planı(args: argparse.Namespace) -> list[str]:
     from research import arsiv
 
@@ -125,6 +208,15 @@ def kosu(args: argparse.Namespace) -> int:
     from research import arsiv, kayit
 
     cikti = Path(args.cikti)
+    # Kilit her şeyden önce alınır. `--zorla` çıktı dizinini siler ama kilit
+    # dosyası kardeş konumda olduğu için bu sıralama korumayı bozmaz.
+    with _Kilit(_kilit_yolu(cikti)):
+        return _kosu_govdesi(args, cikti)
+
+
+def _kosu_govdesi(args: argparse.Namespace, cikti: Path) -> int:
+    from research import arsiv, kayit
+
     if args.zorla and cikti.exists():
         import shutil
 
@@ -195,6 +287,28 @@ def agregasyon(args: argparse.Namespace) -> int:
         kayitlar = _jsonl_oku(cikti / f"{kategori}.jsonl")
         tablolar[kategori] = pd.DataFrame(kayitlar)
         print(f"[agrega] {kategori}: {len(kayitlar)} satır", flush=True)
+
+    # ÇİFT KAYIT BEKÇİSİ. meta.jsonl bir koşuda her (symbol, timeframe) için
+    # tam bir satır üretir; yinelenme ancak iki sürecin aynı dosyaya eklemesi
+    # ile olur. Bu, her satırı tek tek geçerli olduğu için başka hiçbir
+    # kontrolün yakalamadığı bir kirlenmedir ve yüzdeleri sessizce bozar
+    # (aynı gözlem iki kez sayılır). Rapor üretmek yerine durdurmak doğrudur.
+    meta_df = tablolar.get("meta")
+    if meta_df is not None and len(meta_df) and {"symbol", "timeframe"}.issubset(meta_df.columns):
+        yinelenen = int(meta_df.duplicated(subset=["symbol", "timeframe"]).sum())
+        if yinelenen:
+            ornekler = (
+                meta_df[meta_df.duplicated(subset=["symbol", "timeframe"], keep=False)]
+                .groupby(["symbol", "timeframe"]).size().sort_values(ascending=False).head(5)
+            )
+            raise SystemExit(
+                f"ÇİFT KAYIT: meta.jsonl içinde {yinelenen} yinelenen (symbol, timeframe) var.\n"
+                f"  Bu, aynı çıktı dizinine eşzamanlı iki koşunun eklemesiyle olur ve\n"
+                f"  rapor yüzdelerini sessizce bozar (gözlemler iki kez sayılır).\n"
+                f"  En çok yinelenenler:\n{ornekler.to_string()}\n"
+                f"  Çözüm: pgrep -f arastirma_kosu ile süreç kalmadığını doğrulayın,\n"
+                f"  sonra temiz koşun: python scripts/backfill/arastirma_kosu.py --zorla"
+            )
 
     hatalar = _jsonl_oku(cikti / "hatalar.jsonl")
 
