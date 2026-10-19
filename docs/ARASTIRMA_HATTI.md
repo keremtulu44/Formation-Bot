@@ -154,6 +154,43 @@ MS başarısız olsa bile OB/FVG/VP ölçümleri üretilmeye devam eder, hata
 sayılır. AEFES 1h için bu, aksi halde kaybolacak 419 zone ve 710 dokunuş
 epizodunu kurtarır.
 
+## Maliyet ve yeniden üretilebilirlik
+
+Tam koşu ölçüsü (176 sembol × 4 zaman dilimi = 704 iş, 4 GB RAM'lik makinede):
+
+| aşama | süre | tepe bellek |
+|---|---|---|
+| ölçüm (704 iş) | ~53 dk | sembol başına düşük (önbellek her sembolde temizlenir) |
+| agregasyon + rapor | ~33 sn | kolon kısıtlamasıyla yüzlerce MB |
+| üretilen gözlem | 994.142 satır | JSONL ~2.2 GB |
+
+Ham JSONL **git'e girmez** (`arastirma_cikti/` `.gitignore`'da) ve 2.2 GB
+olduğu için çalışma alanında da tutulmaz. Kalıcı olan üç şey: commit edilmiş
+arşiv (`backfill_data/`, 11 MB), ölçüm kodu ve üretilmiş rapor
+(`docs/ARASTIRMA_BULGULARI.md`). Yeniden üretmek için tek komut yeterli:
+
+```bash
+python scripts/backfill/arastirma_kosu.py --zorla
+```
+
+### Agregasyonda kolon kısıtlaması neden zorunlu
+
+JSON her satırda tüm anahtar adlarını tekrarladığı için dokunuş satırları
+(124 kolon) satır başına ~3.9 KB yer kaplar; `dokunus.jsonl` tek başına
+937 MB olur. Bunu `pd.DataFrame(list_of_dicts)` ile okumak 4 GB'lık makinede
+OOM üretir — ilk denemede agregasyon zone tablosunu yükledikten hemen sonra
+SIGKILL ile öldü (exit 137) ve rapor hiç yazılmadı.
+
+`RAPOR_KOLONLARI` her kategori için raporun gerçekten kullandığı kolonları
+önceden sayar; `_jsonl_oku_df` dosyayı 25.000 satırlık parçalar halinde akıtır,
+her parçada tipleri indirger (nesne → sayısal veya `category`) ve sonra
+birleştirir. Böylece tepe bellek `satır × tüm_kolonlar` yerine
+`parça × seçili_kolonlar` mertebesinde kalır ve agregasyon 33 saniyede biter.
+
+**Yeni bir rapor kolonu eklerken `RAPOR_KOLONLARI`'na da eklenmeli.** Aksi
+halde kolon sessizce `NaN` olarak gelir ve tablo boş görünür; bu, hata
+vermediği için fark edilmesi en zor kırılma biçimidir.
+
 ## Bağımlılık notu
 
 `bist_calendar`, `exchange_calendars` bulunamadığında **fail-closed**

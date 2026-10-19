@@ -83,6 +83,111 @@ def _ekle(yol: Path, satirlar: Iterable[dict[str, Any]]) -> int:
     return len(satirlar)
 
 
+#: Raporun gerçekten kullandığı kolonlar. JSONL satırları geniştir (dokunuş
+#: 124 kolon) ve JSON her satırda tüm anahtar adlarını tekrarladığı için
+#: dokunus.jsonl tek başına 937 MB olur. Tamamını dict listesi olarak
+#: belleğe almak ~4 GB'lık makinede OOM üretir (gerçekleşti: agregasyon
+#: 187.046 zone satırını yükledikten sonra SIGKILL ile öldü). Kolonları
+#: önceden kısıtlamak tepe belleği ~2 GB'dan onlarca MB'a indirir.
+RAPOR_KOLONLARI: dict[str, tuple[str, ...] | None] = {
+    "zone": (
+        "symbol", "timeframe", "family", "zone_id", "direction",
+        "temas_var", "temas_bar_sayisi", "native_price_violation",
+        "native_full_fill", "native_terminal_category", "sansur",
+        "omur_bar", "yukseklik_atr", "yukseklik_kovasi", "config_hash",
+    ),
+    "dokunus": (
+        "symbol", "timeframe", "family", "zone_id", "direction", "dokunus_no",
+        "arrival_side", "dokunulan_kenar", "kenar_olcum_yonu",
+        "yukseklik_atr", "yukseklik_kovasi", "atr_at_touch",
+        "yon_tepki_sinifi", "kenar_tepki_sinifi",
+        "yon_h10", "yon_h12", "yon_tepe_atr", "yon_tepe_bar",
+        "yon_pay_1", "yon_pay_3", "yon_pay_5", "yon_h12_decay",
+        "yon_uzun_tepe_atr", "yon_uzun_tepe_bar", "yon_uzun_decay",
+        "kenar_h12", "kenar_tepe_atr", "kenar_pay_5", "kenar_h12_decay",
+        "kenar_uzun_tepe_atr",
+        "yon_asim_025", "yon_asim_050", "yon_asim_100", "yon_asim_150", "yon_asim_200",
+        "kenar_asim_025", "kenar_asim_050", "kenar_asim_100", "kenar_asim_150", "kenar_asim_200",
+        "sansur_pencere", "sansur_terminal", "vp_rvol", "vp_volume_usable",
+        "vp_data_ready", "vp_effort_result_class", "config_hash",
+    ),
+    "swing": (
+        "symbol", "timeframe", "scope", "identity", "rol", "side", "rol_uci",
+        "structural_role_final", "rol_ilk_bar", "rol_sure_bar", "rol_kapanis",
+        "price", "broken", "broken_bar", "bars_to_break",
+        "bars_to_break_from_rol", "deneme_epizot_025", "deneme_epizot_015",
+        "deneme_epizot_050", "deneme_bar_025", "engelledi_025",
+        "engelledi_015", "engelledi_050", "kirilim_bar", "max_yaklasma_atr",
+        "sansur", "gecildi", "vp_rvol", "vp_volume_usable", "config_hash",
+    ),
+    "event": (
+        "symbol", "timeframe", "scope", "event_uid", "event_type", "direction",
+        "devamlilik_sinifi", "uyum", "devam_h12", "devam_tepe_atr",
+        "devam_pay_5", "ters_h12", "onay_gecikmesi_bar", "outcome",
+        "validity", "relevance", "bos_maturity", "quality", "age_bars",
+        "sansur", "vp_rvol", "vp_volume_usable", "vp_effort_result_class",
+        "config_hash",
+    ),
+    "meta": None,  # küçük; tüm kolonlar
+}
+
+
+def _df_optimize(df: "pd.DataFrame") -> "pd.DataFrame":
+    """Nesne kolonlarını sayısal/kategorik tipe indirger (bellek için kritik).
+
+    ``symbol``/``timeframe``/``family`` gibi kolonlar yüz binlerce satırda
+    aynı birkaç değeri tekrarlar; ``object`` dtype her satırda ayrı Python
+    nesnesi tutar, ``category`` ise tek bir sözlük tutar.
+    """
+    import pandas as pd
+
+    for kolon in df.columns:
+        if df[kolon].dtype != object:
+            continue
+        sayisal = pd.to_numeric(df[kolon], errors="coerce")
+        bosluk = df[kolon].isna().sum()
+        if sayisal.notna().sum() > 0 and int(sayisal.isna().sum()) == int(bosluk):
+            df[kolon] = sayisal.astype("float64")
+        else:
+            df[kolon] = df[kolon].astype("category")
+    return df
+
+
+def _jsonl_oku_df(yol: Path, kolonlar: tuple[str, ...] | None = None, chunk: int = 25000) -> "pd.DataFrame":
+    """JSONL'i parça parça akıtır; hiçbir anında tamamı bellekte değildir.
+
+    Her parça ayrı DataFrame olur, tipleri indirgenir ve sonra birleştirilir.
+    Böylece tepe bellek ``satır_sayısı x tüm_kolonlar`` yerine
+    ``chunk x seçili_kolonlar`` mertebesinde kalır.
+    """
+    import pandas as pd
+
+    if not yol.exists():
+        return pd.DataFrame()
+    parcalar: list[Any] = []
+    tampon: list[dict[str, Any]] = []
+    with yol.open("r", encoding="utf-8") as dosya:
+        for satir in dosya:
+            satir = satir.strip()
+            if not satir:
+                continue
+            try:
+                kayit = json.loads(satir)
+            except json.JSONDecodeError:
+                continue
+            if kolonlar is not None:
+                kayit = {k: kayit.get(k) for k in kolonlar}
+            tampon.append(kayit)
+            if len(tampon) >= chunk:
+                parcalar.append(_df_optimize(pd.DataFrame(tampon)))
+                tampon = []
+    if tampon:
+        parcalar.append(_df_optimize(pd.DataFrame(tampon)))
+    if not parcalar:
+        return pd.DataFrame()
+    return pd.concat(parcalar, ignore_index=True)
+
+
 def _jsonl_oku(yol: Path) -> list[dict[str, Any]]:
     if not yol.exists():
         return []
@@ -284,9 +389,9 @@ def agregasyon(args: argparse.Namespace) -> int:
     cikti = Path(args.cikti)
     tablolar: dict[str, pd.DataFrame] = {}
     for kategori in KATEGORILER:
-        kayitlar = _jsonl_oku(cikti / f"{kategori}.jsonl")
-        tablolar[kategori] = pd.DataFrame(kayitlar)
-        print(f"[agrega] {kategori}: {len(kayitlar)} satır", flush=True)
+        df = _jsonl_oku_df(cikti / f"{kategori}.jsonl", RAPOR_KOLONLARI.get(kategori))
+        tablolar[kategori] = df
+        print(f"[agrega] {kategori}: {len(df)} satır, {len(df.columns)} kolon", flush=True)
 
     # ÇİFT KAYIT BEKÇİSİ. meta.jsonl bir koşuda her (symbol, timeframe) için
     # tam bir satır üretir; yinelenme ancak iki sürecin aynı dosyaya eklemesi
@@ -299,7 +404,7 @@ def agregasyon(args: argparse.Namespace) -> int:
         if yinelenen:
             ornekler = (
                 meta_df[meta_df.duplicated(subset=["symbol", "timeframe"], keep=False)]
-                .groupby(["symbol", "timeframe"]).size().sort_values(ascending=False).head(5)
+                .groupby(["symbol", "timeframe"], observed=True).size().sort_values(ascending=False).head(5)
             )
             raise SystemExit(
                 f"ÇİFT KAYIT: meta.jsonl içinde {yinelenen} yinelenen (symbol, timeframe) var.\n"
@@ -347,9 +452,11 @@ def agregasyon(args: argparse.Namespace) -> int:
     rapor_yolu.write_text(metin, encoding="utf-8")
     print(f"[agrega] rapor yazıldı: {rapor_yolu} ({len(metin)} karakter, {sembol_sayisi} sembol)", flush=True)
 
-    # Ham gözlemler de sıkıştırılmış CSV olarak saklanır: rapor yeniden
-    # üretilebilir ama ham satırlar olmadan yeni bir çapraz sorgu yapılamaz.
-    if not args.csv_atla:
+    # Ham JSONL zaten kalıcı depodur. Ek CSV.gz yazımı varsayılan olarak
+    # KAPALIDIR: 994 bin satırı tek DataFrame olarak CSV'ye basmak belleği
+    # zorlar ve JSONL'in birebir kopyasını üretir. Yalnız gerçekten
+    # gerektiğinde `--csv-yaz` ile açılır.
+    if getattr(args, "csv_yaz", False):
         for kategori in KATEGORILER:
             df = tablolar.get(kategori)
             if df is None or len(df) == 0:
@@ -370,7 +477,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--agrega", action="store_true", help="ölçüm yapma, mevcut çıktıdan rapor üret")
     parser.add_argument("--zorla", action="store_true", help="mevcut çıktıyı silip baştan koş")
     parser.add_argument("--rapor-atla", action="store_true", help="koşu sonunda rapor üretme")
-    parser.add_argument("--csv-atla", action="store_true", help="agregasyonda CSV.gz üretme")
+    parser.add_argument(
+        "--csv-yaz",
+        action="store_true",
+        help="agregasyonda ek CSV.gz üret (varsayılan kapalı: JSONL zaten kalıcı "
+             "depodur ve ~1M satırı CSV'ye basmak belleği zorlar)",
+    )
     parser.add_argument("--havuz-disi-dahil", action="store_true", help="BRENT gibi havuz dışı sembolleri dahil et")
     args = parser.parse_args(argv)
 

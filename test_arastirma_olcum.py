@@ -803,7 +803,7 @@ def test_agregasyon_cift_kayitta_durmali(tmp_path: Path) -> None:
         {"symbol": "AAA", "timeframe": "1h", "bar_sayisi": 100},
     ])
     args = argparse.Namespace(
-        cikti=str(cikti), rapor=str(tmp_path / "r.md"), csv_atla=True, havuz_disi_dahil=False,
+        cikti=str(cikti), rapor=str(tmp_path / "r.md"), csv_yaz=False, havuz_disi_dahil=False,
     )
     with pytest.raises(SystemExit) as bilgi:
         cli.agregasyon(args)
@@ -821,7 +821,106 @@ def test_agregasyon_tek_kayitta_calisir(tmp_path: Path) -> None:
         {"symbol": "AAA", "timeframe": "2h", "bar_sayisi": 50, "zone_sayisi": 2},
     ])
     args = argparse.Namespace(
-        cikti=str(cikti), rapor=str(tmp_path / "r.md"), csv_atla=True, havuz_disi_dahil=False,
+        cikti=str(cikti), rapor=str(tmp_path / "r.md"), csv_yaz=False, havuz_disi_dahil=False,
     )
     assert cli.agregasyon(args) == 0
     assert (tmp_path / "r.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# RAPOR_KOLONLARI kapsamı: sessiz NaN kırılmasını önler
+# ---------------------------------------------------------------------------
+def test_rapor_kolonlari_raporun_kullandiklarini_kapsar() -> None:
+    """Raporun okuduğu her kolon kısıtlama listesinde olmalı.
+
+    ``_jsonl_oku_df`` yalnız listelenen kolonları yükler. Listede olmayan bir
+    kolon hata VERMEZ; sessizce ``NaN`` gelir ve tablo boş görünür. Bu, fark
+    edilmesi en zor kırılma biçimi olduğu için açıkça test edilir.
+    """
+    cli = _cli_modulu()
+    zorunlu = {
+        "zone": {"symbol", "timeframe", "family", "zone_id", "temas_var",
+                 "native_price_violation", "native_full_fill", "sansur",
+                 "omur_bar", "yukseklik_atr"},
+        "dokunus": {"symbol", "timeframe", "family", "zone_id", "dokunulan_kenar",
+                    "yukseklik_kovasi", "yon_tepki_sinifi", "kenar_tepki_sinifi",
+                    "yon_h12", "yon_pay_5", "yon_h12_decay", "yon_tepe_atr",
+                    "yon_uzun_tepe_atr", "kenar_h12", "kenar_uzun_tepe_atr",
+                    "vp_rvol", "vp_volume_usable", "sansur_pencere"},
+        "swing": {"symbol", "timeframe", "scope", "rol", "rol_sure_bar",
+                  "deneme_epizot_025", "engelledi_025", "kirilim_bar",
+                  "bars_to_break_from_rol", "sansur", "vp_rvol"},
+        "event": {"symbol", "timeframe", "scope", "event_type", "direction",
+                  "devamlilik_sinifi", "uyum", "devam_h12", "ters_h12",
+                  "outcome", "sansur", "vp_rvol"},
+    }
+    for kategori, kolonlar in zorunlu.items():
+        secili = set(cli.RAPOR_KOLONLARI.get(kategori) or ())
+        eksik = kolonlar - secili
+        assert not eksik, f"{kategori}: RAPOR_KOLONLARI eksik -> {sorted(eksik)}"
+
+
+def test_esik_izgarasi_kolonlari_rapor_kolonlarinda() -> None:
+    """Eşik ızgarası değişirse aşım kolonları da listeye girmeli."""
+    cli = _cli_modulu()
+    dokunus = set(cli.RAPOR_KOLONLARI["dokunus"])
+    for onek in ("yon", "kenar"):
+        for esik in olcum.ESIK_IZGARA:
+            kolon = f"{onek}_asim_{olcum._esik_etiketi(esik)}"
+            assert kolon in dokunus, f"{kolon} RAPOR_KOLONLARI['dokunus'] içinde yok"
+
+
+def test_deneme_esikleri_swing_kolonlarinda() -> None:
+    cli = _cli_modulu()
+    swing = set(cli.RAPOR_KOLONLARI["swing"])
+    for esik in olcum.DENEME_ESIKLERI:
+        etiket = olcum._esik_etiketi(esik)
+        assert f"engelledi_{etiket}" in swing, f"engelledi_{etiket} eksik"
+        assert f"deneme_epizot_{etiket}" in swing, f"deneme_epizot_{etiket} eksik"
+
+
+def test_df_optimize_kategorik_ve_sayisal() -> None:
+    """Tekrarlayan metin -> category, sayısal görünümlü metin -> float."""
+    import pandas as pd
+
+    cli = _cli_modulu()
+    df = pd.DataFrame({
+        "timeframe": ["1h"] * 5,
+        "deger": ["1.5", "2.5", None, "3.5", "4.5"],
+        "metin": ["A", "B", "A", "C", None],
+    })
+    out = cli._df_optimize(df)
+    assert str(out["timeframe"].dtype) == "category"
+    assert str(out["metin"].dtype) == "category"
+    assert pd.api.types.is_numeric_dtype(out["deger"])
+
+
+def test_jsonl_oku_df_kolon_kisitlar(tmp_path: Path) -> None:
+    """Listelenmeyen kolon yüklenmemeli (bellek korumasının kendisi)."""
+    import pandas as pd
+
+    cli = _cli_modulu()
+    yol = tmp_path / "deneme.jsonl"
+    cli._ekle(yol, [{"a": 1, "b": 2, "c": 3}, {"a": 4, "b": 5, "c": 6}])
+    df = cli._jsonl_oku_df(yol, ("a", "c"))
+    assert list(df.columns) == ["a", "c"]
+    assert len(df) == 2
+    tam = cli._jsonl_oku_df(yol, None)
+    assert set(tam.columns) == {"a", "b", "c"}
+
+
+def test_jsonl_oku_df_parcali_yukleme_esdeger(tmp_path: Path) -> None:
+    """Parça boyutu sonucu değiştirmemeli (chunk birleştirmesi doğru olmalı)."""
+    import pandas as pd
+
+    cli = _cli_modulu()
+    yol = tmp_path / "buyuk.jsonl"
+    cli._ekle(yol, [{"n": i, "k": "x" if i % 2 else "y"} for i in range(105)])
+    a = cli._jsonl_oku_df(yol, None, chunk=1000)
+    b = cli._jsonl_oku_df(yol, None, chunk=10)
+    assert len(a) == len(b) == 105
+    pd.testing.assert_frame_equal(
+        a.sort_index(axis=1).reset_index(drop=True),
+        b.sort_index(axis=1).reset_index(drop=True),
+        check_dtype=False, check_categorical=False,
+    )
