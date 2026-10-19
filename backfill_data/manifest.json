@@ -1,0 +1,7152 @@
+{
+ "kayitlar": {
+  "AEFES:1d": {
+   "deneme": 1,
+   "dosya": "AEFES_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "AEFES",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.7,
+   "ticker": "AEFES.IS",
+   "zaman": "2026-10-19T13:33:26+00:00"
+  },
+  "AEFES:1h": {
+   "deneme": 1,
+   "dosya": "AEFES_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "AEFES",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 9.1,
+   "ticker": "AEFES.IS",
+   "zaman": "2026-10-19T13:33:25+00:00"
+  },
+  "AGHOL:1d": {
+   "deneme": 1,
+   "dosya": "AGHOL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "AGHOL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.7,
+   "ticker": "AGHOL.IS",
+   "zaman": "2026-10-19T13:33:30+00:00"
+  },
+  "AGHOL:1h": {
+   "deneme": 1,
+   "dosya": "AGHOL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "AGHOL",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "AGHOL.IS",
+   "zaman": "2026-10-19T13:33:29+00:00"
+  },
+  "AGROT:1d": {
+   "deneme": 1,
+   "dosya": "AGROT_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "AGROT",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "AGROT.IS",
+   "zaman": "2026-10-19T13:33:33+00:00"
+  },
+  "AGROT:1h": {
+   "deneme": 1,
+   "dosya": "AGROT_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "AGROT",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "AGROT.IS",
+   "zaman": "2026-10-19T13:33:33+00:00"
+  },
+  "AKBNK:1d": {
+   "deneme": 1,
+   "dosya": "AKBNK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "AKBNK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "AKBNK.IS",
+   "zaman": "2026-10-19T13:33:36+00:00"
+  },
+  "AKBNK:1h": {
+   "deneme": 1,
+   "dosya": "AKBNK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "AKBNK",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "AKBNK.IS",
+   "zaman": "2026-10-19T13:33:36+00:00"
+  },
+  "AKCNS:1d": {
+   "deneme": 1,
+   "dosya": "AKCNS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "AKCNS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "AKCNS.IS",
+   "zaman": "2026-10-19T13:33:40+00:00"
+  },
+  "AKCNS:1h": {
+   "deneme": 1,
+   "dosya": "AKCNS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 343,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "AKCNS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "AKCNS.IS",
+   "zaman": "2026-10-19T13:33:39+00:00"
+  },
+  "AKFGY:1d": {
+   "deneme": 1,
+   "dosya": "AKFGY_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "AKFGY",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "AKFGY.IS",
+   "zaman": "2026-10-19T13:33:54+00:00"
+  },
+  "AKFGY:1h": {
+   "deneme": 1,
+   "dosya": "AKFGY_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "AKFGY",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 13.9,
+   "ticker": "AKFGY.IS",
+   "zaman": "2026-10-19T13:33:54+00:00"
+  },
+  "AKFYE:1d": {
+   "deneme": 1,
+   "dosya": "AKFYE_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "AKFYE",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "AKFYE.IS",
+   "zaman": "2026-10-19T13:33:58+00:00"
+  },
+  "AKFYE:1h": {
+   "deneme": 1,
+   "dosya": "AKFYE_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "AKFYE",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "AKFYE.IS",
+   "zaman": "2026-10-19T13:33:57+00:00"
+  },
+  "AKSA:1d": {
+   "deneme": 1,
+   "dosya": "AKSA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "AKSA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "AKSA.IS",
+   "zaman": "2026-10-19T13:34:01+00:00"
+  },
+  "AKSA:1h": {
+   "deneme": 1,
+   "dosya": "AKSA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "AKSA",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "AKSA.IS",
+   "zaman": "2026-10-19T13:34:01+00:00"
+  },
+  "AKSEN:1d": {
+   "deneme": 1,
+   "dosya": "AKSEN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "AKSEN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "AKSEN.IS",
+   "zaman": "2026-10-19T13:34:05+00:00"
+  },
+  "AKSEN:1h": {
+   "deneme": 1,
+   "dosya": "AKSEN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "AKSEN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "AKSEN.IS",
+   "zaman": "2026-10-19T13:34:04+00:00"
+  },
+  "ALARK:1d": {
+   "deneme": 1,
+   "dosya": "ALARK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ALARK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ALARK.IS",
+   "zaman": "2026-10-19T13:34:08+00:00"
+  },
+  "ALARK:1h": {
+   "deneme": 1,
+   "dosya": "ALARK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ALARK",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "ALARK.IS",
+   "zaman": "2026-10-19T13:34:08+00:00"
+  },
+  "ALBRK:1d": {
+   "deneme": 1,
+   "dosya": "ALBRK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ALBRK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "ALBRK.IS",
+   "zaman": "2026-10-19T13:34:20+00:00"
+  },
+  "ALBRK:1h": {
+   "deneme": 1,
+   "dosya": "ALBRK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ALBRK",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 6.4,
+   "ticker": "ALBRK.IS",
+   "zaman": "2026-10-19T13:34:20+00:00"
+  },
+  "ALFAS:1d": {
+   "deneme": 1,
+   "dosya": "ALFAS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ALFAS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "ALFAS.IS",
+   "zaman": "2026-10-19T13:34:24+00:00"
+  },
+  "ALFAS:1h": {
+   "deneme": 1,
+   "dosya": "ALFAS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 340,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ALFAS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.3,
+   "ticker": "ALFAS.IS",
+   "zaman": "2026-10-19T13:34:24+00:00"
+  },
+  "ALGYO:1d": {
+   "deneme": 1,
+   "dosya": "ALGYO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ALGYO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "ALGYO.IS",
+   "zaman": "2026-10-19T13:34:28+00:00"
+  },
+  "ALGYO:1h": {
+   "deneme": 1,
+   "dosya": "ALGYO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 341,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ALGYO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "ALGYO.IS",
+   "zaman": "2026-10-19T13:34:27+00:00"
+  },
+  "ALTNY:1d": {
+   "deneme": 1,
+   "dosya": "ALTNY_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ALTNY",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ALTNY.IS",
+   "zaman": "2026-10-19T13:34:32+00:00"
+  },
+  "ALTNY:1h": {
+   "deneme": 1,
+   "dosya": "ALTNY_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ALTNY",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "ALTNY.IS",
+   "zaman": "2026-10-19T13:34:31+00:00"
+  },
+  "ANSGR:1d": {
+   "deneme": 1,
+   "dosya": "ANSGR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ANSGR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.7,
+   "ticker": "ANSGR.IS",
+   "zaman": "2026-10-19T13:34:35+00:00"
+  },
+  "ANSGR:1h": {
+   "deneme": 1,
+   "dosya": "ANSGR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ANSGR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "ANSGR.IS",
+   "zaman": "2026-10-19T13:34:34+00:00"
+  },
+  "ARCLK:1d": {
+   "deneme": 1,
+   "dosya": "ARCLK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ARCLK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ARCLK.IS",
+   "zaman": "2026-10-19T13:34:49+00:00"
+  },
+  "ARCLK:1h": {
+   "deneme": 1,
+   "dosya": "ARCLK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ARCLK",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 13.5,
+   "ticker": "ARCLK.IS",
+   "zaman": "2026-10-19T13:34:49+00:00"
+  },
+  "ARDYZ:1d": {
+   "deneme": 1,
+   "dosya": "ARDYZ_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ARDYZ",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "ARDYZ.IS",
+   "zaman": "2026-10-19T13:34:53+00:00"
+  },
+  "ARDYZ:1h": {
+   "deneme": 1,
+   "dosya": "ARDYZ_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ARDYZ",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "ARDYZ.IS",
+   "zaman": "2026-10-19T13:34:52+00:00"
+  },
+  "ARZUM:1d": {
+   "deneme": 1,
+   "dosya": "ARZUM_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ARZUM",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ARZUM.IS",
+   "zaman": "2026-10-19T13:34:56+00:00"
+  },
+  "ARZUM:1h": {
+   "deneme": 1,
+   "dosya": "ARZUM_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ARZUM",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "ARZUM.IS",
+   "zaman": "2026-10-19T13:34:56+00:00"
+  },
+  "ASELS:1d": {
+   "deneme": 1,
+   "dosya": "ASELS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ASELS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "ASELS.IS",
+   "zaman": "2026-10-19T13:35:00+00:00"
+  },
+  "ASELS:1h": {
+   "deneme": 1,
+   "dosya": "ASELS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ASELS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "ASELS.IS",
+   "zaman": "2026-10-19T13:34:59+00:00"
+  },
+  "ASTOR:1d": {
+   "deneme": 1,
+   "dosya": "ASTOR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ASTOR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.7,
+   "ticker": "ASTOR.IS",
+   "zaman": "2026-10-19T13:35:04+00:00"
+  },
+  "ASTOR:1h": {
+   "deneme": 1,
+   "dosya": "ASTOR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ASTOR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "ASTOR.IS",
+   "zaman": "2026-10-19T13:35:03+00:00"
+  },
+  "AVPGY:1d": {
+   "deneme": 1,
+   "dosya": "AVPGY_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "AVPGY",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "AVPGY.IS",
+   "zaman": "2026-10-19T13:35:18+00:00"
+  },
+  "AVPGY:1h": {
+   "deneme": 1,
+   "dosya": "AVPGY_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "AVPGY",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 13.9,
+   "ticker": "AVPGY.IS",
+   "zaman": "2026-10-19T13:35:17+00:00"
+  },
+  "AYDEM:1d": {
+   "deneme": 1,
+   "dosya": "AYDEM_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "AYDEM",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "AYDEM.IS",
+   "zaman": "2026-10-19T13:35:21+00:00"
+  },
+  "AYDEM:1h": {
+   "deneme": 1,
+   "dosya": "AYDEM_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "AYDEM",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "AYDEM.IS",
+   "zaman": "2026-10-19T13:35:21+00:00"
+  },
+  "BEGYO:1d": {
+   "deneme": 1,
+   "dosya": "BEGYO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "BEGYO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "BEGYO.IS",
+   "zaman": "2026-10-19T13:35:25+00:00"
+  },
+  "BEGYO:1h": {
+   "deneme": 1,
+   "dosya": "BEGYO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "BEGYO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "BEGYO.IS",
+   "zaman": "2026-10-19T13:35:24+00:00"
+  },
+  "BERA:1d": {
+   "deneme": 1,
+   "dosya": "BERA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "BERA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "BERA.IS",
+   "zaman": "2026-10-19T13:35:28+00:00"
+  },
+  "BERA:1h": {
+   "deneme": 1,
+   "dosya": "BERA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "BERA",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "BERA.IS",
+   "zaman": "2026-10-19T13:35:28+00:00"
+  },
+  "BIMAS:1d": {
+   "deneme": 1,
+   "dosya": "BIMAS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "BIMAS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "BIMAS.IS",
+   "zaman": "2026-10-19T13:35:32+00:00"
+  },
+  "BIMAS:1h": {
+   "deneme": 1,
+   "dosya": "BIMAS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "BIMAS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "BIMAS.IS",
+   "zaman": "2026-10-19T13:35:31+00:00"
+  },
+  "BIOEN:1d": {
+   "deneme": 1,
+   "dosya": "BIOEN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "BIOEN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "BIOEN.IS",
+   "zaman": "2026-10-19T13:35:49+00:00"
+  },
+  "BIOEN:1h": {
+   "deneme": 1,
+   "dosya": "BIOEN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "BIOEN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 16.2,
+   "ticker": "BIOEN.IS",
+   "zaman": "2026-10-19T13:35:48+00:00"
+  },
+  "BJKAS:1d": {
+   "deneme": 1,
+   "dosya": "BJKAS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "BJKAS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "BJKAS.IS",
+   "zaman": "2026-10-19T13:35:52+00:00"
+  },
+  "BJKAS:1h": {
+   "deneme": 1,
+   "dosya": "BJKAS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "BJKAS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "BJKAS.IS",
+   "zaman": "2026-10-19T13:35:52+00:00"
+  },
+  "BOBET:1d": {
+   "deneme": 1,
+   "dosya": "BOBET_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "BOBET",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "BOBET.IS",
+   "zaman": "2026-10-19T13:35:56+00:00"
+  },
+  "BOBET:1h": {
+   "deneme": 1,
+   "dosya": "BOBET_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "BOBET",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "BOBET.IS",
+   "zaman": "2026-10-19T13:35:55+00:00"
+  },
+  "BRENT:1d": {
+   "deneme": 1,
+   "dosya": "BRENT_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 07:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 7,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 502
+   },
+   "period": "2y",
+   "satir": 502,
+   "sembol": "BRENT",
+   "son_bar": "2026-10-19 07:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "BZ=F",
+   "zaman": "2026-10-19T13:36:01+00:00"
+  },
+  "BRENT:1h": {
+   "deneme": 1,
+   "dosya": "BRENT_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-08-07 09:00:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 366,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 6825
+   },
+   "period": "365d",
+   "satir": 6825,
+   "sembol": "BRENT",
+   "son_bar": "2026-10-19 16:00:00+03:00",
+   "sure_sn": 4.5,
+   "ticker": "BZ=F",
+   "zaman": "2026-10-19T13:36:00+00:00"
+  },
+  "BRKVY:1d": {
+   "deneme": 1,
+   "dosya": "BRKVY_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "BRKVY",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "BRKVY.IS",
+   "zaman": "2026-10-19T13:36:04+00:00"
+  },
+  "BRKVY:1h": {
+   "deneme": 1,
+   "dosya": "BRKVY_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "BRKVY",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "BRKVY.IS",
+   "zaman": "2026-10-19T13:36:04+00:00"
+  },
+  "BRSAN:1d": {
+   "deneme": 1,
+   "dosya": "BRSAN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "BRSAN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "BRSAN.IS",
+   "zaman": "2026-10-19T13:36:21+00:00"
+  },
+  "BRSAN:1h": {
+   "deneme": 1,
+   "dosya": "BRSAN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "BRSAN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 16.1,
+   "ticker": "BRSAN.IS",
+   "zaman": "2026-10-19T13:36:21+00:00"
+  },
+  "BTCIM:1d": {
+   "deneme": 1,
+   "dosya": "BTCIM_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "BTCIM",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "BTCIM.IS",
+   "zaman": "2026-10-19T13:36:25+00:00"
+  },
+  "BTCIM:1h": {
+   "deneme": 1,
+   "dosya": "BTCIM_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "BTCIM",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "BTCIM.IS",
+   "zaman": "2026-10-19T13:36:24+00:00"
+  },
+  "BURCE:1d": {
+   "deneme": 1,
+   "dosya": "BURCE_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "BURCE",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "BURCE.IS",
+   "zaman": "2026-10-19T13:36:28+00:00"
+  },
+  "BURCE:1h": {
+   "deneme": 1,
+   "dosya": "BURCE_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 339,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3144
+   },
+   "period": "365d",
+   "satir": 3144,
+   "sembol": "BURCE",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "BURCE.IS",
+   "zaman": "2026-10-19T13:36:28+00:00"
+  },
+  "CANTE:1d": {
+   "deneme": 1,
+   "dosya": "CANTE_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 2,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "CANTE",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "CANTE.IS",
+   "zaman": "2026-10-19T13:36:31+00:00"
+  },
+  "CANTE:1h": {
+   "deneme": 1,
+   "dosya": "CANTE_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "CANTE",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "CANTE.IS",
+   "zaman": "2026-10-19T13:36:31+00:00"
+  },
+  "CCOLA:1d": {
+   "deneme": 1,
+   "dosya": "CCOLA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "CCOLA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "CCOLA.IS",
+   "zaman": "2026-10-19T13:36:34+00:00"
+  },
+  "CCOLA:1h": {
+   "deneme": 1,
+   "dosya": "CCOLA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "CCOLA",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "CCOLA.IS",
+   "zaman": "2026-10-19T13:36:34+00:00"
+  },
+  "CEMAS:1d": {
+   "deneme": 1,
+   "dosya": "CEMAS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "CEMAS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "CEMAS.IS",
+   "zaman": "2026-10-19T13:36:51+00:00"
+  },
+  "CEMAS:1h": {
+   "deneme": 1,
+   "dosya": "CEMAS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 341,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3158
+   },
+   "period": "365d",
+   "satir": 3158,
+   "sembol": "CEMAS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 16.3,
+   "ticker": "CEMAS.IS",
+   "zaman": "2026-10-19T13:36:51+00:00"
+  },
+  "CEMTS:1d": {
+   "deneme": 1,
+   "dosya": "CEMTS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "CEMTS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "CEMTS.IS",
+   "zaman": "2026-10-19T13:36:55+00:00"
+  },
+  "CEMTS:1h": {
+   "deneme": 1,
+   "dosya": "CEMTS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "CEMTS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.3,
+   "ticker": "CEMTS.IS",
+   "zaman": "2026-10-19T13:36:55+00:00"
+  },
+  "CIMSA:1d": {
+   "deneme": 1,
+   "dosya": "CIMSA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "CIMSA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "CIMSA.IS",
+   "zaman": "2026-10-19T13:36:59+00:00"
+  },
+  "CIMSA:1h": {
+   "deneme": 1,
+   "dosya": "CIMSA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "CIMSA",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "CIMSA.IS",
+   "zaman": "2026-10-19T13:36:58+00:00"
+  },
+  "CLEBI:1d": {
+   "deneme": 1,
+   "dosya": "CLEBI_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "CLEBI",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "CLEBI.IS",
+   "zaman": "2026-10-19T13:37:02+00:00"
+  },
+  "CLEBI:1h": {
+   "deneme": 1,
+   "dosya": "CLEBI_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3253
+   },
+   "period": "365d",
+   "satir": 3253,
+   "sembol": "CLEBI",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "CLEBI.IS",
+   "zaman": "2026-10-19T13:37:02+00:00"
+  },
+  "CVKMD:1d": {
+   "deneme": 1,
+   "dosya": "CVKMD_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "CVKMD",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "CVKMD.IS",
+   "zaman": "2026-10-19T13:37:06+00:00"
+  },
+  "CVKMD:1h": {
+   "deneme": 1,
+   "dosya": "CVKMD_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "CVKMD",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "CVKMD.IS",
+   "zaman": "2026-10-19T13:37:05+00:00"
+  },
+  "CWENE:1d": {
+   "deneme": 1,
+   "dosya": "CWENE_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "CWENE",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "CWENE.IS",
+   "zaman": "2026-10-19T13:37:23+00:00"
+  },
+  "CWENE:1h": {
+   "deneme": 1,
+   "dosya": "CWENE_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 339,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "CWENE",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 16.9,
+   "ticker": "CWENE.IS",
+   "zaman": "2026-10-19T13:37:23+00:00"
+  },
+  "DAPGM:1d": {
+   "deneme": 1,
+   "dosya": "DAPGM_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DAPGM",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "DAPGM.IS",
+   "zaman": "2026-10-19T13:37:27+00:00"
+  },
+  "DAPGM:1h": {
+   "deneme": 1,
+   "dosya": "DAPGM_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "DAPGM",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "DAPGM.IS",
+   "zaman": "2026-10-19T13:37:27+00:00"
+  },
+  "DARDL:1d": {
+   "deneme": 1,
+   "dosya": "DARDL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DARDL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "DARDL.IS",
+   "zaman": "2026-10-19T13:37:30+00:00"
+  },
+  "DARDL:1h": {
+   "deneme": 1,
+   "dosya": "DARDL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "DARDL",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "DARDL.IS",
+   "zaman": "2026-10-19T13:37:30+00:00"
+  },
+  "DENGE:1d": {
+   "deneme": 1,
+   "dosya": "DENGE_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DENGE",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "DENGE.IS",
+   "zaman": "2026-10-19T13:37:34+00:00"
+  },
+  "DENGE:1h": {
+   "deneme": 1,
+   "dosya": "DENGE_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 340,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "DENGE",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "DENGE.IS",
+   "zaman": "2026-10-19T13:37:34+00:00"
+  },
+  "DERIM:1d": {
+   "deneme": 1,
+   "dosya": "DERIM_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DERIM",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "DERIM.IS",
+   "zaman": "2026-10-19T13:37:37+00:00"
+  },
+  "DERIM:1h": {
+   "deneme": 1,
+   "dosya": "DERIM_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3253
+   },
+   "period": "365d",
+   "satir": 3253,
+   "sembol": "DERIM",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "DERIM.IS",
+   "zaman": "2026-10-19T13:37:37+00:00"
+  },
+  "DEVA:1d": {
+   "deneme": 1,
+   "dosya": "DEVA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DEVA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "DEVA.IS",
+   "zaman": "2026-10-19T13:37:54+00:00"
+  },
+  "DEVA:1h": {
+   "deneme": 1,
+   "dosya": "DEVA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "DEVA",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 15.9,
+   "ticker": "DEVA.IS",
+   "zaman": "2026-10-19T13:37:53+00:00"
+  },
+  "DIRIT:1d": {
+   "deneme": 1,
+   "dosya": "DIRIT_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DIRIT",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 1.1,
+   "ticker": "DIRIT.IS",
+   "zaman": "2026-10-19T13:37:57+00:00"
+  },
+  "DIRIT:1h": {
+   "deneme": 1,
+   "dosya": "DIRIT_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 361,
+    "split_sicramasi_adayi": 15,
+    "toplam_bar": 1442
+   },
+   "period": "365d",
+   "satir": 1442,
+   "sembol": "DIRIT",
+   "son_bar": "2026-10-19 13:30:00+03:00",
+   "sure_sn": 2.2,
+   "ticker": "DIRIT.IS",
+   "zaman": "2026-10-19T13:37:56+00:00"
+  },
+  "DMSAS:1d": {
+   "deneme": 1,
+   "dosya": "DMSAS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DMSAS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "DMSAS.IS",
+   "zaman": "2026-10-19T13:38:01+00:00"
+  },
+  "DMSAS:1h": {
+   "deneme": 1,
+   "dosya": "DMSAS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "DMSAS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "DMSAS.IS",
+   "zaman": "2026-10-19T13:38:00+00:00"
+  },
+  "DOAS:1d": {
+   "deneme": 1,
+   "dosya": "DOAS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DOAS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "DOAS.IS",
+   "zaman": "2026-10-19T13:38:04+00:00"
+  },
+  "DOAS:1h": {
+   "deneme": 1,
+   "dosya": "DOAS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "DOAS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "DOAS.IS",
+   "zaman": "2026-10-19T13:38:04+00:00"
+  },
+  "DOCO:1d": {
+   "deneme": 1,
+   "dosya": "DOCO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DOCO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "DOCO.IS",
+   "zaman": "2026-10-19T13:38:08+00:00"
+  },
+  "DOCO:1h": {
+   "deneme": 1,
+   "dosya": "DOCO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 350,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3252
+   },
+   "period": "365d",
+   "satir": 3252,
+   "sembol": "DOCO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.3,
+   "ticker": "DOCO.IS",
+   "zaman": "2026-10-19T13:38:07+00:00"
+  },
+  "DOFER:1d": {
+   "deneme": 1,
+   "dosya": "DOFER_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DOFER",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "DOFER.IS",
+   "zaman": "2026-10-19T13:38:22+00:00"
+  },
+  "DOFER:1h": {
+   "deneme": 1,
+   "dosya": "DOFER_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 350,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "DOFER",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 13.5,
+   "ticker": "DOFER.IS",
+   "zaman": "2026-10-19T13:38:21+00:00"
+  },
+  "DOHOL:1d": {
+   "deneme": 1,
+   "dosya": "DOHOL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DOHOL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.7,
+   "ticker": "DOHOL.IS",
+   "zaman": "2026-10-19T13:38:26+00:00"
+  },
+  "DOHOL:1h": {
+   "deneme": 1,
+   "dosya": "DOHOL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "DOHOL",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.3,
+   "ticker": "DOHOL.IS",
+   "zaman": "2026-10-19T13:38:25+00:00"
+  },
+  "DYOBY:1d": {
+   "deneme": 1,
+   "dosya": "DYOBY_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "DYOBY",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "DYOBY.IS",
+   "zaman": "2026-10-19T13:38:30+00:00"
+  },
+  "DYOBY:1h": {
+   "deneme": 1,
+   "dosya": "DYOBY_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 341,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "DYOBY",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "DYOBY.IS",
+   "zaman": "2026-10-19T13:38:29+00:00"
+  },
+  "EBEBK:1d": {
+   "deneme": 1,
+   "dosya": "EBEBK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "EBEBK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "EBEBK.IS",
+   "zaman": "2026-10-19T13:38:33+00:00"
+  },
+  "EBEBK:1h": {
+   "deneme": 1,
+   "dosya": "EBEBK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "EBEBK",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "EBEBK.IS",
+   "zaman": "2026-10-19T13:38:33+00:00"
+  },
+  "ECILC:1d": {
+   "deneme": 1,
+   "dosya": "ECILC_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ECILC",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ECILC.IS",
+   "zaman": "2026-10-19T13:38:37+00:00"
+  },
+  "ECILC:1h": {
+   "deneme": 1,
+   "dosya": "ECILC_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ECILC",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "ECILC.IS",
+   "zaman": "2026-10-19T13:38:37+00:00"
+  },
+  "ECZYT:1d": {
+   "deneme": 1,
+   "dosya": "ECZYT_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ECZYT",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ECZYT.IS",
+   "zaman": "2026-10-19T13:38:54+00:00"
+  },
+  "ECZYT:1h": {
+   "deneme": 1,
+   "dosya": "ECZYT_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ECZYT",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 16.0,
+   "ticker": "ECZYT.IS",
+   "zaman": "2026-10-19T13:38:53+00:00"
+  },
+  "EFOR:1d": {
+   "deneme": 1,
+   "dosya": "EFOR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 1,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "EFOR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "EFOR.IS",
+   "zaman": "2026-10-19T13:38:57+00:00"
+  },
+  "EFOR:1h": {
+   "deneme": 1,
+   "dosya": "EFOR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-11-03 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 226,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 2160
+   },
+   "period": "365d",
+   "satir": 2160,
+   "sembol": "EFOR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "EFOR.IS",
+   "zaman": "2026-10-19T13:38:57+00:00"
+  },
+  "EGEEN:1d": {
+   "deneme": 1,
+   "dosya": "EGEEN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "EGEEN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "EGEEN.IS",
+   "zaman": "2026-10-19T13:39:01+00:00"
+  },
+  "EGEEN:1h": {
+   "deneme": 1,
+   "dosya": "EGEEN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "EGEEN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "EGEEN.IS",
+   "zaman": "2026-10-19T13:39:00+00:00"
+  },
+  "EKGYO:1d": {
+   "deneme": 1,
+   "dosya": "EKGYO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "EKGYO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "EKGYO.IS",
+   "zaman": "2026-10-19T13:39:04+00:00"
+  },
+  "EKGYO:1h": {
+   "deneme": 1,
+   "dosya": "EKGYO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "EKGYO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "EKGYO.IS",
+   "zaman": "2026-10-19T13:39:04+00:00"
+  },
+  "ENERY:1d": {
+   "deneme": 1,
+   "dosya": "ENERY_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ENERY",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "ENERY.IS",
+   "zaman": "2026-10-19T13:39:08+00:00"
+  },
+  "ENERY:1h": {
+   "deneme": 1,
+   "dosya": "ENERY_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ENERY",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "ENERY.IS",
+   "zaman": "2026-10-19T13:39:07+00:00"
+  },
+  "ENKAI:1d": {
+   "deneme": 1,
+   "dosya": "ENKAI_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ENKAI",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ENKAI.IS",
+   "zaman": "2026-10-19T13:39:22+00:00"
+  },
+  "ENKAI:1h": {
+   "deneme": 1,
+   "dosya": "ENKAI_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ENKAI",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 13.5,
+   "ticker": "ENKAI.IS",
+   "zaman": "2026-10-19T13:39:22+00:00"
+  },
+  "ENSRI:1d": {
+   "deneme": 1,
+   "dosya": "ENSRI_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ENSRI",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "ENSRI.IS",
+   "zaman": "2026-10-19T13:39:26+00:00"
+  },
+  "ENSRI:1h": {
+   "deneme": 1,
+   "dosya": "ENSRI_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ENSRI",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "ENSRI.IS",
+   "zaman": "2026-10-19T13:39:25+00:00"
+  },
+  "ERBOS:1d": {
+   "deneme": 1,
+   "dosya": "ERBOS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ERBOS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ERBOS.IS",
+   "zaman": "2026-10-19T13:39:29+00:00"
+  },
+  "ERBOS:1h": {
+   "deneme": 1,
+   "dosya": "ERBOS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 343,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ERBOS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.6,
+   "ticker": "ERBOS.IS",
+   "zaman": "2026-10-19T13:39:28+00:00"
+  },
+  "EREGL:1d": {
+   "deneme": 1,
+   "dosya": "EREGL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "EREGL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "EREGL.IS",
+   "zaman": "2026-10-19T13:39:33+00:00"
+  },
+  "EREGL:1h": {
+   "deneme": 1,
+   "dosya": "EREGL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "EREGL",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "EREGL.IS",
+   "zaman": "2026-10-19T13:39:32+00:00"
+  },
+  "ERSU:1d": {
+   "deneme": 1,
+   "dosya": "ERSU_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ERSU",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "ERSU.IS",
+   "zaman": "2026-10-19T13:39:36+00:00"
+  },
+  "ERSU:1h": {
+   "deneme": 1,
+   "dosya": "ERSU_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3252
+   },
+   "period": "365d",
+   "satir": 3252,
+   "sembol": "ERSU",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "ERSU.IS",
+   "zaman": "2026-10-19T13:39:36+00:00"
+  },
+  "ESCAR:1d": {
+   "deneme": 1,
+   "dosya": "ESCAR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ESCAR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "ESCAR.IS",
+   "zaman": "2026-10-19T13:39:52+00:00"
+  },
+  "ESCAR:1h": {
+   "deneme": 1,
+   "dosya": "ESCAR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ESCAR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 15.4,
+   "ticker": "ESCAR.IS",
+   "zaman": "2026-10-19T13:39:52+00:00"
+  },
+  "ESEN:1d": {
+   "deneme": 1,
+   "dosya": "ESEN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ESEN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ESEN.IS",
+   "zaman": "2026-10-19T13:39:56+00:00"
+  },
+  "ESEN:1h": {
+   "deneme": 1,
+   "dosya": "ESEN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 339,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ESEN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "ESEN.IS",
+   "zaman": "2026-10-19T13:39:56+00:00"
+  },
+  "EUPWR:1d": {
+   "deneme": 1,
+   "dosya": "EUPWR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "EUPWR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "EUPWR.IS",
+   "zaman": "2026-10-19T13:39:59+00:00"
+  },
+  "EUPWR:1h": {
+   "deneme": 1,
+   "dosya": "EUPWR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 341,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "EUPWR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "EUPWR.IS",
+   "zaman": "2026-10-19T13:39:59+00:00"
+  },
+  "FENER:1d": {
+   "deneme": 1,
+   "dosya": "FENER_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 3,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "FENER",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "FENER.IS",
+   "zaman": "2026-10-19T13:40:03+00:00"
+  },
+  "FENER:1h": {
+   "deneme": 1,
+   "dosya": "FENER_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 338,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "FENER",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "FENER.IS",
+   "zaman": "2026-10-19T13:40:03+00:00"
+  },
+  "FONET:1d": {
+   "deneme": 1,
+   "dosya": "FONET_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "FONET",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "FONET.IS",
+   "zaman": "2026-10-19T13:40:07+00:00"
+  },
+  "FONET:1h": {
+   "deneme": 1,
+   "dosya": "FONET_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "FONET",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.3,
+   "ticker": "FONET.IS",
+   "zaman": "2026-10-19T13:40:07+00:00"
+  },
+  "FROTO:1d": {
+   "deneme": 1,
+   "dosya": "FROTO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "FROTO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "FROTO.IS",
+   "zaman": "2026-10-19T13:40:24+00:00"
+  },
+  "FROTO:1h": {
+   "deneme": 1,
+   "dosya": "FROTO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "FROTO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 16.5,
+   "ticker": "FROTO.IS",
+   "zaman": "2026-10-19T13:40:24+00:00"
+  },
+  "GARAN:1d": {
+   "deneme": 1,
+   "dosya": "GARAN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "GARAN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "GARAN.IS",
+   "zaman": "2026-10-19T13:40:27+00:00"
+  },
+  "GARAN:1h": {
+   "deneme": 1,
+   "dosya": "GARAN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "GARAN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "GARAN.IS",
+   "zaman": "2026-10-19T13:40:27+00:00"
+  },
+  "GARFA:1d": {
+   "deneme": 1,
+   "dosya": "GARFA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "GARFA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "GARFA.IS",
+   "zaman": "2026-10-19T13:40:31+00:00"
+  },
+  "GARFA:1h": {
+   "deneme": 1,
+   "dosya": "GARFA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 251,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3169
+   },
+   "period": "365d",
+   "satir": 3169,
+   "sembol": "GARFA",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "GARFA.IS",
+   "zaman": "2026-10-19T13:40:30+00:00"
+  },
+  "GESAN:1d": {
+   "deneme": 1,
+   "dosya": "GESAN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "GESAN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "GESAN.IS",
+   "zaman": "2026-10-19T13:40:34+00:00"
+  },
+  "GESAN:1h": {
+   "deneme": 1,
+   "dosya": "GESAN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 340,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "GESAN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "GESAN.IS",
+   "zaman": "2026-10-19T13:40:34+00:00"
+  },
+  "GLYHO:1d": {
+   "deneme": 1,
+   "dosya": "GLYHO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "GLYHO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "GLYHO.IS",
+   "zaman": "2026-10-19T13:40:38+00:00"
+  },
+  "GLYHO:1h": {
+   "deneme": 1,
+   "dosya": "GLYHO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "GLYHO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "GLYHO.IS",
+   "zaman": "2026-10-19T13:40:37+00:00"
+  },
+  "GOLTS:1d": {
+   "deneme": 1,
+   "dosya": "GOLTS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "GOLTS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "GOLTS.IS",
+   "zaman": "2026-10-19T13:40:51+00:00"
+  },
+  "GOLTS:1h": {
+   "deneme": 1,
+   "dosya": "GOLTS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "GOLTS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 12.7,
+   "ticker": "GOLTS.IS",
+   "zaman": "2026-10-19T13:40:51+00:00"
+  },
+  "GRSEL:1d": {
+   "deneme": 1,
+   "dosya": "GRSEL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "GRSEL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "GRSEL.IS",
+   "zaman": "2026-10-19T13:40:55+00:00"
+  },
+  "GRSEL:1h": {
+   "deneme": 1,
+   "dosya": "GRSEL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "GRSEL",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "GRSEL.IS",
+   "zaman": "2026-10-19T13:40:54+00:00"
+  },
+  "GRTHO:1d": {
+   "deneme": 1,
+   "dosya": "GRTHO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "GRTHO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "GRTHO.IS",
+   "zaman": "2026-10-19T13:40:58+00:00"
+  },
+  "GRTHO:1h": {
+   "deneme": 1,
+   "dosya": "GRTHO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "GRTHO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "GRTHO.IS",
+   "zaman": "2026-10-19T13:40:58+00:00"
+  },
+  "GSRAY:1d": {
+   "deneme": 1,
+   "dosya": "GSRAY_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "GSRAY",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "GSRAY.IS",
+   "zaman": "2026-10-19T13:41:02+00:00"
+  },
+  "GSRAY:1h": {
+   "deneme": 1,
+   "dosya": "GSRAY_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "GSRAY",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "GSRAY.IS",
+   "zaman": "2026-10-19T13:41:02+00:00"
+  },
+  "GUBRF:1d": {
+   "deneme": 1,
+   "dosya": "GUBRF_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "GUBRF",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "GUBRF.IS",
+   "zaman": "2026-10-19T13:41:05+00:00"
+  },
+  "GUBRF:1h": {
+   "deneme": 1,
+   "dosya": "GUBRF_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "GUBRF",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.6,
+   "ticker": "GUBRF.IS",
+   "zaman": "2026-10-19T13:41:05+00:00"
+  },
+  "GWIND:1d": {
+   "deneme": 1,
+   "dosya": "GWIND_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "GWIND",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "GWIND.IS",
+   "zaman": "2026-10-19T13:41:22+00:00"
+  },
+  "GWIND:1h": {
+   "deneme": 1,
+   "dosya": "GWIND_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "GWIND",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 16.0,
+   "ticker": "GWIND.IS",
+   "zaman": "2026-10-19T13:41:21+00:00"
+  },
+  "HALKB:1d": {
+   "deneme": 1,
+   "dosya": "HALKB_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "HALKB",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "HALKB.IS",
+   "zaman": "2026-10-19T13:41:25+00:00"
+  },
+  "HALKB:1h": {
+   "deneme": 1,
+   "dosya": "HALKB_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "HALKB",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "HALKB.IS",
+   "zaman": "2026-10-19T13:41:25+00:00"
+  },
+  "HATEK:1d": {
+   "deneme": 1,
+   "dosya": "HATEK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "HATEK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "HATEK.IS",
+   "zaman": "2026-10-19T13:41:29+00:00"
+  },
+  "HATEK:1h": {
+   "deneme": 1,
+   "dosya": "HATEK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3253
+   },
+   "period": "365d",
+   "satir": 3253,
+   "sembol": "HATEK",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "HATEK.IS",
+   "zaman": "2026-10-19T13:41:28+00:00"
+  },
+  "HATSN:1d": {
+   "deneme": 1,
+   "dosya": "HATSN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "HATSN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "HATSN.IS",
+   "zaman": "2026-10-19T13:41:32+00:00"
+  },
+  "HATSN:1h": {
+   "deneme": 1,
+   "dosya": "HATSN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 341,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "HATSN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "HATSN.IS",
+   "zaman": "2026-10-19T13:41:31+00:00"
+  },
+  "HEDEF:1d": {
+   "deneme": 1,
+   "dosya": "HEDEF_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "HEDEF",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "HEDEF.IS",
+   "zaman": "2026-10-19T13:41:35+00:00"
+  },
+  "HEDEF:1h": {
+   "deneme": 1,
+   "dosya": "HEDEF_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 335,
+    "split_sicramasi_adayi": 3,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "HEDEF",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "HEDEF.IS",
+   "zaman": "2026-10-19T13:41:35+00:00"
+  },
+  "HEKTS:1d": {
+   "deneme": 1,
+   "dosya": "HEKTS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "HEKTS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "HEKTS.IS",
+   "zaman": "2026-10-19T13:41:53+00:00"
+  },
+  "HEKTS:1h": {
+   "deneme": 1,
+   "dosya": "HEKTS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "HEKTS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 17.0,
+   "ticker": "HEKTS.IS",
+   "zaman": "2026-10-19T13:41:53+00:00"
+  },
+  "HKTM:1d": {
+   "deneme": 1,
+   "dosya": "HKTM_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "HKTM",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "HKTM.IS",
+   "zaman": "2026-10-19T13:41:56+00:00"
+  },
+  "HKTM:1h": {
+   "deneme": 1,
+   "dosya": "HKTM_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 343,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3253
+   },
+   "period": "365d",
+   "satir": 3253,
+   "sembol": "HKTM",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "HKTM.IS",
+   "zaman": "2026-10-19T13:41:56+00:00"
+  },
+  "IHEVA:1d": {
+   "deneme": 1,
+   "dosya": "IHEVA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "IHEVA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "IHEVA.IS",
+   "zaman": "2026-10-19T13:42:00+00:00"
+  },
+  "IHEVA:1h": {
+   "deneme": 1,
+   "dosya": "IHEVA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3252
+   },
+   "period": "365d",
+   "satir": 3252,
+   "sembol": "IHEVA",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "IHEVA.IS",
+   "zaman": "2026-10-19T13:41:59+00:00"
+  },
+  "ISCTR:1d": {
+   "deneme": 1,
+   "dosya": "ISCTR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ISCTR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ISCTR.IS",
+   "zaman": "2026-10-19T13:42:04+00:00"
+  },
+  "ISCTR:1h": {
+   "deneme": 1,
+   "dosya": "ISCTR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ISCTR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "ISCTR.IS",
+   "zaman": "2026-10-19T13:42:03+00:00"
+  },
+  "ISGYO:1d": {
+   "deneme": 1,
+   "dosya": "ISGYO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ISGYO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ISGYO.IS",
+   "zaman": "2026-10-19T13:42:07+00:00"
+  },
+  "ISGYO:1h": {
+   "deneme": 1,
+   "dosya": "ISGYO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3253
+   },
+   "period": "365d",
+   "satir": 3253,
+   "sembol": "ISGYO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "ISGYO.IS",
+   "zaman": "2026-10-19T13:42:07+00:00"
+  },
+  "ISMEN:1d": {
+   "deneme": 1,
+   "dosya": "ISMEN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ISMEN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "ISMEN.IS",
+   "zaman": "2026-10-19T13:42:21+00:00"
+  },
+  "ISMEN:1h": {
+   "deneme": 1,
+   "dosya": "ISMEN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "ISMEN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 12.8,
+   "ticker": "ISMEN.IS",
+   "zaman": "2026-10-19T13:42:20+00:00"
+  },
+  "IZENR:1d": {
+   "deneme": 1,
+   "dosya": "IZENR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "IZENR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "IZENR.IS",
+   "zaman": "2026-10-19T13:42:24+00:00"
+  },
+  "IZENR:1h": {
+   "deneme": 1,
+   "dosya": "IZENR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "IZENR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "IZENR.IS",
+   "zaman": "2026-10-19T13:42:23+00:00"
+  },
+  "KARSN:1d": {
+   "deneme": 1,
+   "dosya": "KARSN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KARSN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "KARSN.IS",
+   "zaman": "2026-10-19T13:42:27+00:00"
+  },
+  "KARSN:1h": {
+   "deneme": 1,
+   "dosya": "KARSN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 343,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KARSN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "KARSN.IS",
+   "zaman": "2026-10-19T13:42:27+00:00"
+  },
+  "KCAER:1d": {
+   "deneme": 1,
+   "dosya": "KCAER_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KCAER",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "KCAER.IS",
+   "zaman": "2026-10-19T13:42:31+00:00"
+  },
+  "KCAER:1h": {
+   "deneme": 1,
+   "dosya": "KCAER_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KCAER",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.3,
+   "ticker": "KCAER.IS",
+   "zaman": "2026-10-19T13:42:31+00:00"
+  },
+  "KCHOL:1d": {
+   "deneme": 1,
+   "dosya": "KCHOL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KCHOL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "KCHOL.IS",
+   "zaman": "2026-10-19T13:42:35+00:00"
+  },
+  "KCHOL:1h": {
+   "deneme": 1,
+   "dosya": "KCHOL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KCHOL",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "KCHOL.IS",
+   "zaman": "2026-10-19T13:42:35+00:00"
+  },
+  "KFEIN:1d": {
+   "deneme": 1,
+   "dosya": "KFEIN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KFEIN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "KFEIN.IS",
+   "zaman": "2026-10-19T13:42:49+00:00"
+  },
+  "KFEIN:1h": {
+   "deneme": 1,
+   "dosya": "KFEIN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 341,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KFEIN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 13.4,
+   "ticker": "KFEIN.IS",
+   "zaman": "2026-10-19T13:42:49+00:00"
+  },
+  "KIMMR:1d": {
+   "deneme": 1,
+   "dosya": "KIMMR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KIMMR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "KIMMR.IS",
+   "zaman": "2026-10-19T13:42:53+00:00"
+  },
+  "KIMMR:1h": {
+   "deneme": 1,
+   "dosya": "KIMMR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KIMMR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "KIMMR.IS",
+   "zaman": "2026-10-19T13:42:52+00:00"
+  },
+  "KLGYO:1d": {
+   "deneme": 1,
+   "dosya": "KLGYO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KLGYO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "KLGYO.IS",
+   "zaman": "2026-10-19T13:42:57+00:00"
+  },
+  "KLGYO:1h": {
+   "deneme": 1,
+   "dosya": "KLGYO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KLGYO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "KLGYO.IS",
+   "zaman": "2026-10-19T13:42:56+00:00"
+  },
+  "KLSER:1d": {
+   "deneme": 1,
+   "dosya": "KLSER_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KLSER",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "KLSER.IS",
+   "zaman": "2026-10-19T13:43:00+00:00"
+  },
+  "KLSER:1h": {
+   "deneme": 1,
+   "dosya": "KLSER_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KLSER",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "KLSER.IS",
+   "zaman": "2026-10-19T13:43:00+00:00"
+  },
+  "KMPUR:1d": {
+   "deneme": 1,
+   "dosya": "KMPUR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KMPUR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "KMPUR.IS",
+   "zaman": "2026-10-19T13:43:04+00:00"
+  },
+  "KMPUR:1h": {
+   "deneme": 1,
+   "dosya": "KMPUR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KMPUR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "KMPUR.IS",
+   "zaman": "2026-10-19T13:43:04+00:00"
+  },
+  "KONTR:1d": {
+   "deneme": 1,
+   "dosya": "KONTR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 1,
+    "split_sicramasi_adayi": 3,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KONTR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "KONTR.IS",
+   "zaman": "2026-10-19T13:43:21+00:00"
+  },
+  "KONTR:1h": {
+   "deneme": 1,
+   "dosya": "KONTR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 9,
+    "toplam_bar": 2810
+   },
+   "period": "365d",
+   "satir": 2810,
+   "sembol": "KONTR",
+   "son_bar": "2026-10-19 13:30:00+03:00",
+   "sure_sn": 16.2,
+   "ticker": "KONTR.IS",
+   "zaman": "2026-10-19T13:43:20+00:00"
+  },
+  "KONYA:1d": {
+   "deneme": 1,
+   "dosya": "KONYA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KONYA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "KONYA.IS",
+   "zaman": "2026-10-19T13:43:25+00:00"
+  },
+  "KONYA:1h": {
+   "deneme": 1,
+   "dosya": "KONYA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 350,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KONYA",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "KONYA.IS",
+   "zaman": "2026-10-19T13:43:24+00:00"
+  },
+  "KORDS:1d": {
+   "deneme": 1,
+   "dosya": "KORDS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KORDS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "KORDS.IS",
+   "zaman": "2026-10-19T13:43:28+00:00"
+  },
+  "KORDS:1h": {
+   "deneme": 1,
+   "dosya": "KORDS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KORDS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "KORDS.IS",
+   "zaman": "2026-10-19T13:43:28+00:00"
+  },
+  "KRDMD:1d": {
+   "deneme": 1,
+   "dosya": "KRDMD_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KRDMD",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "KRDMD.IS",
+   "zaman": "2026-10-19T13:43:32+00:00"
+  },
+  "KRDMD:1h": {
+   "deneme": 1,
+   "dosya": "KRDMD_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KRDMD",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "KRDMD.IS",
+   "zaman": "2026-10-19T13:43:31+00:00"
+  },
+  "KRGYO:1d": {
+   "deneme": 1,
+   "dosya": "KRGYO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KRGYO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.7,
+   "ticker": "KRGYO.IS",
+   "zaman": "2026-10-19T13:43:35+00:00"
+  },
+  "KRGYO:1h": {
+   "deneme": 1,
+   "dosya": "KRGYO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KRGYO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "KRGYO.IS",
+   "zaman": "2026-10-19T13:43:34+00:00"
+  },
+  "KRTEK:1d": {
+   "deneme": 1,
+   "dosya": "KRTEK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KRTEK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "KRTEK.IS",
+   "zaman": "2026-10-19T13:43:50+00:00"
+  },
+  "KRTEK:1h": {
+   "deneme": 1,
+   "dosya": "KRTEK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3253
+   },
+   "period": "365d",
+   "satir": 3253,
+   "sembol": "KRTEK",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 14.6,
+   "ticker": "KRTEK.IS",
+   "zaman": "2026-10-19T13:43:50+00:00"
+  },
+  "KUTPO:1d": {
+   "deneme": 1,
+   "dosya": "KUTPO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KUTPO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "KUTPO.IS",
+   "zaman": "2026-10-19T13:43:54+00:00"
+  },
+  "KUTPO:1h": {
+   "deneme": 1,
+   "dosya": "KUTPO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KUTPO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "KUTPO.IS",
+   "zaman": "2026-10-19T13:43:53+00:00"
+  },
+  "KZBGY:1d": {
+   "deneme": 1,
+   "dosya": "KZBGY_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "KZBGY",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "KZBGY.IS",
+   "zaman": "2026-10-19T13:43:57+00:00"
+  },
+  "KZBGY:1h": {
+   "deneme": 1,
+   "dosya": "KZBGY_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "KZBGY",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "KZBGY.IS",
+   "zaman": "2026-10-19T13:43:57+00:00"
+  },
+  "LMKDC:1d": {
+   "deneme": 1,
+   "dosya": "LMKDC_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "LMKDC",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "LMKDC.IS",
+   "zaman": "2026-10-19T13:44:01+00:00"
+  },
+  "LMKDC:1h": {
+   "deneme": 1,
+   "dosya": "LMKDC_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "LMKDC",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "LMKDC.IS",
+   "zaman": "2026-10-19T13:44:00+00:00"
+  },
+  "MAGEN:1d": {
+   "deneme": 1,
+   "dosya": "MAGEN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "MAGEN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "MAGEN.IS",
+   "zaman": "2026-10-19T13:44:05+00:00"
+  },
+  "MAGEN:1h": {
+   "deneme": 1,
+   "dosya": "MAGEN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "MAGEN",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "MAGEN.IS",
+   "zaman": "2026-10-19T13:44:04+00:00"
+  },
+  "MAKTK:1d": {
+   "deneme": 1,
+   "dosya": "MAKTK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "MAKTK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "MAKTK.IS",
+   "zaman": "2026-10-19T13:44:18+00:00"
+  },
+  "MAKTK:1h": {
+   "deneme": 1,
+   "dosya": "MAKTK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "MAKTK",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 13.1,
+   "ticker": "MAKTK.IS",
+   "zaman": "2026-10-19T13:44:18+00:00"
+  },
+  "MARMR:1d": {
+   "deneme": 1,
+   "dosya": "MARMR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-09-19 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 272
+   },
+   "period": "2y",
+   "satir": 272,
+   "sembol": "MARMR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "MARMR.IS",
+   "zaman": "2026-10-19T13:44:21+00:00"
+  },
+  "MARMR:1h": {
+   "deneme": 1,
+   "dosya": "MARMR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-09-19 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 247,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 2422
+   },
+   "period": "365d",
+   "satir": 2422,
+   "sembol": "MARMR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "MARMR.IS",
+   "zaman": "2026-10-19T13:44:21+00:00"
+  },
+  "MARTI:1d": {
+   "deneme": 1,
+   "dosya": "MARTI_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "MARTI",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "MARTI.IS",
+   "zaman": "2026-10-19T13:44:25+00:00"
+  },
+  "MARTI:1h": {
+   "deneme": 1,
+   "dosya": "MARTI_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "MARTI",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "MARTI.IS",
+   "zaman": "2026-10-19T13:44:25+00:00"
+  },
+  "MAVI:1d": {
+   "deneme": 1,
+   "dosya": "MAVI_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "MAVI",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "MAVI.IS",
+   "zaman": "2026-10-19T13:44:29+00:00"
+  },
+  "MAVI:1h": {
+   "deneme": 1,
+   "dosya": "MAVI_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "MAVI",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "MAVI.IS",
+   "zaman": "2026-10-19T13:44:28+00:00"
+  },
+  "MEDTR:1d": {
+   "deneme": 1,
+   "dosya": "MEDTR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "MEDTR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "MEDTR.IS",
+   "zaman": "2026-10-19T13:44:33+00:00"
+  },
+  "MEDTR:1h": {
+   "deneme": 1,
+   "dosya": "MEDTR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 350,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "MEDTR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "MEDTR.IS",
+   "zaman": "2026-10-19T13:44:32+00:00"
+  },
+  "MEGAP:1d": {
+   "deneme": 1,
+   "dosya": "MEGAP_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 6,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "MEGAP",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 1.2,
+   "ticker": "MEGAP.IS",
+   "zaman": "2026-10-19T13:44:46+00:00"
+  },
+  "MEGAP:1h": {
+   "deneme": 1,
+   "dosya": "MEGAP_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 358,
+    "split_sicramasi_adayi": 8,
+    "toplam_bar": 1418
+   },
+   "period": "365d",
+   "satir": 1418,
+   "sembol": "MEGAP",
+   "son_bar": "2026-10-19 13:30:00+03:00",
+   "sure_sn": 11.8,
+   "ticker": "MEGAP.IS",
+   "zaman": "2026-10-19T13:44:45+00:00"
+  },
+  "METRO:1d": {
+   "deneme": 1,
+   "dosya": "METRO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "METRO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "METRO.IS",
+   "zaman": "2026-10-19T13:44:49+00:00"
+  },
+  "METRO:1h": {
+   "deneme": 1,
+   "dosya": "METRO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "METRO",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "METRO.IS",
+   "zaman": "2026-10-19T13:44:48+00:00"
+  },
+  "MGROS:1d": {
+   "deneme": 1,
+   "dosya": "MGROS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "MGROS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "MGROS.IS",
+   "zaman": "2026-10-19T13:44:52+00:00"
+  },
+  "MGROS:1h": {
+   "deneme": 1,
+   "dosya": "MGROS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "MGROS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "MGROS.IS",
+   "zaman": "2026-10-19T13:44:52+00:00"
+  },
+  "MIATK:1d": {
+   "deneme": 1,
+   "dosya": "MIATK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "MIATK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "MIATK.IS",
+   "zaman": "2026-10-19T13:44:56+00:00"
+  },
+  "MIATK:1h": {
+   "deneme": 1,
+   "dosya": "MIATK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "MIATK",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "MIATK.IS",
+   "zaman": "2026-10-19T13:44:55+00:00"
+  },
+  "MPARK:1d": {
+   "deneme": 1,
+   "dosya": "MPARK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "MPARK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "MPARK.IS",
+   "zaman": "2026-10-19T13:44:59+00:00"
+  },
+  "MPARK:1h": {
+   "deneme": 1,
+   "dosya": "MPARK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "MPARK",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "MPARK.IS",
+   "zaman": "2026-10-19T13:44:59+00:00"
+  },
+  "MRSHL:1d": {
+   "deneme": 1,
+   "dosya": "MRSHL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "MRSHL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "MRSHL.IS",
+   "zaman": "2026-10-19T13:45:15+00:00"
+  },
+  "MRSHL:1h": {
+   "deneme": 1,
+   "dosya": "MRSHL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 341,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "MRSHL",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 15.7,
+   "ticker": "MRSHL.IS",
+   "zaman": "2026-10-19T13:45:15+00:00"
+  },
+  "NETAS:1d": {
+   "deneme": 1,
+   "dosya": "NETAS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "NETAS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "NETAS.IS",
+   "zaman": "2026-10-19T13:45:19+00:00"
+  },
+  "NETAS:1h": {
+   "deneme": 1,
+   "dosya": "NETAS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "NETAS",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "NETAS.IS",
+   "zaman": "2026-10-19T13:45:18+00:00"
+  },
+  "NIBAS:1d": {
+   "deneme": 1,
+   "dosya": "NIBAS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 1,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "NIBAS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "NIBAS.IS",
+   "zaman": "2026-10-19T13:45:23+00:00"
+  },
+  "NIBAS:1h": {
+   "deneme": 1,
+   "dosya": "NIBAS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 336,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "NIBAS",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "NIBAS.IS",
+   "zaman": "2026-10-19T13:45:22+00:00"
+  },
+  "OBAMS:1d": {
+   "deneme": 1,
+   "dosya": "OBAMS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "OBAMS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "OBAMS.IS",
+   "zaman": "2026-10-19T13:45:26+00:00"
+  },
+  "OBAMS:1h": {
+   "deneme": 1,
+   "dosya": "OBAMS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "OBAMS",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "OBAMS.IS",
+   "zaman": "2026-10-19T13:45:26+00:00"
+  },
+  "ODAS:1d": {
+   "deneme": 1,
+   "dosya": "ODAS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ODAS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ODAS.IS",
+   "zaman": "2026-10-19T13:45:30+00:00"
+  },
+  "ODAS:1h": {
+   "deneme": 1,
+   "dosya": "ODAS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "ODAS",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.2,
+   "ticker": "ODAS.IS",
+   "zaman": "2026-10-19T13:45:30+00:00"
+  },
+  "OFSYM:1d": {
+   "deneme": 1,
+   "dosya": "OFSYM_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "OFSYM",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "OFSYM.IS",
+   "zaman": "2026-10-19T13:45:46+00:00"
+  },
+  "OFSYM:1h": {
+   "deneme": 1,
+   "dosya": "OFSYM_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "OFSYM",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 15.4,
+   "ticker": "OFSYM.IS",
+   "zaman": "2026-10-19T13:45:46+00:00"
+  },
+  "OTKAR:1d": {
+   "deneme": 1,
+   "dosya": "OTKAR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "OTKAR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "OTKAR.IS",
+   "zaman": "2026-10-19T13:45:50+00:00"
+  },
+  "OTKAR:1h": {
+   "deneme": 1,
+   "dosya": "OTKAR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "OTKAR",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "OTKAR.IS",
+   "zaman": "2026-10-19T13:45:49+00:00"
+  },
+  "OYAKC:1d": {
+   "deneme": 1,
+   "dosya": "OYAKC_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "OYAKC",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.7,
+   "ticker": "OYAKC.IS",
+   "zaman": "2026-10-19T13:45:53+00:00"
+  },
+  "OYAKC:1h": {
+   "deneme": 1,
+   "dosya": "OYAKC_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "OYAKC",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.6,
+   "ticker": "OYAKC.IS",
+   "zaman": "2026-10-19T13:45:52+00:00"
+  },
+  "OZGYO:1d": {
+   "deneme": 1,
+   "dosya": "OZGYO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "OZGYO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.7,
+   "ticker": "OZGYO.IS",
+   "zaman": "2026-10-19T13:45:57+00:00"
+  },
+  "OZGYO:1h": {
+   "deneme": 1,
+   "dosya": "OZGYO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 341,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "OZGYO",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "OZGYO.IS",
+   "zaman": "2026-10-19T13:45:56+00:00"
+  },
+  "OZKGY:1d": {
+   "deneme": 1,
+   "dosya": "OZKGY_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "OZKGY",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "OZKGY.IS",
+   "zaman": "2026-10-19T13:46:01+00:00"
+  },
+  "OZKGY:1h": {
+   "deneme": 1,
+   "dosya": "OZKGY_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 349,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3253
+   },
+   "period": "365d",
+   "satir": 3253,
+   "sembol": "OZKGY",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.3,
+   "ticker": "OZKGY.IS",
+   "zaman": "2026-10-19T13:46:00+00:00"
+  },
+  "OZSUB:1d": {
+   "deneme": 1,
+   "dosya": "OZSUB_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "OZSUB",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "OZSUB.IS",
+   "zaman": "2026-10-19T13:46:15+00:00"
+  },
+  "OZSUB:1h": {
+   "deneme": 1,
+   "dosya": "OZSUB_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3254
+   },
+   "period": "365d",
+   "satir": 3254,
+   "sembol": "OZSUB",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 13.9,
+   "ticker": "OZSUB.IS",
+   "zaman": "2026-10-19T13:46:15+00:00"
+  },
+  "PAMEL:1d": {
+   "deneme": 1,
+   "dosya": "PAMEL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "PAMEL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "PAMEL.IS",
+   "zaman": "2026-10-19T13:46:19+00:00"
+  },
+  "PAMEL:1h": {
+   "deneme": 1,
+   "dosya": "PAMEL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 3253
+   },
+   "period": "365d",
+   "satir": 3253,
+   "sembol": "PAMEL",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "PAMEL.IS",
+   "zaman": "2026-10-19T13:46:18+00:00"
+  },
+  "PAPIL:1d": {
+   "deneme": 1,
+   "dosya": "PAPIL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "PAPIL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "PAPIL.IS",
+   "zaman": "2026-10-19T13:46:22+00:00"
+  },
+  "PAPIL:1h": {
+   "deneme": 1,
+   "dosya": "PAPIL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 350,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "PAPIL",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "PAPIL.IS",
+   "zaman": "2026-10-19T13:46:22+00:00"
+  },
+  "PASEU:1d": {
+   "deneme": 1,
+   "dosya": "PASEU_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "PASEU",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "PASEU.IS",
+   "zaman": "2026-10-19T13:46:26+00:00"
+  },
+  "PASEU:1h": {
+   "deneme": 1,
+   "dosya": "PASEU_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 3,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "PASEU",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "PASEU.IS",
+   "zaman": "2026-10-19T13:46:25+00:00"
+  },
+  "PEKGY:1d": {
+   "deneme": 1,
+   "dosya": "PEKGY_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 1,
+    "split_sicramasi_adayi": 2,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "PEKGY",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "PEKGY.IS",
+   "zaman": "2026-10-19T13:46:30+00:00"
+  },
+  "PEKGY:1h": {
+   "deneme": 1,
+   "dosya": "PEKGY_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 341,
+    "split_sicramasi_adayi": 4,
+    "toplam_bar": 3140
+   },
+   "period": "365d",
+   "satir": 3140,
+   "sembol": "PEKGY",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.0,
+   "ticker": "PEKGY.IS",
+   "zaman": "2026-10-19T13:46:29+00:00"
+  },
+  "PENTA:1d": {
+   "deneme": 1,
+   "dosya": "PENTA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "PENTA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "PENTA.IS",
+   "zaman": "2026-10-19T13:46:43+00:00"
+  },
+  "PENTA:1h": {
+   "deneme": 1,
+   "dosya": "PENTA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "PENTA",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 12.6,
+   "ticker": "PENTA.IS",
+   "zaman": "2026-10-19T13:46:42+00:00"
+  },
+  "PETKM:1d": {
+   "deneme": 1,
+   "dosya": "PETKM_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "PETKM",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "PETKM.IS",
+   "zaman": "2026-10-19T13:46:46+00:00"
+  },
+  "PETKM:1h": {
+   "deneme": 1,
+   "dosya": "PETKM_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "PETKM",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "PETKM.IS",
+   "zaman": "2026-10-19T13:46:46+00:00"
+  },
+  "PGSUS:1d": {
+   "deneme": 1,
+   "dosya": "PGSUS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "PGSUS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "PGSUS.IS",
+   "zaman": "2026-10-19T13:46:50+00:00"
+  },
+  "PGSUS:1h": {
+   "deneme": 1,
+   "dosya": "PGSUS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "PGSUS",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "PGSUS.IS",
+   "zaman": "2026-10-19T13:46:49+00:00"
+  },
+  "QUAGR:1d": {
+   "deneme": 1,
+   "dosya": "QUAGR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "QUAGR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "QUAGR.IS",
+   "zaman": "2026-10-19T13:46:53+00:00"
+  },
+  "QUAGR:1h": {
+   "deneme": 1,
+   "dosya": "QUAGR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 247,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3169
+   },
+   "period": "365d",
+   "satir": 3169,
+   "sembol": "QUAGR",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "QUAGR.IS",
+   "zaman": "2026-10-19T13:46:53+00:00"
+  },
+  "REEDR:1d": {
+   "deneme": 1,
+   "dosya": "REEDR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "REEDR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "REEDR.IS",
+   "zaman": "2026-10-19T13:46:56+00:00"
+  },
+  "REEDR:1h": {
+   "deneme": 1,
+   "dosya": "REEDR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "REEDR",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.6,
+   "ticker": "REEDR.IS",
+   "zaman": "2026-10-19T13:46:56+00:00"
+  },
+  "RTALB:1d": {
+   "deneme": 1,
+   "dosya": "RTALB_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "RTALB",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "RTALB.IS",
+   "zaman": "2026-10-19T13:47:10+00:00"
+  },
+  "RTALB:1h": {
+   "deneme": 1,
+   "dosya": "RTALB_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 333,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "RTALB",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 13.5,
+   "ticker": "RTALB.IS",
+   "zaman": "2026-10-19T13:47:10+00:00"
+  },
+  "SAHOL:1d": {
+   "deneme": 1,
+   "dosya": "SAHOL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SAHOL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "SAHOL.IS",
+   "zaman": "2026-10-19T13:47:14+00:00"
+  },
+  "SAHOL:1h": {
+   "deneme": 1,
+   "dosya": "SAHOL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "SAHOL",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "SAHOL.IS",
+   "zaman": "2026-10-19T13:47:13+00:00"
+  },
+  "SASA:1d": {
+   "deneme": 1,
+   "dosya": "SASA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 149,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SASA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "SASA.IS",
+   "zaman": "2026-10-19T13:47:17+00:00"
+  },
+  "SASA:1h": {
+   "deneme": 1,
+   "dosya": "SASA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 377,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "SASA",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "SASA.IS",
+   "zaman": "2026-10-19T13:47:17+00:00"
+  },
+  "SAYAS:1d": {
+   "deneme": 1,
+   "dosya": "SAYAS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SAYAS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "SAYAS.IS",
+   "zaman": "2026-10-19T13:47:20+00:00"
+  },
+  "SAYAS:1h": {
+   "deneme": 1,
+   "dosya": "SAYAS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "SAYAS",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "SAYAS.IS",
+   "zaman": "2026-10-19T13:47:20+00:00"
+  },
+  "SDTTR:1d": {
+   "deneme": 1,
+   "dosya": "SDTTR_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SDTTR",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.7,
+   "ticker": "SDTTR.IS",
+   "zaman": "2026-10-19T13:47:25+00:00"
+  },
+  "SDTTR:1h": {
+   "deneme": 1,
+   "dosya": "SDTTR_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 338,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "SDTTR",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.5,
+   "ticker": "SDTTR.IS",
+   "zaman": "2026-10-19T13:47:24+00:00"
+  },
+  "SELEC:1d": {
+   "deneme": 1,
+   "dosya": "SELEC_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SELEC",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.7,
+   "ticker": "SELEC.IS",
+   "zaman": "2026-10-19T13:47:40+00:00"
+  },
+  "SELEC:1h": {
+   "deneme": 1,
+   "dosya": "SELEC_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 339,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "SELEC",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 14.7,
+   "ticker": "SELEC.IS",
+   "zaman": "2026-10-19T13:47:40+00:00"
+  },
+  "SELVA:1d": {
+   "deneme": 1,
+   "dosya": "SELVA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SELVA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "SELVA.IS",
+   "zaman": "2026-10-19T13:47:44+00:00"
+  },
+  "SELVA:1h": {
+   "deneme": 1,
+   "dosya": "SELVA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 341,
+    "split_sicramasi_adayi": 3,
+    "toplam_bar": 3145
+   },
+   "period": "365d",
+   "satir": 3145,
+   "sembol": "SELVA",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "SELVA.IS",
+   "zaman": "2026-10-19T13:47:43+00:00"
+  },
+  "SEYKM:1d": {
+   "deneme": 1,
+   "dosya": "SEYKM_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SEYKM",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "SEYKM.IS",
+   "zaman": "2026-10-19T13:47:47+00:00"
+  },
+  "SEYKM:1h": {
+   "deneme": 1,
+   "dosya": "SEYKM_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 255,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3167
+   },
+   "period": "365d",
+   "satir": 3167,
+   "sembol": "SEYKM",
+   "son_bar": "2026-10-19 15:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "SEYKM.IS",
+   "zaman": "2026-10-19T13:47:46+00:00"
+  },
+  "SISE:1d": {
+   "deneme": 1,
+   "dosya": "SISE_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SISE",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.7,
+   "ticker": "SISE.IS",
+   "zaman": "2026-10-19T13:47:51+00:00"
+  },
+  "SISE:1h": {
+   "deneme": 1,
+   "dosya": "SISE_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "SISE",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "SISE.IS",
+   "zaman": "2026-10-19T13:47:50+00:00"
+  },
+  "SKBNK:1d": {
+   "deneme": 1,
+   "dosya": "SKBNK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SKBNK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "SKBNK.IS",
+   "zaman": "2026-10-19T13:47:54+00:00"
+  },
+  "SKBNK:1h": {
+   "deneme": 1,
+   "dosya": "SKBNK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "SKBNK",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.6,
+   "ticker": "SKBNK.IS",
+   "zaman": "2026-10-19T13:47:54+00:00"
+  },
+  "SMRTG:1d": {
+   "deneme": 1,
+   "dosya": "SMRTG_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SMRTG",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "SMRTG.IS",
+   "zaman": "2026-10-19T13:48:07+00:00"
+  },
+  "SMRTG:1h": {
+   "deneme": 1,
+   "dosya": "SMRTG_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 342,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "SMRTG",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 12.7,
+   "ticker": "SMRTG.IS",
+   "zaman": "2026-10-19T13:48:07+00:00"
+  },
+  "SNGYO:1d": {
+   "deneme": 1,
+   "dosya": "SNGYO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SNGYO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "SNGYO.IS",
+   "zaman": "2026-10-19T13:48:11+00:00"
+  },
+  "SNGYO:1h": {
+   "deneme": 1,
+   "dosya": "SNGYO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "SNGYO",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "SNGYO.IS",
+   "zaman": "2026-10-19T13:48:10+00:00"
+  },
+  "SNICA:1d": {
+   "deneme": 1,
+   "dosya": "SNICA_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SNICA",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "SNICA.IS",
+   "zaman": "2026-10-19T13:48:14+00:00"
+  },
+  "SNICA:1h": {
+   "deneme": 1,
+   "dosya": "SNICA_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "SNICA",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "SNICA.IS",
+   "zaman": "2026-10-19T13:48:14+00:00"
+  },
+  "SOKE:1d": {
+   "deneme": 1,
+   "dosya": "SOKE_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "SOKE",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "SOKE.IS",
+   "zaman": "2026-10-19T13:48:17+00:00"
+  },
+  "SOKE:1h": {
+   "deneme": 1,
+   "dosya": "SOKE_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "SOKE",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.6,
+   "ticker": "SOKE.IS",
+   "zaman": "2026-10-19T13:48:17+00:00"
+  },
+  "TAVHL:1d": {
+   "deneme": 1,
+   "dosya": "TAVHL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "TAVHL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "TAVHL.IS",
+   "zaman": "2026-10-19T13:48:21+00:00"
+  },
+  "TAVHL:1h": {
+   "deneme": 1,
+   "dosya": "TAVHL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "TAVHL",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "TAVHL.IS",
+   "zaman": "2026-10-19T13:48:20+00:00"
+  },
+  "TCELL:1d": {
+   "deneme": 1,
+   "dosya": "TCELL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "TCELL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "TCELL.IS",
+   "zaman": "2026-10-19T13:48:36+00:00"
+  },
+  "TCELL:1h": {
+   "deneme": 1,
+   "dosya": "TCELL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "TCELL",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 14.6,
+   "ticker": "TCELL.IS",
+   "zaman": "2026-10-19T13:48:35+00:00"
+  },
+  "THYAO:1d": {
+   "deneme": 1,
+   "dosya": "THYAO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "THYAO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "THYAO.IS",
+   "zaman": "2026-10-19T13:48:39+00:00"
+  },
+  "THYAO:1h": {
+   "deneme": 1,
+   "dosya": "THYAO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "THYAO",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "THYAO.IS",
+   "zaman": "2026-10-19T13:48:39+00:00"
+  },
+  "TKFEN:1d": {
+   "deneme": 1,
+   "dosya": "TKFEN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "TKFEN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "TKFEN.IS",
+   "zaman": "2026-10-19T13:48:43+00:00"
+  },
+  "TKFEN:1h": {
+   "deneme": 1,
+   "dosya": "TKFEN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "TKFEN",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "TKFEN.IS",
+   "zaman": "2026-10-19T13:48:43+00:00"
+  },
+  "TOASO:1d": {
+   "deneme": 1,
+   "dosya": "TOASO_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "TOASO",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "TOASO.IS",
+   "zaman": "2026-10-19T13:48:47+00:00"
+  },
+  "TOASO:1h": {
+   "deneme": 1,
+   "dosya": "TOASO_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "TOASO",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "TOASO.IS",
+   "zaman": "2026-10-19T13:48:46+00:00"
+  },
+  "TSKB:1d": {
+   "deneme": 1,
+   "dosya": "TSKB_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "TSKB",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "TSKB.IS",
+   "zaman": "2026-10-19T13:48:50+00:00"
+  },
+  "TSKB:1h": {
+   "deneme": 1,
+   "dosya": "TSKB_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "TSKB",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.7,
+   "ticker": "TSKB.IS",
+   "zaman": "2026-10-19T13:48:50+00:00"
+  },
+  "TTKOM:1d": {
+   "deneme": 1,
+   "dosya": "TTKOM_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "TTKOM",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "TTKOM.IS",
+   "zaman": "2026-10-19T13:49:07+00:00"
+  },
+  "TTKOM:1h": {
+   "deneme": 1,
+   "dosya": "TTKOM_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "TTKOM",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 15.6,
+   "ticker": "TTKOM.IS",
+   "zaman": "2026-10-19T13:49:06+00:00"
+  },
+  "TTRAK:1d": {
+   "deneme": 1,
+   "dosya": "TTRAK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "TTRAK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.4,
+   "ticker": "TTRAK.IS",
+   "zaman": "2026-10-19T13:49:10+00:00"
+  },
+  "TTRAK:1h": {
+   "deneme": 1,
+   "dosya": "TTRAK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "TTRAK",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.6,
+   "ticker": "TTRAK.IS",
+   "zaman": "2026-10-19T13:49:09+00:00"
+  },
+  "TUKAS:1d": {
+   "deneme": 1,
+   "dosya": "TUKAS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "TUKAS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "TUKAS.IS",
+   "zaman": "2026-10-19T13:49:13+00:00"
+  },
+  "TUKAS:1h": {
+   "deneme": 1,
+   "dosya": "TUKAS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "TUKAS",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "TUKAS.IS",
+   "zaman": "2026-10-19T13:49:13+00:00"
+  },
+  "TUPRS:1d": {
+   "deneme": 1,
+   "dosya": "TUPRS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "TUPRS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "TUPRS.IS",
+   "zaman": "2026-10-19T13:49:17+00:00"
+  },
+  "TUPRS:1h": {
+   "deneme": 1,
+   "dosya": "TUPRS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "TUPRS",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "TUPRS.IS",
+   "zaman": "2026-10-19T13:49:16+00:00"
+  },
+  "TURSG:1d": {
+   "deneme": 1,
+   "dosya": "TURSG_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "TURSG",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "TURSG.IS",
+   "zaman": "2026-10-19T13:49:21+00:00"
+  },
+  "TURSG:1h": {
+   "deneme": 1,
+   "dosya": "TURSG_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "TURSG",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.3,
+   "ticker": "TURSG.IS",
+   "zaman": "2026-10-19T13:49:20+00:00"
+  },
+  "ULKER:1d": {
+   "deneme": 1,
+   "dosya": "ULKER_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ULKER",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "ULKER.IS",
+   "zaman": "2026-10-19T13:49:37+00:00"
+  },
+  "ULKER:1h": {
+   "deneme": 1,
+   "dosya": "ULKER_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 347,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "ULKER",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 14.9,
+   "ticker": "ULKER.IS",
+   "zaman": "2026-10-19T13:49:36+00:00"
+  },
+  "ULUUN:1d": {
+   "deneme": 1,
+   "dosya": "ULUUN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ULUUN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ULUUN.IS",
+   "zaman": "2026-10-19T13:49:40+00:00"
+  },
+  "ULUUN:1h": {
+   "deneme": 1,
+   "dosya": "ULUUN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "ULUUN",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.6,
+   "ticker": "ULUUN.IS",
+   "zaman": "2026-10-19T13:49:39+00:00"
+  },
+  "VAKBN:1d": {
+   "deneme": 1,
+   "dosya": "VAKBN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "VAKBN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "VAKBN.IS",
+   "zaman": "2026-10-19T13:49:43+00:00"
+  },
+  "VAKBN:1h": {
+   "deneme": 1,
+   "dosya": "VAKBN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "VAKBN",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "VAKBN.IS",
+   "zaman": "2026-10-19T13:49:43+00:00"
+  },
+  "VERUS:1d": {
+   "deneme": 1,
+   "dosya": "VERUS_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "VERUS",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "VERUS.IS",
+   "zaman": "2026-10-19T13:49:47+00:00"
+  },
+  "VERUS:1h": {
+   "deneme": 1,
+   "dosya": "VERUS_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 346,
+    "split_sicramasi_adayi": 3,
+    "toplam_bar": 3256
+   },
+   "period": "365d",
+   "satir": 3256,
+   "sembol": "VERUS",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "VERUS.IS",
+   "zaman": "2026-10-19T13:49:46+00:00"
+  },
+  "VESBE:1d": {
+   "deneme": 1,
+   "dosya": "VESBE_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "VESBE",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "VESBE.IS",
+   "zaman": "2026-10-19T13:49:51+00:00"
+  },
+  "VESBE:1h": {
+   "deneme": 1,
+   "dosya": "VESBE_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 345,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "VESBE",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 3.1,
+   "ticker": "VESBE.IS",
+   "zaman": "2026-10-19T13:49:50+00:00"
+  },
+  "VESTL:1d": {
+   "deneme": 1,
+   "dosya": "VESTL_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "VESTL",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "VESTL.IS",
+   "zaman": "2026-10-19T13:50:05+00:00"
+  },
+  "VESTL:1h": {
+   "deneme": 1,
+   "dosya": "VESTL_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 344,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "VESTL",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 14.3,
+   "ticker": "VESTL.IS",
+   "zaman": "2026-10-19T13:50:05+00:00"
+  },
+  "XU100:1d": {
+   "deneme": 1,
+   "dosya": "XU100_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 1,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 499
+   },
+   "period": "2y",
+   "satir": 499,
+   "sembol": "XU100",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "XU100.IS",
+   "zaman": "2026-10-19T13:50:09+00:00"
+  },
+  "XU100:1h": {
+   "deneme": 1,
+   "dosya": "XU100_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 3255,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "XU100",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.5,
+   "ticker": "XU100.IS",
+   "zaman": "2026-10-19T13:50:08+00:00"
+  },
+  "XU30:1d": {
+   "deneme": 1,
+   "dosya": "XU30_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 1,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 499
+   },
+   "period": "2y",
+   "satir": 499,
+   "sembol": "XU30",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.8,
+   "ticker": "XU030.IS",
+   "zaman": "2026-10-19T13:50:12+00:00"
+  },
+  "XU30:1h": {
+   "deneme": 1,
+   "dosya": "XU30_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 3255,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "XU30",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.6,
+   "ticker": "XU030.IS",
+   "zaman": "2026-10-19T13:50:11+00:00"
+  },
+  "YEOTK:1d": {
+   "deneme": 1,
+   "dosya": "YEOTK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "YEOTK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "YEOTK.IS",
+   "zaman": "2026-10-19T13:50:16+00:00"
+  },
+  "YEOTK:1h": {
+   "deneme": 1,
+   "dosya": "YEOTK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 338,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "YEOTK",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.8,
+   "ticker": "YEOTK.IS",
+   "zaman": "2026-10-19T13:50:15+00:00"
+  },
+  "YKBNK:1d": {
+   "deneme": 1,
+   "dosya": "YKBNK_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "YKBNK",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "YKBNK.IS",
+   "zaman": "2026-10-19T13:50:19+00:00"
+  },
+  "YKBNK:1h": {
+   "deneme": 1,
+   "dosya": "YKBNK_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 350,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "YKBNK",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.9,
+   "ticker": "YKBNK.IS",
+   "zaman": "2026-10-19T13:50:19+00:00"
+  },
+  "YYAPI:1d": {
+   "deneme": 1,
+   "dosya": "YYAPI_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 9,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "YYAPI",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.6,
+   "ticker": "YYAPI.IS",
+   "zaman": "2026-10-19T13:50:33+00:00"
+  },
+  "YYAPI:1h": {
+   "deneme": 1,
+   "dosya": "YYAPI_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 343,
+    "split_sicramasi_adayi": 3,
+    "toplam_bar": 2457
+   },
+   "period": "365d",
+   "satir": 2457,
+   "sembol": "YYAPI",
+   "son_bar": "2026-10-19 13:30:00+03:00",
+   "sure_sn": 12.8,
+   "ticker": "YYAPI.IS",
+   "zaman": "2026-10-19T13:50:32+00:00"
+  },
+  "ZOREN:1d": {
+   "deneme": 1,
+   "dosya": "ZOREN_1d.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2024-10-21 00:00:00+03:00",
+   "interval": "1d",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 0,
+    "split_sicramasi_adayi": 0,
+    "toplam_bar": 501
+   },
+   "period": "2y",
+   "satir": 501,
+   "sembol": "ZOREN",
+   "son_bar": "2026-10-19 00:00:00+03:00",
+   "sure_sn": 0.5,
+   "ticker": "ZOREN.IS",
+   "zaman": "2026-10-19T13:50:36+00:00"
+  },
+  "ZOREN:1h": {
+   "deneme": 1,
+   "dosya": "ZOREN_1h.csv.gz",
+   "durum": "ok",
+   "ilk_bar": "2025-05-07 09:30:00+03:00",
+   "interval": "1h",
+   "kalite": {
+    "nan_ohlc": 0,
+    "sifir_hacim": 348,
+    "split_sicramasi_adayi": 1,
+    "toplam_bar": 3255
+   },
+   "period": "365d",
+   "satir": 3255,
+   "sembol": "ZOREN",
+   "son_bar": "2026-10-19 16:30:00+03:00",
+   "sure_sn": 2.6,
+   "ticker": "ZOREN.IS",
+   "zaman": "2026-10-19T13:50:35+00:00"
+  }
+ },
+ "kosular": [
+  {
+   "araliklar": [
+    "1h",
+    "1d"
+   ],
+   "ban_korumasi_durdurdu": false,
+   "basladi": "2026-10-19T13:34:08+00:00",
+   "mod": "backfill",
+   "period_1d": "2y",
+   "period_1h": "365d",
+   "sembol_sayisi": 10,
+   "soguma_sayisi": 0,
+   "sonuclar": {
+    "atlandi": 0,
+    "diger": 0,
+    "gecici": 0,
+    "kalici": 0,
+    "ok": 20
+   },
+   "sure_sn": 52.2,
+   "toplam_istek": 20
+  },
+  {
+   "araliklar": [
+    "1h",
+    "1d"
+   ],
+   "ban_korumasi_durdurdu": false,
+   "basladi": "2026-10-19T13:50:36+00:00",
+   "mod": "backfill",
+   "period_1d": "2y",
+   "period_1h": "365d",
+   "sembol_sayisi": 177,
+   "soguma_sayisi": 0,
+   "sonuclar": {
+    "atlandi": 20,
+    "diger": 0,
+    "gecici": 0,
+    "kalici": 0,
+    "ok": 334
+   },
+   "sure_sn": 982.5,
+   "toplam_istek": 334
+  }
+ ],
+ "son_kosu": {
+  "araliklar": [
+   "1h",
+   "1d"
+  ],
+  "ban_korumasi_durdurdu": false,
+  "basladi": "2026-10-19T13:50:36+00:00",
+  "mod": "backfill",
+  "period_1d": "2y",
+  "period_1h": "365d",
+  "sembol_sayisi": 177,
+  "soguma_sayisi": 0,
+  "sonuclar": {
+   "atlandi": 20,
+   "diger": 0,
+   "gecici": 0,
+   "kalici": 0,
+   "ok": 334
+  },
+  "sure_sn": 982.5,
+  "toplam_istek": 334
+ }
+}
