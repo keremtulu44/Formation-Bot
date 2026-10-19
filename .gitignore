@@ -76,3 +76,4 @@ raporlar/
 **/notification_delivery.tmp
 
 .pytest-full.log
+arastirma_cikti/
