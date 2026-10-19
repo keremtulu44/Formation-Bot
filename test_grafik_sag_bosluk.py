@@ -385,8 +385,12 @@ def _daralan(apex_bar):
 
 @pytest.mark.parametrize("apex_bar, son_x, isaret_x", [
     (25, 25, 25),       # boşluğun İÇİNDE → çizgiler apex'te biter, ✕ kesişimde
-    (40, 28, None),     # boşluğun ÖTESİNDE → çizgiler kenara kadar, ✕ görünmez
-    (20, 24, None),     # GERİDE kaldı → uzatma yok (kesişip ters dönen çizgi uydurulmaz)
+    # boşluğun ÖTESİNDE: doğruların GERÇEK kesişimi (bar 25) apex_bar'dan önce
+    # gelir → çizgiler kesişimde biter. Eski davranış (kenara kadar çiz) tepeyi
+    # aşıp X çizen doğrular üretiyordu (kullanıcı: "kırpılıyormuş gibi").
+    (40, 25, None),
+    # GERİDE kaldı → bant apex'te biter; kesişip ters dönen çizgi uydurulmaz.
+    (20, 20, None),
 ])
 def test_bant_apeks_kurallari(apex_bar, son_x, isaret_x):
     ax = fc._eksen()

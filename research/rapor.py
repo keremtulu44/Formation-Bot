@@ -532,6 +532,14 @@ def rapor_uret(
 
     bolumler: list[str] = []
     bolumler.append("# Formation-Bot Arşiv Araştırma Raporu\n")
+    # Uzunluk/okunurluk (kullanıcı: "çıktı gereksiz uzuyorsa çözüm var mı"):
+    # bu dosya TABLO EKİDİR — ham aggregatlar soru başına bölümlenir ve yüzlerce
+    # satır sürer. Okunabilir özet + yorum ayrı belgededir; raporun başına
+    # konan bu işaret, karar için okuyanı ekteki tablolara indirmeden yönlendirir.
+    bolumler.append(
+        "> Bu dosya tablo ekidir: ham aggregatlar soru başına bölümlenir.\n"
+        "> Okunabilir özet ve yorum: `docs/ARASTIRMA_SONUCLARI.md`.\n"
+        "> Yalnız karar için okuyan, aşağıdaki tablolara inmeden özetle yetinebilir.\n")
     bolumler.append(
         f"Kaynak: `backfill_data/` (365 gün derin çekim) · Sembol: {sembol_sayisi} · "
         f"Havuz dışı: {', '.join(havuz_disi) or 'yok'}\n"

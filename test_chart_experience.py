@@ -287,7 +287,7 @@ def test_price_chip_order_is_preserved_around_fixed_last_price():
         {'tip': 'fvg', 'yon': -1, 'alt': 294., 'ust': 297.25, 'durum': 'ACTIVE'}]}
     chips = grafik._zone_sag_adaylari(zones, 60)
     chips += [{'kaynak': 'son', 'y': 290.5, 'metin': '290,50', 'renk': '#ffffff', 'sabit': True, 'oncelik': 9},
-              {'kaynak': 'olay', 'y': 289.25, 'metin': 'kritik 289,25\nBOS referansı', 'renk': '#ffffff', 'oncelik': 5}]
+              {'kaynak': 'olay', 'y': 289.25, 'metin': 'kritik 289,25 · BOS', 'renk': '#ffffff', 'oncelik': 5}]
     result = grafik._sag_ciz(ax, fig, chips, 60, (255, 325))
     ordered = sorted(chips, key=lambda c: c['y'])
     assert result['sirali'] and result['atlanan'] == 0

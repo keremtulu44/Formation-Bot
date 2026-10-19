@@ -1,4 +1,19 @@
 # Formation-Bot Arşiv Araştırma Raporu
+> Bu dosya tablo ekidir: ham aggregatlar soru başına bölümlenir.
+> Okunabilir özet ve yorum: `docs/ARASTIRMA_SONUCLARI.md`.
+> Yalnız karar için okuyan, aşağıdaki tablolara inmeden özetle yetinebilir.
+
+## ÖZET — ilk bakışta (176 sembol × 4 TF, 994.142 gözlem)
+- **OB yeniden test edilir** (%12,9'u 3+ kez, en çok 20 epizot); **FVG tek kullanımlık** (3+ deneme 55.145'te 4; %23'ü hiç dokunulmamış).
+- **OB %85–94 sonunda geçilir**, ama dokunuşların %65–67'si ≥1 ATR tepki verir → zone bir *zamanlama* aracı, bariyer değil. FVG tam dolum %40–43.
+- **Destek tepkisi dirençten büyük** (1d: 2,187'ye 1,660 ATR). Eşik eğrisi düz: ≥0,25 ATR %74–77, ≥1 ATR %58–61, ≥2 ATR %38–40.
+- **Zone boyu ayırt edici ve monoton**: uzun zone erken tepki verip tutuyor (CALISTI %64,3→%71,0), kısa zone geç tepki verip geri veriyor.
+- **MS yön uyumu %97–98**; BOS sonrası devam ~%70; UP BOS, DOWN BOS'tan ~8 puan iyi; INTERNAL biraz zayıf ama daha sık.
+- **PH teste dayanmaz** (%36,0 → 4+ testte %8,0); **PL tutar** (%37,5 → %33,3).
+- **WH/WL medyan 3 native bar**'da süpürülür; WL ~3–5 puan daha çok; INTERNAL > EXTERNAL.
+- **Hacim sezgiye ters**: dokunuşta yüksek RVOL → daha ZAYIF tepki (4h Q1 %70,1 → Q4 %61,0). Hacim burada teyit değil ihlal sinyali.
+- **MS %5,0 seride çöküyor** (35/704) — canlı bot bu serilerde MS alanını sessizce boş bırakıyor (liste: `docs/arastirma_ms_hatali_seriler.txt`).
+
 Kaynak: `backfill_data/` (365 gün derin çekim) · Sembol: 176 · Havuz dışı: BRENT
 
 ## Kapsam
