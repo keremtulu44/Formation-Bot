@@ -363,6 +363,10 @@ def _senaryo_bayrak_aday():
             "hb1": 173, "hp1": round(ust_bas, 2), "hb2": 209, "hp2": round(ust_simdi, 2),
             "lb1": 173, "lp1": round(alt_bas, 2), "lb2": 209, "lp2": round(alt_simdi, 2),
             "upper_touches": 3, "lower_touches": 3, "direction": 1,
+            # Direk (pole): bar 160..172 impulsu. Motorun ürettiği alan adları
+            # aynen taşınır — karta kopyalanmadığında grafikte ÇİZİLEMİYORDU.
+            "has_pole": True, "pole_dir": 1, "pole_duration": 13,
+            "pole_magnitude": 6.40, "pole_quality": 82.0,
             "critical_price_level": round(ust_simdi, 2), "progress": 0.68,
             "evidence_text": "direk +%19 · kanal daralması %33 · son 4 bar üst banda"}
     sonuclar = _sonuclar(
@@ -417,6 +421,11 @@ def _senaryo_flama_teyit():
     cift = {"pattern_name": "Boğa Flaması", "state": "KIRILIM_TEYITLI",
             "quality": 83.0, "contraction": 0.22, "start_bar": 75, "end_bar": 111,
             "apex_bar": 168, "upper_now": ust_teyit, "lower_now": 47.20,
+            # Direk (pole): bar 60..74 impulsu (42 → 49). `apex_bar` (168) son
+            # mumdan ÖNCE olduğu için bant doğruları artık apex'te biter; eskiden
+            # tepeyi aşıp kesişiyorlardı.
+            "has_pole": True, "pole_dir": 1, "pole_duration": 15,
+            "pole_magnitude": 7.00, "pole_quality": 84.0,
             "hb1": 75, "hp1": 47.88, "hb2": 111, "hp2": ust_teyit,
             "lb1": 75, "lp1": 47.00, "lb2": 111, "lp2": 47.20,
             "upper_touches": 3, "lower_touches": 3, "break_price": ust_teyit,
@@ -660,7 +669,10 @@ def main(argv=None) -> int:
     if sec.liste:
         for ad, uretici in SENARYOLAR.items():
             isaret = " [manşet]" if ad in MANSITLER else ""
-            print(f"{ad}{isaret} — {uretici().__doc__.strip().splitlines()[0]}")
+            # `uretici().__doc__` fonksiyonu ÇAĞIRIP dönen dict'in docstring'ini
+            # alıyordu ("dict() -> new empty dictionary"); açıklama fonksiyonun
+            # KENDİ docstring'idir.
+            print(f"{ad}{isaret} — {(uretici.__doc__ or '').strip().splitlines()[0]}")
         return 0
 
     if sec.senaryo == "hepsi":

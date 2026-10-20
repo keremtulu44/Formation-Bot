@@ -155,7 +155,7 @@ def test_kritik_yazisi_tek_kopya_kalir():
     goruntu["olay"]["kritik"] = {"bar": 50, "seviye": 98.0, "tur": "CHoCH"}
     grafik._olay_ciz(ax, goruntu, 60, sag)
     metinler = [a["metin"] for a in sag]
-    assert "kritik 98,00\nCHoCH referansı" in metinler
+    assert "kritik 98,00 · CHoCH" in metinler   # tek satır: şeritte dikey yer kazandırır
     assert "CHoCH↓" not in metinler          # olay etiketi grafikte, şeritte değil
 
 

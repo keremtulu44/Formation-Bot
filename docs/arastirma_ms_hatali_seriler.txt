@@ -1,0 +1,39 @@
+# MS motoru bu serilerde ValueError ile patladı (canlı botta domain sessizce boş kalır).
+# Kaynak: 704 serilik arşiv koşusu, 35 seri (%5.0). Hata: "confirmed break references must still be active"
+# sütunlar: symbol timeframe bar_sayisi hata
+
+EBEBK	1d	501	ValueError: confirmed break references must still be active
+FROTO	1d	501	ValueError: confirmed break references must still be active
+GARFA	1d	501	ValueError: confirmed break references must still be active
+QUAGR	1d	501	ValueError: confirmed break references must still be active
+SNICA	1d	501	ValueError: confirmed break references must still be active
+AEFES	1h	3254	ValueError: confirmed break references must still be active
+ALFAS	1h	3254	ValueError: confirmed break references must still be active
+BIOEN	1h	3254	ValueError: confirmed break references must still be active
+BRKVY	1h	3254	ValueError: confirmed break references must still be active
+CEMAS	1h	3158	ValueError: confirmed break references must still be active
+CVKMD	1h	3254	ValueError: confirmed break references must still be active
+CWENE	1h	3254	ValueError: confirmed break references must still be active
+EBEBK	1h	3254	ValueError: confirmed break references must still be active
+EUPWR	1h	3254	ValueError: confirmed break references must still be active
+GLYHO	1h	3254	ValueError: confirmed break references must still be active
+KARSN	1h	3254	ValueError: confirmed break references must still be active
+KLSER	1h	3254	ValueError: confirmed break references must still be active
+LMKDC	1h	3254	ValueError: confirmed break references must still be active
+MPARK	1h	3254	ValueError: confirmed break references must still be active
+PAMEL	1h	3253	ValueError: confirmed break references must still be active
+PASEU	1h	3255	ValueError: confirmed break references must still be active
+TTRAK	1h	3255	ValueError: confirmed break references must still be active
+ULUUN	1h	3255	ValueError: confirmed break references must still be active
+VERUS	1h	3256	ValueError: confirmed break references must still be active
+YEOTK	1h	3255	ValueError: confirmed break references must still be active
+ALGYO	2h	1804	ValueError: confirmed break references must still be active
+BERA	2h	1804	ValueError: confirmed break references must still be active
+HALKB	2h	1804	ValueError: confirmed break references must still be active
+ISGYO	2h	1803	ValueError: confirmed break references must still be active
+IZENR	2h	1804	ValueError: confirmed break references must still be active
+PENTA	2h	1804	ValueError: confirmed break references must still be active
+DIRIT	4h	1073	ValueError: confirmed break references must still be active
+FROTO	4h	1079	ValueError: confirmed break references must still be active
+ISGYO	4h	1078	ValueError: confirmed break references must still be active
+OFSYM	4h	1079	ValueError: confirmed break references must still be active
