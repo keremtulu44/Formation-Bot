@@ -1,3 +1,6 @@
+> **ARŞİV (2026-10-20):** Bu belge **yürürlükte değildir**; tarihsel kayıt olarak saklanır.
+> Güncel belge haritası: [docs/README.md](../README.md). Taşıma sırasında içerik değiştirilmedi.
+
 # 🔍 Formation-Bot Teşhis Raporu — Pine→Python Dönüşüm Testi
 
 **Tarih:** 2026-09-27 · **Yöntem:** Mevcut diagnostic'ler çalıştırıldı + `repo_teshis.py` ile ölçüm
@@ -6,7 +9,7 @@
 > (0 referans) ve `logrotate.conf` repodan kaldırıldı; aşağıdaki sayılar aracın kaldırılmasından
 > **önce** alınmış tarihsel ölçümlerdir. Aynı kontrolleri yinelemek için `test_triangle.py`,
 > `test_accuracy.py`, `collective_test.py` kullanılabilir.
-**Referans:** `FORMASYON_MANTIGI.md` (Pine v0.4.6 davranışının yazılı hali) + README + commit mesajları
+**Referans:** `docs/tasarim/FORMASYON_MANTIGI.md` (Pine v0.4.6 davranışının yazılı hali) + README + commit mesajları
 
 ---
 

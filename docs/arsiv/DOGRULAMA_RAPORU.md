@@ -1,3 +1,6 @@
+> **ARŞİV (2026-10-20):** Bu belge **yürürlükte değildir**; tarihsel kayıt olarak saklanır.
+> Güncel belge haritası: [docs/README.md](../README.md). Taşıma sırasında içerik değiştirilmedi.
+
 # Formation-Bot — Bağımsız Doğrulama Raporu
 
 **Tarih:** 2 Ekim 2026 · **Kapsam:** Soru 1 (bildirim zamanlaması) + Soru 2 (doğruluk karnesi önerisi) + Soru 3 (dışarıdan bakış: eksikler)
@@ -168,7 +171,7 @@ En iyi: ASELS 4h +%9.2 · En kötü: PETKM 1h −%5.1
 
 # Bölüm 3 — Dışarıdan Bakış: Eksikler
 
-Aşağıdakiler "kodu bilen biri" değil, "sistemi dışarıdan denetleyen biri" gözüyle sıralandı. Zaten `YAPILACAKLAR.md`'de olanlar (A1–A10, B1–B10, C1–C7) ayrıca işaretlendi; tekrar listelemedim.
+Aşağıdakiler "kodu bilen biri" değil, "sistemi dışarıdan denetleyen biri" gözüyle sıralandı. Zaten `docs/arsiv/YAPILACAKLAR.md`'de olanlar (A1–A10, B1–B10, C1–C7) ayrıca işaretlendi; tekrar listelemedim.
 
 ## P0 — Sessiz yanlış/eksik sinyal riski (önce bunlar)
 
@@ -201,7 +204,7 @@ Aşağıdakiler "kodu bilen biri" değil, "sistemi dışarıdan denetleyen biri"
 | P2-7 | **Eksik depolar metadata** | LICENSE yok; linter/type-check yok; testler kök dizinde dağınık | Kamuya açık repoda kullanım/lisans belirsizliği; kod kalitesi otomatik izlenmiyor |
 
 ### Zaten bilinenlerle eşleşme
-`YAPILACAKLAR.md`'de olan ve bu raporda tekrar etmediğim başlıklar: A1 (son_tarama merge), A2 (tatil/yarım gün döngüsü), A5 (4096/kap), A8 (.pkl), B1 (kullanılmayan sinyal göstergesi), B3 (digest kalıcılığı), B5 (yazma amplifikasyonu), B6 (eşik altı görünürlük), B10 (çoklu örnek), C1–C7. Benim eklediğim P0-1/P0-2/P0-3, P1-1, P2-1, P2-2 ve P2-4 bu listede **yok**.
+`docs/arsiv/YAPILACAKLAR.md`'de olan ve bu raporda tekrar etmediğim başlıklar: A1 (son_tarama merge), A2 (tatil/yarım gün döngüsü), A5 (4096/kap), A8 (.pkl), B1 (kullanılmayan sinyal göstergesi), B3 (digest kalıcılığı), B5 (yazma amplifikasyonu), B6 (eşik altı görünürlük), B10 (çoklu örnek), C1–C7. Benim eklediğim P0-1/P0-2/P0-3, P1-1, P2-1, P2-2 ve P2-4 bu listede **yok**.
 
 ---
 

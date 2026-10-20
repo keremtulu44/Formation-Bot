@@ -179,7 +179,7 @@ sordu; ret gerekçesi, kodla doğrulanmış):
 3. Aynı eşikler **alarm metnine** de giriyor → indirim grafikle sınırlı kalmaz.
 4. `minimum_history` Pine-parity/veri-kalitesi sözleşmesinin parçası
    (`test_domain_engines.py`, `test_domain_incremental_parity.py`,
-   `ZONE_SCORING_AUDIT.md`).
+   `docs/denetim/ZONE_SCORING_AUDIT.md`).
 5. BIST saatlik hacminde seans kabarıklığı var; 40 bar 1 haftadan kısa →
    "yükselen hacim" hafta-günü etkisiyle yanıltır.
 
@@ -341,7 +341,7 @@ SABITLER = {                     # grafik.py — §17 ölçümleriyle
   `format_public_summary` (:1419), `_public_izleme_adaylari`, `PUBLIC_*` ve
   `deploy_check.py:649,709` + `kanal_acilis.py` public adımları kaldırılır;
   **yüzey:** 10 dosya (4 kod: `config.py`, `karne.py`, `main.py`, `notifier.py` +
-  6 test dosyası) + `PUBLIC_GRUP_HAZIRLIK.md`, `KANAL_ACILIS_PAKETI.md`,
+  6 test dosyası) + `docs/operasyon/PUBLIC_GRUP_HAZIRLIK.md`, `docs/operasyon/KANAL_ACILIS_PAKETI.md`,
   `README.md` notları. Silinmeden önce 429/`retry_after` mantığı ortak
   yardımcıya taşınır (§16.1.2).
 
@@ -460,7 +460,7 @@ CPU değil · **14** budama merdiveni tek kurala indi.
 ## 20 · Kayıt/izleme borçları
 
 - Bu dosya repoda tutulur; her fazın commit mesajı ilgili § numarasını anır.
-- `YAPILACAKLAR.md`'ye G0-G5 maddeleri G1 commit'iyle eklenir.
+- `docs/arsiv/YAPILACAKLAR.md`'ye G0-G5 maddeleri G1 commit'iyle eklenir.
 - Spike çıktıları depo dışında (`~/grafik-spike/`) tutulur, commit edilmez.
 
 ## 21 · G0 UYGULANDI (2026-10-13) — kayıt
@@ -507,7 +507,7 @@ legacy alarm gövdesi ve backtest raporu.
 --serit-yok --etiket-detay --tum-tf --demo --json --veri-dizin`),
 `test_grafik_iskelet.py` (25 test), `requirements.txt` (+`matplotlib==3.11.2`),
 `.gitignore` (+`*.png`/`*.jpg`; repoda zaten tek PNG takipli değildi),
-`YAPILACAKLAR.md` (+G bölümü). Suite: **925 passed / 44 skipped** (900 taban + 25 yeni test).
+`docs/arsiv/YAPILACAKLAR.md` (+G bölümü). Suite: **925 passed / 44 skipped** (900 taban + 25 yeni test).
 
 ### 22.1 Sözleşme uyumu (§2)
 * `anlik_goruntu(cift, tf, cerceve, *, sonuclar, alarm_turu, alarm_bar, sembol,
@@ -1078,7 +1078,7 @@ girmez; mesaj metni ve `1 olay = 1 mesaj` sözleşmesi değişmez.
 
 ## 29 · GÖRSEL-2 TURU (2026-10-14) — şerit, kadraj, bant teması (sözleşme güncellemesi)
 
-Bu tur §0.4.1, §0.12, §14–§17 ile çelişen veya onları somutlaştıran kararları kayda geçirir. Ayrıntılı ölçüm: `GRAFIK_YEREL_DOGRULAMA_RAPORU.md` §8.
+Bu tur §0.4.1, §0.12, §14–§17 ile çelişen veya onları somutlaştıran kararları kayda geçirir. Ayrıntılı ölçüm: `docs/denetim/GRAFIK_YEREL_DOGRULAMA_RAPORU.md` §8.
 
 ### 29.1 Karar değişiklikleri (önceki sözleşmeye göre)
 
@@ -1156,7 +1156,7 @@ motor çağrısı ve sayı biçimi aynı kalır (§14.2/§15).
 
 ### 31.2 Önce/sonra kanıtı
 
-`docs/ornek_kare_gorsel4.png` — aynı veri (GARAN 4s, 140 mum, `--zone`): üstte
+`docs/gorseller/ornek_kare_gorsel4.png` — aynı veri (GARAN 4s, 140 mum, `--zone`): üstte
 görsel-3 (taramalı kutular + şerit etiketleri), altta görsel-4 (sade kutular +
 kutu içi yazı, BOS/CHoCH grafikte). Kare, `git archive HEAD` ile alınan eski
 ağaçta `grafik_uret.py` çalıştırılarak üretildi (yeniden çizim değil, gerçek
@@ -1223,7 +1223,7 @@ Kullanıcı geri bildirimi ve kararları (birebir):
 
 ### 32.2 Önce/sonra kanıtı
 
-`docs/ornek_kare_gorsel4.png` (aynı dosya §31.2'de de anılır): üst satır GÖRSEL-3,
+`docs/gorseller/ornek_kare_gorsel4.png` (aynı dosya §31.2'de de anılır): üst satır GÖRSEL-3,
 alt satır GÖRSEL-4. Fark: kutularda tarama yok, etiket kutunun İÇİNDE (`OB↑ %31`),
 `BOS↑`/`CHoCH↓` etiketleri mumun yanında, `PH 290,50` fiyatlı.
 
@@ -1295,7 +1295,7 @@ tarama thread'i ile görsel gönderim işçisi birbirinin modunu sızdırırdı.
 
 ### 33.4 Önce/sonra kanıtı
 
-`docs/ornek_kare_gorsel5.png` — üst satır `git archive d8720cc` ağacıyla üretilen
+`docs/gorseller/ornek_kare_gorsel5.png` — üst satır `git archive d8720cc` ağacıyla üretilen
 GERÇEK GÖRSEL-4 çıktısı, alt satır GÖRSEL-5 (aynı veri: GARAN 4s 140 mum `--zone`).
 Fark: `q100` kod etiketi gitti, `%doluluk` + cetvel + künye geldi, BOS kesikli /
 CHoCH noktalı ayrıştı, aynı seviyedeki kutu çipleri (`FVG↓ · OB↑`) birleşti.
@@ -1343,7 +1343,7 @@ OB renkleri tam belirgin değil yani onun şeffaflığını biraz azaltır mıs�
 - 20 kare: cetvele taşınan PH/PL **19**, şeritte 80 çip, atlanan 1 (son fiyat çakışması),
   `mum_cakisan` 0. Kutu dolgu alfa dağılımı: 0,16/0,15 (ana), 0,28 (dolan kısım),
   0,07/0,075 (ince kutu kademesi).
-- `docs/ornek_kare_gorsel6.png` — üstte `git archive 9196cce` ağacıyla üretilen gerçek
+- `docs/gorseller/ornek_kare_gorsel6.png` — üstte `git archive 9196cce` ağacıyla üretilen gerçek
   önce karesi, altta sonrası (aynı veri: THYAO 1s 180 mum `--zone`).
 - Testler: `test_grafik_gorsel5.py` +5 test (cetvel çipi + kılavuz stili, son fiyat
   bastırması ve sayacı, uzak seviyede ikisinin de kalması, dolgu aralığı/neon tavanı,
@@ -1420,8 +1420,8 @@ kalır (HTML/`parse_mode`/link/hizalama YOK — kullanıcı kararı) ve hedef **
 | SONRA normal | 11 | 278 | 242 px | 0 | 0 |
 | SONRA geçersizleşme | 9-10 | 228-252 | 260 px | 0 | 0 |
 
-- `docs/ornek_kart_gorsel7.png` — aynı payload'ın eski/yeni metni (satır satır px ölçüsüyle).
-- `docs/ornek_kare_gorsel7.png` — gerçek AKBNK 4s zinciri (onay barı 95 → geçersizleşme
+- `docs/gorseller/ornek_kart_gorsel7.png` — aynı payload'ın eski/yeni metni (satır satır px ölçüsüyle).
+- `docs/gorseller/ornek_kare_gorsel7.png` — gerçek AKBNK 4s zinciri (onay barı 95 → geçersizleşme
   barı 101, `PatternLifecycleManager.scan` bar bar oynatıldı): önce/sonra kâresi + Gelecek Metin.
 - Testler: `test_kart_metin.py` (10) · `test_grafik_gorsel7.py` (9). Güncellenen sözleşmeler:
   `test_grafik_iskelet.py` (lejant taşması artık kareye yazılmaz), `test_notifier_mesajlari.py`
@@ -1465,7 +1465,7 @@ sadece ton yönü döndü.
   dikdörtgeni sayar. Yeni test: `test_dolan_kisim_acik_doldurulmamis_kalan_koyu`
   (iki ton, dolan < kalan, taban/neon tavanı, hue aynı, sınır çizgisi α 0,90).
   GÖRSEL-6 sayı sözleşmesi (0,14–0,20 ve kenar/vurgu) korunuyor.
-- `docs/ornek_kutu_tonu.png` — iki farklı hisse (GARAN 1s, AKBNK 1s), önce/sonra,
+- `docs/gorseller/ornek_kutu_tonu.png` — iki farklı hisse (GARAN 1s, AKBNK 1s), önce/sonra,
   ölçülen ton değerleriyle.
 
 ## 37 · SAĞ BOŞLUK (2026-10-15) — son mumlar kenara yapışmasın, çizimler devam etsin
@@ -1528,7 +1528,7 @@ Kullanıcı: son mumlar sağ kenarda aniden bitiyor, çizimler son mumda kesiliy
 - `GRAFIK_SAG_BOSLUK=0`: 8 karenin 8'i **bayt bayt aynı** PNG (AKBNK/YKBNK/THYAO/DOHOL 1s,
   SAHOL 2s, SISE/GARAN/HALKB 4s); apex işareti görünür aralıkta olan iki kare (HALKB 4s,
   SAHOL 2s) dahil.
-- `docs/ornek_sag_bosluk.png` — üstte `git archive 8e6862a` ağacıyla üretilen gerçek önce
+- `docs/gorseller/ornek_sag_bosluk.png` — üstte `git archive 8e6862a` ağacıyla üretilen gerçek önce
   karesi, altta sonrası (aynı veri: AKBNK 1s 180 mum, `--zone --formasyon-tara`).
 - PNG tavanı (`deploy_check`, 500 KB) etkilenmedi: artış ≈ 1 KB.
 
@@ -1555,7 +1555,7 @@ Kullanıcı: son mumlar sağ kenarda aniden bitiyor, çizimler son mumda kesiliy
 
 - Boşlukta **zaman etiketi yok**: x ekseni son mumun tarihinde biter.
 - `render.yaml` ve `deploy_check.py` anahtar listelerine eklenmedi (§33'ün `GRAFIK_SADE`,
-  `GRAFIK_RENK_KORUGU`, `GRAFIK_YAZI` anahtarları gibi): `.env.example`, `RENDER_DEPLOY.md` ve
+  `GRAFIK_RENK_KORUGU`, `GRAFIK_YAZI` anahtarları gibi): `.env.example`, `docs/kurulum/RENDER_DEPLOY.md` ve
   bu belgede yazılı.
 - ✕ glifi mevcut tasarımda zemin renkli kenarla çiziliyor (çok soluk); boşluktaki ✕ aynı
   çizimi kullanıyor, asıl görünen ucundaki ~9 pt'lik işaret çizgisi. İstenirse ayrı iş olarak
@@ -1765,8 +1765,8 @@ mitigation oranı motorun kendi `fill_boundary` alanından hesaplanır; kırıl�
   PNG ≈ 55-70 KB.
 - Görsel önizleme aracı: `scripts/grafik_onizleme.py` (sentetik veri, motor
   çalıştırmaz, önbelleğe yazmaz) — tasarım turlarında kare bakmak için.
-- Turun örnek kareleri: `docs/ornek_kare_faz1_4_1s.png` (GARAN 1s, 80 mum,
-  taze/dolmuş OB + kritik + PH/WL cetveli) ve `docs/ornek_kare_faz1_4_4s.png`
+- Turun örnek kareleri: `docs/gorseller/ornek_kare_faz1_4_1s.png` (GARAN 1s, 80 mum,
+  taze/dolmuş OB + kritik + PH/WL cetveli) ve `docs/gorseller/ornek_kare_faz1_4_4s.png`
   (AKBNK 4s, 68 mum, RVOL rozeti). Ölçüm çıktıları (diğer PNG'ler) depo dışında
   tutulur (§0 kural); yalnız tasarım referansı olan bu iki kare repoda kalır.
 
@@ -1809,8 +1809,8 @@ Boşluk artık **eksen genişliğinin yüzdesi**; sabit mum sayısı değil.
 - Karşılaştırma aracı: `scripts/grafik_sag_bosluk_karsilastirma.py`
   (`--kare GARAN:1h --kare AKBNK:4h --oranlar 0.10,0.15,0.20`) — botun kendi
   `kare_uret` yolunu çağırır, satır = oran / kolon = kare tek sayfa üretir.
-  Turun çıktısı: `docs/ornek_sag_bosluk_oran.png` (üç oran × iki kare);
-  `docs/ornek_kare_faz1_4_1s.png` ve `_4s.png` yeni varsayılanla yenilendi
+  Turun çıktısı: `docs/gorseller/ornek_sag_bosluk_oran.png` (üç oran × iki kare);
+  `docs/gorseller/ornek_kare_faz1_4_1s.png` ve `_4s.png` yeni varsayılanla yenilendi
   (14 ve 12 mum boşluk, `mum_cakisan == 0`).
 
 ## 42 · YÖNLÜ RVOL ROZETİ (2026-10-16) — `⚡↑` patlama / `⚡↓` kuruma

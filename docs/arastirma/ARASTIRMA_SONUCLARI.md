@@ -1,6 +1,6 @@
 # Araştırma Sonuçları — Soruların Cevapları
 
-`docs/ARASTIRMA_BULGULARI.md` içindeki tabloların yorumu. Ölçüm tabanı:
+`docs/arastirma/ARASTIRMA_BULGULARI.md` içindeki tabloların yorumu. Ölçüm tabanı:
 **176 sembol × 4 zaman dilimi = 704 seri, 994.142 gözlem satırı**, 365 günlük
 gerçek arşiv (`backfill_data/`). Her sayı o rapordaki bir tablodan alınmıştır;
 tüm hücreler `n>=30` (YETERLI) güvenindedir aksi belirtilmedikçe.

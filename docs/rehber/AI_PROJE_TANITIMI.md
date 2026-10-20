@@ -395,7 +395,7 @@ Kare üretimi kendini ölçer; `meta` sözlüğüne yazar. Testler bu sayılara 
 
 ### 4.7 Görsel evrim (kısa tarih)
 
-Kullanıcı dört fazlı bir görsel plan verdi ve uygulandı (`GRAFIK_TASARIM.md §40`):
+Kullanıcı dört fazlı bir görsel plan verdi ve uygulandı (`docs/tasarim/GRAFIK_TASARIM.md §40`):
 
 1. **FAZ 1 — Temizlik:** geliştirici metinleri (lejant, `veri: N bar hacimsiz`,
    `bölge: N kutu`) kareden çıktı → kart altı dipnotuna; alt hacim paneli kaldırıldı;
@@ -420,16 +420,16 @@ Bu paketle birlikte **şu 5 PNG'yi ekle** (hepsi depoda `docs/` altında,
 
 | Dosya | Ne gösteriyor | Ölçüm |
 | :--- | :--- | :--- |
-| `docs/ornek_kare_faz1_4_1s.png` | **GARAN 1s**, formasyon yok: 80 mum, 6 rozet (↑3 ↓2 ... taze dahil), taze OB (yeşil), kısmen dolmuş OB (gri bant + `%54 dolu`), FVG, sağ ray (PH/kritik/WL) | çakışma 0 · 66 KB · ~450 ms |
-| `docs/ornek_kare_faz1_4_4s.png` | **AKBNK 4s**, 68 mum: OB dolan/boşalan ayrımı, `FVG↑`, `BOS↑/CHoCH↓` çizgileri, `⚡↓` kuruma rozetleri | çakışma 0 · 66 KB · ~500 ms |
-| `docs/ornek_sag_bosluk_oran.png` | Aynı iki kare, **%10 / %15 / %20** sağ boşlukla (3 satır × 2 kolon karşılaştırma) | boşluk payı ölçülü: %10,1–%20,0 |
-| `docs/ornek_rozet_yon.png` | Rozet yakın planları: `⚡↑ x5,57` (patlama) ve `⚡↓ x0,2` (kuruma) + 4 karenin rozet sayıları | kare başına 3–6 |
-| `docs/ornek_rozet_taze.png` | **Tazelik önceliği** kanıtı: her karenin "son mumun rozeti" yakın planı | taze izler: GARAN 1s ↑18 ↓75 · AKBNK 4s ↑33 ↓67 |
+| `docs/gorseller/ornek_kare_faz1_4_1s.png` | **GARAN 1s**, formasyon yok: 80 mum, 6 rozet (↑3 ↓2 ... taze dahil), taze OB (yeşil), kısmen dolmuş OB (gri bant + `%54 dolu`), FVG, sağ ray (PH/kritik/WL) | çakışma 0 · 66 KB · ~450 ms |
+| `docs/gorseller/ornek_kare_faz1_4_4s.png` | **AKBNK 4s**, 68 mum: OB dolan/boşalan ayrımı, `FVG↑`, `BOS↑/CHoCH↓` çizgileri, `⚡↓` kuruma rozetleri | çakışma 0 · 66 KB · ~500 ms |
+| `docs/gorseller/ornek_sag_bosluk_oran.png` | Aynı iki kare, **%10 / %15 / %20** sağ boşlukla (3 satır × 2 kolon karşılaştırma) | boşluk payı ölçülü: %10,1–%20,0 |
+| `docs/gorseller/ornek_rozet_yon.png` | Rozet yakın planları: `⚡↑ x5,57` (patlama) ve `⚡↓ x0,2` (kuruma) + 4 karenin rozet sayıları | kare başına 3–6 |
+| `docs/gorseller/ornek_rozet_taze.png` | **Tazelik önceliği** kanıtı: her karenin "son mumun rozeti" yakın planı | taze izler: GARAN 1s ↑18 ↓75 · AKBNK 4s ↑33 ↓67 |
 
 Depoda ayrıca eski turların kareleri var (isteğe bağlı ek):
 `ornek_kare_gorsel4/5/6/7.png` (katman katman karşılaştırmalar),
-`ornek_kart_gorsel7.png` (metin kartı px ölçüsü), `ornek_kutu_tonu.png` (OB dolgu
-tonu önce/sonra), `ornek_sag_bosluk.png` (sağ boşluk ilk turu).
+`docs/gorseller/ornek_kart_gorsel7.png` (metin kartı px ölçüsü), `docs/gorseller/ornek_kutu_tonu.png` (OB dolgu
+tonu önce/sonra), `docs/gorseller/ornek_sag_bosluk.png` (sağ boşluk ilk turu).
 
 ---
 
@@ -499,7 +499,7 @@ yazdırmaz) → Supabase tablosu gerçekten var mı (404 = SQL çalıştırılma
 - Yalnız kapanmış mumlar bildirime kaynak olur; tarama anı kayarsa güvenlik
   kapısı anlık push'u sonraki tura bırakır.
 - Mobil/Termux kurulumu: `setup-termux.sh`, `requirements-termux.txt`,
-  `LOCAL_SETUP.md`.
+  `docs/kurulum/LOCAL_SETUP.md`.
 
 ---
 
@@ -511,7 +511,7 @@ yazdırmaz) → Supabase tablosu gerçekten var mı (404 = SQL çalıştırılma
 2. **Rozet tasarımı:** `⚡↑ x2,5` çipleri mumun altında. Alternatif: mumun yanında
    dikey mini barlar, veya yalnız en sert 2 tanesi + dipnot? Hangi düzen 5,5"
    telefonda daha hızlı okunur?
-3. **Tarihsel karşılaştırma:** `ornek_sag_bosluk_oran.png`'te %10 / %15 / %20
+3. **Tarihsel karşılaştırma:** `docs/gorseller/ornek_sag_bosluk_oran.png`'te %10 / %15 / %20
    varyantları var. Görsel denge ve okunurluk açısından hangisi, neden?
 4. **Sağ ray hiyerarşisi:** PH/PL/WH/WL + kritik seviye + son fiyat aynı şeritte.
    Hangisi birincil (dolu çip/kalın yazı), hangisi ikincil (soluk) olmalı?
@@ -556,16 +556,16 @@ yazdırmaz) → Supabase tablosu gerçekten var mı (404 = SQL çalıştırılma
 | Konu | Dosya |
 | :--- | :--- |
 | Mum grafiği karesi (tüm çizim) | `grafik.py` · `grafik_uret.py` (CLI) · `scripts/grafik_onizleme.py`, `scripts/grafik_sag_bosluk_karsilastirma.py` |
-| Grafik tasarım sözleşmesi + ölçümler | `GRAFIK_TASARIM.md` (§40 FAZ 1-4 · §41 sağ boşluk · §42 rozet) |
+| Grafik tasarım sözleşmesi + ölçümler | `docs/tasarim/GRAFIK_TASARIM.md` (§40 FAZ 1-4 · §41 sağ boşluk · §42 rozet) |
 | Formasyon motoru | `patterns/` (`detect.py`, `candidate.py`, `lifecycle.py`, `pivots.py`, `mathutil.py`, `pole.py`, `violation.py`) |
 | SMC motorları | `domain_engines/` (`market_structure`, `order_block`, `fvg`, `volume_participation`) |
 | Bölge puanlama | `zone_scoring.py` |
 | Bildirim metinleri | `notifier.py` (`_format_lifecycle_alert_kart*`) · `notification_context.py` · `reporting/format.py`, `reporting/panel.py` |
 | Telegram taşıma + komutlar | `transport/telegram.py` · `telegram_commands.py` · `telegram_alert_flow.py` · `telegram_measure.py` |
-| Kart biçim sözleşmesi (ölçülü) | `TELEGRAM_KART_FORMAT.md` · `TELEGRAM_FORMAT_COMPARISON_EXAMPLES.md` |
+| Kart biçim sözleşmesi (ölçülü) | `docs/tasarim/TELEGRAM_KART_FORMAT.md` · `docs/denetim/TELEGRAM_FORMAT_COMPARISON_EXAMPLES.md` |
 | Tarama döngüsü, durumlar, zamanlama | `main.py` · `canli_tarama.py` · `config.py` · `data.py` · `bist_calendar.py` |
 | Simülasyon / ölçüm araçları | `gun_simulasyonu.py` · `deploy_check.py` · `test_accuracy.py` · `karne.py` |
-| Dağıtım | `render.yaml` · `RENDER_DEPLOY.md` · `.env.example` · `.github/workflows/{ci,deploy,keepalive}.yml` · `supabase_schema.sql` · `supabase_store.py` · `health_server.py` |
+| Dağıtım | `render.yaml` · `docs/kurulum/RENDER_DEPLOY.md` · `.env.example` · `.github/workflows/{ci,deploy,keepalive}.yml` · `supabase_schema.sql` · `supabase_store.py` · `health_server.py` |
 | Test (1319) | `test_*.py` (76 dosya) — grafik tarafı: `test_grafik_*.py` (360 test) |
 
 ---

@@ -25,6 +25,6 @@ Kullanıcı onayıyla uygulanan kurallar ve işletim sınırları.
 - Grafiklerde engulf ve internal katmanı yok; dış yapı korunur. Her OB/FVG için sağda fiyat aralığı gösterilir.
 - Teslim kuyruğu eski hazır görselleri `chart-trust-focus-v3` politikasıyla yeniden üretir; teslim edilmiş metni tekrar göndermez.
 
-- Güven/odak/ayrıntı sözleşmesi: [GRAFIK_GUVEN_ODAK_AYRINTI.md](GRAFIK_GUVEN_ODAK_AYRINTI.md). Normal bildirim metni ve motor kuralları bu sunum değişikliğiyle değişmez.
+- Güven/odak/ayrıntı sözleşmesi: [docs/tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md](GRAFIK_GUVEN_ODAK_AYRINTI.md). Normal bildirim metni ve motor kuralları bu sunum değişikliğiyle değişmez.
 
 - Güven/odak/ayrıntı sonrası son tam paket: **1345 passed, 43 skipped** (240,86 sn).

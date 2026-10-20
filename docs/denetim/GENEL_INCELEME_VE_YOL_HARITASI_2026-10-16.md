@@ -127,7 +127,7 @@ dağınık**. Yeni bir okuyucu (ya da 6 ay sonraki sen) hangi belgenin güncel o
 dosya adından çıkaramıyor (`*_2026-10-15`, `*_2026-10-16` tarihli olanlar tabii ki
 güncel, peki ya geri kalanlar?). README zaten uzun. Görüşüm: kökte yalnız 3 belge kalsın
 (README, YOL_HARİTASI, RUNBOOK); geri kalan `docs/` altına tarih etiketiyle taşınıp
-README'ye tek tabloluk "belge haritası" eklensin. Bu, mevcut `docs/archive` adımının
+README'ye tek tabloluk "belge haritası" eklensin. Bu, mevcut `docs/arsiv` adımının
 tamamlanmış hâli.
 
 ### 2.5 Lint/statik analiz yok
@@ -238,7 +238,7 @@ kaçtı/neden düştü" sorusuna tek `jq` ile cevap verir. `logs/` zaten gitigno
 ### T4 — Görünüm/regresyon galerisini CI'ya taşı
 Bu oturumda eklenen `scripts/ornek_gorsel_uret.py` katalogdaki 6 senaryoyu üretiyor.
 CI'ya eklenecek bir adım bu PNG'leri **artifact** olarak yüklerse her PR'da görsel
-dilin farkı resimde görünür (piksel assert'i değil, insan gözü için). `docs/ornek_galeri`
+dilin farkı resimde görünür (piksel assert'i değil, insan gözü için). `docs/gorseller/ornek_galeri`
 içindeki dosyalar da tek komutla tazelenir.
 
 ### T5 — Test süresi yönetimi
@@ -277,7 +277,7 @@ workflow'unun yakalayabildiği kadar fark ediliyor).
 | Y7 | ★★ | Karneye stabilite satırı (kayan pencereler min–medyan–max) | `karne.py`, `test_karne.py` | K |
 | Y8 | ★★ | Yapısal olay günlüğü (JSONL) + sabah öz-denetim mesajı | `main.py`, yeni `events.py` | O |
 | Y9 | ★★ | Çoklu TF uzlaşısı: kart + karne kırılımı | `notification_context.py`, `karne.py` | O |
-| Y10 | ★★ | Galeriyi CI artifact'ına bağla + `docs/ornek_galeri` tazeleme adımı | `ci.yml` | 1s |
+| Y10 | ★★ | Galeriyi CI artifact'ına bağla + `docs/gorseller/ornek_galeri` tazeleme adımı | `ci.yml` | 1s |
 | Y11 | ★ | Sessiz saatler tercihi | `notifier.py` (zaman filtresi) | K |
 | Y12 | ★ | `main.py`'den komut katmanının ayrıştırılması (yalnız bu parça, tamamı değil) | `main.py` → `commands.py` | O |
 | Y13 | ★ | Sembol sayfası statik site (GitHub Pages) | yeni workflow + `chart_report.py` | O |
@@ -307,7 +307,7 @@ hazırlığı, görsel değişiklik kontrolü):
   aday, flama teyit, kama hazırlık, geçersizleşme, retest). Projenin **kendi** çizim
   zincirini kullanır (`grafik.anlik_goruntu` → `grafik.ciz`); ayrı demo çizicisi yok.
   `bot_data/` yasağı, deterministik veri, kapanış kuralı tek kaynaktan.
-- `docs/ornek_galeri/` — üretilen 6 örnek kare + README (nasıl yeniden üretilir,
+- `docs/gorseller/ornek_galeri/` — üretilen 6 örnek kare + README (nasıl yeniden üretilir,
   katalog tablosu, kurallar).
 - `test_ornek_gorsel_uret.py` — 6 regresyon: üretim, alarm çizgisi, determinizm,
   bot_data koruması, "demo · sentetik" dürüst etiketi.
@@ -330,7 +330,7 @@ fark yaratacak olan onu **anlatma ve kullanışlı hâle getirme** hızı.
 
 İkinci gözlemim: repodaki belge/test disiplini, bu projeyi tek kişilik bir bot olmaktan
 çıkarıp **sürdürülebilir bir ürüne** çeviren asıl varlık. Kodu kimse okumasa bile
-`YAPILACAKLAR.md` + karne + denetim belgeleri projenin hafızası. Bu yüzden önerilerimin
+`docs/arsiv/YAPILACAKLAR.md` + karne + denetim belgeleri projenin hafızası. Bu yüzden önerilerimin
 ilk sırasında belge haritası ve lint var: hafızası düzenli projeler hız kaybetmez.
 
 Son olarak bir uyarı-tavsiye: yeni formasyon/parametre eklerken **karne kapısı**

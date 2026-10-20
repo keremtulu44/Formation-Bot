@@ -262,7 +262,7 @@ TELEGRAM_DM_DEGISIM_KAPISI = os.getenv(
 TELEGRAM_KANAL_GECERSIZ_KAPISI = os.getenv(
     "TELEGRAM_KANAL_GECERSIZ_KAPISI", "1").strip().lower() not in {"0", "false", "kapali", "kapalı"}
 
-# --- GRAFİK KARESİ (G4 / GRAFIK_TASARIM.md §5) — v1'de YALNIZ 4 anahtar ---
+# --- GRAFİK KARESİ (G4 / docs/tasarim/GRAFIK_TASARIM.md §5) — v1'de YALNIZ 4 anahtar ---
 # `yok` (varsayılan) → hiçbir kare üretilmez, gönderim yolu bayt bayt bugünküle
 # aynıdır ve matplotlib HİÇ import edilmez (§6.7). `alarm` → metin gittikten SONRA
 # kareler eklenir (görsel metin kotasını YEMEZ, §4).

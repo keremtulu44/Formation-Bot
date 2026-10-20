@@ -1,3 +1,6 @@
+> **ARŞİV (2026-10-20):** Bu belge **yürürlükte değildir**; tarihsel kayıt olarak saklanır.
+> Güncel belge haritası: [docs/README.md](../README.md). Taşıma sırasında içerik değiştirilmedi.
+
 # Aşama 4 Çalışma Planı — Veri Güvenliği, Takvim Politikası, Kontrollü Doğrulama
 
 **Süre hedefi:** 55 dk iş + 5 dk tampon = 60 dk. Her fazın çıkışında mini kontrol; başarısızlık halinde gevşetme yok, bulgu olarak raporlama var.
@@ -15,7 +18,7 @@
 
 ### P0 — Başlangıç denetimi (0–6 dk)
 - Git snapshot: branch/HEAD/status kaydı; korunacak dosya listesi rapora yazılır.
-- `TELEGRAM_PRODUCT_AND_LIVE_READINESS_AUDIT.md` tamamı + format örnekleri dosyası okunur (format ve korunacak alanlar çıkarılır).
+- `docs/denetim/TELEGRAM_PRODUCT_AND_LIVE_READINESS_AUDIT.md` tamamı + format örnekleri dosyası okunur (format ve korunacak alanlar çıkarılır).
 - Gerçek çağrı zinciri tek geçişte doğrulanır: fetch (`data.py: fetch_yfinance_1h/1d`) → normalize → `append_dataframe` → `tamamlanmis_mumlar` → `resample_all_timeframes` → lifecycle + domain → `prepare_formation` → `send` → `sent`/`ack`. Çıktı: zincir haritası (dosya:fonksiyon).
 - Watch/digest TTL ve cooldown reset akışı kesinleştirilir (`telegram_alert_flow.py`, `notifier.py`).
 - **Durdur kriteri:** zincirde bu plandaki varsayımla çelişen yapı çıkarsa plan güncellenir, sessizce devam edilmez.
@@ -44,7 +47,7 @@
 - `prepared`/`sent` zinciri garanti tablosu olarak raporlanır; exactly-once iddiası yok — at-least-once + duplicate penceresi açık yazılır.
 
 ### P5 — Canlı doğrulama planı + runbook (43–50 dk)
-- `CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md`: Yahoo / Render / Supabase / Telegram için ayrı önkoşul, adım, başarı ölçütü, STOP kriteri; üretim verisine dokunmadan test yöntemleri; kullanıcı onayı gerektiren adımlar **[ONAY GEREKLİ]** etiketiyle; rollback prosedürü; tekrar mesaj / eski veri / bağlantı kopması playbooks.
+- `docs/operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md`: Yahoo / Render / Supabase / Telegram için ayrı önkoşul, adım, başarı ölçütü, STOP kriteri; üretim verisine dokunmadan test yöntemleri; kullanıcı onayı gerektiren adımlar **[ONAY GEREKLİ]** etiketiyle; rollback prosedürü; tekrar mesaj / eski veri / bağlantı kopması playbooks.
 - Bu görevde canlı test **çalıştırılmaz**; plan belge olarak teslim edilir.
 
 ### P6 — Regresyon ve yan etki kontrolü (50–56 dk)
@@ -52,7 +55,7 @@
 - `git status` başlangıçla karşılaştırılır; `bot_data/` 56 commitli dosya + checksum değişimi kontrolü; test artığı yalnız “bu çalıştırmada üretildiği kanıtlanırsa” silinir; başlangıç dosyalarına dokunulmaz.
 
 ### P7 — Teslim raporu (56–60+ dk, tamponlu)
-- `TELEGRAM_PRODUCT_AND_LIVE_READINESS_AUDIT.md`’ye **Aşama 4** bölümü (10 başlık: başlangıç, kod akışı, OHLCV, takvim politikası, güvenilirlik, testler, yan etki, canlı plan, kalan riskler, GO/NO-GO gerekçeli).
+- `docs/denetim/TELEGRAM_PRODUCT_AND_LIVE_READINESS_AUDIT.md`’ye **Aşama 4** bölümü (10 başlık: başlangıç, kod akışı, OHLCV, takvim politikası, güvenilirlik, testler, yan etki, canlı plan, kalan riskler, GO/NO-GO gerekçeli).
 - Karar otomatik GO olmaz; ÜRETİM doğrulaması yapılmadığı sürece NO-GO/CONDITIONAL ayrımı kanıtla yazılır.
 
 ## Kullanıcı kararı bekleyen noktalar (kodlanmayacak, yalnız raporlanacak)

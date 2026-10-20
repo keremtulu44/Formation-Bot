@@ -1,7 +1,10 @@
+> **ARŞİV (2026-10-20):** Bu belge **yürürlükte değildir**; tarihsel kayıt olarak saklanır.
+> Güncel belge haritası: [docs/README.md](../README.md). Taşıma sırasında içerik değiştirilmedi.
+
 # Formation-Bot — Toplu Kodlama Planı
 
-> Bu dosya **çalışma planıdır** ve repo içinde yaşar. Teşhis: `SORUN_RAPORU.md`,
-> yapılacaklar listesi: `YAPILACAKLAR.md`.
+> Bu dosya **çalışma planıdır** ve repo içinde yaşar. Teşhis: `docs/denetim/SORUN_RAPORU.md`,
+> yapılacaklar listesi: `docs/arsiv/YAPILACAKLAR.md`.
 > Kural: her batch = **tek commit + push** (`arena/01a0f318-formation-bot`),
 > testler yeşil olmadan push yok, **main'e merge yalnız kullanıcı onayıyla**.
 
@@ -126,9 +129,9 @@
 - **C7 — ölü araç temizliği:** `fetch_with_rate_limit` + `RATE_LIMIT_MIN/MAX` silindi;
   `mock_fetch_60d_1h` ve `python data.py` mock demosu kaldırıldı (yerine çevrimdışı duman testi);
   `repo_teshis.py`, `logrotate.conf`, `setup.ps1`, `local_test.ps1` git'ten çıkarıldı;
-  `LOCAL_SETUP.md` güncellendi (ölü referanslar, eski dal adı, `patterns/` paket yapısı).
-- Dokümanlar: `.env.example`, `render.yaml`, `RENDER_DEPLOY.md` env tablosu ve `README.md`
-  Batch 7 satırı; `docs/archive/TESHIS_RAPORU.md`'ye aracın kaldırıldığına dair not.
+  `docs/kurulum/LOCAL_SETUP.md` güncellendi (ölü referanslar, eski dal adı, `patterns/` paket yapısı).
+- Dokümanlar: `.env.example`, `render.yaml`, `docs/kurulum/RENDER_DEPLOY.md` env tablosu ve `README.md`
+  Batch 7 satırı; `docs/arsiv/TESHIS_RAPORU.md`'ye aracın kaldırıldığına dair not.
 
 ## BATCH 8 — ✅ Tamamlandı: `main.py` katmanlara ayırma (yapısal)
 
@@ -180,7 +183,7 @@ Bağımsız denetimde bulunan 5 madde, davranışı bozmadan kapatıldı
 |---|---|---|
 | B-1 | CI adım adı "90 kontrol" (gerçek: 100) | `.github/workflows/ci.yml` etiketi 100'e çekildi |
 | B-2 | `.env.example`'da `BOT_INSTANCE_ID` yoktu | Değişken + çoklu örnek açıklaması eklendi |
-| B-3 | `RENDER_DEPLOY.md` env tablosu eksikleri | `BOT_INSTANCE_ID`, `PUBLIC_STATES` satırları + `/health?strict=1` bölümü |
+| B-3 | `docs/kurulum/RENDER_DEPLOY.md` env tablosu eksikleri | `BOT_INSTANCE_ID`, `PUBLIC_STATES` satırları + `/health?strict=1` bölümü |
 | B-4 | `/health` statik 200: donmuş bot "sağlıklı" görünüyordu | `main._saglik_ozeti()` heartbeat yaşını raporlar; `health_server` bu özeti DI ile alır; `?strict=1` bayatken 503; `deploy_check.py` Supabase `state:heartbeat` yaşını da kontrol eder |
 | B-5 | `notifier.py`'de çıplak `except:` | `except (AttributeError, ValueError, TypeError)` (dar kapsam) |
 

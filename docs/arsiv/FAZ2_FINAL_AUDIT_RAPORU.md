@@ -1,3 +1,6 @@
+> **ARŞİV (2026-10-20):** Bu belge **yürürlükte değildir**; tarihsel kayıt olarak saklanır.
+> Güncel belge haritası: [docs/README.md](../README.md). Taşıma sırasında içerik değiştirilmedi.
+
 # FAZ 2 FİNAL AUDİT RAPORU — "Formation history tamamlandı mı?"
 
 **Commit:** `96cc78e` (branch `arena/01a1020f-formation-bot`, PR #15)

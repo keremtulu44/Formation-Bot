@@ -196,7 +196,7 @@ Hata senaryoları (sim): albüm reddedilince 4 kare tek tek gitti, sayaç 4/0. T
 
 - Alarm kareleri **yalnız `TELEGRAM_GRAFIK=alarm`** iken üretilir. Varsayılan `yok` (`config.py`, `render.yaml`, `.env.example`). Yani canlıda şu an alarm tetiklenince görsel **gelmez**; bu bilinçli bir kill-switch.
 - Açıkken: alarm metni → aynı tur sonunda olay başına tek albüm (bu turda sendPhoto döngüsünden albüme çevrildi).
-- Kalan karar: canlıda açılacak mı? (Free plan kotası için `TELEGRAM_GRAFIK_ADET` 1-2 öneriliyor, bkz. RENDER_DEPLOY.md.)
+- Kalan karar: canlıda açılacak mı? (Free plan kotası için `TELEGRAM_GRAFIK_ADET` 1-2 öneriliyor, bkz. docs/kurulum/RENDER_DEPLOY.md.)
 
 ### 9.3 Mum rengi ve arka plan — araştırma özeti
 
@@ -206,7 +206,7 @@ Kaynak taraması (forum ve eğitim sayfaları; kesin standart yok, kullanıcı t
   **Görsel-3 (2026-10-14) güncellemesi:** gövde kuralı AYNEN korunur, üstüne renk
   geldi — yükselen `#31b184` (içi boş), düşen `#e05c58` (dolu). Doluluk farkı
   ikinci kanal olduğu için renk körlüğünde de okunur; gerekçe ve ölçümler
-  `GRAFIK_TASARIM.md` §31'de.
+  `docs/tasarim/GRAFIK_TASARIM.md` §31'de.
 - Koyu arka plan + açık gri/beyaz mum, göz yorgunluğunu azaltıyor; beyaz zemin "agresif" bulunuyor (kullanıcı yorumları).
 - Renk körlüğü için önerilen palet: mavi-turuncu, ya da siyah zeminde beyaz-gri tonları. Bizim palette FVG mavi (`#42a5f5`), BOS turuncu (`#ff8a65`) zaten ayrık.
 - Yeşil/kırmızı yerine tek renk ailesi ("renk psikolojiyi bozar" yorumu) bazı kullanıcılarda daha az dikkat dağıtıcı.

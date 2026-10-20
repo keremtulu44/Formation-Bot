@@ -1,3 +1,6 @@
+> **ARŞİV (2026-10-20):** Bu belge **yürürlükte değildir**; tarihsel kayıt olarak saklanır.
+> Güncel belge haritası: [docs/README.md](../README.md). Taşıma sırasında içerik değiştirilmedi.
+
 # Bildirim notları — 16 Ekim 2026
 
 Kullanıcı onayıyla uygulandı:
@@ -8,7 +11,7 @@ Kullanıcı onayıyla uygulandı:
 - Grafik snapshot'ının eski kuyrukta kaybolması ve `DeferredAlertBuffer.snapshot` çakışması düzeltildi.
 
 Ayarlar: `INVALIDATION_CONFIRM_BARS=3`, `MTF_ALERT_MERGE_HOURS=4`.
-İşletim sınırları ve ayrıntılar: [Bildirim teslim politikası](docs/BILDIRIM_TESLIM_POLITIKASI.md).
+İşletim sınırları ve ayrıntılar: [Bildirim teslim politikası](../tasarim/BILDIRIM_TESLIM_POLITIKASI.md).
 Canlı mesaj/deploy yapılmadı; test sonucu politika dosyasında tutulur.
 
 ## Grafik — son durum
@@ -23,7 +26,7 @@ Canlı mesaj/deploy yapılmadı; test sonucu politika dosyasında tutulur.
 - Açık bölge durumları ve dolum adı; kritik olay referansı; varsayılan odak, seçilebilir bağlam ve mobil çıktı.
 - Gizlenenler silinmez: JSON/HTML bölge ayrıntısı, uzak dış seviyeler ve dış olay zaman çizelgesi.
 - Normal bildirim metni/motorlar korunur. Grafik politikası `chart-trust-focus-v3`; eski hazır PNG yenilenir, gönderilmiş metin tekrarlanmaz.
-- Kullanım, sınırlar ve kabul sözleşmesi: `docs/GRAFIK_GUVEN_ODAK_AYRINTI.md`.
+- Kullanım, sınırlar ve kabul sözleşmesi: `docs/tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md`.
 
 ### Son doğrulama — öncelikler 1–3
 

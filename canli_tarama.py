@@ -218,7 +218,7 @@ def main():
         "PINE KARSILASTIRMA REHBERI (bayrak/flama, Dengeli profili):",
         f"  - Bu taramada {n_ozel} bayrak/flama tespit edildi.",
         "  - Pine'da AYNI hisse+periyotta bayrak/flama goruyorsaniz ama burada yoksa",
-        "    (veya tersi), tipi ve olculeri PINE_FARK_ANALIZI.md'deki dogrulama",
+        "    (veya tersi), tipi ve olculeri docs/tasarim/PINE_FARK_ANALIZI.md'deki dogrulama",
         "    listesine not edin (Pine dosyasi ile karsilastirma bekleniyor).",
         "  - Standart flama (Simetrik Ucgen): derinlik 0.06-0.70, yukseklik orani <=0.46,",
         "    sure orani <=2.80, sure <= 40 bar, eff < direk eff + 0.08, kalite >= 50",

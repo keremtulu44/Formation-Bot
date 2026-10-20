@@ -1,3 +1,6 @@
+> **ARŞİV (2026-10-20):** Bu belge **yürürlükte değildir**; tarihsel kayıt olarak saklanır.
+> Güncel belge haritası: [docs/README.md](../README.md). Taşıma sırasında içerik değiştirilmedi.
+
 # main ↔ arena dalı merge çelişki raporu (12 Eki 2026)
 
 Bu dosya `arena/22bb6a24-formation-bot` dalının `main`'e taşınma denemesinin tam

@@ -7,7 +7,7 @@
 > **ÖNEMLİ — Pine dosyası henüz elimde değil.** Kullanıcı `Yeni Metin Belgesi.txt`
 > olarak ekledi ama dosya diske ulaşmadı (`/home/user/uploads/` boş). Bu yüzden
 > aşağıdaki analiz **iki kaynağa** dayanıyor:
->   1. `FORMASYON_MANTIGI.md` — Pine v0.4.6'nın Türkçe dökümanı (375 satır, 10 bölüm)
+>   1. `docs/tasarim/FORMASYON_MANTIGI.md` — Pine v0.4.6'nın Türkçe dökümanı (375 satır, 10 bölüm)
 >   2. Mevcut Python kodu (`patterns/` paketi) — okunarak doğrulanmış
 > Pine dosyası geldiğinde **5. bölümdeki doğrulama listesi** tekrar açılacak ve her
 > madde satır satır Pine ile karşılaştırılacak. Döküman ile kod arasında sapma
@@ -20,7 +20,7 @@
 | Madde | Durum | Kanıt |
 |---|---|---|
 | Pivot + sağ teyit | ✅ Birebir | `patterns/pivots.py` — `range(pivot_len, n-pivot_len)` sağ karşılaştırma zorunlu |
-| Geometri (eğim/ATR normalize) | ✅ Birebir | `patterns/candidate.py` + `FORMASYON_MANTIGI.md` §2 |
+| Geometri (eğim/ATR normalize) | ✅ Birebir | `patterns/candidate.py` + `docs/tasarim/FORMASYON_MANTIGI.md` §2 |
 | Üçgen / kema tespiti | ✅ Birebir | `patterns/candidate.py` `f_build_candidate` |
 | Kalite skorlama | ✅ Birebir | §5 formülü kodda uygulanmış |
 | İhlal taraması (A1) | ✅ Çözülmüş | `patterns/violation.py:51` `safe_end_bar = min(requested_end_bar, n-1)` |

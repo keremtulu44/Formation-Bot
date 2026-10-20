@@ -25,7 +25,7 @@ python scripts/backfill/arastirma_kosu.py --zorla
 ```
 
 Çıktı: `arastirma_cikti/*.jsonl` (ham gözlemler) ve
-`docs/ARASTIRMA_BULGULARI.md` (rapor). `arastirma_cikti/` git'e girmez
+`docs/arastirma/ARASTIRMA_BULGULARI.md` (rapor). `arastirma_cikti/` git'e girmez
 (`.gitignore`); rapor girer.
 
 Koşu **idempotent**tir: `meta.jsonl` içinde kaydı olan `(symbol, timeframe)`
@@ -167,7 +167,7 @@ Tam koşu ölçüsü (176 sembol × 4 zaman dilimi = 704 iş, 4 GB RAM'lik makin
 Ham JSONL **git'e girmez** (`arastirma_cikti/` `.gitignore`'da) ve 2.2 GB
 olduğu için çalışma alanında da tutulmaz. Kalıcı olan üç şey: commit edilmiş
 arşiv (`backfill_data/`, 11 MB), ölçüm kodu ve üretilmiş rapor
-(`docs/ARASTIRMA_BULGULARI.md`). Yeniden üretmek için tek komut yeterli:
+(`docs/arastirma/ARASTIRMA_BULGULARI.md`). Yeniden üretmek için tek komut yeterli:
 
 ```bash
 python scripts/backfill/arastirma_kosu.py --zorla

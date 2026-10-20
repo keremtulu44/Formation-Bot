@@ -1,3 +1,6 @@
+> **ARŞİV (2026-10-20):** Bu belge **yürürlükte değildir**; tarihsel kayıt olarak saklanır.
+> Güncel belge haritası: [docs/README.md](../README.md). Taşıma sırasında içerik değiştirilmedi.
+
 # Formation-Bot — Yapılacaklar / Düzeltilecekler Listesi (tam)
 
 > Kaynak: `FORMATION_BOT_SORUN_RAPORU.md` (teşhis) · Dal: `arena/01a0f318-formation-bot` (push edildi: `0bca8e5`)
@@ -180,7 +183,7 @@ README: test sayıları `90/90` ve `6/6` (gerçek: 199 passed), eski dal adı `a
 ""
 ---
 
-## G) GRAFİK FAZLARI (G0 → G5) — sözleşme: `GRAFIK_TASARIM.md`
+## G) GRAFİK FAZLARI (G0 → G5) — sözleşme: `docs/tasarim/GRAFIK_TASARIM.md`
 
 Kullanıcı isteği: "kartta ne varsa karede de o olsun" (bant nereden başlıyor, hangi
 mumlara dokundu, yapı nerede kırıldı). Her faz tek commit + tam test yeşil (§3/§6.8).
@@ -237,7 +240,7 @@ yalnız `meta`da (§13 JSONL'e kadar öyle kalacak).
 
 ## L) CANLI HAZIRLIK DENETİMİ (2026-10-14) — G4 sonrası uçtan uca
 
-Kod tarafı bitti (detay + ölçümler: `GRAFIK_TASARIM.md` §26). Tablo = "canlıya
+Kod tarafı bitti (detay + ölçümler: `docs/tasarim/GRAFIK_TASARIM.md` §26). Tablo = "canlıya
 alınca nerede kırılır" sorusunun cevabı; **senin yapacağın 3 satır** işaretli.
 
 | # | Risk | Durum | Kanıt / ne yapıyor |

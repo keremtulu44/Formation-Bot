@@ -737,7 +737,7 @@ def kontrol_public_hedef(token: str, grup_id: str, chat_id: str = "") -> bool:
         return False
     if not grup_id:
         satir(WARN, "Public kanal hedefi yok (TELEGRAM_GROUP_ID)",
-              "Kanal yayını kapalı: yalnız DM çalışır. Kanal açtıysanız KANAL_ACILIS_PAKETI.md "
+              "Kanal yayını kapalı: yalnız DM çalışır. Kanal açtıysanız docs/operasyon/KANAL_ACILIS_PAKETI.md "
               "adımlarını izleyin: TELEGRAM_GROUP_ID=@kanal_adi + bot YÖNETİCİ.")
         return False
     try:
@@ -993,10 +993,10 @@ def main() -> int:
         print("Her şey yerinde: Render tarafı hazır.")
     elif _sayac[FAIL] == 0:
         print("Kritik hata yok. Uyarıların çoğu 'opsiyonel' (örn. TELEGRAM_TEST_KEY) olabilir:")
-        print("UYARI satırlarını yukarıdan aşağı okuyun, RENDER_DEPLOY.md §1-5 karşılığını anlatır.")
+        print("UYARI satırlarını yukarıdan aşağı okuyun, docs/kurulum/RENDER_DEPLOY.md §1-5 karşılığını anlatır.")
     else:
         print("HATA satırlarını sırayla düzeltin; her biri için öneri satır altında yazıyor.")
-    print("Ayrıntılı rehber: RENDER_DEPLOY.md")
+    print("Ayrıntılı rehber: docs/kurulum/RENDER_DEPLOY.md")
     return 1 if _sayac[FAIL] else 0
 
 

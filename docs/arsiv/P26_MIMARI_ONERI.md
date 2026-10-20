@@ -1,3 +1,6 @@
+> **ARŞİV (2026-10-20):** Bu belge **yürürlükte değildir**; tarihsel kayıt olarak saklanır.
+> Güncel belge haritası: [docs/README.md](../README.md). Taşıma sırasında içerik değiştirilmedi.
+
 # P2.6 — AUDIT + MİMARİ ÖNERİ (implementasyon YOK)
 
 **Tarih:** 2026-10-04 · **HEAD:** `623592f` (branch `arena/01a1020f-formation-bot`, PR #15)

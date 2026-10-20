@@ -1,6 +1,6 @@
 # Formation-Bot Arşiv Araştırma Raporu
 > Bu dosya tablo ekidir: ham aggregatlar soru başına bölümlenir.
-> Okunabilir özet ve yorum: `docs/ARASTIRMA_SONUCLARI.md`.
+> Okunabilir özet ve yorum: `docs/arastirma/ARASTIRMA_SONUCLARI.md`.
 > Yalnız karar için okuyan, aşağıdaki tablolara inmeden özetle yetinebilir.
 
 ## ÖZET — ilk bakışta (176 sembol × 4 TF, 994.142 gözlem)
@@ -12,7 +12,7 @@
 - **PH teste dayanmaz** (%36,0 → 4+ testte %8,0); **PL tutar** (%37,5 → %33,3).
 - **WH/WL medyan 3 native bar**'da süpürülür; WL ~3–5 puan daha çok; INTERNAL > EXTERNAL.
 - **Hacim sezgiye ters**: dokunuşta yüksek RVOL → daha ZAYIF tepki (4h Q1 %70,1 → Q4 %61,0). Hacim burada teyit değil ihlal sinyali.
-- **MS %5,0 seride çöküyor** (35/704) — canlı bot bu serilerde MS alanını sessizce boş bırakıyor (liste: `docs/arastirma_ms_hatali_seriler.txt`).
+- **MS %5,0 seride çöküyor** (35/704) — canlı bot bu serilerde MS alanını sessizce boş bırakıyor (liste: `docs/arastirma/arastirma_ms_hatali_seriler.txt`).
 
 Kaynak: `backfill_data/` (365 gün derin çekim) · Sembol: 176 · Havuz dışı: BRENT
 

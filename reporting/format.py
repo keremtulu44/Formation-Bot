@@ -8,7 +8,7 @@ orkestratöre doğru küçülür.
 Davranış değişmedi: metinler birebir aynı (yalnız taşıma).
 
 G0 (2026-10-13): `sayi()` kullanıcıya dönük tüm metinler için tek sayı
-standardıdır — ondalık ayıracı Türkçe virgül. Bkz. GRAFIK_TASARIM.md §15/§19.
+standardıdır — ondalık ayıracı Türkçe virgül. Bkz. docs/tasarim/GRAFIK_TASARIM.md §15/§19.
 """
 
 import logging

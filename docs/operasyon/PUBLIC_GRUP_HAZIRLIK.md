@@ -66,7 +66,7 @@ geçince CI'da kırmızı oluyordu — kayıt `now` parametresi verilmeden duvar
    tek deneme yapar, hata sayar ve bırakır. Telegram'ın pratik sınırı grup başına ~20 mesaj/dk'dır;
    grup + kanal + DM üçe çıkınca hedef başına kuyruk/pacing gerekir.
 5. **Digest ve karne public'e kapalı.** 18:45 izleme digest'i ve Cuma karnesi yalnız DM'e gidiyor.
-   Bu, YAPILACAKLAR.md'deki **B9** maddesinin de özü: "kanala ne gitsin?" kararı verilmeden
+   Bu, docs/arsiv/YAPILACAKLAR.md'deki **B9** maddesinin de özü: "kanala ne gitsin?" kararı verilmeden
    grup açılırsa grup sadece 2 tip mesaj + 2 özet görür (çok seyrek).
 6. **Yetki modeli yok.** Grup ID'sini `TELEGRAM_CHAT_ID` yaparsan **her üye** `/panel` (tüm evreni
    yeniden hesaplar) ve `/tara` çalıştırabilir → kaynak kötüye kullanımı. Üye bazlı rol
@@ -432,7 +432,7 @@ taşınacak, soru-cevap ihtiyacı yok. Kanalda üye listesi görünmez, spam/mod
 yoktur ve `t.me/...` adresi X profiline konabilir. Yorum istenirse kanala bağlı bir
 **tartışma grubu** eklenir; bot oraya hiçbir şey göndermez.
 
-Açıklama + sabitlenmiş karşılama metinleri ve kurulum adımları: **`KANAL_ACILIS_PAKETI.md`**;
+Açıklama + sabitlenmiş karşılama metinleri ve kurulum adımları: **`docs/operasyon/KANAL_ACILIS_PAKETI.md`**;
 metinlerin tek kaynağı `acilis_metinleri.py`, uygulama aracı
 `python kanal_acilis.py --durum|--uygula`.
 

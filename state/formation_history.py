@@ -6,7 +6,7 @@
 # (`state/formation_identity.py`). Tek slot, tek formasyon demektir. Aynı
 # pencere içinde iki canlı formasyon varsa tek slot yetmez: ölçümlerde tek
 # canlı formasyonda bile pencere kaydığında gereksiz yeni stable_id üretimi
-# görüldü (bkz. PHASE2_TASARIM_NOTLARI.md §2). Faz 2.1 bunu çözer: tek slot
+# görüldü (bkz. docs/tasarim/PHASE2_TASARIM_NOTLARI.md §2). Faz 2.1 bunu çözer: tek slot
 # yerine, (stock,tf) başına birden fazla formation kaydı tutan bir defter.
 #
 # KİMLİK BAĞI (identity link)

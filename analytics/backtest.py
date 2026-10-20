@@ -581,7 +581,7 @@ def _s(v, birim="", yuzde=False):
     if yuzde:
         return f"{v:+.1f}%".replace(".", ",")
     # Önce sondaki sıfırlar kırpılır (ayraç nokta iken), sonra virgüle çevrilir:
-    # ters sırada `46,00` → `46,` kalırdı. G0 biçim standardı, GRAFIK_TASARIM.md §19.
+    # ters sırada `46,00` → `46,` kalırdı. G0 biçim standardı, docs/tasarim/GRAFIK_TASARIM.md §19.
     t = f"{v:.2f}".rstrip("0").rstrip(".")
     return t.replace(".", ",") + birim
 

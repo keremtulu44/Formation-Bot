@@ -42,7 +42,7 @@ from typing import Any, Iterable
 
 KATEGORILER = ("zone", "dokunus", "swing", "event", "meta")
 VARSAYILAN_CIKTI = "arastirma_cikti"
-VARSAYILAN_RAPOR = "docs/ARASTIRMA_BULGULARI.md"
+VARSAYILAN_RAPOR = "docs/arastirma/ARASTIRMA_BULGULARI.md"
 
 
 def _repo_koku() -> Path:

@@ -1,6 +1,6 @@
 FORMATION-BOT ARŞİV ARAŞTIRMA RAPORU — DÜZ METİN
 Ölçüm tabanı: 176 sembol × 4 zaman dilimi = 704 seri, 994.142 gözlem satırı,
-365 günlük gerçek arşiv (backfill_data/). Tüm sayılar docs/ARASTIRMA_BULGULARI.md
+365 günlük gerçek arşiv (backfill_data/). Tüm sayılar docs/arastirma/ARASTIRMA_BULGULARI.md
 tablolarından alınmıştır; aksi belirtilmedikçe tüm hücreler n>=30 (YETERLI) güvenindedir.
 
 Ölçüm birimi ve yön kuralı: OB/FVG'de iki eksen birlikte ölçüldü: yön-ancored
@@ -195,7 +195,7 @@ CANLI BOTTA SESSİZ MS ÇÖKMESİ
 ----------------------------------------------------------------------
 704 serinin 35'inde (%5,0) MS motoru "ValueError: confirmed break references must
 still be active" ile patladı: 1h'de 20, 2h'de 6, 4h'te 4, 1d'de 5 seri. Tam sembol
-listesi docs/arastirma_ms_hatali_seriler.txt dosyasındadır.
+listesi docs/arastirma/arastirma_ms_hatali_seriler.txt dosyasındadır.
 Canlı botta _execute_domain hatayı yuttuğu için bot çökmüyor; bunun yerine o
 sembolün MS domaini SESSİZCE BOŞ kalıyor — BOS/CHOCH sinyali üretilmiyor ve
 kullanıcıya uyarı gitmiyor. 1h'de 20 sembol, botun her gün ~20 sembol için yapısal

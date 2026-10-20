@@ -135,7 +135,7 @@ Formation-Bot/
 ├── setup.sh               # Linux kurulum (Oracle Cloud)
 ├── bist-bot.service       # systemd service
 ├── .env.example           # Env örneği
-├── FORMASYON_MANTIGI.md   # Türkçe mantık dökümanı
+├── docs/tasarim/FORMASYON_MANTIGI.md   # Türkçe mantık dökümanı
 ├── bot_data/              # Örnek/seed veri (seed okuma) - gitignore'da
 │   └── THYAO.json         # Human-readable; PICKLE_CACHE=1 ise .pkl de yazılır
 └── logs/

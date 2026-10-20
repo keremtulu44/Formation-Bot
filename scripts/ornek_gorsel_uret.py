@@ -23,7 +23,7 @@ Kullanım:
     python scripts/ornek_gorsel_uret.py --senaryo bayrak_aday --mobil
     python scripts/ornek_gorsel_uret.py --senaryo hepsi --json
 
-Çıktı varsayılan yeri: docs/ornek_galeri/ornek_<senaryo>_<tf>.png
+Çıktı varsayılan yeri: docs/gorseller/ornek_galeri/ornek_<senaryo>_<tf>.png
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ from domain_engines.market_structure.models import Direction  # noqa: E402
 
 IST = timezone(timedelta(hours=3))
 TF_DOSYA = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
-VARSAYILAN_DIZIN = KOK / "docs" / "ornek_galeri"
+VARSAYILAN_DIZIN = KOK / "docs" / "gorseller" / "ornek_galeri"
 
 
 # ------------------------------------------------------------------ yardımcılar
@@ -654,7 +654,7 @@ def main(argv=None) -> int:
                     help="senaryo adı, virgülle liste, 'manset' (varsayılan: "
                          + ", ".join(MANSITLER) + ") veya 'hepsi'")
     ay.add_argument("--cikti-dizin", default=str(VARSAYILAN_DIZIN),
-                    help="PNG çıktı dizini (varsayılan: docs/ornek_galeri)")
+                    help="PNG çıktı dizini (varsayılan: docs/gorseller/ornek_galeri)")
     ay.add_argument("--mobil", action="store_true",
                     help="mobil boyut (780×1100, büyük yazı)")
     ay.add_argument("--sade", action="store_true",

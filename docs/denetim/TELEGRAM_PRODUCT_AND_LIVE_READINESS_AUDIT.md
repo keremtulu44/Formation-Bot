@@ -7,7 +7,7 @@
 ## 1. Başlangıç ve korunmuş çalışma ağacı
 
 - Branch: `arena/956879bf-formation-bot`; HEAD: `f97c15cde20997b2f2d67e55b853a850832bfd07` (`fix: preserve order block rolling parity`). HEAD değiştirilmedi.
-- Önceki audit’in başlangıç kaydı temiz olmayan çalışma ağacı olduğunu gösteriyordu. Bu turda hiçbir başlangıç değişikliği silinmedi/revert edilmedi; `TELEGRAM_SYSTEM_AUDIT.md` ve diğer mevcut debug/audit dosyaları da korunuyor.
+- Önceki audit’in başlangıç kaydı temiz olmayan çalışma ağacı olduğunu gösteriyordu. Bu turda hiçbir başlangıç değişikliği silinmedi/revert edilmedi; `docs/denetim/TELEGRAM_SYSTEM_AUDIT.md` ve diğer mevcut debug/audit dosyaları da korunuyor.
 - Bu tur sonunda da çalışma ağacı değişiklik içeriyor. Son `git status` ile güncel liste aşağıda rapor sonuna kaydedildi.
 - Önceki audit raporları commit history değil, uncommitted workspace dosyalarıdır; başlangıç raporundaki sayıların tekrar üretilebilir kanıt olmadan doğru olduğu varsayılmadı.
 
@@ -128,7 +128,7 @@ Ana döngü summary 09:55 ve 18:45’te; akşam bakım DM’i 18:10–19:00 penc
 
 ### Format örnekleri
 
-`TELEGRAM_FORMAT_COMPARISON_EXAMPLES.md` içinde cache’ten seçilmiş 12 gerçek/replay Formation olayı için A–E beş format bulunur. A verbose `format_message`, B mevcut compact DM formatter’dır; C–E yalnızca sunum önerileridir. Tüm örneklerin ham quality/level/band/contraction/touch/age değerleri ve kaynak timestamp’i tabloda korunmuştur; format otomatik seçilmedi. MTF/domain context veya yeni OHLCV değeri üretilmedi. A–E uzunlukları yalnızca karşılaştırma ölçüsüdür.
+`docs/denetim/TELEGRAM_FORMAT_COMPARISON_EXAMPLES.md` içinde cache’ten seçilmiş 12 gerçek/replay Formation olayı için A–E beş format bulunur. A verbose `format_message`, B mevcut compact DM formatter’dır; C–E yalnızca sunum önerileridir. Tüm örneklerin ham quality/level/band/contraction/touch/age değerleri ve kaynak timestamp’i tabloda korunmuştur; format otomatik seçilmedi. MTF/domain context veya yeni OHLCV değeri üretilmedi. A–E uzunlukları yalnızca karşılaştırma ölçüsüdür.
 
 ## 4. Aşama 3 — canlıya hazırlık ve riskler
 
@@ -217,12 +217,12 @@ Kullanıcı ileride deploy’a izin verirse 24 saatlik gözlem planı (bu oturum
 
 ## 8. Bu raporda dokunulan dosyalar / çalışma ağacı
 
-Bu turdaki uygulama/test ekleri: `notifier.py` (cooldown/cap merge ve Istanbul time state), `test_telegram_notification_delivery.py`, `test_supabase_integration.py`; denetim düzeltmesi turunda `test_live_data_flow.py` (yalnız test, üretim kodu değişmedi); ayrı karşılaştırma eki `TELEGRAM_FORMAT_COMPARISON_EXAMPLES.md`; bu rapor. Önceden bu audit kapsamında bulunan Formation/outbox/watch/parity değişiklikleri korunmuştur.
+Bu turdaki uygulama/test ekleri: `notifier.py` (cooldown/cap merge ve Istanbul time state), `test_telegram_notification_delivery.py`, `test_supabase_integration.py`; denetim düzeltmesi turunda `test_live_data_flow.py` (yalnız test, üretim kodu değişmedi); ayrı karşılaştırma eki `docs/denetim/TELEGRAM_FORMAT_COMPARISON_EXAMPLES.md`; bu rapor. Önceden bu audit kapsamında bulunan Formation/outbox/watch/parity değişiklikleri korunmuştur.
 
 Son durum (commit edilmedi):
 
 - Modified: `main.py`, `notifier.py`, `telegram_alert_flow.py`, `test_domain_incremental_parity.py`, `test_domain_integration_regressions.py`, `test_telegram_alert_flow.py`, `test_supabase_integration.py`.
-- Untracked: `TELEGRAM_FORMAT_COMPARISON_EXAMPLES.md`, `TELEGRAM_PRODUCT_AND_LIVE_READINESS_AUDIT.md`, `TELEGRAM_SYSTEM_AUDIT.md`, `formation_dm_context.py`, `notification_outbox.py`, `test_formation_dm_context.py`, `test_live_data_flow.py`, `test_telegram_notification_delivery.py`.
+- Untracked: `docs/denetim/TELEGRAM_FORMAT_COMPARISON_EXAMPLES.md`, `TELEGRAM_PRODUCT_AND_LIVE_READINESS_AUDIT.md`, `docs/denetim/TELEGRAM_SYSTEM_AUDIT.md`, `formation_dm_context.py`, `notification_outbox.py`, `test_formation_dm_context.py`, `test_live_data_flow.py`, `test_telegram_notification_delivery.py`.
 - `bot_data` içinde test state’i oluşturulmadı/silinmedi; akış testleri tmp disk kullandı. Repodaki mevcut log/debug dosyaları temizlenmedi.
 - Commit/push yapılmadı; branch `arena/956879bf-formation-bot` olarak kaldı.
 
@@ -230,7 +230,7 @@ Son durum (commit edilmedi):
 
 # AŞAMA 4 — Veri Güvenliği, Takvim Politikası ve Kontrollü Doğrulama
 
-Tarih: 2026-10-09. Plan: `ASAMA4_CANLIYA_HAZIRLIK_PLANI.md` (kullanıcı onaylı, tam uygulama; hafta sonu politikası kararı sonraya bırakıldı). Runbook: `CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md`.
+Tarih: 2026-10-09. Plan: `docs/arsiv/ASAMA4_CANLIYA_HAZIRLIK_PLANI.md` (kullanıcı onaylı, tam uygulama; hafta sonu politikası kararı sonraya bırakıldı). Runbook: `docs/operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md`.
 
 ## 1. Başlangıç durumu
 
@@ -292,7 +292,7 @@ Tüm testler ağ çağrısız; Telegram/Supabase env unset. Not: ilk izole suite
 
 ## 8. Canlı doğrulama planı
 
-`CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md` — Yahoo (48/48 eşleme, tazelik, rate-limit, fallback), Render (restart/disk/tek-instance), Supabase (bağlantı, bozuk snapshot, okuma-yazma ayrımı), Telegram (getMe, test hedefi, kabul→sent, 429, restart-tekrar). Üretim adımları `[ONAY GEREKLİ]`; STOP/rollback/tekrar-mesaj playbooks dahil. **Hiçbiri çalıştırılmadı.**
+`docs/operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md` — Yahoo (48/48 eşleme, tazelik, rate-limit, fallback), Render (restart/disk/tek-instance), Supabase (bağlantı, bozuk snapshot, okuma-yazma ayrımı), Telegram (getMe, test hedefi, kabul→sent, 429, restart-tekrar). Üretim adımları `[ONAY GEREKLİ]`; STOP/rollback/tekrar-mesaj playbooks dahil. **Hiçbiri çalıştırılmadı.**
 
 ## 9. Kalan riskler (gerçek servis doğrulaması yok)
 

@@ -135,7 +135,7 @@ Bir formasyonun geçerli olması için:
 
 ### 2.6 Kalite Katsayıları (Kritik — Değiştirilmedi)
 
-**Döküman (`FORMASYON_MANTIGI.md` / `PINE_FARK_ANALIZI.md`):**
+**Döküman (`docs/tasarim/FORMASYON_MANTIGI.md` / `docs/tasarim/PINE_FARK_ANALIZI.md`):**
 ```
 0.28 / 0.20 / 0.12 / 0.16 / 0.12 / 0.07 / 0.05
 ```
@@ -145,7 +145,7 @@ Bir formasyonun geçerli olması için:
 0.26 / 0.18 / 0.12 / 0.20 / 0.10 / 0.07 / 0.07
 ```
 
-**Durum:** `PINE_FARK_ANALIZI.md` §5'te 12 maddelik doğrulama listesi var. `Pine` (`ARGENT v0.4.6` export — `Yeni Metin Belgesi.txt`) henüz bu ortamda bulunmadı. `PINE_FARK_ANALIZI.md`'de belirtilen 12 doğrulama maddesi açılmadan bu katsayılar **değiştirilmez**. Bu, `YAPILACAKLAR.md`'de açık bir kuraldır.
+**Durum:** `docs/tasarim/PINE_FARK_ANALIZI.md` §5'te 12 maddelik doğrulama listesi var. `Pine` (`ARGENT v0.4.6` export — `Yeni Metin Belgesi.txt`) henüz bu ortamda bulunmadı. `docs/tasarim/PINE_FARK_ANALIZI.md`'de belirtilen 12 doğrulama maddesi açılmadan bu katsayılar **değiştirilmez**. Bu, `docs/arsiv/YAPILACAKLAR.md`'de açık bir kuraldır.
 
 ---
 
@@ -177,14 +177,14 @@ Formation-Bot/
 ├── README.md                      # 24194 bayt; tam durum tablosu (Faz 1-5, batch 1-8),
 │                                  # test sonuçları (305 pytest passed), canlı tarama açıklaması,
 │                                  # Pine karşılaştırma rehberi
-├── FORMASYON_MANTIGI.md           # Pine v0.4.6 matematiksel açıklama; 4 pivot, slope, contraction, apex
-├── PINE_FARK_ANALIZI.md           # Çalışma defteri; 12 maddelik doğrulama listesi; kalite katsayı farkı;
+├── docs/tasarim/FORMASYON_MANTIGI.md           # Pine v0.4.6 matematiksel açıklama; 4 pivot, slope, contraction, apex
+├── docs/tasarim/PINE_FARK_ANALIZI.md           # Çalışma defteri; 12 maddelik doğrulama listesi; kalite katsayı farkı;
 │                                  # beklenen Pine dosyası (`Yeni Metin Belgesi.txt`) henüz gelmedi
-├── KODLAMA_PLANI.md               # Batch planı; her batch: kapsam / dosya / test / kabul kriteri
-├── YAPILACAKLAR.md                 # A (düzeltme) / B (iyileştirme) / C (şablon) — tam iş listesi,
+├── docs/arsiv/KODLAMA_PLANI.md               # Batch planı; her batch: kapsam / dosya / test / kabul kriteri
+├── docs/arsiv/YAPILACAKLAR.md                 # A (düzeltme) / B (iyileştirme) / C (şablon) — tam iş listesi,
 │                                  # öncelik (★★★/★★/★), efor (1s / K / O / B)
-├── SORUN_RAPORU.md                 # Ölçümlü teşhis; S1-S11 + ek bulgular; üretim→Telegram hunisi
-├── docs/archive/DOGRULAMA_RAPORU.md  # Dış teşhis bağımsız doğrulaması (TRUE / FALSE / PARTIAL) — arşivde
+├── docs/denetim/SORUN_RAPORU.md                 # Ölçümlü teşhis; S1-S11 + ek bulgular; üretim→Telegram hunisi
+├── docs/arsiv/DOGRULAMA_RAPORU.md  # Dış teşhis bağımsız doğrulaması (TRUE / FALSE / PARTIAL) — arşivde
 │
 ├── config.py                      # Merkezi yapılandırma (TEK KAYNAK):
 │                                  # - BIST_50 = [48 sembol; KOZAL/KOZAA çıkarıldı]
@@ -345,11 +345,11 @@ Formation-Bot/
 │                                  # `/health` pingi; `KEEPALIVE_ALWAYS` (7/24 için)
 │                                  # Not: `RENDER` Free 15 dk trafik yoksa uyur; 5 dk aralık pay bırakır.
 │
-├── RENDER_DEPLOY.md               # Render Free + Supabase + Telegram kurulum rehberi; `build` hatası (`cp314`),
+├── docs/kurulum/RENDER_DEPLOY.md               # Render Free + Supabase + Telegram kurulum rehberi; `build` hatası (`cp314`),
 │                                  # `keep-alive`, `PORT`, `TZ`, webhook (`RENDER_EXTERNAL_URL`)
-├── PUBLIC_GRUP_HAZIRLIK.md         # Kamu grup hazırlığı; `TELEGRAM_GROUP_ID` bağımsız çalışır
-├── KANAL_ACILIS_PAKETI.md         # Kanal açılış metinleri; açıklama, sabitlenmiş karşılama, `kanal_acilis.py`
-├── LOCAL_SETUP.md                  # Yerel kurulum (`pip install`, `.env`, `TERMUX`)
+├── docs/operasyon/PUBLIC_GRUP_HAZIRLIK.md         # Kamu grup hazırlığı; `TELEGRAM_GROUP_ID` bağımsız çalışır
+├── docs/operasyon/KANAL_ACILIS_PAKETI.md         # Kanal açılış metinleri; açıklama, sabitlenmiş karşılama, `kanal_acilis.py`
+├── docs/kurulum/LOCAL_SETUP.md                  # Yerel kurulum (`pip install`, `.env`, `TERMUX`)
 ├── acilis_metinleri.py             # Açılış metinleri (`SESSION_OPEN` / `SESSION_CLOSE` — C1)
 ├── kanal_acilis.py                # `--durum` (kuru çalışma, yazmaz) / `--uygula` (yazar)
 └── supabase_schema.sql             # `state:...` anahtarları için JSONB şema (`state:karne_defteri`, `state:digest_pending`, vb.)
@@ -498,13 +498,13 @@ def haftalik_genislik(defter_path: str, aktif_hisse_sayisi: int = 100) -> dict:
 ### 6.4 Kanal Açılışı (`kanal_acilis.py`)
 
 `kanal_acilis.py --durum` (kuru çalışma, yazmaz) / `--uygula` (yazar) aracı:
-- `KANAL_ACILIS_PAKETI.md`'deki metinleri (`açıklama`, `sabitlenmiş karşılama`) kullanır.
+- `docs/operasyon/KANAL_ACILIS_PAKETI.md`'deki metinleri (`açıklama`, `sabitlenmiş karşılama`) kullanır.
 - `TELEGRAM_GROUP_ID` (`.env`) tanımlı olmalı.
 - `TELEGRAM_BOT_TOKEN` (`.env`) tanımlı olmalı.
 - `kanal_acilis.py` `bot`'u `yönetici` olarak gruba ekler (`TELEGRAM_GROUP_ID`); `kanal` için `channel` ID (`-100...`) kullanılır.
 - `TELEGRAM_CHANNEL_ID` (`.env`) tanımlı değilse `kanal_acilis.py` `grup` olarak açar; `kanal` için `channel` ID eklenmeli.
 
-`PUBLIC_GRUP_HAZIRLIK.md` bu süreci ayrıntılı açıklar.
+`docs/operasyon/PUBLIC_GRUP_HAZIRLIK.md` bu süreci ayrıntılı açıklar.
 
 ---
 
@@ -550,33 +550,33 @@ burada --cache modu ve commit'li bot_data kullanılır.
 
 | Formül / Eşik | Değer (Dengeli) | Açıklama | Kaynak Dosya |
 |---|---|---|---|
-| `upperSlope` | `(hp2 - hp1) / (hb2 - hb1)` | Üst çizgi eğimi (bar farkına bölünmüş fiyat farkı) | `FORMASYON_MANTIGI.md` §2.2 |
-| `lowerSlope` | `(lp2 - lp1) / (lb2 - lb1)` | Alt çizgi eğimi | `FORMASYON_MANTIGI.md` §2.2 |
-| `geometryAtr` | `ATR(14)` veya `ATR(N)` | Fiyat bağımsız ölçek (`Average True Range`) | `FORMASYON_MANTIGI.md` §2.2 |
-| `upperSlopeNorm` | `upperSlope / geometryAtr` | Normalize edilmiş üst eğim | `FORMASYON_MANTIGI.md` §2.2 |
-| `lowerSlopeNorm` | `lowerSlope / geometryAtr` | Normalize edilmiş alt eğim | `FORMASYON_MANTIGI.md` §2.2 |
-| `slopeGapNorm` | `upperSlopeNorm - lowerSlopeNorm` | Eğilim farkı (normalize edilmiş) | `FORMASYON_MANTIGI.md` §2.2 |
-| `flatSlopeNormTol` | `0.024` | Yataylık eşiği (`Dengeli`) | `FORMASYON_MANTIGI.md` §2.1, `config.py` |
-| `minSlopeNormTol` | `0.006` | Minimum eğim (`Dengeli`) | `FORMASYON_MANTIGI.md` §2.1, `config.py` |
-| `parallelSlopeNormTol` | `0.018` (`0.024 * 0.75`) | Paralellik (`Dengeli`) | `FORMASYON_MANTIGI.md` §2.1, `config.py` |
-| `startWidth` | `upperStart - lowerStart` | Başlangıç genişliği (fiyat) | `FORMASYON_MANTIGI.md` §2.3 |
-| `currentWidth` | `upperNow - lowerNow` | Mevcut genişlik (fiyat) | `FORMASYON_MANTIGI.md` §2.3 |
-| `contraction` | `(startWidth - currentWidth) / startWidth` | Daralma oranı (`0` → `1`) | `FORMASYON_MANTIGI.md` §2.3 |
-| `minContraction` | `0.25` (`%25`) | Minimum daralma (`Dengeli`) | `FORMASYON_MANTIGI.md` §2.3, `config.py` |
-| `apexFloat` | `startBar - startWidth / slopeGap` | Üçgen ucu (`float`) | `FORMASYON_MANTIGI.md` §2.5 |
-| `apexBar` | `yuvarla(apexFloat)` | Üçgen ucu (`int` bar) | `FORMASYON_MANTIGI.md` §2.5 |
+| `upperSlope` | `(hp2 - hp1) / (hb2 - hb1)` | Üst çizgi eğimi (bar farkına bölünmüş fiyat farkı) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.2 |
+| `lowerSlope` | `(lp2 - lp1) / (lb2 - lb1)` | Alt çizgi eğimi | `docs/tasarim/FORMASYON_MANTIGI.md` §2.2 |
+| `geometryAtr` | `ATR(14)` veya `ATR(N)` | Fiyat bağımsız ölçek (`Average True Range`) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.2 |
+| `upperSlopeNorm` | `upperSlope / geometryAtr` | Normalize edilmiş üst eğim | `docs/tasarim/FORMASYON_MANTIGI.md` §2.2 |
+| `lowerSlopeNorm` | `lowerSlope / geometryAtr` | Normalize edilmiş alt eğim | `docs/tasarim/FORMASYON_MANTIGI.md` §2.2 |
+| `slopeGapNorm` | `upperSlopeNorm - lowerSlopeNorm` | Eğilim farkı (normalize edilmiş) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.2 |
+| `flatSlopeNormTol` | `0.024` | Yataylık eşiği (`Dengeli`) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.1, `config.py` |
+| `minSlopeNormTol` | `0.006` | Minimum eğim (`Dengeli`) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.1, `config.py` |
+| `parallelSlopeNormTol` | `0.018` (`0.024 * 0.75`) | Paralellik (`Dengeli`) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.1, `config.py` |
+| `startWidth` | `upperStart - lowerStart` | Başlangıç genişliği (fiyat) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.3 |
+| `currentWidth` | `upperNow - lowerNow` | Mevcut genişlik (fiyat) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.3 |
+| `contraction` | `(startWidth - currentWidth) / startWidth` | Daralma oranı (`0` → `1`) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.3 |
+| `minContraction` | `0.25` (`%25`) | Minimum daralma (`Dengeli`) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.3, `config.py` |
+| `apexFloat` | `startBar - startWidth / slopeGap` | Üçgen ucu (`float`) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.5 |
+| `apexBar` | `yuvarla(apexFloat)` | Üçgen ucu (`int` bar) | `docs/tasarim/FORMASYON_MANTIGI.md` §2.5 |
 | `KARNE_HEDEF_ATR` | `1.5` | Karne hedef (`ATR` bazlı) | `config.py` |
 | `KARNE_STOP_ATR` | `1.0` | Karne stop (`ATR` bazlı) | `config.py` |
 | `KARNE_HORIZON_BAR` | `10` | Karne ufuk (`bar` sayısı) | `config.py` |
 | `EVREN_BUYUME_UYARI_ESIGI` | `48` | Evren büyüme uyarı eşiği (`100` için güncellenmeli) | `config.py` |
 | `BIST_OPEN` | `09:50` (İstanbul) | BIST seans açılışı | `config.py`, `data.py` |
 | `BIST_CLOSE` | `18:10` (İstanbul) | BIST seans kapanışı | `config.py`, `data.py` |
-| Kalite katsayıları (doküman) | `0.28 / 0.20 / 0.12 / 0.16 / 0.12 / 0.07 / 0.05` | `Pine v0.4.6` (`ARGENT`) — **değiştirilmedi** | `FORMASYON_MANTIGI.md`, `PINE_FARK_ANALIZI.md` |
+| Kalite katsayıları (doküman) | `0.28 / 0.20 / 0.12 / 0.16 / 0.12 / 0.07 / 0.05` | `Pine v0.4.6` (`ARGENT`) — **değiştirilmedi** | `docs/tasarim/FORMASYON_MANTIGI.md`, `docs/tasarim/PINE_FARK_ANALIZI.md` |
 | Kalite katsayıları (kod) | `0.26 / 0.18 / 0.12 / 0.20 / 0.10 / 0.07 / 0.07` | Python portu (`patterns/`) — **değiştirilmedi** (`Pine` gelmeden) | `patterns/` |
-| `minAge` (yaş) | `16` (`Dengeli`) | Minimum formasyon yaşı (`bar` sayısı) | `FORMASYON_MANTIGI.md` §3 |
-| `upperTouches` | `>= 2` | Üst çizgi temas sayısı (`Dengeli`) | `FORMASYON_MANTIGI.md` §3 |
-| `lowerTouches` | `>= 2` | Alt çizgi temas sayısı (`Dengeli`) | `FORMASYON_MANTIGI.md` §3 |
-| `touchDistribution` | `>= 4` temas toplam, son temas `start`'tan yeterince uzak | Dokunuş dağılımı (`Dengeli`) | `FORMASYON_MANTIGI.md` §3 |
+| `minAge` (yaş) | `16` (`Dengeli`) | Minimum formasyon yaşı (`bar` sayısı) | `docs/tasarim/FORMASYON_MANTIGI.md` §3 |
+| `upperTouches` | `>= 2` | Üst çizgi temas sayısı (`Dengeli`) | `docs/tasarim/FORMASYON_MANTIGI.md` §3 |
+| `lowerTouches` | `>= 2` | Alt çizgi temas sayısı (`Dengeli`) | `docs/tasarim/FORMASYON_MANTIGI.md` §3 |
+| `touchDistribution` | `>= 4` temas toplam, son temas `start`'tan yeterince uzak | Dokunuş dağılımı (`Dengeli`) | `docs/tasarim/FORMASYON_MANTIGI.md` §3 |
 
 ---
 
