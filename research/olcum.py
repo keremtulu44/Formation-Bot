@@ -42,6 +42,7 @@ __all__ = [
     "ESIK_IZGARA",
     "YUKSEKLIK_KOVALARI",
     "PAY_PENCERELERI",
+    "YAKINLIK_IZGARA",
     "DENEME_ESIKLERI",
     "SWING_PENCERESI",
     "UZUN_PENCERE",
@@ -88,6 +89,12 @@ SWING_PENCERESI: int = 40
 #: "Yavaş ama kalıcı" ayrımı için uzun uzanım penceresi (native TF barı).
 #: Ana horizon (12) tepkinin varlığını, bu pencere kalıcılığını ölçer.
 UZUN_PENCERE: int = 40
+
+#: Formasyon sınırına yakınlık ızgarası (ATR). Kullanıcı eşiği 1.00'dır; 0.50 /
+#: 1.50 / 2.00 duyarlılık kontrolüdür. `ESIK_IZGARA`dan AYRI tutulur: 0.25 zaten
+#: swing tarafında temas/deneme eşiğidir ve yakınlık için fazla geniştir.
+#: Ölçümden ÖNCE sabittir; `config_hash`'e girer.
+YAKINLIK_IZGARA: tuple[float, ...] = (0.50, 1.00, 1.50, 2.00)
 
 
 def _esik_etiketi(esik: float) -> str:

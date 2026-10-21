@@ -514,14 +514,15 @@ def test_sembol_timeframe_gozlem_sentetik_ucan_uca() -> None:
     frame = _sentetik_frame(fiyatlar)
 
     gozlem = kayit.sembol_timeframe_gozlem("TEST", "4h", frame)
-    assert set(gozlem) == {"zone", "dokunus", "swing", "event", "meta"}
+    # Formasyon hattı v1'de eklendi: `frm` + `frm_olay` artık sözleşmenin parçası.
+    assert set(gozlem) == {"zone", "dokunus", "swing", "event", "frm", "frm_olay", "meta"}
     meta = gozlem["meta"][0]
     assert meta["symbol"] == "TEST" and meta["timeframe"] == "4h"
     assert meta["bar_sayisi"] == 140
     assert meta["engine_version"] == kayit.ENGINE_VERSION
     assert meta["config_hash"] == kayit.config_hash()
 
-    for kategori in ("zone", "dokunus", "swing", "event"):
+    for kategori in ("zone", "dokunus", "swing", "event", "frm", "frm_olay"):
         for satir in gozlem[kategori]:
             assert satir["engine_version"] == kayit.ENGINE_VERSION
             assert satir["config_hash"] == kayit.config_hash()

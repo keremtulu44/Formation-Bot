@@ -83,3 +83,6 @@ arastirma_cikti/
 .coverage
 .ruff_cache/
 .pytest_cache/
+
+# Koşu kilidi (runtime artefakt)
+*.kilit

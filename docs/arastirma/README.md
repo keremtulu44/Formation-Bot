@@ -16,6 +16,7 @@ tartışmalarında sayı gerektiğinde buraya bakılır.
 | [ARASTIRMA_HATTI.md](ARASTIRMA_HATTI.md) | Yöntem, modüller, anti-lookahead sözleşmesi | Ölçüme güvenmeden önce |
 | **[YASAM_TABLOSU.md](YASAM_TABLOSU.md)** | **Soru sicili:** OB/FVG/formasyon için yaşam tablosu, kilitli sorular, cevap formatı | Yeni ölçüm yapmadan önce |
 | **[KOLON_SOZLUGU.md](KOLON_SOZLUGU.md)** | **Ortak dil:** her kolonun anlamı, birimi, `n` birimi, sınıf değerleri, formasyon tablosu taslağı | Sorgu yazmadan / tablo okumadan önce |
+| **[FORMASYON_SONUCLARI.md](FORMASYON_SONUCLARI.md)** | **Formasyon cevapları:** FRM-01…20 kartları (n + taban + GA) | Formasyon sorularının cevabı |
 | [ARASTIRMA_RAPORU_DUZMETIN.txt](ARASTIRMA_RAPORU_DUZMETIN.txt) | Aynı sonuçların düz metin dışa aktarımı (paylaşım için) | Telegram/forum aktarımı |
 | [arastirma_ms_hatali_seriler.txt](arastirma_ms_hatali_seriler.txt) | MS motorunun patladığı **35 serinin** listesi | Açık bulgu — aşağıya bak |
 

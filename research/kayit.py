@@ -88,6 +88,9 @@ _ANAHTARLAR = (
     "DENEME_ESIKLERI",
     "SWING_PENCERESI",
     "UZUN_PENCERE",
+    # Formasyon yakınlık ızgarası (v1): eşik seçimi ölçümden ÖNCE sabitlenir.
+    # Burada olmazsa config_hash değişmez ve eski/yeni satırlar sessizce karışır.
+    "YAKINLIK_IZGARA",
 )
 
 
@@ -771,4 +774,35 @@ def sembol_timeframe_gozlem(
         "config_hash": config_hash(),
         **fvg_meta,
     }]
-    return {"zone": zone_sat, "dokunus": dokunuslar, "swing": swingler, "event": eventler, "meta": meta}
+    # 4) FORMASYON: kendi motorunu replay eder; defterin offline karşılığı.
+    #    MS rol geçmişi + VP + zone kesişimi aynı geçişte beslenir (ek geçiş yok).
+    from research.formasyon import formasyon_kosu
+
+    fiyat_by_swing = {}
+    for _sw in (ms_details.get("external_swings") or ()):
+        try:
+            fiyat_by_swing[(str(getattr(_sw, "scope", "EXTERNAL")), int(getattr(_sw, "identity", 0) or 0))] = float(_sw.price)
+        except (TypeError, ValueError, AttributeError):
+            continue
+    # MS BOS olay barları (FRM-11): teyit ile aynı barda mı?
+    ms_bos = []
+    for _ev in (ms_details.get("event_history") or ()):
+        if str(getattr(_ev, "event_type", "")) != "EVENT_BOS":
+            continue
+        _bar = getattr(_ev, "event_bar", None)
+        if _bar is None:
+            continue
+        try:
+            ms_bos.append((int(_bar), int(getattr(_ev, "direction", 0) or 0)))
+        except (TypeError, ValueError):
+            continue
+
+    frm, frm_olay, frm_meta = formasyon_kosu(
+        data, symbol=symbol, timeframe=timeframe,
+        rol_grup=rol_grup, fiyat_by_swing=fiyat_by_swing,
+        vp_history=vp_history, zone_rows=zone_sat, ms_olaylari=ms_bos,
+    )
+    meta[0].update(frm_meta)
+
+    return {"zone": zone_sat, "dokunus": dokunuslar, "swing": swingler, "event": eventler,
+            "frm": frm, "frm_olay": frm_olay, "meta": meta}

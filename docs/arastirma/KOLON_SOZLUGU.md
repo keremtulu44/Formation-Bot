@@ -481,7 +481,11 @@ Mesafe, **o barda açık olan** rol aralığından (`rol_ilk_bar ≤ doğum ≤ 
 
 ### 13.5 Mesafe bloğu — "1 ATR yaklaştı" ★
 
-Yaşam boyunca her bar için `U_b` = üst sınır, `L_b` = alt sınır, `A_b` = o barın ATR'si.
+**Ölçüm penceresi: doğumdan kırılıma KADAR.** Kırılımdan sonra fiyat zaten sınırın
+ötesindedir; o barlar katılırsa mesafe her zaman 0 çıkar ve "yaklaştı" bilgisi yok olur.
+Kırılım yoksa tüm ömür kullanılır. `frm_mesafe_olcum_bar` kaç barın ölçüldüğünü söyler.
+
+Her bar için `U_b` = üst sınır, `L_b` = alt sınır, `A_b` = o barın ATR'si.
 
 **İşaretsiz iki ayrı ölçü** (karışmasın diye ayrı kolon):
 
@@ -497,6 +501,7 @@ asim     = max(0, H_b - U_b) / A_b     → ne kadar aştı
 | `frm_yakinlik_alt_fitil_atr` ★ | ATR | Alt sınıra en çok yaklaşma (fitil) |
 | `frm_yakinlik_alt_kapanis_atr` ★ | ATR | Aynı ölçü, kapanış |
 | `frm_yakinlik_ust_bar_time` ★ | zaman | O anın barı (çapa; kart bunu yazar) |
+| `frm_mesafe_olcum_bar` ★ | bar | Mesafe bloğunun kaç barda ölçüldüğü (kırılım öncesi) |
 | `frm_yakinlik_alt_bar_time` ★ | zaman | Aynı |
 | `…_atr_dogum` (4 varyant) ○ | ATR | Aynı ölçüler, **doğum ATR'si** ile — sabit cetvel |
 | `frm_asim_ust_fitil_atr` ★ | ATR | Üst sınırı en fazla ne kadar aştı |
@@ -529,8 +534,10 @@ pencerede hesaplamak "yaklaşan formasyon tepki verdi" cümlesini totoloji yapar
 | `frm_kirilim_deneme` ★ | sayı | Kırılım denemesi sayısı (buffer'a giriş + geri dönüş epizodu) |
 | `frm_kirilim_ilk_deneme_gecikme_bar` ★ | bar | İlk denemenin doğumdan uzaklığı |
 | `frm_kirilim_son_deneme_gecikme_bar` ○ | bar | Son deneme |
-| `frm_teyit_deneme_no` ★ | sayı | **Kaçıncı denemede** teyit alındı (`null` = almadı) |
+| `frm_teyit_deneme_no` ★ | sayı | **Kaçıncı denemede** teyit alındı (`0` = ilk girişte) |
 | `frm_kirilim_deneme_var` ★ | bool | En az bir deneme |
+| `frm_kirilim_zayif_deneme` ★ | sayı | Yalnız `KIRILIM_DENEMESI` (zayıf) epizodu — **ayrı** sayım |
+| `frm_kirilim_teyitli_var` ★ | bool | Formasyon hiç `KIRILIM_TEYITLI` gördü mü |
 
 **Deneme tanımı (öneri — kodlanmadan önce onaylanacak):** fiyat etkin kırılım buffer'ı
 kadar sınırı aşar, sonra `retest_window` bar içinde geri döner. **Tam sayım replay'den
@@ -561,6 +568,10 @@ farkı, ölçüm belirsizliğinin kendisidir ve kartta yazılır.
 | `frm_faz_gecis_sayisi` ○ | sayı | Toplam state geçişi (osilasyon ölçüsü) |
 | `frm_olgunlasma_bar_time` ★ | zaman | `OLGUNLASIYOR`'a ilk giriş |
 | `frm_hazirlik_bar_time` ★ | zaman | `KIRILIM_HAZIRLIGI`'ne ilk giriş |
+| `frm_oncul_getiri_20bar_atr` ★ | ATR | Doğumdan **önceki** 20 barın getirisi (FRM-01) |
+| `frm_oncul_getiri_5bar_atr` ○ | ATR | Aynı ölçü, 5 bar |
+| `daralma_orani` ★ | oran | `1 − current_width/start_width` (kırılıma kadar) |
+| `current_width_son` ○ | fiyat | Son ölçülen genişlik |
 
 ### 13.9 Kırılım bloğu (defterden birebir)
 
@@ -604,7 +615,15 @@ birimindedir, ATR değil. Bu yüzden türetilmiş üç kolon eklenir:
 | `sansur` ★ | bool | Koşu sonunda hâlâ açık |
 | `frm_teyit_sonrasi_mfe_atr` ★ | ATR | Teyitten sonra, kırılım yönünde **en büyük** uzanım (12 bar / 40 bar) |
 | `frm_teyit_sonrasi_mae_atr` ★ | ATR | Teyitten sonra kırılım yönünün **tersine** en büyük uzanım |
-| `frm_gecersiz_state` ○ | sınıf | Geçersizleşmeden **önceki** state (hangi aşamada öldü) |
+| `frm_teyit_ms_bos_ayni_bar` ★ | bool | Teyit barında MS BOS var mı (FRM-11) |
+| `frm_teyit_ms_bos_ayni_yon` ★ | bool | Aynı bar **ve** aynı yön |
+| `frm_teyit_ms_bos_gecikme_bar` ★ | bar | En yakın BOS'a işaretli bar farkı (±10 içinde) |
+| `frm_gecersiz_state` ○ | sınıf | **`FORMASYON_GECERSIZ`'e ilk girişten önceki** state |
+
+**Ömür tanımı (düzeltme).** `omur_bar` = **ölüm barı − doğum barı + 1**, burada ölüm
+barı terminal/ölü state'e **ilk giriş**tir. Motor ölü formasyonu birkaç bar daha taşır;
+son barı kullanmak ömrü ve faz sürelerini şişirir. Ham son bar `son_bar`, ölçüm sonu
+`olcum_son_bar` olarak ayrıca yazılır.
 
 **Ölüm ayrımı korunur.** `BASARISIZ_KIRILIM` tek tür değildir: teyit almadan
 başarısız olan ile teyitten sonra geçersizleşen ayrı hikâyelerdir
@@ -618,10 +637,17 @@ ufuk ailesi). Aksi halde FRM-16 tanımsız kalır.
 
 ### 13.12 `frm_olay` tablosu
 
-`stable_id`, `olay_type` (`NEW_PATTERN`, `DEFINED`, `MATURE`, `PREP`,
+`stable_id`, `olay_type` (`NEW_PATTERN`, `DEFINED`, `MATURE`, `PREP`, `POLE`,
 `BREAK_CANDIDATE`, `COUNTER_BREAK`, `BREAK_CONFIRMED`, `RETEST_OK`, `COMPLETED`,
 `TIMEOUT`, `BREAK_FAILED`, `WEAK`, `INVALID`), `olay_name`, `direction`, `quality`,
-`bar_time`, `gecikme_bar`, `faz`, `fiyat`, `teyit_oncesi`.
+`fiyat`, `bar`, `bar_time`, `state`, `teyit_oncesi`.
+
+**İki alan tuzağı:**
+* `state` = olayın üretildiği bardaki **nihai** state. `INVALID` olayında her zaman
+  `FORMASYON_GECERSIZ`'dir — bilgi taşımaz. "Hangi aşamada öldü" sorusu
+  `frm.frm_gecersiz_state`'ten okunur.
+* `teyit_oncesi` **event type** ile değil **state** ile belirlenir: `COUNTER_BREAK`
+  hem karşı yönlü *aday* hem karşı yönlü *teyit* için üretilir; tip tek başına ayırt etmez.
 
 Defterdeki olay sözlüğü **birebir** taşınır (K2) — yeni alan icat edilmez.
 ### 13.12b VP örnekleme (yan sütun, 4 nokta)
@@ -648,6 +674,7 @@ ile aynı fonksiyondur — ikinci bir tanım yazılmaz.
 | Tam havuz (704 seri) | ~50 dk → **~54 dk** |
 | Kolon sayısı | ~92 (★ çekirdek: ~45) |
 | Satır sayısı | 704 × (formasyon/seri) — `dokunus`tan **çok** küçük |
+| Ölçülen (pilot 12 seri) | 618 formasyon, 3.953 olay, 95 kolon |
 | Kapsam | **20/20 FRM sorusu tek koşuda** (ek geçiş yok — aynı replay döngüsü) |
 
 ### 13.14 Yasaklar

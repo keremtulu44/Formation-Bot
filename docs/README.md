@@ -36,6 +36,7 @@
 | [arastirma/ARASTIRMA_HATTI.md](arastirma/ARASTIRMA_HATTI.md) | Yürürlükte | 2026-10 | Yöntem, modüller, anti-lookahead |
 | [arastirma/YASAM_TABLOSU.md](arastirma/YASAM_TABLOSU.md) | Yürürlükte | 2026-10-20 | Domain bazında soru sicili: OB/FVG/formasyon yaşam tablosu + cevap formatı |
 | [arastirma/KOLON_SOZLUGU.md](arastirma/KOLON_SOZLUGU.md) | Yürürlükte | 2026-10-21 | Ortak kolon dili: anlam + birim + `n` birimi + formasyon tablosu taslağı |
+| [arastirma/FORMASYON_SONUCLARI.md](arastirma/FORMASYON_SONUCLARI.md) | Üretilen | 2026-10-21 | Formasyon FRM-01…20 cevap kartları (arşiv replay) |
 | [arastirma/ARASTIRMA_BULGULARI.md](arastirma/ARASTIRMA_BULGULARI.md) | Üretilen | 2026-10 | Ham tablo eki (`arastirma_kosu.py --agrega`) |
 | [arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt](arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt) | Yürürlükte | 2026-10 | Düz metin dışa aktarım |
 | [arastirma/arastirma_ms_hatali_seriler.txt](arastirma/arastirma_ms_hatali_seriler.txt) | Kayıt (açık bulgu) | 2026-10 | MS motorunun patladığı 35 seri |
