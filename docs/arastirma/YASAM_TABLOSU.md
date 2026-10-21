@@ -181,7 +181,7 @@ S1 doğum → S2 çatal:  (a) hiç temas almadı (%21–28)   → bu bir SONUÇ,
 18 state'in tamamı izlenmez; **karar omurgası** izlenir. Her aşamada "solda kalan kaç tane?"
 mantığı (yaşam tablosu) korunur.
 
-| Aşama | State eşlemesi | Ana soru (ID) | Cevap formatı | Durum |
+| Aşama | State eşlemesi | Ana soru (ID) | Cevap formatı | Tanım |
 |---|---|---|---|---|
 | S0 Öncül | ADAY_OLUSUYOR, GEOMETRI_ADAYI | FRM-01 · Öncül hareket neydi (impulse var mı, yön)? | % + tip dağılımı | ✅ |
 | S1 Doğum | FORMASYON_TANIMLANDI | FRM-02 · Tip/kalite/bant genişliği dağılımı | tablo | ✅ |
@@ -205,6 +205,77 @@ mantığı (yaşam tablosu) korunur.
 | Çapraz | — | FRM-20 · Formasyon yönü ile MS yönü uyumu sonucu değiştiriyor mu? | 2×2 → sonuç % | ○ |
 
 **Yan sütun (formasyon):** FRM-05, FRM-10, FRM-14. Hepsi tek bir soruda, tek bir delta olarak.
+
+> Son sütun (`Tanım`) sorunun **yazılış olgunluğu**dur, ölçülebilirliği değil.
+> Ölçüm durumu ve kolon eşlemesi §4.1'dedir.
+
+### 4.1 FRM soru → kolon eşlemesi (v1)
+
+Her sorunun hangi kolonla cevaplanacağı. Kolon adları [KOLON_SOZLUGU.md](KOLON_SOZLUGU.md)
+§13'tedir; burada yalnız **eşleme** var.
+
+| İşaret | Anlam |
+|---|---|
+| 🟢 | Defter alanı yeterli; replay hattı yazılınca doğrudan cevaplanır (en fazla 1 türetme) |
+| 🟡 | Ek türetme / örnekleme / başka tabloyla birleştirme gerekir |
+| 🔴 | Defterde **olmayan** ölçüm; replay sırasında hesaplanmalı |
+
+> **Bugünkü durum: 0 / 20.** Sebep soru değil, hat: `research/` çıktısında **tek bir
+> formasyon satırı yok** (`lifecycle_export` hacim motorunun alanıdır, formasyonla ilgisi
+> yok). Aşağıdaki 🟢'ler "defterde var" demek — defter canlı botta yazılıyor, ölçüm
+> hattında okunmuyor. Bu yüzden **formasyon replay hattı** foundation'ın 2. kalemi.
+
+| Soru | Aşama | Kaynak kolon(lar) | n birimi | Durum |
+|---|---|---|---|---|
+| **FRM-01** Öncül hareket | S0 | `has_pole`, `pole_dir`, `pole_magnitude`, `pole_efficiency`, `pole_quality`, `pole_duration` | frm | 🟢 |
+| **FRM-02** Tip / kalite / genişlik | S1 | `pattern_type`, `family`, `specialized_variant`, `raw_quality`, `geometry_atr`, `start_width`, `upper_slope`, `lower_slope` | frm | 🟢 |
+| **FRM-03** Doğumda en yakın PH/PL mesafesi | S1 | `frm_dogum_ph_atr`, `frm_dogum_pl_atr`, `frm_dogum_rol_ucu` | frm | 🔴 |
+| **FRM-04** Daralma miktarı ve süresi | S2 | `start_width`, `current_width`, `contraction`, `progress`, `duration_ratio`, `consolidation_height_ratio`, `consolidation_efficiency`, `frm_olgunlasma_bar_time` | frm | 🟢 |
+| **FRM-05** Sıkışmada hacim kurudu mu | S2 | `frm_vp_rvol_dogum`, `frm_vp_rvol_olgunlasma`, `vp_volume_usable` bayrakları | frm | 🟡 |
+| **FRM-06** Yakınlık → kırılım oranı (doz-yanıt) | S3 | `frm_yakinlik_ust_fitil_atr`, `frm_yakin_ust_{E}_epizot`, `terminal_state` | frm | 🟡 |
+| **FRM-07** Kaç deneme, kaçı başarısız | S4 | `frm_kirilim_deneme`, `frm_teyit_deneme_no`, `frm_kirilim_deneme_var` | frm | 🔴 |
+| **FRM-08** Kırılım yönü ↔ en yakın rol tarafı | S4 | `break_snapshot_direction`, `frm_kirilim_ms_uyum` | frm | 🟡 |
+| **FRM-09** Teyit gecikmesi | S5 | `break_gecikme_bar`, `break_snapshot_bar`, `break_snapshot_quality` | frm | 🟢 |
+| **FRM-10** Teyit barı hacmi: teyit mi tuzak mı | S5 | `break_volume_score`, `frm_vp_rvol_teyit`, `sonuc_durum` | frm | 🟡 |
+| **FRM-11** Teyit ↔ MS BOS aynı bar mı | S5 | `break_snapshot_bar` ↔ `event.event_bar` (birleşim) | frm | 🟡 |
+| **FRM-12** Retest oranı ve gecikmesi | S6 | `retest_var`, `retest_gecikme_bar` | frm | 🟢 |
+| **FRM-13** Retest derinliği → başarı | S6 | `retest_derinlik_atr` | frm | 🔴 |
+| **FRM-14** Retest hacmi düşükse başarı | S6 | `frm_vp_rvol_retest` | frm | 🟡 |
+| **FRM-15** Sonuç dağılımı | S7 | `terminal_state`, `sansur` | frm | 🟢 |
+| **FRM-16** Tamamlanma süresi + ATR hareketi | S7 | `omur_bar` (süre), `frm_teyit_sonrasi_mfe_atr` (hareket) | frm | 🔴 (süre 🟢) |
+| **FRM-17** Başarısız kırılım ne kadar geri dönüyor | S7 | `frm_teyit_sonrasi_mae_atr` | frm | 🔴 |
+| **FRM-18** Geçersizleşme hangi state'te | S7 | `frm_olay.olay_type`, `frm_olay.state`, `frm_gecersiz_state` | **frm_olay** | 🟢 |
+| **FRM-19** Kırılımda OB/FVG var mı | Çapraz | `zone` birleşimi: `zone_lower ≤ break_snapshot_price ≤ zone_upper` ∧ `dogum_bar_time ≤ break ≤ terminal_bar_time` | frm | 🟡 |
+| **FRM-20** Formasyon yönü ↔ MS yönü | Çapraz | `classic_dir` ↔ doğum/kırılım anındaki MS yönü (rol geçmişi) | frm | 🟡 |
+
+**Dağılım:** 🟢 7 · 🟡 8 · 🔴 5.
+
+#### Yeni ölçüm blokları — ve maliyeti
+
+| Blok | Kolonlar | Sorular | Nerede hesaplanır |
+|---|---|---|---|
+| MS doğum mesafesi | `frm_dogum_ph_atr`, `frm_dogum_pl_atr`, `frm_dogum_rol_ucu` | FRM-03, 08, 20 | Doğum barında rol geçmişi (`ms_adimli_kosu`); **final** rol değil |
+| Deneme sayımı | `frm_kirilim_deneme`, `frm_teyit_deneme_no`, `frm_kirilim_deneme_var` | FRM-07 | Replay döngüsü (defterde yok) |
+| Retest derinliği | `retest_derinlik_atr` | FRM-13 | Replay: retest penceresinde sınıra dönüş |
+| Teyit sonrası seyir | `frm_teyit_sonrasi_mfe_atr`, `frm_teyit_sonrasi_mae_atr` | FRM-16, 17 | Replay: teyitten sonraki sabit pencere |
+| VP örnekleme | `frm_vp_rvol_{dogum,olgunlasma,teyit,retest}` | FRM-05, 10, 14 | `vp_ornek` (zaten var), 4 bar noktasında |
+
+**Maliyet: ek geçiş yok.** Replay döngüsü her barı zaten ziyaret ediyor; beş blok da aynı
+döngüde hesaplanır. 50 dk → ~54 dk tahmini değişmez. **Tek koşuda 20/20.**
+
+#### Kritik uyarılar
+
+1. **`n` birimi karışmaz.** FRM-01…17, 19, 20 → `frm` (formasyon başına 1 satır).
+   FRM-18 → `frm_olay` (olay başına 1 satır). İkisini aynı tabloda saymak yanıltır.
+2. **Dairesellik.** FRM-06'da yakınlık **kırılımdan önce** ölçülür; sonuç sonradır.
+   Ters yapılırsa "yaklaşan formasyon kırıldı" totoloji olur.
+3. **MS rolü mutasyonlu.** FRM-03/08/20'de doğum/kırılım **anındaki** rol kullanılır;
+   `structural_role_final` yanıltır (rol el değiştirir).
+4. **FRM-16 tanımı netleşmeli.** Formasyon motorunda hedef/stop yok; `outcome_link`
+   hedef/stop'u karne'den alıyor. Öneri: "hedefe ulaşan hareket" = **teyitten sonraki
+   MFE**, sabit 12 bar (ana) + 40 bar (uzun) pencerede. Aksi yazılırsa ölçüm tanımsız kalır.
+5. **FRM-19'da zone canlı olmalı.** `dogum_bar_time ≤ t ≤ terminal_bar_time` koşulu
+   olmadan bugünkü zone listesi geçmişe uygulanır ve sonuç şişer.
 
 ---
 

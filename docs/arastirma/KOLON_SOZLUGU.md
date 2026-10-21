@@ -427,6 +427,9 @@ hacim motorunun alanıdır, formasyonla ilgisi yoktur. Formasyonun tanığı
 Bu tablo, aynı motoru (`ArgentEngine.process(df, tam_yeniden=True)`) replay ederek
 defterin **offline** karşılığını üretir.
 
+> **Soru eşlemesi:** hangi kolonun hangi FRM sorusunu cevapladığı
+> [YASAM_TABLOSU.md](YASAM_TABLOSU.md) §4.1'de. Bu bölüm kolonları tanımlar, orası eşler.
+
 **Yeni matematik yok.** Motor zaten "geri test = canlı birebir" diyor; yapılan iş
 sarmalayıcıdır.
 
@@ -464,6 +467,17 @@ kolonlardan cevaplanır; yeni bir bar-bazlı soru doğarsa koşu tekrarlanır (5
 
 `family` burada **formasyon ailesi** demektir (üçgen, kama, bayrak…), OB/FVG değil.
 Birleştirme yapılırsa `frm_family` / `zone_family` olarak ön eklenir (§14).
+**MS doğum bloğu (yeni ölçüm).** Doğum barında, o an **geçerli** korunan seviyeler:
+
+| Kolon | Birim | Tanım |
+|---|---|---|
+| `frm_dogum_ph_atr` ★ | ATR | Doğumda en yakın **korunan tepe**ye (PH) uzaklık; yoksa `null` |
+| `frm_dogum_pl_atr` ★ | ATR | Doğumda en yakın **korunan dip**e (PL) uzaklık |
+| `frm_dogum_rol_ucu` ★ | sınıf | En yakın seviyenin ucu: `PH` / `PL` / `YOK` |
+
+**Rol mutasyonu tuzağı:** `structural_role_final` burada kullanılamaz — rol el değiştirir.
+Mesafe, **o barda açık olan** rol aralığından (`rol_ilk_bar ≤ doğum ≤ rol_son_bar`) okunur.
+
 
 ### 13.5 Mesafe bloğu — "1 ATR yaklaştı" ★
 
@@ -588,11 +602,19 @@ birimindedir, ATR değil. Bu yüzden türetilmiş üç kolon eklenir:
 | `sonuc_durum` ★ | sınıf | `hedef` / `stop` / `nötr` / `bekliyor` / `ölçülemedi` / `kirilim_yok` |
 | `sonuc_kaynak_bar_time` ○ | zaman | Sonucun bağlandığı bar |
 | `sansur` ★ | bool | Koşu sonunda hâlâ açık |
+| `frm_teyit_sonrasi_mfe_atr` ★ | ATR | Teyitten sonra, kırılım yönünde **en büyük** uzanım (12 bar / 40 bar) |
+| `frm_teyit_sonrasi_mae_atr` ★ | ATR | Teyitten sonra kırılım yönünün **tersine** en büyük uzanım |
+| `frm_gecersiz_state` ○ | sınıf | Geçersizleşmeden **önceki** state (hangi aşamada öldü) |
 
 **Ölüm ayrımı korunur.** `BASARISIZ_KIRILIM` tek tür değildir: teyit almadan
 başarısız olan ile teyitten sonra geçersizleşen ayrı hikâyelerdir
 (`main.py:375`'teki sınıflandırma bunu zaten ayırıyor). `frm_olay` tablosunda
 `olay_type` + `teyit_oncesi` (bool) bu ayrımı taşır.
+
+**`frm_teyit_sonrasi_mfe_atr` neden şart:** formasyon motorunda hedef/stop yok;
+`outcome_link` hedef/stop'u karne'den alıyor. "Hedefe ulaşan hareket" tanımı bu yüzden
+teyit sonrası MFE olarak **sabitlenir** (ana 12 bar, uzun 40 bar; `ESIK_IZGARA` ile aynı
+ufuk ailesi). Aksi halde FRM-16 tanımsız kalır.
 
 ### 13.12 `frm_olay` tablosu
 
@@ -602,6 +624,21 @@ başarısız olan ile teyitten sonra geçersizleşen ayrı hikâyelerdir
 `bar_time`, `gecikme_bar`, `faz`, `fiyat`, `teyit_oncesi`.
 
 Defterdeki olay sözlüğü **birebir** taşınır (K2) — yeni alan icat edilmez.
+### 13.12b VP örnekleme (yan sütun, 4 nokta)
+
+Hacim **ana çıktı değildir** (§12), ama formasyonun dört kritik anında örneklenir:
+
+| Kolon | Örneklendiği an |
+|---|---|
+| `frm_vp_rvol_dogum` | Doğum barı |
+| `frm_vp_rvol_olgunlasma` | `OLGUNLASIYOR`'a ilk giriş |
+| `frm_vp_rvol_teyit` | `break_snapshot_bar` |
+| `frm_vp_rvol_retest` | Retest barı |
+
+Her biri `vp_rvol` + `vp_data_ready` + `vp_volume_usable` üçlüsüyle yazılır. Bayrak
+`False` ise `rvol` **yorumlanmaz** (satır düşmez). Örnekleme `research/olcum.py:vp_ornek`
+ile aynı fonksiyondur — ikinci bir tanım yazılmaz.
+
 
 ### 13.13 Maliyet ve hacim beklentisi
 
@@ -611,6 +648,7 @@ Defterdeki olay sözlüğü **birebir** taşınır (K2) — yeni alan icat edilm
 | Tam havuz (704 seri) | ~50 dk → **~54 dk** |
 | Kolon sayısı | ~92 (★ çekirdek: ~45) |
 | Satır sayısı | 704 × (formasyon/seri) — `dokunus`tan **çok** küçük |
+| Kapsam | **20/20 FRM sorusu tek koşuda** (ek geçiş yok — aynı replay döngüsü) |
 
 ### 13.14 Yasaklar
 
