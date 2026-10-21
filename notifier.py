@@ -459,6 +459,12 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
     for satir in hacim[:2]:
         _satir(satirlar, str(satir))
 
+    # --- arşiv ölçümü: aynı kurulumun geçmişte nasıl sonuçlandığı (en fazla 2 satır).
+    # Kaynak `ampirik_referans`; satır yoksa hiçbir şey basılmaz (uydurma yok).
+    olcum = list(bolumler.get("olcum") or []) if isinstance(bolumler, dict) else []
+    for satir in olcum[:2]:
+        _satir(satirlar, str(satir))
+
     # --- eşik: teyitlide "bozulur", geçersizleşmede 3. satırda yazıldı ---
     if esik and not gecersiz:
         _satir(satirlar, f"· bozulur {_sayı(esik)} {yon_eki} kapanış")

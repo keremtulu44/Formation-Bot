@@ -53,6 +53,7 @@ from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
 from notifier import TelegramNotifier
 import config
+import ampirik_referans as ampirik
 from notification_context import (
     format_domain_context, domain_bolumleri, karsi_deliller,
 )
@@ -1058,6 +1059,8 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları (DM)
 /retest veya /r — retest bekleyen/başarılı
 /kirilim veya /k — kırılım adayı/teyitli (diğer ad: /kırılım)
 /durum — bot, piyasa ve veri sağlığı özeti
+/olcum — arşiv ölçümü referansı: karttaki ◇ satırlarının hangi tablodan,
+   hangi n ile geldiği (diğer adlar: /ölçüm · /referans)
 /karne [gün] — doğruluk karnesi: formasyon/kırılım sayıları + kırılım sonrası
    performans (varsayılan bu hafta; /karne 30 ile son 30 gün). Cuma gün sonu
    mesajının altında otomatik gelir. Veriler yerel dosyada (Supabase gerekmez).
@@ -1090,6 +1093,19 @@ Notlar:
 
 def _komut_yardim(_arguman: str) -> str:
     return KOMUT_YARDIM
+
+
+def _komut_olcum(_arguman: str) -> str:
+    """Arşiv ölçümü referansı (karttaki `◇` satırlarının kaynağı).
+
+    Okuma-yalnız ve durum bağımsız: piyasa kapalıyken de aynı metni verir.
+    Hatasında komut sessiz kalmaz; kısa bir açıklama döner.
+    """
+    try:
+        return ampirik.komut_metni()
+    except Exception as exc:  # noqa: BLE001 - komut yanıtsız kalmasın
+        logger.warning("Ölçüm referansı üretilemedi: %s", exc)
+        return "◇ Arşiv ölçümü şu an üretilemedi; ayrıntı logda."
 
 def _komut_durum(_arguman: str) -> str:
     now = datetime.now(ISTANBUL_TZ)
@@ -2128,6 +2144,9 @@ TELEGRAM_KOMUTLARI = {
     "kirilim": _komut_kirilim,
     "kırılım": _komut_kirilim,
     "k": _komut_kirilim,
+    "olcum": _komut_olcum,
+    "ölçüm": _komut_olcum,
+    "referans": _komut_olcum,
     "karne": _komut_karne,
     "karnem": _komut_karne,
     "backtest": _komut_backtest,
@@ -2973,6 +2992,12 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             reference_price=candle_close_price,
                                             stil="kart",
                                             alarm_tf=tf_name,
+                                            # Arşiv ölçümü bölümü: kart, aynı
+                                            # kurulumun geçmiş sonucunu da yazar.
+                                            olcum=True,
+                                            atr=atr_alarm,
+                                            yon=break_dir,
+                                            retest_seen=payload.get('retest_seen'),
                                             # GÖRSEL-4: geçersizleşme kartı yalnız
                                             # formasyon + geçersizleşen TF'nin bilgisi
                                             # (diğer TF'lerin yapı/bölge/hacim dökümü
