@@ -4,7 +4,7 @@
 > **Amaç:** OB, FVG ve formasyonu **doğumdan ölüme** izleyip, her aşamada okunabilir ve
 > önceden kilitlenmiş sorular sormak. Cevaplar aynı formatta yazılır; böylece "öyle oldu
 > böyle oldu" anlatısı yerine ölçülmüş hücreler konuşur.
-> **Yöntem:** [ARASTIRMA_HATTI.md](ARASTIRMA_HATTI.md) · **Sonuçlar:** [ARASTIRMA_SONUCLARI.md](ARASTIRMA_SONUCLARI.md)
+> **Yöntem:** [ARASTIRMA_HATTI.md](ARASTIRMA_HATTI.md) · **Sonuçlar:** [ARASTIRMA_SONUCLARI.md](ARASTIRMA_SONUCLARI.md) · **Kolon adları:** [KOLON_SOZLUGU.md](KOLON_SOZLUGU.md)
 
 ---
 
