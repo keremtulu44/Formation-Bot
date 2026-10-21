@@ -34,6 +34,7 @@
 | [arastirma/README.md](arastirma/README.md) | Yürürlükte | 2026-10 | Giriş: kilit bulgular + açık MS bulgusu |
 | [arastirma/ARASTIRMA_SONUCLARI.md](arastirma/ARASTIRMA_SONUCLARI.md) | Yürürlükte | 2026-10 | Soru bazında cevaplar ve yorum |
 | [arastirma/ARASTIRMA_HATTI.md](arastirma/ARASTIRMA_HATTI.md) | Yürürlükte | 2026-10 | Yöntem, modüller, anti-lookahead |
+| [arastirma/YASAM_TABLOSU.md](arastirma/YASAM_TABLOSU.md) | Yürürlükte | 2026-10-20 | Domain bazında soru sicili: OB/FVG/formasyon yaşam tablosu + cevap formatı |
 | [arastirma/ARASTIRMA_BULGULARI.md](arastirma/ARASTIRMA_BULGULARI.md) | Üretilen | 2026-10 | Ham tablo eki (`arastirma_kosu.py --agrega`) |
 | [arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt](arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt) | Yürürlükte | 2026-10 | Düz metin dışa aktarım |
 | [arastirma/arastirma_ms_hatali_seriler.txt](arastirma/arastirma_ms_hatali_seriler.txt) | Kayıt (açık bulgu) | 2026-10 | MS motorunun patladığı 35 seri |
