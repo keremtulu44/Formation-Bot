@@ -572,7 +572,9 @@ def _kart_14(df: Any) -> str:
         "FRM-14 · Retest barındaki rvol, teyit sonrası hareketi değiştiriyor mu?",
         "S6 (retest)",
         "rvol medyan bölmesi",
-        "grup başına ≥1 ATR MFE oranı",
+        "grup başına ≥1 ATR MFE oranı · "
+        + _fark_metni(alt.assign(_ok=alt["_hedef"].astype(int)),
+                      alt["_grup"] == "rvol ≥ medyan", alt["_grup"] == "rvol < medyan"),
         f"başarılı retest gören ve rvol'ü ölçülebilen formasyonlar (n={len(alt)})",
         "yan sütun: hacim",
         "tanımlayıcı") + "\n" +

@@ -252,7 +252,7 @@
 **SORU**      : FRM-14 · Retest barındaki rvol, teyit sonrası hareketi değiştiriyor mu?
 **AŞAMA**     : S6 (retest)
 **ANA ÇİZGİ** : rvol medyan bölmesi
-**ÇIKTI**     : grup başına ≥1 ATR MFE oranı
+**ÇIKTI**     : grup başına ≥1 ATR MFE oranı · fark +4.6 puan (GA +2.5…+6.9) · fark var
 **TABAN**     : başarılı retest gören ve rvol'ü ölçülebilen formasyonlar (n=9336)
 **YAN SÜTUN** : yan sütun: hacim
 **KARAR**     : tanımlayıcı
