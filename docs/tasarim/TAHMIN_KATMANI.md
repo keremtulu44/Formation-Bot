@@ -35,9 +35,9 @@ der ve **çelişkiyi** gösterir.
 ```
 1 · NE OLDU        → sistem ne dedi (kanıt: canlı veri)
 2 · GEÇMİŞTE NASIL  → bu kuruluma en yakın ölçüm (kanıt: kayıt sayısı + oran)
-3 · BURADA FARKLI   → canlı sapma: güçlendiren / zayıflatan
+3 · BURADA FARKLI   → canlı sapma: kaç ölçüm lehte, kaçı aleyhte
     ↓
-   BEKLENTİ        → devam · zayıf · kararsız · kanıt yok
+   HÜKÜM           → devam · tek kanıt · kararsız · yön kanıtı yok
 ```
 
 Kural: **3. blok boşsa beklenti yazılmaz.** Sapma yoksa "sıradan bir kurulum"
@@ -63,37 +63,49 @@ Tahmin tek cümle değil; **üç ayrı iddia**. Her birinin kanıtı farklı gü
 
 Her satır ölçülmüş bir ilişki; hiçbiri sezgi değil.
 
-| # | Koşul (canlı) | Ölçüm | Etki | Güç |
-|---|---|---|---|---|
-| 1 | MS **dış** BOS, kırılım yönü ↑ | %75,0 devam · 2,827 ATR | **+ güçlü** | B |
-| 2 | MS **dış** BOS, ↓ | %67,3 · 2,189 ATR | + zayıf | B |
-| 3 | MS **iç** BOS | %68,2 (6505) | + zayıf | B |
-| 4 | MS yok / ölçülmedi | — | **yön iddiası yok** | — |
-| 5 | Önündeki zone ≥2 ATR | CALISTI %71,0 · decay 1,248 | + kısa ufuk | A |
-| 6 | Önündeki zone <0,5 ATR | %64,3 · decay 2,418 | − hareket geç gelir | A |
-| 7 | Zone **3+ temas** | tepki 1,94 ATR (GA üst üste) | − hafif, **kanıt zayıf** | C→yazılmaz |
-| 8 | Zone **1. temas** | 2,02 ATR | nötr | B |
-| 9 | RVOL **Q4** (yüksek) | CALISTI %61,0 vs %70,1 | **− 9 puan** | A |
-| 10 | RVOL **Q1** (düşük) | %70,1 | **+ 9 puan** | A |
-| 11 | FVG'de "kaçıncı temas" | 3+ temas yalnız **4 adet** | **satır yok** | — |
-| 12 | FVG tam dolum riski | %40,3 · superseded %16,6 | erken bitme uyarısı | A |
-| 13 | OB 1d iptal | %82,8 | erken bitme uyarısı | A |
-| 14 | Zone geçilme (her durumda) | %85,4–93,6 | **bariyer sayılmaz** | A |
+Etki artık **sıfat değil puan**: taban %65,5 (dokunuş tepkisi), eşik ölçümün
+kendi yayılımının yarısı. |puan| < eşik → **nötr**, hükme girmez.
+
+| # | Koşul (canlı) | Ölçüm | Puan | Eşik | Sonuç |
+|---|---|---|---|---|---|
+| 1 | MS **dış** BOS ↑ | %75,0 (n1651) | **+9,5** | 5 | lehte |
+| 2 | MS **dış** BOS ↓ | %67,3 (n1736) | +1,8 | 5 | **nötr** |
+| 3 | MS **iç** BOS 4s ↓ | %64,6 (n3393) | −0,9 | 5 | nötr |
+| 4 | MS yok / ölçülmedi | — | — | — | yön iddiası yok |
+| 5 | Bölge ≥2 kat | %71,0 (n162) | +5,5 | 3 | lehte (n<300 → **girmez**) |
+| 6 | Bölge <0,5 kat | %64,3 (n3276) | −1,2 | 3 | nötr |
+| 7 | Zone 3+ temas | 1,94 vs 2,02 ATR · GA üst üste | — | — | **hiç girmez** |
+| 8 | RVOL Q4 (yüksek) | %61,0 (n11928) | **−4,5** | 4 | aleyhte |
+| 9 | RVOL Q1 (düşük) | %70,1 (n6740) | **+4,6** | 4 | lehte |
+| 10 | Rol uyumlu | %79,7 (n15724) | +4,7 | 5 | **nötr** (sınır altı) |
+| 11 | Zone içi vs dışı | %75,9 vs %77,0 | −1,1 | 2 | nötr |
+| 12 | FVG'de "kaçıncı temas" | 3+ temas yalnız 4 adet | — | — | **satır yok** |
+| 13 | FVG tam dolum | %40,3 · ömür 5,7 mum | — | — | **ufuk** (yön değil) |
+| 14 | OB 1g iptal | %82,8 · ömür 32,5 mum | — | — | **ufuk** (yön değil) |
 
 ---
 
 ## 5 · Çelişki kuralı — "kararsız" da bir cevaptır
 
-| Destek | Çelişki | Hüküm |
+| Lehte | Aleyhte | Hüküm |
 |---|---|---|
 | ≥2 | 0 | `devam` |
-| ≥1 | 1 | `devam · zayıf` |
-| herhangi | **≥2** | `kararsız` — çelişen ölçümler **adıyla** yazılır |
-| MS yok | — | `yön kanıtı yok` (sayı basılmaz) |
+| 1 | 0 | `tek kanıt` |
+| ≥1 | ≥1 | `kararsız` — aleyhte olan **adıyla** yazılır |
+| 0 | 0 | `yön kanıtı yok` (sayı basılmaz) |
+
+**Hüküm tek kelimedir, gücü ayrı satırda sayıdır.** `beklenti: devam · zayıf`
+yazmıyoruz: aynı satırda hem oran hem sıfat olunca "zayıf" olanın devam mı, kanıt
+mı, hareket mi olduğu okunmuyor. Gücü sıfat değil **sayı** söyler:
+
+```
+◇ beklenti: kararsız
+◇ 2 ölçüm lehte · 1 aleyhte
+```
 
 **Neden puan yok:** ölçümler bağımsız değil (aynı mumlardan türüyor). 0–100 puan
-üç kez aynı kanıtı sayıp sahte güven üretir. Bu yüzden **sayaç**: kaç destek,
-kaç çelişki — ve çelişkinin adı.
+üç kez aynı kanıtı sayıp sahte güven üretir. Bu yüzden **sayaç**: kaç lehte,
+kaç aleyhte — ve aleyhte olanın adı.
 
 ---
 
@@ -111,25 +123,30 @@ Alçalan Üçgen — kapanışla
 ◈ yön aşağı · dış kırılım (BOS)
 
 2 · GEÇMİŞTE NASIL BİTTİ
-◇ geçmişte %67 devam (3387)
-◇ %10 devam etmedi · %1 ters
+◇ geçmişte %67 devam (1736)
 ◇ devam ederse tipik 2,2 kat
 
 3 · BURADA FARKLI
-◇ 3. temas → tepki 1,94 kat
 ◇ hacim 2,8 kat → %61'e düşer
 
-BEKLENTİ: devam · zayıf
+◇ beklenti: yön kanıtı yok
+◇ 1 aleyhte
 ```
 
 **Türkçe okunuşu:** Yapı aşağı yönde ve dış kırılım var — geçmişte bu kurulumun
-%67'si devam etmiş, %10'u devam etmemiş, %1'i ters dönmüş. Devam ettiğinde
-tipik hareket normalin 2,2 katı. Ama iki şey bunu zayıflatıyor: blok zaten 3 kez
-test edilmiş (tepki ortalaması 1,94'e iniyor) ve hacim normalin 2,8 katı —
-yüksek hacimde devam oranı %70'ten %61'e düşüyor.
+%67,3'ü devam etmiş, devam ettiğinde tipik hareket normalin 2,2 katı. Ama bu
+%67,3, dokunuş tabanı %65,5'ten yalnızca **1,8 puan** yüksek: gürültü. Bir ölçüm
+aleyhte: hacim normalin 2,8 katı, yüksek hacimde devam %70,1'den %61,0'a düşüyor
+(−4,5 puan). Blokun 3. kez test edilmesi **sayılmıyor** — fark 1,94 vs 2,02 ATR,
+GA'lar üst üste.
 
-**Kritik cümle:** "devam eder" değil, "**geçmişte %67 devam etmiş; burada iki ölçüm
-bunu zayıflatıyor**". Aradaki fark, tavsiye ile ölçüm arasındaki fark.
+**Kritik cümle:** "aşağı devam eder" değil, "**geçmişte %67,3 devam etmiş; bu fark
+ölçüm gürültüsünün içinde, hüküm yok**".
+
+**Neden hüküm `devam` değil — ve neden `kararsız` da değil:** tek aleyhte ölçüm
+var, lehte ölçüm yok. `kararsız` iki taraf da varsa denir. Burada lehte taraf
+boş olduğu için hüküm `yön kanıtı yok`. Sıfat (`zayıf`, `güçlü`) hiç kullanılmıyor:
+gücü `1 aleyhte` sayacı ve puan değerleri söylüyor.
 
 ---
 
@@ -170,16 +187,17 @@ tükenir; kırılımın ilk 2-3 mumu kritik."**
 Beklenti bloğu, mevcut 3 `◇` satırının **ikisini yer**, böylece kart 20 satırda kalır:
 
 ```
-◇ bölge normalin 1,4 katı
-◇ beklenti: devam · zayıf
-◇ geçmişte %67 devam (3387)
+◇ beklenti: devam
+◇ 2 ölçüm lehte
+◇ geçmişte %71 devam (3387)
 ```
 
-veya çelişkili durumda:
+çelişkili durumda:
 
 ```
 ◇ beklenti: kararsız
-◇ çelişki: hacim 2,8 kat
+◇ 2 ölçüm lehte · 1 aleyhte
+◇ yapı tipik 5 mumda tükenir
 ```
 
 Yön kanıtı yoksa **hiç basılmaz** (boş satır yerine yokluk):
@@ -223,7 +241,7 @@ Yön kanıtı yoksa **hiç basılmaz** (boş satır yerine yokluk):
 
 ```python
 beklenti(olay, ms, zone, hacim) -> {
-    "hukum": "devam" | "zayif" | "kararsiz" | "kanit_yok",
+    "hukum": "devam" | "tek_kanit" | "kararsiz" | "kanit_yok",
     "destek": [{"ad": "dış BOS ↑", "oran": 75.0, "n": 3387}],
     "celiski": [{"ad": "hacim Q4", "etki": -9.0, "n": 11928}],
     "ufuk": "kisa" | "orta" | "uzun",

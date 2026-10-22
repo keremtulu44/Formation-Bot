@@ -41,6 +41,12 @@ yeniden üretilebilir ölçüm sonuçlarıyla. Amaç formatı beğenmek/beğenme
 8. **Klasik yol byte-byte duruyor.** `TELEGRAM_ALERT_STYLE=klasik` → 25 Eyl
    öncesi biçim. A/B karşılaştırma ve geri alma hakkı için korundu; kartta
    yapılan düzeltme klasik biçime uygulanmaz.
+9. **`◇` satırı ölçümdür, tahmin değil.** Kart, aynı kurulumun arşivdeki
+   sonucunu en çok 2 satırda basar (koşul + n görünür, kaynak
+   [arastirma/AMPIRIK_REFERANS.md](../arastirma/AMPIRIK_REFERANS.md)). Sayı
+   biçimleyicide hesaplanmaz; `ampirik_referans` tablolarından gelir. Koşul
+   sağlanmıyorsa satır basılmaz. Yatırım tavsiyesi dili testle yasak
+   (`test_ampirik_referans.py`).
 
 ## 2. Kart iskeleti
 
@@ -73,6 +79,7 @@ yeniden üretilebilir ölçüm sonuçlarıyla. Amaç formatı beğenmek/beğenme
 ▤ 1s alt bölge emilim işareti         ← hacim: yargı / sayılar / katkı
    RVOL 0,53× ≈DV
 ▤ 4s: hacim verisi bekleniyor
+◇ rol uyumlu %80 n15724               ← arşiv ölçümü (en çok 2 satır)
 ! karşı delil: iç yapı ↓
 › /tara BIMAS
 • yatırım tavsiyesi değildir
