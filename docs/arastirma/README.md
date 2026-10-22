@@ -18,6 +18,7 @@ tartışmalarında sayı gerektiğinde buraya bakılır.
 | **[KOLON_SOZLUGU.md](KOLON_SOZLUGU.md)** | **Ortak dil:** her kolonun anlamı, birimi, `n` birimi, sınıf değerleri, formasyon tablosu taslağı | Sorgu yazmadan / tablo okumadan önce |
 | **[FORMASYON_SONUCLARI.md](FORMASYON_SONUCLARI.md)** | **Formasyon cevapları:** FRM-01…20 kartları (n + taban + GA) | Formasyon sorularının cevabı |
 | **[AMPIRIK_REFERANS.md](AMPIRIK_REFERANS.md)** | **Canlıya bağlanan ölçüm:** hangi sayı kartta hangi koşulda basılıyor (`ampirik_referans.py`) | Ölçümü metne çevirirken |
+| **[KOSULLU_CUMLE_OLCUMU.md](KOSULLU_CUMLE_OLCUMU.md)** | **Ölçüldü, yazılmadı:** "giderse tamamlanır" cümlesinin çapraz tablosu (yakınlık + aşım kovaları), karar ve gerekçe | Koşullu cümle önerilmeden önce |
 | **[REPLAY_OZET_2026-10-21.md](REPLAY_OZET_2026-10-21.md)** | **Son replay'in okunur özeti:** tek ekran + tek tabloda MFE/MAE/NET + örneklem payı | Hızlı karar / paylaşım için |
 | [ARASTIRMA_RAPORU_DUZMETIN.txt](ARASTIRMA_RAPORU_DUZMETIN.txt) | Aynı sonuçların düz metin dışa aktarımı (paylaşım için) | Telegram/forum aktarımı |
 | [arastirma_ms_hatali_seriler.txt](arastirma_ms_hatali_seriler.txt) | MS motorunun patladığı **35 serinin** listesi | Açık bulgu — aşağıya bak |
