@@ -215,3 +215,26 @@ satır basılmaz. Aile tabanları: ms/rvol/yükseklik/zone %65,5 · uyum %75,0.
 Koşullu "giderse tamamlanır" cümlesi ölçüldü ve **karta yazılmadı**; gerekçe ve
 sayılar `docs/arastirma/KOSULLU_CUMLE_OLCUMU.md`. Kural: ölçüm cümleyi
 desteklemiyorsa cümle yazılmaz.
+
+### 7.8 Public bağımsızlığı ve üst TF yedeği (22 Ekim 2026, akşam)
+
+Public kuyruğu DM kartıyla aynı 7 bloğu basar; bu bölüm **public'in DM
+kapılarına takılmamasını** ve eksik kalan iki bloğun nasıl doldurulduğunu
+tanımlar (kod: `notifier.public_kuyruk`, `notification_context._kart_yapi_ozet`).
+
+| Durum | Eskiden | Şimdi |
+|---|---|---|
+| Alarm TF'sinde MS satırı yok (motor o TF'de olay üretmedi) | `◈ … yapı` satırı hiç basılmıyordu → bültende yapı bloğu boş | Sıra: alarm TF → **public görselindeki üst TF** (1h/2h→4h, 4h→1g) → kalan üst TF'ler. Satır **kendi etiketiyle** yazılır (`◈ 4s yapı …`); alarm TF'si gibi gösterilmez |
+| DM mührü `tekrar` dedi (olay bugün DM'e gitti) | `before_send` çalışmadığı için public kuyruğu da dolmuyordu | Yalnız **public'te kaydı olmayan** olay için bağlam hazırlanır; DM'e ikinci kez gitmez |
+| DM geçersizleşme kapısı kapalı (teyit DM'e teslim edilmemiş) | Ayrı `elif` bloğu tüm bağlamı atlıyordu → grupta teyit "geçerli" kalıyordu | Kapı yalnız DM push'unu atlar; bağlam + public kuyruğu çalışır, kararı public kendi kapısı verir |
+| Teyit sonradan kalitesi düştü (eşik altı) | Geçersizleşme kalite kapısına takılıp düşüyordu | `KIRILIM_GECERSIZLESTI` kalite kapısından **muaf** (DM ve public). Kapı yalnız yeni iddialar içindir |
+| Teyit kuyrukta bekliyor (henüz gruba gitmedi) + geçersizleşme | Teyit sonradan gidiyor, geri alma kalıcı olarak kayboluyordu | İkisi **birlikte düşer** (`Public: teyit henüz gönderilmemişti …`) |
+
+MS motoru arızası karta **basılmaz** (karar D); `/durum`a `⚠️ MS (piyasa yapısı)
+motoru: N hissede hata · son: … · alarm kartı etkilenmez` satırı düşer (hisse
+bazlı sayaç; aynı hissenin iki TF alarmı sayacı şişirmez).
+
+Ölçüm (22 Ekim, örnek kayıtlarla): teyit kartı DM 25 satır / 524 kr / en geniş
+253,5 px; public 24 satır / 495 kr; geçersizleşme public 24 satır / 439 kr.
+12 olaylık bülten 2 mesaja bölünür (6+6), yasal uyarı her mesajda **bir** kez,
+en geniş satır 253,5 px (`_kart_esik_px` 283).
