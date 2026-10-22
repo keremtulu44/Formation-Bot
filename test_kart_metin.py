@@ -77,11 +77,11 @@ def test_teyitli_kart_karenin_taşıdığı_bilgiyi_tekrarlamaz():
 def test_kalicilik_ve_esik_yonu_dogru():
     """Eşik GÜNCEL bant sınırıdır: aşağı kırılımı alt sınırın üstü bozar."""
     metin = notifier._format_lifecycle_alert_kart(_payload())
-    assert "bozulur 38,79 üstü kapanış" in metin
+    assert "bozulur: 38,79 üstü kapanış" in metin
     yukari = notifier._format_lifecycle_alert_kart(_payload(
         break_dir=1, break_price=40.10, candle_close_price=40.25,
         upper_now=40.44, lower_now=39.10, state="KIRILIM_TEYITLI"))
-    assert "bozulur 40,44 altı kapanış" in yukari
+    assert "bozulur: 40,44 altı kapanış" in yukari
 
 
 # ------------------------------------------------------------- geçersizleşme
@@ -98,7 +98,7 @@ def test_gecersizlesme_karti_formasyon_ve_tf_ile_sinirli():
     assert not _tasma(satirlar)
     assert satirlar[0] == "▼ SISE 1s GEÇERSİZLEŞTİ"
     assert satirlar[1] == "Yükselen Üçgen - bandına dönüş"
-    assert any(s.startswith("· teyit sınırı 38,79 üstü") for s in satirlar)
+    assert any(s.startswith("· dönüş sınırı 38,79 üstü") for s in satirlar)
     assert "× geçersiz" not in "\n".join(satirlar)
     assert "◈" not in "\n".join(satirlar) and "OB 1s" not in "\n".join(satirlar)
 
@@ -111,7 +111,7 @@ def test_gecersizlesmede_katilim_tek_satir_kalir():
                       "katılım 4s veri yok"]}))
     satirlar = _satirlar(metin)
     assert len([s for s in satirlar if s.startswith("katılım ")]) <= 2
-    assert len(satirlar) <= 13
+    assert len(satirlar) <= notifier._KART_MAKS_SATIR
 
 
 # ---------------------------------------------------------- güncelleme + süzgeç
@@ -135,7 +135,7 @@ def test_suzgec_kapatilinca_eski_tam_kart_doner(monkeypatch):
                           "ust": ["▲ OB 1s 44,14-44,86 (▼) · %0"],
                           "hacim": ["katılım 1s destekliyor"]}))
     assert "◈" in eski or "▪" in eski
-    assert "teyit sınırı" not in eski
+    assert "dönüş sınırı" not in eski
 
 
 def test_suzgec_kapaliyken_de_patlamaz_veri_eksikse(monkeypatch):

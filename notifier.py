@@ -390,7 +390,10 @@ def _kart_esik(data: Dict, yon: int) -> tuple:
 #: kararı (2026-10-21): "alarm metni kendi başına okunabilsin" — kart, kârenin
 #: taşıdığı her şeyi değil, KARAR İÇİN GEREKEN ölçüleri taşır. Tavan aşılırsa
 #: en düşük öncelikli ek satır düşer (bilgi gizlenmez, ölçülerek seçilir).
-_KART_MAKS_SATIR = 16
+#: GÖRSEL-9 (2026-10-22): 7 bloklu düzen + blok arası 1 boş satır. Boş satırlar
+#: tavan hesabına GİRMEZ (bütçe px ile ölçülür); tavan 16 -> 20 çıktı çünkü
+#: `◇` ölçü bloğu 3 satıra ve ölçüm dipnotu karta girdi.
+_KART_MAKS_SATIR = 20
 
 
 def _kart_daralma(data: Dict) -> str:
@@ -414,20 +417,30 @@ def _kart_temas(data: Dict) -> str:
 
 
 def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -> str:
-    """Sade kart (GÖRSEL-8): satır = tek konu, girinti yok, karar ölçüleri tam.
+    """Sade kart (GÖRSEL-9): 7 blok, blok arası bir boş satır, girinti yok.
 
-    Tarihçe: GÖRSEL-7 (15 Eki) kartı 40-45 satırdan 8-11 satıra indirdi ama
-    fazla kırptı — kullanıcı (21 Eki) "metin çok sade kalıyor, elimizdeki veriyi
-    daha iyi kullan" dedi. GÖRSEL-8 bu yüzden üç bilgiyi geri getirir:
+    Tarihçe:
+      * GÖRSEL-7 (15 Eki) kartı 40-45 satırdan 8-11 satıra indirdi, fazla kırptı.
+      * GÖRSEL-8 (21 Eki) üç bilgiyi geri getirdi: `🕒 … mumu`, `▲/▼ … önündeki
+        bölge`, `◈ … yapı`.
+      * GÖRSEL-9 (22 Eki) kartı BLOKLARA ayırdı. Kullanıcı: "okurken nerede ne
+        var belli değil". Blok sırası sabittir ve karar sırasını izler:
 
-      * `🕒 … mumu`  — hangi mum kapandığı (zamanlama olmadan alarm okunmuyor),
-      * `▲ direnç/▼ destek …` — kırılımın ÖNÜNDEKİ ilk canlı bölge ve uzaklığı,
-      * `◈ … yapı dış ↓/iç ↓` — yapı kırılımla aynı yönde mi (tek satır),
+          1 OLAY     — ne oldu (kimlik, formasyon, mum, kapanış/sınır)
+          2 ÖNÜNDE   — kırılımın önündeki canlı bölge, kalite, bant yaşı
+          3 YAPI     — kısa vadeli yön ve geri çekilme; yapı uyuyor mu
+          4 ÖLÇÜ     — arşivde bu kurulum nasıl bitti (`◇`, en çok 3 satır)
+          5 KATILIM  — hacim
+          6 SINIR    — karşı işaret ve `· bozulur` eşiği
+          7 CTA      — yasal uyarı
 
-    ve isteğe bağlı iki ölçü (`· daralma`, `· temas`) ile arşiv ölçümü
-    (`◇`, en çok 2 satır) eklenir. Kârenin taşıdığı bölge DÖKÜMÜ, olay
-    seviyeleri ve girintili alt satırlar hâlâ basılmaz; tavan
-    `_KART_MAKS_SATIR`'dır (16) ve aşılınca en düşük öncelikli ek düşer.
+    `/tara` satırı karttan ÇIKTI (kullanıcı kararı 2026-10-22): komut çalışmaya
+    devam eder, ama her alarmın altında tekrar etmez. Boşalan yer ölçüm dipnotuna
+    gitti (`· geçmiş davranış, kazanç değil`) — kartın en yanlış anlaşılacak
+    satırı `◇` oranlarıdır ("%76 kazanç" diye okunuyordu).
+
+    Tavan `_KART_MAKS_SATIR` (20, boş satırlar hariç); aşılırsa isteğe bağlı
+    ekler en düşük öncelikten düşer, çekirdek satır düşmez.
     """
     stock = str(data.get("stock_name") or "Bilinmiyor").upper()
     timeframe = str(data.get("timeframe") or "1h").lower()
@@ -453,110 +466,110 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
         close = data.get("close_price")
     kapanis = _sayı(close)
     esik, yon_eki = _kart_esik(data, yon)
+    bolumler = data.get("domain_bolumleri")
 
-    # 1-2. satır: kimlik + formasyon (`·` zinciri yok, satır bölünmesin).
-    satirlar: List[str] = [f"{ok} {stock} {tf_label} {olay_metni}".strip()]
+    bloklar: List[List[str]] = []
+
+    # ── BLOK 1 · OLAY ────────────────────────────────────────────────────────
+    blok: List[str] = []
+    _satir(blok, f"{ok} {stock} {tf_label} {olay_metni}".strip())
     if kisalt:
         aday = f"{pattern} — {kisalt}"
         if genislik(aday) > _kart_esik_px():
             aday = f"{pattern} - {kisalt}"
-        _satir(satirlar, aday)
+        _satir(blok, aday)
     else:
-        _satir(satirlar, pattern)
-
-    # 3. satır: hangi mum kapandı (GÖRSEL-8'de geri geldi).
+        _satir(blok, pattern)
     damga = _kart_mum_damgasi(data)
     if damga:
-        _satir(satirlar, damga)
-
-    # 4. satır: olayın ölçüsü. Geçersizleşmede "ne olursa teyit düşerdi" sınırı,
-    # teyitlilerde kapanış + seviye (olayın tek cümlesi).
+        _satir(blok, damga)
+    # Olayın tek ölçüsü: teyitlide "kapanış · sınır", geçersizleşmede "dönüş sınırı".
     if gecersiz:
         if esik:
-            _satir(satirlar, f"· teyit sınırı {_sayı(esik)} {yon_eki}")
+            _satir(blok, f"· dönüş sınırı {_sayı(esik)} {yon_eki}")
         elif kapanis:
-            _satir(satirlar, f"· kapanış {kapanis}")
+            _satir(blok, f"· kapanış {kapanis}")
     elif kapanis and kirilan:
-        _satir(satirlar, f"· kapanış {kapanis} (seviye {kirilan})")
+        _satir(blok, f"· kapanış {kapanis} · sınır {kirilan}")
     elif kapanis:
-        _satir(satirlar, f"· kapanış {kapanis}")
+        _satir(blok, f"· kapanış {kapanis}")
     elif kirilan:
-        _satir(satirlar, f"· seviye {kirilan}")
+        _satir(blok, f"· sınır {kirilan}")
+    bloklar.append(blok)
 
-    # 5. satır: kırılımın önündeki ilk bölge — yalnız teyitli olayda ve veri
-    # varsa (kırılımın yönü bilinmiyorsa "ön" tanımsız).
-    bolumler = data.get("domain_bolumleri")
+    if guncelleme:
+        # Güncelleme yolu: olay künyesi + "değişiklik yok" + CTA. Bağlam
+        # (yapı/bölge/hacim) önceki mesajla birebir aynı olduğu için ölçüm
+        # blokları yeniden basılmaz — kullanıcı zaten görmüştü.
+        bloklar.append(["değişiklik yok · yapı/bölge aynı"])
+        bloklar.append(["• yatırım tavsiyesi değildir"])
+        return "\n\n".join("\n".join(b) for b in bloklar if b)
+
+    # ── BLOK 2 · ÖNÜNDE ──────────────────────────────────────────────────────
+    blok = []
     engel = list(bolumler.get("engel") or []) if isinstance(bolumler, dict) else []
     if engel and not gecersiz:
-        _satir(satirlar, str(engel[0]))
-
+        _satir(blok, str(engel[0]))
     kalite = _sayı(data.get("confidence_score"), 0)
     güç = _sayı(data.get("break_strength"), 0)
     if kalite and güç:
-        _satir(satirlar, f"· kalite {kalite}/100 — güç {güç}")
+        _satir(blok, f"· kalite {kalite}/100 — güç {güç}")
     elif kalite:
-        _satir(satirlar, f"· kalite {kalite}/100")
-
-    # --- isteğe bağlı ölçüler (tavan aşılırsa en sonda bunlar düşer) ---
-    ekler: List[tuple[int, str]] = []
-    for oncelik, metin in ((3, _kart_daralma(data)), (2, _kart_temas(data))):
-        if metin:
-            ekler.append((oncelik, metin))
-
+        _satir(blok, f"· kalite {kalite}/100")
     yas_metni = _kart_yas_metni(data)
     if yas_metni:
         if genislik(yas_metni) <= _kart_esik_px():
-            _satir(satirlar, yas_metni)
+            _satir(blok, yas_metni)
         else:
-            # Uzun ay adı bütçeyi aşarsa iki kısa satıra iner (girinti yok).
             for parca in yas_metni.split(" · "):
-                _satir(satirlar, parca if parca.startswith("·") else "· " + parca)
-    # İsteğe bağlı ölçüler buraya girer (bant/kalite ile aynı blokta okunur);
-    # tavan hesabı kartın tamamı bitince yapılır.
-    ek_yeri = len(satirlar)
+                _satir(blok, parca if parca.startswith("·") else "· " + parca)
+    if blok:
+        bloklar.append(blok)
 
-    retest = "retest var" if data.get("retest_seen") else "retest yok"
-    ust_tf = _KART_UST_TF.get(timeframe)
-    if ust_tf:
-        mtf = f"MTF {ust_tf} onaylı" if data.get("mtf_destek") else f"MTF {ust_tf} onayı yok"
-        _satir(satirlar, f"{retest} — {mtf}")
-    else:
-        _satir(satirlar, retest)
-
-    # yapı: alarm TF'sinin dış/iç durumu, TEK satır (olay seviyeleri /tara'da).
+    # ── BLOK 3 · YAPI ────────────────────────────────────────────────────────
+    blok = []
     yapi_ozet = list(bolumler.get("yapi_ozet") or []) if isinstance(bolumler, dict) else []
     if yapi_ozet and not gecersiz:
-        _satir(satirlar, str(yapi_ozet[0]))
+        _satir(blok, str(yapi_ozet[0]))
+    retest = "geri çekilme var" if data.get("retest_seen") else "geri çekilme yok"
+    ust_tf = _KART_UST_TF.get(timeframe)
+    if ust_tf:
+        mtf = f"{ust_tf} de onaylı" if data.get("mtf_destek") else f"{ust_tf} onayı yok"
+        _satir(blok, f"{retest} · {mtf}")
+    else:
+        _satir(blok, retest)
+    if blok:
+        bloklar.append(blok)
 
-    if guncelleme:
-        # Güncelleme yolu: künye zaten gitti, yalnız değişmeyen bağlam + CTA.
-        _satir(satirlar, "değişiklik yok — yapı/bölge/hacim aynı")
-        satirlar.append(f"› /tara {stock}")
-        satirlar.append("• yatırım tavsiyesi değildir")
-        return "\n".join(satirlar)
-
-    # --- katılım: kârede şerit var, YORUM yok → metinde kalır (en fazla 2 satır) ---
-    hacim = list(bolumler.get("hacim") or []) if isinstance(bolumler, dict) else []
-    for satir in hacim[:2]:
-        _satir(satirlar, str(satir))
-
-    # --- arşiv ölçümü: aynı kurulumun geçmişte nasıl sonuçlandığı (en fazla 2).
-    # Kaynak `ampirik_referans`; satır yoksa hiçbir şey basılmaz (uydurma yok).
+    # ── BLOK 4 · ÖLÇÜ (arşiv; en çok 3 satır) ────────────────────────────────
     olcum = list(bolumler.get("olcum") or []) if isinstance(bolumler, dict) else []
-    for satir in olcum[:2]:
-        _satir(satirlar, str(satir))
+    if olcum:
+        blok = []
+        for satir in olcum[:3]:
+            _satir(blok, str(satir))
+        # Ölçüm dipnotu: oran "kazanç" diye okunmasın. `/tara` satırının yerine
+        # geldi (2026-10-22 kararı). Ölçüm varsa her zaman basılır.
+        _satir(blok, "· geçmiş davranış, kazanç değil")
+        bloklar.append(blok)
 
-    # --- eşik: teyitlide "bozulur", geçersizleşmede 4. satırda yazıldı ---
-    if esik and not gecersiz:
-        _satir(satirlar, f"· bozulur {_sayı(esik)} {yon_eki} kapanış")
+    # ── BLOK 5 · KATILIM ─────────────────────────────────────────────────────
+    hacim = list(bolumler.get("hacim") or []) if isinstance(bolumler, dict) else []
+    blok = []
+    for satir in hacim[:2]:
+        _satir(blok, str(satir))
+    if blok:
+        bloklar.append(blok)
 
+    # ── BLOK 6 · SINIR ───────────────────────────────────────────────────────
+    blok = []
     karsi = [str(x) for x in (data.get("domain_karsi") or []) if str(x).strip()]
     if karsi:
-        _satir(satirlar, "karşı delil: " + " — ".join(karsi[:2]))
+        _satir(blok, "ters işaret: " + " — ".join(karsi[:2]))
+    if esik and not gecersiz:
+        _satir(blok, f"· bozulur: {_sayı(esik)} {yon_eki} kapanış")
 
-    # İzleme adayları: acil mesaj bağlamı (adaptör doldurur; canlı tarayıcı boş
-    # bırakır). Bu blok geldiğinde satır sayısı hedefi aşılabilir — ama bilgi
-    # düşürülmez: başlık + en çok 3 aday satırı, hepsi kendi satırında.
+    # İzleme adayları (adaptör doldurur; canlı tarayıcı boş bırakır): sınır
+    # bloğunun altında, kendi başlığıyla. Bilgi düşürülmez.
     adaylar: List[str] = []
     for aday in list(data.get("watch_context") or [])[:3]:
         if not isinstance(aday, dict):
@@ -566,14 +579,20 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
         adaylar.append(f"▸ {aday.get('stock') or '?'} {aday_tf} — "
                        + STATE_TR.get(str(aday.get("state") or "").strip().upper(), "izlemede"))
     if adaylar:
-        _satir(satirlar, "izleme adayları")
+        _satir(blok, "izleme adayları")
         for aday_satir in adaylar:
-            _satir(satirlar, aday_satir)
+            _satir(blok, aday_satir)
+    if blok:
+        bloklar.append(blok)
 
-    # Tavan: sabit satırlar korunur, isteğe bağlı ekler öncelik sırasıyla girer.
-    # CTA (2 satır) her koşulda sona eklenir; tavan onları da kapsar. Ekler
-    # `ek_yeri`ne (bant satırının ardına) eklenir — kartın ölçü bloğu dağılmaz.
-    kalan = _KART_MAKS_SATIR - len(satirlar) - 2
+    # ── isteğe bağlı ölçüler: yer varsa 2. bloğa girer ──────────────────────
+    ekler: List[tuple[int, str]] = []
+    for oncelik, metin in ((3, _kart_daralma(data)), (2, _kart_temas(data))):
+        if metin:
+            ekler.append((oncelik, metin))
+
+    icerik = sum(len(b) for b in bloklar)
+    kalan = _KART_MAKS_SATIR - icerik
     secilen: List[str] = []
     for _oncelik, metin in sorted(ekler, reverse=True):
         if kalan <= 0:
@@ -581,11 +600,15 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
         secilen.append(metin)
         kalan -= 1
     if secilen:
-        satirlar[ek_yeri:ek_yeri] = secilen
+        # Ölçü satırları 2. blokta (bant/kalite ile) okunur.
+        hedef = bloklar[1] if len(bloklar) > 1 else bloklar[0]
+        hedef.extend(secilen)
 
-    satirlar.append(f"› /tara {stock}")
-    satirlar.append("• yatırım tavsiyesi değildir")
-    return "\n".join(satirlar)
+    # ── BLOK 7 · CTA ─────────────────────────────────────────────────────────
+    bloklar.append(["• yatırım tavsiyesi değildir"])
+
+    # Bloklar arası TEK boş satır; boş satır satır tavanına sayılmaz.
+    return "\n\n".join("\n".join(b) for b in bloklar if b)
 
 
 def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False) -> str:
