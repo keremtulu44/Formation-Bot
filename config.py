@@ -47,11 +47,50 @@ MARKET_SUFFIX = os.getenv("MARKET_SUFFIX", ".IS").strip() or ".IS"
 # (örn. THYAO -> THYAO.IS) kullanırken endeks ve emtia sembolleri doğrudan Yahoo
 # karşılıklarına çevrilir.
 PROVIDER_SYMBOL_MAP = {
+    # --- BIST endeksleri (Yahoo'da `.IS` ekiyle) -----------------------------
     "XU100": "XU100.IS",
     "XU30": "XU030.IS",
     "XU030": "XU030.IS",
+    "XU50": "XU050.IS",
+    "XU050": "XU050.IS",
+    "XBANK": "XBANK.IS",
+    "XUSIN": "XUSIN.IS",
+    "XUTUM": "XUTUM.IS",
+    # --- Makro (BIST dışı, kendi seansı) ------------------------------------
     "BRENT": "BZ=F",
+    "USDTRY": "USDTRY=X",
+    "ALTIN": "GC=F",     # ons altın (USD)
+    "GUMUS": "SI=F",     # ons gümüş (USD)
 }
+
+#: Endeks sembolleri: hisse değildir, "hisse" diye sayılmaz/etiketlenmez.
+ENDEKS_SEMBOLLERI = frozenset({"XU100", "XU30", "XU030", "XU50", "XU050",
+                               "XBANK", "XUSIN", "XUTUM"})
+#: Makro semboller: BIST dışı seans (ABD/forex). Kapanış kuralı BIST seansına
+#: göre hesaplandığı için gün sonu barları BIST kapanışıyla hizalanmaz; bu
+#: yüzden varsayılan olarak YALNIZ veri/bağlam içindir, alarm üretmez
+#: (`MAKRO_ALARM=1` ile açılır). BRENT geçmişte alarm üretiyordu; karar artık
+#: tek bayrakta toplandı.
+MAKRO_SEMBOLLERI = frozenset({"BRENT", "USDTRY", "ALTIN", "GUMUS"})
+#: Makro semboller alarm üretsin mi? Varsayılan KAPALI: bu sembollerin seans
+#: kapanışı BIST'e göre değil (ABD/forex), "yalnız kapanmış mum" kuralı gün sonu
+#: barlarında tam doğrulanamaz. Veri/grafik/bağlam her durumda çalışır.
+MAKRO_ALARM = str(os.getenv("MAKRO_ALARM", "0")).strip().lower() in (
+    "1", "true", "evet", "açık", "acik", "yes", "on")
+
+#: Sağlayıcı bu sembollerde hacim vermiyor (endeks) veya güvenilmez (makro).
+#: Kart "hacim yok" demek yerine nedeni yazar (bkz. notification_context).
+HACIMSIZ_SEMBOLLERI = ENDEKS_SEMBOLLERI | MAKRO_SEMBOLLERI
+
+
+def sembol_turu(sembol: str) -> str:
+    """Sembol sınıfı: "endeks" | "makro" | "hisse" (kart/rapor dili için)."""
+    anahtar = str(sembol or "").strip().upper()
+    if anahtar in ENDEKS_SEMBOLLERI:
+        return "endeks"
+    if anahtar in MAKRO_SEMBOLLERI:
+        return "makro"
+    return "hisse"
 
 
 def yahoo_ticker_for_symbol(stock: str) -> str:
@@ -70,6 +109,10 @@ BIST_50 = [
     "ARCLK", "ENKAI", "ODAS", "ASTOR", "KONTR", "SMRTG", "CWENE", "SNGYO", "ISMEN", "SKBNK",
     "TSKB", "TTRAK", "OTKAR", "AKSA", "AKSEN", "AYDEM", "BRSAN", "CIMSA", "DOAS", "EGEEN",
     "XU100", "XU30", "BRENT",
+    # 2026-10-22 (kullanıcı kararı): BIST 50 + sektör endeksleri + makro.
+    # Endeksler hisse gibi taranır (alarm üretir); makro semboller veri/bağlam
+    # içindir (alarm `MAKRO_ALARM` ile açılır).
+    "XU50", "XBANK", "XUSIN", "USDTRY", "ALTIN", "GUMUS",
 ]
 BIST_30 = BIST_50[:30]
 # Canlı tarama evreni: mevcut BIST 50 listesinden Yahoo verisi sorunlu KOZAL/KOZAA çıkarıldı (48 sembol).
@@ -78,6 +121,29 @@ BIST_30 = BIST_50[:30]
 #   STOCK_UNIVERSE=THYAO,GARAN,AKBNK
 _STOCK_UNIVERSE = [x.strip().upper() for x in os.getenv("STOCK_UNIVERSE", "").split(",") if x.strip()]
 ACTIVE_STOCKS = _STOCK_UNIVERSE or BIST_50
+#: Evren etiketi: "54 sembol (48 hisse + 4 endeks + 2 makro)". Tek yerde
+#: hesaplanır ki /durum, tarama yanıtı ve özet aynı sayıyı söylesin.
+def evren_ozeti(semboller=None, ayrinti: bool = True) -> str:
+    """Evren etiketi: "57 sembol (48 hisse + 5 endeks + 4 makro)".
+
+    `ayrinti=False` → yalnız "57 sembol". Gerekçe: günlük özet/panel satırları
+    283 px bütçesine sığmıyor; kırpılmış parantez ("48 hisse + 5 endeks +\n
+    4 makro") okunmuyordu. Ayrıntı `/durum`da kalır.
+    """
+    liste = list(semboller if semboller is not None else ACTIVE_STOCKS)
+    ozet = f"{len(liste)} sembol"
+    if not ayrinti:
+        return ozet
+    endeks = sum(1 for s in liste if sembol_turu(s) == "endeks")
+    makro = sum(1 for s in liste if sembol_turu(s) == "makro")
+    hisse = len(liste) - endeks - makro
+    parcalar = [f"{hisse} hisse"] if hisse else []
+    if endeks:
+        parcalar.append(f"{endeks} endeks")
+    if makro:
+        parcalar.append(f"{makro} makro")
+    return ozet + (f" ({' + '.join(parcalar)})" if parcalar else "")
+
 
 # Yahoo Finance istek temposu. Kısa istek aralığı + grup molası; paralel istek yok.
 def _env_float(name: str, default: float) -> float:
@@ -245,6 +311,14 @@ TELEGRAM_ALERT_STYLE = os.getenv("TELEGRAM_ALERT_STYLE", "kart").strip().lower()
 # 45/980 → 10/244. "0" yazılırsa 25 Eyl biçimi (tam kart) aynen geri gelir.
 TELEGRAM_KART_SUZGEC = os.getenv("TELEGRAM_KART_SUZGEC", "1").strip().lower() not in {
     "0", "false", "kapali", "kapalı", "yok", "hayir", "hayır"}
+# Beklenti (tahmin) hükmü: `◇ beklenti: devam` + sayaç satırı. VARSAYILAN
+# KAPALI (2026-10-22): katman ölçülmüş ilişkilerden türetiliyor ama canlı
+# akışta bir hafta izlenmeden açılmayacak (tasarım: TAHMIN_UYGULAMA_PLANI.md
+# §8/3). Açmak için `TELEGRAM_KART_TAHMIN=1`.
+# Kural: yön kanıtı yoksa satır basılmaz; hüküm tek kelimedir (devam · tek
+# kanıt · kararsız), sıfat yok.
+TELEGRAM_KART_TAHMIN = os.getenv("TELEGRAM_KART_TAHMIN", "0").strip().lower() in {
+    "1", "true", "acik", "açık", "on", "evet"}
 # Telefon sohbetinde metne ayrılan genişlik (px, 360 px ekran). telegram_measure.py
 # bu bütçeyle satır böler; 0 = bölme yok (satır uzunluğu serbest).
 # not: _env_int 0'ı 1'e yuvarlar; sıfır "bölme yok" demek olabildiği için float okunur.
@@ -374,7 +448,10 @@ def _tf_esiklerini_coz(ham: str, varsayilan: dict) -> dict:
 # Public bütçe + tempo: DM kapılarından AYRI (grup başına 20 mesaj/dk sınırı var).
 PUBLIC_MAX_MESAJ_SAAT = _env_int("PUBLIC_MAX_MESAJ_SAAT", 6)
 PUBLIC_MAX_MESAJ_GUN = _env_int("PUBLIC_MAX_MESAJ_GUN", 25)
-PUBLIC_MIN_ARALIK_SN = _env_float("PUBLIC_MIN_ARALIK_SN", 1.2)
+#: Public mesajlar arası en az aralık (sn). 1,2 → 2,0 (2026-10-22): bülten artık
+#: DM ile aynı 7 bloğu basıyor ve ardından kare(ler) gidiyor; 1,2 sn Telegram'ın
+#: grup hız sınırında 429 üretiyordu. Değer env ile geri alınabilir.
+PUBLIC_MIN_ARALIK_SN = _env_float("PUBLIC_MIN_ARALIK_SN", 2.0)
 
 # --- FAILURE PENALTY ---
 FAILED_PATTERN_PENALTY_BARS = _env_int("FAILED_PATTERN_PENALTY_BARS", 24)

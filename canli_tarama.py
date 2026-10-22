@@ -207,7 +207,8 @@ def main():
                 rapor_satirlari.append(s)
             print()
 
-    ozet = f"\nToplam: {len(bulgular)} canli formasyon / {len(ACTIVE_STOCKS)} hisse x {len(TFLER)} TF"
+    ozet = (f"\nToplam: {len(bulgular)} canli formasyon / "
+            f"{len(ACTIVE_STOCKS)} sembol x {len(TFLER)} TF")
     print(ozet)
     rapor_satirlari.append(ozet)
 

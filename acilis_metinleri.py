@@ -16,9 +16,9 @@ değiştirilirken sınırın sessizce aşılması engellenir.
 # --- Kısa açıklama (kanal "Hakkında" alanı) ---------------------------------
 # Üslup: ne olduğu + ne gönderdiği + sorumluluk reddi + X hesabı.
 ACILIK_ACIKLAMASI = (
-    "BIST formasyon takip panosu · 48 hisse, 4 zaman dilimi: saatlik bülten, "
-    "18:45 kapanış özeti, Cuma doğruluk karnesi. Yatırım tavsiyesi değildir. "
-    "X: @bisthisseveri"
+    "BIST formasyon takip panosu · 48 hisse + endeksler, 4 zaman dilimi: "
+    "saatlik bülten, 18:45 kapanış özeti, Cuma karnesi. Yatırım tavsiyesi "
+    "değildir. X: @bisthisseveri"
 )
 
 # --- Sabitlenmiş karşılama mesajı -------------------------------------------
@@ -27,7 +27,7 @@ ACILIK_ACIKLAMASI = (
 # baştan kırar: başarısızların gizlenmediği açıkça yazılır.
 ACILIK_SABIT_MESAJ = """📌 BIST FORMASYON TAKİP PANOSU — nasıl çalışır?
 
-Bu kanal bir sinyal servisi değil; otomatik bir formasyon takip panosudur. Bot, BIST'ten 48 hisseyi 4 zaman diliminde (1s · 2s · 4s · günlük) tarar ve YALNIZ kapanmış mumlarla çalışır.
+Bu kanal bir sinyal servisi değil; otomatik bir formasyon takip panosudur. Bot, BIST'ten 48 hisseyi ve endeksleri (XU100 · XU30 · XU50 · banka · sanayi) 4 zaman diliminde (1s · 2s · 4s · günlük) tarar ve YALNIZ kapanmış mumlarla çalışır. Endekslerde hacim toplanmadığı için o satır "hacim yok (endeks)" der; yön fiyattan okunur.
 
 📤 NE GÖNDERİLİR
 • Tarama bülteni — yeni tamamlanan formasyon, teyitli kırılım ve başarılı retestler; aynı turda çıkanlar TEK mesajda

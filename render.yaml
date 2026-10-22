@@ -68,6 +68,12 @@ services:
         value: ".IS"
       - key: STOCK_UNIVERSE
         sync: false
+      # MAKRO_ALARM: ons altın/ons gümüş/USDTRY/BRENT alarm üretsin mi?
+      # Varsayılan 0 (yalnız veri + grafik). Bu sembollerin seans kapanışı BIST'e
+      # göre olmadığı için "yalnız kapanmış mum" kuralı gün sonu barlarında tam
+      # doğrulanamaz; 1 yaparsanız BRENT eski davranışına döner.
+      - key: MAKRO_ALARM
+        value: "0"
       # C3: `bot_store` tablosunu paylaşan ikinci örnek anahtar çakışmasın diye.
       - key: SUPABASE_STORE_PREFIX
         value: "formation-bot:"

@@ -88,8 +88,8 @@ def test_retest_basarili_mesaji():
     assert "seviye korundu" not in msg
     # GÖRSEL-7: seviye kârede çizili; metinde TEK satır olarak ve kırılan seviye
     # adıyla kalır (`kırılan` sözcüğü değil, sayı).
-    assert "seviye 302,00" in msg
-    assert "bozulur 302,00 altı kapanış" in msg
+    assert "sınır 302,00" in msg
+    assert "bozulur: 302,00 altı kapanış" in msg
 
 
 def test_aday_oluyor_mesaji():
@@ -144,8 +144,10 @@ def test_sonraki_teyitli_gecersizlesme_ayri_bildirim_mesaji():
     # GÖRSEL-7 iş bölümü: geçersizleşme metni YALNIZ formasyon + TF + "ne olursa
     # teyit düşerdi" sınırını söyler. Kapanış/marj/temas/kırılan seviye kârede
     # çizili (ölçüm: bugünkü kart 34 satırdı, %40'ı girintili devam satırı).
-    assert "teyit sınırı 302,00 altı" in msg
-    assert "kırılan" not in msg and "temas" not in msg and "kaldı" not in msg
+    assert "dönüş sınırı 302,00 altı" in msg
+    # GÖRSEL-8: `· temas üst/alt` isteğe bağlı ölçü olarak geri geldi (formasyonun
+    # kaç kez denendiği); `kırılan` dökümü ve marj hâlâ basılmaz.
+    assert "kırılan" not in msg and "kaldı" not in msg
     assert "× geçersiz" not in msg
     assert "başarısız kırılım" not in msg.lower()
 
@@ -340,7 +342,10 @@ def test_kart_baglamla_birlikte_tavanin_altinda_kalir():
                 f"{state}: kart {len(msg)} kr (tavan {TELEGRAM_ALERT_MAX_KARAKTER})")
             for satir in msg.splitlines():
                 assert genislik(satir) <= TELEGRAM_SATIR_PX, f"{state}: {satir!r}"
-            assert "▸ /tara" not in msg and "/tara THYAO" in msg, state
+            # `/tara` satırı karttan ÇIKTI (2026-10-22): komut çalışır ama
+            # her alarmın altında tekrar etmez; boşalan yer ölçüm dipnotuna gitti.
+            assert "/tara" not in msg, state
+            assert state == "KIRILIM_TEYITLI" or "geçmiş davranış" not in msg
             assert msg.count("yatırım tavsiyesi değildir") == 1, state
             assert len(msg.splitlines()) <= 44, f"{state}: {len(msg.splitlines())} satır"
 
@@ -383,11 +388,12 @@ def test_mesajlar_ayni_iskeleti_paylasir():
 
 def test_mesajlar_tek_sabit_footer_tasir():
     # Eskiden üç cümleden biri rastgele ekleniyordu; artık tek ve sabit footer var.
-    # Kart sürümü: yasal satırın üstünde tek bir CTA (`› /tara HISSE`) durur.
+    # Kart sürümü: yalnız yasal satır kalır; `/tara` CTA'sı 2026-10-22'de
+    # karttan çıkarıldı (komut çalışmaya devam eder, alarmda tekrar etmez).
     for state in _LIFECYCLE:
         msg = _mesaj(state)
         assert msg.count("yatırım tavsiyesi değildir") == 1, state
-        assert msg.count("/tara THYAO") == 1, state
+        assert "/tara" not in msg, state
 
 
 def test_ozet_tek_sabit_footer_ve_turkce_tarih():
@@ -444,13 +450,13 @@ def test_dogrulanmis_olay_kimlik_fiyat_kalite_tasir_kare_detayini_tekrarlamaz():
     assert "▲ THYAO 1s YUKARI TEYİTLİ" in msg
     # Olayın ölçüsü tek satırda: kapanış + o an geçerli seviye ("Çok güçlü" gibi
     # türetilmiş sıfatlar hâlâ yasak).
-    assert "kapanış 303,25 (seviye 302,00)" in msg
+    assert "kapanış 303,25 · sınır 302,00" in msg
     assert "kalite 87/100 — güç 80" in msg
     assert "Güçlü" not in msg and "Çok güçlü" not in msg
-    assert "retest yok" in msg  # payload'da retest_seen yok → motor "görülmedi" der
-    # GÖRSEL-7: kârede ÇİZİLEN bilgi metinde tekrarlanmaz (temas işaretleri, yapı
-    # satırı, mum damgası kâre başlığında). Metin yalnız görünmeyeni söyler.
-    assert "temas üst" not in msg
+    # Sade dil (2026-10-22): "retest" yerine "geri çekilme" yazılır.
+    assert "geri çekilme yok" in msg  # payload'da retest_seen yok
+    # GÖRSEL-8: tema sayısı ve mum damgası metinde VAR (kullanıcı kararı), ama
+    # ham domain dökümü ve ham `bar_metni` basılmaz.
     assert "Market Structure" not in msg
     assert "Mum: 2026-10-12 15:30 kapandı" not in msg
 

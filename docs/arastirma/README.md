@@ -17,8 +17,18 @@ tartışmalarında sayı gerektiğinde buraya bakılır.
 | **[YASAM_TABLOSU.md](YASAM_TABLOSU.md)** | **Soru sicili:** OB/FVG/formasyon için yaşam tablosu, kilitli sorular, cevap formatı | Yeni ölçüm yapmadan önce |
 | **[KOLON_SOZLUGU.md](KOLON_SOZLUGU.md)** | **Ortak dil:** her kolonun anlamı, birimi, `n` birimi, sınıf değerleri, formasyon tablosu taslağı | Sorgu yazmadan / tablo okumadan önce |
 | **[FORMASYON_SONUCLARI.md](FORMASYON_SONUCLARI.md)** | **Formasyon cevapları:** FRM-01…20 kartları (n + taban + GA) | Formasyon sorularının cevabı |
+| **[AMPIRIK_REFERANS.md](AMPIRIK_REFERANS.md)** | **Canlıya bağlanan ölçüm:** hangi sayı kartta hangi koşulda basılıyor (`ampirik_referans.py`) | Ölçümü metne çevirirken |
+| **[KOSULLU_CUMLE_OLCUMU.md](KOSULLU_CUMLE_OLCUMU.md)** | **Ölçüldü, yazılmadı:** "giderse tamamlanır" cümlesinin çapraz tablosu (yakınlık + aşım kovaları), karar ve gerekçe | Koşullu cümle önerilmeden önce |
+| **[REPLAY_OZET_2026-10-21.md](REPLAY_OZET_2026-10-21.md)** | **Son replay'in okunur özeti:** tek ekran + tek tabloda MFE/MAE/NET + örneklem payı | Hızlı karar / paylaşım için |
 | [ARASTIRMA_RAPORU_DUZMETIN.txt](ARASTIRMA_RAPORU_DUZMETIN.txt) | Aynı sonuçların düz metin dışa aktarımı (paylaşım için) | Telegram/forum aktarımı |
 | [arastirma_ms_hatali_seriler.txt](arastirma_ms_hatali_seriler.txt) | MS motorunun patladığı **35 serinin** listesi | Açık bulgu — aşağıya bak |
+
+## Ölçümün canlı metne bağlandığı yer
+
+Kart ve `/tara` çıktısı artık yalnız "şu an ne oldu" değil, aynı kurulumun
+arşivdeki karşılığını da basıyor (`◇` satırları). Hangi ölçümün hangi koşulda
+yazıldığı, `n` gösterimi ve yaklaşımlar: [AMPIRIK_REFERANS.md](AMPIRIK_REFERANS.md).
+Katman varsayılan kapalıdır; açan yüzey açıkça `olcum=True` verir.
 
 ## Kilit bulgular (tek paragrafta)
 

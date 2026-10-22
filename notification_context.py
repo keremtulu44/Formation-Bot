@@ -12,9 +12,34 @@ from math import isfinite
 from typing import Any
 
 from reporting.format import sayi
+from telegram_measure import SATIR_BUTCE, genislik
 
 TIMEFRAME_ORDER = ("1h", "2h", "4h", "1d")
 TIMEFRAME_LABELS = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
+
+
+#: Kart dilinde OB/FVG yerine okunur karşılığı: "blok" (order block) ve
+#: "boşluk" (fair value gap). Kısaltma kartta yaşamaz (kullanıcı kararı
+#: 2026-10-22: "herkesin anlayabileceği format"). `/panel`, export ve log
+#: yüzeyleri teknik adı kullanmaya devam eder.
+_ZONE_SADE = {"OB": "blok", "FVG": "boşluk"}
+
+#: Kart satırının güvenle sığdığı piksel eşiği (notifier._kart_esik_px ile aynı
+#: mantık: bütçenin %5 güvenlik payının altında kal).
+_KART_ESIK_PX = float(SATIR_BUTCE) * 0.95 - 6.0
+
+
+def _sigdir(adaylar: list[str]) -> str:
+    """Bütçeye sığan EN BİLGİLİ adayı seç; hiçbiri sığmazsa en kısasını döndür.
+
+    Sade dil satırları teknik kısaltmalardan uzun (FVG → boşluk). Uzun fiyatlı
+    sembollerde satırı bölmek yerine sıfat düşer, ölçü kalır (bilgi sırası:
+    yön/ok → bölge türü → TF → fiyat → mesafe).
+    """
+    for aday in adaylar:
+        if genislik(aday) <= _KART_ESIK_PX:
+            return aday
+    return min(adaylar, key=genislik)
 
 
 def _field(value: Any, name: str, default=None):
@@ -112,6 +137,24 @@ _STRUCTURE_SHORT = {
     "STATE_TRANSITION_UP": "↑geçiş",
     "STATE_TRANSITION_DOWN": "↓geçiş",
     "STATE_NEUTRAL": "–",
+}
+#: Kart dili (2026-10-22): yapı durumu okla değil sözcükle yazılır. Ok, "yukarı
+#: döndü" ile "yukarı" arasındaki farkı taşımıyordu; geçiş hâli ayrı sözcük.
+_STRUCTURE_SADE = {
+    "STATE_BULLISH": "yukarı",
+    "STATE_BEARISH": "aşağı",
+    "STATE_TRANSITION_UP": "yukarı döndü",
+    "STATE_TRANSITION_DOWN": "aşağı döndü",
+    "STATE_NEUTRAL": "yatay",
+}
+#: Aynı durumların bütçe daraldığında kullanılan kısa hâli ("döndü" düşer).
+#: Nuance kaybı yalnız satır sığmadığında olur; sığdığında tam sözcük basılır.
+_STRUCTURE_SADE_KISA = {
+    "STATE_BULLISH": "yukarı",
+    "STATE_BEARISH": "aşağı",
+    "STATE_TRANSITION_UP": "yukarı",
+    "STATE_TRANSITION_DOWN": "aşağı",
+    "STATE_NEUTRAL": "yatay",
 }
 
 
@@ -529,6 +572,14 @@ def _format_volume(results_by_timeframe: Any) -> list[str]:
     return lines
 
 
+def market_yapisi_hatali(results_by_timeframe: Any) -> bool:
+    """MS (piyasa yapısı) motoru bu turda hata verdi mi? (`/durum` sayacı için)
+
+    Kart bu bilgiyi basmaz (karar D); sayaç `/durum`da görünür.
+    """
+    return _market_structure_failed(results_by_timeframe)
+
+
 def _market_structure_failed(results_by_timeframe: Any) -> bool:
     if not isinstance(results_by_timeframe, Mapping):
         return False
@@ -543,6 +594,123 @@ def _market_structure_failed(results_by_timeframe: Any) -> bool:
 # Kurallar: tek satır = tek bilgi grubu, satır ≤ 283 px (telefonda sarmaz),
 # bilgi kaybolursa satıra çıkartılır (kesilmez). Simgeler tofu riski olmayan
 # geometrik karakterlerden seçildi.
+
+def _kart_engel(results_by_timeframe: Any, reference: float | None,
+                yon: int) -> list[str]:
+    """Kırılımın ÖNÜNDEKİ ilk canlı OB/FVG bölgesi (tek satır).
+
+    Neden kartta: alarm "neyi kırdı"yı söylüyordu ama "önünde ne var"ı
+    söylemiyordu; oysa sıradaki engelin yeri, kırılımın ne kadar yol alabileceğini
+    belirleyen tek sayı. Yön belirleyici: yukarı kırılımda üstteki bölge (direnç),
+    aşağı kırılımda alttaki bölge (destek). Bölge yoksa satır da yoktur.
+    """
+    if reference is None or reference <= 0 or not yon:
+        return []
+    istenen = "üst" if yon > 0 else "alt"
+    en_yakin: tuple[float, str] | None = None
+    for timeframe in TIMEFRAME_ORDER:
+        tf_label = TIMEFRAME_LABELS[timeframe]
+        for alan, tip, yanlar in (
+            ("order_block", "OB", (("bull", "boğa"), ("bear", "ayı"))),
+            ("fvg", "FVG", (("bull_fvg", "boğa"), ("bear_fvg", "ayı"))),
+        ):
+            export = _usable_export(_domain(results_by_timeframe, timeframe, alan))
+            if export is None:
+                continue
+            for anahtar, _yan in yanlar:
+                yan = _field(export, anahtar)
+                top = _number(_field(yan, "top"))
+                bottom = _number(_field(yan, "bottom"))
+                if top is None or bottom is None or top < bottom:
+                    continue
+                if tip == "FVG":
+                    kod = _number(_field(yan, "state"))
+                    if kod is None:
+                        continue
+                    kod = abs(int(kod))
+                    if kod in _FVG_TERMINAL_STATES or kod not in _FVG_STATE_LABELS:
+                        continue
+                konum = _zone_location(top, bottom, reference)
+                if konum is None:
+                    continue
+                grup, mesafe = konum
+                if grup != istenen or mesafe <= 0:
+                    continue
+                seviye = bottom if istenen == "üst" else top
+                ok = "▲" if istenen == "üst" else "▼"
+                tur = "direnç" if istenen == "üst" else "destek"
+                isaret = "+" if istenen == "üst" else "−"
+                marj = f"{isaret}%{mesafe / reference * 100.0:.1f}".replace(".", ",")
+                sade = _ZONE_SADE.get(tip, tip)
+                metin = _sigdir([
+                    f"{ok} {tur} · {sade} {tf_label} {_price(seviye)} {marj}",
+                    f"{ok} {tur} {sade} {tf_label} {_price(seviye)} {marj}",
+                    f"{ok} {sade} {tf_label} {_price(seviye)} {marj}",
+                ])
+                if en_yakin is None or mesafe < en_yakin[0]:
+                    en_yakin = (mesafe, metin)
+    return [en_yakin[1]] if en_yakin else []
+
+
+#: Metindeki "üst zaman dilimi". `main._UST_TF` (public görseli: 1 kare + üst TF)
+#: ile AYNI eşleme: aynı alarmın metni ve görseli aynı üst TF'yi konuşur.
+_UST_TF = {"1h": "4h", "2h": "4h", "4h": "1d"}
+
+
+def _yapi_metni(satir: dict) -> str:
+    """Bir yapı satırını kart cümlesine çevirir; ikisi de boşsa "" döner."""
+    token_dis, token_ic = _token(satir["dis"]), _token(satir["ic"])
+    dis = _STRUCTURE_SADE.get(token_dis, "")
+    ic = _STRUCTURE_SADE.get(token_ic, "")
+    if not dis and not ic:
+        return ""
+    kisa_dis = _STRUCTURE_SADE_KISA.get(token_dis, "")
+    kisa_ic = _STRUCTURE_SADE_KISA.get(token_ic, "")
+    etiket = f"◈ {satir['etiket']} yapı"
+    # Sade dil (2026-10-22): ok tek başına yön söylemiyordu (`dış ↑/iç ↑`).
+    # İkisi aynıysa tek sözcük; farklıysa iki künye. Sığmazsa "döndü"
+    # düşer — ölçü kısalmaz, yalnız nüans kısalır.
+    if dis and ic and token_dis == token_ic:
+        return _sigdir([f"{etiket} dış ve iç {dis}",
+                        f"{etiket} dış ve iç {kisa_dis}"])
+    uzun = [f"dış {dis}" if dis else "", f"iç {ic}" if ic else ""]
+    kisa = [f"dış {kisa_dis}" if kisa_dis else "", f"iç {kisa_ic}" if kisa_ic else ""]
+    return _sigdir([f"{etiket} " + ", ".join(p for p in uzun if p),
+                    f"{etiket} " + ", ".join(p for p in kisa if p)])
+
+
+def _kart_yapi_ozet(rows: list[dict], alarm_tf: str) -> list[str]:
+    """Alarm TF'sinin yapı durumu tek satır: `◈ 1s yapı dış ↓, iç ↓`.
+
+    Kartta (GÖRSEL-8) yapı bloğunun yalnız bu satırı kalır: olay seviyeleri
+    `/tara`'da ve kârede duruyor, satır ise "kırılım yapıyla aynı yönde mi"
+    sorusunu tek bakışta cevaplıyor.
+
+    ÜST TF YEDEĞİ (2026-10-22): alarm TF'sinin yapı satırı yoksa (MS motoru o
+    TF'de olay üretmedi/atladı) satır tamamen düşüyordu — public bültende
+    yapı bloğu boş kalıyordu. Artık sırayla: alarm TF'si → public görselindeki
+    üst TF → kalan üst TF'ler. Satır KENDİ etiketiyle yazılır (`◈ 4s yapı …`),
+    yani alarm TF'siymiş gibi gösterilmez.
+    """
+    mevcut = {str(s.get("timeframe") or "").lower(): s for s in rows}
+    sira = [str(alarm_tf or "").lower()]
+    ust = _UST_TF.get(sira[0])
+    if ust:
+        sira.append(ust)
+    try:
+        baslangic = TIMEFRAME_ORDER.index(sira[0]) + 1
+    except ValueError:
+        baslangic = 0
+    sira += [tf for tf in TIMEFRAME_ORDER[baslangic:] if tf not in sira]
+    for tf in sira:
+        satir = mevcut.get(tf)
+        if satir is None:
+            continue
+        metin = _yapi_metni(satir)
+        if metin:
+            return [metin]
+    return []
+
 
 def _kart_zones(results_by_timeframe: Any, reference: float | None) -> dict[str, list[str]]:
     """OB + FVG tek listede, tarafa göre: ▲ üst (engel) / ▼ alt (destek).
@@ -603,7 +771,8 @@ def _kart_zones(results_by_timeframe: Any, reference: float | None) -> dict[str,
                     isaret = "+" if grup == "üst" else "−"
                     durumlar.append(f"{isaret}%{marj:.1f}".replace(".", ","))
                 baslik = (
-                    f"{ok} {tip} {tf_label} {yan_etiket} · {_price(bottom)}–{_price(top)}"
+                    f"{ok} {_ZONE_SADE.get(tip, tip)} {tf_label} {yan_etiket}"
+                    f" · {_price(bottom)}–{_price(top)}"
                 )
                 adaylar[grup].append((mesafe, baslik, " · ".join(durumlar)))
 
@@ -659,7 +828,33 @@ def _kart_oran(deger: Any) -> str:
     return f"{sayi_deger:.2f}".replace(".", ",")
 
 
-def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None) -> list[str]:
+def _hacim_yok_nedeni(sembol: str) -> str:
+    """Hacim toplanamıyorsa NEDENİ (kartta "veri yok" demek yetersiz).
+
+    Sağlayıcı endekslerde hacim sütununu 0/boş veriyor; makro sembollerde
+    (ons altın/gümüş, kur, brent) hacim farklı birimde ve kapanış hizasızdır.
+    Kullanıcı kararı (2026-10-22): satır silinmesin, açıklama olsun — "bilgi
+    yok" ile "bilgi anlamsız" farklı şeylerdir.
+
+    Bütçe notu: tek satırda "endeks hacmi toplanmıyor · yön fiyattan okunur"
+    466 px ölçüldü (eşik 262,85) ve `_satir` bölüyordu. Bu yüzden açıklama
+    İKİ kısa satıra ayrıldı: `hacim yok (endeks)` + `yön fiyattan okunur`.
+    """
+    import config as _config
+    tur = _config.sembol_turu(sembol)
+    if tur in ("endeks", "makro"):
+        return f"hacim yok ({tur})"
+    return ""
+
+
+def _hacim_yok_notu(sembol: str) -> str:
+    """Sembol sınıfı hacim vermiyorsa tek satırlık yön notu; yoksa boş."""
+    import config as _config
+    return "yön fiyattan okunur" if _config.sembol_turu(sembol) in ("endeks", "makro") else ""
+
+
+def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None,
+                 sembol: str = "") -> list[str]:
     """Katılım bölümü: satır = `katılım {tf} {kısa yargı}`, en fazla 2 satır.
 
     Neden bu biçim (GÖRSEL-7 ölçümü): eski hâl TF başına 3 satır ve 4 TF için
@@ -681,7 +876,9 @@ def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None) -> list[str]:
                 hata = _token(_field(result, "error")) if result is not None else ""
                 kayitlar.append({"tf": timeframe, "etiket": tf_label, "yargi": "",
                                  "rvol": "", "bitti": False,
-                                 "bos": "analiz yapılamadı" if hata else "veri yok"})
+                                 "bos": ("analiz yapılamadı" if hata else
+                                         (_hacim_yok_nedeni(sembol) or "veri yok")),
+                                 "hata": bool(hata)})
             continue
         durum = _token(_field(export, "state"))
         if durum in {"PARTICIPATION_PENDING", "PARTICIPATION_VOLUME_UNAVAILABLE",
@@ -697,6 +894,7 @@ def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None) -> list[str]:
             "rvol": _kart_oran(_field(export, "rvol")),
             "bitti": durum.endswith("_ENDED"),
             "bos": "",
+            "hata": False,
         })
 
     if not kayitlar:
@@ -707,26 +905,188 @@ def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None) -> list[str]:
     if birincil["yargi"]:
         satirlar.append(f"katılım {birincil['etiket']} {birincil['yargi']}")
     elif birincil["rvol"]:
-        satirlar.append(f"katılım {birincil['etiket']} RVOL {birincil['rvol']}")
+        satirlar.append(f"katılım {birincil['etiket']} hacim {birincil['rvol']} kat")
     else:
         satirlar.append(f"katılım {birincil['etiket']} {birincil['bos'] or 'veri yok'}")
+        not_metni = _hacim_yok_notu(sembol)
+        if not_metni and not birincil["hata"]:
+            satirlar.append(not_metni)
 
     digerleri = [k for k in kayitlar if k is not birincil]
     bitenler = [k for k in digerleri if k["bitti"] and k["rvol"]]
     if bitenler:
         k = bitenler[0]
-        satirlar.append(f"katılım {k['etiket']} {k['rvol']} ile bitti")
+        satirlar.append(f"katılım {k['etiket']} hacim bitti ({k['rvol']})")
     else:
         zayiflar = [k for k in digerleri if k["rvol"] and _number(str(k["rvol"]).replace(",", ".")) is not None
                     and float(str(k["rvol"]).replace(",", ".")) < 0.6]
         if zayiflar:
             k = min(zayiflar, key=lambda x: float(str(x["rvol"]).replace(",", ".")))
-            satirlar.append(f"katılım {k['etiket']} {k['rvol']} zayıf")
+            satirlar.append(f"katılım {k['etiket']} hacim düşük ({k['rvol']})")
     return satirlar
+
+# --- ampirik referans (arşiv ölçümü) ---------------------------------------
+# Kart "/tara" gibi yüzeylerde "şu an ne oldu" bilgisinin yanına, aynı kurulumun
+# arşivde nasıl sonuçlandığını koyar. Sayılar `ampirik_referans` tablolarından
+# gelir; burada yalnız motor export'undan hangi özelliklerin okunacağı belirlenir.
+
+def _alarm_tf_zone(results_by_timeframe: Any, alarm_tf: str,
+                   reference: float | None) -> tuple[str, float, float, bool] | None:
+    """Alarm TF'sindeki en yakın OB/FVG bölgesi: (aile, üst, alt, fiyat içinde mi).
+
+    Ölçüm için gereken tek şey bölgenin geometrisidir; skor/kalite kullanılmaz
+    (aday seçimi değil, olayın kendi bölgesi ölçülür).
+    """
+    if reference is None or reference <= 0:
+        return None
+    en_iyi: tuple[float, str, float, float, bool] | None = None
+    for alan, aile, yanlar in (
+        ("order_block", "OB", ("bull", "bear")),
+        ("fvg", "FVG", ("bull_fvg", "bear_fvg")),
+    ):
+        export = _usable_export(_domain(results_by_timeframe, alarm_tf, alan))
+        if export is None:
+            continue
+        for anahtar in yanlar:
+            yan = _field(export, anahtar)
+            top = _number(_field(yan, "top"))
+            bottom = _number(_field(yan, "bottom"))
+            if top is None or bottom is None or top < bottom:
+                continue
+            icinde = bottom <= reference <= top
+            mesafe = 0.0 if icinde else min(abs(top - reference),
+                                           abs(bottom - reference))
+            if en_iyi is None or mesafe < en_iyi[0]:
+                en_iyi = (mesafe, aile, top, bottom, icinde)
+    if en_iyi is None:
+        return None
+    _, aile, top, bottom, icinde = en_iyi
+    return aile, top, bottom, icinde
+
+
+def _fiyat_zone_icinde(results_by_timeframe: Any, reference: float | None) -> bool | None:
+    """Fiyat herhangi bir TF'de canlı OB/FVG bölgesinin içinde mi (FRM-19 tanımı)."""
+    if reference is None or reference <= 0:
+        return None
+    bulundu = False
+    for timeframe in TIMEFRAME_ORDER:
+        zone = _alarm_tf_zone(results_by_timeframe, timeframe, reference)
+        if zone is None:
+            continue
+        bulundu = True
+        if zone[3]:
+            return True
+    return False if bulundu else None
+
+
+def _alarm_tf_ms_olayi(results_by_timeframe: Any, alarm_tf: str):
+    """Alarm TF'sindeki en güncel teyitli BOS/CHoCH: (kapsam, tip, yön)."""
+    export = _usable_export(_domain(results_by_timeframe, alarm_tf, "market_structure"))
+    if export is None:
+        return None, None, None
+    en_son = None
+    en_son_bar: float | None = None
+    for event in _event_rows(export):
+        tip = _token(_field(event, "event_type"))
+        if tip not in {"EVENT_BOS", "BOS", "EVENT_CHOCH", "CHOCH"}:
+            continue
+        if _token(_field(event, "confirmation_status")) != "CONFIRMED":
+            continue
+        if _token(_field(event, "validity")) == "FAILED":
+            continue
+        if _token(_field(event, "relevance")) in {"SUPERSEDED", "HISTORICAL"}:
+            continue
+        if not bool(_field(event, "is_active", True)):
+            continue
+        bar = _number(_field(event, "event_bar"))
+        if en_son is None or (bar is not None and (en_son_bar is None or bar >= en_son_bar)):
+            en_son = event
+            en_son_bar = bar
+    if en_son is None:
+        return None, None, None
+    kapsam = _token(_field(en_son, "scope")) or "EXTERNAL"
+    tip = "CHOCH" if "CHOCH" in _token(_field(en_son, "event_type")) else "BOS"
+    yon = "UP" if (_number(_field(en_son, "direction")) or 0) > 0 else "DOWN"
+    return kapsam, tip, yon
+
+
+def _alarm_tf_rvol(results_by_timeframe: Any, alarm_tf: str) -> float | None:
+    export = _usable_export(_domain(results_by_timeframe, alarm_tf, "volume_participation"))
+    if export is None:
+        return None
+    return _number(_field(export, "rvol"))
+
+
+def _korunan_seviyeler(results_by_timeframe: Any, alarm_tf: str) -> tuple[float | None, float | None]:
+    """Alarm TF'sinin korunan tepe/dibi (PH/PL) — FRM-20 uyum ölçümü için."""
+    export = _usable_export(_domain(results_by_timeframe, alarm_tf, "market_structure"))
+    if export is None:
+        return None, None
+    return (_number(_field(export, "external_protected_high")),
+            _number(_field(export, "external_protected_low")))
+
+
+def olcum_bolumu(results_by_timeframe: Any, reference_price: Any = None, *,
+                 alarm_tf: str | None = None, atr: float | None = None,
+                 yon: int = 0, retest_seen: bool | None = None,
+                 azami: int = 2, aile: str = "",
+                 beklenti: bool = False) -> list[str]:
+    """Kuruluma koşullu ölçüm satırları (`ampirik_referans`).
+
+    Veri yoksa veya tabloda o kesit yoksa satır üretilmez; uydurma yapılmaz.
+
+    `beklenti=True` (varsayılan KAPALI): ölçüm satırlarının ÖNÜNE beklenti
+    hükmü eklenir (`◇ beklenti: devam` + sayaç). Hüküm varsa en çok 1 ölçüm
+    satırı kalır — kart 3 satırı aşmaz (tasarım: TAHMIN_KATMANI.md §8).
+    Yön kanıtı yoksa beklenti satırı **hiç** basılmaz.
+    """
+    import ampirik_referans as ar
+
+    tf = str(alarm_tf or "").lower()
+    if not tf:
+        return []
+    reference = _number(reference_price)
+    kapsam, tip, ms_yon = _alarm_tf_ms_olayi(results_by_timeframe, tf)
+    try:
+        yon_sayi = int(yon or 0)
+    except (TypeError, ValueError):
+        yon_sayi = 0
+    zone = _alarm_tf_zone(results_by_timeframe, tf, reference)
+    ph, pl = _korunan_seviyeler(results_by_timeframe, tf)
+    kurulum = ar.Kurulum(
+        tf=tf,
+        yon=yon_sayi if yon_sayi else (1 if ms_yon == "UP" else -1 if ms_yon == "DOWN" else 0),
+        atr=atr,
+        bolge_top=zone[1] if zone else None,
+        bolge_alt=zone[2] if zone else None,
+        rvol=_alarm_tf_rvol(results_by_timeframe, tf),
+        retest_seen=retest_seen,
+        zone_icinde=_fiyat_zone_icinde(results_by_timeframe, reference),
+        ph=ph,
+        pl=pl,
+        break_price=reference,
+        ms_kapsam=kapsam,
+        ms_tip=tip,
+        ms_yon=ms_yon,
+        aile=str(aile or ""),
+    )
+    if not beklenti:
+        return ar.olcum_satirlari(kurulum, azami=azami)
+    hukum_satirlari = ar.beklenti_satirlari(kurulum)
+    if not hukum_satirlari:
+        # Yön kanıtı yok: hüküm satırı yok, ölçümler normal akışta.
+        return ar.olcum_satirlari(kurulum, azami=azami)
+    kalan = max(0, int(azami) - len(hukum_satirlari))
+    return hukum_satirlari + ar.olcum_satirlari(kurulum, azami=kalan)
+
 
 def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
                      stil: str = "klasik", alarm_tf: str | None = None,
-                     yalniz_tf: bool = False) -> dict:
+                     yalniz_tf: bool = False, olcum: bool = False,
+                     atr: float | None = None, yon: int = 0,
+                     retest_seen: bool | None = None,
+                     azami_olcum: int = 2, aile: str = "",
+                     beklenti: bool = False, sembol: str = "") -> dict:
     """Domain bağlamını bölüm bölüm döndürür (kart biçimleyicisi için).
 
     `stil="kart"`: `yapi`/`ust`/`alt`/`hacim` anahtarlarında hazır satırlar.
@@ -735,6 +1095,10 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
     `yalniz_tf=True` (GÖRSEL-4): yalnız `alarm_tf` bölümleri üretilir. Kullanıcı
     kararı: "geçersizleşince sadece formasyon bilgisi gelsin" — teyitli kırılım
     banda geri döndüğünde 4 zaman diliminin yapı/bölge/hacim dökümü gereksizdi.
+
+    `olcum=True`: `olcum` bölümünde arşiv ölçümü satırları eklenir
+    (`ampirik_referans`). Varsayılan kapalıdır: mevcut çağıranların metni
+    bayt bayt aynı kalır; ölçüm satırını isteyen yüzey açıkça ister.
     """
     reference = _number(reference_price)
     if yalniz_tf and alarm_tf:
@@ -749,13 +1113,27 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
     # Bölüm anahtarları ASCII: kart biçimleyicisi bunları sözlük anahtarı olarak
     # okur (mesaj metnindeki Türkçe karakterlerden bağımsız kalsın).
     bolumler: dict[str, list[str]] = {"yapi": [], "ob": [], "fvg": [], "hacim": [],
-                                      "içinde": [], "ust": [], "alt": []}
+                                      "içinde": [], "ust": [], "alt": [], "olcum": [],
+                                      "engel": [], "yapi_ozet": [], "uyari": []}
     if stil == "kart":
         bolumler["yapi"] = _kart_market_structure(satirlar, str(alarm_tf or "").lower())
+        bolumler["yapi_ozet"] = _kart_yapi_ozet(satirlar, str(alarm_tf or "").lower())
+        bolumler["engel"] = _kart_engel(results_by_timeframe, reference, int(yon or 0))
         bolumler.update(_kart_zones(results_by_timeframe, reference))
-        bolumler["hacim"] = _kart_volume(results_by_timeframe, str(alarm_tf or "").lower())
+        bolumler["hacim"] = _kart_volume(results_by_timeframe, str(alarm_tf or "").lower(),
+                                         sembol=sembol)
         if hata:
-            bolumler["yapi"].append(hata)
+            # MS (piyasa yapısı) motoru hata verdiğinde kart UYARI BASMAZ
+            # (kullanıcı kararı 2026-10-22, karar D): alarm kartı karar belgesidir,
+            # altyapı arıza notu oraya girmez — tek yeri `/durum`. Bilgi yine
+            # taşınır (`uyari` anahtarı); kart biçimleyicisi bu anahtarı okumaz.
+            bolumler["uyari"].append(hata)
+        if olcum:
+            bolumler["olcum"] = olcum_bolumu(
+                results_by_timeframe, reference, alarm_tf=alarm_tf, atr=atr,
+                yon=yon, retest_seen=retest_seen, azami=azami_olcum, aile=aile,
+                beklenti=beklenti,
+            )
         return {k: v for k, v in bolumler.items() if v}
     bolumler["yapi"] = _format_market_structure(satirlar)
     if hata:
@@ -763,6 +1141,12 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
     bolumler["ob"] = _format_order_blocks(results_by_timeframe, reference)
     bolumler["fvg"] = _format_fvgs(results_by_timeframe, reference)
     bolumler["hacim"] = _format_volume(results_by_timeframe)
+    if olcum:
+        bolumler["olcum"] = olcum_bolumu(
+            results_by_timeframe, reference, alarm_tf=alarm_tf, atr=atr,
+            yon=yon, retest_seen=retest_seen, azami=azami_olcum, aile=aile,
+            beklenti=beklenti,
+        )
     return {k: v for k, v in bolumler.items() if v}
 
 
@@ -781,13 +1165,19 @@ def karsi_deliller(results_by_timeframe: Any, alarm_tf: Any = None, break_dir: A
     rows = {row["timeframe"]: row for row in _market_structure_rows(results_by_timeframe)}
     satir = rows.get(tf)
     if satir is not None and yon:
-        ters = {"STATE_BEARISH": "↓", "STATE_TRANSITION_DOWN": "↓geçiş",
-                "STATE_BULLISH": "↑", "STATE_TRANSITION_UP": "↑geçiş"}.get(satir["ic"], "")
-        istenen = "↑" if yon > 0 else "↓"
-        if ters and ters[0] != istenen and ters != "–":
+        # Karşı delil kartın "ters işaret" satırıdır; ok yerine sözcük yazılır
+        # ("iç yapı ↓geçiş" → "iç yapı aşağı döndü"). Yön kıyası yine token
+        # üzerinden yapılır, metin karşılaştırmasına bağlı değildir.
+        ters = _STRUCTURE_SADE.get(_token(satir["ic"]), "")
+        token_ic = _token(satir["ic"])
+        if ters and token_ic in {"STATE_BEARISH", "STATE_TRANSITION_DOWN"} and yon > 0:
             bulgular.append(f"iç yapı {ters}")
-        dis = {"STATE_BEARISH": "↓", "STATE_BULLISH": "↑"}.get(satir["dis"], "")
-        if dis and dis != istenen:
+        elif ters and token_ic in {"STATE_BULLISH", "STATE_TRANSITION_UP"} and yon < 0:
+            bulgular.append(f"iç yapı {ters}")
+        dis_token = _token(satir["dis"])
+        dis = {"STATE_BEARISH": "aşağı", "STATE_BULLISH": "yukarı"}.get(dis_token, "")
+        if dis and ((dis_token == "STATE_BEARISH" and yon > 0)
+                    or (dis_token == "STATE_BULLISH" and yon < 0)):
             bulgular.append(f"dış yapı {dis}")
     export = _usable_export(_domain(results_by_timeframe, tf, "volume_participation")) if tf else None
     if export is None:
@@ -811,7 +1201,10 @@ def karsi_deliller(results_by_timeframe: Any, alarm_tf: Any = None, break_dir: A
 
 def format_domain_context(results_by_timeframe: Any, reference_price: Any = None, *,
                           stil: str = "klasik", alarm_tf: str | None = None,
-                          yalniz_tf: bool = False) -> str:
+                          yalniz_tf: bool = False, olcum: bool = False,
+                          atr: float | None = None, yon: int = 0,
+                          retest_seen: bool | None = None,
+                          azami_olcum: int = 2) -> str:
     """Render concise, read-only context from fresh domain-engine exports.
 
     Candidate scores are selection-only. Missing/skipped results are omitted;
@@ -822,7 +1215,9 @@ def format_domain_context(results_by_timeframe: Any, reference_price: Any = None
     davranış (klasik) önceki biçimlerle birebir aynıdır.
     """
     bolumler = domain_bolumleri(results_by_timeframe, reference_price,
-                                stil=stil, alarm_tf=alarm_tf, yalniz_tf=yalniz_tf)
+                                stil=stil, alarm_tf=alarm_tf, yalniz_tf=yalniz_tf,
+                                olcum=olcum, atr=atr, yon=yon,
+                                retest_seen=retest_seen, azami_olcum=azami_olcum)
     if stil == "kart":
         parcalar = []
         if bolumler.get("yapi"):
@@ -832,6 +1227,8 @@ def format_domain_context(results_by_timeframe: Any, reference_price: Any = None
             parcalar.append("\n".join(bolge))
         if bolumler.get("hacim"):
             parcalar.append("\n".join(bolumler["hacim"]))
+        if bolumler.get("olcum"):
+            parcalar.append("\n".join(bolumler["olcum"]))
         return "\n\n".join(parcalar)
     bölümler = []
     for baslik, anahtar in (
@@ -839,6 +1236,7 @@ def format_domain_context(results_by_timeframe: Any, reference_price: Any = None
         ("🧱 Order Block (OB)", "ob"),
         ("🟪 Fair Value Gap (FVG)", "fvg"),
         ("📊 Hacim / Katılım", "hacim"),
+        ("◇ Arşiv Ölçümü", "olcum"),
     ):
         satirlar = bolumler.get(anahtar) or []
         if satirlar:

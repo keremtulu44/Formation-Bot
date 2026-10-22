@@ -251,7 +251,7 @@ def test_public_ozet_sade_ve_dogru_satirlar(grup_notifier):
     assert metin.count("• SYM") == 5          # listede yalnız ilk 5
     # Satır bütçesi (≤283 px) " · " ayracından böler: bilgi aynı, iki kısa satır.
     import config
-    assert f"{len(config.ACTIVE_STOCKS)} hisse × 4 zaman dilimi" in metin and "9 tarama" in metin
+    assert f"{config.evren_ozeti(ayrinti=False)} × 4 zaman dilimi" in metin and "9 tarama" in metin
     # Grup metninde iç teknik döküm olmamalı
     assert "defter" not in metin and "n=" not in metin and "/tmp" not in metin
 
@@ -382,3 +382,348 @@ def test_tarama_turu_sonunda_bulten_bosaltilir(monkeypatch):
         assert M.daily_stats["tarama_sayisi"] == 10
     finally:
         M.daily_stats["tarama_sayisi"] = eski
+
+
+# --- 6) Bülten = DM kartıyla aynı 7 blok (2026-10-22) -----------------------
+
+def _zengin_olay(**ek):
+    """Kartın 7 bloğunu besleyen tam kayıt (bülten biçimi)."""
+    veri = _olay(break_dir=1, critical_price_level=39.26,
+                 confidence_score=81, break_strength=100, age_bars=94,
+                 band_baslangic="2026-09-30T16:30:00+03:00", retest_seen=False,
+                 mtf_destek=True, upper_now=39.96,
+                 bar_time="2026-10-21T13:30:00+03:00",
+                 bar_kapanis="2026-10-21T17:30:00+03:00",
+                 candle_close_price=39.60,
+                 domain_bolumleri={
+                     "engel": ["▲ direnç · boşluk 4s 41,90 +%5,8"],
+                     "yapi_ozet": ["◈ 4s yapı dış ve iç yukarı"],
+                     "hacim": ["katılım 4s hacim 0,45 kat"],
+                     "olcum": ["◇ 32321 formasyon · %76 tuttu",
+                               "◇ tutunca ~1,05 TL · %2,6",
+                               "◇ rol uyumlu %80 · 15724"],
+                 },
+                 domain_karsi=["iç yapı aşağı döndü"])
+    veri.update(ek)
+    return veri
+
+
+def test_public_bulten_dm_kartiyla_ayni_yedi_blok(grup_notifier):
+    metin = grup_notifier.format_public_batch([_zengin_olay()])
+    # 7 blok: OLAY / ÖNÜNDE / YAPI / ÖLÇÜ / KATILIM / SINIR / CTA
+    assert "Alçalan Üçgen — kapanışla" in metin             # 1 OLAY
+    assert "▲ direnç · boşluk 4s 41,90 +%5,8" in metin      # 2 ÖNÜNDE
+    assert "◈ 4s yapı dış ve iç yukarı" in metin            # 3 YAPI
+    assert "◇ 32321 formasyon · %76 tuttu" in metin         # 4 ÖLÇÜ
+    assert "katılım 4s hacim 0,45 kat" in metin             # 5 KATILIM
+    assert "ters işaret: iç yapı aşağı döndü" in metin      # 6 SINIR
+    assert "· bozulur: 39,96 altı kapanış" in metin
+    assert "yatırım tavsiyesi değildir" in metin            # 7 CTA
+
+
+def test_public_bultende_olcu_en_fazla_iki_satir(grup_notifier):
+    metin = grup_notifier.format_public_batch([_zengin_olay()])
+    olcum = [s for s in metin.splitlines() if s.startswith("◇")]
+    assert len(olcum) == 2, olcum
+    # En düşük öncelikli satır (rol uyumu) düşer; çekirdek ölçü kalır.
+    assert "formasyon · %76 tuttu" in olcum[0]
+    assert not any("rol uyumlu" in s for s in olcum)
+
+
+def test_public_bultende_uyari_tek_kez(grup_notifier):
+    metin = grup_notifier.format_public_batch([_zengin_olay(),
+                                              _zengin_olay(stock="GARAN")])
+    assert metin.count("yatırım tavsiyesi değildir") == 1
+
+
+def test_public_bulten_jargon_tasimaz(grup_notifier):
+    metin = grup_notifier.format_public_batch([_zengin_olay()])
+    for kisa in ("RVOL", "FVG", "BOS", "CHoCH", "ATR"):
+        assert kisa not in metin, (kisa, metin)
+
+
+# --- 7) Public kuyruk kart bağlamını taşır ----------------------------------
+
+def test_public_kuyruk_kart_baglamini_saklar(grup_notifier):
+    n = grup_notifier
+    veri = _zengin_olay()
+    assert n.public_kuyruk(veri) is True
+    kayit = n._public_kuyruk[0]
+    assert kayit["domain_bolumleri"]["olcum"], kayit
+    assert len(kayit["domain_bolumleri"]["olcum"]) <= 2       # bülten sınırı
+    assert kayit["domain_karsi"] == ["iç yapı aşağı döndü"]
+    # Zaman damgası JSON'a yazılabilir metin olmalı (kuyruk diske yazılır).
+    assert isinstance(kayit["bar_time"], str)
+
+
+def test_public_kuyruk_json_serilestirilebilir(grup_notifier):
+    import json as _json
+    n = grup_notifier
+    assert n.public_kuyruk(_zengin_olay()) is True
+    _json.dumps(n._public_kuyruk)          # patlarsa kuyruk diske yazılamaz
+
+
+# --- 8) Public görsel: 1 kare + üst TF --------------------------------------
+
+def test_public_grafik_bir_kare_arti_ust_tf(monkeypatch, grup_notifier, tmp_path):
+    import transport.telegram as tt
+
+    n = grup_notifier
+    yollar = []
+    for ad in ("alarm.png", "ust.png"):
+        yol = tmp_path / ad
+        yol.write_bytes(b"png")
+        yollar.append(str(yol))
+    cagrilar = []
+
+    def sahte_foto(yol, chat_id=None, token=None, notifier=None, caption="", **kw):
+        cagrilar.append({"yol": yol, "chat_id": chat_id, "caption": caption})
+        return True, "ok"
+
+    monkeypatch.setattr(tt, "foto_gonder", sahte_foto)
+    kayit = _zengin_olay()
+    n._public_grafik[str((("ISMEN", "4h", "KIRILIM_TEYITLI")))] = {
+        "goruntular": [{"tf": "4h", "goruntu": {"yol": yollar[0]}},
+                       {"tf": "1d", "goruntu": {"yol": yollar[1]}}]}
+    assert n.public_grafik_gonder(kayit) == 2
+    assert len(cagrilar) == 2
+    assert all(c["chat_id"] == "-1001234567890" for c in cagrilar)
+    assert "üst zaman dilimi" in cagrilar[1]["caption"]
+    # Dosyalar gönderimden sonra silinir (disk çöpü kalmaz).
+    import os
+    assert not any(os.path.exists(y) for y in yollar)
+    # Defter boşaldı: aynı olay ikinci kez kare göndermez.
+    assert n.public_grafik_gonder(kayit) == 0
+
+
+def test_public_aralik_varsayilani_iki_saniye():
+    """Bülten + kare art arda gidiyor; 1,2 sn grup hız sınırında 429 üretiyordu."""
+    import config
+    assert config.PUBLIC_MIN_ARALIK_SN >= 2.0
+
+
+# --- 9) Bülten bütçesi: sığmayan olay kaybolmaz -----------------------------
+
+def test_bulten_butcesi_asilmaz_ve_sayiyi_dogru_yazar(grup_notifier):
+    n = grup_notifier
+    n._BULTEN_KR_BUTCE = 900          # ~2-3 olay sığar
+    kayitlar = [_zengin_olay(stock=f"SEM{i:02d}", formation_id=f"f{i}")
+                for i in range(8)]
+    metin, giren = n._bulten_metni(kayitlar)
+    assert 0 < giren < len(kayitlar), (giren, len(metin))
+    assert len(metin) <= n._BULTEN_KR_BUTCE + 120
+    assert f"Bülten · {giren} gelişme" in metin
+    # Uyarı her zaman metnin SONUNDA: kesme olmadığı için kaybolmaz.
+    assert metin.rstrip().endswith("yatırım tavsiyesi değildir")
+    assert metin.count("yatırım tavsiyesi değildir") == 1
+
+
+def test_bulten_sigandan_fazlasi_kuyrukta_kalir(grup_notifier, monkeypatch):
+    n = grup_notifier
+    n._BULTEN_KR_BUTCE = 700
+    for i in range(5):
+        assert n.public_kuyruk(_zengin_olay(stock=f"SEM{i}", formation_id=f"k{i}"))
+    gonderilenler = []
+
+    def sahte_gonder(metin, deneme=1):
+        gonderilenler.append(metin)
+        return True
+
+    monkeypatch.setattr(n, "send_to_public", sahte_gonder)
+    monkeypatch.setattr(n, "public_grafik_gonder", lambda kayit: 0)
+    assert n.public_bosalt(azami=12) == 5          # hepsi eninde sonunda gider
+    assert len(gonderilenler) >= 2                 # birden çok bülten
+    assert n._public_kuyruk == []                  # hiçbir olay kaybolmadı
+    # Her bülten kendi sayısını doğru yazar ve uyarıyı bir kez taşır.
+    for metin in gonderilenler:
+        assert metin.count("yatırım tavsiyesi değildir") == 1
+        assert len(metin) <= 4096
+
+
+def test_bulten_tek_olay_butceyi_asse_de_gonderilir(grup_notifier, monkeypatch):
+    """Tek karar taşıyan olay kırpılarak da olsa gider — sessizce düşmez."""
+    n = grup_notifier
+    n._BULTEN_KR_BUTCE = 10           # bütçe saçma küçük: yine de ilk olay girer
+    assert n.public_kuyruk(_zengin_olay(formation_id="tek"))
+    cagrildi = []
+    monkeypatch.setattr(n, "send_to_public", lambda m, deneme=1: cagrildi.append(m) or True)
+    monkeypatch.setattr(n, "public_grafik_gonder", lambda kayit: 0)
+    assert n.public_bosalt() == 1
+    assert len(cagrildi) == 1
+    assert n._public_kuyruk == []
+
+
+# --- 9) Public yapı bloğu: alarm TF'si yoksa üst TF ------------------------
+
+def test_public_bulten_ust_tf_yapisini_basabilir(grup_notifier):
+    """Alarm TF'sinde MS olayı yoksa bülten yapı bloğunu üst TF'den okur.
+
+    Kullanıcı sorusu (2026-10-22): "public'te gerekiyorsa üst TF MS sorununu
+    çözdün mü" — bu test o yedeğin bülten metnine gerçekten ulaştığını
+    doğrular (yalnız `domain_bolumleri` birim testi yetmez).
+    """
+    from types import SimpleNamespace
+    import notification_context as nc
+
+    def _ms(dis, ic):
+        return SimpleNamespace(
+            external_scope=SimpleNamespace(state=dis),
+            internal_scope=SimpleNamespace(state=ic),
+            events=[], external_protected_high=None, external_protected_low=None,
+            external_weak_high=None, external_weak_low=None,
+        )
+
+    outputs = {
+        "1h": {"market_structure": SimpleNamespace(skipped=True, export=None, error=None)},
+        "4h": {"market_structure": SimpleNamespace(export=_ms("STATE_BEARISH",
+                                                              "STATE_BEARISH"),
+                                                   skipped=False, error=None)},
+    }
+    bolumler = nc.domain_bolumleri(outputs, 39.60, stil="kart", alarm_tf="1h")
+    metin = grup_notifier.format_public_batch(
+        [_olay(tf="1h", domain_bolumleri=bolumler)])
+    assert "◈ 4s yapı dış ve iç aşağı" in metin
+    # Kural: satır kendi TF'siyle yazılır — alarm TF'si gibi etiketlenmez.
+    assert "◈ 1s yapı" not in metin
+
+
+# --- 10) Public DM kapılarından bağımsız: mühür "tekrar" dese de -----------
+
+def test_dm_muhru_tekrar_dediyse_public_yine_de_alir(monkeypatch, grup_notifier):
+    """DM mührü olayı ikinci kez göndermezken public boşluğu doldurur.
+
+    Eskiden public kuyruğu `before_send` içinde doluyordu; mühür "tekrar"
+    dediğinde `before_send` hiç çalışmıyordu → gruba hiç gitmemiş olay (ağ
+    hatası, bülten bütçesi, restart) bir daha denenmiyordu.
+    """
+    n = grup_notifier
+    monkeypatch.setattr(n, "_public_durum_kaydet", lambda: None)
+    monkeypatch.setattr(n, "can_send", lambda *a, **k: (
+        setattr(n, "_son_engel", "tekrar") or False))
+
+    baglam = []
+
+    def before_send(data):
+        baglam.append(1)
+        n.public_kuyruk(data)
+
+    olay = _olay(formation_id="stable-public-tekrar")
+    assert n.send_with_prepare(dict(olay), before_send=before_send) is False
+    assert baglam == [1]                     # bağlam hazırlandı
+    assert len(n._public_kuyruk) == 1        # olay public kuyruğa girdi
+
+    # Public'te kayıt artık VAR: motor ikinci kez koşmaz (bedel ödenmez).
+    assert n.send_with_prepare(dict(olay), before_send=before_send) is False
+    assert baglam == [1]
+    assert len(n._public_kuyruk) == 1
+
+
+def test_tekrar_public_kapaliyken_motor_calistirmaz(monkeypatch, grup_notifier):
+    n = grup_notifier
+    n.public_enabled = False
+    monkeypatch.setattr(n, "can_send", lambda *a, **k: (
+        setattr(n, "_son_engel", "tekrar") or False))
+    baglam = []
+    n.send_with_prepare(dict(_olay(formation_id="x1")),
+                        before_send=lambda d: baglam.append(1))
+    assert baglam == []
+
+
+def test_dm_gecersizlesme_kapisi_publici_durdurmaz():
+    """Tur 2a kapısı yalnız DM push'unu durdurur; bağlam/public çalışır.
+
+    Yapısal güvence: `dm_gecersiz_engel` dalı `_attach_domain_context(alert_data)`
+    çağırır — yani kart bağlamı ve public kuyruğu DM kapısına takılmaz.
+    """
+    import ast
+    from pathlib import Path
+
+    kaynak = (Path(__file__).parent / "main.py").read_text(encoding="utf-8")
+    agac = ast.parse(kaynak)
+
+    def _cagri_adi(dugum):
+        return getattr(dugum.func, "id", getattr(dugum.func, "attr", ""))
+
+    bulundu = []
+    for dugum in ast.walk(agac):
+        if not isinstance(dugum, ast.If):
+            continue
+        if getattr(dugum.test, "id", "") != "dm_gecersiz_engel":
+            continue
+        adlar = [_cagri_adi(c) for c in ast.walk(dugum) if isinstance(c, ast.Call)]
+        bulundu.append(adlar)
+    assert bulundu, "dm_gecersiz_engel dalı yok (kapı geri ayrı elif'e taşınmış olabilir)"
+    assert any("_attach_domain_context" in adlar for adlar in bulundu), bulundu
+
+
+# --- 11) Geri alma kalite kapısına takılmaz --------------------------------
+
+def test_public_gecersizlesme_kalite_esigi_altinda_da_gider(grup_notifier):
+    """Teyit eşiği geçmiş olayın iptali kalite düşünce bastırılmamalı.
+
+    Aksi hâlde grup, formasyon kalitesi 80'in altına indiği için "geçersizleşti"
+    mesajını hiç görmez ve sinyal sonsuza kadar geçerli sanılır.
+    """
+    n = grup_notifier
+    teyit = _olay(tf="1h", q=85, state="KIRILIM_TEYITLI")
+    iptal = _olay(tf="1h", q=62, state="KIRILIM_GECERSIZLESTI")
+    assert n.should_send_to_public(teyit) is True
+    assert n.should_send_to_public(iptal) is True
+    # Kapı yalnız YENİ iddialar için: aynı düşük kalite teyit kaydı girmez.
+    assert n.should_send_to_public(_olay(tf="1h", q=62, state="KIRILIM_TEYITLI")) is False
+    # Env ile state tamamen kapatılmışsa geri alma da gitmez (kullanıcı kararı).
+    n.public_states = {"KIRILIM_TEYITLI"}
+    assert n.should_send_to_public(iptal) is False
+
+
+def test_dm_gecersizlesme_kalite_esigine_takilmaz():
+    """`main` kalite kapısı geri alma için atlanır (kaynak düzeyi güvence)."""
+    import ast
+    from pathlib import Path
+
+    agac = ast.parse((Path(__file__).parent / "main.py").read_text(encoding="utf-8"))
+    bulundu = []
+    for dugum in ast.walk(agac):
+        if not isinstance(dugum, ast.If):
+            continue
+        for alt in ast.walk(dugum.test):
+            if (isinstance(alt, ast.Compare)
+                    and getattr(alt.left, "id", "") == "q"
+                    and any(getattr(d, "id", "") == "min_q" for d in alt.comparators)):
+                kaynak_test = ast.unparse(dugum.test)
+                bulundu.append(kaynak_test)
+    assert bulundu, "kalite kapısı bulunamadı (yeniden adlandırılmış olabilir)"
+    assert any("KIRILIM_GECERSIZLESTI" in t for t in bulundu), bulundu
+
+
+# --- 12) Geçersizleşme kapısı: kuyrukta bekleyen teyit --------------------
+
+def test_bekleyen_teyit_varsa_ikisi_birlikte_duser(grup_notifier):
+    """Teyit henüz gruba gitmediyse geri alma da gitmez — ikisi birden düşer.
+
+    Eski davranış yalnız GÖNDERİLMİŞ mühürlere bakıyordu: ağ/bütçe hatası
+    yüzünden kuyrukta bekleyen teyit sonradan gidiyor, geri alma ise kalıcı
+    olarak kayboluyordu → grupta yanlış "geçerli" sinyal.
+    """
+    n = grup_notifier
+    n._public_kuyruk = []
+    n._public_alert_markers = {}
+    teyit = _olay(formation_id="stable-bekleyen")
+    assert n.public_kuyruk(teyit) is True
+    iptal = _olay(formation_id="stable-bekleyen", state="KIRILIM_GECERSIZLESTI")
+    assert n.public_kuyruk(iptal) is False     # ikisi de düşer
+    assert n._public_kuyruk == []
+    assert n._public_alert_markers == {}
+
+
+def test_gonderilmis_teyidin_gecersizlesmesi_kuyruga_girer(grup_notifier):
+    n = grup_notifier
+    n._public_kuyruk = []
+    n._public_alert_markers = {}
+    teyit = _olay(formation_id="stable-gonderilmis")
+    assert n.public_kuyruk(teyit) is True
+    n._public_kuyruk = []
+    n._public_alert_markers[n._public_event_key(teyit)] = "2026-10-22T17:31:00+03:00"
+    iptal = _olay(formation_id="stable-gonderilmis", state="KIRILIM_GECERSIZLESTI")
+    assert n.public_kuyruk(iptal) is True
+    assert len(n._public_kuyruk) == 1

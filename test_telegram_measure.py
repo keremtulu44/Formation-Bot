@@ -50,7 +50,7 @@ def test_metni_sigdir_butceyi_asmaz_bilgi_dusurmez():
     metin = ("📡 Gün içi izleme adayları\n"
              "   12/21 gösteriliyor · en yüksek puanlılar\n"
              "• ISCTR 1h Alçalan Üçgen q89 · Sıkışma güçleniyor · daralma %72 · 312.50\n"
-             "📈 Gün: 9 tarama · 48 hisse × 4 zaman dilimi · 28 bildirim\n"
+             "📈 Gün: 9 tarama · 57 sembol × 4 zaman dilimi · 28 bildirim\n"
              "⚡ Kırılım: 3 · yukarı 1 · aşağı 2")
     sigar = metni_sigdir(metin, guvenlik=1.0)
     assert not satirlar_asiyor_mu(sigar)

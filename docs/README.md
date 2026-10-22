@@ -37,6 +37,9 @@
 | [arastirma/YASAM_TABLOSU.md](arastirma/YASAM_TABLOSU.md) | Yürürlükte | 2026-10-20 | Domain bazında soru sicili: OB/FVG/formasyon yaşam tablosu + cevap formatı |
 | [arastirma/KOLON_SOZLUGU.md](arastirma/KOLON_SOZLUGU.md) | Yürürlükte | 2026-10-21 | Ortak kolon dili: anlam + birim + `n` birimi + formasyon tablosu taslağı |
 | [arastirma/FORMASYON_SONUCLARI.md](arastirma/FORMASYON_SONUCLARI.md) | Üretilen | 2026-10-21 | Formasyon FRM-01…20 cevap kartları (arşiv replay) |
+| [arastirma/AMPIRIK_REFERANS.md](arastirma/AMPIRIK_REFERANS.md) | Yürürlükte | 2026-10-21 | Ölçümü canlı metne bağlayan katman: hangi sayı kartta hangi koşulda görünür (`ampirik_referans.py`) |
+| [arastirma/KOSULLU_CUMLE_OLCUMU.md](arastirma/KOSULLU_CUMLE_OLCUMU.md) | Ölçüm | 2026-10-22 | Koşullu tamamlanma cümlesi: çapraz tablo, aşım kovaları, "yazılmadı" kararı | 
+| [arastirma/REPLAY_OZET_2026-10-21.md](arastirma/REPLAY_OZET_2026-10-21.md) | Kayıt | 2026-10-21 | Son doğrulanmış replay'in okunur özeti: tek tabloda MFE/MAE/NET, örneklem güvenilirliği, açık uçlar |
 | [arastirma/ARASTIRMA_BULGULARI.md](arastirma/ARASTIRMA_BULGULARI.md) | Üretilen | 2026-10 | Ham tablo eki (`arastirma_kosu.py --agrega`) |
 | [arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt](arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt) | Yürürlükte | 2026-10 | Düz metin dışa aktarım |
 | [arastirma/arastirma_ms_hatali_seriler.txt](arastirma/arastirma_ms_hatali_seriler.txt) | Kayıt (açık bulgu) | 2026-10 | MS motorunun patladığı 35 seri |
@@ -48,7 +51,8 @@
 | [tasarim/PINE_FARK_ANALIZI.md](tasarim/PINE_FARK_ANALIZI.md) | Yürürlükte | Pine ↔ Python fark defteri, doğrulama listesi |
 | [tasarim/GRAFIK_TASARIM.md](tasarim/GRAFIK_TASARIM.md) | Yürürlükte | Grafik sözleşmesi G0→G5 (kodda `§` ile referanslı) |
 | [tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md](tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md) | Yürürlükte | Güven şeridi, odak/bağlam, açıklanabilirlik (`chart-trust-focus-v3`) |
-| [tasarim/TELEGRAM_KART_FORMAT.md](tasarim/TELEGRAM_KART_FORMAT.md) | Yürürlükte | Alarm kartı biçim sözleşmesi |
+| [tasarim/TELEGRAM_KART_FORMAT.md](tasarim/TELEGRAM_KART_FORMAT.md) | Yürürlükte | Alarm kartı biçim sözleşmesi (22 Eki revizyonu: 7 blok, sade dil, public = DM) |
+| [tasarim/KART_ORNEK_2026-10-22.md](tasarim/KART_ORNEK_2026-10-22.md) | Yürürlükte | Uygulanmış kart örnekleri: DM, geçersizleşme, kısa güncelleme, public bülten |
 | [tasarim/BILDIRIM_TESLIM_POLITIKASI.md](tasarim/BILDIRIM_TESLIM_POLITIKASI.md) | Yürürlükte | MTF tekilleştirme, geçersizleşme, teslim kuyruğu |
 | [tasarim/FAZ3_BACKTEST_VERI_ANALIZI.md](tasarim/FAZ3_BACKTEST_VERI_ANALIZI.md) | Yürürlükte | Backtest/analytics tasarımı (`analytics/backtest.py`) |
 | [tasarim/PHASE2_TASARIM_NOTLARI.md](tasarim/PHASE2_TASARIM_NOTLARI.md) | Yürürlükte | Kimlik/mirror tasarım notları |

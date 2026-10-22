@@ -143,3 +143,48 @@ def test_at_most_one_best_ob_and_fvg_candidate_per_side_and_no_raw_scores():
     assert "2s ayı FVG 93,00–95,00 TL" in context  # best exported quality below
     assert "kalite 96" not in context and "kalite 91" not in context
     assert "kalite 70" not in context and "kalite 75" not in context
+
+
+# --- Üst TF yapı yedeği (public'te boş yapı bloğu) -------------------------
+
+def _ms(dis, ic):
+    return SimpleNamespace(
+        external_scope=SimpleNamespace(state=dis),
+        internal_scope=SimpleNamespace(state=ic),
+        events=[],
+        external_protected_high=None, external_protected_low=None,
+        external_weak_high=None, external_weak_low=None,
+    )
+
+
+def _yapi_ozet(outputs, alarm_tf):
+    import notification_context as nc
+    return nc.domain_bolumleri(outputs, 100.0, stil="kart",
+                               alarm_tf=alarm_tf).get("yapi_ozet") or []
+
+
+def test_alarm_tf_yapisi_yoksa_ust_tf_satiri_basilir():
+    """Public bültende yapı bloğu boş kalıyordu: alarm TF'si MS üretmediyse
+    (motor atladı/hata) satır tamamen düşüyordu. Artık üst TF yedeği var ve
+    satır KENDİ etiketiyle yazılır (`4s`, `1s` değil)."""
+    outputs = {
+        "1h": {"market_structure": SimpleNamespace(skipped=True, export=None, error=None)},
+        "4h": {"market_structure": _result(_ms("STATE_BEARISH", "STATE_BEARISH"))},
+    }
+    ozet = _yapi_ozet(outputs, "1h")
+    assert ozet == ["◈ 4s yapı dış ve iç aşağı"]
+
+
+def test_ust_tf_yedegi_alarm_tf_satiri_varsa_devreye_girmez():
+    outputs = {
+        "1h": {"market_structure": _result(_ms("STATE_BULLISH", "STATE_NEUTRAL"))},
+        "4h": {"market_structure": _result(_ms("STATE_BEARISH", "STATE_BEARISH"))},
+    }
+    assert _yapi_ozet(outputs, "1h") == ["◈ 1s yapı dış yukarı, iç yatay"]
+
+
+def test_ust_tf_de_yoksa_yapi_satiri_uydurulmaz():
+    """Yedek de boşsa satır yok: boş yapı yerine uydurma cümle yazılmaz."""
+    outputs = {"1h": {"market_structure": SimpleNamespace(skipped=True, export=None,
+                                                          error=None)}}
+    assert _yapi_ozet(outputs, "1h") == []

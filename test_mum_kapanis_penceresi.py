@@ -192,11 +192,12 @@ def test_mesaj_mum_satiri_metinleri():
 
 
 def test_mum_damgasi_metinde_degil_karede_okunur():
-    """GÖRSEL-7 iş bölümü: "hangi mum kapandı" bilgisi KÂRE BAŞLIĞINDA yazılı.
+    """GÖRSEL-8 kararı (2026-10-21): mum damgası metne GERİ döndü.
 
-    Neden metinden çıktı: kullanıcı kararı "görsel ana okuma, metin yalnız görselde
-    OLMAYAN bilgiyi söyler". Kâre üst şeridi `son kapanan <tarih> · <fiyat>` yazar;
-    aynı damgayı metinde tekrarlamak 8-11 satır hedefinden bir satır yiyordu.
+    GÖRSEL-7 damgayı yalnız kâreye bırakmıştı. Kullanıcı geri bildirimi: "hangi mum
+    kapandı" okunmadan alarmın zamanlaması anlaşılmıyor; kâre başlığı kaydırılınca
+    damga görünmüyor. Artık metin `🕒 25 Eylül 13:30→17:30 mumu` biçiminde tek satır
+    taşır; ham `bar_metni` yine birebir kopyalanmaz (biçim tek yerden üretilir).
     """
     from notifier import TelegramNotifier
     n = TelegramNotifier()
@@ -208,8 +209,10 @@ def test_mum_damgasi_metinde_degil_karede_okunur():
         'bar_metni': "🕒 4 saatlik mum 25.09 13:30 → 17:30 kapandı",
     }
     mesaj = n.format_message(veri)
-    assert "25.09 13:30→17:30 mumu" not in mesaj and "kapandı" not in mesaj
-    # İzleme (digest) mesajına da eklenmez: yer bütçesi orada farklı.
+    assert "🕒 25 Eylül 13:30→17:30 mumu" in mesaj
+    # Ham `bar_metni` birebir kopyalanmaz; biçim tek yerden (`_kart_mum_damgasi`).
+    assert "4 saatlik mum" not in mesaj and "kapandı" not in mesaj
+    # İzleme (digest) mesajında damga yer almaz: orada bütçe ve amaç farklı.
     veri_izleme = dict(veri, state='SIKISMA_GUCLENIYOR')
     assert "kapandı" not in n.format_message(veri_izleme)
 
