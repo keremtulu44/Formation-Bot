@@ -167,7 +167,11 @@ def _df_optimize(df: "pd.DataFrame") -> "pd.DataFrame":
     import pandas as pd
 
     for kolon in df.columns:
-        if df[kolon].dtype != object:
+        # Metin kolonu iki tipte gelebilir: pandas < 3'te `object`, pandas 3'te
+        # `str`/`StringDtype`. Yalnız `object`e bakmak pandas 3'te hiçbir kolonu
+        # indirgemiyordu (200 bin satırlık raporda bellek şişmesi).
+        if not (pd.api.types.is_object_dtype(df[kolon])
+                or pd.api.types.is_string_dtype(df[kolon])):
             continue
         sayisal = pd.to_numeric(df[kolon], errors="coerce")
         bosluk = df[kolon].isna().sum()

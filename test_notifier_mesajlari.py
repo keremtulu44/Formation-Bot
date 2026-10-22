@@ -145,7 +145,9 @@ def test_sonraki_teyitli_gecersizlesme_ayri_bildirim_mesaji():
     # teyit düşerdi" sınırını söyler. Kapanış/marj/temas/kırılan seviye kârede
     # çizili (ölçüm: bugünkü kart 34 satırdı, %40'ı girintili devam satırı).
     assert "teyit sınırı 302,00 altı" in msg
-    assert "kırılan" not in msg and "temas" not in msg and "kaldı" not in msg
+    # GÖRSEL-8: `· temas üst/alt` isteğe bağlı ölçü olarak geri geldi (formasyonun
+    # kaç kez denendiği); `kırılan` dökümü ve marj hâlâ basılmaz.
+    assert "kırılan" not in msg and "kaldı" not in msg
     assert "× geçersiz" not in msg
     assert "başarısız kırılım" not in msg.lower()
 
@@ -448,9 +450,8 @@ def test_dogrulanmis_olay_kimlik_fiyat_kalite_tasir_kare_detayini_tekrarlamaz():
     assert "kalite 87/100 — güç 80" in msg
     assert "Güçlü" not in msg and "Çok güçlü" not in msg
     assert "retest yok" in msg  # payload'da retest_seen yok → motor "görülmedi" der
-    # GÖRSEL-7: kârede ÇİZİLEN bilgi metinde tekrarlanmaz (temas işaretleri, yapı
-    # satırı, mum damgası kâre başlığında). Metin yalnız görünmeyeni söyler.
-    assert "temas üst" not in msg
+    # GÖRSEL-8: tema sayısı ve mum damgası metinde VAR (kullanıcı kararı), ama
+    # ham domain dökümü ve ham `bar_metni` basılmaz.
     assert "Market Structure" not in msg
     assert "Mum: 2026-10-12 15:30 kapandı" not in msg
 

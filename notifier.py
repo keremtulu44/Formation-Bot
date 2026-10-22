@@ -269,6 +269,12 @@ def _yuzde(value, basamak: int = 1) -> str:
     return f"%{metin}" if metin else ""
 
 
+#: Kart metninde ay adı açık yazılır (`21 Ekim`), sayısal kısa yazım (`21.10`)
+#: kullanılmaz. Tek kaynak: `_kart_mum_damgasi` ve `_kart_yas_metni` buradan okur.
+_KART_AYLAR = ("Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+               "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
+
+
 def _kart_mum_damgasi(data: Dict) -> str:
     """Kapanan mumun damgası: hangi mumun kapandığı mesajın ilk üç satırında."""
     for alan in ("bar_time", "bar_kapanis"):
@@ -285,7 +291,9 @@ def _kart_mum_damgasi(data: Dict) -> str:
                            else datetime.fromisoformat(str(bitis))) if bitis else None
         except (TypeError, ValueError):
             bitis_zaman = None
-        bas = f"{zaman.day:02d}.{zaman.month:02d} {zaman:%H:%M}"
+        # Ay adı açık yazılır: "21 Ekim" herkesin okuduğu biçim, "21.10" değil
+        # (kullanıcı kararı 2026-10-21: "teknik bilen biri bile anlamayabilir").
+        bas = f"{zaman.day} {_KART_AYLAR[zaman.month - 1]} {zaman:%H:%M}"
         if bitis_zaman is not None and bitis_zaman != zaman:
             bas += f"→{bitis_zaman:%H:%M}"
         return f"🕒 {bas} mumu"
@@ -294,10 +302,20 @@ def _kart_mum_damgasi(data: Dict) -> str:
         return ""
     # bar_metni eski biçimde uzun bir cümle: "🕒 4 saatlik mum 25.09 13:30 → 17:30
     # kapandı". Kart için aynı verinin kısa yazımı yeterli (satır bütçesi 283 px).
-    eslesme = re.search(r"(\d{2}\.\d{2})\s+(\d{2}:\d{2})\s*→\s*(\d{2}:\d{2})", metin)
+    eslesme = re.search(r"(\d{2})\.(\d{2})\s+(\d{2}:\d{2})\s*→\s*(\d{2}:\d{2})", metin)
     if eslesme:
-        return f"🕒 {eslesme.group(1)} {eslesme.group(2)}→{eslesme.group(3)} mumu"
-    return metin[:64]
+        ay = int(eslesme.group(2))
+        ay_adi = _KART_AYLAR[ay - 1] if 1 <= ay <= 12 else eslesme.group(2)
+        return (f"🕒 {int(eslesme.group(1))} {ay_adi} "
+                f"{eslesme.group(3)}→{eslesme.group(4)} mumu")
+    # ISO damga ("Mum: 2026-10-12 15:30 kapandı") de normalize edilir; ham metin
+    # ASLA kopyalanmaz — aksi halde biçim iki yerden üretilmiş olur.
+    iso = re.search(r"(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})", metin)
+    if iso:
+        ay = int(iso.group(2))
+        ay_adi = _KART_AYLAR[ay - 1] if 1 <= ay <= 12 else iso.group(2)
+        return f"🕒 {int(iso.group(3))} {ay_adi} {iso.group(4)} mumu"
+    return ""
 
 
 def _kart_suzgec_aktif() -> bool:
@@ -346,7 +364,10 @@ def _kart_yas_metni(data: Dict) -> str:
             zaman = dogum if isinstance(dogum, datetime) else datetime.fromisoformat(str(dogum))
             aylar = ("Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
             ekler = ("tan", "tan", "tan", "dan", "tan", "dan", "dan", "tan", "den", "den", "dan", "tan")
-            metin += f" — {zaman.day} {aylar[zaman.month - 1]}'{ekler[zaman.month - 1]} beri"
+            # GÖRSEL-8: yaş ve izlenme başlangıcı TEK satırda (`· bant 94 bar ·
+            # 30 Eylül'den beri`, 258 px). İki ayrı satır, zenginleşen kartta
+            # bütçeyi yiyordu; ayırıcı `—` değil `·` çünkü cümle değil iki künye.
+            metin += f" · {zaman.day} {aylar[zaman.month - 1]}'{ekler[zaman.month - 1]} beri"
         except (TypeError, ValueError):
             pass
     return metin
@@ -365,14 +386,48 @@ def _kart_esik(data: Dict, yon: int) -> tuple:
     return esik, ("altı" if yon > 0 else "üstü")
 
 
-def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -> str:
-    """Sade kart (GÖRSEL-7): satır = tek konu, `·` zinciri yok, girinti yok.
+#: Sade kartın satır tavanı (CTA ve yasal uyarı dahil). GÖRSEL-8 kullanıcı
+#: kararı (2026-10-21): "alarm metni kendi başına okunabilsin" — kart, kârenin
+#: taşıdığı her şeyi değil, KARAR İÇİN GEREKEN ölçüleri taşır. Tavan aşılırsa
+#: en düşük öncelikli ek satır düşer (bilgi gizlenmez, ölçülerek seçilir).
+_KART_MAKS_SATIR = 16
 
-    Hedef 8-10 satır. Kârenin taşıdığı bilgi (kırılan/kapanış/kalite/daralma/
-    temas/◈ yapı/kutular) TEKRARLANMAZ; yalnız kârede görünmeyenler yazılır:
-    eşik (bozulma/teyit sınırı), bant yaşı+izlenme, MTF onayı, retest durumu,
-    katılım yorumu ve karşı delil. Ölçüm: 219-244 kr, en geniş satır 270 px
-    (bütçe 283 px) — `telegram_measure` ile doğrulandı.
+
+def _kart_daralma(data: Dict) -> str:
+    """`· daralma %52` — formasyonun olgunluğu (contraction, 0-1)."""
+    deger = data.get("contraction")
+    try:
+        sayi_deger = float(deger) if deger is not None else None
+    except (TypeError, ValueError):
+        sayi_deger = None
+    if sayi_deger is None or sayi_deger < 0:
+        return ""
+    return f"· daralma %{max(0, min(100, round(sayi_deger * 100)))}"
+
+
+def _kart_temas(data: Dict) -> str:
+    """`· temas üst 2 / alt 3` — bant sınırlarının kaç kez denendiği."""
+    ust, alt = data.get("upper_touches"), data.get("lower_touches")
+    if ust is None or alt is None:
+        return ""
+    return f"· temas üst {ust} / alt {alt}"
+
+
+def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -> str:
+    """Sade kart (GÖRSEL-8): satır = tek konu, girinti yok, karar ölçüleri tam.
+
+    Tarihçe: GÖRSEL-7 (15 Eki) kartı 40-45 satırdan 8-11 satıra indirdi ama
+    fazla kırptı — kullanıcı (21 Eki) "metin çok sade kalıyor, elimizdeki veriyi
+    daha iyi kullan" dedi. GÖRSEL-8 bu yüzden üç bilgiyi geri getirir:
+
+      * `🕒 … mumu`  — hangi mum kapandığı (zamanlama olmadan alarm okunmuyor),
+      * `▲ direnç/▼ destek …` — kırılımın ÖNÜNDEKİ ilk canlı bölge ve uzaklığı,
+      * `◈ … yapı dış ↓/iç ↓` — yapı kırılımla aynı yönde mi (tek satır),
+
+    ve isteğe bağlı iki ölçü (`· daralma`, `· temas`) ile arşiv ölçümü
+    (`◇`, en çok 2 satır) eklenir. Kârenin taşıdığı bölge DÖKÜMÜ, olay
+    seviyeleri ve girintili alt satırlar hâlâ basılmaz; tavan
+    `_KART_MAKS_SATIR`'dır (16) ve aşılınca en düşük öncelikli ek düşer.
     """
     stock = str(data.get("stock_name") or "Bilinmiyor").upper()
     timeframe = str(data.get("timeframe") or "1h").lower()
@@ -399,10 +454,8 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
     kapanis = _sayı(close)
     esik, yon_eki = _kart_esik(data, yon)
 
-    # 1-2. satır: kimlik + formasyon. `·` yerine `—` (nokta zinciri okunurluğu bozuyor).
+    # 1-2. satır: kimlik + formasyon (`·` zinciri yok, satır bölünmesin).
     satirlar: List[str] = [f"{ok} {stock} {tf_label} {olay_metni}".strip()]
-    # Formasyon satırı: `—` tercih edilir, sığmazsa `-` (satır BÖLÜNMESİN: bölününce
-    # "girintili devam satırı" doğar ve kart tam da o yüzden karışıktı).
     if kisalt:
         aday = f"{pattern} — {kisalt}"
         if genislik(aday) > _kart_esik_px():
@@ -411,9 +464,13 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
     else:
         _satir(satirlar, pattern)
 
-    # 3. satır: olayın ölçüsü. Geçersizleşmede "ne olursa teyit düşerdi" sınırı,
-    # teyitlilerde kapanış + seviye (kârede ikisi de var ama bu tek satır olayın
-    # tek cümlesi: onsuz kart "ne oldu"yu söylemiyor).
+    # 3. satır: hangi mum kapandı (GÖRSEL-8'de geri geldi).
+    damga = _kart_mum_damgasi(data)
+    if damga:
+        _satir(satirlar, damga)
+
+    # 4. satır: olayın ölçüsü. Geçersizleşmede "ne olursa teyit düşerdi" sınırı,
+    # teyitlilerde kapanış + seviye (olayın tek cümlesi).
     if gecersiz:
         if esik:
             _satir(satirlar, f"· teyit sınırı {_sayı(esik)} {yon_eki}")
@@ -426,6 +483,13 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
     elif kirilan:
         _satir(satirlar, f"· seviye {kirilan}")
 
+    # 5. satır: kırılımın önündeki ilk bölge — yalnız teyitli olayda ve veri
+    # varsa (kırılımın yönü bilinmiyorsa "ön" tanımsız).
+    bolumler = data.get("domain_bolumleri")
+    engel = list(bolumler.get("engel") or []) if isinstance(bolumler, dict) else []
+    if engel and not gecersiz:
+        _satir(satirlar, str(engel[0]))
+
     kalite = _sayı(data.get("confidence_score"), 0)
     güç = _sayı(data.get("break_strength"), 0)
     if kalite and güç:
@@ -433,10 +497,23 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
     elif kalite:
         _satir(satirlar, f"· kalite {kalite}/100")
 
+    # --- isteğe bağlı ölçüler (tavan aşılırsa en sonda bunlar düşer) ---
+    ekler: List[tuple[int, str]] = []
+    for oncelik, metin in ((3, _kart_daralma(data)), (2, _kart_temas(data))):
+        if metin:
+            ekler.append((oncelik, metin))
+
     yas_metni = _kart_yas_metni(data)
     if yas_metni:
-        for parca in yas_metni.split(" — "):
-            _satir(satirlar, parca if parca.startswith("·") else "· " + parca)
+        if genislik(yas_metni) <= _kart_esik_px():
+            _satir(satirlar, yas_metni)
+        else:
+            # Uzun ay adı bütçeyi aşarsa iki kısa satıra iner (girinti yok).
+            for parca in yas_metni.split(" · "):
+                _satir(satirlar, parca if parca.startswith("·") else "· " + parca)
+    # İsteğe bağlı ölçüler buraya girer (bant/kalite ile aynı blokta okunur);
+    # tavan hesabı kartın tamamı bitince yapılır.
+    ek_yeri = len(satirlar)
 
     retest = "retest var" if data.get("retest_seen") else "retest yok"
     ust_tf = _KART_UST_TF.get(timeframe)
@@ -446,6 +523,11 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
     else:
         _satir(satirlar, retest)
 
+    # yapı: alarm TF'sinin dış/iç durumu, TEK satır (olay seviyeleri /tara'da).
+    yapi_ozet = list(bolumler.get("yapi_ozet") or []) if isinstance(bolumler, dict) else []
+    if yapi_ozet and not gecersiz:
+        _satir(satirlar, str(yapi_ozet[0]))
+
     if guncelleme:
         # Güncelleme yolu: künye zaten gitti, yalnız değişmeyen bağlam + CTA.
         _satir(satirlar, "değişiklik yok — yapı/bölge/hacim aynı")
@@ -454,12 +536,17 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
         return "\n".join(satirlar)
 
     # --- katılım: kârede şerit var, YORUM yok → metinde kalır (en fazla 2 satır) ---
-    bolumler = data.get("domain_bolumleri")
     hacim = list(bolumler.get("hacim") or []) if isinstance(bolumler, dict) else []
     for satir in hacim[:2]:
         _satir(satirlar, str(satir))
 
-    # --- eşik: teyitlide "bozulur", geçersizleşmede 3. satırda yazıldı ---
+    # --- arşiv ölçümü: aynı kurulumun geçmişte nasıl sonuçlandığı (en fazla 2).
+    # Kaynak `ampirik_referans`; satır yoksa hiçbir şey basılmaz (uydurma yok).
+    olcum = list(bolumler.get("olcum") or []) if isinstance(bolumler, dict) else []
+    for satir in olcum[:2]:
+        _satir(satirlar, str(satir))
+
+    # --- eşik: teyitlide "bozulur", geçersizleşmede 4. satırda yazıldı ---
     if esik and not gecersiz:
         _satir(satirlar, f"· bozulur {_sayı(esik)} {yon_eki} kapanış")
 
@@ -482,6 +569,19 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
         _satir(satirlar, "izleme adayları")
         for aday_satir in adaylar:
             _satir(satirlar, aday_satir)
+
+    # Tavan: sabit satırlar korunur, isteğe bağlı ekler öncelik sırasıyla girer.
+    # CTA (2 satır) her koşulda sona eklenir; tavan onları da kapsar. Ekler
+    # `ek_yeri`ne (bant satırının ardına) eklenir — kartın ölçü bloğu dağılmaz.
+    kalan = _KART_MAKS_SATIR - len(satirlar) - 2
+    secilen: List[str] = []
+    for _oncelik, metin in sorted(ekler, reverse=True):
+        if kalan <= 0:
+            break
+        secilen.append(metin)
+        kalan -= 1
+    if secilen:
+        satirlar[ek_yeri:ek_yeri] = secilen
 
     satirlar.append(f"› /tara {stock}")
     satirlar.append("• yatırım tavsiyesi değildir")

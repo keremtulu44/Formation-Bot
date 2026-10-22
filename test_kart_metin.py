@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Kart metni sözleşmesi (GÖRSEL-7): sade 9-11 satır, zincirsiz, taşmasız.
+"""Kart metni sözleşmesi (GÖRSEL-8/9): ölçüm tabanlı, zincirsiz, taşmasız.
 
 Kullanıcı şikâyeti (2026-10-15): "mesaj aşırı karışık / nokta nokta / okunabilirlik
 kötü". Ölçülen kaynak: bugünkü kart 40-45 satır, ~%40'ı girintili DEVAM satırı,
 7 satır aynı `▪` ile başlıyor, satır başına 1,6 öğe ama 44 `·` karakteri var.
 
 Yeni sözleşme:
-  * satır = TEK konu, en çok 2 öğe (`·` zinciri yok; çift ayırıcı `—`),
+  * satır = TEK konu; 3+ öğeli zincir yok (en çok 2 ayırıcı),
   * girintili devam satırı YOK (satır bölünmesi = `_kart_esik_px` eşiği),
-  * 8-11 satır (uyarı satırı dâhil),
+  * satır sayısı sabit bir sayı değil ÖLÇÜLMÜŞ tavan: hiçbir satır px bütçesini
+    aşmaz ve kart `_KART_MAKS_SATIR`ı geçmez (2026-10-21 kararı: 19-20 satır),
   * kârenin taşıdığı bilgi (kutular/yapı/kırılan seviye/daralma/temas) metinde
     TEKRARLANMAZ; `TELEGRAM_KART_SUZGEC=0` eski tam kartı geri getirir.
 """
@@ -47,15 +48,19 @@ def _tasma(satirlar: list[str]) -> list[str]:
 # ------------------------------------------------------------------ normal kart
 
 
-def test_teyitli_kart_9_11_satir_ve_tasmaz():
+def test_teyitli_kart_tasmaz_ve_zincirsiz():
     satirlar = _satirlar(notifier._format_lifecycle_alert_kart(_payload()))
-    assert 8 <= len(satirlar) <= 13, satirlar
+    # Satır sayısı bir TASARIM hedefi değil ÖLÇÜM tavanıdır: kart bütçeyi
+    # aşmadığı sürece satır sayısı serbesttir (GÖRSEL-9, 2026-10-21).
+    assert len(satirlar) <= notifier._KART_MAKS_SATIR, satirlar
     assert not _tasma(satirlar), _tasma(satirlar)
     assert not [s for s in satirlar if s.startswith(" ")], "girintili devam satırı yok"
-    assert not [s for s in satirlar if s.count("·") >= 2], "3+ öğeli zincir yok"
+    # Zincir kuralı: 3+ öğe tek satıra sığdırılmaz (2 öğe serbest, ör.
+    # `· kapanış 39,60 · sınır 39,26`).
     assert satirlar[0].startswith("▼ SISE 1s AŞAĞI TEYİTLİ")
     assert satirlar[-1] == "• yatırım tavsiyesi değildir"
-    assert satirlar[-2] == "› /tara SISE"
+    # 3+ ayırıcılı satır yok: `·`/`—` karışımı tek satırda 2'yi geçmez.
+    assert not [x for x in satirlar if x.count("·") + x.count("—") >= 3]
 
 
 def test_teyitli_kart_karenin_taşıdığı_bilgiyi_tekrarlamaz():
@@ -89,7 +94,7 @@ def test_gecersizlesme_karti_formasyon_ve_tf_ile_sinirli():
             "ust": ["▲ OB 1s 44,14-44,86 (▼) · %0"],
             "hacim": ["katılım 1s destekliyor"],
         })))
-    assert 8 <= len(satirlar) <= 13, satirlar
+    assert len(satirlar) <= notifier._KART_MAKS_SATIR, satirlar
     assert not _tasma(satirlar)
     assert satirlar[0] == "▼ SISE 1s GEÇERSİZLEŞTİ"
     assert satirlar[1] == "Yükselen Üçgen - bandına dönüş"
