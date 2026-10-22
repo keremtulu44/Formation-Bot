@@ -97,7 +97,7 @@ Sıra sabit: **hüküm → sayaç → ufuk**. Üçüncü satır yoksa kart kısa
 ```
 ◇ beklenti: devam
 ◇ 2 lehte
-◇ tipik ömür 90 mum
+◇ tepe 2,8 · ters 1,9 kat
 ```
 
 Çelişkide:
@@ -105,7 +105,7 @@ Sıra sabit: **hüküm → sayaç → ufuk**. Üçüncü satır yoksa kart kısa
 ```
 ◇ beklenti: kararsız
 ◇ 1 lehte · 1 aleyhte
-◇ devam ederse tipik 2,5 kat
+◇ tipik ömür 90 mum
 ```
 
 Hüküm `yön kanıtı yok` ise sayaç satırı yalnız aleyhte varsa basılır; **ufuk ve
@@ -114,6 +114,12 @@ büyüklük yine basılır** (onlar yön iddiası taşımıyor).
 Ölçülen genişlikler: `◇ beklenti: yön kanıtı yok` **203,5 px** · `◇ 1 lehte · 1 aleyhte`
 **163 px** · `◇ tipik ömür 90 mum` **168,5 px** · `◇ devam ederse tipik 2,5 kat`
 **232 px** — hepsi 262,8 px bütçesinin altında.
+
+**Büyüklük satırı (`tepe/tip ters`)** — kaynak: `ort_devam_h12` + `ort_ters_h12`.
+İkisi de 12 mumluk **tepe** ölçüsüdür, kapanış değildir. Kural: `net = lehe − ters`;
+`net < 0,30 ATR` ise satır **basılmaz**. 32 MS hücresinde bu eşiği 15 hücre geçiyor
+ve geçenlerin 15'i de ↑ kırılım; ↓ kırılımların 16'sında net ortalaması **−0,05**.
+Ayrıntı: `TAHMIN_KATMANI.md` Ek A.
 
 **Ufuk satırı kaynağı** (bu tablo `ampirik_referans`'ta henüz yok, eklenecek):
 
@@ -177,6 +183,9 @@ yalnız `ZONE_OMUR` yeni tablo olarak eklenir (yukarıdaki 6 satır, kaynağı b
 | `test_zone_ici_hic_girmez` | zone içi/dışı farkı 1,1 → hiçbir hükümde görünmez |
 | `test_n300_alti_girmez` | n<300 hücre hükme girmez |
 | `test_ufuk_tablosu_kaynakli` | Ömür satırı yalnız `ZONE_OMUR`'da olan (aile, TF) için basılır |
+| `test_tepe_ters_cifti` | Büyüklük satırı ya iki tarafı da yazar ya hiç basılmaz; tek başına sayı çıkmaz |
+| `test_buyukluk_net_esigi` | `net < 0,30` → satır yok (4h dış BOS ↓ regresyonu) |
+| `test_tepe_kelimesi_zorunlu` | Büyüklük satırında `devam`/`tipik` değil `tepe` geçer |
 | `test_kart_3_satir_tavan` | Beklenti en fazla 3 satır, kart toplamı ≤ 20 |
 | `test_metin_butcesi` | Her satır `telegram_measure.genislik()` ≤ 262 px |
 | `test_kanit_yoksa_yon_yok` | Lehte ölçüm yoksa hiçbir satırda `%` oranı ile yön iması olmaz |

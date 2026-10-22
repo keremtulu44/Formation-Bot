@@ -82,6 +82,8 @@ kendi yayılımının yarısı. |puan| < eşik → **nötr**, hükme girmez.
 | 12 | FVG'de "kaçıncı temas" | 3+ temas yalnız 4 adet | — | — | **satır yok** |
 | 13 | FVG tam dolum | %40,3 · ömür 5,7 mum | — | — | **ufuk** (yön değil) |
 | 14 | OB 1g iptal | %82,8 · ömür 32,5 mum | — | — | **ufuk** (yön değil) |
+| 15 | Büyüklük: lehe tepe − ters tepe | ≥ 0,30 ATR | + | 0,30 | lehte |
+| 16 | Büyüklük: net < 0,30 ATR | 4h dış BOS ↓ +0,12 | 0 | — | **satır yok** |
 
 ---
 
@@ -124,7 +126,7 @@ Alçalan Üçgen — kapanışla
 
 2 · GEÇMİŞTE NASIL BİTTİ
 ◇ geçmişte %67 devam (1736)
-◇ devam ederse tipik 2,2 kat
+   (büyüklük satırı yok: net +0,12 kat, eşik altı — Ek A)
 
 3 · BURADA FARKLI
 ◇ hacim 2,8 kat → %61'e düşer
@@ -263,3 +265,52 @@ Bu yüzden her beklenti hükmünün yanında **sabit bir dipnot** durmalı:
 
 Ve hüküm kelimesi `beklenti` olmalı — `tahmin`, `sinyal`, `fırsat` değil.
 "Tahmin" kelimesi vaat gibi okunur; "beklenti" ölçüm gibi okunur.
+
+---
+
+## Ek A · "tipik 2,2 kat" ne demek — ve neden yanıltıcıydı
+
+Bu sayı `ort_devam_h12` sütunudur. Tanımı `KOLON_SOZLUGU.md`'de:
+**12 mum içindeki en büyük lehe uzanım (tepe), ATR biriminde.**
+
+Üç ayrıntı okumayı değiştiriyor:
+
+**(1) Tepe, kapanış değil.** Yani "tam dipten girip tam tepeden çıkarsan" sayısı.
+Aynı pencerenin kapanış ölçüsü (`h12_kapanis_atr`) bu tabloda yayınlanmadı.
+O yüzden kartta `devam 2,2 kat` değil, **`tepe 2,2 kat`** yazılmalı.
+
+**(2) Yanında `ort_ters_h12` var — ters yöndeki uzanım.** Bu sütun raporda duruyor
+ama tek başına `2,2` yazılınca görünmüyor. 32 MS hücresinin tamamı:
+
+| Grup | n hücre | ort. lehe tepe | ort. ters tepe | net |
+|---|---|---|---|---|
+| **↑ kırılımlar** | 16 | 2,636 ATR | 1,981 ATR | **+0,655** |
+| **↓ kırılımlar** | 16 | 1,968 ATR | 2,014 ATR | **−0,046** |
+
+Yani "2,2 kat" **aşağı kırılımlarda bir avantaj değil**: ters yönde de neredeyse
+aynı büyüklükte hareket oluyor. 32 hücrede lehe > ters olan 23 hücre, ama
+16 aşağı hücresinin 9'unda ters daha büyük.
+
+**(3) En kötü iki hücre 1g aşağı kırılımlar** (tek negatif net'ler):
+
+| Hücre | lehe | ters | net |
+|---|---|---|---|
+| 1g iç CHOCH ↓ (n638) | 1,503 | 2,038 | **−0,535** |
+| 1g dış BOS ↓ (n904) | 1,759 | 2,077 | **−0,318** |
+
+Bu ikisinde **ters yön lehe yönden büyük** — "aşağı kırılım devam eder" cümlesi
+tam burada çöküyor.
+
+**Kural (karta giren):** net = lehe − ters. `net < 0,30 ATR` ise büyüklük satırı
+**basılmaz**. Basıldığında hem iki taraf yazılır, hem birim adı korunur:
+
+```
+◇ tepe 2,8 · ters 1,9 kat     ← 4h dış BOS ↑ (net +0,91)
+◇ tepe 2,2 · ters 2,1 kat     ← 4h dış BOS ↓ (net +0,12) → basılmaz
+```
+
+Ölçülen genişlik: 209,5 px (bütçe 262,8).
+
+**Neden "devam ederse tipik 2,2 kat" yazmıyoruz:** üç kelime, üç yanlış ima —
+`devam ederse` (koşullu kazanç iması), `tipik` (ortalama değil, tepe ortalaması),
+`2,2 kat` (ne cinsinden? ATR). Doğrusu: `tepe 2,8 · ters 1,9 kat`.
