@@ -270,3 +270,11 @@ satır** var; ikisi de aynı 283 px bütçesine uyar (kod: `main._goreli_guc_sat
 Tek satır hâli (`… endeks hacmi yok · yön fiyattan`) 466 px ölçüldü ve `_satir`
 bölüyordu; bu yüzden iki satıra ayrıldı. "veri yok" denmez — veri var, hacim
 alanı boş. Gerekçe ve evren kararı: `docs/tasarim/EVREN_GENISLETME.md`.
+
+**3. Fiyat ölçeği (aynı gün bulundu).** Endeks fiyatı 5 haneli olunca olay
+satırı `· kapanış 13482,50 · sınır 13380,00` **279,5 px** ölçüldü; `_satir`
+bölüyor ve **girintili devam satırı** (`   · sınır 13380,00`) üretiyordu — kart
+sözleşmesi bunu yasaklıyor. Bölme artık biçimleyicide: satır eşiği aşıyorsa
+`· kapanış …` ve `· sınır …` **iki tam satır** olur (hisse fiyatında birleşik
+satır 219,5 px, tek satır kalır). Test:
+`test_kart_metin.py::test_endeks_olceginde_kapanis_sinir_satiri_girintili_bolunmez`.

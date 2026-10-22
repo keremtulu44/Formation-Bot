@@ -509,7 +509,16 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False,
         elif kapanis:
             _satir(blok, f"· kapanış {kapanis}")
     elif kapanis and kirilan:
-        _satir(blok, f"· kapanış {kapanis} · sınır {kirilan}")
+        # ENDEKS ÖLÇEĞİ (2026-10-22): 5 haneli fiyatta birleşik satır 279,5 px
+        # ölçüldü (`· kapanış 13482,50 · sınır 13380,00`) → `_satir` bölüyor ve
+        # GİRİNTİLİ devam satırı üretiyordu; kart sözleşmesi girintili devam
+        # satırını yasaklar. Bölme burada, iki tam satır olarak yapılır.
+        birlesik = f"· kapanış {kapanis} · sınır {kirilan}"
+        if genislik(birlesik) <= _kart_esik_px():
+            _satir(blok, birlesik)
+        else:
+            _satir(blok, f"· kapanış {kapanis}")
+            _satir(blok, f"· sınır {kirilan}")
     elif kapanis:
         _satir(blok, f"· kapanış {kapanis}")
     elif kirilan:

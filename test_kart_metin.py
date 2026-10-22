@@ -63,6 +63,24 @@ def test_teyitli_kart_tasmaz_ve_zincirsiz():
     assert not [x for x in satirlar if x.count("·") + x.count("—") >= 3]
 
 
+def test_endeks_olceginde_kapanis_sinir_satiri_girintili_bolunmez():
+    """5 haneli fiyat (XBANK 13482,50) birleşik satırı 279,5 px'e çıkarıyordu.
+
+    `_satir` bölünce GİRİNTİLİ devam satırı (`   · sınır 13380,00`) üretiyordu;
+    kart sözleşmesi girintili devam satırını yasaklar. Bölme iki tam satır olur.
+    """
+    metin = notifier._format_lifecycle_alert_kart(_payload(
+        stock_name="XBANK", break_dir=1, break_price=13380.0,
+        critical_price_level=13380.0, candle_close_price=13482.5,
+        upper_now=13510.0, lower_now=13120.0))
+    satirlar = _satirlar(metin)
+    assert "· kapanış 13482,50" in satirlar, satirlar
+    assert "· sınır 13380,00" in satirlar, satirlar
+    assert not [s for s in satirlar if s.startswith(" ")], satirlar
+    assert not _tasma(satirlar), _tasma(satirlar)
+    assert len(satirlar) <= notifier._KART_MAKS_SATIR, satirlar
+
+
 def test_teyitli_kart_karenin_taşıdığı_bilgiyi_tekrarlamaz():
     metin = notifier._format_lifecycle_alert_kart(_payload(domain_bolumleri={
         "yapi": ["🏗 1s yapı: HH→LH ↓ / LL→HL ↓"],
