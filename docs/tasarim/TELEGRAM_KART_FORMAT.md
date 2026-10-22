@@ -238,3 +238,35 @@ bazlı sayaç; aynı hissenin iki TF alarmı sayacı şişirmez).
 253,5 px; public 24 satır / 495 kr; geçersizleşme public 24 satır / 439 kr.
 12 olaylık bülten 2 mesaja bölünür (6+6), yasal uyarı her mesajda **bir** kez,
 en geniş satır 253,5 px (`_kart_esik_px` 283).
+
+### 7.9 Endeks + makro: iki kart satırı (22 Ekim 2026, gece)
+
+Evren 57 sembol oldu (48 hisse + 5 endeks + 4 makro). Kart tarafında **iki yeni
+satır** var; ikisi de aynı 283 px bütçesine uyar (kod: `main._goreli_guc_satiri`,
+`notification_context._hacim_yok_nedeni` / `_hacim_yok_notu`).
+
+**1. Endekse göre göreli güç** — YAPI bloğunda, yapı özetinin hemen altında:
+
+```
+· 20 mum endekse +2,1 puan
+```
+
+| Kural | Değer |
+|---|---|
+| Taban | XU100, **aynı TF**, **aynı bitiş mumu**, aynı 20 mum |
+| Ölçü | `hisse_getiri − XU100_getiri`; birim **puan** (iki yüzdenin farkı yüzde değil) |
+| Yazılmaz | XU100'ün kendisinde · veri kısıtsa · geçersizleşme kartında |
+| Ölçüm | 243,5 px. Adaylar: `· 20 mumda endeksten +2,1 puan` 270,5 px ve `· 20 mumda endekse +17,9 puan` 263,5 px — ikisi de eşiği (262,85) aşıyordu |
+
+**2. Hacim yok açıklaması** — KATILIM bloğunda, iki kısa satır:
+
+| Tür | Satırlar | Ölçüm |
+|---|---|---|
+| Endeks | `katılım 4s hacim yok (endeks)` + `yön fiyattan okunur` | 237 + 159 px |
+| Makro | `katılım 4s hacim yok (makro)` + `yön fiyattan okunur` | 231 + 159 px |
+| Hisse, veri yok | `katılım 4s veri yok` (tek satır) | — |
+| Analiz yapılamadı | `analiz yapılamadı` (not **eklenmez**) | — |
+
+Tek satır hâli (`… endeks hacmi yok · yön fiyattan`) 466 px ölçüldü ve `_satir`
+bölüyordu; bu yüzden iki satıra ayrıldı. "veri yok" denmez — veri var, hacim
+alanı boş. Gerekçe ve evren kararı: `docs/tasarim/EVREN_GENISLETME.md`.

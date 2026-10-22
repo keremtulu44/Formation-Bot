@@ -147,3 +147,24 @@ yaklaşık **+40 sn** (tam zamanlı tur ≈ 5 dk'da bir). Ölçüm: 57 sembolde
 
 Ayrıca evren sayısına sabit değer yazan üç eski test türetilmiş doğrulamaya
 çevrildi (`test_scan_pacing`, `test_live_data_flow`, `test_yahoo_backfill`).
+
+### 8.1 Veri yolu duman testi (22 Ekim 2026)
+
+Sandbox'ta Yahoo çıkışı kapalı (`fetch_yfinance_1h` üç sembolde de `None`
+döndü), bu yüzden canlı çekim yerine **aynı boru hattı sentetik seriyle**
+çalıştırıldı: `append_candle → to_dataframe → resample_all_timeframes →
+tamamlanmis_mumlar → anlik_goruntu → kareyi_yaz`.
+
+| Sembol | Deque | 1h | 2h | 4h | 1d | Kare |
+|---|---|---|---|---|---|---|
+| XBANK (seanslı, hacim dolu) | 320 | 320 kapalı | 160 | 80 | 40 | üretildi, 68 KB, uyarı yok |
+| USDTRY (24 saat, hacim 0) | 320 | 320 kapalı | 160 | 80 | 13/14 | üretildi, 61 KB, uyarı yok |
+
+24 saatlik seride `tamamlanmis_mumlar` yalnız **son** günlük mumu eler (14 → 13);
+seans sonrası başlayan barlar geri çekilmiyor — `BAR` kesme kuralı yalnız seans
+içinde başlayıp seans sonunu aşan barlara uygulanıyor. Bu, makro sembollerde
+günlük mumun kapanış anını BIST takvimine bağladığımız anlamına gelir; bu yüzden
+`MAKRO_ALARM=0` varsayılanı korunuyor (bölüm 5).
+
+Canlı doğrulama (gerçek Yahoo verisiyle) deploy sonrası ilk turda `/durum`dan
+yapılmalı: endeks satırlarında `hacim yok (endeks)`, kartta göreli güç satırı.
