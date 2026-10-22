@@ -260,3 +260,44 @@ def test_komut_main_uzerinde_kayitli():
     assert main.TELEGRAM_KOMUTLARI["referans"] is main._komut_olcum
     assert "/olcum" in main.KOMUT_YARDIM
     assert main._komut_olcum("") == ar.komut_metni()
+
+
+# ------------------------------------------------------------ aile ayrımı (Faz 2)
+
+def test_aile_frm_yalniz_formasyon_olcumlerini_basar():
+    """Formasyon alarmı MS/zone satırı basmaz; iki ayrı yüzde yan yana gelmez."""
+    k = _kurulum(aile="FRM", ms_kapsam="EXTERNAL", ms_tip="BOS", ms_yon="UP",
+                 atr=1.0, bolge_top=102.0, bolge_alt=101.0, rvol=3.9,
+                 zone_icinde=True, retest_seen=False, ph=104.0, pl=96.0)
+    satirlar = ar.olcum_satirlari(k, azami=7)
+    assert satirlar, "FRM satırı üretmeli"
+    assert not [s for s in satirlar if s.startswith("◇ BOS")], satirlar
+    assert not [s for s in satirlar if "RVOL" in s], satirlar
+    assert not [s for s in satirlar if "zone" in s], satirlar
+
+
+def test_aile_ms_yalniz_devam_satirini_basar():
+    k = _kurulum(aile="MS", ms_kapsam="EXTERNAL", ms_tip="BOS", ms_yon="UP",
+                 atr=1.0, bolge_top=102.0, bolge_alt=101.0, rvol=3.9,
+                 zone_icinde=True, retest_seen=False, ph=104.0, pl=96.0)
+    satirlar = ar.olcum_satirlari(k, azami=7)
+    assert len(satirlar) == 1
+    assert satirlar[0].startswith("◇ BOS")
+
+
+def test_aile_zone_yalniz_bolge_olcumlerini_basar():
+    k = _kurulum(aile="ZONE", ms_kapsam="EXTERNAL", ms_tip="BOS", ms_yon="UP",
+                 atr=1.0, bolge_top=102.0, bolge_alt=101.0, rvol=3.9,
+                 zone_icinde=True, retest_seen=False, ph=104.0, pl=96.0)
+    satirlar = ar.olcum_satirlari(k, azami=7)
+    assert not [s for s in satirlar if s.startswith("◇ BOS")], satirlar
+    assert satirlar, "zone ölçümü üretmeli"
+
+
+def test_aile_bos_kisit_yok_eski_davranis():
+    """`aile=""` geri dönüş yolu: hiçbir satır türü elenmez."""
+    k = _kurulum(aile="", ms_kapsam="EXTERNAL", ms_tip="BOS", ms_yon="UP",
+                 atr=1.0, bolge_top=102.0, bolge_alt=101.0, rvol=3.9,
+                 zone_icinde=True, retest_seen=False, ph=104.0, pl=96.0)
+    anahtarlar = {s.split()[1] for s in ar.olcum_satirlari(k, azami=7)}
+    assert "BOS" in anahtarlar

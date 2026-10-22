@@ -173,6 +173,24 @@ MS_YON = {
     ("1d", "IC", "CHOCH", "DOWN"): (638, 57.5, 1.503),
 }
 
+#: Ölçüm ailesi → basılabilecek satır anahtarları.
+#:
+#: Neden gerekli (kullanıcı kararı 2026-10-22): aynı kartta İKİ farklı yüzde
+#: görmek okumayı bozuyordu. "Kırılım tuttu %76" (formasyon sonucu) ile
+#: "devam etti %75" (MS olayı) ayrı soruların cevabı; yan yana gelince hangisi
+#: neyin ölçüsü olduğu anlaşılmıyor. Bu yüzden her alarm YALNIZ kendi ailesinin
+#: ölçümünü basar.
+#:
+#: * `FRM`  — formasyon alarmı (kırılım teyitli / retest / geçersizleşme)
+#: * `MS`   — market structure olayı (BOS/CHoCH)
+#: * `ZONE` — OB/FVG teması
+#: Boş aile ("") eski davranışı korur: kısıt yok (geri dönüş yolu).
+AILE_OLCU = {
+    "FRM": ("uyum", "retest", "temel"),
+    "MS": ("ms",),
+    "ZONE": ("zone", "yukseklik", "rvol"),
+}
+
 # Önerilen satır sırası: küçük numara önce basılır.
 ONCELIK = {
     "ms": 0,
@@ -278,6 +296,9 @@ class Kurulum:
     ms_kapsam: str | None = None       # "EXTERNAL" / "INTERNAL"
     ms_tip: str | None = None          # "BOS" / "CHOCH"
     ms_yon: str | None = None          # "UP" / "DOWN"
+    #: Ölçüm ailesi: "FRM" | "MS" | "ZONE" | "" (kısıtsız). Kart yalnız kendi
+    #: ailesinin ölçümünü basar; iki ayrı yüzde yan yana gelmez (bkz. AILE_OLCU).
+    aile: str = ""
 
 
 def _ms_satiri(k: Kurulum) -> tuple[str, int] | None:
@@ -395,15 +416,24 @@ def olcum_satirlari(k: Kurulum, *, azami: int = 2) -> list[str]:
     if not str(k.tf or "").strip():
         # Zaman dilimi yoksa hangi tabloya bakılacağı bilinmiyor → ölçüm yok.
         return []
-    adaylar = [
-        _ms_satiri(k),
-        _uyum_satiri(k),
-        _yukseklik_satiri(k),
-        _rvol_satiri(k),
-        _zone_satiri(k),
-        _retest_satiri(k),
-        _temel_satiri(k),
-    ]
+    ureticiler = {
+        "ms": _ms_satiri,
+        "uyum": _uyum_satiri,
+        "yukseklik": _yukseklik_satiri,
+        "rvol": _rvol_satiri,
+        "zone": _zone_satiri,
+        "retest": _retest_satiri,
+        "temel": _temel_satiri,
+    }
+    aile = str(k.aile or "").strip().upper()
+    izin = AILE_OLCU.get(aile)
+    adaylar = []
+    for anahtar, uretici in ureticiler.items():
+        if izin is not None and anahtar not in izin:
+            continue
+        satir = uretici(k)
+        if satir is not None:
+            adaylar.append(satir)
     secilen = [a for a in adaylar if a is not None]
     secilen.sort(key=lambda x: x[1])
     return [metin for metin, _ in secilen[:max(0, int(azami))]]

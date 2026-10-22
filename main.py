@@ -2995,6 +2995,13 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             # Arşiv ölçümü bölümü: kart, aynı
                                             # kurulumun geçmiş sonucunu da yazar.
                                             olcum=True,
+                                            # Ölçüm AİLESİ: formasyon alarmı
+                                            # yalnız formasyon ölçümünü basar
+                                            # (kırılım tuttu / rol uyumu), MS
+                                            # "devam etti" satırı bu karta
+                                            # girmez — iki ayrı yüzde yan yana
+                                            # okunmuyordu (2026-10-22 kararı).
+                                            aile="FRM",
                                             atr=atr_alarm,
                                             yon=break_dir,
                                             retest_seen=payload.get('retest_seen'),

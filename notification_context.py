@@ -902,7 +902,7 @@ def _korunan_seviyeler(results_by_timeframe: Any, alarm_tf: str) -> tuple[float 
 def olcum_bolumu(results_by_timeframe: Any, reference_price: Any = None, *,
                  alarm_tf: str | None = None, atr: float | None = None,
                  yon: int = 0, retest_seen: bool | None = None,
-                 azami: int = 2) -> list[str]:
+                 azami: int = 2, aile: str = "") -> list[str]:
     """Kuruluma koşullu ölçüm satırları (`ampirik_referans`).
 
     Veri yoksa veya tabloda o kesit yoksa satır üretilmez; uydurma yapılmaz.
@@ -935,6 +935,7 @@ def olcum_bolumu(results_by_timeframe: Any, reference_price: Any = None, *,
         ms_kapsam=kapsam,
         ms_tip=tip,
         ms_yon=ms_yon,
+        aile=str(aile or ""),
     )
     return ar.olcum_satirlari(kurulum, azami=azami)
 
@@ -944,7 +945,7 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
                      yalniz_tf: bool = False, olcum: bool = False,
                      atr: float | None = None, yon: int = 0,
                      retest_seen: bool | None = None,
-                     azami_olcum: int = 2) -> dict:
+                     azami_olcum: int = 2, aile: str = "") -> dict:
     """Domain bağlamını bölüm bölüm döndürür (kart biçimleyicisi için).
 
     `stil="kart"`: `yapi`/`ust`/`alt`/`hacim` anahtarlarında hazır satırlar.
@@ -984,7 +985,7 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
         if olcum:
             bolumler["olcum"] = olcum_bolumu(
                 results_by_timeframe, reference, alarm_tf=alarm_tf, atr=atr,
-                yon=yon, retest_seen=retest_seen, azami=azami_olcum,
+                yon=yon, retest_seen=retest_seen, azami=azami_olcum, aile=aile,
             )
         return {k: v for k, v in bolumler.items() if v}
     bolumler["yapi"] = _format_market_structure(satirlar)
@@ -996,7 +997,7 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
     if olcum:
         bolumler["olcum"] = olcum_bolumu(
             results_by_timeframe, reference, alarm_tf=alarm_tf, atr=atr,
-            yon=yon, retest_seen=retest_seen, azami=azami_olcum,
+            yon=yon, retest_seen=retest_seen, azami=azami_olcum, aile=aile,
         )
     return {k: v for k, v in bolumler.items() if v}
 
