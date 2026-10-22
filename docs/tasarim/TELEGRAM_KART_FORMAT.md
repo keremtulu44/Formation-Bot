@@ -37,12 +37,14 @@ yeniden üretilebilir ölçüm sonuçlarıyla. Amaç formatı beğenmek/beğenme
    yaşam döngüsü etiketi gibi motorun üretmediği alanlar kartta yok (motor OB
    için yalnız `state = ±1` veriyor — `domain_engines/order_block/order_block.py`).
 7. **Bilgi kaybı yok.** Kartta çıkarılan her satır `/tara SEMBOL` çıktısında
-   duruyor; `! karşı delil` satırı bu yüzden kartta.
+   duruyor; `ters işaret` satırı bu yüzden kartta. **İstisna (2026-10-22):**
+   `/tara` komut satırı karttan çıktı (kullanıcı kararı); komut çalışmaya devam
+   eder, her alarmın altında tekrar etmez. Boşalan yer ölçüm dipnotuna gitti.
 8. **Klasik yol byte-byte duruyor.** `TELEGRAM_ALERT_STYLE=klasik` → 25 Eyl
    öncesi biçim. A/B karşılaştırma ve geri alma hakkı için korundu; kartta
    yapılan düzeltme klasik biçime uygulanmaz.
 9. **`◇` satırı ölçümdür, tahmin değil.** Kart, aynı kurulumun arşivdeki
-   sonucunu en çok 2 satırda basar (koşul + n görünür, kaynak
+   sonucunu en çok **3** satırda (public bültende **2**) basar (koşul + n görünür, kaynak
    [arastirma/AMPIRIK_REFERANS.md](../arastirma/AMPIRIK_REFERANS.md)). Sayı
    biçimleyicide hesaplanmaz; `ampirik_referans` tablolarından gelir. Koşul
    sağlanmıyorsa satır basılmaz. Yatırım tavsiyesi dili testle yasak
@@ -147,3 +149,62 @@ Kart, tahmin edilen 850–900 kr bandının tamamında (816–966 kr).
   `kirp()` + Telegram'ın 4096 tavanı.
 - **Ölü `format_message` şablonu** (329–361 px satırlar) silinmedi; hiçbir akış
   oradan geçmiyor, temizliği ayrı commit.
+
+---
+
+## 7. 22 Ekim 2026 revizyonu — 7 blok, sade dil, aile, public
+
+Bu bölüm yukarıdaki 1-9 kuralların **üzerine** eklenir; çelişki varsa bu bölüm
+geçerlidir (kod: `notifier._format_lifecycle_alert_kart_sade`).
+
+### 7.1 Blok düzeni
+
+Kart 7 bloğa ayrıldı, blok arası **tek boş satır**, girinti yok. Sıra karar
+sırasını izler:
+
+| Blok | İçerik |
+|---|---|
+| 1 OLAY | kimlik, formasyon, `🕒 … mumu`, `· kapanış … · sınır …` |
+| 2 ÖNÜNDE | kırılımın önündeki canlı bölge, kalite, bant yaşı |
+| 3 YAPI | kısa vadeli yön, geri çekilme/onay |
+| 4 ÖLÇÜ | `◇` arşiv ölçümü (DM 3, public 2) + `· geçmiş davranış, kazanç değil` |
+| 5 KATILIM | hacim yargısı |
+| 6 SINIR | `ters işaret:` ve `· bozulur:` |
+| 7 CTA | `• yatırım tavsiyesi değildir` |
+
+Tavan `_KART_MAKS_SATIR = 20` **dolu** satır (boş satırlar sayılmaz).
+
+### 7.2 Sade dil
+
+Ölçü ve kart satırlarında kısaltma yaşamaz: `ATR` → `normalin x katı` /
+`~1,05 TL`, `RVOL` → `hacim`, `BOS`/`CHoCH` → `kırılım`/`dönüş`, `OB`/`FVG` →
+`blok`/`boşluk`, `bar` → `mum`, `retest` → `geri çekilme`, `tamamlandı` →
+`tuttu`. Sıfat yasak (`tipik`, `zayıf`, `güçlü`, `muhtemel`). Testler:
+`test_kart_metin.py::test_kart_jargon_tasimaz`,
+`test_ampirik_referans.py::test_sade_dilde_*`.
+
+### 7.3 Aile ayrımı
+
+Aynı kartta iki farklı yüzde basılmaz. Formasyon alarmı `FRM` ailesini
+(`kırılım tuttu`, `rol uyumu`, `geri çekilme`), MS olayı `ms`, zone teması
+`ZONE` ailesini basar (`ampirik_referans.AILE_OLCU`). `aile=""` eski davranışı
+korur (kısıtsız).
+
+### 7.4 Public = DM
+
+Grup bülteni aynı biçimleyiciyi `public=True` ile kullanır: aynı 7 blok, ölçü
+2 satır, yasal uyarı bültede **tek kez**, her olayın ardından **1 kare + üst
+zaman dilimi** görseli (DM 4 kare). `PUBLIC_MIN_ARALIK_SN` 1,2 → 2,0.
+
+### 7.5 DM kapısı
+
+Görseller yalnız **pozitif tamsayı** `TELEGRAM_CHAT_ID`'ye gider
+(`notifier.grafik_dosya_gonder`). `deploy_check` bunu üç satırla denetler:
+pozitif tamsayı · `@kullanici` biçimi (görsel gitmez) · DM ile public hedefin
+aynı olması (hata).
+
+### 7.6 Ölçülen ama yazılmayan
+
+Koşullu "giderse tamamlanır" cümlesi ölçüldü ve **karta yazılmadı**; gerekçe ve
+sayılar `docs/arastirma/KOSULLU_CUMLE_OLCUMU.md`. Kural: ölçüm cümleyi
+desteklemiyorsa cümle yazılmaz.
