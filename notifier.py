@@ -1483,6 +1483,12 @@ class TelegramNotifier:
         quality = data.get('confidence_score', 0)
         if state not in CONFIRMED_PUBLIC_STATES or state not in self.public_states:
             return False
+        # GERİ ALMA KALİTE KAPISINA TAKILMAZ (2026-10-22): teyit eşiği geçmiş bir
+        # olayın "geçersizleşti" mesajı, formasyonun kalitesi sonradan eşiğin
+        # altına indi diye düşürülüyordu → grupta sinyal sonsuza kadar "geçerli"
+        # kalıyordu. Kalite kapısı yalnız YENİ iddialar (teyit/retest) içindir.
+        if state == "KIRILIM_GECERSIZLESTI":
+            return True
         try:
             q = float(quality or 0)
         except (TypeError, ValueError):
@@ -1733,10 +1739,35 @@ class TelegramNotifier:
                 str(kayit.get("stock_name") or "").strip().upper(),
                 str(kayit.get("timeframe") or "").strip().lower())
             with self._public_lck:
-                gonderilmis = bool(
-                    (teyit_key and teyit_key in self._public_alert_markers)
-                    or any(str(k).startswith(onek) for k in self._public_alert_markers)
-                )
+                # TEYİT HÂLÂ KUYRUKTAYSA (henüz gruba gitmedi): ikisi de düşer.
+                # Eskiden yalnız gönderilmiş mühürler aranıyordu; ağ/bütçe hatası
+                # yüzünden kuyrukta bekleyen teyit + hemen ardından gelen
+                # geçersizleşme → teyit sonradan gidiyor, geri alma ise sonsuza
+                # kadar kayboluyordu (grupta yanlış "geçerli" sinyal). Okuyucu
+                # hiç görmemiş bir teyidin geri alınmasına ihtiyaç duymaz.
+                bekleyen = [
+                    k for k in self._public_kuyruk
+                    if teyit_key and self._public_event_key(k) == teyit_key
+                ]
+                if bekleyen:
+                    self._public_kuyruk = [
+                        k for k in self._public_kuyruk
+                        if not (teyit_key and self._public_event_key(k) == teyit_key)
+                    ]
+                    # Kilit DIŞINDA kalıcı yazılır: `_public_durum_kaydet` aynı
+                    # kilidi alır, içeride çağırmak kilitlenme üretir.
+                    kuyruk_degisti = True
+                else:
+                    kuyruk_degisti = False
+                    gonderilmis = bool(
+                        (teyit_key and teyit_key in self._public_alert_markers)
+                        or any(str(k).startswith(onek) for k in self._public_alert_markers)
+                    )
+            if kuyruk_degisti:
+                self._public_durum_kaydet()
+                logger.info("Public: teyit henüz gönderilmemişti (%s); teyit ve "
+                            "geçersizleşme birlikte düşürüldü", onek.rstrip("|"))
+                return False
             if not gonderilmis:
                 logger.info("Public geçersizleşme atlandı (%s): önceki teyitli mesaj bu "
                             "kanala gönderilmemiş", onek.rstrip("|"))
@@ -2445,6 +2476,37 @@ class TelegramNotifier:
             except Exception as e:
                 logger.debug(f"Acil kuyruk Supabase'e kaydedilemedi: {e}")
 
+    def _public_kayitli_mi(self, data: Dict) -> bool:
+        """Olay public defterinde/kuyruğunda zaten var mı? (mühürsüzse: hayır)"""
+        event_key = self._public_event_key(data)
+        if not event_key:
+            return False
+        with self._public_lck:
+            if event_key in self._public_alert_markers:
+                return True
+            return any(self._public_event_key(k) == event_key for k in self._public_kuyruk)
+
+    def _public_kurtar(self, data: Dict, prepare_context) -> bool:
+        """DM "tekrar" dediğinde public'in kaybolmuş olayını kurtarır.
+
+        Dönen değer: bağlam hazırlandı mı (yani public kuyruğuna giriş denendi mi).
+        Karar public'in kendi kapılarına bırakılır (`should_send_to_public`,
+        kuyruk mührü); burada yalnız "bağlamı hazırlamaya değer mi" sorusu
+        cevaplanır. Sessiz istisna yok: hata loglanır, alarm akışı durmaz.
+        """
+        if not self.public_enabled:
+            return False
+        try:
+            if not self.should_send_to_public(data):
+                return False
+        except Exception as exc:  # noqa: BLE001 - public filtresi DM'i düşürmesin
+            logger.debug("Public kurtarma filtresi hata verdi: %s", exc)
+            return False
+        if self._public_kayitli_mi(data):
+            return False
+        prepare_context()
+        return True
+
     def _kuyruga_ekle(self, data: Dict, engel: str) -> None:
         """Engel nedeniyle gönderilemeyen acil olayı kuyruğa alır (en fazla 1 kopya)."""
         key = self._kuyruk_key(data)
@@ -3030,10 +3092,17 @@ class TelegramNotifier:
             stock, pattern, timeframe, state, formation_id=data.get("formation_id")
         ):
             engel = self._son_engel or "cooldown"
-            # "tekrar" nihai reddir: mühürlü olay için ne kuyruk ne de domain işi.
+            # "tekrar" nihai reddir: mühürlü olay için ne DM kuyruğu ne de domain
+            # işi. AMA public DM'den bağımsızdır: mühür "tekrar" dediğinde
+            # `before_send` hiç çalışmadığı için public kuyruğu da dolmuyordu ve
+            # gruba hiç gitmemiş olay (ağ hatası, bülten bütçesi, restart) bir
+            # daha denenmiyordu. Yalnız public'te KAYDI OLMAYAN olay için bağlam
+            # hazırlanır — yani motor bedeli yalnız gerçek boşlukta ödenir.
             if kuyrukla and self.enabled and engel != "tekrar":
                 prepare_context()
                 self._kuyruga_ekle(data, engel)
+            elif engel == "tekrar":
+                self._public_kurtar(data, prepare_context)
             logger.info("%s %s %s %s - %s, gönderilmiyor",
                         stock, pattern, timeframe, state, engel)
             return False

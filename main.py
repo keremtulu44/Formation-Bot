@@ -1112,6 +1112,47 @@ def _komut_olcum(_arguman: str) -> str:
         logger.warning("Ölçüm referansı üretilemedi: %s", exc)
         return "◇ Arşiv ölçümü şu an üretilemedi; ayrıntı logda."
 
+#: MS (piyasa yapısı) motoru hata sayacı. Kart bu uyarıyı BASMAZ (karar D:
+#: "⚠ MS domain devre dışı yalnız /durum'da"); alarm kartı karar belgesidir,
+#: altyapı arızası oraya girmez. Sayaç `/durum`da görünür ki hata sessiz kalmasın.
+#:
+#: HİSSE BAZINDA sayılır, olay bazında değil: aynı hissenin iki TF'si alarm
+#: ürettiğinde bağlam iki kez hazırlanır (çıktı önbellekten gelir) ve olay bazlı
+#: sayaç aynı arızayı iki kez yazardı. Set, tekrarı yutar.
+_ms_hata_sayaci: Dict = {"hisseler": set(), "son": ""}
+
+
+def _ms_hata_kaydet(outputs, stock: str = "") -> None:
+    """MS motoru bu turda hata verdiyse hisseyi sayaca yaz (istisna sızdırmaz)."""
+    try:
+        import notification_context as _nc
+        if not _nc.market_yapisi_hatali(outputs):
+            return
+        _ms_hata_sayaci.setdefault("hisseler", set()).add(str(stock or "?").upper())
+        for tf in ("1h", "2h", "4h", "1d"):
+            sonuc = (outputs or {}).get(tf, {}).get("market_structure") if isinstance(outputs, dict) else None
+            hata = sonuc.get("error") if isinstance(sonuc, dict) else None
+            if hata:
+                _ms_hata_sayaci["son"] = str(hata)[:60]
+                break
+    except Exception as exc:  # noqa: BLE001 - sayaç alarmı düşürmesin
+        logger.debug("MS hata sayacı yazılamadı: %s", exc)
+
+
+def _ms_hata_satiri() -> str:
+    """`/durum` için MS arıza satırı; hata yoksa boş (sessizlik)."""
+    hisseler = _ms_hata_sayaci.get("hisseler") or set()
+    adet = len(hisseler) if isinstance(hisseler, (set, list, tuple)) else int(hisseler or 0)
+    if adet <= 0:
+        return ""
+    satir = f"⚠️ MS (piyasa yapısı) motoru: {adet} hissede hata"
+    son = str(_ms_hata_sayaci.get("son") or "").strip()
+    if son:
+        satir += f" · son: {son}"
+    # Kart etkilenmez: kart yalnız kendi alanlarını basar; bu satır teşhis içindir.
+    return satir + " · alarm kartı etkilenmez"
+
+
 def _komut_durum(_arguman: str) -> str:
     now = datetime.now(ISTANBUL_TZ)
     st = _live_state.status()
@@ -1278,6 +1319,9 @@ def _komut_durum(_arguman: str) -> str:
     kapsam_notu = _kismi_kapsam_notu()
     if kapsam_notu:
         satirlar.append(kapsam_notu)
+    ms_hatasi = _ms_hata_satiri()
+    if ms_hatasi:
+        satirlar.append(ms_hatasi)
     satirlar += ["", "Komutlar: /panel · /tara [HISSE] · /formasyonlar · /grafik [HISSE] · /durum · /yardim"]
     return "\n".join(satirlar)
 
@@ -1392,6 +1436,9 @@ def _komut_formasyonlar(arguman: str, tamamlandi: bool = False) -> str:
     kapsam_notu = _kismi_kapsam_notu()
     if kapsam_notu:
         satirlar.append(kapsam_notu)
+    ms_hatasi = _ms_hata_satiri()
+    if ms_hatasi:
+        satirlar.append(ms_hatasi)
     return "\n".join(satirlar)
 
 def _komut_canli(arguman: str) -> str:
@@ -1412,6 +1459,9 @@ def _komut_canli(arguman: str) -> str:
     kapsam_notu = _kismi_kapsam_notu()
     if kapsam_notu:
         satirlar.append(kapsam_notu)
+    ms_hatasi = _ms_hata_satiri()
+    if ms_hatasi:
+        satirlar.append(ms_hatasi)
     for f in sirali:
         q = f.get("quality") or 0
         ok = _break_ok(f.get("break_dir"))
@@ -1554,6 +1604,9 @@ def _komut_sikisanlar(arguman: str) -> str:
     kapsam_notu = _kismi_kapsam_notu()
     if kapsam_notu:
         satirlar.append(kapsam_notu)
+    ms_hatasi = _ms_hata_satiri()
+    if ms_hatasi:
+        satirlar.append(ms_hatasi)
     for f in sirali:
         satirlar.append(
             f"{f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} q{float(f.get('quality') or 0):.0f} {_break_ok(f.get('break_dir'))}"
@@ -1577,6 +1630,9 @@ def _komut_tamamlanan(arguman: str) -> str:
     kapsam_notu = _kismi_kapsam_notu()
     if kapsam_notu:
         satirlar.append(kapsam_notu)
+    ms_hatasi = _ms_hata_satiri()
+    if ms_hatasi:
+        satirlar.append(ms_hatasi)
     for f in sirali:
         satirlar.append(
             f"{f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} q{float(f.get('quality') or 0):.0f} {_break_ok(f.get('break_dir'))}"
@@ -1603,6 +1659,9 @@ def _komut_retest(arguman: str) -> str:
     kapsam_notu = _kismi_kapsam_notu()
     if kapsam_notu:
         satirlar.append(kapsam_notu)
+    ms_hatasi = _ms_hata_satiri()
+    if ms_hatasi:
+        satirlar.append(ms_hatasi)
     for f in sirali:
         satirlar.append(
             f"{f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} {f.get('state')} q{float(f.get('quality') or 0):.0f} {_break_ok(f.get('break_dir'))}"
@@ -1629,6 +1688,9 @@ def _komut_kirilim(arguman: str) -> str:
     kapsam_notu = _kismi_kapsam_notu()
     if kapsam_notu:
         satirlar.append(kapsam_notu)
+    ms_hatasi = _ms_hata_satiri()
+    if ms_hatasi:
+        satirlar.append(ms_hatasi)
     for f in sirali:
         satirlar.append(
             f"{f.get('stock')} {f.get('timeframe')} {f.get('pattern_name')} {f.get('state')} q{float(f.get('quality') or 0):.0f} {_break_ok(f.get('break_dir'))}"
@@ -2814,7 +2876,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     if send_alerts and state == "BASARISIZ_KIRILIM":
                         _note_basarisiz_kirilim(stock, tf_name, df_tf.index[-1])
                     # Aday hunisi: bu kaydın akıbeti sayılır (bkz. daily_stats notu).
-                    if q < min_q:
+                    # Geri alma (geçersizleşti) kalite eşiğine TAKILMAZ: teyit
+                    # eşiği geçmiş bir olayın iptali, formasyon kalitesi sonradan
+                    # düştü diye bastırılırsa kullanıcıda "geçerli" kalır.
+                    if q < min_q and notification_state != "KIRILIM_GECERSIZLESTI":
                         daily_stats['alerts_below_threshold'] += 1
                         logger.debug(f"{stock} {tf_name} kalite {q:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
                     elif send_alerts and state in WATCH_STATES:
@@ -2840,18 +2905,29 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             "(close=%s, level=%s)",
                             stock, tf_name, notification_state, candle_close_price, break_price,
                         )
-                    elif (send_alerts and notification_state == "KIRILIM_GECERSIZLESTI"
-                          and not _invalidation_confirmation_delivered(
-                              notifier, getattr(active, "stable_id", None))):
-                        _note_unannounced_invalidation(
-                            stock, tf_name, getattr(active, "stable_id", None), df_tf.index[-1]
-                        )
-                        logger.info(
-                            "⏸️ %s %s %s: önceki KIRILIM_TEYITLI teslim edilmemiş; "
-                            "anlık push atlandı, 18:45 özetine eklendi",
-                            stock, tf_name, notification_state,
-                        )
                     elif send_alerts and notification_state in IMMEDIATE_ALERT_STATES:
+                        # Tur 2a DM geçersizleşme kapısı. Eskiden AYRI bir `elif`ti:
+                        # kapı kapandığında bu blok hiç çalışmıyordu, yani
+                        # `public_kuyruk` da çağrılmıyordu → grupta teyit
+                        # "geçerli" kalıyordu (DM'e teyit gitmediyse geri alma
+                        # sonsuza kadar düşüyordu). Artık kapı yalnız DM push'unu
+                        # durdurur; bağlam hazırlanır ve public kendi kapısıyla
+                        # (`TELEGRAM_KANAL_GECERSIZ_KAPISI`) karar verir.
+                        dm_gecersiz_engel = (
+                            notification_state == "KIRILIM_GECERSIZLESTI"
+                            and not _invalidation_confirmation_delivered(
+                                notifier, getattr(active, "stable_id", None))
+                        )
+                        if dm_gecersiz_engel:
+                            _note_unannounced_invalidation(
+                                stock, tf_name, getattr(active, "stable_id", None),
+                                df_tf.index[-1],
+                            )
+                            logger.info(
+                                "⏸️ %s %s %s: önceki KIRILIM_TEYITLI DM'e teslim "
+                                "edilmemiş; DM push yok, public kendi kapısıyla gider",
+                                stock, tf_name, notification_state,
+                            )
                         # Humanized mesaj için ek bilgiler - var olan veriyi kullan, ekstra hesaplama yok
                         upper_touches = getattr(active, 'upper_touches', None)
                         lower_touches = getattr(active, 'lower_touches', None)
@@ -2996,6 +3072,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 outputs = _domain_results_for_notification(
                                     stock, all_tfs, simdiki_zaman, domain_results_by_stock
                                 )
+                                # MS arıza sayacı (yalnız /durum'da görünür).
+                                _ms_hata_kaydet(outputs, stock)
                                 payload['domain_context'] = format_domain_context(
                                     outputs,
                                     reference_price=candle_close_price,
@@ -3072,25 +3150,33 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                              stock, tf_name, public_hata)
 
 
-                        daily_stats['alerts_attempted'] += 1
-                        send_with_prepare = getattr(notifier, "send_with_prepare", None)
-                        if callable(send_with_prepare):
-                            alert_sent = send_with_prepare(
-                                alert_data, before_send=_attach_domain_context
-                            )
-                        else:
-                            # Test/custom notifier adapters may expose only send().
+                        if dm_gecersiz_engel:
+                            # Yalnız bağlam + public kuyruğu: DM'e gönderim yok,
+                            # hint/kuyruk sayaçları da değişmez.
                             _attach_domain_context(alert_data)
-                            alert_sent = notifier.send(alert_data)
+                            alert_sent = False
+                        else:
+                            daily_stats['alerts_attempted'] += 1
+                            send_with_prepare = getattr(notifier, "send_with_prepare", None)
+                            if callable(send_with_prepare):
+                                alert_sent = send_with_prepare(
+                                    alert_data, before_send=_attach_domain_context
+                                )
+                            else:
+                                # Test/custom notifier adapters may expose only send().
+                                _attach_domain_context(alert_data)
+                                alert_sent = notifier.send(alert_data)
                         if alert_sent:
                             daily_stats['alerts_sent'] += 1
                             _gun_sayacini_gonderimle_hizala(
                                 stock, tf_name, notification_state)
                             _live_state.mark_alert_sent(stock, tf_name)
                             logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {notification_state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
-                        else:
+                        elif not dm_gecersiz_engel:
                             # Neden gönderilemedi? cooldown/kap ise olay kaybolmasın
                             # (Batch 5'te kuyruğa alınır); şimdilik sayılır.
+                            # DM geçersizleşme kapısı buraya DÜŞMEZ (yukarıda ayrıldı):
+                            # o bir arıza değil, bilinçli "DM'e söyleme" kararıdır.
                             daily_stats['alerts_failed'] += 1
                             if getattr(notifier, "_son_engel", ""):
                                 if notifier._son_engel == "cooldown":

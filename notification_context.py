@@ -572,6 +572,14 @@ def _format_volume(results_by_timeframe: Any) -> list[str]:
     return lines
 
 
+def market_yapisi_hatali(results_by_timeframe: Any) -> bool:
+    """MS (piyasa yapısı) motoru bu turda hata verdi mi? (`/durum` sayacı için)
+
+    Kart bu bilgiyi basmaz (karar D); sayaç `/durum`da görünür.
+    """
+    return _market_structure_failed(results_by_timeframe)
+
+
 def _market_structure_failed(results_by_timeframe: Any) -> bool:
     if not isinstance(results_by_timeframe, Mapping):
         return False
@@ -644,34 +652,63 @@ def _kart_engel(results_by_timeframe: Any, reference: float | None,
     return [en_yakin[1]] if en_yakin else []
 
 
+#: Metindeki "üst zaman dilimi". `main._UST_TF` (public görseli: 1 kare + üst TF)
+#: ile AYNI eşleme: aynı alarmın metni ve görseli aynı üst TF'yi konuşur.
+_UST_TF = {"1h": "4h", "2h": "4h", "4h": "1d"}
+
+
+def _yapi_metni(satir: dict) -> str:
+    """Bir yapı satırını kart cümlesine çevirir; ikisi de boşsa "" döner."""
+    token_dis, token_ic = _token(satir["dis"]), _token(satir["ic"])
+    dis = _STRUCTURE_SADE.get(token_dis, "")
+    ic = _STRUCTURE_SADE.get(token_ic, "")
+    if not dis and not ic:
+        return ""
+    kisa_dis = _STRUCTURE_SADE_KISA.get(token_dis, "")
+    kisa_ic = _STRUCTURE_SADE_KISA.get(token_ic, "")
+    etiket = f"◈ {satir['etiket']} yapı"
+    # Sade dil (2026-10-22): ok tek başına yön söylemiyordu (`dış ↑/iç ↑`).
+    # İkisi aynıysa tek sözcük; farklıysa iki künye. Sığmazsa "döndü"
+    # düşer — ölçü kısalmaz, yalnız nüans kısalır.
+    if dis and ic and token_dis == token_ic:
+        return _sigdir([f"{etiket} dış ve iç {dis}",
+                        f"{etiket} dış ve iç {kisa_dis}"])
+    uzun = [f"dış {dis}" if dis else "", f"iç {ic}" if ic else ""]
+    kisa = [f"dış {kisa_dis}" if kisa_dis else "", f"iç {kisa_ic}" if kisa_ic else ""]
+    return _sigdir([f"{etiket} " + ", ".join(p for p in uzun if p),
+                    f"{etiket} " + ", ".join(p for p in kisa if p)])
+
+
 def _kart_yapi_ozet(rows: list[dict], alarm_tf: str) -> list[str]:
-    """Alarm TF'sinin yapı durumu tek satır: `◈ 1s yapı dış ↓/iç ↓`.
+    """Alarm TF'sinin yapı durumu tek satır: `◈ 1s yapı dış ↓, iç ↓`.
 
     Kartta (GÖRSEL-8) yapı bloğunun yalnız bu satırı kalır: olay seviyeleri
     `/tara`'da ve kârede duruyor, satır ise "kırılım yapıyla aynı yönde mi"
     sorusunu tek bakışta cevaplıyor.
+
+    ÜST TF YEDEĞİ (2026-10-22): alarm TF'sinin yapı satırı yoksa (MS motoru o
+    TF'de olay üretmedi/atladı) satır tamamen düşüyordu — public bültende
+    yapı bloğu boş kalıyordu. Artık sırayla: alarm TF'si → public görselindeki
+    üst TF → kalan üst TF'ler. Satır KENDİ etiketiyle yazılır (`◈ 4s yapı …`),
+    yani alarm TF'siymiş gibi gösterilmez.
     """
-    for satir in rows:
-        if satir["timeframe"] != alarm_tf:
+    mevcut = {str(s.get("timeframe") or "").lower(): s for s in rows}
+    sira = [str(alarm_tf or "").lower()]
+    ust = _UST_TF.get(sira[0])
+    if ust:
+        sira.append(ust)
+    try:
+        baslangic = TIMEFRAME_ORDER.index(sira[0]) + 1
+    except ValueError:
+        baslangic = 0
+    sira += [tf for tf in TIMEFRAME_ORDER[baslangic:] if tf not in sira]
+    for tf in sira:
+        satir = mevcut.get(tf)
+        if satir is None:
             continue
-        token_dis, token_ic = _token(satir["dis"]), _token(satir["ic"])
-        dis = _STRUCTURE_SADE.get(token_dis, "")
-        ic = _STRUCTURE_SADE.get(token_ic, "")
-        if not dis and not ic:
-            return []
-        kisa_dis = _STRUCTURE_SADE_KISA.get(token_dis, "")
-        kisa_ic = _STRUCTURE_SADE_KISA.get(token_ic, "")
-        etiket = f"◈ {satir['etiket']} yapı"
-        # Sade dil (2026-10-22): ok tek başına yön söylemiyordu (`dış ↑/iç ↑`).
-        # İkisi aynıysa tek sözcük; farklıysa iki künye. Sığmazsa "döndü"
-        # düşer — ölçü kısalmaz, yalnız nüans kısalır.
-        if dis and ic and token_dis == token_ic:
-            return [_sigdir([f"{etiket} dış ve iç {dis}",
-                             f"{etiket} dış ve iç {kisa_dis}"])]
-        uzun = [f"dış {dis}" if dis else "", f"iç {ic}" if ic else ""]
-        kisa = [f"dış {kisa_dis}" if kisa_dis else "", f"iç {kisa_ic}" if kisa_ic else ""]
-        return [_sigdir([f"{etiket} " + ", ".join(p for p in uzun if p),
-                         f"{etiket} " + ", ".join(p for p in kisa if p)])]
+        metin = _yapi_metni(satir)
+        if metin:
+            return [metin]
     return []
 
 
@@ -1045,7 +1082,7 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
     # okur (mesaj metnindeki Türkçe karakterlerden bağımsız kalsın).
     bolumler: dict[str, list[str]] = {"yapi": [], "ob": [], "fvg": [], "hacim": [],
                                       "içinde": [], "ust": [], "alt": [], "olcum": [],
-                                      "engel": [], "yapi_ozet": []}
+                                      "engel": [], "yapi_ozet": [], "uyari": []}
     if stil == "kart":
         bolumler["yapi"] = _kart_market_structure(satirlar, str(alarm_tf or "").lower())
         bolumler["yapi_ozet"] = _kart_yapi_ozet(satirlar, str(alarm_tf or "").lower())
@@ -1053,7 +1090,11 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
         bolumler.update(_kart_zones(results_by_timeframe, reference))
         bolumler["hacim"] = _kart_volume(results_by_timeframe, str(alarm_tf or "").lower())
         if hata:
-            bolumler["yapi"].append(hata)
+            # MS (piyasa yapısı) motoru hata verdiğinde kart UYARI BASMAZ
+            # (kullanıcı kararı 2026-10-22, karar D): alarm kartı karar belgesidir,
+            # altyapı arıza notu oraya girmez — tek yeri `/durum`. Bilgi yine
+            # taşınır (`uyari` anahtarı); kart biçimleyicisi bu anahtarı okumaz.
+            bolumler["uyari"].append(hata)
         if olcum:
             bolumler["olcum"] = olcum_bolumu(
                 results_by_timeframe, reference, alarm_tf=alarm_tf, atr=atr,

@@ -211,3 +211,45 @@ def test_kart_satir_butcesi_ve_satir_tavani():
     for satir in dolu:
         assert tm.genislik(satir) <= notifier._kart_esik_px() + 0.1, satir
         assert satir == satir.lstrip(), f"girinti yok: {satir!r}"
+
+
+# ------------------------------------------------- MS arızası kartı kirletmez
+
+def test_ms_hatasi_kartta_gorunmez_ama_tasinir():
+    """Karar D (2026-10-22): `⚠ MS domain devre dışı` YALNIZ /durum'da.
+
+    Alarm kartı karar belgesidir; altyapı arızası (motor çöktü) oraya giremez.
+    Bilgi kaybolmaz: `uyari` anahtarında taşınır, sayaç `/durum`da görünür.
+    """
+    import notification_context as nc
+
+    outputs = {"4h": {"market_structure": {"error": "engine failed", "skipped": False,
+                                           "export": None}}}
+    bolumler = nc.domain_bolumleri(outputs, 100.0, stil="kart", alarm_tf="4h")
+    # Boş bölümler sözlükten DÜŞER (`domain_bolumleri` süzerek döner).
+    assert bolumler.get("yapi") in (None, [])
+    assert bolumler["uyari"] == ["⚠️ Piyasa yapısı analizi tamamlanamadı"]
+    kart = notifier._format_lifecycle_alert_kart(_payload(domain_bolumleri=bolumler))
+    assert "tamamlanamadı" not in kart
+    assert "MS" not in kart and "domain" not in kart.lower()
+
+
+def test_ms_hata_sayaci_durum_satirina_yazilir():
+    import main as main_module
+
+    main_module._ms_hata_sayaci.update({"hisseler": set(), "son": ""})
+    assert main_module._ms_hata_satiri() == ""  # hata yoksa sessiz
+    bozuk = {"4h": {"market_structure": {"error": "engine failed", "skipped": False}}}
+    main_module._ms_hata_kaydet(bozuk, "SISE")
+    satir = main_module._ms_hata_satiri()
+    assert satir.startswith("⚠️ MS (piyasa yapısı) motoru: 1 hissede hata")
+    assert "engine failed" in satir
+    # Aynı hissenin ikinci TF alarmı sayacı ŞİŞİRMEZ (hisse bazlı sayım).
+    main_module._ms_hata_kaydet(bozuk, "SISE")
+    assert main_module._ms_hata_sayaci["hisseler"] == {"SISE"}
+    # Sağlıklı tur sayaca dokunmaz; ikinci hisse ayrı sayılır.
+    main_module._ms_hata_kaydet({"4h": {"market_structure": {"error": None, "skipped": True}}},
+                                "GARAN")
+    main_module._ms_hata_kaydet(bozuk, "GARAN")
+    assert "2 hissede" in main_module._ms_hata_satiri()
+    main_module._ms_hata_sayaci.update({"hisseler": set(), "son": ""})

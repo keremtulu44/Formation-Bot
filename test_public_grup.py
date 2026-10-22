@@ -551,3 +551,179 @@ def test_bulten_tek_olay_butceyi_asse_de_gonderilir(grup_notifier, monkeypatch):
     assert n.public_bosalt() == 1
     assert len(cagrildi) == 1
     assert n._public_kuyruk == []
+
+
+# --- 9) Public yapı bloğu: alarm TF'si yoksa üst TF ------------------------
+
+def test_public_bulten_ust_tf_yapisini_basabilir(grup_notifier):
+    """Alarm TF'sinde MS olayı yoksa bülten yapı bloğunu üst TF'den okur.
+
+    Kullanıcı sorusu (2026-10-22): "public'te gerekiyorsa üst TF MS sorununu
+    çözdün mü" — bu test o yedeğin bülten metnine gerçekten ulaştığını
+    doğrular (yalnız `domain_bolumleri` birim testi yetmez).
+    """
+    from types import SimpleNamespace
+    import notification_context as nc
+
+    def _ms(dis, ic):
+        return SimpleNamespace(
+            external_scope=SimpleNamespace(state=dis),
+            internal_scope=SimpleNamespace(state=ic),
+            events=[], external_protected_high=None, external_protected_low=None,
+            external_weak_high=None, external_weak_low=None,
+        )
+
+    outputs = {
+        "1h": {"market_structure": SimpleNamespace(skipped=True, export=None, error=None)},
+        "4h": {"market_structure": SimpleNamespace(export=_ms("STATE_BEARISH",
+                                                              "STATE_BEARISH"),
+                                                   skipped=False, error=None)},
+    }
+    bolumler = nc.domain_bolumleri(outputs, 39.60, stil="kart", alarm_tf="1h")
+    metin = grup_notifier.format_public_batch(
+        [_olay(tf="1h", domain_bolumleri=bolumler)])
+    assert "◈ 4s yapı dış ve iç aşağı" in metin
+    # Kural: satır kendi TF'siyle yazılır — alarm TF'si gibi etiketlenmez.
+    assert "◈ 1s yapı" not in metin
+
+
+# --- 10) Public DM kapılarından bağımsız: mühür "tekrar" dese de -----------
+
+def test_dm_muhru_tekrar_dediyse_public_yine_de_alir(monkeypatch, grup_notifier):
+    """DM mührü olayı ikinci kez göndermezken public boşluğu doldurur.
+
+    Eskiden public kuyruğu `before_send` içinde doluyordu; mühür "tekrar"
+    dediğinde `before_send` hiç çalışmıyordu → gruba hiç gitmemiş olay (ağ
+    hatası, bülten bütçesi, restart) bir daha denenmiyordu.
+    """
+    n = grup_notifier
+    monkeypatch.setattr(n, "_public_durum_kaydet", lambda: None)
+    monkeypatch.setattr(n, "can_send", lambda *a, **k: (
+        setattr(n, "_son_engel", "tekrar") or False))
+
+    baglam = []
+
+    def before_send(data):
+        baglam.append(1)
+        n.public_kuyruk(data)
+
+    olay = _olay(formation_id="stable-public-tekrar")
+    assert n.send_with_prepare(dict(olay), before_send=before_send) is False
+    assert baglam == [1]                     # bağlam hazırlandı
+    assert len(n._public_kuyruk) == 1        # olay public kuyruğa girdi
+
+    # Public'te kayıt artık VAR: motor ikinci kez koşmaz (bedel ödenmez).
+    assert n.send_with_prepare(dict(olay), before_send=before_send) is False
+    assert baglam == [1]
+    assert len(n._public_kuyruk) == 1
+
+
+def test_tekrar_public_kapaliyken_motor_calistirmaz(monkeypatch, grup_notifier):
+    n = grup_notifier
+    n.public_enabled = False
+    monkeypatch.setattr(n, "can_send", lambda *a, **k: (
+        setattr(n, "_son_engel", "tekrar") or False))
+    baglam = []
+    n.send_with_prepare(dict(_olay(formation_id="x1")),
+                        before_send=lambda d: baglam.append(1))
+    assert baglam == []
+
+
+def test_dm_gecersizlesme_kapisi_publici_durdurmaz():
+    """Tur 2a kapısı yalnız DM push'unu durdurur; bağlam/public çalışır.
+
+    Yapısal güvence: `dm_gecersiz_engel` dalı `_attach_domain_context(alert_data)`
+    çağırır — yani kart bağlamı ve public kuyruğu DM kapısına takılmaz.
+    """
+    import ast
+    from pathlib import Path
+
+    kaynak = (Path(__file__).parent / "main.py").read_text(encoding="utf-8")
+    agac = ast.parse(kaynak)
+
+    def _cagri_adi(dugum):
+        return getattr(dugum.func, "id", getattr(dugum.func, "attr", ""))
+
+    bulundu = []
+    for dugum in ast.walk(agac):
+        if not isinstance(dugum, ast.If):
+            continue
+        if getattr(dugum.test, "id", "") != "dm_gecersiz_engel":
+            continue
+        adlar = [_cagri_adi(c) for c in ast.walk(dugum) if isinstance(c, ast.Call)]
+        bulundu.append(adlar)
+    assert bulundu, "dm_gecersiz_engel dalı yok (kapı geri ayrı elif'e taşınmış olabilir)"
+    assert any("_attach_domain_context" in adlar for adlar in bulundu), bulundu
+
+
+# --- 11) Geri alma kalite kapısına takılmaz --------------------------------
+
+def test_public_gecersizlesme_kalite_esigi_altinda_da_gider(grup_notifier):
+    """Teyit eşiği geçmiş olayın iptali kalite düşünce bastırılmamalı.
+
+    Aksi hâlde grup, formasyon kalitesi 80'in altına indiği için "geçersizleşti"
+    mesajını hiç görmez ve sinyal sonsuza kadar geçerli sanılır.
+    """
+    n = grup_notifier
+    teyit = _olay(tf="1h", q=85, state="KIRILIM_TEYITLI")
+    iptal = _olay(tf="1h", q=62, state="KIRILIM_GECERSIZLESTI")
+    assert n.should_send_to_public(teyit) is True
+    assert n.should_send_to_public(iptal) is True
+    # Kapı yalnız YENİ iddialar için: aynı düşük kalite teyit kaydı girmez.
+    assert n.should_send_to_public(_olay(tf="1h", q=62, state="KIRILIM_TEYITLI")) is False
+    # Env ile state tamamen kapatılmışsa geri alma da gitmez (kullanıcı kararı).
+    n.public_states = {"KIRILIM_TEYITLI"}
+    assert n.should_send_to_public(iptal) is False
+
+
+def test_dm_gecersizlesme_kalite_esigine_takilmaz():
+    """`main` kalite kapısı geri alma için atlanır (kaynak düzeyi güvence)."""
+    import ast
+    from pathlib import Path
+
+    agac = ast.parse((Path(__file__).parent / "main.py").read_text(encoding="utf-8"))
+    bulundu = []
+    for dugum in ast.walk(agac):
+        if not isinstance(dugum, ast.If):
+            continue
+        for alt in ast.walk(dugum.test):
+            if (isinstance(alt, ast.Compare)
+                    and getattr(alt.left, "id", "") == "q"
+                    and any(getattr(d, "id", "") == "min_q" for d in alt.comparators)):
+                kaynak_test = ast.unparse(dugum.test)
+                bulundu.append(kaynak_test)
+    assert bulundu, "kalite kapısı bulunamadı (yeniden adlandırılmış olabilir)"
+    assert any("KIRILIM_GECERSIZLESTI" in t for t in bulundu), bulundu
+
+
+# --- 12) Geçersizleşme kapısı: kuyrukta bekleyen teyit --------------------
+
+def test_bekleyen_teyit_varsa_ikisi_birlikte_duser(grup_notifier):
+    """Teyit henüz gruba gitmediyse geri alma da gitmez — ikisi birden düşer.
+
+    Eski davranış yalnız GÖNDERİLMİŞ mühürlere bakıyordu: ağ/bütçe hatası
+    yüzünden kuyrukta bekleyen teyit sonradan gidiyor, geri alma ise kalıcı
+    olarak kayboluyordu → grupta yanlış "geçerli" sinyal.
+    """
+    n = grup_notifier
+    n._public_kuyruk = []
+    n._public_alert_markers = {}
+    teyit = _olay(formation_id="stable-bekleyen")
+    assert n.public_kuyruk(teyit) is True
+    iptal = _olay(formation_id="stable-bekleyen", state="KIRILIM_GECERSIZLESTI")
+    assert n.public_kuyruk(iptal) is False     # ikisi de düşer
+    assert n._public_kuyruk == []
+    assert n._public_alert_markers == {}
+
+
+def test_gonderilmis_teyidin_gecersizlesmesi_kuyruga_girer(grup_notifier):
+    n = grup_notifier
+    n._public_kuyruk = []
+    n._public_alert_markers = {}
+    teyit = _olay(formation_id="stable-gonderilmis")
+    assert n.public_kuyruk(teyit) is True
+    n._public_kuyruk = []
+    n._public_alert_markers[n._public_event_key(teyit)] = "2026-10-22T17:31:00+03:00"
+    iptal = _olay(formation_id="stable-gonderilmis", state="KIRILIM_GECERSIZLESTI")
+    assert n.public_kuyruk(iptal) is True
+    assert len(n._public_kuyruk) == 1
