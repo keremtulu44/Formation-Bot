@@ -86,6 +86,11 @@ from reporting.format import (
     format_urgent_alert_queue_summary as _format_urgent_queue_summary,
 )
 
+#: Üst zaman dilimi: public görselinde alarm karesinin yanına eklenen kare
+#: (2026-10-22 kararı: public = 1 kare + üst TF; DM 4 kare alır).
+#: `mtf_destek` hesabındaki teyit TF'siyle aynı mantık, karttan bağımsız sabit.
+_UST_TF = {"1h": "4h", "2h": "4h", "4h": "1d"}
+
 # === LOGGING KURULUMU ===
 # Batch 8 / C2: bu fonksiyon artık IMPORT anında ÇAĞRILMAZ (yan etki kaldırıldı:
 # modül import edildiğinde log dizini oluşturulmuyor/`/var/log` denenmiyordu).
@@ -2914,13 +2919,11 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             # gösterilir, bu nedenle burada bağlam eklenmez/tüketilmez.
                             'watch_context': [],
                         }
-                        # Public (grup) kuyruğuna ekle: gönderim tarama turu sonunda
-                        # TEK bültende yapılır; DM engeli (cooldown/kap) grubu etkilemez.
-                        try:
-                            notifier.public_kuyruk(alert_data)
-                        except Exception as public_hata:  # noqa: BLE001
-                            logger.debug("Public kuyruğa eklenemedi (%s %s): %s",
-                                         stock, tf_name, public_hata)
+                        # Public (grup) kuyruğa ekleme `_attach_domain_context`
+                        # SONUNDA yapılır (2026-10-22): bülten DM kartıyla aynı
+                        # 7 bloğu bastığı için kayıt, ölçüm/bölge/yapı bağlamı
+                        # eklendikten sonra kuyruğa girmeli. DM engeli
+                        # (cooldown/kap) grubu etkilemez.
                         def _grafik_koprusu(payload, outputs):
                             # G4 KÖPRÜSÜ (§4): kareler kartla BİREBİR aynı veriden.
                             # Motor burada YENİDEN çağrılmaz — `outputs` bu turda
@@ -2953,6 +2956,27 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                     simdi=simdiki_zaman)
                                 if veri.get("goruntular"):
                                     payload['grafik_verisi'] = veri
+                                # PUBLIC görseli (2026-10-22 kararı): DM 4 kare
+                                # alır, grup YALNIZ 1 kare + üst zaman dilimi.
+                                # Ayrı liste üretilir; aynı veriden çizilir
+                                # (§14.2: kare kopyadır, motor yeniden koşmaz).
+                                ust_tf = _UST_TF.get(str(tf_name or '').lower())
+                                ust_cerceve = (taze.get(ust_tf)
+                                               if ust_tf and taze.get(ust_tf) is not None
+                                               else None)
+                                public_veri = grafik.kare_listesi(
+                                    active, tf_name,
+                                    taze.get(tf_name) if taze.get(tf_name) is not None else df_tf,
+                                    sonuclar=outputs,
+                                    ek_cerceveler=({ust_tf: ust_cerceve}
+                                                   if ust_tf and ust_cerceve is not None else {}),
+                                    alarm_turu=grafik.alarm_turu_bul(notification_state),
+                                    alarm_bar=(int(alarm_bar) if alarm_bar is not None
+                                               and int(alarm_bar) >= 0 else None),
+                                    sembol=stock, zaman_damgasi=df_tf.index[-1],
+                                    adet=2, simdi=simdiki_zaman)
+                                if public_veri.get("goruntular"):
+                                    payload['grafik_verisi_public'] = public_veri
                             except Exception as grafik_hata:  # noqa: BLE001 - görsel alarmı düşürmesin
                                 # Sayaç/diagnostic kodu da alarm akışını durduramaz.
                                 try:
@@ -3034,6 +3058,13 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                     stock, tf_name, exc,
                                 )
                             _grafik_koprusu(payload, outputs)
+                            # Public kuyruk: bülten kartı hazır olduktan SONRA
+                            # (kart bağlamı + varsa public karesi kayda girer).
+                            try:
+                                notifier.public_kuyruk(payload)
+                            except Exception as public_hata:  # noqa: BLE001
+                                logger.debug("Public kuyruğa eklenemedi (%s %s): %s",
+                                             stock, tf_name, public_hata)
 
 
                         daily_stats['alerts_attempted'] += 1

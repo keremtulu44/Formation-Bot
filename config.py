@@ -374,7 +374,10 @@ def _tf_esiklerini_coz(ham: str, varsayilan: dict) -> dict:
 # Public bütçe + tempo: DM kapılarından AYRI (grup başına 20 mesaj/dk sınırı var).
 PUBLIC_MAX_MESAJ_SAAT = _env_int("PUBLIC_MAX_MESAJ_SAAT", 6)
 PUBLIC_MAX_MESAJ_GUN = _env_int("PUBLIC_MAX_MESAJ_GUN", 25)
-PUBLIC_MIN_ARALIK_SN = _env_float("PUBLIC_MIN_ARALIK_SN", 1.2)
+#: Public mesajlar arası en az aralık (sn). 1,2 → 2,0 (2026-10-22): bülten artık
+#: DM ile aynı 7 bloğu basıyor ve ardından kare(ler) gidiyor; 1,2 sn Telegram'ın
+#: grup hız sınırında 429 üretiyordu. Değer env ile geri alınabilir.
+PUBLIC_MIN_ARALIK_SN = _env_float("PUBLIC_MIN_ARALIK_SN", 2.0)
 
 # --- FAILURE PENALTY ---
 FAILED_PATTERN_PENALTY_BARS = _env_int("FAILED_PATTERN_PENALTY_BARS", 24)

@@ -419,7 +419,8 @@ def _kart_temas(data: Dict) -> str:
     return f"· temas üst {ust} / alt {alt}"
 
 
-def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -> str:
+def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False,
+                                      public: bool = False) -> str:
     """Sade kart (GÖRSEL-9): 7 blok, blok arası bir boş satır, girinti yok.
 
     Tarihçe:
@@ -444,6 +445,10 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
 
     Tavan `_KART_MAKS_SATIR` (20, boş satırlar hariç); aşılırsa isteğe bağlı
     ekler en düşük öncelikten düşer, çekirdek satır düşmez.
+
+    `public=True` (2026-10-22 kararı): grup bülteni DM ile AYNI 7 bloğu basar;
+    tek fark ölçü bloğunun **2** satırla sınırlı olması (kalabalık bültende
+    okunurluk). İçerik uydurulmaz, yalnız en düşük öncelikli ölçü düşer.
     """
     stock = str(data.get("stock_name") or "Bilinmiyor").upper()
     timeframe = str(data.get("timeframe") or "1h").lower()
@@ -548,7 +553,8 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
     olcum = list(bolumler.get("olcum") or []) if isinstance(bolumler, dict) else []
     if olcum:
         blok = []
-        for satir in olcum[:3]:
+        # Kart 3 ölçü satırı taşır; public bültende 2 (2026-10-22 kararı).
+        for satir in olcum[:(2 if public else 3)]:
             _satir(blok, str(satir))
         # Ölçüm dipnotu: oran "kazanç" diye okunmasın. `/tara` satırının yerine
         # geldi (2026-10-22 kararı). Ölçüm varsa her zaman basılır.
@@ -614,11 +620,13 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False) -
     return "\n\n".join("\n".join(b) for b in bloklar if b)
 
 
-def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False) -> str:
+def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False,
+                                 public: bool = False) -> str:
     # GÖRSEL-7: süzgeç açıkken sade kart döner (kârenin taşıdığı satırlar düşer).
     # Kapatmak için `TELEGRAM_KART_SUZGEC=0` → aşağıdaki 25 Eyl biçimi aynen çalışır.
     if _kart_suzgec_aktif():
-        return _format_lifecycle_alert_kart_sade(data, guncelleme=guncelleme)
+        return _format_lifecycle_alert_kart_sade(data, guncelleme=guncelleme,
+                                                 public=public)
     stock = str(data.get("stock_name") or "Bilinmiyor").upper()
     timeframe = str(data.get("timeframe") or "1h").lower()
     state = str(data.get("state") or "").strip().upper()
@@ -1260,6 +1268,10 @@ class TelegramNotifier:
         self.public_max_gunluk = PUBLIC_MAX_MESAJ_GUN
         self.public_min_aralik_sn = PUBLIC_MIN_ARALIK_SN
         self.public_kuyruk_limit = 40
+        # Public kare defteri: {olay anahtarı: grafik_verisi}. Kuyruk kaydına
+        # GİRMEZ (dosya yolu/PIL nesnesi JSON'a yazılmaz); yeniden başlatmada
+        # kare kaybolur, metin kalır — görsel metnin eki, sahibi değil.
+        self._public_grafik: Dict[str, dict] = {}
         self.public_gonderilen = 0
         self.public_hatasi = 0
         self.public_engel = 0
@@ -1678,10 +1690,32 @@ class TelegramNotifier:
             return False
         if self._delivery.public_duplicate(data):
             return False
+        # Bülten artık DM kartıyla AYNI 7 bloğu basar (2026-10-22): kartın
+        # beslendiği alanlar kuyruk kaydına da kopyalanır. Yalnız JSON'a
+        # yazılabilir değerler girer (zaman damgaları ISO metne çevrilir);
+        # kare dosyaları `_public_grafik` defterinde ayrı tutulur.
         kayit = {k: data.get(k) for k in (
             "stock_name", "timeframe", "pattern_name", "state", "confidence_score",
             "critical_price_level", "break_price", "break_dir", "contraction", "bar_metni",
-            "candle_close_price", "upper_touches", "lower_touches", "formation_id")}
+            "candle_close_price", "upper_touches", "lower_touches", "formation_id",
+            "break_strength", "age_bars", "band_baslangic", "upper_now", "lower_now",
+            "retest_seen", "mtf_destek", "domain_bolumleri", "domain_karsi")}
+        for zaman_alani in ("bar_time", "bar_kapanis"):
+            deger = data.get(zaman_alani)
+            if deger is None:
+                kayit[zaman_alani] = None
+                continue
+            try:
+                kayit[zaman_alani] = (deger.isoformat()
+                                      if hasattr(deger, "isoformat") else str(deger))
+            except (TypeError, ValueError):
+                kayit[zaman_alani] = None
+        bolumler = kayit.get("domain_bolumleri")
+        if isinstance(bolumler, dict):
+            kayit["domain_bolumleri"] = {
+                str(anahtar): [str(x) for x in (deger or [])][:(2 if anahtar == "olcum" else 6)]
+                for anahtar, deger in bolumler.items()
+            }
         anahtar = (str(kayit["stock_name"] or "").upper(),
                    str(kayit["timeframe"] or "").lower(),
                    str(kayit["state"] or "").strip().upper())
@@ -1723,6 +1757,9 @@ class TelegramNotifier:
                                self.public_kuyruk_limit, anahtar)
                 return False
             self._public_kuyruk.append(kayit)
+        veri = data.get("grafik_verisi_public")
+        if isinstance(veri, dict) and veri.get("goruntular"):
+            self._public_grafik[str(event_key or anahtar)] = veri
         self._public_durum_kaydet()
         self._delivery.remember_public(data)
         return True
@@ -1754,6 +1791,10 @@ class TelegramNotifier:
             if not self.send_to_public(metin):
                 # Bütçe/ağ engeli: kayıtlar kuyrukta kalır, sonraki turda denenir.
                 break
+            # Metnin ardından kare (2026-10-22): public görsel = 1 kare + üst TF.
+            # Görsel hatası metni geri almaz; sayaçla raporlanır.
+            for kayit in parca:
+                self.public_grafik_gonder(kayit)
             gonderilen += len(parca)
             basarili_kayitlar.extend(parca)
             kalan = kalan[len(parca):]
@@ -1772,7 +1813,19 @@ class TelegramNotifier:
         return gonderilen
 
     def format_public_batch(self, kayitlar: List[Dict]) -> str:
-        """Grup sürümü bülten: sade satırlar, iç izleme notu ve kuyruk yok."""
+        """Grup sürümü bülten — DM kartıyla AYNI 7 blok (2026-10-22 kararı).
+
+        Kullanıcı: *"tüm her şeyi birleştir public'e uygulayacaksın"*. Eskiden
+        grup bülteni olay başına 3 kısa satır basıyordu (kimlik + kapanış +
+        kalite); ölçüm, önündeki bölge, yapı ve sınır blokları yalnız DM'de
+        kalıyordu. Artık aynı biçimleyici kullanılır (`public=True`):
+        tek fark ölçü bloğunun 2 satırla sınırlı olması.
+
+        Değişmeyen kurallar:
+          * iç izleme notu / "teyit bekleniyor" / kuyruk bilgisi gruba gitmez,
+          * yasal uyarı bültende TEK kez (kartın kendi uyarısı düşürülür),
+          * satır ≤ 283 px (`_satir` bütçe uygular).
+        """
         kayitlar = [
             k for k in (kayitlar or [])
             if isinstance(k, dict)
@@ -1780,49 +1833,16 @@ class TelegramNotifier:
         ]
         if not kayitlar:
             return ""
-        # Başlık eskiden "📊 Formasyon bülteni · 25 Eyl 10:40 · 2 gelişme" idi:
-        # ~300 px ile satır bütçesini aşıp son kelimeyi kaydırıyordu. Etiket
-        # kısaltıldı; tarih ve gelişme sayısı (veri) aynen duruyor.
-        # Başlık iki kısa satır: tek satıra tarih + sayıyı dizmek 278-300 px
-        # edip son kelimeyi kaydırıyordu. Kelimeler ("gelişme") aynen korunur.
         satirlar = [f"📊 Bülten · {len(kayitlar)} gelişme",
                     f"   {_tr_tarih(datetime.now(ISTANBUL_TZ))}"]
-        # Olay BAŞINA kısa satırlar. Eskiden her gelişme tek satıra diziliyordu
-        # (1 095-1 160 px → telefonda 3-4 satıra sarıp okunmaz oluyordu) ve fiyat
-        # noktalı (407.17) yazılıyordu; DM kartı virgül kullanıyor.
-        # Olay etiketleri DM kartıyla AYNI sözlüğü kullanır: kanal okuyucusu da
-        # "kapanışla teyitli" der, "önceki teyitli kırılım geçersizleşti" gibi
-        # cümle kurmaz (cümle 1 160 px'lik saran satır üretiyordu).
-        _bulleten_olay = {
-            "KIRILIM_TEYITLI": "kapanışla teyitli",
-            "RETEST_BASARILI": "kapanışla retest başarılı",
-            "KIRILIM_GECERSIZLESTI": "teyit geçersizleşti",
-        }
         for k in kayitlar:
-            stock = str(k.get("stock_name") or "?")
-            tf = TF_KISA.get(str(k.get("timeframe") or "").lower(),
-                             TF_HUMAN.get(k.get("timeframe"), str(k.get("timeframe") or "")))
-            pattern = str(k.get("pattern_name") or "Formasyon")
-            state = str(k.get("state") or "").strip().upper()
-            etiket = _bulleten_olay.get(state) or PUBLIC_STATE_ETIKET.get(
-                state, STATE_TR.get(state, state))
-            yon = _yon_kisa(k.get("break_dir"))
-            _satir(satirlar, f"{PATTERN_EMOJI.get(pattern, '📈')} {stock} {tf} · {pattern}")
-            govde = [f"{yon + ' ' if yon else ''}{etiket}"]
-            seviye = k.get("critical_price_level") or k.get("break_price")
-            govde.append(_sayı(seviye) if seviye else "")
-            _satir(satirlar, "   " + " · ".join(p for p in govde if p), girinti="   ")
-            kapanis = _sayı(k.get("candle_close_price"))
-            ust_t, alt_t = k.get("upper_touches"), k.get("lower_touches")
-            temas = f"temas {ust_t}/{alt_t}" if ust_t is not None and alt_t is not None else ""
-            kalite = _sayı(float(k.get("confidence_score") or 0), 0)
-            satir3 = " · ".join(p for p in ((f"kapanış {kapanis}" if kapanis else ""),
-                                            (f"kalite {kalite}" if kalite else ""), temas) if p)
-            if satir3:
-                _satir(satirlar, "   " + satir3, girinti="   ")
-            damga = _kart_mum_damgasi(k)
-            if damga:
-                satirlar.append(f"   {damga}")
+            kart = _format_lifecycle_alert_kart(k, public=True)
+            # Kartın kendi uyarısı bültende tek kez yazılır (sonda 📌 ile).
+            kart = kart.replace("\n\n• yatırım tavsiyesi değildir", "").rstrip()
+            if not kart:
+                continue
+            satirlar.append("")
+            satirlar.extend(kart.splitlines())
         satirlar.append("")
         satirlar.append("📌 yatırım tavsiyesi değildir")
         return metni_sigdir("\n".join(satirlar), guvenlik=1.0)
@@ -3106,6 +3126,60 @@ class TelegramNotifier:
         except Exception as hata:  # noqa: BLE001 - metin/görsel akışını düşürmesin
             logger.warning("grafik arka plan gönderimi durdu: %s: %s",
                            type(hata).__name__, hata)
+
+    def public_grafik_gonder(self, kayit: Dict) -> int:
+        """Public kaydının karelerini gruba gönderir; `(gönderilen sayısı)`.
+
+        2026-10-22 kararı: public görseli **1 kare + üst zaman dilimi** karesidir
+        (DM 4 kare alır). Kareler bildirim anında üretilir, burada gönderilir;
+        dosya her durumda silinir. Görsel hiçbir koşulda metni/bülteni düşürmez.
+        """
+        if not isinstance(kayit, dict):
+            return 0
+        anahtar = self._public_event_key(kayit) or (
+            str(kayit.get("stock_name") or "").upper(),
+            str(kayit.get("timeframe") or "").lower(),
+            str(kayit.get("state") or "").strip().upper())
+        veri = self._public_grafik.pop(str(anahtar), None)
+        if not veri:
+            return 0
+        hedef = str(getattr(self, "public_chat_id", "") or "").strip()
+        if not hedef or not getattr(self, "public_enabled", False):
+            return 0
+        try:
+            from transport.telegram import foto_gonder
+        except Exception:  # pragma: no cover - taşıma yoksa görsel de yok
+            return 0
+        gonderilen = 0
+        tf = TF_KISA.get(str(kayit.get("timeframe") or "").lower(),
+                         str(kayit.get("timeframe") or ""))
+        bas = f"{str(kayit.get('stock_name') or '').upper()} {tf}".strip()
+        desen = str(kayit.get("pattern_name") or "").strip()
+        for sira, kare in enumerate(list(veri.get("goruntular") or [])[:2]):
+            yol = ((kare or {}).get("goruntu") or {}).get("yol")
+            kare_tf = TF_KISA.get(str((kare or {}).get("tf") or "").lower(),
+                                  str((kare or {}).get("tf") or ""))
+            if not yol:
+                continue
+            caption = (f"{bas} · {desen}" if sira == 0 and desen
+                       else f"{bas} · {kare_tf} üst zaman dilimi")
+            try:
+                self._public_pace()
+                ok, aciklama = foto_gonder(yol, chat_id=hedef, notifier=self,
+                                           caption=caption[:1024])
+                if ok:
+                    gonderilen += 1
+                else:
+                    logger.warning("public karesi gönderilemedi: %s",
+                                   redact_sensitive_text(str(aciklama), self.token)[:160])
+            except Exception as hata:  # noqa: BLE001 - görsel akışı düşürmesin
+                logger.debug("public karesi hatası: %s: %s", type(hata).__name__, hata)
+            finally:
+                try:
+                    os.remove(yol)
+                except (OSError, TypeError):
+                    pass
+        return gonderilen
 
     def grafik_dosya_gonder(self, yol, caption: str = "") -> tuple:
         """Bir PNG'yi DM'e gönderir ve dosyayı SİLER (§4); `(ok, aciklama)`.

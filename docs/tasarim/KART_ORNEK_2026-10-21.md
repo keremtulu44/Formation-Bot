@@ -1,5 +1,9 @@
 # Alarm kartı — sade dil sürümü (2026-10-21 · v2)
 
+> **⚠️ Bu dosya tarihsel öneridir.** Uygulanan sürüm:
+> [KART_ORNEK_2026-10-22.md](KART_ORNEK_2026-10-22.md). Buradaki satır
+> biçimleri kodda yürürlükte DEĞİL (ölçüm satırları ve blok düzeni değişti).
+
 > **Durum:** Önizleme — **kod değişmedi**, onay bekliyor
 > **Bu turda:** teknik kısaltmalar kaldırıldı (`n1651`, `ATR`, `RVOL`, `MTF`, `BOS`, `OB/FVG`, `bar`)
 > **Ölçüm:** her satır `telegram_measure.genislik()` ile ölçüldü · bütçe **262 px**

@@ -382,3 +382,121 @@ def test_tarama_turu_sonunda_bulten_bosaltilir(monkeypatch):
         assert M.daily_stats["tarama_sayisi"] == 10
     finally:
         M.daily_stats["tarama_sayisi"] = eski
+
+
+# --- 6) Bülten = DM kartıyla aynı 7 blok (2026-10-22) -----------------------
+
+def _zengin_olay(**ek):
+    """Kartın 7 bloğunu besleyen tam kayıt (bülten biçimi)."""
+    veri = _olay(break_dir=1, critical_price_level=39.26,
+                 confidence_score=81, break_strength=100, age_bars=94,
+                 band_baslangic="2026-09-30T16:30:00+03:00", retest_seen=False,
+                 mtf_destek=True, upper_now=39.96,
+                 bar_time="2026-10-21T13:30:00+03:00",
+                 bar_kapanis="2026-10-21T17:30:00+03:00",
+                 candle_close_price=39.60,
+                 domain_bolumleri={
+                     "engel": ["▲ direnç · boşluk 4s 41,90 +%5,8"],
+                     "yapi_ozet": ["◈ 4s yapı dış ve iç yukarı"],
+                     "hacim": ["katılım 4s hacim 0,45 kat"],
+                     "olcum": ["◇ 32321 formasyon · %76 tuttu",
+                               "◇ tutunca ~1,05 TL · %2,6",
+                               "◇ rol uyumlu %80 · 15724"],
+                 },
+                 domain_karsi=["iç yapı aşağı döndü"])
+    veri.update(ek)
+    return veri
+
+
+def test_public_bulten_dm_kartiyla_ayni_yedi_blok(grup_notifier):
+    metin = grup_notifier.format_public_batch([_zengin_olay()])
+    # 7 blok: OLAY / ÖNÜNDE / YAPI / ÖLÇÜ / KATILIM / SINIR / CTA
+    assert "Alçalan Üçgen — kapanışla" in metin             # 1 OLAY
+    assert "▲ direnç · boşluk 4s 41,90 +%5,8" in metin      # 2 ÖNÜNDE
+    assert "◈ 4s yapı dış ve iç yukarı" in metin            # 3 YAPI
+    assert "◇ 32321 formasyon · %76 tuttu" in metin         # 4 ÖLÇÜ
+    assert "katılım 4s hacim 0,45 kat" in metin             # 5 KATILIM
+    assert "ters işaret: iç yapı aşağı döndü" in metin      # 6 SINIR
+    assert "· bozulur: 39,96 altı kapanış" in metin
+    assert "yatırım tavsiyesi değildir" in metin            # 7 CTA
+
+
+def test_public_bultende_olcu_en_fazla_iki_satir(grup_notifier):
+    metin = grup_notifier.format_public_batch([_zengin_olay()])
+    olcum = [s for s in metin.splitlines() if s.startswith("◇")]
+    assert len(olcum) == 2, olcum
+    # En düşük öncelikli satır (rol uyumu) düşer; çekirdek ölçü kalır.
+    assert "formasyon · %76 tuttu" in olcum[0]
+    assert not any("rol uyumlu" in s for s in olcum)
+
+
+def test_public_bultende_uyari_tek_kez(grup_notifier):
+    metin = grup_notifier.format_public_batch([_zengin_olay(),
+                                              _zengin_olay(stock="GARAN")])
+    assert metin.count("yatırım tavsiyesi değildir") == 1
+
+
+def test_public_bulten_jargon_tasimaz(grup_notifier):
+    metin = grup_notifier.format_public_batch([_zengin_olay()])
+    for kisa in ("RVOL", "FVG", "BOS", "CHoCH", "ATR"):
+        assert kisa not in metin, (kisa, metin)
+
+
+# --- 7) Public kuyruk kart bağlamını taşır ----------------------------------
+
+def test_public_kuyruk_kart_baglamini_saklar(grup_notifier):
+    n = grup_notifier
+    veri = _zengin_olay()
+    assert n.public_kuyruk(veri) is True
+    kayit = n._public_kuyruk[0]
+    assert kayit["domain_bolumleri"]["olcum"], kayit
+    assert len(kayit["domain_bolumleri"]["olcum"]) <= 2       # bülten sınırı
+    assert kayit["domain_karsi"] == ["iç yapı aşağı döndü"]
+    # Zaman damgası JSON'a yazılabilir metin olmalı (kuyruk diske yazılır).
+    assert isinstance(kayit["bar_time"], str)
+
+
+def test_public_kuyruk_json_serilestirilebilir(grup_notifier):
+    import json as _json
+    n = grup_notifier
+    assert n.public_kuyruk(_zengin_olay()) is True
+    _json.dumps(n._public_kuyruk)          # patlarsa kuyruk diske yazılamaz
+
+
+# --- 8) Public görsel: 1 kare + üst TF --------------------------------------
+
+def test_public_grafik_bir_kare_arti_ust_tf(monkeypatch, grup_notifier, tmp_path):
+    import transport.telegram as tt
+
+    n = grup_notifier
+    yollar = []
+    for ad in ("alarm.png", "ust.png"):
+        yol = tmp_path / ad
+        yol.write_bytes(b"png")
+        yollar.append(str(yol))
+    cagrilar = []
+
+    def sahte_foto(yol, chat_id=None, token=None, notifier=None, caption="", **kw):
+        cagrilar.append({"yol": yol, "chat_id": chat_id, "caption": caption})
+        return True, "ok"
+
+    monkeypatch.setattr(tt, "foto_gonder", sahte_foto)
+    kayit = _zengin_olay()
+    n._public_grafik[str((("ISMEN", "4h", "KIRILIM_TEYITLI")))] = {
+        "goruntular": [{"tf": "4h", "goruntu": {"yol": yollar[0]}},
+                       {"tf": "1d", "goruntu": {"yol": yollar[1]}}]}
+    assert n.public_grafik_gonder(kayit) == 2
+    assert len(cagrilar) == 2
+    assert all(c["chat_id"] == "-1001234567890" for c in cagrilar)
+    assert "üst zaman dilimi" in cagrilar[1]["caption"]
+    # Dosyalar gönderimden sonra silinir (disk çöpü kalmaz).
+    import os
+    assert not any(os.path.exists(y) for y in yollar)
+    # Defter boşaldı: aynı olay ikinci kez kare göndermez.
+    assert n.public_grafik_gonder(kayit) == 0
+
+
+def test_public_aralik_varsayilani_iki_saniye():
+    """Bülten + kare art arda gidiyor; 1,2 sn grup hız sınırında 429 üretiyordu."""
+    import config
+    assert config.PUBLIC_MIN_ARALIK_SN >= 2.0
