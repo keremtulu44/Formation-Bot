@@ -287,6 +287,31 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
             satir(FAIL, "TELEGRAM_GRAFIK tanımlı ama grafik katmanı çalışmıyor",
                   f"{type(hata).__name__}: {str(hata)[:120]} — `pip install -r requirements.txt` "
                   "sonra botu yeniden başlatın (kare alarmı engellemez, yalnız eksik gider).")
+    # --- DM kimliği görsel kapısı (2026-10-22) -----------------------------
+    # Kareler (alarm görseli, /grafik) YALNIZ pozitif tamsayı bir DM sohbetine
+    # gönderilir: `notifier.grafik_dosya_gonder` bu şartı uygular. `@kullanici`
+    # biçimli değer metin yolunu çalıştırır ama görselleri sessizce reddeder;
+    # canlıda "neden resim gelmiyor"un cevabı burada görünmeli.
+    dm_hedef = (degerler.get("TELEGRAM_CHAT_ID") or "").strip()
+    public_hedef = ((degerler.get("TELEGRAM_GROUP_ID") or "").strip()
+                    or (env_degeri("TELEGRAM_CHANNEL_ID", dosya_env) or "").strip())
+    if dm_hedef:
+        try:
+            dm_pozitif = int(dm_hedef) > 0
+        except (TypeError, ValueError):
+            dm_pozitif = False
+        if dm_pozitif:
+            satir(OK, "TELEGRAM_CHAT_ID pozitif tamsayı (DM + görsel kapısı açık)",
+                  "Kareler ve /grafik bu sohbete gider.")
+        else:
+            satir(WARN, "TELEGRAM_CHAT_ID pozitif tamsayı değil",
+                  "Metin gidebilir ama GÖRSELLER gönderilmez (kare kapısı pozitif "
+                  "tamsayı ister). @userinfobot'un verdiği sayıyı kullanın.")
+        if public_hedef and dm_hedef == public_hedef:
+            satir(FAIL, "TELEGRAM_CHAT_ID ile public hedef AYNI",
+                  "Aynı sohbet hem DM hem grup olamaz; görseller DM kapısından "
+                  "reddedilir ve alarm iki kez düşer. Grup için TELEGRAM_GROUP_ID'yi "
+                  "-100… kimliğiyle ayrı tanımlayın.")
     if not degerler.get("TELEGRAM_BOT_TOKEN") and not degerler.get("TELEGRAM_CHAT_ID"):
         seviye = FAIL if canli_mod else WARN
         satir(seviye, "Telegram kapalı olacak", "Token/chat_id yoksa bot çalışır ama hiç mesaj göndermez (log: 'notifier pasif').")

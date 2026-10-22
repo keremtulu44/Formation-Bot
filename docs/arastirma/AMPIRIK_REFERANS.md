@@ -84,6 +84,13 @@ Bu yüzden her alarm yalnız kendi ailesini basar:
 | `ZONE` | `zone` · `yukseklik` · `rvol` | `◇ 240484 temasta %65 tepki` |
 | `""` (boş) | kısıtsız — eski davranış (geri dönüş yolu) | — |
 
+### Nadir kademesi — `n < 300`
+
+Tabanı 300'ün altında olan kesitte **oran basılmaz**: `◇ nadir (162) · yorum yok`.
+Gerekçe: 162 gözlemde %71 ile %60 arasındaki fark GA95 içinde kalır (±7 puan);
+kart onu "sonuç" gibi okutuyordu. Kullanıcı kararı (2026-10-22): *"nadir senaryo
+yorum yapmak doğru olmaz yazılsın"*. Eşik tek yerde: `ampirik_referans.NADIR_ESIK`.
+
 ### Sade dil sözleşmesi (2026-10-22)
 
 Kullanıcı: *"herkesin anlayabileceği format… teknik bilen biri bile

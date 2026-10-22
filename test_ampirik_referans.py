@@ -390,3 +390,20 @@ def test_hareket_satiri_atr_yoksa_kat_olarak_kalir():
     k = _kurulum(aile="FRM", atr=None, break_price=39.60, ph=43.0, pl=36.0)
     hareket = [x for x in ar.olcum_satirlari(k, azami=9) if "tutunca" in x]
     assert not hareket, "ATR yoksa TL çevirisi uydurulmaz"
+
+
+# ------------------------------------------------ nadir kademesi (n < 300)
+
+def test_nadir_kova_oran_basmaz():
+    """n<300'de yüzde yazılmaz: 162 gözlemde %71 "sonuç" değil gürültüdür."""
+    # Yükseklik kovası ≥2 kat → n=162
+    k = _kurulum(aile="ZONE", atr=1.0, bolge_top=103.5, bolge_alt=101.0,
+                 rvol=1.0, zone_icinde=True)
+    satirlar = ar.olcum_satirlari(k, azami=9)
+    assert any("nadir (162) · yorum yok" in s for s in satirlar), satirlar
+    assert not any("%71" in s for s in satirlar), satirlar
+
+
+def test_nadir_esigi_tabloda_tek_yerde():
+    assert ar.NADIR_ESIK == 300
+    assert ar._nadir(162) == "◇ nadir (162) · yorum yok"

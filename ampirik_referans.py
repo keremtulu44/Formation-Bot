@@ -194,6 +194,19 @@ AILE_OLCU = {
 }
 
 # Önerilen satır sırası: küçük numara önce basılır.
+#: Nadir kesit eşiği (2026-10-22 kararı, kullanıcı: "nadir senaryo yorum yapmak
+#: doğru olmaz yazılsın"). Tabanı bu sayının altında olan ölçümde ORAN basılmaz;
+#: satır `◇ nadir (162) · yorum yok` olur. Sebep: 162 gözlemde %71 ile %60
+#: arasındaki fark gürültüdür (GA95 genişliği ~±7 puan) ve kart onu "sonuç"
+#: gibi okutuyordu.
+NADIR_ESIK = 300
+
+
+def _nadir(n: int) -> str:
+    """Nadir kesit satırı: sayı yazılır, yorum yazılmaz."""
+    return f"◇ nadir ({n}) · yorum yok"
+
+
 #: Satır önceliği — aile süzgecinden SONRA, aile içinde sıralama belirler.
 #: FRM'de sıra kullanıcı kararını izler: önce "tuttu mu", sonra "ne kadar
 #: gitti", sonra rol uyumu, en sonda geri çekilme oranı.
@@ -314,6 +327,8 @@ def _ms_satiri(k: Kurulum) -> tuple[str, int] | None:
     if kayit is None:
         return None
     n, calisti, devam = kayit
+    if int(n) < NADIR_ESIK:
+        return (_nadir(int(n)), ONCELIK["ms"])
     # Sade dil (2026-10-22): kısaltma yok. "BOS ↑dış devam %75 n1651" yerine
     # kesitin adı düz Türkçe: BOS → "kırılım", CHoCH → "dönüş". Sayı yine
     # kapsam×tip×yön kesitinden gelir (tablo satırı seçimi değişmedi).
@@ -344,6 +359,8 @@ def _uyum_satiri(k: Kurulum) -> tuple[str, int] | None:
         return None
     anahtar = "uyumlu" if uyumlu else "uyumsuz"
     n, oran = FRM_UYUM[anahtar]
+    if int(n) < NADIR_ESIK:
+        return (_nadir(int(n)), ONCELIK["uyum"])
     # "rol uyumlu %80 n15724" → "rol uyumlu %80 · 15724": `n` kısaltması
     # okunmuyordu; taban sayı olarak, oran yüzde olarak yazılır.
     return (f"◇ rol {anahtar} {_yuzde(oran)} · {n}", ONCELIK["uyum"])
@@ -366,6 +383,8 @@ def _yukseklik_satiri(k: Kurulum) -> tuple[str, int] | None:
     kat = yukseklik / atr
     # "ATR" bir formül adı; "normalin x katı" aynı şeyi herkesin anlayacağı
     # biçimde söyler (kullanıcı kararı 2026-10-22).
+    if n and int(n) < NADIR_ESIK:
+        return (_nadir(int(n)), ONCELIK["yukseklik"])
     if ust is None:
         etiket = "bölge normalin 2 katından geniş"
     elif ust <= 0.5:
@@ -417,6 +436,8 @@ def _retest_satiri(k: Kurulum) -> tuple[str, int] | None:
         # Retest gördüyse ölçüm retest DERİNLİĞİNE bağlıdır (FRM-13); derinlik
         # kartta ölçülmediği için sabit bir oran basmak yanıltıcı olurdu.
         return None
+    if int(FRM_RETEST["n"]) < NADIR_ESIK:
+        return (_nadir(int(FRM_RETEST["n"])), ONCELIK["retest"])
     return (f"◇ geri çekilme {_yuzde(FRM_RETEST['oran'])} · {FRM_RETEST['n']}",
             ONCELIK["retest"])
 
