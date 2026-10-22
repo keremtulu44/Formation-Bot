@@ -233,7 +233,8 @@ def kontrol_repo() -> None:
             satir(OK, f"yerel önbellek: {len(hisseler)} hisse (bot_data/)",
                   "Render'da disk kalıcı DEĞİL; ilk açılış bu dosyalarla hızlanır, sonrası Supabase'e yazılır.")
         else:
-            satir(WARN, "bot_data boş", "İlk açılışta 48 hisse Yahoo'dan çekilir (birkaç dakika sürer).")
+            satir(WARN, "bot_data boş", "İlk açılışta tüm evren (hisse + endeks + makro) Yahoo'dan çekilir; "
+                   "birkaç dakika sürer.")
     else:
         satir(WARN, "bot_data/ yok", "İlk açılışta tüm evren Yahoo'dan indirilir.")
 
@@ -287,6 +288,31 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
             satir(FAIL, "TELEGRAM_GRAFIK tanımlı ama grafik katmanı çalışmıyor",
                   f"{type(hata).__name__}: {str(hata)[:120]} — `pip install -r requirements.txt` "
                   "sonra botu yeniden başlatın (kare alarmı engellemez, yalnız eksik gider).")
+    # --- DM kimliği görsel kapısı (2026-10-22) -----------------------------
+    # Kareler (alarm görseli, /grafik) YALNIZ pozitif tamsayı bir DM sohbetine
+    # gönderilir: `notifier.grafik_dosya_gonder` bu şartı uygular. `@kullanici`
+    # biçimli değer metin yolunu çalıştırır ama görselleri sessizce reddeder;
+    # canlıda "neden resim gelmiyor"un cevabı burada görünmeli.
+    dm_hedef = (degerler.get("TELEGRAM_CHAT_ID") or "").strip()
+    public_hedef = ((degerler.get("TELEGRAM_GROUP_ID") or "").strip()
+                    or (env_degeri("TELEGRAM_CHANNEL_ID", dosya_env) or "").strip())
+    if dm_hedef:
+        try:
+            dm_pozitif = int(dm_hedef) > 0
+        except (TypeError, ValueError):
+            dm_pozitif = False
+        if dm_pozitif:
+            satir(OK, "TELEGRAM_CHAT_ID pozitif tamsayı (DM + görsel kapısı açık)",
+                  "Kareler ve /grafik bu sohbete gider.")
+        else:
+            satir(WARN, "TELEGRAM_CHAT_ID pozitif tamsayı değil",
+                  "Metin gidebilir ama GÖRSELLER gönderilmez (kare kapısı pozitif "
+                  "tamsayı ister). @userinfobot'un verdiği sayıyı kullanın.")
+        if public_hedef and dm_hedef == public_hedef:
+            satir(FAIL, "TELEGRAM_CHAT_ID ile public hedef AYNI",
+                  "Aynı sohbet hem DM hem grup olamaz; görseller DM kapısından "
+                  "reddedilir ve alarm iki kez düşer. Grup için TELEGRAM_GROUP_ID'yi "
+                  "-100… kimliğiyle ayrı tanımlayın.")
     if not degerler.get("TELEGRAM_BOT_TOKEN") and not degerler.get("TELEGRAM_CHAT_ID"):
         seviye = FAIL if canli_mod else WARN
         satir(seviye, "Telegram kapalı olacak", "Token/chat_id yoksa bot çalışır ama hiç mesaj göndermez (log: 'notifier pasif').")
@@ -737,7 +763,7 @@ def kontrol_public_hedef(token: str, grup_id: str, chat_id: str = "") -> bool:
         return False
     if not grup_id:
         satir(WARN, "Public kanal hedefi yok (TELEGRAM_GROUP_ID)",
-              "Kanal yayını kapalı: yalnız DM çalışır. Kanal açtıysanız KANAL_ACILIS_PAKETI.md "
+              "Kanal yayını kapalı: yalnız DM çalışır. Kanal açtıysanız docs/operasyon/KANAL_ACILIS_PAKETI.md "
               "adımlarını izleyin: TELEGRAM_GROUP_ID=@kanal_adi + bot YÖNETİCİ.")
         return False
     try:
@@ -993,10 +1019,10 @@ def main() -> int:
         print("Her şey yerinde: Render tarafı hazır.")
     elif _sayac[FAIL] == 0:
         print("Kritik hata yok. Uyarıların çoğu 'opsiyonel' (örn. TELEGRAM_TEST_KEY) olabilir:")
-        print("UYARI satırlarını yukarıdan aşağı okuyun, RENDER_DEPLOY.md §1-5 karşılığını anlatır.")
+        print("UYARI satırlarını yukarıdan aşağı okuyun, docs/kurulum/RENDER_DEPLOY.md §1-5 karşılığını anlatır.")
     else:
         print("HATA satırlarını sırayla düzeltin; her biri için öneri satır altında yazıyor.")
-    print("Ayrıntılı rehber: RENDER_DEPLOY.md")
+    print("Ayrıntılı rehber: docs/kurulum/RENDER_DEPLOY.md")
     return 1 if _sayac[FAIL] else 0
 
 

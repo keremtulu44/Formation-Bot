@@ -21,11 +21,11 @@ name: Render keep-alive
 # 5-20 dk gecikebilir. 5 dakikalık aralık, 15 dakikalık uyku eşiğine karşı
 # pay bırakır. Bu repo PUBLIC olduğu için GitHub Actions dakikaları ücretsizdir
 # (private repoda 2000 dk/ay sınırı vardır ve bu iş akışı kotayı yakabilir;
-#  ayrıntı: RENDER_DEPLOY.md §5).
+#  ayrıntı: docs/kurulum/RENDER_DEPLOY.md §5).
 #
 # BİLİNEN TUZAK: Public repoda GitHub, 60 gün repo aktivitesi olmazsa zamanlanmış
 # iş akışlarını SESSİZCE devre dışı bırakır. Actions sekmesinde uyarı görürsen
-# "Enable workflow" de; kalıcı çözüm için RENDER_DEPLOY.md §5'e bak.
+# "Enable workflow" de; kalıcı çözüm için docs/kurulum/RENDER_DEPLOY.md §5'e bak.
 #
 # NOT: GitHub `schedule` tetikleyicisini YALNIZCA repo'nun varsayılan branch'inde
 # (main) çalıştırır. Bu dosya main'e merge edilmeden Actions sekmesinde görünmez.
@@ -163,5 +163,5 @@ jobs:
           if [ "$ok" = "1" ]; then
             exit 0
           fi
-          echo "::error title=/health yanıt vermedi::3 denemede de yanıt alınamadı (son HTTP $code). Render → Logs ve RENDER_DEPLOY.md §1'e bakın."
+          echo "::error title=/health yanıt vermedi::3 denemede de yanıt alınamadı (son HTTP $code). Render → Logs ve docs/kurulum/RENDER_DEPLOY.md §1'e bakın."
           exit 1

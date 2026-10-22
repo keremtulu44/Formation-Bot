@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Grafik katmanı — G1 iskeleti (sözleşme: GRAFIK_TASARIM.md §2/§3/§5/§17).
+"""Grafik katmanı — G1 iskeleti (sözleşme: docs/tasarim/GRAFIK_TASARIM.md §2/§3/§5/§17).
 
 Neden bu modül: kart "kapanış 302,48 > 295,00" diyor; kritik mesafe ve retest
 toleransı telefonda mum başına ~1 piksele iniyor. Kullanıcının sorduğu üç soru

@@ -40,9 +40,9 @@ import traceback
 from pathlib import Path
 from typing import Any, Iterable
 
-KATEGORILER = ("zone", "dokunus", "swing", "event", "meta")
+KATEGORILER = ("zone", "dokunus", "swing", "event", "frm", "frm_olay", "meta")
 VARSAYILAN_CIKTI = "arastirma_cikti"
-VARSAYILAN_RAPOR = "docs/ARASTIRMA_BULGULARI.md"
+VARSAYILAN_RAPOR = "docs/arastirma/ARASTIRMA_BULGULARI.md"
 
 
 def _repo_koku() -> Path:
@@ -128,6 +128,31 @@ RAPOR_KOLONLARI: dict[str, tuple[str, ...] | None] = {
         "sansur", "vp_rvol", "vp_volume_usable", "vp_effort_result_class",
         "config_hash",
     ),
+    "frm": (
+        "symbol", "timeframe", "stable_id", "pattern_type", "family", "classic_dir",
+        "dogum_bar_time", "omur_bar", "terminal_state", "acik", "terminal_mi",
+        "kirilim_var", "frm_yakinlik_ust_fitil_atr", "frm_yakinlik_alt_fitil_atr",
+        "frm_yakinlik_ust_kapanis_atr", "frm_yakinlik_alt_kapanis_atr",
+        "frm_asim_ust_fitil_atr", "frm_asim_alt_fitil_atr",
+        "frm_temas_ust_epizot", "frm_temas_alt_epizot",
+        "frm_faz_geometri_bar", "frm_faz_kirilim_bar", "frm_faz_retest_bar",
+        "frm_faz_gecis_sayisi", "frm_kirilim_deneme", "frm_teyit_deneme_no",
+        "frm_kirilim_deneme_var", "upper_touches_son", "lower_touches_son",
+        "frm_pivot_temas_max", "frm_pivot_ezilme_var",
+        "break_snapshot_bar", "break_snapshot_price", "break_snapshot_direction",
+        "break_strength", "break_volume_score", "break_confirmation_strength",
+        "break_gecikme_bar", "retest_var", "retest_gecikme_bar", "retest_derinlik_atr",
+        "frm_teyit_sonrasi_mfe_atr", "frm_teyit_sonrasi_mfe_uzun_atr",
+        "frm_teyit_sonrasi_mae_atr", "frm_dogum_ph_atr", "frm_dogum_pl_atr",
+        "frm_dogum_rol_ucu", "frm_kirilim_ms_uyum", "frm_kirilim_zone_var",
+        "frm_kirilim_ob_var", "frm_kirilim_fvg_var", "frm_gecersiz_state",
+        "frm_vp_rvol_dogum", "frm_vp_rvol_olgunlasma", "frm_vp_rvol_teyit",
+        "frm_vp_rvol_retest", "config_hash",
+    ),
+    "frm_olay": (
+        "symbol", "timeframe", "stable_id", "olay_type", "olay_name",
+        "direction", "quality", "fiyat", "bar", "bar_time", "state", "teyit_oncesi",
+    ),
     "meta": None,  # küçük; tüm kolonlar
 }
 
@@ -142,7 +167,11 @@ def _df_optimize(df: "pd.DataFrame") -> "pd.DataFrame":
     import pandas as pd
 
     for kolon in df.columns:
-        if df[kolon].dtype != object:
+        # Metin kolonu iki tipte gelebilir: pandas < 3'te `object`, pandas 3'te
+        # `str`/`StringDtype`. Yalnız `object`e bakmak pandas 3'te hiçbir kolonu
+        # indirgemiyordu (200 bin satırlık raporda bellek şişmesi).
+        if not (pd.api.types.is_object_dtype(df[kolon])
+                or pd.api.types.is_string_dtype(df[kolon])):
             continue
         sayisal = pd.to_numeric(df[kolon], errors="coerce")
         bosluk = df[kolon].isna().sum()
@@ -354,7 +383,8 @@ def _kosu_govdesi(args: argparse.Namespace, cikti: Path) -> int:
             print(f"[{i}/{len(plan)}] {sembol:8} {tf:3} {sure:6.1f}s "
                   f"bar={m.get('bar_sayisi')} zone={m.get('zone_sayisi')} "
                   f"epizot={m.get('epizot_sayisi')} swing={m.get('swing_sayisi')} "
-                  f"event={m.get('event_sayisi')} rol={m.get('rol_araligi_sayisi')}", flush=True)
+                  f"event={m.get('event_sayisi')} rol={m.get('rol_araligi_sayisi')} "
+                  f"frm={m.get('formasyon_sayisi')}", flush=True)
         except Exception as exc:  # noqa: BLE001 - sembol bazında izolasyon
             hata_sayisi += 1
             _ekle(cikti / "hatalar.jsonl", [{
@@ -452,6 +482,17 @@ def agregasyon(args: argparse.Namespace) -> int:
     rapor_yolu.write_text(metin, encoding="utf-8")
     print(f"[agrega] rapor yazıldı: {rapor_yolu} ({len(metin)} karakter, {sembol_sayisi} sembol)", flush=True)
 
+    # Formasyon cevap kartları ayrı belgeye yazılır: ana rapor tablo eki,
+    # formasyon raporu ise soru-cevap formatında okunabilir çıktıdır.
+    frm_yolu = Path(getattr(args, "frm_rapor", "") or (rapor_yolu.parent / "FORMASYON_SONUCLARI.md"))
+    if (cikti / "frm.jsonl").exists():
+        try:
+            from research import formasyon_rapor
+            frm_metin = formasyon_rapor.rapor_uret(cikti, frm_yolu)
+            print(f"[agrega] formasyon raporu: {frm_yolu} ({len(frm_metin)} karakter)", flush=True)
+        except Exception as exc:  # noqa: BLE001 - ana raporu düşürmesin
+            print(f"[agrega] formasyon raporu ÜRETİLEMEDİ: {type(exc).__name__}: {exc}", flush=True)
+
     # Ham JSONL zaten kalıcı depodur. Ek CSV.gz yazımı varsayılan olarak
     # KAPALIDIR: 994 bin satırı tek DataFrame olarak CSV'ye basmak belleği
     # zorlar ve JSONL'in birebir kopyasını üretir. Yalnız gerçekten
@@ -477,6 +518,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--agrega", action="store_true", help="ölçüm yapma, mevcut çıktıdan rapor üret")
     parser.add_argument("--zorla", action="store_true", help="mevcut çıktıyı silip baştan koş")
     parser.add_argument("--rapor-atla", action="store_true", help="koşu sonunda rapor üretme")
+    parser.add_argument("--frm-rapor", type=str, default="",
+                        help="formasyon cevap kartlarının yolu (varsayılan: ana raporun yanında "
+                             "FORMASYON_SONUCLARI.md)")
     parser.add_argument(
         "--csv-yaz",
         action="store_true",

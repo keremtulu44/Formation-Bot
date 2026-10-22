@@ -27,7 +27,7 @@ def test_gun_satiri_tarama_turunu_yazar(notifier):
     import config
     metin = notifier.format_daily_summary([_formasyon()], {"tarama_sayisi": 9, "alerts_sent": 28})
     assert "📈 Gün: 9 tarama" in metin
-    assert f"{len(config.ACTIVE_STOCKS)} hisse × 4 zaman dilimi" in metin
+    assert f"{config.evren_ozeti(ayrinti=False)} × 4 zaman dilimi" in metin
     assert "28 bildirim" in metin
     assert "432" not in metin
 

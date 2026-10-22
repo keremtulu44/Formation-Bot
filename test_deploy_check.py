@@ -328,3 +328,37 @@ def test_bekleyen_guncelleme_uyarir(monkeypatch):
     }}))
     D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=True)
     assert any(s == D.WARN and "7" in b for s, b in kayit)
+
+
+# --- DM kimliği görsel kapısı (2026-10-22) ----------------------------------
+
+def test_dm_chat_id_pozitif_tamsayi_gorulur(monkeypatch, capsys):
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.delenv("TELEGRAM_GROUP_ID", raising=False)
+    monkeypatch.setattr(dc, "_sayac", {dc.OK: 0, dc.WARN: 0, dc.FAIL: 0})
+    dc.kontrol_env({"TELEGRAM_BOT_TOKEN": "123:abc", "TELEGRAM_CHAT_ID": "12345"},
+                   canli_mod=False)
+    cikti = capsys.readouterr().out
+    assert "pozitif tamsayı" in cikti
+
+
+def test_dm_chat_id_kullanici_adi_uyarir(monkeypatch, capsys):
+    """@kullanici biçimli DM: metin gider, GÖRSELLER gitmez (kapı pozitif sayı ister)."""
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.delenv("TELEGRAM_GROUP_ID", raising=False)
+    monkeypatch.setattr(dc, "_sayac", {dc.OK: 0, dc.WARN: 0, dc.FAIL: 0})
+    dc.kontrol_env({"TELEGRAM_BOT_TOKEN": "123:abc", "TELEGRAM_CHAT_ID": "@kullanici"},
+                   canli_mod=False)
+    cikti = capsys.readouterr().out
+    assert "GÖRSELLER gönderilmez" in cikti
+
+
+def test_dm_ve_public_ayni_hedef_hata(monkeypatch, capsys):
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.delenv("TELEGRAM_GROUP_ID", raising=False)
+    monkeypatch.setattr(dc, "_sayac", {dc.OK: 0, dc.WARN: 0, dc.FAIL: 0})
+    dc.kontrol_env({"TELEGRAM_BOT_TOKEN": "123:abc", "TELEGRAM_CHAT_ID": "-100123",
+                    "TELEGRAM_GROUP_ID": "-100123"}, canli_mod=False)
+    cikti = capsys.readouterr().out
+    assert "AYNI" in cikti
+    assert dc._sayac[dc.FAIL] >= 1

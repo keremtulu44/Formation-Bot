@@ -419,7 +419,7 @@ def test_tara_hisse_argumanini_gercekten_kullanir(monkeypatch):
     monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", ["THYAO", "GARAN"])
     monkeypatch.setattr(main_mod, "_live_state", LiveState())
     cevap = main_mod._komut_tara("THYAO")
-    assert "1 hisse × 4 zaman dilimi" in cevap
+    assert "1 sembol (1 hisse) × 4 zaman dilimi" in cevap
     assert main_mod._scan_job_request["hisseler"] == ["THYAO"]
 
 
@@ -735,7 +735,7 @@ def test_durum_basarisiz_deneme_icin_onceki_taze_fetch_sayisini_kullanmaz(monkey
     })
 
     cevap = main_mod._komut_durum("")
-    assert "kapsam: 0/1 hisse, süre: 2,0 dk" in cevap
+    assert "kapsam: 0/1 sembol, süre: 2,0 dk" in cevap
     assert "başarılı fetch 48/" not in cevap
     assert "fetch hatası 0" not in cevap
 

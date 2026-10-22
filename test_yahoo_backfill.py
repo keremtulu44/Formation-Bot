@@ -311,12 +311,13 @@ def test_havuz_canli_evrenin_bilinen_calisan_hisselerini_icerir():
     XU100/XU30/BRENT endeks+emtia; KOZAL/KOZAA Yahoo'da 404 olduğu için ana
     evrende de YOK (config.py:76-78 notu) — havuzda da beklenmez.
     """
-    from config import BIST_50
+    from config import BIST_50, ENDEKS_SEMBOLLERI, MAKRO_SEMBOLLERI
 
-    beklenen = {s for s in BIST_50 if s not in ("XU100", "XU30", "BRENT")}
+    ozel = ENDEKS_SEMBOLLERI | MAKRO_SEMBOLLERI
+    beklenen = {s for s in BIST_50 if s not in ozel}
     eksik = sorted(beklenen - set(yb.BIST_ADAY_HAVUZU))
     assert not eksik, f"canlı evrenin bilinen-çalışan hisseleri havuzda yok: {eksik}"
-    # endeks/emtia da eşlenmesi gereken özel semboller olarak havuzda olmalı
+    # Endeks/emtia/makro da eşlenmesi gereken özel semboller olarak havuzda olmalı
     assert {"XU100", "XU30", "BRENT"} <= set(yb.BIST_ADAY_HAVUZU)
 
 

@@ -67,9 +67,10 @@ raporlar/
 *.png
 *.jpg
 *.jpeg
-# İstisna: docs/ornek_galeri örnek kareleri bilerek izlenir (mevcut docs/ornek_*.png
-# gibi). scripts/ornek_gorsel_uret.py ile her zaman yeniden üretilebilirler.
-!docs/ornek_galeri/*.png
+# İstisna: docs/gorseller/ altındaki belge kanıtı ve demo kareleri bilerek izlenir
+# (2026-10 taşımasından önce docs/ornek_galeri/ ve docs/*.png idi).
+# scripts/ornek_gorsel_uret.py ile her zaman yeniden üretilebilirler.
+!docs/gorseller/**/*.png
 
 # Durable notification delivery state (includes rendered PNG bytes).
 **/notification_delivery.json
@@ -77,3 +78,11 @@ raporlar/
 
 .pytest-full.log
 arastirma_cikti/
+
+# Yerel araç artıkları (commit edilmez)
+.coverage
+.ruff_cache/
+.pytest_cache/
+
+# Koşu kilidi (runtime artefakt)
+*.kilit

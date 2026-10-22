@@ -538,7 +538,7 @@ def rapor_uret(
     # konan bu işaret, karar için okuyanı ekteki tablolara indirmeden yönlendirir.
     bolumler.append(
         "> Bu dosya tablo ekidir: ham aggregatlar soru başına bölümlenir.\n"
-        "> Okunabilir özet ve yorum: `docs/ARASTIRMA_SONUCLARI.md`.\n"
+        "> Okunabilir özet ve yorum: `docs/arastirma/ARASTIRMA_SONUCLARI.md`.\n"
         "> Yalnız karar için okuyan, aşağıdaki tablolara inmeden özetle yetinebilir.\n")
     bolumler.append(
         f"Kaynak: `backfill_data/` (365 gün derin çekim) · Sembol: {sembol_sayisi} · "

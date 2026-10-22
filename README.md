@@ -18,6 +18,28 @@ python3 test_pennant.py                      # flama regresyon (6 test)
 
 Profil seçimi: `.env` içinde `BOT_PROFILE=Dengeli` (Hassas / Dengeli / Seçici).
 
+## Belgeler ve depo düzeni
+
+**Tek giriş noktası: [docs/README.md](docs/README.md)** — hangi belgenin güncel olduğu
+dosya adından değil, oradaki **durum + tarih** tablosundan okunur.
+
+```
+docs/
+├── README.md      ← belge haritası (buradan başla)
+├── YAPI.md        ← dosya yerleşimi kuralları + taşıma kaydı
+├── arastirma/     ← ÖLÇÜM: arşivde zone/OB/FVG/MS davranışı (değerli çıktı + açık MS bulgusu)
+├── tasarim/       ← yürürlükteki sözleşmeler (grafik, kart, formasyon, teslim politikası)
+├── kurulum/       ← yerel kurulum, Render dağıtımı, Termux arşiv çekimi
+├── operasyon/     ← canlıya alma runbook'u, kanal/grup işletimi
+├── denetim/       ← tarihli inceleme ve denetimler (karar gerekçeleri)
+├── rehber/        ← projeyi başka birine/AI'ya devretme bağlamı
+├── gorseller/     ← belge kanıtı PNG'ler + sentetik demo galerisi
+└── arsiv/         ← yürürlükten kalkmış plan/notlar (silinmez, arşivlenir)
+```
+
+Kod, testler ve `scripts/` **yerinde** durur; yerleşim kuralı ve gerekçesi
+[docs/YAPI.md](docs/YAPI.md)'de. Ölçüm sonuçlarının özeti: [docs/arastirma/README.md](docs/arastirma/README.md).
+
 ## Tarama temposu
 
 Canlı bot `BIST_50` listesindeki **48 sembolü** tarar; Yahoo'da sorunlu KOZAL ve KOZAA
@@ -90,7 +112,7 @@ tam çalışır.
 ## Render ve Supabase dağıtımı
 
 > Adım adım kurulum (Python sürümü sabitleme, Supabase `sb_secret_` anahtarı,
-> telefondan Telegram token alma, keep-alive) için: **[RENDER_DEPLOY.md](RENDER_DEPLOY.md)**
+> telefondan Telegram token alma, keep-alive) için: **[docs/kurulum/RENDER_DEPLOY.md](docs/kurulum/RENDER_DEPLOY.md)**
 
 Build Command `pip install -r requirements.txt`, Start Command `python main.py`.
 Python sürümü repodaki `.python-version` ile **3.12**'ye sabitlidir; Render'ın
@@ -123,7 +145,7 @@ tanımlı değilse bu yol 404 döner ve Telegram'a hiçbir istek gitmez.
 doğrulama `X-Telegram-Bot-Api-Secret-Token` başlığıyla)
 ucunu açar ve Telegram komutları webhook ile gelir (adres `RENDER_EXTERNAL_URL`
 üzerinden otomatik üretilir); tanımlı değilse uç 404 döner ve bot `getUpdates`
-yoklamasını kullanır. Detay: `RENDER_DEPLOY.md` §4.6.
+yoklamasını kullanır. Detay: `docs/kurulum/RENDER_DEPLOY.md` §4.6.
 
 Bot artık **iki yönlüdür**: Telegram'dan gelen komutları yanıtlar. Komutlar
 yalnızca `TELEGRAM_CHAT_ID`'den (DM) kabul edilir; public grup/kanal hedefi
@@ -151,7 +173,7 @@ yoklama kapanır, çakışma olmaz. Başlangıç/mod geçişi API çağrısı ba
 onaylandığında Telegram'da bekleyen tüm güncellemeler kasıtlı olarak atılır;
 yalnızca sonrasında gelenler işlenir. Polling'e geçişte Telegram silme onayı
 alınamazsa listener fail-closed kalır ve komutlar başlatılmaz. Detay:
-`RENDER_DEPLOY.md` §§4.5–4.6.
+`docs/kurulum/RENDER_DEPLOY.md` §§4.5–4.6.
 
 Bot uykudayken yazılan komutlar sessizce kaybolmaz: 15 dakikadan eski komutlar
 çalıştırılmaz ama atlandıkları tek bir mesajla bildirilir; gecikmeli teslim
@@ -178,7 +200,7 @@ Keep-alive iş akışı (`.github/workflows/keepalive.yml`) **5 dakikada bir** o
 istek atar. Pencere, BIST seansını ve akşam komut kullanımını kapsar; gece servis
 uyur (Render Free'nin 750 instance saat/ay kotası korunur: 15 sa/gün ≈ 450–465
 sa/ay, 7/24 ≈ 730 sa/ay). 7/24 ayakta tutmak için Actions → Variables →
-`KEEPALIVE_ALWAYS=true` (bkz. `RENDER_DEPLOY.md` §5).
+`KEEPALIVE_ALWAYS=true` (bkz. `docs/kurulum/RENDER_DEPLOY.md` §5).
 
 > ⚠️ **Ölçüldü (Ekim 2026):** GitHub bu repoda cron koşularını seyrek tetikledi —
 > `*/5` tanımına rağmen günde 4–6 koşu (beklenen 288), çoğu pencere dışı olduğu
@@ -252,20 +274,14 @@ geçirme gerektirir.
 | `.github/workflows/deploy.yml` | Render Deploy Hook ile `main` push'unda otomatik deploy (hook secret yoksa uyarı verip atlar) |
 | `.github/workflows/ci.yml` | Render eşdeğeri CI: Python 3.12 kurulumu, pytest, zamanlama regresyonu ve `PORT` verilip `/health` duman testi |
 | `.github/workflows/keepalive.yml` | Render Free uyumasın diye `/health` pingi (5 dk, her gün 08:00–23:00 İstanbul; `KEEPALIVE_*` değişkenleriyle ayarlanır) |
-| `RENDER_DEPLOY.md` | Render Free + Supabase + Telegram kurulum rehberi; build hatası ve keep-alive dahil |
+| `docs/kurulum/RENDER_DEPLOY.md` | Render Free + Supabase + Telegram kurulum rehberi; build hatası ve keep-alive dahil |
 | `.python-version` | Render build'ı için Python 3.12 sabitlemesi (3.14'te pandas derlenemiyor) |
 | `requirements-optional.txt` | Deploy zincirinde olmayan isteğe bağlı paketler (borsapy) |
 | `patterns/` | Motor: `candidate.py` (geometri + bayrak/flama), `pivots.py`, `pole.py` (direk), `lifecycle.py` (state makinesi), `violation.py`, `selection.py`, `mathutil.py` |
 | `notifier.py` | Telegram: 4 saat cooldown + global günlük/saatlik kapanı |
 | `bot_data/` | Hisse cache'leri — **bilerek git-tracked** (kullanıcı isteği) |
-| `PINE_FARK_ANALIZI.md` | **Çalışma defteri:** Pine ile fark analizi, doğrulama listesi, fikir defteri |
-| `FORMASYON_MANTIGI.md` | Pine v0.4.6 Türkçe dökümanı (formasyon koşulları, kalite formülleri) |
-| `docs/archive/TESHIS_RAPORU.md` | Dış teşhis raporunun bağımsız doğrulaması (TRUE/FALSE/PARTIAL) — arşiv |
-| `SORUN_RAPORU.md` | Ölçümlü teşhis: üretim→Telegram hunisi, bastırılan adaylar, S1-S11 + ek bulgular |
-| `YAPILACAKLAR.md` | A (düzeltme) / B (iyileştirme) / C (şablon) tam iş listesi, öncelik ve efor |
-| `KODLAMA_PLANI.md` | Batch'li uygulama planı; her batch için kapsam/dosya/test/kabul kriteri |
-| `scripts/ornek_gorsel_uret.py` | **Örnek görsel üretim sistemi:** sentetik veriyle, botun kendi çizim zinciriyle DEMO alarm kartı karesi üretir (6 senaryo; `bot_data`'ya yazmaz). Çıktılar ve katalog: `docs/ornek_galeri/` |
-| `GENEL_INCELEME_VE_YOL_HARITASI_2026-10-16.md` | Genel inceleme + yol haritası: güçlü/zayıf yönler, neler eklenebilir, önceliklendirilmiş iş listesi (Y1–Y16) |
+| `scripts/ornek_gorsel_uret.py` | **Örnek görsel üretim sistemi:** sentetik veriyle, botun kendi çizim zinciriyle DEMO alarm kartı karesi üretir (6 senaryo; `bot_data`'ya yazmaz). Çıktılar ve katalog: `docs/gorseller/ornek_galeri/` |
+| `docs/` | Tüm anlatı belgeleri — harita ve durum tablosu: `docs/README.md`; yerleşim kuralları: `docs/YAPI.md` |
 
 ## Canlı tarama raporu nasıl okunur (Pine karşılaştırması)
 
@@ -300,12 +316,12 @@ Regresyon: `pytest` **305 passed**, `test_tarama_zamani.py` **100/100**, `test_p
 Ölçüm (B5, 48 hisse × 360 bar 1H + 250 bar 1D, tek tarama turu):
 `96 istek / 3,26 MB` → seans içi `48 istek / 1,98 MB`, veri değişmeyen turda `0 istek / 0 MB`;
 heartbeat `48 istek / 42 KB` → `2 istek / 1,8 KB`. Telemetri: heartbeat `uzak_yazma` alanı.
-Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölçümlü teşhis: `SORUN_RAPORU.md`.
+Açık iş listesi ve batch planı: `docs/arsiv/YAPILACAKLAR.md`, `docs/arsiv/KODLAMA_PLANI.md`; ölçümlü teşhis: `docs/denetim/SORUN_RAPORU.md`.
 
 ## Bilinmesi gerekenler (yeni oturum için)
 
 1. **Pine dosyası bekleniyor** (`Yeni Metin Belgesi.txt`, ARGENT v0.4.6 export). Diske
-   ulaşmadı; geldiğinde `PINE_FARK_ANALIZI.md` §5'teki 12 maddelik doğrulama listesi açılacak.
+   ulaşmadı; geldiğinde `docs/tasarim/PINE_FARK_ANALIZI.md` §5'teki 12 maddelik doğrulama listesi açılacak.
 2. **Bildirim durumu artık kalıcı (Faz 5):** 18:45 digest tamponu `state:digest_pending`,
    engellenen acil olaylar `state:telegram_acil_kuyruk` anahtarıyla Supabase'e +
    `DATA_DIR` içindeki dosyalara yazılır (batch-7/C4: repo dışı; `state/persistence.py`);
@@ -334,17 +350,19 @@ Açık iş listesi ve batch planı: `YAPILACAKLAR.md`, `KODLAMA_PLANI.md`; ölç
    import anında yakalanır, testler bunu doğrular. Politikayı değiştirmek için sadece
    bu üç yeri düzenle; kodda başka yerde kopya liste yok.
 
-   **Public grup (Faz 1, 02.10.2026):** `TELEGRAM_GROUP_ID` tanımlıysa bot, DM'den
-   **bağımsız** olarak gruba yayın yapar (DM kapalıyken de çalışır). Olaylar tarama turu
-   boyunca kuyrukta toplanır ve tur sonunda **tek bültende** gider; bütçe DM'den ayrıdır
-   (`PUBLIC_MAX_MESAJ_SAAT=6`, `PUBLIC_MAX_MESAJ_GUN=25`, `PUBLIC_MIN_ARALIK_SN=1.2`) ve
-   429 `retry_after` desteklenir. Grup metni sadedir: iç izleme notu, `/panel`, `/durum`,
+   **Public grup (Faz 1, 02.10.2026; metin 22.10.2026'da eşitlendi):** `TELEGRAM_GROUP_ID`
+   tanımlıysa bot, DM'den **bağımsız** olarak gruba yayın yapar (DM kapalıyken de çalışır).
+   Her olay kendi mesajında gider ve metin **DM kartının birebir aynısıdır** (başlık/bülten
+   yok; ölçü 3 `◇`, yasal uyarı her mesajda). Bütçe DM'den ayrıdır ve 1 mesaj = 1 olay
+   olduğu için DM tavanıyla eşittir (`PUBLIC_MAX_MESAJ_SAAT=20`,
+   `PUBLIC_MAX_MESAJ_GUN=120`, `PUBLIC_MIN_ARALIK_SN=2.0`) ve 429 `retry_after` desteklenir.
+   Grup metni sadedir: iç izleme notu, `/panel`, `/durum`,
    dosya yolu, ❌ tek tek olaylar gruba **gitmez**; başarısız kırılımlar 18:45 özetinde
    sayı olarak ve Cuma karnesinin kısa sürümünde görünür. Gruba yönetici bot, komut
    olmayan grup mesajlarına **cevap vermez** (yalnız DM'de yardım metni döner).
 
    **Kanal/grup açılışı:** hedef bir **kanal** da olabilir (önerilen); açıklama ve
-   sabitlenmiş karşılama metinleri `KANAL_ACILIS_PAKETI.md`'de, uygulama aracı
+   sabitlenmiş karşılama metinleri `docs/operasyon/KANAL_ACILIS_PAKETI.md`'de, uygulama aracı
    `python kanal_acilis.py --durum|--uygula` (varsayılan kuru çalışma, yazmaz). Evren 48'in üzerine çıkarsa
    `EVREN_BUYUME_UYARI_ESIGI` ile açılışta tek satır uyarı loglanır (pacing/digest/panel
    limitleri yeniden ölçülmeli).

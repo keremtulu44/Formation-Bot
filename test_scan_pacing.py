@@ -42,15 +42,22 @@ def make_pacer(clock, batch_size=10):
 def test_active_universe_excludes_yahoo_unsupported_symbols():
     from config import yahoo_ticker_for_symbol
 
-    assert len(BIST_50) == 51
-    assert len(set(BIST_50)) == 51
+    # Sayı SABİT DEĞİL: evren 2026-10-22'de endeks+makro ile genişledi.
+    # Korunan sözleşme: tekrarsız liste, KOZAL/KOZAA yok, özel semboller var.
+    assert len(set(BIST_50)) == len(BIST_50)
     assert "KOZAL" not in BIST_50
     assert "KOZAA" not in BIST_50
-    assert {"XU100", "XU30", "BRENT"}.issubset(BIST_50)
+    assert {"XU100", "XU30", "BRENT", "XU50", "XBANK", "XUSIN",
+            "USDTRY", "ALTIN", "GUMUS"}.issubset(BIST_50)
     assert yahoo_ticker_for_symbol("THYAO") == "THYAO.IS"
     assert yahoo_ticker_for_symbol("XU100") == "XU100.IS"
     assert yahoo_ticker_for_symbol("XU30") == "XU030.IS"
     assert yahoo_ticker_for_symbol("BRENT") == "BZ=F"
+    assert yahoo_ticker_for_symbol("XU50") == "XU050.IS"
+    assert yahoo_ticker_for_symbol("XBANK") == "XBANK.IS"
+    assert yahoo_ticker_for_symbol("ALTIN") == "GC=F"
+    assert yahoo_ticker_for_symbol("GUMUS") == "SI=F"
+    assert yahoo_ticker_for_symbol("USDTRY") == "USDTRY=X"
     assert ACTIVE_STOCKS == BIST_50
 
 

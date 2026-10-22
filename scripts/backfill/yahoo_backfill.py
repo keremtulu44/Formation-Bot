@@ -747,7 +747,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             log(f"     {k}: {kal.get('split_sicramasi_adayi')} bar")
 
     log(f"\nManifest    : {hedef/'manifest.json'}")
-    log("Sonraki adım: docs/TERMUX_BACKFILL.md — commit & push")
+    log("Sonraki adım: docs/kurulum/TERMUX_BACKFILL.md — commit & push")
     return 1 if tempo.dur else 0
 
 
