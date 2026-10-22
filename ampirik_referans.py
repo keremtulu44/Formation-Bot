@@ -519,61 +519,64 @@ def olcum_satirlari(k: Kurulum, *, azami: int = 2) -> list[str]:
 
 
 def komut_metni() -> str:
-    """`/olcum` yanıtı: katmanın hangi sayıyı hangi koşulda bastığını özetler.
+    """`/olcum` yanıtı: kartın bastığı sayıların kaynağı ve koşulu.
 
-    Sayılar tablolardan türetilir (elle yeniden yazılmaz); böylece tablo
-    güncellenince komut metni de aynı kalır. Satırlar telefon satır bütçesine
-    (283 px) sığacak biçimde kısa tutulur — `_satir_butcesi` testi doğrular.
+    Kart 2026-10-22'de sade dile geçti; komut metni de aynı dili konuşur —
+    aksi hâlde `/olcum` karta uymayan bir sözlük gösteriyordu (`ATR`, `RVOL`,
+    `retest`, `tamamlandı`). Sayılar tablolardan türetilir, elle yazılmaz.
+    Satırlar telefon bütçesine (283 px) sığar; test doğrular.
     """
     tepki_alt, tepki_ust = ZONE_TEPKI["dokunus_tepki_pct"]
     gecilme_alt, gecilme_ust = ZONE_TEPKI["gecilme_pct"]
     dolum_alt, dolum_ust = ZONE_TEPKI["fvg_tam_dolum_pct"]
     uyum_n, uyum_oran = FRM_UYUM["uyumlu"]
     uyumsuz_n, uyumsuz_oran = FRM_UYUM["uyumsuz"]
-    zone_var_n, zone_var_oran = FRM_ZONE["zone_var"]
-    zone_yok_n, zone_yok_oran = FRM_ZONE["zone_yok"]
     yuksek_n, yuksek_oran, _ = YUKSEKLIK_KOVALARI[-1][1:]
     rvol_q4 = RVOL_KOVALARI["4h"][3]
     rvol_q1 = RVOL_KOVALARI["4h"][0]
     bos_up = MS_YON[("4h", "DIS", "BOS", "UP")]
     bos_down = MS_YON[("4h", "DIS", "BOS", "DOWN")]
+    mfe = FRM_TEYIT_MFE
 
     satirlar = [
         f"◇ Arşiv ölçümü · {OLCUM_SURUMU}",
         OLCUM_TABANI,
         "Karttaki ◇ satırlarının kaynağı",
         "",
-        "Zone (OB/FVG), dokunuşta:",
-        f"· ≥1 ATR tepki %{_say(tepki_alt)}–%{_say(tepki_ust)}",
-        f"· %{_say(gecilme_alt)}–%{_say(gecilme_ust)} kadarı geçilir",
-        f"· FVG tam dolum %{_say(dolum_alt)}–%{_say(dolum_ust)}",
-        "",
-        "Formasyon, teyitten sonra 12 bar:",
-        f"· tamamlandı %{_say(FRM_TERMINAL['tamamlandi'])}"
-        f" (n {FRM_TERMINAL['n']})",
-        f"· başarısız %{_say(FRM_TERMINAL['basarisiz'])}"
-        f" · geçersiz %{_say(FRM_TERMINAL['gecersiz'])}",
-        f"· medyan {_say(FRM_TEYIT_MFE['medyan_atr'])} ATR"
-        f" (n {FRM_TEYIT_MFE['n']})",
-        f"· ters medyan {_say(FRM_TERS['medyan_atr'])} ATR"
-        f" (n {FRM_TERS['n']})",
-        f"· retest %{_say(FRM_RETEST['oran'], 1)}"
+        "Formasyon (FRM ailesi):",
+        f"· {FRM_TERMINAL['n']} formasyondan",
+        f"  %{_say(FRM_TERMINAL['tamamlandi'])} kırılımı tuttu",
+        f"  %{_say(FRM_TERMINAL['basarisiz'])} geri döndü",
+        f"  %{_say(FRM_TERMINAL['gecersiz'])} formasyon bozuldu",
+        # "tuttu" = kırılım teyit aldı ve bandın içine dönmedi; "hedefe
+        # ulaştı" DEĞİL. Kart da bu yüzden "tamamlandı" yazmıyor.
+        "· tutunca lehte tepe:",
+        f"  normalin {_say(mfe['medyan_atr'])} katı (n {mfe['n']})",
+        "  TL karşılığı kartta yazılır",
+        f"· geri çekilme %{_say(FRM_RETEST['oran'], 1)}"
         f" (n {FRM_RETEST['n']})",
+        f"· rol uyumlu %{_say(uyum_oran)} (n {uyum_n})",
+        f"· uyumsuz %{_say(uyumsuz_oran)} (n {uyumsuz_n})",
         "",
-        "Ayrıştırıcılar (tamamlanma):",
-        f"· role uyumlu %{_say(uyum_oran)} (n {uyum_n})",
-        f"· role uyumsuz %{_say(uyumsuz_oran)} (n {uyumsuz_n})",
-        f"· zone içinde %{_say(zone_var_oran)} (n {zone_var_n})",
-        f"· zone dışında %{_say(zone_yok_oran)} (n {zone_yok_n})",
-        f"· ≥2 ATR bölge %{_say(yuksek_oran)} (n {yuksek_n})",
-        f"· yüksek RVOL %{_say(rvol_q4[1])} (n {rvol_q4[0]})",
-        f"· düşük RVOL %{_say(rvol_q1[1])} (n {rvol_q1[0]})",
+        "Yön olayı (MS ailesi):",
+        f"· 4s kırılım yukarı %{_say(bos_up[1])} (n {bos_up[0]})",
+        f"· aşağı %{_say(bos_down[1])} (n {bos_down[0]})",
+        "· kart: 'N olayın %X'i sürdü'",
         "",
-        f"MS 4s dış BOS ↑ %{_say(bos_up[1])} (n {bos_up[0]})",
-        f"   ↓ %{_say(bos_down[1])} (n {bos_down[0]})",
+        "Bölge teması (ZONE ailesi):",
+        f"· {_say(ZONE_TEPKI['dokunus_n'], 0)} temasta"
+        f" %{_say(tepki_alt)} tepki",
+        f"· %{_say(gecilme_alt)}–%{_say(gecilme_ust)} kadarı geçilir",
+        f"· boşluk tam dolum %{_say(dolum_alt)}–%{_say(dolum_ust)}",
+        f"· geniş bölge %{_say(yuksek_oran)} (n {yuksek_n})",
+        f"· hacim yüksek %{_say(rvol_q4[1])} (n {rvol_q4[0]})",
+        f"· hacim düşük %{_say(rvol_q1[1])} (n {rvol_q1[0]})",
         "",
-        "Sınır: tek rejim, 12 bar/ATR;",
-        "maliyet/pozisyon/kalibrasyon yok.",
+        f"n < {NADIR_ESIK} ise oran yazılmaz:",
+        "· '◇ nadir (n) · yorum yok'",
+        "",
+        "Sınır: tek rejim, 12 mum;",
+        "maliyet/pozisyon/kalibrasyon yok",
         "Yatırım tavsiyesi değildir.",
         "Kaynak: docs/arastirma/",
         "AMPIRIK_REFERANS.md",

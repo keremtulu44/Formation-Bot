@@ -264,9 +264,29 @@ def test_komut_metni_ana_sayilari_tasir():
     metin = ar.komut_metni()
     assert metin.startswith("◇ Arşiv ölçümü")
     assert ar.OLCUM_TABANI in metin
-    assert "n 32321" in metin          # FRM-15 tabanı
-    assert "%79,7" in metin and "%73,1" in metin   # FRM-20 iki grup
+    assert "32321 formasyondan" in metin            # FRM-15 tabanı
+    assert "%79,7" in metin and "%73,1" in metin    # FRM-20 iki grup
     assert len(metin) <= 1100, len(metin)
+
+
+def test_komut_metni_kartla_ayni_dili_konusur():
+    """/olcum, kartın artık basmadığı terimleri öğretmemeli.
+
+    Kart 2026-10-22'de sade dile geçti; komut metni eski sözlüğü gösterirse
+    kullanıcı karta bakıp "bu ne" der.
+    """
+    metin = ar.komut_metni()
+    for eski in ("RVOL", "retest", "zone içinde", "MS 4s dış BOS",
+                 "tamamlandı %", "bar)"):
+        assert eski not in metin, eski
+    assert "kırılımı tuttu" in metin
+    assert "geri çekilme" in metin
+    assert "nadir" in metin
+
+
+def test_komut_metni_aileleri_ayri_anlatir():
+    metin = ar.komut_metni()
+    assert "FRM ailesi" in metin and "MS ailesi" in metin and "ZONE ailesi" in metin
     # Yasal uyarı satırı "tavsiye" kelimesini taşır; tarama dışında tutulur.
     tarama = metin.replace("Yatırım tavsiyesi değildir.", "")
     for kelime in TAVSIYE_KELIMELERI:
