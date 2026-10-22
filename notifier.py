@@ -357,7 +357,7 @@ def _kart_yas_metni(data: Dict) -> str:
         yas_say = None
     if yas_say is None:
         return ""
-    metin = f"· bant {yas_say} bar"
+    metin = f"· bant {yas_say} mum"
     dogum = data.get("band_baslangic")
     if dogum:
         try:
@@ -367,7 +367,10 @@ def _kart_yas_metni(data: Dict) -> str:
             # GÖRSEL-8: yaş ve izlenme başlangıcı TEK satırda (`· bant 94 bar ·
             # 30 Eylül'den beri`, 258 px). İki ayrı satır, zenginleşen kartta
             # bütçeyi yiyordu; ayırıcı `—` değil `·` çünkü cümle değil iki künye.
-            metin += f" · {zaman.day} {aylar[zaman.month - 1]}'{ekler[zaman.month - 1]} beri"
+            # Sade dil (2026-10-22): "bar" → "mum". Tarih ek tamlamasıyla
+            # (`30 Eylül'den beri`) 271 px'e çıkıyordu; "(30 Eylül'den)" aynı
+            # bilgiyi 237 px'te taşır.
+            metin += f" ({zaman.day} {aylar[zaman.month - 1]}'{ekler[zaman.month - 1]})"
         except (TypeError, ValueError):
             pass
     return metin
@@ -687,7 +690,7 @@ def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False) -> str
     yas_metni = ""
     try:
         if yas is not None and int(yas) >= 0:
-            yas_metni = f"▪ bant {int(yas)} bar"
+            yas_metni = f"▪ bant {int(yas)} mum"
             if dogum:
                 zaman = (dogum if isinstance(dogum, datetime)
                          else datetime.fromisoformat(str(dogum)))

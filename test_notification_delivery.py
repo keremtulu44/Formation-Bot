@@ -146,9 +146,13 @@ def test_invalidation_caption_only_symbol_and_tf():
 
 def test_date_uses_actual_month_and_turkish_suffix():
     from notifier import _kart_yas_metni
-    assert "16 Ekim'den beri" in _kart_yas_metni({"age_bars": 3, "band_baslangic": "2026-10-16"})
-    assert "16 Eylül'den beri" in _kart_yas_metni({"age_bars": 3, "band_baslangic": "2026-09-16"})
-    assert "16 Mart'tan beri" in _kart_yas_metni({"age_bars": 3, "band_baslangic": "2026-03-16"})
+    # Sade dil (2026-10-22): tarih parantez içinde, "beri" tamlaması yerine.
+    assert "16 Ekim'den" in _kart_yas_metni({"age_bars": 3, "band_baslangic": "2026-10-16"})
+    assert "16 Eylül'den" in _kart_yas_metni({"age_bars": 3, "band_baslangic": "2026-09-16"})
+    # Ay eki ayın ünlü uyumuna göre: Mart → "tan", Ekim → "den", Eylül → "den".
+    assert "16 Mart'tan" in _kart_yas_metni({"age_bars": 3, "band_baslangic": "2026-03-16"})
+    # "bar" yerine "mum" (kullanıcı kararı: bar → mum).
+    assert "mum" in _kart_yas_metni({"age_bars": 3, "band_baslangic": "2026-03-16"})
 
 
 @pytest.mark.parametrize("direction", [-1, 1])

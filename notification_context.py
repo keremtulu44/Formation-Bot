@@ -12,9 +12,34 @@ from math import isfinite
 from typing import Any
 
 from reporting.format import sayi
+from telegram_measure import SATIR_BUTCE, genislik
 
 TIMEFRAME_ORDER = ("1h", "2h", "4h", "1d")
 TIMEFRAME_LABELS = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
+
+
+#: Kart dilinde OB/FVG yerine okunur karşılığı: "blok" (order block) ve
+#: "boşluk" (fair value gap). Kısaltma kartta yaşamaz (kullanıcı kararı
+#: 2026-10-22: "herkesin anlayabileceği format"). `/panel`, export ve log
+#: yüzeyleri teknik adı kullanmaya devam eder.
+_ZONE_SADE = {"OB": "blok", "FVG": "boşluk"}
+
+#: Kart satırının güvenle sığdığı piksel eşiği (notifier._kart_esik_px ile aynı
+#: mantık: bütçenin %5 güvenlik payının altında kal).
+_KART_ESIK_PX = float(SATIR_BUTCE) * 0.95 - 6.0
+
+
+def _sigdir(adaylar: list[str]) -> str:
+    """Bütçeye sığan EN BİLGİLİ adayı seç; hiçbiri sığmazsa en kısasını döndür.
+
+    Sade dil satırları teknik kısaltmalardan uzun (FVG → boşluk). Uzun fiyatlı
+    sembollerde satırı bölmek yerine sıfat düşer, ölçü kalır (bilgi sırası:
+    yön/ok → bölge türü → TF → fiyat → mesafe).
+    """
+    for aday in adaylar:
+        if genislik(aday) <= _KART_ESIK_PX:
+            return aday
+    return min(adaylar, key=genislik)
 
 
 def _field(value: Any, name: str, default=None):
@@ -112,6 +137,24 @@ _STRUCTURE_SHORT = {
     "STATE_TRANSITION_UP": "↑geçiş",
     "STATE_TRANSITION_DOWN": "↓geçiş",
     "STATE_NEUTRAL": "–",
+}
+#: Kart dili (2026-10-22): yapı durumu okla değil sözcükle yazılır. Ok, "yukarı
+#: döndü" ile "yukarı" arasındaki farkı taşımıyordu; geçiş hâli ayrı sözcük.
+_STRUCTURE_SADE = {
+    "STATE_BULLISH": "yukarı",
+    "STATE_BEARISH": "aşağı",
+    "STATE_TRANSITION_UP": "yukarı döndü",
+    "STATE_TRANSITION_DOWN": "aşağı döndü",
+    "STATE_NEUTRAL": "yatay",
+}
+#: Aynı durumların bütçe daraldığında kullanılan kısa hâli ("döndü" düşer).
+#: Nuance kaybı yalnız satır sığmadığında olur; sığdığında tam sözcük basılır.
+_STRUCTURE_SADE_KISA = {
+    "STATE_BULLISH": "yukarı",
+    "STATE_BEARISH": "aşağı",
+    "STATE_TRANSITION_UP": "yukarı",
+    "STATE_TRANSITION_DOWN": "aşağı",
+    "STATE_NEUTRAL": "yatay",
 }
 
 
@@ -590,7 +633,12 @@ def _kart_engel(results_by_timeframe: Any, reference: float | None,
                 tur = "direnç" if istenen == "üst" else "destek"
                 isaret = "+" if istenen == "üst" else "−"
                 marj = f"{isaret}%{mesafe / reference * 100.0:.1f}".replace(".", ",")
-                metin = f"{ok} {tur} {tip} {tf_label} {_price(seviye)} — {marj}"
+                sade = _ZONE_SADE.get(tip, tip)
+                metin = _sigdir([
+                    f"{ok} {tur} · {sade} {tf_label} {_price(seviye)} {marj}",
+                    f"{ok} {tur} {sade} {tf_label} {_price(seviye)} {marj}",
+                    f"{ok} {sade} {tf_label} {_price(seviye)} {marj}",
+                ])
                 if en_yakin is None or mesafe < en_yakin[0]:
                     en_yakin = (mesafe, metin)
     return [en_yakin[1]] if en_yakin else []
@@ -606,15 +654,24 @@ def _kart_yapi_ozet(rows: list[dict], alarm_tf: str) -> list[str]:
     for satir in rows:
         if satir["timeframe"] != alarm_tf:
             continue
-        dis = _STRUCTURE_SHORT.get(satir["dis"], "")
-        ic = _STRUCTURE_SHORT.get(satir["ic"], "")
-        durum = "/".join(p for p in (dis, ic) if p)
-        if not durum:
+        token_dis, token_ic = _token(satir["dis"]), _token(satir["ic"])
+        dis = _STRUCTURE_SADE.get(token_dis, "")
+        ic = _STRUCTURE_SADE.get(token_ic, "")
+        if not dis and not ic:
             return []
-        # Etiketler kısa ama AÇIK: `↑/↑geçiş` hangi kapsamın hangisi olduğu
-        # okunmuyordu; `dış ↑/iç ↑geçiş` tek satırda (≈197 px) sığıyor.
-        parcalar = [f"dış {dis}" if dis else "", f"iç {ic}" if ic else ""]
-        return [f"◈ {satir['etiket']} yapı " + "/".join(p for p in parcalar if p)]
+        kisa_dis = _STRUCTURE_SADE_KISA.get(token_dis, "")
+        kisa_ic = _STRUCTURE_SADE_KISA.get(token_ic, "")
+        etiket = f"◈ {satir['etiket']} yapı"
+        # Sade dil (2026-10-22): ok tek başına yön söylemiyordu (`dış ↑/iç ↑`).
+        # İkisi aynıysa tek sözcük; farklıysa iki künye. Sığmazsa "döndü"
+        # düşer — ölçü kısalmaz, yalnız nüans kısalır.
+        if dis and ic and token_dis == token_ic:
+            return [_sigdir([f"{etiket} dış ve iç {dis}",
+                             f"{etiket} dış ve iç {kisa_dis}"])]
+        uzun = [f"dış {dis}" if dis else "", f"iç {ic}" if ic else ""]
+        kisa = [f"dış {kisa_dis}" if kisa_dis else "", f"iç {kisa_ic}" if kisa_ic else ""]
+        return [_sigdir([f"{etiket} " + ", ".join(p for p in uzun if p),
+                         f"{etiket} " + ", ".join(p for p in kisa if p)])]
     return []
 
 
@@ -677,7 +734,8 @@ def _kart_zones(results_by_timeframe: Any, reference: float | None) -> dict[str,
                     isaret = "+" if grup == "üst" else "−"
                     durumlar.append(f"{isaret}%{marj:.1f}".replace(".", ","))
                 baslik = (
-                    f"{ok} {tip} {tf_label} {yan_etiket} · {_price(bottom)}–{_price(top)}"
+                    f"{ok} {_ZONE_SADE.get(tip, tip)} {tf_label} {yan_etiket}"
+                    f" · {_price(bottom)}–{_price(top)}"
                 )
                 adaylar[grup].append((mesafe, baslik, " · ".join(durumlar)))
 
@@ -781,7 +839,7 @@ def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None) -> list[str]:
     if birincil["yargi"]:
         satirlar.append(f"katılım {birincil['etiket']} {birincil['yargi']}")
     elif birincil["rvol"]:
-        satirlar.append(f"katılım {birincil['etiket']} RVOL {birincil['rvol']}")
+        satirlar.append(f"katılım {birincil['etiket']} hacim {birincil['rvol']} kat")
     else:
         satirlar.append(f"katılım {birincil['etiket']} {birincil['bos'] or 'veri yok'}")
 
@@ -789,13 +847,13 @@ def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None) -> list[str]:
     bitenler = [k for k in digerleri if k["bitti"] and k["rvol"]]
     if bitenler:
         k = bitenler[0]
-        satirlar.append(f"katılım {k['etiket']} {k['rvol']} ile bitti")
+        satirlar.append(f"katılım {k['etiket']} hacim bitti ({k['rvol']})")
     else:
         zayiflar = [k for k in digerleri if k["rvol"] and _number(str(k["rvol"]).replace(",", ".")) is not None
                     and float(str(k["rvol"]).replace(",", ".")) < 0.6]
         if zayiflar:
             k = min(zayiflar, key=lambda x: float(str(x["rvol"]).replace(",", ".")))
-            satirlar.append(f"katılım {k['etiket']} {k['rvol']} zayıf")
+            satirlar.append(f"katılım {k['etiket']} hacim düşük ({k['rvol']})")
     return satirlar
 
 # --- ampirik referans (arşiv ölçümü) ---------------------------------------
@@ -1017,13 +1075,19 @@ def karsi_deliller(results_by_timeframe: Any, alarm_tf: Any = None, break_dir: A
     rows = {row["timeframe"]: row for row in _market_structure_rows(results_by_timeframe)}
     satir = rows.get(tf)
     if satir is not None and yon:
-        ters = {"STATE_BEARISH": "↓", "STATE_TRANSITION_DOWN": "↓geçiş",
-                "STATE_BULLISH": "↑", "STATE_TRANSITION_UP": "↑geçiş"}.get(satir["ic"], "")
-        istenen = "↑" if yon > 0 else "↓"
-        if ters and ters[0] != istenen and ters != "–":
+        # Karşı delil kartın "ters işaret" satırıdır; ok yerine sözcük yazılır
+        # ("iç yapı ↓geçiş" → "iç yapı aşağı döndü"). Yön kıyası yine token
+        # üzerinden yapılır, metin karşılaştırmasına bağlı değildir.
+        ters = _STRUCTURE_SADE.get(_token(satir["ic"]), "")
+        token_ic = _token(satir["ic"])
+        if ters and token_ic in {"STATE_BEARISH", "STATE_TRANSITION_DOWN"} and yon > 0:
             bulgular.append(f"iç yapı {ters}")
-        dis = {"STATE_BEARISH": "↓", "STATE_BULLISH": "↑"}.get(satir["dis"], "")
-        if dis and dis != istenen:
+        elif ters and token_ic in {"STATE_BULLISH", "STATE_TRANSITION_UP"} and yon < 0:
+            bulgular.append(f"iç yapı {ters}")
+        dis_token = _token(satir["dis"])
+        dis = {"STATE_BEARISH": "aşağı", "STATE_BULLISH": "yukarı"}.get(dis_token, "")
+        if dis and ((dis_token == "STATE_BEARISH" and yon > 0)
+                    or (dis_token == "STATE_BULLISH" and yon < 0)):
             bulgular.append(f"dış yapı {dis}")
     export = _usable_export(_domain(results_by_timeframe, tf, "volume_participation")) if tf else None
     if export is None:

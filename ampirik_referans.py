@@ -95,7 +95,9 @@ ZONE_OLCUM = {
 }
 # Soru 2: dokunuşta beklenen yönde >=1 ATR tepki; zone'un kendisi ise geçilir.
 ZONE_TEPKI = {"dokunus_tepki_pct": (65.0, 66.5), "gecilme_pct": (85.4, 93.6),
-              "fvg_tam_dolum_pct": (40.3, 42.6)}
+              "fvg_tam_dolum_pct": (40.3, 42.6),
+              # Dokunuş seviyesi tabanı (ARASTIRMA_BULGULARI Soru 2): 4 TF toplamı.
+              "dokunus_n": 240484}
 
 # Soru 4 — zone yüksekliği kovaları (1d FVG, n=6285): üst sınır, n, CALISTI %.
 YUKSEKLIK_KOVALARI = (
@@ -186,20 +188,24 @@ MS_YON = {
 #: * `ZONE` — OB/FVG teması
 #: Boş aile ("") eski davranışı korur: kısıt yok (geri dönüş yolu).
 AILE_OLCU = {
-    "FRM": ("uyum", "retest", "temel"),
+    "FRM": ("uyum", "retest", "temel", "hareket"),
     "MS": ("ms",),
     "ZONE": ("zone", "yukseklik", "rvol"),
 }
 
 # Önerilen satır sırası: küçük numara önce basılır.
+#: Satır önceliği — aile süzgecinden SONRA, aile içinde sıralama belirler.
+#: FRM'de sıra kullanıcı kararını izler: önce "tuttu mu", sonra "ne kadar
+#: gitti", sonra rol uyumu, en sonda geri çekilme oranı.
 ONCELIK = {
     "ms": 0,
-    "uyum": 1,
-    "yukseklik": 2,
-    "rvol": 3,
-    "zone": 4,
-    "retest": 5,
-    "temel": 6,
+    "temel": 1,
+    "hareket": 2,
+    "uyum": 3,
+    "retest": 4,
+    "zone": 5,
+    "yukseklik": 6,
+    "rvol": 7,
 }
 
 
@@ -308,13 +314,11 @@ def _ms_satiri(k: Kurulum) -> tuple[str, int] | None:
     if kayit is None:
         return None
     n, calisti, devam = kayit
-    kapsam = {"DIS": "dış", "IC": "iç"}.get(str(k.ms_kapsam or "").upper(), "")
-    yon = {"UP": "↑", "DOWN": "↓"}.get(str(k.ms_yon or "").upper(), "")
-    tip = "CHoCH" if str(k.ms_tip).upper() == "CHOCH" else "BOS"
-    # `↑dış` bitişik yazılır: satır bütçesi (283 px) ancak böyle sığıyor.
-    yon_kapsam = f"{yon}{kapsam}" if yon and kapsam else (yon or kapsam)
-    bas = " ".join(p for p in (f"◇ {tip}", yon_kapsam) if p)
-    return (f"{bas} devam {_yuzde(calisti)} n{n}", ONCELIK["ms"])
+    # Sade dil (2026-10-22): kısaltma yok. "BOS ↑dış devam %75 n1651" yerine
+    # kesitin adı düz Türkçe: BOS → "kırılım", CHoCH → "dönüş". Sayı yine
+    # kapsam×tip×yön kesitinden gelir (tablo satırı seçimi değişmedi).
+    tur = "dönüşün" if str(k.ms_tip).upper() == "CHOCH" else "kırılımın"
+    return (f"◇ {n} {tur} {_yuzde(calisti)}'i sürdü", ONCELIK["ms"])
 
 
 def _uyum_satiri(k: Kurulum) -> tuple[str, int] | None:
@@ -340,8 +344,9 @@ def _uyum_satiri(k: Kurulum) -> tuple[str, int] | None:
         return None
     anahtar = "uyumlu" if uyumlu else "uyumsuz"
     n, oran = FRM_UYUM[anahtar]
-    etiket = "rol uyumlu" if uyumlu else "rol uyumsuz"
-    return (f"◇ {etiket} {_yuzde(oran)} n{n}", ONCELIK["uyum"])
+    # "rol uyumlu %80 n15724" → "rol uyumlu %80 · 15724": `n` kısaltması
+    # okunmuyordu; taban sayı olarak, oran yüzde olarak yazılır.
+    return (f"◇ rol {anahtar} {_yuzde(oran)} · {n}", ONCELIK["uyum"])
 
 
 def _yukseklik_satiri(k: Kurulum) -> tuple[str, int] | None:
@@ -358,15 +363,16 @@ def _yukseklik_satiri(k: Kurulum) -> tuple[str, int] | None:
     if kova is None:
         return None
     (ust, n, calisti, notu), _ = kova
+    kat = yukseklik / atr
+    # "ATR" bir formül adı; "normalin x katı" aynı şeyi herkesin anlayacağı
+    # biçimde söyler (kullanıcı kararı 2026-10-22).
     if ust is None:
-        etiket = f"yüksek bölge {notu}".strip()
+        etiket = "bölge normalin 2 katından geniş"
     elif ust <= 0.5:
-        etiket = f"alçak bölge {notu}".strip()
+        etiket = "bölge normalin yarısından dar"
     else:
-        # Orta kovalar ayrıştırıcı değil; ölçülen yükseklik yazılır ki okuyan
-        # hangi bandın içinde olduğunu görsün (uydurma etiket yok).
-        etiket = f"bölge {_say(yukseklik / atr, 1)} ATR"
-    return (f"◇ {etiket} {_yuzde(calisti)} n{n}", ONCELIK["yukseklik"])
+        etiket = f"bölge {_say(kat, 1)} kat"
+    return (f"◇ {etiket} · {_yuzde(calisti)} ({n})", ONCELIK["yukseklik"])
 
 
 def _rvol_satiri(k: Kurulum) -> tuple[str, int] | None:
@@ -379,17 +385,31 @@ def _rvol_satiri(k: Kurulum) -> tuple[str, int] | None:
     # Yalnız ayrışan uçlar basılır: alt çeyrek en iyi, üst çeyrek en kötü.
     if indeks not in {0, 3}:
         return None
-    etiket = "yüksek RVOL" if indeks == 3 else "düşük RVOL"
-    return (f"◇ {etiket} {_yuzde(calisti)} n{n}", ONCELIK["rvol"])
+    # "Q4 RVOL %61" yerine "hacim yüksekken %61 sürdü": çeyrek numarası ve
+    # kısaltma kullanıcıya bir şey söylemiyordu.
+    if indeks == 3:
+        return (f"◇ hacim yüksekken {_yuzde(calisti)} sürdü", ONCELIK["rvol"])
+    return (f"◇ hacim düşükken {_yuzde(calisti)} sürdü", ONCELIK["rvol"])
 
 
 def _zone_satiri(k: Kurulum) -> tuple[str, int] | None:
-    if k.zone_icinde is None:
+    """Dokunuşta beklenen yönde tepki (Soru 2) — zone ailesinin taban ölçüsü.
+
+    Eski satır "zone içi %75,9 / zone dışı %77,0 tamam" idi. Bu iki grup
+    arasındaki fark **1,1 puan**: yorum kurmaya yetmez, kart yerini boşa
+    harcıyordu (bkz. KANIT_ESIKLERI "zone" eşiği ±2 → hiçbir zaman geçmez).
+    Yerine ölçülmüş dokunuş tepkisi basılır.
+    """
+    if k.zone_icinde is None and k.bolge_top is None:
         return None
-    anahtar = "zone_var" if k.zone_icinde else "zone_yok"
-    n, oran = FRM_ZONE[anahtar]
-    etiket = "zone içi" if k.zone_icinde else "zone dışı"
-    return (f"◇ {etiket} {_yuzde(oran)} tamam n{n}", ONCELIK["zone"])
+    alt, ust = ZONE_TEPKI["dokunus_tepki_pct"]
+    # Aralığın ALT ucu yazılır: "%65-66 tepki" demek yerine tek sayı, ve
+    # iyimser uç (%66,5) değil muhafazakâr uç (%65,0) basılır.
+    tepki = alt
+    n = ZONE_TEPKI.get("dokunus_n")
+    if n:
+        return (f"◇ {n} temasta {_yuzde(tepki)} tepki", ONCELIK["zone"])
+    return (f"◇ temaslarda {_yuzde(tepki)} tepki", ONCELIK["zone"])
 
 
 def _retest_satiri(k: Kurulum) -> tuple[str, int] | None:
@@ -397,14 +417,51 @@ def _retest_satiri(k: Kurulum) -> tuple[str, int] | None:
         # Retest gördüyse ölçüm retest DERİNLİĞİNE bağlıdır (FRM-13); derinlik
         # kartta ölçülmediği için sabit bir oran basmak yanıltıcı olurdu.
         return None
-    return (f"◇ retest oranı {_yuzde(FRM_RETEST['oran'])} n{FRM_RETEST['n']}",
+    return (f"◇ geri çekilme {_yuzde(FRM_RETEST['oran'])} · {FRM_RETEST['n']}",
             ONCELIK["retest"])
 
 
 def _temel_satiri(k: Kurulum) -> tuple[str, int] | None:
-    """Her teyitli olayda geçerli tek satırlık taban (FRM-16)."""
-    return (f"◇ medyan {_say(FRM_TEYIT_MFE['medyan_atr'], 1)} ATR "
-            f"n{FRM_TEYIT_MFE['n']}", ONCELIK["temel"])
+    """Formasyon sonucu (FRM-15): kırılım tuttu mu?
+
+    "tamamlandı %76" ifadesi yanıltıcıydı: motorun `FORMASYON_TAMAMLANDI`
+    durumu "hedefe ulaştı" demek DEĞİL — "kırılım teyit aldı ve fiyat formasyon
+    bandına geri dönmedi" demek (patterns/lifecycle.py). Sade karşılığı
+    "tuttu" (kullanıcı kararı 2026-10-22).
+    """
+    return (f"◇ {FRM_TERMINAL['n']} formasyon · "
+            f"{_yuzde(FRM_TERMINAL['tamamlandi'])} tuttu", ONCELIK["temel"])
+
+
+def _hareket_satiri(k: Kurulum) -> tuple[str, int] | None:
+    """Tutan kırılım ne kadar gidiyor (FRM-16) — TL ve yüzde olarak.
+
+    Kullanıcı geri bildirimi (2026-10-22): "tutanlardan 1,2 kat ne demek onu da
+    ben anlamadım". Ölçüm 1,23 ATR (medyan, 12 mum, tutan 24618 formasyon);
+    ATR ve fiyat canlıysa aynı sayı TL ve % olarak yazılır — okumak için
+    ATR bilmek gerekmez.
+    """
+    if k.atr is None:
+        return None
+    try:
+        atr = float(k.atr)
+    except (TypeError, ValueError):
+        return None
+    if atr <= 0:
+        return None
+    kat = FRM_TEYIT_MFE["medyan_atr"]
+    tl = atr * kat
+    fiyat = None
+    if k.break_price is not None:
+        try:
+            fiyat = float(k.break_price)
+        except (TypeError, ValueError):
+            fiyat = None
+    if fiyat and fiyat > 0:
+        oran = tl / fiyat * 100.0
+        return (f"◇ tutunca ~{_say(tl, 2)} TL · {_yuzde(oran, 1)}",
+                ONCELIK["hareket"])
+    return (f"◇ tutunca ~{_say(kat, 1)} kat", ONCELIK["hareket"])
 
 
 def olcum_satirlari(k: Kurulum, *, azami: int = 2) -> list[str]:
@@ -424,6 +481,7 @@ def olcum_satirlari(k: Kurulum, *, azami: int = 2) -> list[str]:
         "zone": _zone_satiri,
         "retest": _retest_satiri,
         "temel": _temel_satiri,
+        "hareket": _hareket_satiri,
     }
     aile = str(k.aile or "").strip().upper()
     izin = AILE_OLCU.get(aile)

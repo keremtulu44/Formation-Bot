@@ -1,7 +1,7 @@
 # Ampirik Referans — ölçümü canlı metne bağlayan katman
 
-> **Durum:** Yürürlükte · **Tarih:** 2026-10-21 · **Kod:** `ampirik_referans.py`
-> **Test:** `test_ampirik_referans.py` (29 kontrol)
+> **Durum:** Yürürlükte · **Tarih:** 2026-10-22 · **Kod:** `ampirik_referans.py`
+> **Test:** `test_ampirik_referans.py` (45 kontrol)
 > **Kaynak tablolar:** [ARASTIRMA_BULGULARI.md](ARASTIRMA_BULGULARI.md) ·
 > [FORMASYON_SONUCLARI.md](FORMASYON_SONUCLARI.md)
 
@@ -19,13 +19,19 @@ her alarmda tekrarlanan sabit bir dipnot değil, o an ayırt edici olan sayı.
 ```
 ▲ SISE 4s YUKARI TEYİTLİ
 Yükselen Üçgen — kapanışla
-· kapanış 39,60 (seviye 39,26)
+
+▲ direnç · boşluk 4s 41,90 +%5,8
 · kalite 81/100 — güç 100
-retest yok — MTF 1g onaylı
-katılım 4s destekliyor
-◇ rol uyumlu %80 n15724      ← yeni: bu kurulumun arşivdeki sonucu
-› /tara SISE
-• yatırım tavsiyesi değildir
+· bant 94 mum (30 Eylül'den)
+
+◈ 4s yapı dış ve iç yukarı
+
+◇ 32321 formasyon · %76 tuttu   ← formasyon sonucu (FRM-15)
+◇ tutunca ~1,05 TL · %2,6       ← aynı ölçüm, TL ve % olarak
+◇ rol uyumlu %80 · 15724        ← yön–rol uyumu (FRM-20)
+· geçmiş davranış, kazanç değil
+
+katılım 4s hacim 0,45 kat
 ```
 
 ## 2. Sözleşme
@@ -49,17 +55,64 @@ katılım 4s destekliyor
 
 ## 3. Hangi ölçüm, hangi koşulda, hangi satır
 
-Öncelik sırası `ONCELIK` sözlüğünde; kart en çok **2** satır basar.
+Öncelik sırası `ONCELIK` sözlüğünde. KRİTİK: satırlar önce **aileye** göre
+süzülür (`AILE_OLCU`), sonra aile içinde önceliğe göre sıralanır. Kart en çok
+**3** satır basar (DM); public bültende **2**. Boş aile (`""`) süzgeci kapatır.
 
 | # | Ölçüm | Koşul (canlı veri) | Kart satırı | n | Kaynak |
 |---|---|---|---|---|---|
-| 0 | MS devamı | alarm TF'de teyitli+güncel BOS/CHoCH | `◇ BOS ↓dış devam %67 n1736` | kova n | Soru 5 |
-| 1 | Yön–rol uyumu | kırılım yönü + en yakın PH/PL | `◇ rol uyumlu %80 n15724` | 15724 / 13573 | FRM-20 |
-| 2 | Zone yüksekliği | ATR + alarm TF zone geometrisi | `◇ yüksek bölge kalıcı %71 n162` | kova n | Soru 4 |
-| 3 | RVOL çeyreği | rvol alt/üst uçta (≈Q1 / ≈Q4) | `◇ yüksek RVOL %61 n11928` | kova n | Hacim tablosu |
-| 4 | Zone içi/dışı | fiyat herhangi TF'de OB/FVG içinde | `◇ zone içi %76 tamam n11905` | 11905 / 20232 | FRM-19 |
-| 5 | Retest oranı | yalnız `retest_seen=False` | `◇ retest oranı %35 n28624` | 28624 | FRM-12 |
-| 6 | Taban | her teyitli olay (yedek satır) | `◇ medyan 1,2 ATR n24618` | 24618 | FRM-16 |
+| 0 | MS devamı | alarm TF'de teyitli+güncel BOS/CHoCH | `◇ 1651 kırılımın %75'i sürdü` | kova n | Soru 5 |
+| 1 | Formasyon sonucu | her formasyon alarmı (taban satır) | `◇ 32321 formasyon · %76 tuttu` | 32321 | FRM-15 |
+| 2 | Tutan hareket | ATR + kırılım fiyatı varsa | `◇ tutunca ~1,05 TL · %2,6` | 24618 | FRM-16 |
+| 3 | Yön–rol uyumu | kırılım yönü + en yakın PH/PL | `◇ rol uyumlu %80 · 15724` | 15724 / 13573 | FRM-20 |
+| 4 | Geri çekilme | yalnız `retest_seen=False` | `◇ geri çekilme %35 · 28624` | 28624 | FRM-12 |
+| 5 | Dokunuş tepkisi | fiyat bir OB/FVG temasında | `◇ 240484 temasta %65 tepki` | 240484 | Soru 2 |
+| 6 | Zone yüksekliği | ATR + alarm TF zone geometrisi | `◇ bölge 1,0 kat · %68 (858)` | kova n | Soru 4 |
+| 7 | Hacim çeyreği | rvol alt/üst uçta (≈Q1 / ≈Q4) | `◇ hacim yüksekken %61 sürdü` | kova n | Hacim tablosu |
+
+### Aile ayrımı (2026-10-22 kararı)
+
+Aynı kartta **iki farklı yüzde** görmek okumayı bozuyordu: "%76 kırılım tuttu"
+(formasyonun sonucu) ile "%75 devam etti" (MS olayının devamı) ayrı soruların
+cevabıdır; yan yana gelince hangisinin neyin ölçüsü olduğu anlaşılmıyordu.
+Bu yüzden her alarm yalnız kendi ailesini basar:
+
+| Aile | Basılan ölçüm | Tipik satır |
+|---|---|---|
+| `FRM` | `uyum` · `retest` · `temel` · `hareket` | `◇ 32321 formasyon · %76 tuttu` |
+| `MS` | `ms` | `◇ 1651 kırılımın %75'i sürdü` |
+| `ZONE` | `zone` · `yukseklik` · `rvol` | `◇ 240484 temasta %65 tepki` |
+| `""` (boş) | kısıtsız — eski davranış (geri dönüş yolu) | — |
+
+### Sade dil sözleşmesi (2026-10-22)
+
+Kullanıcı: *"herkesin anlayabileceği format… teknik bilen biri bile
+anlayamayabilir"*. Ölçüm satırında kısaltma yaşamaz:
+
+| Önce | Sonra | Neden |
+|---|---|---|
+| `n1651` | `1651` | `n` etiketi tabanı gizemliyordu; düz sayı okunur |
+| `BOS ↑dış devam %75` | `kırılımın %75'i sürdü` | kısaltma + ok; kesit adı düz Türkçe |
+| `CHoCH` | `dönüşün` | tip bilgisi korunur, kısaltma kalkar |
+| `retest oranı %35` | `geri çekilme %35` | jargon → günlük sözcük |
+| `1,2 ATR` | `~1,05 TL · %2,6` | ATR bilmeden okunur (ATR varsa) |
+| `bölge 1,4 ATR` | `bölge 1,4 kat` | "normalin katı" ifadesi |
+| `yüksek RVOL` | `hacim yüksekken` | RVOL kısaltması kartta yok |
+| `tamamlandı %76` | `%76 tuttu` | motorun `FORMASYON_TAMAMLANDI` hâli "hedefe ulaştı" DEĞİL, "kırılım teyit aldı ve bandın içine dönmedi" demek |
+| `bar` | `mum` | aynı şey, herkesin bildiği sözcük |
+| `FVG` / `OB` | `boşluk` / `blok` | kart yüzeyinde kısaltma yok |
+| `◇ BOS …` benzeri sıfat | ölçü | `tipik`, `zayıf`, `güçlü`, `muhtemel` yasak (testli) |
+
+Testler: `test_ampirik_referans.py::test_sade_dilde_kisaltma_yok`,
+`::test_sade_dilde_sifat_yok`, `::test_tuttu_ifadesi_motorun_terminal_durumunu_dogru_anlatir`,
+`test_kart_metin.py::test_kart_jargon_tasimaz`.
+
+### Kaldırılan satır: `zone içi/dışı %76 / %77`
+
+Eski satır iki grup arasındaki **1,1 puanlık** farkı basıyordu; kendi kanıt
+eşiği (`KANIT_ESIKLERI["zone"]` = ±2 puan) hiçbir zaman geçmiyor, yani satır
+kart yerini boşa harcıyordu. Yerine ölçülmüş dokunuş tepkisi geçti
+(`◇ 240484 temasta %65 tepki`; aralık %65,0–66,5 → **alt uç** yazılır).
 
 ### Bilinçli yaklaşımlar (gizlenmiyor)
 
@@ -69,9 +122,10 @@ katılım 4s destekliyor
   yalnız ayrışan uçlar (Q1/Q4) basılır.
 - **Zone yüksekliği kova tablosu 1d FVG ölçümüdür** (n=6285). Satır "tüm
   ailelerde geçerli" iddiası taşımaz; orta kovalarda nitelik etiketi yerine
-  ölçülen yükseklik yazılır (`◇ bölge 0,8 ATR %65 n1989`).
-- **Retest gördüyse satır basılmaz.** FRM-13 sonucu retest **derinliğine**
-  bağlıdır; derinlik kartta ölçülmediği için sabit oran yanıltıcı olurdu.
+  ölçülen yükseklik yazılır (`◇ bölge 1,0 kat · %68 (858)`).
+- **Geri çekilme gördüyse satır basılmaz.** FRM-13 sonucu geri çekilme
+  **derinliğine** bağlıdır; derinlik kartta ölçülmediği için sabit oran
+  yanıltıcı olurdu.
 - **MS tablosunda yön yoksa** kapsam×tip satırına düşülür (n daha büyük).
 
 ## 4. Raporlardan farkı

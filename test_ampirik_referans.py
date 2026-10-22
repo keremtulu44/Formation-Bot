@@ -85,34 +85,41 @@ def test_oncelik_ve_azami():
                  rvol=3.2, retest_seen=False, zone_icinde=True)
     satirlar = ar.olcum_satirlari(k, azami=2)
     assert len(satirlar) == 2
-    assert satirlar[0].startswith("◇ BOS")          # MS en önde
-    assert satirlar[1].startswith("◇ rol")          # sonra rol uyumu
+    # Aile kısıtsız: önce MS ("sürdü"), sonra formasyon sonucu ("tuttu").
+    assert "sürdü" in satirlar[0], satirlar
+    assert "tuttu" in satirlar[1], satirlar
     tek = ar.olcum_satirlari(k, azami=1)
     assert len(tek) == 1 and tek[0] == satirlar[0]
 
 
 def test_uyum_yonu_dogru_okunuyor():
     # Aşağı kırılım + altta PL → uyumlu
-    uyumlu = ar.olcum_satirlari(_kurulum(yon=-1, break_price=100.0,
-                                         ph=104.0, pl=96.0), azami=1)
-    assert "uyumlu" in uyumlu[0] and "uyumsuz" not in uyumlu[0]
+    uyumlu = [x for x in ar.olcum_satirlari(_kurulum(yon=-1, break_price=100.0,
+                                                    ph=104.0, pl=96.0), azami=9)
+              if "rol" in x]
+    assert uyumlu and "uyumlu" in uyumlu[0] and "uyumsuz" not in uyumlu[0]
+    assert "%80" in uyumlu[0]
     # Aşağı kırılım ama aşağıda korunan dip yok, üstte PH var → uyumsuz
-    uyumsuz = ar.olcum_satirlari(_kurulum(yon=-1, break_price=100.0,
-                                          ph=96.0, pl=None), azami=1)
-    assert "uyumsuz" in uyumsuz[0]
+    uyumsuz = [x for x in ar.olcum_satirlari(_kurulum(yon=-1, break_price=100.0,
+                                                      ph=96.0, pl=None), azami=9)
+               if "rol" in x]
+    assert uyumsuz and "uyumsuz" in uyumsuz[0]
+    assert "%73" in uyumsuz[0]
 
 
 def test_retest_satiri_iki_durumu_ayirir():
-    yok = ar.olcum_satirlari(_kurulum(retest_seen=False), azami=1)
-    assert yok == ["◇ retest oranı %35 n28624"]
+    # Retest görülmediyse taban oran basılır (artık en önde "tuttu" var).
+    yok = ar.olcum_satirlari(_kurulum(retest_seen=False, aile="FRM"), azami=9)
+    assert "◇ geri çekilme %35 · 28624" in yok, yok
     # Retest gördüyse ölçüm derinliğe bağlı → satır basılmaz (uydurma yok)
-    var = ar.olcum_satirlari(_kurulum(retest_seen=True), azami=1)
-    assert var == ["◇ medyan 1,2 ATR n24618"]
+    var = ar.olcum_satirlari(_kurulum(retest_seen=True, aile="FRM"), azami=9)
+    assert not [x for x in var if "geri çekilme" in x], var
 
 
-def test_temel_satir_her_zaman_son_sira():
-    satirlar = ar.olcum_satirlari(_kurulum(), azami=2)
-    assert satirlar == ["◇ medyan 1,2 ATR n24618"]
+def test_temel_satir_her_zaman_ilk_sira():
+    """Formasyon ailesinde ilk satır "tuttu mu" sorusudur."""
+    satirlar = ar.olcum_satirlari(_kurulum(aile="FRM"), azami=2)
+    assert satirlar[0] == "◇ 32321 formasyon · %76 tuttu", satirlar
 
 
 TAVSIYE_KELIMELERI = ("al ", "sat ", "hedef", "stop", "kâr", "kar ", "zarar",
@@ -149,12 +156,29 @@ def test_satirlar_kart_butcesine_sigar(ek):
         assert tm.genislik(satir) <= notifier._kart_esik_px(), satir
 
 
-def test_her_satirda_n_var():
+def test_taban_her_olcumde_gorunur():
+    """Ölçüm tabanı gizlenmez: ya satırın kendisinde ya aynı blokta bir üstte.
+
+    Sade dil sürümünde `n1651` gibi kısaltma kalktı; taban düz sayı oldu
+    (`1651 olayın %75'i`, `· 15724`). Türetilmiş satır (ör. TL çevirisi)
+    kendi tabanını taşımıyorsa bir üstteki ölçüm satırı taşır.
+    """
     k = _kurulum(ms_kapsam="IC", ms_tip="CHOCH", ms_yon="DOWN", atr=1.0,
                  bolge_top=100.5, bolge_alt=100.0, rvol=0.3,
                  zone_icinde=False, retest_seen=False, ph=105.0, pl=95.0)
-    for satir in ar.olcum_satirlari(k, azami=7):
-        assert " n" in satir, satir
+    satirlar = ar.olcum_satirlari(k, azami=9)
+    assert satirlar
+
+    def taban_var(satir: str) -> bool:
+        # 3+ haneli sayı = ölçüm tabanı. Fiyat (39,60) ve yüzde (2,6) bu
+        # kalıba girmez; taban her zaman en az 3 hanelidir (162, 858, 32321…).
+        import re as _re
+        return bool(_re.search(r"\d{3,}", satir))
+
+    onceki = False
+    for satir in satirlar:
+        assert taban_var(satir) or onceki, f"taban yok: {satir}"
+        onceki = taban_var(satir)
 
 
 # ------------------------------------------------------------------ bölüm/bağlama
@@ -192,13 +216,14 @@ def test_bolum_acikken_exporttan_satir_uretir():
     assert satirlar, bolumler
     assert all(s.startswith("◇") for s in satirlar)
     assert len(satirlar) <= 2
-    # MS export'u BOS ↓ dış olarak okunmalı (en yüksek öncelik)
-    assert any("BOS" in s and "↓" in s for s in satirlar), satirlar
-    # Üçüncü sırada yüksek RVOL satırı var (3,4 → 4h üst çeyrek)
+    # MS export'u "devam etti" olarak okunmalı (sade dil, en yüksek öncelik).
+    # Aile verilmediği için kısıt yok; MS satırı ilk sırada gelir.
+    assert any("sürdü" in s for s in satirlar), satirlar
+    # Yüksek hacim satırı (3,4 → 4h üst çeyrek) geniş limitte görünür.
     genis = nc.domain_bolumleri(_sonuclar(), 100.0, stil="kart", alarm_tf="4h",
                                 olcum=True, atr=1.0, yon=-1, retest_seen=False,
-                                azami_olcum=4)["olcum"]
-    assert any("yüksek RVOL" in s for s in genis), genis
+                                azami_olcum=9)["olcum"]
+    assert any("hacim yüksekken" in s for s in genis), genis
 
 
 def test_olcum_hatasi_alarmi_dusurmez():
@@ -206,8 +231,8 @@ def test_olcum_hatasi_alarmi_dusurmez():
     # (MS/zone/RVOL) basılmamalı; yalnız formasyon tabanı kalır.
     bozuk = {"4h": {"market_structure": {"error": "boom"},
                     "volume_participation": {"skipped": True}}}
-    satirlar = nc.olcum_bolumu(bozuk, 100.0, alarm_tf="4h")
-    assert satirlar == ["◇ medyan 1,2 ATR n24618"], satirlar
+    satirlar = nc.olcum_bolumu(bozuk, 100.0, alarm_tf="4h", aile="FRM")
+    assert satirlar == ["◇ 32321 formasyon · %76 tuttu"], satirlar
 
 
 def test_kart_olcum_satirini_basar():
@@ -282,7 +307,7 @@ def test_aile_ms_yalniz_devam_satirini_basar():
                  zone_icinde=True, retest_seen=False, ph=104.0, pl=96.0)
     satirlar = ar.olcum_satirlari(k, azami=7)
     assert len(satirlar) == 1
-    assert satirlar[0].startswith("◇ BOS")
+    assert "sürdü" in satirlar[0], satirlar
 
 
 def test_aile_zone_yalniz_bolge_olcumlerini_basar():
@@ -299,5 +324,69 @@ def test_aile_bos_kisit_yok_eski_davranis():
     k = _kurulum(aile="", ms_kapsam="EXTERNAL", ms_tip="BOS", ms_yon="UP",
                  atr=1.0, bolge_top=102.0, bolge_alt=101.0, rvol=3.9,
                  zone_icinde=True, retest_seen=False, ph=104.0, pl=96.0)
-    anahtarlar = {s.split()[1] for s in ar.olcum_satirlari(k, azami=7)}
-    assert "BOS" in anahtarlar
+    metin = " ".join(ar.olcum_satirlari(k, azami=9))
+    assert "sürdü" in metin and "tuttu" in metin
+
+
+# ------------------------------------------------- sade dil (Faz 3)
+
+KISALTMALAR = ("ATR", "RVOL", "MTF", "BOS", "CHoCH", "FVG", "OB ", " OB",
+               "bar ", " n1", "n1651", "n15724")
+
+#: Ölçüm satırlarında yasak sıfatlar: ölçülebilir olmayan güç/olasılık imaları.
+YASAK_SIFATLAR = ("tipik", "zayıf", "güçlü", "muhtemel", "ihtimal",
+                  "bekleniyor", "yüksek olasılık")
+
+
+@pytest.mark.parametrize("aile,ek", [
+    ("FRM", {"atr": 1.0, "ph": 105.0, "pl": 95.0, "retest_seen": False}),
+    ("MS", {"ms_kapsam": "EXTERNAL", "ms_tip": "BOS", "ms_yon": "UP"}),
+    ("ZONE", {"atr": 1.0, "bolge_top": 102.0, "bolge_alt": 101.0,
+              "rvol": 3.9, "zone_icinde": True}),
+])
+def test_sade_dilde_kisaltma_yok(aile, ek):
+    """Kart ölçüm satırı kısaltma taşımaz (kullanıcı: "kod yazan birinin bile
+    bileceği" dil yasak). Teknik kimlik metinde kalabilir, ÖLÇÜ satırında kalmaz."""
+    kurulum = _kurulum(aile=aile, **ek)
+    satirlar = ar.olcum_satirlari(kurulum, azami=9)
+    assert satirlar, aile
+    for satir in satirlar:
+        for kisa in KISALTMALAR:
+            assert kisa not in satir, (aile, kisa, satir)
+
+
+@pytest.mark.parametrize("aile,ek", [
+    ("FRM", {"atr": 1.0, "ph": 105.0, "pl": 95.0}),
+    ("MS", {"ms_kapsam": "EXTERNAL", "ms_tip": "BOS", "ms_yon": "DOWN"}),
+    ("ZONE", {"atr": 1.0, "bolge_top": 102.0, "bolge_alt": 101.0, "rvol": 0.2}),
+])
+def test_sade_dilde_sifat_yok(aile, ek):
+    for satir in ar.olcum_satirlari(_kurulum(aile=aile, **ek), azami=9):
+        for sifat in YASAK_SIFATLAR:
+            assert sifat not in satir.lower(), (aile, sifat, satir)
+
+
+def test_tuttu_ifadesi_motorun_terminal_durumunu_dogru_anlatir():
+    """`tamamlandı` = "hedefe ulaştı" DEĞİL; "kırılım tuttu, banda dönmedi".
+
+    Bu ayrım kartın en yanlış anlaşılacak yeridir (kullanıcı 2026-10-22:
+    "formasyonun tamamlanması teknik bilen biri bile anlayamayabilir").
+    """
+    satir = ar.olcum_satirlari(_kurulum(aile="FRM"), azami=1)[0]
+    assert "tuttu" in satir
+    assert "tamamlandı" not in satir and "hedef" not in satir
+
+
+def test_hareket_satiri_tl_ve_yuzde_verir():
+    """1,23 ATR → canlı ATR ve fiyatla TL + yüzde (okumak için ATR bilmek gerekmez)."""
+    k = _kurulum(aile="FRM", atr=0.85, break_price=39.60, ph=43.0, pl=36.0)
+    satirlar = ar.olcum_satirlari(k, azami=9)
+    hareket = [x for x in satirlar if "tutunca" in x]
+    assert hareket, satirlar
+    assert "TL" in hareket[0] and "%" in hareket[0], hareket[0]
+
+
+def test_hareket_satiri_atr_yoksa_kat_olarak_kalir():
+    k = _kurulum(aile="FRM", atr=None, break_price=39.60, ph=43.0, pl=36.0)
+    hareket = [x for x in ar.olcum_satirlari(k, azami=9) if "tutunca" in x]
+    assert not hareket, "ATR yoksa TL çevirisi uydurulmaz"

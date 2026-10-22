@@ -3002,6 +3002,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             # girmez — iki ayrı yüzde yan yana
                                             # okunmuyordu (2026-10-22 kararı).
                                             aile="FRM",
+                                            # Kart 3 ölçü satırı taşır
+                                            # (GÖRSEL-9 blok düzeni).
+                                            azami_olcum=3,
                                             atr=atr_alarm,
                                             yon=break_dir,
                                             retest_seen=payload.get('retest_seen'),

@@ -153,3 +153,61 @@ def test_eksik_alanlarla_da_uretilir(durum):
     satirlar = _satirlar(metin)
     assert satirlar[0].startswith(("▲", "▼")) and satirlar[-1].startswith("• ")
     assert not _tasma(satirlar)
+
+
+# ---------------------------------------------------- sade dil sözleşmesi (Faz 3)
+
+def _kart_metni(**ek):
+    """7 bloklu sade kartı ölçüm bloğuyla üret (DM biçimi)."""
+    payload = {
+        "stock_name": "SISE", "timeframe": "4h", "state": "KIRILIM_TEYITLI",
+        "pattern_name": "Yükselen Üçgen", "break_dir": 1, "break_price": 39.26,
+        "candle_close_price": 39.60, "confidence_score": 81, "break_strength": 100,
+        "age_bars": 94, "band_baslangic": "2026-09-30T16:30:00+03:00",
+        "retest_seen": False, "mtf_destek": True, "upper_now": 39.96,
+        "bar_time": "2026-10-21T13:30:00+03:00",
+        "bar_kapanis": "2026-10-21T17:30:00+03:00",
+        "domain_bolumleri": {
+            "engel": ["▲ direnç · boşluk 4s 41,90 +%5,8"],
+            "yapi_ozet": ["◈ 4s yapı dış ve iç yukarı"],
+            "hacim": ["katılım 4s hacim 0,45 kat"],
+            "olcum": ["◇ 32321 formasyon · %76 tuttu",
+                      "◇ tutunca ~1,05 TL · %2,6",
+                      "◇ rol uyumlu %80 · 15724"],
+        },
+        "domain_karsi": ["iç yapı aşağı döndü"],
+    }
+    payload.update(ek)
+    return notifier._format_lifecycle_alert_kart(payload)
+
+
+#: Kart yüzeyinde yaşamayan kısaltmalar (kullanıcı: "herkesin anlayabileceği format").
+KART_JARGON = ("ATR", "RVOL", "FVG", "BOS", "CHoCH", "OB ", " n1", "n1651", "bar ")
+
+
+def test_kart_jargon_tasimaz():
+    metin = _kart_metni()
+    for kisa in KART_JARGON:
+        assert kisa not in metin, (kisa, metin)
+
+
+def test_kart_mum_dili_kullanir():
+    """"bar" yerine "mum": aynı şey, herkesin bildiği sözcük."""
+    assert "mum" in _kart_metni()
+    assert "bant 94 bar" not in _kart_metni()
+
+
+def test_kart_olcum_bloku_uc_satir_ve_dipnot():
+    satirlar = _kart_metni().splitlines()
+    olcum = [s for s in satirlar if s.startswith("◇")]
+    assert len(olcum) == 3, olcum
+    assert "· geçmiş davranış, kazanç değil" in satirlar
+
+
+def test_kart_satir_butcesi_ve_satir_tavani():
+    metin = _kart_metni()
+    dolu = [s for s in metin.splitlines() if s.strip()]
+    assert len(dolu) <= notifier._KART_MAKS_SATIR, len(dolu)
+    for satir in dolu:
+        assert tm.genislik(satir) <= notifier._kart_esik_px() + 0.1, satir
+        assert satir == satir.lstrip(), f"girinti yok: {satir!r}"
