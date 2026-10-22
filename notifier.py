@@ -554,6 +554,8 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False,
     if olcum:
         blok = []
         # Kart 3 ölçü satırı taşır; public bültende 2 (2026-10-22 kararı).
+        # Beklenti hükmü açıksa (TELEGRAM_KART_TAHMIN) hüküm + sayaç satırları
+        # ölçüm satırlarının önüne gelir; `olcum` listesi zaten o sırayla üretilir.
         for satir in olcum[:(2 if public else 3)]:
             _satir(blok, str(satir))
         # Ölçüm dipnotu: oran "kazanç" diye okunmasın. `/tara` satırının yerine

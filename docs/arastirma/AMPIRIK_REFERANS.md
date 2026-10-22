@@ -84,6 +84,36 @@ Bu yüzden her alarm yalnız kendi ailesini basar:
 | `ZONE` | `zone` · `yukseklik` · `rvol` | `◇ 240484 temasta %65 tepki` |
 | `""` (boş) | kısıtsız — eski davranış (geri dönüş yolu) | — |
 
+### Beklenti hükmü (`TELEGRAM_KART_TAHMIN`, varsayılan KAPALI)
+
+Ölçüm satırlarının **önüne** tek kelimelik bir hüküm eklenebilir:
+`devam` · `tek kanıt` · `kararsız` · `yön kanıtı yok`. Hüküm bir yön tahmini
+DEĞİLDİR: NET %95 GA 11 hücrenin 10'unda sıfırı içerdiği için "yukarı gider"
+cümlesinin kanıtı yok. Hüküm yalnız "ölçümler aynı yöne mi bakıyor" sorusunu
+cevaplar.
+
+| Ölçüm | Taban | Eşik (puan) | Gerekçe (yayılım) |
+|---|---|---|---|
+| MS devamı | %65,5 | ±5,0 | 32 hücre %57,5–77,5 → yayılım 20, yarısı 10; muhafazakâr 5 |
+| Hacim (rvol) | %65,5 | ±4,0 | Q1–Q4 farkı 9,2 (2h) · 9,1 (4h) |
+| Bölge yüksekliği | %65,5 | ±3,0 | kova yayılımı %64,3–71,0 |
+| Rol uyumu | %75,0 | ±5,0 | uyumlu/uyumsuz farkı 6,6 → eşiği GEÇMEZ (nötr) |
+| Zone içi/dışı | %65,5 | ±2,0 | fark 1,1 → hiçbir zaman geçmez |
+
+Kurallar:
+
+* `n < 300` hücre hükme **girmez** (gürültü) — bölge ≥2 kat kovası (n=162) bu
+  yüzden tek başına hüküm üretmez.
+* Rol uyumu tabanı formasyon ailesinindir (%75,0), dokunuş tabanı (%65,5)
+  değil: aksi hâlde 79,7 − 65,5 = +14,2 ile yapay "güçlü lehte" çıkardı.
+* Hüküm satırı + sayaç satırı ölçüm slotlarını yer; kart 3 satırı aşmaz
+  (hüküm varsa en çok 1 ölçüm satırı kalır).
+* **Yön kanıtı yoksa satır basılmaz** (boş satır yerine yokluk).
+* Sıfat yok: gücü `◇ 2 ölçüm lehte · 1 aleyhte` sayacı söyler; `kararsız`
+  durumunda aleyhte olanın **adı** yazılır.
+* Varsayılan kapalı: `TELEGRAM_KART_TAHMIN=1` ile açılır (bir hafta izleme
+  şartı — tasarım `TAHMIN_UYGULAMA_PLANI.md` §8).
+
 ### Nadir kademesi — `n < 300`
 
 Tabanı 300'ün altında olan kesitte **oran basılmaz**: `◇ nadir (162) · yorum yok`.

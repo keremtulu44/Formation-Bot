@@ -3029,6 +3029,11 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             # Kart 3 ölçü satırı taşır
                                             # (GÖRSEL-9 blok düzeni).
                                             azami_olcum=3,
+                                            # Beklenti hükmü varsayılan KAPALI
+                                            # (TELEGRAM_KART_TAHMIN); açıkken
+                                            # ölçüm satırlarının önüne hüküm +
+                                            # sayaç girer, kart 3 satırı aşmaz.
+                                            beklenti=bool(getattr(config, "TELEGRAM_KART_TAHMIN", False)),
                                             atr=atr_alarm,
                                             yon=break_dir,
                                             retest_seen=payload.get('retest_seen'),

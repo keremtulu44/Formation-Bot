@@ -1,6 +1,8 @@
 # Tahmin katmanı — "1 · 2 · 3" şablonu (2026-10-21 · tasarım)
 
-> **Durum:** Tasarım önizlemesi. **Kod değişmedi.**
+> **Durum:** **Uygulandı** (2026-10-22) — `ampirik_referans.beklenti()` /
+> `beklenti_satirlari()`, kartta `TELEGRAM_KART_TAHMIN` (varsayılan KAPALI),
+> 9 test. `/tara` tam çıktısı (adım 4) henüz bağlanmadı.
 > **Kısa cevap:** Evet yapılabilir — ama **yön tahmini** olarak değil, **ölçülmüş
 > beklenti** olarak. Aradaki fark bu belgenin tamamı.
 

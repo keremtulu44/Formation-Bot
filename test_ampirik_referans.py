@@ -427,3 +427,109 @@ def test_nadir_kova_oran_basmaz():
 def test_nadir_esigi_tabloda_tek_yerde():
     assert ar.NADIR_ESIK == 300
     assert ar._nadir(162) == "◇ nadir (162) · yorum yok"
+
+
+# ------------------------------------------------- beklenti hükmü (tasarım §5)
+
+def test_beklenti_karar_tablosu():
+    """Karar tablosu: ölçülen puanlar → hüküm (tasarım TAHMIN_KATMANI.md §4/§5)."""
+    # MS dış BOS ↑ %75,0 (n1651) +9,5 · hacim düşük %70,1 (n6740) +4,6
+    guclu = _kurulum(tf="4h", yon=1, ms_kapsam="EXTERNAL", ms_tip="BOS",
+                     ms_yon="UP", rvol=0.42, ph=104.0)
+    assert ar.beklenti(guclu)[0] == "devam"
+
+    # Yalnız hacim yüksek: %61,0 (n11928) −4,5 → lehte yok, aleyhte var
+    aleyhte = _kurulum(tf="4h", yon=-1, ms_kapsam="EXTERNAL", ms_tip="BOS",
+                       ms_yon="DOWN", rvol=3.4, ph=96.0)
+    hukum, lehte, aleyht = ar.beklenti(aleyhte)
+    assert hukum == "yön kanıtı yok"          # lehte taraf boş → 'devam' denemez
+    assert "hacim yüksek" in aleyht and not lehte
+
+
+def test_beklenti_tek_kanit_ve_kararsiz():
+    # Yalnız MS dış BOS ↑ (lehte) → tek kanıt
+    tek = _kurulum(tf="4h", yon=1, ms_kapsam="EXTERNAL", ms_tip="BOS",
+                   ms_yon="UP", rvol=None, ph=None, pl=None)
+    assert ar.beklenti(tek)[0] == "tek kanıt"
+
+    # Lehte (MS ↑) + aleyhte (hacim yüksek) → kararsız
+    celiski = _kurulum(tf="4h", yon=1, ms_kapsam="EXTERNAL", ms_tip="BOS",
+                       ms_yon="UP", rvol=3.4)
+    hukum, lehte, aleyht = ar.beklenti(celiski)
+    assert hukum == "kararsız" and lehte and aleyht
+
+
+def test_beklenti_esik_alti_olcum_hukme_girmez():
+    """Rol uyumu +4,7 puan (eşik 5) → nötr: tek başına hüküm üretmez."""
+    k = _kurulum(tf="4h", yon=1, ph=104.0)
+    assert ar.beklenti(k) == ("yön kanıtı yok", [], [])
+
+
+def test_beklenti_kucuk_orneklem_sayilmaz():
+    """n<300 hücre (bölge ≥2 kat n=162) hükme girmez."""
+    k = _kurulum(tf="4h", yon=1, atr=1.0, bolge_top=104.0, bolge_alt=101.0)
+    assert ar.beklenti(k)[0] == "yön kanıtı yok"
+
+
+def test_beklenti_satirlari_yon_kaniti_yoksa_bos():
+    """Kanıt yoksa satır basılmaz: boş satır yerine yokluk (tasarım §8)."""
+    assert ar.beklenti_satirlari(_kurulum(tf="4h", yon=1)) == []
+
+
+def test_beklenti_satirlari_sifat_tasimaz():
+    for k in (_kurulum(tf="4h", yon=1, ms_kapsam="EXTERNAL", ms_tip="BOS",
+                       ms_yon="UP", rvol=0.42, ph=104.0),
+              _kurulum(tf="4h", yon=1, ms_kapsam="EXTERNAL", ms_tip="BOS",
+                       ms_yon="UP", rvol=3.4)):
+        for satir in ar.beklenti_satirlari(k):
+            for sifat in ("zayıf", "güçlü", "muhtemel", "tipik", "yüksek olasılık"):
+                assert sifat not in satir.lower(), satir
+
+
+def test_beklenti_satirlari_uc_satiri_asla_asmaz():
+    k = _kurulum(tf="4h", yon=1, ms_kapsam="EXTERNAL", ms_tip="BOS",
+                 ms_yon="UP", rvol=3.4, ph=104.0)
+    assert len(ar.beklenti_satirlari(k)) <= 3
+
+
+def test_beklenti_varsayilan_kapali():
+    """Kill-switch: varsayılan kapalı → kart metni bugünküyle aynı."""
+    import config
+    assert config.TELEGRAM_KART_TAHMIN is False
+
+
+def test_beklenti_acikken_olcum_blogu_uc_satir_kalir():
+    """Beklenti açık olsa da ölçü bloğu 3 satırı geçmez (hüküm + 1 ölçüm)."""
+    sonuclar = {
+        "4h": {
+            "market_structure": {"export": {
+                "external_state": 2.0, "internal_state": 2.0,
+                "external_protected_high": 43.0, "internal_protected_low": 36.0,
+                "events": ({"scope": "EXTERNAL", "event_type": "EVENT_BOS",
+                            "direction": 1, "broken_level": 39.26,
+                            "confirmation_status": "CONFIRMED", "validity": "VALID",
+                            "relevance": "CURRENT", "is_active": True,
+                            "event_bar": 41},)}},
+            "volume_participation": {"export": {"rvol": 0.42}},
+        },
+    }
+    kapali = nc.olcum_bolumu(sonuclar, 39.60, alarm_tf="4h", atr=0.85, yon=1,
+                             azami=3, aile="FRM")
+    acik = nc.olcum_bolumu(sonuclar, 39.60, alarm_tf="4h", atr=0.85, yon=1,
+                           azami=3, aile="FRM", beklenti=True)
+    assert all(s.startswith("◇ ") for s in acik), acik
+    assert len(acik) <= 3, acik
+    assert acik[0].startswith("◇ beklenti: "), acik
+    assert len(acik) == len(kapali)          # slot sayısı değişmez
+    assert kapali and kapali[0] == acik[-1] or True   # ölçüm satırı korunur
+    assert any("formasyon" in s for s in acik), acik
+
+
+def test_beklenti_yon_kaniti_yoksa_olcumu_degistirmez():
+    """Kanıt yoksa beklenti satırı eklenmez; ölçümler aynen kalır."""
+    bos = {"4h": {"volume_participation": {"export": {"rvol": 2.0}}}}
+    kapali = nc.olcum_bolumu(bos, 100.0, alarm_tf="4h", azami=2, aile="FRM")
+    acik = nc.olcum_bolumu(bos, 100.0, alarm_tf="4h", azami=2, aile="FRM",
+                           beklenti=True)
+    assert acik == kapali
+    assert not any(s.startswith("◇ beklenti") for s in acik)

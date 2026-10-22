@@ -194,6 +194,44 @@ AILE_OLCU = {
 }
 
 # Önerilen satır sırası: küçük numara önce basılır.
+#: Karşılaştırma TABANLARI — her ölçüm kendi ailesinin tabanıyla kıyaslanır.
+#:
+#: * `ms`, `rvol`, `yukseklik`, `zone` → **dokunuş tabanı %65,5** (Soru 2
+#:   aralığının alt ucu). Bu ölçümler "temas sonrası ne oldu" sorusunun
+#:   cevabıdır; tabanları da aynı evrendir.
+#: * `uyum` → **formasyon tabanı %75,0** (FRM-15 %76,2; muhafazakâr yuvarlanmış).
+#:   Rol uyumu formasyon ailesinin ölçümüdür; dokunuş tabanıyla kıyaslamak
+#:   onu yapay olarak "güçlü lehte" gösterirdi (79,7 − 65,5 = +14,2), oysa
+#:   formasyon tabanına göre fark +4,7 puandır ve eşiği (5) GEÇMEZ.
+#:
+#: Taban yanlış seçilirse hüküm de yanlış olur; bu yüzden ölçüm→taban eşlemesi
+#: tek yerde ve testle korunur.
+KANIT_TABANLARI = {
+    "ms": 65.5,
+    "rvol": 65.5,
+    "yukseklik": 65.5,
+    "zone": 65.5,
+    "uyum": 75.0,
+}
+#: Geriye dönük ad (tek taban varmış gibi okuyan çağıranlar için).
+KANIT_TABANI = KANIT_TABANLARI["ms"]
+
+#: Ölçüm başına "kanıt eşiği" (puan). Kural: eşik, o ölçümün kendi yayılımının
+#: YARISIDIR (muhafazakâr yuvarlanmış). Etki eşiğin altındaysa ölçüm **nötr**dür
+#: ve hükme girmez — böylece "%4 fark var ama kanıtlanmadı" gibi cümleler
+#: kendiliğinden elenir. Gerekçeler: docs/tasarim/TAHMIN_UYGULAMA_PLANI.md §1.
+KANIT_ESIKLERI = {
+    "ms": 5.0,        # 32 hücre %57,5–77,5 → yayılım 20, yarısı 10; muhafazakâr 5
+    "rvol": 4.0,      # Q1–Q4 farkı 9,2 (2h) · 9,1 (4h)
+    "yukseklik": 3.0,  # kova yayılımı %64,3–71,0
+    "uyum": 5.0,      # uyumlu/uyumsuz farkı 6,6
+    "zone": 2.0,      # fark 1,1 → HİÇBİR ZAMAN geçmez (bilerek: kanıt yok)
+}
+
+#: Küçük örneklem eşiği: altındaki hücre hükme GİRMEZ (sadece kartdan basılmaz
+#: değil — beklenti hükmünde de sayılmaz).
+KANIT_MIN_N = 300
+
 #: Nadir kesit eşiği (2026-10-22 kararı, kullanıcı: "nadir senaryo yorum yapmak
 #: doğru olmaz yazılsın"). Tabanı bu sayının altında olan ölçümde ORAN basılmaz;
 #: satır `◇ nadir (162) · yorum yok` olur. Sebep: 162 gözlemde %71 ile %60
@@ -483,6 +521,160 @@ def _hareket_satiri(k: Kurulum) -> tuple[str, int] | None:
         return (f"◇ tutunca ~{_say(tl, 2)} TL · {_yuzde(oran, 1)}",
                 ONCELIK["hareket"])
     return (f"◇ tutunca ~{_say(kat, 1)} kat", ONCELIK["hareket"])
+
+
+# --- beklenti hükmü (tasarım: docs/tasarim/TAHMIN_KATMANI.md) --------------
+#
+# NE YAPMIYOR: yön tahmini vermiyor. MFE ≈ MAE (ikisi de ~2 ATR) ve NET %95 GA
+# 11 hücrenin 10'unda sıfırı içeriyor; yani "yukarı gider / aşağı gelir"
+# cümlesinin kanıtı YOK. Bu katman yalnız "geçmişte bu kurulum nasıl bitti"
+# der ve çelişkiyi sayar.
+#
+# HÜKÜM TEK KELİME: devam · tek kanıt · kararsız · yön kanıtı yok.
+# Sıfat yok (`zayıf`, `güçlü`, `muhtemel`): gücü SAYI söyler (kaç lehte,
+# kaç aleyhte). Aynı satırda hem oran hem sıfat olunca hangisinin ne olduğu
+# okunmuyordu (kullanıcı kararı 2026-10-22).
+
+
+def _kanit(ad: str, oran: float, n: int, esik: float,
+           *, yon: str = "") -> tuple[str, int] | None:
+    """Tek ölçümü kanıt olarak sınıflar: (taraf, puan) ya da None (nötr).
+
+    `taraf`: "lehte" | "aleyhte". Puan: tabandan sapma (işaretli).
+    """
+    if int(n) < KANIT_MIN_N:
+        return None                    # küçük örneklem hükme girmez
+    puan = oran - KANIT_TABANLARI.get(ad, KANIT_TABANI)
+    if abs(puan) < esik:
+        return None                    # nötr: gürültü, hükme girmez
+    return (("lehte" if puan > 0 else "aleyhte"), int(round(abs(puan))))
+
+
+def beklenti(k: Kurulum) -> tuple[str, list[str], list[str]]:
+    """(hüküm, lehte adları, aleyhte adları).
+
+    Hüküm tablosu (tasarım §5):
+      ≥2 lehte, 0 aleyhte → `devam`
+      1 lehte, 0 aleyhte  → `tek kanıt`
+      ≥1 lehte, ≥1 aleyhte → `kararsız`
+      0 lehte, 0 aleyhte  → `yön kanıtı yok`
+
+    Not: "yalnız aleyhte kanıt" da `yön kanıtı yok` döner — lehte taraf boş
+    olduğu için "devam" denemez; aleyhte ölçümün adı yine yazılır.
+    """
+    if not str(k.tf or "").strip():
+        return ("yön kanıtı yok", [], [])
+    lehte: list[str] = []
+    aleyhte: list[str] = []
+
+    # 1) MS devamı — kapsam × tip × yön hücresi.
+    kayit = None
+    if k.ms_kapsam and k.ms_tip:
+        kapsam = "DIS" if str(k.ms_kapsam).upper().startswith(("EXT", "DIS")) else "IC"
+        tip = "CHOCH" if "CHOCH" in str(k.ms_tip).upper() else "BOS"
+        anahtar = (str(k.tf).lower(), kapsam, tip,
+                   {"UP": "UP", "DOWN": "DOWN"}.get(str(k.ms_yon or "").upper(), ""))
+        kayit = MS_YON.get(anahtar) or MS_TIP.get(anahtar[:3])
+    if kayit:
+        n, oran, _devam = kayit
+        sinif = _kanit("ms", oran, n, KANIT_ESIKLERI["ms"])
+        if sinif:
+            (lehte if sinif[0] == "lehte" else aleyhte).append("kırılım devamı")
+
+    # 2) Bölge yüksekliği — yalnız ≥2 kat kovası (n=162 < 300 → girmez, dürüst).
+    if k.atr and k.bolge_top is not None and k.bolge_alt is not None:
+        try:
+            kat = (float(k.bolge_top) - float(k.bolge_alt)) / float(k.atr)
+        except (TypeError, ValueError, ZeroDivisionError):
+            kat = None
+        if kat is not None:
+            for ust, n, oran, _notu in YUKSEKLIK_KOVALARI:
+                if (ust is None and kat >= 2.0) or (ust is not None and kat < ust):
+                    sinif = _kanit("yukseklik", oran, n, KANIT_ESIKLERI["yukseklik"])
+                    if sinif:
+                        (lehte if sinif[0] == "lehte" else aleyhte).append("bölge genişliği")
+                    break
+
+    # 3) Hacim çeyreği — yalnız uçlar (≈Q1 / ≈Q4).
+    if k.rvol is not None:
+        kova = _rvol_kovasi(k.tf, k.rvol)
+        if kova is not None:
+            indeks, (n, oran, _yon, _ort) = kova
+            if indeks in (0, 3):
+                sinif = _kanit("rvol", oran, n, KANIT_ESIKLERI["rvol"])
+                if sinif:
+                    (lehte if sinif[0] == "lehte" else aleyhte).append(
+                        "hacim yüksek" if indeks == 3 else "hacim düşük")
+
+    # 4) Rol uyumu — fark 6,6 puan, eşik 5 → sınırda kalır (bilerek).
+    if k.yon and (k.ph is not None or k.pl is not None):
+        uyumlu = None
+        try:
+            if k.yon > 0 and k.ph is not None:
+                uyumlu = True              # yukarı kırılım + üstte korunan tepe
+            elif k.yon < 0 and k.pl is not None:
+                uyumlu = True
+            else:
+                uyumlu = False
+        except (TypeError, ValueError):
+            uyumlu = None
+        if uyumlu is not None:
+            n, oran = FRM_UYUM["uyumlu" if uyumlu else "uyumsuz"]
+            sinif = _kanit("uyum", oran, n, KANIT_ESIKLERI["uyum"])
+            if sinif:
+                (lehte if sinif[0] == "lehte" else aleyhte).append("rol uyumu")
+
+    if len(lehte) >= 2 and not aleyhte:
+        hukum = "devam"
+    elif len(lehte) == 1 and not aleyhte:
+        hukum = "tek kanıt"
+    elif lehte and aleyhte:
+        hukum = "kararsız"
+    else:
+        hukum = "yön kanıtı yok"
+    return (hukum, lehte, aleyhte)
+
+
+def beklenti_satirlari(k: Kurulum) -> list[str]:
+    """Karta girecek beklenti satırları; kanıt yoksa BOŞ liste.
+
+    Kural (tasarım §8): yön kanıtı yoksa satır basılmaz — boş satır yerine
+    yokluk. `kararsız` durumunda aleyhte olanın ADI yazılır; sıfat yazılmaz.
+    """
+    hukum, lehte, aleyhte = beklenti(k)
+    if hukum == "yön kanıtı yok":
+        return []
+    satirlar = [f"◇ beklenti: {hukum}"]
+    parcalar = []
+    if lehte:
+        parcalar.append(f"{len(lehte)} ölçüm lehte")
+    if aleyhte:
+        parcalar.append(f"{len(aleyhte)} aleyhte")
+    if parcalar:
+        satirlar.append("◇ " + " · ".join(parcalar))
+    if aleyhte:
+        satirlar.append(f"◇ aleyhte: {', '.join(aleyhte)}")
+    return satirlar
+
+
+def _rvol_kovasi(tf: str, rvol: float | None):  # noqa: D401 - kısa yardımcı
+    """RVOL'ü en yakın çeyrek kovasına atar: (indeks, kova) ya da None."""
+    if rvol is None:
+        return None
+    kovalar = RVOL_KOVALARI.get(str(tf or "").lower())
+    if not kovalar:
+        return None
+    try:
+        deger = float(rvol)
+    except (TypeError, ValueError):
+        return None
+    en_yakin = None
+    for indeks, kova in enumerate(kovalar):
+        ortalama = kova[3]
+        fark = abs(deger - float(ortalama))
+        if en_yakin is None or fark < en_yakin[0]:
+            en_yakin = (fark, indeks, kova)
+    return (en_yakin[1], en_yakin[2]) if en_yakin else None
 
 
 def olcum_satirlari(k: Kurulum, *, azami: int = 2) -> list[str]:

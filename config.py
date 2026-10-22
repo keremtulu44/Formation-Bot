@@ -245,6 +245,14 @@ TELEGRAM_ALERT_STYLE = os.getenv("TELEGRAM_ALERT_STYLE", "kart").strip().lower()
 # 45/980 → 10/244. "0" yazılırsa 25 Eyl biçimi (tam kart) aynen geri gelir.
 TELEGRAM_KART_SUZGEC = os.getenv("TELEGRAM_KART_SUZGEC", "1").strip().lower() not in {
     "0", "false", "kapali", "kapalı", "yok", "hayir", "hayır"}
+# Beklenti (tahmin) hükmü: `◇ beklenti: devam` + sayaç satırı. VARSAYILAN
+# KAPALI (2026-10-22): katman ölçülmüş ilişkilerden türetiliyor ama canlı
+# akışta bir hafta izlenmeden açılmayacak (tasarım: TAHMIN_UYGULAMA_PLANI.md
+# §8/3). Açmak için `TELEGRAM_KART_TAHMIN=1`.
+# Kural: yön kanıtı yoksa satır basılmaz; hüküm tek kelimedir (devam · tek
+# kanıt · kararsız), sıfat yok.
+TELEGRAM_KART_TAHMIN = os.getenv("TELEGRAM_KART_TAHMIN", "0").strip().lower() in {
+    "1", "true", "acik", "açık", "on", "evet"}
 # Telefon sohbetinde metne ayrılan genişlik (px, 360 px ekran). telegram_measure.py
 # bu bütçeyle satır böler; 0 = bölme yok (satır uzunluğu serbest).
 # not: _env_int 0'ı 1'e yuvarlar; sıfır "bölme yok" demek olabildiği için float okunur.

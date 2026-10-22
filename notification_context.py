@@ -960,10 +960,16 @@ def _korunan_seviyeler(results_by_timeframe: Any, alarm_tf: str) -> tuple[float 
 def olcum_bolumu(results_by_timeframe: Any, reference_price: Any = None, *,
                  alarm_tf: str | None = None, atr: float | None = None,
                  yon: int = 0, retest_seen: bool | None = None,
-                 azami: int = 2, aile: str = "") -> list[str]:
+                 azami: int = 2, aile: str = "",
+                 beklenti: bool = False) -> list[str]:
     """Kuruluma koşullu ölçüm satırları (`ampirik_referans`).
 
     Veri yoksa veya tabloda o kesit yoksa satır üretilmez; uydurma yapılmaz.
+
+    `beklenti=True` (varsayılan KAPALI): ölçüm satırlarının ÖNÜNE beklenti
+    hükmü eklenir (`◇ beklenti: devam` + sayaç). Hüküm varsa en çok 1 ölçüm
+    satırı kalır — kart 3 satırı aşmaz (tasarım: TAHMIN_KATMANI.md §8).
+    Yön kanıtı yoksa beklenti satırı **hiç** basılmaz.
     """
     import ampirik_referans as ar
 
@@ -995,7 +1001,14 @@ def olcum_bolumu(results_by_timeframe: Any, reference_price: Any = None, *,
         ms_yon=ms_yon,
         aile=str(aile or ""),
     )
-    return ar.olcum_satirlari(kurulum, azami=azami)
+    if not beklenti:
+        return ar.olcum_satirlari(kurulum, azami=azami)
+    hukum_satirlari = ar.beklenti_satirlari(kurulum)
+    if not hukum_satirlari:
+        # Yön kanıtı yok: hüküm satırı yok, ölçümler normal akışta.
+        return ar.olcum_satirlari(kurulum, azami=azami)
+    kalan = max(0, int(azami) - len(hukum_satirlari))
+    return hukum_satirlari + ar.olcum_satirlari(kurulum, azami=kalan)
 
 
 def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
@@ -1003,7 +1016,8 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
                      yalniz_tf: bool = False, olcum: bool = False,
                      atr: float | None = None, yon: int = 0,
                      retest_seen: bool | None = None,
-                     azami_olcum: int = 2, aile: str = "") -> dict:
+                     azami_olcum: int = 2, aile: str = "",
+                     beklenti: bool = False) -> dict:
     """Domain bağlamını bölüm bölüm döndürür (kart biçimleyicisi için).
 
     `stil="kart"`: `yapi`/`ust`/`alt`/`hacim` anahtarlarında hazır satırlar.
@@ -1044,6 +1058,7 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
             bolumler["olcum"] = olcum_bolumu(
                 results_by_timeframe, reference, alarm_tf=alarm_tf, atr=atr,
                 yon=yon, retest_seen=retest_seen, azami=azami_olcum, aile=aile,
+                beklenti=beklenti,
             )
         return {k: v for k, v in bolumler.items() if v}
     bolumler["yapi"] = _format_market_structure(satirlar)
@@ -1056,6 +1071,7 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
         bolumler["olcum"] = olcum_bolumu(
             results_by_timeframe, reference, alarm_tf=alarm_tf, atr=atr,
             yon=yon, retest_seen=retest_seen, azami=azami_olcum, aile=aile,
+            beklenti=beklenti,
         )
     return {k: v for k, v in bolumler.items() if v}
 
