@@ -500,3 +500,54 @@ def test_public_aralik_varsayilani_iki_saniye():
     """Bülten + kare art arda gidiyor; 1,2 sn grup hız sınırında 429 üretiyordu."""
     import config
     assert config.PUBLIC_MIN_ARALIK_SN >= 2.0
+
+
+# --- 9) Bülten bütçesi: sığmayan olay kaybolmaz -----------------------------
+
+def test_bulten_butcesi_asilmaz_ve_sayiyi_dogru_yazar(grup_notifier):
+    n = grup_notifier
+    n._BULTEN_KR_BUTCE = 900          # ~2-3 olay sığar
+    kayitlar = [_zengin_olay(stock=f"SEM{i:02d}", formation_id=f"f{i}")
+                for i in range(8)]
+    metin, giren = n._bulten_metni(kayitlar)
+    assert 0 < giren < len(kayitlar), (giren, len(metin))
+    assert len(metin) <= n._BULTEN_KR_BUTCE + 120
+    assert f"Bülten · {giren} gelişme" in metin
+    # Uyarı her zaman metnin SONUNDA: kesme olmadığı için kaybolmaz.
+    assert metin.rstrip().endswith("yatırım tavsiyesi değildir")
+    assert metin.count("yatırım tavsiyesi değildir") == 1
+
+
+def test_bulten_sigandan_fazlasi_kuyrukta_kalir(grup_notifier, monkeypatch):
+    n = grup_notifier
+    n._BULTEN_KR_BUTCE = 700
+    for i in range(5):
+        assert n.public_kuyruk(_zengin_olay(stock=f"SEM{i}", formation_id=f"k{i}"))
+    gonderilenler = []
+
+    def sahte_gonder(metin, deneme=1):
+        gonderilenler.append(metin)
+        return True
+
+    monkeypatch.setattr(n, "send_to_public", sahte_gonder)
+    monkeypatch.setattr(n, "public_grafik_gonder", lambda kayit: 0)
+    assert n.public_bosalt(azami=12) == 5          # hepsi eninde sonunda gider
+    assert len(gonderilenler) >= 2                 # birden çok bülten
+    assert n._public_kuyruk == []                  # hiçbir olay kaybolmadı
+    # Her bülten kendi sayısını doğru yazar ve uyarıyı bir kez taşır.
+    for metin in gonderilenler:
+        assert metin.count("yatırım tavsiyesi değildir") == 1
+        assert len(metin) <= 4096
+
+
+def test_bulten_tek_olay_butceyi_asse_de_gonderilir(grup_notifier, monkeypatch):
+    """Tek karar taşıyan olay kırpılarak da olsa gider — sessizce düşmez."""
+    n = grup_notifier
+    n._BULTEN_KR_BUTCE = 10           # bütçe saçma küçük: yine de ilk olay girer
+    assert n.public_kuyruk(_zengin_olay(formation_id="tek"))
+    cagrildi = []
+    monkeypatch.setattr(n, "send_to_public", lambda m, deneme=1: cagrildi.append(m) or True)
+    monkeypatch.setattr(n, "public_grafik_gonder", lambda kayit: 0)
+    assert n.public_bosalt() == 1
+    assert len(cagrildi) == 1
+    assert n._public_kuyruk == []

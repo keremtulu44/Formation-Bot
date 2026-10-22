@@ -1784,20 +1784,22 @@ class TelegramNotifier:
         kalan = list(kuyruk)
         while kalan:
             parca = kalan[:max(1, int(azami))]
-            metin = self.format_public_batch(parca)
-            if not metin:
-                kalan = kalan[len(parca):]
-                continue
+            metin, giren = self._bulten_metni(parca)
+            if not metin or giren <= 0:
+                # Bültene hiçbir olay sığmadı: bütçe/şablon sorunu; olayları
+                # sessizce düşürmek yerine turu bitir (sonraki turda denenir).
+                break
             if not self.send_to_public(metin):
                 # Bütçe/ağ engeli: kayıtlar kuyrukta kalır, sonraki turda denenir.
                 break
+            gonderilen_kismi = parca[:giren]
             # Metnin ardından kare (2026-10-22): public görsel = 1 kare + üst TF.
             # Görsel hatası metni geri almaz; sayaçla raporlanır.
-            for kayit in parca:
+            for kayit in gonderilen_kismi:
                 self.public_grafik_gonder(kayit)
-            gonderilen += len(parca)
-            basarili_kayitlar.extend(parca)
-            kalan = kalan[len(parca):]
+            gonderilen += giren
+            basarili_kayitlar.extend(gonderilen_kismi)
+            kalan = kalan[giren:]
         if gonderilen:
             damga = datetime.now(ISTANBUL_TZ).isoformat()
             with self._public_lck:
@@ -1811,6 +1813,13 @@ class TelegramNotifier:
             logger.info("Public bülten gönderildi: %d olay (%d mesaj)",
                         gonderilen, max(1, (gonderilen + azami - 1) // azami))
         return gonderilen
+
+    #: Bülten karakter bütçesi. Telegram tavanı 4096; pay bırakılır çünkü
+    #: `send_to_public` metni `metni_sigdir(...)` ile satır bazında düzenler ve
+    #: tavan aşılırsa `_kirp` ORTADAN keser: son olay yarım, yasal uyarı yok
+    #: olurdu. Bülten bu yüzden olay EKLEYEREK doldurulur ve sığmayan olay
+    #: sonraki bültene bırakılır (kaybolmaz, kuyrukta kalır).
+    _BULTEN_KR_BUTCE = 3300
 
     def format_public_batch(self, kayitlar: List[Dict]) -> str:
         """Grup sürümü bülten — DM kartıyla AYNI 7 blok (2026-10-22 kararı).
@@ -1833,19 +1842,43 @@ class TelegramNotifier:
         ]
         if not kayitlar:
             return ""
-        satirlar = [f"📊 Bülten · {len(kayitlar)} gelişme",
-                    f"   {_tr_tarih(datetime.now(ISTANBUL_TZ))}"]
+        metin, _adet = self._bulten_metni(kayitlar)
+        return metin
+
+    def _bulten_metni(self, kayitlar: List[Dict]) -> tuple[str, int]:
+        """(bülten metni, metne GERÇEKTEN giren olay sayısı).
+
+        Sayı ayrıca döner çünkü çağıran kuyruktan yalnız gönderilenleri
+        düşürür; sessiz kesme olay kaybı demek olurdu.
+        """
+        baslik = f"📊 Bülten · {len(kayitlar)} gelişme"
+        dipnot = "\n\n📌 yatırım tavsiyesi değildir"
+        satirlar = [baslik, f"   {_tr_tarih(datetime.now(ISTANBUL_TZ))}"]
+        kullanilan = len("\n".join(satirlar)) + len(dipnot)
+        giren = 0
         for k in kayitlar:
             kart = _format_lifecycle_alert_kart(k, public=True)
             # Kartın kendi uyarısı bültende tek kez yazılır (sonda 📌 ile).
             kart = kart.replace("\n\n• yatırım tavsiyesi değildir", "").rstrip()
             if not kart:
                 continue
+            ek = "\n\n" + kart
+            # İlk olay her hâlükârda girer (tek olay bütçeyi aşsa bile alma
+            # kararı verilmiş olaydır; kırpma son çare).
+            if giren and kullanilan + len(ek) + len(dipnot) > self._BULTEN_KR_BUTCE:
+                break
             satirlar.append("")
             satirlar.extend(kart.splitlines())
+            kullanilan += len(ek)
+            giren += 1
+        if giren == 0:
+            return "", 0
+        # Başlıktaki sayı metne giren olayı söyler (kuyrukta bekleyen ayrıdır).
+        if giren != len(kayitlar):
+            satirlar[0] = f"📊 Bülten · {giren} gelişme"
         satirlar.append("")
         satirlar.append("📌 yatırım tavsiyesi değildir")
-        return metni_sigdir("\n".join(satirlar), guvenlik=1.0)
+        return metni_sigdir("\n".join(satirlar), guvenlik=1.0), giren
 
     def format_public_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None,
                               izleme: List[Dict] = None, karne_kisa: str = "",
