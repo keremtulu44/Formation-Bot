@@ -19,7 +19,7 @@ yeniden üretilebilir ölçüm sonuçlarıyla. Amaç formatı beğenmek/beğenme
    böler, gönderim `_gonder()` içinde `satirlar_asiyor_mu()` ile denetlenir ve
    aşım WARNING olarak loglanır. Karakter limiti (70 kr) tek başına yetmiyor:
    `ı` ile `m` aynı değil.
-   Kart dışı yüzeyler (bülten, özet, komut yanıtları, karne) için aynı bütçe
+   Kart dışı yüzeyler (özet, komut yanıtları, karne) için aynı bütçe
    **üç merkezi gönderim noktasında** uygulanır: `notifier.send_text`,
    `notifier.send_to_public`, `telegram_commands._cevapla` →
    `metni_sigdir(metin, guvenlik=1.0)`. `guvenlik=1.0` liste/özet yüzeyleri
@@ -44,7 +44,7 @@ yeniden üretilebilir ölçüm sonuçlarıyla. Amaç formatı beğenmek/beğenme
    öncesi biçim. A/B karşılaştırma ve geri alma hakkı için korundu; kartta
    yapılan düzeltme klasik biçime uygulanmaz.
 9. **`◇` satırı ölçümdür, tahmin değil.** Kart, aynı kurulumun arşivdeki
-   sonucunu en çok **3** satırda (public bültende **2**) basar (koşul + n görünür, kaynak
+   sonucunu en çok **3** satırda basar — grup mesajı da aynı 3 satırı basar (koşul + n görünür, kaynak
    [arastirma/AMPIRIK_REFERANS.md](../arastirma/AMPIRIK_REFERANS.md)). Sayı
    biçimleyicide hesaplanmaz; `ampirik_referans` tablolarından gelir. Koşul
    sağlanmıyorsa satır basılmaz. Yatırım tavsiyesi dili testle yasak
@@ -81,7 +81,7 @@ yeniden üretilebilir ölçüm sonuçlarıyla. Amaç formatı beğenmek/beğenme
 ▤ 1s alt bölge emilim işareti         ← hacim: yargı / sayılar / katkı
    RVOL 0,53× ≈DV
 ▤ 4s: hacim verisi bekleniyor
-◇ rol uyumlu %80 n15724               ← arşiv ölçümü (en çok 2 satır)
+◇ rol uyumlu %80 n15724               ← arşiv ölçümü (en çok 3 satır)
 ! karşı delil: iç yapı ↓
 › /tara BIMAS
 • yatırım tavsiyesi değildir
@@ -190,11 +190,17 @@ Aynı kartta iki farklı yüzde basılmaz. Formasyon alarmı `FRM` ailesini
 `ZONE` ailesini basar (`ampirik_referans.AILE_OLCU`). `aile=""` eski davranışı
 korur (kısıtsız).
 
-### 7.4 Public = DM
+### 7.4 Public = DM (birebir)
 
-Grup bülteni aynı biçimleyiciyi `public=True` ile kullanır: aynı 7 blok, ölçü
-2 satır, yasal uyarı bültede **tek kez**, her olayın ardından **1 kare + üst
-zaman dilimi** görseli (DM 4 kare). `PUBLIC_MIN_ARALIK_SN` 1,2 → 2,0.
+Grup mesajı DM kartının **aynısıdır** — ayrı kip yok, ayrı başlık yok
+(2026-10-22 akşamı; kullanıcı: *"Gelişme olmamalı, DM ile aynı olmalı"*).
+Aynı biçimleyici, aynı 7 blok, aynı 3 `◇`, aynı `• yatırım tavsiyesi değildir`
+satırı. Toplu bülten (`📊 Bülten · N gelişme` + tarih) **kaldırıldı**: olay
+başına bir mesaj gider. Tek fark görseldedir: grup **1 kare + üst zaman dilimi**
+alır (DM 4 kare); `PUBLIC_MIN_ARALIK_SN` 1,2 → 2,0.
+
+Test: `test_public_grup.py::test_public_her_olay_kendi_mesajinda_dm_ile_ayni`
+mesaj metnini DM kartıyla **byte byte** karşılaştırır.
 
 ### 7.5 DM kapısı
 
@@ -234,10 +240,9 @@ MS motoru arızası karta **basılmaz** (karar D); `/durum`a `⚠️ MS (piyasa 
 motoru: N hissede hata · son: … · alarm kartı etkilenmez` satırı düşer (hisse
 bazlı sayaç; aynı hissenin iki TF alarmı sayacı şişirmez).
 
-Ölçüm (22 Ekim, örnek kayıtlarla): teyit kartı DM 25 satır / 524 kr / en geniş
-253,5 px; public 24 satır / 495 kr; geçersizleşme public 24 satır / 439 kr.
-12 olaylık bülten 2 mesaja bölünür (6+6), yasal uyarı her mesajda **bir** kez,
-en geniş satır 253,5 px (`_kart_esik_px` 283).
+Ölçüm (22 Ekim, örnek kayıtlarla): teyit kartı 25 satır / 524 kr / en geniş
+253,5 px; geçersizleşme 24 satır / 439 kr; en geniş satır 253,5 px
+(`_kart_esik_px` 283). Grup mesajı aynı kart olduğu için ölçüm de aynıdır.
 
 ### 7.9 Endeks + makro: iki kart satırı (22 Ekim 2026, gece)
 

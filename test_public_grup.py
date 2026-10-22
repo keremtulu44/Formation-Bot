@@ -166,25 +166,33 @@ def test_public_event_muhru_restartta_kalici(monkeypatch, grup_notifier):
     assert len(sahte.cagrilar) == 1
 
 
-def test_public_bulten_tek_mesajda_birlesir(monkeypatch, grup_notifier):
+def test_public_her_olay_kendi_mesajinda_dm_ile_ayni(monkeypatch, grup_notifier):
+    """Kullanıcı kararı (2026-10-22, akşam): "Gelişme olmamalı, DM ile aynı."
+
+    3 olay = 3 mesaj. Hiçbirinde bülten başlığı/sayı/tarih yok; her metin
+    DM kartının birebir aynısı (kendi yasal uyarısı dâhil).
+    """
     n = grup_notifier
-    for i, stock in enumerate(["ISMEN", "GARAN", "TTRAK"]):
-        assert n.public_kuyruk(_olay(stock=stock, tf="4h" if i != 2 else "1h",
-                                     state="KIRILIM_TEYITLI", q=80 + i))
+    olaylar = [_olay(stock=stock, tf="4h" if i != 2 else "1h",
+                     state="KIRILIM_TEYITLI", q=80 + i)
+               for i, stock in enumerate(["ISMEN", "GARAN", "TTRAK"])]
+    for olay in olaylar:
+        assert n.public_kuyruk(olay)
     sahte = _SahteRequests()
     monkeypatch.setitem(sys.modules, "requests", sahte)
     assert n.public_bosalt() == 3
-    assert len(sahte.cagrilar) == 1                   # 3 olay -> 1 mesaj
-    metin = sahte.cagrilar[0][1]["text"]
-    assert "3 gelişme" in metin
-    for stock in ("ISMEN", "GARAN", "TTRAK"):
-        assert stock in metin
-    assert "yatırım tavsiyesi değildir" in metin
+    assert len(sahte.cagrilar) == 3                   # 3 olay -> 3 mesaj
+    for olay, (_url, govde) in zip(olaylar, sahte.cagrilar):
+        metin = govde["text"]
+        assert metin == notifier_mod._format_lifecycle_alert_kart(olay)
+        assert "gelişme" not in metin
+        assert "Bülten" not in metin
+        assert metin.count("yatırım tavsiyesi değildir") == 1
     assert n._public_kuyruk == []
 
 
-def test_public_bulten_ic_notu_tasimaz(grup_notifier):
-    metin = grup_notifier.format_public_batch([_olay(state="KIRILIM_TEYITLI")])
+def test_public_mesaji_ic_notu_tasimaz(grup_notifier):
+    metin = grup_notifier.format_public_tekil(_olay(state="KIRILIM_TEYITLI"))
     for yasak in ("teyit bekleniyor", "Retest tutarsa", "Diğer izleme adayları"):
         assert yasak not in metin
 
@@ -408,8 +416,10 @@ def _zengin_olay(**ek):
     return veri
 
 
-def test_public_bulten_dm_kartiyla_ayni_yedi_blok(grup_notifier):
-    metin = grup_notifier.format_public_batch([_zengin_olay()])
+def test_public_mesaji_dm_kartiyla_ayni_yedi_blok(grup_notifier):
+    kayit = _zengin_olay()
+    metin = grup_notifier.format_public_tekil(kayit)
+    assert metin == notifier_mod._format_lifecycle_alert_kart(kayit)
     # 7 blok: OLAY / ÖNÜNDE / YAPI / ÖLÇÜ / KATILIM / SINIR / CTA
     assert "Alçalan Üçgen — kapanışla" in metin             # 1 OLAY
     assert "▲ direnç · boşluk 4s 41,90 +%5,8" in metin      # 2 ÖNÜNDE
@@ -421,23 +431,30 @@ def test_public_bulten_dm_kartiyla_ayni_yedi_blok(grup_notifier):
     assert "yatırım tavsiyesi değildir" in metin            # 7 CTA
 
 
-def test_public_bultende_olcu_en_fazla_iki_satir(grup_notifier):
-    metin = grup_notifier.format_public_batch([_zengin_olay()])
+def test_public_olcu_satirlari_dm_ile_ayni_uclu(grup_notifier):
+    """Eski kural (public 2 ölçü) kalktı: metin DM'in aynısı → 3 ölçü.
+
+    Kullanıcı kararı (2026-10-22, akşam) *"DM ile aynı olmalı"*: iki kip
+    tutmak "aynı" iddiasını sessizce bozuyordu.
+    """
+    kayit = _zengin_olay()
+    metin = grup_notifier.format_public_tekil(kayit)
     olcum = [s for s in metin.splitlines() if s.startswith("◇")]
-    assert len(olcum) == 2, olcum
-    # En düşük öncelikli satır (rol uyumu) düşer; çekirdek ölçü kalır.
-    assert "formasyon · %76 tuttu" in olcum[0]
-    assert not any("rol uyumlu" in s for s in olcum)
+    assert len(olcum) == 3, olcum
+    assert olcum == [s for s in
+                     notifier_mod._format_lifecycle_alert_kart(kayit).splitlines()
+                     if s.startswith("◇")]
 
 
-def test_public_bultende_uyari_tek_kez(grup_notifier):
-    metin = grup_notifier.format_public_batch([_zengin_olay(),
-                                              _zengin_olay(stock="GARAN")])
-    assert metin.count("yatırım tavsiyesi değildir") == 1
+def test_public_uyari_her_mesajda_bir_kez(grup_notifier):
+    """Tek mesaj = tek kart: uyarı her mesajda tam BİR kez (DM ile aynı)."""
+    for kayit in (_zengin_olay(), _zengin_olay(stock="GARAN")):
+        metin = grup_notifier.format_public_tekil(kayit)
+        assert metin.count("yatırım tavsiyesi değildir") == 1
 
 
-def test_public_bulten_jargon_tasimaz(grup_notifier):
-    metin = grup_notifier.format_public_batch([_zengin_olay()])
+def test_public_mesaji_jargon_tasimaz(grup_notifier):
+    metin = grup_notifier.format_public_tekil(_zengin_olay())
     for kisa in ("RVOL", "FVG", "BOS", "CHoCH", "ATR"):
         assert kisa not in metin, (kisa, metin)
 
@@ -450,7 +467,7 @@ def test_public_kuyruk_kart_baglamini_saklar(grup_notifier):
     assert n.public_kuyruk(veri) is True
     kayit = n._public_kuyruk[0]
     assert kayit["domain_bolumleri"]["olcum"], kayit
-    assert len(kayit["domain_bolumleri"]["olcum"]) <= 2       # bülten sınırı
+    assert len(kayit["domain_bolumleri"]["olcum"]) <= 3       # DM kartı sınırı
     assert kayit["domain_karsi"] == ["iç yapı aşağı döndü"]
     # Zaman damgası JSON'a yazılabilir metin olmalı (kuyruk diske yazılır).
     assert isinstance(kayit["bar_time"], str)
@@ -502,61 +519,55 @@ def test_public_aralik_varsayilani_iki_saniye():
     assert config.PUBLIC_MIN_ARALIK_SN >= 2.0
 
 
-# --- 9) Bülten bütçesi: sığmayan olay kaybolmaz -----------------------------
+# --- 9) Kuyruk: olay başına mesaj, engelde kayıt bekler ---------------------
 
-def test_bulten_butcesi_asilmaz_ve_sayiyi_dogru_yazar(grup_notifier):
+def test_kuyruk_bosaltmada_her_olay_tek_mesaj(grup_notifier, monkeypatch):
+    """5 olay → 5 mesaj; hepsi DM kartının aynısı, hiçbiri kuyrukta kalmaz."""
     n = grup_notifier
-    n._BULTEN_KR_BUTCE = 900          # ~2-3 olay sığar
     kayitlar = [_zengin_olay(stock=f"SEM{i:02d}", formation_id=f"f{i}")
-                for i in range(8)]
-    metin, giren = n._bulten_metni(kayitlar)
-    assert 0 < giren < len(kayitlar), (giren, len(metin))
-    assert len(metin) <= n._BULTEN_KR_BUTCE + 120
-    assert f"Bülten · {giren} gelişme" in metin
-    # Uyarı her zaman metnin SONUNDA: kesme olmadığı için kaybolmaz.
-    assert metin.rstrip().endswith("yatırım tavsiyesi değildir")
-    assert metin.count("yatırım tavsiyesi değildir") == 1
-
-
-def test_bulten_sigandan_fazlasi_kuyrukta_kalir(grup_notifier, monkeypatch):
-    n = grup_notifier
-    n._BULTEN_KR_BUTCE = 700
-    for i in range(5):
-        assert n.public_kuyruk(_zengin_olay(stock=f"SEM{i}", formation_id=f"k{i}"))
+                for i in range(5)]
+    for kayit in kayitlar:
+        assert n.public_kuyruk(kayit)
     gonderilenler = []
-
-    def sahte_gonder(metin, deneme=1):
-        gonderilenler.append(metin)
-        return True
-
-    monkeypatch.setattr(n, "send_to_public", sahte_gonder)
+    monkeypatch.setattr(n, "send_to_public",
+                        lambda metin, deneme=1: gonderilenler.append(metin) or True)
     monkeypatch.setattr(n, "public_grafik_gonder", lambda kayit: 0)
-    assert n.public_bosalt(azami=12) == 5          # hepsi eninde sonunda gider
-    assert len(gonderilenler) >= 2                 # birden çok bülten
+    assert n.public_bosalt(azami=12) == 5
+    assert len(gonderilenler) == 5                 # bülten yok: olay = mesaj
     assert n._public_kuyruk == []                  # hiçbir olay kaybolmadı
-    # Her bülten kendi sayısını doğru yazar ve uyarıyı bir kez taşır.
-    for metin in gonderilenler:
-        assert metin.count("yatırım tavsiyesi değildir") == 1
+    for kayit, metin in zip(kayitlar, gonderilenler):
+        assert metin == notifier_mod._format_lifecycle_alert_kart(kayit)
         assert len(metin) <= 4096
 
 
-def test_bulten_tek_olay_butceyi_asse_de_gonderilir(grup_notifier, monkeypatch):
-    """Tek karar taşıyan olay kırpılarak da olsa gider — sessizce düşmez."""
+def test_gonderim_engellenirse_kayitlar_kuyrukta_kalir(grup_notifier, monkeypatch):
+    """Bütçe/ağ engeli olayı düşürmez: kuyrukta kalır, sonraki tur dener."""
     n = grup_notifier
-    n._BULTEN_KR_BUTCE = 10           # bütçe saçma küçük: yine de ilk olay girer
-    assert n.public_kuyruk(_zengin_olay(formation_id="tek"))
-    cagrildi = []
-    monkeypatch.setattr(n, "send_to_public", lambda m, deneme=1: cagrildi.append(m) or True)
+    for i in range(3):
+        assert n.public_kuyruk(_zengin_olay(stock=f"SEM{i}", formation_id=f"e{i}"))
+    denemeler = []
+
+    def engelli(metin, deneme=1):
+        denemeler.append(metin)
+        return False                                # bütçe dolu
+
+    monkeypatch.setattr(n, "send_to_public", engelli)
     monkeypatch.setattr(n, "public_grafik_gonder", lambda kayit: 0)
-    assert n.public_bosalt() == 1
-    assert len(cagrildi) == 1
-    assert n._public_kuyruk == []
+    assert n.public_bosalt() == 0
+    assert len(denemeler) == 1                      # ilk engelde tur biter
+    assert len(n._public_kuyruk) == 3               # hiçbiri düşmedi
+    # Engel kalkınca hepsi sırayla gider.
+    gonderilenler = []
+    monkeypatch.setattr(n, "send_to_public",
+                        lambda metin, deneme=1: gonderilenler.append(metin) or True)
+    assert n.public_bosalt() == 3
+    assert n._public_kuyruk == [] and len(gonderilenler) == 3
 
 
 # --- 9) Public yapı bloğu: alarm TF'si yoksa üst TF ------------------------
 
-def test_public_bulten_ust_tf_yapisini_basabilir(grup_notifier):
-    """Alarm TF'sinde MS olayı yoksa bülten yapı bloğunu üst TF'den okur.
+def test_public_mesaji_ust_tf_yapisini_basabilir(grup_notifier):
+    """Alarm TF'sinde MS olayı yoksa mesaj yapı bloğunu üst TF'den okur.
 
     Kullanıcı sorusu (2026-10-22): "public'te gerekiyorsa üst TF MS sorununu
     çözdün mü" — bu test o yedeğin bülten metnine gerçekten ulaştığını
@@ -580,8 +591,8 @@ def test_public_bulten_ust_tf_yapisini_basabilir(grup_notifier):
                                                    skipped=False, error=None)},
     }
     bolumler = nc.domain_bolumleri(outputs, 39.60, stil="kart", alarm_tf="1h")
-    metin = grup_notifier.format_public_batch(
-        [_olay(tf="1h", domain_bolumleri=bolumler)])
+    metin = grup_notifier.format_public_tekil(
+        _olay(tf="1h", domain_bolumleri=bolumler))
     assert "◈ 4s yapı dış ve iç aşağı" in metin
     # Kural: satır kendi TF'siyle yazılır — alarm TF'si gibi etiketlenmez.
     assert "◈ 1s yapı" not in metin
@@ -727,3 +738,43 @@ def test_gonderilmis_teyidin_gecersizlesmesi_kuyruga_girer(grup_notifier):
     iptal = _olay(formation_id="stable-gonderilmis", state="KIRILIM_GECERSIZLESTI")
     assert n.public_kuyruk(iptal) is True
     assert len(n._public_kuyruk) == 1
+
+
+# --- 13) Metin = DM kartı: kuyruk yolundan birebir ---------------------------
+
+def test_kuyruk_yolundan_giden_metin_dm_kartiyla_ayni(grup_notifier, monkeypatch):
+    """Uçtan uca: `public_kuyruk` → `public_bosalt` → Telegram gövdesi.
+
+    Kayıt kuyruğa kopyalanırken bir alan düşerse metin DM'den sessizce
+    ayrışırdı; bu test hem kopyalamayı hem biçimlendirmeyi birlikte doğrular
+    (5 haneli endeks fiyatı dâhil: satır bölünmesi de burada görünür).
+    """
+    n = grup_notifier
+    kayit = _zengin_olay(stock="XBANK", formation_id="endeks-1",
+                         break_dir=1, break_price=13380.0,
+                         critical_price_level=13380.0, candle_close_price=13482.5,
+                         upper_now=13510.0, lower_now=13120.0,
+                         domain_bolumleri={
+                             "yapi_ozet": ["◈ 4s yapı dış ↑, iç ↑"],
+                             "goreli": ["· 20 mum endekse +1,2 puan"],
+                             "olcum": ["◇ 32321 formasyon · %76 tuttu",
+                                       "◇ 1651 kırılımın %75'ü sürdü",
+                                       "◇ hacim yüksekken %79 sürdü"],
+                             "hacim": ["katılım 4s hacim yok (endeks)",
+                                       "yön fiyattan okunur"]})
+    assert n.public_kuyruk(kayit)
+    sahte = _SahteRequests()
+    monkeypatch.setitem(sys.modules, "requests", sahte)
+    assert n.public_bosalt() == 1
+    metin = sahte.cagrilar[0][1]["text"]
+    assert metin == notifier_mod._format_lifecycle_alert_kart(kayit)
+    assert "hacim yok (endeks)" in metin
+    assert "· kapanış 13482,50" in metin and "· sınır 13380,00" in metin
+    assert not [s for s in metin.splitlines() if s.startswith(" ")], metin
+
+
+def test_public_mesaj_butcesi_dm_tavanindan_dusuk_degil():
+    """1 mesaj = 1 olay olduğu için grup, DM'in göremediği alarmı kaçırmamalı."""
+    import config
+    assert config.PUBLIC_MAX_MESAJ_SAAT >= config.TELEGRAM_MAX_MESAJ_SAAT
+    assert config.PUBLIC_MAX_MESAJ_GUN >= config.TELEGRAM_MAX_MESAJ_GUN

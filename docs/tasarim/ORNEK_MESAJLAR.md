@@ -130,12 +130,13 @@ zaten geçmişte kaldı, geçmiş istatistiği tekrar okumak yanıltıcı olur.
 
 ---
 
-## 4. PUBLIC · bülten (3 olay tek mesaj)
+## 4. PUBLIC · DM ile birebir aynı (tek olay = tek mesaj)
+
+Toplu bülten **kaldırıldı** (22 Ekim 2026, akşam). Kullanıcı: *"Gelişme
+olmamalı, DM ile aynı olmalı."* Aşağıdaki metin **gerçek public yolundan**
+geçti: `public_kuyruk()` → `public_bosalt()` → `send_to_public()`.
 
 ```
-📊 Bülten · 3 gelişme
-   22 Eki 18:12
-
 ▲ THYAO 4s YUKARI TEYİTLİ
 Yükselen Üçgen — kapanışla
 🕒 22 Ekim 14:30 mumu
@@ -150,67 +151,38 @@ geri çekilme var · 1g de onaylı
 
 ◇ 32321 formasyon · %76 tuttu
 ◇ 1651 kırılımın %75'i sürdü
+◇ hacim yüksekken %79 sürdü
 · geçmiş davranış, kazanç değil
 
 katılım 4s destekliyor
 
+ters işaret: 1g yapı hâlâ aşağı
 · bozulur: 318,00 altı kapanış
 
-▲ ISMEN 2s RETEST BAŞARILI
-Yükselen Üçgen
-🕒 22 Ekim 14:30 mumu
-· kapanış 41,02 · sınır 40,80
-
-· kalite 86/100 — güç 100
-· bant 5 mum (30 Eylül'den)
-
-◈ 2s yapı dış ↑, iç ↑
-· 20 mum endekse +0,8 puan
-geri çekilme var · 4s de onaylı
-
-◇ 32321 formasyon · %76 tuttu
-◇ rol 41,00 %71 · 486
-· geçmiş davranış, kazanç değil
-
-katılım 2s destekliyor
-
-· bozulur: 41,60 altı kapanış
-
-▲ ASELS 1s YUKARI TEYİTLİ
-Bayrak — kapanışla
-🕒 22 Ekim 14:30 mumu
-· kapanış 88,15 · sınır 87,60
-
-· kalite 81/100 — güç 100
-· bant 2 mum (30 Eylül'den)
-
-◈ 1s yapı dış ↑, iç ↑
-· 20 mum endekse +1,4 puan
-geri çekilme yok · 4s de onaylı
-
-◇ 32321 formasyon · %76 tuttu
-· geçmiş davranış, kazanç değil
-
-katılım 1s destekliyor
-
-· bozulur: 89,40 altı kapanış
-
-📌 yatırım tavsiyesi değildir
+• yatırım tavsiyesi değildir
 ```
 
-*63 satır · 44 dolu · 1182 kr · en geniş 253,5 px · bütçe 3300 kr*
-
-**Public ile DM arasındaki fark metinde üç noktada:**
+*22 satır · 16 dolu · 481 kr · en geniş 253,5 px · DM kartıyla **byte byte aynı***
 
 | | DM | Public |
 |---|---|---|
-| Mesaj sayısı | olay başına 1 kart | olaylar **tek bültende** |
-| Ölçü satırı | 3 `◇` | 2 `◇` |
-| Yasal uyarı | her kartta | bültede **bir kez**, sonda |
+| Mesaj | olay başına 1 kart | olay başına **1 mesaj — aynı kart** |
+| Ölçü satırı | 3 `◇` | 3 `◇` (aynı) |
+| Yasal uyarı | her kartta | her mesajda |
+| Başlık / "N gelişme" / tarih | yok | **yok** |
+| Görsel | 4 kare (tek albüm) | 1 kare + üst TF |
 
-Geri kalan her şey birebir aynıdır — aynı biçimleyici, aynı 283 px satır bütçesi,
-aynı sade dil. Bülten 3300 kr'yi aşarsa olay **kesilmez**, sonraki bültene kalır
-(12 olay → 2 mesaj: 6+6).
+Yani metinde fark **kalmadı**: `format_public_tekil(kayit)` doğrudan
+`_format_lifecycle_alert_kart(kayit)` döndürür, araya hiçbir satır girmez.
+Test bunu eşitlikle sabitler:
+`test_public_grup.py::test_public_her_olay_kendi_mesajinda_dm_ile_ayni`.
+
+**2026-10-22 sabahki kuraldan değişenler:** grup bülteni (başlık + tarih +
+olaylar arası boş satır), ölçünün 2 satıra indirilmesi ve "yasal uyarı bültede
+tek kez" kuralı **kalktı**. Bu üçü metni DM'den ayrıştırıyordu.
+
+3 olay gelirse **3 mesaj** gider (aralarında `PUBLIC_MIN_ARALIK_SN = 2,0 sn`),
+her biri kendi kartı. Görsel her mesajın hemen ardından gelir.
 
 ---
 

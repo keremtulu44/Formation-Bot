@@ -490,7 +490,8 @@ def test_ozet_ve_bulten_satirlari_sarmaz():
     gun = {"tarama_sayisi": 4, "alerts_sent": 6, "stocks_scanned": 28, "tam_tarama_guncel": True,
            "kirilim_teyitli_olay_sayisi": 3, "retest_basarili_olay_sayisi": 1,
            "kirilim_gecersizlesti_olay_sayisi": 2, "son_tarama_bitis": "2026-09-25T16:38:20+03:00"}
-    metinler = [n.format_public_batch(aktif), n.format_daily_summary(aktif, gun),
+    metinler = [n.format_public_tekil(aktif[0]), n.format_public_tekil(aktif[1]),
+                n.format_daily_summary(aktif, gun),
                 n.format_public_summary(aktif, gun, izleme=[{"stock": "FROTO", "timeframe": "1h",
                                                               "pattern_name": "Alçalan Kama",
                                                               "quality": 82}], kapanis=True)]
@@ -506,6 +507,6 @@ def test_metin_sigdir_bilgi_dusurmez():
              "state": "KIRILIM_TEYITLI", "break_dir": 1, "critical_price_level": 21.28,
              "confidence_score": 87.0, "candle_close_price": 21.90,
              "upper_touches": 2, "lower_touches": 2}
-    metin = n.format_public_batch([uzun])
+    metin = n.format_public_tekil(uzun)
     kelimeler = " ".join(metin.split())
     assert "DOHOL" in kelimeler and "21,28" in kelimeler and "kalite 87" in kelimeler

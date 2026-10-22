@@ -103,7 +103,7 @@ tarama ✓, grafik ✓, `/formasyonlar` ✓, **DM/public push ✗**;
 eski davranış.
 
 Endeksler bu kapıya **girmez** (kullanıcı: "normal farksız"): kendi formasyonu,
-OB/FVG'si, kartı, public bülteni vardır.
+OB/FVG'si, kartı, grup mesajı vardır.
 
 ---
 
@@ -113,12 +113,14 @@ Değişen bir şey yok — endeksler aynı yoldan gider:
 
 ```
 motor → should_send_to_public (state ∩ PUBLIC_STATES, TF kalite eşiği)
-      → public kuyruğu (tekrar mührü) → bülten (3300 kr, olay başına 2 ◇)
-      → metin → 1 kare + üst TF karesi
+      → public kuyruğu (tekrar mührü)
+      → olay başına 1 mesaj: DM kartının BİREBİR aynısı
+      → metnin hemen ardından 1 kare + üst TF karesi
 ```
 
-Kart biçimleyici aynı olduğu için endeks olayı da 7 bloklu, sade dilli kart
-olarak gider; tek fark hacim bloğunun yukarıdaki iki satırı.
+Toplu bülten kaldırıldı (2026-10-22 akşamı): grup mesajı DM kartıyla byte byte
+aynıdır — başlık, "N gelişme", tarih satırı yok; 3 `◇` de dâhil. Endeks olayı
+da aynı yoldan gider; tek fark hacim bloğunun yukarıdaki iki satırı.
 
 ---
 
@@ -138,7 +140,7 @@ yaklaşık **+40 sn** (tam zamanlı tur ≈ 5 dk'da bir). Ölçüm: 57 sembolde
 
 - sağlayıcı eşlemesi (`XU50→XU050.IS`, `USDTRY→USDTRY=X`, `ALTIN→GC=F`; `.IS.IS` yok),
 - evren içeriği + `evren_ozeti` (hisse/endeks/makro ayrımı, kısa biçim bütçesi),
-- hacim nedeni (endeks/makro/hisse) + public bültende görünmesi,
+- hacim nedeni (endeks/makro/hisse) + public mesajında görünmesi,
 - makro alarm kapısı (varsayılan kapalı, bayrakla açılır, endeks muaf),
 - göreli güç: puan farkı, yetersiz/bozuk veri, hizalama, satır bütçesi,
   XU100'ün kendisi, veri yokken satır yok,

@@ -262,6 +262,12 @@ Kalite 87/100 · sıkışma %80 · seviye 30.75
 
 Farklar: kuyruk yok, "çok güçlü" yorumu yok, mum satırı kısa, tek footer grup bülteninin altında.
 
+> **Güncelleme (22 Ekim 2026):** Aşağıdaki toplu bülten biçimleri **artık geçerli
+> değil**. Grup, olay başına tek mesaj alır ve metin DM kartının birebir aynısıdır
+> (`📊 Bülten · N gelişme` başlığı, tarih satırı, "bültede tek yasal uyarı" kuralı
+> kaldırıldı). Güncel biçim: `docs/tasarim/ORNEK_MESAJLAR.md` §4 ve
+> `docs/tasarim/TELEGRAM_KART_FORMAT.md` §7.4.
+
 ### 8.3 Grup sürümü — mum kapanışı bülteni (aynı anda 3+ olay)
 
 ```

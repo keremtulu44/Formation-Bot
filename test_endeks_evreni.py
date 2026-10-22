@@ -82,19 +82,22 @@ def test_hissede_hacim_nedeni_uydurulmaz():
     assert _hacim("THYAO") == ["katılım 4s veri yok"]
 
 
-def test_hacim_aciklamasi_public_bultende_de_gorunur():
+def test_hacim_aciklamasi_public_mesajinda_da_gorunur():
     n = notifier.TelegramNotifier()
     n.public_enabled = True
     n.public_chat_id = "-1001234567890"
     n.public_states = set(notifier.CONFIRMED_PUBLIC_STATES)
-    metin = n.format_public_batch([{
+    kayit = {
         "stock_name": "XBANK", "timeframe": "4h", "pattern_name": "Yükselen Üçgen",
         "state": "KIRILIM_TEYITLI", "break_dir": 1, "break_price": 16000.0,
         "critical_price_level": 16000.0, "candle_close_price": 16120.0,
         "confidence_score": 84,
         "domain_bolumleri": {"hacim": ["katılım 4s hacim yok (endeks)",
                                        "yön fiyattan okunur"]},
-    }])
+    }
+    metin = n.format_public_tekil(kayit)
+    # Grup mesajı DM kartının aynısı: aynı satırlar, aynı sıra.
+    assert metin == notifier._format_lifecycle_alert_kart(kayit)
     assert "hacim yok (endeks)" in metin and "yön fiyattan okunur" in metin
 
 

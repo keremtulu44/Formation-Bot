@@ -122,7 +122,7 @@ Telefon bütçesi `_kart_esik_px() = 283`; hiçbir satır aşmıyor. Public bül
 | 2 | `/durum` metninin tamamen sadeleştirilmesi | Operatör paneli; `cooldown`, `digest`, `eşik altı` gibi terimler teşhis için kısa. Kart/`/olcum` sade dil kuralına tabi, `/durum` değil. MS satırı bu turda eklendi |
 | 3 | `/formasyonlar` listesi | Hâlâ `kalite 81/100`, `alarm eşiği 80 altında` gibi teknik etiketler taşıyor; kart 7 bloğa geçtiği için liste ile kart arasında dil farkı var |
 | 4 | Public karelerinin restart sonrası kaybı | Metin gidiyor, görsel gitmiyor; sessiz (sayaç yok) |
-| 5 | `_bulten_metni` tümü boş kart dönerse | Kuyruk başındaki bozuk kayıt bülteni kilitleyebilir; pratikte `stock_name` zorunlu olduğu için görülmedi |
+| 5 | `format_public_tekil` boş kart dönerse | Kuyruk başındaki bozuk kayıt turu kilitleyebilir (kayıt kuyrukta kalır, sonraki tur denenir); pratikte `stock_name` zorunlu olduğu için görülmedi. 22 Ekim akşamı bülten kaldırıldı → tek-olay biçimleyici |
 
 ---
 

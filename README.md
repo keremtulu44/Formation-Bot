@@ -350,11 +350,13 @@ Açık iş listesi ve batch planı: `docs/arsiv/YAPILACAKLAR.md`, `docs/arsiv/KO
    import anında yakalanır, testler bunu doğrular. Politikayı değiştirmek için sadece
    bu üç yeri düzenle; kodda başka yerde kopya liste yok.
 
-   **Public grup (Faz 1, 02.10.2026):** `TELEGRAM_GROUP_ID` tanımlıysa bot, DM'den
-   **bağımsız** olarak gruba yayın yapar (DM kapalıyken de çalışır). Olaylar tarama turu
-   boyunca kuyrukta toplanır ve tur sonunda **tek bültende** gider; bütçe DM'den ayrıdır
-   (`PUBLIC_MAX_MESAJ_SAAT=6`, `PUBLIC_MAX_MESAJ_GUN=25`, `PUBLIC_MIN_ARALIK_SN=1.2`) ve
-   429 `retry_after` desteklenir. Grup metni sadedir: iç izleme notu, `/panel`, `/durum`,
+   **Public grup (Faz 1, 02.10.2026; metin 22.10.2026'da eşitlendi):** `TELEGRAM_GROUP_ID`
+   tanımlıysa bot, DM'den **bağımsız** olarak gruba yayın yapar (DM kapalıyken de çalışır).
+   Her olay kendi mesajında gider ve metin **DM kartının birebir aynısıdır** (başlık/bülten
+   yok; ölçü 3 `◇`, yasal uyarı her mesajda). Bütçe DM'den ayrıdır ve 1 mesaj = 1 olay
+   olduğu için DM tavanıyla eşittir (`PUBLIC_MAX_MESAJ_SAAT=20`,
+   `PUBLIC_MAX_MESAJ_GUN=120`, `PUBLIC_MIN_ARALIK_SN=2.0`) ve 429 `retry_after` desteklenir.
+   Grup metni sadedir: iç izleme notu, `/panel`, `/durum`,
    dosya yolu, ❌ tek tek olaylar gruba **gitmez**; başarısız kırılımlar 18:45 özetinde
    sayı olarak ve Cuma karnesinin kısa sürümünde görünür. Gruba yönetici bot, komut
    olmayan grup mesajlarına **cevap vermez** (yalnız DM'de yardım metni döner).

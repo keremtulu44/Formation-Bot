@@ -3,7 +3,7 @@
 > **Durum:** Uygulandı (kod + test) · önceki öneri: [KART_ORNEK_2026-10-21.md](KART_ORNEK_2026-10-21.md)
 > **Kod:** `notifier._format_lifecycle_alert_kart_sade` (7 blok)
 > **Bütçe:** satır ≤ 262,8 px (`_kart_esik_px()`), tavan 20 dolu satır
-> **Ölçüm bloğu:** `ampirik_referans.olcum_satirlari` — DM 3 satır, public 2 satır
+> **Ölçüm bloğu:** `ampirik_referans.olcum_satirlari` — 3 satır (DM ve grup aynı)
 > **Aile ayrımı:** formasyon alarmı yalnız `FRM` ölçümünü basar (MS/zone satırı girmez)
 
 ---
@@ -94,12 +94,14 @@ ulaştı" değil, "kırılım teyit aldı ve bandın içine dönmedi" demek).
 
 ---
 
-## 2 · Public bülten (grup) — aynı 7 blok
+## 2 · Public (grup) — DM ile birebir aynı
+
+Grup artık **bülten basmıyor** (2026-10-22 akşamı; kullanıcı: *"Gelişme
+olmamalı, DM ile aynı olmalı"*). Olay başına **tek mesaj** gider ve metin,
+yukarıdaki DM kartının aynısıdır: başlık yok, "N gelişme" yok, tarih satırı yok,
+3 `◇` yerinde, yasal uyarı her mesajın sonunda.
 
 ```
-📊 Bülten · 2 gelişme
-   22 Eki 09:35
-
 ▲ SISE 4s YUKARI TEYİTLİ
 Yükselen Üçgen — kapanışla
 🕒 21 Ekim 13:30→17:30 mumu
@@ -114,6 +116,7 @@ geri çekilme yok · 1g de onaylı
 
 ◇ 32321 formasyon · %76 tuttu
 ◇ tutunca ~1,05 TL · %2,6
+◇ rol uyumlu %80 · 15724
 · geçmiş davranış, kazanç değil
 
 katılım 4s hacim 0,45 kat
@@ -121,31 +124,15 @@ katılım 4s hacim 0,45 kat
 ters işaret: iç yapı aşağı döndü
 · bozulur: 39,96 altı kapanış
 
-▼ GARAN 1s GEÇERSİZLEŞTİ
-Alçalan Üçgen — bandına dönüş
-🕒 21 Ekim 16:30 mumu
-· dönüş sınırı 38,79 üstü
-
-· kalite 76/100 — güç 70
-· bant 61 mum (12 Ekim'den)
-
-geri çekilme var · 4s onayı yok
-
-◇ 32321 formasyon · %76 tuttu
-◇ rol uyumsuz %73 · 13573
-· geçmiş davranış, kazanç değil
-
-katılım 1s hacim düşük (0,42)
-
-📌 yatırım tavsiyesi değildir
+• yatırım tavsiyesi değildir
 ```
 
-**Public kuralı: ◇ en fazla 2 satır · görsel 1 kare + üst TF · tek yasal uyarı**
+**Grup kuralı: metin = DM kartı · görsel 1 kare + üst TF · olay başına 1 mesaj**
 
-**Değişen tek şey:** ölçü bloğu bülten kalabalığında **2 satır** (DM 3),
-yasal uyarı bültede **tek kez** yazılır ve her olayın ardından **1 kare + üst
-zaman dilimi** görseli gider (DM 4 kare alır). Bülten ile kare aynı veriden
-çizilir; motor yeniden koşmaz.
+Tek fark **görseldedir**: grup 1 kare + üst zaman dilimi alır (DM 4 kare).
+Metinde fark yoktur; bu yüzden biçimleyicide `public` diye ikinci bir kip de
+yoktur (iki kip zamanla ayrışıyordu: ölçü 3 ↔ 2, uyarı kart başına ↔ bültede
+bir kez). Kare ile metin aynı veriden çizilir; motor yeniden koşmaz.
 
 ---
 

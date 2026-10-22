@@ -430,8 +430,8 @@ def _kart_temas(data: Dict) -> str:
     return f"· temas üst {ust} / alt {alt}"
 
 
-def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False,
-                                      public: bool = False) -> str:
+def _format_lifecycle_alert_kart_sade(data: Dict, *,
+                                      guncelleme: bool = False) -> str:
     """Sade kart (GÖRSEL-9): 7 blok, blok arası bir boş satır, girinti yok.
 
     Tarihçe:
@@ -457,9 +457,10 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False,
     Tavan `_KART_MAKS_SATIR` (20, boş satırlar hariç); aşılırsa isteğe bağlı
     ekler en düşük öncelikten düşer, çekirdek satır düşmez.
 
-    `public=True` (2026-10-22 kararı): grup bülteni DM ile AYNI 7 bloğu basar;
-    tek fark ölçü bloğunun **2** satırla sınırlı olması (kalabalık bültende
-    okunurluk). İçerik uydurulmaz, yalnız en düşük öncelikli ölçü düşer.
+    TEK ÇIKTI (2026-10-22, akşam): grup mesajı DM kartının **birebir aynısıdır**
+    (kullanıcı: *"gelişme olmamalı, DM ile aynı olmalı"*). Bu yüzden ayrı bir
+    `public` varyantı yok: aynı fonksiyon, aynı satırlar, aynı ölçü sayısı (3).
+    Grup toplu bülten basmaz; her olay kendi mesajında gider.
     """
     stock = str(data.get("stock_name") or "Bilinmiyor").upper()
     timeframe = str(data.get("timeframe") or "1h").lower()
@@ -579,10 +580,10 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False,
     olcum = list(bolumler.get("olcum") or []) if isinstance(bolumler, dict) else []
     if olcum:
         blok = []
-        # Kart 3 ölçü satırı taşır; public bültende 2 (2026-10-22 kararı).
+        # Kart 3 ölçü satırı taşır — grup mesajı da AYNI (DM ile birebir).
         # Beklenti hükmü açıksa (TELEGRAM_KART_TAHMIN) hüküm + sayaç satırları
         # ölçüm satırlarının önüne gelir; `olcum` listesi zaten o sırayla üretilir.
-        for satir in olcum[:(2 if public else 3)]:
+        for satir in olcum[:3]:
             _satir(blok, str(satir))
         # Ölçüm dipnotu: oran "kazanç" diye okunmasın. `/tara` satırının yerine
         # geldi (2026-10-22 kararı). Ölçüm varsa her zaman basılır.
@@ -648,13 +649,11 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *, guncelleme: bool = False,
     return "\n\n".join("\n".join(b) for b in bloklar if b)
 
 
-def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False,
-                                 public: bool = False) -> str:
+def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False) -> str:
     # GÖRSEL-7: süzgeç açıkken sade kart döner (kârenin taşıdığı satırlar düşer).
     # Kapatmak için `TELEGRAM_KART_SUZGEC=0` → aşağıdaki 25 Eyl biçimi aynen çalışır.
     if _kart_suzgec_aktif():
-        return _format_lifecycle_alert_kart_sade(data, guncelleme=guncelleme,
-                                                 public=public)
+        return _format_lifecycle_alert_kart_sade(data, guncelleme=guncelleme)
     stock = str(data.get("stock_name") or "Bilinmiyor").upper()
     timeframe = str(data.get("timeframe") or "1h").lower()
     state = str(data.get("state") or "").strip().upper()
@@ -1724,16 +1723,17 @@ class TelegramNotifier:
             return False
         if self._delivery.public_duplicate(data):
             return False
-        # Bülten artık DM kartıyla AYNI 7 bloğu basar (2026-10-22): kartın
-        # beslendiği alanlar kuyruk kaydına da kopyalanır. Yalnız JSON'a
-        # yazılabilir değerler girer (zaman damgaları ISO metne çevrilir);
-        # kare dosyaları `_public_grafik` defterinde ayrı tutulur.
+        # Grup mesajı DM kartının BİREBİR aynısıdır (2026-10-22, akşam):
+        # kartın okuduğu HER alan kuyruk kaydına kopyalanır; biri eksik olursa
+        # metin DM'den sessizce ayrışır (`close_price` bu yüzden eklendi).
+        # Yalnız JSON'a yazılabilir değerler girer (zaman damgaları ISO metne
+        # çevrilir); kare dosyaları `_public_grafik` defterinde ayrı tutulur.
         kayit = {k: data.get(k) for k in (
             "stock_name", "timeframe", "pattern_name", "state", "confidence_score",
             "critical_price_level", "break_price", "break_dir", "contraction", "bar_metni",
-            "candle_close_price", "upper_touches", "lower_touches", "formation_id",
-            "break_strength", "age_bars", "band_baslangic", "upper_now", "lower_now",
-            "retest_seen", "mtf_destek", "domain_bolumleri", "domain_karsi")}
+            "candle_close_price", "close_price", "upper_touches", "lower_touches",
+            "formation_id", "break_strength", "age_bars", "band_baslangic", "upper_now",
+            "lower_now", "retest_seen", "mtf_destek", "domain_bolumleri", "domain_karsi")}
         for zaman_alani in ("bar_time", "bar_kapanis"):
             deger = data.get(zaman_alani)
             if deger is None:
@@ -1747,7 +1747,7 @@ class TelegramNotifier:
         bolumler = kayit.get("domain_bolumleri")
         if isinstance(bolumler, dict):
             kayit["domain_bolumleri"] = {
-                str(anahtar): [str(x) for x in (deger or [])][:(2 if anahtar == "olcum" else 6)]
+                str(anahtar): [str(x) for x in (deger or [])][:(3 if anahtar == "olcum" else 6)]
                 for anahtar, deger in bolumler.items()
             }
         anahtar = (str(kayit["stock_name"] or "").upper(),
@@ -1824,7 +1824,13 @@ class TelegramNotifier:
         return True
 
     def public_bosalt(self, azami: int = 12) -> int:
-        """Kuyruğu tek bülten(ler) halinde gönderir; engel varsa kayıtlar bekler."""
+        """Kuyruğu gönderir: olay başına BİR mesaj, metin DM kartının aynısı.
+
+        Kullanıcı kararı (22 Ekim 2026, akşam): *"Gelişme olmamalı, DM ile aynı
+        olmalı."* Toplu bülten kaldırıldı; `azami` artık tur başına gönderilecek
+        MESAJ sayısıdır (eskiden tek bültendeki olay sayısıydı). Bütçe/ağ engeli
+        olursa gönderilemeyenler OLDUĞU GİBİ kuyrukta kalır.
+        """
         with self._public_lck:
             original_count = len(self._public_kuyruk)
             self._public_kuyruk = [
@@ -1840,25 +1846,22 @@ class TelegramNotifier:
             return 0
         gonderilen = 0
         basarili_kayitlar = []
-        kalan = list(kuyruk)
-        while kalan:
-            parca = kalan[:max(1, int(azami))]
-            metin, giren = self._bulten_metni(parca)
-            if not metin or giren <= 0:
-                # Bültene hiçbir olay sığmadı: bütçe/şablon sorunu; olayları
-                # sessizce düşürmek yerine turu bitir (sonraki turda denenir).
+        for kayit in kuyruk[:max(1, int(azami))]:
+            metin = self.format_public_tekil(kayit)
+            if not metin:
+                # Biçimlenemeyen kayıt: sessizce düşürmek yerine turu bitir
+                # (kayıt kuyrukta kalır, sonraki turda yeniden denenir).
+                logger.warning("Public mesajı üretilemedi (%s %s); kuyrukta kalıyor",
+                               kayit.get("stock_name"), kayit.get("timeframe"))
                 break
             if not self.send_to_public(metin):
                 # Bütçe/ağ engeli: kayıtlar kuyrukta kalır, sonraki turda denenir.
                 break
-            gonderilen_kismi = parca[:giren]
-            # Metnin ardından kare (2026-10-22): public görsel = 1 kare + üst TF.
+            # Metnin HEMEN ardından kare: public görsel = 1 kare + üst TF.
             # Görsel hatası metni geri almaz; sayaçla raporlanır.
-            for kayit in gonderilen_kismi:
-                self.public_grafik_gonder(kayit)
-            gonderilen += giren
-            basarili_kayitlar.extend(gonderilen_kismi)
-            kalan = kalan[giren:]
+            self.public_grafik_gonder(kayit)
+            gonderilen += 1
+            basarili_kayitlar.append(kayit)
         if gonderilen:
             damga = datetime.now(ISTANBUL_TZ).isoformat()
             with self._public_lck:
@@ -1869,75 +1872,33 @@ class TelegramNotifier:
                         self._public_alert_markers[event_key] = damga
                 self._public_alert_muhurlerini_temizle()
             self._public_durum_kaydet()
-            logger.info("Public bülten gönderildi: %d olay (%d mesaj)",
-                        gonderilen, max(1, (gonderilen + azami - 1) // azami))
+            logger.info("Public: %d olay, %d ayrı mesaj", gonderilen, gonderilen)
         return gonderilen
 
-    #: Bülten karakter bütçesi. Telegram tavanı 4096; pay bırakılır çünkü
-    #: `send_to_public` metni `metni_sigdir(...)` ile satır bazında düzenler ve
-    #: tavan aşılırsa `_kirp` ORTADAN keser: son olay yarım, yasal uyarı yok
-    #: olurdu. Bülten bu yüzden olay EKLEYEREK doldurulur ve sığmayan olay
-    #: sonraki bültene bırakılır (kaybolmaz, kuyrukta kalır).
-    _BULTEN_KR_BUTCE = 3300
+    def format_public_tekil(self, kayit: Dict) -> str:
+        """Grup mesajı: DM kartının BİREBİR aynısı (tek olay, tek mesaj).
 
-    def format_public_batch(self, kayitlar: List[Dict]) -> str:
-        """Grup sürümü bülten — DM kartıyla AYNI 7 blok (2026-10-22 kararı).
+        Kullanıcı kararı (22 Ekim 2026, akşam): *"Gelişme olmamalı, DM ile aynı
+        olmalı."* Eski toplu bülten (`📊 Bülten · 3 gelişme` + tarih + sonda tek
+        yasal uyarı) kaldırıldı: başlık, sayı ve tarih satırı yok; her olay
+        DM'de ne görünüyorsa aynen o metinle gider. Bu yüzden biçimleyiciye
+        `public` diye ikinci bir kip verilmez — iki kip zamanla ayrışır
+        (ölçü 3 ↔ 2, uyarı kart başına ↔ bültede bir kez) ve "aynı" iddiası
+        sessizce bozulurdu.
 
-        Kullanıcı: *"tüm her şeyi birleştir public'e uygulayacaksın"*. Eskiden
-        grup bülteni olay başına 3 kısa satır basıyordu (kimlik + kapanış +
-        kalite); ölçüm, önündeki bölge, yapı ve sınır blokları yalnız DM'de
-        kalıyordu. Artık aynı biçimleyici kullanılır (`public=True`):
-        tek fark ölçü bloğunun 2 satırla sınırlı olması.
-
-        Değişmeyen kurallar:
-          * iç izleme notu / "teyit bekleniyor" / kuyruk bilgisi gruba gitmez,
-          * yasal uyarı bültende TEK kez (kartın kendi uyarısı düşürülür),
-          * satır ≤ 283 px (`_satir` bütçe uygular).
+        Kural: metin `_format_lifecycle_alert_kart(kayit)` çıktısıdır; burada
+        ekleme/çıkarma YAPILMAZ. Satır bütçesi (283 px) kartın kendi içinde
+        uygulanır.
         """
-        kayitlar = [
-            k for k in (kayitlar or [])
-            if isinstance(k, dict)
-            and str(k.get("state") or "").strip().upper() in CONFIRMED_PUBLIC_STATES
-        ]
-        if not kayitlar:
+        if not isinstance(kayit, dict):
             return ""
-        metin, _adet = self._bulten_metni(kayitlar)
-        return metin
-
-    def _bulten_metni(self, kayitlar: List[Dict]) -> tuple[str, int]:
-        """(bülten metni, metne GERÇEKTEN giren olay sayısı).
-
-        Sayı ayrıca döner çünkü çağıran kuyruktan yalnız gönderilenleri
-        düşürür; sessiz kesme olay kaybı demek olurdu.
-        """
-        baslik = f"📊 Bülten · {len(kayitlar)} gelişme"
-        dipnot = "\n\n📌 yatırım tavsiyesi değildir"
-        satirlar = [baslik, f"   {_tr_tarih(datetime.now(ISTANBUL_TZ))}"]
-        kullanilan = len("\n".join(satirlar)) + len(dipnot)
-        giren = 0
-        for k in kayitlar:
-            kart = _format_lifecycle_alert_kart(k, public=True)
-            # Kartın kendi uyarısı bültende tek kez yazılır (sonda 📌 ile).
-            kart = kart.replace("\n\n• yatırım tavsiyesi değildir", "").rstrip()
-            if not kart:
-                continue
-            ek = "\n\n" + kart
-            # İlk olay her hâlükârda girer (tek olay bütçeyi aşsa bile alma
-            # kararı verilmiş olaydır; kırpma son çare).
-            if giren and kullanilan + len(ek) + len(dipnot) > self._BULTEN_KR_BUTCE:
-                break
-            satirlar.append("")
-            satirlar.extend(kart.splitlines())
-            kullanilan += len(ek)
-            giren += 1
-        if giren == 0:
-            return "", 0
-        # Başlıktaki sayı metne giren olayı söyler (kuyrukta bekleyen ayrıdır).
-        if giren != len(kayitlar):
-            satirlar[0] = f"📊 Bülten · {giren} gelişme"
-        satirlar.append("")
-        satirlar.append("📌 yatırım tavsiyesi değildir")
-        return metni_sigdir("\n".join(satirlar), guvenlik=1.0), giren
+        try:
+            state = str(kayit.get("state") or "").strip().upper()
+        except Exception:  # noqa: BLE001 - bozuk kayıt gönderimi düşürmesin
+            return ""
+        if state not in CONFIRMED_PUBLIC_STATES:
+            return ""
+        return _format_lifecycle_alert_kart(kayit)
 
     def format_public_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None,
                               izleme: List[Dict] = None, karne_kisa: str = "",
