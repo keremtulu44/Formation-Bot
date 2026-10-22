@@ -111,8 +111,9 @@ Sıra sabit: **hüküm → sayaç → ufuk**. Üçüncü satır yoksa kart kısa
 Hüküm `yön kanıtı yok` ise sayaç satırı yalnız aleyhte varsa basılır; **ufuk ve
 büyüklük yine basılır** (onlar yön iddiası taşımıyor).
 
-Ölçülen genişlikler: `◇ beklenti: yön kanıtı yok` 204 px · `◇ 1 lehte · 1 aleyhte`
-216 px · `◇ tipik ömür 90 mum` 169 px — hepsi 262 px altında.
+Ölçülen genişlikler: `◇ beklenti: yön kanıtı yok` **203,5 px** · `◇ 1 lehte · 1 aleyhte`
+**163 px** · `◇ tipik ömür 90 mum` **168,5 px** · `◇ devam ederse tipik 2,5 kat`
+**232 px** — hepsi 262,8 px bütçesinin altında.
 
 **Ufuk satırı kaynağı** (bu tablo `ampirik_referans`'ta henüz yok, eklenecek):
 
@@ -218,8 +219,8 @@ Açıldıktan sonra sorun çıkarsa tek satırlık env ile eski karta dönülür
 
 1. **Hüküm kelimeleri:** `devam` / `tek kanıt` / `kararsız` / `yön kanıtı yok`.
    `tek kanıt` yerine `sınırlı kanıt` mı olsun? (`tek kanıt` daha kısa, 163 px)
-2. **Sayaç satırı:** `◇ 1 lehte · 1 aleyhte` mi, `◇ 1 ölçüm lehte · 1 aleyhte` mi?
-   (ikincisi 216 → 250 px, hâlâ sığıyor)
+2. **Sayaç satırı:** `◇ 1 lehte · 1 aleyhte` (163 px) mi, `◇ 1 ölçüm lehte · 1 aleyhte`
+   (216 px) mi? İkincisi daha açık ama kartta yer yiyor.
 3. **Varsayılan kapalı mı açık mı?** Önerim: **kapalı** yaz, sen DM'de açıp 1 hafta
    izle, sonra public'e aç.
 
