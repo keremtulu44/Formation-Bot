@@ -149,6 +149,33 @@ zaman dilimi** görseli gider (DM 4 kare alır). Bülten ile kare aynı veriden
 
 ---
 
+## 2b · Beklenti hükmü (`TELEGRAM_KART_TAHMIN=1`, varsayılan KAPALI)
+
+Ölçü bloğunun başına tek kelimelik hüküm eklenir; slot sayısı değişmez
+(hüküm + sayaç + 1 ölçüm = 3):
+
+```
+◇ beklenti: devam
+◇ 2 ölçüm lehte
+◇ 32321 formasyon · %76 tuttu
+· geçmiş davranış, kazanç değil
+```
+
+Çelişki varsa hüküm `kararsız` olur ve aleyhte olanın **adı** yazılır:
+
+```
+◇ beklenti: kararsız
+◇ 1 ölçüm lehte · 1 aleyhte
+◇ aleyhte: hacim yüksek
+```
+
+Yön kanıtı yoksa (ölçüm eşiği geçmedi) **hiçbir satır basılmaz** — kart bugünkü
+hâline döner. Bu bir yön tahmini değil: NET %95 GA 11 hücrenin 10'unda sıfırı
+içeriyor, "yukarı gider" cümlesinin kanıtı yok. Ayrıntı ve eşik tablosu:
+`docs/arastirma/AMPIRIK_REFERANS.md` → "Beklenti hükmü".
+
+---
+
 ## 3 · Sade dil sözlüğü (uygulanan)
 
 | Kartta yok | Yerine gelen | Neden |

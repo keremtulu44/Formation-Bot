@@ -203,7 +203,14 @@ Görseller yalnız **pozitif tamsayı** `TELEGRAM_CHAT_ID`'ye gider
 pozitif tamsayı · `@kullanici` biçimi (görsel gitmez) · DM ile public hedefin
 aynı olması (hata).
 
-### 7.6 Ölçülen ama yazılmayan
+### 7.6 Beklenti hükmü (varsayılan kapalı)
+
+`TELEGRAM_KART_TAHMIN=1` iken ölçü bloğunun başına `◇ beklenti: devam` +
+`◇ 2 ölçüm lehte` girer; slot sayısı 3'te kalır. Hüküm kelimeleri
+`devam · tek kanıt · kararsız · yön kanıtı yok` — sıfat yok. Yön kanıtı yoksa
+satır basılmaz. Aile tabanları: ms/rvol/yükseklik/zone %65,5 · uyum %75,0.
+
+### 7.7 Ölçülen ama yazılmayan
 
 Koşullu "giderse tamamlanır" cümlesi ölçüldü ve **karta yazılmadı**; gerekçe ve
 sayılar `docs/arastirma/KOSULLU_CUMLE_OLCUMU.md`. Kural: ölçüm cümleyi
