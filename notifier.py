@@ -3283,12 +3283,25 @@ class TelegramNotifier:
         return str(yol or "")
 
     def public_grafik_gonder(self, kayit: Dict) -> int:
-        """Public kaydının karelerini gruba gönderir; `(gönderilen sayısı)`.
+        """Public kaydının karelerini gruba TEK ALBÜM gönderir; `(gönderilen)`.
 
         2026-10-22 kararı: public görseli **1 kare + üst zaman dilimi** karesidir
         (DM 4 kare alır). Kareler bildirim anında üretilir, burada çizilip
         gönderilir; dosya her durumda silinir. Görsel hiçbir koşulda metni/
         bülteni düşürmez.
+
+        Neden albüm: Telegram ayrı `sendPhoto` mesajlarını — aralarındaki süre
+        ne kadar kısa olursa olsun — ASLA birleştirmez; iki kare ancak tek
+        `sendMediaGroup` çağrısıyla tek albüm görünür (zamanlama/pacing
+        meselesi değil, çağrı biçimi meselesi). Eski kod kareyi çizip hemen
+        `foto_gonder` çağırdığı (araya `_public_pace` + ikinci çizim girdiği)
+        için grupta hep iki ayrı mesaj görünüyordu. DM yolu
+        (`grafik_toplu_gonder` / `notification_delivery.send_images`) baştan
+        beri albüm gönderir; public artık aynı sözleşmeyi kullanır: ÖNCE
+        bütün kareler çizilir, SONRA tek seferde gönderilir. Tek kare
+        kalırsa (üst TF yok ya da biri çizilemedi) albüm 2–10 öğe istediği
+        için `sendPhoto`'ya düşülür; albüm reddedilirse kare kaybı olmaması
+        için DM'deki gibi kare kare yeniden denenir.
         """
         if not isinstance(kayit, dict):
             return 0
@@ -3300,14 +3313,14 @@ class TelegramNotifier:
         if not hedef or not getattr(self, "public_enabled", False):
             return 0
         try:
-            from transport.telegram import foto_gonder
+            from transport.telegram import foto_gonder, medya_grubu_gonder
         except Exception:  # pragma: no cover - taşıma yoksa görsel de yok
             return 0
-        gonderilen = 0
         tf = TF_KISA.get(str(kayit.get("timeframe") or "").lower(),
                          str(kayit.get("timeframe") or ""))
         bas = f"{str(kayit.get('stock_name') or '').upper()} {tf}".strip()
         desen = str(kayit.get("pattern_name") or "").strip()
+        paketler = []                     # (yol, caption) — olay başına TEK albüm
         for sira, kare in enumerate(list(veri.get("goruntular") or [])[:2]):
             kare_tf = TF_KISA.get(str((kare or {}).get("tf") or "").lower(),
                                   str((kare or {}).get("tf") or ""))
@@ -3325,22 +3338,53 @@ class TelegramNotifier:
                 continue
             caption = (f"{bas} · {desen}" if sira == 0 and desen
                        else f"{bas} · {kare_tf} üst zaman dilimi")
+            paketler.append((yol, caption[:1024]))
+        if not paketler:
+            return 0
+
+        def _tek_gonder(yol, caption) -> bool:
             try:
                 self._public_pace()
                 ok, aciklama = foto_gonder(yol, chat_id=hedef, notifier=self,
-                                           caption=caption[:1024])
+                                           caption=caption)
                 if ok:
-                    gonderilen += 1
                     self.public_grafik_gonderilen += 1
                     self.grafik_gonderilen += 1
-                else:
-                    self.public_grafik_hatasi += 1
-                    logger.warning("public karesi gönderilemedi: %s",
-                                   redact_sensitive_text(str(aciklama), self.token)[:160])
+                    return True
+                self.public_grafik_hatasi += 1
+                logger.warning("public karesi gönderilemedi: %s",
+                               redact_sensitive_text(str(aciklama), self.token)[:160])
             except Exception as hata:  # noqa: BLE001 - görsel akışı düşürmesin
                 self.public_grafik_hatasi += 1
                 logger.debug("public karesi hatası: %s: %s", type(hata).__name__, hata)
-            finally:
+            return False
+
+        gonderilen = 0
+        try:
+            if len(paketler) == 1:
+                gonderilen = 1 if _tek_gonder(*paketler[0]) else 0
+            else:
+                # Pacing albümden BİR KEZ önce; kareler arasına bekleme girmez.
+                self._public_pace()
+                try:
+                    ok, aciklama = medya_grubu_gonder(
+                        [y for y, _c in paketler],
+                        captions=[c for _y, c in paketler],
+                        chat_id=hedef, notifier=self)
+                except Exception as hata:  # noqa: BLE001 - taşıma zaten yutuyor
+                    ok, aciklama = False, type(hata).__name__
+                if ok:
+                    gonderilen = len(paketler)
+                    self.public_grafik_gonderilen += len(paketler)
+                    self.grafik_gonderilen += len(paketler)
+                else:
+                    logger.warning(
+                        "public albümü gönderilemedi, kare kare deneniyor: %s",
+                        redact_sensitive_text(str(aciklama), self.token)[:160])
+                    for yol, caption in paketler:
+                        gonderilen += 1 if _tek_gonder(yol, caption) else 0
+        finally:
+            for yol, _c in paketler:
                 try:
                     os.remove(yol)
                 except (OSError, TypeError):
