@@ -261,6 +261,7 @@ satır** var; ikisi de aynı 283 px bütçesine uyar (kod: `main._goreli_guc_sat
 | Taban | XU100, **aynı TF**, **aynı bitiş mumu**, aynı 20 mum |
 | Ölçü | `hisse_getiri − XU100_getiri`; birim **puan** (iki yüzdenin farkı yüzde değil) |
 | Yazılmaz | XU100'ün kendisinde · veri kısıtsa · geçersizleşme kartında |
+| Not (23 Eki) | Satır, `resample_ohlcv` import edilmediği için 22–23 Ekim boyunca **hiç basılmadı**; bkz. §7.10 |
 | Ölçüm | 243,5 px. Adaylar: `· 20 mumda endeksten +2,1 puan` 270,5 px ve `· 20 mumda endekse +17,9 puan` 263,5 px — ikisi de eşiği (262,85) aşıyordu |
 
 **2. Hacim yok açıklaması** — KATILIM bloğunda, iki kısa satır:
@@ -283,3 +284,78 @@ sözleşmesi bunu yasaklıyor. Bölme artık biçimleyicide: satır eşiği aş�
 `· kapanış …` ve `· sınır …` **iki tam satır** olur (hisse fiyatında birleşik
 satır 219,5 px, tek satır kalır). Test:
 `test_kart_metin.py::test_endeks_olceginde_kapanis_sinir_satiri_girintili_bolunmez`.
+
+### 7.10 23 Ekim 2026 — kart neden "sade" geliyordu (NameError)
+
+Kullanıcı canlı mesajı yapıştırıp *"gelen metin basit, planlanan biçim farklıydı"*
+dedi. Örnek, **7.1'deki blokların 2–6'sı boş** bir karttı: `◈` yapı, `◇` ölçü,
+`▤` katılım, `▼` engel ve `ters işaret` satırlarının hiçbiri yoktu.
+
+Biçimleyici suçlu değildi; **bağlam hiç üretilmemişti**. `main._attach_domain_context`
+içinde:
+
+| Hata | Sonuç |
+|---|---|
+| `atr=atr_alarm` — `atr_alarm` hiçbir yerde tanımlı değil | `NameError`, `except kart_hata` yutuyor → `domain_bolumleri` **her alarmda** boş kalıyor |
+| `_goreli_guc_satiri` içinde `resample_ohlcv(...)` — `main.py`'ye import edilmemiş | `NameError`, `except` yutuyor → `· 20 mum endekse … puan` satırı hiç basılmıyor |
+
+İki hata da geniş `except` bloklarının içinde olduğu için **hiçbir davranış testi
+kırılmadı**; yalnızca Render logunda `Kart bağlamı hazırlanamadı …: name
+'atr_alarm' is not defined` satırı vardı. Kart bu yüzden yalnız payload'dan
+türeyen satırları (olay, kalite, bant, daralma, temas, geri çekilme, `· bozulur`,
+CTA) basıyordu — yani kullanıcının gördüğü "basit" mesaj.
+
+Düzeltme (23 Ekim):
+
+1. `atr_alarm = atr_hesapla(df_tf)` — karne ile aynı fonksiyon; ölçüm kesitleri
+   `normalin x katı` / `~1,05 TL` eşiklerini artık gerçek ATR'den okur. Bu, karta
+   `◇ tutunca ~1,19 TL · %1,7` gibi ATR koşullu satırları geri getirdi.
+2. `resample_ohlcv` `from data import ...` listesine eklendi.
+3. Bağlam parçaları **ayrı try/except**'lere ayrıldı: `domain_context` (klasik
+   metin), `domain_bolumleri` (kart bölümleri), `goreli`, `karsi_deliller`.
+   Tek bir bölümün hatası artık diğerlerini düşürmüyor (25 Eyl dersinin devamı).
+4. Yeni koruma testi: `test_tanimsiz_ad_korumasi.py` — modülleri çalıştırmadan
+   AST ile tarar, Load edilen ama hiçbir yerde atanmayan ad varsa kırılır
+   (`main.py`, `notifier.py`, `notification_context.py`, `notification_delivery.py`,
+   `grafik.py`, `grafik_uret.py`, `telegram_alert_flow.py`, `ampirik_referans.py`).
+
+Düzeltmeden sonra aynı olay (AKBNK 4s, gerçek `bot_data`) kartı:
+
+```
+▼ AKBNK 4s AŞAĞI TEYİTLİ
+Alçalan Üçgen — kapanışla
+🕒 23 Ekim 06:30→10:30 mumu
+· kapanış 70,95 · sınır 65,97
+
+▼ destek · blok 1s 70,40 −%0,8
+· kalite 80/100 — güç 99
+· bant 49 mum (30 Eylül'den)
+· daralma %100
+· temas üst 2 / alt 2
+
+◈ 4s yapı dış ve iç aşağı döndü
+geri çekilme yok · 1g de onaylı
+
+◇ 32321 formasyon · %76 tuttu
+◇ tutunca ~1,19 TL · %1,7
+◇ geri çekilme %35 · 28624
+· geçmiş davranış, kazanç değil
+
+katılım 4s veri yok
+katılım 1s hacim bitti (0,86)
+
+ters işaret: hacim teyitsiz
+· bozulur: 65,97 üstü kapanış
+
+• yatırım tavsiyesi değildir
+```
+
+20 dolu satır (tavan 20), 551 kr (tavan 1100). `§2` iskeletinden bilinçli
+sapmalar: `› /tara` satırı 2026-10-22 kararıyla yok; `× geçersiz:` yerine
+`· bozulur:` yazılıyor (aynı bilgi, kullanıcı dili); bölge listesi yerine tek
+`▼/▲ engel` satırı (en yakın bölge) — kullanıcı kararı 2026-10-22, kart 20
+satırı aşmasın.
+
+**Teşhis notu:** aynı belirti (bölümsüz kart) bağlamın gerçekten boş olduğu
+durumda da görülür; ayırt etmek için logda
+`Kart bağlamı hazırlanamadı` / `Domain runner yüklenemedi` satırına bakılır.

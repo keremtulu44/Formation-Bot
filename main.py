@@ -44,7 +44,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   islem_gunu_mu,
                   son_kapanan_mum_ani, time_until_next_open, is_bist_open,
-                  resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
+                  resample_all_timeframes, resample_ohlcv, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_last_bar,
                   select_yfinance_1h_period, tamamlanmis_mumlar,
                   mum_kapanis_ani, bar_kapandi_mi)
@@ -3167,13 +3167,32 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 )
                                 # MS arıza sayacı (yalnız /durum'da görünür).
                                 _ms_hata_kaydet(outputs, stock)
-                                payload['domain_context'] = format_domain_context(
-                                    outputs,
-                                    reference_price=candle_close_price,
-                                    alarm_tf=tf_name,
-                                    yalniz_tf=(notification_state
-                                               == "KIRILIM_GECERSIZLESTI"),
-                                )
+                                # Klasik bağlam metni KENDİ try'ında: bu metin
+                                # üretilemese bile kart bölümleri (aşağıda) karta
+                                # girmeli. 23 Eki 2026: tek istisna ikisini birden
+                                # düşürüyor, canlı kart "sade" kalıyordu.
+                                try:
+                                    payload['domain_context'] = format_domain_context(
+                                        outputs,
+                                        reference_price=candle_close_price,
+                                        alarm_tf=tf_name,
+                                        yalniz_tf=(notification_state
+                                                   == "KIRILIM_GECERSIZLESTI"),
+                                    )
+                                except Exception as ctx_hata:  # noqa: BLE001
+                                    payload['domain_context'] = ""
+                                    logger.warning(
+                                        "Domain bağlam metni üretilemedi (%s %s): %s",
+                                        stock, tf_name, ctx_hata,
+                                    )
+                                # Ölçüm kesitleri "normalin x katı" eşiğini ATR'den
+                                # okur. 23 Eki 2026: buradaki ad (`atr_alarm`) hiç
+                                # tanımlanmamıştı; her alarmda NameError yutuluyor
+                                # (aşağıdaki `except kart_hata`) ve karta HİÇBİR
+                                # domain bölümü girmiyordu — canlı kart bu yüzden
+                                # "sade" görünüyordu. ATR alarm TF'sinden, karne ile
+                                # aynı fonksiyonla hesaplanır.
+                                atr_alarm = atr_hesapla(df_tf)
                                 # Kart biçimleyicisi bölümleri AYRI ister: kendi
                                 # bölümünü kendi başlığıyla basabilsin ve imza
                                 # (değişmedi kontrolü) yalnız bağlamı görsün.
@@ -3218,12 +3237,27 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             # (endeks/makro: "hacim yok" yerine neden).
                                             sembol=stock,
                                         )
-                                        # Göreli güç yalnız YAPI bloğunda tek satır;
-                                        # endeks alarmının kendisinde basılmaz.
+                                    except Exception as kart_hata:  # noqa: BLE001
+                                        logger.warning(
+                                            "Kart bağlamı hazırlanamadı (%s %s): %s",
+                                            stock, tf_name, kart_hata,
+                                        )
+                                    # Göreli güç yalnız YAPI bloğunda tek satır;
+                                    # endeks alarmının kendisinde basılmaz. Kendi
+                                    # try'ı: endeks verisi yoksa bölge/hacim/ölçü
+                                    # blokları yine basılır.
+                                    try:
                                         goreli = _goreli_guc_satiri(
                                             stock, tf_name, df_tf, deque_manager)
-                                        if goreli:
+                                        if goreli and isinstance(
+                                                payload.get('domain_bolumleri'), dict):
                                             payload['domain_bolumleri']['goreli'] = [goreli]
+                                    except Exception as goreli_hata:  # noqa: BLE001
+                                        logger.debug(
+                                            "Göreli güç satırı üretilemedi (%s %s): %s",
+                                            stock, tf_name, goreli_hata,
+                                        )
+                                    try:
                                         payload['domain_karsi'] = karsi_deliller(
                                             outputs,
                                             alarm_tf=tf_name,
@@ -3231,10 +3265,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             mtf_destek=payload.get('mtf_destek'),
                                             retest_seen=payload.get('retest_seen'),
                                         )
-                                    except Exception as kart_hata:  # noqa: BLE001
-                                        logger.warning(
-                                            "Kart bağlamı hazırlanamadı (%s %s): %s",
-                                            stock, tf_name, kart_hata,
+                                    except Exception as karsi_hata:  # noqa: BLE001
+                                        logger.debug(
+                                            "Karşı delil üretilemedi (%s %s): %s",
+                                            stock, tf_name, karsi_hata,
                                         )
                             except Exception as exc:  # noqa: BLE001 - bağlam alarmı düşürmesin
                                 payload['domain_context'] = ""
