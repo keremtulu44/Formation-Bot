@@ -211,7 +211,13 @@ SABITLER_TABAN: dict[str, Any] = {
     "kare_once_pay": 10,          # FAZ 2: formasyon öncesi 10 mum sol tampon
     "kadraj_cerceve": {"1h": 80, "2h": 74, "4h": 68, "1d": 62},
     "kadraj_formasyon_min": 35,   # FAZ 2 Kural A alt sınırı
-    "kadraj_formasyon_maks": 85,  # FAZ 2 Kural A üst sınırı
+    # 2026-10-23 (kullanıcı: "çizimi kısa tutuyor, formasyonun neresinden
+    # kırıldığı görünmüyor"): üst sınır 85 → 180. 85 mum, 90-100 barlık bir
+    # formasyonun ilk üçte birini kareden atıyordu; kırılımın geldiği taban ve
+    # daralmanın boyu görünmüyordu. Gerçek tavan piksel bütçesidir
+    # (`genislik_tavan / bar_px` = 240 mum, bar başına 6 px); 180 mumda kare
+    # 1080 px genişlikte kalır ve px/bar 6'nın altına inmez.
+    "kadraj_formasyon_maks": 180,
     # zone'lar (G2'de çizilir; sayılar §0.9)
     "zone_ust": {"1h": 3, "2h": 3, "4h": 2, "1d": 1},
     "zone_alt": {"1h": 3, "2h": 3, "4h": 2, "1d": 1},
@@ -670,9 +676,12 @@ def _kadrajla(n: int, formasyon_basi: Optional[int], kare_mum: Optional[int] = N
     """(sol, sag, kirpildi) — FAZ 2 akıllı kadraj (viewpoint zoom) kuralı.
 
     Kural A (formasyon VARSA): kadraj formasyona odaklanır —
-    `formasyon mumu + 10 mum sol tampon`, toplam 35-85 mum aralığına kırpılır
-    (kısa formasyonda fark sola eklenir; 85'ten uzun formasyonda pencil sağda
-    kalır ve `kirpildi=True` ile `budama`ya yazılır).
+    `formasyon mumu + 10 mum sol tampon`. Pencere, formasyonun TAMAMINI
+    göstermeye çalışır (kullanıcı 2026-10-23: "çizimi kısa tutuyor, formasyonun
+    neresinden kırıldığı görünmüyor"); üst sınır `kadraj_formasyon_maks` (180)
+    ve piksel bütçesidir (`genislik_tavan / bar_px` = 240 mum → okunurluk için
+    180'de durulur). Kısa formasyonda fark sola eklenir; 180'den uzun formasyonda
+    sağ (güncel) taraf gösterilir ve `kirpildi=True` ile `budama`ya yazılır.
     Kural B (formasyon YOKSA): TF matrisi (`kadraj_cerceve`: 1g 62 · 4s 68 ·
     2s 74 · 1s 80) kullanılır.
 
@@ -688,17 +697,27 @@ def _kadrajla(n: int, formasyon_basi: Optional[int], kare_mum: Optional[int] = N
     bas = _tam(formasyon_basi)
     if bas is None or bas < 0:
         return max(0, n - carsi), n, False
-    # Kural A — formasyon odaklı kadraj. Üst sınır plandan gelir (85); çağıran
-    # AÇIKÇA bir pencere verdiyse (`--mum`) o daha dar olabilir, geçmez.
+    # Kural A — formasyon odaklı kadraj. Tavan artık 85 DEĞİL: 85 mum, 90-100
+    # barlık bir üçgenin ilk bölümünü (dolayısıyla kırılımın geldiği tabanı ve
+    # daralmanın ne kadar olduğunu) kareden atıyordu. Tavan PİKSEL bütçesinden
+    # türetilir: `genislik_tavan / bar_px` (1440/6 = 240 mum) ve okunurluk için
+    # 240'ın altında tutulur; `kadraj_formasyon_maks` bu tavanı aşağı çeker.
+    # Çağıran AÇIKÇA bir pencere verdiyse (`--mum`) o daha dar olabilir, geçmez.
     alt = int(SABITLER["kadraj_formasyon_min"])
     maks = int(SABITLER["kadraj_formasyon_maks"])
+    try:
+        _bar_px = max(1.0, float(SABITLER["bar_px"]))
+        _piksel = int(float(SABITLER["genislik_tavan"]) / _bar_px)
+        maks = max(alt, min(maks, _piksel))
+    except (TypeError, ValueError):      # pragma: no cover - sabit bozulursa kırpma
+        pass
     if kare_mum:
         maks = max(alt, min(maks, int(kare_mum)))
     istenen = max(1, n - int(bas)) + pay
     toplam = max(2, max(alt, min(maks, istenen)))
     sol = max(0, min(int(bas) - pay, n - toplam))
     kirpildi = False
-    if n - sol > toplam:                        # formasyon 85'ten uzun: sağı göster
+    if n - sol > toplam:                        # formasyon tavandan uzun: sağı göster
         sol = max(0, n - toplam)
         kirpildi = True
     return sol, n, kirpildi
@@ -1351,9 +1370,18 @@ def _alarm_kopyala(cift: Any, alarm_turu: Optional[str], alarm_bar: Optional[int
         bar = _tam(_alan(cift, "end_bar"))
         bar_kaynak = "end_bar"
     disarida = False
-    if bar is not None and not (sol <= bar < sag):
-        disarida = True
-        bar = None
+    bar_mutlak = bar
+    if bar is not None:
+        # ÇERÇEVE → PENCERE dönüşümü (2026-10-23'te bulunan hata): `alarm_bar`
+        # çerçevenin MUTLAK bar indeksidir; kare ise `[sol, sag)` penceresini
+        # çizer. Dönüşüm yapılmadığı için alarm düşey çizgisi yalnız mutlak
+        # indeks tesadüfen pencereye düştüğünde çiziliyordu ve `_gecersiz_katmani`
+        # yanlış muma bakıyordu (kırılım mumu işareti sessizce kayboluyordu).
+        if sol <= bar < sag:
+            bar = int(bar) - int(sol)
+        else:
+            disarida = True
+            bar = None
     try:
         yon = int(_alan(cift, "break_dir") or 0)
     except (TypeError, ValueError):
@@ -1394,7 +1422,8 @@ def _alarm_kopyala(cift: Any, alarm_turu: Optional[str], alarm_bar: Optional[int
         "hedef": hedef,
         "yon": yon,
         "teyit_siniri": _teyit,
-        "bar": bar,
+        "bar": bar,                       # pencere içi (0 = ilk çizilen mum)
+        "bar_mutlak": bar_mutlak,         # çerçeve indeksi (izlenebilirlik)
         "bar_kaynak": bar_kaynak if bar is not None else None,
         "bar_disarida": disarida,
         "durum": durum or None,
@@ -1655,8 +1684,10 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         # Üst blok satır başına 0,031 yiyor: iki satır bugün olduğu yer (0,855),
         # üçüncü satır (L11 yapı satırı) eksene değmesin diye eksen 0,031 daha iner.
         metin = _metinler(goruntu, meta, genislik, eksik, yalnizca_mumlar, etiket_detay)
+        # `sag_ayri_satir`: rozetlerle sığmayan "son mum …" yazısı KENDİ satırına
+        # iner → üst blok bir satır daha yer ister (aksi hâlde eksene değer).
         ust = (0.855 if metin["satirlar"] else 0.885) - 0.031 * max(
-            0, len(metin["satirlar"]) - 2)
+            0, len(metin["satirlar"]) - 2) - (0.031 if metin.get("sag_ayri_satir") else 0.0)
         sol_kenar, sag_metin = (0.12 if _MOD.mobil else 0.075), 0.985
         sag_kenar = (sag_metin * genislik - float(SABITLER["sag_serit_px"])) / genislik
         if alt_blok:
@@ -1761,16 +1792,14 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                 kadraj_disi += 1
         goruntu = {**goruntu, "olay": {**_olay_src, "olaylar": kabul_olaylar,
                                        "kritik": kritik_kabul}}
-        # Bant doğruları KADRAJA DAHİL edilir: çizilen geometri y-aralığının
-        # dışında kalırsa çizgi eksen sınırında SERT KIRPILIYOR ("kırpılıyormuş
-        # gibi" geri bildirimi). Sağ boşluk yalnız `n`'ye bağlı olduğundan burada
-        # aynı değerle hesaplanır; `_formasyon_ciz` ile AYNI seri paylaşılır.
-        _form = goruntu.get("formasyon") or {}
-        if _form.get("upper_now") is not None or _form.get("lower_now") is not None:
-            _sol = int(goruntu.get("sol") or 0)
-            _x0, _bitis, _ = _formasyon_araligi(_form, _sol, n, sag_bosluk_mum(n))
-            for _seri in _formasyon_serileri(_form, _sol, _bitis).values():
-                ek_y.extend(_seri[_x0:_bitis])
+        # Bant doğruları y-aralığını BELİRLEMEZ (2026-10-23 ölçümü): seriyi
+        # olduğu gibi aralığa katmak, bandın fiyattan kopuk bölümünü (üçgenin
+        # geriye uzanan tabanı, dik yükselen alt çizgi) da hesaba katıyor ve
+        # mumları sıkıştırıyordu — AKBNK 1s'te mumlar kare yüksekliğinin yalnız
+        # %29'una sığıyordu. Aralık MUM + kutu + seviye + alarm + bandın
+        # `upper_now/lower_now` (son bardaki gerçek) değerlerinden kurulur;
+        # bandın kadraj dışına taşan kısmı `_formasyon_ciz` içinde kesilir
+        # (uydurma geometri yok, çizgi yalnız görünür aralıkta).
         aralik = _yatay_aralik(kapanis + yuksek + dusuk, ek_y)
         ax.set_ylim(*aralik)
         meta["kare"]["y_araligi"] = [round(aralik[0], 6), round(aralik[1], 6)]
@@ -1853,8 +1882,9 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
 
         if not yalnizca_mumlar:
             try:
-                _formasyon_ciz(ax, goruntu, n, butce, metin, sag_bosluk=sag_bosluk,
-                               aralik=aralik, yuksek=yuksek, dusuk=dusuk)
+                meta["cizgiler"]["formasyon"] = _formasyon_ciz(
+                    ax, goruntu, n, butce, metin, sag_bosluk=sag_bosluk,
+                    aralik=aralik, yuksek=yuksek, dusuk=dusuk)
             except Exception as hata:
                 log.warning("grafik: formasyon katmanı çizilemedi (%s)", hata)
                 eksik.append("formasyon")
@@ -1863,6 +1893,11 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
             except Exception as hata:
                 log.warning("grafik: alarm katmanı çizilemedi (%s)", hata)
                 eksik.append("alarm")
+            try:                       # kırılım marjı (seviye ↔ kapanış ölçüsü)
+                meta["cizgiler"]["kirilim"] = _kirilim_olcusu(
+                    ax, goruntu, n, sag_bosluk=sag_bosluk, aralik=aralik)
+            except Exception as hata:
+                log.warning("grafik: kırılım ölçüsü çizilemedi (%s)", hata)
             try:
                 _gecersiz_katmani(ax, goruntu, alarm, sag_adaylar, n)
             except Exception as hata:
@@ -2054,6 +2089,11 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
     except Exception:                         # pragma: no cover
         _px_bar = 9.0
     yaricap = max(4, int(math.ceil(0.5 * _genis_px / max(1e-6, _px_bar))) + 1)
+    # ARALIK DA PİKSELDEN (2026-10-23, mobil ölçümü): sabit 7 bar, dar karede
+    # (px/bar ≈ 4,5) rozet genişliğinin YARISINI bile karşılamıyor; iki komşu
+    # rozet üst üste biniyordu (`⚡↑ x5,57` + `x3,65` tek çip gibi okunuyordu).
+    # İki rozetin merkez uzaklığı en az rozet genişliği kadar olmalı.
+    min_ara = max(min_ara, 2 * yaricap - 1)
 
     # Rozet, karedeki rehber ÇİZGİLERİN üstüne oturunca okunmuyor (ölçüm: bayrak
     # kartında `⚡↑ x2,17` alt bant doğrusunun, flama kartında `⚡↑ x4,08` FVG kutu
@@ -3182,6 +3222,38 @@ def _formasyon_serileri(formasyon: Mapping[str, Any], sol: int,
     return seriler
 
 
+def _gorunur_parcalar(xs: Sequence[float], ys: Sequence[float],
+                      aralik: Optional[Sequence[float]]) -> list[tuple[list[float], list[float]]]:
+    """Seriyi, y-aralığının İÇİNDE kalan kesintisiz parçalara böler.
+
+    Neden: bant doğrusu fiyattan kopuk bölgede (üçgenin geriye uzanan tabanı,
+    dik yükselen alt çizgi) karenin altına/üstüne taşıyor. Geometri korunur
+    (noktalar `f_line_price`tan gelir) ama **kadraj dışı parça çizilmez** —
+    eksen kenarında sert kesilen, anlamsız bir çizgi kalmaz. `aralik` yoksa
+    seri olduğu gibi döner (birim testleri ve kare-dışı çağrılar eski davranışı
+    görür).
+    """
+    if aralik is None or len(aralik) < 2:
+        return [(list(xs), list(ys))]
+    lo, hi = float(aralik[0]), float(aralik[1])
+    if not math.isfinite(lo) or not math.isfinite(hi) or hi <= lo:
+        return [(list(xs), list(ys))]
+    parcalar: list[tuple[list[float], list[float]]] = []
+    xs_p: list[float] = []
+    ys_p: list[float] = []
+    for x, y in zip(xs, ys):
+        if y is None or not math.isfinite(float(y)) or not (lo <= float(y) <= hi):
+            if xs_p:
+                parcalar.append((xs_p, ys_p))
+                xs_p, ys_p = [], []
+            continue
+        xs_p.append(float(x))
+        ys_p.append(float(y))
+    if xs_p:
+        parcalar.append((xs_p, ys_p))
+    return parcalar
+
+
 def _direk_ciz(ax, formasyon: Mapping[str, Any], x0: int, *,
                yuksek: Optional[Sequence[Optional[float]]] = None,
                dusuk: Optional[Sequence[Optional[float]]] = None) -> bool:
@@ -3254,6 +3326,9 @@ def _formasyon_ciz(ax, goruntu: Mapping[str, Any], n: int, butce: float,
     x0, bitis, apex_i = _formasyon_araligi(formasyon, sol, n, sag_bosluk)
     _direk_ciz(ax, formasyon, x0, yuksek=yuksek, dusuk=dusuk)
     seriler = _formasyon_serileri(formasyon, sol, bitis)
+    # Kırpma sayaçları: y-aralığı dışında kaldığı için çizilmeyen bar sayısı.
+    # Sessiz kayıp yok — `meta["cizgiler"]["formasyon"]["kirpilan"]`a yazılır.
+    kirpilan = {"ust": 0, "alt": 0}
     # Bant arası çok hafif dolgu (GÖRSEL-3): "hangi aralıkta sıkışıyor" tek bakışta
     # görünür; saydamlık mumların okunurluğunu bozmaz, mumların ARDINDA kalır.
     if "ust" in seriler and "alt" in seriler:
@@ -3268,8 +3343,17 @@ def _formasyon_ciz(ax, goruntu: Mapping[str, Any], n: int, butce: float,
             continue
         degerler = seriler[anahtar]
         xs = list(range(x0, bitis))          # bitis == n iken eski çizgi (sağ boşluk yok)
-        ax.plot(xs, degerler[x0:bitis], color=PALET["formasyon"], linewidth=kalin,
-                solid_capstyle="butt", zorder=4)
+        # Y-ARALIĞI KISITI (2026-10-23): doğru, karenin y-aralığının dışına
+        # çıktığı yerde ÇİZİLMEZ. Eskiden seri y-aralığına katılarak çizgi
+        # görünür tutuluyordu ama bedeli mumların sıkışmasıydı (fiyattan kopuk
+        # bant uzantısı tüm kareyi aşağı çekiyordu). Artık aralık mumdan kurulur;
+        # görünür aralığa giren parçalar kesintisiz, dışına taşanlar hiç çizilmez
+        # — doğrunun geometrisi değişmez, yalnız kadraj dışı atlanır.
+        parcalar = _gorunur_parcalar(xs, degerler[x0:bitis], aralik)
+        kirpilan[anahtar] = max(0, len(xs) - sum(len(p[0]) for p in parcalar))
+        for prca_xs, prca_ys in parcalar:
+            ax.plot(prca_xs, prca_ys, color=PALET["formasyon"], linewidth=kalin,
+                    solid_capstyle="butt", zorder=4)
         if x0 > 0:      # bant öncesi: aynı doğrunun geriye kesikli uzantısı (§0.12e)
             # KADRAJ KISITI: uzantı eksen sınırının dışına çıkarsa çizgi kenarda
             # SERT KIRPILIYOR ("kırpılıyormuş gibi" geri bildirimi — dik bantta
@@ -3313,6 +3397,8 @@ def _formasyon_ciz(ax, goruntu: Mapping[str, Any], n: int, butce: float,
                 linestyle="None", markerfacecolor=PALET["formasyon"],
                 markeredgecolor=PALET["zemin"], markeredgewidth=0.7, zorder=6)
     # Bant temasları başlıkta adet olarak kalır; mum üstü daireler çizilmez.
+    return {"kirpilan": kirpilan, "bar": int(bitis - x0),
+            "apex_bar": (int(formasyon["apex_bar"]) if formasyon.get("apex_bar") is not None else None)}
 
 _LEJANT_DUSUK = ("yapı:", "şerit:", "kutular:", "FVG ·", "bant öncesi", "▨ dolan")
 # GÖRSEL-7: geçersizleşme maddeleri DÜŞÜRÜLMEZ. Kare yalnız iki satır taşıyabildiği
@@ -3434,6 +3520,120 @@ def _alarm_ciz(ax, alarm: Mapping[str, Any], n: int, butce: float,
             _projeksiyon_ciz(ax, alarm, n)
         except Exception as hata:  # projeksiyon süsü alarm karesini düşürmesin
             log.debug("grafik: hedef projeksiyonu çizilemedi (%s)", hata)
+
+
+def _kirilim_olcusu(ax, goruntu: Mapping[str, Any], n: int, *,
+                    sag_bosluk: int = 0,
+                    aralik: Optional[Sequence[float]] = None) -> Optional[dict[str, Any]]:
+    """KIRILIM MARJI ölçüsü: bant sınırı ile kırılım mumunun kapanışı arası.
+
+    Neden (kullanıcı 2026-10-23): kart "kırılan 407,17 · kapanış 428,25 · %5,2
+    aştı" diyor ama karede kırılmanın NE KADAR olduğu görünmüyordu; 0,56'lık bir
+    aşım 1 px bile etmiyor. Ölçü, sağdaki boşlukta (mumların üzerinde değil)
+    seviye ile kapanış arasına çift uçlu ok + küçük çip koyar.
+
+    Sayı UYDURULMAZ: seviye `alarm["deger"]` (motorun `break_price`ı), kapanış
+    `alarm["kapanis"]`dir (motorun `candle_close_price`ı — kartın yazdığı sayı).
+    Kapanış yoksa karede çizilen mumun kapanışı okunur (same seri, aynı mum).
+
+    İki MOD vardır ve karıştırılmaz:
+      * `kırılım` (teyit/retest/geçersiz + yön biliniyor): kırılım yönünde ne
+        kadar ilerlediği — `kırılım +0,56` / `içeride 0,39`.
+      * `mesafe` (aday/kritik/yön yok): seviyeye ne kadar KALDIĞI —
+        `seviyeye 0,06`. Aday kartında fiyat henüz kırmamıştır; "kırılım +0,06"
+        yazmak yalan olurdu (eski taslakta tam bu hata vardı).
+
+    Dönen sözlük `meta["cizgiler"]["kirilim"]`e yazılır; çizilmeyecekse `None`.
+    """
+    alarm = goruntu.get("alarm") or {}
+    seviye = _gercek(alarm.get("deger"))
+    if seviye is None:
+        return None
+    kapanis = _gercek(alarm.get("kapanis"))
+    bar = _tam(alarm.get("bar"))
+    if kapanis is None:
+        seri = goruntu.get("kapanis") or []
+        if bar is None or not (0 <= bar < len(seri)):
+            return None
+        kapanis = _gercek(seri[bar])
+    if kapanis is None:
+        return None
+    fark = float(kapanis) - float(seviye)
+    if abs(fark) <= 1e-12:
+        return None
+    tur = str(alarm.get("tur") or "")
+    yon = int(_gercek(alarm.get("yon")) or 0)
+    # Kırılım sayılan türler ve yönü bilinen alarm → MARJ; diğerleri → MESAFE.
+    marj_modu = bool(yon in (1, -1) and tur in ("teyit", "retest", "gecersiz"))
+    if not marj_modu:
+        yon = yon or (1 if fark > 0 else -1)
+    # Kırılım YÖNÜNDE ne kadar ilerledi (negatif → bant içine geri döndü).
+    marj = fark if yon > 0 else -fark
+    yuzde = (100.0 * abs(fark) / abs(float(seviye))) if seviye else None
+    # Çizim aralığı dışındaysa (kare kırpılmış) ölçü çizilmez — uydurma yok.
+    if aralik is not None and len(aralik) >= 2:
+        lo, hi = float(aralik[0]), float(aralik[1])
+        if not (lo <= float(seviye) <= hi and lo <= float(kapanis) <= hi):
+            return None
+    gecersiz = tur == "gecersiz"
+    if gecersiz:
+        # GEÇERSİZLEŞME: "kırılım +0,39" yazmak, geçersizleşmiş bir kırılımı
+        # geçerli gibi gösterirdi. Kartla aynı dil: `üstünde 0,39` / `altında …`.
+        etiket = (f"üstünde {sayi(abs(fark))}" if fark >= 0
+                  else f"altında {sayi(abs(fark))}")
+    elif marj_modu:
+        # İşaret YÖNDEN gelir: kırılım yönünde ilerleme (+) / banda geri dönüş (−).
+        etiket = (f"kırılım +{sayi(abs(marj))}" if marj >= 0
+                  else f"içeride {sayi(abs(marj))}")
+    else:
+        # Aday/kritik: fiyat seviyeyi HENÜZ kırmadı → kalan mesafe yazılır.
+        etiket = f"seviyeye {sayi(abs(fark))}"
+    yuzde_metni = f"%{sayi(abs(yuzde), 1)}" if yuzde is not None else ""
+    # Konum: son mumun SAĞINDAKİ boşluk. Boşluk yoksa ölçü çizilmez (mumların
+    # üzerine ok/yazı binmemesi kuralı; `sag_bosluk_mum` 0 iken bu yol kapalı).
+    if int(sag_bosluk) <= 0:
+        return None
+    x_sag = float(n) - 0.4 + float(sag_bosluk)
+    x_ok = min(x_sag - 0.55, float(n) - 0.4 + max(0.9, float(sag_bosluk) * 0.82))
+    alt_y, ust_y = (float(v) for v in ax.get_ylim())
+    if not (alt_y <= float(seviye) <= ust_y and alt_y <= float(kapanis) <= ust_y):
+        return None
+    if not marj_modu:
+        renk = PALET["eksen"]           # ölçü, sinyal rengi değil
+    elif gecersiz or marj < 0:
+        renk = PALET["eksen"]           # geçersiz/geri dönüş: nötr
+    else:
+        renk = (PALET["mum_yukselen"] if yon > 0 else PALET["mum_dusen"])
+    # Kırılım mumunun kapanışından sağ kenara ince noktalı kılavuz: ölçünün üst
+    # ucu hangi mumun kapanışı olduğu görünsün (mum kadraj dışındaysa çizilmez).
+    if bar is not None and 0 <= int(bar) < n:
+        ax.plot([float(bar) + 0.55, x_ok], [float(kapanis), float(kapanis)],
+                color=renk, linewidth=0.6, linestyle=(0, (1, 2)), alpha=0.55,
+                zorder=4.2)
+    ax.annotate("", xy=(x_ok, float(kapanis)), xytext=(x_ok, float(seviye)),
+                arrowprops=dict(arrowstyle="<->", color=renk, lw=1.0, alpha=0.9,
+                                shrinkA=0, shrinkB=0),
+                zorder=6, annotation_clip=False)
+    # Çip: ölçünün ortasında, boşluğun içinde. Hedef kutusu varsa ve aynı
+    # yüksekliğe düşüyorsa yazı okun üstüne/altına kaydırılır (çakışma yok).
+    orta = (float(kapanis) + float(seviye)) / 2.0
+    yazi = f"{etiket}\n{yuzde_metni}".strip()
+    yazi_y = orta
+    hedef = _gercek(alarm.get("hedef"))
+    if hedef is not None and abs(float(hedef) - orta) <= (ust_y - alt_y) * 0.06:
+        yazi_y = max(float(kapanis), float(seviye)) + (ust_y - alt_y) * 0.045
+    ax.annotate(yazi, xy=(x_ok - 0.35, yazi_y), xytext=(0, 0), textcoords="offset points",
+                ha="right", va="center", fontsize=float(SABITLER["sag_serit_yazi_pt"]) - 0.5,
+                color=renk, zorder=9, annotation_clip=False,
+                bbox=dict(boxstyle="round,pad=0.22", facecolor=PALET["chip_zemin"],
+                          edgecolor=renk, linewidth=0.6, alpha=0.95))
+    return {"seviye": round(float(seviye), 6), "kapanis": round(float(kapanis), 6),
+            "mod": "marj" if marj_modu else "mesafe",
+            "marj": round(float(marj), 6) if marj_modu else None,
+            "mesafe": round(abs(float(fark)), 6),
+            "yuzde": (round(float(yuzde), 3) if yuzde is not None else None),
+            "yon": int(yon), "bar": (int(bar) if bar is not None else None),
+            "etiket": yazi.replace("\n", " · ")}
 
 
 def _projeksiyon_ciz(ax, alarm: Mapping[str, Any], n: int) -> bool:
@@ -3870,9 +4070,22 @@ def _tik_etiketleri(ax, zamanlar: Sequence[Optional[datetime]], tf: str) -> None
     if not aday:
         ax.set_xticks([])
         return
-    if len(aday) > 8:
-        adim = math.ceil(len(aday) / 8.0)
-        aday = [x for j, x in enumerate(aday) if j % adim == 0][:8]
+    # ETİKET YOĞUNLUĞU PİKSELE GÖRE (2026-10-23): sabit "en fazla 8" kuralı,
+    # dar karelerde (mobil: eksen ~465 px, punto 1,35×) tarihleri üst üste
+    # bindiriyordu ("10 Eyl14 Eyl"). Sığan sayı eksen genişliğinden hesaplanır:
+    # her etiket kendi genişliği + nefes payı kadar yer ister.
+    sinir = 8
+    try:
+        eksen_px = float(ax.get_window_extent().width)
+        en_uzun = max((t for _, t in aday), key=len)
+        etiket_px = _metin_px(ax.figure, en_uzun, float(SABITLER["eksen_pt"]))
+        if eksen_px > 1 and etiket_px > 1:
+            sinir = max(2, min(sinir, int(eksen_px / (etiket_px * 1.35 + 8.0))))
+    except Exception as hata:      # pragma: no cover - ölçüm süsü, 8 sınırı kalır
+        log.debug("grafik: tick yoğunluğu ölçülemedi (%s)", hata)
+    if len(aday) > sinir:
+        adim = math.ceil(len(aday) / float(sinir))
+        aday = [x for j, x in enumerate(aday) if j % adim == 0][:sinir]
     ax.set_xticks([i for i, _ in aday])
     ax.set_xticklabels([t for _, t in aday], rotation=0, fontsize=SABITLER["eksen_pt"])
 
@@ -3922,8 +4135,18 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
     if formasyon.get("contraction") is not None:
         # kartla aynı biçim: `notifier.py:309` → `_yuzde(contraction*100, 0)`
         bilgi.append(f"daralma %{sayi(float(formasyon['contraction']) * 100.0, 0)}")
-    if formasyon.get("upper_now") is not None or formasyon.get("lower_now") is not None:
-        bilgi.append(f"bant teması {len(goruntu.get('temas') or [])}")
+    # BANT TEMASI: kart `temas üst 2 / alt 3` diye AYRI sayar; karede tek sayı
+    # yazmak kartla çelişiyordu (üçgen karesinde "bant teması 39" gibi, iki
+    # sınırın toplamı olan bir sayı). Formasyon kaydındaki gerçek alanlar
+    # (`upper_touches`/`lower_touches`) varsa onlar yazılır — kare ile kart
+    # aynı sayıyı söyler. Alan yoksa tek toplam, "toplam" diye ETİKETLENİR.
+    _ust_t = _tam(formasyon.get("upper_touches"))
+    _alt_t = _tam(formasyon.get("lower_touches"))
+    if _ust_t is not None or _alt_t is not None:
+        bilgi.append(f"temas üst {_ust_t if _ust_t is not None else '—'}"
+                     f" / alt {_alt_t if _alt_t is not None else '—'}")
+    elif formasyon.get("upper_now") is not None or formasyon.get("lower_now") is not None:
+        bilgi.append(f"bant teması (toplam) {len(goruntu.get('temas') or [])}")
     if alarm.get("deger") is not None:
         parca = f"seviye {sayi(alarm['deger'])}"
         if alarm.get("kapanis") is not None:
@@ -3989,7 +4212,25 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
     # sayı `meta["lejant_atlanan"]`da makine okunur biçimde durur.
     lejantlar, lejant_punto, lejant_atlanan = _lejant_satirlar(
         _lejant(goruntu, yalnizca_mumlar), genislik)
-    return {"baslik": baslik, "sag": sag, "satirlar": satirlar,
+    # BAŞLIK ÇAKIŞMASI (2026-10-23, mobil ölçümü): rozetler + sağdaki "son mum …"
+    # yazısı dar karede aynı satıra sığmıyor; "son mum" bilgi satırının ÜSTÜNE
+    # biniyordu. Genişlikler GERÇEK renderer ölçümünden gelir (`_olcu_px`);
+    # sığmıyorsa sağ yazı KENDİ satırına iner (satır sayısı burada belli olur ki
+    # eksen üst sınırı ona göre ayrılsın).
+    sag_ayri = False
+    if not yalnizca_mumlar:
+        try:
+            rozet_px = sum(_olcu_px(f"{_ikon(str(p.get('ikon') or ''))} "
+                                    f"{p.get('metin') or ''}".strip(),
+                                    float(SABITLER["baslik_pt"])) + 22.0
+                           for p in pill_listesi[:4])
+            sag_px = _olcu_px(sag, float(SABITLER["durum_pt"])) + 12.0
+            # Sol/sağ kenar boşlukları da düşülür (rozetler `sol_kenar`dan başlar).
+            sag_ayri = (rozet_px + sag_px + 18.0) > float(genislik) * 0.94
+        except Exception:      # pragma: no cover - ölçüm süsü
+            sag_ayri = False
+    return {"baslik": baslik, "sag": sag, "sag_ayri_satir": sag_ayri,
+            "satirlar": satirlar,
             "pill_listesi": ([] if yalnizca_mumlar else pill_listesi),
             "lejant": lejantlar, "lejant_punto": lejant_punto,
             "lejant_atlanan": lejant_atlanan,
@@ -4127,6 +4368,35 @@ def _font_emoji_var(emoji: str) -> bool:
         return False
 
 
+_OLCU_FIG = None
+
+
+def _olcu_figir():
+    """Ölçüm için tek, yeniden kullanılan Agg figürü (pyplot'a DOKUNMAZ).
+
+    Neden ayrı: `_metinler` başlık yerleşimini kare çizilmeden ÖNCE karara
+    bağlıyor (eksen üst sınırı buna bağlı) ve o anda elde bir figür yok. Kalıcı
+    bir ölçüm figürü, tahmini (`_rozet_px`) gerçek renderer genişliğine çevirir:
+    tahminle 3 rozet + sağ yazı dar karede 1-2 px şaşıp üst üste biniyordu.
+    """
+    global _OLCU_FIG
+    if _OLCU_FIG is None:
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        fig = Figure(figsize=(10.8, 1.0), dpi=float(SABITLER["dpi"]))
+        FigureCanvasAgg(fig)
+        _OLCU_FIG = fig
+    return _OLCU_FIG
+
+
+def _olcu_px(metin: str, yazi_pt: float) -> float:
+    """Metnin gerçek piksel genişliği (kalıcı ölçüm figüründen)."""
+    try:
+        return _metin_px(_olcu_figir(), str(metin), float(yazi_pt))
+    except Exception:                       # pragma: no cover - ölçüm süsü
+        return _rozet_px(metin, yazi_pt)
+
+
 def _rozet_px(metin: str, yazi_pt: float) -> float:
     """Rozetin yatay genişliği (piksel) — TAHMİN; gerçek ölçüm `_metin_px`te."""
     punto_px = float(yazi_pt) * float(SABITLER["dpi"]) / 72.0
@@ -4212,14 +4482,23 @@ def _metin_ciz(fig, metin: Mapping[str, Any], sol_kenar: float, sag_kenar: float
         sag_gen = (_metin_px(fig, str(metin.get("sag") or ""), SABITLER["durum_pt"]) + 12.0) / max(1.0, fig_px)
     except Exception:
         sag_gen = 0.22
-    y_sag = (y - 0.040) if (rozetler and x > float(sag_kenar) - sag_gen - 0.015) else y
-    fig.text(sag_kenar, y_sag, metin["sag"], ha="right", va="top", color=PALET["eksen"],
-             fontsize=SABITLER["durum_pt"])
+    # Sağ yazı ("son mum …") rozetlerle aynı satıra sığmıyorsa ALT satıra iner:
+    # bilgi satırlarının ÜSTÜNE binmesi (mobil ölçümü) engellenir — sıra artık
+    # rozet satırı → bilgi satırları → sağ yazı. Karar `_metinler`de ölçülerek
+    # verilir (`sag_ayri_satir`), eksen üst sınırı da ona göre ayrılır.
+    ayri = bool(metin.get("sag_ayri_satir"))
+    if not ayri:
+        y_sag = (y - 0.040) if (rozetler and x > float(sag_kenar) - sag_gen - 0.015) else y
+        fig.text(sag_kenar, y_sag, metin["sag"], ha="right", va="top", color=PALET["eksen"],
+                 fontsize=SABITLER["durum_pt"])
     y -= 0.040
     for satir in metin["satirlar"]:
         fig.text(sol_kenar, y, satir, ha="left", va="top", color=PALET["eksen"],
                  fontsize=SABITLER["durum_pt"])
         y -= 0.031
+    if ayri:
+        fig.text(sag_kenar, y, metin["sag"], ha="right", va="top", color=PALET["eksen"],
+                 fontsize=SABITLER["durum_pt"])
     # Başlık bloğu ile grafik arasında ince AYRAÇ (GÖRSEL-3): üst yazılar kareye
     # "yapışık" görünmesin, okuma alanı net bir dikdörtgen olsun.
     if bool(SABITLER.get("ust_ayrac", True)):

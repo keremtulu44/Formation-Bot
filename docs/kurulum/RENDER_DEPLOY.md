@@ -800,7 +800,7 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `KARNE_STOP_ATR` | `1.0` — "stop" sayılan alehte hareket (ATR katı) | Hayır |
 | `TELEGRAM_GRAFIK` | `yok` (varsayılan) / `alarm` — alarm metninin altına mum karesi ekler (§6.2) | Hayır |
 | `TELEGRAM_GRAFIK_ADET` | `4` — alarm başına kare sayısı (1-4). Free planda `1-2` | Hayır |
-| `GRAFIK_MUM_MAKS` | `80` — formasyon YOKKEN gösterilen mum sayısı (üst sınır). Varsayılan TF matrisi: 1s 80 · 2s 74 · 4s 68 · 1g 62; formasyon varsa kadraj formasyona odaklanır (formasyon + 10 mum tampon, 35-85 arası) | Hayır |
+| `GRAFIK_MUM_MAKS` | `80` — formasyon YOKKEN gösterilen mum sayısı (üst sınır). Varsayılan TF matrisi: 1s 80 · 2s 74 · 4s 68 · 1g 62; formasyon varsa kadraj formasyona odaklanır (formasyon + 10 mum tampon, 35-180 arası — 2026-10-23: 85 mum formasyonun kırılım tabanını kesiyordu) | Hayır |
 | `GRAFIK_OLAY_MAKS` | `6` — kareye çizilen onaylı BOS/CHoCH sayısı | Hayır |
 | `GRAFIK_SAG_BOSLUK_ORANI` | `0.15` — son mumun sağındaki boş alan, **eksen genişliğinin yüzdesi** (%15; kabul penceresi %10-20, otomatik kural bu aralığa kırpılır). Fiyat etiketleri ve 🎯 hedef kutusu buraya çizilir, bant/kutu/aktif BOS çizgileri buraya uzar. `0` = kapalı | Hayır |
 | `GRAFIK_SAG_BOSLUK_MUM` | tanımsız — verilirse üstteki yüzde kuralını ezer ve boşluğu SABİT MUM sayısı yapar (eski yol; `0` = kapalı) | Hayır |

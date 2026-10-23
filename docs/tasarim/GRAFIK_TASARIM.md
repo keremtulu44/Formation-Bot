@@ -1699,7 +1699,7 @@ mitigation oranı motorun kendi `fill_boundary` alanından hesaplanır; kırıl�
 
 | TF | Formasyon yok (mum) | Formasyon var |
 | :--- | :--- | :--- |
-| 1g | 62 | formasyon + 10 mum sol tampon, 35-85 arasına kırpılır |
+| 1g | 62 | formasyon + 10 mum sol tampon, 35-180 arasına kırpılır (§43) |
 | 4s | 68 | aynı kural |
 | 2s | 74 | aynı kural |
 | 1s | 80 | aynı kural |
@@ -1900,3 +1900,93 @@ sertliğe göre doldurur. Taze aday yerleşim listesinde ÖNDE olduğu için onu
   `test_faz1_gercek_karede_son_mumun_rozeti_cizilir` (canlı önbellek kapısı);
   tam paket `pytest -q` → **1275 geçti, 44 atlandı**.
 
+
+## 43 · GÖRSEL-9 (2026-10-23) — kadraj, kırılım marjı ve ölçülen dört çizim hatası
+
+Kullanıcı: *"grafik çizerken bazı hatalar var; örnek olarak çizimi kısa tutuyor,
+formasyonda kırılmanın ne kadar olduğunu göremiyoruz, başka bir şey varsa da
+tespit edip düzelt."* Dört kusur ÖLÇÜLEREK bulundu (gerçek `bot_data` önbelleği +
+demo kataloğu), her biri tek tek kapatıldı.
+
+### 43.1 Kadraj formasyonu kesiyordu (85 → 180 mum)
+
+- **Ölçüm:** AKBNK/GARAN/THYAO 1s karelerinde formasyon 93 bar, kadraj 85 mum →
+  ilk 8 bar (kırılımın geldiği taban) hiç görünmüyordu; `budama` satırı bunu
+  yalnız metinde söylüyordu.
+- **Kural:** Kural A üst sınırı **180 mum** (`kadraj_formasyon_maks`) ve gerçek
+  tavan piksel bütçesidir: `genislik_tavan / bar_px` = 240 mum, okunurluk için
+  180'de durulur (180 bar × 6 px = 1080 px → px/bar 6'nın altına inmez).
+- **Sonuç:** aynı karelerde 85 → 103 mum; demo kataloğunda 85 → 105/110 mum.
+  180'den uzun formasyonda davranış eski gibi: sağ (güncel) taraf gösterilir,
+  `budama`ya *"180 mumluk pencereye kırpıldı"* yazılır.
+
+### 43.2 Bant doğrusu y-aralığını ele geçiriyordu (mumlar %29'a sıkışıyordu)
+
+- **Neden:** `_kare_ciz` bant serisinin TAMAMINI y-aralığına katıyordu. Fiyattan
+  kopuk bölüm (üçgenin geriye uzanan tabanı, dik yükselen alt çizgi) aralığı
+  şişiriyordu: AKBNK 1s'te mumlar kare yüksekliğinin **%29**'una sığıyordu.
+- **Kural:** y-aralığı **mum + kutu + seviye + alarm + `upper_now/lower_now`**dan
+  kurulur. Bant doğrusunun kadraj dışına taşan parçası `_gorunur_parcalar` ile
+  atlanır (geometri değişmez, eksen kenarında kesilen çizgi kalmaz).
+- **Ölçüm (demo kataloğu):** mum kaplaması %29–62 → **%79–93**.
+- **İz:** çizilmeyen bar sayısı `meta["cizgiler"]["formasyon"]["kirpilan"]`
+  (`{"ust": n, "alt": m}`) — sessiz kayıp yok.
+
+### 43.3 Kırılım marjı karede yoktu ("ne kadar kırdı" görünmüyordu)
+
+- **Neden:** kart `▪ kapanış 54,26 · %1,0 aştı` diyor, kare ise yalnız seviye
+  çizgisini gösteriyordu; 0,56'lık aşım ~1 px olduğu için okunamıyordu.
+- **Kural:** `_kirilim_olcusu` sağ boşlukta **çift uçlu ok + çip** çizer:
+  `kırılım +0,56 · %1,0` (yön yukarı) veya `içeride 0,39 · %0,7` (bant içine
+  dönüş). Sayı UYDURULMAZ: seviye `alarm["deger"]`, kapanış `alarm["kapanis"]`
+  (kartın yazdığı `candle_close_price`); kapanış yoksa karedeki mumun kapanışı.
+- **İz:** `meta["cizgiler"]["kirilim"]` = `{seviye, kapanis, marj, yuzde, yon, bar, etiket}`.
+
+### 43.4 Dar karede (mobil) üst üste binen yazılar
+
+Üç ayrı çakışma ölçüldü ve kapatıldı:
+
+| Çakışma | Neden | Düzeltme |
+| :--- | :--- | :--- |
+| `10 Eyl14 Eyl` | X tick sınırı sabit 8'di; mobil eksende (~465 px) sığmıyordu | Sığan sayı eksen genişliğinden ölçülür (`_metin_px` + nefes payı) |
+| `son mum …` bilgi satırının üstüne biniyordu | Rozetlerle aynı satıra zorlanıyordu | Rozet + sağ yazı genişliği ölçülür; sığmıyorsa sağ yazı KENDİ satırına iner (`sag_ayri_satir`) ve eksen üst sınırı buna göre ayrılır |
+| `⚡↑ x5,57` + `x3,65` tek çip gibi | Rozet aralığı sabit 7 bardı (px/bar ≈ 4,5'te yetersiz) | Aralık `2 × yarıçap − 1` (pikselden), yani en az bir rozet genişliği |
+
+### 43.5 Başlıkta kart ile çelişen sayı
+
+- Kare `bant teması 39` yazıyordu (iki sınırın *toplamı*, üstelik temas olmayan
+  mumlar dahil); kart `temas üst 2 / alt 3` diyor. Artık kare motorun kendi
+  alanlarını (`upper_touches`/`lower_touches`) yazar; alan yoksa tek toplam
+  **"toplam"** etiketiyle basılır.
+
+### 43.6 Alarm mumu pencere koordinatına çevrilmiyordu (düşey çizgi kayıptı)
+
+- **Neden:** `alarm_bar` ÇERÇEVENİN mutlak bar indeksidir; kare `[sol, sag)`
+  penceresini çizer. `_alarm_kopyala` dönüşüm yapmadan mutlak indeksi yazıyordu →
+  `0 <= bar < n` testi çoğu karede başarısız oluyor ve **alarm düşey çizgisi hiç
+  çizilmiyordu**; `_gecersiz_katmani` de "geçersizleştiren mum" işaretini yanlış
+  muma (ya da hiç) koyuyordu. Demo kataloğunda çizgi yalnız mutlak indeks tesadüfen
+  pencereye düştüğünde görünüyordu.
+- **Kural:** `bar = mutlak - sol` (pencere içi); çerçeve indeksi
+  `alarm["bar_mutlak"]`ta saklanır. Pencere dışındaysa `bar=None` +
+  `bar_disarida=True` + `uyarilar`a not (eski davranış, sessiz kayıp yok).
+- **Kapatma:** `test_grafik_gorsel9.py::test_alarm_bar_pencere_koordinatina_cevrilir`.
+
+### 43.7 Kırılım ölçüsünün MODU: aday kartında "kırılım" yazmaz
+
+- Aday/kritik alarmında fiyat seviyeyi HENÜZ kırmamıştır; ölçü **mesafe** olur:
+  `seviyeye 0,06 · %0,2` (nötr renk). Kırılım sayılan türlerde (teyit / retest /
+  geçersiz + yön biliniyor) **marj** yazılır: `kırılım +0,56` veya `içeride 0,39`.
+- `meta["cizgiler"]["kirilim"]["mod"]` = `marj` | `mesafe`; sayılar
+  `marj`/`mesafe`/`yuzde` alanlarında — kare ile kart aynı olayı anlatır.
+
+### 43.8 Doğrulama
+
+- `pytest -q` → **1678 geçti, 43 atlandı** (yeni dosya: `test_grafik_gorsel9.py`, 18 test).
+- Demo kataloğu (`scripts/ornek_gorsel_uret.py --senaryo hepsi`) yeniden üretildi;
+  manşet karelerde kırılım ölçüsü çizilir, mum kaplaması %79-93, `mum_cakisan == 0`.
+- Gerçek önbellek: 12 sembol × 1s/4s/1g taraması → `red` yok, `eksik_katman` yok,
+  sağ şeritte `atlanan == 0`.
+- Önce/sonra (aynı veri, aynı kare): AKBNK 1s 85 → 103 mum · mum kaplaması
+  %29 → %79 · alarm düşey çizgisi yok → kırılım mumunda; demo `ucgen_teyit`
+  `bant teması 39` → `temas üst 4 / alt 4` ve sağ boşlukta `kırılım +0,56 · %1,0`.
