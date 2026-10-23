@@ -513,6 +513,92 @@ def test_public_grafik_bir_kare_arti_ust_tf(monkeypatch, grup_notifier, tmp_path
     assert n.public_grafik_gonder(kayit) == 0
 
 
+def test_public_grafik_kareler_diskten_uretilir(monkeypatch, grup_notifier, tmp_path):
+    """Regresyon: `kare_listesi()` yol üretmez; public kareyi KENDİ çizmeli.
+
+    Eski kod `kare["goruntu"]["yol"]` arıyordu; alan hiç dolmadığı için grupta
+    tek bir görüntü bile çıkmıyordu (sayaç 0, hata yok — sessiz kayıp).
+    """
+    import grafik
+    import transport.telegram as tt
+
+    n = grup_notifier
+    yollar = []
+    cizilen = []
+
+    def sahte_kareyi_yaz(goruntu, tf, **kw):
+        cizilen.append(tf)
+        yol = tmp_path / f"{tf}.png"
+        yol.write_bytes(b"\x89PNG")
+        yollar.append(str(yol))
+        return str(yol), {"tf": tf}
+
+    cagrilar = []
+
+    def sahte_foto(yol, chat_id=None, token=None, notifier=None, caption="", **kw):
+        cagrilar.append({"yol": yol, "chat_id": chat_id, "caption": caption,
+                         "var": __import__("os").path.exists(yol)})
+        return True, "ok"
+
+    monkeypatch.setattr(grafik, "kareyi_yaz", sahte_kareyi_yaz)
+    monkeypatch.setattr(tt, "foto_gonder", sahte_foto)
+
+    kayit = _zengin_olay(formation_id="frm-1")
+    n._public_grafik[n._public_kuyruk_anahtari(kayit)] = {
+        "sembol": "ISMEN",
+        "goruntular": [{"tf": "4h", "goruntu": {"sembol": "ISMEN"}},
+                       {"tf": "1d", "goruntu": {"sembol": "ISMEN"}}],
+    }
+    assert n.public_grafik_gonder(kayit) == 2
+    assert cizilen == ["4h", "1d"]                 # kareler gerçekten çizildi
+    assert len(cagrilar) == 2
+    assert all(c["var"] for c in cagrilar)         # gönderim ANINDA dosya vardı
+    assert all(c["chat_id"] == "-1001234567890" for c in cagrilar)
+    assert "üst zaman dilimi" in cagrilar[1]["caption"]
+    assert n.public_grafik_gonderilen == 2
+    assert n.public_grafik_hatasi == 0
+    import os
+    assert not any(os.path.exists(y) for y in yollar)   # /tmp'de çöp kalmaz
+
+
+def test_public_grafik_cizilemeyen_kare_sessiz_kaybolmaz(monkeypatch, grup_notifier):
+    """Çizim başarısızsa metin akışı sürer, sayaç artar (sessiz kayıp yok)."""
+    import grafik
+    import transport.telegram as tt
+
+    n = grup_notifier
+    monkeypatch.setattr(grafik, "kareyi_yaz", lambda goruntu, tf, **kw: (None, {}))
+    cagrilar = []
+    monkeypatch.setattr(tt, "foto_gonder",
+                        lambda *a, **k: cagrilar.append(a) or (True, "ok"))
+
+    kayit = _zengin_olay(formation_id="frm-2")
+    n._public_grafik[n._public_kuyruk_anahtari(kayit)] = {
+        "goruntular": [{"tf": "4h", "goruntu": {"sembol": "ISMEN"}}]}
+    assert n.public_grafik_gonder(kayit) == 0
+    assert cagrilar == []
+    assert n.public_grafik_hatasi == 1
+    assert n.grafik_atlanan_hata >= 1
+
+
+def test_public_kuyruk_kare_defteri_anahtari_ayni(monkeypatch, grup_notifier):
+    """Kuyruğa yazılan anahtar ile gönderimde aranan anahtar AYNI olmalı."""
+    n = grup_notifier
+    kayit = _zengin_olay(formation_id="frm-3")
+    kayit["grafik_verisi_public"] = {
+        "goruntular": [{"tf": "4h", "goruntu": {"sembol": "ISMEN"}}]}
+    assert n.public_kuyruk(kayit) is True
+    anahtar = n._public_kuyruk_anahtari(kayit)
+    assert anahtar in n._public_grafik
+    assert anahtar == "ISMEN|4h|KIRILIM_TEYITLI|frm-3"
+    # Kare verisi payload'da KALMAZ: DM teslim kuyruğu aynı sözlüğü diske yazar.
+    assert "grafik_verisi_public" not in kayit
+    # Kuyruktan düşen kaydın kare verisi bellekte kalmaz.
+    n._public_kuyruk = []
+    n._public_grafik_buda()
+    assert n._public_grafik == {}
+
+
 def test_public_aralik_varsayilani_iki_saniye():
     """Bülten + kare art arda gidiyor; 1,2 sn grup hız sınırında 429 üretiyordu."""
     import config

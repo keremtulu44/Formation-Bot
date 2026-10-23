@@ -1260,6 +1260,12 @@ def _komut_durum(_arguman: str) -> str:
                                    f"{gd.get('public_hatasi', 0)} hata · "
                                    f"kuyruk {gd.get('public_kuyruk', 0)} · "
                                    f"engel {gd.get('public_engel', 0)}")
+                # Görsel ayrı satır: metin satırı zaten 300 px sınırında; kare
+                # sayacı 0/0 olsa da yazılır (\"hiç görüntü gelmiyor\" teşhisi).
+                if "public_grafik_gonderilen" in gd:
+                    gosterim_public += (f"\n   🖼 public kare: "
+                                        f"{gd.get('public_grafik_gonderilen', 0)} gönderildi · "
+                                        f"{gd.get('public_grafik_hatasi', 0)} hata")
             # Görsel sayaçları (§4): metin kotasından AYRIDIR. Açık şalterde
             # sıfır sonuç da teşhis için görünür; kapalıyken yalnız eski/bugünkü
             # görsel etkinliği varsa satır kalır ve bunu başında belirtir.
