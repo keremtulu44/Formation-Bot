@@ -59,7 +59,7 @@ anılır.
 | 4.4 Rate limit | 4.2'yi 3 kez hızlı tekrarla [ONAY GEREKLİ] | 429'da `retry_after` saygılı bekleyiş; dead-letter'a düşmez |
 | 4.5 Tekrar/restart | 4.2'yi eden process'i kabul anında sonlandır [ONAY GEREKLİ] | restart sonrası aynı idempotency key ile ikinci mesaj GİTMEZ; ancak 'kabul-sonrası-crash' penceresinde TEK TEKRAR mümkündür — at-least-once sözleşmesi (TEST kanıtı: test_crash_after_remote_acceptance_is_ambiguous_and_at_least_once) |
 | 4.6 Public kanal | Test kanalına /canli formatında tek mesaj [ONAY GEREKLİ] | DM formatından farklı, private context içermeyen mesaj |
-| 4.7 Alarm karesi (ops.) | `python deploy_check.py --grafik-test --send-test-message`; sonra DM'de `/grafik AKBNK 4s` [ONAY GEREKLİ] | `sendPhoto kabul edildi`; DM'de metin + kare sırası; `/durum`'da `🖼 Grafik karesi: N gönderildi · 0 hata`; grup/kanalda görsel YOK; karenin etiketleri kartla aynı sayıları gösterir |
+| 4.7 Alarm karesi (ops.) | `python deploy_check.py --grafik-test --send-test-message`; sonra DM'de `/grafik AKBNK 4s` [ONAY GEREKLİ] | `sendPhoto kabul edildi`; DM'de metin + kare sırası; `/durum`'da `🖼 Grafik karesi: N gönderildi · 0 hata` ve `🖼 public kare: N gönderildi · 0 hata`; grup/kanalda metnin hemen ardından **1 kare + üst zaman dilimi**; karenin etiketleri kartla aynı sayıları gösterir |
 
 ## 5. Çalıştırma runbook'u
 
