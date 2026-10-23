@@ -255,31 +255,45 @@ class DeliveryOutbox:
             return True
         if tf == "1d" and (bugun - aday_zaman.date()).days > 7:
             return True
-        kapatis = None            # son KIRILIM_GECERSIZLESTI (hikâye kapanışı)
-        ilgili = []               # (zaman, asama, formation_id)
+        kapatis = None            # (zaman, kesin_mi): son hikâye kapanışı
+        ilgili = []               # (zaman, asama, formation_id, kesin_mi)
         for eski, created in oncekiler:
             if str((eski or {}).get("stock_name") or "").strip().upper() != stock:
                 continue
             if _yon(eski) != yon:
                 continue
-            eski_zaman = _olay_zamani(eski) or _zaman_coz(created)
+            # Bar zamanı yoksa `created` (gönderim duvar saati) yedek olur ama
+            # KESİN değildir: gönderim anı bar etiketinden ileride olduğu için
+            # "aday bari bundan eski = replay" hükmü onunla verilmez; yalniz
+            # GÜN seviyesinde karşılaştırma yapılır. Aksi hâlde geçiş
+            # dönemindeki eski bir kayit, etiketi gönderim anından önce olan
+            # meşru yeni bari sessizce öldürür (tahminle sinyal düşürülmez).
+            eski_bar = _olay_zamani(eski)
+            kesin = eski_bar is not None
+            eski_zaman = eski_bar or _zaman_coz(created)
             if eski_zaman is None:
                 continue
             eski_state = str(eski.get("state") or "").strip().upper()
             if eski_state == _GECERSIZ_STATE:
-                if kapatis is None or eski_zaman > kapatis:
-                    kapatis = eski_zaman
+                if kapatis is None or eski_zaman > kapatis[0]:
+                    kapatis = (eski_zaman, kesin)
             elif eski_state in _HIKAYE_ASAMA:
                 ilgili.append((eski_zaman, _HIKAYE_ASAMA[eski_state],
-                               str(eski.get("formation_id") or "")))
+                               str(eski.get("formation_id") or ""), kesin))
         if kapatis is not None:
-            if aday_zaman <= kapatis:     # kapanmış hikâyenin bayat tekrarı
-                return True
-            ilgili = [k for k in ilgili if k[0] > kapatis]
+            k_zaman, k_kesin = kapatis
+            if k_kesin:
+                if aday_zaman <= k_zaman:  # kapanmış hikâyenin bayat tekrarı
+                    return True
+                ilgili = [k for k in ilgili if k[0] > k_zaman]
+            else:
+                if aday_zaman.date() < k_zaman.date():
+                    return True
+                ilgili = [k for k in ilgili if k[0].date() >= k_zaman.date()]
         asama = _HIKAYE_ASAMA[state]
         aday_fid = str(data.get("formation_id") or "")
-        for eski_zaman, eski_asama, eski_fid in ilgili:
-            if aday_zaman <= eski_zaman:  # aynı/eski bar: replay veya kopya
+        for eski_zaman, eski_asama, eski_fid, kesin in ilgili:
+            if kesin and aday_zaman <= eski_zaman:  # aynı/eski bar: replay/kopya
                 return True
             ayni_kimlik = bool(aday_fid and eski_fid and aday_fid == eski_fid)
             ayni_gun = aday_zaman.date() == eski_zaman.date()

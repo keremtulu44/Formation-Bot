@@ -168,6 +168,29 @@ def test_hikaye_kapisi_public_bayatlik_ve_gecersizlesme(tmp_path, monkeypatch):
                                           bar=_bar(box, 0, "09:30")))
 
 
+def test_hikaye_kapisi_eski_kayit_created_yedegiyle_sinyal_oldurmez(tmp_path):
+    """Bar zamanisiz eski public kaydi: `created` gün seviyesinde konuşur.
+
+    Gönderim ani (created) bar etiketinden ileridedir; eski kod "aday barı
+    kayit zamanindan eski = replay" deyip ayni günün meşru RETEST'ini
+    öldürürdü. Kesin olmayan zamanla replay hükmü verilmez; ama aynı gün
+    aynı aşama yine tekrardir.
+    """
+    box = DeliveryOutbox(owner([]), tmp_path)
+    eski = alert(tf="4h", identity="eski-kayit")
+    eski.pop("formation_id")  # eski format: kimlik de bar zamanı da yok
+    bugun = box.now().date().isoformat()
+    box.state["public"].append(
+        {"data": eski, "created": f"{bugun}T22:00:00+03:00", "aliases": []})
+    # Etiketi created'dan önce ama aşaması ileri: replay değil, meşru ilerleme.
+    assert not box.public_duplicate(alert(tf="2h", identity="yeni",
+                                          state="RETEST_BASARILI",
+                                          bar=_bar(box, 0, "13:30")))
+    # Aynı gün aynı aşama: gün seviyesi karşılaştırma bile tekrarı yakalar.
+    assert box.public_duplicate(alert(tf="2h", identity="yeni2",
+                                      bar=_bar(box, 0, "14:30")))
+
+
 def test_no_network_side_effect_if_durable_write_fails(tmp_path, monkeypatch):
     box = DeliveryOutbox(owner([]), tmp_path)
     monkeypatch.setattr(box, "save", lambda: (_ for _ in ()).throw(OSError("disk full")))

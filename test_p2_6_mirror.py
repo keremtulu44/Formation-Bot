@@ -613,3 +613,71 @@ def test_local_formation_repository_temel_api(ortam):
     # 4) get_recent
     recent = repo.get_recent(limit=10, stock=_STOCK, timeframe=_TF)
     assert len(recent) == 1
+
+
+# ============================================================================
+# N. POISON BATCH: bir tablonun deterministik reddi diğerlerini kilitlemez
+# ============================================================================
+# Canlı bulgu (2026-10-23): f2_formations akarken f2_snapshots/f2_events
+# 0 satırda kaldı. Mekanizma: baş batch deterministik 4xx yerse eski kod
+# bütün flush'i kesiyordu; snapshots başındaki zehirli batch events ve
+# outcome_links'i de sonsuza dek kilitliyordu, üstelik red sebebi loga
+# hiç düşmüyordu.
+
+
+class _ZehirliStore(FakeSupabaseStore):
+    """f2_snapshots POST'unu hep 400 ile reddeden store."""
+
+    def request_table(self, table_name, method, *, params=None, json=None, headers=None):
+        if table_name == "f2_snapshots" and method == "POST":
+            return FakeSupabaseResponse({"message": "bad row"}, status_code=400)
+        return super().request_table(table_name, method, params=params,
+                                     json=json, headers=headers)
+
+
+def _poison_kuyruk(tmp_path):
+    q = FormationMirrorQueue(data_dir=str(tmp_path))
+    q.enqueue_diff({
+        "f2_formations": [{"stable_id": "s-1"}],
+        "f2_snapshots": [{"stable_id": "s-1", "tur": "dogum",
+                          "bar_time": "2026-10-23 09:30"}],
+        "f2_events": [{"stable_id": "s-1", "type": "state", "name": "x",
+                       "bar": 1, "bar_time": "2026-10-23 09:30"}],
+    })
+    return q
+
+
+def test_poison_batch_diger_tablolari_kilitlemez(tmp_path):
+    q = _poison_kuyruk(tmp_path)
+    store = _ZehirliStore()
+    giden = q.flush(store)
+    assert giden == 2  # formations + events akti
+    assert len(store.tables["f2_formations"]) == 1
+    assert len(store.tables["f2_events"]) == 1
+    assert q.size() == 1  # zehirli snapshot hâlâ kuyrukta (henüz düşmedi)
+
+
+def test_poison_batch_esik_sonra_duser_kuyruk_acilir(tmp_path):
+    from state.formation_mirror import POISON_ESIK
+
+    q = _poison_kuyruk(tmp_path)
+    store = _ZehirliStore()
+    for _ in range(POISON_ESIK):
+        q.flush(store)
+    assert q.size() == 0  # baş batch elendi, kuyruk açıldı
+
+
+def test_gecici_5xx_satir_dusurmez_backoffa_girer(tmp_path):
+    class _BesyuzStore(FakeSupabaseStore):
+        def request_table(self, table_name, method, *, params=None, json=None, headers=None):
+            if method == "POST":
+                return FakeSupabaseResponse({}, status_code=500)
+            return super().request_table(table_name, method, params=params,
+                                         json=json, headers=headers)
+
+    q = _poison_kuyruk(tmp_path)
+    store = _BesyuzStore()
+    for _ in range(3):
+        q._retry_after = 0.0  # backoff beklemesini testte atla
+        assert q.flush(store) == 0
+    assert q.size() == 3  # geçici hatada tek satır bile düşmez

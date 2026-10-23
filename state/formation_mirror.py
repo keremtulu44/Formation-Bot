@@ -41,6 +41,7 @@ MAX_QUEUE_ITEMS = 5000         # Kuyruk bellek tavanı
 FLUSH_BATCH_SIZE = 100         # Tek PostgREST isteğindeki azami satır
 DEFAULT_BACKOFF_INITIAL = 30.0 # İlk hata beklemesi (sn)
 DEFAULT_BACKOFF_MAX = 600.0    # Azami bekleme (10 dk)
+POISON_ESIK = 5                # Deterministik 4xx'de baş batch bu kadar denemede düşer
 KUYRUK_DOSYA_ADI = "f2_kuyruk.json"
 
 # BAR_ALANLARI int dönüşüm garantisi için
@@ -267,6 +268,8 @@ class FormationMirrorQueue:
         }
         self._backoff_delay = DEFAULT_BACKOFF_INITIAL
         self._retry_after = 0.0
+        # Tablo başı deterministik-red sayacı (poison batch): bkz. flush().
+        self._poison_sayac: Dict[str, int] = {}
         self._fingerprints: Dict[str, Tuple] = {}
         self.load_from_disk()
 
@@ -400,7 +403,11 @@ class FormationMirrorQueue:
         }
 
         gonderilen_toplam = 0
-        hata_olustu = False
+        dusurulen_toplam = 0
+        # Yalnız GEÇİCİ hatalar (exception / 401-403 / 429 / 5xx) global
+        # backoff'u tetikler. Deterministik 4xx bir tablonun baş batch'ine
+        # özgüdür: diğer tablolari kilitlemez, backoff'a da girmez.
+        gecici_hata = False
 
         with self._lock:
             for table, q in self._queues.items():
@@ -433,16 +440,48 @@ class FormationMirrorQueue:
                             q.popleft()
                         gonderilen_toplam += batch_size
                         batches_run += 1
-                        # Başarıda backoff sıfırla
+                        # Başarıda backoff ve poison sayacini sıfırla
                         self._backoff_delay = DEFAULT_BACKOFF_INITIAL
+                        self._poison_sayac[table] = 0
+                        continue
+
+                    # --- Başarısızlık: NEDENİNİ LOGLA (eskiden sessizdi) ---
+                    durum = getattr(resp, "status_code", None)
+                    try:
+                        govde = str(getattr(resp, "text", "") or "")[:300]
+                    except Exception:
+                        govde = ""
+                    logger.warning(
+                        "Supabase %s flush reddedildi (durum=%s, batch=%d): %s",
+                        table, durum, batch_size, govde)
+
+                    if durum in (400, 404, 409, 422):
+                        # Deterministik red: aynı batch bir daha ASLA geçmez.
+                        # Eskiden bu, kuyruk başında sonsuza dek bekleyip
+                        # sonraki tabloları da kilitliyordu (canlıda
+                        # f2_snapshots/events 0 satirda kalmasinin mekanizmasi).
+                        # Birkaç deneme payı bırak (şema deploy'u yetişebilir),
+                        # sonra baş batch'i ELENMİŞ say ve kuyruğu aç; mirror
+                        # türetilmiş veridir, local history source of truth.
+                        sayac = self._poison_sayac.get(table, 0) + 1
+                        self._poison_sayac[table] = sayac
+                        if sayac >= POISON_ESIK:
+                            for _ in range(batch_size):
+                                q.popleft()
+                            dusurulen_toplam += batch_size
+                            self._poison_sayac[table] = 0
+                            batches_run += 1
+                            logger.error(
+                                "Supabase %s: %d satırlık baş batch %d kez "
+                                "deterministik reddedildi, DÜŞÜRÜLDÜ "
+                                "(kuyrukta kalan: %d)",
+                                table, batch_size, sayac, len(q))
+                            continue
                     else:
-                        hata_olustu = True
-                        break
+                        gecici_hata = True
+                    break  # bu tablo bu turda bitti; DİĞER tablolar devam eder
 
-                if hata_olustu:
-                    break
-
-        if hata_olustu:
+        if gecici_hata:
             self._retry_after = time.monotonic() + self._backoff_delay
             self._backoff_delay = min(self._backoff_delay * 2.0, DEFAULT_BACKOFF_MAX)
             logger.debug(
@@ -450,7 +489,7 @@ class FormationMirrorQueue:
                 self._backoff_delay,
             )
 
-        if gonderilen_toplam > 0:
+        if gonderilen_toplam > 0 or dusurulen_toplam > 0:
             self.save_to_disk()
             logger.debug("Mirror flush tamamlandı: %d satır Supabase'e yazıldı", gonderilen_toplam)
 

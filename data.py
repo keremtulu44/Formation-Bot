@@ -1467,6 +1467,50 @@ def sureklilik_sorunlari_bul(dq) -> List[Dict]:
 
 # === RESAMPLING ===
 
+# 2H/4H kova çapası (FAZ düzeltmesi, 2026-10-23): BIST seansinin ilk 1H
+# etiketi. Çapa SABİTTİR ve İstanbul saatinde uygulanır; pencerenin ilk
+# barından TÜRETİLMEZ. Türetilirse kayan 360 barlık pencerenin başı her
+# saat döndükçe faz döner ve bütün 2H/4H tarihi yeniden yazılır
+# (ölçüm: docs/arastirma/KOVA_FAZI_OLCUMU_2026-10-23.md — 4H senaryolarin
+# yalnız %33'ü doğru fazdaydı, motorun nihai durumu %33 değişiyordu).
+_SEANS_CAPASI = "9h30min"
+
+
+def _bist_seans_serisi(idx_ist: pd.DatetimeIndex) -> bool:
+    """Tüm barlar BIST seans saatlerinde mi? (İstanbul duvar saati 09-18)
+
+    Kesintisiz semboller (BRENT/USDTRY/ALTIN...) gece barı da taşır; onlarda
+    seans çapası anlamsızdır, gece yarısı çapası kullanılır. Karar serinin
+    kendi saatlerinden verilir: sembol listesine bağımlılık yok, yeni
+    sembol sınıfı eklenirse davranış kendiliğinden doğru kalır.
+    """
+    if len(idx_ist) == 0:
+        return False
+    saatler = idx_ist.hour
+    return int(saatler.min()) >= 9 and int(saatler.max()) <= 18
+
+
+def _resample_sabit_capali(df: pd.DataFrame, timeframe: str,
+                           available_cols: dict) -> pd.DataFrame:
+    """2H/4H resample: sabit kova çapası, İstanbul saatinde hesaplanır.
+
+    Girdi UTC (araştırma hattı) veya başka tz ile gelebilir: kova sınırları
+    İstanbul gününe göre çizilir, çıktı girdinin tz'sine geri çevrilir —
+    çağıranın tz sözleşmesi bozulmaz, kova ANLARI her yolda aynıdır.
+    tz'siz dizin İstanbul duvar saati sayılır (kod tabanının genel sözleşmesi).
+    """
+    orijinal_tz = df.index.tz
+    calis = df.tz_convert(ISTANBUL_TZ) if orijinal_tz is not None else df
+    # Seans serisi: 09:30 çapası (TV/Pine hizası). Kesintisiz seri:
+    # İstanbul gece yarısı — en azından deterministik; eski "ilk bar"
+    # davranışı kesintisiz seride de fazı saatten saate döndürüyordu.
+    offset = _SEANS_CAPASI if _bist_seans_serisi(calis.index) else "0h"
+    out = calis.resample(timeframe, offset=offset).agg(available_cols)
+    if orijinal_tz is not None:
+        out = out.tz_convert(orijinal_tz)
+    return out
+
+
 def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     """
     1H veriyi 2H, 4H, 1D'ye çevir
@@ -1475,12 +1519,14 @@ def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     Neden dropna? BIST seans dışı boş mumlar oluşur, onları at
     Neden session gap handling? Gece mumları olmamalı
     
-    ÖNEMLİ (B1 fix): 2H/4H kovaları BIST SEANS başına (ilk 1H mumun etiketi, 09:30)
+    ÖNEMLİ (B1 -> FAZ düzeltmesi): 2H/4H kovaları BIST SEANS başına (09:30)
     hizalanır. Neden? Pine'daki request.security(..., "120"/"240") seans başından
     sayar; pandas'in varsayılanı gece yarısıdır. Varsayıanla BIST gününün ilk 1H mumu
     (09:30) TEK BAŞINA bir "2H mumu" oluyor ve sonraki tüm barlar 1 saat kayıyordu
     -> 2H/4H formasyonlar TradingView'dekiyle aynı pivotları üretmiyordu.
-    Ölçüm: eskiden 08:00/10:00/12:00... -> şimdi 09:30/11:30/13:30... (TV ile aynı)
+    B1 çapayı "verinin ilk bari"ndan alıyordu; ilk bar her zaman seans başı
+    OLMADIĞI için (kayan deque!) faz saatten saate dönüyordu. Çapa artık
+    sabittir; ayrıntı ve ölçüm: docs/arastirma/KOVA_FAZI_OLCUMU_2026-10-23.md
     """
     if df_1h is None or len(df_1h) == 0:
         return pd.DataFrame()
@@ -1505,16 +1551,15 @@ def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     available_cols = {k: v for k, v in agg_dict.items() if k in df.columns}
     
     try:
-        # Kova hizası: günlük için gece yarısı (doğal), 2H/4H için SEANS başı.
-        # origin=start_day + offset=<seans başı> -> kovalar 09:30'dan itibaren N saatlik.
-        # Seans başını veriden çıkarıyoruz (hard-code 09:30 değil): ilk barın saati.
-        offset = None
-        if timeframe in ("2h", "4h") and len(df.index) > 0:
-            ilk = df.index[0]
-            offset = f"{ilk.hour}h{ilk.minute:02d}min"
-        
-        if offset:
-            df_resampled = df.resample(timeframe, offset=offset).agg(available_cols)
+        # Kova hizası: günlük için gece yarısı (doğal), 2H/4H için SABİT çapa
+        # (`_resample_sabit_capali`): BIST seans serisinde 09:30, kesintisiz
+        # seride İstanbul gece yarısı. Çapa pencerenin ilk barından ASLA
+        # türetilmez — türetilirse kayan pencere fazı saatten saate döndürür
+        # ve bütün 2H/4H tarihi yeniden yazılır (FAZ düzeltmesi, 2026-10-23).
+        if (timeframe in ("2h", "4h")
+                and isinstance(df.index, pd.DatetimeIndex)
+                and len(df.index) > 0):
+            df_resampled = _resample_sabit_capali(df, timeframe, available_cols)
         else:
             df_resampled = df.resample(timeframe).agg(available_cols)
         

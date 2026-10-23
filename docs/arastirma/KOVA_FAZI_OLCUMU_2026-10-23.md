@@ -1,6 +1,6 @@
 # Kova fazı ölçümü — 2s/4s serisi neden her saat yeniden yazılıyor?
 
-> **Durum:** Ölçüldü, faz düzeltmesi YAPILMADI (karar bu raporun konusu) · **Tarih:** 23 Ekim 2026
+> **Durum:** Ölçüldü ve düzeltme UYGULANDI (aynı gün, §9) · **Tarih:** 23 Ekim 2026
 > **Köken:** 23 Ekim public akışında aynı gün 26 mesaj: ALARK 4 kez, AKBNK/AYDEM/KCHOL'da aynı mumun kopyaları.
 > **Üretim:** `scripts/kova_fazi_olcumu.py` (ağsız; `backfill_data/*_1h.csv.gz`) + Supabase canlı agregaları (salt okuma).
 
@@ -224,3 +224,45 @@ düzeltmesi sonrası karne verisiyle yeniden değerlendirilmelidir.
 .venv/bin/python scripts/kova_fazi_olcumu.py --motorsuz      # yalnız seviye 1
 .venv/bin/python scripts/kova_fazi_olcumu.py --semboller ALARK,AKBNK --json sonuc.json
 ```
+
+
+## 9) Uygulama (23 Ekim 2026, onay sonrası)
+
+§7'deki adımlar uygulandı:
+
+1. **Sabit çapa:** `data._resample_sabit_capali` — BIST seans serisinde çapa
+   sabit 09:30 (İstanbul); kesintisiz seride (gece barı taşıyan: BRENT,
+   USDTRY, ALTIN...) İstanbul gece yarısı. Karar sembol listesinden değil
+   serinin kendi saatlerinden verilir (`_bist_seans_serisi`): yeni sembol
+   sınıfı eklenirse davranış kendiliğinden doğru kalır. Girdi tz'si (canlı
+   İstanbul / araştırma UTC) çıktıya aynen geri çevrilir; kova anları her
+   yolda aynıdır. 1g yolu bilinçli olarak değiştirilmedi.
+2. **Regresyon:** `test_kova_fazi.py` — 9 pencere başının hepsinde etiketlerin
+   doğru fazda olması, pencere başı sonrası kovaların tam seriyle birebir
+   eşitliği, UTC/tz'siz/kesintisiz varyantlar.
+3. **Doğrulama ölçümü** (aynı betik, düzeltme sonrası):
+
+   | Ölçüm | Önce (2s/4s) | Sonra (2s/4s) |
+   |---|---|---|
+   | Doğru faz oranı | %55,6 / %33,3 | **%100 / %100** |
+   | Motor nihai durum farkı | %19,2 / %33,3 | **%0 / %0** |
+   | Desen farkı | %21,7 / %19,2 | **%0 / %0** |
+   | Ardışık saatte karar imzası değişimi | %64,4 / %67,8 | %2,2 / %5,6 |
+
+   Kalan %2-6 imza farkı fazdan değil, pencere başındaki **kısmi ilk
+   kovadan** geliyor (kalite ±0,1); durum/desen hiç değişmiyor.
+4. **Ek sertleştirme (aynı işte):**
+   - Hikâye kapısında bar zamanı taşımayan eski kaydın `created` yedeği
+     artık yalnız gün seviyesinde konuşuyor; "aday barı gönderim anından
+     eski = replay" hükmü kesin olmayan zamanla verilmiyor.
+   - Supabase mirror flush'ında zehirli batch kilidi açıldı: deterministik
+     4xx alan tablo diğer tabloları kilitlemiyor, red sebebi loglanıyor,
+     baş batch 5 denemede düşürülüyor. (Canlıda `f2_snapshots`/`f2_events`'in
+     0 satırda kalmasının mekanizması buydu.)
+5. **Kalan — sıradaki hafta:** §7/4 gözlemi: 2s/4s tespit ve bildirim
+   sayısını bu raporun tabanıyla karşılaştır; güç/üst-TF eşiklerini ancak
+   ondan sonra konuş. Karne kayıtları tarih taşıdığı için önce/sonra ayrımı
+   deploy tarihinden yapılabilir; ayrı sürüm etiketi eklenmedi.
+
+Geçiş notu: deploy günü canlı 2s/4s serileri bir kez sıçrar (doğru faza
+oturur); o gün formasyon envanterinde tek seferlik dalgalanma normaldir.

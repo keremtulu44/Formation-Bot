@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Kova fazı ölçümü (P2-2): `resample_ohlcv` offset'i `df.index[0]`'dan alıyor.
+"""Kova fazı ölçümü (P2-2): faz kaymasının etki ölçümü + düzeltme doğrulaması.
 
 Canlıda 2s/4s serisi, 360 barlık kayan deque penceresinden üretilir. Pencere
 her yeni 1s barda 1 kaydığı için ilk barın gün-içi saati değişir ve kova
@@ -15,9 +15,14 @@ fazları döner. Bu betik etkiyi İKİ seviyede ölçer (ağ yok; veri
     turda tam yeniden oynattığı için "bir saat arayla iki tarama aynı hissede
     farklı karar" oranı doğrudan buradan okunur.
 
-Sabit çapa burada YALNIZ ölçüm referansıdır (üretim kodu değişmez):
-`offset="9h30min"` = BIST ilk 1s bar etiketi; `data.resample_ohlcv`'nin
-B1 düzeltmesinin hedeflediği hiza.
+Sabit çapa (`offset="9h30min"`) ölçüm referansıdır.
+
+GÜNCELLEME (2026-10-23): FAZ düzeltmesi uygulandi; üretim `resample_ohlcv`
+artık aynı sabit çapayı kullanıyor. Betik bu hâliyle regresyon denetimidir:
+beklenen `dogru_faz_oran = 1.0`, motor durum/desen farkı ~0 (kalan imza
+farkı yalnız pencere başındaki kısmi kovadan gelen kalite ±0,1 oynaklığı).
+Düzeltme öncesi taban: 2s %55,6 / 4s %33,3 doğru faz; durum farkı
+%19,2 / %33,3. Rapor: docs/arastirma/KOVA_FAZI_OLCUMU_2026-10-23.md
 
 Kullanım:
     python scripts/kova_fazi_olcumu.py [--semboller ALARK,AKBNK] [--motorsuz]
