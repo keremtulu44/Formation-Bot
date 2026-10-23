@@ -124,7 +124,8 @@ def test_bellek_disk_olmayan_sembol_icin_kullanilir(is_ortami, monkeypatch, tmp_
     assert not fotolar and not threadler
     bitir(yanit, threadler)
     assert cagrilar == [("SEM", "4h")]
-    assert metinler == []                    # başarıda ayrı metin yok (albüm yanıttır)
+    # 2026-10-23: hisse adını taşıyan tek özet metni albümden sonra gider.
+    assert len(metinler) == 1 and metinler[0].splitlines()[0] == "📈 SEM · grafik hazır"
     assert len(fotolar) == 1 and not Path(fotolar[0][0]).exists()
     assert fotolar[0][1].startswith("SEM · 4s · sade")
     assert not (tmp_path / "live/SEM.json").exists()
@@ -151,7 +152,8 @@ def test_telegram_grafik_gorunum_secimini_ureticiye_aktarir(
     monkeypatch.setattr(U, "kare_uret", uret)
     bitir(M._komut_grafik(arguman), threadler)
     assert gorunumler == [beklenen]
-    assert len(fotolar) == 1 and not metinler
+    assert len(fotolar) == 1 and len(metinler) == 1
+    assert metinler[0].splitlines()[0] == "📈 SEM · grafik hazır"
     assert (" · sade" in fotolar[0][1]) is (beklenen is True)
 
 

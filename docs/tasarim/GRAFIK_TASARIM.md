@@ -1993,3 +1993,28 @@ demo kataloğu), her biri tek tek kapatıldı. Kırılım marjı için eklenen �
 - Önce/sonra (aynı veri, aynı kare): AKBNK 1s 85 → 103 mum · mum kaplaması
   %29 → %79 · alarm düşey çizgisi yok → kırılım mumunda; demo `ucgen_teyit`
   `bant teması 39` → `temas üst 4 / alt 4` (sağ boşlukta ölçü çipi yok).
+
+### 43.9 Kare başlığı kart diliyle hizalandı (2026-10-23, akşam)
+
+Kullanıcı kart metnini sadeleştirdikten sonra "görsel taraf için genel bir
+kontrol" istedi. Kare çizimi sağlamdı (kadraj 80-110 mum, örtüşme yok, sağ
+şeritte `atlanan == 0`); uyumsuz olan tek şey **dil**ti: aynı olayın adı kartta
+`KIRILIM · kapanış onaylı` iken karede `kapanışla teyitli kırılım` yazıyordu.
+
+| Kare (eski) | Kare (yeni) | Kaynak |
+|---|---|---|
+| `temas üst 4 / alt 4` | `üste 4, alta 4 kez değdi` | `grafik._metinler` |
+| `seviye 52,23 · kapanış 52,62 (üstünde 0,56)` | `kırılan 52,23 · kapanış 52,62 · %0,7 üstünde` | `grafik._metinler` |
+| `1g yapı: dış yükseliş` | `1g yön yukarı (dış yapı)` | `grafik._yapı_satırı` artık `stil="kart"` + `yapi_ozet` |
+| `1g yapı: dış ↑, iç ↓` başlığı `yön karışık` diyordu (tek kapsam bilinirken) | `1g yön yukarı (dış yapı)`; gerçek çelişkide `yön karışık (dış yukarı, iç aşağı)` | `notification_context._yapi_metni` |
+| `kapanışla teyitli kırılım` / `kapanışla başarılı retest` / `önceki teyitli kırılım geçersizleşti` | `kırılım · kapanış onaylı` / `kırılan seviye tuttu` / `kırılım iptal · banda döndü` | `grafik._TUR_ETIKET` |
+
+`klasik` biçimleyici (`TELEGRAM_ALERT_STYLE=klasik` geri dönüş yolu) ve
+`notification_context`teki klasik metin DEĞİŞMEDİ; `_yapı_satırı` artık kart
+biçimini okuduğu için kare ile kart aynı cümleyi kurar (`test_grafik_teslim.py`
+birebir eşitliği doğrular).
+
+Ayrıca `/grafik` yanıtına hisse adını taşıyan tek özet metni eklendi
+(`📈 THYAO · grafik hazır` + seçim satırı); önceki davranış "başarıda ayrı metin
+yok" idi. Doğrulama: `pytest -q` → **1685 geçti, 43 atlandı**; demo kataloğu
+(`--senaryo hepsi`) yeniden üretildi, 6 kare 253-627 ms.

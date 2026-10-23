@@ -359,3 +359,103 @@ satırı aşmasın.
 **Teşhis notu:** aynı belirti (bölümsüz kart) bağlamın gerçekten boş olduğu
 durumda da görülür; ayırt etmek için logda
 `Kart bağlamı hazırlanamadı` / `Domain runner yüklenemedi` satırına bakılır.
+
+### 7.11 23 Ekim 2026 — sade dil revizyonu (kullanıcı onaylı metin)
+
+Kullanıcı §7.10 sonrası kartı okudu ve *"metni biraz konuşmalıyız, anlam olarak
+pek olmamış, karışık yani bilmeyen biri için"* dedi. Ölçüt tek: **hiç bilmeyen
+biri kartı tek başına okuyup ne olduğunu anlatabilmeli.** Her sayı neyin ölçüsü
+olduğunu kendi satırında taşır; jargon yok, kısaltma yok.
+
+Onaylanan kart (AKBNK 4s, gerçek `bot_data`) — **20 dolu satır / 573 kr**,
+her satır ≤ 262,8 px (bütçe 283 px × 0,95 − 6):
+
+```
+▼ AKBNK 4s AŞAĞI KIRILIM
+Alçalan Üçgen — kapanış onaylı
+🕒 23 Ekim 06:30→10:30 mumu
+· kapanış 63,95 · kırılan 65,97
+
+▼ destek bölgesi 4s 70,40 (%0,8 uzak)
+· formasyon kalitesi 80/100
+· kırılım gücü 99/100
+· bant 49 mum, %55 daralma
+· üste 2, alta 2 kez değdi
+
+◈ 4s yön aşağı (iç ve dış yapı)
+· kırılan seviyeye dönüş yok
+· günlük de aynı yönde
+
+◇ benzer 32.321 kurulum
+   %76'sı devam etti · %35 geri
+◇ tutarsa tepe ~1,19 TL (+%1,7)
+geçmiş davranıştır, kazanç değil
+
+hacim: 1s tükendi (0,86×)
+
+olumsuz: hacim teyidi yok
+· teyit düşer: 65,97 üstü kapanış
+
+• yatırım tavsiyesi değildir
+```
+
+#### Sözcük tablosu (eski → onaylanan)
+
+| Eski | Yeni | Neden |
+|---|---|---|
+| `TEYİTLİ` / `RETEST BAŞARILI` / `GEÇERSİZLEŞTİ` | `KIRILIM` / `SEVİYE KORUNDU` / `KIRILIM İPTAL` | olayın adı; teyidin türü ikinci satırda (`kapanış onaylı`) |
+| `· kalite 80/100 — güç 99` | `· formasyon kalitesi 80/100` + `· kırılım gücü 99/100` | iki 100'lük sayı etiketsizdi |
+| `· sınır 65,97` | `· kırılan 65,97` | hangi sınır? kırılan bant sınırı |
+| `· bozulur: … kapanış` | `· teyit düşer: … kapanış` | "ne bozulur" belirsizdi |
+| `· bant 49 mum (30 Eylül'den)` + `· daralma %100` | `· bant 49 mum, %55 daralma` | tarih iki satırı şişiriyordu; daralma bandın ölçüsü |
+| `· temas üst 2 / alt 2` | `· üste 2, alta 2 kez değdi` | "temas" jargon |
+| `◈ 4s yapı dış ve iç aşağı döndü` | `◈ 4s yön aşağı (iç ve dış yapı)` | hangi yön, neye göre |
+| `geri çekilme yok · 1g de onaylı` | `· kırılan seviyeye dönüş yok` + `· günlük de aynı yönde` | iki jargon tek satırdaydı |
+| `◇ 32321 formasyon · %76 tuttu` | `◇ benzer 32.321 kurulum` + `   %76'sı devam etti · %35 geri` | "%76 kazanç" diye okunuyordu |
+| `◇ tutunca ~1,19 TL · %1,7` | `◇ tutarsa tepe ~1,19 TL (+%1,7)` | "tutunca" koşulsuz hedef gibi okunuyordu |
+| `· geçmiş davranış, kazanç değil` | `geçmiş davranıştır, kazanç değil` (TEK satır) | "geçmişte önerilmiş" gibi okunuyordu; tam hâli 330 px, bütçeye sığan sözcük ekonomisi |
+| `katılım 4s veri yok` | `hacim: 4s yok (endeks)` / hissede **satır yok** | hissede bilgi yokluğu kart yeri hak etmiyor |
+| `katılım 1s hacim bitti (0,86)` | `hacim: 1s tükendi (0,86×)` | ölçü etiketli, × çarpan olarak yazılır |
+| `ters işaret: …` | `olumsuz: …` | neyin tersi? |
+| `▼ destek · blok 1s 70,40 −%0,8` | `▼ destek bölgesi 4s 70,40 (%0,8 uzak)` | `blok` jargon; `−%` işareti yön sanılıyordu |
+
+#### Aynı turda kapatılan iki kusur
+
+1. **Kopya alarmlar** (ALARK 4s ×3, KCHOL 2s ×3): mühür `formation_id` ile
+   tekilleşiyordu; motor aynı kurulumu her taramada yeni kimlikle üretince mühür
+   tutmuyordu. `notifier._kart_kopyasi_mi` artık **kartın kendisine** bakar:
+   aynı hisse+TF+state için birebir aynı metin, mühür TTL'i içinde ikinci kez
+   gönderilmez. Fiyat/kapanış/kalite değişirse metin değişir → gerçekten yeni
+   olay geçer. `TELEGRAM_ALERT_STYLE=klasik` de aynı kapıdan geçer (metin
+   değişmez, yalnız kopya gönderilmez).
+2. **`· bozulur` ↔ `· sınır` çelişkisi** (DOHOL: kırılan 16,87, eşik 16,83):
+   eşik motorun kuralıdır (kapanış bandın içine dönerse teyit düşer) ve bant
+   daraldıkça kırılan seviyenin öbür tarafına düşebilir. Eşik kırılana **eşit
+   değilse** satır artık `· teyit düşer: bant 16,83 üstü` biçiminde yazılır;
+   iki sayı farklı nesnelere (kırılan seviye / bant) ait olduğu görülür.
+
+#### Ölçü bloğu ve sığmayan satırlar
+
+Ölçü bloğu iki seviyeli yazılır: başlık **kaç benzer kurulum** olduğunu söyler
+(`◇ benzer 32.321 kurulum`), alt satır yüzdeyi taşır (`   %76'sı devam etti ·
+%35 geri`). İkinci satır girintilidir çünkü başlığın DEVAMI olduğunu böyle
+gösterir; kart sözleşmesi girintili devam satırını yalnız bu blokta kabul eder.
+
+Satır bütçesi (262,8 px) aşılırsa kırpma yapılmaz, sırayla kısalır: `· bant 49
+mum, %55 daralma` → `· bant %55 daralma`; `· teyit düşer: 65,97 üstü kapanış`
+→ `· teyit düşer: 65,97 üstü`. Eşik kırılan seviyeye EŞİT DEĞİLSE (bant
+daraldığı için olabilir) satır `· teyit düşer: bant 16,83 üstü` biçimini alır —
+iki sayının farklı nesnelere (kırılan seviye / bant) ait olduğu görülür.
+
+#### `/grafik` metni
+
+Albüm tek başına yanıttı; hangi hisseye ait olduğunu söyleyen metin yoktu.
+2026-10-23'ten beri karelerden **sonra** tek özet mesajı gider (hisse en başta):
+
+```
+📈 THYAO · grafik hazır
+1s · 2s · 4s · 1g · 4 kare · 3,2 sn
+```
+
+İkinci satır bütçeye göre kısalır (süre → görünüm seçimleri → kare sayısı);
+hisse ve TF listesi her zaman kalır.

@@ -359,7 +359,7 @@ def test_confirmed_break_invalidation_has_its_own_one_time_seal(monkeypatch):
     assert n.send(invalidation) is True
     assert len(sent) == 1
     # Kart başlığı olayı ilk satırda söyler (bildirim önizlemesi okunabilsin).
-    assert "GEÇERSİZLEŞTİ" in sent[0]["text"]
+    assert "KIRILIM İPTAL" in sent[0]["text"]
     assert n.send(invalidation) is False
     assert len(sent) == 1
 
@@ -396,3 +396,46 @@ def test_same_formation_event_remains_sealed_past_legacy_bar_ttl(monkeypatch):
         "THYAO", "Yükselen Üçgen", "4h", "RETEST_BASARILI",
         formation_id="stable-formation-43",
     ) is True
+
+
+# --- içerik kopyası kapısı (2026-10-23) -------------------------------------
+# Kullanıcı bildirimi: ALARK 4s üç kez, KCHOL 2s üç kez AYNI kart basıldı.
+# Sebep: mühür `formation_id` ile tekilleşiyor, motor aynı kurulumu her taramada
+# yeni kimlikle üretiyor. Artık kartın KENDİSİ de kapı: birebir aynı metin
+# TTL içinde ikinci kez gitmez.
+
+def test_ayni_kart_farkli_kimlikle_tekrar_basilmaz(monkeypatch):
+    n, gonderilenler = _aktif(monkeypatch)
+    # Zaman cooldown'ı devre dışı: sınanan kapı İÇERİK kapısı olsun.
+    n.cooldown_hours = 0
+    ilk = _veri("KIRILIM_TEYITLI", stock="ALARK")
+    ilk.update({"timeframe": "4h", "formation_id": "tarama-1"})
+    assert n.send(ilk) is True
+    ikinci = _veri("KIRILIM_TEYITLI", stock="ALARK")
+    ikinci.update({"timeframe": "4h", "formation_id": "tarama-2"})
+    assert n.send(ikinci) is False
+    assert n._son_engel == "tekrar"
+    assert len(gonderilenler) == 1
+
+
+def test_kart_degistiyse_yeni_olay_gecer(monkeypatch):
+    n, gonderilenler = _aktif(monkeypatch)
+    n.cooldown_hours = 0
+    ilk = _veri("KIRILIM_TEYITLI", stock="KCHOL")
+    ilk.update({"timeframe": "2h", "formation_id": "tarama-1"})
+    assert n.send(ilk) is True
+    # Kapanış değişti → metin değişti → bu gerçekten yeni bilgi.
+    yeni = dict(ilk, formation_id="tarama-2", candle_close_price=305.5)
+    assert n.send(yeni) is True
+    assert len(gonderilenler) == 2
+
+
+def test_klasik_stil_de_kopya_kart_basmaz(monkeypatch):
+    """Geri dönüş yolu (`klasik`) metni korur; kopya mesaj yine engellenir."""
+    monkeypatch.setattr(notifier_mod, "TELEGRAM_ALERT_STYLE", "klasik")
+    n, gonderilenler = _aktif(monkeypatch)
+    ilk = _veri("KIRILIM_TEYITLI", stock="TTKOM")
+    ilk.update({"timeframe": "4h", "formation_id": "tarama-1"})
+    assert n.send(ilk) is True
+    assert n.send(dict(ilk, formation_id="tarama-2")) is False
+    assert len(gonderilenler) == 1

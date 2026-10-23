@@ -1323,12 +1323,14 @@ _ALARM_TURU = {
     "KIRILIM_GECERSIZ": "gecersiz",
 }
 
+# 2026-10-23: kare başlığı kart diliyle aynı sözcükleri kullanır
+# (`KIRILIM · kapanış onaylı`, `SEVİYE KORUNDU`, `KIRILIM İPTAL`).
 _TUR_ETIKET = {
     "aday": "kırılım adayı",
     "kritik": "kritik seviye",
-    "teyit": "kapanışla teyitli kırılım",
-    "retest": "kapanışla başarılı retest",
-    "gecersiz": "önceki teyitli kırılım geçersizleşti",
+    "teyit": "kırılım · kapanış onaylı",
+    "retest": "kırılan seviye tuttu",
+    "gecersiz": "kırılım iptal · banda döndü",
     "ihlal": "bant ihlali",
 }
 
@@ -4024,16 +4026,22 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
     _ust_t = _tam(formasyon.get("upper_touches"))
     _alt_t = _tam(formasyon.get("lower_touches"))
     if _ust_t is not None or _alt_t is not None:
-        bilgi.append(f"temas üst {_ust_t if _ust_t is not None else '—'}"
-                     f" / alt {_alt_t if _alt_t is not None else '—'}")
+        # 2026-10-23: kart dili (`· üste 2, alta 2 kez değdi`) kareye de geçti;
+        # `temas üst 2 / alt 2` jargondu.
+        bilgi.append(f"üste {_ust_t if _ust_t is not None else '—'},"
+                     f" alta {_alt_t if _alt_t is not None else '—'} kez değdi")
     elif formasyon.get("upper_now") is not None or formasyon.get("lower_now") is not None:
-        bilgi.append(f"bant teması (toplam) {len(goruntu.get('temas') or [])}")
+        bilgi.append(f"bant toplam {len(goruntu.get('temas') or [])} kez değdi")
     if alarm.get("deger") is not None:
-        parca = f"seviye {sayi(alarm['deger'])}"
+        # `seviye` hangi seviye? Kart `· kırılan 65,97` diyor; kare de öyle.
+        parca = f"kırılan {sayi(alarm['deger'])}"
         if alarm.get("kapanis") is not None:
             fark = float(alarm["kapanis"]) - float(alarm["deger"])
+            # Ölçü yüzde olarak yazılır (kart da `+%1,7` diyor); sıfıra bölme yok.
+            taban = abs(float(alarm["deger"])) or 1.0
+            yuzde = abs(fark) / taban * 100.0
             parca += (f" · kapanış {sayi(alarm['kapanis'])} "
-                      f"({'üstünde' if fark >= 0 else 'altında'} {sayi(abs(fark))})")
+                      f"· %{sayi(yuzde, 1)} {'üstünde' if fark >= 0 else 'altında'}")
         bilgi.append(parca)
     if bilgi:
         satirlar.append(" · ".join(bilgi))
@@ -4421,12 +4429,19 @@ def _yapı_satırı(sonuclar: Any, tf: str, son_kapanis: Optional[float]) -> str
     try:
         from notification_context import domain_bolumleri
 
-        satirlar = domain_bolumleri({tf: sonuclar}, son_kapanis, stil="klasik",
-                                     alarm_tf=tf).get("yapi") or []
+        # 2026-10-23: kare başlığı da KART diliyle konuşur (`1g yön yukarı
+        # (iç ve dış yapı)`); klasik metin `1g yapı: dış yükseliş` jargondu.
+        # `klasik` biçim geri dönüş yolu olarak `notification_context`te duruyor.
+        bolumler = domain_bolumleri({tf: sonuclar}, son_kapanis, stil="kart",
+                                    alarm_tf=tf)
+        satirlar = (bolumler.get("yapi_ozet") or bolumler.get("yapi") or [])
     except Exception as hata:  # noqa: BLE001 - kart satırı kareyi engellemez
         log.debug("grafik: yapı satırı alınamadı (%s: %s)", type(hata).__name__, hata)
         return ""
-    return _grafik_yapi_metni(str(satirlar[0]).lstrip("• ").strip()) if satirlar else ""
+    if not satirlar:
+        return ""
+    satir = str(satirlar[0]).strip().lstrip("◈•").strip()
+    return _grafik_yapi_metni(satir)
 
 
 def _serit_verisi(sonuclar: Optional[Mapping[str, Any]], hacimler: Sequence[Any],

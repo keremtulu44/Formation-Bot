@@ -2113,13 +2113,54 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
                     f"⚠️ Grafik isteği kısmen tamamlandı: {istek['hisse']} · "
                     f"{time.monotonic() - baslangic:.1f} sn\n" + "\n".join(ozetler),
                     getattr(notifier, "token", "")))
-            # Hepsi başarılıysa ayrı metin yok: albüm kendi başına yanıttır.
+            else:
+                # Albümün kendisi görsel; hangi hisse/TF olduğunu söyleyen tek
+                # metin mesajı ayrıca gider (2026-10-23 kullanıcı isteği).
+                bildir(redact_sensitive_text(
+                    _grafik_ozet_metni(istek["hisse"], istek["tfler"], basarili,
+                                       time.monotonic() - baslangic, istek),
+                    getattr(notifier, "token", "")))
             logger.info("/grafik %s bitti: %d/%d kare, %.1f sn", istek["hisse"], basarili,
                         len(istek["tfler"]), time.monotonic() - baslangic)
     finally:
         zamanlayici.cancel()
         with bildirim_kilidi:
             tamam.set()
+
+
+def _grafik_ozet_metni(hisse: str, tfler, adet: int, sure: float,
+                       istek: dict) -> str:
+    """`/grafik` başarı metni: hisse EN BAŞTA, seçimler arkada (2026-10-23).
+
+    Kullanıcı: "grafik çağırınca hisse metninde gelsin, düzenli şekilde".
+    Albüm tek başına yanıttı ve hangi hisseye ait olduğunu söyleyen metin
+    yoktu. Metin iki satırdır ve satır başına 283 px bütçesine sığar; sığmayan
+    süs (görünüm seçimleri, süre) sırayla düşer — hisse ve TF listesi kalır.
+    """
+    import telegram_measure as _tm
+    modlar = []
+    if istek.get("sade") is True:
+        modlar.append("sade")
+    elif istek.get("sade") is False:
+        modlar.append("detay")
+    if istek.get("gorunum"):
+        modlar.append(str(istek["gorunum"]))
+    if istek.get("mobil"):
+        modlar.append("mobil")
+    tf_listesi = [_tf_kisa(t) for t in tfler]
+    sure_metni = f"{sure:.1f} sn".replace(".", ",")
+    adaylar = [
+        " · ".join(tf_listesi + [f"{adet} kare", sure_metni] + modlar),
+        " · ".join(tf_listesi + [f"{adet} kare"] + modlar),
+        " · ".join(tf_listesi + modlar),
+        " · ".join(tf_listesi),
+    ]
+    ikinci = adaylar[-1]
+    for aday in adaylar:
+        if _tm.genislik(aday) <= _tm.SATIR_BUTCE:
+            ikinci = aday
+            break
+    return f"📈 {hisse} · grafik hazır\n{ikinci}"
 
 
 def _kare_altyazisi(hisse: str, tf: str, meta: dict) -> str:

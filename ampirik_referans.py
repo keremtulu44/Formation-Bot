@@ -47,6 +47,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+#: Satır bütçesi tek kaynaktan (`telegram_measure`): uzun detay satırı bölünmek
+#: yerine sığan en bilgili hâline kısalır (2026-10-23).
+from telegram_measure import SATIR_BUTCE, genislik  # noqa: E402
+
+_KART_ESIK_PX = float(SATIR_BUTCE) * 0.95 - 6.0
+
 OLCUM_SURUMU = "arsiv-2026-10"
 OLCUM_TABANI = "176 sembol × 4 TF (704 seri)"
 OLCUM_KAYNAGI = "docs/arastirma/ARASTIRMA_BULGULARI.md · FORMASYON_SONUCLARI.md"
@@ -188,7 +194,7 @@ MS_YON = {
 #: * `ZONE` — OB/FVG teması
 #: Boş aile ("") eski davranışı korur: kısıt yok (geri dönüş yolu).
 AILE_OLCU = {
-    "FRM": ("uyum", "retest", "temel", "hareket"),
+    "FRM": ("uyum", "detay", "temel", "hareket"),
     "MS": ("ms",),
     "ZONE": ("zone", "yukseklik", "rvol"),
 }
@@ -251,6 +257,10 @@ def _nadir(n: int) -> str:
 ONCELIK = {
     "ms": 0,
     "temel": 1,
+    # `detay`, `temel` başlığının altına giren açıklama satırıdır (2026-10-23):
+    #   ◇ benzer 32.321 kurulum
+    #      %76'sı devam etti · %35 geri
+    "detay": 1,
     "hareket": 2,
     "uyum": 3,
     "retest": 4,
@@ -268,6 +278,11 @@ def _say(x: float, basamak: int = 1) -> str:
 
 def _yuzde(x: float, basamak: int = 0) -> str:
     return "%" + _say(x, basamak)
+
+
+def _binlik(n: int) -> str:
+    """`32321` → `32.321`: örnek sayısı okunur olsun (Türkçe binlik ayırıcı)."""
+    return f"{int(n):,}".replace(",", ".")
 
 
 def rvol_kovasi(tf: str, rvol: float | None) -> tuple[int, tuple] | None:
@@ -470,6 +485,11 @@ def _zone_satiri(k: Kurulum) -> tuple[str, int] | None:
 
 
 def _retest_satiri(k: Kurulum) -> tuple[str, int] | None:
+    """2026-10-23: geri çekilme oranı detay satırına taşındı; ayrı satır yok."""
+    return None
+
+
+def _retest_satiri_eski(k: Kurulum) -> tuple[str, int] | None:
     if k.retest_seen is None or k.retest_seen:
         # Retest gördüyse ölçüm retest DERİNLİĞİNE bağlıdır (FRM-13); derinlik
         # kartta ölçülmediği için sabit bir oran basmak yanıltıcı olurdu.
@@ -481,15 +501,69 @@ def _retest_satiri(k: Kurulum) -> tuple[str, int] | None:
 
 
 def _temel_satiri(k: Kurulum) -> tuple[str, int] | None:
-    """Formasyon sonucu (FRM-15): kırılım tuttu mu?
+    """Formasyon ölçümünün BAŞLIĞI: kaç benzer kurulum var (FRM-15).
 
-    "tamamlandı %76" ifadesi yanıltıcıydı: motorun `FORMASYON_TAMAMLANDI`
-    durumu "hedefe ulaştı" demek DEĞİL — "kırılım teyit aldı ve fiyat formasyon
-    bandına geri dönmedi" demek (patterns/lifecycle.py). Sade karşılığı
-    "tuttu" (kullanıcı kararı 2026-10-22).
+    Kullanıcı (2026-10-23): "32321 formasyon · %76 tuttu" satırı iki sayıyı
+    yan yana koyuyordu ve "%76 kazanç" diye okunuyordu. Artık başlık yalnız
+    ÖRNEK SAYISINI söyler; yüzde ve "devam etti" alt satırdadır
+    (`_detay_satiri`). "tuttu" = kırılım teyit aldı ve fiyat banda dönmedi
+    (hedefe ulaştı demek DEĞİL).
     """
-    return (f"◇ {FRM_TERMINAL['n']} formasyon · "
-            f"{_yuzde(FRM_TERMINAL['tamamlandi'])} tuttu", ONCELIK["temel"])
+    n = int(FRM_TERMINAL["n"])
+    if n < NADIR_ESIK:
+        return None
+    return (f"◇ benzer {_binlik(n)} kurulum", ONCELIK["temel"])
+
+
+def _detay_satiri(k: Kurulum) -> tuple[str, int] | None:
+    """Ölçüm başlığının alt satırı: `   %76'sı devam etti · %35 geri`.
+
+    Üç bilgi tek satırda: kırılımın sürmesi (FRM-15), geri çekilme oranı
+    (FRM-13, yalnız geri çekilme görülmemişse) ve rol uyumu (FRM-20). 283 px
+    bütçesi yüzünden sığmayan parçalar sırayla düşer — ölçü kısalmaz, ayrıntı
+    kısalır (2026-10-23 kullanıcı kararı: sade ama eksik olmayan satır).
+    """
+    devam = _yuzde(FRM_TERMINAL["tamamlandi"])
+    parcalar = [f"{devam}'sı devam etti"]
+    if k.retest_seen is False and int(FRM_RETEST["n"]) >= NADIR_ESIK:
+        parcalar.append(f"{_yuzde(FRM_RETEST['oran'])} geri")
+    uyum = _uyum_orani(k)
+    if uyum is not None:
+        etiket, oran = uyum
+        parcalar.append(f"rol {etiket} {_yuzde(oran)}")
+    adaylar = ["   " + " · ".join(parcalar[:n]) for n in range(len(parcalar), 0, -1)]
+    for aday in adaylar:
+        if genislik(aday) <= _KART_ESIK_PX:
+            return (aday, ONCELIK["detay"])
+    return (adaylar[-1], ONCELIK["detay"])
+
+
+def _uyum_orani(k: Kurulum) -> tuple[str, float] | None:
+    """(uyumlu|uyumsuz, oran) — kırılım yönü en yakın korunan seviyeyle uyumlu mu."""
+    if not k.yon or k.break_price is None:
+        return None
+    fiyat = float(k.break_price)
+    ph, pl = k.ph, k.pl
+    if ph is None and pl is None:
+        return None
+    uyumlu: bool | None = None
+    if k.yon > 0:
+        if ph is not None and ph > fiyat and (pl is None or pl <= fiyat):
+            uyumlu = True
+        elif pl is not None and pl > fiyat:
+            uyumlu = False
+    else:
+        if pl is not None and pl < fiyat and (ph is None or ph >= fiyat):
+            uyumlu = True
+        elif ph is not None and ph < fiyat:
+            uyumlu = False
+    if uyumlu is None:
+        return None
+    anahtar = "uyumlu" if uyumlu else "uyumsuz"
+    n, oran = FRM_UYUM[anahtar]
+    if int(n) < NADIR_ESIK:
+        return None
+    return anahtar, oran
 
 
 def _hareket_satiri(k: Kurulum) -> tuple[str, int] | None:
@@ -516,11 +590,14 @@ def _hareket_satiri(k: Kurulum) -> tuple[str, int] | None:
             fiyat = float(k.break_price)
         except (TypeError, ValueError):
             fiyat = None
+    # 2026-10-23 (kullanıcı): "tutunca" hangi koşulda olduğunu söylemiyordu ve
+    # sayı HEDEF gibi okunuyordu. Ölçüm, tutan kırılımın lehte TEPE mesafesidir
+    # (medyan, FRM-16): "tutarsa tepe ~1,19 TL (+%1,7)".
     if fiyat and fiyat > 0:
         oran = tl / fiyat * 100.0
-        return (f"◇ tutunca ~{_say(tl, 2)} TL · {_yuzde(oran, 1)}",
+        return (f"◇ tutarsa tepe ~{_say(tl, 2)} TL (+{_yuzde(oran, 1)})",
                 ONCELIK["hareket"])
-    return (f"◇ tutunca ~{_say(kat, 1)} kat", ONCELIK["hareket"])
+    return (f"◇ tutarsa tepe normalin {_say(kat, 1)} katı", ONCELIK["hareket"])
 
 
 # --- beklenti hükmü (tasarım: docs/tasarim/TAHMIN_KATMANI.md) --------------
@@ -694,6 +771,7 @@ def olcum_satirlari(k: Kurulum, *, azami: int = 2) -> list[str]:
         "zone": _zone_satiri,
         "retest": _retest_satiri,
         "temel": _temel_satiri,
+        "detay": _detay_satiri,
         "hareket": _hareket_satiri,
     }
     aile = str(k.aile or "").strip().upper()
@@ -736,13 +814,15 @@ def komut_metni() -> str:
         "Karttaki ◇ satırlarının kaynağı",
         "",
         "Formasyon (FRM ailesi):",
-        f"· {FRM_TERMINAL['n']} formasyondan",
-        f"  %{_say(FRM_TERMINAL['tamamlandi'])} kırılımı tuttu",
+        # Kart 2026-10-23: sayı `◇ benzer 32.321 kurulum` başlığında, yüzde
+        # hemen altında (`%76'sı devam etti`). Komut aynı dili konuşur.
+        f"· {_binlik(int(FRM_TERMINAL['n']))} benzer kurulum",
+        f"  %{_say(FRM_TERMINAL['tamamlandi'])} devam etti",
         f"  %{_say(FRM_TERMINAL['basarisiz'])} geri döndü",
-        f"  %{_say(FRM_TERMINAL['gecersiz'])} formasyon bozuldu",
-        # "tuttu" = kırılım teyit aldı ve bandın içine dönmedi; "hedefe
+        f"  %{_say(FRM_TERMINAL['gecersiz'])} bozuldu",
+        # "devam etti" = kırılım teyit aldı ve bandın içine dönmedi; "hedefe
         # ulaştı" DEĞİL. Kart da bu yüzden "tamamlandı" yazmıyor.
-        "· tutunca lehte tepe:",
+        "· tutarsa tepe (lehte):",
         f"  normalin {_say(mfe['medyan_atr'])} katı (n {mfe['n']})",
         "  TL karşılığı kartta yazılır",
         f"· geri çekilme %{_say(FRM_RETEST['oran'], 1)}"

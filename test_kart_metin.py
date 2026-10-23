@@ -30,7 +30,7 @@ def _payload(**ek):
         "confidence_score": 81, "break_strength": 100, "age_bars": 94,
         "band_baslangic": "2026-09-30T16:30:00+03:00", "retest_seen": False,
         "mtf_destek": True, "upper_now": 39.96, "lower_now": 38.79,
-        "domain_bolumleri": {"hacim": ["katılım 1s destekliyor", "katılım 2s 0,42 zayıf"]},
+        "domain_bolumleri": {"hacim": ["hacim: 1s destekliyor", "hacim: 2s 0,42 zayıf"]},
     }
     veri.update(ek)
     return veri
@@ -57,13 +57,13 @@ def test_teyitli_kart_tasmaz_ve_zincirsiz():
     assert not [s for s in satirlar if s.startswith(" ")], "girintili devam satırı yok"
     # Zincir kuralı: 3+ öğe tek satıra sığdırılmaz (2 öğe serbest, ör.
     # `· kapanış 39,60 · sınır 39,26`).
-    assert satirlar[0].startswith("▼ SISE 1s AŞAĞI TEYİTLİ")
+    assert satirlar[0].startswith("▼ SISE 1s AŞAĞI KIRILIM")
     assert satirlar[-1] == "• yatırım tavsiyesi değildir"
     # 3+ ayırıcılı satır yok: `·`/`—` karışımı tek satırda 2'yi geçmez.
     assert not [x for x in satirlar if x.count("·") + x.count("—") >= 3]
 
 
-def test_endeks_olceginde_kapanis_sinir_satiri_girintili_bolunmez():
+def test_endeks_olceginde_kapanis_kirilan_satiri_girintili_bolunmez():
     """5 haneli fiyat (XBANK 13482,50) birleşik satırı 279,5 px'e çıkarıyordu.
 
     `_satir` bölünce GİRİNTİLİ devam satırı (`   · sınır 13380,00`) üretiyordu;
@@ -75,8 +75,11 @@ def test_endeks_olceginde_kapanis_sinir_satiri_girintili_bolunmez():
         upper_now=13510.0, lower_now=13120.0))
     satirlar = _satirlar(metin)
     assert "· kapanış 13482,50" in satirlar, satirlar
-    assert "· sınır 13380,00" in satirlar, satirlar
-    assert not [s for s in satirlar if s.startswith(" ")], satirlar
+    assert "· kırılan 13380,00" in satirlar, satirlar
+    # Girintili devam satırı yalnız ölçüm detayıdır (`   %76'sı devam etti`);
+    # kapanış/kırılan satırı asla bölünmez.
+    devam = [s for s in satirlar if s.startswith(" ")]
+    assert devam == [s for s in devam if s.lstrip().startswith("%")], satirlar
     assert not _tasma(satirlar), _tasma(satirlar)
     assert len(satirlar) <= notifier._KART_MAKS_SATIR, satirlar
 
@@ -86,7 +89,7 @@ def test_teyitli_kart_karenin_taşıdığı_bilgiyi_tekrarlamaz():
         "yapi": ["🏗 1s yapı: HH→LH ↓ / LL→HL ↓"],
         "ust": ["▲ OB 1s 44,14-44,86 (▼) · %0"],
         "alt": ["▲ OB 1s 42,98-43,40 (▼) · %0"],
-        "hacim": ["katılım 1s destekliyor"],
+        "hacim": ["hacim: 1s destekliyor"],
     }))
     for yasak in ("◈", "▸", "▤", "▪", "OB 1s", "%0"):
         assert yasak not in metin, yasak
@@ -95,11 +98,11 @@ def test_teyitli_kart_karenin_taşıdığı_bilgiyi_tekrarlamaz():
 def test_kalicilik_ve_esik_yonu_dogru():
     """Eşik GÜNCEL bant sınırıdır: aşağı kırılımı alt sınırın üstü bozar."""
     metin = notifier._format_lifecycle_alert_kart(_payload())
-    assert "bozulur: 38,79 üstü kapanış" in metin
+    assert "teyit düşer: bant 38,79 üstü" in metin   # eşik ≠ kırılan → bant etiketi
     yukari = notifier._format_lifecycle_alert_kart(_payload(
         break_dir=1, break_price=40.10, candle_close_price=40.25,
         upper_now=40.44, lower_now=39.10, state="KIRILIM_TEYITLI"))
-    assert "bozulur: 40,44 altı kapanış" in yukari
+    assert "teyit düşer: bant 40,44 altı" in yukari
 
 
 # ------------------------------------------------------------- geçersizleşme
@@ -110,12 +113,12 @@ def test_gecersizlesme_karti_formasyon_ve_tf_ile_sinirli():
         state="KIRILIM_GECERSIZLESTI", domain_bolumleri={
             "yapi": ["🏗 1s yapı: HH→LH ↓ / LL→HL ↓"],
             "ust": ["▲ OB 1s 44,14-44,86 (▼) · %0"],
-            "hacim": ["katılım 1s destekliyor"],
+            "hacim": ["hacim: 1s destekliyor"],
         })))
     assert len(satirlar) <= notifier._KART_MAKS_SATIR, satirlar
     assert not _tasma(satirlar)
-    assert satirlar[0] == "▼ SISE 1s GEÇERSİZLEŞTİ"
-    assert satirlar[1] == "Yükselen Üçgen - bandına dönüş"
+    assert satirlar[0] == "▼ SISE 1s KIRILIM İPTAL"
+    assert satirlar[1] == "Yükselen Üçgen — banda döndü"
     assert any(s.startswith("· dönüş sınırı 38,79 üstü") for s in satirlar)
     assert "× geçersiz" not in "\n".join(satirlar)
     assert "◈" not in "\n".join(satirlar) and "OB 1s" not in "\n".join(satirlar)
@@ -125,10 +128,10 @@ def test_gecersizlesmede_katilim_tek_satir_kalir():
     """Geçersizleşme gövdesi kısa kalır: katılım bölümünden en çok 2 satır gelir."""
     metin = notifier._format_lifecycle_alert_kart(_payload(
         state="KIRILIM_GECERSIZLESTI", domain_bolumleri={
-            "hacim": ["katılım 1s destek yok", "katılım 1g 0,52 ile bitti",
-                      "katılım 4s veri yok"]}))
+            "hacim": ["hacim: 1s destek yok", "hacim: 1g 0,52 ile bitti",
+                      "hacim: 4s veri yok"]}))
     satirlar = _satirlar(metin)
-    assert len([s for s in satirlar if s.startswith("katılım ")]) <= 2
+    assert len([s for s in satirlar if s.startswith("hacim:")]) <= 2
     assert len(satirlar) <= notifier._KART_MAKS_SATIR
 
 
@@ -151,7 +154,7 @@ def test_suzgec_kapatilinca_eski_tam_kart_doner(monkeypatch):
         contraction=0.52, band_kaynak="zone", kalite=81,
         domain_bolumleri={"yapi": ["🏗 1s yapı: HH→LH ↓ / LL→HL ↓"],
                           "ust": ["▲ OB 1s 44,14-44,86 (▼) · %0"],
-                          "hacim": ["katılım 1s destekliyor"]}))
+                          "hacim": ["hacim: 1s destekliyor"]}))
     assert "◈" in eski or "▪" in eski
     assert "dönüş sınırı" not in eski
 
@@ -188,7 +191,7 @@ def _kart_metni(**ek):
         "domain_bolumleri": {
             "engel": ["▲ direnç · boşluk 4s 41,90 +%5,8"],
             "yapi_ozet": ["◈ 4s yapı dış ve iç yukarı"],
-            "hacim": ["katılım 4s hacim 0,45 kat"],
+            "hacim": ["hacim: 4s 0,45 kat"],
             "olcum": ["◇ 32321 formasyon · %76 tuttu",
                       "◇ tutunca ~1,05 TL · %2,6",
                       "◇ rol uyumlu %80 · 15724"],
@@ -219,7 +222,11 @@ def test_kart_olcum_bloku_uc_satir_ve_dipnot():
     satirlar = _kart_metni().splitlines()
     olcum = [s for s in satirlar if s.startswith("◇")]
     assert len(olcum) == 3, olcum
-    assert "· geçmiş davranış, kazanç değil" in satirlar
+    # Dipnot TEK satır (kullanıcı 2026-10-23: "birleşik olsun"): iki yargı da
+    # aynı satırda, tam hâli 330 px olduğu için sözcük ekonomisiyle.
+    dipnot = [x for x in satirlar if "kazanç değil" in x]
+    assert len(dipnot) == 1, satirlar
+    assert "geçmiş davranıştır" in dipnot[0], dipnot
 
 
 def test_kart_satir_butcesi_ve_satir_tavani():

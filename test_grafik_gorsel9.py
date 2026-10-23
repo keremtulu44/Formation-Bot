@@ -156,7 +156,7 @@ def test_baslik_motorun_ust_alt_temas_sayilarini_yazar():
     meta = {"mum_sayisi": 85}
     metin = grafik._metinler(goruntu, meta, 1080, [], False)
     satir = " · ".join(metin["satirlar"])
-    assert "temas üst 2 / alt 3" in satir
+    assert "üste 2, alta 3 kez değdi" in satir
     assert "bant teması 39" not in satir
 
 
@@ -166,7 +166,7 @@ def test_baslik_alan_yoksa_toplam_der():
                              "lower_now": 96.0}}
     metin = grafik._metinler(goruntu, {"mum_sayisi": 85}, 1080, [], False)
     satir = " · ".join(metin["satirlar"])
-    assert "bant teması (toplam) 7" in satir
+    assert "bant toplam 7 kez değdi" in satir
 
 
 # ---------------------------------------------- 5. RVOL rozet aralığı (pikselden)
