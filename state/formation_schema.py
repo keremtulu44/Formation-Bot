@@ -32,6 +32,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, Iterable, List, Optional
 
 __all__ = [
@@ -231,7 +232,13 @@ def json_guvenli(deger: Any) -> Any:
         return None
     if isinstance(deger, bool):
         return deger
-    if isinstance(deger, (int, float, str)):
+    if isinstance(deger, float):
+        # NaN/inf JSON'da YOKTUR: Python json bunlari `NaN`/`Infinity`
+        # literali olarak yazar, PostgREST/jsonb gövdeyi toptan reddeder.
+        # Tek bir NaN skor, 100 satirlik batch'i zehirler (2026-10-23
+        # denetimi: f2_snapshots/f2_events bu yüzden 0 satirda kaldi).
+        return deger if math.isfinite(deger) else None
+    if isinstance(deger, (int, str)):
         return deger
     # numpy scalar -> python
     if hasattr(deger, "item"):

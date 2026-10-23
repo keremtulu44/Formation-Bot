@@ -22,6 +22,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import math
 import os
 import threading
 import time
@@ -59,18 +60,26 @@ def _guvenli_int(val: Any) -> Optional[int]:
         return None
     try:
         return int(val)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError: int(float('inf')) — sessizce None olmalı, patlamamalı
         return None
 
 
 def _guvenli_float(val: Any) -> Optional[float]:
-    """Hydration ve diff sırasında float tip güvenliği sağlar."""
+    """Hydration ve diff sırasında float tip güvenliği sağlar.
+
+    Sonlu olmayan değer (NaN/inf) None'a iner: Python `json` NaN'i geçersiz
+    `NaN` literali olarak yazar, PostgREST gövdeyi 400 ile reddeder ve
+    batch kuyruk başında zehre dönüşür (2026-10-23 Supabase denetimi:
+    f2_snapshots sequence'i aylardır 1'de — istek INSERT'e hiç varamıyor).
+    """
     if val is None:
         return None
     try:
-        return float(val)
-    except (TypeError, ValueError):
+        sayi = float(val)
+    except (TypeError, ValueError, OverflowError):
         return None
+    return sayi if math.isfinite(sayi) else None
 
 
 def _kuyruk_yolu(data_dir: Optional[str] = None) -> str:

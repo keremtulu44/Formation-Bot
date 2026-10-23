@@ -266,3 +266,33 @@ düzeltmesi sonrası karne verisiyle yeniden değerlendirilmelidir.
 
 Geçiş notu: deploy günü canlı 2s/4s serileri bir kez sıçrar (doğru faza
 oturur); o gün formasyon envanterinde tek seferlik dalgalanma normaldir.
+
+## 10) Supabase denetim düzeltmeleri (23 Ekim 2026, write izniyle, kontrollü)
+
+**Kök neden doğrulaması (çocuk tablolar neden boş):** `f2_events` sequence'i
+hiç kullanılmamış, `f2_snapshots` sequence'i aylar içinde 1 kez yanmış —
+istekler INSERT'e varmadan ölüyordu. Mekanizma: NaN/inf skor →
+`json_guvenli`/`_guvenli_float` dokunmadan geçiriyordu → Python json
+geçersiz `NaN` literali yazıyor → PostgREST gövdeyi 400 ile toptan
+reddediyor → batch kuyruk başını zehirliyor. (İkinci zehir sınıfı da
+kanıtlandı: çocuk tablolarda `stable_id` FK'si var; oluşum satırı eksik
+snapshot 23503 ile deterministik reddedilir.)
+
+Düzeltmeler:
+- `json_guvenli` ve `_guvenli_float`: sonlu olmayan float → `None`.
+  `_guvenli_int`: `OverflowError` da yutulur. Test: diff çıktısı katı
+  JSON (`allow_nan=False`) ile serileşebilmeli.
+- `bot_store`: öneksiz (legacy) 101 ölü cache anahtarı silindi (229 → 128).
+  Hepsinin canlı ön ekli ikizi vardı ve okuma yolu ikizi tercih ettiği
+  için fiilen hiç okunmuyorlardı (en yenisi 30 Eylül).
+- `v_f2_faz_kontrol` görünümü eklendi (`supabase_schema.sql` §5): deploy
+  sonrası yeni doğumlarda `dogru_faz` yüzdesinin %100'e oturduğu buradan
+  izlenecek. Görünüme Supabase'in otomatik verdiği anon/authenticated
+  hakları geri alındı; yalnız postgres + service_role.
+
+Bilerek yapılmayanlar (kontrollü kapsam): TEXT zaman kolonlarının
+`timestamptz`'a taşınması (kod+şema eşgüdümlü migration ister; TEXT şu an
+kod sözleşmesi), terminali olmayan "zombi" oluşumlara toplu kapatma
+yazmak (veri uydurma olur; kapanış motorundur), RLS politikası eklemek
+(anon/auth'un tablo hakkı zaten yok; politika yokluğu = deny, mevcut
+durum güvenli tarafta).

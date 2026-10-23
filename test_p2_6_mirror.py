@@ -681,3 +681,54 @@ def test_gecici_5xx_satir_dusurmez_backoffa_girer(tmp_path):
         q._retry_after = 0.0  # backoff beklemesini testte atla
         assert q.flush(store) == 0
     assert q.size() == 3  # geçici hatada tek satır bile düşmez
+
+
+# ============================================================================
+# O. NaN/inf JSON zehri: diff çıktısı katı JSON ile serileşebilmeli
+# ============================================================================
+# Canlı bulgu (2026-10-23 Supabase denetimi): f2_snapshots sequence'i
+# aylardır 1'de, f2_events hiç kullanılmamış — istekler INSERT'e
+# varamadan ölüyor. Mekanizma: NaN skor -> Python json `NaN` literali
+# yazar -> PostgREST gövdeyi 400 ile reddeder -> batch kuyruk başında
+# zehre dönüşür. _guvenli_float/json_guvenli artık sonlu olmayanı
+# None'a indirir; bu test kilididir.
+
+
+def test_nan_inf_diff_ciktisini_zehirlemez():
+    from state.formation_mirror import _guvenli_float, _guvenli_int
+
+    assert _guvenli_float(float("nan")) is None
+    assert _guvenli_float(float("inf")) is None
+    assert _guvenli_float(12.5) == 12.5
+    assert _guvenli_int(float("inf")) is None  # OverflowError yutulur
+    assert schema.json_guvenli(float("nan")) is None
+    assert schema.json_guvenli(3.5) == 3.5
+
+    defter = {
+        "stock": "TCELL", "timeframe": "4h",
+        "kayitlar": {"sid-nan": {
+            "durum": "acik",
+            "dogum": {"bar_time": "2026-10-23 09:30:00+03:00", "bar_index": 3,
+                      "alanlar": {"raw_quality": float("nan"),
+                                  "start_bar": float("inf"),
+                                  "family": "ucgen"}},
+            "snapshotlar": [{
+                "tur": "dogum", "bar_time": "2026-10-23 09:30:00+03:00",
+                "bar": 3, "state": "SIKISMA",
+                "alanlar": {"raw_quality": float("nan"),
+                            "break_strength": float("inf"),
+                            "geometry_score": 72.5}}],
+            "olaylar": [{"type": "state", "name": "dogum", "bar": 3,
+                         "time": "2026-10-23 09:30:00+03:00",
+                         "quality": float("nan")}],
+        }},
+    }
+    diff = extract_diff(defter)
+    # Katı JSON: NaN/Infinity literali kalırsa ValueError fırlar.
+    json.dumps(diff, allow_nan=False)
+    assert diff["f2_formations"][0]["raw_quality"] is None
+    assert diff["f2_formations"][0]["start_bar"] is None
+    assert diff["f2_snapshots"][0]["raw_quality"] is None
+    assert diff["f2_snapshots"][0]["alanlar"]["break_strength"] is None
+    assert diff["f2_snapshots"][0]["alanlar"]["raw_quality"] is None
+    assert diff["f2_snapshots"][0]["geometry_score"] == 72.5

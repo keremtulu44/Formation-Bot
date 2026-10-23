@@ -145,3 +145,32 @@ grant select, insert, update on table public.f2_outcome_links to service_role;
 
 create index if not exists f2_outcome_links_durum_idx
     on public.f2_outcome_links (durum);
+
+-- 5) FAZ İZLEME GÖRÜNÜMÜ (2026-10-23 denetimi)
+-- 2s/4s oluşum doğumlarının doğru 09:30 kova fazında olup olmadığını işaretler.
+-- Faz düzeltmesi (sabit çapa) deploy edildikten sonra yeni satırlarda
+-- dogru_faz'in %100'e oturduğu buradan doğrulanır:
+--   select timeframe, round(100.0*avg(dogru_faz::int),1)
+--   from public.v_f2_faz_kontrol where created_at > '<deploy zamani>'
+--   group by timeframe;
+-- Düzeltme öncesi canlı taban: 2s %47,0 / 4s %28,5.
+-- Ölçüm raporu: docs/arastirma/KOVA_FAZI_OLCUMU_2026-10-23.md
+create or replace view public.v_f2_faz_kontrol as
+select
+    stable_id,
+    stock,
+    timeframe,
+    dogum_bar_time,
+    created_at,
+    substring(dogum_bar_time from 12 for 5) as dogum_saati,
+    case
+        when timeframe = '2h' then substring(dogum_bar_time from 12 for 5)
+            in ('09:30','11:30','13:30','15:30','17:30')
+        when timeframe = '4h' then substring(dogum_bar_time from 12 for 5)
+            in ('09:30','13:30','17:30')
+        else null
+    end as dogru_faz
+from public.f2_formations;
+
+revoke all privileges on table public.v_f2_faz_kontrol from public, anon, authenticated;
+grant select on table public.v_f2_faz_kontrol to service_role;
