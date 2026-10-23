@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""GÖRSEL-9 (2026-10-23): kadraj, kırılım marjı ve dar kare yerleşimi.
+"""GÖRSEL-9 (2026-10-23): kadraj, bant kırpma ve dar kare yerleşimi.
 
 Kullanıcı: *"grafik çizerken bazı hatalar var; çizimi kısa tutuyor, formasyonda
 kırılmanın ne kadar olduğunu göremiyoruz"*. Bu dosya düzeltmelerin ÖLÇÜLEBİLİR
@@ -8,11 +8,16 @@ sözlerini kilitler:
   1. Kadraj formasyonu kesmez: üst sınır 180 (85 değil), tavan piksel bütçesinden.
   2. Bant doğrusu y-aralığını ele geçirmez: mumlar karenin çoğunu kaplar,
      kadraj dışına taşan bant parçası ÇİZİLMEZ ve sayılır (sessiz kayıp yok).
-  3. Kırılım marjı karede ölçü olarak durur (`meta["cizgiler"]["kirilim"]`).
-  4. Başlıkta kart ile çelişen "bant teması (toplam)" sayısı yerine motorun
+  3. Başlıkta kart ile çelişen "bant teması (toplam)" sayısı yerine motorun
      `upper_touches`/`lower_touches` alanları yazılır.
-  5. RVOL rozet aralığı pikselden gelir (dar karede çipler üst üste binmez).
-  6. X tick yoğunluğu eksen genişliğinden gelir (mobilde tarihler binmez).
+  4. RVOL rozet aralığı pikselden gelir (dar karede çipler üst üste binmez).
+  5. X tick yoğunluğu eksen genişliğinden gelir (mobilde tarihler binmez).
+
+NOT (2026-10-23, akşam): kırılım marjı çipi (`kırılım +0,56 · %1,0` /
+`seviyeye 0,06`) kullanıcı kararıyla KALDIRILDI — "bu eklemeyi istemiyorum,
+iptal et". Karede ölçü çipi/çift uçlu ok yok; kırılım marjını kart yazar
+(`· kapanış … · sınır …`). Geri eklenmemesi `_kirilim_olcusu`nun yokluğuyla
+kilitlidir (aşağıdaki `test_kirilim_olcusu_kaldirildi`).
 """
 
 from __future__ import annotations
@@ -142,100 +147,6 @@ def test_mumlar_karenin_cogunu_kaplar():
             os.unlink(yol)
 
 
-# ------------------------------------------------- 3. kırılım marjı (ölçü) çizimi
-
-def _alarm_goruntusu(deger=100.0, kapanis=104.0, tur="teyit", yon=1, bar=40):
-    n = 60
-    seri = [100.0 + i * 0.02 for i in range(n)]
-    if kapanis is not None:
-        seri[bar] = float(kapanis)
-    goruntu = {"sol": 0, "kapanis": list(seri), "acilis": list(seri),
-               "yuksek": [v + 0.5 for v in seri], "dusuk": [v - 0.5 for v in seri],
-               "alarm": {"deger": deger, "kapanis": kapanis, "tur": tur, "yon": yon,
-                         "bar": bar, "hedef": None}}
-    return goruntu
-
-
-def test_kirilim_marji_sag_boslukta_olcu_olarak_cizilir():
-    goruntu = _alarm_goruntusu()
-    ax = _eksen(60, (95.0, 110.0))
-    meta = grafik._kirilim_olcusu(ax, goruntu, 60, sag_bosluk=8, aralik=(95.0, 110.0))
-    assert meta is not None
-    assert meta["marj"] == pytest.approx(4.0)
-    assert meta["yuzde"] == pytest.approx(4.0, abs=1e-6)
-    assert "kırılım +4" in meta["etiket"]
-    # çift uçlu ok (annotate) + çip çizildi
-    assert any("kırılım" in str(t.get_text()) for t in ax.texts)
-
-
-def test_kirilim_marji_geri_donuste_iceride_yazar():
-    """Yukarı kırılım yönü +1 ama kapanış seviyenin ALTINDA → "içeride"."""
-    goruntu = _alarm_goruntusu(deger=100.0, kapanis=98.5)
-    goruntu["alarm"]["yon"] = 1
-    ax = _eksen(60, (95.0, 110.0))
-    meta = grafik._kirilim_olcusu(ax, goruntu, 60, sag_bosluk=8, aralik=(95.0, 110.0))
-    assert meta is not None and meta["marj"] < 0
-    assert meta["etiket"].startswith("içeride")
-
-
-def test_gecersizlesen_kirilimda_kirilim_denmez():
-    """Geçersizleşmiş olayda ölçü `üstünde/altında` der — kart diliyle aynı."""
-    goruntu = _alarm_goruntusu(deger=100.0, kapanis=100.39, tur="gecersiz")
-    ax = _eksen(60, (95.0, 110.0))
-    meta = grafik._kirilim_olcusu(ax, goruntu, 60, sag_bosluk=8, aralik=(95.0, 110.0))
-    assert meta["etiket"].startswith("üstünde")
-    assert "kırılım" not in meta["etiket"]
-
-
-def test_aday_alarminda_mesafe_yazilir():
-    """Aday: fiyat seviyeyi henüz kırmadı → `seviyeye …`, marj YOK."""
-    goruntu = _alarm_goruntusu(deger=100.0, kapanis=99.94, tur="aday", yon=0)
-    ax = _eksen(60, (95.0, 110.0))
-    meta = grafik._kirilim_olcusu(ax, goruntu, 60, sag_bosluk=8, aralik=(95.0, 110.0))
-    assert meta["mod"] == "mesafe" and meta["marj"] is None
-    assert meta["mesafe"] == pytest.approx(0.06, abs=1e-9)
-    assert meta["etiket"].startswith("seviyeye")
-
-
-def test_kirilim_marji_bosluk_yoksa_cizilmez():
-    """Sağ boşluk kapalıysa ölçü mumların üstüne binmesin diye çizilmez."""
-    ax = _eksen(60, (95.0, 110.0))
-    assert grafik._kirilim_olcusu(ax, _alarm_goruntusu(), 60, sag_bosluk=0) is None
-
-
-def test_kirilim_marji_kapanis_yoksa_mumdan_okunur():
-    """Motor `candle_close_price` vermezse karedeki mumun kapanışı kullanılır."""
-    goruntu = _alarm_goruntusu(deger=100.0, kapanis=None, tur="kritik")
-    goruntu["kapanis"][40] = 101.5
-    goruntu["acilis"][40] = 101.0
-    ax = _eksen(60, (95.0, 110.0))
-    meta = grafik._kirilim_olcusu(ax, goruntu, 60, sag_bosluk=8, aralik=(95.0, 110.0))
-    assert meta is not None and meta["kapanis"] == pytest.approx(101.5)
-
-
-def test_kirilim_marji_meta_sozlesmesi():
-    """Gerçek kare: teyitli alarmda `meta["cizgiler"]["kirilim"]` dolu."""
-    goruntu = {"sol": 0, "tf": "1h", "tf_kisa": "1s", "sembol": "TST",
-               "son_bar_ts": None, "son_kapanis": 104.0, "bar_sayisi": 60,
-               "zamanlar": [None] * 60,
-               **{ad: [100.0 + i * 0.05 for i in range(60)]
-                  for ad in ("acilis", "yuksek", "dusuk", "kapanis")},
-               "formasyon": {"ad": "Simetrik Üçgen", "state": "KIRILIM_TEYITLI",
-                             "upper_now": 100.0, "lower_now": 96.0},
-               "alarm": {"deger": 100.0, "kapanis": 100.8, "tur": "teyit", "yon": 1,
-                         "bar": 40, "hedef": None},
-               "zone": None, "olay": None, "serit": None, "temas": [], "isaretler": []}
-    yol, meta = grafik.ciz(goruntu, "1h")
-    try:
-        kirilim = meta["cizgiler"].get("kirilim")
-        assert kirilim and kirilim["marj"] == pytest.approx(0.8)
-        assert "seviye" in kirilim and "kapanis" in kirilim
-    finally:
-        if yol:
-            import os
-            os.unlink(yol)
-
-
 # ------------------------------------------- 4. başlıkta kartla aynı temas sayısı
 
 def test_baslik_motorun_ust_alt_temas_sayilarini_yazar():
@@ -348,3 +259,31 @@ def test_alarm_bar_pencere_koordinatina_cevrilir():
                                   alarm_bar=5, sembol="TST")
     assert disari["alarm"]["bar"] is None and disari["alarm"]["bar_disarida"] is True
     assert any("kadraj dışında" in u for u in disari["uyarilar"])
+
+
+# ------------------------------- 8. kırılım ölçüsü çipi KALDIRILDI (2026-10-23)
+
+def test_kirilim_olcusu_kaldirildi():
+    """Kullanıcı kararı: kırılım/mesafe ölçü çipi kareye geri eklenmez."""
+    assert not hasattr(grafik, "_kirilim_olcusu")
+
+    goruntu = {"sol": 0, "tf": "1h", "tf_kisa": "1s", "sembol": "TST",
+               "son_bar_ts": None, "son_kapanis": 100.8, "bar_sayisi": 60,
+               "zamanlar": [None] * 60,
+               **{ad: [100.0 + i * 0.05 for i in range(60)]
+                  for ad in ("acilis", "yuksek", "dusuk", "kapanis")},
+               "formasyon": {"ad": "Simetrik Üçgen", "state": "KIRILIM_TEYITLI",
+                             "upper_now": 100.0, "lower_now": 96.0},
+               "alarm": {"deger": 100.0, "kapanis": 100.8, "tur": "teyit", "yon": 1,
+                         "bar": 40, "hedef": None},
+               "zone": None, "olay": None, "serit": None, "temas": [], "isaretler": []}
+    yol, meta = grafik.ciz(goruntu, "1h")
+    try:
+        assert "kirilim" not in (meta.get("cizgiler") or {})
+        # Karede çip metni de kalmamalı: nötr kare, ölçü yok.
+        for anahtar in ("seviyeye", "kırılım +", "üstünde", "içeride"):
+            assert anahtar not in " ".join(str(d) for d in (meta.get("lejant") or []))
+    finally:
+        if yol:
+            import os
+            os.unlink(yol)

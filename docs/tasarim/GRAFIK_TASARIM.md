@@ -1906,7 +1906,8 @@ sertliğe göre doldurur. Taze aday yerleşim listesinde ÖNDE olduğu için onu
 Kullanıcı: *"grafik çizerken bazı hatalar var; örnek olarak çizimi kısa tutuyor,
 formasyonda kırılmanın ne kadar olduğunu göremiyoruz, başka bir şey varsa da
 tespit edip düzelt."* Dört kusur ÖLÇÜLEREK bulundu (gerçek `bot_data` önbelleği +
-demo kataloğu), her biri tek tek kapatıldı.
+demo kataloğu), her biri tek tek kapatıldı. Kırılım marjı için eklenen ölçü çipi
+(43.3) aynı gün akşam kullanıcı kararıyla geri alındı.
 
 ### 43.1 Kadraj formasyonu kesiyordu (85 → 180 mum)
 
@@ -1932,15 +1933,16 @@ demo kataloğu), her biri tek tek kapatıldı.
 - **İz:** çizilmeyen bar sayısı `meta["cizgiler"]["formasyon"]["kirpilan"]`
   (`{"ust": n, "alt": m}`) — sessiz kayıp yok.
 
-### 43.3 Kırılım marjı karede yoktu ("ne kadar kırdı" görünmüyordu)
+### 43.3 Kırılım marjı ölçüsü — **KALDIRILDI** (kullanıcı kararı, 2026-10-23 akşam)
 
-- **Neden:** kart `▪ kapanış 54,26 · %1,0 aştı` diyor, kare ise yalnız seviye
-  çizgisini gösteriyordu; 0,56'lık aşım ~1 px olduğu için okunamıyordu.
-- **Kural:** `_kirilim_olcusu` sağ boşlukta **çift uçlu ok + çip** çizer:
-  `kırılım +0,56 · %1,0` (yön yukarı) veya `içeride 0,39 · %0,7` (bant içine
-  dönüş). Sayı UYDURULMAZ: seviye `alarm["deger"]`, kapanış `alarm["kapanis"]`
-  (kartın yazdığı `candle_close_price`); kapanış yoksa karedeki mumun kapanışı.
-- **İz:** `meta["cizgiler"]["kirilim"]` = `{seviye, kapanis, marj, yuzde, yon, bar, etiket}`.
+- 23 Ekim'de kareye sağ boşlukta çift uçlu ok + çip eklendi (`kırılım +0,56 · %1,0`,
+  aday kartında `seviyeye 0,06 · %0,2`). Kullanıcı bu eklemeyi reddetti:
+  *"2. eklemeyi istemiyorum, iptal et."*
+- **Durum:** `_kirilim_olcusu` ve çağrısı `grafik.py`den **silindi**; karede ölçü
+  çipi, çift uçlu ok ve kılavuz çizgi YOK. `meta["cizgiler"]` içinde `kirilim`
+  anahtarı üretilmez. Kırılım marjını **kart** yazar (`· kapanış … · sınır …`).
+- Geri eklenmeye karşı kilit: `test_grafik_gorsel9.py::test_kirilim_olcusu_kaldirildi`
+  (`hasattr(grafik, "_kirilim_olcusu")` False + karede `kırılım` izi yok).
 
 ### 43.4 Dar karede (mobil) üst üste binen yazılar
 
@@ -1972,21 +1974,22 @@ demo kataloğu), her biri tek tek kapatıldı.
   `bar_disarida=True` + `uyarilar`a not (eski davranış, sessiz kayıp yok).
 - **Kapatma:** `test_grafik_gorsel9.py::test_alarm_bar_pencere_koordinatina_cevrilir`.
 
-### 43.7 Kırılım ölçüsünün MODU: aday kartında "kırılım" yazmaz
+### 43.7 Kırılım ölçüsü modu — kapsam dışı (43.3 ile birlikte düştü)
 
-- Aday/kritik alarmında fiyat seviyeyi HENÜZ kırmamıştır; ölçü **mesafe** olur:
-  `seviyeye 0,06 · %0,2` (nötr renk). Kırılım sayılan türlerde (teyit / retest /
-  geçersiz + yön biliniyor) **marj** yazılır: `kırılım +0,56` veya `içeride 0,39`.
-- `meta["cizgiler"]["kirilim"]["mod"]` = `marj` | `mesafe`; sayılar
-  `marj`/`mesafe`/`yuzde` alanlarında — kare ile kart aynı olayı anlatır.
+- Ölçü çipi kaldırıldığı için "marj / mesafe" modu da yok: karede ne `kırılım
+  +0,56` ne `seviyeye 0,06` yazılır. Aynı bilgiyi kart verir; kare **geometriyi**
+  gösterir (seviye çizgisi + kırılım mumu + sağ şerit etiketi).
+- Bu bölüm, `43.3`ün silinmesiyle boşalan numarayı korur; geri ekleme yapılırsa
+  43.3'e bakılır (orada kilit testi var).
 
 ### 43.8 Doğrulama
 
-- `pytest -q` → **1678 geçti, 43 atlandı** (yeni dosya: `test_grafik_gorsel9.py`, 18 test).
+- `pytest -q` → **1682 geçti, 43 atlandı** (`test_grafik_gorsel9.py` 12 test; kırılım çipinin
+  7 testi silindi, yerine 1 kilit testi geldi; ayrıca `test_tanimsiz_ad_korumasi.py` 10 test).
 - Demo kataloğu (`scripts/ornek_gorsel_uret.py --senaryo hepsi`) yeniden üretildi;
-  manşet karelerde kırılım ölçüsü çizilir, mum kaplaması %79-93, `mum_cakisan == 0`.
+  manşet karelerde ölçü çipi YOK, mum kaplaması %79-93, `mum_cakisan == 0`.
 - Gerçek önbellek: 12 sembol × 1s/4s/1g taraması → `red` yok, `eksik_katman` yok,
   sağ şeritte `atlanan == 0`.
 - Önce/sonra (aynı veri, aynı kare): AKBNK 1s 85 → 103 mum · mum kaplaması
   %29 → %79 · alarm düşey çizgisi yok → kırılım mumunda; demo `ucgen_teyit`
-  `bant teması 39` → `temas üst 4 / alt 4` ve sağ boşlukta `kırılım +0,56 · %1,0`.
+  `bant teması 39` → `temas üst 4 / alt 4` (sağ boşlukta ölçü çipi yok).

@@ -1893,11 +1893,6 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
             except Exception as hata:
                 log.warning("grafik: alarm katmanı çizilemedi (%s)", hata)
                 eksik.append("alarm")
-            try:                       # kırılım marjı (seviye ↔ kapanış ölçüsü)
-                meta["cizgiler"]["kirilim"] = _kirilim_olcusu(
-                    ax, goruntu, n, sag_bosluk=sag_bosluk, aralik=aralik)
-            except Exception as hata:
-                log.warning("grafik: kırılım ölçüsü çizilemedi (%s)", hata)
             try:
                 _gecersiz_katmani(ax, goruntu, alarm, sag_adaylar, n)
             except Exception as hata:
@@ -3520,120 +3515,6 @@ def _alarm_ciz(ax, alarm: Mapping[str, Any], n: int, butce: float,
             _projeksiyon_ciz(ax, alarm, n)
         except Exception as hata:  # projeksiyon süsü alarm karesini düşürmesin
             log.debug("grafik: hedef projeksiyonu çizilemedi (%s)", hata)
-
-
-def _kirilim_olcusu(ax, goruntu: Mapping[str, Any], n: int, *,
-                    sag_bosluk: int = 0,
-                    aralik: Optional[Sequence[float]] = None) -> Optional[dict[str, Any]]:
-    """KIRILIM MARJI ölçüsü: bant sınırı ile kırılım mumunun kapanışı arası.
-
-    Neden (kullanıcı 2026-10-23): kart "kırılan 407,17 · kapanış 428,25 · %5,2
-    aştı" diyor ama karede kırılmanın NE KADAR olduğu görünmüyordu; 0,56'lık bir
-    aşım 1 px bile etmiyor. Ölçü, sağdaki boşlukta (mumların üzerinde değil)
-    seviye ile kapanış arasına çift uçlu ok + küçük çip koyar.
-
-    Sayı UYDURULMAZ: seviye `alarm["deger"]` (motorun `break_price`ı), kapanış
-    `alarm["kapanis"]`dir (motorun `candle_close_price`ı — kartın yazdığı sayı).
-    Kapanış yoksa karede çizilen mumun kapanışı okunur (same seri, aynı mum).
-
-    İki MOD vardır ve karıştırılmaz:
-      * `kırılım` (teyit/retest/geçersiz + yön biliniyor): kırılım yönünde ne
-        kadar ilerlediği — `kırılım +0,56` / `içeride 0,39`.
-      * `mesafe` (aday/kritik/yön yok): seviyeye ne kadar KALDIĞI —
-        `seviyeye 0,06`. Aday kartında fiyat henüz kırmamıştır; "kırılım +0,06"
-        yazmak yalan olurdu (eski taslakta tam bu hata vardı).
-
-    Dönen sözlük `meta["cizgiler"]["kirilim"]`e yazılır; çizilmeyecekse `None`.
-    """
-    alarm = goruntu.get("alarm") or {}
-    seviye = _gercek(alarm.get("deger"))
-    if seviye is None:
-        return None
-    kapanis = _gercek(alarm.get("kapanis"))
-    bar = _tam(alarm.get("bar"))
-    if kapanis is None:
-        seri = goruntu.get("kapanis") or []
-        if bar is None or not (0 <= bar < len(seri)):
-            return None
-        kapanis = _gercek(seri[bar])
-    if kapanis is None:
-        return None
-    fark = float(kapanis) - float(seviye)
-    if abs(fark) <= 1e-12:
-        return None
-    tur = str(alarm.get("tur") or "")
-    yon = int(_gercek(alarm.get("yon")) or 0)
-    # Kırılım sayılan türler ve yönü bilinen alarm → MARJ; diğerleri → MESAFE.
-    marj_modu = bool(yon in (1, -1) and tur in ("teyit", "retest", "gecersiz"))
-    if not marj_modu:
-        yon = yon or (1 if fark > 0 else -1)
-    # Kırılım YÖNÜNDE ne kadar ilerledi (negatif → bant içine geri döndü).
-    marj = fark if yon > 0 else -fark
-    yuzde = (100.0 * abs(fark) / abs(float(seviye))) if seviye else None
-    # Çizim aralığı dışındaysa (kare kırpılmış) ölçü çizilmez — uydurma yok.
-    if aralik is not None and len(aralik) >= 2:
-        lo, hi = float(aralik[0]), float(aralik[1])
-        if not (lo <= float(seviye) <= hi and lo <= float(kapanis) <= hi):
-            return None
-    gecersiz = tur == "gecersiz"
-    if gecersiz:
-        # GEÇERSİZLEŞME: "kırılım +0,39" yazmak, geçersizleşmiş bir kırılımı
-        # geçerli gibi gösterirdi. Kartla aynı dil: `üstünde 0,39` / `altında …`.
-        etiket = (f"üstünde {sayi(abs(fark))}" if fark >= 0
-                  else f"altında {sayi(abs(fark))}")
-    elif marj_modu:
-        # İşaret YÖNDEN gelir: kırılım yönünde ilerleme (+) / banda geri dönüş (−).
-        etiket = (f"kırılım +{sayi(abs(marj))}" if marj >= 0
-                  else f"içeride {sayi(abs(marj))}")
-    else:
-        # Aday/kritik: fiyat seviyeyi HENÜZ kırmadı → kalan mesafe yazılır.
-        etiket = f"seviyeye {sayi(abs(fark))}"
-    yuzde_metni = f"%{sayi(abs(yuzde), 1)}" if yuzde is not None else ""
-    # Konum: son mumun SAĞINDAKİ boşluk. Boşluk yoksa ölçü çizilmez (mumların
-    # üzerine ok/yazı binmemesi kuralı; `sag_bosluk_mum` 0 iken bu yol kapalı).
-    if int(sag_bosluk) <= 0:
-        return None
-    x_sag = float(n) - 0.4 + float(sag_bosluk)
-    x_ok = min(x_sag - 0.55, float(n) - 0.4 + max(0.9, float(sag_bosluk) * 0.82))
-    alt_y, ust_y = (float(v) for v in ax.get_ylim())
-    if not (alt_y <= float(seviye) <= ust_y and alt_y <= float(kapanis) <= ust_y):
-        return None
-    if not marj_modu:
-        renk = PALET["eksen"]           # ölçü, sinyal rengi değil
-    elif gecersiz or marj < 0:
-        renk = PALET["eksen"]           # geçersiz/geri dönüş: nötr
-    else:
-        renk = (PALET["mum_yukselen"] if yon > 0 else PALET["mum_dusen"])
-    # Kırılım mumunun kapanışından sağ kenara ince noktalı kılavuz: ölçünün üst
-    # ucu hangi mumun kapanışı olduğu görünsün (mum kadraj dışındaysa çizilmez).
-    if bar is not None and 0 <= int(bar) < n:
-        ax.plot([float(bar) + 0.55, x_ok], [float(kapanis), float(kapanis)],
-                color=renk, linewidth=0.6, linestyle=(0, (1, 2)), alpha=0.55,
-                zorder=4.2)
-    ax.annotate("", xy=(x_ok, float(kapanis)), xytext=(x_ok, float(seviye)),
-                arrowprops=dict(arrowstyle="<->", color=renk, lw=1.0, alpha=0.9,
-                                shrinkA=0, shrinkB=0),
-                zorder=6, annotation_clip=False)
-    # Çip: ölçünün ortasında, boşluğun içinde. Hedef kutusu varsa ve aynı
-    # yüksekliğe düşüyorsa yazı okun üstüne/altına kaydırılır (çakışma yok).
-    orta = (float(kapanis) + float(seviye)) / 2.0
-    yazi = f"{etiket}\n{yuzde_metni}".strip()
-    yazi_y = orta
-    hedef = _gercek(alarm.get("hedef"))
-    if hedef is not None and abs(float(hedef) - orta) <= (ust_y - alt_y) * 0.06:
-        yazi_y = max(float(kapanis), float(seviye)) + (ust_y - alt_y) * 0.045
-    ax.annotate(yazi, xy=(x_ok - 0.35, yazi_y), xytext=(0, 0), textcoords="offset points",
-                ha="right", va="center", fontsize=float(SABITLER["sag_serit_yazi_pt"]) - 0.5,
-                color=renk, zorder=9, annotation_clip=False,
-                bbox=dict(boxstyle="round,pad=0.22", facecolor=PALET["chip_zemin"],
-                          edgecolor=renk, linewidth=0.6, alpha=0.95))
-    return {"seviye": round(float(seviye), 6), "kapanis": round(float(kapanis), 6),
-            "mod": "marj" if marj_modu else "mesafe",
-            "marj": round(float(marj), 6) if marj_modu else None,
-            "mesafe": round(abs(float(fark)), 6),
-            "yuzde": (round(float(yuzde), 3) if yuzde is not None else None),
-            "yon": int(yon), "bar": (int(bar) if bar is not None else None),
-            "etiket": yazi.replace("\n", " · ")}
 
 
 def _projeksiyon_ciz(ax, alarm: Mapping[str, Any], n: int) -> bool:
