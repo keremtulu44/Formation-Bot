@@ -9,10 +9,20 @@ from patterns.lifecycle import ArgentEngine
 from patterns.constants import ST_BREAK_FAILED, ST_RETESTING
 
 
-def alert(stock="TCELL", tf="1h", identity="formation-1", direction=-1):
-    return dict(stock_name=stock, timeframe=tf, formation_id=identity,
-                state="KIRILIM_TEYITLI", pattern_name="Alçalan Kama", break_dir=direction,
+def alert(stock="TCELL", tf="1h", identity="formation-1", direction=-1,
+          state="KIRILIM_TEYITLI", pattern="Alçalan Kama", bar=None):
+    veri = dict(stock_name=stock, timeframe=tf, formation_id=identity,
+                state=state, pattern_name=pattern, break_dir=direction,
                 grafik_verisi={"goruntular": [{"tf": tf, "goruntu": {"tf_kisa": tf}}]})
+    if bar is not None:
+        veri["bar_time"] = bar
+    return veri
+
+
+def _bar(box, gun_fark=0, saat="09:30"):
+    """Koşu tarihine göreli bar etiketi (hikâye kapısı 'bugün'e bakar)."""
+    gun = (box.now() + timedelta(days=gun_fark)).date().isoformat()
+    return f"{gun}T{saat}:00+03:00"
 
 
 def owner(events, remote=None):
@@ -95,6 +105,67 @@ def test_public_dedup_is_independent_of_dm(tmp_path):
     assert not box.public_duplicate(alert(tf="4h", direction=1))
     restarted = DeliveryOutbox(owner([]), tmp_path)
     assert restarted.public_duplicate(alert(tf="2h"))
+
+
+def test_hikaye_kapisi_dm_ayni_gun_tf_ve_aile_gozetmez(tmp_path, monkeypatch):
+    """Aynı hisse+yön hikâyesi aynı gün ikinci kez anlatılmaz (kimlik değişse de).
+
+    23 Ekim canlısı: KCHOL 4s Alçalan Üçgen + 2s Alçalan Kama ve ALARK'ın
+    saatlik 4s tekrarları aile/kimlik kapılarından kaçıyordu.
+    """
+    monkeypatch.setenv("TELEGRAM_GRAFIK", "yok")
+    events = []
+    box = DeliveryOutbox(owner(events), tmp_path)
+    assert box.submit(alert(tf="4h", identity="hikaye-ilk", pattern="Alçalan Üçgen",
+                            bar=_bar(box, 0, "09:30")))
+    # Başka TF + başka aile + başka kimlik: eski related() bunu kaçırırdı.
+    assert not box.submit(alert(tf="2h", identity="baska", bar=_bar(box, 0, "11:30")))
+    # Aynı TF yeni kimlik de aynı hikâye.
+    assert not box.submit(alert(tf="4h", identity="yeni-kimlik",
+                                pattern="Alçalan Üçgen", bar=_bar(box, 0, "13:30")))
+    # RETEST ileri gidiştir, gider.
+    assert box.submit(alert(tf="2h", identity="baska", state="RETEST_BASARILI",
+                            bar=_bar(box, 0, "15:30")))
+    # TEYİT, RETEST'ten sonra geri gelemez (TTKOM 23 Ekim sırası).
+    assert not box.submit(alert(tf="1h", identity="ucuncu", bar=_bar(box, 0, "16:30")))
+    # Ters yön yeni hikâyedir.
+    assert box.submit(alert(tf="1h", identity="ters", direction=1,
+                            bar=_bar(box, 0, "16:30")))
+    # Ertesi gün aynı yönde yeni TEYİT serbest (saat de yarına alınır).
+    yarin = box.now() + timedelta(days=1)
+    monkeypatch.setattr(box, "now", lambda: yarin)
+    assert box.submit(alert(tf="4h", identity="ertesi", pattern="Alçalan Üçgen",
+                            bar=_bar(box, 0, "09:30")))
+    assert events == ["text:TCELL"] * 4
+
+
+def test_hikaye_kapisi_public_bayatlik_ve_gecersizlesme(tmp_path, monkeypatch):
+    box = DeliveryOutbox(owner([]), tmp_path)
+    box.remember_public(alert(tf="4h", identity="p-ilk", pattern="Alçalan Üçgen",
+                              bar=_bar(box, 0, "09:30")))
+    # Aile farklı olsa da aynı gün aynı hikâye public'te tekrar etmez.
+    assert box.public_duplicate(alert(tf="2h", identity="p-baska",
+                                      bar=_bar(box, 0, "11:30")))
+    # RETEST ilerlemedir.
+    assert not box.public_duplicate(alert(tf="2h", identity="p-baska",
+                                          state="RETEST_BASARILI",
+                                          bar=_bar(box, 0, "13:30")))
+    # Mutlak bayatlık: dünün gün-içi barı anlık push olamaz; 1g barı olur.
+    assert box.public_duplicate(alert("SISE", tf="2h", identity="eski",
+                                      bar=_bar(box, -1, "11:30")))
+    assert not box.public_duplicate(alert("SISE", tf="1d", identity="gunluk",
+                                          bar=_bar(box, -1, "00:00")))
+    # Geçersizleşme hikâye kapısında asla engellenmez; hikâyeyi kapatır.
+    gecersiz = alert(tf="4h", identity="p-ilk", state="KIRILIM_GECERSIZLESTI",
+                     bar=_bar(box, 0, "15:30"))
+    assert not box.public_duplicate(gecersiz)
+    box.remember_public(gecersiz)
+    assert box.public_duplicate(alert(tf="4h", identity="p-yeni",
+                                      bar=_bar(box, 0, "13:30")))   # bayat tekrar
+    yarin = box.now() + timedelta(days=1)
+    monkeypatch.setattr(box, "now", lambda: yarin)
+    assert not box.public_duplicate(alert(tf="4h", identity="p-yeni",
+                                          bar=_bar(box, 0, "09:30")))
 
 
 def test_no_network_side_effect_if_durable_write_fails(tmp_path, monkeypatch):

@@ -394,14 +394,27 @@ def test_tarama_turu_sonunda_bulten_bosaltilir(monkeypatch):
 
 # --- 6) Bülten = DM kartıyla aynı 7 blok (2026-10-22) -----------------------
 
-def _zengin_olay(**ek):
-    """Kartın 7 bloğunu besleyen tam kayıt (bülten biçimi)."""
-    veri = _olay(break_dir=1, critical_price_level=39.26,
+def _zengin_olay(stock="ISMEN", **ek):
+    """Kartın 7 bloğunu besleyen tam kayıt (bülten biçimi).
+
+    Bar tarihi koşu gününe göre üretilir; aksi halde gün-içi olayları geçmiş
+    günün haberi sayan hikâye/bayatlık kuralı bu "taze olay" fikstürünü haklı
+    olarak reddeder ve test takvimden geçen gün sayısına bağlı kırılır.
+    Sembol açık parametredir; **ek içindeki "stock" anahtarı kayıt alan adı
+    ("stock_name") olmadığı için sessizce yutulur ve farklı hisse sanılan
+    olaylar aynı hikâyeye düşerdi.
+    """
+    from datetime import datetime
+
+    from config import ISTANBUL_TZ
+
+    bugun = datetime.now(ISTANBUL_TZ).date().isoformat()
+    veri = _olay(stock, break_dir=1, critical_price_level=39.26,
                  confidence_score=81, break_strength=100, age_bars=94,
                  band_baslangic="2026-09-30T16:30:00+03:00", retest_seen=False,
                  mtf_destek=True, upper_now=39.96,
-                 bar_time="2026-10-21T13:30:00+03:00",
-                 bar_kapanis="2026-10-21T17:30:00+03:00",
+                 bar_time=f"{bugun}T13:30:00+03:00",
+                 bar_kapanis=f"{bugun}T17:30:00+03:00",
                  candle_close_price=39.60,
                  domain_bolumleri={
                      "engel": ["▲ direnç · boşluk 4s 41,90 +%5,8"],

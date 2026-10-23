@@ -3101,7 +3101,11 @@ class TelegramNotifier:
                         stock, pattern, timeframe, state)
             return False
         data["state"] = state
-        if self.enabled and (self._delivery.already_done(data) or self._delivery.is_cross_duplicate(data)):
+        if self.enabled and (self._delivery.already_done(data)
+                             or self._delivery.is_cross_duplicate(data)
+                             or self._delivery.is_story_duplicate(data)):
+            # Hikâye tekrarı da kimlik tekrarı gibi NİHAİ reddir (acil
+            # kuyruğa girmez): aynı hisse+yön hikâyesi o gün zaten anlatıldı.
             self._son_engel = "tekrar"
             self.engeller["tekrar"] += 1
             return False

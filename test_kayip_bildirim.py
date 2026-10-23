@@ -196,12 +196,16 @@ def test_engel_kalkinca_kuyruk_gonderilir(monkeypatch):
 def test_kapanis_ozeti_kuyruk_alarmini_bildirir_ve_tekrarini_muhurler(monkeypatch):
     n, _ = _aktif(monkeypatch)
     n.max_gunluk = 0
+    # Bar tarihi koşu gününden üretilir: sabit geçmiş gün, gün-içi bayat
+    # olayları nihai "tekrar" sayan hikâye kapısına takılır ve bu testin
+    # ölçtüğü günlük kap/kuyruk yolu hiç çalışmazdı.
+    bugun = datetime.now(ISTANBUL_TZ)
     veri = _veri()
     veri.update({
         "formation_id": "formation-123",
-        "bar_time": "2026-10-15T17:00:00+03:00",
-        "bar_kapanis": "2026-10-15T18:00:00+03:00",
-        "bar_metni": "🕒 1 saatlik mum 15.10 17:00 → 18:00 kapandı",
+        "bar_time": bugun.strftime("%Y-%m-%dT17:00:00+03:00"),
+        "bar_kapanis": bugun.strftime("%Y-%m-%dT18:00:00+03:00"),
+        "bar_metni": f"🕒 1 saatlik mum {bugun:%d.%m} 17:00 → 18:00 kapandı",
     })
     assert n.send(veri) is False
     kayitlar = n.kuyruk_ozet_kayitlari()
@@ -209,7 +213,7 @@ def test_kapanis_ozeti_kuyruk_alarmini_bildirir_ve_tekrarini_muhurler(monkeypatc
 
     metin = main_mod._format_urgent_queue_summary(kayitlar)
     assert "THYAO 1s" in metin and "Kırılım teyitli" in metin
-    assert "15.10 17:00" in metin and "kuyruk " in metin
+    assert f"{bugun:%d.%m} 17:00" in metin and "kuyruk " in metin
 
     assert n.kuyruk_ozetleneni_tuket(kayitlar) == 1
     assert n.kuyruk_durumu()["bekleyen"] == 0

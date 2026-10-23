@@ -68,6 +68,79 @@ def related(a, b):
             and a.get("break_dir") in (-1, 1))
 
 
+# --- Hikâye kapısı -----------------------------------------------------------
+# Kimlik (formation_id = uuid4) her yeniden tespitte değiştiği için ne DM
+# mührü ne public mührü "aynı hissenin aynı yöndeki hikâyesi" tekrarını
+# kesebiliyor (ölçüm: docs/arastirma/KOVA_FAZI_OLCUMU_2026-10-23.md).
+# Bu kapı kimliğe değil hisse+yön+durum aşamasına bakar:
+#   * TEYİT (1) -> RETEST (2) ileri gidiş serbest, geri geliş (RETEST'ten
+#     sonra tekrar TEYİT) aynı formasyonda her zaman / farklı formasyonda
+#     aynı olay-gününde engellenir.
+#   * Aynı aşama: aynı formation_id veya aynı olay-günü (bar tarihi) ikinci
+#     kez basılmaz — TF ve desen ailesi farkı gözetilmez (KCHOL 4s üçgen +
+#     2s kama aynı hikâyedir).
+#   * Adayın barı, kabul edilmiş bir hikâye olayından yeni değilse replay/
+#     kopyadır (restart sonrası eski mumun yeniden gelişi).
+#   * Mutlak bayatlık: gün-içi TF olayı ancak kendi İstanbul gününde anlık
+#     push olur; 1g için pencere 7 gündür (Cuma barı Pazartesi sabahı meşru).
+#   * KIRILIM_GECERSIZLESTI asla burada engellenmez (geri almanin kendi
+#     "önce teyit gitti mi" kapilari var); ama hikâyeyi kapatır: kapatış
+#     anina kadarki bayat olaylar düşer, sonrasındaki taze hikâye serbesttir.
+# Adayda bar zamani yoksa kapı ÇALIŞMAZ (eski davranış korunur): üretim
+# payload'i bar_time'i her zaman taşır; zamansız kayit "yeni mi eski mi"
+# sorusunu cevaplayamaz, tahminle sinyal düşürülmez.
+_HIKAYE_ASAMA = {"KIRILIM_TEYITLI": 1, "RETEST_BASARILI": 2}
+_GECERSIZ_STATE = "KIRILIM_GECERSIZLESTI"
+
+
+def _zaman_coz(deger):
+    """datetime/Timestamp/ISO-metin -> tz-aware datetime (yoksa None)."""
+    if deger is None:
+        return None
+    if isinstance(deger, dict) and "__delivery_datetime__" in deger:
+        deger = deger.get("__delivery_datetime__")
+    if isinstance(deger, datetime):
+        dt = deger
+    elif isinstance(deger, date):
+        dt = datetime(deger.year, deger.month, deger.day)
+    elif hasattr(deger, "to_pydatetime"):
+        try:
+            dt = deger.to_pydatetime()
+        except Exception:
+            return None
+    elif isinstance(deger, str):
+        try:
+            dt = datetime.fromisoformat(deger.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if dt.tzinfo is None:
+        # Bar etiketleri İstanbul duvar saatidir; tz'siz gelirse öyle oku.
+        from config import ISTANBUL_TZ
+        try:
+            dt = ISTANBUL_TZ.localize(dt)
+        except Exception:
+            dt = dt.replace(tzinfo=ISTANBUL_TZ)
+    return dt
+
+
+def _olay_zamani(data):
+    for alan in ("bar_time", "timestamp", "bar_kapanis"):
+        dt = _zaman_coz((data or {}).get(alan))
+        if dt is not None:
+            return dt
+    return None
+
+
+def _yon(data):
+    try:
+        yon = int((data or {}).get("break_dir"))
+    except (TypeError, ValueError):
+        return 0
+    return yon if yon in (-1, 1) else 0
+
+
 class DeliveryOutbox:
     def __init__(self, notifier, directory):
         self.owner = notifier
@@ -160,8 +233,80 @@ class DeliveryOutbox:
                     return True
             return False
 
+    def _story_duplicate(self, data, oncekiler):
+        """Hisse+yön hikâyesi bu olayı zaten anlattı mi? (`oncekiler`: (data, created)).
+
+        Saf okuma: yan etki yok, mühür yazmaz. Kurallar modül başındaki
+        "Hikâye kapısı" bloğunda. `created` yalnız eski kayitlarda bar
+        zamanı yoksa yedek zaman olarak kullanılır.
+        """
+        state = str((data or {}).get("state") or "").strip().upper()
+        if state == _GECERSIZ_STATE or state not in _HIKAYE_ASAMA:
+            return False
+        stock = str(data.get("stock_name") or "").strip().upper()
+        yon = _yon(data)
+        aday_zaman = _olay_zamani(data)
+        if not stock or not yon or aday_zaman is None:
+            return False
+        tf = str(data.get("timeframe") or "").strip().lower()
+        bugun = self.now().date()
+        # Mutlak bayatlık: anlık push eski günün haberi olamaz.
+        if tf in ("1h", "2h", "4h") and aday_zaman.date() < bugun:
+            return True
+        if tf == "1d" and (bugun - aday_zaman.date()).days > 7:
+            return True
+        kapatis = None            # son KIRILIM_GECERSIZLESTI (hikâye kapanışı)
+        ilgili = []               # (zaman, asama, formation_id)
+        for eski, created in oncekiler:
+            if str((eski or {}).get("stock_name") or "").strip().upper() != stock:
+                continue
+            if _yon(eski) != yon:
+                continue
+            eski_zaman = _olay_zamani(eski) or _zaman_coz(created)
+            if eski_zaman is None:
+                continue
+            eski_state = str(eski.get("state") or "").strip().upper()
+            if eski_state == _GECERSIZ_STATE:
+                if kapatis is None or eski_zaman > kapatis:
+                    kapatis = eski_zaman
+            elif eski_state in _HIKAYE_ASAMA:
+                ilgili.append((eski_zaman, _HIKAYE_ASAMA[eski_state],
+                               str(eski.get("formation_id") or "")))
+        if kapatis is not None:
+            if aday_zaman <= kapatis:     # kapanmış hikâyenin bayat tekrarı
+                return True
+            ilgili = [k for k in ilgili if k[0] > kapatis]
+        asama = _HIKAYE_ASAMA[state]
+        aday_fid = str(data.get("formation_id") or "")
+        for eski_zaman, eski_asama, eski_fid in ilgili:
+            if aday_zaman <= eski_zaman:  # aynı/eski bar: replay veya kopya
+                return True
+            ayni_kimlik = bool(aday_fid and eski_fid and aday_fid == eski_fid)
+            ayni_gun = aday_zaman.date() == eski_zaman.date()
+            if asama < eski_asama and (ayni_kimlik or ayni_gun):
+                return True               # geri geliş: RETEST sonrası TEYİT
+            if asama == eski_asama and (ayni_kimlik or ayni_gun):
+                return True               # aynı aşama ikinci kez anlatılmaz
+        return False
+
+    def is_story_duplicate(self, data):
+        """DM hikâye kapısı: teslim defterindeki (bekleyen dahil) satırlar kaynak."""
+        with self.lock:
+            return self._story_duplicate(
+                data, [(r.get("data") or {}, r.get("created"))
+                       for r in self.state["rows"]])
+
     def public_duplicate(self, data):
         with self.lock:
+            # Hikâye kapısı TF/aile gözetmez; eski related/alias mantığı
+            # (bar zamanı taşımayan kayıtlar dahil) onun ALTINDA korunur.
+            if self._story_duplicate(
+                    data, [(r.get("data") or {}, r.get("created"))
+                           for r in self.state["public"]]):
+                log.info("Public hikâye tekrarı engellendi: %s %s %s",
+                         data.get("stock_name"), data.get("timeframe"),
+                         data.get("state"))
+                return True
             for row in self.state["public"]:
                 aliases = row.get("aliases", [])
                 if data.get("formation_id") and any(
@@ -181,8 +326,12 @@ class DeliveryOutbox:
         with self.lock:
             self.state["public"] = [r for r in self.state["public"] if
                 (self.now() - datetime.fromisoformat(r["created"])).total_seconds() < 7 * 86400]
+            # formation_id + bar_time: hikâye kapısının kimlik/bar karşılaştırması
+            # bunlara bakar; eski kayıtlarda yoksa kapı o kayıt için eski
+            # davranışa düşer (created zamanı yedek olur).
             self.state["public"].append({"data": {k: data.get(k) for k in
-                ("stock_name", "timeframe", "state", "break_dir", "pattern_name")},
+                ("stock_name", "timeframe", "state", "break_dir", "pattern_name",
+                 "formation_id", "bar_time")},
                 "created": self.now().isoformat()})
             self.save()
 
@@ -193,7 +342,7 @@ class DeliveryOutbox:
             if row is not None and row["done"]:
                 return False
             if row is None:
-                if self.is_cross_duplicate(data):
+                if self.is_cross_duplicate(data) or self.is_story_duplicate(data):
                     return False
                 row = {"id": identity, "created": self.now().isoformat(),
                        "data": freeze(data), "text_sent": False, "done": False,
