@@ -483,6 +483,7 @@ def test_public_kuyruk_json_serilestirilebilir(grup_notifier):
 # --- 8) Public görsel: 1 kare + üst TF --------------------------------------
 
 def test_public_grafik_bir_kare_arti_ust_tf(monkeypatch, grup_notifier, tmp_path):
+    """İki kare TEK albümde gider (ayrı sendPhoto Telegram'da birleşmez)."""
     import transport.telegram as tt
 
     n = grup_notifier
@@ -493,19 +494,22 @@ def test_public_grafik_bir_kare_arti_ust_tf(monkeypatch, grup_notifier, tmp_path
         yollar.append(str(yol))
     cagrilar = []
 
-    def sahte_foto(yol, chat_id=None, token=None, notifier=None, caption="", **kw):
-        cagrilar.append({"yol": yol, "chat_id": chat_id, "caption": caption})
+    def sahte_album(yollar_, captions=None, chat_id=None, token=None,
+                    notifier=None, **kw):
+        cagrilar.append({"yollar": list(yollar_), "chat_id": chat_id,
+                         "captions": list(captions or [])})
         return True, "ok"
 
-    monkeypatch.setattr(tt, "foto_gonder", sahte_foto)
+    monkeypatch.setattr(tt, "medya_grubu_gonder", sahte_album)
     kayit = _zengin_olay()
     n._public_grafik[str((("ISMEN", "4h", "KIRILIM_TEYITLI")))] = {
         "goruntular": [{"tf": "4h", "goruntu": {"yol": yollar[0]}},
                        {"tf": "1d", "goruntu": {"yol": yollar[1]}}]}
     assert n.public_grafik_gonder(kayit) == 2
-    assert len(cagrilar) == 2
-    assert all(c["chat_id"] == "-1001234567890" for c in cagrilar)
-    assert "üst zaman dilimi" in cagrilar[1]["caption"]
+    assert len(cagrilar) == 1                       # tek mesaj = tek albüm
+    assert cagrilar[0]["yollar"] == yollar          # sıra: olay → üst TF
+    assert cagrilar[0]["chat_id"] == "-1001234567890"
+    assert "üst zaman dilimi" in cagrilar[0]["captions"][1]
     # Dosyalar gönderimden sonra silinir (disk çöpü kalmaz).
     import os
     assert not any(os.path.exists(y) for y in yollar)
@@ -535,13 +539,16 @@ def test_public_grafik_kareler_diskten_uretilir(monkeypatch, grup_notifier, tmp_
 
     cagrilar = []
 
-    def sahte_foto(yol, chat_id=None, token=None, notifier=None, caption="", **kw):
-        cagrilar.append({"yol": yol, "chat_id": chat_id, "caption": caption,
-                         "var": __import__("os").path.exists(yol)})
+    def sahte_album(yollar_, captions=None, chat_id=None, token=None,
+                    notifier=None, **kw):
+        import os as _os
+        cagrilar.append({"yollar": list(yollar_), "chat_id": chat_id,
+                         "captions": list(captions or []),
+                         "var": all(_os.path.exists(y) for y in yollar_)})
         return True, "ok"
 
     monkeypatch.setattr(grafik, "kareyi_yaz", sahte_kareyi_yaz)
-    monkeypatch.setattr(tt, "foto_gonder", sahte_foto)
+    monkeypatch.setattr(tt, "medya_grubu_gonder", sahte_album)
 
     kayit = _zengin_olay(formation_id="frm-1")
     n._public_grafik[n._public_kuyruk_anahtari(kayit)] = {
@@ -551,10 +558,10 @@ def test_public_grafik_kareler_diskten_uretilir(monkeypatch, grup_notifier, tmp_
     }
     assert n.public_grafik_gonder(kayit) == 2
     assert cizilen == ["4h", "1d"]                 # kareler gerçekten çizildi
-    assert len(cagrilar) == 2
-    assert all(c["var"] for c in cagrilar)         # gönderim ANINDA dosya vardı
-    assert all(c["chat_id"] == "-1001234567890" for c in cagrilar)
-    assert "üst zaman dilimi" in cagrilar[1]["caption"]
+    assert len(cagrilar) == 1                      # tek albüm çağrısı
+    assert cagrilar[0]["var"]                      # gönderim ANINDA dosyalar vardı
+    assert cagrilar[0]["chat_id"] == "-1001234567890"
+    assert "üst zaman dilimi" in cagrilar[0]["captions"][1]
     assert n.public_grafik_gonderilen == 2
     assert n.public_grafik_hatasi == 0
     import os

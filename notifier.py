@@ -3283,12 +3283,23 @@ class TelegramNotifier:
         return str(yol or "")
 
     def public_grafik_gonder(self, kayit: Dict) -> int:
-        """Public kaydının karelerini gruba gönderir; `(gönderilen sayısı)`.
+        """Public kaydının karelerini gruba **tek albüm** olarak gönderir.
 
         2026-10-22 kararı: public görseli **1 kare + üst zaman dilimi** karesidir
         (DM 4 kare alır). Kareler bildirim anında üretilir, burada çizilip
         gönderilir; dosya her durumda silinir. Görsel hiçbir koşulda metni/
         bülteni düşürmez.
+
+        NEDEN `sendMediaGroup` (2026-10-23): eskiden kareler ayrı ayrı
+        `sendPhoto` ile gidiyordu. Telegram Bot API'de iki ayrı `sendPhoto`
+        çağrısı, aralarında ne kadar kısa süre olursa olsun, İSTEMCİDE
+        birleştirilmez — albüm yalnız `sendMediaGroup` ile oluşur (gruplama
+        istemci tarafında değil, API çağrısının kendisinde tanımlıdır). Bu yüzden
+        grupta "normal olay" ve "üst TF" iki ayrı mesaj olarak görünüyordu ve
+        araya `_public_pace()` beklemesi de giriyordu. Artık iki kare tek
+        albümde, tek çağrıda gider: sıra (olay → üst TF) korunur, caption her
+        karenin altında kalır. Tek kare kalırsa `foto_gonder` kullanılır
+        (Telegram albüm için en az 2 öğe ister).
         """
         if not isinstance(kayit, dict):
             return 0
@@ -3300,52 +3311,61 @@ class TelegramNotifier:
         if not hedef or not getattr(self, "public_enabled", False):
             return 0
         try:
-            from transport.telegram import foto_gonder
+            from transport.telegram import foto_gonder, medya_grubu_gonder
         except Exception:  # pragma: no cover - taşıma yoksa görsel de yok
             return 0
-        gonderilen = 0
         tf = TF_KISA.get(str(kayit.get("timeframe") or "").lower(),
                          str(kayit.get("timeframe") or ""))
         bas = f"{str(kayit.get('stock_name') or '').upper()} {tf}".strip()
         desen = str(kayit.get("pattern_name") or "").strip()
-        for sira, kare in enumerate(list(veri.get("goruntular") or [])[:2]):
-            kare_tf = TF_KISA.get(str((kare or {}).get("tf") or "").lower(),
-                                  str((kare or {}).get("tf") or ""))
-            try:
-                yol = self._public_kare_png(kare)
-            except Exception as hata:  # noqa: BLE001 - görsel akışı düşürmesin
-                yol = ""
-                logger.warning("public karesi çizilemedi (%s %s): %s: %s",
-                               kayit.get("stock_name"), kare_tf,
-                               type(hata).__name__, hata)
-            if not yol:
-                self.public_grafik_hatasi += 1
-                self.grafik_atlanan_hata += 1
-                self.grafik_son_neden = "public: kare üretilemedi"
-                continue
-            caption = (f"{bas} · {desen}" if sira == 0 and desen
-                       else f"{bas} · {kare_tf} üst zaman dilimi")
-            try:
-                self._public_pace()
-                ok, aciklama = foto_gonder(yol, chat_id=hedef, notifier=self,
-                                           caption=caption[:1024])
-                if ok:
-                    gonderilen += 1
-                    self.public_grafik_gonderilen += 1
-                    self.grafik_gonderilen += 1
-                else:
+        yollar, captionlar = [], []
+        try:
+            for sira, kare in enumerate(list(veri.get("goruntular") or [])[:2]):
+                kare_tf = TF_KISA.get(str((kare or {}).get("tf") or "").lower(),
+                                      str((kare or {}).get("tf") or ""))
+                try:
+                    yol = self._public_kare_png(kare)
+                except Exception as hata:  # noqa: BLE001 - görsel akışı düşürmesin
+                    yol = ""
+                    logger.warning("public karesi çizilemedi (%s %s): %s: %s",
+                                   kayit.get("stock_name"), kare_tf,
+                                   type(hata).__name__, hata)
+                if not yol:
                     self.public_grafik_hatasi += 1
-                    logger.warning("public karesi gönderilemedi: %s",
-                                   redact_sensitive_text(str(aciklama), self.token)[:160])
-            except Exception as hata:  # noqa: BLE001 - görsel akışı düşürmesin
-                self.public_grafik_hatasi += 1
-                logger.debug("public karesi hatası: %s: %s", type(hata).__name__, hata)
-            finally:
+                    self.grafik_atlanan_hata += 1
+                    self.grafik_son_neden = "public: kare üretilemedi"
+                    continue
+                yollar.append(yol)
+                captionlar.append((f"{bas} · {desen}" if sira == 0 and desen
+                                   else f"{bas} · {kare_tf} üst zaman dilimi")[:1024])
+            if not yollar:
+                return 0
+            # Tek çağrı = tek albüm. Pace albümden ÖNCE, kareler arasında DEĞİL.
+            self._public_pace()
+            if len(yollar) == 1:
+                ok, aciklama = foto_gonder(yollar[0], chat_id=hedef, notifier=self,
+                                           caption=captionlar[0])
+            else:
+                ok, aciklama = medya_grubu_gonder(yollar, captions=captionlar,
+                                                  chat_id=hedef, notifier=self)
+            if ok:
+                self.public_grafik_gonderilen += len(yollar)
+                self.grafik_gonderilen += len(yollar)
+                return len(yollar)
+            self.public_grafik_hatasi += 1
+            logger.warning("public karesi gönderilemedi: %s",
+                           redact_sensitive_text(str(aciklama), self.token)[:160])
+            return 0
+        except Exception as hata:  # noqa: BLE001 - görsel akışı düşürmesin
+            self.public_grafik_hatasi += 1
+            logger.debug("public karesi hatası: %s: %s", type(hata).__name__, hata)
+            return 0
+        finally:
+            for yol in yollar:
                 try:
                     os.remove(yol)
                 except (OSError, TypeError):
                     pass
-        return gonderilen
 
     def grafik_dosya_gonder(self, yol, caption: str = "") -> tuple:
         """Bir PNG'yi DM'e gönderir ve dosyayı SİLER (§4); `(ok, aciklama)`.
