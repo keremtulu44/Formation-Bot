@@ -125,10 +125,12 @@ def tf_frame(sembol: str, timeframe: str, kok: str | Path | None = None) -> pd.D
     else:
         from data import resample_ohlcv
 
-        # DatetimeIndex KORUNARAK verilir: resample_ohlcv seans hizasını
-        # `df.index[0].hour/minute` değerinden çıkarır. reset_index() ile
-        # int index verilirse "'int' object has no attribute 'hour'" hatası
-        # oluşur ve fonksiyon boş DataFrame döndürür (sessiz veri kaybı).
+        # DatetimeIndex KORUNARAK verilir: resample_ohlcv kova çapasını
+        # İstanbul saatine göre SABİT 09:30'a bağlar (FAZ düzeltmesi,
+        # 2026-10-23); tz bilgisi bunun için şarttır. UTC girdi, çapa
+        # İstanbul'da hesaplanıp UTC'ye geri çevrilerek aynen korunur.
+        # Int index verilirse fonksiyon boş DataFrame döndürür
+        # (sessiz veri kaybı) — o yüzden index'e dokunulmuyor.
         frame = resample_ohlcv(ham, timeframe)
         if not isinstance(frame.index, pd.DatetimeIndex):
             if "timestamp" in frame.columns:
