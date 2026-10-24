@@ -172,3 +172,12 @@ python scripts/puan_tarama.py   --girdi var/replay/gozlemler177.csv
 ```
 
 Hiçbiri üretim koduna, `bot_data/` dizinine veya Telegram'a dokunmaz.
+
+---
+
+## Ek — 2026-10-25 fazla analizi
+
+Formasyonun kendi katkısı ayrıştırıldı; ayrıntı `FAZLA_ANALIZI_2026-10-25.md`.
+Özet: belirleyici olan aile (kama +4,1 / üçgen −1,9; fark +6,1 puan), aile × trend
+uyumu (kama & MTF 4 → +10,3) ve giriş mesafesi (aile içi Q5−Q1 −7,0). Kalite puanı
+bilgi taşımıyor; retest değişkeni gelecek bilgisi içeriyor (−19,9 ama kullanılamaz).
