@@ -86,3 +86,6 @@ arastirma_cikti/
 
 # Koşu kilidi (runtime artefakt)
 *.kilit
+
+# Replay olcum ara ciktilari (yeniden uretilebilir, Git e girmez)
+var/
