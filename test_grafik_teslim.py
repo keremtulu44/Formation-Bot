@@ -605,7 +605,10 @@ def test_komut_grafik_gercek_onbellkten_kare_gonderir(monkeypatch):
         send_text=lambda m: (metinler.append(m) or True, ""),
         grafik_toplu_gonder=toplu)
     _komut_testini_bitir(monkeypatch, "AKBNK 4s", sahte)
-    assert metinler == []                    # başarıda ayrı metin yok
+    # 2026-10-23: albümden SONRA tek özet metni gider; hisse metnin başında.
+    assert len(metinler) == 1, metinler
+    assert metinler[0].splitlines()[0] == "📈 AKBNK · grafik hazır"
+    assert "4s" in metinler[0].splitlines()[1]
     yol, caption, var_mi = yollar[0]
     assert var_mi and caption.startswith("AKBNK · 4s") and "mum" in caption
     assert not os.path.exists(yol)
@@ -628,9 +631,13 @@ def test_komut_grafik_dort_tf_tek_olay_ozeti(monkeypatch):
         send_text=lambda m: (metinler.append(m) or True, ""),
         grafik_toplu_gonder=toplu)
     _komut_testini_bitir(monkeypatch, "AKBNK", sahte)
-    # 4 TF → TEK albüm (araya metin girmez); başarıda ayrı metin yok
+    # 4 TF → TEK albüm (araya metin girmez) + albümden sonra tek özet metni
     assert len(albumler) == 1 and len(albumler[0]) == 4
-    assert len(yollar) == 4 and metinler == []
+    assert len(yollar) == 4
+    assert len(metinler) == 1, metinler
+    assert metinler[0].splitlines()[0] == "📈 AKBNK · grafik hazır"
+    for kisa in ("1s", "2s", "4s", "1g"):
+        assert kisa in metinler[0], metinler[0]
     assert [c.split(" · ")[1] for c in albumler[0]] == ["1s", "2s", "4s", "1g"]
     assert all(not os.path.exists(yol) for yol in yollar)
 
@@ -913,19 +920,20 @@ def test_bağlam_güncellemesi_kare_getirmez(notifier, grafik_acik, monkeypatch)
 # --------------------------------------------------- kartın yapı satırı karenin üstünde (L11)
 
 def test_yapı_satırı_kart_biçimleyicisinden_birebir_alınır(monkeypatch):
-    """Kare kendi cümlesini KURMAZ: kartın satırı gelir, yalnız `• ` öneki düşer."""
+    """Kare kendi cümlesini KURMAZ: kartın `◈` satırı gelir, yalnız im düşer."""
     görülen: dict = {}
 
     class Sahte:
         @staticmethod
         def domain_bolumleri(sonuclar, referans, *, stil, alarm_tf):
             görülen.update(sonuclar=sonuclar, referans=referans, stil=stil, alarm_tf=alarm_tf)
-            return {"yapi": ["• 4s yapı: dış ↓geçiş · iç ↓geçiş", "  CHoCH ↓ 72,20 · iç"]}
+            return {"yapi_ozet": ["◈ 4s yön aşağı (iç ve dış yapı)"],
+                    "yapi": ["• 4s yapı: dış ↓geçiş · iç ↓geçiş"]}
 
     monkeypatch.setitem(sys.modules, "notification_context", Sahte)
     assert grafik._yapı_satırı({"market_structure": object()}, "4h", 70.9) == \
-        "4s yapı: dış ↓geçiş"
-    assert görülen["stil"] == "klasik" and görülen["alarm_tf"] == "4h"
+        "4s yön aşağı (iç ve dış yapı)"
+    assert görülen["stil"] == "kart" and görülen["alarm_tf"] == "4h"
     assert görülen["referans"] == 70.9
     assert list(görülen["sonuclar"]) == ["4h"]      # {tf: çıktı} sarmalayıcısı veriliyor
 
@@ -981,8 +989,9 @@ def test_gerçek_motorda_kart_satırı_karede_de_var(tf):
         f"tf = {tf!r};"
         "fr, _ = cerceve_getir('AKBNK', tf, 'bot_data', False);"
         "res = run_domain_engines('AKBNK', tf, fr.copy(deep=True));"
-        "kap = domain_bolumleri({tf: res}, float(fr['close'].iloc[-1]), stil='klasik',"
-        " alarm_tf=tf).get('yapi') or [];"
+        "b = domain_bolumleri({tf: res}, float(fr['close'].iloc[-1]), stil='kart',"
+        " alarm_tf=tf);"
+        "kap = (b.get('yapi_ozet') or b.get('yapi') or []);"
         f"out = kare_uret('AKBNK', tf, veri_dizin='bot_data', zone=True, mum=120,"
         " cikti='/tmp/fb_test_yapi.png');"
         "print(json.dumps({'kart': [x.strip() for x in kap], "
@@ -994,12 +1003,12 @@ def test_gerçek_motorda_kart_satırı_karede_de_var(tf):
                                 "PYTHONPATH": str(KOK)})
     assert cevap.returncode == 0, cevap.stderr[-600:]
     veri = json.loads(cevap.stdout.strip().splitlines()[-1])
-    kare = [x for x in (veri["kare"] or []) if "yapı:" in x]
+    kare = [x for x in (veri["kare"] or []) if "yön " in x]
     assert kare, veri
-    # Tek fark sözleşmeli: kart `• ` ile madde imi basıyor, kare imi atmıyor.
+    # Tek fark sözleşmeli: kart `◈` imini basıyor, kare imi atmıyor.
     assert veri["kart"], veri
-    assert grafik._grafik_yapi_metni(veri["kart"][0].lstrip("• ")) == kare[0]
-    assert "iç " not in kare[0]
+    assert grafik._grafik_yapi_metni(
+        veri["kart"][0].strip().lstrip("◈•").strip()) == kare[0]
 
 
 @pytest.mark.parametrize("kod", [200, 403])

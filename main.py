@@ -44,7 +44,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   islem_gunu_mu,
                   son_kapanan_mum_ani, time_until_next_open, is_bist_open,
-                  resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
+                  resample_all_timeframes, resample_ohlcv, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_last_bar,
                   select_yfinance_1h_period, tamamlanmis_mumlar,
                   mum_kapanis_ani, bar_kapandi_mi)
@@ -2113,13 +2113,54 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
                     f"⚠️ Grafik isteği kısmen tamamlandı: {istek['hisse']} · "
                     f"{time.monotonic() - baslangic:.1f} sn\n" + "\n".join(ozetler),
                     getattr(notifier, "token", "")))
-            # Hepsi başarılıysa ayrı metin yok: albüm kendi başına yanıttır.
+            else:
+                # Albümün kendisi görsel; hangi hisse/TF olduğunu söyleyen tek
+                # metin mesajı ayrıca gider (2026-10-23 kullanıcı isteği).
+                bildir(redact_sensitive_text(
+                    _grafik_ozet_metni(istek["hisse"], istek["tfler"], basarili,
+                                       time.monotonic() - baslangic, istek),
+                    getattr(notifier, "token", "")))
             logger.info("/grafik %s bitti: %d/%d kare, %.1f sn", istek["hisse"], basarili,
                         len(istek["tfler"]), time.monotonic() - baslangic)
     finally:
         zamanlayici.cancel()
         with bildirim_kilidi:
             tamam.set()
+
+
+def _grafik_ozet_metni(hisse: str, tfler, adet: int, sure: float,
+                       istek: dict) -> str:
+    """`/grafik` başarı metni: hisse EN BAŞTA, seçimler arkada (2026-10-23).
+
+    Kullanıcı: "grafik çağırınca hisse metninde gelsin, düzenli şekilde".
+    Albüm tek başına yanıttı ve hangi hisseye ait olduğunu söyleyen metin
+    yoktu. Metin iki satırdır ve satır başına 283 px bütçesine sığar; sığmayan
+    süs (görünüm seçimleri, süre) sırayla düşer — hisse ve TF listesi kalır.
+    """
+    import telegram_measure as _tm
+    modlar = []
+    if istek.get("sade") is True:
+        modlar.append("sade")
+    elif istek.get("sade") is False:
+        modlar.append("detay")
+    if istek.get("gorunum"):
+        modlar.append(str(istek["gorunum"]))
+    if istek.get("mobil"):
+        modlar.append("mobil")
+    tf_listesi = [_tf_kisa(t) for t in tfler]
+    sure_metni = f"{sure:.1f} sn".replace(".", ",")
+    adaylar = [
+        " · ".join(tf_listesi + [f"{adet} kare", sure_metni] + modlar),
+        " · ".join(tf_listesi + [f"{adet} kare"] + modlar),
+        " · ".join(tf_listesi + modlar),
+        " · ".join(tf_listesi),
+    ]
+    ikinci = adaylar[-1]
+    for aday in adaylar:
+        if _tm.genislik(aday) <= _tm.SATIR_BUTCE:
+            ikinci = aday
+            break
+    return f"📈 {hisse} · grafik hazır\n{ikinci}"
 
 
 def _kare_altyazisi(hisse: str, tf: str, meta: dict) -> str:
@@ -3167,13 +3208,32 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 )
                                 # MS arıza sayacı (yalnız /durum'da görünür).
                                 _ms_hata_kaydet(outputs, stock)
-                                payload['domain_context'] = format_domain_context(
-                                    outputs,
-                                    reference_price=candle_close_price,
-                                    alarm_tf=tf_name,
-                                    yalniz_tf=(notification_state
-                                               == "KIRILIM_GECERSIZLESTI"),
-                                )
+                                # Klasik bağlam metni KENDİ try'ında: bu metin
+                                # üretilemese bile kart bölümleri (aşağıda) karta
+                                # girmeli. 23 Eki 2026: tek istisna ikisini birden
+                                # düşürüyor, canlı kart "sade" kalıyordu.
+                                try:
+                                    payload['domain_context'] = format_domain_context(
+                                        outputs,
+                                        reference_price=candle_close_price,
+                                        alarm_tf=tf_name,
+                                        yalniz_tf=(notification_state
+                                                   == "KIRILIM_GECERSIZLESTI"),
+                                    )
+                                except Exception as ctx_hata:  # noqa: BLE001
+                                    payload['domain_context'] = ""
+                                    logger.warning(
+                                        "Domain bağlam metni üretilemedi (%s %s): %s",
+                                        stock, tf_name, ctx_hata,
+                                    )
+                                # Ölçüm kesitleri "normalin x katı" eşiğini ATR'den
+                                # okur. 23 Eki 2026: buradaki ad (`atr_alarm`) hiç
+                                # tanımlanmamıştı; her alarmda NameError yutuluyor
+                                # (aşağıdaki `except kart_hata`) ve karta HİÇBİR
+                                # domain bölümü girmiyordu — canlı kart bu yüzden
+                                # "sade" görünüyordu. ATR alarm TF'sinden, karne ile
+                                # aynı fonksiyonla hesaplanır.
+                                atr_alarm = atr_hesapla(df_tf)
                                 # Kart biçimleyicisi bölümleri AYRI ister: kendi
                                 # bölümünü kendi başlığıyla basabilsin ve imza
                                 # (değişmedi kontrolü) yalnız bağlamı görsün.
@@ -3218,12 +3278,27 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             # (endeks/makro: "hacim yok" yerine neden).
                                             sembol=stock,
                                         )
-                                        # Göreli güç yalnız YAPI bloğunda tek satır;
-                                        # endeks alarmının kendisinde basılmaz.
+                                    except Exception as kart_hata:  # noqa: BLE001
+                                        logger.warning(
+                                            "Kart bağlamı hazırlanamadı (%s %s): %s",
+                                            stock, tf_name, kart_hata,
+                                        )
+                                    # Göreli güç yalnız YAPI bloğunda tek satır;
+                                    # endeks alarmının kendisinde basılmaz. Kendi
+                                    # try'ı: endeks verisi yoksa bölge/hacim/ölçü
+                                    # blokları yine basılır.
+                                    try:
                                         goreli = _goreli_guc_satiri(
                                             stock, tf_name, df_tf, deque_manager)
-                                        if goreli:
+                                        if goreli and isinstance(
+                                                payload.get('domain_bolumleri'), dict):
                                             payload['domain_bolumleri']['goreli'] = [goreli]
+                                    except Exception as goreli_hata:  # noqa: BLE001
+                                        logger.debug(
+                                            "Göreli güç satırı üretilemedi (%s %s): %s",
+                                            stock, tf_name, goreli_hata,
+                                        )
+                                    try:
                                         payload['domain_karsi'] = karsi_deliller(
                                             outputs,
                                             alarm_tf=tf_name,
@@ -3231,10 +3306,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             mtf_destek=payload.get('mtf_destek'),
                                             retest_seen=payload.get('retest_seen'),
                                         )
-                                    except Exception as kart_hata:  # noqa: BLE001
-                                        logger.warning(
-                                            "Kart bağlamı hazırlanamadı (%s %s): %s",
-                                            stock, tf_name, kart_hata,
+                                    except Exception as karsi_hata:  # noqa: BLE001
+                                        logger.debug(
+                                            "Karşı delil üretilemedi (%s %s): %s",
+                                            stock, tf_name, karsi_hata,
                                         )
                             except Exception as exc:  # noqa: BLE001 - bağlam alarmı düşürmesin
                                 payload['domain_context'] = ""

@@ -119,12 +119,13 @@ def test_formasyon_yoksa_tf_matrisi_kullanilir():
     assert grafik.kare_mum_tavani("1d") == 62
 
 
-def test_formasyon_85_mumdan_uzunsa_pencere_kirpilir():
-    """Kural A üst sınırı 85: daha uzun formasyonda sağ (güncel) taraf gösterilir."""
-    g = _goruntu(_cerceve(300), cift=_cift(start_bar=10, end_bar=299))
+def test_formasyon_tavandan_uzunsa_pencere_kirpilir():
+    """Kural A üst sınırı 180 (2026-10-23): daha uzun formasyonda sağ taraf gösterilir."""
+    g = _goruntu(_cerceve(400), cift=_cift(start_bar=10, end_bar=399))
     assert g["tavan_kalkti"] is True
-    assert (g["sol"], g["sag"]) == (300 - 85, 300)
-    assert len(g["zamanlar"]) == 85 and "85 mumluk pencereye" in g["budama"][0]
+    # son bar açık olabilir (§0.6) → pencere `sag` üzerinden okunur
+    assert g["sag"] - g["sol"] == 180 and g["sag"] == g["bar_sayisi"]
+    assert "180 mumluk pencereye" in g["budama"][0]
 
 
 def test_formasyon_yokken_tf_matrisi_kirpilmaz():

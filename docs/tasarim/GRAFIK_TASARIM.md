@@ -1699,7 +1699,7 @@ mitigation oranı motorun kendi `fill_boundary` alanından hesaplanır; kırıl�
 
 | TF | Formasyon yok (mum) | Formasyon var |
 | :--- | :--- | :--- |
-| 1g | 62 | formasyon + 10 mum sol tampon, 35-85 arasına kırpılır |
+| 1g | 62 | formasyon + 10 mum sol tampon, 35-180 arasına kırpılır (§43) |
 | 4s | 68 | aynı kural |
 | 2s | 74 | aynı kural |
 | 1s | 80 | aynı kural |
@@ -1900,3 +1900,121 @@ sertliğe göre doldurur. Taze aday yerleşim listesinde ÖNDE olduğu için onu
   `test_faz1_gercek_karede_son_mumun_rozeti_cizilir` (canlı önbellek kapısı);
   tam paket `pytest -q` → **1275 geçti, 44 atlandı**.
 
+
+## 43 · GÖRSEL-9 (2026-10-23) — kadraj, kırılım marjı ve ölçülen dört çizim hatası
+
+Kullanıcı: *"grafik çizerken bazı hatalar var; örnek olarak çizimi kısa tutuyor,
+formasyonda kırılmanın ne kadar olduğunu göremiyoruz, başka bir şey varsa da
+tespit edip düzelt."* Dört kusur ÖLÇÜLEREK bulundu (gerçek `bot_data` önbelleği +
+demo kataloğu), her biri tek tek kapatıldı. Kırılım marjı için eklenen ölçü çipi
+(43.3) aynı gün akşam kullanıcı kararıyla geri alındı.
+
+### 43.1 Kadraj formasyonu kesiyordu (85 → 180 mum)
+
+- **Ölçüm:** AKBNK/GARAN/THYAO 1s karelerinde formasyon 93 bar, kadraj 85 mum →
+  ilk 8 bar (kırılımın geldiği taban) hiç görünmüyordu; `budama` satırı bunu
+  yalnız metinde söylüyordu.
+- **Kural:** Kural A üst sınırı **180 mum** (`kadraj_formasyon_maks`) ve gerçek
+  tavan piksel bütçesidir: `genislik_tavan / bar_px` = 240 mum, okunurluk için
+  180'de durulur (180 bar × 6 px = 1080 px → px/bar 6'nın altına inmez).
+- **Sonuç:** aynı karelerde 85 → 103 mum; demo kataloğunda 85 → 105/110 mum.
+  180'den uzun formasyonda davranış eski gibi: sağ (güncel) taraf gösterilir,
+  `budama`ya *"180 mumluk pencereye kırpıldı"* yazılır.
+
+### 43.2 Bant doğrusu y-aralığını ele geçiriyordu (mumlar %29'a sıkışıyordu)
+
+- **Neden:** `_kare_ciz` bant serisinin TAMAMINI y-aralığına katıyordu. Fiyattan
+  kopuk bölüm (üçgenin geriye uzanan tabanı, dik yükselen alt çizgi) aralığı
+  şişiriyordu: AKBNK 1s'te mumlar kare yüksekliğinin **%29**'una sığıyordu.
+- **Kural:** y-aralığı **mum + kutu + seviye + alarm + `upper_now/lower_now`**dan
+  kurulur. Bant doğrusunun kadraj dışına taşan parçası `_gorunur_parcalar` ile
+  atlanır (geometri değişmez, eksen kenarında kesilen çizgi kalmaz).
+- **Ölçüm (demo kataloğu):** mum kaplaması %29–62 → **%79–93**.
+- **İz:** çizilmeyen bar sayısı `meta["cizgiler"]["formasyon"]["kirpilan"]`
+  (`{"ust": n, "alt": m}`) — sessiz kayıp yok.
+
+### 43.3 Kırılım marjı ölçüsü — **KALDIRILDI** (kullanıcı kararı, 2026-10-23 akşam)
+
+- 23 Ekim'de kareye sağ boşlukta çift uçlu ok + çip eklendi (`kırılım +0,56 · %1,0`,
+  aday kartında `seviyeye 0,06 · %0,2`). Kullanıcı bu eklemeyi reddetti:
+  *"2. eklemeyi istemiyorum, iptal et."*
+- **Durum:** `_kirilim_olcusu` ve çağrısı `grafik.py`den **silindi**; karede ölçü
+  çipi, çift uçlu ok ve kılavuz çizgi YOK. `meta["cizgiler"]` içinde `kirilim`
+  anahtarı üretilmez. Kırılım marjını **kart** yazar (`· kapanış … · sınır …`).
+- Geri eklenmeye karşı kilit: `test_grafik_gorsel9.py::test_kirilim_olcusu_kaldirildi`
+  (`hasattr(grafik, "_kirilim_olcusu")` False + karede `kırılım` izi yok).
+
+### 43.4 Dar karede (mobil) üst üste binen yazılar
+
+Üç ayrı çakışma ölçüldü ve kapatıldı:
+
+| Çakışma | Neden | Düzeltme |
+| :--- | :--- | :--- |
+| `10 Eyl14 Eyl` | X tick sınırı sabit 8'di; mobil eksende (~465 px) sığmıyordu | Sığan sayı eksen genişliğinden ölçülür (`_metin_px` + nefes payı) |
+| `son mum …` bilgi satırının üstüne biniyordu | Rozetlerle aynı satıra zorlanıyordu | Rozet + sağ yazı genişliği ölçülür; sığmıyorsa sağ yazı KENDİ satırına iner (`sag_ayri_satir`) ve eksen üst sınırı buna göre ayrılır |
+| `⚡↑ x5,57` + `x3,65` tek çip gibi | Rozet aralığı sabit 7 bardı (px/bar ≈ 4,5'te yetersiz) | Aralık `2 × yarıçap − 1` (pikselden), yani en az bir rozet genişliği |
+
+### 43.5 Başlıkta kart ile çelişen sayı
+
+- Kare `bant teması 39` yazıyordu (iki sınırın *toplamı*, üstelik temas olmayan
+  mumlar dahil); kart `temas üst 2 / alt 3` diyor. Artık kare motorun kendi
+  alanlarını (`upper_touches`/`lower_touches`) yazar; alan yoksa tek toplam
+  **"toplam"** etiketiyle basılır.
+
+### 43.6 Alarm mumu pencere koordinatına çevrilmiyordu (düşey çizgi kayıptı)
+
+- **Neden:** `alarm_bar` ÇERÇEVENİN mutlak bar indeksidir; kare `[sol, sag)`
+  penceresini çizer. `_alarm_kopyala` dönüşüm yapmadan mutlak indeksi yazıyordu →
+  `0 <= bar < n` testi çoğu karede başarısız oluyor ve **alarm düşey çizgisi hiç
+  çizilmiyordu**; `_gecersiz_katmani` de "geçersizleştiren mum" işaretini yanlış
+  muma (ya da hiç) koyuyordu. Demo kataloğunda çizgi yalnız mutlak indeks tesadüfen
+  pencereye düştüğünde görünüyordu.
+- **Kural:** `bar = mutlak - sol` (pencere içi); çerçeve indeksi
+  `alarm["bar_mutlak"]`ta saklanır. Pencere dışındaysa `bar=None` +
+  `bar_disarida=True` + `uyarilar`a not (eski davranış, sessiz kayıp yok).
+- **Kapatma:** `test_grafik_gorsel9.py::test_alarm_bar_pencere_koordinatina_cevrilir`.
+
+### 43.7 Kırılım ölçüsü modu — kapsam dışı (43.3 ile birlikte düştü)
+
+- Ölçü çipi kaldırıldığı için "marj / mesafe" modu da yok: karede ne `kırılım
+  +0,56` ne `seviyeye 0,06` yazılır. Aynı bilgiyi kart verir; kare **geometriyi**
+  gösterir (seviye çizgisi + kırılım mumu + sağ şerit etiketi).
+- Bu bölüm, `43.3`ün silinmesiyle boşalan numarayı korur; geri ekleme yapılırsa
+  43.3'e bakılır (orada kilit testi var).
+
+### 43.8 Doğrulama
+
+- `pytest -q` → **1682 geçti, 43 atlandı** (`test_grafik_gorsel9.py` 12 test; kırılım çipinin
+  7 testi silindi, yerine 1 kilit testi geldi; ayrıca `test_tanimsiz_ad_korumasi.py` 10 test).
+- Demo kataloğu (`scripts/ornek_gorsel_uret.py --senaryo hepsi`) yeniden üretildi;
+  manşet karelerde ölçü çipi YOK, mum kaplaması %79-93, `mum_cakisan == 0`.
+- Gerçek önbellek: 12 sembol × 1s/4s/1g taraması → `red` yok, `eksik_katman` yok,
+  sağ şeritte `atlanan == 0`.
+- Önce/sonra (aynı veri, aynı kare): AKBNK 1s 85 → 103 mum · mum kaplaması
+  %29 → %79 · alarm düşey çizgisi yok → kırılım mumunda; demo `ucgen_teyit`
+  `bant teması 39` → `temas üst 4 / alt 4` (sağ boşlukta ölçü çipi yok).
+
+### 43.9 Kare başlığı kart diliyle hizalandı (2026-10-23, akşam)
+
+Kullanıcı kart metnini sadeleştirdikten sonra "görsel taraf için genel bir
+kontrol" istedi. Kare çizimi sağlamdı (kadraj 80-110 mum, örtüşme yok, sağ
+şeritte `atlanan == 0`); uyumsuz olan tek şey **dil**ti: aynı olayın adı kartta
+`KIRILIM · kapanış onaylı` iken karede `kapanışla teyitli kırılım` yazıyordu.
+
+| Kare (eski) | Kare (yeni) | Kaynak |
+|---|---|---|
+| `temas üst 4 / alt 4` | `üste 4, alta 4 kez değdi` | `grafik._metinler` |
+| `seviye 52,23 · kapanış 52,62 (üstünde 0,56)` | `kırılan 52,23 · kapanış 52,62 · %0,7 üstünde` | `grafik._metinler` |
+| `1g yapı: dış yükseliş` | `1g yön yukarı (dış yapı)` | `grafik._yapı_satırı` artık `stil="kart"` + `yapi_ozet` |
+| `1g yapı: dış ↑, iç ↓` başlığı `yön karışık` diyordu (tek kapsam bilinirken) | `1g yön yukarı (dış yapı)`; gerçek çelişkide `yön karışık (dış yukarı, iç aşağı)` | `notification_context._yapi_metni` |
+| `kapanışla teyitli kırılım` / `kapanışla başarılı retest` / `önceki teyitli kırılım geçersizleşti` | `kırılım · kapanış onaylı` / `kırılan seviye tuttu` / `kırılım iptal · banda döndü` | `grafik._TUR_ETIKET` |
+
+`klasik` biçimleyici (`TELEGRAM_ALERT_STYLE=klasik` geri dönüş yolu) ve
+`notification_context`teki klasik metin DEĞİŞMEDİ; `_yapı_satırı` artık kart
+biçimini okuduğu için kare ile kart aynı cümleyi kurar (`test_grafik_teslim.py`
+birebir eşitliği doğrular).
+
+Ayrıca `/grafik` yanıtına hisse adını taşıyan tek özet metni eklendi
+(`📈 THYAO · grafik hazır` + seçim satırı); önceki davranış "başarıda ayrı metin
+yok" idi. Doğrulama: `pytest -q` → **1685 geçti, 43 atlandı**; demo kataloğu
+(`--senaryo hepsi`) yeniden üretildi, 6 kare 253-627 ms.

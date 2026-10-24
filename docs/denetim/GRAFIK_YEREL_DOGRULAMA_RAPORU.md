@@ -188,7 +188,7 @@ Tarih: 14 Ekim 2026. Yerel ölçüm; canlı Telegram çağrısı yok (ağ sını
 | Önce (2efd896) | Sonra (bu tur) |
 |---|---|
 | `sendPhoto` 1s · `sendPhoto` 2s · `sendPhoto` 4s · `sendPhoto` 1g | `sendMediaGroup` ×1 (4 öğe, her birinin altyazısı) |
-| metin: `✅ Bitti: AKBNK · 1.8 sn … kaynak: /home/…/AKBNK.json · uyarı: formasyon verisi` | ayrı metin yok (başarıda) |
+| metin: `📈 AKBNK · grafik hazır` + seçim satırı | albümden SONRA tek özet metni (2026-10-23; eskiden başarıda ayrı metin yoktu) |
 
 Hata senaryoları (sim): albüm reddedilince 4 kare tek tek gitti, sayaç 4/0. Tüm TF'ler bozukken tek metin: `❌ Grafik isteği tamamlanamadı`.
 

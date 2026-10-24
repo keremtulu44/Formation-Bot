@@ -85,9 +85,10 @@ def test_oncelik_ve_azami():
                  rvol=3.2, retest_seen=False, zone_icinde=True)
     satirlar = ar.olcum_satirlari(k, azami=2)
     assert len(satirlar) == 2
-    # Aile kısıtsız: önce MS ("sürdü"), sonra formasyon sonucu ("tuttu").
+    # Aile kısıtsız: önce MS ("sürdü"), sonra formasyon ölçüm başlığı
+    # (`◇ benzer … kurulum`; yüzde bir ALT satırda — 2026-10-23).
     assert "sürdü" in satirlar[0], satirlar
-    assert "tuttu" in satirlar[1], satirlar
+    assert "benzer" in satirlar[1] and "kurulum" in satirlar[1], satirlar
     tek = ar.olcum_satirlari(k, azami=1)
     assert len(tek) == 1 and tek[0] == satirlar[0]
 
@@ -108,18 +109,21 @@ def test_uyum_yonu_dogru_okunuyor():
 
 
 def test_retest_satiri_iki_durumu_ayirir():
-    # Retest görülmediyse taban oran basılır (artık en önde "tuttu" var).
+    """Geri çekilme oranı 2026-10-23'ten beri başlığın ALT satırında (`%35 geri`)."""
+    # Retest görülmediyse taban oran yazılır.
     yok = ar.olcum_satirlari(_kurulum(retest_seen=False, aile="FRM"), azami=9)
-    assert "◇ geri çekilme %35 · 28624" in yok, yok
-    # Retest gördüyse ölçüm derinliğe bağlı → satır basılmaz (uydurma yok)
+    detay = [x for x in yok if x.startswith("   ")][0]
+    assert "%35 geri" in detay, yok
+    # Retest gördüyse ölçüm derinliğe bağlı → oran basılmaz (uydurma yok).
     var = ar.olcum_satirlari(_kurulum(retest_seen=True, aile="FRM"), azami=9)
-    assert not [x for x in var if "geri çekilme" in x], var
+    assert not [x for x in var if "geri" in x], var
 
 
 def test_temel_satir_her_zaman_ilk_sira():
-    """Formasyon ailesinde ilk satır "tuttu mu" sorusudur."""
+    """Formasyon ailesinde ilk satır ölçüm başlığıdır; yüzde hemen altındadır."""
     satirlar = ar.olcum_satirlari(_kurulum(aile="FRM"), azami=2)
-    assert satirlar[0] == "◇ 32321 formasyon · %76 tuttu", satirlar
+    assert satirlar[0] == "◇ benzer 32.321 kurulum", satirlar
+    assert satirlar[1].startswith("   %76'sı devam etti"), satirlar
 
 
 TAVSIYE_KELIMELERI = ("al ", "sat ", "hedef", "stop", "kâr", "kar ", "zarar",
@@ -177,6 +181,10 @@ def test_taban_her_olcumde_gorunur():
 
     onceki = False
     for satir in satirlar:
+        if satir.startswith("   "):
+            # Girintili detay, üstteki başlığın tabanını paylaşır.
+            assert onceki, f"taban yok (detay): {satir}"
+            continue
         assert taban_var(satir) or onceki, f"taban yok: {satir}"
         onceki = taban_var(satir)
 
@@ -232,7 +240,8 @@ def test_olcum_hatasi_alarmi_dusurmez():
     bozuk = {"4h": {"market_structure": {"error": "boom"},
                     "volume_participation": {"skipped": True}}}
     satirlar = nc.olcum_bolumu(bozuk, 100.0, alarm_tf="4h", aile="FRM")
-    assert satirlar == ["◇ 32321 formasyon · %76 tuttu"], satirlar
+    assert satirlar[0] == "◇ benzer 32.321 kurulum", satirlar
+    assert satirlar[1].startswith("   %76'sı devam etti"), satirlar
 
 
 def test_kart_olcum_satirini_basar():
@@ -243,7 +252,7 @@ def test_kart_olcum_satirini_basar():
         "age_bars": 94, "band_baslangic": "2026-09-30T16:30:00+03:00",
         "retest_seen": False, "mtf_destek": True,
         "domain_bolumleri": {
-            "hacim": ["katılım 4s destekliyor"],
+            "hacim": ["hacim 4s destekliyor"],
             "olcum": ["◇ rol uyumlu %80 n15724"],
         },
     }
@@ -264,7 +273,7 @@ def test_komut_metni_ana_sayilari_tasir():
     metin = ar.komut_metni()
     assert metin.startswith("◇ Arşiv ölçümü")
     assert ar.OLCUM_TABANI in metin
-    assert "32321 formasyondan" in metin            # FRM-15 tabanı
+    assert "32.321 benzer kurulum" in metin         # FRM-15 tabanı
     assert "%79,7" in metin and "%73,1" in metin    # FRM-20 iki grup
     assert len(metin) <= 1100, len(metin)
 
@@ -279,7 +288,7 @@ def test_komut_metni_kartla_ayni_dili_konusur():
     for eski in ("RVOL", "retest", "zone içinde", "MS 4s dış BOS",
                  "tamamlandı %", "bar)"):
         assert eski not in metin, eski
-    assert "kırılımı tuttu" in metin
+    assert "devam etti" in metin
     assert "geri çekilme" in metin
     assert "nadir" in metin
 
@@ -345,7 +354,7 @@ def test_aile_bos_kisit_yok_eski_davranis():
                  atr=1.0, bolge_top=102.0, bolge_alt=101.0, rvol=3.9,
                  zone_icinde=True, retest_seen=False, ph=104.0, pl=96.0)
     metin = " ".join(ar.olcum_satirlari(k, azami=9))
-    assert "sürdü" in metin and "tuttu" in metin
+    assert "sürdü" in metin and "devam etti" in metin
 
 
 # ------------------------------------------------- sade dil (Faz 3)
@@ -392,23 +401,24 @@ def test_tuttu_ifadesi_motorun_terminal_durumunu_dogru_anlatir():
     Bu ayrım kartın en yanlış anlaşılacak yeridir (kullanıcı 2026-10-22:
     "formasyonun tamamlanması teknik bilen biri bile anlayamayabilir").
     """
-    satir = ar.olcum_satirlari(_kurulum(aile="FRM"), azami=1)[0]
-    assert "tuttu" in satir
-    assert "tamamlandı" not in satir and "hedef" not in satir
+    satirlar = ar.olcum_satirlari(_kurulum(aile="FRM"), azami=2)
+    metin = " ".join(satirlar)
+    assert "devam etti" in metin
+    assert "tamamlandı" not in metin and "hedef" not in metin
 
 
 def test_hareket_satiri_tl_ve_yuzde_verir():
     """1,23 ATR → canlı ATR ve fiyatla TL + yüzde (okumak için ATR bilmek gerekmez)."""
     k = _kurulum(aile="FRM", atr=0.85, break_price=39.60, ph=43.0, pl=36.0)
     satirlar = ar.olcum_satirlari(k, azami=9)
-    hareket = [x for x in satirlar if "tutunca" in x]
+    hareket = [x for x in satirlar if "tutarsa tepe" in x]
     assert hareket, satirlar
     assert "TL" in hareket[0] and "%" in hareket[0], hareket[0]
 
 
 def test_hareket_satiri_atr_yoksa_kat_olarak_kalir():
     k = _kurulum(aile="FRM", atr=None, break_price=39.60, ph=43.0, pl=36.0)
-    hareket = [x for x in ar.olcum_satirlari(k, azami=9) if "tutunca" in x]
+    hareket = [x for x in ar.olcum_satirlari(k, azami=9) if "tutarsa tepe" in x]
     assert not hareket, "ATR yoksa TL çevirisi uydurulmaz"
 
 
@@ -522,7 +532,7 @@ def test_beklenti_acikken_olcum_blogu_uc_satir_kalir():
     assert acik[0].startswith("◇ beklenti: "), acik
     assert len(acik) == len(kapali)          # slot sayısı değişmez
     assert kapali and kapali[0] == acik[-1] or True   # ölçüm satırı korunur
-    assert any("formasyon" in s for s in acik), acik
+    assert any("kurulum" in s for s in acik), acik
 
 
 def test_beklenti_yon_kaniti_yoksa_olcumu_degistirmez():

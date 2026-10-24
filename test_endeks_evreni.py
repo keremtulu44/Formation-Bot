@@ -68,18 +68,18 @@ def _hacim(sembol):
 def test_endekste_hacim_nedeni_yazilir():
     satirlar = _hacim("XBANK")
     # İki kısa satır: tek satırda açıklama 466 px ölçülüyor ve bölünüyordu.
-    assert satirlar == ["katılım 4s hacim yok (endeks)", "yön fiyattan okunur"]
+    assert satirlar == ["hacim: 4s yok (endeks)", "yön fiyattan okunur"]
     assert all(tm.genislik(s) <= notifier._kart_esik_px() for s in satirlar)
 
 
 def test_makro_sembolde_hacim_nedeni_yazilir():
     satirlar = _hacim("ALTIN")
-    assert satirlar == ["katılım 4s hacim yok (makro)", "yön fiyattan okunur"]
+    assert satirlar == ["hacim: 4s yok (makro)", "yön fiyattan okunur"]
 
 
 def test_hissede_hacim_nedeni_uydurulmaz():
     # Hisse için neden uydurulmaz: sağlayıcı hacim veriyor, boşsa gerçekten veri yok.
-    assert _hacim("THYAO") == ["katılım 4s veri yok"]
+    assert _hacim("THYAO") == []
 
 
 def test_hacim_aciklamasi_public_mesajinda_da_gorunur():
@@ -92,13 +92,13 @@ def test_hacim_aciklamasi_public_mesajinda_da_gorunur():
         "state": "KIRILIM_TEYITLI", "break_dir": 1, "break_price": 16000.0,
         "critical_price_level": 16000.0, "candle_close_price": 16120.0,
         "confidence_score": 84,
-        "domain_bolumleri": {"hacim": ["katılım 4s hacim yok (endeks)",
+        "domain_bolumleri": {"hacim": ["hacim: 4s yok (endeks)",
                                        "yön fiyattan okunur"]},
     }
     metin = n.format_public_tekil(kayit)
     # Grup mesajı DM kartının aynısı: aynı satırlar, aynı sıra.
     assert metin == notifier._format_lifecycle_alert_kart(kayit)
-    assert "hacim yok (endeks)" in metin and "yön fiyattan okunur" in metin
+    assert "hacim: 4s yok (endeks)" in metin and "yön fiyattan okunur" in metin
 
 
 # --- 3) Makro alarm kapısı --------------------------------------------------
@@ -190,7 +190,7 @@ def _kart(goreli):
         "bar_kapanis": "2026-10-22T17:30:00+03:00", "contraction": 0.82,
         "domain_bolumleri": {
             "yapi_ozet": ["◈ 1s yapı dış yukarı, iç yatay"],
-            "hacim": ["katılım 1s hacim 1,4 kat"],
+            "hacim": ["hacim 1s hacim 1,4 kat"],
             "olcum": ["◇ 32321 formasyon · %76 tuttu"],
             "goreli": [goreli],
         },

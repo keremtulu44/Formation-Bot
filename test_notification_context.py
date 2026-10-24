@@ -172,7 +172,7 @@ def test_alarm_tf_yapisi_yoksa_ust_tf_satiri_basilir():
         "4h": {"market_structure": _result(_ms("STATE_BEARISH", "STATE_BEARISH"))},
     }
     ozet = _yapi_ozet(outputs, "1h")
-    assert ozet == ["◈ 4s yapı dış ve iç aşağı"]
+    assert ozet == ["◈ 4s yön aşağı (iç ve dış yapı)"]
 
 
 def test_ust_tf_yedegi_alarm_tf_satiri_varsa_devreye_girmez():
@@ -180,7 +180,7 @@ def test_ust_tf_yedegi_alarm_tf_satiri_varsa_devreye_girmez():
         "1h": {"market_structure": _result(_ms("STATE_BULLISH", "STATE_NEUTRAL"))},
         "4h": {"market_structure": _result(_ms("STATE_BEARISH", "STATE_BEARISH"))},
     }
-    assert _yapi_ozet(outputs, "1h") == ["◈ 1s yapı dış yukarı, iç yatay"]
+    assert _yapi_ozet(outputs, "1h") == ["◈ 1s yön karışık (dış yukarı, iç yatay)"]
 
 
 def test_ust_tf_de_yoksa_yapi_satiri_uydurulmaz():
