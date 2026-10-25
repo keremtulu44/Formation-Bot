@@ -18,7 +18,8 @@ from config import (ACTIVE_STOCKS, DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAA
                     TERMINAL_TAZE_BAR,
                     ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL,
                     PUBLIC_MAX_MESAJ_SAAT, PUBLIC_MAX_MESAJ_GUN, PUBLIC_MIN_ARALIK_SN,
-                    PUBLIC_MIN_QUALITY_TF)
+                    PUBLIC_MIN_QUALITY_TF, PUBLIC_MIN_DEVLAMLILIK, DM_MIN_DEVLAMLILIK,
+                    DEVLAMLILIK_AKTIF)
 # Telefon satır bütçesi ölçeri (bağımlılıksız, PIL yok). Eski "satır ≤ 70 karakter"
 # kuralı Türkçe/rakam genişliklerini hesaba katmadığı için 25 Eyl akışında 120
 # satır telefonda sarmalanmıştı; artık piksel bütçesi kullanılıyor.
@@ -27,6 +28,10 @@ from telegram_measure import (SATIR_BUTCE, bol as _satir_bol,
 # Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
 # katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
 from reporting.format import STATE_TR, sayi as _format_sayi
+# Devamlılık puanı: kullanıcıya aktarılan TEK sıralama ölçüsü. Geometri
+# (confidence_score) artık yalnız bildirim eşiğini besler, kartta okunmaz.
+# Ölçüm: docs/arastirma/FAZLA_ANALIZI_2026-10-25.md, PUANLAMA_MIMARISI_2026-10-25.md
+import devamlilik as _dev
 # Günlük public durumu (bütçe sayaçları + gönderilememiş kuyruk) restart'ta
 # korunsun diye kalıcılık katmanı kullanılır (canlı denetim: ikisi de kayboluyordu).
 from state import persistence as _state_persistence
@@ -152,6 +157,35 @@ TF_EVENT_HUMAN = {
     "4h": "4 saat",
     "1d": "1 gün",
 }
+
+def devamlilik_puani(data: Dict) -> Optional[int]:
+    """Kart verisinden devamlılık puanı (5–95). Kapsam dışı ailede None.
+
+    Girdiler: `pattern_name` (aile), `mtf_uyum` (yön uyumlu üst TF teyidi),
+    `bant_mesafe_atr` (girişin banda uzaklığı). Eksik alan nötr sayılır.
+    """
+    return _dev.devamlilik_puani(data.get("pattern_name"),
+                                 data.get("mtf_uyum"),
+                                 data.get("bant_mesafe_atr"))
+
+
+def devamlilik_satiri(data: Dict) -> str:
+    """Tek satır kullanıcı bilgisi: ``Devamlılık: iyi · 75/100``.
+
+    Kapsam dışı ailede boş dize döner; satır hiç yazılmaz (uydurma sayı yok).
+    """
+    return _dev.kart_satiri(data.get("pattern_name"),
+                            data.get("mtf_uyum"),
+                            data.get("bant_mesafe_atr"))
+
+
+def devamlilik_gerekcesi(data: Dict) -> str:
+    """Puanı doğuran nedenler (en fazla üç parça), yoksa boş dize."""
+    metin = _dev.kart_gerekcesi(data.get("pattern_name"),
+                                data.get("mtf_uyum"),
+                                data.get("bant_mesafe_atr"))
+    return metin
+
 
 def quality_comment(q: float) -> str:
     if q >= 85:
@@ -597,10 +631,22 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
         _satir(blok, str(engel[0]))
     # İki 100'lük sayı yan yana etiketsiz duruyordu ("kalite 80 — güç 99"):
     # hangisi neyin ölçüsü? (kullanıcı 2026-10-23). Ayrı satır + tam ad.
-    kalite = _sayı(data.get("confidence_score"), 0)
+    # 2026-10-25: formasyon kalitesi karttan KALKTI (ölçülen sonucu öngörmüyor:
+    # kovalar arası fark <2 puan, bileşenleri zıt yönde). Yerine ölçülmüş
+    # devamlılık puanı gelir; geometri yalnız bildirim eşiğini besler.
     güç = _sayı(data.get("break_strength"), 0)
-    if kalite:
-        _satir(blok, f"· formasyon kalitesi {kalite}/100")
+    if DEVLAMLILIK_AKTIF:
+        devam = devamlilik_satiri(data)
+        if devam:
+            _satir(blok, f"· {devam}")
+        gerekce = devamlilik_gerekcesi(data)
+        if gerekce:
+            _satir(blok, f"· {gerekce}")
+    else:
+        # rollback: `DEVLAMLILIK_AKTIF=0` eski kalite satırını birebir geri getirir
+        kalite = _sayı(data.get("confidence_score"), 0)
+        if kalite:
+            _satir(blok, f"· formasyon kalitesi {kalite}/100")
     if güç:
         _satir(blok, f"· kırılım gücü {güç}/100")
     bant_metni = _kart_bant(data)
@@ -797,13 +843,18 @@ def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False) -> str
         except (TypeError, ValueError):
             marj = ""
         _satir(künye, f"▪ kapanış {kapanis}{marj}")
-    kalite = _sayı(data.get("confidence_score"), 0)
     güç = _sayı(data.get("break_strength"), 0)
-    if kalite:
-        # "Kalite" eskiden formasyonun o anki kalitesiydi (main.py: snap.effective_quality);
-        # alarmı geçiren sayı ile mesajda okunan sayı karışmasın diye etiket açık.
-        _satir(künye, f"▪ kalite {kalite}/100 (formasyon)"
-                      + (f" · kırılma gücü {güç}" if güç else ""))
+    # 2026-10-25: "kalite" (geometri) künyeden kalktı. Eşiği geçen sayı ile
+    # mesajda okunan sayı aynı şey değildi; artık mesajda ölçülmüş devamlılık var.
+    if DEVLAMLILIK_AKTIF:
+        devam = devamlilik_satiri(data)
+        if devam:
+            _satir(künye, f"▪ {devam}" + (f" · kırılma gücü {güç}" if güç else ""))
+    else:
+        kalite = _sayı(data.get("confidence_score"), 0)
+        if kalite:
+            _satir(künye, f"▪ kalite {kalite}/100 (formasyon)"
+                          + (f" · kırılma gücü {güç}" if güç else ""))
     temas = []
     if data.get("upper_touches") is not None and data.get("lower_touches") is not None:
         temas.append(f"temas üst {data.get('upper_touches')} / alt {data.get('lower_touches')}")
@@ -994,13 +1045,21 @@ def _format_lifecycle_alert_klasik(data: Dict) -> str:
     if bar_text:
         lines.append(bar_text)
 
-    try:
-        quality = float(data.get("confidence_score"))
-        if quality == quality and abs(quality) != float("inf"):
-            grade = _quality_grade(quality)
-            lines.append(f"Kalite: {quality:.0f}/100" + (f" · {grade}" if grade else ""))
-    except (TypeError, ValueError, OverflowError):
-        pass
+    if DEVLAMLILIK_AKTIF:
+        # 2026-10-25: kullanıcıya aktarılan yerde geometri yok. Klasik stilde de
+        # aynı sayı okunsun diye kalite satırı devamlılıkla değişti.
+        # `DEVLAMLILIK_AKTIF=0` eski metni birebir geri getirir (rollback).
+        devam = devamlilik_satiri(data)
+        if devam:
+            lines.append(devam)
+    else:
+        try:
+            quality = float(data.get("confidence_score"))
+            if quality == quality and abs(quality) != float("inf"):
+                grade = _quality_grade(quality)
+                lines.append(f"Kalite: {quality:.0f}/100" + (f" · {grade}" if grade else ""))
+        except (TypeError, ValueError, OverflowError):
+            pass
 
     upper_touches = data.get("upper_touches")
     lower_touches = data.get("lower_touches")
@@ -1121,15 +1180,26 @@ def _public_izleme_adaylari(aktif: List[Dict], adet: int = 5, haric=None) -> Lis
     adaylar = [f for f in aktif or []
                if isinstance(f, dict) and str(f.get('state') or '') in WATCH_STATES
                and f.get('stock_name') not in haric]
+    # 2026-10-25: sıralama ölçüsü devamlılık puanı (ölçülmüş fazla), geometri değil.
+    # Kartla aynı sayı okunsun diye puan burada da hesaplanır.
+    def _sira_degeri(f: Dict) -> float:
+        p = devamlilik_puani(f)
+        if p is not None:
+            return float(p)
+        try:
+            return float(f.get('confidence_score') or 0) * 0.5   # kapsam dışı: geriye düşsün
+        except (TypeError, ValueError):
+            return 0.0
+
     try:
-        adaylar.sort(key=lambda f: float(f.get('confidence_score') or 0), reverse=True)
+        adaylar.sort(key=_sira_degeri, reverse=True)
     except (TypeError, ValueError):
         pass
     sonuc = []
     for f in adaylar[:adet]:
         sonuc.append({"stock": f.get("stock_name"), "timeframe": f.get("timeframe"),
                       "pattern_name": f.get("pattern_name"),
-                      "quality": f.get("confidence_score")})
+                      "quality": devamlilik_puani(f)})
     return sonuc
 
 # Zaman dilimi -> bir bar kaç saat? Tek-seferlik mühürün bayatma süresi buna
@@ -1620,6 +1690,13 @@ class TelegramNotifier:
         # kalıyordu. Kalite kapısı yalnız YENİ iddialar (teyit/retest) içindir.
         if state == "KIRILIM_GECERSIZLESTI":
             return True
+        # 2026-10-25: hacim musluğu artık devamlılık puanı. `PUBLIC_MIN_DEVLAMLILIK`
+        # 0 iken davranış eskisiyle birebir aynı; >0 verilirse ek eleme puanla.
+        # Geri alma ("geçersizleşti") bu kapıya takılmaz — yukarıda muaf.
+        if PUBLIC_MIN_DEVLAMLILIK > 0:
+            _p = devamlilik_puani(data)
+            if _p is None or _p < PUBLIC_MIN_DEVLAMLILIK:
+                return False
         try:
             q = float(quality or 0)
         except (TypeError, ValueError):

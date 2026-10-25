@@ -223,12 +223,13 @@ gerektirmiyor, düz metin.
 ### 4.2 Gerekçe satırı (isteğe bağlı, ikinci satır)
 
 ```
-kama · trend uyumlu · giriş seviyeye yakın
+kama · trend uyumlu
+üçgen · seviyeden uzak
 ```
 
-En fazla üç parça; parçalar yalnız puanı yükselten/eksilten gerçek nedenlerden
-seçilir, uydurulmaz. Kart 1.100 karakter sınırında olduğu için gerekçe
-satırının varlığı puan satırını değiştirmez; ikisi toplam ≤2 satır.
+En fazla **iki** parça: aile + puanı en çok oynatan tek neden. Üç parça 283 px
+satır bütçesini aşıyor ve kart satırı bölünüyordu (2026-10-25 örnek görselde
+görüldü, ikiye indirildi). Ölçülen genişlikler: 176–197 px / 283 px.
 
 ### 4.3 Yazmayacaklarımız
 
@@ -337,21 +338,39 @@ Sıralama puanla, kart satırı 4.1'deki gibi. Geri alma: tek bayrak.
 
 ## 8a. Kod durumu (2026-10-25)
 
+**Uygulandı (2026-10-25, ikinci adım).**
+
 | dosya | ne | durum |
 |---|---|---|
-| `devamlilik.py` | saf hesap: `devamlilik_puani`, `bant`, `kart_satiri`, `gerekce` | **yazıldı** |
-| `test_devamlilik.py` | 15 test: ölçek, kapsam dışı, monotonluk, determinizm | **15/15 geçti** |
-| `scripts/devamlilik_dogrulama.py` | arşiv doğrulaması | **yazıldı**, `var/replay/devamlilik.md` |
-| `notifier.py` · `reporting/format.py` · `main.py` | karta bağlama | **/evet bekliyor** |
+| `devamlilik.py` | saf hesap: `devamlilik_puani`, `bant`, `kart_satiri`, `gerekce` | **uygulandı** |
+| `test_devamlilik.py` | 21 test: ölçek, kapsam dışı, monotonluk, piksel bütçesi, kart entegrasyonu, rollback | **21/21 geçti** |
+| `scripts/devamlilik_dogrulama.py` | arşiv doğrulaması | `var/replay/devamlilik.md` |
+| `scripts/devamlilik_ornek.py` | gerçek koddan örnek metin + görsel | `docs/gorseller/devamlilik_ornek_kartlar.png`, `var/replay/devamlilik_ornek.md` |
+| `notifier.py` | kart + klasik + sıralama + kanal kapısı | **uygulandı** |
+| `main.py` | `mtf_uyum` + `bant_mesafe_atr` üretimi, DM kapısı | **uygulandı** |
+| `config.py` | `DEVLAMLILIK_AKTIF`, `PUBLIC_MIN_DEVLAMLILIK`, `DM_MIN_DEVLAMLILIK` | **uygulandı** |
 
-Bağlama noktaları (uygulanmadı, hazır):
+Değişen noktalar:
 
-* `notifier.py:600` — `· formasyon kalitesi {kalite}/100` satırı → yeni satır
-* `notifier.py:800` — `▪ kalite {kalite}/100 (formasyon)` → yeni satır
-* `notifier.py:998` — klasik stil `Kalite: {q}/100 · {grade}` → yeni satır
-* `notifier.py:1125` — Top-12 sıralaması `confidence_score` → `devamlilik_puani`
-* `notifier.py:1614-1630` — public kanal eşiği: taban ~70'e, hacim puanla
-* `reporting/format.py:545` — `q{quality}` → puan
+* `notifier.py` sade kart — `· formasyon kalitesi 87/100` → `· Devamlılık: iyi · 75/100` + gerekçe satırı
+* `notifier.py` künye — `▪ kalite 87/100 (formasyon)` → `▪ Devamlılık: …`
+* `notifier.py` klasik stil — `Kalite: 87/100 · Çok güçlü` → `Devamlılık: …`
+  (iki stil arasında sayı farkı kalmasın; eski metin bayrakla geri gelir)
+* `notifier.py` Top-12 sıralaması — `confidence_score` → devamlılık puanı
+* `notifier.py` public kapı — `PUBLIC_MIN_DEVLAMLILIK > 0` ise ek eleme
+* `main.py` — `mtf_uyum` artık **yön** karşılaştırmalı; `bant_mesafe_atr` eklendi
+
+**Üç bayrak, üçü de varsayılan olarak davranışı korur:**
+
+| bayrak | varsayılan | etki |
+|---|---|---|
+| `DEVLAMLILIK_AKTIF` | `1` | `0` → eski kalite metni birebir geri gelir (kart + klasik) |
+| `PUBLIC_MIN_DEVLAMLILIK` | `0` | `>0` → kanalda ek puan elemesi (55 → hacim %76) |
+| `DM_MIN_DEVLAMLILIK` | `0` | `>0` → DM'de ek puan elemesi |
+
+Hacim kararı bilinçli olarak **verilmedi**: varsayılan 0, yani mesaj sayısı
+bugünküyle aynı. Ölçülen noktalar hazır (55 → hacim %76, fazla +4,2), tek
+env değişikliğiyle açılır.
 
 ## 8b. Tekrar üretim
 

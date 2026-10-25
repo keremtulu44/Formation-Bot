@@ -40,7 +40,8 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     PUBLIC_MIN_QUALITY,
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE, EVREN_BUYUME_UYARI_ESIGI,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL,
-                    TERMINAL_TAZE_BAR)
+                    TERMINAL_TAZE_BAR,
+                    DM_MIN_DEVLAMLILIK)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   islem_gunu_mu,
                   son_kapanan_mum_ani, time_until_next_open, is_bist_open,
@@ -51,7 +52,7 @@ from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
 from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
-from notifier import TelegramNotifier
+from notifier import TelegramNotifier, devamlilik_puani
 import config
 import ampirik_referans as ampirik
 from notification_context import (
@@ -2949,6 +2950,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     
                     # Alert eşiği kontrolü - timeframe'e göre (effective_quality üzerinden)
                     min_q = ALERT_MIN_QUALITY.get(tf_name, ALERT_MIN_QUALITY_GLOBAL)
+                    # Devamlılık puanı DM musluğu (varsayılan 0 = kapalı, davranış
+                    # değişmez). >0 verilirse yalnız bu puanın üstü DM'e gider.
+                    if DM_MIN_DEVLAMLILIK > 0:
+                        _dev_puan = devamlilik_puani({
+                            'pattern_name': active.pattern_type,
+                            'mtf_uyum': mtf_uyum,
+                            'bant_mesafe_atr': bant_mesafe_atr})
+                        if _dev_puan is None or _dev_puan < DM_MIN_DEVLAMLILIK:
+                            logger.info("DM atlandı (devamlılık %s < %s): %s %s",
+                                        _dev_puan, DM_MIN_DEVLAMLILIK, stock, tf_name)
+                            continue
                     try:
                         yas_bar = max(0, int(snap.bar_index - active.start_bar))
                     except Exception:
@@ -3080,18 +3092,41 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         except Exception:
                             band_baslangic = None
                         # Çoklu zaman teyidi: 1h kırılımında 4h destekliyor mu?
+                        # 2026-10-25: kart "4h de aynı yönde" diyordu ama yön
+                        # karşılaştırılmıyordu (yalnız "aktif mi" bakılıyordu).
+                        # Artık yön de aranıyor; kartın iddiası ölçümle aynı olsun.
                         mtf_destek = False
+                        mtf_uyum = 0
                         try:
+                            ust_snap = None
                             if tf_name == "1h":
-                                snap_4h = lifecycle_manager.get_snapshot(stock + "_4h")
-                                if snap_4h and snap_4h.active and snap_4h.state not in ("FORMASYON_GECERSIZ", "Yok", "ST_NONE"):
-                                    mtf_destek = True
+                                ust_snap = lifecycle_manager.get_snapshot(stock + "_4h")
                             elif tf_name == "4h":
-                                snap_1d = lifecycle_manager.get_snapshot(stock + "_1d")
-                                if snap_1d and snap_1d.active:
-                                    mtf_destek = True
+                                ust_snap = lifecycle_manager.get_snapshot(stock + "_1d")
+                            if (ust_snap and ust_snap.active
+                                    and ust_snap.state not in ("FORMASYON_GECERSIZ", "Yok", "ST_NONE")):
+                                mtf_destek = True
+                                # Yön uyumu: üst TF'nin kırılım yönü aynıysa
+                                # ölçümdeki "MTF 4/4" kademesine denk sayılır.
+                                ust_yon = int(getattr(ust_snap, "break_dir", 0) or 0)
+                                if ust_yon and int(break_dir or 0) and ust_yon == int(break_dir):
+                                    mtf_uyum = 4
                         except Exception:
                             mtf_destek = False
+                            mtf_uyum = 0
+
+                        # Girişin banda uzaklığı (ATR cinsinden). Devamlılık
+                        # puanının en sağlam maddesi: kırılımı kovalamak
+                        # formasyonun katkısını yiyor (aile içi Q5−Q1 −7,0).
+                        bant_mesafe_atr = None
+                        try:
+                            _atr = atr_hesapla(df_tf)
+                            _giris = float(candle_close_price)
+                            _bant = float(break_price)
+                            if _atr and _atr > 0:
+                                bant_mesafe_atr = abs(_giris - _bant) / float(_atr)
+                        except Exception:
+                            bant_mesafe_atr = None
 
                         alert_data = {
                             'stock_name': stock,
@@ -3125,6 +3160,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'age_bars': age_bars,
                             'band_baslangic': band_baslangic,
                             'mtf_destek': mtf_destek,
+                            # Devamlılık puanının girdileri (bkz. devamlilik.py).
+                            # `confidence_score` kapı için kalır, kartta okunmaz.
+                            'mtf_uyum': mtf_uyum,
+                            'bant_mesafe_atr': bant_mesafe_atr,
                             # Acil mesaj kısa kalsın; izleme adayları 18:45 digest'inde
                             # gösterilir, bu nedenle burada bağlam eklenmez/tüketilmez.
                             'watch_context': [],

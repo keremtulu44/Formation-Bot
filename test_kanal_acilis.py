@@ -17,6 +17,55 @@ def test_aciklama_sinir_icinde_ve_zorunlu_ibareler():
     assert "formasyon" in metin.lower()
 
 
+def test_bot_kunyesi_sinir_icinde_ve_durust():
+    """BotFather alanları: About ≤120, Description ≤512 (UTF-16 birimi).
+
+    Metin kartın sade diliyle aynı olmalı; "sinyal/kazanç/garanti" gibi
+    vaat okunan sözler künyede geçmez (algı ve şikâyet riski).
+    """
+    sayilar = metinler.karakter_sayilari()
+    assert sayilar["bot_hakkinda"] <= sayilar["bot_hakkinda_siniri"]
+    assert sayilar["bot_aciklamasi"] <= sayilar["bot_aciklama_siniri"]
+
+    for metin in (metinler.BOT_HAKKINDA, metinler.BOT_ACIKLAMASI):
+        kucuk = metin.replace("İ", "i").replace("I", "ı").lower()
+        assert "yatırım tavsiyesi değildir" in kucuk
+        assert "formasyon" in kucuk
+        for yasak in ("sinyal servisi", "kesin kazanç", "garanti", "kazanç garantisi",
+                      "kesin yükselir", "hedef fiyat"):
+            assert yasak not in kucuk, f"künyede vaat gibi söz: {yasak}"
+    # Ne olduğu + ne göndermediği ikisinde de var.
+    assert "al/sat sinyali vermez" in metinler.BOT_ACIKLAMASI.lower()
+
+
+def test_aciklama_kart_diliyle_konusur():
+    """Kanal açıklaması karta aykırı jargon kullanmaz (2026-10-23 sade dil)."""
+    metin = metinler.ACILIK_ACIKLAMASI
+    for eski in ("bülten", "katılım", "RVOL", "retest başarılı"):
+        assert eski not in metin.lower(), eski
+
+
+def test_bot_kunyesi_yazma_kuru_calismada_istek_atmaz():
+    api = _api()
+    api.bot_kunyesi(yazdir=False)
+    # `bot_kunyesi` yalnız okur; yazma metodu çağrılmaz.
+    assert set(api._oturum.metotlar()) == {"getMyShortDescription", "getMyDescription"}
+
+
+def test_bot_kunyesi_yazilir_ve_sinir_asilirsa_reddeder():
+    api = _api()
+    sonuc = K.bot_kunyesi_uygula(api, yazdir=False)
+    assert sonuc == {"hakkinda": metinler.karakter_sayilari()["bot_hakkinda"],
+                     "aciklama": metinler.karakter_sayilari()["bot_aciklamasi"]}
+    assert api._oturum.metotlar() == ["setMyShortDescription", "setMyDescription"]
+
+    uzun = _api()
+    with pytest.raises(K.KanalHatasi):
+        uzun.bot_aciklamasi_yaz("x" * (K.BOT_ACIKLAMA_SINIRI + 1))
+    with pytest.raises(K.KanalHatasi):
+        uzun.bot_hakkinda_yaz("x" * (K.BOT_HAKKINDA_SINIRI + 1))
+
+
 def test_sabit_mesaj_sinir_icinde_ve_durust():
     metin = metinler.ACILIK_SABIT_MESAJ
     sayilar = metinler.karakter_sayilari()

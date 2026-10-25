@@ -560,6 +560,29 @@ ALERT_MIN_QUALITY_GLOBAL = 75
 PUBLIC_MIN_QUALITY_TF = _tf_esiklerini_coz(
     os.getenv("PUBLIC_MIN_QUALITY_TF", ""), ALERT_MIN_QUALITY)
 
+# --- DEVAMLILIK PUANI (2026-10-25) ------------------------------------------
+# Kullanıcıya aktarılan tek sıralama ölçüsü. Geometri (ALERT_MIN_QUALITY) artık
+# yalnız bildirim eşiğini besler, kartta okunmaz. Ölçüm:
+# docs/arastirma/PUANLAMA_MIMARISI_2026-10-25.md
+#
+# Hacim musluğu: 0 = KAPALI (davranış eskisiyle birebir aynı). >0 verilirse
+# kanal/DM yalnız bu puanın üstündeki olayları geçirir. Ölçülen noktalar:
+#   55 → bugünkü hacmin ~%76'sı, fazla +4,2 (bugün +1,5)
+#   45 → hacim ~%100, fazla ~+4,0
+DEVLAMLILIK_AKTIF = os.getenv("DEVLAMLILIK_AKTIF", "1").strip().lower() not in (
+    "0", "false", "hayir", "hayır", "off", "no")
+
+
+def _sayi_env(ad: str, varsayilan: float) -> float:
+    try:
+        return float(os.getenv(ad, str(varsayilan)))
+    except (TypeError, ValueError):
+        return varsayilan
+
+
+PUBLIC_MIN_DEVLAMLILIK = _sayi_env("PUBLIC_MIN_DEVLAMLILIK", 0.0)
+DM_MIN_DEVLAMLILIK = _sayi_env("DM_MIN_DEVLAMLILIK", 0.0)
+
 # --- ALARM / KANAL POLİTİKASI (TEK KAYNAK) ----------------------------------
 # KURAL: Aşağıdaki listeler BİRBİRİNDEN AYRIDIR (aynı state iki listede olamaz).
 # Lifecycle state adları patterns/constants.py'de tanımlıdır.

@@ -122,20 +122,50 @@ def test_kart_satiri_bicimi():
     assert "\n" not in satir
 
 
-def test_gerekce_en_fazla_uc_parca():
-    for mtf in (0, 4):
-        for mesafe in (0.1, 1.5, 3.0):
-            g = dev.gerekce("Kama", mtf, mesafe)
-            assert 1 <= len(g) <= 3, (mtf, mesafe, g)
+def test_gerekce_en_fazla_iki_parca():
+    """Üç parça kartta 283 px'i aşıyordu; sözleşme artık en fazla iki."""
+    for mtf in (0, 2, 4):
+        for mesafe in (0.1, 0.7, 1.5, 3.0):
+            for aile in ("Kama", "Üçgen"):
+                g = dev.gerekce(aile, mtf, mesafe)
+                assert 1 <= len(g) <= 2, (aile, mtf, mesafe, g)
+
+
+def test_gerekce_en_belirleyici_neden():
+    """İkinci parça, puanı en çok oynatan madde olmalı."""
+    # kama: trend uyumu (3,7) > giriş yakın (1,7)
+    assert dev.gerekce("Kama", 4, 0.1) == ["kama", "trend uyumlu"]
+    # kama, trend zayıf (-3,7) > giriş uzak (-1,3)
+    assert dev.gerekce("Kama", 0, 3.0) == ["kama", "trend zayıf"]
+    # üçgende etkileşim yok: yalnız mesafe konuşur
+    assert dev.gerekce("Üçgen", 4, 0.1) == ["üçgen", "seviyeye yakın"]
+    assert dev.gerekce("Üçgen", 4, 3.0) == ["üçgen", "seviyeden uzak"]
 
 
 def test_gerekce_yalniz_gercek_nedenler():
     """Trend uyumlu ancak MTF 4'te; 'yakın' ancak 0,3 ATR altında yazılır."""
     assert "trend uyumlu" in dev.gerekce("Kama", 4, 1.5)
     assert "trend uyumlu" not in dev.gerekce("Üçgen", 4, 1.5)   # üçgende etki yok
-    assert "giriş seviyeye yakın" in dev.gerekce("Kama", 0, 0.2)
-    assert "giriş seviyeye yakın" not in dev.gerekce("Kama", 0, 0.31)
-    assert "giriş seviyeden uzak" in dev.gerekce("Kama", 0, 2.1)
+    # kama'da trend zayıf (−3,7) mesafeden (−1,3) baskın; mesafe üçgende konuşur
+    assert dev.gerekce("Kama", 0, 2.1)[1] == "trend zayıf"
+    assert "seviyeye yakın" in dev.gerekce("Üçgen", 0, 0.2)
+    # 0,3–1 ATR arası da puanı yükseltiyor (+0,85), o yüzden "yakın" doğru;
+    # 1–2 ATR nötr olduğu için hiçbir gerekçe yazılmaz.
+    assert "seviyeye yakın" in dev.gerekce("Üçgen", 0, 0.31)
+    assert dev.gerekce("Üçgen", 0, 1.5) == ["üçgen"]
+    assert "seviyeden uzak" in dev.gerekce("Üçgen", 0, 2.1)
+
+
+def test_satir_piksel_butcesi():
+    """Kartın iki yeni satırı 283 px satır bütçesine sığar (bölünmeden)."""
+    from telegram_measure import genislik, SATIR_BUTCE
+    for aile in ("Kama", "Üçgen"):
+        for mtf in (0, 4):
+            for mesafe in (0.1, 0.7, 1.5, 3.0):
+                puan = dev.kart_satiri(aile, mtf, mesafe)
+                gerekce = "· " + dev.kart_gerekcesi(aile, mtf, mesafe)
+                assert genislik("· " + puan) <= SATIR_BUTCE, (aile, mtf, mesafe, puan)
+                assert genislik(gerekce) <= SATIR_BUTCE, (aile, mtf, mesafe, gerekce)
 
 
 def test_deterministik():
@@ -157,3 +187,58 @@ def test_tablo_dokumanla_uyumlu():
     ]
     for (aile, mtf, mesafe), puan in beklenen:
         assert dev.devamlilik_puani(aile, mtf, mesafe) == puan, (aile, mtf, mesafe)
+
+
+# --- kart entegrasyonu / geri dönüş ---------------------------------------
+# NOT: modülleri `reload` etmiyoruz; reload diğer testlerin tuttuğu referansları
+# bozup sıra bağımlı hatalar üretiyordu. Bayraklar doğrudan yamalanır.
+
+def _ornek_veri():
+    """Gerçekçi alert_data (main.py'nin ürettiği alanlar)."""
+    from datetime import datetime
+    return {
+        "stock_name": "THYAO", "timeframe": "1h", "pattern_name": "Yükselen Kama",
+        "state": "KIRILIM_TEYITLI", "break_dir": 1, "critical_price_level": 302.0,
+        "candle_close_price": 302.35, "confidence_score": 87.0, "break_strength": 80,
+        "mtf_uyum": 4, "bant_mesafe_atr": 0.2, "upper_touches": 4, "lower_touches": 3,
+        "timestamp": datetime(2026, 10, 12, 15, 30),
+    }
+
+
+def test_kart_devamlilik_gosterir_geometri_gostermez(monkeypatch):
+    """Kullanıcıya aktarılan yerde geometri YOK, devamlılık VAR."""
+    import notifier
+    monkeypatch.setattr(notifier, "DEVLAMLILIK_AKTIF", True)
+    metin = notifier.TelegramNotifier().format_message(_ornek_veri())
+    assert "Devamlılık: yüksek · 95/100" in metin
+    assert "formasyon kalitesi" not in metin
+    assert "87/100" not in metin
+
+
+def test_rollback_bayragi_eski_metni_dondurur(monkeypatch):
+    """`DEVLAMLILIK_AKTIF=0` eski kartı birebir geri getirir."""
+    import notifier
+    monkeypatch.setattr(notifier, "DEVLAMLILIK_AKTIF", False)
+    metin = notifier.TelegramNotifier().format_message(_ornek_veri())
+    assert "· formasyon kalitesi 87/100" in metin
+    assert "Devamlılık" not in metin
+
+
+def test_klasik_stil_de_ayni_sayiyi_okur(monkeypatch):
+    """İki stil arasında sayı farkı olmaz: ikisi de devamlılık puanı."""
+    import notifier
+    monkeypatch.setattr(notifier, "DEVLAMLILIK_AKTIF", True)
+    monkeypatch.setattr(notifier, "TELEGRAM_ALERT_STYLE", "klasik")
+    metin = notifier.TelegramNotifier().format_message(_ornek_veri())
+    assert "Devamlılık: yüksek · 95/100" in metin
+    assert "Çok güçlü" not in metin
+
+
+def test_kapsam_disi_ailede_kart_satiri_yok(monkeypatch):
+    """Bayrak/Flama: puan yok, satır yok — uydurma sayı basılmaz."""
+    import notifier
+    monkeypatch.setattr(notifier, "DEVLAMLILIK_AKTIF", True)
+    veri = _ornek_veri()
+    veri["pattern_name"] = "Bayrak"
+    metin = notifier.TelegramNotifier().format_message(veri)
+    assert "Devamlılık" not in metin

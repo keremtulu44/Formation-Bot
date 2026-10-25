@@ -156,7 +156,11 @@ def bant(puan: Optional[int]) -> str:
 def gerekce(aile: Optional[str],
             mtf_uyum: Optional[float] = None,
             bant_mesafe_atr: Optional[float] = None) -> List[str]:
-    """Kart için en fazla üç parçalık gerekçe (yalnız puanı gerçekten etkileyen).
+    """Kart için en fazla iki parçalık gerekçe: aile + en belirleyici tek neden.
+
+    Neden iki: üç parça 283 px satır bütçesini aşıyor ve kart satırı bölüyordu
+    (2026-10-25 örnek görselde görüldü). İkinci parça, puanı **en çok** oynatan
+    maddedir; üçüncüyü yazmak bilgi eklemiyor, satır kırıyor.
 
     Parçalar uydurulmaz: her biri ya puanı yükseltir ya düşürür.
     """
@@ -165,21 +169,24 @@ def gerekce(aile: Optional[str],
         return []
     parca: List[str] = ["kama" if a == "Kama" else "üçgen"]
 
+    # (etki, metin) — yalnız sıfırdan farklı olanlar yarışır
+    adaylar: List[Tuple[float, str]] = []
     esik_etki = ETKILESIM.get(a)
-    if esik_etki is not None and _mtf_deger(mtf_uyum) >= esik_etki[0]:
-        parca.append("trend uyumlu")
-    elif esik_etki is not None:
-        parca.append("trend zayıf")
+    if esik_etki is not None:
+        if _mtf_deger(mtf_uyum) >= esik_etki[0]:
+            adaylar.append((esik_etki[1] * KUCULTME["etkilesim"], "trend uyumlu"))
+        else:
+            adaylar.append((-esik_etki[1] * KUCULTME["etkilesim"], "trend zayıf"))
 
-    try:
-        m = float(bant_mesafe_atr)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        m = None  # type: ignore[assignment]
-    if m is not None and m == m:
-        if m <= 0.3:
-            parca.append("giriş seviyeye yakın")
-        elif m > 2.0:
-            parca.append("giriş seviyeden uzak")
+    ham_mesafe = mesafe_ham(bant_mesafe_atr)
+    if ham_mesafe > 0:
+        adaylar.append((ham_mesafe * KUCULTME["mesafe"], "seviyeye yakın"))
+    elif ham_mesafe < 0:
+        adaylar.append((ham_mesafe * KUCULTME["mesafe"], "seviyeden uzak"))
+
+    if adaylar:
+        _, en = max(adaylar, key=lambda t: abs(t[0]))
+        parca.append(en)
     return parca
 
 
@@ -199,5 +206,5 @@ def kart_satiri(aile: Optional[str],
 def kart_gerekcesi(aile: Optional[str],
                    mtf_uyum: Optional[float] = None,
                    bant_mesafe_atr: Optional[float] = None) -> str:
-    """İkinci (isteğe bağlı) satır: ``kama · trend uyumlu · giriş seviyeye yakın``."""
+    """İkinci (isteğe bağlı) satır: ``kama · trend uyumlu``."""
     return " · ".join(gerekce(aile, mtf_uyum, bant_mesafe_atr))

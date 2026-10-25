@@ -364,10 +364,24 @@ def test_kart_uzun_satiri_boler_bilgi_dusmez():
 
 def test_klasik_stil_eski_biçimi_korur(monkeypatch):
     # Geri dönüş anahtarı: TELEGRAM_ALERT_STYLE=klasik → 25 Eyl biçimi aynen üretilir.
+    # 2026-10-25: klasik stilde de kullanıcıya geometri yerine devamlılık puanı
+    # yazılır (iki stil arasında sayı farkı olmasın). Eski "Kalite:" metni
+    # `DEVLAMLILIK_AKTIF=0` ile birebir geri gelir — o yol ayrı testte.
     monkeypatch.setattr(notifier_mod, "TELEGRAM_ALERT_STYLE", "klasik")
+    monkeypatch.setattr(notifier_mod, "DEVLAMLILIK_AKTIF", True)
     msg = TelegramNotifier().format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=1))
     assert "KIRILIM TEYİTLİ: yukarı kırılım" in msg
+    assert "Devamlılık: " in msg
+    assert "Kalite:" not in msg
+
+
+def test_klasik_stil_rollback_kaliteyi_dondurur(monkeypatch):
+    """`DEVLAMLILIK_AKTIF=0` + klasik → eski metin birebir (rollback yolu)."""
+    monkeypatch.setattr(notifier_mod, "TELEGRAM_ALERT_STYLE", "klasik")
+    monkeypatch.setattr(notifier_mod, "DEVLAMLILIK_AKTIF", False)
+    msg = TelegramNotifier().format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=1))
     assert "Kalite: 85/100" in msg
+    assert "Devamlılık" not in msg
 
 
 def test_mesajlar_ayni_iskeleti_paylasir():
@@ -451,7 +465,11 @@ def test_dogrulanmis_olay_kimlik_fiyat_kalite_tasir_kare_detayini_tekrarlamaz():
     # Olayın ölçüsü tek satırda: kapanış + o an geçerli seviye ("Çok güçlü" gibi
     # türetilmiş sıfatlar hâlâ yasak).
     assert "kapanış 303,25 · kırılan 302,00" in msg
-    assert "formasyon kalitesi 87/100" in msg and "kırılım gücü 80/100" in msg
+    # 2026-10-25: formasyon kalitesi (geometri) karttan KALKTI — ölçülen sonucu
+    # öngörmüyordu. Yerine devamlılık puanı gelir; geometri yalnız eşiği besler.
+    assert "formasyon kalitesi" not in msg and "kalite" not in msg
+    assert "Devamlılık: " in msg and "/100" in msg
+    assert "kırılım gücü 80/100" in msg
     assert "Güçlü" not in msg and "Çok güçlü" not in msg
     # Sade dil (2026-10-22): "retest" yerine "geri çekilme" yazılır.
     assert "kırılan seviyeye dönüş yok" in msg  # payload'da retest_seen yok
@@ -510,4 +528,5 @@ def test_metin_sigdir_bilgi_dusurmez():
     metin = n.format_public_tekil(uzun)
     kelimeler = " ".join(metin.split())
     assert "DOHOL" in kelimeler and "21,28" in kelimeler
-    assert "formasyon kalitesi 87/100" in kelimeler
+    assert "Devamlılık: " in kelimeler
+    assert "formasyon kalitesi" not in kelimeler
