@@ -1080,6 +1080,10 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları (DM)
    TF yazılmazsa o sembolün 4 TF karesi denenir; kabul yanıtı hemen, görsel DM’e gelir.
    Veri mevcut bellek/cache katmanından; eksik/eski cache açık hatadır, canlı fetch yok.
    TELEGRAM_GRAFIK kapalıyken de çalışır; görseller alarm metin kotasını tüketmez.
+/evet · /hayır — gece denetiminin önerisini onayla/reddet (diğer adlar:
+   /onay · /kabul · /hayir · /red). Karar kayda geçer; bot kendiliğinden eşik,
+   kart ya da etiket DEĞİŞTİRMEZ — uygulama elle yapılır. Öneri yalnız sapma
+   varsa ya da ölçüm "bayrak kaldırılsın" derse DM'e düşer.
 /yardim — bu liste (diğer adlar: /help · /start)
 
 Notlar:
@@ -2233,6 +2237,26 @@ def _manuel_tarama_tamamla(request: dict, result: dict, notifier) -> None:
             _scan_job_active.clear()
 
 
+def _komut_oneri_cevabi(cevap: str) -> str:
+    """`/evet` · `/hayır`: gece önerisinin kararını yazar (eşik DEĞİŞMEZ)."""
+    try:
+        import oneri
+        return oneri.cevapla(cevap, store=_supabase_store_ref)
+    except Exception as exc:  # noqa: BLE001 - komut sessiz kalmamalı
+        logger.warning("Gece önerisi yanıtlanamadı: %s", exc)
+        return "Gece önerisi kaydı okunamadı; karar yazılmadı. Birkaç dakika sonra yeniden deneyin."
+
+
+def _komut_evet(_arguman: str) -> str:
+    """Gece önerisini kabul et — kayda geçer, kod kendiliğinden değişmez."""
+    return _komut_oneri_cevabi("evet")
+
+
+def _komut_hayir(_arguman: str) -> str:
+    """Gece önerisini reddet — ölçüm sürer, aynı öneri bir süre tekrar sorulmaz."""
+    return _komut_oneri_cevabi("hayır")
+
+
 TELEGRAM_KOMUTLARI = {
     "start": _komut_yardim,
     "yardim": _komut_yardim,
@@ -2273,6 +2297,13 @@ TELEGRAM_KOMUTLARI = {
     "g": _komut_grafik,
     "genel": _komut_panel,
     "tablo": _komut_panel,
+    # Gece önerisi kararı (§15): onay/red KAYDA geçer, eşik değişmez.
+    "evet": _komut_evet,
+    "onay": _komut_evet,
+    "kabul": _komut_evet,
+    "hayir": _komut_hayir,
+    "hayır": _komut_hayir,
+    "red": _komut_hayir,
 }
 
 # === SON TARAMA KALICILIĞI ===
@@ -4278,11 +4309,14 @@ def _gece_raporu_yaz(gun: str, tutarlilik: dict, olcum: dict) -> bool:
     return cevap is not None
 
 
-def _gece_onerisi_gonder(tutarlilik_sonuc: dict, olcum_sonuc: dict) -> bool:
+def _gece_onerisi_gonder(tutarlilik_sonuc: dict, olcum_sonuc: dict,
+                        gun: str = "") -> bool:
     """Yalnız eylem gerektiren sonucu DM'e öneri olarak yollar.
 
     Sessiz gece: sapma yoksa ve ölçüm "kalsın/yetersiz" diyorsa mesaj GİTMEZ
-    (her gece boş bildirim atmak, öneriyi okunmaz hale getirir).
+    (her gece boş bildirim atmak, öneriyi okunmaz hale getirir). Gönderilen
+    öneri `oneri.py` defterine "bekliyor" olarak yazılır: /evet · /hayır bu
+    kaydı yanıtlar. Aynı metin yakın zamanda yanıtlandıysa tekrar gönderilmez.
     """
     notifier = _notifier_ref
     if notifier is None or not getattr(notifier, "enabled", False):
@@ -4299,17 +4333,38 @@ def _gece_onerisi_gonder(tutarlilik_sonuc: dict, olcum_sonuc: dict) -> bool:
     if not satirlar:
         return False
     metin = ("🌙 Gece denetimi\n" + "\n".join(s for s in satirlar if s)
-             + "\nÖneri; onaylarsan uygularım. Bot kendiliğinden eşik değiştirmez.")
+             + "\n/evet ile onayla ya da /hayır ile reddet. Bot kendiliğinden "
+               "eşik değiştirmez.")
+    try:
+        import oneri
+        # Yanıtlanmış öneri aynı metinle 7 gün içinde tekrar sorulmaz.
+        if oneri.tekrar_mi(metin, store=_supabase_store_ref):
+            logger.info("Gece önerisi aynı metinle yanıtlanmış; DM tekrarlanmadı")
+            return False
+    except Exception as exc:  # noqa: BLE001 - öneri defteri yoksa DM yine gitsin
+        logger.debug("Gece önerisi defteri okunamadı: %s", exc)
     try:
         gonderildi, durum = notifier.send_text(metin)
     except Exception as exc:  # noqa: BLE001 - DM hatası gece işini düşürmemeli
         logger.debug("Gece önerisi gönderilemedi: %s", exc)
         return False
-    if gonderildi:
-        logger.info("Gece önerisi DM'e gitti (%d satır)", len(satirlar))
-    else:
+    if not gonderildi:
         logger.info("Gece önerisi gönderilemedi: %s", durum)
-    return bool(gonderildi)
+        return False
+    try:
+        import oneri
+        oneri.kaydet({
+            "gun": gun or datetime.now().date().isoformat(),
+            "metin": metin,
+            "karar": (olcum_sonuc or {}).get("karar") or "",
+            "ozet": " · ".join(s for s in satirlar if s),
+            "sapma": sapma,
+            "durum": "bekliyor",
+        }, store=_supabase_store_ref)
+    except Exception as exc:  # noqa: BLE001 - kayıt yazılamazsa DM gitti, iş sürer
+        logger.debug("Gece önerisi kaydedilemedi: %s", exc)
+    logger.info("Gece önerisi DM'e gitti (%d satır)", len(satirlar))
+    return True
 
 
 def _gece_denetimi(now: datetime) -> None:
@@ -4342,7 +4397,7 @@ def _gece_denetimi(now: datetime) -> None:
                          {"karar": olcum_sonuc.get("karar"),
                           "metin": olcum_sonuc.get("metin"),
                           "veri": olcum_sonuc.get("veri")})
-        _gece_onerisi_gonder(tutarlilik_sonuc, olcum_sonuc)
+        _gece_onerisi_gonder(tutarlilik_sonuc, olcum_sonuc, gun=gun)
         _gece_denetim_son_gun = gun
     except Exception as exc:  # noqa: BLE001 - gece işi ana döngüyü düşürmemeli
         logger.warning("Gece denetimi başarısız: %s", exc)

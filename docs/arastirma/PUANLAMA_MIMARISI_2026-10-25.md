@@ -876,9 +876,23 @@ Her gece §14.3 kuralı yeniden sorulur: bayraklı grup bayraksız gruptan
 | DM | yalnız **sapma > 0** ya da **`bayrak_kaldirilsin`** varsa, tek mesaj |
 
 Sessiz gece kuralı bilinçli: her gece "her şey yolunda" mesajı göndermek
-öneriyi okunmaz hale getirir. DM metni "onaylarsan uygularım" der; **bot
-kendiliğinden uygulamaz** ve `/evet` komutu bu sürümde yok — onay sohbette
-verilir, uygulama elle yapılır.
+öneriyi okunmaz hale getirir.
+
+**Onay yolu (`oneri.py`):** gönderilen öneri `DATA_DIR/gece_onerisi.json` +
+Supabase `state:gece_onerisi` altında "bekliyor" olarak saklanır. Yanıt iki
+komutla verilir — `/evet` (diğer adlar `/onay` · `/kabul`) ve `/hayır` (diğer
+adlar `/hayir` · `/red`). Komutlar yalnız kayıtlı DM sohbetinden çalışır
+(kanal komut kabul etmez kuralı aynen geçerli).
+
+* `/evet` → karar `onaylandi` olarak kayda geçer; yanıt **"bot kendiliğinden
+  hiçbir eşiği, kartı ya da etiketi değiştirmedi, uygulama elle yapılır"** der.
+  Onay otomatik uygulama değildir: kod/config değişikliği insan işi kalır.
+* `/hayır` → karar `reddedildi` olarak kayda geçer; **ölçüm sürer** (reddetmek
+  "ölçme" demek değil).
+* Aynı metinle gelen öneri, yanıtlandıktan sonra `7 gün` boyunca DM'e tekrar
+  düşmez. Koşullar değişir de metin değişirse yeniden sorulur.
+* Bekleyen öneri yokken iki komut da "bekleyen gece önerisi yok" der; yanıt
+  anlaşılmazsa hiçbir kayıt yazılmaz ve öneri beklemeye devam eder.
 
 ### 15.4 Süre sınırı ve rollback
 
@@ -893,8 +907,10 @@ kart, devamlılık etiketi, eşikler ve klasik stil yolu değişmedi
 ### 15.5 Doğrulama
 
 `test_tutarlilik.py` (13) · `test_olcum_tazele.py` (8) · `test_gece_denetimi.py`
-(7) · `test_ileri_test.py` (16) — hepsi ağsız, motor ve Supabase taklit.
+(7) · `test_oneri.py` (12) · `test_ileri_test.py` (16) — hepsi ağsız, motor ve
+Supabase taklit.
 Kapsanan: seviye kuralının `main` ile eşitliği, ileriye bakış yokluğu
 (bar kesme), desen/yön/seviye sapma dalları, `veri_yok` nedenleri, bütçe
 ertelemesi, yetersiz gözlemde hüküm yokluğu, eşiklerin değişmediği, sessiz
-gecede DM gitmediği, store hatasında işin düşmediği.
+gecede DM gitmediği, store hatasında işin düşmediği, `/evet`–`/hayır` kararının
+kayda geçtiği ve eşik değiştirmediği, aynı önerinin 7 gün tekrarlanmadığı.
