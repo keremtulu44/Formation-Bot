@@ -245,3 +245,27 @@ python scripts/puan_besli.py            # kural + kapsam/başarı eğrisi
   davranışı mı). Ayrımın canlıda bozulup bozulmadığı ayrı bir izleme konusu.
 * Y blok karar için kullanılmadı; hiçbir üretim kodu, eşik, kart veya Telegram
   değişmedi.
+
+---
+
+## Ek — eşik (geometri tabanı) ölçümü, 2026-10-25
+
+`ALERT_MIN_QUALITY` motorun değil bildirim katmanının eşiği olduğu için
+"eşiği düşürünce ne gelir" sorusu arşivden cevaplandı (`scripts/esik_analizi.py`,
+`var/replay/esik.md`). Özet:
+
+| kalite | n | fazla |
+|---|---|---|
+| ≤65 | 144 | −4,9 |
+| 65–70 | 451 | −0,5 |
+| 70–90 | 10.088 | +1,4 … +1,7 (düz) |
+| 85+ | 5.073 | +2,0 |
+| 90+ | 563 | +4,9 |
+
+Eşiği 5 puan düşürmek uyarı sayısını +%25 artırıyor; eklenen grubun fazlası
+**+3,2 [GA +1,6, +5,4]** — yani bugün gönderilenlerden kötü değil. Sonuç:
+bugünkü 80/78/75/70 merdiveni performans filtresi değil, **hacim musluğu**.
+Kalite yalnız iki uçta konuşuyor (65 altı kötü, 90 üstü iyi).
+
+Mimari karşılığı: taban tek seviyeye (~70) iner, hacmi **puan** yönetir
+(`docs/arastirma/PUANLAMA_MIMARISI_2026-10-25.md` §3.3).
