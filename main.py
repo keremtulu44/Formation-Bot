@@ -3387,6 +3387,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             _gun_sayacini_gonderimle_hizala(
                                 stock, tf_name, notification_state)
                             _live_state.mark_alert_sent(stock, tf_name)
+                            # Gölge defter: KULLANICIYA GİDEN uyarılar kaydedilir
+                            # (kanala gitmeyen aday değil) — ileri testin evreni.
+                            _ileri_test_kaydet(alert_data)
                             logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {notification_state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
                         elif not dm_gecersiz_engel:
                             # Neden gönderilemedi? cooldown/kap ise olay kaybolmasın
@@ -4207,6 +4210,44 @@ def morning_preload(deque_manager, pacer):
         logger.error(f"Sabah preload hatası: {e}", exc_info=True)
 
 
+# --- İLERİ TEST (gölge defter) ----------------------------------------------
+# 2026-10-25: Ölçümün açık kalan tek sorusu "kama + üst TF aynı yönde" bayrağı
+# örneklem DIŞINDA işe yarıyor mu? Cevap, gönderilen her uyarının 24 bar sonraki
+# sonucunu kaydetmekle verilir (docs/arastirma/PUANLAMA_MIMARISI_2026-10-25.md
+# §11.4). Bu iş mesaj GÖNDERMEZ, eşik DEĞİŞTİRMEZ; yalnız kayıt tutar.
+ILERI_TEST_GECE_SAAT = 19          # BIST kapanışından sonra, gece mesaisi yok
+_ileri_test_son_gece = ""          # bu süreçte işin koştuğu gün (YYYY-MM-DD)
+
+
+def _ileri_test_kaydet(alert_data) -> None:
+    """Gönderilen uyarıyı gölge deftere yazar. Hata botu DURDURMAZ."""
+    try:
+        import ileri_test
+        ileri_test.kaydet(alert_data, store=_supabase_store_ref)
+    except Exception as exc:  # noqa: BLE001 - ölçüm kaydı botu düşürmemeli
+        logger.debug("İleri test kaydı atlandı: %s", exc)
+
+
+def _ileri_test_gece(now: datetime) -> None:
+    """Günde bir kez, kapanıştan sonra olgunlaşan kayıtların sonucunu hesaplar."""
+    global _ileri_test_son_gece
+    if now.hour < ILERI_TEST_GECE_SAAT:
+        return
+    gun = now.date().isoformat()
+    if _ileri_test_son_gece == gun:
+        return
+    try:
+        import ileri_test
+        cikti = ileri_test.gece(store=_supabase_store_ref,
+                                rapor_yolu=os.path.join(config.DATA_DIR,
+                                                        "ileri_test_ozet.md"))
+        _ileri_test_son_gece = gun
+        logger.info("İleri test gece işi tamam: %s", cikti["istatistik"])
+        logger.info("İleri test özeti:\n%s", cikti["ozet"])
+    except Exception as exc:  # noqa: BLE001 - gece işi ana döngüyü düşürmemeli
+        logger.warning("İleri test gece işi başarısız: %s", exc)
+
+
 def main_loop():
     """
     Ana döngü:
@@ -4796,6 +4837,8 @@ def main_loop():
                 # ile dönülmez (60 sn'de bir uyanıp durumu yeniden değerlendirir).
                 sleep_time = max(sleep_time, 60.0)
                 logger.info(f"BIST KAPALI - {now.strftime('%Y-%m-%d %H:%M:%S')} - {sleep_time/60:.1f}dk uyku (açılışa {wait_open/3600:.1f}sa)")
+                # Boş saatlerin tek gerçek işi: kapanan kayıtların sonucunu yaz.
+                _ileri_test_gece(now)
                 if _bekle_veya_tarama(sleep_time):
                     logger.info("Seans dışı analiz isteği geldi; ana döngü uyandırıldı")
                     continue

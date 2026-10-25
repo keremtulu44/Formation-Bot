@@ -767,3 +767,61 @@ bölgeler (OB/FVG üstte/altta, doluluk), ve **n ile** arşiv ölçüm satırlar
 `DEVLAMLILIK_AKTIF=0` eski `· formasyon kalitesi NN/100` satırını birebir geri
 getirir (kart, künye ve klasik gövde). `TELEGRAM_ALERT_STYLE=klasik` rollback
 yolu da değişmedi.
+
+---
+
+## 14. İleri test kaydı — iddia → kanıt (uygulandı)
+
+§11.4'te yazılan protokol artık **kodda**. `ileri_test.py` gönderilen her
+uyarıyı kaydeder, 24 bar sonra sonucunu hesaplar ve önceden yazılmış kurala
+göre yalnız **öneri** metni üretir.
+
+### 14.1 Neden bu, gece mesaisinin doğru kullanımı
+
+Sistem 7/24 ayakta ama BIST kapalıyken hiçbir ölçüm yapmıyordu. Yeni bar
+üretmediği için tarama tekrarı anlamsız; asıl eksik, kapanmamış ölçüm
+döngüsüydü. Gece işi tam bunu kapatıyor: borsa kapalı, veri sabit, iş
+tekrarlanabilir.
+
+### 14.2 Defter alanları
+
+| Alan | Anlam |
+|---|---|
+| `anahtar` | `SEMBOL\|TF\|bar zamanı` — aynı olay iki kez yazılmaz |
+| `bayrak` | test edilen iddia: kama + üst TF aynı yönde |
+| `puan` | 0–100 iç puan (kartta yok, yalnız log/kıyas) |
+| `giris`, `yon`, `tf`, `bar` | sonucun ölçüleceği referans |
+| `sonuc` | 24 bar sonra: `yuzde` (yön lehine), `devam`, `en_iyi`, `en_kotu` |
+
+Zorunlu alan (bar zamanı, yön, giriş fiyatı) yoksa **kayıt açılmaz** — 24
+barlık pencere yanlış yerden başlarsa sonuç ölçüm değil gürültü olur.
+
+### 14.3 Kural (sonuç görülmeden yazıldı)
+
+1. Sonuç, uyarının kendi TF'sinde 24 bar sonra okunur.
+2. Ölçü: kırılım fiyatından 24. bar kapanışına, yön lehine yüzde.
+3. Taban: **aynı defterdeki bayraksız uyarılar** (aynı dönem, aynı evren).
+   Ayrı "rastgele giriş" simülasyonu kurulmaz; canlı karşılaştırma kendi
+   kontrolünü taşır.
+4. 8–12 hafta sonra bayraklı grup **≥ +3 puan** fazla verirse bayrak kalır.
+5. Grup başına **≥ 100 gözlem** yoksa hüküm yok.
+
+`ozet()` yalnız "kalsın / kaldırılsın / yetersiz" der; **hiçbir eşiği
+değiştirmez, karta dokunmaz**. Uygulama yine kullanıcı onayıyla.
+
+### 14.4 Nerede çalışıyor
+
+* Kayıt: uyarı gerçekten gönderildiğinde (`main.py`, `alert_sent` dalı) — yani
+  testin evreni kullanıcının gördüğü uyarılar.
+* Sonuç hesabı: BIST kapalıyken, günde bir kez, 19:00'dan sonra
+  (`_ileri_test_gece`), gece başına en çok 40 kayıt.
+* Kalıcılık: `DATA_DIR/ileri_test.json` + Supabase `state:ileri_test`.
+  Defter tavanı 5.000 kayıt; taşarsa en eski **sonuçlu** kayıtlar düşer.
+* Mesaj gönderilmez (gece 03:00 mesajı yasak), eşik değişmez, ağ hatası
+  defteri bozmaz.
+
+### 14.5 Beklenen süre
+
+Günde ~10–30 uyarı varsayımıyla grup başına 100 gözlem ≈ **5–8 hafta**. Karar
+penceresi bu yüzden 8–12 hafta. O zamana kadar kartta hiçbir "kalite" iddiası
+yok — kart zaten yalnız olgu basıyor (§13).
