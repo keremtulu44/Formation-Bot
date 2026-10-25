@@ -90,29 +90,33 @@ puan   = 50 + 5 × toplam                       (5 … 95 arası kırpılır)
 
 ### 2.3 Bantlar
 
-| puan | bant | kart cümlesi | arşivdeki pay | ham devam (arşiv) |
+| puan | bant | kart cümlesi | arşivdeki pay | gerçekleşen fazla (arşiv) |
 |---|---|---|---|---|
-| 85–95 | yüksek | `Devamlılık: yüksek` | ~%7 | %45–52 |
-| 65–84 | iyi | `Devamlılık: iyi` | ~%50 | %38–45 |
-| 45–64 | normal | `Devamlılık: normal` | ~%35 | %33–38 |
-| 5–44 | zayıf | `Devamlılık: zayıf` | ~%8 | %28–33 |
+| 85–95 | yüksek | `Devamlılık: yüksek` | %2 | **+15,9** [+7,6, +20,2] |
+| 65–84 | iyi | `Devamlılık: iyi` | %38 | **+4,8** [+3,8, +6,8] |
+| 45–64 | normal | `Devamlılık: normal` | %41 | **−0,7** [−2,5, +0,3] |
+| 5–44 | zayıf | `Devamlılık: zayıf` | %19 | **−1,9** [−4,4, −0,6] |
 
-Son iki sütun **arşivde ölçülen** değerler; mutlak devam oranı değil, o bandın
-içinde kalan kırılımların gerçekleşen devamı. Taban rejime göre %30–41 arasında
-oynadığı için bu sütun sabit değil.
+Son iki sütun **arşivde ölçülen** değerler (15.736 gözlem, `var/replay/devamlilik.md`).
+Fazla, eşleştirilmiş rastgele tabana göre; taban rejime göre %30–41 arasında
+oynadığı için sabit değil.
+
+Tekdüzelik sağlanıyor: yüksek > iyi > normal > zayıf. "yüksek" bandı küçük
+(%2, n=333) çünkü kama + MTF4 birlikte gerekiyor — bu bilinçli: en yüksek etiket
+nadir olsun.
 
 ### 2.4 Örnekler (senin tablon, puana çevrilmiş)
 
 | durum | toplam | puan | bant |
 |---|---|---|---|
 | kama + MTF4 + yakın giriş (≤0,3) | +9,5 | **95** | yüksek |
-| kama + MTF4 + orta mesafe (0,3–1) | +8,7 | **94** | yüksek |
+| kama + MTF4 + orta mesafe (0,3–1) | +8,7 | **93** | yüksek |
 | kama + MTF4 + uzak (>2) | +6,5 | **83** | iyi |
 | kama, MTF düşük, 0,3–1 | +5,0 | **75** | iyi |
 | kama, MTF düşük, 1–2 | +4,1 | **71** | iyi |
 | ortalama kırılım | +1,5 | **58** | normal |
 | üçgen, 0,3–1 | −1,0 | **45** | normal |
-| üçgen, MTF4, 0,3–1 | +2,7 | **64** | normal |
+| üçgen, MTF4, 0,3–1 | −1,1 | **45** | normal |
 | üçgen, 2 ATR ötesi | −3,2 | **34** | zayıf |
 
 Dikkat: **iki tepe var, arası seyrek**. Puan dağılımı düzgün bir çan eğrisi
@@ -330,6 +334,24 @@ Sıralama puanla, kart satırı 4.1'deki gibi. Geri alma: tek bayrak.
    1d +2,4. 1d örnek az (n=70); yeterli örnek gelince ayrı ağırlık gerekebilir.
 
 ---
+
+## 8a. Kod durumu (2026-10-25)
+
+| dosya | ne | durum |
+|---|---|---|
+| `devamlilik.py` | saf hesap: `devamlilik_puani`, `bant`, `kart_satiri`, `gerekce` | **yazıldı** |
+| `test_devamlilik.py` | 15 test: ölçek, kapsam dışı, monotonluk, determinizm | **15/15 geçti** |
+| `scripts/devamlilik_dogrulama.py` | arşiv doğrulaması | **yazıldı**, `var/replay/devamlilik.md` |
+| `notifier.py` · `reporting/format.py` · `main.py` | karta bağlama | **/evet bekliyor** |
+
+Bağlama noktaları (uygulanmadı, hazır):
+
+* `notifier.py:600` — `· formasyon kalitesi {kalite}/100` satırı → yeni satır
+* `notifier.py:800` — `▪ kalite {kalite}/100 (formasyon)` → yeni satır
+* `notifier.py:998` — klasik stil `Kalite: {q}/100 · {grade}` → yeni satır
+* `notifier.py:1125` — Top-12 sıralaması `confidence_score` → `devamlilik_puani`
+* `notifier.py:1614-1630` — public kanal eşiği: taban ~70'e, hacim puanla
+* `reporting/format.py:545` — `q{quality}` → puan
 
 ## 8b. Tekrar üretim
 
