@@ -29,8 +29,8 @@ Makro (BIST dışı, kendi seansı):
 | Kod | Yahoo | Ne |
 |---|---|---|
 | `USDTRY` | `USDTRY=X` | dolar/TL |
-| `ALTIN` | `GC=F` | ons altın (USD) |
-| `GUMUS` | `SI=F` | ons gümüş (USD) |
+| `XAUUSD` | `XAUUSD=X` (yoksa `GC=F`) | ons altın (USD) — parite adı |
+| `XAGUSD` | `XAGUSD=X` (yoksa `SI=F`) | ons gümüş (USD) — parite adı |
 | `BRENT` | `BZ=F` | Brent (zaten vardı) |
 
 **Kritik bulgu — hacim:** Yahoo, endekslerde hacim sütununu **0 / boş** veriyor;
@@ -138,7 +138,7 @@ yaklaşık **+40 sn** (tam zamanlı tur ≈ 5 dk'da bir). Ölçüm: 57 sembolde
 
 `test_endeks_evreni.py` — 23 test:
 
-- sağlayıcı eşlemesi (`XU50→XU050.IS`, `USDTRY→USDTRY=X`, `ALTIN→GC=F`; `.IS.IS` yok),
+- sağlayıcı eşlemesi (`XU50→XU050.IS`, `USDTRY→USDTRY=X`, `XAUUSD→XAUUSD=X`; `.IS.IS` yok),
 - evren içeriği + `evren_ozeti` (hisse/endeks/makro ayrımı, kısa biçim bütçesi),
 - hacim nedeni (endeks/makro/hisse) + public mesajında görünmesi,
 - makro alarm kapısı (varsayılan kapalı, bayrakla açılır, endeks muaf),

@@ -65,10 +65,10 @@ def test_kirilim_teyitli_yon():
     # GÖRSEL-7: `·` ayırıcısı kalktı — satır = TEK konu (≤2 öğe) kuralı; ilk satır
     # yön + hisse + TF + olay taşır ve öyle kalır.
     msg_yukari = notifier.format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=1))
-    assert msg_yukari.splitlines()[0] == "▲ THYAO 1s YUKARI TEYİTLİ"
+    assert msg_yukari.splitlines()[0] == "▲ THYAO 1s YUKARI KIRILIM"
 
     msg_asagi = notifier.format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=-1))
-    assert msg_asagi.splitlines()[0] == "▼ THYAO 1s AŞAĞI TEYİTLİ"
+    assert msg_asagi.splitlines()[0] == "▼ THYAO 1s AŞAĞI KIRILIM"
 
 
 def test_sikisma_mesaji():
@@ -82,14 +82,14 @@ def test_sikisma_mesaji():
 def test_retest_basarili_mesaji():
     notifier = TelegramNotifier()
     msg = notifier.format_message(_base_data(state='RETEST_BASARILI', break_dir=1))
-    assert "RETEST BAŞARILI" in msg
+    assert "SEVİYE KORUNDU" in msg
     # "seviye korundu" ilk satırda zaten söylendiği için ek not basılmaz
     # (25 Eyl biçiminde aynı bilgi iki satırda tekrarlanıyordu).
     assert "seviye korundu" not in msg
     # GÖRSEL-7: seviye kârede çizili; metinde TEK satır olarak ve kırılan seviye
     # adıyla kalır (`kırılan` sözcüğü değil, sayı).
-    assert "sınır 302,00" in msg
-    assert "bozulur: 302,00 altı kapanış" in msg
+    assert "kırılan 302,00" in msg
+    assert "teyit düşer: 302,00 altı kapanış" in msg
 
 
 def test_aday_oluyor_mesaji():
@@ -139,8 +139,8 @@ def test_sonraki_teyitli_gecersizlesme_ayri_bildirim_mesaji():
         upper_touches=3,
         lower_touches=2,
     ))
-    assert "GEÇERSİZLEŞTİ" in msg
-    assert "bandına dönüş" in msg
+    assert "KIRILIM İPTAL" in msg
+    assert "banda döndü" in msg
     # GÖRSEL-7 iş bölümü: geçersizleşme metni YALNIZ formasyon + TF + "ne olursa
     # teyit düşerdi" sınırını söyler. Kapanış/marj/temas/kırılan seviye kârede
     # çizili (ölçüm: bugünkü kart 34 satırdı, %40'ı girintili devam satırı).
@@ -364,10 +364,23 @@ def test_kart_uzun_satiri_boler_bilgi_dusmez():
 
 def test_klasik_stil_eski_biçimi_korur(monkeypatch):
     # Geri dönüş anahtarı: TELEGRAM_ALERT_STYLE=klasik → 25 Eyl biçimi aynen üretilir.
+    # 2026-10-25: klasik stilde de ne geometri ne devamlılık puanı yazılır
+    # (§11–§12: puan tek bayraktan iyi çıkmadı, etiket de hüküm veriyordu).
+    # Eski "Kalite:" metni `DEVLAMLILIK_AKTIF=0` ile birebir geri gelir.
     monkeypatch.setattr(notifier_mod, "TELEGRAM_ALERT_STYLE", "klasik")
+    monkeypatch.setattr(notifier_mod, "DEVLAMLILIK_AKTIF", True)
     msg = TelegramNotifier().format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=1))
     assert "KIRILIM TEYİTLİ: yukarı kırılım" in msg
+    assert "Devamlılık" not in msg and "Kalite:" not in msg
+
+
+def test_klasik_stil_rollback_kaliteyi_dondurur(monkeypatch):
+    """`DEVLAMLILIK_AKTIF=0` + klasik → eski metin birebir (rollback yolu)."""
+    monkeypatch.setattr(notifier_mod, "TELEGRAM_ALERT_STYLE", "klasik")
+    monkeypatch.setattr(notifier_mod, "DEVLAMLILIK_AKTIF", False)
+    msg = TelegramNotifier().format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=1))
     assert "Kalite: 85/100" in msg
+    assert "Devamlılık" not in msg
 
 
 def test_mesajlar_ayni_iskeleti_paylasir():
@@ -383,7 +396,7 @@ def test_mesajlar_ayni_iskeleti_paylasir():
         assert "Yükselen Üçgen" in msg or "YÜKSELEN ÜÇGEN" in msg, state  # kart deseni olduğu gibi yazar
         if state in _LIFECYCLE:
             assert any(kelime in ilk_satir for kelime in
-                       ("TEYİTLİ", "RETEST BAŞARILI", "GEÇERSİZLEŞTİ")), state
+                       ("KIRILIM", "SEVİYE KORUNDU", "KIRILIM İPTAL")), state
 
 
 def test_mesajlar_tek_sabit_footer_tasir():
@@ -424,7 +437,7 @@ def test_ozet_tum_bolumlerde_kalite_gorunur():
     ozet = n.format_daily_summary(aktif, {"stocks_scanned": 48, "alerts_sent": 1})
     # Üç bölüm de aynı madde biçimini kullanır: hisse · desen · tf · kalite
     assert "THYAO 1h Yükselen Üçgen" in ozet and "q86" in ozet
-    assert "TEYİTLİ KIRILIM" in ozet
+    assert "KIRILIM" in ozet
     assert "↓ ISMEN 2h Alçalan Üçgen" in ozet and "q84" in ozet
     # Uzun madde satırı " · " üzerinden ikiye iner (telefonda sarmaması için).
     # Madde tek satıra sığıyor: "↔ ISCTR 4h Alçalan Üçgen q88 · %81" yerine kısa
@@ -447,14 +460,20 @@ def test_dogrulanmis_olay_kimlik_fiyat_kalite_tasir_kare_detayini_tekrarlamaz():
         domain_context="🏗 Market Structure\n• 1h yapı: dış yükseliş",
     ))
     assert "THYAO" in msg and "1s" in msg and "Yükselen Üçgen" in msg
-    assert "▲ THYAO 1s YUKARI TEYİTLİ" in msg
+    assert "▲ THYAO 1s YUKARI KIRILIM" in msg
     # Olayın ölçüsü tek satırda: kapanış + o an geçerli seviye ("Çok güçlü" gibi
     # türetilmiş sıfatlar hâlâ yasak).
-    assert "kapanış 303,25 · sınır 302,00" in msg
-    assert "kalite 87/100 — güç 80" in msg
+    assert "kapanış 303,25 · kırılan 302,00" in msg
+    # 2026-10-25: formasyon kalitesi (geometri) karttan KALKTI — ölçülen sonucu
+    # öngörmüyordu. Yerine devamlılık puanı gelir; geometri yalnız eşiği besler.
+    assert "formasyon kalitesi" not in msg and "kalite" not in msg
+    # 2026-10-25 (§11–§12): kartta ne sayı ne kalite etiketi var. Puan tek
+    # bayraktan iyi çıkmadı; "Devamlılık: yüksek" satırı tamamen kalktı.
+    assert "Devamlılık" not in msg
+    assert "kırılım gücü 80/100" in msg
     assert "Güçlü" not in msg and "Çok güçlü" not in msg
     # Sade dil (2026-10-22): "retest" yerine "geri çekilme" yazılır.
-    assert "geri çekilme yok" in msg  # payload'da retest_seen yok
+    assert "kırılan seviyeye dönüş yok" in msg  # payload'da retest_seen yok
     # GÖRSEL-8: tema sayısı ve mum damgası metinde VAR (kullanıcı kararı), ama
     # ham domain dökümü ve ham `bar_metni` basılmaz.
     assert "Market Structure" not in msg
@@ -509,4 +528,6 @@ def test_metin_sigdir_bilgi_dusurmez():
              "upper_touches": 2, "lower_touches": 2}
     metin = n.format_public_tekil(uzun)
     kelimeler = " ".join(metin.split())
-    assert "DOHOL" in kelimeler and "21,28" in kelimeler and "kalite 87" in kelimeler
+    assert "DOHOL" in kelimeler and "21,28" in kelimeler
+    assert "formasyon kalitesi" not in kelimeler
+    assert "Devamlılık" not in kelimeler

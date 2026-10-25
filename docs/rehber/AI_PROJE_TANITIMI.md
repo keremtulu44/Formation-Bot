@@ -364,7 +364,7 @@ duruyordu; kullanıcı isteğiyle kareden çıkarılıp caption dipnotuna taşı
 | Durum | Kural |
 | :--- | :--- |
 | Formasyon yok | TF matrisi: **1s 80 · 2s 74 · 4s 68 · 1g 62** mum |
-| Formasyon var | formasyon mumları **+10 sol tampon**, toplam **35–85** arasına kırpılır |
+| Formasyon var | formasyon mumları **+10 sol tampon**, toplam **35–180** arasına kırpılır (2026-10-23: 85 → 180; kırılım tabanı kesiliyordu) |
 | Sağ boşluk | **eksen genişliğinin %15'i** (pencere %10–20; `GRAFIK_SAG_BOSLUK_ORANI`). Fiyat etiketleri, seviye çizgileri ve hedef kutusu buraya çizilir; OB/FVG kutuları ve aktif BOS hedefi buraya kadar uzar. |
 
 ### 4.5 RVOL rozeti (hacim) — en son eklenen özellik

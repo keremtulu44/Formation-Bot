@@ -22,7 +22,9 @@ TIMEFRAME_LABELS = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
 #: "boşluk" (fair value gap). Kısaltma kartta yaşamaz (kullanıcı kararı
 #: 2026-10-22: "herkesin anlayabileceği format"). `/panel`, export ve log
 #: yüzeyleri teknik adı kullanmaya devam eder.
-_ZONE_SADE = {"OB": "blok", "FVG": "boşluk"}
+#: 2026-10-23: "blok" (order block) kullanıcıya bir şey söylemiyordu;
+#: "bölge" aynı bilgiyi sade dilde taşır. FVG zaten "boşluk" olarak basılıyor.
+_ZONE_SADE = {"OB": "bölgesi", "FVG": "boşluğu"}
 
 #: Kart satırının güvenle sığdığı piksel eşiği (notifier._kart_esik_px ile aynı
 #: mantık: bütçenin %5 güvenlik payının altında kal).
@@ -639,13 +641,14 @@ def _kart_engel(results_by_timeframe: Any, reference: float | None,
                 seviye = bottom if istenen == "üst" else top
                 ok = "▲" if istenen == "üst" else "▼"
                 tur = "direnç" if istenen == "üst" else "destek"
-                isaret = "+" if istenen == "üst" else "−"
-                marj = f"{isaret}%{mesafe / reference * 100.0:.1f}".replace(".", ",")
+                # 2026-10-23: "blok" (OB) ve işaretli yüzde (`−%0,8`)
+                # okunmuyordu. Kısa ve düz: `▼ destek bölgesi 4s 70,40 (%0,8 uzak)`.
+                marj = f"%{mesafe / reference * 100.0:.1f}".replace(".", ",")
                 sade = _ZONE_SADE.get(tip, tip)
                 metin = _sigdir([
-                    f"{ok} {tur} · {sade} {tf_label} {_price(seviye)} {marj}",
-                    f"{ok} {tur} {sade} {tf_label} {_price(seviye)} {marj}",
-                    f"{ok} {sade} {tf_label} {_price(seviye)} {marj}",
+                    f"{ok} {tur} {sade} {tf_label} {_price(seviye)} ({marj})",
+                    f"{ok} {tur} {tf_label} {_price(seviye)} ({marj} uzak)",
+                    f"{ok} {tur} {tf_label} {_price(seviye)}",
                 ])
                 if en_yakin is None or mesafe < en_yakin[0]:
                     en_yakin = (mesafe, metin)
@@ -666,17 +669,40 @@ def _yapi_metni(satir: dict) -> str:
         return ""
     kisa_dis = _STRUCTURE_SADE_KISA.get(token_dis, "")
     kisa_ic = _STRUCTURE_SADE_KISA.get(token_ic, "")
-    etiket = f"◈ {satir['etiket']} yapı"
-    # Sade dil (2026-10-22): ok tek başına yön söylemiyordu (`dış ↑/iç ↑`).
-    # İkisi aynıysa tek sözcük; farklıysa iki künye. Sığmazsa "döndü"
-    # düşer — ölçü kısalmaz, yalnız nüans kısalır.
+    etiket = f"◈ {satir['etiket']}"
+    # Sade dil (2026-10-23, kullanıcı kararı): "4s yapı dış ve iç aşağı döndü"
+    # iki jargonu arka arkaya koyuyordu ("yapı", "dış/iç"). Satır artık YÖNÜ
+    # söyler, yapı ayrıntısı parantezde kalır:
+    #   ◈ 4s yön aşağı (iç ve dış yapı)
+    # Sığmazsa parantez kısalır, en sonda tamamen düşer (ölçü kaybolmaz).
     if dis and ic and token_dis == token_ic:
-        return _sigdir([f"{etiket} dış ve iç {dis}",
-                        f"{etiket} dış ve iç {kisa_dis}"])
-    uzun = [f"dış {dis}" if dis else "", f"iç {ic}" if ic else ""]
-    kisa = [f"dış {kisa_dis}" if kisa_dis else "", f"iç {kisa_ic}" if kisa_ic else ""]
-    return _sigdir([f"{etiket} " + ", ".join(p for p in uzun if p),
-                    f"{etiket} " + ", ".join(p for p in kisa if p)])
+        # "döndü" nüansı korunur: yapı henüz döndüyse ("aşağı döndü") satırda
+        # kalır, oturmuş yönde ("aşağı") parantez tam yazılır.
+        dondu = dis != kisa_dis
+        if dondu:
+            adaylar = [f"{etiket} yön {dis} (iç, dış)",
+                       f"{etiket} yön {dis}",
+                       f"{etiket} yön {kisa_dis} (iç ve dış yapı)"]
+        else:
+            adaylar = [f"{etiket} yön {dis} (iç ve dış yapı)",
+                       f"{etiket} yön {dis} (iç, dış)",
+                       f"{etiket} yön {dis}",
+                       f"{etiket} yön {kisa_dis}"]
+        return _sigdir(adaylar)
+    if dis and ic:
+        # İki kapsam FARKLI yönde: "karışık" doğru sözcük (çelişki var).
+        uzun = [f"dış {dis}", f"iç {ic}"]
+        kisa = [f"dış {kisa_dis}" if kisa_dis else "", f"iç {kisa_ic}" if kisa_ic else ""]
+        return _sigdir([f"{etiket} yön karışık (" + ", ".join(uzun) + ")",
+                        f"{etiket} yön karışık (" + ", ".join(p for p in kisa if p) + ")"])
+    # Tek kapsam biliniyor: "karışık" demek yanlış olurdu (çelişki yok, eksik
+    # bilgi var). Kare başlığında `1g yön karışık (dış yukarı)` yazıyordu.
+    tek = dis or ic
+    kapsam = "dış" if dis else "iç"
+    tek_kisa = kisa_dis if dis else kisa_ic
+    return _sigdir([f"{etiket} yön {tek} ({kapsam} yapı)",
+                    f"{etiket} yön {tek}",
+                    f"{etiket} yön {tek_kisa}"])
 
 
 def _kart_yapi_ozet(rows: list[dict], alarm_tf: str) -> list[str]:
@@ -843,7 +869,9 @@ def _hacim_yok_nedeni(sembol: str) -> str:
     import config as _config
     tur = _config.sembol_turu(sembol)
     if tur in ("endeks", "makro"):
-        return f"hacim yok ({tur})"
+        # Yalnız "yok (endeks)"; "hacim" sözcüğünü çağıran satır ekler
+        # (`hacim 4s yok (endeks)` — 2026-10-23 düzeni).
+        return f"yok ({tur})"
     return ""
 
 
@@ -877,7 +905,8 @@ def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None,
                 kayitlar.append({"tf": timeframe, "etiket": tf_label, "yargi": "",
                                  "rvol": "", "bitti": False,
                                  "bos": ("analiz yapılamadı" if hata else
-                                         (_hacim_yok_nedeni(sembol) or "veri yok")),
+                                         ("hacim " + _hacim_yok_nedeni(sembol)
+                                          if _hacim_yok_nedeni(sembol) else "veri yok")),
                                  "hata": bool(hata)})
             continue
         durum = _token(_field(export, "state"))
@@ -902,27 +931,32 @@ def _kart_volume(results_by_timeframe: Any, alarm_tf: str | None,
     alarm_key = str(alarm_tf or "").lower()
     birincil = next((k for k in kayitlar if k["tf"] == alarm_key), kayitlar[0])
     satirlar: list[str] = []
+    # 2026-10-23 (kullanıcı): "katılım" yerine "hacim"; hisse verisi yoksa satır
+    # HİÇ basılmaz (bilgi yokluğu kart yerini hak etmiyor). Endeks/makro istisnası
+    # duruyor: orada "veri yok" değil "bu sembolde hacim alanı yok" denir —
+    # sebep bilgisi kullanıcı kararıyla (2026-10-22) korunuyor.
     if birincil["yargi"]:
-        satirlar.append(f"katılım {birincil['etiket']} {birincil['yargi']}")
+        oran_eki = f" ({birincil['rvol']}×)" if birincil["rvol"] else ""
+        satirlar.append(f"hacim: {birincil['etiket']} {birincil['yargi']}{oran_eki}")
     elif birincil["rvol"]:
-        satirlar.append(f"katılım {birincil['etiket']} hacim {birincil['rvol']} kat")
-    else:
-        satirlar.append(f"katılım {birincil['etiket']} {birincil['bos'] or 'veri yok'}")
+        satirlar.append(f"hacim: {birincil['etiket']} normalin {birincil['rvol']} katı")
+    elif _hacim_yok_nedeni(sembol) and not birincil["hata"]:
+        satirlar.append(f"hacim: {birincil['etiket']} {_hacim_yok_nedeni(sembol)}")
         not_metni = _hacim_yok_notu(sembol)
-        if not_metni and not birincil["hata"]:
+        if not_metni:
             satirlar.append(not_metni)
 
     digerleri = [k for k in kayitlar if k is not birincil]
     bitenler = [k for k in digerleri if k["bitti"] and k["rvol"]]
     if bitenler:
         k = bitenler[0]
-        satirlar.append(f"katılım {k['etiket']} hacim bitti ({k['rvol']})")
+        satirlar.append(f"hacim: {k['etiket']} tükendi ({k['rvol']}×)")
     else:
         zayiflar = [k for k in digerleri if k["rvol"] and _number(str(k["rvol"]).replace(",", ".")) is not None
                     and float(str(k["rvol"]).replace(",", ".")) < 0.6]
         if zayiflar:
             k = min(zayiflar, key=lambda x: float(str(x["rvol"]).replace(",", ".")))
-            satirlar.append(f"katılım {k['etiket']} hacim düşük ({k['rvol']})")
+            satirlar.append(f"hacim: {k['etiket']} düşük ({k['rvol']}×)")
     return satirlar
 
 # --- ampirik referans (arşiv ölçümü) ---------------------------------------
@@ -1191,7 +1225,7 @@ def karsi_deliller(results_by_timeframe: Any, alarm_tf: Any = None, break_dir: A
         elif asama == "RECLAIMED":
             bulgular.append("kırılım seviyesi geri alındı")
         elif not _VOLUME_STATE_LABELS.get(_token(_field(export, "state")), ""):
-            bulgular.append("hacim teyitsiz")
+            bulgular.append("hacim teyidi yok")
     # `mtf_destek` ve `retest_seen` bilinçli olarak karşı delil sayılmaz: kartta
     # "▪ MTF: … onayı yok" ve "▪ … retest yok" satırları zaten basılıyor. Aynı
     # bilgiyi iki kez yazmak 25 Eyl biçiminin asıl şişkinliğiydi (yer değil, dikkat

@@ -64,21 +64,54 @@ bağlı tartışma grubu** en esnek yol.
 
 ---
 
-## 3) Kanal açıklaması (161/255 karakter)
+## 3) Kanal açıklaması (209/255 karakter)
 
 Açıklama, kanal aramasında ve link önizlemesinde görünen tek satırlık vitrindir.
 Metnin kendisi `acilis_metinleri.py: ACILIK_ACIKLAMASI` içinde tek kaynaktır:
 
-> **BIST formasyon takip panosu · 48 hisse, 4 zaman dilimi: saatlik bülten, 18:45 kapanış
-> özeti, Cuma doğruluk karnesi. Yatırım tavsiyesi değildir. X: @bisthisseveri**
+> **BIST formasyon takip panosu · 48 hisse + endeksler, 4 zaman dilimi. Kapanışla teyitli
+> kırılım, retest ve iptal bildirimleri tek kartta: seviye, ölçü, teyit eşiği.
+> Yatırım tavsiyesi değildir · X: @bisthisseveri**
 
 Neden bu üçleme: (1) ne olduğu, (2) ne sıklıkta ne geldiği, (3) sorumluluk reddi + X
 bağlantısı. "Sinyal", "kazanç", "hedef" gibi kelimeler bilinçli olarak **yok** — hem
 algı hem de Telegram/şikâyet riski açısından.
+---
+
+## 3b) Bot künyesi — About (119/120) ve Description (497/512)
+
+Botun adının altında görünen iki alan. Metin `acilis_metinleri.py` içinde tek
+kaynak (`BOT_HAKKINDA`, `BOT_ACIKLAMASI`); elle BotFather'a yapıştırmak yerine
+betikle yazılabilir:
+
+```bash
+python kanal_acilis.py --bot            # mevcut künyeyi göster (yazmaz)
+python kanal_acilis.py --bot-uygula     # About + Description'ı yaz
+```
+
+> **Hakkında (About, ≤120):** BIST formasyon tarayıcısı. Kırılımı seviyesi,
+> kalitesi ve teyit eşiğiyle tek mesajda yazar. Yatırım tavsiyesi değildir.
+
+> **Açıklama (Description, ≤512):**
+> Formation-Bot BIST'te üçgen, kama, bayrak ve flama formasyonlarını 48 hissede
+> 4 zaman diliminde, yalnız kapanmış mumla tarar.
+>
+> Kırılım, retest ve iptal olaylarını tek mesajda bildirir: seviye, kapanış,
+> formasyon kalitesi, bant olgunluğu, piyasa yönü, hacim ve teyidin hangi fiyatta
+> düşeceği. Yanında benzer kurulumların geçmiş sonucu var; bunlar orandır,
+> kazanç değildir.
+>
+> Komutlar: /formasyonlar /panel /ozet /tara /grafik /karne /olcum /yardim
+>
+> Al/sat sinyali vermez. Yatırım tavsiyesi değildir.
+
+Kural: künyede "sinyal", "kazanç", "garanti", "hedef fiyat" gibi vaat okunan
+söz geçmez (`test_kanal_acilis.py` doğrular). Bot açıklaması kullanıcıya botu
+arkadaş listesine eklemeden önce görünür — ilk izlenim orada oluşuyor.
 
 ---
 
-## 4) Sabitlenmiş karşılama mesajı (1334/4096 karakter)
+## 4) Sabitlenmiş karşılama mesajı (1478/4096 karakter)
 
 Sabit mesajın işi: yeni gelenin 30 saniyede "bu ne, ne gelir, ne gelmez, sorumluluk
 kimde" sorularını cevaplamak. Tam metin `acilis_metinleri.py: ACILIK_SABIT_MESAJ`:

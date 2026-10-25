@@ -59,8 +59,20 @@ PROVIDER_SYMBOL_MAP = {
     # --- Makro (BIST dışı, kendi seansı) ------------------------------------
     "BRENT": "BZ=F",
     "USDTRY": "USDTRY=X",
-    "ALTIN": "GC=F",     # ons altın (USD)
-    "GUMUS": "SI=F",     # ons gümüş (USD)
+    # Ad uluslararası parite adı: XAU/USD (ons altın) ve XAG/USD (ons gümüş).
+    # Türkçe "ALTIN/GUMUS" adları 2026-10-25'te kaldırıldı; kullanıcı hangi
+    # ürünü izlediğini kodda da görsün diye sembol adı = parite adı.
+    "XAUUSD": "XAUUSD=X",
+    "XAGUSD": "XAGUSD=X",
+}
+
+#: Sağlayıcı bir sembolü tanımıyorsa (boş geçmiş) devreye giren YEDEK eşleme.
+#: Spot parite (`XAUUSD=X`) sağlayıcıda yoksa ons VADELİ seri kullanılır; ikisi
+#: de ons fiyatını izler, fark vadeli primidir. Amaç sessiz veri boşluğu yerine
+#: verinin akmaya devam etmesi: hangi serinin kullanıldığı loga yazılır.
+PROVIDER_SYMBOL_FALLBACK = {
+    "XAUUSD": "GC=F",   # COMEX ons altın (vadeli)
+    "XAGUSD": "SI=F",   # COMEX ons gümüş (vadeli)
 }
 
 #: Endeks sembolleri: hisse değildir, "hisse" diye sayılmaz/etiketlenmez.
@@ -71,7 +83,7 @@ ENDEKS_SEMBOLLERI = frozenset({"XU100", "XU30", "XU030", "XU50", "XU050",
 #: yüzden varsayılan olarak YALNIZ veri/bağlam içindir, alarm üretmez
 #: (`MAKRO_ALARM=1` ile açılır). BRENT geçmişte alarm üretiyordu; karar artık
 #: tek bayrakta toplandı.
-MAKRO_SEMBOLLERI = frozenset({"BRENT", "USDTRY", "ALTIN", "GUMUS"})
+MAKRO_SEMBOLLERI = frozenset({"BRENT", "USDTRY", "XAUUSD", "XAGUSD"})
 #: Makro semboller alarm üretsin mi? Varsayılan KAPALI: bu sembollerin seans
 #: kapanışı BIST'e göre değil (ABD/forex), "yalnız kapanmış mum" kuralı gün sonu
 #: barlarında tam doğrulanamaz. Veri/grafik/bağlam her durumda çalışır.
@@ -112,7 +124,7 @@ BIST_50 = [
     # 2026-10-22 (kullanıcı kararı): BIST 50 + sektör endeksleri + makro.
     # Endeksler hisse gibi taranır (alarm üretir); makro semboller veri/bağlam
     # içindir (alarm `MAKRO_ALARM` ile açılır).
-    "XU50", "XBANK", "XUSIN", "USDTRY", "ALTIN", "GUMUS",
+    "XU50", "XBANK", "XUSIN", "USDTRY", "XAUUSD", "XAGUSD",
 ]
 BIST_30 = BIST_50[:30]
 # Canlı tarama evreni: mevcut BIST 50 listesinden Yahoo verisi sorunlu KOZAL/KOZAA çıkarıldı (48 sembol).
@@ -559,6 +571,29 @@ ALERT_MIN_QUALITY_GLOBAL = 75
 # türetilir; env ile TF bazında geçersiz kılınabilir ("1h:82,4h:78").
 PUBLIC_MIN_QUALITY_TF = _tf_esiklerini_coz(
     os.getenv("PUBLIC_MIN_QUALITY_TF", ""), ALERT_MIN_QUALITY)
+
+# --- DEVAMLILIK PUANI (2026-10-25) ------------------------------------------
+# Kullanıcıya aktarılan tek sıralama ölçüsü. Geometri (ALERT_MIN_QUALITY) artık
+# yalnız bildirim eşiğini besler, kartta okunmaz. Ölçüm:
+# docs/arastirma/PUANLAMA_MIMARISI_2026-10-25.md
+#
+# Hacim musluğu: 0 = KAPALI (davranış eskisiyle birebir aynı). >0 verilirse
+# kanal/DM yalnız bu puanın üstündeki olayları geçirir. Ölçülen noktalar:
+#   55 → bugünkü hacmin ~%76'sı, fazla +4,2 (bugün +1,5)
+#   45 → hacim ~%100, fazla ~+4,0
+DEVLAMLILIK_AKTIF = os.getenv("DEVLAMLILIK_AKTIF", "1").strip().lower() not in (
+    "0", "false", "hayir", "hayır", "off", "no")
+
+
+def _sayi_env(ad: str, varsayilan: float) -> float:
+    try:
+        return float(os.getenv(ad, str(varsayilan)))
+    except (TypeError, ValueError):
+        return varsayilan
+
+
+PUBLIC_MIN_DEVLAMLILIK = _sayi_env("PUBLIC_MIN_DEVLAMLILIK", 0.0)
+DM_MIN_DEVLAMLILIK = _sayi_env("DM_MIN_DEVLAMLILIK", 0.0)
 
 # --- ALARM / KANAL POLİTİKASI (TEK KAYNAK) ----------------------------------
 # KURAL: Aşağıdaki listeler BİRBİRİNDEN AYRIDIR (aynı state iki listede olamaz).

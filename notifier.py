@@ -18,7 +18,8 @@ from config import (ACTIVE_STOCKS, DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAA
                     TERMINAL_TAZE_BAR,
                     ALERT_MIN_QUALITY, ALERT_MIN_QUALITY_GLOBAL,
                     PUBLIC_MAX_MESAJ_SAAT, PUBLIC_MAX_MESAJ_GUN, PUBLIC_MIN_ARALIK_SN,
-                    PUBLIC_MIN_QUALITY_TF)
+                    PUBLIC_MIN_QUALITY_TF, PUBLIC_MIN_DEVLAMLILIK, DM_MIN_DEVLAMLILIK,
+                    DEVLAMLILIK_AKTIF)
 # Telefon satır bütçesi ölçeri (bağımlılıksız, PIL yok). Eski "satır ≤ 70 karakter"
 # kuralı Türkçe/rakam genişliklerini hesaba katmadığı için 25 Eyl akışında 120
 # satır telefonda sarmalanmıştı; artık piksel bütçesi kullanılıyor.
@@ -27,6 +28,12 @@ from telegram_measure import (SATIR_BUTCE, bol as _satir_bol,
 # Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
 # katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
 from reporting.format import STATE_TR, sayi as _format_sayi
+# Devamlılık puanı ARTIK KARTTA YOK (§11–§12): 0–100 puan tek bayraktan iyi
+# çıkmadı, ondan türeyen "yüksek/normal/zayıf" etiketi de ölçümün taşımadığı bir
+# hükümdü. Puan yalnız log/sıralama/gölge kayıt içinde yaşıyor. Geometri
+# (confidence_score) artık yalnız bildirim eşiğini besler, kartta okunmaz.
+# Ölçüm: docs/arastirma/FAZLA_ANALIZI_2026-10-25.md, PUANLAMA_MIMARISI_2026-10-25.md
+import devamlilik as _dev
 # Günlük public durumu (bütçe sayaçları + gönderilememiş kuyruk) restart'ta
 # korunsun diye kalıcılık katmanı kullanılır (canlı denetim: ikisi de kayboluyordu).
 from state import persistence as _state_persistence
@@ -153,6 +160,17 @@ TF_EVENT_HUMAN = {
     "1d": "1 gün",
 }
 
+def devamlilik_puani(data: Dict) -> Optional[int]:
+    """Kart verisinden devamlılık puanı (5–95). Kapsam dışı ailede None.
+
+    Girdiler: `pattern_name` (aile), `mtf_uyum` (yön uyumlu üst TF teyidi),
+    `bant_mesafe_atr` (girişin banda uzaklığı). Eksik alan nötr sayılır.
+    """
+    return _dev.devamlilik_puani(data.get("pattern_name"),
+                                 data.get("mtf_uyum"),
+                                 data.get("bant_mesafe_atr"))
+
+
 def quality_comment(q: float) -> str:
     if q >= 85:
         return "çok güçlü"
@@ -231,15 +249,23 @@ _ENGEL_SAYACLAR = {
 #   devam satırına taşınır.
 _KART_YON = {1: "YUKARI", -1: "AŞAĞI"}
 _KART_OLAY = {
-    # İkinci satırdaki kısa not, ilk satırda söylenmeyeni söyler: RETEST BAŞARILI
-    # zaten "seviye korundu" demek olduğu için orada ek not yoktur (yer boşa gitmez).
-    "KIRILIM_TEYITLI": ("TEYİTLİ", "kapanışla"),
-    "RETEST_BASARILI": ("RETEST BAŞARILI", ""),
-    "KIRILIM_GECERSIZLESTI": ("GEÇERSİZLEŞTİ", "bandına dönüş"),
+    # İkinci satırdaki kısa not, ilk satırda söylenmeyeni söyler (kullanıcı kararı
+    # 2026-10-23): "TEYİTLİ" neyin teyidi olduğunu söylemiyordu — artık olay
+    # KIRILIM, teyidin türü ikinci satırda ("kapanış onaylı").
+    "KIRILIM_TEYITLI": ("KIRILIM", "kapanış onaylı"),
+    # RETEST BAŞARILI teknik ad; sade karşılığı kırılan seviyenin korunması.
+    "RETEST_BASARILI": ("SEVİYE KORUNDU", "kırılan seviye tuttu"),
+    "KIRILIM_GECERSIZLESTI": ("KIRILIM İPTAL", "banda döndü"),
 }
+#: Uzun formasyon adı + uzun not bütçeyi aşınca kullanılan kısa not. Başlık
+#: zaten olayı söylüyor (`SEVİYE KORUNDU`), not yalnız ayrıntıyı ekler.
+_KART_OLAY_KISA = {"RETEST_BASARILI": "seviye tuttu"}
 # mtf_destek yalnız 1h→4h ve 4h→1g için hesaplanır (main.py); etiket bu yüzden
 # alarm TF'sine göre yazılır. Eskiden her durumda "4h destekliyor" deniyordu.
+# Kart ızgarası kısa kodu (`4s`) kullanır; ÜST TF satırı sözcükle yazılır çünkü
+# tek başına "4s de onaylı" neyin onaylandığını söylemiyordu.
 _KART_UST_TF = {"1h": "4s", "2h": "4s", "4h": "1g"}
+_KART_UST_TF_SOZ = {"1h": "4 saatlik", "2h": "4 saatlik", "4h": "günlük"}
 TF_KISA = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
 
 
@@ -407,11 +433,28 @@ def _kart_esik(data: Dict, yon: int) -> tuple:
 #: GÖRSEL-9 (2026-10-22): 7 bloklu düzen + blok arası 1 boş satır. Boş satırlar
 #: tavan hesabına GİRMEZ (bütçe px ile ölçülür); tavan 16 -> 20 çıktı çünkü
 #: `◇` ölçü bloğu 3 satıra ve ölçüm dipnotu karta girdi.
-_KART_MAKS_SATIR = 20
+# 2026-10-23: sade dil iki satırı böldü (kalite/güç, dönüş/üst TF, ölçüm
+# dipnotu) ve `engel`/`goreli` satırları aynı kartta basılabiliyor → tavan 22.
+# Ölçülen en dolu kart 22 satır / 620 kr; sınır 1100 kr.
+_KART_MAKS_SATIR = 22
+
+
+def _kart_sigan(adaylar: List[str]) -> str:
+    """Bütçeye sığan İLK adayı döndürür (hepsi sığmazsa en kısası).
+
+    `_satir` sığmayan satırı bölüp girintili devam satırı üretiyor; kart
+    sözleşmesi bunu yasaklar. Bu yüzden uzun biçimler sırayla kısalır —
+    bilgi düşmez, sözcük ekonomisi devreye girer.
+    """
+    esik = _kart_esik_px()
+    for aday in adaylar:
+        if _satir_px(aday) <= esik:
+            return aday
+    return min(adaylar, key=_satir_px)
 
 
 def _kart_daralma(data: Dict) -> str:
-    """`· daralma %52` — formasyonun olgunluğu (contraction, 0-1)."""
+    """`%52` — formasyonun olgunluğu (contraction, 0-1); bant satırına eklenir."""
     deger = data.get("contraction")
     try:
         sayi_deger = float(deger) if deger is not None else None
@@ -419,15 +462,38 @@ def _kart_daralma(data: Dict) -> str:
         sayi_deger = None
     if sayi_deger is None or sayi_deger < 0:
         return ""
-    return f"· daralma %{max(0, min(100, round(sayi_deger * 100)))}"
+    return f"%{max(0, min(100, round(sayi_deger * 100)))} daralma"
+
+
+def _kart_bant(data: Dict) -> str:
+    """`· bant 49 mum, %52 daralma` — süre ve olgunluk TEK satırda.
+
+    Kullanıcı (2026-10-23): "bant 49 mum (30 Eylül'den)" tarihiyle birlikte
+    daralma yüzdesiyle aynı satıra sığmıyordu (301 px) ve iki ayrı satır
+    ("bant", "daralma") neyin ne olduğunu söylemiyordu. Tarih düştü, iki ölçü
+    tek satıra geldi: 233 px. Tarih `/tara` ve kârede duruyor.
+    """
+    yas = data.get("age_bars")
+    try:
+        yas_say = int(yas) if yas is not None and int(yas) >= 0 else None
+    except (TypeError, ValueError, OverflowError):
+        yas_say = None
+    daralma = _kart_daralma(data)
+    if yas_say is None and not daralma:
+        return ""
+    if yas_say is None:
+        return f"· bant {daralma}"
+    if not daralma:
+        return f"· bant {yas_say} mum"
+    return f"· bant {yas_say} mum, {daralma}"
 
 
 def _kart_temas(data: Dict) -> str:
-    """`· temas üst 2 / alt 3` — bant sınırlarının kaç kez denendiği."""
+    """`· üste 2, alta 2 kez değdi` — bant sınırlarının kaç kez denendiği."""
     ust, alt = data.get("upper_touches"), data.get("lower_touches")
     if ust is None or alt is None:
         return ""
-    return f"· temas üst {ust} / alt {alt}"
+    return f"· üste {ust}, alta {alt} kez değdi"
 
 
 def _format_lifecycle_alert_kart_sade(data: Dict, *,
@@ -494,36 +560,44 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     blok: List[str] = []
     _satir(blok, f"{ok} {stock} {tf_label} {olay_metni}".strip())
     if kisalt:
-        aday = f"{pattern} — {kisalt}"
-        if genislik(aday) > _kart_esik_px():
-            aday = f"{pattern} - {kisalt}"
-        _satir(blok, aday)
+        # Uzun ad + uzun not (ör. "Yükselen Üçgen — kırılan seviye tuttu")
+        # bütçeyi aşıp `tuttu`yu girintili devam satırına düşürüyordu. Sığan
+        # en açık biçim seçilir; bilgi başlıkta zaten var.
+        kisa_not = _KART_OLAY_KISA.get(state, kisalt)
+        _satir(blok, _kart_sigan([
+            f"{pattern} — {kisalt}",
+            f"{pattern} - {kisalt}",
+            f"{pattern} — {kisa_not}",
+            f"{pattern} — {kisa_not.split()[-1]}",
+        ]))
     else:
         _satir(blok, pattern)
     damga = _kart_mum_damgasi(data)
     if damga:
         _satir(blok, damga)
-    # Olayın tek ölçüsü: teyitlide "kapanış · sınır", geçersizleşmede "dönüş sınırı".
+    # Olayın tek ölçüsü: teyitlide "kapanış · kırılan", geçersizleşmede "dönüş
+    # sınırı". "sınır" hangi sınır olduğunu söylemiyordu (kullanıcı 2026-10-23):
+    # yazılan seviye KIRILAN bant sınırıdır.
     if gecersiz:
         if esik:
             _satir(blok, f"· dönüş sınırı {_sayı(esik)} {yon_eki}")
         elif kapanis:
             _satir(blok, f"· kapanış {kapanis}")
     elif kapanis and kirilan:
-        # ENDEKS ÖLÇEĞİ (2026-10-22): 5 haneli fiyatta birleşik satır 279,5 px
-        # ölçüldü (`· kapanış 13482,50 · sınır 13380,00`) → `_satir` bölüyor ve
-        # GİRİNTİLİ devam satırı üretiyordu; kart sözleşmesi girintili devam
-        # satırını yasaklar. Bölme burada, iki tam satır olarak yapılır.
-        birlesik = f"· kapanış {kapanis} · sınır {kirilan}"
+        # ENDEKS ÖLÇEĞİ (2026-10-22): 5 haneli fiyatta birleşik satır ~280 px
+        # ölçülüyor → `_satir` bölüyor ve GİRİNTİLİ devam satırı üretiyordu;
+        # kart sözleşmesi girintili devam satırını yasaklar. Bölme burada,
+        # iki tam satır olarak yapılır.
+        birlesik = f"· kapanış {kapanis} · kırılan {kirilan}"
         if genislik(birlesik) <= _kart_esik_px():
             _satir(blok, birlesik)
         else:
             _satir(blok, f"· kapanış {kapanis}")
-            _satir(blok, f"· sınır {kirilan}")
+            _satir(blok, f"· kırılan {kirilan}")
     elif kapanis:
         _satir(blok, f"· kapanış {kapanis}")
     elif kirilan:
-        _satir(blok, f"· sınır {kirilan}")
+        _satir(blok, f"· kırılan {kirilan}")
     bloklar.append(blok)
 
     if guncelleme:
@@ -539,19 +613,29 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     engel = list(bolumler.get("engel") or []) if isinstance(bolumler, dict) else []
     if engel and not gecersiz:
         _satir(blok, str(engel[0]))
-    kalite = _sayı(data.get("confidence_score"), 0)
+    # İki 100'lük sayı yan yana etiketsiz duruyordu ("kalite 80 — güç 99"):
+    # hangisi neyin ölçüsü? (kullanıcı 2026-10-23). Ayrı satır + tam ad.
+    # 2026-10-25: formasyon kalitesi karttan KALKTI (ölçülen sonucu öngörmüyor:
+    # kovalar arası fark <2 puan, bileşenleri zıt yönde). Yerine ölçülmüş
+    # devamlılık puanı gelir; geometri yalnız bildirim eşiğini besler.
     güç = _sayı(data.get("break_strength"), 0)
-    if kalite and güç:
-        _satir(blok, f"· kalite {kalite}/100 — güç {güç}")
-    elif kalite:
-        _satir(blok, f"· kalite {kalite}/100")
-    yas_metni = _kart_yas_metni(data)
-    if yas_metni:
-        if genislik(yas_metni) <= _kart_esik_px():
-            _satir(blok, yas_metni)
-        else:
-            for parca in yas_metni.split(" · "):
-                _satir(blok, parca if parca.startswith("·") else "· " + parca)
+    # 2026-10-25 gece (§11–§12): "Devamlılık: yüksek/normal/zayıf" satırı
+    # kaldırıldı. Puan tek bayrağa indirgeniyordu, etiket ise ölçümün taşımadığı
+    # bir "kalite hükmü" veriyordu. Aynı bilgi (üst TF aynı yönde mi) kartın
+    # kendi üst-zaman-dilimi satırında yazılı; çift satır açmıyoruz.
+    # Yalnız rollback yolu (`DEVLAMLILIK_AKTIF=0`) eski kalite satırını basar.
+    if not DEVLAMLILIK_AKTIF:
+        kalite = _sayı(data.get("confidence_score"), 0)
+        if kalite:
+            _satir(blok, f"· formasyon kalitesi {kalite}/100")
+    if güç:
+        _satir(blok, f"· kırılım gücü {güç}/100")
+    bant_metni = _kart_bant(data)
+    if bant_metni:
+        _satir(blok, bant_metni)
+    temas_metni = _kart_temas(data)
+    if temas_metni:
+        _satir(blok, temas_metni)
     if blok:
         bloklar.append(blok)
 
@@ -566,13 +650,25 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     goreli = list(bolumler.get("goreli") or []) if isinstance(bolumler, dict) else []
     if goreli and not gecersiz:
         _satir(blok, str(goreli[0]))
-    retest = "geri çekilme var" if data.get("retest_seen") else "geri çekilme yok"
-    ust_tf = _KART_UST_TF.get(timeframe)
-    if ust_tf:
-        mtf = f"{ust_tf} de onaylı" if data.get("mtf_destek") else f"{ust_tf} onayı yok"
-        _satir(blok, f"{retest} · {mtf}")
-    else:
-        _satir(blok, retest)
+    # `geri çekilme yok · 1g de onaylı` iki jargonu tek satıra sıkıştırıyordu
+    # (kullanıcı 2026-10-23). Ayrı satırlar: dönüş + üst zaman dilimi (sözcükle).
+    # İPTAL kartında bu satır basılmaz: olayın kendisi "banda döndü" diyor,
+    # "dönüş yok" yazmak başlıkla çelişiyordu (kullanıcı 2026-10-23).
+    if not gecersiz:
+        _satir(blok, "· kırılan seviyeye dönüş var" if data.get("retest_seen")
+               else "· kırılan seviyeye dönüş yok")
+    ust_soz = _KART_UST_TF_SOZ.get(timeframe)
+    if ust_soz:
+        # 2026-10-25: `mtf_destek` yalnız "üst TF'de aktif formasyon var" demek;
+        # YÖN aynı mı, bilmiyor. Eskiden onay için "de aynı yönde" yazıyordu ve
+        # ters yönlü üst TF'de de aynı cümleyi kuruyordu. Yön uyumu `mtf_uyum`da
+        # (main.py: eşleşirse 4, aksi 0). Bilinmeyeni iddia etmiyoruz.
+        if int(_sayı(data.get("mtf_uyum"), 0) or 0) > 0:
+            _satir(blok, f"· {ust_soz} de aynı yönde")
+        elif data.get("mtf_destek"):
+            _satir(blok, f"· {ust_soz}: yön uyumu yok")
+        else:
+            _satir(blok, f"· {ust_soz} onayı yok")
     if blok:
         bloklar.append(blok)
 
@@ -585,9 +681,13 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
         # ölçüm satırlarının önüne gelir; `olcum` listesi zaten o sırayla üretilir.
         for satir in olcum[:3]:
             _satir(blok, str(satir))
-        # Ölçüm dipnotu: oran "kazanç" diye okunmasın. `/tara` satırının yerine
-        # geldi (2026-10-22 kararı). Ölçüm varsa her zaman basılır.
-        _satir(blok, "· geçmiş davranış, kazanç değil")
+        # Ölçüm dipnotu: oran "kazanç" diye okunmasın. Kullanıcı (2026-10-23):
+        # "geçmiş davranış, kazanç değil" geçmişte bir ÖNERİ olduğu gibi
+        # okunuyordu; iki satır açık yazılır (tek satır 330 px, bütçe 283).
+        # Kullanıcı (2026-10-23): iki satır bölünmesin, tek satır olsun. Tam
+        # hâli (`· oran geçmiş davranıştır, kazanç değildir`) 330 px; bütçe
+        # 262,8. Kırpma yok, sözcük ekonomisi: iki yargı da korunur.
+        _satir(blok, "geçmiş davranıştır, kazanç değil")
         bloklar.append(blok)
 
     # ── BLOK 5 · KATILIM ─────────────────────────────────────────────────────
@@ -602,9 +702,42 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     blok = []
     karsi = [str(x) for x in (data.get("domain_karsi") or []) if str(x).strip()]
     if karsi:
-        _satir(blok, "ters işaret: " + " — ".join(karsi[:2]))
+        # "ters işaret" neyin tersi olduğunu söylemiyordu (kullanıcı 2026-10-23):
+        # satır, sinyalin ALEYHİNE olan veriyi taşır.
+        _satir(blok, "olumsuz: " + " — ".join(karsi[:2]))
     if esik and not gecersiz:
-        _satir(blok, f"· bozulur: {_sayı(esik)} {yon_eki} kapanış")
+        # "bozulur" neyin bozulduğunu söylemiyordu → teyidin düşme eşiği.
+        # 5 haneli fiyatta (XBANK 13510,00) tam satır 278 px ve `_satir` onu
+        # GİRİNTİLİ devam satırına bölüyordu (kart sözleşmesi yasak). Bu yüzden
+        # sığan en açık biçim seçilir; kırpma yok, kısaltma var.
+        fiyat = _sayı(esik)
+        # Eşik motorun kuralıdır: kapanış BANTIN içine dönerse teyit düşer.
+        # Bant kırılımdan sonra daraldığında eşik kırılan seviyenin öbür
+        # tarafına düşebiliyor (DOHOL: kırılan 16,87 ama bant tabanı 16,83).
+        # İki sayı yan yana okununca çelişki gibi görünüyordu; eşik kırılana
+        # eşit değilse "bant" sözcüğüyle etiketlenir (kullanıcı 2026-10-23).
+        kirilan_sayi = None
+        try:
+            kirilan_sayi = float(str(kirilan).replace(",", ".")) if kirilan else None
+        except (TypeError, ValueError):
+            kirilan_sayi = None
+        try:
+            esik_sayi = float(esik)
+        except (TypeError, ValueError):
+            esik_sayi = None
+        bant_farki = (kirilan_sayi is not None and esik_sayi is not None
+                      and abs(esik_sayi - kirilan_sayi) > 1e-9)
+        adaylar = [
+            f"· teyit düşer: {fiyat} {yon_eki} kapanış",
+            f"· teyit düşer: {fiyat} {yon_eki}",
+        ]
+        if bant_farki:
+            adaylar = [
+                f"· teyit düşer: bant {fiyat} {yon_eki} kapanış",
+                f"· teyit düşer: bant {fiyat} {yon_eki}",
+            ] + adaylar
+        adaylar.append(f"· teyit düşer {fiyat} {yon_eki}")
+        _satir(blok, _kart_sigan(adaylar))
 
     # İzleme adayları (adaptör doldurur; canlı tarayıcı boş bırakır): sınır
     # bloğunun altında, kendi başlığıyla. Bilgi düşürülmez.
@@ -623,24 +756,19 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     if blok:
         bloklar.append(blok)
 
-    # ── isteğe bağlı ölçüler: yer varsa 2. bloğa girer ──────────────────────
-    ekler: List[tuple[int, str]] = []
-    for oncelik, metin in ((3, _kart_daralma(data)), (2, _kart_temas(data))):
-        if metin:
-            ekler.append((oncelik, metin))
-
+    # ── satır tavanı ────────────────────────────────────────────────────────
+    # Daralma/temas 2026-10-23'te çekirdek satır oldu (bant satırına katıldı),
+    # bu yüzden "yer varsa ekle" havuzu kalmadı. Tavan artık ölçü bloğunun
+    # altından düşürür: sıra → en son ölçü satırı, sonra göreli güç.
     icerik = sum(len(b) for b in bloklar)
-    kalan = _KART_MAKS_SATIR - icerik
-    secilen: List[str] = []
-    for _oncelik, metin in sorted(ekler, reverse=True):
-        if kalan <= 0:
+    while icerik > _KART_MAKS_SATIR:
+        for blok_ in reversed(bloklar):
+            if len(blok_) > 1 and str(blok_[0]).startswith("◇"):
+                blok_.pop()
+                icerik -= 1
+                break
+        else:
             break
-        secilen.append(metin)
-        kalan -= 1
-    if secilen:
-        # Ölçü satırları 2. blokta (bant/kalite ile) okunur.
-        hedef = bloklar[1] if len(bloklar) > 1 else bloklar[0]
-        hedef.extend(secilen)
 
     # ── BLOK 7 · CTA ─────────────────────────────────────────────────────────
     bloklar.append(["• yatırım tavsiyesi değildir"])
@@ -704,13 +832,18 @@ def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False) -> str
         except (TypeError, ValueError):
             marj = ""
         _satir(künye, f"▪ kapanış {kapanis}{marj}")
-    kalite = _sayı(data.get("confidence_score"), 0)
     güç = _sayı(data.get("break_strength"), 0)
-    if kalite:
-        # "Kalite" eskiden formasyonun o anki kalitesiydi (main.py: snap.effective_quality);
-        # alarmı geçiren sayı ile mesajda okunan sayı karışmasın diye etiket açık.
-        _satir(künye, f"▪ kalite {kalite}/100 (formasyon)"
-                      + (f" · kırılma gücü {güç}" if güç else ""))
+    # 2026-10-25: "kalite" (geometri) künyeden kalktı. Eşiği geçen sayı ile
+    # mesajda okunan sayı aynı şey değildi; artık mesajda ölçülmüş devamlılık var.
+    if DEVLAMLILIK_AKTIF:
+        # Puan/etiket künyeden de kalktı (§11–§12); ölçülmüş kırılma gücü kalır.
+        if güç:
+            _satir(künye, f"▪ kırılma gücü {güç}")
+    else:
+        kalite = _sayı(data.get("confidence_score"), 0)
+        if kalite:
+            _satir(künye, f"▪ kalite {kalite}/100 (formasyon)"
+                          + (f" · kırılma gücü {güç}" if güç else ""))
     temas = []
     if data.get("upper_touches") is not None and data.get("lower_touches") is not None:
         temas.append(f"temas üst {data.get('upper_touches')} / alt {data.get('lower_touches')}")
@@ -901,13 +1034,17 @@ def _format_lifecycle_alert_klasik(data: Dict) -> str:
     if bar_text:
         lines.append(bar_text)
 
-    try:
-        quality = float(data.get("confidence_score"))
-        if quality == quality and abs(quality) != float("inf"):
-            grade = _quality_grade(quality)
-            lines.append(f"Kalite: {quality:.0f}/100" + (f" · {grade}" if grade else ""))
-    except (TypeError, ValueError, OverflowError):
-        pass
+    if not DEVLAMLILIK_AKTIF:
+        # Rollback yolu (`DEVLAMLILIK_AKTIF=0`): 25 Eyl klasik metni birebir,
+        # kalite satırı dahil. Aktifken bu satır yok: puan ve kalite hükmü
+        # karttan kalktı (§11–§12).
+        try:
+            quality = float(data.get("confidence_score"))
+            if quality == quality and abs(quality) != float("inf"):
+                grade = _quality_grade(quality)
+                lines.append(f"Kalite: {quality:.0f}/100" + (f" · {grade}" if grade else ""))
+        except (TypeError, ValueError, OverflowError):
+            pass
 
     upper_touches = data.get("upper_touches")
     lower_touches = data.get("lower_touches")
@@ -1028,15 +1165,26 @@ def _public_izleme_adaylari(aktif: List[Dict], adet: int = 5, haric=None) -> Lis
     adaylar = [f for f in aktif or []
                if isinstance(f, dict) and str(f.get('state') or '') in WATCH_STATES
                and f.get('stock_name') not in haric]
+    # 2026-10-25: sıralama ölçüsü devamlılık puanı (ölçülmüş fazla), geometri değil.
+    # Kartla aynı sayı okunsun diye puan burada da hesaplanır.
+    def _sira_degeri(f: Dict) -> float:
+        p = devamlilik_puani(f)
+        if p is not None:
+            return float(p)
+        try:
+            return float(f.get('confidence_score') or 0) * 0.5   # kapsam dışı: geriye düşsün
+        except (TypeError, ValueError):
+            return 0.0
+
     try:
-        adaylar.sort(key=lambda f: float(f.get('confidence_score') or 0), reverse=True)
+        adaylar.sort(key=_sira_degeri, reverse=True)
     except (TypeError, ValueError):
         pass
     sonuc = []
     for f in adaylar[:adet]:
         sonuc.append({"stock": f.get("stock_name"), "timeframe": f.get("timeframe"),
                       "pattern_name": f.get("pattern_name"),
-                      "quality": f.get("confidence_score")})
+                      "quality": devamlilik_puani(f)})
     return sonuc
 
 # Zaman dilimi -> bir bar kaç saat? Tek-seferlik mühürün bayatma süresi buna
@@ -1194,6 +1342,15 @@ class TelegramNotifier:
         # DM içerik kapısı durumu: anahtar -> {"imza","kapanis","gün"}
         self._dm_imzalar: Dict[str, Dict] = {}
         self._dm_imza_lck = threading.Lock()
+        # --- içerik kopyası kapısı (2026-10-23) ---
+        # Mühür `formation_id` ile tekilleşir; motor aynı kurulumu her taramada
+        # YENİ kimlikle üretirse kimlik değişir ve mühür tutmaz → ALARK 4s üç
+        # kez, KCHOL 2s üç kez birebir aynı kart basıldı (kullanıcı bildirimi).
+        # Bu kapı kimliğe değil KARTIN KENDİSİNE bakar: aynı hisse+TF+state
+        # için birebir aynı metin TTL içinde ikinci kez gönderilmez. Fiyat/
+        # kapanış/kalite değişirse metin değişir → gerçekten yeni olay geçer.
+        self._kart_imzalar: Dict[str, Dict] = {}
+        self._kart_imza_lck = threading.Lock()
         self.gonderim_hatasi = 0
         self.gonderilen_alarm = 0
         # Son can_send çağrısının engel sebebi (None = engel yok). Çağıran taraf
@@ -1518,6 +1675,13 @@ class TelegramNotifier:
         # kalıyordu. Kalite kapısı yalnız YENİ iddialar (teyit/retest) içindir.
         if state == "KIRILIM_GECERSIZLESTI":
             return True
+        # 2026-10-25: hacim musluğu artık devamlılık puanı. `PUBLIC_MIN_DEVLAMLILIK`
+        # 0 iken davranış eskisiyle birebir aynı; >0 verilirse ek eleme puanla.
+        # Geri alma ("geçersizleşti") bu kapıya takılmaz — yukarıda muaf.
+        if PUBLIC_MIN_DEVLAMLILIK > 0:
+            _p = devamlilik_puani(data)
+            if _p is None or _p < PUBLIC_MIN_DEVLAMLILIK:
+                return False
         try:
             q = float(quality or 0)
         except (TypeError, ValueError):
@@ -2190,6 +2354,54 @@ class TelegramNotifier:
         with self._dm_imza_lck:
             kayit = self._dm_imzalar.get(anahtar) or {}
         return "guncelleme" if str(kayit.get("imza") or "") == imza else "yeni"
+
+    # --- içerik kopyası kapısı ---------------------------------------------
+
+    def _kart_metni(self, data: Dict) -> str:
+        """Gönderilecek kart metni (hata olursa boş: kapı sessizce devre dışı)."""
+        try:
+            return str(data.get("_delivery_message") or self.format_message(data) or "")
+        except Exception:  # noqa: BLE001 - metin üretilemezse kopya kapısı çalışmaz
+            return ""
+
+    def _kart_imza_anahtari(self, data: Dict) -> str:
+        return "|".join(str(data.get(k) or "") for k in
+                        ("stock_name", "timeframe", "state")).upper()
+
+    def _kart_kopyasi_mi(self, data: Dict) -> bool:
+        """Aynı hisse+TF+state kartı TTL içinde birebir aynıysa True.
+
+        TTL, mühürle aynı ölçekte (`_muhur_ttl_saat`): motorun "aynı olay"
+        penceresini kapsar. Metin birebir aynı değilse olay yenidir.
+        """
+        import hashlib
+        metin = self._kart_metni(data)
+        if not metin:
+            return False
+        anahtar = self._kart_imza_anahtari(data)
+        imza = hashlib.sha1(metin.encode("utf-8")).hexdigest()
+        with self._kart_imza_lck:
+            kayit = dict(self._kart_imzalar.get(anahtar) or {})
+        if str(kayit.get("imza") or "") != imza:
+            return False
+        try:
+            zaman = datetime.fromisoformat(str(kayit.get("zaman") or ""))
+        except (TypeError, ValueError):
+            return False
+        ttl = _muhur_ttl_saat(str(data.get("timeframe") or ""))
+        return (datetime.now(ISTANBUL_TZ) - _istanbul(zaman)) <= timedelta(hours=ttl)
+
+    def _kart_imza_kaydet(self, data: Dict) -> None:
+        import hashlib
+        metin = self._kart_metni(data)
+        anahtar = self._kart_imza_anahtari(data)
+        if not metin or not anahtar.strip("|"):
+            return
+        with self._kart_imza_lck:
+            self._kart_imzalar[anahtar] = {
+                "imza": hashlib.sha1(metin.encode("utf-8")).hexdigest(),
+                "zaman": datetime.now(ISTANBUL_TZ).isoformat(),
+            }
 
     def _dm_imza_kaydet(self, data: Dict) -> None:
         anahtar = _dm_anahtar(data)
@@ -3612,13 +3824,27 @@ class TelegramNotifier:
             return False
 
     def _gonder(self, data: Dict) -> bool:
+        # İçerik kopyası kapısı: mühür kimliğe bağlı olduğu için kimlik değişince
+        # birebir aynı kart yeniden gidebiliyordu. Gönderimden ÖNCE bakılır.
+        if self._kart_kopyasi_mi(data):
+            self.engeller["tekrar"] += 1
+            self._son_engel = "tekrar"
+            logger.info("%s %s %s - kart birebir aynı, kopya gönderilmiyor",
+                        data.get("stock_name"), data.get("timeframe"), data.get("state"))
+            return False
         if self.enabled:
             try:
-                return self._delivery.submit(data)
+                ok = self._delivery.submit(data)
             except Exception as exc:
                 logger.error("Bildirim kalıcı kuyruğa alınamadı: %s", type(exc).__name__)
                 return False
-        return self._gonder_metin(data)
+            if ok:
+                self._kart_imza_kaydet(data)
+            return ok
+        ok = self._gonder_metin(data)
+        if ok:
+            self._kart_imza_kaydet(data)
+        return ok
 
     def teslimleri_dene(self) -> int:
         return self._delivery.flush() if self.enabled else 0

@@ -16,10 +16,27 @@ değiştirilirken sınırın sessizce aşılması engellenir.
 # --- Kısa açıklama (kanal "Hakkında" alanı) ---------------------------------
 # Üslup: ne olduğu + ne gönderdiği + sorumluluk reddi + X hesabı.
 ACILIK_ACIKLAMASI = (
-    "BIST formasyon takip panosu · 48 hisse + endeksler, 4 zaman dilimi: "
-    "saatlik bülten, 18:45 kapanış özeti, Cuma karnesi. Yatırım tavsiyesi "
-    "değildir. X: @bisthisseveri"
+    "BIST formasyon takip panosu · 48 hisse + endeksler, 4 zaman dilimi. "
+    "Kapanışla teyitli kırılım, retest ve iptal bildirimleri tek kartta: "
+    "seviye, ölçü, teyit eşiği. Yatırım tavsiyesi değildir · X: @bisthisseveri"
 )
+
+# --- Bot künyesi (BotFather: "About" ve "Description") ----------------------
+# 2026-10-23: kart sade dile geçti; botun künyesi de aynı dili konuşur. Amaç
+# botu ilk açan kişinin 15 saniyede "bu ne, ne göndermiyor" sorusunu
+# cevaplaması. "Sinyal", "kazanç", "hedef" gibi sözler bilinçli olarak yok.
+BOT_HAKKINDA = (
+    "BIST formasyon tarayıcısı. Kırılımı seviyesi, kalitesi ve teyit eşiğiyle "
+    "tek mesajda yazar. Yatırım tavsiyesi değildir."
+)
+
+BOT_ACIKLAMASI = """Formation-Bot BIST'te üçgen, kama, bayrak ve flama formasyonlarını 48 hissede 4 zaman diliminde, yalnız kapanmış mumla tarar.
+
+Kırılım, retest ve iptal olaylarını tek mesajda bildirir: seviye, kapanış, formasyon kalitesi, bant olgunluğu, piyasa yönü, hacim ve teyidin hangi fiyatta düşeceği. Yanında benzer kurulumların geçmiş sonucu var; bunlar orandır, kazanç değildir.
+
+Komutlar: /formasyonlar /panel /ozet /tara /grafik /karne /olcum /yardim
+
+Al/sat sinyali vermez. Yatırım tavsiyesi değildir."""
 
 # --- Sabitlenmiş karşılama mesajı -------------------------------------------
 # Yeni gelen biri 30 saniyede şunları öğrenmeli: ne, ne zaman, ne YOK,
@@ -56,8 +73,12 @@ def karakter_sayilari() -> dict:
     return {
         "aciklama": br(ACILIK_ACIKLAMASI),
         "sabit_mesaj": br(ACILIK_SABIT_MESAJ),
+        "bot_hakkinda": br(BOT_HAKKINDA),
+        "bot_aciklamasi": br(BOT_ACIKLAMASI),
         "aciklama_siniri": 255,
         "mesaj_siniri": 4096,
+        "bot_hakkinda_siniri": 120,
+        "bot_aciklama_siniri": 512,
     }
 
 

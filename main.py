@@ -40,18 +40,19 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     PUBLIC_MIN_QUALITY,
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE, EVREN_BUYUME_UYARI_ESIGI,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL,
-                    TERMINAL_TAZE_BAR)
+                    TERMINAL_TAZE_BAR,
+                    DM_MIN_DEVLAMLILIK)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   islem_gunu_mu,
                   son_kapanan_mum_ani, time_until_next_open, is_bist_open,
-                  resample_all_timeframes, fetch_yfinance_1h, fetch_yfinance_1d,
+                  resample_all_timeframes, resample_ohlcv, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_last_bar,
                   select_yfinance_1h_period, tamamlanmis_mumlar,
                   mum_kapanis_ani, bar_kapandi_mi)
 from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
-from notifier import TelegramNotifier
+from notifier import TelegramNotifier, devamlilik_puani
 import config
 import ampirik_referans as ampirik
 from notification_context import (
@@ -1079,6 +1080,10 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları (DM)
    TF yazılmazsa o sembolün 4 TF karesi denenir; kabul yanıtı hemen, görsel DM’e gelir.
    Veri mevcut bellek/cache katmanından; eksik/eski cache açık hatadır, canlı fetch yok.
    TELEGRAM_GRAFIK kapalıyken de çalışır; görseller alarm metin kotasını tüketmez.
+/evet · /hayır — gece denetiminin önerisini onayla/reddet (diğer adlar:
+   /onay · /kabul · /hayir · /red). Karar kayda geçer; bot kendiliğinden eşik,
+   kart ya da etiket DEĞİŞTİRMEZ — uygulama elle yapılır. Öneri yalnız sapma
+   varsa ya da ölçüm "bayrak kaldırılsın" derse DM'e düşer.
 /yardim — bu liste (diğer adlar: /help · /start)
 
 Notlar:
@@ -2113,13 +2118,54 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
                     f"⚠️ Grafik isteği kısmen tamamlandı: {istek['hisse']} · "
                     f"{time.monotonic() - baslangic:.1f} sn\n" + "\n".join(ozetler),
                     getattr(notifier, "token", "")))
-            # Hepsi başarılıysa ayrı metin yok: albüm kendi başına yanıttır.
+            else:
+                # Albümün kendisi görsel; hangi hisse/TF olduğunu söyleyen tek
+                # metin mesajı ayrıca gider (2026-10-23 kullanıcı isteği).
+                bildir(redact_sensitive_text(
+                    _grafik_ozet_metni(istek["hisse"], istek["tfler"], basarili,
+                                       time.monotonic() - baslangic, istek),
+                    getattr(notifier, "token", "")))
             logger.info("/grafik %s bitti: %d/%d kare, %.1f sn", istek["hisse"], basarili,
                         len(istek["tfler"]), time.monotonic() - baslangic)
     finally:
         zamanlayici.cancel()
         with bildirim_kilidi:
             tamam.set()
+
+
+def _grafik_ozet_metni(hisse: str, tfler, adet: int, sure: float,
+                       istek: dict) -> str:
+    """`/grafik` başarı metni: hisse EN BAŞTA, seçimler arkada (2026-10-23).
+
+    Kullanıcı: "grafik çağırınca hisse metninde gelsin, düzenli şekilde".
+    Albüm tek başına yanıttı ve hangi hisseye ait olduğunu söyleyen metin
+    yoktu. Metin iki satırdır ve satır başına 283 px bütçesine sığar; sığmayan
+    süs (görünüm seçimleri, süre) sırayla düşer — hisse ve TF listesi kalır.
+    """
+    import telegram_measure as _tm
+    modlar = []
+    if istek.get("sade") is True:
+        modlar.append("sade")
+    elif istek.get("sade") is False:
+        modlar.append("detay")
+    if istek.get("gorunum"):
+        modlar.append(str(istek["gorunum"]))
+    if istek.get("mobil"):
+        modlar.append("mobil")
+    tf_listesi = [_tf_kisa(t) for t in tfler]
+    sure_metni = f"{sure:.1f} sn".replace(".", ",")
+    adaylar = [
+        " · ".join(tf_listesi + [f"{adet} kare", sure_metni] + modlar),
+        " · ".join(tf_listesi + [f"{adet} kare"] + modlar),
+        " · ".join(tf_listesi + modlar),
+        " · ".join(tf_listesi),
+    ]
+    ikinci = adaylar[-1]
+    for aday in adaylar:
+        if _tm.genislik(aday) <= _tm.SATIR_BUTCE:
+            ikinci = aday
+            break
+    return f"📈 {hisse} · grafik hazır\n{ikinci}"
 
 
 def _kare_altyazisi(hisse: str, tf: str, meta: dict) -> str:
@@ -2191,6 +2237,26 @@ def _manuel_tarama_tamamla(request: dict, result: dict, notifier) -> None:
             _scan_job_active.clear()
 
 
+def _komut_oneri_cevabi(cevap: str) -> str:
+    """`/evet` · `/hayır`: gece önerisinin kararını yazar (eşik DEĞİŞMEZ)."""
+    try:
+        import oneri
+        return oneri.cevapla(cevap, store=_supabase_store_ref)
+    except Exception as exc:  # noqa: BLE001 - komut sessiz kalmamalı
+        logger.warning("Gece önerisi yanıtlanamadı: %s", exc)
+        return "Gece önerisi kaydı okunamadı; karar yazılmadı. Birkaç dakika sonra yeniden deneyin."
+
+
+def _komut_evet(_arguman: str) -> str:
+    """Gece önerisini kabul et — kayda geçer, kod kendiliğinden değişmez."""
+    return _komut_oneri_cevabi("evet")
+
+
+def _komut_hayir(_arguman: str) -> str:
+    """Gece önerisini reddet — ölçüm sürer, aynı öneri bir süre tekrar sorulmaz."""
+    return _komut_oneri_cevabi("hayır")
+
+
 TELEGRAM_KOMUTLARI = {
     "start": _komut_yardim,
     "yardim": _komut_yardim,
@@ -2231,6 +2297,13 @@ TELEGRAM_KOMUTLARI = {
     "g": _komut_grafik,
     "genel": _komut_panel,
     "tablo": _komut_panel,
+    # Gece önerisi kararı (§15): onay/red KAYDA geçer, eşik değişmez.
+    "evet": _komut_evet,
+    "onay": _komut_evet,
+    "kabul": _komut_evet,
+    "hayir": _komut_hayir,
+    "hayır": _komut_hayir,
+    "red": _komut_hayir,
 }
 
 # === SON TARAMA KALICILIĞI ===
@@ -2908,6 +2981,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     
                     # Alert eşiği kontrolü - timeframe'e göre (effective_quality üzerinden)
                     min_q = ALERT_MIN_QUALITY.get(tf_name, ALERT_MIN_QUALITY_GLOBAL)
+                    # Devamlılık puanı DM musluğu (varsayılan 0 = kapalı, davranış
+                    # değişmez). >0 verilirse yalnız bu puanın üstü DM'e gider.
+                    if DM_MIN_DEVLAMLILIK > 0:
+                        _dev_puan = devamlilik_puani({
+                            'pattern_name': active.pattern_type,
+                            'mtf_uyum': mtf_uyum,
+                            'bant_mesafe_atr': bant_mesafe_atr})
+                        if _dev_puan is None or _dev_puan < DM_MIN_DEVLAMLILIK:
+                            logger.info("DM atlandı (devamlılık %s < %s): %s %s",
+                                        _dev_puan, DM_MIN_DEVLAMLILIK, stock, tf_name)
+                            continue
                     try:
                         yas_bar = max(0, int(snap.bar_index - active.start_bar))
                     except Exception:
@@ -3039,18 +3123,41 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         except Exception:
                             band_baslangic = None
                         # Çoklu zaman teyidi: 1h kırılımında 4h destekliyor mu?
+                        # 2026-10-25: kart "4h de aynı yönde" diyordu ama yön
+                        # karşılaştırılmıyordu (yalnız "aktif mi" bakılıyordu).
+                        # Artık yön de aranıyor; kartın iddiası ölçümle aynı olsun.
                         mtf_destek = False
+                        mtf_uyum = 0
                         try:
+                            ust_snap = None
                             if tf_name == "1h":
-                                snap_4h = lifecycle_manager.get_snapshot(stock + "_4h")
-                                if snap_4h and snap_4h.active and snap_4h.state not in ("FORMASYON_GECERSIZ", "Yok", "ST_NONE"):
-                                    mtf_destek = True
+                                ust_snap = lifecycle_manager.get_snapshot(stock + "_4h")
                             elif tf_name == "4h":
-                                snap_1d = lifecycle_manager.get_snapshot(stock + "_1d")
-                                if snap_1d and snap_1d.active:
-                                    mtf_destek = True
+                                ust_snap = lifecycle_manager.get_snapshot(stock + "_1d")
+                            if (ust_snap and ust_snap.active
+                                    and ust_snap.state not in ("FORMASYON_GECERSIZ", "Yok", "ST_NONE")):
+                                mtf_destek = True
+                                # Yön uyumu: üst TF'nin kırılım yönü aynıysa
+                                # ölçümdeki "MTF 4/4" kademesine denk sayılır.
+                                ust_yon = int(getattr(ust_snap, "break_dir", 0) or 0)
+                                if ust_yon and int(break_dir or 0) and ust_yon == int(break_dir):
+                                    mtf_uyum = 4
                         except Exception:
                             mtf_destek = False
+                            mtf_uyum = 0
+
+                        # Girişin banda uzaklığı (ATR cinsinden). Devamlılık
+                        # puanının en sağlam maddesi: kırılımı kovalamak
+                        # formasyonun katkısını yiyor (aile içi Q5−Q1 −7,0).
+                        bant_mesafe_atr = None
+                        try:
+                            _atr = atr_hesapla(df_tf)
+                            _giris = float(candle_close_price)
+                            _bant = float(break_price)
+                            if _atr and _atr > 0:
+                                bant_mesafe_atr = abs(_giris - _bant) / float(_atr)
+                        except Exception:
+                            bant_mesafe_atr = None
 
                         alert_data = {
                             'stock_name': stock,
@@ -3084,6 +3191,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'age_bars': age_bars,
                             'band_baslangic': band_baslangic,
                             'mtf_destek': mtf_destek,
+                            # Devamlılık puanının girdileri (bkz. devamlilik.py).
+                            # `confidence_score` kapı için kalır, kartta okunmaz.
+                            'mtf_uyum': mtf_uyum,
+                            'bant_mesafe_atr': bant_mesafe_atr,
                             # Acil mesaj kısa kalsın; izleme adayları 18:45 digest'inde
                             # gösterilir, bu nedenle burada bağlam eklenmez/tüketilmez.
                             'watch_context': [],
@@ -3167,13 +3278,32 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 )
                                 # MS arıza sayacı (yalnız /durum'da görünür).
                                 _ms_hata_kaydet(outputs, stock)
-                                payload['domain_context'] = format_domain_context(
-                                    outputs,
-                                    reference_price=candle_close_price,
-                                    alarm_tf=tf_name,
-                                    yalniz_tf=(notification_state
-                                               == "KIRILIM_GECERSIZLESTI"),
-                                )
+                                # Klasik bağlam metni KENDİ try'ında: bu metin
+                                # üretilemese bile kart bölümleri (aşağıda) karta
+                                # girmeli. 23 Eki 2026: tek istisna ikisini birden
+                                # düşürüyor, canlı kart "sade" kalıyordu.
+                                try:
+                                    payload['domain_context'] = format_domain_context(
+                                        outputs,
+                                        reference_price=candle_close_price,
+                                        alarm_tf=tf_name,
+                                        yalniz_tf=(notification_state
+                                                   == "KIRILIM_GECERSIZLESTI"),
+                                    )
+                                except Exception as ctx_hata:  # noqa: BLE001
+                                    payload['domain_context'] = ""
+                                    logger.warning(
+                                        "Domain bağlam metni üretilemedi (%s %s): %s",
+                                        stock, tf_name, ctx_hata,
+                                    )
+                                # Ölçüm kesitleri "normalin x katı" eşiğini ATR'den
+                                # okur. 23 Eki 2026: buradaki ad (`atr_alarm`) hiç
+                                # tanımlanmamıştı; her alarmda NameError yutuluyor
+                                # (aşağıdaki `except kart_hata`) ve karta HİÇBİR
+                                # domain bölümü girmiyordu — canlı kart bu yüzden
+                                # "sade" görünüyordu. ATR alarm TF'sinden, karne ile
+                                # aynı fonksiyonla hesaplanır.
+                                atr_alarm = atr_hesapla(df_tf)
                                 # Kart biçimleyicisi bölümleri AYRI ister: kendi
                                 # bölümünü kendi başlığıyla basabilsin ve imza
                                 # (değişmedi kontrolü) yalnız bağlamı görsün.
@@ -3218,12 +3348,27 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             # (endeks/makro: "hacim yok" yerine neden).
                                             sembol=stock,
                                         )
-                                        # Göreli güç yalnız YAPI bloğunda tek satır;
-                                        # endeks alarmının kendisinde basılmaz.
+                                    except Exception as kart_hata:  # noqa: BLE001
+                                        logger.warning(
+                                            "Kart bağlamı hazırlanamadı (%s %s): %s",
+                                            stock, tf_name, kart_hata,
+                                        )
+                                    # Göreli güç yalnız YAPI bloğunda tek satır;
+                                    # endeks alarmının kendisinde basılmaz. Kendi
+                                    # try'ı: endeks verisi yoksa bölge/hacim/ölçü
+                                    # blokları yine basılır.
+                                    try:
                                         goreli = _goreli_guc_satiri(
                                             stock, tf_name, df_tf, deque_manager)
-                                        if goreli:
+                                        if goreli and isinstance(
+                                                payload.get('domain_bolumleri'), dict):
                                             payload['domain_bolumleri']['goreli'] = [goreli]
+                                    except Exception as goreli_hata:  # noqa: BLE001
+                                        logger.debug(
+                                            "Göreli güç satırı üretilemedi (%s %s): %s",
+                                            stock, tf_name, goreli_hata,
+                                        )
+                                    try:
                                         payload['domain_karsi'] = karsi_deliller(
                                             outputs,
                                             alarm_tf=tf_name,
@@ -3231,10 +3376,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             mtf_destek=payload.get('mtf_destek'),
                                             retest_seen=payload.get('retest_seen'),
                                         )
-                                    except Exception as kart_hata:  # noqa: BLE001
-                                        logger.warning(
-                                            "Kart bağlamı hazırlanamadı (%s %s): %s",
-                                            stock, tf_name, kart_hata,
+                                    except Exception as karsi_hata:  # noqa: BLE001
+                                        logger.debug(
+                                            "Karşı delil üretilemedi (%s %s): %s",
+                                            stock, tf_name, karsi_hata,
                                         )
                             except Exception as exc:  # noqa: BLE001 - bağlam alarmı düşürmesin
                                 payload['domain_context'] = ""
@@ -3273,6 +3418,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             _gun_sayacini_gonderimle_hizala(
                                 stock, tf_name, notification_state)
                             _live_state.mark_alert_sent(stock, tf_name)
+                            # Gölge defter: KULLANICIYA GİDEN uyarılar kaydedilir
+                            # (kanala gitmeyen aday değil) — ileri testin evreni.
+                            _ileri_test_kaydet(alert_data)
                             logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {notification_state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
                         elif not dm_gecersiz_engel:
                             # Neden gönderilemedi? cooldown/kap ise olay kaybolmasın
@@ -4093,6 +4241,168 @@ def morning_preload(deque_manager, pacer):
         logger.error(f"Sabah preload hatası: {e}", exc_info=True)
 
 
+# --- İLERİ TEST (gölge defter) ----------------------------------------------
+# 2026-10-25: Ölçümün açık kalan tek sorusu "kama + üst TF aynı yönde" bayrağı
+# örneklem DIŞINDA işe yarıyor mu? Cevap, gönderilen her uyarının 24 bar sonraki
+# sonucunu kaydetmekle verilir (docs/arastirma/PUANLAMA_MIMARISI_2026-10-25.md
+# §11.4). Bu iş mesaj GÖNDERMEZ, eşik DEĞİŞTİRMEZ; yalnız kayıt tutar.
+ILERI_TEST_GECE_SAAT = 19          # BIST kapanışından sonra, gece mesaisi yok
+_ileri_test_son_gece = ""          # bu süreçte işin koştuğu gün (YYYY-MM-DD)
+
+
+def _ileri_test_kaydet(alert_data) -> None:
+    """Gönderilen uyarıyı gölge deftere yazar. Hata botu DURDURMAZ."""
+    try:
+        import ileri_test
+        ileri_test.kaydet(alert_data, store=_supabase_store_ref)
+    except Exception as exc:  # noqa: BLE001 - ölçüm kaydı botu düşürmemeli
+        logger.debug("İleri test kaydı atlandı: %s", exc)
+
+
+def _ileri_test_gece(now: datetime) -> None:
+    """Günde bir kez, kapanıştan sonra olgunlaşan kayıtların sonucunu hesaplar."""
+    global _ileri_test_son_gece
+    if now.hour < ILERI_TEST_GECE_SAAT:
+        return
+    gun = now.date().isoformat()
+    if _ileri_test_son_gece == gun:
+        return
+    try:
+        import ileri_test
+        cikti = ileri_test.gece(store=_supabase_store_ref,
+                                rapor_yolu=os.path.join(config.DATA_DIR,
+                                                        "ileri_test_ozet.md"))
+        _ileri_test_son_gece = gun
+        logger.info("İleri test gece işi tamam: %s", cikti["istatistik"])
+        logger.info("İleri test özeti:\n%s", cikti["ozet"])
+    except Exception as exc:  # noqa: BLE001 - gece işi ana döngüyü düşürmemeli
+        logger.warning("İleri test gece işi başarısız: %s", exc)
+
+
+# --- GECE DENETİMİ (#2 tutarlılık · #3 ölçüm tazeleme) -----------------------
+# 2026-10-25: Gece işi iki soruyu yeniden sorar ama hiçbir şeyi DEĞİŞTİRMEZ:
+#   1. Canlıda gönderilen uyarı, aynı barlarla yeniden oynatıldığında motor
+#      tarafından yine üretiliyor mu? (`tutarlilik.py`)
+#   2. "kama + üst TF aynı yönde" bayrağı bayraksız uyarılardan ölçülebilir
+#      biçimde fazla veriyor mu? (`olcum_tazele.py`)
+# Sonuç loga + `gece_raporu` tablosuna yazılır. DM yalnız EYLEM gerektiren
+# sonuçta gider (sapma ya da "bayrak kaldırılsın"); gece 03:00 mesajı yok ve
+# öneri kendiliğinden uygulanmaz. Toplam iş süre sınırlıdır (en fazla 10 replay)
+# ve yalnız seans kapalıyken koşar; canlı taramayı bekletmez.
+_gece_denetim_son_gun = ""        # bu süreçte denetimin koştuğu gün (YYYY-MM-DD)
+
+
+def _gece_raporu_yaz(gun: str, tutarlilik: dict, olcum: dict) -> bool:
+    """`gece_raporu` tablosuna gün anahtarıyla tek satır yazar. Hata işi düşürmez."""
+    store = _supabase_store_ref
+    if store is None:
+        return False
+    try:
+        cevap = store.request_table(
+            "gece_raporu", "POST",
+            json={"gun": gun, "tutarlilik": tutarlilik, "olcum": olcum},
+            headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+        )
+    except Exception as exc:  # noqa: BLE001 - rapor yazımı denetimi engellememeli
+        logger.debug("Gece raporu yazılamadı: %s", exc)
+        return False
+    return cevap is not None
+
+
+def _gece_onerisi_gonder(tutarlilik_sonuc: dict, olcum_sonuc: dict,
+                        gun: str = "") -> bool:
+    """Yalnız eylem gerektiren sonucu DM'e öneri olarak yollar.
+
+    Sessiz gece: sapma yoksa ve ölçüm "kalsın/yetersiz" diyorsa mesaj GİTMEZ
+    (her gece boş bildirim atmak, öneriyi okunmaz hale getirir). Gönderilen
+    öneri `oneri.py` defterine "bekliyor" olarak yazılır: /evet · /hayır bu
+    kaydı yanıtlar. Aynı metin yakın zamanda yanıtlandıysa tekrar gönderilmez.
+    """
+    notifier = _notifier_ref
+    if notifier is None or not getattr(notifier, "enabled", False):
+        return False
+    satirlar = []
+    sapma = (tutarlilik_sonuc or {}).get("sapma") or 0
+    if sapma:
+        satirlar.append(f"Tutarlılık: {sapma} sapma / "
+                        f"{(tutarlilik_sonuc or {}).get('kontrol', 0)} denetim")
+        for d in ((tutarlilik_sonuc or {}).get("sapmalar") or [])[:2]:
+            satirlar.append(f"· {d.get('sembol')} {d.get('tf')} — {d.get('neden')}")
+    if (olcum_sonuc or {}).get("karar") == "bayrak_kaldirilsin":
+        satirlar.append(str(olcum_sonuc.get("metin") or "").split(" Arşiv:")[0].strip())
+    if not satirlar:
+        return False
+    metin = ("🌙 Gece denetimi\n" + "\n".join(s for s in satirlar if s)
+             + "\n/evet ile onayla ya da /hayır ile reddet. Bot kendiliğinden "
+               "eşik değiştirmez.")
+    try:
+        import oneri
+        # Yanıtlanmış öneri aynı metinle 7 gün içinde tekrar sorulmaz.
+        if oneri.tekrar_mi(metin, store=_supabase_store_ref):
+            logger.info("Gece önerisi aynı metinle yanıtlanmış; DM tekrarlanmadı")
+            return False
+    except Exception as exc:  # noqa: BLE001 - öneri defteri yoksa DM yine gitsin
+        logger.debug("Gece önerisi defteri okunamadı: %s", exc)
+    try:
+        gonderildi, durum = notifier.send_text(metin)
+    except Exception as exc:  # noqa: BLE001 - DM hatası gece işini düşürmemeli
+        logger.debug("Gece önerisi gönderilemedi: %s", exc)
+        return False
+    if not gonderildi:
+        logger.info("Gece önerisi gönderilemedi: %s", durum)
+        return False
+    try:
+        import oneri
+        oneri.kaydet({
+            "gun": gun or datetime.now().date().isoformat(),
+            "metin": metin,
+            "karar": (olcum_sonuc or {}).get("karar") or "",
+            "ozet": " · ".join(s for s in satirlar if s),
+            "sapma": sapma,
+            "durum": "bekliyor",
+        }, store=_supabase_store_ref)
+    except Exception as exc:  # noqa: BLE001 - kayıt yazılamazsa DM gitti, iş sürer
+        logger.debug("Gece önerisi kaydedilemedi: %s", exc)
+    logger.info("Gece önerisi DM'e gitti (%d satır)", len(satirlar))
+    return True
+
+
+def _gece_denetimi(now: datetime) -> None:
+    """Günde bir kez: canlı–replay tutarlılığı + ölçüm tazeleme. Değişiklik YOK."""
+    global _gece_denetim_son_gun
+    if now.hour < ILERI_TEST_GECE_SAAT:
+        return
+    gun = now.date().isoformat()
+    if _gece_denetim_son_gun == gun:
+        return
+    try:
+        import ileri_test
+        import olcum_tazele
+        import tutarlilik
+
+        try:
+            defter = ileri_test.defter_yukle(store=_supabase_store_ref)
+            kayitlar = defter.get("kayitlar") or []
+        except Exception as exc:  # noqa: BLE001 - defter yoksa denetim yine koşar
+            logger.debug("Gece denetimi defteri okuyamadı: %s", exc)
+            kayitlar = []
+
+        tutarlilik_sonuc = tutarlilik.gunluk(kayitlar, simdi=now)
+        logger.info(tutarlilik.ozet(tutarlilik_sonuc))
+        olcum_sonuc = olcum_tazele.tazele(store=_supabase_store_ref, kayitlar=kayitlar)
+        logger.info(olcum_sonuc.get("metin"))
+
+        _gece_raporu_yaz(gun,
+                         {k: v for k, v in tutarlilik_sonuc.items() if k != "detay"},
+                         {"karar": olcum_sonuc.get("karar"),
+                          "metin": olcum_sonuc.get("metin"),
+                          "veri": olcum_sonuc.get("veri")})
+        _gece_onerisi_gonder(tutarlilik_sonuc, olcum_sonuc, gun=gun)
+        _gece_denetim_son_gun = gun
+    except Exception as exc:  # noqa: BLE001 - gece işi ana döngüyü düşürmemeli
+        logger.warning("Gece denetimi başarısız: %s", exc)
+
+
 def main_loop():
     """
     Ana döngü:
@@ -4682,6 +4992,10 @@ def main_loop():
                 # ile dönülmez (60 sn'de bir uyanıp durumu yeniden değerlendirir).
                 sleep_time = max(sleep_time, 60.0)
                 logger.info(f"BIST KAPALI - {now.strftime('%Y-%m-%d %H:%M:%S')} - {sleep_time/60:.1f}dk uyku (açılışa {wait_open/3600:.1f}sa)")
+                # Boş saatlerin tek gerçek işi: kapanan kayıtların sonucunu yaz.
+                _ileri_test_gece(now)
+                # Sonuç yazıldıktan SONRA denetim: aynı günün taze defteri okunur.
+                _gece_denetimi(now)
                 if _bekle_veya_tarama(sleep_time):
                     logger.info("Seans dışı analiz isteği geldi; ana döngü uyandırıldı")
                     continue

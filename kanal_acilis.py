@@ -26,6 +26,9 @@ import sys
 import acilis_metinleri as metinler
 
 ACIKLAMA_SINIRI = 255
+#: BotFather alanları: "About" 120, "Description" 512 (UTF-16 birimi).
+BOT_HAKKINDA_SINIRI = 120
+BOT_ACIKLAMA_SINIRI = 512
 
 
 def _kr(metin: str) -> int:
@@ -114,6 +117,38 @@ class TelegramAPI:
                 f"metin {_kr(metin)} karakter; Telegram sınırı {ACIKLAMA_SINIRI}",
             )
         return self.cagri("setChatDescription", chat_id=hedef, description=metin)
+
+    # --- bot künyesi (BotFather: About = kısa, Description = uzun) ---
+    # Sohbetten bağımsızdır: hedef/kimlik gerekmez, yalnız token.
+    def bot_hakkinda_yaz(self, metin: str):
+        if _kr(metin) > BOT_HAKKINDA_SINIRI:
+            raise KanalHatasi(
+                "setMyShortDescription",
+                f"metin {_kr(metin)} karakter; Telegram sınırı {BOT_HAKKINDA_SINIRI}",
+            )
+        return self.cagri("setMyShortDescription", short_description=metin)
+
+    def bot_aciklamasi_yaz(self, metin: str):
+        if _kr(metin) > BOT_ACIKLAMA_SINIRI:
+            raise KanalHatasi(
+                "setMyDescription",
+                f"metin {_kr(metin)} karakter; Telegram sınırı {BOT_ACIKLAMA_SINIRI}",
+            )
+        return self.cagri("setMyDescription", description=metin)
+
+    def bot_kunyesi(self, yazdir: bool = True) -> dict:
+        """Botun mevcut künyesi (yazma YOK): ne yazılı olduğunu gösterir."""
+        kisa = self.cagri("getMyShortDescription") or {}
+        uzun = self.cagri("getMyDescription") or {}
+        mevcut = {"hakkinda": kisa.get("short_description") or "",
+                  "aciklama": uzun.get("description") or ""}
+        if yazdir:
+            print("\n🤖 Bot künyesi (mevcut)")
+            print(f"   hakkında   ({_kr(mevcut['hakkinda'])}/{BOT_HAKKINDA_SINIRI}): "
+                  f"{mevcut['hakkinda'] or '—'}")
+            print(f"   açıklama   ({_kr(mevcut['aciklama'])}/{BOT_ACIKLAMA_SINIRI}): "
+                  f"{mevcut['aciklama'] or '—'}")
+        return mevcut
 
     def mesaj_gonder(self, hedef, metin: str) -> dict:
         return self.cagri("sendMessage", chat_id=hedef, text=metin,
@@ -207,6 +242,25 @@ def acilisi_uygula(api: TelegramAPI, hedef: str, aciklama: str = None,
     return sonuc
 
 
+def bot_kunyesi_uygula(api: TelegramAPI, hakkinda: str = None,
+                       aciklama: str = None, yazdir: bool = True) -> dict:
+    """BotFather künyesini API'den yazar (hedef/sohbet gerekmez).
+
+    Neden betikten: metin `acilis_metinleri.py` içinde tek kaynak; elle
+    BotFather'a yapıştırıldığında sürüm kayması oluyordu (kart dili değişti,
+    künye eski jargonu anlatmaya devam etti).
+    """
+    hakkinda = metinler.BOT_HAKKINDA if hakkinda is None else hakkinda
+    aciklama = metinler.BOT_ACIKLAMASI if aciklama is None else aciklama
+    api.bot_hakkinda_yaz(hakkinda)
+    if yazdir:
+        print(f"✅ Bot hakkında yazıldı ({_kr(hakkinda)}/{BOT_HAKKINDA_SINIRI} karakter)")
+    api.bot_aciklamasi_yaz(aciklama)
+    if yazdir:
+        print(f"✅ Bot açıklaması yazıldı ({_kr(aciklama)}/{BOT_ACIKLAMA_SINIRI} karakter)")
+    return {"hakkinda": _kr(hakkinda), "aciklama": _kr(aciklama)}
+
+
 def hedef_coz(arg_hedef: str = None) -> str:
     for aday in (arg_hedef, os.getenv("TELEGRAM_GROUP_ID"),
                  os.getenv("TELEGRAM_CHANNEL_ID")):
@@ -224,6 +278,10 @@ def main() -> int:
     ap.add_argument("--atla-aciklama", action="store_true", help="açıklamayı yazma")
     ap.add_argument("--atla-sabit", action="store_true", help="sabit mesajı gönderme")
     ap.add_argument("--aciklama", help="açıklama metnini geçici olarak değiştir")
+    ap.add_argument("--bot", action="store_true",
+                    help="bot künyesini (About + Description) göster, yazma")
+    ap.add_argument("--bot-uygula", action="store_true",
+                    help="bot künyesini Telegram'a yaz (sohbet hedefi gerekmez)")
     args = ap.parse_args()
 
     token = (args.token or os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
@@ -231,6 +289,24 @@ def main() -> int:
     if not token:
         print("❌ TELEGRAM_BOT_TOKEN yok (--token ile verebilirsin).", file=sys.stderr)
         return 2
+
+    # Bot künyesi sohbetten bağımsızdır: hedef yoksa da çalışır.
+    if args.bot or args.bot_uygula:
+        api = TelegramAPI(token)
+        try:
+            if args.bot and not args.bot_uygula:
+                api.bot_kunyesi()
+                print("\nℹ️  Kuru çalışma: künye değiştirilmedi. "
+                      "Yazmak için: --bot-uygula")
+                return 0
+            print("\n🤖 Bot künyesi yazılıyor")
+            bot_kunyesi_uygula(api, yazdir=True)
+        except KanalHatasi as hata:
+            print(f"❌ {hata}", file=sys.stderr)
+            return 1
+        if not hedef:
+            return 0
+
     if not hedef:
         print("❌ Hedef yok: --hedef ver ya da TELEGRAM_GROUP_ID/"
               "TELEGRAM_CHANNEL_ID tanımla.", file=sys.stderr)

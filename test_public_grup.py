@@ -418,10 +418,11 @@ def _zengin_olay(stock="ISMEN", **ek):
                  candle_close_price=39.60,
                  domain_bolumleri={
                      "engel": ["▲ direnç · boşluk 4s 41,90 +%5,8"],
-                     "yapi_ozet": ["◈ 4s yapı dış ve iç yukarı"],
-                     "hacim": ["katılım 4s hacim 0,45 kat"],
-                     "olcum": ["◇ 32321 formasyon · %76 tuttu",
-                               "◇ tutunca ~1,05 TL · %2,6",
+                     "yapi_ozet": ["◈ 4s yön yukarı (iç ve dış yapı)"],
+                     "hacim": ["hacim 4s hacim 0,45 kat"],
+                     "olcum": ["◇ benzer 32.321 kurulum",
+                               "   %76'sı devam etti",
+                               "◇ tutarsa tepe ~1,05 TL (+%2,6)",
                                "◇ rol uyumlu %80 · 15724"],
                  },
                  domain_karsi=["iç yapı aşağı döndü"])
@@ -434,13 +435,14 @@ def test_public_mesaji_dm_kartiyla_ayni_yedi_blok(grup_notifier):
     metin = grup_notifier.format_public_tekil(kayit)
     assert metin == notifier_mod._format_lifecycle_alert_kart(kayit)
     # 7 blok: OLAY / ÖNÜNDE / YAPI / ÖLÇÜ / KATILIM / SINIR / CTA
-    assert "Alçalan Üçgen — kapanışla" in metin             # 1 OLAY
+    assert "Alçalan Üçgen — kapanış onaylı" in metin         # 1 OLAY
     assert "▲ direnç · boşluk 4s 41,90 +%5,8" in metin      # 2 ÖNÜNDE
-    assert "◈ 4s yapı dış ve iç yukarı" in metin            # 3 YAPI
-    assert "◇ 32321 formasyon · %76 tuttu" in metin         # 4 ÖLÇÜ
-    assert "katılım 4s hacim 0,45 kat" in metin             # 5 KATILIM
-    assert "ters işaret: iç yapı aşağı döndü" in metin      # 6 SINIR
-    assert "· bozulur: 39,96 altı kapanış" in metin
+    assert "◈ 4s yön yukarı (iç ve dış yapı)" in metin       # 3 YAPI
+    assert "◇ benzer 32.321 kurulum" in metin                # 4 ÖLÇÜ
+    assert "%76'sı devam etti" in metin
+    assert "hacim 4s hacim 0,45 kat" in metin             # 5 KATILIM
+    assert "olumsuz: iç yapı aşağı döndü" in metin           # 6 SINIR
+    assert "· teyit düşer: bant 39,96 altı" in metin
     assert "yatırım tavsiyesi değildir" in metin            # 7 CTA
 
 
@@ -452,11 +454,14 @@ def test_public_olcu_satirlari_dm_ile_ayni_uclu(grup_notifier):
     """
     kayit = _zengin_olay()
     metin = grup_notifier.format_public_tekil(kayit)
-    olcum = [s for s in metin.splitlines() if s.startswith("◇")]
+    # Ölçü bloğu artık "başlık + girintili detay + hareket": üç satırın
+    # tamamı sayılır (2026-10-23 sade dil düzeni).
+    eşleşme = ("◇", "   ")
+    olcum = [s for s in metin.splitlines() if s.startswith(eşleşme)]
     assert len(olcum) == 3, olcum
     assert olcum == [s for s in
                      notifier_mod._format_lifecycle_alert_kart(kayit).splitlines()
-                     if s.startswith("◇")]
+                     if s.startswith(eşleşme)]
 
 
 def test_public_uyari_her_mesajda_bir_kez(grup_notifier):
@@ -846,7 +851,7 @@ def test_public_mesaji_ust_tf_yapisini_basabilir(grup_notifier):
     bolumler = nc.domain_bolumleri(outputs, 39.60, stil="kart", alarm_tf="1h")
     metin = grup_notifier.format_public_tekil(
         _olay(tf="1h", domain_bolumleri=bolumler))
-    assert "◈ 4s yapı dış ve iç aşağı" in metin
+    assert "◈ 4s yön aşağı (iç ve dış yapı)" in metin
     # Kural: satır kendi TF'siyle yazılır — alarm TF'si gibi etiketlenmez.
     assert "◈ 1s yapı" not in metin
 
@@ -1013,7 +1018,7 @@ def test_kuyruk_yolundan_giden_metin_dm_kartiyla_ayni(grup_notifier, monkeypatch
                              "olcum": ["◇ 32321 formasyon · %76 tuttu",
                                        "◇ 1651 kırılımın %75'ü sürdü",
                                        "◇ hacim yüksekken %79 sürdü"],
-                             "hacim": ["katılım 4s hacim yok (endeks)",
+                             "hacim": ["hacim 4s yok (endeks)",
                                        "yön fiyattan okunur"]})
     assert n.public_kuyruk(kayit)
     sahte = _SahteRequests()
@@ -1021,8 +1026,8 @@ def test_kuyruk_yolundan_giden_metin_dm_kartiyla_ayni(grup_notifier, monkeypatch
     assert n.public_bosalt() == 1
     metin = sahte.cagrilar[0][1]["text"]
     assert metin == notifier_mod._format_lifecycle_alert_kart(kayit)
-    assert "hacim yok (endeks)" in metin
-    assert "· kapanış 13482,50" in metin and "· sınır 13380,00" in metin
+    assert "hacim 4s yok (endeks)" in metin
+    assert "· kapanış 13482,50" in metin and "· kırılan 13380,00" in metin
     assert not [s for s in metin.splitlines() if s.startswith(" ")], metin
 
 

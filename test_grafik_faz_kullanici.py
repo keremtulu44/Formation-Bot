@@ -290,18 +290,23 @@ def test_faz2_tf_matrisi_formasyon_yokken(tf, beklenen):
     assert g["kare_mum"] == beklenen and len(g["zamanlar"]) == beklenen
 
 
-@pytest.mark.parametrize("genislik, beklenen", [(1, 35), (20, 35), (60, 69), (400, 85)])
+@pytest.mark.parametrize("genislik, beklenen", [(1, 35), (20, 35), (60, 69), (400, 180)])
 def test_faz2_formasyon_kadraji_tampon_ve_sinirlar(genislik, beklenen):
-    """Formasyon + 10 mum tampon; alt 35, üst 85 (plan Kural A).
+    """Formasyon + 10 mum tampon; alt 35, üst 180 (2026-10-23 Kural A).
 
-    Beklenen pencere `n - start_bar + 10`un 35-85 aralığına kırpılmışıdır;
+    Üst sınır 85 DEĞİL: 85 mum, 90-100 barlık bir üçgenin ilk bölümünü (kırılımın
+    geldiği tabanı) kareden atıyordu — kullanıcı: "çizimi kısa tutuyor,
+    formasyonun neresinden kırıldığı görünmüyor". Tavan hâlâ piksel bütçesiyle
+    sınırlıdır (`genislik_tavan / bar_px` = 240 mum) ve 180'de durur.
+
+    Beklenen pencere `n - start_bar + 10`un 35-180 aralığına kırpılmışıdır;
     pencere SONUNDA açık mum düşebildiği için n kareden okunur (açık bar çizilmez).
     """
     n = 500
     g = _goruntu(_cerceve(n, "1h"), "1h",
                  cift=_cift(start_bar=n - genislik, end_bar=n - 1))
     gercek_n = g["bar_sayisi"]
-    assert len(g["zamanlar"]) == max(35, min(85, gercek_n - (n - genislik) + 10))
+    assert len(g["zamanlar"]) == max(35, min(180, gercek_n - (n - genislik) + 10))
     assert len(g["zamanlar"]) == beklenen
 
 
