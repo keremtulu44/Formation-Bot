@@ -9,6 +9,19 @@ değiştirmez. Kart/sıralama değişikliği `/evet` ile ayrı adımda yapılır
 
 ---
 
+> ## ⚠ ÖNEMLİ — 2026-10-25 gece: bu dokümanın "puan" kısmı çürütüldü
+>
+> §11 tek bayrak testi: 0–100 puan, `kama & trend uyumu` bayrağıyla **birebir
+> aynı** sonucu veriyor (aynı kapsamda fark ≤0,4 puan; çoğu dilimde 0,0).
+> Yani puan bağımsız bir ölçüm değil. Ayrıca "50 sembollük taze replay" arşivin
+> **%100 alt kümesi** (aynı semboller, aynı fiyat serisi) — bağımsız doğrulama
+> değil, yalnız yeniden koşum.
+>
+> **Sonuç (§12):** kartta **sayı yok**. `Devamlılık: yüksek | normal | zayıf`
+> üç seviyeli etiket yazılır; 0–100 puan yalnız logda kalır. Bu dokümanın
+> "puan belirleyici olacak" iddiası geçersizdir; geçmiş kaydı olarak duruyor.
+> Geometri kararı (§11.5) etkilenmedi.
+
 ## 0. Karar, tek paragraf
 
 Geometri **belirleyici olmaktan çıkıyor**. Uyarıların öne çıkma sırasını ve
@@ -532,3 +545,168 @@ python scripts/ozellik_deposu.py --girdi var/replay/gozlemler50.csv --cikti var/
 python scripts/taban_uret.py --semboller <50 sembol> --cikti var/replay/taban50
 python scripts/puan_sinama.py     # var/replay/puan_sinama.md
 ```
+
+---
+
+## 11. Puan gerçekten var mı? — tek bayrağa karşı test
+
+**Soru:** 0–100'lük puan, "kama + trend uyumu" tek bayrağından daha mı iyi?
+Cevap ölçüldü: **hayır.** Aynı kapsamda ikisi birebir aynı sonucu veriyor.
+
+| kapsam | puan (aşırı) | tek bayrak (aşırı) | fark |
+|---|---|---|---|
+| %5 | +9,5 | +9,6 | −0,0 |
+| %7 | +8,7 | +8,6 | +0,1 |
+| %10 | +7,4 | +7,2 | +0,2 |
+| %15 | +6,2 | +6,1 | +0,0 |
+| %20 | +5,4 | +5,5 | −0,1 |
+| %30 | +4,5 | +4,5 | +0,0 |
+
+(177 arşiv; 50'lik dilimde de farklar ≤0,4 ve işaret değişiyor.)
+
+**Hüküm:** puanın sıralama gücünün tamamı tek bir bayraktan geliyor:
+
+```
+kama  VE  trend uyumu (MTF 4)
+```
+
+Bayrağın dışında kalan sıralama **hiçbir şey eklemiyor**. Yani 0–100 ölçeği,
+bantlar, küçültme katsayıları — hepsi tek bir bitin süslenmesi. Ölçüm buysa,
+kullanıcıya sayı göstermek de yanlış: sayı, ölçüm varmış izlenimi veriyor.
+
+### 11.1 Ve doğrulama sandığım şey doğrulama değildi
+
+50 sembollük "taze" replay'i bağımsız sandım. Değil:
+
+```
+177 arşiv sembol 177 · 50 'taze' sembol 50 · kesişim 50
+gözlem anahtarı kesişimi: 5.236 / 5.236 = %100
+```
+
+Yani o koşu arşivin **tam alt kümesi** — aynı fiyat verisi, aynı dönem,
+alfabetik ilk 50 sembol. Yeniden koşum tutarlılığı sağlıyor, **örneklem dışı
+kanıt sağlamıyor**. Önceki bölümde "bağımsız doğrulama" dediğim şey buydu ve
+yanlıştı; düzeltiyorum.
+
+Elimizdeki bütün kanıt **aynı verinin içinden**:
+
+| kanıt | ne yapıyor | ne yapmıyor |
+|---|---|---|
+| 7 etiket varyantı | tanım değişince aynı sonuç | veriyi değiştirmiyor |
+| S/Z sembol bölmesi | ayrık semboller | aynı fiyat serisi |
+| ilk %70 / son %30 | farklı dönem | aynı fiyat serisi |
+| 50 sembollük koşu | yeniden koşum | **%100 alt küme** |
+
+Hepsi tutarlı, hiçbiri bağımsız değil. Yani bayrağın **yönü** muhtemelen gerçek,
+**büyüklüğü** ise seçim etkisiyle şişmiş olabilir. +9,7 puanlık aşırının canlıda
+daha küçük çıkması normaldir; ne kadar küçük olacağını bu veriyle bilemeyiz.
+
+### 11.2 "Beş belirleyici madde" ne oldu
+
+| # | iddia | sonuç | durum |
+|---|---|---|---|
+| 1 | aile (kama > üçgen) | +2,4 / −3,3 aşırı | **ayakta**, ama 2 kategori |
+| 2 | aile × trend uyumu | +9,7 aşırı | **ayakta**, tek gerçek etki |
+| 3 | giriş mesafesi | taze dilimde GA sıfırı içeriyor | **zayıfladı**, ağırlık yarıya indi |
+| 4 | hacim | artıyor = daha kötü, S/Z oynak | **düştü** |
+| 5 | retest | −19,9 ama gelecek bilgisi | **kullanılamaz** |
+| — | kalite (geometri) | AUC 0,494 | **düştü** |
+
+Beş maddenin beşi de ayakta kalmadı: **iki madde** kaldı, ikisi birleşince
+**tek bir bit** ediyor. Bunu "beş belirleyici" diye sunmak yanlıştı.
+
+### 11.3 Bu ne demek: puan yok, etiket var
+
+Ölçümün desteklediği en fazla şey üç seviyeli bir **etiket**:
+
+| durum | etiket | ölçülen aşırı |
+|---|---|---|
+| kama + trend uyumu | `yüksek` | **+9,7** |
+| kama, trend uyumu yok | `normal` | +2,4 |
+| üçgen | `zayıf` | **−3,3** |
+
+Üç seviye, üç kategori, sıfır uydurma. Sayı yok çünkü sayıyı hak eden bir
+ölçüm yok.
+
+**Puan (0–100) kullanıcıya gösterilmez.** İç hesap olarak kalır: gölge logda
+yazılır, ileri doğrulama için birikir. Kullanıcı yalnız etiketi görür.
+
+### 11.4 Geriye kalan tek dürüst yol: ileri test
+
+Bu veriyle daha fazla doğrulama yapılamaz — hepsi aynı dosyanın içinde. Tek
+çıkış, bayrağı **canlıda** kaydedip ileriye bakmak:
+
+1. Her uyarıda `kama & trend uyumu` bayrağı + puan + sonuç 24 bar sonra loglanır.
+2. 8–12 hafta sonra: bayraklı uyarıların fazlası, aynı dönemin tabanına karşı.
+3. Karar kuralı **önceden** yazılır: bayraklı grup ≥ +3 puan fazla veriyorsa
+   kartta kalmaya devam eder; vermiyorsa kaldırılır.
+4. Bu kural bugün yazılır, sonuç görülmeden. Yoksa aynı hatayı tekrarlarız.
+
+O zamana kadar kartta gösterilen etiket **iddia**dır, ölçüm değil. Bunu
+kullanıcıya söylemek zorundayız — ya etiketin yanında "test ediliyor" notu
+durur, ya etiket hiç gösterilmez.
+
+### 11.5 Geometri kararı bundan etkilenmiyor
+
+Kalitenin karttan kaldırılması **doğruydu** ve bu bölümden etkilenmiyor: eski
+kalite AUC 0,494 (yazı-turanın altı), 50'lik dilimde de 0,494. Geometri sayısı
+bilgi taşımıyordu; onu kaldırmak kazançtı.
+
+Yeni puan da aynı hataya düşmemeli: bilgi taşımadığı ölçülen bir sayıyı kartta
+tutmak, eleştirdiğimiz şeyin ta kendisi.
+
+---
+
+## 12. Uygulama — puan karttan kaldırıldı (2026-10-25, aynı gece)
+
+§11.3'te önerilen karar **uygulandı**. Artık kartta sayı yok.
+
+### 12.1 Ne değişti
+
+| Yer | Önce | Sonra |
+|---|---|---|
+| Kart satırı (`devamlilik.kart_satiri`) | `Devamlılık: iyi · 75/100` | `Devamlılık: normal` |
+| Seviyeler | 4 bant (yüksek/iyi/normal/zayıf) | 3 etiket (yüksek/normal/zayıf) |
+| Gerekçe satırı (`gerekce`) | aile + trend uyumu **+ mesafe** | aile + trend uyumu |
+| 0–100 puan (`devamlilik_puani`) | kartta ve sıralamada | **yalnız log/sıralama/gölge kayıt** |
+| Sıralama (Top-12, `_sira_degeri`) | puan | puan (değişmedi — sıralama kullanıcıya sayı basmıyor) |
+| Hacim musluğu (`PUBLIC_MIN_DEVLAMLILIK`) | puan eşiği | puan eşiği (değişmedi, varsayılan 0) |
+
+Eşleme (ölçülen aşırı fazla, 50 sembollük sınama, küme fazlası +2,0 çıkarılmış):
+
+| Etiket | Koşul | Aşırı fazla | Olayların |
+|---|---|---|---|
+| `yüksek` | kama + trend uyumu | +9,7 | %4 |
+| `normal` | kama, trend uyumu yok | +2,4 | %41 |
+| `zayıf` | üçgen (trend uyumu etkisiz) | −3,3 | %55 |
+
+### 12.2 Neden mesafe gerekçeden çıktı
+
+Etiket aile + trend uyumundan türetiliyor. Gerekçede mesafe yazmak, etiketi
+**doğurmayan** bir nedeni gerekçe gibi göstermek olurdu. Mesafe hâlâ iç puan
+hesabında (§10.3: 177'de −7,0, alt kümede −2,8, GA sıfırı içeriyor) ama
+kullanıcıya ne sayı ne gerekçe olarak yansımıyor.
+
+### 12.3 Dürüstlük sınırı
+
+Üç etiket de **örneklem içi** sayılardır. Örneklem dışı doğrulanmadı; §11.4
+protokolü (canlı log → 8–12 hafta → bayraklı grup ≥ +3 puan fazla ise kalır)
+henüz başlamadı. Kart artık sayı basmadığı için bu sınırın **görünür hasarı
+yok**: kullanıcıya ölçüm varmış izlenimi verilmiyor.
+
+### 12.4 Değişen dosyalar ve doğrulama
+
+* `devamlilik.py` — `devamlilik_etiketi()`, `kart_satiri()` (sayı yok),
+  `gerekce()` (mesafe çıktı).
+* `notifier.py` — `devamlilik_satiri()` docstring + blok yorumu; fonksiyon
+  imzaları korundu (çağrı yerleri değişmedi).
+* `test_devamlilik.py` — 23 test: etiket 3 seviye, kartta rakam yok, gerekçede
+  mesafe yok, etiket ile iç puan aynı yönde.
+* `test_notifier_mesajlari.py` — "Devamlılık satırında rakam yok" katı kontrolü.
+  (Eski test `"/100" in msg` ile geçiyordu çünkü `kırılım gücü 80/100` de
+  `/100` içeriyor — yanlış yeşildi, düzeltildi.)
+* `scripts/devamlilik_ornek.py` + `var/replay/devamlilik_ornek.md` +
+  `docs/gorseller/devamlilik_ornek_kartlar.png` yeniden üretildi.
+
+**Rollback:** `devamlilik_etiketi()` boş dize dönerse satır hiç yazılmaz;
+`TELEGRAM_ALERT_STYLE=klasik` gövdesi bu değişiklikten etkilenmedi.

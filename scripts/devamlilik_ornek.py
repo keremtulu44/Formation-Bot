@@ -150,20 +150,20 @@ def png_uret(satirlar: List[Tuple[str, str, Dict]]) -> Path:
     baslik_yuk = 150
     grid_satir = [bloklar[0:2], bloklar[2:4]]
     y_grid = sum(max(b[2] for b in s) + 26 for s in grid_satir)
-    yukseklik = baslik_yuk + y_grid + yuk_kiyas + 170
+    yukseklik = baslik_yuk + y_grid + yuk_kiyas + 225
 
     img = Image.new("RGB", (GEN, yukseklik), ARKA)
     d = ImageDraw.Draw(img)
 
     # başlık
-    d.text((BOS, 34), "Devamlılık puanı — kart örnekleri", font=f_baslik, fill=METIN)
+    d.text((BOS, 34), "Devamlılık etiketi — kart örnekleri", font=f_baslik, fill=METIN)
     d.text((BOS, 76),
-           "Geometri (eski \"formasyon kalitesi\") karttan kalktı. Yerine ölçülmüş "
-           "devamlılık puanı geldi.",
+           "Geometri (eski \"formasyon kalitesi\") karttan kalktı. Yerine devamlılık "
+           "etiketi geldi. Kartta sayı yok.",
            font=f_alt, fill=SOLUK)
     d.text((BOS, 100),
-           "Puan = 50 + 5 × (aile + aile × trend uyumu + giriş mesafesi) · "
-           "50 = aynı yerde rastgele girmekle aynı",
+           "Ölçüm: 0–100 puan, tek bayraktan (\"kama + trend uyumu\") daha iyi çıkmadı; "
+           "fark aynı kapsamda 0,0 puandı. Sayı logda kalıyor.",
            font=f_alt, fill=SOLUK)
 
     def balon(x, y, gen, yuk):
@@ -205,18 +205,26 @@ def png_uret(satirlar: List[Tuple[str, str, Dict]]) -> Path:
             d.text((x + 14, yy), satir, font=f_kart, fill=METIN)
             yy += satir_yuk
 
-    # alt bilgi: bant tablosu
-    y = yukseklik - 132
-    d.text((BOS, y), "Bantlar (arşivde ölçülen gerçekleşen fazla, 15.736 kırılım)",
+    # alt bilgi: etiket tablosu (50 sembollük sınama, aşırı fazla = küme fazlası
+    # +2,0 çıkarıldıktan sonra kalan). Örneklem İÇİ; ileri test bekliyor (§11.4).
+    y = yukseklik - 168
+    d.text((BOS, y), "Etiketler — 50 sembollük sınamada aşırı fazla "
+                     "(küme fazlası çıkarılmış, örneklem içi)",
            font=f_etiket, fill=VURGU)
-    bantlar = [("yüksek 85–94", "+10,3 puan", "%7"), ("iyi 65–84", "+3,3", "%50"),
-               ("normal 45–64", "−0,7", "%9"), ("zayıf 5–44", "−2,2", "%34")]
-    for i, (ad, fazla, pay) in enumerate(bantlar):
-        x = BOS + i * 272
-        d.rounded_rectangle([x, y + 26, x + 250, y + 88], radius=10, fill=BALON,
+    bantlar = [("yüksek", "kama + trend uyumu", "+9,7", "%4"),
+               ("normal", "kama", "+2,4", "%41"),
+               ("zayıf", "üçgen", "−3,3", "%55")]
+    for i, (ad, kosul, fazla, pay) in enumerate(bantlar):
+        x = BOS + i * 288
+        d.rounded_rectangle([x, y + 26, x + 268, y + 108], radius=10, fill=BALON,
                             outline=KENAR, width=1)
         d.text((x + 14, y + 36), ad, font=f_kart_kalin, fill=METIN)
-        d.text((x + 14, y + 62), f"{fazla}  ·  arşivde {pay}", font=f_alt, fill=SOLUK)
+        d.text((x + 14, y + 62), kosul, font=f_alt, fill=SOLUK)
+        d.text((x + 14, y + 80), f"{fazla} puan  ·  olayların {pay}", font=f_alt, fill=SOLUK)
+    d.text((BOS, y + 124),
+           "Bu üç satır bir iddiadır: örneklem dışında sınanmadı. Kart metni "
+           "sayı basmaz çünkü sayı kanıtlanmadı.",
+           font=f_alt, fill=SOLUK)
 
     CIKTI_PNG.parent.mkdir(parents=True, exist_ok=True)
     img.save(CIKTI_PNG)
@@ -226,13 +234,18 @@ def png_uret(satirlar: List[Tuple[str, str, Dict]]) -> Path:
 def main() -> int:
     satirlar = metin_uret()
 
-    md = ["# Devamlılık puanı — örnek kart metinleri\n",
-          "Üretim kodu (`notifier.format_message`) ile üretildi; elle yazılmadı.\n"]
+    md = ["# Devamlılık etiketi — örnek kart metinleri\n",
+          "Üretim kodu (`notifier.format_message`) ile üretildi; elle yazılmadı.\n",
+          "Kart `Devamlılık: yüksek | normal | zayıf` yazar. 0–100 puan kartta "
+          "görünmez: 2026-10-25 ölçümünde puanın sıralama gücü tek bir bayraktan "
+          "geliyordu (fark ≤0,1 puan), yani sayı ek bilgi taşımıyordu.\n"]
     for etiket, metin, data in satirlar:
         puan = dev.devamlilik_puani(data.get("pattern_name"), data.get("mtf_uyum"),
                                     data.get("bant_mesafe_atr"))
-        b = dev.bant(puan)
-        md.append(f"\n## {etiket} — {b} {puan}/100\n")
+        e = dev.devamlilik_etiketi(data.get("pattern_name"), data.get("mtf_uyum"))
+        md.append(f"\n## {etiket} — etiket: {e} (log: {puan}/100)\n")
+        md.append("> Kartta **sayı yok**; 0–100 puan yalnız logda. "
+                  "Etiket = aile + trend uyumu.\n")
         md.append("```")
         md.append(metin.rstrip())
         md.append("```")
@@ -241,7 +254,7 @@ def main() -> int:
     md.append("**Önce** (geometri):\n```")
     md.append(_eski_metin(satirlar[0][1], satirlar[0][2]).rstrip())
     md.append("```")
-    md.append("**Sonra** (devamlılık):\n```")
+    md.append("**Sonra** (devamlılık etiketi):\n```")
     md.append(satirlar[0][1].rstrip())
     md.append("```")
     CIKTI_MD.parent.mkdir(parents=True, exist_ok=True)

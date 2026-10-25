@@ -114,13 +114,35 @@ def test_bant_sirasi_puan_ile_uyumlu():
 
 
 def test_kart_satiri_bicimi():
-    satir = dev.kart_satiri("Kama", 2, 0.7)
-    assert satir.startswith("Devamlılık: ")
-    assert satir.endswith("/100")
-    assert satir.count("·") == 1
-    # kart sınırı: tek satır, kısa
-    assert len(satir) <= 32
-    assert "\n" not in satir
+    """Kartta SAYI YOK: 0–100 puan tek bayraktan iyi değil (§11)."""
+    satir = dev.kart_satiri("Kama", 4, 0.2)
+    assert satir == "Devamlılık: yüksek"
+    assert "/100" not in satir
+    assert not any(c.isdigit() for c in satir)
+    assert "\n" not in satir and len(satir) <= 32
+
+
+def test_etiket_uc_seviye():
+    """Etiket aile + trend uyumundan: yüksek / normal / zayıf."""
+    assert dev.devamlilik_etiketi("Yükselen Kama", 4) == "yüksek"
+    assert dev.devamlilik_etiketi("Alçalan Kama", 0) == "normal"
+    assert dev.devamlilik_etiketi("Simetrik Üçgen", 4) == "zayıf"
+    assert dev.devamlilik_etiketi("Yükselen Üçgen", 0) == "zayıf"
+    # üçgende trend uyumu etiketi değiştirmez (ölçüm: üçgende etki yok)
+    assert dev.devamlilik_etiketi("Üçgen", 4) == dev.devamlilik_etiketi("Üçgen", 0)
+    assert dev.devamlilik_etiketi("Bayrak", 4) == ""
+
+
+def test_etiket_puan_bandiyla_celismez():
+    """Etiket ile iç puan aynı yönü göstermeli (kama > üçgen)."""
+    import devamlilik as d
+    puanlar = {"yüksek": [], "normal": [], "zayıf": []}
+    for aile in ("Kama", "Üçgen"):
+        for mtf in (0, 2, 4):
+            e = d.devamlilik_etiketi(aile, mtf)
+            puanlar[e].append(d.devamlilik_puani(aile, mtf, 1.0))
+    assert max(puanlar["zayıf"]) < min(puanlar["normal"])
+    assert max(puanlar["normal"]) <= min(puanlar["yüksek"]) + 1
 
 
 def test_gerekce_en_fazla_iki_parca():
@@ -133,28 +155,29 @@ def test_gerekce_en_fazla_iki_parca():
 
 
 def test_gerekce_en_belirleyici_neden():
-    """İkinci parça, puanı en çok oynatan madde olmalı."""
-    # kama: trend uyumu (3,7) > giriş yakın (1,7)
+    """İkinci parça, etiketi doğuran neden olmalı: trend uyumu."""
     assert dev.gerekce("Kama", 4, 0.1) == ["kama", "trend uyumlu"]
-    # kama, trend zayıf (-3,7) > giriş uzak (-1,3)
     assert dev.gerekce("Kama", 0, 3.0) == ["kama", "trend zayıf"]
-    # üçgende etkileşim yok: yalnız mesafe konuşur
-    assert dev.gerekce("Üçgen", 4, 0.1) == ["üçgen", "seviyeye yakın"]
-    assert dev.gerekce("Üçgen", 4, 3.0) == ["üçgen", "seviyeden uzak"]
+    # üçgende etkileşim yok (ölçüm: ayrı etki yok) → yalnız aile yazılır
+    assert dev.gerekce("Üçgen", 4, 0.1) == ["üçgen"]
+    assert dev.gerekce("Üçgen", 4, 3.0) == ["üçgen"]
 
 
-def test_gerekce_yalniz_gercek_nedenler():
-    """Trend uyumlu ancak MTF 4'te; 'yakın' ancak 0,3 ATR altında yazılır."""
-    assert "trend uyumlu" in dev.gerekce("Kama", 4, 1.5)
-    assert "trend uyumlu" not in dev.gerekce("Üçgen", 4, 1.5)   # üçgende etki yok
-    # kama'da trend zayıf (−3,7) mesafeden (−1,3) baskın; mesafe üçgende konuşur
+def test_gerekce_yalniz_etiketin_nedenleri():
+    """Gerekçe, etiketi doğuran nedenleri yazar; mesafe gerekçeye girmez.
+
+    Mesafe etikete girmiyor (etiket = aile + trend uyumu), o yüzden gerekçede
+    "seviyeye yakın" yazmak etiketi doğurmayan bir nedeni gerekçe gibi
+    göstermek olurdu. Mesafe yalnız iç puan hesabında (§10.3).
+    """
+    assert dev.gerekce("Kama", 4, 1.5) == ["kama", "trend uyumlu"]
+    assert "trend uyumlu" not in dev.gerekce("Üçgen", 4, 1.5)
     assert dev.gerekce("Kama", 0, 2.1)[1] == "trend zayıf"
-    assert "seviyeye yakın" in dev.gerekce("Üçgen", 0, 0.2)
-    # 0,3–1 ATR arası da puanı yükseltiyor (+0,85), o yüzden "yakın" doğru;
-    # 1–2 ATR nötr olduğu için hiçbir gerekçe yazılmaz.
-    assert "seviyeye yakın" in dev.gerekce("Üçgen", 0, 0.31)
-    assert dev.gerekce("Üçgen", 0, 1.5) == ["üçgen"]
-    assert "seviyeden uzak" in dev.gerekce("Üçgen", 0, 2.1)
+    for mesafe in (0.1, 0.9, 1.5, 3.0):
+        for aile in ("Kama", "Üçgen"):
+            for mtf in (0, 4):
+                g = dev.gerekce(aile, mtf, mesafe)
+                assert not any("seviye" in parca for parca in g), g
 
 
 def test_satir_piksel_butcesi():
@@ -211,7 +234,7 @@ def test_kart_devamlilik_gosterir_geometri_gostermez(monkeypatch):
     import notifier
     monkeypatch.setattr(notifier, "DEVLAMLILIK_AKTIF", True)
     metin = notifier.TelegramNotifier().format_message(_ornek_veri())
-    assert "Devamlılık: yüksek · 94/100" in metin
+    assert "Devamlılık: yüksek" in metin
     assert "formasyon kalitesi" not in metin
     assert "87/100" not in metin
 
@@ -231,7 +254,7 @@ def test_klasik_stil_de_ayni_sayiyi_okur(monkeypatch):
     monkeypatch.setattr(notifier, "DEVLAMLILIK_AKTIF", True)
     monkeypatch.setattr(notifier, "TELEGRAM_ALERT_STYLE", "klasik")
     metin = notifier.TelegramNotifier().format_message(_ornek_veri())
-    assert "Devamlılık: yüksek · 94/100" in metin
+    assert "Devamlılık: yüksek" in metin
     assert "Çok güçlü" not in metin
 
 

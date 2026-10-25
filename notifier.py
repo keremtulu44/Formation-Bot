@@ -28,7 +28,9 @@ from telegram_measure import (SATIR_BUTCE, bol as _satir_bol,
 # Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
 # katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
 from reporting.format import STATE_TR, sayi as _format_sayi
-# Devamlılık puanı: kullanıcıya aktarılan TEK sıralama ölçüsü. Geometri
+# Devamlılık etiketi: kullanıcıya aktarılan TEK bilgi (sayı değil, seviye —
+# 0–100 puanın tek bayraktan iyi olmadığı ölçüldü, §11). Kullanıcıya sayı
+# basılmaz; puan yalnız log/sıralama içinde. Geometri
 # (confidence_score) artık yalnız bildirim eşiğini besler, kartta okunmaz.
 # Ölçüm: docs/arastirma/FAZLA_ANALIZI_2026-10-25.md, PUANLAMA_MIMARISI_2026-10-25.md
 import devamlilik as _dev
@@ -170,9 +172,13 @@ def devamlilik_puani(data: Dict) -> Optional[int]:
 
 
 def devamlilik_satiri(data: Dict) -> str:
-    """Tek satır kullanıcı bilgisi: ``Devamlılık: iyi · 75/100``.
+    """Tek satır kullanıcı bilgisi: ``Devamlılık: yüksek``.
 
-    Kapsam dışı ailede boş dize döner; satır hiç yazılmaz (uydurma sayı yok).
+    **Kartta sayı yok** (2026-10-25, §11): 0–100 puan tek bayraktan daha iyi
+    değil; sayıyı basmak ölçüm varmış izlenimi veriyordu. Sayı yalnız logda
+    (`devamlilik_puani`, sıralama ve gölge kayıt için) kalır.
+
+    Kapsam dışı ailede boş dize döner; satır hiç yazılmaz.
     """
     return _dev.kart_satiri(data.get("pattern_name"),
                             data.get("mtf_uyum"),
@@ -180,7 +186,11 @@ def devamlilik_satiri(data: Dict) -> str:
 
 
 def devamlilik_gerekcesi(data: Dict) -> str:
-    """Puanı doğuran nedenler (en fazla üç parça), yoksa boş dize."""
+    """Etiketi doğuran nedenler (en fazla iki parça), yoksa boş dize.
+
+    Mesafe (ATR) bilinçli olarak dışarıda: etiket aile + trend uyumundan
+    türetiliyor, gerekçe etiketi doğuran nedenleri yazar.
+    """
     metin = _dev.kart_gerekcesi(data.get("pattern_name"),
                                 data.get("mtf_uyum"),
                                 data.get("bant_mesafe_atr"))

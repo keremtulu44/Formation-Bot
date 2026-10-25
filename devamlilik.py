@@ -41,8 +41,8 @@ KULLANIM
 --------
     >>> devamlilik_puani("Kama", mtf_uyum=4, bant_mesafe_atr=0.2)
     95
-    >>> kart_satiri("Kama", mtf_uyum=2, bant_mesafe_atr=0.7)
-    'Devamlılık: iyi · 75/100'
+    >>> kart_satiri("Kama", mtf_uyum=4)
+    'Devamlılık: yüksek'
 
 KAPSAM DIŞI
 -----------
@@ -162,11 +162,12 @@ def bant(puan: Optional[int]) -> str:
 def gerekce(aile: Optional[str],
             mtf_uyum: Optional[float] = None,
             bant_mesafe_atr: Optional[float] = None) -> List[str]:
-    """Kart için en fazla iki parçalık gerekçe: aile + en belirleyici tek neden.
+    """Etiketi doğuran nedenler: aile + (kamada) trend uyumu.
 
-    Neden iki: üç parça 283 px satır bütçesini aşıyor ve kart satırı bölüyordu
-    (2026-10-25 örnek görselde görüldü). İkinci parça, puanı **en çok** oynatan
-    maddedir; üçüncüyü yazmak bilgi eklemiyor, satır kırıyor.
+    Mesafe **bilinçli olarak dışarıda**: etiket aile + trend uyumundan
+    türetiliyor; gerekçede mesafe yazmak, etiketi doğurmayan bir nedeni
+    gerekçe gibi göstermek olurdu. Mesafe yalnız iç puan hesabında (§10.3:
+    177'de −7,0 ama alt kümede −2,8 ve GA sıfırı içeriyor).
 
     Parçalar uydurulmaz: her biri ya puanı yükseltir ya düşürür.
     """
@@ -174,26 +175,36 @@ def gerekce(aile: Optional[str],
     if a is None:
         return []
     parca: List[str] = ["kama" if a == "Kama" else "üçgen"]
-
-    # (etki, metin) — yalnız sıfırdan farklı olanlar yarışır
-    adaylar: List[Tuple[float, str]] = []
-    esik_etki = ETKILESIM.get(a)
-    if esik_etki is not None:
-        if _mtf_deger(mtf_uyum) >= esik_etki[0]:
-            adaylar.append((esik_etki[1] * KUCULTME["etkilesim"], "trend uyumlu"))
-        else:
-            adaylar.append((-esik_etki[1] * KUCULTME["etkilesim"], "trend zayıf"))
-
-    ham_mesafe = mesafe_ham(bant_mesafe_atr)
-    if ham_mesafe > 0:
-        adaylar.append((ham_mesafe * KUCULTME["mesafe"], "seviyeye yakın"))
-    elif ham_mesafe < 0:
-        adaylar.append((ham_mesafe * KUCULTME["mesafe"], "seviyeden uzak"))
-
-    if adaylar:
-        _, en = max(adaylar, key=lambda t: abs(t[0]))
-        parca.append(en)
+    esik = ETKILESIM.get(a)
+    if esik is not None:
+        parca.append("trend uyumlu" if _mtf_deger(mtf_uyum) >= esik[0] else "trend zayıf")
     return parca
+
+
+def devamlilik_etiketi(aile: Optional[str],
+                       mtf_uyum: Optional[float] = None) -> str:
+    """Kullanıcıya gösterilen ÜÇ SEVİYELİ etiket. Kapsam dışı ailede boş dize.
+
+    2026-10-25 ölçümü (§11): 0–100 puan, tek bayraktan ("kama & trend uyumu")
+    daha iyi değil — aynı kapsamda fark 0,0 puan. Sayının hak ettiği bir ölçüm
+    yok. Kullanıcıya sayı yerine ölçümün desteklediği kadar bilgi verilir:
+
+        kama + trend uyumu → "yüksek"   (aşırı +9,7)
+        kama               → "normal"   (aşırı +2,4)
+        üçgen              → "zayıf"    (aşırı −3,3)
+
+    **Örneklem dışı doğrulanmadı** (§11.4: ileri test bekliyor). Bu yüzden
+    etiket bir iddiadır; sayı gibi ölçüm görünümü vermez.
+    """
+    a = aile_coz(aile)
+    if a is None:
+        return ""
+    if a == "Üçgen":
+        return "zayıf"
+    esik = ETKILESIM.get(a)
+    if esik is not None and _mtf_deger(mtf_uyum) >= esik[0]:
+        return "yüksek"
+    return "normal"
 
 
 def kart_satiri(aile: Optional[str],
@@ -201,12 +212,16 @@ def kart_satiri(aile: Optional[str],
                 bant_mesafe_atr: Optional[float] = None) -> str:
     """Tek satır kullanıcı bilgisi. Kapsam dışı ailede boş dize (satır yok).
 
-    Örnek: ``Devamlılık: iyi · 75/100``
+    Örnek: ``Devamlılık: yüksek``
+
+    **Sayı yok.** Puan (0–100) kartta gösterilmez, logda birikir. Gerekçe:
+    sayının sıralama gücü tek bir bayraktan geliyor; sayı ek bilgi taşımıyor
+    ama ölçüm varmış izlenimi veriyor (§11).
     """
-    p = devamlilik_puani(aile, mtf_uyum, bant_mesafe_atr)
-    if p is None:
+    etiket = devamlilik_etiketi(aile, mtf_uyum)
+    if not etiket:
         return ""
-    return f"Devamlılık: {bant(p)} · {p}/100"
+    return f"Devamlılık: {etiket}"
 
 
 def kart_gerekcesi(aile: Optional[str],

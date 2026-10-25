@@ -468,7 +468,11 @@ def test_dogrulanmis_olay_kimlik_fiyat_kalite_tasir_kare_detayini_tekrarlamaz():
     # 2026-10-25: formasyon kalitesi (geometri) karttan KALKTI — ölçülen sonucu
     # öngörmüyordu. Yerine devamlılık puanı gelir; geometri yalnız eşiği besler.
     assert "formasyon kalitesi" not in msg and "kalite" not in msg
-    assert "Devamlılık: " in msg and "/100" in msg
+    # 2026-10-25 (§11): kartta SAYI YOK — puan tek bayraktan iyi değil.
+    # "Devamlılık: yüksek" gibi üç seviyeli etiket yazılır; 0–100 yalnız logda.
+    _dev_satiri = [ln for ln in msg.splitlines() if "Devamlılık:" in ln]
+    assert _dev_satiri, msg
+    assert not any(ch.isdigit() for ch in _dev_satiri[0]), _dev_satiri
     assert "kırılım gücü 80/100" in msg
     assert "Güçlü" not in msg and "Çok güçlü" not in msg
     # Sade dil (2026-10-22): "retest" yerine "geri çekilme" yazılır.
