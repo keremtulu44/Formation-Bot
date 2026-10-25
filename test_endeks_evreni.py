@@ -27,8 +27,8 @@ import telegram_measure as tm
     ("XBANK", "XBANK.IS"),
     ("XUSIN", "XUSIN.IS"),
     ("USDTRY", "USDTRY=X"),
-    ("ALTIN", "GC=F"),
-    ("GUMUS", "SI=F"),
+    ("XAUUSD", "XAUUSD=X"),
+    ("XAGUSD", "XAGUSD=X"),
 ])
 def test_saglayici_eslemesi_dogru(sembol, ticker):
     assert config.yahoo_ticker_for_symbol(sembol) == ticker
@@ -37,15 +37,20 @@ def test_saglayici_eslemesi_dogru(sembol, ticker):
 
 
 def test_evren_endeks_ve_makro_sembolleri_iceriyor():
-    for sembol in ("XU50", "XBANK", "XUSIN", "USDTRY", "ALTIN", "GUMUS"):
+    for sembol in ("XU50", "XBANK", "XUSIN", "USDTRY", "XAUUSD", "XAGUSD"):
         assert sembol in config.ACTIVE_STOCKS, sembol
     assert config.sembol_turu("XBANK") == "endeks"
-    assert config.sembol_turu("ALTIN") == "makro"
+    assert config.sembol_turu("XAUUSD") == "makro"
+    assert config.sembol_turu("XAGUSD") == "makro"
+    # Eski Türkçe adlar kaldırıldı (2026-10-25): evrende ve eşlemede yok.
+    for eski in ("ALTIN", "GUMUS"):
+        assert eski not in config.ACTIVE_STOCKS, eski
+        assert eski not in config.PROVIDER_SYMBOL_MAP, eski
     assert config.sembol_turu("THYAO") == "hisse"
 
 
 def test_evren_ozeti_hisse_diye_saymaz():
-    tam = config.evren_ozeti(["THYAO", "GARAN", "XU100", "XBANK", "ALTIN"])
+    tam = config.evren_ozeti(["THYAO", "GARAN", "XU100", "XBANK", "XAUUSD"])
     assert tam == "5 sembol (2 hisse + 2 endeks + 1 makro)"
     assert config.evren_ozeti(["THYAO", "GARAN"], ayrinti=False) == "2 sembol"
 
@@ -73,7 +78,7 @@ def test_endekste_hacim_nedeni_yazilir():
 
 
 def test_makro_sembolde_hacim_nedeni_yazilir():
-    satirlar = _hacim("ALTIN")
+    satirlar = _hacim("XAUUSD")
     assert satirlar == ["hacim: 4s yok (makro)", "yön fiyattan okunur"]
 
 
@@ -105,7 +110,7 @@ def test_hacim_aciklamasi_public_mesajinda_da_gorunur():
 
 def test_makro_sembol_varsayilan_olarak_alarm_uretmez(monkeypatch):
     monkeypatch.setattr(config, "MAKRO_ALARM", False)
-    assert main_module._alarm_izni_var("ALTIN") is False
+    assert main_module._alarm_izni_var("XAUUSD") is False
     assert main_module._alarm_izni_var("USDTRY") is False
     # Endeks ve hisse normal yol (kullanıcı: "normal farksız").
     assert main_module._alarm_izni_var("XBANK") is True
@@ -114,7 +119,7 @@ def test_makro_sembol_varsayilan_olarak_alarm_uretmez(monkeypatch):
 
 def test_makro_alarm_bayragi_acilabilir(monkeypatch):
     monkeypatch.setattr(config, "MAKRO_ALARM", True)
-    assert main_module._alarm_izni_var("ALTIN") is True
+    assert main_module._alarm_izni_var("XAUUSD") is True
 
 
 # --- 4) Endekse göre göreli güç --------------------------------------------

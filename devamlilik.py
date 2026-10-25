@@ -41,13 +41,16 @@ KULLANIM
 --------
     >>> devamlilik_puani("Kama", mtf_uyum=4, bant_mesafe_atr=0.2)
     95
-    >>> kart_satiri("Kama", mtf_uyum=4)
-    'Devamlılık: yüksek'
+
+    Puan KARTTA GÖSTERİLMEZ (2026-10-25, §11–§12): puan tek bir bayrağa
+    indirgeniyordu, ondan türeyen "yüksek/normal/zayıf" etiketi de ölçümün
+    taşımadığı bir hükümdü. Kartta ne sayı ne kalite etiketi var. Puan yalnız
+    log/sıralama/gölge kayıt içindir.
 
 KAPSAM DIŞI
 -----------
 Bayrak ve Flama aileleri arşivde 20 gözlem; ölçüm için yetersiz. Bu ailelerde
-fonksiyon `None` döner ve kart satırı **yazılmaz** — uydurma bir sayı
+fonksiyon `None` döner ve hiçbir yere satır **yazılmaz** — uydurma bir sayı
 göstermektense hiç göstermemek doğru. Yeterli gözlem birikince ölçülüp eklenir.
 """
 
@@ -157,75 +160,3 @@ def bant(puan: Optional[int]) -> str:
         if puan >= alt:
             return ad
     return "zayıf"
-
-
-def gerekce(aile: Optional[str],
-            mtf_uyum: Optional[float] = None,
-            bant_mesafe_atr: Optional[float] = None) -> List[str]:
-    """Etiketi doğuran nedenler: aile + (kamada) trend uyumu.
-
-    Mesafe **bilinçli olarak dışarıda**: etiket aile + trend uyumundan
-    türetiliyor; gerekçede mesafe yazmak, etiketi doğurmayan bir nedeni
-    gerekçe gibi göstermek olurdu. Mesafe yalnız iç puan hesabında (§10.3:
-    177'de −7,0 ama alt kümede −2,8 ve GA sıfırı içeriyor).
-
-    Parçalar uydurulmaz: her biri ya puanı yükseltir ya düşürür.
-    """
-    a = aile_coz(aile)
-    if a is None:
-        return []
-    parca: List[str] = ["kama" if a == "Kama" else "üçgen"]
-    esik = ETKILESIM.get(a)
-    if esik is not None:
-        parca.append("trend uyumlu" if _mtf_deger(mtf_uyum) >= esik[0] else "trend zayıf")
-    return parca
-
-
-def devamlilik_etiketi(aile: Optional[str],
-                       mtf_uyum: Optional[float] = None) -> str:
-    """Kullanıcıya gösterilen ÜÇ SEVİYELİ etiket. Kapsam dışı ailede boş dize.
-
-    2026-10-25 ölçümü (§11): 0–100 puan, tek bayraktan ("kama & trend uyumu")
-    daha iyi değil — aynı kapsamda fark 0,0 puan. Sayının hak ettiği bir ölçüm
-    yok. Kullanıcıya sayı yerine ölçümün desteklediği kadar bilgi verilir:
-
-        kama + trend uyumu → "yüksek"   (aşırı +9,7)
-        kama               → "normal"   (aşırı +2,4)
-        üçgen              → "zayıf"    (aşırı −3,3)
-
-    **Örneklem dışı doğrulanmadı** (§11.4: ileri test bekliyor). Bu yüzden
-    etiket bir iddiadır; sayı gibi ölçüm görünümü vermez.
-    """
-    a = aile_coz(aile)
-    if a is None:
-        return ""
-    if a == "Üçgen":
-        return "zayıf"
-    esik = ETKILESIM.get(a)
-    if esik is not None and _mtf_deger(mtf_uyum) >= esik[0]:
-        return "yüksek"
-    return "normal"
-
-
-def kart_satiri(aile: Optional[str],
-                mtf_uyum: Optional[float] = None,
-                bant_mesafe_atr: Optional[float] = None) -> str:
-    """Tek satır kullanıcı bilgisi. Kapsam dışı ailede boş dize (satır yok).
-
-    Örnek: ``Devamlılık: yüksek``
-
-    **Sayı yok.** Puan (0–100) kartta gösterilmez, logda birikir. Gerekçe:
-    sayının sıralama gücü tek bir bayraktan geliyor; sayı ek bilgi taşımıyor
-    ama ölçüm varmış izlenimi veriyor (§11).
-    """
-    etiket = devamlilik_etiketi(aile, mtf_uyum)
-    if not etiket:
-        return ""
-    return f"Devamlılık: {etiket}"
-
-
-def kart_gerekcesi(aile: Optional[str],
-                   mtf_uyum: Optional[float] = None,
-                   bant_mesafe_atr: Optional[float] = None) -> str:
-    """İkinci (isteğe bağlı) satır: ``kama · trend uyumlu``."""
-    return " · ".join(gerekce(aile, mtf_uyum, bant_mesafe_atr))

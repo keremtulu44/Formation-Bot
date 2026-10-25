@@ -28,9 +28,9 @@ from telegram_measure import (SATIR_BUTCE, bol as _satir_bol,
 # Watch adaylarının state'ini Türkçe basmak için TEK KAYNAK sözlük (reporting
 # katmanı da aynısını kullanır; böylece alarm mesajı ile /panel aynı dili konuşur).
 from reporting.format import STATE_TR, sayi as _format_sayi
-# Devamlılık etiketi: kullanıcıya aktarılan TEK bilgi (sayı değil, seviye —
-# 0–100 puanın tek bayraktan iyi olmadığı ölçüldü, §11). Kullanıcıya sayı
-# basılmaz; puan yalnız log/sıralama içinde. Geometri
+# Devamlılık puanı ARTIK KARTTA YOK (§11–§12): 0–100 puan tek bayraktan iyi
+# çıkmadı, ondan türeyen "yüksek/normal/zayıf" etiketi de ölçümün taşımadığı bir
+# hükümdü. Puan yalnız log/sıralama/gölge kayıt içinde yaşıyor. Geometri
 # (confidence_score) artık yalnız bildirim eşiğini besler, kartta okunmaz.
 # Ölçüm: docs/arastirma/FAZLA_ANALIZI_2026-10-25.md, PUANLAMA_MIMARISI_2026-10-25.md
 import devamlilik as _dev
@@ -169,32 +169,6 @@ def devamlilik_puani(data: Dict) -> Optional[int]:
     return _dev.devamlilik_puani(data.get("pattern_name"),
                                  data.get("mtf_uyum"),
                                  data.get("bant_mesafe_atr"))
-
-
-def devamlilik_satiri(data: Dict) -> str:
-    """Tek satır kullanıcı bilgisi: ``Devamlılık: yüksek``.
-
-    **Kartta sayı yok** (2026-10-25, §11): 0–100 puan tek bayraktan daha iyi
-    değil; sayıyı basmak ölçüm varmış izlenimi veriyordu. Sayı yalnız logda
-    (`devamlilik_puani`, sıralama ve gölge kayıt için) kalır.
-
-    Kapsam dışı ailede boş dize döner; satır hiç yazılmaz.
-    """
-    return _dev.kart_satiri(data.get("pattern_name"),
-                            data.get("mtf_uyum"),
-                            data.get("bant_mesafe_atr"))
-
-
-def devamlilik_gerekcesi(data: Dict) -> str:
-    """Etiketi doğuran nedenler (en fazla iki parça), yoksa boş dize.
-
-    Mesafe (ATR) bilinçli olarak dışarıda: etiket aile + trend uyumundan
-    türetiliyor, gerekçe etiketi doğuran nedenleri yazar.
-    """
-    metin = _dev.kart_gerekcesi(data.get("pattern_name"),
-                                data.get("mtf_uyum"),
-                                data.get("bant_mesafe_atr"))
-    return metin
 
 
 def quality_comment(q: float) -> str:
@@ -645,15 +619,12 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     # kovalar arası fark <2 puan, bileşenleri zıt yönde). Yerine ölçülmüş
     # devamlılık puanı gelir; geometri yalnız bildirim eşiğini besler.
     güç = _sayı(data.get("break_strength"), 0)
-    if DEVLAMLILIK_AKTIF:
-        devam = devamlilik_satiri(data)
-        if devam:
-            _satir(blok, f"· {devam}")
-        gerekce = devamlilik_gerekcesi(data)
-        if gerekce:
-            _satir(blok, f"· {gerekce}")
-    else:
-        # rollback: `DEVLAMLILIK_AKTIF=0` eski kalite satırını birebir geri getirir
+    # 2026-10-25 gece (§11–§12): "Devamlılık: yüksek/normal/zayıf" satırı
+    # kaldırıldı. Puan tek bayrağa indirgeniyordu, etiket ise ölçümün taşımadığı
+    # bir "kalite hükmü" veriyordu. Aynı bilgi (üst TF aynı yönde mi) kartın
+    # kendi üst-zaman-dilimi satırında yazılı; çift satır açmıyoruz.
+    # Yalnız rollback yolu (`DEVLAMLILIK_AKTIF=0`) eski kalite satırını basar.
+    if not DEVLAMLILIK_AKTIF:
         kalite = _sayı(data.get("confidence_score"), 0)
         if kalite:
             _satir(blok, f"· formasyon kalitesi {kalite}/100")
@@ -688,8 +659,16 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
                else "· kırılan seviyeye dönüş yok")
     ust_soz = _KART_UST_TF_SOZ.get(timeframe)
     if ust_soz:
-        _satir(blok, f"· {ust_soz} de aynı yönde" if data.get("mtf_destek")
-               else f"· {ust_soz} onayı yok")
+        # 2026-10-25: `mtf_destek` yalnız "üst TF'de aktif formasyon var" demek;
+        # YÖN aynı mı, bilmiyor. Eskiden onay için "de aynı yönde" yazıyordu ve
+        # ters yönlü üst TF'de de aynı cümleyi kuruyordu. Yön uyumu `mtf_uyum`da
+        # (main.py: eşleşirse 4, aksi 0). Bilinmeyeni iddia etmiyoruz.
+        if int(_sayı(data.get("mtf_uyum"), 0) or 0) > 0:
+            _satir(blok, f"· {ust_soz} de aynı yönde")
+        elif data.get("mtf_destek"):
+            _satir(blok, f"· {ust_soz}: yön uyumu yok")
+        else:
+            _satir(blok, f"· {ust_soz} onayı yok")
     if blok:
         bloklar.append(blok)
 
@@ -857,9 +836,9 @@ def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False) -> str
     # 2026-10-25: "kalite" (geometri) künyeden kalktı. Eşiği geçen sayı ile
     # mesajda okunan sayı aynı şey değildi; artık mesajda ölçülmüş devamlılık var.
     if DEVLAMLILIK_AKTIF:
-        devam = devamlilik_satiri(data)
-        if devam:
-            _satir(künye, f"▪ {devam}" + (f" · kırılma gücü {güç}" if güç else ""))
+        # Puan/etiket künyeden de kalktı (§11–§12); ölçülmüş kırılma gücü kalır.
+        if güç:
+            _satir(künye, f"▪ kırılma gücü {güç}")
     else:
         kalite = _sayı(data.get("confidence_score"), 0)
         if kalite:
@@ -1055,14 +1034,10 @@ def _format_lifecycle_alert_klasik(data: Dict) -> str:
     if bar_text:
         lines.append(bar_text)
 
-    if DEVLAMLILIK_AKTIF:
-        # 2026-10-25: kullanıcıya aktarılan yerde geometri yok. Klasik stilde de
-        # aynı sayı okunsun diye kalite satırı devamlılıkla değişti.
-        # `DEVLAMLILIK_AKTIF=0` eski metni birebir geri getirir (rollback).
-        devam = devamlilik_satiri(data)
-        if devam:
-            lines.append(devam)
-    else:
+    if not DEVLAMLILIK_AKTIF:
+        # Rollback yolu (`DEVLAMLILIK_AKTIF=0`): 25 Eyl klasik metni birebir,
+        # kalite satırı dahil. Aktifken bu satır yok: puan ve kalite hükmü
+        # karttan kalktı (§11–§12).
         try:
             quality = float(data.get("confidence_score"))
             if quality == quality and abs(quality) != float("inf"):

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Devamlılık puanı — örnek kart metinleri + görsel.
+"""Puan karttan kalktı — örnek kart metinleri + görsel.
 
 SALT OKUNUR. Hiçbir ağ çağrısı yapmaz, Telegram'a bir şey göndermez.
 
@@ -9,6 +9,14 @@ Ne üretir:
 
 Metinler **gerçek üretim kodundan** gelir: `notifier.TelegramNotifier.format_message`.
 Yani görselde gördüğün satırlar canlıda çıkacak satırlardır; elle yazılmadı.
+
+NEDEN BU DOSYA VAR
+------------------
+2026-10-25 ölçümü (docs/arastirma/PUANLAMA_MIMARISI_2026-10-25.md §11–§12):
+0–100 devamlılık puanı tek bir bayrağa ("kama & üst TF aynı yönde") indirgeniyor,
+ondan türeyen yüksek/normal/zayıf etiketi ise ölçümün taşımadığı bir hüküm
+veriyordu. Kartta ne sayı ne etiket kaldı. Kalan tek bilgi — üst zaman dilimi
+aynı yönde mi — kartın kendi üst-TF satırında, olgu olarak yazılıyor.
 
 Kullanım:
     python scripts/devamlilik_ornek.py
@@ -34,7 +42,7 @@ CIKTI_MD = REPO / "var/replay/devamlilik_ornek.md"
 
 
 def kart(stock: str, desen: str, tf: str, kapanis: float, kirilan: float,
-         mtf: int, mesafe: float, kalite: float = 85.0,
+         mtf: int, mesafe: float, destek: bool = True, kalite: float = 85.0,
          guc: int = 78, yon: int = 1, saat: Tuple[int, int] = (11, 30)) -> Dict:
     """Gerçekçi alert_data: canlıda main.py'nin ürettiği alanların aynısı."""
     return {
@@ -42,22 +50,25 @@ def kart(stock: str, desen: str, tf: str, kapanis: float, kirilan: float,
         "state": "KIRILIM_TEYITLI", "break_dir": yon,
         "critical_price_level": kirilan, "candle_close_price": kapanis,
         "close_price": kapanis, "confidence_score": kalite, "break_strength": guc,
-        "mtf_uyum": mtf, "bant_mesafe_atr": mesafe, "mtf_destek": mtf >= 4,
+        "mtf_uyum": mtf, "bant_mesafe_atr": mesafe, "mtf_destek": destek,
         "upper_touches": 4, "lower_touches": 3, "retest_seen": False,
         "age_bars": 18, "bar_kapandi": True,
         "timestamp": datetime(2026, 10, 12, saat[0], saat[1]),
     }
 
 
+# Dört örnek, kartın söyleyebildiği üç üst-TF hâlini kapsar:
+#   aynı yönde · yön uyumu yok · onay yok
 ORNEKLER: List[Tuple[str, Dict]] = [
-    ("Kama · trend uyumlu · yakın giriş", kart(
+    ("Kama · üst TF aynı yönde", kart(
         "THYAO", "Yükselen Kama", "1h", 302.35, 302.00, mtf=4, mesafe=0.2)),
-    ("Kama · trend zayıf · 0,7 ATR", kart(
+    ("Kama · üst TF ters/yönsüz (4s→1g)", kart(
         "ASELS", "Alçalan Kama", "4h", 88.40, 87.10, mtf=0, mesafe=0.7)),
-    ("Üçgen · 0,8 ATR (yakın sayılır)", kart(
-        "GARAN", "Simetrik Üçgen", "2h", 121.60, 120.50, mtf=2, mesafe=0.8)),
-    ("Üçgen · uzak giriş (kovalama)", kart(
-        "EREGL", "Yükselen Üçgen", "1h", 34.90, 33.20, mtf=0, mesafe=2.6)),
+    ("Üçgen · üst TF aynı yönde", kart(
+        "GARAN", "Simetrik Üçgen", "2h", 121.60, 120.50, mtf=4, mesafe=0.8)),
+    ("Üçgen · üst TF onayı yok", kart(
+        "EREGL", "Yükselen Üçgen", "1h", 34.90, 33.20, mtf=0, mesafe=2.6,
+        destek=False)),
 ]
 
 
@@ -71,20 +82,26 @@ def metin_uret() -> List[Tuple[str, str, Dict]]:
 
 
 def _eski_metin(yeni: str, data: Dict) -> str:
-    """2026-10-25 öncesi kart: devamlılık satırı yerine geometri yazıyordu.
+    """2026-10-25 ÖNCESİ kart: iki satır fazla (etiket + gerekçe).
 
-    Tarihsel karşılaştırma için *yeniden kurulmuş* metin; üretimde artık
-    böyle bir satır yok.
+    Tarihsel karşılaştırma için *yeniden kurulmuş* metin; üretimde artık böyle
+    iki satır yok. Değerler, kaldırılan kodun son hâliyle aynı mantıktan gelir.
     """
-    q = float(data.get("confidence_score") or 0)
-    # Kartta devamlılık bloğu iki satırdır: puan satırı + gerekçe satırı.
-    # Eski kartta tek satır vardı: geometri.
-    return yeni.replace(
-        [s for s in yeni.split("\n") if "Devamlılık:" in s][0],
-        f"· formasyon kalitesi {q:.0f}/100"
-    ).replace(
-        [s for s in yeni.split("\n") if "trend uyumlu" in s or "trend zayıf" in s
-         or "giriş yakın" in s or "giriş uzak" in s][0] + "\n", "")
+    puan = dev.devamlilik_puani(data.get("pattern_name"), data.get("mtf_uyum"),
+                                data.get("bant_mesafe_atr"))
+    aile = dev.aile_coz(data.get("pattern_name"))
+    if puan is None or aile is None:
+        return yeni
+    etiket = "yüksek" if (aile == "Kama" and int(data.get("mtf_uyum") or 0) > 0) \
+        else ("zayıf" if aile == "Üçgen" else "normal")
+    aile_kucuk = "kama" if aile == "Kama" else "üçgen"
+    uyumlu = int(data.get("mtf_uyum") or 0) > 0
+    gerekce = aile_kucuk + (" · trend uyumlu" if uyumlu else " · trend zayıf")
+    satirlar = yeni.split("\n")
+    # Başlık (2 satır) + "· kapanış …" satırından sonra boş satır açıp ekle.
+    ekle = satirlar.index("") if "" in satirlar else len(satirlar)
+    return "\n".join(satirlar[:ekle] + ["", f"· Devamlılık: {etiket}",
+                                       f"· {gerekce}"] + satirlar[ekle:])
 
 
 def png_uret(satirlar: List[Tuple[str, str, Dict]]) -> Path:
@@ -147,23 +164,27 @@ def png_uret(satirlar: List[Tuple[str, str, Dict]]) -> Path:
     yuk_kiyas = 60 + max(len(eski_wrapped), len(bloklar[0][1])) * satir_yuk + 20
 
     # toplam yükseklik
-    baslik_yuk = 150
+    baslik_yuk = 172
     grid_satir = [bloklar[0:2], bloklar[2:4]]
     y_grid = sum(max(b[2] for b in s) + 26 for s in grid_satir)
-    yukseklik = baslik_yuk + y_grid + yuk_kiyas + 225
+    yukseklik = baslik_yuk + y_grid + yuk_kiyas + 170
 
     img = Image.new("RGB", (GEN, yukseklik), ARKA)
     d = ImageDraw.Draw(img)
 
     # başlık
-    d.text((BOS, 34), "Devamlılık etiketi — kart örnekleri", font=f_baslik, fill=METIN)
+    d.text((BOS, 34), "Puan karttan kalktı — kart örnekleri", font=f_baslik, fill=METIN)
     d.text((BOS, 76),
-           "Geometri (eski \"formasyon kalitesi\") karttan kalktı. Yerine devamlılık "
-           "etiketi geldi. Kartta sayı yok.",
+           "Ne sayı ne kalite etiketi. Kalan bilgi olgu olarak yazılıyor: "
+           "üst zaman dilimi aynı yönde mi?",
            font=f_alt, fill=SOLUK)
-    d.text((BOS, 100),
-           "Ölçüm: 0–100 puan, tek bayraktan (\"kama + trend uyumu\") daha iyi çıkmadı; "
-           "fark aynı kapsamda 0,0 puandı. Sayı logda kalıyor.",
+    d.text((BOS, 102),
+           "Ölçüm (§11): 0–100 puan tek bayrağa indirgeniyordu; aynı kapsamda fark "
+           "≤0,1 puandı. Sayı ek bilgi taşımıyordu.",
+           font=f_alt, fill=SOLUK)
+    d.text((BOS, 128),
+           "yüksek/normal/zayıf etiketi de ölçümün taşımadığı bir hüküm veriyordu "
+           "(örneklem dışı sınanmadı).",
            font=f_alt, fill=SOLUK)
 
     def balon(x, y, gen, yuk):
@@ -175,16 +196,11 @@ def png_uret(satirlar: List[Tuple[str, str, Dict]]) -> Path:
         h = max(b[2] for b in grup)
         for j, (etiket, wrapped, _, data) in enumerate(grup):
             x = BOS + j * (sutun_gen + 24)
-            puan = dev.devamlilik_puani(data.get("pattern_name"),
-                                        data.get("mtf_uyum"),
-                                        data.get("bant_mesafe_atr"))
             d.text((x + 4, y), etiket.upper(), font=f_etiket, fill=VURGU)
             balon(x, y + 22, sutun_gen, h - 22)
             yy = y + 40
             for satir in wrapped:
-                if satir.startswith("Devamlılık:") or "Devamlılık:" in satir:
-                    d.text((x + 14, yy), satir, font=f_kart_kalin, fill=VURGU)
-                elif satir.startswith("▲"):
+                if satir.startswith("▲"):
                     d.text((x + 14, yy), satir, font=f_kart_kalin, fill=METIN)
                 else:
                     d.text((x + 14, yy), satir, font=f_kart, fill=METIN)
@@ -205,26 +221,18 @@ def png_uret(satirlar: List[Tuple[str, str, Dict]]) -> Path:
             d.text((x + 14, yy), satir, font=f_kart, fill=METIN)
             yy += satir_yuk
 
-    # alt bilgi: etiket tablosu (50 sembollük sınama, aşırı fazla = küme fazlası
-    # +2,0 çıkarıldıktan sonra kalan). Örneklem İÇİ; ileri test bekliyor (§11.4).
-    y = yukseklik - 168
-    d.text((BOS, y), "Etiketler — 50 sembollük sınamada aşırı fazla "
-                     "(küme fazlası çıkarılmış, örneklem içi)",
-           font=f_etiket, fill=VURGU)
-    bantlar = [("yüksek", "kama + trend uyumu", "+9,7", "%4"),
-               ("normal", "kama", "+2,4", "%41"),
-               ("zayıf", "üçgen", "−3,3", "%55")]
-    for i, (ad, kosul, fazla, pay) in enumerate(bantlar):
-        x = BOS + i * 288
-        d.rounded_rectangle([x, y + 26, x + 268, y + 108], radius=10, fill=BALON,
+    # alt bilgi
+    y = yukseklik - 128
+    d.text((BOS, y), "Kartta kalan bilgiler", font=f_etiket, fill=VURGU)
+    for i, (ad, aciklama) in enumerate((
+            ("aile + üst TF yönü", "kama · aynı yönde / uyum yok"),
+            ("arşiv ölçümü", "n ile: 1651 kırılımın %75'i"),
+            ("yapı ve bölgeler", "BOS/CHoCH · OB-FVG seviyesi"))):
+        x = BOS + i * 372
+        d.rounded_rectangle([x, y + 26, x + 352, y + 96], radius=10, fill=BALON,
                             outline=KENAR, width=1)
         d.text((x + 14, y + 36), ad, font=f_kart_kalin, fill=METIN)
-        d.text((x + 14, y + 62), kosul, font=f_alt, fill=SOLUK)
-        d.text((x + 14, y + 80), f"{fazla} puan  ·  olayların {pay}", font=f_alt, fill=SOLUK)
-    d.text((BOS, y + 124),
-           "Bu üç satır bir iddiadır: örneklem dışında sınanmadı. Kart metni "
-           "sayı basmaz çünkü sayı kanıtlanmadı.",
-           font=f_alt, fill=SOLUK)
+        d.text((x + 14, y + 62), aciklama, font=f_alt, fill=SOLUK)
 
     CIKTI_PNG.parent.mkdir(parents=True, exist_ok=True)
     img.save(CIKTI_PNG)
@@ -234,27 +242,26 @@ def png_uret(satirlar: List[Tuple[str, str, Dict]]) -> Path:
 def main() -> int:
     satirlar = metin_uret()
 
-    md = ["# Devamlılık etiketi — örnek kart metinleri\n",
+    md = ["# Puan karttan kalktı — örnek kart metinleri\n",
           "Üretim kodu (`notifier.format_message`) ile üretildi; elle yazılmadı.\n",
-          "Kart `Devamlılık: yüksek | normal | zayıf` yazar. 0–100 puan kartta "
-          "görünmez: 2026-10-25 ölçümünde puanın sıralama gücü tek bir bayraktan "
-          "geliyordu (fark ≤0,1 puan), yani sayı ek bilgi taşımıyordu.\n"]
+          "Kartta ne 0–100 sayı ne yüksek/normal/zayıf etiketi var. Ölçüm "
+          "(`docs/arastirma/PUANLAMA_MIMARISI_2026-10-25.md` §11): puan tek bir "
+          "bayrağa indirgeniyordu (aynı kapsamda fark ≤0,1); etiket ise örneklem "
+          "dışı sınanmamış bir kalite hükmüydü. Kalan tek bilgi — üst zaman dilimi "
+          "aynı yönde mi — kartın kendi üst-TF satırında olgu olarak yazılıyor.\n"]
     for etiket, metin, data in satirlar:
         puan = dev.devamlilik_puani(data.get("pattern_name"), data.get("mtf_uyum"),
                                     data.get("bant_mesafe_atr"))
-        e = dev.devamlilik_etiketi(data.get("pattern_name"), data.get("mtf_uyum"))
-        md.append(f"\n## {etiket} — etiket: {e} (log: {puan}/100)\n")
-        md.append("> Kartta **sayı yok**; 0–100 puan yalnız logda. "
-                  "Etiket = aile + trend uyumu.\n")
+        md.append(f"\n## {etiket} (log: {puan}/100 — kartta görünmez)\n")
         md.append("```")
         md.append(metin.rstrip())
         md.append("```")
 
     md.append("\n## Önce / sonra (aynı olay)\n")
-    md.append("**Önce** (geometri):\n```")
+    md.append("**Önce** (etiket + gerekçe satırı vardı):\n```")
     md.append(_eski_metin(satirlar[0][1], satirlar[0][2]).rstrip())
     md.append("```")
-    md.append("**Sonra** (devamlılık etiketi):\n```")
+    md.append("**Sonra** (bugün):\n```")
     md.append(satirlar[0][1].rstrip())
     md.append("```")
     CIKTI_MD.parent.mkdir(parents=True, exist_ok=True)

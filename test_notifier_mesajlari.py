@@ -364,15 +364,14 @@ def test_kart_uzun_satiri_boler_bilgi_dusmez():
 
 def test_klasik_stil_eski_biçimi_korur(monkeypatch):
     # Geri dönüş anahtarı: TELEGRAM_ALERT_STYLE=klasik → 25 Eyl biçimi aynen üretilir.
-    # 2026-10-25: klasik stilde de kullanıcıya geometri yerine devamlılık puanı
-    # yazılır (iki stil arasında sayı farkı olmasın). Eski "Kalite:" metni
-    # `DEVLAMLILIK_AKTIF=0` ile birebir geri gelir — o yol ayrı testte.
+    # 2026-10-25: klasik stilde de ne geometri ne devamlılık puanı yazılır
+    # (§11–§12: puan tek bayraktan iyi çıkmadı, etiket de hüküm veriyordu).
+    # Eski "Kalite:" metni `DEVLAMLILIK_AKTIF=0` ile birebir geri gelir.
     monkeypatch.setattr(notifier_mod, "TELEGRAM_ALERT_STYLE", "klasik")
     monkeypatch.setattr(notifier_mod, "DEVLAMLILIK_AKTIF", True)
     msg = TelegramNotifier().format_message(_base_data(state='KIRILIM_TEYITLI', break_dir=1))
     assert "KIRILIM TEYİTLİ: yukarı kırılım" in msg
-    assert "Devamlılık: " in msg
-    assert "Kalite:" not in msg
+    assert "Devamlılık" not in msg and "Kalite:" not in msg
 
 
 def test_klasik_stil_rollback_kaliteyi_dondurur(monkeypatch):
@@ -468,11 +467,9 @@ def test_dogrulanmis_olay_kimlik_fiyat_kalite_tasir_kare_detayini_tekrarlamaz():
     # 2026-10-25: formasyon kalitesi (geometri) karttan KALKTI — ölçülen sonucu
     # öngörmüyordu. Yerine devamlılık puanı gelir; geometri yalnız eşiği besler.
     assert "formasyon kalitesi" not in msg and "kalite" not in msg
-    # 2026-10-25 (§11): kartta SAYI YOK — puan tek bayraktan iyi değil.
-    # "Devamlılık: yüksek" gibi üç seviyeli etiket yazılır; 0–100 yalnız logda.
-    _dev_satiri = [ln for ln in msg.splitlines() if "Devamlılık:" in ln]
-    assert _dev_satiri, msg
-    assert not any(ch.isdigit() for ch in _dev_satiri[0]), _dev_satiri
+    # 2026-10-25 (§11–§12): kartta ne sayı ne kalite etiketi var. Puan tek
+    # bayraktan iyi çıkmadı; "Devamlılık: yüksek" satırı tamamen kalktı.
+    assert "Devamlılık" not in msg
     assert "kırılım gücü 80/100" in msg
     assert "Güçlü" not in msg and "Çok güçlü" not in msg
     # Sade dil (2026-10-22): "retest" yerine "geri çekilme" yazılır.
@@ -532,5 +529,5 @@ def test_metin_sigdir_bilgi_dusurmez():
     metin = n.format_public_tekil(uzun)
     kelimeler = " ".join(metin.split())
     assert "DOHOL" in kelimeler and "21,28" in kelimeler
-    assert "Devamlılık: " in kelimeler
     assert "formasyon kalitesi" not in kelimeler
+    assert "Devamlılık" not in kelimeler

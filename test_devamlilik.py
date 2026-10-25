@@ -43,9 +43,7 @@ def test_kapsam_disi_aile():
     """Bayrak/Flama ölçülmedi: puan yok, kart satırı yok."""
     for ad in ("Bayrak", "Flama", "", None, "Bilinmeyen"):
         assert dev.devamlilik_puani(ad, 4, 0.1) is None
-        assert dev.kart_satiri(ad, 4, 0.1) == ""
         assert dev.bant(None) == ""
-        assert dev.gerekce(ad, 4, 0.1) == []
 
 
 def test_aile_cozma():
@@ -113,83 +111,51 @@ def test_bant_sirasi_puan_ile_uyumlu():
         onceki = s
 
 
-def test_kart_satiri_bicimi():
-    """Kartta SAYI YOK: 0–100 puan tek bayraktan iyi değil (§11)."""
-    satir = dev.kart_satiri("Kama", 4, 0.2)
-    assert satir == "Devamlılık: yüksek"
-    assert "/100" not in satir
-    assert not any(c.isdigit() for c in satir)
-    assert "\n" not in satir and len(satir) <= 32
+def test_puan_kartta_yok():
+    """2026-10-25 (§11–§12): puan ve kalite etiketi karttan tamamen kalktı.
 
-
-def test_etiket_uc_seviye():
-    """Etiket aile + trend uyumundan: yüksek / normal / zayıf."""
-    assert dev.devamlilik_etiketi("Yükselen Kama", 4) == "yüksek"
-    assert dev.devamlilik_etiketi("Alçalan Kama", 0) == "normal"
-    assert dev.devamlilik_etiketi("Simetrik Üçgen", 4) == "zayıf"
-    assert dev.devamlilik_etiketi("Yükselen Üçgen", 0) == "zayıf"
-    # üçgende trend uyumu etiketi değiştirmez (ölçüm: üçgende etki yok)
-    assert dev.devamlilik_etiketi("Üçgen", 4) == dev.devamlilik_etiketi("Üçgen", 0)
-    assert dev.devamlilik_etiketi("Bayrak", 4) == ""
-
-
-def test_etiket_puan_bandiyla_celismez():
-    """Etiket ile iç puan aynı yönü göstermeli (kama > üçgen)."""
-    import devamlilik as d
-    puanlar = {"yüksek": [], "normal": [], "zayıf": []}
-    for aile in ("Kama", "Üçgen"):
-        for mtf in (0, 2, 4):
-            e = d.devamlilik_etiketi(aile, mtf)
-            puanlar[e].append(d.devamlilik_puani(aile, mtf, 1.0))
-    assert max(puanlar["zayıf"]) < min(puanlar["normal"])
-    assert max(puanlar["normal"]) <= min(puanlar["yüksek"]) + 1
-
-
-def test_gerekce_en_fazla_iki_parca():
-    """Üç parça kartta 283 px'i aşıyordu; sözleşme artık en fazla iki."""
-    for mtf in (0, 2, 4):
-        for mesafe in (0.1, 0.7, 1.5, 3.0):
-            for aile in ("Kama", "Üçgen"):
-                g = dev.gerekce(aile, mtf, mesafe)
-                assert 1 <= len(g) <= 2, (aile, mtf, mesafe, g)
-
-
-def test_gerekce_en_belirleyici_neden():
-    """İkinci parça, etiketi doğuran neden olmalı: trend uyumu."""
-    assert dev.gerekce("Kama", 4, 0.1) == ["kama", "trend uyumlu"]
-    assert dev.gerekce("Kama", 0, 3.0) == ["kama", "trend zayıf"]
-    # üçgende etkileşim yok (ölçüm: ayrı etki yok) → yalnız aile yazılır
-    assert dev.gerekce("Üçgen", 4, 0.1) == ["üçgen"]
-    assert dev.gerekce("Üçgen", 4, 3.0) == ["üçgen"]
-
-
-def test_gerekce_yalniz_etiketin_nedenleri():
-    """Gerekçe, etiketi doğuran nedenleri yazar; mesafe gerekçeye girmez.
-
-    Mesafe etikete girmiyor (etiket = aile + trend uyumu), o yüzden gerekçede
-    "seviyeye yakın" yazmak etiketi doğurmayan bir nedeni gerekçe gibi
-    göstermek olurdu. Mesafe yalnız iç puan hesabında (§10.3).
+    Puan tek bir bayrağa indirgeniyordu (fark ≤0,1); ondan türeyen
+    yüksek/normal/zayıf etiketi de ölçümün taşımadığı bir hükümdü. Kullanıcıya
+    aktarılan yüzeyde artık ne sayı ne etiket var.
     """
-    assert dev.gerekce("Kama", 4, 1.5) == ["kama", "trend uyumlu"]
-    assert "trend uyumlu" not in dev.gerekce("Üçgen", 4, 1.5)
-    assert dev.gerekce("Kama", 0, 2.1)[1] == "trend zayıf"
-    for mesafe in (0.1, 0.9, 1.5, 3.0):
-        for aile in ("Kama", "Üçgen"):
-            for mtf in (0, 4):
-                g = dev.gerekce(aile, mtf, mesafe)
-                assert not any("seviye" in parca for parca in g), g
+    import notifier
+    metin = notifier.TelegramNotifier().format_message(_ornek_veri())
+    assert "Devamlılık" not in metin
+    assert "formasyon kalitesi" not in metin
+    # `devamlilik.py` kullanıcıya metin üreten fonksiyon taşımaz: puan saf hesap.
+    for ad in ("kart_satiri", "kart_gerekcesi", "gerekce", "devamlilik_etiketi"):
+        assert not hasattr(dev, ad), ad
 
 
-def test_satir_piksel_butcesi():
-    """Kartın iki yeni satırı 283 px satır bütçesine sığar (bölünmeden)."""
-    from telegram_measure import genislik, SATIR_BUTCE
-    for aile in ("Kama", "Üçgen"):
-        for mtf in (0, 4):
-            for mesafe in (0.1, 0.7, 1.5, 3.0):
-                puan = dev.kart_satiri(aile, mtf, mesafe)
-                gerekce = "· " + dev.kart_gerekcesi(aile, mtf, mesafe)
-                assert genislik("· " + puan) <= SATIR_BUTCE, (aile, mtf, mesafe, puan)
-                assert genislik(gerekce) <= SATIR_BUTCE, (aile, mtf, mesafe, gerekce)
+def test_ust_tf_satiri_yonu_soyler():
+    """Üst TF satırı yön uyumunu söyler; yön bilinmiyorsa 'aynı yönde' DEMEZ.
+
+    `mtf_destek` yalnız "üst TF'de aktif formasyon var" demek. Eskiden onay
+    sayılıp "4 saatlik de aynı yönde" yazılıyordu; ters yönlü üst TF'de de aynı
+    cümle kuruluyordu (yanlış iddia).
+    """
+    import notifier
+    ortak = dict(_ornek_veri())
+    ortak.update({"mtf_destek": True, "mtf_uyum": 4})
+    assert "· 4 saatlik de aynı yönde" in notifier.TelegramNotifier().format_message(ortak)
+    ortak2 = dict(_ornek_veri())
+    ortak2.update({"mtf_destek": True, "mtf_uyum": 0})
+    metin = notifier.TelegramNotifier().format_message(ortak2)
+    assert "· 4 saatlik: yön uyumu yok" in metin
+    assert "aynı yönde" not in metin
+    ortak3 = dict(_ornek_veri())
+    ortak3.update({"mtf_destek": False, "mtf_uyum": 0})
+    assert "· 4 saatlik onayı yok" in notifier.TelegramNotifier().format_message(ortak3)
+
+
+def test_ust_tf_satiri_piksel_butcesine_sigar():
+    """Üst TF satırının üç hâli de 283 px satır bütçesini bölünmeden geçer."""
+    import notifier
+    from telegram_measure import genislik
+    butce = notifier._kart_esik_px()
+    for metin in ("· 4 saatlik de aynı yönde", "· 4 saatlik: yön uyumu yok",
+                  "· 4 saatlik onayı yok", "· günlük: yön uyumu yok"):
+        assert genislik(metin) <= butce, (metin, genislik(metin), butce)
 
 
 def test_deterministik():
@@ -229,12 +195,12 @@ def _ornek_veri():
     }
 
 
-def test_kart_devamlilik_gosterir_geometri_gostermez(monkeypatch):
-    """Kullanıcıya aktarılan yerde geometri YOK, devamlılık VAR."""
+def test_kart_ne_geometri_ne_puan_gosterir(monkeypatch):
+    """Kullanıcıya aktarılan yerde ne geometri ne devamlılık satırı var."""
     import notifier
     monkeypatch.setattr(notifier, "DEVLAMLILIK_AKTIF", True)
     metin = notifier.TelegramNotifier().format_message(_ornek_veri())
-    assert "Devamlılık: yüksek" in metin
+    assert "Devamlılık" not in metin
     assert "formasyon kalitesi" not in metin
     assert "87/100" not in metin
 
@@ -248,13 +214,13 @@ def test_rollback_bayragi_eski_metni_dondurur(monkeypatch):
     assert "Devamlılık" not in metin
 
 
-def test_klasik_stil_de_ayni_sayiyi_okur(monkeypatch):
-    """İki stil arasında sayı farkı olmaz: ikisi de devamlılık puanı."""
+def test_klasik_stil_de_puan_basmaz(monkeypatch):
+    """Klasik gövde de puan/etiket basmaz; rollback (=0) eski kaliteyi döndürür."""
     import notifier
     monkeypatch.setattr(notifier, "DEVLAMLILIK_AKTIF", True)
     monkeypatch.setattr(notifier, "TELEGRAM_ALERT_STYLE", "klasik")
     metin = notifier.TelegramNotifier().format_message(_ornek_veri())
-    assert "Devamlılık: yüksek" in metin
+    assert "Devamlılık" not in metin and "Kalite:" not in metin
     assert "Çok güçlü" not in metin
 
 

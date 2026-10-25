@@ -710,3 +710,60 @@ yok**: kullanıcıya ölçüm varmış izlenimi verilmiyor.
 
 **Rollback:** `devamlilik_etiketi()` boş dize dönerse satır hiç yazılmaz;
 `TELEGRAM_ALERT_STYLE=klasik` gövdesi bu değişiklikten etkilenmedi.
+
+---
+
+## 13. Etiket de kalktı — kart artık yalnız olgu taşıyor
+
+§12'de sayı yerine üç seviyeli etiket konmuştu (`Devamlılık: yüksek`). Aynı
+gecenin devamında etiket de kaldırıldı. Sebep, §11'in devamı: etiketin taşıdığı
+tek bilgi "aile + üst TF aynı yönde" olgusuydu ve **o bilgi kartta zaten vardı**.
+
+### 13.1 Çift satır sorunu
+
+Kart, üst zaman dilimi satırını zaten basıyordu:
+
+```
+· 4 saatlik de aynı yönde
+· günlük onayı yok
+```
+
+Yani `Devamlılık: yüksek` + `kama · trend uyumlu` ikilisi, kartın başka bir
+yerinde yazılı olanı tekrar ediyordu. Üstelik etiket, aynı olguyu "kalite
+hükmü" gibi sunuyordu. İkisi de gereksizdi.
+
+### 13.2 Düzeltilen yanlış iddia
+
+O satır yanlış da konuşuyordu. `mtf_destek` alanı yalnızca "üst zaman diliminde
+aktif bir formasyon var" demek; **yönün aynı olup olmadığını bilmiyor**. Kod
+yine de "de aynı yönde" yazıyordu — ters yönlü üst TF'de bile. Yön uyumu ayrı
+alanda duruyor (`mtf_uyum`: eşleşirse 4, aksi 0).
+
+Yeni üç hâl, hepsi olgu:
+
+| Koşul | Satır |
+|---|---|
+| `mtf_uyum > 0` | `· 4 saatlik de aynı yönde` |
+| `mtf_destek` var, yön uyumu yok | `· 4 saatlik: yön uyumu yok` |
+| üst TF'de aktif formasyon yok | `· 4 saatlik onayı yok` |
+
+Ortadaki hâl bilerek "ters yönde" demiyor: `mtf_uyum = 0` hem ters yön hem
+"yön henüz yok" olabilir; ikisini ayıracak alan karta taşınmıyor. Bilinmeyeni
+iddia etmemek için "yön uyumu yok" yazılıyor.
+
+### 13.3 Bugünkü kart
+
+Kartta kalan bilgiler: olay + kapanış/kırılan, kırılım gücü, bant yaşı, temas
+sayısı, geri çekilme durumu, üst TF yön uyumu, yapı (BOS/CHoCH seviyesi),
+bölgeler (OB/FVG üstte/altta, doluluk), ve **n ile** arşiv ölçüm satırları
+(`◇ 1651 kırılımın %75'i sürdü` gibi). Hiçbiri 0–100 "kalite" hükmü taşımıyor.
+
+`devamlilik.py` artık kullanıcıya metin üretmiyor: yalnız `devamlilik_puani()`
+(sıralama/gölge log) ve `bant()` (log) kaldı. `kart_satiri`, `kart_gerekcesi`,
+`gerekce`, `devamlilik_etiketi` **silindi** — ölü API bırakmamak için.
+
+### 13.4 Rollback
+
+`DEVLAMLILIK_AKTIF=0` eski `· formasyon kalitesi NN/100` satırını birebir geri
+getirir (kart, künye ve klasik gövde). `TELEGRAM_ALERT_STYLE=klasik` rollback
+yolu da değişmedi.

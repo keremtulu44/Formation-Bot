@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Tuple
 from config import (
     ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN,
     DATA_DIR, SEED_DATA_DIR, MARKET_SUFFIX, yahoo_ticker_for_symbol,
+    PROVIDER_SYMBOL_FALLBACK,
     CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER_CLOSE_MIN, TARAMA_PENCERE_SONU,
     BIST_TATILLER, BIST_YARIM_GUNLER,
     VERI_YOK_MODU_ESIK_DK, SPLIT_SUREKLILIK_ESIK_PCT, BAR_BOSLUK_ESIK_SAAT,
@@ -1479,7 +1480,7 @@ _SEANS_CAPASI = "9h30min"
 def _bist_seans_serisi(idx_ist: pd.DatetimeIndex) -> bool:
     """Tüm barlar BIST seans saatlerinde mi? (İstanbul duvar saati 09-18)
 
-    Kesintisiz semboller (BRENT/USDTRY/ALTIN...) gece barı da taşır; onlarda
+    Kesintisiz semboller (BRENT/USDTRY/XAUUSD...) gece barı da taşır; onlarda
     seans çapası anlamsızdır, gece yarısı çapası kullanılır. Karar serinin
     kendi saatlerinden verilir: sembol listesine bağımlılık yok, yeni
     sembol sınıfı eklenirse davranış kendiliğinden doğru kalır.
@@ -1706,6 +1707,21 @@ def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
 
 # === VERİ ÇEKME (MOCK + GERÇEK İSKELET) ===
 
+def saglayici_adaylari(stock: str) -> List[str]:
+    """Sembolün sağlayıcı adları: önce birincil, sonra varsa yedek.
+
+    Neden: bazı ürünler tek bir sağlayıcı serisiyle güvenilir değil. Özellikle
+    `XAUUSD`/`XAGUSD` gibi parite adları: spot seri yoksa vadeli seri (GC=F/SI=F)
+    aynı ons fiyatını izler. Sessiz veri boşluğu yerine yedeğe düşülür ve hangi
+    serinin kullanıldığı loga yazılır — kullanıcı hangi fiyatı gördüğünü bilir.
+    """
+    anahtar = str(stock or "").strip().upper()
+    birincil = yahoo_ticker_for_symbol(stock)
+    yedek = PROVIDER_SYMBOL_FALLBACK.get(anahtar)
+    if yedek and yedek != birincil:
+        return [birincil, yedek]
+    return [birincil]
+
 def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional[pd.DataFrame]:
     """Günlük (1D) OHLCV çeker — DERİN geçmiş (varsayılan 2 yıl, ~500 bar).
 
@@ -1718,8 +1734,17 @@ def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional
         import io
         import contextlib
         import yfinance as yf
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            ham = yf.Ticker(yahoo_ticker_for_symbol(stock)).history(period=period, interval="1d", auto_adjust=False)
+        ham = None
+        adaylar = saglayici_adaylari(stock)
+        for sira, ticker in enumerate(adaylar):
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                ham = yf.Ticker(ticker).history(period=period, interval="1d", auto_adjust=False)
+            if ham is not None and len(ham) > 0:
+                if sira:
+                    logger.info(f"{stock}: birincil seri boştu, yedek seri "
+                                f"kullanıldı ({ticker})")
+                break
+            logger.info(f"{stock}: sağlayıcı {ticker} 1d boş döndü")
         if ham is None or len(ham) == 0:
             return None
         df = ham.copy()
@@ -1813,8 +1838,18 @@ def fetch_yfinance_1h(
         import contextlib
         import yfinance as yf
         captured = io.StringIO()
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(captured):
-            ham = yf.Ticker(yahoo_ticker_for_symbol(stock)).history(period=period, interval="1h", auto_adjust=False)
+        ham = None
+        adaylar = saglayici_adaylari(stock)
+        for sira, ticker in enumerate(adaylar):
+            captured = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(captured):
+                ham = yf.Ticker(ticker).history(period=period, interval="1h", auto_adjust=False)
+            if ham is not None and not ham.empty:
+                if sira:
+                    logger.info(f"{stock}: birincil seri boştu, yedek seri "
+                                f"kullanıldı ({ticker})")
+                break
+            logger.info(f"{stock}: sağlayıcı {ticker} 1h boş döndü")
         if ham is None or ham.empty:
             reason = captured.getvalue().strip() or "Yahoo boş veri döndürdü"
             return result(None, yfinance_error_is_retryable(reason), reason)

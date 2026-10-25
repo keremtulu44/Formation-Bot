@@ -48,15 +48,17 @@ def test_active_universe_excludes_yahoo_unsupported_symbols():
     assert "KOZAL" not in BIST_50
     assert "KOZAA" not in BIST_50
     assert {"XU100", "XU30", "BRENT", "XU50", "XBANK", "XUSIN",
-            "USDTRY", "ALTIN", "GUMUS"}.issubset(BIST_50)
+            "USDTRY", "XAUUSD", "XAGUSD"}.issubset(BIST_50)
     assert yahoo_ticker_for_symbol("THYAO") == "THYAO.IS"
     assert yahoo_ticker_for_symbol("XU100") == "XU100.IS"
     assert yahoo_ticker_for_symbol("XU30") == "XU030.IS"
     assert yahoo_ticker_for_symbol("BRENT") == "BZ=F"
     assert yahoo_ticker_for_symbol("XU50") == "XU050.IS"
     assert yahoo_ticker_for_symbol("XBANK") == "XBANK.IS"
-    assert yahoo_ticker_for_symbol("ALTIN") == "GC=F"
-    assert yahoo_ticker_for_symbol("GUMUS") == "SI=F"
+    # 2026-10-25: Türkçe adlar kaldırıldı, parite adları geldi. Sağlayıcıda
+    # spot parite yoksa veri katmanı yedek seriye düşer (GC=F / SI=F).
+    assert yahoo_ticker_for_symbol("XAUUSD") == "XAUUSD=X"
+    assert yahoo_ticker_for_symbol("XAGUSD") == "XAGUSD=X"
     assert yahoo_ticker_for_symbol("USDTRY") == "USDTRY=X"
     assert ACTIVE_STOCKS == BIST_50
 
@@ -219,3 +221,48 @@ def test_stock_fetch_helper_retries_only_transient_failures(monkeypatch):
     ]
     assert retry_count == 1
     assert recovered_count == 1
+
+
+# --- Makro parite sembolleri: ad + yedek seri (2026-10-25) --------------------
+
+def test_makro_parite_sembolleri_yedek_seri_tasir():
+    """XAUUSD/XAGUSD spot serisi yoksa vadeli seriye düşer; eşleme sessiz kalmaz."""
+    import data
+
+    assert data.saglayici_adaylari("XAUUSD") == ["XAUUSD=X", "GC=F"]
+    assert data.saglayici_adaylari("XAGUSD") == ["XAGUSD=X", "SI=F"]
+    # Yedeği olmayan sembol tek adayla kalır (uydurma ad üretilmez).
+    assert data.saglayici_adaylari("THYAO") == ["THYAO.IS"]
+    assert data.saglayici_adaylari("BRENT") == ["BZ=F"]
+    assert data.saglayici_adaylari("xauusd") == ["XAUUSD=X", "GC=F"]
+
+
+def test_veri_katmani_bos_seride_yedege_duser(monkeypatch):
+    """Birincil seri boş dönerse ikinci ad denenir; veri boşluğu sessiz kalmaz."""
+    import sys
+    import types
+
+    import pandas as pd
+
+    import data
+
+    cagrilar: list[str] = []
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            self.ticker = ticker
+
+        def history(self, **_kw):
+            cagrilar.append(self.ticker)
+            if self.ticker == "XAUUSD=X":
+                return pd.DataFrame()
+            idx = pd.date_range("2026-10-01", periods=3, freq="D", tz="UTC")
+            return pd.DataFrame({"Open": [1.0, 2.0, 3.0], "High": [1.0, 2.0, 3.0],
+                                 "Low": [1.0, 2.0, 3.0], "Close": [1.0, 2.0, 3.0],
+                                 "Volume": [0, 0, 0]}, index=idx)
+
+    monkeypatch.setitem(sys.modules, "yfinance",
+                        types.SimpleNamespace(Ticker=FakeTicker))
+    df = data.fetch_yfinance_1d("XAUUSD")
+    assert df is not None and len(df) == 3
+    assert cagrilar == ["XAUUSD=X", "GC=F"]

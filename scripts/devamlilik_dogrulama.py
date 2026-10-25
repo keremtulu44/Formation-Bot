@@ -145,10 +145,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         out.append(f"| {tf} | {len(g)} | {g.puan.mean():.0f} | {g.fazla.mean()*100:+.1f} |")
 
     ornek = kapsam.nlargest(1, "puan").iloc[0]
-    out.append("\n## 5. Örnek kart satırı\n")
+    out.append("\n## 5. Örnek satır (LOG)\n")
+    out.append("Kartta puan/etiket YOK (2026-10-25 gece, §11–§12). Bu satır yalnız "
+               "logda görünür:\n")
     out.append("```")
-    out.append(dev.kart_satiri(ornek.aile, ornek.mtf_uyum, ornek.bant_mesafe_atr))
-    out.append(dev.kart_gerekcesi(ornek.aile, ornek.mtf_uyum, ornek.bant_mesafe_atr))
+    out.append(f"devamlilik puanı (log) = {int(ornek.puan)} · bant (log) = "
+               f"{dev.bant(int(ornek.puan))}")
     out.append("```")
 
     metin = "\n".join(out)
