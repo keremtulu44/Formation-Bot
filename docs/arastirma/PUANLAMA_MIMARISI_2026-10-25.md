@@ -65,10 +65,16 @@ dar kapsamlı, geçmişte yanıltmış madde kısılır.
 | kama | +4,1 | 7/7 varyant · 6/6 bölme · 176 sembol · aynı hücrede +6,4 | 1,00 | **+4,1** |
 | üçgen | −1,9 | aynı | 1,00 | **−1,9** |
 | kama & MTF 4 (ek) | +6,2 | 7/7 varyant, ama kapsam %6,8 ve MTF geçen turda hayaletti | 0,60 | **+3,7** |
-| mesafe ≤0,3 ATR | +2,0 | 2/2 aile, S/Z aynı yön, 7/7 varyant | 0,85 | **+1,7** |
-| mesafe 0,3–1 ATR | +1,0 | aynı | 0,85 | **+0,9** |
+| mesafe ≤0,3 ATR | +2,0 | 2/2 aile, S/Z aynı yön, 7/7 varyant; **ama 50 sembollük taze dilimde −7,0 → −2,8'e zayıfladı, GA sıfırı içerdi** | 0,50 | **+1,0** |
+| mesafe 0,3–1 ATR | +1,0 | aynı | 0,50 | **+0,5** |
 | mesafe 1–2 ATR | 0 | referans | — | **0** |
-| mesafe >2 ATR | −1,5 | aynı | 0,85 | **−1,3** |
+| mesafe >2 ATR | −1,5 | aynı | 0,50 | **−0,75** |
+
+Küçültme katsayıları **veriye bakmadan** yazıldı; tek dayanak yukarıdaki
+doğrulama sütunu. `mesafe` 2026-10-25'te 0,85'ten 0,50'ye indirildi: taze
+dilimde etki yarıdan fazla eridi. Ölçüldü ki bu indirim puanın gücünü
+değiştirmiyor (en iyi %10 dilimde 0,85 ile 0,00 arası fark <1 puan) — yani
+puanın getirisi mesafeden değil, aile ve aile×trend maddesinden geliyor.
 
 Küçültme katsayıları **veriye bakmadan** yazıldı; tek dayanak yukarıdaki
 doğrulama sütunu. (MTF'nin 0,60 alması, geçen turda MTF uyumunun rastgele
@@ -92,10 +98,10 @@ puan   = 50 + 5 × toplam                       (5 … 95 arası kırpılır)
 
 | puan | bant | kart cümlesi | arşivdeki pay | gerçekleşen fazla (arşiv) |
 |---|---|---|---|---|
-| 85–95 | yüksek | `Devamlılık: yüksek` | %2 | **+15,9** [+7,6, +20,2] |
-| 65–84 | iyi | `Devamlılık: iyi` | %38 | **+4,8** [+3,8, +6,8] |
-| 45–64 | normal | `Devamlılık: normal` | %41 | **−0,7** [−2,5, +0,3] |
-| 5–44 | zayıf | `Devamlılık: zayıf` | %19 | **−1,9** [−4,4, −0,6] |
+| 85–94 | yüksek | `Devamlılık: yüksek` | %7 | **+10,3** [+6,2, +13,1] |
+| 65–84 | iyi | `Devamlılık: iyi` | %50 | **+3,3** [+1,9, +4,5] |
+| 45–64 | normal | `Devamlılık: normal` | %9 | **−0,7** [−4,1, +1,6] |
+| 5–44 | zayıf | `Devamlılık: zayıf` | %34 | **−2,2** [−4,1, −1,2] |
 
 Son iki sütun **arşivde ölçülen** değerler (15.736 gözlem, `var/replay/devamlilik.md`).
 Fazla, eşleştirilmiş rastgele tabana göre; taban rejime göre %30–41 arasında
@@ -109,15 +115,13 @@ nadir olsun.
 
 | durum | toplam | puan | bant |
 |---|---|---|---|
-| kama + MTF4 + yakın giriş (≤0,3) | +9,5 | **95** | yüksek |
-| kama + MTF4 + orta mesafe (0,3–1) | +8,7 | **93** | yüksek |
-| kama + MTF4 + uzak (>2) | +6,5 | **83** | iyi |
-| kama, MTF düşük, 0,3–1 | +5,0 | **75** | iyi |
+| kama + MTF4 + yakın giriş (≤0,3 ATR) | +8,8 | **94** | yüksek |
+| kama + MTF4 + 0,3–1 ATR | +8,3 | **92** | yüksek |
+| kama + MTF4 + uzak (>2 ATR) | +7,1 | **85** | yüksek |
+| kama, MTF düşük, 0,3–1 | +4,6 | **73** | iyi |
 | kama, MTF düşük, 1–2 | +4,1 | **71** | iyi |
-| ortalama kırılım | +1,5 | **58** | normal |
-| üçgen, 0,3–1 | −1,0 | **45** | normal |
-| üçgen, MTF4, 0,3–1 | −1,1 | **45** | normal |
-| üçgen, 2 ATR ötesi | −3,2 | **34** | zayıf |
+| üçgen, 0,3–1 | −1,4 | **43** | zayıf |
+| üçgen, 2 ATR ötesi | −2,7 | **37** | zayıf |
 
 Dikkat: **iki tepe var, arası seyrek**. Puan dağılımı düzgün bir çan eğrisi
 değil, kama/üçgen ayrımından doğuyor. "Her uyarı 0–100 arası güzel bir
@@ -399,3 +403,132 @@ YASAK       retest değişkeni               → gelecek bilgisi
 Puan = 50 + 5 × (aile + etkileşim + mesafe), 5–95 kırpık.
 Geometri iki işten birine indi: çöpü kesen taban. Hacmi puan tutuyor.
 Eşikler ve ağırlıklar bu dokümanla değişmiyor; değişiklik `/evet` ile.
+
+---
+
+## 10. 50 sembollük taze replay — puan gerçekten çalışıyor mu?
+
+**Soru:** ağırlıklar 177 sembollük arşivde seçildi. Aynı veride ölçmek kendini
+doğrulamak olur. Bu yüzden 50 sembollük **yeni bir replay** koşuldu ve puan o
+dilimde sınandı.
+
+**Kurulum:** `puan_replay.py --sembol-sayisi 50` (3,8 dk, 5.236 gözlem, hata 0)
+→ `ozellik_deposu` → o 50 sembol için ayrı taban. Puan, kartın gerçekten
+kullanacağı alanlarla hesaplandı; araştırma kolonlarıyla değil.
+
+### 10.1 Sonuç: bantlar tekdüze, en iyi dilim belirgin
+
+| sıralayıcı | dilim | fazla | **aşırı** (dilim − küme ort.) | %95 GA |
+|---|---|---|---|---|
+| devamlılık puanı · üretim alanlarıyla | %10 | +8,4 | **+6,4** | [+4,2, +12,2] |
+| devamlılık puanı · üretim alanlarıyla | %20 | +6,4 | **+4,4** | [+3,6, +9,0] |
+| devamlılık puanı · araştırma kolonlarıyla | %10 | +8,2 | **+6,2** | [+4,3, +12,1] |
+| eski kalite | %10 | +5,4 | **+3,5** | [+1,3, +10,0] |
+| eski kalite | %20 | +3,3 | +1,3 | [+0,0, +6,6] |
+| rastgele | %10 | +2,0 | **0,0** | — |
+
+Kümenin ortalama fazlası +2,0 puan. Rastgele bir dilim de bunu verir; bu yüzden
+"aşırı" sütunu asıl ölçü. **Puan, rastgele seçime göre %10 dilimde +6,4, eski
+kaliteye göre +2,9 puan daha iyi.**
+
+| bant | n | ham devam | fazla |
+|---|---|---|---|
+| yüksek | 190 | %47,9 | **+14,1** |
+| iyi | 2.186 | %35,9 | **+4,8** |
+| normal | 1.711 | %34,7 | −0,7 |
+| zayıf | 1.000 | %36,6 | **−2,1** |
+
+Tekdüze ✅. Üretim alanlarıyla hesaplanan puan, araştırma kolonlarıyla
+hesaplanandan **daha iyi** çıktı (aşırı +6,4 vs +6,2) — yani karta bağlarken
+yapılan uyarlama puanı bozmamış.
+
+### 10.2 Ama: puan bir olasılık değil, kuyruk aracı
+
+| sıralayıcı | AUC (başarı) | ρ (fazla) |
+|---|---|---|
+| devamlılık puanı | **0,507** | +0,141 |
+| eski kalite | 0,494 | +0,041 |
+| MTF tek başına | 0,544 | −0,100 |
+| mesafe tek başına | 0,486 | +0,045 |
+
+AUC 0,507 demek: **tek tek olaylarda puan neredeyse yazı-tura**. Kazanç, olayların
+%7'lik kuyruğunda toplanıyor (kama & MTF4), ortada sinyal yok. Bu yüzden puan
+kartta "olasılık" gibi değil, **öncelik** olarak sunulmalı — nitekim öyle
+sunuluyor ("Devamlılık: iyi · 73/100", "%73 devam" değil).
+
+### 10.3 Kazanç nereden geliyor: iki madde, üçüncüsü zayıf
+
+| kural | kapsam | fazla | aşırı |
+|---|---|---|---|
+| kama & MTF4 | 335 | **+11,7** | **+9,7** |
+| kama | 2.950 | +4,4 | +2,4 |
+| üçgen | 2.137 | −1,3 | −3,3 |
+| MTF4 (her aile) | 1.722 | +1,5 | **−0,4** |
+| ≤0,3 ATR | 990 | +2,5 | +0,6 |
+| >2 ATR | 1.610 | +1,3 | −0,6 |
+
+Üç bulgu:
+
+1. **MTF tek başına sıfır** (aşırı −0,4), kama ile birleşince +9,7. Etkileşim
+   gerçek; 177'lik arşivde ölçülen +6,2'lik ek katkı burada da doğrulandı.
+2. **Aile maddesi ayakta**: kama +2,4, üçgen −3,3 (aşırı).
+3. **Mesafe zayıfladı.** 177'de aile içi Q5−Q1 −7,0 iken burada −2,8 (kama) ve
+   −4,4 (üçgen), ikisinin de GA'sı sıfırı içeriyor. Ayrıca kama & MTF4 içinde
+   ≤1 ATR (+10,0, n=55) ile >2 ATR (+10,0, n=231) **aynı** çıktı — yani o
+   kuyrukta mesafe hiçbir şey ayırmıyor.
+
+Bu yüzden mesafe küçültmesi **0,85 → 0,50** indirildi. Duyarlılık ölçümü: en iyi
+%10 dilimde 0,85 ile 0,00 arasındaki fark **1 puandan az** — yani puanın getirisi
+mesafeden gelmiyor; katsayıyı düşürmek riski azaltıyor, getiriyi değiştirmiyor.
+
+### 10.4 Aile içinde ne yapıyor
+
+| küme | n | puan aralığı | en iyi %20 | en kötü %20 |
+|---|---|---|---|---|
+| kama | 2.950 | 64–95 | **+7,9** | +1,3 |
+| üçgen | 2.137 | 34–49 | **+0,5** | **−3,2** |
+
+Kama içinde puan 6,6 puanlık yayılma yaratıyor (asıl faydalı kısım bu). Üçgen
+içinde yayılma 3,7 puan ve tamamı negatif: üçgenlerde puan "hangisi daha az
+kötü"yü söylüyor, "hangisi iyi"yi değil.
+
+### 10.5 Çeyrek ve zaman dilimi
+
+| çeyrek | n | araştırma (%20) | üretim (%20) |
+|---|---|---|---|
+| 2025Q2 | 397 | +4,0 | +9,4 |
+| 2025Q3 | 1.161 | +7,0 | +10,2 |
+| 2025Q4 | 1.106 | +0,7 | +4,7 |
+| 2026Q1 | 955 | +8,5 | +12,0 |
+| 2026Q2 | 783 | +9,5 | +9,3 |
+| 2026Q3 | 643 | +8,2 | +5,2 |
+
+Altı çeyreğin altısı pozitif; en zayıfı 2025Q4 (+0,7), o çeyrekte taban da
+yüksekti.
+
+Zaman dilimi: 1h +2,4 · 2h +2,4 · **4h −0,4 · 1d −0,4**. 4h ve 1g'de puan
+getirisi yok. Üretim `mtf_uyum`'u 2h ve 1g için hiç hesaplamıyor; 4h'te
+hesaplayıp sonuç alamıyor. Yani puan 4h/1g'de yalnız aile ve mesafeyle çalışıyor
+ve oradaki ağırlıklar doğrulanmadı.
+
+### 10.6 Hüküm
+
+**Çalışıyor, ama dar bir yerde.**
+
+* bant sırasını doğru kuruyor (yüksek > iyi > normal > zayıf) — arşivde de taze
+  dilimde de;
+* en iyi %10'da rastgeleye göre +6,4, eski kaliteye göre +2,9 puan önde;
+* altı çeyreğin altısında pozitif;
+* tek tek olaylarda zayıf (AUC 0,51) — bu yüzden "olasılık" değil "öncelik".
+
+Kazanç iki maddeden geliyor (aile, aile × trend uyumu); giriş mesafesi taze
+dilimde eridi ve ağırlığı yarıya indirildi. 4h ve 1g'de getiri ölçülmedi.
+
+**Tekrar üretim:**
+
+```bash
+python scripts/puan_replay.py --sembol-sayisi 50 --cikti var/replay/gozlemler50.csv
+python scripts/ozellik_deposu.py --girdi var/replay/gozlemler50.csv --cikti var/replay/ozellikler50.csv
+python scripts/taban_uret.py --semboller <50 sembol> --cikti var/replay/taban50
+python scripts/puan_sinama.py     # var/replay/puan_sinama.md
+```

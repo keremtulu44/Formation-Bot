@@ -25,7 +25,8 @@ def test_olcek_sinirlari():
     """En iyi ve en kötü girdi bile 5…95 arasında kalır."""
     en_iyi = dev.devamlilik_puani("Yükselen Kama", mtf_uyum=4, bant_mesafe_atr=0.0)
     en_kotu = dev.devamlilik_puani("Alçalan Üçgen", mtf_uyum=0, bant_mesafe_atr=9.0)
-    assert en_iyi == 95
+    # mesafe küçültmesi 0,50 (2026-10-25): en iyi hücre 94, 95 değil.
+    assert en_iyi == 94
     assert en_kotu is not None and en_kotu >= dev.PUAN_MIN
     assert en_iyi <= dev.PUAN_MAX
     assert all(dev.devamlilik_puani("Kama", m, x) < 100
@@ -177,13 +178,13 @@ def test_deterministik():
 def test_tablo_dokumanla_uyumlu():
     """Dokümandaki örnek tablo (PUANLAMA_MIMARISI §2.4) ile birebir."""
     beklenen = [
-        (("Kama", 4, 0.2), 95),
-        (("Kama", 4, 0.7), 93),
-        (("Kama", 4, 3.0), 83),
-        (("Kama", 2, 0.7), 75),
+        (("Kama", 4, 0.2), 94),
+        (("Kama", 4, 0.7), 92),
+        (("Kama", 4, 3.0), 85),
+        (("Kama", 2, 0.7), 73),
         (("Kama", 2, 1.5), 71),
-        (("Üçgen", 2, 0.7), 45),
-        (("Üçgen", 2, 3.0), 34),
+        (("Üçgen", 2, 0.7), 43),
+        (("Üçgen", 2, 3.0), 37),
     ]
     for (aile, mtf, mesafe), puan in beklenen:
         assert dev.devamlilik_puani(aile, mtf, mesafe) == puan, (aile, mtf, mesafe)
@@ -210,7 +211,7 @@ def test_kart_devamlilik_gosterir_geometri_gostermez(monkeypatch):
     import notifier
     monkeypatch.setattr(notifier, "DEVLAMLILIK_AKTIF", True)
     metin = notifier.TelegramNotifier().format_message(_ornek_veri())
-    assert "Devamlılık: yüksek · 95/100" in metin
+    assert "Devamlılık: yüksek · 94/100" in metin
     assert "formasyon kalitesi" not in metin
     assert "87/100" not in metin
 
@@ -230,7 +231,7 @@ def test_klasik_stil_de_ayni_sayiyi_okur(monkeypatch):
     monkeypatch.setattr(notifier, "DEVLAMLILIK_AKTIF", True)
     monkeypatch.setattr(notifier, "TELEGRAM_ALERT_STYLE", "klasik")
     metin = notifier.TelegramNotifier().format_message(_ornek_veri())
-    assert "Devamlılık: yüksek · 95/100" in metin
+    assert "Devamlılık: yüksek · 94/100" in metin
     assert "Çok güçlü" not in metin
 
 

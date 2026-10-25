@@ -209,8 +209,8 @@ def png_uret(satirlar: List[Tuple[str, str, Dict]]) -> Path:
     y = yukseklik - 132
     d.text((BOS, y), "Bantlar (arşivde ölçülen gerçekleşen fazla, 15.736 kırılım)",
            font=f_etiket, fill=VURGU)
-    bantlar = [("yüksek 85–95", "+15,9 puan", "%2"), ("iyi 65–84", "+4,8", "%38"),
-               ("normal 45–64", "−0,7", "%41"), ("zayıf 5–44", "−1,9", "%19")]
+    bantlar = [("yüksek 85–94", "+10,3 puan", "%7"), ("iyi 65–84", "+3,3", "%50"),
+               ("normal 45–64", "−0,7", "%9"), ("zayıf 5–44", "−2,2", "%34")]
     for i, (ad, fazla, pay) in enumerate(bantlar):
         x = BOS + i * 272
         d.rounded_rectangle([x, y + 26, x + 250, y + 88], radius=10, fill=BALON,

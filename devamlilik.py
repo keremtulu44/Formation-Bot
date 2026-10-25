@@ -67,7 +67,13 @@ MESAFE_ETKI: Tuple[Tuple[float, float], ...] = ((0.3, 2.0), (1.0, 1.0), (2.0, 0.
 MESAFE_UZAK = -1.5
 
 #: doğrulanma gücüne göre küçültme
-KUCULTME = {"aile": 1.00, "etkilesim": 0.60, "mesafe": 0.85}
+#:
+#: `mesafe` 2026-10-25'te 0,85 → 0,50 indirildi: 50 sembollük taze replay'de
+#: aile içi Q5−Q1 −7,0'den −2,8/−4,4'e zayıfladı ve GA sıfırı içerdi. Küçültme
+#: katsayısı tam olarak bu zayıflama için var. Etkisi ölçüldü: en iyi %10
+#: dilimde 0,85 ile 0,00 arası fark <1 puan — yani puanın gücü mesafeden
+#: gelmiyor; katsayıyı düşürmek riski azaltıyor, getiriyi değiştirmiyor.
+KUCULTME = {"aile": 1.00, "etkilesim": 0.60, "mesafe": 0.50}
 
 # --- ölçek -------------------------------------------------------------------
 TABAN = 50.0
