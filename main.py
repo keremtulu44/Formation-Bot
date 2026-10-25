@@ -4248,6 +4248,106 @@ def _ileri_test_gece(now: datetime) -> None:
         logger.warning("İleri test gece işi başarısız: %s", exc)
 
 
+# --- GECE DENETİMİ (#2 tutarlılık · #3 ölçüm tazeleme) -----------------------
+# 2026-10-25: Gece işi iki soruyu yeniden sorar ama hiçbir şeyi DEĞİŞTİRMEZ:
+#   1. Canlıda gönderilen uyarı, aynı barlarla yeniden oynatıldığında motor
+#      tarafından yine üretiliyor mu? (`tutarlilik.py`)
+#   2. "kama + üst TF aynı yönde" bayrağı bayraksız uyarılardan ölçülebilir
+#      biçimde fazla veriyor mu? (`olcum_tazele.py`)
+# Sonuç loga + `gece_raporu` tablosuna yazılır. DM yalnız EYLEM gerektiren
+# sonuçta gider (sapma ya da "bayrak kaldırılsın"); gece 03:00 mesajı yok ve
+# öneri kendiliğinden uygulanmaz. Toplam iş süre sınırlıdır (en fazla 10 replay)
+# ve yalnız seans kapalıyken koşar; canlı taramayı bekletmez.
+_gece_denetim_son_gun = ""        # bu süreçte denetimin koştuğu gün (YYYY-MM-DD)
+
+
+def _gece_raporu_yaz(gun: str, tutarlilik: dict, olcum: dict) -> bool:
+    """`gece_raporu` tablosuna gün anahtarıyla tek satır yazar. Hata işi düşürmez."""
+    store = _supabase_store_ref
+    if store is None:
+        return False
+    try:
+        cevap = store.request_table(
+            "gece_raporu", "POST",
+            json={"gun": gun, "tutarlilik": tutarlilik, "olcum": olcum},
+            headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+        )
+    except Exception as exc:  # noqa: BLE001 - rapor yazımı denetimi engellememeli
+        logger.debug("Gece raporu yazılamadı: %s", exc)
+        return False
+    return cevap is not None
+
+
+def _gece_onerisi_gonder(tutarlilik_sonuc: dict, olcum_sonuc: dict) -> bool:
+    """Yalnız eylem gerektiren sonucu DM'e öneri olarak yollar.
+
+    Sessiz gece: sapma yoksa ve ölçüm "kalsın/yetersiz" diyorsa mesaj GİTMEZ
+    (her gece boş bildirim atmak, öneriyi okunmaz hale getirir).
+    """
+    notifier = _notifier_ref
+    if notifier is None or not getattr(notifier, "enabled", False):
+        return False
+    satirlar = []
+    sapma = (tutarlilik_sonuc or {}).get("sapma") or 0
+    if sapma:
+        satirlar.append(f"Tutarlılık: {sapma} sapma / "
+                        f"{(tutarlilik_sonuc or {}).get('kontrol', 0)} denetim")
+        for d in ((tutarlilik_sonuc or {}).get("sapmalar") or [])[:2]:
+            satirlar.append(f"· {d.get('sembol')} {d.get('tf')} — {d.get('neden')}")
+    if (olcum_sonuc or {}).get("karar") == "bayrak_kaldirilsin":
+        satirlar.append(str(olcum_sonuc.get("metin") or "").split(" Arşiv:")[0].strip())
+    if not satirlar:
+        return False
+    metin = ("🌙 Gece denetimi\n" + "\n".join(s for s in satirlar if s)
+             + "\nÖneri; onaylarsan uygularım. Bot kendiliğinden eşik değiştirmez.")
+    try:
+        gonderildi, durum = notifier.send_text(metin)
+    except Exception as exc:  # noqa: BLE001 - DM hatası gece işini düşürmemeli
+        logger.debug("Gece önerisi gönderilemedi: %s", exc)
+        return False
+    if gonderildi:
+        logger.info("Gece önerisi DM'e gitti (%d satır)", len(satirlar))
+    else:
+        logger.info("Gece önerisi gönderilemedi: %s", durum)
+    return bool(gonderildi)
+
+
+def _gece_denetimi(now: datetime) -> None:
+    """Günde bir kez: canlı–replay tutarlılığı + ölçüm tazeleme. Değişiklik YOK."""
+    global _gece_denetim_son_gun
+    if now.hour < ILERI_TEST_GECE_SAAT:
+        return
+    gun = now.date().isoformat()
+    if _gece_denetim_son_gun == gun:
+        return
+    try:
+        import ileri_test
+        import olcum_tazele
+        import tutarlilik
+
+        try:
+            defter = ileri_test.defter_yukle(store=_supabase_store_ref)
+            kayitlar = defter.get("kayitlar") or []
+        except Exception as exc:  # noqa: BLE001 - defter yoksa denetim yine koşar
+            logger.debug("Gece denetimi defteri okuyamadı: %s", exc)
+            kayitlar = []
+
+        tutarlilik_sonuc = tutarlilik.gunluk(kayitlar, simdi=now)
+        logger.info(tutarlilik.ozet(tutarlilik_sonuc))
+        olcum_sonuc = olcum_tazele.tazele(store=_supabase_store_ref, kayitlar=kayitlar)
+        logger.info(olcum_sonuc.get("metin"))
+
+        _gece_raporu_yaz(gun,
+                         {k: v for k, v in tutarlilik_sonuc.items() if k != "detay"},
+                         {"karar": olcum_sonuc.get("karar"),
+                          "metin": olcum_sonuc.get("metin"),
+                          "veri": olcum_sonuc.get("veri")})
+        _gece_onerisi_gonder(tutarlilik_sonuc, olcum_sonuc)
+        _gece_denetim_son_gun = gun
+    except Exception as exc:  # noqa: BLE001 - gece işi ana döngüyü düşürmemeli
+        logger.warning("Gece denetimi başarısız: %s", exc)
+
+
 def main_loop():
     """
     Ana döngü:
@@ -4839,6 +4939,8 @@ def main_loop():
                 logger.info(f"BIST KAPALI - {now.strftime('%Y-%m-%d %H:%M:%S')} - {sleep_time/60:.1f}dk uyku (açılışa {wait_open/3600:.1f}sa)")
                 # Boş saatlerin tek gerçek işi: kapanan kayıtların sonucunu yaz.
                 _ileri_test_gece(now)
+                # Sonuç yazıldıktan SONRA denetim: aynı günün taze defteri okunur.
+                _gece_denetimi(now)
                 if _bekle_veya_tarama(sleep_time):
                     logger.info("Seans dışı analiz isteği geldi; ana döngü uyandırıldı")
                     continue

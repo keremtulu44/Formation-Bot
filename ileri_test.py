@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 # --- sözleşme sabitleri ------------------------------------------------------
 BAR_SAYISI = 24            # sonuç kaç bar sonra okunur
-ESIK_FAZLA_PUAN = 3.0      # bayraklı grup en az bu kadar fazla vermeli
+ESIK_FAZLA_PUAN = 3.0      # yüzde puanı: bayraklı grup en az bu kadar fazla vermeli
 MIN_GOZLEM = 100           # grup başına en az gözlem (altında hüküm yok)
 AZAMI_KAYIT = 5000         # defter tavanı
 AZAMI_GECE_IS = 40         # bir gecede en fazla kaç kaydın sonucu hesaplanır
@@ -346,7 +346,9 @@ def kaydet(data: Dict, *, store=None, data_dir: Optional[str] = None,
             return False
         kayitlar.append(kayit)
         defter["kayitlar"] = kayitlar
-        return defter_kaydet(defter, store=store, data_dir=data_dir)
+        yazildi = defter_kaydet(defter, store=store, data_dir=data_dir)
+    tabloya_yaz([kayit], store)
+    return yazildi
 
 
 def sifirla() -> None:
@@ -357,6 +359,55 @@ def sifirla() -> None:
 
 
 # --- gece işi ----------------------------------------------------------------
+
+def tablo_satiri(kayit: Dict) -> Dict[str, Any]:
+    """Defter kaydı → `public.ileri_test` satırı (PostgREST gövdesi)."""
+    def _tf_iso(deger):
+        try:
+            return datetime.fromisoformat(str(deger)).isoformat()
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "anahtar": kayit.get("anahtar"),
+        "sembol": kayit.get("sembol"),
+        "tf": kayit.get("tf"),
+        "desen": kayit.get("desen"),
+        "aile": kayit.get("aile"),
+        "yon": kayit.get("yon"),
+        "giris": kayit.get("giris"),
+        "bar_time": _tf_iso(kayit.get("bar")),
+        "durum": kayit.get("durum"),
+        "puan": kayit.get("puan"),
+        "bayrak": bool(kayit.get("bayrak")),
+        "mtf_uyum": kayit.get("mtf_uyum"),
+        "mtf_destek": kayit.get("mtf_destek"),
+        "sonuc": kayit.get("sonuc"),
+    }
+
+
+def tabloya_yaz(kayitlar: Iterable[Dict], store) -> int:
+    """Kayıtları `ileri_test` tablosuna yazar (upsert). Hata botu düşürmez.
+
+    JSON defter birincil kayıt olarak kalır; tablo SQL ile sorgulanabilsin diye
+    aynası tutulur. Tablo yoksa/izin yoksa sessizce atlanır.
+    """
+    if store is None:
+        return 0
+    satirlar = [tablo_satiri(k) for k in kayitlar if isinstance(k, dict)]
+    satirlar = [s for s in satirlar if s.get("anahtar") and s.get("bar_time")]
+    if not satirlar:
+        return 0
+    try:
+        cevap = store.request_table(
+            "ileri_test", "POST", json=satirlar,
+            headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+        )
+    except Exception as exc:  # noqa: BLE001 - ayna yazımı ölçümü engellememeli
+        logger.debug("İleri test tablosuna yazılamadı: %s", exc)
+        return 0
+    return len(satirlar) if cevap is not None else 0
+
 
 def _varsayilan_getir(sembol: str, tf: str):
     """Sembolün bar verisi: 1d ise günlük, değilse 1h → resample."""
@@ -413,6 +464,7 @@ def gece(*, store=None, data_dir: Optional[str] = None,
         defter["son_gece"] = simdi.date().isoformat()
         metin = ozet(kayitlar)
         defter_kaydet(defter, store=store, data_dir=data_dir)
+        tabloya_yaz([k for k in isler if k.get("sonuc")], store)
 
     if rapor_yolu:
         try:
@@ -445,8 +497,8 @@ def ozet(kayitlar: List[Dict]) -> str:
     satirlar.append(f"- Kayıt: {len(kayitlar)} · sonucu olan: {len(sonuclu)} · "
                     f"bekleyen: {len(kayitlar) - len(sonuclu)}")
     satirlar.append("- Kural (sonuç görülmeden yazıldı): bayraklı grup ≥ "
-                    f"+{ESIK_FAZLA_PUAN:g} puan fazla verirse kalır; grup başına "
-                    f"en az {MIN_GOZLEM} gözlem şart.")
+                    f"+{ESIK_FAZLA_PUAN:g} yüzde puanı fazla verirse kalır; grup "
+                    f"başına en az {MIN_GOZLEM} gözlem şart.")
     satirlar.append("")
     satirlar.append("| Grup | n | ort. 24 bar (yön lehine %) |")
     satirlar.append("|---|---|---|")

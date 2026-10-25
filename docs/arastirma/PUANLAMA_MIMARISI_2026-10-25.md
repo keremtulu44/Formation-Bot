@@ -825,3 +825,76 @@ değiştirmez, karta dokunmaz**. Uygulama yine kullanıcı onayıyla.
 Günde ~10–30 uyarı varsayımıyla grup başına 100 gözlem ≈ **5–8 hafta**. Karar
 penceresi bu yüzden 8–12 hafta. O zamana kadar kartta hiçbir "kalite" iddiası
 yok — kart zaten yalnız olgu basıyor (§13).
+
+## 15. Gece denetimi — canlı ≠ replay mi, ölçüm hâlâ ayakta mı (uygulandı)
+
+§14 ölçümü kurdu ama iki soruyu açık bıraktı: **ölçtüğümüz sayı gerçekten
+canlının ürettiği sayı mı** ve **ölçümün dayandığı tablolar doluyor mu**. Bu iki
+soru gece işine bağlandı (`tutarlilik.py`, `olcum_tazele.py`,
+`_gece_denetimi`). Sözleşme §14 ile aynı: **mesaj atmaz (gece 03:00 yok), hiçbir
+eşiği değiştirmez**; DM yalnız eylem gerektiren sonuçta ve öneri olarak gider.
+
+### 15.1 #2 — canlı–replay tutarlılığı
+
+Aynı uyarı, aynı barlarla yeniden oynatılır: "canlıda gönderdiğim sinyali motor
+bugün aynı veriyle yine üretiyor mu?"
+
+* Girdi: `ileri_test` defterindeki **gerçekten gönderilmiş** uyarılar (son 3 gün,
+  gece başına en fazla 10, duvar saati bütçesi 90 sn).
+* Bar serisi kaydın barında **kesilir** (`df.index <= bar`) — ileriye bakış yok.
+* Motora canlının gördüğü pencere verilir (`DEQUE_MAXLEN`), sınıf da aynı:
+  `ArgentEngine(profile=config.PROFILE, timeframe=tf)`, `tam_yeniden=True`.
+* Karşılaştırma: desen · yön · kırılım seviyesi (±%0,5).
+
+Üç sonuç: `ayni` · `sapma` · `veri_yok` (bar yok / <60 bar / motor hatası / zaman
+okunamadı). **Eşleşme kanıt değil; sapma kesin tutarsızlıktır.** Üç kaynağı
+ayırır: veri boşluğu (bar serisi kaymış), motor sapması (aynı girdi farklı
+çıktı), arayüz sapması (uyarı motorun üretmediği şeyi söylemiş).
+
+Seviye kuralı `main._alert_break_level`'ın **birebir kopyasıdır** (döngüsel
+import olmasın diye); eşitlik `test_tutarlilik.py` içinde `main`'e karşı sınanır,
+böylece iki kural sessizce ayrışamaz.
+
+### 15.2 #3 — ölçüm tazeleme ve arşiv sağlığı
+
+Her gece §14.3 kuralı yeniden sorulur: bayraklı grup bayraksız gruptan
+**≥ +3 yüzde puanı** fazla veriyor mu?
+
+* Girdi: yerel defter (birincil), boşsa `v_ileri_test_ozet` (yedek).
+* Karar: `yetersiz` (grup <100 gözlem) · `bayrak_kalsin` · `bayrak_kaldirilsin`.
+* Ek: `arsiv_sagligi()` — `f2_events`, `f2_outcome_links`, `f2_snapshots`
+  **sıfırsa** metne "sessiz körlük" uyarısı eklenir. 2026-10-25 itibarıyla bu üç
+  tablo boş; `f2_formations` 1.126 satır. Yani "arşivden ölçüyoruz" cümlesi
+  üretimde doğru değil ve her gece bunu söyleyecek.
+
+### 15.3 Nereye yazılıyor, kime gidiyor
+
+| Yer | Ne |
+|---|---|
+| Log | `tutarlilik.ozet(...)` tek satır + `olcum_tazele` metni |
+| `gece_raporu` tablosu | `gun` (PK) · `tutarlilik` jsonb · `olcum` jsonb — günde tek satır |
+| DM | yalnız **sapma > 0** ya da **`bayrak_kaldirilsin`** varsa, tek mesaj |
+
+Sessiz gece kuralı bilinçli: her gece "her şey yolunda" mesajı göndermek
+öneriyi okunmaz hale getirir. DM metni "onaylarsan uygularım" der; **bot
+kendiliğinden uygulamaz** ve `/evet` komutu bu sürümde yok — onay sohbette
+verilir, uygulama elle yapılır.
+
+### 15.4 Süre sınırı ve rollback
+
+Gece denetimi yalnız **seans kapalıyken** koşar, günde bir kez, en fazla 10
+replay + 90 sn bütçe; bütçe dolarsa kalan kayıtlar ertesi geceye kalır ve bu
+özet satırında yazar. Canlı tarama yolu bu kodu hiç çağırmaz.
+
+Rollback: `main.py` içindeki `_gece_denetimi(now)` çağrısını silmek yeterli —
+kart, devamlılık etiketi, eşikler ve klasik stil yolu değişmedi
+(`TELEGRAM_ALERT_STYLE=klasik` byte-identical, `DEVLAMLILIK_AKTIF=0` eski satır).
+
+### 15.5 Doğrulama
+
+`test_tutarlilik.py` (13) · `test_olcum_tazele.py` (8) · `test_gece_denetimi.py`
+(7) · `test_ileri_test.py` (16) — hepsi ağsız, motor ve Supabase taklit.
+Kapsanan: seviye kuralının `main` ile eşitliği, ileriye bakış yokluğu
+(bar kesme), desen/yön/seviye sapma dalları, `veri_yok` nedenleri, bütçe
+ertelemesi, yetersiz gözlemde hüküm yokluğu, eşiklerin değişmediği, sessiz
+gecede DM gitmediği, store hatasında işin düşmediği.
