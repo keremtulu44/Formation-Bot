@@ -47,7 +47,11 @@ _RUNTIME_ADLAR = {
 # Taranan modüller: alarm/kart/görsel zincirinin çekirdeği.
 _MODULLER = (
     "main.py",
-    "notifier.py",
+    "notifier/__init__.py",
+    "notifier/util.py",
+    "notifier/format_kart.py",
+    "notifier/format_summary.py",
+    "notifier/api.py",
     "notification_context.py",
     "notification_delivery.py",
     "grafik.py",
@@ -89,7 +93,7 @@ def tanimsiz_adlar(kaynak: str) -> list[str]:
 
 @pytest.mark.parametrize("dosya", _MODULLER)
 def test_modulde_tanimsiz_ad_yok(dosya):
-    yol = Path(__file__).with_name(dosya)
+    yol = Path(__file__).resolve().parent / dosya
     kaynak = yol.read_text(encoding="utf-8")
     eksik = tanimsiz_adlar(kaynak)
     assert eksik == [], (

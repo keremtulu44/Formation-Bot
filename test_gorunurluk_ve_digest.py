@@ -5,6 +5,7 @@ Bu dosya ağa çıkmaz; main/notifier modülleri doğrudan çağrılır.
 
 import logging
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -169,7 +170,11 @@ def test_kanal_filtresi_env_ile_attempt_ve_izleme_acilamaz():
 # --- A3d: ölü [:10] kalıntısı geri gelmesin ------------------------------
 
 def test_daily_summary_olu_onluk_liste_icermez():
-    kaynak = open(notifier_mod.__file__, encoding="utf-8").read()
+    # notifier.py 2026-10-26'da paket oldu; koruma tüm paket kaynağını tarar.
+    paket_dizini = Path(notifier_mod.__file__).parent
+    kaynak = "\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(paket_dizini.glob("*.py"))
+    )
     assert "reverse=True)[:10]" not in kaynak, "kullanılmayan [:10] ölü kodu geri gelmiş"
     assert "for f in teyitli[:3]" in kaynak
 
