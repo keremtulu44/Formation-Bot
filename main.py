@@ -2979,19 +2979,68 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     except Exception as karne_hata:  # noqa: BLE001 - tarama asla durmasın
                         logger.debug("Karne kaydı atlandı (%s %s): %s", stock, tf_name, karne_hata)
                     
+                    # Çoklu zaman teyidi: 1h kırılımında 4h destekliyor mu?
+                    # 2026-10-25: kart "4h de aynı yönde" diyordu ama yön
+                    # karşılaştırılmıyordu (yalnız "aktif mi" bakılıyordu).
+                    # Artık yön de aranıyor; kartın iddiası ölçümle aynı olsun.
+                    # 2026-10-26: bu blok eskiden alarm hazırlık dalının
+                    # İÇİNDEYDİ; DM musluğu (aşağıda) `mtf_uyum`/`bant_mesafe_atr`
+                    # okuduğu için ilk adayda UnboundLocalError, sonraki
+                    # adaylarda önceki TF'nin eskimiş değeriyle yanlış puan
+                    # çıkıyordu. Girdiler her aktif formasyonda bir kez, en
+                    # başta hesaplanır.
+                    mtf_destek = False
+                    mtf_uyum = 0
+                    try:
+                        ust_snap = None
+                        if tf_name == "1h":
+                            ust_snap = lifecycle_manager.get_snapshot(stock + "_4h")
+                        elif tf_name == "4h":
+                            ust_snap = lifecycle_manager.get_snapshot(stock + "_1d")
+                        if (ust_snap and ust_snap.active
+                                and ust_snap.state not in ("FORMASYON_GECERSIZ", "Yok", "ST_NONE")):
+                            mtf_destek = True
+                            # Yön uyumu: üst TF'nin kırılım yönü aynıysa
+                            # ölçümdeki "MTF 4/4" kademesine denk sayılır.
+                            ust_yon = int(getattr(ust_snap, "break_dir", 0) or 0)
+                            if ust_yon and int(break_dir or 0) and ust_yon == int(break_dir):
+                                mtf_uyum = 4
+                    except Exception:
+                        mtf_destek = False
+                        mtf_uyum = 0
+
+                    # Girişin banda uzaklığı (ATR cinsinden). Devamlılık
+                    # puanının en sağlam maddesi: kırılımı kovalamak
+                    # formasyonun katkısını yiyor (aile içi Q5−Q1 −7,0).
+                    bant_mesafe_atr = None
+                    try:
+                        _atr = atr_hesapla(df_tf)
+                        _giris = float(candle_close_price)
+                        _bant = float(break_price)
+                        if _atr and _atr > 0:
+                            bant_mesafe_atr = abs(_giris - _bant) / float(_atr)
+                    except Exception:
+                        bant_mesafe_atr = None
+
                     # Alert eşiği kontrolü - timeframe'e göre (effective_quality üzerinden)
                     min_q = ALERT_MIN_QUALITY.get(tf_name, ALERT_MIN_QUALITY_GLOBAL)
                     # Devamlılık puanı DM musluğu (varsayılan 0 = kapalı, davranış
                     # değişmez). >0 verilirse yalnız bu puanın üstü DM'e gider.
+                    # 2026-10-26 denetimi: burada eskiden `continue` vardı ve
+                    # kayıt (/formasyonlar, canlı durum) + public kuyruk da
+                    # kesiliyordu — musluk yalnız DM'i kapatmalı (aşağıdaki
+                    # `dm_gecersiz_engel` ile aynı yol; `PUBLIC_MIN_DEVLAMLILIK`
+                    # grubu kendi kapısından geçirir).
+                    dm_dev_engel = False
                     if DM_MIN_DEVLAMLILIK > 0:
                         _dev_puan = devamlilik_puani({
                             'pattern_name': active.pattern_type,
                             'mtf_uyum': mtf_uyum,
                             'bant_mesafe_atr': bant_mesafe_atr})
                         if _dev_puan is None or _dev_puan < DM_MIN_DEVLAMLILIK:
+                            dm_dev_engel = True
                             logger.info("DM atlandı (devamlılık %s < %s): %s %s",
                                         _dev_puan, DM_MIN_DEVLAMLILIK, stock, tf_name)
-                            continue
                     try:
                         yas_bar = max(0, int(snap.bar_index - active.start_bar))
                     except Exception:
@@ -3122,43 +3171,6 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 band_baslangic = df_tf.index[_bas_indeks]
                         except Exception:
                             band_baslangic = None
-                        # Çoklu zaman teyidi: 1h kırılımında 4h destekliyor mu?
-                        # 2026-10-25: kart "4h de aynı yönde" diyordu ama yön
-                        # karşılaştırılmıyordu (yalnız "aktif mi" bakılıyordu).
-                        # Artık yön de aranıyor; kartın iddiası ölçümle aynı olsun.
-                        mtf_destek = False
-                        mtf_uyum = 0
-                        try:
-                            ust_snap = None
-                            if tf_name == "1h":
-                                ust_snap = lifecycle_manager.get_snapshot(stock + "_4h")
-                            elif tf_name == "4h":
-                                ust_snap = lifecycle_manager.get_snapshot(stock + "_1d")
-                            if (ust_snap and ust_snap.active
-                                    and ust_snap.state not in ("FORMASYON_GECERSIZ", "Yok", "ST_NONE")):
-                                mtf_destek = True
-                                # Yön uyumu: üst TF'nin kırılım yönü aynıysa
-                                # ölçümdeki "MTF 4/4" kademesine denk sayılır.
-                                ust_yon = int(getattr(ust_snap, "break_dir", 0) or 0)
-                                if ust_yon and int(break_dir or 0) and ust_yon == int(break_dir):
-                                    mtf_uyum = 4
-                        except Exception:
-                            mtf_destek = False
-                            mtf_uyum = 0
-
-                        # Girişin banda uzaklığı (ATR cinsinden). Devamlılık
-                        # puanının en sağlam maddesi: kırılımı kovalamak
-                        # formasyonun katkısını yiyor (aile içi Q5−Q1 −7,0).
-                        bant_mesafe_atr = None
-                        try:
-                            _atr = atr_hesapla(df_tf)
-                            _giris = float(candle_close_price)
-                            _bant = float(break_price)
-                            if _atr and _atr > 0:
-                                bant_mesafe_atr = abs(_giris - _bant) / float(_atr)
-                        except Exception:
-                            bant_mesafe_atr = None
-
                         alert_data = {
                             'stock_name': stock,
                             'timeframe': tf_name,
@@ -3397,9 +3409,11 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                              stock, tf_name, public_hata)
 
 
-                        if dm_gecersiz_engel:
+                        if dm_gecersiz_engel or dm_dev_engel:
                             # Yalnız bağlam + public kuyruğu: DM'e gönderim yok,
-                            # hint/kuyruk sayaçları da değişmez.
+                            # hint/kuyruk sayaçları da değişmez. İki bilinçli
+                            # DM kapısı aynı yolu kullanır: geçersizleşme
+                            # duyurulmadan geri alma yok + devamlılık musluğu.
                             _attach_domain_context(alert_data)
                             alert_sent = False
                         else:
@@ -3422,11 +3436,12 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             # (kanala gitmeyen aday değil) — ileri testin evreni.
                             _ileri_test_kaydet(alert_data)
                             logger.info(f"📨 Telegram gönderildi: {stock} {tf_name} {notification_state} kalite {q:.0f} touches={upper_touches}/{lower_touches} age={age_bars} mtf={mtf_destek}")
-                        elif not dm_gecersiz_engel:
+                        elif not (dm_gecersiz_engel or dm_dev_engel):
                             # Neden gönderilemedi? cooldown/kap ise olay kaybolmasın
                             # (Batch 5'te kuyruğa alınır); şimdilik sayılır.
-                            # DM geçersizleşme kapısı buraya DÜŞMEZ (yukarıda ayrıldı):
-                            # o bir arıza değil, bilinçli "DM'e söyleme" kararıdır.
+                            # DM geçersizleşme/devamlılık kapıları buraya DÜŞMEZ
+                            # (yukarıda ayrıldı): onlar arıza değil, bilinçli
+                            # "DM'e söyleme" kararıdır.
                             daily_stats['alerts_failed'] += 1
                             if getattr(notifier, "_son_engel", ""):
                                 if notifier._son_engel == "cooldown":

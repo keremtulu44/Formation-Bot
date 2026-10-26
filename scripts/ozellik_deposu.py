@@ -29,7 +29,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 REPO = Path(__file__).resolve().parent.parent
 if str(REPO) not in sys.path:
