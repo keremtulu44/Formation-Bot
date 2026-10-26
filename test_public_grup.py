@@ -909,7 +909,13 @@ def test_dm_gecersizlesme_kapisi_publici_durdurmaz():
     import ast
     from pathlib import Path
 
-    kaynak = (Path(__file__).parent / "main.py").read_text(encoding="utf-8")
+    # 2026-10-26 modülerleştirme: tarama hattı bot/scan.py'de; yapısal güvence
+    # main + bot kaynaklarının birleşiminde aranır (taşımaya dayanıklı).
+    kok = Path(__file__).parent
+    kaynak = "\n".join(
+        [ (kok / "main.py").read_text(encoding="utf-8") ]
+        + [p.read_text(encoding="utf-8") for p in sorted((kok / "bot").glob("*.py"))]
+    )
     agac = ast.parse(kaynak)
 
     def _cagri_adi(dugum):
@@ -963,7 +969,12 @@ def test_dm_gecersizlesme_kalite_esigine_takilmaz():
     import ast
     from pathlib import Path
 
-    agac = ast.parse((Path(__file__).parent / "main.py").read_text(encoding="utf-8"))
+    kok = Path(__file__).parent
+    kaynak = "\n".join(
+        [ (kok / "main.py").read_text(encoding="utf-8") ]
+        + [p.read_text(encoding="utf-8") for p in sorted((kok / "bot").glob("*.py"))]
+    )
+    agac = ast.parse(kaynak)
     bulundu = []
     for dugum in ast.walk(agac):
         if not isinstance(dugum, ast.If):
