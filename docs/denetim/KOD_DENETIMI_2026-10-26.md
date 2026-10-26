@@ -126,6 +126,8 @@ kaynak sırası over-approximation'ı bilinçli). Denetim anında tüm depoda
 5. **Dosya boyutları:** `main.py` ve `grafik.py` ~5.000'er satır, `notifier.py`
    ~3.900. Şimdilik testler güçlü; bir sonraki büyük özellikte alarm gönderim
    zinciri ile tarama döngüsünün ayrıştırılması bakımı kolaylaştırır.
+   **Planlandı:** [tasarim/MODULERLESTIRME_PLANI_2026-10-26.md](../tasarim/MODULERLESTIRME_PLANI_2026-10-26.md)
+   — hedef paket yapısı, monkeypatch yüzeyi envanteri ve faz sırasıyla.
 6. **Repo ağırlığı:** `backfill_data/` (11 MB, 357 dosya) + `bot_data/` seed +
    `docs/gorseller/` PNG'leri bilerek git'te (README/.gitignore gerekçeli).
    Büyüme eğilimi sürerse Git LFS veya seed verisinin release artefaktı olarak

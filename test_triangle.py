@@ -3,11 +3,18 @@
 Gerçek üçgen oluşturup tespit ediyor mu bakalım
 """
 
+import sys
+
 import pandas as pd
 import numpy as np
 from patterns import (find_best_triangle_candidate, create_mock_data, calculate_atr,
                       find_pivots, scan_for_first_detection)
 from config import PROFILE_PARAMS
+
+# CI çıkış kodu (2026-10-26): ❌/uyuşmazlık gören kontrol buraya yazılır.
+# Bu dosya `test_breakout` tarafından İMPORT edilir; bu yüzden çıkış yalnız
+# `__name__ == "__main__"` iken verilir (import eden script'i yarıda kesmesin).
+_HATALAR = []
 
 
 def raporla(df, ad, verbose_logs=None):
@@ -27,6 +34,7 @@ def raporla(df, ad, verbose_logs=None):
               f"formasyon sonrasında kırılmış olabilir — bu radar için başarıdır)")
         return c
     print(f"  ❌ Formasyon bulunamadı (son state {snap.state})")
+    _HATALAR.append(f"{ad}: formasyon bulunamadı")
     if verbose_logs:
         for log in (verbose_logs[:3] if isinstance(verbose_logs, list) else []):
             print(f"   {log}")
@@ -162,6 +170,7 @@ for log in logs[1:5]:
     print(f"  {log}")
 if candidate:
     print(f"  BULUNDU: {candidate.pattern_type} kalite {candidate.raw_quality:.1f}")
+    _HATALAR.append("Test 1: random data'da formasyon bulundu (yanlış pozitif)")
 else:
     print("  Formasyon yok (beklendiği gibi)")
 print()
@@ -193,3 +202,10 @@ for profile in ["Hassas", "Dengeli", "Seçici"]:
             print(f"  {profile}: seri içinde bar {bar} ({c.pattern_type} q{q:.0f}), son bar canlı değil")
         else:
             print(f"  {profile}: Yok")
+            _HATALAR.append(f"Test 4: {profile} profili simetrik üçgeni hiç bulamadı")
+
+if __name__ == "__main__":
+    if _HATALAR:
+        print(f"\n❌ BAŞARISIZ: {len(_HATALAR)} kontrol → " + "; ".join(_HATALAR))
+        sys.exit(1)
+    print("\n✅ TÜM KONTROLLER GEÇTİ")

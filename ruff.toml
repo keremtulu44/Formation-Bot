@@ -1,0 +1,28 @@
+# Statik kapı (2026-10-26 denetimi — docs/denetim/KOD_DENETIMI_2026-10-26.md §4.3)
+#
+# AMAÇ: stil temizliği DEĞİL, sessiz kırılma sınıflarını kapatmak:
+#   * F   — tanımsız ad (F821), yeniden tanımlama (F811), kopya anahtar (F601/F602),
+#           bozuk unpack/sözdizimi-sınıfı mantık hataları (F6xx/F7xx)
+#   * E9  — sözdizimi hataları
+#   * S110 — try/except/pass sessiz yutma (23 Ekim "sade kart" olayının sınıfı;
+#           bilinçli fallback'ler kodda `# noqa: S110 - gerekçe` ile işaretlidir)
+#
+# Stil/modernizasyon kuralları (UP, I, SIM, B, ...) bilinçli olarak SEÇİLMEDİ:
+# depoda ~2.600 kozmetik bulgu var ve gerçek değişiklikleri gölgelerler. Zamanla
+# (bkz. denetim §4.3) kural seti genişletilebilir; bu dosya tek kaynaktır,
+# CI ve yerel koşu AYNI sonucu vermelidir.
+#
+# Kullanım:  ruff check .        (sürüm: requirements-dev.txt)
+target-version = "py312"
+
+[lint]
+select = ["F", "E9", "S110"]
+ignore = [
+    # Kullanılmayan import: fixture kaydı, yeniden dışa aktarım (re-export) ve
+    # iskelet importlar kasıtlı; ~140 adet tek tek ayıklanana kadar kapalı.
+    "F401",
+    # Placeholder'sız f-string — kozmetik.
+    "F541",
+    # Atanmış ama kullanılmamış yerel değişken — kozmetik (tek tek incelenmeli).
+    "F841",
+]

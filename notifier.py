@@ -1856,7 +1856,7 @@ class TelegramNotifier:
                     bekle = 3.0
                     try:
                         bekle = float((resp.json().get("parameters") or {}).get("retry_after") or bekle)
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S110 - alan yoksa 3 sn varsayılanı kalır
                         pass
                     logger.warning("Public 429: %.0f sn sonra tekrar denenecek", bekle)
                     time.sleep(max(0.0, min(bekle, 20.0)))

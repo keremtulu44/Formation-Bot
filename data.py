@@ -1870,7 +1870,9 @@ def fetch_yfinance_1h(
             try:
                 ham.index = pd.to_datetime(ham.index).tz_localize(ISTANBUL_TZ)
             except Exception:
-                pass
+                # Son çare de düştüyse indeks normalize KALMAZ: dedup bozulur,
+                # tamamlanmis_mumlar şaşar. Yutulmasın, iz kalsın (2026-10-26).
+                logger.warning("Mum indeksi TZ'ye normalize edilemedi; ham kalıyor", exc_info=True)
         return result(ham)
     except Exception as exc:
         reason = f"{type(exc).__name__}: {exc}"

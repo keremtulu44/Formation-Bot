@@ -566,7 +566,8 @@ def _gunluk_sayac_yukle() -> None:
     try:
         daily_stats['last_reset'] = datetime.now(ISTANBUL_TZ).date()
     except Exception:  # noqa: BLE001
-        pass
+        # Sayaç yazımı düşse de yedekleme akışı devam etsin; ama iz kalsın.
+        logger.debug("Günlük sayaç damgası yazılamadı", exc_info=True)
     event_keys = (veri or {}).get("olay_muhurlari")
     if isinstance(event_keys, list):
         _daily_lifecycle_event_keys.clear()
@@ -1996,7 +1997,7 @@ def _grafik_isi_calistir(istek, notifier, yonetici):
         try:
             notifier.send_text(f"❌ Grafik isteği tamamlanamadı: {istek['hisse']} · "
                                f"iş kurulumu/bağımlılık: {type(hata).__name__}")
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - en iyi çaba bildirim; asıl hata yukarıda loglandı
             pass
     finally:
         with _grafik_is_kilidi:
@@ -3626,8 +3627,9 @@ def _grafikleri_tur_sonunda(notifier) -> None:
                 ozet.get("gonderilen") or 0)
             daily_stats['grafik_hata'] = int(daily_stats.get('grafik_hata') or 0) + int(
                 ozet.get("hata") or 0)
-        except Exception:  # pragma: no cover - sayaç hiç akışı bozmasın
-            pass
+        except Exception:  # noqa: BLE001
+            # Sayaç güncellenemese de özet logu basılmıştır; iz kalsın (2026-10-26).
+            logger.debug("Grafik sayaçları güncellenemedi", exc_info=True)
 
 
 def _parse_summary_hours() -> List[dt_time]:
@@ -4966,8 +4968,10 @@ def main_loop():
                         try:
                             from state.formation_mirror import get_mirror_queue
                             get_mirror_queue().flush(_supabase_store_ref)
-                        except Exception:
-                            pass
+                        except Exception:  # noqa: BLE001
+                            # Mirror kaybı sessiz kalmasın: kuyruk bellekte kalır,
+                            # sonraki turda yeniden denenir (2026-10-26 denetimi).
+                            logger.warning("Formation mirror flush atlandı", exc_info=True)
                     time.sleep(5)  # aynı saniyede tekrar girmesin
                     continue
                 
@@ -5048,8 +5052,9 @@ def main_loop():
             try:
                 from state.formation_mirror import get_mirror_queue
                 get_mirror_queue().flush(_supabase_store_ref)
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                # Kapanışta mirror kaybı veri kaybı demektir; sessiz geçilmesin.
+                logger.warning("Kapanışta mirror flush atlandı", exc_info=True)
         write_heartbeat(force=True)
     except Exception as e:
         logger.error(f"Kapanış kayıt hatası: {e}")

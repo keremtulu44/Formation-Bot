@@ -51,8 +51,8 @@ from test_breakout_retest_terminal import (
     _iki_tam_zincir,
     _kirilim_retest_zinciri,
     _retest_senaryosu,
-    ortam,  # noqa: F401
 )
+# `ortam` fixture'ı conftest.py'den gelir (2026-10-26); import kaydı gerekmez.
 
 
 class FakeSupabaseResponse:

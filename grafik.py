@@ -587,7 +587,7 @@ def _tarih_metni(dt: Optional[datetime]) -> str:
     if _tarih_tr is not None:
         try:
             return _tarih_tr(dt)
-        except Exception:  # pragma: no cover - notifier biçimi değişirse düşüş
+        except Exception:  # noqa: S110 - bilinçli düşüş: notifier biçimi değişirse manuel biçime geçilir / pragma: no cover
             pass
     return f"{dt.day:02d} {_AY.get(dt.month, '')} {dt:%H:%M}"
 
@@ -1994,7 +1994,7 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         if plt is not None and fig is not None:
             try:
                 plt.close(fig)      # §6.5: RAM büyümesin
-            except Exception:  # pragma: no cover
+            except Exception:  # noqa: S110 - teardown; kapanış hatası çizim sonucunu etkilemez / pragma: no cover
                 pass
 
     return bayt, {"kalite": kalite, "eksik_katmanlar": sorted(set(eksik)), "budama": budama,
@@ -2078,7 +2078,7 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
     if fig is not None:
         try:
             _genis_px = max(_genis_px, float(_metin_px(fig, "⚡↑ x12,34", 8.0)))
-        except Exception:                     # pragma: no cover - ölçüm süsü
+        except Exception:  # noqa: S110 - ölçüm süsü; başarısızsa sabit 5 bar kalır / pragma: no cover
             pass
     try:
         _sol, _sag = ax.get_xlim()
@@ -2196,7 +2196,7 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
                           if v is not None]
                 if _kom_y:
                     y, ofs_y, va = max(_kom_y), 13, "bottom"
-        except Exception:      # pragma: no cover - ölçüm süsü rozeti düşürmez
+        except Exception:  # noqa: S110 - ölçüm süsü rozeti düşürmez / pragma: no cover
             pass
         # Rehber çizgiden UZAĞA it: rozet merkezi (veri biriminde) hesaplanır,
         # çizgiye 16 px'ten yakınsa rozetin bulunduğu tarafa doğru kaydırılır.
@@ -4309,7 +4309,7 @@ def _metin_px(fig, metin: str, yazi_pt: float) -> float:
         if gecici is not None:
             try:
                 gecici.remove()
-            except Exception:               # pragma: no cover
+            except Exception:  # noqa: S110 - teardown; geçici metin temizliği / pragma: no cover
                 pass
     return max(4.0, gen)
 

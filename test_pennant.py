@@ -20,13 +20,19 @@ Standart flama YALNIZ Simetrik Üçgen geometrisinde kurulur (Pine tablo mantı�
 Çalıştırma:  python3 test_pennant.py
 """
 
+import sys
 import warnings
+
 import numpy as np
 import pandas as pd
 
 from patterns import ArgentEngine
 
 warnings.filterwarnings("ignore")
+
+# CI çıkış kodu (2026-10-26): ❌/⚠️ uyuşmazlık gören kontrol buraya yazılır.
+# (assert'ler zaten non-zero çıkışla patlar; yalnız "print edip devam" yolları için.)
+_HATALAR = []
 
 
 def _df_yap(close, start="2026-01-05 09:30", freq="h"):
@@ -147,6 +153,7 @@ if bar:
     assert a.specialized_variant == "Flama (standart)", a.specialized_variant
 else:
     print("  ❌ Boğa flaması bulunamadı - Pine eşiklerine göre reddedildi")
+    _HATALAR.append("Test 1: boğa flaması bulunamadı")
     print(f"     Son durum: {snap.log}")
 
 print("\nTest 2: Ayı flaması standart (aşağı direk + simetrik üçgen kanalı)")
@@ -160,6 +167,7 @@ if bar2:
     assert a.specialized_variant == "Flama (standart)", a.specialized_variant
 else:
     print("  ❌ Ayı flaması bulunamadı")
+    _HATALAR.append("Test 2: ayı flaması bulunamadı")
     print(f"     Son durum: {snap2.log if snap2 else 'yok'}")
 
 print("\nTest 3: Eğik flama (yukarı direk + yükselen üçgen kanalı)")
@@ -173,6 +181,7 @@ if bar3:
     assert a.specialized_variant == "Flama (eğik)", a.specialized_variant
 else:
     print("  ⚠️ Eğik flama bulunamadı - geometri veya kalite eşiği tutmadı")
+    _HATALAR.append("Test 3: eğik flama bulunamadı")
     print(f"     Son durum: {snap3.log if snap3 else 'yok'}")
 
 print("\nTest 4: Kema benzeri kanal (direk + aynı yönde eğimler) -> flama OLMAMALI")
@@ -180,6 +189,7 @@ df_wedge = create_wedge_like(48)
 bar4, snap4 = seride_tespit_bul(df_wedge, "Boğa Flaması")
 if bar4:
     print(f"  ⚠️ Kema kanalında flama bulundu (bar {bar4}) - Pine'da flama üçgen ister")
+    _HATALAR.append(f"Test 4: kema kanalında yanlış pozitif flama (bar {bar4})")
 else:
     print("  ✅ Kema kanalında flama yok (Pine kuralı: flama üçgen geometrisi ister)")
 
@@ -197,6 +207,7 @@ for i in range(30, len(df_rnd) + 1):
         bulunan.add(s.active.pattern_type)
 if bulunan:
     print(f"  ⚠️ YANLIŞ POZİTİF: {bulunan}")
+    _HATALAR.append(f"Test 5: random veride yanlış pozitif {bulunan}")
 else:
     print("  ✅ Flama yok (beklendiği gibi)")
 
@@ -218,5 +229,12 @@ df_np = _df_yap(close)
 bar6, snap6 = seride_tespit_bul(df_np, "Boğa Flaması")
 if bar6:
     print(f"  ⚠️ Direksiz flama bulundu (bar {bar6}) - pole olmadan flama kurulmamalı")
+    _HATALAR.append(f"Test 6: direksiz flama yanlış pozitif (bar {bar6})")
 else:
     print("  ✅ Direksiz flama yok (Pine kuralı: direk şart)")
+
+if __name__ == "__main__":
+    if _HATALAR:
+        print(f"\n❌ BAŞARISIZ: {len(_HATALAR)} kontrol → " + "; ".join(_HATALAR))
+        sys.exit(1)
+    print("\n✅ TÜM KONTROLLER GEÇTİ")

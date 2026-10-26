@@ -5,11 +5,16 @@ Eski mock direği 35 bar yapıp direk ucunu kanalın SON pivotuna bağlıyordu �
 Yeni mock: bar 8'de diip (low pivot) -> 12 barlık güçlü yukarı direk -> paralel kanal.
 """
 
+import sys
+
 import pandas as pd
 import numpy as np
 from patterns import (find_best_flag_candidate, ArgentEngine, calculate_atr,
                       find_pivots, find_pole)
 from config import get_profile_params
+
+# CI çıkış kodu (2026-10-26): ❌/uyuşmazlık gören kontrol buraya yazılır.
+_HATALAR = []
 
 
 def create_bull_flag(n_bars=72):
@@ -80,6 +85,7 @@ if cand:
           f"durationRatio {cand.duration_ratio:.2f}")
 else:
     print("  ❌ Bayrak bulunamadı")
+    _HATALAR.append("Test 1: boğa bayrağı bulunamadı")
 
 # Test 2: Random data (bayrak olmamalı)
 print("\nTest 2: Random data (bayrak OLMAMALI)")
@@ -96,6 +102,7 @@ df_rand = pd.DataFrame({
 cand, logs = find_best_flag_candidate(df_rand, profile="Dengeli")
 if cand:
     print(f"  ❌ Random data'da bayrak bulundu: {cand.pattern_type} (sorun!)")
+    _HATALAR.append(f"Test 2: random data'da yanlış pozitif ({cand.pattern_type})")
 else:
     print("  ✅ Bayrak yok (beklendiği gibi — direk olmadan bayrak kurulamaz)")
 
@@ -110,5 +117,14 @@ df_bear = mirror_ohlc.assign(volume=df_bear['volume'].values)
 cand, logs = find_best_flag_candidate(df_bear, profile="Dengeli")
 if cand:
     print(f"  ✅ BULUNDU: {cand.pattern_type} kalite {cand.raw_quality:.1f} (beklenen: Ayı Bayrağı)")
+    if "Ayı" not in cand.pattern_type:
+        _HATALAR.append(f"Test 3: beklenen Ayı Bayrağı, bulunan {cand.pattern_type}")
 else:
     print("  ❌ Ayı bayrağı bulunamadı")
+    _HATALAR.append("Test 3: ayı bayrağı bulunamadı")
+
+if __name__ == "__main__":
+    if _HATALAR:
+        print(f"\n❌ BAŞARISIZ: {len(_HATALAR)} kontrol → " + "; ".join(_HATALAR))
+        sys.exit(1)
+    print("\n✅ TÜM KONTROLLER GEÇTİ")

@@ -344,7 +344,7 @@ def _zaman_dilimi_normalize(df):
     except Exception:
         try:
             df.index = pd.to_datetime(df.index).tz_localize("Europe/Istanbul")
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - son çare; CLI'da indeks ham kalır, çağıran görür
             pass
     return df
 

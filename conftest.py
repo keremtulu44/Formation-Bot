@@ -50,7 +50,7 @@ _SEANS_SAATLERI = tuple(range(10, 18))   # 1H barları: 10:00 .. 17:00 (17:00 �
 
 def sentetik_1h_mumlar(gun_sayisi: int = 45):
     """Seans saatlerinde, en yeni mumu en yakın iş gününde olan düzgün OHLCV serisi."""
-    from collections import deque  # noqa: F401  (çağıran taraf kullanır)
+    from collections import deque  # noqa: F401 - çağıran taraf kullanır
     from datetime import datetime, time as dt_time, timedelta
 
     import data as data_mod
@@ -112,3 +112,17 @@ def tarama_deque_manager(tmp_path, monkeypatch):
         monkeypatch.setattr(main_mod, ad, 365 * 24 * 60, raising=False)
     monkeypatch.setattr(main_mod, "OFFSESSION_CACHE_MAX_AGE_DAYS", 365, raising=False)
     return manager
+
+
+# === Karne/history paylaşılan test ortamı ===================================
+# Eskiden `test_breakout_retest_terminal.ortam`'dı ve test_p2_* dosyaları onu
+# import ederek kaydediyordu (fixture kaydı = F811 gürültüsü, noqa F401).
+# 2026-10-26: tek kaynak burası; pytest fixture'ları conftest'ten otomatik gelir.
+@pytest.fixture
+def ortam(tmp_path, monkeypatch):
+    """Karne ve history AYNI dizine yazsın (karne DATA_DIR'i import anında kopyalar)."""
+    import karne as karne_mod
+
+    monkeypatch.setattr(config_mod, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(karne_mod, "DATA_DIR", str(tmp_path))
+    return tmp_path
