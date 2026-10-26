@@ -159,7 +159,7 @@ class SupabaseStore:
                     "RLS açıkken bu anahtar bot_store tablosuna yazamaz ve 401/403 alır. "
                     "Doğrusu: sb_secret_... veya legacy service_role JWT (eyJ...)."
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - tanılama logunun kendisi düşerse kurulum bozulmasın
             pass
 
     @classmethod
@@ -190,7 +190,7 @@ class SupabaseStore:
                     "RLS açıkken bu anahtar bot_store tablosuna yazamaz ve 401/403 alır. "
                     "Doğrusu: sb_secret_... veya legacy service_role JWT (eyJ...)."
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - tanılama logunun kendisi düşerse kurulum bozulmasın
             pass
 
         return cls(project_url, service_key)

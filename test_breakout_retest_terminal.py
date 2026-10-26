@@ -42,9 +42,7 @@ import os
 from collections import Counter
 
 import pandas as pd
-import pytest
 
-import config as config_mod
 import karne as K
 from patterns.lifecycle import PatternLifecycleManager, _faz
 from state import formation_history as fh
@@ -201,16 +199,12 @@ def _iki_tam_zincir(key="ASELS_1h"):
     return mgr, seri, kayitlar, terminal_sid_1, (d1, d2)
 
 
-@pytest.fixture
-def ortam(tmp_path, monkeypatch):
-    """Karne ve history AYNI dizine yazsın (karne DATA_DIR'i import anında kopyalar)."""
-    monkeypatch.setattr(config_mod, "DATA_DIR", str(tmp_path))
-    monkeypatch.setattr(K, "DATA_DIR", str(tmp_path))
-    return tmp_path
-
-
 def _turler(rec):
     return dict(Counter(s.get("tur") for s in rec.get("snapshotlar", [])))
+
+
+# NOT (2026-10-26): `ortam` fixture'ı conftest.py'ye taşındı — test_p2_* dosyaları
+# buradan import etmek zorunda kalmasın diye tek kaynak orasıdır.
 
 
 # =====================================================================

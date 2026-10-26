@@ -47,6 +47,15 @@ jobs:
       - name: Kurulu sürümler
         run: pip show pandas numpy yfinance | grep -E "^(Name|Version)"
 
+      # Statik kapı: yalnız "sessiz kırılma" sınıfları (F/E9/S110) — kural seti
+      # ve gerekçesi ruff.toml'da; yerelde `ruff check .` aynı sonucu verir.
+      # 2026-10-26 denetimi: bu kapı tanımsız ad (F821), kullan-önce-ata AST
+      # korumasıyla (pytest'te) ve S110 yutma sınıfıyla birlikte çalışır.
+      - name: Statik kapı (ruff)
+        run: |
+          python -m pip install -r requirements-dev.txt
+          ruff check .
+
       - name: Unit testler (pytest)
         run: python -m pytest -q
         env:
@@ -67,6 +76,29 @@ jobs:
           DATA_DIR: ${{ runner.temp }}/formation-bot-timing-data
           LOG_DIR: ${{ runner.temp }}/formation-bot-timing-logs
           LOCAL_LOG_DIR: ${{ runner.temp }}/formation-bot-timing-logs-fallback
+          TELEGRAM_BOT_TOKEN: ""
+          TELEGRAM_CHAT_ID: ""
+          TELEGRAM_CHANNEL_ID: ""
+          TELEGRAM_TEST_KEY: ""
+          TELEGRAM_WEBHOOK_SECRET: ""
+          SUPABASE_URL: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
+
+      # Bağımsız regresyon scriptleri: pytest toplaması bunları bilinçli atlar
+      # (bkz. pytest.ini); motor sözleşmelerini kendi başlarına doğrularlar.
+      # 2026-10-26'ya kadar CI'da HİÇ koşmuyorlardı ve ❌ basıp exit 0 ile
+      # çıkıyorlardı (CI'ı kör ederdi); artık başarısız kontrol non-zero
+      # çıkışla bu adımı kırmızı yapar (bkz. denetim §4.1).
+      - name: Formasyon regresyon scriptleri (bağımsız)
+        run: |
+          python test_triangle.py
+          python test_breakout.py
+          python test_flag.py
+          python test_pennant.py
+        env:
+          DATA_DIR: ${{ runner.temp }}/formation-bot-regresyon-data
+          LOG_DIR: ${{ runner.temp }}/formation-bot-regresyon-logs
+          LOCAL_LOG_DIR: ${{ runner.temp }}/formation-bot-regresyon-logs-fallback
           TELEGRAM_BOT_TOKEN: ""
           TELEGRAM_CHAT_ID: ""
           TELEGRAM_CHANNEL_ID: ""

@@ -187,8 +187,8 @@ def trust_payload(snapshot, results, *, now, source=None, historical=False, anch
                 # Daily label time is not a physical close time.
                 current = last.date() >= expected.date() if snapshot.get("tf") == "1d" else last >= expected
                 state, label = ("CURRENT", "analiz anında güncel") if current else ("STALE", "VERİ GECİKMİŞ")
-        except Exception:
-            pass  # chart survives; UNKNOWN is visible, never a green success.
+        except Exception:  # noqa: BLE001, S110 - chart survives; UNKNOWN is visible, never a green success
+            pass
     source_text = "kaynak belirtilmedi"
     if source:
         # Paths identify infrastructure, not the market-data provider.

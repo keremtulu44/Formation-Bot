@@ -38,7 +38,10 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
+
+if TYPE_CHECKING:  # yalnız tip ipuçları için; çalışma anında import edilmez
+    import pandas as pd
 
 KATEGORILER = ("zone", "dokunus", "swing", "event", "frm", "frm_olay", "meta")
 VARSAYILAN_CIKTI = "arastirma_cikti"

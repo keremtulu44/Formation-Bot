@@ -1,0 +1,9 @@
+# Yalnız geliştirme/CI araçları — Render build zincirine DAHİL DEĞİLDİR.
+# (Üretim bağımlılıkları requirements.txt'dedir; bkz. README "Hızlı başlangıç".)
+#
+# Kurulum:  pip install -r requirements-dev.txt
+# Kullanım: ruff check .          # kural seti ruff.toml'da; CI "Statik kapı" adımı da aynı komutu koşar
+#
+# Sürüm BİLEREK pinlenmiştir: ruff sürümleri kural sonuçlarını değiştirebilir;
+# "yeşil kapı" sürüm atlayınca kendiliğinden kırmızıya dönmemeli.
+ruff==0.17.2

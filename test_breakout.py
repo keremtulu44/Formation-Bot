@@ -5,10 +5,15 @@ Retest değerlendirmesi kırılım ÇİZGİSİ (pivotlar) üzerinden yapılır; 
 gelen yeni adayla karıştırma hatası (eski A3 bug'ı) mimari olarak imkânsız.
 """
 
+import sys
+
 import pandas as pd
 import numpy as np
 from patterns import ArgentEngine
 from test_triangle import create_perfect_symmetrical_triangle, create_ascending_triangle
+
+# CI çıkış kodu (2026-10-26): ❌/uyuşmazlık gören kontrol buraya yazılır.
+_HATALAR = []
 
 
 def add_bar(df, o, h, l, c, volume=2000000):
@@ -41,7 +46,7 @@ else:
     hit, _ = scan_for_first_detection(df)
     if hit is None:
         print("   ❌ Hiç formasyon oluşmadı, test iptal")
-        exit()
+        sys.exit(1)
     bar, a, q = hit
     print(f"   ⚠️ Son bar canlı değil; ilk tespit bar {bar}: {a.pattern_type} q{q:.0f}")
     upper = a.upper_now
@@ -78,8 +83,13 @@ for i in range(5):
 
 print(f"\n=== TEST BİTTİ ===")
 print(f"Son state: {snap.state}")
-ok_flow = snap.state in ("FORMASYON_TAMAMLANDI", "RETEST_BASARILI", "RETEST_BEKLENIYOR", "RETEST_EDILIYOR")
+# 2026-10-26: "teyit" beklentisi mesajda yazılıydı ama tuple'da yoktu —
+# KIRILIM_TEYITLI bu hattın meşru sonucudur (retest için sonraki barlar gerekir).
+ok_flow = snap.state in ("FORMASYON_TAMAMLANDI", "RETEST_BASARILI", "RETEST_BEKLENIYOR",
+                         "RETEST_EDILIYOR", "KIRILIM_TEYITLI")
 print("Akış sağlıklı:" , "✅" if ok_flow else "❌ (beklenen: teyit/retest/tamamlandı hattı)")
+if not ok_flow:
+    _HATALAR.append(f"kırılım akışı sağlıklı değil (son state {snap.state})")
 
 
 # === BAŞARISIZ KIRILIM TESTİ ===
@@ -95,12 +105,26 @@ if snap2.active:
     df2 = add_bar(df2, upper2 - 0.2, upper2 + 1.0, upper2 - 0.5, upper2 + 0.8)
     snap2 = step(eng2, df2)
     print(f"Kırılım: State: {snap2.state} - {snap2.log}")
-    # İçeri dönüş
-    upper3 = snap2.active.upper_now if snap2.active else upper2
-    df2 = add_bar(df2, upper3 + 0.5, upper3 + 0.6, upper3 - 1.5, upper3 - 1.0, 1000000)
-    snap2 = step(eng2, df2)
-    print(f"İçeri dönüş: State: {snap2.state} - {snap2.log}")
-    print("Beklenen: KIRILIM_ADAYI/DENEMESI sonrası BASARISIZ_KIRILIM ->",
+    # İçeri dönüş — 2026-10-26: güncel sözleşme tek barla BASARISIZ_KIRILIM
+    # üretmez. Geçersizleşme için INVALIDATION_CONFIRM_BARS (varsayılan 1h:3)
+    # ardışık DERİN içeri kapanış gerekir (INVALIDATION_MIN_DEPTH_ATR=0.3);
+    # bkz. patterns/lifecycle._inside_confirmed. Politika bu olduğu için
+    # 3 barla sürüyoruz.
+    for _ in range(3):
+        upper3 = snap2.active.upper_now if snap2.active else upper2
+        df2 = add_bar(df2, upper3 + 0.5, upper3 + 0.6, upper3 - 1.5, upper3 - 1.0, 1000000)
+        snap2 = step(eng2, df2)
+        print(f"İçeri dönüş: State: {snap2.state} - {snap2.log}")
+    print("Beklenen: KIRILIM_ADAYI/DENEMESI sonrası 3 içeri kapanışla BASARISIZ_KIRILIM ->",
           "✅" if snap2.state == "BASARISIZ_KIRILIM" else "⚠️ " + snap2.state)
+    if snap2.state != "BASARISIZ_KIRILIM":
+        _HATALAR.append(f"fail-case: beklenen BASARISIZ_KIRILIM, gelen {snap2.state}")
 else:
     print("Aktif formasyon yok, fail-case testi atlandı")
+    _HATALAR.append("fail-case: aktif formasyon yok, test koşulamadı")
+
+if __name__ == "__main__":
+    if _HATALAR:
+        print(f"\n❌ BAŞARISIZ: {len(_HATALAR)} kontrol → " + "; ".join(_HATALAR))
+        sys.exit(1)
+    print("\n✅ TÜM KONTROLLER GEÇTİ")

@@ -415,7 +415,13 @@ def test_acilista_son_tarama_yukle_cagriliyor():
     import ast
     from pathlib import Path
 
-    kaynak = Path(main_mod.__file__).read_text(encoding="utf-8")
+    # 2026-10-26 modülerleştirme: main_loop bot/app.py'de; kaynak taraması
+    # main + bot birleşiminde yapılır.
+    kok = Path(main_mod.__file__).resolve().parent
+    kaynak = "\n".join(
+        [Path(main_mod.__file__).read_text(encoding="utf-8")]
+        + [p.read_text(encoding="utf-8") for p in sorted((kok / "bot").glob("*.py"))]
+    )
     agac = ast.parse(kaynak)
     main_loop = next(
         (d for d in ast.walk(agac)

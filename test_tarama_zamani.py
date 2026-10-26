@@ -386,10 +386,14 @@ shutil.rmtree('/tmp/test_gunluk_dir', ignore_errors=True)
 print()
 print("=== 10. FAZ 2: TARAMA SÜRESİ ÖLÇÜMÜ ===")
 kontrol("daily_stats tarama süresi alanı içeriyor", 'son_tarama_suresi_dk' in main_mod.daily_stats)
+# 2026-10-26 modülerleştirme: heartbeat payload bot/heartbeat.py'de.
+from pathlib import Path as _Path
+_kaynaklar = open('main.py', encoding='utf-8').read() + "\n" + "\n".join(
+    p.read_text(encoding='utf-8') for p in sorted(_Path('bot').glob('*.py')))
 kontrol("heartbeat tarama süresi alanı içeriyor",
-        'son_tarama_suresi_dk' in open('main.py', encoding='utf-8').read().split('payload = {')[1])
-kontrol("telegram_kap heartbeat alanı içeriyor", 'telegram_kap' in open('main.py', encoding='utf-8').read())
-kontrol("veri_sorunlari heartbeat alanı içeriyor", 'veri_sorunlari' in open('main.py', encoding='utf-8').read())
+        'son_tarama_suresi_dk' in _kaynaklar.split('payload = {')[1])
+kontrol("telegram_kap heartbeat alanı içeriyor", 'telegram_kap' in _kaynaklar)
+kontrol("veri_sorunlari heartbeat alanı içeriyor", 'veri_sorunlari' in _kaynaklar)
 
 
 print()
@@ -427,7 +431,8 @@ _ornekler = [t(2026, 9, 30, 8, 0), t(2026, 9, 30, 20, 0), t(2026, 10, 29, 10, 0)
 kontrol("pencere kapalı <=> bekleme > 0 (tüm örnekler)",
         all((data_mod.tarama_penceresi_acik_mi(an)) == (data_mod.time_until_next_open(an) == 0)
             for an in _ornekler))
-_main_kaynak = open('main.py', encoding='utf-8').read()
+# 2026-10-26: main_loop bot/app.py'de — birleşik kaynakta aranır (_kaynaklar).
+_main_kaynak = _kaynaklar
 kontrol("ana döngüde taban uyku var (0 sn uyku imkânsız)", "sleep_time = max(sleep_time, 60.0)" in _main_kaynak)
 
 

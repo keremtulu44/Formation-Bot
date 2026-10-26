@@ -187,7 +187,6 @@ def test_komut_grafik_taramayi_acar(monkeypatch):
     """`/grafik` formasyonu bulmak için botun kapısını kullanır (eskiden hiç çağrılmıyordu)."""
     import main as M
     import grafik_uret as U
-    from types import SimpleNamespace
     cagri = []
     def uret(hisse, tf, **k):
         cagri.append(k.get("formasyon_tara"))

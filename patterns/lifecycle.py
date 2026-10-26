@@ -1344,7 +1344,7 @@ class PatternLifecycleManager:
                 try:
                     from state.formation_mirror import mirror_kaydet
                     mirror_kaydet(defter)
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 - mirror opsiyonel; history kaydı asla bozulmaz (aşağıdaki güvenlik sınırı)
                     pass
         except Exception:
             # History yazılamazsa bot çalışmaya devam eder (ölü kod değil,

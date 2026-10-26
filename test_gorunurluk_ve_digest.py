@@ -5,6 +5,7 @@ Bu dosya ağa çıkmaz; main/notifier modülleri doğrudan çağrılır.
 
 import logging
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -52,7 +53,13 @@ def test_digest_toplam_gosterilenden_kucukse_tutarsizlik_yazilmaz():
 def test_digest_limiti_env_ile_ayarlanabilir():
     assert isinstance(config.DEFERRED_ALERT_DIGEST_LIMIT, int)
     assert config.DEFERRED_ALERT_DIGEST_LIMIT >= 1
-    kaynak = open(main_mod.__file__, encoding="utf-8").read()
+    # 2026-10-26 modülerleştirme: digest gönderimi bot/summary.py'de.
+    from pathlib import Path
+    kok = Path(main_mod.__file__).resolve().parent
+    kaynak = "\n".join(
+        [open(main_mod.__file__, encoding="utf-8").read()]
+        + [p.read_text(encoding="utf-8") for p in sorted((kok / "bot").glob("*.py"))]
+    )
     # İki meşru çağrı yeri var: 18:45 digesti ve kaçırılan kapanış telafisi
     # (Batch 5). İkisi de env kaynaklı sabiti kullanır; gömülü sayı olmamalı.
     assert kaynak.count("limit=DEFERRED_ALERT_DIGEST_LIMIT") == 2, (
@@ -169,7 +176,11 @@ def test_kanal_filtresi_env_ile_attempt_ve_izleme_acilamaz():
 # --- A3d: ölü [:10] kalıntısı geri gelmesin ------------------------------
 
 def test_daily_summary_olu_onluk_liste_icermez():
-    kaynak = open(notifier_mod.__file__, encoding="utf-8").read()
+    # notifier.py 2026-10-26'da paket oldu; koruma tüm paket kaynağını tarar.
+    paket_dizini = Path(notifier_mod.__file__).parent
+    kaynak = "\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(paket_dizini.glob("*.py"))
+    )
     assert "reverse=True)[:10]" not in kaynak, "kullanılmayan [:10] ölü kodu geri gelmiş"
     assert "for f in teyitli[:3]" in kaynak
 

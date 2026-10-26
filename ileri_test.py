@@ -134,7 +134,7 @@ def kayit_olustur(data: Dict, *, simdi: Optional[datetime] = None) -> Optional[D
         aile = dev.aile_coz(data.get("pattern_name"))
         puan = dev.devamlilik_puani(data.get("pattern_name"), data.get("mtf_uyum"),
                                     data.get("bant_mesafe_atr"))
-    except Exception:  # noqa: BLE001 - puan yoksa kayıt yine tutulur
+    except Exception:  # noqa: BLE001, S110 - puan yoksa kayıt yine tutulur
         pass
 
     return {
@@ -278,7 +278,7 @@ def defter_yukle(*, store=None, data_dir: Optional[str] = None) -> Dict[str, Any
     defter = _defter_bos()
     try:
         from state.paths import yeni_snapshot  # noqa: F401  (API uyumu)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - API uyum probe; yoksa yerel dosyayla devam
         pass
     try:
         with open(defter_yolu(data_dir), "r", encoding="utf-8") as dosya:

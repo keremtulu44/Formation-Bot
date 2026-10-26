@@ -288,7 +288,7 @@ def _formasyon_tara_ayrintili(cerceve, tf: str | None = None) -> tuple[Any, Any,
         if aday is not None and snap.effective_quality is not None:
             try:
                 aday.effective_quality = float(snap.effective_quality)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 - zenginleştirme süsü; kare yine çizilir
                 pass
     except Exception as hata:  # noqa: BLE001 - tarama hatası kareyi düşürmesin
         return None, None, [f"tarama hatası ({type(hata).__name__}): formasyonsuz çizildi"]

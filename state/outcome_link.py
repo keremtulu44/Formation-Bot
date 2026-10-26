@@ -338,8 +338,9 @@ def bagla(defter, stock: str, tf: str, stable_id: Optional[str],
             try:
                 from state.formation_mirror import mirror_kaydet
                 mirror_kaydet(defter_h, data_dir=data_dir)
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                # Mirror opsiyoneldir ama kaybı sessiz kalmasın (2026-10-26).
+                logger.debug("Outcome mirror kaydı atlandı", exc_info=True)
             return ozet
     except Exception:  # noqa: BLE001 - linkage botu asla durdurmaz
         logger.debug("Outcome bağlantısı yazılamadı (%s %s %s)", stock, tf, stable_id,

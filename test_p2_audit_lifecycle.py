@@ -27,14 +27,14 @@ from state import formation_history as fh
 from state import formation_schema as schema
 from state import outcome_link as ol
 
-from test_breakout_retest_terminal import (  # noqa: F401  (ortam fixture)
+from test_breakout_retest_terminal import (
     _kirilim_retest_zinciri,
     _retest_senaryosu,
     _turler,
-    ortam,
     _STOCK,
     _TF,
 )
+# `ortam` fixture'ı conftest.py'den gelir (2026-10-26); import kaydı gerekmez.
 from test_formation_history import _kanalli_pennant
 
 # ---------------------------------------------------------------------

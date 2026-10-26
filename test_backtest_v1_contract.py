@@ -204,7 +204,7 @@ def test_outcome_link_formasyon_sonucu_readonly(tmp_path, monkeypatch):
     try:
         from state import formation_mirror
         monkeypatch.setattr(formation_mirror, "mirror_kaydet", patlama)
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - opsiyonel modül yoksa monkeypatch de gerekmez
         pass
 
     sakli = {"durum": "hedef",

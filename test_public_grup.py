@@ -903,25 +903,44 @@ def test_dm_gecersizlesme_kapisi_publici_durdurmaz():
 
     Yapısal güvence: `dm_gecersiz_engel` dalı `_attach_domain_context(alert_data)`
     çağırır — yani kart bağlamı ve public kuyruğu DM kapısına takılmaz.
+    2026-10-26: devamlılık musluğu (`dm_dev_engel`) de AYNI yola bağlandı;
+    sözleşme iki bilinçli DM kapısını da kapsar (yalnız DM durur, public akar).
     """
     import ast
     from pathlib import Path
 
-    kaynak = (Path(__file__).parent / "main.py").read_text(encoding="utf-8")
+    # 2026-10-26 modülerleştirme: tarama hattı bot/scan.py'de; yapısal güvence
+    # main + bot kaynaklarının birleşiminde aranır (taşımaya dayanıklı).
+    kok = Path(__file__).parent
+    kaynak = "\n".join(
+        [ (kok / "main.py").read_text(encoding="utf-8") ]
+        + [p.read_text(encoding="utf-8") for p in sorted((kok / "bot").glob("*.py"))]
+    )
     agac = ast.parse(kaynak)
 
     def _cagri_adi(dugum):
         return getattr(dugum.func, "id", getattr(dugum.func, "attr", ""))
 
+    def _kapilari(dugum):
+        """Koşulun içinde geçen DM kapısı adları (`x` ya da `x or y`)."""
+        if isinstance(dugum, ast.Name):
+            return {dugum.id}
+        if isinstance(dugum, ast.BoolOp):
+            adlar = set()
+            for d in dugum.values:
+                adlar |= _kapilari(d)
+            return adlar
+        return set()
+
     bulundu = []
     for dugum in ast.walk(agac):
         if not isinstance(dugum, ast.If):
             continue
-        if getattr(dugum.test, "id", "") != "dm_gecersiz_engel":
+        if not (_kapilari(dugum.test) & {"dm_gecersiz_engel", "dm_dev_engel"}):
             continue
         adlar = [_cagri_adi(c) for c in ast.walk(dugum) if isinstance(c, ast.Call)]
         bulundu.append(adlar)
-    assert bulundu, "dm_gecersiz_engel dalı yok (kapı geri ayrı elif'e taşınmış olabilir)"
+    assert bulundu, "DM kapısı dalı yok (kapı geri ayrı elif'e taşınmış olabilir)"
     assert any("_attach_domain_context" in adlar for adlar in bulundu), bulundu
 
 
@@ -950,7 +969,12 @@ def test_dm_gecersizlesme_kalite_esigine_takilmaz():
     import ast
     from pathlib import Path
 
-    agac = ast.parse((Path(__file__).parent / "main.py").read_text(encoding="utf-8"))
+    kok = Path(__file__).parent
+    kaynak = "\n".join(
+        [ (kok / "main.py").read_text(encoding="utf-8") ]
+        + [p.read_text(encoding="utf-8") for p in sorted((kok / "bot").glob("*.py"))]
+    )
+    agac = ast.parse(kaynak)
     bulundu = []
     for dugum in ast.walk(agac):
         if not isinstance(dugum, ast.If):
