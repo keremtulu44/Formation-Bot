@@ -59,6 +59,8 @@ _MODULLER = (
     "bot/lifecycle_events.py",
     "bot/scan.py",
     "bot/security.py",
+    "bot/summary.py",
+    "bot/app.py",
     "notification_context.py",
     "notification_delivery.py",
     "grafik/__init__.py",

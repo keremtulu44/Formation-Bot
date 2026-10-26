@@ -53,7 +53,13 @@ def test_digest_toplam_gosterilenden_kucukse_tutarsizlik_yazilmaz():
 def test_digest_limiti_env_ile_ayarlanabilir():
     assert isinstance(config.DEFERRED_ALERT_DIGEST_LIMIT, int)
     assert config.DEFERRED_ALERT_DIGEST_LIMIT >= 1
-    kaynak = open(main_mod.__file__, encoding="utf-8").read()
+    # 2026-10-26 modülerleştirme: digest gönderimi bot/summary.py'de.
+    from pathlib import Path
+    kok = Path(main_mod.__file__).resolve().parent
+    kaynak = "\n".join(
+        [open(main_mod.__file__, encoding="utf-8").read()]
+        + [p.read_text(encoding="utf-8") for p in sorted((kok / "bot").glob("*.py"))]
+    )
     # İki meşru çağrı yeri var: 18:45 digesti ve kaçırılan kapanış telafisi
     # (Batch 5). İkisi de env kaynaklı sabiti kullanır; gömülü sayı olmamalı.
     assert kaynak.count("limit=DEFERRED_ALERT_DIGEST_LIMIT") == 2, (

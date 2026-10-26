@@ -394,7 +394,13 @@ def test_panel_metinleri_tasima_sonrasi_ayni():
 # --- Batch 8 / C2: import yan etkisi (logging) kaldırıldı --------------------
 def _main_agaci():
     import ast
-    return ast.parse(open("main.py", encoding="utf-8").read())
+    from pathlib import Path
+    kok = Path("main.py").resolve().parent
+    kaynak = "\n".join(
+        [open("main.py", encoding="utf-8").read()]
+        + [p.read_text(encoding="utf-8") for p in sorted((kok / "bot").glob("*.py"))]
+    )
+    return ast.parse(kaynak)
 
 
 def test_setup_logging_import_aninda_cagrilmaz():
@@ -414,8 +420,12 @@ def test_main_loop_logging_kurulumunu_yapar():
     main_loop = next((d for d in ast.walk(agac)
                       if isinstance(d, ast.FunctionDef) and d.name == "main_loop"), None)
     assert main_loop is not None
-    cagrilar = [n.func.id for n in ast.walk(main_loop)
-                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
+    # 2026-10-26: çağrı _pkg.setup_logging() biçiminde olabilir (geç bağlama).
+    cagrilar = [
+        getattr(n.func, "id", getattr(n.func, "attr", ""))
+        for n in ast.walk(main_loop)
+        if isinstance(n, ast.Call)
+    ]
     assert "setup_logging" in cagrilar, "main_loop log kurulumunu yapmalı (yoksa dosyaya log düşmez)"
 
 

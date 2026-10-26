@@ -68,7 +68,13 @@ def test_kapali_gun_ozetleri_bilgi_verir(monkeypatch):
 def test_ana_dongu_ozet_bloklari_islem_gunune_bagli():
     """main.py'de özet ve gece analizi bloklarının ikisi de kapıya bağlı olmalı."""
     import io
-    kaynak = io.open("main.py", encoding="utf-8").read()
+    from pathlib import Path
+    # 2026-10-26 modülerleştirme: ana döngü bot/app.py'de.
+    kok = Path("main.py").resolve().parent
+    kaynak = "\n".join(
+        [io.open("main.py", encoding="utf-8").read()]
+        + [p.read_text(encoding="utf-8") for p in sorted((kok / "bot").glob("*.py"))]
+    )
     assert kaynak.count("islem_gunu_mu(now)") >= 2, "özet ve gün sonu kapıları kurulmalı"
     assert "İŞLEM GÜNÜ KAPISI" in kaynak
     # Kapı, özet döngüsünden ÖNCE ve aynı try içinde olmalı.
