@@ -342,29 +342,35 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     damga = _kart_mum_damgasi(data)
     if damga:
         _satir(blok, damga)
-    # Olayın tek ölçüsü: teyitlide "kapanış · kırılan", geçersizleşmede "dönüş
-    # sınırı". "sınır" hangi sınır olduğunu söylemiyordu (kullanıcı 2026-10-23):
-    # yazılan seviye KIRILAN bant sınırıdır.
+    # Olayın tek ölçüsü: teyitlide kırılan seviye, geçersizleşmede dönüş
+    # sınırı. Kullanıcı isteği (2026-10-26): kapanış bilgisi kaldırıldı,
+    # kırılan seviye net şekilde vurgulanır.
     if gecersiz:
         if esik:
             _satir(blok, f"· dönüş sınırı {_sayı(esik)} {yon_eki}")
+        elif kirilan:
+            _satir(blok, f"· kırılan seviye {kirilan}")
         elif kapanis:
             _satir(blok, f"· kapanış {kapanis}")
-    elif kapanis and kirilan:
-        # ENDEKS ÖLÇEĞİ (2026-10-22): 5 haneli fiyatta birleşik satır ~280 px
-        # ölçülüyor → `_satir` bölüyor ve GİRİNTİLİ devam satırı üretiyordu;
-        # kart sözleşmesi girintili devam satırını yasaklar. Bölme burada,
-        # iki tam satır olarak yapılır.
-        birlesik = f"· kapanış {kapanis} · kırılan {kirilan}"
-        if genislik(birlesik) <= _kart_esik_px():
-            _satir(blok, birlesik)
+    elif kirilan and kapanis:
+        # 2026-10-26: kullanıcı isteği kapanış gereksizse düşsün, ama
+        # değerler farklıysa (XBANK 13482 vs 13380) İKİSİ de ayrı satırda
+        # gösterilir — birleşik satır bütçeyi aşıp girintili devam üretiyordu.
+        try:
+            _kapi = float(str(kapanis).replace(",", "."))
+            _kiri = float(str(kirilan).replace(",", "."))
+            esit = abs(_kapi - _kiri) < 0.005
+        except Exception:
+            esit = str(kapanis).strip() == str(kirilan).strip()
+        if esit:
+            _satir(blok, f"· kırılan seviye {kirilan}")
         else:
             _satir(blok, f"· kapanış {kapanis}")
             _satir(blok, f"· kırılan {kirilan}")
+    elif kirilan:
+        _satir(blok, f"· kırılan seviye {kirilan}")
     elif kapanis:
         _satir(blok, f"· kapanış {kapanis}")
-    elif kirilan:
-        _satir(blok, f"· kırılan {kirilan}")
     bloklar.append(blok)
 
     if guncelleme:
@@ -397,12 +403,9 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
             _satir(blok, f"· formasyon kalitesi {kalite}/100")
     if güç:
         _satir(blok, f"· kırılım gücü {güç}/100")
-    bant_metni = _kart_bant(data)
-    if bant_metni:
-        _satir(blok, bant_metni)
-    temas_metni = _kart_temas(data)
-    if temas_metni:
-        _satir(blok, temas_metni)
+    # Kullanıcı isteği (2026-10-26): bant ve temas bilgileri kaldırıldı
+    # (bant 114 mum, %57 daralma / üste 3 alta 2 kez değdi) karar için
+    # kritik değil ve kartı şişiriyordu.
     if blok:
         bloklar.append(blok)
 
@@ -411,31 +414,22 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     yapi_ozet = list(bolumler.get("yapi_ozet") or []) if isinstance(bolumler, dict) else []
     if yapi_ozet and not gecersiz:
         _satir(blok, str(yapi_ozet[0]))
-    # Göreli güç (2026-10-22): hisse bu pencerede endeksten önde mi? Taban aynı
-    # pencere + aynı TF; fark "puan" olarak yazılır (iki yüzdenin farkı yüzde
-    # değildir). Satır main'de üretilir, burada yalnız yerleştirilir.
-    goreli = list(bolumler.get("goreli") or []) if isinstance(bolumler, dict) else []
-    if goreli and not gecersiz:
-        _satir(blok, str(goreli[0]))
-    # `geri çekilme yok · 1g de onaylı` iki jargonu tek satıra sıkıştırıyordu
-    # (kullanıcı 2026-10-23). Ayrı satırlar: dönüş + üst zaman dilimi (sözcükle).
-    # İPTAL kartında bu satır basılmaz: olayın kendisi "banda döndü" diyor,
-    # "dönüş yok" yazmak başlıkla çelişiyordu (kullanıcı 2026-10-23).
+    # 2026-10-26: göreli güç (20 mum endekse +puan) kaldırıldı - çok açık değil.
+    # Kırılan seviyeye dönüş ve üst TF onayı daha net gösterilmeli (kullanıcı isteği).
     if not gecersiz:
-        _satir(blok, "· kırılan seviyeye dönüş var" if data.get("retest_seen")
-               else "· kırılan seviyeye dönüş yok")
-    ust_soz = _KART_UST_TF_SOZ.get(timeframe)
-    if ust_soz:
-        # 2026-10-25: `mtf_destek` yalnız "üst TF'de aktif formasyon var" demek;
-        # YÖN aynı mı, bilmiyor. Eskiden onay için "de aynı yönde" yazıyordu ve
-        # ters yönlü üst TF'de de aynı cümleyi kuruyordu. Yön uyumu `mtf_uyum`da
-        # (main.py: eşleşirse 4, aksi 0). Bilinmeyeni iddia etmiyoruz.
-        if int(_sayı(data.get("mtf_uyum"), 0) or 0) > 0:
-            _satir(blok, f"· {ust_soz} de aynı yönde")
-        elif data.get("mtf_destek"):
-            _satir(blok, f"· {ust_soz}: yön uyumu yok")
+        # Net vurgu: ikon + net ifade, substring korunuyor (test uyumu için)
+        if data.get("retest_seen"):
+            _satir(blok, "↻ kırılan seviyeye dönüş var ✓")
         else:
-            _satir(blok, f"· {ust_soz} onayı yok")
+            _satir(blok, "↻ kırılan seviyeye dönüş yok ✗")
+    ust_kisa = _KART_UST_TF.get(timeframe)
+    if ust_kisa:
+        if int(_sayı(data.get("mtf_uyum"), 0) or 0) > 0:
+            _satir(blok, f"◆ {ust_kisa} onayı var ✓ — uyumlu")
+        elif data.get("mtf_destek"):
+            _satir(blok, f"◆ {ust_kisa} onayı var — uyumsuz")
+        else:
+            _satir(blok, f"◆ {ust_kisa} onayı yok ✗")
     if blok:
         bloklar.append(blok)
 
@@ -469,9 +463,8 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     blok = []
     karsi = [str(x) for x in (data.get("domain_karsi") or []) if str(x).strip()]
     if karsi:
-        # "ters işaret" neyin tersi olduğunu söylemiyordu (kullanıcı 2026-10-23):
-        # satır, sinyalin ALEYHİNE olan veriyi taşır.
-        _satir(blok, "olumsuz: " + " — ".join(karsi[:2]))
+        # 2026-10-26: daha net — uyarı ikonu ve net ifade
+        _satir(blok, "⚠ olumsuz: " + " — ".join(karsi[:2]))
     if esik and not gecersiz:
         # "bozulur" neyin bozulduğunu söylemiyordu → teyidin düşme eşiği.
         # 5 haneli fiyatta (XBANK 13510,00) tam satır 278 px ve `_satir` onu

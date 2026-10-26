@@ -370,20 +370,13 @@ def _formasyon_araligi(formasyon: Mapping[str, Any], sol: int, n: int,
     x0 = 0
     if bas is not None and int(bas) - sol >= 0:
         x0 = min(int(bas) - sol, max(0, n - 1))
+    # 2026-10-26: kullanıcı isteği — bant çizgisi son muma kadar uzasın.
+    # Eski mantık apex/end_bar'de kesiyordu ve bant yarım kalıyordu.
+    # Yeni mantık: çizgi son muma kadar uzar; yalnızca kesişim (X) korunur.
     bitis = n + max(0, int(sag_bosluk))
     apex_i = None
     if formasyon.get("apex_bar") is not None:
         apex_i = int(formasyon["apex_bar"]) - sol
-        if apex_i >= x0:
-            bitis = max(x0 + 1, min(bitis, apex_i + 1))
-    # ÇÖZÜLMÜŞ formasyonda bant GEÇMİŞTİR: teyit/retest/geçersizleşme kartında
-    # `end_bar` kırılım mumudur; bandı onun ötesine uzatmak "hâlâ sürüyor" yalanı
-    # olur ve doğrular kesişmişse havada X çizer. Yalnız son mumdan ÖNCE biten
-    # bant kısılır — oluşmakta olan formasyonda (`end_bar` == son mum) sağ
-    # boşluktaki projeksiyon aynen kalır.
-    bit = _tam(formasyon.get("end_bar"))
-    if bit is not None and bit - sol < n - 1:
-        bitis = max(x0 + 1, min(bitis, bit - sol + 1))
     # GEOMETRİK KESİŞİM: beyan edilen `apex_bar` motorun yuvarlamasıyla iki
     # doğrunun gerçek kesişiminden sapabiliyor (flama örneğinde 168 ↔ ~124);
     # sapma kalırsa doğrular tepeyi aşıp ters dönüyordu. Kesişim barı doğrudan

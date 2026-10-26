@@ -416,9 +416,8 @@ def _alarm_ciz(ax, alarm: Mapping[str, Any], n: int, butce: float,
     anahtar = _ALARM_KALIN.get(str(alarm.get("durum") or ""),
                               "alarm_kritik" if alarm.get("tur") == "gecersiz" else "alarm_normal")
     kalin = float(SABITLER["cizgi_kalinlik"].get(anahtar, 1.1))
-    bar = alarm.get("bar")
-    if bar is not None and 0 <= int(bar) < n:
-        ax.axvline(int(bar), color=PALET["alarm"], linestyle=(0, (2, 2)), linewidth=kalin, zorder=5)
+    # 2026-10-26: dikey çizik kaldırıldı (kullanıcı isteği: mum üzerindeki
+    # dikey çizik gereksiz, görsel gürültü).
     deger = alarm.get("deger")
     if deger is None:
         return
@@ -611,6 +610,9 @@ def _olay_ciz(ax, goruntu: Mapping[str, Any], n: int,
     swinglar = []  # internal pivots are intentionally hidden, including legacy inputs
     seviyeler = list(olay.get("seviyeler") or [])
     olaylar = list(olay.get("olaylar") or [])
+    # 2026-10-26: kısa BOS segmenti yeterli; eski BOS'ları uzak fiyata kadar
+    # uzatmamak için pivot→kırılım aralığında kısa çizilir (yukarıda x0→x).
+    # Filtreleme yapılmaz — son 15'teki BOS zaten vurgulu (alfa) olarak öne çıkar.
     alarm = goruntu.get("alarm") or {}
     sayac = {"swing": 0, "etiket": 0, "kritik_atlandi": 0,
              "phpl_serit": 0, "whwl_serit": 0, "seviye": 0}
