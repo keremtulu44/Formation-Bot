@@ -123,30 +123,3 @@ from data.seed_cache import (  # noqa: F401
     _atomic_pickle_write,
     _atomic_write,
 )
-
-if __name__ == "__main__":
-    # C7: sahte veri üreticisi kaldırıldı; demo yalnız çevrimdışı yardımcıları
-    # ve deque turunu sınar (gerçek veri için fetch_yfinance_1h/1d).
-    print("=== Data.py duman testi (çevrimdışı) ===")
-    print(f"BIST açık mı? {is_bist_open()}")
-    print(f"Sonraki açılışa: {time_until_next_open()/3600:.2f} saat")
-    print(f"Sonraki mum kapanışına: {time_until_next_candle_close()/60:.1f} dk")
-    
-    # Deque test: only this invocation's temporary cache is cleaned.
-    with tempfile.TemporaryDirectory(prefix="formation-bot-data-test-") as test_root:
-        test_data_dir = os.path.join(test_root, "cache")
-        manager = StockDequeManager(maxlen=10, data_dir=test_data_dir)
-        df_mock = mock_fetch_60d_1h("THYAO", 20)
-        print(f"\nMock THYAO: {len(df_mock)} bar")
-        print(df_mock.tail(3))
-
-        manager.append_dataframe("THYAO", df_mock)
-        df_from_deque = manager.to_dataframe("THYAO")
-        print(f"\nDeque'den DataFrame: {len(df_from_deque)} bar")
-
-        # Resample test
-        resampled = resample_all_timeframes(df_from_deque)
-        for tf, df in resampled.items():
-            print(f"{tf}: {len(df)} bar")
-
-    print("\nTest bitti (test-owned geçici cache temizlendi)")

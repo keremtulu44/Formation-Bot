@@ -100,7 +100,31 @@ def _atanan_adlar(tree: ast.AST) -> set[str]:
             adlar.update(node.names)
         elif isinstance(node, ast.ExceptHandler) and node.name:
             adlar.add(node.name)
+        elif isinstance(node, ast.ImportFrom):
+            # `from X import *` → X.__all__'daki adlar bu modülde bağlanır
+            # (2026-10-26: main.py ince başlatıcı, yüzey bot.__all__'da).
+            for a in node.names:
+                if a.name == "*" and node.module:
+                    adlar |= _star_bagli_adlar(node.module)
     return adlar
+
+
+def _star_bagli_adlar(modul_adi: str) -> set[str]:
+    """Yerel modülün/paketin __all__ kümesi (yoksa boş — koruma yine avlar)."""
+    kok = Path(__file__).resolve().parent
+    yol = kok / (modul_adi.replace(".", "/") + ".py")
+    if not yol.exists():
+        yol = kok / modul_adi.replace(".", "/") / "__init__.py"
+    if not yol.exists():
+        return set()
+    for node in ast.walk(ast.parse(yol.read_text(encoding="utf-8"))):
+        if (isinstance(node, ast.Assign)
+                and any(isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets)):
+            try:
+                return set(ast.literal_eval(node.value))
+            except Exception:
+                return set()
+    return set()
 
 
 def _okunan_adlar(tree: ast.AST) -> set[str]:

@@ -26,7 +26,8 @@
 ```
 .
 ├── README.md                       ← proje girişi + belge haritası bağlantısı
-├── *.py · test_*.py · conftest.py  ← KOD: yerinde (taşınmadı)
+├── main.py · test_*.py · conftest.py  ← KOD: yerinde (main.py İNCE başlatıcı — §8)
+├── bot/ grafik/ notifier/ data/    ← KOD PAKETLERİ (2026-10-26 modülerleştirme — §8)
 ├── requirements*.txt · pytest.ini · render.yaml · .env.example · *.sql · *.service
 ├── backfill_data/ · bot_data/      ← VERİ: yerinde
 ├── scripts/ patterns/ state/ domain_engines/ research/ reporting/ transport/ analytics/
@@ -146,3 +147,37 @@ toplaması gibi çalışma zamanı sözleşmelerine dokunur ve ayrı bir doğrul
 3. [README.md](README.md) tablosuna **bir satır** ekle (yol + durum + tarih).
 4. Belgeyi koda bağlayan bir yol varsa (üretici script, komut çıktısı) aynı commit'te güncelle.
 5. Yürürlükten kalkan belgeyi silme; `arsiv/` altına taşı ve başına arşiv bandı koy.
+
+## 8. Kod paket yapısı (2026-10-26 modülerleştirme)
+
+> 2026-10-26: mega dosyalar (`main.py` 5096, `grafik.py`, `notifier.py`,
+> `data.py`) `docs/tasarim/MODULERLESTIRME_PLANI_2026-10-26.md` planına göre
+> bölündü. **Giriş sözleşmesi aynı:** `python main.py`. Davranış farkı sıfır.
+> Ayrıntı + sapma kaydı: planın başındaki DURUM notu.
+
+```
+main.py                 # İNCE başlatıcı (60 satır): stdlib + `from bot import *`
+bot/
+├── __init__.py         # namespace yüzeyi: import bloğu + tüm modüllerin yeniden
+│                       #   bağları + __all__ (yama yüzeyi main namespace'inde)
+├── statestore.py       # süreç ref'leri + durum kalıcılığı + sayaç depoları
+├── counters.py         # günlük sayaçlar, reset_daily_if_needed
+├── heartbeat.py        # write_heartbeat + _heartbeat_*
+├── commands.py         # Telegram komutları/webhook, /grafik işi, /tarama isteği
+├── lifecycle_events.py # olay sınıflandırma/kayıt/invalidation
+├── scan.py             # scan_all_stocks + tarama hattı
+├── security.py         # alarm izin/politika kapıları
+├── summary.py          # özet/gönderim/gece bakımı
+└── app.py              # setup_logging, signal_handler, main_loop
+grafik/                 # 10 modül (Faz 2)
+notifier/               # api, format_kart, format_summary, util (Faz 1)
+data/                   # fetch → replay → backfill → seed_cache + __main__.py
+```
+
+**Geç bağlama kuralı (plan §3):** yamalı adlar `main` namespace'inde tek
+sahipli; `bot/*` çağrı anında `_pkg.X` okur, global rebind'ler
+`setattr(_pkg, ...)` yazar → `monkeypatch.setattr(main, X)` yamaları (579)
+aynen yakalanır. Kırık test yaması YOK (`test_patch_yuzeyi.py` güvencesi).
+
+**Girişler:** `python main.py` (AYNI) · `BOT_HEALTH_SMOKE_ONLY=1` (AYNI) ·
+`python -m data` (eski `python data.py` dumanı) · `python deploy_check.py` (AYNI).

@@ -91,6 +91,10 @@ from transport import telegram as _transport_telegram
 
 import main as _pkg  # geç bağlama: yamalı adlar _pkg.X (plan §3)
 
+# Def-anı varsayılan: import anında _pkg.okunamaz (döngü); sabit değer çapraz
+# import edilir (monkeypatch yaması yok; değer bot.statestore'da tek sahipli).
+from bot.statestore import _GORELI_MUM  # noqa: F401  (aşağıdaki varsayılan için)
+
 def _evren_olcek_uyarisi(evren=None) -> str:
     """Evren eşiğin üzerindeyse pacing/panel/digest limitlerini hatırlatır.
 
@@ -373,7 +377,7 @@ def _domain_results_for_notification(stock, all_timeframes, now, cache):
     return results
 
 
-def _endekse_gore_guc(df_hisse, df_endeks, adet: int = _pkg._GORELI_MUM):
+def _endekse_gore_guc(df_hisse, df_endeks, adet: int = _GORELI_MUM):
     """(fark_puan, adet) — hisse getirisi eksi endeks getirisi; yoksa None."""
     try:
         if df_hisse is None or df_endeks is None:

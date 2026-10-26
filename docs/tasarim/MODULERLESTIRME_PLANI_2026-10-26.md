@@ -1,5 +1,14 @@
 # Modülerleştirme planı — mega dosyaların bölünmesi (2026-10-26)
 
+> **DURUM: UYGULANDI (2026-10-26, Faz 0.5→6 + 8).** Tüm fazlar tam test
+> suite'i yeşil bitti (son: 2520 passed / 43 skipped + ruff temiz). Uygulanan
+> hâlin ve sapmaların özeti için: **`docs/YAPI.md`**. Faz 7 (opsiyonel
+> `TelegramNotifier` iç ayrıştırma) bilinçli olarak uygulanmadı ("yalnız
+> gerekirse" koşulu). §5'teki `commands/` alt paketi tek `bot/commands.py`
+> olarak uygulandı (bkz. YAPI.md satır bütçesi); `main.py` 60 satıra inerken
+> yama yüzeyi `bot/__init__.py: __all__` + `from bot import *` ile korundu
+> (§3 geç bağlama kuralı — test yamaları kırılmadı).
+
 **Durum:** Yürürlükte (plan — uygulama bir sonraki turda, fazlar hâlinde) ·
 **Kapsam:** `main.py` (5.097), `grafik.py` (5.044), `notifier.py` (3.938),
 `data.py` (1.949) · **Girdi:** [denetim/KOD_DENETIMI_2026-10-26.md](../denetim/KOD_DENETIMI_2026-10-26.md) §4.5
