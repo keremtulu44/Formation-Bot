@@ -6,7 +6,6 @@ import logging
 import notifier as _pkg  # yamalı adlar için geç bağlama (plan §3)
 
 import os
-import logging
 import re
 import threading
 import time
