@@ -269,7 +269,14 @@ def test_formation_alert_runs_fresh_domains_before_telegram_and_tolerates_failur
         stale_lookups.append((args, kwargs))
         return {"market_structure": "stale-previous-scan-result"}
 
-    monkeypatch.setattr(main_module, "get_latest_domain_results", stale_domain_lookup, raising=False)
+    import domain_engines.runner as domain_runner_mod
+
+    # 2026-10-26: yama eskiden `main.get_latest_domain_results`'ı hedefliyordu
+    # ama o ad main'de HİÇ yoktu (`raising=False` ile sessizce işe yaramıyordu).
+    # Adın gerçek evi `domain_engines.runner`; oradan yamalanınca sözleşme
+    # canlı kalır: tarama asla bayat domain sonucuna düşerse `stale_lookups`
+    # dolar ve aşağıdaki iddia patlar.
+    monkeypatch.setattr(domain_runner_mod, "get_latest_domain_results", stale_domain_lookup)
     fresh_stats = copy.deepcopy(main_module.daily_stats)
     for key, value in fresh_stats.items():
         if isinstance(value, bool):
