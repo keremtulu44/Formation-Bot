@@ -55,6 +55,7 @@ _MODULLER = (
     "bot/statestore.py",
     "bot/counters.py",
     "bot/heartbeat.py",
+    "bot/commands.py",
     "notification_context.py",
     "notification_delivery.py",
     "grafik/__init__.py",

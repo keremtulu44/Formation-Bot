@@ -91,50 +91,62 @@ from transport import telegram as _transport_telegram
 
 import main as _pkg  # geç bağlama: yamalı adlar _pkg.X (plan §3)
 
-DIGEST_PENDING_DOSYA = _state_paths.DIGEST_PENDING_DOSYA
+#: Üst zaman dilimi: public görselinde alarm karesinin yanına eklenen kare
+#: (2026-10-22 kararı: public = 1 kare + üst TF; DM 4 kare alır).
+#: `mtf_destek` hesabındaki teyit TF'siyle aynı mantık, karttan bağımsız sabit.
+_UST_TF = {"1h": "4h", "2h": "4h", "4h": "1d"}
 
 
-# Batch 8 / C2 (8.4): digest tamponu kalıcılığı da `state/persistence.py`'de.
-DIGEST_PENDING_SUPABASE_KEY = _state_persistence.DIGEST_PENDING_SUPABASE_KEY
+# main_loop icinde olusturulan nesnelerin global referanslari (heartbeat icin)
+_deque_manager_ref = None
 
 
-# --- İLERİ TEST (gölge defter) ----------------------------------------------
-# 2026-10-25: Ölçümün açık kalan tek sorusu "kama + üst TF aynı yönde" bayrağı
-# örneklem DIŞINDA işe yarıyor mu? Cevap, gönderilen her uyarının 24 bar sonraki
-# sonucunu kaydetmekle verilir (docs/arastirma/PUANLAMA_MIMARISI_2026-10-25.md
-# §11.4). Bu iş mesaj GÖNDERMEZ, eşik DEĞİŞTİRMEZ; yalnız kayıt tutar.
-ILERI_TEST_GECE_SAAT = 19          # BIST kapanışından sonra, gece mesaisi yok
+_notifier_ref = None
 
 
-# Politika tek kaynak: `config.ALERT_STATES` (anlık) / `config.WATCH_STATES`
-# (digest). Bu frozenset yalnız okuma kolaylığı içindir (B7 kararı config'te).
-IMMEDIATE_ALERT_STATES = frozenset(ALERT_STATES)
+# İşlem günü değilken her döngüde aynı log satırını basmamak için gün damgası.
+_islem_gunu_loglandi = {"gun": None}
 
 
-# === ÇOKLU ÖRNEK KORUMASI (Batch 6 / B10) ===
-# Aynı token + aynı Supabase anahtarıyla iki kopya çalışırsa: çift mesaj + cache
-# yarışı. Yoklama modunda Telegram 409 verir; webhook modunda hiçbir sinyal yoktu.
-# Sert kilit kurulmaz (kısa ağ kesintisinde botu durdurmak daha kötü olurdu):
-# durum loglanır, heartbeat ve /durum'a taşınır.
-INSTANCE_ID = (os.environ.get("BOT_INSTANCE_ID") or "").strip() or f"{socket.gethostname()}:{os.getpid()}"
+# SESSİZ ARIZA BEKÇİSİ: üst üste başarısız tarama turu sayacı + son uyarı günü.
+# Neden: Yahoo/veri kaynağı bozulduğunda süreç ayakta kalır, kanal sessizleşir ve
+# sahibin bundan haberi olmaz (kullanıcı "bot öldü" sanır). En fazla günde 1 DM.
+_ardisik_basarisiz_tur = 0
+
+
+_son_tarama_uyari_gun = None
+
+
+TARAMA_UYARI_ESIK_TUR = 3
+
+
+_supabase_store_ref = None
+
+
+_deferred_alert_buffer = DeferredAlertBuffer()
+
+
+# Haftalık doğruluk karnesi defteri (yerel JSON; Supabase GEREKTİRMEZ).
+# Tembel kurulur: dosya yolu DATA_DIR'e bağlı, import anında I/O yapılmaz.
+_karne_defteri: "KarneDefteri | None" = None
+
+
+# Uzak yedeğe yazma aralığı (saniye): defter her tarama turunda birkaç kayıt alır;
+# her kayıtta tüm JSON'u Supabase'e yazmak gereksiz trafik olurdu.
+_karne_son_uzak_yazma = 0.0
 
 
 KARNE_UZAK_YAZMA_ARALIK_SN = 300
 
 
-ORNEK_KONTROL_ARALIK_SN = 300
+# Bugüne ait 18:45 kapanış özetinin gönderilip gönderilmediği (ISO gün). Kalıcı
+# tamponla birlikte Supabase/diske yazılır; restart sonrası aynı özet iki kez gitmez.
+_digest_son_gonderim_gun = None
 
 
-SON_TARAMA_DOSYA = _state_paths.SON_TARAMA_DOSYA
-
-
-SON_TARAMA_SUPABASE_KEY = _state_paths.SON_TARAMA_SUPABASE_KEY
-
-
-SUMMARY_MARKERS_SUPABASE_KEY = "state:daily_summary_markers"
-
-
-TARAMA_UYARI_ESIK_TUR = 3
+# Politika tek kaynak: `config.ALERT_STATES` (anlık) / `config.WATCH_STATES`
+# (digest). Bu frozenset yalnız okuma kolaylığı içindir (B7 kararı config'te).
+IMMEDIATE_ALERT_STATES = frozenset(ALERT_STATES)
 
 
 # Yaşam döngüsü "slotu sıfırlayan" state'ler: motor bu state'lerden birine
@@ -150,79 +162,71 @@ TEKRAR_SIFIRLA_STATELER = frozenset({
 })
 
 
-# === /panel — 48 hisse x 4 zaman dilimi slot tablosu ===
-# Neden ayrı komut: /canli ve /formasyonlar yalnızca DOLU slotları listeler; hangi
-# hissede hiç formasyon yok, hangi TF boş, toplam kaç slot dolu -> görünmez.
-# /panel evrenin tamamını (ACTIVE_STOCKS x 4 TF) tek bakışta gösterir: doluluk
-# sayıları + kompozit puana göre en anlamlı 12 aday.
-WATCH_CONTEXT_HAVUZU = 12    # geçmiş uyumluluğu; acil bildirimlere aday eklenmez
+def _cache_verisi_kullanilabilir(yas_dk: float, taze_veri_var: bool, seans_acik: bool) -> bool:
+    """Fetch başarısızsa seans dışı son mumları yaş sınırına kadar kullan."""
+    if yas_dk > _pkg.OFFSESSION_CACHE_MAX_AGE_DAYS * 24 * 60:
+        return False
+    if taze_veri_var:
+        return True
+    return not seans_acik or yas_dk <= STALE_BAR_UYARI_DK
 
 
-_CONFIRMED_INVALIDATION_REASONS = frozenset({
-    "Kırılım sonrası formasyon alanına dönüldü",
-    "Başarılı retest sonrası yapı içine dönüldü",
-})
+# === SİNYAL YÖNETİMİ (systemctl stop -> SIGTERM) ===
+# Neden? systemd durdururken Python anında ölürse o taramada biriken deque'ler kaybolur.
+_shutdown_requested = False
 
 
-_DOMAIN_TIMEFRAMES = ("1h", "2h", "4h", "1d")
+_deque_manager_ref = None
 
 
-# --- endekse göre göreli güç (2026-10-22) ----------------------------------
-# Kullanıcı kararı: "XU100'e göre göreli güç" karta girsin. Taban kuralı: iki
-# yüzde AYNI pencerede ve AYNI zaman diliminde hesaplanır; fark "puan" olarak
-# yazılır ("%2,1" değil, "2,1 puan") çünkü iki yüzdenin farkı yüzde değildir.
-# Endeks yoksa/veri kısaysa satır basılmaz (uydurma yok).
-_GORELI_MUM = 20
+# Telegram komutları için paylaşılan durum (tarama thread'i yazar, listener okur)
+_live_state = LiveState()
 
 
-_GRAFIK_GORUNUM = {"sade": True, "detay": False}
+_scan_istegi = threading.Event()
 
 
-_GRAFIK_HEDEF_SN = 60
+_scan_job_active = threading.Event()
 
 
-# /grafik argümanı: sembol + isteğe bağlı zaman dilimi + isteğe bağlı görünüm.
-# Desen bilinçli dar — bozuk girdi (path, uzun metin) Telegram'a hiç gitmemeli.
-_GRAFIK_SEMBOL = re.compile(r"^([A-Z][A-Z0-9]{1,9})(?:\.IS)?$")
+_scan_request_lock = threading.Lock()
 
 
-_GRAFIK_TF = {"1s": "1h", "1h": "1h", "2s": "2h", "2h": "2h",
-              "4s": "4h", "4h": "4h", "1g": "1d", "1d": "1d"}
+_scan_job_request = None
 
 
-# --- GÜNLÜK SAYAÇ KALICILIĞI (restart gün sürekliliği) ---------------------
-# Canlı denetimde ölçüldü: gün ortasında restart olunca 18:45 kanal özeti
-# "❌ 8 başarısız / 8 tarama" diyordu; gerçek gün "❌ 9 / 10 tarama" idi.
-# Sayaçlar artık GÜN damgalı olarak diske yazılır, aynı gün restart'ta geri yüklenir.
-_KALICI_SAYACLAR = ('basarisiz_kirilim', 'kirilim_teyitli_olay_sayisi', 'retest_basarili_olay_sayisi', 'kirilim_gecersizlesti_olay_sayisi', 'sessiz_gecersizlesme_sayisi', 'tarama_sayisi', 'alerts_sent', 'stocks_scanned')
+_scan_last_result = {}
 
 
-_LIFECYCLE_CONFIRMATION_TYPES = frozenset({"BREAK_CONFIRMED", "COUNTER_BREAK"})
+_lifecycle_manager_ref = None
 
 
-_LIFECYCLE_EVENT_COUNTERS = {
-    "KIRILIM_TEYITLI": "kirilim_teyitli_olay_sayisi",
-    "RETEST_BASARILI": "retest_basarili_olay_sayisi",
-    "KIRILIM_GECERSIZLESTI": "kirilim_gecersizlesti_olay_sayisi",
-}
+_telegram_listener_ref = None
 
 
-# Telegram tek mesaj sınırı 4096; `kirp()` sondan kestiği için karne (mesajın
-# ALTINDA) kaybolabilirdi. Bu sınırın üstünde karne ikinci mesaj olarak gider.
-_MESAJ_GUVENLI_SINIR = 3900
+# Webhook modunda: Telegram güncellemelerini işleyen nesne (yoklama thread'i YOK).
+# health_server'ın /webhook ucu bu referans üzerinden çalışır; bot hazır değilse
+# (açılıştaki ilk veri yüklemesi) uç 503 döner ve Telegram tekrar dener.
+_telegram_update_processor_ref = None
 
 
-_POST_CLOSE_DIFF_LABELS = {
-    "KIRILIM_TEYITLI": "🏁 Kırılım teyitli",
-    "RETEST_BASARILI": "🔁 Retest başarılı",
-    "KIRILIM_GECERSIZLESTI": "❌ Kırılım geçersizleşti",
-}
+# Aynı anda birden çok webhook isteği gelirse (Telegram sıralı gönderir ama ağ
+# tekrarı olabilir) komut işleme serileştirilir: dinleyicinin hız sınırı/tekrar
+# kümesi kilitli bir bölgede kullanılır.
+_telegram_webhook_kilidi = threading.Lock()
 
 
-#: Üst zaman dilimi: public görselinde alarm karesinin yanına eklenen kare
-#: (2026-10-22 kararı: public = 1 kare + üst TF; DM 4 kare alır).
-#: `mtf_destek` hesabındaki teyit TF'siyle aynı mantık, karttan bağımsız sabit.
-_UST_TF = {"1h": "4h", "2h": "4h", "4h": "1d"}
+# Komut katmanı modu: "webhook" / "yoklama" / "kapali" (ya da başlangıçta None).
+# /health bunu raporlar: "komutlar neden gelmiyor?" sorusunun ilk cevabı budur.
+_komut_modu = None
+
+
+# Render PORT'unda çalışan küçük HTTP sunucusu (webhook + /health + /test).
+_health_server_ref = None
+
+
+# === GÜNLÜK ÖZET ===
+last_run_stats = {}
 
 
 def _analiz_hatasi_kaydi(exc, istek_hisse: int, kaynak: str = "analiz") -> dict:
@@ -252,236 +256,11 @@ def _analiz_hatasi_kaydi(exc, istek_hisse: int, kaynak: str = "analiz") -> dict:
     return dict(_pkg.last_run_stats)
 
 
-# SESSİZ ARIZA BEKÇİSİ: üst üste başarısız tarama turu sayacı + son uyarı günü.
-# Neden: Yahoo/veri kaynağı bozulduğunda süreç ayakta kalır, kanal sessizleşir ve
-# sahibin bundan haberi olmaz (kullanıcı "bot öldü" sanır). En fazla günde 1 DM.
-_ardisik_basarisiz_tur = 0
-
-
-def _cache_verisi_kullanilabilir(yas_dk: float, taze_veri_var: bool, seans_acik: bool) -> bool:
-    """Fetch başarısızsa seans dışı son mumları yaş sınırına kadar kullan."""
-    if yas_dk > _pkg.OFFSESSION_CACHE_MAX_AGE_DAYS * 24 * 60:
-        return False
-    if taze_veri_var:
-        return True
-    return not seans_acik or yas_dk <= STALE_BAR_UYARI_DK
-
-
-_cift_ornek_durumu = {
-    "instance_id": INSTANCE_ID,
-    "son_kontrol": None,
-    "canli_digerleri": [],
-    "uyari": False,
-}
-
-
-# Gün içinde BENZERSİZ başarısız kırılım sayacı (hisse|TF|bar): aynı slot her
-# taramada yeniden üretildiği için ham sayım olayı şişirirdi.
-_daily_basarisiz_keys: set = set()
-
-
-# Restart anında devralınan "başarısız kırılım" sayısı: olay detayı saklanmadığı
-# için yalnız SAYI taşınır, yeni olaylar bu tabanın üstüne eklenir.
-_daily_basarisiz_tabani = 0
-
-
-_daily_lifecycle_event_keys: set[str] = set()
-
-
 # Aynı hisse/TF slotu gün içinde her taramada yeniden bulunur; "bugün kaç formasyon
 # buldun?" sorusunun doğru cevabı BENZERSİZ slot sayısıdır. Eskiden sayaç her
 # taramada yeniden artıyordu (9 tarama x 21 slot = 189) ve metrik şişiyordu.
 # Set, daily_stats içinde tutulmaz (JSON'a serileşmez/heartbeat'e sığmaz).
 _daily_pattern_keys: set = set()
-
-
-_daily_unannounced_invalidation_keys: set = set()
-
-
-_deferred_alert_buffer = DeferredAlertBuffer()
-
-
-# main_loop icinde olusturulan nesnelerin global referanslari (heartbeat icin)
-_deque_manager_ref = None
-
-
-_deque_manager_ref = None
-
-
-_digest_event_keys_snapshot: set[str] | None = None
-
-
-_digest_pending_yolu = _state_paths.digest_pending_yolu
-
-
-# Bugüne ait 18:45 kapanış özetinin gönderilip gönderilmediği (ISO gün). Kalıcı
-# tamponla birlikte Supabase/diske yazılır; restart sonrası aynı özet iki kez gitmez.
-_digest_son_gonderim_gun = None
-
-
-_domain_runner_cache = None
-
-
-# --- GECE DENETİMİ (#2 tutarlılık · #3 ölçüm tazeleme) -----------------------
-# 2026-10-25: Gece işi iki soruyu yeniden sorar ama hiçbir şeyi DEĞİŞTİRMEZ:
-#   1. Canlıda gönderilen uyarı, aynı barlarla yeniden oynatıldığında motor
-#      tarafından yine üretiliyor mu? (`tutarlilik.py`)
-#   2. "kama + üst TF aynı yönde" bayrağı bayraksız uyarılardan ölçülebilir
-#      biçimde fazla veriyor mu? (`olcum_tazele.py`)
-# Sonuç loga + `gece_raporu` tablosuna yazılır. DM yalnız EYLEM gerektiren
-# sonuçta gider (sapma ya da "bayrak kaldırılsın"); gece 03:00 mesajı yok ve
-# öneri kendiliğinden uygulanmaz. Toplam iş süre sınırlıdır (en fazla 10 replay)
-# ve yalnız seans kapalıyken koşar; canlı taramayı bekletmez.
-_gece_denetim_son_gun = ""        # bu süreçte denetimin koştuğu gün (YYYY-MM-DD)
-
-
-_grafik_aktif_is = {}
-
-
-_grafik_is_kilidi = threading.Lock()
-
-
-# Render PORT'unda çalışan küçük HTTP sunucusu (webhook + /health + /test).
-_health_server_ref = None
-
-
-_ileri_test_son_gece = ""          # bu süreçte işin koştuğu gün (YYYY-MM-DD)
-
-
-# İşlem günü değilken her döngüde aynı log satırını basmamak için gün damgası.
-_islem_gunu_loglandi = {"gun": None}
-
-
-def _karne_al() -> KarneDefteri:
-    """Karne defterini (tembel) oluşturur; dosya okunamazsa da çalışır.
-
-    Opsiyonel uzak yedek (Supabase): kuruluysa yerel defterle BİRLEŞTİRİLİR
-    (Render'da DATA_DIR=/tmp olduğu için restart/redeploy yereli siler; yedek
-    haftalık karnenin boşalmasını engeller). Supabase yoksa hiçbir şey değişmez.
-    """
-    global _karne_defteri
-    if _pkg._karne_defteri is None:
-        setattr(_pkg, "_karne_defteri", KarneDefteri())
-        try:
-            _state_persistence.karne_defteri_yukle(_pkg._karne_defteri, _pkg._supabase_store_ref)
-        except Exception as exc:  # noqa: BLE001 - yedek sorunu karneyi engellemesin
-            _pkg.logger.debug("Karne uzak yedeği yüklenemedi: %s", exc)
-    return _pkg._karne_defteri
-
-
-# Haftalık doğruluk karnesi defteri (yerel JSON; Supabase GEREKTİRMEZ).
-# Tembel kurulur: dosya yolu DATA_DIR'e bağlı, import anında I/O yapılmaz.
-_karne_defteri: "KarneDefteri | None" = None
-
-
-# Uzak yedeğe yazma aralığı (saniye): defter her tarama turunda birkaç kayıt alır;
-# her kayıtta tüm JSON'u Supabase'e yazmak gereksiz trafik olurdu.
-_karne_son_uzak_yazma = 0.0
-
-
-_kayit_zamani = _state_paths.kayit_zamani
-
-
-# Komut katmanı modu: "webhook" / "yoklama" / "kapali" (ya da başlangıçta None).
-# /health bunu raporlar: "komutlar neden gelmiyor?" sorusunun ilk cevabı budur.
-_komut_modu = None
-
-
-_lifecycle_manager_ref = None
-
-
-# Telegram komutları için paylaşılan durum (tarama thread'i yazar, listener okur)
-_live_state = LiveState()
-
-
-#: MS (piyasa yapısı) motoru hata sayacı. Kart bu uyarıyı BASMAZ (karar D:
-#: "⚠ MS domain devre dışı yalnız /durum'da"); alarm kartı karar belgesidir,
-#: altyapı arızası oraya girmez. Sayaç `/durum`da görünür ki hata sessiz kalmasın.
-#:
-#: HİSSE BAZINDA sayılır, olay bazında değil: aynı hissenin iki TF'si alarm
-#: ürettiğinde bağlam iki kez hazırlanır (çıktı önbellekten gelir) ve olay bazlı
-#: sayaç aynı arızayı iki kez yazardı. Set, tekrarı yutar.
-_ms_hata_sayaci: Dict = {"hisseler": set(), "son": ""}
-
-
-_notifier_ref = None
-
-
-_scan_istegi = threading.Event()
-
-
-_scan_job_active = threading.Event()
-
-
-_scan_job_request = None
-
-
-_scan_last_result = {}
-
-
-_scan_request_lock = threading.Lock()
-
-
-# === SİNYAL YÖNETİMİ (systemctl stop -> SIGTERM) ===
-# Neden? systemd durdururken Python anında ölürse o taramada biriken deque'ler kaybolur.
-_shutdown_requested = False
-
-
-_son_heartbeat_icerik = None
-
-
-_son_heartbeat_uzak_zamani = 0.0
-
-
-# === HEARTBEAT ===
-# Yazma amplifikasyonu koruması (Batch 6 / B5): heartbeat her hisse sonrası
-# çağrılıyordu (48 hisse × tarama = 48 Supabase UPSERT + 48 dosya yazımı).
-# Yeni kural:
-#   - yerel dosya: HEARTBEAT_MIN_ARALIK_SN'den sık yazılmaz (canlılık göstergesi
-#     olduğu için tamamen atlanmaz; force=True ile hemen yazılır),
-#   - Supabase: içerik değişmediyse veya HEARTBEAT_UZAK_ARALIK_SN dolmadıysa yazılmaz.
-_son_heartbeat_zamani = 0.0
-
-
-# Eski iç adlar (testler ve main gövdesi) korunuyor: yol/snapshot yardımcıları
-# artık `state/paths.py`'de yaşıyor.
-_son_tarama_data_dir = _state_paths.son_tarama_data_dir
-
-
-_son_tarama_uyari_gun = None
-
-
-_son_tarama_yolu = _state_paths.son_tarama_yolu
-
-
-_supabase_store_ref = None
-
-
-_telegram_api_cagri = _transport_telegram.api_cagri
-
-
-_telegram_listener_ref = None
-
-
-# Webhook modunda: Telegram güncellemelerini işleyen nesne (yoklama thread'i YOK).
-# health_server'ın /webhook ucu bu referans üzerinden çalışır; bot hazır değilse
-# (açılıştaki ilk veri yüklemesi) uç 503 döner ve Telegram tekrar dener.
-_telegram_update_processor_ref = None
-
-
-# Aynı anda birden çok webhook isteği gelirse (Telegram sıralı gönderir ama ağ
-# tekrarı olabilir) komut işleme serileştirilir: dinleyicinin hız sınırı/tekrar
-# kümesi kilitli bir bölgede kullanılır.
-_telegram_webhook_kilidi = threading.Lock()
-
-
-_telegram_yanit_oku = _transport_telegram.yanit_oku
-
-
-_webhook_adres_gizle = _transport_telegram.webhook_adres_gizle
-
-
-_yeni_snapshot = _state_paths.yeni_snapshot
 
 
 daily_stats = {
@@ -532,6 +311,218 @@ daily_stats = {
 }
 
 
+# Gün içinde BENZERSİZ başarısız kırılım sayacı (hisse|TF|bar): aynı slot her
+# taramada yeniden üretildiği için ham sayım olayı şişirirdi.
+_daily_basarisiz_keys: set = set()
+
+
+_daily_unannounced_invalidation_keys: set = set()
+
+
+_daily_lifecycle_event_keys: set[str] = set()
+
+
+_digest_event_keys_snapshot: set[str] | None = None
+
+
+_LIFECYCLE_CONFIRMATION_TYPES = frozenset({"BREAK_CONFIRMED", "COUNTER_BREAK"})
+
+
+_CONFIRMED_INVALIDATION_REASONS = frozenset({
+    "Kırılım sonrası formasyon alanına dönüldü",
+    "Başarılı retest sonrası yapı içine dönüldü",
+})
+
+
+_LIFECYCLE_EVENT_COUNTERS = {
+    "KIRILIM_TEYITLI": "kirilim_teyitli_olay_sayisi",
+    "RETEST_BASARILI": "retest_basarili_olay_sayisi",
+    "KIRILIM_GECERSIZLESTI": "kirilim_gecersizlesti_olay_sayisi",
+}
+
+
+# --- GÜNLÜK SAYAÇ KALICILIĞI (restart gün sürekliliği) ---------------------
+# Canlı denetimde ölçüldü: gün ortasında restart olunca 18:45 kanal özeti
+# "❌ 8 başarısız / 8 tarama" diyordu; gerçek gün "❌ 9 / 10 tarama" idi.
+# Sayaçlar artık GÜN damgalı olarak diske yazılır, aynı gün restart'ta geri yüklenir.
+_KALICI_SAYACLAR = ('basarisiz_kirilim', 'kirilim_teyitli_olay_sayisi', 'retest_basarili_olay_sayisi', 'kirilim_gecersizlesti_olay_sayisi', 'sessiz_gecersizlesme_sayisi', 'tarama_sayisi', 'alerts_sent', 'stocks_scanned')
+
+
+# Restart anında devralınan "başarısız kırılım" sayısı: olay detayı saklanmadığı
+# için yalnız SAYI taşınır, yeni olaylar bu tabanın üstüne eklenir.
+_daily_basarisiz_tabani = 0
+
+
+# === ÇOKLU ÖRNEK KORUMASI (Batch 6 / B10) ===
+# Aynı token + aynı Supabase anahtarıyla iki kopya çalışırsa: çift mesaj + cache
+# yarışı. Yoklama modunda Telegram 409 verir; webhook modunda hiçbir sinyal yoktu.
+# Sert kilit kurulmaz (kısa ağ kesintisinde botu durdurmak daha kötü olurdu):
+# durum loglanır, heartbeat ve /durum'a taşınır.
+INSTANCE_ID = (os.environ.get("BOT_INSTANCE_ID") or "").strip() or f"{socket.gethostname()}:{os.getpid()}"
+
+
+ORNEK_KONTROL_ARALIK_SN = 300
+
+
+_cift_ornek_durumu = {
+    "instance_id": INSTANCE_ID,
+    "son_kontrol": None,
+    "canli_digerleri": [],
+    "uyari": False,
+}
+
+
+# === HEARTBEAT ===
+# Yazma amplifikasyonu koruması (Batch 6 / B5): heartbeat her hisse sonrası
+# çağrılıyordu (48 hisse × tarama = 48 Supabase UPSERT + 48 dosya yazımı).
+# Yeni kural:
+#   - yerel dosya: HEARTBEAT_MIN_ARALIK_SN'den sık yazılmaz (canlılık göstergesi
+#     olduğu için tamamen atlanmaz; force=True ile hemen yazılır),
+#   - Supabase: içerik değişmediyse veya HEARTBEAT_UZAK_ARALIK_SN dolmadıysa yazılmaz.
+_son_heartbeat_zamani = 0.0
+
+
+_son_heartbeat_icerik = None
+
+
+_son_heartbeat_uzak_zamani = 0.0
+
+
+#: MS (piyasa yapısı) motoru hata sayacı. Kart bu uyarıyı BASMAZ (karar D:
+#: "⚠ MS domain devre dışı yalnız /durum'da"); alarm kartı karar belgesidir,
+#: altyapı arızası oraya girmez. Sayaç `/durum`da görünür ki hata sessiz kalmasın.
+#:
+#: HİSSE BAZINDA sayılır, olay bazında değil: aynı hissenin iki TF'si alarm
+#: ürettiğinde bağlam iki kez hazırlanır (çıktı önbellekten gelir) ve olay bazlı
+#: sayaç aynı arızayı iki kez yazardı. Set, tekrarı yutar.
+_ms_hata_sayaci: Dict = {"hisseler": set(), "son": ""}
+
+
+# === /panel — 48 hisse x 4 zaman dilimi slot tablosu ===
+# Neden ayrı komut: /canli ve /formasyonlar yalnızca DOLU slotları listeler; hangi
+# hissede hiç formasyon yok, hangi TF boş, toplam kaç slot dolu -> görünmez.
+# /panel evrenin tamamını (ACTIVE_STOCKS x 4 TF) tek bakışta gösterir: doluluk
+# sayıları + kompozit puana göre en anlamlı 12 aday.
+WATCH_CONTEXT_HAVUZU = 12    # geçmiş uyumluluğu; acil bildirimlere aday eklenmez
+
+
+SUMMARY_MARKERS_SUPABASE_KEY = "state:daily_summary_markers"
+
+
+# /grafik argümanı: sembol + isteğe bağlı zaman dilimi + isteğe bağlı görünüm.
+# Desen bilinçli dar — bozuk girdi (path, uzun metin) Telegram'a hiç gitmemeli.
+_GRAFIK_SEMBOL = re.compile(r"^([A-Z][A-Z0-9]{1,9})(?:\.IS)?$")
+
+
+_GRAFIK_TF = {"1s": "1h", "1h": "1h", "2s": "2h", "2h": "2h",
+              "4s": "4h", "4h": "4h", "1g": "1d", "1d": "1d"}
+
+
+_GRAFIK_GORUNUM = {"sade": True, "detay": False}
+
+
+_grafik_is_kilidi = threading.Lock()
+
+
+_grafik_aktif_is = {}
+
+
+_GRAFIK_HEDEF_SN = 60
+
+
+# Eski iç adlar (testler ve main gövdesi) korunuyor: yol/snapshot yardımcıları
+# artık `state/paths.py`'de yaşıyor.
+_son_tarama_data_dir = _state_paths.son_tarama_data_dir
+
+
+_son_tarama_yolu = _state_paths.son_tarama_yolu
+
+
+_digest_pending_yolu = _state_paths.digest_pending_yolu
+
+
+_kayit_zamani = _state_paths.kayit_zamani
+
+
+_yeni_snapshot = _state_paths.yeni_snapshot
+
+
+SON_TARAMA_DOSYA = _state_paths.SON_TARAMA_DOSYA
+
+
+SON_TARAMA_SUPABASE_KEY = _state_paths.SON_TARAMA_SUPABASE_KEY
+
+
+def son_tarama_kaydet(store=None, data_dir=None) -> bool:
+    """Son listeyi Supabase + diske kaydeder (bkz. state.persistence)."""
+    return _state_persistence.son_tarama_kaydet(
+        _pkg._live_state,
+        store=_pkg._supabase_store_ref if store is None else store,
+        data_dir=data_dir,
+    )
+
+
+def son_tarama_yukle(store=None, data_dir=None) -> int:
+    """Kayıtlı son taramayı yükler (bkz. state.persistence)."""
+    return _state_persistence.son_tarama_yukle(
+        _pkg._live_state,
+        store=_pkg._supabase_store_ref if store is None else store,
+        data_dir=data_dir,
+    )
+
+
+_webhook_adres_gizle = _transport_telegram.webhook_adres_gizle
+
+
+_telegram_api_cagri = _transport_telegram.api_cagri
+
+
+_telegram_yanit_oku = _transport_telegram.yanit_oku
+
+
+_domain_runner_cache = None
+
+
+_DOMAIN_TIMEFRAMES = ("1h", "2h", "4h", "1d")
+
+
+# --- endekse göre göreli güç (2026-10-22) ----------------------------------
+# Kullanıcı kararı: "XU100'e göre göreli güç" karta girsin. Taban kuralı: iki
+# yüzde AYNI pencerede ve AYNI zaman diliminde hesaplanır; fark "puan" olarak
+# yazılır ("%2,1" değil, "2,1 puan") çünkü iki yüzdenin farkı yüzde değildir.
+# Endeks yoksa/veri kısaysa satır basılmaz (uydurma yok).
+_GORELI_MUM = 20
+
+
+def _karne_al() -> KarneDefteri:
+    """Karne defterini (tembel) oluşturur; dosya okunamazsa da çalışır.
+
+    Opsiyonel uzak yedek (Supabase): kuruluysa yerel defterle BİRLEŞTİRİLİR
+    (Render'da DATA_DIR=/tmp olduğu için restart/redeploy yereli siler; yedek
+    haftalık karnenin boşalmasını engeller). Supabase yoksa hiçbir şey değişmez.
+    """
+    global _karne_defteri
+    if _pkg._karne_defteri is None:
+        setattr(_pkg, "_karne_defteri", KarneDefteri())
+        try:
+            _state_persistence.karne_defteri_yukle(_pkg._karne_defteri, _pkg._supabase_store_ref)
+        except Exception as exc:  # noqa: BLE001 - yedek sorunu karneyi engellemesin
+            _pkg.logger.debug("Karne uzak yedeği yüklenemedi: %s", exc)
+    return _pkg._karne_defteri
+
+
+# Telegram tek mesaj sınırı 4096; `kirp()` sondan kestiği için karne (mesajın
+# ALTINDA) kaybolabilirdi. Bu sınırın üstünde karne ikinci mesaj olarak gider.
+_MESAJ_GUVENLI_SINIR = 3900
+
+
+# Batch 8 / C2 (8.4): digest tamponu kalıcılığı da `state/persistence.py`'de.
+DIGEST_PENDING_SUPABASE_KEY = _state_persistence.DIGEST_PENDING_SUPABASE_KEY
+
+
+DIGEST_PENDING_DOSYA = _state_paths.DIGEST_PENDING_DOSYA
+
+
 def digest_tamponu_kaydet(store=None, data_dir=None) -> bool:
     """Bekleyen gün içi adayları Supabase + diske yazar."""
     return _state_persistence.digest_tamponu_kaydet(
@@ -555,25 +546,34 @@ def digest_tamponu_yukle(store=None, data_dir=None) -> int:
     return sayi
 
 
-# === GÜNLÜK ÖZET ===
-last_run_stats = {}
+_POST_CLOSE_DIFF_LABELS = {
+    "KIRILIM_TEYITLI": "🏁 Kırılım teyitli",
+    "RETEST_BASARILI": "🔁 Retest başarılı",
+    "KIRILIM_GECERSIZLESTI": "❌ Kırılım geçersizleşti",
+}
 
 
-def son_tarama_kaydet(store=None, data_dir=None) -> bool:
-    """Son listeyi Supabase + diske kaydeder (bkz. state.persistence)."""
-    return _state_persistence.son_tarama_kaydet(
-        _pkg._live_state,
-        store=_pkg._supabase_store_ref if store is None else store,
-        data_dir=data_dir,
-    )
+# --- İLERİ TEST (gölge defter) ----------------------------------------------
+# 2026-10-25: Ölçümün açık kalan tek sorusu "kama + üst TF aynı yönde" bayrağı
+# örneklem DIŞINDA işe yarıyor mu? Cevap, gönderilen her uyarının 24 bar sonraki
+# sonucunu kaydetmekle verilir (docs/arastirma/PUANLAMA_MIMARISI_2026-10-25.md
+# §11.4). Bu iş mesaj GÖNDERMEZ, eşik DEĞİŞTİRMEZ; yalnız kayıt tutar.
+ILERI_TEST_GECE_SAAT = 19          # BIST kapanışından sonra, gece mesaisi yok
 
 
-def son_tarama_yukle(store=None, data_dir=None) -> int:
-    """Kayıtlı son taramayı yükler (bkz. state.persistence)."""
-    return _state_persistence.son_tarama_yukle(
-        _pkg._live_state,
-        store=_pkg._supabase_store_ref if store is None else store,
-        data_dir=data_dir,
-    )
+_ileri_test_son_gece = ""          # bu süreçte işin koştuğu gün (YYYY-MM-DD)
+
+
+# --- GECE DENETİMİ (#2 tutarlılık · #3 ölçüm tazeleme) -----------------------
+# 2026-10-25: Gece işi iki soruyu yeniden sorar ama hiçbir şeyi DEĞİŞTİRMEZ:
+#   1. Canlıda gönderilen uyarı, aynı barlarla yeniden oynatıldığında motor
+#      tarafından yine üretiliyor mu? (`tutarlilik.py`)
+#   2. "kama + üst TF aynı yönde" bayrağı bayraksız uyarılardan ölçülebilir
+#      biçimde fazla veriyor mu? (`olcum_tazele.py`)
+# Sonuç loga + `gece_raporu` tablosuna yazılır. DM yalnız EYLEM gerektiren
+# sonuçta gider (sapma ya da "bayrak kaldırılsın"); gece 03:00 mesajı yok ve
+# öneri kendiliğinden uygulanmaz. Toplam iş süre sınırlıdır (en fazla 10 replay)
+# ve yalnız seans kapalıyken koşar; canlı taramayı bekletmez.
+_gece_denetim_son_gun = ""        # bu süreçte denetimin koştuğu gün (YYYY-MM-DD)
 
 

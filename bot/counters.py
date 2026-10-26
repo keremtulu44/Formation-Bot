@@ -91,6 +91,44 @@ from transport import telegram as _transport_telegram
 
 import main as _pkg  # geç bağlama: yamalı adlar _pkg.X (plan §3)
 
+def _note_pattern_found(stock: str, timeframe: str) -> None:
+    """Günlük BENZERSİZ formasyon sayacını güncelle (aynı hisse bir kez sayılır; A9 düzeltmesi).
+    Mevcut TF davranışı (tarama, alert, digest) bozulmaz; sadece istatistik metrik düzeltilir.
+    Aynı hisse farklı TF'de (1h, 2h, 4h, 1d) aynı formasyon gösterirse, tekrar sayılmaz."""
+    # GÖREV 5 (A9): Multi-timeframe aynı formasyon tekrar sayılmasını önle
+    # Yalnızca hisse adı (TF'den bağımsız) anahtar olarak kullanılır
+    _pkg._daily_pattern_keys.add(f"{str(stock).upper()}")
+    _pkg.daily_stats['patterns_found'] = len(_pkg._daily_pattern_keys)
+
+
+def _note_basarisiz_kirilim(stock: str, timeframe: str, bar_time=None) -> None:
+    """Başarısız kırılımı günde bir kez sayar (public özet satırı için)."""
+    anahtar = f"{str(stock).upper()}|{str(timeframe).lower()}|{bar_time}"
+    if anahtar in _pkg._daily_basarisiz_keys:
+        return
+    _pkg._daily_basarisiz_keys.add(anahtar)
+    # Restart tabanı varsa sayı onun üstüne eklenir (çift sayım olmaz).
+    yeni = len(_pkg._daily_basarisiz_keys) - (
+        1 if "__restart_tabani__" in _pkg._daily_basarisiz_keys else 0)
+    _pkg.daily_stats['basarisiz_kirilim'] = _pkg._daily_basarisiz_tabani + yeni
+    _pkg._gunluk_sayac_kaydet()
+
+
+def _note_unannounced_invalidation(
+    stock: str, timeframe: str, formation_id=None, bar_time=None
+) -> None:
+    """Teslim edilmemiş teyidin geçersizleşmesini günde bir kez say (18:45 özeti için)."""
+    kimlik = str(formation_id or bar_time or "").strip()
+    anahtar = f"{str(stock).upper()}|{str(timeframe).lower()}|{kimlik}"
+    if anahtar in _pkg._daily_unannounced_invalidation_keys:
+        return
+    _pkg._daily_unannounced_invalidation_keys.add(anahtar)
+    _pkg.daily_stats['sessiz_gecersizlesme_sayisi'] = int(
+        _pkg.daily_stats.get('sessiz_gecersizlesme_sayisi') or 0
+    ) + 1
+    _pkg._gunluk_sayac_kaydet()
+
+
 def _gunluk_sayac_kaydet() -> None:
     """Günlük sayaçların kalıcı kopyasını yazar (I/O hatası botu durdurmaz)."""
     try:
@@ -153,44 +191,6 @@ def _gunluk_sayac_yukle() -> None:
         _pkg.daily_stats['basarisiz_kirilim'] = _pkg._daily_basarisiz_tabani
     if yuklenen:
         _pkg.logger.info("Günlük sayaçlar restart'tan geri yüklendi: %s", yuklenen)
-
-
-def _note_basarisiz_kirilim(stock: str, timeframe: str, bar_time=None) -> None:
-    """Başarısız kırılımı günde bir kez sayar (public özet satırı için)."""
-    anahtar = f"{str(stock).upper()}|{str(timeframe).lower()}|{bar_time}"
-    if anahtar in _pkg._daily_basarisiz_keys:
-        return
-    _pkg._daily_basarisiz_keys.add(anahtar)
-    # Restart tabanı varsa sayı onun üstüne eklenir (çift sayım olmaz).
-    yeni = len(_pkg._daily_basarisiz_keys) - (
-        1 if "__restart_tabani__" in _pkg._daily_basarisiz_keys else 0)
-    _pkg.daily_stats['basarisiz_kirilim'] = _pkg._daily_basarisiz_tabani + yeni
-    _pkg._gunluk_sayac_kaydet()
-
-
-def _note_pattern_found(stock: str, timeframe: str) -> None:
-    """Günlük BENZERSİZ formasyon sayacını güncelle (aynı hisse bir kez sayılır; A9 düzeltmesi).
-    Mevcut TF davranışı (tarama, alert, digest) bozulmaz; sadece istatistik metrik düzeltilir.
-    Aynı hisse farklı TF'de (1h, 2h, 4h, 1d) aynı formasyon gösterirse, tekrar sayılmaz."""
-    # GÖREV 5 (A9): Multi-timeframe aynı formasyon tekrar sayılmasını önle
-    # Yalnızca hisse adı (TF'den bağımsız) anahtar olarak kullanılır
-    _pkg._daily_pattern_keys.add(f"{str(stock).upper()}")
-    _pkg.daily_stats['patterns_found'] = len(_pkg._daily_pattern_keys)
-
-
-def _note_unannounced_invalidation(
-    stock: str, timeframe: str, formation_id=None, bar_time=None
-) -> None:
-    """Teslim edilmemiş teyidin geçersizleşmesini günde bir kez say (18:45 özeti için)."""
-    kimlik = str(formation_id or bar_time or "").strip()
-    anahtar = f"{str(stock).upper()}|{str(timeframe).lower()}|{kimlik}"
-    if anahtar in _pkg._daily_unannounced_invalidation_keys:
-        return
-    _pkg._daily_unannounced_invalidation_keys.add(anahtar)
-    _pkg.daily_stats['sessiz_gecersizlesme_sayisi'] = int(
-        _pkg.daily_stats.get('sessiz_gecersizlesme_sayisi') or 0
-    ) + 1
-    _pkg._gunluk_sayac_kaydet()
 
 
 def reset_daily_if_needed():

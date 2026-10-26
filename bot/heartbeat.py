@@ -97,35 +97,6 @@ def _heartbeat_icerik_ozeti(payload: dict) -> str:
                       ensure_ascii=False, sort_keys=True, default=str)
 
 
-def _heartbeat_yasi_sn(simdi: _pkg.datetime = None) -> float:
-    """heartbeat.json'daki `last_scan` damgasının yaşı (saniye); okunamazsa None.
-
-    Denetim B-4: /health artık botun canlı olup olmadığını bu değerle raporlar.
-    Dosya yoksa/bozuksa uydurma değer üretilmez, None döner ('bilinmiyor').
-    """
-    try:
-        with open(_pkg._heartbeat_yolu(), "r", encoding="utf-8") as f:
-            ham = json.load(f).get("last_scan")
-        if not ham:
-            return None
-        damga = _pkg.datetime.fromisoformat(str(ham))
-        if damga.tzinfo is None:
-            damga = ISTANBUL_TZ.localize(damga)
-        return max(0.0, ((simdi or _pkg.datetime.now(ISTANBUL_TZ)) - damga).total_seconds())
-    except Exception:
-        return None
-
-
-def _heartbeat_yolu() -> str:
-    """write_heartbeat ile AYNI dizin çözümlemesini kullanır (tek davranış)."""
-    try:
-        from config import DATA_DIR
-        data_dir = DATA_DIR
-    except ImportError:  # pragma: no cover - config her zaman var; güvenlik ağı
-        data_dir = "./bot_data"
-    return os.path.join(data_dir, "heartbeat.json")
-
-
 def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
     """Botun yaşadığını dışarıdan anlamak için heartbeat dosyası.
     Dışarıdan izleme: `jq .last_scan bot_data/heartbeat.json` 2 saatten eskiyse bot takılmış/kapanmıştır."""
@@ -226,5 +197,34 @@ def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
         setattr(_pkg, "_son_heartbeat_zamani", simdi)
     except Exception as e:
         _pkg.logger.warning(f"Heartbeat yazılamadı: {e}")
+
+
+def _heartbeat_yolu() -> str:
+    """write_heartbeat ile AYNI dizin çözümlemesini kullanır (tek davranış)."""
+    try:
+        from config import DATA_DIR
+        data_dir = DATA_DIR
+    except ImportError:  # pragma: no cover - config her zaman var; güvenlik ağı
+        data_dir = "./bot_data"
+    return os.path.join(data_dir, "heartbeat.json")
+
+
+def _heartbeat_yasi_sn(simdi: _pkg.datetime = None) -> float:
+    """heartbeat.json'daki `last_scan` damgasının yaşı (saniye); okunamazsa None.
+
+    Denetim B-4: /health artık botun canlı olup olmadığını bu değerle raporlar.
+    Dosya yoksa/bozuksa uydurma değer üretilmez, None döner ('bilinmiyor').
+    """
+    try:
+        with open(_pkg._heartbeat_yolu(), "r", encoding="utf-8") as f:
+            ham = json.load(f).get("last_scan")
+        if not ham:
+            return None
+        damga = _pkg.datetime.fromisoformat(str(ham))
+        if damga.tzinfo is None:
+            damga = ISTANBUL_TZ.localize(damga)
+        return max(0.0, ((simdi or _pkg.datetime.now(ISTANBUL_TZ)) - damga).total_seconds())
+    except Exception:
+        return None
 
 
