@@ -170,8 +170,12 @@ def test_seed_yedegi_repo_verisini_okur(tmp_path, monkeypatch):
 def test_pickle_git_disinda():
     kaynak = open(".gitignore", encoding="utf-8").read()
     assert "bot_data/*.pkl" in kaynak
-    # data.py okuma sırası: JSON bloğu pickle bloğundan önce gelmeli
-    kod = open("data.py", encoding="utf-8").read()
+    # data okuma sırası: JSON bloğu pickle bloğundan önce gelmeli.
+    # 2026-10-26 modülerleştirme: kod data/ paketinde (seed_cache.py).
+    from pathlib import Path
+    kod = "\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(Path("data").glob("*.py"))
+    )
     assert kod.index("# JSON birincil") < kod.index("eski pickle dosyasından yüklendi")
 
 
