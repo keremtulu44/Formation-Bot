@@ -128,33 +128,38 @@ def test_puan_kartta_yok():
 
 
 def test_ust_tf_satiri_yonu_soyler():
-    """Üst TF satırı yön uyumunu söyler; yön bilinmiyorsa 'aynı yönde' DEMEZ.
+    """Üst TF satırı yön uyumunu söyler; yön uyumu yoksa 'uyumlu' DEMEZ.
 
     `mtf_destek` yalnız "üst TF'de aktif formasyon var" demek. Eskiden onay
     sayılıp "4 saatlik de aynı yönde" yazılıyordu; ters yönlü üst TF'de de aynı
-    cümle kuruluyordu (yanlış iddia).
+    cümle kuruluyordu (yanlış iddia). 2026-10-26 kullanıcı isteğiyle satır
+    ikonlu/net ifadeye geçti: `uyumlu` / `uyumsuz` / `onayı yok`. Kısa TF kodu
+    (`4s`) korunur — sözcüklü hâl 265 px ile 262,8 px satır bütçesini aşıyordu.
     """
     import notifier
+    n = notifier.TelegramNotifier()
     ortak = dict(_ornek_veri())
     ortak.update({"mtf_destek": True, "mtf_uyum": 4})
-    assert "· 4 saatlik de aynı yönde" in notifier.TelegramNotifier().format_message(ortak)
+    assert "onayı var ✓ — uyumlu" in n.format_message(ortak)
+
     ortak2 = dict(_ornek_veri())
     ortak2.update({"mtf_destek": True, "mtf_uyum": 0})
-    metin = notifier.TelegramNotifier().format_message(ortak2)
-    assert "· 4 saatlik: yön uyumu yok" in metin
-    assert "aynı yönde" not in metin
+    metin = n.format_message(ortak2)
+    assert "onayı var — uyumsuz" in metin
+    assert "uyumlu" not in metin and "aynı yönde" not in metin
+
     ortak3 = dict(_ornek_veri())
     ortak3.update({"mtf_destek": False, "mtf_uyum": 0})
-    assert "· 4 saatlik onayı yok" in notifier.TelegramNotifier().format_message(ortak3)
+    assert "onayı yok ✗" in n.format_message(ortak3)
 
 
 def test_ust_tf_satiri_piksel_butcesine_sigar():
-    """Üst TF satırının üç hâli de 283 px satır bütçesini bölünmeden geçer."""
+    """Üst TF satırının üç GERÇEK hâli de satır bütçesini bölünmeden geçer."""
     import notifier
     from telegram_measure import genislik
     butce = notifier._kart_esik_px()
-    for metin in ("· 4 saatlik de aynı yönde", "· 4 saatlik: yön uyumu yok",
-                  "· 4 saatlik onayı yok", "· günlük: yön uyumu yok"):
+    for metin in ("◆ 4s onayı var ✓ — uyumlu", "◆ 4s onayı var — uyumsuz",
+                  "◆ 4s onayı yok ✗", "◆ 1g onayı var ✓ — uyumlu"):
         assert genislik(metin) <= butce, (metin, genislik(metin), butce)
 
 

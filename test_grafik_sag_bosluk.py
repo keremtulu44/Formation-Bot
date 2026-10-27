@@ -384,13 +384,15 @@ def _daralan(apex_bar):
 
 
 @pytest.mark.parametrize("apex_bar, son_x, isaret_x", [
-    (25, 25, 25),       # boşluğun İÇİNDE → çizgiler apex'te biter, ✕ kesişimde
-    # boşluğun ÖTESİNDE: doğruların GERÇEK kesişimi (bar 25) apex_bar'dan önce
-    # gelir → çizgiler kesişimde biter. Eski davranış (kenara kadar çiz) tepeyi
-    # aşıp X çizen doğrular üretiyordu (kullanıcı: "kırpılıyormuş gibi").
+    (25, 25, 25),       # boşluğun İÇİNDE → çizgiler kesişimde biter, ✕ kesişimde
+    # 2026-10-26 kullanıcı kararı: bant çizgisi SON MUMA kadar uzasın (eski kod
+    # apex/end_bar'de kesiyordu, bant yarım kalıyordu). Doğruların GERÇEK
+    # kesişimi (bar 25) hesaplanır ve çizim orada biter — tepeyi aşıp X çizen
+    # ters dönmüş doğru ÜRETİLMEZ (kullanıcı: "kırpılıyormuş gibi").
     (40, 25, None),
-    # GERİDE kaldı → bant apex'te biter; kesişip ters dönen çizgi uydurulmaz.
-    (20, 20, None),
+    # GERİDE kaldı → aynı kural: çizgiler geçmiş apex'e kırpılmaz, gerçek
+    # kesişimde (25) biter; ters dönen çizgi uydurulmaz, ✕ de çizilmez.
+    (20, 25, None),
 ])
 def test_bant_apeks_kurallari(apex_bar, son_x, isaret_x):
     ax = fc._eksen()
@@ -412,8 +414,13 @@ def test_bosluk_yokken_bant_ve_apeks_eski_davranista():
     assert [ln for ln in ax.lines if ln.get_marker() == "x"] == []
 
 
-def test_tam_karede_apeks_bosluga_dusunce_cizgiler_orada_biter(tmp_path):
-    """Gerçek kare: apex son mumdan 5 bar sonra → çizgiler orada biter, ✕ kesişimde."""
+def test_tam_karede_apeks_bosluga_dusunce_cizgiler_uzanir(tmp_path):
+    """Gerçek kare: apex boşluğa düşer → ✕ apex'te, bant çizgileri boşluğun SONUNA uzar.
+
+    2026-10-26 kullanıcı kararı: bant çizgisi son muma (ve sağ boşluğa) kadar
+    UZAR; eski davranış apex'te kesiyordu ve bant yarım kalıyordu. Apex işareti
+    yine kesişim noktasında kalır — çizgi ucu ile ✕ artık aynı x değil.
+    """
     ust, alt = (200, 53.0, 244, 51.0), (200, 49.0, 244, 51.0)      # mutlak bar; 244'te kesişir
     cift = _cift(hb1=ust[0], hp1=ust[1], hb2=ust[2], hp2=ust[3],
                  lb1=alt[0], lp1=alt[1], lb2=alt[2], lp2=alt[3],
@@ -422,13 +429,16 @@ def test_tam_karede_apeks_bosluga_dusunce_cizgiler_orada_biter(tmp_path):
     g = _goruntu(_cerceve(240, "1h"), "1h", cift)
     fig, meta, _ = _kareyi_ciz(g, "1h", tmp_path)
     ax, n = fig.axes[0], meta["mum_sayisi"]
-    apex_x = 244 - g["sol"]                                  # 184
-    assert n <= apex_x < n + meta["kare"]["sag_bosluk"]
+    apex_x = 244 - g["sol"]
+    bosluk = meta["kare"]["sag_bosluk"]
+    assert n <= apex_x < n + bosluk                       # apex boşluğun İÇİNDE
     kalin = grafik.SABITLER["cizgi_kalinlik"]["formasyon"]
     bantlar = [ln for ln in ax.lines
                if ln.get_color() == grafik.PALET["formasyon"] and len(ln.get_xdata()) > 5
                and abs(ln.get_linewidth() - kalin) < 1e-9 and ln.get_linestyle() in ("-", "solid")]
-    assert sorted(int(ln.get_xdata()[-1]) for ln in bantlar) == [apex_x, apex_x]
+    son_x = n + bosluk - 1                                 # boşluğun son barı
+    assert sorted(int(ln.get_xdata()[-1]) for ln in bantlar) == [son_x, son_x]
+    assert son_x > apex_x                                  # çizgi apex'i GEÇER
     isaretler = [ln for ln in ax.lines if ln.get_marker() == "x"]
     assert len(isaretler) == 1 and int(isaretler[0].get_xdata()[0]) == apex_x
     assert float(isaretler[0].get_ydata()[0]) == pytest.approx(51.0, abs=1e-6)

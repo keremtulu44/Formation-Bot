@@ -138,8 +138,10 @@ _KART_OLAY_KISA = {"RETEST_BASARILI": "seviye tuttu"}
 
 # mtf_destek yalnız 1h→4h ve 4h→1g için hesaplanır (main.py); etiket bu yüzden
 # alarm TF'sine göre yazılır. Eskiden her durumda "4h destekliyor" deniyordu.
-# Kart ızgarası kısa kodu (`4s`) kullanır; ÜST TF satırı sözcükle yazılır çünkü
-# tek başına "4s de onaylı" neyin onaylandığını söylemiyordu.
+# Kısa kod (`4s`) KART IZGARASINDA ve ÜST TF satırında kullanılır: sözcüklü hâl
+# ("4 saatlik ...") 265 px'a çıkıp 262,8 px satır bütçesini aşıyordu (2026-10-26).
+# Uzun karşılıklar yalnız geri uyumluluk için dışa verilir; kart üretimi bunları
+# KULLANMAZ — piksel bütçesi kısa kodu zorunlu kılar.
 _KART_UST_TF = {"1h": "4s", "2h": "4s", "4h": "1g"}
 
 _KART_UST_TF_SOZ = {"1h": "4 saatlik", "2h": "4 saatlik", "4h": "günlük"}
