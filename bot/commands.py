@@ -347,6 +347,27 @@ def _komut_durum(_arguman: str) -> str:
     if _pkg.daily_stats.get('alerts_break_close_invalid'):
         huni += f" · {_pkg.daily_stats['alerts_break_close_invalid']} kapanış teyidi yok"
     satirlar.append(huni)
+    # P2 — arşiv sağlığı (gece ölçümünün dayandığı 4 tablo; P0_P1_P2 planı madde 3)
+    try:
+        arsiv = getattr(_pkg, "_son_arsiv_sagligi", None)
+        olcum = getattr(_pkg, "_son_olcum_ozeti", None)
+        tut = getattr(_pkg, "_son_tutarlilik_ozeti", None)
+        if isinstance(arsiv, dict) and arsiv.get("sayilar"):
+            say = arsiv["sayilar"]
+            parcalar = []
+            for k in ("f2_formations", "f2_events", "f2_outcome_links", "f2_snapshots"):
+                v = say.get(k)
+                parcalar.append(f"{k} {v if v is not None else '—'}")
+            arsiv_satri = "🗄 Arşiv: " + " · ".join(parcalar)
+            if arsiv.get("uyarilar"):
+                arsiv_satri += " — " + "; ".join(arsiv["uyarilar"])[:120]
+            satirlar.append(arsiv_satri)
+        if isinstance(olcum, dict) and olcum.get("karar"):
+            satirlar.append(f"🌙 Gece ölçümü ({olcum.get('gun','')}): {olcum.get('karar')} — {olcum.get('metin','')[:140]}")
+        if isinstance(tut, dict) and tut.get("sapma") is not None:
+            satirlar.append(f"🔬 Tutarlılık ({tut.get('gun','')}): {tut.get('sapma')} sapma / {tut.get('kontrol',0)} kontrol")
+    except Exception:
+        pass
     gosterim = None
     gosterim_public = None
     gosterim_grafik = None

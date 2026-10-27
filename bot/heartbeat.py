@@ -91,6 +91,15 @@ from transport import telegram as _transport_telegram
 
 import main as _pkg  # geç bağlama: yamalı adlar _pkg.X (plan §3)
 
+def _arsiv_snapshoti():
+    try:
+        gec = getattr(_pkg, "_son_arsiv_sagligi", None)
+        if isinstance(gec, dict) and gec:
+            return gec
+        return None
+    except Exception:
+        return None
+
 def _heartbeat_icerik_ozeti(payload: dict) -> str:
     """`last_scan` dışındaki alanların özeti: değişiklik tespiti için."""
     return json.dumps({k: v for k, v in payload.items() if k != "last_scan"},
@@ -182,6 +191,7 @@ def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
             "veri_sorunlari": ({k: [x['tip'] for x in v]
                                for k, v in _pkg._deque_manager_ref.sureklilik_sorunlari.items()}
                               if _pkg._deque_manager_ref else {}),
+            "arsiv_sagligi": _arsiv_snapshoti(),
         }
         icerik = _pkg._heartbeat_icerik_ozeti(payload)
         simdi = time.time()
