@@ -366,7 +366,7 @@ def _komut_durum(_arguman: str) -> str:
             satirlar.append(f"🌙 Gece ölçümü ({olcum.get('gun','')}): {olcum.get('karar')} — {olcum.get('metin','')[:140]}")
         if isinstance(tut, dict) and tut.get("sapma") is not None:
             satirlar.append(f"🔬 Tutarlılık ({tut.get('gun','')}): {tut.get('sapma')} sapma / {tut.get('kontrol',0)} kontrol")
-    except Exception:
+    except Exception:  # noqa: S110 - opsiyonel gece ölçümü/tutarlılık satırları; hata mesajı düşürmesin
         pass
     gosterim = None
     gosterim_public = None

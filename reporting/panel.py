@@ -132,7 +132,7 @@ def panel_raporu(arguman: str, durum, formations, aktif_hisseler, tarama_suruyor
         hsat = _huni_satiri(daily_stats if daily_stats is not None else st.get("_daily_stats") or {})
         if hsat:
             satirlar.append(hsat)
-    except Exception:
+    except Exception:  # noqa: S110 - opsiyonel huni satırı; hata paneli düşürmesin
         pass
     # Eşik altı adaylar: liste ve sayaçlarda görünürler ama alarm ÜRETMEZLER.
     # (Eskiden yalnız debug log'da düşüyorlardı; kullanıcı "kaç tanesi

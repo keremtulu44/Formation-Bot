@@ -976,6 +976,14 @@ class TelegramNotifier:
                                 else "Şu an izlenen formasyon yok.")
         if karne_kisa:
             satirlar += ["", karne_kisa]
+        # 2026-10-27 şablon yenilemesinde ÇAĞRILARI düşen günlük bağlam blokları.
+        # Yaşam döngüsü olay sayıları + son başarılı tam tarama zamanı özetin
+        # alt bilgisidir; import vardı, kullanım yoktu (sessiz regresyon).
+        if isinstance(gun_ozeti, dict):
+            for blok in (_summary_lifecycle_counts(gun_ozeti),
+                         _summary_last_full_scan(gun_ozeti)):
+                if blok:
+                    satirlar += ["", blok]
         satirlar.append("📌 yatırım tavsiyesi değildir")
         return metni_sigdir("\n".join(satirlar), guvenlik=1.0)
 
@@ -1051,6 +1059,13 @@ class TelegramNotifier:
                            "   eski formasyonlar gösterilmedi.\n")
             else:
                 baslik += "\nŞu an öne çıkan teyitli olay ya da sıkışma yok.\n"
+        # 2026-10-27 şablon yenilemesinde ÇAĞRILARI düşen günlük bağlam blokları.
+        # DM özetinde de public özetteki aynı alt bilgi bulunmalı (tek kaynak).
+        if isinstance(gun_ozeti, dict):
+            for blok in (_summary_lifecycle_counts(gun_ozeti),
+                         _summary_last_full_scan(gun_ozeti)):
+                if blok:
+                    baslik += "\n" + blok + "\n"
         baslik += "\n📌 yatırım tavsiyesi değildir"
         return metni_sigdir(baslik, guvenlik=1.0)
 

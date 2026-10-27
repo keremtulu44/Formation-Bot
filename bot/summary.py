@@ -893,7 +893,7 @@ def _gece_denetimi(now: _pkg.datetime) -> None:
             setattr(_pkg, "_son_arsiv_sagligi", (olcum_sonuc.get("veri") or {}).get("arsiv"))
             setattr(_pkg, "_son_olcum_ozeti", {"karar": olcum_sonuc.get("karar"), "metin": olcum_sonuc.get("metin"), "gun": gun})
             setattr(_pkg, "_son_tutarlilik_ozeti", {"sapma": tutarlilik_sonuc.get("sapma"), "kontrol": tutarlilik_sonuc.get("kontrol"), "gun": gun})
-        except Exception:
+        except Exception:  # noqa: S110 - opsiyonel gece özeti alanları; setattr hatası özeti engellemesin
             pass
         _pkg._gece_onerisi_gonder(tutarlilik_sonuc, olcum_sonuc, gun=gun)
         setattr(_pkg, "_gece_denetim_son_gun", gun)
