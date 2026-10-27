@@ -829,6 +829,7 @@ def _panel_raporu(arguman: str = "", tamamlandi: bool = False) -> str:
         tamamlandi=tamamlandi,
         kapsam_notu=_pkg._kismi_kapsam_notu(),
         bos_analiz_mesaji=_pkg._bos_analiz_mesaji(tamamlandi=tamamlandi),
+        daily_stats=getattr(_pkg, "daily_stats", None),
     )
 
 

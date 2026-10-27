@@ -735,6 +735,13 @@ def main_loop():
                 _pkg._ileri_test_gece(now)
                 # Sonuç yazıldıktan SONRA denetim: aynı günün taze defteri okunur.
                 _pkg._gece_denetimi(now)
+                # P2: BIST kapalıyken de mirror kuyruğu boşalt (tatil/hafta sonu 48s idle'da queue 0 kalsın)
+                try:
+                    if _pkg._supabase_store_ref is not None:
+                        from state.formation_mirror import get_mirror_queue
+                        get_mirror_queue().flush(_pkg._supabase_store_ref)
+                except Exception:  # noqa: BLE001
+                    _pkg.logger.debug("BIST KAPALI mirror flush atlandı", exc_info=True)
                 if _pkg._bekle_veya_tarama(sleep_time):
                     _pkg.logger.info("Seans dışı analiz isteği geldi; ana döngü uyandırıldı")
                     continue

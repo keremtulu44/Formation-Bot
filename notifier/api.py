@@ -1074,6 +1074,28 @@ class TelegramNotifier:
                 event_counts = _summary_lifecycle_counts(gun_ozeti)
                 if event_counts:
                     baslik += event_counts + "\n"
+            # P1: aday hunisi (kayıp sayaçlar) özetin 📈 bloğunda görünür; sessiz düşüş olmaz.
+            try:
+                huni = []
+                for anahtar, etiket in (
+                    ("patterns_found", "üretildi"),
+                    ("alerts_below_threshold", "eşik altı"),
+                    ("alerts_state_disabled", "state dışı"),
+                    ("alerts_deferred", "digest"),
+                    ("alerts_kuyruk", "kuyruk"),
+                    ("alerts_bar_kapanmadi", "kapanmamış bar"),
+                    ("alerts_break_close_invalid", "kapanış teyidi yok"),
+                ):
+                    try:
+                        deg = int(gun_ozeti.get(anahtar) or 0)
+                    except Exception:
+                        deg = 0
+                    if deg:
+                        huni.append(f"{deg} {etiket}")
+                if huni:
+                    baslik += "🔎 Huni: " + " · ".join(huni) + "\n"
+            except Exception:
+                pass
         scan_line = _summary_last_full_scan(gun_ozeti)
         if scan_line:
             baslik += scan_line + "\n"
