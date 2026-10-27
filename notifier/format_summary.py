@@ -197,7 +197,7 @@ def movers_snapshot(deque_manager, limit: int = 3) -> Dict[str, List[Dict]]:
         try:
             if _tur(sym) != "hisse":
                 continue
-        except Exception:
+        except Exception:  # noqa: S110 - sembol türü çözümlenemezse hisse varsayılır
             pass
         try:
             df = deque_manager.to_gunluk_dataframe(sym)  # type: ignore[attr-defined]
@@ -261,7 +261,7 @@ def _format_movers_satirlari(movers: Dict[str, List[Dict]]) -> List[str]:
             )
             if parca:
                 satirlar.append(f"• Yükselen: {parca}")
-        except Exception:
+        except Exception:  # noqa: S110 - opsiyonel 'yükselen' satırı; biçim hatası özeti düşürmesin
             pass
     if dusen:
         try:
@@ -271,7 +271,7 @@ def _format_movers_satirlari(movers: Dict[str, List[Dict]]) -> List[str]:
             )
             if parca:
                 satirlar.append(f"• Düşen: {parca}")
-        except Exception:
+        except Exception:  # noqa: S110 - opsiyonel 'düşen' satırı; biçim hatası özeti düşürmesin
             pass
     return satirlar
 

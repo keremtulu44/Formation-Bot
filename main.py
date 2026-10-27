@@ -23,20 +23,47 @@ import socket
 import threading
 from datetime import datetime, timedelta, time as dt_time
 
-import pandas as pd
+# ---------------------------------------------------------------------------
+# GEÇ BAĞLAMA ALIASI — script modu (`python main.py`) düzeltmesi (2026-10-27)
+# ---------------------------------------------------------------------------
+# bot/* alt modülleri `import main as _pkg` ile bu dosyanın namespace'ine
+# ÇAĞRI ANINDA erişir (bkz. MODULERLESTIRME_PLANI §3). `python main.py` ile
+# script olarak çalışınca CPython bu dosyayı `__main__` adıyla sys.modules'e
+# koyar; statestore/app/... içindeki `import main` ise AYRI bir modül nesnesi
+# oluşturup dosyayı İKİNCİ kez çalıştırırdı. O ikinci çalıştırmada `bot` henüz
+# yarım yüklenmiş olduğundan `from bot import *` `signal_handler`'ı getirmez ve
+# aşağıdaki sinyal kaydı NameError verirdi — Render logundaki
+# "NameError: name 'signal_handler' is not defined" hatasının kök nedeni budur.
+# İki ayrı modül nesnesi ayrıca `_pkg.X` ile okunan yamalı adların
+# (monkeypatch, _shutdown_requested, _logging_kuruldu) __main__'den sapmasına
+# yol açardı. Alias ile script modunda `main` ve `__main__` AYNI nesne olur:
+# ne ikinci çalıştırma olur ne de namespace bölünür. `import main` (testler /
+# modül modu) yolunda __name__ == "main" olduğu için bu blok çalışmaz.
+#
+# NOT: `from bot import *` satırının (dolayısıyla bot içindeki `import main`'in)
+# ÜSTÜNDE kalmalıdır.
+if __name__ == "__main__" and sys.modules.get("main") is not sys.modules.get("__main__"):
+    sys.modules["main"] = sys.modules["__main__"]
 
-import config
-from health_server import start_render_health_server
+import pandas as pd  # noqa: E402  (alias bilinçli olarak en üstte)
 
-from bot import *  # noqa: F403,F401  (dış API + yama yüzeyi)
+import config  # noqa: E402
+from health_server import start_render_health_server  # noqa: E402
+
+from bot import *  # noqa: F403,F401,E402  (dış API + yama yüzeyi)
 
 logger = logging.getLogger(__name__)
 
-signal.signal(signal.SIGTERM, signal_handler)
-
-signal.signal(signal.SIGINT, signal_handler)
 
 if __name__ == "__main__":
+    # Sinyal kaydı yalnızca GERÇEK giriş noktasında (ana thread) yapılır. Modül
+    # seviyesinde tutmak iki sorundu: (1) `import bot`/`import main` sırasındaki
+    # yarım yüklenmiş döngüsel importta `signal_handler` henüz bağlı değildi;
+    # (2) `signal.signal` yalnızca ana thread'de geçerlidir. Import zamanı
+    # kayıt zaten bot/__init__.py içinde yapılıyor; burada giriş noktası için
+    # açıkça (yeniden) bağlıyoruz. Aynı fonksiyon iki kez kaydedilmesi zararsız.
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
     setup_logging()
     # HTTP sunucusu main_loop'tan ÖNCE başlar: Render'ın health check'i ilk veri
     # yüklemesi sürerken de yanıt verir. Webhook modunda güncellemeler bu sunucudan
