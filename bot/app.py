@@ -440,12 +440,18 @@ def main_loop():
                             _pkg.logger.warning("Kapanış kuyruğu özetlenemedi: %s", kuyruk_hata)
                             acil_bekleyen = []
                     summary_payload = _pkg._daily_summary_payload(now)
-                    # Kapanış özetinde görünen kuyruk olayları da kullanıcıya bildirildi
-                    # sayılır; "Gün: N bildirim" satırı bunları eksik bırakmasın.
+                    # Kapanis ozetinde gorunen kuyruk olaylari da bildirildi sayilir
                     if acil_bekleyen:
                         summary_payload["alerts_sent"] = int(
                             summary_payload.get("alerts_sent") or 0) + len(acil_bekleyen)
-                    ozet = notifier.format_daily_summary(aktif, summary_payload)
+                    # Piyasa + gunun hareketi (1g) — daily close cache'ten, ek network yok
+                    try:
+                        from notifier.format_summary import movers_snapshot, piyasa_snapshot
+                        _piyasa = piyasa_snapshot(deque_manager)
+                        _movers = movers_snapshot(deque_manager)
+                    except Exception:
+                        _piyasa, _movers = {}, {"yukselen": [], "dusen": []}
+                    ozet = notifier.format_daily_summary(aktif, summary_payload, piyasa=_piyasa, movers=_movers)
                     bekleyen = (
                         _pkg._deferred_alert_buffer.items(now, limit=DEFERRED_ALERT_DIGEST_LIMIT)
                         if sh == deferred_alert_digest_time else []
@@ -532,10 +538,17 @@ def main_loop():
                         if sh == deferred_alert_digest_time:
                             kisa_karne = _pkg._haftalik_karne_kisa(now, deque_manager)
                         kapanis_mi = (sh == deferred_alert_digest_time)
+                        # Public ozet de ayni piyasa/movers blogunu tasir (DM ile birebir ayni kaynak)
+                        try:
+                            from notifier.format_summary import movers_snapshot as _m_snap, piyasa_snapshot as _p_snap
+                            _piyasa_p = _p_snap(deque_manager) if '_piyasa' not in locals() else _piyasa
+                            _movers_p = _m_snap(deque_manager) if '_movers' not in locals() else _movers
+                        except Exception:
+                            _piyasa_p, _movers_p = {}, {"yukselen": [], "dusen": []}
                         grup_ozet = notifier.format_public_summary(
                             aktif, summary_payload, izleme=bekleyen, karne_kisa=kisa_karne,
                             tarama_turu=_pkg.daily_stats.get('tarama_sayisi'),
-                            kapanis=kapanis_mi,
+                            kapanis=kapanis_mi, piyasa=_piyasa_p, movers=_movers_p,
                         )
                         if notifier.send_to_public(grup_ozet):
                             last_summary_public_sent[sh_str] = now.date()
@@ -735,6 +748,13 @@ def main_loop():
                 _pkg._ileri_test_gece(now)
                 # Sonuç yazıldıktan SONRA denetim: aynı günün taze defteri okunur.
                 _pkg._gece_denetimi(now)
+                # P2: BIST kapalıyken de mirror kuyruğu boşalt (tatil/hafta sonu 48s idle'da queue 0 kalsın)
+                try:
+                    if _pkg._supabase_store_ref is not None:
+                        from state.formation_mirror import get_mirror_queue
+                        get_mirror_queue().flush(_pkg._supabase_store_ref)
+                except Exception:  # noqa: BLE001
+                    _pkg.logger.debug("BIST KAPALI mirror flush atlandı", exc_info=True)
                 if _pkg._bekle_veya_tarama(sleep_time):
                     _pkg.logger.info("Seans dışı analiz isteği geldi; ana döngü uyandırıldı")
                     continue

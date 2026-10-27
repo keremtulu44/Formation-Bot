@@ -153,6 +153,129 @@ def _summary_last_full_scan(gun_ozeti: Dict) -> str:
             "   eski formasyonlar gösterilmedi.")
 
 
+PIYASA_SEMBOLLERI = ("XU100", "XAUUSD", "XAGUSD")
+
+
+def piyasa_snapshot(deque_manager) -> Dict[str, Dict]:
+    """Gunluk kapanistan piyasa ozeti: XU100 + XAUUSD/XAGUSD (fallback-safe)."""
+    sonuc: Dict[str, Dict] = {}
+    if deque_manager is None:
+        return sonuc
+    for sym in PIYASA_SEMBOLLERI:
+        try:
+            df = deque_manager.to_gunluk_dataframe(sym)  # type: ignore[attr-defined]
+        except Exception:
+            continue
+        if df is None or len(df) == 0:
+            continue
+        try:
+            son = float(df.iloc[-1]["close"])
+        except Exception:
+            continue
+        deg = None
+        if len(df) >= 2:
+            try:
+                onceki = float(df.iloc[-2]["close"])
+                if onceki:
+                    deg = (son - onceki) / onceki * 100.0
+            except Exception:
+                deg = None
+        sonuc[sym] = {"fiyat": son, "degisim": deg}
+    return sonuc
+
+
+def movers_snapshot(deque_manager, limit: int = 3) -> Dict[str, List[Dict]]:
+    """1g gunluk kapanistan en cok yukselen/dusen (fallback-safe)."""
+    if deque_manager is None:
+        return {"yukselen": [], "dusen": []}
+    try:
+        from config import sembol_turu as _tur
+    except Exception:
+        _tur = lambda s: "hisse"  # type: ignore
+    adaylar: List[Dict] = []
+    for sym in ACTIVE_STOCKS:
+        try:
+            if _tur(sym) != "hisse":
+                continue
+        except Exception:
+            pass
+        try:
+            df = deque_manager.to_gunluk_dataframe(sym)  # type: ignore[attr-defined]
+        except Exception:
+            continue
+        if df is None or len(df) < 2:
+            continue
+        try:
+            son = float(df.iloc[-1]["close"])
+            onceki = float(df.iloc[-2]["close"])
+            if not onceki:
+                continue
+            pct = (son - onceki) / onceki * 100.0
+            adaylar.append({"sembol": sym, "fiyat": son, "degisim": pct})
+        except Exception:
+            continue
+    try:
+        yukselen = sorted([a for a in adaylar if a["degisim"] > 0],
+                          key=lambda x: x["degisim"], reverse=True)[: max(0, int(limit))]
+        dusen = sorted([a for a in adaylar if a["degisim"] < 0],
+                       key=lambda x: x["degisim"])[: max(0, int(limit))]
+    except Exception:
+        yukselen, dusen = [], []
+    return {"yukselen": yukselen, "dusen": dusen}
+
+
+def _format_piyasa_satirlari(piyasa: Dict[str, Dict]) -> List[str]:
+    satirlar: List[str] = []
+    if not isinstance(piyasa, dict) or not piyasa:
+        return satirlar
+    for sym in PIYASA_SEMBOLLERI:
+        veri = piyasa.get(sym)
+        if not isinstance(veri, dict):
+            continue
+        fiyat = veri.get("fiyat")
+        deg = veri.get("degisim")
+        fiyat_str = _sayı(fiyat, 2) if fiyat is not None else ""
+        if deg is None:
+            satirlar.append(f"• {sym} {fiyat_str}".strip())
+        else:
+            try:
+                ok = "↑" if float(deg) > 0 else ("↓" if float(deg) < 0 else "→")
+                pct = f"%{abs(float(deg)):.2f}".replace(".", ",")
+            except Exception:
+                ok, pct = "", ""
+            satirlar.append(f"• {sym} {fiyat_str} {ok} {pct}".replace("  ", " ").strip())
+    return satirlar
+
+
+def _format_movers_satirlari(movers: Dict[str, List[Dict]]) -> List[str]:
+    satirlar: List[str] = []
+    if not isinstance(movers, dict):
+        return satirlar
+    yukselen = movers.get("yukselen") or []
+    dusen = movers.get("dusen") or []
+    if yukselen:
+        try:
+            parca = " · ".join(
+                f"{a.get('sembol')} %{abs(float(a.get('degisim') or 0)):.2f}".replace(".", ",")
+                for a in yukselen[:3] if isinstance(a, dict) and a.get("sembol")
+            )
+            if parca:
+                satirlar.append(f"• Yükselen: {parca}")
+        except Exception:
+            pass
+    if dusen:
+        try:
+            parca = " · ".join(
+                f"{a.get('sembol')} %{abs(float(a.get('degisim') or 0)):.2f}".replace(".", ",")
+                for a in dusen[:3] if isinstance(a, dict) and a.get("sembol")
+            )
+            if parca:
+                satirlar.append(f"• Düşen: {parca}")
+        except Exception:
+            pass
+    return satirlar
+
+
 def _summary_lifecycle_counts(gun_ozeti: Dict) -> str:
     if not isinstance(gun_ozeti, dict):
         return ""

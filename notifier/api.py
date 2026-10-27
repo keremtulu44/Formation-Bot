@@ -110,9 +110,13 @@ from notifier.format_kart import (
     quality_emoji,
 )
 from notifier.format_summary import (
+    _format_movers_satirlari,
+    _format_piyasa_satirlari,
     _public_izleme_adaylari,
     _summary_last_full_scan,
     _summary_lifecycle_counts,
+    movers_snapshot,
+    piyasa_snapshot,
 )
 class TelegramNotifier:
     def __init__(self, persistent_store=None, initial_store_data=None):
@@ -901,13 +905,9 @@ class TelegramNotifier:
 
     def format_public_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None,
                               izleme: List[Dict] = None, karne_kisa: str = "",
-                              tarama_turu=None, kapanis: bool = True) -> str:
-        """Grup sürümü kapanış/sabah özeti: sayılar + izleme listesi, teknik döküm yok.
-
-        `kapanis=False` (09:55 sabah notu): başlık ve izleme listesi başlığı değişir;
-        dün akşam gönderilen kuyruk yerine o an İZLENEN adaylar listelenir; gün
-        sıfırlandığı için "❌ bugün" satırı ve tarama sayısı yazılmaz.
-        """
+                              tarama_turu=None, kapanis: bool = True,
+                              piyasa: Dict = None, movers: Dict = None) -> str:
+        """Grup surumu kapanis/sabah ozeti: yeni iskelet piyasa + movers + teyitli/retest/sikisan."""
         simdi = datetime.now(ISTANBUL_TZ)
         aktif = [f for f in (aktif_formasyonlar or []) if isinstance(f, dict)]
         freshness_known = isinstance(gun_ozeti, dict) and "tam_tarama_guncel" in gun_ozeti
@@ -916,19 +916,29 @@ class TelegramNotifier:
         if freshness_known and not scan_current:
             aktif = []
             izleme = []
-        # Başlık eskiden "📊 13 Eki 19:30 kapanış · BIST formasyon özeti" idi ve
-        # 372 px ile sarmalanıyordu. Etiket öne, tarih alta taşınır: aynı kelime.
-        # (Grup tarafında "kapanış/sabah notu" ayrımı başlıkta okunmaya devam eder.)
         baslik = (f"📊 BIST kapanış · {_tr_tarih(simdi)}" if kapanis
                   else f"📊 BIST sabah notu · {_tr_tarih(simdi)}")
         satirlar = [baslik]
+        # Piyasa blogu (XU100 + XAUUSD/XAGUSD)
+        if isinstance(piyasa, dict) and piyasa:
+            ps = _format_piyasa_satirlari(piyasa)
+            if ps:
+                satirlar.append("")
+                satirlar.append("💹 Piyasa")
+                satirlar.extend(ps)
+        # Gunun hareketi (1g top3)
+        if isinstance(movers, dict) and movers:
+            ms = _format_movers_satirlari(movers)
+            if ms:
+                satirlar.append("")
+                satirlar.append("📈 Günün hareketi (1g)")
+                satirlar.extend(ms)
         retest = [f for f in aktif if f.get('state') == 'RETEST_BASARILI']
         teyitli = [f for f in aktif if f.get('state') == 'KIRILIM_TEYITLI']
         sikisan = [f for f in aktif if f.get('state') == 'SIKISMA_GUCLENIYOR'
                    and (f.get('contraction') or 0) >= self.public_sikisma_min]
         if retest or teyitli:
-            # İki sayaç ayrı satırda: birleşik hali 315 px'tı ve ortadan ikiye
-            # düşüp "· ✅ Teyitli kırılım 2" satırını üretiyordu.
+            satirlar.append("")
             satirlar.append(f"🎯 Retest başarılı {len(retest)}")
             satirlar.append(f"✅ Teyitli kırılım {len(teyitli)}")
         if sikisan:
@@ -936,8 +946,6 @@ class TelegramNotifier:
                              f"(%{(f.get('contraction') or 0) * 100:.0f})" for f in sikisan[:3])
             satirlar.append(f"⚡ Sıkışan {len(sikisan)}: {ilk}")
         if not izleme and not kapanis:
-            # Sabah: dün akşamki kuyruk çoktan tüketildi; o an izlenen adaylar
-            # (sıkışma/olgunlaşma) kaliteye göre sıralanıp "bugünün listesi" olur.
             izleme = _public_izleme_adaylari(aktif, haric={f.get('stock_name') for f in sikisan})
         if izleme:
             satirlar.append("")
@@ -946,8 +954,6 @@ class TelegramNotifier:
             for k in list(izleme)[:5]:
                 if not isinstance(k, dict):
                     continue
-                # Kartla aynı dil: "4s" + "q89". "4 saatlik · kalite 89" ikilisi
-                # satırı 330 px'a çıkarıp her maddeyi ikiye bölüyordu.
                 try:
                     from reporting.format import tf_kisa as _tf_kisa
                     tf = _tf_kisa(k.get('timeframe'))
@@ -961,38 +967,20 @@ class TelegramNotifier:
                                 f"{kalite}")
         if not (retest or teyitli or sikisan) and not izleme:
             if freshness_known and not scan_current:
+                satirlar.append("")
                 satirlar.append("Bugün güncel tam tarama yok;")
                 satirlar.append("   eski formasyonlar gösterilmedi.")
             else:
-                # "…formasyon olmadı." 287 px'ti ve satır bütçesini aşınca cümlenin
-                # ortasından bölünüyordu; kısa hali tek satıra sığıyor.
+                satirlar.append("")
                 satirlar.append("Bugün öne çıkan formasyon yok." if kapanis
                                 else "Şu an izlenen formasyon yok.")
-        try:
-            tur = int(tarama_turu) if tarama_turu is not None else 0
-        except (TypeError, ValueError):
-            tur = 0
-        satirlar.append("")
-        # "…zaman dilimi · 4 tarama · gün yeni başlıyor" 470 px'lık tek satırdı.
-        if tur:
-            satirlar.append(f"📈 Gün: {tur} tarama")
-        # "hisse" değil "sembol": evrende endeks ve makro semboller de var.
-        satirlar.append(f"   {_evren_ozeti(ayrinti=False)} × {len(TF_HUMAN)} zaman dilimi")
-        if not kapanis:
-            satirlar.append("   gün yeni başlıyor")
-        if freshness_known and kapanis:
-            event_counts = _summary_lifecycle_counts(gun_ozeti)
-            if event_counts:
-                satirlar.append(event_counts)
-        scan_line = _summary_last_full_scan(gun_ozeti)
-        if scan_line:
-            satirlar.append(scan_line)
         if karne_kisa:
             satirlar += ["", karne_kisa]
         satirlar.append("📌 yatırım tavsiyesi değildir")
         return metni_sigdir("\n".join(satirlar), guvenlik=1.0)
 
-    def format_daily_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None) -> str:
+    def format_daily_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None,
+                             piyasa: Dict = None, movers: Dict = None) -> str:
         now = datetime.now(ISTANBUL_TZ)
         # Başlık iki satır: tek satırda 310 px'e çıkıp "· 02 Eki 20:05" kısmını
         # kaydırıyordu. Ayraç 30 çizgi 300 px ediyordu (24 = 240 px, sarmaz).
@@ -1006,6 +994,16 @@ class TelegramNotifier:
         snapshot = [f for f in (aktif_formasyonlar or []) if isinstance(f, dict)]
         if freshness_known and not scan_current:
             snapshot = []
+        # Piyasa blogu (XU100 + XAUUSD/XAGUSD) — header'dan hemen sonra, anlamli konum
+        if isinstance(piyasa, dict) and piyasa:
+            ps = _format_piyasa_satirlari(piyasa)
+            if ps:
+                baslik += "\n💹 Piyasa\n" + "\n".join(ps) + "\n"
+        # Gunun hareketi (1g top3)
+        if isinstance(movers, dict) and movers:
+            ms = _format_movers_satirlari(movers)
+            if ms:
+                baslik += "\n📈 Günün hareketi (1g)\n" + "\n".join(ms) + "\n"
         retest = [f for f in snapshot if f.get('state') == 'RETEST_BASARILI']
         teyitli = [f for f in snapshot if f.get('state') == 'KIRILIM_TEYITLI']
         sikisan = [f for f in snapshot if f.get('state') == 'SIKISMA_GUCLENIYOR' and (f.get('contraction', 0) or 0) >= self.public_sikisma_min]
@@ -1049,34 +1047,10 @@ class TelegramNotifier:
                 baslik += _madde(f, ek=yuzde + " ")
         if not (teyitli or retest or sikisan):
             if freshness_known and not scan_current:
-                baslik += ("Güncel tam tarama yok;\n"
+                baslik += ("\nGüncel tam tarama yok;\n"
                            "   eski formasyonlar gösterilmedi.\n")
             else:
-                baslik += "Şu an öne çıkan teyitli olay ya da sıkışma yok.\n"
-        if gun_ozeti:
-            # "432 hisse tarandı" = 48 hisse × 9 tarama; yanıltıcıydı.
-            # Doğru okuma: kaç tur tarandı + evren büyüklüğü.
-            try:
-                tur = int(gun_ozeti.get("tarama_sayisi") or 0)
-            except (TypeError, ValueError):
-                tur = 0
-            if tur <= 0:
-                baslik += "\n📈 Gün: henüz tarama yapılmadı\n"
-            else:
-                # İki tasarlanmış satır: tek satır 435 px'a çıkıp ortadan ikiye
-                # düşüyordu ("· 6 bildirim" havada kalıyordu).
-                _adet = gun_ozeti.get('alerts_sent', 0)
-                baslik += ("\n📈 Gün: " + (f"{tur} tarama" if tur else "tarama")
-                           + (f" · {_adet} bildirim" if _adet else "") + "\n")
-                baslik += (f"   {_evren_ozeti(ayrinti=False)} × {len(TF_HUMAN)} "
-                           f"zaman dilimi\n")
-            if freshness_known:
-                event_counts = _summary_lifecycle_counts(gun_ozeti)
-                if event_counts:
-                    baslik += event_counts + "\n"
-        scan_line = _summary_last_full_scan(gun_ozeti)
-        if scan_line:
-            baslik += scan_line + "\n"
+                baslik += "\nŞu an öne çıkan teyitli olay ya da sıkışma yok.\n"
         baslik += "\n📌 yatırım tavsiyesi değildir"
         return metni_sigdir(baslik, guvenlik=1.0)
 

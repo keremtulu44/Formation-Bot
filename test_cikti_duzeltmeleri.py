@@ -24,18 +24,18 @@ def _formasyon(state="KIRILIM_TEYITLI", stock="ISMEN", tf="4h", q=87):
 # --- "432 hisse tarandı" yanılgısı -----------------------------------------
 
 def test_gun_satiri_tarama_turunu_yazar(notifier):
-    import config
+    # 2026-10-27 şablon: Gün/huni/evren blokları kalktı — Piyasa + Günün hareketi geldi
     metin = notifier.format_daily_summary([_formasyon()], {"tarama_sayisi": 9, "alerts_sent": 28})
-    assert "📈 Gün: 9 tarama" in metin
-    assert f"{config.evren_ozeti(ayrinti=False)} × 4 zaman dilimi" in metin
-    assert "28 bildirim" in metin
+    assert "📈 Gün:" not in metin
+    assert "× 4 zaman dilimi" not in metin
     assert "432" not in metin
+    assert "yatırım tavsiyesi değildir" in metin
 
 
 def test_gun_satiri_sabah_yoksa_henuz_der(notifier):
     metin = notifier.format_daily_summary([_formasyon()], {"tarama_sayisi": 0, "alerts_sent": 0})
-    assert "henüz tarama yapılmadı" in metin
     assert "0 hisse tarandı" not in metin
+    assert "yatırım tavsiyesi değildir" in metin
 
 
 # --- Teyitli kırılım listesi: başlık ile görünen satır sayısı ----------------

@@ -257,9 +257,9 @@ def test_public_ozet_sade_ve_dogru_satirlar(grup_notifier):
     assert "Sıkışan 1" in metin and "GUBRF" in metin
     assert "Yarının izleme listesi (ilk 5)" in metin
     assert metin.count("• SYM") == 5          # listede yalnız ilk 5
-    # Satır bütçesi (≤283 px) " · " ayracından böler: bilgi aynı, iki kısa satır.
-    import config
-    assert f"{config.evren_ozeti(ayrinti=False)} × 4 zaman dilimi" in metin and "9 tarama" in metin
+    # 2026-10-27: Gün/evren satırı şablondan kalktı; piyasa/movers geldi
+    assert "× 4 zaman dilimi" not in metin
+    assert "📈 Gün:" not in metin
     # Grup metninde iç teknik döküm olmamalı
     assert "defter" not in metin and "n=" not in metin and "/tmp" not in metin
 

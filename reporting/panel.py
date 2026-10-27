@@ -28,9 +28,36 @@ from reporting.format import (
 )
 
 
+def _huni_satiri(daily: dict) -> str:
+    """Günlük aday hunisi tek satır (panel ve özet ortak)."""
+    try:
+        d = daily or {}
+        uretildi = int(d.get("patterns_found") or 0)
+        push = int(d.get("alerts_sent") or 0)
+        digest = int(d.get("alerts_deferred") or 0)
+        state_dis = int(d.get("alerts_state_disabled") or 0)
+        esik = int(d.get("alerts_below_threshold") or 0)
+        # En az bir kayıp sayacı yoksa huni anlamsız olur; ama push/digest varsa göster.
+        if not (uretildi or push or digest or esik or state_dis):
+            return ""
+        satir = f"🔎 Huni: {uretildi} üretildi · {push} push · {digest} digest · {state_dis} state dışı · {esik} eşik altı"
+        # Ek kayıplar: yalnız varsa ekle (satır şişmesin)
+        if d.get("alerts_digest_overflow"):
+            satir += f" · {int(d['alerts_digest_overflow'])} digest taşması"
+        if d.get("alerts_kuyruk"):
+            satir += f" · {int(d['alerts_kuyruk'])} kuyruk"
+        if d.get("alerts_bar_kapanmadi"):
+            satir += f" · {int(d['alerts_bar_kapanmadi'])} kapanmamış bar"
+        if d.get("alerts_break_close_invalid"):
+            satir += f" · {int(d['alerts_break_close_invalid'])} kapanış teyidi yok"
+        return satir
+    except Exception:
+        return ""
+
+
 def panel_raporu(arguman: str, durum, formations, aktif_hisseler, tarama_suruyor: bool = False,
                  last_run_stats=None, tamamlandi: bool = False, kapsam_notu: str = "",
-                 bos_analiz_mesaji: str = "", simdi=None) -> str:
+                 bos_analiz_mesaji: str = "", simdi=None, daily_stats=None) -> str:
     """48 hisse x 4 TF slot paneli: sayılar + puana göre top 12 aday. Filtre destekler.
 
     Filtre: `/panel 1h` · `/panel THYAO` · `/panel 1h THYAO` · `/panel kirilim`
@@ -100,6 +127,13 @@ def panel_raporu(arguman: str, durum, formations, aktif_hisseler, tarama_suruyor
             tf_parcalari.append(f"{tf} 0/{len(satir_hisseler)}")
     satirlar.append(" · ".join(tf_parcalari))
     satirlar.append(panel_durum_sayilari(filtreli))
+    # P1: günlük aday hunisi (kayıp sayaçlar) panelde görünür — /durum'daki 🔎 hunisi ile aynı kaynak.
+    try:
+        hsat = _huni_satiri(daily_stats if daily_stats is not None else st.get("_daily_stats") or {})
+        if hsat:
+            satirlar.append(hsat)
+    except Exception:
+        pass
     # Eşik altı adaylar: liste ve sayaçlarda görünürler ama alarm ÜRETMEZLER.
     # (Eskiden yalnız debug log'da düşüyorlardı; kullanıcı "kaç tanesi
     # gösterilmiyor?" sorusunu hiçbir yerden göremiyordu.)
