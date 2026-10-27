@@ -31,9 +31,9 @@ def test_panel_hunisi_daily_stats_ile():
 
 
 def test_summary_hunisi():
+    # 2026-10-27: Huni artık akşam özetinden kalktı (panel/durum/heartbeat'te duruyor)
     from notifier.api import TelegramNotifier
     n = TelegramNotifier.__new__(TelegramNotifier)
-    # minimal init gereken alanlar — format_daily_summary sadece self'e ihtiyaç duyar
     n.public_sikisma_min = 0.5
     gun_ozeti = {
         "tarama_sayisi": 9,
@@ -49,8 +49,8 @@ def test_summary_hunisi():
         "son_basarili_tam_tarama": "2026-10-27T10:00:00+03:00",
     }
     metin = n.format_daily_summary([], gun_ozeti=gun_ozeti)
-    assert "Huni" in metin or "huni" in metin.lower()
-    assert "üretildi" in metin or "eşik" in metin
+    assert "Huni" not in metin and "huni" not in metin.lower()
+    assert "yatırım tavsiyesi değildir" in metin
 
 
 def test_heartbeat_aday_hunisi_var():

@@ -83,12 +83,9 @@ def test_retest_basarili_mesaji():
     notifier = TelegramNotifier()
     msg = notifier.format_message(_base_data(state='RETEST_BASARILI', break_dir=1))
     assert "SEVİYE KORUNDU" in msg
-    # "seviye korundu" ilk satırda zaten söylendiği için ek not basılmaz
-    # (25 Eyl biçiminde aynı bilgi iki satırda tekrarlanıyordu).
     assert "seviye korundu" not in msg
-    # GÖRSEL-7: seviye kârede çizili; metinde TEK satır olarak ve kırılan seviye
-    # adıyla kalır (`kırılan` sözcüğü değil, sayı).
-    assert "kırılan 302,00" in msg
+    # 2026-10-26: kırılan seviye ifadesi netleştirildi (· kırılan seviye / kapanış ayrı satır)
+    assert "302,00" in msg and "kırılan" in msg
     assert "teyit düşer: 302,00 altı kapanış" in msg
 
 
@@ -461,9 +458,8 @@ def test_dogrulanmis_olay_kimlik_fiyat_kalite_tasir_kare_detayini_tekrarlamaz():
     ))
     assert "THYAO" in msg and "1s" in msg and "Yükselen Üçgen" in msg
     assert "▲ THYAO 1s YUKARI KIRILIM" in msg
-    # Olayın ölçüsü tek satırda: kapanış + o an geçerli seviye ("Çok güçlü" gibi
-    # türetilmiş sıfatlar hâlâ yasak).
-    assert "kapanış 303,25 · kırılan 302,00" in msg
+    # 2026-10-26: kapanış/kırılan artık ayrı satırlarda (tek satır bütçeyi aşıyordu)
+    assert "303,25" in msg and "302,00" in msg and "kırılan" in msg
     # 2026-10-25: formasyon kalitesi (geometri) karttan KALKTI — ölçülen sonucu
     # öngörmüyordu. Yerine devamlılık puanı gelir; geometri yalnız eşiği besler.
     assert "formasyon kalitesi" not in msg and "kalite" not in msg

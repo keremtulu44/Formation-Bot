@@ -204,9 +204,10 @@ def _kart(goreli):
 
 
 def test_goreli_satir_kartta_bir_kez_ve_sarmadan():
+    # 2026-10-26: göreli güç satırı (20 mum endekse +pu) karttan kaldırıldı (net değil)
     metin = _kart("· 20 mumda endekse +1,1 puan")
     satirlar = metin.splitlines()
-    assert sum(1 for s in satirlar if "endekse" in s) == 1
+    assert sum(1 for s in satirlar if "endekse" in s) == 0
     assert not [s for s in satirlar if s.startswith("   ")], "girintili devam satırı yok"
     assert all(tm.genislik(s) <= notifier._kart_esik_px() for s in satirlar)
     assert sum(1 for s in satirlar if s.strip()) <= notifier._KART_MAKS_SATIR
