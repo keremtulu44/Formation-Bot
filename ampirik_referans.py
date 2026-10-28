@@ -467,21 +467,23 @@ def _rvol_satiri(k: Kurulum) -> tuple[str, int] | None:
     # "Q4 RVOL %61" yerine "hacim yüksekken %61 sürdü": çeyrek numarası ve
     # kısaltma kullanıcıya bir şey söylemiyordu.
     #
-    # 2026-10-28: taban (`n`) artık satırda. Çünkü bu satır ZONE ailesinde
-    # dokunuş satırının (`◇ 240.484 temasta …`) ALTINDA basılıyor ve tabansız
-    # yüzde, üstteki satırın tabanına ait sanılıyordu. Taban sığmazsa cümle
-    # kısalır (`_sigan`), sayı asla düşmez.
+    # 2026-10-28 (kullanıcı): "fiil kalsın ama anlam pek düzgün değil".
+    # Haklı: tablodaki sütun `tepki_CALISTI` — ölçülen şey dokunuş sonrası
+    # BEKLENEN YÖNDE TEPKİ, "kırılımın sürmesi" değil. "sürdü" yanlış fiildi,
+    # "%61" de öznesiz kalıyordu ("neyin %61'i?"). Doğrusu "tepki verdi"dir.
+    # Taban (n) sığmadığı için satırda yazılmaz; `/olcum` tabanı verir
+    # (`· hacim yüksek %61,0 (n 11.928)`) — taban gizlenmiyor, komuta taşındı.
     yuzde = _yuzde(calisti)
     if indeks == 3:
         return (_sigan([
-            f"◇ hacim yüksekken {yuzde} sürdü ({_binlik(n)})",
-            f"◇ hacim yüksekken {yuzde} ({_binlik(n)})",
-            f"◇ hacim yüksek {yuzde} ({_binlik(n)})",
+            f"◇ hacim yüksekken {yuzde} tepki verdi",     # 285 px → sığmaz
+            f"◇ hacim yüksek: {yuzde} tepki verdi",       # 261 px
+            f"◇ hacim yüksek {yuzde} tepki verdi",        # 256 px
         ]), ONCELIK["rvol"])
     return (_sigan([
-        f"◇ hacim düşükken {yuzde} sürdü ({_binlik(n)})",
-        f"◇ hacim düşükken {yuzde} ({_binlik(n)})",
-        f"◇ hacim düşük {yuzde} ({_binlik(n)})",
+        f"◇ hacim düşükken {yuzde} tepki verdi",          # 277 px → sığmaz
+        f"◇ hacim düşük: {yuzde} tepki verdi",            # 252 px
+        f"◇ hacim düşük {yuzde} tepki verdi",             # 247 px
     ]), ONCELIK["rvol"])
 
 

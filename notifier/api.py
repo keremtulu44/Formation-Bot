@@ -2381,8 +2381,13 @@ class TelegramNotifier:
                 self.grafik_atlanan_hata += 1
                 self.grafik_son_neden = "public: kare üretilemedi"
                 continue
+            # 2026-10-28: ikinci kare her zaman "üst" değil. 1g alarmında
+            # üst TF yok; ikinci kare 4s ALT zaman dilimi olarak gelir ve
+            # caption onu doğru adlandırmalı (`rol` kaynaktan yazılır).
+            rol = str((kare or {}).get("rol") or "ust").strip().lower()
+            etiket = "alt zaman dilimi" if rol == "alt" else "üst zaman dilimi"
             caption = (f"{bas} · {desen}" if sira == 0 and desen
-                       else f"{bas} · {kare_tf} üst zaman dilimi")
+                       else f"{bas} · {kare_tf} {etiket}")
             paketler.append((yol, caption[:1024]))
         if not paketler:
             return 0

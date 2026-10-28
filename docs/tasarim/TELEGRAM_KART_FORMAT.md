@@ -439,7 +439,7 @@ olumsuz: hacim teyidi yok
 Ölçü bloğu **tek satır = tek taban** kuralıyla yazılır (2026-10-28): satırdaki
 yüzdenin `n`'i aynı satırda, parantez içinde ve binlik ayırıcıyla durur
 (`◇ benzer 32.321 · %76'sı sürdü`, `◇ geri çekilme %35 (28.624)`,
-`◇ rol uyumlu %80 (15.724)`, `◇ hacim yüksek %61 (11.928)`).
+`◇ rol uyumlu %80 (15.724)`, `◇ hacim yüksek: %61 tepki verdi`).
 
 Eski biçim iki seviyeliydi: başlık kaç benzer kurulum olduğunu söyler, girintili
 alt satır yüzdeyi taşırdı (`   %76'sı devam etti · %35 geri`). İki farklı

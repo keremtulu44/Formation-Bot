@@ -76,7 +76,7 @@ süzülür (`AILE_OLCU`), sonra aile içinde önceliğe göre sıralanır. Kart 
 | 4 | Geri çekilme | yalnız `retest_seen=False` | `◇ geri çekilme %35 (28.624)` | 28.624 (satırda) | FRM-12 |
 | 5 | Dokunuş tepkisi | fiyat bir OB/FVG temasında | `◇ 240.484 temasta %65 tepki` | 240.484 (satırda) | Soru 2 |
 | 6 | Zone yüksekliği | ATR + alarm TF zone geometrisi | `◇ bölge 1,0 kat · %68 (858)` | kova n | Soru 4 |
-| 7 | Hacim çeyreği | rvol alt/üst uçta (≈Q1 / ≈Q4) | `◇ hacim yüksek %61 (11.928)` | 11.928 / 6.740 (satırda) | Hacim tablosu |
+| 7 | Hacim çeyreği | rvol alt/üst uçta (≈Q1 / ≈Q4) | `◇ hacim yüksek: %61 tepki verdi` | 11.928 / 6.740 (`/olcum`) | Hacim tablosu |
 
 ### Aile ayrımı (2026-10-22 kararı)
 
@@ -142,7 +142,7 @@ anlayamayabilir"*. Ölçüm satırında kısaltma yaşamaz:
 | `retest oranı %35` | `geri çekilme %35` | jargon → günlük sözcük |
 | `1,2 ATR` | `~1,05 TL · %2,6` | ATR bilmeden okunur (ATR varsa) |
 | `bölge 1,4 ATR` | `bölge 1,4 kat` | "normalin katı" ifadesi |
-| `yüksek RVOL` | `hacim yüksekken` | RVOL kısaltması kartta yok |
+| `yüksek RVOL` | `hacim yüksek:` + `tepki verdi` | RVOL kısaltması kartta yok; ölçü `tepki_CALISTI` olduğu için fiil "tepki verdi" (2026-10-28) |
 | `tamamlandı %76` | `%76'sı sürdü` (2026-10-28: `%76 tuttu` yerine) | motorun `FORMASYON_TAMAMLANDI` hâli "hedefe ulaştı" DEĞİL, "kırılım teyit aldı ve bandın içine dönmedi" demek; "tuttu" hedef çağrışımı yapıyordu |
 | `bar` | `mum` | aynı şey, herkesin bildiği sözcük |
 | `FVG` / `OB` | `boşluk` / `blok` | kart yüzeyinde kısaltma yok |
@@ -174,10 +174,12 @@ Kurallar (`_sigan` + `_binlik` ile uygulanır):
 2. **Girintili devam satırı yok.** Ölçü satırı kart sözleşmesinde artık
    tek başına anlamlıdır (kart girintili satırı yalnız bu blokta kabul ediyordu;
    artık hiç kabul etmiyor).
-3. **Sığmazsa cümle kısalır, sayı düşmez.** `_sigan([...])` bütçeye (262,8 px)
-   sığan ilk biçimi seçer; hiçbiri sığmazsa en kısası yazılır. Taban
-   düşürülmez (türetilmiş satır hariç, bkz. 4) — örn. `◇ hacim yüksekken %61 sürdü (11.928)` 317 px olduğu için
-   `◇ hacim yüksek %61 (11.928)` basılır.
+3. **Sığmazsa cümle kısalır.** `_sigan([...])` bütçeye (262,8 px) sığan ilk
+   biçimi seçer; hiçbiri sığmazsa en kısası yazılır. Örn.
+   `◇ hacim yüksekken %61 tepki verdi` 285 px olduğu için
+   `◇ hacim yüksek: %61 tepki verdi` (261 px) basılır. Bu satırda taban
+   sığmadığı için kartta yoktur; `/olcum` `(n 11.928)` yazar — taban
+   gizlenmez, komuta taşınır (türetilmiş satır kuralı, bkz. 4).
 4. **Türetilmiş satır tabanını komşusundan ödünç almaz.** `◇ tutarsa tepe …`
    (FRM-16, n=24.618) yüzde taşır ama kendi tabanı farklı olduğu için taban
    yazmaz; kartta zaten formasyon tabanı bir üstte durur.

@@ -540,6 +540,51 @@ def test_public_grafik_bir_kare_arti_ust_tf(monkeypatch, grup_notifier, tmp_path
     assert n.public_grafik_gonder(kayit) == 0
 
 
+def test_public_grafik_gunluk_alarmda_alt_tf_etiketi(monkeypatch, grup_notifier, tmp_path):
+    """1g alarmının ÜST TF'si yok: ikinci kare 4s, etiketi "alt zaman dilimi".
+
+    Kullanıcı kararı (2026-10-28): grup/kanal görseli her zaman 2 kare olsun;
+    1g'de üst TF bulunmadığı için 4s alt zaman dilimi olarak eklenir ve caption
+    yalan söylemez (`rol="alt"` kaynaktan, bot/scan.py'den yazılır).
+    """
+    import transport.telegram as tt
+
+    n = grup_notifier
+    yollar = []
+    for ad in ("1g.png", "4s.png"):
+        yol = tmp_path / ad
+        yol.write_bytes(b"png")
+        yollar.append(str(yol))
+    albumler = []
+
+    def sahte_album(yollar_arg, captions=None, chat_id=None, **kw):
+        albumler.append({"yollar": list(yollar_arg), "captions": list(captions or [])})
+        return True, "ok"
+
+    monkeypatch.setattr(tt, "medya_grubu_gonder", sahte_album)
+    monkeypatch.setattr(tt, "foto_gonder", lambda *a, **k: (True, "ok"))
+    kayit = _zengin_olay(timeframe="1d")
+    n._public_grafik[str((("ISMEN", "1d", "KIRILIM_TEYITLI")))] = {
+        "goruntular": [{"tf": "1d", "goruntu": {"yol": yollar[0]}},
+                       {"tf": "4h", "goruntu": {"yol": yollar[1]}, "rol": "alt"}]}
+    assert n.public_grafik_gonder(kayit) == 2
+    assert len(albumler) == 1
+    assert "alt zaman dilimi" in albumler[0]["captions"][1], albumler[0]["captions"]
+    assert "üst zaman dilimi" not in albumler[0]["captions"][1]
+
+
+def test_her_tarama_tf_inin_ikinci_kare_kaynagi_var():
+    """Public görseli 2 kare: her taranan TF için üst YA DA alt TF tanımlı."""
+    import main as M
+    from reporting.format import PANEL_TIMEFRAMES
+
+    assert M._ALT_TF.get("1d") == "4h"          # 1g'nin üstü yok
+    for tf in PANEL_TIMEFRAMES:
+        assert tf in M._UST_TF or tf in M._ALT_TF, tf
+    # Alt TF üst TF'nin yerine geçmez: 4s hâlâ 1g'ye çıkar.
+    assert M._UST_TF.get("4h") == "1d"
+
+
 def test_public_grafik_kareler_diskten_uretilir(monkeypatch, grup_notifier, tmp_path):
     """Regresyon: `kare_listesi()` yol üretmez; public kareyi KENDİ çizmeli.
 

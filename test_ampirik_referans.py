@@ -132,16 +132,26 @@ def test_temel_satir_her_zaman_ilk_sira():
     assert satirlar[1] == "◇ geri çekilme %35 (28.624)", satirlar
 
 
-def test_hacim_satiri_dokunus_tabanindan_ayrilir():
-    """Hacim yüzdesi kendi kovasının tabanını yazar (dokunuş n'i ile karışmaz)."""
+def test_hacim_satiri_tepki_fiiliyle_yazilir():
+    """Hacim satırı "tepki verdi" der; dokunuş satırının tabanını ödünç almaz.
+
+    Kullanıcı (2026-10-28): *"fiil kalsın ama anlam pek düzgün değil"*. Ölçü
+    `tepki_CALISTI` olduğu için doğru fiil "tepki verdi"dir. Taban satıra
+    sığmadığı için yazılmaz; `/olcum` komutunda `(n 11.928)` olarak durur —
+    taban gizlenmez, komuta taşınır.
+    """
     k = _kurulum(tf="4h", rvol=3.2, zone_icinde=True, bolge_top=101.0,
                  bolge_alt=99.0, aile="ZONE")
     satirlar = ar.olcum_satirlari(k, azami=3)
     hacim = [s for s in satirlar if "hacim" in s]
     assert len(hacim) == 1, satirlar
-    assert "11.928" in hacim[0], satirlar     # kova tabanı
-    assert "240.484" not in hacim[0], satirlar
+    assert hacim[0].endswith("tepki verdi"), satirlar
+    assert "sürdü" not in hacim[0], satirlar      # yanlış fiil geri gelmesin
+    assert "240.484" not in hacim[0], satirlar    # komşu satırın tabanı değil
     assert tm.genislik(hacim[0]) <= notifier._kart_esik_px(), hacim[0]
+    # Taban komutta duruyor (kaybolmadı).
+    assert "n 11.928" in ar.komut_metni()
+    assert "n 6.740" in ar.komut_metni()
 
 
 def test_ayni_satirda_iki_farkli_taban_olmaz():
@@ -262,10 +272,11 @@ def test_bolum_acikken_exporttan_satir_uretir():
     genis = nc.domain_bolumleri(_sonuclar(), 100.0, stil="kart", alarm_tf="4h",
                                 olcum=True, atr=1.0, yon=-1, retest_seen=False,
                                 azami_olcum=9)["olcum"]
-    # 2026-10-28: hacim satırı tabanını KENDİ taşır; sığmazsa "iken" düşer
-    # (`◇ hacim yüksek %61 (11.928)`), sayı düşmez.
+    # 2026-10-28: hacim satırı "tepki verdi" fiiliyle yazılır (ölçülen şey
+    # dokunuş tepkisi, "kırılımın sürmesi" değil); taban sığmadığı için
+    # satırda değil `/olcum` komutundadır.
     assert any("hacim yüksek" in s for s in genis), genis
-    assert any("(11.928)" in s for s in genis), genis
+    assert any("tepki verdi" in s for s in genis), genis
 
 
 def test_olcum_hatasi_alarmi_dusurmez():
