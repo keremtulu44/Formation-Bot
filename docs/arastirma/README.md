@@ -22,7 +22,7 @@ tartışmalarında sayı gerektiğinde buraya bakılır.
 | **[REPLAY_OZET_2026-10-21.md](REPLAY_OZET_2026-10-21.md)** | **Son replay'in okunur özeti:** tek ekran + tek tabloda MFE/MAE/NET + örneklem payı | Hızlı karar / paylaşım için |
 | **[KOVA_FAZI_OLCUMU_2026-10-23.md](KOVA_FAZI_OLCUMU_2026-10-23.md)** | **Kova fazı ölçümü:** kayan pencerenin 2s/4s fazlarını saatten saate döndürmesinin motor kararına ve bildirim tekrarlarına etkisi; ölçüldü ve sabit-çapa düzeltmesi uygulandı (§9) | Resample/tekrar bildirimi konuşmadan önce |
 | [ARASTIRMA_RAPORU_DUZMETIN.txt](ARASTIRMA_RAPORU_DUZMETIN.txt) | Aynı sonuçların düz metin dışa aktarımı (paylaşım için) | Telegram/forum aktarımı |
-| [arastirma_ms_hatali_seriler.txt](arastirma_ms_hatali_seriler.txt) | MS motorunun patladığı **35 serinin** listesi | Açık bulgu — aşağıya bak |
+| [arastirma_ms_hatali_seriler.txt](arastirma_ms_hatali_seriler.txt) | MS motorunun patladığı **35 serinin** listesi | Kayıt (düzeltildi 2026-10-28) — aşağıya bak |
 
 ## Ölçümün canlı metne bağlandığı yer
 
@@ -42,7 +42,13 @@ daha iyi. Çok test edilen korunan tepe çöker (4+ denemede engelleme %36 → %
 dip tutar (%37,5 → %33,3). **Sezginin tersine**, dokunuş anında yüksek hacim (Q4) her intraday
 TF'de en zayıf tepkiyi verir (%60–61 vs %70); hacim burada teyit değil, tükenme işaretidir.
 
-## ⚠️ Açık bulgu: canlı botta sessiz MS çökmesi
+## ⚠️ ~~Açık bulgu: canlı botta sessiz MS çökmesi~~ → 2026-10-28'DE DÜZELTİLDİ
+
+> **Güncelleme (2026-10-28):** Kök neden (kilitli geçici referansın aday fork'unda
+> kaybolması) düzeltildi; 35 hatalı serinin tamamı hatasız tamamlanıyor.
+> Ayrıntı + doğrulama: [denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md](../denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md).
+> Görünür degrade (`/durum` MS arıza satırı) zaten koddaydı (`bot/commands._ms_hata_satiri`).
+> Aşağıdaki metin ölçüm anındaki (Ekim 2026) tarihli kayıttır:
 
 704 serinin **35'inde (%5,0)** MS motoru
 `ValueError: confirmed break references must still be active` ile düşüyor
@@ -57,6 +63,8 @@ yolu birebir aynı hatayı veriyor (AEFES/ALFAS/ALGYO üzerinde doğrulandı).
 **Önerilen ilk adım** (kök neden ayrı iş): `_execute_domain` hata yakaladığında Telegram'a
 "MS domain devre dışı" uyarısı düşürmek — sessiz boşluk yerine görünür degrade.
 Ayrıntı: [ARASTIRMA_SONUCLARI.md](ARASTIRMA_SONUCLARI.md) §"Canlı botta bulunan sessiz MS çökmesi".
+*(2026-10-28: degrade `/durum` MS arıza satırıyla zaten vardı; kök neden ayrıca
+düzeltildi — bu "ilk adım" maddesi kapanmıştır.)*
 
 ## Yeniden üretim
 

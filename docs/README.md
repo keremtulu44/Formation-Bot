@@ -85,6 +85,8 @@ diye bakmadan önce kodun kendisine ve [YAPI.md](YAPI.md) §6'ya bakın.
 
 | Dosya | Tarih | Ne ölçtü |
 |---|---|---|
+| [denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md](denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md) | 2026-10-28 | MS motorunun 35 seride sessiz çökmesinin kök nedeni (kilitli geçici referansın fork'ta kaybı) + üç katmanlı düzeltme + 35/35 hedef regresyon |
+| [denetim/TARAMA_VE_ONERILER_2026-10-28.md](denetim/TARAMA_VE_ONERILER_2026-10-28.md) | 2026-10-28 | Depo geneli tarama (suite/statik/kapılar), 2026-10-26 açık önerilerin durumu, veri envanteri ve Ö1–Ö7 yol haritası: süzgeç kaçakları karnesi, iki yıllık sağlamlık matrisi, seviye-test `◇` satırı, hacim faz ayrımı, üçgen kanal denei, motor sağlık sicili, karne bant sağlığı |
 | [denetim/KOD_DENETIMI_2026-10-26.md](denetim/KOD_DENETIMI_2026-10-26.md) | 2026-10-26 | Depo geneli kod/hata denetimi: DM musluğu kullan-önce-ata (B1), env drift, yeni AST koruma testi + açık öneriler |
 | [denetim/GENEL_INCELEME_VE_YOL_HARITASI_2026-10-16.md](denetim/GENEL_INCELEME_VE_YOL_HARITASI_2026-10-16.md) | 2026-10-16 | Uçtan uca inceleme + önceliklendirilmiş iş listesi (Y1–Y16) |
 | [denetim/TELEGRAM_PRODUCT_AND_LIVE_READINESS_AUDIT.md](denetim/TELEGRAM_PRODUCT_AND_LIVE_READINESS_AUDIT.md) | 2026-10 | Canlıya hazırlık denetimi (NO-GO gerekçeleri) |

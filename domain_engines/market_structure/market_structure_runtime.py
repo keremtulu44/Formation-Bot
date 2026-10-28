@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .market_structure import SCOPE_EXTERNAL, SCOPE_INTERNAL, SIDE_HIGH, SIDE_LOW, SWING_CANDIDATE, SWING_CONFIRMED, SwingPoint
 from .market_structure_evidence import MarketStructureExport, export_snapshot, structure_score
@@ -40,6 +40,12 @@ class _RuntimeScope:
     last_broken_low: int = 0
     next_candidate_id: int = 0
     next_event_id: int = 0
+    # A break candidate may reference a *provisional* swing that still lives
+    # only in the candidate slot. When a stronger pivot forks that slot to a
+    # fresh identity ("prior identity locked by break"), the prior snapshot
+    # would otherwise vanish and finalize could never confirm the break.
+    # Retained here, keyed by identity, until the pending break resolves.
+    retained_locked: dict[int, SwingPoint] = field(default_factory=dict)
 
 
 class MarketStructureRuntime:
@@ -69,6 +75,26 @@ class MarketStructureRuntime:
         if not bc.valid:
             return False
         return candidate.identity in {bc.broken_swing_identity, bc.origin_swing_identity}
+
+    def retain_locked_snapshot(self, scope: str, snapshot: SwingPoint) -> None:
+        """Keep a provisional snapshot that a pending break still references.
+
+        Called when the candidate slot forks to a new identity while the break
+        is in flight. The snapshot is consumed by the recovery path only if
+        finalize needs it; leftovers are dropped when the break resolves.
+        """
+        if not snapshot.valid or snapshot.identity <= 0:
+            return
+        self.scope(scope).retained_locked[snapshot.identity] = snapshot
+
+    def pop_retained_snapshot(self, scope: str, identity: int, source_bar: int | None) -> SwingPoint:
+        """Consume the retained snapshot for ``identity`` if it still matches."""
+        runtime = self.scope(scope)
+        snapshot = runtime.retained_locked.get(identity)
+        if snapshot is None or snapshot.source_bar != source_bar:
+            return SwingPoint()
+        del runtime.retained_locked[identity]
+        return snapshot
 
     @staticmethod
     def _latest_confirmed(swings: list[SwingPoint], side: str) -> SwingPoint:
@@ -352,6 +378,9 @@ class MarketStructureRuntime:
                 else:
                     runtime.last_broken_low = runtime.candidate.broken_swing_identity
                 runtime.candidate = BreakCandidate()
+                # Break resolved: any retained locked snapshot it needed has
+                # been consumed by recovery; drop orphans (bkz. fork fix).
+                runtime.retained_locked.clear()
                 events.append(event)
             elif evaluation.failed:
                 runtime.next_event_id += 1
@@ -373,6 +402,9 @@ class MarketStructureRuntime:
                 )
                 runtime.last_event = event
                 runtime.candidate = BreakCandidate()
+                # False break resolves the candidate too: retained snapshots
+                # that belonged to it are no longer referenced by anything.
+                runtime.retained_locked.clear()
                 events.append(event)
 
         return events

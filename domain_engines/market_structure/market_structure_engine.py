@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 
 from .market_structure import (
+    CANDIDATE_NEW,
     SCOPE_EXTERNAL,
     SCOPE_INTERNAL,
     SIDE_HIGH,
@@ -53,7 +54,16 @@ class MarketStructureEngine(_SwingCoreEngine):
 
     def _candidate_update(self, candidate, incoming, locked_by_break: bool):
         runtime_lock = self._runtime.locks_candidate(incoming.scope, candidate) if hasattr(self, "_runtime") else False
-        return super()._candidate_update(candidate, incoming, locked_by_break=locked_by_break or runtime_lock)
+        updated, action = super()._candidate_update(candidate, incoming, locked_by_break=locked_by_break or runtime_lock)
+        if candidate.valid and action == CANDIDATE_NEW and (locked_by_break or runtime_lock):
+            # A pending break references ``candidate`` by identity, but the
+            # slot just forked to a fresh identity ("prior identity locked by
+            # break"), so the prior snapshot left the slot. Retain it or
+            # finalize_confirmed_break can never activate the reference and
+            # the whole MS domain dies with a ValueError (704-seri arşiv
+            # koşumuzda 35 seride görülen kırılmaydı; bkz. denetim kaydı).
+            self._runtime.retain_locked_snapshot(candidate.scope, candidate)
+        return updated, action
 
     def _commit_provisional(self, scope_state, snapshot: SwingPoint, confirm_bar: int, evidence: str, quality_floor: float) -> SwingPoint:
         if not snapshot.valid:
