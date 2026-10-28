@@ -102,6 +102,9 @@ def _komut_durumu() -> dict:
     ozet: dict = {
         "mod": _pkg._komut_modu,
         "hedef_tanimli": bool(getattr(_pkg._notifier_ref, "chat_id", "")),
+        # Public hedeflerin GERÇEK tipi (getChat). Kanal hedefi komut alamaz;
+        # bu alan "neden public'te komut çalışmıyor" sorusunun cevabını taşır.
+        "public_hedefler": getattr(_pkg, "_public_hedef_bilgisi", None),
     }
     try:
         if dinleyici is not None and hasattr(dinleyici, "durum"):
@@ -173,6 +176,8 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 /retest veya /r — retest bekleyen/başarılı
 /kirilim veya /k — kırılım adayı/teyitli (diğer ad: /kırılım)
 /durum — bot, piyasa ve veri sağlığı özeti
+/teshis (/teşhis) — public komutların neden çalışmadığını söyler (hedefin
+   KANAL mi GRUP mu olduğu, webhook teslimi, bot üyeliği). Salt-okunur.
 /olcum — arşiv ölçümü referansı: karttaki ◇ satırlarının hangi tablodan,
    hangi n ile geldiği (diğer adlar: /ölçüm · /referans)
 /karne [gün] — doğruluk karnesi: formasyon/kırılım sayıları + kırılım sonrası
@@ -206,6 +211,8 @@ Yetki (kim hangi komutu çalıştırabilir):
   gerekirse PUBLIC_COMMAND_EXTRA ile açılır.
 • Kanal hedefleri komut KABUL ETMEZ: kanal gönderilerinde (`channel_post`) gönderen
   kullanıcı bilgisi yoktur, yöneticilik doğrulanamaz — orası yalnız yayın alır.
+  Üyeler zaten kanala mesaj YAZAMAZ. Grup komutu istiyorsan ayrı bir grup açıp
+  kimliğini PUBLIC_COMMAND_CHATS'e yaz; kanal yayını sürer. Kontrol: /teshis
 
 Notlar:
 • Bu bir AL/SAT aracı değildir: formasyon durumu ve kalite skoru bildirir.
@@ -232,6 +239,124 @@ def _komut_olcum(_arguman: str) -> str:
     except Exception as exc:  # noqa: BLE001 - komut yanıtsız kalmasın
         _pkg.logger.warning("Ölçüm referansı üretilemedi: %s", exc)
         return "◇ Arşiv ölçümü şu an üretilemedi; ayrıntı logda."
+
+
+def _komut_teshis(_arguman: str) -> str:
+    """`/teshis` — public komutların neden çalışmadığını Telegram'a sorarak söyler.
+
+    NEDEN: "public'te komutlar çalışmıyor" üç ayrı sebeple olabilir ve üçü de
+    dışarıdan aynı görünür: (1) hedef KANAL, (2) bot grupta değil/yönetici değil,
+    (3) webhook güncellemeleri teslim etmiyor. Komut listesine bir teşhis komutu
+    eklemek, Render loglarına bakmadan kesin cevabı verir.
+
+    Salt-okunur: hiçbir ayar değiştirmez, mesaj göndermez.
+    """
+    satirlar = ["🩺 Public komut teşhisi"]
+    try:
+        token = _pkg._telegram_token_al()
+        if not token:
+            return "❌ TELEGRAM_BOT_TOKEN yok; teşhis yapılamadı."
+
+        # 1) Public hedefler ve GERÇEK tipleri
+        sohbetler = _pkg._public_komut_sohbetleri()
+        if not sohbetler:
+            satirlar += ["", "❌ Public komut hedefi YOK.",
+                         "   TELEGRAM_GROUP_ID ya da PUBLIC_COMMAND_CHATS tanımlayın."]
+        else:
+            bilgiler = _public_hedef_tipi_getir(sohbetler)
+            satirlar.append("")
+            satirlar.append("Hedefler:")
+            for k in bilgiler:
+                if not k.get("okundu"):
+                    satirlar.append(f"  • {k.get('sohbet')}: okunamadı "
+                                    "(bot sohbette değil ya da kimlik yanlış)")
+                    continue
+                isaret = "✅" if k.get("komut") else "❌"
+                satirlar.append(f"  {isaret} {k.get('sohbet')}: {k.get('tur')}"
+                                + ("" if k.get("komut")
+                                   else " → komut ALAMAZ"))
+            if any(k.get("tur") == "channel" for k in bilgiler):
+                satirlar += [
+                    "",
+                    "🔴 SEBEP: hedef bir KANAL.",
+                    "   Telegram'da üyeler kanala mesaj yazamaz; admin gönderileri",
+                    "   `channel_post` olarak gelir ve gönderen kişi bilgisi (`from`)",
+                    "   yoktur → yöneticilik doğrulanamaz, komut çalıştırılamaz.",
+                    "",
+                    "✅ ÇÖZÜM: komutlar için bir GRUP açın (kanala bağlı tartışma",
+                    "   grubu olabilir), botu gruba ekleyip YÖNETİCİ yapın ve grubun",
+                    "   kimliğini PUBLIC_COMMAND_CHATS'e yazın:",
+                    "     PUBLIC_COMMAND_CHATS=-1001234567890",
+                    "   Kanal yayını TELEGRAM_GROUP_ID ile aynen sürer.",
+                ]
+
+        # 2) Webhook durumu: güncellemeler gerçekten teslim ediliyor mu?
+        satirlar.append("")
+        try:
+            yanit = _pkg._telegram_api_cagri("getWebhookInfo", token, {})
+            ok, aciklama = _pkg._telegram_yanit_oku(yanit)
+            if ok:
+                bilgi = ((yanit.json() or {}).get("result") or {})
+                url = str(bilgi.get("url") or "")
+                satirlar.append(f"Webhook: {'kurulu' if url else 'YOK (yoklama modu)'}")
+                bekleyen = bilgi.get("pending_update_count")
+                if bekleyen is not None:
+                    satirlar.append(f"  bekleyen güncelleme: {bekleyen}")
+                turler = bilgi.get("allowed_updates") or []
+                satirlar.append("  izlenen türler: "
+                                + (", ".join(turler) if turler else "hepsi"))
+                if "message" not in turler and turler:
+                    satirlar.append("  ⚠️ `message` yok: GRUP komutları hiç gelmez!")
+                hata = str(bilgi.get("last_error_message") or "").strip()
+                if hata:
+                    satirlar.append(f"  ⚠️ son hata: {_redakte(hata, token)}")
+            else:
+                satirlar.append(f"Webhook bilgisi okunamadı: {_redakte(aciklama, token)}")
+        except Exception as exc:  # noqa: BLE001 - teşhis yarım kalsa da değerli
+            satirlar.append(f"Webhook bilgisi okunamadı: {_redakte(exc, token)}")
+
+        # 3) Botun hedeflerdeki üyelik/yönetici durumu
+        satirlar.append("")
+        try:
+            ben = _pkg._telegram_api_cagri("getMe", token, {})
+            bot_id = (((ben.json() or {}).get("result")) or {}).get("id")
+        except Exception:  # noqa: BLE001
+            bot_id = None
+        for hedef in sohbetler:
+            if not bot_id:
+                break
+            try:
+                yanit = _pkg._telegram_api_cagri(
+                    "getChatMember", token,
+                    {"chat_id": str(hedef), "user_id": str(bot_id)})
+                uye = ((yanit.json() or {}).get("result") or {})
+                durum = str(uye.get("status") or "?")
+                satirlar.append(f"Bot üyeliği ({_pkg.TelegramCommandListener._maskele(str(hedef))}): "
+                                f"{durum}")
+                if durum in ("left", "kicked"):
+                    satirlar.append("  ❌ Bot bu sohbette DEĞİL → hiçbir mesaj gelmez.")
+                elif durum not in ("administrator", "creator"):
+                    satirlar.append("  ⚠️ Bot yönetici değil. Grup komutları için botun "
+                                    "yönetici olması gerekmez ama ÖNERİLİR; asıl şart "
+                                    "komutu YAZAN kişinin yönetici olmasıdır.")
+            except Exception as exc:  # noqa: BLE001 - teşhis yarım kalsın
+                _pkg.logger.debug("Teşhis: üyelik durumu okunamadı: %s", exc)
+
+        # 4) Özet sayaçlar: güncelleme gelip gelmediği
+        try:
+            durum = _pkg._komut_durumu()
+            satirlar += ["", "Sayaçlar:",
+                         f"  mod={durum.get('mod')} · işlenen={durum.get('islenen')} · "
+                         f"public={durum.get('public_islenen')} · "
+                         f"yetkisiz_kullanıcı={durum.get('yetkisiz_kullanici')} · "
+                         f"kanal_gönderisi={durum.get('kanal_gonderisi')}",
+                         f"  son komut: {durum.get('son_komut')} "
+                         f"({durum.get('son_komut_kaynagi') or '-'})"]
+        except Exception as exc:  # noqa: BLE001 - teşhis yarım kalsın
+            _pkg.logger.debug("Teşhis: sayaçlar okunamadı: %s", exc)
+        return "\n".join(satirlar)
+    except Exception as exc:  # noqa: BLE001 - komut yanıtsız kalmasın
+        return f"❌ Teşhis çalıştırılamadı: {_redakte(exc, '')[:200]}"
 
 
 def _ms_hata_kaydet(outputs, stock: str = "") -> None:
@@ -1281,6 +1406,9 @@ TELEGRAM_KOMUTLARI = {
     "olcum": _komut_olcum,
     "ölçüm": _komut_olcum,
     "referans": _komut_olcum,
+    # Teşhis: public komutların neden çalışmadığını Telegram'a sorarak söyler.
+    "teshis": _komut_teshis,
+    "teşhis": _komut_teshis,
     "karne": _komut_karne,
     "karnem": _komut_karne,
     "backtest": _komut_backtest,
@@ -1313,7 +1441,7 @@ TELEGRAM_KOMUTLARI = {
 PUBLIC_KOMUT_ISLEYICILERI = (
     _komut_yardim, _komut_durum, _komut_formasyonlar, _komut_canli, _komut_ozet,
     _komut_sikisanlar, _komut_tamamlanan, _komut_retest, _komut_kirilim,
-    _komut_olcum, _komut_karne, _komut_backtest, _komut_panel,
+    _komut_olcum, _komut_karne, _komut_backtest, _komut_panel, _komut_teshis,
 )
 
 
@@ -1356,6 +1484,82 @@ def _public_komut_sohbetleri() -> list:
     if kanal and kanal != grup:
         sohbetler.append(kanal)
     return sohbetler
+
+
+#: Telegram'da KOMUT alabilen sohbet tipleri. Kanal YOKTUR: üyeler kanala mesaj
+#: yazamaz ve admin gönderilerinde (`channel_post`) gönderen kullanıcı bilgisi
+#: (`from`) bulunmaz — yöneticilik doğrulanamaz, komut imkânsızdır.
+KOMUT_ALABILEN_SOHBET_TIPLERI = ("group", "supergroup")
+
+
+def _public_hedef_tipi_getir(sohbetler=None) -> list:
+    """Her public hedef için `getChat` ile GERÇEK sohbet tipini okur.
+
+    Döner: `[{"sohbet": maskeli, "tur": "channel"|"supergroup"|..., "komut": bool}]`
+
+    NEDEN: `TELEGRAM_GROUP_ID` adı "grup" dese de bir KANAL gösterebilir (kanal
+    kimliği de `@ad` / `-100…` biçimindedir). Kanalda komut çalışmaz; bunu
+    kullanıcıya söylemenin tek güvenilir yolu Telegram'a sormaktır.
+    """
+    token = _pkg._telegram_token_al()
+    hedefler = list(sohbetler if sohbetler is not None else _pkg._public_komut_sohbetleri())
+    if not token or not hedefler:
+        return []
+    bilgiler = []
+    for hedef in hedefler:
+        tur = None
+        basarili = False
+        try:
+            yanit = _pkg._telegram_api_cagri(
+                "getChat", token, {"chat_id": str(hedef)}, )
+            ok, _aciklama = _pkg._telegram_yanit_oku(yanit)
+            if ok:
+                sohbet = ((yanit.json() or {}).get("result") or {})
+                tur = str(sohbet.get("type") or "").strip().lower() or None
+                basarili = True
+        except Exception as exc:  # noqa: BLE001 - teşhis botu düşürmesin
+            _pkg.logger.warning("Public hedef tipi okunamadı: %s", _redakte(exc, token))
+        bilgiler.append({
+            "sohbet": _pkg.TelegramCommandListener._maskele(str(hedef)),
+            "tur": tur,
+            "komut": bool(tur in KOMUT_ALABILEN_SOHBET_TIPLERI),
+            "okundu": basarili,
+        })
+    return bilgiler
+
+
+def _public_hedef_bilgisini_yenile(sohbetler=None) -> list:
+    """Teşhis bilgisini arka planda tazeleyip `_pkg._public_hedef_bilgisi`'ne yazar.
+
+    Açılışta ÇAĞRILMAZ (ağ gecikmesi botu bekletmesin); komut katmanı kurulduktan
+    sonra daemon thread olarak bir kez çalışır, `/health` sonucu okur.
+    """
+    bilgi = _public_hedef_tipi_getir(sohbetler)
+    setattr(_pkg, "_public_hedef_bilgisi", bilgi or None)
+    for kayit in bilgi:
+        if kayit.get("tur") == "channel":
+            _pkg.logger.warning(
+                "PUBLIC HEDEF KANAL (%s): kanalda KOMUT ÇALIŞMAZ. Komutlar için bir "
+                "GRUP kullanın ve PUBLIC_COMMAND_CHATS'e o grubun kimliğini yazın; "
+                "kanal yayın için TELEGRAM_GROUP_ID olarak kalabilir.",
+                kayit.get("sohbet") or "?")
+        elif kayit.get("tur"):
+            _pkg.logger.info(
+                "Public komut hedefi: %s (%s) — komut %s",
+                kayit.get("sohbet") or "?", kayit.get("tur"),
+                "açık" if kayit.get("komut") else "KAPALI")
+    return bilgi
+
+
+def _public_hedef_bilgisi_baslat(sohbetler=None) -> None:
+    """Teşhisi daemon thread'de başlat (açılışı bloklamaz, hata yutulur)."""
+    def _calis():
+        try:
+            _pkg._public_hedef_bilgisini_yenile(sohbetler)
+        except Exception as exc:  # noqa: BLE001 - teşhis asla botu düşürmesin
+            _pkg.logger.warning("Public hedef teşhisi çalıştırılamadı: %s", exc)
+
+    threading.Thread(target=_calis, name="public-hedef-teshis", daemon=True).start()
 
 
 def _redakte(deger, token: str = "") -> str:
@@ -1464,6 +1668,10 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
         admin_cache_sn=float(getattr(_pkg, "PUBLIC_COMMAND_ADMIN_CACHE_SN", 300) or 0),
     )
     setattr(_pkg, "_komut_modu", sonuc["mod"])
+    # Public hedefin kanal mı grup mu olduğunu ÖĞREN (asenkron, açılışı bloklamaz):
+    # kanal hedefinde komut imkânsızdır ve bu ancak Telegram'a sorularak bilinir.
+    if sonuc["mod"] != "kapali" and _pkg._public_komut_sohbetleri():
+        _public_hedef_bilgisi_baslat()
     if sonuc["mod"] == "webhook":
         setattr(_pkg, "_telegram_update_processor_ref", sonuc["processor"])
     elif sonuc["mod"] == "yoklama":

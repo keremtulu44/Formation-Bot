@@ -184,7 +184,14 @@ def test_set_webhook_dogru_payload_gonderir(monkeypatch):
     assert token == "111:AAA"
     assert payload["url"] == adres
     assert payload["secret_token"] == SECRET
-    assert payload["allowed_updates"] == ["message"]
+    # `message` ŞART (grup komutları); `channel_post` teşhis için BİLİNÇLİ olarak
+    # dahil: kanal hedefinde komut imkânsızdır ve bu ancak gönderi görülürse
+    # anlaşılır. Tek kaynak: telegram_commands.IZLENEN_GUNCELLEMELER.
+    from telegram_commands import IZLENEN_GUNCELLEMELER
+
+    assert payload["allowed_updates"] == list(IZLENEN_GUNCELLEMELER)
+    assert "message" in payload["allowed_updates"]
+    assert "channel_post" in payload["allowed_updates"]
     # Bayat komutlar (dünkü /tara) webhook kurulunca çalışmasın
     assert payload["drop_pending_updates"] is True
 

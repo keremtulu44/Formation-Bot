@@ -204,6 +204,13 @@ _lifecycle_manager_ref = None
 _telegram_listener_ref = None
 
 
+# PUBLIC komut hedefinin Telegram'daki GERÇEK tipi (getChat ile bir kez okunur).
+# Neden gerekli: `TELEGRAM_GROUP_ID` bir KANAL gösteriyorsa komut imkânsızdır
+# (üyeler kanala yazamaz; admin gönderilerinde `from` yoktur). Bu teşhis
+# olmadan "public'te komutlar çalışmıyor" sessiz bir bilmeceye dönüşür.
+_public_hedef_bilgisi = None
+
+
 # Webhook modunda: Telegram güncellemelerini işleyen nesne (yoklama thread'i YOK).
 # health_server'ın /webhook ucu bu referans üzerinden çalışır; bot hazır değilse
 # (açılıştaki ilk veri yüklemesi) uç 503 döner ve Telegram tekrar dener.

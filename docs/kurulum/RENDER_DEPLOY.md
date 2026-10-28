@@ -464,10 +464,21 @@ webhook (§4.6) ile toplanır.
 
 Başka sohbetlerden gelen mesajlar sessizce yok sayılır.
 
-> 📣 **Kanal komut kabul etmez.** Telegram **kanal** mesajlarını `channel_post`
-> türünde teslim eder; orada gönderen kullanıcı bilgisi (`from`) yoktur, yani
-> yöneticilik doğrulanamaz. Kanal hedefi yalnız yayın alır. **Grup** kimliği
-> kullanırsanız yöneticilerin mesajları `message` olarak gelir ve çalışır.
+> 🔴 **Kanal komut kabul etmez — kanaldan komut İMKÂNSIZDIR.** Telegram **kanal**
+> gönderilerini `channel_post` türünde teslim eder; orada gönderen kullanıcı
+> bilgisi (`from`) yoktur, yani yöneticilik doğrulanamaz. Ayrıca üyeler zaten
+> kanala mesaj **yazamaz**. Kanal hedefi yalnız yayın alır.
+>
+> ⚠️ **Ad yanıltıcı:** `TELEGRAM_GROUP_ID` alanına `@bisthisseveri` gibi bir
+> **kanal** adresi yazmak çok yaygın ve sessiz bir hatadır (kanal kimliği de
+> `@ad` / `-100…` biçimindedir). Bu projede **02.10.2026 kararı KANAL** olduğu
+> için `TELEGRAM_GROUP_ID` büyük olasılıkla kanalı gösterir → o sohbette komut
+> çalışmaz. Kanal yayın için kalabilir; komutlar için **ayrı bir grup** açıp
+> kimliğini `PUBLIC_COMMAND_CHATS` olarak verin.
+>
+> **Kesin teşhis:** bot sahibi DM'den `/teshis` yazar (ya da sunucuda
+> `python public_komut_teshis.py`) → hedefin `channel` mı `supergroup` mu olduğu,
+> webhook teslimi ve bot üyeliği tek mesajda söylenir. `/health` → `komut.public_hedefler`.
 
 #### Grup komutlarını açma (varsayılan: AÇIK)
 
@@ -499,6 +510,16 @@ Davranış ayrıntıları:
 * `/health` → `komut` bloğunda `public_komut_hazir`, `public_islenen`,
   `yetkisiz_kullanici`, `admin_kontrol_hatasi`, `public_kapali_komut` alanları
   "grupta komut çalışmıyor" sorusunun hangi kapıda takıldığını gösterir.
+* **Kanal teşhisi:** `komut.public_hedefler` her hedefin `getChat` ile okunan
+  gerçek tipini (`tur`) ve komut alıp alamadığını (`komut`) taşır;
+  `komut.kanal_gonderisi` kanaldan gelen gönderi sayısıdır. Sıfırdan büyükse
+  hedef kanaldır → komut beklemeyin.
+* **Hangi yoldan işlendi:** `komut.son_komut_kaynagi` (`dm`/`public`) ve
+  `komut.son_sohbet_tipi`. `dm` ise grup yolu hiç devreye girmemiştir.
+* `/teshis` **public beyaz listede** (salt-okunur): grup yöneticisi de çalıştırabilir.
+* Telegram'a `allowed_updates` olarak `message`, `edited_message`, `channel_post`,
+  `edited_channel_post` bildirilir. `channel_post` **bilinçli**: kanal hedefinde
+  "hiçbir şey olmuyor" yerine "hedef kanal" cevabını verebilmek için.
 
 | Komut | Ne yapar |
 |---|---|

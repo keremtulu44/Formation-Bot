@@ -70,6 +70,16 @@ BACKLOG_SINIR_SN = 15 * 60      # açılışta bundan eski mesajlar yok sayılı
 # "hiç cevap gelmedi" yerine "bot uyuyordu" bilgisini alır.
 BAYAT_GUVENLI_KOMUTLAR = frozenset({"yardim", "help", "start", "durum"})
 
+# Telegram'a "hangi güncelleme türlerini gönder" deriz. `channel_post` BİLİNÇLİ
+# olarak listede: kanal hedefi komut kabul etmez ama kanaldan gelen gönderileri
+# GÖRMEZSEK "public'te komutlar çalışmıyor" sessiz bir bilmeceye dönüşür.
+# Görünce sayaç artar ve logda hedefin KANAL olduğu söylenir (teşhis).
+IZLENEN_GUNCELLEMELER = (
+    "message", "edited_message", "channel_post", "edited_channel_post",
+)
+# Telegram API'ye JSON olarak verilecek biçim (getUpdates parametresi metin ister).
+IZLENEN_GUNCELLEMELER_JSON = "[" + ", ".join(f'"{t}"' for t in IZLENEN_GUNCELLEMELER) + "]"
+
 
 def kirp(text: str, sinir: int = MAX_MESSAGE_LEN) -> str:
     """Telegram mesaj sınırına sığdırır (kesildiğini de söyler)."""
@@ -231,11 +241,17 @@ class TelegramCommandListener:
             # (fail-closed devreye girdi) ve kaç komut public'te kapalıydı.
             "public": 0, "yetkisiz_kullanici": 0, "admin_kontrol_hatasi": 0,
             "public_kapali_komut": 0,
+            # Kanal gönderileri: KANAL hedefinde komut imkânsızdır (üyeler kanala
+            # yazamaz, admin gönderisinde `from` yok). Sayaç, "hiçbir şey olmuyor"
+            # yerine "hedef kanal" cevabını verir.
+            "kanal_gonderisi": 0,
         }
         self._son_komut_adi: Optional[str] = None
         self._son_komut_ts: Optional[float] = None
         self._son_yetkisiz_chat = ""
         self._son_public_sohbet = ""
+        self._son_komut_kaynagi: Optional[str] = None
+        self._son_sohbet_tipi: Optional[str] = None
         self._admin_kararlari: Dict[Tuple[str, str], Tuple[bool, float]] = {}
 
     # --- yaşam döngüsü -------------------------------------------------
@@ -306,7 +322,12 @@ class TelegramCommandListener:
             "yetkisiz_kullanici": self._sayac["yetkisiz_kullanici"],
             "admin_kontrol_hatasi": self._sayac["admin_kontrol_hatasi"],
             "public_kapali_komut": self._sayac["public_kapali_komut"],
+            "kanal_gonderisi": self._sayac["kanal_gonderisi"],
             "son_public_sohbet": self._maskele(self._son_public_sohbet),
+            # Hangi YOLDAN işlendi: "dm" ise public komut hiç çalışmadı demektir.
+            # "grup komutlarım çalışmıyor" şikâyetinde ilk bakılacak alan.
+            "son_komut_kaynagi": self._son_komut_kaynagi,
+            "son_sohbet_tipi": self._son_sohbet_tipi,
         }
 
     # --- public (grup) yetkisi ------------------------------------------
@@ -418,7 +439,8 @@ class TelegramCommandListener:
         esik = time.time() - BACKLOG_SINIR_SN
         atlanan = 0
         for _ in range(azami_tur):
-            params = {"timeout": 0, "limit": 100, "allowed_updates": '["message"]'}
+            params = {"timeout": 0, "limit": 100,
+                      "allowed_updates": IZLENEN_GUNCELLEMELER_JSON}
             if self._offset is not None:
                 params["offset"] = self._offset
             try:
@@ -508,7 +530,7 @@ class TelegramCommandListener:
         params = {
             "timeout": self.poll_timeout,
             "limit": 20,
-            "allowed_updates": '["message"]',
+            "allowed_updates": IZLENEN_GUNCELLEMELER_JSON,
         }
         if self._offset is not None:
             params["offset"] = self._offset
@@ -631,8 +653,17 @@ class TelegramCommandListener:
                 if sohbet_tipi in ("channel",):
                     # Kanal yayınlarında gönderen KULLANICI yoktur (`sender_chat`),
                     # yöneticilik doğrulanamaz → komut çalıştırılmaz.
-                    logger.debug("Kanal gönderisi komut olarak çalıştırılmadı (chat_id=%s)",
-                                 self._maskele(sohbet_id) or "?")
+                    # SESSİZ KALMA: "public'te komutlar çalışmıyor" şikâyetinin en
+                    # sık sebebi hedefin KANAL olmasıdır; sayaç + tek satır log
+                    # bunu dışarıdan görünür yapar (`/health` → kanal_gonderisi).
+                    self._sayac["kanal_gonderisi"] += 1
+                    if self._sayac["kanal_gonderisi"] == 1 or metin:
+                        logger.warning(
+                            "Public hedef KANAL (chat_id=%s): kanalda komut ÇALIŞMAZ — "
+                            "üyeler kanala mesaj yazamaz, admin gönderisinde `from` yok. "
+                            "Komut için GRUP kullanın (PUBLIC_COMMAND_CHATS).",
+                            self._maskele(sohbet_id) or "?",
+                        )
                     return None
                 if self.public_enabled:
                     public_yolu = True
@@ -660,6 +691,11 @@ class TelegramCommandListener:
                 return None
         if not metin:
             return None
+
+        # Teşhis: hangi yoldan işlendi? ("grup komutlarım çalışmıyor" sorusunda
+        # `son_komut_kaynagi == "dm"` ise public yol hiç devreye girmemiştir.)
+        self._son_komut_kaynagi = "public" if public_yolu else "dm"
+        self._son_sohbet_tipi = sohbet_tipi or None
 
         komut, arguman = komut_coz(metin)
         if not komut:
