@@ -26,13 +26,21 @@ Yükselen Üçgen — kapanışla
 
 ◈ 4s yapı dış ve iç yukarı
 
-◇ 32321 formasyon · %76 tuttu   ← formasyon sonucu (FRM-15)
-◇ tutunca ~1,05 TL · %2,6       ← aynı ölçüm, TL ve % olarak
-◇ rol uyumlu %80 · 15724        ← yön–rol uyumu (FRM-20)
+◇ benzer 32.321 · %76'sı sürdü  ← formasyon sonucu (FRM-15), taban 32.321
+◇ geri çekilme %35 (28.624)     ← FRM-12, KENDİ tabanı 28.624
+◇ tutarsa tepe ~1,05 TL (+%2,6) ← aynı ölçüm, TL ve % olarak
+◇ rol uyumlu %80 (15.724)       ← yön–rol uyumu (FRM-20)
 · geçmiş davranış, kazanç değil
 
 katılım 4s hacim 0,45 kat
 ```
+
+> **2026-10-28 değişikliği (kullanıcı):** eski hâlde tek satırda
+> `   %76'sı devam etti · %35 geri` yazıyordu; %76 ile %35 yan yana gelince
+> "76 + 35 = 111" gibi okunuyordu. Oysa iki sayı **farklı tablolardan**
+> (76 → FRM-15 n=32.321, 35 → FRM-12 n=28.624). Artık kural: **bir satır =
+> bir taban**, taban satırın kendisinde parantezle yazılır ve girintili devam
+> satırı yok.
 
 ## 2. Sözleşme
 
@@ -61,14 +69,14 @@ süzülür (`AILE_OLCU`), sonra aile içinde önceliğe göre sıralanır. Kart 
 
 | # | Ölçüm | Koşul (canlı veri) | Kart satırı | n | Kaynak |
 |---|---|---|---|---|---|
-| 0 | MS devamı | alarm TF'de teyitli+güncel BOS/CHoCH | `◇ 1651 kırılımın %75'i sürdü` | kova n | Soru 5 |
-| 1 | Formasyon sonucu | her formasyon alarmı (taban satır) | `◇ 32321 formasyon · %76 tuttu` | 32321 | FRM-15 |
-| 2 | Tutan hareket | ATR + kırılım fiyatı varsa | `◇ tutunca ~1,05 TL · %2,6` | 24618 | FRM-16 |
-| 3 | Yön–rol uyumu | kırılım yönü + en yakın PH/PL | `◇ rol uyumlu %80 · 15724` | 15724 / 13573 | FRM-20 |
-| 4 | Geri çekilme | yalnız `retest_seen=False` | `◇ geri çekilme %35 · 28624` | 28624 | FRM-12 |
-| 5 | Dokunuş tepkisi | fiyat bir OB/FVG temasında | `◇ 240484 temasta %65 tepki` | 240484 | Soru 2 |
+| 0 | MS devamı | alarm TF'de teyitli+güncel BOS/CHoCH | `◇ 1651 kırılımın %75'i sürdü` | 1651 (satırda) | Soru 5 |
+| 1 | Formasyon sonucu | her formasyon alarmı (taban satır) | `◇ benzer 32.321 · %76'sı sürdü` | 32.321 (satırda) | FRM-15 |
+| 2 | Tutan hareket | ATR + kırılım fiyatı varsa | `◇ tutarsa tepe ~1,05 TL (+%2,6)` | 24.618 (FRM-16) | FRM-16 |
+| 3 | Yön–rol uyumu | kırılım yönü + en yakın PH/PL | `◇ rol uyumlu %80 (15.724)` | 15.724 / 13.573 (satırda) | FRM-20 |
+| 4 | Geri çekilme | yalnız `retest_seen=False` | `◇ geri çekilme %35 (28.624)` | 28.624 (satırda) | FRM-12 |
+| 5 | Dokunuş tepkisi | fiyat bir OB/FVG temasında | `◇ 240.484 temasta %65 tepki` | 240.484 (satırda) | Soru 2 |
 | 6 | Zone yüksekliği | ATR + alarm TF zone geometrisi | `◇ bölge 1,0 kat · %68 (858)` | kova n | Soru 4 |
-| 7 | Hacim çeyreği | rvol alt/üst uçta (≈Q1 / ≈Q4) | `◇ hacim yüksekken %61 sürdü` | kova n | Hacim tablosu |
+| 7 | Hacim çeyreği | rvol alt/üst uçta (≈Q1 / ≈Q4) | `◇ hacim yüksek: %61 tepki verdi` | 11.928 / 6.740 (`/olcum`) | Hacim tablosu |
 
 ### Aile ayrımı (2026-10-22 kararı)
 
@@ -79,9 +87,9 @@ Bu yüzden her alarm yalnız kendi ailesini basar:
 
 | Aile | Basılan ölçüm | Tipik satır |
 |---|---|---|
-| `FRM` | `uyum` · `retest` · `temel` · `hareket` | `◇ 32321 formasyon · %76 tuttu` |
+| `FRM` | `temel` · `detay` · `hareket` · `uyum` | `◇ benzer 32.321 · %76'sı sürdü` |
 | `MS` | `ms` | `◇ 1651 kırılımın %75'i sürdü` |
-| `ZONE` | `zone` · `yukseklik` · `rvol` | `◇ 240484 temasta %65 tepki` |
+| `ZONE` | `zone` · `yukseklik` · `rvol` | `◇ 240.484 temasta %65 tepki` |
 | `""` (boş) | kısıtsız — eski davranış (geri dönüş yolu) | — |
 
 ### Beklenti hükmü (`TELEGRAM_KART_TAHMIN`, varsayılan KAPALI)
@@ -134,22 +142,56 @@ anlayamayabilir"*. Ölçüm satırında kısaltma yaşamaz:
 | `retest oranı %35` | `geri çekilme %35` | jargon → günlük sözcük |
 | `1,2 ATR` | `~1,05 TL · %2,6` | ATR bilmeden okunur (ATR varsa) |
 | `bölge 1,4 ATR` | `bölge 1,4 kat` | "normalin katı" ifadesi |
-| `yüksek RVOL` | `hacim yüksekken` | RVOL kısaltması kartta yok |
-| `tamamlandı %76` | `%76 tuttu` | motorun `FORMASYON_TAMAMLANDI` hâli "hedefe ulaştı" DEĞİL, "kırılım teyit aldı ve bandın içine dönmedi" demek |
+| `yüksek RVOL` | `hacim yüksek:` + `tepki verdi` | RVOL kısaltması kartta yok; ölçü `tepki_CALISTI` olduğu için fiil "tepki verdi" (2026-10-28) |
+| `tamamlandı %76` | `%76'sı sürdü` (2026-10-28: `%76 tuttu` yerine) | motorun `FORMASYON_TAMAMLANDI` hâli "hedefe ulaştı" DEĞİL, "kırılım teyit aldı ve bandın içine dönmedi" demek; "tuttu" hedef çağrışımı yapıyordu |
 | `bar` | `mum` | aynı şey, herkesin bildiği sözcük |
 | `FVG` / `OB` | `boşluk` / `blok` | kart yüzeyinde kısaltma yok |
 | `◇ BOS …` benzeri sıfat | ölçü | `tipik`, `zayıf`, `güçlü`, `muhtemel` yasak (testli) |
+| `%76 tuttu` | `%76'sı sürdü` | "tuttu" hedefe ulaştı gibi okunuyordu; ölçülen şey bandın içine DÖNMEMESİ |
+| `%35 geri` (aynı satırda) | `◇ geri çekilme %35 (28.624)` (kendi satırı) | iki sayı yan yana gelince toplanıyordu (2026-10-28) |
 
 Testler: `test_ampirik_referans.py::test_sade_dilde_kisaltma_yok`,
 `::test_sade_dilde_sifat_yok`, `::test_tuttu_ifadesi_motorun_terminal_durumunu_dogru_anlatir`,
+`::test_ayni_satirda_iki_farkli_taban_olmaz`, `::test_hacim_satiri_dokunus_tabanindan_ayrilir`,
 `test_kart_metin.py::test_kart_jargon_tasimaz`.
+
+### Tek taban kuralı (2026-10-28)
+
+Kullanıcı: *"kart dili düzeltilecek"*. Sorun yalnız sözcük değil, **sayının kime
+ait olduğu**ydu:
+
+```
+önce:  ◇ benzer 32.321 kurulum
+          %76'sı devam etti · %35 geri      ← iki ayrı tablo, tek satır
+sonra: ◇ benzer 32.321 · %76'sı sürdü        ← taban 32.321 (FRM-15)
+       ◇ geri çekilme %35 (28.624)           ← taban 28.624 (FRM-12)
+```
+
+Kurallar (`_sigan` + `_binlik` ile uygulanır):
+
+1. **Bir satır = bir taban.** Satırda yüzde varsa o yüzdenin `n`'i aynı satırda,
+   parantez içinde ve binlik ayırıcıyla yazılır: `(28.624)`, `(15.724)`.
+2. **Girintili devam satırı yok.** Ölçü satırı kart sözleşmesinde artık
+   tek başına anlamlıdır (kart girintili satırı yalnız bu blokta kabul ediyordu;
+   artık hiç kabul etmiyor).
+3. **Sığmazsa cümle kısalır.** `_sigan([...])` bütçeye (262,8 px) sığan ilk
+   biçimi seçer; hiçbiri sığmazsa en kısası yazılır. Örn.
+   `◇ hacim yüksekken %61 tepki verdi` 285 px olduğu için
+   `◇ hacim yüksek: %61 tepki verdi` (261 px) basılır. Bu satırda taban
+   sığmadığı için kartta yoktur; `/olcum` `(n 11.928)` yazar — taban
+   gizlenmez, komuta taşınır (türetilmiş satır kuralı, bkz. 4).
+4. **Türetilmiş satır tabanını komşusundan ödünç almaz.** `◇ tutarsa tepe …`
+   (FRM-16, n=24.618) yüzde taşır ama kendi tabanı farklı olduğu için taban
+   yazmaz; kartta zaten formasyon tabanı bir üstte durur.
+5. **Test:** `::test_ayni_satirda_iki_farkli_taban_olmaz` — bir satırda iki `%`
+   varsa o satır `◇ benzer N · %X'sı sürdü` olmak zorundadır (tek taban).
 
 ### Kaldırılan satır: `zone içi/dışı %76 / %77`
 
 Eski satır iki grup arasındaki **1,1 puanlık** farkı basıyordu; kendi kanıt
 eşiği (`KANIT_ESIKLERI["zone"]` = ±2 puan) hiçbir zaman geçmiyor, yani satır
 kart yerini boşa harcıyordu. Yerine ölçülmüş dokunuş tepkisi geçti
-(`◇ 240484 temasta %65 tepki`; aralık %65,0–66,5 → **alt uç** yazılır).
+(`◇ 240.484 temasta %65 tepki`; aralık %65,0–66,5 → **alt uç** yazılır).
 
 ### Bilinçli yaklaşımlar (gizlenmiyor)
 

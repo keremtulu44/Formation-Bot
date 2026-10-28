@@ -148,10 +148,17 @@ ucunu açar ve Telegram komutları webhook ile gelir (adres `RENDER_EXTERNAL_URL
 yoklamasını kullanır. Detay: `docs/kurulum/RENDER_DEPLOY.md` §4.6.
 
 Bot artık **iki yönlüdür**: Telegram'dan gelen komutları yanıtlar. Komutlar
-yalnızca `TELEGRAM_CHAT_ID`'den (DM) kabul edilir; public grup/kanal hedefi
-(`TELEGRAM_GROUP_ID`) yalnız yayın alır. Kanal mesajları Telegram'da
-`channel_post` türünde gelir ve bot yalnız `message` güncellemelerini dinlediği
-için **kanalda komut yolu yoktur**:
+`TELEGRAM_CHAT_ID` (DM) sohbetinden **her komutla**, public grup/supergroup
+hedefinden (`PUBLIC_COMMAND_CHATS`, yoksa `TELEGRAM_GROUP_ID`) ise **yalnız o
+grubun yöneticileri** için ve varsayılan olarak **okuma komutlarıyla** çalışır
+(grup yolu 2026-10-28'de açıldı). Kanal mesajları Telegram'da `channel_post`
+türünde gelir ve bot yalnız `message` güncellemelerini dinlediği için
+**kanalda komut yolu yoktur**:
+
+`/grafik` (diğer adı `/g`) grupta `PUBLIC_COMMAND_EXTRA=grafik,g` ile açılır;
+açıldığında **kareler ve sonuç metni komutun geldiği gruba** gider (DM'den
+çağrılırsa DM'e). İlerleme/gecikme mesajları her durumda DM'de kalır; böylece
+grup sohbetine bot gürültüsü düşmez.
 
 | Komut | Ne yapar |
 |---|---|

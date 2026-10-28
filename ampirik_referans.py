@@ -257,10 +257,13 @@ def _nadir(n: int) -> str:
 ONCELIK = {
     "ms": 0,
     "temel": 1,
-    # `detay`, `temel` başlığının altına giren açıklama satırıdır (2026-10-23):
-    #   ◇ benzer 32.321 kurulum
-    #      %76'sı devam etti · %35 geri
-    "detay": 1,
+    # `detay` 2026-10-28'den beri GERİ ÇEKİLME satırıdır (FRM-12) ve KENDİ
+    # tabanını yazar:
+    #   ◇ benzer 32.321 · %76'sı sürdü
+    #   ◇ geri çekilme %35 (28.624)
+    # Eski biçim tek satırda iki farklı tablonun yüzdesini birleştiriyordu
+    # (`%76'sı devam etti · %35 geri`) ve 76+35 toplamı gibi okunuyordu.
+    "detay": 2,
     "hareket": 2,
     "uyum": 3,
     "retest": 4,
@@ -414,9 +417,13 @@ def _uyum_satiri(k: Kurulum) -> tuple[str, int] | None:
     n, oran = FRM_UYUM[anahtar]
     if int(n) < NADIR_ESIK:
         return (_nadir(int(n)), ONCELIK["uyum"])
-    # "rol uyumlu %80 n15724" → "rol uyumlu %80 · 15724": `n` kısaltması
-    # okunmuyordu; taban sayı olarak, oran yüzde olarak yazılır.
-    return (f"◇ rol {anahtar} {_yuzde(oran)} · {n}", ONCELIK["uyum"])
+    # 2026-10-28: taban biçimi diğer ölçü satırlarıyla AYNI — binlik ayırıcı ve
+    # parantez (`◇ rol uyumlu %80 (15.724)`). Eski `· 15724` ham sayıydı ve
+    # "%80 15724 ne?" diye okunuyordu.
+    return (_sigan([
+        f"◇ rol {anahtar} {_yuzde(oran)} ({_binlik(int(n))})",
+        f"◇ rol {anahtar} {_yuzde(oran)}",
+    ]), ONCELIK["uyum"])
 
 
 def _yukseklik_satiri(k: Kurulum) -> tuple[str, int] | None:
@@ -459,9 +466,25 @@ def _rvol_satiri(k: Kurulum) -> tuple[str, int] | None:
         return None
     # "Q4 RVOL %61" yerine "hacim yüksekken %61 sürdü": çeyrek numarası ve
     # kısaltma kullanıcıya bir şey söylemiyordu.
+    #
+    # 2026-10-28 (kullanıcı): "fiil kalsın ama anlam pek düzgün değil".
+    # Haklı: tablodaki sütun `tepki_CALISTI` — ölçülen şey dokunuş sonrası
+    # BEKLENEN YÖNDE TEPKİ, "kırılımın sürmesi" değil. "sürdü" yanlış fiildi,
+    # "%61" de öznesiz kalıyordu ("neyin %61'i?"). Doğrusu "tepki verdi"dir.
+    # Taban (n) sığmadığı için satırda yazılmaz; `/olcum` tabanı verir
+    # (`· hacim yüksek %61,0 (n 11.928)`) — taban gizlenmiyor, komuta taşındı.
+    yuzde = _yuzde(calisti)
     if indeks == 3:
-        return (f"◇ hacim yüksekken {_yuzde(calisti)} sürdü", ONCELIK["rvol"])
-    return (f"◇ hacim düşükken {_yuzde(calisti)} sürdü", ONCELIK["rvol"])
+        return (_sigan([
+            f"◇ hacim yüksekken {yuzde} tepki verdi",     # 285 px → sığmaz
+            f"◇ hacim yüksek: {yuzde} tepki verdi",       # 261 px
+            f"◇ hacim yüksek {yuzde} tepki verdi",        # 256 px
+        ]), ONCELIK["rvol"])
+    return (_sigan([
+        f"◇ hacim düşükken {yuzde} tepki verdi",          # 277 px → sığmaz
+        f"◇ hacim düşük: {yuzde} tepki verdi",            # 252 px
+        f"◇ hacim düşük {yuzde} tepki verdi",             # 247 px
+    ]), ONCELIK["rvol"])
 
 
 def _zone_satiri(k: Kurulum) -> tuple[str, int] | None:
@@ -480,7 +503,9 @@ def _zone_satiri(k: Kurulum) -> tuple[str, int] | None:
     tepki = alt
     n = ZONE_TEPKI.get("dokunus_n")
     if n:
-        return (f"◇ {n} temasta {_yuzde(tepki)} tepki", ONCELIK["zone"])
+        # 2026-10-28: taban binlik ayırıcıyla (`240.484`), diğer ölçü
+        # satırlarıyla aynı biçim.
+        return (f"◇ {_binlik(int(n))} temasta {_yuzde(tepki)} tepki", ONCELIK["zone"])
     return (f"◇ temaslarda {_yuzde(tepki)} tepki", ONCELIK["zone"])
 
 
@@ -500,42 +525,62 @@ def _retest_satiri_eski(k: Kurulum) -> tuple[str, int] | None:
             ONCELIK["retest"])
 
 
-def _temel_satiri(k: Kurulum) -> tuple[str, int] | None:
-    """Formasyon ölçümünün BAŞLIĞI: kaç benzer kurulum var (FRM-15).
+def _sigan(adaylar: list[str]) -> str:
+    """Bütçeye sığan İLK aday; hiçbiri sığmazsa en kısası (en son aday).
 
-    Kullanıcı (2026-10-23): "32321 formasyon · %76 tuttu" satırı iki sayıyı
-    yan yana koyuyordu ve "%76 kazanç" diye okunuyordu. Artık başlık yalnız
-    ÖRNEK SAYISINI söyler; yüzde ve "devam etti" alt satırdadır
-    (`_detay_satiri`). "tuttu" = kırılım teyit aldı ve fiyat banda dönmedi
-    (hedefe ulaştı demek DEĞİL).
+    Kart satırı 283 px; aşan satır telefonda sarmalanıp bilgiyi bölüyordu.
+    Kelime seçimi bütçeye göre yapılır, kırpma yapılmaz.
+    """
+    for aday in adaylar:
+        if genislik(aday) <= _KART_ESIK_PX:
+            return aday
+    return adaylar[-1]
+
+
+def _temel_satiri(k: Kurulum) -> tuple[str, int] | None:
+    """Formasyon ölçümünün ilk satırı: örnek sayısı + devam oranı (FRM-15).
+
+    2026-10-28 — KULLANICI GERİ BİLDİRİMİ: kartta `%76` ile `%35` yan yana
+    duruyordu ve "76+35=111" diye okunuyordu. Sebep iki sayının FARKLI
+    tablolardan gelmesiydi (76 → FRM-15 n=32.321, 35 → FRM-12 n=28.624) ama
+    ikisi de tek satırdaydı. Artık her satır TEK taban taşır ve taban aynı
+    satırda yazılır:
+
+        ◇ benzer 32.321 · %76'sı sürdü      ← bu satırın tabanı 32.321
+        ◇ geri çekilme %35 (28.624)         ← bu satırın tabanı 28.624
+
+    "sürdü" = kırılım teyit aldı ve bant içine dönmedi (hedefe ulaştı DEĞİL).
     """
     n = int(FRM_TERMINAL["n"])
     if n < NADIR_ESIK:
         return None
-    return (f"◇ benzer {_binlik(n)} kurulum", ONCELIK["temel"])
+    devam = _yuzde(FRM_TERMINAL["tamamlandi"])
+    return (_sigan([
+        f"◇ benzer {_binlik(n)} · {devam}'sı sürdü",
+        f"◇ benzer {_binlik(n)} · {devam} sürdü",
+        f"◇ benzer {_binlik(n)} kurulum",
+    ]), ONCELIK["temel"])
 
 
 def _detay_satiri(k: Kurulum) -> tuple[str, int] | None:
-    """Ölçüm başlığının alt satırı: `   %76'sı devam etti · %35 geri`.
+    """Geri çekilme satırı (FRM-12): oran + KENDİ tabanı tek satırda.
 
-    Üç bilgi tek satırda: kırılımın sürmesi (FRM-15), geri çekilme oranı
-    (FRM-13, yalnız geri çekilme görülmemişse) ve rol uyumu (FRM-20). 283 px
-    bütçesi yüzünden sığmayan parçalar sırayla düşer — ölçü kısalmaz, ayrıntı
-    kısalır (2026-10-23 kullanıcı kararı: sade ama eksik olmayan satır).
+    2026-10-28: eskiden `%76'sı devam etti · %35 geri` biçimindeydi; iki ayrı
+    tablonun yüzdesi aynı satırda durduğu için toplam sanılıyordu. Artık ayrı
+    satır ve taban parantezde. Yalnız `retest_seen is False` iken basılır:
+    geri çekilme GÖRÜLDÜYSE ölçüm derinliğe bağlıdır (FRM-13), sabit oran
+    basmak yanıltıcı olurdu (uydurma yok).
     """
-    devam = _yuzde(FRM_TERMINAL["tamamlandi"])
-    parcalar = [f"{devam}'sı devam etti"]
-    if k.retest_seen is False and int(FRM_RETEST["n"]) >= NADIR_ESIK:
-        parcalar.append(f"{_yuzde(FRM_RETEST['oran'])} geri")
-    uyum = _uyum_orani(k)
-    if uyum is not None:
-        etiket, oran = uyum
-        parcalar.append(f"rol {etiket} {_yuzde(oran)}")
-    adaylar = ["   " + " · ".join(parcalar[:n]) for n in range(len(parcalar), 0, -1)]
-    for aday in adaylar:
-        if genislik(aday) <= _KART_ESIK_PX:
-            return (aday, ONCELIK["detay"])
-    return (adaylar[-1], ONCELIK["detay"])
+    if k.retest_seen is not False:
+        return None
+    n = int(FRM_RETEST["n"])
+    if n < NADIR_ESIK:
+        return (_nadir(n), ONCELIK["detay"])
+    oran = _yuzde(FRM_RETEST["oran"])
+    return (_sigan([
+        f"◇ geri çekilme {oran} ({_binlik(n)})",
+        f"◇ geri çekilme {oran}",
+    ]), ONCELIK["detay"])
 
 
 def _uyum_orani(k: Kurulum) -> tuple[str, float] | None:
@@ -814,35 +859,38 @@ def komut_metni() -> str:
         "Karttaki ◇ satırlarının kaynağı",
         "",
         "Formasyon (FRM ailesi):",
-        # Kart 2026-10-23: sayı `◇ benzer 32.321 kurulum` başlığında, yüzde
-        # hemen altında (`%76'sı devam etti`). Komut aynı dili konuşur.
-        f"· {_binlik(int(FRM_TERMINAL['n']))} benzer kurulum",
-        f"  %{_say(FRM_TERMINAL['tamamlandi'])} devam etti",
+        # Kart 2026-10-28: her ölçü satırı KENDİ tabanını yazar; iki ayrı
+        # tablonun yüzdesi aynı satırda durmaz. Komut aynı dili konuşur.
+        f"· benzer {_binlik(int(FRM_TERMINAL['n']))}"
+        f" · %{_say(FRM_TERMINAL['tamamlandi'])} sürdü",
         f"  %{_say(FRM_TERMINAL['basarisiz'])} geri döndü",
         f"  %{_say(FRM_TERMINAL['gecersiz'])} bozuldu",
-        # "devam etti" = kırılım teyit aldı ve bandın içine dönmedi; "hedefe
+        # "sürdü" = kırılım teyit aldı ve bandın içine dönmedi; "hedefe
         # ulaştı" DEĞİL. Kart da bu yüzden "tamamlandı" yazmıyor.
+        "  sürdü = bandın içine dönmedi",
         "· tutarsa tepe (lehte):",
-        f"  normalin {_say(mfe['medyan_atr'])} katı (n {mfe['n']})",
+        f"  normalin {_say(mfe['medyan_atr'])} katı (n {_binlik(int(mfe['n']))})",
         "  TL karşılığı kartta yazılır",
+        # Ayrı satır + kendi tabanı: kartta `◇ geri çekilme %35 (28.624)`.
         f"· geri çekilme %{_say(FRM_RETEST['oran'], 1)}"
-        f" (n {FRM_RETEST['n']})",
-        f"· rol uyumlu %{_say(uyum_oran)} (n {uyum_n})",
-        f"· uyumsuz %{_say(uyumsuz_oran)} (n {uyumsuz_n})",
+        f" (n {_binlik(int(FRM_RETEST['n']))})",
+        "  ayrı taban (FRM-12)",
+        f"· rol uyumlu %{_say(uyum_oran)} (n {_binlik(int(uyum_n))})",
+        f"· uyumsuz %{_say(uyumsuz_oran)} (n {_binlik(int(uyumsuz_n))})",
         "",
         "Yön olayı (MS ailesi):",
-        f"· 4s kırılım yukarı %{_say(bos_up[1])} (n {bos_up[0]})",
-        f"· aşağı %{_say(bos_down[1])} (n {bos_down[0]})",
+        f"· 4s kırılım yukarı %{_say(bos_up[1])} (n {_binlik(int(bos_up[0]))})",
+        f"· aşağı %{_say(bos_down[1])} (n {_binlik(int(bos_down[0]))})",
         "· kart: 'N olayın %X'i sürdü'",
         "",
         "Bölge teması (ZONE ailesi):",
-        f"· {_say(ZONE_TEPKI['dokunus_n'], 0)} temasta"
+        f"· {_binlik(int(ZONE_TEPKI['dokunus_n']))} temasta"
         f" %{_say(tepki_alt)} tepki",
         f"· %{_say(gecilme_alt)}–%{_say(gecilme_ust)} kadarı geçilir",
         f"· boşluk tam dolum %{_say(dolum_alt)}–%{_say(dolum_ust)}",
-        f"· geniş bölge %{_say(yuksek_oran)} (n {yuksek_n})",
-        f"· hacim yüksek %{_say(rvol_q4[1])} (n {rvol_q4[0]})",
-        f"· hacim düşük %{_say(rvol_q1[1])} (n {rvol_q1[0]})",
+        f"· geniş bölge %{_say(yuksek_oran)} (n {_binlik(int(yuksek_n))})",
+        f"· hacim yüksek %{_say(rvol_q4[1])} (n {_binlik(int(rvol_q4[0]))})",
+        f"· hacim düşük %{_say(rvol_q1[1])} (n {_binlik(int(rvol_q1[0]))})",
         "",
         f"n < {NADIR_ESIK} ise oran yazılmaz:",
         "· '◇ nadir (n) · yorum yok'",

@@ -515,6 +515,13 @@ Davranış ayrıntıları:
 * Public'te varsayılan **kapalı**: `/tara`, `/grafik`, `/evet`, `/hayir` — ağır
   ya da durum değiştiren komutlar. `PUBLIC_COMMAND_EXTRA=tara` ile açılabilir
   (uyarı: `/tara` tam evren taramasıdır, dakikalarca sürer).
+* **`/grafik` grupta (2026-10-28):** `PUBLIC_COMMAND_EXTRA=grafik,g` yazılınca
+  komut grupta çalışır ve **kareler + sonuç metni o gruba** gider
+  (`grafik_sohbete_gonder(chat_id=…)` / `send_to_chat`). DM'den çağrıldığında
+  davranış değişmez (kareler DM'e). İlerleme/gecikme mesajları her iki yolda da
+  DM'de kalır. `/g` ayrı bir addır: yalnız `grafik` yazarsan `/g` kapalı kalır.
+  Bot gruba **yönetici** olmalıdır; değilse `sendMediaGroup` 403 döner ve kareler
+  gönderilemez (log: "grafik albümü gruba gönderilemedi").
 * `PUBLIC_COMMAND_EXTRA` **alias'ları da** kapsar: `/p` açıksa `/panel` de açıktır
   (beyaz liste işleyici bazlıdır).
 * `/health` → `komut` bloğunda `public_komut_hazir`, `public_islenen`,

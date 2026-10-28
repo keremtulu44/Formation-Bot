@@ -961,7 +961,19 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 # alır, grup YALNIZ 1 kare + üst zaman dilimi.
                                 # Ayrı liste üretilir; aynı veriden çizilir
                                 # (§14.2: kare kopyadır, motor yeniden koşmaz).
-                                ust_tf = _pkg._UST_TF.get(str(tf_name or '').lower())
+                                # 2026-10-28 (kullanıcı: "grup da kanal gibi
+                                # olsun, bir ana bir de üst TF"): 1g alarmının
+                                # ÜST zaman dilimi yok (bot 1s/2s/4s/1g tarıyor),
+                                # grupta tek kare kalıyordu. O durumda ikinci
+                                # kare ALT zaman dilimi olur (1g → 4s) ve
+                                # etiketi "alt zaman dilimi" yazar; yanlış
+                                # "üst" demektense doğru söylemek yeğdir.
+                                ana_tf = str(tf_name or '').lower()
+                                ust_tf = _pkg._UST_TF.get(ana_tf)
+                                ust_rol = "ust"
+                                if ust_tf is None:
+                                    ust_tf = _pkg._ALT_TF.get(ana_tf)
+                                    ust_rol = "alt"
                                 ust_cerceve = (taze.get(ust_tf)
                                                if ust_tf and taze.get(ust_tf) is not None
                                                else None)
@@ -977,6 +989,11 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                     sembol=stock, zaman_damgasi=df_tf.index[-1],
                                     adet=2, simdi=simdiki_zaman)
                                 if public_veri.get("goruntular"):
+                                    # İkinci karenin "üst/alt" rolü kaynaktan
+                                    # yazılır: notifier TF sırasını bilmek
+                                    # zorunda kalmaz, caption yanlış olmaz.
+                                    if len(public_veri["goruntular"]) > 1:
+                                        public_veri["goruntular"][1]["rol"] = ust_rol
                                     payload['grafik_verisi_public'] = public_veri
                             except Exception as grafik_hata:  # noqa: BLE001 - görsel alarmı düşürmesin
                                 # Sayaç/diagnostic kodu da alarm akışını durduramaz.

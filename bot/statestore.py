@@ -96,6 +96,12 @@ import main as _pkg  # geç bağlama: yamalı adlar _pkg.X (plan §3)
 #: `mtf_destek` hesabındaki teyit TF'siyle aynı mantık, karttan bağımsız sabit.
 _UST_TF = {"1h": "4h", "2h": "4h", "4h": "1d"}
 
+#: Üst TF'si OLMAYAN alarmlarda public görseline eklenen ikinci kare.
+#: Tarama 1s/2s/4s/1g yapıyor; 1g'nin üstü (haftalık) yok. 2026-10-28 kullanıcı
+#: kararı: "tek kare kalmasın, 4s alt zaman dilimi olarak gelsin". Etiket de
+#: doğru okunsun diye kareye `rol="alt"` yazılır (yanlış "üst" demek yerine).
+_ALT_TF = {"1d": "4h"}
+
 
 # main_loop icinde olusturulan nesnelerin global referanslari (heartbeat icin)
 _deque_manager_ref = None
