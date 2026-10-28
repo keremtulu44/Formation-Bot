@@ -439,6 +439,30 @@ PUBLIC_SIKISMA_MIN_CONTRACTION = _env_float("PUBLIC_SIKISMA_MIN_CONTRACTION", 0.
 # (grup önceliklidir). Değer @kullanici_adi ya da -100... sayısal ID olabilir.
 TELEGRAM_GROUP_ID = os.getenv("TELEGRAM_GROUP_ID", "").strip()
 
+
+# --- PUBLIC GRUP KOMUTLARI (2026-10-28) -------------------------------------
+# Eskiden kural kesindi: komutlar YALNIZ TELEGRAM_CHAT_ID (DM) sohbetinden
+# kabul edilirdi; public grup yalnız yayın alırdı ("orası yalnız yayın alır").
+# Artık grup/supergroup sohbetinde komut çalışabilir — ama YALNIZCA o sohbetin
+# YÖNETİCİLERİ için ve yalnız okuma komutlarında. Üç kilit birlikte çalışır:
+#   1. sohbet public komut listesinde olacak (PUBLIC_COMMAND_CHATS),
+#   2. komut public beyaz listesinde olacak (bot/commands.py PUBLIC_KOMUT_ADLARI),
+#   3. gönderen kişi getChatMember ile administrator/creator çıkacak.
+# DM davranışı DEĞİŞMEZ: DM'de beyaz liste yoktur, her komut çalışır.
+_PUBLIC_COMMANDS_HAM = os.getenv("PUBLIC_COMMANDS_ENABLED", "1").strip().lower()
+PUBLIC_COMMANDS_ENABLED = _PUBLIC_COMMANDS_HAM not in {"0", "false", "no", "off", "hayir"}
+# Public komut kabul edecek sohbetler. Boşsa TELEGRAM_GROUP_ID / TELEGRAM_CHANNEL_ID
+# kullanılır (yani mevcut kurulumda ek env GEREKMEZ). Virgülle çok sohbet eklenebilir.
+PUBLIC_COMMAND_CHATS = [p.strip().lstrip("@") for p in os.getenv(
+    "PUBLIC_COMMAND_CHATS", "").split(",") if p.strip()]
+# Yönetici doğrulaması (getChatMember) sonucu bu kadar saniye önbelleklenir:
+# her komutta API çağrısı yapılırsa Telegram hız limitine takılabilir.
+PUBLIC_COMMAND_ADMIN_CACHE_SN = _env_int("PUBLIC_COMMAND_ADMIN_CACHE_SN", 300)
+# Public'te varsayılan olarak KAPALI olan komutları tek tek açmak için
+# (örn. "tara,evet"). Boş = yalnız varsayılan okuma listesi.
+PUBLIC_COMMAND_EXTRA = [p.strip().lower() for p in os.getenv(
+    "PUBLIC_COMMAND_EXTRA", "").split(",") if p.strip()]
+
 # Public kalite eşiği TF bazlıdır ve DM alarm eşikleriyle AYNI (tek kaynak):
 # 1h 80 · 2h 78 · 4h 75 · 1d 70. Env ile geçersiz kılmak için "1h:82,4h:78".
 def _tf_esiklerini_coz(ham: str, varsayilan: dict) -> dict:

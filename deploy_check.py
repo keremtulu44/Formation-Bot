@@ -254,6 +254,10 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("TELEGRAM_TEST_KEY", False, "İsteğe bağlı: /test ucunu açar (telefondan Telegram testi)"),
         ("SUPABASE_STORE_PREFIX", False, "Varsayılan formation-bot: ; aynı tabloyu paylaşan 2. kopya için değiştirin"),
         ("BOT_INSTANCE_ID", False, "Varsayılan hostname:pid ; ikinci canlı kopya varsa farklı ad verin (B10)"),
+        ("PUBLIC_COMMANDS_ENABLED", False, "Public GRUP komutları (varsayılan 1 = açık): yalnız grup YÖNETİCİLERİ okuma komutlarını çalıştırır"),
+        ("PUBLIC_COMMAND_CHATS", False, "Boş = TELEGRAM_GROUP_ID; virgülle çok sohbet (-100…,@grup_adi)"),
+        ("PUBLIC_COMMAND_EXTRA", False, "Public'te kapalı komutları aç (örn. tara). Boş = yalnız okuma listesi"),
+        ("PUBLIC_COMMAND_ADMIN_CACHE_SN", False, "getChatMember sonucu önbelleği (varsayılan 300 sn; 0 = kapalı)"),
         ("TELEGRAM_GRAFIK", False, ("İsteğe bağlı: 'alarm' → her alarm metninin ALTINA mum karesi ekler "
                                      "(varsayılan 'yok': gönderim bugünküyle birebir aynı)")),
         ("TELEGRAM_GRAFIK_ADET", False, "İsteğe bağlı: alarm başına en fazla kare (1-4, varsayılan 4)"),
@@ -745,7 +749,8 @@ def kontrol_telegram_yol(token: str, webhook_secret_tanimli: bool) -> None:
             satir(FAIL, f"Telegram webhook teslim hatası{yas_metni}", gizli_hata)
 
 
-def kontrol_public_hedef(token: str, grup_id: str, chat_id: str = "") -> bool:
+def kontrol_public_hedef(token: str, grup_id: str, chat_id: str = "",
+                        public_komut_acik: bool = False) -> bool:
     """Kanal/grup hedefini doğrular: bot orada mı, yönetici mi, mesaj yazabilir mi?
 
     NEDEN: Public yayın DM'den bağımsız çalışır; hedef yanlışsa bot çalışır ama
@@ -821,9 +826,33 @@ def kontrol_public_hedef(token: str, grup_id: str, chat_id: str = "") -> bool:
         satir(WARN, "Sabit karşılama için 'Mesajları sabitle' izni",
               "İzin yoksa kanal_acilis.py --uygula yalnız açıklama yazar.")
     if not chat_id:
-        satir(WARN, "DM chat_id yok: komutlar kapalı",
-              "Public yayın sürer ama /panel,/durum çalışmaz. Komutlar için TELEGRAM_CHAT_ID ekleyin.")
+        # 2026-10-28: public komut yolu açıksa komutlar artık çalışır.
+        if public_komut_acik:
+            satir(OK, "DM chat_id yok; public komut yolu açık",
+                  "Grup YÖNETİCİLERİ okuma komutlarını çalıştırabilir. Kendi DM'inizden "
+                  "komut istiyorsanız TELEGRAM_CHAT_ID ekleyin.")
+        else:
+            satir(WARN, "DM chat_id yok: komutlar kapalı",
+                  "Public yayın sürer ama /panel,/durum çalışmaz. Komutlar için "
+                  "TELEGRAM_CHAT_ID ekleyin ya da PUBLIC_COMMANDS_ENABLED=1 bırakın.")
     return ready
+
+
+def _public_komut_acik(degerler: dict) -> bool:
+    """Public grup komut yolu açık mı? (env + grup hedefi birlikte gerekli).
+
+    Kural `config.py` ile AYNI: PUBLIC_COMMANDS_ENABLED kapalı değilse ve bir grup
+    hedefi (PUBLIC_COMMAND_CHATS ya da TELEGRAM_GROUP_ID) varsa açıktır. Kanal
+    hedefi tek başına yetmez: `channel_post` gönderilerinde yöneticilik
+    doğrulanamaz, kanal komut kabul etmez.
+    """
+    ham = str(degerler.get("PUBLIC_COMMANDS_ENABLED", "1") or "1").strip().lower()
+    if ham in ("0", "false", "no", "off", "hayir"):
+        return False
+    acik = (degerler.get("PUBLIC_COMMAND_CHATS") or "").strip()
+    if acik:
+        return True
+    return bool((degerler.get("TELEGRAM_GROUP_ID") or "").strip())
 
 
 def _health_hedefi(url: str) -> str:
@@ -992,6 +1021,7 @@ def main() -> int:
             degerler.get("TELEGRAM_BOT_TOKEN", ""),
             degerler.get("TELEGRAM_GROUP_ID", "") or degerler.get("TELEGRAM_CHANNEL_ID", ""),
             degerler.get("TELEGRAM_CHAT_ID", ""),
+            public_komut_acik=_public_komut_acik(degerler),
         )
         kontrol_render(args.url or "", args.test_key or degerler.get("TELEGRAM_TEST_KEY", ""))
 

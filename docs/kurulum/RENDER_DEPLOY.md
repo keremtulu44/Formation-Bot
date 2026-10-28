@@ -453,16 +453,52 @@ adresi tanimadigi icin disaridan spam gonderilemez.
 
 Bot artık **iki yönlüdür**: alarm göndermenin yanında Telegram'dan gelen
 komutları okuyup yanıtlar. Komutlar yoklama (`getUpdates`, varsayılan) ya da
-webhook (§4.6) ile toplanır; **yalnızca `TELEGRAM_CHAT_ID`** komut verebilir,
-başka sohbetlerden gelen mesajlar sessizce yok sayılır.
+webhook (§4.6) ile toplanır.
 
-> 📣 **Kanal/grup komut kabul etmez.** Yukarıdaki komutlar yalnızca
-> `TELEGRAM_CHAT_ID` (DM) sohbetinde çalışır; `TELEGRAM_GROUP_ID` yalnız yayın
-> alır. Ayrıca Telegram, **kanal** mesajlarını `channel_post` türünde teslim eder
-> ve bot yalnız `message` güncellemelerini dinler — yani `TELEGRAM_CHAT_ID`'yi
-> kanal kimliği yapsan bile kanalda komut yolu yoktur (grup kimliği verilirse
-> grup yöneticilerinin mesajları `message` olarak gelir ve çalışır; ama o zaman
-> kendi DM komutların susar, bkz. tek sohbet kilidi).
+İki yetki yolu vardır (2026-10-28'den itibaren):
+
+| Yol | Kim çalıştırabilir | Hangi komutlar |
+|---|---|---|
+| **DM** (`TELEGRAM_CHAT_ID`) | Bot sahibi | Listelenen **her** komut |
+| **Grup/supergroup** (`TELEGRAM_GROUP_ID` ya da `PUBLIC_COMMAND_CHATS`) | O grubun **YÖNETİCİLERİ** (`getChatMember` → `creator`/`administrator`) | Yalnız **okuma** komutları |
+
+Başka sohbetlerden gelen mesajlar sessizce yok sayılır.
+
+> 📣 **Kanal komut kabul etmez.** Telegram **kanal** mesajlarını `channel_post`
+> türünde teslim eder; orada gönderen kullanıcı bilgisi (`from`) yoktur, yani
+> yöneticilik doğrulanamaz. Kanal hedefi yalnız yayın alır. **Grup** kimliği
+> kullanırsanız yöneticilerin mesajları `message` olarak gelir ve çalışır.
+
+#### Grup komutlarını açma (varsayılan: AÇIK)
+
+```text
+PUBLIC_COMMANDS_ENABLED=1          # 0 = grubu tamamen salt-okunur yayına çevir
+PUBLIC_COMMAND_CHATS=              # boş = TELEGRAM_GROUP_ID
+PUBLIC_COMMAND_EXTRA=              # public'te kapalı komutları aç (örn. tara)
+PUBLIC_COMMAND_ADMIN_CACHE_SN=300  # getChatMember önbelleği (0 = kapalı)
+```
+
+Üç kilit **birlikte** çalışır: sohbet listede olacak + komut beyaz listede olacak
++ gönderen yönetici çıkacak. Kendi grubunuzda denemek için:
+
+1. Botu gruba ekleyin (en az bir kez mesaj atabilmesi yeterli).
+2. Sizin hesabınız grupta **yönetici** olsun.
+3. Grupta `/durum` yazın → cevap **gruba**, isteğinizi alıntılayarak gelir.
+
+Davranış ayrıntıları:
+
+* Yönetici **olmayan** üyenin komutu sessizce yok sayılır (grupta "yetkiniz yok"
+  cevabı bot spam'i olurdu). Sayaç `/health` → `komut.yetkisiz_kullanici`.
+* Yöneticilik **API'ye sorulamazsa yetki verilmez** (fail-closed). Sayaç
+  `/health` → `komut.admin_kontrol_hatasi`.
+* Public'te varsayılan **kapalı**: `/tara`, `/grafik`, `/evet`, `/hayir` — ağır
+  ya da durum değiştiren komutlar. `PUBLIC_COMMAND_EXTRA=tara` ile açılabilir
+  (uyarı: `/tara` tam evren taramasıdır, dakikalarca sürer).
+* `PUBLIC_COMMAND_EXTRA` **alias'ları da** kapsar: `/p` açıksa `/panel` de açıktır
+  (beyaz liste işleyici bazlıdır).
+* `/health` → `komut` bloğunda `public_komut_hazir`, `public_islenen`,
+  `yetkisiz_kullanici`, `admin_kontrol_hatasi`, `public_kapali_komut` alanları
+  "grupta komut çalışmıyor" sorusunun hangi kapıda takıldığını gösterir.
 
 | Komut | Ne yapar |
 |---|---|
