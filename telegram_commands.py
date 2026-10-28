@@ -206,6 +206,33 @@ class ArkaPlanYaniti(str):
             self._basladi = True
 
 
+# --- Komut bağlamı: komutun geldiği PUBLIC sohbet ---------------------------
+# `/grafik` gibi işler YALNIZ cevap metnini değil, ÜRETTİĞİ DOSYALARI da
+# komutun geldiği sohbete göndermek zorunda (2026-10-28: grup yöneticisi
+# `/grafik` yazınca kare DM'e gidiyordu, grupta hiç görünmüyordu).
+# İşleyici sözleşmesi `isleyici(arguman)` ve 20+ işleyici var; hepsinin imzasını
+# değiştirmek yerine bağlam thread-local tutulur: dinleyici komutu çağırmadan
+# hemen önce yazar, `finally` ile geri alır. İşleyici değeri AYNI thread'de
+# senkron okur ve arka plan işine KOPYALAR (thread'e taşınmaz).
+_KOMUT_SOHBETI = threading.local()
+
+
+def komut_sohbeti() -> str:
+    """Komutun geldiği PUBLIC sohbet kimliği (`-100…`); DM'de/bağlam yoksa "".
+
+    DM'de bilinçli olarak boş: DM yolu eskisi gibi `notifier.chat_id`'ye gider,
+    bu değer yalnız "cevap başka sohbete gidecek" durumunda anlamlıdır.
+    """
+    return str(getattr(_KOMUT_SOHBETI, "sohbet", "") or "")
+
+
+def _komut_sohbeti_ayarla(sohbet: str) -> str:
+    """Bağlamı yazar, ÖNCEKİ değeri döndürür (çağıran `finally` ile geri koyar)."""
+    onceki = komut_sohbeti()
+    _KOMUT_SOHBETI.sohbet = str(sohbet or "")
+    return onceki
+
+
 class TelegramCommandListener:
     """`getUpdates` uzun yoklaması + komut dağıtımı (daemon thread)."""
 
@@ -764,8 +791,10 @@ class TelegramCommandListener:
                 logger.info("Public /%s: bu komut public sohbette kapalı", komut)
                 return self._cevapla(
                     f"🔒 /{komut} public sohbette kapalı.\n"
-                    "Ağır/durum değiştiren komutlar (tara, grafik, evet, hayır) yalnız "
-                    "DM'den çalışır. Açık komutlar için /yardim yazın.",
+                    "Ağır ya da durum değiştiren komutlar (tara, grafik, evet, hayır) "
+                    "varsayılan olarak yalnız DM'den çalışır. Grupta açmak için: "
+                    "PUBLIC_COMMAND_EXTRA=grafik,g (bir yeniden başlatma gerekir). "
+                    "Açık komutlar için /yardim yazın.",
                     update_id, yanit_hedef, reply_to,
                 )
 
@@ -824,6 +853,9 @@ class TelegramCommandListener:
         # Argüman loglanmaz: komut adı teşhis için yeterli, sohbet kimliği/argüman
         # loga sızmamalı.
         logger.info("Telegram komutu: /%s", komut)
+        # Komut bağlamı: işleyici (örn. `/grafik`) cevabı ve dosyaları HANGİ
+        # sohbete göndereceğini buradan okur. DM'de boş bırakılır (eski yol).
+        onceki_sohbet = _komut_sohbeti_ayarla(sohbet_id if public_yolu else "")
         try:
             cevap = isleyici(arguman)
         except Exception as exc:  # noqa: BLE001 - kullanıcıya sade, maskelenmiş hata
@@ -831,6 +863,8 @@ class TelegramCommandListener:
             logger.error("/%s işleyicisi hata verdi: %s", komut, safe_error, exc_info=True)
             self._sayac["hata"] += 1
             cevap = f"\u274c /{komut} çalıştırılamadı: {safe_error[:200]}"
+        finally:
+            _komut_sohbeti_ayarla(onceki_sohbet)
         if not cevap:
             return None
         self._sayac["islenen"] += 1

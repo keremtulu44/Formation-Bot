@@ -678,6 +678,51 @@ class TelegramNotifier:
         """Geriye dönük ad: eski kanal çağrıları artık public yola düşer."""
         return self.send_to_public(text)
 
+    def send_to_chat(self, text: str, chat_id=None, deneme: int = 1) -> bool:
+        """Metni AÇIKÇA verilen sohbete gönderir (`/grafik` grup sonucu).
+
+        Neden gerekli: `/grafik` gruptan çağrıldığında üretilen kareler artık o
+        gruba gidiyor; sonuç/başarısızlık metni DM'e gitseydi isteği yapan
+        yönetici grupta sonucu göremezdi (2026-10-28).
+
+        Yol seçimi tek yerde:
+          * DM hedefi (`self.chat_id`) → `send_text` (eski davranış, aynı sayaçlar)
+          * public hedef (`public_chat_id`) → `send_to_public` (bütçe/pacing/429)
+          * başka bir sohbet → aynı kırpma + pacing ile doğrudan `sendMessage`
+        """
+        hedef = str(chat_id or "").strip()
+        if not hedef:
+            return False
+        dm = str(getattr(self, "chat_id", "") or "").strip()
+        if dm and hedef == dm:
+            ok, _neden = self.send_text(text)
+            return bool(ok)
+        public = str(getattr(self, "public_chat_id", "") or "").strip()
+        if public and hedef == public:
+            return bool(self.send_to_public(text, deneme=max(1, int(deneme))))
+        if not self.token:
+            return False
+        govde = _kirp(metni_sigdir(text, guvenlik=1.0))
+        try:
+            import requests
+            self._public_pace()
+            resp = requests.post(
+                f"https://api.telegram.org/bot{self.token}/sendMessage",
+                json={"chat_id": hedef, "text": govde},
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                self._son_public_ts = time.monotonic()
+                self.public_gonderilen += 1
+                self.son_public_gonderim = datetime.now(ISTANBUL_TZ).isoformat()
+                return True
+            logger.error("Telegram sohbet gönderimi başarısız: %s",
+                         redact_sensitive_text(resp.text, self.token)[:200])
+        except Exception as hata:  # noqa: BLE001 - sonuç metni akışı düşürmesin
+            logger.error("Telegram sohbet gönderim hatası: %s", type(hata).__name__)
+        self.public_hatasi += 1
+        return False
+
     def public_kuyruk(self, data: Dict) -> bool:
         """Uygun olayı public kuyruğa alır (gönderim tarama turu sonunda)."""
         # Kare verisi payload'dan ERKEN alınır: DM teslim kuyruğu (`DeliveryOutbox`)
@@ -2579,6 +2624,83 @@ class TelegramNotifier:
             # `grafik_dosya_gonder` dosyayı siler; önce kopya gerekmez, yalnız bir kez denenir.
             for k, (yol, caption) in enumerate(paketler):
                 sonuc[k] = self._tekil_gonder_dosyasiz(yol, caption)
+            return sonuc
+        finally:
+            for yol, _c in paketler:
+                try:
+                    os.remove(yol)
+                except (OSError, TypeError):
+                    pass
+
+    def grafik_sohbete_gonder(self, paketler, chat_id=None) -> List[bool]:
+        """`/grafik` karelerini İSTENEN sohbete gönderir (grup yolu); dosyaları SİLER.
+
+        `grafik_toplu_gonder` DM'e sabittir (görsel kapısı DM kimliği ister).
+        Grup isteğinde kareler o gruba gitmeli; sözleşme aynı: 2–10 kare TEK
+        albüm, tek kare `sendPhoto`, albüm reddedilirse kare kare yeniden
+        deneme, dosyalar her durumda silinir. Hedef DM ya da boşsa doğrudan
+        `grafik_toplu_gonder`'e devredilir — DM davranışı BİREBİR aynı kalır.
+        """
+        paketler = [(y, c) for y, c in (paketler or []) if y]
+        sonuc = [False] * len(paketler)
+        hedef = str(chat_id or "").strip()
+        if not paketler:
+            return sonuc
+        dm = str(getattr(self, "chat_id", "") or "").strip()
+        if not hedef or (dm and hedef == dm):
+            return self.grafik_toplu_gonder(paketler)
+        try:
+            from transport.telegram import foto_gonder, medya_grubu_gonder
+        except Exception:  # pragma: no cover - taşıma yoksa görsel de yok
+            for yol, _c in paketler:
+                try:
+                    os.remove(yol)
+                except (OSError, TypeError):
+                    pass
+            return sonuc
+
+        def _tek(yol, caption) -> bool:
+            try:
+                self._grafik_pace()
+                ok, aciklama = foto_gonder(yol, chat_id=hedef, notifier=self,
+                                           caption=caption)
+                self._son_grafik_ts = time.monotonic()
+                if ok:
+                    self.grafik_gonderilen += 1
+                    self.public_grafik_gonderilen += 1
+                    return True
+                self.grafik_atlanan_hata += 1
+                self.public_grafik_hatasi += 1
+                logger.warning("grafik karesi gruba gönderilemedi: %s",
+                               redact_sensitive_text(str(aciklama), self.token)[:160])
+            except Exception as hata:  # noqa: BLE001 - görsel akışı düşürmesin
+                self.grafik_atlanan_hata += 1
+                self.public_grafik_hatasi += 1
+                logger.warning("grafik karesi gruba gönderilemedi: %s",
+                               type(hata).__name__)
+            return False
+
+        try:
+            if len(paketler) == 1:
+                sonuc[0] = _tek(*paketler[0])
+                return sonuc
+            self._grafik_pace()
+            try:
+                ok, aciklama = medya_grubu_gonder(
+                    [y for y, _c in paketler],
+                    captions=[c for _y, c in paketler],
+                    chat_id=hedef, notifier=self)
+            except Exception as hata:  # noqa: BLE001 - taşıma zaten yutuyor
+                ok, aciklama = False, type(hata).__name__
+            self._son_grafik_ts = time.monotonic()
+            if ok:
+                self.grafik_gonderilen += len(paketler)
+                self.public_grafik_gonderilen += len(paketler)
+                return [True] * len(paketler)
+            logger.warning("grafik albümü gruba gönderilemedi, kare kare deneniyor: %s",
+                           redact_sensitive_text(str(aciklama), self.token)[:160])
+            for k, (yol, caption) in enumerate(paketler):
+                sonuc[k] = _tek(yol, caption)
             return sonuc
         finally:
             for yol, _c in paketler:

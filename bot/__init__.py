@@ -72,7 +72,7 @@ from supabase_store import SupabaseStore
 from health_server import start_render_health_server
 from live_state import LiveState
 from telegram_commands import (
-    TelegramCommandListener, ArkaPlanYaniti, telegram_sohbet_kimligi,
+    TelegramCommandListener, ArkaPlanYaniti, telegram_sohbet_kimligi, komut_sohbeti,
 )
 
 # Batch 8 / C2: raporlama katmanı `reporting/format.py`'ye ayrıldı. Burada eski
@@ -594,6 +594,7 @@ __all__ = [
     "TELEGRAM_WEBHOOK_URL",
     "TERMINAL_TAZE_BAR",
     "telegram_sohbet_kimligi",
+    "komut_sohbeti",
     "TelegramCommandListener",
     "TelegramNotifier",
     "VERI_YOK_MODU_ESIK_DK",

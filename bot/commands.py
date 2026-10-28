@@ -190,7 +190,9 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 /tara [HISSE] — şimdi analiz et (seans dışı da çalışır)
 /grafik HISSE [1s|2s|4s|1g] [sade|detay] — mum karesini gönder (diğer ad: /g)
    Örnek: /grafik THYAO 4s sade · mum/bant/kritik fiyatı öne çıkarır.
-   TF yazılmazsa o sembolün 4 TF karesi denenir; kabul yanıtı hemen, görsel DM’e gelir.
+   TF yazılmazsa o sembolün 4 TF karesi denenir; kabul yanıtı hemen gelir.
+   Görseller KOMUTUN GELDİĞİ sohbete gider: DM'den yazdıysan DM'e, gruptan
+   yazdıysan o gruba (2026-10-28). Grupta açmak için PUBLIC_COMMAND_EXTRA=grafik,g.
    Veri mevcut bellek/cache katmanından; eksik/eski cache açık hatadır, canlı fetch yok.
    TELEGRAM_GRAFIK kapalıyken de çalışır; görseller alarm metin kotasını tüketmez.
 /evet · /hayır — gece denetiminin önerisini onayla/reddet (diğer adlar:
@@ -208,7 +210,9 @@ Yetki (kim hangi komutu çalıştırabilir):
 • Public'te yalnız OKUMA komutları açıktır: /formasyonlar /canli /panel /ozet
   /sikisanlar /tamamlanan /retest /kirilim /durum /olcum /karne /backtest /yardim.
   /tara, /grafik, /evet, /hayir public'te KAPALIDIR (ağır ya da durum değiştiren);
-  gerekirse PUBLIC_COMMAND_EXTRA ile açılır.
+  gerekirse PUBLIC_COMMAND_EXTRA ile açılır (örn. PUBLIC_COMMAND_EXTRA=grafik,g).
+  Açıldığında /grafik kareleri ve sonuç metni O GRUBA gider; ilerleme/gecikme
+  mesajları DM'de kalır.
 • Kanal hedefleri komut KABUL ETMEZ: kanal gönderilerinde (`channel_post`) gönderen
   kullanıcı bilgisi yoktur, yöneticilik doğrulanamaz — orası yalnız yayın alır.
   Üyeler zaten kanala mesaj YAZAMAZ. Grup komutu istiyorsan ayrı bir grup açıp
@@ -1096,6 +1100,18 @@ def _komut_grafik(arguman: str) -> str:
     notifier = _pkg._notifier_ref
     if notifier is None or not getattr(notifier, "enabled", False):
         return "Telegram gönderimi kapalı: kare üretilemiyor."
+    # KOMUTUN GELDİĞİ SOHBET (2026-10-28): `/grafik` gruptan çağrıldığında
+    # kareler ve sonuç metni o gruba gider; DM'den çağrıldığında eski davranış
+    # (DM) aynen korunur. Yalnız NEGATİF kimlik kabul edilir: grup/supergroup
+    # işaretidir, DM'e (pozitif) ve geçersiz değere asla dosya gönderilmez.
+    komut_sohbeti_fn = getattr(_pkg, "komut_sohbeti", None)
+    hedef_sohbet = str(komut_sohbeti_fn() if callable(komut_sohbeti_fn) else "").strip()
+    try:
+        grup_hedefi = bool(hedef_sohbet) and int(hedef_sohbet) < 0
+    except (TypeError, ValueError):
+        grup_hedefi = False
+    if not grup_hedefi:
+        hedef_sohbet = ""
     # Tek aktif manuel grafik işi: çakışan TF'ler ve sınırsız thread/kuyruk yok.
     with _pkg._grafik_is_kilidi:
         if _pkg._grafik_aktif_is:
@@ -1105,6 +1121,7 @@ def _komut_grafik(arguman: str) -> str:
                     "⏳ Başka grafik isteği hazırlanıyor; bitince yeniden deneyin.")
         istek = {"hisse": hisse, "tfler": tfler, "sade": sade,
                  "gorunum": bolge_gorunumu, "mobil": mobil,
+                 "hedef_sohbet": hedef_sohbet,
                  "asama": "kabul yanıtı bekleniyor"}
         _pkg._grafik_aktif_is.update(istek)
 
@@ -1120,10 +1137,11 @@ def _komut_grafik(arguman: str) -> str:
 
     gorunum = (f" · {'sade' if sade else 'detay'} görünüm" if sade is not None else "")
     gorunum += (" · " + bolge_gorunumu if bolge_gorunumu else "") + (" · mobil" if mobil else "")
+    yer = "bu gruba" if hedef_sohbet else "DM'e"
     return ArkaPlanYaniti(
         f"⏳ Grafik isteği alındı, hazırlanıyor: {hisse} · "
         + "/".join(_tf_kisa(tf) for tf in tfler) + gorunum
-        + ". Hedef yaklaşık 1 dakika; sonuç ve görsel DM'e gelecek.", baslat)
+        + f". Hedef yaklaşık 1 dakika; sonuç ve görseller {yer} gelecek.", baslat)
 
 
 def _grafik_isi_calistir(istek, notifier, yonetici):
@@ -1132,9 +1150,15 @@ def _grafik_isi_calistir(istek, notifier, yonetici):
         _pkg._grafik_isi_yurut(istek, notifier, yonetici)
     except (Exception, SystemExit) as hata:
         _pkg.logger.warning("/grafik iş kurulumu başarısız: %s", type(hata).__name__)
+        metin = (f"❌ Grafik isteği tamamlanamadı: {istek['hisse']} · "
+                 f"iş kurulumu/bağımlılık: {type(hata).__name__}")
         try:
-            notifier.send_text(f"❌ Grafik isteği tamamlanamadı: {istek['hisse']} · "
-                               f"iş kurulumu/bağımlılık: {type(hata).__name__}")
+            hedef = str(istek.get("hedef_sohbet") or "").strip()
+            gonderdi = False
+            if hedef and hasattr(notifier, "send_to_chat"):
+                gonderdi = bool(notifier.send_to_chat(metin, hedef))
+            if not gonderdi:
+                notifier.send_text(metin)
         except Exception:  # noqa: BLE001, S110 - en iyi çaba bildirim; asıl hata yukarıda loglandı
             pass
     finally:
@@ -1143,7 +1167,12 @@ def _grafik_isi_calistir(istek, notifier, yonetici):
 
 
 def _grafik_isi_yurut(istek, notifier, yonetici):
-    """Yalnız seçilen sembol/TF; mevcut cache, kopya frame, DM teslimi.
+    """Yalnız seçilen sembol/TF; mevcut cache, kopya frame, sohbet teslimi.
+
+    Teslim hedefi `istek["hedef_sohbet"]`tir: komut gruptan geldiyse kareler
+    (ve sonuç metni) O gruba, DM'den geldiyse eskisi gibi DM'e gider. İlerleme/
+    gecikme mesajları her durumda DM'de kalır — grup sohbetine bot gürültüsü
+    olmasın; sonuç ve hata görünür kalır.
 
     Sağlayıcı fetch'i burada yok: tarama pacer'ı süreç-geneli değil, yeni bir
     pacer eşzamanlı rate-limit güvenliği sağlamaz. Eksik/eski veri açık hatadır.
@@ -1158,6 +1187,9 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
     asama = {"ad": "cache yükleme"}
     ozetler = []
     basarili = 0
+    # Grup isteği: kareler/sonuç o sohbete. Negatif kimlik şartı `_komut_grafik`te
+    # bir kez uygulanır; burada yalnız taşınır.
+    hedef_sohbet = str(istek.get("hedef_sohbet") or "").strip()
 
     def durum(ad):
         asama["ad"] = ad
@@ -1171,6 +1203,17 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
                                redact_sensitive_text(str(neden), getattr(notifier, "token", ""))[:160])
         except Exception as hata:
             _pkg.logger.warning("/grafik durum teslimi başarısız: %s", type(hata).__name__)
+
+    def sonuc_bildir(metin):
+        """SONUÇ metni: grup isteğinde gruba, aksi hâlde DM'e (grup hatasında DM'e düşer)."""
+        if hedef_sohbet:
+            try:
+                if bool(notifier.send_to_chat(metin, hedef_sohbet)):
+                    return
+                _pkg.logger.warning("/grafik grup sonuç metni gönderilemedi; DM'e düşülüyor")
+            except Exception as hata:  # noqa: BLE001 - sonuç kaybı olmasın
+                _pkg.logger.warning("/grafik grup sonuç metni hatası: %s", type(hata).__name__)
+        bildir(metin)
 
     def gecikme():
         with bildirim_kilidi:
@@ -1230,9 +1273,15 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
                 paketler[0] = (paketler[0][0], paketler[0][1],
                                paketler[0][2] + "\n⚠ " + " · ".join(ozetler))
             durum(f"albüm: {len(paketler)} kare")
-            # `grafik_toplu_gonder` dosyaları kendisi siler (albüm de tek tek de).
+            # Teslim yolu: grup isteği → `grafik_sohbete_gonder(chat_id=…)`,
+            # DM isteği → eski `grafik_toplu_gonder`. İkisi de dosyaları siler.
             try:
-                sonuc_ok = notifier.grafik_toplu_gonder([(y, c) for _t, y, c in paketler])
+                paket_ciftleri = [(y, c) for _t, y, c in paketler]
+                if hedef_sohbet:
+                    sonuc_ok = notifier.grafik_sohbete_gonder(paket_ciftleri,
+                                                              chat_id=hedef_sohbet)
+                else:
+                    sonuc_ok = notifier.grafik_toplu_gonder(paket_ciftleri)
             except Exception as hata:  # noqa: BLE001 - görsel süreci düşürmesin
                 _pkg.logger.warning("/grafik albüm gönderimi istisna: %s", type(hata).__name__)
                 sonuc_ok = [False] * len(paketler)
@@ -1248,19 +1297,19 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
         with bildirim_kilidi:
             tamam.set()
             if not paketler or basarili == 0:
-                bildir(redact_sensitive_text(
+                sonuc_bildir(redact_sensitive_text(
                     f"❌ Grafik isteği tamamlanamadı: {istek['hisse']} · "
                     f"{time.monotonic() - baslangic:.1f} sn\n" + "\n".join(ozetler),
                     getattr(notifier, "token", "")))
             elif basarili < len(paketler):
-                bildir(redact_sensitive_text(
+                sonuc_bildir(redact_sensitive_text(
                     f"⚠️ Grafik isteği kısmen tamamlandı: {istek['hisse']} · "
                     f"{time.monotonic() - baslangic:.1f} sn\n" + "\n".join(ozetler),
                     getattr(notifier, "token", "")))
             else:
                 # Albümün kendisi görsel; hangi hisse/TF olduğunu söyleyen tek
                 # metin mesajı ayrıca gider (2026-10-23 kullanıcı isteği).
-                bildir(redact_sensitive_text(
+                sonuc_bildir(redact_sensitive_text(
                     _pkg._grafik_ozet_metni(istek["hisse"], istek["tfler"], basarili,
                                        time.monotonic() - baslangic, istek),
                     getattr(notifier, "token", "")))
