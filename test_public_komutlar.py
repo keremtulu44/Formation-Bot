@@ -669,3 +669,218 @@ def test_main_kurulum_public_kapaliyken_dm_kapaliysa_kapali(monkeypatch):
     monkeypatch.setattr(main_mod, "_telegram_webhook_url_olustur", lambda *_a, **_k: "")
     mod = main_mod._telegram_komut_katmanini_kur(_sahte_notifier(chat_id=""))
     assert mod == "kapali"
+
+
+# ============================ 15) KANAL SENARYOSU (2026-10-29 teşhisi) ========
+#
+# Gerçek vaka: `TELEGRAM_GROUP_ID=@bisthisseveri` bir KANAL. Kanalda komut
+# İMKÂNSIZDIR (üyeler yazamaz; admin gönderisinde `from` yok) ama eskiden bu
+# SESSİZCE yok sayılıyordu: sayaç artmıyor, log düşmüyordu. Artık görünür.
+
+
+def test_kanal_gonderisi_sayilir_ve_loglanir():
+    d = _dinleyici(session=SahteSession())
+    update = {"update_id": 1,
+              "channel_post": {"message_id": 5, "date": int(time.time()),
+                               "chat": {"id": -1001234567890, "type": "channel"},
+                               "text": "/durum"}}
+    assert d.handle_update(update) is None
+    durum = d.durum()
+    assert durum["kanal_gonderisi"] == 1, "kanal gönderisi sayaçsız kalmamalı"
+    assert durum["public_islenen"] == 0
+
+
+def test_kanal_gonderisi_handler_calistirmaz():
+    cagrildi = []
+    d = _dinleyici(handlers={"durum": lambda _a: cagrildi.append(1) or "x"})
+    update = {"update_id": 1,
+              "channel_post": {"message_id": 5, "date": int(time.time()),
+                               "chat": {"id": -1001234567890, "type": "channel"},
+                               "text": "/durum"}}
+    d.handle_update(update)
+    assert cagrildi == []
+
+
+def test_izlenen_guncellemeler_channel_post_icerir():
+    """Kanal hedefini teşhis edebilmek için channel_post İSTENMELİ."""
+    from telegram_commands import IZLENEN_GUNCELLEMELER, IZLENEN_GUNCELLEMELER_JSON
+
+    assert "message" in IZLENEN_GUNCELLEMELER          # grup komutları
+    assert "channel_post" in IZLENEN_GUNCELLEMELER     # kanal teşhisi
+    assert '"channel_post"' in IZLENEN_GUNCELLEMELER_JSON
+
+
+def test_set_webhook_izlenen_turleri_gonderir():
+    import transport.telegram as tt
+    from telegram_commands import IZLENEN_GUNCELLEMELER
+
+    yakalanan = {}
+
+    def api(method, token, govde, timeout=15):
+        yakalanan[method] = dict(govde)
+        return SahteYanit(200, {"ok": True, "description": "ok"})
+
+    ok = tt.set_webhook(
+        url="https://ornek.onrender.com/webhook", secret="s3cret", token="111:AAA",
+        api=api, yanit_oku_fn=tt.yanit_oku,
+        secret_ayikla_fn=lambda s=None: "s3cret", token_al_fn=lambda t=None: "111:AAA",
+        adres_olustur_fn=lambda **k: "https://ornek.onrender.com/webhook",
+        gizle_fn=lambda *a: "")
+    assert ok is True
+    assert yakalanan["setWebhook"]["allowed_updates"] == list(IZLENEN_GUNCELLEMELER)
+
+
+# ============================ 16) HEDEF TİPİ TEŞHİSİ =========================
+
+
+def test_hedef_tipi_kanal_komut_alamaz(monkeypatch):
+    import main as main_mod
+
+    def api(method, token, payload, timeout=15):
+        assert method == "getChat"
+        return SahteYanit(200, {"ok": True, "result": {"type": "channel",
+                                                       "title": "bisthisseveri"}})
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", api)
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "111:AAA")
+    bilgi = main_mod._public_hedef_tipi_getir(["-1001234567890"])
+    assert len(bilgi) == 1
+    assert bilgi[0]["tur"] == "channel"
+    assert bilgi[0]["komut"] is False
+    assert bilgi[0]["okundu"] is True
+
+
+@pytest.mark.parametrize("tur", ["group", "supergroup"])
+def test_hedef_tipi_grup_komut_alabilir(monkeypatch, tur):
+    import main as main_mod
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", lambda *a, **k: SahteYanit(
+        200, {"ok": True, "result": {"type": tur}}))
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "111:AAA")
+    bilgi = main_mod._public_hedef_tipi_getir([GRUP])
+    assert bilgi[0]["tur"] == tur
+    assert bilgi[0]["komut"] is True
+
+
+def test_hedef_tipi_okunamazsa_sessiz_kalmaz(monkeypatch):
+    import main as main_mod
+
+    def patla(*_a, **_k):
+        raise RuntimeError("ag yok")
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", patla)
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "111:AAA")
+    bilgi = main_mod._public_hedef_tipi_getir([GRUP])
+    assert bilgi[0]["okundu"] is False and bilgi[0]["tur"] is None
+
+
+def test_hedef_tipi_token_yoksa_cagrilmaz(monkeypatch):
+    import main as main_mod
+
+    kayit = []
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", lambda *a, **k: kayit.append(1))
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "")
+    assert main_mod._public_hedef_tipi_getir([GRUP]) == []
+    assert kayit == []
+
+
+def test_komut_durumu_hedef_tiplerini_tasir(monkeypatch):
+    import main as main_mod
+
+    monkeypatch.setattr(main_mod, "_public_hedef_bilgisi",
+                        [{"sohbet": "…7890", "tur": "channel", "komut": False,
+                          "okundu": True}])
+    durum = main_mod._komut_durumu()
+    assert durum["public_hedefler"][0]["tur"] == "channel"
+    assert durum["public_hedefler"][0]["komut"] is False
+
+
+# ============================ 17) /teshis KOMUTU =============================
+
+
+def _teshis_ortami(monkeypatch, *, tur="channel", uyelik="administrator",
+                   turler=("message", "channel_post")):
+    """`/teshis` için sahte Telegram API'si kur."""
+    import main as main_mod
+
+    def api(method, token, payload, timeout=15):
+        if method == "getChat":
+            return SahteYanit(200, {"ok": True, "result": {"type": tur,
+                                                           "title": "test"}})
+        if method == "getMe":
+            return SahteYanit(200, {"ok": True, "result": {"id": 42, "is_bot": True}})
+        if method == "getChatMember":
+            return SahteYanit(200, {"ok": True, "result": {"status": uyelik}})
+        if method == "getWebhookInfo":
+            return SahteYanit(200, {"ok": True, "result": {
+                "url": "https://ornek.onrender.com/webhook",
+                "pending_update_count": 0,
+                "allowed_updates": list(turler),
+            }})
+        return SahteYanit(200, {"ok": True, "result": {}})
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", api)
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "111:AAA")
+    monkeypatch.setattr(main_mod, "PUBLIC_COMMAND_CHATS", [GRUP])
+    return main_mod
+
+
+def test_teshis_kanal_hedefini_ve_cozumu_soyler(monkeypatch):
+    main_mod = _teshis_ortami(monkeypatch, tur="channel")
+    metin = main_mod._komut_teshis("")
+    assert "KANAL" in metin
+    assert "PUBLIC_COMMAND_CHATS" in metin
+    assert "grup" in metin.lower()
+
+
+def test_teshis_grup_hedefinde_kanal_uyarisi_vermez(monkeypatch):
+    main_mod = _teshis_ortami(monkeypatch, tur="supergroup")
+    metin = main_mod._komut_teshis("")
+    assert "Komut alabilen" in metin or "supergroup" in metin
+    assert "🔴 SEBEP: hedef bir KANAL" not in metin
+
+
+def test_teshis_allowed_updates_eksikse_uyarir(monkeypatch):
+    main_mod = _teshis_ortami(monkeypatch, tur="supergroup", turler=("channel_post",))
+    metin = main_mod._komut_teshis("")
+    assert "message" in metin and "hiç gelmez" in metin
+
+
+def test_teshis_bot_grupta_degilse_soyler(monkeypatch):
+    main_mod = _teshis_ortami(monkeypatch, tur="supergroup", uyelik="left")
+    metin = main_mod._komut_teshis("")
+    assert "DEĞİL" in metin
+
+
+def test_teshis_token_yoksa_kirilmaz(monkeypatch):
+    import main as main_mod
+
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "")
+    metin = main_mod._komut_teshis("")
+    assert "TELEGRAM_BOT_TOKEN" in metin
+
+
+def test_teshis_kayitli_ve_public_beyaz_listede():
+    import main as main_mod
+
+    assert main_mod.TELEGRAM_KOMUTLARI["teshis"] is main_mod._komut_teshis
+    assert main_mod.TELEGRAM_KOMUTLARI["teşhis"] is main_mod._komut_teshis
+    assert "teshis" in main_mod._public_komut_adlari()
+
+
+def test_katman_kurulumu_hedef_teshisini_baslatir(monkeypatch):
+    """Kurulum public hedef varken teşhisi başlatmalı — yoksa `/health` içindeki
+    `public_hedefler` hiç dolmaz ve teşhis sessizce ölü kalır."""
+    import bot.commands as bc
+    import main as main_mod
+
+    baslatildi = []
+    monkeypatch.setattr(bc, "_public_hedef_bilgisi_baslat",
+                        lambda *a, **k: baslatildi.append(1))
+    monkeypatch.setattr(bc._transport_telegram, "komut_katmanini_kur",
+                        lambda *a, **k: {"mod": "yoklama", "listener": None,
+                                         "processor": None})
+    monkeypatch.setattr(main_mod, "PUBLIC_COMMAND_CHATS", [GRUP])
+
+    assert main_mod._telegram_komut_katmanini_kur(notifier=None) == "yoklama"
+    assert baslatildi, "public hedef varken hedef teşhisi başlatılmalı"

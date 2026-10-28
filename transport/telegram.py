@@ -11,6 +11,7 @@ düşülür, çağrılan API fonksiyonu DIŞARIDAN verilir (main adaptörleri ke
 import logging
 
 from health_server import WEBHOOK_YOL, WEBHOOK_YOL_ONEK
+from telegram_commands import IZLENEN_GUNCELLEMELER
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +220,11 @@ def set_webhook(url=None, secret=None, token=None, *, api=None, yanit_oku_fn=Non
         return False
     govde = {
         "url": adres,
-        "allowed_updates": ["message"],
+        # TÜM izlenen türler: `channel_post` BİLİNÇLİ olarak dahil. Kanal hedefi
+        # komut kabul etmez ama bu tür gelmezse "public'te komut çalışmıyor"
+        # teşhis edilemez (sayaç artmaz, log düşmez). Tek kaynak:
+        # telegram_commands.IZLENEN_GUNCELLEMELER (getUpdates ile aynı liste).
+        "allowed_updates": list(IZLENEN_GUNCELLEMELER),
         "drop_pending_updates": True,
     }
     if secret:
