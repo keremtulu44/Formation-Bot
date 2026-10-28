@@ -117,6 +117,39 @@ def sohbet_anahtari(deger: Any) -> str:
     return ham.lstrip("@").lower()
 
 
+def telegram_sohbet_kimligi(deger: Any) -> str:
+    """Sohbet kimliğini **Telegram API'sinin beklediği** biçime getirir.
+
+    Neden ayrı bir fonksiyon: `sohbet_anahtari()` ve `config.PUBLIC_COMMAND_CHATS`
+    eşleştirme için `@` işaretini ATAR (`@bisthisseveri` → `bisthisseveri`).
+    Ama `getChat`/`getChatMember` kullanıcı adını `@` ile ister; `@` olmadan
+    "Bad Request: chat not found" döner. 2026-10-28'de tam bu yüzden
+    `PUBLIC_COMMAND_CHATS=@bisthisseveri` eklenince `/teshis` "okunamadı" dedi:
+    eşleştirme biçimi doğrudan API'ye gönderiliyordu.
+
+    Ayrıca kullanıcıların yapıştırdığı biçimler temizlenir:
+      '  "@bisthisseveri"  '       → '@bisthisseveri'
+      'https://t.me/bisthisseveri' → '@bisthisseveri'
+      't.me/bisthisseveri/'        → '@bisthisseveri'
+      '-1001234567890'             → '-1001234567890'  (sayısal aynen)
+    """
+    ham = str(deger or "").strip().strip('"').strip("'").strip()
+    if not ham:
+        return ""
+    dusuk = ham.lower()
+    for onek in ("https://t.me/", "http://t.me/", "https://telegram.me/",
+                 "http://telegram.me/", "t.me/", "telegram.me/"):
+        if dusuk.startswith(onek):
+            ham = ham[len(onek):].rstrip("/")
+            # Davet bağlantısı (+abc…) ya da ?start=… ekleri kimlik değildir.
+            ham = ham.split("?", 1)[0].strip("/")
+            break
+    if ham.lstrip("-").isdigit():
+        return ham
+    ham = ham.lstrip("@").strip()
+    return f"@{ham}" if ham else ""
+
+
 def _sohbet_anahtarlari(mesaj: Dict[str, Any]) -> set:
     """Gelen mesajın sohbeti için eşleşme anahtarları (id + kullanıcı adı)."""
     sohbet = (mesaj.get("chat") or {}) if isinstance(mesaj, dict) else {}

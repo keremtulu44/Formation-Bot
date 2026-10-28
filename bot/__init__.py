@@ -71,7 +71,9 @@ from karne import (KarneDefteri, atr_hesapla, hafta_damgasi, karne_gunu_mu, karn
 from supabase_store import SupabaseStore
 from health_server import start_render_health_server
 from live_state import LiveState
-from telegram_commands import TelegramCommandListener, ArkaPlanYaniti
+from telegram_commands import (
+    TelegramCommandListener, ArkaPlanYaniti, telegram_sohbet_kimligi,
+)
 
 # Batch 8 / C2: raporlama katmanı `reporting/format.py`'ye ayrıldı. Burada eski
 # iç adlar (`_sayi`, `_panel_*`) alias olarak korunuyor: main döngüsü ve testler
@@ -591,6 +593,7 @@ __all__ = [
     "TELEGRAM_WEBHOOK_SECRET",
     "TELEGRAM_WEBHOOK_URL",
     "TERMINAL_TAZE_BAR",
+    "telegram_sohbet_kimligi",
     "TelegramCommandListener",
     "TelegramNotifier",
     "VERI_YOK_MODU_ESIK_DK",

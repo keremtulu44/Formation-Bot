@@ -268,8 +268,12 @@ def _komut_teshis(_arguman: str) -> str:
             satirlar.append("Hedefler:")
             for k in bilgiler:
                 if not k.get("okundu"):
-                    satirlar.append(f"  • {k.get('sohbet')}: okunamadı "
-                                    "(bot sohbette değil ya da kimlik yanlış)")
+                    # Ham API açıklaması ŞART: "okunamadı" tek başına sebebi
+                    # söylemez ve kullanıcı env'i körlemesine değiştirir.
+                    satirlar.append(f"  • {k.get('sohbet')}: okunamadı → "
+                                    f"{k.get('hata') or 'sebep bilinmiyor'}")
+                    satirlar.append("    (kimlik yanlış, bot sohbette değil ya da "
+                                    "hedef bir davet bağlantısı)")
                     continue
                 isaret = "✅" if k.get("komut") else "❌"
                 satirlar.append(f"  {isaret} {k.get('sohbet')}: {k.get('tur')}"
@@ -283,12 +287,27 @@ def _komut_teshis(_arguman: str) -> str:
                     "   `channel_post` olarak gelir ve gönderen kişi bilgisi (`from`)",
                     "   yoktur → yöneticilik doğrulanamaz, komut çalıştırılamaz.",
                     "",
-                    "✅ ÇÖZÜM: komutlar için bir GRUP açın (kanala bağlı tartışma",
-                    "   grubu olabilir), botu gruba ekleyip YÖNETİCİ yapın ve grubun",
-                    "   kimliğini PUBLIC_COMMAND_CHATS'e yazın:",
-                    "     PUBLIC_COMMAND_CHATS=-1001234567890",
-                    "   Kanal yayını TELEGRAM_GROUP_ID ile aynen sürer.",
                 ]
+                # Kanala bağlı tartışma grubu varsa kimliği HAZIR ver — kullanıcı
+                # -100… kimliğini elle aramak zorunda kalmasın.
+                bagli = next((k.get("bagli_grup") for k in bilgiler
+                              if k.get("tur") == "channel" and k.get("bagli_grup")), None)
+                if bagli:
+                    satirlar += [
+                        "✅ HAZIR: kanala bağlı bir TARTIŞMA GRUBU var.",
+                        "   Yapman gereken tek şey şu satırı Render → Environment'a eklemek:",
+                        f"     PUBLIC_COMMAND_CHATS={bagli}",
+                        "   Botu o gruba ekle ve kendi hesabın grup YÖNETİCİSİ olsun;",
+                        "   sonra grupta /durum yaz. Kanal yayını aynen sürer.",
+                    ]
+                else:
+                    satirlar += [
+                        "✅ ÇÖZÜM: komutlar için bir GRUP açın (kanala bağlı tartışma",
+                        "   grubu olabilir), botu gruba ekleyip YÖNETİCİ yapın ve grubun",
+                        "   kimliğini PUBLIC_COMMAND_CHATS'e yazın:",
+                        "     PUBLIC_COMMAND_CHATS=-1001234567890",
+                        "   Kanal yayını TELEGRAM_GROUP_ID ile aynen sürer.",
+                    ]
 
         # 2) Webhook durumu: güncellemeler gerçekten teslim ediliyor mu?
         satirlar.append("")
@@ -328,7 +347,8 @@ def _komut_teshis(_arguman: str) -> str:
             try:
                 yanit = _pkg._telegram_api_cagri(
                     "getChatMember", token,
-                    {"chat_id": str(hedef), "user_id": str(bot_id)})
+                    {"chat_id": _pkg.telegram_sohbet_kimligi(hedef),
+                     "user_id": str(bot_id)})
                 uye = ((yanit.json() or {}).get("result") or {})
                 durum = str(uye.get("status") or "?")
                 satirlar.append(f"Bot üyeliği ({_pkg.TelegramCommandListener._maskele(str(hedef))}): "
@@ -1509,21 +1529,40 @@ def _public_hedef_tipi_getir(sohbetler=None) -> list:
     for hedef in hedefler:
         tur = None
         basarili = False
+        hata = ""
+        bagli_grup = None
         try:
+            # API'ye `@kullanıcı_adı` biçiminde gitmeli: yapılandırma/eşleştirme
+            # biçimi (`@` atılmış) doğrudan gönderilirse "chat not found" döner.
             yanit = _pkg._telegram_api_cagri(
-                "getChat", token, {"chat_id": str(hedef)}, )
-            ok, _aciklama = _pkg._telegram_yanit_oku(yanit)
+                "getChat", token, {"chat_id": _pkg.telegram_sohbet_kimligi(hedef)})
+            ok, aciklama = _pkg._telegram_yanit_oku(yanit)
             if ok:
                 sohbet = ((yanit.json() or {}).get("result") or {})
                 tur = str(sohbet.get("type") or "").strip().lower() or None
+                # Kanala bağlı TARTIŞMA GRUBU varsa komutlar orada çalışabilir.
+                # Kullanıcı -100… kimliğini aramak zorunda kalmasın: kimliği biz
+                # okuyup tam env satırını yazıyoruz.
+                bagli = sohbet.get("linked_chat_id")
+                bagli_grup = str(bagli) if bagli is not None else None
                 basarili = True
+            else:
+                # Hatanın KENDİSİNİ sakla: "okunamadı" tek başına sebebi söylemez
+                # (kimlik yanlış mı, bot üye değil mi, hız limiti mi?).
+                hata = _redakte(aciklama or "bilinmeyen hata", token)
+                _pkg.logger.warning("Public hedef okunamadı (%s): %s",
+                                    _pkg.TelegramCommandListener._maskele(str(hedef)),
+                                    hata)
         except Exception as exc:  # noqa: BLE001 - teşhis botu düşürmesin
-            _pkg.logger.warning("Public hedef tipi okunamadı: %s", _redakte(exc, token))
+            hata = _redakte(exc, token)
+            _pkg.logger.warning("Public hedef tipi okunamadı: %s", hata)
         bilgiler.append({
             "sohbet": _pkg.TelegramCommandListener._maskele(str(hedef)),
             "tur": tur,
             "komut": bool(tur in KOMUT_ALABILEN_SOHBET_TIPLERI),
             "okundu": basarili,
+            "hata": hata,
+            "bagli_grup": bagli_grup,
         })
     return bilgiler
 

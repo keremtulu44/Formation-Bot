@@ -453,8 +453,30 @@ _PUBLIC_COMMANDS_HAM = os.getenv("PUBLIC_COMMANDS_ENABLED", "1").strip().lower()
 PUBLIC_COMMANDS_ENABLED = _PUBLIC_COMMANDS_HAM not in {"0", "false", "no", "off", "hayir"}
 # Public komut kabul edecek sohbetler. Boşsa TELEGRAM_GROUP_ID / TELEGRAM_CHANNEL_ID
 # kullanılır (yani mevcut kurulumda ek env GEREKMEZ). Virgülle çok sohbet eklenebilir.
-PUBLIC_COMMAND_CHATS = [p.strip().lstrip("@") for p in os.getenv(
-    "PUBLIC_COMMAND_CHATS", "").split(",") if p.strip()]
+def _sohbet_listesi_coz(ham: str) -> list:
+    """`-100…,@grup,t.me/grup` biçimini eşleştirme kimliklerine indirger.
+
+    Tırnak, boşluk ve `t.me/...` bağlantısı yapıştırılabilir (kullanıcı hatası
+    çok yaygın); bunlar temizlenmezse sohbet hiç eşleşmez. Eşleştirme için `@`
+    atılır — API çağrılarında geri eklenir (telegram_sohbet_kimligi).
+    """
+    kimlikler = []
+    for parca in str(ham or "").split(","):
+        deger = parca.strip().strip('"').strip("'").strip()
+        if not deger:
+            continue
+        dusuk = deger.lower()
+        for onek in ("https://t.me/", "http://t.me/", "t.me/", "telegram.me/"):
+            if dusuk.startswith(onek):
+                deger = deger[len(onek):].split("?", 1)[0].strip("/")
+                break
+        deger = deger.lstrip("@").strip()
+        if deger and deger not in kimlikler:
+            kimlikler.append(deger)
+    return kimlikler
+
+
+PUBLIC_COMMAND_CHATS = _sohbet_listesi_coz(os.getenv("PUBLIC_COMMAND_CHATS", ""))
 # Yönetici doğrulaması (getChatMember) sonucu bu kadar saniye önbelleklenir:
 # her komutta API çağrısı yapılırsa Telegram hız limitine takılabilir.
 PUBLIC_COMMAND_ADMIN_CACHE_SN = _env_int("PUBLIC_COMMAND_ADMIN_CACHE_SN", 300)
