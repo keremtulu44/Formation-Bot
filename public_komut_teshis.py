@@ -37,6 +37,28 @@ API = "https://api.telegram.org"
 KOMUT_ALABILEN = ("group", "supergroup")
 
 
+def sohbet_kimligi(deger: str) -> str:
+    """Telegram API'sinin beklediği sohbet kimliği (`@ad` ya da sayı).
+
+    `PUBLIC_COMMAND_CHATS` / `TELEGRAM_GROUP_ID` içine `@bisthisseveri`,
+    `bisthisseveri`, `https://t.me/bisthisseveri` ya da tırnaklı değer
+    yazılabilir. `getChat` kullanıcı adını `@` ile ister; `@` olmadan
+    "chat not found" döner — 2026-10-28'de tam bu yaşandı.
+    """
+    ham = str(deger or "").strip().strip('"').strip("'").strip()
+    if not ham:
+        return ""
+    dusuk = ham.lower()
+    for onek in ("https://t.me/", "http://t.me/", "t.me/", "telegram.me/"):
+        if dusuk.startswith(onek):
+            ham = ham[len(onek):].split("?", 1)[0].strip("/")
+            break
+    if ham.lstrip("-").isdigit():
+        return ham
+    ham = ham.lstrip("@").strip()
+    return f"@{ham}" if ham else ""
+
+
 def _maskele(kimlik: str) -> str:
     kimlik = str(kimlik or "")
     return ("…" + kimlik[-4:]) if len(kimlik) > 4 else ("…" if kimlik else "?")
@@ -101,7 +123,8 @@ def main(argv=None) -> int:
             print("  ❌ Public komut hedefi yok: TELEGRAM_GROUP_ID / PUBLIC_COMMAND_CHATS")
             hatalar.append("hedef yok")
             continue
-        sohbet, hata = _cagri(requests, token, "getChat", {"chat_id": hedef})
+        kimlik = sohbet_kimligi(hedef)
+        sohbet, hata = _cagri(requests, token, "getChat", {"chat_id": kimlik})
         if sohbet is None:
             print(f"  ❌ getChat başarısız: {hata}")
             print("     Bot bu sohbette değil ya da kimlik yanlış.")
@@ -109,7 +132,7 @@ def main(argv=None) -> int:
             continue
         tur = str(sohbet.get("type") or "?").lower()
         baslik = sohbet.get("title") or sohbet.get("username") or "?"
-        print(f"  tip: {tur} · başlık: {baslik}")
+        print(f"  kimlik: {_maskele(kimlik)} · tip: {tur} · başlık: {baslik}")
         if tur in KOMUT_ALABILEN:
             print("  ✅ Komut alabilen bir sohbet (grup/supergroup).")
         elif tur == "channel":
@@ -122,6 +145,10 @@ def main(argv=None) -> int:
             print("        PUBLIC_COMMAND_CHATS olarak tanımlayın:")
             print("          PUBLIC_COMMAND_CHATS=-1001234567890")
             print("        Kanal yayını TELEGRAM_GROUP_ID ile aynen sürer.")
+            bagli = sohbet.get("linked_chat_id")
+            if bagli is not None:
+                print(f"  ✅ HAZIR: kanala bağlı tartışma grubu bulundu.")
+                print(f"     Render → Environment'a ekle: PUBLIC_COMMAND_CHATS={bagli}")
             hatalar.append("kanal")
         elif tur == "private":
             print("  ⚠️ Bu bir DM sohbeti; public komut hedefi olarak grup beklenir.")
@@ -129,7 +156,7 @@ def main(argv=None) -> int:
         ben, hata = _cagri(requests, token, "getMe")
         if ben:
             uye, hata2 = _cagri(requests, token, "getChatMember",
-                                {"chat_id": hedef, "user_id": ben.get("id")})
+                                {"chat_id": kimlik, "user_id": ben.get("id")})
             if uye is None:
                 print(f"  ⚠️ Bot üyeliği okunamadı: {hata2}")
             else:

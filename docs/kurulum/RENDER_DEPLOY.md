@@ -479,6 +479,16 @@ Başka sohbetlerden gelen mesajlar sessizce yok sayılır.
 > **Kesin teşhis:** bot sahibi DM'den `/teshis` yazar (ya da sunucuda
 > `python public_komut_teshis.py`) → hedefin `channel` mı `supergroup` mu olduğu,
 > webhook teslimi ve bot üyeliği tek mesajda söylenir. `/health` → `komut.public_hedefler`.
+>
+> **Kimliği elle aramayın:** kanala bağlı bir tartışma grubu varsa `/teshis` onun
+> `-100…` kimliğini `getChat.linked_chat_id` ile okur ve yapıştırılacak satırı
+> hazır verir: `PUBLIC_COMMAND_CHATS=-100…` (`komut.public_hedefler[*].bagli_grup`).
+>
+> ⚠️ **Kimlik biçimi:** `getChat`/`getChatMember` kullanıcı adını `@` ile ister.
+> Config eşleştirme için `@`yı atar, API sınırında `telegram_sohbet_kimligi()`
+> geri ekler. Tırnak, boşluk ve `t.me/...` bağlantıları da temizlenir; sayısal
+> kimlik (`-100…`) aynen kullanılır. (2026-10-29: `PUBLIC_COMMAND_CHATS=@ad`
+> eklenince `@` atıldığı için `getChat` "chat not found" dönüyordu.)
 
 #### Grup komutlarını açma (varsayılan: AÇIK)
 

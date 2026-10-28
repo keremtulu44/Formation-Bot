@@ -884,3 +884,155 @@ def test_katman_kurulumu_hedef_teshisini_baslatir(monkeypatch):
 
     assert main_mod._telegram_komut_katmanini_kur(notifier=None) == "yoklama"
     assert baslatildi, "public hedef varken hedef teşhisi başlatılmalı"
+
+
+# ================== 18) API KİMLİK BİÇİMİ (2026-10-29 regresyonu) ==========
+#
+# GERÇEK VAKA: kullanıcı `PUBLIC_COMMAND_CHATS=@bisthisseveri` ekledi. Config ve
+# eşleştirme `@`'yı attığı için `getChat`'e "bisthisseveri" gitti, Telegram
+# "chat not found" döndü ve `/teshis` "okunamadı" dedi. Kimlik, API sınırında
+# `@` ile geri verilmeli.
+
+
+@pytest.mark.parametrize("giris,beklenen", [
+    ("@bisthisseveri", "@bisthisseveri"),
+    ("bisthisseveri", "@bisthisseveri"),          # config `@`yı atar
+    ('  "@bisthisseveri"  ', "@bisthisseveri"),   # tırnak + boşluk
+    ("https://t.me/bisthisseveri", "@bisthisseveri"),
+    ("t.me/bisthisseveri/", "@bisthisseveri"),
+    ("-1001234567890", "-1001234567890"),         # sayısal aynen
+    ("", ""),
+])
+def test_sohbet_kimligi_api_bicimi(giris, beklenen):
+    from telegram_commands import telegram_sohbet_kimligi as kimlik
+
+    assert kimlik(giris) == beklenen
+
+
+def test_getchat_at_isaretiyle_cagrilir(monkeypatch):
+    """Env'de `@` yoksa bile API'ye `@ad` biçiminde gidilmeli."""
+    import main as main_mod
+
+    cagrilar = []
+
+    def api(method, token, payload, timeout=15):
+        cagrilar.append((method, dict(payload)))
+        return SahteYanit(200, {"ok": True, "result": {"type": "supergroup"}})
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", api)
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "111:AAA")
+    bilgi = main_mod._public_hedef_tipi_getir(["bisthisseveri"])
+    assert cagrilar[0][1]["chat_id"] == "@bisthisseveri"
+    assert bilgi[0]["okundu"] is True
+
+
+def test_getchat_hatasi_teshis_ciktisinda_gorunur(monkeypatch):
+    """`okunamadı` tek başına yetmez: ham API açıklaması gösterilmeli."""
+    import main as main_mod
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", lambda *a, **k: SahteYanit(
+        400, {"ok": False, "description": "Bad Request: chat not found"}))
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "111:AAA")
+    monkeypatch.setattr(main_mod, "PUBLIC_COMMAND_CHATS", ["bisthisseveri"])
+    bilgi = main_mod._public_hedef_tipi_getir([GRUP])
+    assert bilgi[0]["okundu"] is False
+    assert "chat not found" in bilgi[0]["hata"]
+    assert "chat not found" in main_mod._komut_teshis("")
+
+
+def test_public_komut_chats_temizlenir(monkeypatch):
+    """Tırnak/bağlantı/boşluklu env değerleri eşleşebilir kimliğe inmeli."""
+    import config
+
+    assert config._sohbet_listesi_coz('@bisthisseveri, https://t.me/grupum ,"-100123",,') == \
+        ["bisthisseveri", "grupum", "-100123"]
+    assert config._sohbet_listesi_coz("") == []
+
+
+def test_teshis_getchatmember_at_isaretli_kimlik_kullanir(monkeypatch):
+    import main as main_mod
+
+    cagrilar = []
+
+    def api(method, token, payload, timeout=15):
+        cagrilar.append((method, dict(payload)))
+        if method == "getMe":
+            return SahteYanit(200, {"ok": True, "result": {"id": 42}})
+        if method == "getChat":
+            return SahteYanit(200, {"ok": True, "result": {"type": "supergroup"}})
+        if method == "getChatMember":
+            return SahteYanit(200, {"ok": True, "result": {"status": "administrator"}})
+        return SahteYanit(200, {"ok": True, "result": {}})
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", api)
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "111:AAA")
+    # Kullanıcı adı hedefi (config `@`yı atar) API'ye `@`lı gitmeli;
+    # sayısal kimlik ise AYNEN kalmalı.
+    monkeypatch.setattr(main_mod, "PUBLIC_COMMAND_CHATS", ["bisthisseveri"])
+    main_mod._komut_teshis("")
+    uyelik = [p for m, p in cagrilar if m == "getChatMember"]
+    assert uyelik and uyelik[0]["chat_id"] == "@bisthisseveri"
+
+    cagrilar.clear()
+    monkeypatch.setattr(main_mod, "PUBLIC_COMMAND_CHATS", [GRUP])
+    main_mod._komut_teshis("")
+    uyelik = [p for m, p in cagrilar if m == "getChatMember"]
+    assert uyelik and uyelik[0]["chat_id"] == GRUP, "sayısal kimlik değişmemeli"
+
+
+def test_teshis_bagli_tartisma_grubunun_kimligini_verir(monkeypatch):
+    """Kanal hedefi + bağlı tartışma grubu → hazır `PUBLIC_COMMAND_CHATS=…` satırı.
+
+    Kullanıcı `-100…` kimliğini elle aramak zorunda kalmamalı.
+    """
+    import main as main_mod
+
+    def api(method, token, payload, timeout=15):
+        if method == "getChat":
+            return SahteYanit(200, {"ok": True, "result": {
+                "type": "channel", "title": "bisthisseveri",
+                "linked_chat_id": -1009876543210}})
+        if method == "getMe":
+            return SahteYanit(200, {"ok": True, "result": {"id": 42}})
+        if method == "getChatMember":
+            return SahteYanit(200, {"ok": True, "result": {"status": "administrator"}})
+        return SahteYanit(200, {"ok": True, "result": {}})
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", api)
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "111:AAA")
+    monkeypatch.setattr(main_mod, "PUBLIC_COMMAND_CHATS", ["bisthisseveri"])
+
+    metin = main_mod._komut_teshis("")
+    assert "TARTIŞMA GRUBU" in metin
+    assert "PUBLIC_COMMAND_CHATS=-1009876543210" in metin
+    assert "KANAL" in metin          # sebep yine açıkça söylenir
+
+
+def test_teshis_bagli_grup_yoksa_genel_cozum_yazar(monkeypatch):
+    import main as main_mod
+
+    def api(method, token, payload, timeout=15):
+        if method == "getChat":
+            return SahteYanit(200, {"ok": True, "result": {"type": "channel"}})
+        if method == "getMe":
+            return SahteYanit(200, {"ok": True, "result": {"id": 42}})
+        return SahteYanit(200, {"ok": True, "result": {"status": "administrator"}})
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", api)
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "111:AAA")
+    monkeypatch.setattr(main_mod, "PUBLIC_COMMAND_CHATS", ["bisthisseveri"])
+
+    metin = main_mod._komut_teshis("")
+    assert "PUBLIC_COMMAND_CHATS=-1001234567890" in metin
+    assert "TARTIŞMA GRUBU" not in metin
+
+
+def test_hedef_bilgisi_bagli_grubu_tasir(monkeypatch):
+    import main as main_mod
+
+    monkeypatch.setattr(main_mod, "_telegram_api_cagri", lambda *a, **k: SahteYanit(
+        200, {"ok": True, "result": {"type": "channel", "linked_chat_id": -100777}}))
+    monkeypatch.setattr(main_mod, "_telegram_token_al", lambda *_a, **_k: "111:AAA")
+    bilgi = main_mod._public_hedef_tipi_getir(["kanal_adim"])
+    assert bilgi[0]["bagli_grup"] == "-100777"
+    assert bilgi[0]["komut"] is False
