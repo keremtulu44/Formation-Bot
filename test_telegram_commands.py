@@ -778,8 +778,18 @@ def test_yardim_metni_tum_komut_adlarini_listeler():
     assert eksik == [], f"/yardim'da listelenmeyen komut adları: {eksik}"
 
 
-def test_yardim_metni_dm_kilidini_ve_kanal_kuralini_soyler():
+def test_yardim_metni_yetki_kapsamini_soyler():
+    """Yardım metni GERÇEK yetki kapsamını anlatır (2026-10-28 değişikliği).
+
+    Eski metin "public grup komut KABUL ETMEZ" diyordu; artık grup YÖNETİCİLERİ
+    okuma komutlarını çalıştırabilir. Kanal kuralı ise DEĞİŞMEDİ: `channel_post`
+    gönderilerinde yöneticilik doğrulanamadığı için kanal komut kabul etmez.
+    """
     metin = main_mod.KOMUT_YARDIM
-    assert "TELEGRAM_CHAT_ID" in metin and "kayıtlı DM sohbetinden" in metin
-    assert "komut KABUL ETMEZ" in metin          # public grup/kanal hedefi
+    assert "TELEGRAM_CHAT_ID" in metin            # DM sahibi: tüm komutlar
+    assert "YÖNETİCİ" in metin.upper()            # public grup: yönetici şartı
     assert "TELEGRAM_GROUP_ID" in metin
+    # Kanal istisnası korunur ve metinde açıkça yazılır.
+    assert "Kanal hedefleri komut KABUL ETMEZ" in metin
+    # Hangi komutların public'te kapalı olduğu ve nasıl açılacağı yazılmalı.
+    assert "/tara" in metin and "PUBLIC_COMMAND_EXTRA" in metin

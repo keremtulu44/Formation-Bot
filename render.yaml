@@ -35,6 +35,20 @@ services:
       # Kurulum: KANAL_ACILIS_PAKETI.md · kontrol: python kanal_acilis.py --durum
       - key: TELEGRAM_GROUP_ID
         sync: false
+      # --- PUBLIC GRUP KOMUTLARI (2026-10-28) ---
+      # Grup YÖNETİCİLERİ okuma komutlarını çalıştırabilir (getChatMember ile
+      # doğrulanır; API yanıt vermezse yetki verilmez). DM davranışı değişmez.
+      # Bot gruba EKLENMİŞ ve en az bir kez mesaj atabilir olmalıdır.
+      - key: PUBLIC_COMMANDS_ENABLED
+        value: "1"
+      # Boş = TELEGRAM_GROUP_ID kullanılır. Virgülle çok sohbet.
+      - key: PUBLIC_COMMAND_CHATS
+        sync: false
+      # Varsayılan kapalı komutları aç (örn. "tara"). Boş = yalnız okuma listesi.
+      - key: PUBLIC_COMMAND_EXTRA
+        sync: false
+      - key: PUBLIC_COMMAND_ADMIN_CACHE_SN
+        value: "300"
       # Supabase — Settings > API bölümünden
       - key: SUPABASE_URL
         sync: false

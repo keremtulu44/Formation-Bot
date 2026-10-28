@@ -261,9 +261,21 @@ def delete_webhook(token=None, *, api=None, yanit_oku_fn=None, token_al_fn=None)
     return ok
 
 
+def _kapsam_metni(dm_hedef: str, public_yolu: bool) -> str:
+    """Log için yetki kapsamı: hangi sohbetlerden komut kabul edildiği."""
+    parcalar = []
+    if dm_hedef:
+        parcalar.append(f"DM chat_id {dm_hedef}")
+    if public_yolu:
+        parcalar.append("public grup: yalnız yöneticiler, yalnız okuma komutları")
+    return " · ".join(parcalar) or "kapsam yok"
+
+
 def komut_katmanini_kur(notifier, isleyici=None, *, komutlar, yardim_metni, tarama_suruyor,
                         health_server_var, listener_factory, adres_olustur, gizle, secret_ayikla,
-                        set_webhook_fn, delete_webhook_fn) -> dict:
+                        set_webhook_fn, delete_webhook_fn,
+                        public_sohbetler=None, public_komutlar=None, admin_kontrol=None,
+                        admin_cache_sn=300.0) -> dict:
     """Komut katmanını AYNI ANDA TEK modda kurar: 'webhook', 'yoklama' veya 'kapali'.
 
     - **webhook**: secret + taban adres var, HTTP sunucusu ayakta ve setWebhook
@@ -272,30 +284,53 @@ def komut_katmanini_kur(notifier, isleyici=None, *, komutlar, yardim_metni, tara
     - **yoklama**: eski davranış (getUpdates daemon thread). Webhook kapalıyken ya da
       setWebhook başarısız olduğunda komutlar tamamen susmasın diye buraya düşülür;
       önce eski webhook kaydı silinir (yoksa 409).
-    - **kapali**: token/chat_id yok - bot yalnızca alarm gönderir.
+    - **kapali**: token yok VEYA (DM chat_id yok ve public komut yolu da kapalı).
+
+    PUBLIC yol (2026-10-28): `public_sohbetler` + `public_komutlar` + `admin_kontrol`
+    üçü de verilirse grup/supergroup yöneticileri okuma komutlarını çalıştırabilir.
+    DM chat_id boş olsa bile dinleyici açılır ("public-only" kurulum): eskiden DM
+    tanımlı değilse komut katmanı hiç başlamıyordu.
 
     `isleyici` yalnızca testler için verilir (ağa çıkmayan sahte dinleyici).
     """
-    if notifier is None or not getattr(notifier, "enabled", False):
+    token_var = bool((getattr(notifier, "token", "") or "").strip()) if notifier is not None else False
+    dm_hedef = (getattr(notifier, "chat_id", "") or "").strip() if notifier is not None else ""
+    public_hedefler = [str(x).strip() for x in (public_sohbetler or []) if str(x).strip()]
+    public_komut_adlari = [str(x).strip() for x in (public_komutlar or []) if str(x).strip()]
+    public_yolu = bool(public_hedefler and public_komut_adlari and admin_kontrol is not None)
+    if not token_var or not (dm_hedef or public_yolu):
         # PUBLIC hedef varsa yayın sürer ama KOMUTLAR çalışmaz: komut yalnız DM'den
         # okunur (kanala üye mesaj yazamaz). Kullanıcı "bot çalışıyor ama /durum
         # cevap vermiyor" durumunu ancak bu satırdan anlayabilir.
-        if getattr(notifier, "public_enabled", False):
+        if notifier is not None and getattr(notifier, "public_enabled", False):
             logger.warning(
-                "Telegram komutları KAPALI: TELEGRAM_CHAT_ID (DM) tanımlı değil. "
-                "Public hedefe yayın sürer ama /panel,/durum gibi komutlar çalışmaz; "
-                "komutlar için DM chat_id ekle.")
+                "Telegram komutları KAPALI: TELEGRAM_CHAT_ID (DM) tanımlı değil ve "
+                "public komut yolu kapalı. Public hedefe yayın sürer ama /panel,/durum "
+                "gibi komutlar çalışmaz; DM chat_id ekleyin ya da "
+                "PUBLIC_COMMANDS_ENABLED=1 bırakın.")
         else:
             logger.info("Telegram komut dinleyicisi başlatılmadı (token/chat_id yok)")
         return {"mod": "kapali", "listener": None, "processor": None}
     if isleyici is None:
         isleyici = listener_factory(
             token=notifier.token,
-            allowed_chat_id=notifier.chat_id,
+            allowed_chat_id=dm_hedef,
             handlers=komutlar,
             help_text=yardim_metni,
             komutlari_yoksay=tarama_suruyor,
+            public_chat_ids=public_hedefler,
+            public_commands=public_komut_adlari,
+            admin_checker=admin_kontrol,
+            admin_cache_sn=admin_cache_sn,
         )
+    if public_yolu:
+        logger.info(
+            "Public grup komutları AÇIK: %s sohbet · %s komut · yalnız yöneticiler",
+            len(public_hedefler), len(public_komut_adlari))
+    if not dm_hedef:
+        logger.info(
+            "Telegram komutları yalnız PUBLIC yoldan çalışıyor "
+            "(TELEGRAM_CHAT_ID boş): DM komutları kapalı.")
     liste = ", ".join("/" + k for k in komutlar)
     webhook_url = adres_olustur()
     if webhook_url:
@@ -311,7 +346,7 @@ def komut_katmanini_kur(notifier, isleyici=None, *, komutlar, yardim_metni, tara
             logger.info(
                 "Telegram komutları WEBHOOK modunda: "
                 f"{gizle(webhook_url, secret_ayikla())} "
-                f"(yalnızca chat_id {notifier.chat_id})"
+                f"({_kapsam_metni(dm_hedef, public_yolu)})"
             )
             return {"mod": "webhook", "listener": None, "processor": isleyici}
         else:
@@ -320,6 +355,6 @@ def komut_katmanini_kur(notifier, isleyici=None, *, komutlar, yardim_metni, tara
     delete_webhook_fn(token=notifier.token)
     if isleyici.start():
         logger.info(f"Telegram komutları aktif (yoklama): {liste} "
-                    f"(yalnızca chat_id {notifier.chat_id})")
+                    f"({_kapsam_metni(dm_hedef, public_yolu)})")
         return {"mod": "yoklama", "listener": isleyici, "processor": None}
     return {"mod": "kapali", "listener": None, "processor": None}

@@ -153,10 +153,10 @@ def _saglik_ozeti() -> dict:
 
 
 # === TELEGRAM KOMUTLARI (iki yönlü) ===
-# Bot alarm gönderir; bu bölüm Telegram'dan GELEN komutları yanıtlar. Komutlar
-# yalnızca TELEGRAM_CHAT_ID'den kabul edilir (yetki kontrolü telegram_commands.py
-# içinde). Yanıtlar getUpdates uzun yoklamasıyla ayrı bir thread'de toplanır.
-KOMUT_YARDIM = """🤖 Formation-Bot komutları (DM)
+# Bot alarm gönderir; bu bölüm Telegram'dan GELEN komutları yanıtlar. Yetki: DM
+# sohbeti (TELEGRAM_CHAT_ID, tüm komutlar) + public grup YÖNETİCİLERİ (okuma
+# komutları). Kapı telegram_commands.py içinde; yanıtlar geldiği sohbete gider.
+KOMUT_YARDIM = """🤖 Formation-Bot komutları
 
 /formasyonlar — günün canlı formasyonları (detaylı)
    diğer adlar: /formasyon · /liste
@@ -194,18 +194,25 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları (DM)
    varsa ya da ölçüm "bayrak kaldırılsın" derse DM'e düşer.
 /yardim — bu liste (diğer adlar: /help · /start)
 
+Yetki (kim hangi komutu çalıştırabilir):
+• DM (TELEGRAM_CHAT_ID): bot sahibinin sohbeti — listedeki HER komut çalışır.
+• Public grup/supergroup (TELEGRAM_GROUP_ID ya da PUBLIC_COMMAND_CHATS): komut
+  yalnız o grubun YÖNETİCİLERİ için çalışır (Telegram `getChatMember` ile
+  doğrulanır; API yanıt vermezse yetki verilmez). Yönetici olmayan üyenin komutu
+  sessizce yok sayılır — grupta "yetkiniz yok" cevabı spam olurdu.
+• Public'te yalnız OKUMA komutları açıktır: /formasyonlar /canli /panel /ozet
+  /sikisanlar /tamamlanan /retest /kirilim /durum /olcum /karne /backtest /yardim.
+  /tara, /grafik, /evet, /hayir public'te KAPALIDIR (ağır ya da durum değiştiren);
+  gerekirse PUBLIC_COMMAND_EXTRA ile açılır.
+• Kanal hedefleri komut KABUL ETMEZ: kanal gönderilerinde (`channel_post`) gönderen
+  kullanıcı bilgisi yoktur, yöneticilik doğrulanamaz — orası yalnız yayın alır.
+
 Notlar:
-• Komutlar YALNIZCA kayıtlı DM sohbetinden (TELEGRAM_CHAT_ID) kabul edilir.
-  Public grup/kanal hedefi (TELEGRAM_GROUP_ID) komut KABUL ETMEZ: orası yalnız
-  yayın alır. Kanalda komut istiyorsan TELEGRAM_CHAT_ID'yi kanal/grup kimliği
-  yapmalısın — o zaman kendi DM komutların susar (tek sohbet kilidi).
 • Bu bir AL/SAT aracı değildir: formasyon durumu ve kalite skoru bildirir.
 • /panel tüm evreni yeniden hesaplar; /tara [HISSE] istenen kapsamı yeniden analiz eder.
 • Analiz bitince sonucu otomatik gönderir; çalışma sırasında gelen komutlar sessiz kalmaz:
   "⏳ Analiz sürüyor" mesajıyla yanıtlanır (kuyruğa alınmaz, aynı anda tek iş).
-• Public hedefe (grup/kanal) giden yayın bu komutları ÇALIŞTIRMAZ; alarm/özet
-  otomatik gider. Kanal mesajları Telegram'da `channel_post` türünde gelir ve bot
-  yalnız `message` güncellemelerini dinler — yani kanalda komut yolu yoktur.
+• Cevap, komutun geldiği sohbete gider; grupta cevap isteği alıntılar.
 • Komutlar webhook (Render) ya da yoklama ile gelir; ikisi aynı anda açık olmaz.
   Bot ayrıca 15 dk'dan eski komutları çalıştırmaz ("bot uyanık değildi" mesajı gelir)."""
 
@@ -1294,6 +1301,100 @@ TELEGRAM_KOMUTLARI = {
 }
 
 
+# === PUBLIC GRUP KOMUTLARI (2026-10-28) ===
+# Public sohbette (grup/supergroup) YALNIZCA bu işleyicilere bağlı komutlar
+# çalışır. Liste İŞLEYİCİ bazlıdır, ad bazlı değil: `TELEGRAM_KOMUTLARI`'nda 40+
+# alias var (`/p` → panel, `/o` → özet); ad listesi tutulsaydı `/p` açılıp
+# `/panel` kapalı kalabilirdi. Ağır ya da durum DEĞİŞTİREN komutlar dışarıda:
+#   /tara   → tam evren taraması (dakikalarca sürer, grupta istek yarışı)
+#   /grafik → görsel üretimi + dosya gönderimi (DM'e gider, grupta karmaşa)
+#   /evet, /hayir → gece önerisi kararı KAYDA geçer (yetki tartışmalı, DM'de kalır)
+# `PUBLIC_COMMAND_EXTRA` ile tek tek açılabilir (örn. "tara").
+PUBLIC_KOMUT_ISLEYICILERI = (
+    _komut_yardim, _komut_durum, _komut_formasyonlar, _komut_canli, _komut_ozet,
+    _komut_sikisanlar, _komut_tamamlanan, _komut_retest, _komut_kirilim,
+    _komut_olcum, _komut_karne, _komut_backtest, _komut_panel,
+)
+
+
+def _public_komut_adlari() -> set:
+    """Public'te çalışmasına izin verilen KOMUT ADLARI (alias'lar çözülmüş).
+
+    Varsayılan: okuma komutları. `PUBLIC_COMMAND_EXTRA` virgülle ayrılmış ad
+    ekler (örn. `tara,evet`); bilinmeyen ad sessizce yok sayılır.
+    """
+    adlar = {ad for ad, isleyici in TELEGRAM_KOMUTLARI.items()
+             if isleyici in PUBLIC_KOMUT_ISLEYICILERI}
+    for ek in getattr(_pkg, "PUBLIC_COMMAND_EXTRA", []) or []:
+        ad = str(ek).strip().lower()
+        if ad in TELEGRAM_KOMUTLARI:
+            adlar.add(ad)
+        elif ad:
+            _pkg.logger.warning(
+                "PUBLIC_COMMAND_EXTRA içinde bilinmeyen komut: %s (yok sayıldı)", ad)
+    return adlar
+
+
+def _public_komut_sohbetleri() -> list:
+    """Komut kabul eden public sohbetler (grup öncelikli, sonra kanal).
+
+    Açıkça `PUBLIC_COMMAND_CHATS` verilmediyse mevcut `TELEGRAM_GROUP_ID` /
+    `TELEGRAM_CHANNEL_ID` kullanılır: ek env gerekmeden çalışır. Kanal hedefi
+    listede olsa bile `channel_post` gönderileri yetki doğrulanamadığı için
+    komut olarak ÇALIŞMAZ (bkz. telegram_commands.mesaj_sohbeti).
+    """
+    if not getattr(_pkg, "PUBLIC_COMMANDS_ENABLED", True):
+        return []
+    acik = list(getattr(_pkg, "PUBLIC_COMMAND_CHATS", []) or [])
+    if acik:
+        return acik
+    sohbetler = []
+    grup = str(getattr(config, "TELEGRAM_GROUP_ID", "") or "").strip()
+    kanal = str(getattr(config, "TELEGRAM_CHANNEL_ID", "") or "").strip()
+    if grup:
+        sohbetler.append(grup)
+    if kanal and kanal != grup:
+        sohbetler.append(kanal)
+    return sohbetler
+
+
+def _redakte(deger, token: str = "") -> str:
+    """Log için sırları maskele (token/anahtar loga düşmesin)."""
+    from secrets_redaction import redact_sensitive_text
+    return redact_sensitive_text(deger, token)[:200]
+
+
+def _telegram_yonetici_mi(chat_id, user_id) -> bool:
+    """`getChatMember` ile yönetici kontrolü: `creator` ya da `administrator`.
+
+    Fail-closed: çağrı başarısız/yanıt çözülemezse False döner (yetki VERİLMEZ).
+    `can_manage_chat` gibi ek izinlere bakılmaz — Telegram'ın `status` alanı
+    yöneticiliğin tek doğru kaynağıdır.
+    """
+    token = _pkg._telegram_token_al()
+    if not token or not chat_id or not user_id:
+        return False
+    try:
+        yanit = _pkg._telegram_api_cagri(
+            "getChatMember", token, {"chat_id": str(chat_id), "user_id": str(user_id)})
+    except Exception as exc:  # noqa: BLE001 - yetki kararı verilemedi
+        _pkg.logger.warning(
+            "Public komut yönetici kontrolü başarısız: %s",
+            _redakte(exc, token))
+        return False
+    ok, aciklama = _pkg._telegram_yanit_oku(yanit)
+    if not ok:
+        _pkg.logger.warning("Public komut yönetici kontrolü başarısız: %s",
+                            _redakte(aciklama, token))
+        return False
+    try:
+        uye = ((yanit.json() or {}).get("result") or {})
+    except (AttributeError, TypeError, ValueError):
+        return False
+    durum = str((uye or {}).get("status") or "").strip().lower()
+    return durum in ("creator", "administrator")
+
+
 def _telegram_webhook_secret_ayikla(secret=None) -> str:
     # config değeri ÇAĞRI ANINDA okunur: testlerdeki monkeypatch(main, ...) etkili olur.
     return _transport_telegram.webhook_secret_ayikla(secret, varsayilan=_pkg.TELEGRAM_WEBHOOK_SECRET)
@@ -1346,12 +1447,21 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
         komutlar=_pkg.TELEGRAM_KOMUTLARI, yardim_metni=_pkg.KOMUT_YARDIM,
         tarama_suruyor=lambda: _pkg._scan_job_active.is_set(),
         health_server_var=_pkg._health_server_ref is not None,
-        listener_factory=TelegramCommandListener,
+        # `_pkg.X`: yama yüzeyi kuralı (§3) — testler `main.TelegramCommandListener`
+        # yamaladığında çağrı anında buradan okunur. Modül-seviyesi ad kullanılırsa
+        # yama sessizce yok sayılırdı.
+        listener_factory=_pkg.TelegramCommandListener,
         adres_olustur=_pkg._telegram_webhook_url_olustur,
         gizle=_pkg._webhook_adres_gizle,
         secret_ayikla=_pkg._telegram_webhook_secret_ayikla,
         set_webhook_fn=_pkg._telegram_set_webhook,
         delete_webhook_fn=_pkg._telegram_delete_webhook,
+        # PUBLIC yol (2026-10-28): grup yöneticileri okuma komutlarını çalıştırır.
+        # Üçü birlikte verilmezse public komut kapalı kalır (fail-closed).
+        public_sohbetler=_pkg._public_komut_sohbetleri(),
+        public_komutlar=_pkg._public_komut_adlari(),
+        admin_kontrol=_pkg._telegram_yonetici_mi,
+        admin_cache_sn=float(getattr(_pkg, "PUBLIC_COMMAND_ADMIN_CACHE_SN", 300) or 0),
     )
     setattr(_pkg, "_komut_modu", sonuc["mod"])
     if sonuc["mod"] == "webhook":
