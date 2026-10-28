@@ -386,8 +386,8 @@ Alçalan Üçgen — kapanış onaylı
 · kırılan seviyeye dönüş yok
 · günlük de aynı yönde
 
-◇ benzer 32.321 kurulum
-   %76'sı devam etti · %35 geri
+◇ benzer 32.321 · %76'sı sürdü
+◇ geri çekilme %35 (28.624)
 ◇ tutarsa tepe ~1,19 TL (+%1,7)
 geçmiş davranıştır, kazanç değil
 
@@ -411,7 +411,7 @@ olumsuz: hacim teyidi yok
 | `· temas üst 2 / alt 2` | `· üste 2, alta 2 kez değdi` | "temas" jargon |
 | `◈ 4s yapı dış ve iç aşağı döndü` | `◈ 4s yön aşağı (iç ve dış yapı)` | hangi yön, neye göre |
 | `geri çekilme yok · 1g de onaylı` | `· kırılan seviyeye dönüş yok` + `· günlük de aynı yönde` | iki jargon tek satırdaydı |
-| `◇ 32321 formasyon · %76 tuttu` | `◇ benzer 32.321 kurulum` + `   %76'sı devam etti · %35 geri` | "%76 kazanç" diye okunuyordu |
+| `◇ 32321 formasyon · %76 tuttu` | `◇ benzer 32.321 · %76'sı sürdü` + `◇ geri çekilme %35 (28.624)` | "%76 kazanç" diye okunuyordu; sonra iki yüzde tek satırda toplanır gibi okundu (2026-10-28) |
 | `◇ tutunca ~1,19 TL · %1,7` | `◇ tutarsa tepe ~1,19 TL (+%1,7)` | "tutunca" koşulsuz hedef gibi okunuyordu |
 | `· geçmiş davranış, kazanç değil` | `geçmiş davranıştır, kazanç değil` (TEK satır) | "geçmişte önerilmiş" gibi okunuyordu; tam hâli 330 px, bütçeye sığan sözcük ekonomisi |
 | `katılım 4s veri yok` | `hacim: 4s yok (endeks)` / hissede **satır yok** | hissede bilgi yokluğu kart yeri hak etmiyor |
@@ -436,10 +436,16 @@ olumsuz: hacim teyidi yok
 
 #### Ölçü bloğu ve sığmayan satırlar
 
-Ölçü bloğu iki seviyeli yazılır: başlık **kaç benzer kurulum** olduğunu söyler
-(`◇ benzer 32.321 kurulum`), alt satır yüzdeyi taşır (`   %76'sı devam etti ·
-%35 geri`). İkinci satır girintilidir çünkü başlığın DEVAMI olduğunu böyle
-gösterir; kart sözleşmesi girintili devam satırını yalnız bu blokta kabul eder.
+Ölçü bloğu **tek satır = tek taban** kuralıyla yazılır (2026-10-28): satırdaki
+yüzdenin `n`'i aynı satırda, parantez içinde ve binlik ayırıcıyla durur
+(`◇ benzer 32.321 · %76'sı sürdü`, `◇ geri çekilme %35 (28.624)`,
+`◇ rol uyumlu %80 (15.724)`, `◇ hacim yüksek %61 (11.928)`).
+
+Eski biçim iki seviyeliydi: başlık kaç benzer kurulum olduğunu söyler, girintili
+alt satır yüzdeyi taşırdı (`   %76'sı devam etti · %35 geri`). İki farklı
+tablonun yüzdesi tek satırda durunca "76+35=111" gibi okunuyordu ve girintili
+satır kart sözleşmesini zorluyordu; ikisi de kaldırıldı. Girintili satır artık
+**hiçbir** blokta kabul edilmez.
 
 Satır bütçesi (262,8 px) aşılırsa kırpma yapılmaz, sırayla kısalır: `· bant 49
 mum, %55 daralma` → `· bant %55 daralma`; `· teyit düşer: 65,97 üstü kapanış`
