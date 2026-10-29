@@ -203,7 +203,9 @@ def _kart_metni(**ek):
 
 
 #: Kart yüzeyinde yaşamayan kısaltmalar (kullanıcı: "herkesin anlayabileceği format").
-KART_JARGON = ("ATR", "RVOL", "FVG", "BOS", "CHoCH", "OB ", " n1", "n1651", "bar ")
+# OB/FVG yasağı kullanıcı kararıyla 2026-10-29 kaldırıldı — kart yorum
+# satırları açıklayıcılık için bu kelimeleri taşıyabilir. Kalanlar yasaklı.
+KART_JARGON = ("ATR", "RVOL", "BOS", "CHoCH", " n1", "n1651", "bar ")
 
 
 def test_kart_jargon_tasimaz():

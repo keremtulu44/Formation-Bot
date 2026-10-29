@@ -21,8 +21,14 @@ tartışmalarında sayı gerektiğinde buraya bakılır.
 | **[KOSULLU_CUMLE_OLCUMU.md](KOSULLU_CUMLE_OLCUMU.md)** | **Ölçüldü, yazılmadı:** "giderse tamamlanır" cümlesinin çapraz tablosu (yakınlık + aşım kovaları), karar ve gerekçe | Koşullu cümle önerilmeden önce |
 | **[REPLAY_OZET_2026-10-21.md](REPLAY_OZET_2026-10-21.md)** | **Son replay'in okunur özeti:** tek ekran + tek tabloda MFE/MAE/NET + örneklem payı | Hızlı karar / paylaşım için |
 | **[KOVA_FAZI_OLCUMU_2026-10-23.md](KOVA_FAZI_OLCUMU_2026-10-23.md)** | **Kova fazı ölçümü:** kayan pencerenin 2s/4s fazlarını saatten saate döndürmesinin motor kararına ve bildirim tekrarlarına etkisi; ölçüldü ve sabit-çapa düzeltmesi uygulandı (§9) | Resample/tekrar bildirimi konuşmadan önce |
+| **[DZ_REPLAY_SONUCLARI_2026-10-28.md](DZ_REPLAY_SONUCLARI_2026-10-28.md)** | **DZ replay hattı:** 177 sembol × 4 TF = 708 seri, 0 hata — OB/FVG nedensel replay sonuçları + `dz_*` CSV/Supabase eşleme (`scripts/backfill/dz_yukleme.py`) | Zone kapsamı/doğruluğu doğrularken |
+| **[REPLAY_SORU_SETI_2026-10-29.md](REPLAY_SORU_SETI_2026-10-29.md)** | **S01–S32 soru seti:** kod karşılığı + cevap sözleşmesi §0–§7 (eşik: <5 RED / 5–12 kart metni / ≥12 kural) + açık uç sicili §8 | Soru sözleşmesini okumak için |
+| **[REPLAY_SORU_YANITLARI_2026-10-29.md](REPLAY_SORU_YANITLARI_2026-10-29.md)** | **S01–S32 cevapları** (`research/soru_cevaplama.py`, 708 seri 0 hata): 19 canlıya / 1 kart metni / 7 RED / 1 karar yok / 4 gözlem | "Bu kural neye göre, kaç puanla?" diye |
+| [AI_SORU_URETICI_PROMPT.md](AI_SORU_URETICI_PROMPT.md) | Dış AI'a verilecek soru-üretici prompt (tek parça; kolon/ölçek/eşik sözlüğü gömülü) | Yeni soru seti üretilirken |
+| [AI_SONUC_YORUM_TALIMATI.md](AI_SONUC_YORUM_TALIMATI.md) | Dış AI'a verilecek sonuç-yorumu paketi: yalnız yorum (yeni ölçüm/soru istemez, sayı uydurmaz) | Replay sonuçları yorumlatılırken |
+| [SORU_KOVA_BASELINE_2026-10-29.json](SORU_KOVA_BASELINE_2026-10-29.json) | Yayın kapısının §6 kova bazeline (`research/soru_kapisi.py`; saparsa yayın durur) | Kapı sonucu değiştiğinde |
 | [ARASTIRMA_RAPORU_DUZMETIN.txt](ARASTIRMA_RAPORU_DUZMETIN.txt) | Aynı sonuçların düz metin dışa aktarımı (paylaşım için) | Telegram/forum aktarımı |
-| [arastirma_ms_hatali_seriler.txt](arastirma_ms_hatali_seriler.txt) | MS motorunun patladığı **35 serinin** listesi | Açık bulgu — aşağıya bak |
+| [arastirma_ms_hatali_seriler.txt](arastirma_ms_hatali_seriler.txt) | MS motorunun patladığı **35 serinin** listesi | Kayıt (düzeltildi 2026-10-28) — aşağıya bak |
 
 ## Ölçümün canlı metne bağlandığı yer
 
@@ -42,7 +48,13 @@ daha iyi. Çok test edilen korunan tepe çöker (4+ denemede engelleme %36 → %
 dip tutar (%37,5 → %33,3). **Sezginin tersine**, dokunuş anında yüksek hacim (Q4) her intraday
 TF'de en zayıf tepkiyi verir (%60–61 vs %70); hacim burada teyit değil, tükenme işaretidir.
 
-## ⚠️ Açık bulgu: canlı botta sessiz MS çökmesi
+## ⚠️ ~~Açık bulgu: canlı botta sessiz MS çökmesi~~ → 2026-10-28'DE DÜZELTİLDİ
+
+> **Güncelleme (2026-10-28):** Kök neden (kilitli geçici referansın aday fork'unda
+> kaybolması) düzeltildi; 35 hatalı serinin tamamı hatasız tamamlanıyor.
+> Ayrıntı + doğrulama: [denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md](../denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md).
+> Görünür degrade (`/durum` MS arıza satırı) zaten koddaydı (`bot/commands._ms_hata_satiri`).
+> Aşağıdaki metin ölçüm anındaki (Ekim 2026) tarihli kayıttır:
 
 704 serinin **35'inde (%5,0)** MS motoru
 `ValueError: confirmed break references must still be active` ile düşüyor
@@ -57,6 +69,8 @@ yolu birebir aynı hatayı veriyor (AEFES/ALFAS/ALGYO üzerinde doğrulandı).
 **Önerilen ilk adım** (kök neden ayrı iş): `_execute_domain` hata yakaladığında Telegram'a
 "MS domain devre dışı" uyarısı düşürmek — sessiz boşluk yerine görünür degrade.
 Ayrıntı: [ARASTIRMA_SONUCLARI.md](ARASTIRMA_SONUCLARI.md) §"Canlı botta bulunan sessiz MS çökmesi".
+*(2026-10-28: degrade `/durum` MS arıza satırıyla zaten vardı; kök neden ayrıca
+düzeltildi — bu "ilk adım" maddesi kapanmıştır.)*
 
 ## Yeniden üretim
 
@@ -68,6 +82,15 @@ python scripts/backfill/arastirma_kosu.py --agrega       # yalnız raporu yenide
 
 Ham çıktı `arastirma_cikti/*.jsonl` (git'e girmez); rapor
 `docs/arastirma/ARASTIRMA_BULGULARI.md` (bu klasör) olarak yazılır.
+
+Aynı JSONL tabanından replay soru hattı (S01–S32):
+
+```bash
+python run_directional_zone_replay.py                    # DZ replay: 708 seri → dz_* CSV
+python research/soru_cevaplama.py                        # S01–S32 → REPLAY_SORU_YANITLARI_*.md + soru_seti_sonuclari.json
+python -m research.soru_kapisi                           # yayın kapısı (çıkış 0 = açık; --kova-yaz ile baseline üretimi)
+python scripts/ornek_kartlar.py                          # 9 örnek kartlık galeri
+```
 
 ## Sınırlar (özet — tamamı SONUCLARI §Sınırlar)
 

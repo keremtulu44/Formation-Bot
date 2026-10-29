@@ -99,6 +99,12 @@ class MarketStructureRuntime(_BaseRuntime):
                     bc.broken_swing_identity,
                     bc.broken_source_bar,
                 )
+                if not snapshot.valid:
+                    # The slot may have forked while the break was pending;
+                    # recovery falls back to the snapshot retained at fork.
+                    snapshot = self.pop_retained_snapshot(
+                        scope, bc.broken_swing_identity, bc.broken_source_bar
+                    )
                 if not self._commit_missing_reference(
                     swings=swings,
                     candidate_snapshot=snapshot,
@@ -117,6 +123,12 @@ class MarketStructureRuntime(_BaseRuntime):
                     bc.origin_swing_identity,
                     bc.origin_source_bar,
                 )
+                if not snapshot.valid:
+                    # Same fork case as the broken reference above: the
+                    # origin left the candidate slot but was retained.
+                    snapshot = self.pop_retained_snapshot(
+                        scope, bc.origin_swing_identity, bc.origin_source_bar
+                    )
                 if not self._commit_missing_reference(
                     swings=swings,
                     candidate_snapshot=snapshot,

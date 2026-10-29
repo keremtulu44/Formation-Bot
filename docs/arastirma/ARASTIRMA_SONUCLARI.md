@@ -276,6 +276,11 @@ aralığı çıkarıldı.
 
 ## Canlı botta bulunan sessiz MS çökmesi
 
+> **2026-10-28 düzeltmesi:** Kök neden (kilitli geçici referansın aday fork'unda
+> kaybolması) giderildi; 35 serinin tamamı canlı yolda hatasız tamamlanıyor.
+> Kayıt: [denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md](../denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md).
+> Aşağıdaki bölüm ölçüm anındaki tarihli bulgudur.
+
 **704 serinin 35'inde (%5.0)** MS motoru
 `ValueError: confirmed break references must still be active` ile patladı:
 1h'de 20, 2h'de 6, 4h'de 4, 1d'de 5 seri. Etkilenen semboller arasında AEFES,

@@ -316,6 +316,10 @@ def dokunus_satirlari(
             "dokunus_no": ep.get("touch_number_for_zone"),
             "dokunus_baslangic_bar_time": _bar_time(frame, basla),
             "dokunus_bitis_bar_time": _bar_time(frame, bitir),
+            # Soru seti (S01/S15/S32): çapa indeksleri metinden yeniden
+            # çözülmesin diye doğrudan yazılır.
+            "dokunus_baslangic_index": int(basla),
+            "dokunus_bitis_index": int(bitir),
             "dokunus_bar_sayisi": ep.get("touch_bar_count"),
             "sonraki_epizot_index": ep.get("_next_episode_start_index"),
             "arrival_side": ep.get("arrival_side"),
@@ -348,21 +352,41 @@ def dokunus_satirlari(
         # Repo'nun mevcut yön-ancored satırları da taşınır: eski/yeni ölçüm
         # karşılaştırılabilir olsun diye (regresyon kanıtı). Alan adları
         # `build_window_rows` çıktısıyla birebir aynıdır.
+        # repoh{h}_ kopyası: S08/S09 için hedef kategorileri de dahil
+        # (REPLAY_SORU_SETI_2026-10-29.md §8-E1).
         for pencere in window_by_episode.get(ep.get("episode_id"), []):
             horizon = pencere.get("horizon_bars")
             if horizon is None:
                 continue
             onek = f"repoh{horizon}_"
-            for alan in (
+            sabit_alanlar = (
                 "full_window_favorable_excursion_atr",
                 "full_window_adverse_excursion_atr",
                 "favorable_excursion_before_native_terminal_atr",
+                "favorable_excursion_on_terminal_bar_atr",
                 "window_complete",
                 "window_status",
                 "native_terminal_within_full_horizon",
                 "native_price_violation_within_full_horizon",
+                "native_terminal_at_or_before_touch",
+                "native_terminal_reason_in_window",
                 "next_same_zone_touch_in_window",
-            ):
+                "observed_post_touch_bars",
+                "preterminal_post_touch_bars",
+                "active_target_eligible",
+            )
+            hedef_alanlar = tuple(
+                f"target_{etiket}_atr_{alt}"
+                for etiket in ("0p5", "1p0", "1p1p5")
+                for alt in (
+                    "hit_full_window",
+                    "hit_before_native_terminal",
+                    "possible_on_terminal_bar",
+                    "hit_only_after_terminal",
+                    "active_zone_category",
+                )
+            )
+            for alan in sabit_alanlar + hedef_alanlar:
                 if alan in pencere:
                     deger = pencere[alan]
                     satir[f"{onek}{alan}"] = deger if isinstance(deger, (bool, str)) or deger is None else _yuvarla(deger)

@@ -40,6 +40,12 @@
 | [arastirma/AMPIRIK_REFERANS.md](arastirma/AMPIRIK_REFERANS.md) | Yürürlükte | 2026-10-21 | Ölçümü canlı metne bağlayan katman: hangi sayı kartta hangi koşulda görünür (`ampirik_referans.py`) |
 | [arastirma/KOSULLU_CUMLE_OLCUMU.md](arastirma/KOSULLU_CUMLE_OLCUMU.md) | Ölçüm | 2026-10-22 | Koşullu tamamlanma cümlesi: çapraz tablo, aşım kovaları, "yazılmadı" kararı | 
 | [arastirma/REPLAY_OZET_2026-10-21.md](arastirma/REPLAY_OZET_2026-10-21.md) | Kayıt | 2026-10-21 | Son doğrulanmış replay'in okunur özeti: tek tabloda MFE/MAE/NET, örneklem güvenilirliği, açık uçlar |
+| [arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md](arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md) | Ölçüm + hat | 2026-10-28 | 177 sembol × 4 TF tam replay (708/708, 0 hata): anlamlı sonuçlar özeti, `dz_*` depolama hattı (`scripts/backfill/dz_yukleme.py`) ve kolon kapsam raporu |
+| [arastirma/AI_SORU_URETICI_PROMPT.md](arastirma/AI_SORU_URETICI_PROMPT.md) | Yöntem | 2026-10-29 | Kod erişimi olmayan bir yapay zekâya verilecek tek parça soru-üretici prompt: tüm kolon/ölçek/eşik sözlüğü gömülü, depo yolları yalnızca dışlama satırı olarak |
+| [arastirma/REPLAY_SORU_SETI_2026-10-29.md](arastirma/REPLAY_SORU_SETI_2026-10-29.md) | Soru seti | 2026-10-29 | Prompt'tan üretilen S01–S32 soru seti (kodla birebir karşılığı ve cevap sözleşmesi §0–§7 + açık uç sicili §8 E1–E16) |
+| [arastirma/REPLAY_SORU_YANITLARI_2026-10-29.md](arastirma/REPLAY_SORU_YANITLARI_2026-10-29.md) | Üretilen | 2026-10-29 | `research/soru_cevaplama.py` ile S01–S32 cevapları (708 seri, 0 hata): §6 karar özeti 19 canlıya yazılır / 1 kart metni / 7 RED / 1 karar yok / 4 gözlem (S27 çırpınma kuralı yapısal taban nedeniyle RED'e çekildi) |
+| [arastirma/AI_SONUC_YORUM_TALIMATI.md](arastirma/AI_SONUC_YORUM_TALIMATI.md) | Yöntem | 2026-10-29 | Dış AI'a verilecek tek parça sonuç-yorumu paketi: yalnız yorum kuralı (yeni soru/ölçüm istemez, sayı uydurmaz) + gömülü §0 eşik sözleşmesi |
+| [arastirma/SORU_KOVA_BASELINE_2026-10-29.json](arastirma/SORU_KOVA_BASELINE_2026-10-29.json) | Üretilen | 2026-10-29 | `research/soru_kapisi.py` §6 kova bazeline: sonuç JSON'u bundan saparsa yayın durur (yenileme: `--kova-yaz`) |
 | [arastirma/ARASTIRMA_BULGULARI.md](arastirma/ARASTIRMA_BULGULARI.md) | Üretilen | 2026-10 | Ham tablo eki (`arastirma_kosu.py --agrega`) |
 | [arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt](arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt) | Yürürlükte | 2026-10 | Düz metin dışa aktarım |
 | [arastirma/arastirma_ms_hatali_seriler.txt](arastirma/arastirma_ms_hatali_seriler.txt) | Kayıt (açık bulgu) | 2026-10 | MS motorunun patladığı 35 seri |
@@ -85,6 +91,8 @@ diye bakmadan önce kodun kendisine ve [YAPI.md](YAPI.md) §6'ya bakın.
 
 | Dosya | Tarih | Ne ölçtü |
 |---|---|---|
+| [denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md](denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md) | 2026-10-28 | MS motorunun 35 seride sessiz çökmesinin kök nedeni (kilitli geçici referansın fork'ta kaybı) + üç katmanlı düzeltme + 35/35 hedef regresyon |
+| [denetim/TARAMA_VE_ONERILER_2026-10-28.md](denetim/TARAMA_VE_ONERILER_2026-10-28.md) | 2026-10-28 | Depo geneli tarama (suite/statik/kapılar), 2026-10-26 açık önerilerin durumu, veri envanteri ve Ö1–Ö7 yol haritası: süzgeç kaçakları karnesi, iki yıllık sağlamlık matrisi, seviye-test `◇` satırı, hacim faz ayrımı, üçgen kanal denei, motor sağlık sicili, karne bant sağlığı |
 | [denetim/KOD_DENETIMI_2026-10-26.md](denetim/KOD_DENETIMI_2026-10-26.md) | 2026-10-26 | Depo geneli kod/hata denetimi: DM musluğu kullan-önce-ata (B1), env drift, yeni AST koruma testi + açık öneriler |
 | [denetim/GENEL_INCELEME_VE_YOL_HARITASI_2026-10-16.md](denetim/GENEL_INCELEME_VE_YOL_HARITASI_2026-10-16.md) | 2026-10-16 | Uçtan uca inceleme + önceliklendirilmiş iş listesi (Y1–Y16) |
 | [denetim/TELEGRAM_PRODUCT_AND_LIVE_READINESS_AUDIT.md](denetim/TELEGRAM_PRODUCT_AND_LIVE_READINESS_AUDIT.md) | 2026-10 | Canlıya hazırlık denetimi (NO-GO gerekçeleri) |

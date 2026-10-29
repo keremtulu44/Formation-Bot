@@ -323,6 +323,12 @@ TELEGRAM_ALERT_STYLE = os.getenv("TELEGRAM_ALERT_STYLE", "kart").strip().lower()
 # 45/980 → 10/244. "0" yazılırsa 25 Eyl biçimi (tam kart) aynen geri gelir.
 TELEGRAM_KART_SUZGEC = os.getenv("TELEGRAM_KART_SUZGEC", "1").strip().lower() not in {
     "0", "false", "kapali", "kapalı", "yok", "hayir", "hayır"}
+# KART YORUM KATMANI (2026-10-29): S01–S32 araştırma kapılarından kartın "şu
+# an bu hissede ne var?" hâli — koşulu açılan ◇ (en fazla 3) + · dikkat (en
+# fazla 1); kapı yoksa kart birebir eski hâli. Yalnız canlı akış
+# (`_attach_domain_context`) bu kartı açar; kapatmak: TELEGRAM_KART_YORUM=0.
+TELEGRAM_KART_YORUM = os.getenv("TELEGRAM_KART_YORUM", "1").strip().lower() not in {
+    "0", "false", "kapali", "kapalı", "yok", "hayir", "hayır"}
 # Beklenti (tahmin) hükmü: `◇ beklenti: devam` + sayaç satırı. VARSAYILAN
 # KAPALI (2026-10-22): katman ölçülmüş ilişkilerden türetiliyor ama canlı
 # akışta bir hafta izlenmeden açılmayacak (tasarım: TAHMIN_UYGULAMA_PLANI.md

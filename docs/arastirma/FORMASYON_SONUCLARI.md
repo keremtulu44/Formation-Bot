@@ -67,17 +67,17 @@
 **AŞAMA**     : S1 (doğum)
 **ANA ÇİZGİ** : mesafe kovası (<0.5 · 0.5–1 · 1–2 · 2–3 · ≥3 ATR)
 **ÇIKTI**     : kova başına formasyon sayısı + kırılıma varma oranı
-**TABAN**     : MS rolü açık olan formasyonlar (n=30983)
+**TABAN**     : MS rolü açık olan formasyonlar (n=33742)
 **YAN SÜTUN** : rol ucu PH/PL
 **KARAR**     : tanımlayıcı; kırılım oranı sütunu keşif niteliğinde
 
 | mesafe | n | kırılım oranı | GA |
 |---|---|---|---|
-| <0.5 | 524 | %93.1 | %90.6–%95.0 |
-| 0.5–1 | 779 | %95.0 | %93.2–%96.3 |
-| 1–2 | 2676 | %94.4 | %93.5–%95.2 |
-| 2–3 | 4043 | %94.6 | %93.8–%95.2 |
-| ≥3 | 22961 | %94.5 | %94.2–%94.8 |
+| <0.5 | 569 | %93.7 | %91.4–%95.4 |
+| 0.5–1 | 859 | %95.3 | %93.7–%96.6 |
+| 1–2 | 2908 | %94.6 | %93.7–%95.3 |
+| 2–3 | 4401 | %94.7 | %94.0–%95.3 |
+| ≥3 | 25005 | %94.7 | %94.4–%94.9 |
 
 
 
@@ -163,8 +163,8 @@
 **SORU**      : FRM-08 · Kırılım, en yakın korunan seviyeye doğru mu oluyor?
 **AŞAMA**     : S4 (deneme)
 **ANA ÇİZGİ** : uyum: yukarı kırılım + üstte PH / aşağı kırılım + altta PL
-**ÇIKTI**     : uyum oranı %53.7 (GA %53.1–%54.2)
-**TABAN**     : kırılımı olan ve MS rolü açık formasyonlar (n=29297)
+**ÇIKTI**     : uyum oranı %53.5 (GA %53.0–%54.1)
+**TABAN**     : kırılımı olan ve MS rolü açık formasyonlar (n=31960)
 **YAN SÜTUN** : —
 **KARAR**     : tanımlayıcı
 
@@ -209,7 +209,7 @@
 **AŞAMA**     : S5 (teyit)
 **ANA ÇİZGİ** : aynı bar (|gecikme| ≤ 10 bar içinde en yakın BOS)
 **ÇIKTI**     : aynı bar oranı %12.3 (GA %11.8–%12.8) · aynı bar + aynı yön %11.6 · medyan |gecikme| 3 bar
-**TABAN**     : teyit alan ve ±10 bar içinde BOS bulunan formasyonlar (n=16541)
+**TABAN**     : teyit alan ve ±10 bar içinde BOS bulunan formasyonlar (n=18032)
 **YAN SÜTUN** : —
 **KARAR**     : tanımlayıcı
 
@@ -356,13 +356,13 @@
 **SORU**      : FRM-20 · Kırılım yönü en yakın rol seviyesine doğruysa sonuç değişiyor mu?
 **AŞAMA**     : Çapraz
 **ANA ÇİZGİ** : uyumlu / uyumsuz
-**ÇIKTI**     : tamamlanma oranı · fark +6.6 puan (GA +5.5…+7.7) · fark var
-**TABAN**     : kırılımı olan ve MS rolü açık formasyonlar (n=29297)
+**ÇIKTI**     : tamamlanma oranı · fark +6.4 puan (GA +5.3…+7.5) · fark var
+**TABAN**     : kırılımı olan ve MS rolü açık formasyonlar (n=31960)
 **YAN SÜTUN** : —
 **KARAR**     : fark var (GA sıfırı içermiyor)
 
 | grup | n | tamamlanma | GA |
 |---|---|---|---|
-| uyumlu | 15724 | %79.7 | %79.0–%80.3 |
-| uyumsuz | 13573 | %73.1 | %72.3–%73.8 |
+| uyumlu | 17103 | %79.6 | %79.0–%80.2 |
+| uyumsuz | 14857 | %73.2 | %72.5–%73.9 |
 

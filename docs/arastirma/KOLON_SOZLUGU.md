@@ -762,3 +762,35 @@ bulunur. Tüketici kod **eksik kolona dayanıklı** olmalı; kolon yokluğu "0" 
 `frm` tablosu için hedef ~92 kolon (§13); pilot ile doğrulanmadan **donmaz**.
 
 `config_hash` değiştiyse eski ve yeni satırlar aynı tabloda birleştirilmez.
+
+---
+
+## 18. Ölçüm kanunları (2026-10-29 — S09 / S12 / S14–S16 bağlamı)
+
+Tekil kararlar; uygulanacak **resmi kurallar**:
+
+1. **Resmi hedef sayımı (S09).** `repoh*` hedef vuruşunda resmi kolon
+   `target_*_atr_active_zone_category`'dir (aktif bölge sayımı: `AMBIGUOUS_ON_TERMINAL_BAR`
+   ayrı kova, hit sayılmaz). `target_*_atr_possible_on_terminal_bar` yalnızca
+   **üst sınır (audit)** sayımıdır — yayın metnine girmez. İki kural arasındaki
+   fark **≥5 puan** gelen hücrede sonuç `YETERLİ` yerine `KISMI`'na düşer;
+   AMBIGUOUS payı **>%5** ise `YETERLİ` etiketi hiç verilmez (`KISMI` olur).
+2. **Türev alan (S12).** `vp_volume_percent_rank` ile `vp_volume_z_score` aynı
+   bilginin iki kıyafetidir (pencere içi monoton dönüşüm; S12'de 0 satır
+   çelişki). Resmi hacim ölçütü **`vp_rvol`**'dur; ikisi birden aynı hücrede
+   gösterilmez, **ikinci ölçüt yapılmaz**. (S07'deki iki ayrı ölçüt —
+   rvol ile fiyat-ilerlemesi — farklı alanlardır, bu kurala girmez.)
+3. **Yaş semantiği (S16/S25).** `age_bars` = seri sonundaki bant/olay yaşıdır;
+   "ezilme süresi" **DEĞİLDİR** (ezilme hızını `relevance` payı verir). Süre-güç
+   kovaları `rol_sure_bar` üzerindendir: **1–5 / 6–10 / 11–20 / ≥21** bar,
+   ölçüt `engelledi_025`.
+4. **Güven damgası (S14 + S03).** Ölçümün güveni üç ayaktan kurulur:
+   (a) **şekil**: tam cümle + en fazla tek sayı, "· n=…" yan etiketi yasak;
+   (b) **kapsam**: n<30 → `KARAR YOK`; (c) **sayım çelişkisi**: maddedeki 1'e
+   göre iki resmi kural farkı ≥5 puan → `KISMI` zorunlu. Puan-sıralama güven
+   damgası (S03: `r ≥ 10` **ve** `sr ≥ 5`) yalnız **sıra** hücrelerinde
+   kullanılır; oran (pp) hücrelerinde kullanılmaz.
+
+Her madde aynı anda birden çok ayak ister; ayaklardan biri düşerse maddenin
+güveni en düşük ortak paydaya iner (ör. şekil doğru ama kapsam n<30 → güven
+yok, madde okunsa bile karar `KARAR YOK`).

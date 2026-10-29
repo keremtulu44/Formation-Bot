@@ -78,6 +78,9 @@ raporlar/
 
 .pytest-full.log
 arastirma_cikti/
+arastirma_cikti_p*/
+.kaldirac_p*.txt
+dz_yukleme/
 
 # Yerel araç artıkları (commit edilmez)
 .coverage

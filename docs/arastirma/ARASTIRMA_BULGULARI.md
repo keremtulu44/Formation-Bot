@@ -2,27 +2,15 @@
 > Bu dosya tablo ekidir: ham aggregatlar soru başına bölümlenir.
 > Okunabilir özet ve yorum: `docs/arastirma/ARASTIRMA_SONUCLARI.md`.
 > Yalnız karar için okuyan, aşağıdaki tablolara inmeden özetle yetinebilir.
-
-## ÖZET — ilk bakışta (176 sembol × 4 TF, 994.142 gözlem)
-- **OB yeniden test edilir** (%12,9'u 3+ kez, en çok 20 epizot); **FVG tek kullanımlık** (3+ deneme 55.145'te 4; %23'ü hiç dokunulmamış).
-- **OB %85–94 sonunda geçilir**, ama dokunuşların %65–67'si ≥1 ATR tepki verir → zone bir *zamanlama* aracı, bariyer değil. FVG tam dolum %40–43.
-- **Destek tepkisi dirençten büyük** (1d: 2,187'ye 1,660 ATR). Eşik eğrisi düz: ≥0,25 ATR %74–77, ≥1 ATR %58–61, ≥2 ATR %38–40.
-- **Zone boyu ayırt edici ve monoton**: uzun zone erken tepki verip tutuyor (CALISTI %64,3→%71,0), kısa zone geç tepki verip geri veriyor.
-- **MS yön uyumu %97–98**; BOS sonrası devam ~%70; UP BOS, DOWN BOS'tan ~8 puan iyi; INTERNAL biraz zayıf ama daha sık.
-- **PH teste dayanmaz** (%36,0 → 4+ testte %8,0); **PL tutar** (%37,5 → %33,3).
-- **WH/WL medyan 3 native bar**'da süpürülür; WL ~3–5 puan daha çok; INTERNAL > EXTERNAL.
-- **Hacim sezgiye ters**: dokunuşta yüksek RVOL → daha ZAYIF tepki (4h Q1 %70,1 → Q4 %61,0). Hacim burada teyit değil ihlal sinyali.
-- **MS %5,0 seride çöküyor** (35/704) — canlı bot bu serilerde MS alanını sessizce boş bırakıyor (liste: `docs/arastirma/arastirma_ms_hatali_seriler.txt`).
-
 Kaynak: `backfill_data/` (365 gün derin çekim) · Sembol: 176 · Havuz dışı: BRENT
 
 ## Kapsam
 | timeframe | sembol | ort_bar | toplam_zone | toplam_epizot | toplam_swing | toplam_event | toplam_rol_araligi | ms_hatali_seri |
 |-----------|--------|---------|-------------|---------------|--------------|--------------|--------------------|----------------|
-| 1d        | 176    | 499     | 22190       | 24846         | 31875        | 17074        | 23058              | 5              |
-| 1h        | 176    | 3211    | 59130       | 90485         | 177472       | 81853        | 125955             | 20             |
-| 2h        | 176    | 1790    | 64216       | 76267         | 106108       | 52027        | 75822              | 6              |
-| 4h        | 176    | 1073    | 41510       | 48886         | 66940        | 33263        | 48748              | 4              |
+| 1d        | 176    | 499     | 22190       | 24846         | 32801        | 17590        | 23733              | 0              |
+| 1h        | 176    | 3211    | 59130       | 90485         | 201024       | 94455        | 143055             | 0              |
+| 2h        | 176    | 1790    | 64216       | 76267         | 109756       | 53911        | 78467              | 0              |
+| 4h        | 176    | 1073    | 41510       | 48886         | 68464        | 34072        | 49848              | 0              |
 
 ## Yöntem notları
 - Ölçüm birimi **çapa sonrası** barlardır; çapa barının kendisi hiçbir uzanıma katılmaz (anti-lookahead).
@@ -155,310 +143,310 @@ _`ort_h12_decay` 1'den büyükse pencere, tepenin altına kapanmıştır (kapan�
 
 | timeframe | scope    | event_type            | n     | guven   | uyumlu | CALISTI | AZ_DEVAM | DEVAM_YOK | TERS | sansur | ort_devam_h12 | ort_ters_h12 |
 |-----------|----------|-----------------------|-------|---------|--------|---------|----------|-----------|------|--------|---------------|--------------|
-| 1d        | EXTERNAL | EVENT_BOS             | 1777  | YETERLI | %96.7  | %68.9   | %21.2    | %7.1      | %2.0 | %2.8   | 2.284         | 2.083        |
-| 1d        | EXTERNAL | EVENT_CHOCH           | 694   | YETERLI | %95.2  | %66.3   | %22.2    | %8.1      | %3.2 | %0.9   | 2.093         | 2.029        |
-| 1d        | EXTERNAL | EVENT_FALSE_BREAK     | 148   | YETERLI | %96.6  | %69.6   | %20.9    | %6.8      | %2.7 | %2.0   | 2.125         | 2.049        |
-| 1d        | EXTERNAL | EVENT_SWEEP           | 3460  | YETERLI | %95.8  | %66.3   | %23.0    | %7.3      | %3.3 | %0.8   | 1.994         | 2.132        |
-| 1d        | EXTERNAL | EVENT_TRANSITION_FAIL | 201   | YETERLI | %99.5  | %67.7   | %26.4    | %5.5      | %0.5 | %1.0   | 2.258         | 2.199        |
-| 1d        | INTERNAL | EVENT_BOS             | 3236  | YETERLI | %94.7  | %68.0   | %22.0    | %5.5      | %2.5 | %3.5   | 2.300         | 1.942        |
-| 1d        | INTERNAL | EVENT_CHOCH           | 1253  | YETERLI | %95.3  | %64.8   | %23.1    | %8.9      | %2.9 | %0.7   | 2.026         | 2.160        |
-| 1d        | INTERNAL | EVENT_FALSE_BREAK     | 229   | YETERLI | %95.2  | %65.1   | %25.3    | %6.1      | %2.2 | %3.1   | 1.973         | 2.172        |
-| 1d        | INTERNAL | EVENT_SWEEP           | 5686  | YETERLI | %95.8  | %65.0   | %24.8    | %6.9      | %2.7 | %1.3   | 2.015         | 2.058        |
-| 1d        | INTERNAL | EVENT_TRANSITION_FAIL | 390   | YETERLI | %97.2  | %66.4   | %25.6    | %5.6      | %2.1 | %1.3   | 2.145         | 2.183        |
-| 1h        | EXTERNAL | EVENT_BOS             | 8430  | YETERLI | %97.0  | %67.3   | %23.0    | %8.8      | %0.9 | %0.3   | 2.284         | 1.965        |
-| 1h        | EXTERNAL | EVENT_CHOCH           | 3185  | YETERLI | %97.2  | %68.4   | %22.7    | %7.8      | %1.1 | %0.2   | 2.294         | 1.835        |
-| 1h        | EXTERNAL | EVENT_FALSE_BREAK     | 598   | YETERLI | %96.0  | %60.4   | %27.1    | %10.0     | %2.5 | %0.0   | 1.901         | 2.264        |
-| 1h        | EXTERNAL | EVENT_SWEEP           | 17076 | YETERLI | %96.8  | %62.4   | %26.3    | %10.1     | %1.2 | %0.2   | 1.873         | 2.122        |
-| 1h        | EXTERNAL | EVENT_TRANSITION_FAIL | 830   | YETERLI | %97.6  | %69.2   | %21.8    | %8.1      | %1.0 | %0.1   | 2.442         | 1.878        |
-| 1h        | INTERNAL | EVENT_BOS             | 15837 | YETERLI | %97.0  | %67.2   | %23.0    | %8.6      | %1.0 | %0.4   | 2.273         | 1.943        |
-| 1h        | INTERNAL | EVENT_CHOCH           | 5812  | YETERLI | %97.2  | %66.5   | %23.6    | %8.9      | %1.0 | %0.1   | 2.177         | 1.935        |
-| 1h        | INTERNAL | EVENT_FALSE_BREAK     | 1078  | YETERLI | %96.4  | %63.1   | %25.0    | %10.9     | %0.7 | %0.1   | 1.952         | 2.054        |
-| 1h        | INTERNAL | EVENT_SWEEP           | 27374 | YETERLI | %96.9  | %62.8   | %26.2    | %9.7      | %1.1 | %0.3   | 1.919         | 2.108        |
-| 1h        | INTERNAL | EVENT_TRANSITION_FAIL | 1633  | YETERLI | %97.7  | %68.4   | %22.5    | %8.2      | %0.9 | %0.2   | 2.282         | 1.931        |
-| 2h        | EXTERNAL | EVENT_BOS             | 5225  | YETERLI | %97.6  | %67.0   | %23.8    | %8.2      | %1.0 | %1.2   | 2.318         | 2.005        |
-| 2h        | EXTERNAL | EVENT_CHOCH           | 2071  | YETERLI | %97.9  | %68.5   | %22.7    | %8.0      | %0.8 | %0.2   | 2.373         | 1.966        |
-| 2h        | EXTERNAL | EVENT_FALSE_BREAK     | 408   | YETERLI | %94.9  | %68.9   | %20.1    | %8.6      | %2.5 | %0.7   | 2.215         | 2.100        |
-| 2h        | EXTERNAL | EVENT_SWEEP           | 11258 | YETERLI | %97.1  | %63.9   | %25.4    | %9.4      | %1.2 | %0.9   | 1.958         | 2.113        |
-| 2h        | EXTERNAL | EVENT_TRANSITION_FAIL | 585   | YETERLI | %98.6  | %69.9   | %24.8    | %4.8      | %0.5 | %1.7   | 2.451         | 1.976        |
-| 2h        | INTERNAL | EVENT_BOS             | 9983  | YETERLI | %97.2  | %67.2   | %22.8    | %8.8      | %0.7 | %0.9   | 2.271         | 1.991        |
-| 2h        | INTERNAL | EVENT_CHOCH           | 3714  | YETERLI | %97.7  | %69.2   | %22.1    | %7.7      | %0.9 | %0.4   | 2.283         | 1.887        |
-| 2h        | INTERNAL | EVENT_FALSE_BREAK     | 671   | YETERLI | %95.1  | %64.8   | %22.8    | %10.4     | %1.8 | %0.6   | 2.093         | 2.061        |
-| 2h        | INTERNAL | EVENT_SWEEP           | 17091 | YETERLI | %97.3  | %63.5   | %25.6    | %9.6      | %1.1 | %0.7   | 1.903         | 2.153        |
-| 2h        | INTERNAL | EVENT_TRANSITION_FAIL | 1021  | YETERLI | %97.7  | %69.6   | %23.5    | %5.9      | %0.8 | %1.8   | 2.437         | 1.995        |
-| 4h        | EXTERNAL | EVENT_BOS             | 3387  | YETERLI | %98.0  | %71.0   | %20.5    | %7.5      | %0.9 | %2.9   | 2.500         | 1.992        |
-| 4h        | EXTERNAL | EVENT_CHOCH           | 1300  | YETERLI | %97.9  | %70.8   | %20.0    | %8.2      | %0.8 | %0.4   | 2.403         | 2.100        |
-| 4h        | EXTERNAL | EVENT_FALSE_BREAK     | 262   | YETERLI | %97.7  | %66.0   | %24.8    | %8.0      | %1.1 | %0.8   | 2.077         | 2.274        |
-| 4h        | EXTERNAL | EVENT_SWEEP           | 6931  | YETERLI | %97.2  | %66.0   | %23.1    | %9.2      | %1.7 | %1.8   | 2.075         | 2.225        |
-| 4h        | EXTERNAL | EVENT_TRANSITION_FAIL | 359   | YETERLI | %98.1  | %71.3   | %19.2    | %8.6      | %0.6 | %1.1   | 2.714         | 2.016        |
-| 4h        | INTERNAL | EVENT_BOS             | 6505  | YETERLI | %97.0  | %68.2   | %20.9    | %9.2      | %1.0 | %1.7   | 2.408         | 2.084        |
-| 4h        | INTERNAL | EVENT_CHOCH           | 2455  | YETERLI | %97.9  | %70.0   | %21.7    | %7.5      | %0.8 | %0.6   | 2.407         | 2.028        |
-| 4h        | INTERNAL | EVENT_FALSE_BREAK     | 541   | YETERLI | %97.8  | %67.5   | %22.6    | %8.7      | %1.1 | %0.4   | 2.171         | 2.170        |
-| 4h        | INTERNAL | EVENT_SWEEP           | 10827 | YETERLI | %97.4  | %64.3   | %24.3    | %9.9      | %1.3 | %1.4   | 1.977         | 2.280        |
-| 4h        | INTERNAL | EVENT_TRANSITION_FAIL | 696   | YETERLI | %97.6  | %71.8   | %20.3    | %7.2      | %0.6 | %3.2   | 2.547         | 1.926        |
+| 1d        | EXTERNAL | EVENT_BOS             | 1826  | YETERLI | %96.7  | %68.5   | %21.5    | %7.2      | %2.0 | %2.8   | 2.284         | 2.081        |
+| 1d        | EXTERNAL | EVENT_CHOCH           | 714   | YETERLI | %95.2  | %65.8   | %22.7    | %8.0      | %3.2 | %0.8   | 2.100         | 2.038        |
+| 1d        | EXTERNAL | EVENT_FALSE_BREAK     | 153   | YETERLI | %96.7  | %69.9   | %20.9    | %6.5      | %2.6 | %2.0   | 2.137         | 2.026        |
+| 1d        | EXTERNAL | EVENT_SWEEP           | 3566  | YETERLI | %95.8  | %66.1   | %23.2    | %7.3      | %3.3 | %0.8   | 1.987         | 2.129        |
+| 1d        | EXTERNAL | EVENT_TRANSITION_FAIL | 208   | YETERLI | %99.5  | %68.8   | %25.5    | %5.3      | %0.5 | %1.0   | 2.288         | 2.145        |
+| 1d        | INTERNAL | EVENT_BOS             | 3332  | YETERLI | %94.7  | %67.9   | %21.9    | %5.6      | %2.5 | %3.5   | 2.301         | 1.941        |
+| 1d        | INTERNAL | EVENT_CHOCH           | 1291  | YETERLI | %95.2  | %64.0   | %23.9    | %8.9      | %3.0 | %0.7   | 2.016         | 2.174        |
+| 1d        | INTERNAL | EVENT_FALSE_BREAK     | 236   | YETERLI | %95.3  | %64.8   | %25.4    | %6.4      | %2.1 | %3.0   | 1.972         | 2.165        |
+| 1d        | INTERNAL | EVENT_SWEEP           | 5859  | YETERLI | %95.9  | %64.9   | %24.9    | %7.0      | %2.6 | %1.3   | 2.008         | 2.059        |
+| 1d        | INTERNAL | EVENT_TRANSITION_FAIL | 405   | YETERLI | %97.3  | %66.4   | %25.7    | %5.7      | %2.0 | %1.2   | 2.141         | 2.159        |
+| 1h        | EXTERNAL | EVENT_BOS             | 9564  | YETERLI | %97.0  | %67.5   | %22.7    | %8.9      | %0.9 | %0.3   | 2.278         | 1.979        |
+| 1h        | EXTERNAL | EVENT_CHOCH           | 3606  | YETERLI | %97.0  | %68.4   | %22.3    | %8.2      | %1.2 | %0.1   | 2.286         | 1.857        |
+| 1h        | EXTERNAL | EVENT_FALSE_BREAK     | 697   | YETERLI | %96.3  | %61.0   | %26.7    | %10.0     | %2.3 | %0.0   | 1.908         | 2.214        |
+| 1h        | EXTERNAL | EVENT_SWEEP           | 19748 | YETERLI | %96.9  | %62.6   | %26.2    | %10.0     | %1.2 | %0.2   | 1.882         | 2.130        |
+| 1h        | EXTERNAL | EVENT_TRANSITION_FAIL | 947   | YETERLI | %97.4  | %69.0   | %22.1    | %7.7      | %1.3 | %0.1   | 2.406         | 1.924        |
+| 1h        | INTERNAL | EVENT_BOS             | 18210 | YETERLI | %96.9  | %67.3   | %22.6    | %8.8      | %1.1 | %0.4   | 2.266         | 1.958        |
+| 1h        | INTERNAL | EVENT_CHOCH           | 6656  | YETERLI | %97.3  | %66.5   | %23.6    | %8.9      | %1.0 | %0.1   | 2.174         | 1.942        |
+| 1h        | INTERNAL | EVENT_FALSE_BREAK     | 1250  | YETERLI | %96.4  | %63.2   | %24.5    | %11.2     | %0.7 | %0.1   | 1.988         | 2.016        |
+| 1h        | INTERNAL | EVENT_SWEEP           | 31886 | YETERLI | %96.9  | %62.9   | %26.2    | %9.6      | %1.1 | %0.2   | 1.923         | 2.114        |
+| 1h        | INTERNAL | EVENT_TRANSITION_FAIL | 1891  | YETERLI | %97.4  | %68.5   | %22.1    | %8.2      | %1.2 | %0.2   | 2.267         | 1.943        |
+| 2h        | EXTERNAL | EVENT_BOS             | 5408  | YETERLI | %97.6  | %67.1   | %23.8    | %8.1      | %0.9 | %1.2   | 2.326         | 2.001        |
+| 2h        | EXTERNAL | EVENT_CHOCH           | 2141  | YETERLI | %97.9  | %68.6   | %22.6    | %8.1      | %0.7 | %0.2   | 2.362         | 1.962        |
+| 2h        | EXTERNAL | EVENT_FALSE_BREAK     | 421   | YETERLI | %94.8  | %68.9   | %20.0    | %8.6      | %2.6 | %0.7   | 2.195         | 2.114        |
+| 2h        | EXTERNAL | EVENT_SWEEP           | 11705 | YETERLI | %97.2  | %63.9   | %25.4    | %9.4      | %1.2 | %0.8   | 1.955         | 2.113        |
+| 2h        | EXTERNAL | EVENT_TRANSITION_FAIL | 604   | YETERLI | %98.7  | %70.4   | %24.2    | %5.0      | %0.5 | %1.8   | 2.448         | 1.986        |
+| 2h        | INTERNAL | EVENT_BOS             | 10330 | YETERLI | %97.3  | %67.3   | %22.8    | %8.8      | %0.7 | %0.9   | 2.276         | 1.989        |
+| 2h        | INTERNAL | EVENT_CHOCH           | 3845  | YETERLI | %97.7  | %69.3   | %22.0    | %7.6      | %0.9 | %0.4   | 2.286         | 1.885        |
+| 2h        | INTERNAL | EVENT_FALSE_BREAK     | 694   | YETERLI | %95.2  | %64.8   | %22.9    | %10.4     | %1.7 | %0.6   | 2.095         | 2.057        |
+| 2h        | INTERNAL | EVENT_SWEEP           | 17708 | YETERLI | %97.4  | %63.5   | %25.6    | %9.6      | %1.1 | %0.7   | 1.900         | 2.151        |
+| 2h        | INTERNAL | EVENT_TRANSITION_FAIL | 1055  | YETERLI | %97.7  | %69.6   | %23.4    | %6.1      | %0.8 | %1.8   | 2.429         | 1.999        |
+| 4h        | EXTERNAL | EVENT_BOS             | 3466  | YETERLI | %98.0  | %70.9   | %20.5    | %7.6      | %0.9 | %2.9   | 2.503         | 1.999        |
+| 4h        | EXTERNAL | EVENT_CHOCH           | 1325  | YETERLI | %98.0  | %71.0   | %19.8    | %8.2      | %0.8 | %0.4   | 2.414         | 2.097        |
+| 4h        | EXTERNAL | EVENT_FALSE_BREAK     | 279   | YETERLI | %95.0  | %64.5   | %24.0    | %7.9      | %3.6 | %0.7   | 1.991         | 2.438        |
+| 4h        | EXTERNAL | EVENT_SWEEP           | 7085  | YETERLI | %97.2  | %65.8   | %23.2    | %9.2      | %1.8 | %1.7   | 2.068         | 2.229        |
+| 4h        | EXTERNAL | EVENT_TRANSITION_FAIL | 363   | YETERLI | %98.1  | %70.8   | %19.3    | %9.1      | %0.6 | %1.1   | 2.691         | 2.024        |
+| 4h        | INTERNAL | EVENT_BOS             | 6645  | YETERLI | %97.0  | %68.3   | %20.9    | %9.1      | %1.0 | %1.6   | 2.413         | 2.082        |
+| 4h        | INTERNAL | EVENT_CHOCH           | 2507  | YETERLI | %97.8  | %70.0   | %21.8    | %7.4      | %0.8 | %0.6   | 2.407         | 2.024        |
+| 4h        | INTERNAL | EVENT_FALSE_BREAK     | 579   | YETERLI | %95.5  | %66.1   | %21.8    | %8.8      | %3.1 | %0.3   | 2.104         | 2.320        |
+| 4h        | INTERNAL | EVENT_SWEEP           | 11109 | YETERLI | %97.4  | %64.2   | %24.3    | %9.9      | %1.3 | %1.4   | 1.970         | 2.282        |
+| 4h        | INTERNAL | EVENT_TRANSITION_FAIL | 714   | YETERLI | %97.3  | %71.3   | %20.4    | %7.6      | %0.6 | %3.1   | 2.529         | 1.950        |
 
 ### Scope x yön (BOS/CHOCH ayrımıyla)
 
 | timeframe | scope    | event_type  | direction | n    | guven   | uyumlu | CALISTI | AZ_DEVAM | DEVAM_YOK | TERS | sansur | ort_devam_h12 | ort_ters_h12 |
 |-----------|----------|-------------|-----------|------|---------|--------|---------|----------|-----------|------|--------|---------------|--------------|
-| 1d        | EXTERNAL | EVENT_BOS   | DOWN      | 904  | YETERLI | %95.2  | %60.6   | %26.8    | %8.3      | %2.8 | %5.4   | 1.759         | 2.077        |
-| 1d        | EXTERNAL | EVENT_BOS   | UP        | 873  | YETERLI | %98.2  | %77.5   | %15.3    | %5.8      | %1.3 | %0.1   | 2.820         | 2.089        |
-| 1d        | EXTERNAL | EVENT_CHOCH | DOWN      | 386  | YETERLI | %93.8  | %61.1   | %24.6    | %9.8      | %3.9 | %1.0   | 1.629         | 1.841        |
-| 1d        | EXTERNAL | EVENT_CHOCH | UP        | 308  | YETERLI | %97.1  | %72.7   | %19.2    | %5.8      | %2.3 | %0.6   | 2.672         | 2.263        |
-| 1d        | INTERNAL | EVENT_BOS   | DOWN      | 1667 | YETERLI | %93.3  | %60.4   | %27.3    | %6.5      | %3.0 | %6.4   | 1.756         | 1.985        |
-| 1d        | INTERNAL | EVENT_BOS   | UP        | 1569 | YETERLI | %96.3  | %76.1   | %16.3    | %4.3      | %1.9 | %0.3   | 2.871         | 1.898        |
-| 1d        | INTERNAL | EVENT_CHOCH | DOWN      | 638  | YETERLI | %93.6  | %57.5   | %25.9    | %12.9     | %3.3 | %1.1   | 1.503         | 2.038        |
-| 1d        | INTERNAL | EVENT_CHOCH | UP        | 615  | YETERLI | %97.1  | %72.4   | %20.3    | %4.9      | %2.4 | %0.3   | 2.566         | 2.286        |
-| 1h        | EXTERNAL | EVENT_BOS   | DOWN      | 4176 | YETERLI | %97.0  | %67.0   | %23.3    | %8.4      | %1.1 | %0.6   | 2.128         | 2.078        |
-| 1h        | EXTERNAL | EVENT_BOS   | UP        | 4254 | YETERLI | %97.0  | %67.6   | %22.6    | %9.1      | %0.7 | %0.0   | 2.436         | 1.854        |
-| 1h        | EXTERNAL | EVENT_CHOCH | DOWN      | 1648 | YETERLI | %97.7  | %67.2   | %24.6    | %7.0      | %1.1 | %0.3   | 2.123         | 1.836        |
-| 1h        | EXTERNAL | EVENT_CHOCH | UP        | 1537 | YETERLI | %96.7  | %69.7   | %20.6    | %8.7      | %1.0 | %0.0   | 2.477         | 1.834        |
-| 1h        | INTERNAL | EVENT_BOS   | DOWN      | 8061 | YETERLI | %97.2  | %67.1   | %23.8    | %7.7      | %1.2 | %0.8   | 2.124         | 1.997        |
-| 1h        | INTERNAL | EVENT_BOS   | UP        | 7776 | YETERLI | %96.7  | %67.2   | %22.1    | %9.5      | %0.9 | %0.0   | 2.428         | 1.887        |
-| 1h        | INTERNAL | EVENT_CHOCH | DOWN      | 2922 | YETERLI | %97.8  | %64.6   | %26.1    | %8.0      | %1.2 | %0.0   | 1.965         | 2.032        |
-| 1h        | INTERNAL | EVENT_CHOCH | UP        | 2890 | YETERLI | %96.6  | %68.4   | %21.0    | %9.8      | %0.8 | %0.1   | 2.391         | 1.836        |
-| 2h        | EXTERNAL | EVENT_BOS   | DOWN      | 2610 | YETERLI | %97.7  | %64.4   | %25.9    | %8.8      | %0.9 | %2.4   | 2.054         | 2.108        |
-| 2h        | EXTERNAL | EVENT_BOS   | UP        | 2615 | YETERLI | %97.5  | %69.6   | %21.8    | %7.5      | %1.0 | %0.1   | 2.582         | 1.902        |
-| 2h        | EXTERNAL | EVENT_CHOCH | DOWN      | 1062 | YETERLI | %97.8  | %64.7   | %25.2    | %9.3      | %0.8 | %0.4   | 2.001         | 2.014        |
-| 2h        | EXTERNAL | EVENT_CHOCH | UP        | 1009 | YETERLI | %98.0  | %72.5   | %20.1    | %6.5      | %0.8 | %0.0   | 2.764         | 1.917        |
-| 2h        | INTERNAL | EVENT_BOS   | DOWN      | 5073 | YETERLI | %97.6  | %65.1   | %24.8    | %9.2      | %0.6 | %1.7   | 2.024         | 2.105        |
-| 2h        | INTERNAL | EVENT_BOS   | UP        | 4910 | YETERLI | %96.9  | %69.4   | %20.8    | %8.3      | %0.9 | %0.1   | 2.527         | 1.872        |
-| 2h        | INTERNAL | EVENT_CHOCH | DOWN      | 1889 | YETERLI | %97.6  | %66.5   | %23.7    | %8.6      | %1.1 | %0.7   | 1.958         | 1.921        |
-| 2h        | INTERNAL | EVENT_CHOCH | UP        | 1825 | YETERLI | %97.9  | %72.1   | %20.5    | %6.7      | %0.7 | %0.1   | 2.620         | 1.853        |
-| 4h        | EXTERNAL | EVENT_BOS   | DOWN      | 1736 | YETERLI | %97.8  | %67.3   | %23.2    | %8.4      | %1.1 | %5.6   | 2.189         | 2.067        |
-| 4h        | EXTERNAL | EVENT_BOS   | UP        | 1651 | YETERLI | %98.2  | %75.0   | %17.7    | %6.6      | %0.7 | %0.0   | 2.827         | 1.914        |
-| 4h        | EXTERNAL | EVENT_CHOCH | DOWN      | 650  | YETERLI | %97.7  | %70.9   | %19.2    | %9.2      | %0.5 | %0.6   | 2.126         | 1.957        |
-| 4h        | EXTERNAL | EVENT_CHOCH | UP        | 650  | YETERLI | %98.2  | %70.8   | %20.8    | %7.2      | %1.2 | %0.2   | 2.680         | 2.242        |
-| 4h        | INTERNAL | EVENT_BOS   | DOWN      | 3393 | YETERLI | %97.0  | %64.6   | %23.2    | %10.6     | %1.2 | %3.1   | 2.069         | 2.148        |
-| 4h        | INTERNAL | EVENT_BOS   | UP        | 3112 | YETERLI | %97.0  | %72.2   | %18.3    | %7.6      | %0.9 | %0.1   | 2.779         | 2.015        |
-| 4h        | INTERNAL | EVENT_CHOCH | DOWN      | 1235 | YETERLI | %97.8  | %67.9   | %22.8    | %8.6      | %0.8 | %1.0   | 2.077         | 2.019        |
-| 4h        | INTERNAL | EVENT_CHOCH | UP        | 1220 | YETERLI | %98.0  | %72.2   | %20.6    | %6.5      | %0.7 | %0.2   | 2.741         | 2.037        |
+| 1d        | EXTERNAL | EVENT_BOS   | DOWN      | 928  | YETERLI | %95.4  | %60.1   | %27.3    | %8.4      | %2.7 | %5.5   | 1.747         | 2.075        |
+| 1d        | EXTERNAL | EVENT_BOS   | UP        | 898  | YETERLI | %98.1  | %77.2   | %15.6    | %5.9      | %1.3 | %0.1   | 2.830         | 2.087        |
+| 1d        | EXTERNAL | EVENT_CHOCH | DOWN      | 398  | YETERLI | %93.7  | %60.3   | %25.4    | %9.8      | %4.0 | %1.0   | 1.611         | 1.850        |
+| 1d        | EXTERNAL | EVENT_CHOCH | UP        | 316  | YETERLI | %97.2  | %72.8   | %19.3    | %5.7      | %2.2 | %0.6   | 2.712         | 2.273        |
+| 1d        | INTERNAL | EVENT_BOS   | DOWN      | 1710 | YETERLI | %93.2  | %60.3   | %27.1    | %6.8      | %3.1 | %6.5   | 1.754         | 1.987        |
+| 1d        | INTERNAL | EVENT_BOS   | UP        | 1622 | YETERLI | %96.4  | %76.0   | %16.5    | %4.4      | %1.9 | %0.3   | 2.869         | 1.893        |
+| 1d        | INTERNAL | EVENT_CHOCH | DOWN      | 658  | YETERLI | %93.6  | %56.5   | %27.1    | %12.6     | %3.3 | %1.1   | 1.488         | 2.049        |
+| 1d        | INTERNAL | EVENT_CHOCH | UP        | 633  | YETERLI | %96.8  | %71.7   | %20.5    | %5.1      | %2.7 | %0.3   | 2.563         | 2.304        |
+| 1h        | EXTERNAL | EVENT_BOS   | DOWN      | 4725 | YETERLI | %97.1  | %67.2   | %23.1    | %8.5      | %1.1 | %0.7   | 2.129         | 2.099        |
+| 1h        | EXTERNAL | EVENT_BOS   | UP        | 4839 | YETERLI | %97.0  | %67.8   | %22.3    | %9.2      | %0.7 | %0.0   | 2.422         | 1.862        |
+| 1h        | EXTERNAL | EVENT_CHOCH | DOWN      | 1869 | YETERLI | %97.4  | %67.0   | %24.1    | %7.6      | %1.2 | %0.3   | 2.111         | 1.877        |
+| 1h        | EXTERNAL | EVENT_CHOCH | UP        | 1737 | YETERLI | %96.7  | %69.8   | %20.3    | %8.8      | %1.1 | %0.0   | 2.474         | 1.835        |
+| 1h        | INTERNAL | EVENT_BOS   | DOWN      | 9232 | YETERLI | %97.2  | %67.3   | %23.3    | %7.9      | %1.2 | %0.8   | 2.120         | 2.030        |
+| 1h        | INTERNAL | EVENT_BOS   | UP        | 8978 | YETERLI | %96.7  | %67.3   | %21.8    | %9.6      | %0.9 | %0.0   | 2.417         | 1.885        |
+| 1h        | INTERNAL | EVENT_CHOCH | DOWN      | 3361 | YETERLI | %97.7  | %64.7   | %25.9    | %8.2      | %1.2 | %0.0   | 1.965         | 2.047        |
+| 1h        | INTERNAL | EVENT_CHOCH | UP        | 3295 | YETERLI | %96.8  | %68.3   | %21.2    | %9.6      | %0.8 | %0.1   | 2.387         | 1.836        |
+| 2h        | EXTERNAL | EVENT_BOS   | DOWN      | 2696 | YETERLI | %97.7  | %64.3   | %25.9    | %8.8      | %0.9 | %2.4   | 2.064         | 2.104        |
+| 2h        | EXTERNAL | EVENT_BOS   | UP        | 2712 | YETERLI | %97.5  | %69.8   | %21.7    | %7.4      | %1.0 | %0.1   | 2.587         | 1.899        |
+| 2h        | EXTERNAL | EVENT_CHOCH | DOWN      | 1098 | YETERLI | %97.8  | %64.7   | %25.0    | %9.6      | %0.7 | %0.4   | 2.000         | 2.010        |
+| 2h        | EXTERNAL | EVENT_CHOCH | UP        | 1043 | YETERLI | %98.0  | %72.7   | %20.0    | %6.5      | %0.8 | %0.0   | 2.743         | 1.911        |
+| 2h        | INTERNAL | EVENT_BOS   | DOWN      | 5241 | YETERLI | %97.6  | %65.1   | %24.7    | %9.3      | %0.6 | %1.7   | 2.025         | 2.102        |
+| 2h        | INTERNAL | EVENT_BOS   | UP        | 5089 | YETERLI | %97.0  | %69.5   | %20.7    | %8.4      | %0.9 | %0.1   | 2.535         | 1.872        |
+| 2h        | INTERNAL | EVENT_CHOCH | DOWN      | 1955 | YETERLI | %97.6  | %66.6   | %23.6    | %8.5      | %1.1 | %0.7   | 1.961         | 1.924        |
+| 2h        | INTERNAL | EVENT_CHOCH | UP        | 1890 | YETERLI | %97.8  | %72.1   | %20.4    | %6.7      | %0.7 | %0.1   | 2.621         | 1.845        |
+| 4h        | EXTERNAL | EVENT_BOS   | DOWN      | 1777 | YETERLI | %97.8  | %67.0   | %23.2    | %8.7      | %1.1 | %5.6   | 2.180         | 2.072        |
+| 4h        | EXTERNAL | EVENT_BOS   | UP        | 1689 | YETERLI | %98.2  | %75.0   | %17.8    | %6.6      | %0.7 | %0.0   | 2.843         | 1.921        |
+| 4h        | EXTERNAL | EVENT_CHOCH | DOWN      | 661  | YETERLI | %97.7  | %71.1   | %19.2    | %9.1      | %0.5 | %0.6   | 2.130         | 1.957        |
+| 4h        | EXTERNAL | EVENT_CHOCH | UP        | 664  | YETERLI | %98.2  | %70.9   | %20.5    | %7.4      | %1.2 | %0.2   | 2.697         | 2.237        |
+| 4h        | INTERNAL | EVENT_BOS   | DOWN      | 3454 | YETERLI | %97.0  | %64.6   | %23.2    | %10.6     | %1.2 | %3.1   | 2.065         | 2.147        |
+| 4h        | INTERNAL | EVENT_BOS   | UP        | 3191 | YETERLI | %97.0  | %72.2   | %18.3    | %7.5      | %0.9 | %0.1   | 2.792         | 2.011        |
+| 4h        | INTERNAL | EVENT_CHOCH | DOWN      | 1263 | YETERLI | %97.8  | %67.8   | %22.9    | %8.5      | %0.9 | %1.0   | 2.077         | 2.015        |
+| 4h        | INTERNAL | EVENT_CHOCH | UP        | 1244 | YETERLI | %97.9  | %72.2   | %20.7    | %6.4      | %0.8 | %0.2   | 2.743         | 2.033        |
 
 ### Motorun kendi outcome kararı (çapraz kontrol)
 
 | timeframe | scope    | outcome                  | n     | guven   | adet   |
 |-----------|----------|--------------------------|-------|---------|--------|
-| 1d        | EXTERNAL | FAILED                   | 349   | YETERLI | %100.0 |
-| 1d        | EXTERNAL | FOLLOW_THROUGH_CONFIRMED | 455   | YETERLI | %100.0 |
-| 1d        | EXTERNAL | OBSERVED                 | 5438  | YETERLI | %100.0 |
+| 1d        | EXTERNAL | FAILED                   | 361   | YETERLI | %100.0 |
+| 1d        | EXTERNAL | FOLLOW_THROUGH_CONFIRMED | 468   | YETERLI | %100.0 |
+| 1d        | EXTERNAL | OBSERVED                 | 5600  | YETERLI | %100.0 |
 | 1d        | EXTERNAL | PENDING                  | 38    | YETERLI | %100.0 |
-| 1d        | INTERNAL | FAILED                   | 619   | YETERLI | %100.0 |
-| 1d        | INTERNAL | FOLLOW_THROUGH_CONFIRMED | 833   | YETERLI | %100.0 |
-| 1d        | INTERNAL | OBSERVED                 | 9312  | YETERLI | %100.0 |
+| 1d        | INTERNAL | FAILED                   | 641   | YETERLI | %100.0 |
+| 1d        | INTERNAL | FOLLOW_THROUGH_CONFIRMED | 856   | YETERLI | %100.0 |
+| 1d        | INTERNAL | OBSERVED                 | 9596  | YETERLI | %100.0 |
 | 1d        | INTERNAL | PENDING                  | 30    | YETERLI | %100.0 |
-| 1h        | EXTERNAL | FAILED                   | 1428  | YETERLI | %100.0 |
-| 1h        | EXTERNAL | FOLLOW_THROUGH_CONFIRMED | 2317  | YETERLI | %100.0 |
-| 1h        | EXTERNAL | OBSERVED                 | 26336 | YETERLI | %100.0 |
-| 1h        | EXTERNAL | PENDING                  | 38    | YETERLI | %100.0 |
-| 1h        | INTERNAL | FAILED                   | 2711  | YETERLI | %100.0 |
-| 1h        | INTERNAL | FOLLOW_THROUGH_CONFIRMED | 4155  | YETERLI | %100.0 |
-| 1h        | INTERNAL | OBSERVED                 | 44844 | YETERLI | %100.0 |
-| 1h        | INTERNAL | PENDING                  | 24    | KISMI   | %100.0 |
-| 2h        | EXTERNAL | FAILED                   | 993   | YETERLI | %100.0 |
-| 2h        | EXTERNAL | FOLLOW_THROUGH_CONFIRMED | 1463  | YETERLI | %100.0 |
-| 2h        | EXTERNAL | OBSERVED                 | 17068 | YETERLI | %100.0 |
-| 2h        | EXTERNAL | PENDING                  | 23    | KISMI   | %100.0 |
-| 2h        | INTERNAL | FAILED                   | 1692  | YETERLI | %100.0 |
-| 2h        | INTERNAL | FOLLOW_THROUGH_CONFIRMED | 2664  | YETERLI | %100.0 |
-| 2h        | INTERNAL | OBSERVED                 | 28095 | YETERLI | %100.0 |
+| 1h        | EXTERNAL | FAILED                   | 1644  | YETERLI | %100.0 |
+| 1h        | EXTERNAL | FOLLOW_THROUGH_CONFIRMED | 2615  | YETERLI | %100.0 |
+| 1h        | EXTERNAL | OBSERVED                 | 30259 | YETERLI | %100.0 |
+| 1h        | EXTERNAL | PENDING                  | 44    | YETERLI | %100.0 |
+| 1h        | INTERNAL | FAILED                   | 3141  | YETERLI | %100.0 |
+| 1h        | INTERNAL | FOLLOW_THROUGH_CONFIRMED | 4739  | YETERLI | %100.0 |
+| 1h        | INTERNAL | OBSERVED                 | 51987 | YETERLI | %100.0 |
+| 1h        | INTERNAL | PENDING                  | 26    | KISMI   | %100.0 |
+| 2h        | EXTERNAL | FAILED                   | 1025  | YETERLI | %100.0 |
+| 2h        | EXTERNAL | FOLLOW_THROUGH_CONFIRMED | 1513  | YETERLI | %100.0 |
+| 2h        | EXTERNAL | OBSERVED                 | 17717 | YETERLI | %100.0 |
+| 2h        | EXTERNAL | PENDING                  | 24    | KISMI   | %100.0 |
+| 2h        | INTERNAL | FAILED                   | 1749  | YETERLI | %100.0 |
+| 2h        | INTERNAL | FOLLOW_THROUGH_CONFIRMED | 2761  | YETERLI | %100.0 |
+| 2h        | INTERNAL | OBSERVED                 | 29093 | YETERLI | %100.0 |
 | 2h        | INTERNAL | PENDING                  | 29    | KISMI   | %100.0 |
-| 4h        | EXTERNAL | FAILED                   | 621   | YETERLI | %100.0 |
-| 4h        | EXTERNAL | FOLLOW_THROUGH_CONFIRMED | 912   | YETERLI | %100.0 |
-| 4h        | EXTERNAL | OBSERVED                 | 10677 | YETERLI | %100.0 |
+| 4h        | EXTERNAL | FAILED                   | 642   | YETERLI | %100.0 |
+| 4h        | EXTERNAL | FOLLOW_THROUGH_CONFIRMED | 933   | YETERLI | %100.0 |
+| 4h        | EXTERNAL | OBSERVED                 | 10914 | YETERLI | %100.0 |
 | 4h        | EXTERNAL | PENDING                  | 29    | KISMI   | %100.0 |
-| 4h        | INTERNAL | FAILED                   | 1237  | YETERLI | %100.0 |
-| 4h        | INTERNAL | FOLLOW_THROUGH_CONFIRMED | 1726  | YETERLI | %100.0 |
-| 4h        | INTERNAL | OBSERVED                 | 18028 | YETERLI | %100.0 |
-| 4h        | INTERNAL | PENDING                  | 33    | YETERLI | %100.0 |
+| 4h        | INTERNAL | FAILED                   | 1293  | YETERLI | %100.0 |
+| 4h        | INTERNAL | FOLLOW_THROUGH_CONFIRMED | 1759  | YETERLI | %100.0 |
+| 4h        | INTERNAL | OBSERVED                 | 18468 | YETERLI | %100.0 |
+| 4h        | INTERNAL | PENDING                  | 34    | YETERLI | %100.0 |
 
 ## Soru 6 — PH/PL direnç/destek mi, çok denenen mi az denenen mi?
 ### Kararı verilebilir satırlar (sansürsüz)
 
 | timeframe | scope    | rol | deneme_kovasi | n    | guven   | engelledi | engellemedi | ort_deneme_epizot | ort_deneme_bar | ort_rol_sure_bar | ort_bars_to_break |
 |-----------|----------|-----|---------------|------|---------|-----------|-------------|-------------------|----------------|------------------|-------------------|
-| 1d        | EXTERNAL | PH  | 0_deneme      | 664  | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 35.706           | 67.030            |
-| 1d        | EXTERNAL | PH  | 1_deneme      | 292  | YETERLI | %36.0     | %64.0       | 1.000             | 11.743         | 24.637           | 22.168            |
-| 1d        | EXTERNAL | PH  | 2-3_deneme    | 195  | YETERLI | %22.6     | %77.4       | 2.328             | 16.015         | 19.385           | 18.896            |
-| 1d        | EXTERNAL | PH  | 4plus_deneme  | 25   | KISMI   | %8.0      | %92.0       | 4.240             | 16.800         | 20.120           | 19.913            |
-| 1d        | EXTERNAL | PL  | 0_deneme      | 704  | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 39.670           | 70.090            |
-| 1d        | EXTERNAL | PL  | 1_deneme      | 309  | YETERLI | %37.5     | %62.5       | 1.000             | 14.906         | 22.618           | 21.182            |
-| 1d        | EXTERNAL | PL  | 2-3_deneme    | 225  | YETERLI | %28.9     | %71.1       | 2.324             | 15.227         | 22.009           | 22.163            |
-| 1d        | EXTERNAL | PL  | 4plus_deneme  | 30   | YETERLI | %33.3     | %66.7       | 4.300             | 15.833         | 21.733           | 22.167            |
-| 1d        | INTERNAL | PH  | 0_deneme      | 882  | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 20.217           | 58.345            |
-| 1d        | INTERNAL | PH  | 1_deneme      | 643  | YETERLI | %34.1     | %65.9       | 1.000             | 13.726         | 14.773           | 13.396            |
-| 1d        | INTERNAL | PH  | 2-3_deneme    | 533  | YETERLI | %21.0     | %79.0       | 2.310             | 16.964         | 14.782           | 14.591            |
-| 1d        | INTERNAL | PH  | 4plus_deneme  | 96   | YETERLI | %19.8     | %80.2       | 4.292             | 18.135         | 14.354           | 13.956            |
-| 1d        | INTERNAL | PL  | 0_deneme      | 1000 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 20.556           | 59.741            |
-| 1d        | INTERNAL | PL  | 1_deneme      | 637  | YETERLI | %37.7     | %62.3       | 1.000             | 15.777         | 15.771           | 14.556            |
-| 1d        | INTERNAL | PL  | 2-3_deneme    | 587  | YETERLI | %30.0     | %70.0       | 2.344             | 16.242         | 15.828           | 16.347            |
-| 1d        | INTERNAL | PL  | 4plus_deneme  | 98   | YETERLI | %26.5     | %73.5       | 4.378             | 16.694         | 16.051           | 16.676            |
-| 1h        | EXTERNAL | PH  | 0_deneme      | 3724 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 46.807           | 79.363            |
-| 1h        | EXTERNAL | PH  | 1_deneme      | 1292 | YETERLI | %34.2     | %65.8       | 1.000             | 13.403         | 30.562           | 24.848            |
-| 1h        | EXTERNAL | PH  | 2-3_deneme    | 889  | YETERLI | %22.9     | %77.1       | 2.342             | 14.721         | 25.543           | 24.240            |
-| 1h        | EXTERNAL | PH  | 4plus_deneme  | 172  | YETERLI | %22.7     | %77.3       | 4.430             | 16.006         | 25.948           | 25.522            |
-| 1h        | EXTERNAL | PL  | 0_deneme      | 3937 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 46.432           | 89.234            |
-| 1h        | EXTERNAL | PL  | 1_deneme      | 1366 | YETERLI | %35.1     | %64.9       | 1.000             | 13.417         | 29.850           | 24.707            |
-| 1h        | EXTERNAL | PL  | 2-3_deneme    | 801  | YETERLI | %30.5     | %69.5       | 2.293             | 14.251         | 25.471           | 25.437            |
-| 1h        | EXTERNAL | PL  | 4plus_deneme  | 115  | YETERLI | %28.7     | %71.3       | 4.400             | 16.583         | 25.226           | 24.793            |
-| 1h        | INTERNAL | PH  | 0_deneme      | 5344 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 24.927           | 72.796            |
-| 1h        | INTERNAL | PH  | 1_deneme      | 3030 | YETERLI | %34.3     | %65.7       | 1.000             | 15.257         | 16.582           | 14.709            |
-| 1h        | INTERNAL | PH  | 2-3_deneme    | 2595 | YETERLI | %24.1     | %75.9       | 2.334             | 16.104         | 17.227           | 16.929            |
-| 1h        | INTERNAL | PH  | 4plus_deneme  | 570  | YETERLI | %15.3     | %84.7       | 4.442             | 17.604         | 17.030           | 16.962            |
-| 1h        | INTERNAL | PL  | 0_deneme      | 5623 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 24.405           | 97.729            |
-| 1h        | INTERNAL | PL  | 1_deneme      | 3112 | YETERLI | %33.4     | %66.6       | 1.000             | 15.254         | 21.372           | 18.110            |
-| 1h        | INTERNAL | PL  | 2-3_deneme    | 2305 | YETERLI | %27.2     | %72.8       | 2.309             | 16.703         | 18.214           | 17.945            |
-| 1h        | INTERNAL | PL  | 4plus_deneme  | 396  | YETERLI | %29.0     | %71.0       | 4.402             | 17.366         | 18.157           | 17.893            |
-| 2h        | EXTERNAL | PH  | 0_deneme      | 2290 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 43.072           | 72.655            |
-| 2h        | EXTERNAL | PH  | 1_deneme      | 758  | YETERLI | %32.1     | %67.9       | 1.000             | 13.991         | 26.047           | 22.800            |
-| 2h        | EXTERNAL | PH  | 2-3_deneme    | 618  | YETERLI | %23.8     | %76.2       | 2.346             | 14.476         | 25.359           | 24.109            |
-| 2h        | EXTERNAL | PH  | 4plus_deneme  | 141  | YETERLI | %14.2     | %85.8       | 4.426             | 16.121         | 23.844           | 19.762            |
-| 2h        | EXTERNAL | PL  | 0_deneme      | 2502 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 44.203           | 79.673            |
-| 2h        | EXTERNAL | PL  | 1_deneme      | 799  | YETERLI | %35.4     | %64.6       | 1.000             | 13.343         | 31.708           | 25.201            |
-| 2h        | EXTERNAL | PL  | 2-3_deneme    | 537  | YETERLI | %30.2     | %69.8       | 2.287             | 14.480         | 26.892           | 24.951            |
-| 2h        | EXTERNAL | PL  | 4plus_deneme  | 76   | YETERLI | %35.5     | %64.5       | 4.263             | 15.632         | 25.250           | 24.419            |
-| 2h        | INTERNAL | PH  | 0_deneme      | 3265 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 23.916           | 63.482            |
-| 2h        | INTERNAL | PH  | 1_deneme      | 1874 | YETERLI | %34.0     | %66.0       | 1.000             | 15.710         | 18.048           | 15.648            |
-| 2h        | INTERNAL | PH  | 2-3_deneme    | 1738 | YETERLI | %23.1     | %76.9       | 2.356             | 16.533         | 16.203           | 16.231            |
-| 2h        | INTERNAL | PH  | 4plus_deneme  | 398  | YETERLI | %17.8     | %82.2       | 4.503             | 17.704         | 17.470           | 16.743            |
-| 2h        | INTERNAL | PL  | 0_deneme      | 3519 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 21.962           | 64.790            |
-| 2h        | INTERNAL | PL  | 1_deneme      | 1942 | YETERLI | %35.4     | %64.6       | 1.000             | 15.654         | 19.795           | 16.996            |
-| 2h        | INTERNAL | PL  | 2-3_deneme    | 1500 | YETERLI | %26.7     | %73.3       | 2.298             | 16.878         | 18.379           | 18.419            |
-| 2h        | INTERNAL | PL  | 4plus_deneme  | 247  | YETERLI | %25.9     | %74.1       | 4.372             | 17.789         | 19.911           | 19.393            |
-| 4h        | EXTERNAL | PH  | 0_deneme      | 1471 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 42.923           | 76.870            |
-| 4h        | EXTERNAL | PH  | 1_deneme      | 479  | YETERLI | %31.3     | %68.7       | 1.000             | 12.622         | 30.284           | 25.487            |
-| 4h        | EXTERNAL | PH  | 2-3_deneme    | 395  | YETERLI | %23.0     | %77.0       | 2.306             | 14.053         | 23.076           | 22.682            |
-| 4h        | EXTERNAL | PH  | 4plus_deneme  | 93   | YETERLI | %17.2     | %82.8       | 4.624             | 16.731         | 20.613           | 20.093            |
-| 4h        | EXTERNAL | PL  | 0_deneme      | 1551 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 40.729           | 69.262            |
-| 4h        | EXTERNAL | PL  | 1_deneme      | 497  | YETERLI | %34.0     | %66.0       | 1.000             | 13.740         | 26.938           | 23.926            |
-| 4h        | EXTERNAL | PL  | 2-3_deneme    | 355  | YETERLI | %21.1     | %78.9       | 2.276             | 15.986         | 25.459           | 22.610            |
+| 1d        | EXTERNAL | PH  | 0_deneme      | 683  | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 35.801           | 66.776            |
+| 1d        | EXTERNAL | PH  | 1_deneme      | 298  | YETERLI | %36.2     | %63.8       | 1.000             | 11.762         | 24.628           | 22.181            |
+| 1d        | EXTERNAL | PH  | 2-3_deneme    | 200  | YETERLI | %22.0     | %78.0       | 2.325             | 15.990         | 19.410           | 18.946            |
+| 1d        | EXTERNAL | PH  | 4plus_deneme  | 27   | KISMI   | %11.1     | %88.9       | 4.222             | 17.185         | 20.519           | 20.360            |
+| 1d        | EXTERNAL | PL  | 0_deneme      | 725  | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 39.611           | 69.481            |
+| 1d        | EXTERNAL | PL  | 1_deneme      | 315  | YETERLI | %37.8     | %62.2       | 1.000             | 14.914         | 22.648           | 21.227            |
+| 1d        | EXTERNAL | PL  | 2-3_deneme    | 234  | YETERLI | %28.6     | %71.4       | 2.321             | 15.158         | 22.064           | 22.298            |
+| 1d        | EXTERNAL | PL  | 4plus_deneme  | 31   | YETERLI | %32.3     | %67.7       | 4.290             | 15.581         | 21.516           | 21.880            |
+| 1d        | INTERNAL | PH  | 0_deneme      | 906  | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 20.209           | 58.345            |
+| 1d        | INTERNAL | PH  | 1_deneme      | 657  | YETERLI | %33.8     | %66.2       | 1.000             | 13.755         | 14.668           | 13.222            |
+| 1d        | INTERNAL | PH  | 2-3_deneme    | 548  | YETERLI | %20.6     | %79.4       | 2.305             | 16.878         | 14.715           | 14.537            |
+| 1d        | INTERNAL | PH  | 4plus_deneme  | 100  | YETERLI | %20.0     | %80.0       | 4.280             | 18.350         | 14.260           | 13.847            |
+| 1d        | INTERNAL | PL  | 0_deneme      | 1036 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 20.572           | 58.862            |
+| 1d        | INTERNAL | PL  | 1_deneme      | 658  | YETERLI | %38.3     | %61.7       | 1.000             | 15.679         | 15.807           | 14.554            |
+| 1d        | INTERNAL | PL  | 2-3_deneme    | 605  | YETERLI | %29.9     | %70.1       | 2.344             | 16.301         | 15.752           | 16.234            |
+| 1d        | INTERNAL | PL  | 4plus_deneme  | 101  | YETERLI | %26.7     | %73.3       | 4.376             | 16.762         | 16.020           | 16.608            |
+| 1h        | EXTERNAL | PH  | 0_deneme      | 4186 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 46.643           | 79.274            |
+| 1h        | EXTERNAL | PH  | 1_deneme      | 1468 | YETERLI | %34.9     | %65.1       | 1.000             | 13.246         | 30.858           | 24.711            |
+| 1h        | EXTERNAL | PH  | 2-3_deneme    | 1024 | YETERLI | %22.4     | %77.6       | 2.339             | 14.879         | 24.869           | 23.431            |
+| 1h        | EXTERNAL | PH  | 4plus_deneme  | 204  | YETERLI | %21.6     | %78.4       | 4.422             | 16.294         | 25.235           | 24.519            |
+| 1h        | EXTERNAL | PL  | 0_deneme      | 4471 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 46.276           | 87.132            |
+| 1h        | EXTERNAL | PL  | 1_deneme      | 1550 | YETERLI | %35.9     | %64.1       | 1.000             | 13.412         | 30.185           | 24.766            |
+| 1h        | EXTERNAL | PL  | 2-3_deneme    | 915  | YETERLI | %30.3     | %69.7       | 2.293             | 14.231         | 25.603           | 25.701            |
+| 1h        | EXTERNAL | PL  | 4plus_deneme  | 133  | YETERLI | %28.6     | %71.4       | 4.429             | 16.383         | 25.609           | 25.398            |
+| 1h        | INTERNAL | PH  | 0_deneme      | 6063 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 24.326           | 71.958            |
+| 1h        | INTERNAL | PH  | 1_deneme      | 3454 | YETERLI | %34.7     | %65.3       | 1.000             | 15.246         | 16.319           | 14.570            |
+| 1h        | INTERNAL | PH  | 2-3_deneme    | 3031 | YETERLI | %23.7     | %76.3       | 2.340             | 16.149         | 17.022           | 16.757            |
+| 1h        | INTERNAL | PH  | 4plus_deneme  | 681  | YETERLI | %16.2     | %83.8       | 4.441             | 17.460         | 17.019           | 16.849            |
+| 1h        | INTERNAL | PL  | 0_deneme      | 6489 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 23.927           | 93.482            |
+| 1h        | INTERNAL | PL  | 1_deneme      | 3577 | YETERLI | %34.1     | %65.9       | 1.000             | 15.156         | 21.174           | 18.707            |
+| 1h        | INTERNAL | PL  | 2-3_deneme    | 2661 | YETERLI | %27.4     | %72.6       | 2.309             | 16.775         | 18.189           | 18.014            |
+| 1h        | INTERNAL | PL  | 4plus_deneme  | 453  | YETERLI | %28.7     | %71.3       | 4.395             | 17.422         | 17.876           | 17.576            |
+| 2h        | EXTERNAL | PH  | 0_deneme      | 2369 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 43.171           | 72.938            |
+| 2h        | EXTERNAL | PH  | 1_deneme      | 786  | YETERLI | %31.8     | %68.2       | 1.000             | 13.977         | 26.145           | 23.071            |
+| 2h        | EXTERNAL | PH  | 2-3_deneme    | 633  | YETERLI | %24.0     | %76.0       | 2.344             | 14.491         | 25.425           | 24.031            |
+| 2h        | EXTERNAL | PH  | 4plus_deneme  | 145  | YETERLI | %14.5     | %85.5       | 4.414             | 16.041         | 23.903           | 19.667            |
+| 2h        | EXTERNAL | PL  | 0_deneme      | 2596 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 44.242           | 79.294            |
+| 2h        | EXTERNAL | PL  | 1_deneme      | 824  | YETERLI | %35.2     | %64.8       | 1.000             | 13.414         | 31.405           | 25.028            |
+| 2h        | EXTERNAL | PL  | 2-3_deneme    | 556  | YETERLI | %30.6     | %69.4       | 2.281             | 14.408         | 27.061           | 25.069            |
+| 2h        | EXTERNAL | PL  | 4plus_deneme  | 78   | YETERLI | %34.6     | %65.4       | 4.256             | 15.679         | 25.141           | 24.312            |
+| 2h        | INTERNAL | PH  | 0_deneme      | 3376 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 23.934           | 63.070            |
+| 2h        | INTERNAL | PH  | 1_deneme      | 1931 | YETERLI | %33.8     | %66.2       | 1.000             | 15.705         | 18.020           | 15.679            |
+| 2h        | INTERNAL | PH  | 2-3_deneme    | 1803 | YETERLI | %23.2     | %76.8       | 2.354             | 16.515         | 16.223           | 16.253            |
+| 2h        | INTERNAL | PH  | 4plus_deneme  | 411  | YETERLI | %17.5     | %82.5       | 4.523             | 17.745         | 17.433           | 16.658            |
+| 2h        | INTERNAL | PL  | 0_deneme      | 3644 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 22.075           | 64.686            |
+| 2h        | INTERNAL | PL  | 1_deneme      | 2009 | YETERLI | %35.5     | %64.5       | 1.000             | 15.649         | 19.781           | 17.026            |
+| 2h        | INTERNAL | PL  | 2-3_deneme    | 1557 | YETERLI | %26.9     | %73.1       | 2.292             | 16.852         | 18.306           | 18.396            |
+| 2h        | INTERNAL | PL  | 4plus_deneme  | 257  | YETERLI | %26.5     | %73.5       | 4.362             | 17.739         | 20.074           | 19.416            |
+| 4h        | EXTERNAL | PH  | 0_deneme      | 1498 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 42.900           | 77.034            |
+| 4h        | EXTERNAL | PH  | 1_deneme      | 493  | YETERLI | %31.6     | %68.4       | 1.000             | 12.521         | 30.469           | 25.797            |
+| 4h        | EXTERNAL | PH  | 2-3_deneme    | 402  | YETERLI | %22.9     | %77.1       | 2.306             | 14.055         | 23.062           | 22.648            |
+| 4h        | EXTERNAL | PH  | 4plus_deneme  | 95   | YETERLI | %16.8     | %83.2       | 4.621             | 16.884         | 20.526           | 20.000            |
+| 4h        | EXTERNAL | PL  | 0_deneme      | 1587 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 40.951           | 68.957            |
+| 4h        | EXTERNAL | PL  | 1_deneme      | 502  | YETERLI | %33.9     | %66.1       | 1.000             | 13.691         | 27.010           | 24.024            |
+| 4h        | EXTERNAL | PL  | 2-3_deneme    | 366  | YETERLI | %21.6     | %78.4       | 2.284             | 15.899         | 25.544           | 22.654            |
 | 4h        | EXTERNAL | PL  | 4plus_deneme  | 52   | YETERLI | %17.3     | %82.7       | 4.365             | 16.846         | 23.077           | 22.000            |
-| 4h        | INTERNAL | PH  | 0_deneme      | 2080 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 20.720           | 60.490            |
-| 4h        | INTERNAL | PH  | 1_deneme      | 1182 | YETERLI | %29.8     | %70.2       | 1.000             | 15.365         | 16.637           | 14.394            |
-| 4h        | INTERNAL | PH  | 2-3_deneme    | 1180 | YETERLI | %21.8     | %78.2       | 2.331             | 16.426         | 15.840           | 15.883            |
-| 4h        | INTERNAL | PH  | 4plus_deneme  | 328  | YETERLI | %19.2     | %80.8       | 4.595             | 17.640         | 15.747           | 15.408            |
-| 4h        | INTERNAL | PL  | 0_deneme      | 2219 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 21.700           | 57.476            |
-| 4h        | INTERNAL | PL  | 1_deneme      | 1234 | YETERLI | %37.0     | %63.0       | 1.000             | 15.391         | 17.989           | 17.489            |
-| 4h        | INTERNAL | PL  | 2-3_deneme    | 985  | YETERLI | %27.1     | %72.9       | 2.322             | 16.902         | 17.502           | 18.121            |
-| 4h        | INTERNAL | PL  | 4plus_deneme  | 181  | YETERLI | %22.7     | %77.3       | 4.376             | 17.702         | 16.110           | 16.092            |
+| 4h        | INTERNAL | PH  | 0_deneme      | 2117 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 20.696           | 60.490            |
+| 4h        | INTERNAL | PH  | 1_deneme      | 1204 | YETERLI | %29.9     | %70.1       | 1.000             | 15.317         | 16.650           | 14.447            |
+| 4h        | INTERNAL | PH  | 2-3_deneme    | 1210 | YETERLI | %21.9     | %78.1       | 2.327             | 16.412         | 15.971           | 16.027            |
+| 4h        | INTERNAL | PH  | 4plus_deneme  | 332  | YETERLI | %19.0     | %81.0       | 4.599             | 17.687         | 15.699           | 15.389            |
+| 4h        | INTERNAL | PL  | 0_deneme      | 2277 | YETERLI | %100.0    | %0.0        | 0.000             | 0.000          | 21.746           | 57.524            |
+| 4h        | INTERNAL | PL  | 1_deneme      | 1253 | YETERLI | %37.2     | %62.8       | 1.000             | 15.330         | 17.970           | 17.484            |
+| 4h        | INTERNAL | PL  | 2-3_deneme    | 1016 | YETERLI | %27.7     | %72.3       | 2.325             | 16.793         | 17.580           | 18.061            |
+| 4h        | INTERNAL | PL  | 4plus_deneme  | 184  | YETERLI | %22.3     | %77.7       | 4.380             | 17.777         | 16.277           | 16.323            |
 
 ### Karar verilemeyen satırlar (sağdan sansürlü — payda dışı)
 
 | timeframe | scope    | rol | deneme_kovasi | n   | guven   | ort_deneme_epizot | ort_rol_sure_bar |
 |-----------|----------|-----|---------------|-----|---------|-------------------|------------------|
-| 1d        | EXTERNAL | PH  | 0_deneme      | 211 | YETERLI | 0.000             | 15.209           |
+| 1d        | EXTERNAL | PH  | 0_deneme      | 218 | YETERLI | 0.000             | 15.252           |
 | 1d        | EXTERNAL | PH  | 1_deneme      | 3   | ZAYIF   | 1.000             | 20.333           |
 | 1d        | EXTERNAL | PH  | 2-3_deneme    | 3   | ZAYIF   | 2.333             | 24.667           |
 | 1d        | EXTERNAL | PL  | 0_deneme      | 10  | ZAYIF   | 0.000             | 18.900           |
 | 1d        | EXTERNAL | PL  | 2-3_deneme    | 1   | ZAYIF   | 2.000             | 27.000           |
-| 1d        | INTERNAL | PH  | 0_deneme      | 329 | YETERLI | 0.000             | 10.818           |
-| 1d        | INTERNAL | PH  | 1_deneme      | 30  | YETERLI | 1.000             | 11.833           |
+| 1d        | INTERNAL | PH  | 0_deneme      | 341 | YETERLI | 0.000             | 10.777           |
+| 1d        | INTERNAL | PH  | 1_deneme      | 32  | YETERLI | 1.000             | 12.125           |
 | 1d        | INTERNAL | PH  | 2-3_deneme    | 19  | KISMI   | 2.158             | 10.947           |
 | 1d        | INTERNAL | PL  | 0_deneme      | 15  | KISMI   | 0.000             | 13.400           |
 | 1d        | INTERNAL | PL  | 1_deneme      | 5   | ZAYIF   | 1.000             | 11.600           |
 | 1d        | INTERNAL | PL  | 2-3_deneme    | 4   | ZAYIF   | 2.000             | 17.750           |
 | 1d        | INTERNAL | PL  | 4plus_deneme  | 1   | ZAYIF   | 5.000             | 7.000            |
-| 1h        | EXTERNAL | PH  | 0_deneme      | 138 | YETERLI | 0.000             | 16.732           |
+| 1h        | EXTERNAL | PH  | 0_deneme      | 155 | YETERLI | 0.000             | 16.632           |
 | 1h        | EXTERNAL | PH  | 1_deneme      | 4   | ZAYIF   | 1.000             | 23.500           |
 | 1h        | EXTERNAL | PH  | 2-3_deneme    | 1   | ZAYIF   | 2.000             | 19.000           |
 | 1h        | EXTERNAL | PL  | 0_deneme      | 5   | ZAYIF   | 0.000             | 20.200           |
 | 1h        | EXTERNAL | PL  | 1_deneme      | 1   | ZAYIF   | 1.000             | 25.000           |
-| 1h        | INTERNAL | PH  | 0_deneme      | 229 | YETERLI | 0.000             | 9.013            |
-| 1h        | INTERNAL | PH  | 1_deneme      | 51  | YETERLI | 1.000             | 10.784           |
-| 1h        | INTERNAL | PH  | 2-3_deneme    | 11  | ZAYIF   | 2.000             | 13.182           |
+| 1h        | INTERNAL | PH  | 0_deneme      | 262 | YETERLI | 0.000             | 9.118            |
+| 1h        | INTERNAL | PH  | 1_deneme      | 56  | YETERLI | 1.000             | 10.946           |
+| 1h        | INTERNAL | PH  | 2-3_deneme    | 13  | ZAYIF   | 2.077             | 13.308           |
 | 1h        | INTERNAL | PL  | 0_deneme      | 10  | ZAYIF   | 0.000             | 11.800           |
-| 1h        | INTERNAL | PL  | 1_deneme      | 4   | ZAYIF   | 1.000             | 11.500           |
+| 1h        | INTERNAL | PL  | 1_deneme      | 5   | ZAYIF   | 1.000             | 10.400           |
 | 1h        | INTERNAL | PL  | 2-3_deneme    | 2   | ZAYIF   | 2.500             | 20.500           |
-| 2h        | EXTERNAL | PH  | 0_deneme      | 142 | YETERLI | 0.000             | 12.887           |
+| 2h        | EXTERNAL | PH  | 0_deneme      | 148 | YETERLI | 0.000             | 13.088           |
 | 2h        | EXTERNAL | PH  | 1_deneme      | 3   | ZAYIF   | 1.000             | 22.667           |
 | 2h        | EXTERNAL | PH  | 2-3_deneme    | 3   | ZAYIF   | 2.000             | 17.667           |
 | 2h        | EXTERNAL | PL  | 0_deneme      | 11  | ZAYIF   | 0.000             | 21.000           |
 | 2h        | EXTERNAL | PL  | 1_deneme      | 1   | ZAYIF   | 1.000             | 31.000           |
-| 2h        | INTERNAL | PH  | 0_deneme      | 198 | YETERLI | 0.000             | 9.333            |
-| 2h        | INTERNAL | PH  | 1_deneme      | 9   | ZAYIF   | 1.000             | 12.000           |
+| 2h        | INTERNAL | PH  | 0_deneme      | 204 | YETERLI | 0.000             | 9.333            |
+| 2h        | INTERNAL | PH  | 1_deneme      | 10  | ZAYIF   | 1.000             | 13.000           |
 | 2h        | INTERNAL | PH  | 2-3_deneme    | 3   | ZAYIF   | 2.333             | 21.000           |
 | 2h        | INTERNAL | PL  | 0_deneme      | 14  | ZAYIF   | 0.000             | 15.571           |
 | 2h        | INTERNAL | PL  | 1_deneme      | 9   | ZAYIF   | 1.000             | 10.556           |
 | 2h        | INTERNAL | PL  | 2-3_deneme    | 2   | ZAYIF   | 2.500             | 30.000           |
-| 4h        | EXTERNAL | PH  | 0_deneme      | 141 | YETERLI | 0.000             | 8.908            |
+| 4h        | EXTERNAL | PH  | 0_deneme      | 147 | YETERLI | 0.000             | 8.959            |
 | 4h        | EXTERNAL | PH  | 1_deneme      | 2   | ZAYIF   | 1.000             | 19.500           |
 | 4h        | EXTERNAL | PH  | 2-3_deneme    | 1   | ZAYIF   | 3.000             | 29.000           |
 | 4h        | EXTERNAL | PL  | 0_deneme      | 9   | ZAYIF   | 0.000             | 23.111           |
-| 4h        | INTERNAL | PH  | 0_deneme      | 202 | YETERLI | 0.000             | 8.381            |
+| 4h        | INTERNAL | PH  | 0_deneme      | 207 | YETERLI | 0.000             | 8.469            |
 | 4h        | INTERNAL | PH  | 1_deneme      | 10  | ZAYIF   | 1.000             | 13.000           |
 | 4h        | INTERNAL | PH  | 2-3_deneme    | 10  | ZAYIF   | 2.200             | 19.000           |
 | 4h        | INTERNAL | PH  | 4plus_deneme  | 1   | ZAYIF   | 4.000             | 17.000           |
 | 4h        | INTERNAL | PL  | 0_deneme      | 27  | KISMI   | 0.000             | 16.556           |
-| 4h        | INTERNAL | PL  | 1_deneme      | 10  | ZAYIF   | 1.000             | 17.800           |
+| 4h        | INTERNAL | PL  | 1_deneme      | 11  | ZAYIF   | 1.000             | 18.091           |
 | 4h        | INTERNAL | PL  | 2-3_deneme    | 7   | ZAYIF   | 2.286             | 19.571           |
 
 ### Yaklaşma eşiği duyarlılığı (0.25 ana; 0.15 / 0.50 kontrol)
 
 | esik     | timeframe | n_satir | guven   | engelledi_orani | kararsiz_adet |
 |----------|-----------|---------|---------|-----------------|---------------|
-| 0.25 ATR | 1d        | 7551    | YETERLI | %63.4           | 631           |
-| 0.25 ATR | 1h        | 35727   | YETERLI | %66.9           | 456           |
-| 0.25 ATR | 2h        | 22599   | YETERLI | %66.3           | 395           |
-| 0.25 ATR | 4h        | 14702   | YETERLI | %64.9           | 420           |
-| 0.15 ATR | 1d        | 7551    | YETERLI | %59.9           | 631           |
-| 0.15 ATR | 1h        | 35727   | YETERLI | %64.7           | 456           |
-| 0.15 ATR | 2h        | 22599   | YETERLI | %63.7           | 395           |
-| 0.15 ATR | 4h        | 14702   | YETERLI | %62.4           | 420           |
-| 0.5 ATR  | 1d        | 7551    | YETERLI | %72.4           | 631           |
-| 0.5 ATR  | 1h        | 35727   | YETERLI | %74.1           | 456           |
-| 0.5 ATR  | 2h        | 22599   | YETERLI | %73.8           | 395           |
-| 0.5 ATR  | 4h        | 14702   | YETERLI | %72.5           | 420           |
+| 0.25 ATR | 1d        | 7776    | YETERLI | %63.4           | 652           |
+| 0.25 ATR | 1h        | 40874   | YETERLI | %66.8           | 514           |
+| 0.25 ATR | 2h        | 23383   | YETERLI | %66.3           | 408           |
+| 0.25 ATR | 4h        | 15020   | YETERLI | %65.0           | 432           |
+| 0.15 ATR | 1d        | 7776    | YETERLI | %59.9           | 652           |
+| 0.15 ATR | 1h        | 40874   | YETERLI | %64.6           | 514           |
+| 0.15 ATR | 2h        | 23383   | YETERLI | %63.7           | 408           |
+| 0.15 ATR | 4h        | 15020   | YETERLI | %62.4           | 432           |
+| 0.5 ATR  | 1d        | 7776    | YETERLI | %72.5           | 652           |
+| 0.5 ATR  | 1h        | 40874   | YETERLI | %74.1           | 514           |
+| 0.5 ATR  | 2h        | 23383   | YETERLI | %73.8           | 408           |
+| 0.5 ATR  | 4h        | 15020   | YETERLI | %72.6           | 432           |
 
 ## Soru 7 — WH/WL %kaçı ziyaret/süpürüldü, ne kadar sürede?
 | timeframe | scope    | rol | n     | guven   | ziyaret_epizot | supuruldu | hic_ulasilmadi | sansur | ort_deneme_epizot |
 |-----------|----------|-----|-------|---------|----------------|-----------|----------------|--------|-------------------|
-| 1d        | EXTERNAL | WH  | 1727  | YETERLI | %65.2          | %56.2     | %43.8          | %5.4   | 1.208             |
-| 1d        | EXTERNAL | WL  | 1601  | YETERLI | %74.0          | %64.1     | %35.9          | %12.1  | 1.427             |
-| 1d        | INTERNAL | WH  | 3757  | YETERLI | %77.5          | %66.8     | %33.2          | %4.3   | 1.531             |
-| 1d        | INTERNAL | WL  | 3751  | YETERLI | %81.7          | %71.0     | %29.0          | %11.8  | 1.558             |
-| 1h        | EXTERNAL | WH  | 10669 | YETERLI | %68.2          | %56.3     | %43.7          | %0.7   | 1.340             |
-| 1h        | EXTERNAL | WL  | 10453 | YETERLI | %71.3          | %60.7     | %39.3          | %1.4   | 1.291             |
-| 1h        | INTERNAL | WH  | 22995 | YETERLI | %76.7          | %63.0     | %37.0          | %0.6   | 1.544             |
-| 1h        | INTERNAL | WL  | 22152 | YETERLI | %80.6          | %68.9     | %31.1          | %1.7   | 1.502             |
-| 2h        | EXTERNAL | WH  | 6548  | YETERLI | %67.8          | %56.9     | %43.1          | %1.0   | 1.373             |
-| 2h        | EXTERNAL | WL  | 5896  | YETERLI | %71.5          | %60.3     | %39.7          | %2.8   | 1.301             |
-| 2h        | INTERNAL | WH  | 13074 | YETERLI | %76.7          | %63.8     | %36.2          | %1.5   | 1.616             |
-| 2h        | INTERNAL | WL  | 12832 | YETERLI | %80.4          | %69.8     | %30.2          | %2.2   | 1.509             |
-| 4h        | EXTERNAL | WH  | 3854  | YETERLI | %70.5          | %59.3     | %40.7          | %1.1   | 1.444             |
-| 4h        | EXTERNAL | WL  | 4126  | YETERLI | %71.2          | %60.4     | %39.6          | %6.6   | 1.325             |
-| 4h        | INTERNAL | WH  | 8327  | YETERLI | %77.2          | %65.3     | %34.7          | %1.8   | 1.690             |
-| 4h        | INTERNAL | WL  | 8190  | YETERLI | %80.9          | %69.9     | %30.1          | %5.0   | 1.562             |
+| 1d        | EXTERNAL | WH  | 1777  | YETERLI | %65.4          | %56.4     | %43.6          | %5.5   | 1.214             |
+| 1d        | EXTERNAL | WL  | 1647  | YETERLI | %73.8          | %63.8     | %36.2          | %12.1  | 1.424             |
+| 1d        | INTERNAL | WH  | 3882  | YETERLI | %77.6          | %66.9     | %33.1          | %4.2   | 1.530             |
+| 1d        | INTERNAL | WL  | 3845  | YETERLI | %81.7          | %71.0     | %29.0          | %11.9  | 1.559             |
+| 1h        | EXTERNAL | WH  | 12058 | YETERLI | %68.2          | %56.4     | %43.6          | %0.8   | 1.345             |
+| 1h        | EXTERNAL | WL  | 11653 | YETERLI | %71.3          | %60.8     | %39.2          | %1.3   | 1.289             |
+| 1h        | INTERNAL | WH  | 26207 | YETERLI | %76.8          | %63.0     | %37.0          | %0.6   | 1.552             |
+| 1h        | INTERNAL | WL  | 24837 | YETERLI | %80.5          | %68.9     | %31.1          | %1.7   | 1.500             |
+| 2h        | EXTERNAL | WH  | 6784  | YETERLI | %67.8          | %57.0     | %43.0          | %1.0   | 1.376             |
+| 2h        | EXTERNAL | WL  | 6101  | YETERLI | %71.4          | %60.4     | %39.6          | %2.8   | 1.297             |
+| 2h        | INTERNAL | WH  | 13571 | YETERLI | %76.8          | %63.9     | %36.1          | %1.5   | 1.623             |
+| 2h        | INTERNAL | WL  | 13237 | YETERLI | %80.2          | %69.8     | %30.2          | %2.2   | 1.505             |
+| 4h        | EXTERNAL | WH  | 3957  | YETERLI | %70.4          | %59.3     | %40.7          | %1.1   | 1.443             |
+| 4h        | EXTERNAL | WL  | 4211  | YETERLI | %71.1          | %60.6     | %39.4          | %6.7   | 1.327             |
+| 4h        | INTERNAL | WH  | 8538  | YETERLI | %77.2          | %65.4     | %34.6          | %1.8   | 1.687             |
+| 4h        | INTERNAL | WL  | 8362  | YETERLI | %80.8          | %69.9     | %30.1          | %5.0   | 1.565             |
 
 ### Seviyeye ulaşma süresi (native bar; rol atamasından itibaren)
 
-| timeframe | rol | n    | guven   | q25   | ortanca | q75   | ortalama |
-|-----------|-----|------|---------|-------|---------|-------|----------|
-| 1d        | WH  | 1735 | YETERLI | 1.000 | 3.000   | 5.000 | 4.900    |
-| 1d        | WL  | 1827 | YETERLI | 1.000 | 3.000   | 6.000 | 4.700    |
-| 1h        | WH  | 9222 | YETERLI | 1.000 | 3.000   | 6.000 | 5.600    |
-| 1h        | WL  | 9856 | YETERLI | 2.000 | 3.000   | 7.000 | 6.000    |
-| 2h        | WH  | 5696 | YETERLI | 1.000 | 3.000   | 6.000 | 5.400    |
-| 2h        | WL  | 5983 | YETERLI | 2.000 | 3.000   | 7.000 | 5.600    |
-| 4h        | WH  | 3754 | YETERLI | 1.000 | 3.000   | 6.000 | 5.100    |
-| 4h        | WL  | 4207 | YETERLI | 1.000 | 3.000   | 6.000 | 5.400    |
+| timeframe | rol | n     | guven   | q25   | ortanca | q75   | ortalama |
+|-----------|-----|-------|---------|-------|---------|-------|----------|
+| 1d        | WH  | 1792  | YETERLI | 1.000 | 3.000   | 5.000 | 4.900    |
+| 1d        | WL  | 1879  | YETERLI | 1.000 | 3.000   | 6.000 | 4.700    |
+| 1h        | WH  | 10610 | YETERLI | 1.000 | 3.000   | 6.000 | 5.600    |
+| 1h        | WL  | 11199 | YETERLI | 2.000 | 3.000   | 7.000 | 6.100    |
+| 2h        | WH  | 5912  | YETERLI | 1.000 | 3.000   | 6.000 | 5.400    |
+| 2h        | WL  | 6183  | YETERLI | 2.000 | 3.000   | 7.000 | 5.600    |
+| 4h        | WH  | 3854  | YETERLI | 1.000 | 3.000   | 6.000 | 5.100    |
+| 4h        | WL  | 4287  | YETERLI | 1.000 | 3.000   | 6.000 | 5.400    |
 
 ### EVENT_SWEEP çapraz kontrolü
 | timeframe | scope    | direction | n     | guven   | uyumlu | CALISTI | ort_devam_h12 |
 |-----------|----------|-----------|-------|---------|--------|---------|---------------|
-| 1d        | EXTERNAL | DOWN      | 2040  | YETERLI | %95.8  | %65.2   | 1.939         |
-| 1d        | EXTERNAL | UP        | 1420  | YETERLI | %95.9  | %68.0   | 2.073         |
-| 1d        | INTERNAL | DOWN      | 3463  | YETERLI | %96.0  | %65.3   | 1.932         |
-| 1d        | INTERNAL | UP        | 2223  | YETERLI | %95.7  | %64.6   | 2.145         |
-| 1h        | EXTERNAL | DOWN      | 9378  | YETERLI | %97.3  | %62.9   | 1.759         |
-| 1h        | EXTERNAL | UP        | 7698  | YETERLI | %96.1  | %61.8   | 2.012         |
-| 1h        | INTERNAL | DOWN      | 14888 | YETERLI | %97.4  | %63.1   | 1.812         |
-| 1h        | INTERNAL | UP        | 12486 | YETERLI | %96.3  | %62.5   | 2.047         |
-| 2h        | EXTERNAL | DOWN      | 6506  | YETERLI | %97.9  | %64.6   | 1.878         |
-| 2h        | EXTERNAL | UP        | 4752  | YETERLI | %96.1  | %63.1   | 2.068         |
-| 2h        | INTERNAL | DOWN      | 9742  | YETERLI | %98.2  | %64.2   | 1.799         |
-| 2h        | INTERNAL | UP        | 7349  | YETERLI | %96.3  | %62.7   | 2.041         |
-| 4h        | EXTERNAL | DOWN      | 4012  | YETERLI | %98.4  | %66.7   | 2.016         |
-| 4h        | EXTERNAL | UP        | 2919  | YETERLI | %95.6  | %64.9   | 2.157         |
-| 4h        | INTERNAL | DOWN      | 6375  | YETERLI | %98.2  | %64.1   | 1.878         |
-| 4h        | INTERNAL | UP        | 4452  | YETERLI | %96.3  | %64.6   | 2.118         |
+| 1d        | EXTERNAL | DOWN      | 2090  | YETERLI | %95.8  | %65.0   | 1.929         |
+| 1d        | EXTERNAL | UP        | 1476  | YETERLI | %95.9  | %67.7   | 2.069         |
+| 1d        | INTERNAL | DOWN      | 3575  | YETERLI | %96.0  | %65.0   | 1.923         |
+| 1d        | INTERNAL | UP        | 2284  | YETERLI | %95.8  | %64.8   | 2.141         |
+| 1h        | EXTERNAL | DOWN      | 10935 | YETERLI | %97.4  | %63.1   | 1.761         |
+| 1h        | EXTERNAL | UP        | 8813  | YETERLI | %96.1  | %62.0   | 2.033         |
+| 1h        | INTERNAL | DOWN      | 17471 | YETERLI | %97.4  | %63.1   | 1.808         |
+| 1h        | INTERNAL | UP        | 14415 | YETERLI | %96.3  | %62.6   | 2.063         |
+| 2h        | EXTERNAL | DOWN      | 6782  | YETERLI | %97.9  | %64.3   | 1.871         |
+| 2h        | EXTERNAL | UP        | 4923  | YETERLI | %96.2  | %63.3   | 2.072         |
+| 2h        | INTERNAL | DOWN      | 10138 | YETERLI | %98.1  | %64.1   | 1.797         |
+| 2h        | INTERNAL | UP        | 7570  | YETERLI | %96.3  | %62.9   | 2.038         |
+| 4h        | EXTERNAL | DOWN      | 4106  | YETERLI | %98.4  | %66.7   | 2.011         |
+| 4h        | EXTERNAL | UP        | 2979  | YETERLI | %95.5  | %64.7   | 2.145         |
+| 4h        | INTERNAL | DOWN      | 6533  | YETERLI | %98.2  | %64.1   | 1.873         |
+| 4h        | INTERNAL | UP        | 4576  | YETERLI | %96.3  | %64.4   | 2.108         |
 
 ## Hacim — koşullandırma değişkeni
 ### Dokunuş tepkisi x hacim çeyreği (rvol)
@@ -490,23 +478,23 @@ _`ort_h12_decay` 1'den büyükse pencere, tepenin altına kapanmıştır (kapan�
 
 | timeframe | hacim_kovasi | n     | guven   | CALISTI | uyumlu | ort_devam_h12 |
 |-----------|--------------|-------|---------|---------|--------|---------------|
-| 1d        | KULLANILAMAZ | 4885  | YETERLI | %65.9   | %94.8  | 2.127         |
-| 1d        | Q1_dusuk     | 2378  | YETERLI | %63.2   | %95.2  | 1.807         |
-| 1d        | Q2           | 4521  | YETERLI | %66.4   | %96.4  | 2.019         |
-| 1d        | Q3           | 3234  | YETERLI | %65.6   | %96.3  | 2.185         |
-| 1d        | Q4_yuksek    | 2056  | YETERLI | %72.9   | %96.4  | 2.439         |
-| 1h        | KULLANILAMAZ | 4787  | YETERLI | %63.9   | %96.3  | 2.057         |
-| 1h        | Q1_dusuk     | 23588 | YETERLI | %64.0   | %97.2  | 1.985         |
-| 1h        | Q2           | 16133 | YETERLI | %64.3   | %96.5  | 2.001         |
-| 1h        | Q3           | 17497 | YETERLI | %64.7   | %96.9  | 2.068         |
-| 1h        | Q4_yuksek    | 19848 | YETERLI | %66.1   | %97.1  | 2.197         |
-| 2h        | KULLANILAMAZ | 4479  | YETERLI | %64.8   | %96.2  | 2.166         |
-| 2h        | Q1_dusuk     | 10236 | YETERLI | %64.1   | %96.7  | 1.978         |
-| 2h        | Q2           | 13808 | YETERLI | %64.2   | %97.3  | 1.985         |
-| 2h        | Q3           | 12061 | YETERLI | %65.9   | %97.9  | 2.075         |
-| 2h        | Q4_yuksek    | 11443 | YETERLI | %68.3   | %97.8  | 2.324         |
-| 4h        | KULLANILAMAZ | 4412  | YETERLI | %65.3   | %96.4  | 2.177         |
-| 4h        | Q1_dusuk     | 5214  | YETERLI | %66.3   | %96.1  | 2.126         |
-| 4h        | Q2           | 6950  | YETERLI | %66.1   | %97.5  | 2.123         |
-| 4h        | Q3           | 8620  | YETERLI | %67.0   | %98.2  | 2.148         |
-| 4h        | Q4_yuksek    | 8067  | YETERLI | %69.5   | %98.0  | 2.410         |
+| 1d        | KULLANILAMAZ | 5028  | YETERLI | %65.7   | %94.8  | 2.132         |
+| 1d        | Q1_dusuk     | 2368  | YETERLI | %63.0   | %95.4  | 1.811         |
+| 1d        | Q2           | 4710  | YETERLI | %66.2   | %96.3  | 2.006         |
+| 1d        | Q3           | 3377  | YETERLI | %65.1   | %96.2  | 2.161         |
+| 1d        | Q4_yuksek    | 2107  | YETERLI | %72.7   | %96.3  | 2.447         |
+| 1h        | KULLANILAMAZ | 5374  | YETERLI | %64.4   | %96.3  | 2.042         |
+| 1h        | Q1_dusuk     | 27108 | YETERLI | %64.0   | %97.3  | 1.980         |
+| 1h        | Q2           | 18815 | YETERLI | %64.4   | %96.6  | 2.008         |
+| 1h        | Q3           | 20237 | YETERLI | %64.7   | %96.9  | 2.065         |
+| 1h        | Q4_yuksek    | 22921 | YETERLI | %66.1   | %97.1  | 2.199         |
+| 2h        | KULLANILAMAZ | 4634  | YETERLI | %65.0   | %96.3  | 2.164         |
+| 2h        | Q1_dusuk     | 10413 | YETERLI | %64.1   | %96.7  | 1.979         |
+| 2h        | Q2           | 14409 | YETERLI | %64.3   | %97.3  | 1.984         |
+| 2h        | Q3           | 12609 | YETERLI | %65.9   | %97.9  | 2.074         |
+| 2h        | Q4_yuksek    | 11846 | YETERLI | %68.2   | %97.8  | 2.322         |
+| 4h        | KULLANILAMAZ | 4504  | YETERLI | %65.1   | %96.3  | 2.178         |
+| 4h        | Q1_dusuk     | 5233  | YETERLI | %66.1   | %95.9  | 2.122         |
+| 4h        | Q2           | 7189  | YETERLI | %66.1   | %97.5  | 2.117         |
+| 4h        | Q3           | 8898  | YETERLI | %66.7   | %98.1  | 2.137         |
+| 4h        | Q4_yuksek    | 8248  | YETERLI | %69.5   | %97.9  | 2.410         |
