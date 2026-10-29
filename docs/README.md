@@ -41,6 +41,9 @@
 | [arastirma/KOSULLU_CUMLE_OLCUMU.md](arastirma/KOSULLU_CUMLE_OLCUMU.md) | Ölçüm | 2026-10-22 | Koşullu tamamlanma cümlesi: çapraz tablo, aşım kovaları, "yazılmadı" kararı | 
 | [arastirma/REPLAY_OZET_2026-10-21.md](arastirma/REPLAY_OZET_2026-10-21.md) | Kayıt | 2026-10-21 | Son doğrulanmış replay'in okunur özeti: tek tabloda MFE/MAE/NET, örneklem güvenilirliği, açık uçlar |
 | [arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md](arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md) | Ölçüm + hat | 2026-10-28 | 177 sembol × 4 TF tam replay (708/708, 0 hata): anlamlı sonuçlar özeti, `dz_*` depolama hattı (`scripts/backfill/dz_yukleme.py`) ve kolon kapsam raporu |
+| [arastirma/AI_SORU_URETICI_PROMPT.md](arastirma/AI_SORU_URETICI_PROMPT.md) | Yöntem | 2026-10-29 | Kod erişimi olmayan bir yapay zekâya verilecek tek parça soru-üretici prompt: tüm kolon/ölçek/eşik sözlüğü gömülü, depo yolları yalnızca dışlama satırı olarak |
+| [arastirma/REPLAY_SORU_SETI_2026-10-29.md](arastirma/REPLAY_SORU_SETI_2026-10-29.md) | Soru seti | 2026-10-29 | Prompt'tan üretilen S01–S32 soru seti (kodla birebir karşılığı ve cevap sözleşmesi §0–§7 + açık uç sicili §8 E1–E16) |
+| [arastirma/REPLAY_SORU_YANITLARI_2026-10-29.md](arastirma/REPLAY_SORU_YANITLARI_2026-10-29.md) | Üretilen | 2026-10-29 | `research/soru_cevaplama.py` ile S01–S32 cevapları (708 seri, 0 hata): §6 karar özeti 20 canlıya yazılır / 1 kart metni / 6 RED / 1 karar yok / 4 gözlem |
 | [arastirma/ARASTIRMA_BULGULARI.md](arastirma/ARASTIRMA_BULGULARI.md) | Üretilen | 2026-10 | Ham tablo eki (`arastirma_kosu.py --agrega`) |
 | [arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt](arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt) | Yürürlükte | 2026-10 | Düz metin dışa aktarım |
 | [arastirma/arastirma_ms_hatali_seriler.txt](arastirma/arastirma_ms_hatali_seriler.txt) | Kayıt (açık bulgu) | 2026-10 | MS motorunun patladığı 35 seri |

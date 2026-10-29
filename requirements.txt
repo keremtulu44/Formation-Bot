@@ -28,6 +28,7 @@ matplotlib==3.11.2
 
 # Test ve util
 pytest==8.3.2
+tabulate==0.9.0  # research/soru_cevaplama.py Markdown rapor tabloları (to_markdown)
 
 # Not: tvdatafeed PyPI'de yok, gerekirse git'ten:
 # git+https://github.com/rongardF/tvdatafeed.git
