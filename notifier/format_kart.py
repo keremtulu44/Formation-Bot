@@ -547,8 +547,27 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     while icerik > _KART_MAKS_SATIR:
         for blok_ in reversed(bloklar):
             if len(blok_) > 1 and str(blok_[0]).startswith("◇"):
-                blok_.pop()
-                icerik -= 1
+                # Düşme birimi: EN SON ◇ satırı + onun girintili devam
+                # parçaları (sarmalın yarısını kesmek metin kaybı olurdu).
+                # Dipnot (`geçmiş davranıştır…`) KORUNUR: yorum satırlarının
+                # da zorunlu uyarısıdır. Yalnız ◇1+dipnot kaldıysa bloğa
+                # dokunulmaz; arayış başka bloklara geçer (tavan esnetilir).
+                son_i = None
+                for i, x in enumerate(blok_):
+                    if str(x).startswith("◇"):
+                        son_i = i
+                if son_i is None:
+                    continue
+                k = son_i + 1
+                while (k < len(blok_)
+                       and (str(blok_[k]).startswith("◇")
+                            or str(blok_[k]).startswith("   "))):
+                    k += 1
+                if k == len(blok_) and son_i == 0:
+                    continue  # dipnot hariç blok biterdi → bu bloğu atla
+                adim = k - son_i
+                del blok_[son_i:k]
+                icerik -= adim
                 break
         else:
             break
