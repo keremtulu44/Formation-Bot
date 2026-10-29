@@ -476,11 +476,14 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
         bloklar.append(blok)
 
     # ── DİKKAT (yorum katmanı; her kartta en fazla 1) ────────────────────────
-    # ÖNÜNDE/SINIR arası; kapı yoksa blok hiç oluşmaz. Tavan döngüsü tek
-    # satırlık blokları düşürmez (yalnız ◇ ölçüm satırları düşer).
+    # ÖNÜNDE/SINIR arası; kapı yoksa blok hiç oluşmaz. Tam cümle yazılır;
+    # `_satir` sarar (karakter sınırı yok, metin eksilmez). Tavan döngüsü
+    # ◇ bloklarına dokunur; bu blok dokunulmaz.
     dikkat_satiri = str(yorum.get("dikkat") or "")
     if dikkat_satiri:
-        bloklar.append([dikkat_satiri])
+        blok = []
+        _satir(blok, dikkat_satiri)
+        bloklar.append(blok)
 
     # ── BLOK 6 · SINIR ───────────────────────────────────────────────────────
     blok = []

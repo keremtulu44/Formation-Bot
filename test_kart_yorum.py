@@ -97,7 +97,7 @@ def test_s15_fvgde_acilmaz():
 def test_uc_limit_oncelik_sirasi():
     veri = _veri(upper_touches=2, age_bars=25, stock_name="ASELS")
     bolum = _bolum(ust=["▲ OB 4s"],
-                   hacim=["katılım 4s yukarı zayıflıyor"],
+                   hacim=["hacim 4s anormal"],
                    engel=["▲ 101,0 (kırılım eşiği)"])
     sonuc = kart_yorum.sec(veri, bolum)
     # açık: S15, S04, S10, S16, S17, S13, S31 → limit 3, öncelik sırası
@@ -139,15 +139,6 @@ def test_yorum_satirlari_kart_jargonu_tasimaz():
             assert kisa not in kayit["satir"], (kayit["kod"], kisa, kayit["satir"])
 
 
-def test_yorum_satirlari_butce_sinirinda():
-    """Her satır ≤300 px: `_satir` 268,85'te girintili böler, Telegram
-    yerel sarımı hiç olmaz (metin eksilmez)."""
-    from telegram_measure import genislik
-
-    for kayit in kart_yorum.YORUMLAR + kart_yorum.DIKKATLAR:
-        assert genislik(kayit["satir"]) <= 300, (kayit["kod"], kayit["satir"])
-
-
 # ── sade kart entegrasyonu ─────────────────────────────────────────────────
 
 def test_sade_kart_yorum_olcumun_yerine_gecer():
@@ -155,7 +146,8 @@ def test_sade_kart_yorum_olcumun_yerine_gecer():
                  domain_bolumleri=_bolum(engel=["▲ 101,0"]))
     metin = _format_lifecycle_alert_kart_sade(veri)
     duz = " ".join(metin.split())  # girintili devam satırlarını birleştir
-    assert "◇ Eski bölgede tutma 21 puan fazla" in duz
+    assert ("◇ Fiyatın uzun süre temas ettiği bölgelerde tutma 21 puan daha düşük"
+            in duz)
     assert "◇ arşiv ölçüm 12 puan" not in metin        # yeni kaynak eskiyi bastırır
     assert "geçmiş davranıştır, kazanç değil" in metin  # dipnot korunur
     # dikkat bloğu yok (kapı kapalı) ve CTA son satır
@@ -167,7 +159,9 @@ def test_sade_kart_blokta_dikkat_var():
     veri = _veri(domain_bolumleri=_bolum(ust=["▲ FVG 4s"],
                                          hacim=["hacim 4s yok (endeks)"]))
     metin = _format_lifecycle_alert_kart_sade(veri)
-    assert "· dikkat: FVG hedefi geç geliyor" in metin
+    duz = " ".join(metin.split())
+    assert ("· dikkat: FVG hedeflerinin %62'si bölge kapandıktan sonra vuruluyor"
+            in duz)
     assert "· dikkat" in metin.split("• yatırım tavsiyesi değildir")[0]
     # kapı yok → eski ölçüm satırı aynen sürer
     assert "◇ arşiv ölçüm 12 puan" in metin
@@ -178,5 +172,5 @@ def test_sade_kart_anhtar_yok_eski_hal():
     del veri["kart_yorum_kapisi"]
     metin = _format_lifecycle_alert_kart_sade(veri)
     assert "◇ arşiv ölçüm 12 puan" in metin
-    assert "Eski bölgede tutma" not in metin
+    assert "uzun süre temas" not in metin
     assert "· dikkat" not in metin
