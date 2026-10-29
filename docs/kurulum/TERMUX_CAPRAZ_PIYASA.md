@@ -35,8 +35,9 @@ mevcut hisse arşiviyle örtüşme daha kısa olabilir. Saatlik veri bu günlük
 araştırma için istenmez. `bar_time`, Yahoo'nun mum etiketidir, **kapanış veya
 verinin erişilebilir olduğu an değildir**. Son mum tamamlanmamış olabilir.
 Replay'de BIST/makro kapanış saatleri, kaynak ve zaman uyumu ayrıca doğrulanmadan
-bu dosyalar doğrudan karar anı verisi sayılmamalıdır. Fiyatlar `auto_adjust=False`
-ile ham alınır; split/sıçrama ve sıfır hacim raporlanır.
+bu dosyalar doğrudan karar anı verisi sayılmamalıdır. Yahoo fiyatları
+`auto_adjust=False` ile alınır; diğer sağlayıcıların düzeltme bilgisi manifestte
+ayrıca belirtilir. Split/sıçrama ve sıfır hacim raporlanır.
 
 ## 1. Kodu ve ortamı hazırla
 
