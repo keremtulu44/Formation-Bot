@@ -1761,6 +1761,33 @@ BOLUMLER = [
 ]
 
 
+def karar_kovasi(k: str) -> str:
+    """§6 kova eşlemesi: karar metnini sınıfına ayırır (tek kaynak).
+
+    `research/soru_kapisi` yayın kapısı bu fonksiyonu çağırır; 2026-10-29
+    raporundaki iç içe `_sinif` ile birebir aynı davranış (ana gövdeden
+    modül seviyesine çıkarıldı).
+    """
+    import re as _re
+
+    kk = k.upper()
+    # açık yazılmış canlı kararlar — bir soruda tek bir hücre bile yazıyorsa önce o
+    for anahtar in ("YAZILIR", "ZORUNLU", "STOP KURALI", "KURAL+KARNE", "KURAL + KARNE",
+                    "BASTIRMA KURALI", "TAVSİYE"):
+        if anahtar in kk:
+            return "CANLIYA YAZILIR (kart/rozet/kuyruk/filtre)"
+    if "HATA" in kk or "KARAR YOK" in kk:
+        return "KARAR YOK / HATA (n<30, sansür>20%, o hücrede karar yok)"
+    # kelime sınırı: kural-red / reddedilir / :RED — "DEVREDILDI" ile karışmasın
+    if _re.search(r"(^|[^A-ZĞÜŞİÖÇ])RED([^A-ZĞÜŞİÖÇ]|$)", kk) or "REDD" in kk:
+        return "RED / hipotez çöktü (yeni kural açılmaz)"
+    if "→ KURAL" in kk:
+        return "CANLIYA YAZILIR (kart/rozet/kuyruk/filtre)"
+    if "KART METN" in kk or "METN" in kk:
+        return "YALNIZ KART METNİ (5–12 pp / dipnot)"
+    return "Gözlem / yapısal bulgu (kurala dönüşmez)"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="REPLAY soru seti S01–S32 cevap motoru")
     p.add_argument("--cikti", action="append", default=[],
@@ -1834,25 +1861,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             basliklar.append("")
     # canlı bileşen özeti (§6 karar eşlemesi) — tüm karar sınıfları
     basliklar += ["## §6 KARAR ÖZETİ (canlı bileşen eşlemesiyle)", ""]
-    import re as _re
 
     def _sinif(k: str) -> str:
-        kk = k.upper()
-        # açık yazılmış canlı kararlar — bir soruda tek bir hücre bile yazıyorsa önce o
-        for anahtar in ("YAZILIR", "ZORUNLU", "STOP KURALI", "KURAL+KARNE", "KURAL + KARNE",
-                        "BASTIRMA KURALI", "TAVSİYE"):
-            if anahtar in kk:
-                return "CANLIYA YAZILIR (kart/rozet/kuyruk/filtre)"
-        if "HATA" in kk or "KARAR YOK" in kk:
-            return "KARAR YOK / HATA (n<30, sansür>20%, o hücrede karar yok)"
-        # kelime sınırı: kural-red / reddedilir / :RED — "DEVREDILDI" ile karışmasın
-        if _re.search(r"(^|[^A-ZĞÜŞİÖÇ])RED([^A-ZĞÜŞİÖÇ]|$)", kk) or "REDD" in kk:
-            return "RED / hipotez çöktü (yeni kural açılmaz)"
-        if "→ KURAL" in kk:
-            return "CANLIYA YAZILIR (kart/rozet/kuyruk/filtre)"
-        if "KART METN" in kk or "METN" in kk:
-            return "YALNIZ KART METNİ (5–12 pp / dipnot)"
-        return "Gözlem / yapısal bulgu (kurala dönüşmez)"
+        return karar_kovasi(k)
 
     kovalar: dict[str, list[tuple[str, str]]] = {
         "CANLIYA YAZILIR (kart/rozet/kuyruk/filtre)": [],

@@ -449,14 +449,21 @@ def build_window_rows(
         key = (episode["symbol"], episode["timeframe"])
         frame, atr = frames[key], atr_by_series[key]
         touch_end = int(episode["touch_end_index"])
+        start = touch_end + 1
+        # Gereksiz hesap kesildi (2026-10-29): her horizon için ayrı
+        # dizi kesimi + `to_dict` yerine bir kez kes (en büyük horizon),
+        # horizon'a dilimle. Çıktı BİREBİR aynı; HORIZONS büyürse tek satır
+        # yeter. (Kovalar: h10=10, h12=12 — max=12.)
+        max_horizon = max(HORIZONS) if HORIZONS else 0
+        future_max = (frame.iloc[start:start + max_horizon].to_dict("records")
+                      if start < len(frame) else [])
         for horizon in HORIZONS:
-            start = touch_end + 1
             observed = max(0, min(horizon, len(frame) - start))
             complete = observed == horizon
             end = start + horizon - 1
             atr_value = atr[touch_end] if touch_end < len(atr) else None
             atr_ok = atr_value is not None and math.isfinite(float(atr_value)) and float(atr_value) > 0
-            future_all = frame.iloc[start:start + observed].to_dict("records") if observed else []
+            future_all = future_max[:observed]
             full_metrics = directional_excursions(episode["direction"], episode["zone_lower"], episode["zone_upper"], future_all, atr_value) if complete else {
                 "favorable_price": None, "adverse_price": None, "favorable_atr": None, "adverse_atr": None,
             }

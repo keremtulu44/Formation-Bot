@@ -321,6 +321,18 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     esik, yon_eki = _kart_esik(data, yon)
     bolumler = data.get("domain_bolumleri")
 
+    # ── YORUM KATMANI (S01–S32 araştırma kapısı) ─────────────────────────────
+    # Kapı koşulu açılırsa ◇ satırı gelir; kapı yoksa hiçbir şey yazılmaz ve
+    # eski kart birebir sürer. `notifier/kart_yorum` içinde yalnız yorum
+    # YAZILIR (yeni ölçüm yok, sayı uydurulmaz); kod/n logdadır.
+    yorum: Dict = {}
+    try:
+        from notifier.kart_yorum import sec as _kart_yorum_sec
+        yorum = _kart_yorum_sec(data, bolumler)
+    except Exception:  # noqa: BLE001 — yorum katmanı kartı düşürmez
+        import logging as _logging
+        _logging.getLogger(__name__).exception("kart yorumu hesaplanamadı")
+
     bloklar: List[List[str]] = []
 
     # ── BLOK 1 · OLAY ────────────────────────────────────────────────────────
@@ -434,7 +446,11 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
         bloklar.append(blok)
 
     # ── BLOK 4 · ÖLÇÜ (arşiv; en çok 3 satır) ────────────────────────────────
-    olcum = list(bolumler.get("olcum") or []) if isinstance(bolumler, dict) else []
+    # Yorum ◇'ları ÖLÇÜ'nün yerine geçer (yeni soru seti = yeni kaynak);
+    # kapı yoksa (`yorum` boş) arşiv ölçüm satırları aynen sürer.
+    yorum_satirlari = list(yorum.get("yorum") or [])
+    olcum = yorum_satirlari if yorum_satirlari else (
+        list(bolumler.get("olcum") or []) if isinstance(bolumler, dict) else [])
     if olcum:
         blok = []
         # Kart 3 ölçü satırı taşır — grup mesajı da AYNI (DM ile birebir).
@@ -458,6 +474,13 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
         _satir(blok, str(satir))
     if blok:
         bloklar.append(blok)
+
+    # ── DİKKAT (yorum katmanı; her kartta en fazla 1) ────────────────────────
+    # ÖNÜNDE/SINIR arası; kapı yoksa blok hiç oluşmaz. Tavan döngüsü tek
+    # satırlık blokları düşürmez (yalnız ◇ ölçüm satırları düşer).
+    dikkat_satiri = str(yorum.get("dikkat") or "")
+    if dikkat_satiri:
+        bloklar.append([dikkat_satiri])
 
     # ── BLOK 6 · SINIR ───────────────────────────────────────────────────────
     blok = []

@@ -1050,6 +1050,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 # tek bloktaki hata domain_context'i boşaltıyordu).
                                 if getattr(config, "TELEGRAM_ALERT_STYLE", "kart") != "klasik":
                                     try:
+                                        # Yorum kapısı (S01–S32): yalnız canlı
+                                        # akış bu anahtarı yazar — harici/test
+                                        # çağrıları eski kartla kalır.
+                                        payload['kart_yorum_kapisi'] = True
                                         payload['domain_bolumleri'] = domain_bolumleri(
                                             outputs,
                                             reference_price=candle_close_price,
