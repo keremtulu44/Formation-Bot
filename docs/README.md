@@ -40,6 +40,7 @@
 | [arastirma/AMPIRIK_REFERANS.md](arastirma/AMPIRIK_REFERANS.md) | Yürürlükte | 2026-10-21 | Ölçümü canlı metne bağlayan katman: hangi sayı kartta hangi koşulda görünür (`ampirik_referans.py`) |
 | [arastirma/KOSULLU_CUMLE_OLCUMU.md](arastirma/KOSULLU_CUMLE_OLCUMU.md) | Ölçüm | 2026-10-22 | Koşullu tamamlanma cümlesi: çapraz tablo, aşım kovaları, "yazılmadı" kararı | 
 | [arastirma/REPLAY_OZET_2026-10-21.md](arastirma/REPLAY_OZET_2026-10-21.md) | Kayıt | 2026-10-21 | Son doğrulanmış replay'in okunur özeti: tek tabloda MFE/MAE/NET, örneklem güvenilirliği, açık uçlar |
+| [arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md](arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md) | Ölçüm + hat | 2026-10-28 | 177 sembol × 4 TF tam replay (708/708, 0 hata): anlamlı sonuçlar özeti, `dz_*` depolama hattı (`scripts/backfill/dz_yukleme.py`) ve kolon kapsam raporu |
 | [arastirma/ARASTIRMA_BULGULARI.md](arastirma/ARASTIRMA_BULGULARI.md) | Üretilen | 2026-10 | Ham tablo eki (`arastirma_kosu.py --agrega`) |
 | [arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt](arastirma/ARASTIRMA_RAPORU_DUZMETIN.txt) | Yürürlükte | 2026-10 | Düz metin dışa aktarım |
 | [arastirma/arastirma_ms_hatali_seriler.txt](arastirma/arastirma_ms_hatali_seriler.txt) | Kayıt (açık bulgu) | 2026-10 | MS motorunun patladığı 35 seri |
