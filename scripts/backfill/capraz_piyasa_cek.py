@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
+import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,6 +40,10 @@ SERILER = {
 }
 DEFAULT_DIR = ROOT / "capraz_piyasa_data"
 SCHEMA = "capraz-piyasa-ham-v1"
+STOOQ_SPOT = {"XAUUSD": "xauusd", "XAGUSD": "xagusd"}
+# Yahoo'da bu endeksler bazen tek mum döner. Aynı sembolü önce başka
+# dönemlerle dene; BIST50 yerine başka bir endeksi ASLA geçirme.
+KISA_YAHOO_YEDEK = {"XU50", "XUTUM"}
 
 
 def _utc_now():
@@ -70,13 +77,21 @@ def _write_manifest(path, data):
     temp.replace(path)
 
 
-def _validated_frame(frame):
-    """Bozuk/naive saatli veya geçersiz OHLC verisi arşive başarılı diye girmez."""
+def _invalid_ohlc_mask(frame):
+    return ((frame.high < frame[["open", "close", "low"]].max(axis=1)) |
+            (frame.low > frame[["open", "close", "high"]].min(axis=1)))
+
+
+def _validated_frame(frame, *, allow_date_only=False, allow_invalid_ohlc=False):
+    """Geçersiz OHLC yalnız açık izinle ham ve bayraklı arşive girer."""
     import numpy as np
     import pandas as pd
 
-    if not isinstance(frame.index, pd.DatetimeIndex) or frame.index.tz is None:
-        raise ValueError("zaman dilimi bilinmiyor; günlük etiket güvenle kaydedilemiyor")
+    if not isinstance(frame.index, pd.DatetimeIndex):
+        raise ValueError("geçerli tarih indeksi yok")
+    if frame.index.tz is None:
+        if not allow_date_only or not (frame.index == frame.index.normalize()).all():
+            raise ValueError("zaman dilimi bilinmiyor; günlük etiket güvenle kaydedilemiyor")
     if frame.index.has_duplicates or frame.index.hasnans:
         raise ValueError("yinelenen veya boş zaman etiketi var")
     cols = ["open", "high", "low", "close", "volume"]
@@ -90,13 +105,95 @@ def _validated_frame(frame):
         raise ValueError(f"en az 60 günlük bar gerekli, gelen: {len(frame)}")
     if not np.isfinite(prices.to_numpy()).all() or (prices <= 0).any().any():
         raise ValueError("fiyatlarda boş, sonsuz veya sıfır/negatif değer var")
-    if ((frame.high < frame[["open", "close", "low"]].max(axis=1)) |
-            (frame.low > frame[["open", "close", "high"]].min(axis=1))).any():
+    if _invalid_ohlc_mask(frame).any() and not allow_invalid_ohlc:
         raise ValueError("OHLC yüksek/düşük tutarsızlığı var")
     # Kur/spot hacmi güvenilir olmayabilir; eksik hacim sıfırla değiştirilmez.
     if ((frame.volume.dropna() < 0) | ~np.isfinite(frame.volume.dropna())).any():
         raise ValueError("hacimde negatif veya sonsuz değer var")
     return frame
+
+
+def _stooq_cek(symbol, period):
+    """Stooq'un günlük XAU/USD veya XAG/USD CSV'si; tarih SADECE etikettir.
+
+    Zaman dilimi ve kapanış anı API çıktısında yoktur, bu yüzden uydurulmaz.
+    Ağ/erişim/CAPTCHA kaynaklı hata açıkça dönülür, vadeliye geçilmez.
+    """
+    import pandas as pd
+    import requests
+
+    try:
+        response = requests.get(
+            "https://stooq.com/q/d/l/", params={"s": symbol, "i": "d"}, timeout=30,
+            headers={"User-Agent": "Formation-Bot research/1.0"},
+        )
+        response.raise_for_status()
+        frame = pd.read_csv(io.StringIO(response.text))
+        frame.columns = [str(c).strip().lower() for c in frame.columns]
+        required = {"date", "open", "high", "low", "close"}
+        if not required.issubset(frame.columns):
+            raise ValueError("CSV yok/eksik; erişim kısıtı, CAPTCHA veya boş veri olabilir")
+        frame["date"] = pd.to_datetime(frame["date"], format="%Y-%m-%d", errors="raise")
+        frame = frame.set_index("date").sort_index()
+        if period != "max":
+            start = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize() - pd.DateOffset(years=int(period[:-1]))
+            frame = frame[frame.index >= start]
+        if "volume" not in frame.columns:
+            frame["volume"] = float("nan")
+        return _validated_frame(frame, allow_date_only=True), ""
+    except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+        return None, f"Stooq verisi alınamadı: {type(exc).__name__}: {str(exc)[:200]}"
+
+
+def _tradingview_cek(symbol, period):
+    """BIST endeksi için anonim TradingView yedeği (opsiyonel bağımlılık).
+
+    tvDatafeed 2.1.1 POSIX zamanlarını datetime.fromtimestamp ile yerel naive
+    zaman olarak verir. Tek iş parçacıklı CLI'da TZ=UTC altında okuyup TZ'yi
+    geri alıyoruz. Saat etiketi yine gerçek mum kapanışı olarak kullanılamaz.
+    """
+    import importlib.metadata
+    import pandas as pd
+
+    try:
+        if importlib.metadata.version("tradingview-datafeed") != "2.1.1":
+            raise ValueError("yalnız tradingview-datafeed==2.1.1 doğrulandı")
+        from tvDatafeed import Interval, TvDatafeed
+    except (ImportError, importlib.metadata.PackageNotFoundError, ValueError) as exc:
+        return None, f"TradingView yedeği yok: {exc}; pip install tradingview-datafeed==2.1.1"
+    if not hasattr(time, "tzset"):
+        return None, "TradingView yedeği: güvenli UTC zaman ayarı desteklenmiyor"
+    original_tz = os.environ.get("TZ")
+    client = None
+    try:
+        os.environ["TZ"] = "UTC"
+        time.tzset()
+        client = TvDatafeed()  # Anonim: kullanıcı adı, parola veya token istenmez.
+        bars = {"2y": 800, "5y": 1600, "10y": 3000, "max": 5000}[period]
+        data = client.get_hist(symbol=symbol, exchange="BIST", interval=Interval.in_daily, n_bars=bars)
+        if data is None or not isinstance(data.index, pd.DatetimeIndex):
+            raise ValueError("boş veya geçersiz endeks verisi")
+        if data.index.tz is not None:
+            raise ValueError("beklenmeyen saat formatı; otomatik dönüştürülmedi")
+        data = data.copy()
+        data.index = data.index.tz_localize("UTC")
+        if period != "max":
+            start = pd.Timestamp.now(tz="UTC").normalize() - pd.DateOffset(years=int(period[:-1]))
+            data = data[data.index >= start]
+        return _validated_frame(data), ""
+    except Exception as exc:  # noqa: BLE001 - üçüncü taraf ağ kütüphanesi hataları CLI'da raporlanır
+        return None, f"TradingView verisi alınamadı: {type(exc).__name__}: {str(exc)[:200]}"
+    finally:
+        try:
+            if client is not None and getattr(client, "ws", None) is not None:
+                client.ws.close()
+        except Exception:  # noqa: BLE001, S110 - bağlantı kapanışı veri sonucunu değiştirmemeli
+            pass
+        if original_tz is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = original_tz
+        time.tzset()
 
 
 def _record_ok(record, path, ticker, period):
@@ -118,7 +215,16 @@ def durum(hedef, manifest, period=None, *, log=print):
         expected_period = period or (rec.get("period") if isinstance(rec, dict) else None)
         path = hedef / f"{symbol}_1d.csv.gz"
         if _record_ok(rec, path, ticker, expected_period):
-            log(f"  OK    {symbol:8} {ticker:12} {rec['rows']:5} bar  {rec['first_label']} → {rec['last_label']}")
+            provider = rec.get("provider", "yahoo")
+            actual = rec.get("provider_symbol", ticker)
+            log(f"  OK    {symbol:8} {actual:12} ({provider}) {rec['rows']:5} bar  {rec['first_label']} → {rec['last_label']}")
+            if rec.get("partial_history"):
+                missing.append(symbol)
+                log(f"        KAPSAM EKSİK: istenen {rec['period']}, sorgu {rec['download_period']}, "
+                    f"gerçek aralık {rec.get('coverage_days', '?')} gün; yenilemeyle tekrar dene.")
+            bad = rec.get("quality", {}).get("invalid_ohlc_count", 0)
+            if bad:
+                log(f"        UYARI: {bad} tutarsız OHLC mumu ham olarak korundu; ATR için kullanmadan önce filtrelenmeli.")
             if rec.get("last_error"):
                 log(f"        Son yenileme başarısız; eski veri korunuyor: {rec['last_error']}")
         else:
@@ -154,25 +260,91 @@ def cek(hedef, period, *, yenile=False, log=print, tempo=None):
         tempo.bekle()
         raw, error, transient = yb._ham_cek(ticker, period, "1d")
         tempo.istek_bitti()
+        provider, actual_symbol, download_period = "yahoo", ticker, period
+        yahoo_error = error
         try:
+            if symbol in KISA_YAHOO_YEDEK and not transient and (raw is None or len(raw) < 60):
+                # Farklı endeks yerine aynı ticker'a farklı dönemlerle yeniden sor.
+                for fallback_period in (p for p in ("max", "5y", "2y") if p != period):
+                    log(f"  Yahoo {ticker}: yeterli bar yok; aynı sembol {fallback_period} ile deneniyor.")
+                    tempo.bekle()
+                    alt, alt_error, alt_transient = yb._ham_cek(ticker, fallback_period, "1d")
+                    tempo.istek_bitti()
+                    if alt_transient:
+                        error, transient, raw = alt_error, True, None
+                        break
+                    if alt is not None and len(alt) >= 60:
+                        raw, error, download_period = alt, "", fallback_period
+                        break
+                if not transient and (raw is None or len(raw) < 60):
+                    tv_symbol = {"XU50": "XU050", "XUTUM": "XUTUM"}[symbol]
+                    log(f"  Yahoo geçmişi yetersiz; TradingView BIST:{tv_symbol} deneniyor.")
+                    tempo.bekle()
+                    tv_raw, tv_error = _tradingview_cek(tv_symbol, period)
+                    tempo.istek_bitti()
+                    if tv_raw is not None:
+                        raw, error, download_period = tv_raw, "", period
+                        provider, actual_symbol = "tradingview", f"BIST:{tv_symbol}"
+                    else:
+                        error = f"Yahoo yeterli geçmiş vermedi | {tv_error}"
+                        raw = None
+            if symbol in STOOQ_SPOT and raw is None and not transient:
+                log(f"  Yahoo spot erişilemedi; Stooq {STOOQ_SPOT[symbol]} deneniyor (vadeliye çevrilmez).")
+                tempo.bekle()
+                raw, stooq_error = _stooq_cek(STOOQ_SPOT[symbol], period)
+                tempo.istek_bitti()
+                if raw is not None:
+                    provider, actual_symbol = "stooq", STOOQ_SPOT[symbol]
+                else:
+                    error = f"Yahoo: {yahoo_error[:180]} | {stooq_error[:180]}"
             if raw is None:
                 if transient:
                     tempo.gecici_hata(error)
-                raise ValueError(error or "Yahoo boş veri döndürdü")
-            frame = _validated_frame(raw)
-            source_tz = str(frame.index.tz)
-            frame = frame.tz_convert("Europe/Istanbul")
+                raise ValueError(error or "Sağlayıcı boş veri döndürdü")
+            frame = _validated_frame(raw, allow_date_only=(provider == "stooq"),
+                                     allow_invalid_ohlc=(symbol == "USDTRY"))
+            source_tz = str(frame.index.tz) if frame.index.tz is not None else None
+            if source_tz:
+                frame = frame.tz_convert("Europe/Istanbul")
+            bad_labels = [str(x) for x in frame.index[_invalid_ohlc_mask(frame)]]
+            quality = yb._kalite_raporu(frame)
+            quality.update({"invalid_ohlc_count": len(bad_labels), "invalid_ohlc_labels": bad_labels,
+                            "atr_ready": not bool(bad_labels)})
+            first, last = str(frame.index[0]), str(frame.index[-1])
+            if provider == "stooq":
+                # Sadece YYYY-MM-DD: Stooq kapanış saati/zaman dilimi sağlamaz.
+                frame.index = frame.index.strftime("%Y-%m-%d")
+                first, last = frame.index[0], frame.index[-1]
             rows = yb._csv_gz_yaz(path, frame)
+            import pandas as pd
+            coverage_days = (pd.Timestamp(last).date() - pd.Timestamp(first).date()).days
+            # Dönem etiketi 'max' olsa da sağlayıcı az geçmiş döndürebilir.
+            # 45 günlük pay, hafta sonu ve tatillerin uç tarihlerdeki kaymasını tolere eder.
+            partial = ((download_period != "max" and period == "max") or
+                       (period != "max" and download_period != "max" and
+                        int(download_period[:-1]) < int(period[:-1])) or
+                       (period != "max" and coverage_days < int(int(period[:-1]) * 365.25) - 45))
             manifest["series"][symbol] = {
                 "status": "ok", "ticker": ticker, "kind": kind, "currency": currency,
-                "interval": "1d", "period": period, "auto_adjust": False,
+                "provider": provider, "provider_symbol": actual_symbol,
+                "interval": "1d", "period": period, "download_period": download_period,
+                "partial_history": partial, "coverage_days": coverage_days,
+                "auto_adjust": False if provider == "yahoo" else None,
+                "adjustment_note": ("tvdatafeed requests splits adjustment" if provider == "tradingview"
+                                    else "unadjusted Yahoo" if provider == "yahoo" else "unknown Stooq"),
+                "volume_note": ("tvDatafeed may replace missing volume with 0" if provider == "tradingview"
+                                else "zero or missing volume may be non-informative"),
                 "provider_timezone": source_tz, "rows": rows,
-                "first_label": str(frame.index[0]), "last_label": str(frame.index[-1]),
+                "first_label": first, "last_label": last,
                 "last_bar_may_be_incomplete": True, "closed_at_verified": False,
-                "quality": yb._kalite_raporu(frame), "sha256": _hash(path), "downloaded_at": _utc_now(),
+                "quality": quality, "sha256": _hash(path), "downloaded_at": _utc_now(),
             }
             tempo.basarili()
-            log(f"  OK: {rows} bar | {frame.index[0]} → {frame.index[-1]}")
+            log(f"  OK: {rows} bar | {first} → {last} | kaynak: {provider}/{actual_symbol}")
+            if bad_labels:
+                log(f"  UYARI: {len(bad_labels)} tutarsız OHLC mumu ham kaydedildi; ATR'den önce filtre şart.")
+            if partial:
+                log(f"  UYARI: İstenen {period} yerine {download_period} kapsamı bulundu.")
         except (ValueError, OSError, TypeError) as exc:
             failed_this_run.append(symbol)
             # Yenilemede eski başarı kaydı ve dosyayı koru; hata ayrı not edilir.

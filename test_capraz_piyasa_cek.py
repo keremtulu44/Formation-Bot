@@ -19,10 +19,10 @@ class FakeTempo:
     def gecici_hata(self, reason): pass
 
 
-def frame(tz="America/New_York", rows=80):
+def frame(tz="America/New_York", rows=1827):
     return pd.DataFrame(
         {"open": 100.0, "high": 103.0, "low": 99.0, "close": 101.0, "volume": 0.0},
-        index=pd.date_range("2025-01-01", periods=rows, tz=tz),
+        index=pd.date_range("2021-10-28", periods=rows, tz=tz),
     )
 
 
@@ -59,6 +59,7 @@ def test_failed_spot_not_silently_replaced_with_future(tmp_path, monkeypatch, sy
     def fetch(ticker, period, interval):
         return (None, "bulunamadı", False) if ticker == "XAUUSD=X" else (frame(), "", False)
     monkeypatch.setattr(tool.yb, "_ham_cek", fetch)
+    monkeypatch.setattr(tool, "_stooq_cek", lambda *args: (None, "erişim yok"))
     assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 1
     assert not (tmp_path / "XAUUSD_1d.csv.gz").exists()
     assert (tmp_path / "XAU_FUT_1d.csv.gz").exists()
@@ -121,3 +122,145 @@ def test_corrupt_manifest_and_original_archive_rejected(tmp_path):
     with pytest.raises(SystemExit) as exc:
         tool.main(["--hedef", str(Path(tool.ROOT) / "backfill_data")])
     assert exc.value.code == 2
+
+
+def test_stooq_spot_is_labeled_as_stooq_and_date_only(tmp_path, monkeypatch, symbols):
+    def fetch(ticker, period, interval):
+        return (None, "404", False) if ticker == "XAUUSD=X" else (frame(), "", False)
+    monkeypatch.setattr(tool.yb, "_ham_cek", fetch)
+    monkeypatch.setattr(tool, "_stooq_cek", lambda *args: (frame(tz=None), ""))
+    assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 0
+    rec = json.loads((tmp_path / "manifest.json").read_text())["series"]["XAUUSD"]
+    assert rec["provider"] == "stooq" and rec["provider_symbol"] == "xauusd"
+    assert rec["provider_timezone"] is None and rec["closed_at_verified"] is False
+    with gzip.open(tmp_path / "XAUUSD_1d.csv.gz", "rt") as f:
+        next(f)
+        assert f.readline().split(",")[0] == "2021-10-28"
+    assert (tmp_path / "XAU_FUT_1d.csv.gz").exists()
+
+
+def test_stooq_loader_parses_and_checks_response(monkeypatch):
+    import requests
+    class Response:
+        text = "Date,Open,High,Low,Close\n" + "\n".join(
+            f"{day.date()},100,105,95,102" for day in pd.date_range("2024-01-01", periods=80))
+        def raise_for_status(self): pass
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: Response())
+    data, err = tool._stooq_cek("xauusd", "max")
+    assert err == "" and len(data) == 80 and data.index.tz is None
+    assert data.volume.isna().all()
+    Response.text = "Exceeded daily quota or CAPTCHA"
+    data, err = tool._stooq_cek("xauusd", "max")
+    assert data is None and "Stooq verisi alınamadı" in err
+
+
+def test_usdtry_invalid_high_low_preserved_and_flagged(tmp_path, monkeypatch, symbols):
+    def fetch(ticker, period, interval):
+        value = frame()
+        if ticker == "USDTRY=X":
+            value.iloc[4, value.columns.get_loc("high")] = 100.5
+        return value, "", False
+    monkeypatch.setattr(tool.yb, "_ham_cek", fetch)
+    assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 0
+    rec = json.loads((tmp_path / "manifest.json").read_text())["series"]["USDTRY"]
+    assert rec["quality"]["invalid_ohlc_count"] == 1
+    assert len(rec["quality"]["invalid_ohlc_labels"]) == 1
+    assert rec["quality"]["atr_ready"] is False
+    with gzip.open(tmp_path / "USDTRY_1d.csv.gz", "rt") as f:
+        data = pd.read_csv(f)
+    assert data.iloc[4]["high"] == 100.5 and data.iloc[4]["close"] == 101.0
+
+
+def test_index_same_ticker_max_history_fallback(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool, "SERILER", {"XU50": ("XU050.IS", "bist_endeks", "TRY")})
+    calls = []
+    def fetch(ticker, period, interval):
+        calls.append((ticker, period))
+        return (frame(rows=1) if period == "5y" else frame()), "", False
+    monkeypatch.setattr(tool.yb, "_ham_cek", fetch)
+    assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 0
+    assert calls == [("XU050.IS", "5y"), ("XU050.IS", "max")]
+    rec = json.loads((tmp_path / "manifest.json").read_text())["series"]["XU50"]
+    assert rec["download_period"] == "max" and rec["provider_symbol"] == "XU050.IS"
+
+
+def test_index_shorter_history_is_marked_partial(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool, "SERILER", {"XUTUM": ("XUTUM.IS", "bist_endeks", "TRY")})
+    def fetch(ticker, period, interval):
+        return (frame() if period == "2y" else frame(rows=1)), "", False
+    monkeypatch.setattr(tool.yb, "_ham_cek", fetch)
+    assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 1
+    rec = json.loads((tmp_path / "manifest.json").read_text())["series"]["XUTUM"]
+    assert rec["download_period"] == "2y" and rec["partial_history"] is True
+    assert (tmp_path / "XUTUM_1d.csv.gz").exists()
+
+
+def test_index_uses_tradingview_same_index_after_short_yahoo(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool, "SERILER", {"XU50": ("XU050.IS", "bist_endeks", "TRY")})
+    monkeypatch.setattr(tool.yb, "_ham_cek", lambda *args: (frame(rows=1), "", False))
+    tv_calls = []
+    def tv(symbol, period):
+        tv_calls.append((symbol, period))
+        return frame(tz="UTC"), ""
+    monkeypatch.setattr(tool, "_tradingview_cek", tv)
+    assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 0
+    rec = json.loads((tmp_path / "manifest.json").read_text())["series"]["XU50"]
+    assert tv_calls == [("XU050", "5y")]
+    assert rec["provider"] == "tradingview" and rec["provider_symbol"] == "BIST:XU050"
+    assert rec["provider_timezone"] == "UTC" and rec["auto_adjust"] is None
+
+
+def test_failed_tradingview_is_explicit_not_different_index(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool, "SERILER", {"XUTUM": ("XUTUM.IS", "bist_endeks", "TRY")})
+    monkeypatch.setattr(tool.yb, "_ham_cek", lambda *args: (frame(rows=1), "", False))
+    monkeypatch.setattr(tool, "_tradingview_cek", lambda *args: (None, "erişim engellendi"))
+    assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 1
+    rec = json.loads((tmp_path / "manifest.json").read_text())["series"]["XUTUM"]
+    assert "erişim engellendi" in rec["last_error"]
+    assert not (tmp_path / "XUTUM_1d.csv.gz").exists()
+
+
+def test_tradingview_utc_conversion_and_tz_restored(monkeypatch):
+    import importlib.metadata
+    import os
+    import sys
+    import types
+
+    class TV:
+        def __init__(self):
+            self.ws = None
+        def get_hist(self, **kwargs):
+            assert os.environ["TZ"] == "UTC"
+            return frame(tz=None)
+    dummy = types.SimpleNamespace(TvDatafeed=TV, Interval=types.SimpleNamespace(in_daily="1D"))
+    monkeypatch.setitem(sys.modules, "tvDatafeed", dummy)
+    monkeypatch.setattr(importlib.metadata, "version", lambda _: "2.1.1")
+    monkeypatch.setenv("TZ", "Europe/Istanbul")
+    data, err = tool._tradingview_cek("XU050", "max")
+    assert err == "" and str(data.index.tz) == "UTC"
+    assert os.environ["TZ"] == "Europe/Istanbul"
+
+
+def test_existing_v1_manifest_stays_usable_after_update(tmp_path, monkeypatch, symbols):
+    monkeypatch.setattr(tool.yb, "_ham_cek", lambda *args: (frame(), "", False))
+    assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 0
+    path = tmp_path / "manifest.json"
+    data = json.loads(path.read_text())
+    # Eski sürüm provider alanlarını yazmıyordu.
+    for record in data["series"].values():
+        for key in ("provider", "provider_symbol", "download_period", "partial_history", "adjustment_note", "volume_note"):
+            record.pop(key, None)
+    path.write_text(json.dumps(data))
+    monkeypatch.setattr(tool.yb, "_ham_cek", lambda *args: pytest.fail("sağlam eski kayıt atlanmalı"))
+    assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 0
+
+
+def test_max_query_with_insufficient_actual_span_is_partial(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool, "SERILER", {"XU50": ("XU050.IS", "bist_endeks", "TRY")})
+    def fetch(ticker, period, interval):
+        return (frame(rows=1) if period == "5y" else frame(rows=80)), "", False
+    monkeypatch.setattr(tool.yb, "_ham_cek", fetch)
+    assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 1
+    rec = json.loads((tmp_path / "manifest.json").read_text())["series"]["XU50"]
+    assert rec["download_period"] == "max" and rec["partial_history"] is True
+    assert rec["coverage_days"] == 79
