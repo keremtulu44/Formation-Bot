@@ -1326,7 +1326,7 @@ def s25(y: Yukleyici) -> dict[str, Any]:
             pay = 100.0 * float((g["relevance"] == rel).sum()) / n
             rows.append([scope, tip, rel, _fmt(pay), n if rel == "CURRENT" else ""])
     sup = ev[ev["relevance"] == "SUPERSEDED"]
-    med_yas = _medyan(sup["age_bars"])
+    med_yas_havuz = _medyan(ev["age_bars"])  # tüm olaylar (havuz); sup ile karıştırılmamalı
     bos_sup = []
     for scope, g in ev[ev["event_type"] == "EVENT_BOS"].groupby("scope", observed=True):
         pay = 100.0 * float((g["relevance"] == "SUPERSEDED").sum()) / len(g)
@@ -1336,10 +1336,11 @@ def s25(y: Yukleyici) -> dict[str, Any]:
         "id": "S25", "baslik": "Olay ezilmesi (relevance)",
         "veri": f"tüm olaylar: {len(ev)}; SUPERSEDED: {len(sup)}",
         "tablo": md_table(["scope", "tip", "relevance", "pay%", "not"], rows),
-        "ana": f"SUPERSEDED medyan age_bars={_medyan(sup['age_bars']) if len(sup) else '-'} "
-               f"(havuz medyanı {med_yas:.0f})",
+        "ana": f"SUPERSEDED olayların seri-sonu yaşı medyan={_medyan(sup['age_bars']) if len(sup) else '-'} "
+               f"bar (tüm olaylar havuz medyanı {med_yas_havuz:.0f})",
         "karar": " | ".join(bos_sup),
-        "notlar": [],
+        "notlar": ["age_bars = event_bar'dan serinin sonuna süre (ledger'da EZİLME ANINDA donmaz); "
+                   "'ezilme süresi' olarak okunmamalı — ezilme hızını relevance payları verir (BOS %93–96)."],
     }
 
 
@@ -1373,7 +1374,10 @@ def s26(y: Yukleyici) -> dict[str, Any]:
         "karar": "; ".join(f"{k}: fark {_pp(v[0])}pp → " +
                            karar_ver(v[0], v[1], v[2], 0, 0).split(" (")[0]
                            for k, v in sonuc.items()),
-        "notlar": [],
+        "notlar": ["Mekanizma (kayit.py): h12 = bar+1'den itibaren 12 bar; devam_pay_1 ≥0.8 ise "
+                   "tepe zaten 1. bara kilitlenmiş → CALISTI yalnızca o ilk barın ≥1.0 ATR olmasıyla "
+                   "gelir. Fark büyük ölçüde TANIMSAL; kart metninde yön 'ilk barda tükenmiş/uzanım "
+                   "sınırlı' dilinde yazılır, 'devam etmez' genellemesi kurulmaz."],
     }
 
 
@@ -1393,33 +1397,74 @@ def s27(y: Yukleyici) -> dict[str, Any]:
         tam = 100.0 * float((g["terminal_state"] == "FORMASYON_TAMAMLANDI").sum()) / n
         acik = 100.0 * float((g["acik"] == True).sum()) / n  # noqa: E712
         rows.append([tf, kova, n, _fmt(tam), _fmt(acik), guven(n)])
-    sonuc = {}
+
+    def _tam_orani(g: pd.DataFrame) -> float:
+        return 100.0 * float((g["terminal_state"] == "FORMASYON_TAMAMLANDI").sum()) / max(len(g), 1)
+
+    # İSTENEN kontrast (soru seti ekseninde): <=2 taban vs >=6
+    sonuc: dict[str, tuple[float, int, int]] = {}
     for tf, g in d.groupby("timeframe", observed=True):
-        pvt = {}
-        for kova, gg in g.groupby("gecis_kova", observed=True):
-            pvt[kova] = 100.0 * float((gg["terminal_state"] == "FORMASYON_TAMAMLANDI").sum()) / len(gg)
-        if "<=2" in pvt and ">=6" in pvt:
-            sonuc[tf] = (pvt["<=2"] - pvt[">=6"], int((g["gecis_kova"] == "<=2").sum()),
-                         int((g["gecis_kova"] == ">=6").sum()))
-    # tip bazlı (n≥30 hücreler)
+        a = g[g["gecis_kova"] == "<=2"]
+        b = g[g["gecis_kova"] == ">=6"]
+        if len(a) and len(b):
+            sonuc[tf] = (_tam_orani(a) - _tam_orani(b), len(a), len(b))
+    # GERÇEK çırpınma kontrastı: 3-5 vs >=6 (kapalı satırlar; açık sansürü hariç)
+    dk = d[d["acik"] == False]  # noqa: E712
+    gercek: dict[str, tuple[float, int, int]] = {}
+    for tf, g in dk.groupby("timeframe", observed=True):
+        a = g[g["gecis_kova"] == "3-5"]
+        b = g[g["gecis_kova"] == ">=6"]
+        if len(a) >= 30 and len(b) >= 30:
+            gercek[tf] = (_tam_orani(a) - _tam_orani(b), len(a), len(b))
+    a_h, b_h = dk[dk["gecis_kova"] == "3-5"], dk[dk["gecis_kova"] == ">=6"]
+    fark_h = _tam_orani(a_h) - _tam_orani(b_h) if len(a_h) and len(b_h) else float("nan")
+    # <=2 kovası yapısal kontrolü
+    g2 = d[d["gecis_kova"] == "<=2"]
+    tam2 = _tam_orani(g2)
+    pay2 = (100.0 * float((g2["terminal_state"] == "BASARISIZ_KIRILIM").sum()) / len(g2)
+            if len(g2) else float("nan"))
+
     tip_rows = []
     for (tip, kova), g in d.groupby(["pattern_type", "gecis_kova"], observed=True):
         if len(g) >= 30:
             tam = 100.0 * float((g["terminal_state"] == "FORMASYON_TAMAMLANDI").sum()) / len(g)
             tip_rows.append([tip, kova, len(g), _fmt(tam)])
     dagilim = d.groupby(["gecis_kova", "terminal_state"], observed=True).size().unstack(fill_value=0)
+    # karar: seti eşiği (≥12 yayınlama / 5–12 uyarı / <5 RED) GERÇEK eksende uygulanır
+    if pd.isna(fark_h):
+        kv = "KARAR YOK (3-5/>=6 yeterli n yok)"
+    elif abs(fark_h) < 5:
+        kv = ("RED (yapısal): '6+ yayınlanmaz' kuralı KURULMAZ — çırpınma kontrastı 3-5 vs ≥6 = "
+              f"{_pp(fark_h)}pp (<5); ≤2 tabanı TAMAMLANDI üretemez (TAMAMLANDI %{_fmt(tam2)}, "
+              f"BASARISIZ_KIRILIM %{_fmt(pay2)})")
+    elif abs(fark_h) < 12:
+        kv = (f"uyarı düzeyi: 3-5 vs ≥6 = {_pp(fark_h)}pp (5–12) — yalnız karne notu, filtre yok"
+              + (f"; istenen ≤2 tabanlı kontrast {_pp(list(sonuc.values())[0][0])}pp yapısal şişirilmiş"
+                 if sonuc else ""))
+    else:
+        kv = (f"YAZILIR: 3-5 vs ≥6 = {_pp(fark_h)}pp (≥12); ≤2 tabanı ayrıca yapısal not "
+              f"(TAMAMLANDI %{_fmt(tam2)})")
     return {
         "id": "S27", "baslik": "Faz çırpınması → sonuç",
-        "veri": f"frm: {len(frm)} (kova dışı: {len(frm) - len(d)}); bu bölüm {len(d)}",
+        "veri": f"frm: {len(frm)} (kova dışı: {len(frm) - len(d)}); bu bölüm {len(d)}; "
+                f"kapalı (sansürsüz) {len(dk)}",
         "tablo": md_table(["tf", "geçiş", "n", "TAMAMLANDI%", "açık%", "güven"], rows)
         + "\n\nkova × terminal_state:\n" + dagilim.to_markdown()
         + "\n\n(n>=30 tip hücreleri)\n" + md_table(["pattern_type", "geçiş", "n", "TAMAMLANDI%"],
                                                    tip_rows),
-        "ana": "; ".join(f"{tf}: <=2 vs >=6 fark {_pp(v[0])}pp (n={v[1]}/{v[2]})"
-                         for tf, v in sonuc.items()),
-        "karar": "; ".join(
-            f"{tf}:{karar_ver(v[0], v[1], v[2], 0, 0).split(' (')[0]}" for tf, v in sonuc.items()),
-        "notlar": ["C4: tip×TF hücreleri n<30 ise yalnız birleşik n raporlanır."],
+        "ana": ("İSTENEN (≤2 vs ≥6, tüm satır): "
+                + "; ".join(f"{tf}: {_pp(v[0])}pp (n={v[1]}/{v[2]})" for tf, v in sonuc.items())
+                + f" | GERÇEK çırpınma (3-5 vs ≥6, kapalı): havuz {_pp(fark_h)}pp; "
+                + "; ".join(f"{tf} {_pp(v[0])}pp" for tf, v in gercek.items())
+                + f" | ≤2 kovası: TAMAMLANDI %{_fmt(tam2)} (n={len(g2)}), "
+                f"BASARISIZ_KIRILIM %{_fmt(pay2)}"),
+        "karar": kv,
+        "notlar": [
+            "YAPISAL: TAMAMLANDI yoluna ulaşmak için faz geçişi zorunludur — ≤2 kovası "
+            "erken-kapanış kovasıdır (BASARISIZ_KIRILIM/GEÇERSIZ ağırlıklı), çırpınma ölçmez. "
+            "Soru setindeki ≤2 TABANI bu yüzden yanıltıcı; eksen 3-5 vs ≥6 olmalıdır.",
+            "C4: tip×TF hücreleri n<30 ise yalnız birleşik n raporlanır.",
+        ],
     }
 
 

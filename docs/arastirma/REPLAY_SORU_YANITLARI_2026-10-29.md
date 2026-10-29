@@ -585,8 +585,9 @@ BOS dağılımı:
 | INTERNAL | EVENT_TRANSITION_FAIL | SUPERSEDED | 71.4 |  |
 | INTERNAL | EVENT_TRANSITION_FAIL | HISTORICAL | 0.0 |  |
 
-- **ANA SAYI**: SUPERSEDED medyan age_bars=976.0 (havuz medyanı 976)
+- **ANA SAYI**: SUPERSEDED olayların seri-sonu yaşı medyan=976.0 bar (tüm olaylar havuz medyanı 926)
 - **KARAR**: EXTERNAL BOS: SUPERSEDED 93.2% → bastırma kuralı | INTERNAL BOS: SUPERSEDED 96.4% → bastırma kuralı
+- **Notlar**: age_bars = event_bar'dan serinin sonuna süre (ledger'da EZİLME ANINDA donmaz); 'ezilme süresi' olarak okunmamalı — ezilme hızını relevance payları verir (BOS %93–96).
 
 ### S26 · Kırılım hızı (ani kırılım, BOS)
 
@@ -603,12 +604,13 @@ BOS dağılımı:
 
 - **ANA SAYI**: pay_1>=0.8 payı=21.6%; medyan tepe bar=6; hareketin ort. %60'i ilk 3 barda (medyan pay_3)
 - **KARAR**: EXTERNAL: fark -61.0pp → YAZILIR; INTERNAL: fark -61.1pp → YAZILIR
+- **Notlar**: Mekanizma (kayit.py): h12 = bar+1'den itibaren 12 bar; devam_pay_1 ≥0.8 ise tepe zaten 1. bara kilitlenmiş → CALISTI yalnızca o ilk barın ≥1.0 ATR olmasıyla gelir. Fark büyük ölçüde TANIMSAL; kart metninde yön 'ilk barda tükenmiş/uzanım sınırlı' dilinde yazılır, 'devam etmez' genellemesi kurulmaz.
 
 ## §4 FORMASYON
 
 ### S27 · Faz çırpınması → sonuç
 
-- **VERİ**: frm: 34455 (kova dışı: 0); bu bölüm 34455
+- **VERİ**: frm: 34455 (kova dışı: 0); bu bölüm 34455; kapalı (sansürsüz) 34282
 
 | tf | geçiş | n | TAMAMLANDI% | açık% | güven |
 | --- | --- | --- | --- | --- | --- |
@@ -651,9 +653,9 @@ kova × terminal_state:
 | Yükselen Üçgen | <=2 | 667 | 0.0 |
 | Yükselen Üçgen | >=6 | 2979 | 76.9 |
 
-- **ANA SAYI**: 1d: <=2 vs >=6 fark -69.1pp (n=240/711); 1h: <=2 vs >=6 fark -77.9pp (n=1571/6593); 2h: <=2 vs >=6 fark -77.5pp (n=822/3349); 4h: <=2 vs >=6 fark -76.9pp (n=447/1703)
-- **KARAR**: 1d:YAZILIR; 1h:YAZILIR; 2h:YAZILIR; 4h:YAZILIR
-- **Notlar**: C4: tip×TF hücreleri n<30 ise yalnız birleşik n raporlanır.
+- **ANA SAYI**: İSTENEN (≤2 vs ≥6, tüm satır): 1d: -69.1pp (n=240/711); 1h: -77.9pp (n=1571/6593); 2h: -77.5pp (n=822/3349); 4h: -76.9pp (n=447/1703) | GERÇEK çırpınma (3-5 vs ≥6, kapalı): havuz +4.1pp; 1d +6.4pp; 1h +4.4pp; 2h +3.3pp; 4h +3.0pp | ≤2 kovası: TAMAMLANDI %0.0 (n=3080), BASARISIZ_KIRILIM %41.9
+- **KARAR**: RED (yapısal): '6+ yayınlanmaz' kuralı KURULMAZ — çırpınma kontrastı 3-5 vs ≥6 = +4.1pp (<5); ≤2 tabanı TAMAMLANDI üretemez (TAMAMLANDI %0.0, BASARISIZ_KIRILIM %41.9)
+- **Notlar**: YAPISAL: TAMAMLANDI yoluna ulaşmak için faz geçişi zorunludur — ≤2 kovası erken-kapanış kovasıdır (BASARISIZ_KIRILIM/GEÇERSIZ ağırlıklı), çırpınma ölçmez. Soru setindeki ≤2 TABANI bu yüzden yanıltıcı; eksen 3-5 vs ≥6 olmalıdır.; C4: tip×TF hücreleri n<30 ise yalnız birleşik n raporlanır.
 
 ### S28 · Açık örneklem payı (acik + yarım segment)
 
@@ -791,7 +793,7 @@ sıfır-hacimli bar saatleri: 1d: 00:00=172, 07:00=6, 08:00=1; 1h: 09:00=59362, 
 
 ## §6 KARAR ÖZETİ (canlı bileşen eşlemesiyle)
 
-### CANLIYA YAZILIR (kart/rozet/kuyruk/filtre) — 20 madde
+### CANLIYA YAZILIR (kart/rozet/kuyruk/filtre) — 19 madde
 
 - **S02**: FVG: YAZILIR (fark=-13.9pp, azalis, n=278/40349, sansur<=20%); OB: RED (fark=-3.8pp, |fark|<5)
 - **S03**: 0-0.5 ATR'de OLCULEMEDI=49.6% → kural; >=2 ATR'de 5.1% (karşılaştırma)
@@ -811,14 +813,13 @@ sıfır-hacimli bar saatleri: 1d: 00:00=172, 07:00=6, 08:00=1; 1h: 09:00=59362, 
 - **S21**: EXTERNAL:YALNIZ KART METNI; INTERNAL:YAZILIR
 - **S25**: EXTERNAL BOS: SUPERSEDED 93.2% → bastırma kuralı | INTERNAL BOS: SUPERSEDED 96.4% → bastırma kuralı
 - **S26**: EXTERNAL: fark -61.0pp → YAZILIR; INTERNAL: fark -61.1pp → YAZILIR
-- **S27**: 1d:YAZILIR; 1h:YAZILIR; 2h:YAZILIR; 4h:YAZILIR
 - **S32**: kural + karne ayrımı
 
 ### YALNIZ KART METNİ (5–12 pp / dipnot) — 1 madde
 
 - **S13**: OB: en_iyi−en_kötü +5.5pp → kart metni
 
-### RED / hipotez çöktü (yeni kural açılmaz) — 6 madde
+### RED / hipotez çöktü (yeni kural açılmaz) — 7 madde
 
 - **S01**: FVG: RED (fark=-3.9pp, |fark|<5); OB: RED (fark=-2.7pp, |fark|<5)
 - **S12**: RED / kart standardı: rvol tek ölçüt (çelişki yapısal olarak yok)
@@ -826,6 +827,7 @@ sıfır-hacimli bar saatleri: 1d: 00:00=172, 07:00=6, 08:00=1; 1h: 09:00=59362, 
 - **S22**: EXTERNAL/EVENT_BOS:RED; INTERNAL/EVENT_BOS:RED
 - **S23**: EXTERNAL/EVENT_FALSE_BREAK: Δmedyan=0.21 ATR, ΔCALISTI=+2.8pp → kart dipnotu | INTERNAL/EVENT_FALSE_BREAK: Δmedyan=0.34 ATR, ΔCALISTI=+2.8pp → RED: hipotez ters (geç onaylılar daha iyi; gecikme cezası kurulmaz)
 - **S24**: EXTERNAL EVENT_SWEEP vs BOS: +0.8pp → kontra reddedilir | EXTERNAL EVENT_FALSE_BREAK vs BOS: -0.6pp → kontra reddedilir | EXTERNAL EVENT_CHOCH vs BOS: -0.1pp → kontra reddedilir | INTERNAL EVENT_SWEEP vs BOS: +1.4pp → kontra reddedilir | INTERNAL EVENT_FALSE_B
+- **S27**: RED (yapısal): '6+ yayınlanmaz' kuralı KURULMAZ — çırpınma kontrastı 3-5 vs ≥6 = +4.1pp (<5); ≤2 tabanı TAMAMLANDI üretemez (TAMAMLANDI %0.0, BASARISIZ_KIRILIM %41.9)
 
 ### KARAR YOK / HATA (n<30, sansür>20%, o hücrede karar yok) — 1 madde
 
