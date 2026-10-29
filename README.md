@@ -109,6 +109,38 @@ silinir; `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` tanımlıysa defter
 yerelle birleştirilir. Supabase **zorunlu değildir**; yoksa karne yerel dosyayla
 tam çalışır.
 
+## Araştırma ve replay ölçüm hattı
+
+Motorun çıktısı arşivde ölçülür; hat **canlı kararları değiştirmeden** çalışır ve
+sonuçları soru–cevap + kapı kararı biçiminde belgeler. Üç katman:
+
+1. **DZ replay (nedensel zone oynatma)** — `python run_directional_zone_replay.py`
+   lokal `bot_data` cache'inden OB/FVG bölgelerini as-of oynatır: **177 sembol × 4 TF
+   = 708 seri, 0 hata** → [DZ_REPLAY_SONUCLARI_2026-10-28.md](docs/arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md).
+   `dz_*` CSV çıktıları `scripts/backfill/dz_yukleme.py` ile Supabase tablolarına eşlenir.
+2. **Soru seti S01–S32** — ham JSONL'i `python scripts/backfill/arastirma_kosu.py`
+   üretir (`arastirma_cikti*/`, git'e girmez); sorular dış AI'a tek parça prompt
+   olarak verilir ([AI_SORU_URETICI_PROMPT.md](docs/arastirma/AI_SORU_URETICI_PROMPT.md)),
+   cevap sözleşmesi [REPLAY_SORU_SETI_2026-10-29.md](docs/arastirma/REPLAY_SORU_SETI_2026-10-29.md)'de,
+   motor `python research/soru_cevaplama.py` ile yanıtları
+   [REPLAY_SORU_YANITLARI_2026-10-29.md](docs/arastirma/REPLAY_SORU_YANITLARI_2026-10-29.md)'ye
+   yazar. Karar eşiği (§0): **<5 puan RED · 5–12 yalnız kart metni · ≥12 kural/rozet**;
+   sonuç JSON'u kova bazeline
+   ([SORU_KOVA_BASELINE_2026-10-29.json](docs/arastirma/SORU_KOVA_BASELINE_2026-10-29.json))
+   göre `python -m research.soru_kapisi` ile denetlenir — altın toplam/kova farkı
+   varsa yayın durur.
+3. **Kart yorumu** — kapıdan geçen satırlar `notifier/kart_yorum.py`'deki **32 kapılı**
+   ölçüm havuzundan karta yazılır: kart başına en fazla **3◇ + 1 dikkat** satırı
+   (stok hafızası 8), takip kodu/soru ID'si karta girmez, hepsi düz Türkçe tam cümle;
+   kapı yoksa eski kart birebir korunur. Örnek kartlar: `python scripts/ornek_kartlar.py`
+   · regresyon: `test_kart_yorum.py` + `test_kart_metin.py` + `test_soru_kapisi.py`
+   · dış AI'a verilecek yalnız-yorum paketi:
+   [AI_SONUC_YORUM_TALIMATI.md](docs/arastirma/AI_SONUC_YORUM_TALIMATI.md).
+
+Belge zinciri: [docs/README.md](docs/README.md) (harita) →
+[docs/arastirma/README.md](docs/arastirma/README.md) (ölçüm özeti) →
+[KOLON_SOZLUGU.md](docs/arastirma/KOLON_SOZLUGU.md) §18 (yayın kanunları).
+
 ## Render ve Supabase dağıtımı
 
 > Adım adım kurulum (Python sürümü sabitleme, Supabase `sb_secret_` anahtarı,
@@ -288,6 +320,10 @@ geçirme gerektirir.
 | `notifier.py` | Telegram: 4 saat cooldown + global günlük/saatlik kapanı |
 | `bot_data/` | Hisse cache'leri — **bilerek git-tracked** (kullanıcı isteği) |
 | `scripts/ornek_gorsel_uret.py` | **Örnek görsel üretim sistemi:** sentetik veriyle, botun kendi çizim zinciriyle DEMO alarm kartı karesi üretir (6 senaryo; `bot_data`'ya yazmaz). Çıktılar ve katalog: `docs/gorseller/ornek_galeri/` |
+| `directional_zone_replay.py` + `run_directional_zone_replay.py` | OB/FVG nedensel (as-of) replay çekirdeği + çevrimdışı koşucu — 708 seri, `dz_*` CSV üretir |
+| `research/soru_cevaplama.py` + `research/soru_kapisi.py` | S01–S32 cevap motoru + yayın kapısı (altın toplam, tutarlılık, §6 kova bazeline) |
+| `notifier/kart_yorum.py` | Kart yorumu:32 kapılı ölçüm havuzu (◇/dikkat satırları); kapıdan geçmeyen ölçüm karta yazılmaz |
+| `scripts/ornek_kartlar.py` | 9 örnek kartlık galeri (canlı süzgeçsiz biçim dâhil) |
 | `docs/` | Tüm anlatı belgeleri — harita ve durum tablosu: `docs/README.md`; yerleşim kuralları: `docs/YAPI.md` |
 
 ## Canlı tarama raporu nasıl okunur (Pine karşılaştırması)
