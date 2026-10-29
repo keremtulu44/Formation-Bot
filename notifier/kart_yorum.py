@@ -28,6 +28,8 @@ kapı tek satırda açılır; dış AI'nın erişimi olmadığı ölçüde doygu
 Çalışma zamanı: yalnız ``data["kart_yorum_kapisi"]`` (canlı akış
 `_attach_domain_context` yazar) + ``config.TELEGRAM_KART_YORUM`` açıksa çalışır —
 testler ve harici çağrılar bu anahtarsız sessizdir.
+Her satır kart satır bütçesinin %95'ine (268,85 px — `telegram_measure.sigar_mi`)
+sığar; sığmazsa `_satir` böler (kart düzeni için istenmez, kaçınılır).
 """
 from __future__ import annotations
 
@@ -194,34 +196,34 @@ YORUMLAR = (
      "gate": _k_s04, "log": "S04 n=45.857"},
     {"kod": "S11", "satir": "◇ Baskı aynı yönde 19 puan fazla",
      "gate": _k_s11, "log": "S11 n=149.676"},
-    {"kod": "S10", "satir": "◇ Zayıf OB tutması 34 puan düşük",
+    {"kod": "S10", "satir": "◇ Zayıf ilgide tutma 34 puan az",
      "gate": _k_s10, "log": "S10 n=15.968"},
-    {"kod": "S16", "satir": "◇ Uzun duran seviye 15 puan önde",
+    {"kod": "S16", "satir": "◇ Uzun seviye korumada 15 fazla",
      "gate": _k_s16, "log": "S16 n=9.321 vs 10.230"},
-    {"kod": "S17", "satir": "◇ Belirgin bölge korumada 14 fazla",
+    {"kod": "S17", "satir": "◇ Belirgin yerde koruma 14 puan",
      "gate": _k_s17, "log": "S17 n=4.727"},
-    {"kod": "S21", "satir": "◇ Verimli dönemde roller 12 önde",
+    {"kod": "S21", "satir": "◇ Verimli dönemde roller 12 fazla",
      "gate": _k_s21, "log": "S21 n=117.927"},
-    {"kod": "S13", "satir": "◇ Saatlik OB tutması 6 puan fazla",
+    {"kod": "S13", "satir": "◇ Saatlikte tutma 6 puan fazla",
      "gate": _k_s13, "log": "S13 saatlik 85,9 vs 79,8"},
     {"kod": "S31", "satir": "◇ Sembol gruptan 16 puan saptı",
      "gate": _k_s31, "log": "S31 sapma 16,1 puan"},
-    {"kod": "S19", "satir": "◇ Roller %42 devredilerek kapanır",
+    {"kod": "S19", "satir": "◇ Roller %42 devredilir",
      "gate": _k_s19, "log": "S19 devir payı %42 — kapı alanı yok (beklemede)"},
 )
 
 DIKKATLAR = (
-    {"kod": "S07", "satir": "· dikkat: bölge ilk temasta kapandı",
+    {"kod": "S07", "satir": "· dikkat: ilk temasta kapandı",
      "gate": _k_s07, "log": "S07 n=36.145 — kapı alanı yok (beklemede)"},
-    {"kod": "S32", "satir": "· dikkat: ölçümde hacimsiz bar var",
+    {"kod": "S32", "satir": "· dikkat: mumların çoğu hacimsiz",
      "gate": _k_s32, "log": "S32 payı %94,57 — kapı alanı yok (beklemede)"},
     {"kod": "S26", "satir": "· dikkat: hareket ilk barda bitti",
      "gate": _k_s26, "log": "S26 n=114.987 — kapı alanı yok (beklemede)"},
-    {"kod": "S08", "satir": "· dikkat: FVG hedefi geç geliyor",
+    {"kod": "S08", "satir": "· dikkat: boşluk hedefi geç geldi",
      "gate": _k_s08, "log": "S08 n=8.151"},
     {"kod": "S02", "satir": "· dikkat: rejim farklı, ölçüm farklı",
      "gate": _k_s02, "log": "S02 n=278 — kapı alanı yok (beklemede)"},
-    {"kod": "S14", "satir": "· dikkat: hacim verisi eksik geliyor",
+    {"kod": "S14", "satir": "· dikkat: hacim verisi eksik",
      "gate": _k_s14, "log": "S14 güven etiketi KISMI/NOT — şekle göre"},
     {"kod": "S03", "satir": "· dikkat: ölçüm güveni düşük",
      "gate": _k_s03, "log": "S03 r/sr eşiği — kapı alanı yok (beklemede)"},

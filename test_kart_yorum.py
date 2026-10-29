@@ -130,6 +130,23 @@ def test_dikkat_yok():
     assert sonuc["dikkat"] == "" and sonuc["dikkat_kod"] == ""
 
 
+def test_yorum_satirlari_kart_jargonu_tasimaz():
+    """Sözleşme: kart yüzeyinde ATR/RVOL/FVG/OB/BOS/CHoCH/bar yok (Faz 3)."""
+    from test_kart_metin import KART_JARGON
+
+    for kayit in kart_yorum.YORUMLAR + kart_yorum.DIKKATLAR:
+        for kisa in KART_JARGON:
+            assert kisa not in kayit["satir"], (kayit["kod"], kisa, kayit["satir"])
+
+
+def test_yorum_satirlari_butceye_sigar():
+    """Her satır kart satır bütçesinin %95'ine (268,85 px) sığar — sarılmaz."""
+    from telegram_measure import sigar_mi
+
+    for kayit in kart_yorum.YORUMLAR + kart_yorum.DIKKATLAR:
+        assert sigar_mi(kayit["satir"]), (kayit["kod"], kayit["satir"])
+
+
 # ── sade kart entegrasyonu ─────────────────────────────────────────────────
 
 def test_sade_kart_yorum_olcumun_yerine_gecer():
@@ -148,7 +165,7 @@ def test_sade_kart_blokta_dikkat_var():
     veri = _veri(domain_bolumleri=_bolum(ust=["▲ FVG 4s"],
                                          hacim=["hacim 4s yok (endeks)"]))
     metin = _format_lifecycle_alert_kart_sade(veri)
-    assert "· dikkat: FVG hedefi geç geliyor" in metin
+    assert "· dikkat: boşluk hedefi geç geldi" in metin
     assert "· dikkat" in metin.split("• yatırım tavsiyesi değildir")[0]
     # kapı yok → eski ölçüm satırı aynen sürer
     assert "◇ arşiv ölçüm 12 puan" in metin
