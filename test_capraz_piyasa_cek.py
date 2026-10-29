@@ -60,6 +60,7 @@ def test_failed_spot_not_silently_replaced_with_future(tmp_path, monkeypatch, sy
         return (None, "bulunamadı", False) if ticker == "XAUUSD=X" else (frame(), "", False)
     monkeypatch.setattr(tool.yb, "_ham_cek", fetch)
     monkeypatch.setattr(tool, "_stooq_cek", lambda *args: (None, "erişim yok"))
+    monkeypatch.setattr(tool, "_tradingview_cek", lambda *args, **kwargs: (None, "TV erişim yok"))
     assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 1
     assert not (tmp_path / "XAUUSD_1d.csv.gz").exists()
     assert (tmp_path / "XAU_FUT_1d.csv.gz").exists()
@@ -264,3 +265,38 @@ def test_max_query_with_insufficient_actual_span_is_partial(tmp_path, monkeypatc
     rec = json.loads((tmp_path / "manifest.json").read_text())["series"]["XU50"]
     assert rec["download_period"] == "max" and rec["partial_history"] is True
     assert rec["coverage_days"] == 79
+
+
+@pytest.mark.parametrize("symbol", ["XAUUSD", "XAGUSD"])
+def test_tv_ice_spot_fallback_is_labeled_and_never_uses_future(tmp_path, monkeypatch, symbol):
+    monkeypatch.setattr(tool, "SERILER", {symbol: (symbol + "=X", "spot", "USD")})
+    monkeypatch.setattr(tool.yb, "_ham_cek", lambda *args: (None, "404", False))
+    monkeypatch.setattr(tool, "_stooq_cek", lambda *args: (None, "erişim yok"))
+    seen = []
+    def tv(name, period, *, exchange):
+        seen.append((name, period, exchange))
+        return frame(tz="UTC"), ""
+    monkeypatch.setattr(tool, "_tradingview_cek", tv)
+    assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 0
+    rec = json.loads((tmp_path / "manifest.json").read_text())["series"][symbol]
+    assert seen == [(symbol, "5y", "FX_IDC")]
+    assert rec["provider_symbol"] == "FX_IDC:" + symbol
+    assert rec["provider"] == "tradingview" and rec["kind"] == "spot"
+    assert "ICE" in rec["quote_note"] and "not futures" in rec["quote_note"]
+    assert rec["closed_at_verified"] is False
+
+
+def test_xutum_tradingview_empty_response_retried_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool, "SERILER", {"XUTUM": ("XUTUM.IS", "bist_endeks", "TRY")})
+    monkeypatch.setattr(tool.yb, "_ham_cek", lambda *args: (frame(rows=1), "", False))
+    calls = []
+    def tv(symbol, period):
+        calls.append((symbol, period))
+        if len(calls) == 1:
+            return None, "boş veya geçersiz sağlayıcı verisi"
+        return frame(tz="UTC"), ""
+    monkeypatch.setattr(tool, "_tradingview_cek", tv)
+    assert tool.cek(tmp_path, "5y", tempo=FakeTempo(), log=lambda x: None) == 0
+    assert calls == [("XUTUM", "5y"), ("XUTUM", "5y")]
+    rec = json.loads((tmp_path / "manifest.json").read_text())["series"]["XUTUM"]
+    assert rec["provider_symbol"] == "BIST:XUTUM"

@@ -23,7 +23,11 @@ araştırmasının kendisi ve gram fiyatı hesaplaması henüz uygulanmamıştı
 Spot ve vadeli **ayrı dosyalar**dır. Yahoo spot metal verisini sunmazsa araç
 Stooq üzerindeki `xauusd` / `xagusd` günlük CSV'sini deneyecek; kaynak ve
 sembol manifestte açıkça yazılır. Stooq erişimi/CAPTCHA veya kota nedeniyle
-başarısız olabilir; bu durumda hata bildirilir, vadeliyi spot adıyla kaydetmez.
+başarısız olabilir. Stooq da başarısızsa TradingView üzerindeki ICE
+`FX_IDC:XAUUSD` / `FX_IDC:XAGUSD` kotasyonları denenir. Bunlar kaynağa özgü
+USD/ons kotasyonlarıdır, fiziksel alım-satım fiyatı veya merkezi bir spot
+kapanış garantisi değildir. Kaynak ve sembol manifestte belirtilir; vadeli
+spot adıyla kaydedilmez. Alternatiflere anonim erişim garanti değildir.
 Stooq yalnız tarih etiketi verdiği için saat ve kapanış zamanı uydurulmaz.
 Gram TL serisi burada üretilmez:
 ilgili metal ve kurdan sonra hesaplanabilir, ancak uyumlu zamanlar ve ürün
@@ -78,7 +82,8 @@ python -c "import pandas, numpy, yfinance, pytz; print('bağımlılıklar hazır
 ```
 
 XU050/XUTUM için Yahoo çok kısa geçmiş döndürürse TradingView'in aynı
-endekslerini anonim olarak denemek üzere ek bağımlılığı kur:
+endekslerini, spot metaller için de FX_IDC kotasyonlarını anonim olarak
+denemek üzere ek bağımlılığı kur:
 
 ```bash
 pip install tradingview-datafeed==2.1.1

@@ -145,8 +145,8 @@ def _stooq_cek(symbol, period):
         return None, f"Stooq verisi alınamadı: {type(exc).__name__}: {str(exc)[:200]}"
 
 
-def _tradingview_cek(symbol, period):
-    """BIST endeksi için anonim TradingView yedeği (opsiyonel bağımlılık).
+def _tradingview_cek(symbol, period, *, exchange="BIST"):
+    """Anonim TradingView yedeği (opsiyonel bağımlılık).
 
     tvDatafeed 2.1.1 POSIX zamanlarını datetime.fromtimestamp ile yerel naive
     zaman olarak verir. Tek iş parçacıklı CLI'da TZ=UTC altında okuyup TZ'yi
@@ -170,9 +170,9 @@ def _tradingview_cek(symbol, period):
         time.tzset()
         client = TvDatafeed()  # Anonim: kullanıcı adı, parola veya token istenmez.
         bars = {"2y": 800, "5y": 1600, "10y": 3000, "max": 5000}[period]
-        data = client.get_hist(symbol=symbol, exchange="BIST", interval=Interval.in_daily, n_bars=bars)
+        data = client.get_hist(symbol=symbol, exchange=exchange, interval=Interval.in_daily, n_bars=bars)
         if data is None or not isinstance(data.index, pd.DatetimeIndex):
-            raise ValueError("boş veya geçersiz endeks verisi")
+            raise ValueError("boş veya geçersiz sağlayıcı verisi")
         if data.index.tz is not None:
             raise ValueError("beklenmeyen saat formatı; otomatik dönüştürülmedi")
         data = data.copy()
@@ -241,7 +241,7 @@ def cek(hedef, period, *, yenile=False, log=print, tempo=None):
     tempo = tempo or yb.Tempo(grup=6, log=log)
     failed_this_run = []
     manifest["notice"] = (
-        "Ham günlük Yahoo OHLCV; bar_time mum etiketi, kapanış veya kullanılabilirlik zamanı değildir. "
+        "Günlük sağlayıcı OHLCV; bar_time mum etiketi, kapanış veya kullanılabilirlik zamanı değildir. "
         "Son mum tamamlanmamış olabilir. Spot/vadeli ayrı, gram/TL türetilmemiştir."
     )
     for symbol, (ticker, kind, currency) in SERILER.items():
@@ -282,6 +282,13 @@ def cek(hedef, period, *, yenile=False, log=print, tempo=None):
                     tempo.bekle()
                     tv_raw, tv_error = _tradingview_cek(tv_symbol, period)
                     tempo.istek_bitti()
+                    # tvDatafeed bağlantı kopmasında da None döndürüyor. Bir kez
+                    # aynı sembolle yeniden dene; izin sorunu da olabilir.
+                    if tv_raw is None and "boş veya geçersiz sağlayıcı verisi" in tv_error:
+                        log(f"  TradingView boş veri döndürdü; BIST:{tv_symbol} bir kez daha deneniyor.")
+                        tempo.bekle()
+                        tv_raw, tv_error = _tradingview_cek(tv_symbol, period)
+                        tempo.istek_bitti()
                     if tv_raw is not None:
                         raw, error, download_period = tv_raw, "", period
                         provider, actual_symbol = "tradingview", f"BIST:{tv_symbol}"
@@ -296,7 +303,17 @@ def cek(hedef, period, *, yenile=False, log=print, tempo=None):
                 if raw is not None:
                     provider, actual_symbol = "stooq", STOOQ_SPOT[symbol]
                 else:
-                    error = f"Yahoo: {yahoo_error[:180]} | {stooq_error[:180]}"
+                    # TradingView'in FX_IDC/ICE değerleri, vadeli değil, sağlayıcıya
+                    # özgü USD/ons kotasyonudur; merkezi fiziksel fiyat değildir.
+                    log(f"  Stooq erişilemedi; TradingView FX_IDC:{symbol} spot kotasyonu deneniyor.")
+                    tempo.bekle()
+                    tv_raw, tv_error = _tradingview_cek(symbol, period, exchange="FX_IDC")
+                    tempo.istek_bitti()
+                    if tv_raw is not None:
+                        raw, error = tv_raw, ""
+                        provider, actual_symbol = "tradingview", f"FX_IDC:{symbol}"
+                    else:
+                        error = f"Yahoo: {yahoo_error[:60]} | {stooq_error[:100]} | {tv_error[:120]}"
             if raw is None:
                 if transient:
                     tempo.gecici_hata(error)
@@ -327,6 +344,9 @@ def cek(hedef, period, *, yenile=False, log=print, tempo=None):
             manifest["series"][symbol] = {
                 "status": "ok", "ticker": ticker, "kind": kind, "currency": currency,
                 "provider": provider, "provider_symbol": actual_symbol,
+                "quote_note": ("ICE FX_IDC USD per troy ounce spot quote via TradingView; "
+                               "not futures, not a verified physical transaction price"
+                               if provider == "tradingview" and actual_symbol.startswith("FX_IDC:") else None),
                 "interval": "1d", "period": period, "download_period": download_period,
                 "partial_history": partial, "coverage_days": coverage_days,
                 "auto_adjust": False if provider == "yahoo" else None,
