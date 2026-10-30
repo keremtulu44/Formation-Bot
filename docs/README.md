@@ -21,6 +21,8 @@
 | Formasyon mantığı / Pine farkı | [tasarim/FORMASYON_MANTIGI.md](tasarim/FORMASYON_MANTIGI.md) · [tasarim/PINE_FARK_ANALIZI.md](tasarim/PINE_FARK_ANALIZI.md) |
 | Grafik tasarım sözleşmesi | [tasarim/GRAFIK_TASARIM.md](tasarim/GRAFIK_TASARIM.md) · [tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md](tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md) |
 | Telegram kart/bildirim kuralları | [tasarim/TELEGRAM_KART_FORMAT.md](tasarim/TELEGRAM_KART_FORMAT.md) · [tasarim/BILDIRIM_TESLIM_POLITIKASI.md](tasarim/BILDIRIM_TESLIM_POLITIKASI.md) |
+| **174 hisse kırılım ve teyit Replay'i** | [Ayrıntılı sonuç, yöntem ve veri rehberi](arastirma/KIRILIM_TEYIT_REPLAY_AYRINTILI_DOSYA_2026-10-30.md) |
+| Replay ve piyasa pilot sonuçları | [arastirma/SON_REPLAY_SONUCLARI.md](arastirma/SON_REPLAY_SONUCLARI.md) |
 | **Ölçüm: zone'lar piyasada ne yapıyor?** | **[arastirma/](arastirma/README.md)** |
 | Neden bu karar verildi? (denetimler) | [denetim/](denetim/) tablosu |
 | Projeyi başka birine/AI'ya devredeceğim | [rehber/MASTER_PROMPT.md](rehber/MASTER_PROMPT.md) · [rehber/AI_PROJE_TANITIMI.md](rehber/AI_PROJE_TANITIMI.md) |

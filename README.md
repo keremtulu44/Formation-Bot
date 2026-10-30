@@ -109,6 +109,12 @@ silinir; `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` tanımlıysa defter
 yerelle birleştirilir. Supabase **zorunlu değildir**; yoksa karne yerel dosyayla
 tam çalışır.
 
+## Replay araştırma sonuçları
+
+**174 hisse kırılım ve teyit Replay'i:** [ayrıntılı sonuç, yöntem ve veri rehberi](docs/arastirma/KIRILIM_TEYIT_REPLAY_AYRINTILI_DOSYA_2026-10-30.md) — aday/teyit karşılaştırması, yukarı-aşağı ve zaman dilimleri, sansür, kontrol ve ham veriler. Ölçüm tarihsel araştırmadır; canlı bildirim teslimi veya yatırım getirisi değildir.
+
+Tüm genel araştırmalar, kaçırılan hareket pilotu ve **deploy hisseleri × endeks/altın/gümüş** özel sonuçları: [sonuç ve veri dizini](docs/arastirma/SON_REPLAY_SONUCLARI.md). Özel karşılaştırmanın [okunabilir raporu](docs/arastirma/DEPLOY_PIYASA_PILOTU.md), [tekli CSV verileri](docs/arastirma/DEPLOY_TEKLI_PIYASA_HUCRELERI.csv) ve [tekli/ikili sıkıştırılmış verileri](docs/arastirma/DEPLOY_PIYASA_PILOT.csv.gz) ayrı saklanır. Veriler araştırma amaçlıdır; makro kapanış saatleri doğrulanmamıştır.
+
 ## Araştırma ve replay ölçüm hattı
 
 Motorun çıktısı arşivde ölçülür; hat **canlı kararları değiştirmeden** çalışır ve
@@ -136,6 +142,9 @@ sonuçları soru–cevap + kapı kararı biçiminde belgeler. Üç katman:
    · regresyon: `test_kart_yorum.py` + `test_kart_metin.py` + `test_soru_kapisi.py`
    · dış AI'a verilecek yalnız-yorum paketi:
    [AI_SONUC_YORUM_TALIMATI.md](docs/arastirma/AI_SONUC_YORUM_TALIMATI.md).
+
+Kod/Supabase denetimi ve kart dışı Replay kullanım önerileri:
+[DENETIM_VE_REPLAY_ONERILERI_2026-10-29.md](docs/arastirma/DENETIM_VE_REPLAY_ONERILERI_2026-10-29.md).
 
 Belge zinciri: [docs/README.md](docs/README.md) (harita) →
 [docs/arastirma/README.md](docs/arastirma/README.md) (ölçüm özeti) →

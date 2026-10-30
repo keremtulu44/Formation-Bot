@@ -7,6 +7,10 @@ Bu klasör, botun **canlı karar kurallarını değiştirmeden** motor çıktıs
 yaptığını ölçen hattın çıktısıdır. Repodaki tek "yeni bilgi" üreten belge grubudur; kod
 tartışmalarında sayı gerektiğinde buraya bakılır.
 
+**Son Replay sonuçları ve veriler:** [genel ve özel sonuç dizini](SON_REPLAY_SONUCLARI.md) — deploy hisseleri/piyasa karşılaştırmaları, XU100–Brent ve kaçırılan hareket pilotları.
+
+**174 hisse kırılım ve teyit Replay'i:** [Ayrıntılı ana dosya: yöntem, aday/teyit karşılaştırması ve bütün veriler](KIRILIM_TEYIT_REPLAY_AYRINTILI_DOSYA_2026-10-30.md) · [İlk sonuçlar](KIRILIM_TEYIT_REPLAY_SONUCLARI_2026-10-30.md) · [Teyit sonrası hareket ve zaman dilimleri](TEYIT_SONRASI_HAREKET_2026-10-30.md).
+
 ## Nereden okunur
 
 | Dosya | Ne | Nasıl okunur |

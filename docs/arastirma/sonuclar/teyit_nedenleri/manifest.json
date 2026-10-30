@@ -1,0 +1,14 @@
+{
+  "n": 18752,
+  "counts": {
+    "YALNIZ_GUCLU_AYNI_YON": 9930,
+    "YALNIZ_RETEST": 4755,
+    "HER_IKISI": 4067
+  },
+  "strong_definition": "outside AND strength_pass; retest ayrı koşul",
+  "inputs_sha256": {
+    "docs/arastirma/sonuclar/kirilim_replay/adaylar.csv.gz": "f4956cd10f0588b6aedb8a972f5cb3739609e040f4f7ee1c9b27f66c0e8bc0d9",
+    "docs/arastirma/sonuclar/kirilim_replay/teyit_kontrolleri.csv.gz": "cebb081f34641e4251d0664f1502da90fd9ac9d678df35a79779d1dff2f921ce",
+    "scripts/kirilim_teyit_nedenleri.py": "f41d670a0637da686e38bce420ee8927efc716b5ee5dba556d5546841dc6174e"
+  }
+}

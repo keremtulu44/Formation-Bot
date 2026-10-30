@@ -1,0 +1,15 @@
+{
+  "inputs_sha256": {
+    "docs/arastirma/sonuclar/kirilim_replay/adaylar.csv.gz": "f4956cd10f0588b6aedb8a972f5cb3739609e040f4f7ee1c9b27f66c0e8bc0d9",
+    "docs/arastirma/sonuclar/teyit_sonrasi/teyit_sonrasi_olaylar.csv.gz": "d4cfaae7acc5999ec8b3861cb2c408e001db48b759f079705220d96e8ad7b6fe",
+    "scripts/kirilim_aday_teyit_karsilastirma.py": "a9813288d1ef247d639baf61b51fa5413c8b29733fc10737fb3db57d2493c284"
+  },
+  "valid_matched": 18495,
+  "confirmation_nonoverlap": 18131,
+  "raw_and_filtered_are_separate": true,
+  "price_change_sign": "actual price; negative means fall",
+  "candidate_target": "10th close after candidate",
+  "confirmation_target": "10th close after confirmation",
+  "common_target": "same 10th close after candidate",
+  "selection": "valid in both horizons; nonoverlap computed on confirmation windows by source"
+}

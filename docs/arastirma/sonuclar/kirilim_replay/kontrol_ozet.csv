@@ -1,0 +1,17 @@
+tf,period,direction,n,stocks,path,end
+1d,discovery,up,4074,174,1288,901
+1d,discovery,down,4074,174,918,586
+1d,validation,up,2230,174,515,281
+1d,validation,down,2230,174,646,433
+1h,discovery,up,35027,174,9398,6582
+1h,discovery,down,35027,174,7450,5251
+1h,validation,up,15617,174,3219,2103
+1h,validation,down,15617,174,4480,3227
+2h,discovery,up,18741,174,5460,3823
+2h,discovery,down,18741,174,4112,2841
+2h,validation,up,8695,174,1952,1202
+2h,validation,down,8695,174,2624,1910
+4h,discovery,up,10564,174,3265,2260
+4h,discovery,down,10564,174,2238,1482
+4h,validation,up,4996,174,1046,652
+4h,validation,down,4996,174,1610,1145
