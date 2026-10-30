@@ -276,3 +276,63 @@ def test_health_provider_failure_does_not_break_endpoint():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_ready_requires_completed_startup_and_closes_on_shutdown():
+    state = {"startup_complete": False, "heartbeat_stale": None}
+    server = start_render_health_server({"PORT": "0"}, health_provider=lambda: dict(state))
+    try:
+        port = server.server_address[1]
+        assert _get(port, "/health")[0] == 200
+        assert _get_expecting_error(port, "/ready")[0] == 503
+        state["startup_complete"] = True
+        assert _get(port, "/ready")[0] == 200
+        # Readiness says only that startup completed, not that the heartbeat is fresh.
+        state["heartbeat_stale"] = True
+        assert _get(port, "/ready")[0] == 200
+        assert _get_expecting_error(port, "/ready?strict=1")[0] == 503
+        state["startup_complete"] = False
+        assert _get_expecting_error(port, "/ready")[0] == 503
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ready_fails_closed_if_provider_missing_or_broken():
+    for provider in (None, lambda: 1, lambda: 1 / 0):
+        server = start_render_health_server({"PORT": "0"}, health_provider=provider)
+        try:
+            port = server.server_address[1]
+            assert _get(port, "/health")[0] == 200
+            assert _get_expecting_error(port, "/ready")[0] == 503
+        finally:
+            server.shutdown()
+            server.server_close()
+
+
+def test_health_provider_exception_does_not_expose_message():
+    def broken():
+        raise ValueError("secret-should-not-leak")
+
+    server = start_render_health_server({"PORT": "0"}, health_provider=broken)
+    try:
+        _, payload = _get(server.server_address[1], "/health")
+        assert payload["canlilik_hatasi"] == "ValueError"
+        assert "secret-should-not-leak" not in json.dumps(payload)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_test_endpoint_logging_independent_of_rate_limit(caplog):
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="health_server"):
+        server = start_render_health_server({"PORT": "0", "TELEGRAM_TEST_KEY": "secret", "HEALTH_RATE_LIMIT_PER_MIN": "0"})
+        try:
+            assert "/test ucu etkin" in caplog.text
+            assert "/test ucu kapali" not in caplog.text
+            assert "secret" not in caplog.text
+        finally:
+            server.shutdown()
+            server.server_close()

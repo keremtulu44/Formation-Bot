@@ -88,14 +88,14 @@ görünür), yani sessizce kaybolmaz.
 
 GitHub → **Actions** → sol taraftan **Render keep-alive** → **Run workflow** →
 `health_url` alanına `https://<servis-adin>.onrender.com/health` yaz → **Run**.
-Elle tetikleme saat penceresini yok sayar ve 10 saniye içinde sonucu gösterir;
+Elle tetikleme saat penceresini yok sayar; servis uyanırken birkaç dakika sürebilir;
 secret'ı sonra eklemen gerekir.
 
-## C2) (Önerilir) Otomatik deploy için Deploy Hook
+## C2) Otomatik dağıtım kapısı
 
-Render → servis → **Settings → Deploy Hook → Create deploy hook** → URL'i
-GitHub'a secret olarak ekle: `RENDER_DEPLOY_HOOK`. Böylece her merge otomatik
-deploy olur; Auto-Deploy kapalıysa bile kod canlıya iner. Ayrıntı: **§2.1**.
+Mevcut Render servisi → **Settings → Auto-Deploy → After CI Checks Pass**
+seçeneğini doğrulayın. Blueprint sadece onunla yönetilen servisleri etkiler;
+mevcut servise ikinci Blueprint eklemeyin. Manuel kurtarma hook'u için §2.1'e bakın.
 
 ## D) Yapılacak son iki iş
 
@@ -110,10 +110,10 @@ deploy olur; Auto-Deploy kapalıysa bile kod canlıya iner. Ayrıntı: **§2.1**
 2. `https://<servis>.onrender.com/health` → `{"status":"ok"}`
 3. Render → **Logs** → 3 satır:
    `Telegram bağlantısı OK` · `health endpoint ... başladı`; Supabase yapılandırdıysan ayrıca `Supabase bağlantısı OK`
-4. `https://<servis>.onrender.com/test?k=<TELEGRAM_TEST_KEY>` → `{"ok":true}`
-   ve Telegram'da test mesajı düşer
+4. `curl -H "X-Test-Key: <TELEGRAM_TEST_KEY>" https://<servis>.onrender.com/test`
+   → `{"ok":true}` ve Telegram'da test mesajı düşer (gerçek mesaj gönderir).
 5. GitHub → **Actions** → "Render keep-alive" yeşil koşular (5 dk'da bir,
-   yalnızca İstanbul saatiyle 09:30–18:50 arasında)
+   varsayılan olarak İstanbul saatiyle her gün 08:00–23:00 arasında)
 
 ### D3) Tek komutla hepsini kontrol et: `deploy_check.py`
 
@@ -219,16 +219,16 @@ Dashboard → **New → Web Service** → repoyu bağla:
 | Health Check Path | `/health` |
 
 Bot, Render'ın verdiği `PORT` değişkenini görünce `0.0.0.0:$PORT` üzerinde
-`/health` endpoint'i açar. Bu endpoint sadece `{"status":"ok",...}` döner;
-token, anahtar veya portföy verisi sızmaz. Servis canlıysa tarayıcıda
-`https://<servis>.onrender.com/health` çalışıyor demektir.
+`/health` açar. HTTP 200 yalnızca bu sunucunun yanıt verdiğini gösterir;
+veri, Telegram, Supabase ve tarama sağlığının kanıtı değildir.
 
 Yanıt ayrıca **canlılık alanları** taşır (denetim B-4) — bot donmuş mu, yoksa
 yalnız internet mi yavaş, dışarıdan görünür:
 
 | Alan | Anlamı |
 |---|---|
-| `heartbeat_age_s` | Son heartbeat yazımından bu yana geçen saniye |
+| `startup_complete` | Ana döngüye kadar başlangıç işlemleri tamamlandı mı? Harici servislerin sağlığı garantisi değildir. |
+| `heartbeat_age_s` | Son heartbeat içindeki `last_scan` zamanının yaşı; yoksa null |
 | `heartbeat_stale` | Eşiğe göre `true`/`false` (tarama sürerken 45 dk, seans açıkken 30 dk, seans kapalıyken 72 sa) |
 | `heartbeat_stale_esik_s` | O an geçerli eşik (saniye) |
 | `tarama_suruyor` / `seans_acik` | Anlık durum bayrakları |
@@ -237,7 +237,11 @@ yalnız internet mi yavaş, dışarıdan görünür:
 Render'ın kendi health check'i sorgusuz `/health` çağırdığı için **her zaman 200**
 alır (davranış değişmedi). Gerçek izleme yapmak istersen UptimeRobot/cron-job.org
 adresini `/health?strict=1` yap: heartbeat bayatken uç **503** döner ve monitör
-alarm verir.
+alarm verir. `heartbeat_stale: null` ise `strict=1` de 200 döner; bu,
+heartbeat doğrulandı demek değildir. `/ready` başlangıç tamamlanana kadar ve
+kapanışta 503, tamamlandıktan sonra 200 döner. `/ready` tek başına veri/Telegram/
+Supabase testi değildir. Render health path'ini `/ready` yapmayın: ilk yükleme
+uzun sürebilir ve bu değişiklik dağıtım davranışını etkiler.
 
 > **Not:** Render Free disk kalıcı değildir. Her deploy/restart'ta `bot_data/`
 > sıfırlanabilir. Supabase bu yüzden **önerilen ama opsiyonel** uzak OHLCV cache'i
@@ -247,27 +251,24 @@ alarm verir.
 
 ---
 
-### 2.1 Otomatik deploy: Auto-Deploy ve Deploy Hook
+### 2.1 Otomatik deploy: CI kapısı ve manuel kurtarma
 
-İki yol var; **ikisinden biri mutlaka açık olmalı**, yoksa merge edilen kod
-canlıya hiç düşmez ve bunu ancak `/health`'teki commit bilgisinden anlarsın.
+Tek otomatik yol kullanın: Render Dashboard → mevcut servis → Settings →
+**Auto-Deploy: After CI Checks Pass**, bağlı branch `main`. CI'ın gerçekten bu
+commit'te yeşil olduğunu, Render **Deploys** ve `/health` commit alanıyla
+canlı sürümü doğrulayın. `render.yaml` yalnızca Blueprint yönetiminde bu ayarı
+ister; Dashboard'dan ayrı oluşturulmuş servisi **değiştirmez**. Blueprint
+senkronizasyonu ayrı bir dağıtım yolu olabilir; ayarları Dashboard'da doğrulayın.
 
-| Yol | Kurulum | Not |
-|---|---|---|
-| Render Auto-Deploy | Dashboard → servis → Settings → **Auto-Deploy: Yes** | En basit; her `main` push'unda Render kendisi deploy eder |
-| **Deploy Hook + GitHub Actions** | Aşağıdaki 3 adım | Auto-Deploy kapalıysa/bağlantı koptuysa kurtarıcı; deploy'u GitHub tetikler ve Actions'ta görünür |
-
-Repo içindeki `.github/workflows/deploy.yml` hazırdır:
-
-1. Render → servisin → **Settings → Deploy Hook → Create deploy hook** → URL'i kopyala
-   (biçim: `https://api.render.com/deploy/srv-xxxxxxxx?key=yyyyyyyy`)
-2. GitHub → repo → **Settings → Secrets and variables → Actions → New repository secret**
-   → ad: `RENDER_DEPLOY_HOOK`, değer: kopyaladığın URL
-3. Bundan sonra `main`'e her push'ta deploy otomatik tetiklenir.
-
-Secret yoksa iş akışı kırmızı olmaz; “atlandı” uyarısı verir ve yapılacakları
-Actions özetine yazar. Elle denemek için: **Actions → Render deploy → Run
-workflow** (hook URL'ini girdi olarak da verebilirsin).
+`.github/workflows/deploy.yml` artık **yalnız manuel** kurtarma içindir; push'ta
+hook çağırmaz. Bu değişiklikten önce yalnız hook'a güveniyorsanız Dashboard'da
+Auto-Deploy kapısını etkinleştirmeden otomatik deploy durur. Manuel kullanım:
+Render → Deploy Hook URL'ini GitHub Actions secret `RENDER_DEPLOY_HOOK` olarak
+kaydedin; Actions → Render deploy (manuel) → Run workflow → main. Girdi alanına
+hook URL'i yapıştırmayın. Secret eksikse koşu başarısızdır. Manuel hook **CI'ı
+atlayabilir**, o anda bağlı branch'in son commitini ister; kabul yanıtı, deploy'un
+bittiği veya koşudaki SHA'nın dağıtıldığı anlamına gelmez. `ref` parametresiyle
+belirli bir commit deploy etmek Render otomatik deploy'u devre dışı bırakabilir.
 
 **Deploy gerçekten düştü mü?** `python deploy_check.py --url
 https://<servis>.onrender.com` komutu `/health` içindeki `commit` alanını yerel
@@ -428,15 +429,20 @@ Telegram bağlantısı OK (bot: @bist_formation_radar_bot, chat_id: 1857xxxxxx)
 Bu mesajı görmüyorsan token/chat_id yanlış, hata satırı tam neyi söylüyor.
 Mesaj gönderilmez, sadece `getMe` ile kontrol edilir.
 
-### 4.4 Mesaj gonderimini test etme (bir tikla)
+### 4.4 Mesaj gönderimini test etme
 
-`getMe` sadece **token'i** dogrular; asil soru "alarm mesajlari bana ulasacak mi?"
-bunu `TELEGRAM_TEST_KEY` ile acilan `/test` ucu cevaplar. Render → Environment'a
-istedigin rastgele bir yazi ekle (orn. `k7m2x9`), sonra telefondan tarayicida ac:
+`getMe` yalnız token'ı doğrular. İsteğe bağlı `TELEGRAM_TEST_KEY` ile açılan
+`/test` gerçek bir Telegram mesajı gönderir. Anahtarı URL'ye koymayın; başlıkla
+kullanın (komut geçmişinde sır bırakmamaya dikkat edin):
 
+```bash
+read -rs TEST_KEY; echo
+curl -H "X-Test-Key: $TEST_KEY" https://<servis-adin>.onrender.com/test
+unset TEST_KEY
 ```
-https://<servis-adin>.onrender.com/test?k=k7m2x9
-```
+
+Eski `?k=` adresleri ancak açıkça `TELEGRAM_TEST_KEY_QUERY=1` seçilirse çalışır;
+URL ve erişim kayıtlarına sır sızdırdığı için önerilmez.
 
 | Cevap | Anlami |
 |---|---|
@@ -863,7 +869,7 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `TELEGRAM_WEBHOOK_SECRET` | Rastgele metin; doluysa komutlar webhook ile gelir (bkz. §4.6). Boş = yoklama | Evet |
 | `TELEGRAM_WEBHOOK_URL` | (Opsiyonel) Tam webhook adresi; boşsa `RENDER_EXTERNAL_URL` + `/webhook` (sırsız) | Evet |
 | `HEALTH_RATE_LIMIT_PER_MIN` | `60` — public HTTP uçlarında IP başına dakikalık istek limiti (0 = kapalı) | Hayır |
-| `TELEGRAM_TEST_KEY_QUERY` | `1` — `/test?k=` sorgu anahtarı kabul edilsin mi (0 = yalnız başlık) | Hayır |
+| `TELEGRAM_TEST_KEY_QUERY` | `0` — `/test?k=` sorgu anahtarı kabul edilsin mi (0 = yalnız başlık) | Hayır |
 | `HEARTBEAT_MIN_ARALIK_SN` | `60` — yerel heartbeat dosyası yazım aralığı (B5) | Hayır |
 | `HEARTBEAT_UZAK_ARALIK_SN` | `300` — heartbeat'in Supabase'e yazım aralığı (B5) | Hayır |
 | `PICKLE_CACHE` | `0` — 1 ise eski `.pkl` kopyası da yazılır (JSON birincil; A8) | Hayır |

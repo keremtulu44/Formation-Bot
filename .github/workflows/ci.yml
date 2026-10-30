@@ -157,6 +157,15 @@ jobs:
           grep -q '"status": "ok"' "$ROOT/health.json" \
             || { echo "::error::/health gövdesi beklenen JSON değil"; exit 1; }
 
+          # Smoke modunda ana döngü özellikle başlamaz: readiness yanlışlıkla
+          # 200 dönerse liveness ve başlangıç hazırlığı birbirine karıştırılmıştır.
+          ready_code=$(curl -sS -m 5 -o "$ROOT/ready.json" -w "%{http_code}" "http://127.0.0.1:10000/ready")
+          if [ "$ready_code" != "503" ]; then
+            echo "::error::Smoke modunda /ready 503 dönmeli; gelen HTTP $ready_code"
+            exit 1
+          fi
+          python -c 'import json, sys; d=json.load(open(sys.argv[1])); assert d.get("startup_complete") is False' "$ROOT/ready.json"
+
           # Keep-alive iş akışı önbellek kırıcı parametre ekler (/health?ka=...).
           # Sorgu dizesi 404'e yol açarsa ping "servis ölü" sanılır - burada kilitliyoruz.
           kod_q=$(curl -s -o "$ROOT/health_q.json" -w "%{http_code}" "http://127.0.0.1:10000/health?ka=1")

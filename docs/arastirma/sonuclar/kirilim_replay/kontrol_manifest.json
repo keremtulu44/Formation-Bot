@@ -1,0 +1,9 @@
+{
+  "series_ok": 696,
+  "errors": {},
+  "boundary_purged": 650,
+  "right_censored": 700,
+  "uncertain_final_native_bar": 3,
+  "active_candidate_excluded": 6834,
+  "controls": 99944
+}

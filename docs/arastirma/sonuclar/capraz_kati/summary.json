@@ -1,0 +1,190 @@
+{
+  "mode": "STRICT_UNKNOWN",
+  "availability_note": "Dış erişim dosyasının doğruluğu bağımsız denetlenmedi",
+  "availability_sha256": null,
+  "assumed_lag_days": null,
+  "max_age_days": 7,
+  "names": [
+    "XU100",
+    "BRENT",
+    "XAUUSD",
+    "XAGUSD",
+    "USDTRY",
+    "XAU_GRAM_TRY"
+  ],
+  "all_subset_count": 21,
+  "zero_observation_cells": "CSV'de yok; gözlenmeyen yön durumları sıfırdır",
+  "thresholds": [
+    0.5,
+    1.0,
+    1.5
+  ],
+  "horizons": [
+    1,
+    5,
+    10
+  ],
+  "symbols": {
+    "ASTOR": {
+      "rows": 501,
+      "split": "2026-03-11",
+      "sha256": "06ca3e819432f75b81be7f9d408afdb3765608fdfe88d0ba7236440c83b42fab",
+      "horizon_counts": {
+        "1": {
+          "discovery_boundary_purged": 0,
+          "discovery_right_censored": 0,
+          "validation_right_censored": 0
+        },
+        "5": {
+          "discovery_boundary_purged": 4,
+          "discovery_right_censored": 0,
+          "validation_right_censored": 4
+        },
+        "10": {
+          "discovery_boundary_purged": 9,
+          "discovery_right_censored": 0,
+          "validation_right_censored": 9
+        }
+      }
+    },
+    "THYAO": {
+      "rows": 501,
+      "split": "2026-03-11",
+      "sha256": "679bbdae8dddde9b044fd8a4431ba3dfcb5a789bff8cced27e201365e521c305",
+      "horizon_counts": {
+        "1": {
+          "discovery_boundary_purged": 0,
+          "discovery_right_censored": 0,
+          "validation_right_censored": 0
+        },
+        "5": {
+          "discovery_boundary_purged": 4,
+          "discovery_right_censored": 0,
+          "validation_right_censored": 4
+        },
+        "10": {
+          "discovery_boundary_purged": 9,
+          "discovery_right_censored": 0,
+          "validation_right_censored": 9
+        }
+      }
+    }
+  },
+  "sources": {
+    "XU100": {
+      "rows": 1251,
+      "invalid_bars": 0,
+      "closed_at_verified": false,
+      "provider": "yahoo",
+      "provider_symbol": "XU100.IS",
+      "first": "2021-10-28 00:00:00+03:00",
+      "last": "2026-10-28 00:00:00+03:00"
+    },
+    "XU30": {
+      "rows": 1249,
+      "invalid_bars": 0,
+      "closed_at_verified": false,
+      "provider": "yahoo",
+      "provider_symbol": "XU030.IS",
+      "first": "2021-10-28 00:00:00+03:00",
+      "last": "2026-10-28 00:00:00+03:00"
+    },
+    "XU50": {
+      "rows": 1252,
+      "invalid_bars": 0,
+      "closed_at_verified": false,
+      "provider": "tradingview",
+      "provider_symbol": "BIST:XU050",
+      "first": "2021-11-01 09:00:00+03:00",
+      "last": "2026-10-28 09:30:00+03:00"
+    },
+    "XBANK": {
+      "rows": 1249,
+      "invalid_bars": 0,
+      "closed_at_verified": false,
+      "provider": "yahoo",
+      "provider_symbol": "XBANK.IS",
+      "first": "2021-10-28 00:00:00+03:00",
+      "last": "2026-10-28 00:00:00+03:00"
+    },
+    "XUSIN": {
+      "rows": 1249,
+      "invalid_bars": 0,
+      "closed_at_verified": false,
+      "provider": "yahoo",
+      "provider_symbol": "XUSIN.IS",
+      "first": "2021-10-28 00:00:00+03:00",
+      "last": "2026-10-28 00:00:00+03:00"
+    },
+    "XUTUM": {
+      "rows": 1252,
+      "invalid_bars": 0,
+      "closed_at_verified": false,
+      "provider": "tradingview",
+      "provider_symbol": "BIST:XUTUM",
+      "first": "2021-11-01 09:00:00+03:00",
+      "last": "2026-10-28 09:30:00+03:00"
+    },
+    "BRENT": {
+      "rows": 1258,
+      "invalid_bars": 0,
+      "closed_at_verified": false,
+      "provider": "yahoo",
+      "provider_symbol": "BZ=F",
+      "first": "2021-10-29 07:00:00+03:00",
+      "last": "2026-10-29 07:00:00+03:00"
+    },
+    "USDTRY": {
+      "rows": 1300,
+      "invalid_bars": 31,
+      "closed_at_verified": false,
+      "provider": "yahoo",
+      "provider_symbol": "USDTRY=X",
+      "first": "2021-10-29 02:00:00+03:00",
+      "last": "2026-10-29 03:00:00+03:00"
+    },
+    "XAUUSD": {
+      "rows": 1255,
+      "invalid_bars": 0,
+      "closed_at_verified": false,
+      "provider": "tradingview",
+      "provider_symbol": "FX_IDC:XAUUSD",
+      "first": "2021-11-01 01:00:00+03:00",
+      "last": "2026-10-29 01:00:00+03:00"
+    },
+    "XAGUSD": {
+      "rows": 1255,
+      "invalid_bars": 0,
+      "closed_at_verified": false,
+      "provider": "tradingview",
+      "provider_symbol": "FX_IDC:XAGUSD",
+      "first": "2021-11-01 01:00:00+03:00",
+      "last": "2026-10-29 01:00:00+03:00"
+    },
+    "XAU_FUT": {
+      "rows": 1258,
+      "invalid_bars": 0,
+      "closed_at_verified": false,
+      "provider": "yahoo",
+      "provider_symbol": "GC=F",
+      "first": "2021-10-29 07:00:00+03:00",
+      "last": "2026-10-29 07:00:00+03:00"
+    },
+    "XAG_FUT": {
+      "rows": 1257,
+      "invalid_bars": 1,
+      "closed_at_verified": false,
+      "provider": "yahoo",
+      "provider_symbol": "SI=F",
+      "first": "2021-10-29 07:00:00+03:00",
+      "last": "2026-10-29 07:00:00+03:00"
+    },
+    "XAU_GRAM_TRY": {
+      "error": "Eşzamanlı gram/TL OHLC doğrulanmadı; ons high × kur high kullanılmaz"
+    },
+    "XAG_GRAM_TRY": {
+      "error": "Eşzamanlı gram/TL OHLC doğrulanmadı; ons high × kur high kullanılmaz"
+    }
+  },
+  "interpretation": "keşif; çoklu test/bağımlılık kontrolü yok, doğrulanmış bulgu değildir"
+}

@@ -25,6 +25,7 @@ KULLANIM:  python -m pytest test_entrypoint_boot.py -q
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -127,3 +128,25 @@ def test_bot_alt_modulleri_tek_main_modulune_bakar():
             f"{mod.__name__}._pkg, `main` modülünden FARKLI bir nesneye bakıyor; "
             "geç bağlama bölünmüş (yamalı adlar görünmez olur)."
         )
+
+
+def test_shutdown_closes_readiness_and_interrupts_retry_wait(monkeypatch):
+    import threading
+    import main
+    from bot.app import _shutdown_bekle
+
+    monkeypatch.setattr(main, "_startup_ready", True)
+    monkeypatch.setattr(main, "_shutdown_requested", False)
+    monkeypatch.setattr(main, "_scan_istegi", threading.Event())
+    waiter = threading.Thread(target=_shutdown_bekle, args=(30,), daemon=True)
+    waiter.start()
+    try:
+        main.signal_handler(signal.SIGTERM, None)
+        waiter.join(timeout=2)
+        assert not waiter.is_alive()
+        assert main._shutdown_requested is True
+        assert main._startup_ready is False
+        assert main._saglik_ozeti()["startup_complete"] is False
+    finally:
+        main._scan_istegi.set()
+        waiter.join(timeout=2)

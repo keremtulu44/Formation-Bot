@@ -766,8 +766,25 @@ class TelegramCommandListener:
                 logger.debug("Grup sohbetinde komut olmayan mesaj yok sayıldı (chat_id=%s)",
                              self._maskele(sohbet_id) or "?")
                 return None
+            # Eğitim modu: yalnız yetkili private DM ve taze yeni mesaj. Eski
+            # yanıtlarda soru kodu kontrolü eğitim modülünde zorunludur.
+            egitim = getattr(self.handlers.get("test"), "text_handler", None)
+            age = self._mesaj_yasi_sn(mesaj)
+            if (not public_yolu and sohbet_tipi in ("", "private") and callable(egitim)
+                    and "message" in update and (age is None or age <= self.bayat_sinir_sn)):
+                try:
+                    cevap = egitim(metin)
+                    if cevap:
+                        return self._cevapla(cevap, update_id, yanit_hedef, reply_to)
+                except Exception as exc:  # noqa: BLE001 - komut dinleyicisi çalışmaya devam etmeli
+                    logger.warning("Eğitim yanıtı işlenemedi: %s", redact_sensitive_text(exc, self.token))
+                    return self._cevapla("Eğitim yanıtı işlenemedi; /test ile yeniden başlayın.", update_id)
             return self._cevapla(self.help_text or "Komut listesi için /yardim yazın.",
                                  update_id, yanit_hedef, reply_to)
+
+        # Bu özellik PUBLIC_COMMAND_EXTRA ile bile gruba açılamaz.
+        if komut == "test" and (public_yolu or sohbet_tipi not in ("", "private")):
+            return None
 
         # PUBLIC YETKİ KAPISI: komuttan ÖNCE yönetici doğrulanır. Yönetici
         # olmayan üyenin komutu sessizce düşer (grupta "yetkiniz yok" cevabı bot

@@ -144,6 +144,7 @@ def _saglik_ozeti() -> dict:
         esik_sn = 259200
     yas = _pkg._heartbeat_yasi_sn(simdi)
     return {
+        "startup_complete": bool(_pkg._startup_ready) and not _pkg._shutdown_requested,
         "heartbeat_age_s": None if yas is None else int(yas),
         "heartbeat_stale": None if yas is None else bool(yas > esik_sn),
         "heartbeat_stale_esik_s": esik_sn,
@@ -199,6 +200,7 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
    /onay · /kabul · /hayir · /red). Karar kayda geçer; bot kendiliğinden eşik,
    kart ya da etiket DEĞİŞTİRMEZ — uygulama elle yapılır. Öneri yalnız sapma
    varsa ya da ölçüm "bayrak kaldırılsın" derse DM'e düşer.
+/test [HISSE] — yalnız DM'de arşivden grafik okuma alıştırması; skor tutulmaz.
 /yardim — bu liste (diğer adlar: /help · /start)
 
 Yetki (kim hangi komutu çalıştırabilir):
@@ -230,6 +232,26 @@ Notlar:
 
 def _komut_yardim(_arguman: str) -> str:
     return _pkg.KOMUT_YARDIM
+
+
+def _komut_test(arguman: str) -> str:
+    """Kişisel DM'de geçmişten tek eğitim sorusu; veri yalnız yerel arşivdir."""
+    from research.replay_egitim import session
+    notifier = _pkg._notifier_ref
+    if notifier is None or not getattr(notifier, "enabled", False) or not getattr(notifier, "chat_id", ""):
+        return "Eğitim modu için özel sohbet ve Telegram gönderimi gerekli."
+    return session.yeni(arguman, notifier)
+
+
+def _test_metin(metin: str):
+    from research.replay_egitim import session
+    notifier = _pkg._notifier_ref
+    if notifier is None or not getattr(notifier, "chat_id", ""):
+        return None
+    return session.cevap(metin, notifier)
+
+
+_komut_test.text_handler = _test_metin
 
 
 def _komut_olcum(_arguman: str) -> str:
@@ -1486,6 +1508,7 @@ TELEGRAM_KOMUTLARI = {
     "p": _komut_panel,
     "grafik": _komut_grafik,
     "g": _komut_grafik,
+    "test": _komut_test,
     "genel": _komut_panel,
     "tablo": _komut_panel,
     # Gece önerisi kararı (§15): onay/red KAYDA geçer, eşik değişmez.

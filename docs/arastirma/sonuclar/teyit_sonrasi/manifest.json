@@ -1,0 +1,22 @@
+{
+  "source_sha256": {
+    "docs/arastirma/sonuclar/kirilim_replay/adaylar.csv.gz": "f4956cd10f0588b6aedb8a972f5cb3739609e040f4f7ee1c9b27f66c0e8bc0d9",
+    "scripts/kirilim_teyit_sonrasi.py": "29b183e066249c58086e9ad7e9a35dfec6357552d6d3564529e37b45bf0cdfa8",
+    "research/kirilim_denetim.py": "f146edef4efdbd725751d94969391ad49b233ce63b6783d840c7d2d84edb7192",
+    "research/capraz_piyasa.py": "96ccdc8e455f555bdb7c11a06fe7e358e1a95e62af62ab80c19d95cc2941b542"
+  },
+  "confirmed_input": 18752,
+  "series_with_confirmed": 694,
+  "errors": {},
+  "outcome_status": {
+    "VALID": 18495,
+    "BOUNDARY_PURGED": 133,
+    "RIGHT_CENSORED": 112,
+    "DATA_BREAK_CENSORED": 11,
+    "LAST_BAR_UNCERTAIN": 1
+  },
+  "valid_nonoverlap": 18131,
+  "horizon_bars": 10,
+  "baseline": "confirmation close and confirmation ATR (14-bar Wilder, clean segment)",
+  "price_basis": "subsequent closes, not intrabar extremes, fills, or Telegram delivery"
+}

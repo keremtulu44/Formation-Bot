@@ -732,3 +732,48 @@ def test_nan_inf_diff_ciktisini_zehirlemez():
     assert diff["f2_snapshots"][0]["alanlar"]["break_strength"] is None
     assert diff["f2_snapshots"][0]["alanlar"]["raw_quality"] is None
     assert diff["f2_snapshots"][0]["geometry_score"] == 72.5
+
+
+@pytest.mark.parametrize("table", ["f2_snapshots", "f2_events", "f2_outcome_links"])
+@pytest.mark.parametrize("invalid", [False, True])
+def test_hydration_incomplete_read_never_writes_local_history(ortam, table, invalid):
+    class BrokenReadStore(FakeSupabaseStore):
+        def request_table(self, table_name, method, **kwargs):
+            if method == "GET" and table_name == table:
+                return FakeSupabaseResponse({"bad": "payload"}) if invalid else None
+            return super().request_table(table_name, method, **kwargs)
+
+    store = BrokenReadStore()
+    store.tables["f2_formations"] = [{"stable_id": "s1", "stock": _STOCK, "timeframe": _TF}]
+    assert hydrate_stock_tf(_STOCK, _TF, store=store, data_dir=config_mod.DATA_DIR) == 0
+    assert not fh._kayitlar(fh.yukle(_STOCK, _TF, config_mod.DATA_DIR))
+
+
+def test_real_supabase_store_error_reaches_mirror_queue(tmp_path):
+    from supabase_store import SupabaseStore
+    from test_supabase_store import FakeResponse, FakeSession
+
+    session = FakeSession([FakeResponse(status_code=400)] * 5)
+    store = SupabaseStore("https://demo.supabase.co", "secret", session=session)
+    queue = FormationMirrorQueue(data_dir=str(tmp_path))
+    queue.enqueue_diff({"f2_snapshots": [{"stable_id": "s1", "tur": "t", "bar_time": "x"}]})
+    for _ in range(5):
+        queue.flush(store)
+    assert len(session.calls) == 5
+    assert queue.size() == 0
+
+
+def test_conflict_is_retried_not_dropped(tmp_path, monkeypatch):
+    from supabase_store import SupabaseStore
+    from test_supabase_store import FakeResponse, FakeSession
+    import state.formation_mirror as mirror
+
+    monkeypatch.setattr(mirror.time, "monotonic", lambda: 1000)
+    session = FakeSession([FakeResponse(status_code=409)] * 5)
+    store = SupabaseStore("https://demo.supabase.co", "secret", session=session)
+    queue = FormationMirrorQueue(data_dir=str(tmp_path))
+    queue.enqueue_diff({"f2_events": [{"stable_id": "s1"}]})
+    for _ in range(5):
+        queue._retry_after = 0
+        queue.flush(store)
+    assert queue.size() == 1
