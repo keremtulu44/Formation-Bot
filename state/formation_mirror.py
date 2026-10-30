@@ -24,9 +24,9 @@ import json
 import logging
 import math
 import os
+import sqlite3
 import threading
 import time
-from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
@@ -38,12 +38,13 @@ from state.paths import formation_history_yolu
 logger = logging.getLogger(__name__)
 
 # Kuyruk ve flush sabitleri
-MAX_QUEUE_ITEMS = 5000         # Kuyruk bellek tavanı
+MAX_QUEUE_ITEMS = 5000         # Disk kuyruğu için uyarı eşiği; satır atılmaz
 FLUSH_BATCH_SIZE = 100         # Tek PostgREST isteğindeki azami satır
 DEFAULT_BACKOFF_INITIAL = 30.0 # İlk hata beklemesi (sn)
 DEFAULT_BACKOFF_MAX = 600.0    # Azami bekleme (10 dk)
-POISON_ESIK = 5                # Deterministik 4xx'de baş batch bu kadar denemede düşer
-KUYRUK_DOSYA_ADI = "f2_kuyruk.json"
+POISON_ESIK = 5                # Tekrarlayan 400/422 için ek hata uyarısı; satır atılmaz
+KUYRUK_DOSYA_ADI = "f2_kuyruk.json"  # eski sürümden geçiş
+KUYRUK_SQLITE_ADI = "f2_kuyruk.sqlite3"
 
 # BAR_ALANLARI int dönüşüm garantisi için
 BAR_ALANLARI = frozenset({
@@ -258,251 +259,224 @@ def extract_diff(
 # ============================================================================
 
 class FormationMirrorQueue:
-    """Thread-safe bellek ve disk yedekli taşıma kuyruğu.
+    """Disk-backed, coalescing mirror queue. Local history remains authoritative.
 
-    P2.6 Kuralı: Kuyruk türetilmiş durumdur, local history source of truth'tur.
-    Render Free restart'ında disk kuyruğu korunur; redeploy'da ephemeral disk
-    silinir (bu sınır belgelenmiştir).
+    SQLite bounds RAM even during a long Supabase outage; it is still only as
+    durable as DATA_DIR (Render's /tmp does not survive a redeploy).
     """
+
+    _TABLE_KEYS = {
+        "f2_formations": ("stable_id",),
+        "f2_snapshots": ("stable_id", "tur", "bar_time"),
+        "f2_events": ("stable_id", "type", "name", "bar", "bar_time"),
+        "f2_outcome_links": ("stable_id",),
+    }
+    _CONFLICTS = {
+        "f2_formations": ("stable_id", "resolution=merge-duplicates,return=minimal"),
+        "f2_snapshots": ("stable_id,tur,bar_time", "resolution=ignore-duplicates,return=minimal"),
+        "f2_events": ("stable_id,type,name,bar,bar_time", "resolution=ignore-duplicates,return=minimal"),
+        "f2_outcome_links": ("stable_id", "resolution=merge-duplicates,return=minimal"),
+    }
 
     def __init__(self, data_dir: Optional[str] = None):
         self.data_dir = data_dir or DATA_DIR
         self._lock = threading.RLock()
-        # Tablo adına göre öğe kuyrukları: { "f2_formations": deque(), ... }
-        self._queues: Dict[str, deque] = {
-            "f2_formations": deque(),
-            "f2_snapshots": deque(),
-            "f2_events": deque(),
-            "f2_outcome_links": deque(),
-        }
         self._backoff_delay = DEFAULT_BACKOFF_INITIAL
         self._retry_after = 0.0
-        # Tablo başı deterministik-red sayacı (poison batch): bkz. flush().
         self._poison_sayac: Dict[str, int] = {}
+        self._last_error = None
+        self._sent_count = 0
         self._fingerprints: Dict[str, Tuple] = {}
+        # Cache only confirmed rows in this process; pending rows remain in SQLite.
+        # This is not an automatic reconciliation of pre-existing missing history.
+        self._sent: Dict[Tuple[str, str], str] = {}
+        self._over_limit = False
+        os.makedirs(self.data_dir, exist_ok=True)
+        self._db = sqlite3.connect(os.path.join(self.data_dir, KUYRUK_SQLITE_ADI), timeout=10,
+                                   check_same_thread=False)
+        self._db.execute("PRAGMA journal_mode=WAL")
+        self._db.execute("PRAGMA synchronous=NORMAL")
+        self._db.execute("CREATE TABLE IF NOT EXISTS queue ("
+                         "id INTEGER PRIMARY KEY, tab TEXT NOT NULL, key TEXT NOT NULL, "
+                         "payload TEXT NOT NULL, UNIQUE(tab, key))")
+        self._db.execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY)")
+        self._db.commit()
         self.load_from_disk()
+
+    @classmethod
+    def _row_key(cls, table: str, row: Dict[str, Any]) -> str:
+        return json.dumps([row.get(k) for k in cls._TABLE_KEYS[table]],
+                          ensure_ascii=False, separators=(",", ":"))
 
     def size(self) -> int:
         with self._lock:
-            return sum(len(q) for q in self._queues.values())
+            return self._db.execute("SELECT count(*) FROM queue").fetchone()[0]
+
+    def status(self) -> Dict[str, Any]:
+        """Heartbeat için sırsız kuyruk ve son aktarım durumu."""
+        with self._lock:
+            counts = dict(self._db.execute("SELECT tab,count(*) FROM queue GROUP BY tab"))
+            return {"bekleyen": sum(counts.values()), "tablolar": counts,
+                    "gonderilen": self._sent_count, "son_hata": self._last_error}
+
+    def _insert_rows(self, diff: Dict[str, List[Dict[str, Any]]]) -> int:
+        changed = 0
+        for table, rows in diff.items():
+            if table not in self._TABLE_KEYS:
+                continue
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                key = self._row_key(table, row)
+                payload = json.dumps(row, ensure_ascii=False, sort_keys=True,
+                                     separators=(",", ":"), allow_nan=False)
+                if self._sent.get((table, key)) == payload:
+                    # A newer pending row must not be removed just because an
+                    # earlier version happens to equal the last sent version.
+                    pending = self._db.execute(
+                        "SELECT 1 FROM queue WHERE tab=? AND key=?", (table, key)).fetchone()
+                    if not pending:
+                        continue
+                cur = self._db.execute(
+                    "INSERT INTO queue(tab,key,payload) VALUES(?,?,?) "
+                    "ON CONFLICT(tab,key) DO UPDATE SET payload=excluded.payload "
+                    "WHERE queue.payload != excluded.payload", (table, key, payload))
+                changed += cur.rowcount
+        return changed
 
     def enqueue_diff(self, diff: Dict[str, List[Dict[str, Any]]]) -> int:
-        """Diff satırlarını kuyruğa ekler; tavan aşılırsa en eskileri atar."""
         if not diff:
             return 0
-        eklenen = 0
-        with self._lock:
-            for table, rows in diff.items():
-                if table not in self._queues:
-                    continue
-                q = self._queues[table]
-                for row in rows:
-                    q.append(row)
-                    eklenen += 1
-
-            # Tavan kontrolü
-            toplam = self.size()
-            if toplam > MAX_QUEUE_ITEMS:
-                fazla = toplam - MAX_QUEUE_ITEMS
-                logger.warning(
-                    "FormationMirrorQueue kapasitesi aşıldı (%d > %d); "
-                    "en eski %d satır atılıyor (local history korunuyor)",
-                    toplam, MAX_QUEUE_ITEMS, fazla,
-                )
-                # En dolu kuyruklardan kırp
-                atilan = 0
-                while atilan < fazla:
-                    en_dolu = max(self._queues.values(), key=len)
-                    if not en_dolu:
-                        break
-                    en_dolu.popleft()
-                    atilan += 1
-
-            if eklenen > 0:
-                self.save_to_disk()
-        return eklenen
+        with self._lock, self._db:
+            added = self._insert_rows(diff)
+            count = self.size()
+            if count > MAX_QUEUE_ITEMS and not self._over_limit:
+                logger.warning("FormationMirrorQueue %d satıra ulaştı; disk kuyruğunda "
+                               "tutuluyor, satır atılmadı (DATA_DIR kalıcılığını kontrol edin)", count)
+                self._over_limit = True
+            elif count <= MAX_QUEUE_ITEMS:
+                self._over_limit = False
+            return added
 
     def enqueue_from_defter(self, defter: Dict[str, Any]) -> int:
-        """Defteri inceler; içerik parmak izi değiştiyse farkı kuyruğa alır."""
         if not isinstance(defter, dict):
             return 0
-        stock = defter.get("stock") or ""
-        tf = defter.get("timeframe") or ""
-        key = f"{stock}_{tf}"
-
+        key = f"{defter.get('stock') or ''}_{defter.get('timeframe') or ''}"
         fp = defter_fingerprint(defter)
         with self._lock:
             if self._fingerprints.get(key) == fp:
-                return 0  # İçerik değişmedi -> sıfır write amplifikasyonu
+                return 0
+            # Only mark after a committed enqueue; disk errors must be retryable.
+            added = self.enqueue_diff(extract_diff(defter))
             self._fingerprints[key] = fp
-
-        diff = extract_diff(defter)
-        return self.enqueue_diff(diff)
+            return added
 
     def save_to_disk(self) -> bool:
-        """Kuyruğu atomik olarak diske kaydeder."""
-        try:
-            yol = _kuyruk_yolu(self.data_dir)
-            klasor = os.path.dirname(yol)
-            if klasor:
-                os.makedirs(klasor, exist_ok=True)
-            with self._lock:
-                snapshot = {
-                    t: list(q) for t, q in self._queues.items()
-                }
-            tmp = yol + f".tmp.{os.getpid()}"
-            with open(tmp, "w", encoding="utf-8") as fh:
-                json.dump(snapshot, fh, ensure_ascii=False)
-                fh.flush()
-                os.fsync(fh.fileno())
-            os.replace(tmp, yol)
-            return True
-        except Exception as exc:
-            logger.debug("Mirror kuyruğu diske yazılamadı: %s", exc)
-            return False
+        # Every mutation is committed transactionally; retained for callers.
+        with self._lock:
+            self._db.commit()
+        return True
 
     def load_from_disk(self) -> int:
-        """Diskteki kuyruğu yükler."""
-        yol = _kuyruk_yolu(self.data_dir)
-        if not os.path.isfile(yol):
-            return 0
-        try:
-            with open(yol, "r", encoding="utf-8") as fh:
-                data = json.load(fh)
-            if not isinstance(data, dict):
+        """Import the old JSON queue once, atomically with a migration marker."""
+        with self._lock:
+            if self._db.execute("SELECT 1 FROM metadata WHERE key='legacy_imported'").fetchone():
                 return 0
-            yuklenen = 0
-            with self._lock:
-                for table, items in data.items():
-                    if table in self._queues and isinstance(items, list):
-                        for it in items:
-                            if isinstance(it, dict):
-                                self._queues[table].append(it)
-                                yuklenen += 1
-            if yuklenen:
-                logger.info("Mirror kuyruğu diskten yüklendi: %d öğe", yuklenen)
-            return yuklenen
-        except Exception as exc:
-            logger.debug("Mirror kuyruğu diskten okunamadı: %s", exc)
-            return 0
+            path = _kuyruk_yolu(self.data_dir)
+            if not os.path.isfile(path):
+                # Mark even if absent; an unrelated stale file must not be
+                # imported over an already active SQLite queue later.
+                with self._db:
+                    self._db.execute("INSERT INTO metadata VALUES('legacy_imported')")
+                return 0
+            try:
+                with open(path, encoding="utf-8") as source:
+                    data = json.load(source)
+                if not isinstance(data, dict):
+                    raise ValueError("kuyruk JSON nesnesi değil")
+                with self._db:
+                    count = self._insert_rows({t: rows for t, rows in data.items()
+                                               if t in self._TABLE_KEYS and isinstance(rows, list)})
+                    self._db.execute("INSERT INTO metadata VALUES('legacy_imported')")
+                logger.info("Eski mirror kuyruğu SQLite'a aktarıldı: %d satır", count)
+                return count
+            except (OSError, ValueError, TypeError, sqlite3.Error) as exc:
+                # Keep the old file and retry on next process start.
+                logger.warning("Eski mirror kuyruğu aktarılamadı; dosya korundu: %s", exc)
+                return 0
 
     def flush(self, store=None, max_batches: int = 10) -> int:
-        """Kuyruktaki satırları Supabase'e gönderir.
-
-        PostgREST batch endpoint'leri kullanılır:
-            f2_formations: on_conflict=stable_id (merge-duplicates)
-            f2_snapshots:  on_conflict=stable_id,tur,bar_time (ignore-duplicates)
-            f2_events:     on_conflict=stable_id,type,name,bar,bar_time (ignore-duplicates)
-            f2_outcome_links: on_conflict=stable_id (merge-duplicates)
-        """
-        if store is None:
+        if store is None or not getattr(store, "enabled", False):
             return 0
-        if not getattr(store, "enabled", False):
+        if time.monotonic() < self._retry_after:
             return 0
-
-        simdi = time.monotonic()
-        if simdi < self._retry_after:
-            return 0  # Backoff süresi bekleniyor
-
-        on_conflicts = {
-            "f2_formations": ("stable_id", "resolution=merge-duplicates,return=minimal"),
-            "f2_snapshots": ("stable_id,tur,bar_time", "resolution=ignore-duplicates,return=minimal"),
-            "f2_events": ("stable_id,type,name,bar,bar_time", "resolution=ignore-duplicates,return=minimal"),
-            "f2_outcome_links": ("stable_id", "resolution=merge-duplicates,return=minimal"),
-        }
-
-        gonderilen_toplam = 0
-        dusurulen_toplam = 0
-        # Exception / 401-403 / 404 / 409 / 429 / 5xx global backoff'u
-        # tetikler. 404 şema kurulumu, 409 ebeveyn satır beklenmesi olabilir;
-        # bu yüzden baş batch'i düşürmez. 400/422 tablo bazında ele alınır.
-        gecici_hata = False
-
+        sent = 0
+        temporary_error = False
         with self._lock:
-            for table, q in self._queues.items():
-                if not q:
-                    continue
-                conf_key, prefer_val = on_conflicts.get(table, (None, "return=minimal"))
-                params = {"on_conflict": conf_key} if conf_key else None
-                headers = {"Prefer": prefer_val}
-
-                batches_run = 0
-                while q and batches_run < max_batches:
-                    batch_size = min(len(q), FLUSH_BATCH_SIZE)
-                    items = [q[i] for i in range(batch_size)]
-
+            for table, (conflict, prefer) in self._CONFLICTS.items():
+                batches = 0
+                while batches < max_batches:
+                    batch = self._db.execute(
+                        "SELECT id,key,payload FROM queue WHERE tab=? ORDER BY id LIMIT ?",
+                        (table, FLUSH_BATCH_SIZE)).fetchall()
+                    if not batch:
+                        break
+                    if table != "f2_formations":
+                        # A limited formation batch may leave parents pending.
+                        # Do not send children before those parents exist remotely.
+                        pending_parents = {
+                            json.loads(row[0])[0] for row in self._db.execute(
+                                "SELECT key FROM queue WHERE tab='f2_formations'")
+                        }
+                        batch = [row for row in batch
+                                 if json.loads(row[2]).get("stable_id") not in pending_parents]
+                        if not batch:
+                            break
+                    items = [json.loads(row[2]) for row in batch]
                     try:
                         request = getattr(store, "request_table_for_mirror", store.request_table)
-                        resp = request(
-                            table,
-                            "POST",
-                            params=params,
-                            json=items,
-                            headers=headers,
-                        )
+                        resp = request(table, "POST", params={"on_conflict": conflict},
+                                       json=items, headers={"Prefer": prefer})
                     except Exception as exc:
-                        logger.warning("Supabase %s flush exception: %s", table, exc)
+                        # Exception messages from transports can contain URLs or keys.
+                        logger.warning("Supabase %s flush exception: %s", table, type(exc).__name__)
                         resp = None
-
-                    if resp is not None and 200 <= resp.status_code < 300:
-                        # Başarılı: gönderilen öğeleri kuyruktan çıkar
-                        for _ in range(batch_size):
-                            q.popleft()
-                        gonderilen_toplam += batch_size
-                        batches_run += 1
-                        # Başarıda backoff ve poison sayacini sıfırla
+                    status = getattr(resp, "status_code", None)
+                    if status is not None and 200 <= status < 300:
+                        with self._db:
+                            self._db.executemany("DELETE FROM queue WHERE id=? AND payload=?",
+                                                 [(row[0], row[2]) for row in batch])
+                        for _, key, payload in batch:
+                            self._sent[(table, key)] = payload
+                        sent += len(batch)
+                        batches += 1
                         self._backoff_delay = DEFAULT_BACKOFF_INITIAL
                         self._poison_sayac[table] = 0
+                        if self._last_error and self._last_error.get("tablo") == table:
+                            self._last_error = None
                         continue
-
-                    # --- Başarısızlık: NEDENİNİ LOGLA (eskiden sessizdi) ---
-                    durum = getattr(resp, "status_code", None)
-                    # Ham yanıt sır içerebilir; ayrıntı SupabaseStore tarafından
-                    # temizlenerek loglanır, burada yalnız durum kodunu yaz.
-                    logger.warning(
-                        "Supabase %s flush reddedildi (durum=%s, batch=%d)",
-                        table, durum, batch_size)
-
-                    if durum in (400, 422):
-                        # Deterministik red: aynı batch bir daha ASLA geçmez.
-                        # Eskiden bu, kuyruk başında sonsuza dek bekleyip
-                        # sonraki tabloları da kilitliyordu (canlıda
-                        # f2_snapshots/events 0 satirda kalmasinin mekanizmasi).
-                        # Birkaç deneme payı bırak (şema deploy'u yetişebilir),
-                        # sonra baş batch'i ELENMİŞ say ve kuyruğu aç; mirror
-                        # türetilmiş veridir, local history source of truth.
-                        sayac = self._poison_sayac.get(table, 0) + 1
-                        self._poison_sayac[table] = sayac
-                        if sayac >= POISON_ESIK:
-                            for _ in range(batch_size):
-                                q.popleft()
-                            dusurulen_toplam += batch_size
+                    self._last_error = {"tablo": table, "durum": status, "batch": len(batch)}
+                    logger.warning("Supabase %s flush reddedildi (durum=%s, batch=%d)",
+                                   table, status, len(batch))
+                    if status in (400, 422):
+                        count = self._poison_sayac.get(table, 0) + 1
+                        self._poison_sayac[table] = count
+                        if count >= POISON_ESIK:
+                            # A batch error does not identify its bad row; never
+                            # discard the entire batch (or its healthy neighbours).
+                            logger.error("Supabase %s: batch %d kez reddedildi; "
+                                         "kayıtlar disk kuyruğunda korunuyor", table, count)
                             self._poison_sayac[table] = 0
-                            batches_run += 1
-                            logger.error(
-                                "Supabase %s: %d satırlık baş batch %d kez "
-                                "deterministik reddedildi, DÜŞÜRÜLDÜ "
-                                "(kuyrukta kalan: %d)",
-                                table, batch_size, sayac, len(q))
-                            continue
-                    else:
-                        gecici_hata = True
-                    break  # bu tablo bu turda bitti; DİĞER tablolar devam eder
-
-        if gecici_hata:
+                    temporary_error = True
+                    break
+        if temporary_error:
             self._retry_after = time.monotonic() + self._backoff_delay
             self._backoff_delay = min(self._backoff_delay * 2.0, DEFAULT_BACKOFF_MAX)
-            logger.debug(
-                "Mirror flush başarısız oldu; %.1f sn backoff devrede",
-                self._backoff_delay,
-            )
-
-        if gonderilen_toplam > 0 or dusurulen_toplam > 0:
-            self.save_to_disk()
-            logger.debug("Mirror flush tamamlandı: %d satır Supabase'e yazıldı", gonderilen_toplam)
-
-        return gonderilen_toplam
-
+        with self._lock:
+            self._sent_count += sent
+        if sent:
+            logger.debug("Mirror flush tamamlandı: %d satır Supabase'e yazıldı", sent)
+        return sent
 
 # Global singleton instance
 _GLOBAL_QUEUE: Optional[FormationMirrorQueue] = None
@@ -529,7 +503,7 @@ def mirror_kaydet(defter: Dict[str, Any], store=None, data_dir: Optional[str] = 
             q.flush(store)
         return eklenen
     except Exception as exc:
-        logger.debug("mirror_kaydet sessizce atlandı: %s", exc)
+        logger.warning("Mirror kuyruğuna yazılamadı (%s); yerel defter korunur", type(exc).__name__)
         return 0
 
 

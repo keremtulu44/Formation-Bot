@@ -1222,7 +1222,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             except Exception as e:
                 _pkg.logger.warning(f"{stock} save_to_disk hatası: {e}")
             _pkg.write_heartbeat(notifier=notifier)
-            
+
+            # Mirror üretimi tarama sırasında olur. Sadece tur sonunda flush
+            # etmek 57 hisselik tur boyunca kuyruğun taşmasına yol açıyordu.
+            # Hisse başına sınırlı iş yap; arıza analizi/taramayı durdurmasın.
+            if _pkg._supabase_store_ref is not None:
+                try:
+                    from state.formation_mirror import get_mirror_queue
+                    get_mirror_queue().flush(_pkg._supabase_store_ref, max_batches=2)
+                except Exception:  # noqa: BLE001 - mirror opsiyoneldir
+                    _pkg.logger.warning("Tarama sırasında mirror flush atlandı", exc_info=True)
+
         except Exception as e:
             _pkg.daily_stats['errors'] += 1
             tur_hata += 1
