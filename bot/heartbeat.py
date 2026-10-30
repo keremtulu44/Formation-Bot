@@ -100,6 +100,17 @@ def _arsiv_snapshoti():
     except Exception:
         return None
 
+def _mirror_snapshot():
+    """Mevcut kuyruğu sorgula; heartbeat yeni bir kuyruk başlatmaz."""
+    try:
+        from state import formation_mirror
+        queue = formation_mirror._GLOBAL_QUEUE
+        return queue.status() if queue is not None else None
+    except Exception as exc:  # noqa: BLE001 - telemetry heartbeat'i engellememeli
+        _pkg.logger.warning("Mirror sağlık bilgisi okunamadı: %s", type(exc).__name__)
+        return None
+
+
 def _heartbeat_icerik_ozeti(payload: dict) -> str:
     """`last_scan` dışındaki alanların özeti: değişiklik tespiti için."""
     return json.dumps({k: v for k, v in payload.items() if k != "last_scan"},
@@ -192,6 +203,7 @@ def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
                                for k, v in _pkg._deque_manager_ref.sureklilik_sorunlari.items()}
                               if _pkg._deque_manager_ref else {}),
             "arsiv_sagligi": _arsiv_snapshoti(),
+            "formation_mirror": _mirror_snapshot(),
         }
         icerik = _pkg._heartbeat_icerik_ozeti(payload)
         simdi = time.time()

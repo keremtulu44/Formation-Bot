@@ -36,7 +36,7 @@ from state import formation_history as fh
 from state import formation_schema as schema
 from state.formation_mirror import (
     BAR_ALANLARI,
-    KUYRUK_DOSYA_ADI,
+    KUYRUK_SQLITE_ADI,
     FormationMirrorQueue,
     LocalFormationRepository,
     defter_fingerprint,
@@ -300,7 +300,7 @@ def test_queue_bellek_disk_ve_recovery(ortam):
     }
     q1.enqueue_diff(diff)
     assert q1.size() == 1
-    assert os.path.isfile(os.path.join(data_dir, KUYRUK_DOSYA_ADI))
+    assert os.path.isfile(os.path.join(data_dir, KUYRUK_SQLITE_ADI))
 
     # Yeni queue nesnesi diskten kurtarmalı
     q2 = FormationMirrorQueue(data_dir=data_dir)
@@ -315,7 +315,7 @@ def test_queue_bellek_disk_ve_recovery(ortam):
 
 
 def test_queue_tavan_asimi_guvenligi(ortam):
-    """Kuyruk MAX_QUEUE_ITEMS sınırını aşarsa en eskileri atar, botu asla çökertmez."""
+    """Uyarı eşiği aşılsa da satırlar disk kuyruğunda korunur."""
     q = FormationMirrorQueue(data_dir=config_mod.DATA_DIR)
     # Tavanı geçici olarak küçük tut
     with mock.patch("state.formation_mirror.MAX_QUEUE_ITEMS", 10):
@@ -326,7 +326,8 @@ def test_queue_tavan_asimi_guvenligi(ortam):
             "f2_outcome_links": [],
         }
         q.enqueue_diff(fazla_diff)
-        assert q.size() <= 10
+        assert q.size() == 25
+        assert FormationMirrorQueue(data_dir=config_mod.DATA_DIR).size() == 25
 
 
 # ============================================================================
@@ -657,14 +658,15 @@ def test_poison_batch_diger_tablolari_kilitlemez(tmp_path):
     assert q.size() == 1  # zehirli snapshot hâlâ kuyrukta (henüz düşmedi)
 
 
-def test_poison_batch_esik_sonra_duser_kuyruk_acilir(tmp_path):
+def test_poison_batch_esik_sonra_diskte_korunur(tmp_path):
     from state.formation_mirror import POISON_ESIK
 
     q = _poison_kuyruk(tmp_path)
     store = _ZehirliStore()
     for _ in range(POISON_ESIK):
+        q._retry_after = 0
         q.flush(store)
-    assert q.size() == 0  # baş batch elendi, kuyruk açıldı
+    assert q.size() == 1  # deterministik redde bile veri atılmaz
 
 
 def test_gecici_5xx_satir_dusurmez_backoffa_girer(tmp_path):
@@ -758,9 +760,10 @@ def test_real_supabase_store_error_reaches_mirror_queue(tmp_path):
     queue = FormationMirrorQueue(data_dir=str(tmp_path))
     queue.enqueue_diff({"f2_snapshots": [{"stable_id": "s1", "tur": "t", "bar_time": "x"}]})
     for _ in range(5):
+        queue._retry_after = 0
         queue.flush(store)
     assert len(session.calls) == 5
-    assert queue.size() == 0
+    assert queue.size() == 1
 
 
 def test_conflict_is_retried_not_dropped(tmp_path, monkeypatch):

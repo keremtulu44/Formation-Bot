@@ -58,6 +58,9 @@ bot_data/*.pkl
 # Repodaki bot_data/ yalnızca okuma yedeğidir (SEED_DATA_DIR); canlı sunucuda
 # git pull çakışmasını önlemek için runtime kalıpları yok sayılır.
 bot_data/formation_history/
+# Mirror taşıma kuyruğu yerel çalışma durumudur; Git'e alınmaz.
+bot_data/f2_kuyruk.sqlite3*
+bot_data/f2_kuyruk.json
 
 # Simülasyon raporları (üretilen çıktı)
 raporlar/
