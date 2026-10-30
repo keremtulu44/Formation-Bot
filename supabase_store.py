@@ -199,8 +199,13 @@ class SupabaseStore:
     def enabled(self) -> bool:
         return self._disabled_reason is None
 
-    def request_table(self, table_name: str, method: str, *, params=None, json=None, headers=None):
-        """Herhangi bir PostgREST tablosuna istek atar (f2_* tabloları ve bot_store)."""
+    def request_table(self, table_name: str, method: str, *, params=None, json=None, headers=None,
+                      return_errors=False):
+        """PostgREST isteği; varsayılan olarak başarısızlıkta None döner.
+
+        Mirror kuyruğu kalıcı ve geçici HTTP hatalarını ayırmak için hata
+        yanıtını isteyebilir. Ağ hataları her zaman None olarak kalır.
+        """
         if not self.enabled or time.monotonic() < self._retry_after:
             return None
 
@@ -255,8 +260,13 @@ class SupabaseStore:
                     f"Supabase {table_name} isteği başarısız (HTTP {response.status_code}); "
                     f"yerel cache kullanılacak: {detail}",
                 )
-            return None
+            return response if return_errors else None
         return None
+
+    def request_table_for_mirror(self, table_name: str, method: str, *, params=None, json=None, headers=None):
+        """Kuyruğa HTTP durumunu ilet; diğer çağrıların None sözleşmesini koru."""
+        return self.request_table(table_name, method, params=params, json=json,
+                                  headers=headers, return_errors=True)
 
     def _request(self, method: str, *, params=None, json=None):
         return self.request_table(self.TABLE, method, params=params, json=json)
@@ -334,6 +344,9 @@ class SupabaseStore:
         eksik = [k for k in keys if k not in sonuc]
         if self.prefix and eksik:
             legacy = self._tek_istek(eksik)
+            if legacy is None:
+                # Başarısız ikinci tur, eksik anahtarların yokluğu değildir.
+                return None
             if legacy:
                 sonuc.update(legacy)
                 if not self._legacy_uyarildi:

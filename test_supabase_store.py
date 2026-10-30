@@ -244,3 +244,20 @@ def test_from_env_tirnak_temizligi():
     assert store.project_url == "https://demo.supabase.co"
     assert store._headers["apikey"] == "sb_secret_abc123"
     assert "Authorization" not in store._headers
+
+
+def test_legacy_read_failure_is_not_reported_as_missing(monkeypatch):
+    monkeypatch.setattr(supabase_store_module.time, "sleep", lambda _: None)
+    session = FakeSession([
+        FakeResponse(payload=[{"store_key": "formation-bot:a", "payload": 1}]),
+        FakeResponse(status_code=503), FakeResponse(status_code=503),
+    ])
+    store = SupabaseStore("https://demo.supabase.co", "test-secret", session=session)
+    assert store.get_many(["a", "b"]) is None
+
+
+def test_mirror_can_see_http_error_without_changing_default_contract():
+    session = FakeSession([FakeResponse(status_code=400), FakeResponse(status_code=400)])
+    store = SupabaseStore("https://demo.supabase.co", "test-secret", session=session)
+    assert store.request_table("f2_snapshots", "POST") is None
+    assert store.request_table_for_mirror("f2_snapshots", "POST").status_code == 400

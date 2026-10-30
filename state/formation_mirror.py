@@ -413,9 +413,9 @@ class FormationMirrorQueue:
 
         gonderilen_toplam = 0
         dusurulen_toplam = 0
-        # Yalnız GEÇİCİ hatalar (exception / 401-403 / 429 / 5xx) global
-        # backoff'u tetikler. Deterministik 4xx bir tablonun baş batch'ine
-        # özgüdür: diğer tablolari kilitlemez, backoff'a da girmez.
+        # Exception / 401-403 / 404 / 409 / 429 / 5xx global backoff'u
+        # tetikler. 404 şema kurulumu, 409 ebeveyn satır beklenmesi olabilir;
+        # bu yüzden baş batch'i düşürmez. 400/422 tablo bazında ele alınır.
         gecici_hata = False
 
         with self._lock:
@@ -432,7 +432,8 @@ class FormationMirrorQueue:
                     items = [q[i] for i in range(batch_size)]
 
                     try:
-                        resp = store.request_table(
+                        request = getattr(store, "request_table_for_mirror", store.request_table)
+                        resp = request(
                             table,
                             "POST",
                             params=params,
@@ -456,15 +457,13 @@ class FormationMirrorQueue:
 
                     # --- Başarısızlık: NEDENİNİ LOGLA (eskiden sessizdi) ---
                     durum = getattr(resp, "status_code", None)
-                    try:
-                        govde = str(getattr(resp, "text", "") or "")[:300]
-                    except Exception:
-                        govde = ""
+                    # Ham yanıt sır içerebilir; ayrıntı SupabaseStore tarafından
+                    # temizlenerek loglanır, burada yalnız durum kodunu yaz.
                     logger.warning(
-                        "Supabase %s flush reddedildi (durum=%s, batch=%d): %s",
-                        table, durum, batch_size, govde)
+                        "Supabase %s flush reddedildi (durum=%s, batch=%d)",
+                        table, durum, batch_size)
 
-                    if durum in (400, 404, 409, 422):
+                    if durum in (400, 422):
                         # Deterministik red: aynı batch bir daha ASLA geçmez.
                         # Eskiden bu, kuyruk başında sonsuza dek bekleyip
                         # sonraki tabloları da kilitliyordu (canlıda
@@ -596,10 +595,14 @@ def hydrate_stock_tf(
                 "order": "id.asc",
             },
         )
-        if resp_snap is not None and 200 <= resp_snap.status_code < 300:
-            res_json = resp_snap.json()
-            if isinstance(res_json, list):
-                snap_rows = res_json
+        if resp_snap is None or not (200 <= resp_snap.status_code < 300):
+            logger.warning("Hydration iptal: f2_snapshots okunamadı (%s %s)", stock, tf)
+            return 0
+        res_json = resp_snap.json()
+        if not isinstance(res_json, list):
+            logger.warning("Hydration iptal: f2_snapshots yanıtı geçersiz (%s %s)", stock, tf)
+            return 0
+        snap_rows = res_json
 
         # 3) Events çek
         event_rows = []
@@ -612,10 +615,14 @@ def hydrate_stock_tf(
                 "order": "id.asc",
             },
         )
-        if resp_ev is not None and 200 <= resp_ev.status_code < 300:
-            res_json = resp_ev.json()
-            if isinstance(res_json, list):
-                event_rows = res_json
+        if resp_ev is None or not (200 <= resp_ev.status_code < 300):
+            logger.warning("Hydration iptal: f2_events okunamadı (%s %s)", stock, tf)
+            return 0
+        res_json = resp_ev.json()
+        if not isinstance(res_json, list):
+            logger.warning("Hydration iptal: f2_events yanıtı geçersiz (%s %s)", stock, tf)
+            return 0
+        event_rows = res_json
 
         # 4) Outcome links çek
         out_rows = {}
@@ -627,12 +634,16 @@ def hydrate_stock_tf(
                 "stable_id": f"in.({','.join(sids)})",
             },
         )
-        if resp_out is not None and 200 <= resp_out.status_code < 300:
-            res_json = resp_out.json()
-            if isinstance(res_json, list):
-                for row in res_json:
-                    if row.get("stable_id"):
-                        out_rows[row["stable_id"]] = row
+        if resp_out is None or not (200 <= resp_out.status_code < 300):
+            logger.warning("Hydration iptal: f2_outcome_links okunamadı (%s %s)", stock, tf)
+            return 0
+        res_json = resp_out.json()
+        if not isinstance(res_json, list):
+            logger.warning("Hydration iptal: f2_outcome_links yanıtı geçersiz (%s %s)", stock, tf)
+            return 0
+        for row in res_json:
+            if row.get("stable_id"):
+                out_rows[row["stable_id"]] = row
 
         # Snapshots ve events SID'e göre grupla
         snaps_by_sid: Dict[str, list] = {}
