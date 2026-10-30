@@ -56,7 +56,8 @@ permissions:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    # 3 × 120 sn + 2 × 45 sn + runner payı
+    timeout-minutes: 9
     steps:
       # Varsayılan pencere: her gün 08:00-23:00 İstanbul. BIST seansı 09:50-18:40
       # olduğu için tarama saatleri içeride kalır; akşam da servis uyanık kalır ki
@@ -86,6 +87,12 @@ jobs:
             echo "in_window=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          for value in "$start" "$end"; do
+            if ! [[ "$value" =~ ^[0-9]{4}$ ]] || [ "$((10#${value:0:2}))" -gt 23 ] || [ "$((10#${value:2:2}))" -gt 59 ]; then
+              echo "::error::KEEPALIVE_WINDOW_START/END dört haneli geçerli SSdd olmalı."
+              exit 1
+            fi
+          done
           now=$((10#$(TZ=Europe/Istanbul date +%H%M)))
           start_num=$((10#$start))
           end_num=$((10#$end))
@@ -96,10 +103,11 @@ jobs:
             echo "in_window=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [ "$now" -ge "$start_num" ] && [ "$now" -le "$end_num" ]; then
+          if { [ "$start_num" -le "$end_num" ] && [ "$now" -ge "$start_num" ] && [ "$now" -le "$end_num" ]; } || \
+             { [ "$start_num" -gt "$end_num" ] && { [ "$now" -ge "$start_num" ] || [ "$now" -le "$end_num" ]; }; }; then
             echo "in_window=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Pencere dışı (gece): ping atlandı, servis uyur. 08:00'deki ilk ping"
+            echo "Pencere dışı: ping atlandı, servis uyuyabilir. Pencerenin ilk ping'i"
             echo "onu uyandırır; gece komut yanıtı istiyorsan KEEPALIVE_ALWAYS=true yap."
             echo "in_window=false" >> "$GITHUB_OUTPUT"
           fi
@@ -124,7 +132,8 @@ jobs:
               echo ""
               echo 'Değer: `https://<servis-adin>.onrender.com/health`'
             } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            echo "::error::Keep-alive hedefi eksik; ping gönderilmedi."
+            exit 1
           fi
 
           case "$url" in
@@ -135,14 +144,16 @@ jobs:
           ok=0
           code="000"
           for attempt in 1 2 3; do
-            code=$(curl -sS -o /tmp/health.json -w "%{http_code}" \
-                     --max-time 120 --retry 1 --retry-delay 5 \
+            rm -f /tmp/health.json
+            if ! code=$(curl -sS -o /tmp/health.json -w "%{http_code}" \
+                     --max-time 120 \
                      -H "Cache-Control: no-cache" \
                      -H "User-Agent: formation-bot-keepalive" \
-                     "${url}${sep}ka=$(date +%s)" || echo "000")
-            body=$(head -c 400 /tmp/health.json 2>/dev/null || true)
-            echo "Deneme $attempt: HTTP $code — $body"
-            if [ "$code" = "200" ] && printf '%s' "$body" | grep -q '"status"'; then
+                     "${url}${sep}ka=$(date +%s)"); then
+              code="000"
+            fi
+            echo "Deneme $attempt: HTTP $code"
+            if [ "$code" = "200" ] && python3 -c 'import json, sys; d = json.load(open(sys.argv[1], encoding="utf-8")); sys.exit(0 if isinstance(d, dict) and d.get("status") == "ok" else 1)' /tmp/health.json 2>/dev/null; then
               ok=1
               break
             fi
@@ -155,7 +166,6 @@ jobs:
           {
             echo "### Render keep-alive"
             echo ""
-            echo "- Hedef: \`$url\`"
             echo "- Son HTTP kodu: **$code**"
             echo "- Sonuç: $([ "$ok" = "1" ] && echo '✅ servis uyanık' || echo '❌ yanıt yok')"
           } >> "$GITHUB_STEP_SUMMARY"

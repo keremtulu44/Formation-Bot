@@ -27,6 +27,8 @@ Denetim B-4: `/health` her koşulda 200 döner (Render health check davranışı
 değişmez) ama artık botun canlılığını da raporlar. `health_provider` ile dışarıdan
 enjekte edilen özet (heartbeat yaşı, tarama sürüyor mu, seans açık mı) yanıta
 eklenir; monitör `?strict=1` ile çağırırsa heartbeat bayatken uç 503 döner.
+`/ready` başlangıç tamamlanmadıkça veya kapanışta 503 döner; yalnız başlangıç
+aşamasını gösterir, Telegram, veri veya Supabase sağlığını garanti etmez.
 Bu modül main'i import etmez; veriyi yalnızca enjekte edilen callable'dan alır.
 """
 
@@ -169,8 +171,8 @@ class _HealthHandler(BaseHTTPRequestHandler):
         yol = urlparse(self.path).path
         if len(yol) > 1:
             yol = yol.rstrip("/") or "/"
-        if yol in ("/", "/health"):
-            self._send_ok()
+        if yol in ("/", "/health", "/ready"):
+            self._send_ok(ready=(yol == "/ready"))
             return
         if yol == "/test":
             self._handle_test()
@@ -322,9 +324,8 @@ class _HealthHandler(BaseHTTPRequestHandler):
         try:
             ozet = saglayici()
         except Exception as exc:  # noqa: BLE001 - /health asla 500 dönmemeli
-            logger.warning("Canlılık özeti alınamadı: %s: %s", type(exc).__name__, exc)
-            return {"heartbeat_stale": None,
-                    "canlilik_hatasi": f"{type(exc).__name__}: {exc}"[:120]}
+            logger.warning("Canlılık özeti alınamadı: %s", type(exc).__name__)
+            return {"heartbeat_stale": None, "canlilik_hatasi": type(exc).__name__}
         return ozet if isinstance(ozet, dict) else None
 
     def _strict_istendi(self) -> bool:
@@ -333,7 +334,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
         deger = (sorgu.get("strict", ["0"])[0] or "").strip().lower()
         return deger not in ("", "0", "false", "no")
 
-    def _send_ok(self):
+    def _send_ok(self, ready=False):
         # Render bu değişkenleri deploy sırasında enjekte eder: hangi commit'in
         # canlı olduğunu /health'ten görebilmek, "deploy düştü mü?" sorusunu
         # log/dashboard gezmeden cevaplar (deploy_check.py bunu karşılaştırır).
@@ -356,7 +357,10 @@ class _HealthHandler(BaseHTTPRequestHandler):
         if canli:
             payload.update(canli)
         kod = 200
-        if self._strict_istendi() and payload.get("heartbeat_stale") is True:
+        if ready and payload.get("startup_complete") is not True:
+            kod = 503
+            payload["status"] = "hazir_degil"
+        elif self._strict_istendi() and payload.get("heartbeat_stale") is True:
             kod = 503
             payload["status"] = "bayat"
         body = json.dumps(payload).encode("utf-8")
@@ -454,10 +458,10 @@ def start_render_health_server(environ=None, test_sender=None,
         logger.info("Telegram /test ucu etkin (TELEGRAM_TEST_KEY tanimli, anahtar X-Test-Key basliginda)")
         if server.test_key_query:
             logger.warning("TELEGRAM_TEST_KEY_QUERY=1: ?k= sorgu anahtari hâlâ kabul ediliyor (sır URL'de)")
-    if server.rate_limit_per_min:
-        logger.info(f"HTTP rate limit: IP başına {server.rate_limit_per_min} istek/dk")
     else:
         logger.info("Telegram /test ucu kapali (TELEGRAM_TEST_KEY tanimli degil)")
+    if server.rate_limit_per_min:
+        logger.info(f"HTTP rate limit: IP başına {server.rate_limit_per_min} istek/dk")
     if server.webhook_secret:
         # Sırrın kendisi ASLA loglanmaz; yalnızca ucun açık olduğu söylenir.
         logger.info("Telegram webhook ucu etkin (POST /webhook, secret X-Telegram-Bot-Api-Secret-Token basliginda)")

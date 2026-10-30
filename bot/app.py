@@ -137,7 +137,18 @@ def setup_logging():
 def signal_handler(signum, frame):
     global _shutdown_requested
     _pkg.logger.info(f"Sinyal alındı: {signum} - güvenli kapanış hazırlanıyor...")
+    setattr(_pkg, "_startup_ready", False)
     setattr(_pkg, "_shutdown_requested", True)
+
+
+def _shutdown_bekle(seconds):
+    """Hata geri beklemesini /tara ile erken bitirmeden SIGTERM'e duyarlı tut."""
+    bitis = time.monotonic() + seconds
+    while not _pkg._shutdown_requested:
+        kalan = bitis - time.monotonic()
+        if kalan <= 0:
+            break
+        time.sleep(min(kalan, 1.0))
 
 
 def main_loop():
@@ -148,6 +159,7 @@ def main_loop():
     3. Kapalıysa -> 5dk uyu, tekrar kontrol et
     Neden 24/7 çalışıp sadece seans saatlerinde CPU harcasın? Oracle Free'de kaynak kısıtlı
     """
+    setattr(_pkg, "_startup_ready", False)
     _pkg.setup_logging()   # Batch 8 / C2: handler'lar burada bağlanır (import yan etkisi yok)
     _pkg.logger.info("=== BIST FORMASYON BOTU BAŞLATILIYOR ===")
     _pkg.logger.info(f"Profil: {PROFILE}, Params: {PROFILE_PARAMS}")
@@ -233,7 +245,7 @@ def main_loop():
     # İki yönlü Telegram: komutları (panel/canli/formasyonlar/durum/tara/yardim)
     # dinleyen katman. İki mod var, AYNI ANDA YALNIZCA BİRİ açılır:
     #   - webhook  : TELEGRAM_WEBHOOK_SECRET varsa ve HTTP sunucusu ayaktaysa
-    #                (Telegram → POST /webhook/<secret>, health_server taşır)
+    #                (Telegram → POST /webhook + secret başlığı, health_server taşır)
     #   - yoklama  : aksi halde getUpdates uzun yoklaması (daemon thread)
     # Token/chat_id yoksa hiçbiri başlatılmaz; bot eskisi gibi yalnızca alarm gönderir.
     # 18:45 kapanış özeti kaçırıldıysa (bot akşam kapalıydı) ilk fırsatta telafi et.
@@ -339,6 +351,8 @@ def main_loop():
     # (aksi halde 18:45 kanal özeti günün gerçek toplamını eksik gösterir).
     _pkg._gunluk_sayac_yukle()
     
+    if not _pkg._shutdown_requested:
+        setattr(_pkg, "_startup_ready", True)
     while not _pkg._shutdown_requested:
         try:
             now = _pkg.datetime.now(ISTANBUL_TZ)
@@ -768,10 +782,13 @@ def main_loop():
             if _pkg._live_state.status().get('tarama_suruyor'):
                 _pkg._analiz_hatasi_kaydi(e, len(_pkg.ACTIVE_STOCKS), "ana döngü")
             _pkg.write_heartbeat(force=True)
-            time.sleep(30)
+            # SIGTERM sırasında 30 saniyelik uykuya takılıp Render süresini
+            # tüketmemek için shutdown duyarlı bekleme kullan.
+            _shutdown_bekle(30)
             continue
     
-    # Güvenli kapanış (SIGTERM/SIGINT)
+    # Güvenli kapanış (SIGTERM/SIGINT veya döngüden çıkış)
+    setattr(_pkg, "_startup_ready", False)
     _pkg.logger.info("Bot kapanıyor, son kayıtlar yapılıyor...")
     try:
         if _pkg._telegram_listener_ref is not None:

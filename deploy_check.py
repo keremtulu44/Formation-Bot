@@ -224,7 +224,7 @@ def kontrol_repo() -> None:
     ci = REPO_ROOT / ".github" / "workflows" / "ci.yml"
     if ci.exists():
         satir(OK, "CI iş akışı var (.github/workflows/ci.yml)",
-              "Aynı Python 3.12 + kurulum + /health duman testini deploy'dan önce koşar.")
+              "Python 3.12 + kurulum + /health duman testi koşar; deploy kapısı için Render Dashboard ayarını doğrulayın.")
 
     data_dir = REPO_ROOT / "bot_data"
     if data_dir.is_dir():
@@ -919,11 +919,21 @@ def kontrol_render(url: str, test_key: str) -> None:
             govde = r.json()
         except ValueError:
             govde = {}
-        if govde.get("status") == "ok":
+        if isinstance(govde, dict) and govde.get("status") == "ok":
             canli_commit = str(govde.get("commit") or "")
             detay = kaynak + (f" · canlı sürüm: {canli_commit}" if canli_commit else "")
             satir(OK, f"/health ayakta ({govde.get('service', '?')})", detay)
             _commit_karsilastir(canli_commit)
+            if govde.get("startup_complete") is True:
+                satir(OK, "Başlangıç tamamlandı", "Bu, Telegram veya veri/Supabase sağlığının garantisi değildir.")
+            elif govde.get("startup_complete") is False:
+                satir(WARN, "Bot henüz hazır değil veya kapanıyor", "/ready 503 döner; Render loglarını izleyin.")
+            else:
+                satir(WARN, "Başlangıç durumu bilinmiyor", "Eski sürüm veya sağlık sağlayıcısı yok/hatalı olabilir.")
+            if govde.get("heartbeat_stale") is True:
+                satir(WARN, "Heartbeat bayat", "Tarama ve veri durumunu inceleyin.")
+            elif govde.get("heartbeat_stale") is None:
+                satir(WARN, "Heartbeat durumu bilinmiyor", "Henüz ilk tarama yapılmamış olabilir; /health 200 çalışırlık kanıtı değildir.")
         else:
             satir(WARN, "200 döndü ama gövde beklenen JSON değil",
                   _kisa(govde, 160, test_key, url, hedef))

@@ -20,7 +20,8 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
     healthCheckPath: /health
-    autoDeploy: true
+    # Yalnizca Blueprint ile yonetilen servise uygulanir; mevcut Dashboard ayarini kontrol edin.
+    autoDeployTrigger: checksPass
     envVars:
       # Telegram — @BotFather'dan alınan token, Secret olarak işaretlenir
       - key: TELEGRAM_BOT_TOKEN
@@ -67,7 +68,7 @@ services:
         value: "60"
       # OPSIYONEL — Telegram komutlarını webhook ile almak için rastgele bir değer.
       # RENDER_EXTERNAL_URL'i Render otomatik verir; adres
-      # https://<servis>.onrender.com/webhook/<secret> olarak kurulur.
+      # https://<servis>.onrender.com/webhook olarak kurulur; sir baslikta dogrulanir.
       # Boş bırakılırsa bot getUpdates yoklamasını kullanır (varsayılan davranış).
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false

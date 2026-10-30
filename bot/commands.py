@@ -144,6 +144,7 @@ def _saglik_ozeti() -> dict:
         esik_sn = 259200
     yas = _pkg._heartbeat_yasi_sn(simdi)
     return {
+        "startup_complete": bool(_pkg._startup_ready) and not _pkg._shutdown_requested,
         "heartbeat_age_s": None if yas is None else int(yas),
         "heartbeat_stale": None if yas is None else bool(yas > esik_sn),
         "heartbeat_stale_esik_s": esik_sn,

@@ -362,3 +362,31 @@ def test_dm_ve_public_ayni_hedef_hata(monkeypatch, capsys):
     cikti = capsys.readouterr().out
     assert "AYNI" in cikti
     assert dc._sayac[dc.FAIL] >= 1
+
+
+def test_render_probe_warns_when_not_ready_and_heartbeat_unknown(monkeypatch, capsys):
+    import requests
+
+    class Response:
+        status_code = 200
+        def json(self):
+            return {"status": "ok", "startup_complete": False, "heartbeat_stale": None}
+
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: Response())
+    D.kontrol_render("https://example.invalid", "")
+    out = capsys.readouterr().out
+    assert "henüz hazır değil" in out
+    assert "Heartbeat durumu bilinmiyor" in out
+
+
+def test_render_probe_handles_non_object_json(monkeypatch, capsys):
+    import requests
+
+    class Response:
+        status_code = 200
+        def json(self):
+            return ["ok"]
+
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: Response())
+    D.kontrol_render("https://example.invalid", "")
+    assert "beklenen JSON değil" in capsys.readouterr().out

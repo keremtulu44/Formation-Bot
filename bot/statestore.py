@@ -181,6 +181,9 @@ def _cache_verisi_kullanilabilir(yas_dk: float, taze_veri_var: bool, seans_acik:
 # Neden? systemd durdururken Python anında ölürse o taramada biriken deque'ler kaybolur.
 _shutdown_requested = False
 
+# Startup tamamlanana ve shutdown baslayana kadar hazirlik sinyali kapali.
+_startup_ready = False
+
 
 _deque_manager_ref = None
 
