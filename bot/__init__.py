@@ -159,6 +159,7 @@ from bot.statestore import (  # noqa: F401  (geç bağlama — modülerleştirme
     _scan_istegi,
     _scan_job_active,
     _scan_job_request,
+    _scan_job_queue,
     _scan_last_result,
     _scan_request_lock,
     _shutdown_requested,
@@ -768,6 +769,7 @@ __all__ = [
     "_scan_istegi",
     "_scan_job_active",
     "_scan_job_request",
+    "_scan_job_queue",
     "_scan_last_result",
     "_scan_request_lock",
     "_shutdown_requested",
@@ -864,3 +866,15 @@ __all__ = [
     "timedelta",
     "write_heartbeat",
 ]
+
+# `import bot.app` önce gelirse alt modüller yukarıda `import main` yaparken
+# main, henüz tamamlanmamış bot paketinden erken `import *` yapar. Gerçek script
+# girişinde bu sorun yoktur; bağımsız tanılama/test yolunda ise facade'ın yüzlerce
+# adı eksik kalıyordu. Paket tamamlanınca yalnız EKSİK adları bağla; mevcut main
+# değerlerini (ve olası yamaları) değiştirme. `import main` önceyse normal
+# `from bot import *` zaten hemen ardından aynı adları bağlayacaktır.
+_main_facade = sys.modules.get("main")
+if _main_facade is not None:
+    for _export_name in __all__:
+        if _export_name not in vars(_main_facade):
+            setattr(_main_facade, _export_name, globals()[_export_name])

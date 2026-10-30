@@ -11,6 +11,7 @@ import math
 import os
 import pickle
 import tempfile
+import threading
 from typing import Dict, List, Optional, Tuple
 
 from config import (
@@ -99,6 +100,9 @@ class StockDequeManager:
         self.maxlen = maxlen
         self.data_dir = data_dir
         self.persistent_store = persistent_store
+        # Komutlar analizle eşzamanlı okuyabilir: kısa önbellek kopyalama ve
+        # deque'yi değiştirme bölümlerini koru; ağ/hesaplamayı kilit altında tutma.
+        self._cache_lock = threading.RLock()
         self.deques: Dict[str, deque] = {}
         # 1D (günlük) derin veri: 1H penceresinden BAĞIMSIZ (~500 bar).
         # Neden ayrı? 1H deque 360 bar = ~40 iş günü; resample 1D sadece ~40 bar
@@ -239,17 +243,18 @@ class StockDequeManager:
         )
 
     def get_deque(self, stock: str) -> deque:
-        """Hisse için deque al, yoksa oluştur"""
-        if stock not in self.deques:
-            # Diskten yüklemeyi dene
-            loaded = self.load_from_disk(stock)
-            if loaded is not None:
-                self.deques[stock] = loaded
-                _pkg.logger.info(f"{stock} deque diskten yüklendi - {len(loaded)} mum")
-            else:
-                self.deques[stock] = deque(maxlen=self.maxlen)
-                _pkg.logger.info(f"{stock} için yeni deque oluşturuldu")
-        return self.deques[stock]
+        """Hisse için deque al, yoksa oluştur."""
+        with self._cache_lock:
+            if stock not in self.deques:
+                # Eşzamanlı ilk okuma ve tarama birbirinin deque'sini ezmesin.
+                loaded = self.load_from_disk(stock)
+                if loaded is not None:
+                    self.deques[stock] = loaded
+                    _pkg.logger.info(f"{stock} deque diskten yüklendi - {len(loaded)} mum")
+                else:
+                    self.deques[stock] = deque(maxlen=self.maxlen)
+                    _pkg.logger.info(f"{stock} için yeni deque oluşturuldu")
+            return self.deques[stock]
     
     def append_candle(self, stock: str, candle: dict) -> bool:
         """Validate and append one canonicalized candle without bypassing the OHLCV boundary."""
@@ -271,10 +276,11 @@ class StockDequeManager:
             _pkg.logger.error("%s tekil mum reddedildi (kanonikleştirme: %s)", stock, type(exc).__name__)
             return False
         dq = self.get_deque(stock)
-        if _karisik_timestamp_zaman_dilimi(list(dq) + [normalized]):
-            _pkg.logger.error("%s tekil mum reddedildi (cache zaman dilimi karışık)", stock)
-            return False
-        dq.append(normalized)
+        with self._cache_lock:
+            if _karisik_timestamp_zaman_dilimi(list(dq) + [normalized]):
+                _pkg.logger.error("%s tekil mum reddedildi (cache zaman dilimi karışık)", stock)
+                return False
+            dq.append(normalized)
         return True
     
     def append_dataframe(self, stock: str, df: pd.DataFrame) -> bool:
@@ -297,7 +303,8 @@ class StockDequeManager:
             }]
             return False
         dq = self.get_deque(stock)
-        birlesik: Dict[datetime, dict] = {c['timestamp']: c for c in dq}
+        with self._cache_lock:
+            birlesik: Dict[datetime, dict] = {c['timestamp']: c for c in dq}
         yeni = 0
         guncellenen = 0
         for idx, row in df.iterrows():
@@ -326,9 +333,9 @@ class StockDequeManager:
             }]
             return False
         tumu = sorted(birlesik.values(), key=lambda c: c['timestamp'])
-        dq.clear()
-        for c in tumu[-self.maxlen:]:
-            dq.append(c)
+        with self._cache_lock:
+            dq.clear()
+            dq.extend(tumu[-self.maxlen:])
         _pkg.logger.info(f"{stock}: {yeni} yeni / {guncellenen} güncellenen mum (geldi {len(df)}, toplam {len(dq)})")
         # --- SPLIT / SÜREKLİLİK KONTROLÜ (FAZ 2) ---
         # Ham (auto_adjust=False) seride split/bedelsiz ani zıplama üretir -> pivot,
@@ -357,10 +364,11 @@ class StockDequeManager:
     def to_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
         """Deque'yi DataFrame'e çevir - pattern tespiti için"""
         dq = self.get_deque(stock)  # Diskten yüklemeyi de dene
-        if len(dq) == 0:
+        with self._cache_lock:
+            data = list(dq)
+        if not data:
             return None
-        data = list(dq)
-        
+
         # Timestamp'e göre sırala
         data_sorted = sorted(data, key=lambda x: x['timestamp'])
         
@@ -509,35 +517,36 @@ class StockDequeManager:
 
     def get_gunluk_deque(self, stock: str) -> deque:
         """1D (günlük) deque al, yoksa diskten yükle / oluştur."""
-        if stock not in self.gunluk_deques:
-            # Yazma yolu DATA_DIR; okuma gerekirse repo seed'ine düşer (C4).
-            yol = self._okuma_yolu(f"{stock}_gunluk.json")
-            dq = None
-            if os.path.exists(yol):
-                try:
-                    import json
-                    with open(yol, "r", encoding="utf-8") as stream:
-                        raw = json.load(stream)
-                    yuklenen, skipped = _temiz_1d_cache_kayitlari(raw)
-                    if skipped:
-                        _pkg.logger.warning(
-                            "%s günlük JSON cache: %d bozuk/geçersiz kayıt atlandı",
-                            stock, skipped,
+        with self._cache_lock:
+            if stock not in self.gunluk_deques:
+                # Yazma yolu DATA_DIR; okuma gerekirse repo seed'ine düşer (C4).
+                yol = self._okuma_yolu(f"{stock}_gunluk.json")
+                dq = None
+                if os.path.exists(yol):
+                    try:
+                        import json
+                        with open(yol, "r", encoding="utf-8") as stream:
+                            raw = json.load(stream)
+                        yuklenen, skipped = _temiz_1d_cache_kayitlari(raw)
+                        if skipped:
+                            _pkg.logger.warning(
+                                "%s günlük JSON cache: %d bozuk/geçersiz kayıt atlandı",
+                                stock, skipped,
+                            )
+                        dq = deque(
+                            yuklenen[-GUNLUK_DEQUE_MAXLEN:], maxlen=GUNLUK_DEQUE_MAXLEN
                         )
-                    dq = deque(
-                        yuklenen[-GUNLUK_DEQUE_MAXLEN:], maxlen=GUNLUK_DEQUE_MAXLEN
-                    )
-                    _pkg.logger.info("%s günlük deque diskten yüklendi - %d bar", stock, len(dq))
-                except Exception as exc:
-                    _pkg.logger.warning(
-                        "%s günlük cache okunamadı (%s) - yeniden çekilecek",
-                        stock, type(exc).__name__,
-                    )
-                    dq = None
-            if dq is None:
-                dq = deque(maxlen=GUNLUK_DEQUE_MAXLEN)
-            self.gunluk_deques[stock] = dq
-        return self.gunluk_deques[stock]
+                        _pkg.logger.info("%s günlük deque diskten yüklendi - %d bar", stock, len(dq))
+                    except Exception as exc:
+                        _pkg.logger.warning(
+                            "%s günlük cache okunamadı (%s) - yeniden çekilecek",
+                            stock, type(exc).__name__,
+                        )
+                        dq = None
+                if dq is None:
+                    dq = deque(maxlen=GUNLUK_DEQUE_MAXLEN)
+                self.gunluk_deques[stock] = dq
+            return self.gunluk_deques[stock]
 
     def append_gunluk_dataframe(self, stock: str, df: pd.DataFrame) -> bool:
         """1H ile aynı OHLCV kapısı ve idempotent timestamp birleştirmesi."""
@@ -549,7 +558,8 @@ class StockDequeManager:
             )
             return False
         dq = self.get_gunluk_deque(stock)
-        birlesik = {c["timestamp"]: c for c in dq}
+        with self._cache_lock:
+            birlesik = {c["timestamp"]: c for c in dq}
         yeni = guncellenen = 0
         for idx, row in df.iterrows():
             ts = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
@@ -566,18 +576,20 @@ class StockDequeManager:
                 yeni += 1
             birlesik[ts] = candle
         tumu = sorted(birlesik.values(), key=lambda c: c["timestamp"])
-        dq.clear()
-        for c in tumu[-GUNLUK_DEQUE_MAXLEN:]:
-            dq.append(c)
+        with self._cache_lock:
+            dq.clear()
+            dq.extend(tumu[-GUNLUK_DEQUE_MAXLEN:])
         _pkg.logger.info(f"{stock}: {yeni} yeni / {guncellenen} güncellenen GÜNLÜK mum "
                     f"(toplam {len(dq)} bar)")
         return True
 
     def to_gunluk_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
         dq = self.get_gunluk_deque(stock)
-        if len(dq) == 0:
+        with self._cache_lock:
+            data = list(dq)
+        if not data:
             return None
-        df = pd.DataFrame(list(dq))
+        df = pd.DataFrame(data)
         df.set_index("timestamp", inplace=True)
         # to_dataframe ile aynı tz sigortası (tarihsel karma-tz veri güvenliği)
         if not isinstance(df.index, pd.DatetimeIndex):

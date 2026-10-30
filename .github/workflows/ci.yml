@@ -112,7 +112,9 @@ jobs:
       # /test ve kapalı webhook sözleşmeleri gerçek entrypoint üzerinden doğrulanır.
       - name: Render duman testi (/health ayakta mı?)
         run: |
-          set -uo pipefail
+          # Kontrolün kendi kabuğunda da hata durdurulsun; yalnız runner'ın
+          # varsayılan bash -e davranışına güvenmeyin.
+          set -euo pipefail
           ROOT="$RUNNER_TEMP/formation-bot-health-smoke"
           mkdir -p "$ROOT"
           # Render'ın deploy sırasında enjekte ettiği değişkenler (sürüm görünürlüğü)

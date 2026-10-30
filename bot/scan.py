@@ -151,13 +151,18 @@ def _tarama_saglik_kontrolu(notifier) -> None:
 
 
 def create_yahoo_pacer() -> YahooRequestPacer:
-    """Her Yahoo isteğine uygulanan seri pacing ayarları."""
+    """Her Yahoo isteğine uygulanan, kapanış sinyaline duyarlı seri pacing."""
+    # Geç import döngüsel modül bağımlılığını önler. Uzun grup beklemeleri
+    # SIGTERM sonrası yeniden deploy'da güvenli kapanışı geciktirmesin.
+    from bot.app import _shutdown_bekle
+
     return YahooRequestPacer(
         batch_size=SCAN_REQUEST_BATCH_SIZE,
         request_delay_min=SCAN_REQUEST_DELAY_MIN_SEC,
         request_delay_max=SCAN_REQUEST_DELAY_MAX_SEC,
         batch_pause_min=SCAN_BATCH_PAUSE_MIN_SEC,
         batch_pause_max=SCAN_BATCH_PAUSE_MAX_SEC,
+        sleep_fn=_shutdown_bekle,
         logger=_pkg.logger,
     )
 
@@ -180,6 +185,9 @@ def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=
         period = periods.get(stock, FULL_1H_FETCH_PERIOD)
         try:
             with pacer.request(f"{stock} 1H"):
+                # Sinyal pacing beklemesindeyken gelmiş olabilir.
+                if _pkg._shutdown_requested:
+                    break
                 frame, can_retry, reason = _pkg.fetch_yfinance_1h(
                     stock, period=period, with_status=True
                 )
@@ -210,16 +218,23 @@ def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=
             f"{phase}: {len(retryable)} geçici veri hatası için tek tekrar denemesi; "
             f"{backoff:.1f} sn bekleniyor"
         )
-        time.sleep(backoff)
-        pacer.reset_batch()
+        # Normal retry beklemesi korunur; SIGTERM gelirse en geç bir saniyede
+        # bırakılır ve ilk denemede başarısız olan semboller kaybolmaz.
+        from bot.app import _shutdown_bekle
+        _shutdown_bekle(backoff)
+        if not _pkg._shutdown_requested:
+            pacer.reset_batch()
 
         for stock, first_reason in retryable.items():
             if _pkg._shutdown_requested:
                 failures[stock] = first_reason
                 continue
-            retry_count += 1
             try:
                 with pacer.request(f"{stock} 1H retry"):
+                    if _pkg._shutdown_requested:
+                        failures[stock] = first_reason
+                        continue
+                    retry_count += 1
                     frame, _can_retry_again, reason = _pkg.fetch_yfinance_1h(
                         stock,
                         period=periods.get(stock, FULL_1H_FETCH_PERIOD),
@@ -504,6 +519,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             simdiki_zaman = _pkg.datetime.now(ISTANBUL_TZ)
             
             _pkg.logger.info(f"[{idx+1}/{len(scan_stocks)}] {stock} taranıyor...")
+            ilerleme_yaz = getattr(_pkg._live_state, "update_scan_progress", None)
+            if callable(ilerleme_yaz):
+                ilerleme_yaz(idx + 1, stock)
             
             # Deque'den mevcut pencere; fetch aşaması yukarıda, retry dahil tamamlandı.
             df_1h = deque_manager.to_dataframe(stock)
@@ -607,6 +625,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             # (davranış asla kötüleşmez, sadece iyileşir).
             if deque_manager.gunluk_veri_eksik_mi(stock, simdiki_zaman):
                 with pacer.request(f"{stock} 1D"):
+                    if _pkg._shutdown_requested:
+                        break
                     taze_gunluk = fetch_yfinance_1d(stock)
                 deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
                 if taze_gunluk is not None and len(taze_gunluk) >= 30:
@@ -700,23 +720,31 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     # başta hesaplanır.
                     mtf_destek = False
                     mtf_uyum = 0
+                    mtf_kontrol_edildi = False
+                    mtf_yon_biliniyor = None
                     try:
                         ust_snap = None
                         if tf_name == "1h":
                             ust_snap = lifecycle_manager.get_snapshot(stock + "_4h")
                         elif tf_name == "4h":
                             ust_snap = lifecycle_manager.get_snapshot(stock + "_1d")
+                        # 2h için bu akış üst TF'yi sorgulamaz; None ise de
+                        # "onay yok" değil "kontrol edilmedi" demeliyiz.
+                        mtf_kontrol_edildi = ust_snap is not None
                         if (ust_snap and ust_snap.active
                                 and ust_snap.state not in ("FORMASYON_GECERSIZ", "Yok", "ST_NONE")):
                             mtf_destek = True
                             # Yön uyumu: üst TF'nin kırılım yönü aynıysa
                             # ölçümdeki "MTF 4/4" kademesine denk sayılır.
                             ust_yon = int(getattr(ust_snap, "break_dir", 0) or 0)
+                            mtf_yon_biliniyor = bool(ust_yon and int(break_dir or 0))
                             if ust_yon and int(break_dir or 0) and ust_yon == int(break_dir):
                                 mtf_uyum = 4
                     except Exception:
                         mtf_destek = False
                         mtf_uyum = 0
+                        mtf_kontrol_edildi = False
+                        mtf_yon_biliniyor = None
 
                     # Girişin banda uzaklığı (ATR cinsinden). Devamlılık
                     # puanının en sağlam maddesi: kırılımı kovalamak
@@ -906,12 +934,14 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             'break_dir': break_dir,
                             'break_strength': getattr(active, 'break_strength', q),
                             'break_price': break_price,
-                            'retest_seen': getattr(snap, 'retest_seen', False),
+                            'retest_seen': getattr(snap, 'retest_seen', None),
                             'upper_touches': upper_touches,
                             'lower_touches': lower_touches,
                             'age_bars': age_bars,
                             'band_baslangic': band_baslangic,
                             'mtf_destek': mtf_destek,
+                            'mtf_kontrol_edildi': mtf_kontrol_edildi,
+                            'mtf_yon_biliniyor': mtf_yon_biliniyor,
                             # Devamlılık puanının girdileri (bkz. devamlilik.py).
                             # `confidence_score` kapı için kalır, kartta okunmaz.
                             'mtf_uyum': mtf_uyum,
@@ -1285,7 +1315,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
         )
         _pkg.son_tarama_kaydet()
     else:
-        hata = (f"Eksik tarama: {tur_taranan}/{len(scan_stocks)} hisse başarıyla hesaplandı; "
+        hata = (f"Eksik tarama: {tur_taranan}/{len(scan_stocks)} sembol başarıyla hesaplandı; "
                 f"{max(tur_hata, eksik)} hata/atlanan.")
         _pkg._live_state.fail_scan(
             hata,

@@ -91,6 +91,52 @@ from notifier.util import (
     telegram_hata_ipucu,
     token_bicimi_uygun_mu,
 )
+def _retest_durumu(data: Dict, state: str):
+    """Başarılı retest kendi kanıtıdır; eksik alan 'yok' anlamına gelmez."""
+    if state == "RETEST_BASARILI":
+        return True
+    value = data.get("retest_seen")
+    if value is None:
+        return None
+    try:
+        if value is True or value == 1:
+            return True
+        if value is False or value == 0:
+            return False
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def _mtf_kontrol_edildi(data: Dict) -> bool:
+    kontrol = data.get("mtf_kontrol_edildi")
+    if kontrol is not None:
+        return bool(kontrol)
+    return data.get("mtf_destek") is not None or data.get("mtf_uyum") is not None
+
+
+def _kart_yorumu(data: Dict, bolumler: Dict) -> Dict:
+    """Bir olayın yorumunu bir kez seç; DM, grup ve tekrar denemeleri paylaşsın."""
+    sabit = data.get("_kart_yorum_sabit")
+    if isinstance(sabit, dict):
+        return sabit
+    from . import kart_yorum
+    sonuc = kart_yorum.sec(data, bolumler)
+    if data.get("kart_yorum_kapisi"):
+        data["_kart_yorum_sabit"] = sonuc
+    return sonuc
+
+
+def _mum_damgasi_ekle(lines: List[str], stamp: str) -> None:
+    """Uzun mum aralığını anlamlı iki satıra ayır; 'mumu' tek kalmasın."""
+    match = re.fullmatch(r"🕒 (\d{1,2} \S+) (\d{2}:\d{2}→\d{2}:\d{2}) mumu", stamp)
+    if match and _satir_px(stamp) > _kart_esik_px():
+        _satir(lines, f"🕒 {match.group(1)} mumu")
+        _satir(lines, f"   {match.group(2)}")
+    else:
+        _satir(lines, stamp)
+
+
 def _format_lifecycle_alert(data: Dict, *, guncelleme: bool = False) -> str:
     """Onaylı yaşam döngüsü olaylarının mesajı. Stil: _pkg.TELEGRAM_ALERT_STYLE."""
     stil = str(_pkg.TELEGRAM_ALERT_STYLE or "kart").strip().lower()
@@ -133,7 +179,7 @@ def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False) -> str
     _satir(satirlar, f"◆ {pattern}" + (f" · {kisalt}" if kisalt else ""))
     damga = _kart_mum_damgasi(data)
     if damga:
-        _satir(satirlar, damga)
+        _mum_damgasi_ekle(satirlar, damga)
 
     # --- olay künyesi: yalnız payload'da olan veri, uydurma yok ---
     künye: List[str] = []
@@ -169,12 +215,19 @@ def _format_lifecycle_alert_kart(data: Dict, *, guncelleme: bool = False) -> str
     temas = []
     if data.get("upper_touches") is not None and data.get("lower_touches") is not None:
         temas.append(f"temas üst {data.get('upper_touches')} / alt {data.get('lower_touches')}")
-    temas.append("retest var" if data.get("retest_seen") else "retest yok")
+    retest = _retest_durumu(data, state)
+    temas.append("retest var" if retest is True else "retest yok" if retest is False
+                 else "retest bilgisi yok")
     _satir(künye, "▪ " + " · ".join(t for t in temas if t))
     ust_tf = _KART_UST_TF.get(timeframe)
     if ust_tf:
-        _satir(künye, f"▪ MTF: {ust_tf} onayı "
-                      + ("var" if data.get("mtf_destek") else "yok"))
+        if not _mtf_kontrol_edildi(data):
+            _satir(künye, f"▪ MTF: {ust_tf} onayı bilinmiyor")
+        elif data.get("mtf_destek") and data.get("mtf_yon_biliniyor") is False:
+            _satir(künye, f"▪ MTF: {ust_tf} formasyonu · yön belirsiz")
+        else:
+            _satir(künye, f"▪ MTF: {ust_tf} onayı "
+                          + ("var" if data.get("mtf_destek") else "yok"))
     yas = data.get("age_bars")
     dogum = data.get("band_baslangic")
     yas_metni = ""
@@ -327,8 +380,7 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     # YAZILIR (yeni ölçüm yok, sayı uydurulmaz); kod/n logdadır.
     yorum: Dict = {}
     try:
-        from notifier.kart_yorum import sec as _kart_yorum_sec
-        yorum = _kart_yorum_sec(data, bolumler)
+        yorum = _kart_yorumu(data, bolumler)
     except Exception:  # noqa: BLE001 — yorum katmanı kartı düşürmez
         import logging as _logging
         _logging.getLogger(__name__).exception("kart yorumu hesaplanamadı")
@@ -353,7 +405,7 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
         _satir(blok, pattern)
     damga = _kart_mum_damgasi(data)
     if damga:
-        _satir(blok, damga)
+        _mum_damgasi_ekle(blok, damga)
     # Olayın tek ölçüsü: teyitlide kırılan seviye, geçersizleşmede dönüş
     # sınırı. Kullanıcı isteği (2026-10-26): kapanış bilgisi kaldırıldı,
     # kırılan seviye net şekilde vurgulanır.
@@ -429,14 +481,20 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     # 2026-10-26: göreli güç (20 mum endekse +puan) kaldırıldı - çok açık değil.
     # Kırılan seviyeye dönüş ve üst TF onayı daha net gösterilmeli (kullanıcı isteği).
     if not gecersiz:
-        # Net vurgu: ikon + net ifade, substring korunuyor (test uyumu için)
-        if data.get("retest_seen"):
+        retest = _retest_durumu(data, state)
+        if retest is True:
             _satir(blok, "↻ kırılan seviyeye dönüş var ✓")
-        else:
+        elif retest is False:
             _satir(blok, "↻ kırılan seviyeye dönüş yok ✗")
+        else:
+            _satir(blok, "↻ seviye dönüşü bilinmiyor")
     ust_kisa = _KART_UST_TF.get(timeframe)
     if ust_kisa:
-        if int(_sayı(data.get("mtf_uyum"), 0) or 0) > 0:
+        if not _mtf_kontrol_edildi(data):
+            _satir(blok, f"◆ {ust_kisa} onayı bilinmiyor")
+        elif data.get("mtf_destek") and data.get("mtf_yon_biliniyor") is False:
+            _satir(blok, f"◆ {ust_kisa} formasyonu · yön belirsiz")
+        elif int(_sayı(data.get("mtf_uyum"), 0) or 0) > 0:
             _satir(blok, f"◆ {ust_kisa} onayı var ✓ — uyumlu")
         elif data.get("mtf_destek"):
             _satir(blok, f"◆ {ust_kisa} onayı var — uyumsuz")
@@ -738,12 +796,18 @@ def _kart_mum_damgasi(data: Dict) -> str:
             zaman = deger if isinstance(deger, datetime) else datetime.fromisoformat(str(deger))
         except (TypeError, ValueError):
             continue
+        # Sağlayıcı UTC döndürürken kapanış kuralı İstanbul saatindedir.
+        # İki saat dilimini yan yana yazmak yanıltıcı mum süresi üretir.
+        if zaman.tzinfo is not None:
+            zaman = zaman.astimezone(ISTANBUL_TZ)
         bitis = data.get("bar_kapanis")
         try:
             bitis_zaman = (bitis if isinstance(bitis, datetime)
                            else datetime.fromisoformat(str(bitis))) if bitis else None
         except (TypeError, ValueError):
             bitis_zaman = None
+        if bitis_zaman is not None and bitis_zaman.tzinfo is not None:
+            bitis_zaman = bitis_zaman.astimezone(ISTANBUL_TZ)
         # Ay adı açık yazılır: "21 Ekim" herkesin okuduğu biçim, "21.10" değil
         # (kullanıcı kararı 2026-10-21: "teknik bilen biri bile anlamayabilir").
         bas = f"{zaman.day} {_KART_AYLAR[zaman.month - 1]} {zaman:%H:%M}"

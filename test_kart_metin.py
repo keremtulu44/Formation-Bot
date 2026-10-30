@@ -269,7 +269,7 @@ def test_ms_hata_sayaci_durum_satirina_yazilir():
     bozuk = {"4h": {"market_structure": {"error": "engine failed", "skipped": False}}}
     main_module._ms_hata_kaydet(bozuk, "SISE")
     satir = main_module._ms_hata_satiri()
-    assert satir.startswith("⚠️ MS (piyasa yapısı) motoru: 1 hissede hata")
+    assert satir.startswith("⚠️ MS (piyasa yapısı) motoru: 1 sembolde hata")
     assert "engine failed" in satir
     # Aynı hissenin ikinci TF alarmı sayacı ŞİŞİRMEZ (hisse bazlı sayım).
     main_module._ms_hata_kaydet(bozuk, "SISE")
@@ -278,5 +278,5 @@ def test_ms_hata_sayaci_durum_satirina_yazilir():
     main_module._ms_hata_kaydet({"4h": {"market_structure": {"error": None, "skipped": True}}},
                                 "GARAN")
     main_module._ms_hata_kaydet(bozuk, "GARAN")
-    assert "2 hissede" in main_module._ms_hata_satiri()
+    assert "2 sembolde" in main_module._ms_hata_satiri()
     main_module._ms_hata_sayaci.update({"hisseler": set(), "son": ""})

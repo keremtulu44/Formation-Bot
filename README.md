@@ -10,7 +10,7 @@
 python3 -m pip install -r requirements.txt   # pandas, numpy, pytz, yfinance
 cp .env.example .env                         # TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
 python3 main.py                              # canlı bot (heartbeat + SIGTERM destekli)
-python3 canli_tarama.py                      # Aktif evren (48 sembol) x 4 TF canlı tarama raporu
+python3 canli_tarama.py                      # Aktif evren x 4 TF canlı tarama raporu
 python3 canli_tarama.py --cache              # internet yok: bot_data cache ile tarar
 python3 test_tarama_zamani.py                # Faz 1+2 regresyon (90 kontrol)
 python3 test_pennant.py                      # flama regresyon (6 test)
@@ -42,9 +42,11 @@ Kod, testler ve `scripts/` **yerinde** durur; yerleşim kuralı ve gerekçesi
 
 ## Tarama temposu
 
-Canlı bot `BIST_50` listesindeki **48 sembolü** tarar; Yahoo'da sorunlu KOZAL ve KOZAA
-şimdilik çıkarılmıştır. Eksik iki bileşen için veri sağlayıcısı doğrulaması sonrası
-sembol eklenmelidir. Boş/kısa veya 5 günden eski cache için 60 günlük 1H geçmişi;
+Varsayılan `BIST_50` evreni **48 hisse, 5 endeks ve 4 makro araçtan oluşan 57
+semboldür**; `STOCK_UNIVERSE` ortam değişkeni bu listeyi değiştirebilir. KOZAL ve
+KOZAA hisseleri Yahoo veri sorunları nedeniyle şimdilik çıkarılmıştır. Eksik iki
+bileşen için veri sağlayıcısı doğrulaması sonrası sembol eklenmelidir. Boş/kısa
+veya 5 günden eski cache için 60 günlük 1H geçmişi;
 sağlıklı cache'in rutin güncellemesinde yalnızca son 5 gün indirilir ve timestamp'e
 göre tekilleştirilerek eklenir. Yahoo istekleri paralel değil, seri yürütülür: en çok
 10 HTTP isteğinden sonra 10–15 sn mola; istekler arasında 0,9–1,5 sn rastgele aralık.
@@ -103,15 +105,17 @@ Bot, sinyal defterini **tamamen yerel** tutar: `DATA_DIR/karne_defteri.json`
 
 Regresyon: `test_karne.py` (30 test).
 
-**Canlı notu (Render):** `DATA_DIR` orada `/tmp` olduğu için defter redeploy'da
-silinir; `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` tanımlıysa defter
-`state:karne_defteri` anahtarına **yalnız yedek** olarak yazılır ve açılışta
-yerelle birleştirilir. Supabase **zorunlu değildir**; yoksa karne yerel dosyayla
-tam çalışır.
+**Canlı notu (Render):** `DATA_DIR` varsayılan `/tmp` olduğundan defter
+redeploy/restart'ta kaybolabilir. Bot şu anda Supabase'i **yalnız okur**:
+varsa eski `state:karne_defteri` kaydı açılışta yerelle birleştirilebilir, ancak
+yeni karne verisi Supabase'e yedeklenmez. Kalıcılık gerekiyorsa uygun bir kalıcı
+disk ve `DATA_DIR` gerekir; Supabase tanımlamak tek başına yeterli değildir.
 
 ## Replay araştırma sonuçları
 
 **174 hisse kırılım ve teyit Replay'i:** [ayrıntılı sonuç, yöntem ve veri rehberi](docs/arastirma/KIRILIM_TEYIT_REPLAY_AYRINTILI_DOSYA_2026-10-30.md) — aday/teyit karşılaştırması, yukarı-aşağı ve zaman dilimleri, sansür, kontrol ve ham veriler. Ölçüm tarihsel araştırmadır; canlı bildirim teslimi veya yatırım getirisi değildir.
+
+Verilerin hangi amaçlarla kullanılabileceği ve güvenilirlik sınırları: [veri envanteri ve kullanım değerlendirmesi](docs/arastirma/VERI_KULLANIM_VE_GUVENILIRLIK_2026-10-30.md).
 
 Tüm genel araştırmalar, kaçırılan hareket pilotu ve **deploy hisseleri × endeks/altın/gümüş** özel sonuçları: [sonuç ve veri dizini](docs/arastirma/SON_REPLAY_SONUCLARI.md). Özel karşılaştırmanın [okunabilir raporu](docs/arastirma/DEPLOY_PIYASA_PILOTU.md), [tekli CSV verileri](docs/arastirma/DEPLOY_TEKLI_PIYASA_HUCRELERI.csv) ve [tekli/ikili sıkıştırılmış verileri](docs/arastirma/DEPLOY_PIYASA_PILOT.csv.gz) ayrı saklanır. Veriler araştırma amaçlıdır; makro kapanış saatleri doğrulanmamıştır.
 
@@ -173,14 +177,15 @@ Yanıt canlılık alanları da taşır (`heartbeat_age_s`, `heartbeat_stale`,
 Yani "bot ayakta görünüyor ama DM komutları cevap vermiyor" durumunun sebebi
 (yanlış `chat_id` → `yetkisiz_sohbet`, uyku → `bayat_atlanan`, kapalı katman →
 `mod: kapali`, ölü dinleyici → `dinleyici_canli: false`) tek bakışta görülür.
-Render'ın kendi health check'i sorgusuz çağırdığı için `/health` **her zaman
-200** alır, ama `GET /health?strict=1` heartbeat bayatken **503** döner —
-UptimeRobot/cron-job.org gibi bir monitörü bu adrese bağlarsan "bot dondu"
-durumu sessizce geçmez.
+Render'ın health check'i sorgusuz `/health` çağırır; bu uç 200 dönse bile
+başlangıç veya dış servisler hazır olmayabilir. `/ready`, başlangıç tamamlanana
+kadar 503 döner. `GET /health?strict=1` heartbeat **bayatsa** 503 döner, ama
+heartbeat bilinmiyorsa (`null`) 200 canlı taramanın kanıtı değildir.
 
-`TELEGRAM_TEST_KEY` tanımlıysa `GET /test?k=<anahtar>` gerçek bir Telegram test
-mesajı gönderir (gönderim tarafını telefondan doğrulamak için). Anahtar
-tanımlı değilse bu yol 404 döner ve Telegram'a hiçbir istek gitmez.
+`TELEGRAM_TEST_KEY` tanımlıysa `GET /test` isteğinde anahtarı `X-Test-Key`
+başlığında göndererek gerçek bir Telegram test mesajı yollanabilir. Anahtar
+tanımlı değilse bu yol 404 döner. `?k=` varsayılan olarak kapalıdır; yalnız
+`TELEGRAM_TEST_KEY_QUERY=1` ile eski yöntem açılır (sır URL'ye düşer).
 
 `TELEGRAM_WEBHOOK_SECRET` tanımlıysa aynı sunucu `POST /webhook` (sırsız yol;
 doğrulama `X-Telegram-Bot-Api-Secret-Token` başlığıyla)
@@ -205,14 +210,14 @@ grup sohbetine bot gürültüsü düşmez.
 |---|---|
 | `/formasyonlar` | Günün canlı formasyonları (`/formasyonlar 1h`, `/formasyonlar THYAO` filtreleri) |
 | `/canli`, `/c` | Canlı formasyonlar tek kompakt mesajda |
-| `/panel`, `/p` | 48 hisse × 4 TF slot tablosu + sayılar + kompozit kalite/durum puanına göre en anlamlı 12 aday (`/genel`, `/tablo` diğer adları; `/panel 1h THYAO` gibi filtreler). Çağrıldığında güncel veriyle analiz başlatır. |
+| `/panel`, `/p` | Evrendeki semboller × 4 TF slot tablosu (varsayılan 57 sembol) + sayılar + kompozit kalite/durum puanına göre en anlamlı 12 aday (`/genel`, `/tablo` diğer adları; `/panel 1h THYAO` gibi filtreler). Çağrıldığında analiz başlatır. |
 | Son tarama durumu | Başarısız/eksik analiz başarılı boş sonuçtan ayrılır; önceki başarılı adaylar hata durumunda korunur. Yeniden başlatılmış snapshot güncel kabul edilmez. Supabase yalnızca opsiyonel OHLCV cache/geçmiş kaydıdır. |
 | `/ozet`, `/o` | Günlük özet (tamamlanan/retest/sıkışan) |
 | `/durum` | Piyasa, son tarama yaşı, canlı sayı, veri sağlığı, günlük alarm/hata |
 | `/tara [HISSE]` | Şimdi analiz et (seans dışı da; mum kapanışını beklemez). Cache'teki en yeni mum timestamp'i/veri yaşı raporlanır; provider timestamp sözleşmesi doğrulanmadığı için bu, tamamlanmış mum garantisi değildir. |
 | `/yardim` | Komut listesi |
 
-`/panel` ve `/tara [HISSE]` yeni analiz işini kuyruğa alır ve bitince raporlar. Analiz sırasında gelen slash komutları kuyruğa eklenmez ama sessiz de bırakılmaz: kısa bir "⏳ Analiz sürüyor" mesajıyla yanıtlanır. İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan 20:00) anında ayrı bir tam evren analizi yapılır.
+`/panel` ve `/tara [HISSE]` yeni analiz ister ve bitince sonucu komutun geldiği sohbete gönderir. Analiz sürerken `/durum` ilerlemeyi, liste komutları **son tamamlanan analizi** gösterir; yarım sonuçlar yayımlanmaz. Yeni analiz istekleri tek tek çalışır; aynı sohbetin aynı isteği tekrarlanmaz, en fazla 3 istek bekler. Zamanlı işler, bekleyen manuel analizlerin arasına girebilir. Sırası geldiğinde 30 dakikayı aşmış istek çalıştırılmaz ve sahibine bilgi verilir; bildirim, önceki işler bitene kadar gecikebilir. Sıra bellektedir, bot yeniden başlarsa bekleyen istekler silinir. Yetki, eski komut ve hız sınırları geçerliliğini korur. İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan 20:00) anında ayrı bir tam evren analizi yapılır.
 
 Komutlar varsayılan olarak `getUpdates` uzun yoklamasıyla ayrı bir thread'de
 toplanır; aynı token'la ikinci bir kopya (Termux/PC) çalışıyorsa `409 Conflict`
@@ -237,10 +242,11 @@ python deploy_check.py --url https://<servis-adin>.onrender.com --test-key <TELE
 ```
 
 Her satır ✅/⚠️/❌ ile biter, ❌ satırının altında ne yapılacağı yazar; token ve
-anahtar değerleri hiçbir zaman ekrana basılmaz. Özet satırı üç durumu ayrı söyler:
-`ÖZET: Telegram HAZIR · Kanal HAZIR|YOK|HEDEF VAR, IZIN YOK · Supabase HAZIR|YOK`
-— kanal adımı (bot yönetici mi, mesaj izni açık mı) aynı komutla doğrulanır. Deploy öncesi kontrol ise GitHub
-tarafındadır: `.github/workflows/ci.yml` her push'ta aynı Python 3.12 sürümüyle
+anahtar değerleri hiçbir zaman ekrana basılmaz. Özet satırındaki `TANIMLI`,
+yalnızca ortam değişkenlerinin bulunduğunu gösterir; erişim ve teslim için
+ayrıntılı satırları okuyun. Ağ kontrolü açıksa kanalın yönetici/mesaj izni de
+sorgulanır. Çıkış kodu 0, uyarılar dahil bütün servislerin hazır olduğunu
+garantilemez. Deploy öncesi kontrol GitHub tarafındadır: `.github/workflows/ci.yml` her push'ta aynı Python 3.12 sürümüyle
 kurulumu, testleri ve `PORT` verilip `/health`'in 200 döndüğünü doğrular.
 
 Keep-alive iş akışı (`.github/workflows/keepalive.yml`) **5 dakikada bir** olacak
@@ -278,13 +284,13 @@ sa/ay, 7/24 ≈ 730 sa/ay). 7/24 ayakta tutmak için Actions → Variables →
 
 Telegram komutları için Render **Environment** bölümüne `TELEGRAM_BOT_TOKEN` ve
 `TELEGRAM_CHAT_ID` ekleyin (secret değerleri Git'e veya sohbete koymayın).
-`BOT_PROFILE` isteğe bağlıdır. Supabase entegrasyonu da isteğe bağlıdır:
-`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` ve `supabase_schema.sql`, OHLCV
-cache/history ile Telegram rate-limit/cooldown durumunun restart sonrası
-korunmasını sağlar. Bunlar olmadan da bot Yahoo Finance ve yerel cache ile analiz
-üretir; Render'ın ephemeral diski restart/deploy'da yerel geçmişi ve Telegram
-cooldown state'ini sıfırlayabilir. Yeniden başlatılan analiz snapshot'ı güncel
-sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
+`BOT_PROFILE` isteğe bağlıdır. Supabase entegrasyonu da isteğe bağlı ve şu
+anda **salt okunurdur**: eski cache/durum okunabilir, fakat yeni OHLCV, karne,
+bildirim durumu ve heartbeat Supabase'e yazılmaz. Render'ın geçici diski
+restart/deploy'da yerel geçmişi, bekleyen bildirimleri ve cooldown durumunu
+sıfırlayabilir; kalıcı disk kullanılması ayrı yapılandırma gerektirir. Uzak
+çoklu örnek tespiti de salt okunur modda kapalıdır. Yeniden başlatılan analiz
+snapshot'ı güncel sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başlatır.
 
 ### Takvim kaynağı ve sınırı
 
@@ -318,7 +324,7 @@ geçirme gerektirir.
 | `live_state.py` | Tarama thread'i ile komut thread'i arasında thread-safe canlı formasyon/durum paylaşımı |
 | `health_server.py` | Render `PORT` varsa `/health` liveness (+ canlılık alanları, `?strict=1`), korumalı `/test` (X-Test-Key) ve `POST /webhook` (secret_token başlığı) uçları + IP başına rate limit |
 | `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
-| `deploy_check.py` | Kurulum doktoru: repo dosyaları + env + Supabase tablosu + **heartbeat canlılığı** + Telegram + Render `/health` ve `/test` uçlarını tek komutla doğrular (sır yazdırmaz) |
+| `deploy_check.py` | Kurulum doktoru: repo/env, Supabase okuma bağlantısı, Telegram ve Render `/health`/opsiyonel `/test` kontrolleri; bilinmeyen/uyarılar ayrıca incelenmeli (sır yazdırmaz) |
 | `.github/workflows/deploy.yml` | Render Deploy Hook ile `main` push'unda otomatik deploy (hook secret yoksa uyarı verip atlar) |
 | `.github/workflows/ci.yml` | Render eşdeğeri CI: Python 3.12 kurulumu, pytest, zamanlama regresyonu ve `PORT` verilip `/health` duman testi |
 | `.github/workflows/keepalive.yml` | Render Free uyumasın diye `/health` pingi (5 dk, her gün 08:00–23:00 İstanbul; `KEEPALIVE_*` değişkenleriyle ayarlanır) |
@@ -365,6 +371,9 @@ geçirme gerektirir.
 
 Regresyon: `pytest` **305 passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
 
+Aşağıdaki B5 ölçümü ve yukarıdaki faz satırları tarihsel sonuçlardır; mevcut
+sürümde Supabase'e yazma ve uzak çoklu örnek tespiti kapalıdır.
+
 Ölçüm (B5, 48 hisse × 360 bar 1H + 250 bar 1D, tek tarama turu):
 `96 istek / 3,26 MB` → seans içi `48 istek / 1,98 MB`, veri değişmeyen turda `0 istek / 0 MB`;
 heartbeat `48 istek / 42 KB` → `2 istek / 1,8 KB`. Telemetri: heartbeat `uzak_yazma` alanı.
@@ -374,10 +383,10 @@ Açık iş listesi ve batch planı: `docs/arsiv/YAPILACAKLAR.md`, `docs/arsiv/KO
 
 1. **Pine dosyası bekleniyor** (`Yeni Metin Belgesi.txt`, ARGENT v0.4.6 export). Diske
    ulaşmadı; geldiğinde `docs/tasarim/PINE_FARK_ANALIZI.md` §5'teki 12 maddelik doğrulama listesi açılacak.
-2. **Bildirim durumu artık kalıcı (Faz 5):** 18:45 digest tamponu `state:digest_pending`,
-   engellenen acil olaylar `state:telegram_acil_kuyruk` anahtarıyla Supabase'e +
-   `DATA_DIR` içindeki dosyalara yazılır (batch-7/C4: repo dışı; `state/persistence.py`);
-   açılışta geri yüklenir. Bot akşam 18:45'te kapalıysa kaçırılan
+2. **Bildirim durumu yereldir:** 18:45 digest tamponu ve engellenen acil olaylar
+   `DATA_DIR` dosyalarına yazılır; dosyalar korunmuşsa açılışta geri yüklenir.
+   Supabase salt okunur olduğundan yeni uzak yedek oluşmaz; geçici disk kaybında
+   kuyruklar kaybolabilir. Bot akşam 18:45'te kapalıysa kaçırılan
    kapanış özeti açılışta "⏰ Kaçırılan kapanış özeti" olarak telafi edilir. Engellenen acil
    olay `ACIL_KUYRUK_TTL_DK` (varsayılan 180 dk) içinde engel kalkınca gönderilir; süre aşılırsa
    bayat sinyal atılır (kuyruk sayaçları `/durum` ve heartbeat'te görünür).
@@ -422,7 +431,8 @@ Açık iş listesi ve batch planı: `docs/arsiv/YAPILACAKLAR.md`, `docs/arsiv/KO
    `RENDER` → `/tmp/formation-bot-data` → `/var/lib/formation-bot/data` → `~/.formation-bot/data` →
    `./bot_data` denenir. Repodaki `bot_data/*.json` yalnız **okuma** yedeğidir (`SEED_DATA_DIR`);
    canlı veri diske yazılmaz. Supabase anahtarları `SUPABASE_STORE_PREFIX` (varsayılan
-   `formation-bot:`) ile öneklenir; öneksiz eski kayıtlar okunur ve sonraki yazımda taşınır.
+   `formation-bot:`) ile öneklenir; öneksiz eski kayıtlar da okunabilir. Mevcut
+   salt okunur modda sonraki uzak yazım/taşıma yapılmaz.
 10. **Bot kuralları:** `bot_data/*.json` git-tracked; **`*.pkl` artık dışarıda** (A8: public repoda pickle yürütme yüzeyi olmasın; okuma JSON birincil, eski `.pkl` yalnız yedek). Runtime dosyaları
    (heartbeat, telegram_kap, telegram_acil_kuyruk, telegram_digest_pending, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0f318-formation-bot`
    dalında; başka dala push yok. Merge YALNIZCA kullanıcı onayıyla yapılır.

@@ -94,7 +94,9 @@ def kaydet(oneri: Dict, *, store=None, data_dir: Optional[str] = None) -> bool:
         logger.debug("Gece önerisi yazılamadı: %s", exc)
     if store is not None and getattr(store, "writable", True):
         try:
-            store.upsert(SUPABASE_KEY, veri)
+            # Yerel dosya yazılamasa da doğrulanmış bir uzak kayıt yeterlidir.
+            uzak_yazildi = bool(store.upsert(SUPABASE_KEY, veri))
+            yazildi = yazildi or uzak_yazildi
         except Exception as exc:  # noqa: BLE001
             logger.debug("Gece önerisi uzak yedeğe yazılamadı: %s", exc)
     return yazildi
@@ -164,7 +166,9 @@ def cevapla(cevap: str, *, store=None, data_dir: Optional[str] = None,
     oneri = dict(oneri)
     oneri["durum"] = karar
     oneri["cevap_zamani"] = simdi.isoformat(timespec="seconds")
-    kaydet(oneri, store=store, data_dir=data_dir)
+    if not kaydet(oneri, store=store, data_dir=data_dir):
+        return ("⚠️ Karar kaydedilemedi; onay veya ret işlemi tamamlanmadı. "
+                "Depolamayı kontrol edip /evet veya /hayır komutunu yeniden gönderin.")
 
     ozet = str(oneri.get("ozet") or oneri.get("karar") or "").strip()
     baslik = ("✅ Öneri onaylandı" if karar == "onaylandi" else "❌ Öneri reddedildi")

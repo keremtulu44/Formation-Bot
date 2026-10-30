@@ -48,9 +48,9 @@ def test_durum_aday_hunisini_yazar():
         alerts_state_disabled=6, alerts_below_threshold=3, alerts_digest_overflow=0,
     )
     satir = _huni_satiri()
-    assert "21 üretildi" in satir
+    assert "21 formasyonlu sembol" in satir
     assert "4 push" in satir and "11 digest" in satir
-    assert "6 state dışı" in satir and "3 eşik altı" in satir
+    assert "6 state dışı" in satir and "3 eşik altı gözlem" in satir
 
 
 def test_digest_tasmasi_varsa_hunide_gorunur():

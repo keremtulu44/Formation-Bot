@@ -27,11 +27,13 @@ def _temizle_analiz_istegi():
     main_mod._scan_job_active.clear()
     main_mod._scan_istegi.clear()
     main_mod._scan_job_request = None
+    main_mod._scan_job_queue.clear()
     main_mod.last_run_stats.clear()
     yield
     main_mod._scan_job_active.clear()
     main_mod._scan_istegi.clear()
     main_mod._scan_job_request = None
+    main_mod._scan_job_queue.clear()
     main_mod.last_run_stats.clear()
 
 
@@ -410,7 +412,7 @@ def test_tara_komutu_seans_disi_da_istek_kuyruga_koyar(monkeypatch):
     monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", ["THYAO", "GARAN"])
     monkeypatch.setattr(main_mod, "_live_state", LiveState())
     cevap = main_mod._komut_tara("")
-    assert "Analiz başladı" in cevap
+    assert "Analiz başlatılıyor" in cevap
     assert main_mod._scan_istegi.is_set()
     assert main_mod._scan_job_request["hisseler"] == ["THYAO", "GARAN"]
 
@@ -430,8 +432,8 @@ def test_tara_bilinmeyen_hisseyi_tarama_baslatmadan_reddeder(monkeypatch):
     assert not main_mod._scan_istegi.is_set()
 
 
-def test_tarama_isinde_komutlar_calismaz_ama_bilgi_mesaji_alir():
-    """Analiz sürerken komut kuyruğa alınmaz; yine de SESSİZ kalınmaz (kullanıcı görsün)."""
+def test_tarama_sururken_komutlar_genel_mesguliyet_kapisinda_reddedilmez():
+    """Meşguliyetin nasıl ele alınacağı handler'a bırakılır; /durum çalışır."""
     main_mod._scan_job_active.set()
     session = SahteSession()
     calisti = []
@@ -442,12 +444,11 @@ def test_tarama_isinde_komutlar_calismaz_ama_bilgi_mesaji_alir():
         session=session,
         komutlari_yoksay=lambda: main_mod._scan_job_active.is_set(),
     )
-    cevap = dinleyici.handle_update(_guncelleme(100, "/durum"))
-    assert cevap is not None and "Analiz sürüyor" in cevap
-    assert dinleyici.handle_update(_guncelleme(101, "/panel")) is not None
-    assert calisti == []                                    # iş kuyruğa alınmadı
-    assert len(session.post_cagrilari) == 2                 # ama kullanıcı bilgilendirildi
-    assert dinleyici.durum()["mesgul_atlanan"] == 2
+    assert dinleyici.handle_update(_guncelleme(100, "/durum@Bisthisseveri_bot")) == "durum"
+    assert dinleyici.handle_update(_guncelleme(101, "/panel")) == "panel"
+    assert calisti == ["durum", "panel"]
+    assert len(session.post_cagrilari) == 2
+    assert dinleyici.durum()["mesgul_atlanan"] == 0
 
 
 def test_post_close_saat_istanbul_zamanini_cozer(monkeypatch):
@@ -504,8 +505,8 @@ def test_panel_komutu_hisse_ve_slot_sayilarini_gosterir(monkeypatch):
 
     cevap = main_mod._panel_raporu("")
     assert "PANEL" in cevap
-    assert "4 hisse x 4 TF" in cevap          # 48 hisse x 4 slot yapısı
-    assert "dolu slot 2/16" in cevap          # 4 hisse x 4 TF = 16 slot
+    assert "4 sembol x 4 TF" in cevap          # 48 hisse x 4 slot yapısı
+    assert "dolu slot 2/16" in cevap          # 4 sembol x 4 TF = 16 slot
     assert "📊 SAYILAR" in cevap
     assert "🚀 kırılım 1" in cevap and "🎯 retest 1" in cevap
     assert "THYAO 1h 88🚀" in cevap           # slot hücresi: TF + kalite + işaret
@@ -580,7 +581,7 @@ def test_panel_komutu_hisse_filtresi_satirlari_daraltir(monkeypatch):
 
     cevap = main_mod._panel_raporu("THYAO")
     assert "Filtre: THYAO" in cevap
-    assert "1/3 hisse" in cevap
+    assert "1/3 sembol" in cevap
     grid = cevap.split("🗂 SLOTLAR")[1]
     assert "THYAO 1h 80⚡" in grid
     assert "GARAN" not in grid and "AKBNK" not in grid
@@ -591,7 +592,7 @@ def test_panel_komutu_bos_evrende_durum_soyler(monkeypatch):
     monkeypatch.setattr(main_mod, "_live_state", LiveState())
 
     cevap = main_mod._panel_raporu("")
-    assert "2 hisse x 4 TF" in cevap
+    assert "2 sembol x 4 TF" in cevap
     assert "tüm slotlar boş" in cevap
     assert "Henüz başarılı analiz yok" in cevap
 
@@ -643,9 +644,10 @@ def test_veri_durumu_zamani_ve_yasi_acikca_yazar():
 
     bar = datetime.now(main_mod.ISTANBUL_TZ) - timedelta(days=2, hours=1)
     cevap = main_mod._veri_durumu_satiri(bar.isoformat(), 3, 4, 1, 2 * 24 * 60 + 60)
-    assert "Son tamamlanmış mum:" in cevap
-    assert "veri yaşı 2g 1sa" in cevap
-    assert "en eski taranan veri yaşı 2g 1sa" in cevap
+    assert "En yeni 1s cache mum etiketi:" in cevap
+    assert "tamamlanmış" not in cevap  # Cache etiketi kapanış garantisi değildir.
+    assert "etiket yaşı 2g 1sa" in cevap
+    assert "en eski görülen etiket yaşı 2g 1sa" in cevap
     assert "başarılı fetch 3/4" in cevap and "fetch hatası 1" in cevap
 
 
@@ -735,9 +737,28 @@ def test_durum_basarisiz_deneme_icin_onceki_taze_fetch_sayisini_kullanmaz(monkey
     })
 
     cevap = main_mod._komut_durum("")
-    assert "kapsam: 0/1 sembol, süre: 2,0 dk" in cevap
+    basarili_satir = next(line for line in cevap.splitlines() if line.startswith("Son başarılı analiz:"))
+    assert "kapsam: 48/48 sembol, süre: 10,0 dk" in basarili_satir
+    assert "başarısız" not in basarili_satir
+    assert "Son deneme: başarısız (kapsam: 0/1 sembol, süre: 2,0 dk)" in cevap
+    assert "Son deneme veri durumu:" in cevap
     assert "başarılı fetch 48/" not in cevap
     assert "fetch hatası 0" not in cevap
+    panel = main_mod._panel_raporu("")
+    assert "Son başarılı tarama:" in panel and "son deneme başarısız" in panel
+    assert "durum basarisiz" not in panel
+
+
+def test_durum_ilk_deneme_basarisizsa_onceki_basarili_uydurmaz(monkeypatch):
+    durum = LiveState()
+    durum.begin_scan(scope=["THYAO"], beklenen_hisse=1)
+    durum.fail_scan("provider down", islenen_hisse=0, istek_hisse=1, sure_dk=2.0)
+    monkeypatch.setattr(main_mod, "_live_state", durum)
+    main_mod.last_run_stats.update({"status": "basarisiz", "requested": 1, "processed": 0})
+    cevap = main_mod._komut_durum("")
+    assert "Son başarılı analiz: henüz yok" in cevap
+    assert "Son deneme: başarısız (kapsam: 0/1 sembol, süre: 2,0 dk)" in cevap
+    assert "Son başarılı tarama: henüz yok · son deneme başarısız" in main_mod._panel_raporu("")
 
 
 def test_filtreli_liste_basarisiz_son_deneme_varsa_eski_kaynagi_belirtir(monkeypatch):
@@ -762,7 +783,7 @@ def test_kismi_tarama_bos_sonucu_tam_evrende_bos_gibi_yazilmaz(monkeypatch):
     monkeypatch.setattr(main_mod, "_live_state", durum)
 
     cevap = main_mod._komut_formasyonlar("")
-    assert "1 hisselik kısmi kapsamdaydı" in cevap
+    assert "1 sembollük kısmi kapsamdaydı" in cevap
     assert "tam evrende formasyon olmadığı sonucu çıkarılamaz" in cevap
     assert "48 hisse ve 4 zaman diliminde uygun canlı formasyon bulunmadı" not in cevap
 

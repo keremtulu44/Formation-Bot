@@ -341,7 +341,9 @@ def test_restart_panel_canli_durum_ve_kirilim_son_taramayi_gosterir(tmp_path, mo
     durum = main_mod._komut_durum("")
     assert "Piyasa: KAPALI" in durum and "Sonuçtaki formasyon: 2" in durum
     assert "Son başarılı analiz:" in durum
-    assert "THYAO 1h" in main_mod._komut_kirilim("")
+    kirilim = main_mod._komut_kirilim("")
+    assert "THYAO 1s" in kirilim and "teyitli" in kirilim
+    assert "KIRILIM_TEYITLI" not in kirilim
 
 
 def test_yeni_tarama_kayitli_notunu_ve_eski_listeyi_yeniler(tmp_path):

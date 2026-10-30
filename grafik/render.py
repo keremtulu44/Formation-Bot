@@ -121,11 +121,19 @@ def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
     if mobil:
         secenekler["yazi_olcek"] = max(1.35, float(secenekler.get("yazi_olcek") or 1.0))
     kaynak_goruntu = goruntu
-    goruntu = deneyim.prepare_view(goruntu, str(secenekler.get("gorunum") or
-                                   os.environ.get("GRAFIK_GORUNUM") or "odak"),
-                                   max_distance_atr=max(.1, _ortam_sayi("GRAFIK_ODAK_MESAFE_ATR", 3.0)))
+    # Sonuç karesinde fiyat değişse de soru anındaki bölgeler ve yapı aynı
+    # kalmalı; normal grafikler her zamanki gibi görünüm filtresinden geçer.
+    if not (goruntu.get("replay") or {}).get("hazir_gorunum"):
+        goruntu = deneyim.prepare_view(goruntu, str(secenekler.get("gorunum") or
+                                       os.environ.get("GRAFIK_GORUNUM") or "odak"),
+                                       max_distance_atr=max(.1, _ortam_sayi("GRAFIK_ODAK_MESAFE_ATR", 3.0)))
     ayrinti = deneyim.detail_payload(kaynak_goruntu, goruntu)
     olcu = _kare_olcu(goruntu)
+    # Sabit mobil genişlik uzun sonuçlarda mumları çok sıkıştırır. Yalnız o
+    # sonuç karesinde yeterli genişliği koru; normal çizimleri değiştirme.
+    if mobil and (goruntu.get("replay") or {}).get("asama") == "sonuc" and olcu["bar"] > 150:
+        mobil = False
+        secenekler["mobil"] = False
     if mobil:
         olcu = {**olcu, "genislik": 780, "yukseklik": 1100,
                 "px_bar": 780 / max(1, olcu["bar"])}
@@ -340,7 +348,13 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         # BOS/CHoCH/kritik seviyeleri: yalnız mum aralığına yakınsa çizilir ve
         # aralığı genişletir. Eski ve uzak seviyeler (ör. 3 hafta önceki kırılım
         # 8% üstte) eskiden tüm grafiği sıkıştırıyordu; şimdi sayılır, çizilmez.
-        ham = [float(v) for v in (kapanis + yuksek + dusuk) if v is not None]
+        replay = goruntu.get("replay") or {}
+        kesit = replay.get("kesit") if replay.get("asama") == "sonuc" else None
+        # Olayların kadraja alınıp alınmaması soru anındaki mumlarla belirlenir;
+        # sonuç mumları ancak sonrasında fiyat ekseninin genişlemesini sağlar.
+        olay_son = int(kesit) + 1 if kesit is not None else n
+        ham = [float(v) for v in (kapanis[:olay_son] + yuksek[:olay_son]
+                                  + dusuk[:olay_son]) if v is not None]
         taban = ham + ek_y
         t_lo, t_hi = (min(taban), max(taban)) if taban else (0.0, 1.0)
         kadraj_pay = float(SABITLER["kadraj_pay_orani"]) * max(t_hi - t_lo, 1e-9)
@@ -385,6 +399,17 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         meta["kare"]["sag_bosluk_yuzde"] = round(
             100.0 * sag_bosluk / (n + 0.2 + sag_bosluk), 2)
         butce = _butce_px(genislik)
+        katman_n = max(1, min(n, int(kesit) + 1)) if kesit is not None else n
+        katman_bosluk = 0 if kesit is not None else sag_bosluk
+        if kesit is not None:
+            sinir = float(katman_n) - 0.5
+            if katman_n < n:
+                ax.axvspan(sinir, n - 0.5, color=PALET["panel"], alpha=0.3, zorder=0)
+            ax.axvline(sinir, color=PALET["eksen"], linewidth=1.0,
+                       linestyle=(0, (4, 3)), alpha=0.85, zorder=3)
+            ax.annotate("TAHMİN ANI", (sinir, 1), xycoords=ax.get_xaxis_transform(),
+                        xytext=(4, -5), textcoords="offset points", ha="left",
+                        va="top", fontsize=7, color=PALET["eksen"], zorder=6)
         sayac_rozet: dict[str, Any] = {"artis": 0, "dusus": 0,
                                        "taze_artis": None, "taze_dusus": None}
         # Mum gövde genişliği VERİ birimindedir (x = bar indeksi, komşu barlar
@@ -402,8 +427,8 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         # --- bölge kutuları mumların ARDINDA (bilgi zemini; §0.4.1) ---
         if not yalnizca_mumlar and (zone.get("cizilen") or []):
             try:
-                zone_ozet = _zone_ciz(ax, zone, n, aralik, sag_adaylar,
-                                      kutular=mum_kutulari, sag_bosluk=sag_bosluk,
+                zone_ozet = _zone_ciz(ax, zone, katman_n, aralik, sag_adaylar,
+                                      kutular=mum_kutulari, sag_bosluk=katman_bosluk,
                                       engel_y=_zone_etiket_engeller(goruntu)) or {}
                 meta["zone"]["etiket_ic"] = int(zone_ozet.get("ic") or 0)
                 meta["zone"]["etiket_serit"] = int(zone_ozet.get("serit") or 0)
@@ -421,9 +446,9 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                      "whwl_serit": 0, "seviye": 0}
         if not yalnizca_mumlar and (goruntu.get("olay") or {}):
             try:
-                olay_ozet.update(_olay_ciz(ax, goruntu, n, sag_adaylar,
+                olay_ozet.update(_olay_ciz(ax, goruntu, katman_n, sag_adaylar,
                                            kutular=mum_kutulari,
-                                           sag_bosluk=sag_bosluk) or {})
+                                           sag_bosluk=katman_bosluk) or {})
             except Exception as hata:
                 log.warning("grafik: yapı katmanı çizilemedi (%s)", hata)
                 eksik.append("ms")
@@ -456,8 +481,8 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         if not yalnizca_mumlar:
             try:
                 meta["cizgiler"]["formasyon"] = _pkg._formasyon_ciz(
-                    ax, goruntu, n, butce, metin, sag_bosluk=sag_bosluk,
-                    aralik=aralik, yuksek=yuksek, dusuk=dusuk)
+                    ax, goruntu, katman_n, butce, metin, sag_bosluk=katman_bosluk,
+                    aralik=aralik, yuksek=yuksek[:katman_n], dusuk=dusuk[:katman_n])
             except Exception as hata:
                 log.warning("grafik: formasyon katmanı çizilemedi (%s)", hata)
                 eksik.append("formasyon")
@@ -512,7 +537,13 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                        "birlesen_kutu": int(sag_ozet.get("birlesen_kutu") or 0)}
         meta["zone"]["etiket_atlandi"] = int(sag_ozet["atlanan_kaynak"].get("zone", 0))
         meta["olay"]["etiket_atlandi"] = int(sag_ozet["atlanan_kaynak"].get("olay", 0))
-        _tik_etiketleri(ax, zamanlar, str(goruntu.get("tf") or tf))
+        if replay:
+            # Gerçek zamanlar motorlarda kalır; eksene hiçbir tarih/saat çıkmaz.
+            ax.set_xticks([])
+            if ax_serit is not None:
+                ax_serit.set_xticks([])
+        else:
+            _tik_etiketleri(ax, zamanlar, str(goruntu.get("tf") or tf))
         ax.yaxis.grid(True, linestyle=":", color=PALET["grid"],
                       linewidth=SABITLER["cizgi_kalinlik"]["grid"])
         ax.set_axisbelow(True)
@@ -835,7 +866,13 @@ def _guven_satirlari(goruntu, genislik, fallback=False):
                 f"{view.get('gizlenen', 0)} gizli · {view.get('uzak_seviye', 0)} uzak seviye (ayrıntıda)")
     if view.get("mod") == "odak" and view.get("gosterilen") == 0:
         rows.append("Odakta gösterilecek yakın aktif bölge yok; geçmiş/uzak kayıtlar bağlamda.")
-    rows.append("Analiz: " + deneyim.date_text(guven.get("analiz_zamani")))
+    replay = goruntu.get("replay") or {}
+    if replay:
+        rows.append("EĞİTİM · tarihler gizli · analiz ve çizimler soru anına aittir.")
+        if replay.get("asama") == "sonuc":
+            rows.append("Kesikli çizgi: tahmin anı · sağında açılan mumlar.")
+    else:
+        rows.append("Analiz: " + deneyim.date_text(guven.get("analiz_zamani")))
     if fallback:
         rows[3] = "Çizimde bölge katmanları gösterilemedi; ayrıntı verisi korunuyor."
         rows.insert(0, "ÇİZİM SINIRLI: yalnız mumlar; analiz katmanları gösterilemedi.")

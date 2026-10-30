@@ -494,7 +494,7 @@ def test_saglayici_eski_bar_donerse_analiz_devam_eder_ama_isaretlenir(
         fetch_returned=result["fetch_returned"], valid_fetch=result["fetch_valid"],
         analysis_eligible=result["analysis_eligible"],
     )
-    assert "08.10.2026 06:00" in satir and "veri yaşı 8sa" in satir
+    assert "08.10.2026 06:00" in satir and "etiket yaşı 8sa" in satir
     assert "fetch yanıtı 1/1" in satir and "taze fetch 0" in satir
     assert "OHLCV geçerli 1" in satir and "analiz için uygun 1" in satir
 
@@ -692,7 +692,7 @@ def test_tek_hisselik_istek_kismi_kapsam_notu_uretir(monkeypatch):
         "son_tarama_hissesi": 10,
     })
     not_ = main_module._kismi_kapsam_notu()
-    assert "10/10 hisselik kısmi kapsamdı" in not_
+    assert "10/10 sembollük kısmi kapsamdı" in not_
 
 
 def test_cache_yas_matrisi_sinirlari():

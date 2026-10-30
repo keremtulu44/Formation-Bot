@@ -543,13 +543,15 @@ def _sahte_formasyonlar(durum, adet=4):
     durum.finish_scan(son_tarama_suresi_dk=1.0, son_tarama_hissesi=48)
 
 
-def test_webhook_panel_analizini_kuyruga_alir_ve_diger_komutlari_yok_sayar(monkeypatch):
-    """Webhook /panel başlangıcını yanıtlar; iş sürerken diğer komutlara bilgi mesajı gider."""
+def test_webhook_panel_analizini_kuyruga_alir_ve_diger_komutlari_yanitlar(monkeypatch):
+    """Webhook /panel başlatırken okuma komutları son tamamlanan sonucu görür."""
     monkeypatch.setattr(main_mod, "_scan_job_active", __import__("threading").Event())
     monkeypatch.setattr(main_mod, "_scan_istegi", __import__("threading").Event())
     monkeypatch.setattr(main_mod, "_scan_job_request", None)
+    monkeypatch.setattr(main_mod, "_scan_job_queue", [])
     monkeypatch.setattr(main_mod, "_live_state", LiveState())
     monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", ["THYAO", "GARAN"])
+    _sahte_formasyonlar(main_mod._live_state)
 
     session = SahteSession()
     dinleyici = TelegramCommandListener(
@@ -568,15 +570,22 @@ def test_webhook_panel_analizini_kuyruga_alir_ve_diger_komutlari_yok_sayar(monke
         port = server.server_address[1]
         kod, govde = _post(port, f"{WEBHOOK_YOL_ONEK}{SECRET}", _guncelleme(1, "/panel"))
         assert kod == 200 and govde["ok"] is True
-        assert "Analiz başladı" in session.gonderilenler[-1]
+        assert "Analiz başlatılıyor" in session.gonderilenler[-1]
         assert main_mod._scan_job_request["tip"] == "panel"
         assert main_mod._scan_job_active.is_set()
 
+        main_mod._live_state.begin_scan(beklenen_hisse=2)
+        main_mod._live_state.update_scan_progress(1, "THYAO")
         onceki = len(session.post_cagrilari)
         kod2, _ = _post(port, f"{WEBHOOK_YOL_ONEK}{SECRET}", _guncelleme(2, "/canli"))
         assert kod2 == 200
-        assert len(session.post_cagrilari) == onceki + 1     # sessiz kalmaz
-        assert "Analiz sürüyor" in session.gonderilenler[-1]
+        assert len(session.post_cagrilari) == onceki + 1
+        assert "CANLI" in session.gonderilenler[-1]
+        assert "son tamamlanan" in session.gonderilenler[-1]
+        kod3, _ = _post(port, f"{WEBHOOK_YOL_ONEK}{SECRET}", _guncelleme(3, "/durum"))
+        assert kod3 == 200
+        assert "THYAO" in session.gonderilenler[-1]
+        assert "1/2" in session.gonderilenler[-1]
     finally:
         main_mod._scan_job_active.clear()
         main_mod._scan_istegi.clear()

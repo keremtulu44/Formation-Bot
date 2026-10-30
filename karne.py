@@ -305,7 +305,8 @@ class KarneDefteri:
 
     # --- sorgular ---
     def kayitlar(self) -> List[dict]:
-        return [dict(v) for v in self._kayitlar.values()]
+        # Tarama kayıt eklerken komutlar sözlük görünümünde dolaşmamalı.
+        return [dict(v) for v in self._kayitlar.copy().values()]
 
     # --- uzak yedek (OPSİYONEL: Supabase varsa) -----------------------------
     # Neden: Render Free'de DATA_DIR=/tmp'dir ve restart/redeploy'da silinir;
@@ -314,7 +315,7 @@ class KarneDefteri:
     def snapshot(self) -> dict:
         return {
             "surum": KARNE_SURUM,
-            "kayitlar": {k: dict(v) for k, v in self._kayitlar.items()},
+            "kayitlar": {k: dict(v) for k, v in self._kayitlar.copy().items()},
             "formasyon_zamanlari": dict(self._formasyon_zamanlari),
             "son_karne_gonderim": self.son_karne_gonderim,
             "kayit_zamani": datetime.now(ISTANBUL_TZ).isoformat(),
@@ -353,7 +354,7 @@ class KarneDefteri:
         """kayit_zaman'ı aralıkta olan kayıtlar (kayıt anı bazlı pencere)."""
         bitis = bitis or datetime.now(ISTANBUL_TZ)
         sonuc = []
-        for kayit in self._kayitlar.values():
+        for kayit in self._kayitlar.copy().values():
             try:
                 zaman = datetime.fromisoformat(str(kayit.get("kayit_zaman") or ""))
                 if zaman.tzinfo is None:

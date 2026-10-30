@@ -9,6 +9,8 @@ tartışmalarında sayı gerektiğinde buraya bakılır.
 
 **Son Replay sonuçları ve veriler:** [genel ve özel sonuç dizini](SON_REPLAY_SONUCLARI.md) — deploy hisseleri/piyasa karşılaştırmaları, XU100–Brent ve kaçırılan hareket pilotları.
 
+**Ne işe yarar, neye güvenilemez?** [Veri envanteri, öncelikli kullanım önerileri ve güvenilirlik sınırları](VERI_KULLANIM_VE_GUVENILIRLIK_2026-10-30.md).
+
 **174 hisse kırılım ve teyit Replay'i:** [Ayrıntılı ana dosya: yöntem, aday/teyit karşılaştırması ve bütün veriler](KIRILIM_TEYIT_REPLAY_AYRINTILI_DOSYA_2026-10-30.md) · [İlk sonuçlar](KIRILIM_TEYIT_REPLAY_SONUCLARI_2026-10-30.md) · [Teyit sonrası hareket ve zaman dilimleri](TEYIT_SONRASI_HAREKET_2026-10-30.md).
 
 ## Nereden okunur

@@ -200,8 +200,10 @@ def test_stock_fetch_helper_retries_only_transient_failures(monkeypatch):
             return None, False, "404 not found"
         return frames[stock], False, ""
 
+    import bot.app as app
+
     monkeypatch.setattr(main_mod, "fetch_yfinance_1h", fake_fetch)
-    monkeypatch.setattr(main_mod.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(app, "_shutdown_bekle", lambda _seconds: None)
     monkeypatch.setattr(main_mod.random, "uniform", lambda low, _high: low)
     monkeypatch.setattr(main_mod, "_shutdown_requested", False)
 
@@ -266,3 +268,119 @@ def test_veri_katmani_bos_seride_yedege_duser(monkeypatch):
     df = data.fetch_yfinance_1d("XAUUSD")
     assert df is not None and len(df) == 3
     assert cagrilar == ["XAUUSD=X", "GC=F"]
+
+
+def test_retry_backoff_stops_on_shutdown_and_preserves_failed_symbol(monkeypatch):
+    """Render SIGTERM beklerken 30-60 saniyelik retry uykusuna takılmaz."""
+    import main as main_mod
+    import bot.app as app
+    import bot.scan as scan
+
+    sleeps = []
+    calls = []
+    monkeypatch.setattr(main_mod, "_shutdown_requested", False)
+    monkeypatch.setattr(scan.random, "uniform", lambda _low, _high: 60.0)
+    monkeypatch.setattr(main_mod, "fetch_yfinance_1h", lambda *a, **kw: (
+        calls.append(a[0]) or (None, True, "geçici hata")
+    ))
+
+    def stop_during_sleep(seconds):
+        sleeps.append(seconds)
+        assert seconds <= 1.0, "Kapanış sırasında bölünmeyen uzun bekleme"
+        main_mod._shutdown_requested = True
+
+    monkeypatch.setattr(app.time, "sleep", stop_during_sleep)
+    clock = FakeClock()
+    fetched, failures, retries, recovered = main_mod.fetch_1h_stocks_paced(
+        ["ASTOR"], make_pacer(clock), "BAŞLANGIÇ"
+    )
+    assert calls == ["ASTOR"]
+    assert fetched == {} and failures == {"ASTOR": "geçici hata"}
+    assert retries == recovered == 0 and sleeps
+
+
+def test_pacer_wait_does_not_start_new_yahoo_request_after_shutdown(monkeypatch):
+    """İstekler arası uzun beklemede sinyal gelirse sıradaki istek açılmaz."""
+    import main as main_mod
+    import bot.app as app
+    import bot.scan as scan
+
+    calls = []
+    sleeps = []
+    monkeypatch.setattr(main_mod, "_shutdown_requested", False)
+    monkeypatch.setattr(scan, "SCAN_REQUEST_BATCH_SIZE", 1)
+    monkeypatch.setattr(scan, "SCAN_BATCH_PAUSE_MIN_SEC", 60.0)
+    monkeypatch.setattr(scan, "SCAN_BATCH_PAUSE_MAX_SEC", 60.0)
+    monkeypatch.setattr(main_mod, "fetch_yfinance_1h", lambda stock, **kw: (
+        calls.append(stock) or (pd.DataFrame({"close": [1.0]}), False, "")
+    ))
+
+    def stop_during_sleep(seconds):
+        sleeps.append(seconds)
+        assert seconds <= 1.0, "Pacing beklemesi kapanışa duyarlı değil"
+        main_mod._shutdown_requested = True
+
+    monkeypatch.setattr(app.time, "sleep", stop_during_sleep)
+    pacer = main_mod.create_yahoo_pacer()
+    fetched, failures, retries, recovered = main_mod.fetch_1h_stocks_paced(
+        ["ASTOR", "AKBNK"], pacer, "BAŞLANGIÇ"
+    )
+    assert calls == ["ASTOR"]
+    assert list(fetched) == ["ASTOR"]
+    assert failures == {} and retries == recovered == 0 and sleeps
+
+
+def test_retry_does_not_start_after_shutdown_during_pacing(monkeypatch):
+    """Tekrar denemesinin pacing aralığında SIGTERM gelirse istek sayılmaz."""
+    import contextlib
+    import main as main_mod
+    import bot.app as app
+
+    calls = []
+    monkeypatch.setattr(main_mod, "_shutdown_requested", False)
+    monkeypatch.setattr(app, "_shutdown_bekle", lambda _seconds: None)
+    monkeypatch.setattr(main_mod, "fetch_yfinance_1h", lambda stock, **kw: (
+        calls.append(stock) or (None, True, "geçici hata")
+    ))
+
+    class Pacer:
+        def __init__(self):
+            self.count = 0
+
+        @contextlib.contextmanager
+        def request(self, _label):
+            self.count += 1
+            if self.count == 2:
+                main_mod._shutdown_requested = True
+            yield
+
+        def reset_batch(self):
+            pass
+
+    fetched, failures, retries, recovered = main_mod.fetch_1h_stocks_paced(
+        ["ASTOR"], Pacer(), "BAŞLANGIÇ"
+    )
+    assert calls == ["ASTOR"]
+    assert fetched == {} and failures == {"ASTOR": "geçici hata"}
+    assert retries == recovered == 0
+
+
+def test_preload_does_not_request_data_after_shutdown_during_pacing(monkeypatch):
+    import contextlib
+    import main as main_mod
+    import bot.summary as summary
+
+    calls = []
+    monkeypatch.setattr(main_mod, "_shutdown_requested", False)
+    monkeypatch.setattr(main_mod, "ACTIVE_STOCKS", ["ASTOR"])
+    monkeypatch.setattr(summary, "fetch_last_bar", lambda stock: calls.append(stock))
+
+    class Pacer:
+        @contextlib.contextmanager
+        def request(self, _label):
+            main_mod._shutdown_requested = True
+            yield
+
+    main_mod.morning_preload(object(), Pacer())
+    assert main_mod._shutdown_requested is True
+    assert calls == []

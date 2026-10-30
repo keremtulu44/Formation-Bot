@@ -544,8 +544,13 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
     alarm = goruntu.get("alarm") or {}
     n = int(meta.get("mum_sayisi") or 0)
     baslik = f"{goruntu.get('sembol') or '—'} · {goruntu.get('tf_kisa') or goruntu.get('tf')} · {n} mum"
-    sag = "son mum " + deneyim.date_text(goruntu.get("son_bar_ts"),
-                                              daily=str(goruntu.get("tf")) == "1d")
+    replay = goruntu.get("replay") or {}
+    sonuc = replay.get("asama") == "sonuc"
+    if replay:
+        sag = "sonuç kapanışı" if sonuc else "son kapanış"
+    else:
+        sag = "son mum " + deneyim.date_text(goruntu.get("son_bar_ts"),
+                                                  daily=str(goruntu.get("tf")) == "1d")
     if goruntu.get("son_kapanis") is not None:
         sag += f" · {sayi(goruntu['son_kapanis'])}"
     satirlar: list[str] = []
@@ -567,12 +572,17 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
                          "renk": PALET["metin"], "dolgu": PALET["panel"],
                          "kenar": PALET["panel_kenar"]})
     if formasyon.get("ad"):
-        _ad_pill = f"{formasyon['ad']}"
+        _ad_pill = ("Soru anı: " if sonuc else "") + str(formasyon["ad"])
         if q is not None:
             _ad_pill += f" · kalite {int(round(float(q)))}/100"
         pill_listesi.append({"metin": _ad_pill, "ikon": "formasyon",
                              "renk": PALET["formasyon"],
                              "dolgu": PALET["formasyon"], "kenar": PALET["formasyon"]})
+    elif replay:
+        pill_listesi.append({"metin": ("Soru anı: " if sonuc else "") +
+                             (replay.get("formasyon_etiketi") or "kullanılabilir formasyon yok"),
+                             "renk": PALET["eksen"], "dolgu": PALET["panel"],
+                             "kenar": PALET["panel_kenar"]})
     _durum_pill = formasyon_durum_etiketi(formasyon.get("state"))
     if _durum_pill:
         pill_listesi.append({"metin": _durum_pill, "renk": PALET["eksen"],
@@ -629,6 +639,8 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
     # bloğu eksenlere taşırırdı (ölçüm: y=0,844 < `ust`=0,855), o yüzden yer yoksa
     # çizilmez ve `kesilen`de görünür (sessiz kayıp yok).
     motor = _grafik_yapi_metni(goruntu.get("yapı_satırı") or "")
+    if motor and sonuc:
+        motor = "Soru anı: " + motor
     if motor and not yalnizca_mumlar and len(satirlar) < 3:
         yeni_satir, k = _kirp(motor, genislik * 0.88)
         satirlar.append(yeni_satir)

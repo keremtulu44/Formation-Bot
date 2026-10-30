@@ -83,3 +83,56 @@ def test_manual_deploy_requires_main_and_secret(tmp_path):
     workflow = (ROOT / ".github/workflows/deploy.yml").read_text()
     assert "  push:" not in workflow
     assert "hook_url:" not in workflow
+
+
+@pytest.mark.parametrize("ready_body,expected", [
+    ('{"startup_complete": false}', 0),
+    ('{"startup_complete": true}', 1),
+    ('not-json', 1),
+])
+def test_ci_smoke_fails_on_bad_readiness_json(tmp_path, ready_body, expected):
+    """CI kabuğu HTTP koduyla yetinmez; readiness gövdesi de kontrol edilir."""
+    import sys
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    py = bin_dir / "python"
+    py.write_text(
+        '#!/bin/bash\n'
+        'if [ "$1" = main.py ]; then\n'
+        '  echo "Health smoke mode: provider and command loops disabled"\n'
+        '  exec /bin/sleep 30\n'
+        'fi\n'
+        f'exec "{sys.executable}" "$@"\n'
+    )
+    py.chmod(0o755)
+    curl = bin_dir / "curl"
+    curl.write_text('''#!/bin/bash
+out=''
+url=''
+show_code=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) out="$2"; shift 2 ;;
+    -w) show_code=1; shift 2 ;;
+    -m|-X|-H|-d) shift 2 ;;
+    http*) url="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+case "$url" in
+  */ready) body="$READY_BODY"; status=503 ;;
+  */test*|*/webhook*) body='{"ok": false}'; status=404 ;;
+  *) body='{"status": "ok", "commit": "deadbee"}'; status=200; /bin/sleep 0.05 ;;
+esac
+printf '%s' "$body" > "$out"
+if [ "$show_code" = 1 ]; then printf '%s' "$status"; fi
+''')
+    curl.chmod(0o755)
+    body = script(".github/workflows/ci.yml", "- name: Render duman testi")
+    result = run_sh(tmp_path, body, PATH=f"{bin_dir}:{os.environ['PATH']}",
+                    RUNNER_TEMP=str(tmp_path), READY_BODY=ready_body)
+    if expected:
+        assert result.returncode != 0, result.stdout + result.stderr
+    else:
+        assert result.returncode == 0, result.stdout + result.stderr

@@ -24,7 +24,7 @@ def test_panel_hunisi_daily_stats_ile():
         bos_analiz_mesaji="henüz yok",
     )
     assert "Huni" in metin, metin[:500]
-    assert "18 üretildi" in metin
+    assert "18 formasyonlu sembol" in metin
     assert "eşik altı" in metin
     # bar kapanmadı ve kapanış teyidi de görünmeli
     assert "kapanmamış bar" in metin or "kapanış teyidi" in metin

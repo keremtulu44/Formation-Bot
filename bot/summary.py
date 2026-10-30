@@ -743,6 +743,8 @@ def morning_preload(deque_manager, pacer):
                 break
             try:
                 with pacer.request(f"{stock} preload"):
+                    if _pkg._shutdown_requested:
+                        break
                     taze = fetch_last_bar(stock)
                 if taze is not None and len(taze) > 0:
                     deque_manager.append_dataframe(stock, taze)
@@ -845,7 +847,7 @@ def _gece_onerisi_gonder(tutarlilik_sonuc: dict, olcum_sonuc: dict,
         return False
     try:
         import oneri
-        oneri.kaydet({
+        kaydedildi = oneri.kaydet({
             "gun": gun or _pkg.datetime.now().date().isoformat(),
             "metin": metin,
             "karar": (olcum_sonuc or {}).get("karar") or "",
@@ -853,8 +855,17 @@ def _gece_onerisi_gonder(tutarlilik_sonuc: dict, olcum_sonuc: dict,
             "sapma": sapma,
             "durum": "bekliyor",
         }, store=_pkg._supabase_store_ref)
+        if not kaydedildi:
+            _pkg.logger.warning("Gece önerisi hiçbir depoya kaydedilemedi")
+            notifier.send_text("⚠️ Gece önerisi kaydedilemedi; /evet ve /hayır "
+                               "ile yanıtlanamaz. Depolamayı kontrol edin.")
     except Exception as exc:  # noqa: BLE001 - kayıt yazılamazsa DM gitti, iş sürer
-        _pkg.logger.debug("Gece önerisi kaydedilemedi: %s", exc)
+        _pkg.logger.warning("Gece önerisi kaydedilemedi: %s", type(exc).__name__)
+        try:
+            notifier.send_text("⚠️ Gece önerisi kaydedilemedi; /evet ve /hayır "
+                               "ile yanıtlanamaz. Depolamayı kontrol edin.")
+        except Exception:  # noqa: BLE001, S110 - uyarı da başarısızsa log kalır
+            pass
     _pkg.logger.info("Gece önerisi DM'e gitti (%d satır)", len(satirlar))
     return True
 
