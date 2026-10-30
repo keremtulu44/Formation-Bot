@@ -165,7 +165,7 @@ def _ozet_isaret_kaydet(slot: str, gun, public: bool = False) -> None:
         isaretler[anahtar] = deger
         _state_persistence.gunluk_durum_guncelle({"ozet_gunleri": isaretler})
         store = _pkg._supabase_store_ref
-        if store is not None and hasattr(store, "upsert"):
+        if store is not None and getattr(store, "writable", True) and hasattr(store, "upsert"):
             remote_markers = dict(isaretler)
             try:
                 remote = store.get_many([_pkg.SUMMARY_MARKERS_SUPABASE_KEY]) if hasattr(store, "get_many") else None
@@ -241,7 +241,8 @@ def _karne_uzak_kaydet(zorla: bool = False) -> bool:
     Yerel dosya her kayıtta zaten yazılır; bu yalnız dayanıklılık içindir.
     """
     global _karne_son_uzak_yazma
-    if _pkg._supabase_store_ref is None or _pkg._karne_defteri is None:
+    if (_pkg._supabase_store_ref is None or _pkg._karne_defteri is None
+            or not getattr(_pkg._supabase_store_ref, "writable", True)):
         return False
     simdi = time.monotonic()
     if not zorla and (simdi - _pkg._karne_son_uzak_yazma) < _pkg.KARNE_UZAK_YAZMA_ARALIK_SN:

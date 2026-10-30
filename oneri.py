@@ -92,7 +92,7 @@ def kaydet(oneri: Dict, *, store=None, data_dir: Optional[str] = None) -> bool:
         yazildi = True
     except OSError as exc:
         logger.debug("Gece önerisi yazılamadı: %s", exc)
-    if store is not None:
+    if store is not None and getattr(store, "writable", True):
         try:
             store.upsert(SUPABASE_KEY, veri)
         except Exception as exc:  # noqa: BLE001

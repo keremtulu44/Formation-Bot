@@ -172,7 +172,14 @@ def main_loop():
     # Digest damgası main_loop içinde birden çok yerde okunur/yazılır; global
     # bildirimi fonksiyon başında olmalı (Python kuralı).
     global _digest_son_gonderim_gun
-    supabase_store = SupabaseStore.from_env()
+    # Eski veriler okunabilir; bu bot Supabase'e hiçbir veri yazmaz.
+    supabase_store = SupabaseStore.from_env(read_only=True)
+    from state.formation_mirror import set_mirror_writes_enabled
+    set_mirror_writes_enabled(False)
+    _pkg.logger.warning(
+        "Supabase yalnız okunur: yeni yedekler ve çoklu örnek tespiti kapalı; "
+        "yerel geçici disk silinirse yeni durum kaybolabilir."
+    )
     setattr(_pkg, "_supabase_store_ref", supabase_store)
     if supabase_store is not None:
         # Ortam değişkenleri yanlışsa teşhis loga düşsün; hata halinde bot durmaz.
@@ -203,7 +210,7 @@ def main_loop():
     # Analiz snapshot'ı komutların güncel kaynağı değildir. Her /panel ve
     # /tara isteği yeni veriyle yeniden hesaplanır. OHLCV önbelleği Supabase
     # erişilemezse yerel disk/Yahoo üzerinden kurulabilir.
-    deque_manager = StockDequeManager(persistent_store=supabase_store)
+    deque_manager = StockDequeManager(persistent_store=None)
     setattr(_pkg, "_deque_manager_ref", deque_manager)
 
     # Başlangıçta tüm cache ve notifier durumlarını tek Supabase isteğiyle al.
@@ -231,7 +238,7 @@ def main_loop():
     lifecycle_manager = PatternLifecycleManager(profile=PROFILE)
     setattr(_pkg, "_lifecycle_manager_ref", lifecycle_manager)
     notifier = TelegramNotifier(
-        persistent_store=supabase_store,
+        persistent_store=None,
         initial_store_data=remote_rows,
     )
     setattr(_pkg, "_notifier_ref", notifier)
@@ -711,7 +718,7 @@ def main_loop():
                     # Karne defteri yedeği (varsa Supabase; aralıklı, en fazla 5 dk'da bir).
                     _pkg._karne_uzak_kaydet()
                     # Faz 2.6: Formation mirror kuyruğunu Supabase'e flush et
-                    if _pkg._supabase_store_ref is not None:
+                    if _pkg._supabase_store_ref is not None and getattr(_pkg._supabase_store_ref, "writable", True):
                         try:
                             from state.formation_mirror import get_mirror_queue
                             get_mirror_queue().flush(_pkg._supabase_store_ref)
@@ -764,7 +771,7 @@ def main_loop():
                 _pkg._gece_denetimi(now)
                 # P2: BIST kapalıyken de mirror kuyruğu boşalt (tatil/hafta sonu 48s idle'da queue 0 kalsın)
                 try:
-                    if _pkg._supabase_store_ref is not None:
+                    if _pkg._supabase_store_ref is not None and getattr(_pkg._supabase_store_ref, "writable", True):
                         from state.formation_mirror import get_mirror_queue
                         get_mirror_queue().flush(_pkg._supabase_store_ref)
                 except Exception:  # noqa: BLE001
@@ -805,7 +812,7 @@ def main_loop():
         # Bekleyen gün içi adaylar kapanışta da kaybolmasın (Batch 5 / B3).
         _pkg.digest_tamponu_kaydet()
         # Faz 2.6: Kapanışta bekleyen mirror kuyruğunu flush et (SIGTERM/SIGINT)
-        if _pkg._supabase_store_ref is not None:
+        if _pkg._supabase_store_ref is not None and getattr(_pkg._supabase_store_ref, "writable", True):
             try:
                 from state.formation_mirror import get_mirror_queue
                 get_mirror_queue().flush(_pkg._supabase_store_ref)

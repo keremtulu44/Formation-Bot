@@ -50,7 +50,8 @@ services:
         sync: false
       - key: PUBLIC_COMMAND_ADMIN_CACHE_SN
         value: "300"
-      # Supabase — Settings > API bölümünden
+      # Supabase — yalnız geçmişi okur; bot bu modda yeni veri yazmaz.
+      # Render geçici diskindeki yeni durum yeniden deploy sırasında kaybolabilir.
       - key: SUPABASE_URL
         sync: false
       # Yeni "sb_secret_..." anahtarı veya eski service_role JWT; ikisi de olur

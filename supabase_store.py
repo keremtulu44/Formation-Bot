@@ -120,7 +120,7 @@ class SupabaseStore:
     # Eski (öneksiz) anahtarlar okunabilir; sonraki yazımda ön ekli hâle taşınır.
     VARSAYILAN_PREFIX = "formation-bot:"
 
-    def __init__(self, project_url: str, service_key: str, session=None, prefix=None):
+    def __init__(self, project_url: str, service_key: str, session=None, prefix=None, *, read_only=False):
         # Kullanici Dashboard'dan \"https://<ref>.supabase.co\" yerine REST API
         # uc noktasini (https://<ref>.supabase.co/rest/v1/) kopyalayabiliyor.
         # Sondaki slash ve /rest/v1 suffix'i at ki URL iki kez eklenip 404 yemesin.
@@ -144,6 +144,7 @@ class SupabaseStore:
         self.rest_url = f"{self.project_url}/rest/v1/{self.TABLE}"
         self._session = session or requests.Session()
         self._headers = supabase_basliklari(temiz_key)
+        self._read_only = bool(read_only)
 
         self._disabled_reason: Optional[str] = None
         self._warned: set[str] = set()
@@ -163,7 +164,7 @@ class SupabaseStore:
             pass
 
     @classmethod
-    def from_env(cls, environ=None) -> Optional["SupabaseStore"]:
+    def from_env(cls, environ=None, *, read_only=False) -> Optional["SupabaseStore"]:
         """Create a store from Render secrets; return None for local-only mode."""
         environ = os.environ if environ is None else environ
         project_url = _anahtari_temizle(environ.get("SUPABASE_URL", ""))
@@ -193,11 +194,16 @@ class SupabaseStore:
         except Exception:  # noqa: BLE001, S110 - tanılama logunun kendisi düşerse kurulum bozulmasın
             pass
 
-        return cls(project_url, service_key)
+        return cls(project_url, service_key, read_only=read_only)
 
     @property
     def enabled(self) -> bool:
         return self._disabled_reason is None
+
+    @property
+    def writable(self) -> bool:
+        """Whether this store may make mutating requests."""
+        return self.enabled and not self._read_only
 
     def request_table(self, table_name: str, method: str, *, params=None, json=None, headers=None,
                       return_errors=False):
@@ -206,6 +212,10 @@ class SupabaseStore:
         Mirror kuyruğu kalıcı ve geçici HTTP hatalarını ayırmak için hata
         yanıtını isteyebilir. Ağ hataları her zaman None olarak kalır.
         """
+        # Hard boundary: even direct table/mirror calls cannot mutate Supabase
+        # when the application selected read-only mode. Block before network I/O.
+        if self._read_only and str(method).upper() not in {"GET", "HEAD"}:
+            return None
         if not self.enabled or time.monotonic() < self._retry_after:
             return None
 

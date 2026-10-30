@@ -406,7 +406,7 @@ class FormationMirrorQueue:
                 return 0
 
     def flush(self, store=None, max_batches: int = 10) -> int:
-        if store is None or not getattr(store, "enabled", False):
+        if store is None or not getattr(store, "enabled", False) or not getattr(store, "writable", True):
             return 0
         if time.monotonic() < self._retry_after:
             return 0
@@ -481,6 +481,14 @@ class FormationMirrorQueue:
 # Global singleton instance
 _GLOBAL_QUEUE: Optional[FormationMirrorQueue] = None
 _QUEUE_LOCK = threading.RLock()
+_MIRROR_WRITES_ENABLED = True
+
+
+def set_mirror_writes_enabled(enabled: bool) -> None:
+    """Disable mirror enqueue in read-only bot mode; existing disk data is kept."""
+    global _MIRROR_WRITES_ENABLED
+    with _QUEUE_LOCK:
+        _MIRROR_WRITES_ENABLED = bool(enabled)
 
 
 def get_mirror_queue(data_dir: Optional[str] = None) -> FormationMirrorQueue:
@@ -496,6 +504,8 @@ def mirror_kaydet(defter: Dict[str, Any], store=None, data_dir: Optional[str] = 
 
     Asla exception fırlatmaz, botu düşürmez.
     """
+    if not _MIRROR_WRITES_ENABLED or (store is not None and not getattr(store, "writable", True)):
+        return 0
     try:
         q = get_mirror_queue(data_dir)
         eklenen = q.enqueue_from_defter(defter)
