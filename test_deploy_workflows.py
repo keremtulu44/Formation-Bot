@@ -136,3 +136,14 @@ if [ "$show_code" = 1 ]; then printf '%s' "$status"; fi
         assert result.returncode != 0, result.stdout + result.stderr
     else:
         assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_ci_uses_stable_runner_and_node24_actions():
+    """Python 3.12 kapısı, eski Node runtime veya kayan runner imajına dayanmaz."""
+    import re
+
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "runs-on: ubuntu-24.04" in workflow
+    for action in ("checkout", "setup-python"):
+        version = re.search(rf"uses:\s*actions/{action}@v(\d+)", workflow)
+        assert version and int(version.group(1)) >= 6
