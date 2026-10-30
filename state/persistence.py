@@ -62,7 +62,7 @@ def son_tarama_kaydet(live_state, store=None, data_dir=None) -> bool:
             except Exception as exc:
                 logger.warning("Son tarama geçici dosyası temizlenemedi: %s", exc)
 
-    if store is not None:
+    if store is not None and getattr(store, "writable", True):
         try:
             supabase_var = bool(store.upsert(SON_TARAMA_SUPABASE_KEY, veri))
         except Exception as exc:
@@ -130,7 +130,7 @@ def digest_tamponu_kaydet(tampon, store=None, data_dir=None, son_digest_gun=None
         dosya_var = True
     except Exception as exc:
         logger.warning("Digest tamponu dosyaya kaydedilemedi: %s", exc)
-    if store is not None:
+    if store is not None and getattr(store, "writable", True):
         try:
             uzak_var = bool(store.upsert(DIGEST_PENDING_SUPABASE_KEY, veri))
         except Exception as exc:
@@ -204,7 +204,7 @@ def karne_defteri_yukle(defter, store=None) -> int:
 
 def karne_defteri_kaydet(defter, store=None) -> bool:
     """Defteri uzak yedeğe yazar (yerel dosya `KarneDefteri.kaydet` ile zaten yazıldı)."""
-    if store is None:
+    if store is None or not getattr(store, "writable", True):
         return False
     try:
         return bool(store.upsert(KARNE_DEFTERI_SUPABASE_KEY, defter.snapshot()))

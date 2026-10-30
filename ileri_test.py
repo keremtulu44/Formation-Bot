@@ -318,7 +318,7 @@ def defter_kaydet(defter: Dict, *, store=None, data_dir: Optional[str] = None) -
         yazildi = True
     except OSError as exc:
         logger.debug("İleri test defteri yazılamadı: %s", exc)
-    if store is not None:
+    if store is not None and getattr(store, "writable", True):
         try:
             store.upsert(SUPABASE_KEY, defter)
         except Exception as exc:  # noqa: BLE001

@@ -243,7 +243,7 @@ def _tekil_ornek_kontrolu(store=None, force: bool = False) -> dict:
     """Supabase'de başka canlı bot örneği var mı? (uyarı + heartbeat alanı)"""
     global _cift_ornek_durumu
     store = _pkg._supabase_store_ref if store is None else store
-    if store is None:
+    if store is None or not getattr(store, "writable", True):
         return _pkg._cift_ornek_durumu
     simdi = _pkg.datetime.now(ISTANBUL_TZ)
     son = _pkg._cift_ornek_durumu.get("son_kontrol")
@@ -1226,7 +1226,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             # Mirror üretimi tarama sırasında olur. Sadece tur sonunda flush
             # etmek 57 hisselik tur boyunca kuyruğun taşmasına yol açıyordu.
             # Hisse başına sınırlı iş yap; arıza analizi/taramayı durdurmasın.
-            if _pkg._supabase_store_ref is not None:
+            if _pkg._supabase_store_ref is not None and getattr(_pkg._supabase_store_ref, "writable", True):
                 try:
                     from state.formation_mirror import get_mirror_queue
                     get_mirror_queue().flush(_pkg._supabase_store_ref, max_batches=2)

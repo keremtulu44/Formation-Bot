@@ -14,9 +14,8 @@ Ne yapar:
      .github/workflows/keepalive.yml varlığı, yerel bot_data önbelleği.
   2. Env: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (komutlar için gerekli),
      Supabase env'leri (opsiyonel) tanımlı mı? Değerleri ASLA yazdırmaz.
-  3. Supabase varsa: tablo gerçekten var mı? (404 -> SQL çalıştırılmamış,
-     401/403 -> anahtar yanlış, 200 -> hazır) ve bot canlı mı (state:heartbeat
-     yaşı); yoksa analiz yine çalışır.
+  3. Supabase varsa: tablo okunabiliyor mu? Yalnız GET yapılır; yazma testi ve
+     güncellenmeyen uzak heartbeat üzerinden canlılık kontrolü yapılmaz.
   4. Telegram: getMe ile token; istenirse gerçek test mesajı. Ardından
      getWebhookInfo ile KOMUT YOLU: webhook kayıtlı mı, teslim hatası
      (`last_error_message`) var mı, bekleyen güncelleme birikmiş mi? —
@@ -472,30 +471,10 @@ def kontrol_supabase(url: str, anahtar: str, onek: str = None) -> None:
               _kisa(r.text, 180, anahtar, temiz))
         return
 
-    # Şema gerçekten kullanılabilir mi: bir satır yazıp okuyalım (zararsız test anahtarı).
+    # Bot salt okunur modda; tanılama da Supabase'e test satırı yazmamalı.
+    # Uzak heartbeat artık güncellenmez, dolayısıyla canlılık için /health kullanılır.
     if r.status_code == 200:
-        try:
-            test_anahtar = "deploy_check:ping"
-            yaz = requests.post(
-                f"{temiz}/rest/v1/bot_store",
-                headers={**basliklar, "Content-Type": "application/json",
-                         "Prefer": "resolution=merge-duplicates,return=minimal"},
-                json={"store_key": test_anahtar, "payload": {"t": time.time()}},
-                timeout=12,
-            )
-            if yaz.status_code in (200, 201, 204):
-                satir(OK, "Yazma izni var (service_role doğru)", "commit/replace politikası çalışıyor.")
-            else:
-                satir(FAIL, f"Yazma başarısız (HTTP {yaz.status_code})",
-                      "service_role anahtarı kullanılmalı; yazma için upsert politikası şart. "
-                      + _kisa(yaz.text, 160, anahtar, temiz))
-        except Exception as exc:  # noqa: BLE001
-            satir(WARN, "Yazma testi yapılamadı",
-                  f"{type(exc).__name__}: {_kisa(exc, 180, anahtar, temiz)}")
-
-    # B-4: bot gerçekten yaşıyor mu? (heartbeat yaşı; /health?strict=1 ile aynı kaynak)
-    _heartbeat_kontrol(temiz, basliklar_okuma, store_onek(onek if onek is not None
-                                                          else os.environ.get("SUPABASE_STORE_PREFIX", "")))
+        satir(OK, "Supabase salt okunur", "Yazma testi atlandı; canlılık için Render /health kullanın.")
 
 
 def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:

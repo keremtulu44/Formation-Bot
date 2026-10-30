@@ -207,7 +207,8 @@ def write_heartbeat(data_dir: str = None, notifier=None, force: bool = False):
         }
         icerik = _pkg._heartbeat_icerik_ozeti(payload)
         simdi = time.time()
-        if _pkg._supabase_store_ref is not None and (
+        if (_pkg._supabase_store_ref is not None
+                and getattr(_pkg._supabase_store_ref, "writable", True)) and (
                 force
                 or icerik != _pkg._son_heartbeat_icerik
                 or simdi - _pkg._son_heartbeat_uzak_zamani >= HEARTBEAT_UZAK_ARALIK_SN):
