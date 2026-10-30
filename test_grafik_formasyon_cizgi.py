@@ -142,4 +142,4 @@ def test_altyazi_formasyon_adi_ve_durum():
     alt = M._kare_altyazisi("THYAO", "1h", {"mum_sayisi": 180, "formasyon_ad": "Yükselen Üçgen",
                                             "formasyon_durum": "RETEST_BEKLENIYOR",
                                             "son_bar_ts": "2026-09-25T17:30:00+03:00"})
-    assert alt == "THYAO · 1s · 180 mum · Yükselen Üçgen (retest bekleniyor) · son kapanan 25.09.2026 17:30"
+    assert alt == "THYAO · 1s · 180 mum · Yükselen Üçgen (retest bekleniyor) · son mum kapanışı 25.09.2026 18:00 TSİ"

@@ -529,7 +529,11 @@ def test_komut_grafik_kullim_ve_girdi_kapilari(monkeypatch):
     assert M._komut_grafik("TÜRKİYE").startswith("Geçersiz sembol")
     assert M._komut_grafik("A").startswith("Geçersiz sembol")
     assert M._komut_grafik("AKBNK/../x").startswith("Geçersiz sembol")
-    assert "tanınmadı" in M._komut_grafik("AKBNK 9x")
+    for gecersiz in ("9x", "detayy", "odakk"):
+        hata = M._komut_grafik("AKBNK " + gecersiz)
+        assert f"Seçenek tanınmadı: {gecersiz}" in hata
+        assert "Zaman dilimi tanınmadı" not in hata
+        assert all(x in hata for x in ("1s", "4s", "sade|detay", "odak|bağlam", "mobil"))
     assert "bir zaman dilimi" in M._komut_grafik("AKBNK 1s 4s")
     assert "bir kez" in M._komut_grafik("AKBNK sade detay")
     assert M._komut_grafik("akbnk 4s").startswith("Telegram gönderimi kapalı")

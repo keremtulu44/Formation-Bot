@@ -87,6 +87,7 @@ dz_yukleme/
 
 # Yerel araç artıkları (commit edilmez)
 .coverage
+.cache/
 .ruff_cache/
 .pytest_cache/
 

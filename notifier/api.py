@@ -751,8 +751,15 @@ class TelegramNotifier:
             "critical_price_level", "break_price", "break_dir", "contraction", "bar_metni",
             "candle_close_price", "close_price", "upper_touches", "lower_touches",
             "formation_id", "break_strength", "age_bars", "band_baslangic", "upper_now",
-            "lower_now", "retest_seen", "mtf_destek", "domain_bolumleri", "domain_karsi")}
-        for zaman_alani in ("bar_time", "bar_kapanis"):
+            "lower_now", "retest_seen", "mtf_destek", "mtf_uyum", "mtf_kontrol_edildi",
+            "mtf_yon_biliniyor", "domain_bolumleri", "domain_karsi", "watch_context")}
+        # Seçim hisse bazlı hafızayı değiştirir; DM ve public ayrı ayrı
+        # seçerse aynı olayın yorumları farklı olur. Bir kez seçip sabitle.
+        if data.get("kart_yorum_kapisi"):
+            from .format_kart import _kart_yorumu
+            yorum = _kart_yorumu(data, data.get("domain_bolumleri") or {})
+            kayit["_kart_yorum_sabit"] = yorum
+        for zaman_alani in ("bar_time", "bar_kapanis", "band_baslangic"):
             deger = data.get(zaman_alani)
             if deger is None:
                 kayit[zaman_alani] = None

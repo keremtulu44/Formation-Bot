@@ -123,12 +123,13 @@ def test_domain_import_failure_is_logged_and_retried(monkeypatch, caplog):
 
 
 @pytest.mark.parametrize("domain_fails", [False, True])
+@pytest.mark.parametrize("formation_tf", ["2h", "1h"])
 @pytest.mark.parametrize(("engine_state", "expected_notification_state"), [
     ("KIRILIM_TEYITLI", "KIRILIM_TEYITLI"),
     ("BASARISIZ_KIRILIM", "KIRILIM_GECERSIZLESTI"),
 ])
 def test_formation_alert_runs_fresh_domains_before_telegram_and_tolerates_failure(
-    monkeypatch, domain_fails, engine_state, expected_notification_state
+    monkeypatch, domain_fails, formation_tf, engine_state, expected_notification_state
 ):
     import main as main_module
     from config import ACTIVE_STOCKS, ISTANBUL_TZ
@@ -141,10 +142,11 @@ def test_formation_alert_runs_fresh_domains_before_telegram_and_tolerates_failur
     hourly_cache = _valid_frame(50)
     all_timeframes = {
         "1h": pd.DataFrame(),
-        "2h": formation_frame,
+        "2h": pd.DataFrame(),
         "4h": pd.DataFrame(),
         "1d": pd.DataFrame(),
     }
+    all_timeframes[formation_tf] = formation_frame
     invalidation_case = engine_state == "BASARISIZ_KIRILIM"
     active = SimpleNamespace(
         raw_quality=92.0,
@@ -182,7 +184,7 @@ def test_formation_alert_runs_fresh_domains_before_telegram_and_tolerates_failur
 
     class FakeLifecycle:
         def scan(self, key, _frame, *, tam_yeniden):
-            assert key == "AUDIT_2h"
+            assert key == f"AUDIT_{formation_tf}"
             assert tam_yeniden is True
             events.append("formation.scan")
             now = datetime.now(ISTANBUL_TZ)
@@ -216,7 +218,9 @@ def test_formation_alert_runs_fresh_domains_before_telegram_and_tolerates_failur
                 retest_seen=False,
             )
 
-        def get_snapshot(self, _key):
+        def get_snapshot(self, key):
+            if formation_tf == "1h" and key == "AUDIT_4h":
+                return SimpleNamespace(active=object(), state="SIKISMA_GUCLENIYOR", break_dir=0)
             return None
 
     class FakeDeferredAlerts:
@@ -317,13 +321,24 @@ def test_formation_alert_runs_fresh_domains_before_telegram_and_tolerates_failur
     assert result["status"] == "tamamlandi"
     assert fake_live_state.finish_fields["son_tarama_beklenen_hisse"] == 1
     assert fake_live_state.finish_fields["son_basarili_tam_tarama"] == result["finished_at"]
-    assert [call[:2] for call in runner_frames] == [("AUDIT", "2h")]
+    assert [call[:2] for call in runner_frames] == [("AUDIT", formation_tf)]
     assert float(runner_frames[0][2]["close"].iloc[-1]) == float(formation_frame["close"].iloc[-1])
     assert len(alerts) == 1
     assert alerts[0]["state"] == expected_notification_state
     assert alerts[0]["formation_id"] == "stable-formation-audit"
     assert alerts[0]["candle_close_price"] == float(formation_frame["close"].iloc[-1])
     assert alerts[0]["watch_context"] == []
+    from notifier import TelegramNotifier
+    message = TelegramNotifier().format_message(alerts[0])
+    if formation_tf == "2h":
+        # Bu akış 2h için üst TF'yi sorgulamaz; negatif onay uydurulmaz.
+        assert alerts[0]["mtf_kontrol_edildi"] is False
+        assert "4s onayı bilinmiyor" in message
+    else:
+        # Aktif üst formasyonun yönü yoksa "uyumsuz" denemez.
+        assert alerts[0]["mtf_kontrol_edildi"] is True
+        assert alerts[0]["mtf_yon_biliniyor"] is False
+        assert "4s formasyonu · yön belirsiz" in message
     assert "domain_result" not in alerts[0]
     assert stale_lookups == []
     if invalidation_case:

@@ -21,14 +21,15 @@ permissions:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    # ubuntu-latest'in 26.04'e geçişi CI ortamını habersiz değiştirmesin.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Python sürümü repodaki .python-version (3.12) dosyasından okunur - yani
       # Render'ın gördüğü dosyanın AYNISI. Sürüm değişirse CI de onu izler.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version-file: .python-version
           cache: pip
@@ -112,7 +113,9 @@ jobs:
       # /test ve kapalı webhook sözleşmeleri gerçek entrypoint üzerinden doğrulanır.
       - name: Render duman testi (/health ayakta mı?)
         run: |
-          set -uo pipefail
+          # Kontrolün kendi kabuğunda da hata durdurulsun; yalnız runner'ın
+          # varsayılan bash -e davranışına güvenmeyin.
+          set -euo pipefail
           ROOT="$RUNNER_TEMP/formation-bot-health-smoke"
           mkdir -p "$ROOT"
           # Render'ın deploy sırasında enjekte ettiği değişkenler (sürüm görünürlüğü)

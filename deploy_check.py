@@ -207,8 +207,8 @@ def kontrol_repo() -> None:
         if "borsapy" in icerik and not icerik.count("# borsapy"):
             satir(WARN, "requirements.txt borsapy içeriyor",
                   "borsapy Python 3.14'te Rust/C zinciri getirir; repo kodu import etmiyor -> çıkarın.")
-        satir(OK, "Build Command: pip install -r requirements.txt",
-              "Start Command: python main.py (render.yaml / Dashboard)")
+        satir(OK, "Önerilen Build Command: pip install -r requirements.txt",
+              "Start Command: python main.py; mevcut Render Dashboard ayarları ayrıca doğrulanmalıdır.")
 
     wf = REPO_ROOT / ".github" / "workflows" / "keepalive.yml"
     if wf.exists():
@@ -229,8 +229,8 @@ def kontrol_repo() -> None:
     if data_dir.is_dir():
         hisseler = sorted({p.stem for p in data_dir.glob("*.json") if not p.stem.endswith("_gunluk")})
         if hisseler:
-            satir(OK, f"yerel önbellek: {len(hisseler)} hisse (bot_data/)",
-                  "Render'da disk kalıcı DEĞİL; ilk açılış bu dosyalarla hızlanır, sonrası Supabase'e yazılır.")
+            satir(OK, f"yerel önbellek: {len(hisseler)} sembol (bot_data/)",
+                  "Seed ilk açılışı hızlandırabilir. Yeni durum geçici diskte tutulur; Supabase'e yazılmaz.")
         else:
             satir(WARN, "bot_data boş", "İlk açılışta tüm evren (hisse + endeks + makro) Yahoo'dan çekilir; "
                    "birkaç dakika sürer.")
@@ -243,7 +243,7 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
 
     beklenti = [
         ("SUPABASE_URL", False, "İsteğe bağlı: Supabase → Settings → API → Project URL (sonda /rest/v1 OLMADAN)"),
-        ("SUPABASE_SERVICE_ROLE_KEY", False, "İsteğe bağlı uzak cache/state için service_role JWT veya sb_secret_... anahtarı"),
+        ("SUPABASE_SERVICE_ROLE_KEY", False, "İsteğe bağlı eski uzak cache/state okuması için service_role JWT veya sb_secret_... anahtarı"),
         ("TELEGRAM_BOT_TOKEN", True, "@BotFather → /newbot → 'Use this token'"),
         ("TELEGRAM_CHAT_ID", True, "@userinfobot'un verdiği Id (kendine mesaj için pozitif sayı; KOMUTLAR buna bağlı)"),
         ("TELEGRAM_GROUP_ID", False, "PUBLIC KANAL hedefi (@bisthisseveri veya -100…): kanal yayını bununla açılır (eski adı TELEGRAM_CHANNEL_ID)"),
@@ -252,7 +252,7 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("BOT_PROFILE", False, "Dengeli / Hassas / Seçici"),
         ("TELEGRAM_TEST_KEY", False, "İsteğe bağlı: /test ucunu açar (telefondan Telegram testi)"),
         ("SUPABASE_STORE_PREFIX", False, "Varsayılan formation-bot: ; aynı tabloyu paylaşan 2. kopya için değiştirin"),
-        ("BOT_INSTANCE_ID", False, "Varsayılan hostname:pid ; ikinci canlı kopya varsa farklı ad verin (B10)"),
+        ("BOT_INSTANCE_ID", False, "Varsayılan hostname:pid; salt okunur modda uzak çoklu örnek tespiti kapalıdır"),
         ("PUBLIC_COMMANDS_ENABLED", False, "Public GRUP komutları (varsayılan 1 = açık): yalnız grup YÖNETİCİLERİ okuma komutlarını çalıştırır"),
         ("PUBLIC_COMMAND_CHATS", False, "Boş = TELEGRAM_GROUP_ID; virgülle çok sohbet (-100…,@grup_adi)"),
         ("PUBLIC_COMMAND_EXTRA", False, "Public'te kapalı komutları aç (örn. tara). Boş = yalnız okuma listesi"),
@@ -321,7 +321,10 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         satir(seviye, "Telegram kapalı olacak", "Token/chat_id yoksa bot çalışır ama hiç mesaj göndermez (log: 'notifier pasif').")
     if not degerler.get("SUPABASE_URL") and not degerler.get("SUPABASE_SERVICE_ROLE_KEY"):
         satir(WARN, "Supabase kapalı olacak",
-              "Analiz yine çalışır; Render restart/deploy sonrası yerel OHLCV önbelleği ve Telegram sayaçları kalıcı olmayabilir.")
+              "Analiz yine çalışır; eski uzak kayıtlar okunamaz.")
+    satir(WARN, "Yeni durum Supabase'e yedeklenmez",
+          "Bot salt okunur çalışır; geçici DATA_DIR silinirse yeni önbellek, karne ve bildirim durumu kaybolabilir. "
+          "Uzak çoklu örnek tespiti de kapalıdır.")
     anahtar = degerler.get("SUPABASE_SERVICE_ROLE_KEY", "")
     rol = _jwt_rolu(anahtar)
     tur = anahtar_turu(anahtar) if anahtar else ""
@@ -501,7 +504,16 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
         return
 
     if r.status_code == 200:
-        kullanici = ((r.json() or {}).get("result") or {}).get("username", "?")
+        try:
+            govde = r.json()
+        except ValueError:
+            govde = None
+        sonuc = govde.get("result") if isinstance(govde, dict) else None
+        if not (isinstance(govde, dict) and govde.get("ok") is True
+                and isinstance(sonuc, dict) and sonuc.get("id")):
+            satir(FAIL, "getMe yanıtı geçersiz", _kisa(r.text, 160, token, chat_id))
+            return
+        kullanici = sonuc.get("username", "?")
         satir(OK, f"Token geçerli (bot: @{kullanici})")
     elif r.status_code == 401:
         satir(FAIL, "Token reddedildi (HTTP 401)",
@@ -515,9 +527,10 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
     if not chat_id:
         satir(WARN, "chat_id yok", "Telegram'a gönderim için TELEGRAM_CHAT_ID şart (@userinfobot).")
         return
-    satir(OK, "Komutlar açık: /formasyonlar · /durum · /tara · /grafik · /yardim",
-          "Komutlar yalnızca bu chat_id'den kabul edilir. Aynı token'ı ikinci bir kopya "
-          "(Termux/PC) da dinlerse Telegram 409 Conflict verir ve komutlar çalışmaz.")
+    satir(OK, "DM hedefi tanımlı: /formasyonlar · /durum · /tara · /grafik · /yardim",
+          "getMe ve hedefin varlığı komut yolunun veya mesaj tesliminin çalıştığını kanıtlamaz; "
+          "yetkili sohbetten komut deneyin. Aynı token'ı ikinci bir kopya da dinlerse "
+          "Telegram 409 Conflict verebilir.")
     if not chat_id.lstrip("-").isdigit():
         satir(WARN, "chat_id sayı değil", "Kendine mesaj için pozitif Id, grup için -100... ile başlar.")
     else:
@@ -859,9 +872,11 @@ def _yerel_commit() -> str:
 
 
 def _commit_karsilastir(canli_commit: str) -> None:
-    """Canlı sürüm yerelden farklıysa: deploy düşmemiş ya da eski kod çalışıyor."""
+    """Canlı sürümü yerel HEAD ile karşılaştır; bilinmeyen de görünür olsun."""
     yerel = _yerel_commit()
     if not canli_commit or not yerel:
+        satir(WARN, "Canlı sürüm doğrulanamadı",
+              "/health commit alanı veya yerel Git HEAD yok; Render Deploys üzerinden kontrol edin.")
         return
     if canli_commit == yerel[:7] or yerel.startswith(canli_commit) or canli_commit.startswith(yerel):
         satir(OK, f"Canlı sürüm yerelle aynı ({canli_commit})")
@@ -914,7 +929,7 @@ def kontrol_render(url: str, test_key: str) -> None:
             elif govde.get("heartbeat_stale") is None:
                 satir(WARN, "Heartbeat durumu bilinmiyor", "Henüz ilk tarama yapılmamış olabilir; /health 200 çalışırlık kanıtı değildir.")
         else:
-            satir(WARN, "200 döndü ama gövde beklenen JSON değil",
+            satir(FAIL, "200 döndü ama gövde beklenen JSON değil",
                   _kisa(govde, 160, test_key, url, hedef))
     elif r.status_code in (502, 503, 504):
         satir(WARN, f"Servis şu an uyanıyor/başlamadı (HTTP {r.status_code})",
@@ -942,7 +957,13 @@ def kontrol_render(url: str, test_key: str) -> None:
               f"{type(exc).__name__}: {_kisa(exc, 180, test_key, url, hedef)}")
         return
 
-    if r.status_code == 200 and r.json().get("ok"):
+    test_govde = None
+    if r.status_code == 200:
+        try:
+            test_govde = r.json()
+        except ValueError:
+            pass
+    if isinstance(test_govde, dict) and test_govde.get("ok") is True:
         satir(OK, "/test Telegram mesajı gönderdi", "Telegram'da 'test mesaji' görünmeli.")
     elif r.status_code == 404:
         satir(FAIL, "/test kapalı (HTTP 404)",
@@ -1022,22 +1043,26 @@ def main() -> int:
                        args.send_test_message and not args.skip_network)
 
     bolum("ÖZET")
-    # Yeni istenen satır: ÖZET: Telegram HAZIR|YOK · Supabase HAZIR|YOK
-    telegram_hazir = bool(degerler.get("TELEGRAM_BOT_TOKEN") and degerler.get("TELEGRAM_CHAT_ID"))
-    supabase_hazir = bool(degerler.get("SUPABASE_URL") and degerler.get("SUPABASE_SERVICE_ROLE_KEY"))
+    # Değişkenlerin varlığı, kimlik/erişim veya teslimin başarıyla sınandığını
+    # göstermez. Ağ kontrollerinin ayrıntısı yukarıdaki satırlarda kalır.
+    telegram_tanimli = bool(degerler.get("TELEGRAM_BOT_TOKEN") and degerler.get("TELEGRAM_CHAT_ID"))
+    supabase_tanimli = bool(degerler.get("SUPABASE_URL") and degerler.get("SUPABASE_SERVICE_ROLE_KEY"))
     kanal_hedefi = (degerler.get("TELEGRAM_GROUP_ID", "") or degerler.get("TELEGRAM_CHANNEL_ID", ""))
-    ozet_telegram = "HAZIR" if telegram_hazir else "YOK"
-    ozet_supabase = "HAZIR" if supabase_hazir else "YOK"
-    # Kanal: hedef tanımlı + (ağ kontrolü yapıldıysa) gerçekten yazabiliyor olmalı.
+    ozet_telegram = "TANIMLI" if telegram_tanimli else "EKSİK/YOK"
+    ozet_supabase = "TANIMLI (salt okunur)" if supabase_tanimli else "EKSİK/YOK"
     ozet_kanal = "YOK"
     if kanal_hedefi:
-        ozet_kanal = "HAZIR" if (args.skip_network or public_hazir) else "HEDEF VAR, IZIN YOK"
+        if args.skip_network:
+            ozet_kanal = "TANIMLI (DOĞRULANMADI)"
+        else:
+            ozet_kanal = "İZİN DOĞRULANDI" if public_hazir else "HEDEF VAR, İZİN DOĞRULANAMADI"
     print(f"ÖZET: Telegram {ozet_telegram} · Kanal {ozet_kanal} · Supabase {ozet_supabase}")
+    print("TANIMLI yalnızca ayarın varlığıdır; erişim ve teslim için yukarıdaki kontrolleri okuyun.")
     print(f"✅ {_sayac[OK]} tamam   ⚠️  {_sayac[WARN]} uyarı   ❌ {_sayac[FAIL]} hata")
     if _sayac[FAIL] == 0 and _sayac[WARN] == 0:
         print("Her şey yerinde: Render tarafı hazır.")
     elif _sayac[FAIL] == 0:
-        print("Kritik hata yok. Uyarıların çoğu 'opsiyonel' (örn. TELEGRAM_TEST_KEY) olabilir:")
+        print("Kritik hata kaydedilmedi; uyarı ve atlanan kontroller servislerin hazır olduğunu kanıtlamaz.")
         print("UYARI satırlarını yukarıdan aşağı okuyun, docs/kurulum/RENDER_DEPLOY.md §1-5 karşılığını anlatır.")
     else:
         print("HATA satırlarını sırayla düzeltin; her biri için öneri satır altında yazıyor.")

@@ -166,3 +166,42 @@ def test_gece_onerisi_deftere_bekliyor_olarak_yazilir(monkeypatch, tmp_path):
                                   {"karar": "yetersiz", "metin": "Ölçüm: yetersiz veri."},
                                   gun="2026-10-26") is False
     assert len(notifier.mesajlar) == 1
+
+
+def test_yanit_hicbir_depoya_yazilamazsa_kaydedildi_denmez(tmp_path):
+    # Öneri uzak kaynaktan okunur; yerel yol yazılamaz, uzak upsert başarısız.
+    engel = tmp_path / "dosya"
+    engel.write_text("dizin değil", encoding="utf-8")
+    store = SahteStore()
+    store.kayitlar[oneri.SUPABASE_KEY] = {"oneri": {"gun": "2026-10-30", "durum": "bekliyor"}}
+    store.upsert = lambda *_args: False
+
+    metin = oneri.cevapla("evet", store=store, data_dir=str(engel))
+    assert "kaydedilemedi" in metin and "tamamlanmadı" in metin
+    assert "onaylandı" not in metin and "kayda geçti" not in metin
+    assert oneri.bekleyen(store=store, data_dir=str(engel)) is not None
+
+
+def test_yerel_yazilamasa_uzak_basari_karari_kaydeder(tmp_path):
+    engel = tmp_path / "dosya"
+    engel.write_text("dizin değil", encoding="utf-8")
+    store = SahteStore()
+    store.kayitlar[oneri.SUPABASE_KEY] = {"oneri": {"gun": "2026-10-30", "durum": "bekliyor"}}
+
+    metin = oneri.cevapla("hayır", store=store, data_dir=str(engel))
+    assert "reddedildi" in metin
+    assert store.kayitlar[oneri.SUPABASE_KEY]["oneri"]["durum"] == "reddedildi"
+    assert oneri.bekleyen(store=store, data_dir=str(engel)) is None
+
+
+def test_gece_onerisi_defter_hatasi_ayri_uyari_gonderir(monkeypatch, tmp_path):
+    monkeypatch.setattr(oneri, "dosya_yolu", lambda data_dir=None: str(tmp_path / "o.json"))
+    notifier = SahteNotifier()
+    monkeypatch.setattr(M, "_notifier_ref", notifier)
+    monkeypatch.setattr(M, "_supabase_store_ref", None)
+    monkeypatch.setattr(oneri, "kaydet", lambda *_args, **_kwargs: False)
+
+    assert M._gece_onerisi_gonder({"kontrol": 1, "sapma": 1}, {}, gun="2026-10-30")
+    assert len(notifier.mesajlar) == 2
+    assert "/evet" in notifier.mesajlar[0]
+    assert "kaydedilemedi" in notifier.mesajlar[1] and "yanıtlanamaz" in notifier.mesajlar[1]

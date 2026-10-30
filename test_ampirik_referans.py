@@ -589,3 +589,10 @@ def test_beklenti_yon_kaniti_yoksa_olcumu_degistirmez():
                            beklenti=True)
     assert acik == kapali
     assert not any(s.startswith("◇ beklenti") for s in acik)
+
+
+def test_olcum_komutu_nadir_kuralinin_kart_icin_oldugunu_aciklar():
+    metin = ar.komut_metni()
+    assert "geniş bölge %71,0 (n 162)" in metin
+    assert "küçük örneklem, betimleyici" in metin
+    assert "Kartta n < 300: oran yok" in metin

@@ -150,16 +150,16 @@ def test_kare_altyazisi_tarih_ve_mum(monkeypatch):
     import main as M
     alt = M._kare_altyazisi("AKBNK", "4h", {"mum_sayisi": 120,
                                             "son_bar_ts": "2026-09-25T17:30:00+03:00"})
-    assert alt == "AKBNK · 4s · 120 mum · formasyon yok · son kapanan 25.09.2026 17:30"
+    assert alt == "AKBNK · 4s · 120 mum · formasyon yok · son mum kapanışı 25.09.2026 18:00 TSİ"
     alt2 = M._kare_altyazisi("THYAO", "1d", {"son_bar_ts": "bozuk"})
-    assert alt2 == "THYAO · 1g · formasyon yok · son kapanan bozuk"
+    assert alt2 == "THYAO · 1g · formasyon yok · son mum zamanı bilinmiyor"
 
 
 def test_kare_altyazisi_formasyon_adini_yazar():
     import main as M
     alt = M._kare_altyazisi("ALARK", "4h", {"mum_sayisi": 120, "formasyon_ad": "Alçalan Üçgen",
                                             "son_bar_ts": "2026-09-25T17:30:00+03:00"})
-    assert alt == "ALARK · 4s · 120 mum · Alçalan Üçgen · son kapanan 25.09.2026 17:30"
+    assert alt == "ALARK · 4s · 120 mum · Alçalan Üçgen · son mum kapanışı 25.09.2026 18:00 TSİ"
 
 
 def test_kare_altyazisi_sade_gorunumu_belirtir():

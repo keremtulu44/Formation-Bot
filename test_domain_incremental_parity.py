@@ -6,6 +6,7 @@ import math
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from domain_engines.fvg import FvgEngulfingConfig, FvgEngulfingEngine
 from domain_engines.fvg.fvg_engulfing_final import (
@@ -442,3 +443,67 @@ def test_order_block_rolling_boundary_uses_retained_native_pair_history():
         assert len(reference.records) == expected_records
         for record in state.engine.records:
             assert record.source_time == new_window.iloc[record.source_index]["timestamp"]
+
+
+@pytest.mark.parametrize("timeframe", ["1h", "2h", "4h", "1d"])
+def test_private_replay_matches_cold_run_without_touching_live_state(monkeypatch, timeframe):
+    """Historical charts share engines/configuration but not live cursors or latest."""
+    import domain_engines.runner as runner
+
+    monkeypatch.setattr(runner, "_latest_by_series", {})
+    monkeypatch.setattr(runner, "_incremental_states_by_series", {})
+    monkeypatch.setattr(runner, "_series_state_locks", {})
+    frame = _ohlcv_frame(170)
+    live = runner.run_domain_engines("PRIVATE", timeframe, frame)
+    key = ("PRIVATE", timeframe)
+    cursors = dict(runner._incremental_states_by_series[key])
+    latest = runner._latest_by_series[key]
+    lock = runner._series_state_locks[key]
+    checkpoints = {name: (state.last_decision, state.last_result, state.full_replay_count)
+                   for name, (_, state) in cursors.items()}
+
+    # The same cold engine path, but with a historical prefix for the SAME series.
+    replay = runner.run_domain_engines("PRIVATE", timeframe, frame.iloc[:130], isolated=True)
+    assert runner._latest_by_series[key] is latest
+    assert runner.get_latest_domain_results("PRIVATE", timeframe) == live
+    assert runner._series_state_locks[key] is lock
+    assert runner._incremental_states_by_series[key] == cursors
+    for name, (_, state) in cursors.items():
+        assert (state.last_decision, state.last_result, state.full_replay_count) == checkpoints[name]
+
+    cold = runner.run_domain_engines("COLD", timeframe, frame.iloc[:130])
+    for domain in replay:
+        assert replay[domain].skipped == cold[domain].skipped
+        assert replay[domain].reason == cold[domain].reason
+        assert replay[domain].error == cold[domain].error
+        assert repr(replay[domain].export) == repr(cold[domain].export)
+        assert repr(replay[domain].result) == repr(cold[domain].result)
+        assert repr(replay[domain].details) == repr(cold[domain].details)
+    if timeframe == "2h":
+        assert replay["fvg"].skipped
+
+    runner.run_domain_engines("ONLY_PRIVATE", timeframe, frame.iloc[:130], isolated=True)
+    assert ("ONLY_PRIVATE", timeframe) not in runner._incremental_states_by_series
+    assert ("ONLY_PRIVATE", timeframe) not in runner._series_state_locks
+    assert runner.get_latest_domain_results("ONLY_PRIVATE", timeframe) is None
+
+
+def test_private_replay_does_not_wait_for_live_series_lock(monkeypatch):
+    import threading
+    import domain_engines.runner as runner
+
+    live_lock = threading.RLock()
+    monkeypatch.setattr(runner, "_series_state_locks", {("LOCKED", "4h"): live_lock})
+    monkeypatch.setattr(runner, "_run_domain_engines_locked", lambda *a, **kw: {"private": kw["isolated"]})
+    finished, output = threading.Event(), []
+    def work():
+        output.append(runner.run_domain_engines("LOCKED", "4h", _ohlcv_frame(3), isolated=True))
+        finished.set()
+    with live_lock:
+        thread = threading.Thread(target=work)
+        thread.start()
+        try:
+            assert finished.wait(2), "private replay waited for a live series lock"
+        finally:
+            thread.join(2)
+    assert output == [{"private": True}]

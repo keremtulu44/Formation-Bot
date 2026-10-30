@@ -280,6 +280,8 @@ def test_grup_teslimi_patlarsa_sonuc_dm_e_duser(monkeypatch, tmp_path):
                          "hedef_sohbet": GRUP}, n, None)
 
     assert kayit["metinler"], "grup hatasında DM'e düşülmeliydi"
+    assert "gruba gönderilemedi" in kayit["metinler"][-1]
+    assert "DM'e aktarıldı" in kayit["metinler"][-1]
 
 
 # --------------------------------------- 4) notifier: hedefli teslim yolu
@@ -372,3 +374,21 @@ def test_send_to_chat_baska_sohbete_dogrudan_yollar(monkeypatch, temiz_notifier)
 
 def test_send_to_chat_bos_hedefte_gondermez(temiz_notifier):
     assert temiz_notifier.send_to_chat("x", "") is False
+
+
+def test_grup_kurulum_ve_grup_bildirimi_cokerse_dm_uyarisi_verilir(monkeypatch):
+    n, kayit = _sahte_notifier()
+
+    def kurulum_hatasi(*_args):
+        raise RuntimeError("kurulum hatası")
+
+    def grup_hatasi(*_args):
+        raise RuntimeError("grup ulaşılamadı")
+
+    monkeypatch.setattr(M, "_grafik_isi_yurut", kurulum_hatasi)
+    n.send_to_chat = grup_hatasi
+    M._grafik_aktif_is["hisse"] = "THYAO"
+    M._grafik_isi_calistir({"hisse": "THYAO", "hedef_sohbet": GRUP}, n, None)
+    assert "gruba gönderilemedi" in kayit["metinler"][-1]
+    assert "tamamlanamadı" in kayit["metinler"][-1]
+    assert not M._grafik_aktif_is

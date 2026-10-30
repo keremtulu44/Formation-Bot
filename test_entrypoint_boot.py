@@ -150,3 +150,105 @@ def test_shutdown_closes_readiness_and_interrupts_retry_wait(monkeypatch):
     finally:
         main._scan_istegi.set()
         waiter.join(timeout=2)
+
+
+def test_bot_first_import_keeps_main_facade_complete(tmp_path):
+    """Tanılama/testler bot.app'i önce yüklese bile main yarım kalmamalı."""
+    kod = (
+        "import bot.app, bot, main; "
+        "missing = [n for n in bot.__all__ if not hasattr(main, n)]; "
+        "assert not missing, missing; "
+        "assert bot.app._pkg is main; "
+        "assert callable(main.main_loop) and callable(main.signal_handler)"
+    )
+    result = subprocess.run([sys.executable, "-c", kod], cwd=str(_KOK),
+                            env=_smoke_ortami(tmp_path), text=True,
+                            capture_output=True, timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_normal_entrypoint_reaches_readiness_and_shutdown_offline(tmp_path):
+    """Gerçek main_loop, sahte sağlayıcıyla açılır ve SIGTERM'de temiz kapanır."""
+    import json
+    import socket
+    from urllib.error import HTTPError, URLError
+    from urllib.request import urlopen
+
+    fake = tmp_path / "fake-provider"
+    fake.mkdir()
+    (fake / "yfinance.py").write_text('''
+import os
+import time
+from pathlib import Path
+import pandas as pd
+
+class Ticker:
+    def __init__(self, symbol):
+        self.symbol = symbol
+
+    def history(self, period, interval, auto_adjust):
+        while not Path(os.environ["TEST_PROVIDER_GO"]).exists():
+            time.sleep(0.05)
+        frequency = "h" if interval == "1h" else "D"
+        index = pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("h"),
+                              periods=120, freq=frequency)
+        return pd.DataFrame({"Open": 100.0, "High": 102.0, "Low": 99.0,
+                             "Close": 101.0, "Volume": 10000.0}, index=index)
+''', encoding="utf-8")
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+
+    env = _smoke_ortami(tmp_path)
+    env.update({
+        "BOT_HEALTH_SMOKE_ONLY": "0", "PORT": str(port),
+        "STOCK_UNIVERSE": "ASTOR", "SEED_DATA_DIR": str(tmp_path / "no-seed"),
+        "PYTHONPATH": str(fake), "TEST_PROVIDER_GO": str(tmp_path / "provider-go"),
+        "SCAN_REQUEST_DELAY_MIN_SEC": "0", "SCAN_REQUEST_DELAY_MAX_SEC": "0",
+        "SCAN_BATCH_PAUSE_MIN_SEC": "0", "SCAN_BATCH_PAUSE_MAX_SEC": "0",
+    })
+    log_yolu = tmp_path / "normal-start.log"
+
+    def ready():
+        try:
+            with urlopen(f"http://127.0.0.1:{port}/ready", timeout=1) as response:
+                return response.status, json.load(response)
+        except HTTPError as exc:
+            return exc.code, json.load(exc)
+        except (URLError, TimeoutError, OSError):
+            return None, {}
+
+    with log_yolu.open("wb") as log:
+        proc = subprocess.Popen([sys.executable, "-u", "main.py"], cwd=str(_KOK),
+                                stdout=log, stderr=subprocess.STDOUT, env=env)
+        try:
+            deadline = time.monotonic() + 25
+            while time.monotonic() < deadline:
+                assert proc.poll() is None, log_yolu.read_text(encoding="utf-8", errors="replace")
+                code, payload = ready()
+                if code == 503:
+                    break
+                time.sleep(0.1)
+            assert code == 503 and payload.get("startup_complete") is False
+
+            Path(env["TEST_PROVIDER_GO"]).touch()
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                assert proc.poll() is None, log_yolu.read_text(encoding="utf-8", errors="replace")
+                code, payload = ready()
+                if code == 200:
+                    break
+                time.sleep(0.1)
+            assert code == 200 and payload.get("startup_complete") is True, (
+                log_yolu.read_text(encoding="utf-8", errors="replace")[-3000:]
+            )
+            proc.send_signal(signal.SIGTERM)
+            assert proc.wait(timeout=20) == 0
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=10)
+    output = log_yolu.read_text(encoding="utf-8", errors="replace")
+    assert "İLK YÜKLEME [1/1] ASTOR" in output
+    assert "ASTOR: 120 GÜNLÜK mum çekildi" in output
+    assert "Bot durdu" in output and "Traceback" not in output

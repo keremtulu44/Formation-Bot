@@ -181,7 +181,7 @@ def test_main_alert_data_retest_seen_alanı():
         'pattern_name': 'Yükselen Üçgen',
         'state': snap.state,
         'break_dir': snap.break_dir,
-        'retest_seen': getattr(snap, 'retest_seen', False),
+        'retest_seen': getattr(snap, 'retest_seen', None),
     }
     assert 'retest_seen' in alert_data
     assert alert_data['retest_seen'] is False
@@ -469,7 +469,7 @@ def test_dogrulanmis_olay_kimlik_fiyat_kalite_tasir_kare_detayini_tekrarlamaz():
     assert "kırılım gücü 80/100" in msg
     assert "Güçlü" not in msg and "Çok güçlü" not in msg
     # Sade dil (2026-10-22): "retest" yerine "geri çekilme" yazılır.
-    assert "kırılan seviyeye dönüş yok" in msg  # payload'da retest_seen yok
+    assert "seviye dönüşü bilinmiyor" in msg  # eksik retest_seen, yok anlamına gelmez
     # GÖRSEL-8: tema sayısı ve mum damgası metinde VAR (kullanıcı kararı), ama
     # ham domain dökümü ve ham `bar_metni` basılmaz.
     assert "Market Structure" not in msg

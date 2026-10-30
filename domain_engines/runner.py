@@ -70,8 +70,13 @@ def _advance_incremental_engine(
     config_signature: tuple[Any, ...],
     frame: pd.DataFrame,
     engine_factory: Callable[[], Any],
+    *,
+    isolated: bool = False,
 ) -> tuple[IncrementalEngineState, IncrementalDecision]:
-    """Advance one in-memory engine cursor; serialize only its own series."""
+    """Advance a live cursor, or replay into a completely private one."""
+    if isolated:
+        state = IncrementalEngineState(domain, engine_factory())
+        return state, state.advance(frame)
     key = (symbol, timeframe)
     with _state_registry_lock:
         series_lock = _series_state_locks.setdefault(key, threading.RLock())
@@ -205,6 +210,8 @@ def _run_fvg(
     timeframe: str,
     frame: pd.DataFrame,
     profile: str,
+    *,
+    isolated: bool = False,
 ) -> DomainRunResult:
     sensitivity = SensitivityProfile(profile)
     config = FvgEngulfingConfig(sensitivity=sensitivity, timeframe=timeframe)
@@ -215,6 +222,7 @@ def _run_fvg(
         (sensitivity.value, timeframe),
         frame,
         lambda: FvgEngulfingEngine(config=config),
+        isolated=isolated,
     )
     engine = state.engine
     # The last engine result retains the native timestamp even when the frame
@@ -261,6 +269,8 @@ def _run_order_block(
     symbol: str,
     timeframe: str,
     frame: pd.DataFrame,
+    *,
+    isolated: bool = False,
 ) -> DomainRunResult:
     state, _ = _advance_incremental_engine(
         symbol,
@@ -269,6 +279,7 @@ def _run_order_block(
         (),
         frame,
         OrderBlockEngine,
+        isolated=isolated,
     )
     engine = state.engine
     result = engine.snapshot()
@@ -304,6 +315,7 @@ def _run_domain_engines_locked(
     *,
     profile: str = "Dengeli",
     enable_2h_fvg: bool = False,
+    isolated: bool = False,
 ) -> dict[str, DomainRunResult]:
     """Run each applicable domain independently on one symbol/timeframe.
 
@@ -342,7 +354,8 @@ def _run_domain_engines_locked(
             "fvg",
             symbol,
             tf,
-            lambda: _run_fvg(symbol, tf, domain_frame.copy(deep=True), profile),
+            lambda: (_run_fvg(symbol, tf, domain_frame.copy(deep=True), profile, isolated=True)
+                     if isolated else _run_fvg(symbol, tf, domain_frame.copy(deep=True), profile)),
         )
     else:
         reason = (
@@ -363,11 +376,13 @@ def _run_domain_engines_locked(
         "order_block",
         symbol,
         tf,
-        lambda: _run_order_block(symbol, tf, domain_frame.copy(deep=True)),
+        lambda: (_run_order_block(symbol, tf, domain_frame.copy(deep=True), isolated=True)
+                 if isolated else _run_order_block(symbol, tf, domain_frame.copy(deep=True))),
     )
 
-    with _latest_lock:
-        _latest_by_series[(symbol, tf)] = dict(output)
+    if not isolated:
+        with _latest_lock:
+            _latest_by_series[(symbol, tf)] = dict(output)
     return dict(output)
 
 
@@ -379,11 +394,22 @@ def run_domain_engines(
     *,
     profile: str = "Dengeli",
     enable_2h_fvg: bool = False,
+    isolated: bool = False,
 ) -> dict[str, DomainRunResult]:
-    """Run domains serially; keep experimental 2H FVG disabled unless opted in."""
+    """Run domains serially, optionally without reading or writing live state.
+
+    ``isolated`` performs the same cold replay with private OB/FVG cursors and
+    never touches the live per-series locks, cursors, or latest-result registry.
+    The experimental 2H FVG remains disabled unless explicitly opted in.
+    """
     tf = str(timeframe).strip().lower()
     if tf not in ALL_DOMAIN_TIMEFRAMES:
         raise ValueError(f"unsupported Formation-Bot timeframe: {timeframe!r}")
+    if isolated:
+        return _run_domain_engines_locked(
+            symbol, tf, frame, profile=profile, enable_2h_fvg=enable_2h_fvg,
+            isolated=True,
+        )
     key = (symbol, tf)
     with _state_registry_lock:
         series_lock = _series_state_locks.setdefault(key, threading.RLock())

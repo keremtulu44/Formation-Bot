@@ -40,7 +40,8 @@ def _huni_satiri(daily: dict) -> str:
         # En az bir kayıp sayacı yoksa huni anlamsız olur; ama push/digest varsa göster.
         if not (uretildi or push or digest or esik or state_dis):
             return ""
-        satir = f"🔎 Huni: {uretildi} üretildi · {push} push · {digest} digest · {state_dis} state dışı · {esik} eşik altı"
+        satir = (f"🔎 Huni: {uretildi} formasyonlu sembol · {push} push · {digest} digest"
+                 f" · {state_dis} state dışı · {esik} eşik altı gözlem")
         # Ek kayıplar: yalnız varsa ekle (satır şişmesin)
         if d.get("alerts_digest_overflow"):
             satir += f" · {int(d['alerts_digest_overflow'])} digest taşması"
@@ -50,7 +51,7 @@ def _huni_satiri(daily: dict) -> str:
             satir += f" · {int(d['alerts_bar_kapanmadi'])} kapanmamış bar"
         if d.get("alerts_break_close_invalid"):
             satir += f" · {int(d['alerts_break_close_invalid'])} kapanış teyidi yok"
-        return satir
+        return satir + "\nℹ️ Semboller tekil; diğer sayaçlarda tekrarlı tarama gözlemleri olabilir."
     except Exception:
         return ""
 
@@ -70,8 +71,8 @@ def panel_raporu(arguman: str, durum, formations, aktif_hisseler, tarama_suruyor
         satir_hisseler = [s for s in aktif_hisseler
                           if any(t in s.lower() for t in hisse_tokenlari)]
         if not satir_hisseler:
-            return (f"🔍 '{arguman.strip()}' filtresine uyan hisse yok "
-                    f"({len(aktif_hisseler)} hisse evreni).")
+            return (f"🔍 '{arguman.strip()}' filtresine uyan sembol yok "
+                    f"({len(aktif_hisseler)} sembollük evren).")
     filtreli = filtrele_formasyonlar(formations, arguman)
 
     # Slot haritası: (HISSE, tf) -> kayıt. LiveState hisse|TF başına tek kayıt tutar,
@@ -86,23 +87,24 @@ def panel_raporu(arguman: str, durum, formations, aktif_hisseler, tarama_suruyor
 
     # --- başlık + sayılar (her modda tam görünür) ---
     filtresiz = not arguman.strip()
-    kapsam = (f"{len(aktif_hisseler)} hisse x {len(PANEL_TIMEFRAMES)} TF" if filtresiz
-              else f"{len(satir_hisseler)}/{len(aktif_hisseler)} hisse · "
+    kapsam = (f"{len(aktif_hisseler)} sembol x {len(PANEL_TIMEFRAMES)} TF" if filtresiz
+              else f"{len(satir_hisseler)}/{len(aktif_hisseler)} sembol · "
                    f"{len(kolonlar)}/{len(PANEL_TIMEFRAMES)} TF")
     satirlar = [f"📋 PANEL — {kapsam} — {now.strftime('%d.%m.%Y %H:%M')}"]
     if not filtresiz:
         satirlar.append(f"Filtre: {arguman.strip()}")
     durum = st.get("son_tarama_durumu", "yok")
-    tarama = f"Son başarılı tarama: {gecen_sure(st.get('son_tarama_bitis'))} · durum {durum}"
+    son_basarili = gecen_sure(st.get("son_tarama_bitis")) if st.get("son_tarama_bitis") else "henüz yok"
+    tarama = f"Son başarılı tarama: {son_basarili}"
     if st.get("tarama_suruyor") or (tarama_suruyor and not tamamlandi):
         tarama = "Analiz sürüyor"
     if durum == "basarisiz":
         kapsam_is = (f"{(last_run_stats or {}).get('processed', st.get('son_is_hisse_basarili', 0))}/"
                      f"{(last_run_stats or {}).get('requested', st.get('son_is_hisse_istek', len(aktif_hisseler)))}")
-        tarama += f" · son deneme başarısız ({kapsam_is} hisse hesaplandı)"
+        tarama += f" · son deneme başarısız ({kapsam_is} sembol hesaplandı)"
     elif durum == "tamamlandi":
         tarama += (f" · hesaplanan {st.get('son_tarama_hissesi', '—')}/"
-                   f"{st.get('son_tarama_beklenen_hisse') or len(aktif_hisseler)} hisse")
+                   f"{st.get('son_tarama_beklenen_hisse') or len(aktif_hisseler)} sembol")
     satirlar.append(f"{tarama} · dolu slot {len(slot)}/{toplam_slot}")
     veri_zamani = st.get("son_tarama_veri_zamani")
     if veri_zamani:
@@ -166,7 +168,7 @@ def panel_raporu(arguman: str, durum, formations, aktif_hisseler, tarama_suruyor
     if not slot:
         # Hiç dolu slot yok (taze kurulum ya da filtre hiçbir şeye uymadı): 48 satır
         # '—' yazmak yerine tek satırda söyle; sayılar ve top 12 zaten durumu anlatıyor.
-        grid_tam = [f"— tüm slotlar boş ({len(satir_hisseler)} hisse x {len(kolonlar)} TF)"]
+        grid_tam = [f"— tüm slotlar boş ({len(satir_hisseler)} sembol x {len(kolonlar)} TF)"]
     metin = "\n".join(satirlar + [""] + ["🗂 SLOTLAR (" + " · ".join(kolonlar) + ")"] +
                       grid_tam + sabit_kuyruk)
     if len(metin) > PANEL_MESAJ_SINIRI:

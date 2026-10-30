@@ -96,27 +96,6 @@ def test_kontrol_env_normal_mod_uyari(monkeypatch):
     assert dc._sayac[dc.FAIL] == 0
 
 
-def test_ozet_satiri_mantigi():
-    # ÖZET: Telegram HAZIR|YOK · Supabase HAZIR|YOK
-    degerler_hazir = {
-        "TELEGRAM_BOT_TOKEN": "123:abc",
-        "TELEGRAM_CHAT_ID": "12345",
-        "SUPABASE_URL": "https://demo.supabase.co",
-        "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_abc",
-    }
-    telegram_hazir = bool(degerler_hazir.get("TELEGRAM_BOT_TOKEN") and degerler_hazir.get("TELEGRAM_CHAT_ID"))
-    supabase_hazir = bool(degerler_hazir.get("SUPABASE_URL") and degerler_hazir.get("SUPABASE_SERVICE_ROLE_KEY"))
-    ozet = f"ÖZET: Telegram {'HAZIR' if telegram_hazir else 'YOK'} · Supabase {'HAZIR' if supabase_hazir else 'YOK'}"
-    assert "HAZIR" in ozet
-    assert "ÖZET:" in ozet
-
-    degerler_yok = {}
-    telegram_hazir = bool(degerler_yok.get("TELEGRAM_BOT_TOKEN") and degerler_yok.get("TELEGRAM_CHAT_ID"))
-    supabase_hazir = bool(degerler_yok.get("SUPABASE_URL") and degerler_yok.get("SUPABASE_SERVICE_ROLE_KEY"))
-    ozet2 = f"ÖZET: Telegram {'HAZIR' if telegram_hazir else 'YOK'} · Supabase {'HAZIR' if supabase_hazir else 'YOK'}"
-    assert "YOK" in ozet2
-
-
 def test_401_mesajinda_anahtar_turu_ipucu():
     # 401 mesajında anahtar türü ipucu olmalı (anon/publishable/iptal ayrımı)
     # Bu test kontrol_supabase içindeki mantığı doğrular
@@ -134,16 +113,23 @@ def test_anahtar_turu_bos():
     assert anahtar_turu(None) == "boş"
 
 
-def test_ozet_telegram_yok_supabase_var():
-    degerler = {
-        "SUPABASE_URL": "https://demo.supabase.co",
-        "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_abc",
-    }
-    telegram_hazir = bool(degerler.get("TELEGRAM_BOT_TOKEN") and degerler.get("TELEGRAM_CHAT_ID"))
-    supabase_hazir = bool(degerler.get("SUPABASE_URL") and degerler.get("SUPABASE_SERVICE_ROLE_KEY"))
-    ozet = f"ÖZET: Telegram {'HAZIR' if telegram_hazir else 'YOK'} · Supabase {'HAZIR' if supabase_hazir else 'YOK'}"
-    assert "Telegram YOK" in ozet
-    assert "Supabase HAZIR" in ozet
+def test_ozet_telegram_yok_supabase_var(monkeypatch, tmp_path, capsys):
+    import sys
+
+    monkeypatch.setattr(dc, "_sayac", {dc.OK: 0, dc.WARN: 0, dc.FAIL: 0})
+    monkeypatch.setattr(sys, "argv", ["deploy_check.py", "--skip-network",
+                                    "--env-file", str(tmp_path / "no.env")])
+    for key in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_GROUP_ID",
+                "TELEGRAM_CHANNEL_ID"):
+        monkeypatch.setenv(key, "")
+    monkeypatch.setenv("SUPABASE_URL", "https://demo.invalid")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_test")
+    assert dc.main() == 0
+    out = capsys.readouterr().out
+    summary = next(line for line in out.splitlines() if line.startswith("ÖZET:"))
+    assert "Telegram EKSİK/YOK" in summary
+    assert "Supabase TANIMLI (salt okunur)" in summary
+    assert "Yeni durum Supabase'e yedeklenmez" in out
 
 
 def test_kontrol_env_publishable_uyari(monkeypatch):
@@ -390,3 +376,106 @@ def test_render_probe_handles_non_object_json(monkeypatch, capsys):
     monkeypatch.setattr(requests, "get", lambda *args, **kwargs: Response())
     D.kontrol_render("https://example.invalid", "")
     assert "beklenen JSON değil" in capsys.readouterr().out
+
+
+def test_summary_never_treats_environment_as_service_readiness(monkeypatch, capsys):
+    """Tanımlı env, ağ ve mesaj tesliminin doğrulandığı anlamına gelmez."""
+    import sys
+
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    monkeypatch.setattr(sys, "argv", ["deploy_check.py", "--skip-network"])
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:example")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
+    monkeypatch.setenv("TELEGRAM_GROUP_ID", "-100123")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.invalid")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_test")
+    assert D.main() == 0
+    out = capsys.readouterr().out
+    summary = next(line for line in out.splitlines() if line.startswith("ÖZET:"))
+    assert "Telegram HAZIR" not in summary
+    assert "Kanal HAZIR" not in summary
+    assert "Supabase HAZIR" not in summary
+    assert "TANIMLI" in summary and "DOĞRULANMADI" in summary
+
+
+def test_render_probe_rejects_wrong_health_body(monkeypatch, capsys):
+    import requests
+
+    class Response:
+        status_code = 200
+        def json(self):
+            return {"status": "wrong"}
+
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: Response())
+    D.kontrol_render("https://example.invalid", "")
+    assert D._sayac[D.FAIL] == 1
+    assert "beklenen JSON değil" in capsys.readouterr().out
+
+
+def test_render_probe_missing_commit_is_not_silent(monkeypatch, capsys):
+    import requests
+
+    class Response:
+        status_code = 200
+        def json(self):
+            return {"status": "ok", "startup_complete": True, "heartbeat_stale": False}
+
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: Response())
+    D.kontrol_render("https://example.invalid", "")
+    assert "sürüm doğrulanamadı" in capsys.readouterr().out.lower()
+    assert D._sayac[D.WARN] >= 1
+
+
+def test_render_test_endpoint_handles_malformed_success_body(monkeypatch, capsys):
+    import requests
+
+    class Response:
+        status_code = 200
+        text = "bad JSON"
+        def __init__(self, health):
+            self.health = health
+        def json(self):
+            if self.health:
+                return {"status": "ok", "startup_complete": True, "heartbeat_stale": False}
+            raise ValueError("not JSON")
+
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    monkeypatch.setattr(requests, "get", lambda url, **kwargs: Response(url.endswith("/health")))
+    D.kontrol_render("https://example.invalid", "fake-test-key")
+    assert "beklenmeyen yanıt" in capsys.readouterr().out
+    assert D._sayac[D.FAIL] >= 1
+
+
+def test_telegram_getme_requires_valid_success_json(monkeypatch, capsys):
+    import requests
+
+    class Response:
+        status_code = 200
+        text = 'not a valid getMe response'
+        def json(self):
+            return {"ok": False, "result": {}}
+
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: Response())
+    D.kontrol_telegram("123:test", "12345", False)
+    out = capsys.readouterr().out
+    assert "Token geçerli" not in out
+    assert D._sayac[D.FAIL] == 1
+
+
+def test_telegram_getme_bad_json_is_reported_not_raised(monkeypatch, capsys):
+    import requests
+
+    class Response:
+        status_code = 200
+        text = "invalid JSON"
+        def json(self):
+            raise ValueError("bad JSON")
+
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: Response())
+    D.kontrol_telegram("123:test", "12345", False)
+    assert "getMe" in capsys.readouterr().out
+    assert D._sayac[D.FAIL] == 1

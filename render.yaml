@@ -76,8 +76,8 @@ services:
       # --- Batch 7 (C1/C4): pazar/evren/veri dizini (hepsi OPSİYONEL) ---
       # MARKET_SUFFIX: BIST için varsayılan .IS; BIST dışı pazar için değiştirin.
       # STOCK_UNIVERSE: virgülle ayrılmış semboller; BOŞ = BIST 50.
-      # DATA_DIR: Render'da varsayılan /tmp/formation-bot-data (repo/disk geçici,
-      #           kalıcı veri Supabase'de). Kalıcı disk bağlarsanız buradan verin.
+      # DATA_DIR: Render'da varsayılan /tmp/formation-bot-data geçicidir.
+      #           Supabase yalnız okunur; kalıcı disk bağlarsanız buradan verin.
       # SEED_DATA_DIR: yalnız okuma yedeği (varsayılan ./bot_data).
       # LOG_DIR: /var/log yazılamazsa otomatik ./logs'a düşer.
       - key: MARKET_SUFFIX

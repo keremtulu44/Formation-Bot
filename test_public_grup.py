@@ -1105,3 +1105,37 @@ def test_public_mesaj_butcesi_dm_tavanindan_dusuk_degil():
     import config
     assert config.PUBLIC_MAX_MESAJ_SAAT >= config.TELEGRAM_MAX_MESAJ_SAAT
     assert config.PUBLIC_MAX_MESAJ_GUN >= config.TELEGRAM_MAX_MESAJ_GUN
+
+
+def test_public_queue_preserves_mtf_and_frozen_dm_commentary(grup_notifier, monkeypatch):
+    """Kuyruk/tekrar denemesi DM'le aynı yorumu ve üst TF gerçeğini taşımalı."""
+    from datetime import datetime
+    from config import ISTANBUL_TZ
+    from notifier import kart_yorum
+
+    monkeypatch.setattr(notifier_mod, "TELEGRAM_ALERT_STYLE", "kart")
+    monkeypatch.setenv("TELEGRAM_KART_SUZGEC", "1")
+    kart_yorum.sifirla()
+    try:
+        data = _zengin_olay(
+            mtf_destek=True, mtf_uyum=4, mtf_kontrol_edildi=True, mtf_yon_biliniyor=True,
+            kart_yorum_kapisi=True, upper_touches=3, age_bars=6,
+            band_baslangic=ISTANBUL_TZ.localize(datetime(2026, 9, 30, 16, 30)),
+            watch_context=[{"stock": "GARAN", "timeframe": "1h",
+                            "pattern_name": "Üçgen", "state": "IZLEMEDE", "quality": 81}],
+        )
+        assert grup_notifier.public_kuyruk(data)
+        saved = grup_notifier._public_kuyruk[0]
+        assert saved["mtf_uyum"] == 4 and saved["mtf_kontrol_edildi"] is True
+        assert saved["mtf_yon_biliniyor"] is True
+        assert saved["_kart_yorum_sabit"]["yorum"]
+        json.dumps(grup_notifier._public_kuyruk)
+        dm = grup_notifier.format_message(data)
+        public = grup_notifier.format_public_tekil(saved)
+        assert "1g onayı var ✓ — uyumlu" in dm
+        assert "GARAN" in dm
+        for selected in saved["_kart_yorum_sabit"]["yorum"]:
+            assert " ".join(selected.split()) in " ".join(dm.split())
+        assert public == dm == grup_notifier.format_message(data)
+    finally:
+        kart_yorum.sifirla()

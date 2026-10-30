@@ -169,16 +169,23 @@ def sayi(deger, basamak=2, varsayilan="—"):
     return f"{deger_sayi:.{basamak}f}".replace(".", ",")
 
 
+_TF_FILTRE_ALIASES = {"1s": "1h", "2s": "2h", "4s": "4h", "1g": "1d"}
+
+
 def filtrele_formasyonlar(formations, filtre: str):
-    """Filtre: '1h', 'THYAO', '1h THYAO' gibi çoklu token destekler."""
+    """Hisse, formasyon, durum ve zaman dilimini çoklu token ile filtrele.
+
+    Grafikte gösterilen Türkçe kısa TF'ler (1s/2s/4s/1g) de kabul edilir.
+    """
     filtre = (filtre or "").strip().lower()
     if not filtre:
         return formations
     tokens = filtre.split()
     result = formations
     for tok in tokens:
-        if tok in ("1h", "2h", "4h", "1d"):
-            result = [f for f in result if str(f.get("timeframe", "")).lower() == tok]
+        tf = _TF_FILTRE_ALIASES.get(tok, tok)
+        if tf in ("1h", "2h", "4h", "1d"):
+            result = [f for f in result if str(f.get("timeframe", "")).lower() == tf]
         else:
             result = [f for f in result
                       if tok in str(f.get("stock", "")).lower()
@@ -322,11 +329,12 @@ def panel_filtre_coz(arguman: str, evren=None):
     (monkeypatch edilebilir) evrenini açıkça geçirir.
     """
     tokens = [t for t in (arguman or "").replace(",", " ").split() if t]
-    kolonlar = tuple(t.lower() for t in tokens if t.lower() in PANEL_TIMEFRAMES)
+    kolonlar = tuple(_TF_FILTRE_ALIASES.get(t.lower(), t.lower()) for t in tokens
+                     if _TF_FILTRE_ALIASES.get(t.lower(), t.lower()) in PANEL_TIMEFRAMES)
     hisse_tokenlari = []
     for t in tokens:
         tl = t.lower()
-        if tl in PANEL_TIMEFRAMES or len(tl) < 3:
+        if _TF_FILTRE_ALIASES.get(tl, tl) in PANEL_TIMEFRAMES or len(tl) < 3:
             continue
         if any(tl in s.lower() for s in (evren if evren is not None else ACTIVE_STOCKS)):
             hisse_tokenlari.append(tl)
@@ -391,9 +399,13 @@ def panel_sigdir(grid_satirlari, butce: int):
 
 def veri_durumu_satiri(data_asof, fresh_fetch=None, requested=None, fetch_failures=None,
                         oldest_age_minutes=None) -> str:
-    """Son tamamlanmış mum zamanı/yaşı ve fetch durumunu tutarlı biçimde göster."""
+    """Görülen en yeni 1s cache mumunun etiket/yaşını ve fetch durumunu göster.
+
+    Tarama bu etiketi tamamlanmış mum filtresinden ve bazı veri kapılarından
+    önce ölçer; dolayısıyla bu değer kapanış veya analiz edilme garantisi değildir.
+    """
     if not data_asof:
-        return "📡 Son tamamlanmış mum: bu analizde veri zamanı yok"
+        return "📡 En yeni 1s cache mum etiketi: bu denemede veri zamanı yok"
     try:
         bar = datetime.fromisoformat(str(data_asof))
         if bar.tzinfo is None:
@@ -410,11 +422,11 @@ def veri_durumu_satiri(data_asof, fresh_fetch=None, requested=None, fetch_failur
         kapsam = requested if requested is not None else "?"
         hata = f" · fetch hatası {fetch_failures}" if fetch_failures is not None else ""
         fetch = f" · başarılı fetch {fresh_fetch}/{kapsam}{hata}"
-    eski = (f" · en eski taranan veri yaşı {son_bar_yasi_dakika_str(oldest_age_minutes)}"
+    eski = (f" · en eski görülen etiket yaşı {son_bar_yasi_dakika_str(oldest_age_minutes)} (analiz anında)"
             if oldest_age_minutes is not None else "")
-    # Tek satıra dizilince 900+ px ediyordu (telefonda 3-4 satıra sarıyordu);
-    # veri yaşı/fetch bilgisi ayrı satıra iner, içerik aynı kalır.
-    govde = f"📡 Son tamamlanmış mum: {zaman} · veri yaşı {yas_metni}"
+    # Etiket kapanış zamanı değildir; sağlayıcı sözleşmesi doğrulanmadan son
+    # tamamlanmış mum veya tüm evrenin tazeliği gibi sunulmaz.
+    govde = f"📡 En yeni 1s cache mum etiketi: {zaman} · etiket yaşı {yas_metni}"
     ayrinti = " · ".join(p for p in (eski.strip(" ·"), fetch.strip(" ·")) if p)
     return govde + (f"\n   {ayrinti}" if ayrinti else "")
 

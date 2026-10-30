@@ -309,6 +309,8 @@ def main_loop():
             break
         if deque_manager.gunluk_veri_eksik_mi(stock):
             with pacer.request(f"{stock} initial 1D"):
+                if _pkg._shutdown_requested:
+                    break
                 taze_gunluk = fetch_yfinance_1d(stock)
             deque_manager.gunluk_fetch_denemesi_kaydet(stock)
             if taze_gunluk is not None and len(taze_gunluk) >= 30:
@@ -380,7 +382,13 @@ def main_loop():
                             # otomatik döngüde aynı tam evreni hemen tekrar tarama.
                             son_taranan_kapanis = kapanis
                     deque_manager.save_all()
-                    continue
+                    if not _pkg._scan_istegi.is_set():
+                        continue
+                    # Kuyruk doluyken art arda dakikalarca yalnız manuel iş
+                    # çalıştırma: arada özet ve zamanlı tarama fırsatı ver.
+                    # İş dakikalar sürmüş olabilir; zamanlayıcı eski `now` ile
+                    # karar vermemeli. Bekleyen istek varsa uyku hemen kesilir.
+                    now = _pkg.datetime.now(ISTANBUL_TZ)
             # --- ENGELLENEN ACİL OLAYLAR (Batch 5 / B4) ---
             # Teyitli olaylar engel kalkınca birkaç dakikada gönderilir; ancak
             # kapanış digest saatinden sonra bireysel push yapılmaz. Bekleyenler

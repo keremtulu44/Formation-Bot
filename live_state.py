@@ -57,6 +57,8 @@ class LiveState:
         self._pending_replace_all = True
         self._status: Dict[str, Any] = {
             "tarama_suruyor": False,
+            "aktif_tarama_sirasi": 0,
+            "aktif_tarama_sembolu": None,
             "tarama_sayisi": 0,
             "son_tarama_baslangic": None,
             "son_tarama_bitis": None,
@@ -102,6 +104,8 @@ class LiveState:
             self._pending_replace_all = bool(replace_all)
             baslangic = (ts or datetime.now()).isoformat()
             self._status["tarama_suruyor"] = True
+            self._status["aktif_tarama_sirasi"] = 0
+            self._status["aktif_tarama_sembolu"] = None
             self._status["manuel_tarama"] = bool(manuel)
             self._status["son_tarama_durumu"] = "calisiyor"
             self._status["son_is_baslangic"] = baslangic
@@ -112,6 +116,13 @@ class LiveState:
             self._status["son_tarama_hatasi"] = None
             self._status["snapshot_yuklendi"] = False
             self._status["tarama_sayisi"] = int(self._status.get("tarama_sayisi") or 0) + 1
+
+    def update_scan_progress(self, sira: int, sembol: str) -> None:
+        """Yalnız o an işlenen sembolü yayınla; yarım sonuçları yayımlama."""
+        with self._lock:
+            if self._status["tarama_suruyor"]:
+                self._status["aktif_tarama_sirasi"] = max(0, int(sira))
+                self._status["aktif_tarama_sembolu"] = str(sembol or "").upper() or None
 
     def record_formation(self, record: Dict[str, Any]) -> None:
         stock = str(record.get("stock", "")).upper()
@@ -146,12 +157,20 @@ class LiveState:
             self._pending_scope = None
             self._pending_replace_all = True
             self._status["tarama_suruyor"] = False
+            self._status["aktif_tarama_sirasi"] = 0
+            self._status["aktif_tarama_sembolu"] = None
             self._status["son_tarama_durumu"] = extra.pop("son_tarama_durumu", "tamamlandi")
             self._status["son_is_bitis"] = bitis
             self._status["son_tarama_bitis"] = bitis
             for anahtar, deger in extra.items():
                 if deger is not None:
                     self._status[anahtar] = deger
+            # begin_scan bu sayacı sıfırlar; başarılı sonuçta da güncellenmezse
+            # snapshot/yeniden başlama sonrası tamamlanmış iş 0 hisse görünür.
+            if extra.get("son_is_hisse_basarili") is None and extra.get("son_tarama_hissesi") is not None:
+                self._status["son_is_hisse_basarili"] = int(extra["son_tarama_hissesi"])
+            if extra.get("son_is_hisse_istek") is None and extra.get("son_tarama_beklenen_hisse") is not None:
+                self._status["son_is_hisse_istek"] = int(extra["son_tarama_beklenen_hisse"])
             if self._status.get("son_tarama_suresi_dk") is not None:
                 self._status["son_is_suresi_dk"] = self._status["son_tarama_suresi_dk"]
 
@@ -166,6 +185,8 @@ class LiveState:
             self._pending_replace_all = True
             bitis = (ts or datetime.now()).isoformat()
             self._status["tarama_suruyor"] = False
+            self._status["aktif_tarama_sirasi"] = 0
+            self._status["aktif_tarama_sembolu"] = None
             self._status["son_tarama_durumu"] = "basarisiz"
             self._status["son_tarama_hatasi"] = str(hata)[:200]
             self._status["son_is_bitis"] = bitis
@@ -191,6 +212,8 @@ class LiveState:
             formations = [dict(v) for v in self._formations.values()]
             durum = dict(self._status)
         durum["tarama_suruyor"] = False
+        durum.pop("aktif_tarama_sirasi", None)
+        durum.pop("aktif_tarama_sembolu", None)
         durum.pop("snapshot_yuklendi", None)
         return {
             "surum": SON_TARAMA_SURUMU,
@@ -232,6 +255,8 @@ class LiveState:
                 if durum.get(alan) is not None:
                     self._status[alan] = durum[alan]
             self._status["tarama_suruyor"] = False
+            self._status["aktif_tarama_sirasi"] = 0
+            self._status["aktif_tarama_sembolu"] = None
             if self._status.get("son_tarama_durumu") == "yok" and self._status.get("son_tarama_bitis"):
                 self._status["son_tarama_durumu"] = "tamamlandi"
             # An explicitly empty list is a valid "0 candidate" snapshot;

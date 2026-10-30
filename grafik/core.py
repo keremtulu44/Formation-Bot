@@ -809,6 +809,10 @@ def _kare_olcu(goruntu: Mapping[str, Any]) -> dict[str, Any]:
     taban = float(SABITLER["genislik_taban"])
     tavan = float(SABITLER["genislik_tavan"])
     genislik = min(tavan, max(taban, bar * float(SABITLER["bar_px"])))
+    # Eğitim sonucunda soru kadrajı + TÜM açılan mumlar korunur. Daha çok
+    # mum varsa çizgi/alan yerine gerçek mumları sığdırmak için kare genişler.
+    if (goruntu.get("replay") or {}).get("asama") == "sonuc":
+        genislik = min(7000.0, max(genislik, bar * float(SABITLER["bar_px"])))
     px_bar = genislik / bar
     return {"genislik": int(round(genislik)), "yukseklik": int(round(float(SABITLER["yukseklik"]))),
             "bar": bar, "px_bar": px_bar, "cekme": px_bar < float(SABITLER["mum_min_px"])}

@@ -468,7 +468,7 @@ def test_panel_raporu_baglamla_uretilebilir():
     ]
     metin = rp.panel_raporu("", durum, formations, ["THYAO", "GARAN"],
                             bos_analiz_mesaji="ℹ️ boş")
-    assert "📋 PANEL — 2 hisse x 4 TF" in metin
+    assert "📋 PANEL — 2 sembol x 4 TF" in metin
     assert "THYAO 1h 88🚀" in metin, "slot hücresi kalite + durum sembolü göstermeli"
     assert "🔥 TOP 12" in metin
 

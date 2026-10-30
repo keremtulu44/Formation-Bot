@@ -204,6 +204,11 @@ _scan_request_lock = threading.Lock()
 _scan_job_request = None
 
 
+# İstenen analizler ana döngüde TEK TEK çalışır. İlk iş yukarıdaki alanda,
+# sonraki işler bu sınırlı FIFO'da tutulur; ikisine de aynı kilitle erişilir.
+_scan_job_queue = []
+
+
 _scan_last_result = {}
 
 
@@ -513,9 +518,9 @@ _GORELI_MUM = 20
 def _karne_al() -> KarneDefteri:
     """Karne defterini (tembel) oluşturur; dosya okunamazsa da çalışır.
 
-    Opsiyonel uzak yedek (Supabase): kuruluysa yerel defterle BİRLEŞTİRİLİR
-    (Render'da DATA_DIR=/tmp olduğu için restart/redeploy yereli siler; yedek
-    haftalık karnenin boşalmasını engeller). Supabase yoksa hiçbir şey değişmez.
+    Opsiyonel Supabase kaydı varsa yerel defterle birleştirilir. Botun mevcut
+    salt okunur modunda yeni uzak yedek yazılmaz; geçici diskteki yeni verinin
+    redeploy sonrası korunması garanti değildir.
     """
     global _karne_defteri
     if _pkg._karne_defteri is None:
@@ -540,7 +545,7 @@ DIGEST_PENDING_DOSYA = _state_paths.DIGEST_PENDING_DOSYA
 
 
 def digest_tamponu_kaydet(store=None, data_dir=None) -> bool:
-    """Bekleyen gün içi adayları Supabase + diske yazar."""
+    """Bekleyen adayları diske kaydeder; salt okunur Supabase'e yazmaz."""
     return _state_persistence.digest_tamponu_kaydet(
         _pkg._deferred_alert_buffer,
         store=_pkg._supabase_store_ref if store is None else store,
