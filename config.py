@@ -796,3 +796,19 @@ def post_close_only_on_diff_enabled() -> bool:
     return bool(POST_CLOSE_ONLY_ON_DIFF)
 
 
+# --- Ayrı 4S Stabil Güçlü Geri Alım Sinyali (Canlı Evren Replay Doğrulamalı) ---
+STABIL_GERI_ALIM_ALARM = os.getenv("STABIL_GERI_ALIM_ALARM", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık",
+}
+STABIL_ALARM_DM = os.getenv("STABIL_ALARM_DM", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık",
+}
+STABIL_ALARM_PUBLIC = os.getenv("STABIL_ALARM_PUBLIC", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık",
+}
+STABIL_ALARM_COOLDOWN_BAR = max(1, int(os.getenv("STABIL_ALARM_COOLDOWN_BAR", "6")))
+STABIL_ALARM_TEKIL_UST_SINIR = max(1, int(os.getenv("STABIL_ALARM_TEKIL_UST_SINIR", "3")))
+STABIL_ALARM_TAZE_DK = max(30, int(os.getenv("STABIL_ALARM_TAZE_DK", "390")))
+
+
+

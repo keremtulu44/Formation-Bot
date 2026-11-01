@@ -225,20 +225,29 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int) -> Optional[dict[
         or _alan(sonuc_nesne, "bar_projection")
         or ()
     )
+    davranislar = list(
+        _alan(ayrinti, "bar_behaviors")
+        or _alan(sonuc_nesne, "bar_behaviors")
+        or ()
+    )
     pencere_boy = max(0, int(sag) - int(sol))
     if not projeksiyon or pencere_boy <= 0:
         return {"hazir": False, "seviyeler": [], "renkler": [], "durumlar": [],
-                "son_seviye": None, "son_durum": "NO_SUPPORT", "konum": None}
+                "reclaim_barlar": [], "son_seviye": None, "son_durum": "NO_SUPPORT", "konum": None}
 
     if len(projeksiyon) >= sag:
         dilim = projeksiyon[sol:sag]
+        dav_dilim = davranislar[sol:sag] if len(davranislar) >= sag else []
     elif len(projeksiyon) == pencere_boy:
         dilim = projeksiyon
+        dav_dilim = davranislar if len(davranislar) == pencere_boy else []
     elif len(projeksiyon) > pencere_boy:
         dilim = projeksiyon[-pencere_boy:]
+        dav_dilim = davranislar[-pencere_boy:] if len(davranislar) >= pencere_boy else []
     else:
         eksik_bas = [None] * (pencere_boy - len(projeksiyon))
         dilim = eksik_bas + projeksiyon
+        dav_dilim = ([None] * (pencere_boy - len(davranislar)) + davranislar) if davranislar else []
 
     seviyeler: list[Optional[float]] = []
     renkler: list[Optional[str]] = []
@@ -267,6 +276,11 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int) -> Optional[dict[
         renkler.append(renk)
         durumlar.append(durum)
 
+    reclaim_barlar: list[int] = []
+    for idx_b, bhv in enumerate(dav_dilim):
+        if bhv is not None and _alan(bhv, "reclaim_kind") in {"close_reclaim", "intrabar_sweep_reclaim"}:
+            reclaim_barlar.append(int(idx_b))
+
     son_seviye = next((v for v in reversed(seviyeler) if v is not None), None)
     son_renk = next((r for r in reversed(renkler) if r is not None), None)
     son_durum = durumlar[-1] if durumlar else "NO_SUPPORT"
@@ -276,6 +290,7 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int) -> Optional[dict[
         "seviyeler": seviyeler,
         "renkler": renkler,
         "durumlar": durumlar,
+        "reclaim_barlar": reclaim_barlar,
         "son_seviye": son_seviye,
         "son_renk": son_renk,
         "son_durum": son_durum,

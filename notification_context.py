@@ -1061,7 +1061,7 @@ def _korunan_seviyeler(results_by_timeframe: Any, alarm_tf: str) -> tuple[float 
 
 
 def _kart_stabil(results_by_timeframe: Any, alarm_tf: str, reference: float | None) -> list[str]:
-    """Alarm kapanışının nedensel olarak bilinen günlük Stabil desteğiyle olgusal kıyası."""
+    """Alarm kapanışının nedensel günlük Stabil desteğiyle 2 satırlık olgusal özeti."""
     tf = str(alarm_tf or "").lower()
     entry = _domain(results_by_timeframe, tf, "stabil") if tf else None
     if entry is None and isinstance(results_by_timeframe, Mapping):
@@ -1075,6 +1075,7 @@ def _kart_stabil(results_by_timeframe: Any, alarm_tf: str, reference: float | No
     details = _field(entry, "details", {}) or {}
     result_obj = _field(entry, "result")
     projection = _field(details, "bar_projection") or _field(result_obj, "bar_projection") or ()
+    latest_behavior = _field(details, "latest_behavior") or _field(result_obj, "latest_behavior")
     support_snap = _field(details, "support_snapshot") or _field(result_obj, "support_snapshot")
     if support_snap is None:
         export = _field(entry, "export")
@@ -1086,6 +1087,8 @@ def _kart_stabil(results_by_timeframe: Any, alarm_tf: str, reference: float | No
             support_level = _number(_field(projection[-1], "support_level"))
         except Exception:
             support_level = None
+    if support_level is None and latest_behavior is not None:
+        support_level = _number(_field(latest_behavior, "support_level"))
     if support_level is None and support_snap is not None:
         support_level = _number(_field(support_snap, "support_level"))
 
@@ -1095,10 +1098,43 @@ def _kart_stabil(results_by_timeframe: Any, alarm_tf: str, reference: float | No
     if support_level is None or price is None:
         return []
 
-    from domain_engines.stabil import format_stabil_card_line
+    from domain_engines.stabil import format_stabil_card_lines
 
-    line = format_stabil_card_line(price, support_level)
-    return [line] if line else []
+    if latest_behavior is None and support_snap is not None:
+        # Minimal sentetik/mock DomainRunResult çağrılarında yalnız 1. satır veya
+        # snapshot progression'dan türeyen temel yapı satırı üretilir.
+        from domain_engines.stabil.signals import StabilBarBehavior
+
+        pct_vs = ((float(price) - float(support_level)) / float(support_level)) * 100.0
+        prog = str(_field(support_snap, "progression") or "")
+        reg = "STEPPING_UP" if "HIGHER" in prog else ("STEPPING_DOWN" if "LOWER" in prog else "HORIZONTAL_BASE")
+        latest_behavior = StabilBarBehavior(
+            bar_index=0,
+            bar_close_time=None,
+            support_level=float(support_level),
+            close_price=float(price),
+            pct_vs_support=pct_vs,
+            dist_atr=None,
+            low_dist_atr=None,
+            body_atr=None,
+            close_pos=None,
+            vol_ratio=None,
+            fixed_support=("SAME" in prog or not prog),
+            regime=reg,
+            unchanged_days=0,
+            touch_count=0,
+            prev_breach_bars=0,
+            prev_breach_depth_atr=0.0,
+            reclaim_kind=None,
+            weak_reclaim=False,
+            rank_score=0.0,
+        )
+
+    return format_stabil_card_lines(
+        price=price,
+        support_level=support_level,
+        behavior=latest_behavior,
+    )
 
 
 def olcum_bolumu(results_by_timeframe: Any, reference_price: Any = None, *,

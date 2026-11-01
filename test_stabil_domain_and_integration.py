@@ -227,7 +227,12 @@ def test_telegram_card_blok3_yapi_stabil_single_line():
         stil="kart",
         alarm_tf="4h",
     )
-    assert bolumler.get("stabil"), "BLOK 3 · YAPI için Stabil satırı üretilmeli"
+    assert len(bolumler.get("stabil") or []) == 2, "BLOK 3 · YAPI için 2 Stabil satırı üretilmeli"
+    from telegram_measure import genislik
+    import config
+
+    for st_line in bolumler["stabil"]:
+        assert genislik(st_line) <= config.TELEGRAM_SATIR_PX
     kart = _format_lifecycle_alert_kart_sade(
         {
             "stock_name": "ASTOR",
@@ -240,10 +245,8 @@ def test_telegram_card_blok3_yapi_stabil_single_line():
             "domain_bolumleri": bolumler,
         }
     )
-    assert any(
-        tag in kart
-        for tag in ("Stabil: destek üstünde", "Stabil: destek altında", "Stabil: destekte")
-    )
+    assert "Stabil destek:" in kart
+    assert "Stabil yapı:" in kart
 
 
 def test_training_mode_upfront_horizon_code_free_combined_and_causal_stabil(monkeypatch):
@@ -313,3 +316,174 @@ def test_replay_first_seen_censoring_and_bhv48_contract():
     assert by_id["STB-BHV-F01"]["regime_mapping_status"] == "PROVISIONAL_CANDIDATE_PENDING_USER_CONFIRMATION"
     assert by_id["STB-BHV-B01"]["regime_mapping_status"] == "PROVISIONAL_CANDIDATE_PENDING_USER_CONFIRMATION"
     assert by_id["STB-BHV-D02"]["regime_mapping_status"] == "USER_CONFIRMED"
+
+
+def test_chart_stabil_chip_reclaim_triangle_step_colors_and_clean_footer(tmp_path):
+    import grafik
+    from grafik.core import PALET
+    import matplotlib.pyplot as plt
+
+    d_raw = tf_frame("THYAO", "1d").tail(220)
+    h4_raw = tf_frame("THYAO", "4h").tail(180)
+    cutoff = pd.Timestamp(h4_raw.index[-1])
+    bundle = run_stabil_symbol_bundle(
+        "THYAO",
+        {"4h": h4_raw, "1d": d_raw},
+        daily_frame=d_raw,
+        h4_frame=h4_raw,
+        as_of_close=cutoff,
+        isolated=True,
+    )
+    snap = grafik.anlik_goruntu(None, "4h", h4_raw, sonuclar={"4h": {"stabil": bundle["4h"]}}, sembol="THYAO", simdi=cutoff)
+    assert snap["stabil"]["hazir"] is True
+    assert "reclaim_barlar" in snap["stabil"]
+
+    # Inject a synthetic zero/tiny RVOL value to verify `⚡↓ x0,0` is never emitted
+    if snap.get("serit") and snap["serit"].get("degerler"):
+        snap["serit"]["degerler"][-1] = 0.01
+        snap["serit"]["degerler"][-2] = 0.0
+
+    # Inject synthetic step-down + reclaim bar in view to verify coral step-down & `▲` marker
+    snap["stabil"]["seviyeler"][-4] = float(snap["kapanis"][-4]) * 1.03
+    snap["stabil"]["renkler"][-4] = "alt"
+    snap["stabil"]["seviyeler"][-3] = float(snap["kapanis"][-3]) * 0.98
+    snap["stabil"]["renkler"][-3] = "ust"
+    snap["stabil"]["reclaim_barlar"] = [len(snap["kapanis"]) - 2]
+
+    out_png = tmp_path / "thyao_clean.png"
+    yol, meta = grafik.ciz(snap, "4h", secenekler={"cikti": str(out_png)})
+    assert yol is not None and out_png.exists()
+    assert meta["cizgiler"]["stabil"]["cizildi"] is True
+    assert meta["cizgiler"]["stabil"]["reclaim_isaret"] >= 1
+    # Metadata remains populated even though production chart hides the 5-line debug footer
+    assert meta.get("guven_satirlari")
+
+    # Verify figure artists directly: no `grafik-guven` in default render, no `x0,0`, has `Destek` chip
+    from test_grafik_faz_kullanici import _kare_ciz
+
+    fig, _m, _p = _kare_ciz(snap, "4h", tmp_path)
+    try:
+        guven_texts = [t for t in fig.texts if t.get_gid() == "grafik-guven"]
+        assert guven_texts == [], "Normal üretim görselinde 5 satırlık alt debug yazısı basılmamalı"
+        all_labels = [t.get_text() for t in fig.findobj() if hasattr(t, "get_text") and t.get_text()]
+        joined = "\n".join(all_labels)
+        assert "x0,0" not in joined, "Sıfır/mikro hacimli barda ⚡↓ x0,0 rozeti basılmamalı"
+        assert "Destek " in joined, "Sağ eksende Destek <fiyat> çipi görünmeli"
+    finally:
+        plt.close(fig)
+
+
+def test_stabil_standalone_4h_alert_dedup_cooldown_and_burst_summary(tmp_path, monkeypatch):
+    import config
+    from bot.stabil_service import (
+        StabilAlarmCandidate,
+        dispatch_stabil_scan_candidates,
+        evaluate_stabil_4h_candidate,
+    )
+    from domain_engines.stabil import StabilBarBehavior, format_stabil_card_lines
+    from telegram_measure import genislik
+
+    monkeypatch.setattr(config, "STABIL_ALARM_DM", True)
+    monkeypatch.setattr(config, "STABIL_ALARM_PUBLIC", True)
+    monkeypatch.setattr(config, "STABIL_ALARM_TEKIL_UST_SINIR", 3)
+    state_file = str(tmp_path / "stabil_state.json")
+
+    dm_msgs: list[str] = []
+    pub_msgs: list[str] = []
+    notifier = SimpleNamespace(
+        send_text=lambda txt: (dm_msgs.append(txt) or (True, "ok")),
+        send_to_public=lambda txt: (pub_msgs.append(txt) or True),
+    )
+
+    def _mk_cand(sym: str, score: float, kind: str = "close_reclaim") -> StabilAlarmCandidate:
+        bhv = StabilBarBehavior(
+            bar_index=50,
+            bar_close_time="2026-10-16T13:00:00+03:00",
+            support_level=100.0,
+            close_price=102.4,
+            pct_vs_support=2.4,
+            dist_atr=0.35,
+            low_dist_atr=-0.12,
+            body_atr=0.52,
+            close_pos=0.78,
+            vol_ratio=1.35,
+            fixed_support=True,
+            regime="LONG_HORIZONTAL",
+            unchanged_days=26,
+            touch_count=2,
+            prev_breach_bars=1,
+            prev_breach_depth_atr=0.45,
+            reclaim_kind=kind,
+            weak_reclaim=False,
+            rank_score=score,
+        )
+        lines = tuple(format_stabil_card_lines(price=102.4, support_level=100.0, behavior=bhv))
+        return StabilAlarmCandidate(
+            symbol=sym,
+            bar_open_ts="2026-10-16T09:00:00+03:00",
+            bar_close_ts="2026-10-16T13:00:00+03:00",
+            bar_label="16.10 13:00",
+            close_price=102.4,
+            support_level=100.0,
+            behavior=bhv,
+            card_lines=lines,
+        )
+
+    # Burst scenario: 5 simultaneous candidates -> top 2 full cards + 1 consolidated summary = 3 messages
+    cands = [
+        _mk_cand("THYAO", 1.85),
+        _mk_cand("ASELS", 1.72, "intrabar_sweep_reclaim"),
+        _mk_cand("GARAN", 1.50),
+        _mk_cand("TUPRS", 1.40),
+        _mk_cand("AKBNK", 1.25),
+    ]
+    ozet = dispatch_stabil_scan_candidates(cands, notifier, state_path=state_file)
+    assert ozet == {"aday": 5, "tekil_gonderilen": 2, "toplu_ozet": 1}
+    assert len(dm_msgs) == 3
+    assert len(pub_msgs) == 3
+    assert "THYAO" in dm_msgs[0]
+    assert "ASELS" in dm_msgs[1]
+    assert "TOPLU DÖNÜŞ ÖZETİ" in dm_msgs[2]
+    assert "GARAN" in dm_msgs[2] and "TUPRS" in dm_msgs[2] and "AKBNK" in dm_msgs[2]
+
+    for msg in dm_msgs:
+        for line in msg.splitlines():
+            if line.strip():
+                assert genislik(line) <= config.TELEGRAM_SATIR_PX
+
+
+def test_stabil_command_curated_buckets_and_single_symbol():
+    import bot
+    from bot.stabil_service import format_stabil_universe_command
+    from telegram_measure import genislik
+    import config
+
+    assert "stabil" in bot.TELEGRAM_KOMUTLARI
+    assert bot._komut_stabil in bot.PUBLIC_KOMUT_ISLEYICILERI
+    assert "/stabil" in bot.KOMUT_YARDIM
+
+    syms = ["THYAO", "ASELS", "GARAN", "TUPRS", "AKBNK", "EREGL", "KCHOL", "USDTRY"]
+    frames_1h = {s: tf_frame(s, "1h").tail(260) for s in syms if s != "USDTRY"}
+    frames_1d = {s: tf_frame(s, "1d").tail(220) for s in syms if s != "USDTRY"}
+
+    fake_deque = SimpleNamespace(
+        to_dataframe=lambda s: frames_1h.get(s),
+        to_gunluk_dataframe=lambda s: frames_1d.get(s),
+    )
+    now = pd.Timestamp(frames_1h["THYAO"].index[-1]).tz_convert(config.ISTANBUL_TZ) + pd.Timedelta(hours=2)
+
+    genel = format_stabil_universe_command("", deque_manager=fake_deque, active_stocks=syms, now=now)
+    assert "STABİL ÖZETİ" in genel
+    assert "USDTRY" not in genel
+    for line in genel.splitlines():
+        if line.strip():
+            assert genislik(line) <= config.TELEGRAM_SATIR_PX
+
+    tekil = format_stabil_universe_command("THYAO", deque_manager=fake_deque, active_stocks=syms, now=now)
+    assert "THYAO — STABİL ANALİZİ" in tekil
+    assert "Stabil destek:" in tekil
+    assert "Stabil yapı:" in tekil
+    for line in tekil.splitlines():
+        if line.strip():
+            assert genislik(line) <= config.TELEGRAM_SATIR_PX
+

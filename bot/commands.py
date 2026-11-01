@@ -170,6 +170,7 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 /tamamlanan · /tamam · /t — tamamlananlar
 /retest · /r — retest bekleyen veya başarılı
 /kirilim · /kırılım · /k — kırılım adayı veya teyitli
+/stabil [HISSE] — yapısal destek durumu (güçlü çıkış, sağlam zemin, düşüş)
 Örnek filtre: /formasyonlar THYAO 4h
 
 🔎 YENİ ANALİZ VE GRAFİK
@@ -198,6 +199,18 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 
 def _komut_yardim(_arguman: str) -> str:
     return _pkg.KOMUT_YARDIM
+
+
+def _komut_stabil(arguman: str) -> str:
+    """Önbellekteki günlük/4s mumlardan anlamlı Stabil grupları veya tek sembol özeti."""
+    from bot.stabil_service import format_stabil_universe_command
+
+    return format_stabil_universe_command(
+        arguman,
+        deque_manager=_pkg._deque_manager_ref,
+        active_stocks=_pkg.ACTIVE_STOCKS,
+        now=_pkg.datetime.now(ISTANBUL_TZ),
+    )
 
 
 def _komut_test(arguman: str) -> str:
@@ -1638,6 +1651,7 @@ TELEGRAM_KOMUTLARI = {
     "p": _komut_panel,
     "grafik": _komut_grafik,
     "g": _komut_grafik,
+    "stabil": _komut_stabil,
     "test": _komut_test,
     "genel": _komut_panel,
     "tablo": _komut_panel,
@@ -1664,6 +1678,7 @@ PUBLIC_KOMUT_ISLEYICILERI = (
     _komut_yardim, _komut_durum, _komut_formasyonlar, _komut_canli, _komut_ozet,
     _komut_sikisanlar, _komut_tamamlanan, _komut_retest, _komut_kirilim,
     _komut_olcum, _komut_karne, _komut_backtest, _komut_panel, _komut_teshis,
+    _komut_stabil,
 )
 
 

@@ -21,6 +21,14 @@ from .runtime import (
     project_support_to_bar_closes,
     support_validity_color_role,
 )
+from .signals import (
+    LiveStabilSummary,
+    StabilBarBehavior,
+    describe_behavior_structure_short,
+    evaluate_bar_behaviors,
+    format_stabil_card_lines,
+    summarize_symbol_for_command,
+)
 from .stabil_support_lifecycle import (
     DailySupportObservation,
     StabilSupportLifecycleEngine,
@@ -69,6 +77,8 @@ __all__ = [
     "H4Lifecycle",
     "H4TrendSnapshot",
     "H4TrendState",
+    "LiveStabilSummary",
+    "StabilBarBehavior",
     "StabilDomainOutput",
     "StabilRoleReadiness",
     "StabilRoleStatus",
@@ -96,12 +106,16 @@ __all__ = [
     "build_weekly_trend_timeline",
     "classify_candidate_support_regimes",
     "compose_trend_context",
+    "describe_behavior_structure_short",
     "describe_price_vs_support",
+    "evaluate_bar_behaviors",
     "evaluate_stabil_symbol",
     "format_stabil_card_line",
+    "format_stabil_card_lines",
     "is_foreign_or_macro_symbol",
     "prepare_causal_ohlcv",
     "project_support_to_bar_closes",
     "recontextualize_daily_snapshot",
+    "summarize_symbol_for_command",
     "support_validity_color_role",
 ]

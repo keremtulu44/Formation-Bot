@@ -153,7 +153,8 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
     dususler: list[tuple[float, int, float, int]] = []
     for i, v in enumerate(degerler[:n]):
         ham = _gercek(v)
-        if ham is None or ham <= 0.0:      # hacimsiz bar: dipnotta bildirilir
+        # 0 veya yuvarlandığında `x0,0` görünen mikroskobik/eksik hacim barlarına rozet basılmaz
+        if ham is None or ham < 0.05:
             continue
         if ham > esik:
             artislar.append((float(ham), i, float(ham), 1))

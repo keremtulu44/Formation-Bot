@@ -86,6 +86,8 @@ class StabilDomainOutput:
     bar_projection: tuple[SupportBarPoint, ...]
     latest_close: float | None
     latest_support_relation: str | None  # "destek üstünde" | "destek altında" | "destekte" | None
+    bar_behaviors: tuple[Any, ...] = ()
+    latest_behavior: Any | None = None
 
 
 def _normalize_symbol(symbol: str) -> str:
@@ -568,6 +570,21 @@ def evaluate_stabil_symbol(
 
     bar_closes = list(target_clean["timestamp"]) if not target_clean.empty else []
     bar_projection = project_support_to_bar_closes(bar_closes, support_timeline)
+    from .signals import evaluate_bar_behaviors
+
+    bar_behaviors = (
+        evaluate_bar_behaviors(
+            clean_symbol,
+            tf,
+            target_clean,
+            bar_projection,
+            support_timeline,
+            min_tick=cfg.min_tick,
+        )
+        if not target_clean.empty and bar_projection
+        else ()
+    )
+    latest_behavior = bar_behaviors[-1] if bar_behaviors else None
 
     latest_close = float(target_clean["close"].iloc[-1]) if not target_clean.empty else None
     latest_projected_support = (
@@ -596,6 +613,8 @@ def evaluate_stabil_symbol(
         bar_projection=bar_projection,
         latest_close=latest_close,
         latest_support_relation=latest_relation,
+        bar_behaviors=bar_behaviors,
+        latest_behavior=latest_behavior,
     )
 
 

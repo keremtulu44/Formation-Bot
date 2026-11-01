@@ -488,6 +488,8 @@ def run_stabil_domain(
             details={
                 "role_readiness": dict(out.role_readiness),
                 "bar_projection": out.bar_projection,
+                "bar_behaviors": out.bar_behaviors,
+                "latest_behavior": out.latest_behavior,
                 "latest_support_relation": out.latest_support_relation,
                 "latest_close": out.latest_close,
                 "support_snapshot": out.support_snapshot,
