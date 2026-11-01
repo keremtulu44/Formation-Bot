@@ -1,5 +1,17 @@
 # Araştırma — arşiv ölçümü (OB/FVG/MS/PH-PL/WH-WL/Hacim)
 
+## Stabil — kaynak, entegrasyon ve iki ayrı araştırma
+
+**[Stabil ana rehberi](STABIL_REHBERI.md)** · [Replay yöntemleri](STABIL_REPLAY_HATLARI.md) ·
+[Davranış modeli](STABIL_DAVRANIS_MODELI.md) · [48 soru](STABIL_DAVRANIS_SORULARI.md) ·
+[Çalışma geçmişi](STABIL_CALISMA_GECMISI.md) · [Dosya durumu](STABIL_DOSYA_ENVANTERI.md).
+
+2026-11-01: özgün Python TXT kurtarıldı. Önceki 100 sembol/27 soru ve
+100 sembol/48 davranış çalışmaları konuşmada tamamlanmış olarak raporlandı;
+Stabil kodu, tam tablolar ve native paket **bu checkout'ta yoktur**. Bu kayıt
+eski koşuların yeniden doğrulanması değildir; sayılar ve eksikler geçmiş
+belgesinde ayrıdır. Diğer araştırmaların evrenleriyle birleştirilmemelidir.
+
 > **Durum:** Yürürlükte · **Ölçüm tarihi:** Ekim 2026 · **Veri:** `backfill_data/` 365 günlük gerçek arşiv
 > **Taban:** 176 sembol × 4 zaman dilimi = **704 seri**, **994.142 gözlem satırı**
 

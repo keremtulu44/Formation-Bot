@@ -181,3 +181,14 @@ aynen yakalanır. Kırık test yaması YOK (`test_patch_yuzeyi.py` güvencesi).
 
 **Girişler:** `python main.py` (AYNI) · `BOT_HEALTH_SMOKE_ONLY=1` (AYNI) ·
 `python -m data` (eski `python data.py` dumanı) · `python deploy_check.py` (AYNI).
+
+
+## Stabil kayıtlarının yerleşimi (2026-11-01)
+
+- Matematiğin özgün [TXT kaynağı](../domain_engines/05_stabil.txt) ve
+  [köken notu](../domain_engines/STABIL_KAYNAK_NOTU.md) domain kaynaklarının yanındadır.
+- Yöntem/model/soru/geçmiş/kanıt belgeleri [Stabil rehberinde](arastirma/STABIL_REHBERI.md)
+  ve [belge kataloğunda](README.md) birbirine bağlıdır.
+- Eksik runtime/veri paketleri için hayali klasör veya boş sonuç dosyası üretilmez;
+  [envanter](arastirma/STABIL_DOSYA_ENVANTERI.md) tutulur. Büyük veri kalıcılığı
+  manifest/erişim ve geri kurma kontrolü gerektirir; geçici dizin yeterli değildir.

@@ -1,5 +1,17 @@
 # Replay araştırmaları ve sonuç dosyaları
 
+## Stabil — kaynak, entegrasyon ve iki ayrı araştırma
+
+**[Stabil ana rehberi](STABIL_REHBERI.md)** · [Replay yöntemleri](STABIL_REPLAY_HATLARI.md) ·
+[Davranış modeli](STABIL_DAVRANIS_MODELI.md) · [48 soru](STABIL_DAVRANIS_SORULARI.md) ·
+[Çalışma geçmişi](STABIL_CALISMA_GECMISI.md) · [Dosya durumu](STABIL_DOSYA_ENVANTERI.md).
+
+2026-11-01: özgün Python TXT kurtarıldı. Önceki 100 sembol/27 soru ve
+100 sembol/48 davranış çalışmaları konuşmada tamamlanmış olarak raporlandı;
+Stabil kodu, tam tablolar ve native paket **bu checkout'ta yoktur**. Bu kayıt
+eski koşuların yeniden doğrulanması değildir; sayılar ve eksikler geçmiş
+belgesinde ayrıdır. Diğer araştırmaların evrenleriyle birleştirilmemelidir.
+
 **Durum:** Tarihsel araştırma kayıtları; canlı alarm veya yatırım tavsiyesi değildir.
 Makro kaynakların gerçek kapanış saatleri doğrulanmadı: varsayımlı sonuçlar kesin
 bulgu olarak kullanılmamalıdır. Gram/TL OHLC bulunmadığından gram sonuçları yoktur.
