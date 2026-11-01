@@ -99,6 +99,55 @@ def _cerceve_yukle(hisse: str, tf: str, veri_dizin: str, demo: bool):
         raise SystemExit(str(hata))
 
 
+def _stabil_baglami_hazirla(
+    anahtar: str,
+    tf: str,
+    cerceve: Any,
+    veri_dizin: str,
+    *,
+    demo: bool = False,
+    yonetici=None,
+    simdi=None,
+):
+    """Stabil için derin 1d/4h girdilerini nedensel kapanış sınırında hazırlar (salt-okunur)."""
+    from data import StockDequeManager, mum_kapanis_ani, resample_ohlcv, tamamlanmis_mumlar
+
+    if demo:
+        kesim = mum_kapanis_ani(cerceve.index[-1], tf) if len(cerceve) else simdi
+        gunluk = cerceve.copy(deep=True) if tf == "1d" else _demo_cerceve(500)
+        h4 = cerceve.copy(deep=True) if tf == "4h" else None
+        return gunluk, h4, kesim
+
+    kesim = mum_kapanis_ani(cerceve.index[-1], tf) if len(cerceve) else simdi
+    aktif_yonetici = yonetici if yonetici is not None else StockDequeManager(data_dir=veri_dizin)
+
+    gunluk = aktif_yonetici.to_gunluk_dataframe(anahtar)
+    if gunluk is not None and len(gunluk) > 0:
+        gunluk = tamamlanmis_mumlar(gunluk.copy(deep=True), "1d", now=kesim)
+    if gunluk is None or len(gunluk) < 30:
+        try:
+            from research import arsiv
+
+            arsiv_1d = arsiv.tf_frame(anahtar, "1d")
+            if arsiv_1d is not None and len(arsiv_1d) > 0:
+                gunluk = tamamlanmis_mumlar(arsiv_1d.copy(deep=True), "1d", now=kesim)
+        except Exception:
+            pass
+
+    saatlik = aktif_yonetici.to_dataframe(anahtar)
+    if (gunluk is None or len(gunluk) < 2) and saatlik is not None and len(saatlik) >= 5:
+        gunluk = tamamlanmis_mumlar(resample_ohlcv(saatlik.copy(deep=True), "1d"), "1d", now=kesim)
+
+    if tf == "4h":
+        h4 = cerceve.copy(deep=True)
+    elif saatlik is not None and len(saatlik) >= 5:
+        h4 = tamamlanmis_mumlar(resample_ohlcv(saatlik.copy(deep=True), "4h"), "4h", now=kesim)
+    else:
+        h4 = None
+
+    return gunluk, h4, kesim
+
+
 def _cikti_yolu(cikti: str | None, hisse: str, tf: str, tfler: tuple) -> str:
     """PNG yolu: birden çok TF çiziliyorsa ad zaman dilimiyle ayrışır."""
     yol = cikti or f"/tmp/grafik_{str(hisse).upper()}_{tf}.png"
@@ -160,10 +209,25 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
     if zone:
         if asama:
             asama("seçilen TF domain motorları")
-        from domain_engines.runner import run_domain_engines
+        from domain_engines.runner import run_domain_engines, run_stabil_domain
 
-        sonuclar = run_domain_engines(str(hisse).upper().replace(".IS", ""), tf,
-                                       cerceve.copy(deep=True))
+        temiz_ad = str(hisse).upper().replace(".IS", "")
+        sonuclar = run_domain_engines(temiz_ad, tf, cerceve.copy(deep=True))
+        try:
+            stabil_gunluk, stabil_h4, stabil_kesim = _stabil_baglami_hazirla(
+                temiz_ad, tf, cerceve, dizin, demo=demo, yonetici=yonetici, simdi=simdi
+            )
+            sonuclar["stabil"] = run_stabil_domain(
+                temiz_ad,
+                tf,
+                cerceve.copy(deep=True),
+                daily_frame=stabil_gunluk,
+                h4_frame=stabil_h4,
+                as_of_close=stabil_kesim,
+                isolated=True,
+            )
+        except Exception:
+            pass
     goruntu = grafik.anlik_goruntu(formasyon, tf, cerceve, sembol=str(hisse).upper(),
                                    alarm_turu=alarm_turu, sonuclar=sonuclar,
                                    kare_mum=mum, etiket_detay=etiket_detay, simdi=simdi,

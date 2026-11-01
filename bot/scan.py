@@ -388,6 +388,22 @@ def _domain_results_for_notification(stock, all_timeframes, now, cache):
                 _pkg.logger.warning("Domain runner %s/%s beklenmeyen sonuç döndürdü", stock, timeframe)
         except Exception as exc:  # noqa: BLE001 - domain hatası formation uyarısını bastırmasın
             _pkg.logger.warning("Domain runner hatası %s/%s: %s", stock, timeframe, exc)
+    if results and frames.get("1d") is not None:
+        try:
+            from domain_engines.runner import run_stabil_symbol_bundle
+
+            stabil_bundle = run_stabil_symbol_bundle(
+                stock,
+                {tf: frames[tf] for tf in results if tf in frames},
+                daily_frame=frames.get("1d"),
+                h4_frame=frames.get("4h"),
+                as_of_close=now,
+            )
+            for tf, stabil_res in stabil_bundle.items():
+                if tf in results and isinstance(results[tf], dict):
+                    results[tf]["stabil"] = stabil_res
+        except Exception as exc:  # noqa: BLE001 - Stabil hatası diğer domain'leri ve alarmı engellemez
+            _pkg.logger.warning("Stabil domain hatası %s: %s", stock, exc)
     cache[stock] = results
     return results
 

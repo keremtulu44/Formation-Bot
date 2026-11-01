@@ -1,0 +1,921 @@
+{
+  "generated_at": "2026-11-01",
+  "symbol_count": 100,
+  "symbols": [
+    "AEFES",
+    "AGHOL",
+    "AGROT",
+    "AKBNK",
+    "AKCNS",
+    "AKFGY",
+    "AKFYE",
+    "AKSA",
+    "AKSEN",
+    "ALARK",
+    "ALBRK",
+    "ALFAS",
+    "ALGYO",
+    "ALTNY",
+    "ANSGR",
+    "ARCLK",
+    "ARDYZ",
+    "ARZUM",
+    "ASELS",
+    "ASTOR",
+    "AVPGY",
+    "AYDEM",
+    "BEGYO",
+    "BERA",
+    "BIMAS",
+    "BIOEN",
+    "BJKAS",
+    "BOBET",
+    "BRKVY",
+    "BRSAN",
+    "BTCIM",
+    "BURCE",
+    "CANTE",
+    "CCOLA",
+    "CEMAS",
+    "CEMTS",
+    "CIMSA",
+    "CLEBI",
+    "CVKMD",
+    "CWENE",
+    "DAPGM",
+    "DARDL",
+    "DENGE",
+    "DERIM",
+    "DEVA",
+    "DIRIT",
+    "DMSAS",
+    "DOAS",
+    "DOCO",
+    "DOFER",
+    "DOHOL",
+    "DYOBY",
+    "EBEBK",
+    "ECILC",
+    "ECZYT",
+    "EFOR",
+    "EGEEN",
+    "EKGYO",
+    "ENERY",
+    "ENKAI",
+    "ENSRI",
+    "ERBOS",
+    "EREGL",
+    "ERSU",
+    "ESCAR",
+    "ESEN",
+    "EUPWR",
+    "FENER",
+    "FONET",
+    "FROTO",
+    "GARAN",
+    "GARFA",
+    "GESAN",
+    "GLYHO",
+    "GOLTS",
+    "GRSEL",
+    "GRTHO",
+    "GSRAY",
+    "GUBRF",
+    "GWIND",
+    "HALKB",
+    "HATEK",
+    "HATSN",
+    "HEDEF",
+    "HEKTS",
+    "HKTM",
+    "IHEVA",
+    "ISCTR",
+    "ISGYO",
+    "ISMEN",
+    "IZENR",
+    "KARSN",
+    "KCAER",
+    "KCHOL",
+    "KFEIN",
+    "KIMMR",
+    "KLGYO",
+    "KLSER",
+    "KMPUR",
+    "KONTR"
+  ],
+  "total_checkpoints_4h": 107441,
+  "total_first_seen_events": 10417,
+  "question_count": 48,
+  "table_row_count": 642,
+  "elapsed_sec": 188.841,
+  "user_confirmed_regime": false,
+  "source_reference": "domain_engines/05_stabil.txt",
+  "per_symbol": [
+    {
+      "symbol": "AEFES",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 110,
+      "elapsed_sec": 2.0839
+    },
+    {
+      "symbol": "AGHOL",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 141,
+      "elapsed_sec": 1.8268
+    },
+    {
+      "symbol": "AGROT",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 113,
+      "elapsed_sec": 1.7767
+    },
+    {
+      "symbol": "AKBNK",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 83,
+      "elapsed_sec": 1.7621
+    },
+    {
+      "symbol": "AKCNS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 112,
+      "elapsed_sec": 1.8352
+    },
+    {
+      "symbol": "AKFGY",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 140,
+      "elapsed_sec": 1.7396
+    },
+    {
+      "symbol": "AKFYE",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 90,
+      "elapsed_sec": 1.7807
+    },
+    {
+      "symbol": "AKSA",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 114,
+      "elapsed_sec": 1.785
+    },
+    {
+      "symbol": "AKSEN",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 83,
+      "elapsed_sec": 1.8061
+    },
+    {
+      "symbol": "ALARK",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 141,
+      "elapsed_sec": 1.8002
+    },
+    {
+      "symbol": "ALBRK",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 89,
+      "elapsed_sec": 1.8359
+    },
+    {
+      "symbol": "ALFAS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 113,
+      "elapsed_sec": 1.844
+    },
+    {
+      "symbol": "ALGYO",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 77,
+      "elapsed_sec": 1.7362
+    },
+    {
+      "symbol": "ALTNY",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 105,
+      "elapsed_sec": 1.8672
+    },
+    {
+      "symbol": "ANSGR",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 111,
+      "elapsed_sec": 1.7925
+    },
+    {
+      "symbol": "ARCLK",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 123,
+      "elapsed_sec": 1.7512
+    },
+    {
+      "symbol": "ARDYZ",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 90,
+      "elapsed_sec": 1.8092
+    },
+    {
+      "symbol": "ARZUM",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 95,
+      "elapsed_sec": 1.7741
+    },
+    {
+      "symbol": "ASELS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 101,
+      "elapsed_sec": 1.7752
+    },
+    {
+      "symbol": "ASTOR",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 91,
+      "elapsed_sec": 1.8311
+    },
+    {
+      "symbol": "AVPGY",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 121,
+      "elapsed_sec": 1.7646
+    },
+    {
+      "symbol": "AYDEM",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 104,
+      "elapsed_sec": 1.7555
+    },
+    {
+      "symbol": "BEGYO",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 104,
+      "elapsed_sec": 1.7417
+    },
+    {
+      "symbol": "BERA",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 94,
+      "elapsed_sec": 1.7854
+    },
+    {
+      "symbol": "BIMAS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 74,
+      "elapsed_sec": 1.7892
+    },
+    {
+      "symbol": "BIOEN",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 77,
+      "elapsed_sec": 1.8505
+    },
+    {
+      "symbol": "BJKAS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 120,
+      "elapsed_sec": 1.6858
+    },
+    {
+      "symbol": "BOBET",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 110,
+      "elapsed_sec": 1.8076
+    },
+    {
+      "symbol": "BRKVY",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 92,
+      "elapsed_sec": 1.8372
+    },
+    {
+      "symbol": "BRSAN",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 105,
+      "elapsed_sec": 1.8314
+    },
+    {
+      "symbol": "BTCIM",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 91,
+      "elapsed_sec": 1.9786
+    },
+    {
+      "symbol": "BURCE",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 103,
+      "elapsed_sec": 1.955
+    },
+    {
+      "symbol": "CANTE",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 101,
+      "elapsed_sec": 1.6764
+    },
+    {
+      "symbol": "CCOLA",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 100,
+      "elapsed_sec": 1.751
+    },
+    {
+      "symbol": "CEMAS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 118,
+      "elapsed_sec": 1.8544
+    },
+    {
+      "symbol": "CEMTS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 113,
+      "elapsed_sec": 1.856
+    },
+    {
+      "symbol": "CIMSA",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 114,
+      "elapsed_sec": 1.8369
+    },
+    {
+      "symbol": "CLEBI",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 110,
+      "elapsed_sec": 1.8766
+    },
+    {
+      "symbol": "CVKMD",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 103,
+      "elapsed_sec": 1.968
+    },
+    {
+      "symbol": "CWENE",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 89,
+      "elapsed_sec": 1.7492
+    },
+    {
+      "symbol": "DAPGM",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 108,
+      "elapsed_sec": 1.854
+    },
+    {
+      "symbol": "DARDL",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 103,
+      "elapsed_sec": 1.7606
+    },
+    {
+      "symbol": "DENGE",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 129,
+      "elapsed_sec": 1.793
+    },
+    {
+      "symbol": "DERIM",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1078,
+      "first_seen_events": 106,
+      "elapsed_sec": 1.829
+    },
+    {
+      "symbol": "DEVA",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 103,
+      "elapsed_sec": 1.8183
+    },
+    {
+      "symbol": "DIRIT",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1073,
+      "first_seen_events": 133,
+      "elapsed_sec": 1.591
+    },
+    {
+      "symbol": "DMSAS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 70,
+      "elapsed_sec": 1.7106
+    },
+    {
+      "symbol": "DOAS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 104,
+      "elapsed_sec": 1.8724
+    },
+    {
+      "symbol": "DOCO",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1078,
+      "first_seen_events": 109,
+      "elapsed_sec": 1.8072
+    },
+    {
+      "symbol": "DOFER",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 88,
+      "elapsed_sec": 1.7539
+    },
+    {
+      "symbol": "DOHOL",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 97,
+      "elapsed_sec": 1.746
+    },
+    {
+      "symbol": "DYOBY",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 114,
+      "elapsed_sec": 1.7727
+    },
+    {
+      "symbol": "EBEBK",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 120,
+      "elapsed_sec": 1.7965
+    },
+    {
+      "symbol": "ECILC",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 113,
+      "elapsed_sec": 1.7805
+    },
+    {
+      "symbol": "ECZYT",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 100,
+      "elapsed_sec": 1.8134
+    },
+    {
+      "symbol": "EFOR",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 717,
+      "first_seen_events": 53,
+      "elapsed_sec": 1.5291
+    },
+    {
+      "symbol": "EGEEN",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 134,
+      "elapsed_sec": 1.8025
+    },
+    {
+      "symbol": "EKGYO",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 93,
+      "elapsed_sec": 1.7444
+    },
+    {
+      "symbol": "ENERY",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 74,
+      "elapsed_sec": 1.7264
+    },
+    {
+      "symbol": "ENKAI",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 105,
+      "elapsed_sec": 1.7715
+    },
+    {
+      "symbol": "ENSRI",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 88,
+      "elapsed_sec": 1.7672
+    },
+    {
+      "symbol": "ERBOS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 113,
+      "elapsed_sec": 1.833
+    },
+    {
+      "symbol": "EREGL",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 92,
+      "elapsed_sec": 1.7864
+    },
+    {
+      "symbol": "ERSU",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1078,
+      "first_seen_events": 125,
+      "elapsed_sec": 1.7395
+    },
+    {
+      "symbol": "ESCAR",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 68,
+      "elapsed_sec": 1.7797
+    },
+    {
+      "symbol": "ESEN",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 83,
+      "elapsed_sec": 1.6839
+    },
+    {
+      "symbol": "EUPWR",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 110,
+      "elapsed_sec": 1.8525
+    },
+    {
+      "symbol": "FENER",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 93,
+      "elapsed_sec": 1.794
+    },
+    {
+      "symbol": "FONET",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 79,
+      "elapsed_sec": 1.8279
+    },
+    {
+      "symbol": "FROTO",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 141,
+      "elapsed_sec": 1.8181
+    },
+    {
+      "symbol": "GARAN",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 89,
+      "elapsed_sec": 1.8231
+    },
+    {
+      "symbol": "GARFA",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1000,
+      "first_seen_events": 128,
+      "elapsed_sec": 1.7601
+    },
+    {
+      "symbol": "GESAN",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 107,
+      "elapsed_sec": 1.7367
+    },
+    {
+      "symbol": "GLYHO",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 89,
+      "elapsed_sec": 1.7802
+    },
+    {
+      "symbol": "GOLTS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 132,
+      "elapsed_sec": 1.7708
+    },
+    {
+      "symbol": "GRSEL",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 104,
+      "elapsed_sec": 1.7732
+    },
+    {
+      "symbol": "GRTHO",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 99,
+      "elapsed_sec": 1.8758
+    },
+    {
+      "symbol": "GSRAY",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 124,
+      "elapsed_sec": 1.6702
+    },
+    {
+      "symbol": "GUBRF",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 93,
+      "elapsed_sec": 1.7757
+    },
+    {
+      "symbol": "GWIND",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 98,
+      "elapsed_sec": 1.8309
+    },
+    {
+      "symbol": "HALKB",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 89,
+      "elapsed_sec": 1.8189
+    },
+    {
+      "symbol": "HATEK",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1078,
+      "first_seen_events": 90,
+      "elapsed_sec": 1.749
+    },
+    {
+      "symbol": "HATSN",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 147,
+      "elapsed_sec": 1.8614
+    },
+    {
+      "symbol": "HEDEF",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 63,
+      "elapsed_sec": 1.6385
+    },
+    {
+      "symbol": "HEKTS",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 120,
+      "elapsed_sec": 1.7507
+    },
+    {
+      "symbol": "HKTM",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1078,
+      "first_seen_events": 95,
+      "elapsed_sec": 1.931
+    },
+    {
+      "symbol": "IHEVA",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1077,
+      "first_seen_events": 104,
+      "elapsed_sec": 1.8299
+    },
+    {
+      "symbol": "ISCTR",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 91,
+      "elapsed_sec": 1.7645
+    },
+    {
+      "symbol": "ISGYO",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1078,
+      "first_seen_events": 114,
+      "elapsed_sec": 1.8473
+    },
+    {
+      "symbol": "ISMEN",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 124,
+      "elapsed_sec": 1.7775
+    },
+    {
+      "symbol": "IZENR",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 99,
+      "elapsed_sec": 1.7229
+    },
+    {
+      "symbol": "KARSN",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 100,
+      "elapsed_sec": 1.8279
+    },
+    {
+      "symbol": "KCAER",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 107,
+      "elapsed_sec": 1.8158
+    },
+    {
+      "symbol": "KCHOL",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 94,
+      "elapsed_sec": 1.8078
+    },
+    {
+      "symbol": "KFEIN",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 103,
+      "elapsed_sec": 1.8515
+    },
+    {
+      "symbol": "KIMMR",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 118,
+      "elapsed_sec": 1.9404
+    },
+    {
+      "symbol": "KLGYO",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 110,
+      "elapsed_sec": 1.7614
+    },
+    {
+      "symbol": "KLSER",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 121,
+      "elapsed_sec": 1.95
+    },
+    {
+      "symbol": "KMPUR",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1079,
+      "first_seen_events": 116,
+      "elapsed_sec": 1.7781
+    },
+    {
+      "symbol": "KONTR",
+      "daily_bars": 501,
+      "weekly_bars": 104,
+      "h4_bars": 1075,
+      "first_seen_events": 136,
+      "elapsed_sec": 1.7465
+    }
+  ],
+  "verdict_summary": {
+    "ayrı doğrulama gerekli": 10,
+    "belirgin ayrım yok": 17,
+    "betimsel ayrım": 19,
+    "örnek yetersiz": 2
+  }
+}

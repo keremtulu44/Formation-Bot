@@ -237,7 +237,7 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         for z in meta["ayrinti"].get("bolgeler", []):
             z["gorunur"], z["gorunum_nedeni"] = False, "sade görünüm"
         goruntu = {**goruntu, "zone": {}, "serit": {}, "temas": [], "isaretler": [],
-                   "gorunum": gorunum, "sade": True}
+                   "gorunum": gorunum, "sade": True, "stabil": None}
         _olay_sade = dict(goruntu.get("olay") or {})
         goruntu["olay"] = {**_olay_sade, "swinglar": [], "seviyeler": [], "olaylar": []}
     n = int(olcu["bar"])
@@ -355,6 +355,17 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         olay_son = int(kesit) + 1 if kesit is not None else n
         ham = [float(v) for v in (kapanis[:olay_son] + yuksek[:olay_son]
                                   + dusuk[:olay_son]) if v is not None]
+        stabil_src = goruntu.get("stabil") or {}
+        stabil_kadrajda = False
+        if ham and stabil_src.get("hazir"):
+            m_lo, m_hi = min(ham), max(ham)
+            m_span = max(m_hi - m_lo, abs(m_hi) * 0.015, 1e-9)
+            stabil_pay = float(SABITLER.get("stabil_kadraj_orani", 0.35)) * m_span
+            for sv in list(stabil_src.get("seviyeler") or [])[:olay_son]:
+                sv_f = _gercek(sv)
+                if sv_f is not None and (m_lo - stabil_pay <= sv_f <= m_hi + stabil_pay):
+                    ek_y.append(sv_f)
+                    stabil_kadrajda = True
         taban = ham + ek_y
         t_lo, t_hi = (min(taban), max(taban)) if taban else (0.0, 1.0)
         kadraj_pay = float(SABITLER["kadraj_pay_orani"]) * max(t_hi - t_lo, 1e-9)
@@ -479,6 +490,12 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                 log.debug("grafik: rvol rozetleri çizilemedi (%s)", hata)
 
         if not yalnizca_mumlar:
+            try:
+                meta["cizgiler"]["stabil"] = _stabil_ciz(
+                    ax, goruntu, katman_n, aralik, kadrajda=stabil_kadrajda)
+            except Exception as hata:
+                log.warning("grafik: stabil katmanı çizilemedi (%s)", hata)
+                eksik.append("stabil")
             try:
                 meta["cizgiler"]["formasyon"] = _pkg._formasyon_ciz(
                     ax, goruntu, katman_n, butce, metin, sag_bosluk=katman_bosluk,
@@ -889,5 +906,92 @@ def _guven_ciz(fig, satirlar, adim, alt):
         artist = fig.text(.075, y - i * adim, line, ha="left", va="top",
                           fontsize=SABITLER["dipnot_pt"], color=PALET["eksen"])
         artist.set_gid("grafik-guven")
+
+
+def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
+                aralik: tuple[float, float], *, kadrajda: bool = False) -> dict[str, Any]:
+    """Günlük yapısal destek (`support_level`) stepline çizimi — 2 renk, etiketsiz, yardımcı çizgisiz."""
+    from matplotlib.collections import LineCollection
+
+    stabil = goruntu.get("stabil") or {}
+    seviyeler = list(stabil.get("seviyeler") or [])[:katman_n]
+    renkler = list(stabil.get("renkler") or [])[:katman_n]
+    ozet = {
+        "hazir": bool(stabil.get("hazir")),
+        "cizildi": False,
+        "son_seviye": _gercek(stabil.get("son_seviye")),
+        "son_renk": stabil.get("son_renk"),
+        "gorunur_bar": 0,
+        "kadrajda": bool(kadrajda),
+    }
+    if not seviyeler or not ozet["hazir"]:
+        return ozet
+
+    y_lo, y_hi = float(aralik[0]), float(aralik[1])
+    parcalar: list[list[tuple[float, float]]] = []
+    parca_renkleri: list[str] = []
+    aktif_parca: list[tuple[float, float]] = []
+    aktif_renk: Optional[str] = None
+    onceki_y: Optional[float] = None
+    gorunur_bar = 0
+
+    for i, sv in enumerate(seviyeler):
+        y = _gercek(sv)
+        rol = renkler[i] if i < len(renkler) else None
+        if y is None or rol not in {"ust", "alt"}:
+            if len(aktif_parca) >= 2 and aktif_renk is not None:
+                parcalar.append(aktif_parca)
+                parca_renkleri.append(aktif_renk)
+            aktif_parca = []
+            aktif_renk = None
+            onceki_y = None
+            continue
+
+        if y_lo <= y <= y_hi:
+            gorunur_bar += 1
+
+        renk_hex = PALET["stabil_ust"] if rol == "ust" else PALET["stabil_alt"]
+        x_sol = float(i) - 0.5
+        x_sag = float(i) + 0.5
+
+        if onceki_y is not None and aktif_renk == renk_hex and aktif_parca:
+            if abs(y - onceki_y) > 1e-12:
+                aktif_parca.append((x_sol, y))
+            aktif_parca.append((x_sag, y))
+        else:
+            if len(aktif_parca) >= 2 and aktif_renk is not None:
+                parcalar.append(aktif_parca)
+                parca_renkleri.append(aktif_renk)
+            if onceki_y is not None and abs(y - onceki_y) > 1e-12:
+                aktif_parca = [(x_sol, onceki_y), (x_sol, y), (x_sag, y)]
+            else:
+                aktif_parca = [(x_sol, y), (x_sag, y)]
+            aktif_renk = renk_hex
+        onceki_y = y
+
+    if len(aktif_parca) >= 2 and aktif_renk is not None:
+        parcalar.append(aktif_parca)
+        parca_renkleri.append(aktif_renk)
+
+    ozet["gorunur_bar"] = int(gorunur_bar)
+    if not parcalar:
+        return ozet
+
+    kalinlik = float(SABITLER.get("stabil_kalinlik", 2.0))
+    koleksiyon = LineCollection(
+        parcalar,
+        colors=parca_renkleri,
+        linewidths=kalinlik,
+        linestyles="solid",
+        capstyle="butt",
+        joinstyle="miter",
+        zorder=3.6,
+        clip_on=True,
+    )
+    koleksiyon.set_gid("grafik-stabil-stepline")
+    ax.add_collection(koleksiyon)
+    ozet["cizildi"] = True
+    return ozet
+
 
 

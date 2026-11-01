@@ -176,7 +176,7 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 /panel · /p · /genel · /tablo — tüm evreni analiz eder; 4 zaman dilimi ve ilk 12 aday. Örnek: /panel THYAO 1h
 /tara [HISSE] — hisseyi veya tüm evreni yeniden analiz eder. Seans dışında da çalışır.
 /grafik · /g HISSE [1s|2s|4s|1g] [sade|detay] [odak|baglam] [mobil] — mevcut önbellekten kare. Örnek: /grafik THYAO 4s sade. TF belirtilmezse 4 kare denenir; canlı veri çekilmez.
-/test [HISSE] — yalnız özel DM'de arşivle alıştırma. 4 kareden TF seçin, verilen kodla yön tahmin edin. Tarih gizlidir; skor tutulmaz. Örnek: /test ASTOR
+/test [HISSE] — yalnız özel DM'de arşivle alıştırma. 4 kareden TF ve yön tahmin edin (ör. 1s aşağı). Tarih gizlidir; skor tutulmaz. Örnek: /test ASTOR
 
 📊 BİLGİ VE DİĞER KOMUTLAR
 /durum — bot, piyasa, veri sağlığı ve tarama ilerlemesi

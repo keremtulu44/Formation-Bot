@@ -1060,6 +1060,47 @@ def _korunan_seviyeler(results_by_timeframe: Any, alarm_tf: str) -> tuple[float 
             _number(_field(export, "external_protected_low")))
 
 
+def _kart_stabil(results_by_timeframe: Any, alarm_tf: str, reference: float | None) -> list[str]:
+    """Alarm kapanışının nedensel olarak bilinen günlük Stabil desteğiyle olgusal kıyası."""
+    tf = str(alarm_tf or "").lower()
+    entry = _domain(results_by_timeframe, tf, "stabil") if tf else None
+    if entry is None and isinstance(results_by_timeframe, Mapping):
+        if "stabil" in results_by_timeframe:
+            entry = results_by_timeframe.get("stabil")
+        elif not tf:
+            entry = _domain(results_by_timeframe, "1d", "stabil")
+    if entry is None or _field(entry, "error") or _field(entry, "skipped", False):
+        return []
+
+    details = _field(entry, "details", {}) or {}
+    result_obj = _field(entry, "result")
+    projection = _field(details, "bar_projection") or _field(result_obj, "bar_projection") or ()
+    support_snap = _field(details, "support_snapshot") or _field(result_obj, "support_snapshot")
+    if support_snap is None:
+        export = _field(entry, "export")
+        support_snap = _field(export, "support")
+
+    support_level = None
+    if projection:
+        try:
+            support_level = _number(_field(projection[-1], "support_level"))
+        except Exception:
+            support_level = None
+    if support_level is None and support_snap is not None:
+        support_level = _number(_field(support_snap, "support_level"))
+
+    price = reference if reference is not None else _number(
+        _field(details, "latest_close") if details else _field(result_obj, "latest_close")
+    )
+    if support_level is None or price is None:
+        return []
+
+    from domain_engines.stabil import format_stabil_card_line
+
+    line = format_stabil_card_line(price, support_level)
+    return [line] if line else []
+
+
 def olcum_bolumu(results_by_timeframe: Any, reference_price: Any = None, *,
                  alarm_tf: str | None = None, atr: float | None = None,
                  yon: int = 0, retest_seen: bool | None = None,
@@ -1148,10 +1189,11 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
     # okur (mesaj metnindeki Türkçe karakterlerden bağımsız kalsın).
     bolumler: dict[str, list[str]] = {"yapi": [], "ob": [], "fvg": [], "hacim": [],
                                       "içinde": [], "ust": [], "alt": [], "olcum": [],
-                                      "engel": [], "yapi_ozet": [], "uyari": []}
+                                      "engel": [], "yapi_ozet": [], "stabil": [], "uyari": []}
     if stil == "kart":
         bolumler["yapi"] = _kart_market_structure(satirlar, str(alarm_tf or "").lower())
         bolumler["yapi_ozet"] = _kart_yapi_ozet(satirlar, str(alarm_tf or "").lower())
+        bolumler["stabil"] = _kart_stabil(results_by_timeframe, str(alarm_tf or "").lower(), reference)
         bolumler["engel"] = _kart_engel(results_by_timeframe, reference, int(yon or 0))
         bolumler.update(_kart_zones(results_by_timeframe, reference))
         bolumler["hacim"] = _kart_volume(results_by_timeframe, str(alarm_tf or "").lower(),

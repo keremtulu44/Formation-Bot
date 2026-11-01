@@ -478,6 +478,9 @@ def _format_lifecycle_alert_kart_sade(data: Dict, *,
     yapi_ozet = list(bolumler.get("yapi_ozet") or []) if isinstance(bolumler, dict) else []
     if yapi_ozet and not gecersiz:
         _satir(blok, str(yapi_ozet[0]))
+    stabil_satirlar = list(bolumler.get("stabil") or []) if isinstance(bolumler, dict) else []
+    if stabil_satirlar and not gecersiz:
+        _satir(blok, str(stabil_satirlar[0]))
     # 2026-10-26: göreli güç (20 mum endekse +puan) kaldırıldı - çok açık değil.
     # Kırılan seviyeye dönüş ve üst TF onayı daha net gösterilmeli (kullanıcı isteği).
     if not gecersiz:
