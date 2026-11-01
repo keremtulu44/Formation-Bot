@@ -1,0 +1,3706 @@
+{
+  "symbols_count": 100,
+  "total_checkpoints": 107441,
+  "true_reclaim_events": 1150,
+  "elapsed_sec": 177.27,
+  "questions": [
+    {
+      "qid": "RCL-01",
+      "title": "Sarkma derinliği × çıkış mumunun gücü birlikte nasıl çalışıyor?",
+      "note": "",
+      "total_n": 1150,
+      "buckets": [
+        {
+          "bucket": "1_sig_0_0.5ATR__ciliz_mum",
+          "n_events": 360,
+          "symbols": 97,
+          "events_per_symbol": 3.6,
+          "hold_next_4h_pct": 73.3,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 4.7,
+          "horizons": {
+            "4": {
+              "n": 360,
+              "med": -0.018,
+              "mean": 0.009,
+              "eq_sym": 0.019,
+              "mfe_med": 0.412,
+              "mae_med": 0.375,
+              "pos_pct": 46.7,
+              "up1_pct": 16.1,
+              "dn1_pct": 10.0,
+              "early_med": 0.0,
+              "late_med": -0.053
+            },
+            "8": {
+              "n": 355,
+              "med": 0.0,
+              "mean": 0.045,
+              "eq_sym": 0.059,
+              "mfe_med": 0.608,
+              "mae_med": 0.517,
+              "pos_pct": 48.5,
+              "up1_pct": 31.0,
+              "dn1_pct": 25.9,
+              "early_med": 0.071,
+              "late_med": -0.038
+            },
+            "16": {
+              "n": 354,
+              "med": 0.017,
+              "mean": 0.094,
+              "eq_sym": 0.124,
+              "mfe_med": 0.996,
+              "mae_med": 0.783,
+              "pos_pct": 50.0,
+              "up1_pct": 45.2,
+              "dn1_pct": 37.9,
+              "early_med": 0.208,
+              "late_med": -0.146
+            }
+          }
+        },
+        {
+          "bucket": "1_sig_0_0.5ATR__guclu_mum",
+          "n_events": 155,
+          "symbols": 83,
+          "events_per_symbol": 1.55,
+          "hold_next_4h_pct": 91.6,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 27.1,
+          "horizons": {
+            "4": {
+              "n": 155,
+              "med": -0.025,
+              "mean": -0.021,
+              "eq_sym": 0.016,
+              "mfe_med": 0.479,
+              "mae_med": 0.409,
+              "pos_pct": 46.5,
+              "up1_pct": 18.1,
+              "dn1_pct": 13.5,
+              "early_med": 0.0,
+              "late_med": -0.063
+            },
+            "8": {
+              "n": 154,
+              "med": 0.0,
+              "mean": 0.079,
+              "eq_sym": 0.115,
+              "mfe_med": 0.713,
+              "mae_med": 0.561,
+              "pos_pct": 49.4,
+              "up1_pct": 39.0,
+              "dn1_pct": 26.0,
+              "early_med": 0.096,
+              "late_med": -0.15
+            },
+            "16": {
+              "n": 154,
+              "med": 0.0,
+              "mean": 0.141,
+              "eq_sym": 0.231,
+              "mfe_med": 1.068,
+              "mae_med": 0.779,
+              "pos_pct": 48.7,
+              "up1_pct": 48.1,
+              "dn1_pct": 39.0,
+              "early_med": 0.349,
+              "late_med": -0.134
+            }
+          }
+        },
+        {
+          "bucket": "2_orta_0.5_1.2ATR__ciliz_mum",
+          "n_events": 180,
+          "symbols": 82,
+          "events_per_symbol": 1.8,
+          "hold_next_4h_pct": 75.6,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 5.0,
+          "horizons": {
+            "4": {
+              "n": 179,
+              "med": -0.017,
+              "mean": -0.047,
+              "eq_sym": -0.089,
+              "mfe_med": 0.443,
+              "mae_med": 0.383,
+              "pos_pct": 44.7,
+              "up1_pct": 11.7,
+              "dn1_pct": 11.7,
+              "early_med": -0.017,
+              "late_med": -0.023
+            },
+            "8": {
+              "n": 178,
+              "med": -0.216,
+              "mean": -0.091,
+              "eq_sym": -0.182,
+              "mfe_med": 0.601,
+              "mae_med": 0.587,
+              "pos_pct": 41.6,
+              "up1_pct": 25.3,
+              "dn1_pct": 29.8,
+              "early_med": -0.259,
+              "late_med": -0.046
+            },
+            "16": {
+              "n": 177,
+              "med": -0.339,
+              "mean": -0.153,
+              "eq_sym": -0.274,
+              "mfe_med": 0.873,
+              "mae_med": 1.081,
+              "pos_pct": 40.1,
+              "up1_pct": 40.1,
+              "dn1_pct": 49.2,
+              "early_med": -0.287,
+              "late_med": -0.429
+            }
+          }
+        },
+        {
+          "bucket": "2_orta_0.5_1.2ATR__guclu_mum",
+          "n_events": 198,
+          "symbols": 84,
+          "events_per_symbol": 1.98,
+          "hold_next_4h_pct": 85.9,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 21.2,
+          "horizons": {
+            "4": {
+              "n": 198,
+              "med": 0.062,
+              "mean": 0.13,
+              "eq_sym": 0.158,
+              "mfe_med": 0.626,
+              "mae_med": 0.38,
+              "pos_pct": 52.0,
+              "up1_pct": 28.3,
+              "dn1_pct": 11.1,
+              "early_med": 0.0,
+              "late_med": 0.067
+            },
+            "8": {
+              "n": 197,
+              "med": 0.145,
+              "mean": 0.298,
+              "eq_sym": 0.38,
+              "mfe_med": 0.859,
+              "mae_med": 0.513,
+              "pos_pct": 53.8,
+              "up1_pct": 40.6,
+              "dn1_pct": 22.3,
+              "early_med": 0.101,
+              "late_med": 0.184
+            },
+            "16": {
+              "n": 197,
+              "med": 0.153,
+              "mean": 0.326,
+              "eq_sym": 0.413,
+              "mfe_med": 1.282,
+              "mae_med": 0.862,
+              "pos_pct": 54.3,
+              "up1_pct": 53.3,
+              "dn1_pct": 35.5,
+              "early_med": 0.145,
+              "late_med": 0.306
+            }
+          }
+        },
+        {
+          "bucket": "3_derin_1.2+ATR__ciliz_mum",
+          "n_events": 108,
+          "symbols": 64,
+          "events_per_symbol": 1.08,
+          "hold_next_4h_pct": 76.9,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 7.4,
+          "horizons": {
+            "4": {
+              "n": 108,
+              "med": 0.044,
+              "mean": 0.079,
+              "eq_sym": 0.099,
+              "mfe_med": 0.494,
+              "mae_med": 0.4,
+              "pos_pct": 52.8,
+              "up1_pct": 21.3,
+              "dn1_pct": 8.3,
+              "early_med": 0.108,
+              "late_med": -0.099
+            },
+            "8": {
+              "n": 108,
+              "med": 0.073,
+              "mean": 0.149,
+              "eq_sym": 0.087,
+              "mfe_med": 0.759,
+              "mae_med": 0.599,
+              "pos_pct": 52.8,
+              "up1_pct": 36.1,
+              "dn1_pct": 22.2,
+              "early_med": 0.073,
+              "late_med": 0.062
+            },
+            "16": {
+              "n": 108,
+              "med": 0.049,
+              "mean": 0.186,
+              "eq_sym": 0.137,
+              "mfe_med": 1.19,
+              "mae_med": 0.806,
+              "pos_pct": 50.9,
+              "up1_pct": 54.6,
+              "dn1_pct": 32.4,
+              "early_med": 0.15,
+              "late_med": -0.172
+            }
+          }
+        },
+        {
+          "bucket": "3_derin_1.2+ATR__guclu_mum",
+          "n_events": 149,
+          "symbols": 79,
+          "events_per_symbol": 1.49,
+          "hold_next_4h_pct": 82.6,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 18.1,
+          "horizons": {
+            "4": {
+              "n": 149,
+              "med": -0.039,
+              "mean": 0.028,
+              "eq_sym": 0.113,
+              "mfe_med": 0.656,
+              "mae_med": 0.441,
+              "pos_pct": 47.0,
+              "up1_pct": 30.2,
+              "dn1_pct": 13.4,
+              "early_med": 0.104,
+              "late_med": -0.175
+            },
+            "8": {
+              "n": 149,
+              "med": -0.066,
+              "mean": 0.062,
+              "eq_sym": 0.184,
+              "mfe_med": 0.741,
+              "mae_med": 0.659,
+              "pos_pct": 47.7,
+              "up1_pct": 42.3,
+              "dn1_pct": 28.2,
+              "early_med": 0.155,
+              "late_med": -0.203
+            },
+            "16": {
+              "n": 149,
+              "med": 0.035,
+              "mean": -0.015,
+              "eq_sym": 0.22,
+              "mfe_med": 1.165,
+              "mae_med": 1.054,
+              "pos_pct": 50.3,
+              "up1_pct": 50.3,
+              "dn1_pct": 40.9,
+              "early_med": 0.302,
+              "late_med": -0.267
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-02",
+      "title": "0.35 ATR tolerans (floor) üstünde kalıp dönen mi, altına sarkıp (silkeleyip) güçlü dönen mi?",
+      "note": "",
+      "total_n": 1150,
+      "buckets": [
+        {
+          "bucket": "floor_altindan_donus__ciliz_mum",
+          "n_events": 240,
+          "symbols": 93,
+          "events_per_symbol": 2.4,
+          "hold_next_4h_pct": 75.4,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 6.7,
+          "horizons": {
+            "4": {
+              "n": 240,
+              "med": 0.0,
+              "mean": -0.002,
+              "eq_sym": -0.009,
+              "mfe_med": 0.455,
+              "mae_med": 0.38,
+              "pos_pct": 48.8,
+              "up1_pct": 15.0,
+              "dn1_pct": 10.4,
+              "early_med": 0.073,
+              "late_med": -0.077
+            },
+            "8": {
+              "n": 239,
+              "med": -0.046,
+              "mean": 0.0,
+              "eq_sym": -0.02,
+              "mfe_med": 0.664,
+              "mae_med": 0.546,
+              "pos_pct": 46.9,
+              "up1_pct": 30.1,
+              "dn1_pct": 23.8,
+              "early_med": -0.078,
+              "late_med": -0.04
+            },
+            "16": {
+              "n": 239,
+              "med": -0.085,
+              "mean": -0.031,
+              "eq_sym": -0.045,
+              "mfe_med": 0.991,
+              "mae_med": 0.975,
+              "pos_pct": 46.4,
+              "up1_pct": 46.4,
+              "dn1_pct": 41.0,
+              "early_med": 0.069,
+              "late_med": -0.298
+            }
+          }
+        },
+        {
+          "bucket": "floor_altindan_donus__guclu_mum",
+          "n_events": 331,
+          "symbols": 99,
+          "events_per_symbol": 3.31,
+          "hold_next_4h_pct": 83.7,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 19.0,
+          "horizons": {
+            "4": {
+              "n": 331,
+              "med": 0.025,
+              "mean": 0.092,
+              "eq_sym": 0.129,
+              "mfe_med": 0.631,
+              "mae_med": 0.395,
+              "pos_pct": 50.5,
+              "up1_pct": 28.4,
+              "dn1_pct": 11.5,
+              "early_med": 0.1,
+              "late_med": -0.032
+            },
+            "8": {
+              "n": 330,
+              "med": 0.045,
+              "mean": 0.185,
+              "eq_sym": 0.26,
+              "mfe_med": 0.817,
+              "mae_med": 0.583,
+              "pos_pct": 51.2,
+              "up1_pct": 41.5,
+              "dn1_pct": 25.2,
+              "early_med": 0.155,
+              "late_med": -0.011
+            },
+            "16": {
+              "n": 330,
+              "med": 0.109,
+              "mean": 0.199,
+              "eq_sym": 0.265,
+              "mfe_med": 1.201,
+              "mae_med": 0.941,
+              "pos_pct": 53.0,
+              "up1_pct": 51.5,
+              "dn1_pct": 38.2,
+              "early_med": 0.293,
+              "late_med": -0.115
+            }
+          }
+        },
+        {
+          "bucket": "floor_ustunde_sig_sarkma__ciliz_mum",
+          "n_events": 408,
+          "symbols": 97,
+          "events_per_symbol": 4.08,
+          "hold_next_4h_pct": 74.0,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 4.4,
+          "horizons": {
+            "4": {
+              "n": 407,
+              "med": -0.021,
+              "mean": 0.009,
+              "eq_sym": 0.001,
+              "mfe_med": 0.418,
+              "mae_med": 0.386,
+              "pos_pct": 46.2,
+              "up1_pct": 16.2,
+              "dn1_pct": 10.1,
+              "early_med": -0.007,
+              "late_med": -0.053
+            },
+            "8": {
+              "n": 402,
+              "med": 0.0,
+              "mean": 0.039,
+              "eq_sym": 0.035,
+              "mfe_med": 0.61,
+              "mae_med": 0.543,
+              "pos_pct": 47.5,
+              "up1_pct": 30.3,
+              "dn1_pct": 27.9,
+              "early_med": 0.014,
+              "late_med": -0.02
+            },
+            "16": {
+              "n": 400,
+              "med": -0.027,
+              "mean": 0.084,
+              "eq_sym": 0.093,
+              "mfe_med": 0.991,
+              "mae_med": 0.815,
+              "pos_pct": 48.0,
+              "up1_pct": 44.8,
+              "dn1_pct": 39.5,
+              "early_med": 0.14,
+              "late_med": -0.181
+            }
+          }
+        },
+        {
+          "bucket": "floor_ustunde_sig_sarkma__guclu_mum",
+          "n_events": 171,
+          "symbols": 87,
+          "events_per_symbol": 1.71,
+          "hold_next_4h_pct": 92.4,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 28.1,
+          "horizons": {
+            "4": {
+              "n": 171,
+              "med": -0.042,
+              "mean": -0.023,
+              "eq_sym": 0.008,
+              "mfe_med": 0.492,
+              "mae_med": 0.409,
+              "pos_pct": 45.6,
+              "up1_pct": 20.5,
+              "dn1_pct": 14.6,
+              "early_med": 0.0,
+              "late_med": -0.052
+            },
+            "8": {
+              "n": 170,
+              "med": 0.0,
+              "mean": 0.113,
+              "eq_sym": 0.134,
+              "mfe_med": 0.739,
+              "mae_med": 0.549,
+              "pos_pct": 49.4,
+              "up1_pct": 38.8,
+              "dn1_pct": 25.3,
+              "early_med": 0.051,
+              "late_med": -0.008
+            },
+            "16": {
+              "n": 170,
+              "med": 0.0,
+              "mean": 0.107,
+              "eq_sym": 0.24,
+              "mfe_med": 1.084,
+              "mae_med": 0.779,
+              "pos_pct": 48.2,
+              "up1_pct": 49.4,
+              "dn1_pct": 38.2,
+              "early_med": 0.02,
+              "late_med": -0.091
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-03",
+      "title": "Güçlü geri alımda altta kaç 4H mum kaldığı (hızlı tuzak vs altta yatma) sonucu değiştiriyor mu?",
+      "note": "",
+      "total_n": 502,
+      "buckets": [
+        {
+          "bucket": "1_hizli_tuzak_1_2_mum",
+          "n_events": 166,
+          "symbols": 84,
+          "events_per_symbol": 1.66,
+          "hold_next_4h_pct": 92.8,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 24.7,
+          "horizons": {
+            "4": {
+              "n": 166,
+              "med": 0.0,
+              "mean": 0.046,
+              "eq_sym": 0.039,
+              "mfe_med": 0.556,
+              "mae_med": 0.433,
+              "pos_pct": 48.2,
+              "up1_pct": 21.7,
+              "dn1_pct": 12.0,
+              "early_med": 0.0,
+              "late_med": -0.014
+            },
+            "8": {
+              "n": 165,
+              "med": 0.058,
+              "mean": 0.178,
+              "eq_sym": 0.146,
+              "mfe_med": 0.811,
+              "mae_med": 0.555,
+              "pos_pct": 51.5,
+              "up1_pct": 42.4,
+              "dn1_pct": 24.2,
+              "early_med": 0.067,
+              "late_med": 0.036
+            },
+            "16": {
+              "n": 165,
+              "med": 0.0,
+              "mean": 0.149,
+              "eq_sym": 0.23,
+              "mfe_med": 1.065,
+              "mae_med": 0.769,
+              "pos_pct": 47.9,
+              "up1_pct": 50.9,
+              "dn1_pct": 38.8,
+              "early_med": 0.0,
+              "late_med": -0.064
+            }
+          }
+        },
+        {
+          "bucket": "2_kisa_3_6_mum",
+          "n_events": 158,
+          "symbols": 75,
+          "events_per_symbol": 1.58,
+          "hold_next_4h_pct": 84.8,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 21.5,
+          "horizons": {
+            "4": {
+              "n": 158,
+              "med": -0.012,
+              "mean": 0.069,
+              "eq_sym": 0.075,
+              "mfe_med": 0.593,
+              "mae_med": 0.356,
+              "pos_pct": 48.7,
+              "up1_pct": 24.1,
+              "dn1_pct": 11.4,
+              "early_med": 0.058,
+              "late_med": -0.054
+            },
+            "8": {
+              "n": 157,
+              "med": 0.145,
+              "mean": 0.235,
+              "eq_sym": 0.182,
+              "mfe_med": 0.808,
+              "mae_med": 0.481,
+              "pos_pct": 55.4,
+              "up1_pct": 37.6,
+              "dn1_pct": 24.8,
+              "early_med": 0.229,
+              "late_med": 0.05
+            },
+            "16": {
+              "n": 157,
+              "med": 0.215,
+              "mean": 0.291,
+              "eq_sym": 0.259,
+              "mfe_med": 1.215,
+              "mae_med": 0.781,
+              "pos_pct": 58.6,
+              "up1_pct": 51.6,
+              "dn1_pct": 34.4,
+              "early_med": 0.362,
+              "late_med": -0.035
+            }
+          }
+        },
+        {
+          "bucket": "3_orta_7_14_mum",
+          "n_events": 102,
+          "symbols": 69,
+          "events_per_symbol": 1.02,
+          "hold_next_4h_pct": 79.4,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 15.7,
+          "horizons": {
+            "4": {
+              "n": 102,
+              "med": -0.013,
+              "mean": -0.004,
+              "eq_sym": 0.064,
+              "mfe_med": 0.567,
+              "mae_med": 0.444,
+              "pos_pct": 46.1,
+              "up1_pct": 25.5,
+              "dn1_pct": 13.7,
+              "early_med": 0.0,
+              "late_med": -0.16
+            },
+            "8": {
+              "n": 102,
+              "med": -0.253,
+              "mean": 0.003,
+              "eq_sym": 0.031,
+              "mfe_med": 0.662,
+              "mae_med": 0.732,
+              "pos_pct": 37.3,
+              "up1_pct": 34.3,
+              "dn1_pct": 30.4,
+              "early_med": -0.267,
+              "late_med": -0.229
+            },
+            "16": {
+              "n": 102,
+              "med": -0.135,
+              "mean": 0.019,
+              "eq_sym": 0.039,
+              "mfe_med": 1.056,
+              "mae_med": 1.161,
+              "pos_pct": 45.1,
+              "up1_pct": 42.2,
+              "dn1_pct": 48.0,
+              "early_med": -0.1,
+              "late_med": -0.231
+            }
+          }
+        },
+        {
+          "bucket": "4_uzun_15+_mum",
+          "n_events": 76,
+          "symbols": 56,
+          "events_per_symbol": 0.76,
+          "hold_next_4h_pct": 86.8,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 26.3,
+          "horizons": {
+            "4": {
+              "n": 76,
+              "med": 0.062,
+              "mean": 0.112,
+              "eq_sym": 0.175,
+              "mfe_med": 0.772,
+              "mae_med": 0.34,
+              "pos_pct": 53.9,
+              "up1_pct": 38.2,
+              "dn1_pct": 14.5,
+              "early_med": 0.118,
+              "late_med": -0.075
+            },
+            "8": {
+              "n": 76,
+              "med": 0.148,
+              "mean": 0.178,
+              "eq_sym": 0.276,
+              "mfe_med": 1.015,
+              "mae_med": 0.549,
+              "pos_pct": 56.6,
+              "up1_pct": 51.3,
+              "dn1_pct": 21.1,
+              "early_med": 0.274,
+              "late_med": 0.019
+            },
+            "16": {
+              "n": 76,
+              "med": 0.228,
+              "mean": 0.15,
+              "eq_sym": 0.296,
+              "mfe_med": 1.481,
+              "mae_med": 0.873,
+              "pos_pct": 52.6,
+              "up1_pct": 60.5,
+              "dn1_pct": 31.6,
+              "early_med": 0.337,
+              "late_med": -0.76
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-04",
+      "title": "Geri alım mumunun en tepeye yakın kapanması ile üstte fitil bırakması arasındaki fark nedir?",
+      "note": "",
+      "total_n": 1150,
+      "buckets": [
+        {
+          "bucket": "1_tepeye_yakin_kapanis_70%+",
+          "n_events": 739,
+          "symbols": 100,
+          "events_per_symbol": 7.39,
+          "hold_next_4h_pct": 82.5,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 16.0,
+          "horizons": {
+            "4": {
+              "n": 738,
+              "med": 0.006,
+              "mean": 0.053,
+              "eq_sym": 0.069,
+              "mfe_med": 0.529,
+              "mae_med": 0.386,
+              "pos_pct": 50.0,
+              "up1_pct": 22.9,
+              "dn1_pct": 10.6,
+              "early_med": 0.057,
+              "late_med": 0.0
+            },
+            "8": {
+              "n": 733,
+              "med": 0.058,
+              "mean": 0.153,
+              "eq_sym": 0.194,
+              "mfe_med": 0.779,
+              "mae_med": 0.53,
+              "pos_pct": 51.7,
+              "up1_pct": 39.4,
+              "dn1_pct": 23.3,
+              "early_med": 0.076,
+              "late_med": 0.037
+            },
+            "16": {
+              "n": 731,
+              "med": 0.03,
+              "mean": 0.142,
+              "eq_sym": 0.191,
+              "mfe_med": 1.129,
+              "mae_med": 0.836,
+              "pos_pct": 50.3,
+              "up1_pct": 50.9,
+              "dn1_pct": 37.2,
+              "early_med": 0.15,
+              "late_med": -0.083
+            }
+          }
+        },
+        {
+          "bucket": "2_orta_kapanis_45_70%",
+          "n_events": 298,
+          "symbols": 97,
+          "events_per_symbol": 2.98,
+          "hold_next_4h_pct": 75.8,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 7.4,
+          "horizons": {
+            "4": {
+              "n": 298,
+              "med": -0.077,
+              "mean": -0.03,
+              "eq_sym": -0.056,
+              "mfe_med": 0.437,
+              "mae_med": 0.408,
+              "pos_pct": 43.6,
+              "up1_pct": 14.4,
+              "dn1_pct": 13.1,
+              "early_med": -0.042,
+              "late_med": -0.101
+            },
+            "8": {
+              "n": 295,
+              "med": -0.12,
+              "mean": -0.06,
+              "eq_sym": -0.086,
+              "mfe_med": 0.594,
+              "mae_med": 0.636,
+              "pos_pct": 44.4,
+              "up1_pct": 25.8,
+              "dn1_pct": 31.5,
+              "early_med": -0.012,
+              "late_med": -0.18
+            },
+            "16": {
+              "n": 295,
+              "med": -0.021,
+              "mean": 0.013,
+              "eq_sym": -0.019,
+              "mfe_med": 0.904,
+              "mae_med": 0.942,
+              "pos_pct": 48.5,
+              "up1_pct": 43.1,
+              "dn1_pct": 42.7,
+              "early_med": 0.073,
+              "late_med": -0.27
+            }
+          }
+        },
+        {
+          "bucket": "3_ustten_fitil_yemis_<45%",
+          "n_events": 113,
+          "symbols": 61,
+          "events_per_symbol": 1.13,
+          "hold_next_4h_pct": 72.6,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 4.4,
+          "horizons": {
+            "4": {
+              "n": 113,
+              "med": -0.025,
+              "mean": 0.001,
+              "eq_sym": -0.029,
+              "mfe_med": 0.428,
+              "mae_med": 0.388,
+              "pos_pct": 45.1,
+              "up1_pct": 16.8,
+              "dn1_pct": 10.6,
+              "early_med": 0.118,
+              "late_med": -0.304
+            },
+            "8": {
+              "n": 113,
+              "med": -0.169,
+              "mean": 0.014,
+              "eq_sym": -0.05,
+              "mfe_med": 0.612,
+              "mae_med": 0.525,
+              "pos_pct": 40.7,
+              "up1_pct": 28.3,
+              "dn1_pct": 27.4,
+              "early_med": 0.0,
+              "late_med": -0.245
+            },
+            "16": {
+              "n": 113,
+              "med": -0.148,
+              "mean": 0.023,
+              "eq_sym": 0.035,
+              "mfe_med": 0.921,
+              "mae_med": 0.949,
+              "pos_pct": 43.4,
+              "up1_pct": 39.8,
+              "dn1_pct": 43.4,
+              "early_med": 0.323,
+              "late_med": -0.728
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-05",
+      "title": "Geri alım mumunda gövde gücü ile hacim (RVOL) birleştiğinde ne oluyor?",
+      "note": "",
+      "total_n": 1150,
+      "buckets": [
+        {
+          "bucket": "1_guclu_govde_VE_hacimli",
+          "n_events": 429,
+          "symbols": 99,
+          "events_per_symbol": 4.29,
+          "hold_next_4h_pct": 87.2,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 22.6,
+          "horizons": {
+            "4": {
+              "n": 429,
+              "med": -0.023,
+              "mean": 0.037,
+              "eq_sym": 0.05,
+              "mfe_med": 0.568,
+              "mae_med": 0.393,
+              "pos_pct": 47.3,
+              "up1_pct": 25.9,
+              "dn1_pct": 12.4,
+              "early_med": 0.022,
+              "late_med": -0.063
+            },
+            "8": {
+              "n": 427,
+              "med": 0.022,
+              "mean": 0.132,
+              "eq_sym": 0.163,
+              "mfe_med": 0.79,
+              "mae_med": 0.546,
+              "pos_pct": 50.6,
+              "up1_pct": 39.8,
+              "dn1_pct": 25.1,
+              "early_med": 0.154,
+              "late_med": -0.04
+            },
+            "16": {
+              "n": 427,
+              "med": 0.035,
+              "mean": 0.163,
+              "eq_sym": 0.256,
+              "mfe_med": 1.155,
+              "mae_med": 0.874,
+              "pos_pct": 50.6,
+              "up1_pct": 51.1,
+              "dn1_pct": 38.4,
+              "early_med": 0.319,
+              "late_med": -0.186
+            }
+          }
+        },
+        {
+          "bucket": "2_guclu_govde_hacim_normal",
+          "n_events": 73,
+          "symbols": 51,
+          "events_per_symbol": 0.73,
+          "hold_next_4h_pct": 83.6,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 19.2,
+          "horizons": {
+            "4": {
+              "n": 73,
+              "med": 0.169,
+              "mean": 0.149,
+              "eq_sym": 0.157,
+              "mfe_med": 0.72,
+              "mae_med": 0.444,
+              "pos_pct": 57.5,
+              "up1_pct": 24.7,
+              "dn1_pct": 13.7,
+              "early_med": 0.159,
+              "late_med": 0.205
+            },
+            "8": {
+              "n": 73,
+              "med": 0.145,
+              "mean": 0.326,
+              "eq_sym": 0.33,
+              "mfe_med": 0.817,
+              "mae_med": 0.66,
+              "pos_pct": 50.7,
+              "up1_pct": 45.2,
+              "dn1_pct": 26.0,
+              "early_med": -0.277,
+              "late_med": 0.233
+            },
+            "16": {
+              "n": 73,
+              "med": 0.142,
+              "mean": 0.19,
+              "eq_sym": 0.25,
+              "mfe_med": 1.209,
+              "mae_med": 0.893,
+              "pos_pct": 56.2,
+              "up1_pct": 49.3,
+              "dn1_pct": 37.0,
+              "early_med": -0.006,
+              "late_med": 0.364
+            }
+          }
+        },
+        {
+          "bucket": "3_ciliz_govde_ama_hacimli",
+          "n_events": 290,
+          "symbols": 92,
+          "events_per_symbol": 2.9,
+          "hold_next_4h_pct": 78.3,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 6.2,
+          "horizons": {
+            "4": {
+              "n": 290,
+              "med": -0.057,
+              "mean": 0.02,
+              "eq_sym": 0.023,
+              "mfe_med": 0.407,
+              "mae_med": 0.376,
+              "pos_pct": 43.8,
+              "up1_pct": 13.8,
+              "dn1_pct": 7.2,
+              "early_med": -0.032,
+              "late_med": -0.092
+            },
+            "8": {
+              "n": 288,
+              "med": 0.0,
+              "mean": 0.059,
+              "eq_sym": 0.009,
+              "mfe_med": 0.598,
+              "mae_med": 0.538,
+              "pos_pct": 46.9,
+              "up1_pct": 29.9,
+              "dn1_pct": 24.7,
+              "early_med": 0.0,
+              "late_med": -0.008
+            },
+            "16": {
+              "n": 287,
+              "med": 0.03,
+              "mean": 0.153,
+              "eq_sym": 0.108,
+              "mfe_med": 1.037,
+              "mae_med": 0.78,
+              "pos_pct": 50.2,
+              "up1_pct": 48.4,
+              "dn1_pct": 37.3,
+              "early_med": 0.218,
+              "late_med": -0.152
+            }
+          }
+        },
+        {
+          "bucket": "4_ciliz_ve_hacimsiz",
+          "n_events": 358,
+          "symbols": 97,
+          "events_per_symbol": 3.58,
+          "hold_next_4h_pct": 71.5,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 4.5,
+          "horizons": {
+            "4": {
+              "n": 357,
+              "med": 0.0,
+              "mean": -0.007,
+              "eq_sym": -0.022,
+              "mfe_med": 0.459,
+              "mae_med": 0.388,
+              "pos_pct": 49.9,
+              "up1_pct": 17.4,
+              "dn1_pct": 12.6,
+              "early_med": 0.083,
+              "late_med": -0.046
+            },
+            "8": {
+              "n": 353,
+              "med": -0.023,
+              "mean": -0.004,
+              "eq_sym": -0.026,
+              "mfe_med": 0.66,
+              "mae_med": 0.546,
+              "pos_pct": 47.6,
+              "up1_pct": 30.6,
+              "dn1_pct": 27.8,
+              "early_med": 0.0,
+              "late_med": -0.038
+            },
+            "16": {
+              "n": 352,
+              "med": -0.147,
+              "mean": -0.051,
+              "eq_sym": -0.079,
+              "mfe_med": 0.93,
+              "mae_med": 0.98,
+              "pos_pct": 45.2,
+              "up1_pct": 42.9,
+              "dn1_pct": 42.3,
+              "early_med": 0.043,
+              "late_med": -0.296
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-06",
+      "title": "Çizginin kıl payı üstünde kapanmak mı, temiz kopuş mu, aşırı uzamak mı?",
+      "note": "",
+      "total_n": 1150,
+      "buckets": [
+        {
+          "bucket": "1_kil_payi_ustte_0_0.12ATR",
+          "n_events": 483,
+          "symbols": 100,
+          "events_per_symbol": 4.83,
+          "hold_next_4h_pct": 65.6,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 1.0,
+          "horizons": {
+            "4": {
+              "n": 482,
+              "med": 0.006,
+              "mean": 0.041,
+              "eq_sym": 0.017,
+              "mfe_med": 0.456,
+              "mae_med": 0.376,
+              "pos_pct": 50.0,
+              "up1_pct": 17.8,
+              "dn1_pct": 10.6,
+              "early_med": 0.076,
+              "late_med": -0.034
+            },
+            "8": {
+              "n": 479,
+              "med": 0.019,
+              "mean": 0.098,
+              "eq_sym": 0.058,
+              "mfe_med": 0.665,
+              "mae_med": 0.532,
+              "pos_pct": 50.1,
+              "up1_pct": 32.6,
+              "dn1_pct": 25.7,
+              "early_med": 0.088,
+              "late_med": -0.022
+            },
+            "16": {
+              "n": 478,
+              "med": -0.024,
+              "mean": 0.054,
+              "eq_sym": 0.053,
+              "mfe_med": 1.034,
+              "mae_med": 0.853,
+              "pos_pct": 47.7,
+              "up1_pct": 46.2,
+              "dn1_pct": 38.9,
+              "early_med": 0.094,
+              "late_med": -0.187
+            }
+          }
+        },
+        {
+          "bucket": "2_temiz_kopus_0.12_0.50ATR",
+          "n_events": 471,
+          "symbols": 98,
+          "events_per_symbol": 4.71,
+          "hold_next_4h_pct": 87.5,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 10.2,
+          "horizons": {
+            "4": {
+              "n": 471,
+              "med": -0.016,
+              "mean": 0.02,
+              "eq_sym": 0.073,
+              "mfe_med": 0.494,
+              "mae_med": 0.397,
+              "pos_pct": 47.1,
+              "up1_pct": 18.5,
+              "dn1_pct": 9.8,
+              "early_med": 0.0,
+              "late_med": -0.054
+            },
+            "8": {
+              "n": 466,
+              "med": -0.016,
+              "mean": 0.062,
+              "eq_sym": 0.15,
+              "mfe_med": 0.665,
+              "mae_med": 0.548,
+              "pos_pct": 46.8,
+              "up1_pct": 33.0,
+              "dn1_pct": 25.5,
+              "early_med": -0.025,
+              "late_med": -0.015
+            },
+            "16": {
+              "n": 465,
+              "med": 0.011,
+              "mean": 0.087,
+              "eq_sym": 0.148,
+              "mfe_med": 1.065,
+              "mae_med": 0.874,
+              "pos_pct": 50.1,
+              "up1_pct": 47.7,
+              "dn1_pct": 39.6,
+              "early_med": 0.142,
+              "late_med": -0.128
+            }
+          }
+        },
+        {
+          "bucket": "3_cok_uzamis_0.50+ATR",
+          "n_events": 196,
+          "symbols": 84,
+          "events_per_symbol": 1.96,
+          "hold_next_4h_pct": 96.4,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 46.9,
+          "horizons": {
+            "4": {
+              "n": 196,
+              "med": -0.066,
+              "mean": 0.004,
+              "eq_sym": 0.058,
+              "mfe_med": 0.615,
+              "mae_med": 0.414,
+              "pos_pct": 44.4,
+              "up1_pct": 29.6,
+              "dn1_pct": 16.3,
+              "early_med": -0.035,
+              "late_med": -0.119
+            },
+            "8": {
+              "n": 196,
+              "med": 0.007,
+              "mean": 0.102,
+              "eq_sym": 0.143,
+              "mfe_med": 0.898,
+              "mae_med": 0.606,
+              "pos_pct": 50.0,
+              "up1_pct": 44.4,
+              "dn1_pct": 27.0,
+              "early_med": 0.134,
+              "late_med": -0.13
+            },
+            "16": {
+              "n": 196,
+              "med": 0.026,
+              "mean": 0.223,
+              "eq_sym": 0.342,
+              "mfe_med": 1.168,
+              "mae_med": 0.961,
+              "pos_pct": 50.5,
+              "up1_pct": 51.5,
+              "dn1_pct": 39.3,
+              "early_med": 0.319,
+              "late_med": -0.244
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-07",
+      "title": "Öncesinde uzun süredir düz (16g+) olan desteğin geri alınması tepkiyi katlıyor mu?",
+      "note": "",
+      "total_n": 1150,
+      "buckets": [
+        {
+          "bucket": "orta_6_15g__ciliz_mum",
+          "n_events": 294,
+          "symbols": 90,
+          "events_per_symbol": 2.94,
+          "hold_next_4h_pct": 72.4,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 6.1,
+          "horizons": {
+            "4": {
+              "n": 294,
+              "med": -0.058,
+              "mean": -0.02,
+              "eq_sym": -0.018,
+              "mfe_med": 0.432,
+              "mae_med": 0.395,
+              "pos_pct": 43.9,
+              "up1_pct": 13.9,
+              "dn1_pct": 10.2,
+              "early_med": -0.043,
+              "late_med": -0.071
+            },
+            "8": {
+              "n": 293,
+              "med": -0.091,
+              "mean": 0.054,
+              "eq_sym": 0.064,
+              "mfe_med": 0.63,
+              "mae_med": 0.586,
+              "pos_pct": 46.1,
+              "up1_pct": 30.0,
+              "dn1_pct": 26.6,
+              "early_med": -0.157,
+              "late_med": 0.0
+            },
+            "16": {
+              "n": 291,
+              "med": -0.026,
+              "mean": 0.118,
+              "eq_sym": 0.118,
+              "mfe_med": 0.921,
+              "mae_med": 0.872,
+              "pos_pct": 47.1,
+              "up1_pct": 44.0,
+              "dn1_pct": 40.5,
+              "early_med": 0.0,
+              "late_med": -0.123
+            }
+          }
+        },
+        {
+          "bucket": "orta_6_15g__guclu_mum",
+          "n_events": 219,
+          "symbols": 88,
+          "events_per_symbol": 2.19,
+          "hold_next_4h_pct": 86.8,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 19.2,
+          "horizons": {
+            "4": {
+              "n": 219,
+              "med": -0.023,
+              "mean": 0.047,
+              "eq_sym": 0.046,
+              "mfe_med": 0.526,
+              "mae_med": 0.392,
+              "pos_pct": 47.0,
+              "up1_pct": 24.7,
+              "dn1_pct": 11.9,
+              "early_med": 0.0,
+              "late_med": -0.062
+            },
+            "8": {
+              "n": 218,
+              "med": 0.0,
+              "mean": 0.109,
+              "eq_sym": 0.093,
+              "mfe_med": 0.771,
+              "mae_med": 0.567,
+              "pos_pct": 49.5,
+              "up1_pct": 39.9,
+              "dn1_pct": 25.7,
+              "early_med": 0.0,
+              "late_med": 0.0
+            },
+            "16": {
+              "n": 218,
+              "med": -0.016,
+              "mean": 0.139,
+              "eq_sym": 0.156,
+              "mfe_med": 1.152,
+              "mae_med": 0.933,
+              "pos_pct": 49.1,
+              "up1_pct": 50.9,
+              "dn1_pct": 39.9,
+              "early_med": 0.07,
+              "late_med": -0.123
+            }
+          }
+        },
+        {
+          "bucket": "taze_0_5g__ciliz_mum",
+          "n_events": 242,
+          "symbols": 90,
+          "events_per_symbol": 2.42,
+          "hold_next_4h_pct": 75.6,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 4.5,
+          "horizons": {
+            "4": {
+              "n": 241,
+              "med": 0.0,
+              "mean": 0.002,
+              "eq_sym": -0.057,
+              "mfe_med": 0.464,
+              "mae_med": 0.356,
+              "pos_pct": 49.0,
+              "up1_pct": 17.0,
+              "dn1_pct": 10.8,
+              "early_med": 0.043,
+              "late_med": -0.046
+            },
+            "8": {
+              "n": 236,
+              "med": -0.02,
+              "mean": -0.025,
+              "eq_sym": -0.088,
+              "mfe_med": 0.652,
+              "mae_med": 0.556,
+              "pos_pct": 47.5,
+              "up1_pct": 30.5,
+              "dn1_pct": 28.4,
+              "early_med": 0.01,
+              "late_med": -0.038
+            },
+            "16": {
+              "n": 236,
+              "med": -0.156,
+              "mean": 0.025,
+              "eq_sym": -0.041,
+              "mfe_med": 1.022,
+              "mae_med": 0.892,
+              "pos_pct": 46.6,
+              "up1_pct": 45.3,
+              "dn1_pct": 41.1,
+              "early_med": 0.102,
+              "late_med": -0.306
+            }
+          }
+        },
+        {
+          "bucket": "taze_0_5g__guclu_mum",
+          "n_events": 199,
+          "symbols": 85,
+          "events_per_symbol": 1.99,
+          "hold_next_4h_pct": 88.9,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 23.6,
+          "horizons": {
+            "4": {
+              "n": 199,
+              "med": 0.0,
+              "mean": 0.023,
+              "eq_sym": 0.011,
+              "mfe_med": 0.61,
+              "mae_med": 0.405,
+              "pos_pct": 49.7,
+              "up1_pct": 24.6,
+              "dn1_pct": 13.1,
+              "early_med": 0.127,
+              "late_med": -0.05
+            },
+            "8": {
+              "n": 198,
+              "med": 0.053,
+              "mean": 0.146,
+              "eq_sym": 0.127,
+              "mfe_med": 0.76,
+              "mae_med": 0.582,
+              "pos_pct": 51.0,
+              "up1_pct": 40.4,
+              "dn1_pct": 26.3,
+              "early_med": 0.243,
+              "late_med": -0.052
+            },
+            "16": {
+              "n": 198,
+              "med": 0.144,
+              "mean": 0.196,
+              "eq_sym": 0.165,
+              "mfe_med": 1.105,
+              "mae_med": 0.895,
+              "pos_pct": 52.5,
+              "up1_pct": 48.5,
+              "dn1_pct": 38.9,
+              "early_med": 0.449,
+              "late_med": -0.084
+            }
+          }
+        },
+        {
+          "bucket": "uzun_duz_16g+__ciliz_mum",
+          "n_events": 112,
+          "symbols": 57,
+          "events_per_symbol": 1.12,
+          "hold_next_4h_pct": 77.7,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 4.5,
+          "horizons": {
+            "4": {
+              "n": 112,
+              "med": 0.037,
+              "mean": 0.078,
+              "eq_sym": 0.003,
+              "mfe_med": 0.39,
+              "mae_med": 0.349,
+              "pos_pct": 51.8,
+              "up1_pct": 17.9,
+              "dn1_pct": 8.9,
+              "early_med": 0.091,
+              "late_med": 0.0
+            },
+            "8": {
+              "n": 112,
+              "med": 0.014,
+              "mean": 0.052,
+              "eq_sym": -0.023,
+              "mfe_med": 0.613,
+              "mae_med": 0.503,
+              "pos_pct": 50.0,
+              "up1_pct": 30.4,
+              "dn1_pct": 21.4,
+              "early_med": 0.191,
+              "late_med": -0.015
+            },
+            "16": {
+              "n": 112,
+              "med": 0.034,
+              "mean": -0.125,
+              "eq_sym": -0.239,
+              "mfe_med": 1.185,
+              "mae_med": 0.78,
+              "pos_pct": 50.0,
+              "up1_pct": 49.1,
+              "dn1_pct": 36.6,
+              "early_med": 0.345,
+              "late_med": -0.245
+            }
+          }
+        },
+        {
+          "bucket": "uzun_duz_16g+__guclu_mum",
+          "n_events": 84,
+          "symbols": 50,
+          "events_per_symbol": 0.84,
+          "hold_next_4h_pct": 81.0,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 26.2,
+          "horizons": {
+            "4": {
+              "n": 84,
+              "med": 0.076,
+              "mean": 0.141,
+              "eq_sym": 0.126,
+              "mfe_med": 0.742,
+              "mae_med": 0.415,
+              "pos_pct": 51.2,
+              "up1_pct": 31.0,
+              "dn1_pct": 13.1,
+              "early_med": 0.076,
+              "late_med": 0.128
+            },
+            "8": {
+              "n": 84,
+              "med": 0.107,
+              "mean": 0.329,
+              "eq_sym": 0.256,
+              "mfe_med": 0.937,
+              "mae_med": 0.553,
+              "pos_pct": 52.4,
+              "up1_pct": 42.9,
+              "dn1_pct": 21.4,
+              "early_med": 0.194,
+              "late_med": 0.0
+            },
+            "16": {
+              "n": 84,
+              "med": 0.137,
+              "mean": 0.172,
+              "eq_sym": 0.09,
+              "mfe_med": 1.283,
+              "mae_med": 0.707,
+              "pos_pct": 54.8,
+              "up1_pct": 56.0,
+              "dn1_pct": 32.1,
+              "early_med": 0.308,
+              "late_med": -0.049
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-08",
+      "title": "Güçlü geri alımda ilk denemede V-çıkış mı daha iyi, birkaç yoklama sonrası kopuş mu?",
+      "note": "",
+      "total_n": 502,
+      "buckets": [
+        {
+          "bucket": "1_ilk_denemede_V_kopus",
+          "n_events": 419,
+          "symbols": 99,
+          "events_per_symbol": 4.19,
+          "hold_next_4h_pct": 88.1,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 22.7,
+          "horizons": {
+            "4": {
+              "n": 419,
+              "med": 0.0,
+              "mean": 0.054,
+              "eq_sym": 0.069,
+              "mfe_med": 0.597,
+              "mae_med": 0.392,
+              "pos_pct": 48.7,
+              "up1_pct": 25.5,
+              "dn1_pct": 12.2,
+              "early_med": 0.058,
+              "late_med": -0.054
+            },
+            "8": {
+              "n": 417,
+              "med": 0.0,
+              "mean": 0.162,
+              "eq_sym": 0.188,
+              "mfe_med": 0.808,
+              "mae_med": 0.547,
+              "pos_pct": 49.6,
+              "up1_pct": 40.3,
+              "dn1_pct": 24.5,
+              "early_med": 0.096,
+              "late_med": -0.033
+            },
+            "16": {
+              "n": 417,
+              "med": 0.049,
+              "mean": 0.147,
+              "eq_sym": 0.174,
+              "mfe_med": 1.132,
+              "mae_med": 0.868,
+              "pos_pct": 51.1,
+              "up1_pct": 50.1,
+              "dn1_pct": 37.6,
+              "early_med": 0.242,
+              "late_med": -0.11
+            }
+          }
+        },
+        {
+          "bucket": "2_basarisiz_denemeler_sonrasi_kopus",
+          "n_events": 83,
+          "symbols": 59,
+          "events_per_symbol": 0.83,
+          "hold_next_4h_pct": 79.5,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 19.3,
+          "horizons": {
+            "4": {
+              "n": 83,
+              "med": 0.0,
+              "mean": 0.05,
+              "eq_sym": 0.142,
+              "mfe_med": 0.539,
+              "mae_med": 0.481,
+              "pos_pct": 49.4,
+              "up1_pct": 26.5,
+              "dn1_pct": 14.5,
+              "early_med": -0.035,
+              "late_med": 0.046
+            },
+            "8": {
+              "n": 83,
+              "med": 0.141,
+              "mean": 0.152,
+              "eq_sym": 0.215,
+              "mfe_med": 0.781,
+              "mae_med": 0.644,
+              "pos_pct": 55.4,
+              "up1_pct": 42.2,
+              "dn1_pct": 28.9,
+              "early_med": 0.248,
+              "late_med": 0.037
+            },
+            "16": {
+              "n": 83,
+              "med": 0.17,
+              "mean": 0.268,
+              "eq_sym": 0.349,
+              "mfe_med": 1.315,
+              "mae_med": 0.979,
+              "pos_pct": 53.0,
+              "up1_pct": 54.2,
+              "dn1_pct": 41.0,
+              "early_med": 0.126,
+              "late_med": 0.373
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-09",
+      "title": "Sert panik mumla kırılıp güçlü geri alınanlar mı daha iyi gidiyor, süzülerek kırılanlar mı?",
+      "note": "",
+      "total_n": 502,
+      "buckets": [
+        {
+          "bucket": "1_sert_panik_kirilmasi_sonrasi",
+          "n_events": 231,
+          "symbols": 88,
+          "events_per_symbol": 2.31,
+          "hold_next_4h_pct": 86.6,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 21.2,
+          "horizons": {
+            "4": {
+              "n": 231,
+              "med": -0.025,
+              "mean": 0.068,
+              "eq_sym": 0.078,
+              "mfe_med": 0.592,
+              "mae_med": 0.444,
+              "pos_pct": 47.6,
+              "up1_pct": 29.0,
+              "dn1_pct": 11.3,
+              "early_med": 0.202,
+              "late_med": -0.165
+            },
+            "8": {
+              "n": 231,
+              "med": -0.022,
+              "mean": 0.161,
+              "eq_sym": 0.166,
+              "mfe_med": 0.725,
+              "mae_med": 0.704,
+              "pos_pct": 48.1,
+              "up1_pct": 39.4,
+              "dn1_pct": 29.4,
+              "early_med": 0.157,
+              "late_med": -0.229
+            },
+            "16": {
+              "n": 231,
+              "med": -0.085,
+              "mean": 0.097,
+              "eq_sym": 0.167,
+              "mfe_med": 1.085,
+              "mae_med": 1.029,
+              "pos_pct": 48.1,
+              "up1_pct": 47.6,
+              "dn1_pct": 43.7,
+              "early_med": 0.439,
+              "late_med": -0.276
+            }
+          }
+        },
+        {
+          "bucket": "2_yumusak_suzulme_sonrasi",
+          "n_events": 271,
+          "symbols": 98,
+          "events_per_symbol": 2.71,
+          "hold_next_4h_pct": 86.7,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 22.9,
+          "horizons": {
+            "4": {
+              "n": 271,
+              "med": 0.0,
+              "mean": 0.04,
+              "eq_sym": 0.091,
+              "mfe_med": 0.605,
+              "mae_med": 0.369,
+              "pos_pct": 49.8,
+              "up1_pct": 22.9,
+              "dn1_pct": 13.7,
+              "early_med": 0.0,
+              "late_med": 0.111
+            },
+            "8": {
+              "n": 269,
+              "med": 0.096,
+              "mean": 0.16,
+              "eq_sym": 0.187,
+              "mfe_med": 0.84,
+              "mae_med": 0.494,
+              "pos_pct": 52.8,
+              "up1_pct": 41.6,
+              "dn1_pct": 21.6,
+              "early_med": 0.051,
+              "late_med": 0.139
+            },
+            "16": {
+              "n": 269,
+              "med": 0.145,
+              "mean": 0.228,
+              "eq_sym": 0.271,
+              "mfe_med": 1.209,
+              "mae_med": 0.765,
+              "pos_pct": 54.3,
+              "up1_pct": 53.5,
+              "dn1_pct": 33.5,
+              "early_med": 0.104,
+              "late_med": 0.191
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-10",
+      "title": "Geri alımdan hemen sonraki mumda tekrar alta düşen 'sahte çıkışların' oranı ve etkisi nedir?",
+      "note": "",
+      "total_n": 1150,
+      "buckets": [
+        {
+          "bucket": "1_ertesi_mumda_ustte_kaldi",
+          "n_events": 918,
+          "symbols": 100,
+          "events_per_symbol": 9.18,
+          "hold_next_4h_pct": 100.0,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 15.8,
+          "horizons": {
+            "4": {
+              "n": 918,
+              "med": 0.072,
+              "mean": 0.14,
+              "eq_sym": 0.153,
+              "mfe_med": 0.573,
+              "mae_med": 0.322,
+              "pos_pct": 53.1,
+              "up1_pct": 23.7,
+              "dn1_pct": 6.9,
+              "early_med": 0.103,
+              "late_med": 0.0
+            },
+            "8": {
+              "n": 913,
+              "med": 0.075,
+              "mean": 0.186,
+              "eq_sym": 0.213,
+              "mfe_med": 0.779,
+              "mae_med": 0.481,
+              "pos_pct": 52.7,
+              "up1_pct": 39.3,
+              "dn1_pct": 20.6,
+              "early_med": 0.106,
+              "late_med": 0.028
+            },
+            "16": {
+              "n": 912,
+              "med": 0.087,
+              "mean": 0.205,
+              "eq_sym": 0.24,
+              "mfe_med": 1.174,
+              "mae_med": 0.768,
+              "pos_pct": 52.2,
+              "up1_pct": 52.7,
+              "dn1_pct": 34.5,
+              "early_med": 0.271,
+              "late_med": -0.081
+            }
+          }
+        },
+        {
+          "bucket": "2_hemen_ertesi_mumda_alta_dustu",
+          "n_events": 232,
+          "symbols": 90,
+          "events_per_symbol": 2.32,
+          "hold_next_4h_pct": 0.0,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 0.0,
+          "horizons": {
+            "4": {
+              "n": 231,
+              "med": -0.329,
+              "mean": -0.426,
+              "eq_sym": -0.456,
+              "mfe_med": 0.176,
+              "mae_med": 0.66,
+              "pos_pct": 27.3,
+              "up1_pct": 5.6,
+              "dn1_pct": 28.6,
+              "early_med": -0.329,
+              "late_med": -0.34
+            },
+            "8": {
+              "n": 228,
+              "med": -0.403,
+              "mean": -0.324,
+              "eq_sym": -0.376,
+              "mfe_med": 0.362,
+              "mae_med": 0.906,
+              "pos_pct": 32.9,
+              "up1_pct": 16.7,
+              "dn1_pct": 46.9,
+              "early_med": -0.307,
+              "late_med": -0.419
+            },
+            "16": {
+              "n": 227,
+              "med": -0.436,
+              "mean": -0.339,
+              "eq_sym": -0.281,
+              "mfe_med": 0.574,
+              "mae_med": 1.37,
+              "pos_pct": 37.0,
+              "up1_pct": 27.8,
+              "dn1_pct": 58.1,
+              "early_med": -0.253,
+              "late_med": -0.628
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-11",
+      "title": "Güçlü geri alım olurken günlük/haftalık ana trend yukarıysa fark yaratıyor mu?",
+      "note": "",
+      "total_n": 502,
+      "buckets": [
+        {
+          "bucket": "2_ust_trend_ZAYIF_veya_DUSUS",
+          "n_events": 502,
+          "symbols": 100,
+          "events_per_symbol": 5.02,
+          "hold_next_4h_pct": 86.7,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 22.1,
+          "horizons": {
+            "4": {
+              "n": 502,
+              "med": 0.0,
+              "mean": 0.053,
+              "eq_sym": 0.077,
+              "mfe_med": 0.597,
+              "mae_med": 0.4,
+              "pos_pct": 48.8,
+              "up1_pct": 25.7,
+              "dn1_pct": 12.5,
+              "early_med": 0.057,
+              "late_med": -0.05
+            },
+            "8": {
+              "n": 500,
+              "med": 0.025,
+              "mean": 0.16,
+              "eq_sym": 0.189,
+              "mfe_med": 0.8,
+              "mae_med": 0.568,
+              "pos_pct": 50.6,
+              "up1_pct": 40.6,
+              "dn1_pct": 25.2,
+              "early_med": 0.134,
+              "late_med": -0.022
+            },
+            "16": {
+              "n": 500,
+              "med": 0.065,
+              "mean": 0.167,
+              "eq_sym": 0.201,
+              "mfe_med": 1.161,
+              "mae_med": 0.882,
+              "pos_pct": 51.4,
+              "up1_pct": 50.8,
+              "dn1_pct": 38.2,
+              "early_med": 0.229,
+              "late_med": -0.097
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-12",
+      "title": "Güçlü geri alım hem endeks güçlü (XU100>EMA34) hem zayıfken çalışıyor mu?",
+      "note": "",
+      "total_n": 502,
+      "buckets": [
+        {
+          "bucket": "XU100_ABOVE_EMA34",
+          "n_events": 178,
+          "symbols": 87,
+          "events_per_symbol": 1.78,
+          "hold_next_4h_pct": 86.5,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 23.0,
+          "horizons": {
+            "4": {
+              "n": 178,
+              "med": -0.064,
+              "mean": -0.061,
+              "eq_sym": 0.048,
+              "mfe_med": 0.555,
+              "mae_med": 0.437,
+              "pos_pct": 46.6,
+              "up1_pct": 25.8,
+              "dn1_pct": 17.4,
+              "early_med": 0.0,
+              "late_med": -0.208
+            },
+            "8": {
+              "n": 178,
+              "med": -0.017,
+              "mean": 0.011,
+              "eq_sym": 0.09,
+              "mfe_med": 0.762,
+              "mae_med": 0.563,
+              "pos_pct": 48.3,
+              "up1_pct": 39.9,
+              "dn1_pct": 29.8,
+              "early_med": 0.134,
+              "late_med": -0.308
+            },
+            "16": {
+              "n": 178,
+              "med": 0.0,
+              "mean": 0.056,
+              "eq_sym": 0.123,
+              "mfe_med": 1.156,
+              "mae_med": 0.846,
+              "pos_pct": 49.4,
+              "up1_pct": 50.6,
+              "dn1_pct": 38.2,
+              "early_med": 0.145,
+              "late_med": -0.384
+            }
+          }
+        },
+        {
+          "bucket": "XU100_BELOW_EMA34",
+          "n_events": 324,
+          "symbols": 98,
+          "events_per_symbol": 3.24,
+          "hold_next_4h_pct": 86.7,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 21.6,
+          "horizons": {
+            "4": {
+              "n": 324,
+              "med": 0.011,
+              "mean": 0.116,
+              "eq_sym": 0.128,
+              "mfe_med": 0.616,
+              "mae_med": 0.392,
+              "pos_pct": 50.0,
+              "up1_pct": 25.6,
+              "dn1_pct": 9.9,
+              "early_med": 0.08,
+              "late_med": -0.024
+            },
+            "8": {
+              "n": 322,
+              "med": 0.055,
+              "mean": 0.243,
+              "eq_sym": 0.243,
+              "mfe_med": 0.808,
+              "mae_med": 0.571,
+              "pos_pct": 51.9,
+              "up1_pct": 41.0,
+              "dn1_pct": 22.7,
+              "early_med": 0.121,
+              "late_med": 0.018
+            },
+            "16": {
+              "n": 322,
+              "med": 0.116,
+              "mean": 0.229,
+              "eq_sym": 0.251,
+              "mfe_med": 1.164,
+              "mae_med": 0.898,
+              "pos_pct": 52.5,
+              "up1_pct": 50.9,
+              "dn1_pct": 38.2,
+              "early_med": 0.317,
+              "late_med": -0.077
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-13",
+      "title": "Grafiğe konacak 'minik geri alım işareti' için 5 aday tanımın sıklık ve performans yarışı",
+      "note": "events_per_symbol = 100 hissede ~1.5 yıllık arşivde hisse başına ortalama kaç kez işaret çıktığını gösterir.",
+      "total_n": 2790,
+      "buckets": [
+        {
+          "bucket": "Aday_1_tum_geri_alimlar",
+          "n_events": 1150,
+          "symbols": 100,
+          "events_per_symbol": 11.5,
+          "hold_next_4h_pct": 79.8,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 12.6,
+          "horizons": {
+            "4": {
+              "n": 1149,
+              "med": 0.0,
+              "mean": 0.026,
+              "eq_sym": 0.033,
+              "mfe_med": 0.49,
+              "mae_med": 0.39,
+              "pos_pct": 47.9,
+              "up1_pct": 20.1,
+              "dn1_pct": 11.2,
+              "early_med": 0.037,
+              "late_med": -0.053
+            },
+            "8": {
+              "n": 1141,
+              "med": 0.0,
+              "mean": 0.084,
+              "eq_sym": 0.098,
+              "mfe_med": 0.698,
+              "mae_med": 0.552,
+              "pos_pct": 48.7,
+              "up1_pct": 34.8,
+              "dn1_pct": 25.9,
+              "early_med": 0.035,
+              "late_med": -0.036
+            },
+            "16": {
+              "n": 1139,
+              "med": 0.0,
+              "mean": 0.096,
+              "eq_sym": 0.122,
+              "mfe_med": 1.065,
+              "mae_med": 0.872,
+              "pos_pct": 49.2,
+              "up1_pct": 47.8,
+              "dn1_pct": 39.2,
+              "early_med": 0.165,
+              "late_med": -0.171
+            }
+          }
+        },
+        {
+          "bucket": "Aday_2_guclu_govdeli_geri_alim",
+          "n_events": 502,
+          "symbols": 100,
+          "events_per_symbol": 5.02,
+          "hold_next_4h_pct": 86.7,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 22.1,
+          "horizons": {
+            "4": {
+              "n": 502,
+              "med": 0.0,
+              "mean": 0.053,
+              "eq_sym": 0.077,
+              "mfe_med": 0.597,
+              "mae_med": 0.4,
+              "pos_pct": 48.8,
+              "up1_pct": 25.7,
+              "dn1_pct": 12.5,
+              "early_med": 0.041,
+              "late_med": -0.044
+            },
+            "8": {
+              "n": 500,
+              "med": 0.025,
+              "mean": 0.16,
+              "eq_sym": 0.189,
+              "mfe_med": 0.8,
+              "mae_med": 0.568,
+              "pos_pct": 50.6,
+              "up1_pct": 40.6,
+              "dn1_pct": 25.2,
+              "early_med": 0.137,
+              "late_med": -0.027
+            },
+            "16": {
+              "n": 500,
+              "med": 0.065,
+              "mean": 0.167,
+              "eq_sym": 0.201,
+              "mfe_med": 1.161,
+              "mae_med": 0.882,
+              "pos_pct": 51.4,
+              "up1_pct": 50.8,
+              "dn1_pct": 38.2,
+              "early_med": 0.235,
+              "late_med": -0.11
+            }
+          }
+        },
+        {
+          "bucket": "Aday_3_guclu_govde_VE_tepeye_yakin_kapanis",
+          "n_events": 441,
+          "symbols": 100,
+          "events_per_symbol": 4.41,
+          "hold_next_4h_pct": 87.3,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 23.4,
+          "horizons": {
+            "4": {
+              "n": 441,
+              "med": 0.0,
+              "mean": 0.057,
+              "eq_sym": 0.099,
+              "mfe_med": 0.605,
+              "mae_med": 0.397,
+              "pos_pct": 49.2,
+              "up1_pct": 26.5,
+              "dn1_pct": 11.1,
+              "early_med": 0.041,
+              "late_med": -0.032
+            },
+            "8": {
+              "n": 439,
+              "med": 0.058,
+              "mean": 0.165,
+              "eq_sym": 0.208,
+              "mfe_med": 0.811,
+              "mae_med": 0.566,
+              "pos_pct": 51.7,
+              "up1_pct": 42.1,
+              "dn1_pct": 24.1,
+              "early_med": 0.147,
+              "late_med": 0.0
+            },
+            "16": {
+              "n": 439,
+              "med": 0.07,
+              "mean": 0.181,
+              "eq_sym": 0.215,
+              "mfe_med": 1.165,
+              "mae_med": 0.872,
+              "pos_pct": 51.7,
+              "up1_pct": 51.7,
+              "dn1_pct": 37.8,
+              "early_med": 0.235,
+              "late_med": -0.091
+            }
+          }
+        },
+        {
+          "bucket": "Aday_4_guclu_govde_VE_hacim_onayli",
+          "n_events": 429,
+          "symbols": 99,
+          "events_per_symbol": 4.29,
+          "hold_next_4h_pct": 87.2,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 22.6,
+          "horizons": {
+            "4": {
+              "n": 429,
+              "med": -0.023,
+              "mean": 0.037,
+              "eq_sym": 0.05,
+              "mfe_med": 0.568,
+              "mae_med": 0.393,
+              "pos_pct": 47.3,
+              "up1_pct": 25.9,
+              "dn1_pct": 12.4,
+              "early_med": 0.0,
+              "late_med": -0.063
+            },
+            "8": {
+              "n": 427,
+              "med": 0.022,
+              "mean": 0.132,
+              "eq_sym": 0.163,
+              "mfe_med": 0.79,
+              "mae_med": 0.546,
+              "pos_pct": 50.6,
+              "up1_pct": 39.8,
+              "dn1_pct": 25.1,
+              "early_med": 0.154,
+              "late_med": -0.052
+            },
+            "16": {
+              "n": 427,
+              "med": 0.035,
+              "mean": 0.163,
+              "eq_sym": 0.256,
+              "mfe_med": 1.155,
+              "mae_med": 0.874,
+              "pos_pct": 50.6,
+              "up1_pct": 51.1,
+              "dn1_pct": 38.4,
+              "early_med": 0.323,
+              "late_med": -0.214
+            }
+          }
+        },
+        {
+          "bucket": "Aday_5_makul_sarkma_<=1.2ATR_guclu_hacimli_temiz",
+          "n_events": 268,
+          "symbols": 92,
+          "events_per_symbol": 2.68,
+          "hold_next_4h_pct": 89.6,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 25.7,
+          "horizons": {
+            "4": {
+              "n": 268,
+              "med": 0.0,
+              "mean": 0.055,
+              "eq_sym": 0.046,
+              "mfe_med": 0.555,
+              "mae_med": 0.391,
+              "pos_pct": 48.1,
+              "up1_pct": 24.6,
+              "dn1_pct": 10.8,
+              "early_med": 0.0,
+              "late_med": -0.024
+            },
+            "8": {
+              "n": 266,
+              "med": 0.074,
+              "mean": 0.203,
+              "eq_sym": 0.228,
+              "mfe_med": 0.808,
+              "mae_med": 0.503,
+              "pos_pct": 53.0,
+              "up1_pct": 39.8,
+              "dn1_pct": 22.9,
+              "early_med": 0.175,
+              "late_med": 0.0
+            },
+            "16": {
+              "n": 266,
+              "med": 0.113,
+              "mean": 0.279,
+              "eq_sym": 0.317,
+              "mfe_med": 1.148,
+              "mae_med": 0.764,
+              "pos_pct": 51.9,
+              "up1_pct": 51.9,
+              "dn1_pct": 37.6,
+              "early_med": 0.331,
+              "late_med": -0.094
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-14",
+      "title": "Telegram kartı için aday Stabil satırlarının tüm evrendeki (107 bin mum) gerçek karnesi",
+      "note": "",
+      "total_n": 107441,
+      "buckets": [
+        {
+          "bucket": "01_destek_geri_alindi_(guclu_mum)",
+          "n_events": 441,
+          "symbols": 100,
+          "events_per_symbol": 4.41,
+          "hold_next_4h_pct": 87.3,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 23.4,
+          "horizons": {
+            "4": {
+              "n": 441,
+              "med": 0.0,
+              "mean": 0.057,
+              "eq_sym": 0.099,
+              "mfe_med": 0.605,
+              "mae_med": 0.397,
+              "pos_pct": 49.2,
+              "up1_pct": 26.5,
+              "dn1_pct": 11.1,
+              "early_med": 0.057,
+              "late_med": -0.025
+            },
+            "8": {
+              "n": 439,
+              "med": 0.058,
+              "mean": 0.165,
+              "eq_sym": 0.208,
+              "mfe_med": 0.811,
+              "mae_med": 0.566,
+              "pos_pct": 51.7,
+              "up1_pct": 42.1,
+              "dn1_pct": 24.1,
+              "early_med": 0.139,
+              "late_med": 0.0
+            },
+            "16": {
+              "n": 439,
+              "med": 0.07,
+              "mean": 0.181,
+              "eq_sym": 0.215,
+              "mfe_med": 1.165,
+              "mae_med": 0.872,
+              "pos_pct": 51.7,
+              "up1_pct": 51.7,
+              "dn1_pct": 37.8,
+              "early_med": 0.153,
+              "late_med": -0.057
+            }
+          }
+        },
+        {
+          "bucket": "02_destek_geri_alindi_(zayif_mum)",
+          "n_events": 709,
+          "symbols": 100,
+          "events_per_symbol": 7.09,
+          "hold_next_4h_pct": 75.2,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 5.9,
+          "horizons": {
+            "4": {
+              "n": 708,
+              "med": -0.005,
+              "mean": 0.007,
+              "eq_sym": -0.001,
+              "mfe_med": 0.437,
+              "mae_med": 0.385,
+              "pos_pct": 47.0,
+              "up1_pct": 16.1,
+              "dn1_pct": 11.3,
+              "early_med": 0.033,
+              "late_med": -0.058
+            },
+            "8": {
+              "n": 702,
+              "med": -0.022,
+              "mean": 0.033,
+              "eq_sym": 0.023,
+              "mfe_med": 0.633,
+              "mae_med": 0.546,
+              "pos_pct": 46.9,
+              "up1_pct": 30.2,
+              "dn1_pct": 26.9,
+              "early_med": -0.006,
+              "late_med": -0.037
+            },
+            "16": {
+              "n": 700,
+              "med": -0.045,
+              "mean": 0.044,
+              "eq_sym": 0.031,
+              "mfe_med": 0.992,
+              "mae_med": 0.874,
+              "pos_pct": 47.6,
+              "up1_pct": 45.3,
+              "dn1_pct": 40.1,
+              "early_med": 0.089,
+              "late_med": -0.22
+            }
+          }
+        },
+        {
+          "bucket": "03_destek_asagi_kaydi_(pasif_ustte)",
+          "n_events": 1174,
+          "symbols": 100,
+          "events_per_symbol": 11.74,
+          "hold_next_4h_pct": 98.1,
+          "race_sup_up_pct": 9.5,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 0.4,
+          "horizons": {
+            "4": {
+              "n": 1174,
+              "med": -0.016,
+              "mean": 0.065,
+              "eq_sym": 0.081,
+              "mfe_med": 0.448,
+              "mae_med": 0.408,
+              "pos_pct": 48.1,
+              "up1_pct": 20.4,
+              "dn1_pct": 13.4,
+              "early_med": -0.045,
+              "late_med": 0.0
+            },
+            "8": {
+              "n": 1167,
+              "med": -0.015,
+              "mean": 0.059,
+              "eq_sym": 0.08,
+              "mfe_med": 0.661,
+              "mae_med": 0.547,
+              "pos_pct": 48.4,
+              "up1_pct": 32.3,
+              "dn1_pct": 25.4,
+              "early_med": 0.0,
+              "late_med": -0.045
+            },
+            "16": {
+              "n": 1166,
+              "med": -0.118,
+              "mean": -0.073,
+              "eq_sym": -0.032,
+              "mfe_med": 0.962,
+              "mae_med": 0.911,
+              "pos_pct": 46.7,
+              "up1_pct": 43.2,
+              "dn1_pct": 39.2,
+              "early_med": 0.031,
+              "late_med": -0.197
+            }
+          }
+        },
+        {
+          "bucket": "04_destekte_(3+_temas_yorulma)",
+          "n_events": 21,
+          "symbols": 4,
+          "events_per_symbol": 0.21,
+          "hold_next_4h_pct": 71.4,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 0.0,
+          "horizons": {
+            "4": {
+              "n": 21,
+              "med": -0.27,
+              "mean": -0.35,
+              "eq_sym": -0.015,
+              "mfe_med": 0.197,
+              "mae_med": 0.591,
+              "pos_pct": 19.0,
+              "up1_pct": 9.5,
+              "dn1_pct": 19.0,
+              "early_med": 0.431,
+              "late_med": -0.394
+            },
+            "8": {
+              "n": 21,
+              "med": -0.376,
+              "mean": -0.475,
+              "eq_sym": -0.183,
+              "mfe_med": 0.417,
+              "mae_med": 0.638,
+              "pos_pct": 38.1,
+              "up1_pct": 9.5,
+              "dn1_pct": 28.6,
+              "early_med": -0.449,
+              "late_med": -0.376
+            },
+            "16": {
+              "n": 21,
+              "med": -0.197,
+              "mean": -0.944,
+              "eq_sym": -0.469,
+              "mfe_med": 0.638,
+              "mae_med": 0.869,
+              "pos_pct": 23.8,
+              "up1_pct": 14.3,
+              "dn1_pct": 38.1,
+              "early_med": -0.674,
+              "late_med": -0.192
+            }
+          }
+        },
+        {
+          "bucket": "05_destekte_(hacimli_alici)",
+          "n_events": 21,
+          "symbols": 18,
+          "events_per_symbol": 0.21,
+          "hold_next_4h_pct": 42.9,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 4.8,
+          "horizons": {
+            "4": {
+              "n": 20,
+              "med": -0.443,
+              "mean": -0.594,
+              "eq_sym": -0.619,
+              "mfe_med": 0.228,
+              "mae_med": 0.695,
+              "pos_pct": 25.0,
+              "up1_pct": 15.0,
+              "dn1_pct": 40.0,
+              "early_med": 0.183,
+              "late_med": -0.567
+            },
+            "8": {
+              "n": 15,
+              "med": -0.091,
+              "mean": -0.176,
+              "eq_sym": -0.149,
+              "mfe_med": 0.743,
+              "mae_med": 0.557,
+              "pos_pct": 33.3,
+              "up1_pct": 33.3,
+              "dn1_pct": 26.7,
+              "early_med": 0.017,
+              "late_med": -0.091
+            },
+            "16": {
+              "n": 15,
+              "med": 0.203,
+              "mean": -0.128,
+              "eq_sym": -0.046,
+              "mfe_med": 1.11,
+              "mae_med": 0.687,
+              "pos_pct": 53.3,
+              "up1_pct": 46.7,
+              "dn1_pct": 40.0,
+              "early_med": 0.26,
+              "late_med": 0.203
+            }
+          }
+        },
+        {
+          "bucket": "06_destekte_(2._temas)",
+          "n_events": 111,
+          "symbols": 33,
+          "events_per_symbol": 1.11,
+          "hold_next_4h_pct": 73.9,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 9.9,
+          "horizons": {
+            "4": {
+              "n": 111,
+              "med": 0.069,
+              "mean": 0.135,
+              "eq_sym": 0.224,
+              "mfe_med": 0.438,
+              "mae_med": 0.313,
+              "pos_pct": 53.2,
+              "up1_pct": 20.7,
+              "dn1_pct": 7.2,
+              "early_med": 0.099,
+              "late_med": 0.0
+            },
+            "8": {
+              "n": 111,
+              "med": 0.155,
+              "mean": 0.235,
+              "eq_sym": 0.26,
+              "mfe_med": 0.797,
+              "mae_med": 0.485,
+              "pos_pct": 53.2,
+              "up1_pct": 36.9,
+              "dn1_pct": 22.5,
+              "early_med": 0.655,
+              "late_med": -0.262
+            },
+            "16": {
+              "n": 110,
+              "med": 0.296,
+              "mean": 0.387,
+              "eq_sym": 0.36,
+              "mfe_med": 1.286,
+              "mae_med": 0.702,
+              "pos_pct": 58.2,
+              "up1_pct": 50.9,
+              "dn1_pct": 35.5,
+              "early_med": 1.09,
+              "late_med": -0.057
+            }
+          }
+        },
+        {
+          "bucket": "07_destekte_(ilk/normal_temas)",
+          "n_events": 3220,
+          "symbols": 100,
+          "events_per_symbol": 32.2,
+          "hold_next_4h_pct": 74.7,
+          "race_sup_up_pct": 0.9,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 2.9,
+          "horizons": {
+            "4": {
+              "n": 3194,
+              "med": -0.072,
+              "mean": -0.046,
+              "eq_sym": -0.037,
+              "mfe_med": 0.372,
+              "mae_med": 0.385,
+              "pos_pct": 43.2,
+              "up1_pct": 15.3,
+              "dn1_pct": 13.2,
+              "early_med": -0.068,
+              "late_med": -0.076
+            },
+            "8": {
+              "n": 3153,
+              "med": -0.112,
+              "mean": -0.065,
+              "eq_sym": -0.044,
+              "mfe_med": 0.556,
+              "mae_med": 0.613,
+              "pos_pct": 43.4,
+              "up1_pct": 26.7,
+              "dn1_pct": 26.9,
+              "early_med": -0.021,
+              "late_med": -0.197
+            },
+            "16": {
+              "n": 3079,
+              "med": -0.089,
+              "mean": -0.043,
+              "eq_sym": 0.011,
+              "mfe_med": 0.828,
+              "mae_med": 0.898,
+              "pos_pct": 46.4,
+              "up1_pct": 38.2,
+              "dn1_pct": 42.3,
+              "early_med": 0.079,
+              "late_med": -0.294
+            }
+          }
+        },
+        {
+          "bucket": "08_destek_ustunde_(uzun_yatay)",
+          "n_events": 7236,
+          "symbols": 99,
+          "events_per_symbol": 72.36,
+          "hold_next_4h_pct": 99.7,
+          "race_sup_up_pct": 53.9,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 4.9,
+          "horizons": {
+            "4": {
+              "n": 7236,
+              "med": 0.034,
+              "mean": 0.079,
+              "eq_sym": 0.08,
+              "mfe_med": 0.532,
+              "mae_med": 0.385,
+              "pos_pct": 51.0,
+              "up1_pct": 24.2,
+              "dn1_pct": 14.9,
+              "early_med": 0.079,
+              "late_med": -0.02
+            },
+            "8": {
+              "n": 7236,
+              "med": 0.082,
+              "mean": 0.153,
+              "eq_sym": 0.155,
+              "mfe_med": 0.81,
+              "mae_med": 0.564,
+              "pos_pct": 52.5,
+              "up1_pct": 39.6,
+              "dn1_pct": 26.1,
+              "early_med": 0.188,
+              "late_med": -0.042
+            },
+            "16": {
+              "n": 7236,
+              "med": 0.104,
+              "mean": 0.223,
+              "eq_sym": 0.172,
+              "mfe_med": 1.215,
+              "mae_med": 0.861,
+              "pos_pct": 52.4,
+              "up1_pct": 51.0,
+              "dn1_pct": 36.8,
+              "early_med": 0.353,
+              "late_med": -0.24
+            }
+          }
+        },
+        {
+          "bucket": "09_destek_ustunde_(normal)",
+          "n_events": 72616,
+          "symbols": 100,
+          "events_per_symbol": 726.16,
+          "hold_next_4h_pct": 99.2,
+          "race_sup_up_pct": 31.4,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 5.5,
+          "horizons": {
+            "4": {
+              "n": 72504,
+              "med": -0.034,
+              "mean": 0.019,
+              "eq_sym": 0.016,
+              "mfe_med": 0.475,
+              "mae_med": 0.419,
+              "pos_pct": 46.8,
+              "up1_pct": 21.5,
+              "dn1_pct": 14.7,
+              "early_med": 0.0,
+              "late_med": -0.069
+            },
+            "8": {
+              "n": 72299,
+              "med": -0.048,
+              "mean": 0.033,
+              "eq_sym": 0.024,
+              "mfe_med": 0.709,
+              "mae_med": 0.625,
+              "pos_pct": 47.3,
+              "up1_pct": 34.8,
+              "dn1_pct": 28.1,
+              "early_med": 0.0,
+              "late_med": -0.113
+            },
+            "16": {
+              "n": 71760,
+              "med": -0.051,
+              "mean": 0.06,
+              "eq_sym": 0.041,
+              "mfe_med": 1.056,
+              "mae_med": 0.926,
+              "pos_pct": 48.1,
+              "up1_pct": 46.2,
+              "dn1_pct": 40.2,
+              "early_med": 0.07,
+              "late_med": -0.19
+            }
+          }
+        },
+        {
+          "bucket": "10_destek_altinda_(sig_sarkma_izleniyor)",
+          "n_events": 5375,
+          "symbols": 100,
+          "events_per_symbol": 53.75,
+          "hold_next_4h_pct": 19.6,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 61.6,
+          "race_sup_dn_pct": 18.4,
+          "horizons": {
+            "4": {
+              "n": 5326,
+              "med": -0.069,
+              "mean": -0.043,
+              "eq_sym": -0.046,
+              "mfe_med": 0.383,
+              "mae_med": 0.396,
+              "pos_pct": 44.2,
+              "up1_pct": 14.3,
+              "dn1_pct": 12.7,
+              "early_med": -0.019,
+              "late_med": -0.107
+            },
+            "8": {
+              "n": 5293,
+              "med": -0.103,
+              "mean": -0.033,
+              "eq_sym": -0.027,
+              "mfe_med": 0.593,
+              "mae_med": 0.608,
+              "pos_pct": 44.6,
+              "up1_pct": 27.6,
+              "dn1_pct": 26.4,
+              "early_med": -0.053,
+              "late_med": -0.157
+            },
+            "16": {
+              "n": 5230,
+              "med": 0.0,
+              "mean": 0.054,
+              "eq_sym": 0.065,
+              "mfe_med": 0.902,
+              "mae_med": 0.866,
+              "pos_pct": 49.1,
+              "up1_pct": 40.7,
+              "dn1_pct": 39.3,
+              "early_med": 0.166,
+              "late_med": -0.193
+            }
+          }
+        },
+        {
+          "bucket": "11_destek_altinda_(kirik)",
+          "n_events": 16317,
+          "symbols": 100,
+          "events_per_symbol": 163.17,
+          "hold_next_4h_pct": 3.5,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 18.6,
+          "race_sup_dn_pct": 51.1,
+          "horizons": {
+            "4": {
+              "n": 16108,
+              "med": -0.039,
+              "mean": -0.007,
+              "eq_sym": 0.034,
+              "mfe_med": 0.402,
+              "mae_med": 0.378,
+              "pos_pct": 45.7,
+              "up1_pct": 17.2,
+              "dn1_pct": 13.9,
+              "early_med": 0.017,
+              "late_med": -0.09
+            },
+            "8": {
+              "n": 16016,
+              "med": -0.035,
+              "mean": 0.002,
+              "eq_sym": 0.065,
+              "mfe_med": 0.622,
+              "mae_med": 0.563,
+              "pos_pct": 47.3,
+              "up1_pct": 30.6,
+              "dn1_pct": 26.1,
+              "early_med": 0.082,
+              "late_med": -0.113
+            },
+            "16": {
+              "n": 15901,
+              "med": -0.017,
+              "mean": 0.021,
+              "eq_sym": 0.134,
+              "mfe_med": 0.94,
+              "mae_med": 0.815,
+              "pos_pct": 48.5,
+              "up1_pct": 42.4,
+              "dn1_pct": 37.8,
+              "early_med": 0.264,
+              "late_med": -0.182
+            }
+          }
+        },
+        {
+          "bucket": "99_diger",
+          "n_events": 200,
+          "symbols": 67,
+          "events_per_symbol": 2.0,
+          "hold_next_4h_pct": 22.5,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 68.0,
+          "race_sup_dn_pct": 6.5,
+          "horizons": {
+            "4": {
+              "n": 198,
+              "med": -0.025,
+              "mean": 0.032,
+              "eq_sym": -0.008,
+              "mfe_med": 0.368,
+              "mae_med": 0.412,
+              "pos_pct": 46.0,
+              "up1_pct": 16.2,
+              "dn1_pct": 14.1,
+              "early_med": -0.101,
+              "late_med": 0.0
+            },
+            "8": {
+              "n": 189,
+              "med": -0.043,
+              "mean": 0.025,
+              "eq_sym": -0.011,
+              "mfe_med": 0.58,
+              "mae_med": 0.549,
+              "pos_pct": 47.6,
+              "up1_pct": 30.7,
+              "dn1_pct": 21.2,
+              "early_med": -0.049,
+              "late_med": -0.042
+            },
+            "16": {
+              "n": 184,
+              "med": -0.008,
+              "mean": 0.05,
+              "eq_sym": -0.032,
+              "mfe_med": 0.861,
+              "mae_med": 0.653,
+              "pos_pct": 48.4,
+              "up1_pct": 41.8,
+              "dn1_pct": 29.3,
+              "early_med": -0.135,
+              "late_med": 0.0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-15",
+      "title": "Yukarı atak / kırılım mumlarında (alarm anı benzeri) kart etiketleri nasıl ayrışıyor?",
+      "note": "",
+      "total_n": 6957,
+      "buckets": [
+        {
+          "bucket": "01_destek_geri_alindi_(guclu_mum)",
+          "n_events": 347,
+          "symbols": 97,
+          "events_per_symbol": 3.47,
+          "hold_next_4h_pct": 88.5,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 24.5,
+          "horizons": {
+            "4": {
+              "n": 347,
+              "med": 0.0,
+              "mean": 0.055,
+              "eq_sym": 0.087,
+              "mfe_med": 0.597,
+              "mae_med": 0.392,
+              "pos_pct": 48.1,
+              "up1_pct": 27.4,
+              "dn1_pct": 10.4,
+              "early_med": 0.057,
+              "late_med": -0.035
+            },
+            "8": {
+              "n": 346,
+              "med": 0.074,
+              "mean": 0.159,
+              "eq_sym": 0.235,
+              "mfe_med": 0.813,
+              "mae_med": 0.524,
+              "pos_pct": 52.6,
+              "up1_pct": 41.9,
+              "dn1_pct": 22.8,
+              "early_med": 0.161,
+              "late_med": 0.0
+            },
+            "16": {
+              "n": 346,
+              "med": 0.105,
+              "mean": 0.211,
+              "eq_sym": 0.346,
+              "mfe_med": 1.168,
+              "mae_med": 0.867,
+              "pos_pct": 51.7,
+              "up1_pct": 52.6,
+              "dn1_pct": 37.0,
+              "early_med": 0.323,
+              "late_med": -0.091
+            }
+          }
+        },
+        {
+          "bucket": "02_destek_geri_alindi_(zayif_mum)",
+          "n_events": 20,
+          "symbols": 17,
+          "events_per_symbol": 0.2,
+          "hold_next_4h_pct": 85.0,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 10.0,
+          "horizons": {
+            "4": {
+              "n": 20,
+              "med": 0.043,
+              "mean": 0.043,
+              "eq_sym": 0.049,
+              "mfe_med": 0.382,
+              "mae_med": 0.277,
+              "pos_pct": 50.0,
+              "up1_pct": 5.0,
+              "dn1_pct": 5.0,
+              "early_med": 0.16,
+              "late_med": -0.06
+            },
+            "8": {
+              "n": 20,
+              "med": -0.01,
+              "mean": 0.125,
+              "eq_sym": 0.166,
+              "mfe_med": 0.584,
+              "mae_med": 0.564,
+              "pos_pct": 45.0,
+              "up1_pct": 25.0,
+              "dn1_pct": 20.0,
+              "early_med": -0.268,
+              "late_med": 0.426
+            },
+            "16": {
+              "n": 20,
+              "med": -0.303,
+              "mean": -0.143,
+              "eq_sym": -0.083,
+              "mfe_med": 1.022,
+              "mae_med": 1.034,
+              "pos_pct": 40.0,
+              "up1_pct": 45.0,
+              "dn1_pct": 50.0,
+              "early_med": -0.796,
+              "late_med": 0.551
+            }
+          }
+        },
+        {
+          "bucket": "03_destek_asagi_kaydi_(pasif_ustte)",
+          "n_events": 143,
+          "symbols": 78,
+          "events_per_symbol": 1.43,
+          "hold_next_4h_pct": 99.3,
+          "race_sup_up_pct": 5.6,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 2.8,
+          "horizons": {
+            "4": {
+              "n": 143,
+              "med": 0.194,
+              "mean": 0.345,
+              "eq_sym": 0.393,
+              "mfe_med": 0.649,
+              "mae_med": 0.324,
+              "pos_pct": 61.5,
+              "up1_pct": 28.7,
+              "dn1_pct": 16.1,
+              "early_med": 0.357,
+              "late_med": -0.071
+            },
+            "8": {
+              "n": 142,
+              "med": 0.445,
+              "mean": 0.543,
+              "eq_sym": 0.633,
+              "mfe_med": 1.058,
+              "mae_med": 0.339,
+              "pos_pct": 61.3,
+              "up1_pct": 49.3,
+              "dn1_pct": 24.6,
+              "early_med": 0.599,
+              "late_med": -0.138
+            },
+            "16": {
+              "n": 142,
+              "med": 0.543,
+              "mean": 0.421,
+              "eq_sym": 0.459,
+              "mfe_med": 1.676,
+              "mae_med": 0.571,
+              "pos_pct": 62.0,
+              "up1_pct": 58.5,
+              "dn1_pct": 31.0,
+              "early_med": 0.657,
+              "late_med": -0.074
+            }
+          }
+        },
+        {
+          "bucket": "05_destekte_(hacimli_alici)",
+          "n_events": 21,
+          "symbols": 18,
+          "events_per_symbol": 0.21,
+          "hold_next_4h_pct": 42.9,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 4.8,
+          "horizons": {
+            "4": {
+              "n": 20,
+              "med": -0.443,
+              "mean": -0.594,
+              "eq_sym": -0.619,
+              "mfe_med": 0.228,
+              "mae_med": 0.695,
+              "pos_pct": 25.0,
+              "up1_pct": 15.0,
+              "dn1_pct": 40.0,
+              "early_med": 0.183,
+              "late_med": -0.567
+            },
+            "8": {
+              "n": 15,
+              "med": -0.091,
+              "mean": -0.176,
+              "eq_sym": -0.149,
+              "mfe_med": 0.743,
+              "mae_med": 0.557,
+              "pos_pct": 33.3,
+              "up1_pct": 33.3,
+              "dn1_pct": 26.7,
+              "early_med": 0.017,
+              "late_med": -0.091
+            },
+            "16": {
+              "n": 15,
+              "med": 0.203,
+              "mean": -0.128,
+              "eq_sym": -0.046,
+              "mfe_med": 1.11,
+              "mae_med": 0.687,
+              "pos_pct": 53.3,
+              "up1_pct": 46.7,
+              "dn1_pct": 40.0,
+              "early_med": 0.26,
+              "late_med": 0.203
+            }
+          }
+        },
+        {
+          "bucket": "08_destek_ustunde_(uzun_yatay)",
+          "n_events": 543,
+          "symbols": 92,
+          "events_per_symbol": 5.43,
+          "hold_next_4h_pct": 100.0,
+          "race_sup_up_pct": 56.4,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 7.6,
+          "horizons": {
+            "4": {
+              "n": 543,
+              "med": 0.075,
+              "mean": 0.093,
+              "eq_sym": 0.059,
+              "mfe_med": 0.674,
+              "mae_med": 0.411,
+              "pos_pct": 53.4,
+              "up1_pct": 31.9,
+              "dn1_pct": 14.0,
+              "early_med": 0.126,
+              "late_med": 0.0
+            },
+            "8": {
+              "n": 543,
+              "med": 0.258,
+              "mean": 0.345,
+              "eq_sym": 0.31,
+              "mfe_med": 1.031,
+              "mae_med": 0.618,
+              "pos_pct": 55.2,
+              "up1_pct": 49.4,
+              "dn1_pct": 25.0,
+              "early_med": 0.404,
+              "late_med": 0.0
+            },
+            "16": {
+              "n": 543,
+              "med": 0.185,
+              "mean": 0.502,
+              "eq_sym": 0.3,
+              "mfe_med": 1.568,
+              "mae_med": 0.843,
+              "pos_pct": 54.7,
+              "up1_pct": 58.0,
+              "dn1_pct": 33.7,
+              "early_med": 0.925,
+              "late_med": -0.275
+            }
+          }
+        },
+        {
+          "bucket": "09_destek_ustunde_(normal)",
+          "n_events": 4994,
+          "symbols": 100,
+          "events_per_symbol": 49.94,
+          "hold_next_4h_pct": 99.8,
+          "race_sup_up_pct": 31.1,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 8.4,
+          "horizons": {
+            "4": {
+              "n": 4989,
+              "med": -0.028,
+              "mean": 0.054,
+              "eq_sym": 0.05,
+              "mfe_med": 0.567,
+              "mae_med": 0.459,
+              "pos_pct": 47.8,
+              "up1_pct": 27.1,
+              "dn1_pct": 16.5,
+              "early_med": 0.029,
+              "late_med": -0.087
+            },
+            "8": {
+              "n": 4961,
+              "med": 0.012,
+              "mean": 0.103,
+              "eq_sym": 0.084,
+              "mfe_med": 0.858,
+              "mae_med": 0.651,
+              "pos_pct": 50.1,
+              "up1_pct": 40.7,
+              "dn1_pct": 28.4,
+              "early_med": 0.127,
+              "late_med": -0.08
+            },
+            "16": {
+              "n": 4945,
+              "med": -0.043,
+              "mean": 0.123,
+              "eq_sym": 0.08,
+              "mfe_med": 1.273,
+              "mae_med": 0.999,
+              "pos_pct": 48.6,
+              "up1_pct": 50.9,
+              "dn1_pct": 39.0,
+              "early_med": 0.166,
+              "late_med": -0.228
+            }
+          }
+        },
+        {
+          "bucket": "10_destek_altinda_(sig_sarkma_izleniyor)",
+          "n_events": 230,
+          "symbols": 88,
+          "events_per_symbol": 2.3,
+          "hold_next_4h_pct": 18.7,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 60.9,
+          "race_sup_dn_pct": 23.5,
+          "horizons": {
+            "4": {
+              "n": 225,
+              "med": 0.109,
+              "mean": 0.039,
+              "eq_sym": 0.067,
+              "mfe_med": 0.453,
+              "mae_med": 0.329,
+              "pos_pct": 54.7,
+              "up1_pct": 14.2,
+              "dn1_pct": 14.2,
+              "early_med": 0.187,
+              "late_med": -0.048
+            },
+            "8": {
+              "n": 222,
+              "med": 0.042,
+              "mean": 0.087,
+              "eq_sym": 0.113,
+              "mfe_med": 0.705,
+              "mae_med": 0.481,
+              "pos_pct": 51.8,
+              "up1_pct": 33.8,
+              "dn1_pct": 25.2,
+              "early_med": 0.182,
+              "late_med": -0.083
+            },
+            "16": {
+              "n": 222,
+              "med": -0.06,
+              "mean": 0.183,
+              "eq_sym": 0.231,
+              "mfe_med": 1.079,
+              "mae_med": 0.843,
+              "pos_pct": 49.1,
+              "up1_pct": 46.8,
+              "dn1_pct": 39.6,
+              "early_med": 0.603,
+              "late_med": -0.289
+            }
+          }
+        },
+        {
+          "bucket": "11_destek_altinda_(kirik)",
+          "n_events": 658,
+          "symbols": 99,
+          "events_per_symbol": 6.58,
+          "hold_next_4h_pct": 1.2,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 18.5,
+          "race_sup_dn_pct": 59.1,
+          "horizons": {
+            "4": {
+              "n": 651,
+              "med": 0.0,
+              "mean": 0.055,
+              "eq_sym": 0.074,
+              "mfe_med": 0.52,
+              "mae_med": 0.377,
+              "pos_pct": 49.0,
+              "up1_pct": 20.3,
+              "dn1_pct": 13.1,
+              "early_med": 0.085,
+              "late_med": -0.089
+            },
+            "8": {
+              "n": 639,
+              "med": 0.061,
+              "mean": 0.108,
+              "eq_sym": 0.166,
+              "mfe_med": 0.75,
+              "mae_med": 0.501,
+              "pos_pct": 51.3,
+              "up1_pct": 35.2,
+              "dn1_pct": 23.3,
+              "early_med": 0.189,
+              "late_med": -0.041
+            },
+            "16": {
+              "n": 638,
+              "med": -0.013,
+              "mean": 0.005,
+              "eq_sym": 0.053,
+              "mfe_med": 1.072,
+              "mae_med": 0.806,
+              "pos_pct": 48.7,
+              "up1_pct": 47.8,
+              "dn1_pct": 37.5,
+              "early_med": 0.417,
+              "late_med": -0.146
+            }
+          }
+        },
+        {
+          "bucket": "99_diger",
+          "n_events": 1,
+          "symbols": 1,
+          "events_per_symbol": 0.01,
+          "hold_next_4h_pct": 0.0,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 100.0,
+          "race_sup_dn_pct": 0.0,
+          "horizons": {
+            "4": {
+              "n": 1,
+              "med": 0.75,
+              "mean": 0.75,
+              "eq_sym": 0.75,
+              "mfe_med": 1.868,
+              "mae_med": 0.012,
+              "pos_pct": 100.0,
+              "up1_pct": 100.0,
+              "dn1_pct": 0.0,
+              "early_med": null,
+              "late_med": 0.75
+            },
+            "8": {
+              "n": 1,
+              "med": 0.75,
+              "mean": 0.75,
+              "eq_sym": 0.75,
+              "mfe_med": 1.868,
+              "mae_med": 0.012,
+              "pos_pct": 100.0,
+              "up1_pct": 100.0,
+              "dn1_pct": 0.0,
+              "early_med": null,
+              "late_med": 0.75
+            },
+            "16": {
+              "n": 1,
+              "med": 1.011,
+              "mean": 1.011,
+              "eq_sym": 1.011,
+              "mfe_med": 1.868,
+              "mae_med": 0.012,
+              "pos_pct": 100.0,
+              "up1_pct": 100.0,
+              "dn1_pct": 0.0,
+              "early_med": null,
+              "late_med": 1.011
+            }
+          }
+        }
+      ]
+    },
+    {
+      "qid": "RCL-16",
+      "title": "Destek temasında kaçıncı temas olduğu ile 4H hacimli alıcı mumu birleşince ne veriyor?",
+      "note": "",
+      "total_n": 3428,
+      "buckets": [
+        {
+          "bucket": "2_ikinci_temas_normal",
+          "n_events": 111,
+          "symbols": 33,
+          "events_per_symbol": 1.11,
+          "hold_next_4h_pct": 73.9,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 9.9,
+          "horizons": {
+            "4": {
+              "n": 111,
+              "med": 0.069,
+              "mean": 0.135,
+              "eq_sym": 0.224,
+              "mfe_med": 0.438,
+              "mae_med": 0.313,
+              "pos_pct": 53.2,
+              "up1_pct": 20.7,
+              "dn1_pct": 7.2,
+              "early_med": 0.104,
+              "late_med": 0.0
+            },
+            "8": {
+              "n": 111,
+              "med": 0.155,
+              "mean": 0.235,
+              "eq_sym": 0.26,
+              "mfe_med": 0.797,
+              "mae_med": 0.485,
+              "pos_pct": 53.2,
+              "up1_pct": 36.9,
+              "dn1_pct": 22.5,
+              "early_med": 0.651,
+              "late_med": -0.262
+            },
+            "16": {
+              "n": 110,
+              "med": 0.296,
+              "mean": 0.387,
+              "eq_sym": 0.36,
+              "mfe_med": 1.286,
+              "mae_med": 0.702,
+              "pos_pct": 58.2,
+              "up1_pct": 50.9,
+              "dn1_pct": 35.5,
+              "early_med": 1.066,
+              "late_med": 0.0
+            }
+          }
+        },
+        {
+          "bucket": "3_ilk_temas_VE_hacimli_alici",
+          "n_events": 10,
+          "symbols": 9,
+          "events_per_symbol": 0.1,
+          "hold_next_4h_pct": 40.0,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 0.0,
+          "horizons": {
+            "4": {
+              "n": 10,
+              "med": -1.09,
+              "mean": -0.876,
+              "eq_sym": -0.937,
+              "mfe_med": 0.0,
+              "mae_med": 1.187,
+              "pos_pct": 10.0,
+              "up1_pct": 10.0,
+              "dn1_pct": 70.0,
+              "early_med": 0.884,
+              "late_med": -1.114
+            },
+            "8": {
+              "n": 5,
+              "med": -0.091,
+              "mean": -0.285,
+              "eq_sym": -0.285,
+              "mfe_med": 0.743,
+              "mae_med": 0.557,
+              "pos_pct": 40.0,
+              "up1_pct": 20.0,
+              "dn1_pct": 40.0,
+              "early_med": 0.3,
+              "late_med": -0.246
+            },
+            "16": {
+              "n": 5,
+              "med": 0.64,
+              "mean": 0.246,
+              "eq_sym": 0.246,
+              "mfe_med": 1.334,
+              "mae_med": 0.557,
+              "pos_pct": 60.0,
+              "up1_pct": 60.0,
+              "dn1_pct": 40.0,
+              "early_med": 1.134,
+              "late_med": 0.014
+            }
+          }
+        },
+        {
+          "bucket": "4_ilk_temas_normal",
+          "n_events": 1426,
+          "symbols": 100,
+          "events_per_symbol": 14.26,
+          "hold_next_4h_pct": 75.2,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 4.1,
+          "horizons": {
+            "4": {
+              "n": 1418,
+              "med": -0.093,
+              "mean": -0.058,
+              "eq_sym": -0.053,
+              "mfe_med": 0.36,
+              "mae_med": 0.388,
+              "pos_pct": 39.6,
+              "up1_pct": 13.7,
+              "dn1_pct": 11.1,
+              "early_med": -0.08,
+              "late_med": -0.118
+            },
+            "8": {
+              "n": 1401,
+              "med": -0.139,
+              "mean": -0.094,
+              "eq_sym": -0.07,
+              "mfe_med": 0.53,
+              "mae_med": 0.621,
+              "pos_pct": 41.5,
+              "up1_pct": 25.1,
+              "dn1_pct": 25.2,
+              "early_med": 0.0,
+              "late_med": -0.249
+            },
+            "16": {
+              "n": 1361,
+              "med": -0.171,
+              "mean": -0.137,
+              "eq_sym": -0.067,
+              "mfe_med": 0.783,
+              "mae_med": 0.895,
+              "pos_pct": 43.6,
+              "up1_pct": 37.1,
+              "dn1_pct": 42.5,
+              "early_med": 0.027,
+              "late_med": -0.368
+            }
+          }
+        },
+        {
+          "bucket": "5_uc_ve_uzeri_temas_(yorulma)",
+          "n_events": 21,
+          "symbols": 4,
+          "events_per_symbol": 0.21,
+          "hold_next_4h_pct": 71.4,
+          "race_sup_up_pct": 0.0,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 0.0,
+          "horizons": {
+            "4": {
+              "n": 21,
+              "med": -0.27,
+              "mean": -0.35,
+              "eq_sym": -0.015,
+              "mfe_med": 0.197,
+              "mae_med": 0.591,
+              "pos_pct": 19.0,
+              "up1_pct": 9.5,
+              "dn1_pct": 19.0,
+              "early_med": 0.431,
+              "late_med": -0.394
+            },
+            "8": {
+              "n": 21,
+              "med": -0.376,
+              "mean": -0.475,
+              "eq_sym": -0.183,
+              "mfe_med": 0.417,
+              "mae_med": 0.638,
+              "pos_pct": 38.1,
+              "up1_pct": 9.5,
+              "dn1_pct": 28.6,
+              "early_med": -0.449,
+              "late_med": -0.376
+            },
+            "16": {
+              "n": 21,
+              "med": -0.197,
+              "mean": -0.944,
+              "eq_sym": -0.469,
+              "mfe_med": 0.638,
+              "mae_med": 0.869,
+              "pos_pct": 23.8,
+              "up1_pct": 14.3,
+              "dn1_pct": 38.1,
+              "early_med": -0.674,
+              "late_med": -0.192
+            }
+          }
+        },
+        {
+          "bucket": "diger",
+          "n_events": 1860,
+          "symbols": 100,
+          "events_per_symbol": 18.6,
+          "hold_next_4h_pct": 74.1,
+          "race_sup_up_pct": 1.6,
+          "race_reclaim_pct": 0.0,
+          "race_sup_dn_pct": 2.0,
+          "horizons": {
+            "4": {
+              "n": 1841,
+              "med": -0.036,
+              "mean": -0.035,
+              "eq_sym": -0.028,
+              "mfe_med": 0.383,
+              "mae_med": 0.38,
+              "pos_pct": 46.3,
+              "up1_pct": 16.5,
+              "dn1_pct": 14.9,
+              "early_med": -0.031,
+              "late_med": -0.052
+            },
+            "8": {
+              "n": 1815,
+              "med": -0.084,
+              "mean": -0.038,
+              "eq_sym": -0.015,
+              "mfe_med": 0.592,
+              "mae_med": 0.606,
+              "pos_pct": 45.1,
+              "up1_pct": 28.2,
+              "dn1_pct": 27.9,
+              "early_med": -0.04,
+              "late_med": -0.14
+            },
+            "16": {
+              "n": 1781,
+              "med": -0.015,
+              "mean": 0.028,
+              "eq_sym": 0.064,
+              "mfe_med": 0.878,
+              "mae_med": 0.892,
+              "pos_pct": 48.7,
+              "up1_pct": 39.3,
+              "dn1_pct": 41.8,
+              "early_med": 0.054,
+              "late_med": -0.132
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
