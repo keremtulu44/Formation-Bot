@@ -1077,12 +1077,9 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
             sc.set_gid("grafik-stabil-reclaim")
             ozet["reclaim_isaret"] = len(rx)
 
-    # Sağ eksende net `Destek <fiyat>` çipi (yalnız son aktif seviye kadraj içindeyse)
+    # Sağ eksende net `Destek <fiyat>` çipi (yalnız son mumda aktif destek kadraj içindeyse)
     son_sv = _gercek(seviyeler[-1]) if seviyeler else None
     son_rol = renkler[-1] if renkler else None
-    if son_sv is None:
-        son_sv = son_gorunur_y
-        son_rol = son_gorunur_rol
     if (
         sag_adaylar is not None
         and kadrajda

@@ -847,8 +847,19 @@ class StockDequeManager:
                 )
                 if duz_sayisi >= 3:
                     duz_mum_1d.append(stock)
-                dq_1d = self.get_gunluk_deque(stock)
-                sorunlar_1d = sureklilik_sorunlari_bul(dq_1d)
+                df_1d_norm, _ = _pkg.gunluk_bolunme_normalize_et(df_1d)
+                norm_kayitlar = [
+                    {
+                        "timestamp": ts,
+                        "open": float(row["open"]),
+                        "high": float(row["high"]),
+                        "low": float(row["low"]),
+                        "close": float(row["close"]),
+                        "volume": float(row.get("volume", 0.0)),
+                    }
+                    for ts, row in df_1d_norm.iterrows()
+                ]
+                sorunlar_1d = sureklilik_sorunlari_bul(norm_kayitlar)
                 if any(s.get("tip") in ("split", "sok") for s in sorunlar_1d):
                     if stock not in bolunme_veya_sok:
                         bolunme_veya_sok.append(stock)

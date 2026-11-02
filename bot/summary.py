@@ -932,6 +932,7 @@ def gece_mum_temizligi_ve_yenileme(deque_manager, pacer=None, *, stocks=None) ->
         "hatalar_1d": basarisiz_1d,
         "onceki_denetim": onceki_denetim,
         "sonraki_denetim": sonraki_denetim,
+        "kapanis_ile_kesildi": bool(_pkg._shutdown_requested),
         "supabase_yazimi": 0,
     }
 

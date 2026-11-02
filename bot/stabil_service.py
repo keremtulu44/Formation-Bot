@@ -15,6 +15,7 @@ import pandas as pd
 import config
 from data import (
     bar_kapandi_mi,
+    gunluk_bolunme_normalize_et,
     mum_kapanis_ani,
     resample_all_timeframes,
     tamamlanmis_mumlar,
@@ -127,8 +128,8 @@ def evaluate_stabil_4h_candidate(
     if raw_4h is None or raw_1d is None or len(raw_4h) < 20 or len(raw_1d) < 25:
         return None
 
-    df_4h = tamamlanmis_mumlar(raw_4h, "4h")
-    df_1d = tamamlanmis_mumlar(raw_1d, "1d")
+    df_4h = tamamlanmis_mumlar(raw_4h, "4h", now=simdiki_zaman)
+    df_1d = tamamlanmis_mumlar(raw_1d, "1d", now=simdiki_zaman)
     if df_4h is None or df_1d is None or len(df_4h) < 15 or len(df_1d) < 20:
         return None
 
@@ -292,8 +293,12 @@ def _deliver_stabil_message(notifier: Any, text: str) -> bool:
                 logger.warning("Stabil DM gönderim hatası: %s", exc)
 
     if pub_on and notifier is not None:
+        dm_aktif_ama_public_kapali = (
+            bool(getattr(notifier, "enabled", False))
+            and not bool(getattr(notifier, "public_enabled", True))
+        )
         send_pub = getattr(notifier, "send_to_public", None)
-        if callable(send_pub):
+        if callable(send_pub) and not dm_aktif_ama_public_kapali:
             try:
                 ok_pub = bool(send_pub(text))
                 any_ok = any_ok or ok_pub
@@ -371,10 +376,16 @@ def _symbol_frames_from_cache(
     df_4h = None
     if df_1h is not None and len(df_1h) >= 20:
         tfs = resample_all_timeframes(df_1h)
-        df_4h = tamamlanmis_mumlar(tfs.get("4h"), "4h") if tfs.get("4h") is not None else None
+        df_4h = tamamlanmis_mumlar(tfs.get("4h"), "4h", now=now) if tfs.get("4h") is not None else None
         if df_gunluk is None or len(df_gunluk) < 20:
             df_gunluk = tfs.get("1d")
-    df_1d = tamamlanmis_mumlar(df_gunluk, "1d") if df_gunluk is not None and len(df_gunluk) >= 20 else None
+    df_1d = (
+        tamamlanmis_mumlar(df_gunluk, "1d", now=now)
+        if df_gunluk is not None and len(df_gunluk) >= 20
+        else None
+    )
+    if df_1d is not None and len(df_1d) > 1:
+        df_1d, _ = gunluk_bolunme_normalize_et(df_1d)
     return df_4h, df_1d
 
 

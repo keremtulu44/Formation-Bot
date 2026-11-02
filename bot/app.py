@@ -357,6 +357,7 @@ def main_loop():
     last_maintenance_date = None
     last_preload_date = None
     last_nightly_refresh_date = _pkg._gece_mum_yenileme_son_gun_oku()
+    son_gece_yenileme_deneme_ts = 0.0
     son_kuyruk_bosaltma = 0.0  # engellenen acil olaylar bu aralıkla yeniden denenir
     # Restart gün sürekliliği: bugün zaten sayaç biriktirilmişse geri yükle
     # (aksi halde 18:45 kanal özeti günün gerçek toplamını eksik gösterir).
@@ -691,14 +692,29 @@ def main_loop():
                 gece_dakika = int(getattr(_pkg, "NIGHTLY_CANDLE_REFRESH_MINUTE", NIGHTLY_CANDLE_REFRESH_MINUTE))
                 gece_hedef = now.replace(hour=gece_saat, minute=gece_dakika, second=0, microsecond=0)
                 if now >= gece_hedef and (now - gece_hedef).total_seconds() < 3600:
-                    if last_nightly_refresh_date != now.date():
+                    if last_nightly_refresh_date != now.date() and (time.time() - son_gece_yenileme_deneme_ts >= 600):
+                        son_gece_yenileme_deneme_ts = time.time()
                         _pkg._scan_job_active.set()
                         try:
-                            _pkg.gece_mum_temizligi_ve_yenileme(deque_manager, pacer)
+                            gece_sonuc = _pkg.gece_mum_temizligi_ve_yenileme(deque_manager, pacer)
                         finally:
                             _pkg._scan_job_active.clear()
-                        last_nightly_refresh_date = now.date()
-                        _pkg._gece_mum_yenileme_son_gun_kaydet(now.date())
+                        kesildi = bool((gece_sonuc or {}).get("kapanis_ile_kesildi"))
+                        toplam_hedef = int((gece_sonuc or {}).get("toplam_sembol", 0))
+                        yenilenen_toplam = int((gece_sonuc or {}).get("yenilenen_1h", 0)) + int(
+                            (gece_sonuc or {}).get("yenilenen_1d", 0)
+                        )
+                        if not kesildi and (toplam_hedef == 0 or yenilenen_toplam > 0):
+                            last_nightly_refresh_date = now.date()
+                            _pkg._gece_mum_yenileme_son_gun_kaydet(now.date())
+                        else:
+                            _pkg.logger.warning(
+                                "Gece mum temizliği yarım kaldı veya tüm çekimler başarısız oldu "
+                                "(kesildi=%s, yenilenen=%d/%d); 10 dk sonra tekrar denenecek",
+                                kesildi,
+                                yenilenen_toplam,
+                                toplam_hedef,
+                            )
                         now = _pkg.datetime.now(ISTANBUL_TZ)
             except Exception as e:
                 _pkg.logger.error(f"Gece mum temizliği hatası: {e}", exc_info=True)

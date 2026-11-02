@@ -402,7 +402,8 @@ def gunluk_bolunme_normalize_et(df: pd.DataFrame) -> Tuple[pd.DataFrame, int]:
         # Tek adımda >=%30 düşüş (<=0.70x) ve izleyen barlarda eski ölçeğe dönmeme
         if 0.02 <= oran <= 0.70:
             pencere_sonu = min(n, i + 3)
-            kalici = float(np.nanmax(c[i:pencere_sonu])) <= onceki_c * 0.78
+            kalici_ust = min(onceki_c * 0.88, max(onceki_c * 0.78, referans_yeni * 1.26))
+            kalici = float(np.nanmax(c[i:pencere_sonu])) <= kalici_ust
             if kalici:
                 o[:i] *= oran
                 h[:i] *= oran

@@ -408,3 +408,137 @@ def test_gece_0200_mum_temizligi_supabase_kayitsiz_calisir_ve_kirik_mumlari_temi
     bugun = datetime(2026, 11, 2).date()
     main_mod._gece_mum_yenileme_son_gun_kaydet(bugun)
     assert main_mod._gece_mum_yenileme_son_gun_oku() == bugun
+
+
+def test_stabil_komutu_bolunme_normalize_ve_now_tutarliligi(tmp_path):
+    """`/stabil` önbellek okuyucusu bölünmüş 1D seriyi normalize etmeli ve `now` kesimine uymalıdır."""
+    from bot.stabil_service import _symbol_frames_from_cache
+
+    yonetici = StockDequeManager(data_dir=str(tmp_path), persistent_store=None)
+    idx = pd.bdate_range("2025-11-03", periods=120, tz=ISTANBUL_TZ)
+    fiyatlar = np.full(120, 50.0, dtype=float)
+    fiyatlar[70:] = 10.0  # 5:1 bedelsiz bölünme
+    df_1d = pd.DataFrame(
+        {
+            "open": fiyatlar * 0.995,
+            "high": fiyatlar * 1.015,
+            "low": fiyatlar * 0.985,
+            "close": fiyatlar,
+            "volume": np.full(120, 500_000.0),
+        },
+        index=idx,
+    )
+    assert yonetici.replace_gunluk_dataframe("SKBNK", df_1d)
+
+    kesim = idx[99].to_pydatetime().replace(hour=19, minute=0)
+    _, okunan_1d = _symbol_frames_from_cache("SKBNK", yonetici, kesim)
+    assert okunan_1d is not None
+    # `now` kesimi sonrası 20 bar dışarıda kalmalı:
+    assert len(okunan_1d) == 100
+    # Bölünme öncesi 50 TL barları ~10 TL ölçeğine indirilmiş olmalı:
+    assert float(okunan_1d["high"].max()) < 12.0
+
+
+def test_stabil_dm_hatasinda_kapali_public_mock_true_yutmaz(monkeypatch):
+    """DM açık ama public kapalıyken DM ağ hatası olursa sinyal sahte True ile yutulmamalı."""
+    import bot.stabil_service as st_srv
+
+    class SahteBildirici:
+        enabled = True
+        public_enabled = False
+
+        def send_text(self, _text):
+            return False
+
+        def send_to_public(self, _text):
+            # Gerçek TelegramNotifier.send_to_public public_enabled=False iken True döner
+            return True
+
+    monkeypatch.setattr(config, "STABIL_ALARM_DM", True)
+    monkeypatch.setattr(config, "STABIL_ALARM_PUBLIC", True)
+    assert st_srv._deliver_stabil_message(SahteBildirici(), "deneme") is False
+
+
+def test_stabil_son_mumda_destek_yoksa_sag_eksen_cipi_basmaz(tmp_path, monkeypatch):
+    """Destek geçmişte kalıp son mumlarda None olduysa sağ eksende aktif `Destek` çipi çıkmamalı."""
+    import grafik
+
+    yakalanan_adaylar = []
+    orijinal_sag_ciz = grafik._sag_ciz
+
+    def izleyen_sag_ciz(ax, fig, adaylar, *args, **kwargs):
+        yakalanan_adaylar.clear()
+        yakalanan_adaylar.extend(dict(a) for a in adaylar)
+        return orijinal_sag_ciz(ax, fig, adaylar, *args, **kwargs)
+
+    monkeypatch.setattr(grafik, "_sag_ciz", izleyen_sag_ciz)
+
+    n = 60
+    zamanlar = pd.bdate_range("2026-06-01", periods=n, tz=ISTANBUL_TZ)
+    kapanis = [100.0 + np.sin(i / 4.0) * 2.0 for i in range(n)]
+    seviyeler = [98.5 if i < 40 else None for i in range(n)]
+    renkler = ["ust" if i < 40 else None for i in range(n)]
+    goruntu = {
+        "sembol": "AKBNK",
+        "tf": "1d",
+        "zamanlar": list(zamanlar),
+        "acilis": [c - 0.3 for c in kapanis],
+        "yuksek": [c + 0.8 for c in kapanis],
+        "dusuk": [c - 0.8 for c in kapanis],
+        "kapanis": kapanis,
+        "hacim": [1_000_000.0] * n,
+        "stabil": {
+            "hazir": True,
+            "seviyeler": seviyeler,
+            "renkler": renkler,
+            "reclaim_barlar": [],
+        },
+    }
+    hedef = tmp_path / "stabil_kirik_son.png"
+    yol, meta = grafik.ciz(goruntu, "1d", secenekler={"cikti": str(hedef)})
+    assert yol is not None and hedef.exists()
+    assert meta["cizgiler"]["stabil"]["cizildi"] is True
+    assert not any("Destek" in str(a.get("metin", "")) for a in yakalanan_adaylar)
+
+    # Son mumda aktif destek varsa sağ eksen adaylarında `Destek` çipi yer almalı:
+    goruntu_aktif = dict(goruntu)
+    goruntu_aktif["stabil"] = {
+        "hazir": True,
+        "seviyeler": [98.5] * n,
+        "renkler": ["ust"] * n,
+        "reclaim_barlar": [],
+    }
+    hedef_aktif = tmp_path / "stabil_aktif_son.png"
+    yol2, _ = grafik.ciz(goruntu_aktif, "1d", secenekler={"cikti": str(hedef_aktif)})
+    assert yol2 is not None and hedef_aktif.exists()
+    assert any("Destek" in str(a.get("metin", "")) for a in yakalanan_adaylar)
+
+
+def test_yuzde_elli_bedelsiz_arti_iki_tavan_normalize_edilir():
+    """%50 bedelsiz (0.667x) sonrası 2 tavan (+%10, +%10 -> 0.807x) olsa da bölünme yakalanmalı."""
+    idx = pd.bdate_range("2026-01-05", periods=40, tz=ISTANBUL_TZ)
+    c = np.full(40, 30.0, dtype=float)
+    o = np.full(40, 30.0, dtype=float)
+    # 20. barda %50 bedelsiz (30 -> 20), ardından 2 tavan (22 -> 24.2):
+    o[20], c[20] = 20.0, 20.0
+    o[21], c[21] = 20.2, 22.0
+    o[22:], c[22:] = 22.2, 24.2
+    df = pd.DataFrame(
+        {"open": o, "high": np.maximum(o, c) * 1.01, "low": np.minimum(o, c) * 0.99, "close": c, "volume": 100_000.0},
+        index=idx,
+    )
+    norm_df, adet = gunluk_bolunme_normalize_et(df)
+    assert adet == 1
+    assert abs(float(norm_df["close"].iloc[19]) - 20.0) < 1e-6
+
+    # Buna karşılık ertesi gün eski fiyata (30.0) dönen tek günlük sahte iğne bölünme sayılmamalı:
+    c2 = np.full(40, 30.0, dtype=float)
+    o2 = np.full(40, 30.0, dtype=float)
+    o2[20], c2[20] = 18.0, 18.0
+    df_sahte = pd.DataFrame(
+        {"open": o2, "high": np.maximum(o2, c2) * 1.01, "low": np.minimum(o2, c2) * 0.99, "close": c2, "volume": 100_000.0},
+        index=idx,
+    )
+    _, adet_sahte = gunluk_bolunme_normalize_et(df_sahte)
+    assert adet_sahte == 0
+
