@@ -237,6 +237,20 @@ def kontrol_repo() -> None:
     else:
         satir(WARN, "bot_data/ yok", "İlk açılışta tüm evren Yahoo'dan indirilir.")
 
+    stabil_kaynak = REPO_ROOT / "domain_engines" / "05_stabil.txt"
+    if stabil_kaynak.exists():
+        import hashlib
+        stabil_sha = hashlib.sha256(stabil_kaynak.read_bytes()).hexdigest()
+        beklenen_sha = "649896d2ba5860e7c1637e8e7aaae79f8b4574d6de331de7eb53e93f163e6a5e"
+        if stabil_sha == beklenen_sha:
+            satir(OK, "Stabil sertifikalı kaynak doğrulandı (domain_engines/05_stabil.txt)")
+        else:
+            satir(FAIL, "domain_engines/05_stabil.txt SHA256 uyuşmuyor",
+                  f"beklenen {beklenen_sha[:12]}…, bulunan {stabil_sha[:12]}…")
+    else:
+        satir(FAIL, "domain_engines/05_stabil.txt bulunamadı",
+              "Stabil destek motoru sertifikalı kaynak dosyası olmadan çalışmamalıdır.")
+
 
 def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
     bolum("2) ORTAM DEĞİŞKENLERİ (Render → Environment)")
@@ -263,6 +277,8 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("GRAFIK_MUM_MAKS", False, "İsteğe bağlı: kadraj tavanı — kaç mum çizilsin "
                                    "(varsayılan TF matrisi: 1s 80 · 2s 74 · 4s 68 · 1g 62)"),
         ("GRAFIK_OLAY_MAKS", False, "İsteğe bağlı: kareye çizilen onaylı BOS/CHoCH sayısı (varsayılan 6)"),
+        ("NIGHTLY_CANDLE_REFRESH_HOUR", False, "Gece Supabase-kayıtsız mum temizliği saati (varsayılan 2 -> 02:00 TSİ)"),
+        ("STABIL_GERI_ALIM_ALARM", False, "Ayrı 4S Stabil güçlü geri alım alarmları (varsayılan 1 = açık)"),
     ]
 
     degerler = {}

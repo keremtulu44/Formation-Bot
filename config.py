@@ -808,9 +808,9 @@ STABIL_ALARM_DM = os.getenv("STABIL_ALARM_DM", "1").strip().lower() in {
 STABIL_ALARM_PUBLIC = os.getenv("STABIL_ALARM_PUBLIC", "1").strip().lower() in {
     "1", "true", "yes", "on", "acik", "açık",
 }
-STABIL_ALARM_COOLDOWN_BAR = max(1, int(os.getenv("STABIL_ALARM_COOLDOWN_BAR", "6")))
-STABIL_ALARM_TEKIL_UST_SINIR = max(1, int(os.getenv("STABIL_ALARM_TEKIL_UST_SINIR", "3")))
-STABIL_ALARM_TAZE_DK = max(30, int(os.getenv("STABIL_ALARM_TAZE_DK", "390")))
+STABIL_ALARM_COOLDOWN_BAR = _env_int("STABIL_ALARM_COOLDOWN_BAR", 6, minimum=1)
+STABIL_ALARM_TEKIL_UST_SINIR = _env_int("STABIL_ALARM_TEKIL_UST_SINIR", 3, minimum=1)
+STABIL_ALARM_TAZE_DK = _env_int("STABIL_ALARM_TAZE_DK", 390, minimum=30)
 
 
 

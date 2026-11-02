@@ -24,11 +24,11 @@ else
     echo "[3/7] Bot dizini zaten var: $BOT_DIR"
 fi
 
-# 4. Log dizini
-echo "[4/7] Log dizini oluşturuluyor..."
-sudo mkdir -p /var/log/bist-bot
-sudo chown $USER:$USER /var/log/bist-bot
-sudo chmod 755 /var/log/bist-bot
+# 4. Log ve kalıcı veri dizini
+echo "[4/7] Log ve veri dizinleri oluşturuluyor..."
+sudo mkdir -p /var/log/bist-bot /var/lib/formation-bot/data
+sudo chown $USER:$USER /var/log/bist-bot /var/lib/formation-bot/data
+sudo chmod 755 /var/log/bist-bot /var/lib/formation-bot/data
 
 # 5. Python venv
 echo "[5/7] Python venv oluşturuluyor..."

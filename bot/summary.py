@@ -749,7 +749,8 @@ def morning_preload(deque_manager, pacer):
                 if taze is not None and len(taze) > 0:
                     deque_manager.append_dataframe(stock, taze)
                     _pkg.logger.debug(f"{stock}: preload {len(taze)} bar")
-                time.sleep(1)
+                from bot.app import _shutdown_bekle
+                _shutdown_bekle(1.0)
             except Exception as e:
                 _pkg.logger.debug(f"{stock} preload hatası: {e}")
         _pkg.logger.info("=== SABAH ÖN-YÜKLEME BİTTİ ===")
@@ -861,9 +862,8 @@ def gece_mum_temizligi_ve_yenileme(deque_manager, pacer=None, *, stocks=None) ->
 
         if df_1d is None and not _pkg._shutdown_requested:
             try:
-                wait_fn = getattr(aktif_pacer, "wait_retry", None)
-                if callable(wait_fn):
-                    wait_fn(f"{stock} gece 1D retry")
+                from bot.app import _shutdown_bekle
+                _shutdown_bekle(2.0)
                 with aktif_pacer.request(f"{stock} gece 1D retry"):
                     if not _pkg._shutdown_requested:
                         df_1d = _pkg.fetch_yfinance_1d(stock)
@@ -907,10 +907,6 @@ def gece_mum_temizligi_ve_yenileme(deque_manager, pacer=None, *, stocks=None) ->
 
     for stock in yenilenen_semboller:
         reset_incremental_domain_states(stock)
-        try:
-            _pkg._domain_runner_cache.pop(stock, None)
-        except Exception:
-            pass
 
     sonraki_denetim = deque_manager.denetle_mum_butunlugu(hedef_semboller)
     _pkg.logger.info(

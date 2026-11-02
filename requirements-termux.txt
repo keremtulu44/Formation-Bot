@@ -8,9 +8,12 @@
 
 # Sadece saf python paketler - build gerektirmeyen:
 yfinance
+exchange-calendars
 pytz
 python-dotenv
+python-dateutil
 requests
+tabulate
 
 # borsapy TERIMUX'TA KURULMAZ! Sebep:
 # borsapy -> openai -> jiter -> maturin -> rustc

@@ -99,8 +99,9 @@ def _gunluk_cerceve_onar_ve_olcekle(
                         if yedek_bar is not None:
                             for alan in ("open", "high", "low", "close"):
                                 calis.iloc[pos, calis.columns.get_loc(alan)] = float(yedek_bar[alan])
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.getLogger("grafik").debug("%s 1D makro yedek bar onarımı atlandı: %s", sembol, exc)
 
     calis, _ = gunluk_bolunme_normalize_et(calis)
     return calis
@@ -188,8 +189,9 @@ def _stabil_baglami_hazirla(
             arsiv_1d = arsiv.tf_frame(anahtar, "1d")
             if arsiv_1d is not None and len(arsiv_1d) > 0:
                 gunluk = tamamlanmis_mumlar(arsiv_1d.copy(deep=True), "1d", now=kesim)
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.getLogger("grafik").debug("%s arşiv 1D yedek okuma atlandı: %s", anahtar, exc)
 
     saatlik = aktif_yonetici.to_dataframe(anahtar)
     if (gunluk is None or len(gunluk) < 2) and saatlik is not None and len(saatlik) >= 5:
@@ -285,8 +287,9 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
                 as_of_close=stabil_kesim,
                 isolated=True,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.getLogger("grafik").debug("%s %s izole Stabil hesaplaması atlandı: %s", temiz_ad, tf, exc)
     goruntu = grafik.anlik_goruntu(formasyon, tf, cerceve, sembol=str(hisse).upper(),
                                    alarm_turu=alarm_turu, sonuclar=sonuclar,
                                    kare_mum=mum, etiket_detay=etiket_detay, simdi=simdi,

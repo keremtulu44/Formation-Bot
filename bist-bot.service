@@ -12,6 +12,7 @@ EnvironmentFile=/etc/bist-bot.env
 ExecStart=/opt/bist-bot/venv/bin/python3 /opt/bist-bot/main.py
 Restart=always
 RestartSec=30
+TimeoutStopSec=45
 # Logları journal'e yaz, Python FileHandler kendi dosyasına yazsın - çift yazımı önle
 StandardOutput=journal
 StandardError=journal

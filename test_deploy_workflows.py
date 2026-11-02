@@ -147,3 +147,55 @@ def test_ci_uses_stable_runner_and_node24_actions():
     for action in ("checkout", "setup-python"):
         version = re.search(rf"uses:\s*actions/{action}@v(\d+)", workflow)
         assert version and int(version.group(1)) >= 6
+
+
+@pytest.mark.parametrize("now,nightly_flag,expected", [
+    ("0205", "", "true"),
+    ("0220", "", "true"),
+    ("0310", "", "false"),
+    ("0205", "false", "false"),
+])
+def test_keepalive_default_wakes_for_nightly_0200_refresh(tmp_path, now, nightly_flag, expected):
+    """Varsayılan keep-alive penceresi 02:00-02:20 TSİ mum temizliği için servisi uyandırır."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    date = bin_dir / "date"
+    date.write_text(f'#!/bin/bash\ncase "$1" in +%H%M) echo {now};; +%u) echo 3;; *) echo test;; esac\n')
+    date.chmod(0o755)
+    body = script(".github/workflows/keepalive.yml", "- name: Zaman penceresi")
+    body = body.replace("${{ github.event_name }}", "schedule").replace("${{ github.event.inputs.force }}", "false")
+    result = run_sh(
+        tmp_path,
+        body,
+        PATH=f"{bin_dir}:{os.environ['PATH']}",
+        WINDOW_START="",
+        WINDOW_END="",
+        ALWAYS="",
+        WEEKDAYS_ONLY="",
+        NIGHTLY_REFRESH=nightly_flag,
+    )
+    assert result.returncode == 0, result.stderr
+    assert f"in_window={expected}" in (tmp_path / "output").read_text()
+
+
+def test_config_empty_stabil_env_vars_do_not_crash_boot():
+    """Render'da boş bırakılan STABIL_* tamsayı env'leri import sırasında çökmemeli."""
+    import sys
+
+    env = {
+        **os.environ,
+        "STABIL_ALARM_COOLDOWN_BAR": "",
+        "STABIL_ALARM_TEKIL_UST_SINIR": "",
+        "STABIL_ALARM_TAZE_DK": "",
+        "NIGHTLY_CANDLE_REFRESH_HOUR": "",
+        "NIGHTLY_CANDLE_REFRESH_MINUTE": "",
+    }
+    res = subprocess.run(
+        [sys.executable, "-c", "import config; assert config.STABIL_ALARM_COOLDOWN_BAR == 6"],
+        cwd=str(ROOT),
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=15,
+    )
+    assert res.returncode == 0, res.stderr

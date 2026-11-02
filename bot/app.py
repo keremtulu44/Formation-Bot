@@ -293,6 +293,8 @@ def main_loop():
             f"{len(ilk_hatalar)} çözülemeyen"
         )
     for stock in cache_eksik_hisseler:
+        if _pkg._shutdown_requested:
+            break
         taze = ilk_veriler.get(stock)
         if taze is not None:
             deque_manager.append_dataframe(stock, taze)
@@ -305,6 +307,7 @@ def main_loop():
             )
 
     # 1D derin veri de eksikse aynı pacing kuyruğundan geçir.
+    ilk_gunluk_cekilen = 0
     for stock in _pkg.ACTIVE_STOCKS:
         if _pkg._shutdown_requested:
             break
@@ -317,20 +320,31 @@ def main_loop():
             if taze_gunluk is not None and len(taze_gunluk) >= 30:
                 deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
                 deque_manager.save_gunluk_to_disk(stock)
+                ilk_gunluk_cekilen += 1
                 _pkg.logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
             else:
                 _pkg.logger.warning(f"{stock}: ilk günlük veri çekilemedi - resample kullanılacak")
-    
+
+    # Soğuk başlangıçta tüm evren taze çekildiyse aynı sabah ikinci kez tam çekim yapma.
+    if (
+        not _pkg._shutdown_requested
+        and len(_pkg.ACTIVE_STOCKS) > 0
+        and len(ilk_veriler) >= max(1, int(len(_pkg.ACTIVE_STOCKS) * 0.8))
+        and ilk_gunluk_cekilen >= max(1, int(len(_pkg.ACTIVE_STOCKS) * 0.8))
+    ):
+        _pkg._gece_mum_yenileme_son_gun_kaydet(_pkg.datetime.now(ISTANBUL_TZ).date())
+
     # Haftalık karne defteri: açılışta bir kez hazırlanır (uzak yedek varsa
     # Supabase'den birleştirilir). Böylece tarama döngüsü içinde ağ beklemesi
     # olmaz; Supabase yoksa yalnız yerel dosya okunur.
-    try:
-        kd = _pkg._karne_al()
-        kd.buda()
-        _pkg._karne_uzak_kaydet(zorla=True)
-        _pkg.logger.info("Karne defteri hazır: %d kayıt (%s)", kd.boyut(), kd.dosya)
-    except Exception as e:
-        _pkg.logger.warning(f"Karne defteri hazırlanamadı (devam ediliyor): {e}")
+    if not _pkg._shutdown_requested:
+        try:
+            kd = _pkg._karne_al()
+            kd.buda()
+            _pkg._karne_uzak_kaydet(zorla=True)
+            _pkg.logger.info("Karne defteri hazır: %d kayıt (%s)", kd.boyut(), kd.dosya)
+        except Exception as e:
+            _pkg.logger.warning(f"Karne defteri hazırlanamadı (devam ediliyor): {e}")
 
     # Aynı mum iki kez taranmasın (drift koruması). Restart'ta None -> bir sonraki
     # kapanışta tazelenir, son mum gerekiyorsa bir kez daha taranır (zararsız).
@@ -691,7 +705,11 @@ def main_loop():
                 gece_saat = int(getattr(_pkg, "NIGHTLY_CANDLE_REFRESH_HOUR", NIGHTLY_CANDLE_REFRESH_HOUR))
                 gece_dakika = int(getattr(_pkg, "NIGHTLY_CANDLE_REFRESH_MINUTE", NIGHTLY_CANDLE_REFRESH_MINUTE))
                 gece_hedef = now.replace(hour=gece_saat, minute=gece_dakika, second=0, microsecond=0)
-                if now >= gece_hedef and (now - gece_hedef).total_seconds() < 3600:
+                gece_penceresi_acik = now >= gece_hedef and (
+                    (now - gece_hedef).total_seconds() < 3600
+                    or (gece_saat < 9 and now.time() < dt_time(9, 30))
+                )
+                if gece_penceresi_acik:
                     if last_nightly_refresh_date != now.date() and (time.time() - son_gece_yenileme_deneme_ts >= 600):
                         son_gece_yenileme_deneme_ts = time.time()
                         _pkg._scan_job_active.set()

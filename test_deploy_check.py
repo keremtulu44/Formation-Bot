@@ -479,3 +479,25 @@ def test_telegram_getme_bad_json_is_reported_not_raised(monkeypatch, capsys):
     D.kontrol_telegram("123:test", "12345", False)
     assert "getMe" in capsys.readouterr().out
     assert D._sayac[D.FAIL] == 1
+
+
+def test_stabil_alarm_state_data_dir_altina_yazilir_var_log_degil(monkeypatch, tmp_path):
+    """Render konteynerinde /var/log yazılamaz; Stabil alarm durumu DATA_DIR altında olmalı."""
+    import config
+    import bot.stabil_service as st_srv
+
+    monkeypatch.setattr(config, "LOG_DIR", "/var/log/bist-bot")
+    monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
+    hedef = st_srv._state_file_path()
+    assert hedef == str(tmp_path / "stabil_alarm_state.json")
+    st_srv._save_alarm_state({"version": 1, "symbols": {"AKBNK": {"last_bar_open": "2026-11-02T10:00:00+03:00"}}})
+    okunan = st_srv._load_alarm_state()
+    assert "AKBNK" in okunan["symbols"]
+
+
+def test_kontrol_repo_stabil_kaynagini_dogrular(monkeypatch, capsys):
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    D.kontrol_repo()
+    out = capsys.readouterr().out
+    assert "05_stabil.txt" in out
+    assert D._sayac[D.FAIL] == 0

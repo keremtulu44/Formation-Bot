@@ -55,8 +55,10 @@ class StabilAlarmCandidate:
 
 
 def _state_file_path() -> str:
-    log_dir = str(getattr(config, "LOG_DIR", "") or getattr(config, "LOCAL_LOG_DIR", "logs") or "logs")
-    return os.path.join(log_dir, "stabil_alarm_state.json")
+    from state.paths import stabil_alarm_state_yolu
+
+    data_dir = str(getattr(config, "DATA_DIR", "") or "").strip() or None
+    return stabil_alarm_state_yolu(data_dir)
 
 
 def _load_alarm_state(path: str | None = None) -> dict[str, Any]:
