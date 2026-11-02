@@ -37,6 +37,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     HEARTBEAT_MIN_ARALIK_SN, HEARTBEAT_UZAK_ARALIK_SN,
                     PUBLIC_MIN_QUALITY,
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE, EVREN_BUYUME_UYARI_ESIGI,
+                    NIGHTLY_CANDLE_REFRESH_HOUR, NIGHTLY_CANDLE_REFRESH_MINUTE,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL,
                     TERMINAL_TAZE_BAR,
                     DM_MIN_DEVLAMLILIK)
@@ -292,6 +293,8 @@ def main_loop():
             f"{len(ilk_hatalar)} çözülemeyen"
         )
     for stock in cache_eksik_hisseler:
+        if _pkg._shutdown_requested:
+            break
         taze = ilk_veriler.get(stock)
         if taze is not None:
             deque_manager.append_dataframe(stock, taze)
@@ -304,6 +307,7 @@ def main_loop():
             )
 
     # 1D derin veri de eksikse aynı pacing kuyruğundan geçir.
+    ilk_gunluk_cekilen = 0
     for stock in _pkg.ACTIVE_STOCKS:
         if _pkg._shutdown_requested:
             break
@@ -316,20 +320,31 @@ def main_loop():
             if taze_gunluk is not None and len(taze_gunluk) >= 30:
                 deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
                 deque_manager.save_gunluk_to_disk(stock)
+                ilk_gunluk_cekilen += 1
                 _pkg.logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
             else:
                 _pkg.logger.warning(f"{stock}: ilk günlük veri çekilemedi - resample kullanılacak")
-    
+
+    # Soğuk başlangıçta tüm evren taze çekildiyse aynı sabah ikinci kez tam çekim yapma.
+    if (
+        not _pkg._shutdown_requested
+        and len(_pkg.ACTIVE_STOCKS) > 0
+        and len(ilk_veriler) >= max(1, int(len(_pkg.ACTIVE_STOCKS) * 0.8))
+        and ilk_gunluk_cekilen >= max(1, int(len(_pkg.ACTIVE_STOCKS) * 0.8))
+    ):
+        _pkg._gece_mum_yenileme_son_gun_kaydet(_pkg.datetime.now(ISTANBUL_TZ).date())
+
     # Haftalık karne defteri: açılışta bir kez hazırlanır (uzak yedek varsa
     # Supabase'den birleştirilir). Böylece tarama döngüsü içinde ağ beklemesi
     # olmaz; Supabase yoksa yalnız yerel dosya okunur.
-    try:
-        kd = _pkg._karne_al()
-        kd.buda()
-        _pkg._karne_uzak_kaydet(zorla=True)
-        _pkg.logger.info("Karne defteri hazır: %d kayıt (%s)", kd.boyut(), kd.dosya)
-    except Exception as e:
-        _pkg.logger.warning(f"Karne defteri hazırlanamadı (devam ediliyor): {e}")
+    if not _pkg._shutdown_requested:
+        try:
+            kd = _pkg._karne_al()
+            kd.buda()
+            _pkg._karne_uzak_kaydet(zorla=True)
+            _pkg.logger.info("Karne defteri hazır: %d kayıt (%s)", kd.boyut(), kd.dosya)
+        except Exception as e:
+            _pkg.logger.warning(f"Karne defteri hazırlanamadı (devam ediliyor): {e}")
 
     # Aynı mum iki kez taranmasın (drift koruması). Restart'ta None -> bir sonraki
     # kapanışta tazelenir, son mum gerekiyorsa bir kez daha taranır (zararsız).
@@ -355,6 +370,8 @@ def main_loop():
         last_post_close_analysis_date = None
     last_maintenance_date = None
     last_preload_date = None
+    last_nightly_refresh_date = _pkg._gece_mum_yenileme_son_gun_oku()
+    son_gece_yenileme_deneme_ts = 0.0
     son_kuyruk_bosaltma = 0.0  # engellenen acil olaylar bu aralıkla yeniden denenir
     # Restart gün sürekliliği: bugün zaten sayaç biriktirilmişse geri yükle
     # (aksi halde 18:45 kanal özeti günün gerçek toplamını eksik gösterir).
@@ -683,6 +700,43 @@ def main_loop():
             except Exception as e:
                 _pkg.logger.error("Gün sonu analizi zamanlayıcısı hata verdi: %s", e, exc_info=True)
 
+            # --- GECE MUM TEMİZLİĞİ VE YENİLEME (02:00 TSİ, Supabase-kayıtsız) ---
+            try:
+                gece_saat = int(getattr(_pkg, "NIGHTLY_CANDLE_REFRESH_HOUR", NIGHTLY_CANDLE_REFRESH_HOUR))
+                gece_dakika = int(getattr(_pkg, "NIGHTLY_CANDLE_REFRESH_MINUTE", NIGHTLY_CANDLE_REFRESH_MINUTE))
+                gece_hedef = now.replace(hour=gece_saat, minute=gece_dakika, second=0, microsecond=0)
+                gece_penceresi_acik = now >= gece_hedef and (
+                    (now - gece_hedef).total_seconds() < 3600
+                    or (gece_saat < 9 and now.time() < dt_time(9, 30))
+                )
+                if gece_penceresi_acik:
+                    if last_nightly_refresh_date != now.date() and (time.time() - son_gece_yenileme_deneme_ts >= 600):
+                        son_gece_yenileme_deneme_ts = time.time()
+                        _pkg._scan_job_active.set()
+                        try:
+                            gece_sonuc = _pkg.gece_mum_temizligi_ve_yenileme(deque_manager, pacer)
+                        finally:
+                            _pkg._scan_job_active.clear()
+                        kesildi = bool((gece_sonuc or {}).get("kapanis_ile_kesildi"))
+                        toplam_hedef = int((gece_sonuc or {}).get("toplam_sembol", 0))
+                        yenilenen_toplam = int((gece_sonuc or {}).get("yenilenen_1h", 0)) + int(
+                            (gece_sonuc or {}).get("yenilenen_1d", 0)
+                        )
+                        if not kesildi and (toplam_hedef == 0 or yenilenen_toplam > 0):
+                            last_nightly_refresh_date = now.date()
+                            _pkg._gece_mum_yenileme_son_gun_kaydet(now.date())
+                        else:
+                            _pkg.logger.warning(
+                                "Gece mum temizliği yarım kaldı veya tüm çekimler başarısız oldu "
+                                "(kesildi=%s, yenilenen=%d/%d); 10 dk sonra tekrar denenecek",
+                                kesildi,
+                                yenilenen_toplam,
+                                toplam_hedef,
+                            )
+                        now = _pkg.datetime.now(ISTANBUL_TZ)
+            except Exception as e:
+                _pkg.logger.error(f"Gece mum temizliği hatası: {e}", exc_info=True)
+
             # --- SABAH PRE-LOAD (08:30) ---
             try:
                 if now.hour == MORNING_PRELOAD_HOUR and now.minute >= MORNING_PRELOAD_MINUTE and now.minute < MORNING_PRELOAD_MINUTE + 10:
@@ -765,6 +819,11 @@ def main_loop():
                         second=0, microsecond=0,
                     )
                     sleep_time = min(sleep_time, max(1.0, (rapor_anina - now).total_seconds()))
+                gece_saat = int(getattr(_pkg, "NIGHTLY_CANDLE_REFRESH_HOUR", NIGHTLY_CANDLE_REFRESH_HOUR))
+                gece_dakika = int(getattr(_pkg, "NIGHTLY_CANDLE_REFRESH_MINUTE", NIGHTLY_CANDLE_REFRESH_MINUTE))
+                gece_hedef = now.replace(hour=gece_saat, minute=gece_dakika, second=0, microsecond=0)
+                if now < gece_hedef and last_nightly_refresh_date != now.date():
+                    sleep_time = min(sleep_time, max(1.0, (gece_hedef - now).total_seconds()))
                 # TABAN UYKU (regresyon koruması): tatil/yarım gün gibi "pencere
                 # kapalı ama is_bist_open True" durumlarında sleep_time 0'a düşüp
                 # ana döngü boş dönüyordu (ölçüm: ~21.500 log satırı/sn; tatil

@@ -31,6 +31,11 @@ bot_data/karne_defteri.json
 # Phase 1: kalici formation kimligi anchor'lari (runtime durum; DATA_DIR'de yazilir)
 bot_data/formation_identity.json
 bot_data/formation_identity.json.tmp
+# Gece 02:00 mum temizliği damgası ve 4S Stabil alarm durumu (runtime durum; DATA_DIR'de yazılır)
+bot_data/_gece_mum_yenileme.json
+bot_data/_gece_mum_yenileme.json.tmp
+bot_data/stabil_alarm_state.json
+bot_data/stabil_alarm_state.json.tmp
 
 # OS
 .DS_Store

@@ -388,6 +388,22 @@ def _domain_results_for_notification(stock, all_timeframes, now, cache):
                 _pkg.logger.warning("Domain runner %s/%s beklenmeyen sonuç döndürdü", stock, timeframe)
         except Exception as exc:  # noqa: BLE001 - domain hatası formation uyarısını bastırmasın
             _pkg.logger.warning("Domain runner hatası %s/%s: %s", stock, timeframe, exc)
+    if results and frames.get("1d") is not None:
+        try:
+            from domain_engines.runner import run_stabil_symbol_bundle
+
+            stabil_bundle = run_stabil_symbol_bundle(
+                stock,
+                {tf: frames[tf] for tf in results if tf in frames},
+                daily_frame=frames.get("1d"),
+                h4_frame=frames.get("4h"),
+                as_of_close=now,
+            )
+            for tf, stabil_res in stabil_bundle.items():
+                if tf in results and isinstance(results[tf], dict):
+                    results[tf]["stabil"] = stabil_res
+        except Exception as exc:  # noqa: BLE001 - Stabil hatası diğer domain'leri ve alarmı engellemez
+            _pkg.logger.warning("Stabil domain hatası %s: %s", stock, exc)
     cache[stock] = results
     return results
 
@@ -471,6 +487,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     # Teyitli bir olay aynı sembolde birden çok TF'de çıkarsa, alan çıktıları
     # bu scan turunda taze biçimde yalnızca bir kez hesaplanır.
     domain_results_by_stock = {}
+    stabil_adaylari = []
     _pkg._live_state.begin_scan(
         simdiki_zaman,
         manuel=manuel,
@@ -636,6 +653,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     _pkg.logger.warning(f"{stock}: günlük derin veri çekilemedi - resample kullanılacak")
             df_gunluk = deque_manager.to_gunluk_dataframe(stock)
             if df_gunluk is not None and len(df_gunluk) >= 30:
+                from data import gunluk_bolunme_normalize_et
+                df_gunluk, _ = gunluk_bolunme_normalize_et(df_gunluk)
                 all_tfs['1d'] = df_gunluk
             
             # Her TF için: yarım (devam eden) mumu çıkar, TAMAMLANMIŞ mumları besle
@@ -1243,6 +1262,22 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     )
                     _pkg._live_state.record_formation(formasyon_kaydi)
 
+            if send_alerts and _pkg._alarm_izni_var(stock):
+                try:
+                    from bot.stabil_service import evaluate_stabil_4h_candidate
+
+                    st_cand = evaluate_stabil_4h_candidate(
+                        stock,
+                        all_tfs,
+                        simdiki_zaman,
+                        domain_results_by_stock=domain_results_by_stock,
+                        bar_metni_fn=_mum_bilgisi,
+                    )
+                    if st_cand is not None:
+                        stabil_adaylari.append(st_cand)
+                except Exception as st_err:  # noqa: BLE001 - Stabil ayrı sinyali ana taramayı düşürmez
+                    _pkg.logger.warning("%s Stabil 4s aday kontrolü hatası: %s", stock, st_err)
+
             _pkg.daily_stats['stocks_scanned'] += 1
             tur_taranan += 1
             
@@ -1367,6 +1402,22 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     # gider. DM'den bağımsızdır; manuel taramalarda (send_alerts=False) kuyruk
     # zaten boştur.
     _pkg._public_turu_kapat(notifier)
+    if send_alerts and stabil_adaylari:
+        try:
+            from bot.stabil_service import dispatch_stabil_scan_candidates
+
+            st_ozet = dispatch_stabil_scan_candidates(stabil_adaylari, notifier)
+            _pkg.daily_stats['stabil_alerts_sent'] = int(
+                _pkg.daily_stats.get('stabil_alerts_sent') or 0
+            ) + int(st_ozet.get('tekil_gonderilen') or 0) + int(st_ozet.get('toplu_ozet') or 0)
+            _pkg.logger.info(
+                "🟢 Stabil 4s güçlü geri alım: %d aday · %d tekil kart · %d toplu özet",
+                int(st_ozet.get('aday') or 0),
+                int(st_ozet.get('tekil_gonderilen') or 0),
+                int(st_ozet.get('toplu_ozet') or 0),
+            )
+        except Exception as st_disp_err:  # noqa: BLE001
+            _pkg.logger.warning("Stabil 4s bildirim gönderim hatası: %s", st_disp_err)
     _pkg._grafikleri_tur_sonunda(notifier)
     # Tarama bitti: heartbeat kesin yazılsın (force), böylece per-hisse
     # throttle'a takılan son durum dışarıdan anında görünür.

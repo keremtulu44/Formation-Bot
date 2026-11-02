@@ -54,6 +54,59 @@ class VeriYok(Exception):
     """
 
 
+def _gunluk_cerceve_onar_ve_olcekle(
+    df_1g: Any,
+    df_1s: Any = None,
+    *,
+    sembol: str = "",
+):
+    """1D çerçevesindeki vadeli uzlaşma düz çizgilerini onarır ve bölünmeleri normalize eder."""
+    import pandas as pd
+    from config import ISTANBUL_TZ, sembol_turu
+    from data import gunluk_bolunme_normalize_et, resample_ohlcv
+
+    if df_1g is None or len(df_1g) == 0:
+        return df_1g
+
+    calis = df_1g.copy(deep=True)
+    if (
+        df_1s is not None
+        and len(df_1s) >= 5
+        and sembol_turu(sembol) == "makro"
+        and isinstance(calis.index, pd.DatetimeIndex)
+    ):
+        try:
+            r1d = resample_ohlcv(df_1s.copy(deep=True), "1d")
+            if r1d is not None and len(r1d) > 0:
+                idx_1g = (
+                    calis.index.tz_localize(ISTANBUL_TZ)
+                    if calis.index.tz is None
+                    else calis.index.tz_convert(ISTANBUL_TZ)
+                )
+                idx_r = (
+                    r1d.index.tz_localize(ISTANBUL_TZ)
+                    if r1d.index.tz is None
+                    else r1d.index.tz_convert(ISTANBUL_TZ)
+                )
+                gun_haritasi = {
+                    ts.date(): r1d.iloc[pos]
+                    for pos, ts in enumerate(idx_r)
+                    if float(r1d["high"].iloc[pos] - r1d["low"].iloc[pos]) > 1e-9
+                }
+                for pos, ts in enumerate(idx_1g):
+                    if abs(float(calis["high"].iloc[pos] - calis["low"].iloc[pos])) <= 1e-9:
+                        yedek_bar = gun_haritasi.get(ts.date())
+                        if yedek_bar is not None:
+                            for alan in ("open", "high", "low", "close"):
+                                calis.iloc[pos, calis.columns.get_loc(alan)] = float(yedek_bar[alan])
+        except Exception as exc:
+            import logging
+            logging.getLogger("grafik").debug("%s 1D makro yedek bar onarımı atlandı: %s", sembol, exc)
+
+    calis, _ = gunluk_bolunme_normalize_et(calis)
+    return calis
+
+
 def cerceve_getir(hisse: str, tf: str, veri_dizin: str, demo: bool = False, *,
                   yonetici=None):
     """Önbellekten (veya demo) çerçeve: `(df, kaynak)`; yoksa `VeriYok` kaldırır.
@@ -62,7 +115,7 @@ def cerceve_getir(hisse: str, tf: str, veri_dizin: str, demo: bool = False, *,
     önbelleğinden `resample_ohlcv` ile üretilir — ölçüm: 360 × 1s → ~44 bar,
     yani bu depo için günlük kadraj YÜZEYSEL kalır (§18.6).
     """
-    from data import StockDequeManager, resample_ohlcv
+    from data import StockDequeManager, gunluk_bolunme_normalize_et, resample_ohlcv
 
     # Demo bilinçli ayrı yol: gerçek cache'i ne okur ne yazar.
     if demo:
@@ -76,11 +129,12 @@ def cerceve_getir(hisse: str, tf: str, veri_dizin: str, demo: bool = False, *,
                 if anahtar in bellek else yonetici._okuma_yolu(dosya))
 
     saatlik_kaynak, gunluk_kaynak = kaynak(), kaynak(True)
+    df_1s_ham = yonetici.to_dataframe(anahtar)
     if tf == "1d":
         df_1g = yonetici.to_gunluk_dataframe(anahtar)
         if df_1g is not None and len(df_1g) > 1:
-            return df_1g.copy(deep=True), gunluk_kaynak
-    df_1s = yonetici.to_dataframe(anahtar)
+            return _gunluk_cerceve_onar_ve_olcekle(df_1g, df_1s_ham, sembol=anahtar), gunluk_kaynak
+    df_1s = df_1s_ham
     if df_1s is None or len(df_1s) < 5:
         raise VeriYok(f"veri yok: {saatlik_kaynak} okunamadı veya yetersiz; "
                       "grafik için güvenli bağımsız canlı fetch yolu yok. "
@@ -88,7 +142,10 @@ def cerceve_getir(hisse: str, tf: str, veri_dizin: str, demo: bool = False, *,
     df_1s = df_1s.copy(deep=True)
     if tf == "1h":
         return df_1s, saatlik_kaynak
-    return resample_ohlcv(df_1s, tf), f"resample({tf}) ← {saatlik_kaynak}"
+    donusen = resample_ohlcv(df_1s, tf)
+    if tf == "1d" and donusen is not None and len(donusen) > 1:
+        donusen, _ = gunluk_bolunme_normalize_et(donusen)
+    return donusen, f"resample({tf}) ← {saatlik_kaynak}"
 
 
 def _cerceve_yukle(hisse: str, tf: str, veri_dizin: str, demo: bool):
@@ -97,6 +154,59 @@ def _cerceve_yukle(hisse: str, tf: str, veri_dizin: str, demo: bool):
         return cerceve_getir(hisse, tf, veri_dizin, demo)
     except VeriYok as hata:
         raise SystemExit(str(hata))
+
+
+def _stabil_baglami_hazirla(
+    anahtar: str,
+    tf: str,
+    cerceve: Any,
+    veri_dizin: str,
+    *,
+    demo: bool = False,
+    yonetici=None,
+    simdi=None,
+):
+    """Stabil için derin 1d/4h girdilerini nedensel kapanış sınırında hazırlar (salt-okunur)."""
+    from data import StockDequeManager, mum_kapanis_ani, resample_ohlcv, tamamlanmis_mumlar
+
+    if demo:
+        kesim = mum_kapanis_ani(cerceve.index[-1], tf) if len(cerceve) else simdi
+        gunluk = cerceve.copy(deep=True) if tf == "1d" else _demo_cerceve(500)
+        h4 = cerceve.copy(deep=True) if tf == "4h" else None
+        return gunluk, h4, kesim
+
+    kesim = mum_kapanis_ani(cerceve.index[-1], tf) if len(cerceve) else simdi
+    aktif_yonetici = yonetici if yonetici is not None else StockDequeManager(data_dir=veri_dizin)
+
+    gunluk = aktif_yonetici.to_gunluk_dataframe(anahtar)
+    if gunluk is not None and len(gunluk) > 0:
+        gunluk = tamamlanmis_mumlar(gunluk.copy(deep=True), "1d", now=kesim)
+    varsayilan_veri_dizini = Path(veri_dizin).resolve() == Path(_veri_dizini(None)).resolve()
+    if (gunluk is None or len(gunluk) < 30) and varsayilan_veri_dizini:
+        try:
+            from research import arsiv
+
+            arsiv_1d = arsiv.tf_frame(anahtar, "1d")
+            if arsiv_1d is not None and len(arsiv_1d) > 0:
+                gunluk = tamamlanmis_mumlar(arsiv_1d.copy(deep=True), "1d", now=kesim)
+        except Exception as exc:
+            import logging
+            logging.getLogger("grafik").debug("%s arşiv 1D yedek okuma atlandı: %s", anahtar, exc)
+
+    saatlik = aktif_yonetici.to_dataframe(anahtar)
+    if (gunluk is None or len(gunluk) < 2) and saatlik is not None and len(saatlik) >= 5:
+        gunluk = tamamlanmis_mumlar(resample_ohlcv(saatlik.copy(deep=True), "1d"), "1d", now=kesim)
+    if gunluk is not None and len(gunluk) > 1:
+        gunluk = _gunluk_cerceve_onar_ve_olcekle(gunluk, saatlik, sembol=anahtar)
+
+    if tf == "4h":
+        h4 = cerceve.copy(deep=True)
+    elif saatlik is not None and len(saatlik) >= 5:
+        h4 = tamamlanmis_mumlar(resample_ohlcv(saatlik.copy(deep=True), "4h"), "4h", now=kesim)
+    else:
+        h4 = None
+
+    return gunluk, h4, kesim
 
 
 def _cikti_yolu(cikti: str | None, hisse: str, tf: str, tfler: tuple) -> str:
@@ -160,10 +270,26 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
     if zone:
         if asama:
             asama("seçilen TF domain motorları")
-        from domain_engines.runner import run_domain_engines
+        from domain_engines.runner import run_domain_engines, run_stabil_domain
 
-        sonuclar = run_domain_engines(str(hisse).upper().replace(".IS", ""), tf,
-                                       cerceve.copy(deep=True))
+        temiz_ad = str(hisse).upper().replace(".IS", "")
+        sonuclar = run_domain_engines(temiz_ad, tf, cerceve.copy(deep=True))
+        try:
+            stabil_gunluk, stabil_h4, stabil_kesim = _stabil_baglami_hazirla(
+                temiz_ad, tf, cerceve, dizin, demo=demo, yonetici=yonetici, simdi=simdi
+            )
+            sonuclar["stabil"] = run_stabil_domain(
+                temiz_ad,
+                tf,
+                cerceve.copy(deep=True),
+                daily_frame=stabil_gunluk,
+                h4_frame=stabil_h4,
+                as_of_close=stabil_kesim,
+                isolated=True,
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger("grafik").debug("%s %s izole Stabil hesaplaması atlandı: %s", temiz_ad, tf, exc)
     goruntu = grafik.anlik_goruntu(formasyon, tf, cerceve, sembol=str(hisse).upper(),
                                    alarm_turu=alarm_turu, sonuclar=sonuclar,
                                    kare_mum=mum, etiket_detay=etiket_detay, simdi=simdi,

@@ -409,6 +409,48 @@ def _resample_sabit_capali(df: pd.DataFrame, timeframe: str,
     return out
 
 
+def _resample_gunluk_istanbul(
+    df: pd.DataFrame,
+    available_cols: dict,
+) -> pd.DataFrame:
+    """1H -> 1D dönüşümünü İstanbul takvim gününe hizalar ve hayalet düz barları temizler.
+
+    UTC veya farklı saat dilimli girdilerde doğrudan `df.resample('1d')` çağrıldığında
+    gün sınırı UTC gece yarısından (03:00 TSİ) kesiliyor ve 24 saatlik paritelerde
+    gece mumları yanlış güne yazılıyordu. Ayrıca kesintisiz serilerde Cuma kapanışının
+    Cumartesi gece yarısını tek 1H bar geçmesi, Cumartesi günü O≈H≈L≈C olan sahte düz
+    çizgi mum üretiyordu; bu tek barlık hafta sonu sızıntıları ayıklanır.
+    """
+    orijinal_tz = df.index.tz
+    calis = df.tz_convert(ISTANBUL_TZ) if orijinal_tz is not None else df
+    seans_mi = _bist_seans_serisi(calis.index)
+    out = calis.resample("1d").agg(available_cols)
+    bar_sayilari = calis["close"].resample("1d").count() if "close" in calis.columns else None
+    out.dropna(inplace=True)
+    if len(out) > 0 and all(k in out.columns for k in ("open", "high", "low", "close")):
+        hafta_sonu = pd.Series([ts.weekday() >= 5 for ts in out.index], index=out.index, dtype=bool)
+        if not seans_mi and bar_sayilari is not None:
+            sayim = bar_sayilari.reindex(out.index).fillna(0)
+            dar_aralik = (out["high"] - out["low"]).abs() <= np.maximum(out["close"].abs() * 5e-4, 1e-6)
+            hayalet = hafta_sonu & (sayim <= 1) & dar_aralik
+            if bool(hayalet.any()):
+                out = out.loc[~hayalet].copy()
+        elif seans_mi:
+            tatil_veya_hs = pd.Series(
+                [(ts.weekday() >= 5) or (ts.date() in BIST_TATILLER) for ts in out.index],
+                index=out.index,
+                dtype=bool,
+            )
+            duz = (out["high"] - out["low"]).abs() <= 1e-9
+            sifir_v = (out["volume"] <= 0.0) if "volume" in out.columns else True
+            hayalet = tatil_veya_hs & duz & sifir_v
+            if bool(hayalet.any()):
+                out = out.loc[~hayalet].copy()
+    if orijinal_tz is not None and len(out) > 0:
+        out = out.tz_convert(orijinal_tz)
+    return out
+
+
 def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     """
     1H veriyi 2H, 4H, 1D'ye çevir
@@ -454,10 +496,15 @@ def resample_ohlcv(df_1h: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         # seride İstanbul gece yarısı. Çapa pencerenin ilk barından ASLA
         # türetilmez — türetilirse kayan pencere fazı saatten saate döndürür
         # ve bütün 2H/4H tarihi yeniden yazılır (FAZ düzeltmesi, 2026-10-23).
-        if (timeframe in ("2h", "4h")
+        tf_norm = str(timeframe).strip().lower()
+        if (tf_norm in ("2h", "4h")
                 and isinstance(df.index, pd.DatetimeIndex)
                 and len(df.index) > 0):
-            df_resampled = _resample_sabit_capali(df, timeframe, available_cols)
+            df_resampled = _resample_sabit_capali(df, tf_norm, available_cols)
+        elif (tf_norm == "1d"
+                and isinstance(df.index, pd.DatetimeIndex)
+                and len(df.index) > 0):
+            df_resampled = _resample_gunluk_istanbul(df, available_cols)
         else:
             df_resampled = df.resample(timeframe).agg(available_cols)
         

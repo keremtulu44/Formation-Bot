@@ -81,7 +81,17 @@ if __name__ == "__main__":
         # tarama döngüsü BAŞLAMAZ — CI'nın dışa bağımlı olmadan gerçek entrypoint'ı
         # denemesi için tek güvenlik kapısı budur.
         logger.info("Health smoke mode: provider and command loops disabled")
-        while not _shutdown_requested:
-            time.sleep(0.25)
+        try:
+            while not _shutdown_requested:
+                time.sleep(0.25)
+        finally:
+            if _health_server_ref is not None:
+                _health_server_ref.shutdown()
+                _health_server_ref.server_close()
     else:
-        main_loop()
+        try:
+            main_loop()
+        finally:
+            if _health_server_ref is not None:
+                _health_server_ref.shutdown()
+                _health_server_ref.server_close()

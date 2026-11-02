@@ -113,6 +113,7 @@ from data.backfill import (  # noqa: F401
     _ohlcv_kayit_sorunlari,
     _temiz_1d_cache_kayitlari,
     _temiz_1h_cache_kayitlari,
+    gunluk_bolunme_normalize_et,
     ohlcv_girdi_sorunlari,
     sureklilik_sorunlari_bul,
     yuvarlak_orana_yakin_mi,

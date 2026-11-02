@@ -69,7 +69,7 @@ BACKLOG_SINIR_SN = 15 * 60      # açılışta bundan eski mesajlar yok sayılı
 # komutlar (tara/panel) eski veriyle yanlış sonuç üretmesin diye ÇALIŞTIRILMAZ;
 # yalnızca okuma amaçlı komutlar gecikmeli de olsa yanıtlanır — böylece kullanıcı
 # "hiç cevap gelmedi" yerine "bot uyuyordu" bilgisini alır.
-BAYAT_GUVENLI_KOMUTLAR = frozenset({"yardim", "help", "start", "durum"})
+BAYAT_GUVENLI_KOMUTLAR = frozenset({"yardim", "help", "start", "durum", "stabil"})
 
 # Telegram'a "hangi güncelleme türlerini gönder" deriz. `channel_post` BİLİNÇLİ
 # olarak listede: kanal hedefi komut kabul etmez ama kanaldan gelen gönderileri

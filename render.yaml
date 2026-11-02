@@ -108,3 +108,23 @@ services:
         value: "180"
       - key: GRAFIK_OLAY_MAKS
         value: "6"
+      # --- GECE MUM TEMİZLİĞİ VE STABİL 4S SİNYALLERİ ---
+      # Her gece 02:00 TSİ'de aktif evrenin 1H/1D mumlarını Supabase'e yazmadan
+      # yerel bellek/disk üzerinde temiz olarak yeniler.
+      - key: NIGHTLY_CANDLE_REFRESH_HOUR
+        value: "2"
+      - key: NIGHTLY_CANDLE_REFRESH_MINUTE
+        value: "0"
+      # Ayrı 4S Stabil güçlü geri alım alarmları (DM + public kanal; >3 ise 2 kart + 1 özet)
+      - key: STABIL_GERI_ALIM_ALARM
+        value: "1"
+      - key: STABIL_ALARM_DM
+        value: "1"
+      - key: STABIL_ALARM_PUBLIC
+        value: "1"
+      - key: STABIL_ALARM_COOLDOWN_BAR
+        value: "6"
+      - key: STABIL_ALARM_TEKIL_UST_SINIR
+        value: "3"
+      - key: STABIL_ALARM_TAZE_DK
+        value: "390"

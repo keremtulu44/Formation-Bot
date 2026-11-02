@@ -72,8 +72,13 @@ jobs:
           WINDOW_END: ${{ vars.KEEPALIVE_WINDOW_END }}
           ALWAYS: ${{ vars.KEEPALIVE_ALWAYS }}
           WEEKDAYS_ONLY: ${{ vars.KEEPALIVE_WEEKDAYS_ONLY }}
+          NIGHTLY_REFRESH: ${{ vars.KEEPALIVE_NIGHTLY_REFRESH }}
         run: |
           set -uo pipefail
+          custom_window="false"
+          if [ -n "${WINDOW_START:-}" ] || [ -n "${WINDOW_END:-}" ]; then
+            custom_window="true"
+          fi
           start="${WINDOW_START:-0800}"
           end="${WINDOW_END:-2300}"
           if [ "${ALWAYS:-}" = "true" ]; then
@@ -101,6 +106,16 @@ jobs:
           if [ "${WEEKDAYS_ONLY:-}" = "true" ] && [ "$dow" -gt 5 ]; then
             echo "Hafta sonu ve KEEPALIVE_WEEKDAYS_ONLY=true -> ping atlandı"
             echo "in_window=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Gece 02:00-02:20 TSİ Supabase-kayıtsız mum temizliği penceresi:
+          # Varsayılan pencerede (veya KEEPALIVE_NIGHTLY_REFRESH=true verildiğinde)
+          # servisi uyandırıp temizlik bitene kadar ~20 dk ayakta tutar.
+          nightly_mode="${NIGHTLY_REFRESH:-}"
+          if { [ "$nightly_mode" = "true" ] || { [ -z "$nightly_mode" ] && [ "$custom_window" = "false" ]; }; } \
+             && [ "$now" -ge 200 ] && [ "$now" -le 220 ]; then
+            echo "Gece 02:00-02:20 TSİ mum temizliği penceresi -> servis uyandırılıyor"
+            echo "in_window=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if { [ "$start_num" -le "$end_num" ] && [ "$now" -ge "$start_num" ] && [ "$now" -le "$end_num" ]; } || \

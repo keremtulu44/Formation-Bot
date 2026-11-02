@@ -12,7 +12,7 @@ import os
 import pickle
 import tempfile
 import threading
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from config import (
     ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN,
@@ -361,6 +361,63 @@ class StockDequeManager:
             self.sureklilik_sorunlari.pop(stock, None)
         return True
     
+    def replace_dataframe(self, stock: str, df: pd.DataFrame) -> bool:
+        """1H önbelleğini taze ve doğrulanmış geçmişle atomik olarak değiştirir.
+
+        Gece 02:00 mum temizliği için kullanılır: birikmiş kırık/eksik mumları
+        eski önbellekten taşımaz; gelen frame geçersizse mevcut önbelleğe dokunmaz.
+        """
+        girdi_sorunlari = ohlcv_girdi_sorunlari(df)
+        if girdi_sorunlari:
+            _pkg.logger.error(
+                "%s: gece 1H yenileme frame geçersiz (%s); mevcut deque korundu",
+                stock,
+                ", ".join(girdi_sorunlari),
+            )
+            return False
+
+        taze_barlar: Dict[datetime, dict] = {}
+        for idx, row in df.iterrows():
+            ts = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
+            if ts.tzinfo is not None:
+                ts = ts.tz_convert(ISTANBUL_TZ)
+            taze_barlar[ts] = {
+                "timestamp": ts,
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": float(row.get("volume", 0)),
+            }
+
+        if _karisik_timestamp_zaman_dilimi(list(taze_barlar.values())):
+            _pkg.logger.error(
+                "%s: gece 1H yenilemede karışık zaman dilimi; mevcut deque korundu",
+                stock,
+            )
+            return False
+
+        tumu = sorted(taze_barlar.values(), key=lambda c: c["timestamp"])
+        dq = self.get_deque(stock)
+        with self._cache_lock:
+            dq.clear()
+            dq.extend(tumu[-self.maxlen:])
+
+        sorunlar = sureklilik_sorunlari_bul(dq)
+        if sorunlar:
+            self.sureklilik_sorunlari[stock] = sorunlar
+            for s_ in sorunlar:
+                _pkg.logger.warning(f"{stock}: {s_['mesaj']}")
+        else:
+            self.sureklilik_sorunlari.pop(stock, None)
+
+        _pkg.logger.info(
+            "%s: 1H önbellek temiz veriyle yenilendi (%d bar)",
+            stock,
+            len(dq),
+        )
+        return True
+
     def to_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
         """Deque'yi DataFrame'e çevir - pattern tespiti için"""
         dq = self.get_deque(stock)  # Diskten yüklemeyi de dene
@@ -389,7 +446,7 @@ class StockDequeManager:
         
         return df
     
-    def save_to_disk(self, stock: str) -> bool:
+    def save_to_disk(self, stock: str, *, persist_remote: bool = True) -> bool:
         """Save the JSON restart cache and report whether all configured stores succeeded."""
         if stock not in self.deques:
             return False
@@ -422,7 +479,7 @@ class StockDequeManager:
 
             remote_saved = True
             remote_error = None
-            if self.persistent_store is not None:
+            if persist_remote and self.persistent_store is not None:
                 # İçerik değişmediyse UPSERT atlanır (tarama başına ~48 gereksiz
                 # istek + ~2 MB gidiyordu). Kapanış/timestamp değişince yazılır.
                 ozet = self._veri_ozeti(data_list)
@@ -583,6 +640,45 @@ class StockDequeManager:
                     f"(toplam {len(dq)} bar)")
         return True
 
+    def replace_gunluk_dataframe(self, stock: str, df: pd.DataFrame) -> bool:
+        """1D önbelleğini taze ve doğrulanmış geçmişle atomik olarak değiştirir."""
+        sorunlar = ohlcv_girdi_sorunlari(df)
+        if sorunlar:
+            _pkg.logger.error(
+                "%s: gece günlük yenileme frame geçersiz (%s); günlük deque korunuyor",
+                stock,
+                ", ".join(sorunlar),
+            )
+            return False
+
+        taze_barlar: Dict[datetime, dict] = {}
+        for idx, row in df.iterrows():
+            ts = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
+            if ts.tzinfo is None:
+                ts = ISTANBUL_TZ.localize(ts)
+            else:
+                ts = ts.tz_convert(ISTANBUL_TZ)
+            taze_barlar[ts] = {
+                "timestamp": ts,
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": float(row.get("volume", 0)),
+            }
+
+        tumu = sorted(taze_barlar.values(), key=lambda c: c["timestamp"])
+        dq = self.get_gunluk_deque(stock)
+        with self._cache_lock:
+            dq.clear()
+            dq.extend(tumu[-GUNLUK_DEQUE_MAXLEN:])
+        _pkg.logger.info(
+            "%s: GÜNLÜK önbellek temiz veriyle yenilendi (%d bar)",
+            stock,
+            len(dq),
+        )
+        return True
+
     def to_gunluk_dataframe(self, stock: str) -> Optional[pd.DataFrame]:
         dq = self.get_gunluk_deque(stock)
         with self._cache_lock:
@@ -655,7 +751,8 @@ class StockDequeManager:
         return True
 
     def gunluk_fetch_denemesi_kaydet(self, stock: str, now: Optional[datetime] = None,
-                                      *, persist: bool = True) -> None:
+                                      *, persist: bool = True,
+                                      persist_remote: bool = True) -> None:
         """Başarılı veya başarısız günlük fetch denemesinin zamanını kaydet.
 
         ``persist=False`` yalnızca bu süreçte tekrar fetch'i yavaşlatır. Yeni
@@ -672,7 +769,7 @@ class StockDequeManager:
         if not persist:
             return
         self._gunluk_fetch_attempts_kaydet()
-        if self.persistent_store is not None:
+        if persist_remote and self.persistent_store is not None:
             from datetime import timezone
             attempts = {
                 key: value.astimezone(timezone.utc).isoformat()
@@ -693,7 +790,7 @@ class StockDequeManager:
                 if not remote_saved:
                     _pkg.logger.warning("Günlük fetch deneme durumu uzak saklayıcı tarafından reddedildi")
 
-    def save_gunluk_to_disk(self, stock: str) -> bool:
+    def save_gunluk_to_disk(self, stock: str, *, persist_remote: bool = True) -> bool:
         """Save local JSON and report whether configured durable stores accepted it."""
         dq = self.get_gunluk_deque(stock)
         os.makedirs(self.data_dir, exist_ok=True)
@@ -701,7 +798,7 @@ class StockDequeManager:
                     "high": c["high"], "low": c["low"], "close": c["close"],
                     "volume": c["volume"]} for c in dq]
         _atomic_json_write(self._gunluk_dosya(stock), payload)
-        if self.persistent_store is not None:
+        if persist_remote and self.persistent_store is not None:
             # Günlük seri günde bir değişir; tarama başına 48 kez yazmak ~2,4 MB
             # gereksiz trafikti. İçerik değişmediyse gönderilmez.
             ozet = self._veri_ozeti(payload)
@@ -719,6 +816,71 @@ class StockDequeManager:
                 self._gunluk_uzak_ozet[stock] = ozet
                 self.uzak_yazma_yapilan += 1
         return True
+
+    def denetle_mum_butunlugu(self, stocks) -> Dict[str, Any]:
+        """Yerel 1H ve 1D mum önbelleklerinde eksik/kırık/düz mumları tarar."""
+        eksik_1h: List[str] = []
+        eksik_1d: List[str] = []
+        bosluklu_1h: List[str] = []
+        bolunme_veya_sok: List[str] = []
+        duz_mum_1d: List[str] = []
+
+        for stock in stocks:
+            df_1h = self.to_dataframe(stock)
+            if df_1h is None or len(df_1h) < 50:
+                eksik_1h.append(stock)
+            else:
+                dq_1h = self.get_deque(stock)
+                sorunlar_1h = sureklilik_sorunlari_bul(dq_1h)
+                if any(s.get("tip") == "bosluk" for s in sorunlar_1h):
+                    bosluklu_1h.append(stock)
+                if any(s.get("tip") in ("split", "sok") for s in sorunlar_1h):
+                    bolunme_veya_sok.append(stock)
+
+            df_1d = self.to_gunluk_dataframe(stock)
+            if df_1d is None or len(df_1d) < 100:
+                eksik_1d.append(stock)
+            else:
+                son_pencere = df_1d.iloc[-min(len(df_1d), 62):]
+                duz_sayisi = int(
+                    ((son_pencere["high"] - son_pencere["low"]).abs() <= 1e-9).sum()
+                )
+                if duz_sayisi >= 3:
+                    duz_mum_1d.append(stock)
+                df_1d_norm, _ = _pkg.gunluk_bolunme_normalize_et(df_1d)
+                norm_kayitlar = [
+                    {
+                        "timestamp": ts,
+                        "open": float(row["open"]),
+                        "high": float(row["high"]),
+                        "low": float(row["low"]),
+                        "close": float(row["close"]),
+                        "volume": float(row.get("volume", 0.0)),
+                    }
+                    for ts, row in df_1d_norm.iterrows()
+                ]
+                sorunlar_1d = sureklilik_sorunlari_bul(norm_kayitlar)
+                if any(s.get("tip") in ("split", "sok") for s in sorunlar_1d):
+                    if stock not in bolunme_veya_sok:
+                        bolunme_veya_sok.append(stock)
+
+        sorunlu_semboller = sorted(
+            set(eksik_1h)
+            | set(eksik_1d)
+            | set(bosluklu_1h)
+            | set(bolunme_veya_sok)
+            | set(duz_mum_1d)
+        )
+        return {
+            "toplam_sembol": len(list(stocks)),
+            "sorunlu_sembol_sayisi": len(sorunlu_semboller),
+            "sorunlu_semboller": sorunlu_semboller,
+            "eksik_1h": eksik_1h,
+            "eksik_1d": eksik_1d,
+            "bosluklu_1h": bosluklu_1h,
+            "bolunme_veya_sok": bolunme_veya_sok,
+            "duz_mum_1d": duz_mum_1d,
+        }
 
     def son_bar_yasi_dk(self, stock: str, now: Optional[datetime] = None) -> Optional[float]:
         """Bu hissenin cache'indeki en yeni 1H mumun yaşı (dakika). Veri yoksa None.

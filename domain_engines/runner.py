@@ -26,6 +26,10 @@ from .fvg import (
 from .incremental import IncrementalDecision, IncrementalEngineState
 from .market_structure import MarketStructureConfig, MarketStructureEngine
 from .order_block import OrderBlockEngine
+from .stabil import (
+    StabilRoleStatus,
+    evaluate_stabil_symbol,
+)
 from .volume_participation import VolumeParticipationEngine
 
 logger = logging.getLogger(__name__)
@@ -61,6 +65,26 @@ _incremental_states_by_series: dict[
     dict[str, tuple[tuple[Any, ...], IncrementalEngineState]],
 ] = {}
 _series_state_locks: dict[tuple[str, str], threading.RLock] = {}
+
+
+def reset_incremental_domain_states(symbol: str | None = None) -> None:
+    """Clear process-local incremental OB/FVG states after full candle replacement."""
+    with _state_registry_lock:
+        if symbol is None:
+            _incremental_states_by_series.clear()
+        else:
+            hedef = str(symbol)
+            for key in list(_incremental_states_by_series.keys()):
+                if key[0] == hedef:
+                    _incremental_states_by_series.pop(key, None)
+    with _latest_lock:
+        if symbol is None:
+            _latest_by_series.clear()
+        else:
+            hedef = str(symbol)
+            for key in list(_latest_by_series.keys()):
+                if key[0] == hedef:
+                    _latest_by_series.pop(key, None)
 
 
 def _advance_incremental_engine(
@@ -434,3 +458,105 @@ def get_all_latest_domain_results() -> dict[tuple[str, str], dict[str, DomainRun
     """Return a shallow copy of the in-memory, per-series result registry."""
     with _latest_lock:
         return {key: dict(value) for key, value in _latest_by_series.items()}
+
+
+def run_stabil_domain(
+    symbol: str,
+    timeframe: str,
+    frame: pd.DataFrame | None,
+    *,
+    daily_frame: pd.DataFrame | None = None,
+    h4_frame: pd.DataFrame | None = None,
+    weekly_frame: pd.DataFrame | None = None,
+    as_of_close: Any | None = None,
+    certified_closes: bool = False,
+    isolated: bool = False,
+) -> DomainRunResult:
+    """Run Stabil independently with causal MTF inputs and untrimmed native outputs."""
+    tf = str(timeframe).strip().lower()
+    if tf not in ALL_DOMAIN_TIMEFRAMES:
+        raise ValueError(f"unsupported Formation-Bot timeframe: {timeframe!r}")
+
+    def _exec() -> DomainRunResult:
+        out = evaluate_stabil_symbol(
+            symbol,
+            tf,
+            frame.copy(deep=True) if isinstance(frame, pd.DataFrame) else None,
+            daily_frame=daily_frame.copy(deep=True) if isinstance(daily_frame, pd.DataFrame) else None,
+            h4_frame=h4_frame.copy(deep=True) if isinstance(h4_frame, pd.DataFrame) else None,
+            weekly_frame=weekly_frame.copy(deep=True) if isinstance(weekly_frame, pd.DataFrame) else None,
+            as_of_close=as_of_close,
+            certified_closes=certified_closes,
+        )
+        support_role = out.role_readiness["daily_support"]
+        quality = (
+            "OK"
+            if support_role.status is StabilRoleStatus.READY
+            else support_role.status.value
+        )
+        return DomainRunResult(
+            domain="stabil",
+            symbol=symbol,
+            timeframe=tf,
+            result=out,
+            export={
+                "support": out.support_snapshot,
+                "trend": out.trend_context,
+            },
+            data_quality=quality,
+            reason=support_role.reason,
+            details={
+                "role_readiness": dict(out.role_readiness),
+                "bar_projection": out.bar_projection,
+                "bar_behaviors": out.bar_behaviors,
+                "latest_behavior": out.latest_behavior,
+                "latest_support_relation": out.latest_support_relation,
+                "latest_close": out.latest_close,
+                "support_snapshot": out.support_snapshot,
+                "support_observations": out.support_observations,
+                "trend_context": out.trend_context,
+            },
+        )
+
+    res = _execute_domain("stabil", symbol, tf, _exec)
+    if not isolated:
+        key = (symbol, tf)
+        with _latest_lock:
+            existing = _latest_by_series.get(key)
+            if existing is not None:
+                updated = dict(existing)
+                updated["stabil"] = res
+                _latest_by_series[key] = updated
+    return res
+
+
+def run_stabil_symbol_bundle(
+    symbol: str,
+    frames_by_tf: Mapping[str, pd.DataFrame],
+    *,
+    daily_frame: pd.DataFrame | None = None,
+    h4_frame: pd.DataFrame | None = None,
+    as_of_close: Any | None = None,
+    certified_closes: bool = False,
+    isolated: bool = False,
+) -> dict[str, DomainRunResult]:
+    """Produce independent Stabil `DomainRunResult`s across available symbol timeframes."""
+    deep_daily = daily_frame if daily_frame is not None else frames_by_tf.get("1d")
+    deep_h4 = h4_frame if h4_frame is not None else frames_by_tf.get("4h")
+    out: dict[str, DomainRunResult] = {}
+    for tf, tf_frame in frames_by_tf.items():
+        norm_tf = str(tf).strip().lower()
+        if norm_tf not in ALL_DOMAIN_TIMEFRAMES or tf_frame is None:
+            continue
+        out[norm_tf] = run_stabil_domain(
+            symbol,
+            norm_tf,
+            tf_frame,
+            daily_frame=deep_daily,
+            h4_frame=deep_h4,
+            as_of_close=as_of_close,
+            certified_closes=certified_closes,
+            isolated=isolated,
+        )
+    return out
+

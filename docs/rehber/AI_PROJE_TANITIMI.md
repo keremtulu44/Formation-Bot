@@ -1,5 +1,16 @@
 # Formation-Bot — Dosya Göremeyen Bir AI'ya Verilecek Tanıtım Paketi
 
+## Devir notu — Stabil (2026-11-01)
+
+[Stabil ana rehberi](../arastirma/STABIL_REHBERI.md) ve
+[dosya/kurtarma envanteri](../arastirma/STABIL_DOSYA_ENVANTERI.md) önce okunmalı.
+Özgün [Python TXT](../../domain_engines/05_stabil.txt) mevcut; önceki konuşmada
+raporlanan runtime, chart/card entegrasyonu ve replay sonuç paketi bu checkout'ta
+bulunamadı. Aktif dört domain ile kurtarılan Stabil kaynağı karıştırılmamalı.
+Pine yalnız görünüm referansı; native trend/destek tam ve bağımsız kalmalı.
+48 sorunun tamamı doğrulanmış canlı kural değildir. Eksik dosyayı var sayma,
+sayılardan yapay sonuç üretme veya kurtarma yerine izinsiz yeni replay başlatma.
+
 > **Bu dosya ne için:** Projenin görsel tarafı hakkında **dosyalara erişemeyen** bir
 > AI'dan öneri almak için. Kullanım: aşağıdaki metnin tamamını yapıştır, sonra
 > **§5'teki 5 PNG'yi ekle**. Metin kendi başına yeterlidir; görsel eşleşmeleri

@@ -98,3 +98,11 @@ def formation_history_yolu(stock, tf, data_dir=None) -> str:
     from config import DATA_DIR
     return os.path.join(data_dir or DATA_DIR, FORMATION_HISTORY_ALT_DOSYA,
                         "{}_{}.json".format(stock, tf))
+
+
+STABIL_ALARM_STATE_DOSYA = "stabil_alarm_state.json"
+
+
+def stabil_alarm_state_yolu(data_dir=None) -> str:
+    from config import DATA_DIR
+    return os.path.join(data_dir or DATA_DIR, STABIL_ALARM_STATE_DOSYA)

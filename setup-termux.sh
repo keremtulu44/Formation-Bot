@@ -29,8 +29,8 @@ pip install --upgrade pip -q
 # borsapy KURMUYORUZ - jiter/rust hatası var
 # borsapy -> openai -> jiter -> maturin -> rustc aarch64-unknown-linux-android desteklenmiyor
 echo "[4/5] yfinance ve hafif paketler kuruluyor (borsapy hariç)..."
-pip install yfinance pytz python-dotenv requests -q
-echo "  yfinance, pytz, dotenv, requests kuruldu"
+pip install -r requirements-termux.txt -q
+echo "  yfinance, exchange-calendars, pytz, dotenv, dateutil, requests, tabulate kuruldu"
 
 # 5. Opsiyonel: borsapy --no-deps (openai olmadan)
 echo ""
@@ -60,9 +60,9 @@ echo "=== KURULUM BİTTİ ==="
 echo ""
 echo "Test:"
 echo "  source venv/bin/activate"
-echo "  python -c 'import pandas, numpy, yfinance; print(\"ok\")'"
+echo "  python -c 'import pandas, numpy, yfinance, exchange_calendars; print(\"ok\")'"
 echo "  python test_triangle.py"
-echo "  python collective_test.py"
+echo "  python test_tarama_zamani.py"
 echo ""
 echo "Termux hatası çözümü:"
 echo "  - pandas/numpy: pkg install python-numpy python-pandas + venv --system-site-packages"

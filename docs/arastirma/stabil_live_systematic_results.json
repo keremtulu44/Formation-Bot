@@ -1,0 +1,142 @@
+{
+  "live_non_macro_count": 53,
+  "archive_tested_count": 50,
+  "missing_in_archive": [
+    "XU50",
+    "XBANK",
+    "XUSIN"
+  ],
+  "date_span": "2025-05-07 .. 2026-10-19",
+  "span_weeks": 75.9,
+  "cooldown_bars": 6,
+  "burst_cap_single": 3,
+  "total_signals": 284,
+  "signals_per_week_50": 3.74,
+  "est_signals_per_week_53": 3.97,
+  "total_messages_after_burst_cap": 240,
+  "messages_per_week_50": 3.16,
+  "est_messages_per_week_53": 3.35,
+  "burst_4h_bars": 13,
+  "overall": {
+    "count": 284,
+    "per_week": 3.74,
+    "symbols_triggered": 50,
+    "next_bar_hold_pct": 91.5,
+    "ret_4_med_atr": 0.101,
+    "ret_8_med_atr": 0.262,
+    "ret_8_mean_atr": 0.381,
+    "ret_8_eq_sym_med_atr": 0.301,
+    "ret_16_med_atr": 0.188,
+    "ret_16_mean_atr": 0.373,
+    "plus_1atr_8_pct": 65.4,
+    "minus_1atr_8_pct": 49.3,
+    "early_half_r8_med": 0.426,
+    "late_half_r8_med": 0.02
+  },
+  "close_reclaim": {
+    "count": 206,
+    "per_week": 2.72,
+    "symbols_triggered": 50,
+    "next_bar_hold_pct": 91.3,
+    "ret_4_med_atr": 0.097,
+    "ret_8_med_atr": 0.235,
+    "ret_8_mean_atr": 0.407,
+    "ret_8_eq_sym_med_atr": 0.618,
+    "ret_16_med_atr": -0.043,
+    "ret_16_mean_atr": 0.217,
+    "plus_1atr_8_pct": 63.7,
+    "minus_1atr_8_pct": 49.5,
+    "early_half_r8_med": 0.438,
+    "late_half_r8_med": 0.0
+  },
+  "intrabar_sweep_reclaim": {
+    "count": 78,
+    "per_week": 1.03,
+    "symbols_triggered": 37,
+    "next_bar_hold_pct": 92.3,
+    "ret_4_med_atr": 0.126,
+    "ret_8_med_atr": 0.309,
+    "ret_8_mean_atr": 0.303,
+    "ret_8_eq_sym_med_atr": 0.373,
+    "ret_16_med_atr": 1.074,
+    "ret_16_mean_atr": 0.844,
+    "plus_1atr_8_pct": 70.6,
+    "minus_1atr_8_pct": 48.5,
+    "early_half_r8_med": 0.413,
+    "late_half_r8_med": 0.039
+  },
+  "indices_only": {
+    "count": 10,
+    "per_week": 0.13,
+    "symbols_triggered": 2,
+    "next_bar_hold_pct": 100.0,
+    "ret_4_med_atr": -0.334,
+    "ret_8_med_atr": 0.116,
+    "ret_8_mean_atr": 0.582,
+    "ret_8_eq_sym_med_atr": -0.034,
+    "ret_16_med_atr": -1.655,
+    "ret_16_mean_atr": -0.837,
+    "plus_1atr_8_pct": 55.6,
+    "minus_1atr_8_pct": 55.6,
+    "early_half_r8_med": 2.005,
+    "late_half_r8_med": -0.82
+  },
+  "equities_only": {
+    "count": 274,
+    "per_week": 3.61,
+    "symbols_triggered": 48,
+    "next_bar_hold_pct": 91.2,
+    "ret_4_med_atr": 0.113,
+    "ret_8_med_atr": 0.273,
+    "ret_8_mean_atr": 0.374,
+    "ret_8_eq_sym_med_atr": 0.315,
+    "ret_16_med_atr": 0.191,
+    "ret_16_mean_atr": 0.415,
+    "plus_1atr_8_pct": 65.8,
+    "minus_1atr_8_pct": 49.0,
+    "early_half_r8_med": 0.413,
+    "late_half_r8_med": 0.054
+  },
+  "top_symbols": [
+    [
+      "ALARK",
+      10
+    ],
+    [
+      "ASELS",
+      10
+    ],
+    [
+      "HEKTS",
+      10
+    ],
+    [
+      "ISMEN",
+      9
+    ],
+    [
+      "TCELL",
+      9
+    ],
+    [
+      "TOASO",
+      9
+    ],
+    [
+      "TUPRS",
+      9
+    ],
+    [
+      "FROTO",
+      8
+    ],
+    [
+      "KRDMD",
+      8
+    ],
+    [
+      "ODAS",
+      8
+    ]
+  ]
+}

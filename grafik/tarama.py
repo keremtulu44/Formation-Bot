@@ -130,6 +130,7 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
         "zone": None,     # G2: {"cizilen": n, "elenen": n}
         "olay": None,     # G3: {"cizilen": n, "elenen": n}
         "serit": None,    # G3: {"degerler": [...], "esik": x, "kaynak": "..."}
+        "stabil": None,   # Günlük yapısal destek stepline projeksiyonu
     }
     if tavan_kalkti:
         yas = n - int(formasyon["start_bar"])
@@ -160,6 +161,7 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
     if (goruntu["olay"] or {}).get("hata"):
         goruntu["eksik_katmanlar"] = sorted(set(goruntu["eksik_katmanlar"])
                                             | set(goruntu["olay"]["hata"]))
+    goruntu["stabil"] = _stabil_verisi(sonuclar, tf, sol, sag)
     # `sonuclar` yoksa bölge/yapı katmanları YOKTUR — bu veri bozukluğu değil
     # (§0.12w: dipnot yalnız veri sorununa); izi `meta["zone"]["sirala"]` ve
     # `meta["olay"]` sıfırlarında taşınır.
@@ -199,6 +201,101 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
         # Alarm mumu kadraj dışında kaldı: çizilmemesi bilgi kaybıdır → bildirilir.
         goruntu["uyarilar"].append("alarm mumu kadraj dışında: mum işaretlenmedi")
     return goruntu
+
+
+def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int) -> Optional[dict[str, Any]]:
+    """Günlük yapısal destek stepline projeksiyonunu kadraja (`sol:sag`) hizalar."""
+    if not sonuclar or sag <= sol:
+        return None
+    kayit = None
+    if isinstance(sonuclar, Mapping):
+        if "stabil" in sonuclar:
+            kayit = sonuclar.get("stabil")
+        elif tf in sonuclar and isinstance(sonuclar.get(tf), Mapping):
+            kayit = sonuclar[tf].get("stabil")
+    else:
+        kayit = _alan(sonuclar, "stabil")
+    if kayit is None or _alan(kayit, "error") or bool(_alan(kayit, "skipped", False)):
+        return None
+
+    ayrinti = _alan(kayit, "details", {}) or {}
+    sonuc_nesne = _alan(kayit, "result")
+    projeksiyon = list(
+        _alan(ayrinti, "bar_projection")
+        or _alan(sonuc_nesne, "bar_projection")
+        or ()
+    )
+    davranislar = list(
+        _alan(ayrinti, "bar_behaviors")
+        or _alan(sonuc_nesne, "bar_behaviors")
+        or ()
+    )
+    pencere_boy = max(0, int(sag) - int(sol))
+    if not projeksiyon or pencere_boy <= 0:
+        return {"hazir": False, "seviyeler": [], "renkler": [], "durumlar": [],
+                "reclaim_barlar": [], "son_seviye": None, "son_durum": "NO_SUPPORT", "konum": None}
+
+    if len(projeksiyon) >= sag:
+        dilim = projeksiyon[sol:sag]
+        dav_dilim = davranislar[sol:sag] if len(davranislar) >= sag else []
+    elif len(projeksiyon) == pencere_boy:
+        dilim = projeksiyon
+        dav_dilim = davranislar if len(davranislar) == pencere_boy else []
+    elif len(projeksiyon) > pencere_boy:
+        dilim = projeksiyon[-pencere_boy:]
+        dav_dilim = davranislar[-pencere_boy:] if len(davranislar) >= pencere_boy else []
+    else:
+        eksik_bas = [None] * (pencere_boy - len(projeksiyon))
+        dilim = eksik_bas + projeksiyon
+        dav_dilim = ([None] * (pencere_boy - len(davranislar)) + davranislar) if davranislar else []
+
+    seviyeler: list[Optional[float]] = []
+    renkler: list[Optional[str]] = []
+    durumlar: list[str] = []
+    for nokta in dilim:
+        if nokta is None:
+            seviyeler.append(None)
+            renkler.append(None)
+            durumlar.append("NO_SUPPORT")
+            continue
+        seviye = _gercek(_alan(nokta, "support_level"))
+        rol = str(_alan(nokta, "color_role") or "")
+        durum = _ad(_alan(nokta, "validity")) or "NO_SUPPORT"
+        if seviye is None:
+            seviyeler.append(None)
+            renkler.append(None)
+            durumlar.append(durum)
+            continue
+        if rol == "above" or durum == "ACTIVE":
+            renk = "ust"
+        elif rol == "below" or durum in {"BREACHED", "BELOW_FLOOR"}:
+            renk = "alt"
+        else:
+            renk = None
+        seviyeler.append(seviye)
+        renkler.append(renk)
+        durumlar.append(durum)
+
+    reclaim_barlar: list[int] = []
+    for idx_b, bhv in enumerate(dav_dilim):
+        if bhv is not None and _alan(bhv, "reclaim_kind") in {"close_reclaim", "intrabar_sweep_reclaim"}:
+            reclaim_barlar.append(int(idx_b))
+
+    son_seviye = next((v for v in reversed(seviyeler) if v is not None), None)
+    son_renk = next((r for r in reversed(renkler) if r is not None), None)
+    son_durum = durumlar[-1] if durumlar else "NO_SUPPORT"
+    konum = _alan(ayrinti, "latest_support_relation") or _alan(sonuc_nesne, "latest_support_relation")
+    return {
+        "hazir": any(v is not None for v in seviyeler),
+        "seviyeler": seviyeler,
+        "renkler": renkler,
+        "durumlar": durumlar,
+        "reclaim_barlar": reclaim_barlar,
+        "son_seviye": son_seviye,
+        "son_renk": son_renk,
+        "son_durum": son_durum,
+        "konum": str(konum) if konum else None,
+    }
 
 
 def _yapı_satırı(sonuclar: Any, tf: str, son_kapanis: Optional[float]) -> str:
@@ -541,6 +638,8 @@ def _meta_kur(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any]) -> d
                       "durum": alarm.get("durum"), "kapanis": alarm.get("kapanis"),
                       "bar_disarida": bool(alarm.get("bar_disarida"))},
             "kritik": None,        # G3 (§0.12f)
+            "stabil": {"hazir": False, "cizildi": False, "son_seviye": None,
+                       "son_renk": None, "gorunur_bar": 0, "kadrajda": False},
         },
         "zone": _zone_meta(goruntu.get("zone")),
         "olay": _olay_meta(goruntu.get("olay")),

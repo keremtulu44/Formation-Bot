@@ -418,7 +418,8 @@ def test_ozet_tek_sabit_footer_ve_turkce_tarih():
     # Türkçe ay kısaltması: strftime('%b') İngilizce basıyordu. Başlık artık iki
     # satır (tek satır 310 px'tı), tarih girintili devam satırında.
     assert "📊 BIST Formasyon Özeti\n   " in ozet
-    assert "Eki" in ozet
+    turkce_aylar = ("Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara")
+    assert any(f" {ay} " in ozet for ay in turkce_aylar)
 
 
 def test_ozet_tum_bolumlerde_kalite_gorunur():

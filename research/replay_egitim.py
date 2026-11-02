@@ -87,7 +87,14 @@ def soru_sec(sembol: str = "", *, rng=None, kok=None) -> Soru:
                     continue
                 valid.append(pos)
             if valid:
-                return Soru(name, frames, closes, rng.choice(valid), secrets.token_hex(3).upper())
+                return Soru(
+                    name,
+                    frames,
+                    closes,
+                    rng.choice(valid),
+                    secrets.token_hex(3).upper(),
+                    horizon=rng.choice(HORIZONS),
+                )
         except (ValueError, OSError, KeyError, TypeError):
             continue
     raise ValueError("Yeterli ortak geçmiş ve gelecek içeren geçerli arşiv penceresi bulunamadı.")
@@ -126,13 +133,38 @@ def _soru_goruntusu(soru: Soru, tf: str) -> dict:
     import chart_experience
     import grafik
     import grafik_uret
-    from domain_engines.runner import run_domain_engines
+    from domain_engines.runner import run_domain_engines, run_stabil_domain
     from grafik.core import _ortam_sayi
 
     p = soru.positions[tf]
+    cutoff = soru.closes[tf][p]
     history = soru.frames[tf].iloc[max(0, p + 1 - 900):p + 1].copy(deep=True)
     candidate, state, warning = grafik_uret._formasyon_tara_ayrintili(history, tf)
     domains = run_domain_engines(soru.sembol, tf, history, isolated=True)
+    try:
+        d_end = int(soru.closes["1d"].searchsorted(cutoff, side="right") - 1)
+        h4_end = int(soru.closes["4h"].searchsorted(cutoff, side="right") - 1)
+        daily_history = (
+            soru.frames["1d"].iloc[: d_end + 1].copy(deep=True)
+            if d_end >= 0
+            else soru.frames["1d"].iloc[:0].copy(deep=True)
+        )
+        h4_history = (
+            soru.frames["4h"].iloc[: h4_end + 1].copy(deep=True)
+            if h4_end >= 0
+            else soru.frames["4h"].iloc[:0].copy(deep=True)
+        )
+        domains["stabil"] = run_stabil_domain(
+            soru.sembol,
+            tf,
+            history,
+            daily_frame=daily_history,
+            h4_frame=h4_history,
+            as_of_close=cutoff,
+            isolated=True,
+        )
+    except Exception:  # noqa: BLE001 - Stabil hatası eğitim karesini düşürmez
+        log.warning("Eğitim Stabil katmanı hesaplanamadı (%s %s)", soru.sembol, tf)
     snapshot = grafik.anlik_goruntu(
         candidate, tf, history, sonuclar=domains, sembol=soru.sembol,
         simdi=soru.closes[tf][p].to_pydatetime(), veri_kaynagi="arşiv", tarihsel=True,
@@ -318,12 +350,16 @@ class Session:
                     with self.lock:
                         if generation != self.generation:
                             return
+                        if getattr(question, "horizon", None) not in HORIZONS:
+                            question.horizon = random.SystemRandom().choice(HORIZONS)
                         self.current = question
                     sent = notifier.send_to_chat(
                         f"{question.sembol} · 4 kare aynı ana kadar kapanan mumları gösterir; "
                         "son kapanışlar zaman dilimine göre farklı olabilir.\n"
-                        "Bir zaman dilimi seçin: 1s, 2s, 4s veya 1g.\n"
-                        f"Yanıtınıza soru kodunu ekleyin: 4s {question.code}", notifier.chat_id)
+                        f"Tahmin ufku: seçtiğiniz zaman diliminde {question.horizon} kapanmış mum "
+                        "(yatay: ±1,5 ATR).\n"
+                        "Zaman dilimi ve yönü birlikte yazabilirsiniz: ör. 1s aşağı "
+                        f"(veya yalnız TF: 4s {question.code})", notifier.chat_id)
                     if not sent:
                         with self.lock:
                             if generation == self.generation and self.current is question:
@@ -343,25 +379,70 @@ class Session:
 
     def cevap(self, text, notifier):
         from telegram_commands import ArkaPlanYaniti
-        parts = str(text or "").strip().lower().split()
+        raw_parts = str(text or "").strip().split()
+        if not raw_parts:
+            return None
+        tf_aliases = {"1h": "1h", "1s": "1h", "2h": "2h", "2s": "2h",
+                      "4h": "4h", "4s": "4h", "1d": "1d", "1g": "1d"}
+        yon_aliases = {"yukarı": "yukarı", "yukari": "yukarı",
+                       "aşağı": "aşağı", "asagi": "aşağı", "yatay": "yatay"}
         with self.lock:
             q = self.current
-            if q is None: return None
-            if len(parts) != 2 or parts[1].upper() != q.code:
-                example = "yatay" if q.tf is not None else "1s"
-                return f"Açık sorunun koduyla yanıtlayın: ör. {example} {q.code}."
-            if q.tf is None:
-                aliases = {"1h":"1h", "1s":"1h", "2h":"2h", "2s":"2h", "4h":"4h", "4s":"4h", "1d":"1d", "1g":"1d"}
-                if parts[0] not in aliases: return f"Zaman dilimi seçin: 1s, 2s, 4s veya 1g · kod {q.code}"
-                q.tf = aliases[parts[0]]
+            if q is None:
+                return None
+            tokens = [tok.lower() for tok in raw_parts]
+            # Soru kodu zorunlu değildir; ancak kullanıcı açıkça kod yazdıysa
+            # eski/yanlış soru kodu gecikmiş yanıt olarak reddedilir.
+            if len(tokens) >= 2:
+                last_upper = raw_parts[-1].upper()
+                if last_upper == str(q.code).upper():
+                    tokens = tokens[:-1]
+                elif (
+                    last_upper.lower() not in tf_aliases
+                    and last_upper.lower() not in yon_aliases
+                    and re.fullmatch(r"[A-Z0-9]{4,10}", last_upper)
+                ):
+                    return (
+                        "Eski veya hatalı soru kodu; kod yazmadan doğrudan "
+                        "ör. 1s aşağı şeklinde yanıtlayabilirsiniz."
+                    )
+
+            secilen_tf = None
+            secilen_yon = None
+            taninmayan = []
+            for tok in tokens:
+                if secilen_tf is None and tok in tf_aliases:
+                    secilen_tf = tf_aliases[tok]
+                elif secilen_yon is None and tok in yon_aliases:
+                    secilen_yon = yon_aliases[tok]
+                else:
+                    taninmayan.append(tok)
+
+            if taninmayan or (secilen_tf is None and secilen_yon is None):
+                if q.tf is None:
+                    return (
+                        f"Zaman dilimi ve yön yazın (ör. 1s aşağı) veya "
+                        f"önce zaman dilimi seçin: 1s, 2s, 4s, 1g."
+                    )
+                return "Yukarı, yatay veya aşağı yazın (ör. aşağı veya 1s aşağı)."
+
+            if secilen_tf is not None:
+                q.tf = secilen_tf
+            if getattr(q, "horizon", None) not in HORIZONS:
                 q.horizon = random.SystemRandom().choice(HORIZONS)
+
+            if secilen_yon is None:
                 from reporting.format import tf_kisa
-                return (f"{tf_kisa(q.tf)} · {q.horizon} kapanmış mum sonra yön?\n"
-                        "Yukarı, yatay veya aşağı yazın. Yatay: başlangıç kapanışına "
-                        "göre ±1,5 ATR aralığı (sınırlar dahil).\n"
-                        f"Örnek: yukarı {q.code}")
-            yon = {"yukarı":"yukarı", "yukari":"yukarı", "aşağı":"aşağı", "asagi":"aşağı", "yatay":"yatay"}.get(parts[0])
-            if yon is None: return f"Yukarı, yatay veya aşağı yazın; ör. yatay {q.code}"
+                return (
+                    f"{tf_kisa(q.tf)} · {q.horizon} kapanmış mum sonra yön?\n"
+                    "Yukarı, yatay veya aşağı yazın. Yatay: başlangıç kapanışına "
+                    "göre ±1,5 ATR aralığı (sınırlar dahil)."
+                )
+
+            if q.tf is None:
+                return "Zaman dilimini de belirtin: ör. 1s aşağı (1s, 2s, 4s veya 1g)."
+
+            yon = secilen_yon
             try:
                 result = sonuc(q, yon)
             except ValueError as error:

@@ -22,6 +22,7 @@
 | Grafik tasarım sözleşmesi | [tasarim/GRAFIK_TASARIM.md](tasarim/GRAFIK_TASARIM.md) · [tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md](tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md) |
 | Telegram kart/bildirim kuralları | [tasarim/TELEGRAM_KART_FORMAT.md](tasarim/TELEGRAM_KART_FORMAT.md) · [tasarim/BILDIRIM_TESLIM_POLITIKASI.md](tasarim/BILDIRIM_TESLIM_POLITIKASI.md) |
 | **174 hisse kırılım ve teyit Replay'i** | [Ayrıntılı sonuç, yöntem ve veri rehberi](arastirma/KIRILIM_TEYIT_REPLAY_AYRINTILI_DOSYA_2026-10-30.md) |
+| **Stabil domain, native kaynak ve kullanılan replay sistemi** | [Stabil ana rehberi](arastirma/STABIL_REHBERI.md) · [kanıt/kurtarma durumu](arastirma/STABIL_DOSYA_ENVANTERI.md) |
 | Replay ve piyasa pilot sonuçları | [arastirma/SON_REPLAY_SONUCLARI.md](arastirma/SON_REPLAY_SONUCLARI.md) |
 | **Ölçüm: zone'lar piyasada ne yapıyor?** | **[arastirma/](arastirma/README.md)** |
 | Neden bu karar verildi? (denetimler) | [denetim/](denetim/) tablosu |
@@ -33,6 +34,13 @@
 ### `arastirma/` — ölçüm çıktısı
 | Dosya | Durum | Tarih | İçerik |
 |---|---|---|---|
+| [arastirma/STABIL_REHBERI.md](arastirma/STABIL_REHBERI.md) | Yürürlükte | 2026-11-01 | Domain/kaynak/replay giriş haritası; entegrasyon kodu şu an eksik |
+| [arastirma/STABIL_REPLAY_HATLARI.md](arastirma/STABIL_REPLAY_HATLARI.md) | Kayıt | 2026-11-01 | Genel replay ile Stabil native motoru ayrımı ve önceki optimize yöntem |
+| [arastirma/STABIL_DAVRANIS_MODELI.md](arastirma/STABIL_DAVRANIS_MODELI.md) | Kayıt | 2026-11-01 | Konuşmadan yeniden kayıt; dikey/yatay düzeltmesi ve kullanıcı hipotezleri |
+| [arastirma/STABIL_DAVRANIS_SORULARI.md](arastirma/STABIL_DAVRANIS_SORULARI.md) | Kayıt | 2026-11-01 | 48 soru sicili; konuşmadan yeniden kayıt, eski bayt-kopyası değil |
+| [arastirma/STABIL_CALISMA_GECMISI.md](arastirma/STABIL_CALISMA_GECMISI.md) | Kayıt | 2026-11-01 | 27/48 soru koşularının konuşmada raporlanan sayıları; artefaktlar eksik |
+| [arastirma/STABIL_DOSYA_ENVANTERI.md](arastirma/STABIL_DOSYA_ENVANTERI.md) | Kayıt | 2026-11-01 | Bugün mevcut dosyalar, eksik runtime/veri ve kurtarma listesi |
+| [Stabil kaynak notu](../domain_engines/STABIL_KAYNAK_NOTU.md) | Kayıt | 2026-11-01 | Özgün TXT, SHA256 ve eksik entegrasyon kapsamı |
 | [arastirma/README.md](arastirma/README.md) | Yürürlükte | 2026-10 | Giriş: kilit bulgular + açık MS bulgusu |
 | [arastirma/ARASTIRMA_SONUCLARI.md](arastirma/ARASTIRMA_SONUCLARI.md) | Yürürlükte | 2026-10 | Soru bazında cevaplar ve yorum |
 | [arastirma/ARASTIRMA_HATTI.md](arastirma/ARASTIRMA_HATTI.md) | Yürürlükte | 2026-10 | Yöntem, modüller, anti-lookahead |

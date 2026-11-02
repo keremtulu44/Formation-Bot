@@ -20,6 +20,25 @@ Profil seçimi: `.env` içinde `BOT_PROFILE=Dengeli` (Hassas / Dengeli / Seçici
 
 ## Belgeler ve depo düzeni
 
+### Stabil — yeni analitik domain ve araştırma kaydı (2026-11-01)
+
+**[Stabil ana rehberi](docs/arastirma/STABIL_REHBERI.md)** →
+[özgün Python TXT](domain_engines/05_stabil.txt) ·
+[kaynak/entegrasyon durumu](domain_engines/STABIL_KAYNAK_NOTU.md) ·
+[kullanılan replay hatları](docs/arastirma/STABIL_REPLAY_HATLARI.md) ·
+[davranış modeli](docs/arastirma/STABIL_DAVRANIS_MODELI.md) ·
+[48 soru](docs/arastirma/STABIL_DAVRANIS_SORULARI.md) ·
+[çalışma geçmişi](docs/arastirma/STABIL_CALISMA_GECMISI.md) ·
+[dosya/kurtarma envanteri](docs/arastirma/STABIL_DOSYA_ENVANTERI.md).
+
+**Mevcut durum:** Özgün TXT kurtarıldı ve hash eşitliği doğrulandı. Önceki
+konuşmada tamamlandığı bildirilen Stabil runtime entegrasyonu, tam replay
+raporları ve native veri paketi bu checkout'ta bulunamadı. Bu nedenle beşinci
+aktif motor veya yeniden doğrulanmış sonuç iddiası yoktur. Önceki 100 sembollük
+27 soru ile 48 davranış başlığı ayrı çalışmalardır; sonuncusunda bildirilen
+33 ölçüm / 8 proxy / 7 açık konu, 48 doğrulanmış kural demek değildir.
+
+
 **Tek giriş noktası: [docs/README.md](docs/README.md)** — hangi belgenin güncel olduğu
 dosya adından değil, oradaki **durum + tarih** tablosundan okunur.
 

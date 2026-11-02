@@ -84,6 +84,7 @@ _PALET_RENK_KORUGU: dict[str, str] = {
     "mum_dusen": "#f5a05a", "mum_dusen_ic": "#f5a05a",
     "serit_yuk": "#3f8fd0", "serit_dus": "#d98b4a",
     "son_yuk": "#4da3ff", "son_dus": "#f5a05a",
+    "stabil_ust": "#4da3ff", "stabil_alt": "#f5a05a",
 }
 
 
@@ -302,7 +303,7 @@ SABITLER_TABAN: dict[str, Any] = {
     # dizmek teknik olarak sığıyor ama okunmuyordu (GARAN 1s: 13 etiket).
     # Dış rol cetvelinde dört ayrı seviye olabilir (PH/PL/WH/WL); dördünü de
     # koru, iç swing okları sağ şeridi tüketmez.
-    "sag_etiket_maks": {"zone": 3, "olay": 3, "alarm": 1, "swing": 4},
+    "sag_etiket_maks": {"zone": 3, "olay": 3, "alarm": 1, "swing": 4, "stabil": 1},
     "kadraj_pay_orani": 0.06,         # yapı seviyesi: candle aralığının bu oranı dışındaysa çizilmez
     # Sağ boşluk: son mumun sağında kalan boş alan. Fiyat etiketleri, seviye
     # çizgileri ve 🎯 hedef kutusu mumların üzerine değil bu alana çizilir; bant
@@ -330,6 +331,8 @@ SABITLER_TABAN: dict[str, Any] = {
     "ob_taze_esik": 0.02,             # bu oranın altı "taze" (fresh) OB sayılır
     "hedef_aktif": True,              # teyitli alarmda 🎯 hedef projeksiyonu çizilsin mi
     "swing_etiket_ofset_px": 11.0,    # FAZ 4 §6: HH/HL/LH/LL fitile 10-15 px uzak
+    "stabil_kalinlik": 2.0,           # Günlük yapısal destek stepline kalınlığı (Pine linewidth=2)
+    "stabil_kadraj_orani": 0.35,      # Dengeli Y-ölçeği: mum aralığının bu oranı dışındaki uzak destek mumları ezmez
 }
 
 
@@ -387,6 +390,8 @@ PALET_TABAN = {
     "alarm": "#a9b6c4",
     "golge": "#8fa8c8",
     "chip_zemin": "#111922",
+    "stabil_ust": "#2cc98d",
+    "stabil_alt": "#e25d5a",
 }
 
 
