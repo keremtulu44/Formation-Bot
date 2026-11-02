@@ -653,6 +653,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     _pkg.logger.warning(f"{stock}: günlük derin veri çekilemedi - resample kullanılacak")
             df_gunluk = deque_manager.to_gunluk_dataframe(stock)
             if df_gunluk is not None and len(df_gunluk) >= 30:
+                from data import gunluk_bolunme_normalize_et
+                df_gunluk, _ = gunluk_bolunme_normalize_et(df_gunluk)
                 all_tfs['1d'] = df_gunluk
             
             # Her TF için: yarım (devam eden) mumu çıkar, TAMAMLANMIŞ mumları besle

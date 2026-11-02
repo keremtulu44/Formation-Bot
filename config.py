@@ -165,9 +165,9 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
-def _env_int(name: str, default: int) -> int:
+def _env_int(name: str, default: int, *, minimum: int = 1) -> int:
     try:
-        return max(1, int(os.getenv(name, str(default))))
+        return max(minimum, int(os.getenv(name, str(default))))
     except (TypeError, ValueError):
         return default
 
@@ -527,9 +527,11 @@ PUBLIC_MIN_ARALIK_SN = _env_float("PUBLIC_MIN_ARALIK_SN", 2.0)
 # --- FAILURE PENALTY ---
 FAILED_PATTERN_PENALTY_BARS = _env_int("FAILED_PATTERN_PENALTY_BARS", 24)
 
-# --- PRE-LOAD ---
-MORNING_PRELOAD_HOUR = _env_int("MORNING_PRELOAD_HOUR", 8)
-MORNING_PRELOAD_MINUTE = _env_int("MORNING_PRELOAD_MINUTE", 30)
+# --- PRE-LOAD & GECE MUM TEMİZLİĞİ ---
+MORNING_PRELOAD_HOUR = _env_int("MORNING_PRELOAD_HOUR", 8, minimum=0)
+MORNING_PRELOAD_MINUTE = _env_int("MORNING_PRELOAD_MINUTE", 30, minimum=0)
+NIGHTLY_CANDLE_REFRESH_HOUR = _env_int("NIGHTLY_CANDLE_REFRESH_HOUR", 2, minimum=0)
+NIGHTLY_CANDLE_REFRESH_MINUTE = _env_int("NIGHTLY_CANDLE_REFRESH_MINUTE", 0, minimum=0)
 
 DEQUE_MAXLEN = 360
 

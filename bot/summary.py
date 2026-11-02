@@ -757,6 +757,185 @@ def morning_preload(deque_manager, pacer):
         _pkg.logger.error(f"Sabah preload hatası: {e}", exc_info=True)
 
 
+def _gece_mum_yenileme_damga_yolu() -> str:
+    return os.path.join(config.DATA_DIR, "_gece_mum_yenileme.json")
+
+
+def _gece_mum_yenileme_son_gun_oku():
+    yol = _gece_mum_yenileme_damga_yolu()
+    if not os.path.exists(yol):
+        return None
+    try:
+        with open(yol, "r", encoding="utf-8") as stream:
+            veri = json.load(stream)
+        gun = veri.get("son_yenileme_gun") if isinstance(veri, dict) else None
+        return _pkg.datetime.fromisoformat(str(gun)).date() if gun else None
+    except Exception:
+        return None
+
+
+def _gece_mum_yenileme_son_gun_kaydet(gun_obj) -> None:
+    try:
+        os.makedirs(config.DATA_DIR, exist_ok=True)
+        yol = _gece_mum_yenileme_damga_yolu()
+        gecici = f"{yol}.tmp"
+        with open(gecici, "w", encoding="utf-8") as stream:
+            json.dump({"son_yenileme_gun": gun_obj.isoformat()}, stream)
+        os.replace(gecici, yol)
+    except Exception as exc:
+        _pkg.logger.debug("Gece mum yenileme yerel damgası yazılamadı: %s", exc)
+
+
+def gece_mum_temizligi_ve_yenileme(deque_manager, pacer=None, *, stocks=None) -> Dict:
+    """02:00 TSİ gece mum denetimi ve Supabase-kayıtsız temiz yeniden çekim.
+
+    7/24 çalışan süreçte gün içinde biriken eksik, yarım veya kirli mumları
+    sabaha taşımamak için tüm aktif sembollerin 1H (60d) ve 1D (2y) verisini
+    denetler, taze olarak çeker ve yalnızca yerel bellek + yerel JSON önbelleğe
+    yazar (`persist_remote=False` -> sıfır Supabase yazımı).
+    """
+    from domain_engines.runner import reset_incremental_domain_states
+
+    hedef_semboller = list(stocks if stocks is not None else _pkg.ACTIVE_STOCKS)
+    aktif_pacer = pacer if pacer is not None else _pkg.create_yahoo_pacer()
+
+    onceki_denetim = deque_manager.denetle_mum_butunlugu(hedef_semboller)
+    _pkg.logger.info(
+        "=== GECE 02:00 MUM TEMİZLİĞİ BAŞLIYOR (%d sembol; denetimde sorunlu=%d, "
+        "eksik_1h=%d, eksik_1d=%d, bosluklu_1h=%d, duz_1d=%d) ===",
+        len(hedef_semboller),
+        onceki_denetim["sorunlu_sembol_sayisi"],
+        len(onceki_denetim["eksik_1h"]),
+        len(onceki_denetim["eksik_1d"]),
+        len(onceki_denetim["bosluklu_1h"]),
+        len(onceki_denetim["duz_mum_1d"]),
+    )
+
+    yenilenen_1h = 0
+    korunan_1h = 0
+    yenilenen_1d = 0
+    korunan_1d = 0
+    yenilenen_semboller = set()
+
+    fetched_1h, failures_1h, _retry_1h, _kurtarilan_1h = _pkg.fetch_1h_stocks_paced(
+        hedef_semboller,
+        aktif_pacer,
+        "GECE 02:00 MUM TEMİZLİĞİ",
+    )
+
+    for stock in hedef_semboller:
+        df_1h = fetched_1h.get(stock)
+        if df_1h is None or len(df_1h) == 0:
+            korunan_1h += 1
+            continue
+        mevcut_1h = deque_manager.to_dataframe(stock)
+        if mevcut_1h is not None and len(df_1h) < max(30, int(len(mevcut_1h) * 0.5)):
+            _pkg.logger.warning(
+                "%s: gece 1H yanıtı beklenenden kısa (%d < %d/2); mevcut önbellek korundu",
+                stock,
+                len(df_1h),
+                len(mevcut_1h),
+            )
+            korunan_1h += 1
+            continue
+        if deque_manager.replace_dataframe(stock, df_1h):
+            deque_manager.save_to_disk(stock, persist_remote=False)
+            yenilenen_1h += 1
+            yenilenen_semboller.add(stock)
+        else:
+            korunan_1h += 1
+
+    basarisiz_1d: Dict[str, str] = {}
+    for index, stock in enumerate(hedef_semboller, start=1):
+        if _pkg._shutdown_requested:
+            _pkg.logger.info("GECE 02:00 MUM TEMİZLİĞİ: kapanış istendi; 1D çekimi durduruluyor")
+            break
+        df_1d = None
+        try:
+            with aktif_pacer.request(f"{stock} gece 1D"):
+                if _pkg._shutdown_requested:
+                    break
+                df_1d = _pkg.fetch_yfinance_1d(stock)
+        except Exception as exc:
+            basarisiz_1d[stock] = f"{type(exc).__name__}: {exc}"
+
+        if df_1d is None and not _pkg._shutdown_requested:
+            try:
+                wait_fn = getattr(aktif_pacer, "wait_retry", None)
+                if callable(wait_fn):
+                    wait_fn(f"{stock} gece 1D retry")
+                with aktif_pacer.request(f"{stock} gece 1D retry"):
+                    if not _pkg._shutdown_requested:
+                        df_1d = _pkg.fetch_yfinance_1d(stock)
+            except Exception as exc:
+                basarisiz_1d[stock] = f"{type(exc).__name__}: {exc}"
+
+        if df_1d is None or len(df_1d) == 0:
+            korunan_1d += 1
+            basarisiz_1d.setdefault(stock, "1D veri alınamadı")
+            _pkg.logger.warning(
+                "GECE 02:00 MUM TEMİZLİĞİ [%d/%d] %s: 1D alınamadı (%s); mevcut önbellek korundu",
+                index,
+                len(hedef_semboller),
+                stock,
+                basarisiz_1d[stock],
+            )
+            continue
+
+        mevcut_1d = deque_manager.to_gunluk_dataframe(stock)
+        if mevcut_1d is not None and len(df_1d) < max(30, int(len(mevcut_1d) * 0.5)):
+            _pkg.logger.warning(
+                "%s: gece 1D yanıtı beklenenden kısa (%d < %d/2); mevcut günlük önbellek korundu",
+                stock,
+                len(df_1d),
+                len(mevcut_1d),
+            )
+            korunan_1d += 1
+            continue
+
+        if deque_manager.replace_gunluk_dataframe(stock, df_1d):
+            deque_manager.gunluk_fetch_denemesi_kaydet(
+                stock,
+                persist=True,
+                persist_remote=False,
+            )
+            deque_manager.save_gunluk_to_disk(stock, persist_remote=False)
+            yenilenen_1d += 1
+            yenilenen_semboller.add(stock)
+        else:
+            korunan_1d += 1
+
+    for stock in yenilenen_semboller:
+        reset_incremental_domain_states(stock)
+        try:
+            _pkg._domain_runner_cache.pop(stock, None)
+        except Exception:
+            pass
+
+    sonraki_denetim = deque_manager.denetle_mum_butunlugu(hedef_semboller)
+    _pkg.logger.info(
+        "=== GECE 02:00 MUM TEMİZLİĞİ BİTTİ (1H yenilenen=%d/%d, 1D yenilenen=%d/%d, "
+        "kalan sorunlu=%d; Supabase yazımı=0) ===",
+        yenilenen_1h,
+        len(hedef_semboller),
+        yenilenen_1d,
+        len(hedef_semboller),
+        sonraki_denetim["sorunlu_sembol_sayisi"],
+    )
+    return {
+        "toplam_sembol": len(hedef_semboller),
+        "yenilenen_1h": yenilenen_1h,
+        "korunan_1h": korunan_1h,
+        "yenilenen_1d": yenilenen_1d,
+        "korunan_1d": korunan_1d,
+        "hatalar_1h": failures_1h,
+        "hatalar_1d": basarisiz_1d,
+        "onceki_denetim": onceki_denetim,
+        "sonraki_denetim": sonraki_denetim,
+        "supabase_yazimi": 0,
+    }
+
+
 def _ileri_test_kaydet(alert_data) -> None:
     """Gönderilen uyarıyı gölge deftere yazar. Hata botu DURDURMAZ."""
     try:

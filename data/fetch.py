@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Tuple
 from config import (
     ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN,
     DATA_DIR, SEED_DATA_DIR, MARKET_SUFFIX, yahoo_ticker_for_symbol,
-    PROVIDER_SYMBOL_FALLBACK,
+    PROVIDER_SYMBOL_FALLBACK, sembol_turu,
     CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER_CLOSE_MIN, TARAMA_PENCERE_SONU,
     BIST_TATILLER, BIST_YARIM_GUNLER,
     VERI_YOK_MODU_ESIK_DK, SPLIT_SUREKLILIK_ESIK_PCT, BAR_BOSLUK_ESIK_SAAT,
@@ -24,6 +24,77 @@ from config import (
 )
 
 import data as _pkg  # geç bağlama (plan §3)
+
+
+def _saglayici_ohlcv_temizle(
+    df: Optional[pd.DataFrame],
+    *,
+    stock: str = "",
+    timeframe: str = "1h",
+) -> Optional[pd.DataFrame]:
+    """Sağlayıcıdan gelen ham OHLCV tablosundaki münferit bozuk/tatil satırlarını ayıklar.
+
+    Yahoo Finance bazı sembollerde (ör. USDTRY=X, XU050.IS, tatil günleri veya
+    yeni açılan yarım barlar) 500 satırın içine 1-2 adet NaN OHLC, NaN hacim,
+    float32 yuvarlama kayması veya resmî tatilde 0-hacimli düz çizgi satırı
+    bırakabiliyor. Tek bir bozuk satır yüzünden tüm geçmişin reddedilmesini
+    önlemek için sağlayıcı çıkışında yalnızca geçerli satırlar korunur; tüm
+    tablo bozuksa None döner ve üst katman normal hata yolunu izler.
+    """
+    if df is None or len(df) == 0:
+        return None
+    gerekli = ["open", "high", "low", "close", "volume"]
+    if not all(c in df.columns for c in gerekli):
+        return None
+
+    calis = df[gerekli].copy()
+    for col in ("open", "high", "low", "close"):
+        calis[col] = pd.to_numeric(calis[col], errors="coerce")
+    calis["volume"] = pd.to_numeric(calis["volume"], errors="coerce").fillna(0.0)
+
+    fiyat_mat = calis[["open", "high", "low", "close"]].to_numpy(dtype=float)
+    hacim_dizi = calis["volume"].to_numpy(dtype=float)
+    sonlu_maske = np.isfinite(fiyat_mat).all(axis=1) & np.isfinite(hacim_dizi)
+    pozitif_maske = (fiyat_mat > 0.0).all(axis=1) & (hacim_dizi >= 0.0)
+    gecerli_maske = sonlu_maske & pozitif_maske
+    if not bool(gecerli_maske.any()):
+        return None
+    calis = calis.loc[gecerli_maske].copy()
+
+    o = calis["open"].to_numpy(dtype=float)
+    h = calis["high"].to_numpy(dtype=float)
+    l = calis["low"].to_numpy(dtype=float)
+    c = calis["close"].to_numpy(dtype=float)
+    ust_zarf = np.maximum(o, c)
+    alt_zarf = np.minimum(o, c)
+    tol = np.maximum(np.abs(c) * 1e-4, 1e-6)
+
+    # Küçük float32->float64 yuvarlama taşmalarını zarfa oturt; gerçek bozuk satırları ele.
+    h_duz = np.where((h < ust_zarf) & ((ust_zarf - h) <= tol), ust_zarf, h)
+    l_duz = np.where((l > alt_zarf) & ((l - alt_zarf) <= tol), alt_zarf, l)
+    calis["high"] = h_duz
+    calis["low"] = l_duz
+
+    ohlc_uyumlu = (h_duz >= l_duz) & (h_duz >= ust_zarf) & (l_duz <= alt_zarf)
+    if not bool(ohlc_uyumlu.all()):
+        calis = calis.loc[ohlc_uyumlu].copy()
+    if calis.empty:
+        return None
+
+    # BIST hisse/endeks günlük serilerinde sağlayıcının işlem olmayan günlerde
+    # ürettiği 0-hacimli düz çizgi (O=H=L=C, V=0) hayalet barları ayıkla.
+    if (
+        str(timeframe).strip().lower() == "1d"
+        and sembol_turu(stock) != "makro"
+        and isinstance(calis.index, pd.DatetimeIndex)
+    ):
+        duz_bar = (calis["high"] - calis["low"]).abs() <= 1e-9
+        sifir_hacim = calis["volume"] <= 0.0
+        hayalet = duz_bar & sifir_hacim
+        if bool(hayalet.any()) and bool((~hayalet).any()):
+            calis = calis.loc[~hayalet].copy()
+
+    return calis if len(calis) > 0 else None
 
 def saglayici_adaylari(stock: str) -> List[str]:
     """Sembolün sağlayıcı adları: önce birincil, sonra varsa yedek.
@@ -72,7 +143,7 @@ def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional
         else:
             df.index = df.index.tz_convert(ISTANBUL_TZ)
         df.columns = [c.lower() for c in df.columns]
-        return df[["open", "high", "low", "close", "volume"]]
+        return _saglayici_ohlcv_temizle(df, stock=stock, timeframe="1d")
     except Exception as e:
         _pkg.logger.debug(f"{stock} 1D fetch hatası: {e}")
         return None
@@ -192,7 +263,10 @@ def fetch_yfinance_1h(
                 # Son çare de düştüyse indeks normalize KALMAZ: dedup bozulur,
                 # tamamlanmis_mumlar şaşar. Yutulmasın, iz kalsın (2026-10-26).
                 _pkg.logger.warning("Mum indeksi TZ'ye normalize edilemedi; ham kalıyor", exc_info=True)
-        return result(ham)
+        temiz = _saglayici_ohlcv_temizle(ham, stock=stock, timeframe="1h")
+        if temiz is None or temiz.empty:
+            return result(None, False, "Sağlayıcı geçerli OHLCV mumu döndürmedi")
+        return result(temiz)
     except Exception as exc:
         reason = f"{type(exc).__name__}: {exc}"
         return result(None, yfinance_error_is_retryable(exc), reason)

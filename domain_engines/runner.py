@@ -67,6 +67,26 @@ _incremental_states_by_series: dict[
 _series_state_locks: dict[tuple[str, str], threading.RLock] = {}
 
 
+def reset_incremental_domain_states(symbol: str | None = None) -> None:
+    """Clear process-local incremental OB/FVG states after full candle replacement."""
+    with _state_registry_lock:
+        if symbol is None:
+            _incremental_states_by_series.clear()
+        else:
+            hedef = str(symbol)
+            for key in list(_incremental_states_by_series.keys()):
+                if key[0] == hedef:
+                    _incremental_states_by_series.pop(key, None)
+    with _latest_lock:
+        if symbol is None:
+            _latest_by_series.clear()
+        else:
+            hedef = str(symbol)
+            for key in list(_latest_by_series.keys()):
+                if key[0] == hedef:
+                    _latest_by_series.pop(key, None)
+
+
 def _advance_incremental_engine(
     symbol: str,
     timeframe: str,

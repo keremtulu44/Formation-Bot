@@ -343,17 +343,6 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         for b in (_grafik_zone(zone).get("cizilen") or []):
             ek_y.extend([float(b["alt"]), float(b["ust"])])
         _olay_src = goruntu.get("olay") or {}
-        for b in (_olay_src.get("swinglar") or []):        # iç pivot okları
-            v = _gercek(b.get("fiyat"))
-            if v is not None:
-                ek_y.append(v)
-        for b in (_olay_src.get("seviyeler") or []):       # dış PH/PL/WH/WL cetveli
-            v = _gercek(b.get("fiyat"))
-            if v is not None:
-                ek_y.append(v)
-        # BOS/CHoCH/kritik seviyeleri: yalnız mum aralığına yakınsa çizilir ve
-        # aralığı genişletir. Eski ve uzak seviyeler (ör. 3 hafta önceki kırılım
-        # 8% üstte) eskiden tüm grafiği sıkıştırıyordu; şimdi sayılır, çizilmez.
         replay = goruntu.get("replay") or {}
         kesit = replay.get("kesit") if replay.get("asama") == "sonuc" else None
         # Olayların kadraja alınıp alınmaması soru anındaki mumlarla belirlenir;
@@ -361,6 +350,27 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         olay_son = int(kesit) + 1 if kesit is not None else n
         ham = [float(v) for v in (kapanis[:olay_son] + yuksek[:olay_son]
                                   + dusuk[:olay_son]) if v is not None]
+        gorunum_modu = str((goruntu.get("gorunum") or {}).get("mod") or "odak").lower()
+        if ham and gorunum_modu != "baglam":
+            _m_lo, _m_hi = min(ham), max(ham)
+            _m_span = max(_m_hi - _m_lo, abs(_m_hi) * 0.015, 1e-9)
+            _seviye_pay = 1.25 * _m_span
+            _yakin_seviye = lambda val: (_m_lo - _seviye_pay) <= val <= (_m_hi + _seviye_pay)
+        else:
+            _yakin_seviye = lambda _val: True
+        for b in (_olay_src.get("swinglar") or []):        # iç pivot okları
+            v = _gercek(b.get("fiyat"))
+            if v is not None and _yakin_seviye(v):
+                ek_y.append(v)
+        kabul_seviyeler = []
+        for b in (_olay_src.get("seviyeler") or []):       # dış PH/PL/WH/WL cetveli
+            v = _gercek(b.get("fiyat"))
+            if v is not None and _yakin_seviye(v):
+                ek_y.append(v)
+                kabul_seviyeler.append(b)
+        # BOS/CHoCH/kritik seviyeleri: yalnız mum aralığına yakınsa çizilir ve
+        # aralığı genişletir. Eski ve uzak seviyeler (ör. 3 hafta önceki kırılım
+        # 8% üstte) eskiden tüm grafiği sıkıştırıyordu; şimdi sayılır, çizilmez.
         stabil_src = goruntu.get("stabil") or {}
         stabil_kadrajda = False
         if ham and stabil_src.get("hazir"):
@@ -395,6 +405,7 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
             else:
                 kadraj_disi += 1
         goruntu = {**goruntu, "olay": {**_olay_src, "olaylar": kabul_olaylar,
+                                       "seviyeler": kabul_seviyeler,
                                        "kritik": kritik_kabul}}
         # Bant doğruları y-aralığını BELİRLEMEZ (2026-10-23 ölçümü): seriyi
         # olduğu gibi aralığa katmak, bandın fiyattan kopuk bölümünü (üçgenin

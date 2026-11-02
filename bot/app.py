@@ -37,6 +37,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     HEARTBEAT_MIN_ARALIK_SN, HEARTBEAT_UZAK_ARALIK_SN,
                     PUBLIC_MIN_QUALITY,
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE, EVREN_BUYUME_UYARI_ESIGI,
+                    NIGHTLY_CANDLE_REFRESH_HOUR, NIGHTLY_CANDLE_REFRESH_MINUTE,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL,
                     TERMINAL_TAZE_BAR,
                     DM_MIN_DEVLAMLILIK)
@@ -355,6 +356,7 @@ def main_loop():
         last_post_close_analysis_date = None
     last_maintenance_date = None
     last_preload_date = None
+    last_nightly_refresh_date = _pkg._gece_mum_yenileme_son_gun_oku()
     son_kuyruk_bosaltma = 0.0  # engellenen acil olaylar bu aralıkla yeniden denenir
     # Restart gün sürekliliği: bugün zaten sayaç biriktirilmişse geri yükle
     # (aksi halde 18:45 kanal özeti günün gerçek toplamını eksik gösterir).
@@ -683,6 +685,24 @@ def main_loop():
             except Exception as e:
                 _pkg.logger.error("Gün sonu analizi zamanlayıcısı hata verdi: %s", e, exc_info=True)
 
+            # --- GECE MUM TEMİZLİĞİ VE YENİLEME (02:00 TSİ, Supabase-kayıtsız) ---
+            try:
+                gece_saat = int(getattr(_pkg, "NIGHTLY_CANDLE_REFRESH_HOUR", NIGHTLY_CANDLE_REFRESH_HOUR))
+                gece_dakika = int(getattr(_pkg, "NIGHTLY_CANDLE_REFRESH_MINUTE", NIGHTLY_CANDLE_REFRESH_MINUTE))
+                gece_hedef = now.replace(hour=gece_saat, minute=gece_dakika, second=0, microsecond=0)
+                if now >= gece_hedef and (now - gece_hedef).total_seconds() < 3600:
+                    if last_nightly_refresh_date != now.date():
+                        _pkg._scan_job_active.set()
+                        try:
+                            _pkg.gece_mum_temizligi_ve_yenileme(deque_manager, pacer)
+                        finally:
+                            _pkg._scan_job_active.clear()
+                        last_nightly_refresh_date = now.date()
+                        _pkg._gece_mum_yenileme_son_gun_kaydet(now.date())
+                        now = _pkg.datetime.now(ISTANBUL_TZ)
+            except Exception as e:
+                _pkg.logger.error(f"Gece mum temizliği hatası: {e}", exc_info=True)
+
             # --- SABAH PRE-LOAD (08:30) ---
             try:
                 if now.hour == MORNING_PRELOAD_HOUR and now.minute >= MORNING_PRELOAD_MINUTE and now.minute < MORNING_PRELOAD_MINUTE + 10:
@@ -765,6 +785,11 @@ def main_loop():
                         second=0, microsecond=0,
                     )
                     sleep_time = min(sleep_time, max(1.0, (rapor_anina - now).total_seconds()))
+                gece_saat = int(getattr(_pkg, "NIGHTLY_CANDLE_REFRESH_HOUR", NIGHTLY_CANDLE_REFRESH_HOUR))
+                gece_dakika = int(getattr(_pkg, "NIGHTLY_CANDLE_REFRESH_MINUTE", NIGHTLY_CANDLE_REFRESH_MINUTE))
+                gece_hedef = now.replace(hour=gece_saat, minute=gece_dakika, second=0, microsecond=0)
+                if now < gece_hedef and last_nightly_refresh_date != now.date():
+                    sleep_time = min(sleep_time, max(1.0, (gece_hedef - now).total_seconds()))
                 # TABAN UYKU (regresyon koruması): tatil/yarım gün gibi "pencere
                 # kapalı ama is_bist_open True" durumlarında sleep_time 0'a düşüp
                 # ana döngü boş dönüyordu (ölçüm: ~21.500 log satırı/sn; tatil

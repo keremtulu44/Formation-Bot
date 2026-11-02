@@ -346,7 +346,82 @@ def sureklilik_sorunlari_bul(dq) -> List[Dict]:
                                           f"{c['open']:.2f}) - tek barlık hareket, oran yuvarlak değil"),
                                 'zamandar': ts, 'yuzde': round(ziplama, 2),
                             })
+            elif onceki_kapanis > 0 and c['open'] < onceki_kapanis:
+                # BIST bedelsiz/rüçhan bölünmeleri gece aşırı (önceki gün kapanışı ->
+                # yeni gün açılışı) gerçekleşir. Normal taban marjı %10'dur; tek gecede
+                # >=%30 düşüş ve yuvarlak bölünme oranı yalnızca sermaye düzeltmesinde olur.
+                gece_dusus = (onceki_kapanis - c['open']) / onceki_kapanis * 100.0
+                if gece_dusus >= 30.0:
+                    oran = yuvarlak_orana_yakin_mi(gece_dusus, tolerans=2.5)
+                    if oran:
+                        sorunlar.append({
+                            'tip': 'split',
+                            'mesaj': (f"GECE AŞIRI BÖLÜNME/BEDELSİZ (~{oran:.0f}:1): "
+                                      f"{ts.strftime('%d %b %H:%M')} açılışı önceki kapanışa göre "
+                                      f"%{gece_dusus:.1f} düştü ({onceki_kapanis:.2f} -> "
+                                      f"{c['open']:.2f})"),
+                            'zamandar': ts, 'yuzde': round(gece_dusus, 2), 'oran': oran,
+                        })
         onceki = (ts, c['close'], ts.date())
     return sorunlar
+
+
+def gunluk_bolunme_normalize_et(df: pd.DataFrame) -> Tuple[pd.DataFrame, int]:
+    """Ham (auto_adjust=False) günlük OHLCV serisindeki kalıcı bölünme uçurumlarını düzeltir.
+
+    BIST'te günlük taban sınırı %10'dur; tek gecede >=%30 kalıcı fiyat ölçeği düşüşü
+    (sonraki barlarda eski fiyata geri dönmeyen) bedelsiz/rüçhan bölünmesidir.
+    Bölünme öncesi barlar güncel fiyat ölçeğine nedensel (yalnız gerçekleşmiş bölünme
+    barından geriye doğru) ölçeklenir; böylece 1G grafikte Y ekseni 10x açılıp güncel
+    mumları ve Stabil çizgisini düz çizgiye ezmez.
+    """
+    if df is None or len(df) < 5:
+        return df, 0
+    gerekli = ("open", "high", "low", "close")
+    if not all(c in df.columns for c in gerekli):
+        return df, 0
+
+    o = df["open"].to_numpy(dtype=float, copy=True)
+    h = df["high"].to_numpy(dtype=float, copy=True)
+    l = df["low"].to_numpy(dtype=float, copy=True)
+    c = df["close"].to_numpy(dtype=float, copy=True)
+    v = df["volume"].to_numpy(dtype=float, copy=True) if "volume" in df.columns else None
+
+    n = len(df)
+    duzeltilen = 0
+    for i in range(1, n):
+        onceki_c = c[i - 1]
+        yeni_o = o[i]
+        yeni_c = c[i]
+        if not (math.isfinite(onceki_c) and math.isfinite(yeni_o) and math.isfinite(yeni_c)):
+            continue
+        if onceki_c <= 0.0 or yeni_o <= 0.0 or yeni_c <= 0.0:
+            continue
+        referans_yeni = yeni_o if abs(yeni_o - yeni_c) / max(yeni_c, 1e-9) <= 0.25 else yeni_c
+        oran = referans_yeni / onceki_c
+        # Tek adımda >=%30 düşüş (<=0.70x) ve izleyen barlarda eski ölçeğe dönmeme
+        if 0.02 <= oran <= 0.70:
+            pencere_sonu = min(n, i + 3)
+            kalici = float(np.nanmax(c[i:pencere_sonu])) <= onceki_c * 0.78
+            if kalici:
+                o[:i] *= oran
+                h[:i] *= oran
+                l[:i] *= oran
+                c[:i] *= oran
+                if v is not None:
+                    v[:i] /= oran
+                duzeltilen += 1
+
+    if duzeltilen == 0:
+        return df, 0
+
+    out = df.copy()
+    out["open"] = o
+    out["high"] = np.maximum(h, np.maximum(o, c))
+    out["low"] = np.minimum(l, np.minimum(o, c))
+    out["close"] = c
+    if v is not None:
+        out["volume"] = v
+    return out, duzeltilen
 
 
