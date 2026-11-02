@@ -60,50 +60,21 @@ def _gunluk_cerceve_onar_ve_olcekle(
     *,
     sembol: str = "",
 ):
-    """1D çerçevesindeki vadeli uzlaşma düz çizgilerini onarır ve bölünmeleri normalize eder."""
-    import pandas as pd
-    from config import ISTANBUL_TZ, sembol_turu
-    from data import gunluk_bolunme_normalize_et, resample_ohlcv
+    """Günlük hisse serisini ölçekler; doğrulanmamış makro OHLC'yi değiştirmez."""
+    from config import sembol_turu
+    from data import gunluk_bolunme_normalize_et
 
     if df_1g is None or len(df_1g) == 0:
         return df_1g
 
     calis = df_1g.copy(deep=True)
-    if (
-        df_1s is not None
-        and len(df_1s) >= 5
-        and sembol_turu(sembol) == "makro"
-        and isinstance(calis.index, pd.DatetimeIndex)
-    ):
-        try:
-            r1d = resample_ohlcv(df_1s.copy(deep=True), "1d")
-            if r1d is not None and len(r1d) > 0:
-                idx_1g = (
-                    calis.index.tz_localize(ISTANBUL_TZ)
-                    if calis.index.tz is None
-                    else calis.index.tz_convert(ISTANBUL_TZ)
-                )
-                idx_r = (
-                    r1d.index.tz_localize(ISTANBUL_TZ)
-                    if r1d.index.tz is None
-                    else r1d.index.tz_convert(ISTANBUL_TZ)
-                )
-                gun_haritasi = {
-                    ts.date(): r1d.iloc[pos]
-                    for pos, ts in enumerate(idx_r)
-                    if float(r1d["high"].iloc[pos] - r1d["low"].iloc[pos]) > 1e-9
-                }
-                for pos, ts in enumerate(idx_1g):
-                    if abs(float(calis["high"].iloc[pos] - calis["low"].iloc[pos])) <= 1e-9:
-                        yedek_bar = gun_haritasi.get(ts.date())
-                        if yedek_bar is not None:
-                            for alan in ("open", "high", "low", "close"):
-                                calis.iloc[pos, calis.columns.get_loc(alan)] = float(yedek_bar[alan])
-        except Exception as exc:
-            import logging
-            logging.getLogger("grafik").debug("%s 1D makro yedek bar onarımı atlandı: %s", sembol, exc)
-
-    calis, _ = gunluk_bolunme_normalize_et(calis)
+    # Saatlik ve günlük sağlayıcı sembolü/seansı cache'te saklanmıyor. Örneğin
+    # vadeli günlük etiketi 07:00 iken 1H -> 1D İstanbul gece yarısı kovasıdır.
+    # Aynı takvim tarihi, aynı mum veya aynı enstrüman demek değildir; yetersiz
+    # saatlerle düz günlük barı değiştirip sahte OHLC üretmeyiz.
+    # BIST'e özgü bölünme varsayımı makro/endekslere uygulanamaz.
+    if sembol_turu(sembol) == "hisse":
+        calis, _ = gunluk_bolunme_normalize_et(calis)
     return calis
 
 
@@ -115,7 +86,7 @@ def cerceve_getir(hisse: str, tf: str, veri_dizin: str, demo: bool = False, *,
     önbelleğinden `resample_ohlcv` ile üretilir — ölçüm: 360 × 1s → ~44 bar,
     yani bu depo için günlük kadraj YÜZEYSEL kalır (§18.6).
     """
-    from data import StockDequeManager, gunluk_bolunme_normalize_et, resample_ohlcv
+    from data import StockDequeManager, resample_ohlcv
 
     # Demo bilinçli ayrı yol: gerçek cache'i ne okur ne yazar.
     if demo:
@@ -136,15 +107,21 @@ def cerceve_getir(hisse: str, tf: str, veri_dizin: str, demo: bool = False, *,
             return _gunluk_cerceve_onar_ve_olcekle(df_1g, df_1s_ham, sembol=anahtar), gunluk_kaynak
     df_1s = df_1s_ham
     if df_1s is None or len(df_1s) < 5:
+        from config import MAKRO_SEMBOLLERI
+        # Sessiz düzeltme yapılmaz: farklı bir enstrüman yanlışlıkla çizilemez.
+        adaylar = sorted(s for s in MAKRO_SEMBOLLERI
+                         if len(s) == len(anahtar) + 1
+                         and any(s[:i] + s[i + 1:] == anahtar for i in range(len(s))))
+        oneri = f" Benzer semboller: {', '.join(adaylar)}; doğru sembolü kontrol edin." if adaylar else ""
         raise VeriYok(f"veri yok: {saatlik_kaynak} okunamadı veya yetersiz; "
                       "grafik için güvenli bağımsız canlı fetch yolu yok. "
-                      "Botun mevcut veri yüklemesini kontrol edin.")
+                      "Botun mevcut veri yüklemesini kontrol edin." + oneri)
     df_1s = df_1s.copy(deep=True)
     if tf == "1h":
         return df_1s, saatlik_kaynak
     donusen = resample_ohlcv(df_1s, tf)
     if tf == "1d" and donusen is not None and len(donusen) > 1:
-        donusen, _ = gunluk_bolunme_normalize_et(donusen)
+        donusen = _gunluk_cerceve_onar_ve_olcekle(donusen, sembol=anahtar)
     return donusen, f"resample({tf}) ← {saatlik_kaynak}"
 
 
@@ -181,21 +158,14 @@ def _stabil_baglami_hazirla(
     gunluk = aktif_yonetici.to_gunluk_dataframe(anahtar)
     if gunluk is not None and len(gunluk) > 0:
         gunluk = tamamlanmis_mumlar(gunluk.copy(deep=True), "1d", now=kesim)
-    varsayilan_veri_dizini = Path(veri_dizin).resolve() == Path(_veri_dizini(None)).resolve()
-    if (gunluk is None or len(gunluk) < 30) and varsayilan_veri_dizini:
-        try:
-            from research import arsiv
-
-            arsiv_1d = arsiv.tf_frame(anahtar, "1d")
-            if arsiv_1d is not None and len(arsiv_1d) > 0:
-                gunluk = tamamlanmis_mumlar(arsiv_1d.copy(deep=True), "1d", now=kesim)
-        except Exception as exc:
-            import logging
-            logging.getLogger("grafik").debug("%s arşiv 1D yedek okuma atlandı: %s", anahtar, exc)
-
+    # Canlı grafiklerde geçmiş arşivi cache'e yedek olarak karıştırmayız:
+    # farklı tarih/kaynak/fiyat ölçeği Stabil çizgisini yanıltıcı kılabilir.
     saatlik = aktif_yonetici.to_dataframe(anahtar)
-    if (gunluk is None or len(gunluk) < 2) and saatlik is not None and len(saatlik) >= 5:
-        gunluk = tamamlanmis_mumlar(resample_ohlcv(saatlik.copy(deep=True), "1d"), "1d", now=kesim)
+    if (gunluk is None or len(gunluk) < 20) and saatlik is not None and len(saatlik) >= 5:
+        turetilen = tamamlanmis_mumlar(resample_ohlcv(saatlik.copy(deep=True), "1d"), "1d", now=kesim)
+        # Kısa native seri, daha da kısa türetilmiş seriyle ezilmez.
+        if turetilen is not None and (gunluk is None or len(turetilen) > len(gunluk)):
+            gunluk = turetilen
     if gunluk is not None and len(gunluk) > 1:
         gunluk = _gunluk_cerceve_onar_ve_olcekle(gunluk, saatlik, sembol=anahtar)
 
@@ -259,6 +229,12 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
         return {"tf": tf, "yol": None, "meta": {}, "kaynak": "", "uyarilar": [],
                 "hata": str(hata)}
     uyari: list[str] = []
+    if tf == "1d" and not demo:
+        from config import sembol_turu
+        if sembol_turu(hisse) == "makro" and {"high", "low"}.issubset(cerceve.columns):
+            duz_adet = int((cerceve["high"] == cerceve["low"]).sum())
+            if duz_adet:
+                uyari.append(f"Günlük kaynakta {duz_adet} düz OHLC mum var; saatlik veriyle doğrulanmadan değiştirilmedi")
     durum = None
     if formasyon is None:
         if formasyon_tara:
@@ -273,12 +249,12 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
         from domain_engines.runner import run_domain_engines, run_stabil_domain
 
         temiz_ad = str(hisse).upper().replace(".IS", "")
-        sonuclar = run_domain_engines(temiz_ad, tf, cerceve.copy(deep=True))
+        sonuclar = run_domain_engines(temiz_ad, tf, cerceve.copy(deep=True), isolated=True)
         try:
             stabil_gunluk, stabil_h4, stabil_kesim = _stabil_baglami_hazirla(
                 temiz_ad, tf, cerceve, dizin, demo=demo, yonetici=yonetici, simdi=simdi
             )
-            sonuclar["stabil"] = run_stabil_domain(
+            stabil_sonuc = run_stabil_domain(
                 temiz_ad,
                 tf,
                 cerceve.copy(deep=True),
@@ -287,9 +263,15 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
                 as_of_close=stabil_kesim,
                 isolated=True,
             )
+            sonuclar["stabil"] = stabil_sonuc
+            if stabil_sonuc.error:
+                uyari.append("Stabil hesaplanamadı; destek çizgisi gösterilemiyor")
+            elif stabil_sonuc.data_quality != "OK":
+                uyari.append("Stabil için yeterli/doğrulanmış günlük destek verisi yok")
         except Exception as exc:
             import logging
-            logging.getLogger("grafik").debug("%s %s izole Stabil hesaplaması atlandı: %s", temiz_ad, tf, exc)
+            logging.getLogger("grafik").warning("%s %s izole Stabil hesaplaması atlandı: %s", temiz_ad, tf, type(exc).__name__)
+            uyari.append("Stabil hesaplanamadı; destek çizgisi gösterilemiyor")
     goruntu = grafik.anlik_goruntu(formasyon, tf, cerceve, sembol=str(hisse).upper(),
                                    alarm_turu=alarm_turu, sonuclar=sonuclar,
                                    kare_mum=mum, etiket_detay=etiket_detay, simdi=simdi,

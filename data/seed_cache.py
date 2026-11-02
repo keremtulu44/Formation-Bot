@@ -7,6 +7,9 @@ import numpy as np
 from collections import deque
 from datetime import date, datetime, timedelta, time as dt_time
 import logging
+import hashlib
+import json
+from functools import wraps
 import math
 import os
 import pickle
@@ -89,6 +92,15 @@ def _atomic_pickle_write(path: str, payload) -> None:
     _atomic_write(path, "wb", lambda stream: pickle.dump(payload, stream))
 
 
+def _serialized_cache_save(method):
+    """Serialize snapshots and writes so an older save cannot overwrite a newer one."""
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        with self._save_lock:
+            return method(self, *args, **kwargs)
+    return wrapped
+
+
 class StockDequeManager:
     """
     Her hisse için 360 mumluk deque tutar
@@ -103,6 +115,7 @@ class StockDequeManager:
         # Komutlar analizle eşzamanlı okuyabilir: kısa önbellek kopyalama ve
         # deque'yi değiştirme bölümlerini koru; ağ/hesaplamayı kilit altında tutma.
         self._cache_lock = threading.RLock()
+        self._save_lock = threading.RLock()
         self.deques: Dict[str, deque] = {}
         # 1D (günlük) derin veri: 1H penceresinden BAĞIMSIZ (~500 bar).
         # Neden ayrı? 1H deque 360 bar = ~40 iş günü; resample 1D sadece ~40 bar
@@ -117,7 +130,7 @@ class StockDequeManager:
         self.sureklilik_sorunlari: Dict[str, List[Dict]] = {}
         # --- yazma amplifikasyonu koruması (Batch 6 / B5) ---
         # Supabase'e aynı içerik ikinci kez gönderilmesin: son gönderilen verinin
-        # parmak izi (len, son bar zamanı, son kapanış). Disk yazımı her zaman
+        # tüm OHLCV mumlarının parmak izi. Disk yazımı her zaman
         # yapılır (yerel kurtarma), uzak yazım yalnız içerik değiştiğinde.
         self._uzak_ozet: Dict[str, tuple] = {}
         self._gunluk_uzak_ozet: Dict[str, tuple] = {}
@@ -280,7 +293,11 @@ class StockDequeManager:
             if _karisik_timestamp_zaman_dilimi(list(dq) + [normalized]):
                 _pkg.logger.error("%s tekil mum reddedildi (cache zaman dilimi karışık)", stock)
                 return False
-            dq.append(normalized)
+            birlesik = {c["timestamp"]: c for c in dq}
+            birlesik[normalized["timestamp"]] = normalized
+            ordered = sorted(birlesik.values(), key=lambda c: c["timestamp"])
+            dq.clear()
+            dq.extend(ordered[-self.maxlen:])
         return True
     
     def append_dataframe(self, stock: str, df: pd.DataFrame) -> bool:
@@ -305,35 +322,34 @@ class StockDequeManager:
         dq = self.get_deque(stock)
         with self._cache_lock:
             birlesik: Dict[datetime, dict] = {c['timestamp']: c for c in dq}
-        yeni = 0
-        guncellenen = 0
-        for idx, row in df.iterrows():
-            ts = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
-            candle = {
-                'timestamp': ts,
-                'open': float(row['open']),
-                'high': float(row['high']),
-                'low': float(row['low']),
-                'close': float(row['close']),
-                'volume': float(row.get('volume', 0))
-            }
-            if ts in birlesik:
-                guncellenen += 1
-            else:
-                yeni += 1
-            birlesik[ts] = candle
-        if _karisik_timestamp_zaman_dilimi(list(birlesik.values())):
-            _pkg.logger.error(
-                "%s: birleştirilen cache'te naive/aware timestamp karışımı; deque korunuyor",
-                stock,
-            )
-            self.sureklilik_sorunlari[stock] = [{
-                "tip": "gecersiz_girdi",
-                "mesaj": "timestamp zaman dilimi karışık",
-            }]
-            return False
-        tumu = sorted(birlesik.values(), key=lambda c: c['timestamp'])
-        with self._cache_lock:
+            yeni = 0
+            guncellenen = 0
+            for idx, row in df.iterrows():
+                ts = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
+                candle = {
+                    'timestamp': ts,
+                    'open': float(row['open']),
+                    'high': float(row['high']),
+                    'low': float(row['low']),
+                    'close': float(row['close']),
+                    'volume': float(row.get('volume', 0))
+                }
+                if ts in birlesik:
+                    guncellenen += 1
+                else:
+                    yeni += 1
+                birlesik[ts] = candle
+            if _karisik_timestamp_zaman_dilimi(list(birlesik.values())):
+                _pkg.logger.error(
+                    "%s: birleştirilen cache'te naive/aware timestamp karışımı; deque korunuyor",
+                    stock,
+                )
+                self.sureklilik_sorunlari[stock] = [{
+                    "tip": "gecersiz_girdi",
+                    "mesaj": "timestamp zaman dilimi karışık",
+                }]
+                return False
+            tumu = sorted(birlesik.values(), key=lambda c: c['timestamp'])
             dq.clear()
             dq.extend(tumu[-self.maxlen:])
         _pkg.logger.info(f"{stock}: {yeni} yeni / {guncellenen} güncellenen mum (geldi {len(df)}, toplam {len(dq)})")
@@ -346,19 +362,20 @@ class StockDequeManager:
         # yaparsa hisse 40 gün kör kalır. Bunun yerine sorun kaydedilir ve main.py
         # o hisseyi o taramada ANALİZ ETMEZ (sahte sinyal üretmez), kullanıcı
         # logdan görüp müdahale eder (veri yenileme / düzeltme).
-        sorunlar = sureklilik_sorunlari_bul(dq)
-        if sorunlar:
-            self.sureklilik_sorunlari[stock] = sorunlar
-            for s_ in sorunlar:
-                _pkg.logger.warning(f"{stock}: {s_['mesaj']}")
-            if any(s_['tip'] == 'split' for s_ in sorunlar):
-                _pkg.logger.error(
-                    f"{stock}: SPLIT/BEDELSİZ tespit edildi - bu hisse bu tur ANALİZ EDİLMEYECEK "
-                    f"(ham seride sahte kırılım sinyali riski). Veriyi yenilemek/düzeltmek için "
-                    f"elle müdahale gerekir; düzeltilene kadar sessiz kalır."
-                )
-        else:
-            self.sureklilik_sorunlari.pop(stock, None)
+        with self._cache_lock:
+            sorunlar = sureklilik_sorunlari_bul(dq)
+            if sorunlar:
+                self.sureklilik_sorunlari[stock] = sorunlar
+                for s_ in sorunlar:
+                    _pkg.logger.warning(f"{stock}: {s_['mesaj']}")
+                if any(s_['tip'] == 'split' for s_ in sorunlar):
+                    _pkg.logger.error(
+                        f"{stock}: SPLIT/BEDELSİZ tespit edildi - bu hisse bu tur ANALİZ EDİLMEYECEK "
+                        f"(ham seride sahte kırılım sinyali riski). Veriyi yenilemek/düzeltmek için "
+                        f"elle müdahale gerekir; düzeltilene kadar sessiz kalır."
+                    )
+            else:
+                self.sureklilik_sorunlari.pop(stock, None)
         return True
     
     def replace_dataframe(self, stock: str, df: pd.DataFrame) -> bool:
@@ -403,13 +420,14 @@ class StockDequeManager:
             dq.clear()
             dq.extend(tumu[-self.maxlen:])
 
-        sorunlar = sureklilik_sorunlari_bul(dq)
-        if sorunlar:
-            self.sureklilik_sorunlari[stock] = sorunlar
-            for s_ in sorunlar:
-                _pkg.logger.warning(f"{stock}: {s_['mesaj']}")
-        else:
-            self.sureklilik_sorunlari.pop(stock, None)
+        with self._cache_lock:
+            sorunlar = sureklilik_sorunlari_bul(dq)
+            if sorunlar:
+                self.sureklilik_sorunlari[stock] = sorunlar
+                for s_ in sorunlar:
+                    _pkg.logger.warning(f"{stock}: {s_['mesaj']}")
+            else:
+                self.sureklilik_sorunlari.pop(stock, None)
 
         _pkg.logger.info(
             "%s: 1H önbellek temiz veriyle yenilendi (%d bar)",
@@ -446,6 +464,7 @@ class StockDequeManager:
         
         return df
     
+    @_serialized_cache_save
     def save_to_disk(self, stock: str, *, persist_remote: bool = True) -> bool:
         """Save the JSON restart cache and report whether all configured stores succeeded."""
         if stock not in self.deques:
@@ -455,7 +474,8 @@ class StockDequeManager:
         json_path = os.path.join(self.data_dir, f"{stock}.json")
 
         try:
-            data_list = list(self.deques[stock])
+            with self._cache_lock:
+                data_list = [dict(c) for c in self.deques[stock]]
 
             # JSON is the default/safe restart format; build it before the optional
             # legacy pickle so the canonical cache survives a pickle write failure.
@@ -481,7 +501,7 @@ class StockDequeManager:
             remote_error = None
             if persist_remote and self.persistent_store is not None:
                 # İçerik değişmediyse UPSERT atlanır (tarama başına ~48 gereksiz
-                # istek + ~2 MB gidiyordu). Kapanış/timestamp değişince yazılır.
+                # istek + ~2 MB gidiyordu). Her mumun değişimi hesaba katılır.
                 ozet = self._veri_ozeti(data_list)
                 remote_error = None
                 if self._uzak_ozet.get(stock) != ozet:
@@ -617,23 +637,22 @@ class StockDequeManager:
         dq = self.get_gunluk_deque(stock)
         with self._cache_lock:
             birlesik = {c["timestamp"]: c for c in dq}
-        yeni = guncellenen = 0
-        for idx, row in df.iterrows():
-            ts = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
-            if ts.tzinfo is None:
-                ts = ISTANBUL_TZ.localize(ts)
-            else:
-                ts = ts.tz_convert(ISTANBUL_TZ)
-            candle = {"timestamp": ts, "open": float(row["open"]), "high": float(row["high"]),
-                      "low": float(row["low"]), "close": float(row["close"]),
-                      "volume": float(row.get("volume", 0))}
-            if ts in birlesik:
-                guncellenen += 1
-            else:
-                yeni += 1
-            birlesik[ts] = candle
-        tumu = sorted(birlesik.values(), key=lambda c: c["timestamp"])
-        with self._cache_lock:
+            yeni = guncellenen = 0
+            for idx, row in df.iterrows():
+                ts = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
+                if ts.tzinfo is None:
+                    ts = ISTANBUL_TZ.localize(ts)
+                else:
+                    ts = ts.tz_convert(ISTANBUL_TZ)
+                candle = {"timestamp": ts, "open": float(row["open"]), "high": float(row["high"]),
+                          "low": float(row["low"]), "close": float(row["close"]),
+                          "volume": float(row.get("volume", 0))}
+                if ts in birlesik:
+                    guncellenen += 1
+                else:
+                    yeni += 1
+                birlesik[ts] = candle
+            tumu = sorted(birlesik.values(), key=lambda c: c["timestamp"])
             dq.clear()
             dq.extend(tumu[-GUNLUK_DEQUE_MAXLEN:])
         _pkg.logger.info(f"{stock}: {yeni} yeni / {guncellenen} güncellenen GÜNLÜK mum "
@@ -790,13 +809,16 @@ class StockDequeManager:
                 if not remote_saved:
                     _pkg.logger.warning("Günlük fetch deneme durumu uzak saklayıcı tarafından reddedildi")
 
+    @_serialized_cache_save
     def save_gunluk_to_disk(self, stock: str, *, persist_remote: bool = True) -> bool:
         """Save local JSON and report whether configured durable stores accepted it."""
         dq = self.get_gunluk_deque(stock)
         os.makedirs(self.data_dir, exist_ok=True)
+        with self._cache_lock:
+            snapshot = [dict(c) for c in dq]
         payload = [{"timestamp": c["timestamp"].isoformat(), "open": c["open"],
                     "high": c["high"], "low": c["low"], "close": c["close"],
-                    "volume": c["volume"]} for c in dq]
+                    "volume": c["volume"]} for c in snapshot]
         _atomic_json_write(self._gunluk_dosya(stock), payload)
         if persist_remote and self.persistent_store is not None:
             # Günlük seri günde bir değişir; tarama başına 48 kez yazmak ~2,4 MB
@@ -914,11 +936,12 @@ class StockDequeManager:
 
     @staticmethod
     def _veri_ozeti(data_list) -> tuple:
-        """Uzak yazım gerekip gerekmediğini anlamak için ucuz parmak izi."""
-        if not data_list:
-            return (0, None, None)
-        son = data_list[-1] if isinstance(data_list[-1], dict) else {}
-        return (len(data_list), str(son.get("timestamp")), son.get("close"))
+        """Tüm mumları kapsa: geçmiş OHLCV düzeltmeleri de uzak kayda gitmeli."""
+        rows = [[str(c.get("timestamp")), *(c.get(k) for k in
+                 ("open", "high", "low", "close", "volume"))] for c in data_list]
+        encoded = json.dumps(rows, ensure_ascii=True, separators=(",", ":"),
+                             allow_nan=False).encode("utf-8")
+        return (len(rows), hashlib.sha256(encoded).hexdigest())
 
     def uzak_yazma_durumu(self) -> Dict:
         """B5 telemetrisi: kaç uzak yazım yapıldı, kaçı gereksizdi."""

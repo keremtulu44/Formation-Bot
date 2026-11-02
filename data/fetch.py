@@ -112,40 +112,57 @@ def saglayici_adaylari(stock: str) -> List[str]:
     return [birincil]
 
 
-def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional[pd.DataFrame]:
-    """Günlük (1D) OHLCV çeker — DERİN geçmiş (varsayılan 2 yıl, ~500 bar).
+def _fetch_yfinance_adaylari(stock: str, period: str, interval: str):
+    """Adayları doğrula; geçici sağlayıcı hatasında ikinci seriye yüklenme.
 
-    Neden ayrı fonksiyon? 1H deque 360 bar = ~40 iş günü tutar; resample ile 1D
-    yapılırsa sadece ~40 bar olur ve 1D formasyon penceresi (20-60 bar) marjinal
-    kalır. 1H penceresini büyütmek Pine uyumunu bozabileceği için 1D verisini
-    AYRI ve DERİN çekiyoruz. auto_adjust=False: 1H ile aynı gerekçe (ham fiyat).
+    Spot ve vadeli aynı enstrüman değildir. Yedek yalnız birincil seri boş veya
+    geçersiz olduğunda denenir; geçici ağ/rate-limit hatasında retry üst katmana
+    bırakılır. Kaynak değişikliği günlüğe kaydedilir.
     """
+    import contextlib
+    import io
+    import yfinance as yf
+
+    reasons = []
+    for sira, ticker in enumerate(saglayici_adaylari(stock)):
+        captured = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(captured):
+                ham = yf.Ticker(ticker).history(period=period, interval=interval, auto_adjust=False)
+            if ham is None or ham.empty:
+                reason = captured.getvalue().strip() or "Yahoo boş veri döndürdü"
+            else:
+                ham = ham.rename(columns=str.lower)
+                if not isinstance(ham.index, pd.DatetimeIndex):
+                    reason = "Sağlayıcı geçerli zaman indeksi döndürmedi"
+                else:
+                    if ham.index.tz is None:
+                        ham.index = ham.index.tz_localize("UTC").tz_convert(ISTANBUL_TZ)
+                    else:
+                        ham.index = ham.index.tz_convert(ISTANBUL_TZ)
+                    temiz = _saglayici_ohlcv_temizle(ham, stock=stock, timeframe=interval)
+                    if temiz is not None and not temiz.empty:
+                        if sira:
+                            _pkg.logger.warning("%s: yedek sağlayıcı serisi kullanıldı (%s); spot ile aynı enstrüman olmayabilir", stock, ticker)
+                        return temiz, False, ""
+                    reason = "Sağlayıcı geçerli OHLCV mumu döndürmedi"
+        except Exception as exc:
+            reason = f"{type(exc).__name__}: {exc}"
+        retryable = yfinance_error_is_retryable(reason)
+        reasons.append(f"{ticker}: {reason}")
+        if retryable:
+            return None, True, "; ".join(reasons)
+        _pkg.logger.info("%s: sağlayıcı %s %s başarısız: %s", stock, ticker, interval, reason)
+    return None, False, "; ".join(reasons)
+
+
+def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional[pd.DataFrame]:
+    """Günlük derin OHLCV geçmişini sağlayıcıdan çeker."""
     try:
-        import io
-        import contextlib
-        import yfinance as yf
-        ham = None
-        adaylar = saglayici_adaylari(stock)
-        for sira, ticker in enumerate(adaylar):
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                ham = yf.Ticker(ticker).history(period=period, interval="1d", auto_adjust=False)
-            if ham is not None and len(ham) > 0:
-                if sira:
-                    _pkg.logger.info(f"{stock}: birincil seri boştu, yedek seri "
-                                f"kullanıldı ({ticker})")
-                break
-            _pkg.logger.info(f"{stock}: sağlayıcı {ticker} 1d boş döndü")
-        if ham is None or len(ham) == 0:
-            return None
-        df = ham.copy()
-        if df.index.tz is None:
-            df.index = df.index.tz_localize("UTC").tz_convert(ISTANBUL_TZ)
-        else:
-            df.index = df.index.tz_convert(ISTANBUL_TZ)
-        df.columns = [c.lower() for c in df.columns]
-        return _saglayici_ohlcv_temizle(df, stock=stock, timeframe="1d")
-    except Exception as e:
-        _pkg.logger.debug(f"{stock} 1D fetch hatası: {e}")
+        frame, _retryable, _reason = _fetch_yfinance_adaylari(stock, period, "1d")
+        return frame
+    except Exception as exc:
+        _pkg.logger.debug("%s 1D fetch hatası: %s", stock, exc)
         return None
 
 
@@ -220,56 +237,12 @@ def fetch_yfinance_1h(
     ham fiyat kullanır. Bu port sırasında parametre düşmüştü -> temettü sonrası tüm
     geçmiş kayar, pivot/sınır/ATR değerleri Pine'dan sapardı. Geri konuldu.
     """
-    def result(df, retryable=False, reason=""):
-        return (df, retryable, reason) if with_status else df
-
+    # Ortak sağlayıcı yolu history çağrısını auto_adjust=False ile yapar.
     try:
-        import io
-        import contextlib
-        import yfinance as yf
-        captured = io.StringIO()
-        ham = None
-        adaylar = saglayici_adaylari(stock)
-        for sira, ticker in enumerate(adaylar):
-            captured = io.StringIO()
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(captured):
-                ham = yf.Ticker(ticker).history(period=period, interval="1h", auto_adjust=False)
-            if ham is not None and not ham.empty:
-                if sira:
-                    _pkg.logger.info(f"{stock}: birincil seri boştu, yedek seri "
-                                f"kullanıldı ({ticker})")
-                break
-            _pkg.logger.info(f"{stock}: sağlayıcı {ticker} 1h boş döndü")
-        if ham is None or ham.empty:
-            reason = captured.getvalue().strip() or "Yahoo boş veri döndürdü"
-            return result(None, yfinance_error_is_retryable(reason), reason)
-        ham = ham.rename(columns=str.lower)
-        gerekli = ["open", "high", "low", "close", "volume"]
-        if not all(c in ham.columns for c in gerekli):
-            return result(None, False, "Gerekli OHLCV sütunları eksik")
-        ham = ham[gerekli]
-        # Zaman dilimi: deque'daki mumlar Europe/Istanbul tz-aware. yfinance genelde
-        # borsa saatini verir ama bazı durumlarda UTC/naive dönebilir - normalize et,
-        # yoksa dedup bozulur (aynı mum iki kez eklenir) ve tamamlanmis_mumlar şaşar.
-        try:
-            if ham.index.tz is None:
-                ham.index = ham.index.tz_localize("UTC").tz_convert(ISTANBUL_TZ)
-            else:
-                ham.index = ham.index.tz_convert(ISTANBUL_TZ)
-        except Exception:
-            try:
-                ham.index = pd.to_datetime(ham.index).tz_localize(ISTANBUL_TZ)
-            except Exception:
-                # Son çare de düştüyse indeks normalize KALMAZ: dedup bozulur,
-                # tamamlanmis_mumlar şaşar. Yutulmasın, iz kalsın (2026-10-26).
-                _pkg.logger.warning("Mum indeksi TZ'ye normalize edilemedi; ham kalıyor", exc_info=True)
-        temiz = _saglayici_ohlcv_temizle(ham, stock=stock, timeframe="1h")
-        if temiz is None or temiz.empty:
-            return result(None, False, "Sağlayıcı geçerli OHLCV mumu döndürmedi")
-        return result(temiz)
+        df, retryable, reason = _fetch_yfinance_adaylari(stock, period, "1h")
     except Exception as exc:
-        reason = f"{type(exc).__name__}: {exc}"
-        return result(None, yfinance_error_is_retryable(exc), reason)
+        df, retryable, reason = None, yfinance_error_is_retryable(exc), f"{type(exc).__name__}: {exc}"
+    return (df, retryable, reason) if with_status else df
 
 
 def fetch_last_bar(stock: str) -> Optional[pd.DataFrame]:

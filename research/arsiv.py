@@ -52,7 +52,7 @@ HAVUZ_DISI_SEMBOLLER: dict[str, str] = {
 }
 
 _ONTAMPI = Path(__file__).resolve().parent.parent
-_OBELLEK: dict[tuple[str, str], pd.DataFrame] = {}
+_OBELLEK: dict[tuple[str, str, str, int, int], pd.DataFrame] = {}
 
 
 def arsiv_koku(kok: str | Path | None = None) -> Path:
@@ -86,18 +86,37 @@ def arsiv_sembolleri(kok: str | Path | None = None) -> list[str]:
     return semboller
 
 
+
+def _anahtar(sembol: str, interval: str, tur: str, kok: str | Path | None) -> tuple:
+    """Arşiv kökü ve kaynak dosya sürümü farklıysa eski frame kullanılmaz."""
+    root = arsiv_koku(kok).resolve()
+    yol = root / f"{sembol}_{interval}.csv.gz"
+    try:
+        stat = yol.stat()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"arşiv dosyası yok: {yol}") from None
+    return (str(root), sembol, tur, stat.st_mtime_ns, stat.st_size)
+
+
+def _sakla(anahtar: tuple, frame: pd.DataFrame) -> pd.DataFrame:
+    # Güncellenen aynı dosyanın eski sürümleri bellekte birikmesin.
+    for eski in list(_OBELLEK):
+        if eski[:3] == anahtar[:3] and eski != anahtar:
+            _OBELLEK.pop(eski, None)
+    _OBELLEK[anahtar] = frame
+    return frame.copy(deep=True)
+
 def ham_frame(sembol: str, interval: str, kok: str | Path | None = None) -> pd.DataFrame:
     """Arşivdeki ham intervali DatetimeIndex'li OHLCV çerçevesi olarak okur.
 
     ``bar_time`` metin olarak saklanır (repo kuralı: timestamptz değil) ve
     ``+03:00`` ofsetlidir. Sıra korunur; arşiv zaten kronolojik yazılır.
     """
-    anahtar = (sembol, f"raw:{interval}")
-    if anahtar in _OBELLEK:
-        return _OBELLEK[anahtar]
-    yol = arsiv_koku(kok) / f"{sembol}_{interval}.csv.gz"
-    if not yol.exists():
-        raise FileNotFoundError(f"arşiv dosyası yok: {yol}")
+    anahtar = _anahtar(sembol, interval, f"raw:{interval}", kok)
+    kayit = _OBELLEK.get(anahtar)
+    if kayit is not None:
+        return kayit.copy(deep=True)
+    yol = Path(anahtar[0]) / f"{sembol}_{interval}.csv.gz"
     with gzip.open(yol, "rt", encoding="utf-8") as dosya:
         ham = pd.read_csv(dosya)
     ham.columns = [str(c).lower() for c in ham.columns]
@@ -109,16 +128,16 @@ def ham_frame(sembol: str, interval: str, kok: str | Path | None = None) -> pd.D
     ham = ham.set_index("timestamp").sort_index()
     ham = ham.astype({"open": float, "high": float, "low": float, "close": float, "volume": float})
     ham = ham[~ham.index.duplicated(keep="first")]
-    _OBELLEK[anahtar] = ham
-    return ham
+    return _sakla(anahtar, ham)
 
 
 def tf_frame(sembol: str, timeframe: str, kok: str | Path | None = None) -> pd.DataFrame:
     """Sembol için istenen zaman diliminin çerçevesini üretir (önbellekli)."""
-    anahtar = (sembol, timeframe)
-    if anahtar in _OBELLEK:
-        return _OBELLEK[anahtar]
     kaynak = KAYNAK_INTERVAL[timeframe]
+    anahtar = _anahtar(sembol, kaynak, timeframe, kok)
+    kayit = _OBELLEK.get(anahtar)
+    if kayit is not None:
+        return kayit.copy(deep=True)
     ham = ham_frame(sembol, kaynak, kok)
     if timeframe == kaynak:
         frame = ham.copy()
@@ -143,8 +162,7 @@ def tf_frame(sembol: str, timeframe: str, kok: str | Path | None = None) -> pd.D
         # Sessiz sıfır yerine gürültülü hata: boş frame "ölçülecek zone yok"
         # ile karışır ve raporda yanlışlıkla sıfır gözlem olarak görünür.
         raise ValueError(f"{sembol}/{timeframe}: resample/temizlik sonrası boş frame (kaynak {kaynak}, {len(ham)} bar)")
-    _OBELLEK[anahtar] = frame
-    return frame
+    return _sakla(anahtar, frame)
 
 
 def temizle(frame: pd.DataFrame) -> pd.DataFrame:

@@ -149,7 +149,7 @@ def test_gunluk_bolunme_normalize_et_bedelsizi_olcekler_taban_serisine_dokunmaz(
     assert float(norm_taban["close"].iloc[0]) == pytest.approx(100.0)
 
 
-def test_cerceve_getir_xagusd_uzlasma_duz_mumlarini_1h_ile_onarir_ve_1d_png_duz_cizgi_olmaz(tmp_path: Path):
+def test_cerceve_getir_xagusd_uzlasma_mumlarini_korur_ve_uyarir(tmp_path: Path):
     yonetici = StockDequeManager(data_dir=str(tmp_path))
 
     # 120 iş günü 1D XAGUSD: son 3 mum Yahoo vadeli uzlaşma düz çizgisi (O=H=L=C)
@@ -194,7 +194,9 @@ def test_cerceve_getir_xagusd_uzlasma_duz_mumlarini_1h_ile_onarir_ve_1d_png_duz_
 
     onarilmis_1d, _ = grafik_uret.cerceve_getir("XAGUSD", "1d", str(tmp_path), yonetici=yonetici)
     son_uc_aralik = (onarilmis_1d["high"].iloc[-3:] - onarilmis_1d["low"].iloc[-3:]).to_numpy()
-    assert (son_uc_aralik > 0.8).all()
+    # Ayrı seans/kaynak olduğu doğrulanmadan saatlik veri günlük barın üzerine yazılmaz.
+    assert (son_uc_aralik == 0).all()
+    pd.testing.assert_series_equal(onarilmis_1d["close"], df_1d["close"], check_names=False, check_freq=False)
 
     png_yolu = tmp_path / "xagusd_1d.png"
     uret = grafik_uret.kare_uret(
@@ -208,6 +210,7 @@ def test_cerceve_getir_xagusd_uzlasma_duz_mumlarini_1h_ile_onarir_ve_1d_png_duz_
     )
     assert Path(uret["yol"]).exists()
     assert Path(uret["yol"]).stat().st_size > 15_000
+    assert any("düz OHLC" in x for x in uret["meta"].get("uyarilar", []))
 
     # BIST sembolünde (AKBNK) izole veri_dizin ile kare_uret(zone=True) Stabil basamak çizgisini de üretmeli:
     gunler_bist = pd.date_range("2025-10-20", periods=260, freq="1B", tz=ISTANBUL_TZ)

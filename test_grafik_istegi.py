@@ -117,7 +117,7 @@ def test_bellek_disk_olmayan_sembol_icin_kullanilir(is_ortami, monkeypatch, tmp_
     monkeypatch.setattr(M, "_cache_verisi_kullanilabilir", lambda *a: True)
     import domain_engines.runner as R
     cagrilar = []
-    monkeypatch.setattr(R, "run_domain_engines", lambda s, tf, frame: cagrilar.append((s, tf)) or {})
+    monkeypatch.setattr(R, "run_domain_engines", lambda s, tf, frame, **kwargs: cagrilar.append((s, tf)) or {})
     n, metinler, fotolar, threadler = is_ortami
     yanit = M._komut_grafik("SEM 4s sade")
     assert "isteği alındı" in yanit and "sade görünüm" in yanit
