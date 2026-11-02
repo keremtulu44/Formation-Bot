@@ -47,6 +47,9 @@ def _bad(frame):
     bad = (~np.isfinite(o) | ~np.isfinite(h) | ~np.isfinite(l) | ~np.isfinite(c) |
            (o <= 0) | (l <= 0) | (h < o) | (h < c) | (h < l) | (l > o) | (l > c))
     # Bölünme/ham fiyat sıçraması: karşılaştırılamayan pencereyi oyun yapma.
+    volume = pd.to_numeric(frame["volume"], errors="coerce") if "volume" in frame else None
+    if volume is not None:
+        bad |= ~np.isfinite(volume) | (volume < 0)
     bad |= (c / c.shift(1) - 1).abs() > 0.30
     return np.asarray(bad, dtype=int)
 
