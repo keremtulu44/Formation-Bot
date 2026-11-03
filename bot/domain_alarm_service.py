@@ -37,13 +37,15 @@ from notification_context import (
     _token,
     _usable_export,
 )
+from notifier.format_kart import _kart_mum_damgasi, _mum_damgasi_ekle
+from notifier.util import TF_KISA, _KART_MAKS_SATIR, _satir
 from state.paths import yeni_domain_alarm_state_yolu
-from telegram_measure import metni_sigdir
 
 logger = logging.getLogger(__name__)
 
 YENI_KART_ISARETI = "🆕 YENİ"
-_TF_ETIKET = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
+_UST_TF = {"1h": "4h", "2h": "4h", "4h": "1d"}
+_ALT_TF = {"1d": "4h"}
 _GECERSIZ_FORMASYON = {"FORMASYON_GECERSIZ", "YOK", "ST_NONE", "NONE", ""}
 
 
@@ -66,6 +68,8 @@ class DomainAlarmCandidate:
     data_quality: str
     card_lines: tuple[str, ...]
     rank_score: float
+    grafik_verisi: dict[str, Any] | None = None
+    grafik_verisi_public: dict[str, Any] | None = None
 
     @property
     def dedup_key(self) -> str:
@@ -90,7 +94,74 @@ def _tr_sayi(deger: float | None, ondalik: int = 2) -> str:
 
 
 def _tf_etiket(tf: str) -> str:
-    return _TF_ETIKET.get(str(tf).lower(), str(tf))
+    return TF_KISA.get(str(tf).lower(), str(tf))
+
+
+def _grafik_verisi_uret(
+    stock: str,
+    tf: str,
+    frame: pd.DataFrame,
+    frames: Mapping[str, pd.DataFrame],
+    results: Mapping[str, Any],
+    simdiki_zaman: datetime,
+    baglam: Mapping[str, Any] | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Eski alarm kareleriyle birebir aynı `grafik.kare_listesi` çağrısı.
+
+    Yeni kart için ayrı bir çizim yolu yok: aynı `cift`, aynı domain
+    `sonuclar`, aynı kapanmış çerçeveler ve aynı alarm overlay bilgisi
+    kullanılır. Public taraf da eski karardaki 2 kare + üst/alt TF kuralını
+    izler.
+    """
+    try:
+        import grafik
+        if not grafik.grafik_aktif_mi():
+            return None, None
+        baglam = baglam or {}
+        cift = baglam.get("cift")
+        state = str(baglam.get("state") or "").strip().upper()
+        alarm_turu = (
+            grafik.alarm_turu_bul(state) if cift is not None and state else None
+        )
+        alarm_bar = None
+        if cift is not None:
+            try:
+                ham_bar = int(baglam.get("alarm_bar"))
+                if ham_bar >= 0:
+                    alarm_bar = ham_bar
+            except (TypeError, ValueError, OverflowError):
+                alarm_bar = None
+        ek = {k: v for k, v in frames.items() if k != tf}
+        ortak = {
+            "sonuclar": results,
+            "alarm_turu": alarm_turu,
+            "alarm_bar": alarm_bar,
+            "sembol": str(stock).upper(),
+            "zaman_damgasi": frame.index[-1],
+            "simdi": simdiki_zaman,
+        }
+        dm = grafik.kare_listesi(cift, tf, frame, ek_cerceveler=ek, **ortak)
+        if not dm.get("goruntular"):
+            dm = None
+        ust_tf = _UST_TF.get(tf)
+        rol = "ust"
+        if ust_tf is None:
+            ust_tf = _ALT_TF.get(tf)
+            rol = "alt"
+        ust_cerceve = frames.get(ust_tf) if ust_tf else None
+        pub_ek = {ust_tf: ust_cerceve} if ust_tf and ust_cerceve is not None else {}
+        pub = grafik.kare_listesi(
+            cift, tf, frame, ek_cerceveler=pub_ek, adet=2, **ortak
+        )
+        if pub.get("goruntular"):
+            if len(pub["goruntular"]) > 1:
+                pub["goruntular"][1]["rol"] = rol
+        else:
+            pub = None
+        return dm, pub
+    except Exception as exc:  # noqa: BLE001 - grafik alarmı düşürmesin
+        logger.debug("Yeni domain grafik verisi üretilemedi (%s/%s): %s", stock, tf, exc)
+        return None, None
 
 
 def _cfg_sayi(ad: str, varsayilan: float) -> float:
@@ -290,10 +361,7 @@ def _hacim_bilgisi(results: Mapping[str, Any], tf: str,
         "source": kaynak,
         "tier": tier,
         "veri_suphe": veri_suphe,
-        "sebep": (
-            f"hacim {tier} ({_tr_sayi(rvol, 1)}×)"
-            if tier and rvol is not None else None
-        ),
+        "sebep": f"hacim {tier}" if tier else None,
     }
 
 
@@ -338,6 +406,7 @@ def evaluate_domain_alarm_candidates(
     *,
     formasyon_kayitlari: Sequence[Mapping[str, Any]] | None = None,
     bar_metni_fn: Any = None,
+    grafik_baglami: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> list[DomainAlarmCandidate]:
     """Bir sembol için yeni kanal adaylarını üret; canlı state'e yazmaz."""
     if not bool(getattr(config, "YENI_DOMAIN_ALARM", True)):
@@ -421,6 +490,11 @@ def evaluate_domain_alarm_candidates(
         if any("BOS" in s or "CHoCH" in s for s in sebepler):
             puan += 1.0
 
+        grafik_verisi, grafik_verisi_public = _grafik_verisi_uret(
+            stock, tf, frame, frames, results, simdiki_zaman,
+            (grafik_baglami or {}).get(tf),
+        )
+
         adaylar.append(
             DomainAlarmCandidate(
                 symbol=str(stock).upper(),
@@ -440,6 +514,8 @@ def evaluate_domain_alarm_candidates(
                 data_quality=kalite,
                 card_lines=tuple(stabil["card_lines"]),
                 rank_score=puan,
+                grafik_verisi=grafik_verisi,
+                grafik_verisi_public=grafik_verisi_public,
             )
         )
 
@@ -501,62 +577,133 @@ def _isaretle(slots: dict[str, Any], cand: DomainAlarmCandidate) -> None:
 
 # --- Kart metinleri ----------------------------------------------------------
 
+def _yon_isareti(cand: DomainAlarmCandidate) -> str:
+    """Eski kartın ▲/▼/◆ dili: yön yalnız gerçek tetikleyiciden okunur."""
+    metin = " ".join(cand.reasons)
+    if "↑" in metin:
+        return "▲"
+    if "↓" in metin:
+        return "▼"
+    return "◆"
+
+
+def _kart_bloklarini_sigdir(bloklar: list[list[str]]) -> list[list[str]]:
+    """Eski kartın 22 satır tavanı: çekirdek blok ve yasal satır korunur."""
+    icerik = sum(len(b) for b in bloklar)
+    while icerik > _KART_MAKS_SATIR and len(bloklar) > 2:
+        hedef = bloklar[-2]
+        if len(hedef) <= 1:
+            icerik -= len(hedef)
+            bloklar.pop(-2)
+        else:
+            hedef.pop()
+            icerik -= 1
+    return bloklar
+
+
 def format_domain_alarm_card(cand: DomainAlarmCandidate) -> str:
-    satirlar = [
-        f"{YENI_KART_ISARETI} · DOMAİN TETİKLEME",
-        f"{cand.symbol} · {_tf_etiket(cand.timeframe)} · {cand.bar_label}",
-        "Sebep: " + " · ".join(cand.reasons[:4]),
-        f"Stabil: {cand.relation} · {_tr_sayi(cand.dist_atr, 2)} ATR",
-    ]
-    if len(cand.reasons) > 4:
-        satirlar.append(f"… +{len(cand.reasons) - 4} sebep daha")
+    """Eski sade kartla aynı blok dili; yalnız yeni kanal için gerekli bilgi."""
+    tf_label = _tf_etiket(cand.timeframe)
+    bloklar: list[list[str]] = []
+
+    # BLOK 1 · OLAY: kimlik, tetikleyici, mum, kapanış.
+    blok: list[str] = []
+    _satir(blok, f"{YENI_KART_ISARETI} {_yon_isareti(cand)} "
+                 f"{cand.symbol.upper()} {tf_label} TETİKLEME")
+    if cand.reasons:
+        _satir(blok, "· " + " · ".join(cand.reasons[:2]))
+        if len(cand.reasons) > 2:
+            _satir(blok, f"· +{len(cand.reasons) - 2} tetikleyici daha")
+    else:
+        _satir(blok, "· domain tetikleyici")
+    damga = _kart_mum_damgasi(
+        {"bar_time": cand.bar_open, "bar_kapanis": cand.bar_close}
+    )
+    if damga:
+        _mum_damgasi_ekle(blok, damga)
+    else:
+        _satir(blok, f"🕒 {cand.bar_label} mumu")
+    _satir(blok, f"· kapanış {_tr_sayi(cand.close_price)}")
+    bloklar.append(blok)
+
+    # BLOK 3 · YAPI: native basamaklı destek + ilişki/ATR.
+    blok = []
     for satir in cand.card_lines[:2]:
-        satirlar.append(satir)
-    satirlar.append("Koşul: −3 ATR alt sınırı geçti · üst sınır yok")
-    if cand.volume_tier:
-        satirlar.append(
-            f"Hacim: {cand.volume_tier} · RVOL {_tr_sayi(cand.volume_rvol, 1)}× "
-            f"({cand.volume_source})"
-        )
+        _satir(blok, str(satir))
+    _satir(blok, f"· {cand.relation} · {_tr_sayi(cand.dist_atr, 2)} ATR")
+    bloklar.append(blok)
+
+    # BLOK 5 · KATILIM: grafiğin RVOL bilgisi; eşik sebebi üstte zaten var.
+    if cand.volume_tier and cand.volume_rvol is not None:
+        blok = []
+        _satir(blok, f"hacim: RVOL {_tr_sayi(cand.volume_rvol, 1)}× "
+                     f"· {cand.volume_source}")
+        bloklar.append(blok)
+
+    # BLOK 6 · SINIR: yalnız veri kalitesi uyarısı; uydurma koşul satırı yok.
     if cand.data_quality == "VERI_SUPHE":
-        satirlar.append("⚠️ Hacim uç değeri: veri kalitesi kontrolü gerekli")
+        blok = []
+        _satir(blok, "⚠ hacim uç değeri: veri kalitesi kontrolü gerekli")
+        bloklar.append(blok)
     elif cand.data_quality not in {"OK", ""}:
-        satirlar.append(f"Veri kalitesi: {cand.data_quality}")
-    satirlar.append("Yatırım tavsiyesi değildir.")
-    return metni_sigdir("\n".join(satirlar), guvenlik=1.0)
+        blok = []
+        _satir(blok, f"⚠ veri kalitesi: {cand.data_quality}")
+        bloklar.append(blok)
+
+    # BLOK 7 · CTA: eski kartla birebir aynı yasal satır.
+    bloklar.append(["• yatırım tavsiyesi değildir"])
+    bloklar = _kart_bloklarini_sigdir(bloklar)
+    return "\n\n".join("\n".join(b) for b in bloklar if b)
 
 
 def format_domain_alarm_summary_card(cands: Sequence[DomainAlarmCandidate]) -> str:
+    """Burst özeti de eski toplu kartın sade blok dilini kullanır."""
     adet = len(cands)
-    satirlar = [
-        f"{YENI_KART_ISARETI} · DOMAİN TOPLU ÖZET (+{adet})",
-        "Aynı taramada −3 ATR alt sınırını geçen diğer adaylar:",
-        "",
-    ]
+    bloklar: list[list[str]] = []
+    blok: list[str] = []
+    _satir(blok, f"{YENI_KART_ISARETI} · DOMAİN TOPLU ÖZET (+{adet})")
+    ilk = cands[0] if cands else None
+    if ilk is not None:
+        damga = _kart_mum_damgasi(
+            {"bar_time": ilk.bar_open, "bar_kapanis": ilk.bar_close}
+        )
+        if damga:
+            _mum_damgasi_ekle(blok, damga)
+        else:
+            _satir(blok, f"🕒 {ilk.bar_label} mumu")
+    _satir(blok, "Aynı taramada destek alt sınırını geçen diğer adaylar:")
+    bloklar.append(blok)
+
+    blok = []
     for c in cands[:10]:
-        satirlar.append(
+        _satir(
+            blok,
             f"• {c.symbol} {_tf_etiket(c.timeframe)}: {c.relation} "
-            f"({_tr_sayi(c.dist_atr, 1)} ATR) · {' · '.join(c.reasons[:2])}"
+            f"({_tr_sayi(c.dist_atr, 1)} ATR) · {' · '.join(c.reasons[:2])}",
         )
     if adet > 10:
-        satirlar.append(f"• … ve {adet - 10} aday daha")
-    satirlar.extend(["", "Detay: /grafik <SEMBOL> · /stabil"])
-    return metni_sigdir("\n".join(satirlar), guvenlik=1.0)
+        _satir(blok, f"• … ve {adet - 10} aday daha")
+    bloklar.append(blok)
+
+    _satir(bloklar[-1], "› /stabil")
+    bloklar.append(["• yatırım tavsiyesi değildir"])
+    bloklar = _kart_bloklarini_sigdir(bloklar)
+    return "\n\n".join("\n".join(b) for b in bloklar if b)
 
 
-def _deliver_message(notifier: Any, text: str) -> bool:
-    """Ana DM + public hedefe aynı yeni kartı gönder."""
+def _deliver_message(notifier: Any, text: str) -> dict[str, bool]:
+    """Ana DM + public hedefe aynı yeni kartı gönder; kanal sonucunu döndür."""
     dm_on = bool(getattr(config, "YENI_DOMAIN_ALARM_DM", True))
     pub_on = bool(getattr(config, "YENI_DOMAIN_ALARM_PUBLIC", True))
-    any_ok = False
+    dm_ok = False
+    pub_ok = False
 
     if dm_on and notifier is not None:
         send_text = getattr(notifier, "send_text", None)
         if callable(send_text):
             try:
                 res = send_text(text)
-                ok = res[0] if isinstance(res, tuple) else bool(res)
-                any_ok = any_ok or bool(ok)
+                dm_ok = bool(res[0] if isinstance(res, tuple) else res)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Yeni domain DM gönderim hatası: %s", exc)
 
@@ -565,13 +712,39 @@ def _deliver_message(notifier: Any, text: str) -> bool:
         send_pub = getattr(notifier, "send_to_public", None)
         if public_acik is not False and callable(send_pub):
             try:
-                ok_pub = bool(send_pub(text))
+                pub_ok = bool(send_pub(text))
             except Exception as exc:  # noqa: BLE001
-                ok_pub = False
+                pub_ok = False
                 logger.warning("Yeni domain public gönderim hatası: %s", exc)
-            any_ok = any_ok or ok_pub
 
-    return any_ok
+    return {"dm": dm_ok, "public": pub_ok, "any": dm_ok or pub_ok}
+
+
+def _deliver_charts(notifier: Any, cand: DomainAlarmCandidate,
+                    sonuc: Mapping[str, bool]) -> None:
+    """Metnin ardından ESKİ grafik teslim yollarıyla aynı kareleri gönder."""
+    if notifier is None:
+        return
+    kimlik = {
+        "stock_name": cand.symbol,
+        "timeframe": cand.timeframe,
+        "state": "YENI_DOMAIN",
+        "pattern_name": "DOMAİN TETİKLEME",
+    }
+    if sonuc.get("dm") and cand.grafik_verisi:
+        ekle = getattr(notifier, "grafik_kuyruga_ekle", None)
+        if callable(ekle):
+            try:
+                ekle({**kimlik, "grafik_verisi": cand.grafik_verisi}, gonder=True)
+            except Exception as exc:  # noqa: BLE001 - görsel metni düşürmesin
+                logger.warning("Yeni domain DM grafiği kuyruğa alınamadı: %s", exc)
+    if sonuc.get("public") and cand.grafik_verisi_public:
+        bagla = getattr(notifier, "public_grafik_bagla", None)
+        if callable(bagla):
+            try:
+                bagla(kimlik, cand.grafik_verisi_public)
+            except Exception as exc:  # noqa: BLE001 - görsel metni düşürmesin
+                logger.warning("Yeni domain public grafiği gönderilemedi: %s", exc)
 
 
 def dispatch_domain_alarm_candidates(
@@ -611,7 +784,9 @@ def dispatch_domain_alarm_candidates(
         if _zaten_gonderildi(slots.get(cand.dedup_key), cand):
             ozet["filtrelendi"] += 1
             continue
-        if _deliver_message(notifier, format_domain_alarm_card(cand)):
+        sonuc = _deliver_message(notifier, format_domain_alarm_card(cand))
+        if sonuc["any"]:
+            _deliver_charts(notifier, cand, sonuc)
             ozet["tekil_gonderilen"] += 1
             gonderilen.append(cand)
 
@@ -623,7 +798,7 @@ def dispatch_domain_alarm_candidates(
         ozet["filtrelendi"] += len(toplu_liste) - len(yeni_toplu)
         if yeni_toplu and _deliver_message(
             notifier, format_domain_alarm_summary_card(yeni_toplu)
-        ):
+        )["any"]:
             ozet["toplu_ozet"] = 1
             gonderilen.extend(yeni_toplu)
 

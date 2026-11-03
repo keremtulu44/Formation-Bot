@@ -668,6 +668,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             
             # Her TF için: yarım (devam eden) mumu çıkar, TAMAMLANMIŞ mumları besle
             hisse_formasyonlari = []
+            grafik_baglami_by_tf = {}
             for tf_name, df_tf in all_tfs.items():
                 if df_tf is None or len(df_tf) < 30:
                     _pkg.logger.debug(f"{stock} {tf_name} için yeterli veri yok")
@@ -697,6 +698,13 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 notification_state = (
                     "KIRILIM_GECERSIZLESTI" if invalidation_event is not None else state
                 )
+                # Yeni domain kartının grafiği, eski alarm karesiyle AYNI aktif
+                # formasyon kaydını / state'i / bar indeksini kullansın.
+                grafik_baglami_by_tf[str(tf_name).lower()] = {
+                    "cift": active,
+                    "state": notification_state,
+                    "alarm_bar": getattr(snap, "bar_index", None),
+                }
                 # Yaşam döngüsü yok/geçersiz/zayıflama state'ine düştü: bu slotun
                 # "tekrar" mühürleri + 4 saatlik cooldown'ı temizlenir, aynı slotu
                 # tekrar kaplayan yeni formasyon anında bildirilebilir.
@@ -1307,6 +1315,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             simdiki_zaman,
                             formasyon_kayitlari=hisse_formasyonlari,
                             bar_metni_fn=_mum_bilgisi,
+                            grafik_baglami=grafik_baglami_by_tf,
                         )
                     )
                 except Exception as yeni_err:  # noqa: BLE001 - yeni kanal ana taramayı düşürmez

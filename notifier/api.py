@@ -2448,6 +2448,31 @@ class TelegramNotifier:
                     pass
         return gonderilen
 
+    def public_grafik_bagla(self, kayit: Dict, veri: Dict) -> int:
+        """Yeni domain kartının public karesini eski albüm yoluyla gönder.
+
+        `public_kuyruk` yalnız onaylı yaşam döngüsü olayları içindir; yeni
+        kanal metnini doğrudan gönderdiği için kare verisi aynı
+        `_public_grafik` defterine bağlanır ve `public_grafik_gonder` ile
+        aynı 2 kare albüm sözleşmesi kullanılır. Ayrı çizim yolu yoktur.
+        """
+        if not isinstance(kayit, dict) or not isinstance(veri, dict):
+            return 0
+        if not getattr(self, "public_enabled", False):
+            return 0
+        if not (veri.get("goruntular") or []):
+            return 0
+        anahtar = self._public_kuyruk_anahtari(kayit)
+        if not anahtar:
+            return 0
+        with self._public_lck:
+            self._public_grafik[anahtar] = veri
+        try:
+            return self.public_grafik_gonder(kayit)
+        finally:
+            with self._public_lck:
+                self._public_grafik.pop(anahtar, None)
+
     def grafik_dosya_gonder(self, yol, caption: str = "") -> tuple:
         """Bir PNG'yi DM'e gönderir ve dosyayı SİLER (§4); `(ok, aciklama)`.
 

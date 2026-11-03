@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import inspect
 import re
+import sys
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -16,6 +17,8 @@ import pandas as pd
 import pytest
 
 import config
+from notifier.util import TF_KISA, _KART_MAKS_SATIR, _px_butce
+from telegram_measure import genislik
 from bot.domain_alarm_service import (
     DomainAlarmCandidate,
     dispatch_domain_alarm_candidates,
@@ -194,6 +197,8 @@ def _aday(symbol: str = "ASTOR", **kwargs) -> DomainAlarmCandidate:
         data_quality=kwargs.get("data_quality", "OK"),
         card_lines=kwargs.get("card_lines", ("Stabil destek: 90,00",)),
         rank_score=kwargs.get("rank_score", 4.0),
+        grafik_verisi=kwargs.get("grafik_verisi"),
+        grafik_verisi_public=kwargs.get("grafik_verisi_public"),
     )
 
 
@@ -203,6 +208,8 @@ class _Notifier:
         self.public_enabled = True
         self.dm: list[str] = []
         self.public: list[str] = []
+        self.grafik_kuyruk: list = []
+        self.public_grafik: list = []
 
     def send_text(self, text: str):
         self.dm.append(text)
@@ -211,6 +218,14 @@ class _Notifier:
     def send_to_public(self, text: str):
         self.public.append(text)
         return True
+
+    def grafik_kuyruga_ekle(self, data, *, gonder=False):
+        self.grafik_kuyruk.append((data, gonder))
+        return len((data.get("grafik_verisi") or {}).get("goruntular") or [])
+
+    def public_grafik_bagla(self, kayit, veri):
+        self.public_grafik.append((kayit, veri))
+        return len(veri.get("goruntular") or [])
 
 
 def _degerlendir(results: dict, **kwargs) -> list[DomainAlarmCandidate]:
@@ -234,7 +249,9 @@ def test_dist_atr_alt_sinir_hard_ust_serbest():
     yukari = _degerlendir(_sonuclar(dist_atr=5.0, rvol=6.0))
     assert len(yukari) == 1
     assert yukari[0].dist_atr == 5.0
-    assert "üst sınır yok" in format_domain_alarm_card(yukari[0])
+    kart = format_domain_alarm_card(yukari[0])
+    assert "Koşul:" not in kart
+    assert "üst sınır yok" not in kart
 
 
 # 2) Native basamaklı destek: tetik anındaki güncel seviye/ilişki okunur.
@@ -283,6 +300,8 @@ def test_ayni_bar_iki_sebep_tek_kart_iki_kanal(tmp_path):
     assert "🆕 YENİ" in kart
     assert "BOS" in kart and "hacim 5×" in kart
     assert notifier.dm[0] == notifier.public[0]
+    assert not notifier.grafik_kuyruk
+    assert not notifier.public_grafik
 
 
 def test_ayni_bar_ve_cooldown_tekrar_bastirilir(tmp_path):
@@ -418,3 +437,101 @@ def test_eski_kart_metinleri_degismedi():
     assert "🆕 YENİ" not in inspect.getsource(
         TelegramNotifier.format_public_tekil
     )
+
+
+# 10) Yeni kart, eski sade kartın blok dili / piksel bütçesi / yasal satırı.
+def test_yeni_kart_eski_kart_blok_dili_ve_satir_butcesi():
+    kart = format_domain_alarm_card(_aday())
+    satirlar = [l for l in kart.splitlines() if l.strip()]
+    assert "\n\n" in kart
+    assert satirlar[-1] == "• yatırım tavsiyesi değildir"
+    assert TF_KISA["1d"] in kart
+    assert "🕒" in kart
+    assert "Koşul:" not in kart
+    assert "üst sınır yok" not in kart
+    assert "DOMAİN TETİKLEME" not in kart
+    assert "Sebep:" not in kart
+    assert all(genislik(l) <= _px_butce() for l in satirlar)
+    assert len(satirlar) <= _KART_MAKS_SATIR
+
+
+# 11) Grafik ayrı bir yoldan üretilmez: aynı kare_listesi + aynı bağlam.
+def test_grafik_eski_alarm_kare_listesi_baglami_ile_uretilir(monkeypatch):
+    cagrilar = []
+
+    def kare_listesi(cift, tf, cerceve, **kwargs):
+        cagrilar.append((cift, tf, cerceve, kwargs))
+        adet = int(kwargs.get("adet") or 1)
+        return {
+            "sembol": "ASTOR",
+            "goruntular": [{"tf": tf, "goruntu": {}} for _ in range(adet)],
+            "kota": 0,
+            "uyarilar": [],
+        }
+
+    fake = SimpleNamespace(
+        grafik_aktif_mi=lambda: True,
+        alarm_turu_bul=lambda state: "teyit" if state == "KIRILIM_TEYITLI" else None,
+        kare_listesi=kare_listesi,
+    )
+    monkeypatch.setitem(sys.modules, "grafik", fake)
+
+    frame = _frame()
+    frame_4h = _frame()
+    results = _sonuclar(dist_atr=1.0, rvol=6.0, bos=True)
+    active = SimpleNamespace(pattern_name="Yükselen Üçgen")
+    cands = evaluate_domain_alarm_candidates(
+        "ASTOR",
+        {"1d": frame, "4h": frame_4h},
+        {"1d": frame, "4h": frame_4h},
+        results,
+        SIMDI,
+        bar_metni_fn=lambda tf, acilis, kapanis: "03.11 18:30",
+        grafik_baglami={
+            "1d": {
+                "cift": active,
+                "state": "KIRILIM_TEYITLI",
+                "alarm_bar": 39,
+            }
+        },
+    )
+    assert len(cands) == 1
+    assert cands[0].grafik_verisi is not None
+    assert cands[0].grafik_verisi_public is not None
+    assert len(cagrilar) == 2
+    assert cagrilar[0][0] is active
+    assert cagrilar[0][1] == "1d"
+    assert cagrilar[0][3]["sonuclar"] is results
+    assert cagrilar[0][3]["alarm_turu"] == "teyit"
+    assert cagrilar[0][3]["alarm_bar"] == 39
+    assert "4h" in cagrilar[0][3]["ek_cerceveler"]
+    assert cagrilar[1][3]["adet"] == 2
+    assert cands[0].grafik_verisi_public["goruntular"][1]["rol"] == "alt"
+
+
+# 12) Tekil kartın DM + public kareleri aynı payload ile eski teslim yollarına gider.
+def test_yeni_kart_grafikleri_ayni_payload_ile_gider(tmp_path):
+    dm_veri = {
+        "sembol": "ASTOR",
+        "goruntular": [{"tf": "1d", "goruntu": {}}],
+    }
+    pub_veri = {
+        "sembol": "ASTOR",
+        "goruntular": [
+            {"tf": "1d", "goruntu": {}},
+            {"tf": "4h", "goruntu": {}, "rol": "alt"},
+        ],
+    }
+    cand = _aday(grafik_verisi=dm_veri, grafik_verisi_public=pub_veri)
+    notifier = _Notifier()
+    ozet = dispatch_domain_alarm_candidates(
+        [cand], notifier, state_path=str(tmp_path / "yeni.json")
+    )
+    assert ozet["tekil_gonderilen"] == 1
+    assert len(notifier.grafik_kuyruk) == 1
+    assert len(notifier.public_grafik) == 1
+    assert notifier.grafik_kuyruk[0][0]["grafik_verisi"] is dm_veri
+    assert notifier.grafik_kuyruk[0][1] is True
+    assert notifier.grafik_kuyruk[0][0]["state"] == "YENI_DOMAIN"
+    assert notifier.public_grafik[0][1] is pub_veri
+    assert notifier.public_grafik[0][0]["pattern_name"] == "DOMAİN TETİKLEME"
