@@ -85,6 +85,8 @@ _PALET_RENK_KORUGU: dict[str, str] = {
     "serit_yuk": "#3f8fd0", "serit_dus": "#d98b4a",
     "son_yuk": "#4da3ff", "son_dus": "#f5a05a",
     "stabil_ust": "#4da3ff", "stabil_alt": "#f5a05a",
+    # Güçlü yukarı momentum oku: renkle birlikte İÇİ BOŞ ▲ biçimi de ayrım taşır.
+    "stabil_momentum": "#4da3ff",
 }
 
 
@@ -392,6 +394,7 @@ PALET_TABAN = {
     "chip_zemin": "#111922",
     "stabil_ust": "#2cc98d",
     "stabil_alt": "#e25d5a",
+    "stabil_momentum": "#f2c94c",
 }
 
 

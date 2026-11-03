@@ -221,17 +221,21 @@ def prepare_causal_ohlcv(
             "trade_date": [ts.date() for ts in label_times],
             "is_closed": True,
             "is_complete": True,
+            # `dropna` sonrası kaybolan satırlar yüzünden flag maskelerinin
+            # kaymaması için ham girdi sırasını taşıyoruz.
+            "_source_row": range(len(frame)),
         }
     )
     out = out.dropna(subset=["timestamp", "open", "high", "low", "close"])
     if "is_closed" in df.columns:
         closed_mask = df["is_closed"].fillna(False).astype(bool).to_numpy()
         if len(closed_mask) == len(frame):
-            out = out.loc[closed_mask[: len(out)]]
+            out = out.loc[closed_mask[out["_source_row"].to_numpy(dtype=int)]]
     if "is_complete" in df.columns:
         complete_mask = df["is_complete"].fillna(False).astype(bool).to_numpy()
         if len(complete_mask) == len(frame):
-            out = out.loc[complete_mask[: len(out)]]
+            out = out.loc[complete_mask[out["_source_row"].to_numpy(dtype=int)]]
+    out = out.drop(columns=["_source_row"], errors="ignore")
 
     out = out.sort_values("timestamp").drop_duplicates(subset=["timestamp"], keep="last")
     if cutoff_ts is not None:

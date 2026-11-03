@@ -4,6 +4,8 @@ All rules in this module are strictly causal, read-only interpretations of the
 unmodified `05_stabil.txt` support/trend outputs plus closed bar OHLCV:
 - Strong reclaim systematic (`close_reclaim` + `intrabar_sweep_reclaim`) validated
   causally across the live `config.BIST_50` symbol universe and 100-stock archive.
+- Separate strong upward-momentum classification for chart arrows; it stays
+  independent from reclaim alerts and does not require a fixed horizontal support.
 - Fixed 2-line Telegram card copy (`Stabil destek: ...`, `Stabil yapı: ...`)
   kept safely within `config.TELEGRAM_SATIR_PX` (283 px).
 - Curated live bucket classifier for `/stabil` and `/stabil <SEMBOL>`.
@@ -26,8 +28,30 @@ from .candidate_regime import (
 )
 from .stabil_support_lifecycle import (
     StabilSupportLifecycleSnapshot,
+    SupportProgression,
     SupportValidity,
 )
+
+
+#: Grafikte `▲` ile gösterilen, geri alımdan AYRI güçlü yukarı momentum türleri.
+#: Eşikler `/stabil` komutundaki replay-grounded "güçlü çıkış" kuralıyla aynıdır;
+#: native 05_stabil.txt pivot/destek matematiği değiştirilmez.
+STABIL_GUCLU_YUKARI_MOMENTUM_TURLERI = frozenset({
+    "long_base_breakout",        # Oturmuş yatay zeminden güçlü gövdeyle kopuş
+    "upward_rebase_momentum",    # Destek yukarı basamak yaparken gelen güçlü mum
+})
+
+_GUCLU_YUKARI_GOVDE_ATR = 0.35
+_GUCLU_YUKARI_KAPANIS_POZ = 0.65
+_GUCLU_YUKARI_HACIM_ORAN = 1.10
+_GUCLU_YUKARI_COK_GUCLU_GOVDE_ATR = 0.50
+_GUCLU_YUKARI_COOLDOWN_BAR = 3
+
+
+def _enum_value(value: Any) -> str:
+    """StrEnum / düz metin / eski kayıtlar için tek karşılaştırma biçimi."""
+    raw = getattr(value, "value", getattr(value, "name", value))
+    return str(raw or "").upper()
 
 
 def _tr_sayi(deger: float | None, ondalik: int = 2) -> str:
@@ -127,6 +151,9 @@ class StabilBarBehavior:
     reclaim_kind: str | None  # "close_reclaim" | "intrabar_sweep_reclaim" | None
     weak_reclaim: bool
     rank_score: float
+    # Geri alımdan bağımsız, grafikte ayrı `▲` ile gösterilen güçlü yukarı mum.
+    # Varsayılan değer eski kayıtlar / sentetik kart davranışlarıyla uyumludur.
+    momentum_kind: str | None = None
 
 
 def evaluate_bar_behaviors(
@@ -182,6 +209,7 @@ def evaluate_bar_behaviors(
     max_breach_depth_atr = 0.0
     prev_sup: float | None = None
     prev_close: float | None = None
+    last_momentum_bar = -999
 
     for i in range(n):
         pt = bar_projection[i]
@@ -219,6 +247,7 @@ def evaluate_bar_behaviors(
                     reclaim_kind=None,
                     weak_reclaim=False,
                     rank_score=0.0,
+                    momentum_kind=None,
                 )
             )
             prev_sup = None
@@ -226,6 +255,7 @@ def evaluate_bar_behaviors(
             touch_count = 0
             breach_bars = 0
             max_breach_depth_atr = 0.0
+            last_momentum_bar = -999
             continue
 
         sup_f = float(sup)
@@ -258,6 +288,7 @@ def evaluate_bar_behaviors(
 
         reclaim_kind: str | None = None
         weak_reclaim = False
+        momentum_kind: str | None = None
 
         if (
             fixed_support
@@ -304,6 +335,37 @@ def evaluate_bar_behaviors(
             ):
                 reclaim_kind = "intrabar_sweep_reclaim"
 
+        # Güçlü YUKARI mum ayrı bir olaydır: destek altına hiç sarkmadan da
+        # gelebilir ve çizgi yukarı basamak yaptığı barda `fixed_support=False`
+        # olur. Bu yüzden geri alımın `fixed_support` kapısına BAĞLI DEĞİLDİR.
+        # Eşikler `/stabil` "güçlü çıkış" kuralıyla aynı; yalnızca kapalı mum,
+        # geçmiş ATR/hacim ve o ana kadar bilinen native destek kullanılır.
+        if (
+            reclaim_kind is None
+            and not weak_reclaim
+            and pct_vs > 0.0
+            and dist_atr is not None
+            and body_atr is not None
+            and body_atr >= _GUCLU_YUKARI_GOVDE_ATR
+            and close_pos >= _GUCLU_YUKARI_KAPANIS_POZ
+            and touch_count < 3
+            and ((vr is not None and vr >= _GUCLU_YUKARI_HACIM_ORAN)
+                 or body_atr >= _GUCLU_YUKARI_COK_GUCLU_GOVDE_ATR)
+            and _enum_value(getattr(pt, "validity", None)) == SupportValidity.ACTIVE.value
+            and (i - last_momentum_bar) >= _GUCLU_YUKARI_COOLDOWN_BAR
+        ):
+            long_base = unchanged_days >= 20 and 0.15 <= dist_atr <= 1.80
+            step_up = (
+                regime_val == CandidateLineRegime.STEPPING_UP.value
+                or _enum_value(getattr(pt, "progression", None)) == SupportProgression.REBASED_HIGHER.value
+            )
+            stepping = step_up and 0.10 <= dist_atr <= 1.60
+            if long_base or stepping:
+                momentum_kind = (
+                    "long_base_breakout" if long_base else "upward_rebase_momentum"
+                )
+                last_momentum_bar = i
+
         # Update breach state after evaluating current bar
         if c < (sup_f - tol):
             breach_bars += 1
@@ -348,6 +410,7 @@ def evaluate_bar_behaviors(
                 reclaim_kind=reclaim_kind,
                 weak_reclaim=weak_reclaim,
                 rank_score=rank_score,
+                momentum_kind=momentum_kind,
             )
         )
         prev_sup = sup_f

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from bisect import bisect_right
 import io
 import textwrap
 import logging
@@ -161,7 +162,7 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
     if (goruntu["olay"] or {}).get("hata"):
         goruntu["eksik_katmanlar"] = sorted(set(goruntu["eksik_katmanlar"])
                                             | set(goruntu["olay"]["hata"]))
-    goruntu["stabil"] = _stabil_verisi(sonuclar, tf, sol, sag)
+    goruntu["stabil"] = _stabil_verisi(sonuclar, tf, sol, sag, zamanlar[sol:sag])
     # `sonuclar` yoksa bölge/yapı katmanları YOKTUR — bu veri bozukluğu değil
     # (§0.12w: dipnot yalnız veri sorununa); izi `meta["zone"]["sirala"]` ve
     # `meta["olay"]` sıfırlarında taşınır.
@@ -203,9 +204,106 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
     return goruntu
 
 
-def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int) -> Optional[dict[str, Any]]:
-    """Günlük yapısal destek stepline projeksiyonunu kadraja (`sol:sag`) hizalar."""
-    if not sonuclar or sag <= sol:
+def _zaman_anahtari(deger: Any) -> Optional[int]:
+    """Timestamp'i İstanbul nanosaniye anahtarına çevirir; okunamazsa None."""
+    try:
+        import pandas as pd
+
+        ts = pd.Timestamp(deger)
+        if pd.isna(ts):
+            return None
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("Europe/Istanbul")
+        else:
+            ts = ts.tz_convert("Europe/Istanbul")
+        return int(ts.value)
+    except Exception:
+        return None
+
+
+def _stabil_klasik_dilim(projeksiyon: list[Any], davranislar: list[Any],
+                         sol: int, sag: int) -> tuple[list[Any], list[Any]]:
+    """Zaman damgası yoksa eski indeks tabanlı hizalama (geri uyumlu yol)."""
+    pencere_boy = max(0, int(sag) - int(sol))
+    if len(projeksiyon) >= sag:
+        return (projeksiyon[sol:sag],
+                davranislar[sol:sag] if len(davranislar) >= sag else [])
+    if len(projeksiyon) == pencere_boy:
+        return (projeksiyon,
+                davranislar if len(davranislar) == pencere_boy else [])
+    if len(projeksiyon) > pencere_boy:
+        return (projeksiyon[-pencere_boy:],
+                davranislar[-pencere_boy:] if len(davranislar) >= pencere_boy else [])
+    eksik_bas = [None] * (pencere_boy - len(projeksiyon))
+    dav_dilim = ([None] * (pencere_boy - len(davranislar)) + davranislar) if davranislar else []
+    return eksik_bas + projeksiyon, dav_dilim
+
+
+def _stabil_zamanli_dilim(projeksiyon: list[Any], davranislar: list[Any],
+                          sol: int, sag: int, tf: str,
+                          zamanlar: Optional[Sequence[Any]]) -> Optional[tuple[list[Any], list[Any]]]:
+    """Kadraj mumlarını domain'in KAPANIŞ zamanlarıyla eşleştirir.
+
+    `prepare_causal_ohlcv` geçersiz/açık mumları çıkarabildiği için projeksiyon
+    grafik çerçevesinden kısa olabilir. Salt indeks dilimleme bu durumda `▲`
+    işaretlerini kaydırabilir veya tamamen düşürebilir. Burada görünür her mumun
+    close_time'ı, projeksiyondaki en geç `bar_close_time <= close_time` kaydına
+    bağlanır; kesimden sonraki mumlar için destek uydurulmaz.
+    """
+    pencere_boy = max(0, int(sag) - int(sol))
+    if not zamanlar or len(zamanlar) != pencere_boy or not projeksiyon:
+        return None
+    try:
+        import pandas as pd
+        from data import mum_kapanis_anlari
+
+        close_times = mum_kapanis_anlari(pd.DatetimeIndex(zamanlar), str(tf).lower())
+    except Exception:
+        return None
+    if len(close_times) != pencere_boy:
+        return None
+
+    gorunur_anahtarlar = [_zaman_anahtari(t) for t in close_times]
+    projeksiyon_anahtarlari = [_zaman_anahtari(_alan(pt, "bar_close_time")) for pt in projeksiyon]
+    if any(k is None for k in (*gorunur_anahtarlar, *projeksiyon_anahtarlari)):
+        return None
+    if any(b < a for a, b in zip(gorunur_anahtarlar, gorunur_anahtarlar[1:])):
+        return None
+    if any(b < a for a, b in zip(projeksiyon_anahtarlari, projeksiyon_anahtarlari[1:])):
+        return None
+
+    davranis_by_index: dict[int, Any] = {}
+    for pos, bhv in enumerate(davranislar):
+        try:
+            idx = int(_alan(bhv, "bar_index", pos))
+        except (TypeError, ValueError):
+            idx = pos
+        davranis_by_index[idx] = bhv
+
+    son_projeksiyon_zamani = projeksiyon_anahtarlari[-1]
+    dilim: list[Any] = []
+    dav_dilim: list[Any] = []
+    for anahtar in gorunur_anahtarlar:
+        if anahtar < projeksiyon_anahtarlari[0] or anahtar > son_projeksiyon_zamani:
+            dilim.append(None)
+            dav_dilim.append(None)
+            continue
+        pos = bisect_right(projeksiyon_anahtarlari, anahtar) - 1
+        nokta = projeksiyon[pos]
+        dilim.append(nokta)
+        try:
+            bar_idx = int(_alan(nokta, "bar_index", pos))
+        except (TypeError, ValueError):
+            bar_idx = pos
+        dav_dilim.append(davranis_by_index.get(bar_idx))
+    return dilim, dav_dilim
+
+
+def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
+                   zamanlar: Optional[Sequence[Any]] = None) -> Optional[dict[str, Any]]:
+    """Günlük yapısal destek stepline + `▲` işaretlerini kadraja hizalar."""
+    sol_i, sag_i = int(sol), int(sag)
+    if not sonuclar or sag_i <= sol_i:
         return None
     kayit = None
     if isinstance(sonuclar, Mapping):
@@ -230,24 +328,17 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int) -> Optional[dict[
         or _alan(sonuc_nesne, "bar_behaviors")
         or ()
     )
-    pencere_boy = max(0, int(sag) - int(sol))
+    pencere_boy = max(0, sag_i - sol_i)
+    bos = {"hazir": False, "seviyeler": [], "renkler": [], "durumlar": [],
+           "reclaim_barlar": [], "momentum_barlar": [], "son_seviye": None,
+           "son_durum": "NO_SUPPORT", "konum": None}
     if not projeksiyon or pencere_boy <= 0:
-        return {"hazir": False, "seviyeler": [], "renkler": [], "durumlar": [],
-                "reclaim_barlar": [], "son_seviye": None, "son_durum": "NO_SUPPORT", "konum": None}
+        return bos
 
-    if len(projeksiyon) >= sag:
-        dilim = projeksiyon[sol:sag]
-        dav_dilim = davranislar[sol:sag] if len(davranislar) >= sag else []
-    elif len(projeksiyon) == pencere_boy:
-        dilim = projeksiyon
-        dav_dilim = davranislar if len(davranislar) == pencere_boy else []
-    elif len(projeksiyon) > pencere_boy:
-        dilim = projeksiyon[-pencere_boy:]
-        dav_dilim = davranislar[-pencere_boy:] if len(davranislar) >= pencere_boy else []
-    else:
-        eksik_bas = [None] * (pencere_boy - len(projeksiyon))
-        dilim = eksik_bas + projeksiyon
-        dav_dilim = ([None] * (pencere_boy - len(davranislar)) + davranislar) if davranislar else []
+    eslesen = _stabil_zamanli_dilim(projeksiyon, davranislar, sol_i, sag_i, tf, zamanlar)
+    dilim, dav_dilim = eslesen if eslesen is not None else _stabil_klasik_dilim(
+        projeksiyon, davranislar, sol_i, sag_i
+    )
 
     seviyeler: list[Optional[float]] = []
     renkler: list[Optional[str]] = []
@@ -276,10 +367,22 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int) -> Optional[dict[
         renkler.append(renk)
         durumlar.append(durum)
 
+    try:
+        from domain_engines.stabil.signals import STABIL_GUCLU_YUKARI_MOMENTUM_TURLERI
+    except ImportError:
+        STABIL_GUCLU_YUKARI_MOMENTUM_TURLERI = frozenset({
+            "long_base_breakout", "upward_rebase_momentum",
+        })
+
     reclaim_barlar: list[int] = []
+    momentum_barlar: list[int] = []
     for idx_b, bhv in enumerate(dav_dilim):
-        if bhv is not None and _alan(bhv, "reclaim_kind") in {"close_reclaim", "intrabar_sweep_reclaim"}:
+        if bhv is None:
+            continue
+        if _alan(bhv, "reclaim_kind") in {"close_reclaim", "intrabar_sweep_reclaim"}:
             reclaim_barlar.append(int(idx_b))
+        if _alan(bhv, "momentum_kind") in STABIL_GUCLU_YUKARI_MOMENTUM_TURLERI:
+            momentum_barlar.append(int(idx_b))
 
     son_seviye = next((v for v in reversed(seviyeler) if v is not None), None)
     son_renk = next((r for r in reversed(renkler) if r is not None), None)
@@ -291,6 +394,7 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int) -> Optional[dict[
         "renkler": renkler,
         "durumlar": durumlar,
         "reclaim_barlar": reclaim_barlar,
+        "momentum_barlar": momentum_barlar,
         "son_seviye": son_seviye,
         "son_renk": son_renk,
         "son_durum": son_durum,

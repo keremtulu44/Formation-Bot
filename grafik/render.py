@@ -934,7 +934,7 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                 aralik: tuple[float, float], *, kadrajda: bool = False,
                 dusuk: Sequence[Optional[float]] = (),
                 sag_adaylar: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
-    """Günlük yapısal destek (`support_level`) stepline + güçlü geri alım `▲` + sağ `Destek` çipi."""
+    """Destek stepline + geri alım/güçlü yukarı momentum `▲` + sağ `Destek` çipi."""
     from matplotlib.collections import LineCollection
 
     stabil = goruntu.get("stabil") or {}
@@ -944,6 +944,12 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         int(idx) for idx in (stabil.get("reclaim_barlar") or [])
         if isinstance(idx, (int, float)) and 0 <= int(idx) < katman_n
     ]
+    # Eski snapshot'larda alan yoktur; geri alım okuyla aynı barı çift işaretleme.
+    momentum_barlar = [
+        int(idx) for idx in (stabil.get("momentum_barlar") or [])
+        if isinstance(idx, (int, float)) and 0 <= int(idx) < katman_n
+        and int(idx) not in set(reclaim_barlar)
+    ]
     ozet = {
         "hazir": bool(stabil.get("hazir")),
         "cizildi": False,
@@ -951,6 +957,7 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "son_renk": stabil.get("son_renk"),
         "gorunur_bar": 0,
         "reclaim_isaret": 0,
+        "momentum_isaret": 0,
         "kadrajda": bool(kadrajda),
     }
     if not seviyeler or not ozet["hazir"]:
@@ -1047,11 +1054,11 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
     ax.add_collection(koleksiyon)
     ozet["cizildi"] = True
 
-    # Güçlü geri alım mumlarının altına minimal `▲` işareti
-    if reclaim_barlar:
+    # `▲` işaretlerini destek/mum altına yerleştir; kadraj dışına taşmasın.
+    def _ok_koordinatlari(barlar: Sequence[int]) -> tuple[list[float], list[float]]:
         rx: list[float] = []
         ry: list[float] = []
-        for idx in reclaim_barlar:
+        for idx in barlar:
             sv_i = _gercek(seviyeler[idx]) if idx < len(seviyeler) else None
             lo_i = _gercek(dusuk[idx]) if idx < len(dusuk) else None
             ref_y = min(v for v in (sv_i, lo_i) if v is not None) if (sv_i is not None or lo_i is not None) else None
@@ -1062,20 +1069,40 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                 y_pos = max(y_lo + 0.012 * y_span, y_pos)
                 rx.append(float(idx))
                 ry.append(float(y_pos))
-        if rx:
-            sc = ax.scatter(
-                rx,
-                ry,
-                marker="^",
-                s=48,
-                c=PALET["stabil_ust"],
-                edgecolors=PALET["zemin"],
-                linewidths=0.7,
-                zorder=4.8,
-                clip_on=True,
-            )
-            sc.set_gid("grafik-stabil-reclaim")
-            ozet["reclaim_isaret"] = len(rx)
+        return rx, ry
+
+    # Dolu yeşil ▲: güçlü geri alım (altına sarkıp geri çıkma).
+    rx, ry = _ok_koordinatlari(reclaim_barlar)
+    if rx:
+        sc = ax.scatter(
+            rx, ry,
+            marker="^",
+            s=48,
+            c=PALET["stabil_ust"],
+            edgecolors=PALET["zemin"],
+            linewidths=0.7,
+            zorder=4.8,
+            clip_on=True,
+        )
+        sc.set_gid("grafik-stabil-reclaim")
+        ozet["reclaim_isaret"] = len(rx)
+
+    # İçi boş altın ▲: destek altına inmeden gelen güçlü YUKARI mum.
+    # Yatay zeminden kopuş ve çizgi yukarı basamak yaparken de görünür.
+    mx, my = _ok_koordinatlari(momentum_barlar)
+    if mx:
+        sc = ax.scatter(
+            mx, my,
+            marker="^",
+            s=62,
+            facecolors="none",
+            edgecolors=PALET["stabil_momentum"],
+            linewidths=1.35,
+            zorder=4.85,
+            clip_on=True,
+        )
+        sc.set_gid("grafik-stabil-momentum")
+        ozet["momentum_isaret"] = len(mx)
 
     # Sağ eksende net `Destek <fiyat>` çipi (yalnız son mumda aktif destek kadraj içindeyse)
     son_sv = _gercek(seviyeler[-1]) if seviyeler else None
