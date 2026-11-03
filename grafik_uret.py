@@ -179,6 +179,37 @@ def _stabil_baglami_hazirla(
     return gunluk, h4, kesim
 
 
+def stabil_baglami_arsivden(frames: Any, cutoff: Any) -> tuple[Any, Any, Any]:
+    """Replay ile BİREBİR aynı nedensel 1d/4h kesitini arşiv çerçevelerinden alır.
+
+    Normal `/grafik` yolu canlı `StockDequeManager` okur; replay ise aynı sembolün
+    arşiv `frames` sözlüğünü kullanır. İki yol farklı veri kaynağından beslenirse
+    Stabil destek/okları replay sonucuyla uyuşmaz. Bu yardımcı, verilen kesimden
+    sonraki hiçbir günlük/4s mumunu içermez ve canlı state'e yazmaz.
+    """
+    import pandas as pd
+    from data import mum_kapanis_anlari
+
+    kaynak = frames if hasattr(frames, "get") else {}
+
+    def _kes(frame: Any, tf: str) -> Any:
+        if frame is None or len(frame) == 0:
+            return frame
+        close_times = mum_kapanis_anlari(frame.index, tf)
+        try:
+            close_utc = close_times.tz_convert("UTC")
+        except (TypeError, AttributeError):
+            close_utc = close_times.tz_localize("UTC")
+        ts = pd.Timestamp(cutoff)
+        ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
+        end = int(close_utc.searchsorted(ts, side="right") - 1)
+        return frame.iloc[:end + 1].copy(deep=True) if end >= 0 else frame.iloc[:0].copy(deep=True)
+
+    gunluk = _kes(kaynak.get("1d"), "1d")
+    h4 = _kes(kaynak.get("4h"), "4h")
+    return gunluk, h4, pd.Timestamp(cutoff)
+
+
 def _cikti_yolu(cikti: str | None, hisse: str, tf: str, tfler: tuple) -> str:
     """PNG yolu: birden çok TF çiziliyorsa ad zaman dilimiyle ayrışır."""
     yol = cikti or f"/tmp/grafik_{str(hisse).upper()}_{tf}.png"
@@ -198,6 +229,7 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
               yonetici=None, asama=None,
               tazelik_kontrol=None, gorunum: str | None = None,
               mobil: bool = False, tarihsel: bool = False,
+              stabil_frames: Any | None = None,
               ayrinti_yol: str | None = None, simdi=None) -> dict:
     """Tek kare üretir: önbellek → (istersen domain motorları) → PNG.
 
@@ -251,9 +283,20 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
         temiz_ad = str(hisse).upper().replace(".IS", "")
         sonuclar = run_domain_engines(temiz_ad, tf, cerceve.copy(deep=True), isolated=True)
         try:
-            stabil_gunluk, stabil_h4, stabil_kesim = _stabil_baglami_hazirla(
-                temiz_ad, tf, cerceve, dizin, demo=demo, yonetici=yonetici, simdi=simdi
-            )
+            if stabil_frames is not None:
+                # Arşiv/replay ile aynı 1d/4h kesiti: normal grafik ve replay
+                # sonucundaki destek çizgisi/▲ işaretleri birebir eşleşir.
+                from data import mum_kapanis_ani
+
+                arsiv_kesim = simdi or (mum_kapanis_ani(cerceve.index[-1], tf)
+                                        if len(cerceve) else None)
+                stabil_gunluk, stabil_h4, stabil_kesim = stabil_baglami_arsivden(
+                    stabil_frames, arsiv_kesim
+                )
+            else:
+                stabil_gunluk, stabil_h4, stabil_kesim = _stabil_baglami_hazirla(
+                    temiz_ad, tf, cerceve, dizin, demo=demo, yonetici=yonetici, simdi=simdi
+                )
             stabil_sonuc = run_stabil_domain(
                 temiz_ad,
                 tf,

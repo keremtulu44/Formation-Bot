@@ -813,4 +813,34 @@ STABIL_ALARM_TEKIL_UST_SINIR = _env_int("STABIL_ALARM_TEKIL_UST_SINIR", 3, minim
 STABIL_ALARM_TAZE_DK = _env_int("STABIL_ALARM_TAZE_DK", 390, minimum=30)
 
 
+# --- Yeni domain tetiklemeli bildirim kanalı (kullanıcı kararı 2026-11-03) ----
+# Mevcut formasyon/4S alarmları ve replay sonuçları DEĞİŞMEZ. Yeni kanal ana DM +
+# public hedefe "🆕 YENİ" işaretli ayrı kart gönderir. Stabil koşulu native
+# basamaklı desteğin o anki seviyesine göre HARD alt sınırdır: dist_atr >= -3;
+# üst sınır yoktur. Hacim hard kapı değil, kendi başına tetikleyicidir.
+YENI_DOMAIN_ALARM = os.getenv("YENI_DOMAIN_ALARM", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık",
+}
+YENI_DOMAIN_ALARM_DM = os.getenv("YENI_DOMAIN_ALARM_DM", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık",
+}
+YENI_DOMAIN_ALARM_PUBLIC = os.getenv("YENI_DOMAIN_ALARM_PUBLIC", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık",
+}
+YENI_DOMAIN_ALARM_DIST_ATR_ALT = _sayi_env("YENI_DOMAIN_ALARM_DIST_ATR_ALT", -3.0)
+YENI_DOMAIN_ALARM_HACIM_5X = _sayi_env("YENI_DOMAIN_ALARM_HACIM_5X", 5.0)
+YENI_DOMAIN_ALARM_HACIM_10X = _sayi_env("YENI_DOMAIN_ALARM_HACIM_10X", 10.0)
+YENI_DOMAIN_ALARM_HACIM_SUPHE = _sayi_env("YENI_DOMAIN_ALARM_HACIM_SUPHE", 50.0)
+YENI_DOMAIN_ALARM_COOLDOWN_BAR = _env_int("YENI_DOMAIN_ALARM_COOLDOWN_BAR", 6, minimum=1)
+YENI_DOMAIN_ALARM_TEKIL_UST_SINIR = _env_int("YENI_DOMAIN_ALARM_TEKIL_UST_SINIR", 3, minimum=1)
+YENI_DOMAIN_ALARM_TAZE_DK = _env_int("YENI_DOMAIN_ALARM_TAZE_DK", 390, minimum=30)
+# Varsayılan: formasyonun anlık ALERT_STATES olayı da yeni kanalda "🆕 YENİ"
+# işaretli AYRI kart üretir; eski formasyon push'u birebir korunur. 0 verilirse
+# operatör aynı olayda ikinci kartı kapatabilir (diğer domain tetikleyicileri
+# çalışmaya devam eder).
+YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR = os.getenv(
+    "YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR", "1"
+).strip().lower() in {"1", "true", "yes", "on", "acik", "açık"}
+
+
 

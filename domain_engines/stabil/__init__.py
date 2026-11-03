@@ -22,6 +22,7 @@ from .runtime import (
     support_validity_color_role,
 )
 from .signals import (
+    STABIL_GUCLU_YUKARI_MOMENTUM_TURLERI,
     LiveStabilSummary,
     StabilBarBehavior,
     describe_behavior_structure_short,
@@ -65,6 +66,7 @@ from .stabil_trend_engine import (
 )
 
 __all__ = [
+    "STABIL_GUCLU_YUKARI_MOMENTUM_TURLERI",
     "CandidateLineRegime",
     "CandidateRegimePoint",
     "ConfirmedStabilPivot",

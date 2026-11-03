@@ -145,17 +145,10 @@ def _soru_goruntusu(soru: Soru, tf: str) -> dict:
     candidate, state, warning = grafik_uret._formasyon_tara_ayrintili(history, tf)
     domains = run_domain_engines(soru.sembol, tf, history, isolated=True)
     try:
-        d_end = int(soru.closes["1d"].searchsorted(cutoff, side="right") - 1)
-        h4_end = int(soru.closes["4h"].searchsorted(cutoff, side="right") - 1)
-        daily_history = (
-            soru.frames["1d"].iloc[: d_end + 1].copy(deep=True)
-            if d_end >= 0
-            else soru.frames["1d"].iloc[:0].copy(deep=True)
-        )
-        h4_history = (
-            soru.frames["4h"].iloc[: h4_end + 1].copy(deep=True)
-            if h4_end >= 0
-            else soru.frames["4h"].iloc[:0].copy(deep=True)
+        # `kare_uret(stabil_frames=...)` ile aynı nedensel kesim yardımcı
+        # fonksiyonu kullanılır; replay ve normal grafik yolu ayrışmasın.
+        daily_history, h4_history, _stabil_kesim = grafik_uret.stabil_baglami_arsivden(
+            soru.frames, cutoff
         )
         domains["stabil"] = run_stabil_domain(
             soru.sembol,
@@ -167,7 +160,12 @@ def _soru_goruntusu(soru: Soru, tf: str) -> dict:
             isolated=True,
         )
     except Exception:  # noqa: BLE001 - Stabil hatası eğitim karesini düşürmez
-        log.warning("Eğitim Stabil katmanı hesaplanamadı (%s %s)", soru.sembol, tf)
+        # Sessizce yutulan bir motor hatası replay/normal karşılaştırmasını
+        # yanıltıcı biçimde "eşit" gösterebilir; en azından traceback görünsün.
+        log.warning(
+            "Eğitim Stabil katmanı hesaplanamadı (%s %s)",
+            soru.sembol, tf, exc_info=True,
+        )
     snapshot = grafik.anlik_goruntu(
         candidate, tf, history, sonuclar=domains, sembol=soru.sembol,
         simdi=soru.closes[tf][p].to_pydatetime(), veri_kaynagi="arşiv", tarihsel=True,

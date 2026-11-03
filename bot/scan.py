@@ -51,6 +51,10 @@ from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
 from notifier import TelegramNotifier, devamlilik_puani
+from bot.domain_alarm_service import (
+    dispatch_domain_alarm_candidates,
+    evaluate_domain_alarm_candidates,
+)
 import config
 import ampirik_referans as ampirik
 from notification_context import (
@@ -369,15 +373,19 @@ def _completed_domain_frames(all_timeframes, now):
     return prepared
 
 
-def _domain_results_for_notification(stock, all_timeframes, now, cache):
-    """Bu scan turunda sembol başına bir kez taze domain sonucu üret."""
+def _domain_results_for_notification(stock, all_timeframes, now, cache, frames=None):
+    """Bu scan turunda sembol başına bir kez taze domain sonucu üret.
+
+    `frames` verilirse doğrudan tarama döngüsünün kapanmış DataFrame'leri
+    kullanılır; verilmezse eski davranışla `_completed_domain_frames` çağrılır.
+    """
     if stock in cache:
         return cache[stock]
     runner = _pkg._load_domain_runner()
     if runner is None:
         cache[stock] = {}
         return cache[stock]
-    frames = _pkg._completed_domain_frames(all_timeframes, now)
+    frames = frames if isinstance(frames, dict) else _pkg._completed_domain_frames(all_timeframes, now)
     results = {}
     for timeframe, frame in frames.items():
         try:
@@ -488,6 +496,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     # bu scan turunda taze biçimde yalnızca bir kez hesaplanır.
     domain_results_by_stock = {}
     stabil_adaylari = []
+    domain_alarm_adaylari = []
     _pkg._live_state.begin_scan(
         simdiki_zaman,
         manuel=manuel,
@@ -659,6 +668,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             
             # Her TF için: yarım (devam eden) mumu çıkar, TAMAMLANMIŞ mumları besle
             hisse_formasyonlari = []
+            grafik_baglami_by_tf = {}
             for tf_name, df_tf in all_tfs.items():
                 if df_tf is None or len(df_tf) < 30:
                     _pkg.logger.debug(f"{stock} {tf_name} için yeterli veri yok")
@@ -688,6 +698,13 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 notification_state = (
                     "KIRILIM_GECERSIZLESTI" if invalidation_event is not None else state
                 )
+                # Yeni domain kartının grafiği, eski alarm karesiyle AYNI aktif
+                # formasyon kaydını / state'i / bar indeksini kullansın.
+                grafik_baglami_by_tf[str(tf_name).lower()] = {
+                    "cift": active,
+                    "state": notification_state,
+                    "alarm_bar": getattr(snap, "bar_index", None),
+                }
                 # Yaşam döngüsü yok/geçersiz/zayıflama state'ine düştü: bu slotun
                 # "tekrar" mühürleri + 4 saatlik cooldown'ı temizlenir, aynı slotu
                 # tekrar kaplayan yeni formasyon anında bildirilebilir.
@@ -1278,6 +1295,32 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 except Exception as st_err:  # noqa: BLE001 - Stabil ayrı sinyali ana taramayı düşürmez
                     _pkg.logger.warning("%s Stabil 4s aday kontrolü hatası: %s", stock, st_err)
 
+                # Ayrı yeni kanal: BOS/CHoCH · formasyon · OB/FVG · hacim OR
+                # tetikleyicileri, o anki native basamaklı Stabil desteğiyle
+                # ölçülür. Eski kartlar / replay sonuçları değişmez.
+                try:
+                    # Domain sonuçları kart bağlamı için zaten TÜM TF'lerle
+                    # cache'lendi; yeni kanal aynı kapanmış frame kümesini kullanır.
+                    yeni_frames = _pkg._completed_domain_frames(all_tfs, simdiki_zaman)
+                    yeni_outputs = _pkg._domain_results_for_notification(
+                        stock, all_tfs, simdiki_zaman, domain_results_by_stock,
+                        frames=yeni_frames,
+                    )
+                    domain_alarm_adaylari.extend(
+                        evaluate_domain_alarm_candidates(
+                            stock,
+                            all_tfs,
+                            yeni_frames,
+                            yeni_outputs,
+                            simdiki_zaman,
+                            formasyon_kayitlari=hisse_formasyonlari,
+                            bar_metni_fn=_mum_bilgisi,
+                            grafik_baglami=grafik_baglami_by_tf,
+                        )
+                    )
+                except Exception as yeni_err:  # noqa: BLE001 - yeni kanal ana taramayı düşürmez
+                    _pkg.logger.warning("%s yeni domain aday kontrolü hatası: %s", stock, yeni_err)
+
             _pkg.daily_stats['stocks_scanned'] += 1
             tur_taranan += 1
             
@@ -1418,6 +1461,23 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             )
         except Exception as st_disp_err:  # noqa: BLE001
             _pkg.logger.warning("Stabil 4s bildirim gönderim hatası: %s", st_disp_err)
+    # Yeni domain tetiklemeli kartlar: mevcut DM + public ana kanala, "🆕 YENİ"
+    # işaretli AYRI kart olarak gider. Eski formasyon/4S alarmlarına dokunulmaz.
+    if send_alerts and domain_alarm_adaylari:
+        try:
+            dy_ozet = dispatch_domain_alarm_candidates(domain_alarm_adaylari, notifier)
+            _pkg.daily_stats['yeni_domain_alerts_sent'] = int(
+                _pkg.daily_stats.get('yeni_domain_alerts_sent') or 0
+            ) + int(dy_ozet.get('tekil_gonderilen') or 0) + int(dy_ozet.get('toplu_ozet') or 0)
+            _pkg.logger.info(
+                "🆕 Yeni domain tetikleme: %d aday · %d tekil kart · %d toplu özet · %d filtrelendi",
+                int(dy_ozet.get('aday') or 0),
+                int(dy_ozet.get('tekil_gonderilen') or 0),
+                int(dy_ozet.get('toplu_ozet') or 0),
+                int(dy_ozet.get('filtrelendi') or 0),
+            )
+        except Exception as dy_disp_err:  # noqa: BLE001
+            _pkg.logger.warning("Yeni domain bildirim gönderim hatası: %s", dy_disp_err)
     _pkg._grafikleri_tur_sonunda(notifier)
     # Tarama bitti: heartbeat kesin yazılsın (force), böylece per-hisse
     # throttle'a takılan son durum dışarıdan anında görünür.

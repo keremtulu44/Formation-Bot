@@ -37,12 +37,13 @@ def test_replay_snapshot_uses_same_normal_analysis_and_view(question, tf, monkey
     monkeypatch.setattr(grafik, "ciz", capture)
     normal = grafik_uret.kare_uret(
         q.sembol, tf, zone=True, formasyon_tara=True, tarihsel=True,
+        stabil_frames=q.frames,
         simdi=q.closes[tf][p].to_pydatetime(), cikti=str(tmp_path / "normal.png"),
     )
     assert normal["hata"] is None
     expected = chart_experience.prepare_view(captured["snapshot"], "odak")
     for name in ("zamanlar", "acilis", "yuksek", "dusuk", "kapanis", "formasyon",
-                 "alarm", "temas", "isaretler", "olay", "serit", "gorunum"):
+                 "alarm", "temas", "isaretler", "olay", "serit", "stabil", "gorunum"):
         assert replay[name] == expected[name], name
     for key in ("tum", "cizilen"):
         for zone in expected["zone"].get(key) or []:
