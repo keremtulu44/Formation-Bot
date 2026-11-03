@@ -328,6 +328,10 @@ daily_stats = {
     'sessiz_gecersizlesme_sayisi': 0,
     # Tarama turu sayısı; 48 hisse × 9 tur = 432 hisse tarandı şeklinde yazılmaz.
     'tarama_sayisi': 0,
+    # Ayrı 4S Stabil ve yeni domain tetiklemeli kanal sayaçları (mevcut
+    # `alerts_sent` formasyon push'unu değiştirmez).
+    'stabil_alerts_sent': 0,
+    'yeni_domain_alerts_sent': 0,
     'last_reset': _pkg.datetime.now(ISTANBUL_TZ).date()
 }
 

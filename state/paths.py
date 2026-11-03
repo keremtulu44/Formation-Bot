@@ -106,3 +106,11 @@ STABIL_ALARM_STATE_DOSYA = "stabil_alarm_state.json"
 def stabil_alarm_state_yolu(data_dir=None) -> str:
     from config import DATA_DIR
     return os.path.join(data_dir or DATA_DIR, STABIL_ALARM_STATE_DOSYA)
+
+
+YENI_DOMAIN_ALARM_STATE_DOSYA = "yeni_domain_alarm_state.json"
+
+
+def yeni_domain_alarm_state_yolu(data_dir=None) -> str:
+    from config import DATA_DIR
+    return os.path.join(data_dir or DATA_DIR, YENI_DOMAIN_ALARM_STATE_DOSYA)

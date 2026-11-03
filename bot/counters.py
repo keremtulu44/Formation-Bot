@@ -203,6 +203,8 @@ def reset_daily_if_needed():
         # Sıfırla
         _pkg.daily_stats['stocks_scanned'] = 0
         _pkg.daily_stats['patterns_found'] = 0
+        _pkg.daily_stats['stabil_alerts_sent'] = 0
+        _pkg.daily_stats['yeni_domain_alerts_sent'] = 0
         _pkg._daily_pattern_keys.clear()
         _pkg.daily_stats['basarisiz_kirilim'] = 0
         _pkg.daily_stats['sessiz_gecersizlesme_sayisi'] = 0
