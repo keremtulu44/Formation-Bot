@@ -834,11 +834,12 @@ YENI_DOMAIN_ALARM_HACIM_SUPHE = _sayi_env("YENI_DOMAIN_ALARM_HACIM_SUPHE", 50.0)
 YENI_DOMAIN_ALARM_COOLDOWN_BAR = _env_int("YENI_DOMAIN_ALARM_COOLDOWN_BAR", 6, minimum=1)
 YENI_DOMAIN_ALARM_TEKIL_UST_SINIR = _env_int("YENI_DOMAIN_ALARM_TEKIL_UST_SINIR", 3, minimum=1)
 YENI_DOMAIN_ALARM_TAZE_DK = _env_int("YENI_DOMAIN_ALARM_TAZE_DK", 390, minimum=30)
-# Varsayılan: zaten anlık push üreten ALERT_STATES olayları için ikinci kart
-# üretme; eski güzel alarm birebir korunur. 1 verilirse aynı olay yeni işaretle
-# de görünür (operatör tercihi).
+# Varsayılan: formasyonun anlık ALERT_STATES olayı da yeni kanalda "🆕 YENİ"
+# işaretli AYRI kart üretir; eski formasyon push'u birebir korunur. 0 verilirse
+# operatör aynı olayda ikinci kartı kapatabilir (diğer domain tetikleyicileri
+# çalışmaya devam eder).
 YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR = os.getenv(
-    "YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR", "0"
+    "YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR", "1"
 ).strip().lower() in {"1", "true", "yes", "on", "acik", "açık"}
 
 

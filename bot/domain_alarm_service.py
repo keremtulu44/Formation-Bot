@@ -301,7 +301,7 @@ def _formasyon_sebepleri(kayitlar: Sequence[Mapping[str, Any]] | None,
                          tf: str) -> list[str]:
     if not kayitlar:
         return []
-    tekrar = bool(getattr(config, "YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR", False))
+    tekrar = bool(getattr(config, "YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR", True))
     anlik = {str(s).upper() for s in getattr(config, "ALERT_STATES", ())}
     bulunan: list[str] = []
     for kayit in kayitlar:
@@ -314,7 +314,8 @@ def _formasyon_sebepleri(kayitlar: Sequence[Mapping[str, Any]] | None,
         if state in _GECERSIZ_FORMASYON or bildirim in _GECERSIZ_FORMASYON:
             continue
         if not tekrar and bildirim in anlik:
-            # Aynı olay zaten mevcut ana alarma gitti; ikinci kart üretme.
+            # Operatör 0 verirse eski anlık push ile aynı olayda ikinci kart
+            # üretme; BOS/OB/FVG/hacim tetikleyicileri yine çalışır.
             continue
         try:
             q = float(kayit.get("quality") or 0.0)

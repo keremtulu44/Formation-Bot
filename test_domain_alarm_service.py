@@ -40,7 +40,7 @@ def _yeni_kanal_acik(monkeypatch):
     monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_TAZE_DK", 10000)
     monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_COOLDOWN_BAR", 6)
     monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_TEKIL_UST_SINIR", 3)
-    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR", False)
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR", True)
     monkeypatch.setattr(config, "MAKRO_ALARM", False)
     monkeypatch.setattr(
         config, "ALERT_STATES",
@@ -299,8 +299,38 @@ def test_ayni_bar_ve_cooldown_tekrar_bastirilir(tmp_path):
     assert len(notifier.dm) == 1 and len(notifier.public) == 1
 
 
-# 5) Formasyon OR kaynağı; anlık push state'i varsayılan ikinci kart üretmez.
-def test_formasyon_dahil_anlik_tekrar_varsayilan_kapali():
+# 5) Formasyon OR kaynağı; anlık push state'i de yeni karta dahil, eski alarm korunur.
+def test_formasyon_dahil_anlik_state_tekrar_acik():
+    kayitlar = [
+        {
+            "timeframe": "1d",
+            "pattern_name": "Yükselen Üçgen",
+            "state": "SIKISMA_GUCLENIYOR",
+            "notification_state": "SIKISMA_GUCLENIYOR",
+            "quality": 80.0,
+            "min_quality": 60.0,
+        },
+        {
+            "timeframe": "1d",
+            "pattern_name": "Kama",
+            "state": "KIRILIM_TEYITLI",
+            "notification_state": "KIRILIM_TEYITLI",
+            "quality": 90.0,
+            "min_quality": 60.0,
+        },
+    ]
+    cands = _degerlendir(
+        _sonuclar(dist_atr=1.0, rvol=6.0),
+        formasyon_kayitlari=kayitlar,
+    )
+    assert len(cands) == 1
+    sebep_metni = " | ".join(cands[0].reasons)
+    assert "formasyon: Yükselen Üçgen" in sebep_metni
+    assert "formasyon: Kama" in sebep_metni
+
+
+def test_immediate_tekrar_operatörce_kapatilabilir(monkeypatch):
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR", False)
     kayitlar = [
         {
             "timeframe": "1d",
