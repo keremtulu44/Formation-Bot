@@ -1,6 +1,6 @@
 # Stabil hangi replay sistemini kullandı?
 
-**Güncelleme:** 2026-11-01 · [Ana rehber](STABIL_REHBERI.md).
+**Güncelleme:** 2026-11-04 · [Ana rehber](STABIL_REHBERI.md) · [güncel sonuç dizini](SON_REPLAY_SONUCLARI.md).
 
 ## 1. Bugün depoda bulunan genel araştırma altyapısı
 
@@ -14,6 +14,11 @@
 | Genel koşu | [arastirma_kosu.py](../../scripts/backfill/arastirma_kosu.py) | Sembol bazında JSONL, hata izolasyonu, tamamlanan işi atlama |
 | Ayrı cevaplayıcı | [research/soru_cevaplama.py](../../research/soru_cevaplama.py) | Mevcut gözlemlerden S01–S32 cevaplarını üretir; her soruda motoru tekrar çalıştırmaz |
 | Eski yayın denetimi | [research/soru_kapisi.py](../../research/soru_kapisi.py) | Eski soruların baseline/kapı denetimi; Stabil için otomatik yetki değildir |
+| Stabil native history + 100-sembol replay | [research/stabil_replay.py](../../research/stabil_replay.py) | Tek geçişli causal Stabil geçmişi; tamamlanmış H4 checkpoint ve ileri ölçüm tabloları |
+| 48 soru cevaplayıcı | [research/stabil_bhv48.py](../../research/stabil_bhv48.py) | Var olan checkpoint/olay çerçevelerinden 48 tanımlı sorunun aggregate tablolarını üretir |
+| Ayrı canlı-evren testi | [research/stabil_live_systematic.py](../../research/stabil_live_systematic.py) | `config.BIST_50` içindeki arşivde bulunan non-macro sembollerin ayrı 4h systematic ölçümü |
+| 48-soru aggregate çıktıları | [stabil_100_sonuclar/](stabil_100_sonuclar/) | Manifest + JSON/CSV/Markdown mevcut; tam native checkpoint arşivi bu dizinde yok |
+| Ayrı 50/53 systematic sonuç | [stabil_live_systematic_results.json](stabil_live_systematic_results.json) | 50/53 arşiv-kapsama sonucu; 100 sembol/48 soru çalışmasına eklenmez |
 
 Yöntem kaynağı: [ARASTIRMA_HATTI.md](ARASTIRMA_HATTI.md).
 Depodaki arşivde bu güncellemede **177 adet 1H ve 177 adet 1D dosyası** sayıldı.
@@ -31,7 +36,15 @@ Stabil'e veya bugünkü makineye süre garantisi değildir.
 - **Stabil:** aşağıda tarif edilen ayrı native geçmiş tüketicisi; genel hattın
   arşiv/ölçüm/cevaplama ilkelerini yeniden kullanması raporlandı.
 
-## 3. Stabil'e uyarlanan yaklaşım — önceki oturum kaydı
+## 3. Stabil yaklaşımı — güncel uygulama ve tarihsel performans kaydı
+
+Mevcut checkout'ta `research/stabil_replay.py` doğrudan `domain_engines.stabil`
+üzerindeki `build_single_pass_history` yolunu kullanır; bir sembolde history bir
+kez oluşturulur, her tamamlanmış H4 kapanışında günlük/haftalık bilinirlik sınırı
+uygulanır, destek olayları first-seen sequence ile izlenir ve ileri ufuklar açık
+sağ-sansürle ölçülür. `research/stabil_bhv48.py` bu çerçeveleri ayrı cevaplayıcıda
+48 soruya döker; 50/53 systematic çalışması ise `research/stabil_live_systematic.py`
+ile farklı sembol evreninde üretilmiştir.
 
 İlk denemede her 4H kapanışında kaynak motor bütün prefix üzerinde tekrar
 çalıştırılmıştı: `1 → 2 → … → 1079` mum, yaklaşık 582 bin kümülatif işlem.
@@ -49,20 +62,28 @@ Düzeltmede şu yapı raporlandı:
 5. Her 4H kapanışına sadece gerçek kapanışı geçmiş rol verisini projekte etmek.
 6. Ortak fiyat ölçümünü bir kez üretip soruları ayrı tüketicide cevaplamak.
 
-### Önceki modül adları ve işleri
+### Mevcut çıktı kanıtı ve tarihsel eksiklerin ayrımı
 
-Bu dosyalar **bugün mevcut değildir**; aşağıdaki adlar kurtarma envanteridir,
-çalıştırılabilir bağlantı/komut değildir:
-
-| Önceki modül | Raporlanan görev |
+| Mevcut yol | Checkout'taki rol / kanıt |
 |---|---|
-| `research/stabil_replay.py` | `native_history`, `measure_symbol`, ileri fiyat ölçümü |
-| `research/stabil_sorular.py` | 27 STB soru/referans grubu; eski S01–S32'den ayrı |
-| `research/stabil_kosu.py` | Timeout'lu worker, atomik sembol dizini, resume, toplu sonuç |
-| `research/stabil_olay_duzelt.py` | Kaydedilmiş event sequence'den olay eşlemesini yeniden çıkarma |
-| `research/stabil_davranis.py` | 48 davranış başlığı için çapa/özellik/yarış sonuçları |
-| `research/stabil_davranis_finalize.py` | Native motoru çağırmadan son özellik/sansür türetimi |
-| `research/stabil_davranis_paket.py` | Native + fiyat + soru indeksi paketi; referanstan geri kurma |
+| `domain_engines/stabil/` + `domain_engines/runner.py` | Native runtime; `run_stabil_domain` ayrı sonuç döndürür |
+| `research/stabil_replay.py` | Güncel tek-geçişli replay/data-frame üreticisi; tam 100-sembol koşunun native checkpoint paketi değildir |
+| `research/stabil_bhv48.py` | 48 soru için aggregate cevaplayıcı |
+| `docs/arastirma/stabil_100_sonuclar/STABIL_DAVRANIS_48_MANIFEST.json` | 2026-11-01 manifest; 100 sembol, 107.441 H4 checkpoint, 10.417 ilk-görülen destek olayı, 48 soru, 642 sonuç satırı; `user_confirmed_regime=false` |
+| `STABIL_DAVRANIS_48_SONUCLAR.json`, `STABIL_DAVRANIS_48_TABLO.csv`, `STABIL_DAVRANIS_48_YANITLARI.md` | Aggregate JSON/CSV/Markdown cevapları mevcut; tam native checkpoint/fiyat paketi değil |
+| `research/stabil_live_systematic.py` + `stabil_live_systematic_results.json` | Ayrı 50/53 canlı non-macro sembol systematic popülasyonu |
+
+Önceki 100-sembol/27-soru hat için konuşmada adı geçen
+`research/stabil_sorular.py`, `stabil_kosu.py` ve `stabil_olay_duzelt.py` gibi
+araçlar bu checkout'ta bulunmuyor. Bunları mevcut 48-soru cevaplayıcısıyla veya
+50/53 systematic koşusuyla aynı çalışma gibi göstermeyin. Eski 80 MB native
+checkpoint paketi ve özgün 27-soru tabloları da hâlâ mevcut değil.
+
+**Sayım uyuşmazlığı:** önceki konuşma kaydı 107.446 checkpoint ve 4.074 satır
+aktarırken mevcut 48-soru manifesti 107.441 checkpoint ve 642 satır kaydediyor.
+Bunlar sürüm/çıktı olarak ayrıdır; oranlar, satırlar veya çalışma süreleri
+birleştirilmemiştir. Manifest kaynak hashlerini ve kesin veri kesim zamanını
+içermediğinden tam yeniden üretilebilirlik iddiası yoktur.
 
 ## 4. Ölçüm/cevap sözleşmesi
 
@@ -94,7 +115,13 @@ Kurtarılacak paket şu öğeleri taşımalı:
 - Bütün cevaplar, n/sansür, sembol/yıl kırılımları, sapma/sınır notları.
 - MANIFEST SHA256, tüm üye kontrolü ve motor çağırmadan gerçek geri kurma testi.
 
-Yalnız `/home/user/...` veya ignore edilmiş geçici dizinin varlığı, gelecekte
-kalıcılık kanıtı değildir. Önceki paket bu checkout'ta bulunamadı. Gerçek
-kalıcı dosya/uygun harici arşiv doğrulanmadan “yeniden koşmaya gerek kalmaz”
-garantisi verilmemeli. Bu belgeleme turunda yeni koşu veya veri üretimi yapılmadı.
+Aggregate 48-soru tablolarının mevcut olması, önceki yaklaşık 80 MB'lık tam native
+checkpoint/fiyat paketinin mevcut olduğu anlamına gelmez. Manifest kaynak SHA256
+ve kesin veri sonunu da taşımadığından mevcut dosyalar descriptively readable,
+fakat eksiksiz byte-for-byte rerun archive değildir. “Yeniden koşmaya gerek
+kalmaz” garantisi verilmemeli.
+
+2026-11-04 doğrulamasında bir sembol ASTOR için replay/48-soru spot-check
+(48 soru, 552 satır) ve tarihsel 4h domain-context örneği üretildi; 100-sembol
+koşu tekrar çalıştırılmadı, paket veya canlı kalıcılık eklenmedi. Bu spot-check
+manifestteki eski çalışma sayımlarıyla aynı run değildir.

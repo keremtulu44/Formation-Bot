@@ -163,6 +163,21 @@ def main_loop():
     setattr(_pkg, "_startup_ready", False)
     _pkg.setup_logging()   # Batch 8 / C2: handler'lar burada bağlanır (import yan etkisi yok)
     _pkg.logger.info("=== BIST FORMASYON BOTU BAŞLATILIYOR ===")
+    render_runtime = _pkg._render_runtime_status_init()
+    previous_heartbeat = render_runtime.get("previous_heartbeat_at")
+    if previous_heartbeat:
+        _pkg.logger.info(
+            "Render açılış teşhisi: önceki yerel heartbeat %s, yeni süreç %s, "
+            "görünen boşluk yaklaşık %s sn (uyku/restart kesin ayrıştırılamaz).",
+            previous_heartbeat,
+            render_runtime.get("started_at"),
+            int(render_runtime.get("estimated_gap_seconds") or 0),
+        )
+    else:
+        _pkg.logger.info(
+            "Render açılış teşhisi: önceki heartbeat bulunamadı; bu uyanışın "
+            "kesinti süresi yerel diskten belirlenemiyor."
+        )
     _pkg.logger.info(f"Profil: {PROFILE}, Params: {PROFILE_PARAMS}")
     _pkg.logger.info(f"Hisseler: {_pkg.ACTIVE_STOCKS[:5]}... (toplam {len(_pkg.ACTIVE_STOCKS)})")
     evren_uyarisi = _pkg._evren_olcek_uyarisi()

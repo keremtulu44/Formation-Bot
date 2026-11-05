@@ -43,8 +43,10 @@ def webhook_url_olustur(secret=None, webhook_url=None, render_url=None, *,
       2. `RENDER_EXTERNAL_URL` + `/webhook`
          (Render bunu otomatik verir: https://<servis>.onrender.com)
 
-    Secret boşsa mod kapalıdır (boş döner) ve bot yoklamaya devam eder. Telegram
-    webhook için HTTPS zorunlu kılar; http adres üretilirse kurulmaz, loga yazılır.
+    Bu yardımcı secret üretmez: secret boşsa URL kurulmaz ve polling devam eder.
+    Render için runtime secret `config.telegram_webhook_runtime_secret()` ile
+    `main.py` girişinde hazırlanır. Telegram webhook için HTTPS zorunlu kılar;
+    http adres üretilirse kurulmaz, loga yazılır.
     """
     secret = webhook_secret_ayikla(secret, varsayilan_secret)
     if not secret:
@@ -202,9 +204,10 @@ def set_webhook(url=None, secret=None, token=None, *, api=None, yanit_oku_fn=Non
                 gizle_fn=None) -> bool:
     """setWebhook: komutlar Telegram → `/webhook` (sırsız yol) ile gelsin.
 
-    - `drop_pending_updates=True`: bot kapalıyken biriken BAYAT komutlar (örn. dünkü
-      /tara) webhook kurulur kurulmaz çalışmasın. Yoklama modundaki "backlog atla"
-      kuralının (telegram_commands.BACKLOG_SINIR_SN) webhook karşılığıdır.
+    - Bekleyen güncellemeler korunur. Render uyurken gelen komut, webhook isteğiyle
+      servisi uyandırır; açılışta kuyruğu silmek bu ilk komutu kaybettirirdi.
+      Eski komutların güvenliği `TelegramCommandListener` içindeki yaş kapısıyla
+      sağlanır: 15 dakikadan eski durum-değiştirici komut çalıştırılmaz.
     - `secret_token`: Telegram her istekte `X-Telegram-Bot-Api-Secret-Token`
       başlığını gönderir; health_server sırsız yolda bu başlığı ZORUNLU tutar (A7).
     """
@@ -225,7 +228,7 @@ def set_webhook(url=None, secret=None, token=None, *, api=None, yanit_oku_fn=Non
         # teşhis edilemez (sayaç artmaz, log düşmez). Tek kaynak:
         # telegram_commands.IZLENEN_GUNCELLEMELER (getUpdates ile aynı liste).
         "allowed_updates": list(IZLENEN_GUNCELLEMELER),
-        "drop_pending_updates": True,
+        "drop_pending_updates": False,
     }
     if secret:
         govde["secret_token"] = secret
@@ -246,15 +249,16 @@ def delete_webhook(token=None, *, api=None, yanit_oku_fn=None, token_al_fn=None)
     """deleteWebhook: yoklama moduna dönmeden önce eski webhook kaydını siler.
 
     Neden gerekli: webhook kurulu bir token'da `getUpdates` 409 Conflict alır, yani
-    mod değişince (secret silindi / yerelde yoklama) eski kayıt kalırsa komutlar
-    sessizce çalışmaz. `drop_pending_updates=True` ile bayat güncellemeler de temizlenir.
+    mod değişince eski kayıt kalırsa polling komutları çalışmaz. Bekleyen güncellemeler
+    silinmez; polling listener açılışta 15 dakikadan eski backlog'u sınıflandırır,
+    taze komutları korur ve bayat komutları kullanıcıya bildirerek atlar.
     """
     token = token_al_fn(token)
     if not token:
         return False
     api = api if api is not None else api_cagri
     try:
-        yanit = api("deleteWebhook", token, {"drop_pending_updates": True})
+        yanit = api("deleteWebhook", token, {"drop_pending_updates": False})
     except Exception as exc:  # noqa: BLE001 - ağ hatası botu düşürmesin
         logger.warning(f"Webhook kaldirilamadi (ag hatasi): {exc}")
         return False
@@ -284,8 +288,8 @@ def komut_katmanini_kur(notifier, isleyici=None, *, komutlar, yardim_metni, tara
     """Komut katmanını AYNI ANDA TEK modda kurar: 'webhook', 'yoklama' veya 'kapali'.
 
     - **webhook**: secret + taban adres var, HTTP sunucusu ayakta ve setWebhook
-      başarılı. Güncellemeler `/webhook/<secret>` ucundan gelir; yoklama thread'i
-      AÇILMAZ (aynı token'da getUpdates 409 alır).
+      başarılı. Güncellemeler sırsız `/webhook` ucuna Telegram'ın secret header'ı
+      ile gelir; yoklama thread'i AÇILMAZ (aynı token'da getUpdates 409 alır).
     - **yoklama**: eski davranış (getUpdates daemon thread). Webhook kapalıyken ya da
       setWebhook başarısız olduğunda komutlar tamamen susmasın diye buraya düşülür;
       önce eski webhook kaydı silinir (yoksa 409).

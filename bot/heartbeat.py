@@ -232,6 +232,52 @@ def _heartbeat_yolu() -> str:
     return os.path.join(data_dir, "heartbeat.json")
 
 
+def _render_runtime_status_init(now=None) -> dict:
+    """Capture the previous heartbeat before this process overwrites it.
+
+    Render does not expose an exact sleep timestamp to the app; the last local
+    heartbeat is therefore only a lower-bound/estimate for an outage. This
+    helper reads the existing heartbeat file and writes no new storage.
+    """
+    simdi = now or _pkg.datetime.now(ISTANBUL_TZ)
+    simdi = (
+        ISTANBUL_TZ.localize(simdi)
+        if simdi.tzinfo is None else simdi.astimezone(ISTANBUL_TZ)
+    )
+    onceki = None
+    try:
+        with open(_pkg._heartbeat_yolu(), "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        ham = payload.get("last_scan") if isinstance(payload, dict) else None
+        if ham:
+            onceki = _pkg.datetime.fromisoformat(str(ham))
+            onceki = (
+                ISTANBUL_TZ.localize(onceki)
+                if onceki.tzinfo is None else onceki.astimezone(ISTANBUL_TZ)
+            )
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        onceki = None
+    except Exception as exc:  # noqa: BLE001 - teşhis başarısız olsa da bot açılmalı
+        _pkg.logger.debug("Render önceki heartbeat okunamadı: %s", type(exc).__name__)
+        onceki = None
+
+    gap_seconds = max(0.0, (simdi - onceki).total_seconds()) if onceki is not None else None
+    threshold_seconds = 15 * 60
+    status = {
+        "started_at": simdi.isoformat(),
+        "started_monotonic": time.monotonic(),
+        "previous_heartbeat_at": onceki.isoformat() if onceki is not None else None,
+        "previous_heartbeat_source": "local heartbeat.json" if onceki is not None else None,
+        "estimated_gap_seconds": gap_seconds,
+        "sleep_gap_threshold_seconds": threshold_seconds,
+        "possible_sleep_or_restart": (
+            gap_seconds is not None and gap_seconds >= threshold_seconds
+        ),
+    }
+    setattr(_pkg, "_render_runtime_status", status)
+    return dict(status)
+
+
 def _heartbeat_yasi_sn(simdi: _pkg.datetime = None) -> float:
     """heartbeat.json'daki `last_scan` damgasının yaşı (saniye); okunamazsa None.
 

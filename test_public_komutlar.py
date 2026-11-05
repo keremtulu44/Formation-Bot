@@ -795,6 +795,37 @@ def test_komut_durumu_hedef_tiplerini_tasir(monkeypatch):
     assert durum["public_hedefler"][0]["komut"] is False
 
 
+def test_komut_durumu_webhookta_thread_yoklugunu_hazirliksizlik_sanmaz(monkeypatch):
+    import main as main_mod
+
+    class WebhookProcessor:
+        def durum(self):
+            return {"calisiyor": False, "islenen": 0}
+
+    monkeypatch.setattr(main_mod, "_komut_modu", "webhook")
+    monkeypatch.setattr(main_mod, "_health_server_ref", object())
+    monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", WebhookProcessor())
+    monkeypatch.setattr(main_mod, "_telegram_listener_ref", None)
+    monkeypatch.setattr(main_mod, "_shutdown_requested", False)
+
+    durum = main_mod._komut_durumu()
+    assert durum["calisiyor"] is False  # getUpdates thread'i webhook'ta yok
+    assert durum["dinleyici_canli"] is True  # ama HTTP webhook processor hazır
+
+
+def test_komut_durumu_olu_polling_listenerini_oluk_gosterir(monkeypatch):
+    import main as main_mod
+
+    class DeadListener:
+        def durum(self):
+            return {"calisiyor": False}
+
+    monkeypatch.setattr(main_mod, "_komut_modu", "yoklama")
+    monkeypatch.setattr(main_mod, "_telegram_listener_ref", DeadListener())
+    monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", None)
+    assert main_mod._komut_durumu()["dinleyici_canli"] is False
+
+
 # ============================ 17) /teshis KOMUTU =============================
 
 

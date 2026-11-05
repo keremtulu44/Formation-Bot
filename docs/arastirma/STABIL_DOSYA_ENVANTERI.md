@@ -1,8 +1,27 @@
 # Stabil dosya envanteri ve kurtarma listesi
 
-**2026-11-01 gerçek dosya kontrolü.** [Ana rehber](STABIL_REHBERI.md).
+**Tarihsel snapshot: 2026-11-01.** Aşağıdaki “bulunamayan” kayıtlar yalnız o günkü
+workspace/HEAD için geçerlidir. 2026-11-04'te güncel branch yeniden kontrol
+edildi; güncel durum aşağıdaki ek bölümdedir. [Ana rehber](STABIL_REHBERI.md).
 
-## Şimdi mevcut ve kalıcı repo dosyaları
+## 2026-11-04 güncel checkout yeniden kontrolü
+
+| Yol | Bugünkü durum |
+|---|---|
+| `domain_engines/stabil/` + `domain_engines/runner.py` | Mevcut; `run_stabil_domain` `as_of_close` ve `isolated` destekli |
+| `research/arsiv.py` + `backfill_data/ASTOR_1d.csv.gz`, `ASTOR_1h.csv.gz` | Mevcut; yerel gerçek ASTOR arşivi, 4h `tf_frame` ile türetilir |
+| `research/stabil_replay.py`, `research/stabil_bhv48.py` | Mevcut; 100-sembol causal replay builder ve 48-soru aggregate evaluator |
+| `test_stabil_domain_and_integration.py`, `test_stabil_momentum_arrow.py` | Mevcut; runtime/parity/integration regression tests |
+| `scripts/diagnostics/stabil_api_poc.py`, `test_api_readonly_contract_poc.py` | Mevcut; local-only read-only HTTP PoC; public API değil |
+| `docs/arastirma/stabil_100_sonuclar/STABIL_DAVRANIS_48_*` | Mevcut aggregate manifest/JSON/CSV/Markdown; manifest 100 sembol, 107.441 checkpoint, 10.417 first-seen event, 48 soru, 642 satır; exact data cutoff ve source hash yok |
+| `docs/arastirma/stabil_live_systematic_results.json` | Mevcut; ayrı 50/53 canlı non-macro systematic çalışma |
+| `STABIL_DAVRANIS_100_NATIVE_2026-10-31.tar.gz`, flat `docs/arastirma/STABIL_DAVRANIS_48_YANITLARI.md`, `.json.gz`, `STABIL_DAVRANIS_48_SONUC_OZETI.md` | Bu exact historical paths/archive yok. Aggregate rapor `stabil_100_sonuclar/` altındadır; tam native package hâlâ eksik. |
+
+`test_api_readonly_contract_poc.py` 2026-11-03'te **7 passed** oldu. Bu doğrulama
+API kontratındaki arşiv kesiti/look-ahead davranışıyla sınırlı; eski 100 sembollük
+paketi, 48 soruluk araştırmanın sonuçlarını veya canlı deploy'u doğrulamaz.
+
+## 2026-11-01 snapshot'ta mevcut ve kalıcı repo dosyaları
 
 | Dosya | Köken / doğrulama |
 |---|---|
@@ -14,12 +33,14 @@
 | [48 soru](STABIL_DAVRANIS_SORULARI.md) | Konuşmadan yeniden kayıt; eski dosyanın bayt-kopyası değil |
 | [Çalışma geçmişi](STABIL_CALISMA_GECMISI.md) | Tarihsel sonuçların kanıt sınırıyla kaydı |
 
-Şu an çalışan diğer domainler MS, hacim/katılım, FVG ve OB'dir. TXT'nin
-varlığı beşinci runtime entegrasyonunun mevcut olduğu anlamına gelmez.
-Arşivde 177 adet 1H ve 177 adet 1D dosyası var; bu sayı önceki Stabil'in
-100 sembol planını ve kullandığı veri hashlerini yeniden kurmaz.
+Aşağıdaki eski envanterin kapsamı 2026-11-01 snapshot'ıdır. O tarihte “TXT'nin
+varlığı beşinci runtime entegrasyonunun mevcut olduğu anlamına gelmez” ve
+“başka domainler çalışıyor” denmişti; güncel 2026-11-04 checkout'ta Stabil
+runtime ve testleri bulunduğu için bu eski cümleler bugünkü durum olarak
+kullanılmamalıdır. Arşivde 177 adet 1H ve 177 adet 1D dosyası bulunduğuna dair
+eski kayıt, önceki Stabil'in 100 sembol planını/hashlerini yeniden kurmaz.
 
-## Önceki oturumda raporlanan, bugün bulunamayanlar
+## Önceki snapshot'ta raporlanan, o gün bulunamayanlar
 
 Aşağıdakiler **dosya adı sicili**, tıklanabilir teslimat veya çalışma komutu değildir.
 
@@ -40,18 +61,21 @@ Aşağıdakiler **dosya adı sicili**, tıklanabilir teslimat veya çalışma ko
 | `var/stabil_davranis_100_20261031`, `/home/user/stabil-replay-100-20261031` | Önceki native/ham çalışma dizinleri, log/planlar |
 | Onaylanan PNG ve `1bf1b5d` commit nesnesi | Önceki görsel/yerel commit; bu checkout nesnelerinde bulunamadı |
 
-Git incelemesinde bu checkout'un HEAD'i `385c9bd5dd1537d49de2ff2797754d35d01fdb9d`
-idi; reflog/erişilemeyen nesnelerde eski Stabil çalışması bulunmadı. Bu,
-başka bir bilgisayar veya arşivde olmadığı anlamına gelmez.
+2026-11-01 incelemesinde o zamanki workspace HEAD'i
+`385c9bd5dd1537d49de2ff2797754d35d01fdb9d` idi; bu oturumdaki mevcut branch
+HEAD'i `cb50d2d` tabanındadır. Eski reflog/erişilemeyen nesne bulgusu da yalnız
+2026-11-01 snapshot'ına aittir; başka bir bilgisayar/arşivde bulunmadığı anlamına
+gelmez.
 
 ## Kurtarma — öncelik sırası
 
-1. Önceki workspace/export veya kaynak dal/commit arşivini temin et; mevcut
-   dosyaları silme, sonuç üretmek için hemen motoru tekrar çalıştırma.
+1. Yalnız gerçekten eksik olan tarihsel workspace/export veya kaynak dal/commit
+   artefaktlarını ara; mevcut runtime, test veya sonuç dosyalarını silme.
 2. Önce **tam native paketi + final JSON + manifest + plan/sembol listesi**
    kurtar. Paket üye hashlerini ve veri/kod kökenini doğrula.
-3. Runtime ve replay kaynaklarını/testlerini geri al; özgün TXT ile matematik
-   eşitliğini ve prefix nedenselliğini test et. Sadece observer eklerine izin ver.
+3. Güncel runtime/testler mevcut; özgün TXT hash/parity ve prefix nedenselliğini
+   bugünkü testlerle yeniden doğrula. Eksik tarihsel observer/replay araçlarını
+   yalnız ayrı ihtiyaç olarak kurtar; live feature eklemesi sanma.
 4. Tam yanıtlar/paket geri kurma testini motor çağırmadan dene; eksik sonuçları
    native kayıtlarından türet. Ancak native de kayıpsa yeniden koşu gereksinimini bildir.
 5. Raporları kaydedilen snapshot/tablolarla karşılaştır; burada tarihsel diye

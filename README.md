@@ -206,11 +206,15 @@ başlığında göndererek gerçek bir Telegram test mesajı yollanabilir. Anaht
 tanımlı değilse bu yol 404 döner. `?k=` varsayılan olarak kapalıdır; yalnız
 `TELEGRAM_TEST_KEY_QUERY=1` ile eski yöntem açılır (sır URL'ye düşer).
 
-`TELEGRAM_WEBHOOK_SECRET` tanımlıysa aynı sunucu `POST /webhook` (sırsız yol;
-doğrulama `X-Telegram-Bot-Api-Secret-Token` başlığıyla)
-ucunu açar ve Telegram komutları webhook ile gelir (adres `RENDER_EXTERNAL_URL`
-üzerinden otomatik üretilir); tanımlı değilse uç 404 döner ve bot `getUpdates`
-yoklamasını kullanır. Detay: `docs/kurulum/RENDER_DEPLOY.md` §4.6.
+Render Web Service'te `PORT`, `RENDER_EXTERNAL_URL` ve bot token varsa webhook
+varsayılan olarak **otomatik açılır**: süreç başlangıcında kriptografik rastgele
+secret üretilir, Telegram'a `secret_token` olarak kaydedilir ve HTTP sunucusundaki
+`POST /webhook` (sırsız yol; doğrulama `X-Telegram-Bot-Api-Secret-Token`
+başlığıyla) kullanılır. Secret Render Environment'a yazılmaz ve `/health`'te
+ifşa edilmez. Yerel/systemd kurulumunda `PORT` olmadığından `getUpdates`
+yoklaması devam eder. Elle sabit secret için `TELEGRAM_WEBHOOK_SECRET`, Render'da
+sabit secret boşken yoklamaya zorlamak için `TELEGRAM_WEBHOOK_AUTO=0` kullanın. Detay:
+`docs/kurulum/RENDER_DEPLOY.md` §4.6.
 
 Bot artık **iki yönlüdür**: Telegram'dan gelen komutları yanıtlar. Komutlar
 `TELEGRAM_CHAT_ID` (DM) sohbetinden **her komutla**, public grup/supergroup
@@ -238,13 +242,13 @@ grup sohbetine bot gürültüsü düşmez.
 
 `/panel` ve `/tara [HISSE]` yeni analiz ister ve bitince sonucu komutun geldiği sohbete gönderir. Analiz sürerken `/durum` ilerlemeyi, liste komutları **son tamamlanan analizi** gösterir; yarım sonuçlar yayımlanmaz. Yeni analiz istekleri tek tek çalışır; aynı sohbetin aynı isteği tekrarlanmaz, en fazla 3 istek bekler. Zamanlı işler, bekleyen manuel analizlerin arasına girebilir. Sırası geldiğinde 30 dakikayı aşmış istek çalıştırılmaz ve sahibine bilgi verilir; bildirim, önceki işler bitene kadar gecikebilir. Sıra bellektedir, bot yeniden başlarsa bekleyen istekler silinir. Yetki, eski komut ve hız sınırları geçerliliğini korur. İstanbul saatiyle `POST_CLOSE_ANALYSIS_TIME` (varsayılan 20:00) anında ayrı bir tam evren analizi yapılır.
 
-Komutlar varsayılan olarak `getUpdates` uzun yoklamasıyla ayrı bir thread'de
-toplanır; aynı token'la ikinci bir kopya (Termux/PC) çalışıyorsa `409 Conflict`
-alır — o kopyayı kapatın, yoksa komutlar çalışmaz. Webhook modunda (`§4.6`)
-yoklama kapanır, çakışma olmaz. Başlangıç/mod geçişi API çağrısı başarıyla
-onaylandığında Telegram'da bekleyen tüm güncellemeler kasıtlı olarak atılır;
-yalnızca sonrasında gelenler işlenir. Polling'e geçişte Telegram silme onayı
-alınamazsa listener fail-closed kalır ve komutlar başlatılmaz. Detay:
+Render Web Service'te webhook varsayılan; yerel/systemd'de komutlar
+`getUpdates` uzun yoklamasıyla ayrı thread'de toplanır. Aynı token'la ikinci bir
+polling kopyası (Termux/PC) çalışıyorsa `409 Conflict` alır; o kopyayı kapatın.
+Webhook modunda yoklama çalışmaz. Deploy/mod geçişinde Telegram kuyruğu silinmez:
+webhook isteği servisi uyandırabilir, polling açılışında 15 dakikadan eski
+komutlar yaş kapısıyla atlanır, taze olanlar korunur. Eski durum-değiştirici
+komutlar (örn. `/tara`) gecikmeli çalıştırılmaz. Detay:
 `docs/kurulum/RENDER_DEPLOY.md` §§4.5–4.6.
 
 Bot uykudayken yazılan komutlar sessizce kaybolmaz: 15 dakikadan eski komutlar
@@ -277,12 +281,13 @@ sa/ay, 7/24 ≈ 730 sa/ay). 7/24 ayakta tutmak için Actions → Variables →
 
 > ⚠️ **Ölçüldü (Ekim 2026):** GitHub bu repoda cron koşularını seyrek tetikledi —
 > `*/5` tanımına rağmen günde 4–6 koşu (beklenen 288), çoğu pencere dışı olduğu
-> için **günde 0–3 gerçek ping**. Yani servis saatlerce uyuyabiliyor ve o sırada
-> yazılan DM komutları yanıtsız kalıyor. Tek kontrol:
-> `gh run list --workflow keepalive.yml --limit 20`. Bu yüzden **dış monitör
-> (cron-job.org / UptimeRobot) birincil yol olmalı**; DM komutlarının uyku
-> sırasında da çalışması için **webhook modu** en etkilisidir
-> (`TELEGRAM_WEBHOOK_SECRET`, §4.6 — Telegram POST'u servisi uyandırır).
+> için **günde 0–3 gerçek ping**. Bu yüzden sürekli tarama/planlı işler durabilir;
+> tek kontrol `gh run list --workflow keepalive.yml --limit 20`. Güncel kodda
+> Render Web Service komutları otomatik webhook kullanır ve Telegram POST'u
+> uyuyan servisi uyandırabilir; soğuk başlangıçta ilk yanıt gecikebilir. Render'da
+> webhook görünmüyorsa canlı commit'i ve `/health` → `komut.mod` alanını kontrol edin.
+> Eski deploy veya `TELEGRAM_WEBHOOK_AUTO=0` (sabit secret boşken) polling'e düşer; o durumda dış monitör
+> uptime için gereklidir ama tek başına Telegram'ın polling servisini uyandırmaz.
 
 İki çalışma seçeneği:
 
@@ -291,15 +296,14 @@ sa/ay, 7/24 ≈ 730 sa/ay). 7/24 ayakta tutmak için Actions → Variables →
   kaldığından worker çalışma süresi devam eder.
 - **Free Web Service (repo içindeki iş akışıyla):** `.github/workflows/keepalive.yml`
   `https://<render-adresi>/health` adresine **5 dakikada bir**, her gün İstanbul
-  saatiyle 08:00–23:00 arasında istek atar (gece servis uyur, tarama da yapmaz).
+  saatiyle 08:00–23:00 arasında istek atar (gece servis uyur, sürekli tarama da yapmaz).
   Render Free, 15 dakika inbound trafik olmazsa servisi uyutur; 5 dk aralık
   GitHub cron gecikmelerine karşı pay bırakır. Dış monitör (cron-job.org /
-  UptimeRobot) alternatiftir ve repo aktivitesinden bağımsızdır. Monitör durursa,
-  Render servisi yeniden başlatırsa veya istek kaçarsa bot uyuyabilir; bu yöntem
-  uptime garantisi değildir. Süreç pingler arasında çalışır, CPU'yu sürekli meşgul
-  etmez; ancak uyuyan servis Telegram komutlarına cevap veremez (Telegram mesajı
-  Render'a gelen bir HTTP isteği değildir) — gece komut yanıtı için
-  `KEEPALIVE_ALWAYS=true`.
+  UptimeRobot) alternatiftir ve repo aktivitesinden bağımsızdır. Güncel deploy'da
+  Telegram webhook'u varsayılan açıktır: Telegram POST'u servisi uyandırır; ilk
+  yanıt soğuk başlangıç süresince gecikebilir. Auto webhook'u kapatıp polling
+  kullanırsanız (`TELEGRAM_WEBHOOK_AUTO=0` ve sabit secret boşken) uyuyan servis komutları göremez;
+  `KEEPALIVE_ALWAYS=true` veya sürekli çalışan worker gerekir.
 
 Telegram komutları için Render **Environment** bölümüne `TELEGRAM_BOT_TOKEN` ve
 `TELEGRAM_CHAT_ID` ekleyin (secret değerleri Git'e veya sohbete koymayın).
@@ -370,88 +374,46 @@ geçirme gerektirir.
 - Rapor sonunda **PINE KARSILASTIRMA REHBERI**: kaç bayrak/flama bulundu + tüm eşikler.
 - Not: Pine ekranında eski TAMAMLANDI/BASARISIZ formasyonlar da çizili kalabilir — rapor yalnız **canlı** olanları listeler.
 
-## Durum (2026-09-30, dal `arena/01a0f318-formation-bot`)
+## Güncel işletim notları (2026-11-03)
 
-| Faz | İçerik | Commit |
-|---|---|---|
-| Faz 1 | Son mum/35-dk gecikme düzeltmesi, `auto_adjust=False`, ölü formasyon alarm kapısı, fetch hata loglama + `data_stale` heartbeat | `7485ab6` |
-| Faz 2 | 1D gecikme, BIST tatil/yarım gün takvimi + veri-yok modu, split/süreklilik kontrolü, Telegram global kapanı, tarama drift uyarısı, 1D derin deque (500 bar) | `c3000b6` |
-| Faz 3 | Flama motoru doğrulama: `test_pennant.py` (6/6), `specialized_variant` (standart/eğik ayrımı), standart flama geometri şartı, canlı rapora direk/ölçüm detayı + veri tazeliği | `da3840b`, `0fd1f46`, `28a1e7a` |
-| Faz 4 | Son tarama kalıcılığı + `LiveState.snapshot/hydrate`, Telegram webhook modu, `telegram_alert_flow` ile erteleme (18:45 digest) ve panel rapor katmanı | `b85f6bb` (PR #9), `0bca8e5` |
-| Faz 5 (batch-1) | Açılışta `son_tarama_yukle()` çağrısı geri kondu; tatil/yarım gün günlerinde ana döngünün 0 sn uykulu boş dönmesi düzeltildi | `e9a736f` |
-| Faz 5 (batch-2) | Ölü kod temizliği (kanal dalı, `[:10]`, `get_formations`), özet ile panel aynı kaynaktan, digest şeffaflığı (`12/21 gösteriliyor` + `… N aday daha`), `DEFERRED_ALERT_DIGEST_LIMIT`, benzersiz günlük formasyon sayacı | `6dca717` |
-| Faz 5 (batch-3) | Aday hunisi sayaçları (`/durum` "🔎 Aday hunisi"), engel sayaçları (cooldown/günlük kap/saatlik kap/hata), `/panel` eşik altı satırı | `401a788` |
-| Faz 5 (batch-4) | Sunucu saat dilimi (İstanbul) sayaç/log uyumu + `TZ` değişkeni, uzun mesaj kırpma + sınırlı retry, gönderim sağlığı alanları (heartbeat + `/durum` "Telegram PASİF" uyarısı) | `7626e7d` |
-| Faz 5 (batch-5) | 18:45 digest tamponu kalıcı (`state:digest_pending` + açılışta geri yükleme + kaçırılan özet telafisi), engellenen acil olay kuyruğu (`state:telegram_acil_kuyruk`, engel kalkınca gönderim, kuyruk derinliği heartbeat'te) | `0ba343e` |
-| Faz 5 (batch-6) | Yazma amplikasyonu (içerik parmak izi + heartbeat throttle → tarama başına 144 istek/3,3 MB yerine ~50 istek/2 MB, değişmeyen turda ~0), sır URL'den çıktı (webhook `/webhook` + secret_token başlığı, `/test` X-Test-Key, IP rate limit), `.pkl` Git'ten çıkarıldı (JSON birincil), çoklu örnek tespiti (`state:instances` + heartbeat/`/durum` uyarısı) | `a65b053` |
-| Faz 5 (batch-7) | Şablon hazırlığı: `MARKET_SUFFIX`/`STOCK_UNIVERSE`/`LOG_DIR` env + `SESSION_OPEN/CLOSE` adları + 2027 tatil takvimi (C1), Supabase anahtar ön eki `SUPABASE_STORE_PREFIX=formation-bot:` + eski anahtarları iki turlu okuma (C3), `DATA_DIR` repo dışı varsayılan + `SEED_DATA_DIR` salt-okuma seed (C4), ölü araç temizliği (`fetch_with_rate_limit`, mock demo, `repo_teshis.py`, `logrotate.conf`, `.ps1`) (C7) | `a738ec4` |
+README dışındaki belgeler için güncel durum/yaş etiketi **[docs/README.md](docs/README.md)**
+tek kaynaktır. Son deploy incelemesi: [DEPLOY_STABIL_KONTROLU_2026-11.md](docs/denetim/DEPLOY_STABIL_KONTROLU_2026-11.md);
+son genel kontrol: [GENEL_KONTROL_VE_STABIL_OK_DUZELTMESI_2026-11-03.md](docs/tasarim/GENEL_KONTROL_VE_STABIL_OK_DUZELTMESI_2026-11-03.md).
+Eski 2026-09-30 durum tablosu ve “yeni oturum için” maddeleri güncel branch'i
+ve mevcut özellikleri yansıtmadığı için kaldırıldı; eski tarihli denetimler
+`docs/denetim/` ve `docs/arsiv/` altında tarih etiketiyle okunmalıdır.
 
-| Faz 5 (batch-8) | `main.py` katmanlara ayrıldı (yapısal, davranış değişmedi): `reporting/format.py` (saf metin/sayı üretimi, 8.1), `import main` yan etkisi kaldırıldı (8.2), `reporting/panel.py` (panel raporu bağlam ile, 8.3), `state/paths.py` + `state/persistence.py` (son tarama + digest tamponu, 8.4), `transport/telegram.py` (webhook/komut katmanı, 8.5). `main.py` 3047 → 2380 satır | `77a2756` |
+### Canlı Telegram komutları yanıt vermiyorsa
 
-Regresyon: `pytest` **305 passed**, `test_tarama_zamani.py` **100/100**, `test_pennant.py` **6/6**.
+1. `https://<servis>.onrender.com/health` içindeki `commit` değerinin deploy
+   ettiğiniz sürümle eşleştiğini, `startup_complete: true` olduğunu kontrol edin.
+2. Güncel Render Web Service'te beklenen komut yolu `komut.mod: "webhook"` ve
+   `komut.dinleyici_canli: true`'dur. Yerelde/systemd'de polling beklenir.
+3. `mod: "kapali"` ise `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` (DM için
+   @userinfobot'un **sayısal** kimliği) veya public grup ayarları eksiktir.
+   `yetkisiz_sohbet > 0` ise mesaj beklenen `TELEGRAM_CHAT_ID` sohbetinden gelmiyor.
+4. Webhook kayıt/teslim durumunu ve masked komut sayaçlarını birlikte görmek için:
+   `python deploy_check.py --url https://<servis>.onrender.com`.
+   Loglarda HTTP 401 token hatası, HTTP 409 (ikinci polling kopyası), webhook
+   teslim hatası ve `bayat_atlanan` sayacına bakın.
+5. Render Web Service'te webhook varsayılan olarak otomatik kurulur; sabit secret
+   gerekmez. `TELEGRAM_WEBHOOK_AUTO=0` sabit secret boşken polling'e döndürür.
+   Polling, Render Free
+   uykuya geçtiğinde servisi uyandıramaz. Webhook güncellemeleri restart sırasında
+   silinmez; 15 dakikadan eski `/tara` gibi durum-değiştirici komutlar güvenlik
+   nedeniyle çalıştırılmadan kullanıcıya bildirilir.
 
-Aşağıdaki B5 ölçümü ve yukarıdaki faz satırları tarihsel sonuçlardır; mevcut
-sürümde Supabase'e yazma ve uzak çoklu örnek tespiti kapalıdır.
+Ağ/sır gerektiren canlı test bu checkout'ta yapılmadı; deploy ayarları ve gerçek
+Telegram teslimatı kullanıcı hesabındaki Render/Telegram ortamında
+`deploy_check.py` ve Render Logs ile doğrulanmalıdır.
 
-Ölçüm (B5, 48 hisse × 360 bar 1H + 250 bar 1D, tek tarama turu):
-`96 istek / 3,26 MB` → seans içi `48 istek / 1,98 MB`, veri değişmeyen turda `0 istek / 0 MB`;
-heartbeat `48 istek / 42 KB` → `2 istek / 1,8 KB`. Telemetri: heartbeat `uzak_yazma` alanı.
-Açık iş listesi ve batch planı: `docs/arsiv/YAPILACAKLAR.md`, `docs/arsiv/KODLAMA_PLANI.md`; ölçümlü teşhis: `docs/denetim/SORUN_RAPORU.md`.
+### Kalıcılık ve doğruluk sınırları
 
-## Bilinmesi gerekenler (yeni oturum için)
-
-1. **Pine dosyası bekleniyor** (`Yeni Metin Belgesi.txt`, ARGENT v0.4.6 export). Diske
-   ulaşmadı; geldiğinde `docs/tasarim/PINE_FARK_ANALIZI.md` §5'teki 12 maddelik doğrulama listesi açılacak.
-2. **Bildirim durumu yereldir:** 18:45 digest tamponu ve engellenen acil olaylar
-   `DATA_DIR` dosyalarına yazılır; dosyalar korunmuşsa açılışta geri yüklenir.
-   Supabase salt okunur olduğundan yeni uzak yedek oluşmaz; geçici disk kaybında
-   kuyruklar kaybolabilir. Bot akşam 18:45'te kapalıysa kaçırılan
-   kapanış özeti açılışta "⏰ Kaçırılan kapanış özeti" olarak telafi edilir. Engellenen acil
-   olay `ACIL_KUYRUK_TTL_DK` (varsayılan 180 dk) içinde engel kalkınca gönderilir; süre aşılırsa
-   bayat sinyal atılır (kuyruk sayaçları `/durum` ve heartbeat'te görünür).
-3. **Kalite katsayı sapması:** döküman 0.28/0.20/0.12/0.16/0.12/0.07/0.05 diyor, kod
-   0.26/0.18/0.12/0.20/0.10/0.07/0.07 kullanıyor — **Pine gelmeden kod değiştirilmeyecek**.
-4. **Standart flama geometri şartı** (Faz 3'te eklendi): standart flama yalnız Simetrik Üçgen
-   geometrisinde kurulur; eğik geometri eğik flama tablosundan (direk kalitesi +10, süre ×0.85,
-   kalite +8) geçer. Pine'da birebir var mı — doğrulama madde 11.
-5. **Açık A5 maddeleri:** `filter_same_bar_double_pivot` stub, `local_break` TODO,
-   `ST_WEAK`/`ST_GEOMETRY` kod yolu yok.
-6. **Eşikleri ölçüm olmadan gevşetme yasağı** — A4'ün kök nedeni buydu (sentetik bayrak
-   reddediliyor, gerçek veride sahte bayrak bulunuyordu).
-7. **Sandbox kısıtı:** bu ortamdan Yahoo Finance ve Telegram'a erişilemiyor (SSL). Gerçek
-   zamanlı tarama ve canlı bot testi kullanıcının kendi makinesinde yapılmalı; burada
-   `--cache` modu ve commit'li `bot_data` kullanılır.
-8. **Alarm ve kanal politikası TEK KAYNAK (`config.py`):** karar bekleyen B7/B9
-   maddeleri davranışı değiştirmeden tek yerde toplandı —
-   `ALERT_STATES` (anında push edilen 4 kritik olay), `WATCH_STATES` (18:45 kapanış
-   özetine ertelenen 6 izleme state'i; `telegram_alert_flow.WATCH_STATES` bu listeye
-   bağlıdır) ve `PUBLIC_STATES` + `PUBLIC_MIN_QUALITY_TF` + `PUBLIC_SIKISMA_MIN_CONTRACTION`
-   (public grup/kanal akışı; B9). Kesişim/çift bildirim `config._politika_hatalari` ile
-   import anında yakalanır, testler bunu doğrular. Politikayı değiştirmek için sadece
-   bu üç yeri düzenle; kodda başka yerde kopya liste yok.
-
-   **Public grup (Faz 1, 02.10.2026; metin 22.10.2026'da eşitlendi):** `TELEGRAM_GROUP_ID`
-   tanımlıysa bot, DM'den **bağımsız** olarak gruba yayın yapar (DM kapalıyken de çalışır).
-   Her olay kendi mesajında gider ve metin **DM kartının birebir aynısıdır** (başlık/bülten
-   yok; ölçü 3 `◇`, yasal uyarı her mesajda). Bütçe DM'den ayrıdır ve 1 mesaj = 1 olay
-   olduğu için DM tavanıyla eşittir (`PUBLIC_MAX_MESAJ_SAAT=20`,
-   `PUBLIC_MAX_MESAJ_GUN=120`, `PUBLIC_MIN_ARALIK_SN=2.0`) ve 429 `retry_after` desteklenir.
-   Grup metni sadedir: iç izleme notu, `/panel`, `/durum`,
-   dosya yolu, ❌ tek tek olaylar gruba **gitmez**; başarısız kırılımlar 18:45 özetinde
-   sayı olarak ve Cuma karnesinin kısa sürümünde görünür. Gruba yönetici bot, komut
-   olmayan grup mesajlarına **cevap vermez** (yalnız DM'de yardım metni döner).
-
-   **Kanal/grup açılışı:** hedef bir **kanal** da olabilir (önerilen); açıklama ve
-   sabitlenmiş karşılama metinleri `docs/operasyon/KANAL_ACILIS_PAKETI.md`'de, uygulama aracı
-   `python kanal_acilis.py --durum|--uygula` (varsayılan kuru çalışma, yazmaz). Evren 48'in üzerine çıkarsa
-   `EVREN_BUYUME_UYARI_ESIGI` ile açılışta tek satır uyarı loglanır (pacing/digest/panel
-   limitleri yeniden ölçülmeli).
-9. **Veri dizini artık repo dışında (batch-7 / C4):** yazımlar `DATA_DIR`'e gider; sırayla
-   `RENDER` → `/tmp/formation-bot-data` → `/var/lib/formation-bot/data` → `~/.formation-bot/data` →
-   `./bot_data` denenir. Repodaki `bot_data/*.json` yalnız **okuma** yedeğidir (`SEED_DATA_DIR`);
-   canlı veri diske yazılmaz. Supabase anahtarları `SUPABASE_STORE_PREFIX` (varsayılan
-   `formation-bot:`) ile öneklenir; öneksiz eski kayıtlar da okunabilir. Mevcut
-   salt okunur modda sonraki uzak yazım/taşıma yapılmaz.
-10. **Bot kuralları:** `bot_data/*.json` git-tracked; **`*.pkl` artık dışarıda** (A8: public repoda pickle yürütme yüzeyi olmasın; okuma JSON birincil, eski `.pkl` yalnız yedek). Runtime dosyaları
-   (heartbeat, telegram_kap, telegram_acil_kuyruk, telegram_digest_pending, *_gunluk.json) gitignore'da. Tüm iş `arena/01a0f318-formation-bot`
-   dalında; başka dala push yok. Merge YALNIZCA kullanıcı onayıyla yapılır.
+- Render'ın varsayılan `DATA_DIR`'i geçici olabilir; restart/redeploy yeni yerel
+  cache, bildirim kuyruğu, cooldown ve karne verisini kaybettirebilir. Mevcut
+  Supabase entegrasyonu salt okunurdur; tanımlamak yeni state yedeği yazmaz.
+- `/health` liveness ve komut modunu bildirir; veri tazeliği, Telegram mesajının
+  kullanıcıya ulaştığı veya taramanın yatırım sonucu verdiği garantisi değildir.
+- Replay/ölçüm sonuçları geçmiş veriyi betimler; canlı performans ya da yatırım
+  tavsiyesi değildir. Mum kapanış/veri sağlayıcı sınırları ilgili runbook ve
+  araştırma belgelerinde kayıtlıdır.

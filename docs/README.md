@@ -73,6 +73,7 @@
 | [tasarim/FAZ3_BACKTEST_VERI_ANALIZI.md](tasarim/FAZ3_BACKTEST_VERI_ANALIZI.md) | Yürürlükte | Backtest/analytics tasarımı (`analytics/backtest.py`) |
 | [tasarim/PHASE2_TASARIM_NOTLARI.md](tasarim/PHASE2_TASARIM_NOTLARI.md) | Yürürlükte | Kimlik/mirror tasarım notları |
 | [tasarim/MODULERLESTIRME_PLANI_2026-10-26.md](tasarim/MODULERLESTIRME_PLANI_2026-10-26.md) | Uygulandı | 2026-10-26 | Mega dosyaların (main/grafik/notifier/data) bölünme planı: hedef paket yapısı, geç bağlama kuralı, faz sırası (sonuç: [YAPI.md](YAPI.md) §8) |
+| [tasarim/API_SENARYOLARI_VE_URUN_FIKIRLERI_2026-11-03.md](tasarim/API_SENARYOLARI_VE_URUN_FIKIRLERI_2026-11-03.md) | Fikir + local PoC | 2026-11-03 | Dışarıya salt-okunur API ile dış servis entegrasyonu ayrımı; ASTOR/Stabil HTTP kontratı yerelde sınandı, production API değil |
 
 ### `kurulum/` — kur ve çalıştır
 | Dosya | Durum | İçerik |

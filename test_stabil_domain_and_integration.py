@@ -452,6 +452,131 @@ def test_stabil_standalone_4h_alert_dedup_cooldown_and_burst_summary(tmp_path, m
                 assert genislik(line) <= config.TELEGRAM_SATIR_PX
 
 
+def _stabil_delivery_candidate(*, grafik_verisi_public=None, symbol="THYAO"):
+    from bot.stabil_service import StabilAlarmCandidate
+
+    behavior = SimpleNamespace(
+        reclaim_kind="close_reclaim",
+        rank_score=1.5,
+        unchanged_days=26,
+        touch_count=2,
+        vol_ratio=1.35,
+        pct_vs_support=2.4,
+    )
+    return StabilAlarmCandidate(
+        symbol=symbol,
+        bar_open_ts="2026-11-04T09:00:00+03:00",
+        bar_close_ts="2026-11-04T13:00:00+03:00",
+        bar_label="04.11 13:00",
+        close_price=102.4,
+        support_level=100.0,
+        behavior=behavior,
+        card_lines=("Destek üstünde kapanış",),
+        grafik_verisi_public=grafik_verisi_public,
+    )
+
+
+def test_stabil_public_grafik_verisi_uret_main_4h_and_upper_1d(monkeypatch):
+    import bot.stabil_service as st_srv
+
+    frame_4h = SimpleNamespace(index=["2026-11-04T09:00:00+03:00"])
+    frame_1d = object()
+    now = object()
+    stabil_result = object()
+    domain_results = {
+        "THYAO": {
+            "4h": {"market_structure": "4h-structure"},
+            "1d": {"stabil": "daily-stabil"},
+        }
+    }
+    seen = {}
+
+    def kare_listesi(cift, tf, cerceve, **kwargs):
+        seen.update(cift=cift, tf=tf, cerceve=cerceve, kwargs=kwargs)
+        return {
+            "sembol": "THYAO",
+            "goruntular": [
+                {"tf": "4h", "goruntu": {"main": True}},
+                {"tf": "1d", "goruntu": {"upper": True}},
+            ],
+        }
+
+    fake_grafik = SimpleNamespace(
+        grafik_aktif_mi=lambda: True,
+        kare_listesi=kare_listesi,
+    )
+    monkeypatch.setitem(sys.modules, "grafik", fake_grafik)
+
+    veri = st_srv._stabil_public_grafik_verisi_uret(
+        "THYAO", frame_4h, frame_1d, now, domain_results, stabil_result
+    )
+
+    assert seen["cift"] is None
+    assert seen["tf"] == "4h"
+    assert seen["cerceve"] is frame_4h
+    assert seen["kwargs"]["ek_cerceveler"] == {"1d": frame_1d}
+    assert seen["kwargs"]["adet"] == 2
+    assert seen["kwargs"]["sonuclar"]["4h"]["stabil"] is stabil_result
+    assert seen["kwargs"]["sonuclar"]["1d"]["stabil"] == "daily-stabil"
+    assert [k["tf"] for k in veri["goruntular"]] == ["4h", "1d"]
+    assert veri["goruntular"][1]["rol"] == "ust"
+
+
+def test_stabil_public_grafik_respects_global_kill_switch(monkeypatch):
+    import bot.stabil_service as st_srv
+
+    fake_grafik = SimpleNamespace(
+        grafik_aktif_mi=lambda: False,
+        kare_listesi=lambda *args, **kwargs: pytest.fail("kapalı şalterde kare üretilmemeli"),
+    )
+    monkeypatch.setitem(sys.modules, "grafik", fake_grafik)
+
+    assert st_srv._stabil_public_grafik_verisi_uret(
+        "THYAO",
+        SimpleNamespace(index=["2026-11-04T09:00:00+03:00"]),
+        object(),
+        object(),
+        {},
+        object(),
+    ) is None
+
+
+def test_stabil_public_grafik_hatasi_metni_engellemez(tmp_path, monkeypatch):
+    import config
+    from bot.stabil_service import dispatch_stabil_scan_candidates
+
+    monkeypatch.setattr(config, "STABIL_ALARM_DM", True)
+    monkeypatch.setattr(config, "STABIL_ALARM_PUBLIC", True)
+    monkeypatch.setattr(config, "STABIL_ALARM_TEKIL_UST_SINIR", 3)
+
+    events = []
+
+    def public_chart(_identity, _data):
+        events.append("graphic")
+        raise RuntimeError("media failed")
+
+    notifier = SimpleNamespace(
+        send_text=lambda text: events.append("dm-text") or (True, "ok"),
+        send_to_public=lambda text: events.append("public-text") or True,
+        public_grafik_bagla=public_chart,
+    )
+    veri = {
+        "goruntular": [
+            {"tf": "4h", "goruntu": {}},
+            {"tf": "1d", "goruntu": {}, "rol": "ust"},
+        ]
+    }
+    cand = _stabil_delivery_candidate(grafik_verisi_public=veri)
+
+    summary = dispatch_stabil_scan_candidates(
+        [cand], notifier, state_path=str(tmp_path / "stabil-state.json")
+    )
+
+    assert summary["tekil_gonderilen"] == 1
+    assert events == ["dm-text", "public-text", "graphic"]
+    assert (tmp_path / "stabil-state.json").exists()
+
+
 def test_stabil_command_curated_buckets_and_single_symbol():
     import bot
     from bot.stabil_service import format_stabil_universe_command

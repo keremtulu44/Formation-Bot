@@ -52,6 +52,7 @@ class StabilAlarmCandidate:
     support_level: float
     behavior: StabilBarBehavior
     card_lines: tuple[str, ...]
+    grafik_verisi_public: dict[str, Any] | None = None
 
 
 def _state_file_path() -> str:
@@ -107,6 +108,77 @@ def _bars_since_last_sent(df_4h_closed: pd.DataFrame, last_bar_open_iso: str | N
             return 0
         return (len(idx_ts) - 1) - max(0, pos - 1)
     except Exception:
+        return None
+
+
+def _stabil_public_grafik_verisi_uret(
+    stock: str,
+    df_4h: pd.DataFrame,
+    df_1d: pd.DataFrame,
+    simdiki_zaman: datetime,
+    domain_results_by_stock: Mapping[str, Any] | None,
+    stabil_res: Any,
+) -> dict[str, Any] | None:
+    """Public Stabil kartı için mevcut ana-TF + üst-TF kare sözleşmesini üret.
+
+    Grafik kill-switch'i mevcut global `TELEGRAM_GRAFIK` ayarına tabidir. Motor
+    sonuçları tarama turundan yeniden kullanılır; burada domain motoru tekrar
+    çalıştırılmaz. Görsel üretim hatası metin alarmına taşınmaz.
+    """
+    try:
+        import grafik
+
+        if not grafik.grafik_aktif_mi():
+            return None
+
+        per_tf = (domain_results_by_stock or {}).get(stock, {})
+        sonuclar = dict(per_tf) if isinstance(per_tf, Mapping) else {}
+        ana_sonuclar = sonuclar.get("4h")
+        ana_sonuclar = dict(ana_sonuclar) if isinstance(ana_sonuclar, Mapping) else {}
+        # `stabil_res` aday değerlendirmesinde zaten kullanılmış aynı 4s çıktıdır.
+        # İzole hesap yolunda da ana kare Stabil katmanını çizebilsin.
+        ana_sonuclar["stabil"] = stabil_res
+        sonuclar["4h"] = ana_sonuclar
+
+        veri = grafik.kare_listesi(
+            None,
+            "4h",
+            df_4h,
+            sonuclar=sonuclar,
+            ek_cerceveler={"1d": df_1d},
+            sembol=str(stock).upper(),
+            zaman_damgasi=df_4h.index[-1],
+            adet=2,
+            simdi=simdiki_zaman,
+        )
+        if not isinstance(veri, dict):
+            return None
+        uretilenler = list(veri.get("goruntular") or [])
+        ana_kare = next(
+            (k for k in uretilenler
+             if isinstance(k, Mapping) and str(k.get("tf") or "").lower() == "4h"),
+            None,
+        )
+        if ana_kare is None:
+            logger.warning("Stabil ana 4s grafiği üretilemedi (%s); görsel eklenmedi", stock)
+            return None
+        ust_kare = next(
+            (k for k in uretilenler
+             if isinstance(k, Mapping) and str(k.get("tf") or "").lower() == "1d"),
+            None,
+        )
+        goruntular = [dict(ana_kare)]
+        if ust_kare is not None:
+            ust_kare = dict(ust_kare)
+            # Public albüm caption'ı ikinci kareyi doğru biçimde "üst TF" yazar.
+            ust_kare["rol"] = "ust"
+            goruntular.append(ust_kare)
+        else:
+            logger.warning("Stabil public grafik çifti eksik (%s 4s + 1g): 1/2 kare", stock)
+        veri["goruntular"] = goruntular
+        return veri
+    except Exception as exc:  # noqa: BLE001 - grafik metin alarmını engellemesin
+        logger.warning("Stabil public grafikleri hazırlanamadı (%s): %s", stock, exc)
         return None
 
 
@@ -203,6 +275,16 @@ def evaluate_stabil_4h_candidate(
         if callable(bar_metni_fn)
         else son_kapanis.strftime("%d.%m %H:%M")
     )
+    grafik_verisi_public = None
+    if bool(getattr(config, "STABIL_ALARM_PUBLIC", True)):
+        grafik_verisi_public = _stabil_public_grafik_verisi_uret(
+            stock,
+            df_4h,
+            df_1d,
+            simdiki_zaman,
+            domain_results_by_stock,
+            stabil_res,
+        )
     return StabilAlarmCandidate(
         symbol=stock,
         bar_open_ts=bar_open_iso,
@@ -212,6 +294,7 @@ def evaluate_stabil_4h_candidate(
         support_level=float(bhv.support_level),
         behavior=bhv,
         card_lines=card_lines,
+        grafik_verisi_public=grafik_verisi_public,
     )
 
 
@@ -279,18 +362,19 @@ def format_stabil_burst_summary_card(extra_candidates: Sequence[StabilAlarmCandi
     return metni_sigdir("\n".join(satirlar), guvenlik=1.0)
 
 
-def _deliver_stabil_message(notifier: Any, text: str) -> bool:
+def _deliver_stabil_message_channels(notifier: Any, text: str) -> tuple[bool, bool]:
+    """Metni DM/public'e yollar ve başarıları ayrı döndürür (görsel bağı için)."""
     dm_on = bool(getattr(config, "STABIL_ALARM_DM", True))
     pub_on = bool(getattr(config, "STABIL_ALARM_PUBLIC", True))
-    any_ok = False
+    dm_ok = False
+    pub_ok = False
 
     if dm_on and notifier is not None:
         send_text = getattr(notifier, "send_text", None)
         if callable(send_text):
             try:
                 res = send_text(text)
-                ok = res[0] if isinstance(res, tuple) else bool(res)
-                any_ok = any_ok or bool(ok)
+                dm_ok = bool(res[0] if isinstance(res, tuple) else res)
             except Exception as exc:
                 logger.warning("Stabil DM gönderim hatası: %s", exc)
 
@@ -302,12 +386,52 @@ def _deliver_stabil_message(notifier: Any, text: str) -> bool:
         send_pub = getattr(notifier, "send_to_public", None)
         if callable(send_pub) and not dm_aktif_ama_public_kapali:
             try:
-                ok_pub = bool(send_pub(text))
-                any_ok = any_ok or ok_pub
+                pub_ok = bool(send_pub(text))
             except Exception as exc:
                 logger.warning("Stabil public gönderim hatası: %s", exc)
 
-    return any_ok
+    return dm_ok, pub_ok
+
+
+def _deliver_stabil_message(notifier: Any, text: str) -> bool:
+    """Geriye uyumlu kolaylık: DM veya public metninden biri gittiyse True."""
+    dm_ok, pub_ok = _deliver_stabil_message_channels(notifier, text)
+    return dm_ok or pub_ok
+
+
+def _deliver_stabil_public_graphic(
+    notifier: Any,
+    cand: StabilAlarmCandidate,
+    *,
+    public_text_sent: bool,
+) -> int:
+    """Metni başarılı public tesliminden sonra kareleri mevcut albüm yoluna bağla."""
+    veri = cand.grafik_verisi_public
+    if notifier is None or not public_text_sent or not isinstance(veri, dict):
+        return 0
+    if not (veri.get("goruntular") or []):
+        return 0
+    bagla = getattr(notifier, "public_grafik_bagla", None)
+    if not callable(bagla):
+        return 0
+
+    tur = (
+        "STABİL GÜÇLÜ GERİ ALIM"
+        if cand.behavior.reclaim_kind == "close_reclaim"
+        else "STABİL SİLKELEME DÖNÜŞÜ"
+    )
+    kimlik = {
+        "stock_name": cand.symbol,
+        "timeframe": "4h",
+        "state": "STABIL_GERI_ALIM",
+        "pattern_name": tur,
+        "formation_id": cand.bar_open_ts,
+    }
+    try:
+        return int(bagla(kimlik, veri) or 0)
+    except Exception as exc:  # noqa: BLE001 - grafik metin alarmını engellemesin
+        logger.warning("Stabil public grafiği gönderilemedi (%s): %s", cand.symbol, exc)
+        return 0
 
 
 def dispatch_stabil_scan_candidates(
@@ -339,7 +463,10 @@ def dispatch_stabil_scan_candidates(
 
     for cand in tekil_liste:
         metin = format_stabil_reclaim_alert_card(cand)
-        if _deliver_stabil_message(notifier, metin):
+        dm_ok, pub_ok = _deliver_stabil_message_channels(notifier, metin)
+        if pub_ok:
+            _deliver_stabil_public_graphic(notifier, cand, public_text_sent=True)
+        if dm_ok or pub_ok:
             ozet["tekil_gonderilen"] += 1
             symbols_map[cand.symbol] = {
                 "last_bar_open": cand.bar_open_ts,

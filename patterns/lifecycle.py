@@ -12,6 +12,7 @@
 # EXPORT contract (f_export_* plotları) ve alertcondition/alert çağrıları bilerek çevrilmedi;
 # bunun yerine Python dostu `events` listesi üretilir (notifier kullanır).
 
+from copy import deepcopy
 import math
 import uuid
 from dataclasses import dataclass, field
@@ -1231,6 +1232,14 @@ class PatternLifecycleManager:
         self.mintick = mintick
         self.engines: Dict[str, ArgentEngine] = {}
         self.last_snapshots: Dict[str, EngineSnapshot] = {}
+        # The live scanner can avoid replaying an exactly unchanged completed
+        # frame (most often 2h/4h/1d between their close checkpoints). This is
+        # opt-in: ordinary callers retain the full deterministic replay path.
+        self._exact_scan_frame_cache: Dict[
+            str,
+            tuple[pd.DataFrame, EngineSnapshot, ArgentEngine, Optional[str], EngineSnapshot],
+        ] = {}
+        self.last_scan_was_cached = False
 
     def get_engine(self, key: str, timeframe: Optional[str] = None) -> ArgentEngine:
         tf = timeframe or (_parse_stock_tf(key)[1] if key and "_" in str(key) else None)
@@ -1245,10 +1254,55 @@ class PatternLifecycleManager:
     def scan(self, key: str, df: pd.DataFrame, tam_yeniden: bool = False,
              timeframe: Optional[str] = None) -> EngineSnapshot:
         engine = self.get_engine(key, timeframe=timeframe)
+        self.last_scan_was_cached = False
+        self._exact_scan_frame_cache.pop(key, None)
         snap = engine.process(df, tam_yeniden=tam_yeniden)
         self.last_snapshots[key] = snap
         self._history_kaydet(key, engine, snap)
         return snap
+
+    def scan_if_unchanged(self, key: str, df: pd.DataFrame,
+                          tam_yeniden: bool = True,
+                          timeframe: Optional[str] = None) -> EngineSnapshot:
+        """Reuse an exact prior replay result; otherwise run the normal replay.
+
+        Equality includes the complete index, columns, dtypes, and OHLCV values,
+        so a provider correction or a new completed candle always invalidates
+        the cache. This deliberately does not use the engine's incremental
+        cursor: rolling-window shifts still take the existing full-replay path.
+        """
+        if not tam_yeniden or not isinstance(df, pd.DataFrame) or df.empty:
+            return self.scan(key, df, tam_yeniden=tam_yeniden, timeframe=timeframe)
+
+        engine = self.get_engine(key, timeframe=timeframe)
+        cached = self._exact_scan_frame_cache.get(key)
+        if cached is not None:
+            (
+                cached_frame,
+                cached_snapshot,
+                cached_engine,
+                cached_timeframe,
+                published_snapshot,
+            ) = cached
+            if (
+                engine is cached_engine
+                and engine.timeframe == cached_timeframe
+                and self.last_snapshots.get(key) is published_snapshot
+                and cached_frame.equals(df)
+                and getattr(engine, "_bars_done", 0) == len(df)
+                and getattr(engine, "_last_index_value", None) == df.index[-1]
+            ):
+                self.last_scan_was_cached = True
+                # Retain the existing idempotent persistence/retry side effects.
+                self._history_kaydet(key, engine, cached_snapshot)
+                return deepcopy(cached_snapshot)
+
+        self.last_scan_was_cached = False
+        snapshot = self.scan(key, df, tam_yeniden=True, timeframe=timeframe)
+        self._exact_scan_frame_cache[key] = (
+            df.copy(deep=True), deepcopy(snapshot), engine, engine.timeframe, snapshot
+        )
+        return snapshot
 
     # ---------- Faz 2.1/2.2: history defteri yazımı ----------
 

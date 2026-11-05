@@ -469,18 +469,22 @@ tonu önce/sonra), `docs/gorseller/ornek_sag_bosluk.png` (sağ boşluk ilk turu)
 | `TZ` | `Europe/Istanbul` (log ve kota günü hizası) |
 | `MARKET_SUFFIX` · `STOCK_UNIVERSE` | `.IS` · boş = BIST 50 (48 aktif) |
 | `DATA_DIR` · `SEED_DATA_DIR` · `LOG_DIR` | `/tmp/formation-bot-data` · `./bot_data` (okuma yedeği) · `./logs` |
-| `TELEGRAM_WEBHOOK_SECRET` | Doluysa komutlar webhook, boşsa `getUpdates` yoklaması |
+| `TELEGRAM_WEBHOOK_AUTO` | Render Web Service'te varsayılan `1` (otomatik webhook); `0` = sabit secret boşsa polling'e dön |
+| `TELEGRAM_WEBHOOK_SECRET` | İsteğe bağlı sabit secret; Render'da boşsa süreç başına rastgele secret üretilir, yerelde PORT yoksa polling sürer |
 | `TELEGRAM_GRAFIK` · `TELEGRAM_GRAFIK_ADET` | `yok`/`alarm` · alarm başına kare (1-4) |
 | `GRAFIK_*` | Kare ayarları: `GRAFIK_MUM_MAKS`, `GRAFIK_OLAY_MAKS`, `GRAFIK_SAG_BOSLUK_ORANI`, `GRAFIK_HACIM_PANELI`, `GRAFIK_LEJANT_KARE`, `GRAFIK_RVOL_ROZET_ESIK(_DUSUK/MAKS/DUSUS_MAKS)` |
 | `HEALTH_RATE_LIMIT_PER_MIN` | Public uçlarda IP başına limit (0 = kapalı) |
 
 ### 6.3 Ayakta tutma (keep-alive) ve deploy tetiği
 
-- Free plan inbound trafik olmadan uyur; bot kendi çağrılarını **outbound**
-  yaptığı için kendini uyandırmaz. Çözüm: `.github/workflows/keepalive.yml`
-  **5 dakikada bir** `/health` ucuna ping atar (public repoda Actions dakikaları
-  ücretsiz; 60 gün repo aktivitesi olmazsa GitHub zamanlanmış işi sessizce
-  kapatabilir → Actions sekmesinden "Enable workflow").
+- Free plan inbound trafik olmadan uyur; botun kendi alarm çağrıları **outbound**
+  olduğu için tarama/scheduler servisini tek başına uyanık tutmaz. Güncel Render
+  Web Service deploy'unda komut webhook'u varsayılan açıktır ve Telegram POST'u
+  uyuyan servisi uyandırabilir (`TELEGRAM_WEBHOOK_AUTO=0` ve sabit secret boşken polling'e döner).
+  `.github/workflows/keepalive.yml` `/health`'e **5 dakikada bir** ping atmayı
+  dener; Actions cron seyrek/gecikmeli olabilir, 60 gün repo aktivitesi olmazsa
+  GitHub zamanlanmış işi kapatabilir. Bu ping tarama uptime'ı içindir, webhook'un
+  yerini tutmaz; canlı komut modu `/health` → `komut.mod` ile doğrulanır.
 - `.github/workflows/deploy.yml`: `main`'e push'ta Render **Deploy Hook**'unu
   çağırır (`RENDER_DEPLOY_HOOK` secret; yoksa iş kırmızı olmaz, uyarı verir).
   Böylece "merge ettim ama canlı eski sürüm" durumu görünür olur.

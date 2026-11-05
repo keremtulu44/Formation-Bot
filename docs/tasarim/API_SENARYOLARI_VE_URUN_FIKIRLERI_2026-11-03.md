@@ -1,6 +1,6 @@
 # Formation-Bot için API senaryoları ve ürün fikirleri
 
-> **Öneri / fikir notu.** Bu dosya yeni bir değerlendirme belgesidir; mevcut araştırma ekleri, CSV/JSON sonuç dosyaları ve örnek PNG'ler değiştirilmemiştir. Bu turda **gerçek bir public REST API eklenmedi**; aşağıdaki mimari, ürün ve güvenlik önerileri ileride karar verilmesi içindir.
+> **Öneri / fikir notu.** Bu dosya yeni bir değerlendirme belgesidir; mevcut araştırma ekleri, CSV/JSON sonuç dosyaları ve örnek PNG'ler değiştirilmemiştir. Bu turda **public/production REST API eklenmedi**. Yalnız `scripts/diagnostics/stabil_api_poc.py` altında, gerçek Stabil runner'ını yerel ASTOR arşiviyle çağıran, `127.0.0.1` dışına bağlanmayan bir HTTP PoC ve kontrat testleri eklendi. Bu PoC deploy edilebilir API değildir; kapsam/sınırlar §10'da.
 
 ---
 
@@ -84,10 +84,11 @@ Ayrıca "API eklemek" şu anlama da gelebilir: **dış servisleri içeri bağlam
 ### 4.1 Temel ilkeler
 
 - Her analiz yanıtında `as_of`, `timeframe`, `symbol`, `engine_version`, `data_quality`, `source`, `warnings` zorunlu.
-- Yalnız **kapanmış mumlar** ve nedensel `as_of` kesimi; gelecek mum asla sonuca girmez.
+- Snapshot endpoint'lerinde `as_of` timezone taşıyan ISO-8601 olmalı; timestamp etiketinden ziyade gerçek mum kapanışıyla kesim yapılmalı. Yalnız **kapanmış mumlar** kullanılır; gelecek mum sonuca giremez.
 - `replay` ve `live` ayrı etiketlenir; replay sonucu canlı performans gibi sunulmaz.
 - Yanıtlar `not_investment_advice: true` taşır.
-- Her endpoint idempotent, cache'lenebilir ve versiyonlu (`/v1/...`).
+- GET sorguları doğal olarak idempotent olabilir. Aynı cache anahtarı `symbol + tf + as_of + source/version` bileşenlerini içermeli; canlı/freshness uçları için `no-store` tercih edilebilir. Yazma/iş başlatma uçları idempotent sayılmaz; idempotency key, tekrar deneme ve replay koruması ayrıca tanımlanır.
+- Bütün ürün uçları versiyonlu (`/v1/...`) olmalı; test PoC'sindeki `X-API-Key` production auth/kota tasarımının yerine geçmez.
 
 ### 4.2 İlk endpoint seti
 
@@ -108,28 +109,41 @@ Ayrıca "API eklemek" şu anlama da gelebilir: **dış servisleri içeri bağlam
 
 ```json
 {
+  "api_version": "v1",
+  "request_id": "<her istekte yeni 32 karakterlik kimlik>",
   "symbol": "ASTOR",
   "timeframe": "4h",
-  "as_of": "2026-10-19T15:30:00+03:00",
-  "engine_version": "stabil-2026-11-02",
+  "as_of": "2026-10-16T18:30:00+03:00",
+  "engine_version": "stabil-local-poc",
   "data_quality": "OK",
-  "source": "archive|live-cache",
-  "support_level": 162.20,
-  "price_vs_support": "destek üstünde",
-  "regime": "STEPPING_UP",
+  "source": "archive",
+  "latest_bar_close": "2026-10-16T18:00:00+03:00",
+  "latest_bar_age_seconds_at_as_of": 1800,
+  "close_price": 164.89999389648438,
+  "support_level": 172.10000610351562,
+  "price_vs_support": "destek altında",
+  "regime": "HORIZONTAL_AFTER_DROP",
   "signals": {
     "reclaim_kind": null,
-    "momentum_kind": "upward_rebase_momentum",
+    "momentum_kind": null,
     "weak_reclaim": false
   },
   "chart_markers": {
     "reclaim_arrow": false,
-    "momentum_arrow": true
+    "momentum_arrow": false
   },
-  "warnings": [],
+  "readiness": {
+    "daily_support": "READY",
+    "weekly_trend": "READY",
+    "daily_trend": "READY",
+    "h4_trend": "READY"
+  },
+  "warnings": ["OFFLINE_ARCHIVE_NOT_LIVE"],
   "not_investment_advice": true
 }
 ```
+
+Bu, aşağıdaki §10'da anlatılan yerel PoC'nin **gerçek HTTP yanıtındaki** değişken `request_id` çıkarılmış örnektir; fiyatların son basamakları kaynak/arşiv kayan nokta gösterimini yansıtır, canlı fiyat değildir. `source` tek bir enum değeridir (`archive` gibi); `archive|live-cache` ifadesi iki seçenek anlamına gelir, JSON'a aynen yazılmaz. Üretimde `engine_version` build/git kimliğine bağlanmalı; PoC etiketi gerçek sürümleme değildir.
 
 Bu sözleşme, grafikteki iki ayrı `▲` anlamını da korur: **dolu yeşil** güçlü geri alım, **içi boş altın** güçlü yukarı momentum. İkisini tek bir "sinyal" alanında ezmek replay karşılaştırmasını bozar.
 
@@ -225,9 +239,46 @@ Bu sorular yanıtlanmadan public API'yi açmak, mevcut tek örnekli botun state/
 
 ---
 
-## 10. Bu turdaki doğrulama notu
+## 10. Bu turdaki doğrulama ve PoC sınırları
 
-Kod taraması `health_server.py`, `notifier/api.py`, `bot/commands.py`, `telegram_commands.py`, `supabase_store.py`, `main.py`, `grafik_uret.py` ve `research/` üzerinde yapıldı. `notifier/api.py` dosya adına rağmen `TelegramNotifier` sınıfını taşır; HTTP route veya OpenAPI şeması içermez. Mevcut public erişilebilir HTTP yüzü yalnızca `health_server.py` içindeki operasyonel/webhook uçlarıdır. Bu nedenle yukarıdaki öneriler **yeni bir katman** olarak değerlendirilmelidir; var olan bir API'nin genişletilmesi değildir.
+Kod taraması `health_server.py`, `notifier/api.py`, `bot/commands.py`, `telegram_commands.py`, `supabase_store.py`, `main.py`, `grafik_uret.py` ve `research/` üzerinde yapıldı. `notifier/api.py` dosya adına rağmen `TelegramNotifier` sınıfını taşır; HTTP route veya OpenAPI şeması içermez. Mevcut uygulamanın public erişilebilir HTTP yüzü yalnızca `health_server.py` içindeki operasyonel/webhook uçlarıdır. Aşağıdaki PoC, bu yüzün genişletilmesi değil, ondan bağımsız yerel bir kontrat denemesidir.
 
-Genel kontrol sonuçları ayrıca `docs/tasarim/GENEL_KONTROL_VE_STABIL_OK_DUZELTMESI_2026-11-03.md` dosyasında özetlenmiştir. API teklifi bu turda değerlendirme notu olarak kaldı; üretime açılan bir endpoint, yeni bağımlılık veya emir/yazma yüzeyi eklenmedi.
+### Okuma API'si PoC — doğrulanmış senaryo
+
+`domain_engines/runner.py::run_stabil_domain` gerçek motoru çağrılıyor; `as_of_close` ile kesiliyor ve `isolated=True` kullanılıyor. Veri `research.arsiv.tf_frame` üzerinden repo içindeki ASTOR arşivinden gelir. `scripts/diagnostics/stabil_api_poc.py` ana bot tarafından import edilmez, yalnız `127.0.0.1`'e bind eder, `GET` dışında yöntem kabul etmez ve analiz uçlarında `X-API-Key` ister.
+
+Yerelde başlatma (Terminal 1):
+
+```bash
+export FORMATION_API_POC_KEY='local-only-demo'  # yalnız bu yerel PoC için uydurma anahtar
+.venv/bin/python -m scripts.diagnostics.stabil_api_poc --port 8765
+```
+
+İkinci terminalden gönderilen istek (zaman damgasındaki `+` URL-encode edilir):
+
+```bash
+curl --get 'http://127.0.0.1:8765/v1/symbols/ASTOR/stabil' \
+  --data-urlencode 'tf=4h' \
+  --data-urlencode 'as_of=2026-10-16T18:30:00+03:00' \
+  -H 'X-API-Key: local-only-demo'
+```
+
+`test_api_readonly_contract_poc.py` aynı endpoint'e gerçek loopback HTTP istekleri gönderip ASTOR arşivi ve gerçek motorla sınar. 2026-11-03 tarihinde `.venv/bin/python -m pytest -q test_api_readonly_contract_poc.py` sonucu **7 passed**. Ayrıca belgelenen CLI komutu `127.0.0.1:8765` üzerinde başlatıldı; örnek `curl` isteği gerçek runner'dan HTTP 200 ve aşağıdaki arşiv sonucunu döndürdü. Kapsam:
+
+- 4h ve 1d başarılı cevap; 4h mum kapanışı/as-of yaşı ve günlük kapanışı ayrı doğrulanır.
+- `2026-10-16T15:30:00Z` ile `2026-10-16T18:30:00+03:00` aynı an kabul edilip aynı 4h sonucu üretir; cevabın `as_of` alanı İstanbul saatine normalize edilir.
+- Eksik/yanlış anahtar `401`, desteklenmeyen sembol `404`, desteklenmeyen `tf`, eksik/naive/hatalı/tekrarlı sorgu parametresi `422`, gelecekteki `as_of` `422`, arşiv yokluğu `503`, `POST` `405` verir.
+- `as_of` sonrasındaki hem günlük hem 4h OHLCV satırları aşırı değerlere (`10.000` fiyat ve `10^9` hacim) değiştirilince, `request_id` haricindeki analiz yanıtı değişmez; sonuçta gelecekteki kapanış bulunmadığı da ayrıca kontrol edilir. Bu, bu kontrat için look-ahead regresyonudur.
+- Ham OHLCV alanları cevapta yok; offline kaynağı açıkça `source: archive` ve `OFFLINE_ARCHIVE_NOT_LIVE` ile işaretlenir.
+
+Testte gözlenen örnek özet: ASTOR/4h için `as_of=2026-10-16T18:30:00+03:00`, son kapanış `18:00`, yaş `1800` saniye; kapanış yaklaşık `164.90`, destek yaklaşık `172.10`, ilişki `destek altında`, kalite `OK`. Bunlar **arşiv kesiti** değerleridir; canlı fiyat veya sinyal önerisi değildir. `/v1/health` yalnız PoC liveness bilgisidir; veri tazeliğini kanıtlamaz.
+
+### Dış API ile dış servis entegrasyonu aynı iş değil
+
+- **Dışarıya salt-okunur analiz API'si:** bu turda yalnız local PoC test edildi; auth/kapanış/look-ahead sözleşmesi için ilk kanıt var, fakat public ürün yok.
+- **Dış servisleri içeri bağlamak:** piyasa verisi sağlayıcısı, haber/LLM, broker, Slack veya başka servis çağrısı bu PoC'de yapılmadı. API key, lisans, kapanış semantiği ve veri kalitesi ayrı bir değişiklik/karar olarak ele alınmalı. Broker/OMS ve emir gönderimi kapsam dışı.
+
+Bu PoC'de TLS, rate-limit/kota, production kimlik ve anahtar rotasyonu, scope/tenant, OpenAPI, kalıcı audit, cache, canlı veri sağlayıcısı, hata bütçesi ve dışa açma yoktur. Standart kütüphanenin HTTP sunucusu ve yalnız tek ASTOR arşivi kullanılır; sonuç başına motor çalıştırılır. Dolayısıyla **Render'a deploy edilmemeli ve internet arayüzüne bind edilmemelidir**. Public API kararı öncesi ayrı process, veri lisansı, auth/kota, izleme, API schema ve contract/security testleri gerekir.
+
+2026-11-03 son doğrulaması: tüm depo testleri **3367 passed, 43 skipped**; `.venv/bin/ruff check .` ve `git diff --check` temiz. Genel kontrol sonuçları ayrıca `docs/tasarim/GENEL_KONTROL_VE_STABIL_OK_DUZELTMESI_2026-11-03.md` dosyasında özetlenmiştir. Public API, yeni bağımlılık veya emir/yazma yüzeyi bu turda eklenmedi.
 

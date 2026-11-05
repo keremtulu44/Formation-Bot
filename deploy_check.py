@@ -122,6 +122,14 @@ def env_degeri(anahtar: str, dosya_env: dict) -> str:
     return _anahtari_temizle(os.environ.get(anahtar) or dosya_env.get(anahtar) or "")
 
 
+def _env_bool(deger, varsayilan: bool = False) -> bool:
+    """Normalize environment booleans without treating an empty value as False."""
+    ham = "" if deger is None else str(deger).strip().lower()
+    if not ham:
+        return bool(varsayilan)
+    return ham not in {"0", "false", "no", "off", "kapali", "kapalı"}
+
+
 def _jwt_rolu(anahtar: str) -> str:
     """JWT payload'ındaki 'role' alanını okur (imza doğrulaması yapmaz, sır yazmaz)."""
     k = _anahtari_temizle(anahtar)
@@ -261,7 +269,8 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("TELEGRAM_BOT_TOKEN", True, "@BotFather → /newbot → 'Use this token'"),
         ("TELEGRAM_CHAT_ID", True, "@userinfobot'un verdiği Id (kendine mesaj için pozitif sayı; KOMUTLAR buna bağlı)"),
         ("TELEGRAM_GROUP_ID", False, "PUBLIC KANAL hedefi (@bisthisseveri veya -100…): kanal yayını bununla açılır (eski adı TELEGRAM_CHANNEL_ID)"),
-        ("TELEGRAM_WEBHOOK_SECRET", False, "İsteğe bağlı: webhook modunu açar (komutlar Telegram → /webhook ile gelir; uyuyan servisi Telegram uyandırır)"),
+        ("TELEGRAM_WEBHOOK_SECRET", False, "İsteğe bağlı sabit webhook secret'ı; boşsa Render Web Service otomatik üretir"),
+        ("TELEGRAM_WEBHOOK_AUTO", False, "Render Web Service'te varsayılan 1: secret otomatik üretilir; 0 = polling'e dön"),
         ("RENDER_EXTERNAL_URL", False, "Render otomatik verir (webhook adresi buradan üretilir); render.yaml'de tanımlıdır"),
         ("BOT_PROFILE", False, "Dengeli / Hassas / Seçici"),
         ("TELEGRAM_TEST_KEY", False, "İsteğe bağlı: /test ucunu açar (telefondan Telegram testi)"),
@@ -679,19 +688,15 @@ def kontrol_grafik(token: str, chat_id: str, mesaj_gonder: bool, *,
         satir(FAIL, "sendPhoto reddedildi", _kisa(aciklama, 160, token, chat_id))
 
 
-def kontrol_telegram_yol(token: str, webhook_secret_tanimli: bool) -> None:
+def kontrol_telegram_yol(token: str, webhook_secret_tanimli: bool, *,
+                         render_service: bool = False, webhook_auto: bool = False) -> None:
     """Komutların gerçekten hangi yoldan geldiğini Telegram tarafından doğrular.
 
-    NEDEN: "DM'den /yardim yazıyorum, cevap gelmiyor" şikâyetinin en sık iki
-    sebebi yalnız buradan görülür:
-
-      1. **409 çakışması**: Telegram'da webhook kayıtlı ama bot `getUpdates`
-         yoklaması kullanıyor → güncellemeler hiç gelmez.
-      2. **Teslim hatası**: Webhook kayıtlı ama Telegram `last_error_message`
-         ile teslim edemiyor (servis 5xx döndü, adres yanlış, sır uyuşmuyor…).
-
-    Ayrıca bekleyen güncelleme sayısı, komutların birikip birikmediğini gösterir
-    (servis uykudayken Telegram mesajları kuyrukta tutar, 24 saat sonra atar).
+    Telegram `getWebhookInfo` webhook kaydını ve teslim hatalarını gösterir.
+    Render auto-webhook modunda secret her açılışta bellekte üretildiğinden bu
+    makinedeki `.env` dosyasında bulunmayabilir; kesin çalışma modu `/health`
+    içinden ayrıca okunur. Polling yerelde uygundur ama uyuyan Render Free
+    Web Service Telegram'ın getUpdates bağlantısıyla uyandırılamaz.
     """
     if not token:
         return
@@ -720,22 +725,33 @@ def kontrol_telegram_yol(token: str, webhook_secret_tanimli: bool) -> None:
     son_hata = (bilgi.get("last_error_message") or "").strip()
     hata_zamani = bilgi.get("last_error_date")
 
-    if url and not webhook_secret_tanimli:
-        satir(FAIL, "Webhook kayıtlı ama bot yoklama modunda",
-              "TELEGRAM_WEBHOOK_SECRET tanımlı değil; getUpdates 409 Conflict alır ve DM "
-              "komutları çalışmaz. Ya secret'ı tanımlayın ya da webhook'u silin "
-              f"(deleteWebhook). Kayıtlı adres: {_webhook_adres_gizle(url)}")
+    if url and not webhook_secret_tanimli and not (render_service and webhook_auto):
+        satir(FAIL, "Webhook kayıtlı ama yapılandırılmış secret yok",
+              "Bu dağıtım webhook modunda değilse getUpdates 409 Conflict alır ve komutlar "
+              "çalışmaz. Secret'ı ekleyin veya mevcut kaydı temizleyin; canlı mod için `/health` → komut.mod'u doğrulayın. "
+              f"Kayıtlı adres: {_webhook_adres_gizle(url)}")
+    elif url and not webhook_secret_tanimli:
+        satir(WARN, f"Webhook kayıtlı: {_webhook_adres_gizle(url)}",
+              "Secret bu makinede görünmüyor; Render otomatik üretmiş olabilir. Gerçek işlem modunu "
+              "/health → komut.mod ve komut.dinleyici_canli alanlarından doğrulayın.")
     elif url:
         satir(OK, f"Webhook kayıtlı: {_webhook_adres_gizle(url)}",
               "Komutlar Telegram → /webhook üzerinden gelir (sunucu ayakta olmalı).")
     elif webhook_secret_tanimli:
-        satir(WARN, "Webhook bekleniyor ama kayıtlı değil",
+        satir(WARN, "Webhook bekleniyor ama Telegram'da kayıtlı değil",
               "Bot açılışta setWebhook yapamamış (RENDER_EXTERNAL_URL/HTTPS?). Komutlar "
-              "getUpdates yoklamasına düşer; servis uykudaysa yanıt gelmez.")
+              "getUpdates yoklamasına düşebilir; canlı `/health` → komut.mod ve logları kontrol edin.")
+    elif render_service and webhook_auto:
+        satir(WARN, "Render otomatik webhook bekleniyor ama kayıtlı değil",
+              "TELEGRAM_BOT_TOKEN, PORT ve RENDER_EXTERNAL_URL ile yeni sürümde webhook otomatik açılır. "
+              "Eski commit çalışıyor olabilir veya setWebhook başarısızdır; Render logları ve `/health` → komut.mod'u kontrol edin.")
+    elif render_service:
+        satir(WARN, "Render'da komutlar polling (getUpdates) modunda",
+              "TELEGRAM_WEBHOOK_AUTO=0 ve secret yok. Render Free uyursa polling servisi uyandıramaz; "
+              "auto-webhook'u açın veya sürekli çalışan bir worker kullanın.")
     else:
         satir(OK, "Webhook yok; komutlar getUpdates yoklamasıyla gelir",
-              "Bu yolda 15 dakikadan eski komutlar açılışta atlanır; servis uykuya "
-              "girdiyse komut saatler sonra işlenmez.")
+              "Yerel/systemd kullanımında beklenen mod. 15 dakikadan eski komutlar açılışta çalıştırılmaz.")
 
     if bekleyen:
         satir(WARN, f"Telegram'da bekleyen güncelleme: {bekleyen}",
@@ -903,6 +919,65 @@ def _commit_karsilastir(canli_commit: str) -> None:
           "Auto-Deploy kapalıysa her merge'de elle deploy gerekir.")
 
 
+def _health_komut_sayisi(komut: dict, anahtar: str) -> int:
+    try:
+        return max(0, int(komut.get(anahtar) or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def kontrol_render_komut_durumu(health: dict) -> None:
+    """Live `/health` komut alanını değerlendir; env varlığını çalışma kanıtı sayma."""
+    komut = health.get("komut") if isinstance(health, dict) else None
+    if not isinstance(komut, dict):
+        satir(WARN, "Canlı komut durumu raporlanmıyor",
+              "Deploy eski olabilir. Güncel sürümde /health → komut.mod ve komut.dinleyici_canli alanlarını gösterir.")
+        return
+
+    mod = str(komut.get("mod") or "").strip().lower()
+    canli = komut.get("dinleyici_canli")
+    if mod == "webhook":
+        if canli is True:
+            satir(OK, "Telegram komut yolu aktif (webhook)",
+                  "Webhook processor ve HTTP sunucusu hazır; teslim hatası/pending sayısını da kontrol edin.")
+        elif canli is False:
+            satir(FAIL, "Webhook komut yolu hazır değil",
+                  "/health → komut.dinleyici_canli=false. Render loglarında setWebhook ve başlangıç hatalarını kontrol edin.")
+        else:
+            satir(WARN, "Webhook modu bildiriliyor ama liveness bilinmiyor",
+                  "Deploy eski olabilir; güncel sürümde komut.dinleyici_canli alanı beklenir.")
+    elif mod in {"yoklama", "polling"}:
+        if canli is False or (canli is None and komut.get("calisiyor") is False):
+            satir(FAIL, "Telegram polling dinleyicisi durmuş",
+                  "Loglarda HTTP 401 token hatası veya HTTP 409 (aynı token'ı dinleyen ikinci süreç) arayın.")
+        elif canli is True or komut.get("calisiyor") is True:
+            satir(WARN, "Telegram komut yolu polling modunda",
+                  "Dinleyici çalışıyor; Render Free servisi uyursa getUpdates servisi uyandıramaz. Webhook modunu kullanın.")
+        else:
+            satir(WARN, "Polling modu var ama dinleyici durumu bilinmiyor",
+                  "Render Logs'ta Telegram komut dinleyicisinin başlangıç/409 kayıtlarını kontrol edin.")
+    elif mod == "kapali":
+        satir(FAIL, "Telegram komut katmanı kapalı",
+              "TELEGRAM_BOT_TOKEN ile TELEGRAM_CHAT_ID'yi kontrol edin; public-only kullanımda grup komut ayarları da gerekir.")
+    else:
+        satir(WARN, "Komut modu bilinmiyor",
+              "Bot henüz komutları kurmamış olabilir veya çalışan deploy eski olabilir.")
+
+    yetkisiz = _health_komut_sayisi(komut, "yetkisiz_sohbet")
+    if yetkisiz:
+        son = str(komut.get("son_yetkisiz_sohbet") or "")
+        satir(WARN, f"Yetkisiz sohbetten {yetkisiz} komut geldi",
+              f"TELEGRAM_CHAT_ID gelen DM ile eşleşmiyor olabilir; görülen kimlik maskeli: {son or 'yok'}. @userinfobot'taki sayıyı kontrol edin.")
+    bayat = _health_komut_sayisi(komut, "bayat_atlanan")
+    if bayat:
+        satir(WARN, f"{bayat} eski komut güvenlik nedeniyle çalıştırılmadı",
+              "Komutu yeniden gönderin; /health → heartbeat ve Render uyku/uyanma süresini kontrol edin.")
+    hatali = _health_komut_sayisi(komut, "isleyici_hatasi")
+    if hatali:
+        satir(WARN, f"Komut işleyicisinde {hatali} hata kaydı var",
+              "Render Logs'ta ilgili /komut işleyicisi traceback'ini inceleyin.")
+
+
 def kontrol_render(url: str, test_key: str) -> None:
     bolum("5) RENDER SERVİSİ")
     if not url:
@@ -944,6 +1019,15 @@ def kontrol_render(url: str, test_key: str) -> None:
                 satir(WARN, "Heartbeat bayat", "Tarama ve veri durumunu inceleyin.")
             elif govde.get("heartbeat_stale") is None:
                 satir(WARN, "Heartbeat durumu bilinmiyor", "Henüz ilk tarama yapılmamış olabilir; /health 200 çalışırlık kanıtı değildir.")
+            if govde.get("scan_stale") is True:
+                yas = _health_komut_sayisi(govde, "scan_age_s")
+                esik = _health_komut_sayisi(govde, "scan_stale_after_s")
+                satir(WARN, f"Aktif analiz uzadı ({yas // 60} dk)",
+                      f"/health scan_age_s={yas}, eşik={esik}s. Render Logs'ta ilerleyen sembolü, fetch timeout/retry ve provider gecikmesini inceleyin.")
+            elif govde.get("tarama_suruyor") is True and govde.get("scan_stale") is None:
+                satir(WARN, "Aktif analiz süresi ölçülmüyor",
+                      "Deploy eski olabilir; güncel /health scan_age_s ve scan_stale alanlarını döndürür.")
+            kontrol_render_komut_durumu(govde)
         else:
             satir(FAIL, "200 döndü ama gövde beklenen JSON değil",
                   _kisa(govde, 160, test_key, url, hedef))
@@ -1039,9 +1123,12 @@ def main() -> int:
         )
         # Komut yolu: webhook mı yoklama mı, Telegram tarafında ne kayıtlı?
         # (DM komutlarının çalışmaması en çok buradan anlaşılır.)
+        render_service = bool(args.url or degerler.get("RENDER_EXTERNAL_URL"))
         kontrol_telegram_yol(
             degerler.get("TELEGRAM_BOT_TOKEN", ""),
             bool(degerler.get("TELEGRAM_WEBHOOK_SECRET", "")),
+            render_service=render_service,
+            webhook_auto=_env_bool(degerler.get("TELEGRAM_WEBHOOK_AUTO"), varsayilan=True),
         )
         public_hazir = kontrol_public_hedef(
             degerler.get("TELEGRAM_BOT_TOKEN", ""),
