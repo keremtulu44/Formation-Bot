@@ -100,6 +100,69 @@ def _guncelleme(update_id, metin, chat_id=CHAT_ID):
     }
 
 
+def test_config_import_does_not_generate_runtime_webhook_secret():
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    env = os.environ.copy()
+    env.update({
+        "PORT": "10000",
+        "RENDER_EXTERNAL_URL": "https://formation-bot.onrender.com",
+        "TELEGRAM_BOT_TOKEN": "111:AAA",
+        "TELEGRAM_WEBHOOK_AUTO": "1",
+        "TELEGRAM_WEBHOOK_SECRET": "",
+    })
+    subprocess.run(
+        [sys.executable, "-c", "import config; assert config.TELEGRAM_WEBHOOK_SECRET == ''"],
+        cwd=Path(__file__).resolve().parent, env=env, check=True,
+        capture_output=True, text=True, timeout=15,
+    )
+
+
+def test_render_runtime_webhook_secret_is_generated_for_complete_render_inputs(monkeypatch):
+    import secrets
+    import config
+
+    monkeypatch.setattr(secrets, "token_urlsafe", lambda n: f"generated-{n}")
+    secret, generated = config.telegram_webhook_runtime_secret({
+        "PORT": "10000",
+        "RENDER_EXTERNAL_URL": "https://formation-bot.onrender.com",
+        "TELEGRAM_BOT_TOKEN": "111:AAA",
+    })
+    assert (secret, generated) == ("generated-32", True)
+
+
+def test_render_runtime_webhook_secret_respects_explicit_value_and_opt_out():
+    import config
+
+    fixed, generated = config.telegram_webhook_runtime_secret({
+        "PORT": "10000", "RENDER_EXTERNAL_URL": "https://x.onrender.com",
+        "TELEGRAM_BOT_TOKEN": "111:AAA", "TELEGRAM_WEBHOOK_SECRET": "fixed-secret",
+        "TELEGRAM_WEBHOOK_AUTO": "0",
+    })
+    assert (fixed, generated) == ("fixed-secret", False)
+
+    disabled, generated = config.telegram_webhook_runtime_secret({
+        "PORT": "10000", "RENDER_EXTERNAL_URL": "https://x.onrender.com",
+        "TELEGRAM_BOT_TOKEN": "111:AAA", "TELEGRAM_WEBHOOK_AUTO": "false",
+    })
+    assert (disabled, generated) == ("", False)
+
+
+def test_runtime_webhook_secret_is_not_generated_without_public_web_entrypoint():
+    import config
+
+    assert config.telegram_webhook_runtime_secret({
+        "TELEGRAM_BOT_TOKEN": "111:AAA",
+        "RENDER_EXTERNAL_URL": "https://x.onrender.com",
+    }) == ("", False)
+    assert config.telegram_webhook_runtime_secret({
+        "PORT": "10000", "RENDER_EXTERNAL_URL": "https://x.onrender.com",
+    }) == ("", False)
+
+
 def _post(port, yol, govde, basliklar=None):
     veri = json.dumps(govde).encode("utf-8")
     istek = Request(
@@ -192,8 +255,9 @@ def test_set_webhook_dogru_payload_gonderir(monkeypatch):
     assert payload["allowed_updates"] == list(IZLENEN_GUNCELLEMELER)
     assert "message" in payload["allowed_updates"]
     assert "channel_post" in payload["allowed_updates"]
-    # Bayat komutlar (dünkü /tara) webhook kurulunca çalışmasın
-    assert payload["drop_pending_updates"] is True
+    # Uyuyan Render'ı ilk webhook isteği uyandırabilir; açılışta güncellemeler silinmemeli.
+    # Bayat durum-değiştirici komutları handler 15 dk yaş kapısıyla güvenle atlar.
+    assert payload["drop_pending_updates"] is False
 
 
 def test_set_webhook_hatali_yanitta_false_doner(monkeypatch):
@@ -228,7 +292,8 @@ def test_delete_webhook_payload_gonderir(monkeypatch):
     assert main_mod._telegram_delete_webhook(token="111:AAA") is True
     method, token, payload = cagrilar[0]
     assert (method, token) == ("deleteWebhook", "111:AAA")
-    assert payload["drop_pending_updates"] is True
+    # Polling'e dönüşte de Telegram kuyruğu korunur; listener backlog'u sınıflandırır.
+    assert payload["drop_pending_updates"] is False
     # Token yoksa çağrı bile yapılmaz
     assert main_mod._telegram_delete_webhook(token="") is False
 

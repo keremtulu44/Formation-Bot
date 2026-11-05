@@ -56,6 +56,14 @@ logger = logging.getLogger(__name__)
 
 
 if __name__ == "__main__":
+    # Render Web Service'te uyuyan servisin Telegram komutuyla uyanabilmesi için
+    # varsayılan webhook secret'ını yalnız GERÇEK giriş noktasında üret. Secret
+    # process belleğinde kalır; Telegram setWebhook çağrısında güncel değerle
+    # eşzamanlanır. Açıkça TELEGRAM_WEBHOOK_SECRET verilmişse olduğu gibi korunur.
+    _runtime_webhook_secret, _webhook_secret_auto = config.telegram_webhook_runtime_secret()
+    if _runtime_webhook_secret:
+        TELEGRAM_WEBHOOK_SECRET = _runtime_webhook_secret
+
     # Sinyal kaydı yalnızca GERÇEK giriş noktasında (ana thread) yapılır. Modül
     # seviyesinde tutmak iki sorundu: (1) `import bot`/`import main` sırasındaki
     # yarım yüklenmiş döngüsel importta `signal_handler` henüz bağlı değildi;
@@ -65,6 +73,11 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
     setup_logging()
+    if _webhook_secret_auto:
+        logger.info(
+            "Render Web Service algılandı; Telegram komutları için webhook otomatik açılacak "
+            "(TELEGRAM_WEBHOOK_AUTO=0 ile kapatılabilir)"
+        )
     # HTTP sunucusu main_loop'tan ÖNCE başlar: Render'ın health check'i ilk veri
     # yüklemesi sürerken de yanıt verir. Webhook modunda güncellemeler bu sunucudan
     # gelir; bot komutları kurana kadar /webhook 503 döner (Telegram tekrar dener).

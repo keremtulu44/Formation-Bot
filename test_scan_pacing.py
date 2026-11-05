@@ -224,6 +224,16 @@ def test_stock_fetch_helper_retries_only_transient_failures(monkeypatch):
     assert retry_count == 1
     assert recovered_count == 1
 
+    observations = main_mod._last_scan_fetch_observations
+    assert observations["provider_call_seconds"] >= 0.0
+    assert observations["by_symbol"]["THYAO"]["attempts"] == 2
+    assert observations["by_symbol"]["THYAO"]["status"] == "ok"
+    assert observations["by_symbol"]["UNKNOWN"]["attempts"] == 1
+    assert observations["by_symbol"]["UNKNOWN"]["status"] == "failed"
+    completed_at = pd.Timestamp(observations["by_symbol"]["THYAO"]["completed_at"])
+    assert completed_at.tzinfo is not None
+    assert observations["by_symbol"]["THYAO"]["provider_seconds"] >= 0.0
+
 
 # --- Makro parite sembolleri: ad + yedek seri (2026-10-25) --------------------
 

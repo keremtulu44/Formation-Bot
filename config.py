@@ -377,21 +377,49 @@ GRAFIK_OLAY_MAKS = max(0, int(_env_float("GRAFIK_OLAY_MAKS", 6)))
 # `deploy_check` raporu ve `/durum` içindir — sapma olmasın diye aynı okuma.
 
 # --- TELEGRAM WEBHOOK (Render) ---
-# Varsayılan mod YOKLAMA'dır (getUpdates): yerel/systemd kurulumunda inbound HTTP
-# gerekmez. Render gibi bir web serviste komutları webhook ile almak için:
+# Render Web Service'te PORT + herkese açık webhook adresi + bot token varsa,
+# giriş noktasında rastgele bir secret üretilir ve webhook otomatik açılır.
+# Böylece Telegram komutu Render Free servisini uyandırabilir; yerel/systemd
+# kurulumunda PORT olmadığı için varsayılan hâlâ getUpdates yoklamasıdır.
 #
-#   RENDER_EXTERNAL_URL       Render otomatik verir: https://<servis>.onrender.com
-#   TELEGRAM_WEBHOOK_SECRET   rastgele bir metin; adresin son parçasıdır ve
-#                             Telegram'a secret_token olarak da bildirilir
-#   TELEGRAM_WEBHOOK_URL      (opsiyonel) tam adres; boşsa RENDER_EXTERNAL_URL'den
-#                             https://<servis>.onrender.com/webhook üretilir (sırsız;
-#                             doğrulama secret_token başlığıyla yapılır)
-#
-# Secret boşsa webhook modu KAPALIDIR: bot eskisi gibi getUpdates yoklaması yapar
-# ve /webhook ucu 404 döner (dışarıdan varlığı görülmez).
+# TELEGRAM_WEBHOOK_SECRET elle verilirse her zaman onu kullanırız. Otomatiği
+# kapatmak için TELEGRAM_WEBHOOK_AUTO=0 yazılır; bu durumda Render da yoklama
+# modunda kalır ve servisin uyku/ikinci polling süreci riskleri geçerlidir.
+# TELEGRAM_WEBHOOK_URL (opsiyonel) tam adres; boşsa RENDER_EXTERNAL_URL'den
+# https://<servis>.onrender.com/webhook üretilir (sırsız; doğrulama Telegram'ın
+# X-Telegram-Bot-Api-Secret-Token başlığıyla yapılır).
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
 TELEGRAM_WEBHOOK_URL = os.getenv("TELEGRAM_WEBHOOK_URL", "").strip()
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip()
+
+_WEBHOOK_AUTO_KAPALI_DEGERLERI = {"0", "false", "no", "off", "kapali", "kapalı"}
+
+
+def telegram_webhook_runtime_secret(environ=None):
+    """Return ``(secret, generated)`` for the real process entry point.
+
+    Import-time config stays side-effect free. A random secret is generated only
+    when ``main.py`` is actually launched as a Render-style web service, and is
+    held in memory for that process. Telegram's ``setWebhook`` updates the secret
+    on each restart. A configured secret always takes precedence; local/systemd
+    runs without PORT keep using polling.
+    """
+    env = os.environ if environ is None else environ
+    explicit = str(env.get("TELEGRAM_WEBHOOK_SECRET") or "").strip()
+    if explicit:
+        return explicit, False
+
+    auto_value = str(env.get("TELEGRAM_WEBHOOK_AUTO", "1") or "1").strip().lower()
+    auto_enabled = auto_value not in _WEBHOOK_AUTO_KAPALI_DEGERLERI
+    public_url = str(env.get("TELEGRAM_WEBHOOK_URL") or env.get("RENDER_EXTERNAL_URL") or "").strip()
+    has_render_port = bool(str(env.get("PORT") or "").strip())
+    has_bot_token = bool(str(env.get("TELEGRAM_BOT_TOKEN") or "").strip())
+    if not (auto_enabled and has_render_port and public_url and has_bot_token):
+        return "", False
+
+    import secrets
+
+    return secrets.token_urlsafe(32), True
 
 # --- PUBLIC KANAL ve ÖZET ---
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()

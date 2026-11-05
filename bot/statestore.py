@@ -184,6 +184,10 @@ _shutdown_requested = False
 # Startup tamamlanana ve shutdown baslayana kadar hazirlik sinyali kapali.
 _startup_ready = False
 
+# Render uyku/yeniden başlama teşhisi: mevcut heartbeat dosyasından okunan
+# son görülme ile bu process'in açılış zamanı (yalnızca gözlemsel, alarm kapısı değil).
+_render_runtime_status: Dict = {}
+
 
 _deque_manager_ref = None
 

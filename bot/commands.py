@@ -111,6 +111,22 @@ def _komut_durumu() -> dict:
             ozet.update(dinleyici.durum() or {})
     except Exception as exc:  # noqa: BLE001 - /health asla düşmesin
         ozet["hata"] = f"{type(exc).__name__}: {exc}"[:120]
+
+    # Webhook modunda komut processor'ı HTTP isteği başına çağrılır; getUpdates
+    # thread'i özellikle BAŞLATILMAZ. Bu nedenle processor.durum()['calisiyor']
+    # webhook için doğal olarak False'tur. Sağlık çıktısında gerçek taşıma
+    # hazırlığını ayrı ve doğru bir alanla raporla; polling'de thread liveness'ı
+    # kullan, kapalı/başlangıç durumunda False dön.
+    if _pkg._komut_modu == "webhook":
+        ozet["dinleyici_canli"] = bool(
+            _pkg._health_server_ref is not None
+            and _pkg._telegram_update_processor_ref is not None
+            and not _pkg._shutdown_requested
+        )
+    elif _pkg._komut_modu == "yoklama":
+        ozet["dinleyici_canli"] = bool(ozet.get("calisiyor"))
+    else:
+        ozet["dinleyici_canli"] = False
     return ozet
 
 
@@ -118,8 +134,9 @@ def _saglik_ozeti() -> dict:
     """GET /health için canlılık alanları (denetim B-4).
 
     `/health` DAİMA 200 döner; Render'ın health check davranışı değişmez. Bu özet
-    "bot ayakta mı, tarama sürüyor mu, seans açık mı" sorusunu dışarıdan
-    cevaplanabilir yapar; `?strict=1` ile çağıran monitör heartbeat bayatken 503 alır.
+    "bot ayakta mı, tarama ne kadar süredir sürüyor, seans açık mı" sorusunu
+    dışarıdan cevaplanabilir yapar; `?strict=1` ile çağıran monitör heartbeat
+    bayatken 503 alır. `scan_stale`, aktif tarama yaşı uyarı eşiğini aşınca true olur.
 
     Bayatlama eşiği:
       - tarama sürüyorsa  → TARAMA_SURESI_UYARI_DK (uzun tam evren taraması yanlış
@@ -133,22 +150,46 @@ def _saglik_ozeti() -> dict:
     except Exception:
         seans_acik = None
     try:
-        tarama_suruyor = bool(_pkg._live_state.status().get("tarama_suruyor"))
+        scan_status = _pkg._live_state.status() or {}
+        tarama_suruyor = bool(scan_status.get("tarama_suruyor"))
     except Exception:
+        scan_status = {}
         tarama_suruyor = None
+
+    tarama_esigi_sn = int(TARAMA_SURESI_UYARI_DK * 60)
+    tarama_yasi_sn = None
     if tarama_suruyor:
-        esik_sn = int(TARAMA_SURESI_UYARI_DK * 60)
+        baslangic = scan_status.get("son_is_baslangic")
+        try:
+            baslangic = _pkg.datetime.fromisoformat(str(baslangic))
+            if baslangic.tzinfo is None:
+                baslangic = ISTANBUL_TZ.localize(baslangic)
+            else:
+                baslangic = baslangic.astimezone(ISTANBUL_TZ)
+            tarama_yasi_sn = max(0, int((simdi - baslangic).total_seconds()))
+        except (TypeError, ValueError, OverflowError):
+            tarama_yasi_sn = None
+
+    if tarama_suruyor:
+        esik_sn = tarama_esigi_sn
     elif seans_acik:
         esik_sn = 1800
     else:
         esik_sn = 259200
     yas = _pkg._heartbeat_yasi_sn(simdi)
+    tarama_bayat = (
+        None if tarama_suruyor is None or (tarama_suruyor and tarama_yasi_sn is None)
+        else bool(tarama_suruyor and tarama_yasi_sn > tarama_esigi_sn)
+    )
     return {
         "startup_complete": bool(_pkg._startup_ready) and not _pkg._shutdown_requested,
         "heartbeat_age_s": None if yas is None else int(yas),
         "heartbeat_stale": None if yas is None else bool(yas > esik_sn),
         "heartbeat_stale_esik_s": esik_sn,
         "tarama_suruyor": tarama_suruyor,
+        "scan_age_s": tarama_yasi_sn,
+        "scan_stale": tarama_bayat,
+        "scan_stale_after_s": tarama_esigi_sn,
         "seans_acik": seans_acik,
         "evren": len(_pkg.ACTIVE_STOCKS),
         "instance_id": _pkg.INSTANCE_ID,
@@ -181,6 +222,7 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 
 📊 BİLGİ VE DİĞER KOMUTLAR
 /durum — bot, piyasa, veri sağlığı ve tarama ilerlemesi
+/render · /uyku — Render süreç süresi, olası kesinti/uyanma aralığı ve mum/görsel durumu
 /teshis · /teşhis — grup/kanal komut ve teslim teşhisi
 /olcum · /ölçüm · /referans — karttaki arşiv ölçümlerinin kaynağı
 /karne · /karnem [gün] — yerel doğruluk ve performans karnesi
@@ -413,6 +455,119 @@ def _ms_hata_satiri() -> str:
         satir += f" · son: {son}"
     # Kart etkilenmez: kart yalnız kendi alanlarını basar; bu satır teşhis içindir.
     return satir + " · alarm kartı etkilenmez"
+
+
+def _komut_render(_arguman: str) -> str:
+    """Render process uptime, prior heartbeat gap, candle freshness and image mode."""
+    now = _pkg.datetime.now(ISTANBUL_TZ)
+    runtime = getattr(_pkg, "_render_runtime_status", {}) or {}
+
+    def zaman_metni(value):
+        if not value:
+            return "bilinmiyor"
+        try:
+            stamp = _pkg.datetime.fromisoformat(str(value))
+            stamp = (
+                ISTANBUL_TZ.localize(stamp)
+                if stamp.tzinfo is None else stamp.astimezone(ISTANBUL_TZ)
+            )
+            return stamp.strftime("%d.%m.%Y %H:%M:%S TSİ")
+        except (TypeError, ValueError, OverflowError):
+            return "bilinmiyor"
+
+    def sure_metni(seconds):
+        total = max(0, int(seconds))
+        days, total = divmod(total, 86400)
+        hours, total = divmod(total, 3600)
+        minutes, _seconds = divmod(total, 60)
+        parts = []
+        if days:
+            parts.append(f"{days}g")
+        if hours:
+            parts.append(f"{hours}sa")
+        if minutes or not parts:
+            parts.append(f"{minutes}dk")
+        return " ".join(parts)
+
+    started_at = runtime.get("started_at")
+    started_monotonic = runtime.get("started_monotonic")
+    try:
+        uptime_seconds = max(0.0, time.monotonic() - float(started_monotonic))
+    except (TypeError, ValueError, OverflowError):
+        try:
+            started = _pkg.datetime.fromisoformat(str(started_at))
+            started = (
+                ISTANBUL_TZ.localize(started)
+                if started.tzinfo is None else started.astimezone(ISTANBUL_TZ)
+            )
+            uptime_seconds = max(0.0, (now - started).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            uptime_seconds = None
+
+    satirlar = ["☁️ Render / uyku durumu"]
+    if _pkg._shutdown_requested:
+        satirlar.append("Durum: kapanış istenmiş")
+    elif _pkg._startup_ready:
+        satirlar.append("Durum: uyanık ve hazır")
+    else:
+        satirlar.append("Durum: süreç ayakta, başlangıç hazırlığı sürüyor")
+
+    if started_at:
+        satirlar.append(
+            f"Bu süreç uyandı/başladı: {zaman_metni(started_at)} · "
+            f"çalışma süresi {sure_metni(uptime_seconds) if uptime_seconds is not None else 'bilinmiyor'}"
+        )
+    else:
+        satirlar.append("Bu sürecin başlangıç zamanı henüz kaydedilmedi")
+
+    previous_at = runtime.get("previous_heartbeat_at")
+    gap_seconds = runtime.get("estimated_gap_seconds")
+    if previous_at and gap_seconds is not None:
+        gap = sure_metni(gap_seconds)
+        if runtime.get("possible_sleep_or_restart"):
+            satirlar.append(
+                f"⚠️ Olası uyku/kesinti: son heartbeat {zaman_metni(previous_at)} → "
+                f"açılış {zaman_metni(started_at)} · yaklaşık {gap}. "
+                "Son heartbeat düşüşün kesin saati değildir."
+            )
+        else:
+            satirlar.append(
+                f"Önceki heartbeat {zaman_metni(previous_at)} · açılışa kadar {gap}; "
+                "uzun kesinti işareti yok."
+            )
+    else:
+        satirlar.append(
+            "Önceki heartbeat diskte yok; ilk açılış/ephemeral disk nedeniyle "
+            "uyku süresi belirlenemiyor."
+        )
+
+    live_status = _pkg._live_state.status() or {}
+    last_run = getattr(_pkg, "last_run_stats", {}) or {}
+    data_asof = live_status.get("son_tarama_veri_zamani") or last_run.get("data_asof")
+    fresh = live_status.get("son_tarama_taze_veri")
+    requested = live_status.get("son_tarama_beklenen_hisse")
+    fetch_failures = live_status.get("son_tarama_fetch_hatasi")
+    oldest_age = live_status.get("son_tarama_en_eski_veri_yasi_dk")
+    if data_asof is None:
+        data_asof = last_run.get("data_asof")
+    if fresh is None:
+        fresh = last_run.get("fresh_fetch")
+    if requested is None:
+        requested = last_run.get("requested")
+    if fetch_failures is None:
+        fetch_failures = last_run.get("fetch_failures")
+    if oldest_age is None:
+        oldest_age = last_run.get("oldest_bar_age_minutes")
+    satirlar.append(_veri_durumu_satiri(
+        data_asof, fresh, requested, fetch_failures, oldest_age
+    ))
+
+    grafik_durumu = "açık" if config.TELEGRAM_GRAFIK == "alarm" else "kapalı"
+    satirlar.append(
+        f"Alarm görselleri: {grafik_durumu} (TELEGRAM_GRAFIK={config.TELEGRAM_GRAFIK or 'yok'}). "
+        "/grafik isteği ayrıca cache tazeliğiyle doğrulanır."
+    )
+    return "\n".join(satirlar)
 
 
 def _komut_durum(_arguman: str) -> str:
@@ -1615,6 +1770,8 @@ TELEGRAM_KOMUTLARI = {
     "yardim": _komut_yardim,
     "help": _komut_yardim,
     "durum": _komut_durum,
+    "render": _komut_render,
+    "uyku": _komut_render,
     "formasyonlar": _komut_formasyonlar,
     "formasyon": _komut_formasyonlar,
     "liste": _komut_formasyonlar,
@@ -1675,7 +1832,7 @@ TELEGRAM_KOMUTLARI = {
 #   /evet, /hayir → gece önerisi kararı KAYDA geçer (yetki tartışmalı, DM'de kalır)
 # `PUBLIC_COMMAND_EXTRA` ile tek tek açılabilir (örn. "tara").
 PUBLIC_KOMUT_ISLEYICILERI = (
-    _komut_yardim, _komut_durum, _komut_formasyonlar, _komut_canli, _komut_ozet,
+    _komut_yardim, _komut_durum, _komut_render, _komut_formasyonlar, _komut_canli, _komut_ozet,
     _komut_sikisanlar, _komut_tamamlanan, _komut_retest, _komut_kirilim,
     _komut_olcum, _komut_karne, _komut_backtest, _komut_panel, _komut_teshis,
     _komut_stabil,
@@ -1892,8 +2049,8 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
     """Komut katmanını AYNI ANDA TEK modda kurar: 'webhook', 'yoklama' veya 'kapali'.
 
     - **webhook**: secret + taban adres var, HTTP sunucusu ayakta ve setWebhook
-      başarılı. Güncellemeler `/webhook/<secret>` ucundan gelir; yoklama thread'i
-      AÇILMAZ (aynı token'da getUpdates 409 alır).
+      başarılı. Güncellemeler sırsız `/webhook` ucuna Telegram'ın secret header'ı
+      ile gelir; yoklama thread'i AÇILMAZ (aynı token'da getUpdates 409 alır).
     - **yoklama**: eski davranış (getUpdates daemon thread). Webhook kapalıyken ya da
       setWebhook başarısız olduğunda komutlar tamamen susmasın diye buraya düşülür;
       önce eski webhook kaydı silinir (yoksa 409).

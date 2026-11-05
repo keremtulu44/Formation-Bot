@@ -46,7 +46,8 @@ from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   resample_all_timeframes, resample_ohlcv, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_last_bar,
                   select_yfinance_1h_period, tamamlanmis_mumlar,
-                  mum_kapanis_ani, bar_kapandi_mi)
+                  mum_kapanis_ani, mum_kapanis_anlari, seans_sonu_saati,
+                  bar_kapandi_mi)
 from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
@@ -94,6 +95,7 @@ from state import paths as _state_paths
 from transport import telegram as _transport_telegram
 
 import main as _pkg  # geç bağlama: yamalı adlar _pkg.X (plan §3)
+_fetch_observations_local = threading.local()
 
 # Def-anı varsayılan: import anında _pkg.okunamaz (döngü); sabit değer çapraz
 # import edilir (monkeypatch yaması yok; değer bot.statestore'da tek sahipli).
@@ -175,11 +177,14 @@ def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=
     """1H verilerini seri çeker; geçici hatalı sembolleri bir kez tekrar dener.
 
     Dönenler: başarılı DataFrame'ler, kalıcı/son hatalar, retry sayısı,
-    retry ile kurtarılan sembol sayısı.
+    retry ile kurtarılan sembol sayısı. Her sağlayıcı yanıtının tamamlanma zamanı
+    ve çağrı süresi yalnızca bu tarama içinde profiling/tazelik denetimi için tutulur.
     """
     fetched = {}
     failures = {}
     retryable = {}
+    observations = {}
+    provider_call_seconds = 0.0
     periods = periods or {}
 
     for index, stock in enumerate(stocks, start=1):
@@ -187,30 +192,48 @@ def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=
             _pkg.logger.info(f"{phase}: kapanış istendi; veri çekimi durduruluyor")
             break
         period = periods.get(stock, FULL_1H_FETCH_PERIOD)
+        request_seconds = 0.0
         try:
             with pacer.request(f"{stock} 1H"):
                 # Sinyal pacing beklemesindeyken gelmiş olabilir.
                 if _pkg._shutdown_requested:
                     break
-                frame, can_retry, reason = _pkg.fetch_yfinance_1h(
-                    stock, period=period, with_status=True
-                )
+                request_started = time.monotonic()
+                try:
+                    frame, can_retry, reason = _pkg.fetch_yfinance_1h(
+                        stock, period=period, with_status=True
+                    )
+                finally:
+                    request_seconds = max(0.0, time.monotonic() - request_started)
         except Exception as exc:
             frame, can_retry, reason = None, False, f"{type(exc).__name__}: {exc}"
+        provider_call_seconds += request_seconds
+        observations[stock] = {
+            "completed_at": _pkg.datetime.now(ISTANBUL_TZ).isoformat(),
+            "provider_seconds": request_seconds,
+            "attempts": 1,
+            "status": "ok" if frame is not None else "failed",
+        }
 
         if frame is not None:
             fetched[stock] = frame
             _pkg.logger.info(
                 f"{phase} [{index}/{len(stocks)}] {stock}: {period} taze 1H veri alındı "
-                f"({len(frame)} bar)"
+                f"({len(frame)} bar, sağlayıcı çağrısı {request_seconds:.2f} sn)"
             )
         else:
             failures[stock] = reason or "veri alınamadı"
             if can_retry:
                 retryable[stock] = failures.pop(stock)
-                _pkg.logger.warning(f"{phase} {stock}: geçici fetch hatası; son turda bir kez denenecek ({retryable[stock]})")
+                _pkg.logger.warning(
+                    f"{phase} {stock}: geçici fetch hatası (sağlayıcı {request_seconds:.2f} sn); "
+                    f"son turda bir kez denenecek ({retryable[stock]})"
+                )
             else:
-                _pkg.logger.warning(f"{phase} {stock}: yeniden denenmeyecek fetch hatası ({failures[stock]})")
+                _pkg.logger.warning(
+                    f"{phase} {stock}: yeniden denenmeyecek fetch hatası "
+                    f"(sağlayıcı {request_seconds:.2f} sn; {failures[stock]})"
+                )
 
     retry_count = 0
     recovered_count = 0
@@ -233,28 +256,53 @@ def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=
             if _pkg._shutdown_requested:
                 failures[stock] = first_reason
                 continue
+            request_seconds = 0.0
             try:
                 with pacer.request(f"{stock} 1H retry"):
                     if _pkg._shutdown_requested:
                         failures[stock] = first_reason
                         continue
                     retry_count += 1
-                    frame, _can_retry_again, reason = _pkg.fetch_yfinance_1h(
-                        stock,
-                        period=periods.get(stock, FULL_1H_FETCH_PERIOD),
-                        with_status=True,
-                    )
+                    request_started = time.monotonic()
+                    try:
+                        frame, _can_retry_again, reason = _pkg.fetch_yfinance_1h(
+                            stock,
+                            period=periods.get(stock, FULL_1H_FETCH_PERIOD),
+                            with_status=True,
+                        )
+                    finally:
+                        request_seconds = max(0.0, time.monotonic() - request_started)
             except Exception as exc:
                 frame, reason = None, f"{type(exc).__name__}: {exc}"
 
+            provider_call_seconds += request_seconds
+            prior = observations.get(stock, {})
+            observations[stock] = {
+                "completed_at": _pkg.datetime.now(ISTANBUL_TZ).isoformat(),
+                "provider_seconds": float(prior.get("provider_seconds") or 0.0) + request_seconds,
+                "attempts": int(prior.get("attempts") or 1) + 1,
+                "status": "ok" if frame is not None else "failed",
+            }
             if frame is not None:
                 fetched[stock] = frame
                 recovered_count += 1
-                _pkg.logger.info(f"{phase} {stock}: tekrar denemesi başarılı ({len(frame)} bar)")
+                _pkg.logger.info(
+                    f"{phase} {stock}: tekrar denemesi başarılı ({len(frame)} bar, "
+                    f"sağlayıcı çağrısı {request_seconds:.2f} sn)"
+                )
             else:
                 failures[stock] = reason or first_reason or "tekrar denemesi başarısız"
-                _pkg.logger.warning(f"{phase} {stock}: tekrar denemesi de başarısız ({failures[stock]})")
+                _pkg.logger.warning(
+                    f"{phase} {stock}: tekrar denemesi de başarısız "
+                    f"(sağlayıcı {request_seconds:.2f} sn; {failures[stock]})"
+                )
 
+    observation_payload = {
+        "by_symbol": observations,
+        "provider_call_seconds": provider_call_seconds,
+    }
+    _fetch_observations_local.value = observation_payload
+    setattr(_pkg, "_last_scan_fetch_observations", observation_payload)
     return fetched, failures, retry_count, recovered_count
 
 
@@ -371,6 +419,75 @@ def _completed_domain_frames(all_timeframes, now):
         except Exception as exc:  # noqa: BLE001 - bozuk domain frame diğer TF'leri engellemesin
             _pkg.logger.error("Domain frame preparation failed for %s: %s", timeframe, exc)
     return prepared
+
+
+def _expected_latest_1h_close(now):
+    """Configured latest BIST 1H close at an observation time (not a bar label)."""
+    observed = pd.Timestamp(now)
+    observed = (
+        observed.tz_localize(ISTANBUL_TZ)
+        if observed.tzinfo is None else observed.tz_convert(ISTANBUL_TZ)
+    )
+    now_local = observed.to_pydatetime()
+    if not _pkg.islem_gunu_mu(now_local):
+        return None
+
+    session_end_time = seans_sonu_saati(now_local)
+    session_end = observed.replace(
+        hour=session_end_time.hour,
+        minute=session_end_time.minute,
+        second=0,
+        microsecond=0,
+    )
+    if observed >= session_end:
+        return session_end
+
+    checkpoint = _pkg.son_kapanan_mum_ani(now_local)
+    return None if checkpoint is None else pd.Timestamp(checkpoint).tz_convert(ISTANBUL_TZ)
+
+
+def _latest_completed_1h_timing(stock, frame, observed_at):
+    """Compare a returned BIST bar's computed close with the expected close.
+
+    This is observational only: it neither rejects data nor changes alarm gates.
+    Macro series are excluded because their session does not follow BIST hours.
+    """
+    if (
+        not isinstance(frame, pd.DataFrame)
+        or frame.empty
+        or config.sembol_turu(stock) == "makro"
+    ):
+        return None
+    expected_close = _expected_latest_1h_close(observed_at)
+    if expected_close is None:
+        return None
+
+    close_times = mum_kapanis_anlari(frame.index, "1h")
+    observed = pd.Timestamp(observed_at)
+    observed = (
+        observed.tz_localize(ISTANBUL_TZ)
+        if observed.tzinfo is None else observed.tz_convert(ISTANBUL_TZ)
+    )
+    for position in range(len(close_times) - 1, -1, -1):
+        actual_close = close_times[position]
+        if actual_close <= observed:
+            bar_label = pd.Timestamp(frame.index[position])
+            bar_label = (
+                bar_label.tz_localize(ISTANBUL_TZ)
+                if bar_label.tzinfo is None else bar_label.tz_convert(ISTANBUL_TZ)
+            )
+            return {
+                "bar_label": bar_label.isoformat(),
+                "actual_close": actual_close.isoformat(),
+                "expected_close": expected_close.isoformat(),
+                "lag_minutes": (expected_close - actual_close).total_seconds() / 60.0,
+            }
+    return {
+        "bar_label": None,
+        "actual_close": None,
+        "expected_close": expected_close.isoformat(),
+        "lag_minutes": None,
+    }
 
 
 def _domain_results_for_notification(stock, all_timeframes, now, cache, frames=None):
@@ -492,6 +609,16 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     tur_hata = 0
     en_son_bar = None
     en_eski_bar_yasi_dk = None
+    fetch_1h_wall_seconds = 0.0
+    daily_fetch_wall_seconds = 0.0
+    resample_seconds = 0.0
+    pattern_replay_seconds = 0.0
+    pattern_cache_hit_seconds = 0.0
+    pattern_full_replay_seconds = 0.0
+    persistence_seconds = 0.0
+    pattern_scan_count = 0
+    exact_frame_cache_hits = 0
+    candle_timing_observations = []
     # Teyitli bir olay aynı sembolde birden çok TF'de çıkarsa, alan çıktıları
     # bu scan turunda taze biçimde yalnızca bir kez hesaplanır.
     domain_results_by_stock = {}
@@ -527,10 +654,22 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
 
     # Önce 1H fetch turu ve yalnız geçici hatalar için tek retry; analiz retry
     # tamamlandıktan sonra yapılır ki kurtarılan taze veri aynı turda kullanılsın.
+    # Gözlemler bu scan çağrısına özeldir; kalıcı duruma yazılmaz.
+    initial_fetch_observations = {"by_symbol": {}, "provider_call_seconds": 0.0}
+    _fetch_observations_local.value = initial_fetch_observations
+    setattr(_pkg, "_last_scan_fetch_observations", initial_fetch_observations)
     pacer = _pkg.create_yahoo_pacer()
+    fetch_started = time.monotonic()
     taze_1h_verileri, fetch_hatalari, retry_sayisi, retry_kurtarilan = _pkg.fetch_1h_stocks_paced(
         scan_stocks, pacer, "MANUEL ANALİZ" if manuel else "CANLI TARAMA", periods=fetch_periods
     )
+    fetch_1h_wall_seconds = max(0.0, time.monotonic() - fetch_started)
+    fetch_observations = getattr(
+        _fetch_observations_local,
+        "value",
+        getattr(_pkg, "_last_scan_fetch_observations", initial_fetch_observations),
+    )
+    fetch_observations_by_symbol = fetch_observations.get("by_symbol", {})
     _pkg.daily_stats['fetch_ok'] += len(taze_1h_verileri)
     _pkg.daily_stats['fetch_failures'] += len(fetch_hatalari)
     _pkg.daily_stats['fetch_retries'] += retry_sayisi
@@ -564,6 +703,24 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             if df_1h is None or len(df_1h) < 50:
                 _pkg.logger.warning(f"{stock}: veri yok (fetch basarisiz + cache bos) - bu tur atlandi")
                 continue
+
+            # Sağlayıcı timestamp'i bar açılışı olarak yorumlanır; gerçek kapanış
+            # gecikmesini 1H etiket yaşıyla karıştırmamak için ayrı, yalnızca
+            # gözlemsel bir kapanış-zamanı karşılaştırması tut.
+            fetch_observation = fetch_observations_by_symbol.get(stock, {})
+            observed_at = fetch_observation.get("completed_at") or simdiki_zaman
+            try:
+                timing = _latest_completed_1h_timing(stock, df_1h, observed_at)
+            except Exception as timing_error:  # noqa: BLE001 - profiling taramayı etkilemesin
+                timing = None
+                _pkg.logger.debug("1H kapanış zamanlaması ölçülemedi (%s): %s", stock, timing_error)
+            if timing is not None and timing.get("lag_minutes") is not None:
+                timing.update({
+                    "stock": stock,
+                    "source": "provider" if taze is not None else "cache",
+                    "fetch_completed_at": fetch_observation.get("completed_at"),
+                })
+                candle_timing_observations.append(timing)
             
             # --- VERİ TAZELİĞİ ÖLÇÜMÜ (FAZ 1) ---
             # En yeni 1H mumun yaşı. Yahoo saatlerce kapalıysa bu değer büyür ve
@@ -641,7 +798,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 )
             
             # Tüm timeframe'leri üret
+            resample_started = time.monotonic()
             all_tfs = _pkg.resample_all_timeframes(df_1h)
+            resample_seconds += max(0.0, time.monotonic() - resample_started)
             
             # --- 1D İÇİN DERİN VERİ (FAZ 2) ---
             # Resample 1D sadece 1H penceresi kadar (~40 bar) derinlikte olur ve 1D
@@ -650,10 +809,12 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             # AYRI ve DERİN (~2 yıl) çekiyoruz. Veri yoksa resample'e geri dönülür
             # (davranış asla kötüleşmez, sadece iyileşir).
             if deque_manager.gunluk_veri_eksik_mi(stock, simdiki_zaman):
+                daily_fetch_started = time.monotonic()
                 with pacer.request(f"{stock} 1D"):
                     if _pkg._shutdown_requested:
                         break
                     taze_gunluk = fetch_yfinance_1d(stock)
+                daily_fetch_wall_seconds += max(0.0, time.monotonic() - daily_fetch_started)
                 deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
                 if taze_gunluk is not None and len(taze_gunluk) >= 30:
                     deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
@@ -690,8 +851,26 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     )
                 
                 # Motor adayı kendisi bulur ve kırılım anında dondurur (Pine v0.4.6 akışı).
-                # tam_yeniden=True: pencere her taramada sıfırdan deterministik oynatılır.
-                snap = lifecycle_manager.scan(stock + "_" + tf_name, df_tf, tam_yeniden=True)
+                # Değişen/yuvarlanan her frame'de tam deterministik replay korunur;
+                # yalnız birebir aynı frame daha önce çalıştıysa güvenli sonucu kullan.
+                pattern_started = time.monotonic()
+                cached_scan = getattr(lifecycle_manager, "scan_if_unchanged", None)
+                replay_was_cached = False
+                if callable(cached_scan):
+                    snap = cached_scan(stock + "_" + tf_name, df_tf, tam_yeniden=True)
+                    replay_was_cached = bool(
+                        getattr(lifecycle_manager, "last_scan_was_cached", False)
+                    )
+                    exact_frame_cache_hits += int(replay_was_cached)
+                else:
+                    snap = lifecycle_manager.scan(stock + "_" + tf_name, df_tf, tam_yeniden=True)
+                pattern_scan_count += 1
+                replay_seconds = max(0.0, time.monotonic() - pattern_started)
+                pattern_replay_seconds += replay_seconds
+                if replay_was_cached:
+                    pattern_cache_hit_seconds += replay_seconds
+                else:
+                    pattern_full_replay_seconds += replay_seconds
                 state, break_dir, lifecycle_log = snap.state, snap.break_dir, snap.log
                 active = snap.active
                 invalidation_event = _pkg._invalidation_event_for_snapshot(snap, active)
@@ -1325,6 +1504,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             tur_taranan += 1
             
             # Her hisse sonrası diske kaydet (crash durumunda kayıp azalsın) + heartbeat
+            persistence_started = time.monotonic()
             try:
                 deque_manager.save_to_disk(stock)
             except Exception as e:
@@ -1340,6 +1520,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     get_mirror_queue().flush(_pkg._supabase_store_ref, max_batches=2)
                 except Exception:  # noqa: BLE001 - mirror opsiyoneldir
                     _pkg.logger.warning("Tarama sırasında mirror flush atlandı", exc_info=True)
+            persistence_seconds += max(0.0, time.monotonic() - persistence_started)
 
         except Exception as e:
             _pkg.daily_stats['errors'] += 1
@@ -1353,8 +1534,51 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             _pkg.daily_stats['gunluk_bar_sayisi'] = len(_df_g)
             break
 
-    sure_dk = (time.monotonic() - tarama_baslangici) / 60.0
+    sure_seconds = max(0.0, time.monotonic() - tarama_baslangici)
+    sure_dk = sure_seconds / 60.0
     _pkg.daily_stats['son_tarama_suresi_dk'] = round(sure_dk, 1)
+
+    delayed_bars = sorted(
+        (item for item in candle_timing_observations if item["lag_minutes"] > 0.5),
+        key=lambda item: item["lag_minutes"],
+        reverse=True,
+    )
+    if candle_timing_observations:
+        if delayed_bars:
+            detail = ", ".join(
+                f"{item['stock']}={item['lag_minutes']:.0f}dk/{item['source']}"
+                for item in delayed_bars[:12]
+            )
+            _pkg.logger.warning(
+                "1H kapanış tazeliği (mevcut label→close kuralına göre): "
+                "%d/%d BIST sembolü beklenen kapanışın gerisinde; en büyük gecikme %.0f dk. %s",
+                len(delayed_bars), len(candle_timing_observations),
+                delayed_bars[0]["lag_minutes"], detail,
+            )
+        else:
+            _pkg.logger.info(
+                "1H kapanış tazeliği: %d/%d ölçülebilir BIST sembolünde beklenen son kapanış mevcut.",
+                len(candle_timing_observations), len(candle_timing_observations),
+            )
+
+    provider_call_seconds = float(fetch_observations.get("provider_call_seconds") or 0.0)
+    fetch_wait_and_loop = max(0.0, fetch_1h_wall_seconds - provider_call_seconds)
+    measured_seconds = (
+        fetch_1h_wall_seconds + daily_fetch_wall_seconds + resample_seconds
+        + pattern_replay_seconds + persistence_seconds
+    )
+    other_seconds = max(0.0, sure_seconds - measured_seconds)
+    _pkg.logger.info(
+        "Tarama süre profili: toplam %.1fs; 1H fetch+pacing %.1fs "
+        "(sağlayıcı çağrıları %.1fs, pace/akış farkı yaklaşık %.1fs); "
+        "1D fetch %.1fs; resample %.1fs; formasyon replay %.1fs "
+        "(%d frame: exact-cache %d hit/%.1fs, tam replay %.1fs); "
+        "kayıt/heartbeat %.1fs; diğer %.1fs.",
+        sure_seconds, fetch_1h_wall_seconds, provider_call_seconds, fetch_wait_and_loop,
+        daily_fetch_wall_seconds, resample_seconds, pattern_replay_seconds,
+        pattern_scan_count, exact_frame_cache_hits, pattern_cache_hit_seconds,
+        pattern_full_replay_seconds, persistence_seconds, other_seconds,
+    )
     eksik = max(len(scan_stocks) - tur_taranan, 0)
     global last_run_stats
     run_status = "tamamlandi" if tur_taranan == len(scan_stocks) and tur_hata == 0 else "basarisiz"

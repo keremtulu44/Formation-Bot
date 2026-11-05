@@ -27,7 +27,7 @@ Diğer tasarım kararları:
   sessiz kaybolma, "komutlar çalışmıyor" şikâyetinin en büyük sebebiydi.
 - **Geç teslim**: Webhook tekrarı ya da açılış nedeniyle 15 dakikadan eski bir
   komut gelirse durum değiştirenler (tara/panel) çalıştırılmaz; yalnızca okuma
-  komutları (yardim/durum) gecikme notuyla yanıtlanır.
+  komutları (yardim/durum/render/uyku) gecikme notuyla yanıtlanır.
 - **Teşhis**: `durum()` sayaçları `/health` alanına girer (islenen, yetkisiz,
   bayat, son komut yaşı, public komut, yetkisiz kullanıcı, yönetici kontrol
   hatası) — "bot çalışıyor ama komut yok" farkı dışarıdan görünür.
@@ -69,7 +69,9 @@ BACKLOG_SINIR_SN = 15 * 60      # açılışta bundan eski mesajlar yok sayılı
 # komutlar (tara/panel) eski veriyle yanlış sonuç üretmesin diye ÇALIŞTIRILMAZ;
 # yalnızca okuma amaçlı komutlar gecikmeli de olsa yanıtlanır — böylece kullanıcı
 # "hiç cevap gelmedi" yerine "bot uyuyordu" bilgisini alır.
-BAYAT_GUVENLI_KOMUTLAR = frozenset({"yardim", "help", "start", "durum", "stabil"})
+BAYAT_GUVENLI_KOMUTLAR = frozenset({
+    "yardim", "help", "start", "durum", "stabil", "render", "uyku",
+})
 
 # Telegram'a "hangi güncelleme türlerini gönder" deriz. `channel_post` BİLİNÇLİ
 # olarak listede: kanal hedefi komut kabul etmez ama kanaldan gelen gönderileri

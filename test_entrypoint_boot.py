@@ -37,6 +37,7 @@ _KOK = Path(__file__).resolve().parent
 _TEMIZLENEN_ENV = (
     "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_CHANNEL_ID",
     "TELEGRAM_GROUP_ID", "TELEGRAM_TEST_KEY", "TELEGRAM_WEBHOOK_SECRET",
+    "TELEGRAM_WEBHOOK_AUTO", "TELEGRAM_WEBHOOK_URL", "RENDER_EXTERNAL_URL",
     "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
 )
 
@@ -108,6 +109,69 @@ def test_python_main_py_script_modunda_cokmez(tmp_path):
         "python main.py health-smoke modunda KENDİLİĞİNDEN çıktı — import "
         "zamanı hata (örn. signal_handler NameError) olabilir. Log:\n" + cikti[-2500:]
     )
+
+
+def test_render_entrypoint_auto_enables_guarded_webhook_offline(tmp_path):
+    """Render girdileri varken webhook ucu açılır; hiçbir Telegram API çağrısı yapılmaz."""
+    import socket
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+
+    env = _smoke_ortami(tmp_path)
+    env.update({
+        "PORT": str(port),
+        "RENDER_EXTERNAL_URL": "https://formation-bot.onrender.com",
+        "TELEGRAM_BOT_TOKEN": "123:fake-smoke-token",
+        "TELEGRAM_WEBHOOK_SECRET": "",
+        "TELEGRAM_WEBHOOK_AUTO": "1",
+    })
+    log_yolu = tmp_path / "render-webhook-smoke.log"
+    with log_yolu.open("wb") as log:
+        proc = subprocess.Popen([sys.executable, "-u", "main.py"], cwd=str(_KOK),
+                                stdout=log, stderr=subprocess.STDOUT, env=env)
+        try:
+            deadline = time.monotonic() + 20
+            health_ok = False
+            while time.monotonic() < deadline:
+                assert proc.poll() is None, log_yolu.read_text(encoding="utf-8", errors="replace")
+                try:
+                    with urlopen(f"http://127.0.0.1:{port}/health", timeout=1) as response:
+                        health_ok = response.status == 200
+                except (URLError, TimeoutError, OSError):
+                    pass
+                if health_ok:
+                    break
+                time.sleep(0.1)
+            assert health_ok, log_yolu.read_text(encoding="utf-8", errors="replace")[-2500:]
+
+            request = Request(
+                f"http://127.0.0.1:{port}/webhook",
+                data=b'{"update_id": 1}', method="POST",
+                headers={"Content-Type": "application/json"},
+            )
+            try:
+                with urlopen(request, timeout=2) as response:
+                    webhook_code = response.status
+            except HTTPError as exc:
+                webhook_code = exc.code
+            assert webhook_code == 403  # secret etkin; yanlış/boş başlık reddedilir
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=10)
+
+    output = log_yolu.read_text(encoding="utf-8", errors="replace")
+    assert "webhook otomatik açılacak" in output
+    assert "POST /webhook" in output
+    assert "Health smoke mode: provider and command loops disabled" in output
+    assert "Traceback" not in output
 
 
 def test_bot_alt_modulleri_tek_main_modulune_bakar():

@@ -269,8 +269,8 @@ def test_webhook_kayitli_ama_yoklama_modunda_hata(monkeypatch):
     monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit(
         {"ok": True, "result": {"url": "https://x.onrender.com/webhook"}}))
     D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=False)
-    assert any(s == D.FAIL and "yoklama modunda" in b for s, b in kayit)
-    assert not any(s == D.FAIL and "yoklama modunda" not in b for s, b in kayit)
+    assert any(s == D.FAIL and "secret yok" in b for s, b in kayit)
+    assert not any(s == D.FAIL and "secret yok" not in b for s, b in kayit)
 
 
 def test_webhook_yok_yoklama_modunda_bilgi(monkeypatch):
@@ -280,6 +280,86 @@ def test_webhook_yok_yoklama_modunda_bilgi(monkeypatch):
     D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=False)
     assert any(s == D.OK and "yoklama" in b for s, b in kayit)
     assert not any(s == D.FAIL for s, _ in kayit)
+
+
+def test_render_auto_webhook_yoksa_bunu_basarili_saymaz(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit(
+        {"ok": True, "result": {"url": ""}}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=False,
+                           render_service=True, webhook_auto=True)
+    assert any(s == D.WARN and "otomatik webhook" in b for s, b in kayit)
+    assert not any(s == D.OK and "yoklama" in b for s, b in kayit)
+
+
+def test_render_auto_webhook_secret_is_not_required_locally_when_registered(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit(
+        {"ok": True, "result": {"url": "https://x.onrender.com/webhook"}}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=False,
+                           render_service=True, webhook_auto=True)
+    assert any(s == D.WARN and "Webhook kayıtlı:" in b for s, b in kayit)
+    assert not any(s == D.FAIL for s, _ in kayit)
+
+
+def test_render_polling_opt_out_warns_about_sleep(monkeypatch):
+    kayit = _satirlari_tut(monkeypatch)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _Yanit(
+        {"ok": True, "result": {"url": ""}}))
+    D.kontrol_telegram_yol("123:AAA", webhook_secret_tanimli=False,
+                           render_service=True, webhook_auto=False)
+    assert any(s == D.WARN and "polling" in b for s, b in kayit)
+    assert not any(s == D.OK for s, _ in kayit)
+
+
+def test_render_health_komut_katmanini_gercek_moddan_diagnose_eder(monkeypatch, capsys):
+    import requests
+
+    class Response:
+        status_code = 200
+
+        def json(self):
+            return {
+                "status": "ok", "service": "formation-bot", "commit": "abc1234",
+                "startup_complete": True, "heartbeat_stale": False,
+                "tarama_suruyor": True, "scan_age_s": 4320,
+                "scan_stale": True, "scan_stale_after_s": 2700,
+                "komut": {
+                    "mod": "webhook", "dinleyici_canli": True,
+                    "yetkisiz_sohbet": 2, "son_yetkisiz_sohbet": "…4321",
+                    "bayat_atlanan": 1, "isleyici_hatasi": 0,
+                },
+            }
+
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    monkeypatch.setattr(requests, "get", lambda *a, **k: Response())
+    D.kontrol_render("https://example.invalid", "")
+    out = capsys.readouterr().out
+    assert "komut yolu aktif (webhook)" in out
+    assert "Yetkisiz sohbetten 2 komut" in out
+    assert "…4321" in out
+    assert "1 eski komut" in out
+    assert "Aktif analiz uzadı (72 dk)" in out
+
+
+def test_render_health_kapali_komut_katmaninda_hata_verir(monkeypatch, capsys):
+    import requests
+
+    class Response:
+        status_code = 200
+
+        def json(self):
+            return {
+                "status": "ok", "service": "formation-bot", "commit": "abc1234",
+                "startup_complete": True, "heartbeat_stale": False,
+                "komut": {"mod": "kapali", "dinleyici_canli": False},
+            }
+
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    monkeypatch.setattr(requests, "get", lambda *a, **k: Response())
+    D.kontrol_render("https://example.invalid", "")
+    assert "komut katmanı kapalı" in capsys.readouterr().out.lower()
+    assert D._sayac[D.FAIL] >= 1
 
 
 def test_webhook_teslim_hatasi_yeni_ise_hata(monkeypatch):

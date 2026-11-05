@@ -67,10 +67,14 @@ services:
       # A7: public uçlarda IP başına istek limiti (0 = kapalı)
       - key: HEALTH_RATE_LIMIT_PER_MIN
         value: "60"
-      # OPSIYONEL — Telegram komutlarını webhook ile almak için rastgele bir değer.
-      # RENDER_EXTERNAL_URL'i Render otomatik verir; adres
-      # https://<servis>.onrender.com/webhook olarak kurulur; sir baslikta dogrulanir.
-      # Boş bırakılırsa bot getUpdates yoklamasını kullanır (varsayılan davranış).
+      # Render Web Service'te Telegram komutları için varsayılan webhook.
+      # Uygulama, secret boşsa PORT + RENDER_EXTERNAL_URL + bot token ile
+      # process başına rastgele secret üretir; Telegram POST'u uyuyan servisi uyandırabilir.
+      # Yerel/systemd polling davranışı değişmez. Polling'e zorlamak için 0 yapın
+      # (sabit TELEGRAM_WEBHOOK_SECRET de boş olmalı).
+      - key: TELEGRAM_WEBHOOK_AUTO
+        value: "1"
+      # Opsiyonel sabit secret. Doluysa auto ayarından bağımsız olarak webhook kullanılır.
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
       # --- Batch 7 (C1/C4): pazar/evren/veri dizini (hepsi OPSİYONEL) ---

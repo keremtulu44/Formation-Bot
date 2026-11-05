@@ -1,10 +1,14 @@
 # Stabil çalışma geçmişi — konuşma kaydı ve kanıt sınırı
 
-**Belgeleme:** 2026-11-01. [Ana rehber](STABIL_REHBERI.md) · [dosya envanteri](STABIL_DOSYA_ENVANTERI.md).
+**Belgeleme:** tarihsel kayıt 2026-11-01; checkout yeniden denetimi 2026-11-04.
+[Ana rehber](STABIL_REHBERI.md) · [dosya envanteri](STABIL_DOSYA_ENVANTERI.md).
 
-> Aşağıdaki tamamlanma/test/süre/sayılar **önceki konuşmada raporlanan kayıtlardır**.
-> Bu checkout'ta eski kod, tam sonuç tabloları ve paket yoktur. Sayılar yeniden
-> hesaplanmadı; tarihsel anlatım bağımsız kanıt veya şu an çalışan özellik değildir.
+> Aşağıdaki tamamlanma/test/süre/sayılar **önceki konuşma ve eski çalışma
+> sürümlerinin kaydıdır**; bunları bugünkü manifestle birleştirmeyin. 2026-11-04
+> checkout'ta Stabil runtime, `research/stabil_replay.py`, `research/stabil_bhv48.py`
+> ve 48-soru aggregate JSON/CSV/Markdown mevcuttur. 80 MB native checkpoint paketi,
+> özgün 27-soru çıktıları, manifest kaynak hashleri ve kesin veri sonu mevcut
+> aggregate dosyalarda yoktur. Güncel dosya durumu aşağıdaki §7'de karşılaştırılır.
 
 ## 1. Domain ve kullanıcı kabul edilen kapsam
 
@@ -97,11 +101,15 @@ kontrolleri, erken saatlik native kanıt ve bağımsız kör doğrulama eksikti.
 
 Önceki konuşmada 80.735.612 baytlık (yaklaşık 80,7 MB) taşınabilir native/fiyat
 paketi; 719 içerik üyesinin SHA256 kontrolü ve THYAO'nun 4107 soru kaydının
-motor çağrısı olmadan birebir geri kurulması raporlandı. O paket **bugün yok**.
+motor çağrısı olmadan birebir geri kurulması raporlandı. O **tam native paket**
+2026-11-04 checkout'ta hâlâ yoktur. Bununla birlikte §7'deki 48-soru aggregate
+JSON/CSV/Markdown dosyaları artık mevcuttur; bunlar native checkpoint/fiyat
+paketinin veya eski 27-soru çıktılarının yerine geçmez.
 
-77 test, 700 çalışma dosyası kontrolü ve paket doğrulamaları bugünkü bu belge
-kontrolüyle aynı şey değildir. Yeni dokümanların kontrol sonucu, eski native
-çalışmanın yeniden doğrulanması diye sunulmayacak.
+Önceki 77 test, 700 çalışma dosyası kontrolü ve paket doğrulamaları bugünkü bu
+dosya envanteri/tek-sembol spot-check'iyle aynı şey değildir. Yeni doküman veya
+spot-check sonucu, eski 100-sembollük tam koşunun yeniden doğrulanması diye
+sunulmayacak.
 
 ## 6. Bu güncellemede gerçekten yapılan
 
@@ -111,4 +119,41 @@ kontrolüyle aynı şey değildir. Yeni dokümanların kontrol sonucu, eski nati
 - Mevcut README/belge/araştırma/devir haritalarına gerçek bağlantılar eklendi.
 - Eksik runtime/raporların yerini uydurma Python, JSON veya sahte paketle
   doldurmak yerine kurtarma ihtiyacı açık bırakıldı.
-- Yeni replay, provider veri çekimi, Telegram veya Supabase işlemi yapılmadı.
+- Bu 2026-11-01 belgeleme turunda yeni replay, provider veri çekimi, Telegram veya Supabase işlemi yapılmadı.
+
+## 7. 2026-11-04 checkout yeniden denetimi — current artifacts
+
+| Kalem | Mevcut artifact'ten doğrulanan |
+|---|---|
+| Runtime / builder / evaluator | `domain_engines/stabil/`, `research/stabil_replay.py`, `research/stabil_bhv48.py` mevcuttur |
+| 48-soru manifesti | 100 sembol; 107.441 H4 checkpoint; 10.417 first-seen support event; 48 soru; 642 sonuç satırı; 188.841 s; `user_confirmed_regime=false` |
+| 48-soru verdict summary | 10 separate-validation; 17 no-clear-difference; 19 descriptive; 2 insufficient-sample |
+| Aggregate çıktılar | `docs/arastirma/stabil_100_sonuclar/STABIL_DAVRANIS_48_SONUCLAR.json`, `_TABLO.csv`, `_YANITLARI.md` ve `_MANIFEST.json` |
+| Tam native checkpoint/fiyat arşivi | Yok; manifestte source/data SHA256 ve kesin data cutoff da yok |
+| Ayrı live-systematic çalışma | `stabil_live_systematic_results.json`: 50/53 non-macro canlı sembol arşivde; 284 sinyal; 75,9 hafta; next-bar hold %91,5; 8×4H medyan +0,262 ATR |
+
+**Sayım farkı korunmalıdır:** §§3–4'teki eski konuşma kayıtları 107.446 checkpoint,
+390.905/386.017 observation ve 4.074/2.034 satır gibi farklı sayı sürümleri
+aktarır. Mevcut 2026-11-01 manifest 107.441/10.417/642 kaydeder. Bunları tek
+koşu gibi toplamak veya eski yüzdeleri yeni manifestle teyit edilmiş saymak doğru
+değildir. İlk 27-soru koşusunun özgün sonuçları da bu checkout'ta yoktur.
+
+**Sınırlı ASTOR spot-check:** `research.stabil_replay.replay_single_symbol("ASTOR")`
+manifestteki per-symbol 501 günlük / 104 haftalık / 1.079 H4 bar ve 91 first-seen
+event adetleriyle eşleşti. Aynı 4h veri üzerinde cevaplayıcı 48 soru ve 552 satır
+üretti (32 insufficient, 8 descriptive, 7 separate-validation, 1 period-varying).
+Bu bir sembolün yeniden üretim kontrolüdür; 100 sembollük tam koşu değildir ve
+manifestte eksik olan kaynak hashleri/veri kesimini geriye dönük ispatlamaz.
+
+**Ayrı alarm-context denemesi:** ASTOR 2026-10-16 13:30 +03 kapanışına göre
+1075 tamamlanmış H4 bar ve 183,20 referans kapanışıyla salt-okunur domain packet
+örneği üretildi. Replay aday CSV'sindeki 13:30 etiketi H4 barının açılış etiketidir;
+o bar ancak 17:30'da kapanır. Bu nedenle aday tetikleyici/kalite/kuvvet ve sonraki
+onay/sonuç alanları 13:30 paketine dahil edilmedi. Sonraki replay çalışmaları da
+pakette `SONRAKİ ARAŞTIRMA` olarak işaretlenir. Plan/çıktı: [context API planı](ALARM_CONTEXT_API_PLANI.md)
+ve [ASTOR örneği](samples/ALARM_CONTEXT_ASTOR_2026-10-16.md). Sonraki denemede aynı kesit
+ASTOR, THYAO, GARAN, ASELS, SISE, TUPRS, BIMAS, EREGL, FROTO ve SNGYO için on ayrı
+JSON packet olarak üretildi; sembole özgü 4h breakout replay'i `replay_evidence.symbol_specific`
+altına ayrı ve `available_at_snapshot=false` olarak eklendi. [10 sembol yorum raporu](samples/ALARM_CONTEXT_10_SEMBOL_INCELEME_2026-10-16.md)
+ve [10 JSON çıktısı](samples/ALARM_CONTEXT_10_SEMBOL_2026-10-16.zip). Bu deneme live alarm,
+depolama, Telegram veya Supabase davranışını değiştirmez.

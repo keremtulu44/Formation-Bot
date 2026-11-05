@@ -733,6 +733,26 @@ def test_saglik_ozeti_tarama_surerken_uyari_esigini_kullanir(tmp_path, monkeypat
     assert ozet["heartbeat_stale"] is False   # 30 dk < 45 dk
 
 
+def test_saglik_ozeti_72_dakikalik_aktif_tarama_bayat_uyarisi_uretir(tmp_path, monkeypatch):
+    import config as cfg
+    from datetime import datetime, timedelta
+
+    _heartbeat_yaz(tmp_path, 72)
+    monkeypatch.setattr(cfg, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(main_mod, "is_bist_open", lambda now=None: True)
+    baslangic = datetime.now(cfg.ISTANBUL_TZ) - timedelta(minutes=72)
+    monkeypatch.setattr(main_mod._live_state, "status", lambda: {
+        "tarama_suruyor": True,
+        "son_is_baslangic": baslangic.isoformat(),
+    })
+
+    ozet = main_mod._saglik_ozeti()
+    assert ozet["scan_age_s"] >= 71 * 60
+    assert ozet["scan_stale_after_s"] == cfg.TARAMA_SURESI_UYARI_DK * 60
+    assert ozet["scan_stale"] is True
+    assert ozet["heartbeat_stale"] is True
+
+
 def test_saglik_ozeti_heartbeat_yoksa_bilinmiyor_der(tmp_path, monkeypatch):
     import config as cfg
     monkeypatch.setattr(cfg, "DATA_DIR", str(tmp_path))

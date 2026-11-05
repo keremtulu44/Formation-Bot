@@ -251,6 +251,25 @@ def test_gec_gelen_yardim_gecikme_notuyla_yanitlanir():
     assert dinleyici.durum()["islenen"] == 1
 
 
+@pytest.mark.parametrize("command", ["render", "uyku"])
+def test_gec_gelen_render_uyku_durumu_yanitlanir(command):
+    """Render uyandıktan sonra geciken salt-okunur uptime komutu da cevaplanır."""
+    session = SahteSession()
+    dinleyici = _dinleyici(
+        session,
+        handlers={command: lambda _a: "Render ayakta; uyku aralığı yaklaşık 40 dk"},
+    )
+
+    cevap = dinleyici.handle_update(
+        _guncelleme(7, f"/{command}", tarih=time.time() - 90 * 60)
+    )
+
+    assert cevap is not None
+    assert "uykudaydı" in cevap
+    assert "Render ayakta" in cevap
+    assert dinleyici.durum()["islenen"] == 1
+
+
 def test_durum_sayaclari_teshis_icerir():
     """`/health` için: mod, sayaçlar ve maskeli yetkisiz sohbet kimliği."""
     session = SahteSession()

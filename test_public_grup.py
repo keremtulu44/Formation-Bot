@@ -1139,3 +1139,78 @@ def test_public_queue_preserves_mtf_and_frozen_dm_commentary(grup_notifier, monk
         assert public == dm == grup_notifier.format_message(data)
     finally:
         kart_yorum.sifirla()
+
+
+def test_stabil_public_grafikler_4h_1d_mevcut_album_yolundan_gider(
+        grup_notifier, monkeypatch, tmp_path):
+    """Standalone Stabil metninden sonra 4s + 1g tek public albüm olarak gider."""
+    import os
+    from types import SimpleNamespace
+
+    import config
+    from bot.stabil_service import StabilAlarmCandidate, dispatch_stabil_scan_candidates
+    import transport.telegram as tt
+
+    monkeypatch.setattr(config, "STABIL_ALARM_DM", False)
+    monkeypatch.setattr(config, "STABIL_ALARM_PUBLIC", True)
+    monkeypatch.setattr(config, "STABIL_ALARM_TEKIL_UST_SINIR", 3)
+
+    notifier = grup_notifier
+    events = []
+    monkeypatch.setattr(
+        notifier,
+        "send_to_public",
+        lambda text: events.append(("text", text)) or True,
+    )
+
+    yollar = []
+    for name in ("stabil-4h.png", "stabil-1d.png"):
+        path = tmp_path / name
+        path.write_bytes(b"png")
+        yollar.append(str(path))
+
+    def sahte_album(files, captions=None, chat_id=None, notifier=None, **kwargs):
+        events.append(("album", list(files), list(captions or []), chat_id))
+        return True, "ok"
+
+    monkeypatch.setattr(tt, "medya_grubu_gonder", sahte_album)
+
+    behavior = SimpleNamespace(
+        reclaim_kind="close_reclaim",
+        rank_score=1.5,
+        unchanged_days=26,
+        touch_count=2,
+        vol_ratio=1.35,
+        pct_vs_support=2.4,
+    )
+    candidate = StabilAlarmCandidate(
+        symbol="THYAO",
+        bar_open_ts="2026-11-04T09:00:00+03:00",
+        bar_close_ts="2026-11-04T13:00:00+03:00",
+        bar_label="04.11 13:00",
+        close_price=102.4,
+        support_level=100.0,
+        behavior=behavior,
+        card_lines=("Destek üstünde kapanış",),
+        grafik_verisi_public={
+            "goruntular": [
+                {"tf": "4h", "goruntu": {"yol": yollar[0]}},
+                {"tf": "1d", "rol": "ust", "goruntu": {"yol": yollar[1]}},
+            ]
+        },
+    )
+
+    summary = dispatch_stabil_scan_candidates(
+        [candidate], notifier, state_path=str(tmp_path / "stabil-state.json")
+    )
+
+    assert summary["tekil_gonderilen"] == 1
+    assert len(events) == 2 and events[0][0] == "text" and events[1][0] == "album"
+    assert "THYAO" in events[0][1] and "4s — STABİL" in events[0][1]
+    _, sent_paths, captions, chat_id = events[1]
+    assert sent_paths == yollar
+    assert "STABİL GÜÇLÜ GERİ ALIM" in captions[0]
+    assert "1g üst zaman dilimi" in captions[1]
+    assert chat_id == "-1001234567890"
+    assert notifier.public_grafik_gonderilen == 2
+    assert not any(os.path.exists(path) for path in yollar)

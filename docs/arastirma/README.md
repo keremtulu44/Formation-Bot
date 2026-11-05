@@ -6,11 +6,16 @@
 [Davranış modeli](STABIL_DAVRANIS_MODELI.md) · [48 soru](STABIL_DAVRANIS_SORULARI.md) ·
 [Çalışma geçmişi](STABIL_CALISMA_GECMISI.md) · [Dosya durumu](STABIL_DOSYA_ENVANTERI.md).
 
-2026-11-01: özgün Python TXT kurtarıldı. Önceki 100 sembol/27 soru ve
-100 sembol/48 davranış çalışmaları konuşmada tamamlanmış olarak raporlandı;
-Stabil kodu, tam tablolar ve native paket **bu checkout'ta yoktur**. Bu kayıt
-eski koşuların yeniden doğrulanması değildir; sayılar ve eksikler geçmiş
-belgesinde ayrıdır. Diğer araştırmaların evrenleriyle birleştirilmemelidir.
+**2026-11-04 checkout durumu:** özgün Python TXT, Stabil runtime (`domain_engines/stabil/`),
+`research/stabil_replay.py`, `research/stabil_bhv48.py` ve 48 soruluk çalışma için
+aggregate JSON/CSV/Markdown sonuçları bu checkout'ta mevcuttur; ayrıntı için
+[Stabil rehberi](STABIL_REHBERI.md) ve [envanter](STABIL_DOSYA_ENVANTERI.md).
+Önceki 100 sembol/27 soru araştırmasının özgün çıktıları ile 48-soru koşusunun
+80 MB'lık native checkpoint paketi burada yoktur. Mevcut 48-soru manifesti kaynak
+veri hashlerini ve kesin veri kesim zamanını da kaydetmez; bu nedenle eski konuşma
+sayılarıyla mevcut manifest/tablolar birleştirilmemeli ve eksik native çalışma
+paketinin yerine geçtikleri varsayılmamalıdır. 50/53 sembollük sistematik sonuç
+ayrı bir çalışmadır. Hiçbiri canlı alarm kuralı veya yatırım önerisi değildir.
 
 > **Durum:** Yürürlükte · **Ölçüm tarihi:** Ekim 2026 · **Veri:** `backfill_data/` 365 günlük gerçek arşiv
 > **Taban:** 176 sembol × 4 zaman dilimi = **704 seri**, **994.142 gözlem satırı**
@@ -18,6 +23,8 @@ belgesinde ayrıdır. Diğer araştırmaların evrenleriyle birleştirilmemelidi
 Bu klasör, botun **canlı karar kurallarını değiştirmeden** motor çıktısının piyasada ne
 yaptığını ölçen hattın çıktısıdır. Repodaki tek "yeni bilgi" üreten belge grubudur; kod
 tartışmalarında sayı gerektiğinde buraya bakılır.
+
+**İç alarm/istek bağlamı prototipi:** [API ve yorumlama planı](ALARM_CONTEXT_API_PLANI.md) · [ASTOR 2026-10-16 13:30 örnek çıktısı](samples/ALARM_CONTEXT_ASTOR_2026-10-16.md) · [10 sembol karşılaştırmalı yorum](samples/ALARM_CONTEXT_10_SEMBOL_INCELEME_2026-10-16.md) · [10 tam JSON paketi (ZIP)](samples/ALARM_CONTEXT_10_SEMBOL_2026-10-16.zip). Salt-okunur araştırma prototipidir; canlı teslimat, depolama veya işlem kuralı eklemez.
 
 **Son Replay sonuçları ve veriler:** [genel ve özel sonuç dizini](SON_REPLAY_SONUCLARI.md) — deploy hisseleri/piyasa karşılaştırmaları, XU100–Brent ve kaçırılan hareket pilotları.
 
