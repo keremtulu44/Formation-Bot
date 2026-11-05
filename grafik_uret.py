@@ -48,9 +48,9 @@ def _veri_dizini(secenek: str | None) -> str:
 class VeriYok(Exception):
     """Çizilecek çerçeve önbellekte yok.
 
-    Neden ayrı tür: `/grafik` komutu bu durumu kullanıcıya „önbellekte veri yok"
-    diye ANLATMAK zorunda (§4: canlı çekme YOK); CLI ise çıkış kodu ile düşmeli.
-    Aynı okumayı iki yüzeyin ayrı ayrı yapmaması için tek yerde tanımlı.
+    Neden ayrı tür: grafik üreticisi cache-only'dir. Telegram `/grafik` yüzeyi
+    bu hatadan önce ortak pacer'la sınırlı yenilemeyi dener; CLI ise çıkış kodu
+    ile düşer. Aynı okumayı iki yüzeyin ayrı ayrı yapmaması için tek yerde tanımlı.
     """
 
 
@@ -114,8 +114,8 @@ def cerceve_getir(hisse: str, tf: str, veri_dizin: str, demo: bool = False, *,
                          and any(s[:i] + s[i + 1:] == anahtar for i in range(len(s))))
         oneri = f" Benzer semboller: {', '.join(adaylar)}; doğru sembolü kontrol edin." if adaylar else ""
         raise VeriYok(f"veri yok: {saatlik_kaynak} okunamadı veya yetersiz; "
-                      "grafik için güvenli bağımsız canlı fetch yolu yok. "
-                      "Botun mevcut veri yüklemesini kontrol edin." + oneri)
+                      "bu üretici cache-only'dir (Telegram /grafik isteği güvenli yenilemeyi ayrıca dener). "
+                      "Botun veri yüklemesini kontrol edin." + oneri)
     df_1s = df_1s.copy(deep=True)
     if tf == "1h":
         return df_1s, saatlik_kaynak

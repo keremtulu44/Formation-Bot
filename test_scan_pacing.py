@@ -93,6 +93,55 @@ def test_requests_are_spaced_and_pause_after_ten():
     assert len(clock.sleeps) == 10
 
 
+def test_pacer_serializes_shared_threads_until_http_context_finishes():
+    import threading
+
+    pacer = YahooRequestPacer(
+        batch_size=10,
+        request_delay_min=0.0,
+        request_delay_max=0.0,
+        batch_pause_min=0.0,
+        batch_pause_max=0.0,
+        sleep_fn=lambda _seconds: None,
+        monotonic_fn=lambda: 0.0,
+        uniform_fn=lambda low, _high: low,
+    )
+    first_entered, release_first, second_entered = (
+        threading.Event(), threading.Event(), threading.Event())
+
+    def first():
+        with pacer.request("first"):
+            first_entered.set()
+            assert release_first.wait(2)
+
+    def second():
+        with pacer.request("second"):
+            second_entered.set()
+
+    t1 = threading.Thread(target=first)
+    t2 = threading.Thread(target=second)
+    t1.start()
+    assert first_entered.wait(2)
+    t2.start()
+    try:
+        assert not second_entered.wait(0.05)
+    finally:
+        release_first.set()
+        t1.join(2)
+        t2.join(2)
+    assert not t1.is_alive() and not t2.is_alive()
+    assert second_entered.is_set()
+
+
+def test_create_yahoo_pacer_is_process_wide(monkeypatch):
+    import bot.scan as scan
+
+    monkeypatch.setattr(scan, "_yahoo_pacer_ref", None)
+    first = scan.create_yahoo_pacer()
+    second = scan.create_yahoo_pacer()
+    assert first is second
+
+
 def test_minimum_delay_is_applied_after_request_completion():
     clock = FakeClock()
     pacer = make_pacer(clock)
@@ -247,6 +296,59 @@ def test_makro_parite_sembolleri_yedek_seri_tasir():
     assert data.saglayici_adaylari("THYAO") == ["THYAO.IS"]
     assert data.saglayici_adaylari("BRENT") == ["BZ=F"]
     assert data.saglayici_adaylari("xauusd") == ["XAUUSD=X", "GC=F"]
+
+
+def test_grafik_fetch_bayat_birincili_reddeder_ve_yedegi_ayrica_pacerlar(monkeypatch):
+    import contextlib
+    import sys
+    import types
+
+    import data
+
+    now = ISTANBUL_TZ.localize(datetime(2026, 11, 5, 14, 0))
+    provider_calls = []
+    paced = []
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            self.ticker = ticker
+
+        def history(self, **kwargs):
+            assert kwargs["period"] == "60d"
+            assert kwargs["interval"] == "1h"
+            assert kwargs["auto_adjust"] is False
+            provider_calls.append(self.ticker)
+            end = now - (timedelta(days=6) if self.ticker == "XAGUSD=X"
+                         else timedelta(minutes=45))
+            index = pd.date_range(end=end, periods=4, freq="h")
+            return pd.DataFrame({
+                "Open": [20.0, 20.1, 20.2, 20.3],
+                "High": [20.2, 20.3, 20.4, 20.5],
+                "Low": [19.9, 20.0, 20.1, 20.2],
+                "Close": [20.1, 20.2, 20.3, 20.4],
+                "Volume": [100.0] * 4,
+            }, index=index)
+
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=FakeTicker))
+
+    def accept_fresh(frame):
+        age = now - frame.index[-1].to_pydatetime()
+        return age <= timedelta(hours=2), f"latest bar age {age}"
+
+    @contextlib.contextmanager
+    def paced_request(ticker):
+        paced.append(ticker)
+        yield
+
+    frame, retryable, reason = data.fetch_yfinance_chart_data(
+        "XAGUSD", "1h", "60d", frame_validator=accept_fresh,
+        request_context=paced_request,
+    )
+    assert frame is not None and not retryable and reason == ""
+    assert provider_calls == ["XAGUSD=X", "SI=F"]
+    assert paced == provider_calls
+    assert frame.attrs["provider_symbol"] == "SI=F"
+    assert frame.attrs["provider_fallback"] is True
 
 
 def test_veri_katmani_bos_seride_yedege_duser(monkeypatch):

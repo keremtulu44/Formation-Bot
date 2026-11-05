@@ -221,6 +221,9 @@ def test_grup_isteginde_kareler_gruba_sonuc_metni_gruba(monkeypatch, tmp_path):
     monkeypatch.setattr(grafik, "kare_yolu", kare_yolu)
     monkeypatch.setattr(U, "kare_uret", kare_uret)
     monkeypatch.setattr(M, "_cache_verisi_kullanilabilir", lambda *a, **k: True)
+    monkeypatch.setattr(M, "fetch_yfinance_chart_data",
+                        lambda *a, **k: (None, False, "test provider disabled"))
+    M._grafik_yenileme_durum.clear()
 
     istek = {"hisse": "THYAO", "tfler": ("1h", "4h"), "hedef_sohbet": GRUP}
     M._grafik_isi_yurut(istek, n, None)
@@ -252,6 +255,9 @@ def test_dm_isteginde_teslim_eskisi_gibi(monkeypatch, tmp_path):
     monkeypatch.setattr(grafik, "kare_yolu", kare_yolu)
     monkeypatch.setattr(U, "kare_uret",
                         lambda h, tf, **k: {"yol": kare_yolu(h, tf), "meta": {}})
+    monkeypatch.setattr(M, "fetch_yfinance_chart_data",
+                        lambda *a, **k: (None, False, "test provider disabled"))
+    M._grafik_yenileme_durum.clear()
     M._grafik_isi_yurut({"hisse": "THYAO", "tfler": ("4h",)}, n, None)
 
     assert len(kayit["dm_album"]) == 1
@@ -276,6 +282,9 @@ def test_grup_teslimi_patlarsa_sonuc_dm_e_duser(monkeypatch, tmp_path):
                         or str(tmp_path / "x.png"))
     monkeypatch.setattr(U, "kare_uret",
                         lambda h, tf, **k: {"yol": str(tmp_path / "x.png"), "meta": {}})
+    monkeypatch.setattr(M, "fetch_yfinance_chart_data",
+                        lambda *a, **k: (None, False, "test provider disabled"))
+    M._grafik_yenileme_durum.clear()
     M._grafik_isi_yurut({"hisse": "THYAO", "tfler": ("4h",),
                          "hedef_sohbet": GRUP}, n, None)
 

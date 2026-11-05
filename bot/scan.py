@@ -97,6 +97,12 @@ from transport import telegram as _transport_telegram
 import main as _pkg  # geç bağlama: yamalı adlar _pkg.X (plan §3)
 _fetch_observations_local = threading.local()
 
+# Tüm Yahoo yolları (başlangıç, tarama, gece temizliği ve /grafik) aynı pacer'ı
+# kullanır. YahooRequestPacer isteği seri tutar; singleton da ortak hız bütçesi
+# ve grup molalarının ayrı thread'lerde sıfırlanmamasını sağlar.
+_yahoo_pacer_ref = None
+_yahoo_pacer_init_lock = threading.Lock()
+
 # Def-anı varsayılan: import anında _pkg.okunamaz (döngü); sabit değer çapraz
 # import edilir (monkeypatch yaması yok; değer bot.statestore'da tek sahipli).
 from bot.statestore import _GORELI_MUM  # noqa: F401  (aşağıdaki varsayılan için)
@@ -157,20 +163,31 @@ def _tarama_saglik_kontrolu(notifier) -> None:
 
 
 def create_yahoo_pacer() -> YahooRequestPacer:
-    """Her Yahoo isteğine uygulanan, kapanış sinyaline duyarlı seri pacing."""
+    """Süreç-geneli, kapanış sinyaline duyarlı Yahoo pacing yöneticisi.
+
+    Daha önce her tarama kendi pacer'ını kuruyordu; grafik worker'ı güvenli
+    biçimde tarama isteğinin arasına giremiyordu. Tek örnek tüm sağlayıcı
+    çağrılarını aynı sıra/aralık/grup bütçesine bağlar.
+    """
     # Geç import döngüsel modül bağımlılığını önler. Uzun grup beklemeleri
     # SIGTERM sonrası yeniden deploy'da güvenli kapanışı geciktirmesin.
     from bot.app import _shutdown_bekle
 
-    return YahooRequestPacer(
-        batch_size=SCAN_REQUEST_BATCH_SIZE,
-        request_delay_min=SCAN_REQUEST_DELAY_MIN_SEC,
-        request_delay_max=SCAN_REQUEST_DELAY_MAX_SEC,
-        batch_pause_min=SCAN_BATCH_PAUSE_MIN_SEC,
-        batch_pause_max=SCAN_BATCH_PAUSE_MAX_SEC,
-        sleep_fn=_shutdown_bekle,
-        logger=_pkg.logger,
-    )
+    global _yahoo_pacer_ref
+    if _yahoo_pacer_ref is not None:
+        return _yahoo_pacer_ref
+    with _yahoo_pacer_init_lock:
+        if _yahoo_pacer_ref is None:
+            _yahoo_pacer_ref = YahooRequestPacer(
+                batch_size=SCAN_REQUEST_BATCH_SIZE,
+                request_delay_min=SCAN_REQUEST_DELAY_MIN_SEC,
+                request_delay_max=SCAN_REQUEST_DELAY_MAX_SEC,
+                batch_pause_min=SCAN_BATCH_PAUSE_MIN_SEC,
+                batch_pause_max=SCAN_BATCH_PAUSE_MAX_SEC,
+                sleep_fn=_shutdown_bekle,
+                logger=_pkg.logger,
+            )
+    return _yahoo_pacer_ref
 
 
 def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=None):

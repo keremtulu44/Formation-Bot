@@ -805,10 +805,11 @@ Tam kapı: `960 passed, 44 skipped in 143 s` (`test_grafik_yapi.py` 18 test).
 
 ## 25 · G4 UYGULANDI (2026-10-14) — teslim: köprü, kuyruk, `sendPhoto`, `/grafik`
 
-Kullanıcı onayı (bu turun başında, 4 soru): **kareler tarama turu sonunda** gider
-(metin bekletilmez) · **görsel kotası = yalnız `TELEGRAM_GRAFIK_ADET`** (ayrı
-günlük/saatlik tavan YOK) · **kareler YALNIZ DM** (public/kanal metinde kalır) ·
-**`/grafik` önbellekteki her sembolü çizer** (canlı çekme yok, ek hız sınırı yok).
+Kullanıcı onayı (G4 uygulamasının ilk hali, bu turun başında 4 soru):
+**kareler tarama turu sonunda** gider (metin bekletilmez) · **görsel kotası = yalnız
+`TELEGRAM_GRAFIK_ADET`** (ayrı günlük/saatlik tavan YOK) · **kareler YALNIZ DM**
+(public/kanal metinde kalır). İlk uygulamada `/grafik` cache-only idi; kontrollü
+yenileme kararı ve güncel davranış için §44'e bakın.
 
 ### 25.1 Yüzeyler (tek kod yolu)
 
@@ -832,7 +833,8 @@ günlük/saatlik tavan YOK) · **kareler YALNIZ DM** (public/kanal metinde kalı
   çıktısı (§14.2).
 - `/grafik <SEM> [1s|2s|4s|1g]` — `TELEGRAM_KOMUTLARI` + `KOMUT_YARDIM` + `/durum`
   komut satırı + `deploy_check` “Komutlar açık” satırı (dört yüzey birden); sembol
-  desene uymazsa reddeder, önbellekte yoksa “veri yok” der (canlı çekmez). CLI ve
+  desene uymazsa reddeder. İlk sürüm cache-only idi; §44'teki kontrollü tazeleme
+  eksik/bayat kaynağı ortak pacing ve kapanmış mum doğrulamasıyla dener. CLI ve
   komut AYNI `grafik_uret.kare_uret()`i çağırır (`cerceve_getir` `VeriYok` kaldırır;
   CLI onu `SystemExit`e çevirir) — iki yüzeyin ayrışmaması için.
 - Config: §5’teki 4 anahtar `config.py`de (varsayılanlar `yok/4/180/6`),
@@ -2018,3 +2020,46 @@ Ayrıca `/grafik` yanıtına hisse adını taşıyan tek özet metni eklendi
 (`📈 THYAO · grafik hazır` + seçim satırı); önceki davranış "başarıda ayrı metin
 yok" idi. Doğrulama: `pytest -q` → **1685 geçti, 43 atlandı**; demo kataloğu
 (`--senaryo hepsi`) yeniden üretildi, 6 kare 253-627 ms.
+
+## 44 · `/grafik` için kontrollü cache yenileme (2026-11-05)
+
+### Sorunun nedeni
+
+- `grafik_uret.cerceve_getir` yalnızca bellekteki/yerel JSON'daki 1H ve derin 1D
+  cache'lerini okur. `_grafik_isi_yurut` eski veya boş cache'i reddediyordu; kendi
+  Yahoo isteği yoktu. Bu nedenle `/grafik` tek başına geride kalan XAGUSD cache'ini
+  ilerletemezdi.
+- Arka plan taramasındaki sembol fetch'i ayrı çalışır. Sağlayıcı ilk seriden
+  yapısal olarak geçerli fakat eski bir frame döndürürse mevcut fallback yalnız
+  boş/geçersiz yanıt durumunda deneniyordu; `XAGUSD=X` gibi seri ilerlemeyince
+  `SI=F` yedeğine geçiş de engellenebilirdi.
+- 1s/2s/4s tek 1H deque'nin farklı görünümleridir; bunları ayrı ayrı indirmek
+  gereksiz. 1g ise derin günlük deque'dir ve ayrı kaynaktan yenilenmelidir.
+
+### Güvenlik ve davranış
+
+- `/grafik` önce istenen TF'nin **kapanmış mum** yaşını denetler. Eksik/bayat
+  1s/2s/4s için tek 1H yenilemesi, 1g için ayrı 1D yenilemesi denenir; çoklu-TF
+  isteği aynı 1H kaynağını tekrar çağırmaz.
+- İstekler tarama ve başlangıç/gece yenilemeleriyle aynı süreç-geneli
+  `YahooRequestPacer` kuyruğunu paylaşır. Pacer, bekleme + gerçek sağlayıcı
+  çağrısını kilit altında tutar; grafik yenilemesinde yedek adayın her isteği de
+  ayrıca pace edilir. Başarısız grafik yenilemesi sembol/kaynak başına 120 sn soğutulur.
+- Sağlayıcı frame'i mum kapanış ve TF tazelik kapısından geçmeden cache'e eklenmez.
+  Geçerli ama bayat birincil yanıt reddedilirse taze yedek aday denenir. Doğrulama
+  başarısız/boş kalırsa eski cache korunur ve grafik başarısız görünür; taze başarı
+  üretilmez.
+- Kabul edilen frame `StockDequeManager` append/doğrulama yollarından geçer ve
+  yerel JSON'a yazılır (`persist_remote=False`); Supabase/uzak veri yazımı yoktur.
+  Alternatif vadeli seri kullanılırsa caption bunu belirtir, çünkü spotla birebir
+  aynı seri değildir.
+- Seans içi tazelik sınırı: 1H = 120 dk; 2H = 240 dk; 4H = 360 dk; 1D = 1560 dk.
+  Seans dışında mevcut 14 günlük üst sınır korunur. Bu nedenle bildirilen 1D
+  kapanış yaşı 1388 dk (~23 saat) günlük mum için tek başına bayatlık değildir;
+  1H'nin 8678 dk yaşı ise açık seans sırasında yenilemeyi tetikler. 2s/4s eski
+  olduklarında aynı tek 1H yenilemesinden tekrar oluşturulur.
+- CLI (`grafik_uret.py`) cache-only kalır; kontrollü sağlayıcı yenilemesi yalnız
+  Telegram `/grafik` worker'ının sorumluluğundadır.
+- Doğrulama: `pytest -q` → **3446 geçti, 43 atlandı**; Ruff temiz;
+  `deploy_check.py --skip-network` → **29 OK, 6 ortam uyarısı, 0 hata**. Canlı
+  Yahoo/Render isteği yapılmadı; manuel Render deploy edilmedi.

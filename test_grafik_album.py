@@ -193,6 +193,9 @@ def test_komut_grafik_taramayi_acar(monkeypatch):
         return {"yol": None, "meta": {"uyarilar": ["çizim reddi"]}, "hata": "test"}
     monkeypatch.setattr(U, "kare_uret", uret)
     monkeypatch.setattr(M, "_cache_verisi_kullanilabilir", lambda *a: True)
+    monkeypatch.setattr(M, "fetch_yfinance_chart_data",
+                        lambda *a, **k: (None, False, "test provider disabled"))
+    M._grafik_yenileme_durum.clear()
     sahte = SimpleNamespace(enabled=True, metinler=[], send_text=lambda m: (True, ""))
     monkeypatch.setattr(M, "_notifier_ref", sahte)
     monkeypatch.setattr(M, "_deque_manager_ref", None)

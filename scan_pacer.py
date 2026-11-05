@@ -1,6 +1,7 @@
 """Yahoo Finance isteklerini tek iş parçacığında, kontrollü aralıklarla yürütür."""
 
 import random
+import threading
 import time
 from contextlib import contextmanager
 from typing import Callable, Iterator, Optional
@@ -44,10 +45,15 @@ class YahooRequestPacer:
         self.logger = logger
         self._requests_in_batch = 0
         self._last_request_finished: Optional[float] = None
+        # Grafik istekleri taramayla aynı pacer'ı paylaşır. Pacing beklemesi +
+        # sağlayıcı çağrısı tek kilit altında olmalı ki iki thread aynı anda
+        # Yahoo'ya çıkmasın veya aralık sayacı yarışa girmesin.
+        self._request_lock = threading.RLock()
 
     def reset_batch(self) -> None:
         """Backoff sonrası yeniden deneme grubuna temiz bir başlangıç ver."""
-        self._requests_in_batch = 0
+        with self._request_lock:
+            self._requests_in_batch = 0
 
     def _wait_for_slot(self, label: str) -> None:
         if self._requests_in_batch >= self.batch_size:
@@ -76,9 +82,14 @@ class YahooRequestPacer:
 
     @contextmanager
     def request(self, label: str = "") -> Iterator[None]:
-        """İstek çevresinde pacing uygular; hata olsa da sonraki isteği zamanlar."""
-        self._wait_for_slot(label)
-        try:
-            yield
-        finally:
-            self._last_request_finished = self.monotonic_fn()
+        """İstek çevresinde pacing uygular; hata olsa da sonraki isteği zamanlar.
+
+        Kilit, context gövdesi (gerçek HTTP isteği) bitene kadar tutulur. Böylece
+        aynı pacer'ı kullanan grafik thread'i ve tarama thread'i seri kalır.
+        """
+        with self._request_lock:
+            self._wait_for_slot(label)
+            try:
+                yield
+            finally:
+                self._last_request_finished = self.monotonic_fn()

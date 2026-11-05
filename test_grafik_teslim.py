@@ -549,8 +549,8 @@ def test_komut_grafik_notifier_pasifse_uretim_yok(monkeypatch, tmp_path):
     assert "kapalı" in M._komut_grafik("AKBNK 4s")
 
 
-def _komut_testini_bitir(monkeypatch, arguman, sahte):
-    """Kabulü sonra arka plan işi başlat; testte thread'i deterministik join et."""
+def _komut_testini_bitir(monkeypatch, arguman, sahte, chart_fetch=None):
+    """Kabulü sonra arka plan işi başlat; provider testlerde açıkça sahte olur."""
     import threading
     import main as M
     asil = threading.Thread
@@ -563,6 +563,10 @@ def _komut_testini_bitir(monkeypatch, arguman, sahte):
     monkeypatch.setattr(M.threading, "Thread", kur)
     monkeypatch.setattr(M, "_notifier_ref", sahte)
     monkeypatch.setattr(M, "_deque_manager_ref", None)
+    M._grafik_yenileme_durum.clear()
+    if chart_fetch is None:
+        chart_fetch = lambda *a, **k: (None, False, "test provider disabled")
+    monkeypatch.setattr(M, "fetch_yfinance_chart_data", chart_fetch)
     cevap = M._komut_grafik(arguman)
     assert "isteği alındı" in cevap
     assert not threadler
@@ -575,20 +579,28 @@ def _komut_testini_bitir(monkeypatch, arguman, sahte):
     return sahte.metinler[-1] if sahte.metinler else ""
 
 
-def test_komut_grafik_onbellekte_veri_yoksa_canli_cekme_yok(monkeypatch):
+def test_komut_grafik_cache_yoksa_sinirli_fetch_dener_basarizsa_reddeder(monkeypatch):
     import main as M
     import data
     from types import SimpleNamespace
     def yasak(*args, **kwargs):
-        raise AssertionError("sağlayıcıya çıkılamaz")
+        raise AssertionError("eski sağlayıcı yolları kullanılmamalı")
     monkeypatch.setattr(data, "fetch_yfinance_1h", yasak)
     monkeypatch.setattr(data, "fetch_yfinance_1d", yasak)
-    metinler, gorseller = [], []
+    metinler, gorseller, cagrilar = [], [], []
     sahte = SimpleNamespace(enabled=True, metinler=metinler,
         send_text=lambda m: (metinler.append(m) or True, ""),
         grafik_dosya_gonder=lambda *a, **k: gorseller.append(a))
-    metin = _komut_testini_bitir(monkeypatch, "ZZZZQQ 4s", sahte)
-    assert "veri yok" in metin and "tamamlanamadı" in metin and not gorseller
+
+    def chart_fetch(stock, interval, period, **_kwargs):
+        cagrilar.append((stock, interval, period))
+        return None, False, "sahte sağlayıcı boş yanıtı"
+
+    metin = _komut_testini_bitir(monkeypatch, "ZZZZQQ 4s", sahte, chart_fetch)
+    assert cagrilar == [("ZZZZQQ", "1h", "60d")]
+    assert "veri yok" in metin and "tamamlanamadı" in metin
+    assert "Yenileme denemesi" in metin and "sahte sağlayıcı boş yanıtı" in metin
+    assert not gorseller
 
 
 def test_komut_grafik_gercek_onbellkten_kare_gonderir(monkeypatch):
