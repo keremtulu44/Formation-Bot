@@ -2,6 +2,7 @@
 import json
 import os
 import threading
+from datetime import datetime, timedelta, time as dt_time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -53,7 +54,11 @@ def is_ortami(monkeypatch, tmp_path):
     for mod in (data, M):
         monkeypatch.setattr(mod, "fetch_yfinance_1h", yasak)
         monkeypatch.setattr(mod, "fetch_yfinance_1d", yasak)
+    monkeypatch.setattr(M, "fetch_yfinance_chart_data",
+                        lambda *a, **k: (None, False, "testte sağlayıcı kapalı"))
+    M._grafik_yenileme_durum.clear()
     yield n, metinler, fotolar, threadler
+    M._grafik_yenileme_durum.clear()
     for t in threadler:
         t.join(20)
         assert not t.is_alive()
@@ -161,7 +166,8 @@ def test_eksik_cache_kabulden_sonra_acik_hata(is_ortami):
     n, metinler, fotolar, threadler = is_ortami
     bitir(M._komut_grafik("SEM 4s"), threadler)
     assert "tamamlanamadı" in metinler[-1] and "veri yok" in metinler[-1]
-    assert "güvenli bağımsız" in metinler[-1] and not fotolar
+    assert "Yenileme denemesi" in metinler[-1] and "testte sağlayıcı kapalı" in metinler[-1]
+    assert not fotolar
 
 
 def test_eski_cache_sahte_basari_vermez(is_ortami, monkeypatch):
@@ -170,6 +176,194 @@ def test_eski_cache_sahte_basari_vermez(is_ortami, monkeypatch):
     bitir(M._komut_grafik("AKBNK 4s"), threadler)
     assert "cache eski" in metinler[-1] and "Bitti" not in metinler[-1]
     assert not fotolar
+
+
+def _bist_saatlik_frame(start_date, end_date, now):
+    import pandas as pd
+
+    tz = config.ISTANBUL_TZ
+    indexes = []
+    gun = start_date
+    while gun <= end_date:
+        if gun.weekday() < 5:
+            for saat in range(9, 18):
+                ts = tz.localize(datetime.combine(gun, dt_time(saat, 30)))
+                if ts + timedelta(hours=1) <= now:
+                    indexes.append(ts)
+        gun += timedelta(days=1)
+    anchor = datetime(2026, 1, 1).date()
+    closes = [100.0 + (ts.date() - anchor).days * 0.01 + ts.hour * 0.001
+              for ts in indexes]
+    return pd.DataFrame({
+        "open": [v - 0.02 for v in closes],
+        "high": [v + 0.05 for v in closes],
+        "low": [v - 0.05 for v in closes],
+        "close": closes,
+        "volume": [1000.0] * len(closes),
+    }, index=pd.DatetimeIndex(indexes))
+
+
+def _gunluk_test_frame(now):
+    import pandas as pd
+
+    tz = config.ISTANBUL_TZ
+    last_day = now.date() - timedelta(days=1)
+    dates = pd.date_range(end=last_day, periods=45, freq="B", tz=tz)
+    closes = [100.0 + sira * 0.1 for sira in range(len(dates))]
+    return pd.DataFrame({
+        "open": [v - 0.1 for v in closes],
+        "high": [v + 0.2 for v in closes],
+        "low": [v - 0.2 for v in closes],
+        "close": closes,
+        "volume": [1000.0] * len(closes),
+    }, index=dates)
+
+
+def test_grafik_tazeletir_1h_bir_kez_ve_2s_4s_ayni_cachei_kullanir(
+        is_ortami, monkeypatch, tmp_path):
+    from contextlib import contextmanager
+
+    from data import StockDequeManager, tamamlanmis_mumlar
+
+    sabit_now = config.ISTANBUL_TZ.localize(datetime(2026, 11, 5, 14, 35))
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return sabit_now if tz is not None else sabit_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(M, "datetime", FrozenDateTime)
+    monkeypatch.setattr(M, "tarama_penceresi_acik_mi", lambda _now: True)
+    cache = tmp_path / "grafik-cache"
+    cache.mkdir()
+    monkeypatch.setattr(config, "DATA_DIR", str(cache))
+    manager = StockDequeManager(data_dir=str(cache))
+    manager.persistent_store = SimpleNamespace(
+        upsert=lambda *_a, **_k: pytest.fail("grafik yenilemesi uzak cache'e yazmamalı"))
+    bayat = _bist_saatlik_frame(
+        sabit_now.date() - timedelta(days=65),
+        sabit_now.date() - timedelta(days=35),
+        sabit_now,
+    )
+    taze = _bist_saatlik_frame(
+        sabit_now.date() - timedelta(days=45), sabit_now.date(), sabit_now)
+    assert manager.append_dataframe("SEM", bayat)
+    assert manager.append_gunluk_dataframe("SEM", _gunluk_test_frame(sabit_now))
+    monkeypatch.setattr(M, "_deque_manager_ref", manager)
+
+    calls = []
+
+    def refresh(stock, interval, period, *, frame_validator, request_context):
+        calls.append((stock, interval, period))
+        assert interval == "1h" and period == "60d"
+        kabul, neden = frame_validator(taze)
+        assert kabul, neden
+        taze.attrs["provider_symbol"] = "SEM.IS"
+        return taze, False, ""
+
+    monkeypatch.setattr(M, "fetch_yfinance_chart_data", refresh)
+    @contextmanager
+    def no_wait(_label=""):
+        yield
+    monkeypatch.setattr(M, "create_yahoo_pacer", lambda: SimpleNamespace(request=no_wait))
+
+    def kare_uret(hisse, tf, **options):
+        frame, source = U.cerceve_getir(
+            hisse, tf, options["veri_dizin"], yonetici=options["yonetici"])
+        closed = tamamlanmis_mumlar(frame, tf, now=options["simdi"])
+        options["tazelik_kontrol"](closed, source)
+        Path(options["cikti"]).write_bytes(b"png")
+        return {"yol": options["cikti"], "kaynak": source,
+                "meta": {"mum_sayisi": len(closed),
+                         "son_bar_ts": closed.index[-1].isoformat()}}
+
+    monkeypatch.setattr(U, "kare_uret", kare_uret)
+    monkeypatch.setattr(grafik, "kare_yolu", lambda _h, tf: str(cache / f"{tf}.png"))
+    n, metinler, fotolar, threadler = is_ortami
+    bitir(M._komut_grafik("SEM"), threadler)
+
+    assert calls == [("SEM", "1h", "60d")]
+    assert len(fotolar) == 4 and len(metinler) == 1
+    assert manager.to_dataframe("SEM").index[-1] == taze.index[-1]
+    assert (cache / "SEM.json").exists()
+    assert not (cache / "SEM_gunluk.json").exists()
+
+
+def test_grafik_1d_yaklasik_23_saatlik_gunluk_mumu_bayat_saymaz(monkeypatch):
+    import pandas as pd
+
+    tz = config.ISTANBUL_TZ
+    son_etiket = tz.localize(datetime(2026, 11, 4, 8, 0))
+    kapanis = M.mum_kapanis_ani(son_etiket, "1d")
+    simdi = kapanis + timedelta(minutes=1388)
+    indexes = pd.DatetimeIndex([son_etiket - timedelta(days=1), son_etiket])
+    frame = pd.DataFrame({
+        "open": [1.0, 1.0], "high": [1.1, 1.1], "low": [0.9, 0.9],
+        "close": [1.0, 1.0], "volume": [100.0, 100.0],
+    }, index=indexes)
+    monkeypatch.setattr(M, "tarama_penceresi_acik_mi", lambda _now: True)
+
+    durum = M._grafik_cache_tazelik_durumu(frame, "1d", simdi)
+    assert durum["yas_dk"] == pytest.approx(1388.0)
+    assert durum["taze"]
+    assert M._grafik_tazelik_esigi_dk("1d", True) == 1560
+    assert M._grafik_tazelik_esigi_dk("1h", True) == 120
+
+
+def test_grafik_tazeleme_1d_ayri_derin_cachei_yazar(monkeypatch, tmp_path):
+    import pandas as pd
+
+    from data import StockDequeManager
+
+    tz = config.ISTANBUL_TZ
+    simdi = tz.localize(datetime(2026, 11, 5, 14, 35))
+    manager = StockDequeManager(data_dir=str(tmp_path))
+    manager.persistent_store = SimpleNamespace(
+        upsert=lambda *_a, **_k: pytest.fail("grafik yenilemesi uzak cache'e yazmamalı"))
+    dates = pd.date_range(end=simdi.date(), periods=90, freq="D", tz=tz) + timedelta(hours=8)
+
+    def gunluk_frame(indexes, start=30.0):
+        closes = [start + sira * 0.01 for sira in range(len(indexes))]
+        return pd.DataFrame({
+            "open": [v - 0.02 for v in closes], "high": [v + 0.05 for v in closes],
+            "low": [v - 0.05 for v in closes], "close": closes,
+            "volume": [0.0] * len(closes),
+        }, index=indexes)
+
+    manager.append_gunluk_dataframe("XAGUSD", gunluk_frame(dates[:-1]))
+    calls = []
+
+    def refresh(stock, interval, period, *, frame_validator, request_context):
+        calls.append((stock, interval, period))
+        assert frame_validator(gunluk_frame(dates))[0]
+        return gunluk_frame(dates), False, ""
+
+    monkeypatch.setattr(M, "fetch_yfinance_chart_data", refresh)
+    result = M._grafik_tazele("XAGUSD", "1d", manager, now=simdi)
+
+    assert result["ok"] and result["persisted"]
+    assert calls == [("XAGUSD", "1d", config.GUNLUK_FETCH_PERIOD)]
+    assert manager.to_gunluk_dataframe("XAGUSD").index[-1] == dates[-1]
+    assert (tmp_path / "XAGUSD_gunluk.json").exists()
+    assert not (tmp_path / "XAGUSD.json").exists()
+
+
+def test_grafik_yenileme_hatasi_iki_dakika_sogutulur(monkeypatch, tmp_path):
+    from data import StockDequeManager
+
+    manager = StockDequeManager(data_dir=str(tmp_path))
+    calls = []
+    monkeypatch.setattr(M, "fetch_yfinance_chart_data",
+                        lambda *a, **k: calls.append(a) or (None, False, "test hata"))
+    M._grafik_yenileme_durum.clear()
+
+    ilk = M._grafik_tazele("COOLDOWN", "1h", manager)
+    ikinci = M._grafik_tazele("COOLDOWN", "4h", manager)
+
+    assert not ilk["ok"] and "test hata" in ilk["detail"]
+    assert not ikinci["ok"] and "bekleme sınırı" in ikinci["detail"]
+    assert len(calls) == 1
+    M._grafik_yenileme_durum.clear()
 
 
 def test_cakisan_istekler_ve_farkli_is_sinirli(is_ortami):

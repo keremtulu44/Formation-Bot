@@ -75,6 +75,7 @@ from data.fetch import (  # noqa: F401
     fetch_last_bar,
     fetch_yfinance_1d,
     fetch_yfinance_1h,
+    fetch_yfinance_chart_data,
     mock_fetch_60d_1h,
     saglayici_adaylari,
     select_yfinance_1h_period,

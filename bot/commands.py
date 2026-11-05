@@ -12,6 +12,7 @@ import math
 import random
 import socket
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timedelta, time as dt_time
 from typing import List, Dict
 
@@ -217,7 +218,7 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 🔎 YENİ ANALİZ VE GRAFİK
 /panel · /p · /genel · /tablo — tüm evreni analiz eder; 4 zaman dilimi ve ilk 12 aday. Örnek: /panel THYAO 1h
 /tara [HISSE] — hisseyi veya tüm evreni yeniden analiz eder. Seans dışında da çalışır.
-/grafik · /g HISSE [1s|2s|4s|1g] [sade|detay] [odak|baglam] [mobil] — mevcut önbellekten kare. Örnek: /grafik THYAO 4s sade. TF belirtilmezse 4 kare denenir; canlı veri çekilmez.
+/grafik · /g HISSE [1s|2s|4s|1g] [sade|detay] [odak|baglam] [mobil] — cache tazeliğini denetler; eksik/bayat seriyi ortak Yahoo pacer'ıyla sınırlı yenilemeyi dener. Örnek: /grafik THYAO 4s sade. TF belirtilmezse 4 kare denenir.
 /test [HISSE] — yalnız özel DM'de arşivle alıştırma. 4 kareden TF ve yön tahmin edin (ör. 1s aşağı). Tarih gizlidir; skor tutulmaz. Örnek: /test ASTOR
 
 📊 BİLGİ VE DİĞER KOMUTLAR
@@ -1315,6 +1316,198 @@ def _komut_panel(arguman: str) -> str:
     return _pkg._manuel_tarama_istegi("panel", arguman)
 
 
+_GRAFIK_TAZELEME_COOLDOWN_SN = 120.0
+_grafik_yenileme_kilidi = threading.Lock()
+_grafik_yenileme_durum = {}
+
+
+def _grafik_tazelik_esigi_dk(tf: str, seans_acik: bool) -> float:
+    """Grafikte TF'ye uygun son kapanış yaşı sınırı.
+
+    1H tarama kapısı mevcut 120 dk davranışını korur. Üst TF ve günlük mumun
+    normal kapanış aralığı daha uzun olduğundan, aynı 120 dk eşiğiyle geçerli
+    1D (yaklaşık 23 saatlik) veriyi yanlışlıkla bayat saymayız.
+    """
+    if not seans_acik:
+        return float(OFFSESSION_CACHE_MAX_AGE_DAYS * 24 * 60)
+    dakika = {"1h": 60, "2h": 120, "4h": 240, "1d": 24 * 60}.get(tf, 60)
+    return float(STALE_BAR_UYARI_DK if tf == "1h" else dakika + STALE_BAR_UYARI_DK)
+
+
+def _grafik_cache_tazelik_durumu(frame, tf: str, now=None) -> dict:
+    """Kapanmış mum yaşı + TF tavanı; fetch öncesi ve sonrası aynı kapı."""
+    if now is None:
+        now = _pkg.datetime.now(ISTANBUL_TZ)
+    elif now.tzinfo is None:
+        now = ISTANBUL_TZ.localize(now)
+    else:
+        now = now.astimezone(ISTANBUL_TZ)
+    tf = str(tf or "").strip().lower()
+    seans_acik = bool(_pkg.tarama_penceresi_acik_mi(now))
+    esik = _grafik_tazelik_esigi_dk(tf, seans_acik)
+
+    if frame is None or len(frame) == 0:
+        return {"taze": False, "yas_dk": None, "esik_dk": esik,
+                "aciklama": "kapanmış mum yok"}
+    try:
+        kapanan = _pkg.tamamlanmis_mumlar(frame, tf, now=now)
+        if kapanan is None or len(kapanan) < 2:
+            return {"taze": False, "yas_dk": None, "esik_dk": esik,
+                    "aciklama": "en az iki kapanmış mum yok"}
+        kapanis = _pkg.mum_kapanis_ani(kapanan.index[-1], tf)
+        if kapanis is None:
+            return {"taze": False, "yas_dk": None, "esik_dk": esik,
+                    "aciklama": "son mumun kapanış anı belirlenemedi"}
+        yas = (now - kapanis).total_seconds() / 60.0
+    except (TypeError, ValueError, OverflowError, KeyError) as exc:
+        return {"taze": False, "yas_dk": None, "esik_dk": esik,
+                "aciklama": f"mum tazeliği doğrulanamadı ({type(exc).__name__})"}
+
+    # Tarama tarafından sağlanan ortak cache politikası (özellikle test/uygulama
+    # özelleştirmeleri) korunur. Seans açıkken 2H/4H/1D için yalnız TF'ye ait
+    # kapanış aralığı kadar ek pay verilir; 14 günlük mutlak tavan aşılmaz.
+    ortak_kabul = False
+    try:
+        ortak_kabul = bool(_pkg._cache_verisi_kullanilabilir(yas, False, seans_acik))
+    except Exception:  # tazelik kapısı hata verirse fail-closed kal
+        ortak_kabul = False
+    taze = ortak_kabul or (seans_acik and yas <= esik)
+    aciklama = (f"son kapanış yaşı {yas:.0f} dk (sınır {esik:.0f} dk)" if not taze
+                else f"son kapanış yaşı {yas:.0f} dk")
+    return {"taze": taze, "yas_dk": yas, "esik_dk": esik,
+            "kapanis": kapanis, "aciklama": aciklama}
+
+
+def _grafik_derin_gunluk_kaynak_mi(kaynak: str) -> bool:
+    """1D günlük deque/dosyası mı, yoksa yüzeysel 1H resample mı?"""
+    yazi = str(kaynak or "")
+    return yazi.startswith("bellek/1d") or "_gunluk.json" in yazi
+
+
+def _grafik_tazele(hisse: str, tf: str, yonetici, now=None) -> dict:
+    """Bayat/eksik grafik verisini bir kez, ortak Yahoo pacer'ıyla yenile.
+
+    1s/2s/4s aynı 1H cache'ini paylaşır; 1g ayrı derin 1D cache'idir. Provider
+    yanıtı önce kapanmış mum/tazelik kapısından geçer, sonra manager'ın normal
+    append + yerel JSON save kapılarından yazılır. Uzak/Supabase yazımı kapalıdır.
+    """
+    tf = str(tf or "").strip().lower()
+    baz = "1d" if tf == "1d" else "1h"
+    sembol = str(hisse or "").strip().upper().replace(".IS", "")
+    anahtar = (sembol, baz)
+    simdi_mono = time.monotonic()
+    with _grafik_yenileme_kilidi:
+        onceki = _grafik_yenileme_durum.get(anahtar)
+        if onceki:
+            gecen = max(0.0, simdi_mono - float(onceki.get("at", simdi_mono)))
+            if onceki.get("in_progress"):
+                return {"ok": False, "detail": "aynı veri kaynağı için yenileme sürüyor"}
+            if not onceki.get("result", {}).get("ok") and gecen < _GRAFIK_TAZELEME_COOLDOWN_SN:
+                onceki_neden = onceki.get("result", {}).get("detail") or "önceki deneme başarısız"
+                kalan = int(max(0, _GRAFIK_TAZELEME_COOLDOWN_SN - gecen))
+                return {"ok": False,
+                        "detail": f"son denemeden sonra {kalan} sn bekleme sınırı ({onceki_neden})"}
+        _grafik_yenileme_durum[anahtar] = {"at": simdi_mono, "in_progress": True}
+
+    def tamamla(sonuc):
+        with _grafik_yenileme_kilidi:
+            if sonuc.get("ok"):
+                _grafik_yenileme_durum.pop(anahtar, None)
+            else:
+                _grafik_yenileme_durum[anahtar] = {
+                    "at": time.monotonic(), "result": dict(sonuc),
+                }
+        return sonuc
+
+    try:
+        if _pkg._shutdown_requested:
+            return tamamla({"ok": False, "detail": "bot kapanıyor; sağlayıcı isteği başlatılmadı"})
+        if now is None:
+            now = _pkg.datetime.now(ISTANBUL_TZ)
+        elif now.tzinfo is None:
+            now = ISTANBUL_TZ.localize(now)
+        else:
+            now = now.astimezone(ISTANBUL_TZ)
+        if yonetici is None:
+            yonetici = _pkg.StockDequeManager(data_dir=config.DATA_DIR)
+
+        if baz == "1d":
+            interval = "1d"
+            period = config.GUNLUK_FETCH_PERIOD
+        else:
+            interval = "1h"
+            cached = yonetici.to_dataframe(sembol)
+            period = _pkg.select_yfinance_1h_period(cached, now)
+
+        def adayi_kabul_et(frame):
+            if interval == "1d":
+                secilen = frame
+            elif tf == "1h":
+                secilen = frame
+            else:
+                secilen = _pkg.resample_ohlcv(frame, tf)
+            durum = _grafik_cache_tazelik_durumu(secilen, tf, now)
+            return durum["taze"], durum["aciklama"]
+
+        pacer = _pkg.create_yahoo_pacer()
+
+        @contextmanager
+        def saglayici_istegi(ticker):
+            if _pkg._shutdown_requested:
+                raise RuntimeError("Bot kapanıyor; Yahoo isteği başlatılmadı")
+            with pacer.request(f"/grafik {sembol} {interval} ({ticker})"):
+                if _pkg._shutdown_requested:
+                    raise RuntimeError("Bot kapanıyor; Yahoo isteği başlatılmadı")
+                yield
+
+        frame, gecici_hata, hata = _pkg.fetch_yfinance_chart_data(
+            sembol,
+            interval,
+            period,
+            frame_validator=adayi_kabul_et,
+            request_context=saglayici_istegi,
+        )
+        if frame is None or len(frame) == 0:
+            neden = str(hata or ("geçici sağlayıcı hatası" if gecici_hata else "boş veri"))
+            return tamamla({"ok": False, "detail": neden, "retryable": bool(gecici_hata)})
+        if _pkg._shutdown_requested:
+            return tamamla({"ok": False, "detail": "bot kapanıyor; gelen veri cache'e yazılmadı"})
+
+        # Test/adapter sağlayıcısının da validator'ı atlaması halinde cache'e
+        # yazmadan önce aynı güvenlik kapısı son kez uygulanır.
+        kontrol = adayi_kabul_et(frame)
+        if not kontrol[0]:
+            return tamamla({"ok": False,
+                            "detail": f"sağlayıcı yanıtı reddedildi: {kontrol[1]}"})
+        ekle = (yonetici.append_gunluk_dataframe(sembol, frame) if baz == "1d"
+                else yonetici.append_dataframe(sembol, frame))
+        if not ekle:
+            return tamamla({"ok": False, "detail": "OHLCV/cache doğrulaması veriyi reddetti"})
+        if baz == "1d":
+            kaydedildi = yonetici.save_gunluk_to_disk(sembol, persist_remote=False)
+        else:
+            kaydedildi = yonetici.save_to_disk(sembol, persist_remote=False)
+
+        provider = str((getattr(frame, "attrs", {}) or {}).get("provider_symbol") or "")
+        birincil = config.yahoo_ticker_for_symbol(sembol)
+        notlar = []
+        if provider and provider != birincil:
+            notlar.append(f"yedek kaynak {provider}; birincil {birincil} ile aynı seri olmayabilir")
+        if not kaydedildi:
+            notlar.append("taze veri bellekte; yerel diske kalıcılaştırılamadı")
+        _pkg.logger.info(
+            "/grafik %s %s cache yenilendi: %d bar, kaynak=%s, kalici=%s",
+            sembol, baz, len(frame), provider or birincil, bool(kaydedildi),
+        )
+        return tamamla({"ok": True, "provider": provider, "period": period,
+                        "bars": len(frame), "persisted": bool(kaydedildi),
+                        "note": "; ".join(notlar)})
+    except Exception as exc:  # sağlayıcı/cache sorunu eski cache'i başarıya yükseltmez
+        _pkg.logger.warning("/grafik %s %s yenilemesi başarısız: %s",
+                            sembol, baz, type(exc).__name__)
+        return tamamla({"ok": False, "detail": f"{type(exc).__name__}"})
+
+
 def _komut_grafik(arguman: str) -> str:
     """`/grafik [HISSE] [TF] [sade|detay]` — kare(ler) üretir (G4 / §4).
 
@@ -1322,7 +1515,8 @@ def _komut_grafik(arguman: str) -> str:
     kullanıcı istediği zaman bakabilsin diye kapıdan bağımsız bir yüzey lazım.
     `sade`, mum/bant/kritik fiyat hiyerarşisini öne çıkarır; `detay` bütün
     domain işaretlerini gösterir. Kabul cevabından sonra sınırlı arka plan işi
-    çalışır. Veri mevcut bellek/cache katmanından okunur; canlı çekme yok.
+    çalışır. Taze cache okunur; eksik/bayat veri yalnız bu istekte, ortak Yahoo
+    pacing kuyruğundan geçerek ve kapanmış mum doğrulamasıyla sınırlı yenilenir.
     """
     parcalar = (arguman or "").split()
     if not parcalar:
@@ -1444,19 +1638,26 @@ def _grafik_isi_calistir(istek, notifier, yonetici):
 
 
 def _grafik_isi_yurut(istek, notifier, yonetici):
-    """Yalnız seçilen sembol/TF; mevcut cache, kopya frame, sohbet teslimi.
+    """Yalnız seçilen sembol/TF; sınırlı cache yenileme ve sohbet teslimi.
 
     Teslim hedefi `istek["hedef_sohbet"]`tir: komut gruptan geldiyse kareler
     (ve sonuç metni) O gruba, DM'den geldiyse eskisi gibi DM'e gider. İlerleme/
     gecikme mesajları her durumda DM'de kalır — grup sohbetine bot gürültüsü
     olmasın; sonuç ve hata görünür kalır.
 
-    Sağlayıcı fetch'i burada yok: tarama pacer'ı süreç-geneli değil, yeni bir
-    pacer eşzamanlı rate-limit güvenliği sağlamaz. Eksik/eski veri açık hatadır.
+    Eksik/bayat 1H veya 1D kaynağı en fazla bir kez, taramayla paylaşılan Yahoo
+    pacer'ı üzerinden denenir. Yalnız doğrulanmış kapanmış mumlar manager'a
+    eklenir; başarısız/boş/bayat yanıt eski cache'i taze gibi göstermemelidir.
     """
     import grafik
     import grafik_uret
     from secrets_redaction import redact_sensitive_text
+
+    veri_dizini = (yonetici.data_dir if yonetici is not None
+                   else grafik_uret._veri_dizini(None))
+    if yonetici is None:
+        yonetici = _pkg.StockDequeManager(data_dir=veri_dizini)
+    yenileme_durumlari = {}  # istek içinde 1H (1s/2s/4s) ve 1D ayrı ayrı en çok bir kez
 
     baslangic = time.monotonic()
     tamam = threading.Event()
@@ -1506,37 +1707,79 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
     ozetler = []         # üretilemeyen kareler: albüm başlığına eklenir / yalnız hiç kare yoksa metin
     try:
         for tf in istek["tfler"]:
-            durum(f"{_tf_kisa(tf)}: hazırlanıyor")
+            durum(f"{_tf_kisa(tf)}: cache tazeliği")
             hedef = grafik.kare_yolu(istek["hisse"], tf)
             yol = None
+            baz = "1d" if tf == "1d" else "1h"
+            kaynak = ""
             try:
+                simdi = _pkg.datetime.now(ISTANBUL_TZ)
+                try:
+                    cache_frame, kaynak = grafik_uret.cerceve_getir(
+                        istek["hisse"], tf, veri_dizini, yonetici=yonetici)
+                except grafik_uret.VeriYok:
+                    cache_frame, kaynak = None, ""
+                cache_tazelik = _grafik_cache_tazelik_durumu(cache_frame, tf, simdi)
+                derin_gunluk_eksik = (
+                    tf == "1d" and not _grafik_derin_gunluk_kaynak_mi(kaynak))
+                if not cache_tazelik["taze"] or derin_gunluk_eksik:
+                    durum(f"{_tf_kisa(tf)}: sınırlı {baz} yenilemesi")
+                    if baz not in yenileme_durumlari:
+                        yenileme_durumlari[baz] = _grafik_tazele(
+                            istek["hisse"], tf, yonetici, now=simdi)
+
+                # Fetch/pacing sürerken kapanış sınırı değişmiş olabilir; son çizim
+                # kapısı her zaman yeniden alınan İstanbul saatini kullanır.
+                simdi = _pkg.datetime.now(ISTANBUL_TZ)
+
                 def tazelik(frame, kaynak):
-                    now = _pkg.datetime.now(ISTANBUL_TZ)
-                    kapanis = mum_kapanis_ani(frame.index[-1], tf)
-                    yas = (now - kapanis).total_seconds() / 60.0
-                    if not _pkg._cache_verisi_kullanilabilir(
-                            yas, False, _pkg.tarama_penceresi_acik_mi(now)):
+                    kontrol = _grafik_cache_tazelik_durumu(frame, tf, simdi)
+                    if not kontrol["taze"]:
+                        yenileme = yenileme_durumlari.get(baz) or {}
+                        ek = ""
+                        if yenileme and not yenileme.get("ok"):
+                            detay = yenileme.get("detail") or "sağlayıcı güncel veri vermedi"
+                            ek = f" Yenileme denemesi: {detay}."
                         raise grafik_uret.VeriYok(
                             f"cache eski: son kapanmış mum {frame.index[-1].isoformat()} "
-                            f"(kapanış yaşı {yas:.0f} dk). Kaynak: {kaynak}. "
-                            "Güvenli bağımsız fetch yok; botun veri yüklemesini kontrol edin.")
+                            f"({kontrol['aciklama']}). Kaynak: {kaynak}.{ek}")
 
                 sonuc = grafik_uret.kare_uret(
                     istek["hisse"], tf, zone=True, formasyon_tara=True, yonetici=yonetici,
-                    veri_dizin=yonetici.data_dir if yonetici is not None else None,
+                    veri_dizin=veri_dizini,
                     sade=istek.get("sade"), gorunum=istek.get("gorunum"),
                     mobil=istek.get("mobil", False),
                     cikti=hedef, asama=lambda ad: durum(f"{_tf_kisa(tf)}: {ad}"),
-                    tazelik_kontrol=tazelik)
+                    tazelik_kontrol=tazelik, simdi=simdi)
                 yol, meta = sonuc.get("yol"), sonuc.get("meta") or {}
+                kaynak = str(sonuc.get("kaynak") or kaynak or "")
+                yenileme = yenileme_durumlari.get(baz) or {}
                 if not yol:
                     neden = sonuc.get("hata") or " · ".join(meta.get("uyarilar") or []) or "çizim reddi"
+                    if yenileme and not yenileme.get("ok"):
+                        detay = yenileme.get("detail") or "güncel sağlayıcı verisi alınamadı"
+                        if "Yenileme denemesi" not in str(neden):
+                            neden = f"{neden} Yenileme denemesi: {detay}."
                     neden = redact_sensitive_text(neden, getattr(notifier, "token", ""))
                     ozetler.append(f"{_tf_kisa(tf)} ✗ {neden}")
                     continue
-                paketler.append((tf, yol, _pkg._kare_altyazisi(istek["hisse"], tf, meta)))
+
+                caption = _pkg._kare_altyazisi(istek["hisse"], tf, meta)
+                notlar = str(yenileme.get("note") or "").strip()
+                if yenileme.get("ok") and notlar:
+                    caption += "\n⚠ " + notlar
+                elif (tf == "1d" and yenileme and not yenileme.get("ok")
+                      and kaynak.startswith("resample(1d)")):
+                    caption += "\n⚠ Derin 1g kaynak yenilenemedi; kare mevcut 1s cache'inden türetildi"
+                paketler.append((tf, yol, caption))
             except grafik_uret.VeriYok as hata:
-                neden = redact_sensitive_text(str(hata), getattr(notifier, "token", ""))
+                neden = str(hata)
+                yenileme = yenileme_durumlari.get(baz) or {}
+                if yenileme and not yenileme.get("ok"):
+                    detay = yenileme.get("detail") or "güncel sağlayıcı verisi alınamadı"
+                    if "Yenileme denemesi" not in neden:
+                        neden += f" Yenileme denemesi: {detay}."
+                neden = redact_sensitive_text(neden, getattr(notifier, "token", ""))
                 ozetler.append(f"{_tf_kisa(tf)} ✗ {neden or 'veri yok'}")
                 _pkg.logger.warning("/grafik veri yok (%s %s)", istek["hisse"], tf)
             except (Exception, SystemExit) as hata:

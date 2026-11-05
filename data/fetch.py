@@ -9,7 +9,8 @@ import math
 import os
 import pickle
 import tempfile
-from typing import Dict, List, Optional, Tuple
+from contextlib import nullcontext
+from typing import Callable, Dict, List, Optional, Tuple
 
 from config import (
     ISTANBUL_TZ, BIST_OPEN, BIST_CLOSE, DEQUE_MAXLEN,
@@ -112,12 +113,21 @@ def saglayici_adaylari(stock: str) -> List[str]:
     return [birincil]
 
 
-def _fetch_yfinance_adaylari(stock: str, period: str, interval: str):
+def _fetch_yfinance_adaylari(
+    stock: str,
+    period: str,
+    interval: str,
+    *,
+    frame_validator: Optional[Callable] = None,
+    request_context: Optional[Callable] = None,
+):
     """Adayları doğrula; geçici sağlayıcı hatasında ikinci seriye yüklenme.
 
-    Spot ve vadeli aynı enstrüman değildir. Yedek yalnız birincil seri boş veya
-    geçersiz olduğunda denenir; geçici ağ/rate-limit hatasında retry üst katmana
-    bırakılır. Kaynak değişikliği günlüğe kaydedilir.
+    Spot ve vadeli aynı enstrüman değildir. Normal taramada yedek yalnız
+    birincil seri boş/geçersiz olduğunda denenir. Grafik için isteğe bağlı
+    ``frame_validator`` bayat ama yapısal olarak geçerli birincil seriyi de
+    reddedebilir; böylece taze bir yedek varsa ona geçilir. ``request_context``
+    sağlayıcı adayı başına ortak Yahoo pacer'ını uygular.
     """
     import contextlib
     import io
@@ -127,8 +137,10 @@ def _fetch_yfinance_adaylari(stock: str, period: str, interval: str):
     for sira, ticker in enumerate(saglayici_adaylari(stock)):
         captured = io.StringIO()
         try:
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(captured):
-                ham = yf.Ticker(ticker).history(period=period, interval=interval, auto_adjust=False)
+            context = request_context(ticker) if callable(request_context) else nullcontext()
+            with context:
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(captured):
+                    ham = yf.Ticker(ticker).history(period=period, interval=interval, auto_adjust=False)
             if ham is None or ham.empty:
                 reason = captured.getvalue().strip() or "Yahoo boş veri döndürdü"
             else:
@@ -142,10 +154,26 @@ def _fetch_yfinance_adaylari(stock: str, period: str, interval: str):
                         ham.index = ham.index.tz_convert(ISTANBUL_TZ)
                     temiz = _saglayici_ohlcv_temizle(ham, stock=stock, timeframe=interval)
                     if temiz is not None and not temiz.empty:
-                        if sira:
-                            _pkg.logger.warning("%s: yedek sağlayıcı serisi kullanıldı (%s); spot ile aynı enstrüman olmayabilir", stock, ticker)
-                        return temiz, False, ""
-                    reason = "Sağlayıcı geçerli OHLCV mumu döndürmedi"
+                        kabul, dogrulama_nedeni = True, ""
+                        if frame_validator is not None:
+                            try:
+                                sonuc = frame_validator(temiz)
+                                if isinstance(sonuc, tuple):
+                                    kabul, dogrulama_nedeni = bool(sonuc[0]), str(sonuc[1] or "")
+                                else:
+                                    kabul = bool(sonuc)
+                            except Exception as exc:  # doğrulama hatası fallback'e izin verir
+                                kabul = False
+                                dogrulama_nedeni = f"grafik tazelik doğrulaması {type(exc).__name__} ile başarısız"
+                        if kabul:
+                            temiz.attrs["provider_symbol"] = ticker
+                            temiz.attrs["provider_fallback"] = bool(sira)
+                            if sira:
+                                _pkg.logger.warning("%s: yedek sağlayıcı serisi kullanıldı (%s); spot ile aynı enstrüman olmayabilir", stock, ticker)
+                            return temiz, False, ""
+                        reason = dogrulama_nedeni or "Grafik tazelik doğrulamasını geçemedi"
+                    else:
+                        reason = "Sağlayıcı geçerli OHLCV mumu döndürmedi"
         except Exception as exc:
             reason = f"{type(exc).__name__}: {exc}"
         retryable = yfinance_error_is_retryable(reason)
@@ -154,6 +182,32 @@ def _fetch_yfinance_adaylari(stock: str, period: str, interval: str):
             return None, True, "; ".join(reasons)
         _pkg.logger.info("%s: sağlayıcı %s %s başarısız: %s", stock, ticker, interval, reason)
     return None, False, "; ".join(reasons)
+
+
+def fetch_yfinance_chart_data(
+    stock: str,
+    interval: str,
+    period: str,
+    *,
+    frame_validator: Optional[Callable] = None,
+    request_context: Optional[Callable] = None,
+):
+    """`/grafik` için pacing ve tazelik doğrulamalı tek sembol fetch'i.
+
+    Dönen sözleşme `(DataFrame|None, retryable, reason)` biçimindedir; eski
+    1H/1D cache yolları etkilenmez. Birincil seri yapı olarak geçerli ama stale
+    ise validator reddeder ve varsa kaynak yedeği ayrıca denenir.
+    """
+    tf = str(interval or "").strip().lower()
+    if tf not in ("1h", "1d"):
+        raise ValueError("Grafik fetch interval yalnızca 1h veya 1d olabilir")
+    return _fetch_yfinance_adaylari(
+        stock,
+        period,
+        tf,
+        frame_validator=frame_validator,
+        request_context=request_context,
+    )
 
 
 def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional[pd.DataFrame]:
