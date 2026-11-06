@@ -76,6 +76,15 @@ def test_keepalive_response_validation(tmp_path, response, exit_code, expected):
         assert "HTTP 000" in result.stdout and "200000" not in result.stdout
 
 
+def test_skipped_keepalive_is_explicit_in_job_summary(tmp_path):
+    workflow = (ROOT / ".github/workflows/keepalive.yml").read_text(encoding="utf-8")
+    assert "if: steps.window.outputs.in_window == 'false'" in workflow
+    body = script(".github/workflows/keepalive.yml", "- name: Ping atlandı (pencere dışında)")
+    result = run_sh(tmp_path, body)
+    assert result.returncode == 0
+    assert "GET /health çalıştırılmadı" in (tmp_path / "summary").read_text(encoding="utf-8")
+
+
 def test_manual_deploy_requires_main_and_secret(tmp_path):
     body = script(".github/workflows/deploy.yml", "- name: Manuel deploy tetikle")
     assert run_sh(tmp_path, body, REF="refs/heads/main", HOOK="").returncode != 0
