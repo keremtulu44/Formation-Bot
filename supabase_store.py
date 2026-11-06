@@ -110,6 +110,13 @@ def supabase_basliklari(service_key: str) -> Dict[str, str]:
     return basliklar
 
 
+def _postgrest_in_ogesi(deger: str) -> str:
+    """PostgREST in.(...) içinde ayırıcı/kaçış karakterlerini veri olarak koru."""
+    if any(ch in deger for ch in ',()"\\') or any(ch.isspace() for ch in deger):
+        return '"' + deger.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return deger
+
+
 class SupabaseStore:
     TABLE = "bot_store"
     REQUEST_TIMEOUT_SEC = 8
@@ -309,7 +316,7 @@ class SupabaseStore:
             return uzak[len(self.prefix):]
         return uzak
 
-    def _satirlari_oku(self, response):
+    def _satirlari_oku(self, response, allowed_keys=None):
         rows = response.json()
         if not isinstance(rows, list):
             raise TypeError("beklenen liste yerine farklı JSON türü geldi")
@@ -317,6 +324,7 @@ class SupabaseStore:
             self._yerel_anahtar(row["store_key"]): row.get("payload")
             for row in rows
             if isinstance(row, dict) and isinstance(row.get("store_key"), str)
+            and (allowed_keys is None or row["store_key"] in allowed_keys)
         }
 
     def _tek_istek(self, keys) -> Optional[Dict[str, Any]]:
@@ -324,13 +332,13 @@ class SupabaseStore:
             "GET",
             params={
                 "select": "store_key,payload",
-                "store_key": f"in.({','.join(keys)})",
+                "store_key": f"in.({','.join(_postgrest_in_ogesi(k) for k in keys)})",
             },
         )
         if response is None:
             return None
         try:
-            return self._satirlari_oku(response)
+            return self._satirlari_oku(response, set(keys))
         except (ValueError, TypeError, KeyError) as exc:
             self._warn_once("response", f"Supabase yanıtı okunamadı: {exc}")
             return None
@@ -348,6 +356,9 @@ class SupabaseStore:
         keys = list(dict.fromkeys(store_keys))
         if not keys:
             return {}
+        if any(not isinstance(k, str) or not k or "\0" in k for k in keys):
+            self._warn_once("keys", "Supabase anahtarları boş veya geçersiz; istek yapılmadı")
+            return None
         sonuc = self._tek_istek([self._uzak_anahtar(k) for k in keys])
         if sonuc is None:
             return None

@@ -206,6 +206,17 @@ başlığında göndererek gerçek bir Telegram test mesajı yollanabilir. Anaht
 tanımlı değilse bu yol 404 döner. `?k=` varsayılan olarak kapalıdır; yalnız
 `TELEGRAM_TEST_KEY_QUERY=1` ile eski yöntem açılır (sır URL'ye düşer).
 
+`/test` ve `/webhook` için `HEALTH_RATE_LIMIT_PER_MIN` (varsayılan 60) süreç
+başına kayan pencere uygular; `/health` ve `/ready` bu limite dahil değildir.
+Varsayılanda iletilen IP başlığına güvenilmez: proxy arkasındaki tüm istekler
+aynı socket peer sayılabilir. Gerçek istemciye göre sınır istenirse yalnız
+operatörün doğruladığı ingress ağlarını `HEALTH_TRUSTED_PROXY_CIDRS` içine
+virgülle girin. Başlık, ancak doğrudan peer güvenilir olduğunda ve güvenilir
+zincir sağdan kontrol edilerek kullanılır. İnternete açık geniş ağları güvenilir
+saymak IP sahteciliğine izin verir. Bu bellek içi sınır çoklu süreçler arasında
+paylaşılmaz ve ters proxy'deki bağlantı/gövde/hız sınırlarının yerini almaz;
+10 saniyelik socket timeout yavaş-yavaş veri akıtan tüm istemcileri durdurmaz.
+
 Render Web Service'te `PORT`, `RENDER_EXTERNAL_URL` ve bot token varsa webhook
 varsayılan olarak **otomatik açılır**: süreç başlangıcında kriptografik rastgele
 secret üretilir, Telegram'a `secret_token` olarak kaydedilir ve HTTP sunucusundaki
@@ -218,11 +229,15 @@ sabit secret boşken yoklamaya zorlamak için `TELEGRAM_WEBHOOK_AUTO=0` kullanı
 
 Bot artık **iki yönlüdür**: Telegram'dan gelen komutları yanıtlar. Komutlar
 `TELEGRAM_CHAT_ID` (DM) sohbetinden **her komutla**, public grup/supergroup
-hedefinden (`PUBLIC_COMMAND_CHATS`, yoksa `TELEGRAM_GROUP_ID`) ise **yalnız o
-grubun yöneticileri** için ve varsayılan olarak **okuma komutlarıyla** çalışır
+hedefinden (`PUBLIC_COMMAND_CHATS`, yoksa `TELEGRAM_GROUP_ID`/`TELEGRAM_CHANNEL_ID`) ise **yalnız o
+grubun doğrulanabilir gerçek kullanıcı yöneticileri** için ve varsayılan olarak **okuma komutlarıyla** çalışır
 (grup yolu 2026-10-28'de açıldı). Kanal mesajları Telegram'da `channel_post`
 türünde gelir ve bot yalnız `message` güncellemelerini dinlediği için
-**kanalda komut yolu yoktur**:
+**kanalda komut yolu yoktur**. Anonim `sender_chat` veya bot gönderenler
+reddedilir; geçici yönetici sorgusu hatası yetki vermez. Webhook, yanıt henüz
+teslim edilmediyse veya geçici yetki sorgusu hatasında Telegram'a 503 döndürerek
+tekrar isteyebilir. Bekleyen yanıtlar ve tekrar/silme kaydı süreç belleğindedir;
+restart veya belirsiz ağ teslimi için exactly-once garantisi yoktur.
 
 `/grafik` (diğer adı `/g`) grupta `PUBLIC_COMMAND_EXTRA=grafik,g` ile açılır;
 açıldığında **kareler ve sonuç metni komutun geldiği gruba** gider (DM'den
@@ -412,6 +427,23 @@ Telegram teslimatı kullanıcı hesabındaki Render/Telegram ortamında
 - Render'ın varsayılan `DATA_DIR`'i geçici olabilir; restart/redeploy yeni yerel
   cache, bildirim kuyruğu, cooldown ve karne verisini kaybettirebilir. Mevcut
   Supabase entegrasyonu salt okunurdur; tanımlamak yeni state yedeği yazmaz.
+- Public metin kuyruğu, günlük sayaç ve serileştirilebilen bekleyen grafik
+  snapshot'ı yerel günlük duruma yazılır; ancak yazım/serileştirme başarısızsa,
+  gün değişirse veya yerel disk silinirse restart'ta korunacağı garanti edilmez.
+  Kilitler yalnız aynı süreçtedir; iki bot örneği güvenle koordine edilmez.
+- Grafikte tek kare `sendPhoto`, 2–10 kare albüm kullanır (foto başına 10 MiB,
+  albüm toplam 40 MiB). Albüm yalnız **kesin ret**te tek tek yeniden denenir.
+  Timeout/ağ/429/5xx gibi belirsiz sonuçta, çift görseli önlemek için otomatik
+  tekil tekrar yapılmaz: karşılığında ulaşmamış bir görsel kaybolabilir. Canlı
+  DM alarmının dayanıklı outbox'ı ise teslimi garanti etmeye çalışırken albümün
+  **tamamını** sonradan tekrar deneyebilir; timeout sonrası çift albüm mümkündür
+  (at-least-once, exactly-once değil). Metin ve görselin karşı tarafa ulaştığı
+  canlı ortamda ayrıca doğrulanmalıdır.
+- Stabil `▼`, dikey/kademeli destek proxy'sinde yukarı deneme için yapı risk
+  uyarısıdır; kesin düşüş/satış tahmini değildir. Proxy görsel çizginin kesin
+  geometrisi olarak doğrulanmış değildir; yatay `▲` kuralları korunur. Detay:
+  [STABIL_DIKEY_UYARI_2026-11-05.md](docs/tasarim/STABIL_DIKEY_UYARI_2026-11-05.md).
+  Kapanmış arşiv mumlarıyla ok/hacim/OB/FVG araştırması: [Stabil replay raporu](docs/arastirma/stabil_ok_replay_2026_11_05/RAPOR.md).
 - `/health` liveness ve komut modunu bildirir; veri tazeliği, Telegram mesajının
   kullanıcıya ulaştığı veya taramanın yatırım sonucu verdiği garantisi değildir.
 - Replay/ölçüm sonuçları geçmiş veriyi betimler; canlı performans ya da yatırım

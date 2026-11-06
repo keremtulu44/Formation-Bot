@@ -295,7 +295,10 @@ def _stabil_zamanli_dilim(projeksiyon: list[Any], davranislar: list[Any],
             bar_idx = int(_alan(nokta, "bar_index", pos))
         except (TypeError, ValueError):
             bar_idx = pos
-        dav_dilim.append(davranis_by_index.get(bar_idx))
+        # Desteği eski noktayla uzatabiliriz; ancak eski barın OK işareti
+        # eksik/farklı zamanlı her muma tekrar çizilemez.
+        dav_dilim.append(davranis_by_index.get(bar_idx)
+                         if projeksiyon_anahtarlari[pos] == anahtar else None)
     return dilim, dav_dilim
 
 
@@ -330,7 +333,8 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
     )
     pencere_boy = max(0, sag_i - sol_i)
     bos = {"hazir": False, "seviyeler": [], "renkler": [], "durumlar": [],
-           "reclaim_barlar": [], "momentum_barlar": [], "son_seviye": None,
+           "reclaim_barlar": [], "momentum_barlar": [], "dikey_barlar": [],
+           "dikey_deneme_barlar": [], "son_seviye": None,
            "son_durum": "NO_SUPPORT", "konum": None}
     if not projeksiyon or pencere_boy <= 0:
         return bos
@@ -376,9 +380,15 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
 
     reclaim_barlar: list[int] = []
     momentum_barlar: list[int] = []
+    dikey_barlar: list[int] = []
+    dikey_deneme_barlar: list[int] = []
     for idx_b, bhv in enumerate(dav_dilim):
         if bhv is None:
             continue
+        if bool(_alan(bhv, "vertical_support", False)):
+            dikey_barlar.append(int(idx_b))
+        if _alan(bhv, "vertical_attempt_kind"):
+            dikey_deneme_barlar.append(int(idx_b))
         if _alan(bhv, "reclaim_kind") in {"close_reclaim", "intrabar_sweep_reclaim"}:
             reclaim_barlar.append(int(idx_b))
         if _alan(bhv, "momentum_kind") in STABIL_GUCLU_YUKARI_MOMENTUM_TURLERI:
@@ -395,6 +405,8 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
         "durumlar": durumlar,
         "reclaim_barlar": reclaim_barlar,
         "momentum_barlar": momentum_barlar,
+        "dikey_barlar": dikey_barlar,
+        "dikey_deneme_barlar": dikey_deneme_barlar,
         "son_seviye": son_seviye,
         "son_renk": son_renk,
         "son_durum": son_durum,
@@ -769,9 +781,11 @@ def _atom_yaz(yol: str, veri: bytes) -> None:
     """
     klasor = os.path.dirname(os.path.abspath(yol)) or "."
     os.makedirs(klasor, exist_ok=True)
-    gecici = os.path.join(klasor, f".{os.path.basename(yol)}.{os.getpid()}.tmp")
+    # Sabit PID adı /tmp'de symlink saldırısına ve aynı hedefe eşzamanlı
+    # yazımlarda çakışmaya açıktı. mkstemp benzersiz, 0600 ve O_EXCL kullanır.
+    fd, gecici = tempfile.mkstemp(prefix=f".{os.path.basename(yol)}.", suffix=".tmp", dir=klasor)
     try:
-        with open(gecici, "wb") as akis:
+        with os.fdopen(fd, "wb") as akis:
             akis.write(veri)
         os.replace(gecici, yol)
     finally:

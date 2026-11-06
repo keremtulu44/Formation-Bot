@@ -511,7 +511,7 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                 meta["cizgiler"]["stabil"] = _stabil_ciz(
                     ax, goruntu, katman_n, aralik,
                     kadrajda=stabil_kadrajda,
-                    dusuk=dusuk[:katman_n],
+                    dusuk=dusuk[:katman_n], yuksek=yuksek[:katman_n],
                     sag_adaylar=sag_adaylar,
                 )
             except Exception as hata:
@@ -933,6 +933,7 @@ def _guven_ciz(fig, satirlar, adim, alt):
 def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                 aralik: tuple[float, float], *, kadrajda: bool = False,
                 dusuk: Sequence[Optional[float]] = (),
+                yuksek: Sequence[Optional[float]] = (),
                 sag_adaylar: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
     """Destek stepline + geri alım/güçlü yukarı momentum `▲` + sağ `Destek` çipi."""
     from matplotlib.collections import LineCollection
@@ -944,12 +945,24 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         int(idx) for idx in (stabil.get("reclaim_barlar") or [])
         if isinstance(idx, (int, float)) and 0 <= int(idx) < katman_n
     ]
-    # Eski snapshot'larda alan yoktur; geri alım okuyla aynı barı çift işaretleme.
     momentum_barlar = [
         int(idx) for idx in (stabil.get("momentum_barlar") or [])
         if isinstance(idx, (int, float)) and 0 <= int(idx) < katman_n
         and int(idx) not in set(reclaim_barlar)
     ]
+    dikey = {int(i) for i in (stabil.get("dikey_barlar") or [])
+             if isinstance(i, (int, float)) and 0 <= int(i) < katman_n}
+    # Eski/elle hazırlanan snapshot'ta da çizgisi o barda seviye değiştiriyorsa
+    # dikey bağlantı üzerinden ▲ sızmaz. Sonraki statik barlar bu yolla tahmin edilmez.
+    for i in range(1, len(seviyeler)):
+        onceki, simdiki = _gercek(seviyeler[i - 1]), _gercek(seviyeler[i])
+        if onceki is not None and simdiki is not None and abs(simdiki - onceki) > max(1e-8, abs(simdiki) * 1e-9):
+            dikey.add(i)
+    asagi_barlar = {int(i) for i in (stabil.get("dikey_deneme_barlar") or [])
+                     if isinstance(i, (int, float)) and 0 <= int(i) < katman_n}
+    asagi_barlar.update((set(reclaim_barlar) | set(momentum_barlar)) & dikey)
+    reclaim_barlar = [i for i in reclaim_barlar if i not in dikey and i not in asagi_barlar]
+    momentum_barlar = [i for i in momentum_barlar if i not in dikey and i not in asagi_barlar]
     ozet = {
         "hazir": bool(stabil.get("hazir")),
         "cizildi": False,
@@ -958,6 +971,7 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "gorunur_bar": 0,
         "reclaim_isaret": 0,
         "momentum_isaret": 0,
+        "dikey_deneme_isaret": 0,
         "kadrajda": bool(kadrajda),
     }
     if not seviyeler or not ozet["hazir"]:
@@ -1103,6 +1117,26 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         )
         sc.set_gid("grafik-stabil-momentum")
         ozet["momentum_isaret"] = len(mx)
+
+    # ▼ = dikey/kademe destek üzerinde yukarı deneme uyarısı; fiyatın
+    # kesin düşeceği veya emir verilmesi gerektiği anlamına GELMEZ.
+    dx, dy = [], []
+    for idx in sorted(asagi_barlar):
+        sv_i = _gercek(seviyeler[idx]) if idx < len(seviyeler) else None
+        hi_i = _gercek(yuksek[idx]) if idx < len(yuksek) else None
+        referanslar = [v for v in (sv_i, hi_i) if v is not None]
+        if not referanslar:
+            continue
+        ref_y = max(referanslar)
+        if y_lo <= ref_y <= y_hi:
+            dx.append(float(idx))
+            dy.append(min(y_hi - 0.012 * y_span, ref_y + 0.018 * y_span))
+    if dx:
+        sc = ax.scatter(dx, dy, marker="v", s=48, c=PALET["stabil_alt"],
+                        edgecolors=PALET["zemin"], linewidths=0.7,
+                        zorder=4.9, clip_on=True)
+        sc.set_gid("grafik-stabil-dikey-deneme")
+        ozet["dikey_deneme_isaret"] = len(dx)
 
     # Sağ eksende net `Destek <fiyat>` çipi (yalnız son mumda aktif destek kadraj içindeyse)
     son_sv = _gercek(seviyeler[-1]) if seviyeler else None

@@ -31,6 +31,7 @@ from .stabil_support_lifecycle import (
     SupportProgression,
     SupportValidity,
 )
+from .stabil_trend_engine import StabilTrendConfig
 
 
 #: Grafikte `▲` ile gösterilen, geri alımdan AYRI güçlü yukarı momentum türleri.
@@ -154,6 +155,9 @@ class StabilBarBehavior:
     # Geri alımdan bağımsız, grafikte ayrı `▲` ile gösterilen güçlü yukarı mum.
     # Varsayılan değer eski kayıtlar / sentetik kart davranışlarıyla uyumludur.
     momentum_kind: str | None = None
+    # Dikey rejim bir gözlenen/proxy yapı uyarısıdır; satış emri veya yön garantisi değildir.
+    vertical_support: bool = False
+    vertical_attempt_kind: str | None = None
 
 
 def evaluate_bar_behaviors(
@@ -188,18 +192,28 @@ def evaluate_bar_behaviors(
         else ()
     )
     daily_times = [snap.as_of for snap in support_timeline]
+    vertical_up_max_age = 2 * StabilTrendConfig().daily_pivot_len
 
-    def _regime_at(daily_as_of: Any) -> tuple[str, int]:
+    def _regime_at(daily_as_of: Any) -> tuple[str, int, bool]:
         if not regime_points or daily_as_of is None:
-            return CandidateLineRegime.UNAVAILABLE.value, 0
+            return CandidateLineRegime.UNAVAILABLE.value, 0, False
         try:
             idx = bisect_right(daily_times, daily_as_of) - 1
         except TypeError:
             idx = -1
         if idx < 0 or idx >= len(regime_points):
-            return CandidateLineRegime.UNAVAILABLE.value, 0
+            return CandidateLineRegime.UNAVAILABLE.value, 0, False
         rp = regime_points[idx]
-        return rp.regime.value, int(rp.bars_since_support or 0)
+        age = int(rp.bars_since_support or 0)
+        # BREACHED_FIXED_SUPPORT, yükselen kademe üzerinde fiyat aşağı
+        # kapandığında STEPPING_UP etiketinin önüne geçer. Bu etiket önceliği
+        # yakın dönemdeki dikey proxy'yi / uyarıyı kaybettirmemeli.
+        recently_rebased_up = (
+            rp.progression is SupportProgression.REBASED_HIGHER
+            and rp.bars_since_support is not None
+            and age <= vertical_up_max_age
+        )
+        return rp.regime.value, age, recently_rebased_up
 
     out: list[StabilBarBehavior] = []
     touch_count = 0
@@ -270,7 +284,15 @@ def evaluate_bar_behaviors(
         pct_vs = ((c - sup_f) / sup_f) * 100.0
         dist_atr = ((c - sup_f) / atr) if math.isfinite(atr) and atr > 0 else None
         low_dist_atr = ((lo - sup_f) / atr) if math.isfinite(atr) and atr > 0 else None
-        regime_val, unchanged_days = _regime_at(pt.daily_as_of)
+        regime_val, unchanged_days, recently_rebased_up = _regime_at(pt.daily_as_of)
+        # Stepline'ın aynı mumdaki gerçek seviye değişimini ve nedensel aday
+        # kademe rejimlerini birlikte koru. Görsel "dikey" ile bu proxy'nin
+        # birebir örtüştüğü iddiası yok; kullanıcı politikası fail-closed'dur.
+        vertical_support = (
+            regime_val in {CandidateLineRegime.STEPPING_UP.value, CandidateLineRegime.STEPPING_DOWN.value}
+            or recently_rebased_up
+            or (prev_sup is not None and not fixed_support)
+        )
 
         # Independent support touch tracking while above/near same horizontal line
         if dist_atr is not None and low_dist_atr is not None:
@@ -364,7 +386,21 @@ def evaluate_bar_behaviors(
                 momentum_kind = (
                     "long_base_breakout" if long_base else "upward_rebase_momentum"
                 )
-                last_momentum_bar = i
+
+        vertical_attempt_kind = None
+        if vertical_support:
+            # Dikey/kademeli destek üzerinde yukarı deneme, geri alım veya
+            # momentum olsa bile ▲ üretme. İşaret ve alarm aynı kaynaktan
+            # beslendiği için güçlü geri alım alarmına da dönüşmez.
+            vertical_attempt_kind = reclaim_kind or ("weak_reclaim" if weak_reclaim else None) or momentum_kind
+            if vertical_attempt_kind is None and prev_close is not None and prev_sup is not None:
+                if prev_close < prev_sup - tol and h >= sup_f - tol:
+                    vertical_attempt_kind = "touch_from_below"
+            reclaim_kind = None
+            momentum_kind = None
+            weak_reclaim = False
+        elif momentum_kind is not None:
+            last_momentum_bar = i
 
         # Update breach state after evaluating current bar
         if c < (sup_f - tol):
@@ -411,6 +447,8 @@ def evaluate_bar_behaviors(
                 weak_reclaim=weak_reclaim,
                 rank_score=rank_score,
                 momentum_kind=momentum_kind,
+                vertical_support=vertical_support,
+                vertical_attempt_kind=vertical_attempt_kind,
             )
         )
         prev_sup = sup_f
@@ -439,6 +477,8 @@ def describe_behavior_structure_short(bhv: StabilBarBehavior | None) -> str:
     if bhv is None or bhv.support_level is None:
         return "destek henüz oluşmadı"
 
+    if getattr(bhv, "vertical_attempt_kind", None):
+        return "dikey destek · yukarı deneme"
     if bhv.reclaim_kind == "close_reclaim":
         if bhv.vol_ratio is not None and bhv.vol_ratio >= 1.15:
             return "hacimli güçlü geri alım"
@@ -581,6 +621,9 @@ def summarize_symbol_for_command(
     if last.support_level is None or last.close_price is None:
         return None
 
+    vertical = bool(getattr(last, "vertical_support", False)) or last.regime in {
+        CandidateLineRegime.STEPPING_UP.value, CandidateLineRegime.STEPPING_DOWN.value,
+    }
     # Check if strong reclaim happened on the latest bar or 1-2 closed 4H bars ago (~1 trading day)
     recent_reclaim_kind: str | None = None
     reclaim_bars_ago: int | None = None
@@ -589,7 +632,7 @@ def summarize_symbol_for_command(
         cand = bhvs[-1 - offset]
         if cand.reclaim_kind is not None:
             # Still valid only if current close remains above support
-            if (last.pct_vs_support or 0.0) > 0.0:
+            if not vertical and (last.pct_vs_support or 0.0) > 0.0:
                 recent_reclaim_kind = cand.reclaim_kind
                 reclaim_bars_ago = offset
             break
@@ -605,6 +648,18 @@ def summarize_symbol_for_command(
         if pct >= 0
         else f"-%{_tr_sayi(abs(pct), 1)}"
     )
+
+    # Dikey deneme bullish başlıkla pazarlanmaz; ▼ yalnız yapı uyarısıdır.
+    if getattr(last, "vertical_attempt_kind", None):
+        return LiveStabilSummary(
+            symbol=symbol, bucket="zayif_dusus", priority=70.0,
+            close_price=last.close_price, support_level=last.support_level,
+            pct_vs_support=pct, dist_atr=last.dist_atr,
+            unchanged_days=last.unchanged_days, touch_count=last.touch_count,
+            regime=last.regime, reclaim_kind=None, reclaim_bars_ago=None,
+            headline_tr=f"{symbol} · destek {sup_txt} ({pct_etiket}) — dikey destek, yukarı deneme",
+            detail_tr="Kademe sürerken yukarı deneme uyarıdır; aşağı ok kesin düşüş tahmini değildir.",
+        )
 
     # 1. GÜÇLÜ ÇIKIŞ / TAZE GERİ ALIM
     if recent_reclaim_kind is not None:
@@ -638,6 +693,7 @@ def summarize_symbol_for_command(
     # Uzun yatay zeminden taze güçlü kopuş veya kademe yükselten güçlü momentum
     if (
         pct > 0.0
+        and not vertical
         and last.touch_count < 3
         and body >= 0.35
         and (last.close_pos or 0.5) >= 0.65
@@ -674,7 +730,7 @@ def summarize_symbol_for_command(
     if (
         pct >= 0.0
         and last.touch_count < 3
-        and last.regime != CandidateLineRegime.STEPPING_DOWN.value
+        and not vertical
         and 0.0 <= dist <= 1.25
         and (last.unchanged_days >= 20 or last.touch_count == 2)
     ):

@@ -34,8 +34,17 @@ def _decode(value):
     return value
 
 
+def snapshot_to_json(value):
+    """Return a JSON-safe snapshot without losing datetime or numpy scalars."""
+    return json.loads(json.dumps(value, default=_encode))
+
+
+def snapshot_from_json(value):
+    return json.loads(json.dumps(value), object_hook=_decode)
+
+
 def freeze(value):
-    return json.loads(json.dumps(value, default=_encode), object_hook=_decode)
+    return snapshot_from_json(snapshot_to_json(value))
 
 
 def event_id(data):

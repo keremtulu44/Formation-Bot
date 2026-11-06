@@ -33,6 +33,7 @@ Bu modül main'i import etmez; veriyi yalnızca enjekte edilen callable'dan alı
 """
 
 import hmac
+import ipaddress
 import json
 import logging
 import os
@@ -63,53 +64,97 @@ VARSAYILAN_DAKIKA_LIMIT = 60
 # Telegram güncellemeleri birkaç KB'dir. Content-Length ile gövde okuduğumuz için
 # bozuk/kötü niyetli bir istek belleği şişirmesin diye üst sınır koyuyoruz.
 WEBHOOK_MAKS_GOVDE_BAYT = 1_000_000
+# Sahte istemci adresleri veya çok sayıda gerçek istemci belleği sınırsız büyütmesin.
+MAKS_LIMIT_ISTEMCI = 4096
 
 
 class _HealthHandler(BaseHTTPRequestHandler):
-    def _send_json(self, code, payload):
+    # Timeout'lar: yavaş istemci (slowloris) tek handler'ı kitlemesin.
+    timeout = 10
+
+    def version_string(self):
+        # Server başlığından sürüm gizle (bilgi sızıntısı).
+        return "Formation-Bot"
+
+    def end_headers(self):
+        # Tüm yanıtlar (404/429 ve HEAD dahil) aynı güvenlik başlıklarını alır.
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+        super().end_headers()
+
+    def _send_json(self, code, payload, headers=None):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)
+
+    @staticmethod
+    def _sir_eslesiyor(provided, expected):
+        # compare_digest(str, str) ASCII dışı girdide TypeError fırlatır. Ağdan
+        # gelen herhangi bir başlık/sorgu değeri güvenle reddedilebilmelidir.
+        return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
 
     def _test_enabled(self):
         expected = (getattr(self.server, "test_key", "") or "").strip()
         return bool(expected)
 
-    # --- A7: IP başına basit istek limiti ---------------------------------
     def _istemci_ip(self) -> str:
-        # Render/proxy arkasında gerçek istemci ilk X-Forwarded-For değeridir.
-        fwd = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
-        return fwd or (self.client_address[0] if self.client_address else "?")
+        """Forwarded başlığı yalnız açıkça güvenilen proxy zincirinde kullanılır."""
+        try:
+            peer = ipaddress.ip_address(self.client_address[0])
+        except (TypeError, ValueError, IndexError):
+            return "?"
+        networks = getattr(self.server, "trusted_proxy_networks", ())
+        fwd = self.headers.get("X-Forwarded-For") or ""
+        parts = fwd.split(",") if fwd and len(fwd) <= 4096 else []
+        if len(parts) > 16:
+            return str(peer)
+        current = peer
+        # En yakın hop'tan başlayıp ilk GÜVENİLMEYEN adreste dur. İstemcinin
+        # başa eklediği sahte X-Forwarded-For değerleri bu sınırı aşamaz.
+        for part in reversed(parts):
+            if not any(current in network for network in networks):
+                break
+            try:
+                current = ipaddress.ip_address(part.strip())
+            except ValueError:
+                return str(peer)
+        return str(current)
 
     def _limit_asildi(self) -> bool:
-        """(ip, pencere) başına istek sayısı sınırı; aşıldıysa 429 yollar."""
+        """IP başına kayan dakika penceresi; kayıtlar ve temizleme maliyeti sınırlı."""
         limit = int(getattr(self.server, "rate_limit_per_min", 0) or 0)
         if limit <= 0:
             return False
-        simdi = time.time()
+        simdi = time.monotonic()
         ip = self._istemci_ip()
         with self.server.rate_kilidi:
-            gecmis = [t for t in self.server.rate_kayitlari.get(ip, []) if simdi - t < 60.0]
-            if len(gecmis) >= limit:
-                self.server.rate_kayitlari[ip] = gecmis
-                logger.warning(f"Rate limit: {ip} dakikada {len(gecmis)} istek (limit {limit}) - 429")
-                self.send_response(429)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Retry-After", "60")
-                self.send_header("Cache-Control", "no-store")
-                govde = json.dumps({"ok": False, "error": "cok fazla istek"}).encode("utf-8")
-                self.send_header("Content-Length", str(len(govde)))
-                self.end_headers()
-                self.wfile.write(govde)
-                return True
-            gecmis.append(simdi)
-            self.server.rate_kayitlari[ip] = gecmis
-        return False
+            kayitlar = self.server.rate_kayitlari
+            if simdi >= getattr(self.server, "rate_son_temizlik", 0.0) + 60.0:
+                for eski_ip, gecmis in list(kayitlar.items()):
+                    if not gecmis or simdi - gecmis[-1] >= 60.0:
+                        del kayitlar[eski_ip]
+                self.server.rate_son_temizlik = simdi
+            gecmis = [t for t in kayitlar.get(ip, []) if simdi - t < 60.0]
+            if len(gecmis) >= limit or (ip not in kayitlar and len(kayitlar) >= MAKS_LIMIT_ISTEMCI):
+                asildi = True
+            else:
+                gecmis.append(simdi)
+                kayitlar[ip] = gecmis
+                asildi = False
+        if asildi:
+            logger.warning("HTTP istek limiti aşıldı (IP=%s, limit=%s/dk)", ip, limit)
+            self._send_json(429, {"ok": False, "error": "cok fazla istek"},
+                            headers={"Retry-After": "60"})
+        return asildi
 
     def _test_anahtari(self) -> str:
         """Başlıktan anahtar: X-Test-Key veya Authorization: Bearer <anahtar>."""
@@ -143,7 +188,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
                     "/test anahtarı URL sorgusunda geldi (?k=). Sır erişim loglarına düşer; "
                     "X-Test-Key başlığına geçin (TELEGRAM_TEST_KEY_QUERY=0 ile kapatılır)."
                 )
-        if not provided or not hmac.compare_digest(provided, self.server.test_key):
+        if not provided or not self._sir_eslesiyor(provided, self.server.test_key):
             self._send_json(403, {"ok": False, "error": "yanlis anahtar"})
             return
 
@@ -155,7 +200,17 @@ class _HealthHandler(BaseHTTPRequestHandler):
             })
             return
 
-        ok, detail = sender(TEST_MESSAGE)
+        # HEAD bir durum sorgusudur; yan etki üretip Telegram mesajı göndermemeli.
+        if self.command == "HEAD":
+            self._send_json(200, {"ok": True})
+            return
+        try:
+            ok, detail = sender(TEST_MESSAGE)
+        except Exception as exc:  # noqa: BLE001 - /test sunucuyu düşürmesin
+            logger.warning("/test Telegram denemesi başarısız: %s", redact_sensitive_text(
+                exc, getattr(self.server, "test_key", ""), self._webhook_secret()))
+            self._send_json(502, {"ok": False, "error": "test gonderilemedi"})
+            return
         safe_detail = redact_sensitive_text(
             detail, getattr(self.server, "test_key", ""),
             getattr(self.server, "webhook_secret", ""),
@@ -192,9 +247,19 @@ class _HealthHandler(BaseHTTPRequestHandler):
 
     def _govde_oku(self):
         """Content-Length sınırlı gövde okuma. Hata halinde None (yanıt gönderilir)."""
+        # HTTP framing belirsizse isteği kabul etme (proxy/handler ayrışması).
+        if self.headers.get("Transfer-Encoding"):
+            self._send_json(400, {"ok": False, "error": "transfer encoding desteklenmiyor"})
+            return None
+        get_all = getattr(self.headers, "get_all", None)
+        lengths = get_all("Content-Length", []) if callable(get_all) else [self.headers.get("Content-Length")]
+        if len(lengths) != 1:
+            self._send_json(400, {"ok": False, "error": "gecersiz content length"})
+            return None
+        raw = str(lengths[0] or "").strip()
         try:
-            uzunluk = int(self.headers.get("Content-Length") or 0)
-        except (TypeError, ValueError):
+            uzunluk = int(raw) if raw.isascii() and raw.isdigit() else 0
+        except ValueError:
             uzunluk = 0
         if uzunluk <= 0:
             self._send_json(400, {"ok": False, "error": "govde bos"})
@@ -203,8 +268,12 @@ class _HealthHandler(BaseHTTPRequestHandler):
             self._send_json(413, {"ok": False, "error": "govde cok buyuk"})
             return None
         try:
-            return self.rfile.read(uzunluk)
-        except Exception as exc:  # noqa: BLE001 - istemci yarım gönderip kopabilir
+            govde = self.rfile.read(uzunluk)
+            if len(govde) != uzunluk:
+                self._send_json(400, {"ok": False, "error": "govde eksik"})
+                return None
+            return govde
+        except (OSError, TimeoutError) as exc:
             logger.warning(
                 "Webhook govdesi okunamadi: %s",
                 redact_sensitive_text(
@@ -241,13 +310,13 @@ class _HealthHandler(BaseHTTPRequestHandler):
                 "Webhook isteği ESKİ sırlı yoldan geldi (/webhook/<secret>). "
                 "Sır adres/erişim loglarında görünür; bot açılışta sırsız yolu kaydeder."
             )
-            if not hmac.compare_digest(yol_sirri, expected):
+            if not self._sir_eslesiyor(yol_sirri, expected):
                 self._send_json(403, {"ok": False, "error": "yanlis webhook adresi"})
                 return
 
         baslik = (self.headers.get("X-Telegram-Bot-Api-Secret-Token") or "").strip()
         if baslik:
-            if not hmac.compare_digest(baslik, expected):
+            if not self._sir_eslesiyor(baslik, expected):
                 self._send_json(403, {"ok": False, "error": "yanlis secret token basligi"})
                 return
         elif not yol_sirri:
@@ -363,14 +432,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
         elif self._strict_istendi() and payload.get("heartbeat_stale") is True:
             kod = 503
             payload["status"] = "bayat"
-        body = json.dumps(payload).encode("utf-8")
-        self.send_response(kod)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(body)
+        self._send_json(kod, payload)
 
     def do_GET(self):
         self._send_health()
@@ -442,6 +504,15 @@ def start_render_health_server(environ=None, test_sender=None,
         server.rate_limit_per_min = VARSAYILAN_DAKIKA_LIMIT
     server.rate_kayitlari = {}
     server.rate_kilidi = Lock()
+    server.rate_son_temizlik = 0.0
+    server.trusted_proxy_networks = []
+    for raw_network in str(environ.get("HEALTH_TRUSTED_PROXY_CIDRS") or "").split(","):
+        if not raw_network.strip():
+            continue
+        try:
+            server.trusted_proxy_networks.append(ipaddress.ip_network(raw_network.strip(), strict=False))
+        except ValueError:
+            logger.warning("Geçersiz HEALTH_TRUSTED_PROXY_CIDRS girdisi yok sayıldı")
     server.test_key_query = (environ.get("TELEGRAM_TEST_KEY_QUERY", "0") or "").strip() not in ("0", "false", "False")
     thread = Thread(
         target=server.serve_forever,

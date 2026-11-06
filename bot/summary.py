@@ -784,7 +784,10 @@ def _gece_mum_yenileme_son_gun_kaydet(gun_obj) -> None:
             json.dump({"son_yenileme_gun": gun_obj.isoformat()}, stream)
         os.replace(gecici, yol)
     except Exception as exc:
-        _pkg.logger.debug("Gece mum yenileme yerel damgası yazılamadı: %s", exc)
+        _pkg.logger.warning(
+            "Gece mum yenileme yerel damgası yazılamadı (%s); restart sonrası tekrar denenebilir",
+            type(exc).__name__,
+        )
 
 
 def gece_mum_temizligi_ve_yenileme(deque_manager, pacer=None, *, stocks=None) -> Dict:
@@ -817,6 +820,8 @@ def gece_mum_temizligi_ve_yenileme(deque_manager, pacer=None, *, stocks=None) ->
     yenilenen_1d = 0
     korunan_1d = 0
     yenilenen_semboller = set()
+    kaydedilen_1h = set()
+    kaydedilen_1d = set()
 
     fetched_1h, failures_1h, _retry_1h, _kurtarilan_1h = _pkg.fetch_1h_stocks_paced(
         hedef_semboller,
@@ -824,7 +829,11 @@ def gece_mum_temizligi_ve_yenileme(deque_manager, pacer=None, *, stocks=None) ->
         "GECE 02:00 MUM TEMİZLİĞİ",
     )
 
+    failures_1h = dict(failures_1h or {})
     for stock in hedef_semboller:
+        if _pkg._shutdown_requested:
+            _pkg.logger.info("GECE 02:00 MUM TEMİZLİĞİ: kapanış istendi; 1H kaydı durduruluyor")
+            break
         df_1h = fetched_1h.get(stock)
         if df_1h is None or len(df_1h) == 0:
             korunan_1h += 1
@@ -840,9 +849,20 @@ def gece_mum_temizligi_ve_yenileme(deque_manager, pacer=None, *, stocks=None) ->
             korunan_1h += 1
             continue
         if deque_manager.replace_dataframe(stock, df_1h):
-            deque_manager.save_to_disk(stock, persist_remote=False)
-            yenilenen_1h += 1
+            # Bellek değiştiyse artımlı motoru sıfırla; yerel kayıt başarısızsa
+            # bu sembol gece tamamlanmış sayılmaz ve yeniden denenir.
             yenilenen_semboller.add(stock)
+            try:
+                kaydedildi = bool(deque_manager.save_to_disk(stock, persist_remote=False))
+            except Exception as exc:  # noqa: BLE001 - diğer semboller de denensin
+                _pkg.logger.warning("%s gece 1H kaydı başarısız (%s)", stock, type(exc).__name__)
+                kaydedildi = False
+            if kaydedildi:
+                yenilenen_1h += 1
+                kaydedilen_1h.add(stock)
+            else:
+                failures_1h[stock] = "1H yerel cache kaydı başarısız"
+                _pkg.logger.warning("%s gece 1H yerel cache kaydı başarısız; eksik sayılacak", stock)
         else:
             korunan_1h += 1
 
@@ -894,14 +914,22 @@ def gece_mum_temizligi_ve_yenileme(deque_manager, pacer=None, *, stocks=None) ->
             continue
 
         if deque_manager.replace_gunluk_dataframe(stock, df_1d):
-            deque_manager.gunluk_fetch_denemesi_kaydet(
-                stock,
-                persist=True,
-                persist_remote=False,
-            )
-            deque_manager.save_gunluk_to_disk(stock, persist_remote=False)
-            yenilenen_1d += 1
             yenilenen_semboller.add(stock)
+            try:
+                kaydedildi = bool(deque_manager.save_gunluk_to_disk(stock, persist_remote=False))
+            except Exception as exc:  # noqa: BLE001 - diğer semboller de denensin
+                _pkg.logger.warning("%s gece 1D kaydı başarısız (%s)", stock, type(exc).__name__)
+                kaydedildi = False
+            # Kalıcı veri yazılmadıysa kalıcı fetch cooldown da yazılmamalı.
+            deque_manager.gunluk_fetch_denemesi_kaydet(
+                stock, persist=kaydedildi, persist_remote=False,
+            )
+            if kaydedildi:
+                yenilenen_1d += 1
+                kaydedilen_1d.add(stock)
+            else:
+                basarisiz_1d[stock] = "1D yerel cache kaydı başarısız"
+                _pkg.logger.warning("%s gece 1D yerel cache kaydı başarısız; eksik sayılacak", stock)
         else:
             korunan_1d += 1
 
@@ -921,8 +949,10 @@ def gece_mum_temizligi_ve_yenileme(deque_manager, pacer=None, *, stocks=None) ->
     return {
         "toplam_sembol": len(hedef_semboller),
         "yenilenen_1h": yenilenen_1h,
+        "yenilenen_1h_semboller": sorted(kaydedilen_1h),
         "korunan_1h": korunan_1h,
         "yenilenen_1d": yenilenen_1d,
+        "yenilenen_1d_semboller": sorted(kaydedilen_1d),
         "korunan_1d": korunan_1d,
         "hatalar_1h": failures_1h,
         "hatalar_1d": basarisiz_1d,

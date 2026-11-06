@@ -100,7 +100,8 @@ def test_command_reply_redacts_secret_before_message_truncation():
     token = "ZZ_AUDIT_COMMAND_TOKEN_0123456789"
     listener = TelegramCommandListener(
         token=token,
-        allowed_chat_id="test-chat",
+        # DM targets are real positive decimal Telegram chat IDs.
+        allowed_chat_id="123456",
         handlers={},
         response_sender=lambda _update_id, _body: True,
     )

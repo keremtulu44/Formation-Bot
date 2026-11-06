@@ -1,0 +1,15 @@
+{
+  "symbols": 174,
+  "files": 348,
+  "per_file_with_invalid": {},
+  "rows": 645669,
+  "nan_ohlc_rows": 0,
+  "nonfinite_ohlc_rows": 0,
+  "nonpositive_ohlc_rows": 0,
+  "invalid_ohlc_rows": 0,
+  "negative_or_nonfinite_volume_rows": 0,
+  "zero_volume_rows": 59774,
+  "invalid_timestamp_rows": 0,
+  "duplicate_timestamp_rows": 0,
+  "scope": "raw archive rows, including bars excluded by capture cutoff; not a session completeness audit"
+}

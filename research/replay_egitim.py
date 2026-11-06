@@ -246,19 +246,23 @@ def album_hazirla(soru: Soru, tmp, *, answer=None):
     return paths, captions
 
 
-def _album_gonder(paths, captions, notifier, halen_gecerli) -> int:
-    """Önce albüm, açık hata halinde sırayla fotoğraf; gönderilen sayısı."""
-    from transport.telegram import foto_gonder, medya_grubu_gonder
+def _album_gonder(paths, captions, notifier, halen_gecerli) -> int | None:
+    """Kesin ret dışında tekil tekrar yapma; belirsiz teslimde None döndür."""
+    from transport.telegram import foto_gonder, medya_grubu_gonder, medya_kesin_reddedildi
 
     if not halen_gecerli():
         return 0
     if len(paths) >= 2:
         try:
-            ok, _ = medya_grubu_gonder(paths, captions=captions, notifier=notifier)
-            if ok:
-                return len(paths)
-        except Exception:  # noqa: BLE001 - albüm hatasında tek fotoğraf denenir
-            log.warning("Eğitim albümü gönderilemedi; kareler tek tek deneniyor.")
+            ok, reason = medya_grubu_gonder(paths, captions=captions, notifier=notifier)
+        except Exception:  # noqa: BLE001 - API kabul edip yanıtı kaybetmiş olabilir
+            log.warning("Eğitim albümünün teslimi belirsiz; tekil tekrar yapılmadı.")
+            return None
+        if ok:
+            return len(paths)
+        if not medya_kesin_reddedildi(reason):
+            log.warning("Eğitim albümünün teslimi belirsiz; tekil tekrar yapılmadı.")
+            return None
     sent = 0
     for path, caption in zip(paths, captions):
         if not halen_gecerli():
@@ -271,7 +275,7 @@ def _album_gonder(paths, captions, notifier, halen_gecerli) -> int:
     return sent
 
 
-def _sonuc_metni(result: dict, delivered: int) -> str:
+def _sonuc_metni(result: dict, delivered: int | None) -> str:
     from reporting.format import sayi, tf_kisa
 
     def signed(value, decimals):
@@ -284,8 +288,10 @@ def _sonuc_metni(result: dict, delivered: int) -> str:
              f"Kapanış: {sayi(result['start'], 4)} → {sayi(result['end'], 4)}",
              f"Değişim: {signed(result['diff'], 4)} ({signed(percent, 2)}%)",
              f"ATR: {sayi(result['atr'], 4)} · yatay sınır: ±{sayi(1.5 * result['atr'], 4)}"]
-    if delivered < len(TFS):
-        lines.append(f"⚠️ Sonuç görsellerinden {delivered}/{len(TFS)} tanesi gönderilebildi.")
+    if delivered is None:
+        lines.append("⚠️ Sonuç albümünün teslimi belirsiz; çift gönderimi önlemek için tekrar denenmedi.")
+    elif delivered < len(TFS):
+        lines.append(f"⚠️ Sonuç görsellerinden {delivered}/{len(TFS)} tanesinin teslimi doğrulandı.")
     lines.append("Yeni soru: /test")
     return "\n".join(lines)
 
@@ -343,9 +349,15 @@ class Session:
                     sent_count = _album_gonder(paths, captions, notifier, gecerli)
                     if not gecerli():
                         return
+                    if sent_count is None:
+                        notifier.send_to_chat(
+                            "⚠️ Soru albümünün teslimi belirsiz; çift gönderimi önlemek için "
+                            "tekrar denenmedi ve soru iptal edildi. Yeniden denemek için /test yazın.",
+                            notifier.chat_id)
+                        return
                     if sent_count != len(TFS):
                         notifier.send_to_chat(
-                            f"⚠️ Soru görsellerinden {sent_count}/{len(TFS)} tanesi gönderilebildi; "
+                            f"⚠️ Soru görsellerinden {sent_count}/{len(TFS)} tanesinin teslimi doğrulandı; "
                             "soru iptal edildi. Yeniden denemek için /test yazın.", notifier.chat_id)
                         return
                     with self.lock:

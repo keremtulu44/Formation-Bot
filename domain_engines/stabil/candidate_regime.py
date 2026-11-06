@@ -1,8 +1,9 @@
 """Provisional candidate mapping for vertical-step vs horizontal-hold regimes.
 
 GOVERNANCE RULE:
-- Normal chart rendering NEVER uses this module; charts draw the native daily
-  `support_level` stepline directly from `StabilSupportLifecycleEngine`.
+- Charts draw the native daily `support_level` stepline directly. Their signal
+  layer uses stepping states only as a conservative vertical-warning proxy,
+  not as a user-confirmed visual classification or native support calculation.
 - `support[t] == support[t-1]` / `SupportProgression.SAME` alone is NOT treated
   as user-approved horizontalization.
 - This candidate mapping is derived strictly from `05_stabil.txt`'s native pivot

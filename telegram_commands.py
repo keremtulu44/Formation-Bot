@@ -31,11 +31,11 @@ Diğer tasarım kararları:
 - **Teşhis**: `durum()` sayaçları `/health` alanına girer (islenen, yetkisiz,
   bayat, son komut yaşı, public komut, yetkisiz kullanıcı, yönetici kontrol
   hatası) — "bot çalışıyor ama komut yok" farkı dışarıdan görünür.
-- **Onay (offset)**: Komut cevabı dayanıklı outbox'a yazıldıktan sonra
-  `offset = id + 1` ile onaylanır. Aynı süreçte yazma başarısızsa cevap bellekte
-  tutulur ve update yeniden denenir; restart sonrası outbox'taki `update_id`
-  kaydı handler'ın tekrar çalışmasını önler. `update_id` için küçük bir küme de
-  tutulur (restart sonrası aynı komutun iki kez çalışmaması için).
+- **Onay (offset)**: Varsayılan canlı kurulum cevabı doğrudan yollar; başarısız
+  yanıtı aynı süreçte bellekte tutar ve update yeniden denenir. Opsiyonel
+  `response_sender`/`response_exists` hook'ları bağlanırsa harici outbox
+  kullanılabilir; canlı varsayılanda bağlanmaz. `update_id` tekrar önleme
+  kayıtları da süreç belleğindedir, restart/exactly-once garantisi değildir.
 - **409 Conflict**: Aynı token'la başka bir süreç de `getUpdates` yapıyorsa
   (örn. Termux'ta açık kalmış ikinci kopya) Telegram bu kodu döner. Dinleyici
   durur ve logda net söylenir — sonsuz hata döngüsüne girmez.
@@ -50,6 +50,7 @@ Diğer tasarım kararları:
 from __future__ import annotations
 
 import logging
+from collections import OrderedDict
 import threading
 import time
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -63,6 +64,7 @@ API_BASE = "https://api.telegram.org"
 MAX_MESSAGE_LEN = 4000          # Telegram sınırı 4096; pay bırakıyoruz
 MIN_KOMUT_ARALIK_SN = 1.0       # aynı sohbetten saniyede 1 komut
 BACKLOG_SINIR_SN = 15 * 60      # açılışta bundan eski mesajlar yok sayılır
+GORULEN_GUNCELLEME_SINIRI = 10_000
 
 # Eski komutlar: bot uykudayken (Render Free 15 dk hareketsizlikte uyur) yazılan
 # komutlar Telegram tarafından saatler sonra teslim edilebilir. Durum değiştiren
@@ -163,11 +165,8 @@ def _sohbet_anahtarlari(mesaj: Dict[str, Any]) -> set:
     kullanici_adi = sohbet.get("username")
     if kullanici_adi:
         anahtarlar.add(sohbet_anahtari(kullanici_adi))
-    # @kanal_adi biçiminde yapılandırılmış hedef, sayısal id ile eşleşmez;
-    # `chat.username` alanı yoksa kanal yayınları için `sender_chat` de dene.
-    gonderici = mesaj.get("sender_chat") or {}
-    if gonderici.get("username"):
-        anahtarlar.add(sohbet_anahtari(gonderici["username"]))
+    # sender_chat gönderenin kimliğidir, mesajın geldiği sohbet değildir.
+    # Onu hedefle eşleştirmek başka bir grubun yetkisizce açılmasına yol açar.
     anahtarlar.discard("")
     return anahtarlar
 
@@ -285,11 +284,13 @@ class TelegramCommandListener:
         self._admin_cache_sn = max(0.0, float(admin_cache_sn))
         self._session = session
         self._offset: Optional[int] = None
-        self._gorulen: Dict[int, float] = {}
+        self._gorulen: Dict[int, float] = OrderedDict()
         # update_id -> (metin, hedef_sohbet, reply_to): teslim edilemeyen cevap
         # aynı hedefe yeniden denenir (eskiden yalnız metin tutuluyordu ve grup
         # cevabı DM'e kaçabiliyordu).
         self._pending_reply: Dict[int, Tuple[str, Optional[str], Optional[int]]] = {}
+        # Authorization API failures are retryable, not permanent non-admin denials.
+        self._retryable_updates: OrderedDict[int, float] = OrderedDict()
         self._son_komut_zamani: Dict[Tuple[str, str], float] = {}
         self._stop = stop_event or threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -396,7 +397,7 @@ class TelegramCommandListener:
         }
 
     # --- public (grup) yetkisi ------------------------------------------
-    def _yonetici_mi(self, sohbet_id: str, kullanici_id: str) -> bool:
+    def _yonetici_mi(self, sohbet_id: str, kullanici_id: str) -> Optional[bool]:
         """Gönderen kişi sohbetin yöneticisi mi? (fail-closed + TTL önbellek).
 
         Neden önbellek: aynı yönetici art arda birkaç komut yazarsa her komutta
@@ -420,9 +421,9 @@ class TelegramCommandListener:
                 self._maskele(sohbet_id) or "?",
                 redact_sensitive_text(exc, self.token),
             )
-            # Hatalı karar önbelleğe YAZILMAZ: geçici ağ hatası 5 dk boyunca
-            # yöneticiyi kilitlemesin.
-            return False
+            # Hatalı karar önbelleğe YAZILMAZ ve olumsuz yönetici kararından
+            # ayrılır: webhook/polling güncellemeyi tekrar isteyebilir.
+            return None
         self._admin_kararlari[anahtar] = (karar, simdi)
         if len(self._admin_kararlari) > 500:
             self._admin_kararlari = {
@@ -639,10 +640,9 @@ class TelegramCommandListener:
                     "Telegram komutu işlenemedi: %s",
                     redact_sensitive_text(exc, self.token),
                 )
-            # Cevap outbox'a dayanıklı biçimde yazılamadıysa update ACK edilmez:
-            # aynı süreçte saklanan cevap tekrar denenir, komut yan etkisi yeniden
-            # çalıştırılmaz. Sonraki getUpdates turu aynı update_id'yi getirir.
-            if isinstance(update_id, int) and update_id in self._pending_reply:
+            # Cevap teslimi / opsiyonel outbox veya yetki kontrolü bekliyorsa
+            # update ACK edilmez; aynı süreçte sonraki tur tekrar denenir.
+            if self.update_waiting_for_delivery(update_id):
                 break
             try:
                 self._offset = int(update_id) + 1
@@ -652,13 +652,21 @@ class TelegramCommandListener:
 
     def update_waiting_for_delivery(self, update_id) -> bool:
         """Webhook/polling ACK'ini bekletmesi gereken, outbox'ta cevabi bekleyen update."""
-        return isinstance(update_id, int) and update_id in self._pending_reply
+        return isinstance(update_id, int) and (
+            update_id in self._pending_reply or update_id in self._retryable_updates
+        )
 
     def _islenenleri_temizle(self) -> None:
+        # Webhook da polling gibi düzenli temizlenmeli. Aksi halde meşgul bir
+        # gruptaki her mesajın update_id'si süreç boyunca bellekte kalıyordu.
         if len(self._gorulen) < 500:
             return
         su_an = time.time()
-        self._gorulen = {k: v for k, v in self._gorulen.items() if su_an - v < 3600}
+        while self._gorulen:
+            kimlik, kayit_zamani = next(iter(self._gorulen.items()))
+            if len(self._gorulen) < GORULEN_GUNCELLEME_SINIRI and su_an - kayit_zamani < 3600:
+                break
+            del self._gorulen[kimlik]
 
     # --- güncelleme işleme ---------------------------------------------
     def handle_update(self, update: Dict[str, Any]) -> Optional[str]:
@@ -669,6 +677,8 @@ class TelegramCommandListener:
         """
         update_id = update.get("update_id") if isinstance(update, dict) else None
         if isinstance(update_id, int):
+            self._islenenleri_temizle()
+            self._retryable_updates.pop(update_id, None)
             if update_id in self._pending_reply:
                 # Cevap bellekte bekliyor: handler YENİDEN çalıştırılmaz, yalnız
                 # teslim denenir — bekleyen kayıt hedefini de taşır, böylece grup
@@ -683,16 +693,18 @@ class TelegramCommandListener:
             if self.response_exists is not None:
                 try:
                     reply_exists = bool(self.response_exists(update_id))
-                except Exception as exc:  # noqa: BLE001 - kaynağı teşhis et, handler devam eder
+                except Exception as exc:  # noqa: BLE001 - bilinmeyen kayıt durumunda yan etki çalıştırma
                     logger.warning(
-                        "Komut cevap kaydı sorgulanamadı: %s",
+                        "Komut cevap kaydı sorgulanamadı; update tekrar denenecek: %s",
                         redact_sensitive_text(exc, self.token, self.allowed_chat_id),
                     )
-                    reply_exists = False
+                    self._retryable_updates[update_id] = time.monotonic()
+                    while len(self._retryable_updates) > GORULEN_GUNCELLEME_SINIRI:
+                        self._retryable_updates.popitem(last=False)
+                    return None
                 if reply_exists:
                     # Restart sonrası: cevap outbox'ta kayıtlı, komut tekrar çalışmaz.
                     self._gorulen[update_id] = time.time()
-                    self._cevapla("", update_id)
                     return None
 
             if update_id in self._gorulen:
@@ -702,6 +714,8 @@ class TelegramCommandListener:
 
         mesaj = mesaj_sohbeti(update)
         sohbet = mesaj.get("chat") or {}
+        if not isinstance(sohbet, dict):
+            return None
         sohbet_id = str(sohbet.get("id") or "")
         sohbet_tipi = str(sohbet.get("type") or "").lower()
         metin = mesaj.get("text")
@@ -712,7 +726,11 @@ class TelegramCommandListener:
         reply_to: Optional[int] = None
         public_yolu = False
 
-        if str(sohbet_id) != self.allowed_chat_id:
+        # CHAT_ID yanlışlıkla bir grup/kanal olarak yapılandırılsa bile grup
+        # üyelerine DM ayrıcalıkları verilmez. Boş kimlik de DM sayılmaz.
+        dm_yolu = bool(sohbet_id.isdecimal() and int(sohbet_id) > 0 and self.allowed_chat_id and
+                       sohbet_id == self.allowed_chat_id and sohbet_tipi in ("", "private"))
+        if not dm_yolu:
             # PUBLIC yol: sohbet yapılandırılmış public komut hedeflerinden biri mi?
             if self._public_chat_set & _sohbet_anahtarlari(mesaj):
                 if sohbet_tipi in ("channel",):
@@ -729,6 +747,8 @@ class TelegramCommandListener:
                             "Komut için GRUP kullanın (PUBLIC_COMMAND_CHATS).",
                             self._maskele(sohbet_id) or "?",
                         )
+                    return None
+                if sohbet_tipi not in ("group", "supergroup") or not sohbet_id:
                     return None
                 if self.public_enabled:
                     public_yolu = True
@@ -754,7 +774,7 @@ class TelegramCommandListener:
                     self._maskele(self.allowed_chat_id) or "?",
                 )
                 return None
-        if not metin:
+        if not isinstance(metin, str) or not metin:
             return None
 
         # Teşhis: hangi yoldan işlendi? ("grup komutlarım çalışmıyor" sorusunda
@@ -798,10 +818,24 @@ class TelegramCommandListener:
         if public_yolu:
             self._sayac["public"] += 1
             self._son_public_sohbet = sohbet_id
-            kullanici_id = str(((mesaj.get("from") or {}).get("id")) or "")
+            # Kanal/anonim göndericilerde `from` Telegram'ın vekil hesabı
+            # olabilir; gerçek bir grup yöneticisi doğrulanamıyorsa reddet.
+            gonderen = mesaj.get("from") or {}
+            if not isinstance(gonderen, dict) or mesaj.get("sender_chat") or gonderen.get("is_bot"):
+                return None
+            kullanici_id = str(gonderen.get("id") or "")
             if not kullanici_id:
                 return None
-            if not self._yonetici_mi(sohbet_id, kullanici_id):
+            yonetici = self._yonetici_mi(sohbet_id, kullanici_id)
+            if yonetici is None:
+                if isinstance(update_id, int):
+                    self._gorulen.pop(update_id, None)
+                    self._retryable_updates[update_id] = time.monotonic()
+                    while len(self._retryable_updates) > GORULEN_GUNCELLEME_SINIRI:
+                        self._retryable_updates.popitem(last=False)
+                self._sayac["yetkisiz_kullanici"] += 1
+                return None
+            if not yonetici:
                 self._sayac["yetkisiz_kullanici"] += 1
                 logger.info(
                     "Public /%s: gönderen yönetici değil (chat_id=%s) — yok sayıldı",
@@ -842,7 +876,11 @@ class TelegramCommandListener:
         # kullanır; yeni taramaları ise işleyici sınırlı sıraya koyar. Genel bir
         # meşguliyet kapısı /durum'u dakikalarca yanıtsız bırakamaz.
         simdi = time.monotonic()
-        hiz_anahtari = (sohbet_id, komut)
+        # Rastgele bilinmeyen komut adları ayrı ayrı kota/bellek oluşturamaz.
+        hiz_anahtari = (sohbet_id, komut if komut in self.handlers else "__unknown__")
+        if len(self._son_komut_zamani) > 500:
+            self._son_komut_zamani = {k: v for k, v in self._son_komut_zamani.items()
+                                      if simdi - v < 60.0}
         son = self._son_komut_zamani.get(hiz_anahtari, 0.0)
         if simdi - son < MIN_KOMUT_ARALIK_SN:
             logger.info("Telegram komutu çok sık geldi (/%s) — yok sayıldı", komut)
@@ -866,7 +904,8 @@ class TelegramCommandListener:
             cevap = isleyici(arguman)
         except Exception as exc:  # noqa: BLE001 - kullanıcıya sade, maskelenmiş hata
             safe_error = redact_sensitive_text(exc, self.token, self.allowed_chat_id)
-            logger.error("/%s işleyicisi hata verdi: %s", komut, safe_error, exc_info=True)
+            # exc_info ham istisnayı yeniden yazar ve maskelenmiş token'ı sızdırır.
+            logger.error("/%s işleyicisi hata verdi: %s", komut, safe_error)
             self._sayac["hata"] += 1
             cevap = f"\u274c /{komut} çalıştırılamadı: {safe_error[:200]}"
         finally:
@@ -912,7 +951,8 @@ class TelegramCommandListener:
             return None
         # DM yolu mu? Yalnız DM'de outbox sözleşmesinin ESKİ 2 argümanlı
         # imzası kullanılır (testler ve mevcut uygulamalar bozulmasın).
-        dm_yolu = hedef_sohbet == self.allowed_chat_id
+        dm_yolu = (hedef_sohbet == self.allowed_chat_id
+                   and hedef_sohbet.isdecimal() and int(hedef_sohbet) > 0)
         if self.response_sender is not None and isinstance(update_id, int):
             try:
                 if dm_yolu:
