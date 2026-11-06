@@ -895,8 +895,9 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `DEFERRED_ALERT_DIGEST_TIME` | `18:45` (İstanbul; ertelenen adaylar kapanış özetine eklenir) | Hayır |
 | `POST_CLOSE_ANALYSIS_TIME` | `20:00` (İstanbul, ayrı günlük tam evren analizi) | Hayır |
 | `OFFSESSION_CACHE_MAX_AGE_DAYS` | `14` (fetch yokken izin verilen en eski seans dışı cache) | Hayır |
-| `PUBLIC_MIN_QUALITY` | `80` (public kanala min kalite) | Hayır |
-| `PUBLIC_STATES` | `FORMASYON_TAMAMLANDI,RETEST_BASARILI` (public kanala giden state'ler) | Hayır |
+| `PUBLIC_MIN_QUALITY` | `0` (ek taban kapalı; varsayılan TF eşikleri 1h 80, 2h 78, 4h 75, 1d 70). `80` verilirse 2h/4h/1d'deki daha düşük kaliteli DM alarmları kanaldan elenir | Hayır |
+| `PUBLIC_STATES` | `KIRILIM_TEYITLI,RETEST_BASARILI,KIRILIM_GECERSIZLESTI` (varsayılan; yalnız bu kapanışla doğrulanmış olaylar desteklenir) | Hayır |
+| `PUBLIC_MAX_MESAJ_SAAT` / `PUBLIC_MAX_MESAJ_GUN` | Varsayılan 20 / 120 metin; eski örnekteki 6 / 25, yoğunlukta kanalı kısıtlar. Mevcut Render env'i kendiliğinden değişmez | Hayır |
 | `BOT_INSTANCE_ID` | Boş = `hostname:pid`. Örnek adı; salt okunur modda uzak çoklu örnek tespiti kapalıdır | Hayır |
 | `LOG_LEVEL` | `INFO` (varsayılan) | Hayır |
 | `TELEGRAM_TEST_KEY` | `/test` için anahtar; `X-Test-Key` başlığı (bkz. §4.4). `?k=` yalnız `TELEGRAM_TEST_KEY_QUERY=1` iken kabul edilir | Evet |
@@ -932,10 +933,12 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `SUPABASE_STORE_PREFIX` | `formation-bot:` — `bot_store` tablosundaki anahtar ön eki (aynı tabloyu paylaşan ikinci örnekle çakışmayı önler; `off` = eski öneksiz davranış) | Hayır |
 | `RENDER_EXTERNAL_URL` | Render **otomatik** verir (`https://<servis>.onrender.com`); elle eklemeyin | Hayır |
 
-Bildirim akışı: teyitli kırılım, başarılı retest, tamamlanma ve başarısız kırılım
-anında gönderilir. Sıkışma/hazırlık/adayı/retest bekleme durumları slot başına
-bellekte güncellenir ve 18:45 DM kapanış özetinde en yüksek kalite puanlı en fazla
-12 aday olarak yer alır. Kuyruk `DATA_DIR` içinde tutulur; dosya korunursa
+Bildirim akışı: teyitli kırılım, başarılı retest ve daha önce duyurulmuş
+teyidin geçersizleşmesi uygun kapılardan geçerse anında gönderilir. Tamamlanma,
+kırılım denemesi ve başarısız kırılım tekil anlık bildirim değildir. Sıkışma
+adayları 18:45 DM kapanış özetinde kaliteye göre en fazla 12 kayıtla gösterilir;
+hazırlık/deneme/retest bekleme durumları mevcut politikada özete de alınmaz.
+Kuyruk `DATA_DIR` içinde tutulur; dosya korunursa
 restart'ta geri yüklenebilir ve 18:45 kaçırıldıysa telafi denenir. Teslim
 başarısız/belirsizse tam tampon `DATA_DIR/telegram_missed_digest_*.json` altında
 inceleme için saklanır; olası çift mesaj nedeniyle otomatik yeniden gönderilmez.

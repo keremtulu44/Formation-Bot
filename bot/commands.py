@@ -726,16 +726,38 @@ def _komut_durum(_arguman: str) -> str:
                         f"{engel.get('tekrar', 0)} aynı-olay · "
                         f"{gd.get('hatalar', 0)} hata")
             if gd.get("public_enabled"):
-                gosterim_public = (f"📣 Public grup: {gd.get('public_gonderilen', 0)} gönderim · "
+                gosterim_public = (f"📣 Public: {gd.get('public_gonderilen', 0)} gönderim · "
                                    f"{gd.get('public_hatasi', 0)} hata · "
                                    f"kuyruk {gd.get('public_kuyruk', 0)} · "
-                                   f"engel {gd.get('public_engel', 0)}")
+                                   f"bütçe engeli {gd.get('public_engel', 0)}")
+                if "public_saatlik_limit" in gd:
+                    gosterim_public += (
+                        f"\n   Metin bütçesi: saat {gd.get('public_saatlik', 0)}/"
+                        f"{gd['public_saatlik_limit']} · gün {gd.get('public_gunluk', 0)}/"
+                        f"{gd.get('public_gunluk_limit', 0)}"
+                    )
+                filtre = gd.get("public_filtre_sayac")
+                if isinstance(filtre, dict):
+                    gosterim_public += (
+                        f"\n   Filtre (süreçteki denemeler): "
+                        f"state {filtre.get('state', 0)} · kalite {filtre.get('kalite', 0)} · "
+                        f"puan {filtre.get('devamlilik', 0)} · tekrar {filtre.get('tekrar', 0)} · "
+                        f"teyit yok {filtre.get('teyit_yok', 0)}"
+                    )
+                if "public_states" in gd:
+                    kapali = sorted({"KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI"}
+                                    - set(gd.get("public_states") or []))
+                    if kapali:
+                        gosterim_public += "\n   ⚠️ Kanalda kapalı state: " + ", ".join(kapali)
                 # Görsel ayrı satır: metin satırı zaten 300 px sınırında; kare
                 # sayacı 0/0 olsa da yazılır (\"hiç görüntü gelmiyor\" teşhisi).
                 if "public_grafik_gonderilen" in gd:
                     gosterim_public += (f"\n   🖼 public kare: "
                                         f"{gd.get('public_grafik_gonderilen', 0)} gönderildi · "
                                         f"{gd.get('public_grafik_hatasi', 0)} hata")
+            elif gd.get("public_enabled") is False:
+                gosterim_public = ("⚠️ Public hedef kapalı: kanal/grup kimliği veya "
+                                   "bot token'ı tanımlı değil; DM'in çalışması yeterli değil.")
             # Görsel sayaçları (§4): metin kotasından AYRIDIR. Açık şalterde
             # sıfır sonuç da teşhis için görünür; kapalıyken yalnız eski/bugünkü
             # görsel etkinliği varsa satır kalır ve bunu başında belirtir.
