@@ -343,18 +343,19 @@ def test_chart_stabil_chip_reclaim_triangle_step_colors_and_clean_footer(tmp_pat
         snap["serit"]["degerler"][-1] = 0.01
         snap["serit"]["degerler"][-2] = 0.0
 
-    # Inject synthetic step-down + reclaim bar in view to verify coral step-down & `▲` marker
+    # Legacy ▲ on a synthetic step-down must render as a ▼ warning, not a reclaim.
     snap["stabil"]["seviyeler"][-4] = float(snap["kapanis"][-4]) * 1.03
     snap["stabil"]["renkler"][-4] = "alt"
     snap["stabil"]["seviyeler"][-3] = float(snap["kapanis"][-3]) * 0.98
     snap["stabil"]["renkler"][-3] = "ust"
-    snap["stabil"]["reclaim_barlar"] = [len(snap["kapanis"]) - 2]
+    snap["stabil"]["reclaim_barlar"] = [len(snap["kapanis"]) - 3]
 
     out_png = tmp_path / "thyao_clean.png"
     yol, meta = grafik.ciz(snap, "4h", secenekler={"cikti": str(out_png)})
     assert yol is not None and out_png.exists()
     assert meta["cizgiler"]["stabil"]["cizildi"] is True
-    assert meta["cizgiler"]["stabil"]["reclaim_isaret"] >= 1
+    assert meta["cizgiler"]["stabil"]["reclaim_isaret"] == 0
+    assert meta["cizgiler"]["stabil"]["dikey_deneme_isaret"] >= 1
     # Metadata remains populated even though production chart hides the 5-line debug footer
     assert meta.get("guven_satirlari")
 

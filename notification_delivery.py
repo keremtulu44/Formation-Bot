@@ -34,8 +34,17 @@ def _decode(value):
     return value
 
 
+def snapshot_to_json(value):
+    """Return a JSON-safe snapshot without losing datetime or numpy scalars."""
+    return json.loads(json.dumps(value, default=_encode))
+
+
+def snapshot_from_json(value):
+    return json.loads(json.dumps(value), object_hook=_decode)
+
+
 def freeze(value):
-    return json.loads(json.dumps(value, default=_encode), object_hook=_decode)
+    return snapshot_from_json(snapshot_to_json(value))
 
 
 def event_id(data):
@@ -311,17 +320,22 @@ class DeliveryOutbox:
                        for r in self.state["rows"]])
 
     def public_duplicate(self, data):
+        from public_target_review import target_key
         with self.lock:
+            # Bir kanalın geçmişi yeni grupta teslim edilmiş gibi davranmamalı.
+            # Eski (hedefsiz) kayıtlar korunur fakat hedefi bilinen yayını
+            # engellemez; geçişte olası tekrar riski operasyon belgesindedir.
+            target = target_key(getattr(self.owner, "public_chat_id", ""))
+            history = [r for r in self.state["public"] if target_key(r.get("target")) == target]
             # Hikâye kapısı TF/aile gözetmez; eski related/alias mantığı
             # (bar zamanı taşımayan kayıtlar dahil) onun ALTINDA korunur.
             if self._story_duplicate(
-                    data, [(r.get("data") or {}, r.get("created"))
-                           for r in self.state["public"]]):
+                    data, [(r.get("data") or {}, r.get("created")) for r in history]):
                 log.info("Public hikâye tekrarı engellendi: %s %s %s",
                          data.get("stock_name"), data.get("timeframe"),
                          data.get("state"))
                 return True
-            for row in self.state["public"]:
+            for row in history:
                 aliases = row.get("aliases", [])
                 if data.get("formation_id") and any(
                         all(a.get(k) == data.get(k) for k in
@@ -346,6 +360,7 @@ class DeliveryOutbox:
             self.state["public"].append({"data": {k: data.get(k) for k in
                 ("stock_name", "timeframe", "state", "break_dir", "pattern_name",
                  "formation_id", "bar_time")},
+                "target": str(getattr(self.owner, "public_chat_id", "") or ""),
                 "created": self.now().isoformat()})
             self.save()
 

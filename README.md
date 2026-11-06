@@ -206,9 +206,20 @@ başlığında göndererek gerçek bir Telegram test mesajı yollanabilir. Anaht
 tanımlı değilse bu yol 404 döner. `?k=` varsayılan olarak kapalıdır; yalnız
 `TELEGRAM_TEST_KEY_QUERY=1` ile eski yöntem açılır (sır URL'ye düşer).
 
+`/test` ve `/webhook` için `HEALTH_RATE_LIMIT_PER_MIN` (varsayılan 60) süreç
+başına kayan pencere uygular; `/health` ve `/ready` bu limite dahil değildir.
+Varsayılanda iletilen IP başlığına güvenilmez: proxy arkasındaki tüm istekler
+aynı socket peer sayılabilir. Gerçek istemciye göre sınır istenirse yalnız
+operatörün doğruladığı ingress ağlarını `HEALTH_TRUSTED_PROXY_CIDRS` içine
+virgülle girin. Başlık, ancak doğrudan peer güvenilir olduğunda ve güvenilir
+zincir sağdan kontrol edilerek kullanılır. İnternete açık geniş ağları güvenilir
+saymak IP sahteciliğine izin verir. Bu bellek içi sınır çoklu süreçler arasında
+paylaşılmaz ve ters proxy'deki bağlantı/gövde/hız sınırlarının yerini almaz;
+10 saniyelik socket timeout yavaş-yavaş veri akıtan tüm istemcileri durdurmaz.
+
 Render Web Service'te `PORT`, `RENDER_EXTERNAL_URL` ve bot token varsa webhook
-varsayılan olarak **otomatik açılır**: süreç başlangıcında kriptografik rastgele
-secret üretilir, Telegram'a `secret_token` olarak kaydedilir ve HTTP sunucusundaki
+varsayılan olarak **otomatik açılır**: token'dan HMAC ile kararlı bir secret
+üretilir, Telegram'a `secret_token` olarak kaydedilir ve HTTP sunucusundaki
 `POST /webhook` (sırsız yol; doğrulama `X-Telegram-Bot-Api-Secret-Token`
 başlığıyla) kullanılır. Secret Render Environment'a yazılmaz ve `/health`'te
 ifşa edilmez. Yerel/systemd kurulumunda `PORT` olmadığından `getUpdates`
@@ -218,11 +229,15 @@ sabit secret boşken yoklamaya zorlamak için `TELEGRAM_WEBHOOK_AUTO=0` kullanı
 
 Bot artık **iki yönlüdür**: Telegram'dan gelen komutları yanıtlar. Komutlar
 `TELEGRAM_CHAT_ID` (DM) sohbetinden **her komutla**, public grup/supergroup
-hedefinden (`PUBLIC_COMMAND_CHATS`, yoksa `TELEGRAM_GROUP_ID`) ise **yalnız o
-grubun yöneticileri** için ve varsayılan olarak **okuma komutlarıyla** çalışır
+hedefinden (`PUBLIC_COMMAND_CHATS`, yoksa `TELEGRAM_GROUP_ID`/`TELEGRAM_CHANNEL_ID`) ise **yalnız o
+grubun doğrulanabilir gerçek kullanıcı yöneticileri** için ve varsayılan olarak **okuma komutlarıyla** çalışır
 (grup yolu 2026-10-28'de açıldı). Kanal mesajları Telegram'da `channel_post`
 türünde gelir ve bot yalnız `message` güncellemelerini dinlediği için
-**kanalda komut yolu yoktur**:
+**kanalda komut yolu yoktur**. Anonim `sender_chat` veya bot gönderenler
+reddedilir; geçici yönetici sorgusu hatası yetki vermez. Webhook, yanıt henüz
+teslim edilmediyse veya geçici yetki sorgusu hatasında Telegram'a 503 döndürerek
+tekrar isteyebilir. Bekleyen yanıtlar ve tekrar/silme kaydı süreç belleğindedir;
+restart veya belirsiz ağ teslimi için exactly-once garantisi yoktur.
 
 `/grafik` (diğer adı `/g`) grupta `PUBLIC_COMMAND_EXTRA=grafik,g` ile açılır;
 açıldığında **kareler ve sonuç metni komutun geldiği gruba** gider (DM'den
@@ -272,12 +287,12 @@ sorgulanır. Çıkış kodu 0, uyarılar dahil bütün servislerin hazır olduğ
 garantilemez. Deploy öncesi kontrol GitHub tarafındadır: `.github/workflows/ci.yml` her push'ta aynı Python 3.12 sürümüyle
 kurulumu, testleri ve `PORT` verilip `/health`'in 200 döndüğünü doğrular.
 
-Keep-alive iş akışı (`.github/workflows/keepalive.yml`) **5 dakikada bir** olacak
-şekilde tanımlıdır ve her gün İstanbul saatiyle 08:00–23:00 arasında `/health`'e
-istek atar. Pencere, BIST seansını ve akşam komut kullanımını kapsar; gece servis
-uyur (Render Free'nin 750 instance saat/ay kotası korunur: 15 sa/gün ≈ 450–465
-sa/ay, 7/24 ≈ 730 sa/ay). 7/24 ayakta tutmak için Actions → Variables →
-`KEEPALIVE_ALWAYS=true` (bkz. `docs/kurulum/RENDER_DEPLOY.md` §5).
+Keep-alive iş akışında (`.github/workflows/keepalive.yml`) **5 dakikalık cron
+hedefi** vardır; varsayılan ping pencereleri İstanbul saatiyle 08:00–23:00 ve
+02:00–02:20'dir. Gerçek çalıştırma aralıkları garanti edilmez; `KEEPALIVE_ALWAYS=true`
+yalnız saat filtresini kaldırır, 7/24 çalışma sağlamaz. Sonuçları
+`python scripts/keepalive_audit.py` ile denetleyin; bağımsız monitör/sürekli
+çalışan planın maliyet ve kota sınırlarını da kontrol edin.
 
 > ⚠️ **Ölçüldü (Ekim 2026):** GitHub bu repoda cron koşularını seyrek tetikledi —
 > `*/5` tanımına rağmen günde 4–6 koşu (beklenen 288), çoğu pencere dışı olduğu
@@ -288,22 +303,21 @@ sa/ay, 7/24 ≈ 730 sa/ay). 7/24 ayakta tutmak için Actions → Variables →
 > webhook görünmüyorsa canlı commit'i ve `/health` → `komut.mod` alanını kontrol edin.
 > Eski deploy veya `TELEGRAM_WEBHOOK_AUTO=0` (sabit secret boşken) polling'e düşer; o durumda dış monitör
 > uptime için gereklidir ama tek başına Telegram'ın polling servisini uyandırmaz.
+> 6 Kasım kontrolünde de son 100 schedule başlangıcı arasındaki 99 aralığın
+> tamamı 15 dakikayı aştı (medyan 290,6 dk); yeşil iş sonucu ping kanıtı değildir.
+> Ayrıntılı kanıt ve operasyon adımları: [deploy denetimi](docs/kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md).
 
 İki çalışma seçeneği:
 
 - **Background Worker (önerilen, ücretli):** Sürekli çalışan Python döngüsüne uygun servis türü;
   dışarıdan ping gerekmez. Bot piyasa dışında/hafta sonu tarama yapmadan bekler, fakat servis açık
   kaldığından worker çalışma süresi devam eder.
-- **Free Web Service (repo içindeki iş akışıyla):** `.github/workflows/keepalive.yml`
-  `https://<render-adresi>/health` adresine **5 dakikada bir**, her gün İstanbul
-  saatiyle 08:00–23:00 arasında istek atar (gece servis uyur, sürekli tarama da yapmaz).
-  Render Free, 15 dakika inbound trafik olmazsa servisi uyutur; 5 dk aralık
-  GitHub cron gecikmelerine karşı pay bırakır. Dış monitör (cron-job.org /
-  UptimeRobot) alternatiftir ve repo aktivitesinden bağımsızdır. Güncel deploy'da
-  Telegram webhook'u varsayılan açıktır: Telegram POST'u servisi uyandırır; ilk
-  yanıt soğuk başlangıç süresince gecikebilir. Auto webhook'u kapatıp polling
-  kullanırsanız (`TELEGRAM_WEBHOOK_AUTO=0` ve sabit secret boşken) uyuyan servis komutları göremez;
-  `KEEPALIVE_ALWAYS=true` veya sürekli çalışan worker gerekir.
+- **Free Web Service:** repo iş akışı belirtilen pencerelerde `/health` pingi
+  hedefler, fakat ölçülen saatlerce boşluklar nedeniyle tek başına güvenilir
+  değildir. Render Free 15 dk inbound trafik yoksa uyuyabilir. Bağımsız dış
+  monitör veya sürekli çalışan uygun plan gerekir; gerçek sıklık ve kota ayrıca
+  doğrulanmalıdır. Güncel webhook Telegram POST'u ile uyandırmayı deneyebilir;
+  ilk yanıt gecikebilir. Polling, uyuyan servisi kendisi uyandıramaz.
 
 Telegram komutları için Render **Environment** bölümüne `TELEGRAM_BOT_TOKEN` ve
 `TELEGRAM_CHAT_ID` ekleyin (secret değerleri Git'e veya sohbete koymayın).
@@ -348,9 +362,9 @@ geçirme gerektirir.
 | `health_server.py` | Render `PORT` varsa `/health` liveness (+ canlılık alanları, `?strict=1`), korumalı `/test` (X-Test-Key) ve `POST /webhook` (secret_token başlığı) uçları + IP başına rate limit |
 | `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
 | `deploy_check.py` | Kurulum doktoru: repo/env, Supabase okuma bağlantısı, Telegram ve Render `/health`/opsiyonel `/test` kontrolleri; bilinmeyen/uyarılar ayrıca incelenmeli (sır yazdırmaz) |
-| `.github/workflows/deploy.yml` | Render Deploy Hook ile `main` push'unda otomatik deploy (hook secret yoksa uyarı verip atlar) |
+| `.github/workflows/deploy.yml` | Yalnız elle tetiklenen Render Deploy Hook; push'ta çalışmaz. Dashboard auto-deploy ayarı ayrıca doğrulanmalıdır. |
 | `.github/workflows/ci.yml` | Render eşdeğeri CI: Python 3.12 kurulumu, pytest, zamanlama regresyonu ve `PORT` verilip `/health` duman testi |
-| `.github/workflows/keepalive.yml` | Render Free uyumasın diye `/health` pingi (5 dk, her gün 08:00–23:00 İstanbul; `KEEPALIVE_*` değişkenleriyle ayarlanır) |
+| `.github/workflows/keepalive.yml` | `/health` pingi için en iyi çaba cron hedefi; fiili sıklık ve koşunun ping atıp atmadığı ayrıca izlenmeli |
 | `docs/kurulum/RENDER_DEPLOY.md` | Render Free + Supabase + Telegram kurulum rehberi; build hatası ve keep-alive dahil |
 | `.python-version` | Render build'ı için Python 3.12 sabitlemesi (3.14'te pandas derlenemiyor) |
 | `requirements-optional.txt` | Deploy zincirinde olmayan isteğe bağlı paketler (borsapy) |
@@ -412,6 +426,23 @@ Telegram teslimatı kullanıcı hesabındaki Render/Telegram ortamında
 - Render'ın varsayılan `DATA_DIR`'i geçici olabilir; restart/redeploy yeni yerel
   cache, bildirim kuyruğu, cooldown ve karne verisini kaybettirebilir. Mevcut
   Supabase entegrasyonu salt okunurdur; tanımlamak yeni state yedeği yazmaz.
+- Public metin kuyruğu, günlük sayaç ve serileştirilebilen bekleyen grafik
+  snapshot'ı yerel günlük duruma yazılır; ancak yazım/serileştirme başarısızsa,
+  gün değişirse veya yerel disk silinirse restart'ta korunacağı garanti edilmez.
+  Kilitler yalnız aynı süreçtedir; iki bot örneği güvenle koordine edilmez.
+- Grafikte tek kare `sendPhoto`, 2–10 kare albüm kullanır (foto başına 10 MiB,
+  albüm toplam 40 MiB). Albüm yalnız **kesin ret**te tek tek yeniden denenir.
+  Timeout/ağ/429/5xx gibi belirsiz sonuçta, çift görseli önlemek için otomatik
+  tekil tekrar yapılmaz: karşılığında ulaşmamış bir görsel kaybolabilir. Canlı
+  DM alarmının dayanıklı outbox'ı ise teslimi garanti etmeye çalışırken albümün
+  **tamamını** sonradan tekrar deneyebilir; timeout sonrası çift albüm mümkündür
+  (at-least-once, exactly-once değil). Metin ve görselin karşı tarafa ulaştığı
+  canlı ortamda ayrıca doğrulanmalıdır.
+- Stabil `▼`, dikey/kademeli destek proxy'sinde yukarı deneme için yapı risk
+  uyarısıdır; kesin düşüş/satış tahmini değildir. Proxy görsel çizginin kesin
+  geometrisi olarak doğrulanmış değildir; yatay `▲` kuralları korunur. Detay:
+  [STABIL_DIKEY_UYARI_2026-11-05.md](docs/tasarim/STABIL_DIKEY_UYARI_2026-11-05.md).
+  Kapanmış arşiv mumlarıyla ok/hacim/OB/FVG araştırması: [Stabil replay raporu](docs/arastirma/stabil_ok_replay_2026_11_05/RAPOR.md).
 - `/health` liveness ve komut modunu bildirir; veri tazeliği, Telegram mesajının
   kullanıcıya ulaştığı veya taramanın yatırım sonucu verdiği garantisi değildir.
 - Replay/ölçüm sonuçları geçmiş veriyi betimler; canlı performans ya da yatırım

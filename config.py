@@ -378,7 +378,7 @@ GRAFIK_OLAY_MAKS = max(0, int(_env_float("GRAFIK_OLAY_MAKS", 6)))
 
 # --- TELEGRAM WEBHOOK (Render) ---
 # Render Web Service'te PORT + herkese açık webhook adresi + bot token varsa,
-# giriş noktasında rastgele bir secret üretilir ve webhook otomatik açılır.
+# giriş noktasında token'dan kararlı bir HMAC secret türetilir ve webhook açılır.
 # Böylece Telegram komutu Render Free servisini uyandırabilir; yerel/systemd
 # kurulumunda PORT olmadığı için varsayılan hâlâ getUpdates yoklamasıdır.
 #
@@ -398,10 +398,11 @@ _WEBHOOK_AUTO_KAPALI_DEGERLERI = {"0", "false", "no", "off", "kapali", "kapalı"
 def telegram_webhook_runtime_secret(environ=None):
     """Return ``(secret, generated)`` for the real process entry point.
 
-    Import-time config stays side-effect free. A random secret is generated only
-    when ``main.py`` is actually launched as a Render-style web service, and is
-    held in memory for that process. Telegram's ``setWebhook`` updates the secret
-    on each restart. A configured secret always takes precedence; local/systemd
+    Import-time config stays side-effect free. On a Render-style web service,
+    derive a stable, domain-separated secret from the bot token in memory. Two
+    new replicas with the same token can validate the same webhook header during
+    a rolling deploy; this is NOT a distributed single-instance lock. An explicit
+    secret always wins and can be rotated independently of the token. Local/systemd
     runs without PORT keep using polling.
     """
     env = os.environ if environ is None else environ
@@ -413,13 +414,18 @@ def telegram_webhook_runtime_secret(environ=None):
     auto_enabled = auto_value not in _WEBHOOK_AUTO_KAPALI_DEGERLERI
     public_url = str(env.get("TELEGRAM_WEBHOOK_URL") or env.get("RENDER_EXTERNAL_URL") or "").strip()
     has_render_port = bool(str(env.get("PORT") or "").strip())
-    has_bot_token = bool(str(env.get("TELEGRAM_BOT_TOKEN") or "").strip())
-    if not (auto_enabled and has_render_port and public_url and has_bot_token):
+    bot_token = str(env.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    if not (auto_enabled and has_render_port and public_url and bot_token):
         return "", False
 
-    import secrets
+    import hashlib
+    import hmac
 
-    return secrets.token_urlsafe(32), True
+    # HMAC is domain-separated: exposing the webhook secret does not disclose
+    # the underlying high-entropy Telegram bot token. Hex fits Telegram's allowed
+    # characters, and no URL/path or token is logged or written to disk.
+    derived = hmac.new(bot_token.encode("utf-8"), b"formation-bot:webhook-secret:v1", hashlib.sha256).hexdigest()
+    return derived, True
 
 # --- PUBLIC KANAL ve ÖZET ---
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()

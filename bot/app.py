@@ -152,6 +152,104 @@ def _shutdown_bekle(seconds):
         time.sleep(min(kalan, 1.0))
 
 
+def _salt_okunur_notifier_baslangici(rows, data_dir):
+    """Değiştirilemeyen uzak gönderim kuyruğunun tekrar oynatılmasını önle.
+
+    Uzak bildirim mühürleri tarihsel ipucu olabilir; bekleyen gönderimler ise
+    bu süreç tarafından uzakta ACK edilemediği için otomatik çalıştırılamaz.
+    Yerel dosya varsa yerel durum önceliklidir: bazı eski okuyucular uzak değeri
+    tarihe bakmadan seçiyordu. Uzak veriye dokunulmaz.
+    """
+    if not isinstance(rows, dict):
+        return rows
+    result = dict(rows)
+    local_files = {
+        "state:telegram_caps": "telegram_kap.json",
+        "state:telegram_cooldowns": "telegram_soguma.json",
+        "state:telegram_son_alerts": "telegram_son_alerts.json",
+        "state:notification_delivery": "notification_delivery.json",
+    }
+    for key, filename in local_files.items():
+        if os.path.exists(os.path.join(data_dir, filename)):
+            result.pop(key, None)
+
+    # Acil kuyruk uzakta ACK edilemez. Boş uzak liste dahi yerel kuyruğu
+    # gölgelememeli; yerel dosya normal yükleyici tarafından okunur.
+    emergency = result.pop("state:telegram_acil_kuyruk", None)
+    if isinstance(emergency, list) and emergency:
+        _pkg.logger.warning(
+            "Salt okunur uzak acil kuyruk otomatik oynatılmadı (%d olay); "
+            "teslim durumu doğrulanamıyor ve uzak kayıt korunuyor", len(emergency),
+        )
+
+    # Tamamlanmış uzak teslimler tekilleştirme için yararlı olabilir, ancak
+    # bitmemiş satırları körlemesine yeniden göndermek güvenli değildir.
+    remote_outbox = result.get("state:notification_delivery")
+    if isinstance(remote_outbox, dict):
+        safe = dict(remote_outbox)
+        source_rows = safe.get("rows")
+        if isinstance(source_rows, list):
+            completed = [r for r in source_rows if isinstance(r, dict) and r.get("done") is True]
+            omitted = len(source_rows) - len(completed)
+            safe["rows"] = completed
+            if omitted:
+                _pkg.logger.warning(
+                    "Salt okunur uzak teslim kuyruğundan %d doğrulanmamış satır "
+                    "otomatik oynatılmadı; uzak kayıt korunuyor", omitted,
+                )
+        else:
+            safe["rows"] = []
+        result["state:notification_delivery"] = safe
+
+    # Eski string mühür biçimi normal yükleyicide BUGÜNE tarihlenir. Salt okunur
+    # tarihi bir kopyada bu, her açılışta gerçek yeni alarmları bastırabilir.
+    alerts = result.get("state:telegram_son_alerts")
+    if isinstance(alerts, dict):
+        safe_alerts = {k: v for k, v in alerts.items() if not isinstance(v, str)}
+        if len(safe_alerts) != len(alerts):
+            _pkg.logger.warning("Salt okunur uzak tarihsiz eski alarm mühürleri yüklenmedi: %d",
+                                len(alerts) - len(safe_alerts))
+        result["state:telegram_son_alerts"] = safe_alerts
+    return result
+
+
+class _NightlyRefreshProgress:
+    """Aynı günün 1H ve 1D başarılarını biriktir; yalnız eksikleri tekrar çek.
+
+    İlerleme süreç belleğindedir, restart sonrası yeniden denenir. Gün damgası
+    yalnız tüm hedefler iki zaman diliminde gerçekten kaydedilince basılabilir.
+    """
+
+    def __init__(self):
+        self.day = None
+        self.targets = set()
+        self.done_1h = set()
+        self.done_1d = set()
+
+    def pending(self, day, stocks):
+        if self.day != day:
+            self.day = day
+            self.done_1h.clear()
+            self.done_1d.clear()
+        ordered = list(dict.fromkeys(stocks))
+        self.targets = set(ordered)
+        return [stock for stock in ordered if stock not in self.done_1h or stock not in self.done_1d]
+
+    def record(self, result, attempted):
+        if not isinstance(result, dict):
+            return False
+        allowed = self.targets.intersection(attempted)
+        for key, done in (("yenilenen_1h_semboller", self.done_1h),
+                          ("yenilenen_1d_semboller", self.done_1d)):
+            symbols = result.get(key)
+            if isinstance(symbols, (list, tuple, set)):
+                done.update(symbol for symbol in symbols if isinstance(symbol, str) and symbol in allowed)
+        return bool(
+            self.targets and not result.get("kapanis_ile_kesildi")
+            and self.targets <= self.done_1h and self.targets <= self.done_1d
+        )
+
+
 def main_loop():
     """
     Ana döngü:
@@ -253,16 +351,23 @@ def main_loop():
             deque_manager.hydrate_from_supabase(_pkg.ACTIVE_STOCKS, remote_rows)
     lifecycle_manager = PatternLifecycleManager(profile=PROFILE)
     setattr(_pkg, "_lifecycle_manager_ref", lifecycle_manager)
+    notifier_rows = remote_rows
+    if supabase_store is not None and not getattr(supabase_store, "writable", True):
+        # Notifier'ın gerçek DATA_DIR yama yüzeyi; cache hydrate verisini değiştirme.
+        from notifier import DATA_DIR as notifier_data_dir
+        notifier_rows = _salt_okunur_notifier_baslangici(remote_rows, notifier_data_dir)
     notifier = TelegramNotifier(
         persistent_store=None,
-        initial_store_data=remote_rows,
+        initial_store_data=notifier_rows,
     )
     setattr(_pkg, "_notifier_ref", notifier)
-    # Telegram token/chat_id teşhisi: mesaj göndermeden getMe ile doğrular.
-    notifier.check_connection()
+    # SIGTERM açılış sırasında gelmişse yeni ağ işi/komut dinleyicisi başlatma.
+    # Başlamış tek bir ağ çağrısı anında iptal edilemez; zaman aşımları geçerlidir.
+    if not _pkg._shutdown_requested:
+        notifier.check_connection()
     # Public hedef (kanal/grup) doğrulaması: bot yönetici değilse/izin yoksa
     # ilk gönderimde 403 almak yerine AÇILIŞTA net uyarı verilir.
-    if notifier.public_enabled:
+    if not _pkg._shutdown_requested and notifier.public_enabled:
         notifier.check_public_connection()
 
     # İki yönlü Telegram: komutları (panel/canli/formasyonlar/durum/tara/yardim)
@@ -272,20 +377,23 @@ def main_loop():
     #   - yoklama  : aksi halde getUpdates uzun yoklaması (daemon thread)
     # Token/chat_id yoksa hiçbiri başlatılmaz; bot eskisi gibi yalnızca alarm gönderir.
     # 18:45 kapanış özeti kaçırıldıysa (bot akşam kapalıydı) ilk fırsatta telafi et.
-    _pkg._kacirilan_digest_ozeti(notifier, _pkg.datetime.now(ISTANBUL_TZ))
+    if not _pkg._shutdown_requested:
+        _pkg._kacirilan_digest_ozeti(notifier, _pkg.datetime.now(ISTANBUL_TZ))
     # Özet işaretini ilk preload/fetch'ten önce al: seans öncesi kuyruk engeli
     # açılışta hemen çözülsün; kapanış özeti sonrası eski kuyruk ayrı push olmasın.
     _dm_isaretler, _public_isaretler = _pkg._ozet_isaretlerini_yukle()
     _acilis_zamani = _pkg.datetime.now(ISTANBUL_TZ)
     _acilis_digest_saati = _pkg._parse_deferred_alert_digest_time()
     _ozet_slotu = _acilis_digest_saati.strftime("%H:%M")
-    _pkg._acil_kuyruk_acilista_isle(
-        notifier, _acilis_zamani, _acilis_digest_saati,
-        kapanis_ozeti_gonderildi=not _pkg._ozet_slot_gonderilmeli(
-            _dm_isaretler, _ozet_slotu, _acilis_zamani.date()),
-    )
+    if not _pkg._shutdown_requested:
+        _pkg._acil_kuyruk_acilista_isle(
+            notifier, _acilis_zamani, _acilis_digest_saati,
+            kapanis_ozeti_gonderildi=not _pkg._ozet_slot_gonderilmeli(
+                _dm_isaretler, _ozet_slotu, _acilis_zamani.date()),
+        )
 
-    _pkg._telegram_komut_katmanini_kur(notifier)
+    if not _pkg._shutdown_requested:
+        _pkg._telegram_komut_katmanini_kur(notifier)
     
     # İlk kurulum/preload de aynı hız sınırını kullanır; boş 1H cache'ler seri çekilir.
     _pkg.logger.info(
@@ -299,9 +407,12 @@ def main_loop():
         if mevcut is None or len(mevcut) < 50:
             cache_eksik_hisseler.append(stock)
 
-    ilk_veriler, ilk_hatalar, ilk_retry, ilk_kurtarilan = _pkg.fetch_1h_stocks_paced(
-        cache_eksik_hisseler, pacer, "İLK YÜKLEME"
-    )
+    if _pkg._shutdown_requested:
+        ilk_veriler, ilk_hatalar, ilk_retry, ilk_kurtarilan = {}, {}, 0, 0
+    else:
+        ilk_veriler, ilk_hatalar, ilk_retry, ilk_kurtarilan = _pkg.fetch_1h_stocks_paced(
+            cache_eksik_hisseler, pacer, "İLK YÜKLEME"
+        )
     if ilk_retry:
         _pkg.logger.info(
             f"İlk yükleme retry özeti: {ilk_retry} tekrar, {ilk_kurtarilan} başarılı, "
@@ -322,7 +433,6 @@ def main_loop():
             )
 
     # 1D derin veri de eksikse aynı pacing kuyruğundan geçir.
-    ilk_gunluk_cekilen = 0
     for stock in _pkg.ACTIVE_STOCKS:
         if _pkg._shutdown_requested:
             break
@@ -335,19 +445,13 @@ def main_loop():
             if taze_gunluk is not None and len(taze_gunluk) >= 30:
                 deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
                 deque_manager.save_gunluk_to_disk(stock)
-                ilk_gunluk_cekilen += 1
                 _pkg.logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
             else:
                 _pkg.logger.warning(f"{stock}: ilk günlük veri çekilemedi - resample kullanılacak")
 
-    # Soğuk başlangıçta tüm evren taze çekildiyse aynı sabah ikinci kez tam çekim yapma.
-    if (
-        not _pkg._shutdown_requested
-        and len(_pkg.ACTIVE_STOCKS) > 0
-        and len(ilk_veriler) >= max(1, int(len(_pkg.ACTIVE_STOCKS) * 0.8))
-        and ilk_gunluk_cekilen >= max(1, int(len(_pkg.ACTIVE_STOCKS) * 0.8))
-    ):
-        _pkg._gece_mum_yenileme_son_gun_kaydet(_pkg.datetime.now(ISTANBUL_TZ).date())
+    # İlk yükleme eksik önbelleği birleştirir; temiz gece yenilemesi değildir.
+    # Daha önce %80 yanıt bile gün damgası basıp başarısız sembolleri gizliyordu.
+    # Başlangıç hiçbir koşulda gece temizliğini tamamlanmış saymaz.
 
     # Haftalık karne defteri: açılışta bir kez hazırlanır (uzak yedek varsa
     # Supabase'den birleştirilir). Böylece tarama döngüsü içinde ağ beklemesi
@@ -386,8 +490,11 @@ def main_loop():
     last_maintenance_date = None
     last_preload_date = None
     last_nightly_refresh_date = _pkg._gece_mum_yenileme_son_gun_oku()
-    son_gece_yenileme_deneme_ts = 0.0
+    gece_ilerleme = _NightlyRefreshProgress()
+    son_gece_yenileme_deneme_ts = None  # monotonic, deneme bittikten sonra tutulur
     son_kuyruk_bosaltma = 0.0  # engellenen acil olaylar bu aralıkla yeniden denenir
+    son_public_ozel_deneme = 0.0
+    son_dm_ozel_deneme = 0.0
     # Restart gün sürekliliği: bugün zaten sayaç biriktirilmişse geri yükle
     # (aksi halde 18:45 kanal özeti günün gerçek toplamını eksik gösterir).
     _pkg._gunluk_sayac_yukle()
@@ -435,6 +542,36 @@ def main_loop():
                         _pkg.logger.info(f"Engellenen acil kuyruğundan {gonderilen_kuyruk} olay gönderildi")
             except Exception as e:
                 _pkg.logger.debug(f"Acil kuyruk boşaltma hatası: {e}")
+
+            # Stabil/domain DM kopyası da public başarısından bağımsızdır.
+            try:
+                dm_ozel = getattr(notifier, "dm_ozel_bosalt", None)
+                if (not _pkg._shutdown_requested and callable(dm_ozel)
+                        and getattr(notifier, "enabled", False)
+                        and _pkg._acil_kuyruk_gonderim_penceresi_acik(now, deferred_alert_digest_time)
+                        and time.time() - son_dm_ozel_deneme >= ACIL_KUYRUK_BOSALTMA_ARALIK_SN):
+                    son_dm_ozel_deneme = time.time()
+                    adet = int(dm_ozel() or 0)
+                    if adet:
+                        _pkg.logger.info("Bekleyen DM özel alarmlardan %d metin gönderildi", adet)
+            except Exception as exc:  # noqa: BLE001 - dış servis ana döngüyü durdurmasın
+                _pkg.logger.warning("DM özel alarm kuyruğu denenemedi: %s", type(exc).__name__)
+
+            # Stabil/domain public kopyaları DM başarısından bağımsızdır.
+            # Kesin bütçe/4xx engelinde sonraki taramayı beklemeden dene;
+            # belirsiz teslimler outbox tarafından otomatik yeniden gönderilmez.
+            try:
+                public_ozel = getattr(notifier, "public_ozel_bosalt", None)
+                if (not _pkg._shutdown_requested and callable(public_ozel)
+                        and getattr(notifier, "public_enabled", False)
+                        and _pkg._acil_kuyruk_gonderim_penceresi_acik(now, deferred_alert_digest_time)
+                        and time.time() - son_public_ozel_deneme >= ACIL_KUYRUK_BOSALTMA_ARALIK_SN):
+                    son_public_ozel_deneme = time.time()
+                    adet = int(public_ozel() or 0)
+                    if adet:
+                        _pkg.logger.info("Bekleyen public özel alarmlardan %d metin gönderildi", adet)
+            except Exception as exc:  # noqa: BLE001 - dış servis ana döngüyü durdurmasın
+                _pkg.logger.warning("Public özel alarm kuyruğu denenemedi: %s", type(exc).__name__)
 
             # --- ÇOKLU ÖRNEK KONTROLÜ (Batch 6 / B10) ---
             # 5 dakikada bir: aynı Supabase anahtarlarını kullanan başka bir canlı
@@ -725,30 +862,36 @@ def main_loop():
                     or (gece_saat < 9 and now.time() < dt_time(9, 30))
                 )
                 if gece_penceresi_acik:
-                    if last_nightly_refresh_date != now.date() and (time.time() - son_gece_yenileme_deneme_ts >= 600):
-                        son_gece_yenileme_deneme_ts = time.time()
+                    tekrar_hazir = (son_gece_yenileme_deneme_ts is None or
+                                    time.monotonic() - son_gece_yenileme_deneme_ts >= 600)
+                    if last_nightly_refresh_date != now.date() and tekrar_hazir:
+                        hedef_gun = now.date()
+                        kalan = gece_ilerleme.pending(hedef_gun, _pkg.ACTIVE_STOCKS)
                         _pkg._scan_job_active.set()
                         try:
-                            gece_sonuc = _pkg.gece_mum_temizligi_ve_yenileme(deque_manager, pacer)
+                            gece_sonuc = (
+                                _pkg.gece_mum_temizligi_ve_yenileme(deque_manager, pacer, stocks=kalan)
+                                if kalan else {}
+                            )
                         finally:
                             _pkg._scan_job_active.clear()
-                        kesildi = bool((gece_sonuc or {}).get("kapanis_ile_kesildi"))
-                        toplam_hedef = int((gece_sonuc or {}).get("toplam_sembol", 0))
-                        yenilenen_toplam = int((gece_sonuc or {}).get("yenilenen_1h", 0)) + int(
-                            (gece_sonuc or {}).get("yenilenen_1d", 0)
-                        )
-                        if not kesildi and (toplam_hedef == 0 or yenilenen_toplam > 0):
-                            last_nightly_refresh_date = now.date()
-                            _pkg._gece_mum_yenileme_son_gun_kaydet(now.date())
-                        else:
-                            _pkg.logger.warning(
-                                "Gece mum temizliği yarım kaldı veya tüm çekimler başarısız oldu "
-                                "(kesildi=%s, yenilenen=%d/%d); 10 dk sonra tekrar denenecek",
-                                kesildi,
-                                yenilenen_toplam,
-                                toplam_hedef,
-                            )
+                            # Başlangıçtan değil bitişten itibaren bekle: uzun bir
+                            # sağlayıcı turu peş peşe retry fırtınası yaratmasın.
+                            son_gece_yenileme_deneme_ts = time.monotonic()
+                        tamamlandi = gece_ilerleme.record(gece_sonuc, kalan)
                         now = _pkg.datetime.now(ISTANBUL_TZ)
+                        kesildi = bool((gece_sonuc or {}).get("kapanis_ile_kesildi"))
+                        if tamamlandi and not _pkg._shutdown_requested and now.date() == hedef_gun:
+                            last_nightly_refresh_date = hedef_gun
+                            _pkg._gece_mum_yenileme_son_gun_kaydet(hedef_gun)
+                        else:
+                            toplam = len(gece_ilerleme.targets)
+                            _pkg.logger.warning(
+                                "Gece temizliği tamamlanmadı (kesildi=%s, 1H=%d/%d, 1D=%d/%d); "
+                                "pencere açıksa eksikler en erken 10 dk sonra denenir",
+                                kesildi, len(gece_ilerleme.done_1h & gece_ilerleme.targets), toplam,
+                                len(gece_ilerleme.done_1d & gece_ilerleme.targets), toplam,
+                            )
             except Exception as e:
                 _pkg.logger.error(f"Gece mum temizliği hatası: {e}", exc_info=True)
 

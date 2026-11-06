@@ -126,8 +126,9 @@ class TelegramNotifier:
         self.chat_id = _env_temizle(os.environ.get("TELEGRAM_CHAT_ID", ""))
         # Public hedef: grup (tercih) ya da eski kanal ayarı. Grup, DM'den BAĞIMSIZ
         # çalışır; DM kapalıyken de grup yayını sürer.
-        self.group_id = _env_temizle(os.environ.get("TELEGRAM_GROUP_ID", ""))
-        self.channel_id = _env_temizle(os.environ.get("TELEGRAM_CHANNEL_ID", ""))
+        from telegram_commands import telegram_sohbet_kimligi
+        self.group_id = telegram_sohbet_kimligi(_env_temizle(os.environ.get("TELEGRAM_GROUP_ID", "")))
+        self.channel_id = telegram_sohbet_kimligi(_env_temizle(os.environ.get("TELEGRAM_CHANNEL_ID", "")))
         self.public_chat_id = self.group_id or self.channel_id
         self.cooldown_hours = 4
         self.last_sent: Dict[str, datetime] = {}
@@ -242,7 +243,12 @@ class TelegramNotifier:
         # yerine 1 mesaj). Bütçe DM'den ayrıdır: grup için saatte/günde sınır.
         self._public_kuyruk: List[dict] = []
         self._public_alert_markers: Dict[str, str] = {}
-        self._public_lck = threading.Lock()
+        self._public_lck = threading.RLock()
+        # Aynı public kuyruğunu iki işçi eşzamanlı boşaltmasın; teyit/iptal
+        # kararı da uçuş halindeki gönderimin sonucunu beklesin.
+        self._public_flush_lck = threading.RLock()
+        self._public_send_lck = threading.RLock()
+        self._public_persist_lck = threading.Lock()
         self._public_saatlik: List[datetime] = []
         self._public_gun_sayac = 0
         self._public_gun = datetime.now(ISTANBUL_TZ).date()
@@ -251,13 +257,20 @@ class TelegramNotifier:
         self.public_max_gunluk = PUBLIC_MAX_MESAJ_GUN
         self.public_min_aralik_sn = PUBLIC_MIN_ARALIK_SN
         self.public_kuyruk_limit = 40
-        # Public kare defteri: {olay anahtarı: grafik_verisi}. Kuyruk kaydına
-        # GİRMEZ (dosya yolu/PIL nesnesi JSON'a yazılmaz); yeniden başlatmada
-        # kare kaybolur, metin kalır — görsel metnin eki, sahibi değil.
+        # Public kare defteri: {olay anahtarı: grafik_verisi}. Kuyruktaki
+        # JSON'a çevrilebilir snapshot da yerelde saklanır; restart sonrası
+        # bekleyen metnin görseli sessizce kaybolmaz.
         self._public_grafik: Dict[str, dict] = {}
         self.public_gonderilen = 0
         self.public_hatasi = 0
         self.public_engel = 0
+        self._son_public_deneme = "bilinmiyor"  # yalnız _public_send_lck altında kullanılır
+        # Süreç ömrü boyunca kuyruk denemelerinin (tekil olay sayısı değildir)
+        # red nedenleri: kanalın DM'den ayrışması /durum'da sessiz kalmasın.
+        self.public_filtre_sayac = {
+            "hedef_yok": 0, "state": 0, "kalite": 0, "devamlilik": 0,
+            "tekrar": 0, "teyit_yok": 0, "kuyruk_dolu": 0, "hata": 0,
+        }
         self.public_kuyruk_tasmasi = 0
         self.son_public_gonderim = None
         # Public görsel sayaçları: metinden AYRI. Eski kod `yol` alanı olmayan
@@ -266,6 +279,15 @@ class TelegramNotifier:
         self.public_grafik_hatasi = 0
 
         self.public_enabled = bool(self.token and self.public_chat_id)
+        # Özel Stabil/domain olayları public bütçeye takılsa da DM başarısı
+        # public teslimini yanlışlıkla tamamlanmış saymasın.
+        from public_aux_outbox import PublicAuxOutbox
+        from private_aux_outbox import PrivateAuxOutbox
+        from public_target_review import PublicTargetReview
+        self._public_aux = PublicAuxOutbox(self, _pkg.DATA_DIR)
+        self._dm_aux = PrivateAuxOutbox(self, _pkg.DATA_DIR)
+        self._public_target_review = PublicTargetReview(_pkg.DATA_DIR)
+        self._public_state_writable = True
         # GÖREV 6 (A10): Telegram sayaç ayrımı — alert/watch/digest/command
         # Mevcut alert/watch/digest/command ayrımını bozmayacak şekilde eklenir.
         # send_text() içeriğine göre kategorize edilir; mevcut çağrı noktaları değişmeden çalışır.
@@ -295,6 +317,23 @@ class TelegramNotifier:
                 logger.warning("Telegram token biçimi uygun değil (beklenen 123456789:AA...). Kontrol et.")
             self.enabled = True
             logger.info("Telegram notifier aktif - insanlaştırma V2 + kanal")
+        if self.token and not self.public_chat_id:
+            logger.warning("Public hedef tanımlı değil: DM çalışsa da kanal/grup bildirimi gönderilmez")
+        if self.group_id and self.channel_id and self.group_id != self.channel_id:
+            logger.warning("İki public hedef tanımlı: TELEGRAM_GROUP_ID öncelikli, "
+                           "TELEGRAM_CHANNEL_ID kullanılmaz")
+        if self.public_enabled:
+            eksik = sorted(CONFIRMED_PUBLIC_STATES - self.public_states)
+            if eksik:
+                logger.warning("Public state filtresi bu bildirimleri kapatıyor: %s", ", ".join(eksik))
+            if self.public_max_saatlik < self.max_saatlik or self.public_max_gunluk < self.max_gunluk:
+                logger.warning("Public metin bütçesi DM'den düşük: saat %d/%d, gün %d/%d; "
+                               "kanal gecikebilir veya eksik kalabilir",
+                               self.public_max_saatlik, self.max_saatlik,
+                               self.public_max_gunluk, self.max_gunluk)
+            if self.public_min_quality > 0:
+                logger.info("Public ek kalite tabanı %.1f; bazı DM olayları kanaldan elenebilir",
+                            self.public_min_quality)
 
     def _gonderim_sagligi_kaydet(self, basari: bool, hata: str = "") -> None:
         """Son başarılı/başarısız gönderimi işaretle (heartbeat ve /durum okur).
@@ -307,7 +346,8 @@ class TelegramNotifier:
             self.son_basarili_gonderim = datetime.now(ISTANBUL_TZ).isoformat()
         else:
             self.gonderim_hatasi += 1
-            self.son_gonderme_hatasi = str(hata or "bilinmeyen hata")[:200]
+            self.son_gonderme_hatasi = redact_sensitive_text(
+                hata or "bilinmeyen hata", getattr(self, "token", ""))[:200]
 
     def send_text(self, text: str, deneme: int = 2):
         """Düz metin gönderir (özet, komut yanıtı, /test).
@@ -365,8 +405,9 @@ class TelegramNotifier:
                     break  # kalıcı hata: tekrar denemek anlamsız
                 logger.warning(f"Telegram gönderimi başarısız (deneme {i + 1}/{deneme}): HTTP {resp.status_code}")
             except Exception as e:
-                son_hata = f"istek hatasi: {e}"[:200]
-                logger.warning(f"Telegram gönderim hatası (deneme {i + 1}/{deneme}): {e}")
+                son_hata = redact_sensitive_text(f"istek hatasi: {e}", self.token)[:200]
+                logger.warning("Telegram gönderim hatası (deneme %s/%s): %s",
+                               i + 1, deneme, son_hata)
             if i + 1 < deneme and self.retry_bekleme_sn > 0:
                 time.sleep(self.retry_bekleme_sn)
         self._gonderim_sagligi_kaydet(basari=False, hata=son_hata)
@@ -389,7 +430,8 @@ class TelegramNotifier:
             logger.error("Telegram token/chat_id reddedildi: HTTP %s %s | %s",
                          resp.status_code, redact_sensitive_text(resp.text, self.token)[:200], ipucu)
         except Exception as e:
-            logger.error(f"Telegram bağlantı hatası (token yanlış olabilir): {e}")
+            logger.error("Telegram bağlantı hatası (token yanlış olabilir): %s",
+                         redact_sensitive_text(e, self.token))
         return False
 
     def check_public_connection(self) -> Dict:
@@ -403,7 +445,7 @@ class TelegramNotifier:
         botu durdurmaz, hata alanına yazılır).
         """
         bilgi: Dict = {"hedef": self.public_chat_id, "baslik": None, "tip": None,
-                       "yonetici": None, "can_post": None, "hata": ""}
+                       "yonetici": None, "can_post": None, "can_send_photos": None, "hata": ""}
         if not self.public_enabled:
             bilgi["hata"] = "public hedef tanımlı değil"
             self.public_hedef_bilgi = bilgi
@@ -433,65 +475,67 @@ class TelegramNotifier:
             uye, _ = _cagri("getChatMember", chat_id=self.public_chat_id,
                             user_id=(ben or {}).get("id"))
             durum = str((uye or {}).get("status") or "")
-            bilgi["yonetici"] = durum in ("administrator", "creator")
-            # Kanallarda 'can_post_messages' alanı; gruplarda yokluğu "serbest" demek.
-            bilgi["can_post"] = bool((uye or {}).get("can_post_messages")) or (
-                bilgi["tip"] != "channel" and bilgi["yonetici"])
-            if bilgi["tip"] == "channel" and not bilgi["can_post"]:
-                logger.error(
-                    "❌ Public hedef '%s' bir KANAL ve bot yönetici değil ya da 'Mesaj "
-                    "gönderme' izni kapalı. Kanal → Yöneticiler → bot → Mesaj gönderme.",
-                    bilgi["baslik"])
+            bilgi["yonetici"] = durum in ("administrator", "creator") if durum else None
+            if bilgi["tip"] == "channel" and durum:
+                bilgi["can_post"] = durum == "creator" or bool((uye or {}).get("can_post_messages"))
+                bilgi["can_send_photos"] = bilgi["can_post"]
+            elif bilgi["tip"] in ("group", "supergroup") and durum:
+                if bilgi["yonetici"]:
+                    bilgi["can_post"] = bilgi["can_send_photos"] = True
+                elif durum in ("left", "kicked") or (durum == "restricted" and not uye.get("is_member", True)):
+                    bilgi["can_post"] = bilgi["can_send_photos"] = False
+                else:
+                    # Normal üye için grup varsayılanları; kısıtlı üye için
+                    # doğrudan üyelik izinleri. Eksik bilgi bilinmiyor kalır.
+                    izinler = uye if durum == "restricted" else sohbet.get("permissions")
+                    if isinstance(izinler, dict):
+                        for alan, anahtar in (("can_post", "can_send_messages"),
+                                              ("can_send_photos", "can_send_photos")):
+                            deger = izinler.get(anahtar)
+                            bilgi[alan] = deger if isinstance(deger, bool) else None
+            if bilgi["can_post"] is False or bilgi["can_send_photos"] is False:
+                logger.warning("Public hedef '%s' (%s): metin izni=%s, fotoğraf izni=%s; "
+                               "üyelik ve grup/kanal izinlerini kontrol edin",
+                               bilgi["baslik"], bilgi["tip"], bilgi["can_post"], bilgi["can_send_photos"])
             else:
-                logger.info("✅ Public hedef doğrulandı: %s (%s) · yönetici=%s · mesaj gönderme=%s",
-                            bilgi["baslik"], bilgi["tip"], bilgi["yonetici"], bilgi["can_post"])
+                logger.info("Public hedef görüldü: %s (%s) · yönetici=%s · metin=%s · fotoğraf=%s "
+                            "(None: doğrulanamadı)", bilgi["baslik"], bilgi["tip"],
+                            bilgi["yonetici"], bilgi["can_post"], bilgi["can_send_photos"])
         except Exception as exc:  # noqa: BLE001 - ağ hatası botu durdurmaz
-            bilgi["hata"] = f"{type(exc).__name__}: {exc}"
+            bilgi["hata"] = redact_sensitive_text(f"{type(exc).__name__}: {exc}", self.token)[:200]
             logger.warning("Public hedef doğrulanamadı (ağ): %s", bilgi["hata"])
         self.public_hedef_bilgi = bilgi
         return bilgi
 
-    def should_send_to_public(self, data: Dict) -> bool:
-        """Public kanala gönderilsin mi? (DM'den bağımsız filtre)
-
-        Kural bugün iki koşula bakar: state `PUBLIC_STATES` içinde olacak ve
-        kalite `PUBLIC_MIN_QUALITY` üstünde olacak.
-
-        NOT: Eskiden burada `SIKISMA_GUCLENIYOR` için "daralma >= eşik ise
-        gönderilebilir" gibi görünen bir dal vardı ama iki yolda da `False`
-        dönüyordu (ölü kod). Kanal davranışı KİMSENİN onayı olmadan
-        değiştirilmesin diye dal kaldırıldı: sıkışma adaylarını kanalda görmek
-        istersen `PUBLIC_STATES` env'ine `SIKISMA_GUCLENIYOR` ekle (günlük
-        özetteki daralma eşiği `PUBLIC_SIKISMA_MIN_CONTRACTION` ayrıca geçerli).
-        """
+    def _public_filtre_nedeni(self, data: Dict) -> str | None:
+        """Saf public filtresi: None uygundur; diğer sonuçlar teşhis nedenidir."""
         state = data.get('state', '')
         quality = data.get('confidence_score', 0)
         if state not in CONFIRMED_PUBLIC_STATES or state not in self.public_states:
-            return False
-        # GERİ ALMA KALİTE KAPISINA TAKILMAZ (2026-10-22): teyit eşiği geçmiş bir
-        # olayın "geçersizleşti" mesajı, formasyonun kalitesi sonradan eşiğin
-        # altına indi diye düşürülüyordu → grupta sinyal sonsuza kadar "geçerli"
-        # kalıyordu. Kalite kapısı yalnız YENİ iddialar (teyit/retest) içindir.
+            return "state"
+        # Önceden duyurulmuş teyidin iptali kalite/puan kapısına takılmaz;
+        # teyidin gerçekten kanala gidip gitmediği ayrıca kuyrukta kontrol edilir.
         if state == "KIRILIM_GECERSIZLESTI":
-            return True
-        # 2026-10-25: hacim musluğu artık devamlılık puanı. `PUBLIC_MIN_DEVLAMLILIK`
-        # 0 iken davranış eskisiyle birebir aynı; >0 verilirse ek eleme puanla.
-        # Geri alma ("geçersizleşti") bu kapıya takılmaz — yukarıda muaf.
+            return None
         if PUBLIC_MIN_DEVLAMLILIK > 0:
-            _p = devamlilik_puani(data)
-            if _p is None or _p < PUBLIC_MIN_DEVLAMLILIK:
-                return False
+            puan = devamlilik_puani(data)
+            if puan is None or puan < PUBLIC_MIN_DEVLAMLILIK:
+                return "devamlilik"
         try:
             q = float(quality or 0)
         except (TypeError, ValueError):
-            return False
+            return "kalite"
         tf = str(data.get('timeframe') or '').lower()
         esik = self.public_min_quality_tf.get(tf, ALERT_MIN_QUALITY_GLOBAL)
         try:
             esik = max(float(esik), float(self.public_min_quality or 0))
         except (TypeError, ValueError):
             pass
-        return q >= esik
+        return None if q >= esik else "kalite"
+
+    def should_send_to_public(self, data: Dict) -> bool:
+        """DM'den bağımsız state, devamlılık ve TF kalite politikasını uygular."""
+        return self._public_filtre_nedeni(data) is None
 
     # --- PUBLIC (grup) gönderim yolu ------------------------------------
     # DM yolundan tamamen bağımsızdır: kendi bütçesi, kendi sayaçları, kendi
@@ -535,7 +579,28 @@ class TelegramNotifier:
             logger.debug("Public günlük durum okunamadı: %s", hata)
             return
         public = veri.get("public") or {}
-        if not isinstance(public, dict):
+        if not isinstance(public, dict) or not self.public_chat_id:
+            return
+        from public_target_review import target_key
+        eski_hedef = public.get("target")
+        anlamli = bool(public.get("kuyruk") or public.get("alert_muhurlari")
+                       or public.get("gun_sayac") or public.get("saatlik_ts"))
+        if anlamli and target_key(eski_hedef) != target_key(self.public_chat_id):
+            # Eski sürümde hedef saklanmıyordu. Kaynağı belirsiz kuyruğu veya
+            # başka gruba ait mühürleri yeni hedefe körlemesine taşımak güvenli
+            # değildir. Önce yerel arşive al, başarısızsa eski state'e dokunma.
+            if not self._public_target_review.archive(public, self.public_chat_id):
+                self._public_state_writable = False
+                self.public_enabled = False
+                logger.error("Public hedef geçmişi korunamadı; eski state üzerine yazılmadı, "
+                             "public gönderim durduruldu")
+                return
+            logger.warning("Public hedef değişmiş veya eski hedef bilinmiyor; "
+                           "eski kuyruk ve mühürler otomatik taşınmadan arşivlendi")
+            if not self._public_durum_kaydet():
+                self._public_state_writable = False
+                self.public_enabled = False
+                logger.error("Yeni public hedef state'i yazılamadı; public gönderim durduruldu")
             return
         raw_markers = public.get("alert_muhurlari")
         if isinstance(raw_markers, dict):
@@ -551,7 +616,7 @@ class TelegramNotifier:
         saatlik = []
         for damga in list(public.get("saatlik_ts") or []):
             try:
-                saatlik.append(datetime.fromisoformat(str(damga)))
+                saatlik.append(_istanbul(datetime.fromisoformat(str(damga))))
             except (TypeError, ValueError):
                 continue
         self._public_saatlik = saatlik
@@ -575,21 +640,32 @@ class TelegramNotifier:
                         self._public_gun_sayac, self.public_max_gunluk,
                         len(self._public_kuyruk))
 
-    def _public_durum_kaydet(self) -> None:
-        """Public bütçe + kuyruğu GÜN damgalı yazar (I/O hatası gönderimi bozmaz)."""
+    def _public_durum_kaydet(self) -> bool:
+        """Public bütçe + kuyruğu GÜN damgalı yazar; başarısızlık False döner."""
+        if not self._public_state_writable:
+            return False
         try:
-            with self._public_lck:
-                self._public_alert_muhurlerini_temizle()
-                kuyruk = [dict(k) for k in self._public_kuyruk]
-                markers = dict(self._public_alert_markers)
-            _state_persistence.gunluk_durum_guncelle({"public": {
-                "gun_sayac": self._public_gun_sayac,
-                "saatlik_ts": [t.isoformat() for t in self._public_saatlik],
-                "kuyruk": kuyruk,
-                "alert_muhurlari": markers,
-            }})
+            # Snapshot + yazım sıralı olmalı: eski snapshot daha yeni bir
+            # kuyruğun ardından diske yazılıp onu silemez.
+            with self._public_persist_lck:
+                with self._public_lck:
+                    self._public_alert_muhurlerini_temizle()
+                    kuyruk = [dict(k) for k in self._public_kuyruk]
+                    markers = dict(self._public_alert_markers)
+                sonuc = _state_persistence.gunluk_durum_guncelle({"public": {
+                    "target": self.public_chat_id,
+                    "gun_sayac": self._public_gun_sayac,
+                    "saatlik_ts": [t.isoformat() for t in self._public_saatlik],
+                    "kuyruk": kuyruk,
+                    "alert_muhurlari": markers,
+                }})
+                if sonuc is False:
+                    logger.warning("Public günlük durum yazılamadı")
+                    return False
+                return True
         except Exception as hata:  # noqa: BLE001
-            logger.debug("Public günlük durum yazılamadı: %s", hata)
+            logger.warning("Public günlük durum yazılamadı: %s", type(hata).__name__)
+            return False
 
     def _public_gun_sifirla_gerekirse(self, simdi: datetime) -> None:
         if simdi.date() != self._public_gun:
@@ -623,11 +699,19 @@ class TelegramNotifier:
             time.sleep(min(bekle, 5.0))
 
     def send_to_public(self, text: str, deneme: int = 1) -> bool:
+        # Check budget, pace, send and account as one operation for all callers.
+        with self._public_send_lck:
+            return self._send_to_public(text, deneme)
+
+    def _send_to_public(self, text: str, deneme: int = 1) -> bool:
         """Grup/kanal hedefine gönderir: bütçe + pacing + 429 retry + kırpma."""
+        self._son_public_deneme = "belirsiz"
         if not self.public_enabled:
+            self._son_public_deneme = "hedef_yok"
             logger.info(f"[MOCK PUBLIC] {text[:120]}")
             return True
         if not self._public_kap_gec():
+            self._son_public_deneme = "butce"
             self.public_engel += 1
             logger.warning("Public bütçe dolu (saatlik %d / günlük %d) - gönderim atlandı",
                            self.public_max_saatlik, self.public_max_gunluk)
@@ -643,6 +727,7 @@ class TelegramNotifier:
                     timeout=15,
                 )
                 if resp.status_code == 200:
+                    self._son_public_deneme = "gonderildi"
                     self._son_public_ts = time.monotonic()
                     self._public_saatlik.append(datetime.now(ISTANBUL_TZ))
                     self._public_gun_sayac += 1
@@ -660,6 +745,11 @@ class TelegramNotifier:
                     logger.warning("Public 429: %.0f sn sonra tekrar denenecek", bekle)
                     time.sleep(max(0.0, min(bekle, 20.0)))
                     continue
+                # Telegram'ın kesin 4xx reddi tekrarlanabilir; 5xx/bağlantı
+                # kesintisinde sunucu kabul etmiş olabilir, sonuç belirsizdir.
+                self._son_public_deneme = (
+                    "reddedildi" if 400 <= resp.status_code < 500 else "belirsiz"
+                )
                 ipucu = telegram_hata_ipucu(resp.status_code,
                                                  redact_sensitive_text(resp.text, self.token))
                 logger.error("Telegram public hata: %s | %s",
@@ -669,14 +759,31 @@ class TelegramNotifier:
             self._gonderim_sagligi_kaydet(basari=False, hata="public: gönderim başarısız")
             return False
         except Exception as e:
-            logger.error("Telegram public gönderim hatası: %s", e)
+            guvenli_hata = redact_sensitive_text(e, self.token)
+            logger.error("Telegram public gönderim hatası: %s", guvenli_hata)
             self.public_hatasi += 1
-            self._gonderim_sagligi_kaydet(basari=False, hata=f"public: {e}")
+            self._gonderim_sagligi_kaydet(basari=False, hata=f"public: {guvenli_hata}")
             return False
 
     def send_to_channel(self, text: str) -> bool:
         """Geriye dönük ad: eski kanal çağrıları artık public yola düşer."""
         return self.send_to_public(text)
+
+    def public_ozel_gonder(self, event_id: str, text: str, *, identity=None, graphics=None):
+        """Özel alarm public metin/görselini yerel kuyruğa al: (kabul, metin gitti)."""
+        return self._public_aux.submit(event_id, text, identity=identity, graphics=graphics)
+
+    def public_ozel_bosalt(self) -> int:
+        """Bütçe veya kesin ret sonrası bekleyen özel public alarmları dene."""
+        return self._public_aux.flush()
+
+    def dm_ozel_gonder(self, event_id: str, text: str, *, identity=None, graphics=None):
+        """Özel alarm DM metin/görselini bağımsız kuyruğa al: (kabul, metin gitti)."""
+        return self._dm_aux.submit(event_id, text, identity=identity, graphics=graphics)
+
+    def dm_ozel_bosalt(self) -> int:
+        """Kesin DM reddinde bekleyen özel alarmları yeniden dene."""
+        return self._dm_aux.flush()
 
     def send_to_chat(self, text: str, chat_id=None, deneme: int = 1) -> bool:
         """Metni AÇIKÇA verilen sohbete gönderir (`/grafik` grup sonucu).
@@ -723,29 +830,35 @@ class TelegramNotifier:
         self.public_hatasi += 1
         return False
 
+    def _public_reddi_say(self, neden: str) -> None:
+        with self._public_lck:
+            self.public_filtre_sayac[neden] = self.public_filtre_sayac.get(neden, 0) + 1
+
     def public_kuyruk(self, data: Dict) -> bool:
         """Uygun olayı public kuyruğa alır (gönderim tarama turu sonunda)."""
-        # Kare verisi payload'dan ERKEN alınır: DM teslim kuyruğu (`DeliveryOutbox`)
-        # aynı sözlüğü diske yazıyor; public'e ait kare listesi orada kalırsa
-        # her alarm için onlarca KB kare verisi 7 gün boyunca saklanırdı. Kare
-        # yalnız burada, bellekteki `_public_grafik` defterinde yaşar.
+        # Public karesi DM teslim defterine kopyalanmaz. Yalnız public'in
+        # bekleyen kuyruk kaydında ve bellekte yaşar, teslimde kaldırılır.
         grafik_verisi = data.pop("grafik_verisi_public", None) \
             if isinstance(data, dict) else None
         if not self.public_enabled:
+            self._public_reddi_say("hedef_yok")
             return False
         try:
             if not self.should_send_to_public(data):
+                self._public_reddi_say(self._public_filtre_nedeni(data) or "hata")
                 return False
         except Exception as exc:  # noqa: BLE001 - kuyruk hatası taramayı durdurmasın
-            logger.debug("Public filtre hatası: %s", exc)
+            self._public_reddi_say("hata")
+            logger.warning("Public filtre hatası: %s", type(exc).__name__)
             return False
         if self._delivery.public_duplicate(data):
+            self._public_reddi_say("tekrar")
             return False
         # Grup mesajı DM kartının BİREBİR aynısıdır (2026-10-22, akşam):
         # kartın okuduğu HER alan kuyruk kaydına kopyalanır; biri eksik olursa
         # metin DM'den sessizce ayrışır (`close_price` bu yüzden eklendi).
         # Yalnız JSON'a yazılabilir değerler girer (zaman damgaları ISO metne
-        # çevrilir); kare dosyaları `_public_grafik` defterinde ayrı tutulur.
+        # çevrilir); kare snapshot'ı yalnız bekleyen public kaydında saklanır.
         kayit = {k: data.get(k) for k in (
             "stock_name", "timeframe", "pattern_name", "state", "confidence_score",
             "critical_price_level", "break_price", "break_dir", "contraction", "bar_metni",
@@ -789,7 +902,9 @@ class TelegramNotifier:
             onek = "%s|%s|KIRILIM_TEYITLI|" % (
                 str(kayit.get("stock_name") or "").strip().upper(),
                 str(kayit.get("timeframe") or "").strip().lower())
-            with self._public_lck:
+            # Bir teyit o anda gönderiliyorsa "henüz gönderilmedi" diye
+            # iptal edilmesi, grupta geri alınmamış yanlış sinyal bırakır.
+            with self._public_flush_lck, self._public_lck:
                 # TEYİT HÂLÂ KUYRUKTAYSA (henüz gruba gitmedi): ikisi de düşer.
                 # Eskiden yalnız gönderilmiş mühürler aranıyordu; ağ/bütçe hatası
                 # yüzünden kuyrukta bekleyen teyit + hemen ardından gelen
@@ -815,42 +930,53 @@ class TelegramNotifier:
                         or any(str(k).startswith(onek) for k in self._public_alert_markers)
                     )
             if kuyruk_degisti:
+                self._public_reddi_say("teyit_yok")
+                self._public_grafik_buda()
                 self._public_durum_kaydet()
                 logger.info("Public: teyit henüz gönderilmemişti (%s); teyit ve "
                             "geçersizleşme birlikte düşürüldü", onek.rstrip("|"))
                 return False
             if not gonderilmis:
+                self._public_reddi_say("teyit_yok")
                 logger.info("Public geçersizleşme atlandı (%s): önceki teyitli mesaj bu "
                             "kanala gönderilmemiş", onek.rstrip("|"))
                 return False
+        grafik_snapshot = None
+        veri = grafik_verisi
+        if isinstance(veri, dict) and veri.get("goruntular"):
+            try:
+                from notification_delivery import snapshot_to_json
+                grafik_snapshot = snapshot_to_json(veri)
+            except (TypeError, ValueError, OverflowError) as hata:
+                # Metin kaybolmasın; görselin yeniden başlatmada korunamadığı
+                # sessiz bırakılmaz. Aynı süreçteki görsel yine denenir.
+                logger.warning("Public kare snapshot'ı kalıcılaştırılamadı: %s", type(hata).__name__)
         with self._public_lck:
             self._public_alert_muhurlerini_temizle()
             if event_key and event_key in self._public_alert_markers:
+                self._public_reddi_say("tekrar")
                 return False
             for queued in self._public_kuyruk:
                 if event_key:
                     if self._public_event_key(queued) == event_key:
+                        self._public_reddi_say("tekrar")
                         return False
                 elif (str(queued.get("stock_name") or "").upper(),
                       str(queued.get("timeframe") or "").lower(),
                       str(queued.get("state") or "").strip().upper()) == anahtar:
+                    self._public_reddi_say("tekrar")
                     return False
             if len(self._public_kuyruk) >= self.public_kuyruk_limit:
+                self._public_reddi_say("kuyruk_dolu")
                 self.public_kuyruk_tasmasi += 1
                 logger.warning("Public kuyruk dolu (%d) - olay atıldı: %s",
                                self.public_kuyruk_limit, anahtar)
                 return False
+            if grafik_snapshot is not None:
+                kayit["_public_grafik_snapshot"] = grafik_snapshot
             self._public_kuyruk.append(kayit)
-        veri = grafik_verisi
-        if isinstance(veri, dict) and veri.get("goruntular"):
-            # Kapasite: kare verisi yalnız kuyruktaki olaylar için tutulur;
-            # tavan aşılırsa en eski kayıt düşer (kare, metnin eki — sahibi değil).
-            if len(self._public_grafik) >= max(2 * self.public_kuyruk_limit, 40):
-                self._public_grafik_buda()
-                if len(self._public_grafik) >= max(2 * self.public_kuyruk_limit, 40):
-                    for eski in list(self._public_grafik)[:len(self._public_grafik) // 2]:
-                        self._public_grafik.pop(eski, None)
-            self._public_grafik[self._public_kuyruk_anahtari(kayit)] = veri
+            if isinstance(veri, dict) and veri.get("goruntular"):
+                self._public_grafik[self._public_kuyruk_anahtari(kayit)] = veri
         self._public_durum_kaydet()
         self._delivery.remember_public(data)
         return True
@@ -870,12 +996,18 @@ class TelegramNotifier:
 
     def _public_grafik_buda(self) -> None:
         """Kuyrukta karşılığı olmayan kare verisini atar (bellek sızıntısı)."""
-        kalan = {self._public_kuyruk_anahtari(k) for k in self._public_kuyruk}
-        for anahtar in list(self._public_grafik):
-            if anahtar not in kalan:
-                del self._public_grafik[anahtar]
+        with self._public_lck:
+            kalan = {self._public_kuyruk_anahtari(k) for k in self._public_kuyruk}
+            for anahtar in list(self._public_grafik):
+                if anahtar not in kalan:
+                    del self._public_grafik[anahtar]
 
     def public_bosalt(self, azami: int = 12) -> int:
+        """Tek işçiyle kuyruk boşalt; eşzamanlı çağrılar çift yayın üretmesin."""
+        with self._public_flush_lck:
+            return self._public_bosalt(azami)
+
+    def _public_bosalt(self, azami: int = 12) -> int:
         """Kuyruğu gönderir: olay başına BİR mesaj, metin DM kartının aynısı.
 
         Kullanıcı kararı (22 Ekim 2026, akşam): *"Gelişme olmamalı, DM ile aynı
@@ -900,33 +1032,30 @@ class TelegramNotifier:
         if not kuyruk or not self.public_enabled:
             return 0
         gonderilen = 0
-        basarili_kayitlar = []
         for kayit in kuyruk[:max(1, int(azami))]:
             metin = self.format_public_tekil(kayit)
             if not metin:
-                # Biçimlenemeyen kayıt: sessizce düşürmek yerine turu bitir
-                # (kayıt kuyrukta kalır, sonraki turda yeniden denenir).
                 logger.warning("Public mesajı üretilemedi (%s %s); kuyrukta kalıyor",
                                kayit.get("stock_name"), kayit.get("timeframe"))
                 break
             if not self.send_to_public(metin):
-                # Bütçe/ağ engeli: kayıtlar kuyrukta kalır, sonraki turda denenir.
-                break
-            # Metnin HEMEN ardından kare: public görsel = 1 kare + üst TF.
-            # Görsel hatası metni geri almaz; sayaçla raporlanır.
-            self.public_grafik_gonder(kayit)
-            gonderilen += 1
-            basarili_kayitlar.append(kayit)
-        if gonderilen:
-            damga = datetime.now(ISTANBUL_TZ).isoformat()
+                break  # bütçe/ağ engeli: henüz gönderilmeyenler kuyrukta kalır
+            try:
+                self.public_grafik_gonder(kayit)
+            except Exception as hata:  # noqa: BLE001 - görsel hatası metni tekrar bastırmasın
+                self.public_grafik_hatasi += 1
+                logger.warning("Public görsel gönderimi başarısız: %s", type(hata).__name__)
+            # Kuyruk tur sırasında değişebilir. İlk N öğeyi körlemesine kesmek,
+            # yeni eklenmiş bir başka olayı göndermeden silebilirdi.
             with self._public_lck:
-                self._public_kuyruk = self._public_kuyruk[gonderilen:]
-                for kayit in basarili_kayitlar:
-                    event_key = self._public_event_key(kayit)
-                    if event_key:
-                        self._public_alert_markers[event_key] = damga
+                self._public_kuyruk = [k for k in self._public_kuyruk if k is not kayit]
+                event_key = self._public_event_key(kayit)
+                if event_key:
+                    self._public_alert_markers[event_key] = datetime.now(ISTANBUL_TZ).isoformat()
                 self._public_alert_muhurlerini_temizle()
-            self._public_durum_kaydet()
+            self._public_durum_kaydet()  # her başarılı olaydan sonra checkpoint
+            gonderilen += 1
+        if gonderilen:
             logger.info("Public: %d olay, %d ayrı mesaj", gonderilen, gonderilen)
         return gonderilen
 
@@ -1862,9 +1991,23 @@ class TelegramNotifier:
             # Public (grup) hedefi: DM'den bağımsız sayaçlar.
             "public_enabled": self.public_enabled,
             "public_chat_id": self.public_chat_id,
+            "public_hedef_bilgi": dict(self.public_hedef_bilgi),
             "public_gonderilen": self.public_gonderilen,
             "public_hatasi": self.public_hatasi,
             "public_engel": self.public_engel,
+            "public_filtre_sayac": dict(self.public_filtre_sayac),
+            "public_states": sorted(self.public_states),
+            "public_min_quality": self.public_min_quality,
+            "public_min_quality_tf": dict(self.public_min_quality_tf),
+            "public_min_devamlilik": PUBLIC_MIN_DEVLAMLILIK,
+            "public_saatlik": sum(
+                1 for stamp in self._public_saatlik
+                if 0 <= (datetime.now(ISTANBUL_TZ) - _istanbul(stamp)).total_seconds() < 3600
+            ),
+            "public_saatlik_limit": self.public_max_saatlik,
+            "public_gunluk": (self._public_gun_sayac
+                               if self._public_gun == datetime.now(ISTANBUL_TZ).date() else 0),
+            "public_gunluk_limit": self.public_max_gunluk,
             "public_grafik_gonderilen": self.public_grafik_gonderilen,
             "public_grafik_hatasi": self.public_grafik_hatasi,
             # Görsel kuyruğu (§4): metin kotasından bağımsız sayaçlar.
@@ -1881,6 +2024,10 @@ class TelegramNotifier:
             "grafik_ort_ms": (round(self.grafik_toplam_ms / self.grafik_kare_sayisi, 1)
                               if self.grafik_kare_sayisi else 0.0),
             "public_kuyruk": len(self._public_kuyruk),
+            "public_ozel_kuyruk": self._public_aux.status(),
+            "dm_ozel_kuyruk": self._dm_aux.status(),
+            "public_hedef_inceleme": self._public_target_review.status(),
+            "public_state_writable": self._public_state_writable,
             "public_kuyruk_tasmasi": self.public_kuyruk_tasmasi,
             "son_public_gonderim": self.son_public_gonderim,
         }
@@ -2149,16 +2296,6 @@ class TelegramNotifier:
                         stock, pattern, timeframe, state)
             return False
         data["state"] = state
-        if self.enabled and (self._delivery.already_done(data)
-                             or self._delivery.is_cross_duplicate(data)
-                             or self._delivery.is_story_duplicate(data)):
-            # Hikâye tekrarı da kimlik tekrarı gibi NİHAİ reddir (acil
-            # kuyruğa girmez): aynı hisse+yön hikâyesi o gün zaten anlatıldı.
-            self._son_engel = "tekrar"
-            self.engeller["tekrar"] += 1
-            return False
-        if data.get("formation_id") is not None:
-            data["formation_id"] = str(data["formation_id"])
 
         def prepare_context():
             if not callable(before_send):
@@ -2169,6 +2306,19 @@ class TelegramNotifier:
                 data["domain_context"] = ""
                 logger.warning("Bildirim bağlamı hazırlanamadı (%s %s): %s",
                                stock, timeframe, exc)
+
+        if self.enabled and (self._delivery.already_done(data)
+                             or self._delivery.is_cross_duplicate(data)
+                             or self._delivery.is_story_duplicate(data)):
+            # DM'de mühürlü/tekrar olan olayın public tarafı ayrı bağımsızdır.
+            # Eski erken dönüş, kayıp public tarafını kurtarma yoluna hiç
+            # ulaştırmıyordu; public kendi filtresi ve mühürleriyle karar verir.
+            self._public_kurtar(data, prepare_context)
+            self._son_engel = "tekrar"
+            self.engeller["tekrar"] += 1
+            return False
+        if data.get("formation_id") is not None:
+            data["formation_id"] = str(data["formation_id"])
 
         if not self.can_send(
             stock, pattern, timeframe, state, formation_id=data.get("formation_id")
@@ -2352,20 +2502,28 @@ class TelegramNotifier:
         beri albüm gönderir; public artık aynı sözleşmeyi kullanır: ÖNCE
         bütün kareler çizilir, SONRA tek seferde gönderilir. Tek kare
         kalırsa (üst TF yok ya da biri çizilemedi) albüm 2–10 öğe istediği
-        için `sendPhoto`'ya düşülür; albüm reddedilirse kare kaybı olmaması
-        için DM'deki gibi kare kare yeniden denenir.
+        için `sendPhoto`'ya düşülür; yalnız kesin albüm reddinde kareler tek
+        tek denenir. Belirsiz teslimde yinelenmeyi önlemek için tekrar yapılmaz.
         """
         if not isinstance(kayit, dict):
             return 0
         anahtar = self._public_kuyruk_anahtari(kayit)
-        veri = self._public_grafik.pop(anahtar, None)
+        with self._public_lck:
+            veri = self._public_grafik.pop(anahtar, None)
+        if not veri and kayit.get("_public_grafik_snapshot") is not None:
+            try:
+                from notification_delivery import snapshot_from_json
+                veri = snapshot_from_json(kayit["_public_grafik_snapshot"])
+            except (TypeError, ValueError, OverflowError) as hata:
+                self.public_grafik_hatasi += 1
+                logger.warning("Bekleyen public kare snapshot'ı okunamadı: %s", type(hata).__name__)
         if not veri:
             return 0
         hedef = str(getattr(self, "public_chat_id", "") or "").strip()
         if not hedef or not getattr(self, "public_enabled", False):
             return 0
         try:
-            from transport.telegram import foto_gonder, medya_grubu_gonder
+            from transport.telegram import foto_gonder, medya_grubu_gonder, medya_kesin_reddedildi
         except Exception:  # pragma: no cover - taşıma yoksa görsel de yok
             return 0
         tf = TF_KISA.get(str(kayit.get("timeframe") or "").lower(),
@@ -2434,12 +2592,18 @@ class TelegramNotifier:
                     gonderilen = len(paketler)
                     self.public_grafik_gonderilen += len(paketler)
                     self.grafik_gonderilen += len(paketler)
-                else:
-                    logger.warning(
-                        "public albümü gönderilemedi, kare kare deneniyor: %s",
-                        redact_sensitive_text(str(aciklama), self.token)[:160])
+                elif medya_kesin_reddedildi(aciklama):
+                    logger.warning("public albümü reddedildi, kare kare deneniyor: %s",
+                                   redact_sensitive_text(str(aciklama), self.token)[:160])
                     for yol, caption in paketler:
                         gonderilen += 1 if _tek_gonder(yol, caption) else 0
+                else:
+                    # Timeout/5xx sonrasında albüm aslında ulaşmış olabilir.
+                    # Hemen tekillere düşmek aynı görselleri iki kez basar.
+                    self.public_grafik_hatasi += len(paketler)
+                    self.grafik_atlanan_hata += len(paketler)
+                    logger.warning("public albüm teslimi belirsiz; tekil tekrar yapılmadı: %s",
+                                   redact_sensitive_text(str(aciklama), self.token)[:160])
         finally:
             for yol, _c in paketler:
                 try:
@@ -2620,9 +2784,9 @@ class TelegramNotifier:
         """`[(yol, caption)]` → kare başına başarı listesi; geçici dosyaları SİLER.
 
         Tek kare → `sendPhoto` (`grafik_dosya_gonder`). 2–10 kare → TEK albüm
-        (`sendMediaGroup`): kareler arasına metin girmez. Albüm reddedilirse kareler
-        tek tek yeniden denenir (kare kaybı olmasın). Her yol, sonuçtan bağımsız
-        olarak bu fonksiyonda silinir (§4).
+        (`sendMediaGroup`): kareler arasına metin girmez. Yalnız kesin albüm
+        reddinde tek tek yeniden denenir; belirsiz teslim tekrar edilmez. Her
+        geçici dosya sonuçtan bağımsız olarak bu fonksiyonda silinir (§4).
         """
         paketler = [(y, c) for y, c in (paketler or []) if y]
         sonuc = [False] * len(paketler)
@@ -2645,7 +2809,7 @@ class TelegramNotifier:
                 ok, aciklama = self.grafik_dosya_gonder(paketler[0][0], caption=paketler[0][1])
                 sonuc[0] = ok
                 return sonuc
-            from transport.telegram import medya_grubu_gonder
+            from transport.telegram import medya_grubu_gonder, medya_kesin_reddedildi
 
             self._grafik_pace()
             ok, aciklama = medya_grubu_gonder(
@@ -2655,9 +2819,14 @@ class TelegramNotifier:
             if ok:
                 self.grafik_gonderilen += len(paketler)
                 return [True] * len(paketler)
-            logger.warning("grafik albümü gönderilemedi, kare kare deneniyor: %s",
+            if not medya_kesin_reddedildi(aciklama):
+                self.grafik_atlanan_hata += len(paketler)
+                logger.warning("grafik albüm teslimi belirsiz; tekil tekrar yapılmadı: %s",
+                               redact_sensitive_text(str(aciklama), self.token)[:160])
+                return sonuc
+            logger.warning("grafik albümü reddedildi, kare kare deneniyor: %s",
                            redact_sensitive_text(str(aciklama), self.token)[:160])
-            # Yedek: albüm reddedildiyse kareleri tek tek dene (kare kaybı olmasın).
+            # Yalnız kesin reddedilen albüm tek tek denenebilir.
             # `grafik_dosya_gonder` dosyayı siler; önce kopya gerekmez, yalnız bir kez denenir.
             for k, (yol, caption) in enumerate(paketler):
                 sonuc[k] = self._tekil_gonder_dosyasiz(yol, caption)
@@ -2674,8 +2843,8 @@ class TelegramNotifier:
 
         `grafik_toplu_gonder` DM'e sabittir (görsel kapısı DM kimliği ister).
         Grup isteğinde kareler o gruba gitmeli; sözleşme aynı: 2–10 kare TEK
-        albüm, tek kare `sendPhoto`, albüm reddedilirse kare kare yeniden
-        deneme, dosyalar her durumda silinir. Hedef DM ya da boşsa doğrudan
+        albüm, tek kare `sendPhoto`; yalnız kesin albüm reddinde tekil yeniden
+        deneme yapılır, dosyalar her durumda silinir. Hedef DM ya da boşsa doğrudan
         `grafik_toplu_gonder`'e devredilir — DM davranışı BİREBİR aynı kalır.
         """
         paketler = [(y, c) for y, c in (paketler or []) if y]
@@ -2687,7 +2856,19 @@ class TelegramNotifier:
         if not hedef or (dm and hedef == dm):
             return self.grafik_toplu_gonder(paketler)
         try:
-            from transport.telegram import foto_gonder, medya_grubu_gonder
+            grup_hedefi = int(hedef) < 0
+        except ValueError:
+            grup_hedefi = False
+        if not grup_hedefi:
+            # Çağıran hatası dosyayı başka bir DM'e/kanala sızdırmasın.
+            for yol, _c in paketler:
+                try:
+                    os.remove(yol)
+                except (OSError, TypeError):
+                    pass
+            return sonuc
+        try:
+            from transport.telegram import foto_gonder, medya_grubu_gonder, medya_kesin_reddedildi
         except Exception:  # pragma: no cover - taşıma yoksa görsel de yok
             for yol, _c in paketler:
                 try:
@@ -2734,7 +2915,13 @@ class TelegramNotifier:
                 self.grafik_gonderilen += len(paketler)
                 self.public_grafik_gonderilen += len(paketler)
                 return [True] * len(paketler)
-            logger.warning("grafik albümü gruba gönderilemedi, kare kare deneniyor: %s",
+            if not medya_kesin_reddedildi(aciklama):
+                self.grafik_atlanan_hata += len(paketler)
+                self.public_grafik_hatasi += len(paketler)
+                logger.warning("grup albüm teslimi belirsiz; tekil tekrar yapılmadı: %s",
+                               redact_sensitive_text(str(aciklama), self.token)[:160])
+                return sonuc
+            logger.warning("grafik albümü grupta reddedildi, kare kare deneniyor: %s",
                            redact_sensitive_text(str(aciklama), self.token)[:160])
             for k, (yol, caption) in enumerate(paketler):
                 sonuc[k] = _tek(yol, caption)
@@ -2859,12 +3046,14 @@ class TelegramNotifier:
             else:
                 ipucu = telegram_hata_ipucu(resp.status_code,
                                                  redact_sensitive_text(resp.text, self.token))
-                logger.error(f"Telegram hatası: {resp.text} | {ipucu}")
+                logger.error("Telegram hatası: %s | %s",
+                             redact_sensitive_text(resp.text, self.token)[:200], ipucu)
                 self._gonderim_sagligi_kaydet(basari=False, hata=ipucu)
                 return False
         except Exception as e:
-            logger.error(f"Telegram gönderim hatası: {e}")
-            self._gonderim_sagligi_kaydet(basari=False, hata=f"istek hatasi: {e}")
+            guvenli_hata = redact_sensitive_text(e, self.token)
+            logger.error("Telegram gönderim hatası: %s", guvenli_hata)
+            self._gonderim_sagligi_kaydet(basari=False, hata=f"istek hatasi: {guvenli_hata}")
             return False
 
 

@@ -674,50 +674,85 @@ def format_domain_alarm_summary_card(cands: Sequence[DomainAlarmCandidate]) -> s
     _satir(blok, "Aynı taramada destek alt sınırını geçen diğer adaylar:")
     bloklar.append(blok)
 
-    blok = []
-    for c in cands[:10]:
-        _satir(
-            blok,
-            f"• {c.symbol} {_tf_etiket(c.timeframe)}: {c.relation} "
-            f"({_tr_sayi(c.dist_atr, 1)} ATR) · {' · '.join(c.reasons[:2])}",
-        )
-    if adet > 10:
-        _satir(blok, f"• … ve {adet - 10} aday daha")
-    bloklar.append(blok)
+    def aday_satirlari(ayrintili: bool) -> list[str]:
+        satirlar: list[str] = []
+        for c in cands[:10]:
+            if ayrintili:
+                metin = (f"• {c.symbol} {_tf_etiket(c.timeframe)}: {c.relation} "
+                         f"({_tr_sayi(c.dist_atr, 1)} ATR) · {' · '.join(c.reasons[:2])}")
+            else:
+                # Önce kimlikleri koru: uzun sebepler satır sınırında kesilip
+                # bazı semboller görünmeden gönderildi diye işaretlenmemeli.
+                metin = f"• {c.symbol} {_tf_etiket(c.timeframe)} · {_tr_sayi(c.dist_atr, 1)} ATR"
+            _satir(satirlar, metin)
+        if adet > 10:
+            _satir(satirlar, f"• … ve {adet - 10} aday daha")
+        _satir(satirlar, "› /stabil")
+        return satirlar
 
-    _satir(bloklar[-1], "› /stabil")
+    bloklar.append(aday_satirlari(True))
     bloklar.append(["• yatırım tavsiyesi değildir"])
-    bloklar = _kart_bloklarini_sigdir(bloklar)
+    if sum(len(b) for b in bloklar) > _KART_MAKS_SATIR:
+        bloklar[-2] = aday_satirlari(False)
+    # Dispatch en fazla 5 adayı sayfaladığı için isimler burada kırpılmaz.
     return "\n\n".join("\n".join(b) for b in bloklar if b)
 
 
-def _deliver_message(notifier: Any, text: str) -> dict[str, bool]:
-    """Ana DM + public hedefe aynı yeni kartı gönder; kanal sonucunu döndür."""
+def _deliver_message(notifier: Any, text: str, *, public_event_id=None,
+                     public_identity=None, public_graphics=None, dm_graphics=None) -> dict[str, bool]:
+    """DM ve public için bağımsız teslim/kuyruk durumunu takip et."""
     dm_on = bool(getattr(config, "YENI_DOMAIN_ALARM_DM", True))
     pub_on = bool(getattr(config, "YENI_DOMAIN_ALARM_PUBLIC", True))
-    dm_ok = False
-    pub_ok = False
+    dm_ok = dm_accepted = pub_ok = pub_accepted = False
+    dm_managed = public_managed = False
+    dm_required = dm_on and notifier is not None and getattr(notifier, "enabled", True) is not False
+    pub_required = pub_on and notifier is not None and getattr(notifier, "public_enabled", True) is not False
 
-    if dm_on and notifier is not None:
+    if dm_required:
         send_text = getattr(notifier, "send_text", None)
-        if callable(send_text):
+        queue_dm = getattr(notifier, "dm_ozel_gonder", None)
+        if public_event_id and callable(queue_dm):
+            dm_managed = True
+            try:
+                dm_accepted, dm_ok = queue_dm(
+                    public_event_id, text, identity=public_identity, graphics=dm_graphics)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Yeni domain DM kuyruğu başarısız: %s", type(exc).__name__)
+        elif callable(send_text):
             try:
                 res = send_text(text)
                 dm_ok = bool(res[0] if isinstance(res, tuple) else res)
+                dm_accepted = dm_ok
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Yeni domain DM gönderim hatası: %s", exc)
+                logger.warning("Yeni domain DM gönderim hatası: %s", type(exc).__name__)
 
     if pub_on and notifier is not None:
         public_acik = getattr(notifier, "public_enabled", None)
         send_pub = getattr(notifier, "send_to_public", None)
-        if public_acik is not False and callable(send_pub):
+        queue_pub = getattr(notifier, "public_ozel_gonder", None)
+        if public_acik is not False and public_event_id and callable(queue_pub):
+            public_managed = True
+            try:
+                pub_accepted, pub_ok = queue_pub(
+                    public_event_id, text, identity=public_identity, graphics=public_graphics)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Yeni domain public kuyruğu başarısız: %s", type(exc).__name__)
+        elif public_acik is not False and callable(send_pub):
             try:
                 pub_ok = bool(send_pub(text))
+                pub_accepted = pub_ok
             except Exception as exc:  # noqa: BLE001
-                pub_ok = False
-                logger.warning("Yeni domain public gönderim hatası: %s", exc)
+                logger.warning("Yeni domain public gönderim hatası: %s", type(exc).__name__)
+        if dm_ok and public_acik is False:
+            logger.warning("Yeni domain DM gitti, public hedef kapalı; kanal kopyası gönderilmedi")
+        elif dm_ok and not (pub_ok or pub_accepted):
+            logger.warning("Yeni domain DM gitti ancak public kopyası saklanamadı/gönderilmedi")
 
-    return {"dm": dm_ok, "public": pub_ok, "any": dm_ok or pub_ok}
+    recorded = ((not dm_required or dm_ok or dm_accepted)
+                and (not pub_required or pub_ok or pub_accepted)
+                and (dm_ok or dm_accepted or pub_ok or pub_accepted))
+    return {"dm": bool(dm_ok), "public": bool(pub_ok), "any": bool(dm_ok or pub_ok),
+            "recorded": bool(recorded), "dm_managed": dm_managed, "public_managed": public_managed}
 
 
 def _deliver_charts(notifier: Any, cand: DomainAlarmCandidate,
@@ -731,14 +766,14 @@ def _deliver_charts(notifier: Any, cand: DomainAlarmCandidate,
         "state": "YENI_DOMAIN",
         "pattern_name": "DOMAİN TETİKLEME",
     }
-    if sonuc.get("dm") and cand.grafik_verisi:
+    if sonuc.get("dm") and not sonuc.get("dm_managed") and cand.grafik_verisi:
         ekle = getattr(notifier, "grafik_kuyruga_ekle", None)
         if callable(ekle):
             try:
                 ekle({**kimlik, "grafik_verisi": cand.grafik_verisi}, gonder=True)
             except Exception as exc:  # noqa: BLE001 - görsel metni düşürmesin
                 logger.warning("Yeni domain DM grafiği kuyruğa alınamadı: %s", exc)
-    if sonuc.get("public") and cand.grafik_verisi_public:
+    if sonuc.get("public") and not sonuc.get("public_managed") and cand.grafik_verisi_public:
         bagla = getattr(notifier, "public_grafik_bagla", None)
         if callable(bagla):
             try:
@@ -770,37 +805,52 @@ def dispatch_domain_alarm_candidates(
     state = _load_state(state_path)
     slots = state.setdefault("slots", {})
     degisti = False
+    # Burst sınırı tekrarlı adaylar çıkarıldıktan sonra uygulanmalı. Aksi halde
+    # önceki turda gönderilmiş iki yüksek puanlı aday, yeni iki olayı tekil kart
+    # ve görsel yerine gereksizce toplu özete itiyordu.
+    yeni_adaylar = [c for c in sirali if not _zaten_gonderildi(slots.get(c.dedup_key), c)]
+    ozet["filtrelendi"] += len(sirali) - len(yeni_adaylar)
 
     ust_sinir = _cfg_int("YENI_DOMAIN_ALARM_TEKIL_UST_SINIR", 3)
-    if len(sirali) <= ust_sinir:
-        tekil_liste = list(sirali)
+    if len(yeni_adaylar) <= ust_sinir:
+        tekil_liste = list(yeni_adaylar)
         toplu_liste: list[DomainAlarmCandidate] = []
     else:
-        tekil_liste = list(sirali[:2])
-        toplu_liste = list(sirali[2:])
+        tekil_liste = list(yeni_adaylar[:2])
+        toplu_liste = list(yeni_adaylar[2:])
+
+    from public_aux_outbox import auxiliary_event_id
 
     gonderilen: list[DomainAlarmCandidate] = []
     for cand in tekil_liste:
-        if _zaten_gonderildi(slots.get(cand.dedup_key), cand):
-            ozet["filtrelendi"] += 1
-            continue
-        sonuc = _deliver_message(notifier, format_domain_alarm_card(cand))
+        identity = {"stock_name": cand.symbol, "timeframe": cand.timeframe,
+                    "state": "YENI_DOMAIN", "pattern_name": "DOMAİN TETİKLEME"}
+        sonuc = _deliver_message(
+            notifier, format_domain_alarm_card(cand),
+            public_event_id=auxiliary_event_id("domain", [(cand.symbol, cand.timeframe, cand.bar_open)]),
+            public_identity=identity, public_graphics=cand.grafik_verisi_public,
+            dm_graphics=cand.grafik_verisi,
+        )
         if sonuc["any"]:
             _deliver_charts(notifier, cand, sonuc)
             ozet["tekil_gonderilen"] += 1
+        if sonuc["recorded"]:
+            # Public bütçe nedeniyle bekliyorsa da ayrı, kalıcı kuyruk vardır.
             gonderilen.append(cand)
 
-    if toplu_liste:
-        yeni_toplu = [
-            c for c in toplu_liste
-            if not _zaten_gonderildi(slots.get(c.dedup_key), c)
-        ]
-        ozet["filtrelendi"] += len(toplu_liste) - len(yeni_toplu)
-        if yeni_toplu and _deliver_message(
-            notifier, format_domain_alarm_summary_card(yeni_toplu)
-        )["any"]:
-            ozet["toplu_ozet"] = 1
-            gonderilen.extend(yeni_toplu)
+    # Bir kartın satır tavanına sığmayan adaylar sessizce kaybolmasın;
+    # her sayfa yalnız içinde listelenen semboller için teslim mührü alır.
+    for baslangic in range(0, len(toplu_liste), 5):
+        sayfa = toplu_liste[baslangic:baslangic + 5]
+        sonuc = _deliver_message(
+            notifier, format_domain_alarm_summary_card(sayfa),
+            public_event_id=auxiliary_event_id(
+                "domain-summary", [(c.symbol, c.timeframe, c.bar_open) for c in sayfa]),
+        )
+        if sonuc["any"]:
+            ozet["toplu_ozet"] += 1
+        if sonuc["recorded"]:
+            gonderilen.extend(sayfa)
 
     for cand in gonderilen:
         _isaretle(slots, cand)

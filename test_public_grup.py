@@ -74,6 +74,20 @@ def test_public_hedef_dm_olmadan_calisir(monkeypatch, grup_notifier):
     assert sahte.cagrilar[0][1]["chat_id"] == "-1001234567890"
 
 
+@pytest.mark.parametrize("grup", ["https://t.me/FormationBot1", "@FormationBot1", "FormationBot1"])
+def test_public_grup_linki_telegram_api_kimligine_doner(monkeypatch, grup):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123456789:" + "A" * 30)
+    monkeypatch.setenv("TELEGRAM_GROUP_ID", grup)
+    monkeypatch.setenv("TELEGRAM_CHANNEL_ID", "@EskiKanal")
+    n = notifier_mod.TelegramNotifier()
+    n.public_min_aralik_sn = 0
+    sahte = _SahteRequests()
+    monkeypatch.setitem(sys.modules, "requests", sahte)
+    assert n.send_to_public("deneme") is True
+    assert n.public_chat_id == "@FormationBot1"
+    assert sahte.cagrilar[0][1]["chat_id"] == "@FormationBot1"
+
+
 def test_public_hedef_yoksa_mock_modda_kirilmaz(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123456789:" + "A" * 30)
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
@@ -328,9 +342,13 @@ def test_grup_sohbetinde_komut_calisir():
 
     session = SahteSession()
     dinleyici = tc.TelegramCommandListener(
-        token="111:AAA", allowed_chat_id="-1001234567890",
-        handlers={"durum": lambda _a: "durum cevabi"}, help_text="YARDIM", session=session)
-    cevap = dinleyici.handle_update(_grup_guncellemesi(2, "/durum"))
+        token="111:AAA", allowed_chat_id="",
+        handlers={"durum": lambda _a: "durum cevabi"}, help_text="YARDIM", session=session,
+        public_chat_ids=["-1001234567890"], public_commands=["durum"],
+        admin_checker=lambda _chat, _user: True)
+    guncelleme = _grup_guncellemesi(2, "/durum")
+    guncelleme["message"]["from"] = {"id": 555, "is_bot": False}
+    cevap = dinleyici.handle_update(guncelleme)
     assert cevap == "durum cevabi"
     assert len(session.post_cagrilari) == 1
 
@@ -719,7 +737,7 @@ def test_public_grafik_album_reddedilince_kare_kare_dener(
         yollar.append(str(yol))
     cagrilar = []
     monkeypatch.setattr(tt, "medya_grubu_gonder",
-                        lambda *a, **k: (False, "reddedildi"))
+                        lambda *a, **k: (False, tt.MedyaHatasi("HTTP 400: reddedildi", kesin_red=True)))
 
     def sahte_foto(yol, chat_id=None, token=None, notifier=None, caption="", **kw):
         cagrilar.append({"yol": yol, "chat_id": chat_id, "caption": caption})

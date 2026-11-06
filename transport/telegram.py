@@ -9,7 +9,12 @@ düşülür, çağrılan API fonksiyonu DIŞARIDAN verilir (main adaptörleri ke
 """
 
 import logging
+import os
+import re
+import stat
+from urllib.parse import urlsplit
 
+from secrets_redaction import redact_sensitive_text
 from health_server import WEBHOOK_YOL, WEBHOOK_YOL_ONEK
 from telegram_commands import IZLENEN_GUNCELLEMELER
 
@@ -28,61 +33,41 @@ def webhook_adres_gizle(adres: str, secret: str = "") -> str:
     return adres.replace(secret, "***") if secret else adres
 
 
+def _guvenli_webhook_url(adres: str) -> bool:
+    """Sırlar yalnız geçerli HTTPS adresine, URL kimlik bilgisi olmadan gider."""
+    if not adres or any(ch.isspace() or ord(ch) < 32 for ch in adres):
+        return False
+    try:
+        parca = urlsplit(adres)
+        return bool(parca.scheme.lower() == "https" and parca.hostname and
+                    parca.username is None and parca.password is None and
+                    not parca.query and not parca.fragment and
+                    (parca.port is None or 1 <= parca.port <= 65535))
+    except ValueError:
+        return False
+
+
 def webhook_url_olustur(secret=None, webhook_url=None, render_url=None, *,
                         varsayilan_secret="", varsayilan_url="", varsayilan_render="") -> str:
-    """Telegram webhook adresini üretir; webhook modu kapalıysa boş döner.
-
-    A7 (Batch 6): adres artık SIR TAŞIMAZ — `…/webhook`. Doğrulama, `setWebhook`
-    ile bildirilen `secret_token` başlığıyla yapılır; böylece sır URL ile birlikte
-    Telegram sunucularına, proxy ve erişim loglarına düşmez.
-
-    Öncelik:
-      1. `TELEGRAM_WEBHOOK_URL` — tam adres. Sonunda `/webhook` varsa aynen
-         kullanılır; eski biçim (`/webhook/<secret>`) verilmişse geriye dönük
-         uyumluluk için korunur (uyarı loglanır); diğer durumda taban adres sayılır.
-      2. `RENDER_EXTERNAL_URL` + `/webhook`
-         (Render bunu otomatik verir: https://<servis>.onrender.com)
-
-    Bu yardımcı secret üretmez: secret boşsa URL kurulmaz ve polling devam eder.
-    Render için runtime secret `config.telegram_webhook_runtime_secret()` ile
-    `main.py` girişinde hazırlanır. Telegram webhook için HTTPS zorunlu kılar;
-    http adres üretilirse kurulmaz, loga yazılır.
-    """
+    """Yalnız HTTPS webhook adresi üret; eski sırlı yolu uyumluluk için koru."""
     secret = webhook_secret_ayikla(secret, varsayilan_secret)
     if not secret:
         return ""
     webhook_url = (varsayilan_url if webhook_url is None else webhook_url or "").strip()
     render_url = (varsayilan_render if render_url is None else render_url or "").strip()
-
-    if webhook_url:
-        adres = webhook_url.rstrip("/")
-        if adres.endswith(WEBHOOK_YOL):
-            return adres                       # sırsız tam adres (önerilen)
-        if WEBHOOK_YOL_ONEK in adres:
-            # Eski kayıt: sır yolda. Çalışır ama sır loglara düşer; uyarı ver.
-            logger.warning(
-                "TELEGRAM_WEBHOOK_URL sır içeriyor (…/webhook/<secret>); önerilen biçim "
-                f"…{WEBHOOK_YOL} + secret_token başlığı. Eski biçim kabul edildi."
-            )
-            return adres
-        if adres.endswith("/webhook"):
-            return adres
-        adres = f"{adres}{WEBHOOK_YOL}"
-    elif render_url:
-        adres = f"{render_url.rstrip('/')}{WEBHOOK_YOL}"
-    else:
-        logger.warning(
-            "TELEGRAM_WEBHOOK_SECRET tanimli ama taban adres yok "
-            "(TELEGRAM_WEBHOOK_URL veya RENDER_EXTERNAL_URL gerekli) - yoklama kullanilacak"
-        )
+    taban = webhook_url or render_url
+    if not taban:
+        logger.warning("Webhook taban adresi yok; yoklama kullanilacak")
         return ""
-
-    if not adres.startswith("https://"):
-        logger.warning(
-            "Webhook adresi https olmali (Telegram zorunlu): "
-            f"{webhook_adres_gizle(adres, secret)} - webhook kurulmadi"
-        )
+    # Tam /webhook ve eski /webhook/<secret> yolları dahil HER yolda kontrol.
+    if not _guvenli_webhook_url(taban):
+        logger.warning("Webhook adresi geçerli HTTPS olmalı (sorgu/kimlik bilgisi yasak)")
         return ""
+    adres = taban.rstrip("/")
+    if not (adres.endswith(WEBHOOK_YOL) or WEBHOOK_YOL_ONEK in urlsplit(adres).path):
+        adres += WEBHOOK_YOL
+    elif WEBHOOK_YOL_ONEK in urlsplit(adres).path:
+        logger.warning("Sırlı eski webhook yolu kullanılıyor; /webhook ve secret_token önerilir")
     return adres
 
 
@@ -107,9 +92,50 @@ def yanit_oku(yanit):
         govde = yanit.json() or {}
     except Exception:
         govde = {}
+    if not isinstance(govde, dict):
+        govde = {}
     ok = kod == 200 and bool(govde.get("ok"))
     aciklama = str(govde.get("description") or "").strip() or f"HTTP {kod}"
     return ok, aciklama
+
+
+# Telegram sendPhoto için fotoğraf başına üst sınır. Albümde de toplam belleği
+# sınırla: requests multipart içeriğini ayrıca bellekte birleştirebilir.
+FOTO_MAKS_BAYT = 10 * 1024 * 1024
+ALBUM_MAKS_BAYT = 40 * 1024 * 1024
+
+
+class MedyaHatasi(str):
+    """İstek kesin reddedildiyse tek tek fotoğraf denenebilir; timeout belirsizdir."""
+
+    def __new__(cls, mesaj, *, kesin_red=False):
+        nesne = super().__new__(cls, mesaj)
+        nesne.kesin_red = bool(kesin_red)
+        return nesne
+
+
+def medya_kesin_reddedildi(aciklama) -> bool:
+    return isinstance(aciklama, MedyaHatasi) and aciklama.kesin_red
+
+
+def _foto_baytlari(yol):
+    # Düzenli dosya + boyut kontrolü; FIFO'da bloklanma, sembolik bağlantı ile
+    # yerel dosya sızıntısı ve sınırlandırılmamış read() engellenir.
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    fd = os.open(os.fspath(yol), flags)
+    try:
+        bilgi = os.fstat(fd)
+        if not stat.S_ISREG(bilgi.st_mode) or bilgi.st_size <= 0 or bilgi.st_size > FOTO_MAKS_BAYT:
+            raise ValueError("gecersiz veya buyuk fotograf")
+        with os.fdopen(fd, "rb") as akis:
+            fd = None
+            bayt = akis.read(FOTO_MAKS_BAYT + 1)
+        if not bayt or len(bayt) > FOTO_MAKS_BAYT:
+            raise ValueError("gecersiz veya buyuk fotograf")
+        return bayt
+    finally:
+        if fd is not None:
+            os.close(fd)
 
 
 def foto_gonder(yol, chat_id=None, token=None, notifier=None, caption="", *,
@@ -125,25 +151,26 @@ def foto_gonder(yol, chat_id=None, token=None, notifier=None, caption="", *,
     Görsel gönderimi hiçbir koşulda alarmı düşürmez: çağıran taraf sonucu yalnız
     sayaça yazar.
     """
-    import os
-
     if not yol or not os.path.exists(yol):
         return False, "png yok"
     metin_token = token_al(token=token, notifier=notifier)
     hedef = chat_id if chat_id is not None else getattr(notifier, "chat_id", "")
     if not metin_token or not hedef:
         return False, "token/chat_id yok"
+    try:
+        bayt = _foto_baytlari(yol)
+    except (OSError, TypeError, ValueError) as hata:
+        return False, f"dosya okunamadı: {type(hata).__name__}"
     cagri = api or _multipart_cagri
     try:
-        with open(yol, "rb") as akis:
-            yanit = cagri("sendPhoto", metin_token, {
-                "chat_id": hedef,
-                "caption": str(caption or "")[:1024],
-            }, {"photo": (os.path.basename(yol), akis.read(), "image/png")},
-                timeout=timeout)
+        yanit = cagri("sendPhoto", metin_token, {
+            "chat_id": hedef,
+            "caption": str(caption or "")[:1024],
+        }, {"photo": (os.path.basename(yol), bayt, "image/png")}, timeout=timeout)
     except Exception as hata:   # ağ hatası: çağıran taraf sayar, alarm sürer
         return False, f"istek hatasi: {type(hata).__name__}"[:200]
-    return yanit_oku(yanit)
+    ok, aciklama = yanit_oku(yanit)
+    return ok, redact_sensitive_text(aciklama, metin_token)
 
 
 def medya_grubu_gonder(yollar, captions=None, chat_id=None, token=None, notifier=None, *,
@@ -157,13 +184,12 @@ def medya_grubu_gonder(yollar, captions=None, chat_id=None, token=None, notifier
     fonksiyonda okunur; silme çağıran tarafın sorumluluğundadır.
     """
     import json
-    import os
 
     yollar = [y for y in (yollar or []) if y]
     if not (2 <= len(yollar) <= 10):
-        return False, "albüm 2-10 kare ister"
+        return False, MedyaHatasi("albüm 2-10 kare ister", kesin_red=True)
     if not all(os.path.exists(y) for y in yollar):
-        return False, "png yok"
+        return False, MedyaHatasi("png yok", kesin_red=True)
     metin_token = token_al(token=token, notifier=notifier)
     hedef = chat_id if chat_id is not None else getattr(notifier, "chat_id", "")
     if not metin_token or not hedef:
@@ -176,18 +202,25 @@ def medya_grubu_gonder(yollar, captions=None, chat_id=None, token=None, notifier
             ad = f"photo{i}"
             medya.append({"type": "photo", "media": f"attach://{ad}",
                           "caption": str(caps[i] or "")[:1024]})
-            with open(yol, "rb") as akis:
-                dosyalar[ad] = (os.path.basename(yol), akis.read(), "image/png")
-    except OSError as hata:
-        return False, f"dosya okunamadı: {type(hata).__name__}"[:200]
+            bayt = _foto_baytlari(yol)
+            if sum(len(item[1]) for item in dosyalar.values()) + len(bayt) > ALBUM_MAKS_BAYT:
+                raise ValueError("albüm çok büyük")
+            dosyalar[ad] = (os.path.basename(yol), bayt, "image/png")
+    except (OSError, TypeError, ValueError) as hata:
+        return False, MedyaHatasi(f"dosya okunamadı: {type(hata).__name__}", kesin_red=True)
     cagri = api or _multipart_cagri
     try:
         yanit = cagri("sendMediaGroup", metin_token,
                       {"chat_id": hedef, "media": json.dumps(medya, ensure_ascii=False)},
                       dosyalar, timeout=timeout)
-    except Exception as hata:   # ağ hatası: çağıran taraf sayar, alarm sürer
-        return False, f"istek hatasi: {type(hata).__name__}"[:200]
-    return yanit_oku(yanit)
+    except Exception as hata:   # Telegram kabul etmiş olabilir: tekillere düşme
+        return False, MedyaHatasi(f"istek hatasi: {type(hata).__name__}"[:200])
+    ok, aciklama = yanit_oku(yanit)
+    aciklama = redact_sensitive_text(aciklama, metin_token)
+    if not ok:
+        # 400/413 kesin red; 5xx, 429, bozuk yanıt ve ağ hatası belirsizdir.
+        aciklama = MedyaHatasi(aciklama, kesin_red=getattr(yanit, "status_code", 0) in (400, 413))
+    return ok, aciklama
 
 
 def _multipart_cagri(method: str, token: str, alanlar: dict, dosyalar: dict,
@@ -218,8 +251,11 @@ def set_webhook(url=None, secret=None, token=None, *, api=None, yanit_oku_fn=Non
     if not token:
         logger.warning("Webhook kurulmadi: Telegram token yok")
         return False
-    if not adres:
-        logger.warning("Webhook kurulmadi: adres uretilemedi (secret/RENDER_EXTERNAL_URL eksik)")
+    if not adres or not _guvenli_webhook_url(adres):
+        logger.warning("Webhook kurulmadi: geçerli HTTPS adresi gerekli")
+        return False
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,256}", secret or ""):
+        logger.warning("Webhook kurulmadi: Telegram secret_token biçimi geçersiz")
         return False
     govde = {
         "url": adres,
@@ -235,13 +271,14 @@ def set_webhook(url=None, secret=None, token=None, *, api=None, yanit_oku_fn=Non
     try:
         yanit = api("setWebhook", token, govde)
     except Exception as exc:  # noqa: BLE001 - ağ hatası botu düşürmesin
-        logger.error(f"Webhook kurulamadi (ag hatasi): {exc}")
+        logger.error("Webhook kurulamadi (ag hatasi): %s", redact_sensitive_text(exc, token, secret))
         return False
     ok, aciklama = yanit_oku_fn(yanit)
     if ok:
-        logger.info(f"Telegram webhook kuruldu: {gizle_fn(adres, secret)} ({aciklama})")
+        logger.info("Telegram webhook kuruldu: %s (%s)", gizle_fn(adres, secret),
+                    redact_sensitive_text(aciklama, token, secret))
     else:
-        logger.error(f"Telegram webhook kurulamadi: {aciklama}")
+        logger.error("Telegram webhook kurulamadi: %s", redact_sensitive_text(aciklama, token, secret))
     return ok
 
 
@@ -260,13 +297,13 @@ def delete_webhook(token=None, *, api=None, yanit_oku_fn=None, token_al_fn=None)
     try:
         yanit = api("deleteWebhook", token, {"drop_pending_updates": False})
     except Exception as exc:  # noqa: BLE001 - ağ hatası botu düşürmesin
-        logger.warning(f"Webhook kaldirilamadi (ag hatasi): {exc}")
+        logger.warning("Webhook kaldirilamadi (ag hatasi): %s", redact_sensitive_text(exc, token))
         return False
     ok, aciklama = yanit_oku_fn(yanit)
     if ok:
-        logger.info(f"Telegram webhook kaldirildi ({aciklama})")
+        logger.info("Telegram webhook kaldirildi (%s)", redact_sensitive_text(aciklama, token))
     else:
-        logger.warning(f"Telegram webhook kaldirilamadi: {aciklama}")
+        logger.warning("Telegram webhook kaldirilamadi: %s", redact_sensitive_text(aciklama, token))
     return ok
 
 
@@ -303,7 +340,12 @@ def komut_katmanini_kur(notifier, isleyici=None, *, komutlar, yardim_metni, tara
     `isleyici` yalnızca testler için verilir (ağa çıkmayan sahte dinleyici).
     """
     token_var = bool((getattr(notifier, "token", "") or "").strip()) if notifier is not None else False
-    dm_hedef = (getattr(notifier, "chat_id", "") or "").strip() if notifier is not None else ""
+    dm_hedef = str(getattr(notifier, "chat_id", "") or "").strip() if notifier is not None else ""
+    if dm_hedef and (not dm_hedef.isdecimal() or int(dm_hedef) <= 0):
+        # Dinleyici yalnız pozitif sayısal özel sohbeti DM kabul eder; aksi
+        # halde "açık" mod raporlayıp hiçbir DM'i yanıtlayamazdı.
+        logger.warning("TELEGRAM_CHAT_ID geçersiz: DM için pozitif sayısal sohbet kimliği gerekli")
+        dm_hedef = ""
     public_hedefler = [str(x).strip() for x in (public_sohbetler or []) if str(x).strip()]
     public_komut_adlari = [str(x).strip() for x in (public_komutlar or []) if str(x).strip()]
     public_yolu = bool(public_hedefler and public_komut_adlari and admin_kontrol is not None)

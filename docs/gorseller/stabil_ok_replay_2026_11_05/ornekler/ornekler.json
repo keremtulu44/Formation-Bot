@@ -1,0 +1,35 @@
+[
+  {
+    "symbol": "AKFGY",
+    "event_close_time": "2026-03-05 13:30:00+03:00",
+    "expected_marker": "up",
+    "future_bars": 8,
+    "signal_index_in_chart": 67,
+    "files": {
+      "olay": "AKFGY_zayif_dusuk_hacim_olay.png",
+      "sonuc_8bar": "AKFGY_zayif_dusuk_hacim_sonuc_8bar.png"
+    }
+  },
+  {
+    "symbol": "ALFAS",
+    "event_close_time": "2026-01-08 17:30:00+03:00",
+    "expected_marker": "up",
+    "future_bars": 8,
+    "signal_index_in_chart": 133,
+    "files": {
+      "olay": "ALFAS_zayif_yakin_ob_fvg_olay.png",
+      "sonuc_8bar": "ALFAS_zayif_yakin_ob_fvg_sonuc_8bar.png"
+    }
+  },
+  {
+    "symbol": "AEFES",
+    "event_close_time": "2025-07-17 17:30:00+03:00",
+    "expected_marker": "down",
+    "future_bars": 8,
+    "signal_index_in_chart": 87,
+    "files": {
+      "olay": "AEFES_dikey_uyari_sonrasi_yukselis_olay.png",
+      "sonuc_8bar": "AEFES_dikey_uyari_sonrasi_yukselis_sonuc_8bar.png"
+    }
+  }
+]

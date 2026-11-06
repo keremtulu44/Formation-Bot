@@ -725,17 +725,76 @@ def _komut_durum(_arguman: str) -> str:
                         f"{engel.get('saatlik_kap', 0)} saatlik kap · "
                         f"{engel.get('tekrar', 0)} aynı-olay · "
                         f"{gd.get('hatalar', 0)} hata")
+            dm_ozel = gd.get("dm_ozel_kuyruk")
+            if isinstance(dm_ozel, dict):
+                gosterim += (f"\n   DM özel alarmlar: {dm_ozel.get('pending', 0)} bekliyor · "
+                             f"{dm_ozel.get('review', 0)} elle inceleme")
+                if dm_ozel.get("available") is False:
+                    gosterim += " · ⚠️ kuyruk okunamadı"
             if gd.get("public_enabled"):
-                gosterim_public = (f"📣 Public grup: {gd.get('public_gonderilen', 0)} gönderim · "
+                gosterim_public = (f"📣 Public: {gd.get('public_gonderilen', 0)} gönderim · "
                                    f"{gd.get('public_hatasi', 0)} hata · "
                                    f"kuyruk {gd.get('public_kuyruk', 0)} · "
-                                   f"engel {gd.get('public_engel', 0)}")
+                                   f"bütçe engeli {gd.get('public_engel', 0)}")
+                hedef = str(gd.get("public_chat_id") or "")
+                if hedef:
+                    gorunen = hedef if hedef.startswith("@") else "…" + hedef[-4:]
+                    gosterim_public += f"\n   Hedef: {gorunen}"
+                hedef_bilgi = gd.get("public_hedef_bilgi")
+                if isinstance(hedef_bilgi, dict) and hedef_bilgi:
+                    def izin(deger):
+                        return "evet" if deger is True else "hayır" if deger is False else "bilinmiyor"
+                    gosterim_public += (
+                        f" · {hedef_bilgi.get('tip') or 'tip bilinmiyor'}"
+                        f"\n   Açılış izin kontrolü: metin {izin(hedef_bilgi.get('can_post'))} · "
+                        f"fotoğraf {izin(hedef_bilgi.get('can_send_photos'))}"
+                    )
+                if "public_saatlik_limit" in gd:
+                    gosterim_public += (
+                        f"\n   Metin bütçesi: saat {gd.get('public_saatlik', 0)}/"
+                        f"{gd['public_saatlik_limit']} · gün {gd.get('public_gunluk', 0)}/"
+                        f"{gd.get('public_gunluk_limit', 0)}"
+                    )
+                hedef_inceleme = gd.get("public_hedef_inceleme")
+                if isinstance(hedef_inceleme, dict):
+                    if hedef_inceleme.get("archives"):
+                        gosterim_public += f"\n   Eski hedef state'i: {hedef_inceleme['archives']} arşiv · elle inceleme"
+                    if hedef_inceleme.get("available") is False:
+                        gosterim_public += "\n   ⚠️ Hedef inceleme arşivi okunamadı"
+                ozel = gd.get("public_ozel_kuyruk")
+                if isinstance(ozel, dict):
+                    gosterim_public += (
+                        f"\n   Özel alarmlar: {ozel.get('pending', 0)} bekliyor · "
+                        f"{ozel.get('review', 0)} elle inceleme"
+                    )
+                    if ozel.get("available") is False:
+                        gosterim_public += " · ⚠️ kuyruk okunamadı"
+                filtre = gd.get("public_filtre_sayac")
+                if isinstance(filtre, dict):
+                    gosterim_public += (
+                        f"\n   Filtre (süreçteki denemeler): "
+                        f"state {filtre.get('state', 0)} · kalite {filtre.get('kalite', 0)} · "
+                        f"puan {filtre.get('devamlilik', 0)} · tekrar {filtre.get('tekrar', 0)} · "
+                        f"teyit yok {filtre.get('teyit_yok', 0)}"
+                    )
+                if "public_states" in gd:
+                    kapali = sorted({"KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI"}
+                                    - set(gd.get("public_states") or []))
+                    if kapali:
+                        gosterim_public += "\n   ⚠️ Kanalda kapalı state: " + ", ".join(kapali)
                 # Görsel ayrı satır: metin satırı zaten 300 px sınırında; kare
                 # sayacı 0/0 olsa da yazılır (\"hiç görüntü gelmiyor\" teşhisi).
                 if "public_grafik_gonderilen" in gd:
                     gosterim_public += (f"\n   🖼 public kare: "
                                         f"{gd.get('public_grafik_gonderilen', 0)} gönderildi · "
                                         f"{gd.get('public_grafik_hatasi', 0)} hata")
+            elif gd.get("public_enabled") is False:
+                if gd.get("public_state_writable") is False:
+                    gosterim_public = ("⚠️ Public durduruldu: eski hedef state'i güvenle "
+                                       "arşivlenemedi/yazılamadı; log ve diski inceleyin.")
+                else:
+                    gosterim_public = ("⚠️ Public hedef kapalı: kanal/grup kimliği veya "
+                                       "bot token'ı tanımlı değil; DM'in çalışması yeterli değil.")
             # Görsel sayaçları (§4): metin kotasından AYRIDIR. Açık şalterde
             # sıfır sonuç da teşhis için görünür; kapalıyken yalnız eski/bugünkü
             # görsel etkinliği varsa satır kalır ve bunu başında belirtir.
@@ -1563,7 +1622,7 @@ def _komut_grafik(arguman: str) -> str:
     tfler = (tf,) if tf else ("1h", "2h", "4h", "1d")
 
     notifier = _pkg._notifier_ref
-    if notifier is None or not getattr(notifier, "enabled", False):
+    if notifier is None:
         return "Telegram gönderimi kapalı: kare üretilemiyor."
     # KOMUTUN GELDİĞİ SOHBET (2026-10-28): `/grafik` gruptan çağrıldığında
     # kareler ve sonuç metni o gruba gider; DM'den çağrıldığında eski davranış
@@ -1577,6 +1636,12 @@ def _komut_grafik(arguman: str) -> str:
         grup_hedefi = False
     if not grup_hedefi:
         hedef_sohbet = ""
+    # `enabled` yalnız DM hedefini gösterir. Public-only kurulumda yetkili
+    # grubun /grafik isteği için token yeterlidir; DM hedefi gerekmemeli.
+    if (hedef_sohbet and not getattr(notifier, "token", "")) or (
+        not hedef_sohbet and not getattr(notifier, "enabled", False)
+    ):
+        return "Telegram gönderimi kapalı: kare üretilemiyor."
     # Tek aktif manuel grafik işi: çakışan TF'ler ve sınırsız thread/kuyruk yok.
     with _pkg._grafik_is_kilidi:
         if _pkg._grafik_aktif_is:
@@ -1697,8 +1762,12 @@ def _grafik_isi_yurut(istek, notifier, yonetici):
     def gecikme():
         with bildirim_kilidi:
             if not tamam.is_set():
-                bildir(f"⏳ {istek['hisse']}: 1 dakika hedefi aşıldı; "
-                       f"henüz bitmedi. Aşama: {asama['ad']}. Sonuç ayrıca bildirilecek.")
+                metin = (f"⏳ {istek['hisse']}: 1 dakika hedefi aşıldı; "
+                         f"henüz bitmedi. Aşama: {asama['ad']}. Sonuç ayrıca bildirilecek.")
+                if hedef_sohbet and not getattr(notifier, "enabled", False):
+                    sonuc_bildir(metin)  # public-only: DM bulunmadığından gruba bildir
+                else:
+                    bildir(metin)
 
     zamanlayici = threading.Timer(_pkg._GRAFIK_HEDEF_SN, gecikme)
     zamanlayici.daemon = True
@@ -2224,7 +2293,7 @@ def _redakte(deger, token: str = "") -> str:
     return redact_sensitive_text(deger, token)[:200]
 
 
-def _telegram_yonetici_mi(chat_id, user_id) -> bool:
+def _telegram_yonetici_mi(chat_id, user_id, *, hata_yukselt=False) -> bool:
     """`getChatMember` ile yönetici kontrolü: `creator` ya da `administrator`.
 
     Fail-closed: çağrı başarısız/yanıt çözülemezse False döner (yetki VERİLMEZ).
@@ -2233,6 +2302,8 @@ def _telegram_yonetici_mi(chat_id, user_id) -> bool:
     """
     token = _pkg._telegram_token_al()
     if not token or not chat_id or not user_id:
+        if hata_yukselt:
+            raise RuntimeError("yönetici kontrolü için token/kimlik eksik")
         return False
     try:
         yanit = _pkg._telegram_api_cagri(
@@ -2241,17 +2312,25 @@ def _telegram_yonetici_mi(chat_id, user_id) -> bool:
         _pkg.logger.warning(
             "Public komut yönetici kontrolü başarısız: %s",
             _redakte(exc, token))
+        if hata_yukselt:
+            raise RuntimeError("yönetici kontrolüne ulaşılamadı") from None
         return False
     ok, aciklama = _pkg._telegram_yanit_oku(yanit)
     if not ok:
         _pkg.logger.warning("Public komut yönetici kontrolü başarısız: %s",
                             _redakte(aciklama, token))
+        if hata_yukselt:
+            raise RuntimeError("yönetici kontrolü başarısız")
         return False
     try:
         uye = ((yanit.json() or {}).get("result") or {})
+        if not isinstance(uye, dict) or "status" not in uye:
+            raise ValueError("eksik üye durumu")
     except (AttributeError, TypeError, ValueError):
+        if hata_yukselt:
+            raise RuntimeError("yönetici kontrolü yanıtı geçersiz") from None
         return False
-    durum = str((uye or {}).get("status") or "").strip().lower()
+    durum = str(uye.get("status") or "").strip().lower()
     return durum in ("creator", "administrator")
 
 
@@ -2320,7 +2399,9 @@ def _telegram_komut_katmanini_kur(notifier, isleyici=None) -> str:
         # Üçü birlikte verilmezse public komut kapalı kalır (fail-closed).
         public_sohbetler=_pkg._public_komut_sohbetleri(),
         public_komutlar=_pkg._public_komut_adlari(),
-        admin_kontrol=_pkg._telegram_yonetici_mi,
+        # Geçici API hatası normal "üye değil" sonucuna dönüşmemeli; aksi
+        # halde başarısızlık yönetici TTL'i boyunca önbellekte kalıyordu.
+        admin_kontrol=lambda chat, user: _pkg._telegram_yonetici_mi(chat, user, hata_yukselt=True),
         admin_cache_sn=float(getattr(_pkg, "PUBLIC_COMMAND_ADMIN_CACHE_SN", 300) or 0),
     )
     setattr(_pkg, "_komut_modu", sonuc["mod"])
@@ -2340,17 +2421,29 @@ def _telegram_webhook_isle(guncelleme):
 
     Dönen değer HTTP kodudur:
       200 → işlendi (cevap sendMessage ile gitti),
-      503 → bot henüz komutları kurmadı (Telegram tekrar dener),
+      503 → bot hazır değil, cevap bekliyor veya geçici doğrulama hatası
+            (Telegram tekrar dener; bellek içi koruma restart garantisi değildir),
       500 → işleyici hatası (Telegram tekrar dener, güncelleme kaybolmaz).
     """
     isleyici = _pkg._telegram_update_processor_ref
-    if isleyici is None:
+    if isleyici is None or _pkg._shutdown_requested:
         return 503
     with _pkg._telegram_webhook_kilidi:
+        # Sinyal kilit beklenirken gelebilir veya işlemci kapanışta değişebilir.
+        # Yeni işi başlatma; 503, Telegram'ın daha sonra yeniden denemesini sağlar.
+        if _pkg._shutdown_requested or isleyici is not _pkg._telegram_update_processor_ref:
+            return 503
         try:
             isleyici.handle_update(guncelleme)
+            bekliyor = getattr(isleyici, "update_waiting_for_delivery", None)
+            update_id = guncelleme.get("update_id") if isinstance(guncelleme, dict) else None
+            if callable(bekliyor) and bekliyor(update_id):
+                # Cevap gönderilmediyse Telegram 2xx ile ACK almamalı: tekrar
+                # aynı update gelince yalnız bekleyen cevap denenir.
+                return 503
         except Exception as exc:  # noqa: BLE001 - tek güncelleme sunucuyu düşürmesin
-            _pkg.logger.error(f"Webhook guncellemesi islenemedi: {exc}", exc_info=True)
+            _pkg.logger.error("Webhook guncellemesi islenemedi: %s",
+                              _redakte(exc, getattr(isleyici, "token", "")))
             return 500
     return 200
 

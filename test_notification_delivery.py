@@ -107,6 +107,30 @@ def test_public_dedup_is_independent_of_dm(tmp_path):
     assert restarted.public_duplicate(alert(tf="2h"))
 
 
+def test_public_delivery_history_is_scoped_to_target_and_legacy_is_preserved(tmp_path):
+    old_owner = owner([])
+    old_owner.public_chat_id = "@EskiKanal"
+    old = DeliveryOutbox(old_owner, tmp_path)
+    old.remember_public(alert())
+    assert old.public_duplicate(alert(tf="4h"))
+
+    new_owner = owner([])
+    new_owner.public_chat_id = "@FormationBot1"
+    new = DeliveryOutbox(new_owner, tmp_path)
+    assert not new.public_duplicate(alert(tf="4h"))
+    assert new.state["public"][0]["target"] == "@EskiKanal"
+    new.remember_public(alert())
+    assert new.public_duplicate(alert(tf="4h"))
+    assert DeliveryOutbox(new_owner, tmp_path).public_duplicate(alert(tf="4h"))
+    assert len(new.state["public"]) == 2  # old target history not discarded
+
+    new.state["public"][1].pop("target")  # legacy rows remain but cannot prove target
+    new.save()
+    recovered = DeliveryOutbox(new_owner, tmp_path)
+    assert not recovered.public_duplicate(alert(tf="4h"))
+    assert len(recovered.state["public"]) == 2
+
+
 def test_hikaye_kapisi_dm_ayni_gun_tf_ve_aile_gozetmez(tmp_path, monkeypatch):
     """Aynı hisse+yön hikâyesi aynı gün ikinci kez anlatılmaz (kimlik değişse de).
 

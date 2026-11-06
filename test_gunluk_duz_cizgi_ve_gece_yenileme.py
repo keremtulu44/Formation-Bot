@@ -386,6 +386,8 @@ def test_gece_0200_mum_temizligi_supabase_kayitsiz_calisir_ve_kirik_mumlari_temi
     assert ozet["supabase_yazimi"] == 0
     assert ozet["yenilenen_1h"] == 1
     assert ozet["yenilenen_1d"] == 1
+    assert ozet["yenilenen_1h_semboller"] == ["AKBNK"]
+    assert ozet["yenilenen_1d_semboller"] == ["AKBNK"]
     assert ozet["korunan_1h"] == 1
     assert ozet["korunan_1d"] == 1
     assert ozet["sonraki_denetim"]["sorunlu_sembol_sayisi"] == 0

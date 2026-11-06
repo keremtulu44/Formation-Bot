@@ -15,6 +15,8 @@ import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+import pytest
+
 import main as main_mod
 from health_server import WEBHOOK_YOL, WEBHOOK_YOL_ONEK, start_render_health_server
 from live_state import LiveState
@@ -121,17 +123,18 @@ def test_config_import_does_not_generate_runtime_webhook_secret():
     )
 
 
-def test_render_runtime_webhook_secret_is_generated_for_complete_render_inputs(monkeypatch):
-    import secrets
+def test_render_runtime_webhook_secret_is_stable_across_replicas_and_token_specific():
+    import re
     import config
 
-    monkeypatch.setattr(secrets, "token_urlsafe", lambda n: f"generated-{n}")
-    secret, generated = config.telegram_webhook_runtime_secret({
-        "PORT": "10000",
-        "RENDER_EXTERNAL_URL": "https://formation-bot.onrender.com",
-        "TELEGRAM_BOT_TOKEN": "111:AAA",
-    })
-    assert (secret, generated) == ("generated-32", True)
+    env = {"PORT": "10000", "RENDER_EXTERNAL_URL": "https://formation-bot.onrender.com",
+           "TELEGRAM_BOT_TOKEN": "111:AAA"}
+    first, generated = config.telegram_webhook_runtime_secret(env)
+    second, generated_again = config.telegram_webhook_runtime_secret(dict(env, PORT="10001"))
+    other, _ = config.telegram_webhook_runtime_secret(dict(env, TELEGRAM_BOT_TOKEN="111:BBB"))
+    assert generated is generated_again is True
+    assert first == second and first != other and first != env["TELEGRAM_BOT_TOKEN"]
+    assert re.fullmatch(r"[A-Za-z0-9_-]{1,256}", first)
 
 
 def test_render_runtime_webhook_secret_respects_explicit_value_and_opt_out():
@@ -376,6 +379,35 @@ def test_webhook_isle_bot_hazir_degilse_503(monkeypatch):
     assert main_mod._telegram_webhook_isle(_guncelleme(1, "/panel")) == 503
 
 
+def test_webhook_isle_shutdown_sonrasi_503_ve_yeni_komut_yok(monkeypatch):
+    isleyici = SahteIsleyici()
+    monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", isleyici)
+    monkeypatch.setattr(main_mod, "_shutdown_requested", True)
+    assert main_mod._telegram_webhook_isle(_guncelleme(2, "/panel")) == 503
+    assert isleyici.guncellemeler == []
+
+
+@pytest.mark.parametrize("change", ["shutdown", "processor"])
+def test_webhook_kilit_beklerken_kapanirsa_is_baslatmaz(monkeypatch, change):
+    isleyici = SahteIsleyici()
+    monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", isleyici)
+    monkeypatch.setattr(main_mod, "_shutdown_requested", False)
+
+    class SignalWhileWaiting:
+        def __enter__(self):
+            if change == "shutdown":
+                main_mod._shutdown_requested = True
+            else:
+                main_mod._telegram_update_processor_ref = None
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(main_mod, "_telegram_webhook_kilidi", SignalWhileWaiting())
+    assert main_mod._telegram_webhook_isle(_guncelleme(3, "/panel")) == 503
+    assert isleyici.guncellemeler == []
+
+
 def test_webhook_isle_guncellemeyi_isleyiciye_verir(monkeypatch):
     isleyici = SahteIsleyici()
     monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", isleyici)
@@ -399,6 +431,26 @@ def _webhook_sunucusu(handler, secret=SECRET):
         {"PORT": "0", "TELEGRAM_WEBHOOK_SECRET": secret or ""},
         webhook_handler=handler,
     )
+
+
+def test_two_new_replicas_accept_same_derived_webhook_header():
+    import config
+
+    env = {"PORT": "10000", "RENDER_EXTERNAL_URL": RENDER_URL, "TELEGRAM_BOT_TOKEN": "111:AAA"}
+    first, _ = config.telegram_webhook_runtime_secret(env)
+    second, _ = config.telegram_webhook_runtime_secret(dict(env, PORT="10001"))
+    servers = [_webhook_sunucusu(lambda _update: 200, secret=secret) for secret in (first, second)]
+    try:
+        for server in servers:
+            port = server.server_address[1]
+            assert _post(port, WEBHOOK_YOL, _guncelleme(1, "/panel"),
+                         {"X-Telegram-Bot-Api-Secret-Token": first})[0] == 200
+            assert _post(port, WEBHOOK_YOL, _guncelleme(2, "/panel"),
+                         {"X-Telegram-Bot-Api-Secret-Token": "wrong"})[0] == 403
+    finally:
+        for server in servers:
+            server.shutdown()
+            server.server_close()
 
 
 def test_webhook_ucu_secret_tanimli_degilse_404():

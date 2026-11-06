@@ -1,5 +1,9 @@
 # Public Grup Hazırlık Analizi — Bildirim Hattı ve Dil
 
+> **Tarihsel analiz:** Grup komutları daha sonra eklendi. Kullanıcı 6 Kasım'da
+> `@FormationBot1` grubuna geçtiğini bildirdi; aşağıdaki 2 Ekim durumunu mevcut
+> Render yapılandırması veya güncel yetenek olarak kabul etmeyin.
+
 > Tarih: 2026-10-02 · Dal: `arena/01a0fdec-formation-bot` · Dayanak: kod okuması + 384 test
 > Bu doküman "şu an neredeyiz, public grup için ne eksik?" sorusunun ölçülmüş cevabıdır.
 

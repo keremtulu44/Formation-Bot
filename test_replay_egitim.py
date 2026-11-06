@@ -130,7 +130,7 @@ def test_training_album_fallback_sends_four_images_and_activates_only_afterward(
     monkeypatch.setattr(eg, "soru_sec", lambda _: question)
     monkeypatch.setattr(eg, "album_hazirla", lambda *a, **k: (
         ["a", "b", "c", "d"], ["1s", "2s", "4s", "1g"]))
-    monkeypatch.setattr(tg, "medya_grubu_gonder", lambda *a, **k: (False, "HTTP 400"))
+    monkeypatch.setattr(tg, "medya_grubu_gonder", lambda *a, **k: (False, tg.MedyaHatasi("HTTP 400", kesin_red=True)))
     def photo(path, **kwargs):
         assert session.current is None
         deliveries.append((path, kwargs["caption"]))
@@ -153,7 +153,7 @@ def test_incomplete_question_delivery_is_cancelled_and_explained(monkeypatch):
     monkeypatch.setattr(eg, "soru_sec", lambda _: question)
     monkeypatch.setattr(eg, "album_hazirla", lambda *a, **k: (
         ["a", "b", "c", "d"], ["1s", "2s", "4s", "1g"]))
-    monkeypatch.setattr(tg, "medya_grubu_gonder", lambda *a, **k: (False, "HTTP 400"))
+    monkeypatch.setattr(tg, "medya_grubu_gonder", lambda *a, **k: (False, tg.MedyaHatasi("HTTP 400", kesin_red=True)))
     monkeypatch.setattr(tg, "foto_gonder", lambda path, **k: (path != "c", ""))
     notifier = SimpleNamespace(chat_id="123", send_to_chat=lambda text, _: messages.append(text) or True)
     session.yeni("ASTOR", notifier).baslat()
@@ -215,7 +215,7 @@ def test_album_fallback_stops_after_cancellation(monkeypatch):
     import transport.telegram as tg
 
     active, sent = [True], []
-    monkeypatch.setattr(tg, "medya_grubu_gonder", lambda *a, **k: (False, ""))
+    monkeypatch.setattr(tg, "medya_grubu_gonder", lambda *a, **k: (False, tg.MedyaHatasi("HTTP 400", kesin_red=True)))
     def photo(path, **kwargs):
         sent.append(path)
         active[0] = False
@@ -256,3 +256,31 @@ def test_selection_checks_hourly_bars_beyond_first_short_horizon(monkeypatch):
     _mock_short_archive(monkeypatch, hourly_periods=20 * 24, invalid_hour=48)
     with pytest.raises(ValueError, match="ortak geçmiş ve gelecek"):
         eg.soru_sec("ASTOR", rng=__import__("random").Random(7))
+
+
+@pytest.mark.parametrize("ambiguous", ["timeout", "server_error", "exception"])
+def test_training_ambiguous_album_does_not_resend_or_activate(monkeypatch, ambiguous):
+    import transport.telegram as tg
+
+    question = SimpleNamespace(sembol="ASTOR", code="ABC123", tf=None, horizon=None)
+    session, messages, sent_photos = eg.Session(), [], []
+    _inline_jobs(session, monkeypatch)
+    monkeypatch.setattr(eg, "soru_sec", lambda _: question)
+    monkeypatch.setattr(eg, "album_hazirla", lambda *a, **k: (["a", "b", "c", "d"], ["1s", "2s", "4s", "1g"]))
+    def album(*args, **kwargs):
+        if ambiguous == "exception":
+            raise TimeoutError("response lost")
+        return False, tg.MedyaHatasi(ambiguous, kesin_red=False)
+    monkeypatch.setattr(tg, "medya_grubu_gonder", album)
+    monkeypatch.setattr(tg, "foto_gonder", lambda *a, **k: sent_photos.append(a) or (True, ""))
+    notifier = SimpleNamespace(chat_id="123", send_to_chat=lambda text, _: messages.append(text) or True)
+    session.yeni("ASTOR", notifier).baslat()
+    assert session.current is None and sent_photos == []
+    assert "belirsiz" in messages[-1] and "soru iptal" in messages[-1]
+
+
+def test_ambiguous_result_album_does_not_claim_zero_images():
+    result = {"tf": "1h", "horizon": 8, "tahmin": "yatay", "direction": "yatay",
+              "start": 100.0, "end": 100.0, "diff": 0.0, "atr": 2.0}
+    text = eg._sonuc_metni(result, None)
+    assert "belirsiz" in text and "0/4" not in text

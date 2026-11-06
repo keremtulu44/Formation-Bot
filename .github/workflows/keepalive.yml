@@ -3,7 +3,10 @@ name: Render keep-alive
 # Render Free web service 15 dakika INBOUND istek gelmezse uykuya geçer
 # (uyanması ~1 dakika; o dakikada tarama yapılmaz). Bot kendi Telegram/Yahoo
 # çağrılarını outbound yaptığı için servisi kendi kendine ayakta tutmaz.
-# Bu iş akışı /health ucuna periyodik istek atarak servisi uyanık tutar.
+# Bu iş akışı /health ucuna istek atmayı HEDEFLER; GitHub cron en iyi çabadır,
+# çalıştırma aralıkları garanti değildir. Gerçekte daha uzun boşluklar ölçüldü;
+# yalnız bu iş akışına 7/24 erişilebilirlik veya gece yenilemesi için güvenmeyin.
+# İzlemeyi ayrıca yapın: python scripts/keepalive_audit.py --repo OWNER/REPO
 #
 # KURULUM (tek seferlik):
 #   GitHub → repo → Settings → Secrets and variables → Actions
@@ -17,9 +20,9 @@ name: Render keep-alive
 #   https://<servis-adin>.onrender.com/health yaz → Run.
 #   (Elle tetikleme saat penceresini yok sayar, yani hemen ping atar.)
 #
-# NEDEN 5 DAKİKA: GitHub cron'u "en iyi çaba" ile çalışır ve yoğun saatlerde
-# 5-20 dk gecikebilir. 5 dakikalık aralık, 15 dakikalık uyku eşiğine karşı
-# pay bırakır. Bu repo PUBLIC olduğu için GitHub Actions dakikaları ücretsizdir
+# NEDEN 5 DAKİKA: GitHub cron'u "en iyi çaba" ile çalışır; aralıklar 15 dk'yı
+# aşabilir ve saatlerce boşluk da gözlenmiştir. İstenen 5 dk, garanti değildir.
+# Bu repo PUBLIC olduğu için GitHub Actions dakikaları ücretsizdir
 # (private repoda 2000 dk/ay sınırı vardır ve bu iş akışı kotayı yakabilir;
 #  ayrıntı: docs/kurulum/RENDER_DEPLOY.md §5).
 #
@@ -60,8 +63,8 @@ jobs:
     timeout-minutes: 9
     steps:
       # Varsayılan pencere: her gün 08:00-23:00 İstanbul. BIST seansı 09:50-18:40
-      # olduğu için tarama saatleri içeride kalır; akşam da servis uyanık kalır ki
-      # Telegram komutları (/formasyonlar, /tara) anında cevaplanır.
+      # olduğu için hedef saatleri içerir; gerçek çalıştırma sıklığı ve komut
+      # yanıt süresi GitHub/Render tarafından garanti edilmez.
       # Kota: 7/24 ≈ 730 sa/ay (750 sınırına çok yakın); 15 sa/gün ≈ 450-465 sa/ay.
       # Pencere dışında servis 15 dk sonra uyur ve komutlar yanıtlanmaz; istersen
       # Actions → Variables → KEEPALIVE_ALWAYS=true ile 7/24 ping açabilirsin.
@@ -110,7 +113,8 @@ jobs:
           fi
           # Gece 02:00-02:20 TSİ Supabase-kayıtsız mum temizliği penceresi:
           # Varsayılan pencerede (veya KEEPALIVE_NIGHTLY_REFRESH=true verildiğinde)
-          # servisi uyandırıp temizlik bitene kadar ~20 dk ayakta tutar.
+          # ping HEDEFLENİR; cron eksik/gecikmiş olabilir, 20 dk veya temizlik
+          # bitene kadar uyanık kalma garantisi vermez.
           nightly_mode="${NIGHTLY_REFRESH:-}"
           if { [ "$nightly_mode" = "true" ] || { [ -z "$nightly_mode" ] && [ "$custom_window" = "false" ]; }; } \
              && [ "$now" -ge 200 ] && [ "$now" -le 220 ]; then
@@ -126,6 +130,16 @@ jobs:
             echo "onu uyandırır; gece komut yanıtı istiyorsan KEEPALIVE_ALWAYS=true yap."
             echo "in_window=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Ping atlandı (pencere dışında)
+        if: steps.window.outputs.in_window == 'false'
+        run: |
+          echo '### ⏭️ Ping atlandı'
+          echo 'Bu koşunun yeşil olması servise istek yapıldığı anlamına gelmez.'
+          {
+            echo '### ⏭️ Ping atlandı'
+            echo 'Saat penceresi dışında GET /health çalıştırılmadı; job sonucu servis sağlığı değildir.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: GET /health
         if: steps.window.outputs.in_window == 'true'

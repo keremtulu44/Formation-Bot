@@ -1,5 +1,9 @@
 # KANAL AÇILIŞ PAKETİ (02.10.2026)
 
+> **Tarihsel belge:** Kullanıcı 6 Kasım'da eski kanaldan `@FormationBot1`
+> grubuna geçtiğini bildirdi. Aşağıdaki eski hedef/kanal önerisi güncel yapılandırma
+> değildir; [Render rehberi](../kurulum/RENDER_DEPLOY.md) ve gerçek servis ayarlarını esas alın.
+
 Bu belge, **@bisthisseveri** X hesabının Telegram ayağını kurmak için: kanal mı grup mu
 kararı, hazır açıklama metni, hazır sabitlenmiş mesaj ve uygulama adımları.
 

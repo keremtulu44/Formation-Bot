@@ -12,6 +12,7 @@ durdurmaz; iki kopyadan en yeni kayıt zamanlı olan seçilir.
 import json
 import logging
 import os
+import tempfile
 import threading
 from datetime import datetime
 
@@ -139,10 +140,15 @@ def digest_tamponu_kaydet(tampon, store=None, data_dir=None, son_digest_gun=None
 
 
 def digest_tamponu_yukle(tampon, store=None, data_dir=None):
-    """En yeni digest tamponunu (Supabase > disk) yükler.
+    """Gönderim durumunu yerel veya yazılabilir uzak kopyadan yükle.
+
+    Salt okunur bir uzak snapshot tüketildiğinde güncellenemez: yeniden
+    başlatmalarda aynı eski özeti tekrar göndermek (hatta yerel güncel durumu
+    ezmek) mümkündür. Bu nedenle o kopya otomatik gönderim kaynağı değildir;
+    yerel kopya varsa kullanılır. Uzak kayıt silinmez, operatör inceleyebilir.
+    Yazılabilir store ile eski en-yeni-snapshot davranışı korunur.
 
     Döner: (yüklenen aday sayısı, kayıttaki `son_digest_gun` ya da None).
-    Çağıran taraf (main), ikinci değeri doluysa kendi globalini günceller.
     """
     uzak_veri, yerel_veri = None, None
     if store is not None:
@@ -150,6 +156,15 @@ def digest_tamponu_yukle(tampon, store=None, data_dir=None):
             satirlar = store.get_many([DIGEST_PENDING_SUPABASE_KEY])
             if isinstance(satirlar, dict):
                 uzak_veri = satirlar.get(DIGEST_PENDING_SUPABASE_KEY)
+            if not getattr(store, "writable", True) and isinstance(uzak_veri, dict):
+                bekleyen = uzak_veri.get("bekleyen")
+                if isinstance(bekleyen, list) and bekleyen:
+                    logger.warning(
+                        "Salt okunur uzak digest otomatik yüklenmedi (gün=%s, aday=%d): "
+                        "teslim durumu güncellenemediği için tekrar riski var; uzak kayıt korunuyor",
+                        uzak_veri.get("gun") or "bilinmiyor", len(bekleyen),
+                    )
+                uzak_veri = None
         except Exception as exc:
             logger.warning("Digest tamponu Supabase'den okunamadı: %s", exc)
     try:
@@ -226,24 +241,36 @@ def gonderim_durumu_yukle(data_dir=None) -> dict:
         return {}
 
 
-def gonderim_durumu_kaydet(guncelleme: dict, data_dir=None) -> bool:
-    """İşaretleri mevcut dosyayla birleştirip atomik yazar.
+# Both update paths modify the SAME file; read-modify-write must be serialized.
+_GUNLUK_KILIT = threading.RLock()
 
-    Tek tek anahtar güncellemesi desteklenir: {"post_close_analizi_gun": "2026-10-02"}
-    """
+
+def _gonderim_durumu_atom_yaz(yol, veri):
+    klasor = os.path.dirname(yol) or "."
+    os.makedirs(klasor, exist_ok=True)
+    fd, gecici = tempfile.mkstemp(prefix=f".{os.path.basename(yol)}.", suffix=".tmp", dir=klasor)
     try:
-        mevcut = gonderim_durumu_yukle(data_dir)
-        mevcut.update(guncelleme or {})
-        yol = gonderim_durumu_yolu(data_dir)
-        os.makedirs(os.path.dirname(yol), exist_ok=True)
-        gecici = yol + ".tmp"
-        with open(gecici, "w", encoding="utf-8") as dosya:
-            json.dump(mevcut, dosya, ensure_ascii=False, indent=2, default=str)
+        with os.fdopen(fd, "w", encoding="utf-8") as cikti:
+            json.dump(veri, cikti, ensure_ascii=False, indent=2, default=str)
         os.replace(gecici, yol)
-        return True
-    except Exception as exc:  # noqa: BLE001 - I/O hatası botu durdurmaz
-        logger.warning("Gönderim durumu yazılamadı (%s): %s", GONDERIM_DURUMU_DOSYA, exc)
-        return False
+    finally:
+        try:
+            os.remove(gecici)
+        except FileNotFoundError:
+            pass
+
+
+def gonderim_durumu_kaydet(guncelleme: dict, data_dir=None) -> bool:
+    """İşaretleri mevcut dosyayla birleştirip atomik yazar."""
+    with _GUNLUK_KILIT:
+        try:
+            mevcut = gonderim_durumu_yukle(data_dir)
+            mevcut.update(guncelleme or {})
+            _gonderim_durumu_atom_yaz(gonderim_durumu_yolu(data_dir), mevcut)
+            return True
+        except Exception as exc:  # noqa: BLE001 - I/O hatası botu durdurmaz
+            logger.warning("Gönderim durumu yazılamadı (%s): %s", GONDERIM_DURUMU_DOSYA, exc)
+            return False
 
 
 # === GÜNLÜK DURUM (restart gün sürekliliği) ===============================
@@ -258,9 +285,6 @@ def gonderim_durumu_kaydet(guncelleme: dict, data_dir=None) -> bool:
 #   4) public olay kuyruğu -> tur ortasında restart'ta bültendeki olaylar
 #      sessizce kayboluyordu.
 # Hepsi tek dosyada, GÜN damgalı tutulur; gün değişince otomatik sıfırlanır.
-_GUNLUK_KILIT = threading.Lock()
-
-
 def _bugun_iso(gun=None) -> str:
     if gun is None:
         return datetime.now(ISTANBUL_TZ).date().isoformat()
@@ -301,12 +325,7 @@ def gunluk_durum_guncelle(patch: dict, gun=None, data_dir=None) -> bool:
                 mevcut = {"gun": bugun}
             mevcut.update(patch or {})
             dosya["gunluk"] = mevcut
-            yol = gonderim_durumu_yolu(data_dir)
-            os.makedirs(os.path.dirname(yol), exist_ok=True)
-            gecici = yol + ".tmp"
-            with open(gecici, "w", encoding="utf-8") as cikti:
-                json.dump(dosya, cikti, ensure_ascii=False, indent=2, default=str)
-            os.replace(gecici, yol)
+            _gonderim_durumu_atom_yaz(gonderim_durumu_yolu(data_dir), dosya)
             return True
         except Exception as exc:  # noqa: BLE001 - I/O hatası botu durdurmaz
             logger.warning("Günlük durum yazılamadı: %s", exc)

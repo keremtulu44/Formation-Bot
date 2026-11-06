@@ -2,7 +2,7 @@
 
 Kapsam:
 1. `▲` yalnız destek geri alımına değil, replay eşikli güçlü yukarı muma da gelir.
-2. Destek yukarı basamak yapıp `fixed_support=False` olduğu barda işaret kaybolmaz.
+2. Dikey/kademeli destekte yukarı deneme ▲ yerine uyarı ▼ olur.
 3. Domain projeksiyonu grafikten kısa/cleaned ise ok, kapanış zamanıyla hizalanır.
 4. `prepare_causal_ohlcv` NaN satırdan sonra `is_closed/is_complete` maskelerini kaydırmaz.
 5. Yeni sınıflandırma gelecekteki mumu görmez.
@@ -153,15 +153,12 @@ def test_guclu_yukari_mum_uzun_yatay_zeminde_ok_uretir_ve_geri_alim_degildir():
     assert son.fixed_support is True
 
 
-def test_guclu_yukari_mum_destek_yukari_basamak_yaparken_kaybolmaz():
+def test_dikey_destekte_yukari_deneme_bullish_olmaz():
     bhvs = _davranislar(step_up=True)
-    isaretli = [i for i, b in enumerate(bhvs) if b.momentum_kind is not None]
-    assert isaretli == [len(bhvs) - 1]
     son = bhvs[-1]
-    assert son.momentum_kind == "upward_rebase_momentum"
-    assert son.reclaim_kind is None and not son.weak_reclaim
-    # Asıl regresyon: güçlü mum yeni basamağın geldiği barda `fixed_support=False`.
-    assert son.fixed_support is False
+    assert son.fixed_support is False and son.vertical_support is True
+    assert son.momentum_kind is None and son.reclaim_kind is None
+    assert son.vertical_attempt_kind == "upward_rebase_momentum"
 
 
 def test_momentum_sinifi_gelecekteki_mumu_gormez():

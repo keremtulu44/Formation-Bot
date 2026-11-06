@@ -21,6 +21,8 @@ bot_data/telegram_soguma.json
 # Batch 5: bekleyen 18:45 digest tamponu ve engellenen acil olay kuyruğu (runtime durum)
 bot_data/telegram_digest_pending.json
 bot_data/telegram_digest_pending.json.tmp
+bot_data/telegram_missed_digest_*.json
+bot_data/.missed_digest_*.tmp
 bot_data/telegram_acil_kuyruk.json
 # Son tarama çalışma durumudur; kayıtlı liste ve atomik yazım dosyası Git'e girmez.
 bot_data/son_tarama.json
@@ -83,6 +85,11 @@ raporlar/
 # Durable notification delivery state (includes rendered PNG bytes).
 **/notification_delivery.json
 **/notification_delivery.tmp
+**/telegram_public_aux.json
+**/telegram_dm_aux.json
+**/.public_aux_*.tmp
+**/telegram_public_target_review.json
+**/.public_target_review_*.tmp
 
 .pytest-full.log
 arastirma_cikti/

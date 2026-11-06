@@ -1,0 +1,3884 @@
+{
+  "version": "2026-11-05-v2-capture-cutoff",
+  "generated_utc": "2026-11-06T05:12:58.399179+00:00",
+  "git_head_at_run": "7f389b76e8234d988ab82f038cc08729b63f940a",
+  "python": "3.11.2",
+  "pandas": "2.2.2",
+  "numpy": "1.26.4",
+  "source_sha256": {
+    "bist_calendar.py": "2e44c35a8478ce843821ba23183efad9974d620bc18575f728889cb379a3d0c5",
+    "config.py": "b226c68a94589ccfc0d7743bfebc22f932dcf5d04c338dde80f3c40f98ec0262",
+    "data/__init__.py": "a5e15959a7c74057ef6002651d16c0ee2f4517c32c9eaea3a5f47adde5685ca0",
+    "data/__main__.py": "54a944746f30654e5c1d6e738261489b65fdc95270ceaef85faf940ac24f9476",
+    "data/backfill.py": "06fc912ff5105859d5e91f49a94d585bba10f11f44b27271fea4054d6645b992",
+    "data/fetch.py": "726eab05f95d053f48773ea618b7b71650f11445ae110aaaeeb6d24b758ae74c",
+    "data/replay.py": "d666b7d98cf22b02b5c3a2df2100c60b5fe20e8e084fc9b0f39b2567502b3190",
+    "data/seed_cache.py": "cea1cd086dba1d8d182f3a0efb05efcb4202528b3f4a75cdb7190e78990dba9d",
+    "domain_engines/05_stabil.txt": "649896d2ba5860e7c1637e8e7aaae79f8b4574d6de331de7eb53e93f163e6a5e",
+    "domain_engines/fvg/__init__.py": "7452d63d8cbaf403df5da14485f3c158e16ee3fe47f61bc53b018f99e663da9d",
+    "domain_engines/fvg/fvg_engulfing.py": "010e308538926eaaa7fa80e526fae2c536386d0b0b93da511ad0cbd2b3bbf6ef",
+    "domain_engines/fvg/fvg_engulfing_engine.py": "523d9559bd461869f90a14135189dcda9294eec1a1147df53f9c1cfd1ce94a29",
+    "domain_engines/fvg/fvg_engulfing_final.py": "4c6cc021eecf2545190c00d1b89d828c889f24f644420ab1f661fcbaa606d52b",
+    "domain_engines/fvg/fvg_engulfing_models.py": "6d212aae6cb94eed349c6a98dca1523ec076d4c38404a49b64169cd0ff362e4e",
+    "domain_engines/fvg/models.py": "421102a65e3a12ee085e0c9af97b93a6aed92bc6ffcc9524117966141f99a1e2",
+    "domain_engines/market_structure/__init__.py": "14049855e9aec379ad8ca7d0cb748edc7b1f3d57382a60751fd151160691970f",
+    "domain_engines/market_structure/base.py": "73ebf86e715c4857f0e038bfa0ac4e32885e929ba427809d3f78566ea74ef2b9",
+    "domain_engines/market_structure/market_structure.py": "10b9d4c90a99824cd357aebf5d021b2ffa67affc62bad350ccd499b610d19ddf",
+    "domain_engines/market_structure/market_structure_engine.py": "1ed7fc80a49895fa399ce6fe0d752de98eb9b4e84dbe4b50fe57a55a1d8c6858",
+    "domain_engines/market_structure/market_structure_event_runtime.py": "0d10d54695ff9cf2820712dcf2bed90bdf7f68772466ce976580e718d1dd4507",
+    "domain_engines/market_structure/market_structure_events.py": "95a1888484d6e9bca97937a9bb68564942fc94f5e006cf6e2582edd71a7b660a",
+    "domain_engines/market_structure/market_structure_evidence.py": "2117cddafc5cf560167fbbbad51ecf3207e6bb06e17b5482346d5a9f7e2f5439",
+    "domain_engines/market_structure/market_structure_runtime.py": "50afdec9ee48b94ae9c0068520ad9502ef9c18e35cf61632ec49cc3dce4a7674",
+    "domain_engines/market_structure/market_structure_runtime_bridge.py": "6b7a56b2dc6468634000dcc0f6d7dad261c2b666211f2338bedbcb76daa72cd0",
+    "domain_engines/market_structure/market_structure_state.py": "8e282c49b3e964c9ce58a404f9db2947291e9f797ab510c80e3c4c8dec598fa4",
+    "domain_engines/market_structure/models.py": "421102a65e3a12ee085e0c9af97b93a6aed92bc6ffcc9524117966141f99a1e2",
+    "domain_engines/order_block/__init__.py": "104f9bfefd06d2a1148e697c9b662550069bcedea8d98b11908943ee3f6b705a",
+    "domain_engines/order_block/base.py": "73ebf86e715c4857f0e038bfa0ac4e32885e929ba427809d3f78566ea74ef2b9",
+    "domain_engines/order_block/models.py": "421102a65e3a12ee085e0c9af97b93a6aed92bc6ffcc9524117966141f99a1e2",
+    "domain_engines/order_block/order_block.py": "95e81221b11bf3b5261d4bde958b2ab65737664c5471d1bddaa5fe5ce47f57c4",
+    "domain_engines/order_block/order_block_engine.py": "cd2f477decd8728a03bcf9e9d71cdbd3e217546789cc0a8017c6f7624bc4d86a",
+    "domain_engines/stabil/__init__.py": "c9f4cd415d073fecf01ed4c61f282d1595c4e56789aeb6aeedb9c04fd693e31b",
+    "domain_engines/stabil/candidate_regime.py": "64315bd167b8a97c0cf21d8220116eb85f8ef072e437e215e6242f06b9ba806a",
+    "domain_engines/stabil/runtime.py": "88e16cfa8c8e99ecbe6e35883adc5d06816cb577b83b60ca9acb6612d80ab145",
+    "domain_engines/stabil/signals.py": "9bd2930ad2a798fc716d69e1e22ddf0b8ab2ed59adea5261c86543ae7a8cfadc",
+    "domain_engines/stabil/stabil_support_lifecycle.py": "7ab47193fae21e3cc83a2068e3707c4e3281e1bf8d9b69af979aa4117adde3fb",
+    "domain_engines/stabil/stabil_trend_engine.py": "1bf07c7dc0ca5daf6d2583d7d04d64bd8f20a3cf78ac283cf1740dfbba9e4150",
+    "domain_engines/volume_participation/__init__.py": "a751754e7cbdbac26484ef1c23cb930a44ea2412a1ae21e044d26229d608e52e",
+    "domain_engines/volume_participation/base.py": "73ebf86e715c4857f0e038bfa0ac4e32885e929ba427809d3f78566ea74ef2b9",
+    "domain_engines/volume_participation/models.py": "421102a65e3a12ee085e0c9af97b93a6aed92bc6ffcc9524117966141f99a1e2",
+    "domain_engines/volume_participation/volume_participation_engine.py": "9a267ea02e36d6ec79659c0cd1cb944e7bcacd7ec05c16e86502c78597e4acdb",
+    "domain_engines/volume_participation/volume_participation_final.py": "68947e41077c52d65355979320128d6c05f971e42ebce02536c6ffc72d29293f",
+    "domain_engines/volume_participation/volume_participation_lifecycle.py": "7118bc6b50227370d1ea0b496b45ffb1d4b8c946983b60b2b4fde94107542853",
+    "research/arsiv.py": "e3881379c3e51b260c049b239b08e51a84034e499b9ba083b44dd3ab7de63067",
+    "research/stabil_arrow_context_replay.py": "0c58adc6590d95c57f41cf6b515a586cfea983a9872c2aeea998ed6c60dd777e",
+    "research/stabil_replay.py": "01a2e120112ef95897675146bb92962c4c6d8531c69f70091d46b55f4b99d748",
+    "scripts/backfill/yahoo_backfill.py": "470fc853668b169be83436cfea0d8bd66b8fd3e087c3251cc9fe5c7fdffa682c"
+  },
+  "archive_root_label": "backfill_data",
+  "input_sha256": {
+    "AEFES_1h.csv.gz": "8500fd7a78d046c995028e6b982a722b08457c5a1c2019f03bf4e9e646945672",
+    "AEFES_1d.csv.gz": "e3503740a3d6cd689123c4bf224a760bdf743a9fb49df5fc7ad32297549a91ad",
+    "manifest.json": "a38284ee48e66a67811cb91e5a697d7778586730ad0cb9b3ecec588b4848a6ae",
+    "AGHOL_1h.csv.gz": "907027b7a6f9baedc8abd663abbc787d59e80379c4515a59f427962609ddfaec",
+    "AGHOL_1d.csv.gz": "554f8a2bf99ab006dbed63331981b70be8b831999d45364968c3ccaa36233cc3",
+    "AGROT_1h.csv.gz": "d641ddb0b80080144ccfa2c7c8948fb5c20560f222f2df508345e19d0ac557ac",
+    "AGROT_1d.csv.gz": "4154e0b3518828829d7827780299002484b7557ff736c216e901418dfca6b2db",
+    "AKBNK_1h.csv.gz": "3ecd24845344f3d0317d10312c3f6b172464dccf94c11f681e602d9280297bb0",
+    "AKBNK_1d.csv.gz": "080d822198c61aeb5fc1e01af9084a553deb3cd8688e7a4851db9a314ad63755",
+    "AKCNS_1h.csv.gz": "15ff818469285f309c965cb11c2a862a9610a39d901c3f9b2eb875249f832f6b",
+    "AKCNS_1d.csv.gz": "492762ae306042f4375fc51b8f8a2d22e0831d556f6873a504f39e40167872ad",
+    "AKFGY_1h.csv.gz": "8d3f4753aa296e4979e5a4a60bd0341e0320fa1aa0f23fdca80e1d003fcafad1",
+    "AKFGY_1d.csv.gz": "8efc2378fcbb09e732794d423db0bc8cfe7f1bd154ae477704dece591a6a5b0f",
+    "AKFYE_1h.csv.gz": "e6f1e234575653435d9206e996c42e1b6fcf3b10a3fa4ed7055ef5606b13fbc8",
+    "AKFYE_1d.csv.gz": "06020bb32ae1380458942855bf36acc88af772ea7103911348cc19cb83acb41e",
+    "AKSA_1h.csv.gz": "c19955272251fec2d0a17add410306a27986db0b70ca86f92d149f611fa1e0d1",
+    "AKSA_1d.csv.gz": "912f355abf76a293095cd455daf29b8c6b6e4c701f72e9658712f0e07863418d",
+    "AKSEN_1h.csv.gz": "356c15717ea9961970caf8c56a6184333988ffc190b6ec301822c228a1c59d36",
+    "AKSEN_1d.csv.gz": "eeb732fb07b2291f6ab8abee0285cc9c6027aab9322602690ade8b327cdafe3d",
+    "ALARK_1h.csv.gz": "474094820ee8e2977e97de9febff4ebe8ca46ef8a501735c9fe9508f31cc3a8d",
+    "ALARK_1d.csv.gz": "0f6e23deb6f338a6bfc6a085ca991ef191d12f5e47c4d8f47302c9731779e3eb",
+    "ALBRK_1h.csv.gz": "23b09670fe981a7dd82e4f9f49178832ac85d61614b78325224d52dd4183c636",
+    "ALBRK_1d.csv.gz": "ef0c0690219cf009a5638da180bcf51224c44da4c3b685b3e007caca31823630",
+    "ALFAS_1h.csv.gz": "f7d7415b9b0ad37784c755fd0fb5eca4736caec513f6adce63378f6d25047b8b",
+    "ALFAS_1d.csv.gz": "08f00fe6e0b8e2ef6733b2727cdcd38e452000de620d6bfa3e4265ad2f957880",
+    "ALGYO_1h.csv.gz": "2e5143786b53005ff4a05d73378a1ecf2265c9bdeddf5f572174d78c233c55e9",
+    "ALGYO_1d.csv.gz": "91dd49d79a7c874902da68e5ce6e2e01ad8ddfd7882ce484f20db04ee32729a5",
+    "ALTNY_1h.csv.gz": "05c2f27bc08349bec265fd32a6ceeda8f53628108b277ceed06d5ac4424c128a",
+    "ALTNY_1d.csv.gz": "0ec3b27f271cae3a361aba0d79903b36f46d400c5de689856b0f460b52154d49",
+    "ANSGR_1h.csv.gz": "3ced3a2a19758b7ac46669ba36243a30c557bf3f786fd3d76392962eb20a70f3",
+    "ANSGR_1d.csv.gz": "ca160bf51ecdde5b7ab3517f640763894ff77d777437ecf09a5d75cc7ab21a4b",
+    "ARCLK_1h.csv.gz": "e805803c7ea29176cc78c3407a09255da9f7513fe4498046cc415242c0a71915",
+    "ARCLK_1d.csv.gz": "08928bd48b469cb43d67845971ed90daf3b1b20e816717adf0a2fdc46870f09f",
+    "ARDYZ_1h.csv.gz": "0f6bd072eefa77fc9654e654381f5f5317da57a40c55f19fdb766b985debf087",
+    "ARDYZ_1d.csv.gz": "1f9bd291d94e8be08d787ea8987d76f21e7b6b42b57ed76d6513d24ae3f85659",
+    "ARZUM_1h.csv.gz": "6d2f96aa9e268f90cd2f137dbd1a8060a2f2f69b40bfeec6040c569f65452774",
+    "ARZUM_1d.csv.gz": "46ddaa86d08283411c9ea48256453d105e46822f9291a8877159d505bb78f094",
+    "ASELS_1h.csv.gz": "ef12d08f63c5f1b807c7663a86d2d27748e677685e7b5fcd5c72af21bcd29a26",
+    "ASELS_1d.csv.gz": "15bf775fc4be0aa01636e5c5b5f35ffdecd256c6d13f2590a5a151fd24e78aab",
+    "ASTOR_1h.csv.gz": "ac295c0f68911ad6057f06de3ab07e1c059429acb5fa8eb24acb02b49a4ef8b0",
+    "ASTOR_1d.csv.gz": "06ca3e819432f75b81be7f9d408afdb3765608fdfe88d0ba7236440c83b42fab",
+    "AVPGY_1h.csv.gz": "86a2d36d240e18f1adf98135d400260a2e3e547a69484075cac9eae0bc1bb930",
+    "AVPGY_1d.csv.gz": "670aefaaead9b59dbb3a91435304ffce127fab387e62f66249596bf14d4bee7c",
+    "AYDEM_1h.csv.gz": "db2df712f5d7eebde2785ad730660d64bd4814b31231a99ecca95f17cd8e16f9",
+    "AYDEM_1d.csv.gz": "1031bd7571b025cb0d67c77e26d21857732cbaee796600f0f21bfcdde38142c3",
+    "BEGYO_1h.csv.gz": "0544e6b15c9e1b20fd8a3a387a88f36b4331e31c446530890cec101ef387406b",
+    "BEGYO_1d.csv.gz": "7b771b20dda64b7a7d2f62b960ddb932e1d823d72d12c69ae03bf0f8ac4c7b64",
+    "BERA_1h.csv.gz": "a475c48a155cdba5b33ad9d0a9c8d7b7b99efbc42627bc24a7f56ba9c4a89f05",
+    "BERA_1d.csv.gz": "6bb787c44de108620f7024b373827244270cdb551cf0cc9fad0d74c12ca1042c",
+    "BIMAS_1h.csv.gz": "9ba0594b9801e429ad078e2d994ab1fbd10c7228606eea5283cc389bd29b770e",
+    "BIMAS_1d.csv.gz": "0fcd0d8522788a2b099ba6bd3b4cb5bb0788a4624598378b4f462710293e48c1",
+    "BIOEN_1h.csv.gz": "73aad001c07953b5beb00409e9aa7cd5575572142c5d2e269e669f38c4c41c4e",
+    "BIOEN_1d.csv.gz": "fb2c21a4f5891f52071715203755d69ef0230429ffe7d667e4fbd7b68d2c0bf2",
+    "BJKAS_1h.csv.gz": "00be98d5649306a5124b4351df485abd4d39e8beffe52411cc0be882a4c08b95",
+    "BJKAS_1d.csv.gz": "3f553d05a8f68dd834439f4b8e184ad3b75a5e182468ed52f719ec7d35b048fb",
+    "BOBET_1h.csv.gz": "397fcc8897d5ad9918deb562bd96d71d73ccb939ebcb26a57dc6e347193cbf28",
+    "BOBET_1d.csv.gz": "cd8395e4d2fda14c3683b21e46b677c398ddf53d370a2c6adeac6e4d9a168e70",
+    "BRKVY_1h.csv.gz": "f9c1a5c0d0b34cd0e021a8b7d907d3a522d2d1a3c873a322048995e795623186",
+    "BRKVY_1d.csv.gz": "f617987a3757b02289383e822c451a56e8d5c99a032944012d67b0d0e2470ef2",
+    "BRSAN_1h.csv.gz": "650ac82488a317f030bdd11f45715d935948cb5794585b6dea8d63ec4c8dee3a",
+    "BRSAN_1d.csv.gz": "bd06726055d829eaf7b22b851d1370d1b494c0dc2f54f6312e195d5173c78828",
+    "BTCIM_1h.csv.gz": "e38d6b4fbe4bca48efe61a6a363073c823a0be05bd9198704c0e65427bef08db",
+    "BTCIM_1d.csv.gz": "e5875bdf22eafb011b36f330b1e4f26e2779c29cd4e4466cb76f1c0045d62378",
+    "BURCE_1h.csv.gz": "b3cbdd1ee4b7f8774be683fe40f5b636f878b810b8d3a0c8d39dc11d34a651cb",
+    "BURCE_1d.csv.gz": "88d4ed974b485e16ab48948f0a781dad9e28d312453567861c8059cd90e22277",
+    "CANTE_1h.csv.gz": "edd42c39882aa0148667db8d96edda6d4d867ed0c84740647bad099e2cc244b3",
+    "CANTE_1d.csv.gz": "ac23e6a5f0e1c1250c9d6d7573041ad0bf65a0a06dca253b0c0ca3b79d338d99",
+    "CCOLA_1h.csv.gz": "cbb387cda6b86801764a8470464d22afbc4800d3343507697326c9fbcb07dc97",
+    "CCOLA_1d.csv.gz": "19db7bcf4b8bf424a798ecf0bcf7a9834a5c630565daa1bd1dd16d16a9f15214",
+    "CEMAS_1h.csv.gz": "a806a1004e07035f292cbede0a343a12aa1ee2f70749fbd7ce65f4f2c6809e9e",
+    "CEMAS_1d.csv.gz": "8823cd9435ca7cd28435681e9613f9079a8d7ab591287d797050dfef608548aa",
+    "CEMTS_1h.csv.gz": "151bad304ef8de5f95626fec3a38d2218babd0857554f440d32367a7dfcec417",
+    "CEMTS_1d.csv.gz": "ccbd83995a75fe20bfbc124baaeeffe9d00c1684a57f1aabd206968579580521",
+    "CIMSA_1h.csv.gz": "961ce6923bc61493cd7330bd9e77abaefc5b5c08c01e8b1e21d5b740f6c0093c",
+    "CIMSA_1d.csv.gz": "671ce6bc78d0117c8aa602b930d69dc0620136b4579c07e5030a0d1b63830c9f",
+    "CLEBI_1h.csv.gz": "261e380bffca1e937df2947644831736405b4391df27820b84c081bb892332d1",
+    "CLEBI_1d.csv.gz": "b546395a22c45f49c8108026380f584e260935fdb170668e77fd236298a328cc",
+    "CVKMD_1h.csv.gz": "566715fcfb919e6a58cc0a5013c173dde5d5cb4239a5a861ebf43f0892283bfd",
+    "CVKMD_1d.csv.gz": "efd2ee1138288b89a97d5134b33c68b2a044754c19dfea7622a67420ba25bf9c",
+    "CWENE_1h.csv.gz": "db961aec1c179c61cffd1a0711e317fa59320c59e190df87fb645db425911bf2",
+    "CWENE_1d.csv.gz": "b1433f448833ffa22b439a82e231587deeb92d184114e471c537c815fd40ee86",
+    "DAPGM_1h.csv.gz": "df552252223f65753e33628c9ccdb6b645b8134a4fea72590f4221915cb9c206",
+    "DAPGM_1d.csv.gz": "9b9a7558440e1e8d2923b20d423fa0335e905206b5afc8c852224e4c7f336d22",
+    "DARDL_1h.csv.gz": "b18a766bb74cc70b9a9733f7d65dd3368b78cbfd74e937c67dd3af67897ad63b",
+    "DARDL_1d.csv.gz": "ef5c0386dcade59b909ce6435b12b3f3bc1379a4ab20b458fc9653f83a2044b7",
+    "DENGE_1h.csv.gz": "a3d70e3ef3e14fc3243e5f5548303d89e07dd11cca8de06cce88ea05cb6db77d",
+    "DENGE_1d.csv.gz": "61cd39e8856a227c0b029ff4c135d1a253fc7443dafb7161fbaa9684d25a41df",
+    "DERIM_1h.csv.gz": "c373332a685f5d0de5e62f6e324fcb75a26dabb4368289109d5bb010755271b6",
+    "DERIM_1d.csv.gz": "be76a5885de1f0e63c4419fa2c7fb5d082b3d867baa1d701d54b8134dcaf71c1",
+    "DEVA_1h.csv.gz": "838f86dc927b257e4109d6c47dcd29f4b7fb468ecde66e5e5fdc8d20f7626a5a",
+    "DEVA_1d.csv.gz": "de21c8bf5fe50e5007d9975f83502c7168985c38efdaf06a7d78e3586f556e9b",
+    "DIRIT_1h.csv.gz": "b5208edf46568235ce9d536b7b92ca3b5ed214a2d2b8611a9d4495db0d4b8fce",
+    "DIRIT_1d.csv.gz": "10f29e2b7df0056021ce57822930515684eb1c606c801f844aee95f0908a3064",
+    "DMSAS_1h.csv.gz": "9ad4283381d78f7f65541eb72d29d562d62fef763c4a84ddc7893d288bc3f58b",
+    "DMSAS_1d.csv.gz": "50b8a4186a0c3f978cc3c0dc2a3fcf6a1f4802cce7dd1edd76c64a8fa5fa4818",
+    "DOAS_1h.csv.gz": "f3e76623fd5d24fcd53236a2d3b41fa34de77a6ad82b422604d57a4cad4e1224",
+    "DOAS_1d.csv.gz": "5fc93a2bc6f893a0aab1bbbba805ae42a6dbfb7f57b8c495497cb777fbaeac94",
+    "DOCO_1h.csv.gz": "1cddcd730539ea3e160b26caf34f32059c22cb0008b5dbfadcefaf9fcefbcad0",
+    "DOCO_1d.csv.gz": "422faf9524143c6770ea47e4a1d3f5db6dbcb556ecc5cbefc8c0062e3dd97b3e",
+    "DOFER_1h.csv.gz": "dc3a1aa8e5de3084ca2b7722ea62d58fbca79b8bd4b75e099c2bab553221d214",
+    "DOFER_1d.csv.gz": "551a9b9aba26f3e1efd346c86fa3a2d62f69d486d9c61a62fcf1eb7ccf480189",
+    "DOHOL_1h.csv.gz": "65c659519b0a3745046db3f525bd1874e16efe6eab52f73491e2b4a38e1fe3f2",
+    "DOHOL_1d.csv.gz": "3006ad3e8e8feb170225e3fc42127bf0ca6f0ce9c7900c5eea88ee128038d1ad",
+    "DYOBY_1h.csv.gz": "6f30dc9db5a696515e62491916d091be888eb124aa5bf09c1dabdb27bfff18a6",
+    "DYOBY_1d.csv.gz": "6a5136f0e271642d08150184545eadcfb56e46274e7440e672d40d6768301e55",
+    "EBEBK_1h.csv.gz": "f518d00318982d491b0d65c65e88009d58501d4cf55097995693b3b071783aac",
+    "EBEBK_1d.csv.gz": "db0d3555085d4d588f01adf88e901996f0f0f94ea206a3281d8573a094cda0c3",
+    "ECILC_1h.csv.gz": "33e50299381db9dfa058ffb109edee661a2d0fa87398150c6d567c458ec76157",
+    "ECILC_1d.csv.gz": "8c80a731afb2d6e7cb66a98881fbefafb17a6f6bc6f93506dc67e88dbf239a1a",
+    "ECZYT_1h.csv.gz": "dea6b4fec5b7699bd69fabd19795b1207fbf5aecf385049e3198d361bb9da3e8",
+    "ECZYT_1d.csv.gz": "e8a506a89511af2413ea5925510285b3ba246c942d4623d6409c70d30ed92fb7",
+    "EFOR_1h.csv.gz": "35803d6f4a406bfc846e888d14346bebd05621ff5be10f65353d4b8c09241b19",
+    "EFOR_1d.csv.gz": "b15ce88268969b09ce4f47742eabf8546a3b6ece5b549ed4923d75d02285fe6d",
+    "EGEEN_1h.csv.gz": "35a7e8b2458da571c87ba62f786d23cc7c367f0d8b9e52abffc61542154c7ec5",
+    "EGEEN_1d.csv.gz": "bd0e61821c498f6384aee82fc6f58f1ec64326592e6795a30766a1a1233aad88",
+    "EKGYO_1h.csv.gz": "a297bb197a7f9f8c4eb6a10a60fde25eea64e109897afe788aa7b0b28d1395bb",
+    "EKGYO_1d.csv.gz": "6718c3c9a8826a37ee8fb2844ed550dd85f136031fee731f30c3119f39c569f4",
+    "ENERY_1h.csv.gz": "57fe96b43ba17419d27e963a0a4fa3a2287873e2e3056d0d5424d54c3f385b65",
+    "ENERY_1d.csv.gz": "3001ab9f739bab7d9266622030678b3751bd17cd3f61e6151b002df2a5ab0b11",
+    "ENKAI_1h.csv.gz": "ff9ce95673821a34f5fe4ce046bcc27366b2e3b3ff069ea5c44b1063836efd59",
+    "ENKAI_1d.csv.gz": "cfdb1c570f9ab8e567a9fb3efde141cf9e1f408eb96bb52fca1ba38d1d003089",
+    "ENSRI_1h.csv.gz": "e7ecf00bc52c7536ad73f18f1d12e254fbefcb50c4781c2b8ab352bcb500c7ad",
+    "ENSRI_1d.csv.gz": "49ad9ac98d23fe168a320ee61c165733215534a2015bbf4c0c83aba090fec9db",
+    "ERBOS_1h.csv.gz": "3c6b522f2be86c6760597adc51de63cfd0a413cbd279316b6a315de95b807130",
+    "ERBOS_1d.csv.gz": "042984b3c1494324ded56ecaa598970573ecd8a6ff16871b4e0f434a123ece43",
+    "EREGL_1h.csv.gz": "01ec0216c337b49da9c9a3582f9ef272f750b4ebd484029786fb89bbdebb19a2",
+    "EREGL_1d.csv.gz": "b3539e87ad1f91afb1506b386e2e1347723ae3c43dbd46518002beb22f92f470",
+    "ERSU_1h.csv.gz": "aef2d8344da69471099e11f808ac20a1cc7117c229a6ad8be721d9777abf3b67",
+    "ERSU_1d.csv.gz": "4b0cf483dbb6fae834e9a9d8627f9f0b651711fc4885080a0fc913942a228b2f",
+    "ESCAR_1h.csv.gz": "d8fd04428b5f0514f05139d263d234ecef441e946a4e81d1e133df92c9a81c3f",
+    "ESCAR_1d.csv.gz": "54bf319125e0985654b588ad1c7e69ab05849d21feb6640045dd30a1daffde9a",
+    "ESEN_1h.csv.gz": "f1c129fbe518a3cabb9b31eb90f4d7da0698852b8bd636bf0fbebe02ff82a923",
+    "ESEN_1d.csv.gz": "ffb58cbc0b0dbb0fdde24e871ae9381415a53750bf5a644611a51f285f50da28",
+    "EUPWR_1h.csv.gz": "55b564327d3efc5be98871f584ce793ea84724750c7ae214dd24f12a6f0de2ba",
+    "EUPWR_1d.csv.gz": "9aa43f75485904095257342a25b029aca30521d7032cb189f6d5b7684a349ed5",
+    "FENER_1h.csv.gz": "aebe9f45b23e56e972a3d2f05859eaf862f551af6071b1ff00b6abe17174d896",
+    "FENER_1d.csv.gz": "9802885faa73901823ca38a383299c911ca304268111adea06b3cdb66de76f6d",
+    "FONET_1h.csv.gz": "a8ab605120954e530c61e90991486b57fe1265ae78a4834edf72ac525e8f57ef",
+    "FONET_1d.csv.gz": "21cb23edd45b935b65951cb44dd633f5750146c44c126cc5a479257b3b28abca",
+    "FROTO_1h.csv.gz": "82dcee8376a09e1aa4b11a76b44cafc5f268cb217bf1446222927e0b62652c1d",
+    "FROTO_1d.csv.gz": "8b147f925b5f009ebebe0411589adb93f5b1d42f89c40fe7a8330ca6981db005",
+    "GARAN_1h.csv.gz": "80857a4d665522a11ecd75eca3a3048fc5e6e08ce778034f5532e8e5d558afe2",
+    "GARAN_1d.csv.gz": "1144329d2e986de3e84c45ad330b486ee5e8835e759ef6a8e659258c61d223a0",
+    "GARFA_1h.csv.gz": "34b61757992cf2c10ca919dff8faf1e10152636459409cb3f1ccda2f7303d8fa",
+    "GARFA_1d.csv.gz": "0f0cace4dd3c13fc458f4321f83a8933b6a565205569ce647645378395202a35",
+    "GESAN_1h.csv.gz": "4d4cce02b4ec1b58faba4a38a9082ddd06f7e789db0ae369c1d723b1d796703b",
+    "GESAN_1d.csv.gz": "8917f84ad46ac2bd18673acc24aac4d929785c13cb13167b8a00bb7ec4e5fd21",
+    "GLYHO_1h.csv.gz": "9947a762bb8da46e4de981c2d66045eac97d4c31dcb2dfca4fbdb21dc495afc8",
+    "GLYHO_1d.csv.gz": "45f3020db1a7f03a2b8d3d3bf4694c75d4428986b6aed59cd22fed057f4a3f2d",
+    "GOLTS_1h.csv.gz": "0d05245b6091d360dc3e58363528758a5de82caf3748c21217394096fa94c932",
+    "GOLTS_1d.csv.gz": "80603a679ad0b4389f0a21a26f12edfc715b8335276f46917a4b610ba8c5b48e",
+    "GRSEL_1h.csv.gz": "2f8c265062daf34e1c6baf6adffd8475cd24f4583dae1aa78fd7e5c3059b954d",
+    "GRSEL_1d.csv.gz": "239b8c296c53b59bd68a1373fe5e389e49e7e2804267372bd5d1eaa40fab918a",
+    "GRTHO_1h.csv.gz": "80a9d92a44b73c550ba9fefe31c3aea5844ce709013bcd341cacd6fa3faf5044",
+    "GRTHO_1d.csv.gz": "166b7f192fc931279f3110bb179a27e7e5a026492ed66c71daef53ccc44be75c",
+    "GSRAY_1h.csv.gz": "114af431d5b9cc4a3a86509f67b5e2b755672137314f42fb8609a70caa3d79d5",
+    "GSRAY_1d.csv.gz": "b2b503baeb4574c0d21b17ee7c12d9e0888a970b318b8f1465bfafd20a2796cc",
+    "GUBRF_1h.csv.gz": "9a4112e48cfc44f5a19e30e0fa6bea605e65d5444d8a22108ad6723903deead8",
+    "GUBRF_1d.csv.gz": "d050ade416b01013bdce530b5aff699e6643ca45947b46edb010ded1f0627e24",
+    "GWIND_1h.csv.gz": "3040ec5bbb03ef1849f61d7d28750c678226a4690f41b6c6927905a8cac79607",
+    "GWIND_1d.csv.gz": "fe7a082ca32675e8f8c0f61dc0019c751b4b48128afec5605dbc79f66fa83b4b",
+    "HALKB_1h.csv.gz": "8064b43d14f5619f55bbb551a7d7231d23586504beac5c2d9662c66750cbf1e3",
+    "HALKB_1d.csv.gz": "cbdadbd1c7717a33465d2f307bfedb9eb94df667d0e6934285355ffeff392d28",
+    "HATEK_1h.csv.gz": "179d9632b745942d1e566c057c82a2de1cdc253a85963db871e4861a83525ee8",
+    "HATEK_1d.csv.gz": "d1113e2d8304740e829f0e8593cba1d6d87ada01af7c6aef19d245c4a9f96561",
+    "HATSN_1h.csv.gz": "44f1cbbeb829d1366911d090fc2d3f50e1e6dd88a726a85e094088ea095dcfe1",
+    "HATSN_1d.csv.gz": "f662ae3646a6b11ba49f5fa9a069da4d270597697be7b63768afdeb9d53c8df5",
+    "HEDEF_1h.csv.gz": "75ae60da9fc50e2a142436a5f1882ff5d0c660e1d60a7b217fb43a5308eb8a6c",
+    "HEDEF_1d.csv.gz": "b79a59e545207a826a8199d1934655b7e83555fa01792fcfc840edeef975594c",
+    "HEKTS_1h.csv.gz": "8c14e050f043c352e562ea7509ebcc70e37d3c9a2b1d55fd3f8f7c194f30b78f",
+    "HEKTS_1d.csv.gz": "12ff705b3770548f70596299ce89150753eca7aec5679d7ec520b9e1508c52ac",
+    "HKTM_1h.csv.gz": "f33b22d639b32f810bbde54b534fe89a768da7465af20fe029e69443b1c04ac6",
+    "HKTM_1d.csv.gz": "4f933b23c4de12374ba020120d1a3c3c9c593c02d5df64be73d616fccebacba7",
+    "IHEVA_1h.csv.gz": "e50c43c6cc86a6b1ba6c286980789dd02ed3813acbfdb5ed051b6c0e97569695",
+    "IHEVA_1d.csv.gz": "7887e66a9e419875067c1c87ee4c89df4a36e730ae65fa09821a08e42055e547",
+    "ISCTR_1h.csv.gz": "8a854033fad0a10b78fca0191d08082708a5fdbf332597f2b47e5153a18605fb",
+    "ISCTR_1d.csv.gz": "043e9c9617d8acf41ffe536f18fb34d7136262d8628854fdfa8c3ae9c2e9f13b",
+    "ISGYO_1h.csv.gz": "e466776a77e5bce25f37ca7aec6ccf16080bb9f0e491ae2e424845733fa2d764",
+    "ISGYO_1d.csv.gz": "f8588f6fd38d54f1e330b001bf351dd32f38e8065d5a7a3b6afd6a9b22359565",
+    "ISMEN_1h.csv.gz": "d8b97791529499f2b6b4f78c4d7a6f143739c756abb0e92a8807c8e5cf444b4d",
+    "ISMEN_1d.csv.gz": "2b3c73d7d95070e7f645874bf39615dfa5cdb8f5ba2e32bf09593417963ce7ad",
+    "IZENR_1h.csv.gz": "c9b423a70b57be1cd4f07849eb934212b8ea40170367a3d425bacc7c033dc955",
+    "IZENR_1d.csv.gz": "24deb5338fe7c32a3e15034ffc82f130b1fc73708fa44530435d36e8adae94e1",
+    "KARSN_1h.csv.gz": "8ba152a92cfb9822abb78b5eb8364268fbfbc3a05398d26f5e7ba522808c8566",
+    "KARSN_1d.csv.gz": "f237e185c3ef79375597658ddeda70facf7e91477545611d68e8cf1e36fa5a67",
+    "KCAER_1h.csv.gz": "42fff4c2a7e0e18038609a2d71da44f7087df20bb5a20b5dec68c9013d6ffa77",
+    "KCAER_1d.csv.gz": "ae8e0257435e3960bdbca026180a03e59fb1c9f58ed52201a9fda77c71854cec",
+    "KCHOL_1h.csv.gz": "4cc162f79e32df803468086cbdd89564b2d1e87d7d3e34776d225bec132f9320",
+    "KCHOL_1d.csv.gz": "47762d2ff18baaaf31076b09f06dde94e050ddadf044a29b4287cb4a97f1a4e3",
+    "KFEIN_1h.csv.gz": "5a3b70eff58aa0739e2f0bebf9b7aa26f5f535bb79bde661bcc65bdc1e906d7a",
+    "KFEIN_1d.csv.gz": "c9ef3c7f259d9c3af96f55fb02b981b968979a6b8d480e212d244b422d1a1504",
+    "KIMMR_1h.csv.gz": "f3774f8155178eaa5aae8e8c6add1e0f3496c51b1fbd2c3a41cdeb14e55bc2df",
+    "KIMMR_1d.csv.gz": "86bf917a92d3df87e0db6271ae175d5ee8e79223dbed94f08d64645259db40d5",
+    "KLGYO_1h.csv.gz": "1a754ff2d45d064fa9c94fd5bbb2da32bf65896072dc015044233a7c40f1a2a4",
+    "KLGYO_1d.csv.gz": "268f2eb12e1405a28025e36fd0e575e683661fd7490df9b50e0f9e8a8b42b914",
+    "KLSER_1h.csv.gz": "564e3f8cc2900e5dd334771ea4f83b984dc4ca4750dc75cddc2001d11127d64b",
+    "KLSER_1d.csv.gz": "9d79e1d682549651217e57c43be1b86e9240f47b42e33ac79cbc196a1b4b54fd",
+    "KMPUR_1h.csv.gz": "1a9ac321c29520b122cdd0ba11499516300911fe9a2284baddd28e1f63613bdd",
+    "KMPUR_1d.csv.gz": "48d826e0140ca56e1ef75364c9752a9844cf879584e9ffd9999ac59edd55f2d1",
+    "KONTR_1h.csv.gz": "d911d4a1be8cc866d38137c56e02d62f7fa4acf87b451da123156e8b47a759e8",
+    "KONTR_1d.csv.gz": "ff5a50770e26748b55b11320f44e773f003e750b2312f71e51f723c8460bf89f",
+    "KONYA_1h.csv.gz": "1606d707eee0682cfbecdf000535321a6afaa7e7797d3a7c04e31d3e3961b735",
+    "KONYA_1d.csv.gz": "9c944587ba3acbec1a71d8aee0e86b512afbf03d99eb380a728463098b58dbe7",
+    "KORDS_1h.csv.gz": "df828f0513705b4c1c8488b3836a838a3f368232455e85e473482a1d68be9a15",
+    "KORDS_1d.csv.gz": "1a516083d3c6c30b0285ad178f6942b25e1217d3cb94746520faf0aa74ec0074",
+    "KRDMD_1h.csv.gz": "aaf2e3ec610009211bc0922d624d0c0e48833387c1a7c494e71513e14e4b6416",
+    "KRDMD_1d.csv.gz": "902bed9d3b6db14141bc53ce058e98d36fc2bf11abc987553054cdc8c319555a",
+    "KRGYO_1h.csv.gz": "06af524f6da02333ab209f8d4ef9875fb219fd5dcd0717111c46be9f17b7c02f",
+    "KRGYO_1d.csv.gz": "dce905efcc3f1ec84d1c47c9ed534104c8d72e66fe83389d61e6f74a032e55f3",
+    "KRTEK_1h.csv.gz": "b27e1ff4c12030d14e55de23222b67913beece72b1440eef798ec71448092768",
+    "KRTEK_1d.csv.gz": "c727e2500c04b81b6b6afcc65e74b5837b4d0ece35685a294627d23a2ab9658c",
+    "KUTPO_1h.csv.gz": "07015916ae6f627baf9d92ed38f58aeec59e90053cd3fe41fad80f08aa50c9d1",
+    "KUTPO_1d.csv.gz": "2bdc0c76f65fce75969295f7d216aa9e3e124567064c79ea6a3de142fb53ad14",
+    "KZBGY_1h.csv.gz": "24e00cb292539a2b77c7ae1adf6edd544788aff3b7d07998c4524380aaa53a78",
+    "KZBGY_1d.csv.gz": "fc1d7e527d0b7cdd8986411cf461263cd6d4bbaf7fd13f49678271ca39ce3e4f",
+    "LMKDC_1h.csv.gz": "24d183c903240f212cd6e29eec0c20c17cda565c42c41befcb5e46af03b7e18b",
+    "LMKDC_1d.csv.gz": "ec813db09548353bbf4d363801b91825e5f8ef7e5ba5f87af9d9ab8ffa216f5c",
+    "MAGEN_1h.csv.gz": "1998b658864ff34b5697da0f23bd1acfe1828a627f4db69e136661214b6316cb",
+    "MAGEN_1d.csv.gz": "3941324fe36519155c9a8e689ca5c3c75f87eb1a9d63ca8d034e2ee3f2d5a26e",
+    "MAKTK_1h.csv.gz": "db3d131756b63300debba89b6b0e854492fe035a568b3ba3334fe2eefc38cd08",
+    "MAKTK_1d.csv.gz": "0b300af153d26b5747bcf7e90d629aa9e290fd13f48c81937bafadbdd22b886f",
+    "MARMR_1h.csv.gz": "bf6a0e410ddab1a6e83acec3cab2d7e72a70e3f512005eae59203296f63b9cf6",
+    "MARMR_1d.csv.gz": "8c6752a64d2b8d2dadd934cbfd0419ac74ad0f49ddfac027601f5f4a613a1734",
+    "MARTI_1h.csv.gz": "5937e91ffd42c14cac32c8db5d8d53b1a0f96a38e397a8bec7e4095eff9b10f3",
+    "MARTI_1d.csv.gz": "bdcb4ed9c62a509483767a5e530d1ef102d5920b7cd9179df43e0f4b9307c670",
+    "MAVI_1h.csv.gz": "ed32052904ae125056b60df50d8797e9a9a2299d2cb690d47f26baa644676fad",
+    "MAVI_1d.csv.gz": "95ba61055b350bf55ecc4ca5eef34affc65b3c7ebd5609c858c76dd2aaa36c2f",
+    "MEDTR_1h.csv.gz": "fc35fffa579f39ab6751c899615bf50fe57b8d013658dcd3d2268b1732b7cd48",
+    "MEDTR_1d.csv.gz": "b79661d683f69a1c18d4a3f6ceedcbd6a0815a9e49d84698f8e90051b3bc3d62",
+    "MEGAP_1h.csv.gz": "507ddd527ddb3d81298a355d9fd425d1997c4d535c843ef7722ca217f372181c",
+    "MEGAP_1d.csv.gz": "39b0a74787826ba426b339dd563b536076c7865abd153ab8a5aef9530460b37a",
+    "METRO_1h.csv.gz": "043b46c6e5463ea83ac0f3a8a944548690af54ff2c7b4e05c5370635e2a89415",
+    "METRO_1d.csv.gz": "445479197908a17faf02553c0f367c0810a565503b9cb8fef6805a819ebc0743",
+    "MGROS_1h.csv.gz": "693f06fc7ed91bf16c9e1aa76152d16af33051208c7a2ffc9d055ad8b1e313c2",
+    "MGROS_1d.csv.gz": "df038713e3dcf637c2674e383a97b9d1c971a71cfd584ec3a5d9940e793f3d1b",
+    "MIATK_1h.csv.gz": "27dca7bd97bcd588753e9d84550efb1fa4f87047f5c08bae73ad825b91d4e6ee",
+    "MIATK_1d.csv.gz": "01dedc4eda956ca50fb67d25c77884fcd92eeaeb3fba1be842616fb4cc78aad8",
+    "MPARK_1h.csv.gz": "5c88aafdce8ed76cf348835f50c0ac00b3db73f90a26fa831795e7b045437e93",
+    "MPARK_1d.csv.gz": "003c7f73120ebe33abd65d25ae285d0eb46e4030311cb8b541ca6b2d74435f79",
+    "MRSHL_1h.csv.gz": "f048282328c909e15bae65e97b784cf8e4be5d65af62bdc7f04958aa721fa0e4",
+    "MRSHL_1d.csv.gz": "fc9351766e24b8524202917a813ed35ee8830b1372e9a53600ba6d85e41964bd",
+    "NETAS_1h.csv.gz": "5e6697acd39438103ffb702ca86266be8944b77c85791762c36ef7076e75f461",
+    "NETAS_1d.csv.gz": "6898d690bab7062820154961cec1d865afd3aa7d08b9f53b5d4a5cdeda386991",
+    "NIBAS_1h.csv.gz": "56473743857bb32c5f896fef317073660424a244e168a4bc5728466699c0c76e",
+    "NIBAS_1d.csv.gz": "883942a323a3b05791c5844bd5e4b1c059588fd3a59ec59224940852ff85e357",
+    "OBAMS_1h.csv.gz": "855067b6dcdc02304e7ce3048fa9ac3c8e68ea0563a1a655af28a7b0339b9268",
+    "OBAMS_1d.csv.gz": "814ad80792c1432ba45d85a5a99ae8d33c3312c783e7b187deaf26d3f286c2ae",
+    "ODAS_1h.csv.gz": "f7bcac018896238f7a807bc015426de49e8e855c89cad69d1470fe4beb376f27",
+    "ODAS_1d.csv.gz": "353c21b6e152f7d06b0d00da4f01d647e278dd5bcc0ac269cb03e1c3f39e86c6",
+    "OFSYM_1h.csv.gz": "f174f1e65b6b2990f4f70c0a03d605dc7863f3e39f1d81f03a2e4ec183214aa6",
+    "OFSYM_1d.csv.gz": "b65a3a2a1d2c8cbe7ca772aecb03ddbc3e223c3711bbca08ab390a1d71c86459",
+    "OTKAR_1h.csv.gz": "cde7dd1ca19d91b3c03a7728c2b16f733817121791550b15e9e69c19a2cdf5a7",
+    "OTKAR_1d.csv.gz": "be60dd8ed205587e47ebc147befa0fadb1094fc8fc735246f208092ccf16d904",
+    "OYAKC_1h.csv.gz": "edeee6682a9c7bc2aa131c4cbd7cdcad7c12858901e38e66f08917cb5d05fb47",
+    "OYAKC_1d.csv.gz": "459c1400f9ec01c18b7c419b2c2dba4455a06726f8ea9313e28d15a1f203947a",
+    "OZGYO_1h.csv.gz": "be2f24b6c35757786a331ba6f378a124a4324042195889b81a8625ff37c77954",
+    "OZGYO_1d.csv.gz": "e501ef32dc1321664402c255e788bc02c15bb45de8db0928c01649e8c1b3afe3",
+    "OZKGY_1h.csv.gz": "b7060ddac840cecfe6f1a34aaf74e258e54e427497ba7069eb8877ad19e4c16f",
+    "OZKGY_1d.csv.gz": "872fc53fa83a75d260e11ee86a173d6a757b881b32fabcff481d77c14781fbd0",
+    "OZSUB_1h.csv.gz": "b8a587748560a4471199fd52c4a15c28d47d1c249e970e63a2c09ef1dfa28d91",
+    "OZSUB_1d.csv.gz": "a92bdbe4150fc6838342c23ee4ab83450c0dfaa541bf4cff11bbeaf0c3db4a82",
+    "PAMEL_1h.csv.gz": "07999f779cc45813d5153647f0fd997a0197edd9ace55cb7f8676bb00bdf4e3d",
+    "PAMEL_1d.csv.gz": "25586b467f6d3537a094d73a6a3591d5b456e3c1949afb9a75cc716d5df89e78",
+    "PAPIL_1h.csv.gz": "a9951eba62e89e878be03c1acf5f4d02d3b4cd0beb0a8826b0104dfd913fa1b0",
+    "PAPIL_1d.csv.gz": "fb21789c9b226c9781d1670bec5750e63f42b48ef180f1662c203fd47b997437",
+    "PASEU_1h.csv.gz": "63204750cc80b803b139088cc3b7314a55ffccacb5d6fdf3df9d57b830667dc7",
+    "PASEU_1d.csv.gz": "394155400529bb57502157286ffce551d6604e6e91cc22f5d6bb2352faf26b4a",
+    "PEKGY_1h.csv.gz": "f3c0f96572974eeac8c51649eafd443785c8320a1a57b0216d789bde17827676",
+    "PEKGY_1d.csv.gz": "a7625ebc2d816eb09342a0de8aea510a5b536f60b1e07ad5a9e3e70b454be386",
+    "PENTA_1h.csv.gz": "c171f05cb8cf7259a26a7e23bf253fb5abe067f20b0a451bb8b0ff45f8eb5f3c",
+    "PENTA_1d.csv.gz": "e5271e3ec22473fb7555c97096bb870d814645b90ecbf569f896f0027b9586b5",
+    "PETKM_1h.csv.gz": "d839b83c1eecebcba5d0ea13d5d9886eb108bd2bae5434fadc85a487c7e7b76e",
+    "PETKM_1d.csv.gz": "e0355dbeb57ad64439f97eddc0913289469e8866cc674f7f12f2de757f69d86a",
+    "PGSUS_1h.csv.gz": "7dc7e431304250f78acc5e02650e665b5754953ed656ed795f4e61ae38e7bf62",
+    "PGSUS_1d.csv.gz": "eba86f002d89cd312e24de63e7b67f9a5aa3beb78d26161645e1e17d6aa72a20",
+    "QUAGR_1h.csv.gz": "a4dd9bb0b998f7648ee81998e43de05e4a574abf95dea01fe485f3a381741196",
+    "QUAGR_1d.csv.gz": "ad5f10b6c8a768c2428a1872a93575d5be38a297e97f30776ea4fde3a59fbb05",
+    "REEDR_1h.csv.gz": "351c9132e191ddc95c43e9ac3e6a95dcb65f114989a08dceb526089826d627a6",
+    "REEDR_1d.csv.gz": "32fafb84a7240cbbc2e59fce216df521cdd29bdf2e6923a7460e7a05191c7b6b",
+    "RTALB_1h.csv.gz": "263db6f73a9a5845af302aa254bcadbb61e4cb41158009bc9bab986817ece513",
+    "RTALB_1d.csv.gz": "4e2a859e3196a10e99dd5f963e18ea067b22ebe46693e86772ba45c1855f61d7",
+    "SAHOL_1h.csv.gz": "82ea0f0a667730ef56cbfcd88fb294cfde7dc4935cf0328a0ef2eefdd78dbc54",
+    "SAHOL_1d.csv.gz": "894fd6bf6aaafb95e8303ff0b32d29e1a2487eb7d304d2a5e8841c6a91c6da17",
+    "SASA_1h.csv.gz": "31f1161b44e5b517c9cc7930f4ea04d8d36084a86b14ec0876c905650eaf08ff",
+    "SASA_1d.csv.gz": "3922aa1915d31ea255a341595543d254857ba4c889bfeace7c2088c963aaab4a",
+    "SAYAS_1h.csv.gz": "91868436fcdcfe4a4a8610685e2b8d606bf99b991415af8120376b21c703ccef",
+    "SAYAS_1d.csv.gz": "55d00135d61727883a903d14a3447ab50353de4cd19302c8c790f9cbed85e102",
+    "SDTTR_1h.csv.gz": "0797f6611161d28d7c12994fbc39d8521443e25cadc5d70c9dded0e23d99b121",
+    "SDTTR_1d.csv.gz": "dd2fa5d0e212ba8204aa06fe06b34ec037ff542e817cc68ab18ec662beb1905d",
+    "SELEC_1h.csv.gz": "3aa4d4dbbef38b37e064c051b250ccf4a3d10b06bd21fd6f0350f1b22248a695",
+    "SELEC_1d.csv.gz": "1958b0d9c2da6c7b5a503959f5dfd3b75de41eb6743a8e6fa210349779812fa4",
+    "SELVA_1h.csv.gz": "f2cfec507cd48245f7a4e7d56b774c8082a01ca68853464c2652e1ac18d7374e",
+    "SELVA_1d.csv.gz": "88d9b0c0edfc2e4cdfc366f032316a1512064cc7ae861b816dd698e1bc4b3a0c",
+    "SEYKM_1h.csv.gz": "8f49b8ddad9fa6513da3eda67773ea24fe10568fa44db4b6496dd3001886abea",
+    "SEYKM_1d.csv.gz": "0dffa3fcf2d175509167a91eb33fd28388b081427bbfb30274e5561e7f5d11dd",
+    "SISE_1h.csv.gz": "104d33f4f8477bcad773c5bf91069facfa792f6319bac3bf1bd3ec365b34fd67",
+    "SISE_1d.csv.gz": "89828ac4d11a30b162f4441fa869e4ee93e81a3877c2a779498032f1d4407384",
+    "SKBNK_1h.csv.gz": "0b6538cd40b8236e967d53074b88daafc167a51028e5eec3ca6dfac9d9468336",
+    "SKBNK_1d.csv.gz": "9c485f40935ca86c648f03c375ddeab4ffb5ca1bba75e270f700d5a1343658a2",
+    "SMRTG_1h.csv.gz": "a14d4092b534fa0a44f0b120319308bb8daa23ba1522837d3d479f4783326377",
+    "SMRTG_1d.csv.gz": "3c363bc29fb6ad339e90fccb1d2b577a1ca91c4004c1158fc0838cb271bd91d4",
+    "SNGYO_1h.csv.gz": "02ef615dc48c117c4744f08ef495e2bb9c1e888b63cb8d117917610de714d069",
+    "SNGYO_1d.csv.gz": "9782b291745be77c2e8fbefeeb443eae740bffc02ff640199d4e1a196d100e2f",
+    "SNICA_1h.csv.gz": "fba1b6566d533888c13b87ffcb2fc29b4cfdf2863b67e7994451d9850fe019d9",
+    "SNICA_1d.csv.gz": "e0eb18e036f3f21295dc503749df014b9869b993eca623e968c94a68a977295d",
+    "SOKE_1h.csv.gz": "ee937660980bddb1f81af7fae5d91fec499ba87ea308b546a6d5e30647f5e7e8",
+    "SOKE_1d.csv.gz": "70f73a3b1b32543e9bf00e5c940739efbb6d5b7b7cc34c4078235d5238a29095",
+    "TAVHL_1h.csv.gz": "a0d86d8df458528f4cf4c1e0fa0304846765849782be40875844eb52ef933ca5",
+    "TAVHL_1d.csv.gz": "44de7735e1c39e8732d6c2c44b7da5707076c99b556144f6011bd49dd6cab246",
+    "TCELL_1h.csv.gz": "a7282125493605e3763fd2597b7a5c3c73bd71b9ea27a693eadd6705a71d3302",
+    "TCELL_1d.csv.gz": "28f7cc6bb6f42888111bb1ca10dbda03017cbe1d3c59360a63df2fb19228c7ac",
+    "THYAO_1h.csv.gz": "79794a3ae4f63cb9dd7a65c19202b99d90ba00edbdae057ae19c190a831b6e4f",
+    "THYAO_1d.csv.gz": "679bbdae8dddde9b044fd8a4431ba3dfcb5a789bff8cced27e201365e521c305",
+    "TKFEN_1h.csv.gz": "22f706d85e00a3e6db20ef20093cab8c93bb5df34457b72f22d67c08ff136ab4",
+    "TKFEN_1d.csv.gz": "6226457ef13afc1b20219a0117c9dce32925825862bbb9bd7965be5f05683edf",
+    "TOASO_1h.csv.gz": "b3ccf89984a06bfca932d9908f04912091b9eed4b75406117ef0b05d4697c319",
+    "TOASO_1d.csv.gz": "a2eb263cfe4fae6034a7ec4279ba093d25237bac156f9f85a2d6e1190a3ba600",
+    "TSKB_1h.csv.gz": "d92b9ddfe623bb0b9234c8cf08a7b93199c391c323dd28865bb5ae76cc7cfd60",
+    "TSKB_1d.csv.gz": "b5313c4e820560e098cfe9705a90494f0b95fb3252130e30548b1d1c1402099e",
+    "TTKOM_1h.csv.gz": "87c7546441b6895b450c45a5be448ec440cf68e38df1b46c5a5fd61cfb27f482",
+    "TTKOM_1d.csv.gz": "03e11c77b76c3c020b1da09537315c69bf841ac4f487e70ab091e42a7afe0c23",
+    "TTRAK_1h.csv.gz": "941e100d726990a8ade70eeb752c7a976a40dcdfc5d5e1d22e9a5f7c1cd2d229",
+    "TTRAK_1d.csv.gz": "41e1bd4aa39b614af949a480092a542be0208ec8e97d07a0dc1a16115df63b1c",
+    "TUKAS_1h.csv.gz": "8862918184ca4e98b089e388b339ad011f1da8d4dda53e6dc7072625d10c78dd",
+    "TUKAS_1d.csv.gz": "b76be724b7a326eb75180afac5820e6159a75d9d32a98fb09bc15d8c367705f8",
+    "TUPRS_1h.csv.gz": "8149ee508014aa409c4b539bb2203804eeb7599b30792434ddbb660ebe144de7",
+    "TUPRS_1d.csv.gz": "1422e242621170ea2cbdf3d097732c53ed0a04cfdbd7b54b2ffe89558b202c39",
+    "TURSG_1h.csv.gz": "45680e6b6ca70f5604e06e3feeed76558d7aa55a6ee324b767d3268092ee882f",
+    "TURSG_1d.csv.gz": "063c00f05a579433659d620850299748e40187d5251613bd9d2730552efdf688",
+    "ULKER_1h.csv.gz": "5bfc322d14fe5e854010403ef1926fb733b7d49c63230a153879d85c655f6428",
+    "ULKER_1d.csv.gz": "b12e6422b5e65037d02e363ce623eac326a508bf90568915061dfecc2ab5b61a",
+    "ULUUN_1h.csv.gz": "50984400ce52741eac1fce2ed87312af8fa0ca4f841ea413286a628ca534e21e",
+    "ULUUN_1d.csv.gz": "39e7ef5de57d02f1e584d22a9465b69d142812139fa06489ddd850196f239df1",
+    "VAKBN_1h.csv.gz": "27f8df69365ccfa72fbe0688ccaf78b077c146800d3cb10ddbb6a292b670ecf9",
+    "VAKBN_1d.csv.gz": "b9ca9fcb0bc725fff3157da92a84bddb2a6f05ab7c9447a44ce897631734e75b",
+    "VERUS_1h.csv.gz": "b696562409c360ff6bd3bf2ae6617f53883c5710c2250751f56f02390765808d",
+    "VERUS_1d.csv.gz": "b5f3033fc5fbac85ccb1e29d392680ff613d64bb3b13f7e273eaf36035ccfaea",
+    "VESBE_1h.csv.gz": "25b2182b05120ba15b26968bbf098652e966f3a52e4f854c807108b8965cacba",
+    "VESBE_1d.csv.gz": "dd7780bde932cdf812cb2612f1da1fe1823231714d9bcb6e3d059170b031e7d1",
+    "VESTL_1h.csv.gz": "ccc7add3f32b394674daffa036d022d0b29f23c20e4b75d7730a4f43962555da",
+    "VESTL_1d.csv.gz": "45398ec80434fdce5eb10251b6d53b1fe41106038fdee99483f5526e3b3ac16a",
+    "YEOTK_1h.csv.gz": "1483d9fca4fa477bebfeb028d54de8e6bbe0f3f1267ff677d7c7e7c5d91d7e2f",
+    "YEOTK_1d.csv.gz": "3df74397e39d86ce86972d97eaf64c2ee8250d1b9d0778841a46eeaac91a6b5b",
+    "YKBNK_1h.csv.gz": "14635404bc37798cf9b2b52d48e42eb4b434bea172403b65fe224fa855e0b944",
+    "YKBNK_1d.csv.gz": "264b0c5a088ea87cbc4aa06f2efe47d76bcaeb9a82e3c5e4366676c45128b57f",
+    "YYAPI_1h.csv.gz": "f927336369940ca3d6d282d597d79f9bddacc63c88e31284015a89c093cc005e",
+    "YYAPI_1d.csv.gz": "397b3aae1651ed219a838aa83b45653486bb49b618121e6a5f49778e80a348ef",
+    "ZOREN_1h.csv.gz": "1dc677c776d00c9611d7237a085a22b34247211560d2acfd5b148f2334aa1ad7",
+    "ZOREN_1d.csv.gz": "df59ed08ec19fb54ca5066ce0e898e369141806899931bb3dae0af8d4c3efb32"
+  },
+  "selection": "sorted BIST equities with local 1h archive",
+  "symbols_requested": [
+    "AEFES",
+    "AGHOL",
+    "AGROT",
+    "AKBNK",
+    "AKCNS",
+    "AKFGY",
+    "AKFYE",
+    "AKSA",
+    "AKSEN",
+    "ALARK",
+    "ALBRK",
+    "ALFAS",
+    "ALGYO",
+    "ALTNY",
+    "ANSGR",
+    "ARCLK",
+    "ARDYZ",
+    "ARZUM",
+    "ASELS",
+    "ASTOR",
+    "AVPGY",
+    "AYDEM",
+    "BEGYO",
+    "BERA",
+    "BIMAS",
+    "BIOEN",
+    "BJKAS",
+    "BOBET",
+    "BRKVY",
+    "BRSAN",
+    "BTCIM",
+    "BURCE",
+    "CANTE",
+    "CCOLA",
+    "CEMAS",
+    "CEMTS",
+    "CIMSA",
+    "CLEBI",
+    "CVKMD",
+    "CWENE",
+    "DAPGM",
+    "DARDL",
+    "DENGE",
+    "DERIM",
+    "DEVA",
+    "DIRIT",
+    "DMSAS",
+    "DOAS",
+    "DOCO",
+    "DOFER",
+    "DOHOL",
+    "DYOBY",
+    "EBEBK",
+    "ECILC",
+    "ECZYT",
+    "EFOR",
+    "EGEEN",
+    "EKGYO",
+    "ENERY",
+    "ENKAI",
+    "ENSRI",
+    "ERBOS",
+    "EREGL",
+    "ERSU",
+    "ESCAR",
+    "ESEN",
+    "EUPWR",
+    "FENER",
+    "FONET",
+    "FROTO",
+    "GARAN",
+    "GARFA",
+    "GESAN",
+    "GLYHO",
+    "GOLTS",
+    "GRSEL",
+    "GRTHO",
+    "GSRAY",
+    "GUBRF",
+    "GWIND",
+    "HALKB",
+    "HATEK",
+    "HATSN",
+    "HEDEF",
+    "HEKTS",
+    "HKTM",
+    "IHEVA",
+    "ISCTR",
+    "ISGYO",
+    "ISMEN",
+    "IZENR",
+    "KARSN",
+    "KCAER",
+    "KCHOL",
+    "KFEIN",
+    "KIMMR",
+    "KLGYO",
+    "KLSER",
+    "KMPUR",
+    "KONTR",
+    "KONYA",
+    "KORDS",
+    "KRDMD",
+    "KRGYO",
+    "KRTEK",
+    "KUTPO",
+    "KZBGY",
+    "LMKDC",
+    "MAGEN",
+    "MAKTK",
+    "MARMR",
+    "MARTI",
+    "MAVI",
+    "MEDTR",
+    "MEGAP",
+    "METRO",
+    "MGROS",
+    "MIATK",
+    "MPARK",
+    "MRSHL",
+    "NETAS",
+    "NIBAS",
+    "OBAMS",
+    "ODAS",
+    "OFSYM",
+    "OTKAR",
+    "OYAKC",
+    "OZGYO",
+    "OZKGY",
+    "OZSUB",
+    "PAMEL",
+    "PAPIL",
+    "PASEU",
+    "PEKGY",
+    "PENTA",
+    "PETKM",
+    "PGSUS",
+    "QUAGR",
+    "REEDR",
+    "RTALB",
+    "SAHOL",
+    "SASA",
+    "SAYAS",
+    "SDTTR",
+    "SELEC",
+    "SELVA",
+    "SEYKM",
+    "SISE",
+    "SKBNK",
+    "SMRTG",
+    "SNGYO",
+    "SNICA",
+    "SOKE",
+    "TAVHL",
+    "TCELL",
+    "THYAO",
+    "TKFEN",
+    "TOASO",
+    "TSKB",
+    "TTKOM",
+    "TTRAK",
+    "TUKAS",
+    "TUPRS",
+    "TURSG",
+    "ULKER",
+    "ULUUN",
+    "VAKBN",
+    "VERUS",
+    "VESBE",
+    "VESTL",
+    "YEOTK",
+    "YKBNK",
+    "YYAPI",
+    "ZOREN"
+  ],
+  "symbols_successful": [
+    "AEFES",
+    "AGHOL",
+    "AGROT",
+    "AKBNK",
+    "AKCNS",
+    "AKFGY",
+    "AKFYE",
+    "AKSA",
+    "AKSEN",
+    "ALARK",
+    "ALBRK",
+    "ALFAS",
+    "ALGYO",
+    "ALTNY",
+    "ANSGR",
+    "ARCLK",
+    "ARDYZ",
+    "ARZUM",
+    "ASELS",
+    "ASTOR",
+    "AVPGY",
+    "AYDEM",
+    "BEGYO",
+    "BERA",
+    "BIMAS",
+    "BIOEN",
+    "BJKAS",
+    "BOBET",
+    "BRKVY",
+    "BRSAN",
+    "BTCIM",
+    "BURCE",
+    "CANTE",
+    "CCOLA",
+    "CEMAS",
+    "CEMTS",
+    "CIMSA",
+    "CLEBI",
+    "CVKMD",
+    "CWENE",
+    "DAPGM",
+    "DARDL",
+    "DENGE",
+    "DERIM",
+    "DEVA",
+    "DIRIT",
+    "DMSAS",
+    "DOAS",
+    "DOCO",
+    "DOFER",
+    "DOHOL",
+    "DYOBY",
+    "EBEBK",
+    "ECILC",
+    "ECZYT",
+    "EFOR",
+    "EGEEN",
+    "EKGYO",
+    "ENERY",
+    "ENKAI",
+    "ENSRI",
+    "ERBOS",
+    "EREGL",
+    "ERSU",
+    "ESCAR",
+    "ESEN",
+    "EUPWR",
+    "FENER",
+    "FONET",
+    "FROTO",
+    "GARAN",
+    "GARFA",
+    "GESAN",
+    "GLYHO",
+    "GOLTS",
+    "GRSEL",
+    "GRTHO",
+    "GSRAY",
+    "GUBRF",
+    "GWIND",
+    "HALKB",
+    "HATEK",
+    "HATSN",
+    "HEDEF",
+    "HEKTS",
+    "HKTM",
+    "IHEVA",
+    "ISCTR",
+    "ISGYO",
+    "ISMEN",
+    "IZENR",
+    "KARSN",
+    "KCAER",
+    "KCHOL",
+    "KFEIN",
+    "KIMMR",
+    "KLGYO",
+    "KLSER",
+    "KMPUR",
+    "KONTR",
+    "KONYA",
+    "KORDS",
+    "KRDMD",
+    "KRGYO",
+    "KRTEK",
+    "KUTPO",
+    "KZBGY",
+    "LMKDC",
+    "MAGEN",
+    "MAKTK",
+    "MARMR",
+    "MARTI",
+    "MAVI",
+    "MEDTR",
+    "MEGAP",
+    "METRO",
+    "MGROS",
+    "MIATK",
+    "MPARK",
+    "MRSHL",
+    "NETAS",
+    "NIBAS",
+    "OBAMS",
+    "ODAS",
+    "OFSYM",
+    "OTKAR",
+    "OYAKC",
+    "OZGYO",
+    "OZKGY",
+    "OZSUB",
+    "PAMEL",
+    "PAPIL",
+    "PASEU",
+    "PEKGY",
+    "PENTA",
+    "PETKM",
+    "PGSUS",
+    "QUAGR",
+    "REEDR",
+    "RTALB",
+    "SAHOL",
+    "SASA",
+    "SAYAS",
+    "SDTTR",
+    "SELEC",
+    "SELVA",
+    "SEYKM",
+    "SISE",
+    "SKBNK",
+    "SMRTG",
+    "SNGYO",
+    "SNICA",
+    "SOKE",
+    "TAVHL",
+    "TCELL",
+    "THYAO",
+    "TKFEN",
+    "TOASO",
+    "TSKB",
+    "TTKOM",
+    "TTRAK",
+    "TUKAS",
+    "TUPRS",
+    "TURSG",
+    "ULKER",
+    "ULUUN",
+    "VAKBN",
+    "VERUS",
+    "VESBE",
+    "VESTL",
+    "YEOTK",
+    "YKBNK",
+    "YYAPI",
+    "ZOREN"
+  ],
+  "symbols_failed": {},
+  "symbol_coverage": [
+    {
+      "symbol": "AEFES",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:33:14.900000+00:00",
+        "1d": "2026-10-19T13:33:24.300000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "AGHOL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:33:25.100000+00:00",
+        "1d": "2026-10-19T13:33:28.300000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "AGROT",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:33:29.200000+00:00",
+        "1d": "2026-10-19T13:33:31.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "AKBNK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:33:32.300000+00:00",
+        "1d": "2026-10-19T13:33:34.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "AKCNS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:33:35+00:00",
+        "1d": "2026-10-19T13:33:38.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "AKFGY",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:33:39.100000+00:00",
+        "1d": "2026-10-19T13:33:52.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "AKFYE",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:33:53.200000+00:00",
+        "1d": "2026-10-19T13:33:56.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "AKSA",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:33:56.800000+00:00",
+        "1d": "2026-10-19T13:33:59.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "AKSEN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:00+00:00",
+        "1d": "2026-10-19T13:34:03.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ALARK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:03.900000001+00:00",
+        "1d": "2026-10-19T13:34:06.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ALBRK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:12.600000+00:00",
+        "1d": "2026-10-19T13:34:18.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ALFAS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:19.700000+00:00",
+        "1d": "2026-10-19T13:34:22.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ALGYO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:23+00:00",
+        "1d": "2026-10-19T13:34:26.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ALTNY",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:27+00:00",
+        "1d": "2026-10-19T13:34:30.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ANSGR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:30.200000+00:00",
+        "1d": "2026-10-19T13:34:33.300000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ARCLK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:34.500000+00:00",
+        "1d": "2026-10-19T13:34:47.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ARDYZ",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:47.900000001+00:00",
+        "1d": "2026-10-19T13:34:51.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ARZUM",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:52.100000+00:00",
+        "1d": "2026-10-19T13:34:54.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ASELS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:54.900000001+00:00",
+        "1d": "2026-10-19T13:34:58.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ASTOR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:34:59+00:00",
+        "1d": "2026-10-19T13:35:02.300000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "AVPGY",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:35:02.100000+00:00",
+        "1d": "2026-10-19T13:35:16.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "AYDEM",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:35:17.300000+00:00",
+        "1d": "2026-10-19T13:35:19.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "BEGYO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:35:19.900000001+00:00",
+        "1d": "2026-10-19T13:35:23.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "BERA",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:35:24+00:00",
+        "1d": "2026-10-19T13:35:26.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "BIMAS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:35:27.100000+00:00",
+        "1d": "2026-10-19T13:35:30.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "BIOEN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:35:30.800000+00:00",
+        "1d": "2026-10-19T13:35:47.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "BJKAS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:35:48+00:00",
+        "1d": "2026-10-19T13:35:50.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "BOBET",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:35:51+00:00",
+        "1d": "2026-10-19T13:35:54.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "BRKVY",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:35:59.800000+00:00",
+        "1d": "2026-10-19T13:36:02.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "BRSAN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:36:03.900000+00:00",
+        "1d": "2026-10-19T13:36:19.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "BTCIM",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:36:20.100000+00:00",
+        "1d": "2026-10-19T13:36:23.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "BURCE",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:36:24+00:00",
+        "1d": "2026-10-19T13:36:26.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "CANTE",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:36:27.300000+00:00",
+        "1d": "2026-10-19T13:36:29.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "CCOLA",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:36:30.300000+00:00",
+        "1d": "2026-10-19T13:36:32.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "CEMAS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:36:33.700000+00:00",
+        "1d": "2026-10-19T13:36:49.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "CEMTS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:36:50.700000+00:00",
+        "1d": "2026-10-19T13:36:53.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "CIMSA",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:36:53.900000001+00:00",
+        "1d": "2026-10-19T13:36:57.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "CLEBI",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:36:58.100000+00:00",
+        "1d": "2026-10-19T13:37:00.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "CVKMD",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:37:01.100000+00:00",
+        "1d": "2026-10-19T13:37:04.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "CWENE",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:37:05.100000+00:00",
+        "1d": "2026-10-19T13:37:21.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DAPGM",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:37:22.800000+00:00",
+        "1d": "2026-10-19T13:37:25.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DARDL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:37:26.300000+00:00",
+        "1d": "2026-10-19T13:37:28.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DENGE",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:37:29.900000001+00:00",
+        "1d": "2026-10-19T13:37:32.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DERIM",
+      "bars_1d": 500,
+      "bars_4h": 1077,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:37:33.300000+00:00",
+        "1d": "2026-10-19T13:37:35.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DEVA",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:37:36.100000001+00:00",
+        "1d": "2026-10-19T13:37:52.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DIRIT",
+      "bars_1d": 500,
+      "bars_4h": 1072,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:37:52.800000+00:00",
+        "1d": "2026-10-19T13:37:54.900000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DMSAS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:37:56+00:00",
+        "1d": "2026-10-19T13:37:59.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DOAS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:38:00.100000+00:00",
+        "1d": "2026-10-19T13:38:02.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DOCO",
+      "bars_1d": 500,
+      "bars_4h": 1077,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:38:02.700000+00:00",
+        "1d": "2026-10-19T13:38:06.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DOFER",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:38:06.500000+00:00",
+        "1d": "2026-10-19T13:38:20.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DOHOL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:38:20.700000+00:00",
+        "1d": "2026-10-19T13:38:24.300000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "DYOBY",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:38:24.900000001+00:00",
+        "1d": "2026-10-19T13:38:28.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "EBEBK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:38:28.800000+00:00",
+        "1d": "2026-10-19T13:38:31.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ECILC",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:38:32.800000+00:00",
+        "1d": "2026-10-19T13:38:35.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ECZYT",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:38:36+00:00",
+        "1d": "2026-10-19T13:38:52.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "EFOR",
+      "bars_1d": 500,
+      "bars_4h": 716,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:38:53.300000+00:00",
+        "1d": "2026-10-19T13:38:55.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-11-03 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "EGEEN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:38:56+00:00",
+        "1d": "2026-10-19T13:38:59.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "EKGYO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:39:00.100000+00:00",
+        "1d": "2026-10-19T13:39:02.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ENERY",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:39:02.900000001+00:00",
+        "1d": "2026-10-19T13:39:06.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ENKAI",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:39:07.500000+00:00",
+        "1d": "2026-10-19T13:39:20.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ENSRI",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:39:21.100000+00:00",
+        "1d": "2026-10-19T13:39:24.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ERBOS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:39:24.400000+00:00",
+        "1d": "2026-10-19T13:39:27.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "EREGL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:39:27.900000001+00:00",
+        "1d": "2026-10-19T13:39:31.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ERSU",
+      "bars_1d": 500,
+      "bars_4h": 1077,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:39:31.800000+00:00",
+        "1d": "2026-10-19T13:39:34.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ESCAR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:39:35.600000001+00:00",
+        "1d": "2026-10-19T13:39:50.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ESEN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:39:51.800000+00:00",
+        "1d": "2026-10-19T13:39:54.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "EUPWR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:39:55.200000+00:00",
+        "1d": "2026-10-19T13:39:57.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "FENER",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:39:58.800000+00:00",
+        "1d": "2026-10-19T13:40:01.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "FONET",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:40:02.700000+00:00",
+        "1d": "2026-10-19T13:40:05.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "FROTO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:40:06.500000+00:00",
+        "1d": "2026-10-19T13:40:22.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "GARAN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:40:23.300000+00:00",
+        "1d": "2026-10-19T13:40:25.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "GARFA",
+      "bars_1d": 500,
+      "bars_4h": 999,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:40:26.200000+00:00",
+        "1d": "2026-10-19T13:40:29.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "GESAN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:40:30.100000+00:00",
+        "1d": "2026-10-19T13:40:32.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "GLYHO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:40:32.800000+00:00",
+        "1d": "2026-10-19T13:40:36.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "GOLTS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:40:37.300000+00:00",
+        "1d": "2026-10-19T13:40:49.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "GRSEL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:40:50.100000+00:00",
+        "1d": "2026-10-19T13:40:53.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "GRTHO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:40:53.900000001+00:00",
+        "1d": "2026-10-19T13:40:56.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "GSRAY",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:40:57.900000001+00:00",
+        "1d": "2026-10-19T13:41:00.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "GUBRF",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:41:01.400000+00:00",
+        "1d": "2026-10-19T13:41:03.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "GWIND",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:41:04+00:00",
+        "1d": "2026-10-19T13:41:20.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "HALKB",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:41:21+00:00",
+        "1d": "2026-10-19T13:41:23.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "HATEK",
+      "bars_1d": 500,
+      "bars_4h": 1077,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:41:24.300000+00:00",
+        "1d": "2026-10-19T13:41:27.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "HATSN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:41:27.300000+00:00",
+        "1d": "2026-10-19T13:41:30.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "HEDEF",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:41:30.800000+00:00",
+        "1d": "2026-10-19T13:41:33.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "HEKTS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:41:35+00:00",
+        "1d": "2026-10-19T13:41:51.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "HKTM",
+      "bars_1d": 500,
+      "bars_4h": 1077,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:41:52.100000+00:00",
+        "1d": "2026-10-19T13:41:54.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "IHEVA",
+      "bars_1d": 500,
+      "bars_4h": 1076,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:41:55.100000+00:00",
+        "1d": "2026-10-19T13:41:58.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ISCTR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:41:59+00:00",
+        "1d": "2026-10-19T13:42:02.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ISGYO",
+      "bars_1d": 500,
+      "bars_4h": 1077,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:42:03+00:00",
+        "1d": "2026-10-19T13:42:05.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ISMEN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:42:06.200000+00:00",
+        "1d": "2026-10-19T13:42:19.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "IZENR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:42:19.100000+00:00",
+        "1d": "2026-10-19T13:42:22.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KARSN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:42:23.200000+00:00",
+        "1d": "2026-10-19T13:42:25.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KCAER",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:42:26.700000+00:00",
+        "1d": "2026-10-19T13:42:29.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KCHOL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:42:30.900000001+00:00",
+        "1d": "2026-10-19T13:42:33.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KFEIN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:42:34.600000+00:00",
+        "1d": "2026-10-19T13:42:47.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KIMMR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:42:47.800000+00:00",
+        "1d": "2026-10-19T13:42:51.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KLGYO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:42:51.800000+00:00",
+        "1d": "2026-10-19T13:42:55.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KLSER",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:42:55.800000+00:00",
+        "1d": "2026-10-19T13:42:58.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KMPUR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:42:59.800000+00:00",
+        "1d": "2026-10-19T13:43:02.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KONTR",
+      "bars_1d": 500,
+      "bars_4h": 1074,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:43:02.800000+00:00",
+        "1d": "2026-10-19T13:43:19.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KONYA",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:43:20+00:00",
+        "1d": "2026-10-19T13:43:23.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KORDS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:43:23.900000001+00:00",
+        "1d": "2026-10-19T13:43:26.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KRDMD",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:43:27.200000+00:00",
+        "1d": "2026-10-19T13:43:30.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KRGYO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:43:30.100000+00:00",
+        "1d": "2026-10-19T13:43:33.300000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KRTEK",
+      "bars_1d": 500,
+      "bars_4h": 1077,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:43:34.400000+00:00",
+        "1d": "2026-10-19T13:43:48.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KUTPO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:43:48.900000001+00:00",
+        "1d": "2026-10-19T13:43:52.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "KZBGY",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:43:53.300000+00:00",
+        "1d": "2026-10-19T13:43:55.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "LMKDC",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:43:55.900000001+00:00",
+        "1d": "2026-10-19T13:43:59.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "MAGEN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:00+00:00",
+        "1d": "2026-10-19T13:44:03.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "MAKTK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:03.900000+00:00",
+        "1d": "2026-10-19T13:44:16.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "MARMR",
+      "bars_1d": 271,
+      "bars_4h": 801,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:17.300000+00:00",
+        "1d": "2026-10-19T13:44:19.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-09-19 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "MARTI",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:20.900000001+00:00",
+        "1d": "2026-10-19T13:44:23.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "MAVI",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:23.800000+00:00",
+        "1d": "2026-10-19T13:44:27.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "MEDTR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:28.200000+00:00",
+        "1d": "2026-10-19T13:44:31.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "MEGAP",
+      "bars_1d": 500,
+      "bars_4h": 1054,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:32.200000+00:00",
+        "1d": "2026-10-19T13:44:43.800000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "METRO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:44.300000+00:00",
+        "1d": "2026-10-19T13:44:47.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "MGROS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:48.200000+00:00",
+        "1d": "2026-10-19T13:44:50.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "MIATK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:51.100000+00:00",
+        "1d": "2026-10-19T13:44:54.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "MPARK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:55.200000+00:00",
+        "1d": "2026-10-19T13:44:57.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "MRSHL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:44:58.300000+00:00",
+        "1d": "2026-10-19T13:45:13.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "NETAS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:45:14+00:00",
+        "1d": "2026-10-19T13:45:17.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "NIBAS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:45:18+00:00",
+        "1d": "2026-10-19T13:45:21.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "OBAMS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:45:21.900000001+00:00",
+        "1d": "2026-10-19T13:45:24.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ODAS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:45:25.800000+00:00",
+        "1d": "2026-10-19T13:45:28.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "OFSYM",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:45:29.600000001+00:00",
+        "1d": "2026-10-19T13:45:44.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "OTKAR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:45:45.300000+00:00",
+        "1d": "2026-10-19T13:45:48.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "OYAKC",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:45:48.400000+00:00",
+        "1d": "2026-10-19T13:45:51.300000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "OZGYO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:45:51.900000001+00:00",
+        "1d": "2026-10-19T13:45:55.300000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "OZKGY",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:45:55.700000+00:00",
+        "1d": "2026-10-19T13:45:59.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "OZSUB",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:46:00.100000+00:00",
+        "1d": "2026-10-19T13:46:13.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "PAMEL",
+      "bars_1d": 500,
+      "bars_4h": 1077,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:46:14.200000+00:00",
+        "1d": "2026-10-19T13:46:17.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "PAPIL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:46:17.900000001+00:00",
+        "1d": "2026-10-19T13:46:20.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "PASEU",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:46:21.100000+00:00",
+        "1d": "2026-10-19T13:46:24.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "PEKGY",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:46:25+00:00",
+        "1d": "2026-10-19T13:46:28.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "PENTA",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:46:28.400000+00:00",
+        "1d": "2026-10-19T13:46:41.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "PETKM",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:46:42.100000+00:00",
+        "1d": "2026-10-19T13:46:44.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "PGSUS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:46:45.100000+00:00",
+        "1d": "2026-10-19T13:46:48.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "QUAGR",
+      "bars_1d": 500,
+      "bars_4h": 999,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:46:49.100000+00:00",
+        "1d": "2026-10-19T13:46:51.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "REEDR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:46:52.400000+00:00",
+        "1d": "2026-10-19T13:46:54.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "RTALB",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:46:55.500000+00:00",
+        "1d": "2026-10-19T13:47:08.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SAHOL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:47:09.300000+00:00",
+        "1d": "2026-10-19T13:47:12.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SASA",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:47:13.300000+00:00",
+        "1d": "2026-10-19T13:47:15.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SAYAS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:47:16.300000+00:00",
+        "1d": "2026-10-19T13:47:18.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SDTTR",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:47:19.500000+00:00",
+        "1d": "2026-10-19T13:47:23.300000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SELEC",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:47:24.300000+00:00",
+        "1d": "2026-10-19T13:47:38.300000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SELVA",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:47:39.200000+00:00",
+        "1d": "2026-10-19T13:47:42.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SEYKM",
+      "bars_1d": 500,
+      "bars_4h": 1000,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:47:42.300000+00:00",
+        "1d": "2026-10-19T13:47:45.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SISE",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:47:46.100000+00:00",
+        "1d": "2026-10-19T13:47:49.300000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SKBNK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:47:50.400000+00:00",
+        "1d": "2026-10-19T13:47:52.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SMRTG",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:47:53.300000+00:00",
+        "1d": "2026-10-19T13:48:05.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SNGYO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:48:06.100000+00:00",
+        "1d": "2026-10-19T13:48:09.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SNICA",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:48:10.300000+00:00",
+        "1d": "2026-10-19T13:48:12.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "SOKE",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:48:13.400000+00:00",
+        "1d": "2026-10-19T13:48:15.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "TAVHL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:48:16.100000+00:00",
+        "1d": "2026-10-19T13:48:19.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "TCELL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:48:19.400000+00:00",
+        "1d": "2026-10-19T13:48:34.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "THYAO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:48:35.200000+00:00",
+        "1d": "2026-10-19T13:48:37.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "TKFEN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:48:38.900000001+00:00",
+        "1d": "2026-10-19T13:48:41.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "TOASO",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:48:41.900000001+00:00",
+        "1d": "2026-10-19T13:48:45.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "TSKB",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:48:46.300000+00:00",
+        "1d": "2026-10-19T13:48:48.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "TTKOM",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:48:49.400000+00:00",
+        "1d": "2026-10-19T13:49:05.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "TTRAK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:49:05.400000+00:00",
+        "1d": "2026-10-19T13:49:08.600000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "TUKAS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:49:09.200000+00:00",
+        "1d": "2026-10-19T13:49:11.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "TUPRS",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:49:11.900000001+00:00",
+        "1d": "2026-10-19T13:49:15.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "TURSG",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:49:15.700000+00:00",
+        "1d": "2026-10-19T13:49:19.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ULKER",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:49:20.100000+00:00",
+        "1d": "2026-10-19T13:49:35.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ULUUN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:49:35.400000+00:00",
+        "1d": "2026-10-19T13:49:38.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "VAKBN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:49:39.200000+00:00",
+        "1d": "2026-10-19T13:49:41.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "VERUS",
+      "bars_1d": 500,
+      "bars_4h": 1079,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:49:42.100000+00:00",
+        "1d": "2026-10-19T13:49:45.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "VESBE",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:49:45.900000001+00:00",
+        "1d": "2026-10-19T13:49:49.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "VESTL",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:49:49.700000+00:00",
+        "1d": "2026-10-19T13:50:03.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "YEOTK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:50:11.200000+00:00",
+        "1d": "2026-10-19T13:50:14.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "YKBNK",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:50:15.100000+00:00",
+        "1d": "2026-10-19T13:50:17.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "YYAPI",
+      "bars_1d": 500,
+      "bars_4h": 1049,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:50:18.200000+00:00",
+        "1d": "2026-10-19T13:50:31.400000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    },
+    {
+      "symbol": "ZOREN",
+      "bars_1d": 500,
+      "bars_4h": 1078,
+      "capture_start_bound_utc": {
+        "1h": "2026-10-19T13:50:31.400000+00:00",
+        "1d": "2026-10-19T13:50:34.500000+00:00"
+      },
+      "excluded_unclosed_1d": 1,
+      "excluded_unclosed_4h": 1,
+      "first_4h_close": "2025-05-07 13:30:00+03:00",
+      "last_4h_close": "2026-10-19 13:30:00+03:00"
+    }
+  ],
+  "definition": {
+    "event": "closed 4h Stabil signal; post-policy arrows and separate vertical attempts",
+    "capture_cutoff": "scheduled bar close <= manifest timestamp minus recorded fetch duration and one second",
+    "atr": "causal Wilder ATR14 in 4h bars, frozen at event close",
+    "weak_reaction": "full next 8 bars MFE < 0.5 ATR; not inferred for censored/invalid windows",
+    "return": "8th later bar close minus signal close, in frozen ATR units",
+    "race": "first high >= entry+ATR or low <= entry-ATR; both on same bar is ambiguous",
+    "invalid": "bad OHLCV or >30 percent close gap in last 20 or outcome horizon",
+    "overlap": "all signals retained; independent comparison keeps first per symbol >=8 bars apart",
+    "ob": "nearest confirmed active bearish OB remaining zone at/above close",
+    "fvg": "selected native active bearish FVG remaining zone at/above close; candidate excluded",
+    "volume": "event volume / mean of up to previous 20 positive 4h volumes; >=5 required",
+    "regime": "unconfirmed vertical/horizontal candidate proxy, not visual ground truth"
+  },
+  "summary": {
+    "event_class_counts": {
+      "VERTICAL_OTHER_WARNING": 3353,
+      "VERTICAL_SUPPRESSED_PREVIOUS_UP_CANDIDATE": 838,
+      "UP_ARROW": 584
+    },
+    "symbols_with_arrow": 161,
+    "arrow_status_8_counts": {
+      "VALID": 555,
+      "BAD_HISTORY": 15,
+      "RIGHT_CENSORED": 14
+    },
+    "valid_arrows_8": 555,
+    "weak_mfe_arrows_8": 138,
+    "nonpositive_close_arrows_8": 294,
+    "nonoverlap_arrows_8": 508,
+    "comparisons": {
+      "kind": [
+        {
+          "group": "close_reclaim",
+          "all_events": 267,
+          "valid_8": 255,
+          "symbols_valid": 131,
+          "weak_mfe_n": 59,
+          "weak_mfe_rate": 0.23137254901960785,
+          "nonpositive_close_rate": 0.5450980392156862,
+          "median_return_atr": -0.21356350629760049,
+          "up_first_rate": 0.4627450980392157,
+          "down_first_rate": 0.4745098039215686,
+          "same_bar_ambiguous_n": 3,
+          "right_censored_n": 2
+        },
+        {
+          "group": "intrabar_sweep_reclaim",
+          "all_events": 175,
+          "valid_8": 162,
+          "symbols_valid": 107,
+          "weak_mfe_n": 48,
+          "weak_mfe_rate": 0.2962962962962963,
+          "nonpositive_close_rate": 0.5370370370370371,
+          "median_return_atr": -0.1635783683734671,
+          "up_first_rate": 0.5123456790123457,
+          "down_first_rate": 0.4382716049382716,
+          "same_bar_ambiguous_n": 4,
+          "right_censored_n": 12
+        },
+        {
+          "group": "long_base_breakout",
+          "all_events": 63,
+          "valid_8": 63,
+          "symbols_valid": 49,
+          "weak_mfe_n": 18,
+          "weak_mfe_rate": 0.2857142857142857,
+          "nonpositive_close_rate": 0.5555555555555556,
+          "median_return_atr": -0.0404890993861329,
+          "up_first_rate": 0.49206349206349204,
+          "down_first_rate": 0.42857142857142855,
+          "same_bar_ambiguous_n": 1,
+          "right_censored_n": 0
+        },
+        {
+          "group": "upward_rebase_momentum",
+          "all_events": 79,
+          "valid_8": 75,
+          "symbols_valid": 54,
+          "weak_mfe_n": 13,
+          "weak_mfe_rate": 0.17333333333333334,
+          "nonpositive_close_rate": 0.44,
+          "median_return_atr": 0.19894047547285668,
+          "up_first_rate": 0.5866666666666667,
+          "down_first_rate": 0.3466666666666667,
+          "same_bar_ambiguous_n": 1,
+          "right_censored_n": 0
+        }
+      ],
+      "volume_bucket": [
+        {
+          "group": "HIGH_GE_1.2",
+          "all_events": 350,
+          "valid_8": 337,
+          "symbols_valid": 137,
+          "weak_mfe_n": 83,
+          "weak_mfe_rate": 0.24629080118694363,
+          "nonpositive_close_rate": 0.5192878338278932,
+          "median_return_atr": -0.0293056392892143,
+          "up_first_rate": 0.49851632047477745,
+          "down_first_rate": 0.4362017804154303,
+          "same_bar_ambiguous_n": 8,
+          "right_censored_n": 7
+        },
+        {
+          "group": "LOW_LT_0.8",
+          "all_events": 102,
+          "valid_8": 99,
+          "symbols_valid": 76,
+          "weak_mfe_n": 25,
+          "weak_mfe_rate": 0.25252525252525254,
+          "nonpositive_close_rate": 0.5454545454545454,
+          "median_return_atr": -0.30328944967647214,
+          "up_first_rate": 0.5050505050505051,
+          "down_first_rate": 0.46464646464646464,
+          "same_bar_ambiguous_n": 1,
+          "right_censored_n": 2
+        },
+        {
+          "group": "MID_0.8_TO_1.2",
+          "all_events": 125,
+          "valid_8": 119,
+          "symbols_valid": 83,
+          "weak_mfe_n": 30,
+          "weak_mfe_rate": 0.25210084033613445,
+          "nonpositive_close_rate": 0.5462184873949579,
+          "median_return_atr": -0.3122353698667598,
+          "up_first_rate": 0.48739495798319327,
+          "down_first_rate": 0.4369747899159664,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 5
+        },
+        {
+          "group": "UNKNOWN",
+          "all_events": 7,
+          "valid_8": 0,
+          "symbols_valid": 0,
+          "weak_mfe_n": 0,
+          "weak_mfe_rate": null,
+          "nonpositive_close_rate": null,
+          "median_return_atr": null,
+          "up_first_rate": null,
+          "down_first_rate": null,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        }
+      ],
+      "ob_ahead": [
+        {
+          "group": "FAR_OVER_1ATR",
+          "all_events": 333,
+          "valid_8": 321,
+          "symbols_valid": 137,
+          "weak_mfe_n": 83,
+          "weak_mfe_rate": 0.2585669781931464,
+          "nonpositive_close_rate": 0.5451713395638629,
+          "median_return_atr": -0.18439495372149267,
+          "up_first_rate": 0.5015576323987538,
+          "down_first_rate": 0.4236760124610592,
+          "same_bar_ambiguous_n": 5,
+          "right_censored_n": 12
+        },
+        {
+          "group": "NEAR_1ATR",
+          "all_events": 169,
+          "valid_8": 167,
+          "symbols_valid": 103,
+          "weak_mfe_n": 42,
+          "weak_mfe_rate": 0.25149700598802394,
+          "nonpositive_close_rate": 0.5029940119760479,
+          "median_return_atr": -0.06199699094986367,
+          "up_first_rate": 0.47904191616766467,
+          "down_first_rate": 0.46706586826347307,
+          "same_bar_ambiguous_n": 4,
+          "right_censored_n": 2
+        },
+        {
+          "group": "NONE_AHEAD",
+          "all_events": 11,
+          "valid_8": 11,
+          "symbols_valid": 10,
+          "weak_mfe_n": 2,
+          "weak_mfe_rate": 0.18181818181818182,
+          "nonpositive_close_rate": 0.45454545454545453,
+          "median_return_atr": 0.5976610521651194,
+          "up_first_rate": 0.36363636363636365,
+          "down_first_rate": 0.6363636363636364,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        },
+        {
+          "group": "UNKNOWN",
+          "all_events": 71,
+          "valid_8": 56,
+          "symbols_valid": 42,
+          "weak_mfe_n": 11,
+          "weak_mfe_rate": 0.19642857142857142,
+          "nonpositive_close_rate": 0.5357142857142857,
+          "median_return_atr": -0.17219103828510623,
+          "up_first_rate": 0.5535714285714286,
+          "down_first_rate": 0.42857142857142855,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        }
+      ],
+      "fvg_ahead": [
+        {
+          "group": "FAR_OVER_1ATR",
+          "all_events": 79,
+          "valid_8": 73,
+          "symbols_valid": 56,
+          "weak_mfe_n": 19,
+          "weak_mfe_rate": 0.2602739726027397,
+          "nonpositive_close_rate": 0.6164383561643836,
+          "median_return_atr": -0.6039877789235057,
+          "up_first_rate": 0.4657534246575342,
+          "down_first_rate": 0.4931506849315068,
+          "same_bar_ambiguous_n": 1,
+          "right_censored_n": 6
+        },
+        {
+          "group": "NEAR_1ATR",
+          "all_events": 84,
+          "valid_8": 83,
+          "symbols_valid": 62,
+          "weak_mfe_n": 25,
+          "weak_mfe_rate": 0.30120481927710846,
+          "nonpositive_close_rate": 0.5301204819277109,
+          "median_return_atr": -0.1799635342998674,
+          "up_first_rate": 0.46987951807228917,
+          "down_first_rate": 0.4578313253012048,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 1
+        },
+        {
+          "group": "NONE_AHEAD",
+          "all_events": 350,
+          "valid_8": 343,
+          "symbols_valid": 139,
+          "weak_mfe_n": 83,
+          "weak_mfe_rate": 0.24198250728862974,
+          "nonpositive_close_rate": 0.5102040816326531,
+          "median_return_atr": 0.0,
+          "up_first_rate": 0.5014577259475219,
+          "down_first_rate": 0.42857142857142855,
+          "same_bar_ambiguous_n": 8,
+          "right_censored_n": 7
+        },
+        {
+          "group": "UNKNOWN",
+          "all_events": 71,
+          "valid_8": 56,
+          "symbols_valid": 42,
+          "weak_mfe_n": 11,
+          "weak_mfe_rate": 0.19642857142857142,
+          "nonpositive_close_rate": 0.5357142857142857,
+          "median_return_atr": -0.17219103828510623,
+          "up_first_rate": 0.5535714285714286,
+          "down_first_rate": 0.42857142857142855,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        }
+      ],
+      "ms_external_state": [
+        {
+          "group": "STATE_BEARISH",
+          "all_events": 277,
+          "valid_8": 265,
+          "symbols_valid": 123,
+          "weak_mfe_n": 70,
+          "weak_mfe_rate": 0.2641509433962264,
+          "nonpositive_close_rate": 0.5320754716981132,
+          "median_return_atr": -0.0731783955223862,
+          "up_first_rate": 0.49056603773584906,
+          "down_first_rate": 0.4641509433962264,
+          "same_bar_ambiguous_n": 2,
+          "right_censored_n": 12
+        },
+        {
+          "group": "STATE_BULLISH",
+          "all_events": 76,
+          "valid_8": 74,
+          "symbols_valid": 48,
+          "weak_mfe_n": 18,
+          "weak_mfe_rate": 0.24324324324324326,
+          "nonpositive_close_rate": 0.5405405405405406,
+          "median_return_atr": -0.22472521738429524,
+          "up_first_rate": 0.5135135135135135,
+          "down_first_rate": 0.43243243243243246,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 2
+        },
+        {
+          "group": "STATE_TRANSITION_DOWN",
+          "all_events": 123,
+          "valid_8": 123,
+          "symbols_valid": 76,
+          "weak_mfe_n": 31,
+          "weak_mfe_rate": 0.25203252032520324,
+          "nonpositive_close_rate": 0.5203252032520326,
+          "median_return_atr": -0.1144216560587979,
+          "up_first_rate": 0.4878048780487805,
+          "down_first_rate": 0.43089430894308944,
+          "same_bar_ambiguous_n": 4,
+          "right_censored_n": 0
+        },
+        {
+          "group": "STATE_TRANSITION_UP",
+          "all_events": 37,
+          "valid_8": 37,
+          "symbols_valid": 31,
+          "weak_mfe_n": 8,
+          "weak_mfe_rate": 0.21621621621621623,
+          "nonpositive_close_rate": 0.5135135135135135,
+          "median_return_atr": 0.0,
+          "up_first_rate": 0.4594594594594595,
+          "down_first_rate": 0.35135135135135137,
+          "same_bar_ambiguous_n": 3,
+          "right_censored_n": 0
+        },
+        {
+          "group": "UNKNOWN",
+          "all_events": 71,
+          "valid_8": 56,
+          "symbols_valid": 42,
+          "weak_mfe_n": 11,
+          "weak_mfe_rate": 0.19642857142857142,
+          "nonpositive_close_rate": 0.5357142857142857,
+          "median_return_atr": -0.17219103828510623,
+          "up_first_rate": 0.5535714285714286,
+          "down_first_rate": 0.42857142857142855,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        }
+      ],
+      "regime_proxy": [
+        {
+          "group": "BREACHED_FIXED_SUPPORT",
+          "all_events": 139,
+          "valid_8": 130,
+          "symbols_valid": 86,
+          "weak_mfe_n": 23,
+          "weak_mfe_rate": 0.17692307692307693,
+          "nonpositive_close_rate": 0.5076923076923077,
+          "median_return_atr": 0.0,
+          "up_first_rate": 0.5230769230769231,
+          "down_first_rate": 0.4307692307692308,
+          "same_bar_ambiguous_n": 2,
+          "right_censored_n": 0
+        },
+        {
+          "group": "HORIZONTAL_AFTER_DROP",
+          "all_events": 228,
+          "valid_8": 213,
+          "symbols_valid": 117,
+          "weak_mfe_n": 63,
+          "weak_mfe_rate": 0.29577464788732394,
+          "nonpositive_close_rate": 0.5539906103286385,
+          "median_return_atr": -0.3022031798935492,
+          "up_first_rate": 0.45539906103286387,
+          "down_first_rate": 0.5117370892018779,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 14
+        },
+        {
+          "group": "HORIZONTAL_BASE",
+          "all_events": 10,
+          "valid_8": 10,
+          "symbols_valid": 9,
+          "weak_mfe_n": 4,
+          "weak_mfe_rate": 0.4,
+          "nonpositive_close_rate": 0.5,
+          "median_return_atr": 0.12091237698927629,
+          "up_first_rate": 0.6,
+          "down_first_rate": 0.4,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        },
+        {
+          "group": "LONG_HORIZONTAL",
+          "all_events": 49,
+          "valid_8": 49,
+          "symbols_valid": 29,
+          "weak_mfe_n": 12,
+          "weak_mfe_rate": 0.24489795918367346,
+          "nonpositive_close_rate": 0.4489795918367347,
+          "median_return_atr": 0.10494257115985552,
+          "up_first_rate": 0.5510204081632653,
+          "down_first_rate": 0.32653061224489793,
+          "same_bar_ambiguous_n": 3,
+          "right_censored_n": 0
+        },
+        {
+          "group": "NEWLY_FLATTENED_AFTER_RISE",
+          "all_events": 158,
+          "valid_8": 153,
+          "symbols_valid": 86,
+          "weak_mfe_n": 36,
+          "weak_mfe_rate": 0.23529411764705882,
+          "nonpositive_close_rate": 0.5424836601307189,
+          "median_return_atr": -0.2698009214609695,
+          "up_first_rate": 0.5098039215686274,
+          "down_first_rate": 0.39215686274509803,
+          "same_bar_ambiguous_n": 4,
+          "right_censored_n": 0
+        }
+      ],
+      "stabil_daily_raw_state": [
+        {
+          "group": "DAILY_RAW_ADVANCE",
+          "all_events": 4,
+          "valid_8": 4,
+          "symbols_valid": 3,
+          "weak_mfe_n": 0,
+          "weak_mfe_rate": 0.0,
+          "nonpositive_close_rate": 0.0,
+          "median_return_atr": 2.0508549640022444,
+          "up_first_rate": 1.0,
+          "down_first_rate": 0.0,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        },
+        {
+          "group": "DAILY_RAW_BALANCE",
+          "all_events": 8,
+          "valid_8": 8,
+          "symbols_valid": 8,
+          "weak_mfe_n": 4,
+          "weak_mfe_rate": 0.5,
+          "nonpositive_close_rate": 0.875,
+          "median_return_atr": -0.8302323728386694,
+          "up_first_rate": 0.25,
+          "down_first_rate": 0.75,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        },
+        {
+          "group": "DAILY_RAW_DISTRIBUTION",
+          "all_events": 15,
+          "valid_8": 15,
+          "symbols_valid": 13,
+          "weak_mfe_n": 1,
+          "weak_mfe_rate": 0.06666666666666667,
+          "nonpositive_close_rate": 0.4,
+          "median_return_atr": 0.2729520979077823,
+          "up_first_rate": 0.7333333333333333,
+          "down_first_rate": 0.06666666666666667,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        },
+        {
+          "group": "DAILY_RAW_GAP_WATCH",
+          "all_events": 6,
+          "valid_8": 6,
+          "symbols_valid": 6,
+          "weak_mfe_n": 2,
+          "weak_mfe_rate": 0.3333333333333333,
+          "nonpositive_close_rate": 0.5,
+          "median_return_atr": -0.17888485155483902,
+          "up_first_rate": 0.3333333333333333,
+          "down_first_rate": 0.6666666666666666,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        },
+        {
+          "group": "DAILY_RAW_NEUTRAL",
+          "all_events": 265,
+          "valid_8": 257,
+          "symbols_valid": 119,
+          "weak_mfe_n": 65,
+          "weak_mfe_rate": 0.2529182879377432,
+          "nonpositive_close_rate": 0.5447470817120622,
+          "median_return_atr": -0.16031298086667006,
+          "up_first_rate": 0.48638132295719844,
+          "down_first_rate": 0.45136186770428016,
+          "same_bar_ambiguous_n": 4,
+          "right_censored_n": 1
+        },
+        {
+          "group": "DAILY_RAW_PULLBACK",
+          "all_events": 43,
+          "valid_8": 43,
+          "symbols_valid": 32,
+          "weak_mfe_n": 9,
+          "weak_mfe_rate": 0.20930232558139536,
+          "nonpositive_close_rate": 0.3953488372093023,
+          "median_return_atr": 0.15775768241491278,
+          "up_first_rate": 0.4186046511627907,
+          "down_first_rate": 0.4883720930232558,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        },
+        {
+          "group": "DAILY_RAW_STRUCTURE_BROKEN",
+          "all_events": 46,
+          "valid_8": 45,
+          "symbols_valid": 34,
+          "weak_mfe_n": 8,
+          "weak_mfe_rate": 0.17777777777777778,
+          "nonpositive_close_rate": 0.4666666666666667,
+          "median_return_atr": 0.4097810796026569,
+          "up_first_rate": 0.6222222222222222,
+          "down_first_rate": 0.35555555555555557,
+          "same_bar_ambiguous_n": 1,
+          "right_censored_n": 0
+        },
+        {
+          "group": "DAILY_RAW_TOO_DEEP",
+          "all_events": 196,
+          "valid_8": 176,
+          "symbols_valid": 110,
+          "weak_mfe_n": 48,
+          "weak_mfe_rate": 0.2727272727272727,
+          "nonpositive_close_rate": 0.5625,
+          "median_return_atr": -0.30721927488015455,
+          "up_first_rate": 0.48863636363636365,
+          "down_first_rate": 0.45454545454545453,
+          "same_bar_ambiguous_n": 4,
+          "right_censored_n": 13
+        },
+        {
+          "group": "UNKNOWN",
+          "all_events": 1,
+          "valid_8": 1,
+          "symbols_valid": 1,
+          "weak_mfe_n": 1,
+          "weak_mfe_rate": 1.0,
+          "nonpositive_close_rate": 1.0,
+          "median_return_atr": -1.6684875948824978,
+          "up_first_rate": 0.0,
+          "down_first_rate": 1.0,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        }
+      ],
+      "stabil_h4_state": [
+        {
+          "group": "H4_BUYERS_EMERGING",
+          "all_events": 319,
+          "valid_8": 314,
+          "symbols_valid": 135,
+          "weak_mfe_n": 83,
+          "weak_mfe_rate": 0.2643312101910828,
+          "nonpositive_close_rate": 0.5127388535031847,
+          "median_return_atr": 0.0,
+          "up_first_rate": 0.4968152866242038,
+          "down_first_rate": 0.4426751592356688,
+          "same_bar_ambiguous_n": 4,
+          "right_censored_n": 5
+        },
+        {
+          "group": "H4_NO_RECOVERY",
+          "all_events": 23,
+          "valid_8": 19,
+          "symbols_valid": 18,
+          "weak_mfe_n": 3,
+          "weak_mfe_rate": 0.15789473684210525,
+          "nonpositive_close_rate": 0.47368421052631576,
+          "median_return_atr": 0.08769120082389324,
+          "up_first_rate": 0.5263157894736842,
+          "down_first_rate": 0.42105263157894735,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 4
+        },
+        {
+          "group": "H4_RECOVERY_CONFIRMED",
+          "all_events": 17,
+          "valid_8": 17,
+          "symbols_valid": 16,
+          "weak_mfe_n": 6,
+          "weak_mfe_rate": 0.35294117647058826,
+          "nonpositive_close_rate": 0.5294117647058824,
+          "median_return_atr": -0.0731783955223862,
+          "up_first_rate": 0.5294117647058824,
+          "down_first_rate": 0.47058823529411764,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        },
+        {
+          "group": "H4_RECOVERY_FAILED",
+          "all_events": 47,
+          "valid_8": 46,
+          "symbols_valid": 35,
+          "weak_mfe_n": 5,
+          "weak_mfe_rate": 0.10869565217391304,
+          "nonpositive_close_rate": 0.4782608695652174,
+          "median_return_atr": 0.11676426427057335,
+          "up_first_rate": 0.6304347826086957,
+          "down_first_rate": 0.2826086956521739,
+          "same_bar_ambiguous_n": 2,
+          "right_censored_n": 1
+        },
+        {
+          "group": "H4_SELLING_WEAKENING",
+          "all_events": 153,
+          "valid_8": 149,
+          "symbols_valid": 94,
+          "weak_mfe_n": 40,
+          "weak_mfe_rate": 0.2684563758389262,
+          "nonpositive_close_rate": 0.5973154362416108,
+          "median_return_atr": -0.39413897815099125,
+          "up_first_rate": 0.4429530201342282,
+          "down_first_rate": 0.4899328859060403,
+          "same_bar_ambiguous_n": 3,
+          "right_censored_n": 4
+        },
+        {
+          "group": "UNKNOWN",
+          "all_events": 25,
+          "valid_8": 10,
+          "symbols_valid": 7,
+          "weak_mfe_n": 1,
+          "weak_mfe_rate": 0.1,
+          "nonpositive_close_rate": 0.4,
+          "median_return_atr": 0.6746002125285867,
+          "up_first_rate": 0.6,
+          "down_first_rate": 0.4,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        }
+      ]
+    },
+    "nonoverlap_comparisons": {
+      "kind": [
+        {
+          "group": "close_reclaim",
+          "all_events": 244,
+          "valid_8": 233,
+          "symbols_valid": 129,
+          "weak_mfe_n": 52,
+          "weak_mfe_rate": 0.22317596566523606,
+          "nonpositive_close_rate": 0.5278969957081545,
+          "median_return_atr": -0.10308295636473917,
+          "up_first_rate": 0.4721030042918455,
+          "down_first_rate": 0.4721030042918455,
+          "same_bar_ambiguous_n": 3,
+          "right_censored_n": 2
+        },
+        {
+          "group": "intrabar_sweep_reclaim",
+          "all_events": 153,
+          "valid_8": 144,
+          "symbols_valid": 103,
+          "weak_mfe_n": 41,
+          "weak_mfe_rate": 0.2847222222222222,
+          "nonpositive_close_rate": 0.5277777777777778,
+          "median_return_atr": -0.0651035587483855,
+          "up_first_rate": 0.5208333333333334,
+          "down_first_rate": 0.4236111111111111,
+          "same_bar_ambiguous_n": 4,
+          "right_censored_n": 9
+        },
+        {
+          "group": "long_base_breakout",
+          "all_events": 49,
+          "valid_8": 49,
+          "symbols_valid": 44,
+          "weak_mfe_n": 14,
+          "weak_mfe_rate": 0.2857142857142857,
+          "nonpositive_close_rate": 0.5306122448979592,
+          "median_return_atr": 0.0,
+          "up_first_rate": 0.4897959183673469,
+          "down_first_rate": 0.4489795918367347,
+          "same_bar_ambiguous_n": 1,
+          "right_censored_n": 0
+        },
+        {
+          "group": "upward_rebase_momentum",
+          "all_events": 62,
+          "valid_8": 60,
+          "symbols_valid": 48,
+          "weak_mfe_n": 9,
+          "weak_mfe_rate": 0.15,
+          "nonpositive_close_rate": 0.45,
+          "median_return_atr": 0.09306614285684184,
+          "up_first_rate": 0.6,
+          "down_first_rate": 0.3333333333333333,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        }
+      ],
+      "volume_bucket": [
+        {
+          "group": "HIGH_GE_1.2",
+          "all_events": 304,
+          "valid_8": 295,
+          "symbols_valid": 137,
+          "weak_mfe_n": 72,
+          "weak_mfe_rate": 0.2440677966101695,
+          "nonpositive_close_rate": 0.511864406779661,
+          "median_return_atr": 0.0,
+          "up_first_rate": 0.49830508474576274,
+          "down_first_rate": 0.4406779661016949,
+          "same_bar_ambiguous_n": 7,
+          "right_censored_n": 5
+        },
+        {
+          "group": "LOW_LT_0.8",
+          "all_events": 91,
+          "valid_8": 89,
+          "symbols_valid": 72,
+          "weak_mfe_n": 21,
+          "weak_mfe_rate": 0.23595505617977527,
+          "nonpositive_close_rate": 0.550561797752809,
+          "median_return_atr": -0.43960972891619404,
+          "up_first_rate": 0.5056179775280899,
+          "down_first_rate": 0.4606741573033708,
+          "same_bar_ambiguous_n": 1,
+          "right_censored_n": 2
+        },
+        {
+          "group": "MID_0.8_TO_1.2",
+          "all_events": 106,
+          "valid_8": 102,
+          "symbols_valid": 74,
+          "weak_mfe_n": 23,
+          "weak_mfe_rate": 0.22549019607843138,
+          "nonpositive_close_rate": 0.5098039215686274,
+          "median_return_atr": -0.08342187794013206,
+          "up_first_rate": 0.5196078431372549,
+          "down_first_rate": 0.4117647058823529,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 4
+        },
+        {
+          "group": "UNKNOWN",
+          "all_events": 7,
+          "valid_8": 0,
+          "symbols_valid": 0,
+          "weak_mfe_n": 0,
+          "weak_mfe_rate": null,
+          "nonpositive_close_rate": null,
+          "median_return_atr": null,
+          "up_first_rate": null,
+          "down_first_rate": null,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        }
+      ],
+      "ob_ahead": [
+        {
+          "group": "FAR_OVER_1ATR",
+          "all_events": 284,
+          "valid_8": 275,
+          "symbols_valid": 136,
+          "weak_mfe_n": 69,
+          "weak_mfe_rate": 0.2509090909090909,
+          "nonpositive_close_rate": 0.5272727272727272,
+          "median_return_atr": -0.0293056392892143,
+          "up_first_rate": 0.5163636363636364,
+          "down_first_rate": 0.41818181818181815,
+          "same_bar_ambiguous_n": 4,
+          "right_censored_n": 9
+        },
+        {
+          "group": "NEAR_1ATR",
+          "all_events": 152,
+          "valid_8": 150,
+          "symbols_valid": 100,
+          "weak_mfe_n": 36,
+          "weak_mfe_rate": 0.24,
+          "nonpositive_close_rate": 0.5,
+          "median_return_atr": -0.02193460768019788,
+          "up_first_rate": 0.48,
+          "down_first_rate": 0.46,
+          "same_bar_ambiguous_n": 4,
+          "right_censored_n": 2
+        },
+        {
+          "group": "NONE_AHEAD",
+          "all_events": 10,
+          "valid_8": 10,
+          "symbols_valid": 10,
+          "weak_mfe_n": 1,
+          "weak_mfe_rate": 0.1,
+          "nonpositive_close_rate": 0.4,
+          "median_return_atr": 0.6706771326379697,
+          "up_first_rate": 0.4,
+          "down_first_rate": 0.6,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        },
+        {
+          "group": "UNKNOWN",
+          "all_events": 62,
+          "valid_8": 51,
+          "symbols_valid": 42,
+          "weak_mfe_n": 10,
+          "weak_mfe_rate": 0.19607843137254902,
+          "nonpositive_close_rate": 0.5490196078431373,
+          "median_return_atr": -0.2567187791350395,
+          "up_first_rate": 0.5294117647058824,
+          "down_first_rate": 0.45098039215686275,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        }
+      ],
+      "fvg_ahead": [
+        {
+          "group": "FAR_OVER_1ATR",
+          "all_events": 69,
+          "valid_8": 66,
+          "symbols_valid": 56,
+          "weak_mfe_n": 16,
+          "weak_mfe_rate": 0.24242424242424243,
+          "nonpositive_close_rate": 0.5909090909090909,
+          "median_return_atr": -0.5663557113511601,
+          "up_first_rate": 0.5,
+          "down_first_rate": 0.4696969696969697,
+          "same_bar_ambiguous_n": 1,
+          "right_censored_n": 3
+        },
+        {
+          "group": "NEAR_1ATR",
+          "all_events": 80,
+          "valid_8": 79,
+          "symbols_valid": 62,
+          "weak_mfe_n": 24,
+          "weak_mfe_rate": 0.3037974683544304,
+          "nonpositive_close_rate": 0.5443037974683544,
+          "median_return_atr": -0.3599602667369053,
+          "up_first_rate": 0.46835443037974683,
+          "down_first_rate": 0.45569620253164556,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 1
+        },
+        {
+          "group": "NONE_AHEAD",
+          "all_events": 297,
+          "valid_8": 290,
+          "symbols_valid": 138,
+          "weak_mfe_n": 66,
+          "weak_mfe_rate": 0.22758620689655173,
+          "nonpositive_close_rate": 0.4896551724137931,
+          "median_return_atr": 0.05252710146070173,
+          "up_first_rate": 0.5103448275862069,
+          "down_first_rate": 0.4241379310344828,
+          "same_bar_ambiguous_n": 7,
+          "right_censored_n": 7
+        },
+        {
+          "group": "UNKNOWN",
+          "all_events": 62,
+          "valid_8": 51,
+          "symbols_valid": 42,
+          "weak_mfe_n": 10,
+          "weak_mfe_rate": 0.19607843137254902,
+          "nonpositive_close_rate": 0.5490196078431373,
+          "median_return_atr": -0.2567187791350395,
+          "up_first_rate": 0.5294117647058824,
+          "down_first_rate": 0.45098039215686275,
+          "same_bar_ambiguous_n": 0,
+          "right_censored_n": 0
+        }
+      ]
+    }
+  }
+}
