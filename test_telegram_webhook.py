@@ -15,6 +15,8 @@ import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+import pytest
+
 import main as main_mod
 from health_server import WEBHOOK_YOL, WEBHOOK_YOL_ONEK, start_render_health_server
 from live_state import LiveState
@@ -375,6 +377,35 @@ def test_komut_katmani_secret_yoksa_yoklama_veya_kapali(monkeypatch):
 def test_webhook_isle_bot_hazir_degilse_503(monkeypatch):
     monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", None)
     assert main_mod._telegram_webhook_isle(_guncelleme(1, "/panel")) == 503
+
+
+def test_webhook_isle_shutdown_sonrasi_503_ve_yeni_komut_yok(monkeypatch):
+    isleyici = SahteIsleyici()
+    monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", isleyici)
+    monkeypatch.setattr(main_mod, "_shutdown_requested", True)
+    assert main_mod._telegram_webhook_isle(_guncelleme(2, "/panel")) == 503
+    assert isleyici.guncellemeler == []
+
+
+@pytest.mark.parametrize("change", ["shutdown", "processor"])
+def test_webhook_kilit_beklerken_kapanirsa_is_baslatmaz(monkeypatch, change):
+    isleyici = SahteIsleyici()
+    monkeypatch.setattr(main_mod, "_telegram_update_processor_ref", isleyici)
+    monkeypatch.setattr(main_mod, "_shutdown_requested", False)
+
+    class SignalWhileWaiting:
+        def __enter__(self):
+            if change == "shutdown":
+                main_mod._shutdown_requested = True
+            else:
+                main_mod._telegram_update_processor_ref = None
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(main_mod, "_telegram_webhook_kilidi", SignalWhileWaiting())
+    assert main_mod._telegram_webhook_isle(_guncelleme(3, "/panel")) == 503
+    assert isleyici.guncellemeler == []
 
 
 def test_webhook_isle_guncellemeyi_isleyiciye_verir(monkeypatch):

@@ -2367,9 +2367,13 @@ def _telegram_webhook_isle(guncelleme):
       500 → işleyici hatası (Telegram tekrar dener, güncelleme kaybolmaz).
     """
     isleyici = _pkg._telegram_update_processor_ref
-    if isleyici is None:
+    if isleyici is None or _pkg._shutdown_requested:
         return 503
     with _pkg._telegram_webhook_kilidi:
+        # Sinyal kilit beklenirken gelebilir veya işlemci kapanışta değişebilir.
+        # Yeni işi başlatma; 503, Telegram'ın daha sonra yeniden denemesini sağlar.
+        if _pkg._shutdown_requested or isleyici is not _pkg._telegram_update_processor_ref:
+            return 503
         try:
             isleyici.handle_update(guncelleme)
             bekliyor = getattr(isleyici, "update_waiting_for_delivery", None)

@@ -361,11 +361,13 @@ def main_loop():
         initial_store_data=notifier_rows,
     )
     setattr(_pkg, "_notifier_ref", notifier)
-    # Telegram token/chat_id teşhisi: mesaj göndermeden getMe ile doğrular.
-    notifier.check_connection()
+    # SIGTERM açılış sırasında gelmişse yeni ağ işi/komut dinleyicisi başlatma.
+    # Başlamış tek bir ağ çağrısı anında iptal edilemez; zaman aşımları geçerlidir.
+    if not _pkg._shutdown_requested:
+        notifier.check_connection()
     # Public hedef (kanal/grup) doğrulaması: bot yönetici değilse/izin yoksa
     # ilk gönderimde 403 almak yerine AÇILIŞTA net uyarı verilir.
-    if notifier.public_enabled:
+    if not _pkg._shutdown_requested and notifier.public_enabled:
         notifier.check_public_connection()
 
     # İki yönlü Telegram: komutları (panel/canli/formasyonlar/durum/tara/yardim)
@@ -375,20 +377,23 @@ def main_loop():
     #   - yoklama  : aksi halde getUpdates uzun yoklaması (daemon thread)
     # Token/chat_id yoksa hiçbiri başlatılmaz; bot eskisi gibi yalnızca alarm gönderir.
     # 18:45 kapanış özeti kaçırıldıysa (bot akşam kapalıydı) ilk fırsatta telafi et.
-    _pkg._kacirilan_digest_ozeti(notifier, _pkg.datetime.now(ISTANBUL_TZ))
+    if not _pkg._shutdown_requested:
+        _pkg._kacirilan_digest_ozeti(notifier, _pkg.datetime.now(ISTANBUL_TZ))
     # Özet işaretini ilk preload/fetch'ten önce al: seans öncesi kuyruk engeli
     # açılışta hemen çözülsün; kapanış özeti sonrası eski kuyruk ayrı push olmasın.
     _dm_isaretler, _public_isaretler = _pkg._ozet_isaretlerini_yukle()
     _acilis_zamani = _pkg.datetime.now(ISTANBUL_TZ)
     _acilis_digest_saati = _pkg._parse_deferred_alert_digest_time()
     _ozet_slotu = _acilis_digest_saati.strftime("%H:%M")
-    _pkg._acil_kuyruk_acilista_isle(
-        notifier, _acilis_zamani, _acilis_digest_saati,
-        kapanis_ozeti_gonderildi=not _pkg._ozet_slot_gonderilmeli(
-            _dm_isaretler, _ozet_slotu, _acilis_zamani.date()),
-    )
+    if not _pkg._shutdown_requested:
+        _pkg._acil_kuyruk_acilista_isle(
+            notifier, _acilis_zamani, _acilis_digest_saati,
+            kapanis_ozeti_gonderildi=not _pkg._ozet_slot_gonderilmeli(
+                _dm_isaretler, _ozet_slotu, _acilis_zamani.date()),
+        )
 
-    _pkg._telegram_komut_katmanini_kur(notifier)
+    if not _pkg._shutdown_requested:
+        _pkg._telegram_komut_katmanini_kur(notifier)
     
     # İlk kurulum/preload de aynı hız sınırını kullanır; boş 1H cache'ler seri çekilir.
     _pkg.logger.info(
@@ -402,9 +407,12 @@ def main_loop():
         if mevcut is None or len(mevcut) < 50:
             cache_eksik_hisseler.append(stock)
 
-    ilk_veriler, ilk_hatalar, ilk_retry, ilk_kurtarilan = _pkg.fetch_1h_stocks_paced(
-        cache_eksik_hisseler, pacer, "İLK YÜKLEME"
-    )
+    if _pkg._shutdown_requested:
+        ilk_veriler, ilk_hatalar, ilk_retry, ilk_kurtarilan = {}, {}, 0, 0
+    else:
+        ilk_veriler, ilk_hatalar, ilk_retry, ilk_kurtarilan = _pkg.fetch_1h_stocks_paced(
+            cache_eksik_hisseler, pacer, "İLK YÜKLEME"
+        )
     if ilk_retry:
         _pkg.logger.info(
             f"İlk yükleme retry özeti: {ilk_retry} tekrar, {ilk_kurtarilan} başarılı, "
