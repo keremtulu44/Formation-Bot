@@ -555,11 +555,53 @@ def _acil_kuyruk_acilista_isle(notifier, simdi: _pkg.datetime, digest_saati: dt_
         return 0
 
 
-def _kacirilan_digest_ozeti(notifier, simdiki_zaman) -> str:
-    """Geçmiş günden kalan bekleyen adaylar için kaçırılan 18:45 telafisi.
+def _kacirilan_digest_arsivle(gun, metin, simdi):
+    """Başarısız/belirsiz teslimi silmeden yerelde operatör incelemesine sakla.
 
-    Bot akşam 18:45'te kapalıysa tampon bir sonraki açılışa kadar bekler;
-    burada tek seferde gönderilir (aksi halde _ensure_day ilk taramada temizler).
+    Otomatik yeniden gönderme YOK: timeout Telegram tarafından kabul edilmiş
+    olabilir. Dosya yerel disktedir, Render geçici diskinin ömrünü aşamaz.
+    """
+    import hashlib
+    import tempfile
+
+    gecici = None
+    try:
+        os.makedirs(config.DATA_DIR, exist_ok=True)
+        snapshot = _pkg._deferred_alert_buffer.snapshot()
+        identity = json.dumps({"metin": metin, "tampon": snapshot}, ensure_ascii=False,
+                              sort_keys=True, default=str).encode("utf-8")
+        fingerprint = hashlib.sha256(identity).hexdigest()[:12]
+        yol = os.path.join(config.DATA_DIR, f"telegram_missed_digest_{gun.isoformat()}_{fingerprint}.json")
+        fd, gecici = tempfile.mkstemp(prefix=".missed_digest_", suffix=".tmp", dir=config.DATA_DIR)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump({
+                "gun": gun.isoformat(), "kayit_zamani": simdi.isoformat(),
+                "teslim_durumu": "belirsiz", "metin": metin, "tampon": snapshot,
+            }, stream, ensure_ascii=False, default=str)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(gecici, yol)
+        gecici = None
+        return True
+    except Exception as exc:  # noqa: BLE001 - tamponu silmek yerine görünür hata
+        _pkg.logger.error("Kaçırılan digest arşivlenemedi (%s)", type(exc).__name__)
+        return False
+    finally:
+        if gecici is not None:
+            try:
+                os.remove(gecici)
+            except FileNotFoundError:
+                pass  # noqa: S110 - başarısız geçici dosya zaten yok
+            except OSError as exc:
+                _pkg.logger.warning("Digest geçici dosyası temizlenemedi (%s)", type(exc).__name__)
+
+
+def _kacirilan_digest_ozeti(notifier, simdiki_zaman) -> str:
+    """Geçmiş günden kalan adayları telafi et; belirsiz teslimi yerelde sakla.
+
+    Bot kapalıydıysa açılışta bir kez denenir. Başarısız/belirsiz yanıtta tam
+    tampon arşivlenir; yeni günün taraması eski kayıtları körlemesine silmez.
+    Arşiv otomatik tekrar gönderilmez ve geçici diskte kalıcılık garanti değildir.
     """
     global _digest_son_gonderim_gun
     gun = _pkg._deferred_alert_buffer.gun()
@@ -573,19 +615,33 @@ def _kacirilan_digest_ozeti(notifier, simdiki_zaman) -> str:
         return ""
     watch_summary = _format_deferred_alert_summary(bekleyen, len(_pkg._deferred_alert_buffer))
     metin = f"⏰ Kaçırılan kapanış özeti ({gun.strftime('%d.%m')} 18:45)\n{watch_summary}"
+    gonderildi = False
     if notifier is None or not notifier.enabled:
-        # Pasif modda sessizce düşmesin: bir sonraki açılışta tekrar denenmeyecek,
-        # bu yüzden kayıt yine de temizlenir ve durum loglanır.
         _pkg.logger.warning("Kaçırılan kapanış özeti gönderilemedi (Telegram pasif): %d aday", len(bekleyen))
     else:
-        gonderildi, hata = notifier.send_text(metin)
-        if gonderildi:
-            _pkg._deferred_alert_buffer.mark_reported(bekleyen, simdiki_zaman)
-            # Telafi edilen gün "gönderildi" sayılır; bugünün 18:45'i hâlâ bekliyor.
-            setattr(_pkg, "_digest_son_gonderim_gun", gun.isoformat())
-            _pkg.logger.info("Kaçırılan kapanış özeti gönderildi: %d aday (%s)", len(bekleyen), gun)
-        else:
-            _pkg.logger.warning("Kaçırılan kapanış özeti gönderilemedi: %s", hata)
+        from secrets_redaction import redact_sensitive_text
+        try:
+            gonderildi, hata = notifier.send_text(metin)
+        except Exception as exc:  # noqa: BLE001 - kaydı koru, açılışı düşürme
+            hata = type(exc).__name__
+        if not gonderildi:
+            _pkg.logger.warning("Kaçırılan kapanış özeti teslimi doğrulanamadı: %s",
+                                redact_sensitive_text(hata, getattr(notifier, "token", "")))
+    if gonderildi:
+        _pkg._deferred_alert_buffer.mark_reported(bekleyen, simdiki_zaman)
+        # Telafi edilen gün "gönderildi" sayılır; bugünün 18:45'i hâlâ bekliyor.
+        setattr(_pkg, "_digest_son_gonderim_gun", gun.isoformat())
+        _pkg.logger.info("Kaçırılan kapanış özeti gönderildi: %d aday (%s)", len(bekleyen), gun)
+    elif not _kacirilan_digest_arsivle(gun, metin, simdiki_zaman):
+        # Orijinali şu anda silme. Sonraki gün taraması veya geçici disk kaybı
+        # yine de risktir; arşiv yazma hatası operasyonel müdahale gerektirir.
+        _pkg.logger.error("Digest tamponu korunuyor; arşiv yazma hatası nedeniyle müdahale gerekli")
+        return metin
+    else:
+        _pkg.logger.warning(
+            "Kaçırılan digest yerel inceleme arşivine alındı (%s, %d aday); "
+            "teslim belirsiz olduğundan otomatik yeniden gönderilmez", gun, len(bekleyen),
+        )
     _pkg._deferred_alert_buffer.clear(simdiki_zaman)
     _pkg.digest_tamponu_kaydet()
     return metin
