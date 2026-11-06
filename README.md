@@ -218,8 +218,8 @@ paylaşılmaz ve ters proxy'deki bağlantı/gövde/hız sınırlarının yerini 
 10 saniyelik socket timeout yavaş-yavaş veri akıtan tüm istemcileri durdurmaz.
 
 Render Web Service'te `PORT`, `RENDER_EXTERNAL_URL` ve bot token varsa webhook
-varsayılan olarak **otomatik açılır**: süreç başlangıcında kriptografik rastgele
-secret üretilir, Telegram'a `secret_token` olarak kaydedilir ve HTTP sunucusundaki
+varsayılan olarak **otomatik açılır**: token'dan HMAC ile kararlı bir secret
+üretilir, Telegram'a `secret_token` olarak kaydedilir ve HTTP sunucusundaki
 `POST /webhook` (sırsız yol; doğrulama `X-Telegram-Bot-Api-Secret-Token`
 başlığıyla) kullanılır. Secret Render Environment'a yazılmaz ve `/health`'te
 ifşa edilmez. Yerel/systemd kurulumunda `PORT` olmadığından `getUpdates`
@@ -287,12 +287,12 @@ sorgulanır. Çıkış kodu 0, uyarılar dahil bütün servislerin hazır olduğ
 garantilemez. Deploy öncesi kontrol GitHub tarafındadır: `.github/workflows/ci.yml` her push'ta aynı Python 3.12 sürümüyle
 kurulumu, testleri ve `PORT` verilip `/health`'in 200 döndüğünü doğrular.
 
-Keep-alive iş akışı (`.github/workflows/keepalive.yml`) **5 dakikada bir** olacak
-şekilde tanımlıdır ve her gün İstanbul saatiyle 08:00–23:00 arasında `/health`'e
-istek atar. Pencere, BIST seansını ve akşam komut kullanımını kapsar; gece servis
-uyur (Render Free'nin 750 instance saat/ay kotası korunur: 15 sa/gün ≈ 450–465
-sa/ay, 7/24 ≈ 730 sa/ay). 7/24 ayakta tutmak için Actions → Variables →
-`KEEPALIVE_ALWAYS=true` (bkz. `docs/kurulum/RENDER_DEPLOY.md` §5).
+Keep-alive iş akışında (`.github/workflows/keepalive.yml`) **5 dakikalık cron
+hedefi** vardır; varsayılan ping pencereleri İstanbul saatiyle 08:00–23:00 ve
+02:00–02:20'dir. Gerçek çalıştırma aralıkları garanti edilmez; `KEEPALIVE_ALWAYS=true`
+yalnız saat filtresini kaldırır, 7/24 çalışma sağlamaz. Sonuçları
+`python scripts/keepalive_audit.py` ile denetleyin; bağımsız monitör/sürekli
+çalışan planın maliyet ve kota sınırlarını da kontrol edin.
 
 > ⚠️ **Ölçüldü (Ekim 2026):** GitHub bu repoda cron koşularını seyrek tetikledi —
 > `*/5` tanımına rağmen günde 4–6 koşu (beklenen 288), çoğu pencere dışı olduğu
@@ -303,22 +303,21 @@ sa/ay, 7/24 ≈ 730 sa/ay). 7/24 ayakta tutmak için Actions → Variables →
 > webhook görünmüyorsa canlı commit'i ve `/health` → `komut.mod` alanını kontrol edin.
 > Eski deploy veya `TELEGRAM_WEBHOOK_AUTO=0` (sabit secret boşken) polling'e düşer; o durumda dış monitör
 > uptime için gereklidir ama tek başına Telegram'ın polling servisini uyandırmaz.
+> 6 Kasım kontrolünde de son 100 schedule başlangıcı arasındaki 99 aralığın
+> tamamı 15 dakikayı aştı (medyan 290,6 dk); yeşil iş sonucu ping kanıtı değildir.
+> Ayrıntılı kanıt ve operasyon adımları: [deploy denetimi](docs/kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md).
 
 İki çalışma seçeneği:
 
 - **Background Worker (önerilen, ücretli):** Sürekli çalışan Python döngüsüne uygun servis türü;
   dışarıdan ping gerekmez. Bot piyasa dışında/hafta sonu tarama yapmadan bekler, fakat servis açık
   kaldığından worker çalışma süresi devam eder.
-- **Free Web Service (repo içindeki iş akışıyla):** `.github/workflows/keepalive.yml`
-  `https://<render-adresi>/health` adresine **5 dakikada bir**, her gün İstanbul
-  saatiyle 08:00–23:00 arasında istek atar (gece servis uyur, sürekli tarama da yapmaz).
-  Render Free, 15 dakika inbound trafik olmazsa servisi uyutur; 5 dk aralık
-  GitHub cron gecikmelerine karşı pay bırakır. Dış monitör (cron-job.org /
-  UptimeRobot) alternatiftir ve repo aktivitesinden bağımsızdır. Güncel deploy'da
-  Telegram webhook'u varsayılan açıktır: Telegram POST'u servisi uyandırır; ilk
-  yanıt soğuk başlangıç süresince gecikebilir. Auto webhook'u kapatıp polling
-  kullanırsanız (`TELEGRAM_WEBHOOK_AUTO=0` ve sabit secret boşken) uyuyan servis komutları göremez;
-  `KEEPALIVE_ALWAYS=true` veya sürekli çalışan worker gerekir.
+- **Free Web Service:** repo iş akışı belirtilen pencerelerde `/health` pingi
+  hedefler, fakat ölçülen saatlerce boşluklar nedeniyle tek başına güvenilir
+  değildir. Render Free 15 dk inbound trafik yoksa uyuyabilir. Bağımsız dış
+  monitör veya sürekli çalışan uygun plan gerekir; gerçek sıklık ve kota ayrıca
+  doğrulanmalıdır. Güncel webhook Telegram POST'u ile uyandırmayı deneyebilir;
+  ilk yanıt gecikebilir. Polling, uyuyan servisi kendisi uyandıramaz.
 
 Telegram komutları için Render **Environment** bölümüne `TELEGRAM_BOT_TOKEN` ve
 `TELEGRAM_CHAT_ID` ekleyin (secret değerleri Git'e veya sohbete koymayın).
@@ -365,7 +364,7 @@ geçirme gerektirir.
 | `deploy_check.py` | Kurulum doktoru: repo/env, Supabase okuma bağlantısı, Telegram ve Render `/health`/opsiyonel `/test` kontrolleri; bilinmeyen/uyarılar ayrıca incelenmeli (sır yazdırmaz) |
 | `.github/workflows/deploy.yml` | Yalnız elle tetiklenen Render Deploy Hook; push'ta çalışmaz. Dashboard auto-deploy ayarı ayrıca doğrulanmalıdır. |
 | `.github/workflows/ci.yml` | Render eşdeğeri CI: Python 3.12 kurulumu, pytest, zamanlama regresyonu ve `PORT` verilip `/health` duman testi |
-| `.github/workflows/keepalive.yml` | Render Free uyumasın diye `/health` pingi (5 dk, her gün 08:00–23:00 İstanbul; `KEEPALIVE_*` değişkenleriyle ayarlanır) |
+| `.github/workflows/keepalive.yml` | `/health` pingi için en iyi çaba cron hedefi; fiili sıklık ve koşunun ping atıp atmadığı ayrıca izlenmeli |
 | `docs/kurulum/RENDER_DEPLOY.md` | Render Free + Supabase + Telegram kurulum rehberi; build hatası ve keep-alive dahil |
 | `.python-version` | Render build'ı için Python 3.12 sabitlemesi (3.14'te pandas derlenemiyor) |
 | `requirements-optional.txt` | Deploy zincirinde olmayan isteğe bağlı paketler (borsapy) |

@@ -378,7 +378,7 @@ GRAFIK_OLAY_MAKS = max(0, int(_env_float("GRAFIK_OLAY_MAKS", 6)))
 
 # --- TELEGRAM WEBHOOK (Render) ---
 # Render Web Service'te PORT + herkese açık webhook adresi + bot token varsa,
-# giriş noktasında rastgele bir secret üretilir ve webhook otomatik açılır.
+# giriş noktasında token'dan kararlı bir HMAC secret türetilir ve webhook açılır.
 # Böylece Telegram komutu Render Free servisini uyandırabilir; yerel/systemd
 # kurulumunda PORT olmadığı için varsayılan hâlâ getUpdates yoklamasıdır.
 #

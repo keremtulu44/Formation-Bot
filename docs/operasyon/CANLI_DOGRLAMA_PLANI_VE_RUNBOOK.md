@@ -1,5 +1,11 @@
 # Kontrollü Canlı Doğrulama Planı ve Runbook (Aşama 4)
 
+> **Tarihsel plan; güncel operasyon talimatı değildir.** Aşağıdaki eski yazma
+> testleri, örnek sayıları, bildirim biçimleri ve zamanlama varsayımları mevcut
+> salt-okunur/yerel-state koduyla uyuşmayabilir. Güncel deploy, güvenlik ve
+> rollback için [6 Kasım denetimini](../kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md)
+> kullanın; canlı veritabanına test yazımı/silmesi yapmayın.
+
 **Durum:** Plan belgesidir; bu görevde HİÇBİR canlı test çalıştırılmadı. Her adım
 `[ONAY GEREKLİ]` etiketi taşıyorsa kullanıcıdan açık izin gerekir. Gizli değerler
 (token/anahtar) bu belgede VE çıktılarda asla yazdırılmaz; yalnızca değişken adları

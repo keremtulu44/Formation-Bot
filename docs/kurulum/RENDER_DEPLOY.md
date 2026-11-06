@@ -641,10 +641,12 @@ zaman dilimi taranır; ilk alarm birkaç gün sürebilir — bu arada `/formasyo
 
 Render Web Service'te `PORT`, `RENDER_EXTERNAL_URL` ve
 `TELEGRAM_BOT_TOKEN` varsa güncel kod komut webhook'unu **otomatik açar**.
-Secret yoksa `main.py` process başına kriptografik rastgele bir değer üretir;
-`setWebhook` ile Telegram'a bildirir ve aynı değeri yalnızca süreç belleğinde
-kullanır. Render Environment'a ayrıca secret kopyalamak gerekmez. Yerel/systemd
-kurulumunda `PORT` olmadığı için varsayılan hâlâ `getUpdates` polling'dir.
+Secret yoksa `main.py` token'dan HMAC-SHA256 ile kararlı bir değer türetir;
+`setWebhook` ile Telegram'a bildirir. Aynı token ve sürümle yeni örnekler aynı
+değeri doğrular, ancak bu bir liderlik/tek sender garantisi değildir. İlk geçişte
+eski rastgele secret kullanan örnekle kısa süre uyuşmazlık olabilir. Render
+Environment'a ayrıca secret kopyalamak gerekmez. Yerel/systemd kurulumunda
+`PORT` olmadığı için varsayılan hâlâ `getUpdates` polling'dir.
 
 - **Sabit secret istiyorsanız:** Render → Environment →
   `TELEGRAM_WEBHOOK_SECRET` = rastgele bir değer.
@@ -735,42 +737,43 @@ dakikada bir mesaj gelmesi de kendiliğinden koruma sağlamaz, çünkü mesaj
 
 ### Seçenek A — GitHub Actions (public repoda ücretsiz; tek başına YETERSİZ) ⚠️
 
-Repo içinde `.github/workflows/keepalive.yml` hazır. **5 dakikada bir**
-`/health` adresine istek atar. Neden 5 ve neden sadece gündüz:
+Repo içindeki `.github/workflows/keepalive.yml`, `*/5` cron ile `/health` pingi
+**hedefler**. GitHub schedule en iyi çabadır; 6 Kasım incelemesinde son 100
+başlangıcın 99/99 aralığı 15 dakikadan uzun, medyanı 290,6 dakikaydı. Ayrıntı:
+[deploy denetimi](DEPLOY_CANLI_ONCESI_2026-11-06.md). Pencere dışında job yeşil
+olsa bile `GET /health` atlanır; job rengine değil adım sonucuna bakın.
 
-- GitHub `schedule` **“en iyi çaba”** ile çalışır; yoğun saatlerde koşular
-  5–20 dakika gecikebilir. 15 dakikalık uyku eşiğine karşı 5 dakikalık aralık
-  pay bırakır (10 dakikalık aralıkta bir gecikme servisi uyutabilir).
-- Komutlar (`/formasyonlar`, `/tara`, ...) Render'da güncel webhook modunda
-  Telegram'ın inbound POST'u ile uyuyan servisi uyandırabilir; ilk cevap cold
-  start boyunca gecikebilir. Polling'e zorlanmış/eski deploy bu yolu kullanamaz.
-- Ping **her gün İstanbul saatiyle 08:00–23:00** arasında atılır; gece servis
-  uyur. Pencere BIST seansını (09:50–18:40) kapsar ve tarama/scheduler'ın
-  çalışmasına yardım eder. Webhook açıkken akşam komutları da gelebilir; polling
-  modunda uykudaki servis yanıt veremez. Kota: Render Free aylık **750 instance saat** verir; 15 sa/gün
-  ≈ 450–465 saat/ay, 7/24 ise ≈ 730 saat/ay (sınıra çok yakın). Kota taşarsa
-  servis ay sonuna kadar askıya alınır.
-- Pencere dışında iş akışı “içeride miyim?” kontrolünden sonra hiçbir şey
-  yapmaz ve yeşil biter; servis 15 dakikada bir normal şekilde uyur, 08:00'deki
-  ilk ping onu ~1 dakikada uyandırır ve bot ilk taramayı 10:35'te yapar.
-- 7/24 tarama/scheduler istiyorsan `KEEPALIVE_ALWAYS=true` yap (7/24 ping);
-  webhook komut yanıtı için bu değişken gerekmez. Polling'de ise keep-alive/worker
-  servisi uyandırmaya yardım eder, ancak Actions cron gecikmesi garanti değildir.
+- Varsayılan hedef pencereler her gün İstanbul 08:00–23:00 ve 02:00–02:20'dir.
+  İlk/sonraki pinglerin zamanında gelmesi veya gece temizliği bitene kadar uyanık
+  kalma garantisi yoktur. `KEEPALIVE_WEEKDAYS_ONLY` gece dahil hafta sonunu kapatır;
+  özel gündüz penceresi tanımlanırsa gece için `KEEPALIVE_NIGHTLY_REFRESH=true`
+  gerekir.
+- `KEEPALIVE_ALWAYS=true` yalnız saat filtresini kaldırır; GitHub'ın seyrek
+  tetiklenmesini düzeltmez. Bağımsız monitor veya sürekli çalışan uygun planı,
+  gerçekten gelen istekleri ve Render'ın güncel fiyat/kotalarını ayrıca doğrulayın.
+- Telegram webhook'u inbound POST ile servisi uyandırabilir; polling'e zorlanmış
+  veya eski deploy bu yolu kullanamaz. Cold start ve gerçek teslim ayrı izlenir.
+
+```bash
+python scripts/keepalive_audit.py --repo keremtulu44/Formation-Bot
+# 0 = örneklenen schedule aralıkları eşikte; 1 = tespit edilen sorun; 2 = eksik kanıt
+```
 
 Ayarlar (istersen, Actions → Variables):
 
 | Değişken | Etkisi |
 |---|---|
-| `KEEPALIVE_ALWAYS=true` | Pencereyi kapatır, 7/24 ping atar (tarama/scheduler kesintisini azaltır; kota ~730 sa/ay). Webhook komutları için şart değildir. |
-| `KEEPALIVE_WINDOW_START` / `KEEPALIVE_WINDOW_END` | Pencereyi değiştirir (varsayılan `0800` / `2300`; `0930`/`1850` = yalnızca seans) |
-| `KEEPALIVE_WEEKDAYS_ONLY=true` | Hafta sonu ping atmaz (pencere hafta içi kalır) |
+| `KEEPALIVE_ALWAYS=true` | Saat filtresini kaldırır; çalıştırılma sıklığını garanti etmez. |
+| `KEEPALIVE_WINDOW_START` / `KEEPALIVE_WINDOW_END` | Gündüz hedef penceresini değiştirir (varsayılan `0800` / `2300`). |
+| `KEEPALIVE_NIGHTLY_REFRESH=true` | Özel gündüz penceresi varken de 02:00–02:20 hedefini açar; cron çalışmasını garanti etmez. |
+| `KEEPALIVE_WEEKDAYS_ONLY=true` | Gece dahil hafta sonu pingini atlar. |
 
 Kurulum (tek seferlik, telefondan da yapılabilir):
 
 1. GitHub → repo → **Settings → Secrets and variables → Actions**
 2. **New repository secret** (veya sekmesi **Variables**) → ad:
    `RENDER_HEALTH_URL`, değer: `https://<servis-adin>.onrender.com/health`
-3. Kaydet. İlk koşu en geç 5 dakika içinde Actions sekmesinde görünür.
+3. Kaydet. İlk koşunun ne zaman geleceği garanti değildir; Actions ve denetim betiğiyle izleyin.
 
 > Secret oluşturmadan denemek istersen: **Actions → Render keep-alive →
 > Run workflow → `health_url` alanına adresi yaz → Run.** Elle tetikleme
@@ -780,7 +783,7 @@ Kurulum (tek seferlik, telefondan da yapılabilir):
 
 | Repo tipi | Actions dakikası | 5 dk'lık cron ne yakar? |
 |---|---|---|
-| **Public** (bu repo) | Ücretsiz ve **sınırsız** | Sorun yok, `*/5` en güvenli seçenek |
+| **Public** (bu repo) | GitHub-hosted standart runner kullanımı için güncel GitHub politikasını doğrulayın | `*/5` bir istek sıklığı hedefidir, güvenilirlik garantisi değildir |
 | Private | 2.000 dk/ay ücretsiz | Her koşu **en az 1 dk** yazılır: `*/5` ≈ 8.600 dk/ay, `*/10` ≈ 4.300 dk/ay → **kota biter** |
 
 Yani repo private olsaydı GitHub Actions ile keep-alive ücretsiz olmazdı;
@@ -849,10 +852,10 @@ uygulanmaz; sürekli çalışır, ping'e ihtiyaç duymaz. Render cron/worker iç
 
 ### Günlük saat 750 sınırı
 
-Tek bir Free web service 7/24 çalışsa bile ayda ~720 saat eder; workspace
-başına ücretsiz sınır 750 saat/aydır. Yani **tek bot için saat sorunu yoktur**,
-tüm süre boyunca ayakta kalabilir. 750 saati aşmamak için ikinci bir Free
-servis açma.
+24 saat × 30 gün = 720 saat, 31 gün = 744 saattir; diğer servisler veya platformun
+hesaplama kuralları bütçeyi etkileyebilir. Güncel plan/kotaları ve tüm workspace
+kullanımını Render Dashboard'dan kontrol edin; bu hesap ücretsiz ya da kesintisiz
+çalışma garantisi değildir. Aynı token ile ikinci aktif bot oluşturmayın.
 
 ---
 
@@ -862,7 +865,7 @@ Eski planda 5 görevli, 1.5dk iş / 3.5dk uyku döngüsü vardı (Oracle reclaim
 Render Free'de bu gereksiz, hatta zararlı. 750 saat sınırı içindeyiz:
 
 - 20 iş günü x 24 saat = 480 saat, 30 gün x 24 = 720 saat < 750 saat
-- Keep-alive zaten GitHub Actions ile 08:00-23:00 arası yapılıyor (15 saat/gün)
+- Keep-alive'ın 08:00-23:00 ve 02:00-02:20 hedefleri var; fiili sıklık garanti değil
 - Gece CPU yakmak saati boşa harcar, RAM şişirir, Yahoo rate-limit yedirir
 
 **Güncel 3 fazlı mimari (bedava kalma odaklı):**
@@ -871,7 +874,7 @@ Render Free'de bu gereksiz, hatta zararlı. 750 saat sınırı içindeyiz:
 |---|---|---|---|
 | Canlı | 09:50-18:10 | %60-80 | Mum kapanış +5dk tarama, Telegram DM + kanal |
 | Kapanış Bakımı | 18:10-19:00 | %20 15dk | Veri hijyeni (hacim 0 bar), state temizliği (48h ölü), gün sonu raporu |
-| Gece | 19:00-08:00 | %0-2 | Derin uyku `sleep(300)`, sadece keep-alive ping, Yahoo'ya istek yok |
+| Gece | 19:00-08:00 | Değişken | Servis ayaktaysa 20:00 analizi ve 02:00 sonrası mum yenilemesi denenir; servis uyuyabilir, Yahoo istekleri ve süresi garanti değildir |
 | Pre-load | 08:30 | %25 | Sabah 10 hissenin son 5 gününü yavaşça çek, 09:50'de 0-latency |
 
 Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi kapatıldı - manuel tuning daha güvenli.
@@ -898,7 +901,7 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `LOG_LEVEL` | `INFO` (varsayılan) | Hayır |
 | `TELEGRAM_TEST_KEY` | `/test` için anahtar; `X-Test-Key` başlığı (bkz. §4.4). `?k=` yalnız `TELEGRAM_TEST_KEY_QUERY=1` iken kabul edilir | Evet |
 | `TELEGRAM_WEBHOOK_AUTO` | `1` varsayılan; Render Web Service'te otomatik webhook. `0` = polling'e zorla | Hayır |
-| `TELEGRAM_WEBHOOK_SECRET` | İsteğe bağlı sabit secret; boşsa Render process başına otomatik üretir (bkz. §4.6) | Evet |
+| `TELEGRAM_WEBHOOK_SECRET` | İsteğe bağlı sabit secret; boşsa güncel Render kodu token'dan HMAC ile türetir (bkz. §4.6) | Evet |
 | `TELEGRAM_WEBHOOK_URL` | (Opsiyonel) Tam HTTPS webhook adresi; boşsa `RENDER_EXTERNAL_URL` + `/webhook` (sırsız) | Evet |
 | `HEALTH_RATE_LIMIT_PER_MIN` | `60` — public HTTP uçlarında IP başına dakikalık istek limiti (0 = kapalı) | Hayır |
 | `TELEGRAM_TEST_KEY_QUERY` | `0` — `/test?k=` sorgu anahtarı kabul edilsin mi (0 = yalnız başlık) | Hayır |
@@ -933,8 +936,11 @@ Bildirim akışı: teyitli kırılım, başarılı retest, tamamlanma ve başar�
 anında gönderilir. Sıkışma/hazırlık/adayı/retest bekleme durumları slot başına
 bellekte güncellenir ve 18:45 DM kapanış özetinde en yüksek kalite puanlı en fazla
 12 aday olarak yer alır. Kuyruk `DATA_DIR` içinde tutulur; dosya korunursa
-restart'ta geri yüklenebilir ve 18:45 kaçırıldıysa telafi denenir. Geçici disk
-silinirse bu durum ve engellenmiş acil alarm kuyruğu da kaybolabilir; Supabase'e
+restart'ta geri yüklenebilir ve 18:45 kaçırıldıysa telafi denenir. Teslim
+başarısız/belirsizse tam tampon `DATA_DIR/telegram_missed_digest_*.json` altında
+inceleme için saklanır; olası çift mesaj nedeniyle otomatik yeniden gönderilmez.
+Salt okunur uzak digest/kuyruktaki doğrulanmamış bekleyenler otomatik oynatılmaz.
+Geçici disk silinirse bu arşiv ve yeni yerel kuyruklar da kaybolabilir; Supabase'e
 yeni yedek yazılmaz. 20:00 tam evren raporu ayrı kalır.
 
 ### 6.1 Haftalık doğruluk karnesi (canlıda nasıl çalışır)
@@ -1034,7 +1040,7 @@ Değişken ekleyip/ düzenleyince Render servisi otomatik yeniden başlatır
 | Actions'ta "Render keep-alive" koşusu **sarı** ve logda `RENDER_HEALTH_URL tanımlı değil` | Secret/Variable hiç eklenmemiş (bkz. §C). Bu bir hata değil uyarıdır; ekleyince yeşile döner |
 | Actions "Render keep-alive" hiç görünmüyor | İş akışı `main`'e merge edilmemiş (schedule sadece varsayılan branch'te çalışır) |
 | Keep-alive bir süre çalıştı, sonra durdu | Public repoda 60 gün aktivite olmaması (bkz. §5). Actions sekmesinden **Enable workflow** |
-| Koşular 5 dk yerine 20+ dk aralıkla geliyor | GitHub cron'u gecikebilir; pencere dışıysa normal. Sık oluyorsa Seçenek B'yi kur |
+| Koşular 5 dk yerine 20+ dk aralıkla geliyor | Schedule pencere dışında da tetiklenmek üzere tanımlıdır; uzun boşluklar GitHub tetikleme sorunudur. `python scripts/keepalive_audit.py` ile ölç, bağımsız izleme kur |
 | `deploy_check.py` "Supabase'e ulaşılamadı" | Ağ/proxy engeli ya da URL yanlış; `--skip-network` ile dosya tarafını yine kontrol edebilirsin |
 
 ---

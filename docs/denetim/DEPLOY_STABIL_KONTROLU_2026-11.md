@@ -1,5 +1,10 @@
 # Deploy ve Stabil entegrasyonu kontrolü
 
+> **Tarihsel kayıt:** Aşağıdaki tespitler önceki kod durumuna aittir. Özellikle
+> açılışta %80 ile gece damgası basılması daha sonra kaldırıldı. Güncel durum,
+> gerçek GitHub/Supabase kanıtı ve operasyon adımları için
+> [6 Kasım deploy denetimine](../kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md) bakın.
+
 ## Kanıt ve sınır
 
 Bu inceleme checkout ve izole yerel testlere dayanır. Render Dashboard, canlı servis ayarları/logları, Telegram ve veri sağlayıcılarına erişimle doğrulama yapılmadı; deploy veya GitHub değişikliği tetiklenmedi. Yerel Python 3.11 ile çalışıldı; Render/CI `.python-version` 3.12 kullanır. GitHub'daki mevcut main commit `f03b155...` için CI başarılıdır, ancak bu çalışma alanındaki henüz commit edilmemiş değişikliklerin GitHub CI'dan geçtiğini göstermez.

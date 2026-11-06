@@ -16,7 +16,7 @@
 | Botu kuracağım / çalıştıracağım | [kurulum/LOCAL_SETUP.md](kurulum/LOCAL_SETUP.md) |
 | Render'a (canlıya) çıkaracağım | [kurulum/RENDER_DEPLOY.md](kurulum/RENDER_DEPLOY.md) |
 | Telefondan arşiv verisi çekeceğim | [kurulum/TERMUX_BACKFILL.md](kurulum/TERMUX_BACKFILL.md) |
-| Canlıya geçiş adımları / runbook | [operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md](operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md) |
+| Canlıya geçiş / güncel deploy ve rollback | [kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md](kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md) (eski plan: [arşiv](operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md)) |
 | Kanal/grup açacağım | [operasyon/KANAL_ACILIS_PAKETI.md](operasyon/KANAL_ACILIS_PAKETI.md) · [operasyon/PUBLIC_GRUP_HAZIRLIK.md](operasyon/PUBLIC_GRUP_HAZIRLIK.md) |
 | Formasyon mantığı / Pine farkı | [tasarim/FORMASYON_MANTIGI.md](tasarim/FORMASYON_MANTIGI.md) · [tasarim/PINE_FARK_ANALIZI.md](tasarim/PINE_FARK_ANALIZI.md) |
 | Grafik tasarım sözleşmesi | [tasarim/GRAFIK_TASARIM.md](tasarim/GRAFIK_TASARIM.md) · [tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md](tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md) |
@@ -85,7 +85,8 @@
 ### `operasyon/` — canlıya alma ve işletim
 | Dosya | Durum | İçerik |
 |---|---|---|
-| [operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md](operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md) | Yürürlükte | Kontrollü canlı doğrulama adımları, rollback |
+| [kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md](kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md) | Güncel | Kanıta dayalı deploy, canlı doğrulama ve rollback |
+| [operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md](operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md) | Tarihsel | Önceki doğrulama planı; güncel state/teslim sözleşmesini yansıtmayabilir |
 | [operasyon/KANAL_ACILIS_PAKETI.md](operasyon/KANAL_ACILIS_PAKETI.md) | Yürürlükte | Kanal açılış metinleri ve adımları |
 | [operasyon/PUBLIC_GRUP_HAZIRLIK.md](operasyon/PUBLIC_GRUP_HAZIRLIK.md) | Kayıt (politika) | Public grup yayın hattı ve dil kararları |
 
