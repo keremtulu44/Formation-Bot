@@ -44,6 +44,23 @@ def test_nightly_progress_never_trusts_counts_unknown_symbols_or_interruptions()
     }, ["A"])
 
 
+def test_legacy_partial_success_stamp_is_not_trusted_after_upgrade(tmp_path, monkeypatch):
+    import json
+    import config
+    import bot.summary as summary
+
+    monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
+    marker = tmp_path / "_gece_mum_yenileme.json"
+    marker.write_text(json.dumps({"son_yenileme_gun": "2026-11-06"}))
+    assert summary._gece_mum_yenileme_son_gun_oku() is None
+    day = datetime(2026, 11, 6).date()
+    summary._gece_mum_yenileme_son_gun_kaydet(day)
+    assert json.loads(marker.read_text())["surum"] == 2
+    assert summary._gece_mum_yenileme_son_gun_oku() == day
+    marker.write_text(json.dumps({"surum": 999, "son_yenileme_gun": day.isoformat()}))
+    assert summary._gece_mum_yenileme_son_gun_oku() is None
+
+
 def test_nightly_local_write_failure_is_not_reported_as_success(monkeypatch, caplog):
     import domain_engines.runner as runner
     import bot.summary as summary

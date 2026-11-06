@@ -825,7 +825,12 @@ def _gece_mum_yenileme_son_gun_oku():
     try:
         with open(yol, "r", encoding="utf-8") as stream:
             veri = json.load(stream)
-        gun = veri.get("son_yenileme_gun") if isinstance(veri, dict) else None
+        # Eski damgalar yalnız kısmi başarı veya ilk yükleme ile basılabiliyordu;
+        # yeni tam-evren/iki TF kuralının kanıtı değildir, migrasyonda yok sayılır.
+        if not isinstance(veri, dict) or veri.get("surum") != 2:
+            _pkg.logger.info("Eski/uyumsuz gece yenileme damgası doğrulanamıyor; tekrar denenecek")
+            return None
+        gun = veri.get("son_yenileme_gun")
         return _pkg.datetime.fromisoformat(str(gun)).date() if gun else None
     except Exception:
         return None
@@ -837,7 +842,7 @@ def _gece_mum_yenileme_son_gun_kaydet(gun_obj) -> None:
         yol = _gece_mum_yenileme_damga_yolu()
         gecici = f"{yol}.tmp"
         with open(gecici, "w", encoding="utf-8") as stream:
-            json.dump({"son_yenileme_gun": gun_obj.isoformat()}, stream)
+            json.dump({"surum": 2, "son_yenileme_gun": gun_obj.isoformat()}, stream)
         os.replace(gecici, yol)
     except Exception as exc:
         _pkg.logger.warning(
