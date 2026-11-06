@@ -265,7 +265,9 @@ def test_channel_post_mesaj_olarak_okunur():
 # --------------------------------------------------------- 7) sohbet eşleştirmesi
 
 
-@pytest.mark.parametrize("yapilandirilan", ["-1001234567890", "@test_grup"])
+@pytest.mark.parametrize("yapilandirilan", [
+    "-1001234567890", "@test_grup", "https://t.me/test_grup", '"t.me/test_grup/"',
+])
 def test_sohbet_kullanici_adi_ve_sayisal_id_ile_eslesir(yapilandirilan):
     """`TELEGRAM_GROUP_ID=@grup` ile `-100…` aynı sohbeti göstermeli.
 

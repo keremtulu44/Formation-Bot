@@ -674,20 +674,27 @@ def format_domain_alarm_summary_card(cands: Sequence[DomainAlarmCandidate]) -> s
     _satir(blok, "Aynı taramada destek alt sınırını geçen diğer adaylar:")
     bloklar.append(blok)
 
-    blok = []
-    for c in cands[:10]:
-        _satir(
-            blok,
-            f"• {c.symbol} {_tf_etiket(c.timeframe)}: {c.relation} "
-            f"({_tr_sayi(c.dist_atr, 1)} ATR) · {' · '.join(c.reasons[:2])}",
-        )
-    if adet > 10:
-        _satir(blok, f"• … ve {adet - 10} aday daha")
-    bloklar.append(blok)
+    def aday_satirlari(ayrintili: bool) -> list[str]:
+        satirlar: list[str] = []
+        for c in cands[:10]:
+            if ayrintili:
+                metin = (f"• {c.symbol} {_tf_etiket(c.timeframe)}: {c.relation} "
+                         f"({_tr_sayi(c.dist_atr, 1)} ATR) · {' · '.join(c.reasons[:2])}")
+            else:
+                # Önce kimlikleri koru: uzun sebepler satır sınırında kesilip
+                # bazı semboller görünmeden gönderildi diye işaretlenmemeli.
+                metin = f"• {c.symbol} {_tf_etiket(c.timeframe)} · {_tr_sayi(c.dist_atr, 1)} ATR"
+            _satir(satirlar, metin)
+        if adet > 10:
+            _satir(satirlar, f"• … ve {adet - 10} aday daha")
+        _satir(satirlar, "› /stabil")
+        return satirlar
 
-    _satir(bloklar[-1], "› /stabil")
+    bloklar.append(aday_satirlari(True))
     bloklar.append(["• yatırım tavsiyesi değildir"])
-    bloklar = _kart_bloklarini_sigdir(bloklar)
+    if sum(len(b) for b in bloklar) > _KART_MAKS_SATIR:
+        bloklar[-2] = aday_satirlari(False)
+    # Dispatch en fazla 5 adayı sayfaladığı için isimler burada kırpılmaz.
     return "\n\n".join("\n".join(b) for b in bloklar if b)
 
 
@@ -786,22 +793,24 @@ def dispatch_domain_alarm_candidates(
     state = _load_state(state_path)
     slots = state.setdefault("slots", {})
     degisti = False
+    # Burst sınırı tekrarlı adaylar çıkarıldıktan sonra uygulanmalı. Aksi halde
+    # önceki turda gönderilmiş iki yüksek puanlı aday, yeni iki olayı tekil kart
+    # ve görsel yerine gereksizce toplu özete itiyordu.
+    yeni_adaylar = [c for c in sirali if not _zaten_gonderildi(slots.get(c.dedup_key), c)]
+    ozet["filtrelendi"] += len(sirali) - len(yeni_adaylar)
 
     ust_sinir = _cfg_int("YENI_DOMAIN_ALARM_TEKIL_UST_SINIR", 3)
-    if len(sirali) <= ust_sinir:
-        tekil_liste = list(sirali)
+    if len(yeni_adaylar) <= ust_sinir:
+        tekil_liste = list(yeni_adaylar)
         toplu_liste: list[DomainAlarmCandidate] = []
     else:
-        tekil_liste = list(sirali[:2])
-        toplu_liste = list(sirali[2:])
+        tekil_liste = list(yeni_adaylar[:2])
+        toplu_liste = list(yeni_adaylar[2:])
 
     from public_aux_outbox import auxiliary_event_id
 
     gonderilen: list[DomainAlarmCandidate] = []
     for cand in tekil_liste:
-        if _zaten_gonderildi(slots.get(cand.dedup_key), cand):
-            ozet["filtrelendi"] += 1
-            continue
         identity = {"stock_name": cand.symbol, "timeframe": cand.timeframe,
                     "state": "YENI_DOMAIN", "pattern_name": "DOMAİN TETİKLEME"}
         sonuc = _deliver_message(
@@ -816,22 +825,19 @@ def dispatch_domain_alarm_candidates(
             # Public bütçe nedeniyle bekliyorsa da ayrı, kalıcı kuyruk vardır.
             gonderilen.append(cand)
 
-    if toplu_liste:
-        yeni_toplu = [
-            c for c in toplu_liste
-            if not _zaten_gonderildi(slots.get(c.dedup_key), c)
-        ]
-        ozet["filtrelendi"] += len(toplu_liste) - len(yeni_toplu)
-        if yeni_toplu:
-            sonuc = _deliver_message(
-                notifier, format_domain_alarm_summary_card(yeni_toplu),
-                public_event_id=auxiliary_event_id(
-                    "domain-summary", [(c.symbol, c.timeframe, c.bar_open) for c in yeni_toplu]),
-            )
-            if sonuc["any"]:
-                ozet["toplu_ozet"] = 1
-            if sonuc["recorded"]:
-                gonderilen.extend(yeni_toplu)
+    # Bir kartın satır tavanına sığmayan adaylar sessizce kaybolmasın;
+    # her sayfa yalnız içinde listelenen semboller için teslim mührü alır.
+    for baslangic in range(0, len(toplu_liste), 5):
+        sayfa = toplu_liste[baslangic:baslangic + 5]
+        sonuc = _deliver_message(
+            notifier, format_domain_alarm_summary_card(sayfa),
+            public_event_id=auxiliary_event_id(
+                "domain-summary", [(c.symbol, c.timeframe, c.bar_open) for c in sayfa]),
+        )
+        if sonuc["any"]:
+            ozet["toplu_ozet"] += 1
+        if sonuc["recorded"]:
+            gonderilen.extend(sayfa)
 
     for cand in gonderilen:
         _isaretle(slots, cand)

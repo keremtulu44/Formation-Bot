@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 import deploy_check as dc  # noqa: F401 - eski testler bu adı kullanıyor
 import deploy_check as D
 from deploy_check import _anahtari_temizle, anahtar_turu, supabase_basliklari, _jwt_rolu
@@ -225,6 +227,29 @@ def test_kanal_izin_kapaliysa_hata(monkeypatch):
     monkeypatch.setattr("requests.post", lambda *a, **k: cevaplar.pop(0))
     assert D.kontrol_public_hedef("123456789:AAAA", "@bisthisseveri", "12345") is False
     assert any(s == D.FAIL and "Mesaj gönderme" in b for s, b in kayit)
+
+
+@pytest.mark.parametrize("permissions,ready", [
+    ({"can_send_messages": True, "can_send_photos": True}, True),
+    ({"can_send_messages": True, "can_send_photos": False}, False),
+    ({}, False),
+])
+def test_grup_linki_ve_uye_izinleri_ayri_kontrol_edilir(monkeypatch, permissions, ready):
+    kayit = _satirlari_tut(monkeypatch)
+    calls = []
+    cevaplar = [
+        _Yanit({"ok": True, "result": {"type": "supergroup", "title": "Formation", "permissions": permissions}}),
+        _Yanit({"ok": True, "result": {"id": 42}}),
+        _Yanit({"ok": True, "result": {"status": "member"}}),
+    ]
+    def post(url, **kw):
+        calls.append((url, kw))
+        return cevaplar.pop(0)
+    monkeypatch.setattr("requests.post", post)
+    assert D.kontrol_public_hedef("123456789:AAAA", "https://t.me/FormationBot1", "12345") is ready
+    assert calls[0][1]["json"]["chat_id"] == "@FormationBot1"
+    assert calls[2][1]["json"]["chat_id"] == "@FormationBot1"
+    assert any("Grup" in message for _, message in kayit)
 
 
 def test_bot_hedefte_yoksa_hata(monkeypatch):

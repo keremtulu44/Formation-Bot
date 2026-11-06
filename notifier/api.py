@@ -126,8 +126,9 @@ class TelegramNotifier:
         self.chat_id = _env_temizle(os.environ.get("TELEGRAM_CHAT_ID", ""))
         # Public hedef: grup (tercih) ya da eski kanal ayarı. Grup, DM'den BAĞIMSIZ
         # çalışır; DM kapalıyken de grup yayını sürer.
-        self.group_id = _env_temizle(os.environ.get("TELEGRAM_GROUP_ID", ""))
-        self.channel_id = _env_temizle(os.environ.get("TELEGRAM_CHANNEL_ID", ""))
+        from telegram_commands import telegram_sohbet_kimligi
+        self.group_id = telegram_sohbet_kimligi(_env_temizle(os.environ.get("TELEGRAM_GROUP_ID", "")))
+        self.channel_id = telegram_sohbet_kimligi(_env_temizle(os.environ.get("TELEGRAM_CHANNEL_ID", "")))
         self.public_chat_id = self.group_id or self.channel_id
         self.cooldown_hours = 4
         self.last_sent: Dict[str, datetime] = {}
@@ -439,7 +440,7 @@ class TelegramNotifier:
         botu durdurmaz, hata alanına yazılır).
         """
         bilgi: Dict = {"hedef": self.public_chat_id, "baslik": None, "tip": None,
-                       "yonetici": None, "can_post": None, "hata": ""}
+                       "yonetici": None, "can_post": None, "can_send_photos": None, "hata": ""}
         if not self.public_enabled:
             bilgi["hata"] = "public hedef tanımlı değil"
             self.public_hedef_bilgi = bilgi
@@ -469,18 +470,32 @@ class TelegramNotifier:
             uye, _ = _cagri("getChatMember", chat_id=self.public_chat_id,
                             user_id=(ben or {}).get("id"))
             durum = str((uye or {}).get("status") or "")
-            bilgi["yonetici"] = durum in ("administrator", "creator")
-            # Kanallarda 'can_post_messages' alanı; gruplarda yokluğu "serbest" demek.
-            bilgi["can_post"] = bool((uye or {}).get("can_post_messages")) or (
-                bilgi["tip"] != "channel" and bilgi["yonetici"])
-            if bilgi["tip"] == "channel" and not bilgi["can_post"]:
-                logger.error(
-                    "❌ Public hedef '%s' bir KANAL ve bot yönetici değil ya da 'Mesaj "
-                    "gönderme' izni kapalı. Kanal → Yöneticiler → bot → Mesaj gönderme.",
-                    bilgi["baslik"])
+            bilgi["yonetici"] = durum in ("administrator", "creator") if durum else None
+            if bilgi["tip"] == "channel" and durum:
+                bilgi["can_post"] = durum == "creator" or bool((uye or {}).get("can_post_messages"))
+                bilgi["can_send_photos"] = bilgi["can_post"]
+            elif bilgi["tip"] in ("group", "supergroup") and durum:
+                if bilgi["yonetici"]:
+                    bilgi["can_post"] = bilgi["can_send_photos"] = True
+                elif durum in ("left", "kicked") or (durum == "restricted" and not uye.get("is_member", True)):
+                    bilgi["can_post"] = bilgi["can_send_photos"] = False
+                else:
+                    # Normal üye için grup varsayılanları; kısıtlı üye için
+                    # doğrudan üyelik izinleri. Eksik bilgi bilinmiyor kalır.
+                    izinler = uye if durum == "restricted" else sohbet.get("permissions")
+                    if isinstance(izinler, dict):
+                        for alan, anahtar in (("can_post", "can_send_messages"),
+                                              ("can_send_photos", "can_send_photos")):
+                            deger = izinler.get(anahtar)
+                            bilgi[alan] = deger if isinstance(deger, bool) else None
+            if bilgi["can_post"] is False or bilgi["can_send_photos"] is False:
+                logger.warning("Public hedef '%s' (%s): metin izni=%s, fotoğraf izni=%s; "
+                               "üyelik ve grup/kanal izinlerini kontrol edin",
+                               bilgi["baslik"], bilgi["tip"], bilgi["can_post"], bilgi["can_send_photos"])
             else:
-                logger.info("✅ Public hedef doğrulandı: %s (%s) · yönetici=%s · mesaj gönderme=%s",
-                            bilgi["baslik"], bilgi["tip"], bilgi["yonetici"], bilgi["can_post"])
+                logger.info("Public hedef görüldü: %s (%s) · yönetici=%s · metin=%s · fotoğraf=%s "
+                            "(None: doğrulanamadı)", bilgi["baslik"], bilgi["tip"],
+                            bilgi["yonetici"], bilgi["can_post"], bilgi["can_send_photos"])
         except Exception as exc:  # noqa: BLE001 - ağ hatası botu durdurmaz
             bilgi["hata"] = redact_sensitive_text(f"{type(exc).__name__}: {exc}", self.token)[:200]
             logger.warning("Public hedef doğrulanamadı (ağ): %s", bilgi["hata"])
@@ -1934,6 +1949,7 @@ class TelegramNotifier:
             # Public (grup) hedefi: DM'den bağımsız sayaçlar.
             "public_enabled": self.public_enabled,
             "public_chat_id": self.public_chat_id,
+            "public_hedef_bilgi": dict(self.public_hedef_bilgi),
             "public_gonderilen": self.public_gonderilen,
             "public_hatasi": self.public_hatasi,
             "public_engel": self.public_engel,

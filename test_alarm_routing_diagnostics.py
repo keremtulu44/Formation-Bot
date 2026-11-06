@@ -57,6 +57,16 @@ def test_public_quality_and_dedup_reasons_visible_without_changing_policy(monkey
     assert "Metin bütçesi: saat" in durum
 
 
+def test_status_shows_public_target_and_separate_photo_permission(monkeypatch, tmp_path):
+    n = _notifier(monkeypatch, tmp_path)
+    n.public_chat_id = "@FormationBot1"
+    n.public_hedef_bilgi = {"tip": "supergroup", "can_post": True, "can_send_photos": False}
+    monkeypatch.setattr(main_mod, "_notifier_ref", n)
+    durum = main_mod._komut_durum("")
+    assert "@FormationBot1" in durum and "supergroup" in durum
+    assert "metin evet" in durum and "fotoğraf hayır" in durum
+
+
 def test_public_disabled_is_explicit_in_status(monkeypatch, tmp_path):
     n = _notifier(monkeypatch, tmp_path, public=False)
     assert n.enabled and not n.public_enabled

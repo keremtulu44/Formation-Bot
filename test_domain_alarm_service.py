@@ -426,6 +426,66 @@ def test_burst_iki_tekil_bir_toplu_ozet(tmp_path):
     assert len(state["slots"]) == 4
 
 
+def test_burst_sayimi_onceden_gonderilenleri_dislar_ve_yeni_gorseller_korunur(tmp_path):
+    graphic = {"goruntular": [{"timeframe": "1d"}]}
+    cands = [
+        _aday(symbol="ASELS", rank_score=5.0, grafik_verisi=graphic, grafik_verisi_public=graphic),
+        _aday(symbol="ASTOR", rank_score=4.0, grafik_verisi=graphic, grafik_verisi_public=graphic),
+        _aday(symbol="BIMAS", rank_score=3.0, grafik_verisi=graphic, grafik_verisi_public=graphic),
+        _aday(symbol="THYAO", rank_score=2.0, grafik_verisi=graphic, grafik_verisi_public=graphic),
+    ]
+    notifier = _Notifier()
+    state_path = str(tmp_path / "domain.json")
+    dispatch_domain_alarm_candidates(cands[:2], notifier, state_path=state_path)
+    notifier.dm.clear()
+    notifier.public.clear()
+    notifier.grafik_kuyruk.clear()
+    notifier.public_grafik.clear()
+    ozet = dispatch_domain_alarm_candidates(cands, notifier, state_path=state_path)
+    assert ozet == {"aday": 4, "tekil_gonderilen": 2, "toplu_ozet": 0, "filtrelendi": 2}
+    assert "BIMAS" in notifier.dm[0] and "THYAO" in notifier.dm[1]
+    assert len(notifier.public) == len(notifier.grafik_kuyruk) == len(notifier.public_grafik) == 2
+
+
+def test_burst_uzun_sebeplerde_tum_semboller_gorunur_ve_sayfalara_bolunur(tmp_path):
+    import json
+
+    cands = [
+        _aday(symbol=f"ABC{i:02d}", rank_score=30 - i,
+              reasons=("formasyon: Yükselen Üçgen Sıkışma Güçleniyor " * 2,
+                       "FVG boğa bölge reaksiyonu"))
+        for i in range(14)
+    ]
+    notifier = _Notifier()
+    state_path = str(tmp_path / "domain.json")
+    ozet = dispatch_domain_alarm_candidates(cands, notifier, state_path=state_path)
+    assert ozet["tekil_gonderilen"] == 2 and ozet["toplu_ozet"] == 3
+    assert len(notifier.dm) == len(notifier.public) == 5
+    assert all(c.symbol in "\n".join(notifier.dm) for c in cands)
+    for text in notifier.dm[2:]:
+        assert len([line for line in text.splitlines() if line.strip()]) <= _KART_MAKS_SATIR
+        assert all(genislik(line) <= _px_butce() for line in text.splitlines())
+    assert len(json.loads((tmp_path / "domain.json").read_text())["slots"]) == 14
+
+
+def test_burst_basarisiz_sayfada_adaylar_gonderildi_diye_isaretlenmez(tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_PUBLIC", False)
+    cands = [_aday(symbol=f"ABC{i:02d}", rank_score=30 - i) for i in range(12)]
+    calls = []
+    def send(text):
+        calls.append(text)
+        return len(calls) != 4  # 2 cards, first summary succeed; second summary fails
+    notifier = SimpleNamespace(enabled=True, send_text=send)
+    state_path = str(tmp_path / "domain.json")
+    ozet = dispatch_domain_alarm_candidates(cands, notifier, state_path=state_path)
+    assert ozet["tekil_gonderilen"] == 2 and ozet["toplu_ozet"] == 1
+    slots = json.loads((tmp_path / "domain.json").read_text())["slots"]
+    assert all(c.dedup_key in slots for c in cands[:7])
+    assert all(c.dedup_key not in slots for c in cands[7:])
+
+
 # 9) Eski formasyon/4S kart metinlerine yeni işaret sızmaz.
 def test_eski_kart_metinleri_degismedi():
     from bot import stabil_service

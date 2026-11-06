@@ -74,6 +74,43 @@ restart boyunca tam veri koruması garanti edilemez**:
   kuyruk kaydında 0 satır görüldü. Bunlar tarihsel kayıtlar, güncel canlı teslim
   kanıtı değildir. Hiçbir SQL yazma/silme, şema veya secret değişikliği yapılmadı.
 
+### Güncel hedef ve bildirim incelemesi — 6 Kasım
+
+- Kullanıcı eski `@bisthisseveri` **kanalından** `https://t.me/FormationBot1`
+  **grubuna** geçtiğini bildirdi. Public önizleme `Formation` adlı, 2 üyeli bir
+  gruba katılma ekranını gösterdi; bu sayfa grup gönderi geçmişi, bot üyeliği veya
+  bugünkü teslim hakkında kanıt sağlamıyor. Eski kanalın son gönderileri artık
+  güncel grubun çalıştığı/çalışmadığına delil değildir.
+- Gerçek Render değerleri erişilemedi. `TELEGRAM_GROUP_ID` önceliklidir;
+  `TELEGRAM_CHANNEL_ID` yalnız grup değeri boşsa kullanılır. Bu yüzden Render'da
+  yeni grup hedefini ve varsa `PUBLIC_COMMAND_CHATS` eski listesini doğrulayın.
+  Botun grupta metin **ve fotoğraf** izni ayrı ayrı önemlidir. Grup kullanıcı adı,
+  `@FormationBot1` veya sayısal kimlik kullanılabilir; Telegram davet bağlantısı
+  sohbet kimliği değildir. Yeni kod public `t.me` kullanıcı adı URL'sini de normalize
+  eder; örnek env dosyasını değiştirmek Render ayarını değiştirmez.
+- Kod varsayılanları ile canlı env aynı olmak zorunda değildir: teyitli kırılım,
+  başarılı retest ve teyit sonrası geçersizleşme yayınlanabilir; deneme/bekleme
+  state'leri doğrudan push değildir. Varsayılan kalite tabanları 1s=80, 2s=78,
+  4s=75, 1g=70. `PUBLIC_STATES` veya ek public kalite eşiği bunları daraltabilir.
+  Eski rehberdeki `FORMASYON_TAMAMLANDI,RETEST_BASARILI` listesi efektif olarak
+  yalnız retest bırakır; kullanıldığını bilmiyoruz. Eski örnek 6/saat, 25/gün
+  limitliydi; mevcut varsayılan 20/saat, 120/gün metindir. Görsellerin ana şalteri
+  `TELEGRAM_GRAFIK` varsayılan/örnek değerle `yok` olduğunda grafik üretilmez;
+  `alarm` olarak açılması gerekir. Gerçek Render değerleri bilinmiyor.
+- Aynı turda üçten fazla yeni domain adayı varsa normal politika en yüksek ikiyi
+  tekil kart+görsel, kalanları metin özeti şeklindedir; özet üyeleri tek tek
+  görsel almaz. Önceden gönderilmiş adaylar artık burst sayısına katılmıyor;
+  uzun toplu özetler aday isimlerini kaybetmemek için sayfalara ayrılıyor.
+- `YENI_DOMAIN_ALARM_COOLDOWN_BAR=6` ayarının kodda farklı barları kapsamadığı
+  tespit edildi: anahtarın kendisi bar zamanını içeriyor, dolayısıyla pratikte
+  aynı-bar tekilleştirme var. Bu davranışı altı barlık yasak hâline getirmek yeni
+  alarmları azaltacağından bu incelemede değiştirilmedi. Stabil'in altı 4s barlık
+  cooldown'ı ayrı çalışır.
+- Dikey destek üzerindeki yukarı denemede aşağı uyarı politikası korunur: bu
+  olay güçlü yeşil Stabil geri-alım alarmı sayılmaz. Test edildi; bu dalda bazı
+  eski pozitif Stabil alarmları azalabilir. Bunun bugünkü canlı örneklerin nedeni
+  olduğu veya dalın Render'da çalıştığı kanıtlanmadı.
+
 ## Kodda düzeltilen deploy sınıfı sorunlar
 
 - Salt okunur uzak eski digest ve pending outbox tekrarını engelleme; yerel
@@ -98,6 +135,19 @@ restart boyunca tam veri koruması garanti edilemez**:
   Hâlihazırda başlayan ağ çağrısı anında iptal edilemez.
 - Keep-alive job özeti pencere dışı `GET` atlamasını açık yazar. Cron değiştirmek
   veya başka bir Actions işi eklemek GitHub'ın dış zamanlayıcısını garanti edemez.
+- Standalone domain/Stabil kartının public kopyası artık DM'den bağımsız yerel
+  `DATA_DIR/telegram_public_aux.json` kuyruğuna alınır; kota veya kesin 4xx
+  reddinde pencere içinde tekrar denenir. `ACIL_KUYRUK_TTL_DK` (varsayılan 180 dk)
+  aşılırsa veya gün değişirse otomatik gönderilmez. Timeout/5xx, gönderim sırasında
+  kapanma, kısmi görsel ve hedef değişikliği elle incelemeye gider; otomatik kör
+  tekrar çift gönderime yol açabilir. `/durum` pending/review ve açılıştaki
+  metin/fotoğraf izin durumunu gösterir; izin bilgisi canlı sürekli test değildir.
+  100 tamamlanmamış/inceleme kaydı sınırı, yerel diskin kaybı, eşzamanlı süreçler
+  ve belirsiz ağ sonucu nedeniyle bu bir teslim veya exactly-once garantisi
+  değildir. Kuyruk eski hedefe yazılmış mesajı yeni gruba otomatik taşımaz.
+- **Bilinen asimetri:** public başarılıyken DM başarısız olursa bu özel kuyruk
+  DM'yi telafi etmez. Görsel üretilemez/gönderilemezse metin yine gidebilir;
+  ilgili sayaç/log ve inceleme kaydı kontrol edilmelidir.
 
 ## Birleştirme/deploy öncesi kontrol
 
@@ -156,9 +206,13 @@ restart boyunca tam veri koruması garanti edilemez**:
 - Eski sürüm, bu değişikliklerle oluşturulmuş güncel yerel state'i veya webhook
   secret'ı farklı yorumlayabilir. İzinli yedeği koruyun; state/DB'yi körlemesine
   silmeyin, geçmiş Supabase kuyruklarını yeniden oynatmayın.
-- `telegram_missed_digest_*.json` için önce gerçek Telegram geçmişini kontrol
-  edin; "belirsiz" dosya mesajın gitmediğini ispatlamaz. Elle yeniden gönderim
-  yalnız çift mesaj riski değerlendirilerek yapılmalıdır.
+- `telegram_missed_digest_*.json` ve `telegram_public_aux.json` için önce
+  güvenli yedek alın ve gerçek Telegram geçmişini kontrol edin; "belirsiz" kayıt
+  mesajın gitmediğini ispatlamaz. Özel kuyruğun `uncertain`, `graphics_uncertain`,
+  `expired` ve `target_changed` satırlarını otomatik göndermeyin. 100 tamamlanmamış
+  kayıt sınırı dolduysa yetkili operatör her kaydı hedef/geçmiş/tazelik açısından
+  incelemeli; dosyayı veya kayıtları körlemesine silmemelidir. Elle telafi/temizlik
+  yalnız çift mesaj ve yanlış gruba gönderim riski değerlendirilerek yapılmalıdır.
 - Son başarılı deploy'a döndükten sonra `/health` commit, `/ready`, gerçek tarama
   ve Telegram yolunu tekrar kontrol edin. Bu kontroller yapılmadıkça rollback
   başarıyla tamamlandı denmez.

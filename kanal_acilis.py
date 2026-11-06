@@ -262,10 +262,11 @@ def bot_kunyesi_uygula(api: TelegramAPI, hakkinda: str = None,
 
 
 def hedef_coz(arg_hedef: str = None) -> str:
+    from telegram_commands import telegram_sohbet_kimligi
     for aday in (arg_hedef, os.getenv("TELEGRAM_GROUP_ID"),
                  os.getenv("TELEGRAM_CHANNEL_ID")):
         if aday and str(aday).strip():
-            return str(aday).strip()
+            return telegram_sohbet_kimligi(aday)
     return ""
 
 

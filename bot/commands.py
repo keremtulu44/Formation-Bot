@@ -730,6 +730,19 @@ def _komut_durum(_arguman: str) -> str:
                                    f"{gd.get('public_hatasi', 0)} hata · "
                                    f"kuyruk {gd.get('public_kuyruk', 0)} · "
                                    f"bütçe engeli {gd.get('public_engel', 0)}")
+                hedef = str(gd.get("public_chat_id") or "")
+                if hedef:
+                    gorunen = hedef if hedef.startswith("@") else "…" + hedef[-4:]
+                    gosterim_public += f"\n   Hedef: {gorunen}"
+                hedef_bilgi = gd.get("public_hedef_bilgi")
+                if isinstance(hedef_bilgi, dict) and hedef_bilgi:
+                    def izin(deger):
+                        return "evet" if deger is True else "hayır" if deger is False else "bilinmiyor"
+                    gosterim_public += (
+                        f" · {hedef_bilgi.get('tip') or 'tip bilinmiyor'}"
+                        f"\n   Açılış izin kontrolü: metin {izin(hedef_bilgi.get('can_post'))} · "
+                        f"fotoğraf {izin(hedef_bilgi.get('can_send_photos'))}"
+                    )
                 if "public_saatlik_limit" in gd:
                     gosterim_public += (
                         f"\n   Metin bütçesi: saat {gd.get('public_saatlik', 0)}/"

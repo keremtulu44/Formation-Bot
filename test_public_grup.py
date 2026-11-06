@@ -74,6 +74,20 @@ def test_public_hedef_dm_olmadan_calisir(monkeypatch, grup_notifier):
     assert sahte.cagrilar[0][1]["chat_id"] == "-1001234567890"
 
 
+@pytest.mark.parametrize("grup", ["https://t.me/FormationBot1", "@FormationBot1", "FormationBot1"])
+def test_public_grup_linki_telegram_api_kimligine_doner(monkeypatch, grup):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123456789:" + "A" * 30)
+    monkeypatch.setenv("TELEGRAM_GROUP_ID", grup)
+    monkeypatch.setenv("TELEGRAM_CHANNEL_ID", "@EskiKanal")
+    n = notifier_mod.TelegramNotifier()
+    n.public_min_aralik_sn = 0
+    sahte = _SahteRequests()
+    monkeypatch.setitem(sys.modules, "requests", sahte)
+    assert n.send_to_public("deneme") is True
+    assert n.public_chat_id == "@FormationBot1"
+    assert sahte.cagrilar[0][1]["chat_id"] == "@FormationBot1"
+
+
 def test_public_hedef_yoksa_mock_modda_kirilmaz(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123456789:" + "A" * 30)
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)

@@ -17,7 +17,7 @@
 | Render'a (canlıya) çıkaracağım | [kurulum/RENDER_DEPLOY.md](kurulum/RENDER_DEPLOY.md) |
 | Telefondan arşiv verisi çekeceğim | [kurulum/TERMUX_BACKFILL.md](kurulum/TERMUX_BACKFILL.md) |
 | Canlıya geçiş / güncel deploy ve rollback | [kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md](kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md) (eski plan: [arşiv](operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md)) |
-| Kanal/grup açacağım | [operasyon/KANAL_ACILIS_PAKETI.md](operasyon/KANAL_ACILIS_PAKETI.md) · [operasyon/PUBLIC_GRUP_HAZIRLIK.md](operasyon/PUBLIC_GRUP_HAZIRLIK.md) |
+| Grup hedefi ve komutlar | [Render rehberi](kurulum/RENDER_DEPLOY.md) · geçmiş kararlar: [kanal paketi](operasyon/KANAL_ACILIS_PAKETI.md), [grup hazırlık analizi](operasyon/PUBLIC_GRUP_HAZIRLIK.md) |
 | Formasyon mantığı / Pine farkı | [tasarim/FORMASYON_MANTIGI.md](tasarim/FORMASYON_MANTIGI.md) · [tasarim/PINE_FARK_ANALIZI.md](tasarim/PINE_FARK_ANALIZI.md) |
 | Grafik tasarım sözleşmesi | [tasarim/GRAFIK_TASARIM.md](tasarim/GRAFIK_TASARIM.md) · [tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md](tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md) |
 | Telegram kart/bildirim kuralları | [tasarim/TELEGRAM_KART_FORMAT.md](tasarim/TELEGRAM_KART_FORMAT.md) · [tasarim/BILDIRIM_TESLIM_POLITIKASI.md](tasarim/BILDIRIM_TESLIM_POLITIKASI.md) |

@@ -75,6 +75,35 @@ def test_horizontal_support_still_allows_real_reclaim():
     assert attempt.vertical_attempt_kind is None
 
 
+def test_vertical_warning_is_not_dispatched_as_bullish_standalone_stabil(tmp_path, monkeypatch):
+    import config
+    import bot.stabil_service as service
+
+    monkeypatch.setattr(config, "STABIL_GERI_ALIM_ALARM", True)
+    monkeypatch.setattr(config, "STABIL_ALARM_PUBLIC", False)
+    monkeypatch.setattr(service, "tamamlanmis_mumlar", lambda frame, *_a, **_k: frame)
+    monkeypatch.setattr(service, "bar_kapandi_mi", lambda *_a, **_k: True)
+    now = pd.Timestamp("2026-10-01 17:00", tz="Europe/Istanbul").to_pydatetime()
+    monkeypatch.setattr(service, "mum_kapanis_ani", lambda *_a: now)
+    _, _, _, frame, vertical = behaviors(falling=True)
+    _, _, _, _, horizontal = behaviors(falling=False)
+    frame = frame.copy()
+    frame.index = pd.date_range("2026-09-01", periods=len(frame), freq="4h", tz="Europe/Istanbul")
+    frames = {"4h": frame, "1d": frame}
+
+    def evaluate(bhv):
+        result = SimpleNamespace(error=None, result=SimpleNamespace(latest_behavior=bhv))
+        return service.evaluate_stabil_4h_candidate(
+            "ASTOR", frames, now, state_path=str(tmp_path / "stabil.json"),
+            domain_results_by_stock={"ASTOR": {"4h": {"stabil": result}}},
+        )
+
+    assert vertical[-1].vertical_attempt_kind == "close_reclaim"
+    assert evaluate(vertical[-1]) is None  # warning is not a green reclaim alert
+    candidate = evaluate(horizontal[-1])
+    assert candidate is not None and candidate.behavior.reclaim_kind == "close_reclaim"
+
+
 def test_falling_vertical_lower_wick_attempt_also_gets_warning():
     _, snapshots, points, frame = make_series(falling=True)
     frame.loc[29, ["open", "high", "low", "close"]] = [94.7, 95.05, 94.2, 94.4]

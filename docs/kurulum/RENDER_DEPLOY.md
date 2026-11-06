@@ -494,12 +494,15 @@ Başka sohbetlerden gelen mesajlar sessizce yok sayılır.
 > bilgisi (`from`) yoktur, yani yöneticilik doğrulanamaz. Ayrıca üyeler zaten
 > kanala mesaj **yazamaz**. Kanal hedefi yalnız yayın alır.
 >
-> ⚠️ **Ad yanıltıcı:** `TELEGRAM_GROUP_ID` alanına `@bisthisseveri` gibi bir
-> **kanal** adresi yazmak çok yaygın ve sessiz bir hatadır (kanal kimliği de
-> `@ad` / `-100…` biçimindedir). Bu projede **02.10.2026 kararı KANAL** olduğu
-> için `TELEGRAM_GROUP_ID` büyük olasılıkla kanalı gösterir → o sohbette komut
-> çalışmaz. Kanal yayın için kalabilir; komutlar için **ayrı bir grup** açıp
-> kimliğini `PUBLIC_COMMAND_CHATS` olarak verin.
+> ⚠️ **Güncel hedef:** kullanıcı 6 Kasım'da eski `@bisthisseveri` kanalından
+> [FormationBot1](https://t.me/FormationBot1) grubuna geçtiğini bildirdi. Bu bilgi
+> Render'daki gerçek env'i veya botun üyelik/izinlerini doğrulamaz. `TELEGRAM_GROUP_ID`
+> grup kullanıcı adı (`@FormationBot1`) veya sayısal grup ID'si olmalı; eski kanal
+> kalırsa yayın eski hedefe gider. `PUBLIC_COMMAND_CHATS` boşsa grup hedefi kullanılır;
+> dolu eski liste varsa grup için ayrıca düzeltilmelidir.
+>
+> `TELEGRAM_GROUP_ID` teknik olarak bir kanalı da gösterebilir; kanal kimliği de
+> `@ad` / `-100…` biçimindedir. Komut ancak yetkili bir grupta çalışır.
 >
 > **Kesin teşhis:** bot sahibi DM'den `/teshis` yazar (ya da sunucuda
 > `python public_komut_teshis.py`) → hedefin `channel` mı `supergroup` mu olduğu,
@@ -886,7 +889,7 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | BotFather token'ı | Evet |
 | `TELEGRAM_CHAT_ID` | Kendi Telegram id'n (owner DM) | Evet |
-| `TELEGRAM_GROUP_ID` | **Public kanal hedefi (ÖNERİLEN ad):** `@bisthisseveri` veya `-100...`. Bot kanalda **yönetici** olmalı (Mesaj gönderme; sabit mesaj için Mesajları sabitle). DM olmadan da yayın çalışır. Kontrol: `python deploy_check.py` ve `python kanal_acilis.py --durum` | Evet |
+| `TELEGRAM_GROUP_ID` | Public grup hedefi: kullanıcıya göre `@FormationBot1` veya doğrulanmış `-100...` grup ID'si. Bot üyeliği ile metin/fotoğraf izinlerini kontrol edin; grup komutları için bot yöneticiliği önerilir. DM olmadan da yayın çalışabilir. Render'daki mevcut değer doğrulanmadı. Kontrol: `python deploy_check.py` | Evet |
 | `TELEGRAM_CHANNEL_ID` | Aynı şeyin eski adı (hâlâ desteklenir; ikisi de kanal/grup için çalışır) | Evet |
 | `SUPABASE_URL` | `https://<ref>.supabase.co` (opsiyonel eski cache/state için salt okunur erişim) | Hayır (plain) |
 | `SUPABASE_SERVICE_ROLE_KEY` | `sb_secret_...` veya `eyJ...` | Evet |

@@ -222,11 +222,11 @@ class _HttpYanit:
         return self._payload
 
 
-def _hedef_dogrula(monkeypatch, uye_durum, uye_ek=None, tip="channel"):
+def _hedef_dogrula(monkeypatch, uye_durum, uye_ek=None, tip="channel", sohbet_ek=None):
     n = _public_notifier(monkeypatch)
     cevaplar = [
         {"ok": True, "result": {"id": 42424242, "username": "simulasyon_bot"}},
-        {"ok": True, "result": {"type": tip, "title": "BIST Formasyon"}},
+        {"ok": True, "result": dict({"type": tip, "title": "BIST Formasyon"}, **(sohbet_ek or {}))},
         {"ok": True, "result": dict({"status": uye_durum}, **(uye_ek or {}))},
     ]
     monkeypatch.setattr("requests.post", lambda *a, **k: _HttpYanit(cevaplar.pop(0)))
@@ -247,6 +247,23 @@ def test_kanal_yonetici_ve_izinliyse_tamam(monkeypatch, veri_dizini):
 def test_kanal_yonetici_ama_mesaj_izni_kapali(monkeypatch, veri_dizini):
     bilgi = _hedef_dogrula(monkeypatch, "administrator", {"can_post_messages": False})
     assert bilgi["yonetici"] is True and bilgi["can_post"] is False
+
+
+@pytest.mark.parametrize("status,member,permissions,post,photo", [
+    ("administrator", {}, {}, True, True),
+    ("member", {}, {"can_send_messages": True, "can_send_photos": False}, True, False),
+    ("member", {}, {"can_send_messages": False, "can_send_photos": False}, False, False),
+    ("member", {}, {}, None, None),
+    ("restricted", {"is_member": True, "can_send_messages": True, "can_send_photos": False}, {}, True, False),
+    ("restricted", {"is_member": False}, {}, False, False),
+    ("left", {}, {}, False, False),
+])
+def test_grup_metin_ve_fotograf_izni_ayri_ve_bilinmeyen_belirtilir(
+    monkeypatch, veri_dizini, status, member, permissions, post, photo,
+):
+    bilgi = _hedef_dogrula(monkeypatch, status, member, tip="supergroup",
+                           sohbet_ek={"permissions": permissions})
+    assert bilgi["can_post"] is post and bilgi["can_send_photos"] is photo
 
 
 def test_hedef_yoksa_dogrulama_hata_verir(monkeypatch, veri_dizini):

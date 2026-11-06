@@ -114,7 +114,9 @@ def sohbet_anahtari(deger: Any) -> str:
     sessizce hiç çalışmaz. Sayısal değer aynen, kullanıcı adı küçük harf ve
     `@` olmadan döner.
     """
-    ham = str(deger or "").strip()
+    # Grup URL'si TELEGRAM_GROUP_ID'ye yapıştırıldığında da gelen username ile
+    # aynı anahtar oluşmalı; API ve komut yönlendirme iki ayrı hedef görmesin.
+    ham = telegram_sohbet_kimligi(deger)
     if not ham:
         return ""
     if ham.lstrip("-").isdigit():

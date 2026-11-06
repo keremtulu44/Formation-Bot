@@ -208,6 +208,41 @@ def test_real_notifier_public_budget_unblocks_without_repeating_dm(monkeypatch, 
     assert n.public_ozel_bosalt() == 0 and len(public) == 1
 
 
+def test_real_chart_snapshots_survive_restart_and_render_two_pngs(monkeypatch, tmp_path):
+    import os
+    import requests
+    import grafik
+    import transport.telegram as transport
+    from test_alarm_routing_diagnostics import _notifier
+    from test_domain_alarm_service import _frame
+
+    monkeypatch.setenv("TELEGRAM_GRAFIK", "alarm")
+    graphics = grafik.kare_listesi(
+        None, "1d", _frame(), ek_cerceveler={"4h": _frame()}, adet=2, sembol="ASTOR")
+    assert len(graphics["goruntular"]) == 2
+    identity = {"stock_name": "ASTOR", "timeframe": "1d", "state": "YENI_DOMAIN"}
+    original = _notifier(monkeypatch, tmp_path)
+    original.public_max_saatlik = 0
+    assert original.public_ozel_gonder("real-graphics", "text", identity=identity, graphics=graphics) == (True, False)
+    row = json.loads((tmp_path / "telegram_public_aux.json").read_text())["rows"][0]
+    assert row["graphics"] and not row["volatile_graphics"]
+
+    restarted = _notifier(monkeypatch, tmp_path)
+    restarted.public_min_aralik_sn = 0
+    calls = []
+    monkeypatch.setattr(requests, "post", lambda _url, json, timeout:
+                        SimpleNamespace(status_code=200, text="{}"))
+    def album(paths, captions, chat_id, notifier):
+        assert all(os.path.getsize(path) > 1000 for path in paths)
+        calls.append((list(paths), chat_id))
+        return True, "ok"
+    monkeypatch.setattr(transport, "medya_grubu_gonder", album)
+    assert restarted.public_ozel_bosalt() == 1
+    assert len(calls) == 1 and len(calls[0][0]) == 2 and calls[0][1] == restarted.public_chat_id
+    assert all(not os.path.exists(path) for path in calls[0][0])
+    assert restarted.public_grafik_gonderilen == 2 and restarted._public_aux.status()["completed"] == 1
+
+
 def test_text_sent_before_crash_resumes_only_its_graphics(tmp_path):
     owner = FakeOwner(["butce"])
     queue = PublicAuxOutbox(owner, tmp_path)

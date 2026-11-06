@@ -268,7 +268,7 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("SUPABASE_SERVICE_ROLE_KEY", False, "İsteğe bağlı eski uzak cache/state okuması için service_role JWT veya sb_secret_... anahtarı"),
         ("TELEGRAM_BOT_TOKEN", True, "@BotFather → /newbot → 'Use this token'"),
         ("TELEGRAM_CHAT_ID", True, "@userinfobot'un verdiği Id (kendine mesaj için pozitif sayı; KOMUTLAR buna bağlı)"),
-        ("TELEGRAM_GROUP_ID", False, "PUBLIC KANAL hedefi (@bisthisseveri veya -100…): kanal yayını bununla açılır (eski adı TELEGRAM_CHANNEL_ID)"),
+        ("TELEGRAM_GROUP_ID", False, "PUBLIC GRUP/kanal hedefi (@FormationBot1 veya -100…): yayın burada açılır (eski adı TELEGRAM_CHANNEL_ID)"),
         ("TELEGRAM_WEBHOOK_SECRET", False, "İsteğe bağlı sabit webhook secret'ı; boşsa Render Web Service otomatik üretir"),
         ("TELEGRAM_WEBHOOK_AUTO", False, "Render Web Service'te varsayılan 1: secret otomatik üretilir; 0 = polling'e dön"),
         ("RENDER_EXTERNAL_URL", False, "Render otomatik verir (webhook adresi buradan üretilir); render.yaml'de tanımlıdır"),
@@ -792,9 +792,10 @@ def kontrol_public_hedef(token: str, grup_id: str, chat_id: str = "",
         return False
     if not grup_id:
         satir(WARN, "Public kanal hedefi yok (TELEGRAM_GROUP_ID)",
-              "Kanal yayını kapalı: yalnız DM çalışır. Kanal açtıysanız docs/operasyon/KANAL_ACILIS_PAKETI.md "
-              "adımlarını izleyin: TELEGRAM_GROUP_ID=@kanal_adi + bot YÖNETİCİ.")
+              "Grup/kanal yayını kapalı: yalnız DM çalışır. Hedefi tanımlayın ve botun üyeliğini kontrol edin.")
         return False
+    from telegram_commands import telegram_sohbet_kimligi
+    grup_id = telegram_sohbet_kimligi(grup_id)
     try:
         r = requests.post(f"https://api.telegram.org/bot{token}/getChat",
                           json={"chat_id": grup_id}, timeout=12)
@@ -828,17 +829,33 @@ def kontrol_public_hedef(token: str, grup_id: str, chat_id: str = "",
 
     durum = str(uye.get("status") or "?")
     if durum in ("administrator", "creator"):
-        satir(OK, "Bot hedefte YÖNETİCİ", "Kanal listesinde 1 mesaj/gün yerine kalıcı görünür.")
+        satir(OK, "Bot hedefte YÖNETİCİ", "Üyelik okundu; yayın izinleri ayrıca kontrol edilir.")
         if tip == "channel":
-            if uye.get("can_post_messages"):
+            if durum == "creator" or uye.get("can_post_messages"):
                 satir(OK, "Kanal izni var: Mesaj gönderme", "Yayın açık.")
                 ready = True
             else:
                 satir(FAIL, "Kanal izni KAPALI: Mesaj gönderme",
                       "Kanal → Yöneticiler → bot → 'Mesaj gönderme' açık olmalı; yoksa gönderim 403 döner.")
-        else:
+        elif tip in ("group", "supergroup"):
             satir(OK, "Grup: mesaj gönderme serbest", "Yönetici bot grup ayarlarından etkilenmez.")
             ready = True
+        else:
+            satir(WARN, "Sohbet tipi bilinmiyor", "Yayın izni doğrulanamadı.")
+    elif tip in ("group", "supergroup") and durum in ("member", "restricted"):
+        if durum == "restricted" and not uye.get("is_member", True):
+            satir(FAIL, "Bot hedefte YOK (restricted)", "Botu gruba ekleyin.")
+        else:
+            izin = uye if durum == "restricted" else sohbet.get("permissions") or {}
+            metin = izin.get("can_send_messages")
+            fotograf = izin.get("can_send_photos")
+            if metin is True and fotograf is True:
+                satir(OK, "Grup metin ve fotoğraf izni var", "Komut yönetici doğrulaması için bot yöneticiliği önerilir.")
+                ready = True
+            elif metin is False or fotograf is False:
+                satir(FAIL, "Grup metin/fotoğraf izni kısıtlı", f"metin={metin}, fotoğraf={fotograf}")
+            else:
+                satir(WARN, "Grup metin/fotoğraf izni doğrulanamadı", f"metin={metin}, fotoğraf={fotograf}")
     elif durum == "left":
         satir(FAIL, "Bot hedefte YOK (left)",
               "Botu kanala/grupa ekleyin; kanalda ayrıca YÖNETİCİ yapın (Mesaj gönderme izni).")

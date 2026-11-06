@@ -201,6 +201,10 @@ def test_yonetici_degilse_durum_kirmizi_gosterir(capsys):
     assert "🛡 Yönetici: ❌" in cikti
 
 
+def test_hedef_coz_grup_linkini_api_bicimine_cevirir():
+    assert K.hedef_coz("https://t.me/FormationBot1") == "@FormationBot1"
+
+
 def test_hedef_coz_oncelik(monkeypatch):
     monkeypatch.setenv("TELEGRAM_GROUP_ID", "@grup_id")
     monkeypatch.setenv("TELEGRAM_CHANNEL_ID", "-100999")
