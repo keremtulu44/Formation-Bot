@@ -282,8 +282,10 @@ class TelegramNotifier:
         # Özel Stabil/domain olayları public bütçeye takılsa da DM başarısı
         # public teslimini yanlışlıkla tamamlanmış saymasın.
         from public_aux_outbox import PublicAuxOutbox
+        from private_aux_outbox import PrivateAuxOutbox
         from public_target_review import PublicTargetReview
         self._public_aux = PublicAuxOutbox(self, _pkg.DATA_DIR)
+        self._dm_aux = PrivateAuxOutbox(self, _pkg.DATA_DIR)
         self._public_target_review = PublicTargetReview(_pkg.DATA_DIR)
         self._public_state_writable = True
         # GÖREV 6 (A10): Telegram sayaç ayrımı — alert/watch/digest/command
@@ -774,6 +776,14 @@ class TelegramNotifier:
     def public_ozel_bosalt(self) -> int:
         """Bütçe veya kesin ret sonrası bekleyen özel public alarmları dene."""
         return self._public_aux.flush()
+
+    def dm_ozel_gonder(self, event_id: str, text: str, *, identity=None, graphics=None):
+        """Özel alarm DM metin/görselini bağımsız kuyruğa al: (kabul, metin gitti)."""
+        return self._dm_aux.submit(event_id, text, identity=identity, graphics=graphics)
+
+    def dm_ozel_bosalt(self) -> int:
+        """Kesin DM reddinde bekleyen özel alarmları yeniden dene."""
+        return self._dm_aux.flush()
 
     def send_to_chat(self, text: str, chat_id=None, deneme: int = 1) -> bool:
         """Metni AÇIKÇA verilen sohbete gönderir (`/grafik` grup sonucu).
@@ -2015,6 +2025,7 @@ class TelegramNotifier:
                               if self.grafik_kare_sayisi else 0.0),
             "public_kuyruk": len(self._public_kuyruk),
             "public_ozel_kuyruk": self._public_aux.status(),
+            "dm_ozel_kuyruk": self._dm_aux.status(),
             "public_hedef_inceleme": self._public_target_review.status(),
             "public_state_writable": self._public_state_writable,
             "public_kuyruk_tasmasi": self.public_kuyruk_tasmasi,

@@ -192,7 +192,7 @@ def test_real_notifier_public_budget_unblocks_without_repeating_dm(monkeypatch, 
     n.public_max_saatlik = 0
     n.public_min_aralik_sn = 0
     dm, public, images = [], [], []
-    monkeypatch.setattr(n, "send_text", lambda text: (dm.append(text) or True, "ok"))
+    monkeypatch.setattr(n, "send_text", lambda text, **_kw: (dm.append(text) or True, "ok"))
     monkeypatch.setattr(n, "public_grafik_bagla", lambda identity, graphic: images.append(identity) or 2)
     monkeypatch.setattr(requests, "post", lambda _url, json, timeout: (
         public.append(json) or SimpleNamespace(status_code=200, text="{}")))

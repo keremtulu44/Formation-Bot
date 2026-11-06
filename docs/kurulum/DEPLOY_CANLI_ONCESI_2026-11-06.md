@@ -153,9 +153,12 @@ restart boyunca tam veri koruması garanti edilemez**:
   hedefi bilinmeyen teslim geçmişi yeni grubun tekrarlı olay kapısına katılmaz:
   aynı grup kullanılmışsa bazı eski olaylar yeniden görünebilir. Arşivleri Telegram
   geçmişiyle doğrulamadan ne otomatik oynatın ne silin; geçici disk koruma değildir.
-- **Bilinen asimetri:** public başarılıyken DM başarısız olursa bu özel kuyruk
-  DM'yi telafi etmez. Görsel üretilemez/gönderilemezse metin yine gidebilir;
-  ilgili sayaç/log ve inceleme kaydı kontrol edilmelidir.
+- Aynı özel kartın DM kopyası da `DATA_DIR/telegram_dm_aux.json` içinde ayrı
+  tutulur: public başarısı kesin reddedilen DM'yi tamamlanmış saymaz. DM için
+  timeout/5xx veya yarıda kesilen istek yine otomatik tekrarlanmaz. Domain
+  görsel snapshot'ları DM metninden sonra eski DM albüm yoluyla gider; standalone
+  Stabil'in mevcut DM davranışı metindir, public görseli ayrıdır. Görsel
+  üretilemez/gönderilemezse metin yine gidebilir; inceleme kaydını kontrol edin.
 
 ## Birleştirme/deploy öncesi kontrol
 
@@ -214,8 +217,8 @@ restart boyunca tam veri koruması garanti edilemez**:
 - Eski sürüm, bu değişikliklerle oluşturulmuş güncel yerel state'i veya webhook
   secret'ı farklı yorumlayabilir. İzinli yedeği koruyun; state/DB'yi körlemesine
   silmeyin, geçmiş Supabase kuyruklarını yeniden oynatmayın.
-- `telegram_missed_digest_*.json`, `telegram_public_aux.json` ve
-  `telegram_public_target_review.json` için önce güvenli yedek alın ve gerçek
+- `telegram_missed_digest_*.json`, `telegram_public_aux.json`, `telegram_dm_aux.json`
+  ve `telegram_public_target_review.json` için önce güvenli yedek alın ve gerçek
   Telegram geçmişini kontrol edin; "belirsiz" kayıt
   mesajın gitmediğini ispatlamaz. Özel kuyruğun `uncertain`, `graphics_uncertain`,
   `expired` ve `target_changed` satırlarını otomatik göndermeyin. 100 tamamlanmamış

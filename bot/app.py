@@ -494,6 +494,7 @@ def main_loop():
     son_gece_yenileme_deneme_ts = None  # monotonic, deneme bittikten sonra tutulur
     son_kuyruk_bosaltma = 0.0  # engellenen acil olaylar bu aralıkla yeniden denenir
     son_public_ozel_deneme = 0.0
+    son_dm_ozel_deneme = 0.0
     # Restart gün sürekliliği: bugün zaten sayaç biriktirilmişse geri yükle
     # (aksi halde 18:45 kanal özeti günün gerçek toplamını eksik gösterir).
     _pkg._gunluk_sayac_yukle()
@@ -541,6 +542,20 @@ def main_loop():
                         _pkg.logger.info(f"Engellenen acil kuyruğundan {gonderilen_kuyruk} olay gönderildi")
             except Exception as e:
                 _pkg.logger.debug(f"Acil kuyruk boşaltma hatası: {e}")
+
+            # Stabil/domain DM kopyası da public başarısından bağımsızdır.
+            try:
+                dm_ozel = getattr(notifier, "dm_ozel_bosalt", None)
+                if (not _pkg._shutdown_requested and callable(dm_ozel)
+                        and getattr(notifier, "enabled", False)
+                        and _pkg._acil_kuyruk_gonderim_penceresi_acik(now, deferred_alert_digest_time)
+                        and time.time() - son_dm_ozel_deneme >= ACIL_KUYRUK_BOSALTMA_ARALIK_SN):
+                    son_dm_ozel_deneme = time.time()
+                    adet = int(dm_ozel() or 0)
+                    if adet:
+                        _pkg.logger.info("Bekleyen DM özel alarmlardan %d metin gönderildi", adet)
+            except Exception as exc:  # noqa: BLE001 - dış servis ana döngüyü durdurmasın
+                _pkg.logger.warning("DM özel alarm kuyruğu denenemedi: %s", type(exc).__name__)
 
             # Stabil/domain public kopyaları DM başarısından bağımsızdır.
             # Kesin bütçe/4xx engelinde sonraki taramayı beklemeden dene;

@@ -699,21 +699,30 @@ def format_domain_alarm_summary_card(cands: Sequence[DomainAlarmCandidate]) -> s
 
 
 def _deliver_message(notifier: Any, text: str, *, public_event_id=None,
-                     public_identity=None, public_graphics=None) -> dict[str, bool]:
-    """DM teslimi ile public'in teslim/kuyruk durumunu ayrı takip et."""
+                     public_identity=None, public_graphics=None, dm_graphics=None) -> dict[str, bool]:
+    """DM ve public için bağımsız teslim/kuyruk durumunu takip et."""
     dm_on = bool(getattr(config, "YENI_DOMAIN_ALARM_DM", True))
     pub_on = bool(getattr(config, "YENI_DOMAIN_ALARM_PUBLIC", True))
-    dm_ok = False
-    pub_ok = False
-    pub_accepted = False
-    public_managed = False
+    dm_ok = dm_accepted = pub_ok = pub_accepted = False
+    dm_managed = public_managed = False
+    dm_required = dm_on and notifier is not None and getattr(notifier, "enabled", True) is not False
+    pub_required = pub_on and notifier is not None and getattr(notifier, "public_enabled", True) is not False
 
-    if dm_on and notifier is not None:
+    if dm_required:
         send_text = getattr(notifier, "send_text", None)
-        if callable(send_text):
+        queue_dm = getattr(notifier, "dm_ozel_gonder", None)
+        if public_event_id and callable(queue_dm):
+            dm_managed = True
+            try:
+                dm_accepted, dm_ok = queue_dm(
+                    public_event_id, text, identity=public_identity, graphics=dm_graphics)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Yeni domain DM kuyruğu başarısız: %s", type(exc).__name__)
+        elif callable(send_text):
             try:
                 res = send_text(text)
                 dm_ok = bool(res[0] if isinstance(res, tuple) else res)
+                dm_accepted = dm_ok
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Yeni domain DM gönderim hatası: %s", type(exc).__name__)
 
@@ -739,8 +748,11 @@ def _deliver_message(notifier: Any, text: str, *, public_event_id=None,
         elif dm_ok and not (pub_ok or pub_accepted):
             logger.warning("Yeni domain DM gitti ancak public kopyası saklanamadı/gönderilmedi")
 
-    return {"dm": dm_ok, "public": bool(pub_ok), "any": dm_ok or bool(pub_ok),
-            "recorded": dm_ok or bool(pub_accepted), "public_managed": public_managed}
+    recorded = ((not dm_required or dm_ok or dm_accepted)
+                and (not pub_required or pub_ok or pub_accepted)
+                and (dm_ok or dm_accepted or pub_ok or pub_accepted))
+    return {"dm": bool(dm_ok), "public": bool(pub_ok), "any": bool(dm_ok or pub_ok),
+            "recorded": bool(recorded), "dm_managed": dm_managed, "public_managed": public_managed}
 
 
 def _deliver_charts(notifier: Any, cand: DomainAlarmCandidate,
@@ -754,7 +766,7 @@ def _deliver_charts(notifier: Any, cand: DomainAlarmCandidate,
         "state": "YENI_DOMAIN",
         "pattern_name": "DOMAİN TETİKLEME",
     }
-    if sonuc.get("dm") and cand.grafik_verisi:
+    if sonuc.get("dm") and not sonuc.get("dm_managed") and cand.grafik_verisi:
         ekle = getattr(notifier, "grafik_kuyruga_ekle", None)
         if callable(ekle):
             try:
@@ -817,6 +829,7 @@ def dispatch_domain_alarm_candidates(
             notifier, format_domain_alarm_card(cand),
             public_event_id=auxiliary_event_id("domain", [(cand.symbol, cand.timeframe, cand.bar_open)]),
             public_identity=identity, public_graphics=cand.grafik_verisi_public,
+            dm_graphics=cand.grafik_verisi,
         )
         if sonuc["any"]:
             _deliver_charts(notifier, cand, sonuc)

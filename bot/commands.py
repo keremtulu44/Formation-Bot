@@ -725,6 +725,12 @@ def _komut_durum(_arguman: str) -> str:
                         f"{engel.get('saatlik_kap', 0)} saatlik kap · "
                         f"{engel.get('tekrar', 0)} aynı-olay · "
                         f"{gd.get('hatalar', 0)} hata")
+            dm_ozel = gd.get("dm_ozel_kuyruk")
+            if isinstance(dm_ozel, dict):
+                gosterim += (f"\n   DM özel alarmlar: {dm_ozel.get('pending', 0)} bekliyor · "
+                             f"{dm_ozel.get('review', 0)} elle inceleme")
+                if dm_ozel.get("available") is False:
+                    gosterim += " · ⚠️ kuyruk okunamadı"
             if gd.get("public_enabled"):
                 gosterim_public = (f"📣 Public: {gd.get('public_gonderilen', 0)} gönderim · "
                                    f"{gd.get('public_hatasi', 0)} hata · "

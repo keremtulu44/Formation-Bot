@@ -37,9 +37,11 @@ class PublicAuxOutbox:
     MAX_PENDING = 100
     RECEIPT_DAYS = 7
 
-    def __init__(self, notifier, directory):
+    def __init__(self, notifier, directory, *, filename="telegram_public_aux.json", max_images=2, label="Public"):
         self.owner = notifier
-        self.path = Path(directory) / "telegram_public_aux.json"
+        self.label = label
+        self.path = Path(directory) / filename
+        self.max_images = max_images
         self.lock = threading.RLock()
         self.rows = []
         self.available = True
@@ -61,7 +63,7 @@ class PublicAuxOutbox:
             pass
         except (OSError, ValueError, TypeError) as exc:
             self.available = False
-            logger.error("Public özel alarm kuyruğu okunamadı; üzerine yazılmayacak: %s", type(exc).__name__)
+            logger.error("%s özel alarm kuyruğu okunamadı; üzerine yazılmayacak: %s", self.label, type(exc).__name__)
 
     def _now(self):
         return datetime.now(ISTANBUL_TZ)
@@ -99,7 +101,7 @@ class PublicAuxOutbox:
         """Return (persisted, text_sent); public target must already be known."""
         if not self.available or not event_id or not text or not self.owner.public_enabled:
             if not self.owner.public_enabled:
-                logger.warning("Public özel alarmı kuyruğa alınamadı: kanal/grup hedefi kapalı")
+                logger.warning("%s özel alarmı kuyruğa alınamadı: hedef kapalı", self.label)
             return False, False
         target = str(self.owner.public_chat_id or "").strip()
         if not target:
@@ -108,13 +110,13 @@ class PublicAuxOutbox:
             row = next((item for item in self.rows if item.get("id") == str(event_id)), None)
             if row is not None:
                 if row.get("target") != target:
-                    logger.error("Public özel alarm hedefi değişmiş; eski kayıt yeni hedefe gönderilmeyecek")
+                    logger.error("%s özel alarm hedefi değişmiş; eski kayıt yeni hedefe gönderilmeyecek", self.label)
                     return False, False
                 return True, bool(row.get("text_sent"))
             now = self._now()
             self._prune_receipts(now)
             if sum(r.get("status") != "complete" for r in self.rows) >= self.MAX_PENDING:
-                logger.error("Public özel alarm kuyruğu dolu (%d); yeni olay saklanamadı", self.MAX_PENDING)
+                logger.error("%s özel alarm kuyruğu dolu (%d); yeni olay saklanamadı", self.label, self.MAX_PENDING)
                 return False, False
             snapshot = None
             if isinstance(graphics, dict) and graphics.get("goruntular"):
@@ -124,8 +126,8 @@ class PublicAuxOutbox:
                     # Still send text and, if the process stays alive, the image.
                     # A restart cannot recover an unserializable in-memory image.
                     self._volatile_graphics[str(event_id)] = graphics
-                    logger.warning("Public özel alarm görseli diske saklanamadı (%s); "
-                                   "restart sonrası geri yüklenemez", type(exc).__name__)
+                    logger.warning("%s özel alarm görseli diske saklanamadı (%s); "
+                                   "restart sonrası geri yüklenemez", self.label, type(exc).__name__)
             row = {
                 "id": str(event_id), "target": target, "created": now.isoformat(),
                 "status": "pending", "text_sent": False, "text": str(text),
@@ -138,7 +140,7 @@ class PublicAuxOutbox:
             except (OSError, TypeError, ValueError) as exc:
                 self.rows.remove(row)
                 self._volatile_graphics.pop(str(event_id), None)
-                logger.error("Public özel alarmı diske kaydedilemedi; gönderim denenmedi: %s", type(exc).__name__)
+                logger.error("%s özel alarmı diske kaydedilemedi; gönderim denenmedi: %s", self.label, type(exc).__name__)
                 return False, False
             try:
                 # Older pending work gets the first available public budget.
@@ -149,7 +151,7 @@ class PublicAuxOutbox:
                     row["status"] = "uncertain"
                 elif row.get("status") == "graphics_sending":
                     row["status"] = "graphics_uncertain"
-                logger.error("Public özel alarm sonucu kaydedilemedi: %s", type(exc).__name__)
+                logger.error("%s özel alarm sonucu kaydedilemedi: %s", self.label, type(exc).__name__)
             return True, bool(row.get("text_sent"))
 
     def _mark_expired(self, row, now):
@@ -160,7 +162,7 @@ class PublicAuxOutbox:
             age = (now - created).total_seconds()
             if created.astimezone(ISTANBUL_TZ).date() != now.date() or age > ACIL_KUYRUK_TTL_DK * 60:
                 row["status"] = "expired"
-                logger.warning("Public özel alarmı bayatladı; otomatik gönderilmeyecek (%s)", row.get("id"))
+                logger.warning("%s özel alarmı bayatladı; otomatik gönderilmeyecek (%s)", self.label, row.get("id"))
                 return True
             if age < -120:
                 row["status"] = "uncertain"
@@ -182,7 +184,7 @@ class PublicAuxOutbox:
         if not graphics:
             if row.get("volatile_graphics"):
                 row["status"] = "graphics_uncertain"
-                logger.warning("Public özel alarm görseli restart sonrasında bulunamadı; metin korunuyor")
+                logger.warning("%s özel alarm görseli restart sonrasında bulunamadı; metin korunuyor", self.label)
             else:
                 row["status"] = "complete"
             self._save()
@@ -193,16 +195,16 @@ class PublicAuxOutbox:
             sent = int(self.owner.public_grafik_bagla(row.get("identity") or {}, graphics) or 0)
         except Exception as exc:  # noqa: BLE001 - alert text has already been sent
             sent = 0
-            logger.warning("Public özel alarm görseli gönderilemedi: %s", type(exc).__name__)
+            logger.warning("%s özel alarm görseli gönderilemedi: %s", self.label, type(exc).__name__)
         self._volatile_graphics.pop(row["id"], None)
-        expected = min(2, len(graphics.get("goruntular") or []))
+        expected = min(self.max_images, len(graphics.get("goruntular") or []))
         if expected and sent >= expected:
             row["status"] = "complete"
             row["graphics"] = None
         else:
             row["status"] = "graphics_uncertain"
-            logger.warning("Public özel alarm metni gitti, %d/%d görsel bildirildi; "
-                           "belirsizlik/çift riskine karşı otomatik tekrar yok", sent, expected)
+            logger.warning("%s özel alarm metni gitti, %d/%d görsel bildirildi; "
+                           "belirsizlik/çift riskine karşı otomatik tekrar yok", self.label, sent, expected)
         self._save()
 
     def _flush_locked(self, max_items, only_id=None):
@@ -222,7 +224,7 @@ class PublicAuxOutbox:
             if row.get("target") != str(self.owner.public_chat_id or "").strip():
                 row["status"] = "target_changed"
                 self._save()
-                logger.error("Public özel alarm hedefi değişti; kayıt elle incelenmeli")
+                logger.error("%s özel alarm hedefi değişti; kayıt elle incelenmeli", self.label)
                 continue
             if self._mark_expired(row, now):
                 self._save()
@@ -238,7 +240,7 @@ class PublicAuxOutbox:
                     outcome = getattr(self.owner, "_son_public_deneme", "belirsiz")
                 except Exception as exc:  # noqa: BLE001 - unknown HTTP outcome
                     ok, outcome = False, "belirsiz"
-                    logger.warning("Public özel alarm gönderim sonucu belirsiz: %s", type(exc).__name__)
+                    logger.warning("%s özel alarm gönderim sonucu belirsiz: %s", self.label, type(exc).__name__)
                 if ok and outcome != "hedef_yok":
                     row["text_sent"] = True
                     row["status"] = "text_sent"
@@ -248,12 +250,12 @@ class PublicAuxOutbox:
                 elif outcome in {"butce", "reddedildi", "hedef_yok"}:
                     row["status"] = "pending"  # no delivery occurred; safe to retry later
                     self._save()
-                    logger.warning("Public özel alarmı (%s) beklemede; daha sonra denenebilir", outcome)
+                    logger.warning("%s özel alarmı (%s) beklemede; daha sonra denenebilir", self.label, outcome)
                     break
                 else:
                     row["status"] = "uncertain"
                     self._save()
-                    logger.warning("Public özel alarm teslimi belirsiz; otomatik tekrar yok, elle incele")
+                    logger.warning("%s özel alarm teslimi belirsiz; otomatik tekrar yok, elle incele", self.label)
         return sent_count
 
     def flush(self, max_items=3):
@@ -261,7 +263,7 @@ class PublicAuxOutbox:
             try:
                 return self._flush_locked(max(1, int(max_items)))
             except (OSError, TypeError, ValueError) as exc:
-                logger.error("Public özel alarm kuyruğu kaydedilemedi: %s", type(exc).__name__)
+                logger.error("%s özel alarm kuyruğu kaydedilemedi: %s", self.label, type(exc).__name__)
                 return 0
 
     def status(self):

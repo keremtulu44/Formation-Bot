@@ -86,6 +86,7 @@ raporlar/
 **/notification_delivery.json
 **/notification_delivery.tmp
 **/telegram_public_aux.json
+**/telegram_dm_aux.json
 **/.public_aux_*.tmp
 **/telegram_public_target_review.json
 **/.public_target_review_*.tmp
