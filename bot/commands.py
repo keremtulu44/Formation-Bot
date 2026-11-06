@@ -749,6 +749,12 @@ def _komut_durum(_arguman: str) -> str:
                         f"{gd['public_saatlik_limit']} · gün {gd.get('public_gunluk', 0)}/"
                         f"{gd.get('public_gunluk_limit', 0)}"
                     )
+                hedef_inceleme = gd.get("public_hedef_inceleme")
+                if isinstance(hedef_inceleme, dict):
+                    if hedef_inceleme.get("archives"):
+                        gosterim_public += f"\n   Eski hedef state'i: {hedef_inceleme['archives']} arşiv · elle inceleme"
+                    if hedef_inceleme.get("available") is False:
+                        gosterim_public += "\n   ⚠️ Hedef inceleme arşivi okunamadı"
                 ozel = gd.get("public_ozel_kuyruk")
                 if isinstance(ozel, dict):
                     gosterim_public += (
@@ -777,8 +783,12 @@ def _komut_durum(_arguman: str) -> str:
                                         f"{gd.get('public_grafik_gonderilen', 0)} gönderildi · "
                                         f"{gd.get('public_grafik_hatasi', 0)} hata")
             elif gd.get("public_enabled") is False:
-                gosterim_public = ("⚠️ Public hedef kapalı: kanal/grup kimliği veya "
-                                   "bot token'ı tanımlı değil; DM'in çalışması yeterli değil.")
+                if gd.get("public_state_writable") is False:
+                    gosterim_public = ("⚠️ Public durduruldu: eski hedef state'i güvenle "
+                                       "arşivlenemedi/yazılamadı; log ve diski inceleyin.")
+                else:
+                    gosterim_public = ("⚠️ Public hedef kapalı: kanal/grup kimliği veya "
+                                       "bot token'ı tanımlı değil; DM'in çalışması yeterli değil.")
             # Görsel sayaçları (§4): metin kotasından AYRIDIR. Açık şalterde
             # sıfır sonuç da teşhis için görünür; kapalıyken yalnız eski/bugünkü
             # görsel etkinliği varsa satır kalır ve bunu başında belirtir.

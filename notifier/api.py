@@ -282,7 +282,10 @@ class TelegramNotifier:
         # Özel Stabil/domain olayları public bütçeye takılsa da DM başarısı
         # public teslimini yanlışlıkla tamamlanmış saymasın.
         from public_aux_outbox import PublicAuxOutbox
+        from public_target_review import PublicTargetReview
         self._public_aux = PublicAuxOutbox(self, _pkg.DATA_DIR)
+        self._public_target_review = PublicTargetReview(_pkg.DATA_DIR)
+        self._public_state_writable = True
         # GÖREV 6 (A10): Telegram sayaç ayrımı — alert/watch/digest/command
         # Mevcut alert/watch/digest/command ayrımını bozmayacak şekilde eklenir.
         # send_text() içeriğine göre kategorize edilir; mevcut çağrı noktaları değişmeden çalışır.
@@ -574,7 +577,28 @@ class TelegramNotifier:
             logger.debug("Public günlük durum okunamadı: %s", hata)
             return
         public = veri.get("public") or {}
-        if not isinstance(public, dict):
+        if not isinstance(public, dict) or not self.public_chat_id:
+            return
+        from public_target_review import target_key
+        eski_hedef = public.get("target")
+        anlamli = bool(public.get("kuyruk") or public.get("alert_muhurlari")
+                       or public.get("gun_sayac") or public.get("saatlik_ts"))
+        if anlamli and target_key(eski_hedef) != target_key(self.public_chat_id):
+            # Eski sürümde hedef saklanmıyordu. Kaynağı belirsiz kuyruğu veya
+            # başka gruba ait mühürleri yeni hedefe körlemesine taşımak güvenli
+            # değildir. Önce yerel arşive al, başarısızsa eski state'e dokunma.
+            if not self._public_target_review.archive(public, self.public_chat_id):
+                self._public_state_writable = False
+                self.public_enabled = False
+                logger.error("Public hedef geçmişi korunamadı; eski state üzerine yazılmadı, "
+                             "public gönderim durduruldu")
+                return
+            logger.warning("Public hedef değişmiş veya eski hedef bilinmiyor; "
+                           "eski kuyruk ve mühürler otomatik taşınmadan arşivlendi")
+            if not self._public_durum_kaydet():
+                self._public_state_writable = False
+                self.public_enabled = False
+                logger.error("Yeni public hedef state'i yazılamadı; public gönderim durduruldu")
             return
         raw_markers = public.get("alert_muhurlari")
         if isinstance(raw_markers, dict):
@@ -614,8 +638,10 @@ class TelegramNotifier:
                         self._public_gun_sayac, self.public_max_gunluk,
                         len(self._public_kuyruk))
 
-    def _public_durum_kaydet(self) -> None:
-        """Public bütçe + kuyruğu GÜN damgalı yazar (I/O hatası gönderimi bozmaz)."""
+    def _public_durum_kaydet(self) -> bool:
+        """Public bütçe + kuyruğu GÜN damgalı yazar; başarısızlık False döner."""
+        if not self._public_state_writable:
+            return False
         try:
             # Snapshot + yazım sıralı olmalı: eski snapshot daha yeni bir
             # kuyruğun ardından diske yazılıp onu silemez.
@@ -624,14 +650,20 @@ class TelegramNotifier:
                     self._public_alert_muhurlerini_temizle()
                     kuyruk = [dict(k) for k in self._public_kuyruk]
                     markers = dict(self._public_alert_markers)
-                _state_persistence.gunluk_durum_guncelle({"public": {
+                sonuc = _state_persistence.gunluk_durum_guncelle({"public": {
+                    "target": self.public_chat_id,
                     "gun_sayac": self._public_gun_sayac,
                     "saatlik_ts": [t.isoformat() for t in self._public_saatlik],
                     "kuyruk": kuyruk,
                     "alert_muhurlari": markers,
                 }})
+                if sonuc is False:
+                    logger.warning("Public günlük durum yazılamadı")
+                    return False
+                return True
         except Exception as hata:  # noqa: BLE001
-            logger.debug("Public günlük durum yazılamadı: %s", hata)
+            logger.warning("Public günlük durum yazılamadı: %s", type(hata).__name__)
+            return False
 
     def _public_gun_sifirla_gerekirse(self, simdi: datetime) -> None:
         if simdi.date() != self._public_gun:
@@ -1983,6 +2015,8 @@ class TelegramNotifier:
                               if self.grafik_kare_sayisi else 0.0),
             "public_kuyruk": len(self._public_kuyruk),
             "public_ozel_kuyruk": self._public_aux.status(),
+            "public_hedef_inceleme": self._public_target_review.status(),
+            "public_state_writable": self._public_state_writable,
             "public_kuyruk_tasmasi": self.public_kuyruk_tasmasi,
             "son_public_gonderim": self.son_public_gonderim,
         }

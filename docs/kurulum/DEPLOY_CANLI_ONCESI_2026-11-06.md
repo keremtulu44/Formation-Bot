@@ -145,6 +145,14 @@ restart boyunca tam veri koruması garanti edilemez**:
   100 tamamlanmamış/inceleme kaydı sınırı, yerel diskin kaybı, eşzamanlı süreçler
   ve belirsiz ağ sonucu nedeniyle bu bir teslim veya exactly-once garantisi
   değildir. Kuyruk eski hedefe yazılmış mesajı yeni gruba otomatik taşımaz.
+- Normal public bülten kuyruğu ve tekrar geçmişi de hedefe bağlandı. Başka hedefe
+  ait veya eski sürümden kalan **hedefi bilinmeyen** günlük kuyruk/mühürler yeni
+  gruba gönderilmez; önce `DATA_DIR/telegram_public_target_review.json` içine
+  yerel inceleme için alınır. Arşiv/durum yazılamazsa eski veri korunur ve public
+  güvenli biçimde durdurulur. `/durum` arşiv adedini bildirir. Bu geçişte eski
+  hedefi bilinmeyen teslim geçmişi yeni grubun tekrarlı olay kapısına katılmaz:
+  aynı grup kullanılmışsa bazı eski olaylar yeniden görünebilir. Arşivleri Telegram
+  geçmişiyle doğrulamadan ne otomatik oynatın ne silin; geçici disk koruma değildir.
 - **Bilinen asimetri:** public başarılıyken DM başarısız olursa bu özel kuyruk
   DM'yi telafi etmez. Görsel üretilemez/gönderilemezse metin yine gidebilir;
   ilgili sayaç/log ve inceleme kaydı kontrol edilmelidir.
@@ -206,8 +214,9 @@ restart boyunca tam veri koruması garanti edilemez**:
 - Eski sürüm, bu değişikliklerle oluşturulmuş güncel yerel state'i veya webhook
   secret'ı farklı yorumlayabilir. İzinli yedeği koruyun; state/DB'yi körlemesine
   silmeyin, geçmiş Supabase kuyruklarını yeniden oynatmayın.
-- `telegram_missed_digest_*.json` ve `telegram_public_aux.json` için önce
-  güvenli yedek alın ve gerçek Telegram geçmişini kontrol edin; "belirsiz" kayıt
+- `telegram_missed_digest_*.json`, `telegram_public_aux.json` ve
+  `telegram_public_target_review.json` için önce güvenli yedek alın ve gerçek
+  Telegram geçmişini kontrol edin; "belirsiz" kayıt
   mesajın gitmediğini ispatlamaz. Özel kuyruğun `uncertain`, `graphics_uncertain`,
   `expired` ve `target_changed` satırlarını otomatik göndermeyin. 100 tamamlanmamış
   kayıt sınırı dolduysa yetkili operatör her kaydı hedef/geçmiş/tazelik açısından

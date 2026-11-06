@@ -87,6 +87,8 @@ raporlar/
 **/notification_delivery.tmp
 **/telegram_public_aux.json
 **/.public_aux_*.tmp
+**/telegram_public_target_review.json
+**/.public_target_review_*.tmp
 
 .pytest-full.log
 arastirma_cikti/

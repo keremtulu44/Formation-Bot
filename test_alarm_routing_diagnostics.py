@@ -96,7 +96,8 @@ def test_dm_outbox_early_duplicate_can_recover_missing_public(monkeypatch, tmp_p
 def test_restored_public_hourly_timestamps_accept_legacy_naive_dates(monkeypatch, tmp_path):
     now = datetime.now(config.ISTANBUL_TZ)
     monkeypatch.setattr(persistence, "gunluk_durum_yukle", lambda: {
-        "public": {"saatlik_ts": [(now - timedelta(minutes=5)).replace(tzinfo=None).isoformat()]}
+        "public": {"target": "-10012345",
+                   "saatlik_ts": [(now - timedelta(minutes=5)).replace(tzinfo=None).isoformat()]}
     })
     monkeypatch.setattr(persistence, "gunluk_durum_guncelle", lambda *_: None)
     monkeypatch.setattr(notifier_mod, "DATA_DIR", str(tmp_path))
