@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     # Render Web Service'te uyuyan servisin Telegram komutuyla uyanabilmesi için
-    # varsayılan webhook secret'ını yalnız GERÇEK giriş noktasında üret. Secret
+    # varsayılan webhook secret'ını yalnız GERÇEK giriş noktasında türet. Secret
     # process belleğinde kalır; Telegram setWebhook çağrısında güncel değerle
     # eşzamanlanır. Açıkça TELEGRAM_WEBHOOK_SECRET verilmişse olduğu gibi korunur.
     _runtime_webhook_secret, _webhook_secret_auto = config.telegram_webhook_runtime_secret()

@@ -69,7 +69,8 @@ services:
         value: "60"
       # Render Web Service'te Telegram komutları için varsayılan webhook.
       # Uygulama, secret boşsa PORT + RENDER_EXTERNAL_URL + bot token ile
-      # process başına rastgele secret üretir; Telegram POST'u uyuyan servisi uyandırabilir.
+      # token'dan HMAC ile sabit secret türetir; Telegram POST'u uyuyan servisi uyandırabilir.
+      # Yeni örnekler aynı başlığı doğrular; bu çoklu örnek lider kilidi değildir.
       # Yerel/systemd polling davranışı değişmez. Polling'e zorlamak için 0 yapın
       # (sabit TELEGRAM_WEBHOOK_SECRET de boş olmalı).
       - key: TELEGRAM_WEBHOOK_AUTO

@@ -35,7 +35,7 @@ anahtar Secret olmalı. `BOT_PROFILE` plain/isteğe bağlıdır.
 | 4 | `TELEGRAM_CHAT_ID` | `__` ← **@userinfobot** → Start → verdiği `Id:` sayısı | **evet** |
 | 5 | `BOT_PROFILE` | `Dengeli` | hayır |
 | 6 | `TELEGRAM_TEST_KEY` | `__` ← istediğin rastgele bir yazı (örn. `k7m2x9`) | **evet** |
-| 7 | `TELEGRAM_WEBHOOK_SECRET` | Boş bırakılabilir. Sabit secret istersen rastgele bir yazı (`python3 -c "import secrets; print(secrets.token_urlsafe(24))"`); güncel kod Render Web Service'te process başına otomatik üretir (bkz. **§4.6**) | **evet** |
+| 7 | `TELEGRAM_WEBHOOK_SECRET` | Boş bırakılabilir; güncel kod Render'da token'dan HMAC ile sabit bir değer türetir. Bağımsız döndürülebilen secret istersen rastgele değer tanımla (bkz. **§4.6**). | **evet** |
 | 8 | `TELEGRAM_WEBHOOK_AUTO` | Varsayılan `1`; Render webhook otomatiğini kapatmak/polling'e dönmek için `0` | hayır |
 
 > Supabase'i kullanacaksan #2'nin değerini `eyJhbGciOi...` diye başlayan uzun
@@ -50,9 +50,14 @@ anahtar Secret olmalı. `BOT_PROFILE` plain/isteğe bağlıdır.
 Boş bırakırsan bot çalışır ama: #1/#2 boşsa eski uzak kayıtlar okunamaz;
 tanımlı olsalar da yeni kayıtlar Supabase'e **yazılmaz**. #3/#4 boşsa DM
 komut/mesaj yolu çalışmaz (public hedef ayrı yapılandırılır). #7 boşsa güncel
-Render Web Service kodu otomatik bir webhook secret üretir; yalnızca
-`TELEGRAM_WEBHOOK_AUTO=0` (sabit secret da boşsa) polling'e döndürür. Yerel/systemd'de `PORT` olmadığı
-için yoklama varsayılandır.
+Render Web Service kodu otomatik olarak bot token'ından HMAC ile webhook secret'ı
+**türetir**; yeni kodlu örnekler aynı token ile aynı başlığı doğrular. Token veya
+secret'ı loglara yazmayın. Token'dan bağımsız rotasyon için ayrı güçlü
+`TELEGRAM_WEBHOOK_SECRET` tanımlayın. `TELEGRAM_WEBHOOK_AUTO=0` (sabit secret da
+boşsa) polling'e döndürür; yerel/systemd'de `PORT` olmadığı için polling varsayılandır.
+İlk geçişte eski kod rastgele process-secret kullanıyorsa eski ve yeni örnekler
+kısa süre aynı anda yaşadığında webhook hataları görülebilir; bu değişiklik tek
+aktif bot veya bildirim tekilliği garantisi değildir.
 
 ## B) Render → servis ayarları (env değil, ayar kutusu)
 

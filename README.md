@@ -363,7 +363,7 @@ geçirme gerektirir.
 | `health_server.py` | Render `PORT` varsa `/health` liveness (+ canlılık alanları, `?strict=1`), korumalı `/test` (X-Test-Key) ve `POST /webhook` (secret_token başlığı) uçları + IP başına rate limit |
 | `supabase_schema.sql` | Cache ve çalışma durumları için tek JSONB store tablosu; Supabase SQL Editor'da çalıştırılır |
 | `deploy_check.py` | Kurulum doktoru: repo/env, Supabase okuma bağlantısı, Telegram ve Render `/health`/opsiyonel `/test` kontrolleri; bilinmeyen/uyarılar ayrıca incelenmeli (sır yazdırmaz) |
-| `.github/workflows/deploy.yml` | Render Deploy Hook ile `main` push'unda otomatik deploy (hook secret yoksa uyarı verip atlar) |
+| `.github/workflows/deploy.yml` | Yalnız elle tetiklenen Render Deploy Hook; push'ta çalışmaz. Dashboard auto-deploy ayarı ayrıca doğrulanmalıdır. |
 | `.github/workflows/ci.yml` | Render eşdeğeri CI: Python 3.12 kurulumu, pytest, zamanlama regresyonu ve `PORT` verilip `/health` duman testi |
 | `.github/workflows/keepalive.yml` | Render Free uyumasın diye `/health` pingi (5 dk, her gün 08:00–23:00 İstanbul; `KEEPALIVE_*` değişkenleriyle ayarlanır) |
 | `docs/kurulum/RENDER_DEPLOY.md` | Render Free + Supabase + Telegram kurulum rehberi; build hatası ve keep-alive dahil |

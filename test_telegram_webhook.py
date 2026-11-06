@@ -121,17 +121,18 @@ def test_config_import_does_not_generate_runtime_webhook_secret():
     )
 
 
-def test_render_runtime_webhook_secret_is_generated_for_complete_render_inputs(monkeypatch):
-    import secrets
+def test_render_runtime_webhook_secret_is_stable_across_replicas_and_token_specific():
+    import re
     import config
 
-    monkeypatch.setattr(secrets, "token_urlsafe", lambda n: f"generated-{n}")
-    secret, generated = config.telegram_webhook_runtime_secret({
-        "PORT": "10000",
-        "RENDER_EXTERNAL_URL": "https://formation-bot.onrender.com",
-        "TELEGRAM_BOT_TOKEN": "111:AAA",
-    })
-    assert (secret, generated) == ("generated-32", True)
+    env = {"PORT": "10000", "RENDER_EXTERNAL_URL": "https://formation-bot.onrender.com",
+           "TELEGRAM_BOT_TOKEN": "111:AAA"}
+    first, generated = config.telegram_webhook_runtime_secret(env)
+    second, generated_again = config.telegram_webhook_runtime_secret(dict(env, PORT="10001"))
+    other, _ = config.telegram_webhook_runtime_secret(dict(env, TELEGRAM_BOT_TOKEN="111:BBB"))
+    assert generated is generated_again is True
+    assert first == second and first != other and first != env["TELEGRAM_BOT_TOKEN"]
+    assert re.fullmatch(r"[A-Za-z0-9_-]{1,256}", first)
 
 
 def test_render_runtime_webhook_secret_respects_explicit_value_and_opt_out():
@@ -399,6 +400,26 @@ def _webhook_sunucusu(handler, secret=SECRET):
         {"PORT": "0", "TELEGRAM_WEBHOOK_SECRET": secret or ""},
         webhook_handler=handler,
     )
+
+
+def test_two_new_replicas_accept_same_derived_webhook_header():
+    import config
+
+    env = {"PORT": "10000", "RENDER_EXTERNAL_URL": RENDER_URL, "TELEGRAM_BOT_TOKEN": "111:AAA"}
+    first, _ = config.telegram_webhook_runtime_secret(env)
+    second, _ = config.telegram_webhook_runtime_secret(dict(env, PORT="10001"))
+    servers = [_webhook_sunucusu(lambda _update: 200, secret=secret) for secret in (first, second)]
+    try:
+        for server in servers:
+            port = server.server_address[1]
+            assert _post(port, WEBHOOK_YOL, _guncelleme(1, "/panel"),
+                         {"X-Telegram-Bot-Api-Secret-Token": first})[0] == 200
+            assert _post(port, WEBHOOK_YOL, _guncelleme(2, "/panel"),
+                         {"X-Telegram-Bot-Api-Secret-Token": "wrong"})[0] == 403
+    finally:
+        for server in servers:
+            server.shutdown()
+            server.server_close()
 
 
 def test_webhook_ucu_secret_tanimli_degilse_404():
