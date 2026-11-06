@@ -263,6 +263,7 @@ class TelegramNotifier:
         self.public_gonderilen = 0
         self.public_hatasi = 0
         self.public_engel = 0
+        self._son_public_deneme = "bilinmiyor"  # yalnız _public_send_lck altında kullanılır
         # Süreç ömrü boyunca kuyruk denemelerinin (tekil olay sayısı değildir)
         # red nedenleri: kanalın DM'den ayrışması /durum'da sessiz kalmasın.
         self.public_filtre_sayac = {
@@ -277,6 +278,10 @@ class TelegramNotifier:
         self.public_grafik_hatasi = 0
 
         self.public_enabled = bool(self.token and self.public_chat_id)
+        # Özel Stabil/domain olayları public bütçeye takılsa da DM başarısı
+        # public teslimini yanlışlıkla tamamlanmış saymasın.
+        from public_aux_outbox import PublicAuxOutbox
+        self._public_aux = PublicAuxOutbox(self, _pkg.DATA_DIR)
         # GÖREV 6 (A10): Telegram sayaç ayrımı — alert/watch/digest/command
         # Mevcut alert/watch/digest/command ayrımını bozmayacak şekilde eklenir.
         # send_text() içeriğine göre kategorize edilir; mevcut çağrı noktaları değişmeden çalışır.
@@ -651,10 +656,13 @@ class TelegramNotifier:
 
     def _send_to_public(self, text: str, deneme: int = 1) -> bool:
         """Grup/kanal hedefine gönderir: bütçe + pacing + 429 retry + kırpma."""
+        self._son_public_deneme = "belirsiz"
         if not self.public_enabled:
+            self._son_public_deneme = "hedef_yok"
             logger.info(f"[MOCK PUBLIC] {text[:120]}")
             return True
         if not self._public_kap_gec():
+            self._son_public_deneme = "butce"
             self.public_engel += 1
             logger.warning("Public bütçe dolu (saatlik %d / günlük %d) - gönderim atlandı",
                            self.public_max_saatlik, self.public_max_gunluk)
@@ -670,6 +678,7 @@ class TelegramNotifier:
                     timeout=15,
                 )
                 if resp.status_code == 200:
+                    self._son_public_deneme = "gonderildi"
                     self._son_public_ts = time.monotonic()
                     self._public_saatlik.append(datetime.now(ISTANBUL_TZ))
                     self._public_gun_sayac += 1
@@ -687,6 +696,11 @@ class TelegramNotifier:
                     logger.warning("Public 429: %.0f sn sonra tekrar denenecek", bekle)
                     time.sleep(max(0.0, min(bekle, 20.0)))
                     continue
+                # Telegram'ın kesin 4xx reddi tekrarlanabilir; 5xx/bağlantı
+                # kesintisinde sunucu kabul etmiş olabilir, sonuç belirsizdir.
+                self._son_public_deneme = (
+                    "reddedildi" if 400 <= resp.status_code < 500 else "belirsiz"
+                )
                 ipucu = telegram_hata_ipucu(resp.status_code,
                                                  redact_sensitive_text(resp.text, self.token))
                 logger.error("Telegram public hata: %s | %s",
@@ -705,6 +719,14 @@ class TelegramNotifier:
     def send_to_channel(self, text: str) -> bool:
         """Geriye dönük ad: eski kanal çağrıları artık public yola düşer."""
         return self.send_to_public(text)
+
+    def public_ozel_gonder(self, event_id: str, text: str, *, identity=None, graphics=None):
+        """Özel alarm public metin/görselini yerel kuyruğa al: (kabul, metin gitti)."""
+        return self._public_aux.submit(event_id, text, identity=identity, graphics=graphics)
+
+    def public_ozel_bosalt(self) -> int:
+        """Bütçe veya kesin ret sonrası bekleyen özel public alarmları dene."""
+        return self._public_aux.flush()
 
     def send_to_chat(self, text: str, chat_id=None, deneme: int = 1) -> bool:
         """Metni AÇIKÇA verilen sohbete gönderir (`/grafik` grup sonucu).
@@ -1944,6 +1966,7 @@ class TelegramNotifier:
             "grafik_ort_ms": (round(self.grafik_toplam_ms / self.grafik_kare_sayisi, 1)
                               if self.grafik_kare_sayisi else 0.0),
             "public_kuyruk": len(self._public_kuyruk),
+            "public_ozel_kuyruk": self._public_aux.status(),
             "public_kuyruk_tasmasi": self.public_kuyruk_tasmasi,
             "son_public_gonderim": self.son_public_gonderim,
         }

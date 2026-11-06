@@ -736,6 +736,14 @@ def _komut_durum(_arguman: str) -> str:
                         f"{gd['public_saatlik_limit']} · gün {gd.get('public_gunluk', 0)}/"
                         f"{gd.get('public_gunluk_limit', 0)}"
                     )
+                ozel = gd.get("public_ozel_kuyruk")
+                if isinstance(ozel, dict):
+                    gosterim_public += (
+                        f"\n   Özel alarmlar: {ozel.get('pending', 0)} bekliyor · "
+                        f"{ozel.get('review', 0)} elle inceleme"
+                    )
+                    if ozel.get("available") is False:
+                        gosterim_public += " · ⚠️ kuyruk okunamadı"
                 filtre = gd.get("public_filtre_sayac")
                 if isinstance(filtre, dict):
                     gosterim_public += (

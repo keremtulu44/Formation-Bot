@@ -362,12 +362,15 @@ def format_stabil_burst_summary_card(extra_candidates: Sequence[StabilAlarmCandi
     return metni_sigdir("\n".join(satirlar), guvenlik=1.0)
 
 
-def _deliver_stabil_message_channels(notifier: Any, text: str) -> tuple[bool, bool]:
-    """Metni DM/public'e yollar ve başarıları ayrı döndürür (görsel bağı için)."""
+def _deliver_stabil_message_result(notifier: Any, text: str, *, public_event_id=None,
+                                   public_identity=None, public_graphics=None) -> dict[str, bool]:
+    """DM sonucu ile public'in teslim/kuyruk sonucunu ayrı tut."""
     dm_on = bool(getattr(config, "STABIL_ALARM_DM", True))
     pub_on = bool(getattr(config, "STABIL_ALARM_PUBLIC", True))
     dm_ok = False
     pub_ok = False
+    pub_accepted = False
+    public_managed = False
 
     if dm_on and notifier is not None:
         send_text = getattr(notifier, "send_text", None)
@@ -375,8 +378,8 @@ def _deliver_stabil_message_channels(notifier: Any, text: str) -> tuple[bool, bo
             try:
                 res = send_text(text)
                 dm_ok = bool(res[0] if isinstance(res, tuple) else res)
-            except Exception as exc:
-                logger.warning("Stabil DM gönderim hatası: %s", exc)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Stabil DM gönderim hatası: %s", type(exc).__name__)
 
     if pub_on and notifier is not None:
         dm_aktif_ama_public_kapali = (
@@ -384,19 +387,45 @@ def _deliver_stabil_message_channels(notifier: Any, text: str) -> tuple[bool, bo
             and not bool(getattr(notifier, "public_enabled", True))
         )
         send_pub = getattr(notifier, "send_to_public", None)
-        if callable(send_pub) and not dm_aktif_ama_public_kapali:
+        queue_pub = getattr(notifier, "public_ozel_gonder", None)
+        if not dm_aktif_ama_public_kapali and public_event_id and callable(queue_pub):
+            public_managed = True
+            try:
+                pub_accepted, pub_ok = queue_pub(
+                    public_event_id, text, identity=public_identity, graphics=public_graphics)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Stabil public kuyruğu başarısız: %s", type(exc).__name__)
+        elif callable(send_pub) and not dm_aktif_ama_public_kapali:
             try:
                 pub_ok = bool(send_pub(text))
-            except Exception as exc:
-                logger.warning("Stabil public gönderim hatası: %s", exc)
+                pub_accepted = pub_ok
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Stabil public gönderim hatası: %s", type(exc).__name__)
+        if dm_ok and dm_aktif_ama_public_kapali:
+            logger.warning("Stabil DM gitti, public hedef kapalı; kanal kopyası gönderilmedi")
+        elif dm_ok and not (pub_ok or pub_accepted):
+            logger.warning("Stabil DM gitti ancak public kopyası saklanamadı/gönderilmedi")
 
-    return dm_ok, pub_ok
+    return {"dm": dm_ok, "public": bool(pub_ok), "any": dm_ok or bool(pub_ok),
+            "recorded": dm_ok or bool(pub_accepted), "public_managed": public_managed}
+
+
+def _deliver_stabil_message_channels(notifier: Any, text: str) -> tuple[bool, bool]:
+    sonuc = _deliver_stabil_message_result(notifier, text)
+    return sonuc["dm"], sonuc["public"]
 
 
 def _deliver_stabil_message(notifier: Any, text: str) -> bool:
     """Geriye uyumlu kolaylık: DM veya public metninden biri gittiyse True."""
     dm_ok, pub_ok = _deliver_stabil_message_channels(notifier, text)
     return dm_ok or pub_ok
+
+
+def _stabil_public_identity(cand: StabilAlarmCandidate) -> dict[str, str]:
+    tur = ("STABİL GÜÇLÜ GERİ ALIM" if cand.behavior.reclaim_kind == "close_reclaim"
+           else "STABİL SİLKELEME DÖNÜŞÜ")
+    return {"stock_name": cand.symbol, "timeframe": "4h", "state": "STABIL_GERI_ALIM",
+            "pattern_name": tur, "formation_id": cand.bar_open_ts}
 
 
 def _deliver_stabil_public_graphic(
@@ -415,20 +444,8 @@ def _deliver_stabil_public_graphic(
     if not callable(bagla):
         return 0
 
-    tur = (
-        "STABİL GÜÇLÜ GERİ ALIM"
-        if cand.behavior.reclaim_kind == "close_reclaim"
-        else "STABİL SİLKELEME DÖNÜŞÜ"
-    )
-    kimlik = {
-        "stock_name": cand.symbol,
-        "timeframe": "4h",
-        "state": "STABIL_GERI_ALIM",
-        "pattern_name": tur,
-        "formation_id": cand.bar_open_ts,
-    }
     try:
-        return int(bagla(kimlik, veri) or 0)
+        return int(bagla(_stabil_public_identity(cand), veri) or 0)
     except Exception as exc:  # noqa: BLE001 - grafik metin alarmını engellemesin
         logger.warning("Stabil public grafiği gönderilemedi (%s): %s", cand.symbol, exc)
         return 0
@@ -460,14 +477,21 @@ def dispatch_stabil_scan_candidates(
     state = _load_alarm_state(state_path)
     symbols_map = state.setdefault("symbols", {})
     degisti = False
+    from public_aux_outbox import auxiliary_event_id
 
     for cand in tekil_liste:
         metin = format_stabil_reclaim_alert_card(cand)
-        dm_ok, pub_ok = _deliver_stabil_message_channels(notifier, metin)
-        if pub_ok:
+        sonuc = _deliver_stabil_message_result(
+            notifier, metin,
+            public_event_id=auxiliary_event_id("stabil", [(cand.symbol, cand.bar_open_ts)]),
+            public_identity=_stabil_public_identity(cand),
+            public_graphics=cand.grafik_verisi_public,
+        )
+        if sonuc["public"] and not sonuc["public_managed"]:
             _deliver_stabil_public_graphic(notifier, cand, public_text_sent=True)
-        if dm_ok or pub_ok:
+        if sonuc["any"]:
             ozet["tekil_gonderilen"] += 1
+        if sonuc["recorded"]:
             symbols_map[cand.symbol] = {
                 "last_bar_open": cand.bar_open_ts,
                 "last_bar_close": cand.bar_close_ts,
@@ -477,8 +501,14 @@ def dispatch_stabil_scan_candidates(
 
     if toplu_liste:
         ozet_metin = format_stabil_burst_summary_card(toplu_liste)
-        if _deliver_stabil_message(notifier, ozet_metin):
+        sonuc = _deliver_stabil_message_result(
+            notifier, ozet_metin,
+            public_event_id=auxiliary_event_id(
+                "stabil-summary", [(c.symbol, c.bar_open_ts) for c in toplu_liste]),
+        )
+        if sonuc["any"]:
             ozet["toplu_ozet"] = 1
+        if sonuc["recorded"]:
             for cand in toplu_liste:
                 symbols_map[cand.symbol] = {
                     "last_bar_open": cand.bar_open_ts,

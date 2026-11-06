@@ -85,6 +85,8 @@ raporlar/
 # Durable notification delivery state (includes rendered PNG bytes).
 **/notification_delivery.json
 **/notification_delivery.tmp
+**/telegram_public_aux.json
+**/.public_aux_*.tmp
 
 .pytest-full.log
 arastirma_cikti/
