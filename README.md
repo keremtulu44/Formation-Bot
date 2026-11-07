@@ -23,23 +23,30 @@ Windows PowerShell için [yerel kurulum rehberine](docs/kurulum/LOCAL_SETUP.md) 
 
 ## Belgeler ve depo düzeni
 
-### Stabil — yeni analitik domain ve araştırma kaydı (2026-11-01)
+### Stabil — analitik domain, grafik entegrasyonu ve araştırma
 
 **[Stabil ana rehberi](docs/arastirma/STABIL_REHBERI.md)** →
 [özgün Python TXT](domain_engines/05_stabil.txt) ·
-[kaynak/entegrasyon durumu](domain_engines/STABIL_KAYNAK_NOTU.md) ·
+[native kaynak notu](domain_engines/STABIL_KAYNAK_NOTU.md) ·
 [kullanılan replay hatları](docs/arastirma/STABIL_REPLAY_HATLARI.md) ·
-[davranış modeli](docs/arastirma/STABIL_DAVRANIS_MODELI.md) ·
+[direnç/destek araştırması](docs/arastirma/stabil_direnc_50_model_testi_2026_11_06/RAPOR_50.md) ·
+[yerel direnç grafik/teslim denetimi](docs/tasarim/STABIL_DIRENC_GORSEL_TESLIM_DENETIMI_2026-11-07.md) ·
+[2026-11-07 genel kontrol](docs/denetim/STABIL_DIRENC_GENEL_KONTROL_2026-11-07.md) ·
+[önceki davranış modeli](docs/arastirma/STABIL_DAVRANIS_MODELI.md) ·
+[yeni destek sonrası soru taslağı](docs/arastirma/STABIL_DESTEK_SONRASI_DAVRANIS_SORU_PLANI_2026-11-07.md) ·
 [48 soru](docs/arastirma/STABIL_DAVRANIS_SORULARI.md) ·
-[çalışma geçmişi](docs/arastirma/STABIL_CALISMA_GECMISI.md) ·
 [dosya/kurtarma envanteri](docs/arastirma/STABIL_DOSYA_ENVANTERI.md).
 
-**Mevcut durum:** Özgün TXT kurtarıldı ve hash eşitliği doğrulandı. Önceki
-konuşmada tamamlandığı bildirilen Stabil runtime entegrasyonu, tam replay
-raporları ve native veri paketi bu checkout'ta bulunamadı. Bu nedenle beşinci
-aktif motor veya yeniden doğrulanmış sonuç iddiası yoktur. Önceki 100 sembollük
-27 soru ile 48 davranış başlığı ayrı çalışmalardır; sonuncusunda bildirilen
-33 ölçüm / 8 proxy / 7 açık konu, 48 doğrulanmış kural demek değildir.
+**Mevcut durum (2026-11-07):** Stabil native runtime ve günlük destek/trend
+sonuçları mevcut. Ayrı, yönce terslenmiş günlük direnç hesabı yerel `/grafik`
+ve mevcut alarm grafiklerine bağlandı; direnç kendi başına yeni otomatik alarm
+üretmez. Yerel test ve sahte Telegram taşımalı grafik/teslim senaryoları başarılı;
+canlı Render ayarları, gerçek Telegram teslimi ve güncel sağlayıcı verisi bu
+checkout'ta doğrulanmış değildir. Otomatik alarm grafikleri `TELEGRAM_GRAFIK`
+ayarına bağlı ve örnek varsayılanı `yok`tur; gerçek Dashboard değeri operatörce
+kontrol edilmelidir. 100-sembol/48-soru tarihsel araştırmasının eksik native
+paketi ile mevcut aggregate kayıtları birbirinden ayrı tutulmalıdır; raporlanan
+33 ölçüm / 8 proxy / 7 açık başlık 48 doğrulanmış kural demek değildir.
 
 
 **Tek giriş noktası: [docs/README.md](docs/README.md)** — hangi belgenin güncel olduğu

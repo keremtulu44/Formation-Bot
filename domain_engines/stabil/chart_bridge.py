@@ -104,8 +104,34 @@ def _days(first: date, last: date):
         day += timedelta(days=1)
 
 
-def _daily_checked(frame: Any, cutoff: pd.Timestamp, *, equity: bool) -> pd.DataFrame:
-    daily = _closed(frame, "1d", cutoff)
+def _drop_known_closed_daily_rows(frame: pd.DataFrame, *, symbol: str) -> pd.DataFrame:
+    """Remove provider daily bars whose local dates are known BIST closures.
+
+    A BIST-listed instrument cannot have a valid trading candle on a known
+    holiday/weekend. Providers sometimes leave synthetic/stale daily rows on
+    those labels. Exclude only calendar-confirmed CLOSED dates; an UNKNOWN date
+    still fails closed, and missing real sessions are checked afterward.
+    """
+    if frame.empty:
+        return frame
+    closed_dates: set[date] = set()
+    for day in {ts.date() for ts in frame.index}:
+        session = _session(day)
+        if session.status is SessionStatus.UNKNOWN:
+            raise _UnsafeSource(f"unknown_session:{day.isoformat()}")
+        if session.status is SessionStatus.CLOSED:
+            closed_dates.add(day)
+    if not closed_dates:
+        return frame
+    log.warning("%s: daily provider rows on known BIST closure dates excluded: %s",
+                symbol, ", ".join(map(str, sorted(closed_dates))))
+    return frame.loc[[ts.date() not in closed_dates for ts in frame.index]].copy()
+
+
+def _daily_checked(frame: Any, cutoff: pd.Timestamp, *, equity: bool, symbol: str) -> pd.DataFrame:
+    daily = _drop_known_closed_daily_rows(_closed(frame, "1d", cutoff), symbol=symbol)
+    if daily.empty:
+        raise _UnsafeSource("no_completed_bars")
     dates = [ts.date() for ts in daily.index]
     if len(set(dates)) != len(dates):
         raise _UnsafeSource("duplicate_daily_session")
@@ -117,7 +143,9 @@ def _daily_checked(frame: Any, cutoff: pd.Timestamp, *, equity: bool) -> pd.Data
         session = _session(day)
         if session.status is not SessionStatus.TRADING:
             if day in actual:
-                raise _UnsafeSource("daily_on_closed_session")
+                # Preserve the failing label so a provider/timezone-corrupted
+                # daily cache can be diagnosed without weakening fail-closed.
+                raise _UnsafeSource(f"daily_on_closed_session:{day.isoformat()}")
             continue
         daily_label = pd.DatetimeIndex([pd.Timestamp(day, tz="Europe/Istanbul")])
         if mum_kapanis_anlari(daily_label, "1d")[0] <= cutoff:
@@ -228,8 +256,11 @@ def resistance_for_chart(
         target = _closed(indexed, tf, cutoff)
         # In case the supplied wall clock filtered a trailing target bar.
         cutoff = min(cutoff, mum_kapanis_anlari(target.index, tf)[-1])
-        daily = _daily_checked(daily_frame, cutoff, equity=sembol_turu(name) == "hisse")
+        daily = _daily_checked(daily_frame, cutoff, equity=sembol_turu(name) == "hisse", symbol=name)
         if tf == "1d":
+            target = _drop_known_closed_daily_rows(target, symbol=name)
+            if target.empty:
+                raise _UnsafeSource("no_completed_bars")
             matching = daily.reindex(target.index)
             if not _same_rows(target, matching):
                 raise _UnsafeSource("daily_target_source_mismatch")
