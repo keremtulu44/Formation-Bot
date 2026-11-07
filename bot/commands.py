@@ -52,6 +52,7 @@ from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
 from notifier import TelegramNotifier, devamlilik_puani
+from grafik_ayar import otomatik_grafik_acik
 import config
 import ampirik_referans as ampirik
 from notification_context import (
@@ -563,9 +564,10 @@ def _komut_render(_arguman: str) -> str:
         data_asof, fresh, requested, fetch_failures, oldest_age
     ))
 
-    grafik_durumu = "açık" if config.TELEGRAM_GRAFIK == "alarm" else "kapalı"
+    grafik_degeri = (os.environ.get("TELEGRAM_GRAFIK") or "").strip().lower()
+    grafik_durumu = "açık" if otomatik_grafik_acik(grafik_degeri) else "kapalı"
     satirlar.append(
-        f"Alarm görselleri: {grafik_durumu} (TELEGRAM_GRAFIK={config.TELEGRAM_GRAFIK or 'yok'}). "
+        f"Alarm görselleri: {grafik_durumu} (TELEGRAM_GRAFIK={grafik_degeri or 'yok'}). "
         "/grafik isteği ayrıca cache tazeliğiyle doğrulanır."
     )
     return "\n".join(satirlar)
@@ -1990,7 +1992,17 @@ def _kare_altyazisi(hisse: str, tf: str, meta: dict) -> str:
         parcalar.append(f"son mum kapanışı {ts}")
     elif ham_ts:
         parcalar.append("son mum zamanı bilinmiyor")
-    return " · ".join(parcalar)
+    caption = " · ".join(parcalar)
+    # Manuel grafikte dipnotlar varsayılan olarak PNG'ye basılmaz. Yalnız bu
+    # yeni katmanın kaynak/hizalama uyarısını altyazıda görünür kıl; destek
+    # mesajlarını ve diğer alarm metinlerini değiştirme. Sade modda katman zaten
+    # istenmediğinden uyarı da gösterilmez.
+    if not (isinstance(mod, dict) and mod.get("sade")):
+        for uyari in meta.get("uyarilar") or []:
+            if str(uyari).startswith("Stabil direnç gösterilemedi:"):
+                caption += "\n⚠ " + str(uyari)
+                break
+    return caption
 
 
 def _komut_tara(arguman: str) -> str:

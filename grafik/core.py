@@ -21,6 +21,7 @@ from typing import Any, Iterable, Mapping, Optional, Sequence
 from reporting.format import sayi
 import chart_experience as deneyim
 from telegram_measure import SATIR_BUTCE, genislik as _genislik_16
+from grafik_ayar import otomatik_grafik_acik
 
 try:  # yalnız kapanmış mum kuralı (§0.6); zincir koparsa kural devre dışı kalır
     from data import bar_kapandi_mi as _bar_kapandi_mi
@@ -305,7 +306,7 @@ SABITLER_TABAN: dict[str, Any] = {
     # dizmek teknik olarak sığıyor ama okunmuyordu (GARAN 1s: 13 etiket).
     # Dış rol cetvelinde dört ayrı seviye olabilir (PH/PL/WH/WL); dördünü de
     # koru, iç swing okları sağ şeridi tüketmez.
-    "sag_etiket_maks": {"zone": 3, "olay": 3, "alarm": 1, "swing": 4, "stabil": 1},
+    "sag_etiket_maks": {"zone": 3, "olay": 3, "alarm": 1, "swing": 4, "stabil": 1, "stabil_direnc": 1},
     "kadraj_pay_orani": 0.06,         # yapı seviyesi: candle aralığının bu oranı dışındaysa çizilmez
     # Sağ boşluk: son mumun sağında kalan boş alan. Fiyat etiketleri, seviye
     # çizgileri ve 🎯 hedef kutusu mumların üzerine değil bu alana çizilir; bant
@@ -438,12 +439,12 @@ _AY = {1: "Oca", 2: "Şub", 3: "Mar", 4: "Nis", 5: "May", 6: "Haz",
 
 
 def grafik_aktif_mi() -> bool:
-    """Kill-switch (§5): `TELEGRAM_GRAFIK=yok` (veya boş) ise hiçbir kare üretilmez.
+    """Otomatik alarm kareleri için ortak şalteri çağrı anında oku.
 
-    Neden env'den ve çağrı anında: anahtarı değiştirmek için süreci yeniden
-    başlatmak gerekmesin; `deploy_check` de aynı okumayı yapar (G4).
+    `/grafik` komutu bundan bağımsızdır. Boş/yok/0/false/off/kapalı gibi
+    kapatma değerleri notifier ve kurulum doktoruyla aynı şekilde yorumlanır.
     """
-    return (os.environ.get("TELEGRAM_GRAFIK") or "yok").strip().lower() != "yok"
+    return otomatik_grafik_acik(os.environ.get("TELEGRAM_GRAFIK"))
 
 
 def grafik_kare_adedi() -> int:

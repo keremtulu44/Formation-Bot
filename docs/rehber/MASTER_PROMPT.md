@@ -183,7 +183,8 @@ Formation-Bot/
 │                                  # LOG_DIR, DATA_DIR, SEED_DATA_DIR, SESSION_OPEN/CLOSE
 ├── .env.example
 ├── .python-version                # 3.12
-├── requirements.txt               # pandas, numpy, pytz, yfinance
+├── requirements-deploy.txt        # canlı/CI pinleri (kurulum için scripts/install_deploy_dependencies.sh)
+├── requirements.txt               # tarihsel replay için hash'li eski pinler
 │
 ├── README.md                      # 24194 bayt; tam durum tablosu (Faz 1-5, batch 1-8),
 │                                  # test sonuçları (305 pytest passed), canlı tarama açıklaması,

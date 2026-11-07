@@ -1,0 +1,14 @@
+{
+  "result": "OK",
+  "path_manifest_sha256": "04b29f1fdb8a7b4a3c63093fbca275ca12ec07a3f802322751e44a86f7ea0a75",
+  "verifier_sha256": "d150eb7f16146d5dda847d77044f124acfa49060c5777914d79d9c29f0c42787",
+  "break_events": 1789,
+  "valid_24": 1373,
+  "flat_branches": 129,
+  "direct_real_price_checks": {
+    "DOCO": {
+      "SUPPORT": 15,
+      "RESISTANCE": 22
+    }
+  }
+}

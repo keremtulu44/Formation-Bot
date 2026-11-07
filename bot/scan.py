@@ -839,6 +839,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 else:
                     _pkg.logger.warning(f"{stock}: günlük derin veri çekilemedi - resample kullanılacak")
             df_gunluk = deque_manager.to_gunluk_dataframe(stock)
+            # Grafik direnci için native, normalize edilmemiş günlük kaynak.
+            # Mevcut destek/formasyon yolunun ölçeklemesi aynen korunur.
+            df_gunluk_ham = df_gunluk if isinstance(df_gunluk, pd.DataFrame) else None
             if df_gunluk is not None and len(df_gunluk) >= 30:
                 from data import gunluk_bolunme_normalize_et
                 df_gunluk, _ = gunluk_bolunme_normalize_et(df_gunluk)
@@ -1188,11 +1191,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         # eklendikten sonra kuyruğa girmeli. DM engeli
                         # (cooldown/kap) grubu etkilemez.
                         def _grafik_koprusu(payload, outputs):
-                            # G4 KÖPRÜSÜ (§4): kareler kartla BİREBİR aynı veriden.
-                            # Motor burada YENİDEN çağrılmaz — `outputs` bu turda
-                            # `_domain_results_for_notification`da üretildi; kare
-                            # yalnız kopyalar (§14.2). `grafik_verisi` bellek içidir
-                            # ve acil kuyruk kaydından arındırılır (notifier).
+                            # G4 KÖPRÜSÜ: mevcut kart motorları yeniden çalışmaz.
+                            # Bağımsız direnç yalnız grafik hazırlanırken hesaplanır,
+                            # özel/genel kareler aynı sonucu paylaşır; karta veya
+                            # alarm kararına geri yazılmaz. Render yalnız kopyalar.
                             try:
                                 import grafik
                                 if not grafik.grafik_aktif_mi():
@@ -1205,10 +1207,31 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 # görseller gönderiliyordu.
                                 tek_kare = (notification_state
                                             == "KIRILIM_GECERSIZLESTI")
+                                ana_cerceve = taze.get(tf_name) if taze.get(tf_name) is not None else df_tf
+                                grafik_sonuclari = outputs
+                                try:
+                                    from domain_engines.stabil.chart_bridge import (
+                                        add_chart_resistance, alarm_chart_timeframes,
+                                    )
+                                    ana_tf_direnc = str(tf_name or '').lower()
+                                    public_tf_direnc = (_pkg._UST_TF.get(ana_tf_direnc)
+                                                        or _pkg._ALT_TF.get(ana_tf_direnc))
+                                    grafik_cerceveleri = {**taze, tf_name: ana_cerceve}
+                                    secilen_tfler = alarm_chart_timeframes(
+                                        tf_name, taze, grafik.grafik_kare_adedi(),
+                                        public_tf=public_tf_direnc, single=tek_kare,
+                                    )
+                                    grafik_sonuclari = add_chart_resistance(
+                                        stock, grafik_cerceveleri, outputs, daily_frame=df_gunluk_ham,
+                                        hourly_frame=df_1h, as_of_close=simdiki_zaman, timeframes=secilen_tfler,
+                                    )
+                                except Exception as direnç_hata:  # noqa: BLE001 - eski grafiği koru
+                                    _pkg.logger.warning("%s direnç grafik köprüsü atlandı: %s",
+                                                        stock, type(direnç_hata).__name__)
                                 veri = grafik.kare_listesi(
                                     active, tf_name,
-                                    taze.get(tf_name) if taze.get(tf_name) is not None else df_tf,
-                                    sonuclar=outputs,
+                                    ana_cerceve,
+                                    sonuclar=grafik_sonuclari,
                                     ek_cerceveler=({} if tek_kare else
                                                    {k: v for k, v in taze.items()
                                                     if k != tf_name}),
@@ -1241,8 +1264,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                                else None)
                                 public_veri = grafik.kare_listesi(
                                     active, tf_name,
-                                    taze.get(tf_name) if taze.get(tf_name) is not None else df_tf,
-                                    sonuclar=outputs,
+                                    ana_cerceve,
+                                    sonuclar=grafik_sonuclari,
                                     ek_cerceveler=({ust_tf: ust_cerceve}
                                                    if ust_tf and ust_cerceve is not None else {}),
                                     alarm_turu=grafik.alarm_turu_bul(notification_state),
@@ -1485,6 +1508,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         simdiki_zaman,
                         domain_results_by_stock=domain_results_by_stock,
                         bar_metni_fn=_mum_bilgisi,
+                        direnc_gunluk_ham=df_gunluk_ham,
                     )
                     if st_cand is not None:
                         stabil_adaylari.append(st_cand)
@@ -1512,6 +1536,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             formasyon_kayitlari=hisse_formasyonlari,
                             bar_metni_fn=_mum_bilgisi,
                             grafik_baglami=grafik_baglami_by_tf,
+                            direnc_gunluk_ham=df_gunluk_ham,
                         )
                     )
                 except Exception as yeni_err:  # noqa: BLE001 - yeni kanal ana taramayı düşürmez

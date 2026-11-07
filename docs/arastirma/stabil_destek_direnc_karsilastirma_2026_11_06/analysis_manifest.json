@@ -1,0 +1,11 @@
+{
+  "comparison_manifest_sha256": "0c2d6056e9bf44f1fed362e6124a0848878af5934ef549d88237203751ba5c08",
+  "summary_script_sha256": "af261cd160017e40f2b8a2935020b50868f6243cb1914674d92a66f7cde71af5",
+  "legacy_table_sha256": "a42d2874fce36cb21bcbf92a0d82832cd8669ce9e090f6d5be62d8460e14a04d",
+  "generated_outputs_sha256": {
+    "summary.json": "1b99c0b2e7fce0f69f4274431a58ec507b0557de019ee20ba00fd7d036026033",
+    "RAPOR.md": "7b72ba202b7774f54b846a6ade3de3798355db37b77f95a8cc3dbcfff1e1fb5b",
+    "toplu_bulgular.md": "6dec01a18d48dbebe7c11b9ffbb5f7e536638be75be5bbdb6abe7c961703c267",
+    "matched_support_resistance.csv.gz": "c62b9358d4c8c11f5d2536de42bfe1bedc080dc473c8bd9f6c2ba33832cba114"
+  }
+}

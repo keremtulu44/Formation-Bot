@@ -1,5 +1,5 @@
 # OPSIYONEL - Render build'ına DAHİL EDİLMEZ.
-# Botun canlı veri kaynağı yfinance'tir; requirements.txt yeterlidir.
+# Botun canlı veri kaynağı yfinance'tir; requirements-deploy.txt yeterlidir.
 # Bu dosya yalnızca terminalde denemek istersen:
 #   pip install -r requirements-optional.txt
 #

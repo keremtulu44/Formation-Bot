@@ -1,0 +1,47 @@
+[
+  {
+    "slug": "01_test_red",
+    "title": "Temas / aşağı önce",
+    "symbol": "ENSRI",
+    "event": "TEST",
+    "event_close_time": "2026-01-02T13:30:00+03:00",
+    "line": 17.67000008,
+    "ceiling": 18.28067704,
+    "close": 17.43000031,
+    "atr_event": 0.4596400779,
+    "return_8_atr": 1.588198195,
+    "first_1atr_8": "DOWN_FIRST",
+    "first_retest_8": null,
+    "image": "../../gorseller/stabil_direnc_replay_2026_11_06/ornekler/01_test_red.png"
+  },
+  {
+    "slug": "02_kirilim_tutunma",
+    "title": "Yukarı kırılım / sonraki temas üstte kapanış",
+    "symbol": "BERA",
+    "event": "BREAK_UP",
+    "event_close_time": "2026-01-02T13:30:00+03:00",
+    "line": 17.84000015,
+    "ceiling": 18.07129842,
+    "close": 18.04000092,
+    "atr_event": 0.5915927203,
+    "return_8_atr": -0.1352312635,
+    "first_1atr_8": "UP_FIRST",
+    "first_retest_8": "TOUCH_CLOSE_ABOVE",
+    "image": "../../gorseller/stabil_direnc_replay_2026_11_06/ornekler/02_kirilim_tutunma.png"
+  },
+  {
+    "slug": "03_kirilim_geri_donus",
+    "title": "Yukarı kırılım / sonraki temas çizgiye veya altına kapanış",
+    "symbol": "GRTHO",
+    "event": "BREAK_UP",
+    "event_close_time": "2026-01-02T13:30:00+03:00",
+    "line": 287.25,
+    "ceiling": 294.9020862,
+    "close": 293.25,
+    "atr_event": 10.12621036,
+    "return_8_atr": -1.407239184,
+    "first_1atr_8": "DOWN_FIRST",
+    "first_retest_8": "TOUCH_CLOSE_AT_OR_BELOW",
+    "image": "../../gorseller/stabil_direnc_replay_2026_11_06/ornekler/03_kirilim_geri_donus.png"
+  }
+]

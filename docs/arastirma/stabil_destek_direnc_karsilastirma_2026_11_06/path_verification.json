@@ -1,0 +1,22 @@
+{
+  "result": "OK",
+  "path_manifest_sha256": "07ff41af9404e30ccadc803d7fdc3d4da2663813c3e31d57309f3e79e9675277",
+  "verifier_sha256": "d150eb7f16146d5dda847d77044f124acfa49060c5777914d79d9c29f0c42787",
+  "break_events": 5998,
+  "valid_24": 4686,
+  "flat_branches": 392,
+  "direct_real_price_checks": {
+    "AEFES": {
+      "SUPPORT": 21,
+      "RESISTANCE": 18
+    },
+    "DOCO": {
+      "SUPPORT": 15,
+      "RESISTANCE": 22
+    },
+    "YYAPI": {
+      "SUPPORT": 0,
+      "RESISTANCE": 5
+    }
+  }
+}

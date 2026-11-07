@@ -1,6 +1,6 @@
 name: CI (Render parity)
 
-# Neden bu iş akışı: Render build'i "pip install -r requirements.txt" ile
+# Neden bu iş akışı: Render build'i scripts/install_deploy_dependencies.sh ile
 # Python 3.12'de çalışır. Burada aynı sürümle kurulum + testler + gerçek bir
 # "PORT ver, /health bekle" duman testi koşar; deploy'dan ÖNCE kırılırsa burada
 # kırmızı olur. Render'ın en pahalı hatası (cp314 tekerleği olmadığı için
@@ -23,7 +23,9 @@ jobs:
   build-and-test:
     # ubuntu-latest'in 26.04'e geçişi CI ortamını habersiz değiştirmesin.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Tam gerçek-arşiv regresyonu yavaş koşucularda 20 dakikayı aşabiliyor;
+    # testleri atlamadan kurulum, bağımsız kontroller ve dumana da pay bırak.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
@@ -33,6 +35,10 @@ jobs:
         with:
           python-version-file: .python-version
           cache: pip
+          cache-dependency-path: |
+            requirements-deploy.txt
+            requirements-dev.txt
+            scripts/install_deploy_dependencies.sh
 
       - name: Python sürümü (Render ile aynı olmalı)
         run: |
@@ -41,12 +47,10 @@ jobs:
           cat .python-version
 
       - name: Bağımlılıklar (Render Build Command'in aynısı)
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: bash scripts/install_deploy_dependencies.sh
 
       - name: Kurulu sürümler
-        run: pip show pandas numpy yfinance | grep -E "^(Name|Version)"
+        run: python -m pip show pip setuptools pandas numpy yfinance requests python-dotenv pytest | grep -E "^(Name|Version)"
 
       # Statik kapı: yalnız "sessiz kırılma" sınıfları (F/E9/S110) — kural seti
       # ve gerekçesi ruff.toml'da; yerelde `ruff check .` aynı sonucu verir.
@@ -68,6 +72,29 @@ jobs:
           TELEGRAM_CHANNEL_ID: ""
           TELEGRAM_TEST_KEY: ""
           TELEGRAM_WEBHOOK_SECRET: ""
+          SUPABASE_URL: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
+
+      # Gerçek giriş ve PNG katmanını ağsız örnek seed üzerinde dene. Doktor
+      # uyarıda exit 0 döndüğü için PNG ve direnç durumu ayrıca aranır.
+      - name: Kurulum doktoru ve grafik (çevrimdışı)
+        run: |
+          set -euo pipefail
+          mkdir -p "$DATA_DIR"
+          cp bot_data/AKBNK.json "$DATA_DIR/AKBNK.json"
+          python deploy_check.py --skip-network --grafik-test | tee "$RUNNER_TEMP/deploy-doctor.log"
+          grep -Fq 'Kare üretildi: AKBNK 4h' "$RUNNER_TEMP/deploy-doctor.log"
+          grep -Eq 'Stabil direnç (bu karede|hazır ama bu karede)' "$RUNNER_TEMP/deploy-doctor.log"
+          grep -Fq 'Fotoğraf gönderilmedi' "$RUNNER_TEMP/deploy-doctor.log"
+        env:
+          DATA_DIR: ${{ runner.temp }}/formation-bot-doctor-data
+          LOG_DIR: ${{ runner.temp }}/formation-bot-doctor-logs
+          LOCAL_LOG_DIR: ${{ runner.temp }}/formation-bot-doctor-logs-fallback
+          TELEGRAM_GRAFIK: "false"
+          TELEGRAM_BOT_TOKEN: ""
+          TELEGRAM_CHAT_ID: ""
+          TELEGRAM_GROUP_ID: ""
+          TELEGRAM_CHANNEL_ID: ""
           SUPABASE_URL: ""
           SUPABASE_SERVICE_ROLE_KEY: ""
 

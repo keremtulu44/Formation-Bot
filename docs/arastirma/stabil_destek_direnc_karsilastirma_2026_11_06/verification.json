@@ -1,0 +1,108 @@
+{
+  "archive_files_verified": 349,
+  "source_hashes_verified": 9,
+  "symbols": 174,
+  "events_4h": 33893,
+  "events_native_daily": 35351,
+  "legacy_like_checkpoints": 328762,
+  "prior_resistance_4h_rows": 16162,
+  "prior_resistance_daily_rows": 17161,
+  "legacy_and_prefix_checks": {
+    "AEFES": {
+      "A01": {
+        "cohort_rows": 727,
+        "valid_8_checked": 646,
+        "valid_24_checked": 598,
+        "differences": 0
+      },
+      "B04": {
+        "cohort_rows": 63,
+        "valid_8_checked": 50,
+        "valid_24_checked": 43,
+        "differences": 0
+      },
+      "C02": {
+        "cohort_rows": 13,
+        "valid_8_checked": 12,
+        "valid_24_checked": 12,
+        "differences": 0
+      },
+      "F01": {
+        "cohort_rows": 206,
+        "valid_8_checked": 187,
+        "valid_24_checked": 164,
+        "differences": 0
+      },
+      "causal_prefix_lengths": [
+        166,
+        333,
+        499
+      ]
+    },
+    "DOCO": {
+      "A01": {
+        "cohort_rows": 754,
+        "valid_8_checked": 666,
+        "valid_24_checked": 620,
+        "differences": 0
+      },
+      "B04": {
+        "cohort_rows": 51,
+        "valid_8_checked": 48,
+        "valid_24_checked": 45,
+        "differences": 0
+      },
+      "C02": {
+        "cohort_rows": 15,
+        "valid_8_checked": 11,
+        "valid_24_checked": 7,
+        "differences": 0
+      },
+      "F01": {
+        "cohort_rows": 159,
+        "valid_8_checked": 132,
+        "valid_24_checked": 116,
+        "differences": 0
+      },
+      "causal_prefix_lengths": [
+        166,
+        333,
+        499
+      ]
+    },
+    "YYAPI": {
+      "A01": {
+        "cohort_rows": 591,
+        "valid_8_checked": 192,
+        "valid_24_checked": 179,
+        "differences": 0
+      },
+      "B04": {
+        "cohort_rows": 136,
+        "valid_8_checked": 52,
+        "valid_24_checked": 52,
+        "differences": 0
+      },
+      "C02": {
+        "cohort_rows": 25,
+        "valid_8_checked": 0,
+        "valid_24_checked": 0,
+        "differences": 0
+      },
+      "F01": {
+        "cohort_rows": 93,
+        "valid_8_checked": 0,
+        "valid_24_checked": 0,
+        "differences": 0
+      },
+      "causal_prefix_lengths": [
+        166,
+        333,
+        499
+      ]
+    }
+  },
+  "matched_pairs_before_censor": 202,
+  "matched_valid_pairs": 178,
+  "result": "OK"
+}

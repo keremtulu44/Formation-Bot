@@ -1,0 +1,558 @@
+{
+  "scope": "post-results exploratory fixed-native-line paths, not visual horizontal confirmation",
+  "paths": 205,
+  "groups": [
+    {
+      "period": "PRE_2026",
+      "side": "RESISTANCE",
+      "initial_side": "ADVERSE",
+      "first": {
+        "n": 4,
+        "symbols": 4,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 3,
+          "NO_REMAINING": 1
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 0.0,
+          "LINE_CHANGED_FIRST": 0.0,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 75.0,
+          "NO_REMAINING": 25.0
+        }
+      },
+      "first_cross_position_counts": {
+        "EQUAL": 0,
+        "STRICT": 0
+      },
+      "strict_safe_first": {
+        "n": 4,
+        "symbols": 4,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 3,
+          "NO_REMAINING": 1
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 0.0,
+          "LINE_CHANGED_FIRST": 0.0,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 75.0,
+          "NO_REMAINING": 25.0
+        }
+      },
+      "after_safe_return": {
+        "n": 0,
+        "symbols": 0,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": null,
+          "LINE_CHANGED_FIRST": null,
+          "AMBIGUOUS_SAME_BAR": null,
+          "LEVEL_UNAVAILABLE": null,
+          "NEITHER": null,
+          "NO_REMAINING": null
+        }
+      }
+    },
+    {
+      "period": "PRE_2026",
+      "side": "RESISTANCE",
+      "initial_side": "SAFE",
+      "first": {
+        "n": 50,
+        "symbols": 31,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 11,
+          "LINE_CHANGED_FIRST": 2,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 34,
+          "NO_REMAINING": 3
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 22.0,
+          "LINE_CHANGED_FIRST": 4.0,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 68.0,
+          "NO_REMAINING": 6.0
+        }
+      },
+      "first_cross_position_counts": {
+        "EQUAL": 0,
+        "STRICT": 11
+      },
+      "strict_safe_first": {
+        "n": 0,
+        "symbols": 0,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": null,
+          "LINE_CHANGED_FIRST": null,
+          "AMBIGUOUS_SAME_BAR": null,
+          "LEVEL_UNAVAILABLE": null,
+          "NEITHER": null,
+          "NO_REMAINING": null
+        }
+      },
+      "after_safe_return": {
+        "n": 0,
+        "symbols": 0,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": null,
+          "LINE_CHANGED_FIRST": null,
+          "AMBIGUOUS_SAME_BAR": null,
+          "LEVEL_UNAVAILABLE": null,
+          "NEITHER": null,
+          "NO_REMAINING": null
+        }
+      }
+    },
+    {
+      "period": "PRE_2026",
+      "side": "SUPPORT",
+      "initial_side": "ADVERSE",
+      "first": {
+        "n": 2,
+        "symbols": 2,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 1,
+          "LINE_CHANGED_FIRST": 1,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 50.0,
+          "LINE_CHANGED_FIRST": 50.0,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 0.0,
+          "NO_REMAINING": 0.0
+        }
+      },
+      "first_cross_position_counts": {
+        "EQUAL": 0,
+        "STRICT": 1
+      },
+      "strict_safe_first": {
+        "n": 2,
+        "symbols": 2,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 1,
+          "LINE_CHANGED_FIRST": 1,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 50.0,
+          "LINE_CHANGED_FIRST": 50.0,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 0.0,
+          "NO_REMAINING": 0.0
+        }
+      },
+      "after_safe_return": {
+        "n": 1,
+        "symbols": 1,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 1,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 0.0,
+          "LINE_CHANGED_FIRST": 0.0,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 100.0,
+          "NO_REMAINING": 0.0
+        }
+      }
+    },
+    {
+      "period": "PRE_2026",
+      "side": "SUPPORT",
+      "initial_side": "SAFE",
+      "first": {
+        "n": 26,
+        "symbols": 20,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 6,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 18,
+          "NO_REMAINING": 2
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 23.076923076923077,
+          "LINE_CHANGED_FIRST": 0.0,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 69.23076923076923,
+          "NO_REMAINING": 7.6923076923076925
+        }
+      },
+      "first_cross_position_counts": {
+        "EQUAL": 0,
+        "STRICT": 6
+      },
+      "strict_safe_first": {
+        "n": 0,
+        "symbols": 0,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": null,
+          "LINE_CHANGED_FIRST": null,
+          "AMBIGUOUS_SAME_BAR": null,
+          "LEVEL_UNAVAILABLE": null,
+          "NEITHER": null,
+          "NO_REMAINING": null
+        }
+      },
+      "after_safe_return": {
+        "n": 0,
+        "symbols": 0,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": null,
+          "LINE_CHANGED_FIRST": null,
+          "AMBIGUOUS_SAME_BAR": null,
+          "LEVEL_UNAVAILABLE": null,
+          "NEITHER": null,
+          "NO_REMAINING": null
+        }
+      }
+    },
+    {
+      "period": "Y2026",
+      "side": "RESISTANCE",
+      "initial_side": "ADVERSE",
+      "first": {
+        "n": 6,
+        "symbols": 6,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 6,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 100.0,
+          "LINE_CHANGED_FIRST": 0.0,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 0.0,
+          "NO_REMAINING": 0.0
+        }
+      },
+      "first_cross_position_counts": {
+        "EQUAL": 2,
+        "STRICT": 4
+      },
+      "strict_safe_first": {
+        "n": 6,
+        "symbols": 6,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 5,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 1,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 83.33333333333333,
+          "LINE_CHANGED_FIRST": 0.0,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 16.666666666666668,
+          "NO_REMAINING": 0.0
+        }
+      },
+      "after_safe_return": {
+        "n": 6,
+        "symbols": 6,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 4,
+          "LINE_CHANGED_FIRST": 1,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 1,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 66.66666666666667,
+          "LINE_CHANGED_FIRST": 16.666666666666668,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 16.666666666666668,
+          "NO_REMAINING": 0.0
+        }
+      }
+    },
+    {
+      "period": "Y2026",
+      "side": "RESISTANCE",
+      "initial_side": "SAFE",
+      "first": {
+        "n": 46,
+        "symbols": 32,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 11,
+          "LINE_CHANGED_FIRST": 3,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 24,
+          "NO_REMAINING": 8
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 23.91304347826087,
+          "LINE_CHANGED_FIRST": 6.521739130434782,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 52.17391304347826,
+          "NO_REMAINING": 17.391304347826086
+        }
+      },
+      "first_cross_position_counts": {
+        "EQUAL": 0,
+        "STRICT": 11
+      },
+      "strict_safe_first": {
+        "n": 0,
+        "symbols": 0,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": null,
+          "LINE_CHANGED_FIRST": null,
+          "AMBIGUOUS_SAME_BAR": null,
+          "LEVEL_UNAVAILABLE": null,
+          "NEITHER": null,
+          "NO_REMAINING": null
+        }
+      },
+      "after_safe_return": {
+        "n": 0,
+        "symbols": 0,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": null,
+          "LINE_CHANGED_FIRST": null,
+          "AMBIGUOUS_SAME_BAR": null,
+          "LEVEL_UNAVAILABLE": null,
+          "NEITHER": null,
+          "NO_REMAINING": null
+        }
+      }
+    },
+    {
+      "period": "Y2026",
+      "side": "SUPPORT",
+      "initial_side": "ADVERSE",
+      "first": {
+        "n": 6,
+        "symbols": 6,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 5,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 1,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 83.33333333333333,
+          "LINE_CHANGED_FIRST": 0.0,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 16.666666666666668,
+          "NO_REMAINING": 0.0
+        }
+      },
+      "first_cross_position_counts": {
+        "EQUAL": 1,
+        "STRICT": 4
+      },
+      "strict_safe_first": {
+        "n": 6,
+        "symbols": 6,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 5,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 1,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 83.33333333333333,
+          "LINE_CHANGED_FIRST": 0.0,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 16.666666666666668,
+          "NO_REMAINING": 0.0
+        }
+      },
+      "after_safe_return": {
+        "n": 5,
+        "symbols": 5,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 2,
+          "LINE_CHANGED_FIRST": 1,
+          "AMBIGUOUS_SAME_BAR": 1,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 1,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 40.0,
+          "LINE_CHANGED_FIRST": 20.0,
+          "AMBIGUOUS_SAME_BAR": 20.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 20.0,
+          "NO_REMAINING": 0.0
+        }
+      }
+    },
+    {
+      "period": "Y2026",
+      "side": "SUPPORT",
+      "initial_side": "SAFE",
+      "first": {
+        "n": 65,
+        "symbols": 35,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 16,
+          "LINE_CHANGED_FIRST": 3,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 40,
+          "NO_REMAINING": 6
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": 24.615384615384617,
+          "LINE_CHANGED_FIRST": 4.615384615384615,
+          "AMBIGUOUS_SAME_BAR": 0.0,
+          "LEVEL_UNAVAILABLE": 0.0,
+          "NEITHER": 61.53846153846154,
+          "NO_REMAINING": 9.23076923076923
+        }
+      },
+      "first_cross_position_counts": {
+        "EQUAL": 0,
+        "STRICT": 16
+      },
+      "strict_safe_first": {
+        "n": 0,
+        "symbols": 0,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": null,
+          "LINE_CHANGED_FIRST": null,
+          "AMBIGUOUS_SAME_BAR": null,
+          "LEVEL_UNAVAILABLE": null,
+          "NEITHER": null,
+          "NO_REMAINING": null
+        }
+      },
+      "after_safe_return": {
+        "n": 0,
+        "symbols": 0,
+        "counts": {
+          "PRICE_CROSSES_FIRST": 0,
+          "LINE_CHANGED_FIRST": 0,
+          "AMBIGUOUS_SAME_BAR": 0,
+          "LEVEL_UNAVAILABLE": 0,
+          "NEITHER": 0,
+          "NO_REMAINING": 0
+        },
+        "pct": {
+          "PRICE_CROSSES_FIRST": null,
+          "LINE_CHANGED_FIRST": null,
+          "AMBIGUOUS_SAME_BAR": null,
+          "LEVEL_UNAVAILABLE": null,
+          "NEITHER": null,
+          "NO_REMAINING": null
+        }
+      }
+    }
+  ]
+}

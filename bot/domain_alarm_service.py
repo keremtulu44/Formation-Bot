@@ -105,6 +105,10 @@ def _grafik_verisi_uret(
     results: Mapping[str, Any],
     simdiki_zaman: datetime,
     baglam: Mapping[str, Any] | None,
+    *,
+    direnc_gunluk_ham: pd.DataFrame | None = None,
+    direnc_saatlik_ham: pd.DataFrame | None = None,
+    direnc_cache: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Eski alarm kareleriyle birebir aynı `grafik.kare_listesi` çağrısı.
 
@@ -132,8 +136,24 @@ def _grafik_verisi_uret(
             except (TypeError, ValueError, OverflowError):
                 alarm_bar = None
         ek = {k: v for k, v in frames.items() if k != tf}
+        grafik_sonuclari = results
+        try:
+            from domain_engines.stabil.chart_bridge import add_chart_resistance, alarm_chart_timeframes
+
+            public_tf = _UST_TF.get(tf) or _ALT_TF.get(tf)
+            secilen_tfler = alarm_chart_timeframes(
+                tf, frames, grafik.grafik_kare_adedi(), public_tf=public_tf,
+                single=alarm_turu == "gecersiz",
+            )
+            grafik_sonuclari = add_chart_resistance(
+                stock, {**frames, tf: frame}, results, daily_frame=direnc_gunluk_ham,
+                hourly_frame=direnc_saatlik_ham, as_of_close=simdiki_zaman,
+                timeframes=secilen_tfler, cache=direnc_cache,
+            )
+        except Exception as exc:  # noqa: BLE001 - mevcut grafik yine hazırlanır
+            logger.warning("Domain direnç grafiği atlandı (%s/%s): %s", stock, tf, type(exc).__name__)
         ortak = {
-            "sonuclar": results,
+            "sonuclar": grafik_sonuclari,
             "alarm_turu": alarm_turu,
             "alarm_bar": alarm_bar,
             "sembol": str(stock).upper(),
@@ -407,6 +427,7 @@ def evaluate_domain_alarm_candidates(
     formasyon_kayitlari: Sequence[Mapping[str, Any]] | None = None,
     bar_metni_fn: Any = None,
     grafik_baglami: Mapping[str, Mapping[str, Any]] | None = None,
+    direnc_gunluk_ham: pd.DataFrame | None = None,
 ) -> list[DomainAlarmCandidate]:
     """Bir sembol için yeni kanal adaylarını üret; canlı state'e yazmaz."""
     if not bool(getattr(config, "YENI_DOMAIN_ALARM", True)):
@@ -421,6 +442,9 @@ def evaluate_domain_alarm_candidates(
 
     taze_sinir = _cfg_int("YENI_DOMAIN_ALARM_TAZE_DK", 390)
     adaylar: list[DomainAlarmCandidate] = []
+    # Yalnız bu sembol/tarama anı için: birden çok alarm adayı aynı grafiğin
+    # direnç hesabını tekrar çalıştırmasın. Kill-switch kapalıyken boş kalır.
+    direnc_cache: dict[str, Any] = {}
 
     for tf, frame in frames.items():
         tf = str(tf).lower()
@@ -493,6 +517,9 @@ def evaluate_domain_alarm_candidates(
         grafik_verisi, grafik_verisi_public = _grafik_verisi_uret(
             stock, tf, frame, frames, results, simdiki_zaman,
             (grafik_baglami or {}).get(tf),
+            direnc_gunluk_ham=direnc_gunluk_ham,
+            direnc_saatlik_ham=all_tfs.get("1h") if isinstance(all_tfs, Mapping) else None,
+            direnc_cache=direnc_cache,
         )
 
         adaylar.append(

@@ -65,13 +65,24 @@ aktif bot veya bildirim tekilliği garantisi değildir.
 |---|---|---|
 | B1 | Region | `Frankfurt` (ABD ise calisir ama Turk'e ping uzun) |
 | B2 | Instance Type | `Free` |
-| B3 | Build Command | `pip install -r requirements.txt` |
+| B3 | Build Command | `bash scripts/install_deploy_dependencies.sh` |
 | B4 | Start Command | `python main.py` |
 | B5 | Health Check Path | `/health` |
 | B6 | Python Version | Bos birak - repodaki `.python-version` (3.12) zorlar |
 | B7 | Root Directory | Bos birak (repo kok) |
 | B8 | Auto-Deploy | `After CI Checks Pass` (§2.1; mevcut Dashboard servisinde ayrıca doğrula) |
 | B9 | Branch | `main` olmali - `main`de bot kodu yoksa servis acilmaz |
+
+**Bağımlılık geçişi:** `requirements.txt` araştırma replay'inin değiştirilmeyen
+eski hash'li ortam kaydıdır; tek başına canlı kullanım için değildir. Yukarıdaki
+kurucu güvenlik düzeltmeleri içeren `requirements-deploy.txt` ile pinlenmiş build
+araçlarını kurar ve `pip check` çalıştırır. CI aynı kurucuyu kullanır. Mevcut
+Dashboard servisi Blueprint dışındaysa komut kendiliğinden değişmez; eski komut
+kullanılıyorsa güvenlik güncellemesi o servise uygulanmış sayılmaz. Kurucu henüz
+servisin dağıttığı commit'te yokken yeni build komutunu çalıştırmak build'i
+bozar. Auto-deploy ve ayar değişikliklerinin deploy tetikleme davranışını
+Dashboard'da kontrol ederek merge, build ayarı ve yeniden dağıtımı tek bir
+bakım planında koordine edin; ikinci servis oluşturmayın.
 
 ## C) GitHub → repo → Settings → Secrets and variables → Actions
 
@@ -231,7 +242,7 @@ Dashboard → **New → Web Service** → repoyu bağla:
 | Runtime | Python |
 | Region | Frankfurt (Türkiye'ye en yakın) |
 | Instance Type | Free |
-| Build Command | `pip install -r requirements.txt` |
+| Build Command | `bash scripts/install_deploy_dependencies.sh` |
 | Start Command | `python main.py` |
 | Health Check Path | `/health` |
 
@@ -917,8 +928,8 @@ Self-calibration (botun kendi skorunu otomatik değiştirmesi) public öncesi ka
 | `KARNE_GUNU` | `4` — karne gönderim günü (0=Pazartesi ... 4=Cuma) | Hayır |
 | `KARNE_HEDEF_ATR` | `1.5` — kırılım sonrası "hedef" sayılan lehte hareket (ATR katı) | Hayır |
 | `KARNE_STOP_ATR` | `1.0` — "stop" sayılan alehte hareket (ATR katı) | Hayır |
-| `TELEGRAM_GRAFIK` | `yok` (varsayılan) / `alarm` — alarm metninin altına mum karesi ekler (§6.2) | Hayır |
-| `TELEGRAM_GRAFIK_ADET` | `4` — alarm başına kare sayısı (1-4). Free planda `1-2` | Hayır |
+| `TELEGRAM_GRAFIK` | `yok` (varsayılan) / `alarm` — uygun DM/public alarmlarına otomatik kare; `/grafik` bağımsız (§6.2) | Hayır |
+| `TELEGRAM_GRAFIK_ADET` | `4` — DM kare üst sınırı (1-4); public normal olayda en fazla 2, geçersizleşmede 1 (§6.2) | Hayır |
 | `GRAFIK_MUM_MAKS` | `80` — formasyon YOKKEN gösterilen mum sayısı (üst sınır). Varsayılan TF matrisi: 1s 80 · 2s 74 · 4s 68 · 1g 62; formasyon varsa kadraj formasyona odaklanır (formasyon + 10 mum tampon, 35-180 arası — 2026-10-23: 85 mum formasyonun kırılım tabanını kesiyordu) | Hayır |
 | `GRAFIK_OLAY_MAKS` | `6` — kareye çizilen onaylı BOS/CHoCH sayısı | Hayır |
 | `GRAFIK_SAG_BOSLUK_ORANI` | `0.15` — son mumun sağındaki boş alan, **eksen genişliğinin yüzdesi** (%15; kabul penceresi %10-20, otomatik kural bu aralığa kırpılır). Fiyat etiketleri ve 🎯 hedef kutusu buraya çizilir, bant/kutu/aktif BOS çizgileri buraya uzar. `0` = kapalı | Hayır |
@@ -969,11 +980,29 @@ yeni yedek yazılmaz. 20:00 tam evren raporu ayrı kalır.
 
 ### 6.2 Alarm kareleri (isteğe bağlı; kapalıyken hiçbir şey değişmez)
 
-`TELEGRAM_GRAFIK=alarm` iken her alarmın METNİNDEN SONRA, tarama turunun sonunda
-hissenin mum karesi gider (1 olay = 1 metin + kareler; görseller mesaj kotasını
-yemez, grup/kanala hiç görsel gitmez). Kare kartla AYNI veriyi çizer: formasyon bandı + temaslar, OB/FVG kutuları
-(doluluk %'siyle), BOS/CHoCH + `kritik` seviyesi, `rvol` şeridi ve kartın yapı satırı
-(`4s yapı: …` — kelimeleri mesajdaki satırla birebir aynı, §27).
+`TELEGRAM_GRAFIK=yok` otomatik alarm karelerini kapatır; `/grafik` komutu bundan
+**bağımsızdır** ve yetkili DM veya grup kullanımında çalışabilir. Boş, `0`,
+`false`, `off`, `no`, `none`, `hayir/hayır` ve `kapali/kapalı` da otomatik
+kareleri kapatır. Diğer değerler geriye uyumluluk için açık sayılır; bilinmeyen
+bir değer doktor tarafından uyarılır. Operasyonda açıkça `yok` veya `alarm`
+kullanın.
+
+`alarm` uygun olaylarda otomatik kare hazırlamayı açar; her mesajda kare veya
+başarılı teslim garantisi değildir. Formasyon ve domain olaylarında DM için
+`TELEGRAM_GRAFIK_ADET` üst sınırı 1–4'tür. Public hedef, uygun normal olaylarda
+ana TF ve kullanılabiliyorsa ikinci TF olmak üzere en fazla 2 kare alır; ikinci
+public kare DM sınırından bağımsızdır. Geçersizleşmede yalnız ilgili TF kullanılır.
+Stabil 4s güçlü geri alımın otomatik kareleri public hedef içindir; DM metni bu
+yoldan otomatik kare almaz. Yoğunluk özeti gibi bazı mesajlar yalnız metindir.
+Gerçek hedefler, izinler, veri ve Telegram teslimi ayrıca doğrulanmalıdır.
+
+Kare; mevcut bant/temas, OB/FVG, BOS/CHoCH ve Stabil destek/direnç katmanlarının
+uygun olanlarını çizer. Direnç için doğrulanmış native günlük kaynak ve gün içi
+karelerde kaynak saatlik mumlar gerekir. Kaynak doğrulanamazsa direnç katmanı
+kapanır; hazır seviye kadraj dışında kalabilir. `sade` görünüm Stabil destek ve
+direnci gizler. Metin ve medya ayrı teslim edilir; medya başarısız veya belirsiz
+olabilir. Belirsiz medyayı yinelenme riski nedeniyle otomatik tekrar sanmayın.
+Örnek davranışlar ve sınırlar için [görsel teslim denetimine](../tasarim/STABIL_DIRENC_GORSEL_TESLIM_DENETIMI_2026-11-07.md) bakın.
 
 Kurulum sonrası tek komutla duman (çizim çevrimdışıdır; fotoğraf da göndermek için
 `--send-test-message` ekleyin):
@@ -983,22 +1012,20 @@ python deploy_check.py --grafik-test                     # sadece üret: boyut/s
 python deploy_check.py --grafik-test --send-test-message # sendPhoto'yu da dener
 ```
 
-Beklenen satırlar: `Grafik katmanı import edildi (matplotlib 3.11.x)`,
-`Kare üretildi: AKBNK 4h · 120 mum · ~72 KB · ~450 ms`, ardından
-`Fotoğraf gönderilmedi` / `sendPhoto kabul edildi`. `veri yok` uyarısı İLK
-tarama öncesi normaldir (kare yalnız önbelleği okur, canlı çekmez).
+Doktor PNG üretiminden ayrı olarak `Stabil direnç bu karede çizildi`,
+`hazır değil` (durum ve nedenle), `hazır ama bu karede çizilmedi` veya
+`durumu raporlanmadı` sonucunu verir. Bir karede çizilmesi bütün sembolleri,
+canlı tazeliği veya Telegram teslimini kanıtlamaz. `veri yok` uyarısı ilk
+tarama öncesi görülebilir: kare yalnız önbelleği okur, canlı veri çekmez.
+`--send-test-message` gerçek Telegram mesajı/fotoğrafı gönderir; bu testi yalnız
+uygun hedefte ve bilerek çalıştırın.
 
-Ölçülen maliyet (`python grafik_uret.py --hisse AKBNK --tum-tf --zone`, gerçek önbellek
-+ gerçek motorlar, 2026-10-14): kare **başına 134-568 ms** ve 52-78 KB → **4 kare ≈
-1,3 sn**; süreç tepesi 129 MB (çizim sırasında +52 MB). Render Free 512 MB için
-kabul edilebilir, ama aynı turda 10 alarm varsa tura ~13 sn ekler; gerekirse
-`TELEGRAM_GRAFIK_ADET=1`. Kare üretilemezse alarm DÜŞMEZ. Şalter açıkken
-`/durum`, sıfırlar dâhil `🖼 Grafik karesi` satırını; gönderim, köprü ve karesiz
-sayaçlarını ayrı ayrı gösterir. Build: matplotlib 3.11.2'nin cp312 manylinux
-tekerleği VAR (kaynak derleme yok; `pip download --python-version 312 --only-binary=:all:`
-ile doğrulandı) —
-§1'deki "wheel yoksa build patlar" tuzağına girmez. `TELEGRAM_GRAFIK=yok` iken
-`matplotlib` HİÇ import edilmez (taze süreçte ölçüldü).
+14.10.2026'daki eski ölçüm kare başına 134–568 ms ve 52–78 KB idi; bu ölçüm yeni
+Stabil direnç katmanından **öncedir**, güncel Render kapasitesi veya yoğun tur
+süresi kanıtı değildir. Canlıda `/durum` grafik ve hata sayaçlarını, Render logları
+ise süre ve bellek davranışını izlemek için kullanılır; düşük DM kare sınırı
+gerekirse `TELEGRAM_GRAFIK_ADET=1` ayarlanabilir, public ikinci kare sınırdan
+bağımsızdır. Python 3.12 dependency kurulumu CI'da ayrıca doğrulanır.
 
 #### Görsel gitmiyorsa
 
@@ -1058,7 +1085,7 @@ Render'a giden kod, deploy'dan **önce** GitHub tarafında sınanır:
 
 1. **Python sürümü**: `actions/setup-python` ile repodaki `.python-version`
    (3.12) okunur — yani Render'ın göreceği sürümün aynısı.
-2. **Kurulum**: `pip install -r requirements.txt` (Render Build Command'in
+2. **Kurulum**: `bash scripts/install_deploy_dependencies.sh` (Render Build Command'in
    birebir aynısı). Tekerlek bulunamazsa, yani Render'ı patlatacak durum
    (cp314 senaryosu) oluşursa burada kırmızı olur — deploy'u hiç denemezsin.
 3. **Testler**: `python -m pytest -q` + `python test_tarama_zamani.py`

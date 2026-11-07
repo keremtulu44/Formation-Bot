@@ -167,9 +167,14 @@ restart boyunca tam veri koruması garanti edilemez**:
    tamamlanmadan merge etmeyin; `gh pr checks <PR>` ve Actions job adımlarına
    bakın. Green check başka SHA'ya aitse geçerli kanıt değildir.
 2. Render Dashboard → ilgili **mevcut** servis: branch, build
-   `pip install -r requirements.txt`, start `python main.py`, Python 3.12,
+   `bash scripts/install_deploy_dependencies.sh`, start `python main.py`, Python 3.12,
    health `/health`, auto-deploy/check kapısı ve env değişkenlerinin **adlarını**
    kontrol edin. `render.yaml` mevcut Dashboard ayarlarını otomatik kanıtlamaz.
+   Eski build komutundaki `requirements.txt` tarihsel replay ortamıdır; yeni
+   kurucu/`requirements-deploy.txt` gerçek servisin build'inde kullanılmadıkça
+   güncel güvenlik pinleri o serviste geçerli değildir. Kurucu, dağıtılan
+   commit'te bulunmadan build komutunu değiştirmek hataya yol açabilir; merge,
+   ayar ve deploy sırasını bakım penceresinde koordine edin.
 3. İkinci servis/worker/polling istemcisinin aynı token'la çalışmadığını ve
    deploy sırasındaki olası iki-process penceresini değerlendirin. Gerçek tek
    sender gerekiyorsa bakım penceresinde eski sender'ı durdurarak geçiş veya

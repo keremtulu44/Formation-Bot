@@ -40,8 +40,7 @@ source venv/bin/activate
 
 # 6. Requirements kurulumu
 echo "[6/7] Python paketleri kuruluyor..."
-pip install --upgrade pip
-pip install -r requirements.txt
+bash scripts/install_deploy_dependencies.sh
 
 # 7. Environment file
 echo "[7/7] Environment dosyası kontrolü..."

@@ -17,7 +17,8 @@ services:
     runtime: python
     plan: free
     region: frankfurt
-    buildCommand: pip install -r requirements.txt
+    # CANLI pinler + güvenli build araçları; requirements.txt tarihsel replay içindir.
+    buildCommand: bash scripts/install_deploy_dependencies.sh
     startCommand: python main.py
     healthCheckPath: /health
     # Yalnizca Blueprint ile yonetilen servise uygulanir; mevcut Dashboard ayarini kontrol edin.
@@ -99,13 +100,13 @@ services:
       - key: SUPABASE_STORE_PREFIX
         value: "formation-bot:"
       # --- ALARM KARELERİ (grafik; ops.) ---
-      # `yok` = hiçbir kare üretilmez (gönderim önceden nasılsa öyle; matplotlib
-      # hiç import edilmez). `alarm` = alarm METNİ gittikten sonra tarama turu
-      # sonunda hissenin mum karesi eklenir. Görseller mesaj kotasını YEMEZ.
-      # Not: `/grafik` komutu bu anahtardan bağımsız çalışır.
+      # `yok` yalnız otomatik alarm karelerini kapatır; `/grafik` bağımsızdır.
+      # `alarm` uygun DM ve public olayları için kare hazırlayabilir. Özetler,
+      # eksik kaynaklar, hedef izinleri ve medya hataları teslimi etkiler.
+      # Boş/0/false/off/kapalı da kapatır; belirsizlik için yok/alarm kullanın.
       - key: TELEGRAM_GRAFIK
         value: "yok"
-      # Alarm başına en fazla kare (1-4); Render Free için 1-2 önerilir (§26).
+      # DM için üst sınır 1-4; public normal olayda en fazla 2, geçersizleşmede 1.
       - key: TELEGRAM_GRAFIK_ADET
         value: "4"
       # Kadraj tavanı (mum) ve kareye çizilen onaylı BOS/CHoCH sayısı.
