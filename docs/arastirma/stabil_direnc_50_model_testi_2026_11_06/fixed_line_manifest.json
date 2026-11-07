@@ -1,0 +1,11 @@
+{
+  "path_manifest_sha256": "04b29f1fdb8a7b4a3c63093fbca275ca12ec07a3f802322751e44a86f7ea0a75",
+  "plan_sha256": "06d46bb119fc17afbfd06fafa3996b983375298e5730548bddfb1fca972f9842",
+  "script_sha256": "8d9191625c761458e26ef1c36b57a8787fc16c948c6389357f3973f2db4e3a0f",
+  "test_sha256": "bed6ac0a86bcdd08215af96683ef37535aad2533eca692483e873b07e5c6dbcc",
+  "outputs_sha256": {
+    "fixed_line_paths.csv.gz": "5e239fe92798821e6c7ea0ce3811665d95c06b3186f6eb70f5927b394679aa3b",
+    "fixed_line_summary.json": "3fbbaa115a43b77916d85fe8a5907ab6d10773a434b0c84cf441bb96f2c12a0c",
+    "sabit_cizgi_yollari.md": "038c2069714119a3f738209ca5ce9fe1a1d8f0afac7f923a2cdb6d8451df1ad2"
+  }
+}

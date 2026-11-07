@@ -1,0 +1,14 @@
+{
+  "comparison_manifest_sha256": "0c2d6056e9bf44f1fed362e6124a0848878af5934ef549d88237203751ba5c08",
+  "input_events_sha256": "b7b4d8d08374f9c09076c5db3b6b3c0136e952ef2b82bbeaca7f16cd85bd1c0d",
+  "source_sha256": {
+    "research/stabil_support_resistance_paths.py": "8f2f78f7fa6ad08b4150643688d2a65f2d0af2c28b967b6b1ff8dcbc22bbbe02",
+    "test_stabil_support_resistance_paths.py": "ecdbb8bc38dd3dfb1cc41731dd01000a57d7519b21f31b974290e215b49594fb",
+    "docs/arastirma/stabil_destek_direnc_karsilastirma_2026_11_06/YOL_PLANI.md": "84c2acd3df059248d9ab4802d01da23deda317a5cf3e27ed62ce435b4823215b"
+  },
+  "outputs_sha256": {
+    "break_paths_24.csv.gz": "f525de2bd6c33f8f78da04c92e9de3205f429ee6c32e719025df23cf8500ce90",
+    "break_path_summary.json": "0fa4c00e4c7d2cdfc6c218b8b8ab42da9b491a1719821360c2a6ea15b619bf99",
+    "yol_bulgulari.md": "2f5962386b549bbc8934c063f80a8662fe9b7bf50bcb4f8dd838e2efe8e0ae17"
+  }
+}

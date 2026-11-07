@@ -1,0 +1,41 @@
+{
+  "result": "OK",
+  "selected_symbols": 50,
+  "f01_groups_checked": 16,
+  "post_touch_close_groups_checked": 4,
+  "b04_checkpoint_rows": 4741,
+  "fixed_line_path_rows": 205,
+  "independent_original_price_checks_DOCO": {
+    "b04_future_closes": 94,
+    "fixed_line_paths": 8
+  },
+  "independent_original_price_checks_six_resistance_paths": {
+    "DMSAS": {
+      "b04_future_closes": 0,
+      "fixed_line_paths": 1
+    },
+    "DYOBY": {
+      "b04_future_closes": 0,
+      "fixed_line_paths": 1
+    },
+    "EFOR": {
+      "b04_future_closes": 0,
+      "fixed_line_paths": 1
+    },
+    "GARAN": {
+      "b04_future_closes": 0,
+      "fixed_line_paths": 1
+    },
+    "HATSN": {
+      "b04_future_closes": 0,
+      "fixed_line_paths": 1
+    },
+    "KFEIN": {
+      "b04_future_closes": 0,
+      "fixed_line_paths": 1
+    }
+  },
+  "focused_manifest_sha256": "8f8befa9230846631712e2f81d9de6caf9f0e712830b15edaa7abbf49c45023e",
+  "fixed_line_manifest_sha256": "d730010934d43e851184ac59668529dea3df7dcbf1cc6f21a17977ec2dda8698",
+  "verifier_sha256": "7758cb51c9ea5616f9636a7da49e2f9c0169f4f6d3ffefa03f5954ae23301995"
+}

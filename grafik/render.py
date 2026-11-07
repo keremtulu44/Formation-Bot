@@ -237,7 +237,7 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         for z in meta["ayrinti"].get("bolgeler", []):
             z["gorunur"], z["gorunum_nedeni"] = False, "sade görünüm"
         goruntu = {**goruntu, "zone": {}, "serit": {}, "temas": [], "isaretler": [],
-                   "gorunum": gorunum, "sade": True, "stabil": None}
+                   "gorunum": gorunum, "sade": True, "stabil": None, "stabil_direnc": None}
         _olay_sade = dict(goruntu.get("olay") or {})
         goruntu["olay"] = {**_olay_sade, "swinglar": [], "seviyeler": [], "olaylar": []}
     n = int(olcu["bar"])
@@ -382,6 +382,19 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                 if sv_f is not None and (m_lo - stabil_pay <= sv_f <= m_hi + stabil_pay):
                     ek_y.append(sv_f)
                     stabil_kadrajda = True
+        # Direnç, desteğin yerini almaz; aynı sınırlı kadraj politikasına
+        # bağımsız olarak girer. Uzak seviye mumları sıkıştırmaz.
+        direnc_src = goruntu.get("stabil_direnc") or {}
+        direnc_kadrajda = False
+        if ham and direnc_src.get("hazir"):
+            m_lo, m_hi = min(ham), max(ham)
+            m_span = max(m_hi - m_lo, abs(m_hi) * 0.015, 1e-9)
+            direnc_pay = float(SABITLER.get("stabil_kadraj_orani", 0.35)) * m_span
+            for sv in list(direnc_src.get("seviyeler") or [])[:olay_son]:
+                sv_f = _gercek(sv)
+                if sv_f is not None and (m_lo - direnc_pay <= sv_f <= m_hi + direnc_pay):
+                    ek_y.append(sv_f)
+                    direnc_kadrajda = True
         taban = ham + ek_y
         t_lo, t_hi = (min(taban), max(taban)) if taban else (0.0, 1.0)
         kadraj_pay = float(SABITLER["kadraj_pay_orani"]) * max(t_hi - t_lo, 1e-9)
@@ -517,6 +530,16 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
             except Exception as hata:
                 log.warning("grafik: stabil katmanı çizilemedi (%s)", hata)
                 eksik.append("stabil")
+            try:
+                meta["cizgiler"]["stabil_direnc"] = _stabil_direnc_ciz(
+                    ax, goruntu, katman_n, aralik,
+                    kadrajda=direnc_kadrajda,
+                    dusuk=dusuk[:katman_n], yuksek=yuksek[:katman_n],
+                    sag_adaylar=sag_adaylar,
+                )
+            except Exception as hata:
+                log.warning("grafik: Stabil direnç katmanı çizilemedi (%s)", hata)
+                eksik.append("stabil_direnc")
             try:
                 meta["cizgiler"]["formasyon"] = _pkg._formasyon_ciz(
                     ax, goruntu, katman_n, butce, metin, sag_bosluk=katman_bosluk,
@@ -1162,3 +1185,141 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
 
 
 
+
+
+def _stabil_direnc_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
+                       aralik: tuple[float, float], *, kadrajda: bool = False,
+                       dusuk: Sequence[Optional[float]] = (),
+                       yuksek: Sequence[Optional[float]] = (),
+                       sag_adaylar: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
+    """Ayrı kesik direnç stepline; ▼ dönüş/momentum ve ▲ yapı uyarısı.
+
+    Kırmızı güvenli taraf, yeşil direnç üstüdür. Geometrik konektör yalnız
+    çizgidir; destek renderer'ındaki eski snapshot sezgisini burada uygulayıp
+    motorun kararını yeniden sınıflandırmayız.
+    """
+    from matplotlib.collections import LineCollection
+
+    layer = goruntu.get("stabil_direnc") or {}
+    levels = list(layer.get("seviyeler") or [])[:katman_n]
+    roles = list(layer.get("renkler") or [])[:katman_n]
+    summary = {
+        "hazir": bool(layer.get("hazir")), "durum": layer.get("durum"), "neden": layer.get("neden"),
+        "cizildi": False, "son_seviye": _gercek(layer.get("son_seviye")),
+        "son_renk": layer.get("son_renk"), "gorunur_bar": 0, "kadrajda": bool(kadrajda),
+        "donus_isaret": 0, "momentum_isaret": 0, "dikey_deneme_isaret": 0,
+    }
+    if not summary["hazir"] or not levels:
+        return summary
+    y_lo, y_hi = float(aralik[0]), float(aralik[1])
+    span = max(y_hi - y_lo, 1e-9)
+    horizontal: list[list[tuple[float, float]]] = []
+    horizontal_colors: list[str] = []
+    steps: list[list[tuple[float, float]]] = []
+    step_colors: list[str] = []
+    active: list[tuple[float, float]] = []
+    active_color: Optional[str] = None
+    previous: Optional[float] = None
+
+    for i, raw in enumerate(levels):
+        y = _gercek(raw)
+        role = roles[i] if i < len(roles) else None
+        if y is None or role not in {"ust", "alt"}:
+            if len(active) >= 2 and active_color:
+                horizontal.append(active)
+                horizontal_colors.append(active_color)
+            active, active_color, previous = [], None, None
+            continue
+        if y_lo <= y <= y_hi:
+            summary["gorunur_bar"] += 1
+        color = PALET["stabil_alt"] if role == "alt" else PALET["stabil_ust"]
+        x_left, x_right = float(i) - 0.5, float(i) + 0.5
+        changed = previous is not None and abs(y - previous) > 1e-12
+        if changed and previous is not None:
+            steps.append([(x_left, previous), (x_left, y)])
+            # Mirror support's directional connector colors as well: a rising
+            # resistance is the reflection of a falling support, and vice versa.
+            # This connector is geometry only, not a new signal or regime.
+            step_colors.append(PALET["stabil_alt"] if y > previous else PALET["stabil_ust"])
+        if previous is not None and not changed and active_color == color and active:
+            active.append((x_right, y))
+        else:
+            if len(active) >= 2 and active_color:
+                horizontal.append(active)
+                horizontal_colors.append(active_color)
+            active, active_color = [(x_left, y), (x_right, y)], color
+        previous = y
+    if len(active) >= 2 and active_color:
+        horizontal.append(active)
+        horizontal_colors.append(active_color)
+    if not horizontal:
+        return summary
+
+    width = float(SABITLER.get("stabil_kalinlik", 1.9))
+    if steps:
+        step_collection = LineCollection(steps, colors=step_colors, linewidths=max(1.0, width * 0.72),
+                                         linestyles="solid", alpha=0.76, zorder=3.57, clip_on=True)
+        step_collection.set_gid("grafik-stabil-direnc-step")
+        ax.add_collection(step_collection)
+    collection = LineCollection(horizontal, colors=horizontal_colors, linewidths=width,
+                                linestyles=(0, (4, 2)), capstyle="butt", joinstyle="miter",
+                                zorder=3.67, clip_on=True)
+    collection.set_gid("grafik-stabil-direnc-stepline")
+    ax.add_collection(collection)
+    step_visible = any(min(seg[0][1], seg[1][1]) <= y_hi and max(seg[0][1], seg[1][1]) >= y_lo
+                       for seg in steps)
+    summary["cizildi"] = bool(summary["gorunur_bar"] or step_visible)
+
+    def indices(name: str) -> list[int]:
+        return sorted({int(i) for i in (layer.get(name) or ())
+                       if isinstance(i, (int, float)) and 0 <= int(i) < min(katman_n, len(levels))})
+
+    def coordinates(bars: Sequence[int], *, above: bool) -> tuple[list[float], list[float]]:
+        xs: list[float] = []
+        ys: list[float] = []
+        for i in bars:
+            level = _gercek(levels[i])
+            candle = _gercek(yuksek[i] if above and i < len(yuksek)
+                             else dusuk[i] if not above and i < len(dusuk) else None)
+            values = [v for v in (level, candle) if v is not None]
+            if not values:
+                continue
+            ref = max(values) if above else min(values)
+            if y_lo <= ref <= y_hi:
+                position = (min(y_hi - 0.012 * span, ref + 0.018 * span) if above
+                            else max(y_lo + 0.012 * span, ref - 0.018 * span))
+                # Slight offset keeps opposite support and resistance marks on
+                # the same candle distinguishable, without moving to another bar.
+                xs.append(float(i) + 0.16)
+                ys.append(float(position))
+        return xs, ys
+
+    def draw(bars: Sequence[int], *, above: bool, marker: str, hollow: bool,
+             color: str, gid: str, size: int) -> int:
+        xs, ys = coordinates(bars, above=above)
+        if not xs:
+            return 0
+        kwargs = ({"facecolors": "none", "edgecolors": color, "linewidths": 1.4}
+                  if hollow else {"c": color, "edgecolors": PALET["zemin"], "linewidths": 0.7})
+        scatter = ax.scatter(xs, ys, marker=marker, s=size, zorder=4.9, clip_on=True, **kwargs)
+        scatter.set_gid(gid)
+        return len(xs)
+
+    # Draw precisely the motor's classification; no per-step inferred warning.
+    summary["donus_isaret"] = draw(indices("donus_barlar"), above=True, marker="v", hollow=False,
+                                    color=PALET["stabil_alt"], gid="grafik-stabil-direnc-donus", size=48)
+    summary["momentum_isaret"] = draw(indices("momentum_barlar"), above=True, marker="v", hollow=True,
+                                       color=PALET["stabil_alt"], gid="grafik-stabil-direnc-momentum", size=62)
+    summary["dikey_deneme_isaret"] = draw(
+        indices("dikey_deneme_barlar"), above=False, marker="^", hollow=True,
+        color=PALET["stabil_ust"], gid="grafik-stabil-direnc-dikey-deneme", size=62,
+    )
+    last = _gercek(levels[-1]) if levels else None
+    role = roles[-1] if roles else None
+    if sag_adaylar is not None and last is not None and role in {"ust", "alt"} and y_lo <= last <= y_hi:
+        sag_adaylar.append({
+            "kaynak": "stabil_direnc", "x": float(katman_n) - 0.5, "y": float(last),
+            "metin": f"Direnç {sayi(last)}", "renk": PALET["stabil_alt"] if role == "alt" else PALET["stabil_ust"],
+            "bg": PALET["chip_zemin"], "oncelik": 6, "yeni": float(katman_n),
+        })
+    return summary

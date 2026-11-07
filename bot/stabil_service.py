@@ -118,12 +118,15 @@ def _stabil_public_grafik_verisi_uret(
     simdiki_zaman: datetime,
     domain_results_by_stock: Mapping[str, Any] | None,
     stabil_res: Any,
+    *,
+    direnc_gunluk_ham: pd.DataFrame | None = None,
+    direnc_saatlik_ham: pd.DataFrame | None = None,
 ) -> dict[str, Any] | None:
     """Public Stabil kartı için mevcut ana-TF + üst-TF kare sözleşmesini üret.
 
-    Grafik kill-switch'i mevcut global `TELEGRAM_GRAFIK` ayarına tabidir. Motor
-    sonuçları tarama turundan yeniden kullanılır; burada domain motoru tekrar
-    çalıştırılmaz. Görsel üretim hatası metin alarmına taşınmaz.
+    Grafik kill-switch'i mevcut global `TELEGRAM_GRAFIK` ayarına tabidir. Destek
+    ve diğer domain sonuçları yeniden kullanılır; bağımsız direnç yalnız grafik
+    için, ham kaynaklar doğrulanarak hesaplanır. Görsel hatası alarmı engellemez.
     """
     try:
         import grafik
@@ -139,6 +142,16 @@ def _stabil_public_grafik_verisi_uret(
         # İzole hesap yolunda da ana kare Stabil katmanını çizebilsin.
         ana_sonuclar["stabil"] = stabil_res
         sonuclar["4h"] = ana_sonuclar
+        try:
+            from domain_engines.stabil.chart_bridge import add_chart_resistance
+
+            sonuclar = add_chart_resistance(
+                stock, {"4h": df_4h, "1d": df_1d}, sonuclar,
+                daily_frame=direnc_gunluk_ham, hourly_frame=direnc_saatlik_ham,
+                as_of_close=simdiki_zaman,
+            )
+        except Exception as exc:  # noqa: BLE001 - eski destek alarm karesi korunur
+            logger.warning("Stabil direnç grafiği atlandı (%s): %s", stock, type(exc).__name__)
 
         veri = grafik.kare_listesi(
             None,
@@ -190,6 +203,7 @@ def evaluate_stabil_4h_candidate(
     domain_results_by_stock: Mapping[str, Any] | None = None,
     bar_metni_fn: Any = None,
     state_path: str | None = None,
+    direnc_gunluk_ham: pd.DataFrame | None = None,
 ) -> StabilAlarmCandidate | None:
     """Evaluate closed 4H bar for strong Stabil reclaim signal with causal dedup & cooldown."""
     if not bool(getattr(config, "STABIL_GERI_ALIM_ALARM", True)):
@@ -284,6 +298,8 @@ def evaluate_stabil_4h_candidate(
             simdiki_zaman,
             domain_results_by_stock,
             stabil_res,
+            direnc_gunluk_ham=direnc_gunluk_ham,
+            direnc_saatlik_ham=all_tfs.get("1h"),
         )
     return StabilAlarmCandidate(
         symbol=stock,

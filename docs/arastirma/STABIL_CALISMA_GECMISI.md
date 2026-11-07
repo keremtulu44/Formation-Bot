@@ -157,3 +157,97 @@ JSON packet olarak üretildi; sembole özgü 4h breakout replay'i `replay_eviden
 altına ayrı ve `available_at_snapshot=false` olarak eklendi. [10 sembol yorum raporu](samples/ALARM_CONTEXT_10_SEMBOL_INCELEME_2026-10-16.md)
 ve [10 JSON çıktısı](samples/ALARM_CONTEXT_10_SEMBOL_2026-10-16.zip). Bu deneme live alarm,
 depolama, Telegram veya Supabase davranışını değiştirmez.
+
+## 8. 2026-11-06 — sonraki araştırma için yalnızca kullanıcı notu
+
+Kullanıcının güçlü mum beklenen normal destek yukarı oklarıyla ilgili gözlemi,
+BOS aşağı yönü ile okun ve destek kırılmasının ilişkisi hakkındaki hipotezi ve
+dikey/yatay mantığıyla daha sonra denemek istediği küçük direnç görselleştirmesi
+[bekleyen araştırma notlarına](STABIL_BEKLEYEN_ARASTIRMA_NOTLARI_2026_11_06.md)
+kaydedildi. Kullanıcı bu aşamada yalnız kayıt istedi: yeni replay, BOS filtresi,
+dirence ilişkin görsel deneme veya canlı kural değişikliği yapılmadı.
+
+## 9. 2026-11-06 — kullanıcının tanımına göre 50 hisselik direnç replay'i
+
+Kullanıcı destek modelinin ters yönlü direnç tarifini onayladı; kırılmadan sonra
+eski çizgi sabitken fiyatın dönüşü ile çizginin yukarı takibi, ayrıca temas,
+kapanış ve sonraki hareketin ayrı ölçülmesini istedi. Aynı veri ve aynı simetrik
+araştırma kurallarıyla 50 hisse replay edildi: [odak raporu](stabil_direnc_50_model_testi_2026_11_06/RAPOR_50.md),
+[plan](stabil_direnc_50_model_testi_2026_11_06/PLAN.md) ve
+[doğrulama](stabil_direnc_50_model_testi_2026_11_06/DOGRULAMA.md).
+
+Sonuçlar bazı benzerlikler gösterse de kullanıcının grafikteki dikey/yatay
+sırasını ispatlamıyor; özellikle fiyat yeni direncin üstündeyken görülen yolun
+örneklemi küçük. Bu, sonradan istenirse görsel olarak da doğrulanacak bir açık
+noktadır. Bekleyen güçlü mum, BOS ve görsel notları §8'deki yerinde duruyor;
+bu turda BOS filtresi, yeni görsel, canlı aktivasyon, alarm veya dağıtım yok.
+
+## 10. 2026-11-07 — bağımsız direnç ve ters ok katmanı, ilk iki adım
+
+Kullanıcının yalnız ilk iki adım için verdiği onayla, mevcut desteği değiştirmeden
+`domain_engines/stabil/resistance.py` içinde native teyitli günlük direnç,
+renk rolleri, kapanışa projeksiyon ve ters ok/yapı uyarısı hazırlandı. Üç barlık
+momentum tekrar kısıtı korundu; pivot sonrası keyfî bekleme, dirence özel alarm
+veya BOS filtresi eklenmedi. Ayrıntılar ve veri-kalitesi sınırları:
+[uygulama ön kontrolü](../tasarim/STABIL_DIRENC_CANLI_TEST_ON_KONTROL_2026-11-06.md).
+
+Sentetik ayna/nedensellik testleri ve daha önce incelenen EFOR/AKBNK örnekleri
+başarılı; destek ve grafik regresyonları da tekrar kontrol edildi. Bu ilk iki
+adımın sonunda katman **grafiklere bağlı veya canlıda değildi**. Sonraki yerel
+bağlantı için §11'e bakın; canlı test ve BOS/tekrar-kısıtı araştırması ayrıdır.
+
+## 11. 2026-11-07 — direnç katmanını mevcut grafiklere yerel bağlama
+
+Üçüncü adım kullanıcı isteğiyle planlandı ve bağımsız direnç, kaynak/kalite
+köprüsünden geçirilerek `/grafik`, formasyon, Stabil destek ve domain alarm
+karelerine eklendi. Kesikli direnç desteğin yerini almaz; ters renkler, aşağı
+oklar ve yukarı aday yapı uyarısı yalnız motorun kendi sınıflandırmasını izler.
+Günlük kaynak veya saatlik bileşenler doğrulanamazsa yalnız direnç gizlenir;
+mevcut alarm kararı ve destek kartı değiştirilmez. Otomatik grafik anahtarı
+kapalıyken direnç hesabı yapılmaz; manuel `/grafik` bundan bağımsızdır.
+
+EFOR ve AKBNK gerçek arşiv görüntüleri yerel olarak incelendi; komut, alarm
+karesi, JSON/kuyruk ve sahte taşıma entegrasyonları test edildi. Bunlar canlı
+Telegram teslimi veya kârlılık kanıtı değildir. Eksik native günlük kaynakta
+manuel `/grafik` yeni bir günlük ağ isteği yapmaz; ayrıca kaynakta görülmeyen
+her veri hatası saptanamaz. Sade görünüm iki Stabil katmanını da gizler; uzak
+seviyeler mevcut kadraj politikasında görünmeyebilir.
+
+Kaynak kontrolleri, örneklerin kesin kapanışları, test sınırları ve dağıtım
+öncesi kalanlar [3. adım notunda](../tasarim/STABIL_DIRENC_CANLI_TEST_ON_KONTROL_2026-11-06.md#3-adım-uygulanan-yerel-bağlantı-ve-sınırları-2026-11-07).
+Bu adımda yeni direnç alarmı, BOS filtresi, ek bekleme, Telegram gönderimi veya
+canlı dağıtım yoktur.
+
+Son kodun ve public kuyruk kalıcılığı testlerinin Python 3.11.2 ile tek, temiz
+tam regresyonu **3.979 başarılı, 43 atlandı**. Dört tarihsel araştırma
+doğrulayıcısı da başarılı; Python 3.12 CI, gerçek Telegram teslimi ve canlı
+dağıtım bu yerel çalışmanın dışındadır.
+
+## 12. 2026-11-07 — gerçek arşivle görsel ve teslim denetimi
+
+Kullanıcının ayrıntılı kontrol isteği üzerine gerçek tarihsel arşivle `/grafik`
+komut işçisi, normal formasyon taraması, Stabil destek ve domain adayları,
+notifier/outbox ve gerçek PNG üretimi birlikte sınandı. **15 uçtan uca senaryo
+başarılı**; ağ ve Telegram taşıması sahte, tarih ve cache tazeliği tarihsel
+simülasyona göre kontrollü. Seçilmiş 12 görsel, mesaj/metadata kanıtları ve
+hangi durumda neyin gönderilip gönderilmediği:
+[ayrıntılı görsel ve teslim denetimi](../tasarim/STABIL_DIRENC_GORSEL_TESLIM_DENETIMI_2026-11-07.md).
+
+Gerçek AKBNK formasyon kırılımında DM dört/public iki kare; 23 Mart gerçek
+Stabil geri alımında DM yalnız metin, public 4s+1g; gerçek DOCO CHoCH'ta DM
+dört/public iki kare denetlendi. Gerçek AKBNK retest adayı mevcut kapanış
+sınırı kapısında reddedildi. Aynı taramada bağımsız Stabil ve domain olayları
+ayrıca ortaya çıkabildi. Dört gerçek 4s domain adayıyla yapılan seçili burst
+denemesinde iki tekil kart ve grafik, kalan adaylar için grafik içermeyen özet
+üretildi. Geçersizleşme olayı ise açıkça kontrollü olarak enjekte edildi.
+
+Önemli sınırlar: `sade` her iki Stabil katmanını gizler; hazır ama kadraj dışı
+direncin otomatik altyazıda her zaman açıklaması yoktur. Tam taramadaki izole
+Stabil geri alımında, önceden domain cache olmadığı için public günlük karede
+eski destek katmanı yokken bağımsız direnç çizildi; bu eski destek akışı
+sessizce değiştirilmedi. Medya sonucu belirsizliği, teslim kanıtı olmaksızın
+incelemeye işaretlendi. Render Dashboard, gerçek Telegram ve deploy hâlâ
+kontrol edilmedi; BOS/ok etkisi replay araştırması ertelenmiş durumdadır.
+
+Bu ayrıntılı denetimden sonraki tek tam regresyon **4.057 başarılı, 43 atlandı**
+(Python 3.11.2, çıkış kodu 0); `ruff check .` ve `git diff --check` başarılı.

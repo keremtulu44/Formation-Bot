@@ -132,6 +132,7 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
         "olay": None,     # G3: {"cizilen": n, "elenen": n}
         "serit": None,    # G3: {"degerler": [...], "esik": x, "kaynak": "..."}
         "stabil": None,   # Günlük yapısal destek stepline projeksiyonu
+        "stabil_direnc": None,  # Bağımsız günlük yapısal direnç projeksiyonu
     }
     if tavan_kalkti:
         yas = n - int(formasyon["start_bar"])
@@ -163,6 +164,10 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
         goruntu["eksik_katmanlar"] = sorted(set(goruntu["eksik_katmanlar"])
                                             | set(goruntu["olay"]["hata"]))
     goruntu["stabil"] = _stabil_verisi(sonuclar, tf, sol, sag, zamanlar[sol:sag])
+    goruntu["stabil_direnc"] = _stabil_direnc_verisi(sonuclar, tf, sol, sag, zamanlar[sol:sag])
+    direnc = goruntu["stabil_direnc"]
+    if direnc and direnc.get("neden") and not direnc.get("hazir"):
+        goruntu["uyarilar"].append(_stabil_direnc_uyarisi(str(direnc["neden"])))
     # `sonuclar` yoksa bölge/yapı katmanları YOKTUR — bu veri bozukluğu değil
     # (§0.12w: dipnot yalnız veri sorununa); izi `meta["zone"]["sirala"]` ve
     # `meta["olay"]` sıfırlarında taşınır.
@@ -413,6 +418,159 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
         "konum": str(konum) if konum else None,
     }
 
+
+
+def _stabil_direnc_uyarisi(neden: str) -> str:
+    """Kullanıcıya görünen kısa neden; ayrıntılı kod snapshot metadata'dadır."""
+    aciklamalar = {
+        "missing_source": "gerekli günlük veya saatlik kaynak yok",
+        "no_completed_bars": "kapanmış kaynak mumu yok",
+        "no_complete_target_bucket": "tam hedef mum yok",
+        "missing_daily_session": "günlük işlem seansı eksik",
+        "daily_on_closed_session": "kapalı günde günlük mum var",
+        "duplicate_daily_session": "günlük seans tekrarlı",
+        "missing_or_invalid_target_bucket": "hedef zaman diliminde eksik veya hatalı kova",
+        "incomplete_hourly_bucket": "mumun saatlik bileşenleri eksik",
+        "missing_hourly_source": "saatlik kaynak hedef mumu karşılamıyor",
+        "incomplete_or_invalid_flag": "kaynakta tamamlanmamış veya belirsiz mum var",
+        "invalid_ohlcv": "kaynak fiyat/hacim verisi hatalı",
+        "invalid_timestamp": "kaynak zamanları doğrulanamadı",
+        "invalid_cutoff": "kapanış sınırı doğrulanamadı",
+        "invalid_columns": "kaynak sütunları doğrulanamadı",
+        "target_source_mismatch": "hedef mum saatlik kaynakla uyuşmuyor",
+        "daily_target_source_mismatch": "günlük grafik kaynakla uyuşmuyor",
+        "daily_split_scale_unverified": "geçmiş fiyat ölçeği doğrulanamadı",
+        "unknown_session": "işlem takvimi doğrulanamadı",
+        "calendar_close_mismatch": "yarım gün kapanışı doğrulanamadı",
+        "unsupported_session": "bu sembolün seansı desteklenmiyor",
+        "unsupported_timeframe": "zaman dilimi desteklenmiyor",
+        "insufficient_history_for_resistance": "günlük direnç geçmişi henüz yeterli değil",
+        "invalid_time_alignment": "mum kapanış zamanları eşleştirilemedi",
+        "future_daily_snapshot": "günlük bilginin zamanı doğrulanamadı",
+        "missing_daily_snapshot": "günlük bilginin kapanış zamanı yok",
+        "empty_projection": "direnç projeksiyonu yok",
+    }
+    aciklama = aciklamalar.get(neden, "hesap veya kaynak doğrulanamadı")
+    return f"Stabil direnç gösterilemedi: {aciklama}"
+
+
+def _stabil_direnc_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
+                          zamanlar: Optional[Sequence[Any]] = None) -> Optional[dict[str, Any]]:
+    """Direnci yalnız aynı kapanış anındaki grafiğe bağla; indeksle tahmin etme.
+
+    Destek köprüsünden farklı olarak eksik zamana önceki çizgi taşınmaz. Bir
+    basamak konektörünün geometrisi de yeni bir sinyal/uyarı yaratmaz: okların
+    türü yalnız bağımsız direnç motorunun aynı mumdaki davranışından gelir.
+    """
+    if not sonuclar or int(sag) <= int(sol):
+        return None
+    if isinstance(sonuclar, Mapping):
+        kayit = sonuclar.get("stabil_direnc")
+        if kayit is None and isinstance(sonuclar.get(tf), Mapping):
+            kayit = sonuclar[tf].get("stabil_direnc")
+    else:
+        kayit = _alan(sonuclar, "stabil_direnc")
+    if kayit is None:
+        return None
+    status = _ad(_alan(kayit, "status")) or "UNAVAILABLE"
+    neden = _alan(kayit, "reason")
+    bos: dict[str, Any] = {
+        "hazir": False, "durum": status, "neden": str(neden) if neden else None,
+        "seviyeler": [], "renkler": [], "durumlar": [],
+        "donus_barlar": [], "momentum_barlar": [], "dikey_barlar": [],
+        "dikey_deneme_barlar": [], "son_seviye": None, "son_renk": None,
+    }
+    # A partial/failed result is never a trustworthy price line, even if a
+    # caller accidentally supplied old projection points alongside the error.
+    if status != "READY":
+        bos["neden"] = bos["neden"] or "empty_projection"
+        return bos
+    projeksiyon = list(_alan(kayit, "bar_projection") or ())
+    davranislar = list(_alan(kayit, "bar_behaviors") or ())
+    if not projeksiyon:
+        bos["neden"] = bos["neden"] or "empty_projection"
+        return bos
+    pencere_boy = int(sag) - int(sol)
+    if zamanlar is None or len(zamanlar) != pencere_boy:
+        bos["neden"] = "invalid_time_alignment"
+        return bos
+    try:
+        import pandas as pd
+        from data import mum_kapanis_anlari
+
+        gorunur = [_zaman_anahtari(t) for t in
+                   mum_kapanis_anlari(pd.DatetimeIndex(zamanlar), str(tf).lower())]
+        p_zamanlar = [_zaman_anahtari(_alan(p, "bar_close_time")) for p in projeksiyon]
+        b_zamanlar = [_zaman_anahtari(_alan(b, "bar_close_time")) for b in davranislar]
+        for anahtarlar in (gorunur, p_zamanlar, b_zamanlar):
+            if any(k is None for k in anahtarlar) or any(b <= a for a, b in zip(anahtarlar, anahtarlar[1:])):
+                bos["neden"] = "invalid_time_alignment"
+                return bos
+        for p, p_zaman in zip(projeksiyon, p_zamanlar):
+            gun = _alan(p, "daily_as_of")
+            # Warmup points may have neither a daily snapshot nor a level, but
+            # a price without the date that made it knowable is not drawable.
+            if gun is None and _gercek(_alan(p, "resistance_level")) is not None:
+                bos["neden"] = "missing_daily_snapshot"
+                return bos
+            gun_zaman = _zaman_anahtari(gun) if gun is not None else None
+            if gun is not None and (gun_zaman is None or gun_zaman > p_zaman):
+                bos["neden"] = "future_daily_snapshot"
+                return bos
+        p_map = dict(zip(p_zamanlar, projeksiyon))
+        b_map = dict(zip(b_zamanlar, davranislar))
+    except Exception:  # noqa: BLE001 - yanlış hizalanmış katman çizilmez
+        bos["neden"] = "invalid_time_alignment"
+        return bos
+
+    seviyeler: list[Optional[float]] = []
+    renkler: list[Optional[str]] = []
+    durumlar: list[str] = []
+    donus: list[int] = []
+    momentum: list[int] = []
+    dikey: list[int] = []
+    uyari: list[int] = []
+    for idx, anahtar in enumerate(gorunur):
+        nokta, bhv = p_map.get(anahtar), b_map.get(anahtar)
+        sv = _gercek(_alan(nokta, "resistance_level")) if nokta is not None else None
+        rol = str(_alan(nokta, "color_role") or "") if nokta is not None else ""
+        renk = {"red": "alt", "green": "ust"}.get(rol)
+        if sv is None or sv <= 0 or renk is None:
+            seviyeler.append(None)
+            renkler.append(None)
+            durumlar.append("NO_RESISTANCE")
+            continue
+        seviyeler.append(sv)
+        renkler.append(renk)
+        durumlar.append(_ad(_alan(nokta, "validity")) or "NO_RESISTANCE")
+        if bhv is None:
+            continue
+        # Zaman tam eşleşse bile başka bir barın davranışı bu çizgiye ait olamaz.
+        if _alan(bhv, "bar_index") != _alan(nokta, "bar_index"):
+            continue
+        bhv_seviye = _gercek(_alan(bhv, "resistance_level"))
+        if bhv_seviye is None or abs(bhv_seviye - sv) > max(1e-8, abs(sv) * 1e-9):
+            continue
+        if bool(_alan(bhv, "vertical_resistance", False)):
+            dikey.append(idx)
+            if _alan(bhv, "vertical_attempt_kind"):
+                uyari.append(idx)
+            continue
+        if _alan(bhv, "return_kind") in {"close_return_below", "intrabar_sweep_rejection"}:
+            donus.append(idx)
+        elif _alan(bhv, "momentum_kind") in {"long_ceiling_breakdown", "downward_rebase_momentum"}:
+            momentum.append(idx)
+
+    return {
+        "hazir": any(v is not None for v in seviyeler), "durum": status,
+        "neden": str(neden) if neden else None,
+        "seviyeler": seviyeler, "renkler": renkler, "durumlar": durumlar,
+        "donus_barlar": donus, "momentum_barlar": momentum,
+        "dikey_barlar": dikey, "dikey_deneme_barlar": uyari,
+        # A missing last projection must not leave a stale price chip.
+        "son_seviye": seviyeler[-1] if seviyeler else None,
+        "son_renk": renkler[-1] if renkler else None,
+    }
 
 def _yapı_satırı(sonuclar: Any, tf: str, son_kapanis: Optional[float]) -> str:
     """Kartın `🏗 Piyasa Yapısı` bloğunun İLK satırı, birebir (yalnız `• ` öneki düşer).
@@ -756,6 +914,8 @@ def _meta_kur(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any]) -> d
             "kritik": None,        # G3 (§0.12f)
             "stabil": {"hazir": False, "cizildi": False, "son_seviye": None,
                        "son_renk": None, "gorunur_bar": 0, "kadrajda": False},
+            "stabil_direnc": {"hazir": False, "cizildi": False, "son_seviye": None,
+                              "son_renk": None, "gorunur_bar": 0, "kadrajda": False},
         },
         "zone": _zone_meta(goruntu.get("zone")),
         "olay": _olay_meta(goruntu.get("olay")),

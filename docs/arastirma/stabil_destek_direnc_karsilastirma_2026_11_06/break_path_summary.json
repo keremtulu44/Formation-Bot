@@ -1,0 +1,627 @@
+{
+  "scope": "exploratory post-results path analysis, not blind or causal",
+  "horizon_4h": 24,
+  "selected_symbols": 174,
+  "path_rows": 5998,
+  "errors": {},
+  "groups": {
+    "2026": {
+      "SUPPORT": {
+        "all_events": 1792,
+        "status_24": {
+          "VALID": 1467,
+          "RIGHT_CENSORED": 132,
+          "BAD_DAILY_SOURCE_HISTORY": 118,
+          "BAD_HISTORY_OR_MISSING": 58,
+          "BAD_FUTURE_OR_MISSING": 17
+        },
+        "right_censored_any": 143,
+        "first": {
+          "n": 1467,
+          "symbols": 162,
+          "counts": {
+            "PRICE_RETURNS_FIXED_FIRST": 928,
+            "LINE_ADVERSE_FIRST": 236,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 28,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 275
+          },
+          "percent": {
+            "PRICE_RETURNS_FIXED_FIRST": 63.25835037491479,
+            "LINE_ADVERSE_FIRST": 16.087252897068847,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 1.9086571233810499,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 18.74573960463531
+          }
+        },
+        "line_first_price_side": {
+          "SAFE_TO_NEW_LINE": 215,
+          "ADVERSE_TO_NEW_LINE": 21
+        },
+        "after_line": {
+          "n": 236,
+          "symbols": 122,
+          "counts": {
+            "FLAT_PROXY_FIRST": 141,
+            "PRICE_RETURNS_OLD_FIRST": 13,
+            "LINE_CHANGED_FIRST": 2,
+            "AMBIGUOUS_SAME_BAR": 15,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 65
+          },
+          "percent": {
+            "FLAT_PROXY_FIRST": 59.74576271186441,
+            "PRICE_RETURNS_OLD_FIRST": 5.508474576271187,
+            "LINE_CHANGED_FIRST": 0.847457627118644,
+            "AMBIGUOUS_SAME_BAR": 6.3559322033898304,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 27.54237288135593
+          }
+        },
+        "flat_price_side": {
+          "SAFE_TO_NEW_LINE": 133,
+          "ADVERSE_TO_NEW_LINE": 8
+        },
+        "after_flat": {
+          "n": 141,
+          "symbols": 96,
+          "counts": {
+            "PRICE_CROSSES_NEW_LINE": 38,
+            "LINE_CHANGED_FIRST": 18,
+            "AMBIGUOUS_SAME_BAR": 0,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 85
+          },
+          "percent": {
+            "PRICE_CROSSES_NEW_LINE": 26.95035460992908,
+            "LINE_CHANGED_FIRST": 12.76595744680851,
+            "AMBIGUOUS_SAME_BAR": 0.0,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 60.283687943262414
+          }
+        },
+        "after_price": {
+          "n": 928,
+          "symbols": 162,
+          "counts": {
+            "PRICE_BREAKS_FIXED_AGAIN": 531,
+            "LINE_ADVERSE_FIRST": 324,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 46,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 27
+          },
+          "percent": {
+            "PRICE_BREAKS_FIXED_AGAIN": 57.2198275862069,
+            "LINE_ADVERSE_FIRST": 34.91379310344828,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 4.956896551724138,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 2.9094827586206895
+          }
+        }
+      },
+      "RESISTANCE": {
+        "all_events": 1529,
+        "status_24": {
+          "VALID": 1233,
+          "BAD_FUTURE_OR_MISSING": 136,
+          "BAD_HISTORY_OR_MISSING": 89,
+          "BAD_DAILY_SOURCE_HISTORY": 55,
+          "RIGHT_CENSORED": 16
+        },
+        "right_censored_any": 16,
+        "first": {
+          "n": 1233,
+          "symbols": 162,
+          "counts": {
+            "PRICE_RETURNS_FIXED_FIRST": 856,
+            "LINE_ADVERSE_FIRST": 154,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 35,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 188
+          },
+          "percent": {
+            "PRICE_RETURNS_FIXED_FIRST": 69.42416869424169,
+            "LINE_ADVERSE_FIRST": 12.489862124898622,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 2.83860502838605,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 15.247364152473642
+          }
+        },
+        "line_first_price_side": {
+          "SAFE_TO_NEW_LINE": 144,
+          "ADVERSE_TO_NEW_LINE": 10
+        },
+        "after_line": {
+          "n": 154,
+          "symbols": 104,
+          "counts": {
+            "FLAT_PROXY_FIRST": 102,
+            "PRICE_RETURNS_OLD_FIRST": 9,
+            "LINE_CHANGED_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 13,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 30
+          },
+          "percent": {
+            "FLAT_PROXY_FIRST": 66.23376623376623,
+            "PRICE_RETURNS_OLD_FIRST": 5.8441558441558445,
+            "LINE_CHANGED_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 8.441558441558442,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 19.48051948051948
+          }
+        },
+        "flat_price_side": {
+          "SAFE_TO_NEW_LINE": 93,
+          "ADVERSE_TO_NEW_LINE": 9
+        },
+        "after_flat": {
+          "n": 102,
+          "symbols": 75,
+          "counts": {
+            "PRICE_CROSSES_NEW_LINE": 27,
+            "LINE_CHANGED_FIRST": 10,
+            "AMBIGUOUS_SAME_BAR": 0,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 65
+          },
+          "percent": {
+            "PRICE_CROSSES_NEW_LINE": 26.470588235294116,
+            "LINE_CHANGED_FIRST": 9.803921568627452,
+            "AMBIGUOUS_SAME_BAR": 0.0,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 63.72549019607843
+          }
+        },
+        "after_price": {
+          "n": 856,
+          "symbols": 160,
+          "counts": {
+            "PRICE_BREAKS_FIXED_AGAIN": 488,
+            "LINE_ADVERSE_FIRST": 319,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 21,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 28
+          },
+          "percent": {
+            "PRICE_BREAKS_FIXED_AGAIN": 57.00934579439252,
+            "LINE_ADVERSE_FIRST": 37.26635514018692,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 2.453271028037383,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 3.2710280373831777
+          }
+        }
+      }
+    },
+    "2025": {
+      "SUPPORT": {
+        "all_events": 1282,
+        "status_24": {
+          "VALID": 898,
+          "BAD_HISTORY_OR_MISSING": 108,
+          "CROSS_SPLIT": 95,
+          "BAD_FUTURE_OR_MISSING": 85,
+          "BAD_DAILY_SOURCE_HISTORY": 49,
+          "NO_HISTORY_OR_ATR": 47
+        },
+        "right_censored_any": 0,
+        "first": {
+          "n": 898,
+          "symbols": 162,
+          "counts": {
+            "PRICE_RETURNS_FIXED_FIRST": 610,
+            "LINE_ADVERSE_FIRST": 90,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 24,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 174
+          },
+          "percent": {
+            "PRICE_RETURNS_FIXED_FIRST": 67.92873051224944,
+            "LINE_ADVERSE_FIRST": 10.022271714922049,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 2.6726057906458798,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 19.37639198218263
+          }
+        },
+        "line_first_price_side": {
+          "SAFE_TO_NEW_LINE": 87,
+          "ADVERSE_TO_NEW_LINE": 3
+        },
+        "after_line": {
+          "n": 90,
+          "symbols": 69,
+          "counts": {
+            "FLAT_PROXY_FIRST": 53,
+            "PRICE_RETURNS_OLD_FIRST": 11,
+            "LINE_CHANGED_FIRST": 1,
+            "AMBIGUOUS_SAME_BAR": 12,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 13
+          },
+          "percent": {
+            "FLAT_PROXY_FIRST": 58.888888888888886,
+            "PRICE_RETURNS_OLD_FIRST": 12.222222222222221,
+            "LINE_CHANGED_FIRST": 1.1111111111111112,
+            "AMBIGUOUS_SAME_BAR": 13.333333333333334,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 14.444444444444445
+          }
+        },
+        "flat_price_side": {
+          "SAFE_TO_NEW_LINE": 52,
+          "ADVERSE_TO_NEW_LINE": 1
+        },
+        "after_flat": {
+          "n": 53,
+          "symbols": 44,
+          "counts": {
+            "PRICE_CROSSES_NEW_LINE": 20,
+            "LINE_CHANGED_FIRST": 3,
+            "AMBIGUOUS_SAME_BAR": 0,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 30
+          },
+          "percent": {
+            "PRICE_CROSSES_NEW_LINE": 37.735849056603776,
+            "LINE_CHANGED_FIRST": 5.660377358490566,
+            "AMBIGUOUS_SAME_BAR": 0.0,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 56.60377358490566
+          }
+        },
+        "after_price": {
+          "n": 610,
+          "symbols": 156,
+          "counts": {
+            "PRICE_BREAKS_FIXED_AGAIN": 350,
+            "LINE_ADVERSE_FIRST": 218,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 1,
+            "AMBIGUOUS_SAME_BAR": 7,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 34
+          },
+          "percent": {
+            "PRICE_BREAKS_FIXED_AGAIN": 57.377049180327866,
+            "LINE_ADVERSE_FIRST": 35.73770491803279,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.16393442622950818,
+            "AMBIGUOUS_SAME_BAR": 1.1475409836065573,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 5.573770491803279
+          }
+        }
+      },
+      "RESISTANCE": {
+        "all_events": 1395,
+        "status_24": {
+          "VALID": 1088,
+          "BAD_HISTORY_OR_MISSING": 115,
+          "NO_HISTORY_OR_ATR": 71,
+          "CROSS_SPLIT": 46,
+          "BAD_FUTURE_OR_MISSING": 39,
+          "BAD_DAILY_SOURCE_HISTORY": 36
+        },
+        "right_censored_any": 0,
+        "first": {
+          "n": 1088,
+          "symbols": 164,
+          "counts": {
+            "PRICE_RETURNS_FIXED_FIRST": 721,
+            "LINE_ADVERSE_FIRST": 156,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 20,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 191
+          },
+          "percent": {
+            "PRICE_RETURNS_FIXED_FIRST": 66.26838235294117,
+            "LINE_ADVERSE_FIRST": 14.338235294117647,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 1.838235294117647,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 17.55514705882353
+          }
+        },
+        "line_first_price_side": {
+          "SAFE_TO_NEW_LINE": 145,
+          "ADVERSE_TO_NEW_LINE": 11
+        },
+        "after_line": {
+          "n": 156,
+          "symbols": 102,
+          "counts": {
+            "FLAT_PROXY_FIRST": 96,
+            "PRICE_RETURNS_OLD_FIRST": 15,
+            "LINE_CHANGED_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 6,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 39
+          },
+          "percent": {
+            "FLAT_PROXY_FIRST": 61.53846153846154,
+            "PRICE_RETURNS_OLD_FIRST": 9.615384615384615,
+            "LINE_CHANGED_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 3.8461538461538463,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 25.0
+          }
+        },
+        "flat_price_side": {
+          "SAFE_TO_NEW_LINE": 85,
+          "ADVERSE_TO_NEW_LINE": 11
+        },
+        "after_flat": {
+          "n": 96,
+          "symbols": 69,
+          "counts": {
+            "PRICE_CROSSES_NEW_LINE": 28,
+            "LINE_CHANGED_FIRST": 1,
+            "AMBIGUOUS_SAME_BAR": 0,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 67
+          },
+          "percent": {
+            "PRICE_CROSSES_NEW_LINE": 29.166666666666668,
+            "LINE_CHANGED_FIRST": 1.0416666666666667,
+            "AMBIGUOUS_SAME_BAR": 0.0,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 69.79166666666667
+          }
+        },
+        "after_price": {
+          "n": 721,
+          "symbols": 158,
+          "counts": {
+            "PRICE_BREAKS_FIXED_AGAIN": 426,
+            "LINE_ADVERSE_FIRST": 237,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 32,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 26
+          },
+          "percent": {
+            "PRICE_BREAKS_FIXED_AGAIN": 59.084604715672675,
+            "LINE_ADVERSE_FIRST": 32.87101248266297,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 4.438280166435506,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 3.606102635228849
+          }
+        }
+      }
+    },
+    "OLD100_BOTH_PERIODS": {
+      "SUPPORT": {
+        "all_events": 1745,
+        "status_24": {
+          "VALID": 1326,
+          "BAD_DAILY_SOURCE_HISTORY": 112,
+          "BAD_HISTORY_OR_MISSING": 79,
+          "RIGHT_CENSORED": 78,
+          "BAD_FUTURE_OR_MISSING": 65,
+          "CROSS_SPLIT": 53,
+          "NO_HISTORY_OR_ATR": 32
+        },
+        "right_censored_any": 86,
+        "first": {
+          "n": 1326,
+          "symbols": 94,
+          "counts": {
+            "PRICE_RETURNS_FIXED_FIRST": 856,
+            "LINE_ADVERSE_FIRST": 194,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 27,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 249
+          },
+          "percent": {
+            "PRICE_RETURNS_FIXED_FIRST": 64.5550527903469,
+            "LINE_ADVERSE_FIRST": 14.630467571644042,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 2.0361990950226243,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 18.778280542986426
+          }
+        },
+        "line_first_price_side": {
+          "SAFE_TO_NEW_LINE": 179,
+          "ADVERSE_TO_NEW_LINE": 15
+        },
+        "after_line": {
+          "n": 194,
+          "symbols": 81,
+          "counts": {
+            "FLAT_PROXY_FIRST": 107,
+            "PRICE_RETURNS_OLD_FIRST": 19,
+            "LINE_CHANGED_FIRST": 3,
+            "AMBIGUOUS_SAME_BAR": 16,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 49
+          },
+          "percent": {
+            "FLAT_PROXY_FIRST": 55.154639175257735,
+            "PRICE_RETURNS_OLD_FIRST": 9.793814432989691,
+            "LINE_CHANGED_FIRST": 1.5463917525773196,
+            "AMBIGUOUS_SAME_BAR": 8.24742268041237,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 25.257731958762886
+          }
+        },
+        "flat_price_side": {
+          "SAFE_TO_NEW_LINE": 102,
+          "ADVERSE_TO_NEW_LINE": 5
+        },
+        "after_flat": {
+          "n": 107,
+          "symbols": 67,
+          "counts": {
+            "PRICE_CROSSES_NEW_LINE": 32,
+            "LINE_CHANGED_FIRST": 9,
+            "AMBIGUOUS_SAME_BAR": 0,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 66
+          },
+          "percent": {
+            "PRICE_CROSSES_NEW_LINE": 29.906542056074766,
+            "LINE_CHANGED_FIRST": 8.411214953271028,
+            "AMBIGUOUS_SAME_BAR": 0.0,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 61.6822429906542
+          }
+        },
+        "after_price": {
+          "n": 856,
+          "symbols": 94,
+          "counts": {
+            "PRICE_BREAKS_FIXED_AGAIN": 483,
+            "LINE_ADVERSE_FIRST": 301,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 1,
+            "AMBIGUOUS_SAME_BAR": 30,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 41
+          },
+          "percent": {
+            "PRICE_BREAKS_FIXED_AGAIN": 56.425233644859816,
+            "LINE_ADVERSE_FIRST": 35.16355140186916,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.11682242990654206,
+            "AMBIGUOUS_SAME_BAR": 3.5046728971962615,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 4.789719626168225
+          }
+        }
+      },
+      "RESISTANCE": {
+        "all_events": 1712,
+        "status_24": {
+          "VALID": 1340,
+          "BAD_HISTORY_OR_MISSING": 127,
+          "BAD_FUTURE_OR_MISSING": 113,
+          "BAD_DAILY_SOURCE_HISTORY": 52,
+          "CROSS_SPLIT": 35,
+          "NO_HISTORY_OR_ATR": 33,
+          "RIGHT_CENSORED": 12
+        },
+        "right_censored_any": 12,
+        "first": {
+          "n": 1340,
+          "symbols": 95,
+          "counts": {
+            "PRICE_RETURNS_FIXED_FIRST": 908,
+            "LINE_ADVERSE_FIRST": 187,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 32,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 213
+          },
+          "percent": {
+            "PRICE_RETURNS_FIXED_FIRST": 67.76119402985074,
+            "LINE_ADVERSE_FIRST": 13.955223880597014,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 2.388059701492537,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 15.895522388059701
+          }
+        },
+        "line_first_price_side": {
+          "SAFE_TO_NEW_LINE": 174,
+          "ADVERSE_TO_NEW_LINE": 13
+        },
+        "after_line": {
+          "n": 187,
+          "symbols": 82,
+          "counts": {
+            "FLAT_PROXY_FIRST": 120,
+            "PRICE_RETURNS_OLD_FIRST": 15,
+            "LINE_CHANGED_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 11,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 41
+          },
+          "percent": {
+            "FLAT_PROXY_FIRST": 64.1711229946524,
+            "PRICE_RETURNS_OLD_FIRST": 8.02139037433155,
+            "LINE_CHANGED_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 5.882352941176471,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 21.925133689839573
+          }
+        },
+        "flat_price_side": {
+          "SAFE_TO_NEW_LINE": 110,
+          "ADVERSE_TO_NEW_LINE": 10
+        },
+        "after_flat": {
+          "n": 120,
+          "symbols": 65,
+          "counts": {
+            "PRICE_CROSSES_NEW_LINE": 28,
+            "LINE_CHANGED_FIRST": 9,
+            "AMBIGUOUS_SAME_BAR": 0,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 83
+          },
+          "percent": {
+            "PRICE_CROSSES_NEW_LINE": 23.333333333333332,
+            "LINE_CHANGED_FIRST": 7.5,
+            "AMBIGUOUS_SAME_BAR": 0.0,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 69.16666666666667
+          }
+        },
+        "after_price": {
+          "n": 908,
+          "symbols": 95,
+          "counts": {
+            "PRICE_BREAKS_FIXED_AGAIN": 531,
+            "LINE_ADVERSE_FIRST": 315,
+            "LINE_FAVORABLE_FIRST": 0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0,
+            "AMBIGUOUS_SAME_BAR": 32,
+            "LEVEL_UNAVAILABLE": 0,
+            "NEITHER": 30
+          },
+          "percent": {
+            "PRICE_BREAKS_FIXED_AGAIN": 58.480176211453745,
+            "LINE_ADVERSE_FIRST": 34.691629955947135,
+            "LINE_FAVORABLE_FIRST": 0.0,
+            "IDENTITY_SAME_LEVEL_FIRST": 0.0,
+            "AMBIGUOUS_SAME_BAR": 3.5242290748898677,
+            "LEVEL_UNAVAILABLE": 0.0,
+            "NEITHER": 3.303964757709251
+          }
+        }
+      }
+    }
+  }
+}

@@ -675,7 +675,7 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
     # yazılan bu not okuyucuya hiçbir şey söylemiyordu (madde zaten çizilmemiş);
     # sayı `meta["lejant_atlanan"]`da makine okunur biçimde durur.
     lejantlar, lejant_punto, lejant_atlanan = _lejant_satirlar(
-        _lejant(goruntu, yalnizca_mumlar), genislik)
+        _lejant(goruntu, yalnizca_mumlar, meta=meta), genislik)
     # BAŞLIK ÇAKIŞMASI (2026-10-23, mobil ölçümü): rozetler + sağdaki "son mum …"
     # yazısı dar karede aynı satıra sığmıyor; "son mum" bilgi satırının ÜSTÜNE
     # biniyordu. Genişlikler GERÇEK renderer ölçümünden gelir (`_olcu_px`);
@@ -702,7 +702,8 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
             "butce": SATIR_BUTCE, "genislik": genislik}
 
 
-def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool) -> list[str]:
+def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool,
+            *, meta: Optional[Mapping[str, Any]] = None) -> list[str]:
     """Çizilen ne ise o (§0.12v); uydurma etiket yok — katman yoksa madde de yok."""
     if yalnizca_mumlar:
         return ["yalnızca mumlar (çökme modu)"]
@@ -717,6 +718,20 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool) -> list[str]:
         oge = ["kapanmış mum", "mavi boş = yükselen", "turuncu dolu = düşen"]
     else:
         oge = ["kapanmış mum", "yeşil boş = yükselen", "kırmızı dolu = düşen"]
+    direnc = goruntu.get("stabil_direnc") or {}
+    cizilen = ((meta or {}).get("cizgiler") or {}).get("stabil_direnc") or {}
+    # İlk metin geçişinde çizim henüz yok; son geçiş gerçek görünen sayıları
+    # kullanır. Böylece kadraj dışındaki ok lejantta çizilmiş gibi anlatılmaz.
+    olculdu = "donus_isaret" in cizilen
+    if (cizilen.get("cizildi") if olculdu else direnc.get("hazir")):
+        oge.append("┄ Stabil direnç")
+    for sayac, barlar, etiket in (
+        ("donus_isaret", "donus_barlar", "▼ direnç dönüşü"),
+        ("momentum_isaret", "momentum_barlar", "▽ direnç momentumu"),
+        ("dikey_deneme_isaret", "dikey_deneme_barlar", "△ direnç yapı uyarısı"),
+    ):
+        if (cizilen.get(sayac) if olculdu else direnc.get(barlar)):
+            oge.append(etiket)
     # GÖRSEL-5: olay çizgileri stil olarak ayrıştı; lejant da ayrı yazar (hangisi
     # görünüyorsa o madde çıkar — uydurma yok).
     _olaylar = list((goruntu.get("olay") or {}).get("olaylar") or [])

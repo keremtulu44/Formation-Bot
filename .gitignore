@@ -98,6 +98,7 @@ arastirma_cikti_p*/
 dz_yukleme/
 
 # Yerel araç artıkları (commit edilmez)
+.arena_work/
 .coverage
 .cache/
 .ruff_cache/

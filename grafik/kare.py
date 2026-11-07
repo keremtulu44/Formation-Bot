@@ -93,7 +93,7 @@ def disk_uygun_mu() -> bool:
         return True
 
 
-_MOTOR_ANAHTARLARI = ("order_block", "fvg", "market_structure", "volume_participation", "stabil")
+_MOTOR_ANAHTARLARI = ("order_block", "fvg", "market_structure", "volume_participation", "stabil", "stabil_direnc")
 
 
 def _sonuc_sec(sonuclar: Any, tf: str, *, cikis: Optional[dict[str, Any]] = None) -> Any:

@@ -210,6 +210,24 @@ def stabil_baglami_arsivden(frames: Any, cutoff: Any) -> tuple[Any, Any, Any]:
     return gunluk, h4, pd.Timestamp(cutoff)
 
 
+def _direnc_kaynaklari(anahtar: str, veri_dizin: str, *, yonetici=None,
+                       demo: bool = False, stabil_frames: Any = None) -> tuple[Any, Any]:
+    """Direnç için native günlük ve orijinal saatlik kaynağı salt-okur döndür.
+
+    Destekteki 1s→1g yedeği burada kullanılmaz: türetilmiş bir günlük mumun
+    eksik bileşenini native günlük gibi sunmak sahte direnç yaratabilir.
+    """
+    if stabil_frames is not None:
+        kaynak = stabil_frames if hasattr(stabil_frames, "get") else {}
+        return kaynak.get("1d"), kaynak.get("1h")
+    if demo:
+        return None, None  # sentetik demo gerçek kaynak doğrulaması iddia etmez
+    from data import StockDequeManager
+
+    aktif = yonetici if yonetici is not None else StockDequeManager(data_dir=veri_dizin)
+    return aktif.to_gunluk_dataframe(anahtar), aktif.to_dataframe(anahtar)
+
+
 def _cikti_yolu(cikti: str | None, hisse: str, tf: str, tfler: tuple) -> str:
     """PNG yolu: birden çok TF çiziliyorsa ad zaman dilimiyle ayrışır."""
     yol = cikti or f"/tmp/grafik_{str(hisse).upper()}_{tf}.png"
@@ -315,6 +333,25 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
             import logging
             logging.getLogger("grafik").warning("%s %s izole Stabil hesaplaması atlandı: %s", temiz_ad, tf, type(exc).__name__)
             uyari.append("Stabil hesaplanamadı; destek çizgisi gösterilemiyor")
+        # Destek hesap akışından bağımsız: hata yalnız direnç katmanını kapatır.
+        # `/grafik` kullanıcı isteğiyle çalışır; otomatik-alarm kill-switch'i bu
+        # manuel komutu engellemez. Hiçbir bildirim/alarm kararı burada alınmaz.
+        try:
+            from data import mum_kapanis_ani
+            from domain_engines.stabil.chart_bridge import resistance_for_chart
+
+            direnc_gunluk, direnc_saatlik = _direnc_kaynaklari(
+                temiz_ad, dizin, yonetici=yonetici, demo=demo, stabil_frames=stabil_frames,
+            )
+            direnc_kesim = simdi or mum_kapanis_ani(cerceve.index[-1], tf)
+            sonuclar["stabil_direnc"] = resistance_for_chart(
+                temiz_ad, tf, cerceve, daily_frame=direnc_gunluk,
+                hourly_frame=direnc_saatlik, as_of_close=direnc_kesim,
+            )
+        except Exception as exc:  # noqa: BLE001 - direnç hatası grafiği durdurmaz
+            import logging
+            logging.getLogger("grafik").warning("%s %s direnç grafiği hazırlanamadı: %s", temiz_ad, tf, type(exc).__name__)
+            sonuclar["stabil_direnc"] = {"status": "DATA_ERROR", "reason": f"chart_bridge_error:{type(exc).__name__}"}
     goruntu = grafik.anlik_goruntu(formasyon, tf, cerceve, sembol=str(hisse).upper(),
                                    alarm_turu=alarm_turu, sonuclar=sonuclar,
                                    kare_mum=mum, etiket_detay=etiket_detay, simdi=simdi,

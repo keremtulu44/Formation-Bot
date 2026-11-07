@@ -158,6 +158,24 @@ def test_ci_uses_stable_runner_and_node24_actions():
         assert version and int(version.group(1)) >= 6
 
 
+def test_ci_timeout_covers_slow_full_regression():
+    """Gerçek arşivli tam paket 20 dakikayı geçebilir; duman testine de pay kalmalı."""
+    import re
+
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    timeout = re.search(r"(?m)^\s+timeout-minutes:\s*(\d+)\s*$", workflow)
+    assert timeout and int(timeout.group(1)) >= 35
+
+
+def test_ci_doctor_smoke_is_offline_and_checks_png_and_resistance():
+    body = script(".github/workflows/ci.yml", "- name: Kurulum doktoru ve grafik")
+    assert "--skip-network --grafik-test" in body
+    assert "--send-test-message" not in body
+    assert "Kare üretildi: AKBNK 4h" in body
+    assert "Stabil direnç" in body and "Fotoğraf gönderilmedi" in body
+    assert "set -euo pipefail" in body
+
+
 @pytest.mark.parametrize("now,nightly_flag,expected", [
     ("0205", "", "true"),
     ("0220", "", "true"),

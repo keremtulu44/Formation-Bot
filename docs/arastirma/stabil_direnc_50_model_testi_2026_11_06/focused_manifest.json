@@ -1,0 +1,14 @@
+{
+  "selection_sha256": "273d0b79224bd11418327f973dd5f9cf5e63875c91f92fac113a0d9a3b545918",
+  "plan_sha256": "e88265b3b1658b85a33318f6451882415a70f912ee7fca2367ff9f0bc79b1afc",
+  "comparison_manifest_sha256": "889b25dbd2b2f9685e5a7735754f6d98dd54cc682946b476a3ea7bcdf98b5c76",
+  "path_manifest_sha256": "04b29f1fdb8a7b4a3c63093fbca275ca12ec07a3f802322751e44a86f7ea0a75",
+  "fixed_line_manifest_sha256": "d730010934d43e851184ac59668529dea3df7dcbf1cc6f21a17977ec2dda8698",
+  "focused_script_sha256": "28ecd667de9ee736fe99d58013844b5d9efbfba83c22e61049474d6755c52bf1",
+  "focused_tests_sha256": "a8c1c98747fde6712fa80e0310bf4f22b403abdec8903c5b515f2015046c1770",
+  "output_sha256": {
+    "RAPOR_50.md": "87acbc00c17411dc865287940ee40e9adacdad0a5c3b3e2ea05af3da9702e09f",
+    "focused_summary.json": "0e9446eb3404e23aaa50dfe8d27621dcf06bc471df86ccd6a88c6cad8f472c76",
+    "b04_fixed_line_breaks.csv.gz": "7eb90a27437d47695b27f5e87c97294a56f49bb47c6bc9fca1eb2b01b67746f7"
+  }
+}

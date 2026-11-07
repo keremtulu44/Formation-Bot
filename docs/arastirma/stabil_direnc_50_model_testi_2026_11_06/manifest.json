@@ -1,0 +1,1936 @@
+{
+  "scope": "research-only, prior resistance outcomes were already observed; no independent blind holdout",
+  "reflection_constant_for_measurement": 100000.0,
+  "selected_symbols": [
+    "AKBNK",
+    "AKFGY",
+    "AKSEN",
+    "ALARK",
+    "ALTNY",
+    "ARZUM",
+    "ASELS",
+    "AVPGY",
+    "AYDEM",
+    "BERA",
+    "BJKAS",
+    "BOBET",
+    "BRSAN",
+    "CANTE",
+    "CCOLA",
+    "CIMSA",
+    "DAPGM",
+    "DENGE",
+    "DERIM",
+    "DIRIT",
+    "DMSAS",
+    "DOCO",
+    "DYOBY",
+    "EFOR",
+    "EGEEN",
+    "EKGYO",
+    "ENKAI",
+    "ERBOS",
+    "ERSU",
+    "ESCAR",
+    "ESEN",
+    "EUPWR",
+    "GARAN",
+    "GOLTS",
+    "GRSEL",
+    "GRTHO",
+    "GSRAY",
+    "GUBRF",
+    "GWIND",
+    "HATSN",
+    "HEKTS",
+    "ISCTR",
+    "ISGYO",
+    "ISMEN",
+    "IZENR",
+    "KCHOL",
+    "KFEIN",
+    "KIMMR",
+    "KLGYO",
+    "KMPUR"
+  ],
+  "successful_symbols": 50,
+  "errors": {},
+  "events_4h": 10097,
+  "events_native_daily": 10494,
+  "legacy_like_checkpoint_rows": 94705,
+  "support_4h_events": 5285,
+  "resistance_4h_events": 4812,
+  "support_native_events": 5345,
+  "resistance_native_events": 5149,
+  "legacy_support_manifest_sha256": "99f9c857ec4573127331f719b8d9e2f29d522e8a7f229a15b3c8683d75618cf4",
+  "prior_resistance_manifest_sha256": "d85f2698e47d5e951789ee708bce28002c4eab01d236872c4a3e4b7330508fb1",
+  "prior_resistance_event_hashes": {
+    "events_4h.csv.gz": "e78cda01e3c7ce2b5329ce1087dfa785a9717427d9d19e60010563f2507d5f7d",
+    "native_daily_events.csv.gz": "8eec9f9cffea040d34f7e14536cb8f99b7005481218542f37b03652830cf5011"
+  },
+  "prior_input_files_verified": 349,
+  "source_sha256": {
+    "research/stabil_support_resistance_compare.py": "bfc487112efd551093eb2e6f42c6abc47637c6dbfcfae44762ad790e14a7b989",
+    "research/stabil_support_resistance_report.py": "af261cd160017e40f2b8a2935020b50868f6243cb1914674d92a66f7cde71af5",
+    "research/stabil_support_resistance_verify.py": "ec3b1285b13b7a5c550bc70f8c14269ff9f90ada6e476833f8d38b85682b2377",
+    "research/stabil_replay.py": "01a2e120112ef95897675146bb92962c4c6d8531c69f70091d46b55f4b99d748",
+    "research/stabil_bhv48.py": "6edca258e8dfb7b235d3341c91c573ce67b20fced3c3d96dd5c7b9cc9506cb4d",
+    "research/stabil_resistance_replay.py": "c505e6ffc4b858c1d4f8a45d5c77d983f3a330909370630c0c9c4634cbeba952",
+    "research/stabil_resistance_report.py": "fd78273ba692c76878dd3a17a04e7c10fe94af7fc76f54a2e6918b8e08b313de",
+    "test_stabil_support_resistance_compare.py": "82168d9dfe69aa0a8961aec0f33a12037cfc981f83438961a1c0cf3222c1689a",
+    "docs/arastirma/stabil_direnc_50_model_testi_2026_11_06/PLAN.md": "e88265b3b1658b85a33318f6451882415a70f912ee7fca2367ff9f0bc79b1afc"
+  },
+  "outputs_sha256": {
+    "events_4h.csv.gz": "542eb96b5e27035efd5291823af5ffb60078226048be88f0fab469aef83df2b4",
+    "events_native_daily.csv.gz": "62e6a49bfe08596d241dcb47b917154c8a80cb7db7b17282397c84c1a12b9d0d",
+    "legacy_like_checkpoints.csv.gz": "ed86c1f9d5dbb40d4cca81d8a9d721447bfb2b24de163ee4f66c0c38df6db5df"
+  },
+  "environment": {
+    "python": "3.11.2",
+    "pandas": "2.2.2",
+    "numpy": "1.26.4",
+    "exchange_calendars": "4.13.2"
+  },
+  "symbols": [
+    {
+      "symbol": "AKBNK",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 16,
+        "BREAK_UP": 12,
+        "RETURN_DOWN": 7,
+        "TEST": 8
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 69,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "DEPART_BELOW": 16,
+          "TEST": 8,
+          "BREAK_UP": 12,
+          "STATE_CROSS_UP": 12,
+          "RETURN_DOWN": 7,
+          "STATE_CROSS_DOWN": 12,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "AKFGY",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 29,
+        "BREAK_UP": 24,
+        "RETURN_DOWN": 19,
+        "TEST": 22
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 166,
+          "TEST": 22,
+          "BREAK_UP": 24,
+          "STATE_CROSS_UP": 24,
+          "RETURN_DOWN": 19,
+          "STATE_CROSS_DOWN": 24,
+          "DEPART_BELOW": 29,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "AKSEN",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "BREAK_UP": 8,
+        "DEPART_BELOW": 12,
+        "RETURN_DOWN": 5,
+        "TEST": 8
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 69,
+          "BREAK_UP": 8,
+          "STATE_CROSS_UP": 8,
+          "RETURN_DOWN": 5,
+          "STATE_CROSS_DOWN": 7,
+          "DEPART_BELOW": 12,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "eligible_Y2026": 571,
+          "TEST": 8
+        }
+      }
+    },
+    {
+      "symbol": "ALARK",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 19,
+        "BREAK_UP": 16,
+        "TEST": 27,
+        "RETURN_DOWN": 13
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "STATE_CROSS_DOWN": 17,
+          "below_within_1_5_atr": 147,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 27,
+          "BREAK_UP": 16,
+          "STATE_CROSS_UP": 16,
+          "RETURN_DOWN": 13,
+          "DEPART_BELOW": 19,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "ALTNY",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 31,
+        "RETURN_DOWN": 9,
+        "BREAK_UP": 16,
+        "TEST": 22
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 196,
+          "TEST": 22,
+          "BREAK_UP": 16,
+          "RETURN_DOWN": 9,
+          "STATE_CROSS_DOWN": 15,
+          "DEPART_BELOW": 31,
+          "STATE_CROSS_UP": 15,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "ARZUM",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 1,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 5,
+        "h4_bars_on_suspect_daily_date": 3,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 18,
+        "BREAK_UP": 14,
+        "RETURN_DOWN": 8,
+        "TEST": 14
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 203,
+          "Y2026": 0
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 874,
+          "below_within_1_5_atr": 110,
+          "DEPART_BELOW": 18,
+          "eligible_bars": 203,
+          "eligible_PRE_2026": 203,
+          "TEST": 14,
+          "BREAK_UP": 14,
+          "STATE_CROSS_UP": 14,
+          "STATE_CROSS_DOWN": 14,
+          "RETURN_DOWN": 8
+        }
+      }
+    },
+    {
+      "symbol": "ASELS",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "BREAK_UP": 21,
+        "RETURN_DOWN": 19,
+        "TEST": 18,
+        "DEPART_BELOW": 20
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 134,
+          "DEPART_BELOW": 20,
+          "TEST": 18,
+          "BREAK_UP": 21,
+          "STATE_CROSS_UP": 21,
+          "RETURN_DOWN": 19,
+          "STATE_CROSS_DOWN": 21,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "AVPGY",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "RETURN_DOWN": 16,
+        "BREAK_UP": 22,
+        "DEPART_BELOW": 31,
+        "TEST": 23
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "RETURN_DOWN": 16,
+          "STATE_CROSS_DOWN": 23,
+          "below_within_1_5_atr": 169,
+          "BREAK_UP": 22,
+          "STATE_CROSS_UP": 22,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 23,
+          "DEPART_BELOW": 31,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "AYDEM",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 22,
+        "BREAK_UP": 12,
+        "RETURN_DOWN": 8,
+        "TEST": 10
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 109,
+          "STATE_CROSS_DOWN": 12,
+          "DEPART_BELOW": 22,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 10,
+          "BREAK_UP": 12,
+          "STATE_CROSS_UP": 12,
+          "RETURN_DOWN": 8,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "BERA",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "RETURN_DOWN": 17,
+        "DEPART_BELOW": 18,
+        "BREAK_UP": 21,
+        "TEST": 16
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 126,
+          "STATE_CROSS_DOWN": 21,
+          "DEPART_BELOW": 18,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 16,
+          "BREAK_UP": 21,
+          "STATE_CROSS_UP": 21,
+          "RETURN_DOWN": 17,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "BJKAS",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 18,
+        "BREAK_UP": 18,
+        "RETURN_DOWN": 13,
+        "TEST": 22
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "RETURN_DOWN": 13,
+          "STATE_CROSS_DOWN": 17,
+          "below_within_1_5_atr": 212,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 22,
+          "BREAK_UP": 18,
+          "STATE_CROSS_UP": 17,
+          "DEPART_BELOW": 18,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "BOBET",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 28,
+        "TEST": 20,
+        "RETURN_DOWN": 8,
+        "BREAK_UP": 15
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 154,
+          "DEPART_BELOW": 28,
+          "TEST": 20,
+          "BREAK_UP": 15,
+          "STATE_CROSS_UP": 14,
+          "STATE_CROSS_DOWN": 13,
+          "RETURN_DOWN": 8,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "BRSAN",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "RETURN_DOWN": 8,
+        "BREAK_UP": 14,
+        "TEST": 16,
+        "DEPART_BELOW": 8
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 79,
+          "BREAK_UP": 14,
+          "STATE_CROSS_UP": 14,
+          "RETURN_DOWN": 8,
+          "STATE_CROSS_DOWN": 14,
+          "TEST": 16,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "DEPART_BELOW": 8,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "CANTE",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 22,
+        "BREAK_UP": 18,
+        "RETURN_DOWN": 12,
+        "TEST": 14
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 144,
+          "TEST": 14,
+          "BREAK_UP": 18,
+          "STATE_CROSS_UP": 18,
+          "RETURN_DOWN": 12,
+          "STATE_CROSS_DOWN": 18,
+          "DEPART_BELOW": 22,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "CCOLA",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 16,
+        "TEST": 15,
+        "BREAK_UP": 12,
+        "RETURN_DOWN": 9
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "RETURN_DOWN": 9,
+          "STATE_CROSS_DOWN": 12,
+          "below_within_1_5_atr": 108,
+          "BREAK_UP": 12,
+          "STATE_CROSS_UP": 12,
+          "DEPART_BELOW": 16,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 15,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "CIMSA",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "BREAK_UP": 21,
+        "TEST": 21,
+        "DEPART_BELOW": 22,
+        "RETURN_DOWN": 15
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 164,
+          "DEPART_BELOW": 22,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "BREAK_UP": 21,
+          "STATE_CROSS_UP": 21,
+          "STATE_CROSS_DOWN": 20,
+          "TEST": 21,
+          "RETURN_DOWN": 15,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "DAPGM",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "BREAK_UP": 23,
+        "DEPART_BELOW": 15,
+        "RETURN_DOWN": 14,
+        "TEST": 17
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 132,
+          "DEPART_BELOW": 15,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 17,
+          "BREAK_UP": 23,
+          "STATE_CROSS_UP": 23,
+          "RETURN_DOWN": 14,
+          "STATE_CROSS_DOWN": 23,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "DENGE",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 1,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 30,
+        "TEST": 24,
+        "RETURN_DOWN": 19,
+        "BREAK_UP": 25
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 0,
+          "Y2026": 0
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 1077,
+          "below_within_1_5_atr": 210,
+          "BREAK_UP": 25,
+          "STATE_CROSS_UP": 25,
+          "TEST": 24,
+          "STATE_CROSS_DOWN": 24,
+          "DEPART_BELOW": 30,
+          "RETURN_DOWN": 19
+        }
+      }
+    },
+    {
+      "symbol": "DERIM",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1077,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 8
+      },
+      "event_checks": {
+        "DEPART_BELOW": 30,
+        "RETURN_DOWN": 13,
+        "BREAK_UP": 22,
+        "TEST": 20
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 551
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 90,
+          "STATE_CROSS_DOWN": 20,
+          "eligible_bars": 986,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 161,
+          "DEPART_BELOW": 30,
+          "TEST": 20,
+          "BREAK_UP": 22,
+          "STATE_CROSS_UP": 20,
+          "RETURN_DOWN": 13,
+          "eligible_Y2026": 551
+        }
+      }
+    },
+    {
+      "symbol": "DIRIT",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1072,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 725,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 725,
+        "missing_whole_h4_buckets": 13
+      },
+      "event_checks": {
+        "BREAK_UP": 24,
+        "RETURN_DOWN": 16,
+        "TEST": 21,
+        "DEPART_BELOW": 17
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 0,
+          "Y2026": 0
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 1071,
+          "STATE_CROSS_DOWN": 24,
+          "below_within_1_5_atr": 94,
+          "TEST": 21,
+          "BREAK_UP": 24,
+          "STATE_CROSS_UP": 24,
+          "DEPART_BELOW": 17,
+          "RETURN_DOWN": 16
+        }
+      }
+    },
+    {
+      "symbol": "DMSAS",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "RETURN_DOWN": 10,
+        "DEPART_BELOW": 12,
+        "BREAK_UP": 14,
+        "TEST": 12
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 126,
+          "DEPART_BELOW": 12,
+          "BREAK_UP": 14,
+          "STATE_CROSS_UP": 14,
+          "RETURN_DOWN": 10,
+          "STATE_CROSS_DOWN": 13,
+          "TEST": 12,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "DOCO",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1077,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 2,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 2,
+        "missing_whole_h4_buckets": 8
+      },
+      "event_checks": {
+        "DEPART_BELOW": 16,
+        "TEST": 17,
+        "BREAK_UP": 20,
+        "RETURN_DOWN": 14
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 551
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 90,
+          "eligible_bars": 986,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 107,
+          "TEST": 17,
+          "BREAK_UP": 20,
+          "STATE_CROSS_UP": 19,
+          "RETURN_DOWN": 14,
+          "STATE_CROSS_DOWN": 19,
+          "DEPART_BELOW": 16,
+          "eligible_Y2026": 551
+        }
+      }
+    },
+    {
+      "symbol": "DYOBY",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 25,
+        "BREAK_UP": 21,
+        "RETURN_DOWN": 10,
+        "TEST": 18
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 195,
+          "STATE_CROSS_DOWN": 20,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 18,
+          "BREAK_UP": 21,
+          "STATE_CROSS_UP": 20,
+          "RETURN_DOWN": 10,
+          "DEPART_BELOW": 25,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "EFOR",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 716,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 4
+      },
+      "event_checks": {
+        "DEPART_BELOW": 14,
+        "BREAK_UP": 9,
+        "RETURN_DOWN": 5,
+        "TEST": 5
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 98,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 46,
+          "below_within_1_5_atr": 54,
+          "DEPART_BELOW": 14,
+          "TEST": 5,
+          "BREAK_UP": 9,
+          "STATE_CROSS_UP": 9,
+          "eligible_bars": 669,
+          "eligible_PRE_2026": 98,
+          "RETURN_DOWN": 5,
+          "STATE_CROSS_DOWN": 9,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "EGEEN",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 23,
+        "RETURN_DOWN": 15,
+        "TEST": 29,
+        "BREAK_UP": 23
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 180,
+          "TEST": 29,
+          "BREAK_UP": 23,
+          "STATE_CROSS_UP": 22,
+          "RETURN_DOWN": 15,
+          "STATE_CROSS_DOWN": 21,
+          "DEPART_BELOW": 23,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "EKGYO",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "BREAK_UP": 12,
+        "DEPART_BELOW": 22,
+        "TEST": 14,
+        "RETURN_DOWN": 8
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 115,
+          "DEPART_BELOW": 22,
+          "TEST": 14,
+          "BREAK_UP": 12,
+          "STATE_CROSS_UP": 11,
+          "RETURN_DOWN": 8,
+          "STATE_CROSS_DOWN": 11,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "ENKAI",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "RETURN_DOWN": 8,
+        "DEPART_BELOW": 23,
+        "BREAK_UP": 14,
+        "TEST": 16
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 118,
+          "DEPART_BELOW": 23,
+          "TEST": 16,
+          "BREAK_UP": 14,
+          "STATE_CROSS_UP": 13,
+          "RETURN_DOWN": 8,
+          "STATE_CROSS_DOWN": 12,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "ERBOS",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 18,
+        "BREAK_UP": 21,
+        "TEST": 31,
+        "RETURN_DOWN": 16
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 232,
+          "DEPART_BELOW": 18,
+          "TEST": 31,
+          "BREAK_UP": 21,
+          "STATE_CROSS_UP": 21,
+          "RETURN_DOWN": 16,
+          "STATE_CROSS_DOWN": 20,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "ERSU",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1077,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 2,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 2,
+        "missing_whole_h4_buckets": 8
+      },
+      "event_checks": {
+        "RETURN_DOWN": 13,
+        "BREAK_UP": 17,
+        "DEPART_BELOW": 39,
+        "TEST": 28
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 415,
+          "Y2026": 551
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 110,
+          "below_within_1_5_atr": 233,
+          "DEPART_BELOW": 39,
+          "eligible_bars": 966,
+          "eligible_PRE_2026": 415,
+          "TEST": 28,
+          "BREAK_UP": 17,
+          "STATE_CROSS_UP": 17,
+          "RETURN_DOWN": 13,
+          "STATE_CROSS_DOWN": 17,
+          "eligible_Y2026": 551
+        }
+      }
+    },
+    {
+      "symbol": "ESCAR",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 15,
+        "TEST": 16,
+        "RETURN_DOWN": 7,
+        "BREAK_UP": 14
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 100,
+          "DEPART_BELOW": 15,
+          "BREAK_UP": 14,
+          "STATE_CROSS_UP": 14,
+          "STATE_CROSS_DOWN": 13,
+          "TEST": 16,
+          "RETURN_DOWN": 7,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "ESEN",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "BREAK_UP": 15,
+        "DEPART_BELOW": 14,
+        "RETURN_DOWN": 8,
+        "TEST": 18
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 100,
+          "TEST": 18,
+          "BREAK_UP": 15,
+          "STATE_CROSS_UP": 15,
+          "STATE_CROSS_DOWN": 14,
+          "DEPART_BELOW": 14,
+          "RETURN_DOWN": 8,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "EUPWR",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 11,
+        "BREAK_UP": 21,
+        "RETURN_DOWN": 16,
+        "TEST": 16
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "RETURN_DOWN": 16,
+          "STATE_CROSS_DOWN": 20,
+          "below_within_1_5_atr": 109,
+          "BREAK_UP": 21,
+          "STATE_CROSS_UP": 20,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 16,
+          "DEPART_BELOW": 11,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "GARAN",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 17,
+        "TEST": 16,
+        "BREAK_UP": 12,
+        "RETURN_DOWN": 9
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 74,
+          "TEST": 16,
+          "BREAK_UP": 12,
+          "STATE_CROSS_UP": 12,
+          "RETURN_DOWN": 9,
+          "STATE_CROSS_DOWN": 12,
+          "DEPART_BELOW": 17,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "GOLTS",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "BREAK_UP": 28,
+        "TEST": 24,
+        "DEPART_BELOW": 23,
+        "RETURN_DOWN": 19
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "RETURN_DOWN": 19,
+          "STATE_CROSS_DOWN": 28,
+          "below_within_1_5_atr": 161,
+          "BREAK_UP": 28,
+          "STATE_CROSS_UP": 28,
+          "DEPART_BELOW": 23,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 24,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "GRSEL",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "RETURN_DOWN": 13,
+        "TEST": 28,
+        "DEPART_BELOW": 25,
+        "BREAK_UP": 21
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 182,
+          "DEPART_BELOW": 25,
+          "TEST": 28,
+          "BREAK_UP": 21,
+          "STATE_CROSS_UP": 20,
+          "RETURN_DOWN": 13,
+          "STATE_CROSS_DOWN": 20,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "GRTHO",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "RETURN_DOWN": 10,
+        "DEPART_BELOW": 29,
+        "TEST": 19,
+        "BREAK_UP": 15
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "RETURN_DOWN": 10,
+          "STATE_CROSS_DOWN": 15,
+          "below_within_1_5_atr": 133,
+          "TEST": 19,
+          "BREAK_UP": 15,
+          "STATE_CROSS_UP": 15,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "DEPART_BELOW": 29,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "GSRAY",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 1,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 25,
+        "RETURN_DOWN": 17,
+        "TEST": 19,
+        "BREAK_UP": 23
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 0,
+          "Y2026": 0
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 1077,
+          "below_within_1_5_atr": 235,
+          "DEPART_BELOW": 25,
+          "TEST": 19,
+          "BREAK_UP": 23,
+          "STATE_CROSS_UP": 23,
+          "STATE_CROSS_DOWN": 22,
+          "RETURN_DOWN": 17
+        }
+      }
+    },
+    {
+      "symbol": "GUBRF",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 19,
+        "BREAK_UP": 19,
+        "RETURN_DOWN": 12,
+        "TEST": 15
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 115,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "DEPART_BELOW": 19,
+          "BREAK_UP": 19,
+          "STATE_CROSS_UP": 19,
+          "STATE_CROSS_DOWN": 18,
+          "TEST": 15,
+          "RETURN_DOWN": 12,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "GWIND",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 22,
+        "RETURN_DOWN": 12,
+        "BREAK_UP": 21,
+        "TEST": 19
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 167,
+          "TEST": 19,
+          "DEPART_BELOW": 22,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "BREAK_UP": 21,
+          "STATE_CROSS_UP": 21,
+          "RETURN_DOWN": 12,
+          "STATE_CROSS_DOWN": 20,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "HATSN",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 13,
+        "BREAK_UP": 22,
+        "RETURN_DOWN": 16,
+        "TEST": 19
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 146,
+          "DEPART_BELOW": 13,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 19,
+          "BREAK_UP": 22,
+          "STATE_CROSS_UP": 21,
+          "RETURN_DOWN": 16,
+          "STATE_CROSS_DOWN": 20,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "HEKTS",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 23,
+        "BREAK_UP": 21,
+        "RETURN_DOWN": 15,
+        "TEST": 19
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "RETURN_DOWN": 15,
+          "STATE_CROSS_DOWN": 21,
+          "below_within_1_5_atr": 188,
+          "DEPART_BELOW": 23,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 19,
+          "BREAK_UP": 21,
+          "STATE_CROSS_UP": 21,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "ISCTR",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 13,
+        "RETURN_DOWN": 7,
+        "BREAK_UP": 13,
+        "TEST": 10
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 63,
+          "STATE_CROSS_DOWN": 14,
+          "DEPART_BELOW": 13,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "BREAK_UP": 13,
+          "STATE_CROSS_UP": 13,
+          "TEST": 10,
+          "RETURN_DOWN": 7,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "ISGYO",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1077,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 8
+      },
+      "event_checks": {
+        "DEPART_BELOW": 21,
+        "RETURN_DOWN": 10,
+        "BREAK_UP": 15,
+        "TEST": 18
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 551
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 90,
+          "below_within_1_5_atr": 120,
+          "BREAK_UP": 15,
+          "STATE_CROSS_UP": 15,
+          "STATE_CROSS_DOWN": 14,
+          "eligible_bars": 986,
+          "eligible_PRE_2026": 435,
+          "DEPART_BELOW": 21,
+          "TEST": 18,
+          "RETURN_DOWN": 10,
+          "eligible_Y2026": 551
+        }
+      }
+    },
+    {
+      "symbol": "ISMEN",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 17,
+        "RETURN_DOWN": 12,
+        "BREAK_UP": 16,
+        "TEST": 25
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 138,
+          "BREAK_UP": 16,
+          "STATE_CROSS_UP": 16,
+          "RETURN_DOWN": 12,
+          "STATE_CROSS_DOWN": 15,
+          "TEST": 25,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "DEPART_BELOW": 17,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "IZENR",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 22,
+        "TEST": 20,
+        "RETURN_DOWN": 12,
+        "BREAK_UP": 17
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 149,
+          "DEPART_BELOW": 22,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "TEST": 20,
+          "BREAK_UP": 17,
+          "STATE_CROSS_UP": 17,
+          "RETURN_DOWN": 12,
+          "STATE_CROSS_DOWN": 17,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "KCHOL",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 19,
+        "TEST": 13,
+        "RETURN_DOWN": 8,
+        "BREAK_UP": 11
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "below_within_1_5_atr": 72,
+          "DEPART_BELOW": 19,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "BREAK_UP": 11,
+          "STATE_CROSS_UP": 11,
+          "TEST": 13,
+          "STATE_CROSS_DOWN": 10,
+          "RETURN_DOWN": 8,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "KFEIN",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 22,
+        "TEST": 25,
+        "BREAK_UP": 20,
+        "RETURN_DOWN": 12
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 201,
+          "STATE_CROSS_DOWN": 20,
+          "TEST": 25,
+          "BREAK_UP": 20,
+          "STATE_CROSS_UP": 20,
+          "DEPART_BELOW": 22,
+          "RETURN_DOWN": 12,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "KIMMR",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "BREAK_UP": 26,
+        "RETURN_DOWN": 17,
+        "DEPART_BELOW": 32,
+        "TEST": 29
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 214,
+          "DEPART_BELOW": 32,
+          "TEST": 29,
+          "BREAK_UP": 26,
+          "STATE_CROSS_UP": 26,
+          "RETURN_DOWN": 17,
+          "STATE_CROSS_DOWN": 25,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "KLGYO",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "DEPART_BELOW": 35,
+        "RETURN_DOWN": 17,
+        "BREAK_UP": 22,
+        "TEST": 26
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "below_within_1_5_atr": 210,
+          "DEPART_BELOW": 35,
+          "TEST": 26,
+          "BREAK_UP": 22,
+          "STATE_CROSS_UP": 22,
+          "RETURN_DOWN": 17,
+          "STATE_CROSS_DOWN": 22,
+          "eligible_Y2026": 571
+        }
+      }
+    },
+    {
+      "symbol": "KMPUR",
+      "checks": {
+        "daily_bars": 500,
+        "h4_bars": 1078,
+        "bad_daily_bars_including_30pct_jump": 0,
+        "bad_h4_bars_including_incomplete_and_30pct_jump": 1,
+        "h4_bars_on_suspect_daily_date": 0,
+        "incomplete_h4_buckets": 1,
+        "missing_whole_h4_buckets": 7
+      },
+      "event_checks": {
+        "RETURN_DOWN": 20,
+        "BREAK_UP": 27,
+        "DEPART_BELOW": 13,
+        "TEST": 20
+      },
+      "coverage": {
+        "_eligible": {
+          "PRE_2026": 435,
+          "Y2026": 571
+        },
+        "MIRROR_P4": {
+          "known_but_history_bad_or_warmup": 71,
+          "eligible_bars": 1006,
+          "eligible_PRE_2026": 435,
+          "STATE_CROSS_DOWN": 27,
+          "below_within_1_5_atr": 113,
+          "TEST": 20,
+          "BREAK_UP": 27,
+          "STATE_CROSS_UP": 27,
+          "RETURN_DOWN": 20,
+          "DEPART_BELOW": 13,
+          "eligible_Y2026": 571
+        }
+      }
+    }
+  ]
+}

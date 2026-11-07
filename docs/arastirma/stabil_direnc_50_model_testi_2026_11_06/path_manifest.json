@@ -1,0 +1,14 @@
+{
+  "comparison_manifest_sha256": "889b25dbd2b2f9685e5a7735754f6d98dd54cc682946b476a3ea7bcdf98b5c76",
+  "input_events_sha256": "542eb96b5e27035efd5291823af5ffb60078226048be88f0fab469aef83df2b4",
+  "source_sha256": {
+    "research/stabil_support_resistance_paths.py": "8f2f78f7fa6ad08b4150643688d2a65f2d0af2c28b967b6b1ff8dcbc22bbbe02",
+    "test_stabil_support_resistance_paths.py": "ecdbb8bc38dd3dfb1cc41731dd01000a57d7519b21f31b974290e215b49594fb",
+    "docs/arastirma/stabil_direnc_50_model_testi_2026_11_06/YOL_PLANI.md": "84c2acd3df059248d9ab4802d01da23deda317a5cf3e27ed62ce435b4823215b"
+  },
+  "outputs_sha256": {
+    "break_paths_24.csv.gz": "0bdda2ab0cc3ae48655530ee026f8e3adbf0f475455b8f0d31feb7d816e1881d",
+    "break_path_summary.json": "fc1b7b313d2f4c6b54cbb0d8844b311c4be3e132c363cad56ed36d91c107f845",
+    "yol_bulgulari.md": "98e3eb7ba3fa4965f6969899a5feb01eb7cda934e36c5e83bea422a592dd8a19"
+  }
+}

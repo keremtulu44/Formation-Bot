@@ -39,6 +39,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from secrets_redaction import redact_sensitive_text
+from grafik_ayar import GRAFIK_ACIK_DEGERLER, GRAFIK_KAPALI_DEGERLER, otomatik_grafik_acik
 
 REPO_ROOT = Path(__file__).resolve().parent
 
@@ -223,10 +224,11 @@ def kontrol_repo() -> None:
         icerik = wf.read_text(encoding="utf-8")
         cron_ok = '"*/5 * * * *"' in icerik or "*/5 * * * *" in icerik
         satir(OK, "keep-alive iş akışı var (.github/workflows/keepalive.yml)",
-              "cron */5" + ("" if cron_ok else " (beklenenden farklı)"))
+              ("cron */5" if cron_ok else "cron beklenenden farklı")
+              + "; gerçek ping sıklığı garanti değildir. scripts/keepalive_audit.py ile gözlemleyin.")
     else:
         satir(WARN, "keep-alive iş akışı yok",
-              "Render Free 15 dk hareketsizlikte uyur; bu dosya servisi uyanık tutar.")
+              "Render Free 15 dk hareketsizlikte uyuyabilir; bağımsız izleme/uyandırma gerekir.")
 
     ci = REPO_ROOT / ".github" / "workflows" / "ci.yml"
     if ci.exists():
@@ -280,9 +282,9 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("PUBLIC_COMMAND_CHATS", False, "Boş = TELEGRAM_GROUP_ID; virgülle çok sohbet (-100…,@grup_adi)"),
         ("PUBLIC_COMMAND_EXTRA", False, "Public'te kapalı komutları aç (örn. tara). Boş = yalnız okuma listesi"),
         ("PUBLIC_COMMAND_ADMIN_CACHE_SN", False, "getChatMember sonucu önbelleği (varsayılan 300 sn; 0 = kapalı)"),
-        ("TELEGRAM_GRAFIK", False, ("İsteğe bağlı: 'alarm' → her alarm metninin ALTINA mum karesi ekler "
-                                     "(varsayılan 'yok': gönderim bugünküyle birebir aynı)")),
-        ("TELEGRAM_GRAFIK_ADET", False, "İsteğe bağlı: alarm başına en fazla kare (1-4, varsayılan 4)"),
+        ("TELEGRAM_GRAFIK", False, ("İsteğe bağlı: 'alarm' uygun DM/public alarmlarına kare ekler; "
+                                     "'yok' otomatik kareleri kapatır, /grafik bağımsızdır")),
+        ("TELEGRAM_GRAFIK_ADET", False, "DM için üst sınır 1-4 (varsayılan 4); public normal olayda en fazla 2, geçersizleşmede 1"),
         ("GRAFIK_MUM_MAKS", False, "İsteğe bağlı: kadraj tavanı — kaç mum çizilsin "
                                    "(varsayılan TF matrisi: 1s 80 · 2s 74 · 4s 68 · 1g 62)"),
         ("GRAFIK_OLAY_MAKS", False, "İsteğe bağlı: kareye çizilen onaylı BOS/CHoCH sayısı (varsayılan 6)"),
@@ -302,25 +304,27 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         else:
             satir(OK, f"{anahtar} tanımlı değil (opsiyonel)", aciklama)
 
-    # Grafik karesi: anahtar açıksa bağımlılık da şart (matplotlib import edilmezse
-    # kare sessizce düşer; kullanıcı "neden resim yok"u log'dan bulamazdı).
+    # Şalter yorumu çalışan kodla ortaktır; kapalıyken grafik katmanı yüklenmez.
     grafik_anahtari = (degerler.get("TELEGRAM_GRAFIK") or "").strip().lower()
-    if grafik_anahtari not in {"", "yok", "false", "kapali", "kapalı"}:
+    if grafik_anahtari not in GRAFIK_ACIK_DEGERLER | GRAFIK_KAPALI_DEGERLER:
+        satir(WARN, "TELEGRAM_GRAFIK değeri tanınmıyor",
+              "Geriye uyumluluk için açık sayılır; belirsizliği önlemek üzere alarm veya yok kullanın.")
+    if otomatik_grafik_acik(grafik_anahtari):
         try:
             import matplotlib  # noqa: F401
-            import grafik as _grafik_mod
-            satir(OK, f"Grafik karesi açık ({grafik_anahtari})",
-                  f"kadraj {int(degerler.get('GRAFIK_MUM_MAKS') or _grafik_mod.SABITLER['kare_mum'])} mum"
-                  " · /grafik komutu da bu katmanı kullanır")
+            import grafik  # noqa: F401
+            satir(OK, "Otomatik alarm grafikleri açık",
+                  "Uygun DM/public olaylarında kare üretilebilir; /grafik ayrıca çalışır.")
         except Exception as hata:  # noqa: BLE001
             satir(FAIL, "TELEGRAM_GRAFIK tanımlı ama grafik katmanı çalışmıyor",
-                  f"{type(hata).__name__}: {str(hata)[:120]} — `pip install -r requirements.txt` "
-                  "sonra botu yeniden başlatın (kare alarmı engellemez, yalnız eksik gider).")
+                  f"{type(hata).__name__}: "
+                  f"{_kisa(hata, 120, degerler.get('TELEGRAM_BOT_TOKEN', ''), degerler.get('TELEGRAM_CHAT_ID', ''))} — "
+                  "`pip install -r requirements.txt` sonra botu yeniden başlatın.")
+    else:
+        satir(OK, "Otomatik alarm grafikleri kapalı", "/grafik komutu bu şalterden bağımsızdır.")
     # --- DM kimliği görsel kapısı (2026-10-22) -----------------------------
-    # Kareler (alarm görseli, /grafik) YALNIZ pozitif tamsayı bir DM sohbetine
-    # gönderilir: `notifier.grafik_dosya_gonder` bu şartı uygular. `@kullanici`
-    # biçimli değer metin yolunu çalıştırır ama görselleri sessizce reddeder;
-    # canlıda "neden resim gelmiyor"un cevabı burada görünmeli.
+    # DM grafik yolu pozitif tamsayı sohbet ister; public grafik ve grup /grafik
+    # ayrı hedef/yetki kapıları kullanır. Bu kontrol public teslimini kanıtlamaz.
     dm_hedef = (degerler.get("TELEGRAM_CHAT_ID") or "").strip()
     public_hedef = ((degerler.get("TELEGRAM_GROUP_ID") or "").strip()
                     or (env_degeri("TELEGRAM_CHANNEL_ID", dosya_env) or "").strip())
@@ -330,12 +334,12 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         except (TypeError, ValueError):
             dm_pozitif = False
         if dm_pozitif:
-            satir(OK, "TELEGRAM_CHAT_ID pozitif tamsayı (DM + görsel kapısı açık)",
-                  "Kareler ve /grafik bu sohbete gider.")
+            satir(OK, "TELEGRAM_CHAT_ID pozitif tamsayı (DM görsel kimliği uygun)",
+                  "Bu yalnız biçim kontrolüdür; Telegram izinlerini ve teslimi ayrıca doğrulayın.")
         else:
             satir(WARN, "TELEGRAM_CHAT_ID pozitif tamsayı değil",
-                  "Metin gidebilir ama GÖRSELLER gönderilmez (kare kapısı pozitif "
-                  "tamsayı ister). @userinfobot'un verdiği sayıyı kullanın.")
+                  "Metin gidebilir ama DM GÖRSELLER gönderilmez (DM kapısı pozitif "
+                  "tamsayı ister); public yol ayrıdır. @userinfobot'un verdiği sayıyı kullanın.")
         if public_hedef and dm_hedef == public_hedef:
             satir(FAIL, "TELEGRAM_CHAT_ID ile public hedef AYNI",
                   "Aynı sohbet hem DM hem grup olamaz; görseller DM kapısından "
@@ -618,6 +622,26 @@ def _webhook_adres_gizle(url: str) -> str:
     return _kisa(_webhook_sir_gizle((url or "").strip()), 120)
 
 
+def _direnc_dumanini_raporla(meta: dict, token: str = "", chat_id: str = "") -> None:
+    """PNG varlığını direnç katmanının hazır/çizilmiş olmasıyla karıştırma."""
+    cizgiler = meta.get("cizgiler")
+    katman = cizgiler.get("stabil_direnc") if isinstance(cizgiler, dict) else None
+    if not isinstance(katman, dict):
+        satir(WARN, "Stabil direnç durumu raporlanmadı",
+              "PNG üretilmesi katmanın hazır veya çizilmiş olduğunu kanıtlamaz.")
+    elif katman.get("hazir") is not True:
+        durum = _kisa(katman.get("durum") or "bilinmiyor", 100, token, chat_id)
+        neden = _kisa(katman.get("neden") or "belirtilmemiş", 100, token, chat_id)
+        satir(WARN, "Stabil direnç bu karede hazır değil",
+              f"durum: {durum} · neden: {neden}; kaynak/kadraj ve sade görünümü kontrol edin.")
+    elif katman.get("cizildi") is not True:
+        satir(WARN, "Stabil direnç hazır ama bu karede çizilmedi",
+              "Seviye kadraj dışında veya gösterim kısıtlı olabilir; başka örneği de kontrol edin.")
+    else:
+        satir(OK, "Stabil direnç bu karede çizildi",
+              "Bu tek örnek diğer semboller, canlı teslim veya veri tazeliğini kanıtlamaz.")
+
+
 def kontrol_grafik(token: str, chat_id: str, mesaj_gonder: bool, *,
                    hisse: str = "AKBNK", tf: str = "4h") -> None:
     """Grafik katmanının canlı dumanı (G4): kare üret, isteğe bağlı gönder.
@@ -638,9 +662,9 @@ def kontrol_grafik(token: str, chat_id: str, mesaj_gonder: bool, *,
               f"{type(exc).__name__}: {_kisa(exc, 160, token, chat_id)} · "
               "`pip install -r requirements.txt` (matplotlib 3.11.x) sonra yeniden başlat.")
         return
-    if not mesaj_gonder and os.environ.get("TELEGRAM_GRAFIK", "yok").strip().lower() == "yok":
-        satir(OK, "TELEGRAM_GRAFIK=yok", "Alarm kareleri kapalı; /grafik komutu yine çalışır. "
-                                        "Kareyi denemek için: --grafik-test --send-test-message")
+    if not mesaj_gonder and not otomatik_grafik_acik(os.environ.get("TELEGRAM_GRAFIK")):
+        satir(OK, "Otomatik alarm grafikleri kapalı", "/grafik komutu yine çalışır. "
+              "Fotoğraf göndermeyi denemek için: --grafik-test --send-test-message")
     try:
         import grafik_uret
 
@@ -665,6 +689,7 @@ def kontrol_grafik(token: str, chat_id: str, mesaj_gonder: bool, *,
     eksik = list(meta.get("eksik_katmanlar") or [])
     if eksik:
         satir(WARN, "Karede eksik katman var", " · ".join(str(x) for x in eksik))
+    _direnc_dumanini_raporla(meta, token, chat_id)
     if kb > 500:
         satir(FAIL, "Kare Telegram boyut riskinde", f"{kb} KB > 500 KB — kadrajı küçült "
               "(GRAFIK_MUM_MAKS) veya bölge/şerit katmanlarını kapat.")

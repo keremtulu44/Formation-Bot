@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 import config
 import main as main_mod
+import pytest
 
 
 IST = config.ISTANBUL_TZ
@@ -57,7 +58,7 @@ def test_render_command_reports_estimated_gap_data_and_image_mode(monkeypatch):
         "son_tarama_en_eski_veri_yasi_dk": 75.0,
     })
     monkeypatch.setattr(main_mod, "last_run_stats", {}, raising=False)
-    monkeypatch.setattr(config, "TELEGRAM_GRAFIK", "yok")
+    monkeypatch.setenv("TELEGRAM_GRAFIK", "yok")
 
     reply = main_mod._komut_render("")
 
@@ -68,6 +69,17 @@ def test_render_command_reports_estimated_gap_data_and_image_mode(monkeypatch):
     assert "1sa 15dk" in reply
     assert "Alarm görselleri: kapalı" in reply
     assert "TELEGRAM_GRAFIK=yok" in reply
+
+
+@pytest.mark.parametrize("deger,beklenen", [
+    ("yok", "kapalı"), ("false", "kapalı"), ("0", "kapalı"),
+    ("alarm", "açık"), ("yes", "açık"), ("bilinmeyen", "açık"),
+])
+def test_render_command_uses_real_graphics_switch_interpretation(monkeypatch, deger, beklenen):
+    monkeypatch.setenv("TELEGRAM_GRAFIK", deger)
+    reply = main_mod._komut_render("")
+    assert f"Alarm görselleri: {beklenen}" in reply
+    assert f"TELEGRAM_GRAFIK={deger}" in reply
 
 
 def test_render_and_sleep_aliases_are_read_only_public_commands():

@@ -1,0 +1,46 @@
+{
+  "archive_files_verified": 349,
+  "source_hashes_verified": 9,
+  "symbols": 50,
+  "events_4h": 10097,
+  "events_native_daily": 10494,
+  "legacy_like_checkpoints": 94705,
+  "prior_resistance_4h_rows": 4812,
+  "prior_resistance_daily_rows": 5149,
+  "legacy_and_prefix_checks": {
+    "DOCO": {
+      "A01": {
+        "cohort_rows": 754,
+        "valid_8_checked": 666,
+        "valid_24_checked": 620,
+        "differences": 0
+      },
+      "B04": {
+        "cohort_rows": 51,
+        "valid_8_checked": 48,
+        "valid_24_checked": 45,
+        "differences": 0
+      },
+      "C02": {
+        "cohort_rows": 15,
+        "valid_8_checked": 11,
+        "valid_24_checked": 7,
+        "differences": 0
+      },
+      "F01": {
+        "cohort_rows": 159,
+        "valid_8_checked": 132,
+        "valid_24_checked": 116,
+        "differences": 0
+      },
+      "causal_prefix_lengths": [
+        166,
+        333,
+        499
+      ]
+    }
+  },
+  "matched_pairs_before_censor": 61,
+  "matched_valid_pairs": 53,
+  "result": "OK"
+}

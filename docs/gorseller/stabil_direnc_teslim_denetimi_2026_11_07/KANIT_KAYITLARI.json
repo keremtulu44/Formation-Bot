@@ -1,0 +1,1891 @@
+{
+  "uyari": "Tamamı yerel tarihsel simülasyondur. DM/public hedefleri, HTTP ve Telegram medya taşıması sahtedir; gerçek teslim veya dağıtım yapılmamıştır.",
+  "test": "test_stabil_resistance_delivery_e2e.py",
+  "test_sonucu": "15 passed",
+  "resimler": [
+    {
+      "dosya": "01_doco_grafik_4s.png",
+      "sha256": "3ddf3a0aa1e042356f443fe91098ed3c19d0e52e12f92029265cec3994a3d8bf",
+      "bayt": 97409,
+      "sembol": "DOCO",
+      "tf": "4h",
+      "kesim_istanbul": "2026-10-19T13:30:00+03:00",
+      "senaryo": "gerçek arşiv, /grafik işçisi, özel DM",
+      "sahte_hedef": "DM",
+      "gorsel_altyazisi": "DOCO · 4s · lejant kısaltıldı (+7) · 71 mum · Yükselen Üçgen (retest bekleniyor) · son mum kapanışı 19.10.2026 13:30 TSİ"
+    },
+    {
+      "dosya": "02_doco_grafik_1g.png",
+      "sha256": "e40d7d64478b71bba73732265bbb1e8d0cb4d2a28266ff8623ded5281153c1d6",
+      "bayt": 63542,
+      "sembol": "DOCO",
+      "tf": "1d",
+      "kesim_istanbul": "2026-10-19T13:30:00+03:00",
+      "senaryo": "gerçek arşiv, /grafik işçisi, özel DM",
+      "sahte_hedef": "DM",
+      "gorsel_altyazisi": "DOCO · 1g · 62 mum · formasyon yok · son mum kapanışı 16.10.2026 18:30 TSİ"
+    },
+    {
+      "dosya": "03_doco_sade_grup_4s.png",
+      "sha256": "6c80ca574ec1d3a387dde5cde6c9649ff307003030cae40f0bdfcd72aecd99fc",
+      "bayt": 68863,
+      "sembol": "DOCO",
+      "tf": "4h",
+      "kesim_istanbul": "2026-10-19T13:30:00+03:00",
+      "senaryo": "gerçek arşiv, /grafik grup yönlendirme, sade",
+      "sahte_hedef": "PUBLIC",
+      "gorsel_altyazisi": "DOCO · 4s · sade · 71 mum · Yükselen Üçgen (retest bekleniyor) · son mum kapanışı 19.10.2026 13:30 TSİ"
+    },
+    {
+      "dosya": "04_doco_gunluk_eksik_4s.png",
+      "sha256": "6f615283a6c7e1be3dbf6f63976d48d65550fce0a19828aa3b4f8868fc7ea429",
+      "bayt": 91963,
+      "sembol": "DOCO",
+      "tf": "4h",
+      "kesim_istanbul": "2026-10-19T13:30:00+03:00",
+      "senaryo": "gerçek saatlik arşiv, günlük kaynak bilinçli kaldırılmış",
+      "sahte_hedef": "DM",
+      "gorsel_altyazisi": "DOCO · 4s · 71 mum · Yükselen Üçgen (retest bekleniyor) · son mum kapanışı 19.10.2026 13:30 TSİ\n⚠ Stabil direnç gösterilemedi: gerekli günlük veya saatlik kaynak yok"
+    },
+    {
+      "dosya": "05_akbnk_formasyon_4s.png",
+      "sha256": "3198fe43a85321a83d235dd0c7856bcf2e7f2c57dd191207438054f6821af9a0",
+      "bayt": 116130,
+      "sembol": "AKBNK",
+      "tf": "4h",
+      "kesim_istanbul": "2026-03-18T13:30:00+03:00",
+      "senaryo": "gerçek 4s formasyon kırılımı, DM",
+      "sahte_hedef": "DM",
+      "gorsel_altyazisi": "AKBNK · 4s · 94 mum · lejant kısaltıldı (+8)\nℹ️ bölge: 7 kutu kapak dışında (üst 2 · alt 2)"
+    },
+    {
+      "dosya": "06_akbnk_formasyon_1s_kadraj_disi.png",
+      "sha256": "f46524f1230316604f97be1fa0685b8d4220cddfa3ba80e6bedae93c69cf0eb8",
+      "bayt": 67763,
+      "sembol": "AKBNK",
+      "tf": "1h",
+      "kesim_istanbul": "2026-03-18T13:30:00+03:00",
+      "senaryo": "gerçek kırılım albümü, 1s karede direnç kadraj dışında",
+      "sahte_hedef": "DM",
+      "gorsel_altyazisi": "AKBNK · 1s · 80 mum\nℹ️ veri: 9 bar hacimsiz · bölge: 9 kutu kapak dışında (üst 3 · alt 3) · bant/alarm diğer zaman dilimine ait: bu karede çizilmedi (§14.1)"
+    },
+    {
+      "dosya": "07_akbnk_stabil_public_4s.png",
+      "sha256": "637da807fff35ccc0fb108efde2221b6f5a2aa40610827dd415cd3b419e1b3ab",
+      "bayt": 46629,
+      "sembol": "AKBNK",
+      "tf": "4h",
+      "kesim_istanbul": "2026-03-23T17:30:00+03:00",
+      "senaryo": "gerçek taramada Stabil destek geri alımı, public",
+      "sahte_hedef": "PUBLIC",
+      "gorsel_altyazisi": "AKBNK 4s · STABİL GÜÇLÜ GERİ ALIM"
+    },
+    {
+      "dosya": "08_akbnk_stabil_public_1g.png",
+      "sha256": "2d6536fd61567da56ee0f4847e664107e2b990bfd50ef1b867494c8848274378",
+      "bayt": 43085,
+      "sembol": "AKBNK",
+      "tf": "1d",
+      "kesim_istanbul": "2026-03-23T17:30:00+03:00",
+      "senaryo": "aynı Stabil alarmı public günlük kare, mevcut destek cache yok",
+      "sahte_hedef": "PUBLIC",
+      "gorsel_altyazisi": "AKBNK 4s · 1g üst zaman dilimi"
+    },
+    {
+      "dosya": "09_doco_domain_choch_4s.png",
+      "sha256": "143310af6b094d138349a712fb547facc0fa00401c5a844c21dd7a260245cfc2",
+      "bayt": 71710,
+      "sembol": "DOCO",
+      "tf": "4h",
+      "kesim_istanbul": "2026-10-19T13:30:00+03:00",
+      "senaryo": "gerçek CHoCH domain adayı, DM",
+      "sahte_hedef": "DM",
+      "gorsel_altyazisi": "DOCO · 4s · 68 mum\nℹ️ bölge: 8 kutu kapak dışında (üst 2 · alt 2) · bölge: 1 kutunun başlangıcı kadraj dışında"
+    },
+    {
+      "dosya": "10_akbnk_gecersiz_kontrollu_4s.png",
+      "sha256": "b2a53b785dda3961ec81f05cd71fbd93fb1ea0a16b2d8981fe1b6228b721e9d5",
+      "bayt": 88829,
+      "sembol": "AKBNK",
+      "tf": "4h",
+      "kesim_istanbul": "2026-03-23T17:30:00+03:00",
+      "senaryo": "gerçek veri ve önceki teyit; invalidation olayı kontrollü enjekte",
+      "sahte_hedef": "DM",
+      "gorsel_altyazisi": "AKBNK · 4s"
+    },
+    {
+      "dosya": "11_eregl_burst_domain_4s.png",
+      "sha256": "0b911b2e8e839b6f4c5662c42bbc2a747f0ca563760883cb0f30a5842dd30d50",
+      "bayt": 59250,
+      "sembol": "EREGL",
+      "tf": "4h",
+      "kesim_istanbul": "2026-10-19T13:30:00+03:00",
+      "senaryo": "dört gerçek 4s domain adayının kontrollü burst testi, tekil",
+      "sahte_hedef": "DM",
+      "gorsel_altyazisi": "EREGL · 4s · 68 mum\nℹ️ bölge: 1 kutu kapak dışında (üst 2 · alt 2)"
+    },
+    {
+      "dosya": "12_kchol_burst_domain_4s.png",
+      "sha256": "1fcb9727b9604e9de8e8288c8dde843cf0237d1d3ceb2269313140f7292c9ee2",
+      "bayt": 61689,
+      "sembol": "KCHOL",
+      "tf": "4h",
+      "kesim_istanbul": "2026-10-19T13:30:00+03:00",
+      "senaryo": "dört gerçek 4s domain adayının kontrollü burst testi, tekil",
+      "sahte_hedef": "DM",
+      "gorsel_altyazisi": "KCHOL · 4s · 68 mum\nℹ️ bölge: 4 kutu kapak dışında (üst 2 · alt 2)"
+    }
+  ],
+  "senaryo_kayitlari": {
+    "test_command_real_worker_all_f0": {
+      "messages": [
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "📈 DOCO · grafik hazır\n1s · 2s · 4s · 1g · 4 kare · 13,6 sn"
+        }
+      ],
+      "albums": [
+        {
+          "chat_id": "SAHTE_DM",
+          "images": [
+            "album_00_00.png",
+            "album_00_01.png",
+            "album_00_02.png",
+            "album_00_03.png"
+          ],
+          "captions": [
+            "DOCO · 1s · 80 mum · formasyon yok · son mum kapanışı 19.10.2026 13:30 TSİ",
+            "DOCO · 2s · 74 mum · formasyon yok · son mum kapanışı 19.10.2026 13:30 TSİ",
+            "DOCO · 4s · lejant kısaltıldı (+7) · 71 mum · Yükselen Üçgen (retest bekleniyor) · son mum kapanışı 19.10.2026 13:30 TSİ",
+            "DOCO · 1g · 62 mum · formasyon yok · son mum kapanışı 16.10.2026 18:30 TSİ"
+          ]
+        }
+      ],
+      "renders": [
+        {
+          "tf": "1h",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 80,
+            "kadrajda": true,
+            "donus_isaret": 2,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 67,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0,
+            "kadrajda": true
+          },
+          "warnings": [
+            "tarama: bu karede kullanılabilir formasyon yok (canlı tarama kapısı)"
+          ]
+        },
+        {
+          "tf": "2h",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 72,
+            "kadrajda": true,
+            "donus_isaret": 2,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 74,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0,
+            "kadrajda": true
+          },
+          "warnings": [
+            "tarama: bu karede kullanılabilir formasyon yok (canlı tarama kapısı)"
+          ]
+        },
+        {
+          "tf": "4h",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 43,
+            "kadrajda": true,
+            "donus_isaret": 1,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 71,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1,
+            "kadrajda": true
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1d",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 62,
+            "kadrajda": true,
+            "donus_isaret": 1,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 3
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 62,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 3,
+            "kadrajda": true
+          },
+          "warnings": [
+            "tarama: bu karede kullanılabilir formasyon yok (canlı tarama kapısı)"
+          ]
+        }
+      ]
+    },
+    "test_manual_group_simple_mode_0": {
+      "messages": [
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "text": "📈 DOCO · grafik hazır\n4s · 1 kare · 2,9 sn · sade"
+        }
+      ],
+      "albums": [
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "images": [
+            "album_00_00.png"
+          ],
+          "captions": [
+            "DOCO · 4s · sade · 71 mum · Yükselen Üçgen (retest bekleniyor) · son mum kapanışı 19.10.2026 13:30 TSİ"
+          ]
+        }
+      ],
+      "renders": [
+        {
+          "tf": "4h",
+          "mode": "sade",
+          "resistance": {
+            "hazir": false,
+            "durum": null,
+            "neden": null,
+            "cizildi": false,
+            "son_seviye": null,
+            "son_renk": null,
+            "gorunur_bar": 0,
+            "kadrajda": false,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": false,
+            "cizildi": false,
+            "son_seviye": null,
+            "son_renk": null,
+            "gorunur_bar": 0,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0,
+            "kadrajda": false
+          }
+        }
+      ]
+    },
+    "test_manual_missing_daily_emit0": {
+      "messages": [
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "📈 DOCO · grafik hazır\n4s · 1 kare · 0,6 sn · detay"
+        }
+      ],
+      "albums": [
+        {
+          "chat_id": "SAHTE_DM",
+          "images": [
+            "album_00_00.png"
+          ],
+          "captions": [
+            "DOCO · 4s · 71 mum · Yükselen Üçgen (retest bekleniyor) · son mum kapanışı 19.10.2026 13:30 TSİ\n⚠ Stabil direnç gösterilemedi: gerekli günlük veya saatlik kaynak yok"
+          ]
+        }
+      ],
+      "renders": [
+        {
+          "tf": "4h",
+          "resistance": {
+            "hazir": false,
+            "durum": "UNAVAILABLE",
+            "neden": "missing_source",
+            "cizildi": false,
+            "son_seviye": null,
+            "son_renk": null,
+            "gorunur_bar": 0,
+            "kadrajda": false,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": false,
+            "cizildi": false,
+            "son_seviye": null,
+            "son_renk": null,
+            "gorunur_bar": 0,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0,
+            "kadrajda": false
+          },
+          "warnings": [
+            "Stabil direnç gösterilemedi: gerekli günlük veya saatlik kaynak yok",
+            "Stabil için yeterli/doğrulanmış günlük destek verisi yok"
+          ]
+        }
+      ]
+    },
+    "test_real_formation_breakout_f0": {
+      "messages": [
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "▲ AKBNK 4s YUKARI KIRILIM\nAlçalan Kama — kapanış onaylı\n🕒 18 Mart 09:30→13:30 mumu\n· kapanış 76,95\n· kırılan 73,94\n\n▲ direnç bölgesi 1s 77,20 (%0,3)\n· kırılım gücü 88/100\n\n◈ 4s yön karışık (dış aşağı, iç\n   aşağı)\nStabil destek: 69,30 (+%11,0 üst)\nStabil yapı: düşüş sonrası yatay\n↻ kırılan seviyeye dönüş yok ✗\n◆ 1g onayı bilinmiyor\n\n◇ Fiyatın uzun süre temas ettiği\n   bölgelerde tutma 21 puan\n   daha düşük\ngeçmiş davranıştır, kazanç değil\n\n⚠ olumsuz: iç yapı aşağı — hacim\n   teyidi yok\n· teyit düşer: bant 72,89 altı\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "text": "▲ AKBNK 4s YUKARI KIRILIM\nAlçalan Kama — kapanış onaylı\n🕒 18 Mart 09:30→13:30 mumu\n· kapanış 76,95\n· kırılan 73,94\n\n▲ direnç bölgesi 1s 77,20 (%0,3)\n· kırılım gücü 88/100\n\n◈ 4s yön karışık (dış aşağı, iç\n   aşağı)\nStabil destek: 69,30 (+%11,0 üst)\nStabil yapı: düşüş sonrası yatay\n↻ kırılan seviyeye dönüş yok ✗\n◆ 1g onayı bilinmiyor\n\n◇ Fiyatın uzun süre temas ettiği\n   bölgelerde tutma 21 puan\n   daha düşük\ngeçmiş davranıştır, kazanç değil\n\n⚠ olumsuz: iç yapı aşağı — hacim\n   teyidi yok\n· teyit düşer: bant 72,89 altı\n\n• yatırım tavsiyesi değildir"
+        }
+      ],
+      "albums": [
+        {
+          "chat_id": "SAHTE_DM",
+          "images": [
+            "album_00_00.png",
+            "album_00_01.png",
+            "album_00_02.png",
+            "album_00_03.png"
+          ],
+          "captions": [
+            "AKBNK · 4s · 94 mum · lejant kısaltıldı (+8)\nℹ️ bölge: 7 kutu kapak dışında (üst 2 · alt 2)",
+            "AKBNK · 1s · 80 mum\nℹ️ veri: 9 bar hacimsiz · bölge: 9 kutu kapak dışında (üst 3 · alt 3) · bant/alarm diğer zaman dilimine ait: bu karede çizilmedi (§14.1)",
+            "AKBNK · 2s · 74 mum\nℹ️ bölge: 5 kutu kapak dışında (üst 3 · alt 3) · bant/alarm diğer zaman dilimine ait: bu karede çizilmedi (§14.1)",
+            "AKBNK · 1g · 62 mum\nℹ️ bölge: 44 kutu kapak dışında (üst 1 · alt 1) · bant/alarm diğer zaman dilimine ait: bu karede çizilmedi (§14.1)"
+          ]
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "images": [
+            "album_01_00.png",
+            "album_01_01.png"
+          ],
+          "captions": [
+            "AKBNK 4s · Alçalan Kama",
+            "AKBNK 4s · 1g üst zaman dilimi"
+          ]
+        }
+      ],
+      "renders": [
+        {
+          "tf": "4h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 94,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 94,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              12,
+              55
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": false,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 0,
+            "kadrajda": false,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 22,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": []
+          },
+          "warnings": []
+        },
+        {
+          "tf": "2h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 74,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 74,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 3,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              9
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1d",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 62,
+            "kadrajda": true,
+            "donus_isaret": 2,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 4
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 52,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              12,
+              15
+            ],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              6,
+              18,
+              34,
+              49
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "4h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 94,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 94,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              12,
+              55
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1d",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 62,
+            "kadrajda": true,
+            "donus_isaret": 2,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 4
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 52,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              12,
+              15
+            ],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              6,
+              18,
+              34,
+              49
+            ]
+          },
+          "warnings": []
+        }
+      ]
+    },
+    "test_same_real_scan_can_emit_s0": {
+      "messages": [
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "🟢 AKBNK\n   · 4s — STABİL GÜÇLÜ GERİ ALIM\nKapanış 72,50\n   · 🕒 4 saatlik mum 23.03 13:30 →\n   17:30 kapandı\n\nStabil destek: 69,30 (+%4,6 üstte)\nStabil yapı: hacimli güçlü geri alım\nZemin: hacim x5,2\n\n📊 Arşiv karşılığı (canlı evren 4s):\n• Sonraki mum destek üstü: %91,5\n• 2 günde ortanca fark: +0,26 ATR"
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "text": "🟢 AKBNK\n   · 4s — STABİL GÜÇLÜ GERİ ALIM\nKapanış 72,50\n   · 🕒 4 saatlik mum 23.03 13:30 →\n   17:30 kapandı\n\nStabil destek: 69,30 (+%4,6 üstte)\nStabil yapı: hacimli güçlü geri alım\nZemin: hacim x5,2\n\n📊 Arşiv karşılığı (canlı evren 4s):\n• Sonraki mum destek üstü: %91,5\n• 2 günde ortanca fark: +0,26 ATR"
+        },
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "🆕 YENİ ▼ AKBNK 4s TETİKLEME\n· BOS ↓\n   · formasyon: Alçalan Kama\n   · RETEST_BASARILI\n🕒 23 Mart 13:30→17:30 mumu\n· kapanış 72,50\n\nStabil destek: 69,30 (+%4,6\n   üstte)\nStabil yapı: hacimli güçlü geri\n   alım\n· destek üstünde · 1,41 ATR\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "text": "🆕 YENİ ▼ AKBNK 4s TETİKLEME\n· BOS ↓\n   · formasyon: Alçalan Kama\n   · RETEST_BASARILI\n🕒 23 Mart 13:30→17:30 mumu\n· kapanış 72,50\n\nStabil destek: 69,30 (+%4,6\n   üstte)\nStabil yapı: hacimli güçlü geri\n   alım\n· destek üstünde · 1,41 ATR\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "🆕 YENİ ◆ AKBNK 2s TETİKLEME\n· formasyon: Alçalan Kama\n   · SIKISMA_GUCLENIYOR\n🕒 23 Mart 15:30→17:30 mumu\n· kapanış 72,50\n\nStabil destek: 69,30 (+%4,6\n   üstte)\nStabil yapı: düşüş sonrası yatay\n· destek üstünde · 1,76 ATR\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "text": "🆕 YENİ ◆ AKBNK 2s TETİKLEME\n· formasyon: Alçalan Kama\n   · SIKISMA_GUCLENIYOR\n🕒 23 Mart 15:30→17:30 mumu\n· kapanış 72,50\n\nStabil destek: 69,30 (+%4,6\n   üstte)\nStabil yapı: düşüş sonrası yatay\n· destek üstünde · 1,76 ATR\n\n• yatırım tavsiyesi değildir"
+        }
+      ],
+      "albums": [
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "images": [
+            "album_00_00.png",
+            "album_00_01.png"
+          ],
+          "captions": [
+            "AKBNK 4s · STABİL GÜÇLÜ GERİ ALIM",
+            "AKBNK 4s · 1g üst zaman dilimi"
+          ]
+        },
+        {
+          "chat_id": "SAHTE_DM",
+          "images": [
+            "album_01_00.png"
+          ],
+          "captions": [
+            "AKBNK · 4s · 99 mum · lejant kısaltıldı (+9)\nℹ️ bölge: 7 kutu kapak dışında (üst 2 · alt 2)"
+          ]
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "images": [
+            "album_02_00.png",
+            "album_02_01.png"
+          ],
+          "captions": [
+            "AKBNK 4s · DOMAİN TETİKLEME",
+            "AKBNK 4s · 1g üst zaman dilimi"
+          ]
+        },
+        {
+          "chat_id": "SAHTE_DM",
+          "images": [
+            "album_03_00.png"
+          ],
+          "captions": [
+            "AKBNK · 2s · 146 mum · lejant kısaltıldı (+10)\nℹ️ bölge: 3 kutu kapak dışında (üst 3 · alt 3)"
+          ]
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "images": [
+            "album_04_00.png",
+            "album_04_01.png"
+          ],
+          "captions": [
+            "AKBNK 2s · DOMAİN TETİKLEME",
+            "AKBNK 2s · 4s üst zaman dilimi"
+          ]
+        }
+      ],
+      "renders": [
+        {
+          "tf": "4h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 68,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 68,
+            "reclaim_isaret": 1,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              24
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1d",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 62,
+            "kadrajda": true,
+            "donus_isaret": 2,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 4
+          },
+          "support": {
+            "hazir": false,
+            "cizildi": false,
+            "son_seviye": null,
+            "son_renk": null,
+            "gorunur_bar": 0,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0,
+            "kadrajda": false
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              10,
+              13
+            ],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              4,
+              16,
+              32,
+              47
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "4h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 99,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 99,
+            "reclaim_isaret": 1,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              12,
+              55
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "4h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 99,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 99,
+            "reclaim_isaret": 1,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              12,
+              55
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1d",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 62,
+            "kadrajda": true,
+            "donus_isaret": 2,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 4
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 54,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              10,
+              13
+            ],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              4,
+              16,
+              32,
+              47
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "2h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 146,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 3
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 146,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 3,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              0,
+              60,
+              72
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "2h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 146,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 3
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 146,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 3,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              0,
+              60,
+              72
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "4h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 68,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 68,
+            "reclaim_isaret": 1,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              24
+            ]
+          },
+          "warnings": []
+        }
+      ]
+    },
+    "test_domain_real_choch_candida0": {
+      "messages": [
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "🆕 YENİ ▲ DOCO 4s TETİKLEME\n· CHoCH ↑\n🕒 19 Ekim 09:30→13:30 mumu\n· kapanış 10.952,50\n\nStabil destek: 10.360,0 (+%5,7\n   üst)\nStabil yapı: yükselen kademe\n· destek üstünde · 3,73 ATR\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "text": "🆕 YENİ ▲ DOCO 4s TETİKLEME\n· CHoCH ↑\n🕒 19 Ekim 09:30→13:30 mumu\n· kapanış 10.952,50\n\nStabil destek: 10.360,0 (+%5,7\n   üst)\nStabil yapı: yükselen kademe\n· destek üstünde · 3,73 ATR\n\n• yatırım tavsiyesi değildir"
+        }
+      ],
+      "albums": [
+        {
+          "chat_id": "SAHTE_DM",
+          "images": [
+            "album_00_00.png",
+            "album_00_01.png",
+            "album_00_02.png",
+            "album_00_03.png"
+          ],
+          "captions": [
+            "DOCO · 4s · 68 mum\nℹ️ bölge: 8 kutu kapak dışında (üst 2 · alt 2) · bölge: 1 kutunun başlangıcı kadraj dışında",
+            "DOCO · 1s · 80 mum\nℹ️ veri: 8 bar hacimsiz · bölge: 4 kutu kapak dışında (üst 3 · alt 3) · bant/alarm diğer zaman dilimine ait: bu karede çizilmedi (§14.1)",
+            "DOCO · 2s · 74 mum\nℹ️ bölge: 3 kutu kapak dışında (üst 3 · alt 3) · bölge: 1 kutunun başlangıcı kadraj dışında · bant/alarm diğer zaman dilimine ait: bu karede çizilmedi (§14.1)",
+            "DOCO · 1g · 62 mum\nℹ️ bölge: 51 kutu kapak dışında (üst 1 · alt 1) · bant/alarm diğer zaman dilimine ait: bu karede çizilmedi (§14.1)"
+          ]
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "images": [
+            "album_01_00.png",
+            "album_01_01.png"
+          ],
+          "captions": [
+            "DOCO 4s · DOMAİN TETİKLEME",
+            "DOCO 4s · 1g üst zaman dilimi"
+          ]
+        }
+      ],
+      "renders": [
+        {
+          "tf": "4h",
+          "symbol": "DOCO",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 43,
+            "kadrajda": true,
+            "donus_isaret": 1,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 68,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              67
+            ],
+            "momentum_barlar": [
+              64
+            ],
+            "dikey_deneme_barlar": []
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1h",
+          "symbol": "DOCO",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 80,
+            "kadrajda": true,
+            "donus_isaret": 2,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 67,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              70,
+              76
+            ],
+            "momentum_barlar": [
+              67
+            ],
+            "dikey_deneme_barlar": []
+          },
+          "warnings": []
+        },
+        {
+          "tf": "2h",
+          "symbol": "DOCO",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 72,
+            "kadrajda": true,
+            "donus_isaret": 2,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 74,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              68,
+              72
+            ],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": []
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1d",
+          "symbol": "DOCO",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 62,
+            "kadrajda": true,
+            "donus_isaret": 1,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 3
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 62,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 3,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              25
+            ],
+            "momentum_barlar": [
+              59
+            ],
+            "dikey_deneme_barlar": [
+              16,
+              17,
+              54
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "4h",
+          "symbol": "DOCO",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 43,
+            "kadrajda": true,
+            "donus_isaret": 1,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 68,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              67
+            ],
+            "momentum_barlar": [
+              64
+            ],
+            "dikey_deneme_barlar": []
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1d",
+          "symbol": "DOCO",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 62,
+            "kadrajda": true,
+            "donus_isaret": 1,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 3
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 62,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 3,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              25
+            ],
+            "momentum_barlar": [
+              59
+            ],
+            "dikey_deneme_barlar": [
+              16,
+              17,
+              54
+            ]
+          },
+          "warnings": []
+        }
+      ]
+    },
+    "test_controlled_post_confirmat0": {
+      "messages": [
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "▲ AKBNK 4s KIRILIM İPTAL\nAlçalan Kama — banda döndü\n🕒 23 Mart 13:30→17:30 mumu\n· dönüş sınırı 72,89 altı\n\n· kırılım gücü 88/100\n\n◆ 1g onayı bilinmiyor\n\n◇ benzer 32.321 · %76'sı sürdü\n◇ geri çekilme %35 (28.624)\n◇ tutarsa tepe ~2,39 TL (+%3,3)\ngeçmiş davranıştır, kazanç değil\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "text": "▲ AKBNK 4s KIRILIM İPTAL\nAlçalan Kama — banda döndü\n🕒 23 Mart 13:30→17:30 mumu\n· dönüş sınırı 72,89 altı\n\n· kırılım gücü 88/100\n\n◆ 1g onayı bilinmiyor\n\n◇ benzer 32.321 · %76'sı sürdü\n◇ geri çekilme %35 (28.624)\n◇ tutarsa tepe ~2,39 TL (+%3,3)\ngeçmiş davranıştır, kazanç değil\n\n• yatırım tavsiyesi değildir"
+        }
+      ],
+      "albums": [
+        {
+          "chat_id": "SAHTE_DM",
+          "images": [
+            "album_00_00.png"
+          ],
+          "captions": [
+            "AKBNK · 4s"
+          ]
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "images": [
+            "album_01_00.png"
+          ],
+          "captions": [
+            "AKBNK 4s · Alçalan Kama"
+          ]
+        }
+      ],
+      "renders": [
+        {
+          "tf": "4h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 94,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 94,
+            "reclaim_isaret": 1,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              7,
+              50
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "4h",
+          "symbol": "AKBNK",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 93.5,
+            "son_renk": "alt",
+            "gorunur_bar": 94,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 69.30000305175781,
+            "son_renk": "ust",
+            "gorunur_bar": 94,
+            "reclaim_isaret": 1,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 2,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              7,
+              50
+            ]
+          },
+          "warnings": []
+        }
+      ]
+    },
+    "test_four_actual_4h_domain_can0": {
+      "messages": [
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "🆕 YENİ ▼ EREGL 4s TETİKLEME\n· BOS ↓\n🕒 19 Ekim 09:30→13:30 mumu\n· kapanış 35,90\n\nStabil destek: 36,08 (-%0,5\n   altında)\nStabil yapı: sığ sarkma (izlemede)\n· destek altında · -0,29 ATR\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "text": "🆕 YENİ ▼ EREGL 4s TETİKLEME\n· BOS ↓\n🕒 19 Ekim 09:30→13:30 mumu\n· kapanış 35,90\n\nStabil destek: 36,08 (-%0,5\n   altında)\nStabil yapı: sığ sarkma (izlemede)\n· destek altında · -0,29 ATR\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "🆕 YENİ ▼ KCHOL 4s TETİKLEME\n· BOS ↓\n🕒 19 Ekim 09:30→13:30 mumu\n· kapanış 204,00\n\nStabil destek: 205,20 (-%0,6\n   altta)\nStabil yapı: destek kademe iniyor\n· destek altında · -0,37 ATR\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "text": "🆕 YENİ ▼ KCHOL 4s TETİKLEME\n· BOS ↓\n🕒 19 Ekim 09:30→13:30 mumu\n· kapanış 204,00\n\nStabil destek: 205,20 (-%0,6\n   altta)\nStabil yapı: destek kademe iniyor\n· destek altında · -0,37 ATR\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "🆕 YENİ\n   · DOMAİN TOPLU ÖZET (+2)\n🕒 19 Ekim 09:30→13:30 mumu\nAynı taramada destek alt sınırını\n   geçen diğer adaylar:\n\n• DOCO 4s: destek üstünde (3,7\n   ATR)\n   · CHoCH ↑\n• EFOR 4s: destek üstünde (5,9\n   ATR)\n   · BOS ↓\n› /stabil\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "text": "🆕 YENİ\n   · DOMAİN TOPLU ÖZET (+2)\n🕒 19 Ekim 09:30→13:30 mumu\nAynı taramada destek alt sınırını\n   geçen diğer adaylar:\n\n• DOCO 4s: destek üstünde (3,7\n   ATR)\n   · CHoCH ↑\n• EFOR 4s: destek üstünde (5,9\n   ATR)\n   · BOS ↓\n› /stabil\n\n• yatırım tavsiyesi değildir"
+        }
+      ],
+      "albums": [
+        {
+          "chat_id": "SAHTE_DM",
+          "images": [
+            "album_00_00.png"
+          ],
+          "captions": [
+            "EREGL · 4s · 68 mum\nℹ️ bölge: 1 kutu kapak dışında (üst 2 · alt 2)"
+          ]
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "images": [
+            "album_01_00.png",
+            "album_01_01.png"
+          ],
+          "captions": [
+            "EREGL 4s · DOMAİN TETİKLEME",
+            "EREGL 4s · 1g üst zaman dilimi"
+          ]
+        },
+        {
+          "chat_id": "SAHTE_DM",
+          "images": [
+            "album_02_00.png"
+          ],
+          "captions": [
+            "KCHOL · 4s · 68 mum\nℹ️ bölge: 4 kutu kapak dışında (üst 2 · alt 2)"
+          ]
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "images": [
+            "album_03_00.png",
+            "album_03_01.png"
+          ],
+          "captions": [
+            "KCHOL 4s · DOMAİN TETİKLEME",
+            "KCHOL 4s · 1g üst zaman dilimi"
+          ]
+        }
+      ],
+      "renders": [
+        {
+          "tf": "4h",
+          "symbol": "EREGL",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 38.13999938964844,
+            "son_renk": "alt",
+            "gorunur_bar": 68,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 36.08000183105469,
+            "son_renk": "ust",
+            "gorunur_bar": 68,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 5,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": []
+          },
+          "warnings": []
+        },
+        {
+          "tf": "4h",
+          "symbol": "EREGL",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 38.13999938964844,
+            "son_renk": "alt",
+            "gorunur_bar": 68,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 36.08000183105469,
+            "son_renk": "ust",
+            "gorunur_bar": 68,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 5,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": []
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1d",
+          "symbol": "EREGL",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 38.13999938964844,
+            "son_renk": "alt",
+            "gorunur_bar": 62,
+            "kadrajda": true,
+            "donus_isaret": 1,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 3
+          },
+          "support": {
+            "hazir": false,
+            "cizildi": false,
+            "son_seviye": null,
+            "son_renk": null,
+            "gorunur_bar": 0,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0,
+            "kadrajda": false
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              34
+            ],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": [
+              4,
+              27,
+              28
+            ]
+          },
+          "warnings": []
+        },
+        {
+          "tf": "4h",
+          "symbol": "KCHOL",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 224.3000030517578,
+            "son_renk": "alt",
+            "gorunur_bar": 43,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 205.1999969482422,
+            "son_renk": "alt",
+            "gorunur_bar": 68,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": []
+          },
+          "warnings": []
+        },
+        {
+          "tf": "4h",
+          "symbol": "KCHOL",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 224.3000030517578,
+            "son_renk": "alt",
+            "gorunur_bar": 43,
+            "kadrajda": true,
+            "donus_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 205.1999969482422,
+            "son_renk": "alt",
+            "gorunur_bar": 68,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [],
+            "momentum_barlar": [],
+            "dikey_deneme_barlar": []
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1d",
+          "symbol": "KCHOL",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 224.3000030517578,
+            "son_renk": "alt",
+            "gorunur_bar": 62,
+            "kadrajda": true,
+            "donus_isaret": 3,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 4
+          },
+          "support": {
+            "hazir": false,
+            "cizildi": false,
+            "son_seviye": null,
+            "son_renk": null,
+            "gorunur_bar": 0,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0,
+            "kadrajda": false
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              0,
+              10,
+              15
+            ],
+            "momentum_barlar": [
+              2
+            ],
+            "dikey_deneme_barlar": [
+              26,
+              34,
+              35,
+              38
+            ]
+          },
+          "warnings": []
+        }
+      ]
+    },
+    "test_domain_real_event_media_u0": {
+      "messages": [
+        {
+          "chat_id": "SAHTE_DM",
+          "text": "🆕 YENİ ▲ DOCO 4s TETİKLEME\n· CHoCH ↑\n🕒 19 Ekim 09:30→13:30 mumu\n· kapanış 10.952,50\n\nStabil destek: 10.360,0 (+%5,7\n   üst)\nStabil yapı: yükselen kademe\n· destek üstünde · 3,73 ATR\n\n• yatırım tavsiyesi değildir"
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "text": "🆕 YENİ ▲ DOCO 4s TETİKLEME\n· CHoCH ↑\n🕒 19 Ekim 09:30→13:30 mumu\n· kapanış 10.952,50\n\nStabil destek: 10.360,0 (+%5,7\n   üst)\nStabil yapı: yükselen kademe\n· destek üstünde · 3,73 ATR\n\n• yatırım tavsiyesi değildir"
+        }
+      ],
+      "albums": [
+        {
+          "chat_id": "SAHTE_DM",
+          "images": [
+            "album_00_00.png"
+          ],
+          "captions": [
+            "DOCO · 4s · 68 mum\nℹ️ bölge: 8 kutu kapak dışında (üst 2 · alt 2) · bölge: 1 kutunun başlangıcı kadraj dışında"
+          ]
+        },
+        {
+          "chat_id": "SAHTE_PUBLIC",
+          "images": [
+            "album_01_00.png",
+            "album_01_01.png"
+          ],
+          "captions": [
+            "DOCO 4s · DOMAİN TETİKLEME",
+            "DOCO 4s · 1g üst zaman dilimi"
+          ]
+        }
+      ],
+      "renders": [
+        {
+          "tf": "4h",
+          "symbol": "DOCO",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 43,
+            "kadrajda": true,
+            "donus_isaret": 1,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 68,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              67
+            ],
+            "momentum_barlar": [
+              64
+            ],
+            "dikey_deneme_barlar": []
+          },
+          "warnings": []
+        },
+        {
+          "tf": "4h",
+          "symbol": "DOCO",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 43,
+            "kadrajda": true,
+            "donus_isaret": 1,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 0
+          },
+          "support": {
+            "hazir": true,
+            "cizildi": true,
+            "son_seviye": 10360.0,
+            "son_renk": "ust",
+            "gorunur_bar": 68,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 1,
+            "kadrajda": true
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              67
+            ],
+            "momentum_barlar": [
+              64
+            ],
+            "dikey_deneme_barlar": []
+          },
+          "warnings": []
+        },
+        {
+          "tf": "1d",
+          "symbol": "DOCO",
+          "resistance": {
+            "hazir": true,
+            "durum": "READY",
+            "neden": null,
+            "cizildi": true,
+            "son_seviye": 11045.0,
+            "son_renk": "ust",
+            "gorunur_bar": 62,
+            "kadrajda": true,
+            "donus_isaret": 1,
+            "momentum_isaret": 1,
+            "dikey_deneme_isaret": 3
+          },
+          "support": {
+            "hazir": false,
+            "cizildi": false,
+            "son_seviye": null,
+            "son_renk": null,
+            "gorunur_bar": 0,
+            "reclaim_isaret": 0,
+            "momentum_isaret": 0,
+            "dikey_deneme_isaret": 0,
+            "kadrajda": false
+          },
+          "signal_bars": {
+            "donus_barlar": [
+              25
+            ],
+            "momentum_barlar": [
+              59
+            ],
+            "dikey_deneme_barlar": [
+              16,
+              17,
+              54
+            ]
+          },
+          "warnings": []
+        }
+      ]
+    },
+    "test_actual_formation_retest_o0": {
+      "messages": [],
+      "albums": [],
+      "renders": []
+    }
+  },
+  "albüm_dosya_adlari_uyarisi": "Senaryo kayıtlarındaki albüm dosya adları testin geçici adlarıdır; yalnız resimler listesinde belirtilen dosyalar belgeye kopyalandı.",
+  "kontrollu_senaryolar": {
+    "test_controlled_post_confirmat0": "Gerçek teyit ve OHLC; iptal olayı test tarafından enjekte edildi, gerçek geçmiş iptal iddiası değildir.",
+    "test_domain_real_event_media_u0": "Gerçek domain adayı ve PNG; medya taşıması timeout belirsizliği döndürür. Kayıttaki albümler yalnız DENEME, teslim kanıtı değildir.",
+    "test_actual_formation_retest_o0": "Gerçek retest adayında teyit-sınırı kapısı alarmı reddetti; bu yüzden mesaj ve albüm listeleri boştur.",
+    "test_four_actual_4h_domain_can0": "Dört gerçek aynı-kapanış 4s adayı birlikte seçilerek burst testi yapıldı; tüm piyasanın canlı taraması değildir."
+  }
+}

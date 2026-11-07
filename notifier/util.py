@@ -42,6 +42,7 @@ import devamlilik as _dev
 from state import persistence as _state_persistence
 
 from secrets_redaction import redact_sensitive_text
+from grafik_ayar import otomatik_grafik_acik
 
 
 logger = logging.getLogger("notifier")  # eski kayıt adıyla aynı
@@ -292,11 +293,10 @@ def _grafik_dipnotu(meta: Dict) -> str:
 def _grafik_salteri_acik() -> bool:
     """Grafik kill-switch'ini grafik modülünü içe aktarmadan oku.
 
-    `grafik.grafik_aktif_mi()` ile aynı env sözleşmesi: eksik/boş/`yok` kapalı,
-    diğer değerler açık. Bu kontrol, kill-switch kapalıyken grafik katmanını
-    gereksiz yere yüklememek için notifier içinde tutulur.
+    `grafik.grafik_aktif_mi()` ile aynı, ortak env sözleşmesini kullanır.
+    Kill-switch kapalıyken grafik katmanını gereksiz yere yüklemez.
     """
-    return (os.environ.get("TELEGRAM_GRAFIK") or "yok").strip().lower() != "yok"
+    return otomatik_grafik_acik(os.environ.get("TELEGRAM_GRAFIK"))
 
 
 def _istanbul(dt: datetime) -> datetime:
