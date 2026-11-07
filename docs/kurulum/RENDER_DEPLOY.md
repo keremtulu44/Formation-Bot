@@ -65,13 +65,24 @@ aktif bot veya bildirim tekilliği garantisi değildir.
 |---|---|---|
 | B1 | Region | `Frankfurt` (ABD ise calisir ama Turk'e ping uzun) |
 | B2 | Instance Type | `Free` |
-| B3 | Build Command | `pip install -r requirements.txt` |
+| B3 | Build Command | `bash scripts/install_deploy_dependencies.sh` |
 | B4 | Start Command | `python main.py` |
 | B5 | Health Check Path | `/health` |
 | B6 | Python Version | Bos birak - repodaki `.python-version` (3.12) zorlar |
 | B7 | Root Directory | Bos birak (repo kok) |
 | B8 | Auto-Deploy | `After CI Checks Pass` (§2.1; mevcut Dashboard servisinde ayrıca doğrula) |
 | B9 | Branch | `main` olmali - `main`de bot kodu yoksa servis acilmaz |
+
+**Bağımlılık geçişi:** `requirements.txt` araştırma replay'inin değiştirilmeyen
+eski hash'li ortam kaydıdır; tek başına canlı kullanım için değildir. Yukarıdaki
+kurucu güvenlik düzeltmeleri içeren `requirements-deploy.txt` ile pinlenmiş build
+araçlarını kurar ve `pip check` çalıştırır. CI aynı kurucuyu kullanır. Mevcut
+Dashboard servisi Blueprint dışındaysa komut kendiliğinden değişmez; eski komut
+kullanılıyorsa güvenlik güncellemesi o servise uygulanmış sayılmaz. Kurucu henüz
+servisin dağıttığı commit'te yokken yeni build komutunu çalıştırmak build'i
+bozar. Auto-deploy ve ayar değişikliklerinin deploy tetikleme davranışını
+Dashboard'da kontrol ederek merge, build ayarı ve yeniden dağıtımı tek bir
+bakım planında koordine edin; ikinci servis oluşturmayın.
 
 ## C) GitHub → repo → Settings → Secrets and variables → Actions
 
@@ -231,7 +242,7 @@ Dashboard → **New → Web Service** → repoyu bağla:
 | Runtime | Python |
 | Region | Frankfurt (Türkiye'ye en yakın) |
 | Instance Type | Free |
-| Build Command | `pip install -r requirements.txt` |
+| Build Command | `bash scripts/install_deploy_dependencies.sh` |
 | Start Command | `python main.py` |
 | Health Check Path | `/health` |
 
@@ -1074,7 +1085,7 @@ Render'a giden kod, deploy'dan **önce** GitHub tarafında sınanır:
 
 1. **Python sürümü**: `actions/setup-python` ile repodaki `.python-version`
    (3.12) okunur — yani Render'ın göreceği sürümün aynısı.
-2. **Kurulum**: `pip install -r requirements.txt` (Render Build Command'in
+2. **Kurulum**: `bash scripts/install_deploy_dependencies.sh` (Render Build Command'in
    birebir aynısı). Tekerlek bulunamazsa, yani Render'ı patlatacak durum
    (cp314 senaryosu) oluşursa burada kırmızı olur — deploy'u hiç denemezsin.
 3. **Testler**: `python -m pytest -q` + `python test_tarama_zamani.py`

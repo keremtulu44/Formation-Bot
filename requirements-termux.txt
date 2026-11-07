@@ -10,9 +10,10 @@
 yfinance
 exchange-calendars
 pytz
-python-dotenv
+# Bilinen güvenlik duyuruları için en az düzeltilmiş sürümler.
+python-dotenv>=1.2.2
 python-dateutil
-requests
+requests>=2.33.0
 tabulate
 
 # borsapy TERIMUX'TA KURULMAZ! Sebep:

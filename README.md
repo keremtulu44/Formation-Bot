@@ -7,7 +7,7 @@
 ## Hızlı başlangıç
 
 ```bash
-python3 -m pip install -r requirements.txt   # pandas, numpy, pytz, yfinance
+bash scripts/install_deploy_dependencies.sh  # güvenli canlı pinler + pip check
 cp .env.example .env                         # TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
 python3 main.py                              # canlı bot (heartbeat + SIGTERM destekli)
 python3 canli_tarama.py                      # Aktif evren x 4 TF canlı tarama raporu
@@ -17,6 +17,9 @@ python3 test_pennant.py                      # flama regresyon (6 test)
 ```
 
 Profil seçimi: `.env` içinde `BOT_PROFILE=Dengeli` (Hassas / Dengeli / Seçici).
+`requirements.txt` geçmiş araştırma replay'inin hash'li, eski paket kaydıdır;
+**canlı kurulumda kullanmayın**. Canlı pinler `requirements-deploy.txt` içindedir.
+Windows PowerShell için [yerel kurulum rehberine](docs/kurulum/LOCAL_SETUP.md) bakın.
 
 ## Belgeler ve depo düzeni
 
@@ -178,7 +181,9 @@ Belge zinciri: [docs/README.md](docs/README.md) (harita) →
 > Adım adım kurulum (Python sürümü sabitleme, Supabase `sb_secret_` anahtarı,
 > telefondan Telegram token alma, keep-alive) için: **[docs/kurulum/RENDER_DEPLOY.md](docs/kurulum/RENDER_DEPLOY.md)**
 
-Build Command `pip install -r requirements.txt`, Start Command `python main.py`.
+Build Command `bash scripts/install_deploy_dependencies.sh`, Start Command
+`python main.py`. Mevcut Dashboard servisinin build ayarı ayrıca güncellenip
+kontrol edilmelidir; Blueprint başka bir servisi otomatik düzeltmez.
 Python sürümü repodaki `.python-version` ile **3.12**'ye sabitlidir; Render'ın
 varsayılanı 3.14'tür ve pandas 2.2.2 / numpy 1.26.4'ün cp314 tekerleği
 olmadığı için build kaynak koddan derlemeye düşüp patlıyor.

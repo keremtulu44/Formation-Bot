@@ -95,12 +95,13 @@ git pull origin main
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 
-# Paketler
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+# Paketler: Linux/Render kurucusuyla aynı sürümler (PowerShell'de Bash gerekmez)
+python -m pip install pip==26.2 setuptools==84.1.0
+python -m pip install -r requirements-deploy.txt
+python -m pip check
 
-# Ekstra
-pip install yfinance borsapy pandas numpy pytz python-dotenv requests
+# requirements.txt tarihsel replay ortamıdır, canlı kurulumda kullanmayın.
+# borsapy isteğe bağlıdır ve deploy'a dahil edilmez.
 
 # .env
 Copy-Item ".env.example" ".env"
@@ -131,7 +132,8 @@ Formation-Bot/
 ├── test_triangle.py       # Üçgen test (mock)
 ├── test_breakout.py       # Kırılım test
 ├── test_flag.py           # Bayrak test
-├── requirements.txt       # API bağımlılıkları
+├── requirements-deploy.txt # Güncel canlı/CI bağımlılıkları
+├── requirements.txt       # Tarihsel replay için hash'li eski pinler
 ├── setup.sh               # Linux kurulum (Oracle Cloud)
 ├── bist-bot.service       # systemd service
 ├── .env.example           # Env örneği

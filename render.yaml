@@ -17,7 +17,8 @@ services:
     runtime: python
     plan: free
     region: frankfurt
-    buildCommand: pip install -r requirements.txt
+    # CANLI pinler + güvenli build araçları; requirements.txt tarihsel replay içindir.
+    buildCommand: bash scripts/install_deploy_dependencies.sh
     startCommand: python main.py
     healthCheckPath: /health
     # Yalnizca Blueprint ile yonetilen servise uygulanir; mevcut Dashboard ayarini kontrol edin.

@@ -226,3 +226,94 @@ def test_config_empty_stabil_env_vars_do_not_crash_boot():
         timeout=15,
     )
     assert res.returncode == 0, res.stderr
+
+
+def _pinned_requirements(name):
+    entries = []
+    for raw_line in (ROOT / name).read_text(encoding="utf-8").splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if line:
+            package, separator, version = line.partition("==")
+            assert separator and package and version, line
+            entries.append((package.lower(), version))
+    assert len(entries) == len(dict(entries)), "duplicate direct dependency"
+    return dict(entries)
+
+
+def test_live_pins_keep_historical_manifest_but_upgrade_known_advisories():
+    """Replay pinleri hash için sabit; canlı dosya aynı paketlerle güvenli pinleri kurar."""
+    from packaging.version import Version
+
+    historical = _pinned_requirements("requirements.txt")
+    live = _pinned_requirements("requirements-deploy.txt")
+    known_fixed_minimum = {
+        "requests": "2.33.0",
+        "python-dotenv": "1.2.2",
+        "pytest": "9.0.3",
+    }
+    assert set(live) == set(historical)
+    for package in historical.keys() - known_fixed_minimum.keys():
+        assert live[package] == historical[package], package
+    for package, minimum in known_fixed_minimum.items():
+        assert Version(live[package]) >= Version(minimum)
+        assert Version(live[package]) > Version(historical[package])
+
+
+def test_render_and_ci_use_the_same_live_installer():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    blueprint = (ROOT / "render.yaml").read_text(encoding="utf-8")
+    installer = "bash scripts/install_deploy_dependencies.sh"
+    assert f"run: {installer}" in workflow
+    assert f"buildCommand: {installer}" in blueprint
+    assert "requirements-deploy.txt" in workflow  # pip cache dependency path
+    assert "scripts/install_deploy_dependencies.sh" in workflow
+    assert installer in (ROOT / "setup.sh").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("failure,expected_calls", [
+    ("", 3),
+    ("pip==26.2", 1),
+    ("requirements-deploy.txt", 2),
+    ("pip check", 3),
+])
+def test_live_installer_order_and_failure_propagation(tmp_path, failure, expected_calls):
+    """Gerçek pip çalıştırmadan sıralamayı ve kırmızı build geçişlerini test et."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_python = bin_dir / "python"
+    fake_python.write_text('''#!/bin/bash
+printf '%s\\n' "$*" >> "$CALLS_FILE"
+if [[ -n "$FAKE_FAIL" && "$*" == *"$FAKE_FAIL"* ]]; then exit 42; fi
+''', encoding="utf-8")
+    fake_python.chmod(0o755)
+    calls_file = tmp_path / "calls"
+    result = subprocess.run(
+        ["bash", str(ROOT / "scripts/install_deploy_dependencies.sh")],
+        cwd=tmp_path,
+        env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}",
+             "CALLS_FILE": str(calls_file), "FAKE_FAIL": failure},
+        capture_output=True, text=True, timeout=10,
+    )
+    calls = calls_file.read_text(encoding="utf-8").splitlines()
+    assert len(calls) == expected_calls
+    assert calls[0] == "-m pip install pip==26.2 setuptools==84.1.0"
+    if expected_calls >= 2:
+        assert calls[1] == "-m pip install -r requirements-deploy.txt"
+    if expected_calls == 3:
+        assert calls[2] == "-m pip check"
+    assert result.returncode == (42 if failure else 0), result.stderr
+
+
+def test_termux_minimums_do_not_allow_the_known_vulnerable_pins():
+    from packaging.requirements import Requirement
+
+    entries = {}
+    for raw in (ROOT / "requirements-termux.txt").read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line:
+            requirement = Requirement(line)
+            entries[requirement.name.lower()] = requirement.specifier
+    assert "2.32.3" not in entries["requests"]
+    assert "2.33.0" in entries["requests"]
+    assert "1.0.1" not in entries["python-dotenv"]
+    assert "1.2.2" in entries["python-dotenv"]

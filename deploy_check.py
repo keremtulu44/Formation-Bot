@@ -32,9 +32,11 @@ import argparse
 import base64
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
+from importlib import metadata
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -205,19 +207,25 @@ def kontrol_repo() -> None:
         satir(FAIL, ".python-version yok",
               "Render varsayılanı Python 3.14 olur ve 'pip install' pandas'ı kaynaktan derlemeye çalışıp patlar.")
 
-    req = REPO_ROOT / "requirements.txt"
-    if not req.exists():
-        satir(FAIL, "requirements.txt yok", "Build Command: pip install -r requirements.txt")
+    req = REPO_ROOT / "requirements-deploy.txt"
+    kurucu = REPO_ROOT / "scripts" / "install_deploy_dependencies.sh"
+    build_komutu = "bash scripts/install_deploy_dependencies.sh"
+    if not req.exists() or not kurucu.exists():
+        satir(FAIL, "Canlı bağımlılık dosyası veya kurucusu yok", f"Build Command: {build_komutu}")
     else:
-        icerik = req.read_text(encoding="utf-8")
-        for paket in ("pandas==2.2.2", "numpy==1.26.4", "yfinance"):
-            if paket.split("==")[0] in icerik:
-                satir(OK, f"requirements içinde {paket.split('==')[0]} var")
-        if "borsapy" in icerik and not icerik.count("# borsapy"):
-            satir(WARN, "requirements.txt borsapy içeriyor",
-                  "borsapy Python 3.14'te Rust/C zinciri getirir; repo kodu import etmiyor -> çıkarın.")
-        satir(OK, "Önerilen Build Command: pip install -r requirements.txt",
-              "Start Command: python main.py; mevcut Render Dashboard ayarları ayrıca doğrulanmalıdır.")
+        # Yorumlarda geçen isimler gerçekten kurulacak bağımlılık sayılmamalı.
+        gereksinimler = [s.split("#", 1)[0].strip() for s in req.read_text(encoding="utf-8").splitlines()]
+        for paket in ("pandas", "numpy", "yfinance"):
+            if any(re.match(rf"^{paket}(?:\[|[<>=!~;@\s]|$)", s, re.IGNORECASE) for s in gereksinimler):
+                satir(OK, f"canlı requirements içinde {paket} var")
+            else:
+                satir(FAIL, f"canlı requirements içinde {paket} bulunamadı",
+                      "Zorunlu doğrudan bağımlılık canlı kurulum dosyasına eklenmeli.")
+        if any(re.match(r"^borsapy(?:\[|[<>=!~;@\s]|$)", s, re.IGNORECASE) for s in gereksinimler):
+            satir(WARN, "canlı requirements borsapy içeriyor",
+                  "borsapy ağır Rust/C zinciri getirir; repo kodu import etmiyor -> çıkarın.")
+        satir(OK, f"Önerilen Build Command: {build_komutu}",
+              "Start: python main.py. requirements.txt tarihsel replay içindir; mevcut Dashboard ayarını doğrulayın.")
 
     wf = REPO_ROOT / ".github" / "workflows" / "keepalive.yml"
     if wf.exists():
@@ -260,6 +268,46 @@ def kontrol_repo() -> None:
     else:
         satir(FAIL, "domain_engines/05_stabil.txt bulunamadı",
               "Stabil destek motoru sertifikalı kaynak dosyası olmadan çalışmamalıdır.")
+
+
+def kontrol_bagimlilik_guvenligi() -> None:
+    """Bilinen duyurular için bu Python ortamındaki asgari sürümleri denetle.
+
+    Bu, genel bir zafiyet taraması veya uzaktaki Render sürümünü ölçen kontrol
+    değildir. Kurulum araçlarının eksikliği bile bot çalışmasını durdurmaz, bu
+    nedenle tüm bulgular uyarı olarak raporlanır.
+    """
+    print("\nPaket sürümleri yalnız bu Python ortamı içindir; Render build logunu (veya varsa Shell'i) kontrol edin.")
+    try:
+        from packaging.version import InvalidVersion, Version
+    except ImportError:
+        satir(WARN, "Paket sürümleri karşılaştırılamadı", "packaging kurulu değil; canlı kurucuyu çalıştırın.")
+        return
+
+    asgari = {
+        "requests": "2.33.0",
+        "python-dotenv": "1.2.2",
+        "pytest": "9.0.3",
+        "pip": "26.2",
+        "setuptools": "84.1.0",
+    }
+    for paket, minimum in asgari.items():
+        try:
+            kurulu = metadata.version(paket)
+        except metadata.PackageNotFoundError:
+            satir(WARN, f"{paket} bu ortamda kurulu değil", "Dağıtım kurulumunu ve ortamı doğrulayın.")
+            continue
+        try:
+            eski = Version(kurulu) < Version(minimum)
+        except InvalidVersion:
+            satir(WARN, f"{paket} sürümü karşılaştırılamadı", "Paket sürümünü ve kurulumu elle doğrulayın.")
+            continue
+        if eski:
+            satir(WARN, f"{paket} {kurulu}: bilinen duyurular için eski sürüm",
+                  f"En az {minimum}; canlı kurulum: bash scripts/install_deploy_dependencies.sh")
+        else:
+            satir(OK, f"{paket} {kurulu}: bilinen asgari sürüm karşılanıyor",
+                  "Bu kontrol tüm güvenlik açıklarını taramaz.")
 
 
 def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
@@ -319,7 +367,7 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
             satir(FAIL, "TELEGRAM_GRAFIK tanımlı ama grafik katmanı çalışmıyor",
                   f"{type(hata).__name__}: "
                   f"{_kisa(hata, 120, degerler.get('TELEGRAM_BOT_TOKEN', ''), degerler.get('TELEGRAM_CHAT_ID', ''))} — "
-                  "`pip install -r requirements.txt` sonra botu yeniden başlatın.")
+                  "`bash scripts/install_deploy_dependencies.sh` sonra botu yeniden başlatın.")
     else:
         satir(OK, "Otomatik alarm grafikleri kapalı", "/grafik komutu bu şalterden bağımsızdır.")
     # --- DM kimliği görsel kapısı (2026-10-22) -----------------------------
@@ -447,7 +495,7 @@ def kontrol_supabase(url: str, anahtar: str, onek: str = None) -> None:
     try:
         import requests
     except ImportError:
-        satir(WARN, "Atlandı", "requests kurulu değil (pip install -r requirements.txt).")
+        satir(WARN, "Atlandı", "requests kurulu değil (bash scripts/install_deploy_dependencies.sh).")
         return
 
     temiz = _anahtari_temizle(url).rstrip("/")
@@ -660,7 +708,7 @@ def kontrol_grafik(token: str, chat_id: str, mesaj_gonder: bool, *,
     except Exception as exc:  # noqa: BLE001
         satir(FAIL, "Grafik katmanı yüklenemedi",
               f"{type(exc).__name__}: {_kisa(exc, 160, token, chat_id)} · "
-              "`pip install -r requirements.txt` (matplotlib 3.11.x) sonra yeniden başlat.")
+              "`bash scripts/install_deploy_dependencies.sh` (matplotlib 3.11.x) sonra yeniden başlat.")
         return
     if not mesaj_gonder and not otomatik_grafik_acik(os.environ.get("TELEGRAM_GRAFIK")):
         satir(OK, "Otomatik alarm grafikleri kapalı", "/grafik komutu yine çalışır. "
@@ -1149,6 +1197,7 @@ def main() -> int:
 
     canli_mod = bool(args.url)
     kontrol_repo()
+    kontrol_bagimlilik_guvenligi()
     degerler = kontrol_env(dosya_env, canli_mod=canli_mod)
 
     public_hazir = False

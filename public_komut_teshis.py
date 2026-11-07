@@ -87,7 +87,7 @@ def main(argv=None) -> int:
     try:
         import requests
     except ImportError:
-        print("❌ requests yok: pip install -r requirements.txt", file=sys.stderr)
+        print("❌ requests yok: bash scripts/install_deploy_dependencies.sh", file=sys.stderr)
         return 2
 
     token = (args.token or os.getenv("TELEGRAM_BOT_TOKEN", "")).strip()

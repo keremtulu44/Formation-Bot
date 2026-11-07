@@ -605,4 +605,72 @@ def test_kontrol_repo_stabil_kaynagini_dogrular(monkeypatch, capsys):
     D.kontrol_repo()
     out = capsys.readouterr().out
     assert "05_stabil.txt" in out
+    assert "borsapy içeriyor" not in out  # Yorumdaki opsiyonel paket uyarı üretmez.
     assert D._sayac[D.FAIL] == 0
+
+
+def test_bagimlilik_guvenligi_hangi_ortami_gosterdigini_belirtir(monkeypatch, capsys):
+    versions = {
+        "requests": "2.34.2", "python-dotenv": "1.2.4", "pytest": "9.0.3",
+        "pip": "26.2", "setuptools": "84.1.0",
+    }
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    monkeypatch.setattr(D.metadata, "version", lambda name: versions[name])
+    D.kontrol_bagimlilik_guvenligi()
+    out = capsys.readouterr().out
+    assert "yalnız bu Python ortamı" in out
+    assert "Render build logunu" in out
+    assert "tüm güvenlik açıklarını taramaz" in out
+    assert D._sayac[D.WARN] == 0
+    assert D._sayac[D.OK] == 5
+
+
+@pytest.mark.parametrize("value", ["2.32.3", "2.33.0rc1", "not-a-version", None])
+def test_bagimlilik_guvenligi_eski_eksik_gecersiz_veya_on_surum_uyarisi(monkeypatch, capsys, value):
+    versions = {
+        "requests": value, "python-dotenv": "1.2.4", "pytest": "9.0.3",
+        "pip": "26.2", "setuptools": "84.1.0",
+    }
+
+    def fake_version(name):
+        if versions[name] is None:
+            raise D.metadata.PackageNotFoundError(name)
+        return versions[name]
+
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    monkeypatch.setattr(D.metadata, "version", fake_version)
+    D.kontrol_bagimlilik_guvenligi()
+    assert "requests" in capsys.readouterr().out
+    assert D._sayac[D.WARN] == 1
+    assert D._sayac[D.FAIL] == 0
+
+
+def test_kontrol_repo_yorumdaki_paketi_kurulu_saymaz(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(D, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    (tmp_path / ".python-version").write_text("3.12\n", encoding="utf-8")
+    (tmp_path / "requirements-deploy.txt").write_text(
+        "pandas==2.2.2\nyfinance==1.7.0\n# numpy==1.26.4\n# borsapy==0.11.0\n", encoding="utf-8"
+    )
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "install_deploy_dependencies.sh").touch()
+    D.kontrol_repo()
+    out = capsys.readouterr().out
+    assert "canlı requirements içinde numpy bulunamadı" in out
+    assert "canlı requirements borsapy içeriyor" not in out
+    assert D._sayac[D.FAIL] >= 1
+
+
+def test_kontrol_repo_aktif_borsapy_icin_uyarir(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(D, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(D, "_sayac", {D.OK: 0, D.WARN: 0, D.FAIL: 0})
+    (tmp_path / ".python-version").write_text("3.12\n", encoding="utf-8")
+    (tmp_path / "requirements-deploy.txt").write_text(
+        "pandas==2.2.2\nnumpy==1.26.4\nyfinance==1.7.0\nBorsapy>=0.11\n", encoding="utf-8"
+    )
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "install_deploy_dependencies.sh").touch()
+    D.kontrol_repo()
+    assert "canlı requirements borsapy içeriyor" in capsys.readouterr().out

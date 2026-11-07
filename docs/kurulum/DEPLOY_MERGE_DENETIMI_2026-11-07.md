@@ -36,12 +36,48 @@ servisi oluşturulmadı; manuel deploy hook'u çalıştırılmadı.
   bütünlüğü için tutulur; `.arena_work/` geçici test/log dosyaları Git'e
   konulmaz.
 
+## Bağımlılık ve güvenlik kontrolü
+
+7 Kasım PyPI sürüm duyurularına göre araştırma replay'inin eski `requirements.txt`
+pinlerinde `requests==2.32.3` (CVE-2024-47081 ve CVE-2026-25645),
+`python-dotenv==1.0.1` (CVE-2026-28684) ve test aracı `pytest==8.3.2`
+(CVE-2025-71176) için düzeltmeler yayınlanmıştı. Sömürü koşulları farklıdır:
+requests `.netrc` duyurusu özel hazırlanmış URL ve kimlik bilgisi koşullarına
+bağlıdır; diğer requests duyurusu `extract_zipped_paths`, dotenv duyurusu
+`set_key`/`unset_key` çağrılarıyla ilgilidir ve repo kaynaklarında bu özel API
+çağrıları bulunmamıştır. Pytest duyurusu ortak Unix geçici dizininde yerel
+saldırgan riskidir; bunlar canlı sömürünün kanıtı değildir.
+
+Tarihsel dosyayı/hash zincirini değiştirmeden canlı `requirements-deploy.txt`
+dosyası eklendi: sırasıyla `requests==2.34.2`, `python-dotenv==1.2.4`,
+`pytest==9.0.3`; diğer doğrudan paket pinleri aynı kaldı. Ortak kurucu
+`bash scripts/install_deploy_dependencies.sh`, `pip==26.2` ve
+`setuptools==84.1.0` kurup canlı pinleri yükler ve `pip check` çalıştırır.
+Blueprint ve CI aynı kurucuyu kullanır; Termux dosyasına da requests ve dotenv
+asgari düzeltilmiş sürümleri eklendi. Doktor eski paketleri uyarır ve ölçtüğü
+ortamın yalnız yerel Python olduğunu belirtir.
+
+Ayrı ve temiz yerel Python 3.11 ortamında kurulum ve `pip check` başarılı; o
+ortamdaki 45 kurulu paket için PyPI sürüm JSON sorgusunda **0 duyuru / 0 sorgu
+hatası** görüldü. Bu anlık, yalnız PyPI ve o ortama ait bir sonuçtur; tüm açıklar,
+serbest transitif sürümlerin geleceği veya Python 3.12 Render ortamı için güvenlik
+garantisi değildir. Render Dashboard eski build komutunu koruyorsa canlı servise
+yeni pinler uygulanmaz. Kurucu dağıtılan commit'te olmadan build komutunu
+çalıştırmak da build'i bozar; deploy geçişi bakım planıyla koordine edilmelidir.
+
 ## Yerel kanıt
 
 - Önceki tam paket: Python 3.11.2, **4057 passed, 43 skipped**, exit 0; bu koşu
   son deploy düzeltmelerinden öncedir ve Python 3.12 CI'nın yerine geçmez.
-- Deploy/şalter, workflow, grafik, doktor ve `/render` odaklı testler: **220
-  passed**. Ruff ve `git diff --check` temiz.
+- Önceki deploy/şalter, workflow, grafik, doktor, `/render` ve gerçek arşivli
+  teslim entegrasyon testleri: **231 passed**. Bunlar bağımlılık güvenlik
+  güncellemesinden önceydi; güncel pinlerle CI sonucunu ayrıca izleyin.
+- Yeni temiz ortamda deploy, başlangıç/kapanış, grafik, Telegram, bildirim ve
+  Supabase odaklı paket: **612 passed, 1 skipped**. Son doktor/kurucu değişikliği
+  sonrasında odaklı dosyalar yeniden **95 passed**; kurucu başarısız adımda
+  duruyor, yorum satırı paket sayılmıyor. Ruff ve `git diff --check` temiz.
+- Yeni pinlerle çevrimdışı grafik doktoru **0 hata**, health dumanı ve dört
+  tarihsel araştırma doğrulayıcısı da başarılı; canlı erişim sınırı değişmedi.
 - Aynı CI kabuğuyla gerçek entrypoint dumanı: `/health` 200 ve beklenen sahte
   commit, `/ready` 503 ve `startup_complete=false`, kapalı `/test` ve webhook
   404. Smoke modunda tarama/sağlayıcı/Telegram döngüleri özellikle başlamaz;

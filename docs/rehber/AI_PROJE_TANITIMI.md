@@ -1,5 +1,9 @@
 # Formation-Bot — Dosya Göremeyen Bir AI'ya Verilecek Tanıtım Paketi
 
+> Bu tanıtımın tasarım/araştırma tarihçesi eski olabilir. Canlı dağıtım ve
+> güncel sınırlamalar için [Render kılavuzunu](../kurulum/RENDER_DEPLOY.md) ve
+> [son deploy denetimini](../kurulum/DEPLOY_MERGE_DENETIMI_2026-11-07.md) izleyin.
+
 ## Devir notu — Stabil (2026-11-01)
 
 [Stabil ana rehberi](../arastirma/STABIL_REHBERI.md) ve
@@ -453,10 +457,10 @@ tonu önce/sonra), `docs/gorseller/ornek_sag_bosluk.png` (sağ boşluk ilk turu)
 | Tür / plan | Web Service · **Free** (15 dk inbound trafik yoksa uyur) |
 | Bölge | **Frankfurt** (Türkiye'ye en yakın) |
 | Runtime | Python — sürüm repodaki **`.python-version` = 3.12** ile sabit (Render varsayılanı 3.14 ve pandas 2.2.2/numpy 1.26.4 tekerleği yok → build patlar) |
-| Build Command | `pip install -r requirements.txt` |
+| Build Command | `bash scripts/install_deploy_dependencies.sh` (Dashboard ayrıca doğrulanmalı) |
 | Start Command | `python main.py` |
 | Health Check Path | `/health` |
-| Auto-Deploy | açık (kapalıysa her merge sonrası "Manual Deploy") |
+| Auto-Deploy | Mevcut Dashboard'da kontrol et; merge gerçek deploy tetikleyebilir |
 
 ### 6.2 Ortam değişkenleri (özet; tam liste `.env.example`, 57 anahtar)
 
@@ -464,13 +468,13 @@ tonu önce/sonra), `docs/gorseller/ornek_sag_bosluk.png` (sağ boşluk ilk turu)
 | :--- | :--- |
 | `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHAT_ID` | Bot + DM komut kanalı (zorunlu) |
 | `TELEGRAM_GROUP_ID` | Kanal/grup yayını (opsiyonel; bot orada yönetici olmalı) |
-| `SUPABASE_URL` · `SUPABASE_SERVICE_ROLE_KEY` | Kalıcı OHLCV önbelleği + Telegram durumu (opsiyonel ama önerilir) |
+| `SUPABASE_URL` · `SUPABASE_SERVICE_ROLE_KEY` | Eski uzak cache/state okuması (opsiyonel); yeni durum Supabase'e yazılmaz |
 | `BOT_PROFILE` | `Hassas` / **`Dengeli`** / `Seçici` |
 | `TZ` | `Europe/Istanbul` (log ve kota günü hizası) |
 | `MARKET_SUFFIX` · `STOCK_UNIVERSE` | `.IS` · boş = BIST 50 (48 aktif) |
 | `DATA_DIR` · `SEED_DATA_DIR` · `LOG_DIR` | `/tmp/formation-bot-data` · `./bot_data` (okuma yedeği) · `./logs` |
 | `TELEGRAM_WEBHOOK_AUTO` | Render Web Service'te varsayılan `1` (otomatik webhook); `0` = sabit secret boşsa polling'e dön |
-| `TELEGRAM_WEBHOOK_SECRET` | İsteğe bağlı sabit secret; Render'da boşsa süreç başına rastgele secret üretilir, yerelde PORT yoksa polling sürer |
+| `TELEGRAM_WEBHOOK_SECRET` | İsteğe bağlı sabit secret; Render'da boşsa token'dan sabit HMAC ile türetilir, yerelde PORT yoksa polling sürer |
 | `TELEGRAM_GRAFIK` · `TELEGRAM_GRAFIK_ADET` | `yok`/`alarm` · alarm başına kare (1-4) |
 | `GRAFIK_*` | Kare ayarları: `GRAFIK_MUM_MAKS`, `GRAFIK_OLAY_MAKS`, `GRAFIK_SAG_BOSLUK_ORANI`, `GRAFIK_HACIM_PANELI`, `GRAFIK_LEJANT_KARE`, `GRAFIK_RVOL_ROZET_ESIK(_DUSUK/MAKS/DUSUS_MAKS)` |
 | `HEALTH_RATE_LIMIT_PER_MIN` | Public uçlarda IP başına limit (0 = kapalı) |
@@ -481,13 +485,13 @@ tonu önce/sonra), `docs/gorseller/ornek_sag_bosluk.png` (sağ boşluk ilk turu)
   olduğu için tarama/scheduler servisini tek başına uyanık tutmaz. Güncel Render
   Web Service deploy'unda komut webhook'u varsayılan açıktır ve Telegram POST'u
   uyuyan servisi uyandırabilir (`TELEGRAM_WEBHOOK_AUTO=0` ve sabit secret boşken polling'e döner).
-  `.github/workflows/keepalive.yml` `/health`'e **5 dakikada bir** ping atmayı
+  `.github/workflows/keepalive.yml` uygun saatlerde `/health`'e ping atmayı
   dener; Actions cron seyrek/gecikmeli olabilir, 60 gün repo aktivitesi olmazsa
-  GitHub zamanlanmış işi kapatabilir. Bu ping tarama uptime'ı içindir, webhook'un
-  yerini tutmaz; canlı komut modu `/health` → `komut.mod` ile doğrulanır.
-- `.github/workflows/deploy.yml`: `main`'e push'ta Render **Deploy Hook**'unu
-  çağırır (`RENDER_DEPLOY_HOOK` secret; yoksa iş kırmızı olmaz, uyarı verir).
-  Böylece "merge ettim ama canlı eski sürüm" durumu görünür olur.
+  GitHub zamanlanmış işi kapatabilir. 7 Kasım örneğinde tüm 19 aralık 15 dakikadan
+  uzundu; bu, sürekli çalışma garantisi değildir. Bağımsız izleme gerekir.
+- `.github/workflows/deploy.yml`: yalnız yetkili, **elle** `main` üzerinden
+  tetiklendiğinde Render Deploy Hook'una istek gönderir; hook secret'ı yoksa
+  başarısız olur. İsteğin kabulü deploy'un tamamlandığını kanıtlamaz.
 - `/health` yanıtı canlı commit'i döner: `{"status":"ok", ..., "commit":"67cadbd",
   "branch":"main"}`.
 
@@ -497,18 +501,17 @@ tonu önce/sonra), `docs/gorseller/ornek_sag_bosluk.png` (sağ boşluk ilk turu)
 python deploy_check.py --url https://<servis>.onrender.com
 ```
 
-Sırasıyla: repo tarafı (`.python-version`, requirements pinleri, keepalive
-workflow'u, yerel önbellek) → env (token/chat id var mı; değerleri **asla**
-yazdırmaz) → Supabase tablosu gerçekten var mı (404 = SQL çalıştırılmamış,
-401/403 = anahtar yanlış, 200 = hazır) + heartbeat yaşı → Telegram `getMe` ve
-`getWebhookInfo` (komut yolu kopuk mu, bekleyen güncelleme birikmiş mi) →
-`/health` ayakta mı + canlı commit yerel HEAD ile aynı mı.
+Sırasıyla: repo tarafı, **bu Python ortamındaki** paket sürümleri → env
+(token/chat id var mı; değerleri yazdırmaz) → varsa Supabase okuması → Telegram
+`getMe` ve `getWebhookInfo` → `/health` yanıtı ve commit karşılaştırması.
+Uzaktaki paket sürümleri, gerçek bildirim teslimi, veri güncelliği ve kalıcılık
+bu komutla tek başına doğrulanmaz.
 
 ### 6.5 Kalıcılık ve sınırlar
 
-- Render diski **geçici** (`/tmp`): kalıcılık Supabase `bot_store` tablosunda
-  (`SUPABASE_STORE_PREFIX`), yoksa analiz çalışır ama önbellek/state her yeniden
-  başlatmada sıfırlanır.
+- Render'ın varsayılan diski **geçici** (`/tmp`); Supabase mevcut kodda yeni
+  önbellek/state yazmaz. Yeniden başlatmada yerel durum kaybolabilir; yedek ve
+  gerekiyorsa desteklenen kalıcı disk ile tek sender geçişi ayrıca planlanmalı.
 - BIST tatil/yarım gün takvimi `exchange-calendars` (XIST); **bilinmeyen tarih
   fail-closed** (tarama yapılmaz).
 - Yalnız kapanmış mumlar bildirime kaynak olur; tarama anı kayarsa güvenlik
