@@ -22,7 +22,7 @@
 | Grafik tasarım sözleşmesi | [tasarim/GRAFIK_TASARIM.md](tasarim/GRAFIK_TASARIM.md) · [tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md](tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md) |
 | Telegram kart/bildirim kuralları | [tasarim/TELEGRAM_KART_FORMAT.md](tasarim/TELEGRAM_KART_FORMAT.md) · [tasarim/BILDIRIM_TESLIM_POLITIKASI.md](tasarim/BILDIRIM_TESLIM_POLITIKASI.md) |
 | **174 hisse kırılım ve teyit Replay'i** | [Ayrıntılı sonuç, yöntem ve veri rehberi](arastirma/KIRILIM_TEYIT_REPLAY_AYRINTILI_DOSYA_2026-10-30.md) |
-| **Stabil domain, native kaynak ve kullanılan replay sistemi** | [Stabil ana rehberi](arastirma/STABIL_REHBERI.md) · [kanıt/kurtarma durumu](arastirma/STABIL_DOSYA_ENVANTERI.md) |
+| **Stabil domain, direnç ve yerel teslim doğrulaması** | [Stabil ana rehberi](arastirma/STABIL_REHBERI.md) · [7 Kasım genel kontrol](denetim/STABIL_DIRENC_GENEL_KONTROL_2026-11-07.md) · [direnç görsel/teslim denetimi](tasarim/STABIL_DIRENC_GORSEL_TESLIM_DENETIMI_2026-11-07.md) · [kanıt/kurtarma durumu](arastirma/STABIL_DOSYA_ENVANTERI.md) |
 | Replay ve piyasa pilot sonuçları | [arastirma/SON_REPLAY_SONUCLARI.md](arastirma/SON_REPLAY_SONUCLARI.md) |
 | **Ölçüm: zone'lar piyasada ne yapıyor?** | **[arastirma/](arastirma/README.md)** |
 | Neden bu karar verildi? (denetimler) | [denetim/](denetim/) tablosu |
@@ -34,9 +34,12 @@
 ### `arastirma/` — ölçüm çıktısı
 | Dosya | Durum | Tarih | İçerik |
 |---|---|---|---|
-| [arastirma/STABIL_REHBERI.md](arastirma/STABIL_REHBERI.md) | Yürürlükte | 2026-11-01 | Domain/kaynak/replay giriş haritası; entegrasyon kodu şu an eksik |
+| [arastirma/STABIL_REHBERI.md](arastirma/STABIL_REHBERI.md) | Yürürlükte | 2026-11-04+ | Domain/kaynak/replay haritası; mevcut runtime ve entegrasyon doğrulaması (canlı deploy kanıtı değil) |
+| [denetim/STABIL_DIRENC_GENEL_KONTROL_2026-11-07.md](denetim/STABIL_DIRENC_GENEL_KONTROL_2026-11-07.md) | Kayıt | 2026-11-07 | Stabil direnç ve grafik teslimi: bulgular, testler ve canlı doğrulama sınırları |
+| [tasarim/STABIL_DIRENC_GORSEL_TESLIM_DENETIMI_2026-11-07.md](tasarim/STABIL_DIRENC_GORSEL_TESLIM_DENETIMI_2026-11-07.md) | Kayıt | 2026-11-07 | Gerçek arşivli PNG ve sahte taşımalı bildirim yolları; gerçek Telegram/deploy değil |
 | [arastirma/STABIL_REPLAY_HATLARI.md](arastirma/STABIL_REPLAY_HATLARI.md) | Kayıt | 2026-11-01 | Genel replay ile Stabil native motoru ayrımı ve önceki optimize yöntem |
 | [arastirma/STABIL_DAVRANIS_MODELI.md](arastirma/STABIL_DAVRANIS_MODELI.md) | Kayıt | 2026-11-01 | Konuşmadan yeniden kayıt; dikey/yatay düzeltmesi ve kullanıcı hipotezleri |
+| [arastirma/STABIL_DESTEK_SONRASI_DAVRANIS_SORU_PLANI_2026-11-07.md](arastirma/STABIL_DESTEK_SONRASI_DAVRANIS_SORU_PLANI_2026-11-07.md) | Taslak | 2026-11-07 | Native Stabil desteğine göre davranış araştırması ve konuşulacak tanımlar; replay yapılmadı |
 | [arastirma/STABIL_DAVRANIS_SORULARI.md](arastirma/STABIL_DAVRANIS_SORULARI.md) | Kayıt | 2026-11-01 | 48 soru sicili; konuşmadan yeniden kayıt, eski bayt-kopyası değil |
 | [arastirma/STABIL_CALISMA_GECMISI.md](arastirma/STABIL_CALISMA_GECMISI.md) | Kayıt | 2026-11-01 | 27/48 soru koşularının konuşmada raporlanan sayıları; artefaktlar eksik |
 | [arastirma/STABIL_DOSYA_ENVANTERI.md](arastirma/STABIL_DOSYA_ENVANTERI.md) | Kayıt | 2026-11-01 | Bugün mevcut dosyalar, eksik runtime/veri ve kurtarma listesi |

@@ -72,6 +72,33 @@ def test_internal_missing_hourly_bar_or_whole_bucket_fails_closed(tf, missing_co
     assert not result.bar_projection
 
 
+def test_known_closed_day_provider_row_is_excluded_without_mutating_source(caplog):
+    daily, hourly = _frames()
+    closed_day = pd.Timestamp("2026-03-28", tz="Europe/Istanbul")  # Saturday
+    daily.loc[closed_day] = daily.iloc[-1].to_numpy()
+    daily = daily.sort_index()
+    before = daily.copy(deep=True)
+
+    result = _output("4h", daily, hourly)
+
+    assert result.status == StabilRoleStatus.READY, result.reason
+    assert all(obs.timestamp.date() != closed_day.date() for obs in result.observations)
+    assert "2026-03-28" in caplog.text
+    pd.testing.assert_frame_equal(daily, before)
+
+
+def test_daily_chart_and_resistance_both_ignore_known_closed_day_provider_row():
+    daily, hourly = _frames()
+    closed_day = pd.Timestamp("2026-03-28", tz="Europe/Istanbul")  # Saturday
+    daily.loc[closed_day] = daily.iloc[-1].to_numpy()
+    daily = daily.sort_index()
+
+    result = _output("1d", daily, hourly)
+
+    assert result.status == StabilRoleStatus.READY, result.reason
+    assert all(point.bar_close_time.date() != closed_day.date() for point in result.bar_projection)
+
+
 def test_missing_daily_trading_session_or_latest_completed_daily_fails_closed():
     daily, hourly = _frames()
     assert _output("4h", daily.drop(daily.index[20]), hourly).reason == "missing_daily_session"

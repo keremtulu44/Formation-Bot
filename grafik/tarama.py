@@ -422,6 +422,9 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
 
 def _stabil_direnc_uyarisi(neden: str) -> str:
     """Kullanıcıya görünen kısa neden; ayrıntılı kod snapshot metadata'dadır."""
+    if str(neden).startswith("daily_on_closed_session:"):
+        gun = str(neden).partition(":")[2]
+        return f"Stabil direnç gösterilemedi: BIST kapalı olan {gun} tarihinde günlük mum var"
     aciklamalar = {
         "missing_source": "gerekli günlük veya saatlik kaynak yok",
         "no_completed_bars": "kapanmış kaynak mumu yok",
