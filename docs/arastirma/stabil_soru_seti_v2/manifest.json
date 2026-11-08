@@ -1,25 +1,45 @@
 {
-  "surum": "V2-2026-11-08",
+  "surum": "V2-2026-11-08-rev2",
   "durum": "ONERI",
   "kapsam": "stabil_destek",
   "kararlar": {
-    "basari_olcusu": ["first_1atr", "sabit_ufuk_kapanis"],
+    "basari_olcusu": [
+      "first_1atr",
+      "sabit_ufuk_kapanis"
+    ],
     "celisen_olay": "ayri_hucre",
     "orneklem_bolmesi": "sembol_hash",
     "kesif_orani": 0.6,
     "hash_kurali": "sha256(sembol) % 10 < 6 -> kesif",
-    "gruplama_eksenleri": ["native_yasam_dongusu", "geometrik_mesafe"],
+    "gruplama_eksenleri": [
+      "native_yasam_dongusu",
+      "geometrik_mesafe"
+    ],
     "mum_birimi": "gunluk_ATR14",
     "sicil": "V2",
     "legacy": "STABIL_DAVRANIS_SORULARI.md (A-H, dondu)",
     "dallanma_seviyesi": 3,
     "artik_hucre": "zorunlu",
     "min_n_ana": 100,
-    "min_n_alt": 30
+    "min_n_alt": 30,
+    "yön_hükmü": {
+      "kesif_esik": 0.6,
+      "dogrulama_esik": 0.55,
+      "kontrol_farki_pp": 10,
+      "min_n": 100,
+      "aksi": "ok_uretme"
+    }
   },
   "sozlesme": {
     "atr": "giris_barinda_donmus_gunluk_ATR14",
-    "ufuklar_4s_bar": [1, 4, 8, 10, 12, 16],
+    "ufuklar_4s_bar": [
+      1,
+      4,
+      8,
+      10,
+      12,
+      16
+    ],
     "ana_ufuk_4s_bar": 16,
     "mesafe_bantlari_atr1d": {
       "temas": "|low-seviye| <= 0.35 veya low<=seviye<=high",
@@ -30,137 +50,380 @@
     "temas_epizodu": {
       "ardisik_temas": "tek_temas",
       "yeni_temas_icin_min_bar_ayrilma": 2,
-      "sayi_bandi": [1, 2, 3, "4+"]
+      "sayi_bandi": [
+        1,
+        2,
+        3,
+        "4+"
+      ]
     },
     "mum_anatomisi_atr1d": {
-      "govde": {"yonsuz": "<0.20", "orta": "0.20-0.50", "buyuk": ">=0.50"},
-      "kapanis_pozisyonu": {"alt": "<0.35", "orta": "0.35-0.65", "ust": ">0.65"},
-      "aralik": {"dar": "<0.35", "normal": "0.35-1.00", "genis": ">1.00"}
+      "govde": {
+        "yonsuz": "<0.20",
+        "orta": "0.20-0.50",
+        "buyuk": ">=0.50"
+      },
+      "kapanis_pozisyonu": {
+        "alt": "<0.35",
+        "orta": "0.35-0.65",
+        "ust": ">0.65"
+      },
+      "aralik": {
+        "dar": "<0.35",
+        "normal": "0.35-1.00",
+        "genis": ">1.00"
+      }
     },
-    "hacim_bandi": {"dusuk": "<0.8", "normal": "0.8-1.2", "yuksek": ">=1.2"},
-    "ustune_cikis": {"onceki_kapanis": "d_prev < 0", "bu_kapanis": "d_now >= +0.05"},
-    "kalma": {"pencere_bar": 3, "tol_atr1d": 0.05},
-    "temizlik_orani": {"pencere_bar": 8, "pay": "geri_donen / tum_kirilmalar"},
-    "sansur": "sag_sansur_tabanda_yuzde_gecerli_n_uzerinden"
+    "hacim_bandi": {
+      "dusuk": "<0.8",
+      "normal": "0.8-1.2",
+      "yuksek": ">=1.2"
+    },
+    "ustune_cikis": {
+      "onceki_kapanis": "d_prev < 0",
+      "bu_kapanis": "d_now >= +0.05"
+    },
+    "kalma": {
+      "pencere_bar": 3,
+      "tol_atr1d": 0.05
+    },
+    "temizlik_orani": {
+      "pencere_bar": 8,
+      "pay": "geri_donen / tum_kirilmalar"
+    },
+    "sansur": "sag_sansur_tabanda_yuzde_gecerli_n_uzerinden",
+    "dikeylik_tanimlari": {
+      "D1_kod_proxy": "regime in {STEPPING_UP,STEPPING_DOWN} veya son 8 gunde yukari rebase veya seviye degisti ve sabit degil",
+      "D2_egim": "(seviye_t - seviye_{t-20}) / ATR1d >= 1.0",
+      "D3_rejim": "regime == STEPPING_UP"
+    },
+    "raf_alti_dolu": {
+      "pencere_bar": 20,
+      "min_bar": 5,
+      "bant_atr1d": 0.35,
+      "gevsek_varyant": {
+        "min_bar": 3,
+        "bant_atr1d": 0.5
+      }
+    },
+    "geri_alim_denemesi": {
+      "onceki": "d_{t-1} < 0",
+      "bu": "d_t >= 0",
+      "kalma_penceresi_bar": 3
+    }
   },
   "sorular": [
     {
-      "id": "V2-01",
-      "aile": "K1",
-      "baslik": "Destek ustune cikis ne kadar tutuyor",
-      "kutle": "d_prev < 0 ve d_now >= +0.05 (kapanisla ustune cikis), epizot basina tek olay",
-      "bolunme": ["first_1atr_16", "ret_atr_16_isaret"],
-      "alt_hucreler": ["sarkma_derinligi", "temas_sayisi", "native_durum", "govde_bandi", "hacim_bandi", "bos_asagi", "artik"],
-      "domainlar": ["bos", "rvol", "ayı_fvg_mesafesi", "ayı_ob_mesafesi"],
-      "min_n": {"ana": 100, "alt": 30},
-      "miras": ["STB-BHV-A01", "STB-BHV-A03", "STB-BHV-C01"],
-      "durum": "ONERI",
-      "oncelik": 1
+      "id": "Y1",
+      "aile": "yon",
+      "baslik": "Dikey destek altindan gelen geri alim tutmuyor mu",
+      "kutle": "d_{t-1}<0 ve d_t>=0 (geri alim denemesi)",
+      "bolunme": [
+        "3 barda tuttu/tutmadı",
+        "first_1atr_16"
+      ],
+      "alt_hucreler": [
+        "D1",
+        "D2",
+        "D3",
+        "raf_var_yok",
+        "temas_sayisi",
+        "govde",
+        "hacim",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol",
+        "fvg",
+        "order_block"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "dikey_raf_yok": "▼",
+        "yatay_raf_var": "▲"
+      },
+      "oncelik": 1,
+      "durum": "ONERI"
     },
     {
-      "id": "V2-02",
-      "aile": "K1",
-      "baslik": "Ustunde kalma suresi ve kalamama",
-      "kutle": "V2-01 olaylari",
-      "bolunme": ["kaldi_kalamadi_3bar", "first_1atr_16", "ret_atr_16_isaret"],
-      "alt_hucreler": ["govde_bandi", "hacim_bandi", "temas_sayisi", "kapanis_pozisyonu"],
-      "domainlar": ["bos", "rvol"],
-      "min_n": {"ana": 100, "alt": 30},
-      "miras": [],
-      "durum": "ONERI",
-      "oncelik": 4
-    },
-    {
-      "id": "V2-03",
-      "aile": "K1",
-      "baslik": "Kucuk/yonsuz mum neden mi eslikci mi",
-      "kutle": "V2-02 kalamadi hucresi + mesafe/rejim eslesmis kontrol",
-      "bolunme": ["first_1atr_16", "ret_atr_16_isaret"],
-      "alt_hucreler": ["atr1d_dilimi", "mesafe_bandi", "rejim", "govde_bandi"],
-      "domainlar": ["rvol"],
-      "min_n": {"ana": 100, "alt": 30},
-      "miras": [],
-      "durum": "ONERI",
-      "oncelik": 5
-    },
-    {
-      "id": "V2-04",
-      "aile": "K2",
-      "baslik": "Hareketsiz fiyat ve destegin hareketlenmesi",
-      "kutle": "|d| > 1.00 ust uste >= 6 bar (hareketsiz) -> ilk hareketlenme bari",
-      "bolunme": ["hareketlenme_yonu", "first_1atr_16", "ret_atr_16_isaret"],
-      "alt_hucreler": ["bekleme_suresi", "rejim", "hacim_bandi", "artik"],
-      "domainlar": ["bos", "rvol"],
-      "min_n": {"ana": 100, "alt": 30},
-      "miras": ["STB-BHV-A01", "STB-BHV-A04", "STB-BHV-A05"],
-      "durum": "ONERI",
-      "oncelik": 7
-    },
-    {
-      "id": "V2-05",
-      "aile": "K3",
-      "baslik": "Sabit destegin altina inis: temizlik orani",
-      "kutle": "kapanis d < 0 (ilk kirilma bari)",
-      "bolunme": ["temizlik_orani_8bar", "sarkma_suresi"],
-      "alt_hucreler": ["sarkma_derinligi", "kirilma_govdesi", "hacim_bandi", "bos_asagi", "artik"],
-      "domainlar": ["bos", "rvol", "ayı_fvg_mesafesi", "ayı_ob_mesafesi"],
-      "min_n": {"ana": 100, "alt": 30},
-      "miras": ["STB-BHV-D01", "STB-BHV-D02", "STB-BHV-E"],
-      "durum": "ONERI",
-      "oncelik": 2
-    },
-    {
-      "id": "V2-06",
-      "aile": "K3",
-      "baslik": "Temas sayisi kirilma riskini artiriyor mu (3. temas sarti)",
-      "kutle": "her temas epizodu + 16 bar",
-      "bolunme": ["kirilma_orani", "kirilma_derinligi"],
-      "alt_hucreler": ["temas_sayisi_1_2_3_4plus", "tepki_boyu", "temas_araligi", "rejim", "hacim_bandi", "artik"],
-      "domainlar": ["rvol"],
-      "min_n": {"ana": 100, "alt": 30},
-      "miras": ["STB-BHV-C02", "STB-BHV-C04"],
-      "durum": "ONERI",
-      "oncelik": 6
-    },
-    {
-      "id": "V2-07",
-      "aile": "K4",
-      "baslik": "Azinligi hangi yan domain acikliyor",
-      "kutle": "V2-01/02/05/06 azinlik hucreleri (satir basina bir)",
-      "bolunme": ["domain_var", "domain_yok", "domain_bilinmiyor"],
-      "alt_hucreler": ["bos_asagi", "rvol", "fvg_mesafesi", "ob_mesafesi", "artik"],
-      "domainlar": ["bos", "rvol", "fvg", "order_block"],
-      "min_n": {"ana": 100, "alt": 30},
-      "miras": [],
-      "durum": "ONERI",
-      "oncelik": 8
-    },
-    {
-      "id": "V2-08",
-      "aile": "K4",
-      "baslik": "Kontrol: destek bilgisi mi piyasa egilimi mi",
-      "kutle": "V2-01 ve V2-05 hucrelerinin eslesmis karsi ornegi (ayni sembol, ayni ATR dilimi, sabit tohum)",
-      "bolunme": ["first_1atr_16", "ret_atr_16_isaret"],
-      "alt_hucreler": ["seviye_var", "seviye_yok"],
+      "id": "K1",
+      "aile": "kontrol",
+      "baslik": "Rastgele bar ve seviye yok karsi ornegi",
+      "kutle": "eslesmis ATR dilimi + mesafe bandi, sabit tohum",
+      "bolunme": [
+        "first_1atr_16",
+        "ret_atr_16_isaret"
+      ],
+      "alt_hucreler": [
+        "seviye_var",
+        "seviye_yok",
+        "rastgele_bar"
+      ],
       "domainlar": [],
-      "min_n": {"ana": 100, "alt": 30},
-      "miras": ["STB-BHV-H"],
-      "durum": "ONERI",
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "sart": "Y1-5 yuzdeleri kontrolden >=10 puan ayrismali"
+      },
+      "oncelik": 2,
+      "zorunlu": true,
+      "durum": "ONERI"
+    },
+    {
+      "id": "Y4",
+      "aile": "yon",
+      "baslik": "Sabit destegin altina iniste temizlik orani yon veriyor mu",
+      "kutle": "kapanis d<0 (ilk kirilma bari)",
+      "bolunme": [
+        "temizlik_orani_8bar",
+        "first_1atr_16"
+      ],
+      "alt_hucreler": [
+        "sarkma_derinligi",
+        "sarkma_suresi",
+        "kirilma_govdesi",
+        "hacim",
+        "bos_asagi",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol",
+        "fvg",
+        "order_block"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "sig_sarkma_hizli_donus": "▲",
+        "derin_sarkma_donus_yok": "▼"
+      },
       "oncelik": 3,
-      "zorunlu": true
+      "durum": "ONERI"
+    },
+    {
+      "id": "Y2",
+      "aile": "yon",
+      "baslik": "Alti dolu (raf) gercekten destek veriyor mu",
+      "kutle": "0<d<=1.0 ve raf var; kontrol raf yok ayni mesafe",
+      "bolunme": [
+        "first_1atr_16",
+        "ret_atr_16_isaret",
+        "sekme_0.5ATR_8bar"
+      ],
+      "alt_hucreler": [
+        "raf_yasi",
+        "temas_sayisi",
+        "rejim",
+        "hacim",
+        "bos",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "raf_var_temas": "▲",
+        "raf_yok_temas": "▼ veya ok yok"
+      },
+      "oncelik": 4,
+      "durum": "ONERI"
+    },
+    {
+      "id": "Y3",
+      "aile": "yon",
+      "baslik": "Tutmayan geri alim sonrasi dusus suruyor mu",
+      "kutle": "Y1 'tutmadi' hucresi",
+      "bolunme": [
+        "first_1atr_16",
+        "mae_atr_16"
+      ],
+      "alt_hucreler": [
+        "raf_yok",
+        "dikeylik_tanimi",
+        "dusus_govdesi",
+        "hacim",
+        "bos_asagi",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "basarisiz_geri_alim": "▼"
+      },
+      "oncelik": 5,
+      "durum": "ONERI"
+    },
+    {
+      "id": "Y5",
+      "aile": "yon",
+      "baslik": "Hareketsiz fiyat + hacim patlamasi yon veriyor mu",
+      "kutle": "|d|>1.00 ust uste >=6 bar ve sonraki bar rvol>=1.2",
+      "bolunme": [
+        "first_1atr_16"
+      ],
+      "alt_hucreler": [
+        "bekleme_suresi",
+        "rejim",
+        "govde",
+        "bos",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "patlama_yonunde": "▲/▼"
+      },
+      "oncelik": 6,
+      "durum": "ONERI"
+    },
+    {
+      "id": "X1",
+      "aile": "katman",
+      "baslik": "Mum anatomisi katmani (Y1/Y4 azinligina)",
+      "kutle": "ilgili Y sorusunun azinlik hucresi",
+      "bolunme": [
+        "govde_bandi",
+        "kapanis_pozisyonu",
+        "aralik",
+        "fitil"
+      ],
+      "alt_hucreler": [
+        "atr1d_dilimi",
+        "mesafe_bandi",
+        "rejim"
+      ],
+      "domainlar": [],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "not": "neden/eslikci ayrimi icin eslesmis karsilastirma zorunlu",
+      "durum": "ONERI"
+    },
+    {
+      "id": "X2",
+      "aile": "katman",
+      "baslik": "Yan domain katmani + artik hucresi",
+      "kutle": "Y1-Y5 hucreleri",
+      "bolunme": [
+        "var",
+        "yok",
+        "bilinmiyor"
+      ],
+      "alt_hucreler": [
+        "bos_asagi",
+        "rvol",
+        "fvg_mesafesi",
+        "ob_mesafesi",
+        "weekly",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol",
+        "fvg",
+        "order_block"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "not": "bilinmiyor asla 0 sayilmaz; artik hucresi zorunlu",
+      "durum": "ONERI"
     }
   ],
   "eksik_kod_isleri": [
-    {"id": "G1", "is": "son 3 barda BOS asagi/yukari bayragi", "boyut": "kucuk"},
-    {"id": "G2", "is": "mum anatomisi sutunlari (gunluk ATR)", "boyut": "kucuk"},
-    {"id": "G3", "is": "kalma (3 bar) + temas epizodu sayaclari", "boyut": "orta"},
-    {"id": "G4", "is": "sembol hash bolmesi + kesif/dogrulama sutunlari", "boyut": "kucuk"},
-    {"id": "G5", "is": "manifest tabanli sonuc tablosu ureticisi", "boyut": "orta"}
+    {
+      "id": "G0",
+      "is": "D1/D2/D3 dikeylik + raf (shelf) metrigi",
+      "boyut": "orta"
+    },
+    {
+      "id": "G1",
+      "is": "son 3 barda BOS asagi/yukari bayragi",
+      "boyut": "kucuk"
+    },
+    {
+      "id": "G2",
+      "is": "mum anatomisi sutunlari (gunluk ATR)",
+      "boyut": "kucuk"
+    },
+    {
+      "id": "G3",
+      "is": "geri alim denemesi + 3 bar tuttu/tutmadi + temas epizodu",
+      "boyut": "orta"
+    },
+    {
+      "id": "G4",
+      "is": "sembol hash bolmesi + kesif/dogrulama sutunlari",
+      "boyut": "kucuk"
+    },
+    {
+      "id": "G5",
+      "is": "manifest tabanli yon tablosu ureticisi",
+      "boyut": "orta"
+    }
   ],
   "sinirlar": {
     "ok_kurallari_degismez": true,
     "direnc_ilk_turda_yok": true,
     "yeni_domain_yok": true,
     "checkpoint_paketi_depoya_eklenmez": true
+  },
+  "amac": "ok_yonu_cikarimi",
+  "on_olcum_2026_11_08": {
+    "sembol": 15,
+    "bar": 16185,
+    "dikey_bar_payi": {
+      "D1": 0.411,
+      "D3": 0.288,
+      "D2": 0.001
+    },
+    "geri_alim_denemesi_3bar_geri_dusme": {
+      "D1": {
+        "n": 170,
+        "oran": 0.218
+      },
+      "D2": {
+        "n": 25,
+        "oran": 0.32
+      },
+      "D3": {
+        "n": 14,
+        "oran": 0.429
+      },
+      "yatay": {
+        "n": 14,
+        "oran": 0.286
+      }
+    },
+    "raf_kosulu_bar_payi": 0.006,
+    "uyari": "n kucuk; hüküm degil, on ipucu"
   }
 }
