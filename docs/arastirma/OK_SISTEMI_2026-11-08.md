@@ -13,8 +13,8 @@ Direnç tarafı (`resistance.py`) bunun **birebir aynası**dır (aynı eşikler,
 
 | ID | Ok | Ne zaman konuyor | Eşikler | Kod |
 |---|---|---|---|---|
-| **K1** | ▲ | Destek altına sarktıktan sonra **gövdeyle desteğin üstüne kapanış** | önceki ihlal ≤ 1,50 ATR · gövde ≥ 0,32 · kapanış poz. ≥ 0,65 · çizgiye uzaklık ≥ +0,05 ATR · hacim onayı | `close_reclaim` |
-| **K2** | ▲ | Yukarıdayken **fitille altı süpürüp** aynı mumda üstüne dönüş | fitil −1,20…−0,08 ATR · gövde ≥ 0,35 · kapanış poz. ≥ 0,68 · hacim onayı | `intrabar_sweep_reclaim` |
+| **K1** | ▲ | Destek altına sarktıktan sonra **gövdeyle desteğin üstüne kapanış** | önceki ihlal ≤ 1,50 ATR · gövde ≥ 0,32 · kapanış poz. ≥ 0,65 · çizgiye uzaklık ≥ +0,05 ATR · **hacim şartı yok** (§9) | `close_reclaim` |
+| **K2** | ▲ | Yukarıdayken **fitille altı süpürüp** aynı mumda üstüne dönüş | fitil −1,20…−0,08 ATR · gövde ≥ 0,35 · kapanış poz. ≥ 0,68 · **hacim şartı yok** (§9) | `intrabar_sweep_reclaim` |
 | **M1** | ▲ | **Oturmuş yatay zeminden** güçlü gövdeyle kopuş | çizgi ≥ 20 gün sabit · uzaklık 0,15–1,80 ATR · gövde ≥ 0,35 · kapanış poz. ≥ 0,65 · (hacim ≥ 1,10 **veya** gövde ≥ 0,50) · temas < 3 · 3 bar soğuma | `long_base_breakout` |
 | **M2** | ▲ | **Destek yukarı basamak yaparken** gelen güçlü yukarı mum | kademe yukarı · uzaklık 0,10–1,60 ATR · diğer eşikler M1 ile aynı | `upward_rebase_momentum` |
 | **U1** | ▼ | **Dikey/kademeli destek üzerinde yukarı deneme** → ▲ bastırılır, yerine yapı uyarısı | dikey rejim (kademe yukarı/aşağı, ya da çizgi o bar yer değiştirdi) **ve** (geri alım / zayıf geri alım / momentum / alttan temas) | `vertical_attempt_kind` |
@@ -187,18 +187,21 @@ aynı görünüyordu. Artık iki tarafta da **◇**; ayırt eden şey renk ve ko
 
 ### 8.4 Görseller — `docs/gorseller/ok_duzeltme_2026_11_08/` (10 adet, hepsinde iki katman)
 
-| Dosya | Sembol / gün | Destek oku | Direnç oku |
+Sayılar §9'daki hacim değişikliğinden **sonraki** kodla üretilmiştir.
+Biçim: **dolu** (olay) · *içi boş* (momentum) · ◇ (yapı uyarısı).
+
+| Dosya | Sembol / gün | Destek: dolu ▲ · içi boş ▲ · ◇ | Direnç: dolu ▼ · içi boş ▼ · ◇ |
 |---|---|---|---|
-| `ikikatman_aefes_uzak_uyari.png` | AEFES 19.09.2025 | 2 ◇ | 4 ◇ |
-| `ikikatman_aghol_ust_uste.png` | AGHOL 01.04.2025 | 2 ▲ + 4 ◇ | 1 ▼ + 1 ▽ |
-| `ikikatman_agrot_uc_atr.png` | AGROT 28.03.2025 | 6 ◇ | 1 ▼ + 1 ▽ |
-| `ikikatman_aksen_tekrar.png` | AKSEN 06.03.2026 | 2 ◇ | 1 ▽ |
-| `ikikatman_sise_kademe.png` | SISE 02.10.2026 | 2 ▲ + 4 ◇ | 1 ◇ |
-| `ikikatman_thyao_gun_ici.png` | THYAO 21.09.2026 | 2 ▲ + 1 ◇ | — |
-| `ikikatman_cemas_yogun.png` | CEMAS 06.08.2026 | 1 ▲ + 3 ◇ | 1 ▼ + 1 ◇ |
-| `ikikatman_alark_bes_bar.png` | ALARK 22.05.2025 | 7 ◇ | 1 ▽ + 2 ◇ |
-| `ikikatman_garan_dikey.png` | GARAN 21.09.2026 | 2 ▲ + 1 ◇ | 4 ▼ + 2 ◇ |
-| `ikikatman_akbnk_geri_alim.png` | AKBNK 23.03.2026 | 1 ◇ | 2 ▼ + 2 ◇ |
+| `ikikatman_aefes_uzak_uyari.png` | AEFES 19.09.2025 | 0 · 0 · 2 | 0 · 0 · 4 |
+| `ikikatman_aghol_ust_uste.png` | AGHOL 01.04.2025 | **3** · 0 · 4 | 1 · 1 · 0 |
+| `ikikatman_agrot_uc_atr.png` | AGROT 28.03.2025 | 0 · 0 · 6 | 1 · 1 · 0 |
+| `ikikatman_aksen_tekrar.png` | AKSEN 06.03.2026 | 0 · 0 · 2 | 0 · 1 · 0 |
+| `ikikatman_sise_kademe.png` | SISE 02.10.2026 | 2 · 0 · 4 | 0 · 0 · 1 |
+| `ikikatman_thyao_gun_ici.png` | THYAO 21.09.2026 | 2 · 0 · 1 | 0 · 0 · 0 |
+| `ikikatman_cemas_yogun.png` | CEMAS 06.08.2026 | 1 · 0 · 3 | 1 · 0 · 1 |
+| `ikikatman_alark_bes_bar.png` | ALARK 22.05.2025 | 0 · 0 · 7 | 0 · 1 · 2 |
+| `ikikatman_garan_dikey.png` | GARAN 21.09.2026 | 0 · **2** · 1 | 4 · 0 · 2 |
+| `ikikatman_akbnk_geri_alim.png` | AKBNK 23.03.2026 | 0 · 0 · 1 | 2 · 0 · 2 |
 
 Ayrıca önce/sonra karşılaştırmaları: `karsilastirma_AGHOL.png`, `karsilastirma_AGROT.png`,
 `karsilastirma_AKSEN.png` (§7).
@@ -207,3 +210,70 @@ Ayrıca önce/sonra karşılaştırmaları: `karsilastirma_AGHOL.png`, `karsilas
 `test_stabil_resistance_chart_render` (7), `test_stabil_resistance_chart_bridge`,
 `test_stabil_resistance_chart_snapshot`, `test_stabil_support_resistance_compare`, `test_grafik_gorsel4`,
 `test_grafik_gorsel_kalite` → **73 test geçiyor**.
+
+---
+
+## 9. HACİM ŞARTI KALDIRILDI — yalnız DOLU oklarda (2026-11-08, kullanıcı kararı)
+
+### 9.1 Karar
+- **Dolu ▲ (destek geri alımı) ve dolu ▼ (direnç dönüşü)** artık hacim şartı aramıyor.
+- **Momentum (içi boş ▲/▼) AYNEN kaldı** — orada hâlâ `hacim ≥1,10×` **veya** `gövde ≥0,50 ATR`.
+- ◇ yapı uyarısı değişmedi.
+
+### 9.2 Gerekçe (rev10 replay, ölçülmüş)
+- Havuzda "hacim yüksek" anlamlı **göründü** (DOWN lift +4,9, p=0,0007) ama senaryo-stratifiye
+  Mantel–Haenszel testinde **kayboldu**: OR 0,82 (p=0,020) → **0,93 (p=0,55)**; işaret testi doğrulamada
+  **3/6** (p=0,66). Havuzdaki fark kompozisyondan geliyordu (Cramér's V 0,383).
+- **Yukarı tarafta hacim hiç fark yaratmadı:** UP %52,0 → %50,5. Yani hacim, ▲'yı doğru yapan şey değildi.
+- Hacmin işe yaradığı tek yer `▼` ailesiydi (`rvol ≥0,8` → DOWN %52,9 → %56,9) ve o hâlâ **aday**, canlı ok değil.
+
+### 9.3 Kod
+| Dosya | Ne değişti |
+|---|---|
+| `domain_engines/stabil/signals.py` | `vol_ok_close` / `vol_ok_sweep` → `True` (K1/K2). Momentumun `hacim veya gövde` şartı dokunulmadı |
+| `domain_engines/stabil/resistance.py` | `volume_ok_return` / `volume_ok_sweep` → `True` (ayna, dolu ▼) |
+
+**Yan etki (bilinçli):** `is_index` gövde istisnası (endekslerde 0,38/0,40) bu blokla birlikte kalktı;
+artık herkes için aynı anatomik kapılar geçerli (gövde ≥0,32/0,35 · kapanış poz. ≥0,65/0,68).
+Endeks istisnası zaten **gevşetiyordu**; kalkması endeksi dezavantajlı bırakmıyor.
+
+### 9.4 Ölçüm — önce / sonra (günlük, 50 sembol, 24.549 bar)
+
+| Ölçüm | Önce | Sonra |
+|---|---|---|
+| **Dolu ▲** (K1+K2) | 180 | **195 (+15, %8,3)** |
+| Momentum ▲ (M1+M2) | 51 | **51 (değişmedi)** |
+| ◇ yapı uyarısı | 737 | **737 (değişmedi)** |
+| Toplam ok | 968 | **983 (+%1,5)** |
+| Sembol başına dolu ▲ | 3,6 | 3,9 |
+| Hiç değişmeyen sembol | — | **36 / 50** |
+
+**Direnç tarafı (30 sembol, ~14.600 bar):** dolu ▼ 159 → **174 (+15)** · momentum ▼ 38 → **38 (aynı)** · ◇ 377 → 378.
+
+**Yeni gelen 15 ok nereden geldi?** Hepsi hacmi 1,0×'in **altında** olan günler (0,23–0,94×):
+10'u `close_reclaim`, 5'i `intrabar_sweep_reclaim`; gövde 0,33–0,45 ATR, kapanış pozisyonu 0,70–1,00,
+çizgiye mesafe 0,08–0,81 ATR. Mesafe (`≤1,80 ATR`) ve soğuma kapıları aynen geçerli → **uzaktan ok gelmedi,
+art arda ok oluşmadı**. "Hacim kalkarsa spam olur" korkusu bu kütlede **doğrulanmadı**.
+
+### 9.5 Görseller — `docs/gorseller/ok_hacim_kapisi_2026_11_08/`
+5 sembolde **aynı kare, iki kod hâli**:
+
+| Sembol / gün | Ne görünüyor | Dosya |
+|---|---|---|
+| AGHOL 16.01.2025 | dolu ▲ 1 → **2** | `karsilastirma_aghol_geri_alim.png` |
+| ALARK 14.07.2026 | dolu ▲ 1 → **2** | `karsilastirma_alark_geri_alim.png` |
+| CEMTS 25.03.2025 | dolu ▲ 2 → **3** | `karsilastirma_cemts_geri_alim.png` |
+| AEFES 30.12.2025 | dolu ▲ 1 → **2** (süpürme) | `karsilastirma_aefes_supurme.png` |
+| DOCO 17.03.2026 | dolu ▲ 2 → **3**, dolu ▼ 0 → **1** | `karsilastirma_doco_geri_alim.png` |
+
+Tam kareler: `hacim_once_*.png` (eski kod, `HEAD` sürümü süreç içinde taklit edilir) ve
+`hacim_sonra_*.png` (yeni kod). Üretici: `research/stabil_hacim_kapisi_gorseller.py`
+(`once` · `sonra` · `karsilastir`).
+
+### 9.6 Test
+`test_stabil_resistance_engine` içindeki eski "endeks hacim istisnası" testi yeni davranışa çevrildi:
+`test_zero_volume_no_longer_blocks_return_on_index_or_stock` (hacim 0 iken endeks de hisse de dönüş alır).
+`test_stabil_resistance_engine` · `test_stabil_momentum_arrow` · `test_stabil_vertical_policy` ·
+`test_stabil_arrow_context_replay` · `test_stabil_support_resistance_compare` ·
+`test_stabil_resistance_chart_render` · `test_stabil_resistance_chart_bridge` · `test_stabil_resistance_replay`
+→ **131 test geçiyor**.

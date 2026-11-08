@@ -188,7 +188,6 @@ def evaluate_bar_behaviors(
 
     atr_arr = _causal_atr14(highs, lows, closes, period=14)
     vol_ratio_arr = _causal_vol_ratio20(volumes, window=20)
-    is_index = _is_index_symbol(symbol)
     tol = max(float(min_tick) * 0.5, 1e-6)
 
     # Map daily_as_of -> CandidateRegimePoint causally
@@ -331,16 +330,16 @@ def evaluate_bar_behaviors(
             now_above = c > (sup_f + tol)
             was_above = prev_close >= (prev_sup - tol)
 
-            vol_ok_close = (
-                (vr is not None and vr >= 1.0)
-                or body_atr >= 0.45
-                or (is_index and body_atr >= 0.38)
-            )
-            vol_ok_sweep = (
-                (vr is not None and vr >= 1.0)
-                or body_atr >= 0.50
-                or (is_index and body_atr >= 0.40)
-            )
+            # 2026-11-08 (kullanıcı kararı): dolu ▲ (geri alım/dönüş) için
+            # HACİM ŞARTI KALDIRILDI. Gerekçe: rev10 replay ölçümünde hacim
+            # havuzda anlamlı görünüp senaryo-stratifiye testte kayboldu
+            # (OR 0,82→0,93, p 0,020→0,55) ve yukarı tarafta hiç fark
+            # yaratmadı (UP %52,0→%50,5). Ok artık yalnız mum anatomisiyle
+            # kurulur: gövde ≥0,32/0,35 ATR · kapanış pozisyonu ≥0,65/0,68 ·
+            # çizgiye mesafe · ihlal derinliği. Momentumun hacim-veya-gövde
+            # şartı AYNEN duruyor (kullanıcı: "momentum aynen kalsın").
+            vol_ok_close = True
+            vol_ok_sweep = True
 
             if was_below and now_above:
                 if (

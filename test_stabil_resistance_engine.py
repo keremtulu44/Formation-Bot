@@ -664,7 +664,13 @@ def test_deep_breach_does_not_become_strong_return():
     assert resistance[-1].weak_return and resistance[-1].arrow_kind is None
 
 
-def test_index_volume_exception_mirrors_existing_support():
+def test_zero_volume_no_longer_blocks_return_on_index_or_stock():
+    """2026-11-08: dolu ▼/▲ için hacim şartı kaldırıldı (kullanıcı kararı).
+
+    Önceden bu test "endeks istisnası"nı koruyordu: hacim 0 iken endeks dönüş
+    alıyor, hisse almıyordu. Hacim kapısı kalktığı için ikisi de aynı davranır;
+    geriye yalnız mum anatomisi (gövde/kapanış konumu/mesafe) kalır.
+    """
     rows = quiet(28) + [
         {"open": 100.1, "high": 100.2, "low": 99.4, "close": 99.7, "volume": 0.},
         {"open": 99.8, "high": 100.5, "low": 99.7, "close": 100.4, "volume": 0.},
@@ -676,7 +682,8 @@ def test_index_volume_exception_mirrors_existing_support():
     assert index[-1].return_kind == "close_return_below"
     *_, stock_support, _real, _points, _history, stock = setup_reference(rows, symbol="ASTOR")
     assert_behaviors_mirror(stock_support, stock)
-    assert stock[-1].weak_return and stock[-1].arrow_kind is None
+    assert stock[-1].return_kind == "close_return_below"
+    assert stock[-1].weak_return is False
 
 
 def test_unclosed_internal_row_with_bad_time_does_not_disappear_from_history():

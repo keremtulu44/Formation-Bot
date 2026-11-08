@@ -32,7 +32,6 @@ from .signals import (
     _causal_atr14,
     _causal_vol_ratio20,
     _enum_value,
-    _is_index_symbol,
 )
 from .stabil_support_lifecycle import (
     DailySupportObservation,
@@ -443,7 +442,6 @@ def evaluate_resistance_bar_behaviors(
     )
     atr_arr = _causal_atr14(highs, lows, closes, period=14)
     volume_arr = _causal_vol_ratio20(volumes, window=20)
-    is_index = _is_index_symbol(symbol)
     tol = max(float(min_tick) * 0.5, 1e-6)
     regime_points = classify_candidate_support_regimes(history._mirrored_timeline) if history._mirrored_timeline else ()
     daily_times = [snap.as_of for snap in history._mirrored_timeline]
@@ -538,10 +536,13 @@ def evaluate_resistance_bar_behaviors(
             was_above = previous_close > previous_line + tol
             now_below = c < line - tol
             was_below = previous_close <= previous_line + tol
-            volume_ok_return = ((vr is not None and vr >= 1.0) or bearish_body_atr >= 0.45
-                                or (is_index and bearish_body_atr >= 0.38))
-            volume_ok_sweep = ((vr is not None and vr >= 1.0) or bearish_body_atr >= 0.50
-                               or (is_index and bearish_body_atr >= 0.40))
+            # 2026-11-08 (kullanıcı kararı): dolu ▼ (direnç dönüşü) için HACİM
+            # ŞARTI KALDIRILDI — destek tarafındaki `signals.py` ile birebir
+            # aynı davranış. Ok yalnız mum anatomisiyle kurulur: gövde
+            # ≥0,32/0,35 ATR · kapanış pozisyonu ≥0,65/0,68 · mesafe · ihlal
+            # derinliği. Momentumun hacim-veya-gövde şartı AYNEN duruyor.
+            volume_ok_return = True
+            volume_ok_sweep = True
             if was_above and now_below:
                 if (0.0 < prior_breach_depth <= 1.50 and bearish_body_atr >= 0.32
                         and bearish_close_pos >= 0.65
