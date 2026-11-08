@@ -42,14 +42,14 @@ def test_reverse_colors_distinct_dashed_line_and_all_arrow_shapes():
     items = {c.get_gid(): c for c in ax.collections}
     line = items["grafik-stabil-direnc-stepline"]
     assert [colors.to_hex(c) for c in line.get_colors()] == [
-        grafik.PALET["stabil_alt"], grafik.PALET["stabil_ust"], grafik.PALET["stabil_alt"]
+        grafik.PALET["stabil_direnc"], grafik.PALET["stabil_direnc_kirik"], grafik.PALET["stabil_direnc"]
     ]
     assert line.get_linestyles()[0][1] is not None  # dashed, distinguishable from solid support
     assert len(items["grafik-stabil-direnc-donus"].get_facecolors()) == 1
     assert len(items["grafik-stabil-direnc-momentum"].get_facecolors()) == 0
     assert len(items["grafik-stabil-direnc-dikey-deneme"].get_facecolors()) == 0
-    assert colors.to_hex(items["grafik-stabil-direnc-donus"].get_facecolors()[0]) == grafik.PALET["stabil_alt"]
-    assert colors.to_hex(items["grafik-stabil-direnc-dikey-deneme"].get_edgecolors()[0]) == grafik.PALET["stabil_ust"]
+    assert colors.to_hex(items["grafik-stabil-direnc-donus"].get_facecolors()[0]) == grafik.PALET["stabil_direnc"]
+    assert colors.to_hex(items["grafik-stabil-direnc-dikey-deneme"].get_edgecolors()[0]) == grafik.PALET["stabil_direnc"]
     assert [(x["kaynak"], x["metin"]) for x in chips] == [("stabil_direnc", "Direnç 101,00")]
 
 
@@ -98,7 +98,7 @@ def test_colorblind_palette_and_no_stale_chip():
                            dusuk=[99] * 6, yuksek=[102] * 6, sag_adaylar=chips)
         line = next(c for c in ax.collections if c.get_gid() == "grafik-stabil-direnc-stepline")
         assert colors.to_hex(line.get_colors()[0]) == "#f5a05a"
-        assert colors.to_hex(line.get_colors()[1]) == "#4da3ff"
+        assert colors.to_hex(line.get_colors()[1]) == "#b45309"
     assert chips == []
 
 
@@ -124,9 +124,9 @@ def test_legend_reports_only_visible_classifications():
     summary = {"cizildi": True, "donus_isaret": 1, "momentum_isaret": 0, "dikey_deneme_isaret": 1}
     legend = grafik._lejant({"stabil_direnc": layer}, False, meta={"cizgiler": {"stabil_direnc": summary}})
     assert "┄ Stabil direnç" in legend
-    assert "▼ direnç dönüşü" in legend
-    assert "◇ direnç yapı uyarısı" in legend
-    assert "▽ direnç momentumu" not in legend
+    assert "▼ direnç dönüşü (turuncu)" in legend
+    assert "◇ direnç yapı uyarısı (turuncu)" in legend
+    assert "▽ direnç momentumu (turuncu)" not in legend
 
 
 def test_step_connector_colors_are_the_directional_mirror_of_support():
@@ -138,5 +138,5 @@ def test_step_connector_colors_are_the_directional_mirror_of_support():
     _stabil_direnc_ciz(ax, {"stabil_direnc": layer}, 6, (95, 105), kadrajda=True)
     connector = next(c for c in ax.collections if c.get_gid() == "grafik-stabil-direnc-step")
     assert [colors.to_hex(c) for c in connector.get_colors()] == [
-        grafik.PALET["stabil_alt"], grafik.PALET["stabil_ust"]
+        grafik.PALET["stabil_direnc_kirik"], grafik.PALET["stabil_direnc"]
     ]

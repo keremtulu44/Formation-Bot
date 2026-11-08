@@ -86,6 +86,8 @@ _PALET_RENK_KORUGU: dict[str, str] = {
     "serit_yuk": "#3f8fd0", "serit_dus": "#d98b4a",
     "son_yuk": "#4da3ff", "son_dus": "#f5a05a",
     "stabil_ust": "#4da3ff", "stabil_alt": "#f5a05a",
+    "stabil_destek": "#4da3ff", "stabil_direnc": "#f5a05a",
+    "stabil_destek_kirik": "#2f6fb5", "stabil_direnc_kirik": "#b45309",
     # Güçlü yukarı momentum oku: renkle birlikte İÇİ BOŞ ▲ biçimi de ayrım taşır.
     "stabil_momentum": "#4da3ff",
 }
@@ -396,6 +398,15 @@ PALET_TABAN = {
     "stabil_ust": "#2cc98d",
     "stabil_alt": "#e25d5a",
     "stabil_momentum": "#f2c94c",
+    # 2026-11-08 (kullanıcı): destek ve direnç katmanı renk olarak ayrışsın.
+    # Renk artık KATMANI anlatır (yeşil = destek, turuncu = direnç);
+    # seviyenin tutup tutmadığını çizgi stili/çip söyler.
+    "stabil_destek": "#2cc98d",
+    "stabil_direnc": "#f5a05a",
+    # Katman içinde "tutuyor / kırıldı" ayrımı aynı renk ailesinde kalır:
+    # destek yeşilin iki tonu, direnç turuncunun iki tonu.
+    "stabil_destek_kirik": "#1f9e73",
+    "stabil_direnc_kirik": "#c2410c",
 }
 
 

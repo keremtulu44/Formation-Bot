@@ -150,3 +150,60 @@ Etkisi: **513 ok (%39) azalır**, ▲ tarafı hiç etkilenmez, "dikey bastırma"
 - `KADEME_ASAGI` bayrağı hâlâ en büyük grup (462): bu bir **hata değil**, destek aşağı kademedeyken
   üretilen yapı uyarısıdır ve ▲ zaten bastırılıyor. Sinyal değeri ayrı ölçülüyor (§0.10).
 - Direnç tarafı görselleri bu arşivde üretilemedi (o rol aktif değil); ayna kod ve testler kapsıyor.
+
+---
+
+## 8. İKİ KATMAN BİRLİKTE + AYRIŞAN RENK + EŞİTLENMİŞ OK SÖZLÜĞÜ (2026-11-08)
+
+### 8.1 Direnç neden hiç görünmüyordu
+Canlı `/grafik` yolu iki katmanı da hesaplıyor (`grafik_uret`: `stabil` + `stabil_direnc`), ama
+**replay/örnek görsel yolu** (`research/replay_egitim._soru_goruntusu`) yalnız destek motorunu
+çalıştırıyordu → ürettiğim örnek görsellerde direnç katmanı **hiç yoktu**. Hata görselde değil,
+görseli üreten yoldaydı.
+→ Yeni üretici `research/stabil_ok_ornek_gorseller.py` her karede **ikisini birlikte** hesaplıyor;
+10 görselin 10'unda da `destek=True, direnç=True` doğrulandı.
+
+### 8.2 Renk: artık renk KATMANI söylüyor
+
+| Katman | Tutuyor | Kırıldı / ters taraf |
+|---|---|---|
+| **Destek** | yeşil `#2cc98d` | koyu yeşil `#1f9e73` |
+| **Direnç** | turuncu `#f5a05a` | koyu turuncu `#c2410c` |
+
+Önce ikisi de aynı yeşil/kırmızı paleti kullanıyordu → "direnç mi destek mi" ayırt edilemiyordu.
+Artık **yeşil = destek, turuncu = direnç**; "tutuyor mu, kırıldı mı" bilgisi aynı rengin iki tonunda.
+Renk körü modunda mavi/turuncu ikilisi korunuyor.
+
+### 8.3 Eşitlenmiş ok sözlüğü (iki taraf aynı dil)
+
+| Olay | Destek tarafı | Direnç tarafı |
+|---|---|---|
+| Geri alım / dönüş | **▲** dolu (yeşil) | **▼** dolu (turuncu) |
+| Momentum | **▲** içi boş (yeşil) | **▼** içi boş (turuncu) |
+| Yapı uyarısı | **◇** içi boş (yeşil) | **◇** içi boş (turuncu) |
+
+Destek tarafındaki yapı uyarısı eskiden **▼** (dolu kırmızı) çiziliyordu — direnç dönüşüyle birebir
+aynı görünüyordu. Artık iki tarafta da **◇**; ayırt eden şey renk ve konum.
+
+### 8.4 Görseller — `docs/gorseller/ok_duzeltme_2026_11_08/` (10 adet, hepsinde iki katman)
+
+| Dosya | Sembol / gün | Destek oku | Direnç oku |
+|---|---|---|---|
+| `ikikatman_aefes_uzak_uyari.png` | AEFES 19.09.2025 | 2 ◇ | 4 ◇ |
+| `ikikatman_aghol_ust_uste.png` | AGHOL 01.04.2025 | 2 ▲ + 4 ◇ | 1 ▼ + 1 ▽ |
+| `ikikatman_agrot_uc_atr.png` | AGROT 28.03.2025 | 6 ◇ | 1 ▼ + 1 ▽ |
+| `ikikatman_aksen_tekrar.png` | AKSEN 06.03.2026 | 2 ◇ | 1 ▽ |
+| `ikikatman_sise_kademe.png` | SISE 02.10.2026 | 2 ▲ + 4 ◇ | 1 ◇ |
+| `ikikatman_thyao_gun_ici.png` | THYAO 21.09.2026 | 2 ▲ + 1 ◇ | — |
+| `ikikatman_cemas_yogun.png` | CEMAS 06.08.2026 | 1 ▲ + 3 ◇ | 1 ▼ + 1 ◇ |
+| `ikikatman_alark_bes_bar.png` | ALARK 22.05.2025 | 7 ◇ | 1 ▽ + 2 ◇ |
+| `ikikatman_garan_dikey.png` | GARAN 21.09.2026 | 2 ▲ + 1 ◇ | 4 ▼ + 2 ◇ |
+| `ikikatman_akbnk_geri_alim.png` | AKBNK 23.03.2026 | 1 ◇ | 2 ▼ + 2 ◇ |
+
+Ayrıca önce/sonra karşılaştırmaları: `karsilastirma_AGHOL.png`, `karsilastirma_AGROT.png`,
+`karsilastirma_AKSEN.png` (§7).
+
+### 8.5 Test
+`test_stabil_resistance_chart_render` (7), `test_stabil_resistance_chart_bridge`,
+`test_stabil_resistance_chart_snapshot`, `test_stabil_support_resistance_compare`, `test_grafik_gorsel4`,
+`test_grafik_gorsel_kalite` → **73 test geçiyor**.

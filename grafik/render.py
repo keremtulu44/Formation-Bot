@@ -1054,14 +1054,14 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
             son_gorunur_y = y
             son_gorunur_rol = rol
 
-        renk_hex = PALET["stabil_ust"] if rol == "ust" else PALET["stabil_alt"]
+        renk_hex = PALET["stabil_destek"] if rol == "ust" else PALET["stabil_destek_kirik"]
         x_sol = float(i) - 0.5
         x_sag = float(i) + 0.5
 
         step_degisti = onceki_y is not None and abs(y - onceki_y) > 1e-12
         if step_degisti and onceki_y is not None:
             # Basamak yönü kendi gerçek rengini alır: yukarı basamak zümrüt, aşağı basamak mercan.
-            dikey_renk = PALET["stabil_ust"] if y > onceki_y else PALET["stabil_alt"]
+            dikey_renk = PALET["stabil_destek"] if y > onceki_y else PALET["stabil_destek_kirik"]
             dikey_parcalar.append([(x_sol, onceki_y), (x_sol, y)])
             dikey_renkler.append(dikey_renk)
 
@@ -1129,14 +1129,14 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                 ry.append(float(y_pos))
         return rx, ry
 
-    # Dolu yeşil ▲: güçlü geri alım (altına sarkıp geri çıkma).
+    # Dolu ▲ (destek rengi): güçlü geri alım (altına sarkıp geri çıkma).
     rx, ry = _ok_koordinatlari(reclaim_barlar)
     if rx:
         sc = ax.scatter(
             rx, ry,
             marker="^",
             s=48,
-            c=PALET["stabil_ust"],
+            c=PALET["stabil_destek"],
             edgecolors=PALET["zemin"],
             linewidths=0.7,
             zorder=4.8,
@@ -1145,7 +1145,7 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         sc.set_gid("grafik-stabil-reclaim")
         ozet["reclaim_isaret"] = len(rx)
 
-    # İçi boş altın ▲: destek altına inmeden gelen güçlü YUKARI mum.
+    # İçi boş ▲ (destek rengi): destek altına inmeden gelen güçlü YUKARI mum.
     # Yatay zeminden kopuş ve çizgi yukarı basamak yaparken de görünür.
     mx, my = _ok_koordinatlari(momentum_barlar)
     if mx:
@@ -1154,7 +1154,7 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
             marker="^",
             s=62,
             facecolors="none",
-            edgecolors=PALET["stabil_momentum"],
+            edgecolors=PALET["stabil_destek"],
             linewidths=1.35,
             zorder=4.85,
             clip_on=True,
@@ -1176,8 +1176,8 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
             dx.append(float(idx))
             dy.append(min(y_hi - 0.012 * y_span, ref_y + 0.018 * y_span))
     if dx:
-        sc = ax.scatter(dx, dy, marker="v", s=48, c=PALET["stabil_alt"],
-                        edgecolors=PALET["zemin"], linewidths=0.7,
+        sc = ax.scatter(dx, dy, marker="D", s=46, facecolors="none",
+                        edgecolors=PALET["stabil_destek"], linewidths=1.3,
                         zorder=4.9, clip_on=True)
         sc.set_gid("grafik-stabil-dikey-deneme")
         ozet["dikey_deneme_isaret"] = len(dx)
@@ -1253,7 +1253,7 @@ def _stabil_direnc_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
             continue
         if y_lo <= y <= y_hi:
             summary["gorunur_bar"] += 1
-        color = PALET["stabil_alt"] if role == "alt" else PALET["stabil_ust"]
+        color = PALET["stabil_direnc"] if role == "alt" else PALET["stabil_direnc_kirik"]
         x_left, x_right = float(i) - 0.5, float(i) + 0.5
         changed = previous is not None and abs(y - previous) > 1e-12
         if changed and previous is not None:
@@ -1261,7 +1261,7 @@ def _stabil_direnc_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
             # Mirror support's directional connector colors as well: a rising
             # resistance is the reflection of a falling support, and vice versa.
             # This connector is geometry only, not a new signal or regime.
-            step_colors.append(PALET["stabil_alt"] if y > previous else PALET["stabil_ust"])
+            step_colors.append(PALET["stabil_direnc_kirik"] if y > previous else PALET["stabil_direnc"])
         if previous is not None and not changed and active_color == color and active:
             active.append((x_right, y))
         else:
@@ -1328,15 +1328,15 @@ def _stabil_direnc_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
 
     # Draw precisely the motor's classification; no per-step inferred warning.
     summary["donus_isaret"] = draw(indices("donus_barlar"), above=True, marker="v", hollow=False,
-                                    color=PALET["stabil_alt"], gid="grafik-stabil-direnc-donus", size=48)
+                                    color=PALET["stabil_direnc"], gid="grafik-stabil-direnc-donus", size=48)
     summary["momentum_isaret"] = draw(indices("momentum_barlar"), above=True, marker="v", hollow=True,
-                                       color=PALET["stabil_alt"], gid="grafik-stabil-direnc-momentum", size=62)
+                                       color=PALET["stabil_direnc"], gid="grafik-stabil-direnc-momentum", size=62)
     # 2026-11-08 ok denetimi: bu işaret bir YUKARI OK DEĞİL, direnç yapı uyarısıdır.
     # İçi boş `^` fiyatın altına konunca "destekle ilgisiz yukarı ok" gibi okunuyordu;
     # nötr ELMAS `◇` mumun ÜSTÜNE konur ve lejantta "yapı uyarısı" yazar.
     summary["dikey_deneme_isaret"] = draw(
         indices("dikey_deneme_barlar"), above=True, marker="D", hollow=True,
-        color=PALET["stabil_ust"], gid="grafik-stabil-direnc-dikey-deneme", size=52,
+        color=PALET["stabil_direnc"], gid="grafik-stabil-direnc-dikey-deneme", size=52,
     )
     last = _gercek(levels[-1]) if levels else None
     role = roles[-1] if roles else None
