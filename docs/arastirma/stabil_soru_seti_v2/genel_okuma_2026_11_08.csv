@@ -1,0 +1,69 @@
+analiz,kalem,bolme,n,yuzde,lift_puan,p,yorum
+A1 havuz,rvol=dusuk,kesif,1616,52.5,-1.7,0.9103,"UP tarafi (DOWN lift: +2.0, p=0.0535)"
+A1 havuz,rvol=dusuk,dogrulama,775,52.8,-2.0,0.8709,"UP tarafi (DOWN lift: +2.2, p=0.1055)"
+A1 havuz,rvol=normal,kesif,1218,50.4,-3.7,0.9955,"UP tarafi (DOWN lift: +4.3, p=0.0012)"
+A1 havuz,rvol=normal,dogrulama,472,52.1,-2.7,0.8787,"UP tarafi (DOWN lift: +3.6, p=0.0581)"
+A1 havuz,rvol=yuksek,kesif,1037,48.2,-5.9,0.9999,"UP tarafi (DOWN lift: +4.9, p=0.0007)"
+A1 havuz,rvol=yuksek,dogrulama,412,51.2,-3.6,0.928,"UP tarafi (DOWN lift: +2.9, p=0.1168)"
+A1 havuz,govde=yonsuz,kesif,912,52.9,-1.3,0.7826,"UP tarafi (DOWN lift: +1.6, p=0.1705)"
+A1 havuz,govde=yonsuz,dogrulama,400,53.2,-1.5,0.7327,"UP tarafi (DOWN lift: +1.3, p=0.3000)"
+A1 havuz,govde=orta,kesif,1202,50.2,-3.9,0.9966,"UP tarafi (DOWN lift: +3.9, p=0.0034)"
+A1 havuz,govde=orta,dogrulama,538,53.0,-1.8,0.802,"UP tarafi (DOWN lift: +2.3, p=0.1436)"
+A1 havuz,govde=buyuk,kesif,1757,49.9,-4.3,0.9998,"UP tarafi (DOWN lift: +4.3, p=0.0002)"
+A1 havuz,govde=buyuk,dogrulama,721,51.0,-3.8,0.9786,"UP tarafi (DOWN lift: +4.0, p=0.0155)"
+A1 havuz,kapanis_poz=alt,kesif,1955,48.0,-6.2,1.0,"UP tarafi (DOWN lift: +6.2, p=0.0000)"
+A1 havuz,kapanis_poz=alt,dogrulama,839,52.0,-2.8,0.9501,"UP tarafi (DOWN lift: +3.3, p=0.0279)"
+A1 havuz,kapanis_poz=orta,kesif,843,54.0,-0.2,0.5384,"UP tarafi (DOWN lift: +0.9, p=0.2974)"
+A1 havuz,kapanis_poz=orta,dogrulama,380,53.9,-0.8,0.6301,"UP tarafi (DOWN lift: +1.5, p=0.2711)"
+A1 havuz,kapanis_poz=ust,kesif,1073,53.0,-1.1,0.7673,"UP tarafi (DOWN lift: +0.6, p=0.3480)"
+A1 havuz,kapanis_poz=ust,dogrulama,440,51.1,-3.7,0.9385,"UP tarafi (DOWN lift: +2.9, p=0.1088)"
+A2 MH (senaryo-stratifiye),rvol yuksek vs dusuk,kesif,2600,0.82,,0.0202,OR<1 = kosul DOWN olasiligini artiriyor; n = karsilastirilabilir olay
+A2 MH (senaryo-stratifiye),rvol yuksek vs dusuk,dogrulama,1165,0.93,,0.5463,OR<1 = kosul DOWN olasiligini artiriyor; n = karsilastirilabilir olay
+A2 MH (senaryo-stratifiye),govde buyuk vs yonsuz,kesif,2623,0.95,,0.5774,OR<1 = kosul DOWN olasiligini artiriyor; n = karsilastirilabilir olay
+A2 MH (senaryo-stratifiye),govde buyuk vs yonsuz,dogrulama,1102,0.93,,0.6087,OR<1 = kosul DOWN olasiligini artiriyor; n = karsilastirilabilir olay
+A2 MH (senaryo-stratifiye),kapanis ust vs alt,kesif,2969,1.07,,0.4386,OR<1 = kosul DOWN olasiligini artiriyor; n = karsilastirilabilir olay
+A2 MH (senaryo-stratifiye),kapanis ust vs alt,dogrulama,1257,0.85,,0.2802,OR<1 = kosul DOWN olasiligini artiriyor; n = karsilastirilabilir olay
+A2 MH (senaryo-stratifiye),onayli mum vs zayif mum,kesif,1032,0.79,,0.0853,OR<1 = kosul DOWN olasiligini artiriyor; n = karsilastirilabilir olay
+A2 MH (senaryo-stratifiye),onayli mum vs zayif mum,dogrulama,481,0.93,,0.7368,OR<1 = kosul DOWN olasiligini artiriyor; n = karsilastirilabilir olay
+A3a kaynak fiyat yeri,alt,kesif->dogrulama,884,44.6,0.5,0.3775,DOWN; dogrulama n=364 %48.6 lift +5.2 p=0.0232
+A3a kaynak fiyat yeri,ust,kesif->dogrulama,2562,49.1,5.1,0.0,DOWN; dogrulama n=1112 %46.0 lift +2.5 p=0.0461
+A3a kaynak fiyat yeri,yapisik,kesif->dogrulama,425,44.5,0.4,0.4305,DOWN; dogrulama n=183 %43.2 lift -0.3 p=0.5306
+A3b kaynak destek davranisi,asagi,kesif->dogrulama,1262,50.2,6.1,0.0,DOWN; dogrulama n=543 %47.0 lift +3.5 p=0.0494
+A3b kaynak destek davranisi,sabit,kesif->dogrulama,1344,43.6,-0.4,0.6296,DOWN; dogrulama n=563 %48.3 lift +4.9 p=0.01
+A3b kaynak destek davranisi,yukari,kesif->dogrulama,1265,49.2,5.1,0.0001,DOWN; dogrulama n=553 %43.4 lift -0.1 p=0.5096
+A3c hedef destek davranisi,asagi,kesif->dogrulama,1044,49.8,5.8,0.0001,DOWN; dogrulama n=443 %49.9 lift +6.4 p=0.0031
+A3c hedef destek davranisi,sabit,kesif->dogrulama,1646,46.9,2.9,0.0099,DOWN; dogrulama n=714 %45.9 lift +2.5 p=0.0899
+A3c hedef destek davranisi,yukari,kesif->dogrulama,1181,46.5,2.4,0.0458,DOWN; dogrulama n=502 %43.4 lift -0.0 p=0.5043
+A3d fiyat yeri gecisi,alt->alt,kesif->dogrulama,238,45.0,0.9,0.3888,DOWN; dogrulama n=112 %39.3 lift -4.2 p=0.813
+A3d fiyat yeri gecisi,alt->ust,kesif->dogrulama,411,45.7,1.7,0.2447,DOWN; dogrulama n=164 %53.7 lift +10.2 p=0.0042
+A3d fiyat yeri gecisi,alt->yapisik,kesif->dogrulama,235,42.1,-1.9,0.7235,DOWN; dogrulama n=88 %51.1 lift +7.7 p=0.0729
+A3d fiyat yeri gecisi,ust->alt,kesif->dogrulama,197,53.3,9.3,0.0045,DOWN; dogrulama n=75 %58.7 lift +15.2 p=0.0039
+A3d fiyat yeri gecisi,ust->ust,kesif->dogrulama,1733,46.8,2.7,0.0106,DOWN; dogrulama n=739 %44.0 lift +0.5 p=0.3861
+A3d fiyat yeri gecisi,ust->yapisik,kesif->dogrulama,632,54.1,10.1,0.0,DOWN; dogrulama n=298 %47.7 lift +4.2 p=0.0717
+A3d fiyat yeri gecisi,yapisik->alt,kesif->dogrulama,197,48.7,4.7,0.0928,DOWN; dogrulama n=86 %38.4 lift -5.1 p=0.829
+A3d fiyat yeri gecisi,yapisik->ust,kesif->dogrulama,211,40.8,-3.3,0.8322,DOWN; dogrulama n=92 %47.8 lift +4.4 p=0.1986
+A3e destek davranisi gecisi,asagi->asagi,kesif->dogrulama,492,52.4,8.4,0.0001,DOWN; dogrulama n=204 %48.0 lift +4.6 p=0.093
+A3e destek davranisi gecisi,asagi->sabit,kesif->dogrulama,618,48.9,4.8,0.0079,DOWN; dogrulama n=259 %46.7 lift +3.3 p=0.1444
+A3e destek davranisi gecisi,asagi->yukari,kesif->dogrulama,152,48.0,4.0,0.1616,DOWN; dogrulama n=80 %45.0 lift +1.5 p=0.3899
+A3e destek davranisi gecisi,sabit->asagi,kesif->dogrulama,416,45.9,1.9,0.2218,DOWN; dogrulama n=181 %55.2 lift +11.8 p=0.0007
+A3e destek davranisi gecisi,sabit->sabit,kesif->dogrulama,386,43.3,-0.8,0.6219,DOWN; dogrulama n=164 %51.2 lift +7.8 p=0.0224
+A3e destek davranisi gecisi,sabit->yukari,kesif->dogrulama,542,42.1,-2.0,0.8237,DOWN; dogrulama n=218 %40.4 lift -3.1 p=0.8208
+A3e destek davranisi gecisi,yukari->asagi,kesif->dogrulama,136,52.2,8.2,0.0277,DOWN; dogrulama n=58 %39.7 lift -3.8 p=0.7201
+A3e destek davranisi gecisi,yukari->sabit,kesif->dogrulama,642,47.2,3.1,0.0541,DOWN; dogrulama n=291 %42.3 lift -1.2 p=0.6579
+A3e destek davranisi gecisi,yukari->yukari,kesif->dogrulama,487,50.9,6.9,0.0011,DOWN; dogrulama n=204 %46.1 lift +2.6 p=0.2244
+A4 OK-V ailesi,ailesi filtresiz,kesif,939,52.9,8.9,0.0,"83 sembol, en buyuk sembol pay %2"
+A4 OK-V ailesi,ailesi filtresiz,dogrulama,398,51.3,7.8,0.0008,"36 sembol, en buyuk sembol pay %4"
+A4 OK-V ailesi,ailesi rvol>=0.8,kesif,561,56.9,12.8,0.0,"83 sembol, en buyuk sembol pay %2"
+A4 OK-V ailesi,ailesi rvol>=0.8,dogrulama,226,55.3,11.9,0.0002,"36 sembol, en buyuk sembol pay %5"
+A4 OK-V ailesi,ailesi govde>=0.20,kesif,778,53.6,9.5,0.0,"83 sembol, en buyuk sembol pay %2"
+A4 OK-V ailesi,ailesi govde>=0.20,dogrulama,323,52.9,9.5,0.0003,"36 sembol, en buyuk sembol pay %5"
+A4 OK-V ailesi,ailesi rvol>=0.8 & govde>=0.20,kesif,466,56.9,12.8,0.0,"83 sembol, en buyuk sembol pay %3"
+A4 OK-V ailesi,ailesi rvol>=0.8 & govde>=0.20,dogrulama,188,57.4,14.0,0.0001,"36 sembol, en buyuk sembol pay %5"
+A4 OK-V ailesi,ailesi rvol<0.8 (elenen),kesif,378,47.1,3.0,0.1168,"82 sembol, en buyuk sembol pay %2"
+A4 OK-V ailesi,ailesi rvol<0.8 (elenen),dogrulama,172,45.9,2.5,0.2559,"35 sembol, en buyuk sembol pay %5"
+A4 OK-V ailesi,ailesi govde<0.20 (elenen),kesif,161,49.7,5.6,0.0747,"66 sembol, en buyuk sembol pay %5"
+A4 OK-V ailesi,ailesi govde<0.20 (elenen),dogrulama,75,44.0,0.5,0.4617,"35 sembol, en buyuk sembol pay %9"
+A5 kontrol (yanlis kullanim),tum olaylar,kesif,3871,47.6,3.5,0.0,filtre tek basina sinyal uretmiyor
+A5 kontrol (yanlis kullanim),filtreli tum olaylar,kesif,1815,48.5,4.4,0.0001,filtre tek basina sinyal uretmiyor
+A5 kontrol (yanlis kullanim),tum olaylar,dogrulama,1659,46.2,2.8,0.0111,filtre tek basina sinyal uretmiyor
+A5 kontrol (yanlis kullanim),filtreli tum olaylar,dogrulama,730,46.3,2.9,0.0601,filtre tek basina sinyal uretmiyor

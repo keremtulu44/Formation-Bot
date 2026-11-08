@@ -1,5 +1,5 @@
 {
-  "surum": "V2-2026-11-08-rev9",
+  "surum": "V2-2026-11-08-rev10",
   "durum": "ONERI",
   "kapsam": "stabil_destek",
   "kararlar": {
@@ -929,7 +929,7 @@
     "dosya": "senaryo_dogrulama_sonuclari_2026_11_08.csv"
   },
   "olcum_sozlesmesi": {
-    "surum": "v2.0-kilitli",
+    "surum": "v2.1",
     "tf": "1d",
     "ufuk_gun": 16,
     "dedup_gun": 5,
@@ -954,6 +954,234 @@
       "lift_dogrulama_min_pp": 1,
       "p_max": 0.05,
       "bonferroni_rapor": true
+    },
+    "ek_2_9": {
+      "kural": "Koşullandırma iddiası yalnız (a) senaryo-stratifiye Mantel-Haenszel veya (b) aile havuzu ile test edilir; havuzlanmış tek değişkenli tablo karar veremez.",
+      "kompozisyon_kontrolu": "koşul x senaryo Cramér's V raporlanır; V>=0.30 ise havuz etkisi şüpheli",
+      "bonferroni": "aile havuzu tek test sayılır; eşik aile sayısına göre",
+      "elenen_taraf": "her filtre, elenen tarafla birlikte raporlanır (kapı mı süs mü)"
     }
+  },
+  "genel_okuma_2026_11_08": {
+    "amac": "5 adayı teker teker keskinleştirmek yerine tek koşullandırma katmanını tüm senaryolara uygulamak; karar aile düzeyinde",
+    "kurulum": {
+      "sembol": 119,
+      "olay": 5530,
+      "gecis": 59,
+      "horizon_gun": 16,
+      "dedup_gun": 5,
+      "taban": {
+        "kesif": {
+          "n": 7839,
+          "up": 54.1,
+          "down": 44.0
+        },
+        "dogrulama": {
+          "n": 3420,
+          "up": 54.8,
+          "down": 43.5
+        }
+      },
+      "eklenen_nitelikler": [
+        "rvol = hacim / 20g ortalama",
+        "govde = |close-open| / ATR1d",
+        "kapanis_poz = (close-low)/(high-low)"
+      ],
+      "olay_kumesi_degismedi": true
+    },
+    "havuz_etkisi_gecersiz": {
+      "sebep": "kompozisyon (kosul x senaryo Cramér's V: rvol 0.16, kapanis 0.383)",
+      "mh_rvol_yuksek_vs_dusuk": {
+        "kesif": {
+          "OR": 0.82,
+          "p": 0.0202
+        },
+        "dogrulama": {
+          "OR": 0.93,
+          "p": 0.5463
+        }
+      },
+      "mh_govde_buyuk_vs_yonsuz": {
+        "kesif": {
+          "OR": 0.95,
+          "p": 0.5774
+        },
+        "dogrulama": {
+          "OR": 0.93,
+          "p": 0.6087
+        }
+      },
+      "mh_kapanis_ust_vs_alt": {
+        "kesif": {
+          "OR": 1.07,
+          "p": 0.4386
+        },
+        "dogrulama": {
+          "OR": 0.85,
+          "p": 0.2802
+        }
+      },
+      "isaret_testi_rvol": {
+        "kesif": "9/14 p=0.21",
+        "dogrulama": "3/6 p=0.66"
+      }
+    },
+    "aile_sonuclari": {
+      "iki_kumede_tutan": [
+        {
+          "aile": "ust -> alt",
+          "nK": 197,
+          "dn_K": 53.3,
+          "lift_K": 9.3,
+          "p_K": 0.0045,
+          "nD": 75,
+          "dn_D": 58.7,
+          "lift_D": 15.2,
+          "p_D": 0.0039
+        },
+        {
+          "aile": "kaynak konum ust",
+          "nK": 2562,
+          "dn_K": 49.1,
+          "lift_K": 5.1,
+          "p_K": 5e-05,
+          "nD": 1112,
+          "dn_D": 46.0,
+          "lift_D": 2.5,
+          "p_D": 0.0461
+        }
+      ],
+      "kismi": [
+        {
+          "aile": "ust -> yapisik",
+          "lift_K": 10.1,
+          "p_K": 1e-05,
+          "lift_D": 4.2,
+          "p_D": 0.0717
+        },
+        {
+          "aile": "asagi -> asagi",
+          "lift_K": 8.4,
+          "p_K": 0.0001,
+          "lift_D": 4.6,
+          "p_D": 0.093
+        },
+        {
+          "aile": "asagi -> sabit",
+          "lift_K": 4.8,
+          "p_K": 0.0079,
+          "lift_D": 3.3,
+          "p_D": 0.1444
+        }
+      ],
+      "yalniz_dogrulamada": [
+        "sabit -> asagi (K 1.9 / D 11.8)",
+        "alt -> ust (K 1.7 / D 10.2)"
+      ],
+      "dogrulamada_ters": [
+        "yukari -> asagi (K 8.2 / D -3.8)"
+      ],
+      "bonferroni_aile": {
+        "test_sayisi": 11,
+        "esik": 0.0045,
+        "gecen": [
+          "ust -> alt (sinirda)"
+        ]
+      },
+      "yukari_taraf": {
+        "aile": "sabit -> yukari",
+        "up_lift_K": 3.2,
+        "p_K": 0.065,
+        "up_lift_D": 3.9,
+        "p_D": 0.1224,
+        "karar": "esik alti (6 puan) -> yukari ok yok"
+      }
+    },
+    "tek_genel_filtre": {
+      "kural": "yalniz OK-V ailesi icinde: rvol >= 0.8 & govde >= 0.20",
+      "aile_filtresiz": {
+        "nK": 939,
+        "dn_K": 52.9,
+        "lift_K": 8.9,
+        "nD": 398,
+        "dn_D": 51.3,
+        "lift_D": 7.8
+      },
+      "aile_filtreli": {
+        "nK": 466,
+        "dn_K": 56.9,
+        "lift_K": 12.8,
+        "p_K": 1e-06,
+        "nD": 188,
+        "dn_D": 57.4,
+        "lift_D": 14.0,
+        "p_D": 0.0001
+      },
+      "elenen_rvol_dusuk": {
+        "nK": 378,
+        "lift_K": 3.0,
+        "nD": 172,
+        "lift_D": 2.5
+      },
+      "elenen_govde_yonsuz": {
+        "nK": 161,
+        "lift_K": 5.6,
+        "nD": 75,
+        "lift_D": 0.5
+      },
+      "sembol_yogunlasmasi": {
+        "kesif_pct": 3,
+        "dogrulama_pct": 5
+      },
+      "kontrol_tum_havuz": {
+        "filtresiz_lift": [
+          3.5,
+          2.8
+        ],
+        "filtreli_lift": [
+          4.4,
+          2.9
+        ],
+        "sonuc": "filtre tek basina sinyal degil"
+      },
+      "senaryo_bazinda_kesif": {
+        "ust+asagi -> ust+sabit": [
+          51.0,
+          55.4,
+          224
+        ],
+        "ust+asagi -> yapisik+asagi": [
+          55.8,
+          60.0,
+          100
+        ],
+        "ust+asagi -> alt+asagi": [
+          58.7,
+          60.0,
+          45
+        ],
+        "ust+yukari -> alt+yukari": [
+          53.7,
+          61.4,
+          57
+        ],
+        "ust+sabit -> yapisik+sabit": [
+          51.5,
+          47.5,
+          40
+        ]
+      }
+    },
+    "karar": {
+      "aday_tek_kural": "kaynak ust + (destek asagi step veya fiyat destege iniyor) + rvol>=0.8 + govde>=0.20 -> ilk +/-1 ATR asagi (n 466/188, lift +12.8/+14.0)",
+      "ok_kurali_degismedi": true,
+      "teker_teker_keskinlestirme": "iptal - genel okuma ile ayni bilgi, coklu karsilastirma riski yok",
+      "acik_kalan": [
+        "tek aday kuralin ok olarak kilitlenmesi (onay bekliyor)",
+        "ust -> alt ailesinin sembol bazinda dokumu",
+        "177 sembolluk tam kosu"
+      ]
+    },
+    "dosya": "docs/arastirma/stabil_soru_seti_v2/genel_okuma_2026_11_08.csv"
   }
 }

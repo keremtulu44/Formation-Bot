@@ -312,6 +312,115 @@ Tek tutarlı pozitif; 6 puan eşiğini geçmediği için aday değil.
 | `alt+asagi -> alt+sabit` | 118 | %57.6 | 49 | %61.2 | +3.5 / +6.4 | 0.1194 | ELENDI |
 | `ust+sabit -> ust+yukari` | 496 | %58.5 | 199 | %59.3 | +4.3 / +4.5 | 0.0079 | ELENDI |
 
+### 0.10 GENEL OKUMA — senaryolar tek tek değil, aile olarak ölçüldü (rev10)
+
+**Ne değişti:** rev9'dan sonra plan, 5 `▼` adayını **teker teker** hacim/mum koşuluyla keskinleştirmekti
+(~30 küçük örneklem hücresi). Bunun yerine **tek koşullandırma katmanı bütün senaryolara aynı anda**
+uygulandı; karar hücre hücre değil **aile düzeyinde** ve **senaryo-stratifiye tek test**le verildi.
+
+**Aynı olay kümesi:** 119 sembol, **5.530 geçiş olayı**, 59 geçiş, olaylar arası ≥5 gün, ufuk 16 gün,
+taban **keşif UP %54,1 / DOWN %44,0** · **doğrulama UP %54,8 / DOWN %43,5**. rev9 ile **birebir
+karşılaştırılabilir**: §2.1–§2.8 aynen korundu, giriş gününe yalnız üç nitelik eklendi
+(`rvol`, `gövde`, `kapanış konumu`; §2.8'deki kilitli bantlarla). **Olay kümesi hiç değişmedi.**
+
+#### 1) Havuzda görünen koşul etkisi GERÇEK DEĞİL — kompozisyon
+
+Tüm olaylar tek havuzda, tek değişkenli bakıldığında koşullar güçlü görünüyor (keşif):
+
+| Katman | n keşif | UP % | UP lift | DOWN lift | p (DOWN) |
+|---|---|---|---|---|---|
+| `rvol < 0,8` | 1.616 | %52,5 | −1,7 | +2,0 | 0,054 |
+| `rvol 0,8–1,2` | 1.218 | %50,4 | −3,7 | +4,3 | 0,0012 |
+| `rvol ≥ 1,2` | 1.037 | %48,2 | −5,9 | +4,9 | 0,0007 |
+| `gövde ≥ 0,50` | 1.757 | %49,9 | −4,3 | +4,3 | 0,0002 |
+| `kapanış gün dibinde (<0,35)` | 1.955 | %48,0 | −6,2 | +6,2 | <0,0001 |
+
+Üç test bu tabloyu **çürütüyor**:
+
+1. **Senaryo-stratifiye Mantel–Haenszel** (her senaryo kendi içinde; tek test):
+   `rvol yüksek vs düşük` **OR 0,82 (p=0,020) → 0,93 (p=0,55)**;
+   `gövde büyük vs yönsüz` **0,95 → 0,93** (p=0,58 / 0,61);
+   `kapanış üst vs alt` **1,07 → 0,85** (p=0,44 / 0,28).
+   **Doğrulamada hiçbiri kalmıyor.**
+2. **İşaret testi:** `rvol yüksek > düşük` kaç senaryoda DOWN lift'ini büyütüyor → keşif **9/14** (p=0,21),
+   doğrulama **3/6** (p=0,66). Yön bile tutarlı değil.
+3. **Kompozisyon kanıtı:** `kapanış konumu` ile senaryo arasında **Cramér's V = 0,383**. "Gün dibinde
+   kapanış" zaten `üst+aşağı` geçişinin tarifidir; havuzdaki +6,2 puan **senaryodan** geliyor, koşuldan değil.
+
+> **Ders:** havuzlanmış tek değişkenli tablo, 59 senaryoyu tek torbaya attığı için yanıltıcı.
+> Sözleşmeye bu yüzden **§2.9** eklendi: koşullandırma yalnız senaryo-stratifiye veya aile-içi testle kanıtlanır.
+
+#### 2) Doğru okuma: aile düzeyi (59 hücre yerine 11 aile)
+
+DOWN lift = tabana göre puan (taban DOWN: keşif %44,0 · doğrulama %43,5).
+
+| Aile ekseni | Aile | nK | DN % K | lift K | p K | nD | DN % D | lift D | p D | İki kümede |
+|---|---|---|---|---|---|---|---|---|---|---|
+| fiyat yeri | **`üst → alt`** | 197 | %53,3 | **+9,3** | 0,0045 | 75 | %58,7 | **+15,2** | 0,0039 | **EVET** |
+| fiyat yeri | **`üst → yapışık`** | 632 | %54,1 | **+10,1** | <0,0001 | 298 | %47,7 | +4,2 | 0,072 | kısmî (D zayıf) |
+| fiyat yeri | `yapışık → üst` | 211 | %40,8 | −3,3 | 0,83 | 92 | %47,8 | +4,4 | 0,20 | hayır |
+| fiyat yeri | `alt → üst` | 411 | %45,7 | +1,7 | 0,24 | 164 | %53,7 | +10,2 | 0,0042 | hayır (yalnız D) |
+| destek | **`aşağı → aşağı`** | 492 | %52,4 | **+8,4** | 0,0001 | 204 | %48,0 | +4,6 | 0,093 | kısmî |
+| destek | **`aşağı → sabit`** | 618 | %48,9 | **+4,8** | 0,0079 | 259 | %46,7 | +3,3 | 0,14 | kısmî |
+| destek | `sabit → aşağı` | 416 | %45,9 | +1,9 | 0,22 | 181 | %55,2 | +11,8 | 0,0007 | hayır (yalnız D) |
+| destek | `yukarı → aşağı` | 136 | %52,2 | +8,2 | 0,028 | 58 | %39,7 | −3,8 | 0,72 | hayır (D'de ters) |
+| destek | `sabit → sabit` | 386 | %43,3 | −0,8 | 0,62 | 164 | %51,2 | +7,8 | 0,022 | hayır |
+| kaynak konum | `üst` (tüm) | 2.562 | %49,1 | +5,1 | <0,0001 | 1.112 | %46,0 | +2,5 | 0,046 | **EVET** |
+| kaynak konum | `alt` (tüm) | 884 | %44,6 | +0,5 | 0,38 | 364 | %48,6 | +5,2 | 0,023 | hayır |
+
+**Okuma:**
+- **İki kümede de tutan tek aile `üst → alt`.** Fiyat desteğin altına indiği gün, 16 günde ilk ±1 ATR
+  dokunması belirgin şekilde aşağı: **+9,3 / +15,2 puan**. 11 aile testi → Bonferroni eşiği **0,0045**;
+  `üst → alt` her iki kümede **tam sınırda** geçiyor (0,0045 / 0,0039) → "sağlam ama sınırda".
+- **`üst → yapışık` ve `aşağı → aşağı`** keşifte çok güçlü, doğrulamada yön aynı ama anlamsız → **kısmî**.
+  rev9'un "destek aşağı step yaparken düşüş sürer" bulgusu aile olarak **doğrulanıyor ama zayıflıyor**.
+- **Asimetri uyarısı:** `sabit → aşağı`, `alt → üst` gibi aileler **yalnız doğrulamada** anlamlı; keşifte
+  yoklar → kural gereği (§2.7) aday olamazlar. Bunlar "ters sırada bulunmuş" tesadüfler.
+- **Yukarı taraf:** tek tutarlı aile **`sabit → yukarı`** (destek yukarı adım atmaya başlıyor):
+  UP %57,4 (+3,2, n=542, p=0,065) / %58,7 (+3,9, n=218, p=0,12) → **6 puan eşiğinin altında**.
+  ⇒ rev9'un "**0 ▲**" sonucu aile düzeyinde de aynı: **yukarı ok yok**.
+
+#### 3) Tek genel filtre — 5 ayrı kural değil, 1 kapı
+
+`▼` ailesi (rev9'un 5 hücresi) **tek gövde** olarak havuzlandı; iki koşul ayrı ayrı ve birlikte sınandı:
+
+| Durum | nK | DN % K | lift K | p K | nD | DN % D | lift D | p D |
+|---|---|---|---|---|---|---|---|---|
+| aile, filtre yok | 939 | %52,9 | +8,9 | <0,0001 | 398 | %51,3 | +7,8 | 0,0008 |
+| + `rvol ≥ 0,8` | 561 | %56,9 | **+12,8** | <0,0001 | 226 | %55,3 | **+11,9** | 0,0002 |
+| + `gövde ≥ 0,20` | 778 | %53,6 | +9,5 | <0,0001 | 323 | %52,9 | +9,5 | 0,0003 |
+| **+ ikisi birden** | **466** | **%56,9** | **+12,8** | **<0,0001** | **188** | **%57,4** | **+14,0** | **0,0001** |
+| aile, `rvol < 0,8` (**elenen**) | 378 | %47,1 | +3,0 | 0,12 | 172 | %45,9 | +2,5 | 0,26 |
+| aile, `gövde < 0,20` (**elenen**) | 161 | %49,7 | +5,6 | 0,075 | 75 | %44,0 | +0,5 | 0,46 |
+
+- **Kapı mı, süs mü?** Elenen iki taraf da taban gürültüsüne düşüyor (+3,0/+2,5 ve +5,6/+0,5) → bu iki
+  koşul sinyali **üretmiyor, ayıklıyor**. Kilitli kural (§2.7) filtrelenmiş ailede rahat geçiyor.
+- **Sembol yoğunlaşması yok:** en büyük tek sembol payı %3 (keşif) / %5 (doğrulama).
+- **Kontrol — yanlış kullanım testi:** aynı filtre **tüm** olaylara uygulanınca hiçbir şey eklemiyor
+  (DOWN lift +3,5 → +4,4 keşif; +2,8 → +2,9 doğrulama). ⇒ filtre **kendi başına sinyal değil**, yalnız
+  `▼` ailesinin içinde anlamlı. Yukarı tarafta da işe yaramıyor: UP %52,0 → %50,5 (keşif).
+- **Senaryo bazında (keşif, önce → sonra):** `üst+aşağı → üst+sabit` %51,0 → **%55,4** (n=224) ·
+  `üst+aşağı → yapışık+aşağı` %55,8 → **%60,0** (n=100) · `üst+aşağı → alt+aşağı` %58,7 → **%60,0** (n=45) ·
+  `üst+yukarı → alt+yukarı` %53,7 → **%61,4** (n=57). **İstisna:** `üst+sabit → yapışık+sabit`
+  %51,5 → %47,5 (n=40) — ailenin zaten en zayıf hücresi, filtre onu kurtarmıyor.
+
+#### 4) Pratik anlamı (ok kuralı **değişmedi**)
+
+1. **Tek aday kural** (5 ayrı senaryo yerine): *kaynak `üst` + geçiş günü destek aşağı step ya da fiyat
+   desteğe iniyor + `rvol ≥ 0,8` + `gövde ≥ 0,20` → 16 günde ilk ±1 ATR dokunması aşağı.*
+   Ölçülmüş hâli: n 466/188, DOWN %56,9/%57,4, lift +12,8/+14,0. **Bu bir aday**; ok kuralına dönüşmesi
+   onay bekliyor (rev9 kararı: ok değişmiyor).
+2. **Yukarı ok yok**; `sabit → yukarı` gözlem listesinde kalıyor (+3,2/+3,9).
+3. **Teker teker keskinleştirme iptal:** genel okuma, ~30 küçük hücre yerine **11 aile + 4 MH + 2 filtre
+   testi** ile aynı bilgiyi verdi — ve çoklu karşılaştırma riskini ortadan kaldırdı.
+
+**Tekrar üretim (replay):** `docs/arastirma/stabil_soru_seti_v2/kosular/rev10_*.py` sırasıyla
+`rev10_olay_uretimi.py` (olay + taban, ~325 s) → `rev10_genel_analiz.py` → `rev10_kosul_gercek_mi.py` →
+`rev10_tek_filtre.py` → `rev10_csv.py`. Çalıştırma: `PYTHONPATH=. .venv/bin/python <dosya>`.
+
+**Açık kalan (onay bekleyen):** (a) tek aday kuralın ok olarak kilitlenmesi, (b) `üst → alt` ailesinin
+hangi alt hücrelerden beslendiğinin sembol bazında dökümü, (c) 177 sembollük tam koşu.
+
 ---
 
 ## 1. Kilitlenen kararlar
@@ -329,10 +438,14 @@ Tek tutarlı pozitif; 6 puan eşiğini geçmediği için aday değil.
 | Tetik onayı | **Günlük kapanış onayı yeterli** (intraday erken tetik yok). |
 | Kapsam | **(c)**: hem "dik kalma / yataya dönme" (geniş, n≈19.000) hem "fiyat çizgiye yapışık/altında" (dar, n≈2.000) ayrı satırlarda. |
 | Şablon | Ana bölünme → azınlık profili → **LIFT** → mum → domain → artık → kontrol. |
+| Genel okuma | Karar **aile düzeyinde** verilir (59 hücre değil); koşullandırma yalnız senaryo-stratifiye MH veya aile-içi testle kanıtlanır (§2.9). |
+| Hacim/mum filtresi | Tek genel kapı: **`rvol ≥ 0,8` + `gövde ≥ 0,20`**, yalnız `▼` ailesi içinde geçerli; tek başına sinyal değil. |
 
 ---
 
-## 2. ÖLÇÜM SÖZLEŞMESİ v2.0 — KİLİTLİ (2026-11-08)
+## 2. ÖLÇÜM SÖZLEŞMESİ v2.1 — KİLİTLİ (2026-11-08)
+
+*(v2.1 = v2.0 + madde 2.9. §2.1–§2.8 **değişmedi**; rev9 sonuçları geçerli.)*
 
 Aşağıdaki tanımlar **donduruldu**. Değiştirmek için yeni sürüm numarası gerekir; aksi hâlde sonuçlar
 karşılaştırılamaz.
@@ -388,6 +501,18 @@ senaryolar "sağlam", yalnız p<0,05'i geçenler "yön doğru, kanıt orta" say�
   için ≥2 gün ayrılma.
 - Kırpma/sansür: hücrelerde n yazılır, n<30 olan hücrede yüzde verilmez ("yetersiz örneklem").
 - Sembol yoğunlaşması: bir hücrenin %20'sinden fazlası tek sembolden gelirse not düşülür.
+
+**2.9 Koşullandırma ve aile (genel) testleri — v2.1 eki**
+- Bir koşulun (hacim, mum anatomisi, kapanış konumu…) yön verdiği iddia **yalnız** iki yolla test edilir:
+  **(a)** senaryo-stratifiye Mantel–Haenszel (her senaryo kendi içinde), **(b)** senaryoların **aile** olarak
+  havuzlanması. **Havuzlanmış tek değişkenli tablo karar veremez** (senaryo karışımı = kompozisyon etkisi).
+- Her ölçümde **kompozisyon kontrolü** zorunlu: koşul ile senaryo arasındaki ilişki (Cramér's V) raporlanır;
+  V ≥ 0,30 ise havuz etkisi şüpheli sayılır ve karar için kullanılamaz.
+- Aile havuzu **tek test** sayılır; Bonferroni **aile sayısına** göre uygulanır.
+- Bir filtrenin değeri **elenen tarafla birlikte** raporlanır: elenen taraf taban gürültüsünde kalıyorsa
+  filtre "kapı", sinyali koruyorsa "süs"tür.
+- Aynı filtre **tüm** olaylara da uygulanıp gösterilir; genel havuzda etki eklemiyorsa filtre yalnız kendi
+  ailesi içinde geçerlidir, tek başına sinyal sayılamaz.
 
 ## 3. YÖN SORULARI (ana set)
 
