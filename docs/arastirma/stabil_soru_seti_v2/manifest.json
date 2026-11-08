@@ -1,5 +1,5 @@
 {
-  "surum": "V2-2026-11-08-rev7",
+  "surum": "V2-2026-11-08-rev8",
   "durum": "ONERI",
   "kapsam": "stabil_destek",
   "kararlar": {
@@ -773,5 +773,63 @@
       "sabit destekte alttan 3 gunde uste donme %31, hareketli destekte %20-25 (ayni yonde zayif destek)",
       "hicbir statik durum %60 ok esigini gecmiyor -> ok gecisten (olaydan) cikmali"
     ]
+  },
+  "senaryo_katalogu": {
+    "tanim": "A durumundan B durumuna gecis gunu; olcum gecis gununden ileri (nedensel)",
+    "sembol": 39,
+    "gozlem_gecis": 3496,
+    "hucre": 58,
+    "n30_uzeri": 30,
+    "dosyalar": [
+      "senaryo_gecis_sonuclari_2026_11_08.csv",
+      "senaryo_teshis_sonuclari_2026_11_08.csv"
+    ],
+    "adaylar": [
+      {
+        "gecis": "alt+asagi -> alt+sabit",
+        "n": 81,
+        "yon": "▲",
+        "up": 0.691,
+        "medyan_atr": 0.2,
+        "not": "destek dusmeyi birakti"
+      },
+      {
+        "gecis": "alt+sabit -> yapisik+sabit",
+        "n": 100,
+        "yon": "▲",
+        "up": 0.64,
+        "medyan_atr": -0.11,
+        "not": "sabit destek, fiyat tirmaniyor"
+      },
+      {
+        "gecis": "alt+sabit -> ust+sabit",
+        "n": 44,
+        "yon": "▲",
+        "up": 0.659,
+        "medyan_atr": -0.49,
+        "not": "n kucuk"
+      },
+      {
+        "gecis": "ust+yukari -> alt+yukari",
+        "n": 65,
+        "yon": "▼",
+        "down": 0.6,
+        "medyan_atr": 0.33,
+        "not": "kullanicinin dikey destek iddiasi"
+      },
+      {
+        "gecis": "ust+asagi -> alt+asagi",
+        "n": 49,
+        "yon": "▼",
+        "down": 0.612,
+        "medyan_atr": 0.02,
+        "not": "hareketli destek + altina dusus"
+      }
+    ],
+    "uyari": "30 hucre test edildi; coklu karsilastirma riski. 5 aday dogrulama kumesinde (%40 sembol) test edilmeden ok kurali olamaz.",
+    "sonucu_olmayanlar": {
+      "yetersiz_n_hucre": 28,
+      "kosullu_senaryolar": "A->B + R1-R4 / hacim / BOS / mum anatomisi / gap (~400 hucre) G0-G2 sonrasi"
+    }
   }
 }
