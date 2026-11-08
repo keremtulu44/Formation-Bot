@@ -176,7 +176,10 @@ def _same_rows(left: pd.DataFrame, right: pd.DataFrame) -> bool:
 def _intraday_checked(target: pd.DataFrame, hourly_frame: Any, tf: str, cutoff: pd.Timestamp) -> pd.DataFrame:
     # Trim only the rolling source's initial *partial bucket*: retaining it
     # would turn missing prefix constituents into a fictitious complete bar.
-    # Internal/trailing holes are errors, not silently skipped or filled.
+    # Internal holes and trailing holes *inside* the observed source range are
+    # errors, not silently skipped or filled. A trailing bucket whose window
+    # ends after the last observed hourly bar is dropped instead of being
+    # certified by its scheduled close (provider lag / mid-session capture).
     hourly = _closed(hourly_frame, "1h", cutoff, start=target.index[0])
     first_hourly = hourly.index[0]
     if target.index[0] < first_hourly:
@@ -186,6 +189,25 @@ def _intraday_checked(target: pd.DataFrame, hourly_frame: Any, tf: str, cutoff: 
     if target.empty:
         raise _UnsafeSource("no_complete_target_bucket")
     hourly = hourly.loc[hourly.index >= target.index[0]]
+    # Trailing bucket: a bucket whose window ends after the last observed hourly
+    # bar cannot be certified, even if its scheduled close is already in the past
+    # (provider lag / archive captured mid-session). Certifying it by its
+    # scheduled close was the reason a *single* trailing partial bucket made the
+    # whole 4h resistance layer fail as "incomplete_hourly_bucket". Such a
+    # trailing bucket is dropped, never filled; interior holes still fail closed.
+    while len(target) >= 1:
+        last_label = target.index[-1]
+        last_close = mum_kapanis_anlari(pd.DatetimeIndex([last_label]), tf)[0]
+        last_hour_close = mum_kapanis_anlari(pd.DatetimeIndex([hourly.index[-1]]), "1h")[0]
+        if last_close <= last_hour_close:
+            break
+        log.warning(
+            "Stabil direnç: kapanmamış son kova atlandı (%s, kova kapanışı %s, son 1s kapanışı %s)",
+            last_label, last_close, last_hour_close,
+        )
+        target = target.iloc[:-1].copy()
+    if target.empty:
+        raise _UnsafeSource("no_complete_target_bucket")
     first, last = target.index[0], target.index[-1]
     expected: list[pd.Timestamp] = []
     hours = _INTRADAY_HOURS[tf]
@@ -200,7 +222,18 @@ def _intraday_checked(target: pd.DataFrame, hourly_frame: Any, tf: str, cutoff: 
             if first <= start <= last:
                 expected.append(start)
             start += pd.Timedelta(hours=hours)
-    if list(target.index) != expected:
+    actual = list(target.index)
+    if actual != expected:
+        # Fail-closed korunur; yalnız hangi günün/kovanın eksik olduğu loglanır.
+        # Teşhis olmadan "direnç gösterilemedi" mesajı kaynağı suçlamakla
+        # yetiniyordu; oysa neden tek bir sağlayıcı boşluğu olabilir.
+        eksik = [str(label) for label in expected if label not in set(actual)]
+        fazla = [str(label) for label in actual if label not in set(expected)]
+        log.warning(
+            "Stabil direnç hedef kova doğrulaması başarısız: %d beklenen / %d mevcut; "
+            "eksik=%s; beklenmeyen=%s",
+            len(expected), len(actual), eksik[:3], fazla[:3],
+        )
         raise _UnsafeSource("missing_or_invalid_target_bucket")
 
     for label, row in target.iterrows():

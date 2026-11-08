@@ -1,7 +1,7 @@
 """Chart-only resistance source gates; no change to alert/support contracts."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, time
 
 import numpy as np
 import pandas as pd
@@ -203,3 +203,18 @@ def test_half_day_constituents_follow_real_session_end():
     assert result.status == StabilRoleStatus.READY, result.reason
     assert result.bar_projection[-1].bar_close_time == pd.Timestamp("2026-05-26 13:00", tz="Europe/Istanbul")
     assert result.bar_projection[-1].daily_as_of == result.bar_projection[-1].bar_close_time
+
+
+def test_2025_half_days_are_known_to_the_intraday_gate():
+    """2025 arefe günleri config'te yokken XIST ile çelişip tüm 4s katmanı kapanıyordu.
+
+    `_intraday_checked` takvimin erken kapanışını kendi kapanış helper'ımızla
+    karşılaştırır. Tarih config'te yoksa helper 18:00 der, kapı fail-closed olur ve
+    direnç katmanı o pencereyi kapsayan her grafikte kaybolur.
+    """
+    from domain_engines.stabil.chart_bridge import _session
+
+    for half_day in (date(2025, 6, 5), date(2025, 10, 28)):
+        assert bist_session_for(half_day).is_half_day
+        session = _session(half_day, intraday=True)  # çelişki varsa burada yükselir
+        assert session.close_time is not None and session.close_time < time(18, 0)

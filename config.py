@@ -258,6 +258,15 @@ BIST_TATILLER = {
 
 # Yarım gün: (açıklama, seans kapanış saati)
 BIST_YARIM_GUNLER = {
+    # 2025 arefe günleri. Bu iki tarih eksikken `seans_sonu_saati` o günlerde
+    # 18:00 dönüyordu: 1s/4s kova kapanışları, günlük mumun tamamlanma anı ve
+    # dolayısıyla Stabil direnç grafiğinin `calendar_close_mismatch` kapısı
+    # yanlış çalışıyordu (XIST takvimi bu günleri erken kapanış bilir).
+    # Saat, depodaki 2026 arefe sözleşmesiyle aynı (13:00) tutulur; XIST bu iki
+    # 2025 günü için 12:30 kaydeder. Fark en fazla 30 dakikadır ve yalnız geçmiş
+    # replay/grafik kapanış anını etkiler; canlı tarama penceresi etkilenmez.
+    date(2025, 6, 5): ("Kurban Bayramı arefesi", time(13, 0)),
+    date(2025, 10, 28): ("Cumhuriyet Bayramı arefesi", time(13, 0)),
     date(2026, 3, 19): ("Ramazan Bayramı arefesi", time(13, 0)),
     date(2026, 5, 26): ("Kurban Bayramı arefesi", time(13, 0)),
     date(2026, 10, 28): ("Cumhuriyet Bayramı arefesi", time(13, 0)),

@@ -218,3 +218,34 @@ def test_post_close_zamanlayici_guardi_yok_kod_duzeysinde(tmp_path):
         assert result["fetch_failures"] == len(config.ACTIVE_STOCKS)
     finally:
         pytest_monkey.undo()
+
+
+def test_tum_xist_yarim_gunleri_configte_tanimli():
+    """XIST'in erken kapanış bildirdiği her gün config'te de yarım gün olmalı.
+
+    Eksik kayıt `seans_sonu_saati`'yi 18:00'e düşürür: 1s/4s kova kapanışları,
+    günlük mumun tamamlanma anı ve Stabil direnç grafiğinin gün/oturum kapısı
+    yanlış hesaplanır. 2025 arefe günleri bu yüzden bir kez eksikti.
+    """
+    from bist_calendar import SessionStatus, bist_session_for
+
+    eksik = []
+    gun = date(2025, 1, 1)
+    while gun <= date(2027, 12, 31):
+        session = bist_session_for(gun)
+        if session.status is SessionStatus.TRADING and session.is_half_day:
+            if gun not in config.BIST_YARIM_GUNLER:
+                eksik.append(gun)
+        gun += timedelta(days=1)
+    assert not eksik, f"config.BIST_YARIM_GUNLER eksik arefe günleri: {eksik}"
+
+
+def test_2025_arefe_gununde_seans_sonu_erken():
+    """Yarım gün kaydı kapanış helper'larına gerçekten yansımalı."""
+    from data import seans_sonu_saati
+
+    assert config.BIST_YARIM_GUNLER[date(2025, 6, 5)][1] == time(13, 0)
+    assert seans_sonu_saati(date(2025, 6, 5)) == time(13, 0)
+    assert seans_sonu_saati(date(2025, 10, 28)) == time(13, 0)
+    # Normal gün ve kayıtsız gün değişmemeli.
+    assert seans_sonu_saati(date(2025, 6, 6)) == time(18, 0)
