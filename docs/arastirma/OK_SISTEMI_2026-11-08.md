@@ -441,3 +441,63 @@ Neden görünmüyor: gövde kapısı zaten ≥0,32/0,35 ATR (`GOVDESIZ` imkâns�
 - Kontrol B tanımı \|dist\| ≤ 0,50 ATR; ▲ barlarının yalnız %46'sı bu tanıma giriyor (diğerleri
   0,5–1,8 ATR aralığında). Daha dar bir eşleştirme (mesafe kovaları) ayrı soru.
 - Direnç tarafı (ayna) bu düzeltmeyle ölçülmedi.
+
+---
+
+## 13. DİRENÇ AYNASI — tabanlı ölçüm (2026-11-08)
+
+### 13.1 Kilitlenen tasarım (ölçümden ÖNCE)
+| Kalem | Karar |
+|---|---|
+| **Kütle** | Günlük 1d, 176 sembol, yalnız **dolu ▼** (`close_return_below`, `intrabar_sweep_rejection`) = **927 ok** |
+| **Başarı yönü** | ▼ "fiyat aşağı döner" der → **başarı = aşağı**. (Destek ölçümünde başarı yukarıydı; aynı sayıyı ters yönde okumak yanlış olurdu.) |
+| **Kontrol A** | Ok olmayan tüm barlar (83.769) |
+| **Kontrol B** | Dirençteki ok olmayan barlar (\|dist\| ≤ 0,50 ATR; 6.477) |
+| **Yansıtma** | R1: −1 ATR önce mi +1 ATR önce mi · R2: −2 ATR önce mi +1 ATR önce mi · R3: 10 bar sonra kapanış direncin **altında** mı |
+| **Eşik** | nK≥50 · nD≥20 · liftK≥+6 **ve** liftD≥+1 **ve** iki kümede Fisher p<0,0083 (Bonferroni, 6 test) |
+| **Replay** | `PYTHONPATH=. .venv/bin/python research/stabil_direnc_taban_replay.py` (~40 sn) |
+
+### 13.2 Sonuç
+
+| Yansıtma | Kontrol | Keşif (n) | aşağı% | lift | pK | Doğrulama (n) | aşağı% | lift | pD | Kural |
+|---|---|---|---|---|---|---|---|---|---|---|
+| R1 ±1 ATR | A tüm barlar | 591 | 54,5 / 48,8 | +5,6 | 0,0036 | 308 | 58,8 / 48,2 | +10,6 | 0,00014 | liftK eşiğin altı |
+| R1 ±1 ATR | **B dirençteki** | 591 | 54,5 / 46,7 | **+7,8** | 0,00021 | 308 | 58,8 / 49,3 | **+9,5** | 0,0011 | **GEÇTİ ✓** |
+| R2 −2/+1 | **A tüm barlar** | 537 | 40,6 / 32,2 | **+8,4** | 3·10⁻⁵ | 279 | 41,9 / 31,5 | **+10,5** | 0,00016 | **GEÇTİ ✓** |
+| R2 −2/+1 | B dirençteki | 537 | 40,6 / 32,1 | +8,5 | 6·10⁻⁵ | 279 | 41,9 / 34,6 | +7,3 | 0,011 | doğrulama Bonferroni'yi geçmedi |
+| R3 seviye | A tüm barlar | 609 | 63,2 / 73,0 | −9,8 | 1,0 | 318 | 65,4 / 73,9 | −8,4 | 1,0 | taban yanlış (§12.4) |
+| R3 seviye | **B dirençteki** | 609 | 63,2 / 51,3 | **+11,9** | 1,7·10⁻⁸ | 318 | 65,4 / 53,1 | **+12,3** | 2·10⁻⁵ | **GEÇTİ ✓** |
+
+### 13.3 Okuma
+1. **▼ üç yansıtmada da kuralı geçti** (R1-B, R2-A, R3-B). ▲'da geçen tek hücre R3-B'ydi (§12).
+2. Yani sistemin **ölçülmüş avantajı aşağı tarafta**: bir direnç dönüşünden sonra hem yön yarışı
+   (+7,8 / +9,5) hem 2:1 koşu (+8,4 / +10,5) hem "10 bar sonra hâlâ direncin altında"
+   (+11,9 / +12,3) kontrolden belirgin biçimde iyi.
+3. **Üç bağımsız yol aynı yere çıkıyor:** rev10'un senaryo-stratifiye testi (`üst → alt` +9,3/+15,2),
+   §12'nin ▲ ölçümü (yalnız "seviye tuttu"), §13'ün ▼ ölçümü (üç yansıtma). Hepsi "aşağı taraf daha güvenilir"
+   diyor.
+4. R3-A'nın negatif çıkması hata değil: bu evrende ortalama bar zaten %73 oranında direncin altında (trend);
+   "tüm barlar" ▲/▼ için yanlış tabandır — §12'de düzeltilen noktanın aynısı.
+
+### 13.4 Karar
+- **Üretim mantığı değişmiyor.** Ölçüm mevcut okları doğruluyor, yenisini istemiyor.
+- Doküman düzeyinde resmî ayrım: **▲ = yapı olayı** ("seviye tuttu"), **▼ = sinyal-dereceli olay**
+  (yön + koşu + seviye). Lejant metni kullanıcı isterse bu ayrımı yansıtacak şekilde güncellenebilir
+  (şu an "▲ destek geri alımı / ▼ direnç dönüşü" olarak kalıyor).
+- ▲/▼ bayrakları (§11) bu sonucu değiştirmiyor.
+
+### 13.5 Görsel set — `docs/gorseller/ok_ozet_2026_11_08/`
+| Dosya | İçerik |
+|---|---|
+| `00_pano.png` | Tek sayfa pano: 4 kare (AGHOL iki katman · GARAN dikey · AGHOL hacim-sonra · AGROT ◇-sonra) + ok sözlüğü + sayılar + tabanlı ölçüm sonuçları |
+| `README.md` | Setin indeksi: hangi klasör neyi kanıtlıyor, hangi betik üretiyor |
+
+Üretici: `research/ok_ozet_pano.py`. Kaynak kareler: §8 (`ok_duzeltme_2026_11_08`),
+§9 (`ok_hacim_kapisi_2026_11_08`), §10 (`ok_cizgi_seyreltme_2026_11_08`).
+
+### 13.6 Sınırlar
+- Tek zaman dilimi (1d), işlem maliyeti/yayılma yok; kontroller aynı sembol/dönem ama eşleştirme
+  yalnız mesafe bandıyla yapıldı (rejim/trend eşleştirmesi ayrı soru).
+- Direnç tarafı **ayna** motorla üretiliyor; bu ölçüm aynanın çıktısını ölçtü, ayna kodunun paritesini
+  ayrıca `test_stabil_resistance_engine` kapsıyor.
+- R2/R3 için "başarı" tanımı sabit (2:1 ve 10 bar); farklı eşiklerle sonuç değişebilir, yeniden ölçülür.
