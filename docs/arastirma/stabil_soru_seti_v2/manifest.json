@@ -1,5 +1,5 @@
 {
-  "surum": "V2-2026-11-08-rev4",
+  "surum": "V2-2026-11-08-rev5",
   "durum": "ONERI",
   "kapsam": "stabil_destek",
   "kararlar": {
@@ -30,7 +30,20 @@
       "aksi": "ok_uretme"
     },
     "olcum_tf": "gunluk (1d) esas; 4s yalniz uygulama/cizim katmani",
-    "pencere_birimi": "gun"
+    "pencere_birimi": "gun",
+    "tetik_onayi": "gunluk kapanis yeterli (intraday erken tetik yok)",
+    "kapsam": "c: (a) dik kalma/yataya donme genis + (b) fiyat cizgiye yapışık veya altinda (d<=+0.5) dar, ayri satirlar",
+    "sablon": [
+      "ana_bolunme",
+      "azinlik_profili",
+      "LIFT",
+      "mum_anatomisi",
+      "yan_domain",
+      "artik_hucre",
+      "kontrol",
+      "yon_hukmu"
+    ],
+    "lift_kurali": "lift = azinlik_payi / cogunluk_payi; lift ~1.0 ise ortak nokta degil; lift yazilmadan iddia yok"
   },
   "sozlesme": {
     "atr": "giris_barinda_donmus_gunluk_ATR14",
@@ -500,5 +513,65 @@
     "alti_dolmasi": "dik cizginin yataya donmesi (STEPPING_UP -> NEWLY_FLATTENED_AFTER_RISE), hafif yukari tepki sonrasi",
     "alti_bos": "dik kalir, yeni step yapmaz (dusus devam)",
     "yatay": "fiyat toparlandi"
+  },
+  "ornek_sablon_2026_11_08": {
+    "kutle": "gunluk STEPPING_UP gunleri, 40 sembol, ufuk 16 gun",
+    "n": 4205,
+    "ana_bolunme": {
+      "UP_first": 0.54,
+      "DOWN_first": 0.448,
+      "AMBIG": 0.009,
+      "NEITHER": 0.004
+    },
+    "azinlik_n": 1883,
+    "cogunluk_n": 2270,
+    "lift": {
+      "govde_<0.20": {
+        "azinlik": 0.263,
+        "cogunluk": 0.243,
+        "lift": 1.08
+      },
+      "govde_>=0.50": {
+        "azinlik": 0.387,
+        "cogunluk": 0.396,
+        "lift": 0.98
+      },
+      "kapanis_alt_<0.35": {
+        "azinlik": 0.387,
+        "cogunluk": 0.347,
+        "lift": 1.12
+      },
+      "kapanis_ust_>0.65": {
+        "azinlik": 0.27,
+        "cogunluk": 0.335,
+        "lift": 0.81
+      },
+      "aralik_>1.0": {
+        "azinlik": 0.426,
+        "cogunluk": 0.375,
+        "lift": 1.13
+      },
+      "rvol_>=1.2": {
+        "azinlik": 0.276,
+        "cogunluk": 0.277,
+        "lift": 1.0
+      },
+      "rvol_<0.8": {
+        "azinlik": 0.407,
+        "cogunluk": 0.397,
+        "lift": 1.02
+      },
+      "d_<0": {
+        "azinlik": 0.005,
+        "cogunluk": 0.003,
+        "lift": 1.55
+      },
+      "d_0_0.5": {
+        "azinlik": 0.115,
+        "cogunluk": 0.098,
+        "lift": 1.17
+      }
+    },
+    "sonuc": "'kucuk/yonsuz mum' iddiasi bu genis kutlede dogrulanmiyor (lift 1.08, hacimde fark yok); dar senaryoda (kapsam b) yeniden test edilir"
   }
 }

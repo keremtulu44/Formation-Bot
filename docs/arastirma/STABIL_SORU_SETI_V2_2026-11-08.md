@@ -103,6 +103,32 @@ Diklik derecesi ölçümü: `step_dikligi = (seviye_t − seviye_{t−20}) / ATR
 `≤0` / `0–1` / `1–2` / `>2`. (İlk denemede `>2` hücresinde yalnız 23 geri alım denemesi vardı; asıl
 ölçüm 177 sembolde yapılacak.)
 
+### 0.5 Örnek doldurulmuş şablon (gerçek ölçüm — biçim örneği)
+
+Kütle: **günlük `STEPPING_UP` günleri**, 40 sembol, ufuk 16 gün → n=4.205.
+
+**1) Ana bölünme:** `UP_first` %54,0 · `DOWN_first` %44,8 · `AMBIG` %0,9 · `NEITHER` %0,4.
+(%70/%30 değil — gerçek sayı bu; %70 gibi bir eşik yalnız daraltılmış hücrelerde çıkar.)
+
+**2–3) Azınlık profili (`DOWN_first`, n=1.883) ve LIFT (çoğunluk `UP_first`, n=2.270):**
+
+| Özellik | Azınlıkta | Çoğunlukta | Lift | Yorum |
+|---|---|---|---|---|
+| Gövde `<0,20 ATR` (yönsüz) | %26,3 | %24,3 | **1,08** | **ayırt etmiyor** |
+| Gövde `≥0,50 ATR` (büyük) | %38,7 | %39,6 | 0,98 | ayırt etmiyor |
+| Kapanış altta `<0,35` | %38,7 | %34,7 | 1,12 | zayıf |
+| Kapanış üstte `>0,65` | %27,0 | %33,5 | 0,81 | ters yönde zayıf |
+| Aralık `>1,0 ATR` | %42,6 | %37,5 | 1,13 | zayıf |
+| Hacim `rvol ≥1,2` | %27,6 | %27,7 | **1,00** | **ayırt etmiyor** |
+| Hacim `rvol <0,8` | %40,7 | %39,7 | 1,02 | ayırt etmiyor |
+| Fiyat çizginin **altında** | %0,5 | %0,3 | 1,55 | nadir ama en yüksek lift |
+| Mesafe `0–0,5 ATR` | %11,5 | %9,8 | 1,17 | zayıf |
+
+**Öğretici sonuç:** "kalan %30'un çoğu küçük/yönsüz mum" iddiası **bu kütlede doğrulanmıyor**
+(lift 1,08; hacimde hiç fark yok). Ama bu, iddianın yanlış olduğu anlamına gelmez — iddia **dar
+senaryo** için (fiyat çizgiye yapışık/altında, kapsam **b**) kurulmuş olabilir; orada yeniden test edilir.
+Şablonun işi tam olarak bunu ayırmak: geniş kütlede kaybolan özellik, dar hücrede güçlenebilir.
+
 ---
 
 ## 1. Kilitlenen kararlar
@@ -116,6 +142,10 @@ Diklik derecesi ölçümü: `step_dikligi = (seviye_t − seviye_{t−20}) / ATR
 | Sicil | Yeni V2 ID uzayı (Y = yön, X = katman, K = kontrol); A–H legacy dondu. |
 | Dallanma | 3 seviye: yön sonucu → mum anatomisi → domain → **artık hücresi** (zorunlu). |
 | Min hücre | Ana kütle **n≥100**, alt hücre **n≥30**; altında yüzde yazılmaz: "yetersiz örneklem (n=..)". |
+| Ölçüm TF | **Günlük (1d) esas**; 4s yalnız uygulama/çizim. |
+| Tetik onayı | **Günlük kapanış onayı yeterli** (intraday erken tetik yok). |
+| Kapsam | **(c)**: hem "dik kalma / yataya dönme" (geniş, n≈19.000) hem "fiyat çizgiye yapışık/altında" (dar, n≈2.000) ayrı satırlarda. |
+| Şablon | Ana bölünme → azınlık profili → **LIFT** → mum → domain → artık → kontrol. |
 
 ---
 
@@ -143,6 +173,21 @@ Diklik derecesi ölçümü: `step_dikligi = (seviye_t − seviye_{t−20}) / ATR
   - **R4** = R1 **veya** R2, **ve** pencere hacmi `rvol ≥ 1.0`
   - **Geçersiz:** yalnız fitil (gövde `<0.20 ATR1d`) ve kapanış < açılış → tepki sayılmaz.
 
+**2.2b R1–R4 ne demek (sade dil)**
+
+Hepsi aynı şeyi ölçmenin dört farklı yolu: **"o hafif yukarı tepki gerçekten oldu mu?"** Tepki 1–3 gün
+sürebilir; her varyant farklı bir "kanıt" arıyor:
+
+| Varyant | Aradığı şey | Neden |
+|---|---|---|
+| **R1** | Pencerede **en az bir gün gerçek gövde** (gövde ≥0,20 ATR1d) ve kapanış > açılış | Tek fitilli mum yataylaştırmıyor; gövde şart |
+| **R2** | Pencerenin **son günü üst tarafta kapanış** (kapanış pozisyonu >0,65) | Alıcı gün sonunda hâlâ güçlü |
+| **R3** | Pencerenin **en dibinden son kapanışa** toplam toparlanma ≥0,35 ATR1d | Tepkinin büyüklüğü (fitil dahil) |
+| **R4** | R1 **veya** R2, **ve** pencere hacmi `rvol ≥ 1,0` | Tepki hacimle destekleniyor mu |
+
+Dördü **alternatif**, biri diğerinin yerine geçmez: ölçümde hangisinin "yataya dönüş"ü en iyi ayırdığı
+görülecek. Hiçbiri ayırmıyorsa hüküm: **"tepki ölçütü çalışmıyor"** — o zaman bu yoldan ok çıkmaz.
+
 **2.3 Yön hükmü (karar kuralı — ön kayıtlı)**
 Bir koşul **ok adayı** olur ancak ve ancak:
 1. keşifte `UP_FIRST` (veya `DOWN_FIRST`) **≥ %60** ve `n ≥ 100`,
@@ -151,6 +196,22 @@ Bir koşul **ok adayı** olur ancak ve ancak:
 
 Tutmazsa hüküm: **"ok üretme"**. Ayrıca **teşhis tabloları** (§0.2 gibi, geleceğe bakarak gruplanmış)
 hiçbir zaman ok kuralına dönüşmez; yalnız nedensel tablolar dönüşür.
+
+**2.3b Standart şablon — her soru bu sırayla doldurulur**
+
+Kullanıcının istediği "%70 şöyle olunca yukarı olmuş, kalan %30'un ortak noktası ne" işi **budur** ve
+her soru için aynı sırayla koşar:
+
+1. **Ana bölünme:** kütlede sonuç oranları (ör. %54 yukarı / %45 aşağı / %1 belirsiz).
+2. **Azınlık profili:** azınlık hücresinde her özelliğin payı.
+3. **LIFT (zorunlu):** aynı özelliğin **çoğunluk** hücresindeki payı ve oranı `lift = azınlık / çoğunluk`.
+   **Lift 1,0'a yakınsa o özellik "ortak nokta" değildir.** Lift yazılmadan hiçbir ortak nokta iddiası
+   kabul edilmez. (Ör. "azınlığın %90'ı küçük mum" — çoğunlukta da %85 ise bulgu yoktur.)
+4. **Katman sırası:** mum anatomisi → yan domain → **artık hücresi** (zorunlu).
+5. **Kontrol (K1):** aynı hücrede rastgele bar / seviye yok.
+6. **Yön hükmü:** §2.3.
+
+*Örnek doldurulmuş şablon (gerçek ölçüm, §0.5) bu sıranın nasıl göründüğünü gösterir.*
 
 **2.4 Diğer**
 - Aynı barda iki eşik → `AMBIGUOUS` ayrı hücre. Sağ-sansür tabanda; yüzdeler geçerli n üzerinden.
