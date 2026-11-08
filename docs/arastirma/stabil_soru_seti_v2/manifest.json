@@ -1,5 +1,5 @@
 {
-  "surum": "V2-2026-11-08-rev5",
+  "surum": "V2-2026-11-08-rev6",
   "durum": "ONERI",
   "kapsam": "stabil_destek",
   "kararlar": {
@@ -573,5 +573,91 @@
       }
     },
     "sonuc": "'kucuk/yonsuz mum' iddiasi bu genis kutlede dogrulanmiyor (lift 1.08, hacimde fark yok); dar senaryoda (kapsam b) yeniden test edilir"
-  }
+  },
+  "konu_adaylari": [
+    {
+      "id": "K1",
+      "kosul": "dik step-step destek + 1-3 gunluk tepki -> 10 gunde yataya dondu",
+      "ok": "▲",
+      "iddia": "toparlanma basladi",
+      "n_durumu": "olculdu ~12000 (40 sembolde 2790)"
+    },
+    {
+      "id": "K2",
+      "kosul": "dik destek dik kaldi (tepki yok, yeni step yok)",
+      "ok": "▼",
+      "iddia": "dusus suruyor",
+      "n_durumu": "olculdu ~6000 (40 sembolde 1415)"
+    },
+    {
+      "id": "K3",
+      "kosul": "sabit destek sarkti, kapanis geri dondu (temizlik orani yuksek)",
+      "ok": "▲",
+      "iddia": "sarkma fitildi",
+      "n_durumu": "olculecek"
+    },
+    {
+      "id": "K4",
+      "kosul": "sabit destek derin kirildi, donus yok",
+      "ok": "▼",
+      "iddia": "kirilma gercek",
+      "n_durumu": "olculecek"
+    },
+    {
+      "id": "K5",
+      "kosul": "uzun yatay destek (>=24 gun) + ilk temas",
+      "ok": "▲",
+      "iddia": "yatay taban tutar",
+      "n_durumu": "olculecek"
+    },
+    {
+      "id": "K6",
+      "kosul": "3. ve sonraki temas",
+      "ok": "▼",
+      "iddia": "yapi yoruldu",
+      "n_durumu": "olculecek"
+    },
+    {
+      "id": "K7",
+      "kosul": "uzun yatay + hacim patlamasi (rvol>=1.2)",
+      "ok": "patlama yonu",
+      "iddia": "sikisma cozuluyor",
+      "n_durumu": "olculecek"
+    },
+    {
+      "id": "K8",
+      "kosul": "yeni yukari step (rebase) + guclu govde",
+      "ok": "▲",
+      "iddia": "momentum devam (mevcut ok)",
+      "n_durumu": "dogrulama"
+    },
+    {
+      "id": "K9",
+      "kosul": ">=20 gun yatay + guclu govde",
+      "ok": "▲",
+      "iddia": "taban kirilimi (mevcut ok)",
+      "n_durumu": "dogrulama"
+    },
+    {
+      "id": "K10",
+      "kosul": "destegin altina gap ile acilis",
+      "ok": "▼ veya ▲",
+      "iddia": "panik mi tuzak mi",
+      "n_durumu": "olculecek (gap tanimi netlesince)"
+    }
+  ],
+  "onerilen_ilk_uc": [
+    [
+      "K1",
+      "K2"
+    ],
+    [
+      "K3",
+      "K4"
+    ],
+    [
+      "K8",
+      "K9"
+    ]
+  ]
 }

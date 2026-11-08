@@ -129,6 +129,34 @@ Kütle: **günlük `STEPPING_UP` günleri**, 40 sembol, ufuk 16 gün → n=4.205
 senaryo** için (fiyat çizgiye yapışık/altında, kapsam **b**) kurulmuş olabilir; orada yeniden test edilir.
 Şablonun işi tam olarak bunu ayırmak: geniş kütlede kaybolan özellik, dar hücrede güçlenebilir.
 
+### 0.6 Konu adayları — hepsi "ok çıkar mı?" sorusu (SEÇİM BEKLİYOR)
+
+Her satır: **koşul → ok adayı → iddia**. Sadeleştirilmiş liste; her biri aynı şablonla (§2.3b) ölçülür.
+"n durumu" yalnız ölçülmüş olanlarda yazılı, diğerleri ilk koşuda belli olacak.
+
+| # | Koşul (kütle) | Ok adayı | İddia | n durumu |
+|---|---|---|---|---|
+| **K1** | Dik step-step destek + 1–3 günlük tepki → **10 günde yataya döndü** | **▲** | Toparlanma başladı | ölçüldü: ~12.000 (40 sembolde 2.790) |
+| **K2** | Dik destek **dik kaldı** (tepki yok, yeni step yok) | **▼** | Düşüş sürüyor | ölçüldü: ~6.000 (40 sembolde 1.415) |
+| **K3** | Sabit destek sarktı, **kapanış geri döndü** (temizlik oranı yüksek) | **▲** | Sarkma fitildi, kırılma değil | ölçülecek |
+| **K4** | Sabit destek **derin kırıldı**, dönüş yok | **▼** | Kırılma gerçek | ölçülecek |
+| **K5** | Uzun yatay destek (**≥24 gün**) + **ilk temas** | **▲** | Yatay taban tutar | ölçülecek |
+| **K6** | **3. ve sonraki temas** | **▼** | Yapı yoruldu (kırılma riski) | ölçülecek |
+| **K7** | Uzun yatay + **hacim patlaması** (rvol ≥1,2) | patlama yönü | Sıkışma çözülüyor | ölçülecek |
+| **K8** | **Yeni yukarı step** (rebase) + güçlü gövde | **▲** | Momentum devam — *bugün canlıda olan ok* | doğrulama |
+| **K9** | **≥20 gün yatay** + güçlü gövde | **▲** | Taban kırılımı — *bugün canlıda olan ok* | doğrulama |
+| **K10** | Desteğin **altına gapla** açılış | ▼ veya ▲ | Panik mi, tuzak mı | ölçülecek |
+
+**Notlar**
+- **K8 ve K9 doğrulama**: bu iki ok bugün canlıda üretiliyor; ilk iş "gerçekten kazandırıyor mu" — ölçüm
+  hazır olduğu için en ucuz ve en öğretici satırlar. Sonuç kötüyse ok rework'ünde ilk kesilecekler.
+- **K1 + K2 tek soru**: aynı kütlenin iki tarafı (yataya döndü / dik kaldı). Birlikte ölçülmeli.
+- **K5 ve K6** aynı ailenin iki ucu: ilk temas iyi, 3.+ temas kötü mü? İkisi tek tabloda.
+- **K10** yalnız gap tanımı netleşirse (kaç ATR'lik açılış boşluğu) ölçülür.
+
+**Önerilen ilk 3 (basit başlangıç):** **K1+K2** (senin modelin, en çok veri) → **K3+K4** (temizlik oranı,
+hiç ölçülmedi) → **K8+K9** (canlıdaki okların doğrulanması, ucuz).
+
 ---
 
 ## 1. Kilitlenen kararlar
