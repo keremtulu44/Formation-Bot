@@ -187,19 +187,19 @@ aynı görünüyordu. Artık iki tarafta da **◇**; ayırt eden şey renk ve ko
 
 ### 8.4 Görseller — `docs/gorseller/ok_duzeltme_2026_11_08/` (10 adet, hepsinde iki katman)
 
-Sayılar §9'daki hacim değişikliğinden **sonraki** kodla üretilmiştir.
+Sayılar §9 (hacim) ve §10 (◇ seyreltme) değişikliklerinden **sonraki** kodla üretilmiştir.
 Biçim: **dolu** (olay) · *içi boş* (momentum) · ◇ (yapı uyarısı).
 
 | Dosya | Sembol / gün | Destek: dolu ▲ · içi boş ▲ · ◇ | Direnç: dolu ▼ · içi boş ▼ · ◇ |
 |---|---|---|---|
-| `ikikatman_aefes_uzak_uyari.png` | AEFES 19.09.2025 | 0 · 0 · 2 | 0 · 0 · 4 |
-| `ikikatman_aghol_ust_uste.png` | AGHOL 01.04.2025 | **3** · 0 · 4 | 1 · 1 · 0 |
-| `ikikatman_agrot_uc_atr.png` | AGROT 28.03.2025 | 0 · 0 · 6 | 1 · 1 · 0 |
-| `ikikatman_aksen_tekrar.png` | AKSEN 06.03.2026 | 0 · 0 · 2 | 0 · 1 · 0 |
-| `ikikatman_sise_kademe.png` | SISE 02.10.2026 | 2 · 0 · 4 | 0 · 0 · 1 |
+| `ikikatman_aefes_uzak_uyari.png` | AEFES 19.09.2025 | 0 · 0 · 2 | 0 · 0 · 3 |
+| `ikikatman_aghol_ust_uste.png` | AGHOL 01.04.2025 | **3** · 0 · 2 | 1 · 1 · 0 |
+| `ikikatman_agrot_uc_atr.png` | AGROT 28.03.2025 | 0 · 0 · 2 | 1 · 1 · 0 |
+| `ikikatman_aksen_tekrar.png` | AKSEN 06.03.2026 | 0 · 0 · 1 | 0 · 1 · 0 |
+| `ikikatman_sise_kademe.png` | SISE 02.10.2026 | 2 · 0 · 2 | 0 · 0 · 1 |
 | `ikikatman_thyao_gun_ici.png` | THYAO 21.09.2026 | 2 · 0 · 1 | 0 · 0 · 0 |
-| `ikikatman_cemas_yogun.png` | CEMAS 06.08.2026 | 1 · 0 · 3 | 1 · 0 · 1 |
-| `ikikatman_alark_bes_bar.png` | ALARK 22.05.2025 | 0 · 0 · 7 | 0 · 1 · 2 |
+| `ikikatman_cemas_yogun.png` | CEMAS 06.08.2026 | 1 · 0 · 1 | 1 · 0 · 1 |
+| `ikikatman_alark_bes_bar.png` | ALARK 22.05.2025 | 0 · 0 · 3 | 0 · 1 · 2 |
 | `ikikatman_garan_dikey.png` | GARAN 21.09.2026 | 0 · **2** · 1 | 4 · 0 · 2 |
 | `ikikatman_akbnk_geri_alim.png` | AKBNK 23.03.2026 | 0 · 0 · 1 | 2 · 0 · 2 |
 
@@ -277,3 +277,70 @@ Tam kareler: `hacim_once_*.png` (eski kod, `HEAD` sürümü süreç içinde takl
 `test_stabil_arrow_context_replay` · `test_stabil_support_resistance_compare` ·
 `test_stabil_resistance_chart_render` · `test_stabil_resistance_chart_bridge` · `test_stabil_resistance_replay`
 → **131 test geçiyor**.
+
+---
+
+## 10. ◇ YAPI UYARISI SEYRELTILDI (2026-11-08, kullanıcı kararı: 20 bar)
+
+### 10.1 Sorun
+Oklar temizlendikten sonra grafikte kalan kalabalığın kaynağı ok değildi: günlük 50 sembolde
+**983 işaretin 737'si (%75) ◇** idi. Sembol başına 14,7 ◇, en yoğun sembolde 22.
+
+### 10.2 Ayrım (ölçümden önce konuldu)
+722 ◇'in **189'u güçlü** (bastırılmış gerçek aday: `close_reclaim` 60 · `intrabar_sweep_reclaim` 18 ·
+`upward_rebase_momentum` 111), **548'i zayıf** (`touch_from_below` 516 · `weak_reclaim` 32).
+Güçlü olanlar kullanıcının koruduğu kuralın taşıyıcısı — **onlara dokunulmadı**.
+
+### 10.3 Uygulanan kural
+`_DIKEY_UYARI_SOGUMA_BAR`: **3 → 20**. Soğuma yalnız **zayıf** denemelere uygulanır (mevcut mantık);
+güçlü bastırılmış aday her zaman yazılır. ▲ / momentum / mesafe kapısı **hiç değişmedi**.
+
+Ölçülen seçenekler (süzgeç, günlük 50 sembol, 737 ◇):
+
+| Zayıf ◇ soğuma | Kalan ◇ | Silinen | Sembol başına | En yüksek |
+|---|---|---|---|---|
+| 3 bar (eski) | 737 | — | 14,7 | 22 |
+| 10 bar | 591 | −%20 | 11,8 | 18 |
+| **20 bar (seçilen)** | **484** | **−%34** | **9,7** | 15 |
+| 30 bar | 432 | −%41 | 8,6 | 15 |
+| 60 bar | 333 | −%55 | 6,7 | 11 |
+
+Ayrıca "her ◇'e ara vermek" (güçlü dahil) −%42…−%59 veriyordu; **reddedildi** (korunan kuralın bilgisi kaybolur).
+
+### 10.4 Ölçüm — önce / sonra (günlük, 50 sembol, 24.549 bar)
+
+| Ölçüm | Önce | Sonra |
+|---|---|---|
+| ◇ yapı uyarısı | 737 | **486 (−%34)** |
+| ◇ sembol başına (medyan) | 14,7 (15) | **9,7 (10)** |
+| ◇ en yoğun sembol | 22 | **15** |
+| **Dolu ▲** | 195 | **195 (değişmedi)** |
+| Momentum ▲ | 51 | **51 (değişmedi)** |
+| Toplam işaret | 983 | **732** |
+
+**Direnç tarafı (30 sembol):** ◇ 378 → **294 (−%22)**, dolu ▼ 174 → **174**, momentum 38 → **38**.
+(Simülasyon 484, üretim 486 — aradaki 2 fark, üretimde soğumanın döngü içinde uygulanmasından.)
+
+### 10.5 Görseller — `docs/gorseller/ok_cizgi_seyreltme_2026_11_08/`
+Aynı kare, iki kod hâli (▲ okları birebir aynı):
+
+| Sembol / gün | ◇ önce → sonra | Dosya |
+|---|---|---|
+| ALARK 22.05.2025 | **7 → 3** | `karsilastirma_cizgi_alark_yogun.png` |
+| AGROT 28.03.2025 | **6 → 2** | `karsilastirma_cizgi_agrot_uc_atr.png` |
+| AGHOL 01.04.2025 | **4 → 2** | `karsilastirma_cizgi_aghol_ust_uste.png` |
+| CEMAS 06.08.2026 | **3 → 1** | `karsilastirma_cizgi_cemas_yogun.png` |
+| AEFES 19.09.2025 | 2 → 2 | `karsilastirma_cizgi_aefes_uzak_uyari.png` |
+
+Tam kareler: `cizgi_once_*.png` / `cizgi_sonra_*.png`. Üretici:
+`research/stabil_cizgi_seyreltme_gorseller.py` (`once` · `sonra` · `karsilastir`).
+
+**Not:** `docs/gorseller/ok_hacim_kapisi_2026_11_08/` kareleri §9'un kendi kanıtıdır ve ◇ değişikliğinden
+**önce** üretildi; orada yalnız ▲ farkı önemlidir, ◇ sayıları bugünkü koddan fazladır.
+
+### 10.6 Test
+`test_stabil_vertical_policy` · `test_stabil_momentum_arrow` · `test_stabil_resistance_engine` ·
+`test_stabil_arrow_context_replay` · `test_stabil_support_resistance_compare` ·
+`test_stabil_resistance_chart_render` · `test_stabil_resistance_chart_bridge` ·
+`test_stabil_resistance_replay` → **131 test geçiyor**. §8'in 10 görseli yeni kodla yeniden üretildi,
+§8.4 tablosu güncellendi.

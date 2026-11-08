@@ -52,7 +52,13 @@ _GUCLU_YUKARI_COOLDOWN_BAR = 3
 # Ok yalnız çizgiyle GERÇEK ilişkide basılır; art arda ve uzaktan ok basılmaz.
 # Bu üç sabit eşikleri gevşetmez, yalnız yanlış yere basılan oku süzer.
 _OK_MAKS_MESAFE_ATR = 1.80          # ▲: kapanış çizgiden bu kadar ATR uzaktaysa ok yok (M1 sınırıyla aynı)
-_DIKEY_UYARI_SOGUMA_BAR = 3         # ▼ dikey uyarısı art arda basılmaz (3 bar)
+# ◇ yapı uyarısı (dikey/kademeli destek) seyreltme — 2026-11-08, kullanıcı kararı.
+# Ölçüm (günlük 50 sembol, 737 ◇): zayıf denemelerin soğuması 3 bar iken 737 ◇
+# (sembol başına 14,7) basılıyordu; 20 bara çıkınca 484 (sembol başına 9,7, −%34)
+# ve 3 aylık pencerede 4-6 ◇ → 1-2. GÜÇLÜ bastırılmış adaylar (close_reclaim /
+# sweep / momentum) bu soğumaya TABİ DEĞİL: "dikey destek, fiyat üstüne çıktı,
+# ▲ konmaz" bilgisi kaybolmaz. ▲/momentum okları hiç etkilenmez.
+_DIKEY_UYARI_SOGUMA_BAR = 20        # zayıf ◇ aynı bölgede 20 barda bir basılır (~1 ay)
 
 
 def _enum_value(value: Any) -> str:
