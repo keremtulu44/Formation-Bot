@@ -344,3 +344,42 @@ Tam kareler: `cizgi_once_*.png` / `cizgi_sonra_*.png`. Üretici:
 `test_stabil_resistance_chart_render` · `test_stabil_resistance_chart_bridge` ·
 `test_stabil_resistance_replay` → **131 test geçiyor**. §8'in 10 görseli yeni kodla yeniden üretildi,
 §8.4 tablosu güncellendi.
+
+---
+
+## 11. ▲ BAYRAK REPLAY — hiçbir bayrak "kötü haber" değil (2026-11-08)
+
+### 11.1 Kilitlenen tasarım (ölçümden ÖNCE)
+| Kalem | Karar |
+|---|---|
+| **Kütle** | Günlük (1d), `backfill_data` içindeki tüm semboller (176 sembol geçerli), yalnız **dolu ▲** (K1+K2) |
+| **Ölçüt** | Giriş = ok barının kapanışı · ufuk 16 bar · nedensel ATR14 · ilk dokunma: +1 ATR = UP, −1 ATR = DOWN · `yön isabeti = UP/(UP+DOWN)` |
+| **Eşik** | Hücre kullanılabilir: nK≥50 · nD≥20. "Kötü haber" için: liftK≤−6 **ve** liftD≤−1 **ve** iki kümede tek taraflı Fisher p<0,006 (8 bayrak → Bonferroni) |
+| **Bölünme** | `sha256(sembol)%10<6` keşif (K), kalanı doğrulama (D) |
+| **Replay** | `PYTHONPATH=. .venv/bin/python research/stabil_ok_bayrak_replay.py` (~6 dk) → `/tmp/ok_bayrak_oklar.csv`, `/tmp/ok_bayrak_ozet.csv` |
+
+### 11.2 Sonuç — dolu ▲ 748 ok (723 çözüldü, %3 çözülmedi)
+
+| Bayrak | nK | liftK | pK | nD | liftD | pD | Karar |
+|---|---|---|---|---|---|---|---|
+| `SESSIZ` (rvol <0,8) | 128 | **−3,1** | 0,236 | 57 | **+3,4** | 0,771 | fark yok (yön doğrulamada ters) |
+| `TEKRAR` (≤5 bar arayla) | 151 | −1,0 | 0,422 | 66 | +4,8 | 0,858 | fark yok |
+| `YORGUN` (temas ≥3) | 5 | −10,0 | 0,500 | 1 | −52,7 | 0,473 | **yetersiz-n** |
+| `GOVDESIZ` · `UZAK` · `KADEME_ASAGI` · `REJIM_YOK` · `ALTI_BOS` | — | — | — | — | — | — | **▲'da hiç görünmüyor** |
+
+Neden görünmüyor: gövde kapısı zaten ≥0,32/0,35 ATR (`GOVDESIZ` imkânsız), mesafe kapısı ≤1,80 ATR
+(`UZAK` imkânsız), dikey rejimde ▲ bastırılıyor (`ALTI_BOS`, `REJIM_YOK`, `KADEME_ASAGI`).
+
+### 11.3 Taban ve "sağlam vs bayraklı"
+- Genel: **UP 368 / DOWN 355 = %50,9** → ▲ oku, ±1 ATR/16 bar ölçütünde **yazı tura**.
+- Keşif: temiz %52,7 (n=241) vs bayraklı %47,3 (n=245) → −5,4 puan "kötü" görünüyor.
+- Doğrulama: temiz %47,7 (n=128) vs bayraklı %58,7 (n=109) → **+11 puan ters yönde**.
+- İşaret iki kümede ters → sözleşme gereği **iddia kurulamaz**; bu bir örneklem gürültüsü.
+
+### 11.4 Karar
+1. **Üretim kodu değişmiyor.** Hiçbir bayrak filtre/kural olmaya hak kazanmıyor; bayraklar denetim
+   raporunda **teşhis etiketi** olarak kalıyor, ok üretimini etkilemiyor.
+2. `SESSIZ` (rvol<0,8) oklarının daha kötü **olmaması**, §9'daki "dolu oklarda hacim şartı kalksın"
+   kararını bağımsız olarak destekliyor (▲'ların %26'sı zaten rvol<0,8).
+3. Geriye kalan gerçek soru bayrak değil: **▲'nın kendisinde ölçülebilir avantaj yok.** Bu, rev9/rev10'un
+   "yukarı ok yok" bulgusuyla aynı yere çıkıyor → ▲ "yapı olayı" olarak kalmalı, alarm/sinyal olmamalı.
