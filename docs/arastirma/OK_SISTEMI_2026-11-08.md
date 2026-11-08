@@ -375,6 +375,7 @@ Neden görünmüyor: gövde kapısı zaten ≥0,32/0,35 ATR (`GOVDESIZ` imkâns�
 - Keşif: temiz %52,7 (n=241) vs bayraklı %47,3 (n=245) → −5,4 puan "kötü" görünüyor.
 - Doğrulama: temiz %47,7 (n=128) vs bayraklı %58,7 (n=109) → **+11 puan ters yönde**.
 - İşaret iki kümede ters → sözleşme gereği **iddia kurulamaz**; bu bir örneklem gürültüsü.
+- ⚠️ **Bu bölümdeki "%50,9 = yazı tura" okuması TABANSIZ olduğu için geçersizdir — §12'de düzeltildi.**
 
 ### 11.4 Karar
 1. **Üretim kodu değişmiyor.** Hiçbir bayrak filtre/kural olmaya hak kazanmıyor; bayraklar denetim
@@ -383,3 +384,60 @@ Neden görünmüyor: gövde kapısı zaten ≥0,32/0,35 ATR (`GOVDESIZ` imkâns�
    kararını bağımsız olarak destekliyor (▲'ların %26'sı zaten rvol<0,8).
 3. Geriye kalan gerçek soru bayrak değil: **▲'nın kendisinde ölçülebilir avantaj yok.** Bu, rev9/rev10'un
    "yukarı ok yok" bulgusuyla aynı yere çıkıyor → ▲ "yapı olayı" olarak kalmalı, alarm/sinyal olmamalı.
+
+---
+
+## 12. DÜZELTME — "▲ avantajı yok" yanlış yansıtmaydı (2026-11-08)
+
+### 12.1 Hata neydi
+§11, ▲'nın yön isabetini **taban (kontrol) olmadan** yorumladı: %50,9'u "yazı tura" saydı.
+İki ayrı yansıtma hatası vardı:
+1. **Kontrol yok.** Karşılaştırma örtük olarak %50'ydi. Doğrusu: aynı sembollerde, aynı dönemde,
+   aynı ufukta **ok olmayan barlar** ne yapıyor?
+2. **Yanlış hedef.** ±1 ATR **simetrik yarış**, okun iddiasını ("seviye geri alındı/tuttu")
+   yansıtmıyor; hızlı yön yarışını ölçüyor.
+
+### 12.2 Kilitlenen tasarım
+| Kalem | Karar |
+|---|---|
+| Kütle | Günlük 1d, tüm semboller (176), dolu ▲ (K1+K2) = **716 ok** |
+| Kontrol A | Aynı sembol/dönem, **ok olmayan tüm barlar** (83.980 bar) |
+| Kontrol B | Aynı sembol/dönem, **destekteki ok olmayan barlar** (\|dist\| ≤ 0,50 ATR; 9.884 bar) |
+| Üç yansıtma | R1: ilk ±1 ATR yarışı · R2: +2 ATR önce mi −1 ATR önce mi · R3: 10 bar sonra kapanış, okun seviyesinin üstünde mi |
+| Eşik | nK≥50 · nD≥20 · "avantaj var" için liftK≥+6 **ve** liftD≥+1 **ve** iki kümede Fisher p<0,0083 (6 test → Bonferroni) |
+| Replay | `PYTHONPATH=. .venv/bin/python research/stabil_ok_taban_replay.py` (~6 dk) |
+
+### 12.3 Sonuç
+
+| Yansıtma | Kontrol | Keşif (n) | liftK | pK | Doğrulama (n) | liftD | pD |
+|---|---|---|---|---|---|---|---|
+| R1 ±1 ATR | A tüm barlar | 465 | +0,1 | 0,50 | 227 | +3,0 | 0,20 |
+| R1 ±1 ATR | **B destekteki** | 465 | **+4,5** | 0,034 | 227 | **+6,5** | 0,033 |
+| R2 +2/−1 ATR | B destekteki | 418 | +2,8 | 0,14 | 204 | +6,4 | 0,040 |
+| R3 seviye tuttu | A tüm barlar | 480 | **−7,1** | 1,00 | 236 | **−11,1** | 1,00 |
+| R3 seviye tuttu | **B destekteki** | 480 | **+14,0** | **2·10⁻⁹** | 236 | **+8,8** | **0,0053** |
+
+### 12.4 Okuma (düzeltilmiş)
+1. **"Yazı tura" ifadesi geçersiz.** Tüm barlara karşı fark yok, ama **doğru kontrol** desteğe yakın
+   barlardır: orada ▲ **+4,5/+6,5** puan getiriyor. Yani ▲, "desteğe yakın olmanın" cezasını
+   (kontrol B %46,7 · %48,1) **geri kazanıyor**.
+2. **Tek Bonferroni'yi geçen iddia R3-B:** okun kendi seviyesinin üstünde kalma oranı
+   **%63,5 vs %49,6** (keşif, +14,0, p=2·10⁻⁹) ve **%58,9 vs %50,1** (doğrulama, +8,8, p=0,0053).
+   ⇒ **▲ "seviye tuttu" iddiasında doğrulanıyor.**
+3. **±1 ATR yön yarışında avantaj ölçülmedi** (+4,5/+6,5 puan, Bonferroni'yi geçmiyor; keşif eşiğin
+   altında). Yani ▲ "hızlı yukarı hareket" iddiasında değil.
+4. **R3-A negatif olması hata değil:** bu evrende ortalama bar zaten %70 oranında seviyenin üstünde
+   (trend), o yüzden "tüm barlar" ▲ için yanlış tabandır — düzeltmenin asıl sebebi bu.
+
+### 12.5 Pratik karar
+- ▲'nın ölçülmüş tek anlamı: **"fiyat desteğe indi, geri aldı ve 10 bar sonra seviyenin üstünde"**
+  (+14/+9 puan, iki kümede). Bu bir **yapı** bilgisidir; "hızlı yukarı hareket" bilgisi değildir.
+- §11'in "hiçbir bayrak kötü haber değil" sonucu **değişmiyor** (o ölçüm bayrak bazlıydı; taban
+  karşılaştırması farklı bir soruydu).
+- Grafik/alarm davranışı değişmiyor; düzeltme **yorum ve doküman** düzeyinde.
+
+### 12.6 Sınırlar (açıkça)
+- Tek zaman dilimi (1d), tek hedef seti (R1–R3), işlem maliyeti/yayılma yok.
+- Kontrol B tanımı \|dist\| ≤ 0,50 ATR; ▲ barlarının yalnız %46'sı bu tanıma giriyor (diğerleri
+  0,5–1,8 ATR aralığında). Daha dar bir eşleştirme (mesafe kovaları) ayrı soru.
+- Direnç tarafı (ayna) bu düzeltmeyle ölçülmedi.
