@@ -1,5 +1,5 @@
 {
-  "surum": "V2-2026-11-08-rev8",
+  "surum": "V2-2026-11-08-rev9",
   "durum": "ONERI",
   "kapsam": "stabil_destek",
   "kararlar": {
@@ -830,6 +830,130 @@
     "sonucu_olmayanlar": {
       "yetersiz_n_hucre": 28,
       "kosullu_senaryolar": "A->B + R1-R4 / hacim / BOS / mum anatomisi / gap (~400 hucre) G0-G2 sonrasi"
+    }
+  },
+  "dogrulama_2026_11_08": {
+    "kurulum": {
+      "sembol": 119,
+      "olay": 5530,
+      "dedup_gun": 5,
+      "ufuk_gun": 16,
+      "bolme": "sha256(sembol)%10<6 -> kesif (%60)"
+    },
+    "taban_oran": {
+      "kesif": {
+        "n": 7839,
+        "up": 0.541,
+        "down": 0.44
+      },
+      "dogrulama": {
+        "n": 3420,
+        "up": 0.548,
+        "down": 0.435
+      },
+      "not": "taban %54 -> mutlak yuzde degil LIFT kullanilir"
+    },
+    "karar_dagilimi": {
+      "OK-DOWN": 5,
+      "OK-UP": 0,
+      "ELENDI": 15,
+      "yetersiz_n": 39
+    },
+    "gecenler": [
+      {
+        "senaryo": "ust+asagi -> ust+sabit",
+        "nK": 465,
+        "UPk": 0.477,
+        "nD": 187,
+        "UPd": 0.487,
+        "lift": "-6.4/-6.1",
+        "p": 0.0004
+      },
+      {
+        "senaryo": "ust+asagi -> yapisik+asagi",
+        "nK": 226,
+        "UPk": 0.429,
+        "nD": 108,
+        "UPd": 0.519,
+        "lift": "-11.2/-2.9",
+        "p": 0.0005
+      },
+      {
+        "senaryo": "ust+asagi -> alt+asagi",
+        "nK": 63,
+        "UPk": 0.397,
+        "nD": 23,
+        "UPd": 0.391,
+        "lift": "-14.5/-15.7",
+        "p": 0.0022
+      },
+      {
+        "senaryo": "ust+sabit -> yapisik+sabit",
+        "nK": 103,
+        "UPk": 0.485,
+        "nD": 50,
+        "UPd": 0.38,
+        "lift": "-5.6/-16.8",
+        "p": 0.0087
+      },
+      {
+        "senaryo": "ust+yukari -> alt+yukari",
+        "nK": 82,
+        "UPk": 0.427,
+        "nD": 30,
+        "UPd": 0.433,
+        "lift": "-11.5/-11.5",
+        "p": 0.0132
+      }
+    ],
+    "bonferroni": {
+      "esik": 0.00085,
+      "gecen": [
+        "ust+asagi -> ust+sabit",
+        "ust+asagi -> yapisik+asagi"
+      ]
+    },
+    "elendi_ornek": [
+      "alt+sabit -> yapisik+sabit (kesif .611 -> dogrulama .444)",
+      "alt+asagi -> alt+sabit (kucuk ornekte .691 -> genis .576/.612, lift +3.5/+6.4)"
+    ],
+    "gozlem_listesi": [
+      {
+        "senaryo": "ust+sabit -> ust+yukari",
+        "n": 695,
+        "UP": "0.585/0.593",
+        "lift": "+4.3/+4.5",
+        "p": 0.0079
+      }
+    ],
+    "dosya": "senaryo_dogrulama_sonuclari_2026_11_08.csv"
+  },
+  "olcum_sozlesmesi": {
+    "surum": "v2.0-kilitli",
+    "tf": "1d",
+    "ufuk_gun": 16,
+    "dedup_gun": 5,
+    "durum": {
+      "fiyat_yeri": {
+        "alt": "d < -0.05",
+        "yapisik": "-0.05 <= d <= 0.50",
+        "ust": "d > 0.50"
+      },
+      "destek_davranisi": {
+        "sabit": "|delta10|<0.02 ATR",
+        "yukari": "delta10 >= 0.02",
+        "asagi": "delta10 <= -0.02"
+      }
+    },
+    "sonuc": "first_1atr_16 (UP/DOWN/AMBIG/NEITHER)",
+    "taban": "her 5. gun, durumdan bagimsiz; kesif ve dogrulama icin ayri",
+    "karar": {
+      "n_kesif_min": 50,
+      "n_dogrulama_min": 20,
+      "lift_kesif_min_pp": 6,
+      "lift_dogrulama_min_pp": 1,
+      "p_max": 0.05,
+      "bonferroni_rapor": true
     }
   }
 }

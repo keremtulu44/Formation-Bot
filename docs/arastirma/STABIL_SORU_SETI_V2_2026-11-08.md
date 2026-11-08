@@ -191,6 +191,130 @@ neredeyse hep doğru olduğu için o satırların okunması gereken sütunu "3 g
    dik kaldı" olayı ve R1–R4 tepki tetikleyicileri doğru yol; statik durum tabloları ok kaynağı değil.
 
 
+### 0.8 Senaryo kataloğu — "şuradan şuraya geçersek ne oluyor"
+
+**Tanım:** senaryo = bir gün **A durumundan B durumuna geçiş** (durum = fiyatın yeri × desteğin davranışı,
+§0.7). Geçiş günü gözlenebilir olduğu için ölçüm o günden ileri yapılır → **nedensel**. ID: `A -> B`.
+
+**İki ayrı ölçüm, karıştırılmamalı:** *teşhis* (durumun kendisinden ileri — harita) ve *nedensel*
+(geçiş gününden ileri — ok adayı). Dosyalar: `senaryo_teshis_sonuclari_2026_11_08.csv` (73 hücre) ve
+`senaryo_gecis_sonuclari_2026_11_08.csv` (58 hücre). 39 sembol, günlük, ufuk 16 gün, 3.496 geçiş olayı.
+
+**Sonucu olan 30 senaryo** (kenar = UP% − DN%):
+
+| Senaryo (geçiş günü) | n | UP_first | DOWN_first | medyan | 16g kırılma | Karar |
+|---|---|---|---|---|---|---|
+| `alt+asagi -> alt+sabit` | 81 | %69.1 | %29.6 | +0.20 | %95.1 | **ADAY ▲** |
+| `alt+sabit -> ust+sabit` | 44 | %65.9 | %34.1 | -0.49 | %40.9 | **ADAY ▲** |
+| `alt+sabit -> yapisik+sabit` | 100 | %64.0 | %36.0 | -0.11 | %65.0 | **ADAY ▲** |
+| `yapisik+yukari -> ust+yukari` | 148 | %59.5 | %39.2 | +0.73 | %48.0 | — |
+| `alt+sabit -> yapisik+asagi` | 33 | %57.6 | %39.4 | -0.56 | %81.8 | — |
+| `alt+yukari -> ust+yukari` | 33 | %57.6 | %39.4 | +0.70 | %39.4 | — |
+| `yapisik+asagi -> ust+asagi` | 135 | %57.8 | %41.5 | -0.42 | %60.0 | — |
+| `ust+sabit -> ust+yukari` | 333 | %56.2 | %41.7 | -0.40 | %47.4 | — |
+| `yapisik+sabit -> ust+sabit` | 112 | %56.2 | %42.0 | -0.17 | %51.8 | — |
+| `ust+sabit -> yapisik+yukari` | 44 | %56.8 | %43.2 | +0.29 | %72.7 | — |
+| `alt+asagi -> ust+asagi` | 31 | %54.8 | %41.9 | -0.41 | %61.3 | — |
+| `yapisik+sabit -> alt+sabit` | 130 | %54.6 | %43.8 | +0.15 | %90.8 | — |
+| `ust+sabit -> alt+sabit` | 47 | %53.2 | %46.8 | -0.26 | %89.4 | — |
+| `ust+yukari -> ust+sabit` | 248 | %52.4 | %46.8 | -0.34 | %41.1 | — |
+| `ust+sabit -> yapisik+sabit` | 137 | %50.4 | %47.4 | -0.08 | %75.2 | — |
+| `alt+sabit -> ust+asagi` | 169 | %50.3 | %49.1 | -0.29 | %42.6 | — |
+| `alt+yukari -> yapisik+yukari` | 56 | %50.0 | %50.0 | -0.13 | %69.6 | — |
+| `ust+asagi -> yapisik+asagi` | 187 | %48.7 | %50.8 | -0.35 | %77.5 | — |
+| `ust+yukari -> ust+asagi` | 59 | %47.5 | %50.8 | +0.38 | %32.2 | — |
+| `alt+asagi -> yapisik+asagi` | 49 | %46.9 | %51.0 | -0.92 | %73.5 | — |
+| `yapisik+asagi -> alt+asagi` | 122 | %46.7 | %50.8 | -0.38 | %95.1 | — |
+| `ust+yukari -> yapisik+yukari` | 215 | %47.4 | %51.6 | +0.37 | %74.0 | — |
+| `yapisik+yukari -> alt+yukari` | 141 | %46.8 | %52.5 | +0.08 | %92.2 | — |
+| `ust+asagi -> ust+sabit` | 234 | %45.3 | %53.4 | +0.03 | %40.2 | — |
+| `ust+asagi -> ust+yukari` | 82 | %43.9 | %52.4 | -0.33 | %48.8 | — |
+| `alt+yukari -> alt+sabit` | 86 | %44.2 | %54.7 | -0.27 | %90.7 | — |
+| `ust+sabit -> ust+asagi` | 107 | %43.0 | %55.1 | -0.44 | %38.3 | — |
+| `yapisik+sabit -> ust+asagi` | 50 | %42.0 | %58.0 | -0.69 | %46.0 | — |
+| `ust+yukari -> alt+yukari` | 65 | %38.5 | %60.0 | +0.33 | %83.1 | **ADAY ▼** |
+| `ust+asagi -> alt+asagi` | 49 | %36.7 | %61.2 | +0.02 | %93.9 | **ADAY ▼** |
+
+**Sonucu OLMAYANLAR (replay'e kalacaklar):**
+- **28 hücre** n<30 → CSV'de `durum=yetersiz-n`. Tam koşuda çoğu n≥30'a çıkar.
+- **~400 koşullu senaryo** (`A -> B` + tepki tipi R1–R4 / hacim / BOS aşağı / mum anatomisi / gap)
+  hiç ölçülmedi; G0–G2 sütunları gerekiyor.
+
+---
+
+### 0.9 DOĞRULAMA KOŞUSU — adaylar keşif/doğrulama ayrımında test edildi
+
+**Kurulum:** 119 sembol, günlük, olaylar arası **en az 5 gün** ayrım, ufuk 16 gün, **5.530 geçiş olayı**.
+Sembol hash'i ile bölme: **keşif %60** / **doğrulama %40**. Taban oran (durumdan bağımsız, her 5. gün):
+**keşif UP %54,1 / DOWN %44,0**, **doğrulama UP %54,8 / DOWN %43,5**.
+
+**En önemli bulgu: taban oran %54.** Yani "%60 yukarı" tek başına beceri değil; her senaryo **tabana göre**
+okunmalı. Ölçüm sözleşmesi buna göre kilitlendi (§2).
+
+**Sonuç — 59 senaryo hücresi:**
+
+| Karar | Sayı | Anlamı |
+|---|---|---|
+| **OK-▼** | **5** | Aşağı yön, tabana göre anlamlı, doğrulamada tutuyor |
+| **OK-▲** | **0** | **Hiçbir yukarı senaryo kalmadı** |
+| ELENDİ | 15 | Keşifte görünen kenar doğrulamada kayboldu |
+| yetersiz-n | 39 | n<50 (keşif) veya n<20 (doğrulama) |
+
+**Doğrulanan 5 senaryo (hepsi aşağı):**
+
+| Senaryo | nK | UP_keşif | nD | UP_doğr | UP lift K/D | p (tek yön) |
+|---|---|---|---|---|---|---|
+| `ust+aşağı → ust+sabit` | 465 | %47,7 | 187 | %48,7 | −6,4 / −6,1 | 0,0004 |
+| `ust+aşağı → yapışık+aşağı` | 226 | %42,9 | 108 | %51,9 | −11,2 / −2,9 | 0,0005 |
+| `ust+sabit → yapışık+sabit` | 103 | %48,5 | 50 | %38,0 | −5,6 / −16,8 | 0,0087 |
+| `ust+yukarı → alt+yukarı` | 82 | %42,7 | 30 | %43,3 | −11,5 / −11,5 | 0,0132 |
+
+(`ust+aşağı → alt+aşağı` = %39,7 / %39,1, n=63/23, p=0,0022 — tabloda da var.)
+
+**Ortak nokta:** fiyat **desteğe doğru inerken** destek ya **aşağı step** yapıyor ya da **sabit**; her iki
+hâlde de **yukarı ilk dokunma tabanın altında**. Kullanıcının "dikey destek altına düşen fiyat tekrar altına
+iner" iddiası `ust+yukarı → alt+yukarı` satırıyla **doğrulandı** (−11,5 puan, iki kümede de aynı).
+
+**En öğretici iki eleme:**
+- `alt+sabit → yapışık+sabit`: keşif %61,1 (aday) → doğrulama **%44,4** → sahte.
+- `alt+aşağı → alt+sabit`: küçük örneklemde %69,1 idi; geniş örneklemde %57,6 / %61,2 (lift +3,5/+6,4) →
+  eşiği geçemedi. **%69 gürültüymüş.**
+
+**Bonferroni (59 test → p<0,00085):** yalnız **2** senaryo geçiyor (`ust+aşağı → ust+sabit`,
+`ust+aşağı → yapışık+aşağı`) → "destek aşağı step yaparken fiyat yaklaşırsa düşüş sürer" **en sağlam** bulgu.
+
+**Gözlem listesi (ok değil):** `ust+sabit → ust+yukarı` — n=695, UP %58,5→%59,3, lift +4,3/+4,5, p=0,008.
+Tek tutarlı pozitif; 6 puan eşiğini geçmediği için aday değil.
+
+**İlk 21 hücre** (nK≥30 ve nD≥20):
+
+| Senaryo | nK | UP_keşif | nD | UP_doğr | UP lift K/D | p | Karar |
+|---|---|---|---|---|---|---|---|
+| `ust+asagi -> ust+sabit` | 465 | %47.7 | 187 | %48.7 | -6.4 / -6.1 | 0.9992 | OK-▼ |
+| `ust+asagi -> yapisik+asagi` | 226 | %42.9 | 108 | %51.9 | -11.2 / -2.9 | 0.9989 | OK-▼ |
+| `ust+asagi -> alt+asagi` | 63 | %39.7 | 23 | %39.1 | -14.5 / -15.7 | 0.9967 | OK-▼ |
+| `ust+sabit -> yapisik+sabit` | 103 | %48.5 | 50 | %38.0 | -5.6 / -16.8 | 0.9876 | OK-▼ |
+| `ust+yukari -> yapisik+yukari` | 215 | %46.0 | 99 | %53.5 | -8.1 / -1.3 | 0.9792 | ELENDI |
+| `ust+yukari -> alt+yukari` | 82 | %42.7 | 30 | %43.3 | -11.5 / -11.5 | 0.9917 | OK-▼ |
+| `alt+sabit -> ust+asagi` | 260 | %51.5 | 112 | %40.2 | -2.6 / -14.6 | 0.9901 | ELENDI |
+| `yapisik+asagi -> alt+asagi` | 57 | %43.9 | 23 | %56.5 | -10.3 / +1.7 | 0.8833 | ELENDI |
+| `ust+yukari -> ust+sabit` | 480 | %50.6 | 216 | %54.6 | -3.5 / -0.2 | 0.8855 | ELENDI |
+| `ust+sabit -> ust+asagi` | 73 | %42.5 | 30 | %53.3 | -11.7 / -1.5 | 0.9585 | ELENDI |
+| `ust+yukari -> ust+asagi` | 83 | %47.0 | 38 | %60.5 | -7.2 / +5.7 | 0.7390 | ELENDI |
+| `ust+asagi -> ust+yukari` | 136 | %49.3 | 69 | %52.2 | -4.9 / -2.6 | 0.8685 | ELENDI |
+| `alt+yukari -> alt+sabit` | 116 | %44.8 | 61 | %55.7 | -9.3 / +0.9 | 0.9309 | ELENDI |
+| `yapisik+sabit -> alt+sabit` | 62 | %56.5 | 28 | %50.0 | +2.3 / -4.8 | 0.4769 | ELENDI |
+| `yapisik+yukari -> ust+yukari` | 54 | %53.7 | 24 | %54.2 | -0.4 / -0.6 | 0.5207 | ELENDI |
+| `yapisik+yukari -> alt+yukari` | 67 | %47.8 | 32 | %71.9 | -6.4 / +17.1 | 0.3887 | ELENDI |
+| `alt+sabit -> yapisik+sabit` | 90 | %61.1 | 36 | %44.4 | +7.0 / -10.4 | 0.3093 | ELENDI |
+| `alt+sabit -> yapisik+asagi` | 46 | %60.9 | 20 | %45.0 | +6.7 / -9.8 | 0.3771 | yetersiz-n |
+| `yapisik+asagi -> ust+asagi` | 54 | %63.0 | 24 | %54.2 | +8.8 / -0.6 | 0.1391 | ELENDI |
+| `alt+asagi -> alt+sabit` | 118 | %57.6 | 49 | %61.2 | +3.5 / +6.4 | 0.1194 | ELENDI |
+| `ust+sabit -> ust+yukari` | 496 | %58.5 | 199 | %59.3 | +4.3 / +4.5 | 0.0079 | ELENDI |
+
+---
+
+## 1. Kilitlenen kararlar
 
 | Konu | Karar |
 |---|---|
@@ -208,76 +332,62 @@ neredeyse hep doğru olduğu için o satırların okunması gereken sütunu "3 g
 
 ---
 
-## 2. Ölçüm sözleşmesi (ölçümden önce sabit)
+## 2. ÖLÇÜM SÖZLEŞMESİ v2.0 — KİLİTLİ (2026-11-08)
 
-**2.1 Birim ve bantlar**
-- `d = (kapanış − seviye) / ATR1d`. Mesafe: **temas** `|low−seviye| ≤ 0.35 ATR1d` · **yakın**
-  `0.35<|d|≤1.00` · **uzak** `1.00<|d|≤2.00` · **çok uzak** `|d|>2.00`.
-- Temas epizodu: ardışık temas barları tek temas; yeni temas için ≥2 bar ayrılma (native `touch_count` kullanılmaz).
-- Mum (günlük ATR): gövde **yönsüz <0.20** / 0.20–0.50 / **büyük ≥0.50**; kapanış pozisyonu
-  <0.35 / 0.35–0.65 / >0.65; aralık dar <0.35 / 0.35–1.00 / >1.00.
-- Hacim rvol: düşük <0.8 / normal 0.8–1.2 / yüksek ≥1.2.
+Aşağıdaki tanımlar **donduruldu**. Değiştirmek için yeni sürüm numarası gerekir; aksi hâlde sonuçlar
+karşılaştırılamaz.
 
-**2.2 Yataylaşma geçişi ("altı dolması") — olay tanımı (günlük, gün cinsinden)**
-- **Geçiş olayı:** `regime == STEPPING_UP` iken **10 gün** içinde `NEWLY_FLATTENED_AFTER_RISE` etiketinin
-  ilk göründüğü gün. (10 gün = native pivot aralığı 2 × `daily_pivot_len` = 8 gün + 2 gün pay.)
-- **Dik kalma:** aynı pencerede rejim `STEPPING_UP` kalıyor (yeni step yok).
-- **Bozulma:** pencerede `BREACHED_FIXED_SUPPORT` veya `STEPPING_DOWN` (ayrı hücre, karıştırılmaz).
-- **"Hafif yukarı tepki" — tek mum değil, değişken uzunlukta (kullanıcı kararı):**
-  tepki **1–3 gün** sürebilir; **tek fitilli mum çizgiyi matematiksel olarak yataylaştırmaz**, bu yüzden
-  yalnız fitil tepki sayılmaz. Varyantlar yan yana ölçülür:
-  - **R1** (gövde katılımı): pencere içinde **en az bir gün** gövde `≥0.20 ATR1d` ve kapanış > açılış
-  - **R2** (kapanış yeri): pencerenin son günü kapanış pozisyonu `>0.65`
-  - **R3** (toparlanma): pencerenin en düşük dibinden son kapanışa `≥0.35 ATR1d`
-  - **R4** = R1 **veya** R2, **ve** pencere hacmi `rvol ≥ 1.0`
-  - **Geçersiz:** yalnız fitil (gövde `<0.20 ATR1d`) ve kapanış < açılış → tepki sayılmaz.
+**2.1 Zaman dilimi ve birim**
+- Ölçüm **günlük (1d)**; 4s yalnız uygulama/çizim. Tüm pencereler **gün** cinsinden.
+- `ATR1d` = giriş gününde dondurulmuş, nedensel Wilder ATR14 (günlük).
+- `d = (kapanış − destek seviyesi) / ATR1d`.
 
-**2.2b R1–R4 ne demek (sade dil)**
+**2.2 Durum tanımı (9 durum)**
+- Fiyat yeri: **alt** `d < −0.05` · **yapışık** `−0.05 ≤ d ≤ +0.50` · **üst** `d > +0.50`.
+- Destek davranışı: seviyenin **10 gün önceki** değerine göre `Δ = (seviye_t − seviye_{t−10}) / ATR1d`;
+  **sabit** `|Δ| < 0.02` · **yukarı** `Δ ≥ 0.02` · **aşağı** `Δ ≤ −0.02`.
+- Durum = `fiyat_yeri + destek_davranışı` (ör. `ust+yukari`).
 
-Hepsi aynı şeyi ölçmenin dört farklı yolu: **"o hafif yukarı tepki gerçekten oldu mu?"** Tepki 1–3 gün
-sürebilir; her varyant farklı bir "kanıt" arıyor:
+**2.3 Senaryo (geçiş) tanımı**
+- Senaryo = **durumun değiştiği gün**: `durum(t−1) = A`, `durum(t) = B`, `A ≠ B`.
+- Aynı sembolde iki olay arasında **en az 5 gün** (örtüşme azaltma). Bu kural uygulanmadan elde edilen
+  sayılar yalnız teşhis amaçlıdır, karar veremez.
 
-| Varyant | Aradığı şey | Neden |
-|---|---|---|
-| **R1** | Pencerede **en az bir gün gerçek gövde** (gövde ≥0,20 ATR1d) ve kapanış > açılış | Tek fitilli mum yataylaştırmıyor; gövde şart |
-| **R2** | Pencerenin **son günü üst tarafta kapanış** (kapanış pozisyonu >0,65) | Alıcı gün sonunda hâlâ güçlü |
-| **R3** | Pencerenin **en dibinden son kapanışa** toplam toparlanma ≥0,35 ATR1d | Tepkinin büyüklüğü (fitil dahil) |
-| **R4** | R1 **veya** R2, **ve** pencere hacmi `rvol ≥ 1,0` | Tepki hacimle destekleniyor mu |
+**2.4 Sonuç metrikleri**
+- **Birincil:** `first_1atr_16` = geçiş günü kapanışından itibaren 16 gün içinde **+1 ATR** (UP) mi
+  **−1 ATR** (DOWN) mı önce vuruldu. Aynı gün ikisi → `AMBIG` (ayrı hücre, yukarı/aşağı sayılmaz).
+  16 gün dolmadan veri biterse `NEITHER`/sansür → tabanda.
+- **İkincil:** `ret_atr_16` (16. gün kapanış getirisi, ATR1d) medyanı; `kirilma` = 16 gün içinde o gün
+  bilinen seviyenin altına kapanış oranı.
 
-Dördü **alternatif**, biri diğerinin yerine geçmez: ölçümde hangisinin "yataya dönüş"ü en iyi ayırdığı
-görülecek. Hiçbiri ayırmıyorsa hüküm: **"tepki ölçütü çalışmıyor"** — o zaman bu yoldan ok çıkmaz.
+**2.5 Taban oranı (baseline) — ZORUNLU**
+- Her sembolde **her 5. gün** durumdan bağımsız örneklenir; aynı `first_1atr_16` metriği hesaplanır.
+- Taban **ayrı ayrı keşif ve doğrulama kümelerinde** raporlanır ve her senaryo **tabana göre** okunur.
+- Ölçülen taban (2026-11-08): keşif UP %54,1 / DOWN %44,0 · doğrulama UP %54,8 / DOWN %43,5.
+- **Kural:** mutlak yüzde karar için kullanılmaz; **lift** (senaryo − taban) kullanılır.
 
-**2.3 Yön hükmü (karar kuralı — ön kayıtlı)**
-Bir koşul **ok adayı** olur ancak ve ancak:
-1. keşifte `UP_FIRST` (veya `DOWN_FIRST`) **≥ %60** ve `n ≥ 100`,
-2. doğrulamada aynı yön **≥ %55**,
-3. kontrol (K1) aynı hücrede **≥10 puan** düşük.
+**2.6 Örneklem bölmesi**
+- `sha256(sembol) % 10 < 6` → **keşif**; kalan → **doğrulama**. Bölme ölçümden önce sabit.
 
-Tutmazsa hüküm: **"ok üretme"**. Ayrıca **teşhis tabloları** (§0.2 gibi, geleceğe bakarak gruplanmış)
-hiçbir zaman ok kuralına dönüşmez; yalnız nedensel tablolar dönüşür.
+**2.7 Karar kuralı (ok adayı)**
+Bir senaryo ok adayı olur ancak ve ancak:
+1. **n ≥ 50** (keşif) ve **n ≥ 20** (doğrulama),
+2. keşifte **lift ≥ +6 puan** (yukarı için UP, aşağı için DOWN),
+3. doğrulamada **aynı yönde lift ≥ +1 puan**,
+4. havuzlanmış tek yönlü binom **p < 0,05**,
+5. ve §5'teki kontrol (K1) ile çelişmiyor.
 
-**2.3b Standart şablon — her soru bu sırayla doldurulur**
+Ek not: 59 hücre test edildiği için **Bonferroni eşiği p < 0,00085** ayrıca raporlanır; bu eşiği geçen
+senaryolar "sağlam", yalnız p<0,05'i geçenler "yön doğru, kanıt orta" sayılır.
 
-Kullanıcının istediği "%70 şöyle olunca yukarı olmuş, kalan %30'un ortak noktası ne" işi **budur** ve
-her soru için aynı sırayla koşar:
-
-1. **Ana bölünme:** kütlede sonuç oranları (ör. %54 yukarı / %45 aşağı / %1 belirsiz).
-2. **Azınlık profili:** azınlık hücresinde her özelliğin payı.
-3. **LIFT (zorunlu):** aynı özelliğin **çoğunluk** hücresindeki payı ve oranı `lift = azınlık / çoğunluk`.
-   **Lift 1,0'a yakınsa o özellik "ortak nokta" değildir.** Lift yazılmadan hiçbir ortak nokta iddiası
-   kabul edilmez. (Ör. "azınlığın %90'ı küçük mum" — çoğunlukta da %85 ise bulgu yoktur.)
-4. **Katman sırası:** mum anatomisi → yan domain → **artık hücresi** (zorunlu).
-5. **Kontrol (K1):** aynı hücrede rastgele bar / seviye yok.
-6. **Yön hükmü:** §2.3.
-
-*Örnek doldurulmuş şablon (gerçek ölçüm, §0.5) bu sıranın nasıl göründüğünü gösterir.*
-
-**2.4 Diğer**
-- Aynı barda iki eşik → `AMBIGUOUS` ayrı hücre. Sağ-sansür tabanda; yüzdeler geçerli n üzerinden.
-- Ana ufuk **16 × 4s bar**; 1/4/8/10/12 yalnız ek sütun.
+**2.8 Diğer sabitler**
+- Mum anatomisi (günlük ATR): gövde `<0.20` yönsüz / `0.20–0.50` / `≥0.50` büyük; kapanış pozisyonu
+  `<0.35` / `0.35–0.65` / `>0.65`; aralık `<0.35` / `0.35–1.00` / `>1.00`.
+- Hacim `rvol` = hacim / 20 günlük ortalama: `<0.8` / `0.8–1.2` / `≥1.2`.
+- Temas: `|low − seviye| ≤ 0.35 ATR1d` veya bar seviyeyi kesiyor; ardışık temaslar tek temas; yeni temas
+  için ≥2 gün ayrılma.
+- Kırpma/sansür: hücrelerde n yazılır, n<30 olan hücrede yüzde verilmez ("yetersiz örneklem").
 - Sembol yoğunlaşması: bir hücrenin %20'sinden fazlası tek sembolden gelirse not düşülür.
-
----
 
 ## 3. YÖN SORULARI (ana set)
 
