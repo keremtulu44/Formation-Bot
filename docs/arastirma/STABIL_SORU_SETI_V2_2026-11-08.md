@@ -1,49 +1,77 @@
 # Stabil — V2 soru seti: **ok yönü çıkar mı?** (onay taslağı)
 
-**Tarih:** 2026-11-08 · **Durum:** ÖNERİ (rev. 2) · **Kod:** henüz yok
+**Tarih:** 2026-11-08 · **Durum:** ÖNERİ (rev. 3) · **Kod:** henüz yok
 [Ana rehber](STABIL_REHBERI.md) · [Eski 48 soru sicili (A–H, legacy)](STABIL_DAVRANIS_SORULARI.md) ·
 [Sistem incelemesi](STABIL_SISTEM_INCELEMESI_2026-11-08.md) · [Davranış modeli](STABIL_DAVRANIS_MODELI.md) ·
 Makine okunur: [`stabil_soru_seti_v2/manifest.json`](stabil_soru_seti_v2/manifest.json)
 
-**Bu setin amacı davranış betimlemek değil.** Her soru şu tek cümleye bağlanmak zorunda:
-**"Bu koşulda ok yönü çıkar mı, çıkarsa hangi yönde?"** Cevap "yön çıkmıyor" ise bu da geçerli bir
-sonuçtur ve o koşul ok üretmez. Bu yüzden her soru **yön hükmü** ile kapanır (§2.4), yoksa açık kalmaz.
+Amacı davranış betimlemek değil. Her soru tek cümleye bağlanır: **"Bu koşulda ok yönü çıkar mı, hangi
+yönde?"** Cevabın "yön çıkmıyor" olması da geçerli sonuçtur. Bu yüzden her soru bir **yön hükmü** ile
+kapanır (§2.4).
 
 ---
 
 ## 0. Kullanıcının modeli — ölçülecek asıl iddia
 
-> "Destek **dikeyken** fiyat desteğin altına düşerse ve tekrar üstüne çıkmaya çalışırsa, **tekrar altına
-> iniyor**. Mantığı: destek dikeyken fiyatın **altı boş**. Ama fiyatın **altı dolduğunda**, altında
-> sağlam bir destek olduğu için oradan destek alması daha muhtemel."
+> "Dikey derken **step-step desteğin dikleşmesini** kastediyorum. Fiyat dikey destekten çıkmaya çalışır:
+> düşüş devam ederse destek dikliğini bozmaz, **yeni step yapmaz**; ama o çıkışında **hafif bir yukarı
+> tepki** gösterirse matematiksel Stabil desteği **yataya döner**. Dikeyken sağlam düşüş var demek,
+> yatayken fiyat toparlandı demek."
 
-Bu iddia üç ayrı ölçülebilir parçaya ayrılıyor:
+Üç parçaya ayrılıyor — ve **"altı dolması" bir fiyat rafı değil, çizginin yataya dönmesidir**:
 
-| Parça | Ölçüm |
+| Parça | Ne | Native karşılığı |
+|---|---|---|
+| **P1 Dikeylik** | Yükselen kademelerin (step) dikleşmesi | `STEPPING_UP` + seviyenin ATR cinsinden yükseliş hızı |
+| **P2 Altı dolması** | Dik çizginin **yataya dönmesi** (hafif yukarı tepki sonrası) | `STEPPING_UP → NEWLY_FLATTENED_AFTER_RISE` geçişi |
+| **P3 Sonuç** | Diken sonra yön: düşüş sürüyor mu, toparlanma mı | 16 × 4s bar `first_1atr` + getiri (ATR1d) |
+
+### 0.1 Ölçülen yapı (20 sembol)
+
+`STEPPING_UP` barlarının **10 bar içinde** vardığı durum (n=6.117):
+
+| Sonraki durum | Pay |
 |---|---|
-| (P1) **Dikeylik** | Çizginin son N barda ATR cinsinden yükseliş hızı (eğim) |
-| (P2) **Altı boş / dolu** | Fiyatın altında yatay bir "raf" (kümelenmiş kapanışlar) var mı, yoksa sadece dik çizgi mi |
-| (P3) **Sonuç** | Altından üstüne çıkma denemesi 3 barda geri düşüyor mu; 16 barda ilk dokunma yönü |
+| Hâlâ `STEPPING_UP` (dik kaldı) | %61,9 |
+| `NEWLY_FLATTENED_AFTER_RISE` (**yataya döndü**) | %23,1 |
+| `BREACHED_FIXED_SUPPORT` | %11,8 |
+| `STEPPING_DOWN` | %3,0 |
 
-**Tek bir uyarı:** "dikey" tanımı ölçümün kaderini belirliyor. Bugün kodda `vertical_support` diye bir
-proxy var ama **eğim ölçmüyor**: `rejim ∈ {STEPPING_UP, STEPPING_DOWN}` veya "son 8 günde yukarı rebase"
-veya "seviye önceki bardan farklı ve sabit değil". Yani pratikte **"yatay olmayan her destek dikey"**
-sayılıyor. Ön ölçüm (15 sembol, 16.185 4s bar):
+Yani "dik çizgi ya dik kalır ya yataya döner" ikilemi gerçekten **en sık iki yol** (%62 / %23).
 
-| Tanım | "Dikey" sayılan bar payı |
-|---|---|
-| Kod proxy'si (mevcut) | **%41,1** |
-| Rejim = `STEPPING_UP` | %28,8 |
-| Çizgi 20 barda ≥1 ATR yükseldi (eğim) | %0,1 |
+### 0.2 Ölçülen yön (20 sembol, 4s bar, ATR1d, ufuk 16 bar)
 
-Aynı olgu üç tanımda %0,1 ile %41 arasında. **Tanım seçilmeden hiçbir sonuç okunamaz** — bu yüzden §3'te
-üç tanım yan yana koşulacak ve hangisinin ayrıştırdığı raporlanacak.
+| Dikey destek ne yaptı | n | UP_first | DOWN_first | ort. getiri | medyan |
+|---|---|---|---|---|---|
+| **Dik kaldı** (yeni step yok) | 4.525 | %51,1 | %47,6 | +0,05 ATR | **−0,04 ATR** |
+| **Yataya döndü** (tepki geldi) | 1.479 | %54,8 | %43,3 | **+0,83 ATR** | **+0,47 ATR** |
 
-**Ön ipucu (karar DEĞİL):** "fiyat destek altında → 1–3 bar içinde üstüne çıkma denemesi" olaylarında
-3 barda tekrar altına inme oranı: kod-proxy dikey **%21,8 (n=170)** · eğim≥1 ATR/20 bar **%32,0 (n=25)** ·
-`STEPPING_UP` **%42,9 (n=14)** · yatay rejimler **%28,6 (n=14)**. Yön, iddiandaki gibi (dikey → daha çok
-geri düşüş) ama **n çok küçük**; 15 sembol ve tek pencere ile hüküm verilemez. Ayrıca yatay rejimde de
-%28,6 çıkması "dikey olmayan her şey iyi" demek olmadığını gösteriyor.
+Fark medyanda **+0,51 ATR**. İddianın yönü doğru görünüyor.
+
+### 0.3 KRİTİK UYARI — bu bir teşhis, sinyal değil
+
+Yukarıdaki tablo **geleceğe bakarak** gruplanmıştır: bir barın "yataya dönecek" olduğu ölçüm anında
+bilinmiyordu. Tradable hâle gelmesi için **nedensel** sürüm gerekir: yataya dönüşün **ilk işaretini**
+(o "hafif yukarı tepki") gördüğümüz barda pozisyon almak. Y1'in işi tam olarak budur. Bu yüzden:
+
+- **Y1-a (teşhis)**: yataya dönüş öncesi ortak nokta ne? (mum, hacim, tepki büyüklüğü)
+- **Y1-b (nedensel)**: o işaret görüldüğü anda ölçülen ileri sonuç, dik kalanlarınkinden ayrışıyor mu?
+
+### 0.4 "Dikey" tanımı: üç varyant (yan yana koşulur)
+
+| Kod | Tanım | Bar payı (20 sembol) |
+|---|---|---|
+| **D1** | Mevcut kod proxy'si: rejim `STEPPING_UP/STEPPING_DOWN` veya son 8 günde yukarı rebase veya seviye değişti ve sabit değil | %41,1 |
+| **D2** | **Eğim**: `(seviye_t − seviye_{t−20}) / ATR1d ≥ 1.0` | %0,1 |
+| **D3** | `regime == STEPPING_UP` (kullanıcının "step dikleşmesi"nin native etiketi) | %28,8 |
+
+**D1 bugün "yatay olmayan her destek dikey" demek** ve `HORIZONTAL_AFTER_DROP` /
+`NEWLY_FLATTENED_AFTER_RISE` rejimlerinde hiç ateşlemiyor. Kullanıcının kastettiği dikeylik **D3 +
+diklik derecesi**; bu yüzden D3 esas, D2 diklik derecesi olarak sütun olacak.
+
+Diklik derecesi ölçümü: `step_dikligi = (seviye_t − seviye_{t−20}) / ATR1d` bantları
+`≤0` / `0–1` / `1–2` / `>2`. (İlk denemede `>2` hücresinde yalnız 23 geri alım denemesi vardı; asıl
+ölçüm 177 sembolde yapılacak.)
 
 ---
 
@@ -51,12 +79,12 @@ geri düşüş) ama **n çok küçük**; 15 sembol ve tek pencere ile hüküm ve
 
 | Konu | Karar |
 |---|---|
-| Başarı ölçüsü | **İkisi birden**: ±1 ATR ilk dokunma (16 × 4s bar) **+** 16. barda kapanış işareti. Çelişen olay ayrı hücre. |
-| Örneklem bölmesi | **Sembol hash'i**: `sha256(sembol) % 10 < 6` → keşif (~106), kalan doğrulama (~71). |
-| Gruplama | **İki eksen**: native yaşam döngüsü × geometrik mesafe (ATR bandı). |
-| Mum birimi | **Günlük ATR14** (girişte dondurulmuş). 4s ATR yalnız ek sütun. |
-| Sicil | **Yeni V2 ID uzayı** (Y = yön sorusu, X = açıklayıcı katman, K = kontrol); A–H legacy dondu. |
-| Dallanma | **3 seviye**: yön sonucu → mum anatomisi → domain → **artık hücresi** (zorunlu). |
+| Başarı ölçüsü | ±1 ATR ilk dokunma (16 × 4s bar) **+** 16. barda kapanış getirisi. Çelişen olay ayrı hücre. |
+| Örneklem bölmesi | Sembol hash'i: `sha256(sembol) % 10 < 6` → keşif (~106), kalan doğrulama (~71). |
+| Gruplama | İki eksen: native rejim/yaşam döngüsü × geometrik mesafe (ATR bandı). |
+| Mum birimi | **Günlük ATR14** (girişte dondurulmuş). |
+| Sicil | Yeni V2 ID uzayı (Y = yön, X = katman, K = kontrol); A–H legacy dondu. |
+| Dallanma | 3 seviye: yön sonucu → mum anatomisi → domain → **artık hücresi** (zorunlu). |
 | Min hücre | Ana kütle **n≥100**, alt hücre **n≥30**; altında yüzde yazılmaz: "yetersiz örneklem (n=..)". |
 
 ---
@@ -64,108 +92,105 @@ geri düşüş) ama **n çok küçük**; 15 sembol ve tek pencere ile hüküm ve
 ## 2. Ölçüm sözleşmesi (ölçümden önce sabit)
 
 **2.1 Birim ve bantlar**
-- Seviye: native günlük destek projeksiyonunun o bardaki değeri. `d = (kapanış − seviye) / ATR1d`.
-- Mesafe: **temas** `|low−seviye| ≤ 0.35 ATR1d` (veya bar seviyeyi kesiyor) · **yakın** `0.35<|d|≤1.00` ·
-  **uzak** `1.00<|d|≤2.00` · **çok uzak** `|d|>2.00`.
-- Temas epizodu: ardışık temas barları tek temas; yeni temas için ≥2 bar ayrılma. (native `touch_count` kullanılmaz.)
-- Mum (günlük ATR): gövde **yönsüz <0.20** / orta 0.20–0.50 / **büyük ≥0.50**; kapanış pozisyonu
-  alt <0.35 / orta / üst >0.65; aralık dar <0.35 / normal / geniş >1.00.
+- `d = (kapanış − seviye) / ATR1d`. Mesafe: **temas** `|low−seviye| ≤ 0.35 ATR1d` · **yakın**
+  `0.35<|d|≤1.00` · **uzak** `1.00<|d|≤2.00` · **çok uzak** `|d|>2.00`.
+- Temas epizodu: ardışık temas barları tek temas; yeni temas için ≥2 bar ayrılma (native `touch_count` kullanılmaz).
+- Mum (günlük ATR): gövde **yönsüz <0.20** / 0.20–0.50 / **büyük ≥0.50**; kapanış pozisyonu
+  <0.35 / 0.35–0.65 / >0.65; aralık dar <0.35 / 0.35–1.00 / >1.00.
 - Hacim rvol: düşük <0.8 / normal 0.8–1.2 / yüksek ≥1.2.
 
-**2.2 "Dikeylik" üç tanım (yan yana koşulur)**
-| Kod | Tanım |
-|---|---|
-| **D1** | Mevcut kod proxy'si: `regime ∈ {STEPPING_UP, STEPPING_DOWN}` veya son 8 günde yukarı rebase veya seviye değişti ve sabit değil |
-| **D2** | **Eğim**: `(seviye_t − seviye_{t−20}) / ATR1d ≥ 1.0` (20 × 4s bar ≈ 6–7 işlem günü) |
-| **D3** | `regime == STEPPING_UP` (native etiket) |
+**2.2 Yataylaşma geçişi ("altı dolması") — olay tanımı**
+- **Geçiş olayı:** `regime == STEPPING_UP` iken 10 bar içinde `NEWLY_FLATTENED_AFTER_RISE` etiketinin
+  ilk göründüğü bar.
+- **Dik kalma:** aynı pencerede rejim `STEPPING_UP` kalıyor (yeni step yok).
+- **Bozulma:** pencerede `BREACHED_FIXED_SUPPORT` veya `STEPPING_DOWN` (ayrı hücre, karıştırılmaz).
+- **"Hafif yukarı tepki" (nedensel işaret — varyantlar yan yana):**
+  - **R1**: kapanış > açılış **ve** gövde `≥0.20 ATR1d`
+  - **R2**: kapanış pozisyonu `>0.65` (barın üst üçte birinde kapanış)
+  - **R3**: dip → kapanış toparlanması `≥0.35 ATR1d` (fitil dahil)
+  - **R4**: R1 veya R2, **ve** hacim `rvol ≥ 1.0`
 
-Her yön sorusu D1/D2/D3 için **ayrı satırda** raporlanır. Hangi tanım ayrıştırıyorsa ok kuralı onun
-üzerine kurulur; ayrıştırmıyorsa o tanım "yön bilgisi taşımıyor" diye kapatılır.
+**2.3 Yön hükmü (karar kuralı — ön kayıtlı)**
+Bir koşul **ok adayı** olur ancak ve ancak:
+1. keşifte `UP_FIRST` (veya `DOWN_FIRST`) **≥ %60** ve `n ≥ 100`,
+2. doğrulamada aynı yön **≥ %55**,
+3. kontrol (K1) aynı hücrede **≥10 puan** düşük.
 
-**2.3 "Altı boş / altı dolu" (raf) tanımı**
-- **Raf var (altı dolu):** son 20 barda **en az 5 barın** kapanışı tek bir bantta (`±0.35 ATR1d`) kümelenmiş
-  **ve** bu bant fiyatın altında (bantın üstü ≤ güncel kapanış).
-- **Altı boş:** son 20 barda böyle bir küme yok; fiyatın altında yalnız dik çizgi var.
-- Ön ölçüm: bu raf koşulu barların %0,6'sında sağlanıyor (102/16.185) — çok dar. Varyant olarak
-  `en az 3 bar` ve `±0.50 ATR1d` de ölçülecek, hangisinin n≥100 hücre ürettiği raporda yazılacak.
+Tutmazsa hüküm: **"ok üretme"**. Ayrıca **teşhis tabloları** (§0.2 gibi, geleceğe bakarak gruplanmış)
+hiçbir zaman ok kuralına dönüşmez; yalnız nedensel tablolar dönüşür.
 
-**2.4 Yön hükmü (karar kuralı — ön kayıtlı)**
-Bir koşul **ok adayı** sayılır ancak ve ancak:
-1. **Keşif** kümesinde `UP_FIRST` oranı **≥ %60** (veya `DOWN_FIRST` ≥ %60) **ve** `n ≥ 100`,
-2. **Doğrulama** kümesinde aynı yön **≥ %55**,
-3. **Kontrol** (K1) aynı hücrede **≥10 puan** daha düşük sonuç veriyor.
-
-Üçü sağlanmazsa hüküm: **"ok üretme"**. (Yön çıkmayan koşul, yanlış yönde ok üretmekten iyidir.)
-
-**2.5 Diğer**
-- Aynı barda iki eşik → `AMBIGUOUS` ayrı hücre. Sağ-sansür tabanda, yüzdeler geçerli n üzerinden.
-- Ana ufuk **16 × 4s bar**; 1/4/8/10/12 kısa ufuk yalnız ek sütun.
+**2.4 Diğer**
+- Aynı barda iki eşik → `AMBIGUOUS` ayrı hücre. Sağ-sansür tabanda; yüzdeler geçerli n üzerinden.
+- Ana ufuk **16 × 4s bar**; 1/4/8/10/12 yalnız ek sütun.
 - Sembol yoğunlaşması: bir hücrenin %20'sinden fazlası tek sembolden gelirse not düşülür.
 
 ---
 
 ## 3. YÖN SORULARI (ana set)
 
-### Y1 — Dikey destek altından gelen geri alım tutmuyor mu? *(çekirdek)*
-- **Kütle:** `d_{t−1} < 0` (fiyat destek altında) **ve** `d_t ≥ 0` (kapanış üstüne çıktı) = **geri alım denemesi**.
-- **Bölünme:** (a) 3 barda kapanış tekrar `seviye` altında mı (tutmadı / tuttu); (b) 16 barda `first_1atr`.
-- **Alt hücreler:** D1/D2/D3 dikeylik · raf var/yok · temas sayısı · geri alım barının gövdesi · hacim · artık.
-- **Yön kuralı adayı:** dikey + raf yok → `▼`; dikey değil + raf var → `▲`. Ön kayıtlı eşik §2.4.
-- **Cevaplanırsa:** ok yönü ilk kez *yapı* bilgisinden türetilir; bugünkü "dikeyde ▲ basma" kuralının
-  (kör bastırma) yerine **karşıt yön** kuralı gelebilir.
-- **Miras:** A01/A03/C01, model §dikey.
+### Y1 — Dik destekte yataya dönüş öngörülebilir mi? *(çekirdek, iki parçalı)*
 
-### Y2 — "Altı dolu" gerçekten destek veriyor mu?
-- **Kütle:** fiyat desteğin **üstünde** (`0 < d ≤ 1.0`) **ve** raf var (2.3). Kontrol: raf yok, aynı mesafe.
-- **Bölünme:** 16 barda `first_1atr` + `ret_atr_16` + "destekten sekme" (temas sonrası 8 barda `≥ +0.5 ATR`).
-- **Alt hücreler:** raf yaşı (kaç bar) · temas sayısı · rejim · hacim · BOS · artık.
-- **Yön kuralı adayı:** raf var + temas → `▲`; raf yok (altı boş) + temas → `▼` veya "ok yok".
-- **Cevaplanırsa:** "raf" kavramı ok filtresi olarak kullanılabilir hale gelir.
+**Y1-a (teşhis):** Dik kalma ile yataya dönme ayrımını ne yapıyor?
+- **Kütle:** `regime == STEPPING_UP` barları (n≈6.000 / 20 sembol).
+- **Bölünme:** 10 bar içinde yataya döndü / dik kaldı / bozuldu.
+- **Alt hücreler:** geçişten önceki 1–3 barın mumu (gövde, kp, fitil) · `step_dikligi` bandı ·
+  hacim · `touch_count` · son step'ten bu yana geçen gün · artık.
+- **Cevaplanırsa:** "hafif yukarı tepki"nin hangi ölçülebilir tanımı ayrıştırıyor (R1–R4'ten hangisi).
 
-### Y3 — Tutmayan geri alım sonrası düşüş sürüyor mu? (`▼` devam kuralı)
-- **Kütle:** Y1'in **"tutmadı"** hücresi (geri alım denemesi 3 barda geri düştü).
-- **Bölünme:** sonraki 16 barda `first_1atr` (aşağı ilk dokunma) + `mae_atr_16`.
-- **Alt hücreler:** raf yok · dikeylik tanımı · düşüş barının gövdesi · hacim · BOS aşağı · artık.
-- **Yön kuralı adayı:** "başarısız geri alım" → `▼` (bugün böyle bir ok **yok**; yalnız uyarı işareti var).
-- **Cevaplanırsa:** mevcut mercan `▼`nin (dikey deneme uyarısı) bir *giriş* sinyaline dönüşüp dönmeyeceği belli olur.
+**Y1-b (nedensel):** O işaret görüldüğü anda yön çıkıyor mu?
+- **Kütle:** `regime == STEPPING_UP` **ve** R1–R4'ten biri sağlanan bar (işaret barı).
+- **Kontrol:** aynı gün/rejimde işaret sağlamayan bar.
+- **Bölünme:** 16 barda `first_1atr` + getiri.
+- **Yön kuralı adayı:** işaret var → `▲` (yataya dönüş lehine); işaret yok + fiyat çizgi altı → `▼` veya "ok yok".
+- **Cevaplanırsa:** ok yönü ilk kez *yapı geçişinden* türetilir — bugün böyle bir ok **yok**.
 
-### Y4 — Sabit desteğin altına inişte temizlik oranı yön veriyor mu?
+### Y2 — "Dik kaldı" durumu düşüşün devamı mı? (`▼` kuralı)
+- **Kütle:** Y1-a'nın **"dik kaldı"** hücresi (10 bar boyunca yeni step yok).
+- **Bölünme:** sonraki 16 barda `first_1atr` (aşağı) + `mae_atr_16`.
+- **Alt hücreler:** `step_dikligi` · fiyatın çizgiye mesafesi · düşüş barı gövdesi · hacim · BOS aşağı · artık.
+- **Yön kuralı adayı:** dik + dik kaldı → `▼`. (Bugün dikeyde `▲` bastırılıp mercan `▼` uyarısı basılıyor;
+  bu soru o uyarının *giriş* sinyaline dönüşüp dönmeyeceğini ölçer.)
+- **Cevaplanırsa:** mevcut "dikeyde ok bastırma" politikası yön kuralına dönüşür.
+
+### Y3 — Sabit desteğin altına inişte temizlik oranı yön veriyor mu?
 - **Kütle:** kapanış `d < 0` (kırılma), ilk kırılma barı.
 - **Bölünme:** 8 bar içinde kapanışla seviye üstüne dönüş (temizlik oranı) + 16 barda `first_1atr`.
-- **Alt hücreler:** sarkma derinliği (`≤0.35` fitil / `0.35–1.0` / `1.0–2.0` / `>2.0` ATR1d) · sarkma süresi ·
+- **Alt hücreler:** sarkma derinliği (`≤0.35` fitil / `0.35–1.0` / `1.0–2.0` / `>2.0`) · sarkma süresi ·
   kırılma gövdesi · hacim · BOS aşağı · artık.
 - **Yön kuralı adayı:** sığ sarkma + hızlı dönüş → `▲`; derin sarkma + dönüş yok → `▼`.
 - **Cevaplanırsa:** `▲` reclaim eşiklerinin (ihlal ≤1,5 ATR) dayanağı sayıya bağlanır.
 
+### Y4 — Yatay desteğin üstünde tutunma neye bağlı?
+- **Kütle:** `NEWLY_FLATTENED_AFTER_RISE` veya `LONG_HORIZONTAL` rejiminde, `0 < d ≤ 1.0`.
+- **Bölünme:** 16 barda `first_1atr` + "sekme" (temas sonrası 8 barda `≥ +0,5 ATR`).
+- **Alt hücreler:** yataylaşma yaşı (bar) · temas sayısı · hacim · BOS · artık.
+- **Yön kuralı adayı:** yatay + temas → `▲`; dikey + temas → `▼` veya "ok yok".
+- **Cevaplanırsa:** "dikey/yatay" ikilemi okun temel filtresi olur — bugünkü `long_base_breakout`
+  (≥20 gün yatay) kuralının sayısal karşılığı netleşir.
+
 ### Y5 — Hareketsiz fiyat + hacim patlaması yön veriyor mu?
-- **Kütle:** `|d| > 1.00` üst üste ≥6 bar (hareketsiz) **ve** sonraki barda rvol ≥1.2.
-- **Bölünme:** 16 barda `first_1atr` (patlama yönünde mi, tersine mi).
-- **Alt hücreler:** bekleme süresi · rejim (`NEWLY_FLATTENED_AFTER_RISE` / `LONG_HORIZONTAL`) · gövde · BOS · artık.
+- **Kütle:** `|d| > 1.00` üst üste ≥6 bar **ve** sonraki barda rvol ≥1.2.
+- **Bölünme:** 16 barda `first_1atr`.
+- **Alt hücreler:** bekleme süresi · rejim · gövde · BOS · artık.
 - **Yön kuralı adayı:** hareketsizlik + hacim → patlama yönünde `▲`/`▼`.
-- **Cevaplanırsa:** "sıkışma sonrası kırılma" tipi ok için ilk sayısal dayanak.
 
 ---
 
-## 4. Açıklayıcı katmanlar (tek başına soru değil, Y1–Y5 hücrelerine uygulanır)
+## 4. Açıklayıcı katmanlar (tek başına soru değil)
 
-**X1 — Mum anatomisi katmanı.** Azınlık hücresinin ortak noktası: gövde bandı, kapanış pozisyonu, aralık,
-fitil. Kullanıcı gözlemi: "kalamayanların çoğu küçük/yönsüz mum". Bu katman Y1 ve Y4'ün azınlığına uygulanır.
-**Neden/eşlikçi ayrımı:** aynı `ATR1d` diliminde ve aynı mesafe bandında eşleştirilmiş karşılaştırma zorunlu.
+**X1 — Mum anatomisi.** Y1-a/Y2/Y3'ün azınlık hücrelerine uygulanır: gövde, kapanış pozisyonu, aralık,
+fitil. **Neden/eşlikçi ayrımı** için aynı `ATR1d` diliminde ve aynı mesafe bandında eşleştirme zorunlu.
 
-**X2 — Yan domain katmanı.** BOS aşağı (son 3 bar) · rvol bandı · ayı FVG mesafesi · ayı OB mesafesi ·
-weekly bağlam. Her domain "var / yok / **bilinmiyor**" üçlüsü; "bilinmiyor" asla 0 sayılmaz.
-**Artık hücresi zorunlu**: dört domainin hiçbiri yok → ayrı satır; "geri kalan ne yapmış" cevaplanmadan
-soru kapanmaz.
+**X2 — Yan domain.** BOS aşağı (son 3 bar) · rvol · ayı FVG mesafesi · ayı OB mesafesi · weekly bağlam.
+Her domain "var / yok / **bilinmiyor**"; "bilinmiyor" asla 0 sayılmaz. **Artık hücresi zorunlu**:
+"geri kalan ne yapmış" cevaplanmadan soru kapanmaz.
 
 ---
 
 ## 5. K1 — Kontrol (atlanamaz)
 
-Aynı sembol, aynı `ATR1d` dilimi, aynı mesafe bandı; seviyeden bağımsız **rastgele barlar** (sabit tohum)
-ve "seviye yok" karşı örneği. Aynı sonuç metrikleri.
-
-K1 olmadan Y1–Y5'in yüzdeleri yorumlanamaz: destek seviyesine hiç bakmadan seçilen rastgele barlar da
-benzer %60/%40 üretebilir. Yön hükmü kuralının 3. şartı (§2.4) budur.
+Aynı sembol, aynı `ATR1d` dilimi, aynı mesafe bandı; seviyeden bağımsız rastgele barlar (sabit tohum) ve
+"seviye yok" karşı örneği. Aynı sonuç metrikleri. Yön hükmünün 3. şartı budur (§2.3).
 
 ---
 
@@ -173,39 +198,37 @@ benzer %60/%40 üretebilir. Yön hükmü kuralının 3. şartı (§2.4) budur.
 
 | Sıra | Soru | Neden |
 |---|---|---|
-| 1 | **Y1** | Kullanıcının modeli; ok yönünün ilk gerçek testi |
-| 2 | **K1** | Y1'in yüzdesini anlamlandırır |
-| 3 | **Y4** | Temizlik oranı hiç ölçülmedi, `▲` eşiklerinin dayanağı |
-| 4 | Y2 → Y3 | Raf kavramı ve `▼` devam kuralı |
-| 5 | Y5 → X1 → X2 | Sıkışma + açıklayıcı katmanlar |
+| 1 | **Y1-a** | "Hafif yukarı tepki" hangi tanımla ayrışıyor — her şeyin başlangıcı |
+| 2 | **Y1-b** | Nedensel sürüm; ok kuralının doğduğu yer |
+| 3 | **K1** | Y1-b'nin yüzdesini anlamlandırır |
+| 4 | Y2 → Y3 → Y4 | `▼` kuralı, temizlik oranı, yatay filtresi |
+| 5 | Y5 → X1 → X2 | Sıkışma + katmanlar |
 
 | # | İş | Neden gerekli |
 |---|---|---|
-| **G0** | Dikeylik tanımları D1/D2/D3 + raf (shelf) metriği, replay checkpoint tablosuna | Y1/Y2 kütlesi; bugün yalnız kod proxy'si (D1) var |
-| **G1** | "Son 3 barda BOS aşağı/yukarı" bayrağı | Bugün yalnız `ms_external_state` var, olay bayrağı yok |
+| **G0** | `step_dikligi` (20 bar ATR yükselişi) + yataylaşma geçiş etiketi + R1–R4 işaret bayrakları | Y1'in kütlesi |
+| **G1** | "Son 3 barda BOS aşağı/yukarı" bayrağı | Bugün yalnız `ms_external_state` var |
 | **G2** | Mum anatomisi sütunları (gövde, kp, aralık, fitil — günlük ATR) | `stabil_replay` checkpoint'inde yok |
-| **G3** | Geri alım denemesi + "3 barda tuttu/tutmadı" + temas epizodu sayaçları | Y1/Y3/Y4 kütlesi |
+| **G3** | Kırılma/temas/geri alım sayaçları + 3 bar "tuttu/tutmadı" | Y2/Y3 kütlesi |
 | **G4** | Sembol hash bölmesi + keşif/doğrulama sütunları | Sözleşme |
-| **G5** | Manifest tabanlı yön tablosu üreticisi (JSON/CSV) | Tekrarlanabilirlik (§8.8) |
+| **G5** | Manifest tabanlı yön tablosu üreticisi | Tekrarlanabilirlik (§8.8) |
+| **G6** | 177 sembollük tam koşu (paralel, ~10 dk) | Hücrelerin n≥100 olması için |
 
 ---
 
 ## 7. Kapsam sınırı
 
-- **Ok kuralları bu turda değişmez.** V2 yalnız ölçer ve "yön kuralı adayı" önerir; `▲`/`▼` eşiklerine
-  dokunmak ayrı ve birlikte verilecek bir karardır.
-- **Direnç tarafı** ilk turda koşmaz (aynı sorular sonra aynalanır).
-- **Yeni domain yazılmaz**; yalnız mevcut 4 domain kullanılır.
+- **Ok kuralları bu turda değişmez.** V2 yalnız ölçer ve yön kuralı adayı önerir.
+- **Direnç tarafı** ilk turda koşmaz.
+- **Yeni domain yazılmaz**; mevcut 4 domain kullanılır.
 - Checkpoint paketi (~80 MB) depoya eklenmez.
 
 ---
 
 ## 8. Onay istenen noktalar
 
-1. **Dikeylik için hangi tanım esas alınsın?** D1 (kod proxy, %41) / D2 (eğim, %0,1) / D3 (`STEPPING_UP`, %29)
-   — bence üçü de koşulmalı ve **ok kuralı en iyi ayrıştıran** tanımın üzerine kurulmalı; sen gözle
-   baktığında "dikey" dediğin çizgi hangisi?
-2. **"Altı dolu" raf tanımı** (son 20 barda ≥5 bar, ±0.35 ATR1d) senin gördüğünle uyuşuyor mu? Daha gevşek
-   (≥3 bar / ±0.50 ATR1d) ölçülsün mü?
-3. **Y3 çıktısı:** "başarısız geri alım → `▼`" fikri ok rework'ünün parçası mı olacak, yoksa ayrı bir
-   uyarı işareti olarak mı kalmalı?
+1. **"Hafif yukarı tepki" (R1–R4) tanımları** senin gözle gördüğünle uyuşuyor mu? Özellikle R3
+   ("dipten kapanışa ≥0,35 ATR toparlanma") senin kastettiğin tepki mi?
+2. **Yataylaşma penceresi 10 bar** (≈3 işlem günü) doğru mu? Native etiket `NEWLY_FLATTENED_AFTER_RISE`
+   için 8 pivot aralığı sonrası ilk yatay genişleme diyor; sen gözle ne kadar sonra "yataya döndü" diyorsun?
+3. **Y2 çıktısı `▼`** (dik kaldı → düşüş devam): ok rework'ünün parçası mı, yoksa ayrı uyarı mı kalsın? — "bakarız" dedin, not olarak duruyor.
