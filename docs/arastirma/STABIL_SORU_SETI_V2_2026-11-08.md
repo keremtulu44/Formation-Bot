@@ -157,9 +157,40 @@ Her satır: **koşul → ok adayı → iddia**. Sadeleştirilmiş liste; her bir
 **Önerilen ilk 3 (basit başlangıç):** **K1+K2** (senin modelin, en çok veri) → **K3+K4** (temizlik oranı,
 hiç ölçülmedi) → **K8+K9** (canlıdaki okların doğrulanması, ucuz).
 
----
+### 0.7 Süreç haritası: 9 durum (kullanıcının senaryo ağacı)
 
-## 1. Kilitlenen kararlar
+Kullanıcının anlattığı süreç iki eksene indi: **fiyatın yeri** (desteğin altı / yapışık / üstü) ×
+**desteğin davranışı** (sabit / yukarı hareket / aşağı hareket; son 10 günde seviye değişti mi).
+Her gün bir duruma düşüyor, sonra ne olduğu ölçülüyor. (39 sembol, 16.745 gün, ufuk 16 gün.)
+
+| Durum | n | 16 günde kırılma | UP_first | DOWN_first | medyan | **3 gün sonra** alt/yapışık/üst |
+|---|---|---|---|---|---|---|
+| alt + sabit | 1.881 | %91,3 | **%54,7** | %43,9 | −0,37 ATR | **60 / 9 / 31** |
+| alt + yukarı | 712 | %92,1 | %49,2 | %50,4 | +0,06 | 65 / 10 / 25 |
+| alt + aşağı | 580 | %95,3 | %50,9 | %47,1 | −0,14 | 72 / 8 / 20 |
+| yapışık + sabit | 462 | %73,6 | %53,7 | %45,2 | −0,12 | 29 / 18 / 53 |
+| yapışık + yukarı | 520 | %70,8 | %51,0 | %48,7 | +0,24 | 38 / 18 / 44 |
+| yapışık + aşağı | 442 | %76,7 | %49,3 | %49,1 | −0,42 | 41 / 19 / 40 |
+| üst + sabit | 4.153 | **%39,5** | %53,2 | %45,6 | −0,17 | 5 / 7 / 89 |
+| üst + yukarı | 4.032 | %42,6 | %54,1 | %44,5 | −0,02 | 6 / 7 / 86 |
+| üst + aşağı | 3.963 | %42,2 | %49,5 | %49,0 | −0,14 | 6 / 8 / 86 |
+
+*(Kırılma = sonraki 16 günde o gün bilinen seviyenin altına kapanış. "Alt" durumlarında bu tanım
+neredeyse hep doğru olduğu için o satırların okunması gereken sütunu "3 gün sonra" dağılımıdır.)*
+
+**Bu haritanın söyledikleri — üç net sonuç:**
+
+1. **Kırılma riskini destek hareketi değil, mesafe belirliyor.** Üstteyken kırılma %39–43; çizgiye
+   yapışıkken %71–77. Destek sabit mi hareketli mi: fark yalnız 2–4 puan. Yani "destek hareketlenince
+   kırılır" iddiası bu kütlede **zayıf**.
+2. **"Sabit destek tepki verir" iddiası zayıf ama aynı yönde.** Altta kalan fiyat 3 gün içinde üste
+   dönme: sabit destekte %31, yukarı hareketli destekte %25, aşağı hareketli destekte %20.
+   Ayrıca alt+sabit, alt durumların en yüksek UP_first'ine sahip (%54,7 vs %49–51).
+3. **Hiçbir statik durum ok eşiğini geçmiyor.** En yüksek UP_first %54,7; ön kayıtlı eşik %60.
+   Sonuç: **ok statik durumdan değil, geçişten (olaydan) çıkmalı** — yani K1/K2'nin "yataya döndü /
+   dik kaldı" olayı ve R1–R4 tepki tetikleyicileri doğru yol; statik durum tabloları ok kaynağı değil.
+
+
 
 | Konu | Karar |
 |---|---|

@@ -1,5 +1,5 @@
 {
-  "surum": "V2-2026-11-08-rev6",
+  "surum": "V2-2026-11-08-rev7",
   "durum": "ONERI",
   "kapsam": "stabil_destek",
   "kararlar": {
@@ -659,5 +659,119 @@
       "K8",
       "K9"
     ]
-  ]
+  ],
+  "durum_haritasi": {
+    "eksenler": {
+      "fiyat_yeri": [
+        "alt (d<-0.05)",
+        "yapisik (-0.05..0.5)",
+        "ust (>0.5)"
+      ],
+      "destek_davranisi": [
+        "sabit (10 gunde seviye degismedi)",
+        "yukari hareket",
+        "asagi hareket"
+      ]
+    },
+    "sembol": 39,
+    "gozlem": 16745,
+    "ufuk_gun": 16,
+    "tablo": {
+      "alt+sabit": {
+        "n": 1881,
+        "kirilma": 0.913,
+        "up_first": 0.547,
+        "down_first": 0.439,
+        "medyan_atr": -0.37,
+        "t3_alt": 60,
+        "t3_yapisik": 9,
+        "t3_ust": 31
+      },
+      "alt+yukari": {
+        "n": 712,
+        "kirilma": 0.921,
+        "up_first": 0.492,
+        "down_first": 0.504,
+        "medyan_atr": 0.06,
+        "t3_alt": 65,
+        "t3_yapisik": 10,
+        "t3_ust": 25
+      },
+      "alt+asagi": {
+        "n": 580,
+        "kirilma": 0.953,
+        "up_first": 0.509,
+        "down_first": 0.471,
+        "medyan_atr": -0.14,
+        "t3_alt": 72,
+        "t3_yapisik": 8,
+        "t3_ust": 20
+      },
+      "yapisik+sabit": {
+        "n": 462,
+        "kirilma": 0.736,
+        "up_first": 0.537,
+        "down_first": 0.452,
+        "medyan_atr": -0.12,
+        "t3_alt": 29,
+        "t3_yapisik": 18,
+        "t3_ust": 53
+      },
+      "yapisik+yukari": {
+        "n": 520,
+        "kirilma": 0.708,
+        "up_first": 0.51,
+        "down_first": 0.487,
+        "medyan_atr": 0.24,
+        "t3_alt": 38,
+        "t3_yapisik": 18,
+        "t3_ust": 44
+      },
+      "yapisik+asagi": {
+        "n": 442,
+        "kirilma": 0.767,
+        "up_first": 0.493,
+        "down_first": 0.491,
+        "medyan_atr": -0.42,
+        "t3_alt": 41,
+        "t3_yapisik": 19,
+        "t3_ust": 40
+      },
+      "ust+sabit": {
+        "n": 4153,
+        "kirilma": 0.395,
+        "up_first": 0.532,
+        "down_first": 0.456,
+        "medyan_atr": -0.17,
+        "t3_alt": 5,
+        "t3_yapisik": 7,
+        "t3_ust": 89
+      },
+      "ust+yukari": {
+        "n": 4032,
+        "kirilma": 0.426,
+        "up_first": 0.541,
+        "down_first": 0.445,
+        "medyan_atr": -0.02,
+        "t3_alt": 6,
+        "t3_yapisik": 7,
+        "t3_ust": 86
+      },
+      "ust+asagi": {
+        "n": 3963,
+        "kirilma": 0.422,
+        "up_first": 0.495,
+        "down_first": 0.49,
+        "medyan_atr": -0.14,
+        "t3_alt": 6,
+        "t3_yapisik": 8,
+        "t3_ust": 86
+      }
+    },
+    "sonuclar": [
+      "kirilma riskini mesafe belirliyor (ust %39-43, yapisik %71-77); destek hareketinin katkisi 2-4 puan",
+      "sabit destekte alttan 3 gunde uste donme %31, hareketli destekte %20-25 (ayni yonde zayif destek)",
+      "hicbir statik durum %60 ok esigini gecmiyor -> ok gecisten (olaydan) cikmali"
+    ]
+  }
 }
