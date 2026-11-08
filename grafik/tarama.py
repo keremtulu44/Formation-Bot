@@ -436,6 +436,7 @@ def _stabil_direnc_uyarisi(neden: str) -> str:
         "incomplete_hourly_bucket": "mumun saatlik bileşenleri eksik",
         "missing_hourly_source": "saatlik kaynak hedef mumu karşılamıyor",
         "incomplete_or_invalid_flag": "kaynakta tamamlanmamış veya belirsiz mum var",
+        "insufficient_continuous_buckets": "sağlayıcı boşluğu sonrası kesintisiz kova kalmadı",
         "invalid_ohlcv": "kaynak fiyat/hacim verisi hatalı",
         "invalid_timestamp": "kaynak zamanları doğrulanamadı",
         "invalid_cutoff": "kapanış sınırı doğrulanamadı",

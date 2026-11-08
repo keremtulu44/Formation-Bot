@@ -26,11 +26,13 @@ davranışı değiştirilmedi**; ok tarafı bu turda yalnız anlaşıldı ve öl
    momentum), mercan `▼` (dikey destek üzerinde yukarı deneme = yapı uyarısı). Dirençte aynaları
    vardır (`▼` dolu = güçlü aşağı dönüş, `▼` içi boş = aşağı momentum, `▲` içi boş = yukarı deneme).
 4. **En önemli iki bulgu:** (a) 4s grafiklerde direnç katmanı, sağlayıcı kaynaklı tek bir eksik
-   saatlik kova yüzünden gerçek arşivde **hiç çizilmiyor** (fail-closed kapı bütün katmanı düşürüyor);
+   saatlik kova yüzünden gerçek arşivde **hiç çizilmiyordu** (fail-closed kapı bütün katmanı
+   düşürüyordu; 2026-11-08'de "son kesintisiz bloğa kırpma" politikasıyla çözüldü — §8.1);
    (b) ok gücü eşikleri **4s ATR** biriminde, oysa okları gerekçelendiren araştırma **günlük ATR**
    biriminde konuşuyor — bu yüzden "güçlü mum" sanılan okların çoğu günlük ölçekte zayıf.
-5. Bu turda düzeltilen iki gerçek hata: **2025 yarım gün kayıtlarının eksikliği** (takvim/kapanış
-   çelişkisi) ve **kapanmamış son 4s kovasının "kapandı" sayılması**. Ayrıntı §8.
+5. Bu turda düzeltilen üç gerçek hata: **2025 yarım gün kayıtlarının eksikliği** (takvim/kapanış
+   çelişkisi), **kapanmamış son 4s kovasının "kapandı" sayılması** ve **sağlayıcı boşluğunda bütün 4s
+   katmanının kararması** (kırpma politikası). Ayrıntı §8.
 
 ---
 
@@ -42,7 +44,7 @@ davranışı değiştirilmedi**; ok tarafı bu turda yalnız anlaşıldı ve öl
 | `ruff check .` | All checks passed |
 | Ok replay hattı gerçek arşivle çalıştırıldı | 2 sembol (ASTOR, AKBNK) → 39 olay, hata yok |
 | **Taze örneklem koşusu (bu dosya için)** | **40 sembol, 1061 olay**, 1 dk 26 sn, 0 hata |
-| Direnç grafiği gerçek arşivle sınandı | 1g kare **READY**; 4s kare **DATA_ERROR** (sebep §8.1) |
+| Direnç grafiği gerçek arşivle sınandı | 1g kare **READY**; 4s kare **DATA_ERROR** (sebep §8.1; aynı gün kırpma politikasıyla **12/12 READY** oldu) |
 | Değiştirilen dosyalar | `config.py` (2025 yarım günleri), `domain_engines/stabil/chart_bridge.py` (son kova + teşhis logu), iki test dosyası |
 
 Ok eşiklerine, momentum/sweep kurallarına, dikey uyarı politikasına ve alarm üretimine **dokunulmadı**;
@@ -368,27 +370,38 @@ kırılımdan kural çıkarılamayacağını gösterir. 40 sembolde bu türün *
 
 ## 8. Tespit edilen sorunlar
 
-### 8.1 ÇÖZÜLMEDİ — 4s grafiklerde direnç katmanı gerçek arşivde hiç çizilmiyor (yüksek etki)
+### 8.1 ÇÖZÜLDÜ (2026-11-08, politika C) — 4s direnç katmanı boşluk yüzünden tamamen kapanıyordu
 
-`chart_bridge._intraday_checked` her 4s kovasını kendi 1s bileşenleriyle doğrular ve **tek bir eksik
-kovada bütün katmanı** `DATA_ERROR` yapar. Gerçek arşivde:
+`chart_bridge._intraday_checked` her 4s kovasını kendi 1s bileşenleriyle doğrular; **tek bir eksik
+kovada bütün katmanı** `DATA_ERROR` yapıyordu. Gerçek arşivde iki yapısal sağlayıcı boşluğu var:
 
-* 2025-10-27…2025-11-03 arasında **17:30 kovaları** (son saat) eksik — tüm sembollerde aynı 7 bar.
-* **2026-04-20 09:30 ve 10:30 saatlik barları** tüm sembollerde eksik → o günün 4s kovası yarım.
+* **2026-04-20 09:30 ve 10:30** 1s barları tüm sembollerde eksik (o gün 09:30 4s kovası yarım),
+* 2025-10-27…2025-11-06 arasında 7 gün **17:30 barı** eksik (günün son 4s kovası yarım; bu barlar
+  arşivde genel olarak var — 353/365 gün —, yalnız o haftada yok).
 
-Ölçüm: rastgele 25 sembolün tamamı ve 12 sembollük ikinci grupta **12/12** sembol 4s için
-`missing_or_invalid_target_bucket` / `incomplete_hourly_bucket` döndü; 1g kare ise `READY`.
-Sonuç: **geçmiş grafiklerde (replay/eğitim dahil) direnç çizgisi ve direnç okları görünmüyor**; canlıda
-da sağlayıcı tek bir saatlik barı geciktirdiğinde, o boşluk pencereden çıkana kadar katman kapanıyor.
+Ölçüm (öncesi): 12/12 sembol 4s için `missing_or_invalid_target_bucket` / `incomplete_hourly_bucket`;
+1g kare `READY`. Yani **geçmiş grafiklerde direnç çizgisi ve direnç okları hiç görünmüyordu**.
 
-Bu bilinçli bir fail-closed sözleşmesidir, sessizce gevşetilmedi. Seçenekler (karar kullanıcıda):
+**Karar (kullanıcı "sence" dedi, uygulanan: C — son kesintisiz bloğa kırpma).** Gerekçe:
 
-| Seçenek | Ne yapar | Bedel |
-|---|---|---|
-| **A. Aynen bırak** | Doğrulanamayan bar çizilmez | Özellik pratikte kullanılamaz |
-| **B. Yalnız son N barı doğrula** | Görünür pencere doğrulanır, eski boşluk katmanı düşürmez | Eski barların doğrulanmadığı kabul edilir |
-| **C. Son kesintisiz bloğa kırp** | Boşluktan sonrası çizilir, öncesi boş kalır | Geçmiş kısalır, görsel boşluk dürüstçe kalır |
-| **D. Kova maskesi** | Seviye çizilir; yalnız doğrulanmamış barlarda ok üretilmez | Yeni API; testler güncellenir |
+* 4s katmanındaki seviye **günlük** geçmişten üretilip bar kapanışlarına projekte ediliyor; 4s
+  çerçeve yalnız çizim ızgarası. Dolayısıyla baştaki kovaları atmak seviye hesabını bozmuyor,
+  yalnız çizgi daha geç başlıyor — "sessizce yanlış veri çizmek" ile karıştırılmaz.
+* A (aynen bırak) özelliği pratikte ölü bırakıyordu; B (son N bar) doğrulanmamış barları çizer;
+  D (kova maskesi) `bar_index` hizasını ve davranış zincirini boşluk üzerinden bağlar.
+* Politika **doldurmaz, uydurmaz**: yalnız son doğrulanamayan kovanın öncesi bırakılır, kalan blok
+  kesintisiz ve toplam-tutarlı olarak doğrulanır; kırpma `WARNING` ile (kova, neden, atılan/kalan)
+  loglanır. Ayrıca sondaki doğrulanamayan kova (gecikme/eksik bileşen/uyuşmayan toplam) yalnız o
+  barı düşürür — eskiden olduğu gibi bütün katmanı kapatmaz. Kırpma sonrası **2'den az** kova
+  kalırsa katman açılmaz: yeni neden `insufficient_continuous_buckets`.
+
+Ölçüm (sonrası, gerçek arşiv): **12/12 sembol `READY`**. Tam arşivde kırpma noktası
+**2026-04-20 09:30 (711 kova atıldı, 367 çizildi)**, 2025-12-01+ penceresinde 293 atıldı / 367 kaldı.
+Canlı benzeri **son ~120 kova** penceresinde **hiç kırpma yok** (boşluk pencerenin dışında): canlı
+tarama davranışı değişmedi, değişiklik yalnız boşluğu kapsayan uzun pencereleri etkiliyor.
+Bedel: çizgi görünür pencerede 2026-04-20'den itibaren başlar; bunu kullanıcı gözle görecek.
+Maliyet: tam arşiv 4s ≈ 1,0 s/sembol, son 120 kova ≈ 0,2 s/sembol (kova doğrulaması zaten vardı;
+kırpma noktası aranırken doğrulama sondan geriye yürüyüp ilk sorunda durur).
 
 ### 8.2 DÜZELTİLDİ — 2025 yarım günleri takvimden eksikti (orta-yüksek etki)
 
@@ -411,8 +424,8 @@ eklenmediğinde test kırmızı olur.
 kovanın eksik bileşenleri (arşiv seans ortasında alınmış / sağlayıcı son saati henüz göndermemiş)
 "eksik kova" hatasına dönüşüp katmanı düşürüyordu. Artık **penceresi son gözlenen saatlik barın
 kapanışından sonra biten kova** sertifikalandırılmıyor: atlanıyor (doldurulmuyor), log'a yazılıyor;
-**iç boşluklar hâlâ fail-closed**. Ayrıca kova uyuşmazlığında hangi günün eksik olduğu loglanıyor
-(önceden yalnız "gösterilemedi" vardı, teşhis yoktu).
+iç boşluklar artık 8.1'deki kırpma politikasıyla ele alınıyor. Kova uyuşmazlığında hangi günün eksik
+olduğu loglanıyor (önceden yalnız "gösterilemedi" vardı, teşhis yoktu).
 
 ### 8.4 AÇIK — `/stabil` komutu ile grafik oku aynı kavramı farklı tanımlıyor (orta etki)
 
@@ -500,5 +513,5 @@ değişikliğin işe yaradığı" ölçülemez.
 * Direnç katmanının grafikte görünmesi kârlılık, alarm veya işlem sinyali değildir; alarm üretmez.
 * `▲`/`▼` işaretleri kesin düşüş/yükseliş tahmini değildir. `▲` setinin kendisi, ölçülen örneklemde
   yazı-tura düzeyindedir (UP_FIRST %49,7 / DOWN_FIRST %44,1).
-* Bu dosya, §8.1 ve §8.4–8.9 kapatılmadan "direnç canlıda doğrulandı" veya "oklar kalibre edildi"
+* Bu dosya, §8.4–8.9 kapatılmadan "direnç canlıda doğrulandı" veya "oklar kalibre edildi"
   diye okunmamalıdır.

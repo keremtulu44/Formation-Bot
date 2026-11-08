@@ -28,6 +28,9 @@ from .runtime import StabilRoleStatus
 log = logging.getLogger(__name__)
 _PRICE_COLUMNS = ("open", "high", "low", "close", "volume")
 _INTRADAY_HOURS = {"1h": 1, "2h": 2, "4h": 4}
+# Kırpma sonrası çizgi için en az bu kadar kesintisiz kova gerekir; iki noktadan
+# azı çizgi değil tek noktadır ve "hazır" demek yanıltıcı olur.
+_MIN_CONTINUOUS_BUCKETS = 2
 
 
 class _UnsafeSource(ValueError):
@@ -173,13 +176,86 @@ def _same_rows(left: pd.DataFrame, right: pd.DataFrame) -> bool:
     ))
 
 
+def _bucket_problem(row: pd.Series, label: pd.Timestamp, hourly: pd.DataFrame, tf: str) -> str | None:
+    """Return the reason a target bucket cannot be certified, or None.
+
+    A bucket is certifiable only if it holds exactly its expected 1H constituents
+    and its OHLCV equals their aggregate. Nothing is filled in.
+    """
+    end = mum_kapanis_anlari(pd.DatetimeIndex([label]), tf)[0]
+    expected_hours = []
+    hour = label
+    while hour < end:
+        expected_hours.append(hour)
+        hour += pd.Timedelta(hours=1)
+    part = hourly.loc[(hourly.index >= label) & (hourly.index < end)]
+    if list(part.index) != expected_hours:
+        return "incomplete_hourly_bucket"
+    aggregate = np.array([
+        part["open"].iloc[0], part["high"].max(), part["low"].min(),
+        part["close"].iloc[-1], part["volume"].sum(),
+    ], dtype=float)
+    if not np.allclose(row[list(_PRICE_COLUMNS)].to_numpy(dtype=float), aggregate,
+                       rtol=1e-9, atol=1e-8, equal_nan=False):
+        return "target_source_mismatch"
+    return None
+
+
+def _bucket_problems(target: pd.DataFrame, hourly: pd.DataFrame, tf: str) -> dict[pd.Timestamp, str]:
+    """Map every uncertifiable target bucket (including grid holes) to a reason.
+
+    Cheap grid comparison first, then a backward walk that stops at the first bad
+    bucket: everything after it is proven contiguous and aggregate-consistent.
+    """
+    first, last = target.index[0], target.index[-1]
+    hours = _INTRADAY_HOURS[tf]
+    expected: list[pd.Timestamp] = []
+    for day in _days(first.date(), last.date()):
+        session = _session(day, intraday=True)
+        if session.status is not SessionStatus.TRADING:
+            continue
+        start = pd.Timestamp(day, tz="Europe/Istanbul") + pd.Timedelta(hours=9, minutes=30)
+        end_time = seans_sonu_saati(day)
+        end = pd.Timestamp(day, tz="Europe/Istanbul") + pd.Timedelta(hours=end_time.hour, minutes=end_time.minute)
+        while start < end:
+            if first <= start <= last:
+                expected.append(start)
+            start += pd.Timedelta(hours=hours)
+    actual = list(target.index)
+    problems: dict[pd.Timestamp, str] = {}
+    if expected != actual:
+        grid, seen = set(expected), set(actual)
+        for label in expected:
+            if label not in seen:
+                problems[label] = "eksik_hedef_kova"
+        for label in actual:
+            if label not in grid:
+                problems[label] = "beklenmeyen_hedef_kova"
+    son_sorun = max(problems) if problems else None
+    for label in reversed(actual):
+        if son_sorun is not None and label <= son_sorun:
+            break
+        if label in problems:
+            continue
+        kind = _bucket_problem(target.loc[label], label, hourly, tf)
+        if kind is not None:
+            problems[label] = kind
+            break
+    return problems
+
+
 def _intraday_checked(target: pd.DataFrame, hourly_frame: Any, tf: str, cutoff: pd.Timestamp) -> pd.DataFrame:
     # Trim only the rolling source's initial *partial bucket*: retaining it
     # would turn missing prefix constituents into a fictitious complete bar.
-    # Internal holes and trailing holes *inside* the observed source range are
-    # errors, not silently skipped or filled. A trailing bucket whose window
-    # ends after the last observed hourly bar is dropped instead of being
-    # certified by its scheduled close (provider lag / mid-session capture).
+    # A trailing bucket whose window ends after the last observed hourly bar is
+    # dropped instead of being certified by its scheduled close (provider lag /
+    # mid-session capture).
+    #
+    # Interior provider holes are never filled or invented. They are handled by
+    # *trimming the prefix* up to the last bad bucket, so the drawn level always
+    # comes from a contiguous, verified run of buckets (policy chosen 2026-11-08:
+    # a whole-dark layer hid the feature for every window spanning a hole). The
+    # trade-off is visible: the line starts later than the chart window.
     hourly = _closed(hourly_frame, "1h", cutoff, start=target.index[0])
     first_hourly = hourly.index[0]
     if target.index[0] < first_hourly:
@@ -208,51 +284,37 @@ def _intraday_checked(target: pd.DataFrame, hourly_frame: Any, tf: str, cutoff: 
         target = target.iloc[:-1].copy()
     if target.empty:
         raise _UnsafeSource("no_complete_target_bucket")
-    first, last = target.index[0], target.index[-1]
-    expected: list[pd.Timestamp] = []
-    hours = _INTRADAY_HOURS[tf]
-    for day in _days(first.date(), last.date()):
-        session = _session(day, intraday=True)
-        if session.status is not SessionStatus.TRADING:
+    # Sondaki kullanılamaz kovalar (sağlayıcı gecikmesi, eksik bileşen, uyuşmayan
+    # toplam) çizgiyi kısaltır; içerideki bir boşluk ise öncesini bırakır.
+    while True:
+        problems = _bucket_problems(target, hourly, tf)
+        if not problems:
+            break
+        if target.index[-1] in problems:
+            log.warning(
+                "Stabil direnç: kapanmamış/doğrulanamayan son kova atlandı (%s, neden=%s)",
+                target.index[-1], problems[target.index[-1]],
+            )
+            target = target.iloc[:-1].copy()
+            if target.empty:
+                raise _UnsafeSource("no_complete_target_bucket")
             continue
-        start = pd.Timestamp(day, tz="Europe/Istanbul") + pd.Timedelta(hours=9, minutes=30)
-        end_time = seans_sonu_saati(day)
-        end = pd.Timestamp(day, tz="Europe/Istanbul") + pd.Timedelta(hours=end_time.hour, minutes=end_time.minute)
-        while start < end:
-            if first <= start <= last:
-                expected.append(start)
-            start += pd.Timedelta(hours=hours)
-    actual = list(target.index)
-    if actual != expected:
-        # Fail-closed korunur; yalnız hangi günün/kovanın eksik olduğu loglanır.
-        # Teşhis olmadan "direnç gösterilemedi" mesajı kaynağı suçlamakla
-        # yetiniyordu; oysa neden tek bir sağlayıcı boşluğu olabilir.
-        eksik = [str(label) for label in expected if label not in set(actual)]
-        fazla = [str(label) for label in actual if label not in set(expected)]
+        # İç boşluk: yalnız son sorunlu kovanın öncesi bırakılır. Kalan blok
+        # kesintisiz ve doğrulanmıştır; boşluk doldurulmaz, kova uydurulmaz.
+        # Politika 2026-11-08: boşluk yüzünden katmanın tamamını karartmak
+        # yerine çizgi görünür pencerede daha geç başlar.
+        son_sorun = max(problems)
+        atilan = int((target.index <= son_sorun).sum())
         log.warning(
-            "Stabil direnç hedef kova doğrulaması başarısız: %d beklenen / %d mevcut; "
-            "eksik=%s; beklenmeyen=%s",
-            len(expected), len(actual), eksik[:3], fazla[:3],
+            "Stabil direnç: son sorunlu kovaya kadar kırpıldı (sorunlu kova=%s, neden=%s, "
+            "atılan=%d, kalan=%d)",
+            son_sorun, problems[son_sorun], atilan, len(target) - atilan,
         )
-        raise _UnsafeSource("missing_or_invalid_target_bucket")
-
-    for label, row in target.iterrows():
-        end = mum_kapanis_anlari(pd.DatetimeIndex([label]), tf)[0]
-        expected_hours = []
-        hour = label
-        while hour < end:
-            expected_hours.append(hour)
-            hour += pd.Timedelta(hours=1)
-        part = hourly.loc[(hourly.index >= label) & (hourly.index < end)]
-        if list(part.index) != expected_hours:
-            raise _UnsafeSource("incomplete_hourly_bucket")
-        aggregate = np.array([
-            part["open"].iloc[0], part["high"].max(), part["low"].min(),
-            part["close"].iloc[-1], part["volume"].sum(),
-        ], dtype=float)
-        if not np.allclose(row[list(_PRICE_COLUMNS)].to_numpy(dtype=float), aggregate,
-                           rtol=1e-9, atol=1e-8, equal_nan=False):
-            raise _UnsafeSource("target_source_mismatch")
+        target = target.loc[target.index > son_sorun].copy()
+        if len(target) < _MIN_CONTINUOUS_BUCKETS:
+            # Kırpma sonrası tek kova kalıyorsa çizgi yoktur: uydurma yerine söyle.
+            raise _UnsafeSource("insufficient_continuous_buckets")
+        break
     return target
 
 

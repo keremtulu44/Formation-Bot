@@ -63,12 +63,28 @@ def test_partial_rolling_prefix_is_not_invented():
 
 
 @pytest.mark.parametrize("tf,missing_count", [("1h", 1), ("2h", 1), ("4h", 1), ("4h", 4)])
-def test_internal_missing_hourly_bar_or_whole_bucket_fails_closed(tf, missing_count):
+def test_internal_missing_hourly_bar_or_whole_bucket_trims_to_last_continuous_block(tf, missing_count, caplog):
     daily, hourly = _frames()
     hourly = hourly.drop(hourly.index[10:10 + missing_count])
     result = _output(tf, daily, hourly)
+    # Politika (2026-11-08): sağlayıcı boşluğu katmanı karanlıkta bırakmaz;
+    # yalnız son sorunlu kovanın öncesi bırakılır. Hiçbir kova doldurulmaz.
+    assert result.status == StabilRoleStatus.READY, result.reason
+    assert "kırpıldı" in caplog.text
+    assert result.bar_projection[0].bar_close_time > hourly.index[9]
+    assert result.bar_projection[-1].daily_as_of <= result.bar_projection[-1].bar_close_time
+
+
+def test_hole_that_leaves_no_drawable_run_fails_closed(caplog):
+    daily, hourly = _frames()
+    # First bucket stays certified, the next one loses its constituents: after
+    # trimming at most a single bucket would remain, which is not a line.
+    # Four full days plus a single trailing 17:30 bar: the hole right before
+    # that bar leaves at most one certifiable bucket, which is not a line.
+    hourly = pd.concat([hourly.iloc[:36], hourly.iloc[-1:]])
+    result = _output("4h", daily, hourly)
     assert result.status == StabilRoleStatus.DATA_ERROR
-    assert result.reason in {"missing_or_invalid_target_bucket", "incomplete_hourly_bucket"}
+    assert result.reason == "insufficient_continuous_buckets"
     assert not result.bar_projection
 
 
@@ -111,7 +127,7 @@ def test_missing_daily_trading_session_or_latest_completed_daily_fails_closed():
     assert result.reason == "missing_daily_session"
 
 
-def test_partial_flag_and_different_aggregate_fail_closed():
+def test_partial_flag_and_different_aggregate_fail_closed(caplog):
     daily, hourly = _frames()
     target = resample_ohlcv(hourly, "4h")
     hourly["is_complete"] = True
@@ -121,7 +137,16 @@ def test_partial_flag_and_different_aggregate_fail_closed():
     hourly["is_complete"] = True
     target.iloc[4, target.columns.get_loc("high")] += 0.5
     result = _output("4h", daily, hourly, target=target)
-    assert result.reason == "target_source_mismatch"
+    # The damaged bucket is dropped, the certified neighbours stay.
+    assert result.status == StabilRoleStatus.READY, result.reason
+    assert result.bar_projection[0].bar_close_time > mum_kapanis_anlari(target.index[4:5], "4h")[0]
+    assert "target_source_mismatch" in caplog.text
+    # A mismatch in the *last* bucket only shortens the line by one bar.
+    target = resample_ohlcv(hourly, "4h")
+    target.iloc[-1, target.columns.get_loc("high")] += 0.5
+    result = _output("4h", daily, hourly, target=target)
+    assert result.status == StabilRoleStatus.READY, result.reason
+    assert result.bar_projection[-1].bar_close_time < mum_kapanis_anlari(target.index[-1:], "4h")[0]
 
 
 def test_future_bad_values_duplicates_and_flags_do_not_affect_cutoff():
