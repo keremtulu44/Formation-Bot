@@ -728,7 +728,7 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool,
     for sayac, barlar, etiket in (
         ("donus_isaret", "donus_barlar", "▼ direnç dönüşü"),
         ("momentum_isaret", "momentum_barlar", "▽ direnç momentumu"),
-        ("dikey_deneme_isaret", "dikey_deneme_barlar", "△ direnç yapı uyarısı"),
+        ("dikey_deneme_isaret", "dikey_deneme_barlar", "◇ direnç yapı uyarısı"),
     ):
         if (cizilen.get(sayac) if olculdu else direnc.get(barlar)):
             oge.append(etiket)

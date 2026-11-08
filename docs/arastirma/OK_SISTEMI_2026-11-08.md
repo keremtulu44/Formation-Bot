@@ -107,3 +107,46 @@ Etkisi: **513 ok (%39) azalır**, ▲ tarafı hiç etkilenmez, "dikey bastırma"
 
 **Dosyalar:** `ok_denetimi_2026_11_08.csv` (1.315 ok, kural + gerekçe + bayrak),
 `ok_ozet_sembol_2026_11_08.csv` (50 sembol), kod: `research/stabil_ok_denetimi.py`.
+
+---
+
+## 7. UYGULANAN DÜZELTME (2026-11-08)
+
+Üç kapı eklendi; **eşikler gevşetilmedi, ok üretim mantığı değişmedi**.
+
+| # | Kapı | Yer | Ne yapıyor |
+|---|---|---|---|
+| 1 | **Mesafe** `\|d\| ≤ 1,80 ATR` | `signals.py` / `resistance.py` (ayna) | Çizgiden 1,8 ATR'den uzakta ok basılmaz ("destekle ilişkisi yok" şikâyeti) |
+| 2 | **Soğuma** 3 bar | aynı | Yalnız **zayıf** denemelerde (`weak_reclaim`, `touch_from_below`, `weak_return`, `approach_from_above`). Bastırılmış **güçlü** aday (close_reclaim / sweep / momentum) her zaman yazılır — "dikey bastırma" bilgisi kaybolmaz |
+| 3 | **Görsel** | `render.py` + `panels.py` | Direnç yapı uyarısı artık **▲ değil ◇** ve mumun **üstünde**; lejant: "◇ direnç yapı uyarısı" |
+
+### Ölçüm — düzeltme öncesi / sonrası
+
+**Günlük grafik (49 sembol, ~500 bar/sembol):**
+
+| Ölçüm | Önce | Sonra |
+|---|---|---|
+| Toplam ok | 1.243 | **968 (−%22)** |
+| **3+ gün üst üste uyarı** | **46 vaka** | **0** |
+| **Çizgiden uzak ok** | 102 | **0** |
+| Tekrar bayrağı | 467 | 257 |
+| ▲ sinyalleri | 237 | 231 (yalnız uzakta olanlar düştü) |
+
+**4 saatlik (50 sembol, 1.079 bar/sembol):** 1.315 → **932 ok (−%29)**; dikey uyarı 1.176 → 800;
+▲ 139 → 132; şüpheli 1.041 → 663; tekrar 498 → 256.
+
+### Test
+`test_stabil_vertical_policy`, `test_stabil_resistance_engine` (parite dahil), `test_stabil_arrow_context_replay`
+(AEFES 17:30 gerçek vakası), `test_stabil_momentum_arrow`, `test_stabil_resistance_chart_render`,
+`test_stabil_resistance_delivery_e2e` → **tamamı geçiyor**.
+
+### Görseller (`docs/gorseller/ok_duzeltme_2026_11_08/`)
+- `karsilastirma_AGHOL.png` — 4 gün üst üste uyarı (önce 7 → sonra 4)
+- `karsilastirma_AGROT.png` — 3 ATR uzakta uyarı (önce 8 → sonra 6, uzaktaki tamamen silindi)
+- `karsilastirma_AKSEN.png` — tekrar (önce 4 → sonra 2)
+- `*_before.png` / `*_after.png` — tam kareler
+
+### Kalan (bilinçli)
+- `KADEME_ASAGI` bayrağı hâlâ en büyük grup (462): bu bir **hata değil**, destek aşağı kademedeyken
+  üretilen yapı uyarısıdır ve ▲ zaten bastırılıyor. Sinyal değeri ayrı ölçülüyor (§0.10).
+- Direnç tarafı görselleri bu arşivde üretilemedi (o rol aktif değil); ayna kod ve testler kapsıyor.

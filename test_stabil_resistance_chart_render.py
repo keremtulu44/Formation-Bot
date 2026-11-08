@@ -125,7 +125,7 @@ def test_legend_reports_only_visible_classifications():
     legend = grafik._lejant({"stabil_direnc": layer}, False, meta={"cizgiler": {"stabil_direnc": summary}})
     assert "┄ Stabil direnç" in legend
     assert "▼ direnç dönüşü" in legend
-    assert "△ direnç yapı uyarısı" in legend
+    assert "◇ direnç yapı uyarısı" in legend
     assert "▽ direnç momentumu" not in legend
 
 

@@ -48,6 +48,12 @@ _GUCLU_YUKARI_HACIM_ORAN = 1.10
 _GUCLU_YUKARI_COK_GUCLU_GOVDE_ATR = 0.50
 _GUCLU_YUKARI_COOLDOWN_BAR = 3
 
+# 2026-11-08 ok denetimi (docs/arastirma/OK_SISTEMI_2026-11-08.md):
+# Ok yalnız çizgiyle GERÇEK ilişkide basılır; art arda ve uzaktan ok basılmaz.
+# Bu üç sabit eşikleri gevşetmez, yalnız yanlış yere basılan oku süzer.
+_OK_MAKS_MESAFE_ATR = 1.80          # ▲: kapanış çizgiden bu kadar ATR uzaktaysa ok yok (M1 sınırıyla aynı)
+_DIKEY_UYARI_SOGUMA_BAR = 3         # ▼ dikey uyarısı art arda basılmaz (3 bar)
+
 
 def _enum_value(value: Any) -> str:
     """StrEnum / düz metin / eski kayıtlar için tek karşılaştırma biçimi."""
@@ -224,6 +230,7 @@ def evaluate_bar_behaviors(
     prev_sup: float | None = None
     prev_close: float | None = None
     last_momentum_bar = -999
+    last_dikey_uyari_bar = -999
 
     for i in range(n):
         pt = bar_projection[i]
@@ -340,7 +347,7 @@ def evaluate_bar_behaviors(
                     0.0 < prior_breach_depth <= 1.50
                     and body_atr >= 0.32
                     and close_pos >= 0.65
-                    and dist_atr >= 0.05
+                    and 0.05 <= dist_atr <= _OK_MAKS_MESAFE_ATR
                     and vol_ok_close
                 ):
                     reclaim_kind = "close_reclaim"
@@ -350,7 +357,7 @@ def evaluate_bar_behaviors(
                 was_above
                 and now_above
                 and (-1.20 <= low_dist_atr <= -0.08)
-                and dist_atr >= 0.08
+                and 0.08 <= dist_atr <= _OK_MAKS_MESAFE_ATR
                 and body_atr >= 0.35
                 and close_pos >= 0.68
                 and vol_ok_sweep
@@ -382,7 +389,7 @@ def evaluate_bar_behaviors(
                 or _enum_value(getattr(pt, "progression", None)) == SupportProgression.REBASED_HIGHER.value
             )
             stepping = step_up and 0.10 <= dist_atr <= 1.60
-            if long_base or stepping:
+            if (long_base or stepping) and dist_atr <= _OK_MAKS_MESAFE_ATR:
                 momentum_kind = (
                     "long_base_breakout" if long_base else "upward_rebase_momentum"
                 )
@@ -392,10 +399,26 @@ def evaluate_bar_behaviors(
             # Dikey/kademeli destek üzerinde yukarı deneme, geri alım veya
             # momentum olsa bile ▲ üretme. İşaret ve alarm aynı kaynaktan
             # beslendiği için güçlü geri alım alarmına da dönüşmez.
-            vertical_attempt_kind = reclaim_kind or ("weak_reclaim" if weak_reclaim else None) or momentum_kind
-            if vertical_attempt_kind is None and prev_close is not None and prev_sup is not None:
+            aday = reclaim_kind or ("weak_reclaim" if weak_reclaim else None) or momentum_kind
+            if aday is None and prev_close is not None and prev_sup is not None:
                 if prev_close < prev_sup - tol and h >= sup_f - tol:
-                    vertical_attempt_kind = "touch_from_below"
+                    aday = "touch_from_below"
+            # 2026-11-08 denetimi: uyarı yalnız (a) fiyat çizgiyle ilişkideyken,
+            # (b) art arda değil. Çizgiden 1,8 ATR'den uzakta "yukarı deneme"
+            # sayılmaz; 3 bar içinde ikinci uyarı basılmaz.
+            if aday is not None:
+                cok_uzak = dist_atr is not None and abs(dist_atr) > _OK_MAKS_MESAFE_ATR
+                # Soğuma yalnız ZAYIF denemelere uygulanır: bastırılmış güçlü bir
+                # yukarı aday (close_reclaim / sweep / momentum) bilgi taşır, o
+                # her zaman yazılır. Tekrar eden asıl gürültü "weak_reclaim" ve
+                # "touch_from_below"dur.
+                zayif_deneme = aday in {"weak_reclaim", "touch_from_below"}
+                sogumada = zayif_deneme and (i - last_dikey_uyari_bar) < _DIKEY_UYARI_SOGUMA_BAR
+                if cok_uzak or sogumada:
+                    aday = None
+                else:
+                    last_dikey_uyari_bar = i
+            vertical_attempt_kind = aday
             reclaim_kind = None
             momentum_kind = None
             weak_reclaim = False

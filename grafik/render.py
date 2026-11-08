@@ -540,6 +540,11 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
             except Exception as hata:
                 log.warning("grafik: Stabil direnç katmanı çizilemedi (%s)", hata)
                 eksik.append("stabil_direnc")
+            # "Katman yok" ile "hesaplandı ama görünür fiyat aralığında değil"
+            # aynı şey değildir; farkı tek satırla söyle (çizim değişmez).
+            _disi = _stabil_katman_gorunmuyor(meta.get("cizgiler") or {}, eksik)
+            if _disi:
+                meta["uyarilar"] = list(meta["uyarilar"]) + [_disi]
             try:
                 meta["cizgiler"]["formasyon"] = _pkg._formasyon_ciz(
                     ax, goruntu, katman_n, butce, metin, sag_bosluk=katman_bosluk,
@@ -953,6 +958,22 @@ def _guven_ciz(fig, satirlar, adim, alt):
         artist.set_gid("grafik-guven")
 
 
+def _stabil_katman_gorunmuyor(cizgiler: Mapping[str, Any],
+                              eksik: Sequence[str] = ()) -> str | None:
+    """Hazır ama görünür fiyat aralığında hiç çizilemeyen Stabil katmanı.
+
+    `hazir=False` (veri/kaynak yok) ile `hazir=True` fakat `gorunur_bar=0`
+    (seviye kadrajın dışında) farklı durumlardır; kullanıcı ikisini aynı boşluk
+    gibi görmemeli. Dönen metin yalnız bilgi amaçlıdır, çizim/ok kararını
+    değiştirmez. Sorunlu (`eksik`) katman bu mesaja dahil edilmez.
+    """
+    adlar = [etiket for ad, etiket in (("stabil", "destek"), ("stabil_direnc", "direnç"))
+             if (cizgiler.get(ad) or {}).get("hazir")
+             and int((cizgiler.get(ad) or {}).get("gorunur_bar") or 0) <= 0
+             and ad not in set(eksik or ())]
+    return f"Stabil {'/'.join(adlar)} hazır ancak kadraj dışında" if adlar else None
+
+
 def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                 aralik: tuple[float, float], *, kadrajda: bool = False,
                 dusuk: Sequence[Optional[float]] = (),
@@ -1310,9 +1331,12 @@ def _stabil_direnc_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                                     color=PALET["stabil_alt"], gid="grafik-stabil-direnc-donus", size=48)
     summary["momentum_isaret"] = draw(indices("momentum_barlar"), above=True, marker="v", hollow=True,
                                        color=PALET["stabil_alt"], gid="grafik-stabil-direnc-momentum", size=62)
+    # 2026-11-08 ok denetimi: bu işaret bir YUKARI OK DEĞİL, direnç yapı uyarısıdır.
+    # İçi boş `^` fiyatın altına konunca "destekle ilgisiz yukarı ok" gibi okunuyordu;
+    # nötr ELMAS `◇` mumun ÜSTÜNE konur ve lejantta "yapı uyarısı" yazar.
     summary["dikey_deneme_isaret"] = draw(
-        indices("dikey_deneme_barlar"), above=False, marker="^", hollow=True,
-        color=PALET["stabil_ust"], gid="grafik-stabil-direnc-dikey-deneme", size=62,
+        indices("dikey_deneme_barlar"), above=True, marker="D", hollow=True,
+        color=PALET["stabil_ust"], gid="grafik-stabil-direnc-dikey-deneme", size=52,
     )
     last = _gercek(levels[-1]) if levels else None
     role = roles[-1] if roles else None
