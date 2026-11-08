@@ -1,0 +1,166 @@
+{
+  "surum": "V2-2026-11-08",
+  "durum": "ONERI",
+  "kapsam": "stabil_destek",
+  "kararlar": {
+    "basari_olcusu": ["first_1atr", "sabit_ufuk_kapanis"],
+    "celisen_olay": "ayri_hucre",
+    "orneklem_bolmesi": "sembol_hash",
+    "kesif_orani": 0.6,
+    "hash_kurali": "sha256(sembol) % 10 < 6 -> kesif",
+    "gruplama_eksenleri": ["native_yasam_dongusu", "geometrik_mesafe"],
+    "mum_birimi": "gunluk_ATR14",
+    "sicil": "V2",
+    "legacy": "STABIL_DAVRANIS_SORULARI.md (A-H, dondu)",
+    "dallanma_seviyesi": 3,
+    "artik_hucre": "zorunlu",
+    "min_n_ana": 100,
+    "min_n_alt": 30
+  },
+  "sozlesme": {
+    "atr": "giris_barinda_donmus_gunluk_ATR14",
+    "ufuklar_4s_bar": [1, 4, 8, 10, 12, 16],
+    "ana_ufuk_4s_bar": 16,
+    "mesafe_bantlari_atr1d": {
+      "temas": "|low-seviye| <= 0.35 veya low<=seviye<=high",
+      "yakin": "0.35 < |d| <= 1.00",
+      "uzak": "1.00 < |d| <= 2.00",
+      "cok_uzak": "|d| > 2.00"
+    },
+    "temas_epizodu": {
+      "ardisik_temas": "tek_temas",
+      "yeni_temas_icin_min_bar_ayrilma": 2,
+      "sayi_bandi": [1, 2, 3, "4+"]
+    },
+    "mum_anatomisi_atr1d": {
+      "govde": {"yonsuz": "<0.20", "orta": "0.20-0.50", "buyuk": ">=0.50"},
+      "kapanis_pozisyonu": {"alt": "<0.35", "orta": "0.35-0.65", "ust": ">0.65"},
+      "aralik": {"dar": "<0.35", "normal": "0.35-1.00", "genis": ">1.00"}
+    },
+    "hacim_bandi": {"dusuk": "<0.8", "normal": "0.8-1.2", "yuksek": ">=1.2"},
+    "ustune_cikis": {"onceki_kapanis": "d_prev < 0", "bu_kapanis": "d_now >= +0.05"},
+    "kalma": {"pencere_bar": 3, "tol_atr1d": 0.05},
+    "temizlik_orani": {"pencere_bar": 8, "pay": "geri_donen / tum_kirilmalar"},
+    "sansur": "sag_sansur_tabanda_yuzde_gecerli_n_uzerinden"
+  },
+  "sorular": [
+    {
+      "id": "V2-01",
+      "aile": "K1",
+      "baslik": "Destek ustune cikis ne kadar tutuyor",
+      "kutle": "d_prev < 0 ve d_now >= +0.05 (kapanisla ustune cikis), epizot basina tek olay",
+      "bolunme": ["first_1atr_16", "ret_atr_16_isaret"],
+      "alt_hucreler": ["sarkma_derinligi", "temas_sayisi", "native_durum", "govde_bandi", "hacim_bandi", "bos_asagi", "artik"],
+      "domainlar": ["bos", "rvol", "ayı_fvg_mesafesi", "ayı_ob_mesafesi"],
+      "min_n": {"ana": 100, "alt": 30},
+      "miras": ["STB-BHV-A01", "STB-BHV-A03", "STB-BHV-C01"],
+      "durum": "ONERI",
+      "oncelik": 1
+    },
+    {
+      "id": "V2-02",
+      "aile": "K1",
+      "baslik": "Ustunde kalma suresi ve kalamama",
+      "kutle": "V2-01 olaylari",
+      "bolunme": ["kaldi_kalamadi_3bar", "first_1atr_16", "ret_atr_16_isaret"],
+      "alt_hucreler": ["govde_bandi", "hacim_bandi", "temas_sayisi", "kapanis_pozisyonu"],
+      "domainlar": ["bos", "rvol"],
+      "min_n": {"ana": 100, "alt": 30},
+      "miras": [],
+      "durum": "ONERI",
+      "oncelik": 4
+    },
+    {
+      "id": "V2-03",
+      "aile": "K1",
+      "baslik": "Kucuk/yonsuz mum neden mi eslikci mi",
+      "kutle": "V2-02 kalamadi hucresi + mesafe/rejim eslesmis kontrol",
+      "bolunme": ["first_1atr_16", "ret_atr_16_isaret"],
+      "alt_hucreler": ["atr1d_dilimi", "mesafe_bandi", "rejim", "govde_bandi"],
+      "domainlar": ["rvol"],
+      "min_n": {"ana": 100, "alt": 30},
+      "miras": [],
+      "durum": "ONERI",
+      "oncelik": 5
+    },
+    {
+      "id": "V2-04",
+      "aile": "K2",
+      "baslik": "Hareketsiz fiyat ve destegin hareketlenmesi",
+      "kutle": "|d| > 1.00 ust uste >= 6 bar (hareketsiz) -> ilk hareketlenme bari",
+      "bolunme": ["hareketlenme_yonu", "first_1atr_16", "ret_atr_16_isaret"],
+      "alt_hucreler": ["bekleme_suresi", "rejim", "hacim_bandi", "artik"],
+      "domainlar": ["bos", "rvol"],
+      "min_n": {"ana": 100, "alt": 30},
+      "miras": ["STB-BHV-A01", "STB-BHV-A04", "STB-BHV-A05"],
+      "durum": "ONERI",
+      "oncelik": 7
+    },
+    {
+      "id": "V2-05",
+      "aile": "K3",
+      "baslik": "Sabit destegin altina inis: temizlik orani",
+      "kutle": "kapanis d < 0 (ilk kirilma bari)",
+      "bolunme": ["temizlik_orani_8bar", "sarkma_suresi"],
+      "alt_hucreler": ["sarkma_derinligi", "kirilma_govdesi", "hacim_bandi", "bos_asagi", "artik"],
+      "domainlar": ["bos", "rvol", "ayı_fvg_mesafesi", "ayı_ob_mesafesi"],
+      "min_n": {"ana": 100, "alt": 30},
+      "miras": ["STB-BHV-D01", "STB-BHV-D02", "STB-BHV-E"],
+      "durum": "ONERI",
+      "oncelik": 2
+    },
+    {
+      "id": "V2-06",
+      "aile": "K3",
+      "baslik": "Temas sayisi kirilma riskini artiriyor mu (3. temas sarti)",
+      "kutle": "her temas epizodu + 16 bar",
+      "bolunme": ["kirilma_orani", "kirilma_derinligi"],
+      "alt_hucreler": ["temas_sayisi_1_2_3_4plus", "tepki_boyu", "temas_araligi", "rejim", "hacim_bandi", "artik"],
+      "domainlar": ["rvol"],
+      "min_n": {"ana": 100, "alt": 30},
+      "miras": ["STB-BHV-C02", "STB-BHV-C04"],
+      "durum": "ONERI",
+      "oncelik": 6
+    },
+    {
+      "id": "V2-07",
+      "aile": "K4",
+      "baslik": "Azinligi hangi yan domain acikliyor",
+      "kutle": "V2-01/02/05/06 azinlik hucreleri (satir basina bir)",
+      "bolunme": ["domain_var", "domain_yok", "domain_bilinmiyor"],
+      "alt_hucreler": ["bos_asagi", "rvol", "fvg_mesafesi", "ob_mesafesi", "artik"],
+      "domainlar": ["bos", "rvol", "fvg", "order_block"],
+      "min_n": {"ana": 100, "alt": 30},
+      "miras": [],
+      "durum": "ONERI",
+      "oncelik": 8
+    },
+    {
+      "id": "V2-08",
+      "aile": "K4",
+      "baslik": "Kontrol: destek bilgisi mi piyasa egilimi mi",
+      "kutle": "V2-01 ve V2-05 hucrelerinin eslesmis karsi ornegi (ayni sembol, ayni ATR dilimi, sabit tohum)",
+      "bolunme": ["first_1atr_16", "ret_atr_16_isaret"],
+      "alt_hucreler": ["seviye_var", "seviye_yok"],
+      "domainlar": [],
+      "min_n": {"ana": 100, "alt": 30},
+      "miras": ["STB-BHV-H"],
+      "durum": "ONERI",
+      "oncelik": 3,
+      "zorunlu": true
+    }
+  ],
+  "eksik_kod_isleri": [
+    {"id": "G1", "is": "son 3 barda BOS asagi/yukari bayragi", "boyut": "kucuk"},
+    {"id": "G2", "is": "mum anatomisi sutunlari (gunluk ATR)", "boyut": "kucuk"},
+    {"id": "G3", "is": "kalma (3 bar) + temas epizodu sayaclari", "boyut": "orta"},
+    {"id": "G4", "is": "sembol hash bolmesi + kesif/dogrulama sutunlari", "boyut": "kucuk"},
+    {"id": "G5", "is": "manifest tabanli sonuc tablosu ureticisi", "boyut": "orta"}
+  ],
+  "sinirlar": {
+    "ok_kurallari_degismez": true,
+    "direnc_ilk_turda_yok": true,
+    "yeni_domain_yok": true,
+    "checkpoint_paketi_depoya_eklenmez": true
+  }
+}

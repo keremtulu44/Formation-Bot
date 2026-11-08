@@ -40,6 +40,7 @@
 | [arastirma/STABIL_REPLAY_HATLARI.md](arastirma/STABIL_REPLAY_HATLARI.md) | Kayıt | 2026-11-01 | Genel replay ile Stabil native motoru ayrımı ve önceki optimize yöntem |
 | [arastirma/STABIL_DAVRANIS_MODELI.md](arastirma/STABIL_DAVRANIS_MODELI.md) | Kayıt | 2026-11-01 | Konuşmadan yeniden kayıt; dikey/yatay düzeltmesi ve kullanıcı hipotezleri |
 | [arastirma/STABIL_SISTEM_INCELEMESI_2026-11-08.md](arastirma/STABIL_SISTEM_INCELEMESI_2026-11-08.md) | İnceleme | 2026-11-08 | Destek/direnç mantığı, ok kuralları, replay hattı, taze 40 sembol kanıtı, açık sorunlar ve düzeltmeler |
+| [arastirma/STABIL_SORU_SETI_V2_2026-11-08.md](arastirma/STABIL_SORU_SETI_V2_2026-11-08.md) | Tasarım | 2026-11-08 | V2 ana soru seti: 8 soru, ölçüm sözleşmesi (günlük ATR, ikili başarı ölçüsü, sembol bölmesi), dallanma yöntemi, eksik kod işleri |
 | [arastirma/STABIL_DESTEK_SONRASI_DAVRANIS_SORU_PLANI_2026-11-07.md](arastirma/STABIL_DESTEK_SONRASI_DAVRANIS_SORU_PLANI_2026-11-07.md) | Taslak | 2026-11-07 | Native Stabil desteğine göre davranış araştırması ve konuşulacak tanımlar; replay yapılmadı |
 | [arastirma/STABIL_DAVRANIS_SORULARI.md](arastirma/STABIL_DAVRANIS_SORULARI.md) | Kayıt | 2026-11-01 | 48 soru sicili; konuşmadan yeniden kayıt, eski bayt-kopyası değil |
 | [arastirma/STABIL_CALISMA_GECMISI.md](arastirma/STABIL_CALISMA_GECMISI.md) | Kayıt | 2026-11-01 | 27/48 soru koşularının konuşmada raporlanan sayıları; artefaktlar eksik |
