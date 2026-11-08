@@ -1,5 +1,5 @@
 {
-  "surum": "V2-2026-11-08-rev3",
+  "surum": "V2-2026-11-08-rev4",
   "durum": "ONERI",
   "kapsam": "stabil_destek",
   "kararlar": {
@@ -28,19 +28,14 @@
       "kontrol_farki_pp": 10,
       "min_n": 100,
       "aksi": "ok_uretme"
-    }
+    },
+    "olcum_tf": "gunluk (1d) esas; 4s yalniz uygulama/cizim katmani",
+    "pencere_birimi": "gun"
   },
   "sozlesme": {
     "atr": "giris_barinda_donmus_gunluk_ATR14",
-    "ufuklar_4s_bar": [
-      1,
-      4,
-      8,
-      10,
-      12,
-      16
-    ],
-    "ana_ufuk_4s_bar": 16,
+    "ufuklar_4s_bar": null,
+    "ana_ufuk_4s_bar": null,
     "mesafe_bantlari_atr1d": {
       "temas": "|low-seviye| <= 0.35 veya low<=seviye<=high",
       "yakin": "0.35 < |d| <= 1.00",
@@ -107,16 +102,19 @@
       "(seviye_t - seviye_{t-20}) / ATR1d": "bantlar: <=0 / 0-1 / 1-2 / >2"
     },
     "yataylasma_gecisi": {
-      "olay": "STEPPING_UP iken 10 bar icinde NEWLY_FLATTENED_AFTER_RISE ilk bari",
+      "olay": "STEPPING_UP iken 10 GUN icinde NEWLY_FLATTENED_AFTER_RISE ilk gunu (native 8 gun + 2 pay)",
       "dik_kalma": "ayni pencerede rejim STEPPING_UP kaliyor",
       "bozulma": "BREACHED_FIXED_SUPPORT veya STEPPING_DOWN (ayri hucre)"
     },
     "hafif_yukari_tepki_varyantlari": {
-      "R1": "kapanis > acilis ve govde >= 0.20 ATR1d",
-      "R2": "kapanis pozisyonu > 0.65",
-      "R3": "dipten kapanisa toparlanma >= 0.35 ATR1d",
-      "R4": "R1 veya R2 ve rvol >= 1.0"
-    }
+      "pencere_gun": "1-3 (degisken; tek mum degil)",
+      "R1": "pencerede en az bir gun govde >= 0.20 ATR1d ve kapanis>acilis",
+      "R2": "pencerenin son gunu kapanis pozisyonu > 0.65",
+      "R3": "pencerenin en dusuk dibinden son kapanisa >= 0.35 ATR1d",
+      "R4": "R1 veya R2 ve pencere rvol >= 1.0",
+      "gecersiz": "yalniz fitil (govde < 0.20 ATR1d) ve kapanis<acilis -> tek fitil matematiksel olarak yataylastirmaz"
+    },
+    "ana_ufuk_gun": 16
   },
   "sorular": [
     {
@@ -427,49 +425,75 @@
   },
   "amac": "ok_yonu_cikarimi",
   "on_olcum_2026_11_08": {
-    "sembol": 20,
-    "stepping_up_gecis_10bar": {
-      "hala_STEPPING_UP": 0.619,
-      "NEWLY_FLATTENED_AFTER_RISE": 0.231,
-      "BREACHED_FIXED_SUPPORT": 0.118,
-      "STEPPING_DOWN": 0.03,
-      "n": 6117
-    },
-    "yon_teşhis_16bar": {
-      "dik_kaldi": {
-        "n": 4525,
-        "up_first": 0.511,
-        "down_first": 0.476,
-        "ort_getiri_atr": 0.05,
-        "medyan_atr": -0.04
+    "gunluk": {
+      "sembol": 39,
+      "stepping_gun": 4205,
+      "teshis_16gun": {
+        "dik_kaldi": {
+          "n": 1415,
+          "up_first": 0.456,
+          "down_first": 0.535,
+          "ort_atr": -0.14,
+          "medyan_atr": -0.29
+        },
+        "yataya_dondu": {
+          "n": 2790,
+          "up_first": 0.582,
+          "down_first": 0.404,
+          "ort_atr": 0.46,
+          "medyan_atr": 0.11
+        }
       },
-      "yataya_dondu": {
-        "n": 1479,
-        "up_first": 0.548,
-        "down_first": 0.433,
-        "ort_getiri_atr": 0.83,
-        "medyan_atr": 0.47
+      "mesafe_dagilimi": {
+        "d<0": {
+          "n": 16,
+          "flatten": 0.438,
+          "up_first": 0.438
+        },
+        "0..0.5": {
+          "n": 440,
+          "flatten": 0.316,
+          "up_first": 0.505
+        },
+        "0.5..1.5": {
+          "n": 1246,
+          "flatten": 0.514,
+          "up_first": 0.578
+        },
+        ">1.5": {
+          "n": 2503,
+          "flatten": 0.801,
+          "up_first": 0.528
+        }
       }
     },
-    "uyari": "TESHIS: gelecege bakarak gruplanmis; ok kurali olamaz. Nedensel surum Y1-b.",
-    "geri_alim_denemesi_3bar": {
-      "D1": {
-        "n": 170,
-        "oran": 0.218
+    "4s": {
+      "sembol": 20,
+      "stepping_bar": 6117,
+      "gecis_10bar": {
+        "hala_STEPPING_UP": 0.619,
+        "NEWLY_FLATTENED_AFTER_RISE": 0.231,
+        "BREACHED_FIXED_SUPPORT": 0.118,
+        "STEPPING_DOWN": 0.03
       },
-      "D2": {
-        "n": 25,
-        "oran": 0.32
-      },
-      "D3": {
-        "n": 14,
-        "oran": 0.429
-      },
-      "yatay": {
-        "n": 14,
-        "oran": 0.286
+      "teshis_16bar": {
+        "dik_kaldi": {
+          "n": 4525,
+          "up_first": 0.511,
+          "down_first": 0.476,
+          "ort_atr": 0.05,
+          "medyan_atr": -0.04
+        },
+        "yataya_dondu": {
+          "n": 1479,
+          "up_first": 0.548,
+          "down_first": 0.433,
+          "ort_atr": 0.83,
+          "medyan_atr": 0.47
+        }
       }
-    }
+    },
+    "uyari": "TESHIS: gelecege bakarak gruplanmis; ok kurali olamaz. Nedensel surum Y1-b. 'Dik destek + fiyat altinda' gunlukte yalniz 16 gozlem: kapsam karari acik."
   },
   "model": {
     "dikeylik": "step-step destegin diklesmesi (yukselen kademelerin siklasmasi)",

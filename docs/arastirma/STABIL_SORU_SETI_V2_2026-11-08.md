@@ -39,14 +39,44 @@ kapanır (§2.4).
 
 Yani "dik çizgi ya dik kalır ya yataya döner" ikilemi gerçekten **en sık iki yol** (%62 / %23).
 
-### 0.2 Ölçülen yön (20 sembol, 4s bar, ATR1d, ufuk 16 bar)
+### 0.2 Ölçülen yön — iki zaman dilimi
 
-| Dikey destek ne yaptı | n | UP_first | DOWN_first | ort. getiri | medyan |
+**Günlük (esas, 39 sembol, 4.205 `STEPPING_UP` günü, ufuk 16 gün, ATR1d):**
+
+| Dik destek ne yaptı (10 gün) | n | UP_first | DOWN_first | ort. getiri | medyan |
 |---|---|---|---|---|---|
-| **Dik kaldı** (yeni step yok) | 4.525 | %51,1 | %47,6 | +0,05 ATR | **−0,04 ATR** |
-| **Yataya döndü** (tepki geldi) | 1.479 | %54,8 | %43,3 | **+0,83 ATR** | **+0,47 ATR** |
+| **Dik kaldı** | 1.415 | %45,6 | **%53,5** | −0,14 ATR | **−0,29 ATR** |
+| **Yataya döndü** | 2.790 | **%58,2** | %40,4 | **+0,46 ATR** | **+0,11 ATR** |
 
-Fark medyanda **+0,51 ATR**. İddianın yönü doğru görünüyor.
+**4s (ikincil, 20 sembol, 6.117 bar, ufuk 16 × 4s bar):**
+
+| Dik destek ne yaptı (10 bar) | n | UP_first | DOWN_first | ort. getiri | medyan |
+|---|---|---|---|---|---|
+| Dik kaldı | 4.525 | %51,1 | %47,6 | +0,05 ATR | −0,04 ATR |
+| Yataya döndü | 1.479 | %54,8 | %43,3 | +0,83 ATR | +0,47 ATR |
+
+**Karar: ölçüm günlükten yapılır.** Gerekçe hem native (matematik günlük pivotlarla, ATR günlük), hem
+ölçüm (DOWN_first farkı günlükte 13 puan, 4s'te 4,3 puan). 4s yalnız **uygulama/çizim** katmanı: okun
+tetiklendiği gün günlük kapanışta bilinen durum, sonraki günlük kapanışa kadar 4s grafikte devralınır.
+
+### 0.2b Ölçümün en önemli kısıtı: senaryo seyrek
+
+Günlükte fiyatın çizgiye mesafesine göre dağılım (aynı 4.205 gün):
+
+| d = (kapanış − seviye)/ATR1d | n | 10 günde yataya dönme | UP_first |
+|---|---|---|---|
+| **d < 0 (fiyat dik desteğin altında)** | **16** | %43,8 | %43,8 |
+| 0 … 0,5 (çizgiye yapışık) | 440 | %31,6 | %50,5 |
+| 0,5 … 1,5 | 1.246 | %51,4 | %57,8 |
+| > 1,5 (uzak) | 2.503 | %80,1 | %52,8 |
+
+Yani "dik destek + fiyat altında + üstüne çıkma denemesi" **günlükte yalnız 16 gözlem** (39 sembolde).
+Onunla ok kuralı kurulamaz. İki sonuç:
+
+1. Okun hedefi "altına düşen fiyatın geri alımı" değil, **çizginin yataya dönüş anı** olmalı — bu %66
+   sıklıkta ve yeterli n üretiyor.
+2. Senaryoyu korumak istiyorsak kütle `d ≤ +0,5 ATR1d` ("fiyat çizgiye yapışık veya altında") olarak
+   genişletilmeli (n≈456). Bu bir **kapsam kararı**; §8'de onay isteniyor.
 
 ### 0.3 KRİTİK UYARI — bu bir teşhis, sinyal değil
 
@@ -63,7 +93,7 @@ bilinmiyordu. Tradable hâle gelmesi için **nedensel** sürüm gerekir: yataya 
 |---|---|---|
 | **D1** | Mevcut kod proxy'si: rejim `STEPPING_UP/STEPPING_DOWN` veya son 8 günde yukarı rebase veya seviye değişti ve sabit değil | %41,1 |
 | **D2** | **Eğim**: `(seviye_t − seviye_{t−20}) / ATR1d ≥ 1.0` | %0,1 |
-| **D3** | `regime == STEPPING_UP` (kullanıcının "step dikleşmesi"nin native etiketi) | %28,8 |
+| **D3** | `regime == STEPPING_UP` (kullanıcının "step dikleşmesi"nin native etiketi) | %28,8 (4s) |
 
 **D1 bugün "yatay olmayan her destek dikey" demek** ve `HORIZONTAL_AFTER_DROP` /
 `NEWLY_FLATTENED_AFTER_RISE` rejimlerinde hiç ateşlemiyor. Kullanıcının kastettiği dikeylik **D3 +
@@ -99,16 +129,19 @@ Diklik derecesi ölçümü: `step_dikligi = (seviye_t − seviye_{t−20}) / ATR
   <0.35 / 0.35–0.65 / >0.65; aralık dar <0.35 / 0.35–1.00 / >1.00.
 - Hacim rvol: düşük <0.8 / normal 0.8–1.2 / yüksek ≥1.2.
 
-**2.2 Yataylaşma geçişi ("altı dolması") — olay tanımı**
-- **Geçiş olayı:** `regime == STEPPING_UP` iken 10 bar içinde `NEWLY_FLATTENED_AFTER_RISE` etiketinin
-  ilk göründüğü bar.
+**2.2 Yataylaşma geçişi ("altı dolması") — olay tanımı (günlük, gün cinsinden)**
+- **Geçiş olayı:** `regime == STEPPING_UP` iken **10 gün** içinde `NEWLY_FLATTENED_AFTER_RISE` etiketinin
+  ilk göründüğü gün. (10 gün = native pivot aralığı 2 × `daily_pivot_len` = 8 gün + 2 gün pay.)
 - **Dik kalma:** aynı pencerede rejim `STEPPING_UP` kalıyor (yeni step yok).
 - **Bozulma:** pencerede `BREACHED_FIXED_SUPPORT` veya `STEPPING_DOWN` (ayrı hücre, karıştırılmaz).
-- **"Hafif yukarı tepki" (nedensel işaret — varyantlar yan yana):**
-  - **R1**: kapanış > açılış **ve** gövde `≥0.20 ATR1d`
-  - **R2**: kapanış pozisyonu `>0.65` (barın üst üçte birinde kapanış)
-  - **R3**: dip → kapanış toparlanması `≥0.35 ATR1d` (fitil dahil)
-  - **R4**: R1 veya R2, **ve** hacim `rvol ≥ 1.0`
+- **"Hafif yukarı tepki" — tek mum değil, değişken uzunlukta (kullanıcı kararı):**
+  tepki **1–3 gün** sürebilir; **tek fitilli mum çizgiyi matematiksel olarak yataylaştırmaz**, bu yüzden
+  yalnız fitil tepki sayılmaz. Varyantlar yan yana ölçülür:
+  - **R1** (gövde katılımı): pencere içinde **en az bir gün** gövde `≥0.20 ATR1d` ve kapanış > açılış
+  - **R2** (kapanış yeri): pencerenin son günü kapanış pozisyonu `>0.65`
+  - **R3** (toparlanma): pencerenin en düşük dibinden son kapanışa `≥0.35 ATR1d`
+  - **R4** = R1 **veya** R2, **ve** pencere hacmi `rvol ≥ 1.0`
+  - **Geçersiz:** yalnız fitil (gövde `<0.20 ATR1d`) ve kapanış < açılış → tepki sayılmaz.
 
 **2.3 Yön hükmü (karar kuralı — ön kayıtlı)**
 Bir koşul **ok adayı** olur ancak ve ancak:
@@ -131,16 +164,17 @@ hiçbir zaman ok kuralına dönüşmez; yalnız nedensel tablolar dönüşür.
 ### Y1 — Dik destekte yataya dönüş öngörülebilir mi? *(çekirdek, iki parçalı)*
 
 **Y1-a (teşhis):** Dik kalma ile yataya dönme ayrımını ne yapıyor?
-- **Kütle:** `regime == STEPPING_UP` barları (n≈6.000 / 20 sembol).
+- **Kütle:** **günlük** `regime == STEPPING_UP` günleri (n≈4.200 / 39 sembol; 177 sembolde ~19.000 bekleniyor).
 - **Bölünme:** 10 bar içinde yataya döndü / dik kaldı / bozuldu.
 - **Alt hücreler:** geçişten önceki 1–3 barın mumu (gövde, kp, fitil) · `step_dikligi` bandı ·
   hacim · `touch_count` · son step'ten bu yana geçen gün · artık.
 - **Cevaplanırsa:** "hafif yukarı tepki"nin hangi ölçülebilir tanımı ayrıştırıyor (R1–R4'ten hangisi).
 
 **Y1-b (nedensel):** O işaret görüldüğü anda yön çıkıyor mu?
-- **Kütle:** `regime == STEPPING_UP` **ve** R1–R4'ten biri sağlanan bar (işaret barı).
-- **Kontrol:** aynı gün/rejimde işaret sağlamayan bar.
-- **Bölünme:** 16 barda `first_1atr` + getiri.
+- **Kütle:** `regime == STEPPING_UP` **ve** R1–R4'ten biri sağlanan gün (işaret günü = tepki penceresinin
+  son günü, karar o günün kapanışında verilir).
+- **Kontrol:** aynı gün/rejimde işaret sağlamayan günler.
+- **Bölünme:** 16 **gün**de `first_1atr` + getiri.
 - **Yön kuralı adayı:** işaret var → `▲` (yataya dönüş lehine); işaret yok + fiyat çizgi altı → `▼` veya "ok yok".
 - **Cevaplanırsa:** ok yönü ilk kez *yapı geçişinden* türetilir — bugün böyle bir ok **yok**.
 
@@ -227,8 +261,11 @@ Aynı sembol, aynı `ATR1d` dilimi, aynı mesafe bandı; seviyeden bağımsız r
 
 ## 8. Onay istenen noktalar
 
-1. **"Hafif yukarı tepki" (R1–R4) tanımları** senin gözle gördüğünle uyuşuyor mu? Özellikle R3
-   ("dipten kapanışa ≥0,35 ATR toparlanma") senin kastettiğin tepki mi?
-2. **Yataylaşma penceresi 10 bar** (≈3 işlem günü) doğru mu? Native etiket `NEWLY_FLATTENED_AFTER_RISE`
-   için 8 pivot aralığı sonrası ilk yatay genişleme diyor; sen gözle ne kadar sonra "yataya döndü" diyorsun?
-3. **Y2 çıktısı `▼`** (dik kaldı → düşüş devam): ok rework'ünün parçası mı, yoksa ayrı uyarı mı kalsın? — "bakarız" dedin, not olarak duruyor.
+1. **KAPSAM (en önemli):** "dik destek + fiyat altında" senaryosu günlükte yalnız 16 gözlem. Hangi kütle?
+   - **(a)** Yalnız çizginin yataya dönüşü (n≈19.000, en güçlü istatistik) — senaryoyu dolaylı ölçer
+   - **(b)** `d ≤ +0,5 ATR1d` ("fiyat çizgiye yapışık veya altında", n≈2.000) — senaryoyu doğrudan ölçer
+   - **(c)** İkisi ayrı satırda
+2. **Tepki penceresi 1–3 gün** ve **R1 (en az bir gövde ≥0,20 ATR1d)** senin gördüğün "hafif yukarı tepki"yi
+   yakalıyor mu? (Tek fitil hariç tutuldu — dediğin gibi yataylaştırmıyor.)
+3. **Yataylaşma penceresi 10 gün** (native 8 gün + 2 pay) doğru mu?
+4. **Y2 çıktısı `▼`** (dik kaldı → düşüş devam): ok rework'ünün parçası mı, ayrı uyarı mı? — "bakarız" notu duruyor.
