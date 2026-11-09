@@ -535,7 +535,7 @@ Kırpıcıda iki kusur bulundu ve düzeltildi (`grafik/panels.py`):
 
 Test: `test_stabil_resistance_chart_render.py` (9 test; yeni `test_legend_never_drops_the_arrow_dictionary`).
 
-### 14.3 ◇ ikinci tur — ÖLÇÜLDÜ, UYGULANMADI
+### 14.3 ◇ ikinci tur — ölçüm (karar: 50 bar, §14.6)
 Soru: bugünkü 486 ◇'in 297'si hâlâ zayıf. İkinci bir tur anlamlı kazanç verir mi, bedeli ne?
 
 Kütle: günlük 50 sembol · 25.051 bar · filtre yalnız zayıf ◇ (`weak_reclaim`, `touch_from_below`);
@@ -563,8 +563,7 @@ Simülatörün sadakati: S0 = **486**, üretimin bugünkü sayısıyla birebir; 
 **Sonuç:** anlamlı ikinci tur ancak **50 bar**'da başlıyor (486 → 364, bugüne göre −%25, 3 bar'lık eski
 kurala göre −%51). 40 bar eşiği 7 işaretle kaçırıyor; 50 → 60 bar arası kazanç azalıyor (+29 işaret için
 soğuma 10 bar daha). Atılanların ~%26'sı 20 bar içinde bir ▲ ile öncülenmiş — yani kesilen sınıf bugün de
-gürültü sayılan sınıfın aynısı. **Kural uygulanmadı**; karar kullanıcıda (sıfır kod değişikliği,
-tek satır: `_DIKEY_UYARI_SOGUMA_BAR` 20 → 50).
+gürültü sayılan sınıfın aynısı. **Kullanıcı kararı: 50 bar uygulanır** (§14.6).
 
 ### 14.4 Görseller — `docs/gorseller/ok_egitim_lejant_2026_11_08/`
 | Dosya | İçerik |
@@ -580,3 +579,28 @@ karelerden üretildi; pano yeniden üretilebilir).
 - ◇ bir "dikkat" işaretidir; bu ölçüm **işaret sayısını** ölçtü, ◇'in öngörü değerini değil
   (o soru ayrı bir replay ister).
 - Öncü oranı, atılan ◇'nin ▲ ile ilişkisini gösterir; ◇'e bağlı hiçbir karar kuralı yoktur.
+
+### 14.6 UYGULAMA — zayıf ◇ soğuması 20 → 50 bar (2026-11-08, kullanıcı kararı)
+`domain_engines/stabil/signals.py::_DIKEY_UYARI_SOGUMA_BAR` = **50**. Kural aynen §10'daki gibi
+**yalnız zayıf** denemelere (`weak_reclaim`, `touch_from_below`) uygulanır; güçlü bastırılmış aday,
+▲ ve momentum hiç etkilenmez.
+
+Üretim doğrulaması (kod çalıştırıldı, aynı 50 sembol · 25.051 bar):
+
+| Ölçüm | 20 bar (önce) | **50 bar (sonra)** |
+|---|---|---|
+| ◇ toplam | 486 | **364 (−%25)** |
+| ◇ sembol başına medyan | 10 | **7** |
+| ◇ en yoğun sembol | 15 | **13** |
+| ◇'süz sembol | 1 | 1 (değişmedi) |
+| Dolu ▲ | 195 | **195** |
+| Momentum ▲ | 51 | **51** |
+
+Simülasyon (364) ile üretim (364) birebir — ölçümün uygulamaya dönüşü doğrulandı.
+
+Kısa pencere (3 ay) karelerinde ikinci turun etkisi küçüktür: 5 örnek karede ◇ 14 → 12, ▲ birebir aynı
+(`docs/gorseller/ok_cizgi_ikinci_tur_2026_11_08/`). Kazanç uzun geçmişte birikir: sembol başına
+birikimli 486 → 364.
+
+Üretici: `research/stabil_cizgi_seyreltme_gorseller.py` (`once` = HEAD/20 bar, `sonra` = çalışma ağacı/50 bar,
+`karsilastir`); klasör ve etiketler `GORSEL_KLASOR`, `GORSEL_ONCE_ETIKET`, `GORSEL_SONRA_ETIKET` ile verilir.

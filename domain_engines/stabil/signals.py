@@ -53,12 +53,16 @@ _GUCLU_YUKARI_COOLDOWN_BAR = 3
 # Bu üç sabit eşikleri gevşetmez, yalnız yanlış yere basılan oku süzer.
 _OK_MAKS_MESAFE_ATR = 1.80          # ▲: kapanış çizgiden bu kadar ATR uzaktaysa ok yok (M1 sınırıyla aynı)
 # ◇ yapı uyarısı (dikey/kademeli destek) seyreltme — 2026-11-08, kullanıcı kararı.
-# Ölçüm (günlük 50 sembol, 737 ◇): zayıf denemelerin soğuması 3 bar iken 737 ◇
-# (sembol başına 14,7) basılıyordu; 20 bara çıkınca 484 (sembol başına 9,7, −%34)
-# ve 3 aylık pencerede 4-6 ◇ → 1-2. GÜÇLÜ bastırılmış adaylar (close_reclaim /
-# sweep / momentum) bu soğumaya TABİ DEĞİL: "dikey destek, fiyat üstüne çıktı,
-# ▲ konmaz" bilgisi kaybolmaz. ▲/momentum okları hiç etkilenmez.
-_DIKEY_UYARI_SOGUMA_BAR = 20        # zayıf ◇ aynı bölgede 20 barda bir basılır (~1 ay)
+# İKİ TUR ölçüldü (günlük 50 sembol; ikisi de yalnız ZAYIF denemelere uygulanır):
+#   3 bar → 737 ◇ (sembol başına 14,7)          [eski hâl]
+#   20 bar → 486 ◇ (9,7; −%34)                  [1. tur, §10]
+#   50 bar → 364 ◇ (7,0; 3 bar'a göre −%51)     [2. tur, §14.3 — SEÇİLEN]
+# 40 bar (396) kazanç eşiğini 7 işaretle kaçırdı, 60 bar (335) kazancı azalttı;
+# "seviye başına 1" (650) ve "20 bar + seviye başına 1" (486) ek kazanç vermedi.
+# GÜÇLÜ bastırılmış adaylar (close_reclaim / sweep / momentum) bu soğumaya TABİ
+# DEĞİL: "dikey destek, fiyat üstüne çıktı, ▲ konmaz" bilgisi kaybolmaz.
+# ▲/momentum okları hiç etkilenmez. Ölçüm: research/stabil_cizgi_seyreltme_olcum.py
+_DIKEY_UYARI_SOGUMA_BAR = 50        # zayıf ◇ aynı bölgede 50 barda bir basılır (~2,5 ay)
 
 
 def _enum_value(value: Any) -> str:

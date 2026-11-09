@@ -22,7 +22,11 @@ from pathlib import Path
 import grafik
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "docs/gorseller/ok_cizgi_seyreltme_2026_11_08"
+# Klasör ve etiketler ortam değişkeniyle değiştirilebilir: aynı üretici hem
+# 1. turu (3 → 20 bar) hem 2. turu (20 → 50 bar) çeker.
+OUT = ROOT / os.environ.get("GORSEL_KLASOR", "docs/gorseller/ok_cizgi_seyreltme_2026_11_08")
+ONCE_ETIKET = os.environ.get("GORSEL_ONCE_ETIKET", "ÖNCE · ◇ her 3 barda bir tekrar")
+SONRA_ETIKET = os.environ.get("GORSEL_SONRA_ETIKET", "SONRA · ◇ 20 barda bir (~1 ay)")
 PKG = ROOT / "domain_engines/stabil"
 
 #: (sembol, gün, kısa ad) — ◇ yoğunluğu yüksek bilinen kareler
@@ -83,8 +87,8 @@ def karsilastir() -> int:
             continue
         sekil, eksenler = plt.subplots(2, 1, figsize=(11.0, 12.4), facecolor="#0e1116")
         for eksen, yol, etiket, renk in (
-            (eksenler[0], once_yol, "ÖNCE · ◇ her 3 barda bir tekrar", "#9aa7b4"),
-            (eksenler[1], sonra_yol, "SONRA · ◇ 20 barda bir (~1 ay)", "#2cc98d"),
+            (eksenler[0], once_yol, ONCE_ETIKET, "#9aa7b4"),
+            (eksenler[1], sonra_yol, SONRA_ETIKET, "#2cc98d"),
         ):
             eksen.imshow(_kirp(mpimg.imread(yol)))
             eksen.axis("off")

@@ -82,10 +82,10 @@ def egitim_karesi() -> tuple[str, dict]:
 
 
 SATIR_ADI = {   # tabloda sığan kısa adlar
-    "S0 · 20 bar (bugün)": "S0 · 20 bar (bugün)",
+    "S0 · 20 bar (bugün)": "S0 · 20 bar (önce)",
     "S1 · 30 bar": "S1 · 30 bar",
     "S2 · 40 bar": "S2 · 40 bar",
-    "S6 · 50 bar": "S6 · 50 bar",
+    "S6 · 50 bar": "S6 · 50 bar (bugün)",
     "S7 · 60 bar": "S7 · 60 bar",
     "S8 · 40 bar + rvol≥1,5 deler": "S8 · 40 bar + rvol",
     "S3 · seviye başına 1": "S3 · seviye başına 1",
@@ -155,7 +155,7 @@ def pano(kare_yolu: str, direnc: dict) -> str:
             ha="center", va="top", color=SOLUK, fontsize=8.6)
 
     # ---------- 3 · ◇ eğrisi ----------
-    ax.text(0.055, 0.285, "3 · ◇ İKİNCİ TUR: soğuma kaç bar olmalı?", color=VURGU,
+    ax.text(0.055, 0.285, "3 · ◇ İKİNCİ TUR: soğuma 20 → 50 bar (uygulandı)", color=VURGU,
             fontsize=12.5, fontweight="bold")
     eax = fig.add_axes([0.062, 0.082, 0.40, 0.182])
     eax.set_facecolor("#161b22")
@@ -170,6 +170,9 @@ def pano(kare_yolu: str, direnc: dict) -> str:
     for x, yy, ad in EGRI:
         eax.annotate(f"{yy} · {ad}", (x, yy), textcoords="offset points",
                      xytext=kaymalar.get(x, (0, 9)), ha="center", color=METIN, fontsize=7.4)
+    eax.scatter([50], [364], s=190, facecolor="none", edgecolor=YESIL, lw=2.2, zorder=4)
+    eax.annotate("uygulandı", (50, 364), textcoords="offset points", xytext=(26, -30),
+                 color=YESIL, fontsize=7.6, fontweight="bold")
     eax.set_xlabel("zayıf ◇ soğuması (bar)", color=SOLUK, fontsize=8)
     eax.set_ylabel("günlük 50 sembolde ◇", color=SOLUK, fontsize=8)
     eax.tick_params(colors=SOLUK, labelsize=7.4)
@@ -202,8 +205,8 @@ def pano(kare_yolu: str, direnc: dict) -> str:
     ax.text(0.525, y - 0.042,
             "Yeşil = kilitli eşikleri geçen tek aday: 50 bar → 364 (bugüne göre −%25, 3 bar'a\n"
             "göre −%51). 40 bar eşiği 7 işaretle kaçırıyor; 50/60 bar geçiyor ama kazanç azalıyor.\n"
-            "Atılanların ~%26'sı 20 bar içinde bir ▲ ile öncülenmiş — kesilen sınıf, bugün de\n"
-            "gürültü sayılan sınıfın ta kendisi. Kural bu turda UYGULANMADI: karar sizde.",
+            "UYGULANDI: soğuma 20 → 50 bar. Üretimde ölçüldü: ◇ 486 → 364 · sembol başına 10 → 7 ·\n"
+            "dolu ▲ 195 (aynı) · momentum ▲ 51 (aynı) · ◇'süz sembol 1 (aynı).",
             color=SOLUK, fontsize=8.2, va="top")
 
     ax.text(0.525, 0.009,
