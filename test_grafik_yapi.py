@@ -397,3 +397,23 @@ def test_cli_zone_yapi_ve_seriti_dolduruyor(tmp_path, tf):
         assert "yerel hesap" in " ".join(meta["metin"]["lejant"])   # §0.12a etiketi
     assert meta["eksik_katmanlar"] == []
     assert meta["png_kb"] <= 500
+
+
+def test_capa_is_visible_without_structure_and_flips_from_bottom_axis():
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from grafik.markers import _olay_ciz
+    fig = Figure(figsize=(8, 5), dpi=100)
+    FigureCanvasAgg(fig)
+    ax = fig.subplots()
+    ax.set_xlim(-1, 2)
+    ax.set_ylim(99, 102)
+    image = {"olay": {}, "serit": {"capa": [0]}, "dusuk": [99.01],
+             "yuksek": [100.0], "zamanlar": []}
+    info = _olay_ciz(ax, image, 1)
+    assert info["capa"] == 1
+    mark = next(x for x in ax.texts if x.get_text() == '!')
+    assert mark.xy == (0.0, 100.0)
+    assert mark.get_verticalalignment() == 'bottom'
+    fig.canvas.draw()
+    assert ax.bbox.contains(mark.get_window_extent().x0, mark.get_window_extent().y0)

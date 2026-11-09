@@ -210,7 +210,9 @@ def test_command_real_worker_all_four_archived_frames_with_alarm_switch_off(monk
     assert len(offline.albums) == 1 and offline.albums[0]["chat_id"] == DM
     assert len(offline.albums[0]["images"]) == 4
     assert [tf for tf, _, _ in observed] == ["1h", "2h", "4h", "1d"]
-    assert all(meta["cizgiler"]["stabil_direnc"]["hazir"] for _, meta, _ in observed)
+    assert all(meta["cizgiler"]["stabil_direnc"]["hazir"] == (tf in {"4h", "1d"})
+               for tf, meta, _ in observed)
+    assert all((snap.get("stabil_direnc") or {}).get("hazir") for _, _, snap in observed)
     h4 = next((meta, snap) for tf, meta, snap in observed if tf == "4h")
     assert h4[0]["cizgiler"]["stabil_direnc"]["cizildi"]
     assert h4[1]["stabil_direnc"]["donus_barlar"]  # the selected archived return is actually shown
@@ -271,7 +273,7 @@ def test_domain_real_choch_candidate_sends_private_and_public_albums(monkeypatch
     assert offline.messages[0]["text"] == offline.messages[1]["text"]
     assert [(x["chat_id"], len(x["images"])) for x in offline.albums] == [(DM, 4), (GROUP, 2)]
     assert [x["tf"] for x in offline.renders] == ["4h", "1h", "2h", "1d", "4h", "1d"]
-    assert all(x["resistance"]["hazir"] for x in offline.renders)
+    assert all(x["resistance"]["hazir"] == (x["tf"] in {"4h", "1d"}) for x in offline.renders)
     assert offline.renders[0]["resistance"]["cizildi"]
     assert offline.renders[0]["resistance"]["donus_isaret"] >= 1
 
@@ -339,10 +341,9 @@ def test_real_formation_breakout_from_archive_through_scan_and_both_delivery_pat
     assert offline.messages[0]["text"] == offline.messages[1]["text"]
     assert [(x["chat_id"], len(x["images"])) for x in offline.albums] == [(DM, 4), (GROUP, 2)]
     assert [x["tf"] for x in offline.renders] == ["4h", "1h", "2h", "1d", "4h", "1d"]
-    assert all(x["resistance"]["hazir"] for x in offline.renders)
+    assert all(x["resistance"]["hazir"] == (x["tf"] in {"4h", "1d"}) for x in offline.renders)
     assert offline.renders[0]["resistance"]["cizildi"]
-    # On this actual 1H chart 93.50 is outside the price frame: ready does not
-    # mean visible, and the renderer correctly leaves the candle scale intact.
+    # On 1H the resistance layer is intentionally hidden for display.
     assert not offline.renders[1]["resistance"]["cizildi"]
     assert not offline.renders[1]["resistance"]["kadrajda"]
 

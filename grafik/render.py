@@ -115,7 +115,14 @@ def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
             secenekler["yazi_olcek"] = float(str(os.environ["GRAFIK_YAZI"]).replace(",", "."))
         except (TypeError, ValueError):
             pass
-    tf = str(tf or goruntu.get("tf") or "1h")
+    tf = str(tf or goruntu.get("tf") or "1h").lower()
+    # Short-timeframe charts stay legible: hide only the Stabil support and
+    # resistance *display*, including arrows and labels.  The snapshot and
+    # all domain/alarm calculations remain untouched.  The explicit option is
+    # for diagnostic before/after comparison, not a live default.
+    stabil_gizli = tf in {"1h", "2h"} and not bool(secenekler.get("stabil_goster", False))
+    if stabil_gizli:
+        goruntu = {**goruntu, "stabil": None, "stabil_direnc": None}
     mobil = bool(secenekler.get("mobil", _ortam_bayrak("GRAFIK_MOBIL")))
     secenekler["mobil"] = mobil
     if mobil:
@@ -142,6 +149,7 @@ def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
     meta["gorunum"] = dict(goruntu.get("gorunum") or {})
     meta["ayrinti"] = ayrinti
     meta["grafik_politikasi"] = deneyim.POLICY
+    meta["stabil_cizimde_gizli"] = stabil_gizli
     meta["girdi_ozeti"] = girdi_ozeti(goruntu)
 
     def bitir(png_yolu: Optional[str]) -> tuple[Optional[str], dict[str, Any]]:
@@ -485,7 +493,8 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         olay_ozet = {"swing": 0, "etiket_atlandi": 0, "kritik": 0,
                      "kritik_atlandi": 0, "capa": 0, "phpl_serit": 0,
                      "whwl_serit": 0, "seviye": 0}
-        if not yalnizca_mumlar and (goruntu.get("olay") or {}):
+        if not yalnizca_mumlar and ((goruntu.get("olay") or {}) or
+                                     (goruntu.get("serit") or {}).get("capa")):
             try:
                 olay_ozet.update(_olay_ciz(ax, goruntu, katman_n, sag_adaylar,
                                            kutular=mum_kutulari,
