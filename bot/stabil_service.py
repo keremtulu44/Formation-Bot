@@ -285,15 +285,18 @@ def evaluate_stabil_4h_candidate(
     cached_tf = cached_tf.get("4h", {}) if isinstance(cached_tf, Mapping) else {}
     cached_market = cached_tf.get("market_structure") if isinstance(cached_tf, Mapping) else None
     if _update_sent_stabil_status(state, stock, df_4h, cached_market):
+        sym_state["queue_cancel_pending"] = True
         _save_alarm_state(state, state_path)
-        cancel = getattr(notifier, "stabil_bekleyen_iptal", None)
-        if callable(cancel):
-            from public_aux_outbox import auxiliary_event_id
-            event_id = auxiliary_event_id("stabil", [(stock, sym_state.get("last_bar_open"))])
-            try:
-                cancel(event_id)
-            except (OSError, TypeError, ValueError) as exc:
-                logger.warning("Stabil bekleyen alarm iptali kaydedilemedi (%s): %s", stock, exc)
+    cancel = getattr(notifier, "stabil_bekleyen_iptal", None)
+    if sym_state.get("queue_cancel_pending") and callable(cancel):
+        from public_aux_outbox import auxiliary_event_id
+        event_id = auxiliary_event_id("stabil", [(stock, sym_state.get("last_bar_open"))])
+        try:
+            cancel(event_id)
+            sym_state.pop("queue_cancel_pending", None)
+            _save_alarm_state(state, state_path)
+        except (OSError, TypeError, ValueError) as exc:
+            logger.warning("Stabil bekleyen alarm iptali kaydedilemedi (%s): %s", stock, exc)
     last_sent_open = sym_state.get("last_bar_open")
     if last_sent_open == bar_open_iso:
         return None
