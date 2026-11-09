@@ -65,6 +65,7 @@ def main():
                     if not old_img: raise RuntimeError('Karşılaştırma çizimi çıktı üretmedi')
                 row={'symbol':symbol,'tf':tf,'last_bar':str(frame.index[-1]),'close_time':str(cutoff),
                      'image':path.name,'cizgiler':meta.get('cizgiler'), 'zone':meta.get('zone'),
+                     'sag':meta.get('sag'),
                      'uyarilar':meta.get('uyarilar'), 'eksik':meta.get('eksik_katmanlar'),
                      'resistance_status':str(domains['stabil_direnc'].status),
                      'resistance_reason':domains['stabil_direnc'].reason}

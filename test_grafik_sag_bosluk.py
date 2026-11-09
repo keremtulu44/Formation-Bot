@@ -327,7 +327,7 @@ def test_cipler_eksenin_sag_kenarina_sabitlenir():
     cipler = [t for t in ax.texts if t.get_bbox_patch() is not None]
     assert len(cipler) == 1
     assert cipler[0].xy[0] == pytest.approx(kenar)
-    assert cipler[0].get_position()[0] == pytest.approx(kenar + 0.22)
+    assert ax.transData.transform((cipler[0].get_position()[0], 105))[0] - ax.transData.transform((kenar, 105))[0] == pytest.approx(9)
 
 
 def test_bosluk_yokken_cip_eski_konumda():
@@ -336,7 +336,7 @@ def test_bosluk_yokken_cip_eski_konumda():
     grafik._sag_ciz(ax, fig, [_cip()], n, (90.0, 120.0))
     cip = [t for t in ax.texts if t.get_bbox_patch() is not None][0]
     assert cip.xy[0] == pytest.approx(n - 0.4)
-    assert cip.get_position()[0] == pytest.approx(n - 0.18)
+    assert ax.transData.transform((cip.get_position()[0], 105))[0] - ax.transData.transform((n - 0.4, 105))[0] == pytest.approx(9)
 
 
 # ------------------------------------------------------------------ bant çizgileri
