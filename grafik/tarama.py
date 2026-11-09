@@ -165,6 +165,65 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
                                             | set(goruntu["olay"]["hata"]))
     goruntu["stabil"] = _stabil_verisi(sonuclar, tf, sol, sag, zamanlar[sol:sag])
     goruntu["stabil_direnc"] = _stabil_direnc_verisi(sonuclar, tf, sol, sag, zamanlar[sol:sag])
+    # Cross-domain bridge: event timestamps must match this chart's native bars.
+    from domain_engines.stabil.structure_context import barrier_reason, events_for_bars, marker_state
+    ms_result = sonuclar.get("market_structure") if isinstance(sonuclar, Mapping) else None
+    structure_events = events_for_bars(ms_result, zamanlar)
+    for layer, direction, keys in (
+        (goruntu["stabil"], "UP", ("reclaim_barlar", "momentum_barlar")),
+        (goruntu["stabil_direnc"], "DOWN", ("donus_barlar", "momentum_barlar")),
+    ):
+        if not layer:
+            continue
+        layer["baglam_bastirilan"] = []
+        for key in keys:
+            kept = []
+            for bar in layer.get(key, []):
+                status = marker_state(sol + bar, direction, tf, structure_events, sag - 1)
+                if status in {"opposite_structure", "invalidated_by_opposite_bos"}:
+                    layer["baglam_bastirilan"].append({"bar": bar, "tur": key, "neden": status})
+                else:
+                    kept.append(bar)
+            layer[key] = kept
+    # Same-bar S/R corridor and current pattern boundary. Pattern snapshots do
+    # not carry historical geometry, so never back-project today's pattern.
+    from domain_engines.stabil.signals import _causal_atr14
+    import numpy as np
+    try:
+        atr_values = _causal_atr14(
+            np.asarray(sutun["yuksek"], dtype=float),
+            np.asarray(sutun["dusuk"], dtype=float),
+            np.asarray(sutun["kapanis"], dtype=float), period=14)
+    except (TypeError, ValueError, IndexError):
+        atr_values = []
+    support_layer = goruntu["stabil"] or {}
+    resistance_layer = goruntu["stabil_direnc"] or {}
+    for layer, other, direction, keys, boundary, other_role in (
+        (support_layer, resistance_layer, 1, ("reclaim_barlar", "momentum_barlar"), "upper_now", "alt"),
+        (resistance_layer, support_layer, -1, ("donus_barlar", "momentum_barlar"), "lower_now", "ust"),
+    ):
+        if not layer:
+            continue
+        for key in keys:
+            kept = []
+            for bar in layer.get(key, []):
+                source_bar = sol + bar
+                close = _gercek(sutun["kapanis"][source_bar]) if source_bar < n else None
+                atr = _gercek(atr_values[source_bar]) if source_bar < len(atr_values) else None
+                barriers = []
+                levels, roles = other.get("seviyeler", []), other.get("renkler", [])
+                if bar < len(levels) and bar < len(roles) and roles[bar] == other_role:
+                    barriers.append(("stabil_koridoru", _gercek(levels[bar])))
+                # Only the current snapshot is known to exist at this bar.
+                state = str(formasyon.get("state") or "").upper()
+                if source_bar == n - 1 and state not in {"", "BASARISIZ", "IPTAL", "FORMASYON_GECERSIZ"}:
+                    barriers.append(("formasyon_siniri", _gercek(formasyon.get(boundary))))
+                reason = barrier_reason(close, atr, "UP" if direction == 1 else "DOWN", barriers)
+                if reason:
+                    layer.setdefault("baglam_bastirilan", []).append({"bar": bar, "tur": key, "neden": reason})
+                else:
+                    kept.append(bar)
+            layer[key] = kept
     direnc = goruntu["stabil_direnc"]
     if direnc and direnc.get("neden") and not direnc.get("hazir"):
         goruntu["uyarilar"].append(_stabil_direnc_uyarisi(str(direnc["neden"])))
@@ -394,7 +453,7 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
             dikey_barlar.append(int(idx_b))
         if _alan(bhv, "vertical_attempt_kind"):
             dikey_deneme_barlar.append(int(idx_b))
-        if _alan(bhv, "reclaim_kind") in {"close_reclaim", "intrabar_sweep_reclaim"}:
+        if _alan(bhv, "reclaim_kind") in {"multi_bar_recovery", "intrabar_sweep_reclaim"}:
             reclaim_barlar.append(int(idx_b))
         if _alan(bhv, "momentum_kind") in STABIL_GUCLU_YUKARI_MOMENTUM_TURLERI:
             momentum_barlar.append(int(idx_b))

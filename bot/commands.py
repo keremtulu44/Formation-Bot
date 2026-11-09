@@ -254,6 +254,7 @@ def _komut_stabil(arguman: str) -> str:
         deque_manager=_pkg._deque_manager_ref,
         active_stocks=_pkg.ACTIVE_STOCKS,
         now=_pkg.datetime.now(ISTANBUL_TZ),
+        formations=_pkg._live_state.formations(),
     )
 
 

@@ -1509,6 +1509,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         domain_results_by_stock=domain_results_by_stock,
                         bar_metni_fn=_mum_bilgisi,
                         direnc_gunluk_ham=df_gunluk_ham,
+                        pattern_snapshot=next((f for f in hisse_formasyonlari
+                                               if f.get("timeframe") == "4h"), None),
                     )
                     if st_cand is not None:
                         stabil_adaylari.append(st_cand)

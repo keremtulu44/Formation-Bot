@@ -355,7 +355,7 @@ def test_chart_stabil_chip_reclaim_triangle_step_colors_and_clean_footer(tmp_pat
     assert yol is not None and out_png.exists()
     assert meta["cizgiler"]["stabil"]["cizildi"] is True
     assert meta["cizgiler"]["stabil"]["reclaim_isaret"] == 0
-    assert meta["cizgiler"]["stabil"]["dikey_deneme_isaret"] >= 1
+    assert meta["cizgiler"]["stabil"]["dikey_deneme_isaret"] == 0
     # Metadata remains populated even though production chart hides the 5-line debug footer
     assert meta.get("guven_satirlari")
 
@@ -396,7 +396,7 @@ def test_stabil_standalone_4h_alert_dedup_cooldown_and_burst_summary(tmp_path, m
         send_to_public=lambda txt: (pub_msgs.append(txt) or True),
     )
 
-    def _mk_cand(sym: str, score: float, kind: str = "close_reclaim") -> StabilAlarmCandidate:
+    def _mk_cand(sym: str, score: float, kind: str = "multi_bar_recovery") -> StabilAlarmCandidate:
         bhv = StabilBarBehavior(
             bar_index=50,
             bar_close_time="2026-10-16T13:00:00+03:00",
@@ -457,7 +457,7 @@ def _stabil_delivery_candidate(*, grafik_verisi_public=None, symbol="THYAO"):
     from bot.stabil_service import StabilAlarmCandidate
 
     behavior = SimpleNamespace(
-        reclaim_kind="close_reclaim",
+        reclaim_kind="multi_bar_recovery",
         rank_score=1.5,
         unchanged_days=26,
         touch_count=2,

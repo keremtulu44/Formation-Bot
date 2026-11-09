@@ -2,8 +2,8 @@
 
 All rules in this module are strictly causal, read-only interpretations of the
 unmodified `05_stabil.txt` support/trend outputs plus closed bar OHLCV:
-- Strong reclaim systematic (`close_reclaim` + `intrabar_sweep_reclaim`) validated
-  causally across the live `config.BIST_50` symbol universe and 100-stock archive.
+- Separate intrabar sweep and experimental multi-bar recovery classifications.
+  The new multi-bar rule has not been performance-validated.
 - Separate strong upward-momentum classification for chart arrows; it stays
   independent from reclaim alerts and does not require a fixed horizontal support.
 - Fixed 2-line Telegram card copy (`Stabil destek: ...`, `Stabil yapı: ...`)
@@ -165,7 +165,7 @@ class StabilBarBehavior:
     touch_count: int
     prev_breach_bars: int
     prev_breach_depth_atr: float
-    reclaim_kind: str | None  # "close_reclaim" | "intrabar_sweep_reclaim" | None
+    reclaim_kind: str | None  # "multi_bar_recovery" | "intrabar_sweep_reclaim" | None
     weak_reclaim: bool
     rank_score: float
     # Geri alımdan bağımsız, grafikte ayrı `▲` ile gösterilen güçlü yukarı mum.
@@ -240,6 +240,7 @@ def evaluate_bar_behaviors(
     prev_close: float | None = None
     last_momentum_bar = -999
     last_dikey_uyari_bar = -999
+    pending_recovery = False
 
     for i in range(n):
         pt = bar_projection[i]
@@ -280,6 +281,7 @@ def evaluate_bar_behaviors(
                     momentum_kind=None,
                 )
             )
+            pending_recovery = False
             prev_sup = None
             prev_close = c
             touch_count = 0
@@ -340,28 +342,14 @@ def evaluate_bar_behaviors(
             now_above = c > (sup_f + tol)
             was_above = prev_close >= (prev_sup - tol)
 
-            # 2026-11-08 (kullanıcı kararı): dolu ▲ (geri alım/dönüş) için
-            # HACİM ŞARTI KALDIRILDI. Gerekçe: rev10 replay ölçümünde hacim
-            # havuzda anlamlı görünüp senaryo-stratifiye testte kayboldu
-            # (OR 0,82→0,93, p 0,020→0,55) ve yukarı tarafta hiç fark
-            # yaratmadı (UP %52,0→%50,5). Ok artık yalnız mum anatomisiyle
-            # kurulur: gövde ≥0,32/0,35 ATR · kapanış pozisyonu ≥0,65/0,68 ·
-            # çizgiye mesafe · ihlal derinliği. Momentumun hacim-veya-gövde
-            # şartı AYNEN duruyor (kullanıcı: "momentum aynen kalsın").
-            vol_ok_close = True
-            vol_ok_sweep = True
-
+            # Eski tek mumlu close_reclaim artık sinyal değildir. Zayıf
+            # geçiş tanısı ve bağımsız fitil yolu ayrı tutulur.
             if was_below and now_above:
-                if (
+                weak_reclaim = not (
                     0.0 < prior_breach_depth <= 1.50
-                    and body_atr >= 0.32
-                    and close_pos >= 0.65
+                    and body_atr >= 0.32 and close_pos >= 0.65
                     and 0.05 <= dist_atr <= _OK_MAKS_MESAFE_ATR
-                    and vol_ok_close
-                ):
-                    reclaim_kind = "close_reclaim"
-                else:
-                    weak_reclaim = True
+                )
             elif (
                 was_above
                 and now_above
@@ -369,9 +357,34 @@ def evaluate_bar_behaviors(
                 and 0.08 <= dist_atr <= _OK_MAKS_MESAFE_ATR
                 and body_atr >= 0.35
                 and close_pos >= 0.68
-                and vol_ok_sweep
             ):
                 reclaim_kind = "intrabar_sweep_reclaim"
+
+        # Hipotez: geri alım mumu dahil üç mumda en az iki yeşil,
+        # iki artan kapanış ve dipten en az 0,5 ATR ilerleme. Dip önceki
+        # iki mumda ve destek altında olmalı; aynı destek korunmalı.
+        # Karar yalnız sonraki kapanmış mum yeşilse o mumda üretilir.
+        confirmed_recovery = pending_recovery and fixed_support and c > o
+        pending_recovery = False
+        if confirmed_recovery and reclaim_kind is None:
+            reclaim_kind = "multi_bar_recovery"
+        if (i >= 2 and fixed_support and not vertical_support and prev_close is not None
+                and prev_sup is not None and prev_close < prev_sup - tol
+                and c > sup_f + tol and math.isfinite(atr) and atr > 0
+                and all(bar_projection[j].support_level is not None
+                        and abs(float(bar_projection[j].support_level) - sup_f)
+                        <= max(tol, 1e-6 * max(1.0, sup_f))
+                        for j in range(i - 2, i + 1))):
+            bottom = min(lows[i - 2:i])
+            pending_recovery = (
+                bottom < sup_f - tol
+                and bottom <= lows[i]
+                and c - bottom >= 0.5 * atr
+                and sum(closes[j] > opens[j] for j in range(i - 2, i + 1)) >= 2
+                and closes[i - 2] < closes[i - 1] < closes[i]
+            )
+        crossing_from_below = (prev_close is not None and prev_sup is not None
+                               and prev_close < prev_sup - tol and c > sup_f + tol)
 
         # Güçlü YUKARI mum ayrı bir olaydır: destek altına hiç sarkmadan da
         # gelebilir ve çizgi yukarı basamak yaptığı barda `fixed_support=False`
@@ -381,6 +394,7 @@ def evaluate_bar_behaviors(
         if (
             reclaim_kind is None
             and not weak_reclaim
+            and not crossing_from_below
             and pct_vs > 0.0
             and dist_atr is not None
             and body_atr is not None
@@ -418,7 +432,7 @@ def evaluate_bar_behaviors(
             if aday is not None:
                 cok_uzak = dist_atr is not None and abs(dist_atr) > _OK_MAKS_MESAFE_ATR
                 # Soğuma yalnız ZAYIF denemelere uygulanır: bastırılmış güçlü bir
-                # yukarı aday (close_reclaim / sweep / momentum) bilgi taşır, o
+                # yukarı aday (sweep / momentum) bilgi taşır, o
                 # her zaman yazılır. Tekrar eden asıl gürültü "weak_reclaim" ve
                 # "touch_from_below"dur.
                 zayif_deneme = aday in {"weak_reclaim", "touch_from_below"}
@@ -511,10 +525,8 @@ def describe_behavior_structure_short(bhv: StabilBarBehavior | None) -> str:
 
     if getattr(bhv, "vertical_attempt_kind", None):
         return "dikey destek · yukarı deneme"
-    if bhv.reclaim_kind == "close_reclaim":
-        if bhv.vol_ratio is not None and bhv.vol_ratio >= 1.15:
-            return "hacimli güçlü geri alım"
-        return "güçlü geri alım"
+    if bhv.reclaim_kind == "multi_bar_recovery":
+        return "çok mumlu toparlanma · yeşil takip"
     if bhv.reclaim_kind == "intrabar_sweep_reclaim":
         return "silkeleme sonrası dönüş"
     if bhv.weak_reclaim:
@@ -533,7 +545,7 @@ def describe_behavior_structure_short(bhv: StabilBarBehavior | None) -> str:
 
     # Price at/above support
     if bhv.touch_count >= 3:
-        return "çok test edildi, yorgun"
+        return "çok kez test edildi"
     if bhv.regime == CandidateLineRegime.LONG_HORIZONTAL.value:
         if bhv.touch_count == 2:
             return "uzun yatay · 2. test"
@@ -662,9 +674,9 @@ def summarize_symbol_for_command(
     lookback = min(3, len(bhvs))
     for offset in range(lookback):
         cand = bhvs[-1 - offset]
-        if cand.reclaim_kind is not None:
+        if cand.reclaim_kind in {"intrabar_sweep_reclaim", "multi_bar_recovery"}:
             # Still valid only if current close remains above support
-            if not vertical and (last.pct_vs_support or 0.0) > 0.0:
+            if not vertical and (offset == 0 or (last.pct_vs_support or 0.0) > 0.0):
                 recent_reclaim_kind = cand.reclaim_kind
                 reclaim_bars_ago = offset
             break
@@ -697,8 +709,8 @@ def summarize_symbol_for_command(
     if recent_reclaim_kind is not None:
         zaman_notu = "son 4S mumda" if reclaim_bars_ago == 0 else f"{reclaim_bars_ago} mum önce"
         tur_notu = (
-            "kapanışla güçlü geri alım"
-            if recent_reclaim_kind == "close_reclaim"
+            "çok mumlu toparlanma ve yeşil takip"
+            if recent_reclaim_kind == "multi_bar_recovery"
             else "fitille silkeleme sonrası dönüş"
         )
         prio = 100.0 + float(bhvs[-1 - (reclaim_bars_ago or 0)].rank_score) * 10.0 - float(reclaim_bars_ago or 0) * 3.0
@@ -717,14 +729,14 @@ def summarize_symbol_for_command(
             reclaim_bars_ago=reclaim_bars_ago,
             headline_tr=f"{symbol} · destek {sup_txt} ({pct_etiket}) — {tur_notu} ({zaman_notu})",
             detail_tr=(
-                f"Destek üstünde güçlü mumla tutundu ({zaman_notu}); geçmiş testlerde "
-                f"ilk mumda tutunma oranı yüksek kurulum."
+                f"{zaman_notu}; olay teyit veya yön garantisi değildir."
             ),
         )
 
     # Uzun yatay zeminden taze güçlü kopuş veya kademe yükselten güçlü momentum
     if (
         pct > 0.0
+        and last.prev_breach_bars == 0
         and not vertical
         and last.touch_count < 3
         and body >= 0.35
@@ -758,21 +770,15 @@ def summarize_symbol_for_command(
             detail_tr="Oturmuş destek üstünden güçlü gövdeyle uzaklaşıyor.",
         )
 
-    # 2. SAĞLAM YATAY ZEMİN / 2. TEST TUTUNANLAR
+    # 2. UZUN YATAY ZEMİN (temas sayısı tek başına onay değildir)
     if (
         pct >= 0.0
         and last.touch_count < 3
         and not vertical
         and 0.0 <= dist <= 1.25
-        and (last.unchanged_days >= 20 or last.touch_count == 2)
+        and last.unchanged_days >= 20
     ):
-        neden = (
-            f"{last.unchanged_days}g yatay zemin"
-            if last.unchanged_days >= 20
-            else "2. bağımsız destek testi tuttu"
-        )
-        if last.unchanged_days >= 20 and last.touch_count == 2:
-            neden = f"{last.unchanged_days}g yatay zemin · 2. test"
+        neden = f"{last.unchanged_days}g yatay zemin"
         prio = 60.0 + min(20.0, float(last.unchanged_days) * 0.3) - abs(dist - 0.35) * 5.0
         return LiveStabilSummary(
             symbol=symbol,
@@ -788,7 +794,7 @@ def summarize_symbol_for_command(
             reclaim_kind=None,
             reclaim_bars_ago=None,
             headline_tr=f"{symbol} · destek {sup_txt} ({pct_etiket}) — {neden}",
-            detail_tr="Uzun yatay baz veya 2. temas desteği koruyor; desteğe yakın sağlıklı bölge.",
+            detail_tr="Uzun yatay zemin gözleniyor; temas sayısı tek başına onay değildir.",
         )
 
     # 3. SIĞ SARKMA (GERİ ALIM İZLENENLER)

@@ -734,10 +734,8 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool,
     # TEK ok sözlüğü cümlesi çizilen her şeyi anlatır ve ölçümü yansıtır:
     # ▲ "yapı", ▼ "sinyal" (docs/arastirma/OK_SISTEMI_2026-11-08.md §12–§13).
     _cizgiler = (meta or {}).get("cizgiler") or {}
-    _ok_sayaclari = (("stabil", "reclaim_isaret", ("reclaim_barlar", "momentum_barlar",
-                                                   "dikey_deneme_barlar")),
-                     ("stabil_direnc", "donus_isaret", ("donus_barlar", "momentum_barlar",
-                                                        "dikey_deneme_barlar")))
+    _ok_sayaclari = (("stabil", "reclaim_isaret", ("reclaim_barlar", "momentum_barlar")),
+                     ("stabil_direnc", "donus_isaret", ("donus_barlar", "momentum_barlar")))
     ok_cizildi = False
     for anahtar, hazir_anahtar, barlar in _ok_sayaclari:
         katman = goruntu.get(anahtar) or {}
@@ -749,14 +747,14 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool,
             continue
         oge.append("┄ Stabil destek (yeşil)" if anahtar == "stabil"
                    else "┄ Stabil direnç (turuncu)")
-        sayaclar = ("reclaim_isaret", "momentum_isaret", "dikey_deneme_isaret") \
-            if anahtar == "stabil" else ("donus_isaret", "momentum_isaret", "dikey_deneme_isaret")
+        sayaclar = ("reclaim_isaret", "momentum_isaret") \
+            if anahtar == "stabil" else ("donus_isaret", "momentum_isaret")
         if olculdu:
             ok_cizildi = ok_cizildi or any(cizilen.get(k) for k in sayaclar)
         else:
             ok_cizildi = ok_cizildi or any(katman.get(b) for b in barlar)
     if ok_cizildi:
-        oge.append("▼ dönüş = sinyal · ▲ geri alım = yapı · boş = momentum · ◇ = uyarı")
+        oge.append("▼ dönüş = sinyal · ▲ geri alım = yapı · boş = momentum")
     # GÖRSEL-5: olay çizgileri stil olarak ayrıştı; lejant da ayrı yazar (hangisi
     # görünüyorsa o madde çıkar — uydurma yok).
     _olaylar = list((goruntu.get("olay") or {}).get("olaylar") or [])

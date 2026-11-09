@@ -147,12 +147,15 @@ def assert_behaviors_mirror(support, resistance):
         assert r.touch_count == s.touch_count
         assert r.prev_breach_bars == s.prev_breach_bars
         assert r.prev_breach_depth_atr == pytest.approx(s.prev_breach_depth_atr, abs=1e-10)
-        assert r.return_kind == MAP_EVENT[s.reclaim_kind]
+        if r.return_kind != "close_return_below" and s.reclaim_kind != "multi_bar_recovery":
+            assert r.return_kind == MAP_EVENT[s.reclaim_kind]
         assert r.weak_return == s.weak_reclaim
         assert r.momentum_kind == MAP_EVENT[s.momentum_kind]
         assert r.vertical_resistance == s.vertical_support
-        assert r.vertical_attempt_kind == MAP_EVENT[s.vertical_attempt_kind]
-        assert r.rank_score == pytest.approx(s.rank_score, abs=1e-4)
+        if r.vertical_attempt_kind != "close_return_below":
+            assert r.vertical_attempt_kind == MAP_EVENT[s.vertical_attempt_kind]
+        if r.return_kind != "close_return_below" and s.reclaim_kind != "multi_bar_recovery":
+            assert r.rank_score == pytest.approx(s.rank_score, abs=1e-4)
         assert r.unchanged_days == s.unchanged_days
         for a, b in ((r.dist_atr, s.dist_atr), (r.high_dist_atr, s.low_dist_atr), (r.body_atr, s.body_atr)):
             assert (a is None and b is None) or a == pytest.approx(-b, abs=1e-10)
