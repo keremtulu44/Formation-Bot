@@ -126,3 +126,49 @@ def test_delivered_alert_status_changes_only_when_later_bos_is_known():
     assert item["signal_status"] == "invalidated_by_opposite_bos"
     assert item["invalidated_bar_open"] == times[6].isoformat()
     assert not _update_sent_stabil_status(state, "TEST", frame, ms)
+
+
+def test_failed_choch_repairs_only_from_transition_failure_bar():
+    times = pd.date_range("2026-01-01", periods=6, freq="h", tz="UTC")
+    history = [event(times[1], "DOWN", "CHOCH", validity="FAILED"),
+               event(times[3], "UP", "TRANSITION_FAIL")]
+    events = events_for_bars(SimpleNamespace(details={"event_history": history}), times)
+    assert marker_state(2, "UP", "4h", events, 2) == "opposite_structure"
+    assert marker_state(3, "UP", "4h", events, 3) == "active"
+
+
+def test_native_pattern_candidate_boundary_and_invalidation(monkeypatch):
+    import grafik.tarama as tarama
+    from patterns.candidate import PatternCandidate
+    times = pd.date_range("2026-01-01", periods=20, freq="h", tz="UTC")
+    frame = pd.DataFrame({"open": [100.] * 20, "high": [101.] * 20,
+                          "low": [99.] * 20, "close": [100.] * 20,
+                          "volume": [100.] * 20}, index=times)
+    monkeypatch.setattr(tarama, "_bar_kapandi_mi", lambda *_a, **_k: True)
+    monkeypatch.setattr(tarama, "_stabil_verisi", lambda *_a: {
+        "hazir": True, "seviyeler": [99.] * 20, "renkler": ["ust"] * 20,
+        "reclaim_barlar": [19], "momentum_barlar": []})
+    monkeypatch.setattr(tarama, "_stabil_direnc_verisi", lambda *_a: None)
+    candidate = PatternCandidate(valid=True, pattern_type="test", upper_now=100.4)
+    image = tarama.anlik_goruntu(candidate, "1h", frame, alarm_turu="aday")
+    assert image["stabil"]["reclaim_barlar"] == []
+    image = tarama.anlik_goruntu(candidate, "1h", frame, alarm_turu="gecersiz")
+    assert image["stabil"]["reclaim_barlar"] == [19]
+
+
+def test_real_card_surfaces_apply_aligned_opposite_structure():
+    from test_stabil_multibar_recovery import sample, evaluate
+    from notification_context import _kart_stabil
+    from bot.domain_alarm_service import _stabil_bilgisi
+    labels, snapshots, points, frame = sample()
+    frame.index = labels
+    behavior = evaluate(frame, points, snapshots)[-1]
+    output = SimpleNamespace(latest_behavior=behavior, bar_projection=points)
+    stabil = SimpleNamespace(error=None, skipped=False, result=output,
+                             details={"latest_behavior": behavior, "bar_projection": points})
+    market = SimpleNamespace(details={"event_history": [event(labels[-2], "DOWN")]})
+    results = {"1d": {"stabil": stabil, "market_structure": market}}
+    assert any("toparlanma" in s for s in _kart_stabil({"1d": {"stabil": stabil}}, "1d", behavior.close_price))
+    assert not any("toparlanma" in s for s in _kart_stabil(results, "1d", behavior.close_price))
+    assert not any("toparlanma" in s for s in _stabil_bilgisi(results, "1d", frame)["card_lines"])
+    assert behavior.reclaim_kind == "multi_bar_recovery"  # raw lifecycle is unchanged

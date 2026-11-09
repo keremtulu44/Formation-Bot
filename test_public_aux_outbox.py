@@ -172,7 +172,7 @@ def test_stabil_dm_success_no_longer_loses_quota_blocked_public_copy(monkeypatch
     monkeypatch.setattr(config, "STABIL_ALARM_DM", True)
     monkeypatch.setattr(config, "STABIL_ALARM_PUBLIC", True)
     n = RoutedNotifier(tmp_path)
-    behavior = SimpleNamespace(reclaim_kind="close_reclaim", rank_score=1.5,
+    behavior = SimpleNamespace(reclaim_kind="multi_bar_recovery", rank_score=1.5,
                                unchanged_days=26, touch_count=2, vol_ratio=1.35)
     cand = StabilAlarmCandidate(symbol="THYAO", bar_open_ts="2026-11-06T09:30:00+03:00",
                                 bar_close_ts="2026-11-06T13:30:00+03:00", bar_label="06.11 13:30",
@@ -255,3 +255,24 @@ def test_text_sent_before_crash_resumes_only_its_graphics(tmp_path):
     assert recovered.flush() == 0
     assert recovered_owner.attempts == [] and len(recovered_owner.graphics) == 1
     assert recovered.status()["completed"] == 1
+
+
+def test_cancel_pending_only_cancels_definitely_unsent_and_survives_restart(tmp_path):
+    owner = FakeOwner(["butce"])
+    queue = PublicAuxOutbox(owner, tmp_path)
+    assert queue.submit("stabil:old", "old reclaim", graphics=_graphics()) == (True, False)
+    assert queue.cancel_pending("stabil:old")
+    assert not queue.cancel_pending("stabil:old")
+    recovered_owner = FakeOwner(["gonderildi"])
+    recovered = PublicAuxOutbox(recovered_owner, tmp_path)
+    assert recovered.flush() == 0 and recovered_owner.attempts == []
+    assert recovered.rows[0]["status"] == "cancelled"
+
+
+def test_cancel_pending_never_changes_uncertain_or_delivered_rows(tmp_path):
+    owner = FakeOwner(["belirsiz", "gonderildi"])
+    queue = PublicAuxOutbox(owner, tmp_path)
+    assert queue.submit("uncertain", "unknown")[0]
+    assert not queue.cancel_pending("uncertain")
+    assert queue.submit("delivered", "sent")[1]
+    assert not queue.cancel_pending("delivered")

@@ -216,7 +216,13 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
                     barriers.append(("stabil_koridoru", _gercek(levels[bar])))
                 # Only the current snapshot is known to exist at this bar.
                 state = str(formasyon.get("state") or "").upper()
-                if source_bar == n - 1 and state not in {"", "BASARISIZ", "IPTAL", "FORMASYON_GECERSIZ"}:
+                # Native PatternCandidate carries validity and geometry, but
+                # its lifecycle state lives in the enclosing snapshot.
+                active_candidate = bool(_alan(cift, "valid", False)) and not state
+                active_state = state not in {"", "BASARISIZ", "IPTAL", "FORMASYON_GECERSIZ",
+                                             "KIRILIM_GECERSIZ", "KIRILIM_GECERSIZLESTI"}
+                if (source_bar == n - 1 and alarm_turu != "gecersiz"
+                        and (active_candidate or active_state)):
                     barriers.append(("formasyon_siniri", _gercek(formasyon.get(boundary))))
                 reason = barrier_reason(close, atr, "UP" if direction == 1 else "DOWN", barriers)
                 if reason:

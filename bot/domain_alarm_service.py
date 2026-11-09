@@ -250,10 +250,16 @@ def _stabil_bilgisi(results: Mapping[str, Any], tf: str,
         else:
             relation = "destekte"
 
+    # The domain card and chart must not advertise an upward signal that a
+    # same-bar, aligned opposing structure suppresses.
+    from domain_engines.stabil.structure_context import behavior_for_structure
+    projection = _field(details, "bar_projection") or _field(out, "bar_projection") or ()
+    close_times = [_field(point, "bar_close_time") for point in projection]
+    card_behavior = behavior_for_structure(bhv, _domain(results, tf, "market_structure"), close_times, tf)
     try:
         kart = tuple(
             format_stabil_card_lines(
-                price=close, support_level=sup, behavior=bhv,
+                price=close, support_level=sup, behavior=card_behavior,
             )[:2]
         )
     except Exception as exc:  # noqa: BLE001 - kart satırı alarmı düşürmesin

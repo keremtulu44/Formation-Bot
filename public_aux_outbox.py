@@ -84,7 +84,7 @@ class PublicAuxOutbox:
     def _prune_receipts(self, now):
         kept = []
         for row in self.rows:
-            if row.get("status") != "complete":
+            if row.get("status") not in {"complete", "cancelled"}:
                 kept.append(row)
                 continue
             try:
@@ -115,7 +115,7 @@ class PublicAuxOutbox:
                 return True, bool(row.get("text_sent"))
             now = self._now()
             self._prune_receipts(now)
-            if sum(r.get("status") != "complete" for r in self.rows) >= self.MAX_PENDING:
+            if sum(r.get("status") not in {"complete", "cancelled"} for r in self.rows) >= self.MAX_PENDING:
                 logger.error("%s özel alarm kuyruğu dolu (%d); yeni olay saklanamadı", self.label, self.MAX_PENDING)
                 return False, False
             snapshot = None
@@ -257,6 +257,20 @@ class PublicAuxOutbox:
                     self._save()
                     logger.warning("%s özel alarm teslimi belirsiz; otomatik tekrar yok, elle incele", self.label)
         return sent_count
+
+    def cancel_pending(self, event_id):
+        """Cancel a definitely unsent single event; never alter ambiguous/delivered work."""
+        with self.lock:
+            if not self.available:
+                return False
+            row = next((r for r in self.rows if r.get("id") == str(event_id)), None)
+            if row is None or row.get("status") != "pending" or row.get("text_sent"):
+                return False
+            row["status"] = "cancelled"
+            row["graphics"] = None
+            self._volatile_graphics.pop(str(event_id), None)
+            self._save()
+            return True
 
     def flush(self, max_items=3):
         with self.lock:

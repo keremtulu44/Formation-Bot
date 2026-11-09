@@ -773,6 +773,14 @@ class TelegramNotifier:
         """Özel alarm public metin/görselini yerel kuyruğa al: (kabul, metin gitti)."""
         return self._public_aux.submit(event_id, text, identity=identity, graphics=graphics)
 
+    def stabil_bekleyen_iptal(self, event_id: str) -> int:
+        """Cancel only definitely unsent individual Stabil copies on both routes."""
+        cancelled = 0
+        for queue in (self._public_aux, self._dm_aux):
+            if queue.cancel_pending(event_id):
+                cancelled += 1
+        return cancelled
+
     def public_ozel_bosalt(self) -> int:
         """Bütçe veya kesin ret sonrası bekleyen özel public alarmları dene."""
         return self._public_aux.flush()

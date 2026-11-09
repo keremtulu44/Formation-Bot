@@ -1130,6 +1130,10 @@ def _kart_stabil(results_by_timeframe: Any, alarm_tf: str, reference: float | No
             rank_score=0.0,
         )
 
+    from domain_engines.stabil.structure_context import behavior_for_structure
+    market = _domain(results_by_timeframe, tf, "market_structure") if tf else None
+    close_times = [_field(point, "bar_close_time") for point in projection]
+    latest_behavior = behavior_for_structure(latest_behavior, market, close_times, tf)
     return format_stabil_card_lines(
         price=price,
         support_level=support_level,

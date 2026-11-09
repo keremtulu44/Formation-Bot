@@ -121,6 +121,7 @@ def _stabil_public_grafik_verisi_uret(
     *,
     direnc_gunluk_ham: pd.DataFrame | None = None,
     direnc_saatlik_ham: pd.DataFrame | None = None,
+    pattern_snapshot: Mapping[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Public Stabil kartı için mevcut ana-TF + üst-TF kare sözleşmesini üret.
 
@@ -153,8 +154,21 @@ def _stabil_public_grafik_verisi_uret(
         except Exception as exc:  # noqa: BLE001 - eski destek alarm karesi korunur
             logger.warning("Stabil direnç grafiği atlandı (%s): %s", stock, type(exc).__name__)
 
+        chart_pattern = None
+        if isinstance(pattern_snapshot, Mapping):
+            try:
+                matches = pd.Timestamp(pattern_snapshot.get("bar_time")) == pd.Timestamp(df_4h.index[-1])
+            except (TypeError, ValueError):
+                matches = False
+            if matches:
+                chart_pattern = {
+                    "state": pattern_snapshot.get("state"),
+                    "pattern_name": pattern_snapshot.get("pattern_name"),
+                    "upper_now": pattern_snapshot.get("upper"),
+                    "lower_now": pattern_snapshot.get("lower"),
+                }
         veri = grafik.kare_listesi(
-            None,
+            chart_pattern,
             "4h",
             df_4h,
             sonuclar=sonuclar,
@@ -233,6 +247,7 @@ def evaluate_stabil_4h_candidate(
     state_path: str | None = None,
     direnc_gunluk_ham: pd.DataFrame | None = None,
     pattern_snapshot: Any = None,
+    notifier: Any = None,
 ) -> StabilAlarmCandidate | None:
     """Evaluate closed 4H bar for strong Stabil reclaim signal with causal dedup & cooldown."""
     if not bool(getattr(config, "STABIL_GERI_ALIM_ALARM", True)):
@@ -271,6 +286,14 @@ def evaluate_stabil_4h_candidate(
     cached_market = cached_tf.get("market_structure") if isinstance(cached_tf, Mapping) else None
     if _update_sent_stabil_status(state, stock, df_4h, cached_market):
         _save_alarm_state(state, state_path)
+        cancel = getattr(notifier, "stabil_bekleyen_iptal", None)
+        if callable(cancel):
+            from public_aux_outbox import auxiliary_event_id
+            event_id = auxiliary_event_id("stabil", [(stock, sym_state.get("last_bar_open"))])
+            try:
+                cancel(event_id)
+            except (OSError, TypeError, ValueError) as exc:
+                logger.warning("Stabil bekleyen alarm iptali kaydedilemedi (%s): %s", stock, exc)
     last_sent_open = sym_state.get("last_bar_open")
     if last_sent_open == bar_open_iso:
         return None
@@ -372,6 +395,7 @@ def evaluate_stabil_4h_candidate(
             stabil_res,
             direnc_gunluk_ham=direnc_gunluk_ham,
             direnc_saatlik_ham=all_tfs.get("1h"),
+            pattern_snapshot=pattern_snapshot,
         )
     return StabilAlarmCandidate(
         symbol=stock,

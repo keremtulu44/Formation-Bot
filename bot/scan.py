@@ -1499,6 +1499,16 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     _pkg._live_state.record_formation(formasyon_kaydi)
 
             if send_alerts and _pkg._alarm_izni_var(stock):
+                # Stabil evaluates the same closed-bar domain snapshot as the
+                # subsequent domain channel, even when no pattern fired first.
+                try:
+                    closed_frames = _pkg._completed_domain_frames(all_tfs, simdiki_zaman)
+                    _pkg._domain_results_for_notification(
+                        stock, all_tfs, simdiki_zaman, domain_results_by_stock,
+                        frames=closed_frames,
+                    )
+                except Exception as domain_err:  # noqa: BLE001
+                    _pkg.logger.warning("%s Stabil domain bağlamı hazırlanamadı: %s", stock, domain_err)
                 try:
                     from bot.stabil_service import evaluate_stabil_4h_candidate
 
@@ -1511,6 +1521,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         direnc_gunluk_ham=df_gunluk_ham,
                         pattern_snapshot=next((f for f in hisse_formasyonlari
                                                if f.get("timeframe") == "4h"), None),
+                        notifier=notifier,
                     )
                     if st_cand is not None:
                         stabil_adaylari.append(st_cand)

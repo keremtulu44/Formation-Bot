@@ -19,7 +19,7 @@ def name(value):
     return str(getattr(value, "name", value) or "").upper()
 
 
-def events_for_bars(result, bar_times):
+def events_for_bars(result, bar_times, *, timeframe=None):
     """Map only explicitly timestamped, confirmed external events onto source bars."""
     if result is None or field(result, "error") or field(result, "skipped", False):
         return []
@@ -42,14 +42,21 @@ def events_for_bars(result, bar_times):
     for e in events:
         kind = name(field(e, "event_type")).removeprefix("EVENT_")
         direction = name(field(e, "direction"))
-        if (name(field(e, "scope")) != "EXTERNAL" or kind not in {"BOS", "CHOCH"}
+        if (name(field(e, "scope")) != "EXTERNAL" or kind not in {"BOS", "CHOCH", "TRANSITION_FAIL"}
                 or name(field(e, "confirmation_status")) != "CONFIRMED"
                 or direction not in {"UP", "DOWN"}):
             continue
-        idx = mapping.get(key(field(e, "confirmed_at")))
+        event_time = field(e, "confirmed_at")
+        if timeframe is not None:
+            try:
+                from data import mum_kapanis_ani
+                event_time = mum_kapanis_ani(event_time, timeframe)
+            except (TypeError, ValueError, KeyError, OverflowError):
+                continue
+        idx = mapping.get(key(event_time))
         if idx is not None:
             out.append((idx, kind, direction))
-    return sorted(out)
+    return sorted(out, key=lambda e: e[0])
 
 
 def marker_state(bar, direction, timeframe, events, as_of):
@@ -90,3 +97,26 @@ def barrier_reason(close, atr, direction, barriers):
         except (TypeError, ValueError):
             continue
     return None
+
+
+def behavior_for_structure(behavior, structure_result, close_times, timeframe):
+    """Mask an upward signal in card copy only when aligned structure opposes it."""
+    if behavior is None or not (field(behavior, "reclaim_kind") or field(behavior, "momentum_kind")):
+        return behavior
+    if not close_times or field(behavior, "bar_close_time") is None:
+        return behavior
+    try:
+        if pd.Timestamp(field(behavior, "bar_close_time")) != pd.Timestamp(close_times[-1]):
+            return behavior
+    except (TypeError, ValueError):
+        return behavior
+    events = events_for_bars(structure_result, close_times, timeframe=timeframe)
+    if marker_state(len(close_times) - 1, "UP", timeframe, events, len(close_times) - 1) != "opposite_structure":
+        return behavior
+    from dataclasses import is_dataclass, replace
+    if is_dataclass(behavior) and not isinstance(behavior, type):
+        return replace(behavior, reclaim_kind=None, momentum_kind=None)
+    if isinstance(behavior, Mapping):
+        return {**behavior, "reclaim_kind": None, "momentum_kind": None}
+    # Unfamiliar behavior types are not mutated or guessed.
+    return behavior
