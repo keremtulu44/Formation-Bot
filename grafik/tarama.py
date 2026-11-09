@@ -166,7 +166,7 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
     goruntu["stabil"] = _stabil_verisi(sonuclar, tf, sol, sag, zamanlar[sol:sag])
     goruntu["stabil_direnc"] = _stabil_direnc_verisi(sonuclar, tf, sol, sag, zamanlar[sol:sag])
     # Cross-domain bridge: event timestamps must match this chart's native bars.
-    from domain_engines.stabil.structure_context import barrier_reason, events_for_bars, marker_state
+    from domain_engines.stabil.structure_context import barrier_reason, events_for_bars, marker_state, pattern_is_active
     ms_result = sonuclar.get("market_structure") if isinstance(sonuclar, Mapping) else None
     structure_events = events_for_bars(ms_result, zamanlar)
     for layer, direction, keys in (
@@ -222,8 +222,7 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
                 # Native PatternCandidate carries validity and geometry, but
                 # its lifecycle state lives in the enclosing snapshot.
                 active_candidate = bool(_alan(cift, "valid", False)) and not state
-                active_state = state not in {"", "BASARISIZ", "IPTAL", "FORMASYON_GECERSIZ",
-                                             "KIRILIM_GECERSIZ", "KIRILIM_GECERSIZLESTI"}
+                active_state = pattern_is_active(state)
                 if (source_bar == n - 1 and alarm_turu != "gecersiz"
                         and (active_candidate or active_state)):
                     barriers.append(("formasyon_siniri", _gercek(formasyon.get(boundary))))

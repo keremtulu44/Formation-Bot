@@ -336,7 +336,7 @@ def evaluate_stabil_4h_candidate(
         return None
     # Apply the same optional causal structure gate as the chart. Missing or
     # unaligned Market Structure data are not evidence of a contrary event.
-    from domain_engines.stabil.structure_context import barrier_reason, events_for_bars, marker_state
+    from domain_engines.stabil.structure_context import barrier_reason, events_for_bars, marker_state, pattern_is_active
     tf_map = (domain_results_by_stock or {}).get(stock, {})
     per_tf = tf_map.get("4h", {}) if isinstance(tf_map, Mapping) else {}
     ms = per_tf.get("market_structure") if isinstance(per_tf, Mapping) else None
@@ -360,7 +360,7 @@ def evaluate_stabil_4h_candidate(
             same_bar = not pd.isna(pattern_time) and pattern_time == pd.Timestamp(last_open_ts)
         except (TypeError, ValueError):
             same_bar = False
-        if same_bar and pattern_snapshot.get("state") not in {"FORMASYON_GECERSIZ", "Yok", "ST_NONE"}:
+        if same_bar and pattern_is_active(pattern_snapshot.get("state")):
             barriers.append(("formasyon_siniri", pattern_snapshot.get("upper")))
     resistance = per_tf.get("stabil_direnc") if isinstance(per_tf, Mapping) else None
     if resistance is None and all_tfs.get("1h") is not None and direnc_gunluk_ham is not None:
@@ -710,7 +710,7 @@ def _command_barrier_context(symbol, timeframe, frame, bhv, summary, manager, no
     if (summary is None or summary.bucket != "guclu_cikis" or frame is None or frame.empty
             or (summary.reclaim_bars_ago or 0) != 0):
         return bhv, summary
-    from domain_engines.stabil.structure_context import barrier_reason
+    from domain_engines.stabil.structure_context import barrier_reason, pattern_is_active
     from domain_engines.stabil.signals import _causal_atr14
     barriers = []
     for pattern in formations or ():
@@ -720,7 +720,7 @@ def _command_barrier_context(symbol, timeframe, frame, bhv, summary, manager, no
             same_bar = pd.Timestamp(pattern.get("bar_time")) == pd.Timestamp(frame.index[-1])
         except (ValueError, TypeError):
             same_bar = False
-        if same_bar and pattern.get("state") not in {"FORMASYON_GECERSIZ", "Yok", "ST_NONE"}:
+        if same_bar and pattern_is_active(pattern.get("state")):
             barriers.append(("formasyon_siniri", pattern.get("upper")))
             break
     try:

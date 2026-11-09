@@ -558,8 +558,8 @@ bu kapsama dahil değildir. Yeni çok mumlu alarmda eski karışık grubun repla
 yüzdeleri performans kanıtı gibi gösterilmez.
 
 
-**Kalan yüzey sınırı:** Diğer domain/formasyon kartlarında ters piyasa yapısı
-uygulanır; aynı kartlara formasyon karşı sınırı ve bağımsız direnç geometrisi
-her çağrıda taşınmadığından bu geometrik filtrelerin tüm kartlarla grafik
-arasında birebir eşleştiği iddia edilemez. Eksik/tarihi kaynaklar varsa durum
+**Kalan yüzey sınırı:** Diğer domain/formasyon kartlarında ters piyasa yapısı uygulanır. Ayrı domain
+alarm kartında aynı mumdaki mevcut formasyon sınırı ve mevcut, zaman hizalı
+dirence de bakılır; klasik formasyon kartına bu geometriler her çağrıda
+taşınmadığından bütün kartlarla grafik arasında birebir eşleşme iddia edilemez. Eksik/tarihi kaynaklar varsa durum
 otomatik olarak biliniyor sayılmaz.

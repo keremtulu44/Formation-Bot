@@ -203,7 +203,7 @@ def _token_temiz(deger: Any) -> str:
 
 
 def _stabil_bilgisi(results: Mapping[str, Any], tf: str,
-                    frame: pd.DataFrame) -> dict[str, Any] | None:
+                    frame: pd.DataFrame, formations=()) -> dict[str, Any] | None:
     """O anki native basamaklı destek + `dist_atr` + ilişki + 2 satırlık kart."""
     entry = _domain(results, tf, "stabil")
     if entry is None or _field(entry, "error") or bool(_field(entry, "skipped", False)):
@@ -256,6 +256,38 @@ def _stabil_bilgisi(results: Mapping[str, Any], tf: str,
     projection = _field(details, "bar_projection") or _field(out, "bar_projection") or ()
     close_times = [_field(point, "bar_close_time") for point in projection]
     card_behavior = behavior_for_structure(bhv, _domain(results, tf, "market_structure"), close_times, tf)
+    # Use only same-bar available formation and resistance; missing sources
+    # remain unknown. This affects display copy, not other domain events.
+    from domain_engines.stabil.structure_context import barrier_reason, mask_behavior, pattern_is_active
+    barriers = []
+    for formation in formations or ():
+        try:
+            aligned = (formation.get("timeframe") == tf and
+                       pd.Timestamp(formation.get("bar_time")) == pd.Timestamp(frame.index[-1]))
+        except (TypeError, ValueError, IndexError):
+            aligned = False
+        if aligned and pattern_is_active(formation.get("state")):
+            barriers.append(("formasyon_siniri", formation.get("upper")))
+            break
+    resistance = _domain(results, tf, "stabil_direnc")
+    points = _field(resistance, "bar_projection") or ()
+    if points:
+        point = points[-1]
+        try:
+            expected_close = mum_kapanis_ani(frame.index[-1], tf)
+            aligned = pd.Timestamp(_field(point, "bar_close_time")) == pd.Timestamp(expected_close)
+        except (TypeError, ValueError, IndexError):
+            aligned = False
+        if aligned and str(_field(point, "color_role") or "") == "red":
+            barriers.insert(0, ("stabil_koridoru", _field(point, "resistance_level")))
+    try:
+        from domain_engines.stabil.signals import _causal_atr14
+        atr = _causal_atr14(frame["high"].to_numpy(dtype=float), frame["low"].to_numpy(dtype=float),
+                            frame["close"].to_numpy(dtype=float), period=14)[-1]
+        if barrier_reason(close, atr, "UP", barriers):
+            card_behavior = mask_behavior(card_behavior)
+    except (KeyError, ValueError, TypeError, IndexError):
+        pass
     try:
         kart = tuple(
             format_stabil_card_lines(
@@ -480,7 +512,7 @@ def evaluate_domain_alarm_candidates(
             logger.debug("Yeni domain bar kontrolü atlandı %s/%s: %s", stock, tf, exc)
             continue
 
-        stabil = _stabil_bilgisi(results, tf, frame)
+        stabil = _stabil_bilgisi(results, tf, frame, formasyon_kayitlari)
         if stabil is None:
             continue
 

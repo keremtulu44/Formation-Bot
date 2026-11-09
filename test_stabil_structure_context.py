@@ -195,3 +195,27 @@ def test_later_bos_renders_original_arrow_as_faded_not_new_diamond(monkeypatch):
     assert meta["iptal_isaret"] == 1 and meta["reclaim_isaret"] == 0
     assert any(c.get_gid() == "grafik-stabil-iptal" for c in ax.collections)
     assert not any(c.get_gid() == "grafik-stabil-dikey-deneme" for c in ax.collections)
+
+
+def test_domain_card_masks_signal_for_same_bar_pattern_not_old_pattern():
+    from test_stabil_multibar_recovery import sample, evaluate
+    from bot.domain_alarm_service import _stabil_bilgisi
+    labels, snapshots, points, frame = sample()
+    frame.index = labels
+    behavior = evaluate(frame, points, snapshots)[-1]
+    output = SimpleNamespace(latest_behavior=behavior, bar_projection=points)
+    stabil = SimpleNamespace(error=None, skipped=False, result=output,
+                             details={"latest_behavior": behavior, "bar_projection": points})
+    results = {"1d": {"stabil": stabil}}
+    formation = {"timeframe": "1d", "state": "ADAY", "bar_time": str(labels[-1]),
+                 "upper": behavior.close_price + .1}
+    assert not any("toparlanma" in s for s in _stabil_bilgisi(results, "1d", frame, [formation])["card_lines"])
+    formation["bar_time"] = str(labels[-2])
+    assert any("toparlanma" in s for s in _stabil_bilgisi(results, "1d", frame, [formation])["card_lines"])
+
+
+def test_failed_and_missing_formation_states_are_not_barriers():
+    from domain_engines.stabil.structure_context import pattern_is_active
+    for state in (None, "", "FORMASYON_YOK", "FORMASYON_GECERSIZ", "BASARISIZ_KIRILIM"):
+        assert not pattern_is_active(state)
+    assert pattern_is_active("KIRILIM_HAZIRLIGI")

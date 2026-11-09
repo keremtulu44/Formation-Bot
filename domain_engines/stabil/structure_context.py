@@ -113,10 +113,23 @@ def behavior_for_structure(behavior, structure_result, close_times, timeframe):
     events = events_for_bars(structure_result, close_times, timeframe=timeframe)
     if marker_state(len(close_times) - 1, "UP", timeframe, events, len(close_times) - 1) != "opposite_structure":
         return behavior
+    return mask_behavior(behavior)
+
+
+def mask_behavior(behavior):
+    """Clear only upward marker copy; never mutate native domain state."""
     from dataclasses import is_dataclass, replace
     if is_dataclass(behavior) and not isinstance(behavior, type):
         return replace(behavior, reclaim_kind=None, momentum_kind=None)
     if isinstance(behavior, Mapping):
         return {**behavior, "reclaim_kind": None, "momentum_kind": None}
-    # Unfamiliar behavior types are not mutated or guessed.
     return behavior
+
+
+def pattern_is_active(state):
+    """Conservatively reject missing and terminal formation snapshot states."""
+    return name(state) not in {
+        "", "YOK", "ST_NONE", "FORMASYON_YOK", "FORMASYON_GECERSIZ",
+        "BASARISIZ", "BASARISIZ_KIRILIM", "IPTAL", "KIRILIM_GECERSIZ",
+        "KIRILIM_GECERSIZLESTI",
+    }
