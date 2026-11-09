@@ -88,7 +88,11 @@ def test_grafik_uret_builds_real_resistance_overlay_without_alarm_kill_switch(tf
     layer = observed[0]["stabil_direnc"]
     assert layer["hazir"] and layer["durum"] == "READY" and layer["son_seviye"] > 0
     assert observed[0]["stabil"] is not None
-    assert answer["meta"]["cizgiler"]["stabil_direnc"]["son_seviye"] == layer["son_seviye"]
+    drawn = answer["meta"]["cizgiler"]["stabil_direnc"]
+    if tf in {"1h", "2h"}:
+        assert answer["meta"]["stabil_cizimde_gizli"] and not drawn["cizildi"]
+    else:
+        assert drawn["son_seviye"] == layer["son_seviye"]
     assert not any("Stabil direnç gösterilemedi" in msg for msg in answer["meta"]["uyarilar"])
 
 
