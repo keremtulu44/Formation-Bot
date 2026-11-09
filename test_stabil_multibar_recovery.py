@@ -126,3 +126,16 @@ def test_scan_updates_delivered_status_during_cooldown(tmp_path, monkeypatch):
     assert json.loads(state_path.read_text())["symbols"]["ASTOR"]["signal_status"] == "invalidated_by_opposite_bos"
     from public_aux_outbox import auxiliary_event_id
     assert cancelled == [auxiliary_event_id("stabil", [("ASTOR", frame.index[-2].isoformat())])]
+
+
+def test_new_recovery_alert_does_not_claim_old_replay_rates_or_above_support():
+    from bot.stabil_service import StabilAlarmCandidate, format_stabil_reclaim_alert_card, format_stabil_burst_summary_card
+    _, snapshots, points, frame = sample()
+    behavior = evaluate(frame, points, snapshots)[-1]
+    candidate = StabilAlarmCandidate(symbol="TEST", bar_open_ts="2026-01-01", bar_close_ts="2026-01-01",
+        bar_label="test", close_price=behavior.close_price, support_level=behavior.support_level,
+        behavior=behavior, card_lines=("Stabil yapı: çok mumlu toparlanma",))
+    text = format_stabil_reclaim_alert_card(candidate)
+    assert "%91,5" not in text and "+0,26 ATR" not in text
+    summary = format_stabil_burst_summary_card([candidate])
+    assert "-%" in summary and "destek üstüne güçlü dönen" not in summary

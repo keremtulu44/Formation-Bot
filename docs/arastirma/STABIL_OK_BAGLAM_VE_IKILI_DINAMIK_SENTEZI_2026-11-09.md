@@ -551,5 +551,8 @@ hizalı ters yapı varsa yukarı Stabil olayı metinde bastırılır; ham motor
 kaydı değişmez. Ters BOS nedeniyle henüz gönderilmemiş, tekil Stabil public
 ve DM kayıtları güvenli biçimde iptal edilir. Gönderilmiş veya teslimi
 belirsiz mesajlara dokunulmaz. Eski, tekil ve açık kimlikli gönderilmemiş
-close-reclaim mesajları da açılışta emekliye ayrılır. Kimlikleri ayrıştırılamayan
-eski toplu özetler ve geometrik altı/üstü boş tanımı bu kapsama dahil değildir.
+close-reclaim mesajları da açılışta emekliye ayrılır. Yeni toplu özetlerde iptal edilen üye varsa özet otomatik gönderilmez,
+diğer üyelerle birlikte inceleme için korunur; kimlikleri ayrıştırılamayan
+eski toplu özetler için aynı güvence yoktur. Geometrik altı/üstü boş tanımı
+bu kapsama dahil değildir. Yeni çok mumlu alarmda eski karışık grubun replay
+yüzdeleri performans kanıtı gibi gösterilmez.

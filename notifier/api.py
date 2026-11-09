@@ -782,8 +782,7 @@ class TelegramNotifier:
         """Cancel only definitely unsent individual Stabil copies on both routes."""
         cancelled = 0
         for queue in (self._public_aux, self._dm_aux):
-            if queue.cancel_pending(event_id):
-                cancelled += 1
+            cancelled += queue.cancel_stabil_member(event_id)
         return cancelled
 
     def public_ozel_bosalt(self) -> int:

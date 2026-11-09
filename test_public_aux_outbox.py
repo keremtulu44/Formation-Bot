@@ -291,3 +291,17 @@ def test_retired_reclaim_migration_only_cancels_identified_unsent(tmp_path):
     assert queue.cancel_retired_stabil() == 1
     assert {row["id"]: row["status"] for row in queue.rows} == {
         "old": "cancelled", "new": "pending", "uncertain": "uncertain"}
+
+
+def test_invalidated_pending_summary_goes_to_review_without_sending_other_members(tmp_path):
+    owner = FakeOwner(["butce"])
+    queue = PublicAuxOutbox(owner, tmp_path)
+    identity = {"state": "STABIL_OZET", "stabil_event_ids": ["stabil:a", "stabil:b"]}
+    assert queue.submit("stabil-summary:ab", "A and B", identity=identity) == (True, False)
+    assert queue.cancel_stabil_member("stabil:a") == 1
+    assert queue.rows[0]["status"] == "invalidated_group"
+    assert queue.status()["review"] == 1
+    recovered_owner = FakeOwner(["gonderildi"])
+    recovered = PublicAuxOutbox(recovered_owner, tmp_path)
+    assert recovered.flush() == 0 and recovered_owner.attempts == []
+    assert recovered.rows[0]["text"] == "A and B"  # retained for operator review

@@ -441,14 +441,8 @@ def format_stabil_reclaim_alert_card(cand: StabilAlarmCandidate) -> str:
     if zemin_parcalar:
         satirlar.append("Zemin: " + " · ".join(zemin_parcalar))
 
-    satirlar.extend(
-        [
-            "",
-            "📊 Arşiv karşılığı (canlı evren 4s):",
-            "• Sonraki mum destek üstü: %91,5",
-            "• 2 günde ortanca fark: +0,26 ATR",
-        ]
-    )
+    # Historical combined close-reclaim/sweep statistics do not describe the
+    # new multi-bar rule or the sweep-only subset; do not present them here.
     return metni_sigdir("\n".join(satirlar), guvenlik=1.0)
 
 
@@ -461,11 +455,11 @@ def format_stabil_burst_summary_card(extra_candidates: Sequence[StabilAlarmCandi
     ]
     if zaman:
         satirlar.append(f"Kapanan mum: {zaman}")
-    satirlar.append("Aynı 4s kapanışında destek üstüne güçlü dönen diğer semboller:")
+    satirlar.append("Aynı 4s kapanışındaki diğer Stabil dönüşleri:")
     satirlar.append("")
     for c in extra_candidates[:10]:
         pct = c.behavior.pct_vs_support or 0.0
-        pct_s = f"+%{_tr_sayi(abs(pct), 1)}"
+        pct_s = f"{'+' if pct >= 0 else '-'}%{_tr_sayi(abs(pct), 1)}"
         tur = "geri alım" if c.behavior.reclaim_kind == "multi_bar_recovery" else "silkeleme dönüşü"
         satirlar.append(
             f"• {c.symbol}: {_tr_sayi(c.close_price)} (destek {_tr_sayi(c.support_level)}, {pct_s}) · {tur}"
@@ -635,6 +629,9 @@ def dispatch_stabil_scan_candidates(
             notifier, ozet_metin,
             public_event_id=auxiliary_event_id(
                 "stabil-summary", [(c.symbol, c.bar_open_ts) for c in toplu_liste]),
+            public_identity={"state": "STABIL_OZET", "stabil_event_ids": [
+                auxiliary_event_id("stabil", [(c.symbol, c.bar_open_ts)]) for c in toplu_liste
+            ]},
         )
         if sonuc["any"]:
             ozet["toplu_ozet"] = 1

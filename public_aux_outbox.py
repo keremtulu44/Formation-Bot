@@ -286,6 +286,26 @@ class PublicAuxOutbox:
             self._save()
             return True
 
+    def cancel_stabil_member(self, event_id):
+        """Cancel an unsent single; quarantine unsent summaries containing it.
+
+        A grouped card cannot safely be rewritten without reconstructing all
+        members; retain it for review rather than silently lose other members.
+        """
+        with self.lock:
+            cancelled = int(self.cancel_pending(event_id))
+            changed = False
+            for row in self.rows:
+                identity = row.get("identity") or {}
+                if (row.get("status") == "pending" and not row.get("text_sent")
+                        and identity.get("state") == "STABIL_OZET"
+                        and str(event_id) in (identity.get("stabil_event_ids") or [])):
+                    row["status"] = "invalidated_group"
+                    changed = True
+            if changed:
+                self._save()
+            return cancelled + int(changed)
+
     def flush(self, max_items=3):
         with self.lock:
             try:
@@ -299,6 +319,6 @@ class PublicAuxOutbox:
             return {
                 "available": self.available,
                 "pending": sum(r.get("status") in {"pending", "text_sent"} for r in self.rows),
-                "review": sum(r.get("status") in {"uncertain", "graphics_uncertain", "expired", "target_changed", "sending", "graphics_sending"} for r in self.rows),
+                "review": sum(r.get("status") in {"uncertain", "graphics_uncertain", "expired", "target_changed", "sending", "graphics_sending", "invalidated_group"} for r in self.rows),
                 "completed": sum(r.get("status") == "complete" for r in self.rows),
             }
