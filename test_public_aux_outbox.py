@@ -276,3 +276,18 @@ def test_cancel_pending_never_changes_uncertain_or_delivered_rows(tmp_path):
     assert not queue.cancel_pending("uncertain")
     assert queue.submit("delivered", "sent")[1]
     assert not queue.cancel_pending("delivered")
+
+
+def test_retired_reclaim_migration_only_cancels_identified_unsent(tmp_path):
+    owner = FakeOwner(["butce", "butce", "belirsiz"])
+    queue = PublicAuxOutbox(owner, tmp_path)
+    old = {"state": "STABIL_GERI_ALIM", "pattern_name": "STABİL GÜÇLÜ GERİ ALIM"}
+    new = {"state": "STABIL_GERI_ALIM", "pattern_name": "STABİL ÇOK MUMLU TOPARLANMA"}
+    assert queue.submit("old", "old", identity=old)[0]
+    assert queue.submit("new", "new", identity=new)[0]
+    # Simulate a previously attempted request whose delivery is unknown.
+    queue.rows.append({"id": "uncertain", "status": "uncertain", "text_sent": False,
+                       "identity": old})
+    assert queue.cancel_retired_stabil() == 1
+    assert {row["id"]: row["status"] for row in queue.rows} == {
+        "old": "cancelled", "new": "pending", "uncertain": "uncertain"}

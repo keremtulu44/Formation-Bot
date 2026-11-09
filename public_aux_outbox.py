@@ -258,6 +258,20 @@ class PublicAuxOutbox:
                     logger.warning("%s özel alarm teslimi belirsiz; otomatik tekrar yok, elle incele", self.label)
         return sent_count
 
+    def cancel_retired_stabil(self):
+        """Retire definitely-unsent, individually identified old reclaim cards."""
+        with self.lock:
+            if not self.available:
+                return 0
+            ids = []
+            for row in self.rows:
+                identity = row.get("identity") or {}
+                if (row.get("status") == "pending" and not row.get("text_sent")
+                        and identity.get("state") == "STABIL_GERI_ALIM"
+                        and identity.get("pattern_name") == "STABİL GÜÇLÜ GERİ ALIM"):
+                    ids.append(row["id"])
+            return sum(bool(self.cancel_pending(event_id)) for event_id in ids)
+
     def cancel_pending(self, event_id):
         """Cancel a definitely unsent single event; never alter ambiguous/delivered work."""
         with self.lock:

@@ -116,9 +116,13 @@ def test_scan_updates_delivered_status_during_cooldown(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "mum_kapanis_ani", lambda *_a: now)
     result = SimpleNamespace(error=None, result=SimpleNamespace(latest_behavior=behavior))
     ms = SimpleNamespace(details={"event_history": [event(frame.index[-1], "DOWN")]})
+    cancelled = []
+    notifier = SimpleNamespace(stabil_bekleyen_iptal=lambda event_id: cancelled.append(event_id))
     candidate = service.evaluate_stabil_4h_candidate(
         "ASTOR", {"4h": frame, "1d": frame}, now,
         domain_results_by_stock={"ASTOR": {"4h": {"stabil": result, "market_structure": ms}}},
-        state_path=str(state_path))
+        state_path=str(state_path), notifier=notifier)
     assert candidate is None
     assert json.loads(state_path.read_text())["symbols"]["ASTOR"]["signal_status"] == "invalidated_by_opposite_bos"
+    from public_aux_outbox import auxiliary_event_id
+    assert cancelled == [auxiliary_event_id("stabil", [("ASTOR", frame.index[-2].isoformat())])]

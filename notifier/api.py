@@ -286,6 +286,11 @@ class TelegramNotifier:
         from public_target_review import PublicTargetReview
         self._public_aux = PublicAuxOutbox(self, _pkg.DATA_DIR)
         self._dm_aux = PrivateAuxOutbox(self, _pkg.DATA_DIR)
+        for queue in (self._public_aux, self._dm_aux):
+            try:
+                queue.cancel_retired_stabil()
+            except (OSError, TypeError, ValueError) as exc:
+                logger.warning("Eski Stabil kuyruğu temizlenemedi: %s", type(exc).__name__)
         self._public_target_review = PublicTargetReview(_pkg.DATA_DIR)
         self._public_state_writable = True
         # GÖREV 6 (A10): Telegram sayaç ayrımı — alert/watch/digest/command
