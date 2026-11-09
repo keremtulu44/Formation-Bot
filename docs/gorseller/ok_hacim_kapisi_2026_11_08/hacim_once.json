@@ -1,0 +1,42 @@
+[
+  {
+    "sembol": "AGHOL",
+    "gun": "2025-01-17",
+    "dosya": "hacim_once_aghol_geri_alim.png",
+    "destek_dolu": 1,
+    "destek_momentum": 0,
+    "direnc_dolu": 0
+  },
+  {
+    "sembol": "ALARK",
+    "gun": "2026-07-15",
+    "dosya": "hacim_once_alark_geri_alim.png",
+    "destek_dolu": 1,
+    "destek_momentum": 0,
+    "direnc_dolu": 3
+  },
+  {
+    "sembol": "CEMTS",
+    "gun": "2025-03-26",
+    "dosya": "hacim_once_cemts_geri_alim.png",
+    "destek_dolu": 2,
+    "destek_momentum": 0,
+    "direnc_dolu": 0
+  },
+  {
+    "sembol": "AEFES",
+    "gun": "2025-12-31",
+    "dosya": "hacim_once_aefes_supurme.png",
+    "destek_dolu": 1,
+    "destek_momentum": 1,
+    "direnc_dolu": 2
+  },
+  {
+    "sembol": "DOCO",
+    "gun": "2026-03-18",
+    "dosya": "hacim_once_doco_geri_alim.png",
+    "destek_dolu": 2,
+    "destek_momentum": 0,
+    "direnc_dolu": 0
+  }
+]

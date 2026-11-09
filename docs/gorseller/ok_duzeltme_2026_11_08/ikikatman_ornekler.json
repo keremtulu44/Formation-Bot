@@ -1,0 +1,72 @@
+[
+  {
+    "sembol": "AEFES",
+    "gun": "2025-09-19",
+    "dosya": "ikikatman_aefes_uzak_uyari.png",
+    "destek_cizildi": true,
+    "direnc_cizildi": true
+  },
+  {
+    "sembol": "AGHOL",
+    "gun": "2025-04-01",
+    "dosya": "ikikatman_aghol_ust_uste.png",
+    "destek_cizildi": true,
+    "direnc_cizildi": true
+  },
+  {
+    "sembol": "AGROT",
+    "gun": "2025-03-28",
+    "dosya": "ikikatman_agrot_uc_atr.png",
+    "destek_cizildi": true,
+    "direnc_cizildi": true
+  },
+  {
+    "sembol": "AKSEN",
+    "gun": "2026-03-06",
+    "dosya": "ikikatman_aksen_tekrar.png",
+    "destek_cizildi": true,
+    "direnc_cizildi": true
+  },
+  {
+    "sembol": "SISE",
+    "gun": "2026-10-02",
+    "dosya": "ikikatman_sise_kademe.png",
+    "destek_cizildi": true,
+    "direnc_cizildi": true
+  },
+  {
+    "sembol": "THYAO",
+    "gun": "2026-09-21",
+    "dosya": "ikikatman_thyao_gun_ici.png",
+    "destek_cizildi": true,
+    "direnc_cizildi": true
+  },
+  {
+    "sembol": "CEMAS",
+    "gun": "2026-08-06",
+    "dosya": "ikikatman_cemas_yogun.png",
+    "destek_cizildi": true,
+    "direnc_cizildi": true
+  },
+  {
+    "sembol": "ALARK",
+    "gun": "2025-05-22",
+    "dosya": "ikikatman_alark_bes_bar.png",
+    "destek_cizildi": true,
+    "direnc_cizildi": true
+  },
+  {
+    "sembol": "GARAN",
+    "gun": "2026-09-21",
+    "dosya": "ikikatman_garan_dikey.png",
+    "destek_cizildi": true,
+    "direnc_cizildi": true
+  },
+  {
+    "sembol": "AKBNK",
+    "gun": "2026-03-23",
+    "dosya": "ikikatman_akbnk_geri_alim.png",
+    "destek_cizildi": true,
+    "direnc_cizildi": true
+  }
+]

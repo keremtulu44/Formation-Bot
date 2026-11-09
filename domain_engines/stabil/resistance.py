@@ -22,6 +22,8 @@ import pandas as pd
 from .candidate_regime import CandidateLineRegime, classify_candidate_support_regimes
 from .runtime import StabilRoleStatus, _to_istanbul_timestamp, prepare_causal_ohlcv, project_support_to_bar_closes
 from .signals import (
+    _DIKEY_UYARI_SOGUMA_BAR,
+    _OK_MAKS_MESAFE_ATR,
     _GUCLU_YUKARI_COOLDOWN_BAR,
     _GUCLU_YUKARI_COK_GUCLU_GOVDE_ATR,
     _GUCLU_YUKARI_GOVDE_ATR,
@@ -30,7 +32,6 @@ from .signals import (
     _causal_atr14,
     _causal_vol_ratio20,
     _enum_value,
-    _is_index_symbol,
 )
 from .stabil_support_lifecycle import (
     DailySupportObservation,
@@ -441,7 +442,6 @@ def evaluate_resistance_bar_behaviors(
     )
     atr_arr = _causal_atr14(highs, lows, closes, period=14)
     volume_arr = _causal_vol_ratio20(volumes, window=20)
-    is_index = _is_index_symbol(symbol)
     tol = max(float(min_tick) * 0.5, 1e-6)
     regime_points = classify_candidate_support_regimes(history._mirrored_timeline) if history._mirrored_timeline else ()
     daily_times = [snap.as_of for snap in history._mirrored_timeline]
@@ -474,6 +474,7 @@ def evaluate_resistance_bar_behaviors(
     previous_line: float | None = None
     previous_close: float | None = None
     last_momentum_bar = -999
+    last_dikey_uyari_bar = -999
 
     for i in range(n):
         pt = bar_projection[i]
@@ -535,18 +536,22 @@ def evaluate_resistance_bar_behaviors(
             was_above = previous_close > previous_line + tol
             now_below = c < line - tol
             was_below = previous_close <= previous_line + tol
-            volume_ok_return = ((vr is not None and vr >= 1.0) or bearish_body_atr >= 0.45
-                                or (is_index and bearish_body_atr >= 0.38))
-            volume_ok_sweep = ((vr is not None and vr >= 1.0) or bearish_body_atr >= 0.50
-                               or (is_index and bearish_body_atr >= 0.40))
+            # 2026-11-08 (kullanıcı kararı): dolu ▼ (direnç dönüşü) için HACİM
+            # ŞARTI KALDIRILDI — destek tarafındaki `signals.py` ile birebir
+            # aynı davranış. Ok yalnız mum anatomisiyle kurulur: gövde
+            # ≥0,32/0,35 ATR · kapanış pozisyonu ≥0,65/0,68 · mesafe · ihlal
+            # derinliği. Momentumun hacim-veya-gövde şartı AYNEN duruyor.
+            volume_ok_return = True
+            volume_ok_sweep = True
             if was_above and now_below:
                 if (0.0 < prior_breach_depth <= 1.50 and bearish_body_atr >= 0.32
-                        and bearish_close_pos >= 0.65 and safe_dist >= 0.05 and volume_ok_return):
+                        and bearish_close_pos >= 0.65
+                        and 0.05 <= safe_dist <= _OK_MAKS_MESAFE_ATR and volume_ok_return):
                     return_kind = "close_return_below"
                 else:
                     weak_return = True
             elif (was_below and now_below and -1.20 <= mirrored_low_dist <= -0.08
-                  and safe_dist >= 0.08 and bearish_body_atr >= 0.35
+                  and 0.08 <= safe_dist <= _OK_MAKS_MESAFE_ATR and bearish_body_atr >= 0.35
                   and bearish_close_pos >= 0.68 and volume_ok_sweep):
                 return_kind = "intrabar_sweep_rejection"
 
@@ -562,17 +567,30 @@ def evaluate_resistance_bar_behaviors(
             step_down = (candidate == CandidateLineRegime.STEPPING_UP.value
                          or _enum_value(pt.progression) == ResistanceProgression.REBASED_LOWER.value)
             stepping = step_down and 0.10 <= safe_dist <= 1.60
-            if long_ceiling or stepping:
+            if (long_ceiling or stepping) and safe_dist <= _OK_MAKS_MESAFE_ATR:
                 momentum_kind = "long_ceiling_breakdown" if long_ceiling else "downward_rebase_momentum"
 
         vertical_attempt_kind = None
         if vertical:
-            vertical_attempt_kind = return_kind or ("weak_return" if weak_return else None) or momentum_kind
-            if vertical_attempt_kind is None and previous_close is not None and previous_line is not None:
+            aday = return_kind or ("weak_return" if weak_return else None) or momentum_kind
+            if aday is None and previous_close is not None and previous_line is not None:
                 if previous_close > previous_line + tol and lo <= line + tol:
                     # The native tolerance also admits near-line/gap cases; it
                     # is a structural attempt, not proof of an actual touch.
-                    vertical_attempt_kind = "approach_from_above"
+                    aday = "approach_from_above"
+            # Ayna süzgeç (2026-11-08 ok denetimi, destek tarafıyla birebir):
+            # fiyat çizgiyle ilişkide değilse ya da 3 bar içinde ikinci kez
+            # uyarı çıkacaksa yapı uyarısı basılmaz.
+            if aday is not None:
+                cok_uzak = safe_dist is not None and abs(safe_dist) > _OK_MAKS_MESAFE_ATR
+                # Destek tarafıyla birebir: soğuma yalnız zayıf denemelere.
+                zayif_deneme = aday in {"weak_return", "approach_from_above"}
+                sogumada = zayif_deneme and (i - last_dikey_uyari_bar) < _DIKEY_UYARI_SOGUMA_BAR
+                if cok_uzak or sogumada:
+                    aday = None
+                else:
+                    last_dikey_uyari_bar = i
+            vertical_attempt_kind = aday
             return_kind, momentum_kind, weak_return = None, None, False
         elif momentum_kind is not None:
             last_momentum_bar = i

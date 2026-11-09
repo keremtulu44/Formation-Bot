@@ -42,14 +42,14 @@ def test_reverse_colors_distinct_dashed_line_and_all_arrow_shapes():
     items = {c.get_gid(): c for c in ax.collections}
     line = items["grafik-stabil-direnc-stepline"]
     assert [colors.to_hex(c) for c in line.get_colors()] == [
-        grafik.PALET["stabil_alt"], grafik.PALET["stabil_ust"], grafik.PALET["stabil_alt"]
+        grafik.PALET["stabil_direnc"], grafik.PALET["stabil_direnc_kirik"], grafik.PALET["stabil_direnc"]
     ]
     assert line.get_linestyles()[0][1] is not None  # dashed, distinguishable from solid support
     assert len(items["grafik-stabil-direnc-donus"].get_facecolors()) == 1
     assert len(items["grafik-stabil-direnc-momentum"].get_facecolors()) == 0
     assert len(items["grafik-stabil-direnc-dikey-deneme"].get_facecolors()) == 0
-    assert colors.to_hex(items["grafik-stabil-direnc-donus"].get_facecolors()[0]) == grafik.PALET["stabil_alt"]
-    assert colors.to_hex(items["grafik-stabil-direnc-dikey-deneme"].get_edgecolors()[0]) == grafik.PALET["stabil_ust"]
+    assert colors.to_hex(items["grafik-stabil-direnc-donus"].get_facecolors()[0]) == grafik.PALET["stabil_direnc"]
+    assert colors.to_hex(items["grafik-stabil-direnc-dikey-deneme"].get_edgecolors()[0]) == grafik.PALET["stabil_direnc"]
     assert [(x["kaynak"], x["metin"]) for x in chips] == [("stabil_direnc", "Direnç 101,00")]
 
 
@@ -98,7 +98,7 @@ def test_colorblind_palette_and_no_stale_chip():
                            dusuk=[99] * 6, yuksek=[102] * 6, sag_adaylar=chips)
         line = next(c for c in ax.collections if c.get_gid() == "grafik-stabil-direnc-stepline")
         assert colors.to_hex(line.get_colors()[0]) == "#f5a05a"
-        assert colors.to_hex(line.get_colors()[1]) == "#4da3ff"
+        assert colors.to_hex(line.get_colors()[1]) == "#b45309"
     assert chips == []
 
 
@@ -123,10 +123,57 @@ def test_legend_reports_only_visible_classifications():
     layer = _layer()
     summary = {"cizildi": True, "donus_isaret": 1, "momentum_isaret": 0, "dikey_deneme_isaret": 1}
     legend = grafik._lejant({"stabil_direnc": layer}, False, meta={"cizgiler": {"stabil_direnc": summary}})
-    assert "┄ Stabil direnç" in legend
-    assert "▼ direnç dönüşü" in legend
-    assert "△ direnç yapı uyarısı" in legend
-    assert "▽ direnç momentumu" not in legend
+    metin = " · ".join(legend)
+    assert "┄ Stabil direnç (turuncu)" in metin
+    assert "▼ dönüş = sinyal" in metin
+    assert "◇ = uyarı" in metin                      # ◇ var: uyarı sözlükte konuşur
+    assert "▽ momentum" not in metin                # momentum yok: yazılmaz
+
+
+def test_legend_explains_both_layers_in_the_same_language():
+    """2026-11-08: destek katmanı da lejantta konuşur; ▲ "yapı", ▼ "sinyal" (§12–§13)."""
+    destek = {"hazir": True, "seviyeler": [100, 100], "reclaim_barlar": [1],
+              "momentum_barlar": [], "dikey_deneme_barlar": [1]}
+    direnc = _layer()
+    legend = grafik._lejant(
+        {"stabil": destek, "stabil_direnc": direnc}, False,
+        meta={"cizgiler": {
+            "stabil": {"cizildi": True, "reclaim_isaret": 1, "momentum_isaret": 0,
+                       "dikey_deneme_isaret": 1},
+            "stabil_direnc": {"cizildi": True, "donus_isaret": 1, "momentum_isaret": 0,
+                              "dikey_deneme_isaret": 1},
+        }},
+    )
+    metin = " · ".join(legend)
+    assert "┄ Stabil destek (yeşil)" in metin and "┄ Stabil direnç (turuncu)" in metin
+    assert metin.index("┄ Stabil destek") < metin.index("┄ Stabil direnç")
+    assert "▲ geri alım = yapı" in metin              # ▲ = yapı olayı (§12)
+    assert "▼ dönüş = sinyal" in metin                # ▼ = sinyal-dereceli olay (§13)
+    assert "▲ momentum" not in metin                  # momentum yoksa yazılmaz
+    assert "◇ = uyarı" in metin
+
+
+def test_legend_never_drops_the_arrow_dictionary():
+    """Bütçe kısarken önce süs maddeler düşer; ok sözlüğü ve katman başlıkları KALIR.
+
+    Ölçüm (2026-11-08): GARAN 2026-09-21 gibi yoğun karede kırpıcı, en uzun madde
+    olan ok sözlüğünü ve direnç başlığını düşürüyordu — kare, işaretlerini
+    açıklamadan kalıyordu.
+    """
+    from grafik.panels import _lejant_satirlar
+
+    oge = ["kapanmış mum", "yeşil boş = yükselen", "kırmızı dolu = düşen",
+           "┄ Stabil destek (yeşil)", "┄ Stabil direnç (turuncu)",
+           "▼ dönüş = sinyal · ▲ geri alım = yapı · boş = momentum · ◇ = uyarı",
+           "┈ CHoCH dış", "┄ BOS dış", "kutular: OB", "▨ dolan kısım",
+           "şerit: rvol(20)", "yapı: BOS/CHoCH dış · PH/PL/WH/WL sağda"]
+    satirlar, _, atlanan = _lejant_satirlar(oge, 900)
+    metin = " ".join(satirlar)
+    assert len(satirlar) <= 2                          # kare 2 satır taşır
+    assert atlanan >= 1                                # bütçe gerçekten kısıldı
+    assert "▼ dönüş = sinyal" in metin and "▲ geri alım = yapı" in metin
+    assert "┄ Stabil destek" in metin and "┄ Stabil direnç" in metin
+    assert "yapı: BOS/CHoCH" not in metin              # düşen: düşük öncelikli kopya
 
 
 def test_step_connector_colors_are_the_directional_mirror_of_support():
@@ -138,5 +185,5 @@ def test_step_connector_colors_are_the_directional_mirror_of_support():
     _stabil_direnc_ciz(ax, {"stabil_direnc": layer}, 6, (95, 105), kadrajda=True)
     connector = next(c for c in ax.collections if c.get_gid() == "grafik-stabil-direnc-step")
     assert [colors.to_hex(c) for c in connector.get_colors()] == [
-        grafik.PALET["stabil_alt"], grafik.PALET["stabil_ust"]
+        grafik.PALET["stabil_direnc_kirik"], grafik.PALET["stabil_direnc"]
     ]

@@ -1,0 +1,1187 @@
+{
+  "surum": "V2-2026-11-08-rev10",
+  "durum": "ONERI",
+  "kapsam": "stabil_destek",
+  "kararlar": {
+    "basari_olcusu": [
+      "first_1atr",
+      "sabit_ufuk_kapanis"
+    ],
+    "celisen_olay": "ayri_hucre",
+    "orneklem_bolmesi": "sembol_hash",
+    "kesif_orani": 0.6,
+    "hash_kurali": "sha256(sembol) % 10 < 6 -> kesif",
+    "gruplama_eksenleri": [
+      "native_yasam_dongusu",
+      "geometrik_mesafe"
+    ],
+    "mum_birimi": "gunluk_ATR14",
+    "sicil": "V2",
+    "legacy": "STABIL_DAVRANIS_SORULARI.md (A-H, dondu)",
+    "dallanma_seviyesi": 3,
+    "artik_hucre": "zorunlu",
+    "min_n_ana": 100,
+    "min_n_alt": 30,
+    "yön_hükmü": {
+      "kesif_esik": 0.6,
+      "dogrulama_esik": 0.55,
+      "kontrol_farki_pp": 10,
+      "min_n": 100,
+      "aksi": "ok_uretme"
+    },
+    "olcum_tf": "gunluk (1d) esas; 4s yalniz uygulama/cizim katmani",
+    "pencere_birimi": "gun",
+    "tetik_onayi": "gunluk kapanis yeterli (intraday erken tetik yok)",
+    "kapsam": "c: (a) dik kalma/yataya donme genis + (b) fiyat cizgiye yapışık veya altinda (d<=+0.5) dar, ayri satirlar",
+    "sablon": [
+      "ana_bolunme",
+      "azinlik_profili",
+      "LIFT",
+      "mum_anatomisi",
+      "yan_domain",
+      "artik_hucre",
+      "kontrol",
+      "yon_hukmu"
+    ],
+    "lift_kurali": "lift = azinlik_payi / cogunluk_payi; lift ~1.0 ise ortak nokta degil; lift yazilmadan iddia yok"
+  },
+  "sozlesme": {
+    "atr": "giris_barinda_donmus_gunluk_ATR14",
+    "ufuklar_4s_bar": null,
+    "ana_ufuk_4s_bar": null,
+    "mesafe_bantlari_atr1d": {
+      "temas": "|low-seviye| <= 0.35 veya low<=seviye<=high",
+      "yakin": "0.35 < |d| <= 1.00",
+      "uzak": "1.00 < |d| <= 2.00",
+      "cok_uzak": "|d| > 2.00"
+    },
+    "temas_epizodu": {
+      "ardisik_temas": "tek_temas",
+      "yeni_temas_icin_min_bar_ayrilma": 2,
+      "sayi_bandi": [
+        1,
+        2,
+        3,
+        "4+"
+      ]
+    },
+    "mum_anatomisi_atr1d": {
+      "govde": {
+        "yonsuz": "<0.20",
+        "orta": "0.20-0.50",
+        "buyuk": ">=0.50"
+      },
+      "kapanis_pozisyonu": {
+        "alt": "<0.35",
+        "orta": "0.35-0.65",
+        "ust": ">0.65"
+      },
+      "aralik": {
+        "dar": "<0.35",
+        "normal": "0.35-1.00",
+        "genis": ">1.00"
+      }
+    },
+    "hacim_bandi": {
+      "dusuk": "<0.8",
+      "normal": "0.8-1.2",
+      "yuksek": ">=1.2"
+    },
+    "ustune_cikis": {
+      "onceki_kapanis": "d_prev < 0",
+      "bu_kapanis": "d_now >= +0.05"
+    },
+    "kalma": {
+      "pencere_bar": 3,
+      "tol_atr1d": 0.05
+    },
+    "temizlik_orani": {
+      "pencere_bar": 8,
+      "pay": "geri_donen / tum_kirilmalar"
+    },
+    "sansur": "sag_sansur_tabanda_yuzde_gecerli_n_uzerinden",
+    "dikeylik_tanimlari": {
+      "D1_kod_proxy": "regime in {STEPPING_UP,STEPPING_DOWN} veya son 8 gunde yukari rebase veya seviye degisti ve sabit degil",
+      "D2_egim": "(seviye_t - seviye_{t-20}) / ATR1d >= 1.0",
+      "D3_rejim": "regime == STEPPING_UP  (ESAS; diklik derecesi step_dikligi ile)"
+    },
+    "raf_alti_dolu": null,
+    "geri_alim_denemesi": {
+      "onceki": "d_{t-1} < 0",
+      "bu": "d_t >= 0",
+      "kalma_penceresi_bar": 3
+    },
+    "step_dikligi": {
+      "(seviye_t - seviye_{t-20}) / ATR1d": "bantlar: <=0 / 0-1 / 1-2 / >2"
+    },
+    "yataylasma_gecisi": {
+      "olay": "STEPPING_UP iken 10 GUN icinde NEWLY_FLATTENED_AFTER_RISE ilk gunu (native 8 gun + 2 pay)",
+      "dik_kalma": "ayni pencerede rejim STEPPING_UP kaliyor",
+      "bozulma": "BREACHED_FIXED_SUPPORT veya STEPPING_DOWN (ayri hucre)"
+    },
+    "hafif_yukari_tepki_varyantlari": {
+      "pencere_gun": "1-3 (degisken; tek mum degil)",
+      "R1": "pencerede en az bir gun govde >= 0.20 ATR1d ve kapanis>acilis",
+      "R2": "pencerenin son gunu kapanis pozisyonu > 0.65",
+      "R3": "pencerenin en dusuk dibinden son kapanisa >= 0.35 ATR1d",
+      "R4": "R1 veya R2 ve pencere rvol >= 1.0",
+      "gecersiz": "yalniz fitil (govde < 0.20 ATR1d) ve kapanis<acilis -> tek fitil matematiksel olarak yataylastirmaz"
+    },
+    "ana_ufuk_gun": 16
+  },
+  "sorular": [
+    {
+      "id": "K1",
+      "aile": "kontrol",
+      "baslik": "Rastgele bar ve seviye yok karsi ornegi",
+      "kutle": "eslesmis ATR dilimi + mesafe bandi, sabit tohum",
+      "bolunme": [
+        "first_1atr_16",
+        "ret_atr_16_isaret"
+      ],
+      "alt_hucreler": [
+        "seviye_var",
+        "seviye_yok",
+        "rastgele_bar"
+      ],
+      "domainlar": [],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "sart": "Y1-5 yuzdeleri kontrolden >=10 puan ayrismali"
+      },
+      "oncelik": 3,
+      "zorunlu": true,
+      "durum": "ONERI"
+    },
+    {
+      "id": "Y5",
+      "aile": "yon",
+      "baslik": "Hareketsiz fiyat + hacim patlamasi yon veriyor mu",
+      "kutle": "|d|>1.00 ust uste >=6 bar ve sonraki bar rvol>=1.2",
+      "bolunme": [
+        "first_1atr_16"
+      ],
+      "alt_hucreler": [
+        "bekleme_suresi",
+        "rejim",
+        "govde",
+        "bos",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "patlama_yonunde": "▲/▼"
+      },
+      "oncelik": 6,
+      "durum": "ONERI"
+    },
+    {
+      "id": "X1",
+      "aile": "katman",
+      "baslik": "Mum anatomisi katmani (Y1/Y4 azinligina)",
+      "kutle": "ilgili Y sorusunun azinlik hucresi",
+      "bolunme": [
+        "govde_bandi",
+        "kapanis_pozisyonu",
+        "aralik",
+        "fitil"
+      ],
+      "alt_hucreler": [
+        "atr1d_dilimi",
+        "mesafe_bandi",
+        "rejim"
+      ],
+      "domainlar": [],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "not": "neden/eslikci ayrimi icin eslesmis karsilastirma zorunlu",
+      "durum": "ONERI"
+    },
+    {
+      "id": "X2",
+      "aile": "katman",
+      "baslik": "Yan domain katmani + artik hucresi",
+      "kutle": "Y1-Y5 hucreleri",
+      "bolunme": [
+        "var",
+        "yok",
+        "bilinmiyor"
+      ],
+      "alt_hucreler": [
+        "bos_asagi",
+        "rvol",
+        "fvg_mesafesi",
+        "ob_mesafesi",
+        "weekly",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol",
+        "fvg",
+        "order_block"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "not": "bilinmiyor asla 0 sayilmaz; artik hucresi zorunlu",
+      "durum": "ONERI"
+    },
+    {
+      "id": "Y1-a",
+      "aile": "yon",
+      "baslik": "Dik kalma ile yataya donme ayrimini ne yapiyor",
+      "kutle": "regime == STEPPING_UP barlari",
+      "bolunme": [
+        "10 bar icinde yataya dondu",
+        "dik kaldi",
+        "bozuldu"
+      ],
+      "alt_hucreler": [
+        "gecis oncesi 1-3 bar mumu",
+        "step_dikligi",
+        "hacim",
+        "touch_count",
+        "son stepten gecen gun",
+        "artik"
+      ],
+      "domainlar": [],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "oncelik": 1,
+      "durum": "ONERI"
+    },
+    {
+      "id": "Y1-b",
+      "aile": "yon",
+      "baslik": "Isaret goruldugu anda yon cikiyor mu",
+      "kutle": "STEPPING_UP ve R1-R4 isaretlerinden biri",
+      "bolunme": [
+        "first_1atr_16",
+        "ret_atr_16"
+      ],
+      "alt_hucreler": [
+        "isaret varyanti R1-R4",
+        "step_dikligi",
+        "hacim",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "isaret_var": "▲",
+        "isaret_yok_ve_fiyat_altinda": "▼ veya ok yok"
+      },
+      "oncelik": 2,
+      "durum": "ONERI"
+    },
+    {
+      "id": "Y2",
+      "aile": "yon",
+      "baslik": "Dik kaldi durumu dususun devami mi",
+      "kutle": "Y1-a dik kaldi hucresi",
+      "bolunme": [
+        "first_1atr_16",
+        "mae_atr_16"
+      ],
+      "alt_hucreler": [
+        "step_dikligi",
+        "mesafe",
+        "dusus_govdesi",
+        "hacim",
+        "bos_asagi",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "dik_kaldi": "▼"
+      },
+      "oncelik": 4,
+      "durum": "ONERI"
+    },
+    {
+      "id": "Y3",
+      "aile": "yon",
+      "baslik": "Sabit destegin altina iniste temizlik orani",
+      "kutle": "kapanis d<0 (ilk kirilma bari)",
+      "bolunme": [
+        "temizlik_orani_8bar",
+        "first_1atr_16"
+      ],
+      "alt_hucreler": [
+        "sarkma_derinligi",
+        "sarkma_suresi",
+        "kirilma_govdesi",
+        "hacim",
+        "bos_asagi",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol",
+        "fvg",
+        "order_block"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "sig_sarkma_hizli_donus": "▲",
+        "derin_sarkma_donus_yok": "▼"
+      },
+      "oncelik": 5,
+      "durum": "ONERI"
+    },
+    {
+      "id": "Y4",
+      "aile": "yon",
+      "baslik": "Yatay destek ustunde tutunma",
+      "kutle": "NEWLY_FLATTENED_AFTER_RISE veya LONG_HORIZONTAL rejiminde 0<d<=1.0",
+      "bolunme": [
+        "first_1atr_16",
+        "sekme_0.5ATR_8bar"
+      ],
+      "alt_hucreler": [
+        "yataylasma_yasi",
+        "temas_sayisi",
+        "hacim",
+        "bos",
+        "artik"
+      ],
+      "domainlar": [
+        "bos",
+        "rvol"
+      ],
+      "min_n": {
+        "ana": 100,
+        "alt": 30
+      },
+      "yon_kurali_adayi": {
+        "yatay_temas": "▲",
+        "dikey_temas": "▼ veya ok yok"
+      },
+      "oncelik": 6,
+      "durum": "ONERI"
+    }
+  ],
+  "eksik_kod_isleri": [
+    {
+      "id": "G0",
+      "is": "step_dikligi + yataylasma gecis etiketi + R1-R4 bayraklari",
+      "boyut": "orta"
+    },
+    {
+      "id": "G1",
+      "is": "son 3 barda BOS asagi/yukari bayragi",
+      "boyut": "kucuk"
+    },
+    {
+      "id": "G2",
+      "is": "mum anatomisi sutunlari (gunluk ATR)",
+      "boyut": "kucuk"
+    },
+    {
+      "id": "G3",
+      "is": "kirilma/temas/geri alim sayaclari + 3 bar tuttu/tutmadi",
+      "boyut": "orta"
+    },
+    {
+      "id": "G4",
+      "is": "sembol hash bolmesi + kesif/dogrulama sutunlari",
+      "boyut": "kucuk"
+    },
+    {
+      "id": "G5",
+      "is": "manifest tabanli yon tablosu ureticisi",
+      "boyut": "orta"
+    },
+    {
+      "id": "G6",
+      "is": "177 sembolluk tam kosu (paralel ~10 dk)",
+      "boyut": "orta"
+    }
+  ],
+  "sinirlar": {
+    "ok_kurallari_degismez": true,
+    "direnc_ilk_turda_yok": true,
+    "yeni_domain_yok": true,
+    "checkpoint_paketi_depoya_eklenmez": true
+  },
+  "amac": "ok_yonu_cikarimi",
+  "on_olcum_2026_11_08": {
+    "gunluk": {
+      "sembol": 39,
+      "stepping_gun": 4205,
+      "teshis_16gun": {
+        "dik_kaldi": {
+          "n": 1415,
+          "up_first": 0.456,
+          "down_first": 0.535,
+          "ort_atr": -0.14,
+          "medyan_atr": -0.29
+        },
+        "yataya_dondu": {
+          "n": 2790,
+          "up_first": 0.582,
+          "down_first": 0.404,
+          "ort_atr": 0.46,
+          "medyan_atr": 0.11
+        }
+      },
+      "mesafe_dagilimi": {
+        "d<0": {
+          "n": 16,
+          "flatten": 0.438,
+          "up_first": 0.438
+        },
+        "0..0.5": {
+          "n": 440,
+          "flatten": 0.316,
+          "up_first": 0.505
+        },
+        "0.5..1.5": {
+          "n": 1246,
+          "flatten": 0.514,
+          "up_first": 0.578
+        },
+        ">1.5": {
+          "n": 2503,
+          "flatten": 0.801,
+          "up_first": 0.528
+        }
+      }
+    },
+    "4s": {
+      "sembol": 20,
+      "stepping_bar": 6117,
+      "gecis_10bar": {
+        "hala_STEPPING_UP": 0.619,
+        "NEWLY_FLATTENED_AFTER_RISE": 0.231,
+        "BREACHED_FIXED_SUPPORT": 0.118,
+        "STEPPING_DOWN": 0.03
+      },
+      "teshis_16bar": {
+        "dik_kaldi": {
+          "n": 4525,
+          "up_first": 0.511,
+          "down_first": 0.476,
+          "ort_atr": 0.05,
+          "medyan_atr": -0.04
+        },
+        "yataya_dondu": {
+          "n": 1479,
+          "up_first": 0.548,
+          "down_first": 0.433,
+          "ort_atr": 0.83,
+          "medyan_atr": 0.47
+        }
+      }
+    },
+    "uyari": "TESHIS: gelecege bakarak gruplanmis; ok kurali olamaz. Nedensel surum Y1-b. 'Dik destek + fiyat altinda' gunlukte yalniz 16 gozlem: kapsam karari acik."
+  },
+  "model": {
+    "dikeylik": "step-step destegin diklesmesi (yukselen kademelerin siklasmasi)",
+    "alti_dolmasi": "dik cizginin yataya donmesi (STEPPING_UP -> NEWLY_FLATTENED_AFTER_RISE), hafif yukari tepki sonrasi",
+    "alti_bos": "dik kalir, yeni step yapmaz (dusus devam)",
+    "yatay": "fiyat toparlandi"
+  },
+  "ornek_sablon_2026_11_08": {
+    "kutle": "gunluk STEPPING_UP gunleri, 40 sembol, ufuk 16 gun",
+    "n": 4205,
+    "ana_bolunme": {
+      "UP_first": 0.54,
+      "DOWN_first": 0.448,
+      "AMBIG": 0.009,
+      "NEITHER": 0.004
+    },
+    "azinlik_n": 1883,
+    "cogunluk_n": 2270,
+    "lift": {
+      "govde_<0.20": {
+        "azinlik": 0.263,
+        "cogunluk": 0.243,
+        "lift": 1.08
+      },
+      "govde_>=0.50": {
+        "azinlik": 0.387,
+        "cogunluk": 0.396,
+        "lift": 0.98
+      },
+      "kapanis_alt_<0.35": {
+        "azinlik": 0.387,
+        "cogunluk": 0.347,
+        "lift": 1.12
+      },
+      "kapanis_ust_>0.65": {
+        "azinlik": 0.27,
+        "cogunluk": 0.335,
+        "lift": 0.81
+      },
+      "aralik_>1.0": {
+        "azinlik": 0.426,
+        "cogunluk": 0.375,
+        "lift": 1.13
+      },
+      "rvol_>=1.2": {
+        "azinlik": 0.276,
+        "cogunluk": 0.277,
+        "lift": 1.0
+      },
+      "rvol_<0.8": {
+        "azinlik": 0.407,
+        "cogunluk": 0.397,
+        "lift": 1.02
+      },
+      "d_<0": {
+        "azinlik": 0.005,
+        "cogunluk": 0.003,
+        "lift": 1.55
+      },
+      "d_0_0.5": {
+        "azinlik": 0.115,
+        "cogunluk": 0.098,
+        "lift": 1.17
+      }
+    },
+    "sonuc": "'kucuk/yonsuz mum' iddiasi bu genis kutlede dogrulanmiyor (lift 1.08, hacimde fark yok); dar senaryoda (kapsam b) yeniden test edilir"
+  },
+  "konu_adaylari": [
+    {
+      "id": "K1",
+      "kosul": "dik step-step destek + 1-3 gunluk tepki -> 10 gunde yataya dondu",
+      "ok": "▲",
+      "iddia": "toparlanma basladi",
+      "n_durumu": "olculdu ~12000 (40 sembolde 2790)"
+    },
+    {
+      "id": "K2",
+      "kosul": "dik destek dik kaldi (tepki yok, yeni step yok)",
+      "ok": "▼",
+      "iddia": "dusus suruyor",
+      "n_durumu": "olculdu ~6000 (40 sembolde 1415)"
+    },
+    {
+      "id": "K3",
+      "kosul": "sabit destek sarkti, kapanis geri dondu (temizlik orani yuksek)",
+      "ok": "▲",
+      "iddia": "sarkma fitildi",
+      "n_durumu": "olculecek"
+    },
+    {
+      "id": "K4",
+      "kosul": "sabit destek derin kirildi, donus yok",
+      "ok": "▼",
+      "iddia": "kirilma gercek",
+      "n_durumu": "olculecek"
+    },
+    {
+      "id": "K5",
+      "kosul": "uzun yatay destek (>=24 gun) + ilk temas",
+      "ok": "▲",
+      "iddia": "yatay taban tutar",
+      "n_durumu": "olculecek"
+    },
+    {
+      "id": "K6",
+      "kosul": "3. ve sonraki temas",
+      "ok": "▼",
+      "iddia": "yapi yoruldu",
+      "n_durumu": "olculecek"
+    },
+    {
+      "id": "K7",
+      "kosul": "uzun yatay + hacim patlamasi (rvol>=1.2)",
+      "ok": "patlama yonu",
+      "iddia": "sikisma cozuluyor",
+      "n_durumu": "olculecek"
+    },
+    {
+      "id": "K8",
+      "kosul": "yeni yukari step (rebase) + guclu govde",
+      "ok": "▲",
+      "iddia": "momentum devam (mevcut ok)",
+      "n_durumu": "dogrulama"
+    },
+    {
+      "id": "K9",
+      "kosul": ">=20 gun yatay + guclu govde",
+      "ok": "▲",
+      "iddia": "taban kirilimi (mevcut ok)",
+      "n_durumu": "dogrulama"
+    },
+    {
+      "id": "K10",
+      "kosul": "destegin altina gap ile acilis",
+      "ok": "▼ veya ▲",
+      "iddia": "panik mi tuzak mi",
+      "n_durumu": "olculecek (gap tanimi netlesince)"
+    }
+  ],
+  "onerilen_ilk_uc": [
+    [
+      "K1",
+      "K2"
+    ],
+    [
+      "K3",
+      "K4"
+    ],
+    [
+      "K8",
+      "K9"
+    ]
+  ],
+  "durum_haritasi": {
+    "eksenler": {
+      "fiyat_yeri": [
+        "alt (d<-0.05)",
+        "yapisik (-0.05..0.5)",
+        "ust (>0.5)"
+      ],
+      "destek_davranisi": [
+        "sabit (10 gunde seviye degismedi)",
+        "yukari hareket",
+        "asagi hareket"
+      ]
+    },
+    "sembol": 39,
+    "gozlem": 16745,
+    "ufuk_gun": 16,
+    "tablo": {
+      "alt+sabit": {
+        "n": 1881,
+        "kirilma": 0.913,
+        "up_first": 0.547,
+        "down_first": 0.439,
+        "medyan_atr": -0.37,
+        "t3_alt": 60,
+        "t3_yapisik": 9,
+        "t3_ust": 31
+      },
+      "alt+yukari": {
+        "n": 712,
+        "kirilma": 0.921,
+        "up_first": 0.492,
+        "down_first": 0.504,
+        "medyan_atr": 0.06,
+        "t3_alt": 65,
+        "t3_yapisik": 10,
+        "t3_ust": 25
+      },
+      "alt+asagi": {
+        "n": 580,
+        "kirilma": 0.953,
+        "up_first": 0.509,
+        "down_first": 0.471,
+        "medyan_atr": -0.14,
+        "t3_alt": 72,
+        "t3_yapisik": 8,
+        "t3_ust": 20
+      },
+      "yapisik+sabit": {
+        "n": 462,
+        "kirilma": 0.736,
+        "up_first": 0.537,
+        "down_first": 0.452,
+        "medyan_atr": -0.12,
+        "t3_alt": 29,
+        "t3_yapisik": 18,
+        "t3_ust": 53
+      },
+      "yapisik+yukari": {
+        "n": 520,
+        "kirilma": 0.708,
+        "up_first": 0.51,
+        "down_first": 0.487,
+        "medyan_atr": 0.24,
+        "t3_alt": 38,
+        "t3_yapisik": 18,
+        "t3_ust": 44
+      },
+      "yapisik+asagi": {
+        "n": 442,
+        "kirilma": 0.767,
+        "up_first": 0.493,
+        "down_first": 0.491,
+        "medyan_atr": -0.42,
+        "t3_alt": 41,
+        "t3_yapisik": 19,
+        "t3_ust": 40
+      },
+      "ust+sabit": {
+        "n": 4153,
+        "kirilma": 0.395,
+        "up_first": 0.532,
+        "down_first": 0.456,
+        "medyan_atr": -0.17,
+        "t3_alt": 5,
+        "t3_yapisik": 7,
+        "t3_ust": 89
+      },
+      "ust+yukari": {
+        "n": 4032,
+        "kirilma": 0.426,
+        "up_first": 0.541,
+        "down_first": 0.445,
+        "medyan_atr": -0.02,
+        "t3_alt": 6,
+        "t3_yapisik": 7,
+        "t3_ust": 86
+      },
+      "ust+asagi": {
+        "n": 3963,
+        "kirilma": 0.422,
+        "up_first": 0.495,
+        "down_first": 0.49,
+        "medyan_atr": -0.14,
+        "t3_alt": 6,
+        "t3_yapisik": 8,
+        "t3_ust": 86
+      }
+    },
+    "sonuclar": [
+      "kirilma riskini mesafe belirliyor (ust %39-43, yapisik %71-77); destek hareketinin katkisi 2-4 puan",
+      "sabit destekte alttan 3 gunde uste donme %31, hareketli destekte %20-25 (ayni yonde zayif destek)",
+      "hicbir statik durum %60 ok esigini gecmiyor -> ok gecisten (olaydan) cikmali"
+    ]
+  },
+  "senaryo_katalogu": {
+    "tanim": "A durumundan B durumuna gecis gunu; olcum gecis gununden ileri (nedensel)",
+    "sembol": 39,
+    "gozlem_gecis": 3496,
+    "hucre": 58,
+    "n30_uzeri": 30,
+    "dosyalar": [
+      "senaryo_gecis_sonuclari_2026_11_08.csv",
+      "senaryo_teshis_sonuclari_2026_11_08.csv"
+    ],
+    "adaylar": [
+      {
+        "gecis": "alt+asagi -> alt+sabit",
+        "n": 81,
+        "yon": "▲",
+        "up": 0.691,
+        "medyan_atr": 0.2,
+        "not": "destek dusmeyi birakti"
+      },
+      {
+        "gecis": "alt+sabit -> yapisik+sabit",
+        "n": 100,
+        "yon": "▲",
+        "up": 0.64,
+        "medyan_atr": -0.11,
+        "not": "sabit destek, fiyat tirmaniyor"
+      },
+      {
+        "gecis": "alt+sabit -> ust+sabit",
+        "n": 44,
+        "yon": "▲",
+        "up": 0.659,
+        "medyan_atr": -0.49,
+        "not": "n kucuk"
+      },
+      {
+        "gecis": "ust+yukari -> alt+yukari",
+        "n": 65,
+        "yon": "▼",
+        "down": 0.6,
+        "medyan_atr": 0.33,
+        "not": "kullanicinin dikey destek iddiasi"
+      },
+      {
+        "gecis": "ust+asagi -> alt+asagi",
+        "n": 49,
+        "yon": "▼",
+        "down": 0.612,
+        "medyan_atr": 0.02,
+        "not": "hareketli destek + altina dusus"
+      }
+    ],
+    "uyari": "30 hucre test edildi; coklu karsilastirma riski. 5 aday dogrulama kumesinde (%40 sembol) test edilmeden ok kurali olamaz.",
+    "sonucu_olmayanlar": {
+      "yetersiz_n_hucre": 28,
+      "kosullu_senaryolar": "A->B + R1-R4 / hacim / BOS / mum anatomisi / gap (~400 hucre) G0-G2 sonrasi"
+    }
+  },
+  "dogrulama_2026_11_08": {
+    "kurulum": {
+      "sembol": 119,
+      "olay": 5530,
+      "dedup_gun": 5,
+      "ufuk_gun": 16,
+      "bolme": "sha256(sembol)%10<6 -> kesif (%60)"
+    },
+    "taban_oran": {
+      "kesif": {
+        "n": 7839,
+        "up": 0.541,
+        "down": 0.44
+      },
+      "dogrulama": {
+        "n": 3420,
+        "up": 0.548,
+        "down": 0.435
+      },
+      "not": "taban %54 -> mutlak yuzde degil LIFT kullanilir"
+    },
+    "karar_dagilimi": {
+      "OK-DOWN": 5,
+      "OK-UP": 0,
+      "ELENDI": 15,
+      "yetersiz_n": 39
+    },
+    "gecenler": [
+      {
+        "senaryo": "ust+asagi -> ust+sabit",
+        "nK": 465,
+        "UPk": 0.477,
+        "nD": 187,
+        "UPd": 0.487,
+        "lift": "-6.4/-6.1",
+        "p": 0.0004
+      },
+      {
+        "senaryo": "ust+asagi -> yapisik+asagi",
+        "nK": 226,
+        "UPk": 0.429,
+        "nD": 108,
+        "UPd": 0.519,
+        "lift": "-11.2/-2.9",
+        "p": 0.0005
+      },
+      {
+        "senaryo": "ust+asagi -> alt+asagi",
+        "nK": 63,
+        "UPk": 0.397,
+        "nD": 23,
+        "UPd": 0.391,
+        "lift": "-14.5/-15.7",
+        "p": 0.0022
+      },
+      {
+        "senaryo": "ust+sabit -> yapisik+sabit",
+        "nK": 103,
+        "UPk": 0.485,
+        "nD": 50,
+        "UPd": 0.38,
+        "lift": "-5.6/-16.8",
+        "p": 0.0087
+      },
+      {
+        "senaryo": "ust+yukari -> alt+yukari",
+        "nK": 82,
+        "UPk": 0.427,
+        "nD": 30,
+        "UPd": 0.433,
+        "lift": "-11.5/-11.5",
+        "p": 0.0132
+      }
+    ],
+    "bonferroni": {
+      "esik": 0.00085,
+      "gecen": [
+        "ust+asagi -> ust+sabit",
+        "ust+asagi -> yapisik+asagi"
+      ]
+    },
+    "elendi_ornek": [
+      "alt+sabit -> yapisik+sabit (kesif .611 -> dogrulama .444)",
+      "alt+asagi -> alt+sabit (kucuk ornekte .691 -> genis .576/.612, lift +3.5/+6.4)"
+    ],
+    "gozlem_listesi": [
+      {
+        "senaryo": "ust+sabit -> ust+yukari",
+        "n": 695,
+        "UP": "0.585/0.593",
+        "lift": "+4.3/+4.5",
+        "p": 0.0079
+      }
+    ],
+    "dosya": "senaryo_dogrulama_sonuclari_2026_11_08.csv"
+  },
+  "olcum_sozlesmesi": {
+    "surum": "v2.1",
+    "tf": "1d",
+    "ufuk_gun": 16,
+    "dedup_gun": 5,
+    "durum": {
+      "fiyat_yeri": {
+        "alt": "d < -0.05",
+        "yapisik": "-0.05 <= d <= 0.50",
+        "ust": "d > 0.50"
+      },
+      "destek_davranisi": {
+        "sabit": "|delta10|<0.02 ATR",
+        "yukari": "delta10 >= 0.02",
+        "asagi": "delta10 <= -0.02"
+      }
+    },
+    "sonuc": "first_1atr_16 (UP/DOWN/AMBIG/NEITHER)",
+    "taban": "her 5. gun, durumdan bagimsiz; kesif ve dogrulama icin ayri",
+    "karar": {
+      "n_kesif_min": 50,
+      "n_dogrulama_min": 20,
+      "lift_kesif_min_pp": 6,
+      "lift_dogrulama_min_pp": 1,
+      "p_max": 0.05,
+      "bonferroni_rapor": true
+    },
+    "ek_2_9": {
+      "kural": "Koşullandırma iddiası yalnız (a) senaryo-stratifiye Mantel-Haenszel veya (b) aile havuzu ile test edilir; havuzlanmış tek değişkenli tablo karar veremez.",
+      "kompozisyon_kontrolu": "koşul x senaryo Cramér's V raporlanır; V>=0.30 ise havuz etkisi şüpheli",
+      "bonferroni": "aile havuzu tek test sayılır; eşik aile sayısına göre",
+      "elenen_taraf": "her filtre, elenen tarafla birlikte raporlanır (kapı mı süs mü)"
+    }
+  },
+  "genel_okuma_2026_11_08": {
+    "amac": "5 adayı teker teker keskinleştirmek yerine tek koşullandırma katmanını tüm senaryolara uygulamak; karar aile düzeyinde",
+    "kurulum": {
+      "sembol": 119,
+      "olay": 5530,
+      "gecis": 59,
+      "horizon_gun": 16,
+      "dedup_gun": 5,
+      "taban": {
+        "kesif": {
+          "n": 7839,
+          "up": 54.1,
+          "down": 44.0
+        },
+        "dogrulama": {
+          "n": 3420,
+          "up": 54.8,
+          "down": 43.5
+        }
+      },
+      "eklenen_nitelikler": [
+        "rvol = hacim / 20g ortalama",
+        "govde = |close-open| / ATR1d",
+        "kapanis_poz = (close-low)/(high-low)"
+      ],
+      "olay_kumesi_degismedi": true
+    },
+    "havuz_etkisi_gecersiz": {
+      "sebep": "kompozisyon (kosul x senaryo Cramér's V: rvol 0.16, kapanis 0.383)",
+      "mh_rvol_yuksek_vs_dusuk": {
+        "kesif": {
+          "OR": 0.82,
+          "p": 0.0202
+        },
+        "dogrulama": {
+          "OR": 0.93,
+          "p": 0.5463
+        }
+      },
+      "mh_govde_buyuk_vs_yonsuz": {
+        "kesif": {
+          "OR": 0.95,
+          "p": 0.5774
+        },
+        "dogrulama": {
+          "OR": 0.93,
+          "p": 0.6087
+        }
+      },
+      "mh_kapanis_ust_vs_alt": {
+        "kesif": {
+          "OR": 1.07,
+          "p": 0.4386
+        },
+        "dogrulama": {
+          "OR": 0.85,
+          "p": 0.2802
+        }
+      },
+      "isaret_testi_rvol": {
+        "kesif": "9/14 p=0.21",
+        "dogrulama": "3/6 p=0.66"
+      }
+    },
+    "aile_sonuclari": {
+      "iki_kumede_tutan": [
+        {
+          "aile": "ust -> alt",
+          "nK": 197,
+          "dn_K": 53.3,
+          "lift_K": 9.3,
+          "p_K": 0.0045,
+          "nD": 75,
+          "dn_D": 58.7,
+          "lift_D": 15.2,
+          "p_D": 0.0039
+        },
+        {
+          "aile": "kaynak konum ust",
+          "nK": 2562,
+          "dn_K": 49.1,
+          "lift_K": 5.1,
+          "p_K": 5e-05,
+          "nD": 1112,
+          "dn_D": 46.0,
+          "lift_D": 2.5,
+          "p_D": 0.0461
+        }
+      ],
+      "kismi": [
+        {
+          "aile": "ust -> yapisik",
+          "lift_K": 10.1,
+          "p_K": 1e-05,
+          "lift_D": 4.2,
+          "p_D": 0.0717
+        },
+        {
+          "aile": "asagi -> asagi",
+          "lift_K": 8.4,
+          "p_K": 0.0001,
+          "lift_D": 4.6,
+          "p_D": 0.093
+        },
+        {
+          "aile": "asagi -> sabit",
+          "lift_K": 4.8,
+          "p_K": 0.0079,
+          "lift_D": 3.3,
+          "p_D": 0.1444
+        }
+      ],
+      "yalniz_dogrulamada": [
+        "sabit -> asagi (K 1.9 / D 11.8)",
+        "alt -> ust (K 1.7 / D 10.2)"
+      ],
+      "dogrulamada_ters": [
+        "yukari -> asagi (K 8.2 / D -3.8)"
+      ],
+      "bonferroni_aile": {
+        "test_sayisi": 11,
+        "esik": 0.0045,
+        "gecen": [
+          "ust -> alt (sinirda)"
+        ]
+      },
+      "yukari_taraf": {
+        "aile": "sabit -> yukari",
+        "up_lift_K": 3.2,
+        "p_K": 0.065,
+        "up_lift_D": 3.9,
+        "p_D": 0.1224,
+        "karar": "esik alti (6 puan) -> yukari ok yok"
+      }
+    },
+    "tek_genel_filtre": {
+      "kural": "yalniz OK-V ailesi icinde: rvol >= 0.8 & govde >= 0.20",
+      "aile_filtresiz": {
+        "nK": 939,
+        "dn_K": 52.9,
+        "lift_K": 8.9,
+        "nD": 398,
+        "dn_D": 51.3,
+        "lift_D": 7.8
+      },
+      "aile_filtreli": {
+        "nK": 466,
+        "dn_K": 56.9,
+        "lift_K": 12.8,
+        "p_K": 1e-06,
+        "nD": 188,
+        "dn_D": 57.4,
+        "lift_D": 14.0,
+        "p_D": 0.0001
+      },
+      "elenen_rvol_dusuk": {
+        "nK": 378,
+        "lift_K": 3.0,
+        "nD": 172,
+        "lift_D": 2.5
+      },
+      "elenen_govde_yonsuz": {
+        "nK": 161,
+        "lift_K": 5.6,
+        "nD": 75,
+        "lift_D": 0.5
+      },
+      "sembol_yogunlasmasi": {
+        "kesif_pct": 3,
+        "dogrulama_pct": 5
+      },
+      "kontrol_tum_havuz": {
+        "filtresiz_lift": [
+          3.5,
+          2.8
+        ],
+        "filtreli_lift": [
+          4.4,
+          2.9
+        ],
+        "sonuc": "filtre tek basina sinyal degil"
+      },
+      "senaryo_bazinda_kesif": {
+        "ust+asagi -> ust+sabit": [
+          51.0,
+          55.4,
+          224
+        ],
+        "ust+asagi -> yapisik+asagi": [
+          55.8,
+          60.0,
+          100
+        ],
+        "ust+asagi -> alt+asagi": [
+          58.7,
+          60.0,
+          45
+        ],
+        "ust+yukari -> alt+yukari": [
+          53.7,
+          61.4,
+          57
+        ],
+        "ust+sabit -> yapisik+sabit": [
+          51.5,
+          47.5,
+          40
+        ]
+      }
+    },
+    "karar": {
+      "aday_tek_kural": "kaynak ust + (destek asagi step veya fiyat destege iniyor) + rvol>=0.8 + govde>=0.20 -> ilk +/-1 ATR asagi (n 466/188, lift +12.8/+14.0)",
+      "ok_kurali_degismedi": true,
+      "teker_teker_keskinlestirme": "iptal - genel okuma ile ayni bilgi, coklu karsilastirma riski yok",
+      "acik_kalan": [
+        "tek aday kuralin ok olarak kilitlenmesi (onay bekliyor)",
+        "ust -> alt ailesinin sembol bazinda dokumu",
+        "177 sembolluk tam kosu"
+      ]
+    },
+    "dosya": "docs/arastirma/stabil_soru_seti_v2/genel_okuma_2026_11_08.csv"
+  }
+}

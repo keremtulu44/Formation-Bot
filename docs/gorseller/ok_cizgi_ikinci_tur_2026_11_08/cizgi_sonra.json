@@ -1,0 +1,47 @@
+[
+  {
+    "sembol": "ALARK",
+    "gun": "2025-05-22",
+    "dosya": "cizgi_sonra_alark_yogun.png",
+    "destek_dolu": 0,
+    "destek_momentum": 0,
+    "destek_cizgi": 2,
+    "direnc_cizgi": 2
+  },
+  {
+    "sembol": "AGROT",
+    "gun": "2025-03-28",
+    "dosya": "cizgi_sonra_agrot_uc_atr.png",
+    "destek_dolu": 0,
+    "destek_momentum": 0,
+    "destek_cizgi": 1,
+    "direnc_cizgi": 0
+  },
+  {
+    "sembol": "AGHOL",
+    "gun": "2025-04-01",
+    "dosya": "cizgi_sonra_aghol_ust_uste.png",
+    "destek_dolu": 3,
+    "destek_momentum": 0,
+    "destek_cizgi": 2,
+    "direnc_cizgi": 0
+  },
+  {
+    "sembol": "CEMAS",
+    "gun": "2026-08-06",
+    "dosya": "cizgi_sonra_cemas_yogun.png",
+    "destek_dolu": 1,
+    "destek_momentum": 0,
+    "destek_cizgi": 1,
+    "direnc_cizgi": 1
+  },
+  {
+    "sembol": "AEFES",
+    "gun": "2025-09-19",
+    "dosya": "cizgi_sonra_aefes_uzak_uyari.png",
+    "destek_dolu": 0,
+    "destek_momentum": 0,
+    "destek_cizgi": 2,
+    "direnc_cizgi": 1
+  }
+]

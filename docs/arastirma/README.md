@@ -4,7 +4,8 @@
 
 **[Stabil ana rehberi](STABIL_REHBERI.md)** · [Replay yöntemleri](STABIL_REPLAY_HATLARI.md) ·
 [Davranış modeli](STABIL_DAVRANIS_MODELI.md) · [48 soru](STABIL_DAVRANIS_SORULARI.md) ·
-[Çalışma geçmişi](STABIL_CALISMA_GECMISI.md) · [Dosya durumu](STABIL_DOSYA_ENVANTERI.md).
+[Çalışma geçmişi](STABIL_CALISMA_GECMISI.md) · [Dosya durumu](STABIL_DOSYA_ENVANTERI.md) ·
+**[sistem/ok/replay incelemesi (2026-11-08)](STABIL_SISTEM_INCELEMESI_2026-11-08.md)** · **[V2 ana sorular (2026-11-08)](STABIL_SORU_SETI_V2_2026-11-08.md)**.
 
 **2026-11-04 checkout durumu:** özgün Python TXT, Stabil runtime (`domain_engines/stabil/`),
 `research/stabil_replay.py`, `research/stabil_bhv48.py` ve 48 soruluk çalışma için
