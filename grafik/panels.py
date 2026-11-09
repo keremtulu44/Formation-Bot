@@ -134,6 +134,30 @@ def _sag_sirali_yerlesim(sabit, diger, lo, hi, bosluk: float = 0.0):
     return True
 
 
+def _sag_metni_sar(metin: str, butce: float) -> str:
+    """Wrap labels rather than clipping price/status information with ellipsis."""
+    font = float(SABITLER["sag_serit_yazi_pt"])
+    def fits(value):
+        return _sigar_mi(value, butce) and _olcu_px(value, font) <= butce
+    lines = []
+    for source in str(metin).split("\n"):
+        remaining = source
+        while remaining and not fits(remaining):
+            end = 0
+            for i in range(1, len(remaining) + 1):
+                if not fits(remaining[:i]):
+                    break
+                end = i
+            end = max(1, end)
+            space = remaining.rfind(" ", 0, end + 1)
+            if space > 0:
+                end = space
+            lines.append(remaining[:end].rstrip())
+            remaining = remaining[end:].lstrip()
+        lines.append(remaining)
+    return "\n".join(lines)
+
+
 def _sag_ciz(ax, fig, adaylar: Sequence[dict[str, Any]], n: int,
              aralik: Sequence[float], *, x_kenar: Optional[float] = None) -> dict[str, Any]:
     """Sağ fiyat şeridi: etiketleri eksenin DIŞINDA, son mumun sağında yerleştirir.
@@ -141,7 +165,7 @@ def _sag_ciz(ax, fig, adaylar: Sequence[dict[str, Any]], n: int,
     Kural: sabit öğe (son kapanış) önce yerini alır; diğerleri öncelik ve seviyeye
     göre en yakın boş dikey konuma itilir. Hiçbir etiket sessizce atılmaz: yalnız
     şerit dolduğunda (en düşük öncelikli) düşer ve `atlanan_kaynak` ile sayılır.
-    Yazı genişliği şerit içine kırpılır (`…`), mum alanına taşmaz.
+    Uzun yazı şerit içinde satıra sarılır; metin kırpılmaz.
     """
     sonuc: dict[str, Any] = {"yerlesen": 0, "atlanan": 0, "atlanan_kaynak": {},
                              "eledi_kaynak": {}, "birlesik": 0, "birlesen_kutu": 0,
@@ -169,7 +193,7 @@ def _sag_ciz(ax, fig, adaylar: Sequence[dict[str, Any]], n: int,
     # ("hiçbir etiket sessizce atılmaz" kuralı önce gelir) — yer varsa tam pay,
     # daralmışsa küçülür, şerit doluysa sıfıra iner.
     bosluk_istenen = h * float(SABITLER.get("sag_etiket_bosluk", 0.0))
-    butce = float(SABITLER["sag_serit_px"]) - 14.0
+    butce = float(SABITLER["sag_serit_px"]) - 25.0
     for a in adaylar:
         if a.get("fiyat_araligi"):
             alt, ust = a["fiyat_araligi"]
@@ -222,30 +246,17 @@ def _sag_ciz(ax, fig, adaylar: Sequence[dict[str, Any]], n: int,
             sonuc["birlesik"] = int(sonuc["birlesik"]) + 1
             sonuc["birlesen_kutu"] = int(sonuc["birlesen_kutu"]) + int(a["_sayi"]) - 1
             metin = " · ".join(a["_parcalar"])
-            # Aynı tip birden fazla kez geçiyorsa sayıyla kısalt: `OB↓ · OB↑ ×2`.
-            if len(set(a["_parcalar"])) < len(a["_parcalar"]):
-                ilk = sorted(set(a["_parcalar"]))[0]
-                metin = f"{ilk} · … ×{len(a['_parcalar'])}"
             a["metin"] = metin
             a["birlesik"] = int(a["_sayi"])
     diger = _birlesik
-    # Sabit "son fiyat" ile AYNI bantta kalan swing çipi atlanır: aynı sayıyı iki
-    # kez yazmak okunurluğu bozar (ölçüm: THYAO 1s'te `PH 290,50` ile son fiyat
-    # `290,50` üst üste bindi). Son fiyat sabittir ve seviyeyi zaten söyler;
-    # PH/PL okuması grafikteki ince seviye çizgisi + lejantla sürer. Atlamalar
-    # SAYILIR (`atlanan_kaynak`) — sessiz kayıp yok.
-    _son_y = [float(x["y"]) for x in sabit]
-    if _son_y:
-        _kalan = []
-        for a in diger:
-            if (str(a.get("kaynak")) == "swing"
-                    and any(abs(float(a["y"]) - y) <= h * 0.75 for y in _son_y)):
-                kaynak = str(a.get("kaynak") or "?")
-                sonuc["atlanan_kaynak"][kaynak] = sonuc["atlanan_kaynak"].get(kaynak, 0) + 1
-                a["yy"] = None
-                continue
-            _kalan.append(a)
-        diger = _kalan
+    # Preserve the role even when its price equals the last-price chip. Wrap
+    # every label before calculating placement heights (also after merges).
+    for a in sabit + diger:
+        a["metin"] = _sag_metni_sar(str(a["metin"]), butce)
+        a["_yari_h"] = h * (1 + str(a["metin"]).count("\n")) / 2.0
+    talep = sum(2.0 * float(a["_yari_h"]) for a in sabit + diger)
+    bosluk = max(0.0, min(bosluk_istenen,
+                         ((hi - lo) - talep) / max(1, len(sabit + diger) - 1)))
     def _yerlestir(bosluk_degeri: float) -> dict[str, Any]:
         yerlesik: list[float] = []
         yukseklikler: list[float] = []
@@ -290,14 +301,18 @@ def _sag_ciz(ax, fig, adaylar: Sequence[dict[str, Any]], n: int,
     # kuralı nefes payından önce gelir (dar karede pay etiket yutuyordu).
     yer = _yerlestir(bosluk)
     if sum(yer["atlanan_kaynak"].values()):
+        onceki_konumlar = [a.get("yy") for a in sabit + diger]
         paysiz = _yerlestir(0.0)
         if sum(paysiz["atlanan_kaynak"].values()) < sum(yer["atlanan_kaynak"].values()):
             yer = paysiz
+        else:
+            for a, yy in zip(sabit + diger, onceki_konumlar):
+                a["yy"] = yy
     sonuc["yerlesen"] += yer["yerlesen"]
     sonuc["atlanan_kaynak"].update(yer["atlanan_kaynak"])
     sonuc["kaydirilan"] = yer["kaydirilan"]
     sonuc["sirali"] = yer["sirali"]
-    butce = float(SABITLER["sag_serit_px"]) - 14.0
+    butce = float(SABITLER["sag_serit_px"]) - 25.0
     # Kutu etiketleri (OB/FVG) şeride ince KILAVUZ çizgisiyle bağlanır: kutu
     # kadrajın solunda olsa bile yazının hangi kutuya ait olduğu görünür kalır
     # ("sağdaki yazılar alakasız" geri bildirimi — görsel-3).
@@ -314,17 +329,24 @@ def _sag_ciz(ax, fig, adaylar: Sequence[dict[str, Any]], n: int,
                     color=a["renk"], linewidth=float(stil.get("lw", 0.6)),
                     alpha=float(stil.get("alpha", 0.3)),
                     linestyle=stil.get("ls", (0, (1, 2.5))), zorder=1.5, clip_on=False)
+    # A fixed pixel inset gives displaced labels enough room for a visible
+    # leader, independent of candle count or zoom level.
+    x0_px = ax.transData.transform((x_kenar, lo))[0]
+    text_x = ax.transData.inverted().transform((x0_px + 9.0, ax.bbox.y0))[0]
     for a in sabit + diger:
         if a.get("yy") is None:
             continue
-        metin = "\n".join(_kirp(line, butce)[0] for line in str(a["metin"]).split("\n"))
+        metin = str(a["metin"])
         kw: dict[str, Any] = {}
-        if a.get("bg"):        # son fiyat: dolu çip (yön rengi), koyu yazı, kalın
+        if a.get("sabit") and a.get("bg"):  # son fiyat: yön renginde dolu çip
             kw["bbox"] = dict(boxstyle="round,pad=0.28", facecolor=a["bg"], edgecolor="none")
             kw["fontweight"] = "bold"
         else:                  # katman etiketi: koyu çip + katman renginde kenar/yazı
-            kw["bbox"] = dict(boxstyle="round,pad=0.26", facecolor=PALET["chip_zemin"],
-                              edgecolor=a["renk"], linewidth=0.7, alpha=0.95)
+            kw["bbox"] = dict(boxstyle="round,pad=0.32,rounding_size=0.3",
+                              facecolor=PALET["chip_zemin"], edgecolor=a["renk"],
+                              linewidth=0.8, alpha=0.95)
+            if str(a.get("kaynak")) in {"stabil", "stabil_direnc"}:
+                kw["fontweight"] = "bold"
         # FAZ 4 §1 (Label Collision / Y-Offset): etiket çakışmayı önlemek için
         # kaydırıldıysa GERÇEK seviyeye KESİKLİ lider çizgiyle bağlanır — okuyucu
         # "bu yazı hangi seviyeye ait" sorusunu kaybetmez.
@@ -332,7 +354,7 @@ def _sag_ciz(ax, fig, adaylar: Sequence[dict[str, Any]], n: int,
             kw["arrowprops"] = dict(arrowstyle="-", color=a["renk"], lw=0.7, alpha=0.55,
                                     linestyle=(0, (2, 2)), shrinkA=0, shrinkB=0)
             sonuc["lider"] = int(sonuc.get("lider") or 0) + 1
-        ax.annotate(metin, xy=(x_kenar, float(a["y"])), xytext=(x_kenar + 0.22, float(a["yy"])),
+        ax.annotate(metin, xy=(x_kenar, float(a["y"])), xytext=(text_x, float(a["yy"])),
                     textcoords="data", ha="left", va="center",
                     fontsize=float(SABITLER["sag_serit_yazi_pt"]), color=a["renk"],
                     zorder=8, annotation_clip=False, **kw)
@@ -734,10 +756,8 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool,
     # TEK ok sözlüğü cümlesi çizilen her şeyi anlatır ve ölçümü yansıtır:
     # ▲ "yapı", ▼ "sinyal" (docs/arastirma/OK_SISTEMI_2026-11-08.md §12–§13).
     _cizgiler = (meta or {}).get("cizgiler") or {}
-    _ok_sayaclari = (("stabil", "reclaim_isaret", ("reclaim_barlar", "momentum_barlar",
-                                                   "dikey_deneme_barlar")),
-                     ("stabil_direnc", "donus_isaret", ("donus_barlar", "momentum_barlar",
-                                                        "dikey_deneme_barlar")))
+    _ok_sayaclari = (("stabil", "reclaim_isaret", ("reclaim_barlar", "momentum_barlar")),
+                     ("stabil_direnc", "donus_isaret", ("donus_barlar", "momentum_barlar")))
     ok_cizildi = False
     for anahtar, hazir_anahtar, barlar in _ok_sayaclari:
         katman = goruntu.get(anahtar) or {}
@@ -749,14 +769,22 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool,
             continue
         oge.append("┄ Stabil destek (yeşil)" if anahtar == "stabil"
                    else "┄ Stabil direnç (turuncu)")
-        sayaclar = ("reclaim_isaret", "momentum_isaret", "dikey_deneme_isaret") \
-            if anahtar == "stabil" else ("donus_isaret", "momentum_isaret", "dikey_deneme_isaret")
+        sayaclar = ("reclaim_isaret", "momentum_isaret") \
+            if anahtar == "stabil" else ("donus_isaret", "momentum_isaret")
         if olculdu:
             ok_cizildi = ok_cizildi or any(cizilen.get(k) for k in sayaclar)
         else:
             ok_cizildi = ok_cizildi or any(katman.get(b) for b in barlar)
     if ok_cizildi:
-        oge.append("▼ dönüş = sinyal · ▲ geri alım = yapı · boş = momentum · ◇ = uyarı")
+        oge.append("▼ dönüş = sinyal · ▲ geri alım = yapı · boş = momentum")
+    iptal_cizildi = any(
+        ((meta or {}).get("cizgiler") or {}).get(k, {}).get("iptal_isaret", 0)
+        if "iptal_isaret" in (((meta or {}).get("cizgiler") or {}).get(k) or {})
+        else (goruntu.get(k) or {}).get("iptal_barlar")
+        for k in ("stabil", "stabil_direnc")
+    )
+    if iptal_cizildi:
+        oge.append("gri ok = ters BOS sonrası iptal")
     # GÖRSEL-5: olay çizgileri stil olarak ayrıştı; lejant da ayrı yazar (hangisi
     # görünüyorsa o madde çıkar — uydurma yok).
     _olaylar = list((goruntu.get("olay") or {}).get("olaylar") or [])

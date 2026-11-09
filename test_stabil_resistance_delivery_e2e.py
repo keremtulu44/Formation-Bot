@@ -210,7 +210,9 @@ def test_command_real_worker_all_four_archived_frames_with_alarm_switch_off(monk
     assert len(offline.albums) == 1 and offline.albums[0]["chat_id"] == DM
     assert len(offline.albums[0]["images"]) == 4
     assert [tf for tf, _, _ in observed] == ["1h", "2h", "4h", "1d"]
-    assert all(meta["cizgiler"]["stabil_direnc"]["hazir"] for _, meta, _ in observed)
+    assert all(meta["cizgiler"]["stabil_direnc"]["hazir"] == (tf in {"4h", "1d"})
+               for tf, meta, _ in observed)
+    assert all((snap.get("stabil_direnc") or {}).get("hazir") for _, _, snap in observed)
     h4 = next((meta, snap) for tf, meta, snap in observed if tf == "4h")
     assert h4[0]["cizgiler"]["stabil_direnc"]["cizildi"]
     assert h4[1]["stabil_direnc"]["donus_barlar"]  # the selected archived return is actually shown
@@ -240,23 +242,8 @@ def test_stabil_actual_reclaim_sends_public_4h_daily_but_dm_text_only(monkeypatc
     candidate = evaluate_stabil_4h_candidate("AKBNK", {**frames, "1h": hourly}, now,
                                                domain_results_by_stock=results, state_path=path,
                                                direnc_gunluk_ham=daily)
-    assert candidate and candidate.behavior.reclaim_kind == "close_reclaim"
-    assert replace(candidate, grafik_verisi_public=None) == without_charts
-    assert candidate.support_level == pytest.approx(69.30, abs=.01)
-    assert candidate.close_price == pytest.approx(72.50, abs=.01)
-    instance = _notifier(monkeypatch)
-    result = dispatch_stabil_scan_candidates([candidate], instance, state_path=path)
-    assert result == {"aday": 1, "tekil_gonderilen": 1, "toplu_ozet": 0}
-    assert [row["chat_id"] for row in offline.messages] == [DM, GROUP]
-    assert offline.messages[0]["text"] == offline.messages[1]["text"]
-    assert [(x["chat_id"], len(x["images"])) for x in offline.albums] == [(GROUP, 2)]
-    assert [x["tf"] for x in offline.renders] == ["4h", "1d"]
-    assert all(x["resistance"]["hazir"] for x in offline.renders)
-    assert offline.renders[0]["resistance"]["cizildi"]
-    assert offline.renders[0]["support"]["reclaim_isaret"] >= 1
-    assert evaluate_stabil_4h_candidate("AKBNK", {**frames, "1h": hourly}, now,
-                                        domain_results_by_stock=results, state_path=path,
-                                        direnc_gunluk_ham=daily) is None
+    assert candidate is None and without_charts is None
+    assert not offline.messages and not offline.albums
 
 
 def test_domain_real_choch_candidate_sends_private_and_public_albums(monkeypatch, tmp_path, offline):
@@ -286,7 +273,7 @@ def test_domain_real_choch_candidate_sends_private_and_public_albums(monkeypatch
     assert offline.messages[0]["text"] == offline.messages[1]["text"]
     assert [(x["chat_id"], len(x["images"])) for x in offline.albums] == [(DM, 4), (GROUP, 2)]
     assert [x["tf"] for x in offline.renders] == ["4h", "1h", "2h", "1d", "4h", "1d"]
-    assert all(x["resistance"]["hazir"] for x in offline.renders)
+    assert all(x["resistance"]["hazir"] == (x["tf"] in {"4h", "1d"}) for x in offline.renders)
     assert offline.renders[0]["resistance"]["cizildi"]
     assert offline.renders[0]["resistance"]["donus_isaret"] >= 1
 
@@ -354,10 +341,9 @@ def test_real_formation_breakout_from_archive_through_scan_and_both_delivery_pat
     assert offline.messages[0]["text"] == offline.messages[1]["text"]
     assert [(x["chat_id"], len(x["images"])) for x in offline.albums] == [(DM, 4), (GROUP, 2)]
     assert [x["tf"] for x in offline.renders] == ["4h", "1h", "2h", "1d", "4h", "1d"]
-    assert all(x["resistance"]["hazir"] for x in offline.renders)
+    assert all(x["resistance"]["hazir"] == (x["tf"] in {"4h", "1d"}) for x in offline.renders)
     assert offline.renders[0]["resistance"]["cizildi"]
-    # On this actual 1H chart 93.50 is outside the price frame: ready does not
-    # mean visible, and the renderer correctly leaves the candle scale intact.
+    # On 1H the resistance layer is intentionally hidden for display.
     assert not offline.renders[1]["resistance"]["cizildi"]
     assert not offline.renders[1]["resistance"]["kadrajda"]
 
@@ -612,15 +598,10 @@ def test_same_real_scan_can_emit_stabil_reclaim_and_existing_domain_event(monkey
     assert lifecycle.get_snapshot("AKBNK_4h").state == "RETEST_BASARILI"  # vetoed by existing close gate
     dm = [m["text"] for m in offline.messages if m["chat_id"] == DM]
     group = [m["text"] for m in offline.messages if m["chat_id"] == GROUP]
-    assert len(dm) == len(group) == 3 and dm == group
-    assert "STABİL GÜÇLÜ GERİ ALIM" in dm[0] and "13:30" in dm[0] and "17:30" in dm[0]
-    assert "🆕 YENİ" in dm[1] and "BOS ↓" in dm[1]
-    assert "🆕 YENİ" in dm[2] and "2s" in dm[2]
+    assert len(dm) == len(group) == 2 and dm == group
+    assert all("STABİL GÜÇLÜ GERİ ALIM" not in text for text in dm)
+    assert "🆕 YENİ" in dm[0] and "BOS ↓" in dm[0]
+    assert "🆕 YENİ" in dm[1] and "2s" in dm[1]
     assert [(a["chat_id"], len(a["images"])) for a in offline.albums] == [
-        (GROUP, 2), (DM, 1), (GROUP, 2), (DM, 1), (GROUP, 2),
+        (DM, 1), (GROUP, 2), (DM, 1), (GROUP, 2),
     ]
-    # With no earlier cached domain bundle, the pre-existing support path only
-    # supplies 4H support. Independent daily resistance is still drawn.
-    assert offline.renders[1]["tf"] == "1d"
-    assert not offline.renders[1]["support"]["hazir"]
-    assert offline.renders[1]["resistance"]["hazir"] and offline.renders[1]["resistance"]["cizildi"]

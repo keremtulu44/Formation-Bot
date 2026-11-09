@@ -1339,6 +1339,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                         # akış bu anahtarı yazar — harici/test
                                         # çağrıları eski kartla kalır.
                                         payload['kart_yorum_kapisi'] = True
+                                        from domain_engines.stabil.structure_context import pattern_is_active
+                                        from domain_engines.stabil.signals import _causal_atr14
+                                        try:
+                                            stabil_atr = _causal_atr14(
+                                                df_tf["high"].to_numpy(dtype=float),
+                                                df_tf["low"].to_numpy(dtype=float),
+                                                df_tf["close"].to_numpy(dtype=float), period=14)[-1]
+                                        except (KeyError, TypeError, ValueError, IndexError):
+                                            stabil_atr = None
+                                        stable_upper = (getattr(active, "upper_now", None)
+                                                        if pattern_is_active(notification_state) else None)
                                         payload['domain_bolumleri'] = domain_bolumleri(
                                             outputs,
                                             reference_price=candle_close_price,
@@ -1374,6 +1385,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             # Sembol sınıfı hacim satırını belirler
                                             # (endeks/makro: "hacim yok" yerine neden).
                                             sembol=stock,
+                                            stabil_formation_upper=stable_upper,
+                                            stabil_formation_atr=stabil_atr,
                                         )
                                     except Exception as kart_hata:  # noqa: BLE001
                                         _pkg.logger.warning(
@@ -1499,6 +1512,16 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     _pkg._live_state.record_formation(formasyon_kaydi)
 
             if send_alerts and _pkg._alarm_izni_var(stock):
+                # Stabil evaluates the same closed-bar domain snapshot as the
+                # subsequent domain channel, even when no pattern fired first.
+                try:
+                    closed_frames = _pkg._completed_domain_frames(all_tfs, simdiki_zaman)
+                    _pkg._domain_results_for_notification(
+                        stock, all_tfs, simdiki_zaman, domain_results_by_stock,
+                        frames=closed_frames,
+                    )
+                except Exception as domain_err:  # noqa: BLE001
+                    _pkg.logger.warning("%s Stabil domain bağlamı hazırlanamadı: %s", stock, domain_err)
                 try:
                     from bot.stabil_service import evaluate_stabil_4h_candidate
 
@@ -1509,6 +1532,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         domain_results_by_stock=domain_results_by_stock,
                         bar_metni_fn=_mum_bilgisi,
                         direnc_gunluk_ham=df_gunluk_ham,
+                        pattern_snapshot=next((f for f in hisse_formasyonlari
+                                               if f.get("timeframe") == "4h"), None),
+                        notifier=notifier,
                     )
                     if st_cand is not None:
                         stabil_adaylari.append(st_cand)

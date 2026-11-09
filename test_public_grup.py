@@ -1194,7 +1194,7 @@ def test_stabil_public_grafikler_4h_1d_mevcut_album_yolundan_gider(
     monkeypatch.setattr(tt, "medya_grubu_gonder", sahte_album)
 
     behavior = SimpleNamespace(
-        reclaim_kind="close_reclaim",
+        reclaim_kind="multi_bar_recovery",
         rank_score=1.5,
         unchanged_days=26,
         touch_count=2,
@@ -1227,7 +1227,7 @@ def test_stabil_public_grafikler_4h_1d_mevcut_album_yolundan_gider(
     assert "THYAO" in events[0][1] and "4s — STABİL" in events[0][1]
     _, sent_paths, captions, chat_id = events[1]
     assert sent_paths == yollar
-    assert "STABİL GÜÇLÜ GERİ ALIM" in captions[0]
+    assert "STABİL ÇOK MUMLU TOPARLANMA" in captions[0]
     assert "1g üst zaman dilimi" in captions[1]
     assert chat_id == "-1001234567890"
     assert notifier.public_grafik_gonderilen == 2

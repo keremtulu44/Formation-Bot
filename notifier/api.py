@@ -286,6 +286,11 @@ class TelegramNotifier:
         from public_target_review import PublicTargetReview
         self._public_aux = PublicAuxOutbox(self, _pkg.DATA_DIR)
         self._dm_aux = PrivateAuxOutbox(self, _pkg.DATA_DIR)
+        for queue in (self._public_aux, self._dm_aux):
+            try:
+                queue.cancel_retired_stabil()
+            except (OSError, TypeError, ValueError) as exc:
+                logger.warning("Eski Stabil kuyruğu temizlenemedi: %s", type(exc).__name__)
         self._public_target_review = PublicTargetReview(_pkg.DATA_DIR)
         self._public_state_writable = True
         # GÖREV 6 (A10): Telegram sayaç ayrımı — alert/watch/digest/command
@@ -772,6 +777,13 @@ class TelegramNotifier:
     def public_ozel_gonder(self, event_id: str, text: str, *, identity=None, graphics=None):
         """Özel alarm public metin/görselini yerel kuyruğa al: (kabul, metin gitti)."""
         return self._public_aux.submit(event_id, text, identity=identity, graphics=graphics)
+
+    def stabil_bekleyen_iptal(self, event_id: str) -> int:
+        """Cancel only definitely unsent individual Stabil copies on both routes."""
+        cancelled = 0
+        for queue in (self._public_aux, self._dm_aux):
+            cancelled += queue.cancel_stabil_member(event_id)
+        return cancelled
 
     def public_ozel_bosalt(self) -> int:
         """Bütçe veya kesin ret sonrası bekleyen özel public alarmları dene."""

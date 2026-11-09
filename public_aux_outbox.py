@@ -84,7 +84,7 @@ class PublicAuxOutbox:
     def _prune_receipts(self, now):
         kept = []
         for row in self.rows:
-            if row.get("status") != "complete":
+            if row.get("status") not in {"complete", "cancelled"}:
                 kept.append(row)
                 continue
             try:
@@ -115,7 +115,7 @@ class PublicAuxOutbox:
                 return True, bool(row.get("text_sent"))
             now = self._now()
             self._prune_receipts(now)
-            if sum(r.get("status") != "complete" for r in self.rows) >= self.MAX_PENDING:
+            if sum(r.get("status") not in {"complete", "cancelled"} for r in self.rows) >= self.MAX_PENDING:
                 logger.error("%s özel alarm kuyruğu dolu (%d); yeni olay saklanamadı", self.label, self.MAX_PENDING)
                 return False, False
             snapshot = None
@@ -258,6 +258,58 @@ class PublicAuxOutbox:
                     logger.warning("%s özel alarm teslimi belirsiz; otomatik tekrar yok, elle incele", self.label)
         return sent_count
 
+    def cancel_retired_stabil(self):
+        """Retire definitely-unsent, individually identified old reclaim cards."""
+        with self.lock:
+            if not self.available:
+                return 0
+            ids = []
+            for row in self.rows:
+                identity = row.get("identity")
+                if not isinstance(identity, dict):
+                    continue
+                if (row.get("status") == "pending" and not row.get("text_sent")
+                        and identity.get("state") == "STABIL_GERI_ALIM"
+                        and identity.get("pattern_name") == "STABİL GÜÇLÜ GERİ ALIM"):
+                    ids.append(row["id"])
+            return sum(bool(self.cancel_pending(event_id)) for event_id in ids)
+
+    def cancel_pending(self, event_id):
+        """Cancel a definitely unsent single event; never alter ambiguous/delivered work."""
+        with self.lock:
+            if not self.available:
+                return False
+            row = next((r for r in self.rows if r.get("id") == str(event_id)), None)
+            if row is None or row.get("status") != "pending" or row.get("text_sent"):
+                return False
+            row["status"] = "cancelled"
+            row["graphics"] = None
+            self._volatile_graphics.pop(str(event_id), None)
+            self._save()
+            return True
+
+    def cancel_stabil_member(self, event_id):
+        """Cancel an unsent single; quarantine unsent summaries containing it.
+
+        A grouped card cannot safely be rewritten without reconstructing all
+        members; retain it for review rather than silently lose other members.
+        """
+        with self.lock:
+            cancelled = int(self.cancel_pending(event_id))
+            changed = False
+            for row in self.rows:
+                identity = row.get("identity")
+                if not isinstance(identity, dict):
+                    continue
+                if (row.get("status") == "pending" and not row.get("text_sent")
+                        and identity.get("state") == "STABIL_OZET"
+                        and str(event_id) in (identity.get("stabil_event_ids") or [])):
+                    row["status"] = "invalidated_group"
+                    changed = True
+            if changed:
+                self._save()
+            return cancelled + int(changed)
+
     def flush(self, max_items=3):
         with self.lock:
             try:
@@ -271,6 +323,6 @@ class PublicAuxOutbox:
             return {
                 "available": self.available,
                 "pending": sum(r.get("status") in {"pending", "text_sent"} for r in self.rows),
-                "review": sum(r.get("status") in {"uncertain", "graphics_uncertain", "expired", "target_changed", "sending", "graphics_sending"} for r in self.rows),
+                "review": sum(r.get("status") in {"uncertain", "graphics_uncertain", "expired", "target_changed", "sending", "graphics_sending", "invalidated_group"} for r in self.rows),
                 "completed": sum(r.get("status") == "complete" for r in self.rows),
             }

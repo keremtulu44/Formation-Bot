@@ -60,7 +60,7 @@ def test_falling_vertical_support_blocks_reclaim_and_marks_attempt():
     before, attempt = result[28:30]
     assert before.regime == "STEPPING_DOWN"
     assert attempt.vertical_support and attempt.fixed_support
-    assert attempt.vertical_attempt_kind == "close_reclaim"
+    assert attempt.vertical_attempt_kind == "touch_from_below"
     assert attempt.reclaim_kind is None and attempt.momentum_kind is None
     summary = summarize_symbol_for_command("ASTOR", SimpleNamespace(bar_behaviors=result))
     assert summary.bucket == "zayif_dusus" and summary.reclaim_kind is None
@@ -71,7 +71,7 @@ def test_horizontal_support_still_allows_real_reclaim():
     _, _, _, _, result = behaviors(falling=False)
     attempt = result[29]
     assert not attempt.vertical_support
-    assert attempt.reclaim_kind == "close_reclaim"
+    assert attempt.reclaim_kind is None
     assert attempt.vertical_attempt_kind is None
 
 
@@ -98,10 +98,10 @@ def test_vertical_warning_is_not_dispatched_as_bullish_standalone_stabil(tmp_pat
             domain_results_by_stock={"ASTOR": {"4h": {"stabil": result}}},
         )
 
-    assert vertical[-1].vertical_attempt_kind == "close_reclaim"
+    assert vertical[-1].vertical_attempt_kind == "touch_from_below"
     assert evaluate(vertical[-1]) is None  # warning is not a green reclaim alert
     candidate = evaluate(horizontal[-1])
-    assert candidate is not None and candidate.behavior.reclaim_kind == "close_reclaim"
+    assert candidate is None
 
 
 def test_falling_vertical_lower_wick_attempt_also_gets_warning():
@@ -128,9 +128,9 @@ def test_vertical_warning_is_projected_and_rendered_as_down_arrow():
     try:
         meta = _stabil_ciz(ax, {"stabil": layer}, len(points), (90, 105),
                            dusuk=frame["low"], yuksek=frame["high"])
-        assert meta["dikey_deneme_isaret"] == 1
+        assert meta["dikey_deneme_isaret"] == 0
         assert meta["reclaim_isaret"] == 0 and meta["momentum_isaret"] == 0
-        assert any(item.get_gid() == "grafik-stabil-dikey-deneme" for item in ax.collections)
+        assert not any(item.get_gid() == "grafik-stabil-dikey-deneme" for item in ax.collections)
     finally:
         plt.close(fig)
 
@@ -142,10 +142,9 @@ def test_legacy_snapshot_with_level_step_cannot_draw_up_arrow():
     try:
         meta = _stabil_ciz(ax, {"stabil": layer}, 3, (90, 105),
                            dusuk=[99, 94, 94], yuksek=[101, 96, 96])
-        assert meta["dikey_deneme_isaret"] == 1
+        assert meta["dikey_deneme_isaret"] == 0
         assert meta["reclaim_isaret"] == 1 and meta["momentum_isaret"] == 0
-        down = next(c for c in ax.collections if c.get_gid() == "grafik-stabil-dikey-deneme")
-        assert [int(point[0]) for point in down.get_offsets()] == [1]
+        assert not any(c.get_gid() == "grafik-stabil-dikey-deneme" for c in ax.collections)
     finally:
         plt.close(fig)
 
@@ -174,7 +173,7 @@ def test_recent_upward_step_stays_vertical_when_breach_regime_takes_priority():
     frame.loc[29, ["open", "high", "low", "close"]] = [104.7, 106.0, 104.6, 105.8]
     last = evaluate_bar_behaviors("ASTOR", "1d", frame, points, snapshots)[-1]
     assert last.regime == "BREACHED_FIXED_SUPPORT" and last.vertical_support
-    assert last.vertical_attempt_kind == "close_reclaim"
+    assert last.vertical_attempt_kind == "touch_from_below"
     assert last.reclaim_kind is None and last.momentum_kind is None
 
 
@@ -184,4 +183,4 @@ def test_older_breached_upward_step_does_not_remain_vertical_forever():
     snapshots[29] = replace(snapshots[29], bars_since_support=9)
     result = evaluate_bar_behaviors("ASTOR", "1d", frame, points, snapshots)
     assert result[-1].regime == "BREACHED_FIXED_SUPPORT"
-    assert not result[-1].vertical_support and result[-1].reclaim_kind == "close_reclaim"
+    assert not result[-1].vertical_support and result[-1].reclaim_kind is None

@@ -620,7 +620,8 @@ def _olay_ciz(ax, goruntu: Mapping[str, Any], n: int,
     yerlesik_swing: list[tuple[float, bool, float]] = []
     yerlesik_olay: list[tuple[float, float, float, float]] = []   # piksel kutular
     kritik_eslesdi = False
-    if not swinglar and not seviyeler and not olaylar and not (olay.get("kritik") or {}):
+    if (not swinglar and not seviyeler and not olaylar and not (olay.get("kritik") or {})
+            and not (goruntu.get("serit") or {}).get("capa")):
         return sayac
     zamanlar = list(goruntu.get("zamanlar") or [])
     dusuk = [float(v) for v in (list(goruntu.get("dusuk") or [])[:n])]
@@ -753,9 +754,17 @@ def _olay_ciz(ax, goruntu: Mapping[str, Any], n: int,
     for i in (serit.get("capa") or []):
         if 0 <= int(i) < n:
             y = dusuk[int(i)] if int(i) < len(dusuk) else None
-            ax.annotate("!", xy=(float(i), (y if y is not None else 0.0)), xytext=(0, -9),
-                        textcoords="offset points", ha="center", va="top", fontsize=9.5,
-                        color=PALET["ihlal"], zorder=7, annotation_clip=False)
+            if y is None:
+                continue
+            # Near the lower edge a fixed negative offset spills into the date
+            # axis (e.g. ASTOR 2h). Flip to above the candle if there is no room.
+            alt_px = ax.transData.transform((float(i), y))[1] - ax.bbox.y0
+            ust = goruntu.get("yuksek") or []
+            above = alt_px < 25 and int(i) < len(ust) and ust[int(i)] is not None
+            anchor = float(ust[int(i)]) if above else y
+            ax.annotate("!", xy=(float(i), anchor), xytext=(0, 5 if above else -9),
+                        textcoords="offset points", ha="center", va="bottom" if above else "top",
+                        fontsize=9.5, color=PALET["ihlal"], zorder=7, annotation_clip=True)
     return {"swing": sayac["swing"], "etiket_atlandi": sayac["etiket"],
             "kritik": 1 if kritik_cizildi else 0,
             "kritik_atlandi": sayac["kritik_atlandi"], "capa": len(serit.get("capa") or []),

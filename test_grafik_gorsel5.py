@@ -468,8 +468,8 @@ def test_ph_pl_sag_seritte_cetvel_olarak_durur():
     assert "HL" not in yazilar and not any(y.startswith(("PH", "PL")) for y in yazilar)
 
 
-def test_ph_pl_son_fiyatla_ayni_bantta_ise_atlanir_ve_sayilir():
-    """Son fiyat aynı seviyeyi söylüyorsa PH/PL çipi tekrar yazılmaz (sayılır)."""
+def test_ph_pl_son_fiyatla_ayni_bantta_bile_rol_korunur():
+    """Aynı fiyat, yapı rolünü kaybetmez; iki etiket çakışmadan yerleşir."""
     from matplotlib.figure import Figure
 
     fig = Figure(figsize=(10.8, 8.1), dpi=100)
@@ -484,8 +484,9 @@ def test_ph_pl_son_fiyatla_ayni_bantta_ise_atlanir_ve_sayilir():
     ]
     ozet = grafik._sag_ciz(ax, fig, adaylar, 60, aralik)
     metinler = [str(t.get_text()) for t in ax.texts if t.get_bbox_patch() is not None]
-    assert metinler == ["100,00"]                 # PH tekrarı yok
-    assert ozet["atlanan_kaynak"].get("swing") == 1 and ozet["atlanan"] == 1
+    assert sorted(metinler) == ["100,00", "PH 100,00"]
+    assert ozet["atlanan"] == 0
+    assert ozet["lider"] >= 1
 
 
 def test_ph_pl_son_fiyattan_uzaksa_ikisi_de_kalir():

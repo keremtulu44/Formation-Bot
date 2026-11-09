@@ -172,7 +172,10 @@ def test_ci_doctor_smoke_is_offline_and_checks_png_and_resistance():
     assert "--skip-network --grafik-test" in body
     assert "--send-test-message" not in body
     assert "Kare üretildi: AKBNK 4h" in body
-    assert "Stabil direnç" in body and "Fotoğraf gönderilmedi" in body
+    assert "scripts/ci_seed_graphics.py" in body
+    assert "Stabil direnç bu karede çizildi" in body
+    assert "Stabil direnç hazır ama bu karede çizilmedi" in body
+    assert "Fotoğraf gönderilmedi" in body
     assert "set -euo pipefail" in body
 
 
@@ -317,3 +320,29 @@ def test_termux_minimums_do_not_allow_the_known_vulnerable_pins():
     assert "2.33.0" in entries["requests"]
     assert "1.0.1" not in entries["python-dotenv"]
     assert "1.2.2" in entries["python-dotenv"]
+
+
+def test_doctor_ci_gate_rejects_unready_resistance(tmp_path):
+    body = script(".github/workflows/ci.yml", "- name: Kurulum doktoru ve grafik")
+    gate = next(line for line in body.splitlines() if "grep -Eq" in line and "Stabil direnç" in line)
+    log = tmp_path / "deploy-doctor.log"
+    log.write_text("⚠️ [UYARI] Stabil direnç bu karede hazır değil\n")
+    result = run_sh(tmp_path, gate, RUNNER_TEMP=str(tmp_path))
+    assert result.returncode != 0
+    log.write_text("✅ [OK  ] Stabil direnç bu karede çizildi\n")
+    assert run_sh(tmp_path, gate, RUNNER_TEMP=str(tmp_path)).returncode == 0
+    log.write_text("⚠️ [UYARI] Stabil direnç hazır ama bu karede çizilmedi\n")
+    assert run_sh(tmp_path, gate, RUNNER_TEMP=str(tmp_path)).returncode == 0
+
+
+def test_graphics_ci_daily_seed_matches_hourly_cutoff_and_avoids_live_dir(tmp_path):
+    import json
+    from datetime import datetime
+    from scripts.ci_seed_graphics import ROOT, main
+    main(str(tmp_path))
+    daily = json.loads((tmp_path / "AKBNK_gunluk.json").read_text())
+    hourly = json.loads((ROOT / "bot_data/AKBNK.json").read_text())
+    assert max(datetime.fromisoformat(r['timestamp']).date() for r in daily) <= max(
+        datetime.fromisoformat(r['timestamp']).date() for r in hourly)
+    with pytest.raises(ValueError):
+        main(str(ROOT / 'bot_data'))

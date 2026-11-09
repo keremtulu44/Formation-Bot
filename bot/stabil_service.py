@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 import json
 import logging
@@ -121,6 +121,7 @@ def _stabil_public_grafik_verisi_uret(
     *,
     direnc_gunluk_ham: pd.DataFrame | None = None,
     direnc_saatlik_ham: pd.DataFrame | None = None,
+    pattern_snapshot: Mapping[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Public Stabil kartı için mevcut ana-TF + üst-TF kare sözleşmesini üret.
 
@@ -153,8 +154,21 @@ def _stabil_public_grafik_verisi_uret(
         except Exception as exc:  # noqa: BLE001 - eski destek alarm karesi korunur
             logger.warning("Stabil direnç grafiği atlandı (%s): %s", stock, type(exc).__name__)
 
+        chart_pattern = None
+        if isinstance(pattern_snapshot, Mapping):
+            try:
+                matches = pd.Timestamp(pattern_snapshot.get("bar_time")) == pd.Timestamp(df_4h.index[-1])
+            except (TypeError, ValueError):
+                matches = False
+            if matches:
+                chart_pattern = {
+                    "state": pattern_snapshot.get("state"),
+                    "pattern_name": pattern_snapshot.get("pattern_name"),
+                    "upper_now": pattern_snapshot.get("upper"),
+                    "lower_now": pattern_snapshot.get("lower"),
+                }
         veri = grafik.kare_listesi(
-            None,
+            chart_pattern,
             "4h",
             df_4h,
             sonuclar=sonuclar,
@@ -195,6 +209,34 @@ def _stabil_public_grafik_verisi_uret(
         return None
 
 
+def _update_sent_stabil_status(state, symbol, frame, market_result):
+    """Record later opposite BOS without changing the original delivered alert."""
+    from domain_engines.stabil.structure_context import events_for_bars, marker_state
+    item = (state.get("symbols") or {}).get(symbol) or {}
+    if not item.get("last_bar_open") or item.get("signal_status") == "invalidated_by_opposite_bos":
+        return False
+    try:
+        origin = pd.Timestamp(item["last_bar_open"])
+        matches = [i for i, time in enumerate(frame.index) if pd.Timestamp(time) == origin]
+    except (TypeError, ValueError):
+        return False
+    if len(matches) != 1:
+        return False
+    bar = matches[0]
+    events = events_for_bars(market_result, frame.index)
+    # Invalidation is a separate post-delivery fact even if another event
+    # would classify the original marker as opposed in hindsight.
+    post = [e for e in events if bar < e[0] <= min(bar + 3, len(frame) - 1)]
+    if marker_state(bar, "UP", "4h", post, len(frame) - 1) != "invalidated_by_opposite_bos":
+        return False
+    invalidation_bar = next(i for i, kind, direction in post
+                            if kind == "BOS" and direction == "DOWN"
+                            and {e[2] for e in post if e[0] == i and e[1] == "BOS"} == {"DOWN"})
+    item["signal_status"] = "invalidated_by_opposite_bos"
+    item["invalidated_bar_open"] = pd.Timestamp(frame.index[invalidation_bar]).isoformat()
+    return True
+
+
 def evaluate_stabil_4h_candidate(
     stock: str,
     all_tfs: Mapping[str, pd.DataFrame],
@@ -204,6 +246,8 @@ def evaluate_stabil_4h_candidate(
     bar_metni_fn: Any = None,
     state_path: str | None = None,
     direnc_gunluk_ham: pd.DataFrame | None = None,
+    pattern_snapshot: Any = None,
+    notifier: Any = None,
 ) -> StabilAlarmCandidate | None:
     """Evaluate closed 4H bar for strong Stabil reclaim signal with causal dedup & cooldown."""
     if not bool(getattr(config, "STABIL_GERI_ALIM_ALARM", True)):
@@ -237,6 +281,22 @@ def evaluate_stabil_4h_candidate(
     bar_open_iso = pd.Timestamp(last_open_ts).isoformat()
     state = _load_alarm_state(state_path)
     sym_state = (state.get("symbols") or {}).get(stock) or {}
+    cached_tf = (domain_results_by_stock or {}).get(stock, {})
+    cached_tf = cached_tf.get("4h", {}) if isinstance(cached_tf, Mapping) else {}
+    cached_market = cached_tf.get("market_structure") if isinstance(cached_tf, Mapping) else None
+    if _update_sent_stabil_status(state, stock, df_4h, cached_market):
+        sym_state["queue_cancel_pending"] = True
+        _save_alarm_state(state, state_path)
+    cancel = getattr(notifier, "stabil_bekleyen_iptal", None)
+    if sym_state.get("queue_cancel_pending") and callable(cancel):
+        from public_aux_outbox import auxiliary_event_id
+        event_id = auxiliary_event_id("stabil", [(stock, sym_state.get("last_bar_open"))])
+        try:
+            cancel(event_id)
+            sym_state.pop("queue_cancel_pending", None)
+            _save_alarm_state(state, state_path)
+        except (OSError, TypeError, ValueError) as exc:
+            logger.warning("Stabil bekleyen alarm iptali kaydedilemedi (%s): %s", stock, exc)
     last_sent_open = sym_state.get("last_bar_open")
     if last_sent_open == bar_open_iso:
         return None
@@ -272,9 +332,47 @@ def evaluate_stabil_4h_candidate(
     if bhv is None and isinstance(getattr(stabil_res, "details", None), Mapping):
         bhv = stabil_res.details.get("latest_behavior")
 
-    if bhv is None or bhv.reclaim_kind not in {"close_reclaim", "intrabar_sweep_reclaim"}:
+    if bhv is None or bhv.reclaim_kind not in {"multi_bar_recovery", "intrabar_sweep_reclaim"}:
+        return None
+    # Apply the same optional causal structure gate as the chart. Missing or
+    # unaligned Market Structure data are not evidence of a contrary event.
+    from domain_engines.stabil.structure_context import barrier_reason, events_for_bars, marker_state, pattern_is_active
+    tf_map = (domain_results_by_stock or {}).get(stock, {})
+    per_tf = tf_map.get("4h", {}) if isinstance(tf_map, Mapping) else {}
+    ms = per_tf.get("market_structure") if isinstance(per_tf, Mapping) else None
+    events = events_for_bars(ms, df_4h.index)
+    if marker_state(len(df_4h) - 1, "UP", "4h", events, len(df_4h) - 1) == "opposite_structure":
         return None
     if bhv.support_level is None or bhv.close_price is None:
+        return None
+
+    # Same-bar opposing boundaries, only when their source is available.
+    # A missing pattern/resistance is unknown, not an invented obstacle.
+    from domain_engines.stabil.signals import _causal_atr14
+    import numpy as np
+    atr = _causal_atr14(df_4h["high"].to_numpy(dtype=float),
+                        df_4h["low"].to_numpy(dtype=float),
+                        df_4h["close"].to_numpy(dtype=float), period=14)[-1]
+    barriers = []
+    if isinstance(pattern_snapshot, Mapping):
+        try:
+            pattern_time = pd.Timestamp(pattern_snapshot.get("bar_time"))
+            same_bar = not pd.isna(pattern_time) and pattern_time == pd.Timestamp(last_open_ts)
+        except (TypeError, ValueError):
+            same_bar = False
+        if same_bar and pattern_is_active(pattern_snapshot.get("state")):
+            barriers.append(("formasyon_siniri", pattern_snapshot.get("upper")))
+    resistance = per_tf.get("stabil_direnc") if isinstance(per_tf, Mapping) else None
+    if resistance is None and all_tfs.get("1h") is not None and direnc_gunluk_ham is not None:
+        from domain_engines.stabil.chart_bridge import resistance_for_chart
+        resistance = resistance_for_chart(stock, "4h", df_4h, daily_frame=direnc_gunluk_ham,
+                                          hourly_frame=all_tfs.get("1h"), as_of_close=simdiki_zaman)
+    if resistance is not None:
+        from grafik.tarama import _stabil_direnc_verisi
+        layer = _stabil_direnc_verisi({"stabil_direnc": resistance}, "4h", 0, len(df_4h), list(df_4h.index))
+        if layer and layer.get("hazir") and layer.get("renkler") and layer["renkler"][-1] == "alt":
+            barriers.insert(0, ("stabil_koridoru", layer["seviyeler"][-1]))
+    if barrier_reason(bhv.close_price, atr, "UP", barriers):
         return None
 
     card_lines = tuple(
@@ -300,6 +398,7 @@ def evaluate_stabil_4h_candidate(
             stabil_res,
             direnc_gunluk_ham=direnc_gunluk_ham,
             direnc_saatlik_ham=all_tfs.get("1h"),
+            pattern_snapshot=pattern_snapshot,
         )
     return StabilAlarmCandidate(
         symbol=stock,
@@ -318,8 +417,8 @@ def format_stabil_reclaim_alert_card(cand: StabilAlarmCandidate) -> str:
     """283px mobile-safe standalone 4H Stabil strong reclaim alert card."""
     bhv = cand.behavior
     baslik_tur = (
-        "STABİL GÜÇLÜ GERİ ALIM"
-        if bhv.reclaim_kind == "close_reclaim"
+        "STABİL ÇOK MUMLU TOPARLANMA"
+        if bhv.reclaim_kind == "multi_bar_recovery"
         else "STABİL SİLKELEME DÖNÜŞÜ"
     )
     satirlar = [
@@ -342,14 +441,8 @@ def format_stabil_reclaim_alert_card(cand: StabilAlarmCandidate) -> str:
     if zemin_parcalar:
         satirlar.append("Zemin: " + " · ".join(zemin_parcalar))
 
-    satirlar.extend(
-        [
-            "",
-            "📊 Arşiv karşılığı (canlı evren 4s):",
-            "• Sonraki mum destek üstü: %91,5",
-            "• 2 günde ortanca fark: +0,26 ATR",
-        ]
-    )
+    # Historical combined close-reclaim/sweep statistics do not describe the
+    # new multi-bar rule or the sweep-only subset; do not present them here.
     return metni_sigdir("\n".join(satirlar), guvenlik=1.0)
 
 
@@ -362,12 +455,12 @@ def format_stabil_burst_summary_card(extra_candidates: Sequence[StabilAlarmCandi
     ]
     if zaman:
         satirlar.append(f"Kapanan mum: {zaman}")
-    satirlar.append("Aynı 4s kapanışında destek üstüne güçlü dönen diğer semboller:")
+    satirlar.append("Aynı 4s kapanışındaki diğer Stabil dönüşleri:")
     satirlar.append("")
     for c in extra_candidates[:10]:
         pct = c.behavior.pct_vs_support or 0.0
-        pct_s = f"+%{_tr_sayi(abs(pct), 1)}"
-        tur = "geri alım" if c.behavior.reclaim_kind == "close_reclaim" else "silkeleme dönüşü"
+        pct_s = f"{'+' if pct >= 0 else '-'}%{_tr_sayi(abs(pct), 1)}"
+        tur = "geri alım" if c.behavior.reclaim_kind == "multi_bar_recovery" else "silkeleme dönüşü"
         satirlar.append(
             f"• {c.symbol}: {_tr_sayi(c.close_price)} (destek {_tr_sayi(c.support_level)}, {pct_s}) · {tur}"
         )
@@ -448,7 +541,7 @@ def _deliver_stabil_message(notifier: Any, text: str) -> bool:
 
 
 def _stabil_public_identity(cand: StabilAlarmCandidate) -> dict[str, str]:
-    tur = ("STABİL GÜÇLÜ GERİ ALIM" if cand.behavior.reclaim_kind == "close_reclaim"
+    tur = ("STABİL ÇOK MUMLU TOPARLANMA" if cand.behavior.reclaim_kind == "multi_bar_recovery"
            else "STABİL SİLKELEME DÖNÜŞÜ")
     return {"stock_name": cand.symbol, "timeframe": "4h", "state": "STABIL_GERI_ALIM",
             "pattern_name": tur, "formation_id": cand.bar_open_ts}
@@ -484,6 +577,10 @@ def dispatch_stabil_scan_candidates(
     state_path: str | None = None,
 ) -> dict[str, int]:
     """Send standalone 4H Stabil alerts applying burst rule (>3 -> top 2 cards + 1 summary)."""
+    # Legacy candidates may be deserialized or passed directly, bypassing
+    # evaluation. Never dispatch the retired support close_reclaim path.
+    candidates = [c for c in candidates if c.behavior.reclaim_kind in
+                  {"intrabar_sweep_reclaim", "multi_bar_recovery"}]
     ozet = {"aday": len(candidates), "tekil_gonderilen": 0, "toplu_ozet": 0}
     if not candidates:
         return ozet
@@ -522,6 +619,7 @@ def dispatch_stabil_scan_candidates(
                 "last_bar_open": cand.bar_open_ts,
                 "last_bar_close": cand.bar_close_ts,
                 "kind": cand.behavior.reclaim_kind,
+                "signal_status": "active",
             }
             degisti = True
 
@@ -531,6 +629,9 @@ def dispatch_stabil_scan_candidates(
             notifier, ozet_metin,
             public_event_id=auxiliary_event_id(
                 "stabil-summary", [(c.symbol, c.bar_open_ts) for c in toplu_liste]),
+            public_identity={"state": "STABIL_OZET", "stabil_event_ids": [
+                auxiliary_event_id("stabil", [(c.symbol, c.bar_open_ts)]) for c in toplu_liste
+            ]},
         )
         if sonuc["any"]:
             ozet["toplu_ozet"] = 1
@@ -540,6 +641,7 @@ def dispatch_stabil_scan_candidates(
                     "last_bar_open": cand.bar_open_ts,
                     "last_bar_close": cand.bar_close_ts,
                     "kind": cand.behavior.reclaim_kind,
+                    "signal_status": "active",
                 }
             degisti = True
 
@@ -574,10 +676,87 @@ def _symbol_frames_from_cache(
     return df_4h, df_1d
 
 
+def _command_structure_context(symbol: str, timeframe: str, frame: pd.DataFrame,
+                               bhv: Any, summary: LiveStabilSummary | None):
+    """Use only a same-snapshot cached structure result, never a stale cache."""
+    if summary is None or summary.bucket != "guclu_cikis" or frame is None or frame.empty:
+        return bhv, summary
+    from domain_engines.runner import get_latest_domain_results
+    from domain_engines.stabil.structure_context import events_for_bars, marker_state
+    record = (get_latest_domain_results(symbol, timeframe) or {}).get("market_structure")
+    snapshot = getattr(record, "result", None)
+    try:
+        timestamp = pd.Timestamp(getattr(snapshot, "timestamp", None))
+        if pd.isna(timestamp) or timestamp != pd.Timestamp(frame.index[-1]):
+            return bhv, summary
+    except (ValueError, TypeError):
+        return bhv, summary
+    events = events_for_bars(record, frame.index)
+    current = len(frame) - 1
+    marker_bar = current - (summary.reclaim_bars_ago or 0)
+    status = marker_state(marker_bar, "UP", timeframe, events, current)
+    if status not in {"opposite_structure", "invalidated_by_opposite_bos"}:
+        return bhv, summary
+    if bhv is not None:
+        bhv = replace(bhv, reclaim_kind=None, momentum_kind=None)
+    return bhv, replace(summary, bucket="notr", priority=0.0, reclaim_kind=None,
+                        reclaim_bars_ago=None,
+                        headline_tr=f"{symbol} · ters piyasa yapısı bağlamı",
+                        detail_tr="Ters yapı veya sonradan ters BOS: önceki yukarı ok bastırıldı.")
+
+
+def _command_barrier_context(symbol, timeframe, frame, bhv, summary, manager, now, formations):
+    """Use only current-bar geometry; never back-project today's formation."""
+    if (summary is None or summary.bucket != "guclu_cikis" or frame is None or frame.empty
+            or (summary.reclaim_bars_ago or 0) != 0):
+        return bhv, summary
+    from domain_engines.stabil.structure_context import barrier_reason, pattern_is_active
+    from domain_engines.stabil.signals import _causal_atr14
+    barriers = []
+    for pattern in formations or ():
+        if pattern.get("stock") != symbol or pattern.get("timeframe") != timeframe:
+            continue
+        try:
+            same_bar = pd.Timestamp(pattern.get("bar_time")) == pd.Timestamp(frame.index[-1])
+        except (ValueError, TypeError):
+            same_bar = False
+        if same_bar and pattern_is_active(pattern.get("state")):
+            barriers.append(("formasyon_siniri", pattern.get("upper")))
+            break
+    try:
+        from domain_engines.stabil.chart_bridge import resistance_for_chart
+        from grafik.tarama import _stabil_direnc_verisi
+        raw_daily = manager.to_gunluk_dataframe(symbol)
+        raw_hourly = manager.to_dataframe(symbol)
+        if raw_daily is not None and (timeframe == "1d" or raw_hourly is not None):
+            resistance = resistance_for_chart(symbol, timeframe, frame, daily_frame=raw_daily,
+                                               hourly_frame=raw_hourly, as_of_close=now)
+            layer = _stabil_direnc_verisi({"stabil_direnc": resistance}, timeframe, 0,
+                                           len(frame), list(frame.index))
+            if layer and layer.get("hazir") and layer.get("renkler") and layer["renkler"][-1] == "alt":
+                barriers.insert(0, ("stabil_koridoru", layer["seviyeler"][-1]))
+    except Exception as exc:
+        logger.debug("/stabil direnç bağlamı kullanılamadı (%s): %s", symbol, exc)
+    try:
+        atr = _causal_atr14(frame["high"].to_numpy(dtype=float), frame["low"].to_numpy(dtype=float),
+                            frame["close"].to_numpy(dtype=float), period=14)[-1]
+        reason = barrier_reason(summary.close_price, atr, "UP", barriers)
+    except (KeyError, ValueError, TypeError, IndexError):
+        reason = None
+    if reason is None:
+        return bhv, summary
+    if bhv is not None:
+        bhv = replace(bhv, reclaim_kind=None, momentum_kind=None)
+    return bhv, replace(summary, bucket="notr", priority=0.0, reclaim_kind=None,
+                        reclaim_bars_ago=None, headline_tr=f"{symbol} · yakın karşı sınır",
+                        detail_tr="Karşı sınır yakın; yukarı ok bağlamda bastırıldı.")
+
+
 def format_single_symbol_stabil_report(
     stock: str,
     deque_manager: Any,
     now: datetime,
+    formations: Sequence[Mapping[str, Any]] = (),
 ) -> str:
     if config.sembol_turu(stock) == "makro":
         return metni_sigdir(
@@ -620,12 +799,15 @@ def format_single_symbol_stabil_report(
             guvenlik=1.0,
         )
 
-    card_lines = format_stabil_card_lines(
-        price=bhv.close_price,
-        support_level=bhv.support_level,
-        behavior=bhv,
-    )
     summary = summarize_symbol_for_command(stock, out_4h or out_1d, out_1d)
+    bhv, summary = _command_structure_context(
+        stock, "4h" if out_4h is not None else "1d",
+        df_4h if out_4h is not None else df_1d, bhv, summary)
+    bhv, summary = _command_barrier_context(
+        stock, "4h" if out_4h is not None else "1d",
+        df_4h if out_4h is not None else df_1d, bhv, summary, deque_manager, now, formations)
+    card_lines = format_stabil_card_lines(
+        price=bhv.close_price, support_level=bhv.support_level, behavior=bhv)
 
     grup_etiket = {
         "guclu_cikis": "🟢 Güçlü çıkış / geri alım",
@@ -669,6 +851,7 @@ def format_stabil_universe_command(
     deque_manager: Any,
     active_stocks: Sequence[str],
     now: datetime,
+    formations: Sequence[Mapping[str, Any]] = (),
 ) -> str:
     """`/stabil` and `/stabil <SEMBOL>` handler implementation."""
     temiz = (arguman or "").strip().upper().replace(".IS", "")
@@ -681,7 +864,7 @@ def format_stabil_universe_command(
                 "Genel görünüm için /stabil · örnek tek sembol: /stabil THYAO",
                 guvenlik=1.0,
             )
-        return format_single_symbol_stabil_report(parca, deque_manager, now)
+        return format_single_symbol_stabil_report(parca, deque_manager, now, formations)
 
     if deque_manager is None:
         return "⏳ Önbellek henüz hazır değil; ilk taramadan sonra /stabil kullanılabilir."
@@ -710,6 +893,12 @@ def format_stabil_universe_command(
             out_4h = getattr(bundle.get("4h"), "result", None) if "4h" in bundle else None
             out_1d = getattr(bundle.get("1d"), "result", None) if "1d" in bundle else None
             ozet = summarize_symbol_for_command(sym, out_4h or out_1d, out_1d)
+            _, ozet = _command_structure_context(
+                sym, "4h" if out_4h is not None else "1d",
+                df_4h if out_4h is not None else df_1d, None, ozet)
+            _, ozet = _command_barrier_context(
+                sym, "4h" if out_4h is not None else "1d",
+                df_4h if out_4h is not None else df_1d, None, ozet, deque_manager, now, formations)
             if ozet is not None:
                 summaries.append(ozet)
         except Exception as exc:

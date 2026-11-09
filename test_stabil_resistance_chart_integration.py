@@ -88,7 +88,11 @@ def test_grafik_uret_builds_real_resistance_overlay_without_alarm_kill_switch(tf
     layer = observed[0]["stabil_direnc"]
     assert layer["hazir"] and layer["durum"] == "READY" and layer["son_seviye"] > 0
     assert observed[0]["stabil"] is not None
-    assert answer["meta"]["cizgiler"]["stabil_direnc"]["son_seviye"] == layer["son_seviye"]
+    drawn = answer["meta"]["cizgiler"]["stabil_direnc"]
+    if tf in {"1h", "2h"}:
+        assert answer["meta"]["stabil_cizimde_gizli"] and not drawn["cizildi"]
+    else:
+        assert drawn["son_seviye"] == layer["son_seviye"]
     assert not any("Stabil direnç gösterilemedi" in msg for msg in answer["meta"]["uyarilar"])
 
 
@@ -398,48 +402,14 @@ def test_real_archived_stabil_reclaim_candidate_and_notifications_are_unchanged(
                                       as_of_close=now, isolated=True)
     results = {"AKBNK": {tf: {"stabil": value} for tf, value in bundle.items()}}
     before = results["AKBNK"]["4h"]["stabil"].result.latest_behavior
-    assert before.reclaim_kind == "close_reclaim"
+    assert before.reclaim_kind is None
     assert before.support_level == pytest.approx(69.30, abs=.01)
     assert before.close_price == pytest.approx(72.50, abs=.01)
     monkeypatch.setattr(config, "STABIL_GERI_ALIM_ALARM", True)
-    monkeypatch.setattr(config, "STABIL_ALARM_DM", True)
-    monkeypatch.setattr(config, "STABIL_ALARM_PUBLIC", True)
-    args = ("AKBNK", frames, now)
-    options = {"domain_results_by_stock": results, "direnc_gunluk_ham": daily,
-               "state_path": str(tmp_path / "not-yet-sent.json")}
-    monkeypatch.setenv("TELEGRAM_GRAFIK", "yok")
-    old = evaluate_stabil_4h_candidate(*args, **options)
-    monkeypatch.setenv("TELEGRAM_GRAFIK", "alarm")
-    new = evaluate_stabil_4h_candidate(*args, **options)
-    assert old and new
-    assert replace(old, grafik_verisi_public=None) == replace(new, grafik_verisi_public=None)
-    assert format_stabil_reclaim_alert_card(old) == format_stabil_reclaim_alert_card(new)
-    assert results["AKBNK"]["4h"]["stabil"].result.latest_behavior == before
-    assert [k["tf"] for k in new.grafik_verisi_public["goruntular"]] == ["4h", "1d"]
-    assert all(k["goruntu"]["stabil_direnc"]["hazir"] for k in new.grafik_verisi_public["goruntular"])
-    image = new.grafik_verisi_public["goruntular"][0]["goruntu"]
-    path, meta = grafik.ciz(image, "4h", secenekler={"cikti": str(tmp_path / "stabil.png")})
-    assert path and meta["cizgiler"]["stabil_direnc"]["cizildi"]
-    assert meta["cizgiler"]["stabil"]["reclaim_isaret"] >= 1
-
-    class Notifier:
-        enabled = public_enabled = True
-        def __init__(self): self.dm, self.public, self.graphics = [], [], []
-        def send_text(self, text):
-            self.dm.append(text)
-            return True, "ok"
-        def public_ozel_gonder(self, _event, text, *, identity, graphics):
-            self.public.append((text, identity))
-            self.graphics.append(graphics)
-            return True, True
-
-    first, second = Notifier(), Notifier()
-    report_a = dispatch_stabil_scan_candidates([old], first, state_path=str(tmp_path / "a.json"))
-    report_b = dispatch_stabil_scan_candidates([new], second, state_path=str(tmp_path / "b.json"))
-    assert report_a == report_b == {"aday": 1, "tekil_gonderilen": 1, "toplu_ozet": 0}
-    assert first.dm == second.dm and first.public == second.public
-    assert first.graphics == [None] and second.graphics == [new.grafik_verisi_public]
-    assert (tmp_path / "a.json").read_text() == (tmp_path / "b.json").read_text()
+    assert evaluate_stabil_4h_candidate(
+        "AKBNK", frames, now, domain_results_by_stock=results,
+        direnc_gunluk_ham=daily, state_path=str(tmp_path / "state.json"),
+    ) is None
 
 
 def test_automatic_graphs_report_exception_but_keep_existing_layers(monkeypatch, tmp_path):

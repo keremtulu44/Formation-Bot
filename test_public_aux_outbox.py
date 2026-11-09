@@ -172,7 +172,7 @@ def test_stabil_dm_success_no_longer_loses_quota_blocked_public_copy(monkeypatch
     monkeypatch.setattr(config, "STABIL_ALARM_DM", True)
     monkeypatch.setattr(config, "STABIL_ALARM_PUBLIC", True)
     n = RoutedNotifier(tmp_path)
-    behavior = SimpleNamespace(reclaim_kind="close_reclaim", rank_score=1.5,
+    behavior = SimpleNamespace(reclaim_kind="multi_bar_recovery", rank_score=1.5,
                                unchanged_days=26, touch_count=2, vol_ratio=1.35)
     cand = StabilAlarmCandidate(symbol="THYAO", bar_open_ts="2026-11-06T09:30:00+03:00",
                                 bar_close_ts="2026-11-06T13:30:00+03:00", bar_label="06.11 13:30",
@@ -255,3 +255,53 @@ def test_text_sent_before_crash_resumes_only_its_graphics(tmp_path):
     assert recovered.flush() == 0
     assert recovered_owner.attempts == [] and len(recovered_owner.graphics) == 1
     assert recovered.status()["completed"] == 1
+
+
+def test_cancel_pending_only_cancels_definitely_unsent_and_survives_restart(tmp_path):
+    owner = FakeOwner(["butce"])
+    queue = PublicAuxOutbox(owner, tmp_path)
+    assert queue.submit("stabil:old", "old reclaim", graphics=_graphics()) == (True, False)
+    assert queue.cancel_pending("stabil:old")
+    assert not queue.cancel_pending("stabil:old")
+    recovered_owner = FakeOwner(["gonderildi"])
+    recovered = PublicAuxOutbox(recovered_owner, tmp_path)
+    assert recovered.flush() == 0 and recovered_owner.attempts == []
+    assert recovered.rows[0]["status"] == "cancelled"
+
+
+def test_cancel_pending_never_changes_uncertain_or_delivered_rows(tmp_path):
+    owner = FakeOwner(["belirsiz", "gonderildi"])
+    queue = PublicAuxOutbox(owner, tmp_path)
+    assert queue.submit("uncertain", "unknown")[0]
+    assert not queue.cancel_pending("uncertain")
+    assert queue.submit("delivered", "sent")[1]
+    assert not queue.cancel_pending("delivered")
+
+
+def test_retired_reclaim_migration_only_cancels_identified_unsent(tmp_path):
+    owner = FakeOwner(["butce", "butce", "belirsiz"])
+    queue = PublicAuxOutbox(owner, tmp_path)
+    old = {"state": "STABIL_GERI_ALIM", "pattern_name": "STABİL GÜÇLÜ GERİ ALIM"}
+    new = {"state": "STABIL_GERI_ALIM", "pattern_name": "STABİL ÇOK MUMLU TOPARLANMA"}
+    assert queue.submit("old", "old", identity=old)[0]
+    assert queue.submit("new", "new", identity=new)[0]
+    # Simulate a previously attempted request whose delivery is unknown.
+    queue.rows.append({"id": "uncertain", "status": "uncertain", "text_sent": False,
+                       "identity": old})
+    assert queue.cancel_retired_stabil() == 1
+    assert {row["id"]: row["status"] for row in queue.rows} == {
+        "old": "cancelled", "new": "pending", "uncertain": "uncertain"}
+
+
+def test_invalidated_pending_summary_goes_to_review_without_sending_other_members(tmp_path):
+    owner = FakeOwner(["butce"])
+    queue = PublicAuxOutbox(owner, tmp_path)
+    identity = {"state": "STABIL_OZET", "stabil_event_ids": ["stabil:a", "stabil:b"]}
+    assert queue.submit("stabil-summary:ab", "A and B", identity=identity) == (True, False)
+    assert queue.cancel_stabil_member("stabil:a") == 1
+    assert queue.rows[0]["status"] == "invalidated_group"
+    assert queue.status()["review"] == 1
+    recovered_owner = FakeOwner(["gonderildi"])
+    recovered = PublicAuxOutbox(recovered_owner, tmp_path)
+    assert recovered.flush() == 0 and recovered_owner.attempts == []
+    assert recovered.rows[0]["text"] == "A and B"  # retained for operator review

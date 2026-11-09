@@ -38,7 +38,7 @@ def test_reverse_colors_distinct_dashed_line_and_all_arrow_shapes():
     info = _stabil_direnc_ciz(ax, {"stabil_direnc": _layer()}, 6, (95, 105), kadrajda=True,
                                dusuk=[99] * 6, yuksek=[102] * 6, sag_adaylar=chips)
     assert info["cizildi"] and info["gorunur_bar"] == 6
-    assert (info["donus_isaret"], info["momentum_isaret"], info["dikey_deneme_isaret"]) == (1, 1, 1)
+    assert (info["donus_isaret"], info["momentum_isaret"], info["dikey_deneme_isaret"]) == (1, 1, 0)
     items = {c.get_gid(): c for c in ax.collections}
     line = items["grafik-stabil-direnc-stepline"]
     assert [colors.to_hex(c) for c in line.get_colors()] == [
@@ -47,9 +47,8 @@ def test_reverse_colors_distinct_dashed_line_and_all_arrow_shapes():
     assert line.get_linestyles()[0][1] is not None  # dashed, distinguishable from solid support
     assert len(items["grafik-stabil-direnc-donus"].get_facecolors()) == 1
     assert len(items["grafik-stabil-direnc-momentum"].get_facecolors()) == 0
-    assert len(items["grafik-stabil-direnc-dikey-deneme"].get_facecolors()) == 0
+    assert "grafik-stabil-direnc-dikey-deneme" not in items
     assert colors.to_hex(items["grafik-stabil-direnc-donus"].get_facecolors()[0]) == grafik.PALET["stabil_direnc"]
-    assert colors.to_hex(items["grafik-stabil-direnc-dikey-deneme"].get_edgecolors()[0]) == grafik.PALET["stabil_direnc"]
     assert [(x["kaynak"], x["metin"]) for x in chips] == [("stabil_direnc", "Direnç 101,00")]
 
 
@@ -126,7 +125,7 @@ def test_legend_reports_only_visible_classifications():
     metin = " · ".join(legend)
     assert "┄ Stabil direnç (turuncu)" in metin
     assert "▼ dönüş = sinyal" in metin
-    assert "◇ = uyarı" in metin                      # ◇ var: uyarı sözlükte konuşur
+    assert "◇ = uyarı" not in metin
     assert "▽ momentum" not in metin                # momentum yok: yazılmaz
 
 
@@ -150,7 +149,7 @@ def test_legend_explains_both_layers_in_the_same_language():
     assert "▲ geri alım = yapı" in metin              # ▲ = yapı olayı (§12)
     assert "▼ dönüş = sinyal" in metin                # ▼ = sinyal-dereceli olay (§13)
     assert "▲ momentum" not in metin                  # momentum yoksa yazılmaz
-    assert "◇ = uyarı" in metin
+    assert "◇ = uyarı" not in metin
 
 
 def test_legend_never_drops_the_arrow_dictionary():
@@ -187,3 +186,23 @@ def test_step_connector_colors_are_the_directional_mirror_of_support():
     assert [colors.to_hex(c) for c in connector.get_colors()] == [
         grafik.PALET["stabil_direnc_kirik"], grafik.PALET["stabil_direnc"]
     ]
+
+
+def test_legacy_same_bar_return_and_momentum_draw_only_return():
+    _, ax = _ax()
+    layer = _layer()
+    layer["donus_barlar"] = [2]
+    layer["momentum_barlar"] = [2]
+    info = _stabil_direnc_ciz(ax, {"stabil_direnc": layer}, 6, (95, 105),
+                               dusuk=[99] * 6, yuksek=[102] * 6)
+    assert info["donus_isaret"] == 1 and info["momentum_isaret"] == 0
+
+
+def test_invalidated_resistance_arrow_is_faded_at_original_bar():
+    _, ax = _ax()
+    layer = _layer()
+    layer.update({"donus_barlar": [], "momentum_barlar": [], "iptal_barlar": [2]})
+    info = _stabil_direnc_ciz(ax, {"stabil_direnc": layer}, 6, (95, 105),
+                               dusuk=[99] * 6, yuksek=[102] * 6)
+    assert info["iptal_isaret"] == 1 and info["donus_isaret"] == 0
+    assert any(c.get_gid() == "grafik-stabil-direnc-iptal" for c in ax.collections)

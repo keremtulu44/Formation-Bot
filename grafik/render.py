@@ -115,7 +115,14 @@ def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
             secenekler["yazi_olcek"] = float(str(os.environ["GRAFIK_YAZI"]).replace(",", "."))
         except (TypeError, ValueError):
             pass
-    tf = str(tf or goruntu.get("tf") or "1h")
+    tf = str(tf or goruntu.get("tf") or "1h").lower()
+    # Short-timeframe charts stay legible: hide only the Stabil support and
+    # resistance *display*, including arrows and labels.  The snapshot and
+    # all domain/alarm calculations remain untouched.  The explicit option is
+    # for diagnostic before/after comparison, not a live default.
+    stabil_gizli = tf in {"1h", "2h"} and not bool(secenekler.get("stabil_goster", False))
+    if stabil_gizli:
+        goruntu = {**goruntu, "stabil": None, "stabil_direnc": None}
     mobil = bool(secenekler.get("mobil", _ortam_bayrak("GRAFIK_MOBIL")))
     secenekler["mobil"] = mobil
     if mobil:
@@ -142,6 +149,7 @@ def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
     meta["gorunum"] = dict(goruntu.get("gorunum") or {})
     meta["ayrinti"] = ayrinti
     meta["grafik_politikasi"] = deneyim.POLICY
+    meta["stabil_cizimde_gizli"] = stabil_gizli
     meta["girdi_ozeti"] = girdi_ozeti(goruntu)
 
     def bitir(png_yolu: Optional[str]) -> tuple[Optional[str], dict[str, Any]]:
@@ -485,7 +493,8 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         olay_ozet = {"swing": 0, "etiket_atlandi": 0, "kritik": 0,
                      "kritik_atlandi": 0, "capa": 0, "phpl_serit": 0,
                      "whwl_serit": 0, "seviye": 0}
-        if not yalnizca_mumlar and (goruntu.get("olay") or {}):
+        if not yalnizca_mumlar and ((goruntu.get("olay") or {}) or
+                                     (goruntu.get("serit") or {}).get("capa")):
             try:
                 olay_ozet.update(_olay_ciz(ax, goruntu, katman_n, sag_adaylar,
                                            kutular=mum_kutulari,
@@ -1015,6 +1024,7 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "gorunur_bar": 0,
         "reclaim_isaret": 0,
         "momentum_isaret": 0,
+        "iptal_isaret": 0,
         "dikey_deneme_isaret": 0,
         "kadrajda": bool(kadrajda),
     }
@@ -1162,25 +1172,19 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         sc.set_gid("grafik-stabil-momentum")
         ozet["momentum_isaret"] = len(mx)
 
-    # ▼ = dikey/kademe destek üzerinde yukarı deneme uyarısı; fiyatın
-    # kesin düşeceği veya emir verilmesi gerektiği anlamına GELMEZ.
-    dx, dy = [], []
-    for idx in sorted(asagi_barlar):
-        sv_i = _gercek(seviyeler[idx]) if idx < len(seviyeler) else None
-        hi_i = _gercek(yuksek[idx]) if idx < len(yuksek) else None
-        referanslar = [v for v in (sv_i, hi_i) if v is not None]
-        if not referanslar:
-            continue
-        ref_y = max(referanslar)
-        if y_lo <= ref_y <= y_hi:
-            dx.append(float(idx))
-            dy.append(min(y_hi - 0.012 * y_span, ref_y + 0.018 * y_span))
-    if dx:
-        sc = ax.scatter(dx, dy, marker="D", s=46, facecolors="none",
-                        edgecolors=PALET["stabil_destek"], linewidths=1.3,
-                        zorder=4.9, clip_on=True)
-        sc.set_gid("grafik-stabil-dikey-deneme")
-        ozet["dikey_deneme_isaret"] = len(dx)
+    # A later opposing BOS changes the historical arrow's current state; it
+    # does not erase the original event or introduce a new symbol.
+    cancelled = sorted({int(i) for i in (stabil.get("iptal_barlar") or ())
+                        if isinstance(i, (int, float)) and 0 <= int(i) < katman_n
+                        and int(i) not in dikey and int(i) not in asagi_barlar})
+    cx, cy = _ok_koordinatlari(cancelled)
+    if cx:
+        sc = ax.scatter(cx, cy, marker="^", s=48, c="#9CA3AF", alpha=0.55,
+                        edgecolors=PALET["zemin"], linewidths=0.7, zorder=4.8, clip_on=True)
+        sc.set_gid("grafik-stabil-iptal")
+        ozet["iptal_isaret"] = len(cx)
+
+    # Dikey adaylar teşhis olarak kalır; bastırılmış oka yeni işaret çizilmez.
 
     # Sağ eksende net `Destek <fiyat>` çipi (yalnız son mumda aktif destek kadraj içindeyse)
     son_sv = _gercek(seviyeler[-1]) if seviyeler else None
@@ -1228,7 +1232,7 @@ def _stabil_direnc_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "hazir": bool(layer.get("hazir")), "durum": layer.get("durum"), "neden": layer.get("neden"),
         "cizildi": False, "son_seviye": _gercek(layer.get("son_seviye")),
         "son_renk": layer.get("son_renk"), "gorunur_bar": 0, "kadrajda": bool(kadrajda),
-        "donus_isaret": 0, "momentum_isaret": 0, "dikey_deneme_isaret": 0,
+        "donus_isaret": 0, "momentum_isaret": 0, "iptal_isaret": 0, "dikey_deneme_isaret": 0,
     }
     if not summary["hazir"] or not levels:
         return summary
@@ -1327,17 +1331,15 @@ def _stabil_direnc_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         return len(xs)
 
     # Draw precisely the motor's classification; no per-step inferred warning.
-    summary["donus_isaret"] = draw(indices("donus_barlar"), above=True, marker="v", hollow=False,
+    return_bars = indices("donus_barlar")
+    momentum_bars = [i for i in indices("momentum_barlar") if i not in set(return_bars)]
+    summary["donus_isaret"] = draw(return_bars, above=True, marker="v", hollow=False,
                                     color=PALET["stabil_direnc"], gid="grafik-stabil-direnc-donus", size=48)
-    summary["momentum_isaret"] = draw(indices("momentum_barlar"), above=True, marker="v", hollow=True,
+    summary["momentum_isaret"] = draw(momentum_bars, above=True, marker="v", hollow=True,
                                        color=PALET["stabil_direnc"], gid="grafik-stabil-direnc-momentum", size=62)
-    # 2026-11-08 ok denetimi: bu işaret bir YUKARI OK DEĞİL, direnç yapı uyarısıdır.
-    # İçi boş `^` fiyatın altına konunca "destekle ilgisiz yukarı ok" gibi okunuyordu;
-    # nötr ELMAS `◇` mumun ÜSTÜNE konur ve lejantta "yapı uyarısı" yazar.
-    summary["dikey_deneme_isaret"] = draw(
-        indices("dikey_deneme_barlar"), above=True, marker="D", hollow=True,
-        color=PALET["stabil_direnc"], gid="grafik-stabil-direnc-dikey-deneme", size=52,
-    )
+    summary["iptal_isaret"] = draw(indices("iptal_barlar"), above=True, marker="v", hollow=False,
+                                    color="#9CA3AF", gid="grafik-stabil-direnc-iptal", size=48)
+    # Bastırılmış direnç adayları grafikte ayrı işaret üretmez.
     last = _gercek(levels[-1]) if levels else None
     role = roles[-1] if roles else None
     if sag_adaylar is not None and last is not None and role in {"ust", "alt"} and y_lo <= last <= y_hi:
