@@ -1015,6 +1015,7 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "gorunur_bar": 0,
         "reclaim_isaret": 0,
         "momentum_isaret": 0,
+        "iptal_isaret": 0,
         "dikey_deneme_isaret": 0,
         "kadrajda": bool(kadrajda),
     }
@@ -1162,6 +1163,18 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         sc.set_gid("grafik-stabil-momentum")
         ozet["momentum_isaret"] = len(mx)
 
+    # A later opposing BOS changes the historical arrow's current state; it
+    # does not erase the original event or introduce a new symbol.
+    cancelled = sorted({int(i) for i in (stabil.get("iptal_barlar") or ())
+                        if isinstance(i, (int, float)) and 0 <= int(i) < katman_n
+                        and int(i) not in dikey and int(i) not in asagi_barlar})
+    cx, cy = _ok_koordinatlari(cancelled)
+    if cx:
+        sc = ax.scatter(cx, cy, marker="^", s=48, c="#9CA3AF", alpha=0.55,
+                        edgecolors=PALET["zemin"], linewidths=0.7, zorder=4.8, clip_on=True)
+        sc.set_gid("grafik-stabil-iptal")
+        ozet["iptal_isaret"] = len(cx)
+
     # Dikey adaylar teşhis olarak kalır; bastırılmış oka yeni işaret çizilmez.
 
     # Sağ eksende net `Destek <fiyat>` çipi (yalnız son mumda aktif destek kadraj içindeyse)
@@ -1210,7 +1223,7 @@ def _stabil_direnc_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "hazir": bool(layer.get("hazir")), "durum": layer.get("durum"), "neden": layer.get("neden"),
         "cizildi": False, "son_seviye": _gercek(layer.get("son_seviye")),
         "son_renk": layer.get("son_renk"), "gorunur_bar": 0, "kadrajda": bool(kadrajda),
-        "donus_isaret": 0, "momentum_isaret": 0, "dikey_deneme_isaret": 0,
+        "donus_isaret": 0, "momentum_isaret": 0, "iptal_isaret": 0, "dikey_deneme_isaret": 0,
     }
     if not summary["hazir"] or not levels:
         return summary
@@ -1315,6 +1328,8 @@ def _stabil_direnc_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                                     color=PALET["stabil_direnc"], gid="grafik-stabil-direnc-donus", size=48)
     summary["momentum_isaret"] = draw(momentum_bars, above=True, marker="v", hollow=True,
                                        color=PALET["stabil_direnc"], gid="grafik-stabil-direnc-momentum", size=62)
+    summary["iptal_isaret"] = draw(indices("iptal_barlar"), above=True, marker="v", hollow=False,
+                                    color="#9CA3AF", gid="grafik-stabil-direnc-iptal", size=48)
     # Bastırılmış direnç adayları grafikte ayrı işaret üretmez.
     last = _gercek(levels[-1]) if levels else None
     role = roles[-1] if roles else None

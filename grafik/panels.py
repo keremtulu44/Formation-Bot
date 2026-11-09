@@ -755,6 +755,14 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool,
             ok_cizildi = ok_cizildi or any(katman.get(b) for b in barlar)
     if ok_cizildi:
         oge.append("▼ dönüş = sinyal · ▲ geri alım = yapı · boş = momentum")
+    iptal_cizildi = any(
+        ((meta or {}).get("cizgiler") or {}).get(k, {}).get("iptal_isaret", 0)
+        if "iptal_isaret" in (((meta or {}).get("cizgiler") or {}).get(k) or {})
+        else (goruntu.get(k) or {}).get("iptal_barlar")
+        for k in ("stabil", "stabil_direnc")
+    )
+    if iptal_cizildi:
+        oge.append("gri ok = ters BOS sonrası iptal")
     # GÖRSEL-5: olay çizgileri stil olarak ayrıştı; lejant da ayrı yazar (hangisi
     # görünüyorsa o madde çıkar — uydurma yok).
     _olaylar = list((goruntu.get("olay") or {}).get("olaylar") or [])

@@ -176,12 +176,15 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
         if not layer:
             continue
         layer["baglam_bastirilan"] = []
+        layer["iptal_barlar"] = []
         for key in keys:
             kept = []
             for bar in layer.get(key, []):
                 status = marker_state(sol + bar, direction, tf, structure_events, sag - 1)
                 if status in {"opposite_structure", "invalidated_by_opposite_bos"}:
                     layer["baglam_bastirilan"].append({"bar": bar, "tur": key, "neden": status})
+                    if status == "invalidated_by_opposite_bos":
+                        layer["iptal_barlar"].append(bar)
                 else:
                     kept.append(bar)
             layer[key] = kept

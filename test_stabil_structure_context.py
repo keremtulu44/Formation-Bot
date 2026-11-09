@@ -172,3 +172,26 @@ def test_real_card_surfaces_apply_aligned_opposite_structure():
     assert not any("toparlanma" in s for s in _kart_stabil(results, "1d", behavior.close_price))
     assert not any("toparlanma" in s for s in _stabil_bilgisi(results, "1d", frame)["card_lines"])
     assert behavior.reclaim_kind == "multi_bar_recovery"  # raw lifecycle is unchanged
+
+
+def test_later_bos_renders_original_arrow_as_faded_not_new_diamond(monkeypatch):
+    import grafik.tarama as tarama
+    from grafik.render import _stabil_ciz
+    from matplotlib.figure import Figure
+    times = pd.date_range("2026-01-01", periods=20, freq="h", tz="UTC")
+    frame = pd.DataFrame({"open": [100.] * 20, "high": [101.] * 20,
+                          "low": [99.] * 20, "close": [100.] * 20,
+                          "volume": [100.] * 20}, index=times)
+    monkeypatch.setattr(tarama, "_bar_kapandi_mi", lambda *_a, **_k: True)
+    monkeypatch.setattr(tarama, "_stabil_verisi", lambda *_a: {
+        "hazir": True, "seviyeler": [99.] * 20, "renkler": ["ust"] * 20,
+        "reclaim_barlar": [17], "momentum_barlar": []})
+    monkeypatch.setattr(tarama, "_stabil_direnc_verisi", lambda *_a: None)
+    ms = SimpleNamespace(details={"event_history": [event(times[18], "DOWN")]})
+    image = tarama.anlik_goruntu(None, "1h", frame, sonuclar={"market_structure": ms})
+    assert image["stabil"]["iptal_barlar"] == [17]
+    ax = Figure().subplots()
+    meta = _stabil_ciz(ax, image, 20, (95, 105), dusuk=[99.] * 20, yuksek=[101.] * 20)
+    assert meta["iptal_isaret"] == 1 and meta["reclaim_isaret"] == 0
+    assert any(c.get_gid() == "grafik-stabil-iptal" for c in ax.collections)
+    assert not any(c.get_gid() == "grafik-stabil-dikey-deneme" for c in ax.collections)
