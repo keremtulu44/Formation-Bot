@@ -1060,7 +1060,8 @@ def _korunan_seviyeler(results_by_timeframe: Any, alarm_tf: str) -> tuple[float 
             _number(_field(export, "external_protected_low")))
 
 
-def _kart_stabil(results_by_timeframe: Any, alarm_tf: str, reference: float | None) -> list[str]:
+def _kart_stabil(results_by_timeframe: Any, alarm_tf: str, reference: float | None,
+                 *, formation_upper=None, formation_atr=None) -> list[str]:
     """Alarm kapanışının nedensel günlük Stabil desteğiyle 2 satırlık olgusal özeti."""
     tf = str(alarm_tf or "").lower()
     entry = _domain(results_by_timeframe, tf, "stabil") if tf else None
@@ -1134,6 +1135,9 @@ def _kart_stabil(results_by_timeframe: Any, alarm_tf: str, reference: float | No
     market = _domain(results_by_timeframe, tf, "market_structure") if tf else None
     close_times = [_field(point, "bar_close_time") for point in projection]
     latest_behavior = behavior_for_structure(latest_behavior, market, close_times, tf)
+    from domain_engines.stabil.structure_context import barrier_reason, mask_behavior
+    if barrier_reason(price, formation_atr, "UP", [("formasyon_siniri", formation_upper)]):
+        latest_behavior = mask_behavior(latest_behavior)
     return format_stabil_card_lines(
         price=price,
         support_level=support_level,
@@ -1201,7 +1205,8 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
                      atr: float | None = None, yon: int = 0,
                      retest_seen: bool | None = None,
                      azami_olcum: int = 2, aile: str = "",
-                     beklenti: bool = False, sembol: str = "") -> dict:
+                     beklenti: bool = False, sembol: str = "",
+                     stabil_formation_upper=None, stabil_formation_atr=None) -> dict:
     """Domain bağlamını bölüm bölüm döndürür (kart biçimleyicisi için).
 
     `stil="kart"`: `yapi`/`ust`/`alt`/`hacim` anahtarlarında hazır satırlar.
@@ -1233,7 +1238,9 @@ def domain_bolumleri(results_by_timeframe: Any, reference_price: Any = None, *,
     if stil == "kart":
         bolumler["yapi"] = _kart_market_structure(satirlar, str(alarm_tf or "").lower())
         bolumler["yapi_ozet"] = _kart_yapi_ozet(satirlar, str(alarm_tf or "").lower())
-        bolumler["stabil"] = _kart_stabil(results_by_timeframe, str(alarm_tf or "").lower(), reference)
+        bolumler["stabil"] = _kart_stabil(
+            results_by_timeframe, str(alarm_tf or "").lower(), reference,
+            formation_upper=stabil_formation_upper, formation_atr=stabil_formation_atr)
         bolumler["engel"] = _kart_engel(results_by_timeframe, reference, int(yon or 0))
         bolumler.update(_kart_zones(results_by_timeframe, reference))
         bolumler["hacim"] = _kart_volume(results_by_timeframe, str(alarm_tf or "").lower(),

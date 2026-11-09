@@ -560,6 +560,7 @@ yüzdeleri performans kanıtı gibi gösterilmez.
 
 **Kalan yüzey sınırı:** Diğer domain/formasyon kartlarında ters piyasa yapısı uygulanır. Ayrı domain
 alarm kartında aynı mumdaki mevcut formasyon sınırı ve mevcut, zaman hizalı
-dirence de bakılır; klasik formasyon kartına bu geometriler her çağrıda
-taşınmadığından bütün kartlarla grafik arasında birebir eşleşme iddia edilemez. Eksik/tarihi kaynaklar varsa durum
+dirence de bakılır; klasik formasyon kartında aynı mumdaki aktif formasyon sınırı taşınır; ancak
+bağımsız direnç geometrisi bu karta her çağrıda taşınmadığından bütün kartlarla
+grafik arasında birebir eşleşme iddia edilemez. Eksik/tarihi kaynaklar varsa durum
 otomatik olarak biliniyor sayılmaz.

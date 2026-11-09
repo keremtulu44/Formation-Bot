@@ -219,3 +219,21 @@ def test_failed_and_missing_formation_states_are_not_barriers():
     for state in (None, "", "FORMASYON_YOK", "FORMASYON_GECERSIZ", "BASARISIZ_KIRILIM"):
         assert not pattern_is_active(state)
     assert pattern_is_active("KIRILIM_HAZIRLIGI")
+
+
+def test_classic_formation_card_masks_same_bar_near_boundary():
+    from test_stabil_multibar_recovery import sample, evaluate
+    from notification_context import domain_bolumleri
+    labels, snapshots, points, frame = sample()
+    frame.index = labels
+    behavior = evaluate(frame, points, snapshots)[-1]
+    output = SimpleNamespace(latest_behavior=behavior, bar_projection=points)
+    stabil = SimpleNamespace(error=None, skipped=False, result=output,
+                             details={"latest_behavior": behavior, "bar_projection": points})
+    results = {"1d": {"stabil": stabil}}
+    original = domain_bolumleri(results, behavior.close_price, stil="kart", alarm_tf="1d")
+    masked = domain_bolumleri(results, behavior.close_price, stil="kart", alarm_tf="1d",
+                              stabil_formation_upper=behavior.close_price + .1, stabil_formation_atr=1.0)
+    assert any("toparlanma" in s for s in original["stabil"])
+    assert not any("toparlanma" in s for s in masked["stabil"])
+    assert behavior.reclaim_kind == "multi_bar_recovery"

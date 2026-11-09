@@ -1339,6 +1339,17 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                         # akış bu anahtarı yazar — harici/test
                                         # çağrıları eski kartla kalır.
                                         payload['kart_yorum_kapisi'] = True
+                                        from domain_engines.stabil.structure_context import pattern_is_active
+                                        from domain_engines.stabil.signals import _causal_atr14
+                                        try:
+                                            stabil_atr = _causal_atr14(
+                                                df_tf["high"].to_numpy(dtype=float),
+                                                df_tf["low"].to_numpy(dtype=float),
+                                                df_tf["close"].to_numpy(dtype=float), period=14)[-1]
+                                        except (KeyError, TypeError, ValueError, IndexError):
+                                            stabil_atr = None
+                                        stable_upper = (getattr(active, "upper_now", None)
+                                                        if pattern_is_active(notification_state) else None)
                                         payload['domain_bolumleri'] = domain_bolumleri(
                                             outputs,
                                             reference_price=candle_close_price,
@@ -1374,6 +1385,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                             # Sembol sınıfı hacim satırını belirler
                                             # (endeks/makro: "hacim yok" yerine neden).
                                             sembol=stock,
+                                            stabil_formation_upper=stable_upper,
+                                            stabil_formation_atr=stabil_atr,
                                         )
                                     except Exception as kart_hata:  # noqa: BLE001
                                         _pkg.logger.warning(
