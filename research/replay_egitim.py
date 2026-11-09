@@ -147,7 +147,7 @@ def _soru_goruntusu(soru: Soru, tf: str) -> dict:
     try:
         # `kare_uret(stabil_frames=...)` ile aynı nedensel kesim yardımcı
         # fonksiyonu kullanılır; replay ve normal grafik yolu ayrışmasın.
-        daily_history, h4_history, _stabil_kesim = grafik_uret.stabil_baglami_arsivden(
+        daily_history, h4_history, stabil_kesim = grafik_uret.stabil_baglami_arsivden(
             soru.frames, cutoff
         )
         domains["stabil"] = run_stabil_domain(
@@ -159,6 +159,27 @@ def _soru_goruntusu(soru: Soru, tf: str) -> dict:
             as_of_close=cutoff,
             isolated=True,
         )
+        # Canlı `/grafik` yolu (grafik_uret) İKİ katmanı da hesaplıyor; replay
+        # yolu yalnız desteği hesapladığı için eğitim/soru karelerinde direnç
+        # katmanı hiç görünmüyordu (2026-11-08, §8.1'in kalan izi). Aynı
+        # `resistance_for_chart` köprüsü ve aynı nedensel kesim kullanılır.
+        # Direnç hatası destek katmanını ve kareyi düşürmez.
+        try:
+            from domain_engines.stabil.chart_bridge import resistance_for_chart
+
+            domains["stabil_direnc"] = resistance_for_chart(
+                soru.sembol,
+                tf,
+                history,
+                daily_frame=daily_history,
+                hourly_frame=h4_history,
+                as_of_close=stabil_kesim,
+            )
+        except Exception:  # noqa: BLE001 - direnç hatası eğitim karesini düşürmez
+            log.warning(
+                "Eğitim direnç katmanı hesaplanamadı (%s %s)",
+                soru.sembol, tf, exc_info=True,
+            )
     except Exception:  # noqa: BLE001 - Stabil hatası eğitim karesini düşürmez
         # Sessizce yutulan bir motor hatası replay/normal karşılaştırmasını
         # yanıltıcı biçimde "eşit" gösterebilir; en azından traceback görünsün.

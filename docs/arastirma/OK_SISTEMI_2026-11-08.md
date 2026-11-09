@@ -501,3 +501,82 @@ Neden görünmüyor: gövde kapısı zaten ≥0,32/0,35 ATR (`GOVDESIZ` imkâns�
 - Direnç tarafı **ayna** motorla üretiliyor; bu ölçüm aynanın çıktısını ölçtü, ayna kodunun paritesini
   ayrıca `test_stabil_resistance_engine` kapsıyor.
 - R2/R3 için "başarı" tanımı sabit (2:1 ve 10 bar); farklı eşiklerle sonuç değişebilir, yeniden ölçülür.
+
+---
+
+## 14. EĞİTİM KARESİ + LEJANT DİLİ + ◇ İKİNCİ TUR ÖLÇÜMÜ (2026-11-08)
+
+### 14.1 Eğitim/replay karesinde direnç katmanı (uygulandı)
+Canlı `/grafik` iki Stabil katmanını da (`stabil`, `stabil_direnc`) hesaplarken replay/eğitim yolu
+yalnız desteği hesaplıyordu: soru karelerinde ▼ dönüş oku hiç görünmüyordu. `research/replay_egitim.py`
+`_soru_goruntusu` artık canlı yolla **aynı** köprüyü ve **aynı** nedensel kesimi kullanıyor
+(`resistance_for_chart(..., as_of_close=stabil_kesim)`); direnç hatası kendi `try/except`'inde,
+kareyi ve destek katmanını düşürmüyor (yalnız `log.warning`).
+
+Doğrulama (replay karesi, gerçek arşiv verisi): `snapshot["stabil_direnc"]` var ve `cizildi=True` —
+AGHOL ▼0/┄3 · GARAN ▼2/┄1 · THYAO ▼2/┄4 işaret, lejantta iki katman başlığı birlikte yazılıyor.
+
+### 14.2 Lejant dili ölçümü söylüyor (uygulandı)
+Kare, çizdiği şeyi adıyla söyler. Lejant artık **katman başlığı + tek ok sözlüğü**:
+
+| | GARAN 21.09.2026 (yoğun kare) |
+|---|---|
+| Önce | `… ┄ Stabil direnç · ┈ CHoCH dış · ┄ BOS dış · ┈ seviye (PH/PL/WH/WL sağda)` — **6 madde sığmadı**, destek başlığı ve ok sözlüğü yok |
+| Sonra | `… ┄ Stabil destek (yeşil) · ┄ Stabil direnç (turuncu) · ▼ dönüş = sinyal · ▲ geri alım = yapı · boş = momentum · ◇ = uyarı · …` — **1 madde sığmadı** |
+
+Dil, ölçümle aynı: **▲ = yapı olayı (geri alım)**, **▼ = sinyal-dereceli olay (dönüş)** (§12–§13).
+
+Kırpıcıda iki kusur bulundu ve düzeltildi (`grafik/panels.py`):
+1. **Korunan maddeler** arasına `┄ Stabil …` ve `▼ dönüş …` eklendi — bütçe kısarken düşen ilk madde
+   ok sözlüğüydü, yani kare işaretlerini açıklamadan kalıyordu (ölçüm: GARAN, sözlük kayboldu).
+2. Kırpma hedefi **tek satır** yerine **iki satır** yapıldı (`butce*2*0.98`) ve `_bol(...)[:2]`
+   kırpması sayılarak kapatıldı — eski hedef, kare iki satır taşıyabildiği hâlde mum renk şemasını
+   (`yeşil boş = yükselen` vb.) siliyordu.
+
+Test: `test_stabil_resistance_chart_render.py` (9 test; yeni `test_legend_never_drops_the_arrow_dictionary`).
+
+### 14.3 ◇ ikinci tur — ÖLÇÜLDÜ, UYGULANMADI
+Soru: bugünkü 486 ◇'in 297'si hâlâ zayıf. İkinci bir tur anlamlı kazanç verir mi, bedeli ne?
+
+Kütle: günlük 50 sembol · 25.051 bar · filtre yalnız zayıf ◇ (`weak_reclaim`, `touch_from_below`);
+güçlü ◇ (189), ▲ ve momentum **dokunulmadı**. Olay akışı soğuma 0 ile çıkarıldı, kurallar
+**simüle** edildi (üretim kodu değişmedi): `research/stabil_cizgi_seyreltme_olcum.py`.
+
+Kilitli eşikler (ölçümden **önce** yazıldı): toplam ◇ ≤ 389 (ek %20 kazanç) · yeni ◇'süz sembol yok ·
+güçlü ◇ kontrolle aynı · atılanların öncü oranı ≤ %40.
+
+| Kural | ◇ | zayıf | medyan | en çok | atılanın öncü% | Karar |
+|---|---|---|---|---|---|---|
+| S0 · 20 bar (bugün) | 486 | 297 | 10 | 15 | 26 | kontrol |
+| S1 · 30 bar | 433 | 244 | 9 | 15 | 26 | geçmedi |
+| S2 · 40 bar | 396 | 207 | 8 | 14 | 26 | geçmedi (7 işaret) |
+| **S6 · 50 bar** | **364** | 175 | 7 | 13 | 27 | **eşik geçti** |
+| S7 · 60 bar | 335 | 146 | 7 | 12 | 25 | eşik geçti |
+| S3 · seviye başına 1 | 650 | 461 | 14 | 20 | 30 | geçmedi (bugünden kötü) |
+| S4 · yalnız rvol ≥ 1,0 | 406 | 217 | 8 | 15 | 24 | geçmedi |
+| S5 · 20 bar + seviye başına 1 | 486 | 297 | 10 | 15 | 26 | geçmedi (S0 ile aynı) |
+| S8 · 40 bar + rvol ≥ 1,5 deler | 396 | 207 | 8 | 14 | 26 | geçmedi (istisna hiç tetiklenmiyor) |
+
+Simülatörün sadakati: S0 = **486**, üretimin bugünkü sayısıyla birebir; §10.3'ün 30/60 bar noktaları
+(432/333) bu turda 433/335 çıktı (arşive eklenen barlar).
+
+**Sonuç:** anlamlı ikinci tur ancak **50 bar**'da başlıyor (486 → 364, bugüne göre −%25, 3 bar'lık eski
+kurala göre −%51). 40 bar eşiği 7 işaretle kaçırıyor; 50 → 60 bar arası kazanç azalıyor (+29 işaret için
+soğuma 10 bar daha). Atılanların ~%26'sı 20 bar içinde bir ▲ ile öncülenmiş — yani kesilen sınıf bugün de
+gürültü sayılan sınıfın aynısı. **Kural uygulanmadı**; karar kullanıcıda (sıfır kod değişikliği,
+tek satır: `_DIKEY_UYARI_SOGUMA_BAR` 20 → 50).
+
+### 14.4 Görseller — `docs/gorseller/ok_egitim_lejant_2026_11_08/`
+| Dosya | İçerik |
+|---|---|
+| `00_pano.png` | Tek sayfa: lejant önce/sonra (GARAN + AGHOL) · replay karesi (▼ kadrajda) · ◇ eğrisi + ölçüm tablosu |
+| `01_egitim_karesi_garan.png` | Replay karesi, direnç katmanı çizili |
+
+Üretici: `research/ok_egitim_ozet_pano.py` (lejant "önce" satırları HEAD `75d5214` koduyla aynı
+karelerden üretildi; pano yeniden üretilebilir).
+
+### 14.5 Sınırlar
+- Kütle 50 sembolle sınırlı (§10 ile karşılaştırılabilirlik için); 60+ bar seçenekleri ölçülmedi.
+- ◇ bir "dikkat" işaretidir; bu ölçüm **işaret sayısını** ölçtü, ◇'in öngörü değerini değil
+  (o soru ayrı bir replay ister).
+- Öncü oranı, atılan ◇'nin ▲ ile ilişkisini gösterir; ◇'e bağlı hiçbir karar kuralı yoktur.

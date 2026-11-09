@@ -411,7 +411,11 @@ _LEJANT_DUSUK = ("yapı:", "şerit:", "kutular:", "FVG ·", "bant öncesi", "▨
 # için sıra önemli: altta kalan madde kaybolurken `✕ geçersizleştiren mum` /
 # `┈ teyit sınırı` gibi karenin YENİ işaretleri her koşulda okunmalı — yoksa kare
 # açıklamasız bir işaret bırakır (lejant = çizileni anlatır kuralı, §0.12v).
-_LEJANT_KORU = ("✕", "┈", "│")
+# Stabil katman başlıkları (`┄ Stabil destek` / `┄ Stabil direnç`) ve ok sözlüğü
+# (`▼ dönüş = sinyal · …`) da korunur: bunlar süs değil, karedeki işaretlerin
+# ANLAMIDIR. Yoğun bir karede bütçe kısarken ilk düşen madde ok sözlüğü olursa
+# kare okunamaz hale gelir (ölçüm: GARAN 2026-09-21, atlanan 6 → sözlük kayıp).
+_LEJANT_KORU = ("✕", "┈", "│", "┄ Stabil", "▼ dönüş")
 
 
 def _lejant_satirlar(oge: Sequence[str], kare_genislik: float) -> tuple[list[str], float, int]:
@@ -443,7 +447,13 @@ def _lejant_satirlar(oge: Sequence[str], kare_genislik: float) -> tuple[list[str
     # işaretleri her koşulda kalır. Kareye `+N madde sığmadı` YAZILMAZ: okunurluğu
     # bozan bir geliştirici notuydu (ölçüm: `+6 madde sığmadı`); sayı
     # `meta["lejant_atlanan"]`da durur, sessiz kayıp yok.
-    while len(oge) > 2 and _genislik_16(" · ".join(oge)) > butce * 1.02:
+    # Hedef İKİ satır: buraya yalnız 2 satıra sığmayan lejant düşer ve çıkış
+    # `_bol(...)[:2]`. Tek satır hedefi koymak (eski `butce * 1.02`) yoğun karede
+    # lejantı gereksiz yere kırpıyordu: GARAN 2026-09-21'de mum renk şeması
+    # ("yeşil boş = yükselen" vb.) siliniyordu — oysa kare 2 satır taşıyabiliyor.
+    hedef = butce * 2 * 0.98
+    while len(oge) > 2 and (_genislik_16(" · ".join(oge)) > hedef
+                            or len(_bol(" · ".join(oge), butce)) > 2):
         korunan = [i for i, x in enumerate(oge) if str(x).startswith(_LEJANT_KORU)]
         serbest = [i for i in range(len(oge)) if i not in korunan]
         dusuk = [i for i in serbest if str(oge[i]).startswith(_LEJANT_DUSUK)]
@@ -718,20 +728,35 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool,
         oge = ["kapanmış mum", "mavi boş = yükselen", "turuncu dolu = düşen"]
     else:
         oge = ["kapanmış mum", "yeşil boş = yükselen", "kırmızı dolu = düşen"]
-    direnc = goruntu.get("stabil_direnc") or {}
-    cizilen = ((meta or {}).get("cizgiler") or {}).get("stabil_direnc") or {}
-    # İlk metin geçişinde çizim henüz yok; son geçiş gerçek görünen sayıları
-    # kullanır. Böylece kadraj dışındaki ok lejantta çizilmiş gibi anlatılmaz.
-    olculdu = "donus_isaret" in cizilen
-    if (cizilen.get("cizildi") if olculdu else direnc.get("hazir")):
-        oge.append("┄ Stabil direnç")
-    for sayac, barlar, etiket in (
-        ("donus_isaret", "donus_barlar", "▼ direnç dönüşü (turuncu)"),
-        ("momentum_isaret", "momentum_barlar", "▽ direnç momentumu (turuncu)"),
-        ("dikey_deneme_isaret", "dikey_deneme_barlar", "◇ direnç yapı uyarısı (turuncu)"),
-    ):
-        if (cizilen.get(sayac) if olculdu else direnc.get(barlar)):
-            oge.append(etiket)
+    # İki katman da aynı dilde yazılır (2026-11-08): önce DESTEK (yeşil), sonra
+    # DİRENÇ (turuncu). Lejant bütçesi sınırlı olduğu için her ok türü ayrı madde
+    # yazılmaz (bütçe aşılınca en uzun maddeler düşerdi); katman başlıkları +
+    # TEK ok sözlüğü cümlesi çizilen her şeyi anlatır ve ölçümü yansıtır:
+    # ▲ "yapı", ▼ "sinyal" (docs/arastirma/OK_SISTEMI_2026-11-08.md §12–§13).
+    _cizgiler = (meta or {}).get("cizgiler") or {}
+    _ok_sayaclari = (("stabil", "reclaim_isaret", ("reclaim_barlar", "momentum_barlar",
+                                                   "dikey_deneme_barlar")),
+                     ("stabil_direnc", "donus_isaret", ("donus_barlar", "momentum_barlar",
+                                                        "dikey_deneme_barlar")))
+    ok_cizildi = False
+    for anahtar, hazir_anahtar, barlar in _ok_sayaclari:
+        katman = goruntu.get(anahtar) or {}
+        cizilen = _cizgiler.get(anahtar) or {}
+        # İlk metin geçişinde çizim henüz yok; son geçiş gerçek görünen sayıları
+        # kullanır. Böylece kadraj dışındaki ok lejantta çizilmiş gibi anlatılmaz.
+        olculdu = hazir_anahtar in cizilen
+        if not (cizilen.get("cizildi") if olculdu else katman.get("hazir")):
+            continue
+        oge.append("┄ Stabil destek (yeşil)" if anahtar == "stabil"
+                   else "┄ Stabil direnç (turuncu)")
+        sayaclar = ("reclaim_isaret", "momentum_isaret", "dikey_deneme_isaret") \
+            if anahtar == "stabil" else ("donus_isaret", "momentum_isaret", "dikey_deneme_isaret")
+        if olculdu:
+            ok_cizildi = ok_cizildi or any(cizilen.get(k) for k in sayaclar)
+        else:
+            ok_cizildi = ok_cizildi or any(katman.get(b) for b in barlar)
+    if ok_cizildi:
+        oge.append("▼ dönüş = sinyal · ▲ geri alım = yapı · boş = momentum · ◇ = uyarı")
     # GÖRSEL-5: olay çizgileri stil olarak ayrıştı; lejant da ayrı yazar (hangisi
     # görünüyorsa o madde çıkar — uydurma yok).
     _olaylar = list((goruntu.get("olay") or {}).get("olaylar") or [])
