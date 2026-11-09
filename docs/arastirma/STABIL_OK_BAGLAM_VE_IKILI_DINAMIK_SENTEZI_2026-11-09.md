@@ -556,3 +556,10 @@ diğer üyelerle birlikte inceleme için korunur; kimlikleri ayrıştırılamaya
 eski toplu özetler için aynı güvence yoktur. Geometrik altı/üstü boş tanımı
 bu kapsama dahil değildir. Yeni çok mumlu alarmda eski karışık grubun replay
 yüzdeleri performans kanıtı gibi gösterilmez.
+
+
+**Kalan yüzey sınırı:** Diğer domain/formasyon kartlarında ters piyasa yapısı
+uygulanır; aynı kartlara formasyon karşı sınırı ve bağımsız direnç geometrisi
+her çağrıda taşınmadığından bu geometrik filtrelerin tüm kartlarla grafik
+arasında birebir eşleştiği iddia edilemez. Eksik/tarihi kaynaklar varsa durum
+otomatik olarak biliniyor sayılmaz.

@@ -265,7 +265,9 @@ class PublicAuxOutbox:
                 return 0
             ids = []
             for row in self.rows:
-                identity = row.get("identity") or {}
+                identity = row.get("identity")
+                if not isinstance(identity, dict):
+                    continue
                 if (row.get("status") == "pending" and not row.get("text_sent")
                         and identity.get("state") == "STABIL_GERI_ALIM"
                         and identity.get("pattern_name") == "STABİL GÜÇLÜ GERİ ALIM"):
@@ -296,7 +298,9 @@ class PublicAuxOutbox:
             cancelled = int(self.cancel_pending(event_id))
             changed = False
             for row in self.rows:
-                identity = row.get("identity") or {}
+                identity = row.get("identity")
+                if not isinstance(identity, dict):
+                    continue
                 if (row.get("status") == "pending" and not row.get("text_sent")
                         and identity.get("state") == "STABIL_OZET"
                         and str(event_id) in (identity.get("stabil_event_ids") or [])):
