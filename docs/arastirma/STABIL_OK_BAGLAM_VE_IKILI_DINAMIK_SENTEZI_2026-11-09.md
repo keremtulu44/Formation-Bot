@@ -522,8 +522,8 @@ Taze dış BOS/CHoCH için başlangıç pencereleri 1s=10, 2s=6, 4s=4,
 1g=2 bardır; bunlar ölçülmüş optimumlar değil uygulama hipotezleridir.
 Yalnız zaman damgası hedef mumla eşleşen, kapanışta onaylı olaylar okunur;
 en son ters yapıyı sonraki aynı yönlü yapı onarabilir. Ok sonrası ilk üç
-barda ters BOS gelirse grafik o oku o andan itibaren bastırılmış olarak
-kaydeder; gönderilmiş 4s alarmın durumu da uygun yapı verisi varsa güncellenir.
+barda ters BOS gelirse grafik o oku o andan itibaren gri iptal durumunda
+gösterir; gönderilmiş 4s alarmın durumu da uygun yapı verisi varsa güncellenir.
 Geçmişte gönderilmiş Telegram bildirimi geri alınmaz veya değiştirilmez. Veri eksikse ters olay
 varmış gibi davranılmaz. Grafik koridorunda karşı Stabil çizgisi veya yalnız
 şimdiki formasyon sınırı 0,5 ATR içinde ve hareket yönündeyse ok bastırılır.
@@ -539,3 +539,17 @@ taşınmaz. Eksik kaynaklar otomatik olarak engel sayılmaz.
 korunur; geometrik bir hava boşluğu veya yatay tabansızlık ayrıca ölçülmedi.
 Bu nedenle proxy ile gerçek görsel boşluk eşdeğer kabul edilmez ve evrensel
 performans iddiası yapılmaz.
+
+
+### 2026-11-09 entegrasyon kontrolü sonrası düzeltmeler
+
+Tarama, Stabil adayından önce kapalı mumlarla domain bağlamını hazırlar.
+Teyitli geçiş başarısızlığı yalnız oluştuğu andan itibaren yapı onarımı olarak
+dikkate alınır; geçmişe gelecekteki başarısızlık taşınmaz. Gerçek formasyon
+adayı sınırı grafik köprüsüne bağlanır. Diğer domain kartlarında zaman
+hizalı ters yapı varsa yukarı Stabil olayı metinde bastırılır; ham motor
+kaydı değişmez. Ters BOS nedeniyle henüz gönderilmemiş, tekil Stabil public
+ve DM kayıtları güvenli biçimde iptal edilir. Gönderilmiş veya teslimi
+belirsiz mesajlara dokunulmaz. Eski, tekil ve açık kimlikli gönderilmemiş
+close-reclaim mesajları da açılışta emekliye ayrılır. Kimlikleri ayrıştırılamayan
+eski toplu özetler ve geometrik altı/üstü boş tanımı bu kapsama dahil değildir.

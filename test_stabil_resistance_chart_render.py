@@ -196,3 +196,13 @@ def test_legacy_same_bar_return_and_momentum_draw_only_return():
     info = _stabil_direnc_ciz(ax, {"stabil_direnc": layer}, 6, (95, 105),
                                dusuk=[99] * 6, yuksek=[102] * 6)
     assert info["donus_isaret"] == 1 and info["momentum_isaret"] == 0
+
+
+def test_invalidated_resistance_arrow_is_faded_at_original_bar():
+    _, ax = _ax()
+    layer = _layer()
+    layer.update({"donus_barlar": [], "momentum_barlar": [], "iptal_barlar": [2]})
+    info = _stabil_direnc_ciz(ax, {"stabil_direnc": layer}, 6, (95, 105),
+                               dusuk=[99] * 6, yuksek=[102] * 6)
+    assert info["iptal_isaret"] == 1 and info["donus_isaret"] == 0
+    assert any(c.get_gid() == "grafik-stabil-direnc-iptal" for c in ax.collections)
