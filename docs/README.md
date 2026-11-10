@@ -24,6 +24,8 @@
 | **174 hisse kırılım ve teyit Replay'i** | [Ayrıntılı sonuç, yöntem ve veri rehberi](arastirma/KIRILIM_TEYIT_REPLAY_AYRINTILI_DOSYA_2026-10-30.md) |
 | **Stabil domain, direnç ve yerel teslim doğrulaması** | [Stabil ana rehberi](arastirma/STABIL_REHBERI.md) · [7 Kasım genel kontrol](denetim/STABIL_DIRENC_GENEL_KONTROL_2026-11-07.md) · [direnç görsel/teslim denetimi](tasarim/STABIL_DIRENC_GORSEL_TESLIM_DENETIMI_2026-11-07.md) · [kanıt/kurtarma durumu](arastirma/STABIL_DOSYA_ENVANTERI.md) |
 | Replay ve piyasa pilot sonuçları | [arastirma/SON_REPLAY_SONUCLARI.md](arastirma/SON_REPLAY_SONUCLARI.md) |
+| **Stop & sermaye koruma replay'i** | **[arastirma/STOP_SERMAYE_REPLAY_2026-11-09.md](arastirma/STOP_SERMAYE_REPLAY_2026-11-09.md)** · [çıktılar: sonuclar/stop_sermaye/](arastirma/sonuclar/stop_sermaye/) · [betik](../scripts/stop_sermaye_replay.py) |
+| **Gölge zincir replay'i (Faz 0–5)** | **[arastirma/GOLGE_ZINCIR_REPLAY_2026-11-09.md](arastirma/GOLGE_ZINCIR_REPLAY_2026-11-09.md)** · [giriş/çıkış incelemesi](arastirma/GOLGE_ZINCIR_GIRIS_CIKIS_INCELEMESI_2026-11-10.md) · [plan](tasarim/5_FAZLI_KODLAMA_PLANI_2026-11-09.md) · [sözleşme](tasarim/SENARYO_MOTORU_BRIFING_SOZLESMESI_2026-11-09.md) · [çıktılar: sonuclar/golge_zincir/](arastirma/sonuclar/golge_zincir/) · betikler: `research/golge_{zincir,olcum,kapi,inceleme}.py` |
 | **Ölçüm: zone'lar piyasada ne yapıyor?** | **[arastirma/](arastirma/README.md)** |
 | Neden bu karar verildi? (denetimler) | [denetim/](denetim/) tablosu |
 | Projeyi başka birine/AI'ya devredeceğim | [rehber/MASTER_PROMPT.md](rehber/MASTER_PROMPT.md) · [rehber/AI_PROJE_TANITIMI.md](rehber/AI_PROJE_TANITIMI.md) |
@@ -79,6 +81,7 @@
 | [tasarim/PHASE2_TASARIM_NOTLARI.md](tasarim/PHASE2_TASARIM_NOTLARI.md) | Yürürlükte | Kimlik/mirror tasarım notları |
 | [tasarim/MODULERLESTIRME_PLANI_2026-10-26.md](tasarim/MODULERLESTIRME_PLANI_2026-10-26.md) | Uygulandı | 2026-10-26 | Mega dosyaların (main/grafik/notifier/data) bölünme planı: hedef paket yapısı, geç bağlama kuralı, faz sırası (sonuç: [YAPI.md](YAPI.md) §8) |
 | [tasarim/API_SENARYOLARI_VE_URUN_FIKIRLERI_2026-11-03.md](tasarim/API_SENARYOLARI_VE_URUN_FIKIRLERI_2026-11-03.md) | Fikir + local PoC | 2026-11-03 | Dışarıya salt-okunur API ile dış servis entegrasyonu ayrımı; ASTOR/Stabil HTTP kontratı yerelde sınandı, production API değil |
+| [tasarim/SENARYO_MOTORU_BRIFING_SOZLESMESI_2026-11-09.md](tasarim/SENARYO_MOTORU_BRIFING_SOZLESMESI_2026-11-09.md) | Tasarım | 2026-11-09 | Sırayla konuşan katman brifingi, toplu yeniden yorum (TYR), bloklarla hassas giriş, işlem yaşam döngüsü + sermaye koruması; gölge defter/replay planı — kod yok, canlı karar değiştirmez |
 
 ### `kurulum/` — kur ve çalıştır
 | Dosya | Durum | İçerik |

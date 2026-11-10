@@ -1,0 +1,302 @@
+{
+  "kapsam": {
+    "plan": 2771,
+    "sonuc": 2765,
+    "geometri_gecerli_tetik": 9700,
+    "geometri_red_toplam": 281341,
+    "censored": 6,
+    "veri_yok": 0
+  },
+  "giris_kvadrant": {
+    "iyi_zamanlama": 1384,
+    "erken_girdi_dustu": 843,
+    "gec_girdi_dibi_kacirdi": 338,
+    "yuksekten_girdi_ve_dustu": 200
+  },
+  "giris_kvadrant_sonuc": {
+    "erken_girdi_dustu": {
+      "stop": 697,
+      "zaman": 90,
+      "hedef": 56
+    },
+    "iyi_zamanlama": {
+      "hedef": 663,
+      "zaman": 643,
+      "stop": 78
+    },
+    "yuksekten_girdi_ve_dustu": {
+      "stop": 158,
+      "zaman": 33,
+      "hedef": 9
+    },
+    "gec_girdi_dibi_kacirdi": {
+      "zaman": 176,
+      "hedef": 144,
+      "stop": 18
+    }
+  },
+  "giris_metrikler": {
+    "dip_kacis": {
+      "ort": 0.559,
+      "p50": 0.341,
+      "p90": 1.489
+    },
+    "dusus": {
+      "ort": 1.076,
+      "p50": 0.606,
+      "p90": 2.75
+    }
+  },
+  "cikis_kvadrant": {
+    "orta_yerde": 1731,
+    "dibe_satti": 524,
+    "tepede_satti": 510
+  },
+  "cikis_kvadrant_sonuc": {
+    "orta_yerde": {
+      "zaman": 622,
+      "stop": 594,
+      "hedef": 515
+    },
+    "tepede_satti": {
+      "hedef": 341,
+      "zaman": 146,
+      "stop": 23
+    },
+    "dibe_satti": {
+      "stop": 334,
+      "zaman": 174,
+      "hedef": 16
+    }
+  },
+  "erken_satis": {
+    "n": 872,
+    "ort": 1.628,
+    "p50": 1.045,
+    "p90": 4.356,
+    "toplam_birakilan_atr": 1419.9
+  },
+  "geri_verilen": {
+    "n": 1814,
+    "ort": 0.383,
+    "p50": 0.0,
+    "p90": 1.261
+  },
+  "stop_kalitesi": {
+    "dogrulandi_devam_etti": 884,
+    "toparlandi_geri_geldi": 67,
+    "toparlanma": {
+      "n": 949,
+      "ort": 1.244,
+      "p50": 0.819,
+      "p90": 3.416
+    }
+  },
+  "zaman_cikisi": {
+    "n": 942,
+    "ort": 11.88,
+    "p50": 2.242,
+    "p90": 7.23,
+    "hedefe_kalan_notu": "medyan esas; ortalama uç değerlerle şişer"
+  },
+  "hedef_mesafe_atr": {
+    "n": 2771,
+    "ort": 6.663,
+    "p50": 1.764050199216881,
+    "p90": 4.182488118218089,
+    "max": 610.1,
+    "on_suz_atr_uzerinde": 113,
+    "zaman_alt_kume": {
+      "n": 942,
+      "ort": 12.332,
+      "p50": 2.618095440955702,
+      "p90": 8.312926722428763
+    }
+  },
+  "lehte_gucu": {
+    "4": {
+      "stop": 881,
+      "zaman": 872,
+      "hedef": 800
+    },
+    "5": {
+      "hedef": 72,
+      "stop": 70,
+      "zaman": 70
+    }
+  },
+  "kapilar": {
+    "BEKLE · olgunluk yok (desteğe mesafe > 1 ATR)": {
+      "n": 4899,
+      "karsi_olgu_beklenti_atr": 0.2989,
+      "toplam_pnl_atr": 1464.4,
+      "sonuc": {
+        "zaman": 2071,
+        "stop": 1602,
+        "hedef": 1210,
+        "yok": 16
+      },
+      "ornekler": [
+        "AEFES-1h-334",
+        "AEFES-1h-540",
+        "AEFES-2h-299"
+      ]
+    },
+    "20-bar boşluk (üst üste tetik)": {
+      "n": 914,
+      "karsi_olgu_beklenti_atr": 0.237,
+      "toplam_pnl_atr": 216.6,
+      "sonuc": {
+        "zaman": 408,
+        "stop": 331,
+        "hedef": 175
+      },
+      "ornekler": [
+        "AEFES-2h-323",
+        "AGHOL-1d-418",
+        "AKCNS-1h-1842"
+      ]
+    },
+    "BEKLE · taze karşıt MS uyarısı sürüyor": {
+      "n": 868,
+      "karsi_olgu_beklenti_atr": 0.2705,
+      "toplam_pnl_atr": 234.8,
+      "sonuc": {
+        "stop": 329,
+        "hedef": 303,
+        "zaman": 236
+      },
+      "ornekler": [
+        "AEFES-1h-93",
+        "AEFES-1h-94",
+        "AEFES-1h-95"
+      ]
+    },
+    "RET · G1 kapandı (tez öldü)": {
+      "n": 207,
+      "karsi_olgu_beklenti_atr": 0.3296,
+      "toplam_pnl_atr": 68.2,
+      "sonuc": {
+        "stop": 95,
+        "hedef": 69,
+        "zaman": 43
+      },
+      "ornekler": [
+        "AGHOL-1h-957",
+        "AKFGY-1d-471",
+        "ALARK-4h-212"
+      ]
+    },
+    "BEKLE · G1 kapısı kapalı (motor susar)": {
+      "n": 37,
+      "karsi_olgu_beklenti_atr": 0.1632,
+      "toplam_pnl_atr": 6.0,
+      "sonuc": {
+        "zaman": 17,
+        "stop": 11,
+        "hedef": 9
+      },
+      "ornekler": [
+        "ASELS-1d-89",
+        "CIMSA-1d-53",
+        "CIMSA-1d-54"
+      ]
+    },
+    "RET · planda ters yapı geldi": {
+      "n": 4,
+      "karsi_olgu_beklenti_atr": 0.381,
+      "toplam_pnl_atr": 1.5,
+      "sonuc": {
+        "stop": 2,
+        "hedef": 2
+      },
+      "ornekler": [
+        "BERA-1d-70",
+        "XU30-1d-136"
+      ]
+    }
+  },
+  "geometri_red": {
+    "hedef adayı yok veya R<1,2 (karşıt yapı)": 135866,
+    "stop çok uzak (>2,5 ATR)": 82076,
+    "stop çok yakın (<0,5 ATR)": 63083,
+    "destek veya bant yok (G1/G5 yapısal)": 316
+  },
+  "en_kotu_10": [
+    {
+      "plan_id": "OBAMS-2h-542",
+      "sonuc": "stop",
+      "pnl_atr": -2.485,
+      "tf": "2h",
+      "donem": "kesif"
+    },
+    {
+      "plan_id": "BEGYO-1h-2124",
+      "sonuc": "stop",
+      "pnl_atr": -2.462,
+      "tf": "1h",
+      "donem": "kesif"
+    },
+    {
+      "plan_id": "OTKAR-1h-2955",
+      "sonuc": "stop",
+      "pnl_atr": -2.389,
+      "tf": "1h",
+      "donem": "dogrulama"
+    },
+    {
+      "plan_id": "ISGYO-2h-948",
+      "sonuc": "stop",
+      "pnl_atr": -2.387,
+      "tf": "2h",
+      "donem": "kesif"
+    },
+    {
+      "plan_id": "ALFAS-2h-108",
+      "sonuc": "stop",
+      "pnl_atr": -2.346,
+      "tf": "2h",
+      "donem": "kesif"
+    },
+    {
+      "plan_id": "FENER-2h-756",
+      "sonuc": "stop",
+      "pnl_atr": -2.335,
+      "tf": "2h",
+      "donem": "kesif"
+    },
+    {
+      "plan_id": "CWENE-2h-1376",
+      "sonuc": "stop",
+      "pnl_atr": -2.313,
+      "tf": "2h",
+      "donem": "dogrulama"
+    },
+    {
+      "plan_id": "OTKAR-1h-3102",
+      "sonuc": "stop",
+      "pnl_atr": -2.305,
+      "tf": "1h",
+      "donem": "dogrulama"
+    },
+    {
+      "plan_id": "BTCIM-2h-1793",
+      "sonuc": "stop",
+      "pnl_atr": -2.274,
+      "tf": "2h",
+      "donem": "dogrulama"
+    },
+    {
+      "plan_id": "LMKDC-1h-1664",
+      "sonuc": "stop",
+      "pnl_atr": -2.26,
+      "tf": "1h",
+      "donem": "kesif"
+    }
+  ],
+  "sinirlamalar": [
+    "tetik ÖNCESİ kapılar (bant/tepki onayı yoksa tetik hiç yazılmaz) defterde yok — ölçülemedi",
+    "karşıt-olgu yarışları bağımsızdır (örtüşmezlik uygulanmaz); kaba üstel",
+    "close tabanlı (dip/tepe low-high değil) — koşucuyla tutarlılık için"
+  ]
+}
