@@ -1,0 +1,20 @@
+{
+  "baz_hucre": {
+    "stop_atr": 1.0,
+    "hedef_atr": 1.5,
+    "ufuk": 10
+  },
+  "sembol_tf_sayisi": 692,
+  "toplam_islem_kural_yok": 15808,
+  "toplam_atr_kural_yok": 1429.0,
+  "toplam_atr_kural_var": 1429.0,
+  "kural_etkisi_atr": 0.0,
+  "duran_islem_toplam": 0,
+  "gunluk_stop_max": 1,
+  "gunluk_stop_2plus_pay_yuzde": 0.0,
+  "gunluk_stop_3plus_pay_yuzde": 0.0,
+  "maks_ust_uste_stop_medyan": 3.0,
+  "maks_ust_uste_stop_maks": 10,
+  "maks_dusus_atr_medyan": 4.0,
+  "maks_dusus_atr_maks": 17.5
+}

@@ -1,0 +1,9 @@
+{
+  "kural": "sembol×TF'de 3 üst üste stop → sıradaki işlem atlanır",
+  "toplam_atr_kural_var": 1404.5,
+  "toplam_atr_kural_yok": 1429.0,
+  "duran_islem": 655,
+  "streak_3plus_seri_orani_yuzde": 60.67,
+  "streak_5plus_seri_orani_yuzde": 16.23,
+  "streak_maks": 10
+}

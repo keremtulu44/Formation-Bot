@@ -109,3 +109,6 @@ dz_yukleme/
 
 # Replay olcum ara ciktilari (yeniden uretilebilir, Git e girmez)
 var/
+
+# Gölge zincir defteri — büyük çıktı; ölçüm özetleri (ozet.json/CSV) commit edilir
+docs/arastirma/sonuclar/**/golge_defter.jsonl*
