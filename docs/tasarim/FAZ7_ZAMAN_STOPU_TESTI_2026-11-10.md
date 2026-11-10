@@ -78,3 +78,48 @@ altında → EXIT TARAFI KAPANDI** (tek başına da kombinasyon da hep negatif).
 **Popülasyon notu:** gap=20 bar = H=20 olduğundan açık-plan bastırması
 gap ile çakışır → plan POPÜLASYONUNUN990 ile birebir aynı olması beklenir
 (aynı bar sırası: önce çözünme, sonra tetik); sapma raporlanır.
+
+---
+
+## Ek B — Replay sonucu (H=20, holdout120,0 hata,2.388 sn)
+
+| ölçüt | H=10 (Faz6) | **H=20** | yön |
+|---|---|---|---|
+| plan |990 | **989** (popülasyon ≈ birebir; offline öngörü384/452/153 → replay **384/451/153** ✓) | ✓ |
+| **K1** |224 | **223** | ✓ |
+| **K2 (≥+5)** | −2,24 | **−4,46** | **✗ kötüleşti** |
+| **K3 doğrulama** | **+0,1204** | **+0,0383** | **✗ eridi (−%68)** |
+| K4 / K5 |0 /0 |0 /0 | ✓ |
+| **K6a kesif** | +0,3460 | **+0,4088 (+%18)** | ✓ |
+| K6b | +0,1204 | +0,0383 | ✓ (ince) |
+| kapı kararı | GEÇMEDİ (K2) | **GEÇMEDİ (K2)** | — |
+| tutunma | %32,4 | %32,4 | — |
+| stop doğrulandı/toparlandı |333/18 |429/22 | — |
+
+**Dönem dengesi (yapısal bulgu — H eğrisi, dönem bazlı):**
+
+| H | genel | kesif | doğrulama |
+|---|---|---|---|
+|10 | +0,2950 | +0,3460 | **+0,1204** |
+|12 | +0,2961 | +0,3533 | +0,1005 |
+|15 | +0,3035 | +0,3759 | +0,0561 |
+|18 | +0,3227 | +0,4017 | +0,0524 |
+|20 | +0,3240 | +0,4104 | +0,0283 |
+|25 | +0,3292 | +0,4355 | **−0,0342** |
+
+Kesif ↔ doğrulama **zıt yönde** — tek global H'de denge noktası
+**H≈10–12**; H≥15 kesif lehine doğrulama minderini yiyor (K3 >0 eşiğine
+yaklaşır, H=25'te kırılır). K2 her iki H'de de kötüleşiyor → **H ile
+onarılamaz** (verdict tarafı — §9 ile aynı sonuç).
+
+## Karar (Faz7)
+
+1. **H=10 KORUNUR** (varsayılan). H=20 genel/K6a artışı doğrulandı ama
+   K3 minderini (%68) harcadı, K2'yi kötüleştirdi → kapıda kabul yok
+   (dikkatli duruş: K3 kırılganlaşırsa kapı5/7'ye düşer).
+2. **H=25 plato tepe notu** ve **dönem-bağımlı H (kesif20/doğrulama10)**
+   hipotezi SONRAKİ faz adayı — ayrı tescil + ayrı doğrulama ister;
+   aşırı-kalibrasyon riski nedeniyle bu fazda uygulanmadı.
+3. **Öncelik değişmez: K2 = verdict tarafı.** İki H denemesinde de
+   kötüleşti — zaman penceresi K2'yi onarmaz; sıradaki kaldıraç
+   RET-G1 rafinasyonu / ölçüm tasarımı (FAZ6 §6).
