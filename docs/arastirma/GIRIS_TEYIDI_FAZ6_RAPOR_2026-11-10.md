@@ -129,3 +129,49 @@ python3 research/golge_kapi.py --olcum <çık>/olcum_ozet.json
 python3 research/golge_inceleme.py --defter sonuclar/golge_zincir/golge_defter.jsonl --cikti <çık>/inceleme_ozet.json
 python3 -m pytest test_senaryo_giris_teyidi.py -q   #8 test
 ```
+
+---
+
+## 9. EK — Erken girişlerin onay profili (nerelerden geçiyor?)
+
+`plan_sonuc.csv` (990 plan) + fiyat arşivinden yeniden hesap (quadrant
+birebir doğrulandı:532/357/63/38). Katman hunisi:
+
+```
+tetik (G5 band+tepki onayı) 200.964
+  → geometri (destek/bant, R≥1.2, stop 0,5–2,5)     7.601 (%3,8)
+  → UYGUN ∧20-bar boşluk                           3.059
+  → teyit T1505                                      990 (tutunma %32,4)
+  → bunlardan erken = 357 (%36,1) — HEPSİNİ geçtiler
+```
+
+**Onaylar erken ile iyi'yi AYIRMIYOR (kanıt):**
+
+| | erken (n357) | iyi (n532) |
+|---|---|---|
+| hukum satırı "4 lehte" | **%96,9** | **%96,2** → lehte ort **4.0 = 4.0** |
+| dönem kesif | %74,8 | %79,3 |
+| TF:1h/2h/4h/1d |30,5 /26,6 /16,2 /26,6 |36,8 /23,3 /19,4 /20,5 |
+| R ort | **3.06** | **4.03** (ikisi de≫1,2) |
+| **\|MAE\| ort** | **1,38 ATR** | **0,26 ATR** (fark SONRASI) |
+| pnl ort | −0,755 | +1,001 |
+
+**Neden bu kadar fazla (yapısal):**
+1. **Tetik doğası:** destek/bant tetiği fiyat DÜŞERKEN çalar — erken nüfus
+   düşüşün içinde doğuyor (§7: kırmızı bar %76/%77, mom3 −0,62/−0,65 —
+   erken ve iyi giriş-öncesi neredeyse aynı).
+2. **Verdict ayrıştırmıyor:**4-lehte UYGUN paketi hem erken'i hem iyi'yi
+   onaylıyor; "düşüş sürüyor" şartı yok (ve BOS ekleme reddedildi).
+3. **Geometri düşüşü ÖDÜLLENDİRİR:** destek yakın → stop yakın → R büyük;
+   düşerken R matematiği iyileşir (erken R3,06 hâlâ rahat geçer).
+4. **Tepki onayı tek barlık mola** olabiliyor; düşüşün bittiğine kanıt değil.
+5. **T1505 giriş SONRASI kör:** test+hold giriş öncesi15 barı doğrular;
+   girişten sonraki yeni dipleri durdurmaz (bilinçli — over-filter yasağı).
+6. **1d yoğunluğu:** erken'de1d payı %26,6 (tüm planlar %21,8) — geniş
+   pencere, geniş düşüş.
+
+**Sonuç:** erken299 stop = toplam351 stopun %85'i; onay anında iyi'den
+fark **neredeyse sıfır** (lehte4.0=4.0, R benzer) — fark girişten SONRA
+(MAE1,38 vs0,26) oluşuyor. Giriş katmanları (tetik/verdict/geometri/teyit)
+artık suçlanacak yer değil; **erken anlaşılıp çıkışta erken davranmak**
+(P2) kaldıraçtır.
