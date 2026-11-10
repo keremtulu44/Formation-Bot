@@ -307,21 +307,35 @@ def analiz(defter_yolu: Path) -> dict[str, Any]:
         if d.get("plan_id"):
             continue                      # plan açıldı, engel değil
         if d.get("hukum") == "UYGUN":
-            kategori = "20-bar boşluk (üst üste tetik)"
+            # Faz6: teyit alanı defterde — False ise giriş teyidi kesti,
+            # True ise20-bar boşluk; alan yoksa (eski defter) boşluk say.
+            if d.get("teyit") is False:
+                kategori = "Faz6 giriş teyidi (devamlılık)"
+            else:
+                kategori = "20-bar boşluk (üst üste tetik)"
         else:
             kategori = gerekce_kategori(d.get("_gerekce")) or (
                 f"{d.get('hukum')} · gerekce eşleşmedi")
         k = engel.setdefault(kategori, {
-            "n": 0, "pnl_sum": 0.0, "sonuc": Counter(), "ornekler": []})
+            "n": 0, "pnl_sum": 0.0, "sonuc": Counter(), "kv": Counter(),
+            "ornekler": []})
         k["n"] += 1
-        # karşıt-olgu: aynı yarış, bağımsız (örtüşmezlik yok)
         closes = kapanis(d["sembol"], d["tf"])
-        sonuc, _k, pnl = yaris(closes, int(d["bar_index"]), float(d["giris"]),
-                               float(d["stop"]), float(d["hedef"]), float(d["atr"]))
+        # kaçan tetiğin giriş yeri (aynı ±10 bar kvadrantı)
+        e = int(d["bar_index"])
+        atr_d, giris_d = float(d["atr"]), float(d["giris"])
+        prev = closes[max(0, e - W):e]
+        nxt = closes[e + 1:min(len(closes), e + 1 + W)]
+        dip_k = max(0.0, (giris_d - (min(prev) if prev else giris_d)) / atr_d)
+        dus_k = max(0.0, (giris_d - (min(nxt) if nxt else giris_d)) / atr_d)
+        k["kv"][kvadrant(dip_k, dus_k)] += 1
+        # karşıt-olgu: aynı yarış, bağımsız (örtüşmezlik yok)
+        sonuc, _k, pnl = yaris(closes, e, giris_d,
+                               float(d["stop"]), float(d["hedef"]), atr_d)
         k["pnl_sum"] += pnl
         k["sonuc"][sonuc] += 1
         if len(k["ornekler"]) < 3 and sonuc == "hedef":
-            k["ornekler"].append(d["plan_id"] or f"{d['sembol']}-{d['tf']}-{d['bar_index']}")
+            k["ornekler"].append(d["plan_id"] or f"{d['sembol']}-{d['tf']}-{e}")
 
     # plan açılmayan UYGUN-boşluk sayısını ayrıca doğru say (plan_id yoksa)
     # ----------3) özet ----------
@@ -357,7 +371,8 @@ def analiz(defter_yolu: Path) -> dict[str, Any]:
         "kapilar": {
             k: {"n": v["n"], "karsi_olgu_beklenti_atr": round(v["pnl_sum"] / v["n"], 4),
                 "toplam_pnl_atr": round(v["pnl_sum"], 1),
-                "sonuc": oran(v["sonuc"]), "ornekler": v["ornekler"]}
+                "sonuc": oran(v["sonuc"]), "giris_kvadrant": oran(v["kv"]),
+                "ornekler": v["ornekler"]}
             for k, v in sorted(engel.items(), key=lambda kv: -kv[1]["n"])},
         "geometri_red": oran(t["geo_red"]),
         "en_kotu_10": en_kotu[:10],

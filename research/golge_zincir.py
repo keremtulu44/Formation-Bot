@@ -49,6 +49,7 @@ from domain_engines.stabil import build_single_pass_history  # noqa: E402
 from research.arsiv import HAVUZ_DISI_SEMBOLLER, arsiv_sembolleri, tf_frame  # noqa: E402
 from research.formasyon import formasyon_kosu  # noqa: E402
 from senaryo.defter import GolgeDefter  # noqa: E402
+from senaryo.giris_teyidi import giris_teyidi  # noqa: E402
 from senaryo.modeller import IslemSonucu  # noqa: E402
 from senaryo.plan_karti import plan_karti_uret  # noqa: E402
 from senaryo.tyr import TyrDurum, tyr_hukmu  # noqa: E402
@@ -143,6 +144,7 @@ class Sayac:
     tetik: int = 0
     tetik_geometri: int = 0
     plan: int = 0
+    teyit_red: int = 0
     sonuc: dict[str, int] = field(default_factory=lambda: {"hedef": 0, "stop": 0,
                                                            "yok": 0, "zaman": 0})
     hukum_dagilim: dict[str, int] = field(default_factory=lambda: {"BEKLE": 0, "UYGUN": 0, "RET": 0})
@@ -157,6 +159,8 @@ def seri_kosu(
     sembol, tf = hazir.symbol, hazir.tf
     norm = hazir.norm
     n = len(norm)
+    dusukler = [float(x) for x in norm["low"].tolist()]
+    kapanislar = [float(x) for x in norm["close"].tolist()]
     aktif: dict[str, tuple[tuple[str, str, str], int, int]] = {}  # kim → (imza, doğuş i, geçerlilik)
     son_hukum: str | None = None
     acik_plan: dict[str, Any] | None = None
@@ -211,7 +215,7 @@ def seri_kosu(
         # Tetik (kör bazın ham maddesi): G5 bandı + onaylı tepki — hüküm ne
         # olursa olsun, boşluksuz kaydedilir; örtüşmesizlik ölçümde uygulanır
         # (ev stili: 20 bar, açgözlü). Plan = tetik ∧ UYGUN ∧ geometri ∧
-        # son plandan ≥20 bar.
+        # son plandan ≥20 bar ∧ giriş teyidi (Faz6 devamlılık — FAZ6 belgesi §2).
         if acik_plan is None and g5.bant is not None and g5.tepki_onayi:
             donem = "kesif" if i < hazir.split_i else "dogrulama"
             bilinmeyenler = ["hacim doğrulanmadı (sıfır hacim kaydı)"]
@@ -228,8 +232,19 @@ def seri_kosu(
                 kaynak_bildirimler=tuple(f"{k}:{v[0][1]}" for k, v in aktif.items()),
                 ek_bilinmeyenler=bilinmeyenler,
             )
+            # Faz6 giriş teyidi (yalnız planı etkiler; tetik/kör baz değişmez)
+            teyit_ok, teyit_neden = True, None
+            if kart is not None:
+                zemin_hatti = (max(float(g1.destek), float(g5.bant[0]))
+                               if g1.destek is not None else float(g5.bant[0]))
+                teyit_ok, teyit_neden = giris_teyidi(
+                    low=dusukler, close=kapanislar, i=i,
+                    zemin=zemin_hatti, atr=atr)
+            bosluk_var = i >= son_plan_i + 20
             plan_mi = (kart is not None and h.hukum == "UYGUN"
-                       and i >= son_plan_i + 20)
+                       and bosluk_var and teyit_ok)
+            if kart is not None and h.hukum == "UYGUN" and bosluk_var and not teyit_ok:
+                sayac.teyit_red += 1
             defter.yaz({
                 "tip": "zincir_ozet", "tur": "tetik", "sembol": sembol, "tf": tf,
                 "t": t_iso, "bar_index": i, "donem": donem,
@@ -242,6 +257,9 @@ def seri_kosu(
                 "hedef": kart.hedef if kart else None,
                 "R": kart.R if kart else None,
                 "plan_id": kart.plan_id if plan_mi else None,
+                "teyit": teyit_ok if kart is not None else None,
+                "teyit_neden": (teyit_neden
+                                if (kart is not None and not teyit_ok) else None),
             })
             sayac.tetik += 1
             if kart is not None:
@@ -365,7 +383,8 @@ def main(argv: list[str] | None = None) -> int:
             "bildirim": sayac.bildirim, "bitis": sayac.bitis,
             "hukum_yazim": sayac.hukum, "hukum_dagilim": sayac.hukum_dagilim,
             "tetik": sayac.tetik, "tetik_geometri": sayac.tetik_geometri,
-            "plan": sayac.plan, "sonuc": sayac.sonuc,
+            "plan": sayac.plan, "teyit_red": sayac.teyit_red,
+            "sonuc": sayac.sonuc,
         },
         "hatalar": hatalar[:200],
         "hata_sayisi": len(hatalar),
