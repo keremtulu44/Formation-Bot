@@ -45,3 +45,36 @@ toplamını artırır.
   değil, çıkış parametresi tayini; deklare edildi).
 - Erken stop payı artabilir (geç stoplar); asıl ölçüt K3/K6 ve
   pnl/plan yönüdür.
+
+---
+
+## Ek A — Koşu öncesi derin tarama (aynı gün,990 holdout plan)
+
+**H doygunluk eğrisi (pnl/plan):**
+| H |10 |15 | **20** | **25** |30 |40 |
+|---|---|---|---|---|---|---|
+| | +0,2950 | +0,3035 | **+0,3240** | **+0,3292 (tepe)** | +0,3249 | +0,3197 |
+
+Eğri20–25 platosu,30+ düşüş (geç stoplar birikiyor: stop452→512).
+**Bu faz H=20 ile tescilli** (Ek'teki15/20 adaylığı); H=25 plato tepe
+notu — SONRAKİ iterasyon adayı (ayrı tescil gerekir).
+
+**H=10 → H=20 grup kırılımı (kim kazanıyor?):**
+| grup | H10 | H20 | değişim |
+|---|---|---|---|
+| iyi (n532) | +1.001 (hedef256) | **+1.080 (hedef331)** | ✓ asıl kazanç burada; ama stop29→92 (geri-dönüş vuruşu) |
+| erken (n357) | −0,755 | −0,774 | ≈ aynı/kötü — H erken'i kurtarmıyor (beklendiği gibi) |
+| geç (n63) | +1.250 (stop0) | +1.021 (stop11) | ✗ kötüleşiyor (uzun pencere geç'i vuruyor) |
+| yüksekten (n38) | −1,312 | −1,103 | ✓ hafif iyileşme |
+
+**Sonuç:** H=20'nin artı toplamı **iyi grubun hedef erişiminden** geliyor;
+erken zararı sabit kalıyor. Yani bu bir "ödül büyütme" kaldıracı —
+erken-giriş çözümü değil (§9 ile tutarlı).
+
+**Kombinasyon taraması (H=20 + çıkış kuralı):** dip1,25/1,50 → +0,3105/+0,3056;
+trail1,00/1,25 → +0,2555/+0,2903 — **hepsi H=20 tek başına (+0,3240)
+altında → EXIT TARAFI KAPANDI** (tek başına da kombinasyon da hep negatif).
+
+**Popülasyon notu:** gap=20 bar = H=20 olduğundan açık-plan bastırması
+gap ile çakışır → plan POPÜLASYONUNUN990 ile birebir aynı olması beklenir
+(aynı bar sırası: önce çözünme, sonra tetik); sapma raporlanır.
