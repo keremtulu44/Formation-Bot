@@ -71,3 +71,42 @@ Sabitler (koştan önce yazıldı):
 - Zemin altı kapanış kuralı, kırılıp geri dönen (bull-trap) girişleri de keser
   — bilinçli muhafazakârlık.
 - Teyit penceresi3 bar: uzun TF'te (1d)3 bar =3 gün — kabul edildi (basitlik).
+
+---
+
+## Revize 1 — kalibrasyon sonrası (2026-11-10, ana koşudan ÖNCE)
+
+30 sembol kalibrasyon koşusu + çevrimdışı varyant süpürmesi (939 aday,
+`research/faz6_kalibrasyon.py`) **V1'in (ilk3 kural) işe yaramadığını** gösterdi:
+
+| varyant | ret% | stop% | bek | iyi | erken | yüksekten |
+|---|---|---|---|---|---|---|
+| kapı yok | 100 | 36,7 | +0,326 | 48,6 | 33,2 | 7,6 |
+| **V1 (ilk hâli)** | 39,1 | 35,4 | +0,293 | 52,6 | 32,2 | 8,7 |
+| T10 (test10) | 36,3 | **34,9** | +0,381 | 52,8 | **29,6** | 7,3 |
+| T1005 | 39,9 | 34,9 | +0,334 | 52,3 | 30,7 | 7,5 |
+| **T1505 (SEÇİLDİ)** | **41,9** | 35,9 | **+0,365** | **55,5** | 33,8 | **4,6** |
+| T1075 | 44,1 | 35,3 | +0,301 | 51,2 | 31,9 | 7,2 |
+
+**Püf noktası (V1 neden geri tepti):** "yeni dip yok" kuralı asıl **yıkanma
+dipini** (desteğin test edilip tutulduğu an — çekiç/kırılış) kesiyor, henüz
+test edilmemiş düşüşleri bırakıyordu → kapı, iyi girişleri (bek +0,35)
+elemiş, zayıfları tutmuştu (retro-korelatif). Kullanıcı sorusu olan
+"destek tuttu mu" **test+hold** ile ölçülür: son15 barda zemin test
+edilmiş (low ≤ zemin+0,5 ATR), kapanışlar zemin üstü kalmış, giriş
+pencerenin dibinden geri dönmüş.
+
+**Revize kural (tek,3 koşul):**
+1. `min(low[i-14..i]) ≤ zemin + 0,5·ATR` — test edilmiş
+2. `close[j] ≥ zemin ∀j ∈ [i-14..i]` — zemin altına kapanış yok (intraday
+   delik serbest)
+3. `close[i] > min(close[i-14..i])` — pencere dibinden geri dönüldü
+
+Mom3/zirve kapakları **elendi** (sweep'te bek'i düşürdü: T1005M +0,298 <
+T1005 +0,334). Yeni-dip kuralı **elendi** (yukarıda). Zemin hattı aynen:
+`max(destek, band_lo)`.
+
+**Kalibrasyon sızıntısını önleme:** ilk30 sembol kalibrasyonda kullanıldı —
+**ana koşu `--semboller` ile ilk30 DIŞINDA120 sembol** (holdout). K1–K6,
+boşluk20, tetik/kör baz değişmedi. Zemin40% korundu (T1505 = %41,9;
+mutlak hacim ≈2000+ plan/yıl — aç bırakma riski yok).

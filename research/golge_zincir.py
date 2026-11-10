@@ -215,7 +215,8 @@ def seri_kosu(
         # Tetik (kör bazın ham maddesi): G5 bandı + onaylı tepki — hüküm ne
         # olursa olsun, boşluksuz kaydedilir; örtüşmesizlik ölçümde uygulanır
         # (ev stili: 20 bar, açgözlü). Plan = tetik ∧ UYGUN ∧ geometri ∧
-        # son plandan ≥20 bar ∧ giriş teyidi (Faz6 devamlılık — FAZ6 belgesi §2).
+        # son plandan ≥20 bar ∧ giriş teyidi (Faz6 Revize1 T1505 — test+hold;
+        # FAZ6_GIRIS_TEYIDI_KURALLARI Revize1).
         if acik_plan is None and g5.bant is not None and g5.tepki_onayi:
             donem = "kesif" if i < hazir.split_i else "dogrulama"
             bilinmeyenler = ["hacim doğrulanmadı (sıfır hacim kaydı)"]

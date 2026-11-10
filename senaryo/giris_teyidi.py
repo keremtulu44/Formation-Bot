@@ -1,61 +1,74 @@
 # -*- coding: utf-8 -*-
-"""Faz 6 — giriş teyidi: "destek tuttu mu / düşüş bitti mi?" (devamlılık).
+"""Faz6 giriş teyidi (devamlılık) — Revize1 kuralı T1505.
 
-Belge: ``docs/tasarim/FAZ6_GIRIS_TEYIDI_KURALLARI_2026-11-10.md`` (koşudan
-önce yazıldı; eşikler değişmez).
+Saf modül: veri okumaz, sadece sayılarla çalışır (test edilebilirlik).
 
-Üç şart (hepsi **devamlılık** — ucuz, yerel, BOS/CHOCH değil):
+Kural (FAZ6_GIRIS_TEYIDI_KURALLARI Revize1 — kalibrasyon sonrası seçildi,
+30 sembol holdout'lu ana koşudan önce kaydedildi):
 
-1. **Zemin altı kapanış yok** (son ``PENCERE`` bar): tez çizgisi
-   ``zemin = max(destek, band_lo)`` altına **kapanılmamış** olacak —
-   destek kırılıp geri dönmüş girişler elenir.
-2. **Yeni dip yok:** giriş barının ``low``'u, son2 bardaki dibin altında
-   **yeni dip yapmayacak** (dip zaten oluşmuş olmalı; düşüşe alım kesilir).
-3. **Kovalama sınırı:** girişten önceki3 barda koşu ``MOM3_TAVANI_ATR``
-   ATR'yi aşarsa giriş yok (zirveye yakın/omentumlu kovalama kesilir).
+1. **test:** son15 barda zemin test edilmiş —
+   `min(low[i-14..i]) ≤ zemin + 0,5·ATR`
+2. **hold:** son15 barda kapanışlar zemin üstü —
+   `close[j] ≥ zemin ∀j ∈ [i-14..i]` (intraday delik serbest)
+3. **dönüş:** giriş kapanışı pencere dibinden yukarı dönmüş —
+   `close[i] > min(close[i-14..i])`
 
-Safdır: çerçeve okumaz; girdi değişmezse çıktı değişmez. Yalnız **planı**
-etkiler — tetik/kör baz (K2 temeli) değişmez.
+Zemin hattı koşucuda hesaplanır: `max(destek, band_lo)` (FAZ6 §2 —
+destek çizgisi desteklemezse kâğıt tutmaz).
+
+Kullanım: `ok, neden = giris_teyidi(low=..., close=..., i=..., zemin=..., atr=...)`
+
+Neden sırası (ilk ihlal): `zemin_alti_kapanis` → `test_yok` → `donus_yok` →
+`tamam` (ok=True).
+
+Revize1 tarihi ve gerekçesi (V1'in yıkanmayı kesmesi) belgede §Revize1.
 """
 
 from __future__ import annotations
 
-PENCERE = 3              # devamlılık penceresi (bar) — FAZ6 §2
-MOM3_TAVANI_ATR = 0.50   # kovalama sınırı — FAZ6 §2
+from typing import Sequence
+
+PENCERE = 15          # test/hold penceresi (bar)
+TEST_TAVANI_ATR = 0.50  # zemin + 0,5 ATR'e kadar test sayılır
 
 
-def giris_teyidi(
-    *,
-    low: list[float],
-    close: list[float],
-    i: int,
-    zemin: float,
-    atr: float,
-    pencere: int = PENCERE,
-    mom3_tavani: float = MOM3_TAVANI_ATR,
-) -> tuple[bool, str]:
-    """``i`` anında giriş teyidi. ``(geçti mi, gerekçe)`` — saf.
+def giris_teyidi(*, low: Sequence[float], close: Sequence[float], i: int,
+                 zemin: float, atr: float) -> tuple[bool, str | None]:
+    """Faz6 giriş teyidi (Revize1 · T1505).
 
-    ``i >= pencere + 1`` varsayılır (koşucu ``ILK_BAR=40`` ile garanti eder);
-    yine de küçük ``i`` için pencere kırpılır, ``dip_teyidi_yok`` için
-    en az1 bar geçmiş gerekir.
+    Args:
+        low: serinin tüm bar LOW değerleri.
+        close: serinin tüm bar CLOSE değerleri.
+        i: tetik/giriş barı indeksi (kapanış üzerinden).
+        zemin: giriş tezi zemin hattı — `max(destek, band_lo)`.
+        atr: tetik barındaki ATR (TOL ölçeği).
+
+    Returns:
+        (True, None) teyit verildi; (False, neden) teyit reddedildi.
     """
-    if i < 1:
+    if i < PENCERE - 1:
         return False, "yetersiz_gecmis"
+    bas = i - (PENCERE - 1)
+    pencere_close = close[bas:i + 1]
+    pencere_low = low[bas:i + 1]
 
-    # 1) zemin altına kapanış yok (son pencere bar, giriş barı dahil)
-    bas = max(0, i - pencere + 1)
+    # 1) hold: zemin altına kapanış olmamış (intraday delik serbest)
     for j in range(bas, i + 1):
         if close[j] < zemin:
             return False, "zemin_alti_kapanis"
 
-    # 2) yeni dip yok: giriş low'u son (pencere-1) bardaki dibin altında olmasın
-    onceki = low[max(0, i - (pencere - 1)):i]
-    if onceki and low[i] < min(onceki):
-        return False, "dip_teyidi_yok"
+    # 2) test: zemin son15 barda test edilmiş olmalı (0,5 ATR tampon)
+    if min(pencere_low) > zemin + TEST_TAVANI_ATR * atr:
+        return False, "test_yok"
 
-    # 3) kovalama: son3 barda koşu > tavan (i>=3; ILK_BAR sayesinde her zaman)
-    if i >= 3 and (close[i] - close[i - 3]) / atr > mom3_tavani:
-        return False, "kovalama"
+    # 3) dönüş: giriş kapanışı pencere dibinin üstünde olmalı
+    if close[i] <= min(pencere_close):
+        return False, "donus_yok"
 
-    return True, "tamam"
+    return True, None
+
+
+def kural_metni() -> str:
+    """Tek satırlık kural özeti (rapor/belge tekrar kullanımı için)."""
+    return (f"Faz6 T1505: son{PENCERE} barda test (low≤zemin+{TEST_TAVANI_ATR} ATR) "
+            f"∧ hold (close≥zemin) ∧ dönüş (close[i]>min(close))")
