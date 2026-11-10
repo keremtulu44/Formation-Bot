@@ -65,6 +65,7 @@ from senaryo.zincir import (  # noqa: E402
 VARSAYILAN_CIKTI = KOK / "docs/arastirma/sonuclar/golge_zincir"
 ILK_BAR = 40                      # zincirin başladığı minimum bar
 KARSIT_YAS_ESIK_BAR = 5           # plan §3: taze karşıt MS olayı yaşı
+ZAMAN_STOPU_BAR = 10              # Faz7: --zaman-stopu ile değiştirilir
 
 
 # --- hazırlık ---------------------------------------------------------------
@@ -232,6 +233,7 @@ def seri_kosu(
                 hukum_satiri=h.satir,
                 kaynak_bildirimler=tuple(f"{k}:{v[0][1]}" for k, v in aktif.items()),
                 ek_bilinmeyenler=bilinmeyenler,
+                zaman_stopu=ZAMAN_STOPU_BAR,
             )
             # Faz6 giriş teyidi (yalnız planı etkiler; tetik/kör baz değişmez)
             teyit_ok, teyit_neden = True, None
@@ -328,7 +330,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cikti", default=str(VARSAYILAN_CIKTI))
     p.add_argument("--devam", action="store_true",
                    help="mevcut deftere ekle (varsayılan: taze koşu)")
+    p.add_argument("--zaman-stopu", type=int, default=10,
+                   help="plan zaman stopu, bar (Faz7:15/20 testi)")
     args = p.parse_args(argv)
+
+    global ZAMAN_STOPU_BAR
+    ZAMAN_STOPU_BAR = max(1, args.zaman_stopu)
 
     cikti = Path(args.cikti)
     cikti.mkdir(parents=True, exist_ok=True)
@@ -377,7 +384,8 @@ def main(argv: list[str] | None = None) -> int:
     ozet = {
         "parametreler": {
             "evren": len(semboller), "tfs": tfs, "ilksar_bar": ILK_BAR,
-            "zaman_stopu": 10, "plan_araligi_bar": 20, "bolme": "kesif/dogrulama %70/%30",
+            "zaman_stopu": ZAMAN_STOPU_BAR, "plan_araligi_bar": 20,
+            "bolme": "kesif/dogrulama %70/%30",
         },
         "seri_sayisi": seri_sayisi,
         "sayacler": {
