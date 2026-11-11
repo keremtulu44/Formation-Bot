@@ -42,6 +42,21 @@ Sıra (A raporlarının çıktılarıyla kesinleşecek):
 - Rejim/ay filtresi, exit-side, H20, ön-gözlem giriş filtreleri **kapalı kalır**.
 - Tecrübe satırları yalnız envanterdaki n+kaynakla yazılır (uydurma yasağı).
 
-## 4. Tur A kayıtları
+## 4. Tur A kayıtları (2026-11-11 tamamlandı)
 
-- (doldurulacak: commit, replay doğrulama, rapor yolları)
+- **Kod:** `bcf534d` (modeller + plan_karti + golge_zincir; test paketi
+  4349passed/6failed — 6 hata **önceden var**, `git stash` ile teyitli,
+  stabil_direnç modülüyle ilgili, FAZ9'a bağımsız).
+- **Replay A:** `sonuclar/golge_zincir_faz9a/` (998,7 sn, 0 hata).
+- **Değişmezlik kanıtı ✓✓:**412/412 plan-id birebir · plan-başı sonuç farkı
+  **0** · pnl maks fark **0,000000 ATR** · sonuç137/132/143 = FAZ8.
+- **Rapor:** `docs/arastirma/CUMLE_SICILI_SAHNE_FAZ9_2026-11-11.md`
+  (cümle sicili + koşul öbekleri + sahne ölçümü + çift-kesişimler).
+- **İlk adaylar (öLÇÜLDÜ, KARAR YOK):**
+  1. `stabil:zemin ACTIVE, dinamik **EXPANDING**` n141 → **+0,560A/işlem**
+     vs `**CONTRACTING**` n188 → **+0,330A** (fark +0,23A; büyük-eksik adayı).
+  2. `zemin_kademe_asagi` n183 **%60 kârlı** vs `zemin_kademe_yukari` n222
+     **%53** (C3 "dikey tırmanışta altı boş" dersi işlem sonuçlarına yansıdı).
+  3. Evrensel iddialar (stabil:izle vb.) ayırt etmiyor — A12 dersi tekrar.
+- **Sıradaki tur (B)** — kullanıcı seçimi bekliyor: hedef-zenginliği A/B,
+  CONTRACTING cümlesinden sığ kapı, veya karakterli stop.
