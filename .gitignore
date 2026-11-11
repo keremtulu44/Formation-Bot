@@ -112,3 +112,6 @@ var/
 
 # Gölge zincir defteri — büyük çıktı; ölçüm özetleri (ozet.json/CSV) commit edilir
 docs/arastirma/sonuclar/**/golge_defter.jsonl*
+
+# Kök seviye gölge-zincir replay çıktıları (yeniden üretilebilir)
+/sonuclar/

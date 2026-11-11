@@ -173,7 +173,7 @@ class G5Durum:
     aile: str = ""             # OB | FVG
     dolu: bool = False         # terminal/dolum kaydı var mı (as-of)
     temas_bar: int | None = None   # bant son teması (as-of, ≤ i)
-    tepki_onayi: bool = False      # temas sonrası 3 bar içinde bandın üstüne kapanış
+    tepki_onayi: bool = False      # temas sonrası 3 bar içinde bandın üstüne kapanış (as-of ≤ i)
 
 
 def _zone_asof_aktif(z: Mapping[str, Any], i: int) -> bool:
@@ -196,9 +196,9 @@ def g5_durumu(
     """``i`` anında fiyata en yakın yaşayan giriş bandı + tepki onayı.
 
     ``frame``: ``_normalize_frame`` çıktısı (RangeIndex + timestamp kolonu).
-    Tepki onayı: band temasından sonraki 3 bar içinde bandın beklenen yönde
-    dışına kapanış (uzun: ``close ≥ band_hi``). Blok işlemi **engellemez**:
-    banda yoksa ``bant=None`` kalır, zincir devam eder.
+    Tepki onayı: band temasından sonraki 3 bar içinde (as-of: en fazla ``i``
+    barı) bandın beklenen yönde dışına kapanış (uzun: ``close ≥ band_hi``).
+    Blok işlemi **engellemez**: banda yoksa ``bant=None`` kalır, zincir devam eder.
     """
     if len(frame) == 0 or i < 0 or i >= len(frame):
         return G5Durum()
@@ -223,7 +223,9 @@ def g5_durumu(
 
     tepki = False
     if temas_bar is not None:
-        uc_bar = range(temas_bar + 1, min(temas_bar + 4, len(frame)))
+        # As-of kesinlik: pencere her zaman <= i barıyla sınırlıdır (gelecek
+        # kapanış okunmaz). FAZ9-C düzeltmesi: `len(frame)` yerine `i + 1`.
+        uc_bar = range(temas_bar + 1, min(temas_bar + 4, i + 1))
         for j in uc_bar:
             c = float(frame.at[j, "close"])
             tepki = (c >= hi) if yon == "long" else (c <= lo)

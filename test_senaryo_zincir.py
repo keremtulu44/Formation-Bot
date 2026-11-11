@@ -159,6 +159,37 @@ def test_g5_tepki_onayi_uc_bar():
     assert not g5_durumu([z2], [], f2, 8).tepki_onayi
 
 
+def test_g5_tepki_onayi_gelecek_okumaz():
+    # FAZ9-C: temas bar 4; bar 6'da gelecek kapanış bant üstü. i=5'te bu
+    # gelecek görülmemeli (onay yok); i=6'da görülür (onay var).
+    f = _frame([99.5, 99.4, 99.5, 99.5, 99.6, 99.7, 100.4, 100.2])
+    z = _zone(temaslar=(4,))
+    assert not g5_durumu([z], [], f, 5).tepki_onayi   # i=5: bar 6 gelecek
+    assert g5_durumu([z], [], f, 6).tepki_onayi       # i=6: bar 6 artık geçmiş
+
+
+def test_g5_tepki_onayi_temas_barinda_bos_pencere():
+    # temas bar == i → pencere boş → onay yok (gelecek bar 6'ya bakılmaz)
+    f = _frame([99.5, 99.4, 99.5, 99.5, 99.6, 99.7, 100.4])
+    z = _zone(temaslar=(5,))
+    assert not g5_durumu([z], [], f, 5).tepki_onayi
+    assert g5_durumu([z], [], f, 6).tepki_onayi
+
+
+def test_g5_kesme_testi_cerceve_iye_kesilince_degismez():
+    # FAZ9-C kalıcı kesme testi: çerçeve N'de kesilirse i ≤ N-1 kararları
+    # aynen kalmalı (g5 tamamen as-of olmalı).
+    f = _frame([99.5, 99.4, 99.6, 99.7, 100.4, 100.2, 99.9, 100.1,
+                99.8, 100.5, 100.3, 99.6])
+    z = _zone(temaslar=(2, 5))
+    for i in range(1, len(f)):
+        tam = g5_durumu([z], [], f, i)
+        kesilmis = g5_durumu([z], [], f.iloc[: i + 1], i)
+        assert (tam.bant, tam.temas_bar, tam.tepki_onayi) == (
+            kesilmis.bant, kesilmis.temas_bar, kesilmis.tepki_onayi
+        ), f"i={i} kesme testi sızıntısı"
+
+
 def test_g5_yon_filtresi_kisa_tezde_ayna():
     f = _frame([100.0] * 6)
     asagi = _zone(lo=99.0, hi=100.0)
