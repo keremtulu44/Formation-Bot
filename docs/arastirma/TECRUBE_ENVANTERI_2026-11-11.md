@@ -152,3 +152,12 @@ KT=KIRILIM_TEYIT_REPLAY… · SS=STOP_SERMAYE_REPLAY · GZ=golge faz raporları)
 *Kullanım sırası:* (1) domain cümlesi yazılacaksa bu envanterden satır + n + kaynak
 alınır (uydurma yasağı); (2) yeni ölçüm varsa satır buraya eklenir; (3) §H
 boşlukları faz planı olur — **hepsi önce ölç, sonra kapı, sonra hüküm.*
+
+## I. (FAZ9 eki) B-1 — CONTRACTING filtresi: **RED** (2026-11-11)
+
+- **Kural:** "zemin dinamiği CONTRACTING ise giriş açılmasın" (n188, +0,330A/işlem).
+- **Sonuç:** kapı **6/7 GEÇMEDİ** (K1=47<50) — kalite arttı (K2+8,59 · K30,5795 ·
+  PF2,46 · kârlı%58,5) ama doğrulama nüfusu90→47 düştü ve toplam net −62,1A.
+- **Ders:** zayıf-grup-filtresi kaliteyi yükseltir, nüfusu ve toplam kârı kırar;
+  **uyarı-mekanizması (B-1b/B-2) filtre-denemeden önce denenmeli.**
+- Kayıt: `FAZ9_TECRUBE_ENTEGRE §6` + `kapi_karari_faz9b1.json`.
