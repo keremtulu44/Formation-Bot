@@ -5,7 +5,7 @@ Girdi:
   — plan kayıtlarında ``sahneler`` ve ``aktif_bildirimler`` (FAZ9 A1/A2)
 * FAZ8 referans ``olcum_faz8/plan_sonuc.csv`` — değişmezlik karşılaştırması
 
-Çıktı: ``docs/arastirma/CUMLE_SICILI_SAHNE_FAZ9_2026-11-11.md``
+Çıktı: ``docs/arastirma/faz9_tecrube/CUMLE_SICILI_SAHNE.md``
 
 Kurallar: n≥30 satır; n<30 "nadir — yorum yok"; tek satır tek taban;
 karar vermez, yalnız ölçer (sözleşme §B4 tohumu).
@@ -27,7 +27,7 @@ sys.path.insert(0, str(KOK))
 
 DEFTER = KOK / "sonuclar/golge_zincir_faz9a/golge_defter.jsonl"
 FAZ8_CSV = KOK / "docs/arastirma/sonuclar/golge_zincir/olcum_faz8/plan_sonuc.csv"
-CIKTI = KOK / "docs/arastirma/CUMLE_SICILI_SAHNE_FAZ9_2026-11-11.md"
+CIKTI = KOK / "docs/arastirma/faz9_tecrube/CUMLE_SICILI_SAHNE.md"
 N_ESIK = 30
 
 
