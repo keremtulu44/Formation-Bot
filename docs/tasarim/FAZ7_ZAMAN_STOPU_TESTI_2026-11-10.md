@@ -123,3 +123,30 @@ onarılamaz** (verdict tarafı — §9 ile aynı sonuç).
 3. **Öncelik değişmez: K2 = verdict tarafı.** İki H denemesinde de
    kötüleşti — zaman penceresi K2'yi onarmaz; sıradaki kaldıraç
    RET-G1 rafinasyonu / ölçüm tasarımı (FAZ6 §6).
+
+---
+
+## Ek C — Stop tamponu genişletme testi (çevrimdışı,990 plan) → RED
+
+Stop = zemin − tampon·ATR (baz tampon0,10). Genişletme "minnak tepki"
+sorununu mekanik olarak çözüyor ama ekonomik olarak her adımda kötüleşiyor:
+
+| tampon | pnl/plan | kar% | hedef/stop/zaman | R ort | doğrulama | erken-stop | iyi-stop |
+|---|---|---|---|---|---|---|---|
+| **0,10 (baz)** | **+0,2950** |51,3 |299/351/340 |3,56 | **+0,1204** |299/357 |29/532 |
+|0,25 | +0,2633 |51,9 |302/325/363 |3,08 | +0,0875 |290/357 |15/532 |
+|0,50 | +0,2309 |52,9 |306/260/422 |2,53 | +0,0668 |244/357 |1/532 |
+|0,75 | +0,2042 |53,7 |310/215/463 |2,15 | +0,0188 |201/357 |0/532 |
+|1,00 | +0,1720 |54,0 |311/183/494 |1,87 | **−0,0400 ✗** |171/357 |0/532 |
+
+**Neden kötü:** (1) kurtulan sessiz-stoplar derin-stoplara dönüşüyor —
+erken grubun toplamı −269 → −343 ATR; (2) R3,56→2,53 eriyor, üstelik0,50'de
+planların **%50'si** R<1,2 / stop>2,5 ATR seçimini ihlal ederdi (popülasyon
+çöker); (3) doğrulama minderi1,00'de negatife düşüyor (K3 kapısı gider).
+Kazanan-oranı artışı (51→54%) tek başına yanıltıcı.
+
+**Sonuç:** sıkı stop (%95 doğrulanmış stop kalitesi) **doğru fiyatlanmış** —
+"minnak tepki" gerçektir ama o dokunuşların çoğu tez-ölümüdür. Mevcut
+tampon=0,10 **korunur**. (FAZ7 Ek A/B/C ile birlikte: H, tampon, giriş
+filtreleri, çıkış kuralları — hepsi ölçüldü, hepsi mevcut yapı lehine
+sonuçlandı.)
