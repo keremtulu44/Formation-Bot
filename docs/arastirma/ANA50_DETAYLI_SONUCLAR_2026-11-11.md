@@ -64,3 +64,33 @@ KONTR/4h −1,9 (hepsi −2 ATR altında — derin zarar yok, sınırlı)
   doğrulamalı (plan n412 bekleniyor).
 - Ciro sıralaması arşiv-ortalama (inceleme) — üretim kuralı FAZ8 §2.
 - Yüzdeler ATR-tabanlı, maliyet0 (K3 ölçüm varsayımı).
+
+---
+
+## Ek — Kâr/Zarar oranı detayı (FAZ8 replay, n=412, birebir)
+
+- **Profit Factor:2,12×** (+332,6A kâr / −157,1A zarar) · net +175,5A
+- Kârlı230 (%55,8) · Zararlı175 (%42,5) · başa baş7
+- Kazanan ort **+%3,12** / kaybeden ort **−%2,12** → oran **1,61×** ·
+  beklenti **+%0,844/işlem** · R ort +0,438 (kazanan +1,44 / kaybeden −0,86)
+
+**Kâr kovaları (n):** 0–0,5A:33 (+9,3A) · 0,5–1A:42 (+33,7A) ·
+**1–2A:111 (+155,2A — omuz)** · 2–3A:32 (+78,6A) · 3–5A:10 (+37,4A) ·
+5A+:2 (+18,4A)
+**Zarar kovaları:** 0–0,5A:20 (−4,4A) · **0,5–1A:90 (−66,7A — en kalabalık)** ·
+1–1,5A:50 (−60,2A) · 1,5A+:15 (−25,9A) → **derin zarar sınırlı (stop
+sayesinde; derin sınıf sadece %3,6)**
+
+**Yüzde:**
+- Kârlı: medyan **+%2,19** (p25 +%1,29 · p75 +%4,13 · max **+%17,64**)
+- Zararlı: medyan **−%1,79** (p75 −%1,01 · min −%9,53)
+
+**Çıkış:** hedef137 → **%100 kârlı** (+233,2A) · zaman143 → **%65 kârlı**
+(+73,0A) · stop132 → %0 (−130,8A)
+
+**Yoğunlaşma (dayanıklılık):** en iyi10 işlem kârın yalnızca **%15'ini**
+veriyor (ilk50 → +146A) → **tek şans işlemine bağlı değil, geniş tabanlı**.
+Sembol: **39/50 kârlı** (+202A) vs11 zararlı (−26,6A); en kârlı5: ENKAI
++16,5 · SKBNK +15,4 · EREGL +14,9 · DAPGM +14,1 · ENERY +11,0; en zararlı3
+kronik (CCOLA −5,3 · KCHOL −4,5 · HEKTS −3,3) ana50'de kaldı ama matematik
+toplamı taşıyor.
