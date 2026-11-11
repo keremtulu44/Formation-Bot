@@ -1,0 +1,58 @@
+{
+  "karar": "GEÇTİ",
+  "gecen": 7,
+  "toplam_esik": 7,
+  "esikler": [
+    {
+      "kod": "K1",
+      "esik": ">= 50",
+      "aciklama": "doğrulamada UYGUN plan n",
+      "deger": 90,
+      "gecti": true
+    },
+    {
+      "kod": "K2",
+      "esik": ">= 5.0",
+      "aciklama": "UYGUN − kör koşullu hedef (puan)",
+      "deger": 5.03,
+      "gecti": true
+    },
+    {
+      "kod": "K3",
+      "esik": "> 0.0",
+      "aciklama": "doğrulama beklentisi (maliyet 0)",
+      "deger": 0.4073,
+      "gecti": true
+    },
+    {
+      "kod": "K4",
+      "esik": "<= 5.0",
+      "aciklama": "G1 kapalıyken plan oranı (%)",
+      "deger": 0.0,
+      "gecti": true
+    },
+    {
+      "kod": "K5",
+      "esik": "== 0",
+      "aciklama": "RET sonrası plan ihlali",
+      "deger": 0,
+      "gecti": true
+    },
+    {
+      "kod": "K6a",
+      "esik": "> 0.0",
+      "aciklama": "keşif beklentisi",
+      "deger": 0.4311,
+      "gecti": true
+    },
+    {
+      "kod": "K6b",
+      "esik": "> 0.0",
+      "aciklama": "doğrulama beklentisi",
+      "deger": 0.4073,
+      "gecti": true
+    }
+  ],
+  "not": "Kanıt birikimi; canlıya bağlantı yok (kırmızı çizgi 8). Eşikler koşumdan ÖNCE plan belgesinde sabitlendi.",
+  "olcum_dosyasi": "/tmp/faz8_olcum/olcum_ozet.json"
+}

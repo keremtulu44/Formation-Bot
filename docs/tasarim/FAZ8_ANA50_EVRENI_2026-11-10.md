@@ -45,3 +45,32 @@ beklenen sapma minimal; replay bunu test eder.
   düşük ciro70'in çıkarılması.
 - Rejim sinyali (genişlik ρ=+0,64) BİLEREK bu faza alınmadı —
   karmaşıklık maliyeti; ayrı faz adayı.
+
+---
+
+## Replay Sonucu (2026-11-11,200 seri,0 hata,1.842 sn) → **KAPI: GEÇTİ (7/7)**
+
+| Kapı | Eşik | Faz6 (tüm120) | Faz7 (H20) | **FAZ8 ana50** | |
+|---|---|---|---|---|---|
+| K1 | ≥50 |224 |223 | **90** | ✓ |
+| **K2** | **≥+5,0** | −2,24 | −4,46 | **+5,03** | **✓ (ilk kez)** |
+| K3 | >0 | +0,1204 | +0,0383 | **+0,4073** | ✓ |
+| K4 | ≤5 |0 |0 | **0** | ✓ |
+| K5 | =0 |0 |0 | **0** | ✓ |
+| K6a | >0 | +0,346 | +0,4088 | **+0,4311** | ✓ |
+| K6b | >0 | +0,1204 | +0,0383 | **+0,4073** | ✓ |
+| **karar** | | GEÇMEDİ | GEÇMEDİ | **GEÇTİ** | **7/7** |
+
+- **Offline↔replay birebir:** plan412 · sonuç137/132/143 — çevrimdışı
+  öngörüyle **tam eşleşme** (determinizm korunuyor).
+- **K2'nin dönüşü:** UYGUN koşullu44,83 − kör39,80 = +5,03 — paket
+  (verdict+teyit) **çekirdek evrende ham akışı ilk kez geçiyor**;
+  sürükleyici olan düşük-likidite70 idi (−0,07 doğrulama).
+- Giriş kv233/133/28/18 · stop kalitesi127/132 = **%96,2 doğrulanmış** ·
+  tutunma %31,7 (889 teyit_red) · n412/yıl.
+
+**Dürüstlük notları:** (1) K2 marjı **ince:5,03 ≥5,0 (0,03 pay)** —
+sınırda; (2) ölçüm aynı holdout120 üzerinde (evren seçimi ex-ante ciro
+ama numune taze değil); (3) kesin onay adayı: **taze26 sembol** (hiç
+kullanılmadı) veya yeni sezon verisi. Bu notlar kapı disiplininin parçası
+olarak kayda geçti.

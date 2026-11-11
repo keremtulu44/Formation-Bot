@@ -1,0 +1,40 @@
+{
+  "parametreler": {
+    "evren": 50,
+    "tfs": [
+      "1h",
+      "2h",
+      "4h",
+      "1d"
+    ],
+    "ilksar_bar": 40,
+    "zaman_stopu": 10,
+    "plan_araligi_bar": 20,
+    "bolme": "kesif/dogrulama %70/%30"
+  },
+  "seri_sayisi": 200,
+  "sayacler": {
+    "bildirim": 160866,
+    "bitis": 43454,
+    "hukum_yazim": 24421,
+    "hukum_dagilim": {
+      "BEKLE": 147995,
+      "UYGUN": 109483,
+      "RET": 61649
+    },
+    "tetik": 80942,
+    "tetik_geometri": 3384,
+    "plan": 412,
+    "teyit_red": 889,
+    "sonuc": {
+      "hedef": 137,
+      "stop": 132,
+      "yok": 0,
+      "zaman": 143
+    }
+  },
+  "hatalar": [],
+  "hata_sayisi": 0,
+  "sure_sn": 1841.6,
+  "defter": "sonuclar/golge_zincir_faz8ana50/golge_defter.jsonl"
+}
