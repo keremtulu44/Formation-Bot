@@ -83,3 +83,31 @@ def test_kayit_modeliyle_tutarli():
     p = _plan()
     # PlanKaydi doğrulaması (R tutarlılığı, bilinmeyenler) içeride döner
     PlanKaydi.from_dict(p.to_dict())
+
+
+# --- FAZ9 B-turu (opt-in bayraklar) -----------------------------------------
+def test_b3_ek_aday_en_yakini_kazanir():
+    p = _plan(karsit_yapilar=[103.0], ek_adaylar=[102.0])
+    assert p is not None and p.hedef == 102.0
+    assert p.R == pytest.approx((102 - 100) / (100 - 98.4), rel=1e-3)
+
+
+def test_b3_ek_aday_r_esiginde_karti_duser():
+    # en yakın aday formasyon üst sınırı → R < 1,2 → kart yok (gizli filtre etkisi)
+    assert _plan(karsit_yapilar=[103.0], ek_adaylar=[101.5]) is None
+
+
+def test_b4_karakterli_stop_dikey_yukselende_genis():
+    p = _plan(karakterli_stop=True, karakter="REBASED_HIGHER")
+    assert p is not None
+    # zemin 98.5; tampon 0,10 → 0,30 ATR → stop 98.2
+    assert p.stop == pytest.approx(98.2)
+
+
+def test_b4_bayrak_kapali_ve_diger_karakterler_ayni():
+    # bayrak kapalı → karakter ne olursa olsun varsayılan0,10
+    p1 = _plan(karakterli_stop=False, karakter="REBASED_HIGHER")
+    assert p1 is not None and p1.stop == pytest.approx(98.4)
+    # bayrak açık ama karakter farklı → yine varsayılan
+    p2 = _plan(karakterli_stop=True, karakter="NONE")
+    assert p2 is not None and p2.stop == pytest.approx(98.4)

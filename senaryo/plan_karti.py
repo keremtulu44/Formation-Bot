@@ -41,6 +41,9 @@ def plan_karti_uret(
     band: tuple[float, float] | None,
     karsit_yapilar: Sequence[float],
     hukum_satiri: str,
+    ek_adaylar: Sequence[float] = (),
+    karakter: str = "",
+    karakterli_stop: bool = False,
     kaynak_bildirimler: Sequence[str] = (),
     aktif_bildirimler: Sequence[str] = (),
     sahneler: Sequence[str] = (),
@@ -60,14 +63,20 @@ def plan_karti_uret(
     # destek bandın içindeyse destek, bandın altındaysa bandın alt sınırı
     # yakındır: max() ile yakın hat seçilir; uzak destek stopu şişirmez.
     zemin = max(float(destek), float(band[0]))
-    stop = zemin - STOP_TAMPON_ATR * atr
+    # B4 (FAZ9, opt-in): karakterli stop — dikey-yükselen basamakta (REBASED_HIGHER)
+    # tez-death tamponu geniş; diğer karakterlerde sözleşme varsayılanı 0,10 ATR.
+    tampon = STOP_TAMPON_ATR
+    if karakterli_stop and karakter == "REBASED_HIGHER":
+        tampon = 0.30
+    stop = zemin - tampon * atr
     stop_mesafe = giris - stop
     if not (STOP_MIN_ATR * atr <= stop_mesafe <= STOP_MAX_ATR * atr):
         return None
 
     # --- hedef: en yakın karşıt yapı (R eşiği ile) --------------------------
+    # B3 (FAZ9, opt-in): ek_adaylar (ör. formasyon üst sınırı) yarışmaya girer.
     adaylar = sorted(
-        float(x) for x in karsit_yapilar
+        float(x) for x in list(karsit_yapilar) + list(ek_adaylar)
         if x is not None and math.isfinite(float(x)) and float(x) > giris
     )
     if not adaylar:

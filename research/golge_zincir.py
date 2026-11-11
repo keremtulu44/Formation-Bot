@@ -188,6 +188,9 @@ def seri_kosu(
     hist: Any,
     defter: GolgeDefter,
     sayac: Sayac,
+    b2_uyari: bool = False,
+    b3_hedef: bool = False,
+    b4_karakterli: bool = False,
 ) -> None:
     sembol, tf = hazir.symbol, hazir.tf
     norm = hazir.norm
@@ -237,6 +240,9 @@ def seri_kosu(
         h = tyr_hukmu(TyrDurum(
             sembol=sembol, tf=tf, t=t_iso, g1=g1,
             ms=tuple(ms_list), g2=g2, planda=acik_plan is not None,
+            # B2 (FAZ9, opt-in): kademe-yukarı uyarısı — çelişki sayacına +2,
+            # TYR tavanı1'i aşınca BEKLE (plan gecikir; kesme değil, erteleme).
+            ek_celiski=(2 if (b2_uyari and g1.ilerleme == "REBASED_HIGHER") else 0),
         ))
         if h.hukum != son_hukum:
             defter.yaz(h)
@@ -254,14 +260,28 @@ def seri_kosu(
             donem = "kesif" if i < hazir.split_i else "dogrulama"
             bilinmeyenler = ["hacim doğrulanmadı (sıfır hacim kaydı)"]
             if g2.aktif:
-                bilinmeyenler.append("formasyon üst sınırı hedefe dahil edilmedi (G2 bağlam)")
+                if b3_hedef and g2.mesafe_ust_atr is not None:
+                    bilinmeyenler.append(
+                        "formasyon üst sınırı statik G2 mesafesiyle aday (B3, tazelik sınırlı)"
+                    )
+                else:
+                    bilinmeyenler.append("formasyon üst sınırı hedefe dahil edilmedi (G2 bağlam)")
             if not g1.onayli:
                 bilinmeyenler.append("onaysız test: kırılma %51,6 (n=1616)")
+            # B3 (FAZ9, opt-in): formasyon üst sınırı hedef yarışına aday.
+            ust_aday = (
+                fiyat + float(g2.mesafe_ust_atr) * atr
+                if (b3_hedef and g2.aktif and g2.mesafe_ust_atr is not None)
+                else None
+            )
             kart = plan_karti_uret(
                 plan_id=f"{sembol}-{tf}-{i}",
                 sembol=sembol, tf=tf, t=t_iso, bar_index=i, donem=donem,
                 giris=fiyat, atr=atr, destek=g1.destek, band=g5.bant,
                 karsit_yapilar=karsit_yapilar(hazir, i, fiyat),
+                ek_adaylar=(ust_aday,) if ust_aday is not None else (),
+                karakter=str(g1.ilerleme or ""),
+                karakterli_stop=b4_karakterli,
                 hukum_satiri=h.satir,
                 kaynak_bildirimler=tuple(f"{k}:{v[0][1]}" for k, v in aktif.items()),
                 ek_bilinmeyenler=bilinmeyenler,
@@ -377,6 +397,13 @@ def main(argv: list[str] | None = None) -> int:
                    help="mevcut deftere ekle (varsayılan: taze koşu)")
     p.add_argument("--zaman-stopu", type=int, default=10,
                    help="plan zaman stopu, bar (Faz7:15/20 testi)")
+    # FAZ9 B-turu bayrakları (varsayılan kapalı → baz davranış aynı)
+    p.add_argument("--b2-uyari", action="store_true",
+                   help="B2: kademe-yukarı TYR çelişki uyarısı (+2 → BEKLE)")
+    p.add_argument("--b3-hedef", action="store_true",
+                   help="B3: formasyon üst sınırı hedef yarışına aday")
+    p.add_argument("--b4-karakterli", action="store_true",
+                   help="B4: dikey-yükselen karakterde stop tamponu 0,10 → 0,30 ATR")
     args = p.parse_args(argv)
 
     global ZAMAN_STOPU_BAR
@@ -415,7 +442,10 @@ def main(argv: list[str] | None = None) -> int:
                     if len(frame) < ILK_BAR + 30:
                         continue
                     hazir = seri_hazirla(sembol, tf, frame)
-                    seri_kosu(hazir, hist, defter, sayac)
+                    seri_kosu(hazir, hist, defter, sayac,
+                              b2_uyari=args.b2_uyari,
+                              b3_hedef=args.b3_hedef,
+                              b4_karakterli=args.b4_karakterli)
                     seri_sayisi += 1
                 except Exception as hata:  # noqa: BLE001 — seri hatası zinciri durdurmaz
                     hatalar.append({"sembol": sembol, "tf": tf,
