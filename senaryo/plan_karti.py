@@ -42,6 +42,8 @@ def plan_karti_uret(
     karsit_yapilar: Sequence[float],
     hukum_satiri: str,
     kaynak_bildirimler: Sequence[str] = (),
+    aktif_bildirimler: Sequence[str] = (),
+    sahneler: Sequence[str] = (),
     ek_bilinmeyenler: Sequence[str] = (),
     yon: str = "long",
     zaman_stopu: int = VARSAYILAN_ZAMAN_STOPU,
@@ -94,6 +96,8 @@ def plan_karti_uret(
         bilinmeyenler=tuple(dict.fromkeys(bilinmeyenler)),  # tekrarsız, sıra korunur
         hukum_satiri=hukum_satiri,
         kaynak_bildirimler=tuple(kaynak_bildirimler),
+        aktif_bildirimler=tuple(aktif_bildirimler),
+        sahneler=tuple(sahneler),
         donem=donem,
         bar_index=int(bar_index),
     )

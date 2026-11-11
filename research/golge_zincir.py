@@ -136,6 +136,38 @@ def karsit_yapilar(hazir: SeriHazirlik, i: int, giris: float) -> list[float]:
     return sorted(seviyeler)
 
 
+def _sahne_etiketleri(g1, g2, g5, h, atr) -> list[str]:
+    """FAZ9 A2 — tetik anının as-of sahne etiketleri (yalnız kayıt; filtre değil).
+
+    Tecrübe Envanteri §H1 tohumu: etiketler plan kaydına yazılır, karar
+    VERMEZ (sözleşme kırmızı çizgisi: kapılar az ve sığ; etiket = veri).
+    """
+    etiketler: list[str] = []
+    if g1.onayli:
+        etiketler.append("zemin_onayli")
+    if g1.mesafe_atr is not None and float(g1.mesafe_atr) <= 0.5:
+        etiketler.append("zemin_yakin")
+    if g1.ilerleme == "REBASED_HIGHER":
+        etiketler.append("zemin_kademe_yukari")
+    elif g1.ilerleme == "REBASED_LOWER":
+        etiketler.append("zemin_kademe_asagi")
+    if g2.aktif:
+        etiketler.append("formasyon_aktif")
+        if g2.olgun:
+            etiketler.append("formasyon_olgun")
+    if getattr(h, "lehte", 0) >= 5:
+        etiketler.append("ms_destek")
+    if g5.bant is not None and atr:
+        bant_y = (float(g5.bant[1]) - float(g5.bant[0])) / float(atr)
+        if bant_y >= 2.0:
+            etiketler.append("zone_genis")
+        elif bant_y < 0.5:
+            etiketler.append("zone_dar")
+    if g5.dolu:
+        etiketler.append("zone_dolu")
+    return etiketler
+
+
 # --- bir serinin bar bar döngüsü -------------------------------------------
 @dataclass
 class Sayac:
@@ -162,7 +194,7 @@ def seri_kosu(
     n = len(norm)
     dusukler = [float(x) for x in norm["low"].tolist()]
     kapanislar = [float(x) for x in norm["close"].tolist()]
-    aktif: dict[str, tuple[tuple[str, str, str], int, int]] = {}  # kim → (imza, doğuş i, geçerlilik)
+    aktif: dict[str, tuple[tuple[str, str, str], int, int, Any]] = {}  # kim → (imza, doğuş i, geçerlilik, bildirim)
     son_hukum: str | None = None
     acik_plan: dict[str, Any] | None = None
     son_plan_i = -10**9
@@ -189,9 +221,9 @@ def seri_kosu(
             if mevcut is None or mevcut[0] != imza:
                 defter.yaz(b)
                 sayac.bildirim += 1
-                aktif[b.kim] = (imza, i, b.gecerlilik_bar)
+                aktif[b.kim] = (imza, i, b.gecerlilik_bar, b)
         for kim in list(aktif):
-            _imza, dogus, gec = aktif[kim]
+            _imza, dogus, gec, _b = aktif[kim]
             if i - dogus >= gec > 0:
                 defter.yaz({
                     "tip": "sessizlik", "tur": "bitis", "sembol": sembol, "tf": tf,
@@ -234,6 +266,19 @@ def seri_kosu(
                 kaynak_bildirimler=tuple(f"{k}:{v[0][1]}" for k, v in aktif.items()),
                 ek_bilinmeyenler=bilinmeyenler,
                 zaman_stopu=ZAMAN_STOPU_BAR,
+                aktif_bildirimler=tuple(  # FAZ9 A1: zengin bağlam (yalnız kayıt)
+                    json.dumps(
+                        {
+                            "kim": b.kim, "iddia": b.iddia, "kosul": b.kosul,
+                            "kaynak": b.kaynak, "dogrudan": b.dogrudan,
+                            "kalan": max(0, int(gec) - (i - int(dogus))),
+                            "seviyeler": [round(float(s), 4) for s in (b.seviyeler or ())],
+                        },
+                        ensure_ascii=False,
+                    )
+                    for (_imza, dogus, gec, b) in aktif.values()
+                ),
+                sahneler=tuple(_sahne_etiketleri(g1, g2, g5, h, atr)),  # FAZ9 A2
             )
             # Faz6 giriş teyidi (yalnız planı etkiler; tetik/kör baz değişmez)
             teyit_ok, teyit_neden = True, None

@@ -152,6 +152,9 @@ class PlanKaydi:
     kaynak_bildirimler: tuple[str, ...] = ()
     donem: str = ""                  # kesif | dogrulama (sembol-bası kronolojik %70/%30)
     bar_index: int = -1              # tetik bar indeksi (örtüşmesizlik ölçümü için)
+    # FAZ9 A1/A2 — yalnız kayıt katmanı (karar değiştirmez):
+    aktif_bildirimler: tuple[str, ...] = ()  # tetikteki aktif bildiriler (JSON: kim/iddia/kosul/kalan/seviyeler)
+    sahneler: tuple[str, ...] = ()           # as-of sahne etiketleri (envanter §H1 tohumu; filtre DEĞİL)
 
     def __post_init__(self) -> None:
         if self.tip != "plan":
@@ -191,6 +194,8 @@ class PlanKaydi:
         p = dict(d)
         p["bilinmeyenler"] = tuple(p.get("bilinmeyenler") or ())
         p["kaynak_bildirimler"] = tuple(p.get("kaynak_bildirimler") or ())
+        p["aktif_bildirimler"] = tuple(p.get("aktif_bildirimler") or ())
+        p["sahneler"] = tuple(p.get("sahneler") or ())
         return cls(**p)
 
 
