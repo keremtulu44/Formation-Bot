@@ -250,3 +250,35 @@ def test_blok_yoksa_bildirim_yok_zincir_devam():
                        ms_olaylari=ms, g5=G5Durum())
     assert not any(b.kim == "blok" for b in bl)
     assert len(bl) == 3
+
+
+# --- FAZ9-C as-of (dış denetim düzeltmeleri) --------------------------------
+def test_g2_asof_gelecek_okumaz():
+    # tam-seri alanları olgun gösterirken (daralma0.6/mesafe0.5), i=20'de
+    # as-of değerler (0.3 / 2.0) olgun KILMAZ — gelecek okuma kapatıldı
+    satir = _frm(daralma=0.6, mesafe_alt=0.5)
+    satir[0].update({
+        "asof_bar": [12, 20, 30],
+        "asof_daralma": [0.1, 0.3, 0.6],
+        "asof_ust_kap": [2.0, 1.5, 1.5],
+        "asof_alt_kap": [2.5, 2.0, 0.5],
+    })
+    d = g2_durumu(satir, 20)
+    assert d.aktif and not d.olgun
+    assert d.daralma == 0.3 and d.mesafe_alt_atr == 2.0
+    # i=30: as-of dizisi gerçekten olgunluğa ulaşıyor
+    d2 = g2_durumu(satir, 30)
+    assert d2.olgun and d2.daralma == 0.6
+    # as-of dizi varken tam-seri alanına asla düşülmez (i=12)
+    d3 = g2_durumu(satir, 12)
+    assert d3.daralma == 0.1 and not d3.olgun
+
+
+def test_g5_dolu_terminal_gelecek_okumaz():
+    f = _frame([100.0] * 10)
+    # terminal (ölüm barı) gelecekte: eski kod True üretirdi (407/412 sızıntısı)
+    z = _zone(terminal=6, dolu=0.0)
+    assert not g5_durumu([z], [], f, 4).dolu
+    # as-of doluluk oranı yüksekse True (ölüm barı gereksiz)
+    z2 = _zone(terminal=None, dolu=0.9)
+    assert g5_durumu([z2], [], f, 4).dolu

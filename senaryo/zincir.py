@@ -109,6 +109,25 @@ def g2_durumu(frm_satirlari: Sequence[Mapping[str, Any]], i: int) -> G2Durum:
     daralma = r.get("daralma_orani")
     mesafe_alt = r.get("frm_yakinlik_alt_kapanis_atr")
     mesafe_ust = r.get("frm_yakinlik_ust_kapanis_atr")
+    # FAZ9-C as-of: karar alan alanlar varsa yalnız i'ye kadar olan kayıtlardan
+    # okunur (tam-seri aggregate = gelecek sızıntısı, dış denetim bulgusu).
+    asof_bar = r.get("asof_bar") or []
+    if asof_bar:
+        _idx = -1
+        for _pos, _b in enumerate(asof_bar):
+            if int(_b) > i:
+                break
+            _idx = _pos
+        if _idx >= 0:
+            _d = r.get("asof_daralma") or []
+            _u = r.get("asof_ust_kap") or []
+            _a = r.get("asof_alt_kap") or []
+            if _idx < len(_d):
+                daralma = _d[_idx]
+            if _idx < len(_u):
+                mesafe_ust = _u[_idx]
+            if _idx < len(_a):
+                mesafe_alt = _a[_idx]
     olgun = bool(
         (daralma is not None and float(daralma) >= 0.5)
         or (mesafe_alt is not None and float(mesafe_alt) <= 1.0)
@@ -233,9 +252,9 @@ def g5_durumu(
                 break
 
     aile = str(z.get("family", ""))
-    dolu = (z.get("native_terminal_index") is not None) or (
-        (z.get("native_fill_ratio_at_terminal_or_asof") or 0) >= 0.5
-    )
+    # FAZ9-C: "dolu" yalnız as-of doluluk oranından; terminal (ölüm) barı
+    # GELECEK okuyordu (dış denetim:407/412 sabit etiket) — kaldırıldı.
+    dolu = ((z.get("native_fill_ratio_at_terminal_or_asof") or 0) >= 0.5)
     return G5Durum(
         bant=(lo, hi),
         zone_id=str(z.get("zone_id", "")),
