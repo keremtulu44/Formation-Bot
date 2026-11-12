@@ -201,3 +201,24 @@ K1/kârlı%/net/PF dörtlüsünden herhangi biri baz altına düşerse RED.
 Her varyant: bayraklı replay → `golge_olcum` → `golge_kapi` → bu belgeye sonuç
 tablosu → kazanan varsa Envanter + sistem değişikliği; yoksa sistem değişmez.
 **Kırmızı çizgi8:** hepsi gölge kanıt; canlıya bağlantı yok.
+
+---
+
+## 9. B-5 ÖN-KAYIT — TYR olgunluk-zenginliği (`--b5-olgunluk`) (2026-11-11, sonuç okunmadan yazıldı)
+
+**Kaynak (uydurma değil):** Envanter §H7 "TYR'ye zenginlik girişi — akmıyor →
+lehte sayacı" boşluğu + TYR'nin kendi lehte mimarisi (`onaylı +1` ve
+`taze_destekleyen +1` ayrı ayrı sayılıyor ama ikisi birlikte UYGUN'un
+olgunluk kapısını açmıyor) + B1/B2/B3 üçünün de K1'i kıstığı (nüfus büyüten
+kol son6 adayın tek yönü).
+
+**Kural (tek değişken):** `olgunluk = (mesafe ≤ 1 ATR) VEYA (G2 olgun) VEYA
+(--b5-olgunluk açıkken: g1.onaylı AND taze_destekleyen MS desteği)`. Yalnızca
+UYGUN hücresine dokunur; RET, çelişki-bekle, tetik, geometri, teyit DEĞİŞMEZ.
+Yani: destek onayı + taze MS desteği birlikte varsa, mesafe >1 ATR olsa bile
+olgunluk tamamlanmış sayılır.
+
+**Kapı (aynı dörtlü, §7.2):** K1 ≥ 43 · kârlı% ≥ 47,5 · net ≥ +57,9A ·
+PF ≥ 1,57. **Dürüst beklenti:** n yönü ↑ olası (genişleme); kalite belirsiz
+(desteğe uzak giriş riski — doz-yanıt D5 tersi işlem görebilir). Kazanan
+dörtlü tutmazsa RED.
