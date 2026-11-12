@@ -89,6 +89,11 @@ def main(argv: list[str] | None = None) -> int:
 
     karar = kapi_degerlendir(girdi)
     karar["olcum_dosyasi"] = str(yol)
+    # Determinizm/görünürlük: ölçümde varsa kapı kararına da taşınır
+    # (rapor katmanı — kapı eşiklerine dokunmaz).
+    for ek in ("pasaport", "ga95"):
+        if ek in olcum:
+            karar[ek] = olcum[ek]
     cikti = Path(args.cikti)
     cikti.parent.mkdir(parents=True, exist_ok=True)
     cikti.write_text(json.dumps(karar, ensure_ascii=False, indent=2),

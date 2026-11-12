@@ -1,5 +1,13 @@
 # Faz 8 — "Ana50" Evreni (güçlü likit çekirdek) — Koşudan Önce Tescil
 
+> ⚠️ **GEÇERSİZ KAYNAK ŞERİDİ (2026-11-12, FAZ9-C denetimi):** Bu belgedeki
+> tüm sayılar **sızıntılı tetikle** (G5 tepki-onayı gelecek bar okuyordu;
+> FAZ9-C'de kapatıldı) ölçülmüştür. **Sayılar karar tabanı olarak
+> GEÇERSİZDİR; yalnız tarihsel kayıt olarak durur.** Tek geçerli ölçümler:
+> `docs/tasarim/faz9_tecrube/FAZ9_PLAN_VE_SONUCLAR.md` (audit-öncesi §8 +
+> audit'li §11/§12).
+
+
 **Tarih:** 2026-11-10 · **Durum:** tescilli (holdout120 üzerinde çevrimdışı
 ölçüm sonuçlandıktan sonra, doğrulama replay'inden ÖNCE).
 

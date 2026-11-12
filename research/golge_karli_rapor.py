@@ -52,7 +52,7 @@ def raporla(csv_yol: str) -> dict:
         a, b = datetime.fromisoformat(ts[0]), datetime.fromisoformat(ts[-1])
         gun_sayisi = (b - a).days
     except Exception:
-        pass
+        gun_sayisi = 0
 
     return {
         "plan_n": len(rows),

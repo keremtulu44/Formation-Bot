@@ -1,0 +1,921 @@
+{
+  "parametreler": {
+    "evren": 176,
+    "tfs": [
+      "1h",
+      "2h",
+      "4h",
+      "1d"
+    ],
+    "ilksar_bar": 40,
+    "zaman_stopu": 10,
+    "plan_araligi_bar": 20,
+    "bolme": "kesif/dogrulama %70/%30"
+  },
+  "seri_sayisi": 0,
+  "sayacler": {
+    "bildirim": 0,
+    "bitis": 0,
+    "hukum_yazim": 0,
+    "hukum_dagilim": {
+      "BEKLE": 0,
+      "UYGUN": 0,
+      "RET": 0
+    },
+    "tetik": 0,
+    "tetik_geometri": 0,
+    "plan": 0,
+    "teyit_red": 0,
+    "sonuc": {
+      "hedef": 0,
+      "stop": 0,
+      "yok": 0,
+      "zaman": 0
+    }
+  },
+  "hatalar": [
+    {
+      "sembol": "AEFES",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "AGHOL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "AGROT",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "AKBNK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "AKCNS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "AKFGY",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "AKFYE",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "AKSA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "AKSEN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ALARK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ALBRK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ALFAS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ALGYO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ALTNY",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ANSGR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ARCLK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ARDYZ",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ARZUM",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ASELS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ASTOR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "AVPGY",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "AYDEM",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "BEGYO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "BERA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "BIMAS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "BIOEN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "BJKAS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "BOBET",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "BRKVY",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "BRSAN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "BTCIM",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "BURCE",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "CANTE",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "CCOLA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "CEMAS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "CEMTS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "CIMSA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "CLEBI",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "CVKMD",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "CWENE",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DAPGM",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DARDL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DENGE",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DERIM",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DEVA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DIRIT",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DMSAS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DOAS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DOCO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DOFER",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DOHOL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "DYOBY",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "EBEBK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ECILC",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ECZYT",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "EFOR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "EGEEN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "EKGYO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ENERY",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ENKAI",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ENSRI",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ERBOS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "EREGL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ERSU",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ESCAR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ESEN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "EUPWR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "FENER",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "FONET",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "FROTO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "GARAN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "GARFA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "GESAN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "GLYHO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "GOLTS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "GRSEL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "GRTHO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "GSRAY",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "GUBRF",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "GWIND",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "HALKB",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "HATEK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "HATSN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "HEDEF",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "HEKTS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "HKTM",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "IHEVA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ISCTR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ISGYO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ISMEN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "IZENR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KARSN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KCAER",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KCHOL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KFEIN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KIMMR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KLGYO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KLSER",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KMPUR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KONTR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KONYA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KORDS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KRDMD",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KRGYO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KRTEK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KUTPO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "KZBGY",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "LMKDC",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "MAGEN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "MAKTK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "MARMR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "MARTI",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "MAVI",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "MEDTR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "MEGAP",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "METRO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "MGROS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "MIATK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "MPARK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "MRSHL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "NETAS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "NIBAS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "OBAMS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ODAS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "OFSYM",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "OTKAR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "OYAKC",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "OZGYO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "OZKGY",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "OZSUB",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "PAMEL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "PAPIL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "PASEU",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "PEKGY",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "PENTA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "PETKM",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "PGSUS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "QUAGR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "REEDR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "RTALB",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SAHOL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SASA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SAYAS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SDTTR",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SELEC",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SELVA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SEYKM",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SISE",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SKBNK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SMRTG",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SNGYO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SNICA",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "SOKE",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "TAVHL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "TCELL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "THYAO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "TKFEN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "TOASO",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "TSKB",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "TTKOM",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "TTRAK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "TUKAS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "TUPRS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "TURSG",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ULKER",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ULUUN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "VAKBN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "VERUS",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "VESBE",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "VESTL",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "XU100",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "XU30",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "YEOTK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "YKBNK",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "YYAPI",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    },
+    {
+      "sembol": "ZOREN",
+      "adim": "g1",
+      "hata": "ModuleNotFoundError(\"No module named 'pytz'\")"
+    }
+  ],
+  "hata_sayisi": 176,
+  "sure_sn": 1.9,
+  "defter": "docs/arastirma/sonuclar/golge_zincir/faz9d_baz_176/golge_defter.jsonl"
+}

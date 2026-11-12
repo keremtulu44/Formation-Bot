@@ -1,5 +1,13 @@
 # Ana50 — Detaylı Sonuçlar (klasik H=10 replay'i, çevrimdışı tam döküm)
 
+> ⚠️ **GEÇERSİZ KAYNAK ŞERİDİ (2026-11-12, FAZ9-C denetimi):** Bu belgedeki
+> tüm sayılar **sızıntılı tetikle** (G5 tepki-onayı gelecek bar okuyordu;
+> FAZ9-C'de kapatıldı) ölçülmüştür. **Sayılar karar tabanı olarak
+> GEÇERSİZDİR; yalnız tarihsel kayıt olarak durur.** Tek geçerli ölçümler:
+> `docs/tasarim/faz9_tecrube/FAZ9_PLAN_VE_SONUCLAR.md` (audit-öncesi §8 +
+> audit'li §11/§12).
+
+
 **Kaynak:** holdout120 defteri `plan_sonuc.csv` × ciro-top50 evreni ·
 n=412 plan · FAZ8 replay'i `sonuclar/golge_zincir_faz8ana50/` doğrular.
 

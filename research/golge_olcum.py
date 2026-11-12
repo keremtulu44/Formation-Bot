@@ -200,6 +200,42 @@ def main(argv: list[str] | None = None) -> int:
         "K6_dogrulama_beklenti": ozet["plan_donen"].get("dogrulama", {}).get("beklenti_atr"),
     }
 
+    # 3b) görünürlük GA'sı — sembol-gruplu bootstrap (rapor katmanı;
+    #      KARAR KAPISI DEĞİL, yalnız belirsizlik görünürlüğü — denetçi notu)
+    if len(dog) and len(dog_kor):
+        import numpy as np
+
+        def _sembol_toplam(df: pd.DataFrame) -> pd.DataFrame:
+            coz = df[df["sonuc"].isin(["hedef", "stop", "zaman"])]
+            return pd.DataFrame({
+                "hedef": df[df["sonuc"] == "hedef"].groupby("sembol").size(),
+                "stop": df[df["sonuc"] == "stop"].groupby("sembol").size(),
+                "coz_pnl": coz.groupby("sembol")["pnl_atr"].sum(),
+                "coz_n": coz.groupby("sembol")["pnl_atr"].count(),
+            }).fillna(0.0)
+
+        _pp, _pk = _sembol_toplam(dog), _sembol_toplam(dog_kor)
+        _rng = np.random.default_rng(42)
+        _k2, _k3 = [], []
+        for _ in range(2000):
+            sp = _pp.iloc[_rng.integers(0, len(_pp), len(_pp))]
+            sk = _pk.iloc[_rng.integers(0, len(_pk), len(_pk))]
+            hp, hs = float(sp["hedef"].sum()), float(sp["stop"].sum())
+            kp, ks = float(sk["hedef"].sum()), float(sk["stop"].sum())
+            if hp + hs > 0 and kp + ks > 0:
+                _k2.append(100.0 * hp / (hp + hs) - 100.0 * kp / (kp + ks))
+            if float(sp["coz_n"].sum()) > 0:
+                _k3.append(float(sp["coz_pnl"].sum()) / float(sp["coz_n"].sum()))
+        if _k2 and _k3:
+            ozet["ga95"] = {
+                "aciklama": ("sembol-gruplu bootstrap; B=2000, tohum=42; "
+                             "yalnız görünürlük (rapor), karar kapısı değil"),
+                "K2_puan": [round(float(np.percentile(_k2, 2.5)), 2),
+                            round(float(np.percentile(_k2, 97.5)), 2)],
+                "K3_beklenti": [round(float(np.percentile(_k3, 2.5)), 4),
+                                round(float(np.percentile(_k3, 97.5)), 4)],
+            }
+
     # 4) kural etkileri (kural-yok toplamına göre)
     if len(plan_df):
         ham = plan_df[plan_df["sonuc"] != "sansur"].to_dict("records")
@@ -238,6 +274,26 @@ def main(argv: list[str] | None = None) -> int:
         "geometri": len(geo_tetik),
         "hukum": dict(Counter(t["hukum"] for t in tetikler)),
         "g1_kapali": len(g1_kapali_tetik),
+    }
+
+    # --- pasaport (determinizm: aynı girdi → aynı sonuç,5 dk'da doğrulanır) --
+    import hashlib
+    import platform
+
+    def _sha256(dosya: str) -> str:
+        h = hashlib.sha256()
+        with open(dosya, "rb") as f:
+            for parca in iter(lambda: f.read(1 << 20), b""):
+                h.update(parca)
+        return h.hexdigest()
+
+    ozet["pasaport"] = {
+        "defter_sha256": _sha256(str(defter_yol)),
+        "defter_boyut_bayt": Path(str(defter_yol)).stat().st_size,
+        "python": platform.python_version(),
+        "pandas": pd.__version__,
+        "plan_n": int(len(plan_df)),
+        "sembol_n": int(plan_df["sembol"].nunique()) if len(plan_df) else 0,
     }
 
     # --- dosyalar -----------------------------------------------------------

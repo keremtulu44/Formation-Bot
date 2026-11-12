@@ -1,5 +1,13 @@
 # Tecrübe Envanteri — replay'lerin ölçtüğü GENEL dersler (tek tek sahne değil)
 
+> **KAYNAK GEÇERLİLİĞİ (2026-11-12, FAZ9-C denetimi — tarih sınırlı):**
+> **§A–§I satırlarının TAMAMI** sızıntılı tetikle (G5 gelecek-okuması)
+> ölçülmüş FAZ5–FAZ9-A hatlarının ürünüdür: **sayılar karar tabanı olarak
+> geçersizdir**, yalnız deney-öncesi sezgisel referans olarak okunabilir.
+> **§J ve sonrası** audit'li (as-of) hatlardandır ve geçerlidir.
+> Tek geçerli sayı kaynağı: `FAZ9_PLAN_VE_SONUCLAR.md` §8/§11/§12.
+
+
 **Tarih:** 2026-11-11 · **Durum:** Tam envanter (kullanıcı görevi: *"replay'lerde
 ölçtüklerimizi tespit et, tam liste hazırla, verileri iyice topla"*)
 **Amaç:** Domain'lerin "öğreneceği tecrübe hazinesi" — her satır **genel bir

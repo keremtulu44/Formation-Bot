@@ -5,6 +5,9 @@
 hüküm, tetik, plan, sonuç) birebir aynı kalmalı. G1 (as-of geçmiş), G2 (as-of
 diziler), G5 (as-of tepki/doluluk), MS, karsit (as-of onay) sayesinde
 boru-hattı tam as-of olmalı.
+
+2026-11-12 denetçi notu üzerine parametreldi: 3 sembol × 3 TF (arşiv
+`backfill_data/` repo'da commit'lidir — temiz klon/CI dahil her yerde koşar).
 """
 
 import json
@@ -16,14 +19,18 @@ from research.arsiv import tf_frame
 from research.golge_zincir import Sayac, seri_hazirla, seri_kosu
 from senaryo.defter import GolgeDefter
 
+KOMBOL = [(s, tf)
+          for s in ("AEFES", "EREGL", "GARAN")
+          for tf in ("1h", "4h", "1d")]
+
 
 @pytest.mark.slow
-def test_kesme_testi_kayitlar_degismez(tmp_path):
-    sembol, tf = "AEFES", "4h"
+@pytest.mark.parametrize("sembol,tf", KOMBOL)
+def test_kesme_testi_kayitlar_degismez(tmp_path, sembol, tf):
     frame = tf_frame(sembol, tf)
     n = len(frame)
     N = int(n * 0.6)
-    assert N > 100, f"seri kısa: {n}"
+    assert N > 100, f"seri kısa: {n} (<167 bar — kesim anlamsız)"
     import pandas as pd
     from directional_zone_replay import _normalize_frame
     kesim_idx = int(N * 0.7) - 1          # kesif payı: donem farkı da eşitlenir

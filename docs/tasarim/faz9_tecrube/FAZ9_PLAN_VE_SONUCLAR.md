@@ -374,3 +374,21 @@ Mevcut veri/evrenlerle **7/7 geçilemez**; seçenekler (önce-ölç-sonra-karar)
 
 **Öneri (ajan):** D + B birlikte — sistem gölgede kalmaya devam eder, veri
 akar, K1 doğal yoldan açılır; A yalnız danışman/insan onayıyla ve beyanlı.
+
+**Kilit cümleleri (2026-11-12 dış denetçi onayıyla, bağlayıcı):**
+
+1. **"Taze doğrulama bitmeden HİÇBİR eşik revizyonu koşulmaz/koşılmaz."**
+   (D oturumu nazikçe A'ya kaymasın diye bu madde plan belgesine işlenmiştir.)
+2. **K1 yalnız şu zincirle değişebilir:** (i) gerekçe "43 vs50 fark etmez"
+   değil, **ölçüm cihazının değişmesidir** (sızıntı audit'i = cihaz temelden
+   değişti → kapı re-basing'i meşrudur); (ii) yeni eşik **taze/okunmamış**
+   veride, sonuç OKUNMADAN ön-kayıtla yazılır; (iii) eski eşik (K1=50,
+   FAZ9-A 6/7 kaydı) tarihsel olarak korunur, yenisi yalnız ileriye uygulanır;
+   (iv) **güç analiziyle** motive edilir (ör. K2≥5'i %80 güçle ayırt eden n
+   kaçtır). **Mevcut veri üzerinde "K1:50→40" savunulamaz.**
+3. **Evren süzgeci (ön-kayıt):** yeni evrenler yalnız **hisselerden**
+   seçilir; endeksler (XU100/XU30) hariç.176'daki iki endeks bu süzgecin
+   gerisindedir; sonraki evren sayımlarında dikkate alınmaz.
+4. **Rapor katmanı:** K2/K3 sayılarının yanına **sembol-gruplu bootstrap
+   GA** eşlik eder (artık `olcum_ozet.json["ga95"]` ve kapı JSON'unda —
+   yalnız görünürlük, kapı eşiği değişmez).
