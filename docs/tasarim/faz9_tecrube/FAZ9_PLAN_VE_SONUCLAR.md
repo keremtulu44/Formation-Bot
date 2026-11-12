@@ -392,3 +392,43 @@ akar, K1 doğal yoldan açılır; A yalnız danışman/insan onayıyla ve beyanl
 4. **Rapor katmanı:** K2/K3 sayılarının yanına **sembol-gruplu bootstrap
    GA** eşlik eder (artık `olcum_ozet.json["ga95"]` ve kapı JSON'unda —
    yalnız görünürlük, kapı eşiği değişmez).
+
+---
+
+## 13. GİRİŞ-ZAMANLAMASI — OK ÖZELLİĞİ ÖN-KAYDI (2026-11-12, sonuç okunmadan)
+
+**Kullanıcı karar haritası (bu bölüm bağlayıcı):** Q1=**a** (golge/plan
+sistemi) · Q2=**iii** (yalnız yumuşak skor/bildirim; otomatik engel YOK;
+çıkış sinyali YASAK kol) · Q3=**1** (yalnız K1/K2▲) · Q4=**β** (son5 bar) ·
+Q5=**X→Z arası** (önce ölçüm; giriş-tarafı yumuşak skor yalnız bu ölçüm
+olumlu çıkınca ve AYRI ön-kayıtla).
+
+### 13.1 Gerekçe ve hipotez
+
+Teşhis (§12 + dış denetçi): en büyük bağımsız kayıp kovası
+`erken_girdi_dustu` (n133, %84 stop, −99,2A) ↔ `iyi_zamanlama` (n233,
++256,9A). K1/K2▲ = "destek geri alındı / zeminden kopuş" (OK_SISTEMI
+2026-11-08 denetlendi; ▲ tarafı temiz). **Hipotez:** plandan önce son5
+barda K1/K2▲ varsa plan daha iyi tutar (erken girişe doğrudan rakip).
+
+### 13.2 Özellik tanımı (tek, değişmez)
+
+- `ok_var` = **giriş barı ve önceki4 kapanmış bar** (toplam5) içinde
+  `kural ∈ {close_reclaim (K1), intrabar_sweep_reclaim (K2)}` oku var mı
+  (0/1). Çizgi-temaslılık ok kuralının kendisinde (≤1,80 ATR) zaten var.
+- Kaynak: `domain_engines/stabil` `bar_behaviors` →
+  `research.stabil_ok_denetimi.denetle` (üretim kodu DEĞİŞMEZ).
+
+### 13.3 Ölçüm protokolü
+
+- Evren: **faz9d-baz176 planları** (633; keşif/doğrulama dönemleri
+  `donem` sütunuyla ayrık — seri-içi %70/%30, aynı split).
+- Gruplar: `ok_var=1` vs `ok_var=0` × keşif/doğrulama.
+- **Tek ana karşılaştırma:** doğrulamada `kârlı%(var) − kârlı%(yok)`.
+- **Kabul (ön-kayıt):** keşifte **aynı yön** VE doğrulamada **≥ +10 puan**;
+  ayrıca her grup×dönem **n≥100** (değilse "n yetersiz — hüküm yok").
+- Yan rapor (karar değil): PF, net, stop oranı, beklenti, GA.
+- **Yasaklar:** sert filtre/kapı bu turda yok · M1/M2/U1 kullanılmaz ·
+  eşik (5 bar) değiştirilmez · çıkış/stop'a dokunulmaz · sonuç
+  okunmadan başka özellik eklenmez. Olumlu çıkarsa giriş-tarafı yumuşak
+  skor = **ayrı ön-kayıt** (bu bölüm otomatik yetki vermez).
