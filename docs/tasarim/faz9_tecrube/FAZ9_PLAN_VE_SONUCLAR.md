@@ -322,3 +322,55 @@ geldi, denetlenmedi) + ön-kayıt + kapı ister.
 kapatıldı —407/412 sabit etiket), K2'nin tek-işleme bağlılığı (std hata7,4
 puan — bu nüfusta K2 ayırt edemiyor), "erken giriş" teşhisi hâlâ baskın
 (giriş zamanlaması = ana kâr kaynağı; hedef/stop kolları ikincil).
+
+---
+
+## 12. §11 EVREN PROGRAMI SONUÇLARI + KÖK HÜKÜM (2026-11-12)
+
+### 12.1 Büyük-evre koşuları (audit'li kod, H=10, tüm arşiv — ön-kayıt `389d259`)
+
+| Koşu | N | plan | K1 | K2 | K3 | K4/K5/K6 | Kapı | Net | Kârlı% |
+|---|---|---|---|---|---|---|---|---|---|
+| **FAZ9-D baz176** |176 |633 |**141 ✓** |**2,88 ✗** |**−0,120 ✗** | ✓✓✗ | **4/7 GEÇMEDİ** | +81,7A | %44,2 |
+| **FAZ9-D B4-176** |176 |554 |131 ✓ |3,32 ✗ |−0,107 ✗ | ✓✓✗ | **4/7 GEÇMEDİ** | +79,9A | %44,8 |
+| B5-176 | — | — | — | — | — | — | **koşulmadı** (baz176 RED → §11.3 program durdu) | — | — |
+
+- **Doğrulama:** baz176 = n141 ama **−16,9A, kârlı%36,9** — kenar yok.
+- Keşif tarafı pozitif (+98,6A) — **tüm kayıp doğrulamada**.
+
+### 12.2 Evren-kırılımı (baz176 alt kümeleri, koşusuz teşhis)
+
+| Alt küme | plan n | doğrulama n | doğrulama net | K2 (plan−kör) |
+|---|---|---|---|---|
+| ana50 (orijinal) |200 |43 | **+19,1A** | **+18,12 ✓** |
+| ciro-top100 (benim sıralamam) |318 |80 | −0,5A | ~+3 ✗ |
+| ciro-300M tabanı (N75) |230 |57 | +7,8A | **−1,07 ✗** |
+| ana50 ∪ likidite-top50 (N70) |223 |53 | +13,7A | **−0,89 ✗** |
+| tüm176 |633 |141 | −16,9A | **2,88 ✗** |
+
+### 12.3 Kök hüküm (sayılar)
+
+1. **Nüfus sorunu çözüldü:** K1 her geniş evrede131–141 (≥50 ✓).
+2. **Kapılar zıt çekiyor:** K1 (n≥50) yalnız geniş evrede; **K2≥5 yalnız
+   orijinal ana50'de**. Genişletmenin her yolu K2'yi −1…+3 aralığına düşürüyor.
+3. **Kenar likidite-çekirdeğinde yaşıyor ama orada n kıt:** ana50 doğrulama
+   +19,1A (n43) — ekleme gelen her grup doğrulamada ~0/negatif katkı veriyor.
+4. **Ölçüm sağlıklı artık:** kesme testi kalıcı; tüm sayılar as-of boru
+   hattından; dış danışmanla çapraz teyit (G5 düzeltmesi) var.
+5. **Seçim-sızıntısı notu:** FAZ8 evreni tam-arşiv cirosuyla seçilmiş
+   (üretim kuralı "ilk30 gün" ile48/50 uyuşmuyor — dış denetim bulgusu);
+   tam-arşiv ciro = sonuç dönemini içeren seçim (hafif selection-leak riski).
+
+### 12.4 Kapı-protokolü kararı — SADECE KULLANICININ (bu noktadan sonra koşu yok)
+
+Mevcut veri/evrenlerle **7/7 geçilemez**; seçenekler (önce-ölç-sonra-karar):
+
+| Seçenek | Anlamı | Risk |
+|---|---|---|
+| **A) K1 tazelemesi** (≥50 → ≥40 gibi, gerekçeli) | ana50'de43 ≥ yeni eşik → kapı anlamlı ölçülebilir | Eşik revizyonu = kalkan değişikliği; açık beyan + danışman denetimi ister |
+| **B) Taze veriyi bekle** | Aylık yeni plan ~doğrulama50'yi birkaç ayda aşar | Zaman; sistem gölgede kalır |
+| **C) Hold-out taze26 ile doğrula** |24 hisse K1'i tek başına açmaz; ana50+taze birleşimi K2 riski | Örnek yetersiz |
+| **D) Sistemi olduğu gibi bırak** | Gölge devam, canlıya bağlantı yok (kırmızı çizgi8), B4/B5 adayları kayıtlı | İlerleme durmaz, kanıt birikir |
+
+**Öneri (ajan):** D + B birlikte — sistem gölgede kalmaya devam eder, veri
+akar, K1 doğal yoldan açılır; A yalnız danışman/insan onayıyla ve beyanlı.

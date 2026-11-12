@@ -68,8 +68,9 @@ python -m pytest -q   # tam suite (bilinen6: alarm=pandas3 ortam + stabil DATA_E
 | B-1 | CONTRACTING filtresi | ✅ bitti | **RED** (K1 47<50) — Envanter §I |
 | FAZ9-C | G5 sızıntısı düzeltmesi + dış denetim | ✅ bitti | Baz200/K1=43 (danışmanla birebir) — §7.1 |
 | B-2/B-3/B-4/B-5 | Uyarı · hedef-özellik · karakterli-stop · olgunluk-zenginliği | ✅ audit-öncesi koşuldu | **4/4 RED** (§8 tablosu) — mekanizma dersleri korunur |
-| **AUDIT** | Kök-as-of üçlüsü: violation çapası + G2 as-of + zone_dolu + kalıcı kesme testi | ✅ bitti (`2f956ba`) | Boru hattı tam as-of; **eski koşular kapı iddiası değil** |
-| **§11 Kök plan** | Evren=176 + büyük-evre baz → B4/B5 tekrarı | 🔄 koşuyor | Ön-kayıt `389d259`/`4648de6` |
+| **AUDIT** | Kök-as-of üçlüsü: violation çapası + G2 as-of + zone_dolu + kalıcı kesme testi | ✅ bitti (`2f956ba`) | Boru hattı tam as-of; eski koşular kapı iddiası değil |
+| **§11 Evren programı** | baz176 + B4-176 (B5-176 baz-RED nedeniyle durdu) | ✅ bitti | **İkisi de4/7**: K1✓ (141/131) ama K2/K3✗ — §12.1 |
+| **§12 KÖK HÜKÜM** | Evren-kırılımı + kapı-protokolü kararı | ⏳ **Kullanıcı kararı bekliyor** |4/4 seçenek tablosu (§12.4) — öneri: gölge devam + veri bekleme |
 
 ## Kırmızı çizgiler (özet — sözleşme §10)
 
