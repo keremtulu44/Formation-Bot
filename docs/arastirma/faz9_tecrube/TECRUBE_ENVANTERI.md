@@ -161,3 +161,24 @@ boşlukları faz planı olur — **hepsi önce ölç, sonra kapı, sonra hüküm
 - **Ders:** zayıf-grup-filtresi kaliteyi yükseltir, nüfusu ve toplam kârı kırar;
   **uyarı-mekanizması (B-1b/B-2) filtre-denemeden önce denenmeli.**
 - Kayıt: `FAZ9_TECRUBE_ENTEGRE §6` + `kapi_karari_faz9b1.json`.
+
+---
+
+## J. (FAZ9 eki) B-turu + AUDIT — dersler (2026-11-11)
+
+- **AUDIT (en büyük ders):** üç bağımsız sızıntı kapatıldı — (1) G5 tepki
+  penceresi gelecek bar okuyordu (`i+1` kesiği,276/412 plan etkilenmişti),
+  (2) **violation tarama penceresi çerçeve sonuna çakılıydı** (`n-1` yerine
+  `safe_end_bar` — canlıda tesadüfen doğru, uzun replay'de erken barlar
+  yanlıştı; dış denetimin çözülmemiş G2/G4 sorununun KÖKÜ), (3) zone_dolu
+  terminal(gelecek) etiketi (407/412 sabit). **Kalıcı test:** `test_golge_kesme.py`
+  — çerçeve kesilince tüm kayıtlar birebir (GEÇTİ).
+- **Audit-öncesi B2–B5:4/4 RED** (FAZ9 §8): kesme-sınıfı (B2) kalite↑ n↓;
+  hedef-özellik (B3) gizli filtre; karakterli-stop (B4) en yakın2; olgunluk-
+  zenginliği (B5) en yakın (kârlı% −0,6pp) ve tek n-büyüten kol.
+- **K1=43 yapısal yetmezlik:** küçük evren (ana50) kapıdan geçmeyi imkânsız
+  kıldı → **evren=176 kararı** (FAZ9 §11, sıralama belirsizliği de kalktı).
+- **K2 tek-işleme bağlı** (std hata≈7,4 puan) — bu nüfusta K2 tek başına
+  ayırt edici değil; dörtlü şart gerekli.
+- **Giriş zamanlaması hâlâ baskın kâr kaynağı** (erken-giriş teşhisi §5):
+  hedef/stop kolları ikincil; kaldıraç girişte aranmalı (sahne/cümle ile).
