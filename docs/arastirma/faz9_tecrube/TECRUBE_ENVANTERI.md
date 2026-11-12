@@ -190,3 +190,16 @@ boşlukları faz planı olur — **hepsi önce ölç, sonra kapı, sonra hüküm
   ayırt edici değil; dörtlü şart gerekli.
 - **Giriş zamanlaması hâlâ baskın kâr kaynağı** (erken-giriş teşhisi §5):
   hedef/stop kolları ikincil; kaldıraç girişte aranmalı (sahne/cümle ile).
+
+## K. (FAZ9 eki) Ok-plan olay-dışıklığı — giriş-zamanlaması ilk denemesi (2026-11-12)
+
+§13 ön-kayıdı (K1/K2▲ · girişten önce5 bar · baz176 planları633):
+**HÜKÜM YOK.** `ok_var=1` =0/633 (4h-birim koşusu) ve1/633 (TF-doğru
+koşu; doğrulama n=0).168 sembolde toplam160 K1/K2 (0,95/sembol);
+planlara-en-yakın-ok >100 bar olan314/633. **Ders:** K1/K2 oku
+(çizgi≤1,80 ATR) ile formasyon plan girişi **mekanik olarak ayrık olaylar**
+—5-bar pencere bile değil,20-bar pencere bile n≥100 tavanı≈13'e takılır.
+Yumuşak skor uygulanmadı (Q2-iii, ön-kayıt gereği). Tek istisna YKBNK4h
+(hedef,+1,60A) — kanıt değil. Giriş-zamanlaması sıradaki denemesi farklı
+özellikle (mesafe_atr/teyit yaşı) veya U1▼ hazard'ıyla ayrı ön-kayıtla.
+Çıktı: `docs/arastirma/sonuclar/golge_zincir/ok_plan_zamanlama/`.

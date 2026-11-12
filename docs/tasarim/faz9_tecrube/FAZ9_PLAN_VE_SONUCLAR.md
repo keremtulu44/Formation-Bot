@@ -445,3 +445,32 @@ hatası ikinci koşuya kadar bu notta beyan edilmiştir; ilk koşu
 açıklanır. Ok akışı-4h yorumunun1d planlar için dar kalması ihtimaline
 karşı **yan rapor**: her plan için kendi TF'indeki5-bar penceresine
 düşen **herhangi** K1/K2 (4h) sayısı da yazılır (aynı tabloda).
+
+### 13.5 Sonuç (2026-11-12, iki koşu — HÜKÜM YOK)
+
+| Koşu | Pencere | `ok_var=1` | Karar |
+|---|---|---|---|
+|1| tüm planlarda4h (birim hatası) | **0/633** | n yetersiz |
+|2| planın kendi TF'inde5 bar (§13.4) | **1/633** (YKBNK4h, keşif, hedef, +1,60A) | **n yetersiz — HÜKÜM YOK** |
+
+Doğrulama `ok_var=1` n=0 → §13.3 kabul kriteri (≥100/grup) **yapısal
+olarak taşınamaz**. Manzara (`oklar_sembol.csv`):
+
+-168 sembolde toplam **160 K1/K2** (sembol başına0,95 — PR#57 sonrası
+  kod,8 Kasım denetimi/kodundan belirgin şekilde daha az ok basıyor);
+- **279 plan (%44)** hiç ok basılmamış sembollerde;
+- plana-en-yakın-ok mesafesi:0-5 bar **5** ·5-10:2 ·10-20:6 ·
+  **>100 bar:314** → pencere20 bara genişletilse bile tavan≈13 (n≥100
+  imkânsız).
+
+**Yorum (olay-dışıklık — şans değil):** K1/K2 oku fiyatın **çizgiden
+≤1,80 ATR** içinde olmasını gerektirir; formasyon planları çoğu zaman
+genişlemiş hareketlerde tetiklenir → iki olay **mekanik olarak ayrık**.
+Bu özellik tanımıyla (K1/K2 ·5-bar · giriş-öncesi) giriş-zamanlaması
+ayrıştırılamaz — **yumuşak skor (Q2-iii) uygulanmadı** (ön-kayıt gereği).
+
+**Sonraki seçenek (üçü de ayrı §13-x ön-kayıdı olmadan koşulmaz):**
+(a) giriş-zamanlaması deneyinin orijinal diğer özellikleri (mesafe_atr,
+teyit yaşı — dış denetçi örnekleri); (b) **U1▼ tehlike tarafı** (bol
+olay: tüm okların ~%89'u — "girişten önce dikey yapı uyarısı var mı"
+hazard testi); (c) ters yön (ok → giriş,5 bar içinde) ölçümü.
