@@ -35,6 +35,7 @@ class TyrDurum:
     g2: G2Durum = G2Durum()
     planda: bool = False          # açık plan/tez var mı (iptal kuralı için)
     ek_celiski: int = 0           # diğer ölçülen çelişkiler (ör. karakter tersi)
+    olgunluk_genis: bool = False  # B5 (FAZ9): zenginlik-köprüsü ile olgunluk
 
 
 def tyr_hukmu(d: TyrDurum) -> Hukum:
@@ -66,6 +67,10 @@ def tyr_hukmu(d: TyrDurum) -> Hukum:
     olgunluk = (mesafe is not None and mesafe <= MESAFE_ESIGI_ATR) or (
         d.g2.aktif and d.g2.olgun
     )
+    # B5 (FAZ9, opt-in §9): zenginlik-köprüsü — onaylı zemin + taze MS desteği
+    # birlikte olgunluk kapısını açar (yalnız UYGUN hücresi; RET/bekle değişmez).
+    if d.olgunluk_genis and g1.onayli and taze_destekleyen:
+        olgunluk = True
     if olgunluk:
         lehte += 1
     if g1.onayli:

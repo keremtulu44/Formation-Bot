@@ -191,6 +191,7 @@ def seri_kosu(
     b2_uyari: bool = False,
     b3_hedef: bool = False,
     b4_karakterli: bool = False,
+    b5_olgunluk: bool = False,
 ) -> None:
     sembol, tf = hazir.symbol, hazir.tf
     norm = hazir.norm
@@ -243,6 +244,7 @@ def seri_kosu(
             # B2 (FAZ9, opt-in): kademe-yukarı uyarısı — çelişki sayacına +2,
             # TYR tavanı1'i aşınca BEKLE (plan gecikir; kesme değil, erteleme).
             ek_celiski=(2 if (b2_uyari and g1.ilerleme == "REBASED_HIGHER") else 0),
+            olgunluk_genis=b5_olgunluk,
         ))
         if h.hukum != son_hukum:
             defter.yaz(h)
@@ -404,6 +406,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="B3: formasyon üst sınırı hedef yarışına aday")
     p.add_argument("--b4-karakterli", action="store_true",
                    help="B4: dikey-yükselen karakterde stop tamponu 0,10 → 0,30 ATR")
+    p.add_argument("--b5-olgunluk", action="store_true",
+                   help="B5: onaylı zemin + taze MS desteği birlikte olgunluk yapar")
     args = p.parse_args(argv)
 
     global ZAMAN_STOPU_BAR
@@ -445,7 +449,8 @@ def main(argv: list[str] | None = None) -> int:
                     seri_kosu(hazir, hist, defter, sayac,
                               b2_uyari=args.b2_uyari,
                               b3_hedef=args.b3_hedef,
-                              b4_karakterli=args.b4_karakterli)
+                              b4_karakterli=args.b4_karakterli,
+                              b5_olgunluk=args.b5_olgunluk)
                     seri_sayisi += 1
                 except Exception as hata:  # noqa: BLE001 — seri hatası zinciri durdurmaz
                     hatalar.append({"sembol": sembol, "tf": tf,

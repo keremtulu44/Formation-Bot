@@ -82,6 +82,24 @@ def test_bekle_olgunluk_yok():
     assert "olgunluk" in h.gerekce
 
 
+# 8b) B5 (FAZ9 §9): zenginlik-köprüsü — bayrak açıkken onaylı + taze destekleyen
+# birlikte olgunluk yapar; bayrak kapalı veya destekleyen yoksa değişmez.
+def test_b5_olgunluk_zenginlik_koprusu():
+    g1 = _g1(mesafe_atr=2.5, onayli=True)
+    ms = (_ms(yas=1, yon="up"),)
+    # bayrak kapalı → eski davranış (BEKLE)
+    assert tyr_hukmu(_dur(g1=g1, g2=G2Durum(), ms=ms)).hukum == "BEKLE"
+    # bayrak açık + taze destekleyen → UYGUN
+    h = tyr_hukmu(_dur(g1=g1, g2=G2Durum(), ms=ms, olgunluk_genis=True))
+    assert h.hukum == "UYGUN"
+    # bayrak açık ama taze destekleyen yok → yine BEKLE (tek başına yetmez)
+    assert tyr_hukmu(_dur(g1=g1, g2=G2Durum(), olgunluk_genis=True)).hukum == "BEKLE"
+    # bayrak açık + onaylı değil → yine BEKLE
+    h2 = tyr_hukmu(_dur(g1=_g1(mesafe_atr=2.5, onayli=False),
+                        g2=G2Durum(), ms=ms, olgunluk_genis=True))
+    assert h2.hukum == "BEKLE"
+
+
 # 9) Saflık: girdi değişmezse çıktı değişmez; girdi frozen
 def test_tyr_saf_ve_frozen():
     d = _dur()
