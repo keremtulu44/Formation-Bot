@@ -222,3 +222,39 @@ olgunluk tamamlanmış sayılır.
 PF ≥ 1,57. **Dürüst beklenti:** n yönü ↑ olası (genişleme); kalite belirsiz
 (desteğe uzak giriş riski — doz-yanıt D5 tersi işlem görebilir). Kazanan
 dörtlü tutmazsa RED.
+
+---
+
+## 11. KÖK PLAN ÖN-KAYDI — audit + evren genişletme + yeniden koşu (2026-11-11, sonuçlar okunmadan yazıldı)
+
+**Bağlam:** G5 sızıntısı + dış denetimin açık maddeleri (G2/G4 kesim
+tutarsızlığı, zone_dolu etiketi) **kökten kapatıldı** (`2f956ba`): violation
+penceresi çerçeve sonu yerine tarama bitişine çakıldı (kök neden — canlıda
+tesadüfen aynı, uzun replay'de erken barlar yanlıştı), G2 as-of dizileri,
+zone_dolu terminal kaldırıldı; **kalıcı boru-hattı kesme testi GEÇTİ**
+(`test_golge_kesme.py`). Önceki tüm koşular (FAZ9-C baz, B1–B5) **audit-öncesi
+döneme** aittir: göreli yön bilgisi olarak okunur, kapı iddiası yeniden
+kurulmaz.
+
+### 11.1 Evren kararı (kilit)
+
+- **Evren = tüm arşiv** (`arsiv_sembolleri` − `HAVUZ_DISI` = **176 sembol**).
+  Gerekçe: (a) ana50'de K1=43 yapısal yetmezlik; (b) ciro-sıralaması
+  belirsizliği (dış denetim:48/50 vs37/50 örtüşme) tamamen ortadan kalkar;
+  (c) likidite kalitesini kapı K1/kârlı% zaten ölçer.
+- Protokol AYNEN: H=10, TF=1h/2h/4h/1d, %70/%30 keşif/doğrulama, K1–K6
+  **eşikleri değişmez** (K1≥50 dahil — anti-overfit kalkanı sökülmez).
+- Beklenti (yön): plan n ≈700 → doğrulama ≈150–190 → kapı anlamlı çalışır.
+
+### 11.2 Koşu sırası ve adaylar
+
+1. **Büyük-evre baz** (bayrak yok, audit-öncesi kod değil — yeni kod).
+2. **B4** (karakterli stop — audit-öncesi en yakın aday: kârlı% eşit, K2↑).
+3. **B5** (olgunluk-zenginliği — tek n-büyüten kol).
+- B1/B2/B3 **tekrarlanmaz**: üçü de kesme-tuzağında RED (mekanizma sınıfı
+  kapandı).
+
+### 11.3 Kazanma şartı (her varyant için, eşzamanlı)
+
+**K1 ≥ 50** (mutlak kapı) · kârlı% ≥ büyük-evre baz · net ≥ baz · PF ≥ baz.
+Beraberlik/belirsizlik → RED, sistem değişmez. Tüm sonuçlar bu belgeye + Envanter'e yazılır.
