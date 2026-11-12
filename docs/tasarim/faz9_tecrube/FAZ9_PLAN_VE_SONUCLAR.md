@@ -432,3 +432,16 @@ barda K1/K2▲ varsa plan daha iyi tutar (erken girişe doğrudan rakip).
   eşik (5 bar) değiştirilmez · çıkış/stop'a dokunulmaz · sonuç
   okunmadan başka özellik eklenmez. Olumlu çıkarsa giriş-tarafı yumuşak
   skor = **ayrı ön-kayıt** (bu bölüm otomatik yetki vermez).
+
+### 13.4 Uygulama notu (2026-11-12, ikinci koşudan ÖNCE yazıldı)
+
+İlk koşu pencereyi tüm planlarda4h barlarında ölçtü; oysa planlar4 TF'li
+(1h182 · 1d174 · 2h150 · 4h127). §13.2'deki "**giriş barı** ve önceki4
+kapanmış bar" ifadesi planın **kendi TF'indeki** bar demektir → pencere
+**planın TF'inde5 bar** olarak düzeltilir (ok akışı OK_SISTEMI kanonuyla
+aynı: `evaluate_stabil_symbol`4h hedefi; ok zamanları değişmez). Bu birim
+hatası ikinci koşuya kadar bu notta beyan edilmiştir; ilk koşu
+(`ok_var=1` grubu0, TF-birim hatasıyla) geçersiz sayılmaz, yalnız
+açıklanır. Ok akışı-4h yorumunun1d planlar için dar kalması ihtimaline
+karşı **yan rapor**: her plan için kendi TF'indeki5-bar penceresine
+düşen **herhangi** K1/K2 (4h) sayısı da yazılır (aynı tabloda).
