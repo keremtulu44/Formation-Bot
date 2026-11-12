@@ -258,3 +258,67 @@ kurulmaz.
 
 **K1 ≥ 50** (mutlak kapı) · kârlı% ≥ büyük-evre baz · net ≥ baz · PF ≥ baz.
 Beraberlik/belirsizlik → RED, sistem değişmez. Tüm sonuçlar bu belgeye + Envanter'e yazılır.
+
+---
+
+## 8. AUDIT-ÖNCESİ DÖNEM SONUÇ TABLOSU (2026-11-11 — §11 uyarınca kapı iddiası değil, yön bilgisi)
+
+> **Uyarı:** Bu tablo G5 sızıntısı kapatıldıktan ama G2/violation/zone_dolu
+> audit'i (`2f956ba`) ÖNCESİ koşulmuştur. Dış denetim kurallarıyla (§7.2 dörtlü)
+> değerlendirilmiş, hepsi RED'tir; mekanizma yönleri korunur, kapı iddiası
+> büyük-evre bazda yeniden kurulur (§11).
+
+| Koşu | n | K1 | K2 | Kârlı% | PF | Net | Dörtlü karar |
+|---|---|---|---|---|---|---|---|
+| FAZ9-C baz (50 sembol) |200 |43 ✗ |+18,12 |%47,5 |1,57 |+57,9A | referans |
+| **B2** kademe-uyarısı |97 |23 ✗ |+24,12 |**%52,6** |1,65 |+30,2A | **RED** (K1+net) |
+| **B3** formasyon-üstü hedef |152 |33 ✗ |+15,96 |%42,1 |1,20 |+16,4A | **RED** (4/4 kötü) |
+| **B4** karakterli stop |179 |39 ✗ |**+22,15** |%47,5 |1,54 |+51,6A | **RED** (K1,PF,net) |
+| **B5** olgunluk-zenginliği |207 |44 ✗ |+16,43 |%46,9 |1,57 |**+60,7A** | **RED** (kârlı% −0,6pp) |
+
+**Dönem ortak:** 2024-12-31 → 2026-10-13 (651 gün), ana50, H=10.
+
+**Kârlı-işlem raporu (kullanıcı sorusu — bu dönem, ana50):**
+
+| | Baz | B2 | B3 | B4 | B5 |
+|---|---|---|---|---|---|
+| Karlı işlem / toplam |95/200 |51/97 |64/152 |85/179 |96/207 |
+| Kârlı % |%47,5 |%52,6 |%42,1 |%47,5 |%46,9 |
+| Hedefe ulaşanların ort. getirisi |%4,75 |%4,17 |%4,11 |%4,88 |— |
+| Net |+57,9A |+30,2A |+16,4A |+51,6A |+60,7A |
+
+**Çıkarılan dersler (audit-öncesi döneme ait, mekanizma sınıfı):**
+1. **B2/B1 sınıfı (kesme/uyarı):** kalite artıyor, nüfus ve net kırılıyor →
+   bu sınıf kapandı (B1, B2).
+2. **B3 sınıfı (hedefe aday ekleme):** en yakın-aday R süzgeci gizli filtre
+   oluyor, hedef sayısı bile düşüyor → sınıf RED.
+3. **B4 (karakterli stop):** mekanizma çalıştı (stop74→62, K2+22,15, kârlı%
+   eşit) ama dörtlü tutmadı → büyük-evrede tekrar (§11).
+4. **B5 (olgunluk-zenginliği):** tek n-büyüten kol (207, K1 44, net en yüksek)
+   ve kârlı% eşiğine0,6 puan kaldı → büyük-evrede tekrar (§11).
+
+---
+
+## 10. DOMAIN ANALİZİ — eski domain replay'lerinden eklenebilir sistemler (2026-11-11)
+
+**Kaynak:** Envanter §A–H (domain hatları: OB–FVG, MARKET STRUCTURE, STABIL,
+FORMASYON, hacim, veri-tuzakları) + dış denetim notları. Kural: her aday
+**as-of kanıt tazelemesi** (audit dersi: A–D bölümleri sızıntılı hatlardan
+geldi, denetlenmedi) + ön-kayıt + kapı ister.
+
+| # | Aday sistem | Kaynak ders | Durum | Sıradaki adım |
+|---|---|---|---|---|
+| 1 | **Olgunluk-zenginliği** (yapı-koşullu UYGUN genişlemesi) | H7 + TYR lehte mimarisi | **Test edildi (B5, audit-öncesi: en yakın RED)** | §11 büyük-evre tekrarı |
+| 2 | **Formasyon üst sınırı → hedef** | H5 + sözleşme §5 gerilimi | **Test edildi (B3: RED — sınıf kapandı)** | Kapatıldı |
+| 3 | **Karakterli stop** (dikey basamakta geniş tampon) | H6 + sözleşme §5 + FRM-39 | **Test edildi (B4: RED, en yakın2)** | §11 büyük-evre tekrarı |
+| 4 | **Kademe/CONTRACTING uyarı-sınıfı** | B-1 dersi + I1 | **Test edildi (B1, B2: RED — kesme tuzağı)** | Kapatıldı (uyarı≠kesme doğrulandı ama TYR bekleme de kesiyor) |
+| 5 | **Sahne-bileşimi** (çok-etiketli sahne × sonuç) | H1 + Tur A sahne etiketleri | Açık | Az sayıda ön-kayıtlı sahne, tek tek ölç (n≥30) |
+| 6 | **Doğrulanmış domain iddialarını TYR'ye akıtmak** (OK R3-B %63,5; KIRILIM ilk-barda %76,3; TAHMIN MS-dış-BOS +9,5) | §C/§A dersleri | Açık (H7 v2) | Önce as-of tazeleme (A–D denetimi) → sonra B5-v2 gibi tek değişken |
+| 7 | **Hacim izin katmanı (VP)** | H4 + F1 (hacim %100 dolu ama kirli) | Açık | Önce hacim audit'i; izin katmanı sonra |
+| 8 | **Rejim/genişlik** (evren-genişlik; ay-filtresi kapandı) | H8 | Açık | Ayrı faz — kombinasyon-kaos riski nedeniyle tek başına |
+| 9 | **Cümle sicili bildiri-başına** (H2) + diyalog döngüsü (H3) | Sözleşme §4/§3 | Altyapı | Tur A verisi hazır; rapor katmanı en sonda |
+
+**Dış denetimle gelen ek uyarılar (ekleme öncesi):** `zone_dolu` (audit'de
+kapatıldı —407/412 sabit etiket), K2'nin tek-işleme bağlılığı (std hata7,4
+puan — bu nüfusta K2 ayırt edemiyor), "erken giriş" teşhisi hâlâ baskın
+(giriş zamanlaması = ana kâr kaynağı; hedef/stop kolları ikincil).

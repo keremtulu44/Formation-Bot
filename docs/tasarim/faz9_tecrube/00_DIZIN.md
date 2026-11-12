@@ -45,17 +45,19 @@ research/golge_{zincir,olcum,kapi,inceleme,tecrube_rapor}.py  ← hat betikleri
 ## Temel komutlar
 
 ```bash
-# Replay (ana50, bayraksız = düzeltmeli baz davranışı)
-SEMBOLLER=$(tr '\n' ',' < docs/arastirma/sonuclar/golge_zincir/ana50_semboller.txt | sed 's/,$//')
-python -m research.golge_zincir --semboller "$SEMBOLLER" --cikti sonuclar/<ad> [--b2-uyari|--b3-hedef|--b4-karakterli]
+# Replay — ana50 veya büyük evren (176); bayraklar varsayılan KAPALI
+SEMBOLLER=$(tr '\n' ',' < docs/arastirma/sonuclar/golge_zincir/evren176_semboller.txt | sed 's/,$//')
+python -m research.golge_zincir --semboller "$SEMBOLLER" --cikti sonuclar/<ad> \
+    [--b2-uyari|--b3-hedef|--b4-karakterli|--b5-olgunluk]
 
-# Ölçüm → Kapı
+# Ölçüm → Kapı → Kârlı raporu
 python -m research.golge_olcum --defter sonuclar/<ad>/golge_defter.jsonl --cikti sonuclar/<ad>/olcum
 python -m research.golge_kapi --olcum sonuclar/<ad>/olcum/olcum_ozet.json --cikti sonuclar/<ad>/kapi_karari.json
+python research/golge_karli_rapor.py --olcum sonuclar/<ad>/olcum/plan_sonuc.csv
 
-# Testler (G5 as-of kesme testleri dahil)
-python -m pytest test_senaryo_zincir.py test_senaryo_plan.py -q   # hedefli
-python -m pytest -q                                               # tam suite
+# Testler (as-of kesme testleri dahil — kalıcı)
+python -m pytest test_golge_kesme.py test_senaryo_zincir.py test_senaryo_plan.py test_senaryo_tyr.py -q
+python -m pytest -q   # tam suite (bilinen6: alarm=pandas3 ortam + stabil DATA_ERROR)
 ```
 
 ## FAZ9 durum tablosu
@@ -63,11 +65,11 @@ python -m pytest -q                                               # tam suite
 | Adım | Mekanizma | Durum | Karar |
 |---|---|---|---|
 | Tur A | Aktif bildirim + sahne etiketi (yalnız kayıt) | ✅ bitti | Değişmezlik kanıtı:412/0/0,0 |
-| FAZ9-C | G5 gelecek-sızıntısı düzeltmesi (as-of `i+1`) | ✅ bitti | Baz =200 plan,6/7 (K1=43) — danışmanla birebir |
-| B-1 | CONTRACTING filtresi | ✅ bitti | **RED** (K1 47<50, net −62,1A) — Envanter §I |
-| B-2 | Kademe-yukarı TYR uyarısı (`--b2-uyari`) | §7.3 ön-kayıt ✓ | sonuç: bkz. §7.6+ |
-| B-3 | Formasyon üst sınırı hedef adayı (`--b3-hedef`) | §7.4 ön-kayıt ✓ | sonuç: bkz. §7.6+ |
-| B-4 | Karakterli stop (`--b4-karakterli`) | §7.5 ön-kayıt ✓ | sonuç: bkz. §7.6+ |
+| B-1 | CONTRACTING filtresi | ✅ bitti | **RED** (K1 47<50) — Envanter §I |
+| FAZ9-C | G5 sızıntısı düzeltmesi + dış denetim | ✅ bitti | Baz200/K1=43 (danışmanla birebir) — §7.1 |
+| B-2/B-3/B-4/B-5 | Uyarı · hedef-özellik · karakterli-stop · olgunluk-zenginliği | ✅ audit-öncesi koşuldu | **4/4 RED** (§8 tablosu) — mekanizma dersleri korunur |
+| **AUDIT** | Kök-as-of üçlüsü: violation çapası + G2 as-of + zone_dolu + kalıcı kesme testi | ✅ bitti (`2f956ba`) | Boru hattı tam as-of; **eski koşular kapı iddiası değil** |
+| **§11 Kök plan** | Evren=176 + büyük-evre baz → B4/B5 tekrarı | 🔄 koşuyor | Ön-kayıt `389d259`/`4648de6` |
 
 ## Kırmızı çizgiler (özet — sözleşme §10)
 
