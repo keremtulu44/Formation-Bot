@@ -706,3 +706,32 @@ doğrulamanın −16,9A'lık zararı da ağırlıkla burada.
 3. **Sıradaki adım (kural gereği):** bu otopsi **mekanizma hipotezidir**;
    uygulama için **ayrı ön-kayıt** gerekir (§16 — kullanıcı kararı + kayıt).
    Bu bölüm yalnızca **teshis/kayıttır**, sisteme hiçbir şey uygulanmaz.
+
+
+### 17.5 Kâr tarafının karşılaştırması (kullanıcı isteği: "kazananlarda da aynı mı?")
+
+**Kâr oranı ok-un yaşıyla MONOTON artıyor — her iki dönemde de:**
+
+| son_ok_yasi | n | kâr oranı% | net | keşif kâr% | doğrulama kâr% |
+|---|---|---|---|---|---|
+| **≤1sa (taze)** |387 | **39,3** | +5,9 |41,2 | **34,0** |
+|1-4sa |202 |51,0 | +63,7 |52,4 |44,1 |
+|4-24sa |44 | **56,8** | +12,1 | **57,5** | **50,0** |
+
+- **Her iki dönemde de monoton** (keşif41,2→52,4→57,5 · doğrulama34,0→44,1→50,0) —
+  §17.2'nin kayıp-bulgusunun simetriği bu: taze giriş **kazanma olasılığını düşürüyor**.
+- **Kazananlar da çoğunlukla taze civarında** (kâr planlarının%54,3'ü taze; medyan
+  50dk) — çünkü planların %61'i zaten taze. Fark oranlarda: taze kovada kazanma
+  %39, eski kovada %57.
+- **Verimlilik:** keşifte **taze-olmayan**208 plan +76,8A (plan başına +0,37A) ↔
+  taze284 plan +21,8A (+0,08A) → **4,5× verim farkı**.
+- **Doğrulamanın zararının%94'ü tek kovadan:** toplam −16,9A'nın **−15,9A'sı taze
+  kovasından** (taze-olmayan: −1,0A).
+- **R kuyruğu (ikinci ayrım):** kâr planlarında R>3,5 oranı **%9,6** ↔ kayıplarda
+  **%14,6**; R>3,5 kovası kâr oranı en düşük (34,3%; doğrulamada20,0).
+- **Mesafe/TF:** medyan mesafe kâr1,84 ↔ kayıp1,89 (zayıf ayrım); TF kârda dengeli
+  (1d75/1h74/4h68/2h63) — **kazanç tek bir TF'de toplanmıyor**.
+
+**Özet:** Kâr = **daha eski ok'un girişlerinden** + **orta R'li hedeflerden** geliyor;
+kayıp = **taze ok + yüksek-R kuyruğu**. Aynı fenomenin iki yüzü — §17.4 hükmü
+değişmez, yalnızca "kazanç nerede" tamamlanmış oldu.
