@@ -527,3 +527,51 @@ Pencere kuralı §13.4 ile aynı; yalnız ok türü değişir.
 (mesafe_atr, teyit yaşı — her planda tanımlı, olay-sığınması yok →
 tek garantili n kaynağı); (c) ters yön (ok→ giriş) muhtemelen aynı
 çoğunlukla13 civarı olaya takılır → öncelik (a)'da.
+
+---
+
+## 15. HARİTA — GİRİŞ-ANİ ÖZELLİK HARİTASI ÖN-KAYDI (2026-11-12, sonuç okunmadan)
+
+**Onay:** kullanıcı ("Başla izin verildi"). **Tür:** harita (keşif), deney
+değil — hiçbir sonuç bu bölüm tek başına sistem değiştirmez.
+
+### 15.1 Özellikler (3 ile kilitli;4'üncü özellik yasağı)
+
+1. **`mesafe_atr`**: giriş zamanına en yakın **önceki**4h bar davranışının
+   `dist_atr`'si (kapanış − destek çizgisi, ATR birimi; negatif = çizginin
+   altında). Kaynak: `bar_behaviors` (§13 hattı).
+2. **`hukum_yasi`**: girişten geriye doğru son `UYGUN` hukum değişimine
+   kadar geçen **planın kendi TF'inde bar sayısı**. Kaynak: golge defteri
+   (`tip=="hukum"` kayıtları, as-of). Önceki UYGUN yoksa boş (boş kova
+   raporlanır).
+3. **`son_ok_yasi`**: girişe en yakın **K1/K2/U1** okuna mutlak bar
+   mesafesi (plan TF'inde, yönsüz). Kaynak: `denetle` çıktısı (M1/M2
+   hariç — §13/14 ile aynı evren).
+
+Hepsi giriş-ÖNCESİ ölçülebilir (as-of). `erken/iyi` kova etiketleri
+post-hoc dosyadan **kurulmayacak** (giriş-öncesi tanımı temiz değil) —
+harita yalnız yukarıdaki3 sürekli özellik + sonuçlarla sınırlıdır.
+
+### 15.2 Kovalar ve tablo (tek çıktı)
+
+- Kovalar: özellik üzerinde **sonuç-kör çeyrekler** (Q1–Q4; kesimler
+  yalnız özellik değeriyle, `pnl`'ye bakılmadan).
+- Tablo: kova × **keşif/doğrulama** → n, kârlı% (pnl>0), stop oranı,
+  net ATR, PF, beklenti. Çıkış: `harita_plan_ozellik.csv` + bu belgede
+ 3 tablo (§15.4).
+
+### 15.3 Okuma kuralı (ilan edildi — kapı değil, karar-yardımı)
+
+> **Sinyal VAR:** en iyi–en kötü kova kârlı% farkı **≥15,0 puan** VE
+> Q1↔Q4 yönü **her iki dönemde aynı**.
+> **Sinyal YOK:** fark <15pp ya da yön dönemler arasında ters.
+
+Sinyal VAR → mekanizma kararı **ayrı ön-kayıtla** kullanıcıya gider.
+Sinyal YOK → D+B'ye sürgüsüz geçiş önerisi (mikro-deneme kapanır).
+Bu bölümün hangi sonucu olursa olsun **otomatik kapı/uygulama yetkisi yoktur.**
+
+### 15.4 Yasaklar
+
+4'üncü özellik yok · kova sayısı/kesimleri sonuçtan sonra değişmez ·
+erişim yalnız giriş-öncesi (as-of) · çıkış/stop'a dokunulmaz · sert
+filtre üretilmez · sonuç okunmadan bu metne ekleme yapılmaz.
