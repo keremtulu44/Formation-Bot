@@ -654,3 +654,55 @@ Açılışı yalnız D+B ritmiyle; hangi evrenle "taze" adının düştüğü
 Son değerlendirme: **baz176 =4/7 GEÇMEDİ** (§12.1). Bir sonraki
 değerlendirme = bir sonraki D+B ritminde (16.1-1). Bu arada sistem
 **gölgede, kırmızı çizgi8 aktif, canlıya bağlantı yok**.
+
+
+---
+
+## 17. KAYIP OTOPSİSİ — zarar eden planların ortak noktası (2026-11-12, tespit/kayıt — KAPI DEĞİL)
+
+**Veri:** takipli artefaktlar (`baz176/olcum/plan_sonuc.csv` + `harita_plan_ozellik.csv`),
+633 plan · **343 kayıp (%54,2)** · net +81,7A (keşif +98,6 / doğrulama **−16,9**).
+
+### 17.1 Kayıp anatomisi
+
+| çıkış tipi | n | kayıp | kazanç |
+|---|---|---|---|
+| **stop** |253 | **253 (hepsi kayıp)** |0 |
+| **zaman** (zaman-stopu) |237 |90 |147 |
+| **hedef** |143 |0 |**143 (hepsi kazanç)** |
+
+→ Kayıplar = **253 stop + 90 zaman-çıkışı**. Kaybın "hepsi"ne bakmanın anlamı:
+**stop'a giden planların neyini paylaştığına** bakmak.
+
+### 17.2 Ortak noktalar — her iki dönemde de aynı yönde (keşif → doğrulama kayıp%)
+
+| Aday ortak nokta | keşif kayıp% | doğrulama kayıp% | not |
+|---|---|---|---|
+| **Girişe ≤1sa içinde taze ok var** | **57,0** (n284) | **63,1** (n103) | karşıt kovalar daha iyi:1-4sa 46,4→55,9 · 4-24sa 42,5→50,0 · **stop'larda %69,6** · kazanç planlarında 55,2'ye karşı **kayıp planlarında 66,2** |
+| **Hedef R >3,5** | **61,8** (n55) | **69,6** (n23) | en yüksek-R kovası en kötü iki dönemde de |
+| Ok-mesafesi ≤0,5 ATR |60,6 | **84,6** | doğrulama n≈13 → **gözlem, kanıt değil** |
+| TF / giriş saati | — | — | **tutarlı değil** (4h keşifte en iyi → doğrulamada kötü; saat yönü ters) |
+
+### 17.3 En güçlü hücre: `taze_ok + düşük TF (1h/2h/1d)`
+
+| hücre | n | keşif kayıp% | keşif net | doğrulama kayıp% | doğrulama net |
+|---|---|---|---|---|---|
+| **taze_ok + dusuk_tf** | **291 (planların %46'sı)** | **61,1** | **−7,8A** | **63,7** | **−10,3A** |
+| taze_ok + yuksek_R |47 |74,2 | −5,6A |75,0 | +1,4A (n16 küçük) |
+| tek başına taze_ok |387 |57,0 | +21,8 |63,1 | −15,9 |
+
+**Tek hücre iki dönemde de net NEGATİF:** `taze_ok + düşük TF` — üstelik
+geniş n (291) ile. Sistemin genel keşif kârı bu hücre dışından geliyor;
+doğrulamanın −16,9A'lık zararı da ağırlıkla burada.
+
+### 17.4 Sonuç (bu bölüm kapı/karar DEĞİLDİR — §16 yürürlükte)
+
+1. **Ortak nokta:** zarar eden planların büyük çoğunluğu **"giriş, taze bir
+   ok'un (≤1sa) hemen ardından"** + **düşük TF** koşulunda toplanıyor; ikinci
+   aday **çok yüksek R hedefi**. (§15 haritasının `son_ok_yasi` sinyalinin
+   kayıp-yüzüyle birebir aynı fenomen — iki bağımsız okuma aynı yeri gösteriyor.)
+2. **Problem noktası:** sistem **giriş anında "ok tazeliğini" görmüyor**;
+   plan aynı kurallarla üretiliyor, fark girişin zamanlamasında.
+3. **Sıradaki adım (kural gereği):** bu otopsi **mekanizma hipotezidir**;
+   uygulama için **ayrı ön-kayıt** gerekir (§16 — kullanıcı kararı + kayıt).
+   Bu bölüm yalnızca **teshis/kayıttır**, sisteme hiçbir şey uygulanmaz.
