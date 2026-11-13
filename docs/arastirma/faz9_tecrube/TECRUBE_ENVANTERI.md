@@ -203,3 +203,10 @@ Yumuşak skor uygulanmadı (Q2-iii, ön-kayıt gereği). Tek istisna YKBNK4h
 (hedef,+1,60A) — kanıt değil. Giriş-zamanlaması sıradaki denemesi farklı
 özellikle (mesafe_atr/teyit yaşı) veya U1▼ hazard'ıyla ayrı ön-kayıtla.
 Çıktı: `docs/arastirma/sonuclar/golge_zincir/ok_plan_zamanlama/`.
+
+**Eki §14 (U1▼ tehlike):** aynı pencerede `u1_var=1` = **13/633**
+(keşif9/doğrulama4; yön karışık) → n≥100 imkânsız, **HÜKÜM YOK**.
+Ders: onay-kutusu K1/K2 ve tehlike-kutusu U1 **ikisi de** plan
+girişiyle olay-dışık — ok-tabanlı özellikler plan ayrıştırması için
+kapandı; kalan garantili kaynak **per-plan sürekli özellikler**
+(mesafe_atr, teyit yaşı). Çıktı: `.../u1_plan_tehlike/`.

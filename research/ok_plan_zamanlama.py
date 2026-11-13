@@ -36,8 +36,10 @@ def _utc_serit(x):
     return t.tz_convert("UTC") if t.tzinfo else t.tz_localize("UTC")
 
 
-def sembol_verisi(sembol: str) -> tuple[set[pd.Timestamp], dict[str, list[pd.Timestamp]]]:
-    """K1/K2 ok zamanları (4h kanonu) + TF başına bar zamanları."""
+def sembol_verisi(
+    sembol: str, kurallar: tuple[str, ...] = ("K1", "K2"),
+) -> tuple[set[pd.Timestamp], dict[str, list[pd.Timestamp]]]:
+    """İstenen kural ok zamanları (4h kanonu) + TF başına bar zamanları."""
     d = (pd.read_csv(ROOT / f"backfill_data/{sembol}_1d.csv.gz",
                      compression="gzip", parse_dates=["bar_time"])
          .set_index("bar_time").reset_index()
@@ -50,7 +52,7 @@ def sembol_verisi(sembol: str) -> tuple[set[pd.Timestamp], dict[str, list[pd.Tim
     out = evaluate_stabil_symbol(sembol, "4h", h4,
                                  daily_frame=d, h4_frame=h4)
     oklar = {_utc_serit(k.bar_close_time) for k in denetle(out.bar_behaviors)
-             if k.kural_adi in ("K1", "K2")}
+             if k.kural_adi in kurallar}
     h2 = resample_ohlcv(h, "2h").reset_index()
     stamps = {
         "1h": [_utc_serit(t) for t in h.index],
@@ -65,7 +67,10 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--plan", default=str(VARSAYILAN_PLAN))
     ap.add_argument("--cikti", default=str(VARSAYILAN_CIKTI))
+    ap.add_argument("--kurallar", default="K1,K2",
+                    help="virgülle ayrılmış kural_adi listesi (örn. U1)")
     args = ap.parse_args()
+    kurallar = tuple(x.strip() for x in args.kurallar.split(",") if x.strip())
     cikti = Path(args.cikti)
     cikti.mkdir(parents=True, exist_ok=True)
 
@@ -78,7 +83,7 @@ def main() -> int:
     for i, s in enumerate(semboller, 1):
         for _ in range(3):
             try:
-                harita[s] = sembol_verisi(s)
+                harita[s] = sembol_verisi(s, kurallar)
                 break
             except Exception as hata:
                 harita[s] = (set(), {})
@@ -128,7 +133,9 @@ def main() -> int:
             if n else None,
             "beklenti_atr": round(float(g["pnl"].mean()), 4) if n else None,
         })
-    ozet = {"ozellik": "K1/K2▲ (4h kanonu), pencere=plan TF'inde5 bar (§13.4)",
+    ozet = {"ozellik": f"{'+'.join(kurallar)} (4h kanonu), "
+                       "pencere=plan TF'inde5 bar (§13.4)",
+            "kurallar": list(kurallar),
             "pencere": PENCERE, "plan_n": int(len(df)),
             "ok_var_toplam": int(df["ok_var"].sum()),
             "gruplar": rapor}

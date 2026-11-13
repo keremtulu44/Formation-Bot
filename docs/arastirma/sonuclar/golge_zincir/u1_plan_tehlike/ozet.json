@@ -1,0 +1,51 @@
+{
+  "ozellik": "U1 (4h kanonu), pencere=plan TF'inde5 bar (§13.4)",
+  "kurallar": [
+    "U1"
+  ],
+  "pencere": 5,
+  "plan_n": 633,
+  "ok_var_toplam": 13,
+  "gruplar": [
+    {
+      "donem": "dogrulama",
+      "ok_var": 0,
+      "n": 137,
+      "karli_yuzde": 37.2,
+      "net_atr": -15.84,
+      "PF": 0.81,
+      "stop_orani": 50.4,
+      "beklenti_atr": -0.1156
+    },
+    {
+      "donem": "dogrulama",
+      "ok_var": 1,
+      "n": 4,
+      "karli_yuzde": 25.0,
+      "net_atr": -1.03,
+      "PF": 0.58,
+      "stop_orani": 50.0,
+      "beklenti_atr": -0.2585
+    },
+    {
+      "donem": "kesif",
+      "ok_var": 0,
+      "n": 483,
+      "karli_yuzde": 45.8,
+      "net_atr": 84.94,
+      "PF": 1.35,
+      "stop_orani": 37.3,
+      "beklenti_atr": 0.1759
+    },
+    {
+      "donem": "kesif",
+      "ok_var": 1,
+      "n": 9,
+      "karli_yuzde": 77.8,
+      "net_atr": 13.64,
+      "PF": 10.27,
+      "stop_orani": 22.2,
+      "beklenti_atr": 1.516
+    }
+  ]
+}

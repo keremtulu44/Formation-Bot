@@ -505,3 +505,25 @@ Pencere kuralı §13.4 ile aynı; yalnız ok türü değişir.
   (yasak kol) · pencere5 bar değişmez · K1/K2/M1/M2 kullanılmaz ·
   sonuç okunmadan özellik/eşik eklenmez. Bu bölüm hangi sonuçta olursa
   olsun otomatik kapı yetkisi vermez.
+
+### 14.3 Sonuç (2026-11-12 — HÜKÜM YOK)
+
+| Dönem | u1=0 | u1=1 |
+|---|---|---|
+| keşif | n483 · kârlı%45,8 · net+84,9A · PF1,35 | **n9** · kârlı%77,8 · net+13,6A · PF10,3 |
+| doğrulama | n137 · kârlı%37,2 · net−15,8A · PF0,81 | **n4** · kârlı%25,0 · net−1,0A · PF0,58 |
+
+- `u1_var=1` toplam **13/633 (%2)** → n≥100 **yapısal olarak imkânsız**
+  → **HÜKÜM YOK** (ön-kayıt gereği).
+- Yön karışık ve her iki u1=1 grubu da n≪100 (keşifte +32,0pp **ters**,
+  doğrulamada −12,2pp **doğru** — ikisi de gürültü; tek başına okunamaz).
+- **Ders:** olay-dışıklığı U1 için de geçerli (daha az dramatik):
+  dikey-yapı uyarıları da plan tetik anlarıyla **aynı5-bar pencerede**
+  neredeyse hiç çakışmıyor. **Ok-tabanlı her iki kutu (onay K1/K2 +
+  tehlike U1) plan ayrıştırması için kapandı.**
+- **Yumuşak skor uygulanmadı** (Q2-iii + n yetersiz). Sistem değişmedi.
+
+**Kalan kapılar (§13.5 güncelli):** (a) **per-plan sürekli özellikler**
+(mesafe_atr, teyit yaşı — her planda tanımlı, olay-sığınması yok →
+tek garantili n kaynağı); (c) ters yön (ok→ giriş) muhtemelen aynı
+çoğunlukla13 civarı olaya takılır → öncelik (a)'da.
