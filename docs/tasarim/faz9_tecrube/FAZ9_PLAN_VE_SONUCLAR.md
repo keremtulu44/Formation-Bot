@@ -474,3 +474,34 @@ ayrıştırılamaz — **yumuşak skor (Q2-iii) uygulanmadı** (ön-kayıt gere�
 teyit yaşı — dış denetçi örnekleri); (b) **U1▼ tehlike tarafı** (bol
 olay: tüm okların ~%89'u — "girişten önce dikey yapı uyarısı var mı"
 hazard testi); (c) ters yön (ok → giriş,5 bar içinde) ölçümü.
+
+---
+
+## 14. GİRİŞ-ZAMANLAMASI — U1▼ TEHLİKE ÖZELLİĞİ ÖN-KAYDI (2026-11-12, sonuç okunmadan)
+
+**Kaynak:** §13.5 seçenek (b) + kullanıcı onayı ("B'yi dene").
+Pencere kuralı §13.4 ile aynı; yalnız ok türü değişir.
+
+### 14.1 Özellik (tek, değişmez)
+
+- `u1_var` = **giriş barı ve önceki4 kapanmış bar** (planın kendi TF'inde
+  toplam5 bar) içinde `kural_adi == "U1"` (dikey yapı uyarısı ▼; OK_SISTEMI
+  K1/K2/M1/M2'yi bastıran fail-closed kural) var mı (0/1).
+- Yol: aynı hat (`evaluate_stabil_symbol` → `denetle`), yalnız filtre
+  K1/K2 → **U1**; ok akışı4h kanonu (değişmez).
+
+### 14.2 Hipotez, kabul ve yasaklar (ön-kayıt)
+
+- **Yön:** `u1_var=1` → **DAHA KÖTÜ** (hazard: dikey/kademeli yapıda
+  erken giriş). Beklenen: kârlı%(1) < kârlı%(0), stop oranı yüksek.
+- **Tek ana karşılaştırma:** doğrulamada `kârlı%(u1=1) − kârlı%(u1=0)`.
+- **KABUL (tehlike doğru):** keşifte aynı yön (fark <0) VE doğrulamada
+  fark **≤ −10,0 puan**; ayrıca her grup×dönem **n≥100** (değilse
+  "n yetersiz — hüküm yok").
+- **RED:** yön tutmazsa (u1=1 daha iyi ya da |fark| küçük) →
+  "ayrıştırmıyor" olarak kayda geçer, sistem değişmez.
+- Yan rapor (karar değil): PF, net, stop oranı, beklenti, GA.
+- **Yasaklar:** sert filtre/kapı yok (Q2-iii) · çıkış sinyali yok
+  (yasak kol) · pencere5 bar değişmez · K1/K2/M1/M2 kullanılmaz ·
+  sonuç okunmadan özellik/eşik eklenmez. Bu bölüm hangi sonuçta olursa
+  olsun otomatik kapı yetkisi vermez.
