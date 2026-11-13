@@ -210,3 +210,24 @@ Ders: onay-kutusu K1/K2 ve tehlike-kutusu U1 **ikisi de** plan
 girişiyle olay-dışık — ok-tabanlı özellikler plan ayrıştırması için
 kapandı; kalan garantili kaynak **per-plan sürekli özellikler**
 (mesafe_atr, teyit yaşı). Çıktı: `.../u1_plan_tehlike/`.
+
+## L. (FAZ9 eki) Giriş-anı haritası — ilk pozitif sinyal + beraberlik dersi (2026-11-12)
+
+§15 ön-kayıtlı harita (633 plan,3 özellik, sonuç-kör çeyrekler):
+**`son_ok_yasi` SİNYAL VERDİ** — girişe en yakın K1/K2/U1 okuna uzak
+Q1 kovası her iki dönemde en kötü (doğrulama kârlı%26,7 / stop%71,1 /
+net−12,6A), en-iyi−en-kötü keşif15,5pp + doğrulama23,3pp, yön +/+. Öbür
+ikisi yok: mesafe_atr (yön ters), hukum_yasi (yön ters + yalnız35 farklı
+değer → yapısal zayıf).
+
+**Dersler:**
+1. **Beraberlik çökmesi:** kova ataması `değer→kova` dict'iyle yapılırsa
+   eşit değerler tek kovaya yığılır (hukum Q4=510/633) ve okuma-SAPAR.
+   Kural: kovalar **konum-bazlı** (sıralama + pozisyon), hiç değer-key'li
+   dict değil. İlk koşu geçersiz, düzeltme sonuç-öncesi niyetle uyumlu.
+2. **hukum_yasi gibi az-farklı-değerli özellikler haritada okunmaz**
+   (35 farklı değer /633) — özellik seçimi öncesi `nunique` kontrolü.
+3. **İlk pozitif sinyal yönü:** "girişe yakın taze stabil olay = kötü"
+   — giriş-zamanlaması haritasının çalıştığı yer burası; mekanizma
+   (yumuşak skor / süzgeç / bekletme) kullanıcı kararı + ayrı ön-kayıt.
+Çıktı: `docs/arastirma/sonuclar/golge_zincir/harita_giris_zamanlama/`.

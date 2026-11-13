@@ -575,3 +575,46 @@ Bu bölümün hangi sonucu olursa olsun **otomatik kapı/uygulama yetkisi yoktur
 4'üncü özellik yok · kova sayısı/kesimleri sonuçtan sonra değişmez ·
 erişim yalnız giriş-öncesi (as-of) · çıkış/stop'a dokunulmaz · sert
 filtre üretilmez · sonuç okunmadan bu metne ekleme yapılmaz.
+
+### 15.5 Sonuç (2026-11-12 —1. koşu hata-bildirimi +2. koşu nihai)
+
+**Şeffaflık:**1. koşuda kova ataması `değer→kova` dict'iyle yapıldı,
+**beraberlikler tek kovaya yığıldı** (hukum_yasi Q4=510/633) — uygulama
+hatası, ön-kayıtta niyet **eşit-sıklıktı**. Düzeltildi (konum-bazlı,
+sonuç-kör sıralama) ve nihai tablolar2. koşudan;1. koşu geçersiz sayılır.
+Dağılım: mesafe_atr **569 farklı değer** (medyan1,86) · hukum_yasi
+**35 farklı** (medyan2 — yapısal olarak zayıf) · son_ok_yasi **211 farklı**
+(medyan39) · boş yalnız mesafe48/633.
+
+#### A. `son_ok_yasi` — **SİNYAL VAR** (§15.3: her iki dönem ≥15pp + aynı yön)
+
+| Kova (girişe en yakın K1/K2/U1 mesafesi) | keşif k% | keşif n | doğr. k% | doğr. n | doğr. stop% | doğr. net |
+|---|---|---|---|---|---|---|
+| Q1 (en yakın) |38,6 |114 | **26,7** |45 | **71,1** | **−12,6A** |
+| Q2 |44,5 |119 |33,3 |39 |46,2 | −8,2A |
+| Q3 |46,8 |126 | **50,0** |32 |34,4 | +9,9A |
+| Q4 (en uzak) | **54,1** |133 |44,0 |25 |40,0 | −5,9A |
+
+- en-iyi−en-kötü: keşif **15,5pp** ✓ · doğrulama **23,3pp** ✓ ·
+  Q4−Q1 yönü keşif **+15,5** / doğrulama **+17,3** → **aynı yön** ✓.
+- Okuma: **girişe yakın stabil olay = en kötü kova** (taze olay
+  gürültüsüne denk gelen giriş); ok'tan uzak/sakin girişler daha iyi.
+  Korelasyon (keşif + doğrulama teyidi); **mekanizma değil**.
+
+#### B. `mesafe_atr` — SİNYAL YOK
+keşif en-iyi−en-kötü10,4pp (<15); Q4−Q1 keşif −3,8 / doğrulama +8,4
+(**yön ters**). Kovalar: doğrulama Q1%20,8 ↔ Q2%52,5 — mono yok.
+
+#### C. `hukum_yasi` — SİNYAL YOK
+keşif11,1pp (<15) + **yön ters** (keşif +11,1 / doğrulama −10,3).
+Ek olarak yalnız35 farklı değer → bu özellikle güvenilir okuma yapılamaz.
+
+#### D. Karar durumu
+
+§15.3 gereği **mekanizma kararı kullanıcıya gider** (bu bölüm
+otomatik yetki vermez). Seçenekler: (i) **yumuşak skor/uyarı**
+(Q2-iii ruhu — plan raporuna "ok-yakınlık" etiketi; engel yok);
+(ii) **BEKLE/süzgeç** (Q1'e girerse plan yok sayılır — n etkisi:
+~159/633 plan (%25) elenir; doğrulama K1 n141→~96, hâlâ ≥50);
+(iii) **beklet** (harita kayda geçer, uygulama D+B'ye). Çıkış/
+stop'a dokunmak yok; hangi seçenek seçilirse ayrı ön-kayıt şart.
