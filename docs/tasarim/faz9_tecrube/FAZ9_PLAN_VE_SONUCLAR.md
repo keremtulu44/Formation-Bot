@@ -618,3 +618,39 @@ otomatik yetki vermez). Seçenekler: (i) **yumuşak skor/uyarı**
 ~159/633 plan (%25) elenir; doğrulama K1 n141→~96, hâlâ ≥50);
 (iii) **beklet** (harita kayda geçer, uygulama D+B'ye). Çıkış/
 stop'a dokunmak yok; hangi seçenek seçilirse ayrı ön-kayıt şart.
+
+---
+
+## 16. KARAR KAYDI — (iii) BEKLET + D+B PROSEDÜRÜ + taze26 KİLİDİ (2026-11-12)
+
+**Kullanıcı kararı (§15.5-D):** seçilen seçenek **(iii) beklet**.
+
+- `son_ok_yasi` sinyali **kayıtlıdır** (§15.5-A) ama bu oturumda
+  **uygulanmaz** — (i) yumuşak etiket ve (ii) Q1 süzgeci de kapalıdır;
+  ikisi de yalnız **gelecekte ayrı ön-kayıtla** açılabilir.
+
+### 16.1 D+B prosedürü (bağlayıcı, oturumlar arası ritim)
+
+1. Gölge zincir **aylık** yeni bar setiyle yeniden koşulur (arşiv
+   uzantısı ve/veya taze26) → defter + `golge_olcum` + `golge_kapi`.
+2. Kapı **ayda ≤1** değerlendirilir: eşikler §11.3 (K1≥50 mutlak;
+   K2/K3/K4/K5/K6 değişmez), sonuç kapı JSON'una yazılır;
+   **pasaport (sha256) + GA95 + n zorunlu**.
+3. Yorum yalnız D+B veri setiyle yapılır (§12.4 kilidi: taze
+   doğrulama bitmeden **eşik revizyonu koşulmaz/koşılmaz**).
+4. Yeni mikro-deneme / özellik avı **kapalı** — §13 (K1/K2),
+   §14 (U1), §15 (harita) karşılaştırmaları kapanmıştır; yalnız
+   yukarıdaki ritim çalışır.
+
+### 16.2 taze26 kilidi (tek satır ön-kayıt — dış denetçi isteği)
+
+**Eligibility:** taze26 = evren176 ve ana50 **dışında**, BIST **hissesi**
+(endeks XU100/XU30 hariç), arşivde daha önce plan üretilmemiş semboller.
+Açılışı yalnız D+B ritmiyle; hangi evrenle "taze" adının düştüğü
+**koşu JSON'una yazılır**.
+
+### 16.3 Kapıların bugünkü durumu
+
+Son değerlendirme: **baz176 =4/7 GEÇMEDİ** (§12.1). Bir sonraki
+değerlendirme = bir sonraki D+B ritminde (16.1-1). Bu arada sistem
+**gölgede, kırmızı çizgi8 aktif, canlıya bağlantı yok**.

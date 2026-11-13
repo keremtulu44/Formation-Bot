@@ -70,7 +70,10 @@ python -m pytest -q   # tam suite (bilinen6: alarm=pandas3 ortam + stabil DATA_E
 | B-2/B-3/B-4/B-5 | Uyarı · hedef-özellik · karakterli-stop · olgunluk-zenginliği | ✅ audit-öncesi koşuldu | **4/4 RED** (§8 tablosu) — mekanizma dersleri korunur |
 | **AUDIT** | Kök-as-of üçlüsü: violation çapası + G2 as-of + zone_dolu + kalıcı kesme testi | ✅ bitti (`2f956ba`) | Boru hattı tam as-of; eski koşular kapı iddiası değil |
 | **§11 Evren programı** | baz176 + B4-176 (B5-176 baz-RED nedeniyle durdu) | ✅ bitti | **İkisi de4/7**: K1✓ (141/131) ama K2/K3✗ — §12.1 |
-| **§12 KÖK HÜKÜM** | Evren-kırılımı + kapı-protokolü kararı | ⏳ **Kullanıcı kararı bekliyor** |4/4 seçenek tablosu (§12.4) — öneri: gölge devam + veri bekleme |
+| **§12 KÖK HÜKÜM** | Evren-kırılımı + kapı-protokolü kararı | ✅ bitti | D+B onaylandı (kullanıcı) |
+| **§13/§14 Ok denemeleri** | K1/K2 onay · U1 tehlike (giriş-öncesi5 bar) | ✅ bitti | **HÜKÜM YOK** (1 ve13 vaka — olay-dışıklık) |
+| **§15 HARİTA** | giriş-anı3 özellik × sonuç (633 plan) | ✅ bitti | **`son_ok_yasi` SİNYAL VAR** (yakın ok = kötü giriş); mesafe/hukum yok |
+| **§16 KARAR** | Kullanıcı seçimi + D+B ritmi + taze26 kilidi | ✅ bitti | **(iii) beklet** — mekanizmalar kapalı; aylık kapı ritmi; yeni deneme yok |
 
 ## Kırmızı çizgiler (özet — sözleşme §10)
 
@@ -80,4 +83,6 @@ var · uydurma yasağı · kapatılmış kollar yeniden denenmez (exit-side, sto
 buffer, H≥25, rejim-AY filtresi, ön-gözlem giriş filtreleri) · **canlıya
 bağlantı yok (kırmızı çizgi8)**.
 
-*Son güncelleme: FAZ9-C baz + B-turu koşuları — FAZ9_PLAN_VE_SONUCLAR.md §7.*
+*Son güncelleme: §16 karar kaydı — (iii) beklet + D+B ritmi + taze26 kilidi
+(FAZ9_PLAN_VE_SONUCLAR.md §16); giriş-anı haritası `son_ok_yasi` sinyali
+kayıtlı (§15.5), uygulama kapalı.*
