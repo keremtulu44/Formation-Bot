@@ -735,3 +735,52 @@ doğrulamanın −16,9A'lık zararı da ağırlıkla burada.
 **Özet:** Kâr = **daha eski ok'un girişlerinden** + **orta R'li hedeflerden** geliyor;
 kayıp = **taze ok + yüksek-R kuyruğu**. Aynı fenomenin iki yüzü — §17.4 hükmü
 değişmez, yalnızca "kazanç nerede" tamamlanmış oldu.
+
+
+---
+
+## 18. ÖN-KAYIT — BEKLE filtresi: as-of taze-ok (2026-11-12, ölçüm ÖNCESİ yazıldı)
+
+**Kullanıcı yönlendirmesi:** §17 otopsisi anlamlı bulundu → "uygula ve test edelim".
+§16'daki (iii) beklet bu bölümle **değiştirildi**; uygulama yine **ölçüm/gölge
+kademesinde** (canlıya bağlantı yok, kırmızı çizgi8).
+
+### 18.0 Düzeltme (şeffaflık — §17'de birim hatası)
+
+§15/§17'deki `son_ok_yasi` **plan-TF cinsinden MUTLAK bar mesafesi** idi
+(gelecekteki ok'lara da bakar; "≤1sa" etiketi **yanlıştı** — o kova
+"≤60 plan-TF barı" demekti). Sinyal kaydı (§15.3 kurallarıyla) geçerli kalır;
+ancak **canlıya uygulanabilir filtre geçmişe bakabilir ve zaman biriminde
+olmalı**. Bu bölüm o düzeltmeyi yapar.
+
+### 18.1 Mekanizma (kilitli)
+
+- **Özellik:** `son_ok_asof_dk` = plan zamanından **geriye doğru** en son
+  K1/K2/U1 ok'una geçen süre (**dakika**; yalnız geçmiş ok'lar — as-of).
+- **Kural:** `son_ok_asof_dk ≤ 60` ise plan **BEKLE**'ye düşer (üretilmez;
+  tetik/kör baz değişmez; yalnız plan katmanı).
+- **Eşik60dk** doğal-önceden-seçimdir (§17'nin niyeti "tazelik"; TF'ler arası
+  adil karşılaştırma için dakika). **Eşik sonuçlara göre DEĞİŞTİRİLMEZ.**
+
+### 18.2 Okuma kuralı (§15.3 ile aynı, ikili kova)
+
+Taze (≤60dk) vs değil — **keşifte ≥15pp fark + doğrulamada aynı yön ve ≥15pp**
+→ sinyal var sayılır. Yoksa: filtre **uygulanmaz**, sonuç "SİNYAL YOK" olarak
+yazılır (kapı: bu bölüm kapı iddiası değil, uygulama etki ölçümüdür; kapı
+K1–K6'dır ve eşikleri değişmez).
+
+### 18.3 Ölçüm (yapılacak)
+
+1. Aynı633 plan üzerinde `son_ok_asof_dk` yeniden-hesabı (oklar: `denetle`
+   K1/K2/U1, tek evaluate geçişi — §15 ile aynı kaynak).
+2. §18.2 okuması → sinyal kararı.
+3. Sinyal varsa: filreli vs filtresiz **K1–K6 + net etki tablosu**
+   (kör baz sabit; K4/K5 zincir-kaynağı, zincir koşusunda doğrulanır).
+4. Uygulama: `golge_zincir.py` plan_mi yoluna as-of BEKLE şartı +
+   sayaç + defter satırı (`--beklet-taze-dk`, varsayılan60;0=kapatır).
+
+### 18.4 Yasaklar
+
+Mutlak/gelecek-ok kullanımı yok · eşik revizyonu yok · tetik/kör baz ve
+çıkış/stop'a dokunmak yok · sonuç okunmadan bu metne ekleme yapılmaz ·
+4'üncü özellik yok.
