@@ -784,3 +784,31 @@ K1–K6'dır ve eşikleri değişmez).
 Mutlak/gelecek-ok kullanımı yok · eşik revizyonu yok · tetik/kör baz ve
 çıkış/stop'a dokunmak yok · sonuç okunmadan bu metne ekleme yapılmaz ·
 4'üncü özellik yok.
+
+
+### 18.5 Sonuç — **SİNYAL YOK → filtre UYGULANMADI** (2026-11-12, koşudan sonra)
+
+**Ön-kayıtlı okuma (§18.2) işletildi:**
+
+| test | keşif | doğrulama | hüküm |
+|---|---|---|---|
+| **as-of dakika** (≤60dk; §18.1 tanımı) | taze n**5** kâr%80,0 ↔ değil %46,0 → **−34,0pp** | taze n**2** kâr%0,0 ↔ %37,4 → **+37,4pp** | yönler **TERS** + n≈0 → **YOK** |
+| **as-of bar** (≤60 plan-TF barı; §15'in birimine yakın tercüme) | taze n135 kâr%50,4 ↔ değil %47,1 → **−3,3pp** | taze n71 %32,4 ↔ %41,4 → **+9,0pp** | yönler **TERS** + ikisi de <15pp → **YOK** |
+| kontrol: **mutlak bar** (§15 tanımı) | Q1 %36,8 → Q4 %55,3 (monoton ✓) | Q1 %29,7 → Q4 %40,0 | **sinyal yalnız mutlak ölçümde** |
+
+**Yorum:** §15/§17 sinyali **gelecek-ok'un payından** yaşıyor — girişten
+kısa süre **sonra** gelen yeni ok "kötü plan"ı işaretliyor; giriş anında bu
+bilgi **yok** (as-of testleri yön değiştirdi). Dolayısıyla:
+
+1. **BEKLE filtresi uygulanmadı** (ön-kayıt kuralı: sinyal yoksa uygulama yok).
+   Sistem **dokunulmaz** (§16 yürürlükte, kırmızı çizgi8).
+2. **Etki ölçümü yine de kayıtlı** (betik `beklet_taze_etki.py`, `etki.json`):
+   ≤60dk filtresi633 plandan yalnız7'sini etkiler → K1141→139, K2 2,88→3,15,
+   K3 −0,1197→−0,1102, kapı **aynı: GEÇMEDİ3/7**, net keşif98,6→88,9 /
+   doğrulama −16,9→−15,3 → **etki zaten önemsiz**.
+3. **§17'ye düzeltme:** "≤1sa" etiketi hem birim (bar≠dakika) hem
+   gelecek-ok kontaminasyonu nedeniyle yanlıştı — §17.2'nin "ortak nokta"
+   bulgusu **betimleyici kalır, eylem temeli OLMAZ** (bu bölümle düzeltilir).
+4. **Kapanan kapı:** "ok-temelli giriş filtresi" ailesi — hem §13/§14 (olay
+   sayımları) hem §18 (ok-temelli zamanlama süzgeci) **ölçüldü ve kapatıldı**.
+   Giriş-zamanlaması paradigması için tek kalan D+B veri biriktirmektir.

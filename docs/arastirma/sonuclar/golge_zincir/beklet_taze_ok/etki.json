@@ -1,0 +1,173 @@
+{
+  "onkayit": "FAZ9 §18 (bceb2cb) — eşik60dk, as-of, dakika",
+  "esik_dk": 60.0,
+  "plan_n": 633,
+  "taze_n": 7,
+  "asof_ok_yok_n": 136,
+  "okuma": {
+    "kesif": {
+      "taze_n": 5,
+      "degil_n": 487,
+      "kar_taze_yuzde": 80.0,
+      "kar_degil_yuzde": 46.0,
+      "fark_pp": -34.0,
+      "net_taze": 9.7,
+      "net_degil": 88.9
+    },
+    "dogrulama": {
+      "taze_n": 2,
+      "degil_n": 139,
+      "kar_taze_yuzde": 0.0,
+      "kar_degil_yuzde": 37.4,
+      "fark_pp": 37.4,
+      "net_taze": -1.6,
+      "net_degil": -15.3
+    }
+  },
+  "sinyal_var": false,
+  "kapi_girdisi_filtresiz": {
+    "K1_dogrulama_uygun_n": 141,
+    "K2_kor_farki_puan": 2.88,
+    "K2_uygun_kosullu": 25.26,
+    "K2_kor_kosullu": 22.38,
+    "K3_dogrulama_beklenti": -0.1197,
+    "K4_g1_kapali_plan_orani": null,
+    "K5_ret_sonrasi_plan_ihlal": 0,
+    "K6_kesif_beklenti": 0.2004,
+    "K6_dogrulama_beklenti": -0.1197
+  },
+  "kapi_girdisi_filtreli": {
+    "K1_dogrulama_uygun_n": 139,
+    "K2_kor_farki_puan": 3.15,
+    "K2_uygun_kosullu": 25.53,
+    "K2_kor_kosullu": 22.38,
+    "K3_dogrulama_beklenti": -0.1102,
+    "K4_g1_kapali_plan_orani": null,
+    "K5_ret_sonrasi_plan_ihlal": 0,
+    "K6_kesif_beklenti": 0.1825,
+    "K6_dogrulama_beklenti": -0.1102
+  },
+  "karar_filtresiz": {
+    "karar": "GEÇMEDİ",
+    "gecen": 3,
+    "toplam_esik": 7,
+    "esikler": [
+      {
+        "kod": "K1",
+        "esik": ">= 50",
+        "aciklama": "doğrulamada UYGUN plan n",
+        "deger": 141,
+        "gecti": true
+      },
+      {
+        "kod": "K2",
+        "esik": ">= 5.0",
+        "aciklama": "UYGUN − kör koşullu hedef (puan)",
+        "deger": 2.88,
+        "gecti": false
+      },
+      {
+        "kod": "K3",
+        "esik": "> 0.0",
+        "aciklama": "doğrulama beklentisi (maliyet 0)",
+        "deger": -0.1197,
+        "gecti": false
+      },
+      {
+        "kod": "K4",
+        "esik": "<= 5.0",
+        "aciklama": "G1 kapalıyken plan oranı (%)",
+        "deger": null,
+        "gecti": false
+      },
+      {
+        "kod": "K5",
+        "esik": "== 0",
+        "aciklama": "RET sonrası plan ihlali",
+        "deger": 0,
+        "gecti": true
+      },
+      {
+        "kod": "K6a",
+        "esik": "> 0.0",
+        "aciklama": "keşif beklentisi",
+        "deger": 0.2004,
+        "gecti": true
+      },
+      {
+        "kod": "K6b",
+        "esik": "> 0.0",
+        "aciklama": "doğrulama beklentisi",
+        "deger": -0.1197,
+        "gecti": false
+      }
+    ],
+    "not": "Kanıt birikimi; canlıya bağlantı yok (kırmızı çizgi 8). Eşikler koşumdan ÖNCE plan belgesinde sabitlendi."
+  },
+  "karar_filtreli": {
+    "karar": "GEÇMEDİ",
+    "gecen": 3,
+    "toplam_esik": 7,
+    "esikler": [
+      {
+        "kod": "K1",
+        "esik": ">= 50",
+        "aciklama": "doğrulamada UYGUN plan n",
+        "deger": 139,
+        "gecti": true
+      },
+      {
+        "kod": "K2",
+        "esik": ">= 5.0",
+        "aciklama": "UYGUN − kör koşullu hedef (puan)",
+        "deger": 3.15,
+        "gecti": false
+      },
+      {
+        "kod": "K3",
+        "esik": "> 0.0",
+        "aciklama": "doğrulama beklentisi (maliyet 0)",
+        "deger": -0.1102,
+        "gecti": false
+      },
+      {
+        "kod": "K4",
+        "esik": "<= 5.0",
+        "aciklama": "G1 kapalıyken plan oranı (%)",
+        "deger": null,
+        "gecti": false
+      },
+      {
+        "kod": "K5",
+        "esik": "== 0",
+        "aciklama": "RET sonrası plan ihlali",
+        "deger": 0,
+        "gecti": true
+      },
+      {
+        "kod": "K6a",
+        "esik": "> 0.0",
+        "aciklama": "keşif beklentisi",
+        "deger": 0.1825,
+        "gecti": true
+      },
+      {
+        "kod": "K6b",
+        "esik": "> 0.0",
+        "aciklama": "doğrulama beklentisi",
+        "deger": -0.1102,
+        "gecti": false
+      }
+    ],
+    "not": "Kanıt birikimi; canlıya bağlantı yok (kırmızı çizgi 8). Eşikler koşumdan ÖNCE plan belgesinde sabitlendi."
+  },
+  "k4_not": "K4 defter kaynaklı; zincir koşusunda doğrulanacak. K5 filtreyle0 kalır.",
+  "net_kesif": {
+    "filtresiz": 98.6,
+    "filtreli": 88.9
+  },
+  "net_dogrulama": {
+    "filtresiz": -16.9,
+    "filtreli": -15.3
+  }
+}
