@@ -1,0 +1,233 @@
+{
+  "zarar": {
+    "n": 318,
+    "kar_kapanis": 129,
+    "donus": 95,
+    "signals": {
+      "vp_dusuk": {
+        "known": 79,
+        "true": 27,
+        "pct_known": 34.177215189873415,
+        "pct_all": 28.421052631578945
+      },
+      "vp_yari": {
+        "known": 78,
+        "true": 34,
+        "pct_known": 43.58974358974359,
+        "pct_all": 35.78947368421053
+      },
+      "vp_ters": {
+        "known": 79,
+        "true": 11,
+        "pct_known": 13.924050632911392,
+        "pct_all": 11.578947368421053
+      },
+      "blok_temas": {
+        "known": 95,
+        "true": 10,
+        "pct_known": 10.526315789473683,
+        "pct_all": 10.526315789473683
+      },
+      "blok_yakin": {
+        "known": 95,
+        "true": 7,
+        "pct_known": 7.368421052631578,
+        "pct_all": 7.368421052631578
+      },
+      "stabil_temas": {
+        "known": 95,
+        "true": 16,
+        "pct_known": 16.842105263157894,
+        "pct_all": 16.842105263157894
+      },
+      "ms_ters_olay": {
+        "known": 95,
+        "true": 0,
+        "pct_known": 0.0,
+        "pct_all": 0.0
+      },
+      "ms_ters_durum": {
+        "known": 95,
+        "true": 0,
+        "pct_known": 0.0,
+        "pct_all": 0.0
+      },
+      "frm_derin": {
+        "known": 95,
+        "true": 0,
+        "pct_known": 0.0,
+        "pct_all": 0.0
+      }
+    },
+    "vp_sinif": {
+      "NEUTRAL": 90,
+      "VERY_HIGH_EFFORT_WEAK_RESULT": 4,
+      "RISING_EFFORT_STRONG_RESULT": 1
+    },
+    "frm_state": {
+      "RETEST_BEKLENIYOR": 47,
+      "RETEST_BASARILI": 21,
+      "RETEST_EDILIYOR": 15,
+      "FORMASYON_TAMAMLANDI": 3,
+      "KIRILIM_TEYIT_ALAMADI": 2,
+      "KIRILIM_ADAYI": 2,
+      "KIRILIM_DENEMESI": 2,
+      "FORMASYON_TANIMLANDI": 1,
+      "KIRILIM_HAZIRLIGI": 1,
+      "KIRILIM_TEYITLI": 1
+    }
+  },
+  "stop_zarar": {
+    "n": 283,
+    "kar_kapanis": 112,
+    "donus": 79,
+    "signals": {
+      "vp_dusuk": {
+        "known": 64,
+        "true": 19,
+        "pct_known": 29.6875,
+        "pct_all": 24.050632911392405
+      },
+      "vp_yari": {
+        "known": 63,
+        "true": 21,
+        "pct_known": 33.33333333333333,
+        "pct_all": 26.582278481012654
+      },
+      "vp_ters": {
+        "known": 64,
+        "true": 7,
+        "pct_known": 10.9375,
+        "pct_all": 8.860759493670885
+      },
+      "blok_temas": {
+        "known": 79,
+        "true": 9,
+        "pct_known": 11.39240506329114,
+        "pct_all": 11.39240506329114
+      },
+      "blok_yakin": {
+        "known": 79,
+        "true": 6,
+        "pct_known": 7.59493670886076,
+        "pct_all": 7.59493670886076
+      },
+      "stabil_temas": {
+        "known": 79,
+        "true": 13,
+        "pct_known": 16.455696202531644,
+        "pct_all": 16.455696202531644
+      },
+      "ms_ters_olay": {
+        "known": 79,
+        "true": 0,
+        "pct_known": 0.0,
+        "pct_all": 0.0
+      },
+      "ms_ters_durum": {
+        "known": 79,
+        "true": 0,
+        "pct_known": 0.0,
+        "pct_all": 0.0
+      },
+      "frm_derin": {
+        "known": 79,
+        "true": 0,
+        "pct_known": 0.0,
+        "pct_all": 0.0
+      }
+    },
+    "vp_sinif": {
+      "NEUTRAL": 74,
+      "VERY_HIGH_EFFORT_WEAK_RESULT": 4,
+      "RISING_EFFORT_STRONG_RESULT": 1
+    },
+    "frm_state": {
+      "RETEST_BEKLENIYOR": 37,
+      "RETEST_BASARILI": 18,
+      "RETEST_EDILIYOR": 15,
+      "FORMASYON_TAMAMLANDI": 3,
+      "KIRILIM_TEYIT_ALAMADI": 2,
+      "KIRILIM_ADAYI": 2,
+      "KIRILIM_DENEMESI": 1,
+      "KIRILIM_TEYITLI": 1
+    }
+  },
+  "kar": {
+    "n": 330,
+    "kar_kapanis": 233,
+    "donus": 128,
+    "signals": {
+      "vp_dusuk": {
+        "known": 106,
+        "true": 53,
+        "pct_known": 50.0,
+        "pct_all": 41.40625
+      },
+      "vp_yari": {
+        "known": 102,
+        "true": 62,
+        "pct_known": 60.78431372549019,
+        "pct_all": 48.4375
+      },
+      "vp_ters": {
+        "known": 106,
+        "true": 5,
+        "pct_known": 4.716981132075472,
+        "pct_all": 3.90625
+      },
+      "blok_temas": {
+        "known": 128,
+        "true": 25,
+        "pct_known": 19.53125,
+        "pct_all": 19.53125
+      },
+      "blok_yakin": {
+        "known": 128,
+        "true": 17,
+        "pct_known": 13.28125,
+        "pct_all": 13.28125
+      },
+      "stabil_temas": {
+        "known": 128,
+        "true": 10,
+        "pct_known": 7.8125,
+        "pct_all": 7.8125
+      },
+      "ms_ters_olay": {
+        "known": 128,
+        "true": 0,
+        "pct_known": 0.0,
+        "pct_all": 0.0
+      },
+      "ms_ters_durum": {
+        "known": 128,
+        "true": 0,
+        "pct_known": 0.0,
+        "pct_all": 0.0
+      },
+      "frm_derin": {
+        "known": 128,
+        "true": 0,
+        "pct_known": 0.0,
+        "pct_all": 0.0
+      }
+    },
+    "vp_sinif": {
+      "NEUTRAL": 125,
+      "VERY_HIGH_EFFORT_WEAK_RESULT": 2,
+      "RISING_EFFORT_STRONG_RESULT": 1
+    },
+    "frm_state": {
+      "RETEST_BEKLENIYOR": 83,
+      "RETEST_BASARILI": 20,
+      "FORMASYON_TAMAMLANDI": 12,
+      "FORMASYON_TANIMLANDI": 4,
+      "KIRILIM_DENEMESI": 3,
+      "KIRILIM_TEYIT_ALAMADI": 2,
+      "KIRILIM_ADAYI": 2,
+      "FORMASYON_GECERSIZ": 1,
+      "RETEST_EDILIYOR": 1
+    }
+  }
+}
