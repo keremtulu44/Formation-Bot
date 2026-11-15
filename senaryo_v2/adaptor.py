@@ -11,10 +11,10 @@ Hizalanan katmanlar (her biri kendi ham motorunu hiç değiştirmeden çağırı
 
 from __future__ import annotations
 
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 import math
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 import pandas as pd
@@ -51,7 +51,14 @@ from patterns.lifecycle import (
 from patterns.mathutil import f_line_price
 from patterns.pole import PoleInfo, find_pole
 
-from .modeller import BOS_TAZELIK_PENCERE, BarDurum, BlokBand, SeriVerisi
+from .modeller import (
+    BOS_TAZELIK_PENCERE,
+    KOPUKLUK_ESIK_ORAN,
+    KOPUKLUK_KARANTINA_BAR,
+    BarDurum,
+    BlokBand,
+    SeriVerisi,
+)
 
 _FRM_KIRILIM_VE_SONRASI = frozenset({
     ST_BREAK_ATTEMPT,
@@ -79,6 +86,7 @@ class GunlukBaglam:
     atr_1d: np.ndarray
     support_timeline: tuple[Any, ...]
     resistance_history: Any
+    kopukluk_barlari: tuple[int, ...] = ()   # günlük seride açılışı kopuk bar indeksleri
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,6 +226,79 @@ def _enum_str(val: Any) -> str:
     return str(getattr(val, "value", val))
 
 
+_MS_KAPSAM_KISA = {"EXTERNAL": "EXT", "INTERNAL": "INT"}
+
+
+def _ms_olay_etiketleri(events: Any) -> tuple[str, ...]:
+    """MarketStructureEngine olay adlarını `EXT:BOS:+1` biçimli süreç etiketine çevirir.
+
+    Motor yapısal olayı `SCOPE:EVENT_TIP:yon:kimlik` adıyla yayınlar; swing çekirdeğinin
+    kendi (EVENT_ ile başlamayan) kayıtları yapısal olay değildir ve atlanır.
+    """
+    etiketler: list[str] = []
+    for ev in events or ():
+        parca = str(ev).split(":")
+        if len(parca) < 3 or not parca[1].startswith("EVENT_"):
+            continue
+        kapsam = _MS_KAPSAM_KISA.get(parca[0])
+        if kapsam is None:
+            continue
+        try:
+            yon = int(parca[2])
+        except ValueError:
+            continue
+        if yon not in (-1, 1):
+            continue
+        etiketler.append(f"{kapsam}:{parca[1][len('EVENT_'):]}:{yon:+d}")
+    return tuple(etiketler)
+
+
+def kopukluk_barlarini_bul(opens: Any, closes: Any, *, esik_oran: float = KOPUKLUK_ESIK_ORAN) -> tuple[int, ...]:
+    """Açılışı önceki kapanıştan `esik_oran`dan fazla kopan bar indekslerini döndürür.
+
+    Nedensel: bar i'nin bayrağı yalnız `close[i-1]` ve `open[i]` ile hesaplanır.
+    """
+    bulunan: list[int] = []
+    for i in range(1, len(opens)):
+        onceki = float(closes[i - 1])
+        acilis = float(opens[i])
+        if not (math.isfinite(onceki) and math.isfinite(acilis)) or onceki <= 0 or acilis <= 0:
+            continue
+        if abs(acilis / onceki - 1.0) > esik_oran:
+            bulunan.append(i)
+    return tuple(bulunan)
+
+
+def karantina_araliklari(
+    close_times: Sequence[Any],
+    kendi_kopukluklar: Sequence[int],
+    gunluk_zamanlar: Sequence[Any],
+    gunluk_kopukluklar: Sequence[int],
+    *,
+    geri_bar: int = KOPUKLUK_KARANTINA_BAR,
+) -> tuple[tuple[int, ...], tuple[tuple[int, int], ...]]:
+    """Bu TF'nin bar ekseninde (görünür kopukluk barları, kirli bağlam aralıkları) döndürür.
+
+    Bu TF'nin kendi kopuklukları ATR/formasyon/MS'yi `geri_bar` bar boyunca kirletir. Günlük
+    serinin kopuklukları (Stabil S/R ve ATR_1d günlükten gelir) Stabil bağlamını `geri_bar`
+    GÜNLÜK bar boyunca kirletir; bu aralık bar kapanış zamanlarıyla bu TF'nin eksenine taşınır.
+    Arşivde günlük ve saatlik dosyalar aynı kurumsal işlemi farklı günlerde taşıyabildiği için
+    iki kaynak ayrı ayrı izlenir. Nedensel: bir kopukluk yalnız kendisinden SONRAKİ barları kirletir.
+    """
+    n = len(close_times)
+    gorunur: set[int] = set(int(x) for x in kendi_kopukluklar)
+    kirli: list[tuple[int, int]] = [(int(x), min(n - 1, int(x) + geri_bar)) for x in kendi_kopukluklar]
+    for g in gunluk_kopukluklar:
+        j_bas = bisect_left(close_times, gunluk_zamanlar[g])
+        if j_bas >= n:
+            continue
+        g_bit = g + geri_bar
+        j_bit = n - 1 if g_bit >= len(gunluk_zamanlar) else min(n - 1, bisect_left(close_times, gunluk_zamanlar[g_bit]))
+        gorunur.add(j_bas)
+        kirli.append((j_bas, max(j_bas, j_bit)))
+    return tuple(sorted(gorunur)), tuple(sorted(set(kirli)))
+
+
 def hazirla_gunluk_baglam(
     sembol: str,
     daily_raw: pd.DataFrame | None = None,
@@ -265,6 +346,7 @@ def hazirla_gunluk_baglam(
         atr_1d=atr_1d,
         support_timeline=support_tl,
         resistance_history=res_hist,
+        kopukluk_barlari=kopukluk_barlarini_bul(d_clean["open"].to_numpy(dtype=float), d_closes),
     )
 
 
@@ -382,6 +464,13 @@ def seriyi_hazirla(
     ms_unbroken_lows: list[tuple[float, ...]] = [() for _ in range(n)]
     ms_up_broken_lvls: list[tuple[float, ...]] = [() for _ in range(n)]
     ms_dn_broken_lvls: list[tuple[float, ...]] = [() for _ in range(n)]
+    ms_olaylar: list[tuple[str, ...]] = [() for _ in range(n)]
+    ms_int_state = ["STATE_NEUTRAL"] * n
+    ms_int_dir = [0] * n
+    ms_ext_aday_dir = [0] * n
+    ms_int_aday_dir = [0] * n
+    ms_int_prot_high: list[float | None] = [None] * n
+    ms_int_prot_low: list[float | None] = [None] * n
 
     ohlcv_records = target_clean[["timestamp", "open", "high", "low", "close", "volume"]].to_dict("records")
 
@@ -398,6 +487,7 @@ def seriyi_hazirla(
 
         for i, row in enumerate(ohlcv_records):
             res = ms.update(row)
+            ms_olaylar[i] = _ms_olay_etiketleri(res.events if res is not None else ())
             has_ext_bos = any(
                 ev.startswith("EXTERNAL:EVENT_BOS:") or ev.startswith("EXTERNAL:EVENT_CHOCH:")
                 for ev in (res.events if res is not None else ())
@@ -459,6 +549,19 @@ def seriyi_hazirla(
             ms_prot_low[i] = float(pl_v) if pl_v is not None else None
             ms_weak_high[i] = float(wh_v) if wh_v is not None else None
             ms_weak_low[i] = float(wl_v) if wl_v is not None else None
+
+            # İşlem-içi izleme için iç yapı + onay bekleyen kırılım adayları (aynı as-of an).
+            ictx = ms.internal_context
+            ms_int_state[i] = str(ictx.state)
+            ms_int_dir[i] = int(ictx.direction)
+            iph_v = lvls.get("internal_protected_high")
+            ipl_v = lvls.get("internal_protected_low")
+            ms_int_prot_high[i] = float(iph_v) if iph_v is not None else None
+            ms_int_prot_low[i] = float(ipl_v) if ipl_v is not None else None
+            ext_aday = ms.external_break_candidate
+            int_aday = ms.internal_break_candidate
+            ms_ext_aday_dir[i] = int(ext_aday.direction) if getattr(ext_aday, "valid", False) else 0
+            ms_int_aday_dir[i] = int(int_aday.direction) if getattr(int_aday, "valid", False) else 0
 
             for s in reversed(swings):
                 if not s.valid or s.broken or s.price is None:
@@ -581,6 +684,13 @@ def seriyi_hazirla(
             blok_bear_at = [tuple(lst) for lst in bear_lists]
         except Exception:
             blok_hatali = True
+
+    # 7. Veri sürekliliği (düzeltilmemiş kurumsal işlem / durdurma sonrası açılış kopuklukları).
+    kopukluk_idx = kopukluk_barlarini_bul(opens, closes)
+    kopukluk_kume = frozenset(kopukluk_idx)
+    gorunur_barlar, kirli_araliklar = karantina_araliklari(
+        close_times, kopukluk_idx, baglam.daily_close_times, baglam.kopukluk_barlari
+    )
 
     # Birleştirme: bar 0..n-1
     barlar: list[BarDurum] = []
@@ -731,6 +841,14 @@ def seriyi_hazirla(
                 vp_direction=vp_dir[i],
                 frm_width_atr=f_w_atr,
                 frm_contraction=f_con,
+                ms_olaylar=ms_olaylar[i],
+                ms_int_state=ms_int_state[i],
+                ms_int_dir=ms_int_dir[i],
+                ms_ext_aday_dir=ms_ext_aday_dir[i],
+                ms_int_aday_dir=ms_int_aday_dir[i],
+                ms_int_protected_high=ms_int_prot_high[i],
+                ms_int_protected_low=ms_int_prot_low[i],
+                kopukluk=(i in kopukluk_kume),
             )
         )
 
@@ -743,4 +861,7 @@ def seriyi_hazirla(
         ms_hatali=ms_hatali,
         blok_hatali=blok_hatali,
         vp_hatali=vp_hatali,
+        kopukluk_barlari=kopukluk_idx,
+        kopukluk_gorunur_barlari=gorunur_barlar,
+        kirli_araliklar=kirli_araliklar,
     )

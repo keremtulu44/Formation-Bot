@@ -14,11 +14,13 @@ import pandas as pd
 from senaryo_v2.adaptor import seriyi_hazirla, hazirla_gunluk_baglam
 from senaryo_v2.yaris import _tek_yarisi_simule_et
 
-ROOT = Path('docs/arastirma/sonuclar/golge_v2')
+# Yollar depo köküne göredir: betik hangi dizinden çağrılırsa çağrılsın aynı dosyaları okur/yazar.
+KOK = Path(__file__).resolve().parents[1]
+ROOT = KOK / 'docs/arastirma/sonuclar/golge_v2'
 OUT = ROOT / 'iptal_olcum'
 CACHE_KEY = hashlib.sha256(b''.join(Path(p).read_bytes() for p in (
-    __file__, 'senaryo_v2/yaris.py', 'senaryo_v2/adaptor.py',
-    'senaryo_v2/modeller.py', str(ROOT/'mod0_baz.csv.gz')))).hexdigest()[:16]
+    __file__, KOK/'senaryo_v2/yaris.py', KOK/'senaryo_v2/surec.py', KOK/'senaryo_v2/adaptor.py',
+    KOK/'senaryo_v2/modeller.py', ROOT/'mod0_baz.csv.gz'))).hexdigest()[:16]
 PARTS = OUT / 'parca' / CACHE_KEY
 CASES = {'baz10': (10,False,False), 'duvar10': (10,True,False),
          'baski10': (10,False,True), 'birlesik10': (10,True,True),
@@ -58,6 +60,8 @@ def main():
     parser=argparse.ArgumentParser(); parser.add_argument('--workers',type=int,default=2); args=parser.parse_args()
     PARTS.mkdir(parents=True,exist_ok=True)
     data=pd.read_csv(ROOT/'mod0_baz.csv.gz')
+    # Bilerek veri karantinası UYGULANMAZ: bu ölçüm karantinadan önceki D7 kümesinde yapıldı ve
+    # RAPOR.md o kümeyi anlatır. Temiz kümedeki güncel ölçüm: research/golge_v2_surec_olcum.py.
     data=data[data.tf.isin(['4h','1d']) & data.kalite_katmani.eq('A_ARTI') & ~data.sansurlu].copy()
     jobs=[(str(symbol),g.to_dict('records')) for symbol,g in data.groupby('sembol')]
     with concurrent.futures.ProcessPoolExecutor(max_workers=args.workers) as pool:

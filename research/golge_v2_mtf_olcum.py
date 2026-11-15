@@ -11,8 +11,10 @@ from domain_engines.market_structure import MarketStructureEngine, MarketStructu
 from research.arsiv import tf_frame
 from senaryo_v2.mtf_yonetim import Snapshot, ManagementBar, ManagementConfig, simulate_management
 
-ROOT=Path('docs/arastirma/sonuclar/golge_v2'); OUT=ROOT/'mtf_olcum'
-KEY=hashlib.sha256(b''.join(Path(p).read_bytes() for p in [__file__,'senaryo_v2/mtf_yonetim.py',str(ROOT/'mod0_baz.csv.gz')])).hexdigest()[:12]
+# Yollar depo köküne göredir: betik hangi dizinden çağrılırsa çağrılsın aynı dosyaları okur/yazar.
+KOK=Path(__file__).resolve().parents[1]
+ROOT=KOK/'docs/arastirma/sonuclar/golge_v2'; OUT=ROOT/'mtf_olcum'
+KEY=hashlib.sha256(b''.join(Path(p).read_bytes() for p in [__file__,KOK/'senaryo_v2/mtf_yonetim.py',ROOT/'mod0_baz.csv.gz'])).hexdigest()[:12]
 PART=OUT/'parca'/KEY
 
 def configs():
@@ -23,6 +25,12 @@ def configs():
         name=f'{two}_{four}_{action}_{"yarim" if half else "hemen"}'
         result[name]=ManagementConfig(two_mode=two,four_mode=four,mtf_action=action,activate_after_half_r=half)
         result[name+'_kar1_025']=ManagementConfig(two_mode=two,four_mode=four,mtf_action=action,activate_after_half_r=half,protect_trigger_r=1,protect_lock_r=.25)
+    # Not (2026-11-14): `four_mode='state'` kollarında 4s yapısal yönü de aynı-gün / 4 saat tazeliği
+    # ister; yani her sabah ilk 4s mumu kapanana kadar görünmez. Sekiz temel 4s-durum kolu
+    # `four_state_kalici=True` ile bir kez yeniden koşuldu: 601 işlemin hepsinde sonuç (net, çıkış
+    # nedeni, çıkış barı, sinyal sayısı) kalıcı olmayan eşiyle birebir aynı çıktı. Yani bu kolların
+    # sessizliği tazelik kuralından kaynaklanmıyor (olası neden: 4s dış yönü ufuk içinde nadiren
+    # ters dönüyor; ayrıca ölçülmedi). Sonuç özdeş olduğu için kalıcı kollar listeye eklenmedi.
     return result
 
 CASES=configs()
@@ -92,6 +100,8 @@ def worker(job):
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--workers',type=int,default=2);a=p.parse_args();PART.mkdir(parents=True,exist_ok=True)
+    # Bilerek veri karantinası UYGULANMAZ: bu ölçüm karantinadan önceki D7 kümesinde yapıldı ve
+    # RAPOR.md o kümeyi anlatır. Temiz kümedeki güncel ölçüm: research/golge_v2_surec_olcum.py.
     d=pd.read_csv(ROOT/'mod0_baz.csv.gz');d=d[d.tf.isin(['4h','1d']) & d.kalite_katmani.eq('A_ARTI') & ~d.sansurlu]
     jobs=[(s,g.to_dict('records')) for s,g in d.groupby('sembol')]
     with concurrent.futures.ProcessPoolExecutor(max_workers=a.workers) as pool:

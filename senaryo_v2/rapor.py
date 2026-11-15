@@ -222,3 +222,158 @@ def tez_iptali_karsilastir(df: pd.DataFrame) -> dict[str, Any]:
             ),
         }
     return out
+
+
+# ---------------------------------------------------------------------------
+# Küme tanımına duyarlılık + işlem-içi süreç görünürlüğü
+# ---------------------------------------------------------------------------
+ZAMAN_KUMELERI: tuple[str, ...] = ("sembol", "gun", "hafta", "ay")
+
+
+def zaman_kumesi_saglamligi(
+    df: pd.DataFrame,
+    deger_col: str,
+    *,
+    zaman_col: str = "bar_close_time",
+    sembol_col: str = "sembol",
+    B: int = 1000,
+) -> dict[str, Any]:
+    """Aynı ortalamanın %95 GA'sını dört küme tanımıyla verir: sembol, gün, hafta, ay.
+
+    Sembol kümesi, aynı gün birlikte hareket eden hisseleri bağımsız sayar. Piyasa geneli
+    bir günün/haftanın etkisi bütün sembollere birden yayıldığı için tek başına sembol
+    kümesi belirsizliği olduğundan dar gösterebilir; kabul kararı en dar değil en geniş
+    aralığa dayanmalıdır. `en_kotu_alt` dört alt sınırın en küçüğüdür.
+
+    Tek kümeli bir tanım belirsizlik ölçemez: aralığı `None` kalır ve o durumda
+    `hepsinde_pozitif` False döner (ölçülemeyen dayanıklılık, dayanıklılık sayılmaz).
+    """
+    bos = {"n": 0, "ort": None, "kumeler": {}, "en_kotu_alt": None, "hepsinde_pozitif": False}
+    if df.empty or deger_col not in df.columns or zaman_col not in df.columns:
+        return bos
+    sub = df[[sembol_col, zaman_col, deger_col]].dropna()
+    if sub.empty:
+        return bos
+    gun = sub[zaman_col].astype(str).str[:10]
+    tarih = pd.to_datetime(gun, errors="coerce")
+    iso = tarih.dt.isocalendar()
+    calisma = pd.DataFrame(
+        {
+            "sembol": sub[sembol_col].to_numpy(),
+            "gun": gun.to_numpy(),
+            "hafta": (iso["year"].astype(str) + "-H" + iso["week"].astype(str).str.zfill(2)).to_numpy(),
+            "ay": gun.str[:7].to_numpy(),
+            deger_col: sub[deger_col].to_numpy(dtype=float),
+        }
+    )
+    kumeler: dict[str, Any] = {}
+    for kume in ZAMAN_KUMELERI:
+        oz = kume_bootstrap_ozet(calisma, deger_col, sembol_col=kume, B=B)
+        olculebilir = oz["sembol_n"] >= 2
+        kumeler[kume] = {
+            "kume_n": oz["sembol_n"],
+            "ci95_alt": oz["ci95_alt"] if olculebilir else None,
+            "ci95_ust": oz["ci95_ust"] if olculebilir else None,
+        }
+    altlar = [k["ci95_alt"] for k in kumeler.values() if k["ci95_alt"] is not None]
+    return {
+        "n": int(len(calisma)),
+        "ort": round(float(calisma[deger_col].mean()), 4),
+        "kumeler": kumeler,
+        "en_kotu_alt": min(altlar) if altlar else None,
+        "hepsinde_pozitif": len(altlar) == len(ZAMAN_KUMELERI) and min(altlar) > 0,
+    }
+
+
+def surec_izini_coz(iz: Any) -> list[tuple[int, tuple[str, ...]]]:
+    """`"1:FRM_TEYIT,VP_LEHTE_BASKI|3:SEVIYE_ICI"` -> [(1, (...)), (3, (...))]."""
+    if not isinstance(iz, str) or not iz:
+        return []
+    cozulen: list[tuple[int, tuple[str, ...]]] = []
+    for parca in iz.split("|"):
+        k, _, etiketler = parca.partition(":")
+        if etiketler:
+            cozulen.append((int(k), tuple(etiketler.split(","))))
+    return cozulen
+
+
+def surec_ozeti_uret(
+    df: pd.DataFrame,
+    *,
+    deger_col: str = "net15_20_r",
+    neden_col: str = "neden_20_intra_iptal",
+) -> dict[str, Any]:
+    """Birincil yarışın işlem-içi süreç kayıtlarından BETİMLEYİCİ özet üretir.
+
+    Bu tablo "işlem açıkken ne görüldü" sorusunu yanıtlar; bir çıkış kuralının değerini
+    ÖLÇMEZ. Etiketlerin nihai sonuçla ilişkisi sonuç-koşulludur (erken stop olan işlem
+    etiketi görmeye fırsat bulamaz); kural değeri yalnız eşleşmiş replay ile ölçülür
+    (`research/golge_v2_surec_olcum.py`).
+    """
+    if df.empty or "surec_gozlem_n" not in df.columns:
+        return {}
+    sub = df[df["surec_gozlem_n"].notna() & df[deger_col].notna()].copy()
+    if sub.empty:
+        return {}
+    n = int(len(sub))
+    gozlem = sub["surec_gozlem_n"].astype(float)
+    stoplar = sub[sub[neden_col].astype(str).str.startswith("STOP")]
+
+    cikis: list[dict[str, Any]] = []
+    for neden, grp in sub.groupby(neden_col, sort=True):
+        cikis.append(
+            {
+                "neden": str(neden),
+                "n": int(len(grp)),
+                "ort_net_r": round(float(grp[deger_col].mean()), 4),
+                "ort_gozlem": round(float(grp["surec_gozlem_n"].mean()), 2),
+                "ort_mfe_r": round(float(grp["surec_mfe_r"].mean()), 4),
+                "ort_mae_r": round(float(grp["surec_mae_r"].mean()), 4),
+            }
+        )
+
+    tez: list[dict[str, Any]] = []
+    for durum, grp in sub.groupby(sub["surec_tez_son"].fillna("").replace("", "GOZLEM_YOK"), sort=True):
+        tez.append(
+            {
+                "tez_son": str(durum),
+                "n": int(len(grp)),
+                "pay": round(len(grp) / n, 4),
+                "ort_net_r": round(float(grp[deger_col].mean()), 4),
+                "stop_orani": round(float(grp[neden_col].astype(str).str.startswith("STOP").mean()), 4),
+            }
+        )
+
+    sayac: dict[str, int] = {}
+    ilk_bar: dict[str, list[int]] = {}
+    for iz in sub["surec_izi"]:
+        gorulen: dict[str, int] = {}
+        for k, etiketler in surec_izini_coz(iz):
+            for e in etiketler:
+                gorulen.setdefault(e, k)
+        for e, k in gorulen.items():
+            sayac[e] = sayac.get(e, 0) + 1
+            ilk_bar.setdefault(e, []).append(k)
+    etiketler_ozet = [
+        {
+            "etiket": e,
+            "islem_n": c,
+            "pay": round(c / n, 4),
+            "medyan_ilk_bar": float(np.median(ilk_bar[e])),
+        }
+        for e, c in sorted(sayac.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
+
+    return {
+        "n": n,
+        "ort_gozlem": round(float(gozlem.mean()), 2),
+        "gozlemsiz_n": int((gozlem == 0).sum()),
+        "gozlemsiz_pay": round(float((gozlem == 0).mean()), 4),
+        "stop_n": int(len(stoplar)),
+        # Stop olan işlemler stoptan ÖNCE ne kadar kâr gördü? (stopu taşıma fikrinin tavanı)
+        "stop_once_yarim_r_gordu": round(float((stoplar["surec_mfe_r"] >= 0.5).mean()), 4) if len(stoplar) else None,
+        "stop_once_bir_r_gordu": round(float((stoplar["surec_mfe_r"] >= 1.0).mean()), 4) if len(stoplar) else None,
+        "cikis_nedeni": cikis,
+        "tez_son": tez,
+        "etiketler": etiketler_ozet,
+    }

@@ -46,6 +46,21 @@ MAX_BEKLEME_LIMIT: int = 3
 FREN_ARDISIK_STOP: int = 3
 FREN_SOGUMA_BAR: int = 5
 
+# Veri sürekliliği karantinası (düzeltilmemiş bölünme / bedelli-bedelsiz / temettü
+# veya durdurma sonrası açılış). BIST günlük fiyat marjı ±%10'dur; ardışık iki bar
+# arasında bunu aşan bir açılış boşluğu normal işlemle oluşamaz. Böyle bir barı
+# gören ATR/formasyon/MS durumu ve o barın üstünden taşınan işlem ölçülemez.
+KOPUKLUK_ESIK_ORAN: float = 0.115
+# Wilder ATR(14) şoku ~60 barda %3'ün altına iner; formasyon/MS pivotları da aynı
+# pencerede yenilenir. Kopukluktan sonraki bu kadar bar "kirli bağlam" sayılır.
+KOPUKLUK_KARANTINA_BAR: int = 60
+
+# Market Structure motoru bir korunan seviyeyi "geçerli" diye bildirirken fiyat o seviyenin
+# bu kadar ATR ötesinde kapanmışsa motorun durumu fiyatla çelişiyordur (bayat). Ardışık
+# taban/tavan barlarında ya da kopukluk sonrasında swing oluşmadığı için kırılım olayı
+# üretilemeyince görülür ve yüzlerce bar sürebilir. Karar girdisi DEĞİL; yalnız etiket.
+MS_BAYAT_ESIK_ATR: float = 1.0
+
 
 @dataclass(frozen=True, slots=True)
 class BlokBand:
@@ -153,6 +168,34 @@ class BarDurum:
     frm_width_atr: float | None = None
     frm_contraction: float | None = None
 
+    # Market Structure süreç alanları (işlem-içi izleme; hepsi bar i kapanışında as-of).
+    # ms_olaylar etiketi: "<EXT|INT>:<BOS|CHOCH|TRANSITION_FAIL|SWEEP|FALSE_BREAK>:<+1|-1>".
+    # Yön her zaman olayın İMA ETTİĞİ yöndür (tepe süpürmesi -1, dip süpürmesi +1,
+    # başarısız yukarı kırılım -1). Giriş kapıları yalnız EXTERNAL BOS/CHoCH okur;
+    # geri kalanı yalnız açık işlemin izlenmesi içindir.
+    ms_olaylar: tuple[str, ...] = ()
+    ms_int_state: str = "STATE_NEUTRAL"
+    ms_int_dir: int = 0
+    ms_ext_aday_dir: int = 0      # onay bekleyen (henüz BOS olmamış) dış kırılım adayı yönü
+    ms_int_aday_dir: int = 0      # onay bekleyen iç kırılım adayı yönü
+    ms_int_protected_high: float | None = None
+    ms_int_protected_low: float | None = None
+
+    # Veri sürekliliği: bu barın açılışı önceki kapanıştan KOPUKLUK_ESIK_ORAN'dan fazla kopuk.
+    kopukluk: bool = False
+
+    @property
+    def ms_dis_bayat(self) -> bool:
+        """Dış yapının korunan seviyesi kapanışın `MS_BAYAT_ESIK_ATR` ATR'den fazla gerisinde mi?
+
+        Doğruysa `ms_ext_state` (ve ondan türeyen `ms_yapi_uyumlu`) bu barda güvenilmezdir:
+        motor seviyeyi hâlâ koruyor sanıyor, fiyat çoktan ötesinde.
+        """
+        esik = MS_BAYAT_ESIK_ATR * self.atr_tf
+        if self.ms_protected_low is not None and self.close < self.ms_protected_low - esik:
+            return True
+        return self.ms_protected_high is not None and self.close > self.ms_protected_high + esik
+
 
 @dataclass(frozen=True, slots=True)
 class SeriVerisi:
@@ -166,6 +209,36 @@ class SeriVerisi:
     ms_hatali: bool = False
     blok_hatali: bool = False
     vp_hatali: bool = False
+    # Veri sürekliliği (karar girdisi DEĞİL; yalnız ölçüm kümesinden karantina etiketi):
+    kopukluk_barlari: tuple[int, ...] = ()            # bu TF'de açılışı kopuk bar indeksleri
+    kopukluk_gorunur_barlari: tuple[int, ...] = ()    # bu TF + günlük bağlam kopukluklarının göründüğü barlar
+    kirli_araliklar: tuple[tuple[int, int], ...] = () # as-of bağlamın kirli olduğu [bas, bit] bar aralıkları
+
+    @property
+    def domain_hatali(self) -> bool:
+        """Herhangi bir domain motoru hata verdiyse seri ölçüme alınmaz (fail-closed)."""
+        return bool(self.r_hatali or self.frm_hatali or self.ms_hatali or self.blok_hatali or self.vp_hatali)
+
+    def karantina_nedeni(self, bar_index: int, *, ileri_bar: int) -> str:
+        """Olay barı için veri karantinası etiketi ("" = temiz).
+
+        * `KOPUKLUK_GERI`  — olay barının as-of bağlamı (ATR, formasyon, MS, Stabil) bir
+          fiyat kopukluğunu hâlâ taşıyor.
+        * `KOPUKLUK_ILERI` — işlem penceresi (`bar_index` sonrası `ileri_bar` bar) içinde
+          bir kopukluk var; sonuç stratejiye değil kurumsal işleme/durdurmaya aittir.
+
+        Etiket işlemin nasıl bittiğine BAKMAZ (yalnız takvim konumuna bakar); böylece
+        karantina sonuca göre seçim yapmaz.
+        """
+        geri = any(bas <= bar_index <= bit for bas, bit in self.kirli_araliklar)
+        ileri = any(bar_index < x <= bar_index + ileri_bar for x in self.kopukluk_gorunur_barlari)
+        if geri and ileri:
+            return "KOPUKLUK_GERI+ILERI"
+        if geri:
+            return "KOPUKLUK_GERI"
+        if ileri:
+            return "KOPUKLUK_ILERI"
+        return ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,9 +374,16 @@ class YarisSonucuV2:
     pnl_yap_close_iptal_r: float | None
     neden_yap_close_iptal: str
 
-    # E. Saf H-bar sonrası MFE/MAE & kapanış getirisi (tez iptali kapalı)
+    # E. Saf H-bar sonrası MFE/MAE & kapanış getirisi (tez iptali kapalı).
+    # DİKKAT: bunlar stopsuz/hedefsiz TAM ufuk yoludur, çıkışta kesilmez; "işlem sırasında
+    # ne görüldü" sorusu için `surec.mfe_r` / `surec.mae_r` (çıkışa kadar) kullanılır.
     mfe_atr: float | None
     mae_atr: float | None
     kapanis_h_atr: float | None
     sansurlu: bool
     sonuc_meta: dict[str, Any] | None = None
+
+    # F. Birincil yarışın (2.0 ATR, intrabar, tez iptali açık) çıkış barı ve süreç özeti
+    bar_20_intra_iptal: int = 0           # dolumdan itibaren çıkış barı (dolum barında çıkış = 0)
+    risk_r_atr: float | None = None       # R paydası (ATR): Mod 0/1 gerçek risk, Mod 2 planlanan risk
+    surec: Any | None = None              # senaryo_v2.surec.SurecOzeti (işlem-içi izleme özeti)

@@ -115,3 +115,6 @@ docs/arastirma/sonuclar/**/golge_defter.jsonl*
 
 # Kök seviye gölge-zincir replay çıktıları (yeniden üretilebilir)
 /sonuclar/
+
+# Gölge v2 alt ölçümlerinin sembol bazlı ara önbelleği (yeniden üretilebilir; özet/CSV commit edilir)
+docs/arastirma/sonuclar/golge_v2/*/parca/

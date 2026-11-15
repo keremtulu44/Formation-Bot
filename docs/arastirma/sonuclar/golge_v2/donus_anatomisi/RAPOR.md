@@ -1,5 +1,7 @@
 # D7: Kâr gördükten sonra dönen işlemlerin domain anatomisi
 
+> **Not (2026-11-14).** Bu ölçüm veri karantinasından önceki 648 işlemlik D7 kümesindedir; bu işlemlerin 11'i sonradan düzeltilmemiş kurumsal işlem kopukluğu nedeniyle ana rapordan çıkarıldı (`../RAPOR_GOLGE_V2.md` §7). Aşağıdaki sayılar o kümeyi anlatır ve betik bilerek aynı kümeyi yeniden üretir. Karantina sonrası kümede, sonraki-açılış uygulamasıyla yapılan güncel işlem-içi ölçüm: `../surec_olcum/RAPOR.md`; özet: `docs/arastirma/GOLGE_V2_INCELEME_VE_SUREC_2026-11-14.md`.
+
 ## Soru ve yöntem
 
 D7'nin 648 işlemini, giriş/stop/hedef ve 10 bar ufku değişmeden inceledik. “Kâr gördü”: girişten sonra, **çıkış barından önce**, bir mumun yüksek/düşüğü en az +0,5 başlangıç riski (R) gördü. Ardından o mumdan sonraki ilk ters yönlü kapanış barını seçtik (long: önceki kapanışa göre düşüş; short: yükseliş). Bu nokta gerçekleştiğinde bilinebilir; sonradan bakılarak bulunmuş mutlak tepe değildir. Fiyat bu barda hâlâ kârda olabilir. Çıkış barı, stop/hedef ve diğer hareketlerin mum içi sırası bilinmediği için dışarıda bırakıldı.

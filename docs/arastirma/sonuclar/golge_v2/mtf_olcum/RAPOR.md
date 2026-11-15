@@ -1,5 +1,7 @@
 # D7 — işlem içi MTF ve kâr koruma karşılaştırması
 
+> **Not (2026-11-14).** Bu ölçüm veri karantinasından önceki 648 işlemlik D7 kümesindedir; bu işlemlerin 11'i sonradan düzeltilmemiş kurumsal işlem kopukluğu nedeniyle ana rapordan çıkarıldı (`../RAPOR_GOLGE_V2.md` §7). Aşağıdaki sayılar o kümeyi anlatır ve betik bilerek aynı kümeyi yeniden üretir. Karantina sonrası kümede, sonraki-açılış uygulamasıyla yapılan güncel işlem-içi ölçüm: `../surec_olcum/RAPOR.md`; özet: `docs/arastirma/GOLGE_V2_INCELEME_VE_SUREC_2026-11-14.md`.
+
 ## Sonuç
 
 Önceden belirlenen MTF ve kâr koruma varyantları 601 ortak işlemde kıyaslandı. Test edilen kâr koruma kuralları tüm örneklemde baz beklentisini artırmadı. İki fiyat teyidine dayalı MTF sinyalinden sonra başa başa koruma, tüm örneklemde +0,0076 R/işlem iyileşti; ancak ileri dönemde −0,0127 R/işlem geriledi, hisse-bloklu belirsizlik aralığı sıfırı içerdi. Bu nedenle iyileşme doğrulanmış değil ve canlıya önerilmiyor.

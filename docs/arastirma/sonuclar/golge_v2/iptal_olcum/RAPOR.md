@@ -1,5 +1,7 @@
 # D7 işlem-içi iptal ölçümü
 
+> **Not (2026-11-14).** Bu ölçüm veri karantinasından önceki 648 işlemlik D7 kümesindedir; bu işlemlerin 11'i sonradan düzeltilmemiş kurumsal işlem kopukluğu nedeniyle ana rapordan çıkarıldı (`../RAPOR_GOLGE_V2.md` §7). Aşağıdaki sayılar o kümeyi anlatır ve betik bilerek aynı kümeyi yeniden üretir. Karantina sonrası kümede, sonraki-açılış uygulamasıyla yapılan güncel işlem-içi ölçüm: `../surec_olcum/RAPOR.md`; özet: `docs/arastirma/GOLGE_V2_INCELEME_VE_SUREC_2026-11-14.md`.
+
 ## Kapsam ve yöntem
 
 Mevcut `mod0_baz.csv.gz` dosyasındaki 4s/günlük A_ARTI, sansürsüz 648 işlemin tamamı, aynı giriş, aynı stop ve **2,0 ATR hedef** ile tekrar oynatıldı. Bazın işlem başına getirisi önceki rapora en fazla 0,000068 R farkla uydu. Girişler aynı, barlar arşivden domain adaptörüyle yeniden kuruldu; tüm serilerde domain hatası sıfır. Mevcut senaryodaki ilk üç bar tez iptali korunur (bu örneklemde tetiklenmedi). İşlem maliyeti toplam %0,30, giriş ve çıkışta 15 baz puan. R, işlem başındaki stop mesafesi cinsinden getiridir.

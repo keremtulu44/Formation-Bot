@@ -10,7 +10,9 @@ import numpy as np
 import pandas as pd
 from senaryo_v2.adaptor import seriyi_hazirla, hazirla_gunluk_baglam
 
-ROOT=Path('docs/arastirma/sonuclar/golge_v2'); OUT=ROOT/'donus_anatomisi'
+# Yollar depo köküne göredir: betik hangi dizinden çağrılırsa çağrılsın aynı dosyaları okur/yazar.
+KOK=Path(__file__).resolve().parents[1]
+ROOT=KOK/'docs/arastirma/sonuclar/golge_v2'; OUT=ROOT/'donus_anatomisi'
 
 def work(job):
     sym, rows=job; result=[]; bag=hazirla_gunluk_baglam(sym)

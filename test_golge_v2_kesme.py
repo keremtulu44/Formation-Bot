@@ -9,8 +9,10 @@ import pytest
 
 from research.arsiv import tf_frame
 from senaryo_v2.adaptor import seriyi_hazirla
+from senaryo_v2.modeller import MAX_BEKLEME_LIMIT, UFUK_VARSAYILAN_BAR
 from senaryo_v2.olaylar import aday_olaylari_cikar
 from senaryo_v2.plan import plan_karti_olustur
+from senaryo_v2.yaris import yarisi_yurut
 
 
 @pytest.mark.parametrize("sembol,tf", [("AEFES", "4h"), ("AEFES", "1d"), ("THYAO", "4h"), ("THYAO", "1h")])
@@ -37,11 +39,31 @@ def test_gercek_arsivde_prefix_kesme_degismezligi(sembol: str, tf: str):
     olay_cut = list(aday_olaylari_cikar(seri_cut))
     assert olay_cut == olay_full
 
+    def _bar_olaylari(olaylar):
+        harita: dict[int, list] = {}
+        for o in olaylar:
+            harita.setdefault(o.bar_index, []).append(o)
+        return harita
+
+    bo_cut, bo_full = _bar_olaylari(olay_cut), _bar_olaylari(aday_olaylari_cikar(seri_full))
+    pencere = MAX_BEKLEME_LIMIT + UFUK_VARSAYILAN_BAR
+    yarisan = 0
     for o_cut, o_full in zip(olay_cut, olay_full):
         for mod in ("mod0", "mod1", "mod2"):
             p_cut = plan_karti_olustur(o_cut, seri_cut.barlar[o_cut.bar_index], mod=mod)
             p_full = plan_karti_olustur(o_full, seri_full.barlar[o_full.bar_index], mod=mod)
             assert p_cut == p_full
+            # Penceresi kesimden önce biten işlemde yarış ve işlem-içi süreç kaydı (gözlemler,
+            # tez yolu, çıkışa kadar MFE/MAE) kesimden sonraki veriden etkilenmemelidir.
+            if o_cut.bar_index + pencere < len(seri_cut.barlar):
+                s_cut = yarisi_yurut(seri_cut, o_cut, p_cut, bar_olaylari=bo_cut)
+                s_full = yarisi_yurut(seri_full, o_full, p_full, bar_olaylari=bo_full)
+                assert s_cut == s_full, f"{sembol}/{tf} {o_cut.olay_id} {mod} yaris/surec farkli!"
+                yarisan += 1
+    assert yarisan > 0
+
+    # Veri kopukluğu bayrağı da nedenseldir: kesik seride görülen kopukluklar tam seridekilerin önekidir.
+    assert seri_cut.kopukluk_barlari == tuple(i for i in seri_full.kopukluk_barlari if i < len(seri_cut.barlar))
 
 
 def test_ana_urun_ve_v1_izolasyon_temizligi():
