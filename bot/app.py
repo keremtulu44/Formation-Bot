@@ -504,6 +504,18 @@ def main_loop():
     while not _pkg._shutdown_requested:
         try:
             now = _pkg.datetime.now(ISTANBUL_TZ)
+            # --- CANLILIK / HEARTBEAT (periyodik) ---
+            # Heartbeat eskiden yalnız tarama içinde/ sonunda yazılıyordu;
+            # seans dışı uzun uykularda ve beklemelerde dosya saatlerce
+            # güncellenmediği için /health, deploy_check ve /render canlı
+            # süreci "uyuyor/bayat" sanıyordu. write_heartbeat içeride
+            # HEARTBEAT_MIN_ARALIK_SN ile kısılır; buradan her döngüde
+            # çağrılması ucuzdur ve gerçek kesinti ile boşta beklemeyi ayırır.
+            try:
+                _pkg.write_heartbeat(notifier=notifier)
+            except Exception as hb_hata:  # noqa: BLE001 - heartbeat ana döngüyü düşürmesin
+                _pkg.logger.debug("Periyodik heartbeat yazılamadı: %s", type(hb_hata).__name__)
+
             # Durable delivery is not tied to the next candle or market hours.
             # Media failures must also recover after the closing scan/restart.
             try:

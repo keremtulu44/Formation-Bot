@@ -179,6 +179,24 @@ def _saglik_ozeti() -> dict:
     else:
         esik_sn = 259200
     yas = _pkg._heartbeat_yasi_sn(simdi)
+    # --- BİLDİRİM SAĞLIĞI ---
+    # "/health 200 ama Telegram'a hiçbir şey gitmiyor" durumu dışarıdan
+    # görünsün: teslim kuyruğunda bekleyen, ilk bekleyenin hatası ve
+    # notifier'ın açık olup olmadığı. Okuma hatası /health'i düşürmez.
+    bildirim: dict = {"enabled": None, "teslim_kuyrugu": None}
+    try:
+        notifier = _pkg._notifier_ref
+        if notifier is not None:
+            bildirim["enabled"] = bool(getattr(notifier, "enabled", False))
+            durum_fn = getattr(notifier, "gonderim_durumu", None)
+            if callable(durum_fn):
+                gd = durum_fn() or {}
+                bildirim["teslim_kuyrugu"] = gd.get("teslim_kuyrugu")
+                bildirim["acil_kuyruk"] = gd.get("acil_kuyruk")
+                bildirim["son_basarili_gonderim"] = gd.get("son_basarili_gonderim")
+                bildirim["son_gonderme_hatasi"] = gd.get("son_gonderme_hatasi")
+    except Exception as exc:  # noqa: BLE001 - /health asla düşmesin
+        bildirim["hata"] = type(exc).__name__
     tarama_bayat = (
         None if tarama_suruyor is None or (tarama_suruyor and tarama_yasi_sn is None)
         else bool(tarama_suruyor and tarama_yasi_sn > tarama_esigi_sn)
@@ -193,6 +211,7 @@ def _saglik_ozeti() -> dict:
         "scan_stale": tarama_bayat,
         "scan_stale_after_s": tarama_esigi_sn,
         "seans_acik": seans_acik,
+        "bildirim": bildirim,
         "evren": len(_pkg.ACTIVE_STOCKS),
         "instance_id": _pkg.INSTANCE_ID,
         "komut": _pkg._komut_durumu(),
@@ -522,6 +541,22 @@ def _komut_render(_arguman: str) -> str:
         )
     else:
         satirlar.append("Bu sürecin başlangıç zamanı henüz kaydedilmedi")
+
+    # ŞU ANKİ canlılık ayrıca basılır: açılıştaki eski boşluk (uyku/deploy)
+    # geçmişte kalmış olabilir; kullanıcı "hâlâ uyuyor mu?" sanmasın.
+    try:
+        hb_yas = _pkg._heartbeat_yasi_sn(now)
+    except Exception:  # noqa: BLE001 - teşhis komutu düşmesin
+        hb_yas = None
+    if hb_yas is None:
+        satirlar.append("Son heartbeat: henüz yazılmadı/bilinmiyor")
+    elif hb_yas < 180:
+        satirlar.append(f"Şu an canlı: son heartbeat {max(0, int(hb_yas))} sn önce")
+    elif hb_yas < 3600:
+        satirlar.append(f"Son heartbeat: {int(hb_yas // 60)} dk önce")
+    else:
+        satirlar.append(
+            f"⚠️ Son heartbeat {hb_yas / 3600:.1f} sa önce — ana döngü takılmış olabilir")
 
     previous_at = runtime.get("previous_heartbeat_at")
     gap_seconds = runtime.get("estimated_gap_seconds")

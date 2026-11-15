@@ -1117,6 +1117,13 @@ def kontrol_render(url: str, test_key: str) -> None:
             elif govde.get("tarama_suruyor") is True and govde.get("scan_stale") is None:
                 satir(WARN, "Aktif analiz süresi ölçülmüyor",
                       "Deploy eski olabilir; güncel /health scan_age_s ve scan_stale alanlarını döndürür.")
+            bildirim = govde.get("bildirim") if isinstance(govde.get("bildirim"), dict) else {}
+            kuyruk = bildirim.get("teslim_kuyrugu") if isinstance(bildirim.get("teslim_kuyrugu"), dict) else {}
+            if bildirim.get("enabled") is False:
+                satir(WARN, "Telegram bildirimi kapalı", "Token/chat_id tanımlı değil; /health 200 olsa da bildirim gitmez.")
+            elif isinstance(kuyruk.get("pending"), int) and kuyruk["pending"]:
+                satir(WARN, f"Bildirim kuyruğunda {kuyruk['pending']} bekleyen var",
+                      f"En eski: {kuyruk.get('oldest_created') or '?'} · son hata: {_kisa(kuyruk.get('last_error') or 'yok', 120, test_key, url, hedef)} · deneme: {kuyruk.get('attempts')}")
             kontrol_render_komut_durumu(govde)
         else:
             satir(FAIL, "200 döndü ama gövde beklenen JSON değil",
