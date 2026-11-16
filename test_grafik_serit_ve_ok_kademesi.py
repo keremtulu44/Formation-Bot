@@ -71,3 +71,21 @@ def test_ok_kademesi_turleri_ayirir(tmp_path):
     assert cizgiler["reclaim_supurme_isaret"] == 1
     assert cizgiler["momentum_isaret"] == 1
     assert cizgiler["momentum_taban_isaret"] == 1
+
+
+def test_ok_baglam_halkalari_cizilir(tmp_path):
+    """Yapı uyumu (beyaz halka) + yakın engel (kırmızı halka) sayaçları."""
+    g = _goruntu()
+    g["stabil"] = {
+        "hazir": True, "seviyeler": [49.0] * 40, "renkler": ["ust"] * 40,
+        "reclaim_barlar": [10, 12], "momentum_barlar": [],
+        "reclaim_turleri": {"10": "multi_bar_recovery", "12": "intrabar_sweep_reclaim"},
+        "yapi_uyumlu_barlar": [10], "engel_yakin_barlar": [12],
+        "dikey_barlar": [], "dikey_deneme_barlar": [], "son_seviye": 49.0,
+        "son_renk": "ust",
+    }
+    yol, meta = grafik.ciz(g, "4h", {"cikti": str(tmp_path / "baglam.png")})
+    assert yol
+    cizgiler = meta["cizgiler"]["stabil"]
+    assert cizgiler["yapi_uyumlu_isaret"] == 1
+    assert cizgiler["engel_yakin_isaret"] == 1

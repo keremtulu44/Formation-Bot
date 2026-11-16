@@ -232,6 +232,54 @@ def anlik_goruntu(cift: Any = None, tf: str = "1h", cerceve: Any = None, *,
                 else:
                     kept.append(bar)
             layer[key] = kept
+    # --- OK BAĞLAM ETİKETLERİ (2026-11-15, replay destekli görsel katman) ---
+    # Sinyal kararı değişmez; yalnız grafikte bilgi taşınır:
+    #  * yapi_uyumlu: ok barından önce pencerede aynı yönlü teyitli BOS/CHoCH
+    #    (MS domaini; replay'de kapanış geri alımı + boğa MS %65,2 yönde, n=23
+    #    → küçük örnek, bu yüzden yalnız halka işareti, filtre değil).
+    #  * engel_yakin: ok yönünde ≤1 ATR'de karşı FVG kutusu (zone domaini;
+    #    replay'de yakın FVG geri alım/süpürmeyi kötüleştiriyor: %30,8/%36,4
+    #    zayıfa karşı %21,8/%28,6; rebase'i kötüleştirmiyor. Yakın OB'de fark
+    #    yok (%25,1'e karşı %25,9) → OB bu işarete GİRMEZ; işaret bastırma
+    #    değil "önünde boşluk engeli var" bilgisidir).
+    # ATR burada (tarama katmanı) var; renderer'da yok — hesap burada yapılır.
+    from domain_engines.stabil.structure_context import WINDOWS as _PENCERELER
+    _pencere = _PENCERELER.get(str(tf).lower(), 4)
+    _zoneler = list((goruntu.get("zone") or {}).get("cizilen") or [])
+    for _layer, _yon in ((goruntu["stabil"], 1), (goruntu["stabil_direnc"], -1)):
+        if not _layer:
+            continue
+        _keys = ("reclaim_barlar", "momentum_barlar") if _yon == 1 else (
+            "donus_barlar", "momentum_barlar")
+        _barlar = sorted({int(b) for k in _keys for b in (_layer.get(k) or [])})
+        _uyumlu, _engel = [], []
+        for _bar in _barlar:
+            _kaynak = sol + _bar
+            if any(e[1] in {"BOS", "CHOCH"}
+                   and e[2] == ("UP" if _yon == 1 else "DOWN")
+                   and 0 <= _kaynak - e[0] <= _pencere
+                   for e in structure_events):
+                _uyumlu.append(_bar)
+            _kapanis = _gercek(sutun["kapanis"][_kaynak]) if _kaynak < n else None
+            _atr = _gercek(atr_values[_kaynak]) if _kaynak < len(atr_values) else None
+            if _kapanis is not None and _atr:
+                for _z in _zoneler:
+                    if str(_z.get("tip") or "") != "fvg":
+                        continue  # replay: yakın OB farkı yok; yalnız FVG
+                    if int(_z.get("yon") or 0) != -_yon:
+                        continue
+                    if not (int(_z.get("x0") or 0) <= _bar <= int(_z.get("x1", 10 ** 9))):
+                        continue
+                    _alt, _ust = _gercek(_z.get("alt")), _gercek(_z.get("ust"))
+                    if _alt is None or _ust is None:
+                        continue
+                    _mesafe = (_alt - _kapanis) if _yon == 1 else (_kapanis - _ust)
+                    if 0 <= _mesafe <= _atr:
+                        _engel.append(_bar)
+                        break
+        _layer["yapi_uyumlu_barlar"] = _uyumlu
+        _layer["engel_yakin_barlar"] = _engel
+
     direnc = goruntu["stabil_direnc"]
     if direnc and direnc.get("neden") and not direnc.get("hazir"):
         goruntu["uyarilar"].append(_stabil_direnc_uyarisi(str(direnc["neden"])))
