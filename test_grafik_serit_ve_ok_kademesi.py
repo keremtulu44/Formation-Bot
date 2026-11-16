@@ -78,9 +78,10 @@ def test_baglam_sinifi_guclu_halka_zayif_soluk(tmp_path):
     g = _goruntu()
     g["stabil"] = {
         "hazir": True, "seviyeler": [49.0] * 40, "renkler": ["ust"] * 40,
-        "reclaim_barlar": [10, 12], "momentum_barlar": [],
-        "reclaim_turleri": {"10": "multi_bar_recovery", "12": "intrabar_sweep_reclaim"},
-        "baglam": {"10": "guclu", "12": "zayif"},
+        "reclaim_barlar": [10, 12, 14], "momentum_barlar": [],
+        "reclaim_turleri": {"10": "multi_bar_recovery", "12": "intrabar_sweep_reclaim",
+                            "14": "multi_bar_recovery"},
+        "baglam": {"10": "guclu", "12": "zayif", "14": "cok_guclu"},
         "dikey_barlar": [], "dikey_deneme_barlar": [], "son_seviye": 49.0,
         "son_renk": "ust",
     }
@@ -89,3 +90,35 @@ def test_baglam_sinifi_guclu_halka_zayif_soluk(tmp_path):
     cizgiler = meta["cizgiler"]["stabil"]
     assert cizgiler["baglam_guclu_isaret"] == 1
     assert cizgiler["baglam_zayif_isaret"] == 1
+    assert cizgiler["baglam_cok_guclu_isaret"] == 1
+
+
+def test_baglam_kademesi_h4_gunluk_birlesimi():
+    """cok_guclu: guclu+(gunluk kirik|H4 basarisiz); zayif+H4 basarisiz notr."""
+    from dataclasses import replace
+    from types import SimpleNamespace
+
+    from grafik.tarama import _stabil_verisi
+    from test_stabil_multibar_recovery import evaluate, sample
+
+    labels, snapshots, points, frame = sample()
+    behaviors = list(evaluate(frame, points, snapshots))
+    son = behaviors[30]
+    assert son.reclaim_kind == "multi_bar_recovery"
+
+    def katman(b):
+        davranislar = behaviors[:30] + [b]
+        return _stabil_verisi({"stabil": SimpleNamespace(
+            error=None, skipped=False,
+            details={"bar_projection": points, "bar_behaviors": davranislar})},
+            "1d", 0, len(points), list(labels))
+
+    guclu_taban = replace(son, regime="BREACHED_FIXED_SUPPORT")
+    assert katman(guclu_taban)["baglam"].get("30") == "guclu"
+    assert katman(replace(guclu_taban, daily_raw_state="DAILY_RAW_STRUCTURE_BROKEN")
+                  )["baglam"].get("30") == "cok_guclu"
+    assert katman(replace(guclu_taban, h4_state="H4_RECOVERY_FAILED")
+                  )["baglam"].get("30") == "cok_guclu"
+    zayif_taban = replace(son, regime="HORIZONTAL_AFTER_DROP")
+    assert katman(zayif_taban)["baglam"].get("30") == "zayif"
+    assert "30" not in katman(replace(zayif_taban, h4_state="H4_RECOVERY_FAILED"))["baglam"]

@@ -588,6 +588,36 @@ def evaluate_stabil_symbol(
         if not target_clean.empty and bar_projection
         else ()
     )
+    # Bar davranışlarına kapanış anındaki nedensel H4/günlük trend durumunu
+    # işle (replay'deki stabil_h4_state/stabil_daily_raw_state tanımlarıyla
+    # birebir: günlükte bisect ile son kapanmış gün, H4'te son kapanmış 4s bar).
+    # Yalnız grafik bağlam kademesi kullanır; hata durumunda alanlar boş kalır
+    # ve bağlam nötr davranır (fail-open görsel katman, sinyal etkilenmez).
+    if bar_behaviors:
+        try:
+            from dataclasses import replace as _dc_replace
+
+            _h_tl = build_h4_trend_timeline(h4_clean, cfg) if not h4_clean.empty else ()
+            _d_tl = build_daily_raw_trend_timeline(daily_clean, cfg) if not daily_clean.empty else ()
+            _h_times = [_to_istanbul_timestamp(t) for t in h4_clean["timestamp"]] if _h_tl else []
+            _d_times = [_to_istanbul_timestamp(t) for t in daily_clean["timestamp"]] if _d_tl else []
+            if _h_tl or _d_tl:
+                _zengin = []
+                for _b in bar_behaviors:
+                    _ts = _to_istanbul_timestamp(_b.bar_close_time)
+                    _h4s = _guns = None
+                    if _ts is not None and _h_tl:
+                        _i = bisect_right(_h_times, _ts) - 1
+                        if _i >= 0 and _h_tl[_i].data_ready:
+                            _h4s = _h_tl[_i].state.value
+                    if _ts is not None and _d_tl:
+                        _i = bisect_right(_d_times, _ts) - 1
+                        if _i >= 0 and _d_tl[_i].data_ready:
+                            _guns = _d_tl[_i].raw_state.value
+                    _zengin.append(_dc_replace(_b, h4_state=_h4s, daily_raw_state=_guns))
+                bar_behaviors = tuple(_zengin)
+        except Exception:
+            pass
     latest_behavior = bar_behaviors[-1] if bar_behaviors else None
 
     latest_close = float(target_clean["close"].iloc[-1]) if not target_clean.empty else None

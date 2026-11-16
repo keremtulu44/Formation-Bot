@@ -174,6 +174,11 @@ class StabilBarBehavior:
     # Dikey rejim bir gözlenen/proxy yapı uyarısıdır; satış emri veya yön garantisi değildir.
     vertical_support: bool = False
     vertical_attempt_kind: str | None = None
+    # Bar kapanışındaki nedensel trend bağlamı (runtime doldurur; replay'deki
+    # stabil_h4_state / stabil_daily_raw_state ile aynı tanımlar). Grafik
+    # bağlam kademesi içindir; sinyal üretimi kullanmaz.
+    h4_state: str | None = None
+    daily_raw_state: str | None = None
 
 
 def evaluate_bar_behaviors(

@@ -481,16 +481,29 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
         # kümeli bootstrap ile doğrulandı:
         #   guclu: rebase oku VEYA (çok mumlu geri alım + BREACHED_FIXED_SUPPORT)
         #          -> %57,5 yönde / %16,1 zayıf (iki zaman yarısında da %57-58)
+        #   cok_guclu: guclu + (günlük yapi kirik VEYA H4 basarisiz toparlanma)
+        #          -> n=49, %69 yönde / %10 zayıf; zaman %65->%74,
+        #             bootstrap yön farkı +%16,1pp GA [~0, +30,8] (sınırda)
         #   zayif: HORIZONTAL_AFTER_DROP zemininde geri alım/süpürme
-        #          -> %44,8 yönde / %30,7 zayıf
+        #          -> %44,8 yönde / %30,7 zayıf. İstisna: H4 basarisiz
+        #          toparlanma varsa solukluk kalkar (n=21, %62 yönde; iki
+        #          zaman yarısında da %62; medyan negatif oldugu icin
+        #          guclu yapilmaz, yalniz notr gosterilir).
         # Sinyal üretimi değişmez; sınıf yalnız grafik vurgusudur.
         _rejim = str(_alan(bhv, "regime") or "")
+        _h4 = str(_alan(bhv, "h4_state") or "")
+        _gunluk = str(_alan(bhv, "daily_raw_state") or "")
         if (_alan(bhv, "momentum_kind") == "upward_rebase_momentum"
                 or (_alan(bhv, "reclaim_kind") == "multi_bar_recovery"
                     and _rejim == "BREACHED_FIXED_SUPPORT")):
-            baglam[str(int(idx_b))] = "guclu"
+            if (_gunluk == "DAILY_RAW_STRUCTURE_BROKEN"
+                    or _h4 == "H4_RECOVERY_FAILED"):
+                baglam[str(int(idx_b))] = "cok_guclu"
+            else:
+                baglam[str(int(idx_b))] = "guclu"
         elif (_rejim == "HORIZONTAL_AFTER_DROP"
-              and _alan(bhv, "reclaim_kind") in {"multi_bar_recovery", "intrabar_sweep_reclaim"}):
+              and _alan(bhv, "reclaim_kind") in {"multi_bar_recovery", "intrabar_sweep_reclaim"}
+              and _h4 != "H4_RECOVERY_FAILED"):
             baglam[str(int(idx_b))] = "zayif"
 
     son_seviye = next((v for v in reversed(seviyeler) if v is not None), None)

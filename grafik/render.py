@@ -1088,6 +1088,7 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "reclaim_supurme_isaret": 0,
         "momentum_isaret": 0,
         "momentum_taban_isaret": 0,
+        "baglam_cok_guclu_isaret": 0,
         "baglam_guclu_isaret": 0,
         "baglam_zayif_isaret": 0,
         "iptal_isaret": 0,
@@ -1309,6 +1310,16 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         return [int(b) for b in (reclaim_barlar + momentum_barlar)
                 if str(_baglam.get(str(b)) or _baglam.get(b) or "") == sinif]
 
+    _cgx, _cgy = _ok_koordinatlari(_baglam_barlar("cok_guclu"))
+    if _cgx:
+        # Ekstra güçlü: çift beyaz halka (dış + iç).
+        sc = ax.scatter(_cgx, _cgy, marker="o", s=300, facecolors="none",
+                        edgecolors="#ffffff", linewidths=1.4, zorder=4.92, clip_on=True)
+        sc.set_gid("grafik-stabil-baglam-cok-guclu-dis")
+        sc = ax.scatter(_cgx, _cgy, marker="o", s=170, facecolors="none",
+                        edgecolors="#e5e7eb", linewidths=1.0, zorder=4.93, clip_on=True)
+        sc.set_gid("grafik-stabil-baglam-cok-guclu")
+        ozet["baglam_cok_guclu_isaret"] = len(_cgx)
     _gx, _gy = _ok_koordinatlari(_baglam_barlar("guclu"))
     if _gx:
         sc = ax.scatter(_gx, _gy, marker="o", s=150, facecolors="none",

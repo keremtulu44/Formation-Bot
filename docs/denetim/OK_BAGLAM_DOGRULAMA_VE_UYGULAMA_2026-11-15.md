@@ -43,3 +43,20 @@ düzeltmesi yok, olaylar tarih korelasyonunu paylaşır. Bu yüzden uygulama
 Canlıda halkalı/soluk ok dağılımı ve ileri tarihli performansı ayrıca
 ölçülmeden sınıf tanımı genişletilmeyecek; direnç tarafı kendi replay'i
 koşulmadan aynı sınıfı almayacak.
+
+## Ek katman doğrulaması (aynı gün, ikinci aşama)
+
+555 geçerli ok üzerinde üç aday, zaman bölmesi + sembol kümeli bootstrap
+(3000 tekrar) ile sınandı:
+
+| Aday | n | Yönde / Zayıf | Fark (bootstrap %95 GA) | Zaman | Karar |
+|---|---|---|---|---|---|
+| Güçlü + (günlük STRUCTURE_BROKEN \| H4 RECOVERY_FAILED) | 49 | %69 / %10 (kalan güçlü %53/%18, medyan +0,41) | yön +%16,1pp [~0, +30,8] | %65 → %74 | **Uygulandı: `cok_guclu` (çift halka)** |
+| Güçlü + yalnız günlük kırık | 38 | %68 / %13 | yön GA [−3,2, +29,1] | %64 → %75 | Birleşik tanım tercih edildi |
+| Zayıf + H4 RECOVERY_FAILED | 21 | %62 / %19 (zayıf kalan %43/%32) | yön +%19,2pp [~0, +38,6] | %62 → %62 | **Uygulandı: solukluk kalkar, nötr** (medyan −0,57 olduğu için güçlü yapılmadı) |
+
+GA alt sınırları sıfıra değiyor; bu yüzden katmanlar yine sinyal/alarm
+değil, yalnız görsel kademedir. Taşıma yolu: `StabilBarBehavior.h4_state /
+daily_raw_state` alanlarını runtime, kapanmış bar zaman çizelgelerinden
+nedensel (bisect) doldurur; hata durumunda alan boş kalır ve kademe
+mevcut davranışa düşer.
