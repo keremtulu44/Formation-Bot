@@ -1088,8 +1088,6 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "reclaim_supurme_isaret": 0,
         "momentum_isaret": 0,
         "momentum_taban_isaret": 0,
-        "yapi_uyumlu_isaret": 0,
-        "engel_yakin_isaret": 0,
         "iptal_isaret": 0,
         "dikey_deneme_isaret": 0,
         "kadrajda": bool(kadrajda),
@@ -1298,21 +1296,6 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         sc.set_gid("grafik-stabil-iptal")
         ozet["iptal_isaret"] = len(cx)
 
-    # Bağlam halkaları (2026-11-15): yapı uyumu = beyaz halka, yakın engel =
-    # kırmızı halka. Okun kendisini değiştirmez; "bu ok neyin içinde çıktı"
-    # bilgisini taşır (tarama katmanında ATR/MS/zone ile hesaplanır).
-    for _alan_adi, _gid, _renk in (
-            ("yapi_uyumlu_barlar", "grafik-stabil-yapi-uyumlu", "#e5e7eb"),
-            ("engel_yakin_barlar", "grafik-stabil-engel-yakin", "#f87171")):
-        _bx, _by = _ok_koordinatlari(
-            [int(i) for i in (stabil.get(_alan_adi) or [])
-             if isinstance(i, (int, float)) and 0 <= int(i) < katman_n])
-        if _bx:
-            sc = ax.scatter(_bx, _by, marker="o", s=150, facecolors="none",
-                            edgecolors=_renk, linewidths=1.1, zorder=4.9, clip_on=True)
-            sc.set_gid(_gid)
-            ozet[_alan_adi.replace("_barlar", "_isaret")] = len(_bx)
-
     # Dikey adaylar teşhis olarak kalır; bastırılmış oka yeni işaret çizilmez.
 
     # Sağ eksende net `Destek <fiyat>` çipi (yalnız son mumda aktif destek kadraj içindeyse)
@@ -1362,7 +1345,6 @@ def _stabil_direnc_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "cizildi": False, "son_seviye": _gercek(layer.get("son_seviye")),
         "son_renk": layer.get("son_renk"), "gorunur_bar": 0, "kadrajda": bool(kadrajda),
         "donus_isaret": 0, "momentum_isaret": 0, "iptal_isaret": 0, "dikey_deneme_isaret": 0,
-        "yapi_uyumlu_isaret": 0, "engel_yakin_isaret": 0,
     }
     if not summary["hazir"] or not levels:
         return summary
@@ -1469,16 +1451,6 @@ def _stabil_direnc_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                                        color=PALET["stabil_direnc"], gid="grafik-stabil-direnc-momentum", size=62)
     summary["iptal_isaret"] = draw(indices("iptal_barlar"), above=True, marker="v", hollow=False,
                                     color="#9CA3AF", gid="grafik-stabil-direnc-iptal", size=48)
-    # Bağlam halkaları (destekle aynı dil): beyaz = yapı uyumu, kırmızı = engel.
-    for _alan_adi, _gid, _renk in (
-            ("yapi_uyumlu_barlar", "grafik-stabil-direnc-yapi-uyumlu", "#e5e7eb"),
-            ("engel_yakin_barlar", "grafik-stabil-direnc-engel-yakin", "#f87171")):
-        _bx, _by = coordinates(indices(_alan_adi), above=True)
-        if _bx:
-            _sc = ax.scatter(_bx, _by, marker="o", s=150, facecolors="none",
-                             edgecolors=_renk, linewidths=1.1, zorder=4.95, clip_on=True)
-            _sc.set_gid(_gid)
-            summary[_alan_adi.replace("_barlar", "_isaret")] = len(_bx)
     # Bastırılmış direnç adayları grafikte ayrı işaret üretmez.
     last = _gercek(levels[-1]) if levels else None
     role = roles[-1] if roles else None

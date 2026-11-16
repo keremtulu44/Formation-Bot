@@ -35,18 +35,6 @@ def main():
                           ("fvg_ahead", "Öndeki FVG"), ("ob_ahead", "Öndeki OB")):
         print(f"\n--- {baslik} ---")
         print(grup(up, kolon).to_string())
-    print("\n--- Diğer domain bağlamları (ok anında) ---")
-    for kolon, baslik in (("ms_external_state", "Piyasa yapısı (MS) durumu"),
-                          ("stabil_h4_state", "Stabil 4s davranışı"),
-                          ("ob_ahead", "Öndeki OB"), ("fvg_ahead", "Öndeki FVG")):
-        print(f"\n{baslik}:")
-        print(grup(up, kolon).to_string())
-    # Tür × FVG yakınlığı: engel her türü aynı etkilemiyor (rebase hariç).
-    up = up.assign(engel_fvg=up.fvg_ahead.eq("NEAR_1ATR").map(
-        {True: "FVG yakin", False: "FVG yakin degil"}))
-    print("\nOk türü × yakın FVG:")
-    print(grup(up, ["kind", "engel_fvg"]).to_string())
-
     # Aday filtrelerin dürüst testi: veri desteklemiyorsa raporda öyle yazar.
     adaylar = {
         "hacim >= 1,2": up.volume_ratio20 >= 1.2,
