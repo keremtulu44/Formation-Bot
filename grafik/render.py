@@ -89,6 +89,46 @@ from grafik.tarama import (  # noqa: F401
     girdi_ozeti,
 )
 
+def _sag_serit_px_hesapla(goruntu: Mapping[str, Any]) -> float:
+    """Sağ şerit genişliğini karenin gerçek etiketlerine göre seç (2026-11-15).
+
+    Eskiden her karede sabit 158 px (mobil 210 px) ayrılıyordu; etiketsiz
+    karede genişliğin ~%15-25'i boş kulvara gidiyordu. Artık en uzun aday
+    etiket ölçülür: yalnız son fiyat çipi varsa şerit daralır, uzun
+    kritik/zone etiketi varsa taban değerin üstüne çıkabilir. Tavan,
+    mum alanını korumak için mobilde 230, masaüstünde 195 px'dir.
+    """
+    metinler: list[str] = []
+    kapanis = goruntu.get("kapanis") or []
+    if kapanis and kapanis[-1] is not None:
+        try:
+            metinler.append(sayi(float(kapanis[-1])))
+        except (TypeError, ValueError):
+            pass
+    alarm = goruntu.get("alarm") or {}
+    if alarm.get("deger") is not None:
+        metinler.append(f"alarm {sayi(float(alarm['deger']))}")
+    if alarm.get("hedef") is not None:
+        metinler.append(f"hedef {sayi(float(alarm['hedef']))}")
+    for b in (goruntu.get("zone") or {}).get("cizilen") or []:
+        try:
+            metinler.append(_zone_kunye(b))
+        except Exception:  # noqa: BLE001 - etiket tahmini çizimi düşürmez
+            pass
+    kritik = (goruntu.get("olay") or {}).get("kritik") or {}
+    if kritik.get("seviye") is not None:
+        metinler.append(f"kritik {sayi(float(kritik['seviye']))}")
+    for anahtar, on_ek in (("stabil", "Destek"), ("stabil_direnc", "Direnç")):
+        seviye = (goruntu.get(anahtar) or {}).get("son_seviye")
+        if seviye is not None:
+            metinler.append(f"{on_ek} {sayi(float(seviye))}")
+    en_uzun = max((len(m) for m in metinler), default=0)
+    # 8,5 pt etikette karakter ~5,6 px; iki yanda çip payı + nefes payı.
+    genislik = 36.0 + en_uzun * 5.6 * max(1.0, float(_MOD.yazi_olcek or 1.0))
+    tavan = 230.0 if _MOD.mobil else 195.0
+    return round(min(tavan, max(84.0, genislik)), 1)
+
+
 @_seri_cizim
 def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
         secenekler: Optional[Mapping[str, Any]] = None) -> tuple[Optional[str], dict[str, Any]]:
@@ -278,6 +318,12 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         ust = (0.855 if metin["satirlar"] else 0.885) - 0.031 * max(
             0, len(metin["satirlar"]) - 2) - (0.031 if metin.get("sag_ayri_satir") else 0.0)
         sol_kenar, sag_metin = (0.12 if _MOD.mobil else 0.075), 0.985
+        # Dinamik sağ şerit: bu kareye özel genişlik thread-local moda yazılır;
+        # panels tarafı da aynı SABITLER okumasıyla tutarlı kalır.
+        if not yalnizca_mumlar:
+            _MOD.serit_px = _sag_serit_px_hesapla(goruntu)
+            meta["kare"] = {**(meta.get("kare") or {}),
+                            "sag_serit_px": float(SABITLER["sag_serit_px"])}
         sag_kenar = (sag_metin * genislik - float(SABITLER["sag_serit_px"])) / genislik
         if alt_blok:
             alt, y_lejant, _, _ = _alt_yerlesim(len(metin["dipnotlar"]) + 2,
@@ -653,6 +699,22 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                            "kirmizi": [_taban - _ALT_ADIM * (len(y_gri) + i + 1)
                                        for i in range(len(y_kirmizi))]}
         _pkg._metin_ciz(fig, metin, sol_kenar, sag_metin, ust, alt_blok=alt_blok)
+        # VERİ ROZETİ (2026-11-15): "son mum bilinmiyor" footer'da kayboluyordu;
+        # eksik/açık verili kare köşede belirgin rozet taşır, gerçek analiz
+        # sanılmaz. Replay karelerinde tarih bilinçli gizlidir → rozet yok.
+        veri_rozeti = None
+        if not goruntu.get("replay"):
+            if not goruntu.get("son_bar_ts"):
+                veri_rozeti = ("VERİ EKSİK", "#b91c1c")
+            elif goruntu.get("son_bar_kapali") is False:
+                veri_rozeti = ("SON MUM AÇIK", "#b45309")
+        meta["veri_rozeti"] = veri_rozeti[0] if veri_rozeti else None
+        if veri_rozeti:
+            fig.text(0.985, 0.012, veri_rozeti[0], ha="right", va="bottom",
+                     fontsize=8.5 * max(1.0, float(_MOD.yazi_olcek or 1.0)),
+                     color="#ffffff", zorder=20,
+                     bbox=dict(boxstyle="round,pad=0.35", facecolor=veri_rozeti[1],
+                               edgecolor="none", alpha=0.92))
         if cizilecek_guven:
             _guven_ciz(fig, cizilecek_guven, guven_adim, guven_alt)
         meta["guven_satirlari"] = guven_satirlari
@@ -1023,7 +1085,9 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "son_renk": stabil.get("son_renk"),
         "gorunur_bar": 0,
         "reclaim_isaret": 0,
+        "reclaim_supurme_isaret": 0,
         "momentum_isaret": 0,
+        "momentum_taban_isaret": 0,
         "iptal_isaret": 0,
         "dikey_deneme_isaret": 0,
         "kadrajda": bool(kadrajda),
@@ -1139,8 +1203,24 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                 ry.append(float(y_pos))
         return rx, ry
 
+    # Ok kademeleri — replay destekli (stabil_ok_replay_2026_11_05, 555 geçerli
+    # ▲, 8 bar MFE<0,5 ATR = "zayıf tepki"): çok mumlu/kapanış geri alımı %23,1
+    # zayıf → dolu tam; fitil süpürmesi (`intrabar_sweep_reclaim`) %29,6 zayıf
+    # (en zayıf tür) → küçük+soluk; `upward_rebase_momentum` %17,3 zayıf ve
+    # +1 ATR önce %58,7 (en güçlü) → içi boş büyük; `long_base_breakout` %28,6
+    # → içi boş küçük+soluk. Tür bilgisi yoksa (eski snapshot) eski görünüm.
+    # Bu yalnız GÖRSEL kademedir; ok üretimi/bastırma değişmez (replay
+    # gözlemsel, filtre kanıtı değildir).
+    reclaim_turleri = stabil.get("reclaim_turleri") or {}
+    momentum_turleri = stabil.get("momentum_turleri") or {}
+
+    def _tur(bar, sozluk):
+        return str(sozluk.get(str(bar)) or sozluk.get(bar) or "")
+
+    supurme = [b for b in reclaim_barlar if _tur(b, reclaim_turleri) == "intrabar_sweep_reclaim"]
+    dolu = [b for b in reclaim_barlar if b not in set(supurme)]
     # Dolu ▲ (destek rengi): güçlü geri alım (altına sarkıp geri çıkma).
-    rx, ry = _ok_koordinatlari(reclaim_barlar)
+    rx, ry = _ok_koordinatlari(dolu)
     if rx:
         sc = ax.scatter(
             rx, ry,
@@ -1154,10 +1234,27 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         )
         sc.set_gid("grafik-stabil-reclaim")
         ozet["reclaim_isaret"] = len(rx)
+    sx, sy = _ok_koordinatlari(supurme)
+    if sx:
+        sc = ax.scatter(
+            sx, sy,
+            marker="^",
+            s=34,
+            c=PALET["stabil_destek"],
+            alpha=0.55,
+            edgecolors=PALET["zemin"],
+            linewidths=0.6,
+            zorder=4.75,
+            clip_on=True,
+        )
+        sc.set_gid("grafik-stabil-reclaim-supurme")
+        ozet["reclaim_supurme_isaret"] = len(sx)
 
     # İçi boş ▲ (destek rengi): destek altına inmeden gelen güçlü YUKARI mum.
-    # Yatay zeminden kopuş ve çizgi yukarı basamak yaparken de görünür.
-    mx, my = _ok_koordinatlari(momentum_barlar)
+    rebase = ([b for b in momentum_barlar if _tur(b, momentum_turleri) == "upward_rebase_momentum"]
+              if momentum_turleri else list(momentum_barlar))
+    taban = [b for b in momentum_barlar if b not in set(rebase)]
+    mx, my = _ok_koordinatlari(rebase)
     if mx:
         sc = ax.scatter(
             mx, my,
@@ -1171,6 +1268,21 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         )
         sc.set_gid("grafik-stabil-momentum")
         ozet["momentum_isaret"] = len(mx)
+    tx, ty = _ok_koordinatlari(taban)
+    if tx:
+        sc = ax.scatter(
+            tx, ty,
+            marker="^",
+            s=44,
+            facecolors="none",
+            edgecolors=PALET["stabil_destek"],
+            linewidths=1.1,
+            alpha=0.6,
+            zorder=4.85,
+            clip_on=True,
+        )
+        sc.set_gid("grafik-stabil-momentum-taban")
+        ozet["momentum_taban_isaret"] = len(tx)
 
     # A later opposing BOS changes the historical arrow's current state; it
     # does not erase the original event or introduce a new symbol.

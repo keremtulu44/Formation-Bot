@@ -72,6 +72,10 @@ class _ModKapsami(threading.local):
         self.yazi_olcek: float = 1.0
         self.sade: bool = False
         self.mobil: bool = False
+        # Dinamik sağ şerit (2026-11-15): kare başına hesaplanan genişlik (px).
+        # None → SABITLER taban değeri. Thread-local olduğu için paralel
+        # kareler birbirinin şeridini görmez.
+        self.serit_px: Optional[float] = None
 
 
 _MOD = _ModKapsami()
@@ -99,8 +103,9 @@ def _mod_kapsami(secenekler: Optional[Mapping[str, Any]] = None):
 
     @contextlib.contextmanager
     def _kapsam():
-        onceki = (_MOD.palet, _MOD.yazi_olcek, _MOD.sade, _MOD.mobil)
+        onceki = (_MOD.palet, _MOD.yazi_olcek, _MOD.sade, _MOD.mobil, _MOD.serit_px)
         sec = dict(secenekler or {})
+        _MOD.serit_px = None
         _MOD.palet = dict(_PALET_RENK_KORUGU) if sec.get("renk_korugu") else None
         try:
             olcek = float(sec.get("yazi_olcek") or 1.0)
@@ -112,7 +117,7 @@ def _mod_kapsami(secenekler: Optional[Mapping[str, Any]] = None):
         try:
             yield
         finally:
-            _MOD.palet, _MOD.yazi_olcek, _MOD.sade, _MOD.mobil = onceki
+            _MOD.palet, _MOD.yazi_olcek, _MOD.sade, _MOD.mobil, _MOD.serit_px = onceki
 
     return _kapsam()
 
@@ -161,6 +166,8 @@ class _SabitlerSarmalayici(Mapping):
 
     def __getitem__(self, anahtar: str) -> Any:
         deger = self._taban[anahtar]
+        if anahtar == "sag_serit_px" and _MOD.serit_px:
+            return float(_MOD.serit_px)
         if _MOD.mobil and anahtar == "sag_serit_px":
             return 210.0
         olcek = _MOD.yazi_olcek
