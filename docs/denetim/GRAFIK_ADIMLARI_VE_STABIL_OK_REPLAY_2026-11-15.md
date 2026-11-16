@@ -47,6 +47,39 @@ vurgusu kademelendi:
   destek ölçümünü aynaya varsaymak bu çalışmanın kendi kuralına aykırı.
   Önce `stabil_resistance_replay` ile aynı tablo çıkarılmalı.
 
+### Kaç ok yönünde tepki verdi? (sayılar, 8 bar ufku)
+
+"Yönde tepki" = ±1 ATR yarışında ok yönünün **önce** görülmesi.
+
+**Yukarı ▲ (destek replay'i, tür bazında — kayıtlı `kind` alanı):**
+
+| Ok | Geçerli n | Yönde (+1 önce) | Ters (−1 önce) | Zayıf (MFE<0,5) |
+|---|---:|---:|---:|---:|
+| Dolu tam (`close_reclaim`) | 255 | **118 (%46,3)** | 121 (%47,5) | 59 (%23,1) |
+| İçi boş büyük (`upward_rebase_momentum`) | 75 | **44 (%58,7)** | 26 (%34,7) | 13 (%17,3) |
+| Süpürme (küçük/soluk) | 162 | 83 (%51,2) | 71 | 48 (%29,6) |
+| Taban kopuşu (küçük/soluk) | 63 | 31 (%49,2) | 27 | 18 (%28,6) |
+
+16 barda: dolu tam 124/255 (%48,6), içi boş büyük 46/75 (%61,3).
+Dolu tam okların yarısından azı yönde tepki veriyor; kapanış medyanı da
+negatif (−0,21 ATR). İçi boş büyük, iki ölçüde de açık ara en iyisi.
+
+**Aşağı ▼ (direnç) — DÜRÜST SINIR:** Kayıtlı direnç replay'lerinde
+(`stabil_direnc_replay_2026_11_06`, `stabil_destek_direnc_karsilastirma`)
+ok **türü** (`close_return_below`, `downward_rebase_momentum`) kaydedilmemiş;
+yalnız çizgi-olayları var. Tür bazında ▼ sayısı bu kayıtlardan çıkarılamaz.
+En yakın karşılıklarla (ayna model MIRROR_P4, 8 bar):
+
+| Direnç olayı | Geçerli n | Yönde (−1 önce) | Ters (+1 önce) |
+|---|---:|---:|---:|
+| Güvenli tarafa dönüş (dolu ▼ karşılığı) | 1.706 | **797 (%46,7)** | 802 (%47,0) |
+| Direnç testi (`TEST`) | 2.334 | 986 (%42,2) | 1.196 (%51,2) |
+
+Yani direnç dönüşü de yazı-tura civarında; test olayları tersine daha çok
+gidiyor. **Tür bazlı ▼ tablosu için direnç ok replay'inin koşulması gerekir**
+(sıradaki iş, §B sonundaki liste madde 1) — o koşulmadan direnç oklarına
+kademe uygulanmadı ve sayı uydurulmadı.
+
 ### Replay'in REDDETTİĞİ fikirler (uygulanmadı, gerekçesiyle)
 - **Hacim filtresi/rozeti kademesi:** düşük %25,3 ≈ yüksek %24,6 (fark
   +0,6 puan, bootstrap %95 GA −8,8…+10,3). "Sessiz günde oku soluklaştır"
