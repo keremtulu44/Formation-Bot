@@ -593,14 +593,21 @@ def evaluate_stabil_symbol(
     # birebir: günlükte bisect ile son kapanmış gün, H4'te son kapanmış 4s bar).
     # Yalnız grafik bağlam kademesi kullanır; hata durumunda alanlar boş kalır
     # ve bağlam nötr davranır (fail-open görsel katman, sinyal etkilenmez).
+    # Çizelgeler YENİDEN hesaplanmaz: `trend_engine.analyze` aynı çizelgeleri
+    # son anlık görüntü için zaten üretti; buradan okunur (tekrar yok).
     if bar_behaviors:
         try:
             from dataclasses import replace as _dc_replace
 
-            _h_tl = build_h4_trend_timeline(h4_clean, cfg) if not h4_clean.empty else ()
-            _d_tl = build_daily_raw_trend_timeline(daily_clean, cfg) if not daily_clean.empty else ()
-            _h_times = [_to_istanbul_timestamp(t) for t in h4_clean["timestamp"]] if _h_tl else []
-            _d_times = [_to_istanbul_timestamp(t) for t in daily_clean["timestamp"]] if _d_tl else []
+            _tl = trend_engine.timelines()
+            _h_tl = list(_tl.h4) if _tl is not None else []
+            _d_tl = list(_tl.daily_raw) if _tl is not None else []
+            _h_times = (
+                [_to_istanbul_timestamp(t) for t in _tl.h4_close_times] if _h_tl else []
+            )
+            _d_times = (
+                [_to_istanbul_timestamp(t) for t in _tl.daily_close_times] if _d_tl else []
+            )
             if _h_tl or _d_tl:
                 _zengin = []
                 for _b in bar_behaviors:
@@ -608,15 +615,15 @@ def evaluate_stabil_symbol(
                     _h4s = _guns = None
                     if _ts is not None and _h_tl:
                         _i = bisect_right(_h_times, _ts) - 1
-                        if _i >= 0 and _h_tl[_i].data_ready:
+                        if _i >= 0 and _i < len(_h_tl) and _h_tl[_i].data_ready:
                             _h4s = _h_tl[_i].state.value
                     if _ts is not None and _d_tl:
                         _i = bisect_right(_d_times, _ts) - 1
-                        if _i >= 0 and _d_tl[_i].data_ready:
+                        if _i >= 0 and _i < len(_d_tl) and _d_tl[_i].data_ready:
                             _guns = _d_tl[_i].raw_state.value
                     _zengin.append(_dc_replace(_b, h4_state=_h4s, daily_raw_state=_guns))
                 bar_behaviors = tuple(_zengin)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - görsel katman; hata kademeyi nötre düşürür
             pass
     latest_behavior = bar_behaviors[-1] if bar_behaviors else None
 

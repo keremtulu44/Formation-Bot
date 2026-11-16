@@ -113,7 +113,7 @@ def _sag_serit_px_hesapla(goruntu: Mapping[str, Any]) -> float:
     for b in (goruntu.get("zone") or {}).get("cizilen") or []:
         try:
             metinler.append(_zone_kunye(b))
-        except Exception:  # noqa: BLE001 - etiket tahmini çizimi düşürmez
+        except Exception:  # noqa: BLE001, S110 - etiket tahmini çizimi düşürmez
             pass
     kritik = (goruntu.get("olay") or {}).get("kritik") or {}
     if kritik.get("seviye") is not None:
@@ -122,9 +122,17 @@ def _sag_serit_px_hesapla(goruntu: Mapping[str, Any]) -> float:
         seviye = (goruntu.get(anahtar) or {}).get("son_seviye")
         if seviye is not None:
             metinler.append(f"{on_ek} {sayi(float(seviye))}")
-    en_uzun = max((len(m) for m in metinler), default=0)
-    # 8,5 pt etikette karakter ~5,6 px; iki yanda çip payı + nefes payı.
-    genislik = 36.0 + en_uzun * 5.6 * max(1.0, float(_MOD.yazi_olcek or 1.0))
+    # Genişlik, şeridin KENDİ sığdırma ölçüsüyle aynı modelle hesaplanır:
+    # `grafik.panels._sag_metni_sar` etiketi `_sigar_mi(...)` (aynı
+    # `_genislik_16 * metin_carpani` tahmini) ile sınar ve bütçe
+    # `SABITLER["sag_serit_px"] - 25`tir. Eski "36 + 5,6 px/karakter"
+    # tahmini bu modelin altında kalıyordu: "Destek 282,50" (13 karakter)
+    # 108,8 px şerit → 83,8 px bütçe isterken metnin ölçüsü 95,5 px;
+    # çip gereksiz yere iki satıra sarıyordu (2026-11-16 kontrolü).
+    # Bu yüzden şerit = 25 px çip payı + en uzun etiketin ölçüsü + nefes payı.
+    olcu = max((_genislik_16(str(m)) * float(SABITLER["metin_carpani"])
+                for m in metinler), default=0.0)
+    genislik = 25.0 + olcu * max(1.0, float(_MOD.yazi_olcek or 1.0)) + 8.0
     tavan = 230.0 if _MOD.mobil else 195.0
     return round(min(tavan, max(84.0, genislik)), 1)
 

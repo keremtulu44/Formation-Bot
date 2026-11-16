@@ -216,6 +216,24 @@ class StabilTrendContext:
     h4_evidence: H4EvidenceStatus
 
 
+@dataclass(frozen=True, slots=True)
+class StabilTrendTimelines:
+    """`analyze` sırasında zaten üretilmiş tam zaman çizelgeleri.
+
+    Neden: `analyze` son durumu (`[-1]`) almak için günlük/H4 çizelgelerinin
+    TAMAMINI hesaplar. Grafik bağlam kademesi (`h4_state`/`daily_raw_state`)
+    aynı çizelgelere bar bar ihtiyaç duyuyor; yeniden hesaplamak sembol×TF
+    başına ~2,7 sn ekliyordu (2026-11-16 kontrolü). Bu taşıyıcı, aynı
+    hesaplamayı paylaşır — matematik değişmez, yalnız tekrar kalkar.
+    Zaman damgaları çizelgeyle aynı (temizlenmiş) çerçeveden gelir.
+    """
+
+    daily_close_times: tuple[Any, ...]
+    daily_raw: tuple[DailyTrendSnapshot, ...]
+    h4_close_times: tuple[Any, ...]
+    h4: tuple[H4TrendSnapshot, ...]
+
+
 def _safe_div(a: float, b: float | None, default: float | None = None) -> float | None:
     if b is None or pd.isna(b) or abs(float(b)) <= 1e-12:
         return default
@@ -613,12 +631,6 @@ def build_daily_raw_trend_timeline(
     return tuple(out)
 
 
-def _daily_snapshot(frame: pd.DataFrame, weekly: WeeklyTrendState, cfg: StabilTrendConfig) -> DailyTrendSnapshot:
-    if frame.empty:
-        return DailyTrendSnapshot()
-    return build_daily_raw_trend_timeline(frame, cfg, weekly=weekly)[-1]
-
-
 def _true_ranges(frame: pd.DataFrame) -> list[float]:
     out: list[float] = []
     for i, row in frame.iterrows():
@@ -769,12 +781,6 @@ def build_h4_trend_timeline(frame: pd.DataFrame, cfg: StabilTrendConfig) -> tupl
     return tuple(out)
 
 
-def _h4_snapshot(frame: pd.DataFrame, cfg: StabilTrendConfig) -> H4TrendSnapshot:
-    if frame.empty:
-        return H4TrendSnapshot()
-    return build_h4_trend_timeline(frame, cfg)[-1]
-
-
 def _h4_evidence(daily: DailyTrendSnapshot, h4: H4TrendSnapshot, cfg: StabilTrendConfig) -> H4EvidenceStatus:
     correction = daily.state in {DailyTrendState.CONTROLLED_PULLBACK, DailyTrendState.BASE_BUILDING}
     if not correction or daily.pullback_start_time is None or not h4.data_ready:
@@ -820,19 +826,34 @@ class StabilTrendEngine:
     def __init__(self, config: StabilTrendConfig | None = None) -> None:
         self.config = config or StabilTrendConfig()
         self._snapshot: StabilTrendContext | None = None
+        self._timelines: StabilTrendTimelines | None = None
 
     def analyze(self, weekly: pd.DataFrame, daily: pd.DataFrame, h4: pd.DataFrame, *, as_of: Any | None = None) -> StabilTrendContext:
         w = _clean(weekly, as_of)
         d = _clean(daily, as_of)
         h = _clean(h4, as_of)
         weekly_snapshot = _weekly_snapshot(w, self.config)
-        daily_snapshot = _daily_snapshot(d, weekly_snapshot.state, self.config)
-        h4_snapshot = _h4_snapshot(h, self.config)
+        # Çizelgeler bir kez üretilir: son anlık görüntü `[-1]`, tamamı ise
+        # `timelines()` ile grafik bağlam kademesine verilir (tekrar hesap yok).
+        daily_tl = build_daily_raw_trend_timeline(d, self.config, weekly=weekly_snapshot.state) if not d.empty else ()
+        h4_tl = build_h4_trend_timeline(h, self.config) if not h.empty else ()
+        daily_snapshot = daily_tl[-1] if daily_tl else DailyTrendSnapshot()
+        h4_snapshot = h4_tl[-1] if h4_tl else H4TrendSnapshot()
         evidence = _h4_evidence(daily_snapshot, h4_snapshot, self.config)
         candidates = [x for x in (weekly_snapshot.timestamp, daily_snapshot.timestamp, h4_snapshot.timestamp) if x is not None]
         context_as_of = max(candidates) if candidates else as_of
+        self._timelines = StabilTrendTimelines(
+            daily_close_times=tuple(d["timestamp"]) if not d.empty else (),
+            daily_raw=daily_tl,
+            h4_close_times=tuple(h["timestamp"]) if not h.empty else (),
+            h4=h4_tl,
+        )
         self._snapshot = StabilTrendContext(context_as_of, weekly_snapshot, daily_snapshot, h4_snapshot, evidence)
         return self._snapshot
 
     def snapshot(self) -> StabilTrendContext | None:
         return self._snapshot
+
+    def timelines(self) -> StabilTrendTimelines | None:
+        """Son `analyze` çağrısında üretilen tam günlük/H4 çizelgeleri (varsa)."""
+        return self._timelines

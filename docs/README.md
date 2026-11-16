@@ -112,6 +112,10 @@ diye bakmadan önce kodun kendisine ve [YAPI.md](YAPI.md) §6'ya bakın.
 
 | Dosya | Tarih | Ne ölçtü |
 |---|---|---|
+| [denetim/GENEL_KONTROL_2026-11-16.md](denetim/GENEL_KONTROL_2026-11-16.md) | 2026-11-16 | Depo geneli kontrol: son commit (7cac9ce) iddialarının kod doğrulaması, CI statik kapısı (S110 ×2), 4.270/1 test sonucu, sağ şerit genişliği regresyonu ve bağlam zenginleştirmesinin çift çizelge maliyeti (+%90) — düzeltmeler + açık riskler |
+| [denetim/OK_BAGLAM_DOGRULAMA_VE_UYGULAMA_2026-11-15.md](denetim/OK_BAGLAM_DOGRULAMA_VE_UYGULAMA_2026-11-15.md) | 2026-11-15 | Ok bağlam profili (güçlü/zayıf/çok güçlü) doğrulaması ve görsel uygulaması; bootstrap güven aralıkları ve sınırlar |
+| [denetim/GRAFIK_ADIMLARI_VE_STABIL_OK_REPLAY_2026-11-15.md](denetim/GRAFIK_ADIMLARI_VE_STABIL_OK_REPLAY_2026-11-15.md) | 2026-11-15 | Dinamik sağ şerit, veri rozeti, ok türü taşıma/kademesi: kayıtlı replay sayıları ve uygulama kararları |
+| [denetim/BILDIRIM_VE_GRAFIK_INCELEME_2026-11-15.md](denetim/BILDIRIM_VE_GRAFIK_INCELEME_2026-11-15.md) | 2026-11-15 | Bildirim hattı + grafik görünümü incelemesi ve uygulanan düzeltmeler |
 | [denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md](denetim/MS_KILITLI_REFERANS_DUZELTME_2026-10-28.md) | 2026-10-28 | MS motorunun 35 seride sessiz çökmesinin kök nedeni (kilitli geçici referansın fork'ta kaybı) + üç katmanlı düzeltme + 35/35 hedef regresyon |
 | [denetim/TARAMA_VE_ONERILER_2026-10-28.md](denetim/TARAMA_VE_ONERILER_2026-10-28.md) | 2026-10-28 | Depo geneli tarama (suite/statik/kapılar), 2026-10-26 açık önerilerin durumu, veri envanteri ve Ö1–Ö7 yol haritası: süzgeç kaçakları karnesi, iki yıllık sağlamlık matrisi, seviye-test `◇` satırı, hacim faz ayrımı, üçgen kanal denei, motor sağlık sicili, karne bant sağlığı |
 | [denetim/KOD_DENETIMI_2026-10-26.md](denetim/KOD_DENETIMI_2026-10-26.md) | 2026-10-26 | Depo geneli kod/hata denetimi: DM musluğu kullan-önce-ata (B1), env drift, yeni AST koruma testi + açık öneriler |
