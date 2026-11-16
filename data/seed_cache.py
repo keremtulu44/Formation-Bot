@@ -24,8 +24,9 @@ from config import (
     CANDLE_CLOSE_MINUTE, SCAN_DELAY_AFTER_CLOSE_MIN, TARAMA_PENCERE_SONU,
     BIST_TATILLER, BIST_YARIM_GUNLER,
     VERI_YOK_MODU_ESIK_DK, SPLIT_SUREKLILIK_ESIK_PCT, BAR_BOSLUK_ESIK_SAAT,
-    GUNLUK_FETCH_PERIOD, GUNLUK_DEQUE_MAXLEN,
+    GUNLUK_FETCH_PERIOD, GUNLUK_DEQUE_MAXLEN, GUNLUK_FETCH_HATA_TEKRAR_DK,
     FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD, FULL_1H_FETCH_STALE_DAYS,
+    BOSLUK_TAMIR_TEKRAR_DK,
     ALLOW_TRUSTED_PICKLE_CACHE,
 )
 
@@ -126,6 +127,15 @@ class StockDequeManager:
         # Başarısız/henüz güncellenmemiş veriyi her saat tekrar istememek için cooldown.
         self._gunluk_fetch_attempts: Dict[str, datetime] = {}
         self._gunluk_attempt_path = os.path.join(self.data_dir, "gunluk_fetch_attempts.json")
+        # Seans içi boşluk (eksik 1H mumu) tamir denemeleri. Delik rutin 5 günlük
+        # pencereyle kapanmıyorsa tam pencere (60d) denenir; sağlayıcıda kalıcı
+        # delik varsa her turda 60d indirmemek için sembol başına soğuma uygulanır.
+        # Kalıcı yazılmaz: restart sonrası tek bir tam deneme zararsızdır.
+        self._bosluk_tamir_denemeleri: Dict[str, datetime] = {}
+        # Başarısız günlük (1D) fetch zamanları: kalıcı DEĞİL. Süreç içinde kısa
+        # bir soğuma uygular; böylece geçici bir hata sembolü 6 saat verisiz
+        # bırakmaz, sağlayıcı da her turda dövülmez.
+        self._gunluk_fetch_hatalari: Dict[str, datetime] = {}
         # Son tespit edilen veri sorunları (split / bar boşluğu) - main.py okur
         self.sureklilik_sorunlari: Dict[str, List[Dict]] = {}
         # --- yazma amplifikasyonu koruması (Batch 6 / B5) ---
@@ -711,6 +721,39 @@ class StockDequeManager:
             df.index = pd.to_datetime(df.index, utc=True).tz_convert(ISTANBUL_TZ)
         return df
 
+    def bosluk_tamir_uygun_mu(self, stock: str, now: Optional[datetime] = None) -> bool:
+        """Seans içi boşluğu tam pencereyle onarma denemesi yapılabilir mi?
+
+        Soğuma (`BOSLUK_TAMIR_TEKRAR_DK`) dolmadıysa False döner. Amaç, sağlayıcıda
+        kalıcı deliği olan sembol için her tarama turunda 60 günlük indirme
+        yapılmasını engellemek; delik gerçekten onarılırsa `sureklilik_sorunlari`
+        temizlenir ve bu kapı bir daha sorulmaz.
+        """
+        if now is None:
+            now = datetime.now(ISTANBUL_TZ)
+        elif now.tzinfo is None:
+            now = ISTANBUL_TZ.localize(now)
+        else:
+            now = now.astimezone(ISTANBUL_TZ)
+        onceki = self._bosluk_tamir_denemeleri.get(stock)
+        if onceki is None:
+            return True
+        if onceki.tzinfo is None:
+            onceki = ISTANBUL_TZ.localize(onceki)
+        else:
+            onceki = onceki.astimezone(ISTANBUL_TZ)
+        return (now - onceki) >= timedelta(minutes=float(BOSLUK_TAMIR_TEKRAR_DK))
+
+    def bosluk_tamir_kaydet(self, stock: str, now: Optional[datetime] = None) -> None:
+        """Boşluk tamiri için tam pencere denemesinin zamanını işaretle."""
+        if now is None:
+            now = datetime.now(ISTANBUL_TZ)
+        elif now.tzinfo is None:
+            now = ISTANBUL_TZ.localize(now)
+        else:
+            now = now.astimezone(ISTANBUL_TZ)
+        self._bosluk_tamir_denemeleri[stock] = now
+
     def gunluk_veri_eksik_mi(self, stock: str, now: Optional[datetime] = None) -> bool:
         """Günlük veri eksik/eskiyse ve cooldown dolduysa True -> fetch gerekir.
 
@@ -724,6 +767,17 @@ class StockDequeManager:
             now = ISTANBUL_TZ.localize(now)
         else:
             now = now.astimezone(ISTANBUL_TZ)
+
+        # Başarısız son deneme çok yeniyse bekle: bu, 30 dakikalık hızlı
+        # yeniden-deneme penceresidir, başarılı çekimin 6 saatlik cooldown'ı değil.
+        son_hata = self._gunluk_fetch_hatalari.get(stock)
+        if son_hata is not None:
+            if son_hata.tzinfo is None:
+                son_hata = ISTANBUL_TZ.localize(son_hata)
+            else:
+                son_hata = son_hata.astimezone(ISTANBUL_TZ)
+            if now - son_hata < timedelta(minutes=float(GUNLUK_FETCH_HATA_TEKRAR_DK)):
+                return False
 
         df = self.to_gunluk_dataframe(stock)
         son_gun = None
@@ -771,8 +825,13 @@ class StockDequeManager:
 
     def gunluk_fetch_denemesi_kaydet(self, stock: str, now: Optional[datetime] = None,
                                       *, persist: bool = True,
-                                      persist_remote: bool = True) -> None:
+                                      persist_remote: bool = True,
+                                      basarili: bool = True) -> None:
         """Başarılı veya başarısız günlük fetch denemesinin zamanını kaydet.
+
+        ``basarili=False`` ise deneme, başarılı cooldown'ı (6 saat) DEĞİL kısa
+        bir hata soğumasını (`GUNLUK_FETCH_HATA_TEKRAR_DK`) besler: geçici
+        sağlayıcı hatası yüzünden sembol 6 saat günlük verisiz kalmamalı.
 
         ``persist=False`` yalnızca bu süreçte tekrar fetch'i yavaşlatır. Yeni
         günlük cache kalıcı yazılamadıysa, kalıcı cooldown yazmak yeniden
@@ -784,6 +843,10 @@ class StockDequeManager:
             now = ISTANBUL_TZ.localize(now)
         else:
             now = now.astimezone(ISTANBUL_TZ)
+        if not basarili:
+            self._gunluk_fetch_hatalari[stock] = now
+            return
+        self._gunluk_fetch_hatalari.pop(stock, None)
         self._gunluk_fetch_attempts[stock] = now
         if not persist:
             return
@@ -854,7 +917,9 @@ class StockDequeManager:
             else:
                 dq_1h = self.get_deque(stock)
                 sorunlar_1h = sureklilik_sorunlari_bul(dq_1h)
-                if any(s.get("tip") == "bosluk" for s in sorunlar_1h):
+                # `gun_boslugu`: bütün bir seansın hiç çekilmemesi. Önceden yalnız
+                # aynı gün içi delikler sayılıyordu; eksik gün denetimden kaçıyordu.
+                if any(s.get("tip") in ("bosluk", "gun_boslugu") for s in sorunlar_1h):
                     bosluklu_1h.append(stock)
                 if any(s.get("tip") in ("split", "sok") for s in sorunlar_1h):
                     bolunme_veya_sok.append(stock)

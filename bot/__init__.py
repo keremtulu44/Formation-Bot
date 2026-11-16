@@ -57,6 +57,7 @@ from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   son_kapanan_mum_ani, time_until_next_open, is_bist_open,
                   resample_all_timeframes, resample_ohlcv, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_yfinance_chart_data, fetch_last_bar,
+                  seans_ici_bosluk_sayisi,
                   select_yfinance_1h_period, tamamlanmis_mumlar,
                   mum_kapanis_ani, bar_kapandi_mi)
 from scan_pacer import YahooRequestPacer
@@ -878,6 +879,7 @@ __all__ = [
     "resample_ohlcv",
     "reset_daily_if_needed",
     "scan_all_stocks",
+    "seans_ici_bosluk_sayisi",
     "select_yfinance_1h_period",
     "setup_logging",
     "signal",

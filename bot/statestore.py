@@ -317,6 +317,13 @@ daily_stats = {
     'fetch_retries': 0,
     'fetch_retry_recovered': 0,
     'stale_stocks': 0,
+    # Cache yazımı reddedilen (OHLCV doğrulaması) sağlayıcı yanıtları: eski
+    # cache tazeymiş gibi analiz edilmesin diye hem sayılır hem ERROR loglanır.
+    'cache_reddi': 0,
+    # Seans içi boşluk tamiri için tam pencereyle istenen sembol sayısı.
+    'bosluk_tamir_fetch': 0,
+    # Boşluğu bilinerek analiz edilen sembol sayısı (kalite uyarısı).
+    'bosluklu_analiz': 0,
     'max_bar_age_min': None,
     'data_stale': False,
     'veri_yok_modu': False,

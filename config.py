@@ -193,6 +193,10 @@ SCAN_RETRY_BACKOFF_MAX_SEC = max(
 FULL_1H_FETCH_PERIOD = "60d"
 ROUTINE_1H_FETCH_PERIOD = "5d"
 FULL_1H_FETCH_STALE_DAYS = 5
+# Seans içi boşluk (eksik 1H mumu) tamiri: rutin 5 günlük pencere boşluğu
+# kapatamıyorsa tam pencere (60d) bir kez denenir. Sağlayıcıda kalıcı delik
+# varsa her turda 60d indirmemek için sembol başına bu soğuma uygulanır.
+BOSLUK_TAMIR_TEKRAR_DK = 180
 
 ISTANBUL_TZ = pytz.timezone("Europe/Istanbul")
 BIST_OPEN = time(9, 50)     # gerçek BIST seans başlangıcı (Yahoo ilk mumu 09:30 etiketli)
@@ -315,6 +319,13 @@ TARAMA_SURESI_UYARI_DK = 45
 # KORUNUR, sadece günlük pencere ~2 yıla çıkar. Maliyet: günde 30 ek fetch
 # (sadece günlük bar eksikse çekilir, yoksa cache).
 GUNLUK_FETCH_PERIOD = "2y"
+#: Tam 1H penceresinin kapsadığı gün sayısı (`FULL_1H_FETCH_PERIOD="60d"`).
+#: Boşluk/split kararlarında "bu delik tam pencereyle kapanabilir mi" sınırıdır.
+FULL_1H_FETCH_WINDOW_DAYS = 60
+#: Başarısız günlük (1D) fetch sonrası yeniden deneme beklemesi (dk).
+#: Başarılı denemede 6 saatlik cooldown uygulanır; sağlayıcı hatası da 6 saat
+#: sayılırsa tek bir geçici hatada sembol yarım gün günlük verisiz kalıyordu.
+GUNLUK_FETCH_HATA_TEKRAR_DK = 30
 GUNLUK_DEQUE_MAXLEN = 500
 
 TELEGRAM_MAX_MESAJ_SAAT = 20

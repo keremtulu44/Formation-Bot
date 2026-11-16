@@ -803,8 +803,12 @@ def morning_preload(deque_manager, pacer):
                         break
                     taze = fetch_last_bar(stock)
                 if taze is not None and len(taze) > 0:
-                    deque_manager.append_dataframe(stock, taze)
-                    _pkg.logger.debug(f"{stock}: preload {len(taze)} bar")
+                    if deque_manager.append_dataframe(stock, taze):
+                        _pkg.logger.debug(f"{stock}: preload {len(taze)} bar")
+                    else:
+                        _pkg.logger.warning(
+                            f"{stock}: preload verisi OHLCV doğrulamasında reddedildi"
+                        )
                 from bot.app import _shutdown_bekle
                 _shutdown_bekle(1.0)
             except Exception as e:

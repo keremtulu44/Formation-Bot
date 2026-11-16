@@ -141,3 +141,157 @@ eklendi.
 | `domain_engines/stabil/__init__.py` | `StabilTrendTimelines` dışa aktarımı |
 | `grafik/render.py` | Sağ şerit genişliği ölçü modeliyle hizalı; S110 gerekçesi |
 | `docs/README.md` | 2026-11-15 belgeleri + bu rapor tabloya eklendi |
+
+## 7. Veri çekme hattı: "eksik çekilip geçilme" denetimi (2026-11-16, ikinci tur)
+
+Kullanıcı sorusu: *"veri çekilme sürecinde eksik çekilip geçilme olayı gibi
+sorunları tespit edip çözer misin"*. Aşağıdaki altı kusur kodda kanıtlandı,
+beşi düzeltildi; biri **bilinçli olarak değiştirilmedi** (mevcut test
+sözleşmesi, §7.7).
+
+İnceleme yüzeyi: `data/fetch.py`, `data/seed_cache.py`, `data/backfill.py`,
+`bot/scan.py` (fetch penceresi + 1H/1D append), `bot/app.py` (ilk yükleme),
+`bot/summary.py` (gece yenilemesi) ve `canli_tarama.py`.
+
+### 7.1 Sessiz satır eleme (sağlayıcı çıkışı)
+
+`_saglayici_ohlcv_temizle` sağlayıcı yanıtından NaN/imkânsız OHLC/hayalet
+tatil satırlarını ayıklıyor, **kaç satır attığını kimseye söylemiyordu**. 500
+satırlık yanıtın 40'ı elense bile log tek satır "başarılı fetch" gösteriyordu;
+kullanıcı eksik seriyi ancak grafikte fark ediyordu.
+
+Düzeltme: fonksiyon `attrs` içinde `ham_satir` / `reddedilen_satir` /
+`hayalet_satir` taşıyor; `_fetch_yfinance_adaylari` eleme olduğunda sembol,
+sağlayıcı adı, dönem ve "kalan mum" ile **WARNING** yazıyor. Kısmi kabul
+davranışı (bozuk satır yüzünden tüm geçmişi reddetmemek) aynen korundu.
+
+### 7.2 Append reddi yutuluyordu (hem 1H hem 1D)
+
+`StockDequeManager.append_dataframe` / `append_gunluk_dataframe` OHLCV
+doğrulaması sınırıdır ve **bool** döner. Çağıranlar dönüşü yok sayıyordu:
+reddedilen veri deque'e yazılmıyor ama üst katman "tazelendi" logluyor,
+taze veri varmış gibi analize devam ediyordu (tam olarak "eksik çekilip
+geçilme").
+
+Düzeltilen çağrı yerleri:
+
+| Yer | Önce | Sonra |
+|---|---|---|
+| `bot/scan.py` 1H turu | dönüş yok sayılıyordu | `False` ise `cache_reddi` sayacı + ERROR; `taze=None` yapılıp "taze veri yok" yoluna düşülür |
+| `bot/scan.py` 1D turu | `False` olsa da "günlük veri tazelendi" | `True` ise loglanır; `False` ise ERROR + mevcut günlük cache korunur |
+| `bot/app.py` ilk 1H | `False` olsa da "diske kaydedildi" | yalnız başarılı yazımda disk+log; aksi hâlde hata sözlüğüne yazılır, sonraki turda tekrar denenir |
+| `bot/app.py` ilk 1D | dönüş yok sayılıyordu | aynı şekilde koşullu log + `cache_reddi` |
+| `bot/summary.py` preload | dönüş yok sayılıyordu | reddedilirse WARNING |
+
+### 7.3 Seans içi boşluk hiç onarılmıyordu
+
+`select_yfinance_1h_period` pencereyi yalnız **son barın yaşına** göre seçiyor
+(taze ise `5d`, değilse `60d`). Cache'te 3 gün önceki bir seansın içinde delik
+varsa son bar taze olduğu için pencere `5d` kalıyor, delik **asla** kapanmıyor;
+`bot/scan.py` de delikli seriyle analiz sürüyordu (yalnız `split` analizi
+durduruyor).
+
+Düzeltme:
+* `data/fetch.py::seans_ici_bosluk_sayisi(cached)` — aynı takvim günü içindeki
+  `BAR_BOSLUK_ESIK_SAAT` (1,5 saat) üstü aralıkları sayar; gece/hafta sonu
+  aralıklarını saymaz.
+* Tarama öncesi pencere seçiminde boşluk varsa **tam pencere (60d)** istenir.
+  Sağlayıcıda kalıcı delik olan sembol için her turda 60d indirmemek üzere
+  sembol başına `BOSLUK_TAMIR_TEKRAR_DK` (180 dk) soğuma uygulanır
+  (`StockDequeManager.bosluk_tamir_uygun_mu` / `bosluk_tamir_kaydet`).
+* Ayrıca `sureklilik_sorunlari` içindeki pencere içi (`FULL_1H_FETCH_WINDOW_DAYS`)
+  boşluk kayıtları da tamir tetikleyicisidir; 60 günden eski delikler için
+  boşuna indirme yapılmaz.
+
+Onarım başarılıysa `sureklilik_sorunlari` temizlenir (mevcut `replace/append`
+davranışı); başarısızsa §7.4'teki uyarı görünür.
+
+### 7.4 Delik kapatılamazsa analiz sessizdi
+
+`bot/scan.py` boşluk/şokta analize devam ediyor ve yalnız INFO yazıyordu.
+Artık `bosluk` içeren sembol için **WARNING** ("analiz delikli seriyle sürüyor;
+sinyal kalitesi etkilenebilir") + kaç boşluk olduğu ve `bosluklu_analiz`
+sayacı yazılıyor. Karar değişmedi (fail-open korunuyor), yalnız görünürlük
+arttı.
+
+### 7.5 Başarısız 1D denemesi sembolü 6 saat kilitliyordu
+
+`gunluk_fetch_denemesi_kaydet` fetch sonucundan **önce** çağrılıyordu; tek bir
+geçici sağlayıcı hatası 6 saatlik cooldown yazıyor, sembol yarım gün günlük
+veri olmadan resample ile idare ediyordu.
+
+Düzeltme: `basarili=False` parametresi. Başarılı deneme eskisi gibi 6 saatlik
+`_gunluk_fetch_attempts` cooldown'ı yazar; başarısız deneme yalnız bellekte
+tutulan kısa soğumaya (`GUNLUK_FETCH_HATA_TEKRAR_DK` = 30 dk) yazılır, kalıcı
+cooldown'a **dokunmaz**. Böylece sağlayıcı her turda dövülmez ama sembol de
+yarım gün verisiz kalmaz. Çağrı yerleri: `bot/scan.py`, `bot/app.py`,
+`canli_tarama.py`.
+
+### 7.6 Bir seansın tamamı eksikse hiç görünmüyordu
+
+`sureklilik_sorunlari_bul` boşluğu yalnız `ts.date() == onceki_gun` iken
+arıyordu. Bir günün (veya birkaç günün) tüm barları eksikse iki bar arasındaki
+aralık farklı güne düşüyor, ne uyarı ne denetim kaydı üretiliyordu.
+
+Düzeltme: `_aradaki_islem_gunu_sayisi` (BIST takvimi: `islem_gunu_mu`) ile
+farklı güne düşen aralıkta **atlanmış işlem günü** varsa `gun_boslugu` kaydı
+üretilir. Yalnız seans içi (saatlik) seride çalışır — medyan bar aralığı > 12
+saat olan günlük serilerde tatil boşlukları yanlış pozitif üretmesin. Normal
+gece/hafta sonu aralıkları sayılmaz. `denetle_mum_butunlugu` artık
+`gun_boslugu` kayıtlarını da `bosluklu_1h` olarak raporlar.
+
+### 7.7 Bilinçli olarak DEĞİŞTİRİLMEYEN (test sözleşmesi)
+
+* **Geçici sağlayıcı hatasında yedek seriye geçilmez.** `_fetch_yfinance_adaylari`
+  retryable hatada `(None, True, ...)` döner; yedek aday denenmez. Bu,
+  `test_grafik_veri_guvenilirligi.py::test_gecici_hatada_yedek_istegi_yok` ile
+  açıkça sözleşmeye bağlanmış bir karar (spot ↔ vadeli seriyi ağ hatası
+  anında sessizce değiştirmemek). Denendi, test kırmızıya döndü → geri
+  alındı. "Eksik kalma" riski yeniden-deneme tarafında çözüldü (§7.5).
+
+### 7.8 Yeni sayaçlar
+
+`bot/statestore.py::daily_stats`: `cache_reddi`, `bosluk_tamir_fetch`,
+`bosluklu_analiz`. Şema tanımı güncellendi; `reset_daily` listesi aynı
+sözlükten türetildiği için ayrıca değişmedi.
+
+### 7.9 Testler
+
+Yeni dosya `test_veri_eksik_akis.py` (14 test) — **ağa çıkmaz**, gerçek
+`StockDequeManager` + sahte fetch kullanır:
+
+| Test | Neyi kilitler |
+|---|---|
+| `test_seans_ici_bosluk_temiz_seride_yok` / `..._eksik_mumda_sayilir` / `..._gece_ve_hafta_sonunu_saymaz` / `..._bos_ve_kisa_seride_sifir` | boşluk ölçütü |
+| `test_bosluk_tamir_sogumasi` | 180 dk soğuma |
+| `test_saglayici_temizleme_elenen_satirlari_bildirir` | `attrs` sayaçları |
+| `test_cache_boslugu_tam_pencereyle_tamir_ister` | delik → 60d istenir, onarılır, sonra 5d'ye döner |
+| `test_kalici_delikte_tamir_sogumaya_girer` | kalıcı delikte tekrar 60d indirilmez |
+| `test_bosluklu_analiz_uyari_ve_sayac` | delikli analiz uyarısı + sayaç |
+| `test_reddedilen_1h_append_taze_veri_sayilmaz` | reddedilen 1H append cache'e sızmaz, `cache_reddi` artar |
+| `test_reddedilen_gunluk_append_tazelendi_logu_yazmaz` | sahte "tazelendi" logu yok |
+| `test_eksik_seans_gun_boslugu_olarak_yakalanir` / `test_normal_gece_ve_hafta_sonu_gun_boslugu_uretmez` | `gun_boslugu` tespiti ve yanlış pozitif yokluğu |
+| `test_gunluk_fetch_hatasi_alti_saat_kilitlemez` | hata → 30 dk, başarı → 6 saat |
+
+Not (test yüzeyi kusuru, düzeltilmedi): `bot/scan.py` 1D fetch'i
+`_pkg.fetch_yfinance_1d` üzerinden değil **kendi bağlı adıyla** çağırıyor;
+`main` üzerinden yamalayan testler ağa çıkabilir. Bu turda testler iki yüzeyi
+birlikte yamaladı. Ayrıca `scan_all_stocks`'un mevcut entegrasyon testleri
+(`test_live_data_flow.py`, `test_bist_calendar_regressions.py` içindeki 13+8
+test) hâlâ `skip` ve bir kısmı **artık var olmayan** parametreleri
+(`require_current_session`, `_run_domain_engines_for_symbol`,
+`_safe_completed_domain_frame`, `fetch_valid`) kullanıyor → tarama hattının
+uçtan uca otomatik kapsaması yok. Bu turdaki entegrasyon testleri bu boşluğu
+kısmen kapatır (gerçek `scan_all_stocks` + gerçek deque).
+
+### 7.10 Doğrulama (bu tur)
+
+| Kapı | Sonuç |
+|---|---|
+| `ruff check .` | Temiz (0 hata) |
+| `python -m pytest -q` (tam süit) | **4304 geçti / 43 atlandı / 675,8 sn** |
+| `test_grafik_veri_guvenilirligi.py` (sözleşme geri alımı sonrası) | 9/9 geçti |
+| Hedefli veri hattı paketi (9 dosya) | 99 geçti / 35 atlandı |
+
+(Atlanan 43 test, depoda önceden `skip` işaretli testlerdir; bu turda
+eklenmedi.)
