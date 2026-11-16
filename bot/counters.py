@@ -241,6 +241,12 @@ def reset_daily_if_needed():
         _pkg.daily_stats['fetch_retries'] = 0
         _pkg.daily_stats['fetch_retry_recovered'] = 0
         _pkg.daily_stats['stale_stocks'] = 0
+        # 2026-11-16 denetimi: bu dört sayaç kodda artıyordu ama gün değişiminde
+        # sıfırlanmıyordu -> dünün değeri bugünün özetine taşınıyordu.
+        _pkg.daily_stats['cache_reddi'] = 0
+        _pkg.daily_stats['bosluk_tamir_fetch'] = 0
+        _pkg.daily_stats['bosluklu_analiz'] = 0
+        _pkg.daily_stats['alerts_makro_kapali'] = 0
         _pkg.daily_stats['max_bar_age_min'] = None
         _pkg.daily_stats['data_stale'] = False
         _pkg.daily_stats['veri_yok_modu'] = False

@@ -309,6 +309,12 @@ daily_stats = {
     'alerts_engel_cooldown': 0,   # cooldown nedeniyle gönderilemedi (B4 kuyruğuna girer)
     'alerts_engel_kap': 0,        # saatlik/günlük kap nedeniyle gönderilemedi
     'alerts_engel_tekrar': 0,     # aynı olay tekrar bastırıldı (tekrar mühürü; nihai red, kuyruğa girmez)
+    'alerts_makro_kapali': 0,     # makro sembol alarmı kapalı olduğu için push yok (MAKRO_ALARM=0)
+    # Görsel sayaçları: metin kotasından ayrı izlenir, gün sonunda sıfırlanır.
+    # (2026-11-16 denetimi: kodda kullanılıp şemada olmadıkları için ilk turda
+    # sessizce oluşuyorlardı; artık gün başından itibaren tanımlı.)
+    'grafik_kare': 0,
+    'grafik_hata': 0,
     # Veri sağlığı (FAZ 1): fetch başarısızlıkları artık SAYILIYOR ve görünür.
     # Önceden fetch başarısız olunca cache dolu olduğu için hiç log satırı yoktu
     # -> Yahoo saatlerce kapalıysa bot "sağlıklı" görünürken kör çalışıyordu.

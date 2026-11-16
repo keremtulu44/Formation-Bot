@@ -295,3 +295,95 @@ kısmen kapatır (gerçek `scan_all_stocks` + gerçek deque).
 
 (Atlanan 43 test, depoda önceden `skip` işaretli testlerdir; bu turda
 eklenmedi.)
+
+## 8. Genel kontrol — ikinci tur (2026-11-16, aynı gün)
+
+Kullanıcı isteği: *"şimdi genel bir kontrol yap"*. Bu bölüm **CI'nın sekiz
+kapısının tamamını yerelde yeniden üretir** ve GitHub Actions sonucunu kaydeder.
+Önceki bölümler (7) veri hattı denetimiydi; bu bölüm depo geneli kontrol.
+
+### 8.1 Kapı sonuçları
+
+| Kapı (CI adı) | Bu turdaki sonuç |
+|---|---|
+| GitHub CI (`CI (Render parity)`, run `43894494101`) | **success**, 8 dk 58 sn, **12/12 adım yeşil**, Python **3.12** (repo `.python-version`) |
+| `Statik kapı (ruff)` | **Temiz** — yerel (3.11.2) ve CI (3.12) aynı sonuç |
+| `Unit testler (pytest)` | **4314 geçti / 43 atlandı / 694 sn**; 4357 toplandı (CI'da aynı adım yeşil) |
+| `Kurulum doktoru ve grafik (çevrimdışı)` | **39 tamam / 7 uyarı / 0 hata**; `Kare üretildi: AKBNK 4h` (68 mum, 74,9 KB), `Stabil direnç bu karede çizildi`, `Fotoğraf gönderilmedi` — CI'nın üç `grep` beklentisi de karşılandı |
+| `Zamanlama / ölü formasyon regresyonu` (`test_tarama_zamani.py`) | **102/102** |
+| `Formasyon regresyon scriptleri` | `test_triangle` / `test_breakout` / `test_flag` / `test_pennant` → **dördü de "TÜM KONTROLLER GEÇTİ"** |
+| `Render duman testi (/health)` | `/health` **200** `"status": "ok"`, `/health?ka=1` **200** + `"commit": "deadbee"`, `/ready` **503** (`startup_complete: false`), `/test` **404**, `POST /webhook/deneme` **404** |
+| Duman testi koruma kontrolü | Log'da `Health smoke mode: provider and command loops disabled` **var**, `TARAMA BAŞLIYOR / Yahoo pacing / 1H fetch penceresi` izi **yok** |
+
+7 uyarının hepsi ortam kaynaklı (Telegram/Supabase tanımsız, `--skip-network`,
+eski `setuptools`); kod kaynaklı hata yok.
+
+### 8.2 Bulgu: günlük sayaç şeması ile sıfırlama birbirinden kaymış
+
+`daily_stats` iki yerde tanımlıdır: şema (`bot/statestore.py`) ve gün değişimi
+sıfırlaması (`bot/counters.reset_daily_if_needed`, her anahtarı **tek tek**
+sıfırlar). Mekanik tarama (kodda `daily_stats[...]` geçen anahtarlar ↔ şema ↔
+sıfırlama listesi) iki yönlü kayma buldu:
+
+| Sınıf | Sayaçlar | Sonuç |
+|---|---|---|
+| Şemada yok, kodda var | `grafik_kare`, `grafik_hata`, `alerts_makro_kapali` | İlk kullanımda sessizce oluşuyordu (gün başından itibaren tanımsız) |
+| Şemada var, gün değişiminde sıfırlanmıyor | `cache_reddi`, `bosluk_tamir_fetch`, `bosluklu_analiz` (**§7'de eklendi**), `alerts_makro_kapali` | Dünün değeri bugünün özetine taşınıyordu |
+
+Düzeltme: üç eksik şema anahtarı eklendi; dört eksik sıfırlama yazıldı. Aynı
+sınıfın tekrarını önlemek için **sözleşme testi** eklendi
+(`test_gunluk_sayac_semasi.py`, 2 test): (a) kodda artırılan her anahtar şemada
+olmalı, (b) gün değişiminde her sayısal sayaç 0'a dönmeli.
+
+### 8.3 Doğrulama: yeni `gun_boslugu` tespiti tatilde yanlış pozitif üretmiyor
+
+§7.6'da eklenen eksik-seans tespiti BIST takvimine dayanır; bayram/hafta sonu
+boşluklarının eksik veri sanılmaması kritik. Çalıştırılan senaryolar:
+
+| Senaryo | Sonuç |
+|---|---|
+| 3 günlük resmî tatil (27-29 Mayıs 2026, Kurban Bayramı) atlanmış | **sorun yok** |
+| Normal bir iş günü (Salı) tamamen eksik | `gun_boslugu` — "1 işlem günü hiç çekilmemiş" |
+| Seans içi 3 saatlik delik | `bosluk` (mevcut davranış) |
+| Temiz seri | sorun yok |
+| `denetle_mum_butunlugu` çıktısı | `bosluklu_1h: ['DELIK', 'EKSIKGUN']` — yeni tip denetime girdi |
+
+Bu senaryo kalıcı test olarak eklendi
+(`test_resmi_tatil_gunleri_gun_boslugu_uretmez`).
+
+### 8.4 Bilgi — aksiyon alınmayan gözlemler
+
+1. **Ölü/tek-referanslı tanımlar:** 2703 fonksiyon tanımından 35'i depo içinde
+   tek geçiyor (çoğu `research/` ve `domain_engines/` yardımcıları; bir kısmı
+   `getattr` ile dinamik çağrılıyor olabilir). Bunlardan ikisi dikkat çekici:
+   `bist_calendar.is_trading_day` ve `bist_calendar.seconds_until_next_bist_open`
+   — `data/replay.islem_gunu_mu` / `time_until_next_open` ile **aynı işi yapan
+   ikinci yüzey**; atlanan testlerin gerekçesinde geçen "takvimi tek kaynağa
+   indirme" işiyle aynı başlık. Bu turda **dokunulmadı** (kapsam dışı refaktör).
+2. **`docs/README.md` küratörlü indeks:** 172 belgeden 86'sı tabloda yok;
+   `arastirma/` dışında kalan 30 belgenin 4'ü `denetim/` altında
+   (`ALARM_DENETIMI_2026-10-22`, `DEPLOY_STABIL_KONTROLU_2026-11`,
+   `GRAFIK_VERI_SUREKLILIGI_2026-11`, `P0_P1_P2_UYGULAMA_PLANI`). YAPI §7.3
+   "her yeni belge için bir satır" der; bunlar geçmişten kalmış kayıtlar.
+   Kayıt/durum bilgisi bilinmediği için **satır eklenmedi**; karar bekliyor.
+   Bu raporun kendisi tabloda kayıtlı (satır güncellendi).
+3. **Depo boyutu:** `.git` 132 MB; en büyük izlenen dosyalar
+   `docs/arastirma/**/*.csv.gz` (19 MB, 18 MB). Bilinçli arşiv — Git LFS'e
+   taşımak ayrı bir karar, dokunulmadı.
+4. **Sır taraması:** izlenen dosyalarda gerçek anahtar yok; bulunan eşleşmeler
+   test fixture'ları (`123456789:AA…`, `eyJhbGciOi…` sahte JWT). `.env`
+   izlenmiyor, `.gitignore` kapsıyor. **Temiz.**
+5. **TODO/FIXME:** 2 adet (`patterns/pole.py`, `patterns/pivots.py`), ikisi de
+   önceden var olan notlar.
+6. **Ortam farkı:** sandbox Python **3.11.2**, repo/CI/Render **3.12**. Bu
+   turdaki sayılar 3.11'de alındı; **3.12 kanıtı GitHub Actions'tan** (yeşil).
+
+### 8.5 Değişen dosyalar (bu tur)
+
+| Dosya | Değişiklik |
+|---|---|
+| `bot/statestore.py` | Eksik şema anahtarları: `grafik_kare`, `grafik_hata`, `alerts_makro_kapali` |
+| `bot/counters.py` | Gün değişiminde eksik sıfırlamalar: `cache_reddi`, `bosluk_tamir_fetch`, `bosluklu_analiz`, `alerts_makro_kapali` |
+| `test_gunluk_sayac_semasi.py` | **Yeni** — şema↔sıfırlama sözleşmesi (2 test) |
+| `test_veri_eksik_akis.py` | +1 test: resmî tatilde `gun_boslugu` yanlış pozitifi yok |
+| `docs/README.md` | Bu raporun satırı §8'i kapsayacak şekilde güncellendi |

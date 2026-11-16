@@ -430,3 +430,39 @@ def test_gunluk_fetch_hatasi_alti_saat_kilitlemez(tmp_path):
     mgr.gunluk_fetch_denemesi_kaydet("THYAO", aksam, persist=False)
     assert mgr.gunluk_veri_eksik_mi("THYAO", aksam + timedelta(hours=5)) is False
     assert mgr.gunluk_veri_eksik_mi("THYAO", aksam + timedelta(hours=7)) is True
+
+
+def test_resmi_tatil_gunleri_gun_boslugu_uretmez():
+    """Ardışık resmî tatil günleri (ör. Kurban Bayramı) eksik veri SANILMAZ."""
+    from data.backfill import sureklilik_sorunlari_bul
+
+    tatiller = sorted(config.BIST_TATILLER)
+    ardisik = None
+    for i in range(len(tatiller) - 1):
+        if (tatiller[i + 1] - tatiller[i]).days == 1:
+            ardisik = {tatiller[i], tatiller[i + 1]}
+            if i + 2 < len(tatiller) and (tatiller[i + 2] - tatiller[i + 1]).days == 1:
+                ardisik.add(tatiller[i + 2])
+            break
+    assert ardisik, "BIST_TATILLER içinde ardışık tatil bulunamadı"
+
+    simdi = datetime(2026, 6, 10, 17, 0, tzinfo=IST)
+    bugun = pd.Timestamp(simdi).normalize()
+    parcalar = []
+    for geri in range(30, 0, -1):
+        gun = bugun - pd.Timedelta(days=geri)
+        if gun.date() in ardisik or gun.weekday() >= 5:
+            continue
+        idx = pd.date_range(f"{gun.date()} 10:00", periods=9, freq="h", tz=IST)
+        parcalar.append(pd.DataFrame(
+            {"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 1000.0},
+            index=idx,
+        ))
+    seri = pd.concat(parcalar)
+    kayitlar = [
+        {"timestamp": ts.to_pydatetime(), "open": float(r.open), "high": float(r.high),
+         "low": float(r.low), "close": float(r.close), "volume": float(r.volume)}
+        for ts, r in seri.iterrows()
+    ]
+    sorunlar = sureklilik_sorunlari_bul(kayitlar)
+    assert not [s for s in sorunlar if s["tip"] in ("bosluk", "gun_boslugu")]
