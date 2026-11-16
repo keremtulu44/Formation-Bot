@@ -1088,6 +1088,8 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "reclaim_supurme_isaret": 0,
         "momentum_isaret": 0,
         "momentum_taban_isaret": 0,
+        "baglam_guclu_isaret": 0,
+        "baglam_zayif_isaret": 0,
         "iptal_isaret": 0,
         "dikey_deneme_isaret": 0,
         "kadrajda": bool(kadrajda),
@@ -1295,6 +1297,30 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                         edgecolors=PALET["zemin"], linewidths=0.7, zorder=4.8, clip_on=True)
         sc.set_gid("grafik-stabil-iptal")
         ozet["iptal_isaret"] = len(cx)
+
+    # Bağlam sınıfı (2026-11-15, doğrulanmış profil; tarama katmanı hesaplar):
+    # guclu -> beyaz halka (rebase veya kırık-sonrası-sabit zeminde geri alım;
+    # replay %57,5 yönde / %16,1 zayıf), zayif -> soluklaştırma
+    # (düşüş-sonrası yatay zeminde geri alım/süpürme; %44,8 / %30,7).
+    # Ok üretimi değişmez; yalnız vurgu değişir (filtre değildir).
+    _baglam = stabil.get("baglam") or {}
+
+    def _baglam_barlar(sinif):
+        return [int(b) for b in (reclaim_barlar + momentum_barlar)
+                if str(_baglam.get(str(b)) or _baglam.get(b) or "") == sinif]
+
+    _gx, _gy = _ok_koordinatlari(_baglam_barlar("guclu"))
+    if _gx:
+        sc = ax.scatter(_gx, _gy, marker="o", s=150, facecolors="none",
+                        edgecolors="#e5e7eb", linewidths=1.1, zorder=4.9, clip_on=True)
+        sc.set_gid("grafik-stabil-baglam-guclu")
+        ozet["baglam_guclu_isaret"] = len(_gx)
+    _zx, _zy = _ok_koordinatlari(_baglam_barlar("zayif"))
+    if _zx:
+        sc = ax.scatter(_zx, _zy, marker="^", s=62, c=PALET["zemin"], alpha=0.55,
+                        edgecolors="none", zorder=4.95, clip_on=True)
+        sc.set_gid("grafik-stabil-baglam-zayif")
+        ozet["baglam_zayif_isaret"] = len(_zx)
 
     # Dikey adaylar teşhis olarak kalır; bastırılmış oka yeni işaret çizilmez.
 

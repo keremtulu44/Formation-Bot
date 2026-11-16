@@ -407,6 +407,7 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
     bos = {"hazir": False, "seviyeler": [], "renkler": [], "durumlar": [],
            "reclaim_barlar": [], "momentum_barlar": [], "dikey_barlar": [],
            "dikey_deneme_barlar": [], "reclaim_turleri": {}, "momentum_turleri": {},
+           "rejimler": [], "baglam": {},
            "son_seviye": None,
            "son_durum": "NO_SUPPORT", "konum": None}
     if not projeksiyon or pencere_boy <= 0:
@@ -455,9 +456,12 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
     momentum_barlar: list[int] = []
     reclaim_turleri: dict[str, str] = {}
     momentum_turleri: dict[str, str] = {}
+    rejimler: list[Optional[str]] = []
+    baglam: dict[str, str] = {}
     dikey_barlar: list[int] = []
     dikey_deneme_barlar: list[int] = []
     for idx_b, bhv in enumerate(dav_dilim):
+        rejimler.append(str(_alan(bhv, "regime") or "") if bhv is not None else None)
         if bhv is None:
             continue
         if bool(_alan(bhv, "vertical_support", False)):
@@ -472,6 +476,22 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
         if _alan(bhv, "momentum_kind") in STABIL_GUCLU_YUKARI_MOMENTUM_TURLERI:
             momentum_barlar.append(int(idx_b))
             momentum_turleri[str(int(idx_b))] = str(_alan(bhv, "momentum_kind"))
+        # --- BAĞLAM SINIFI (2026-11-15, doğrulanmış replay profili) ---
+        # stabil_ok_replay_2026_11_05 (555 ok) + zaman bölmesi ve sembol
+        # kümeli bootstrap ile doğrulandı:
+        #   guclu: rebase oku VEYA (çok mumlu geri alım + BREACHED_FIXED_SUPPORT)
+        #          -> %57,5 yönde / %16,1 zayıf (iki zaman yarısında da %57-58)
+        #   zayif: HORIZONTAL_AFTER_DROP zemininde geri alım/süpürme
+        #          -> %44,8 yönde / %30,7 zayıf
+        # Sinyal üretimi değişmez; sınıf yalnız grafik vurgusudur.
+        _rejim = str(_alan(bhv, "regime") or "")
+        if (_alan(bhv, "momentum_kind") == "upward_rebase_momentum"
+                or (_alan(bhv, "reclaim_kind") == "multi_bar_recovery"
+                    and _rejim == "BREACHED_FIXED_SUPPORT")):
+            baglam[str(int(idx_b))] = "guclu"
+        elif (_rejim == "HORIZONTAL_AFTER_DROP"
+              and _alan(bhv, "reclaim_kind") in {"multi_bar_recovery", "intrabar_sweep_reclaim"}):
+            baglam[str(int(idx_b))] = "zayif"
 
     son_seviye = next((v for v in reversed(seviyeler) if v is not None), None)
     son_renk = next((r for r in reversed(renkler) if r is not None), None)
@@ -486,6 +506,8 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
         "momentum_barlar": momentum_barlar,
         "reclaim_turleri": reclaim_turleri,
         "momentum_turleri": momentum_turleri,
+        "rejimler": rejimler,
+        "baglam": baglam,
         "dikey_barlar": dikey_barlar,
         "dikey_deneme_barlar": dikey_deneme_barlar,
         "son_seviye": son_seviye,

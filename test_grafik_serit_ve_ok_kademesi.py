@@ -71,3 +71,21 @@ def test_ok_kademesi_turleri_ayirir(tmp_path):
     assert cizgiler["reclaim_supurme_isaret"] == 1
     assert cizgiler["momentum_isaret"] == 1
     assert cizgiler["momentum_taban_isaret"] == 1
+
+
+def test_baglam_sinifi_guclu_halka_zayif_soluk(tmp_path):
+    """Doğrulanmış profil: güçlü bağlam halkası, zayıf bağlam soluklaştırma."""
+    g = _goruntu()
+    g["stabil"] = {
+        "hazir": True, "seviyeler": [49.0] * 40, "renkler": ["ust"] * 40,
+        "reclaim_barlar": [10, 12], "momentum_barlar": [],
+        "reclaim_turleri": {"10": "multi_bar_recovery", "12": "intrabar_sweep_reclaim"},
+        "baglam": {"10": "guclu", "12": "zayif"},
+        "dikey_barlar": [], "dikey_deneme_barlar": [], "son_seviye": 49.0,
+        "son_renk": "ust",
+    }
+    yol, meta = grafik.ciz(g, "4h", {"cikti": str(tmp_path / "baglam.png")})
+    assert yol
+    cizgiler = meta["cizgiler"]["stabil"]
+    assert cizgiler["baglam_guclu_isaret"] == 1
+    assert cizgiler["baglam_zayif_isaret"] == 1
