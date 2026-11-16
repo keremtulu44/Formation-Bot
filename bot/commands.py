@@ -1414,6 +1414,9 @@ def _komut_panel(arguman: str) -> str:
 
 
 _GRAFIK_TAZELEME_COOLDOWN_SN = 120.0
+#: /grafik sağlayıcı isteği: geçici hata (429/timeout/503) için toplam deneme.
+#: 1 = yeniden deneme yok. Kare isteği kullanıcıyı beklettiği için üst sınır küçük.
+_GRAFIK_HATA_DENEME = 2
 _grafik_yenileme_kilidi = threading.Lock()
 _grafik_yenileme_durum = {}
 
@@ -1445,19 +1448,20 @@ def _grafik_cache_tazelik_durumu(frame, tf: str, now=None) -> dict:
 
     if frame is None or len(frame) == 0:
         return {"taze": False, "yas_dk": None, "esik_dk": esik,
-                "aciklama": "kapanmış mum yok"}
+                "gecikme_dk": None, "aciklama": "kapanmış mum yok"}
     try:
         kapanan = _pkg.tamamlanmis_mumlar(frame, tf, now=now)
         if kapanan is None or len(kapanan) < 2:
             return {"taze": False, "yas_dk": None, "esik_dk": esik,
-                    "aciklama": "en az iki kapanmış mum yok"}
+                    "gecikme_dk": None, "aciklama": "en az iki kapanmış mum yok"}
         kapanis = _pkg.mum_kapanis_ani(kapanan.index[-1], tf)
         if kapanis is None:
             return {"taze": False, "yas_dk": None, "esik_dk": esik,
-                    "aciklama": "son mumun kapanış anı belirlenemedi"}
+                    "gecikme_dk": None, "aciklama": "son mumun kapanış anı belirlenemedi"}
         yas = (now - kapanis).total_seconds() / 60.0
     except (TypeError, ValueError, OverflowError, KeyError) as exc:
         return {"taze": False, "yas_dk": None, "esik_dk": esik,
+                "gecikme_dk": None,
                 "aciklama": f"mum tazeliği doğrulanamadı ({type(exc).__name__})"}
 
     # Tarama tarafından sağlanan ortak cache politikası (özellikle test/uygulama
@@ -1468,10 +1472,35 @@ def _grafik_cache_tazelik_durumu(frame, tf: str, now=None) -> dict:
         ortak_kabul = bool(_pkg._cache_verisi_kullanilabilir(yas, False, seans_acik))
     except Exception:  # tazelik kapısı hata verirse fail-closed kal
         ortak_kabul = False
-    taze = ortak_kabul or (seans_acik and yas <= esik)
-    aciklama = (f"son kapanış yaşı {yas:.0f} dk (sınır {esik:.0f} dk)" if not taze
-                else f"son kapanış yaşı {yas:.0f} dk")
+
+    # SEANS AÇIKKEN ÖLÇÜT "YAŞ" DEĞİL "GECİKME" (2026-11-16): seans açıkken
+    # geçen süre takvimin doğal sonucudur. Seansın ilk saatlerinde (ilk saatlik
+    # mum kapanmadan) son kapanmış mum DÜNKÜdür; yaş ~16 saat olur ve eski kapı
+    # bunu "bayat" sayıp /grafik'i "veri yok" ile kapatıyordu. Aynı şekilde 1G
+    # grafik, günün günlük mumu kapanana kadar (18:30) bütün gün bayat
+    # görünüyordu. Artık veri, seans takvimine göre KAPANMIŞ OLMASI GEREKEN son
+    # mumla karşılaştırılır: gecikme = beklenen kapanış - son kapanış.
+    gecikme_dk = None
+    try:
+        beklenen = _pkg.beklenen_son_kapanis_ani(tf, now)
+    except Exception:  # takvim hatası tazelik kapısını kilitlemesin
+        beklenen = None
+    if beklenen is not None:
+        gecikme_dk = (beklenen - kapanis).total_seconds() / 60.0
+    olculen = gecikme_dk if (seans_acik and gecikme_dk is not None) else yas
+    # Mutlak tavan `_cache_verisi_kullanilabilir` içindedir (seans dışı 14 gün);
+    # seans içinde gecikme modeli zaten "beklenen son kapanış"a bağlar.
+    taze = bool(ortak_kabul or (olculen <= esik))
+
+    if taze:
+        aciklama = f"son kapanış yaşı {yas:.0f} dk"
+    elif gecikme_dk is not None:
+        aciklama = (f"son kapanış yaşı {yas:.0f} dk; seans takvimine göre "
+                    f"{gecikme_dk:.0f} dk geride (sınır {esik:.0f} dk)")
+    else:
+        aciklama = f"son kapanış yaşı {yas:.0f} dk (sınır {esik:.0f} dk)"
     return {"taze": taze, "yas_dk": yas, "esik_dk": esik,
+            "gecikme_dk": gecikme_dk, "beklenen_kapanis": beklenen,
             "kapanis": kapanis, "aciklama": aciklama}
 
 
@@ -1564,6 +1593,27 @@ def _grafik_tazele(hisse: str, tf: str, yonetici, now=None) -> dict:
             frame_validator=adayi_kabul_et,
             request_context=saglayici_istegi,
         )
+        # Geçici sağlayıcı hatası (429/timeout/503…) tek istekte kareyi
+        # düşürmesin: sınırlı bir yeniden deneme. Yedeğe geçiş YOK (spot/vadeli
+        # ayrımı korunur); aynı sembol, aynı pencere, kısa bekleme.
+        deneme = 1
+        while (frame is None or len(frame) == 0) and gecici_hata and deneme < _GRAFIK_HATA_DENEME:
+            if _pkg._shutdown_requested:
+                break
+            bekleme = min(2.0 * deneme, 4.0)
+            _pkg.logger.info(
+                "/grafik %s %s geçici sağlayıcı hatası (%s); %.1f sn sonra yeniden denenecek (%d/%d)",
+                sembol, interval, (hata or "")[:120], bekleme, deneme + 1, _GRAFIK_HATA_DENEME,
+            )
+            time.sleep(bekleme)
+            deneme += 1
+            frame, gecici_hata, hata = _pkg.fetch_yfinance_chart_data(
+                sembol,
+                interval,
+                period,
+                frame_validator=adayi_kabul_et,
+                request_context=saglayici_istegi,
+            )
         if frame is None or len(frame) == 0:
             neden = str(hata or ("geçici sağlayıcı hatası" if gecici_hata else "boş veri"))
             return tamamla({"ok": False, "detail": neden, "retryable": bool(gecici_hata)})

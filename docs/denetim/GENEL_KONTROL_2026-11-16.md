@@ -387,3 +387,113 @@ Bu senaryo kalıcı test olarak eklendi
 | `test_gunluk_sayac_semasi.py` | **Yeni** — şema↔sıfırlama sözleşmesi (2 test) |
 | `test_veri_eksik_akis.py` | +1 test: resmî tatilde `gun_boslugu` yanlış pozitifi yok |
 | `docs/README.md` | Bu raporun satırı §8'i kapsayacak şekilde güncellendi |
+
+## 9. `/grafik` her zaman çalışsın: seans-farkında veri tazeliği (2026-11-16)
+
+Kullanıcı isteği: *"veri çekme olayına bakar mısın, öyle bir ayarla ki /grafik
+rahatlıkla çalışabilsin herhangi bir zamanda"*.
+
+### 9.1 Kök neden: tazelik "yaş" ile ölçülüyordu, seans takvimi yok sayılıyordu
+
+`bot/commands.py::_grafik_cache_tazelik_durumu` veriyi **son kapanmış mumun
+yaşına** göre değerlendiriyordu (seans içi: 1H 120 dk, 2H 240, 4H 360, 1D 1560).
+Bu ölçüt takvimi bilmediği için seansın doğal boşluklarını "bayat veri" sanıyor:
+
+| Zaman | Son kapanmış mum | Yaş | Eski kapı |
+|---|---|---|---|
+| Pazartesi 10:05 | Cuma 18:00 | ~3 845 dk | **bayat** (1H/2H/4H/1D) |
+| Pazartesi 12:00 | Cuma 18:00 (cache güncellenmemişse) | ~3 930 dk | **bayat** |
+| Herhangi bir gün 12:00 (1G) | önceki seans 18:30 | ~2 700 dk | **bayat** (1D sınırı 1 560 dk) |
+
+Sonuç: seansın ilk saatlerinde (ilk saatlik mum kapanmadan) ve **günlük grafikte
+günün günlük mumu kapanana kadar (18:30) bütün gün** doğrulayıcı sağlayıcı
+yanıtını reddediyor, `/grafik` "cache eski … veri yok" dönüyordu. Bot yeniden
+başladığında (Render uyku/restart) cache dünkü hâliyle kaldığı için aynı duvar
+her seferinde oluşuyordu.
+
+### 9.2 Ölçüm (öncesi → sonrası)
+
+Senaryo: cache son işlem gününün 18:00 kapanışıyla bitiyor; `seans_acik` gerçek
+takvime göre.
+
+| Zaman | Önce (1h / 2h / 4h / 1d) | Sonra |
+|---|---|---|
+| Pzt 09:55 (açılış) | bayat / bayat / bayat / bayat | **taze** ×4 |
+| Pzt 10:05 | bayat / bayat / bayat / bayat | **taze** ×4 |
+| Pzt 10:45 | bayat / bayat / bayat / bayat | bayat / **taze** / **taze** / **taze** |
+| Pzt 12:00 | bayat / bayat / bayat / bayat | bayat / bayat / **taze** / **taze** |
+| Pzt 17:00 | bayat / bayat / bayat / bayat | bayat / bayat / bayat / **taze** |
+| Pzt 18:45 · 23:00 · Cmt · Paz | taze ×4 | taze ×4 (değişmedi) |
+
+10:45'ten sonraki "bayat" sonuçlar **doğrudur**: o senaryoda cache gerçekten
+Cuma'da kalmıştır. Normal işleyişte cache her tarama turunda (≈5 dk) yazıldığı
+için gecikme ~0 olur:
+
+| Gerçekçi senaryo (cache son kapanmış bara kadar güncel) | 1h | 2h | 4h |
+|---|---|---|---|
+| Pzt 09:58 (açılış + 8 dk) | taze (0 dk) | taze (0) | taze (0) |
+| Pzt 10:40 (ilk saatlik mum kapandı) | taze (0) | taze (0) | taze (0) |
+| Pzt 12:40 | taze (60) | taze (−60) | taze (0) |
+| Pzt 17:55 | taze (0) | taze (0) | taze (0) |
+| Salı 09:55 (yeni seans açılışı) | taze (0) | taze (0) | taze (0) |
+
+### 9.3 Düzeltme
+
+1. **`data/replay.py::beklenen_son_kapanis_ani(tf, now)`** — seans takvimine göre
+   "şu an kapanmış olması gereken son mum"u üretir. Takvim kararı mevcut tek
+   kaynaklardan gelir: `islem_gunu_mu` (hafta sonu/tatil) + `mum_kapanis_anlari`
+   (seans sonu, yarım gün). Kova deseni (`09:30`, `11:30`, …) `resample_ohlcv`'ın
+   09:30 çapasından türetilir; elle yazılmaz. Ölçüm: 0,6–3,0 ms/çağrı.
+2. **`bot/commands.py::_grafik_cache_tazelik_durumu`** — seans açıkken ölçüt
+   `gecikme = beklenen kapanış − son kapanış`. Eşikler aynı (1H 120 dk, 2H 240,
+   4H 360, 1D 1560). Seans dışı ölçüt eskisi gibi yaş + 14 gün tavanı (davranış
+   değişmedi). Sonuç sözlüğüne `gecikme_dk` ve `beklenen_kapanis` eklendi;
+   kullanıcıya giden açıklama "seans takvimine göre N dk geride" diyor.
+3. **Yarım gün koruması** — desen üretilirken seans sonundan sonra başlayan kova
+   etiketleri atılır. Bu olmadan 2026-10-28 (29 Ekim arifesi, 13:00 kapanış)
+   için "beklenen kapanış 18:30" gibi imkânsız bir değer çıkıyordu.
+4. **pytz LMT hatası** — `datetime.combine(..., tzinfo=ISTANBUL_TZ)` pytz'de
+   LMT (+1:56) kayması üretir; 17:30 etiketi 18:34'e kayıyordu. Yeni kodda ve
+   §7.6'da eklenen `_aradaki_islem_gunu_sayisi` içinde `.localize()` kullanıldı.
+5. **Sınırlı yeniden deneme** — sağlayıcı geçici hata dönerse (429/timeout/503)
+   `/grafik` aynı sembol/pencere ile `_GRAFIK_HATA_DENEME` (2) kez, 2–4 sn
+   bekleyerek yeniden dener. Yedek seriye (spot ↔ vadeli) geçiş **yok**; o karar
+   `test_gecici_hatada_yedek_istegi_yok` sözleşmesiyle korunuyor.
+6. **`docs/tasarim/GRAFIK_TASARIM.md`** — "Seans içi tazelik sınırı" bölümü
+   gecikme modeline göre güncellendi (belge koda bağlı: YAPI §7.3/4. madde).
+
+### 9.4 Testler
+
+`test_grafik_her_zaman.py` (10 test, ağa çıkmaz):
+
+| Test | Neyi kilitler |
+|---|---|
+| `test_seans_ilk_dakikalarinda_veri_bayat_sayilmaz[1h/2h/4h/1d]` | Seans açılışında dünün son mumu taze sayılır; `yas_dk` büyük kalırken `gecikme_dk` ~0 |
+| `test_gercekten_geride_kalan_cache_hala_reddedilir` | Negatif kontrol: iki seans eksik cache bayat kalır |
+| `test_beklenen_son_kapanis_takvimi_izler` | Cumartesi → Cuma 18:00; 29 Ekim tatili + arife yarım gün → 28 Ekim 13:00 |
+| `test_seans_basinda_saglayici_kapaliyken_cache_ten_kare_uretilir` | 10:05'te sağlayıcı kapalı → PNG yine üretilir (`/grafik` uçtan uca) |
+| `test_gunluk_grafik_gun_icinde_calisir` | 1G kare gün içinde üretilir |
+| `test_gecici_saglayici_hatasi_yeniden_denenir` | 429 → ikinci denemede başarı, 2 çağrı |
+| `test_kalici_hatada_yeniden_deneme_sinirlidir` | "delisted" gibi kalıcı hatada tek çağrı |
+
+Mevcut grafik sözleşmeleri korunuyor: `test_grafik_istegi.py`, `test_grafik_veri_guvenilirligi.py`,
+`test_grafik_album.py`, `test_grafik_grup.py`, `test_grafik_teslim.py` → **127/127 geçti**.
+
+### 9.5 Açık kalan sınırlar (bilinçli)
+
+1. Sağlayıcı tamamen kapalı **ve** cache hiç yok/14 günden eski → `/grafik` yine
+   veri yok der; gösterecek güncel veri yoktur (uydurma kadraj çizilmez).
+2. Seans **dışında** ölçüt hâlâ yaştır (14 gün tavanı): gece/hafta sonu
+   davranışı değişmedi, regresyon riski alınmadı.
+3. Tarama hattı (`_cache_verisi_kullanilabilir`) bu turda **değiştirilmedi**;
+   gecikme modeli yalnız `/grafik` tazelik kapısında geçerli.
+
+### 9.6 Doğrulama (bu tur)
+
+| Kapı | Sonuç |
+|---|---|
+| `ruff check .` | Temiz |
+| `python -m pytest -q` (tam süit) | **4338 geçti / 43 atlandı / 520,5 sn** (4381 toplandı) |
+| Grafik sözleşme dosyaları (5 dosya) | **127/127 geçti** |
+| `test_patch_yuzeyi.py` (yamalanan her hedef gerçek mi) | 1160 parametre geçti — yeni testteki tüm yamalar gerçek yüzeyler |
+| `beklenen_son_kapanis_ani` maliyeti | 1H 3,0 ms · 2H 2,1 ms · 4H 1,4 ms · 1D 0,6 ms |

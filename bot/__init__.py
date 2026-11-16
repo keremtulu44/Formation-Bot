@@ -59,7 +59,7 @@ from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   fetch_yfinance_chart_data, fetch_last_bar,
                   seans_ici_bosluk_sayisi,
                   select_yfinance_1h_period, tamamlanmis_mumlar,
-                  mum_kapanis_ani, bar_kapandi_mi)
+                  mum_kapanis_ani, bar_kapandi_mi, beklenen_son_kapanis_ani)
 from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
@@ -870,6 +870,7 @@ __all__ = [
     "math",
     "morning_preload",
     "mum_kapanis_ani",
+    "beklenen_son_kapanis_ani",
     "os",
     "panel_raporu",
     "pd",

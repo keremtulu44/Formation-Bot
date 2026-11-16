@@ -309,7 +309,8 @@ def _aradaki_islem_gunu_sayisi(ilk: datetime, son: datetime, *, sinir: int = 400
     adim = 0
     while gun < bitis and adim < sinir:
         adim += 1
-        if islem_gunu_mu(datetime.combine(gun, dt_time(12, 0), tzinfo=ISTANBUL_TZ)):
+        # pytz'de `tzinfo=` doğrudan verilirse LMT (+1:56) kayması olur; localize şart.
+        if islem_gunu_mu(ISTANBUL_TZ.localize(datetime.combine(gun, dt_time(12, 0)))):
             sayac += 1
         gun += timedelta(days=1)
     return sayac

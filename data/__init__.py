@@ -95,6 +95,7 @@ from data.replay import (  # noqa: F401
     is_bist_open,
     islem_gunu_mu,
     mum_kapanis_ani,
+    beklenen_son_kapanis_ani,
     mum_kapanis_anlari,
     resample_all_timeframes,
     resample_ohlcv,
