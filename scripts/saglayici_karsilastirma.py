@@ -250,14 +250,25 @@ def canli_karsilastir(semboller: Iterable[str], tfs: Iterable[str], adet: int = 
 
 
 # ----------------------------------------------------------------- CLI -----
+def _liste(degerler: Iterable[str]) -> List[str]:
+    """Virgül ve/veya boşlukla ayrılmış listeleri tek listeye indirir."""
+    cikti: List[str] = []
+    for deger in degerler or []:
+        cikti.extend(parca.strip() for parca in str(deger).split(",") if parca.strip())
+    return cikti
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="Sağlayıcı karşılaştırma / geçiş ölçümü")
     ap.add_argument("--mod", choices=("arsiv", "canli"), default="arsiv")
     ap.add_argument("--veri-dizini", default="bot_data")
-    ap.add_argument("--sembol", default="THYAO,GARAN,AKBNK,ASELS,EREGL")
-    ap.add_argument("--tf", default="1g")
+    # Listeler HEM virgüllü HEM boşluklu verilebilir:
+    #   --sembol "THYAO,GARAN"   ·   --sembol THYAO GARAN
+    # (PowerShell virgülsüz yazımda virgülü ayraç sayıp argümanı bölüyor.)
+    ap.add_argument("--sembol", nargs="+", default=["THYAO,GARAN,AKBNK,ASELS,EREGL"])
+    ap.add_argument("--tf", nargs="+", default=["1g"])
     ap.add_argument("--adet", type=int, default=360)
-    ap.add_argument("--aday", default="borsapy")
+    ap.add_argument("--aday", nargs="+", default=["borsapy"])
     ap.add_argument("--cikti", default="")
     args = ap.parse_args(argv)
 
@@ -276,10 +287,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print()
         print(json.dumps(rapor, ensure_ascii=False, indent=2))
     else:
-        semboller = [s.strip().upper() for s in args.sembol.split(",") if s.strip()]
-        adaylar = [a.strip() for a in args.aday.split(",") if a.strip()]
-        tfs = ["1h" if t.strip().lower() in ("1s", "1h") else "1d"
-               for t in args.tf.split(",") if t.strip()]
+        semboller = [s.upper() for s in _liste(args.sembol)]
+        adaylar = _liste(args.aday)
+        tfs = ["1h" if t.lower() in ("1s", "1h") else "1d" for t in _liste(args.tf)]
         sonuclar = canli_karsilastir(semboller, tfs, adet=args.adet, adaylar=adaylar)
         metin = rapor_markdown(sonuclar)
         print(metin)

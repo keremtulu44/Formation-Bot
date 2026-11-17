@@ -165,6 +165,13 @@ def test_rapor_markdown_satirlari():
     assert "| geç |" in metin
 
 
+def test_liste_virgul_ve_bosluk_ayracini_birlestirir():
+    """PowerShell virgülü ayırır; her iki yazım da aynı listeye inmeli."""
+    assert S._liste(["THYAO,GARAN", "AKBNK"]) == ["THYAO", "GARAN", "AKBNK"]
+    assert S._liste(["THYAO", "GARAN"]) == ["THYAO", "GARAN"]
+    assert S._liste(["1g,1s"]) == ["1g", "1s"]
+
+
 def test_cli_arsiv_modu_cikti_uretir(tmp_path, capsys):
     _arsiv_yaz(tmp_path, "THYAO", [10, 11, 12])
     cikti = tmp_path / "rapor.md"
