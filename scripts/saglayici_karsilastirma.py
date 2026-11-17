@@ -179,21 +179,68 @@ def _yuzde(deger) -> str:
 
 
 # ------------------------------------------------------------- TANI -------
-def tani() -> Dict:
-    """Ortam teşhisi: Python sürümü + sağlayıcı paketlerinin import durumu.
+def _izi(hata: BaseException, satir: int = 6) -> List[str]:
+    """Hataya giden çağrı zincirinin son satırları (teşhis için)."""
+    import traceback
+    try:
+        metin = "".join(traceback.format_exception(type(hata), hata, hata.__traceback__))
+    except Exception:  # noqa: BLE001 - teşhis kendisi hata üretmesin
+        return []
+    return [s.rstrip() for s in metin.strip().splitlines()[-satir:]]
 
-    Neden: canlı mod hataları tek satıra sığdırmak zorunda ("red (SyntaxError)").
-    O hatanın sebebi genelde paket değil, **Python sürümü** olur (3.10+ sözdizimi).
-    Bu mod tek komutta sürümü ve import sonucunu yazar.
+
+def _kisa(metin: str, sinir: int = 120) -> str:
+    """İz satırlarını okunur tut: uzun mesajları kırp."""
+    metin = " ".join(str(metin).split())
+    return metin if len(metin) <= sinir else metin[: sinir - 1] + "…"
+
+
+_CAKISMA_ISARETI = "<" * 7 + " "
+
+
+def cakisma_dosyalari(kok: "str | Path" = ".") -> List[str]:
+    """Çalışma ağacında çözülmemiş birleştirme işareti kalmış ``.py`` dosyaları.
+
+    Neden: yarım kalmış ``git merge`` sonrası ``import config`` "SyntaxError"
+    verir; hata metni bunu söylemez. Bu tarama sebebi doğrudan söyler.
+    """
+    atla = {".git", ".venv", "venv", "node_modules", "__pycache__", "build", "dist", "out"}
+    bulunan: List[str] = []
+    for yol in sorted(Path(kok).rglob("*.py")):
+        if atla & set(yol.parts):
+            continue
+        try:
+            metin = yol.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if _CAKISMA_ISARETI in metin:
+            bulunan.append(str(yol))
+    return bulunan
+
+
+def tani(dene: bool = False, sembol: str = "THYAO", adet: int = 5, kok: str = ".",
+         saglayicilar: Optional[Dict[str, Callable[[str, str, int], Optional[pd.DataFrame]]]] = None) -> Dict:
+    """Ortam teşhisi: hangi Python, hangi paket, import neden patlıyor, ağ var mı.
+
+    Neden: canlı mod hataları tek satıra sığmak zorunda ("red (SyntaxError)").
+    Bu mod tek komutta sürümü, çalışan yorumlayıcıyı, import sonucunu, hata
+    izini, çakışma işareti kalan dosyaları ve (istenirse) gerçek çekme denemesini
+    yazar. Varsayılan ``dene=False``: ağ olmadan da çalışır.
     """
     import platform
     import sys as _sys
+
     bilgi: Dict = {
         "python": platform.python_version(),
+        "calisan_python": _sys.executable,
+        "venv": None if _sys.prefix == _sys.base_prefix else _sys.prefix,
         "platform": platform.platform(),
         "onerilen_python": "3.11 veya 3.12 (repoda .python-version)",
         "paketler": {},
         "importlar": {},
+        "izler": {},
+        "denemeler": {},
+        "cakisma": [],
     }
     from importlib.metadata import PackageNotFoundError, version as _v
     for paket in ("yfinance", "pandas", "numpy", "borsapy", "curl_cffi", "tvdatafeed"):
@@ -208,6 +255,17 @@ def tani() -> Dict:
             bilgi["importlar"][ad] = "ok"
         except Exception as hata:  # noqa: BLE001 - teşhis kendisi hata üretmesin
             bilgi["importlar"][ad] = _hata_metni(hata)
+            bilgi["izler"][ad] = _izi(hata)
+    if kok:
+        bilgi["cakisma"] = cakisma_dosyalari(kok)
+    if dene:
+        kaynak = SAGLAYICILAR if saglayicilar is None else saglayicilar
+        for ad, cek in kaynak.items():
+            try:
+                df = cek(sembol, "1d", adet)
+                bilgi["denemeler"][ad] = {"bar": 0 if df is None else int(len(df))}
+            except Exception as hata:  # noqa: BLE001
+                bilgi["denemeler"][ad] = {"hata": _hata_metni(hata), "izi": _izi(hata)}
     bilgi["surum_uyari"] = (
         None if _sys.version_info >= (3, 10)
         else "Python 3.10'dan eski: borsapy/curl_cffi kurulamaz, yfinance import "
@@ -220,11 +278,32 @@ def tani_markdown(bilgi: Dict) -> str:
     satirlar = [
         "### Ortam teşhisi",
         f"- Python: **{bilgi['python']}** (önerilen: {bilgi['onerilen_python']})",
+        f"- Çalışan yorumlayıcı: {bilgi.get('calisan_python') or '?'}",
+        f"- Sanal ortam: {bilgi.get('venv') or 'YOK (venv dışında çalışıyor)'}",
         f"- Platform: {bilgi['platform']}",
         "- Paketler: " + " · ".join(
             f"{k} {v or 'YOK'}" for k, v in bilgi["paketler"].items()),
         "- Import: " + " · ".join(f"{k}: {v}" for k, v in bilgi["importlar"].items()),
     ]
+    for ad, iz in (bilgi.get("izler") or {}).items():
+        if iz:
+            satirlar.append(f"- {ad} hatasının izi: " + " ⏎ ".join(_kisa(x) for x in iz[-3:]))
+    cakisma = bilgi.get("cakisma") or []
+    if cakisma:
+        ilk = ", ".join(cakisma[:3]) + (" …" if len(cakisma) > 3 else "")
+        satirlar.append(
+            f"- ⛔ Çözülmemiş birleştirme işareti **{len(cakisma)} dosyada** ({ilk})."
+            " Bu hâlde `import config` \"SyntaxError\" verir."
+            " Çözüm: `git merge --abort` (yarım merge) veya dosyaları elle düzelt.")
+    elif bilgi.get("cakisma") == []:
+        satirlar.append("- Birleştirme işareti: yok (çalışma ağacı temiz)")
+    for ad, d in (bilgi.get("denemeler") or {}).items():
+        if "bar" in d:
+            satirlar.append(f"- Deneme {ad}: {d['bar']} bar geldi ✅")
+        else:
+            satirlar.append(f"- Deneme {ad}: {d['hata']}")
+            if d.get("izi"):
+                satirlar.append("  · " + " ⏎ ".join(_kisa(x) for x in d["izi"][-2:]))
     if bilgi.get("surum_uyari"):
         satirlar.append(f"- ⚠️ {bilgi['surum_uyari']}")
     return "\n".join(satirlar)
@@ -328,10 +407,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--adet", type=int, default=360)
     ap.add_argument("--aday", nargs="+", default=["borsapy"])
     ap.add_argument("--cikti", default="")
+    # Teşhis modu: --tanis-dene 1 → gerçek çekme denemesi (ağ gerekir)
+    ap.add_argument("--tanis-dene", type=int, default=1)
+    ap.add_argument("--tanis-sembol", default="THYAO")
     args = ap.parse_args(argv)
 
     if args.mod == "tanis":
-        bilgi = tani()
+        bilgi = tani(dene=bool(args.tanis_dene), sembol=args.tanis_sembol,
+                     adet=args.adet if args.adet < 60 else 5)
         metin = tani_markdown(bilgi)
         print(metin)
         print()

@@ -21,6 +21,20 @@ Profil seçimi: `.env` içinde `BOT_PROFILE=Dengeli` (Hassas / Dengeli / Seçici
 **canlı kurulumda kullanmayın**. Canlı pinler `requirements-deploy.txt` içindedir.
 Windows PowerShell için [yerel kurulum rehberine](docs/kurulum/LOCAL_SETUP.md) bakın.
 
+### Windows: yerel depo karıştıysa (tek komut)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\yerel_onar.ps1
+```
+
+Yarım kalmış birleştirmeyi iptal eder, yerel değişiklikleri `git stash`'e alır
+(`git stash list` ile geri alınır), dalı uzaktaki hâline eşitler ve ortam teşhisini
+(`--mod tanis`) çalıştırır. Hiçbir şey silinmez.
+
+`config.py: needs merge`, `Pulling is not possible because you have unmerged files` ve
+`--mod: invalid choice: 'tanis'` hatalarının üçü de aynı sebepten gelir: çalışma ağacı
+yarım kalmış bir birleştirmeden kalmıştır. Bu betik o durumu temizler.
+
 ## Belgeler ve depo düzeni
 
 ### Stabil — analitik domain, grafik entegrasyonu ve araştırma

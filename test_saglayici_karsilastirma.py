@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -198,3 +199,45 @@ def test_cli_arsiv_modu_cikti_uretir(tmp_path, capsys):
     assert kod == 0
     assert "Yerel arşiv kalitesi" in capsys.readouterr().out
     assert "sıfır hacim" in cikti.read_text(encoding="utf-8")
+
+
+def test_cakisma_isareti_kalan_dosyayi_bulur(tmp_path):
+    """Yarım merge 'SyntaxError' gibi görünür; tanı dosyayı adıyla söylemeli."""
+    (tmp_path / "bozuk.py").write_text("x = 1\n" + "<" * 7 + " HEAD\ny = 2\n", encoding="utf-8")
+    (tmp_path / "temiz.py").write_text("x = 1\n", encoding="utf-8")
+
+    bulunan = S.cakisma_dosyalari(tmp_path)
+
+    assert [Path(p).name for p in bulunan] == ["bozuk.py"]
+    bilgi = S.tani(kok=str(tmp_path))
+    assert "bozuk.py" in S.tani_markdown(bilgi)
+
+
+def test_cakisma_yoksa_temiz_der(tmp_path):
+    (tmp_path / "temiz.py").write_text("x = 1\n", encoding="utf-8")
+    assert S.cakisma_dosyalari(tmp_path) == []
+    assert "yok (çalışma ağacı temiz)" in S.tani_markdown(S.tani(kok=str(tmp_path)))
+
+
+def test_tani_deneme_hatasini_iziyle_yazar():
+    def patlayan(sembol, tf, adet):
+        raise SyntaxError("invalid syntax (config.py, line 3)")
+
+    bilgi = S.tani(dene=True, kok="", saglayicilar={"yahoo": patlayan})
+
+    assert bilgi["denemeler"]["yahoo"]["hata"].startswith("SyntaxError:")
+    assert bilgi["denemeler"]["yahoo"]["izi"], "hata izi boş olmamalı"
+    metin = S.tani_markdown(bilgi)
+    assert "Deneme yahoo: SyntaxError:" in metin
+
+
+def test_tani_ceken_saglayiciyi_bar_sayisiyla_isaretler():
+    def calisan(sembol, tf, adet):
+        idx = pd.date_range("2026-11-02", periods=5, freq="D", tz=S.ISTANBUL)
+        return pd.DataFrame({"open": 1.0, "high": 2.0, "low": 0.5,
+                             "close": 1.5, "volume": 10}, index=idx)
+
+    bilgi = S.tani(dene=True, kok="", saglayicilar={"borsapy": calisan})
+
+    assert bilgi["denemeler"]["borsapy"] == {"bar": 5}
+    assert "5 bar geldi" in S.tani_markdown(bilgi)
