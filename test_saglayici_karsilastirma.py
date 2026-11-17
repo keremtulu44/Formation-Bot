@@ -153,6 +153,24 @@ def test_canli_karsilastir_ulasilamayan_saglayici(monkeypatch):
     assert "ulaşılamadı" in sonuc[0]["karar"]
 
 
+def test_hata_metni_sebebi_de_yazar():
+    """'red (SyntaxError)' tek başına teşhis edilemez; mesaj da rapora girmeli."""
+    metin = S._hata_metni(SyntaxError("invalid syntax (f-string)"))
+    assert metin.startswith("SyntaxError:")
+    assert "invalid syntax" in metin
+    assert len(S._hata_metni(ValueError("x" * 900))) <= 160
+
+
+def test_tani_ortam_bilgisi_verir():
+    bilgi = S.tani()
+    assert bilgi["python"].count(".") == 2
+    assert set(bilgi["importlar"]) == {"yfinance", "borsapy", "tvdatafeed"}
+    # Python <3.10 ise uyarı metni dolu olmalı, aksi halde boş
+    assert (bilgi["surum_uyari"] is None) == (tuple(map(int, bilgi["python"].split(".")[:2])) >= (3, 10))
+    metin = S.tani_markdown(bilgi)
+    assert "Python:" in metin and "Import:" in metin
+
+
 # --------------------------------------------------------------- RAPOR -----
 def test_rapor_markdown_satirlari():
     metin = S.rapor_markdown([

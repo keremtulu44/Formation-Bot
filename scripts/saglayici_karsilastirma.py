@@ -178,6 +178,58 @@ def _yuzde(deger) -> str:
     return "-" if deger is None else f"{deger:.3f}".replace(".", ",")
 
 
+# ------------------------------------------------------------- TANI -------
+def tani() -> Dict:
+    """Ortam teşhisi: Python sürümü + sağlayıcı paketlerinin import durumu.
+
+    Neden: canlı mod hataları tek satıra sığdırmak zorunda ("red (SyntaxError)").
+    O hatanın sebebi genelde paket değil, **Python sürümü** olur (3.10+ sözdizimi).
+    Bu mod tek komutta sürümü ve import sonucunu yazar.
+    """
+    import platform
+    import sys as _sys
+    bilgi: Dict = {
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "onerilen_python": "3.11 veya 3.12 (repoda .python-version)",
+        "paketler": {},
+        "importlar": {},
+    }
+    from importlib.metadata import PackageNotFoundError, version as _v
+    for paket in ("yfinance", "pandas", "numpy", "borsapy", "curl_cffi", "tvdatafeed"):
+        try:
+            bilgi["paketler"][paket] = _v(paket)
+        except PackageNotFoundError:
+            bilgi["paketler"][paket] = None
+    for ad, modul in (("yfinance", "yfinance"), ("borsapy", "borsapy"),
+                      ("tvdatafeed", "tvDatafeed")):
+        try:
+            __import__(modul)
+            bilgi["importlar"][ad] = "ok"
+        except Exception as hata:  # noqa: BLE001 - teşhis kendisi hata üretmesin
+            bilgi["importlar"][ad] = _hata_metni(hata)
+    bilgi["surum_uyari"] = (
+        None if _sys.version_info >= (3, 10)
+        else "Python 3.10'dan eski: borsapy/curl_cffi kurulamaz, yfinance import "
+             "edilemez (SyntaxError). Python 3.11/3.12 kurun."
+    )
+    return bilgi
+
+
+def tani_markdown(bilgi: Dict) -> str:
+    satirlar = [
+        "### Ortam teşhisi",
+        f"- Python: **{bilgi['python']}** (önerilen: {bilgi['onerilen_python']})",
+        f"- Platform: {bilgi['platform']}",
+        "- Paketler: " + " · ".join(
+            f"{k} {v or 'YOK'}" for k, v in bilgi["paketler"].items()),
+        "- Import: " + " · ".join(f"{k}: {v}" for k, v in bilgi["importlar"].items()),
+    ]
+    if bilgi.get("surum_uyari"):
+        satirlar.append(f"- ⚠️ {bilgi['surum_uyari']}")
+    return "\n".join(satirlar)
+
+
 # ------------------------------------------------------------ SAĞLAYICILAR --
 def _yahoo(sembol: str, tf: str, adet: int) -> Optional[pd.DataFrame]:
     import yfinance as yf
@@ -225,7 +277,7 @@ def canli_karsilastir(semboller: Iterable[str], tfs: Iterable[str], adet: int = 
                 ref_ham = SAGLAYICILAR[referans](sembol, tf, adet)
             except Exception as hata:  # noqa: BLE001 - ağ hatası rapora düşsün
                 sonuclar.append({"sembol": sembol, "tf": tf,
-                                 "karar": f"red ({referans} ulaşılamadı: {type(hata).__name__})"})
+                                 "karar": f"red ({referans} ulaşılamadı: {_hata_metni(hata)})"})
                 continue
             ref = normalize(ref_ham)
             if ref is None:
@@ -237,7 +289,7 @@ def canli_karsilastir(semboller: Iterable[str], tfs: Iterable[str], adet: int = 
                     aday = normalize(SAGLAYICILAR[ad](sembol, tf, adet))
                 except Exception as hata:  # noqa: BLE001
                     sonuclar.append({"sembol": sembol, "tf": tf,
-                                     "karar": f"red ({ad} ulaşılamadı: {type(hata).__name__})"})
+                                     "karar": f"red ({ad} ulaşılamadı: {_hata_metni(hata)})"})
                     continue
                 if aday is None:
                     sonuclar.append({"sembol": sembol, "tf": tf,
@@ -250,6 +302,12 @@ def canli_karsilastir(semboller: Iterable[str], tfs: Iterable[str], adet: int = 
 
 
 # ----------------------------------------------------------------- CLI -----
+def _hata_metni(hata: BaseException) -> str:
+    """``SyntaxError`` tek başına hiçbir şey anlatmaz: tip + mesajın başı."""
+    mesaj = " ".join(str(hata).split())[:140]
+    return f"{type(hata).__name__}: {mesaj}" if mesaj else type(hata).__name__
+
+
 def _liste(degerler: Iterable[str]) -> List[str]:
     """Virgül ve/veya boşlukla ayrılmış listeleri tek listeye indirir."""
     cikti: List[str] = []
@@ -260,7 +318,7 @@ def _liste(degerler: Iterable[str]) -> List[str]:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="Sağlayıcı karşılaştırma / geçiş ölçümü")
-    ap.add_argument("--mod", choices=("arsiv", "canli"), default="arsiv")
+    ap.add_argument("--mod", choices=("arsiv", "canli", "tanis"), default="arsiv")
     ap.add_argument("--veri-dizini", default="bot_data")
     # Listeler HEM virgüllü HEM boşluklu verilebilir:
     #   --sembol "THYAO,GARAN"   ·   --sembol THYAO GARAN
@@ -271,6 +329,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--aday", nargs="+", default=["borsapy"])
     ap.add_argument("--cikti", default="")
     args = ap.parse_args(argv)
+
+    if args.mod == "tanis":
+        bilgi = tani()
+        metin = tani_markdown(bilgi)
+        print(metin)
+        print()
+        print(json.dumps(bilgi, ensure_ascii=False, indent=2))
+        if args.cikti:
+            Path(args.cikti).write_text(metin + "\n", encoding="utf-8")
+        return 0
 
     if args.mod == "arsiv":
         rapor = arsiv_kalite(args.veri_dizini)
