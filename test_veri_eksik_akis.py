@@ -294,7 +294,12 @@ def test_kalici_delikte_tamir_sogumaya_girer(tmp_path, monkeypatch):
     mgr.append_dataframe("THYAO", cache)
 
     # Sağlayıcı deliği İÇERMEYEN taze yanıt döndürüyor (kalıcı veri deliği).
-    taze = _seri((simdi - pd.Timedelta(hours=3)).strftime("%Y-%m-%d %H:%M"), 1)
+    # Yanıt, cache'in SON barına oturtulur (duvar saatinden bağımsız): `simdi - 3s`
+    # kullanıldığında bar seansın ortasına düşüp YENİ bir seans içi boşluk yaratıyordu
+    # ("08:05 ile 10:00 arasında 1,9 saat") ve delik sayısı 1 yerine 2 çıkıyordu —
+    # test yalnız seans öncesi saatlerde geçiyordu (CI'da 10:38'de kırmızı).
+    son_bar = mgr.to_dataframe("THYAO").index.max()
+    taze = _seri(pd.Timestamp(son_bar).strftime("%Y-%m-%d %H:%M"), 1)
     cagrilar = _tarama_kur(monkeypatch, tmp_path, fetch_frames={"THYAO": taze}, now=simdi)
 
     main_module.scan_all_stocks(
