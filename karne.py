@@ -34,7 +34,8 @@ from typing import Callable, Dict, List, Optional
 import pandas as pd
 
 from config import (DATA_DIR, ISTANBUL_TZ, KARNE_FORMASYON_TTL_SAAT, KARNE_GUNU,
-                    KARNE_HEDEF_ATR, KARNE_HORIZON_BAR, KARNE_SAKLAMA_GUN, KARNE_STOP_ATR)
+                    KARNE_HEDEF_ATR, KARNE_HORIZON_BAR, KARNE_KAYMA_ATR,
+                    KARNE_KOMISYON_BPS, KARNE_SAKLAMA_GUN, KARNE_STOP_ATR)
 
 logger = logging.getLogger(__name__)
 
@@ -380,7 +381,8 @@ def _sayi(deger) -> Optional[float]:
 
 def sinyal_sonucu(kayit: dict, df: Optional[pd.DataFrame], now: datetime = None,
                   hedef_atr: float = None, stop_atr: float = None,
-                  horizon: int = None) -> Optional[dict]:
+                  horizon: int = None, komisyon_bps: float = None,
+                  kayma_atr: float = None) -> Optional[dict]:
     """Kırılım kaydının ileri performansı (bar bar MFE/MAE + ilk dokunuş yarışı).
 
     df: sinyalin timeframe'indeki seri (kapanmış barlar). None/eksikse None döner.
@@ -404,12 +406,15 @@ def sinyal_sonucu(kayit: dict, df: Optional[pd.DataFrame], now: datetime = None,
     hedef_atr = KARNE_HEDEF_ATR if hedef_atr is None else hedef_atr
     stop_atr = KARNE_STOP_ATR if stop_atr is None else stop_atr
     horizon = KARNE_HORIZON_BAR if horizon is None else horizon
+    komisyon_bps = KARNE_KOMISYON_BPS if komisyon_bps is None else komisyon_bps
+    kayma_atr = KARNE_KAYMA_ATR if kayma_atr is None else kayma_atr
 
     ileri = df.iloc[konum + 1: konum + 1 + max(1, int(horizon))]
     if len(ileri) == 0:
         return {"durum": DURUM_BEKLIYOR, "mfe_pct": None, "mae_pct": None,
                 "mfe_atr": None, "mae_atr": None, "son_pct": None, "bar_sayisi": 0,
-                "hedef_bar": None, "stop_bar": None}
+                "hedef_bar": None, "stop_bar": None,
+                "brut_pct": None, "masraf_pct": None, "net_pct": None}
 
     mfe = mae = 0.0
     hedef_bar = stop_bar = None
@@ -440,6 +445,17 @@ def sinyal_sonucu(kayit: dict, df: Optional[pd.DataFrame], now: datetime = None,
     else:
         durum = DURUM_NOTR
     son_pct = (son_kapanis - entry) / entry * yon
+    # --- MASRAF (sinyal başına, yüzde) — 2026-11-16 ---
+    # Komisyon gidiş-dönüş toplam; kayma iki yön (tek yön x 2) ATR cinsinden.
+    komisyon_pct = max(0.0, komisyon_bps) / 100.0
+    kayma_pct = max(0.0, kayma_atr) * 2.0 * atr / entry * 100.0
+    masraf_pct = komisyon_pct + kayma_pct
+    if durum == DURUM_HEDEF:
+        brut_pct = hedef_atr * atr / entry * 100.0
+    elif durum == DURUM_STOP:
+        brut_pct = -stop_atr * atr / entry * 100.0
+    else:
+        brut_pct = son_pct * 100.0
     return {
         "durum": durum,
         "mfe_pct": round(mfe * 100, 2),
@@ -447,6 +463,10 @@ def sinyal_sonucu(kayit: dict, df: Optional[pd.DataFrame], now: datetime = None,
         "mfe_atr": round(mfe * entry / atr, 2),
         "mae_atr": round(mae * entry / atr, 2),
         "son_pct": round(son_pct * 100, 2),
+        # Masraf katmanı: brüt = kural sonucu, net = masraf düşülmüş.
+        "brut_pct": round(brut_pct, 3),
+        "masraf_pct": round(masraf_pct, 3),
+        "net_pct": round(brut_pct - masraf_pct, 3),
         "bar_sayisi": int(len(ileri)),
         "hedef_bar": hedef_bar,
         "stop_bar": stop_bar,
@@ -521,6 +541,36 @@ def karne_hesapla(kayitlar: List[dict], saglayici: Callable[[str, str], Optional
         kalite_performans[etiket]["n"] += 1
         kalite_performans[etiket]["poz"] += poz
 
+    # --- MASRAF SONRASI ÖZET (2026-11-16) ---
+    # Sinyal başına ortalama brüt/net yüzde. Net = brüt - (komisyon + kayma).
+    brutler = [s["brut_pct"] for _, s in sonuclar if s.get("brut_pct") is not None]
+    netler = [s["net_pct"] for _, s in sonuclar if s.get("net_pct") is not None]
+    masraflar = [s["masraf_pct"] for _, s in sonuclar if s.get("masraf_pct") is not None]
+    ort_brut_pct = round(sum(brutler) / len(brutler), 3) if brutler else None
+    ort_net_pct = round(sum(netler) / len(netler), 3) if netler else None
+    ort_masraf_pct = round(sum(masraflar) / len(masraflar), 3) if masraflar else None
+
+    # Haftalık net ortalama: "tek hafta yanıltır" uyarısını sayıyla göstermek için.
+    # Kayıtlar pencereye göre süzülmüş gelir; burada bar zamanına göre kovalara
+    # ayrılır. En çok son 4 hafta gösterilir; 2'den az kova varsa metin yazılmaz.
+    kovalar: Dict[str, List[float]] = {}
+    for k, sc in sonuclar:
+        if sc.get("net_pct") is None:
+            continue
+        zaman = k.get("bar_time") or k.get("zaman")
+        try:
+            anahtar = hafta_damgasi(istanbul(zaman))
+        except Exception:  # noqa: BLE001 - bozuk zaman damgası özeti düşürmesin
+            continue
+        kovalar.setdefault(anahtar, []).append(sc["net_pct"])
+    haftalik_net = [(h, round(sum(v) / len(v), 3)) for h, v in sorted(kovalar.items())][-4:]
+    haftalik_net_ortanca = None
+    if len(haftalik_net) >= 2:
+        degerler = sorted(v for _, v in haftalik_net)
+        orta = len(degerler) // 2
+        haftalik_net_ortanca = (degerler[orta] if len(degerler) % 2
+                                else round((degerler[orta - 1] + degerler[orta]) / 2, 3))
+
     # Öne çıkanlar: ufuk sonu getiriye göre sıralı
     siralama = [(k, s) for k, s in sonuclar if s.get("son_pct") is not None]
     siralama.sort(key=lambda ks: ks[1]["son_pct"], reverse=True)
@@ -551,6 +601,11 @@ def karne_hesapla(kayitlar: List[dict], saglayici: Callable[[str, str], Optional
         "ort_mfe_pct": _ort("mfe_pct"),
         "ort_mae_pct": _ort("mae_pct"),
         "ort_mfe_atr": _ort("mfe_atr"),
+        "ort_brut_pct": ort_brut_pct,
+        "ort_net_pct": ort_net_pct,
+        "ort_masraf_pct": ort_masraf_pct,
+        "haftalik_net": haftalik_net,
+        "haftalik_net_ortanca": haftalik_net_ortanca,
         "ort_son_pct": _ort("son_pct"),
         "tf_performans": tf_performans,
         "kalite_performans": kalite_performans,
@@ -656,29 +711,43 @@ def karne_metni(metrik: dict, baslik: str = "HAFTALIK DOĞRULUK KARNESİ",
         satirlar.extend(_blok(f" Hisse dağılımı ({metrik['hisse_cesidi']} hisse):",
                               hisse_tokenlari))
 
-    # --- kırılım performansı ---
+    # --- kırılım performansı (2026-11-16 sadeleştirildi) ---
+    # Eski biçim 6 satır + 4 emoji + 3 ölçü birimiydi (adet / yüzde / oran);
+    # "⚡ Kırılım: N · yukarı..", "🎯 H bar: hedef..", "✅ Yönünde kapanan..",
+    # "ters ..", "ort. lehte/aleyhte ..". Yenisini okuma sırası tek çizgi:
+    #   Sonuç  -> ne oldu
+    #   Para   -> masraf dahil/hariç ortalama (asıl karar sayısı)
+    #   Son N hafta -> tek hafta yanıltır uyarısı, sayıyla
+    #   Güven  -> kaç sinyal var, ne zaman yorum yapılır
     satirlar.append("")
     if metrik["kirilim_toplam"] == 0:
-        satirlar.append("⚡ Kırılım: 0 · bu aralıkta teyit yok")
+        satirlar.append("Kırılım: 0 · bu aralıkta teyit yok")
     else:
-        satirlar.append(f"⚡ Kırılım: {metrik['kirilim_toplam']} · "
+        satirlar.append("Sonuç")
+        satirlar.append(f"   {metrik['kirilim_toplam']} sinyal · "
                         f"yukarı {metrik['yon_yukari']} · aşağı {metrik['yon_asagi']}")
         if metrik["degerlendirilen"]:
-            satirlar.append(f" {KARNE_HORIZON_BAR} bar: hedef {metrik['hedef']} · "
-                            f"nötr {metrik['notr']} · stop {metrik['stop']}")
+            satirlar.append(f"   hedef {metrik['hedef']} · stop {metrik['stop']} · "
+                            f"yatay {metrik['notr']}")
             oran = metrik['pozitif'] * 100.0 / metrik["degerlendirilen"]
-            # "Kırılım yönünde kapatan: 1/3 (%33) · ters 1 · yatay 1" 426 px'tı;
-            # oran ile dağılım ayrı satırlarda.
-            satirlar.append(f" ✅ Yönünde kapanan: {metrik['pozitif']}/"
+            satirlar.append(f"   Yönünde kapanan: {metrik['pozitif']}/"
                             f"{metrik['degerlendirilen']} (%{oran:.0f})")
-            _dagilim = " · ".join(p for p in (f"ters {metrik['negatif']}",
-                                              f"yatay {metrik['yatay']}"
-                                              if metrik['yatay'] else "") if p)
-            if _dagilim:
-                satirlar.append(f"   {_dagilim}")
-            if metrik["ort_mfe_pct"] is not None:
-                satirlar.append("   ort. lehte " + _pct_tr(metrik['ort_mfe_pct'])
-                                + " · aleyhte " + _pct_tr(metrik['ort_mae_pct']))
+        if metrik.get("ort_net_pct") is not None:
+            satirlar.append("")
+            satirlar.append("Para (sinyal başına ortalama)")
+            satirlar.append("   Masraf dahil: " + _pct_tr(metrik["ort_net_pct"], 2))
+            satirlar.append("   Masrafsız: " + _pct_tr(metrik["ort_brut_pct"], 2))
+            satirlar.append("   Masraf: binde "
+                            + f"{KARNE_KOMISYON_BPS / 10.0:.1f}".replace(".", ",")
+                            + " + kayma")
+            satirlar.append("   (komisyon + BSMV dahil)")
+        haftalik = metrik.get("haftalik_net") or []
+        if len(haftalik) >= 2:
+            satirlar.append("")
+            satirlar.append(f"Son {len(haftalik)} hafta")
+            satirlar.append("   " + " · ".join(_pct_tr(v) for _, v in haftalik))
+            if metrik.get("haftalik_net_ortanca") is not None:
+                satirlar.append("   Ortanca: " + _pct_tr(metrik["haftalik_net_ortanca"]))
         if metrik["bekleyen"]:
             satirlar.append(f" ⏳ {metrik['bekleyen']} sinyal için "
                             f"{KARNE_HORIZON_BAR} bar dolmadı")
@@ -687,7 +756,8 @@ def karne_metni(metrik: dict, baslik: str = "HAFTALIK DOĞRULUK KARNESİ",
         if metrik["tf_performans"]:
             parcalar = [f"{_tf_tr(tf)} {v['poz']}/{v['n']}" for tf, v in
                         sorted(metrik["tf_performans"].items())]
-            satirlar.extend(_blok(" ⚡ TF (yönünde/n):", parcalar))
+            satirlar.append("")
+            satirlar.extend(_blok(" TF (yönünde/n):", parcalar))
         if metrik["kalite_performans"]:
             sirali_kalite = sorted(metrik["kalite_performans"].items(),
                                    key=lambda kv: _KALITE_SIRA.get(kv[0], 9))
@@ -713,10 +783,22 @@ def karne_metni(metrik: dict, baslik: str = "HAFTALIK DOĞRULUK KARNESİ",
         satirlar.extend(_blok("🔁 Olaylar (bu aralık):", olaylar))
 
     # --- uyarı ---
-    if metrik["degerlendirilen"] and metrik["degerlendirilen"] < 30:
+    # Güven eşiği (2026-11-16): eski satır "⚠️ n=10 küçük · 30+ sinyal gerek"
+    # idi; sayı ile birlikte NE ZAMAN yorum yapılacağını da söylüyor.
+    _n = metrik["degerlendirilen"]
+    if _n:
         satirlar.append("")
-        satirlar.append(f"⚠️ n={metrik['degerlendirilen']} küçük · 30+ sinyal gerek")
-    satirlar.extend(_blok("ℹ️ Veriler yerel dosyada (Supabase gerekmez)",
+        if _n < 30:
+            satirlar.append(f"Güven: az veri ({_n} sinyal)")
+            satirlar.append("30+ sinyalden sonra yorum yapılır")
+        elif _n < 100:
+            satirlar.append(f"Güven: kısmi ({_n} sinyal)")
+            satirlar.append("100+ sinyalde yorum yapılır")
+        else:
+            satirlar.append(f"Güven: yeterli ({_n} sinyal)")
+    # 379 px'ti (bütçe 283): "yerel dosya" bilgisi zaten başlıkta ("defter: N
+    # kayıt (yerel dosya)") duruyor; satır iki kısa satıra bölündü.
+    satirlar.extend(_blok("ℹ️ Supabase gerekmez",
                            ["/karne ile istediğin an al"]))
     return "\n".join(satirlar)
 

@@ -187,7 +187,10 @@ def test_karne_metni_istenen_ciktilar(defter):
     assert "THYAO 2" in metin and "ASELS 1" in metin
     # Satırlar tek satıra sığacak biçimde kısaltıldı (bkz. telegram_measure,
     # 283 px); sayıların kendisi aynı bilgileri veriyor.
-    assert "Kırılım: 2" in metin
+    # 2026-11-16: performans bloğu sadeleştirildi (Sonuç / Para / Güven).
+    # "⚡ Kırılım: 2" satırı yerine bölüm başlığı + tek satır sayım geldi.
+    assert "Sonuç" in metin
+    assert "2 sinyal · yukarı 2 · aşağı 0" in metin
     assert "hedef 1" in metin and "stop 1" in metin
     assert "Yönünde kapanan: 1/2" in metin
     assert "Kalite: q≥80 1/1 · q70–79 0/1" in metin
@@ -214,7 +217,7 @@ def test_karne_gun_sayisi_penceresi(defter):
 def test_bos_defter_metni(defter):
     metin = K.karne_uret(defter, _saglayici, now=t(2026, 10, 2, 18, 45))
     assert "Formasyon tespiti: 0" in metin
-    assert "Kırılım: 0" in metin
+    assert "Kırılım: 0 · bu aralıkta teyit yok" in metin
 
 
 # === 4) CUMA KAPISI + GÖNDERİM TEKİLLİĞİ =================================

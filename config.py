@@ -471,6 +471,18 @@ KARNE_STOP_ATR = _env_float("KARNE_STOP_ATR", 1.0)     # stop: alehte bu kadar A
 KARNE_HORIZON_BAR = _env_int("KARNE_HORIZON_BAR", 10)  # sinyalden sonra kaç bar izlenecek
 KARNE_SAKLAMA_GUN = _env_int("KARNE_SAKLAMA_GUN", 120)  # bu günden eski kayıtlar budanır
 KARNE_FORMASYON_TTL_SAAT = _env_int("KARNE_FORMASYON_TTL_SAAT", 48)  # aynı hisse/TF/formasyon sayımı
+# --- KARNE MASRAFI (2026-11-16) ---
+# Neden: karne "10 sinyalde 4 hedef" diyordu ama işlem masrafını saymıyordu; kâğıt
+# üstünde artı görünen hafta gerçekte eksi olabiliyordu. Masraf iki kalemdir ve
+# ikisi de SİNYAL BAŞINA yüzde olarak düşülür:
+#   * komisyon: gidiş-dönüş toplam, BSMV dahil. Varsayılan binde 2,1 = yan başına
+#     on binde 10 (%0,10) + %5 BSMV + borsa payı. Türkiye'de perakende aralık
+#     on binde 0 (0 komisyonlu fintech) – binde 2 (banka); ortalama-üst bandı
+#     seçildi ki rakam iyimser görünmesin.
+#   * kayma: tek yön ATR cinsinden; iki yön (alış+satış) uygulanır.
+# İkisi de env ile değiştirilebilir; mesajda değeri görünür (gizli sabit yok).
+KARNE_KOMISYON_BPS = _env_float("KARNE_KOMISYON_BPS", 21.0)   # gidiş-dönüş, BSMV dahil (binde 2,1)
+KARNE_KAYMA_ATR = _env_float("KARNE_KAYMA_ATR", 0.05)         # tek yön; iki yön uygulanır
 # --- YAZMA AMPLİKASYONU (Batch 6 / B5) ---
 # Heartbeat her hisse sonrası yazılıyordu: 48 hisse × tarama = 48 Supabase UPSERT.
 # Yerel dosya canlılık göstergesi olduğu için her zaman yazılır; Supabase'e yazım
