@@ -94,10 +94,48 @@ def _mum_cakisma_say(fig, ax, acilis, yuksek, dusuk, kapanis, cap: float) -> dic
                 katman_cakisan.append(str(t.get_text())[:16])
             else:
                 cakisan.append(str(t.get_text())[:16])
+        # İŞARET GEOMETRİSİ (2026-11-16): yukarıdaki ölçüm yalnız `ax.texts`
+        # geziyor; `▲`/`○` işaretleri `PathCollection` olduğu için kapıya hiç
+        # girmiyordu (yeni ok kademeleri ölçümsüz kaldı). Burada her işaretin
+        # piksel yarıçapı (s → pt² → px) komşu mumun gövde/fitil kutusuyla
+        # karşılaştırılır; KENDİ mumuna değmesi hata değildir (ok zaten onun
+        # altına konur), KOMŞU mumla temas sayılır ve görünür olur.
+        isaret: dict[str, Any] = {"isaret": 0, "isaret_komsu_cakisan": 0,
+                                  "isaret_detay": {}}
+        try:
+            import math as _m
+            dpi = float(fig.dpi)
+            sahip = np.arange(n)
+            for kk in ax.collections:
+                gid = str(kk.get_gid() or "")
+                if not gid.startswith("grafik-") or not hasattr(kk, "get_sizes"):
+                    continue                        # step/stepline çizgileri işaret değil
+                noktalar = np.asarray(kk.get_offsets(), float)
+                if noktalar.ndim != 2 or noktalar.size == 0:
+                    continue
+                yari = (_m.sqrt(float(np.atleast_1d(kk.get_sizes())[0])) / 2.0) * dpi / 72.0
+                nokta_px = ax.transData.transform(noktalar)
+                temas = np.zeros((n, len(noktalar)), dtype=bool)
+                for kk2 in (gk, fk):
+                    if len(kk2) != n:            # hizalama bozuksa bu kutu atlanır
+                        continue
+                    temas |= ((kk2[:, None, 0] <= nokta_px[None, :, 0] + yari)
+                              & (kk2[:, None, 2] >= nokta_px[None, :, 0] - yari)
+                              & (kk2[:, None, 1] <= nokta_px[None, :, 1] + yari)
+                              & (kk2[:, None, 3] >= nokta_px[None, :, 1] - yari))
+                isaret["isaret"] += len(noktalar)
+                for j in range(len(noktalar)):
+                    bar = int(round(float(noktalar[j][0])))
+                    if bool((temas[:, j] & (sahip != bar)).any()):
+                        isaret["isaret_komsu_cakisan"] += 1
+                        isaret["isaret_detay"][gid] = isaret["isaret_detay"].get(gid, 0) + 1
+        except Exception as hata:  # pragma: no cover - ölçüm çizimi bozmaz
+            log.debug("grafik: işaret çakışma ölçümü atlandı (%s)", hata)
         return {"yazi": len(yazilar), "mum_cakisan": len(cakisan), "cakisan": cakisan[:8],
                 "katman_yazi": sum(1 for t in yazilar
                                    if str(t.get_gid() or "").endswith("-ici")),
-                "katman_cakisan": katman_cakisan[:8]}
+                "katman_cakisan": katman_cakisan[:8],
+                **isaret}
     except Exception as hata:  # pragma: no cover - ölçüm çizimi bozmaz
         log.debug("grafik: çakışma ölçümü atlandı (%s)", hata)
         return None

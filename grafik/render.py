@@ -1197,103 +1197,137 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
     ax.add_collection(koleksiyon)
     ozet["cizildi"] = True
 
-    # `▲` işaretlerini destek/mum altına yerleştir; kadraj dışına taşmasın.
+    # `▲` işaretlerini mumun DİBİNİN altına yerleştir; kadraj dışına taşmasın.
+    #
+    # 2026-11-16 (ok incelemesi): eskiden referans `min(destek, dip)` ve ofset
+    # `0,018 × aralık` idi. Destek fiyattan uzakken ok desteğe kayıp mumdan
+    # kopuyordu (ölçüm: 12–57 px arası değişken mesafe, `ULKER`/`AKBNK` 1G) ve
+    # ofset volatiliteden bağımsızdı. Yeni kural: ref = mumun DİBİ (yoksa destek),
+    # ofset = en az 0,018×aralık, en çok 0,032×aralık VEYA 0,25×tipik gövde
+    # (bar başına ortalama yüksek-düşük): sakin pencerede sabit, oynak pencerede
+    # bir tık daha nefes payı. Ok artık her zaman kendi mumunun dibinde durur.
+    _aralik_boy = [abs(float(h) - float(l)) for h, l in zip(yuksek, dusuk)
+                   if _gercek(h) is not None and _gercek(l) is not None]
+    _tipik_govde = (sum(_aralik_boy) / len(_aralik_boy)) if _aralik_boy else 0.0
+    _ok_ofset = max(0.018 * y_span, min(0.032 * y_span, 0.25 * _tipik_govde))
+
     def _ok_koordinatlari(barlar: Sequence[int]) -> tuple[list[float], list[float]]:
         rx: list[float] = []
         ry: list[float] = []
         for idx in barlar:
             sv_i = _gercek(seviyeler[idx]) if idx < len(seviyeler) else None
             lo_i = _gercek(dusuk[idx]) if idx < len(dusuk) else None
-            ref_y = min(v for v in (sv_i, lo_i) if v is not None) if (sv_i is not None or lo_i is not None) else None
+            # Önce mumun dibi; mum verisi yoksa destek seviyesi (uydurma yok).
+            ref_y = lo_i if lo_i is not None else sv_i
             if ref_y is None:
                 continue
-            y_pos = ref_y - 0.018 * y_span
-            if y_lo <= ref_y <= y_hi:
-                y_pos = max(y_lo + 0.012 * y_span, y_pos)
-                rx.append(float(idx))
-                ry.append(float(y_pos))
+            # Destek çizgisi mumun dibine ÇOK yakınsa (çizgi oku kesiyordu; ölçüm:
+            # 1G karede stepline ▲'nın içinden geçiyor) işaret ikisinin ALTINA iner.
+            if sv_i is not None and lo_i is not None and abs(sv_i - lo_i) <= 2.2 * _ok_ofset:
+                ref_y = min(sv_i, lo_i)
+            if not (y_lo <= ref_y <= y_hi):
+                # Mum kadraj dışındaysa desteğe düş: işaret görünür bölgede kalsın.
+                if sv_i is None or not (y_lo <= sv_i <= y_hi):
+                    continue
+                ref_y = sv_i
+            y_pos = ref_y - _ok_ofset
+            if y_pos < y_lo + 0.012 * y_span:
+                y_pos = y_lo + 0.012 * y_span
+            rx.append(float(idx))
+            ry.append(float(y_pos))
         return rx, ry
+
+    def _ok_grubu(barlar: Sequence[int], gid: str, *, boyut: float, dolu: bool,
+                  zorder: float, alfa: float = 1.0, kenar: float = 0.7,
+                  kalinlik: float = 1.35) -> int:
+        """Tek bir ok kademesini çizer ve GÖRÜNEN işaret sayısını döndürür."""
+        if not barlar:
+            return 0
+        x, y = _ok_koordinatlari(barlar)
+        if not x:
+            return 0
+        ortak = dict(marker="^", s=boyut, zorder=zorder, clip_on=True, alpha=alfa)
+        if dolu:
+            sc = ax.scatter(x, y, c=PALET["stabil_destek"], edgecolors=PALET["zemin"],
+                            linewidths=kenar, **ortak)
+        else:
+            sc = ax.scatter(x, y, facecolors="none", edgecolors=PALET["stabil_destek"],
+                            linewidths=kalinlik, **ortak)
+        sc.set_gid(gid)
+        return len(x)
 
     # Ok kademeleri — replay destekli (stabil_ok_replay_2026_11_05, 555 geçerli
     # ▲, 8 bar MFE<0,5 ATR = "zayıf tepki"): çok mumlu/kapanış geri alımı %23,1
     # zayıf → dolu tam; fitil süpürmesi (`intrabar_sweep_reclaim`) %29,6 zayıf
     # (en zayıf tür) → küçük+soluk; `upward_rebase_momentum` %17,3 zayıf ve
     # +1 ATR önce %58,7 (en güçlü) → içi boş büyük; `long_base_breakout` %28,6
-    # → içi boş küçük+soluk. Tür bilgisi yoksa (eski snapshot) eski görünüm.
+    # → içi boş küçük+soluk. Tür bilgisi YOKSA (eski snapshot) nötr kademe
+    # kullanılır — en güçlü görünüm varsayılan DEĞİLDİR (aşırı iddia olurdu).
     # Bu yalnız GÖRSEL kademedir; ok üretimi/bastırma değişmez (replay
     # gözlemsel, filtre kanıtı değildir).
     reclaim_turleri = stabil.get("reclaim_turleri") or {}
     momentum_turleri = stabil.get("momentum_turleri") or {}
+    _momentum_bilinmiyor = not momentum_turleri
 
     def _tur(bar, sozluk):
         return str(sozluk.get(str(bar)) or sozluk.get(bar) or "")
 
     supurme = [b for b in reclaim_barlar if _tur(b, reclaim_turleri) == "intrabar_sweep_reclaim"]
     dolu = [b for b in reclaim_barlar if b not in set(supurme)]
+    if _momentum_bilinmiyor:
+        # Nötr: bilinmeyen tür ne "en güçlü" ne "en zayıf" sayılır.
+        rebase = list(momentum_barlar)
+        taban: list[int] = []
+    else:
+        rebase = [b for b in momentum_barlar if _tur(b, momentum_turleri) == "upward_rebase_momentum"]
+        taban = [b for b in momentum_barlar if b not in set(rebase)]
+
+    # Bağlam sınıfı (2026-11-15, doğrulanmış profil; tarama katmanı hesaplar):
+    # guclu -> beyaz halka (rebase veya kırık-sonrası-sabit zeminde geri alım;
+    # replay %57,5 yönde / %16,1 zayıf), zayif -> SOLUK ok
+    # (düşüş-sonrası yatay zeminde geri alım/süpürme; %44,8 / %30,7).
+    # Ok üretimi değişmez; yalnız vurgu değişir (filtre değildir).
+    # 2026-11-16: zemin rengiyle üstünü boyama KALDIRILDI — ok kayboluyordu
+    # (doküman "ok silinmez" diyordu). Zayıf ok artık kendi alfasıyla çizilir.
+    _baglam = stabil.get("baglam") or {}
+
+    def _baglam_barlar(sinif):
+        return [int(b) for b in (reclaim_barlar + momentum_barlar)
+                if str(_baglam.get(str(b)) or _baglam.get(b) or "") == sinif]
+
+    _zayif = set(_baglam_barlar("zayif"))
+    zayif_dolu_normal = [b for b in dolu if b in _zayif]
+    zayif_dolu_supurme = [b for b in supurme if b in _zayif]
+    zayif_bos = [b for b in rebase + taban if b in _zayif]
+    dolu = [b for b in dolu if b not in _zayif]
+    supurme = [b for b in supurme if b not in _zayif]
+    rebase = [b for b in rebase if b not in _zayif]
+    taban = [b for b in taban if b not in _zayif]
+
     # Dolu ▲ (destek rengi): güçlü geri alım (altına sarkıp geri çıkma).
-    rx, ry = _ok_koordinatlari(dolu)
-    if rx:
-        sc = ax.scatter(
-            rx, ry,
-            marker="^",
-            s=48,
-            c=PALET["stabil_destek"],
-            edgecolors=PALET["zemin"],
-            linewidths=0.7,
-            zorder=4.8,
-            clip_on=True,
-        )
-        sc.set_gid("grafik-stabil-reclaim")
-        ozet["reclaim_isaret"] = len(rx)
-    sx, sy = _ok_koordinatlari(supurme)
-    if sx:
-        sc = ax.scatter(
-            sx, sy,
-            marker="^",
-            s=34,
-            c=PALET["stabil_destek"],
-            alpha=0.55,
-            edgecolors=PALET["zemin"],
-            linewidths=0.6,
-            zorder=4.75,
-            clip_on=True,
-        )
-        sc.set_gid("grafik-stabil-reclaim-supurme")
-        ozet["reclaim_supurme_isaret"] = len(sx)
+    ozet["reclaim_isaret"] = (
+        _ok_grubu(dolu, "grafik-stabil-reclaim", boyut=48, dolu=True, zorder=4.8)
+        + _ok_grubu(zayif_dolu_normal, "grafik-stabil-reclaim-zayif", boyut=44,
+                    dolu=True, zorder=4.8, alfa=0.35)
+    )
+    ozet["reclaim_supurme_isaret"] = (
+        _ok_grubu(supurme, "grafik-stabil-reclaim-supurme", boyut=34, dolu=True,
+                  zorder=4.75, alfa=0.55, kenar=0.6)
+        + _ok_grubu(zayif_dolu_supurme, "grafik-stabil-reclaim-supurme-zayif", boyut=34,
+                    dolu=True, zorder=4.75, alfa=0.22, kenar=0.6)
+    )
 
     # İçi boş ▲ (destek rengi): destek altına inmeden gelen güçlü YUKARI mum.
-    rebase = ([b for b in momentum_barlar if _tur(b, momentum_turleri) == "upward_rebase_momentum"]
-              if momentum_turleri else list(momentum_barlar))
-    taban = [b for b in momentum_barlar if b not in set(rebase)]
-    mx, my = _ok_koordinatlari(rebase)
-    if mx:
-        sc = ax.scatter(
-            mx, my,
-            marker="^",
-            s=62,
-            facecolors="none",
-            edgecolors=PALET["stabil_destek"],
-            linewidths=1.35,
-            zorder=4.85,
-            clip_on=True,
-        )
-        sc.set_gid("grafik-stabil-momentum")
-        ozet["momentum_isaret"] = len(mx)
-    tx, ty = _ok_koordinatlari(taban)
-    if tx:
-        sc = ax.scatter(
-            tx, ty,
-            marker="^",
-            s=44,
-            facecolors="none",
-            edgecolors=PALET["stabil_destek"],
-            linewidths=1.1,
-            alpha=0.6,
-            zorder=4.85,
-            clip_on=True,
-        )
-        sc.set_gid("grafik-stabil-momentum-taban")
-        ozet["momentum_taban_isaret"] = len(tx)
+    # Tür bilinmiyorsa nötr boyut (50) kullanılır: 62 yalnız kanıtlı rebase'in.
+    ozet["momentum_isaret"] = (
+        _ok_grubu(rebase, "grafik-stabil-momentum",
+                  boyut=50.0 if _momentum_bilinmiyor else 62.0, dolu=False, zorder=4.85)
+        + _ok_grubu(zayif_bos, "grafik-stabil-momentum-zayif", boyut=46, dolu=False,
+                    zorder=4.85, alfa=0.30)
+    )
+    ozet["momentum_taban_isaret"] = _ok_grubu(
+        taban, "grafik-stabil-momentum-taban", boyut=44, dolu=False,
+        zorder=4.85, alfa=0.6, kalinlik=1.1)
 
     # A later opposing BOS changes the historical arrow's current state; it
     # does not erase the original event or introduce a new symbol.
@@ -1306,17 +1340,6 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                         edgecolors=PALET["zemin"], linewidths=0.7, zorder=4.8, clip_on=True)
         sc.set_gid("grafik-stabil-iptal")
         ozet["iptal_isaret"] = len(cx)
-
-    # Bağlam sınıfı (2026-11-15, doğrulanmış profil; tarama katmanı hesaplar):
-    # guclu -> beyaz halka (rebase veya kırık-sonrası-sabit zeminde geri alım;
-    # replay %57,5 yönde / %16,1 zayıf), zayif -> soluklaştırma
-    # (düşüş-sonrası yatay zeminde geri alım/süpürme; %44,8 / %30,7).
-    # Ok üretimi değişmez; yalnız vurgu değişir (filtre değildir).
-    _baglam = stabil.get("baglam") or {}
-
-    def _baglam_barlar(sinif):
-        return [int(b) for b in (reclaim_barlar + momentum_barlar)
-                if str(_baglam.get(str(b)) or _baglam.get(b) or "") == sinif]
 
     _cgx, _cgy = _ok_koordinatlari(_baglam_barlar("cok_guclu"))
     if _cgx:
@@ -1334,12 +1357,9 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                         edgecolors="#e5e7eb", linewidths=1.1, zorder=4.9, clip_on=True)
         sc.set_gid("grafik-stabil-baglam-guclu")
         ozet["baglam_guclu_isaret"] = len(_gx)
-    _zx, _zy = _ok_koordinatlari(_baglam_barlar("zayif"))
-    if _zx:
-        sc = ax.scatter(_zx, _zy, marker="^", s=62, c=PALET["zemin"], alpha=0.55,
-                        edgecolors="none", zorder=4.95, clip_on=True)
-        sc.set_gid("grafik-stabil-baglam-zayif")
-        ozet["baglam_zayif_isaret"] = len(_zx)
+    # Zayıf bağlam SAYACI: ok zaten soluk çizildi; ayrı bir örtü/işaret yok.
+    _zx, _zy = _ok_koordinatlari(sorted(_zayif))
+    ozet["baglam_zayif_isaret"] = len(_zx)
 
     # Dikey adaylar teşhis olarak kalır; bastırılmış oka yeni işaret çizilmez.
 

@@ -437,7 +437,17 @@ _LEJANT_DUSUK = ("yapı:", "şerit:", "kutular:", "FVG ·", "bant öncesi", "▨
 # (`▼ dönüş = sinyal · …`) da korunur: bunlar süs değil, karedeki işaretlerin
 # ANLAMIDIR. Yoğun bir karede bütçe kısarken ilk düşen madde ok sözlüğü olursa
 # kare okunamaz hale gelir (ölçüm: GARAN 2026-09-21, atlanan 6 → sözlük kayıp).
-_LEJANT_KORU = ("✕", "┈", "│", "┄ Stabil", "▼ dönüş")
+_LEJANT_KORU = ("✕", "┈", "│", "┄ Stabil", "▼ dönüş", "ok kademesi:")
+
+
+def _satirlari_temizle(satirlar: Sequence[str]) -> list[str]:
+    """Satır başına düşen ayırıcıyı (`· `) kırpar.
+
+    `_bol` madde ayırıcısından bölünce ikinci satır "· soluk = zayıf" gibi
+    ayırıcıyla başlıyordu (2026-11-16 lejant ölçümü); kart metninde çirkin
+    duruyor ve ilk bakışta "eksik madde" izlenimi veriyor.
+    """
+    return [s[2:].lstrip() if str(s).startswith("· ") else s for s in satirlar]
 
 
 def _lejant_satirlar(oge: Sequence[str], kare_genislik: float) -> tuple[list[str], float, int]:
@@ -461,7 +471,7 @@ def _lejant_satirlar(oge: Sequence[str], kare_genislik: float) -> tuple[list[str
         metin = " · ".join(oge)
         if _genislik_16(metin) <= butce:
             return [metin], punto, atlanan
-        satirlar = [s.strip() for s in _bol(metin, butce)]
+        satirlar = _satirlari_temizle([s.strip() for s in _bol(metin, butce)])
         if len(satirlar) <= 2:
             return satirlar, punto, atlanan
     # GÖRSEL-7: taşmada ÖNCE uzun ve düşük öncelikli bilgi satırları düşer
@@ -486,7 +496,8 @@ def _lejant_satirlar(oge: Sequence[str], kare_genislik: float) -> tuple[list[str
         else:                        # hepsi korunmuş: en sondan düşürülür
             oge.pop()
         atlanan += 1
-    return _bol(" · ".join(oge), butce)[:2], max(7.0, _taban_pt * 0.76), atlanan
+    return (_satirlari_temizle(_bol(" · ".join(oge), butce))[:2],
+            max(7.0, _taban_pt * 0.76), atlanan)
 
 
 _ALT_ADIM = 0.0235      # kare altındaki yazı bloğunun satır adımı (figür kesiri)
@@ -734,6 +745,28 @@ def _metinler(goruntu: Mapping[str, Any], meta: Mapping[str, Any], genislik: int
             "butce": SATIR_BUTCE, "genislik": genislik}
 
 
+def _kademe_cizildi(anahtar: str, cizgiler: Mapping[str, Any],
+                    goruntu: Mapping[str, Any]) -> bool:
+    """Ok kademesi kareye çizildi mi? Ölçüm varsa sayaçtan, yoksa snapshot'tan.
+
+    `_lejant` iki geçişte çağrılır: ilk geçişte çizim sayaçları henüz yoktur,
+    o zaman katman verisine bakılır (uydurma yok: sınıf snapshot'ta duruyor).
+    """
+    for katman_adi in ("stabil", "stabil_direnc"):
+        sayaclar = ((cizgiler or {}).get(katman_adi) or {})
+        if anahtar in sayaclar:
+            if int(sayaclar.get(anahtar) or 0) > 0:
+                return True
+            continue
+        sinif = {"baglam_cok_guclu_isaret": "cok_guclu",
+                 "baglam_guclu_isaret": "guclu",
+                 "baglam_zayif_isaret": "zayif"}[anahtar]
+        baglam = (goruntu.get(katman_adi) or {}).get("baglam") or {}
+        if any(str(v) == sinif for v in baglam.values()):
+            return True
+    return False
+
+
 def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool,
             *, meta: Optional[Mapping[str, Any]] = None) -> list[str]:
     """Çizilen ne ise o (§0.12v); uydurma etiket yok — katman yoksa madde de yok."""
@@ -777,6 +810,18 @@ def _lejant(goruntu: Mapping[str, Any], yalnizca_mumlar: bool,
             ok_cizildi = ok_cizildi or any(katman.get(b) for b in barlar)
     if ok_cizildi:
         oge.append("▼ dönüş = sinyal · ▲ geri alım = yapı · boş = momentum")
+    # OK KADEMESİ (2026-11-16, ok incelemesi): ○ halka / ◎ çift halka / soluk ok
+    # 2026-11-15'te eklendi ama lejantta HİÇ yazmıyordu → kullanıcı "bu halka ne?"
+    # sorusunun cevabını karede bulamıyordu (§0.12v: lejant çizileni anlatır).
+    # Yalnız GERÇEKTEN çizilen sınıf yazılır; hiçbiri yoksa madde de yok.
+    _kademe: list[str] = []
+    for _anahtar, _ad in (("baglam_cok_guclu_isaret", "◎ çok güçlü"),
+                          ("baglam_guclu_isaret", "○ güçlü"),
+                          ("baglam_zayif_isaret", "soluk = zayıf")):
+        if _kademe_cizildi(_anahtar, _cizgiler, goruntu):
+            _kademe.append(_ad)
+    if _kademe:
+        oge.append("ok kademesi: " + " · ".join(_kademe))
     iptal_cizildi = any(
         ((meta or {}).get("cizgiler") or {}).get(k, {}).get("iptal_isaret", 0)
         if "iptal_isaret" in (((meta or {}).get("cizgiler") or {}).get(k) or {})

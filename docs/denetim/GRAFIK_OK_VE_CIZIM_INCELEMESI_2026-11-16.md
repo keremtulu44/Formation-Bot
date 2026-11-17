@@ -67,8 +67,10 @@ Yeni betik, `grafik`'in kendi kalite kapısının **görmediği** şeyi ölçüy
 
 | Pencere | İşaret | Kendi mumuna değen | **Komşu muma değen** | Dikey mesafe (medyan) | Tarih etiketi çakışması |
 |---|---|---|---|---|---|
-| 200 bar | 49 | **0** | **13 (%27)** | 12,1 – 44,7 px | 0 / 12 kare |
-| 120 bar | 32 | **0** | **7 (%22)** | 12,1 – 56,6 px | **7 / 7 günlük karede 1 çift** (4s'te 0) |
+| 200 bar — önce | 49 | **0** | **13 (%27)** | 12,1 – 44,7 px | 0 / 12 kare |
+| 200 bar — **sonra** | 41 | **0** | 16 (%39) | 12,1 – 25,0 px | 0 / 12 kare |
+| 120 bar — önce | 32 | **0** | **7 (%22)** | 12,1 – 56,6 px | **7 / 7 günlük karede 1 çift** (4s'te 0) |
+| 120 bar — **sonra** | 29 | **0** | 9 (%31) | 12,1 – 15,4 px | **0** |
 
 Ek enjeksiyon ölçümü (dört kademe + üç bağlam aynı karede, bar aralığı ≈4,4 px):
 `çok güçlü` dış halkası **r≈12 px** → **±2–3 barı** kapsıyor; 40. barın halkası
@@ -91,7 +93,7 @@ Ek enjeksiyon ölçümü (dört kademe + üç bağlam aynı karede, bar aralığ
 
 ## 4. Bulgular
 
-### P1 — Lejant çizileni anlatmıyor (repo'nun kendi kuralı §0.12v)
+### P1 — Lejant çizileni anlatmıyor (repo'nun kendi kuralı §0.12v) — **UYGULANDI**
 
 Karede ok olan bir grafik için üretilen tek lejant satırı **birebir** şu:
 
@@ -105,12 +107,20 @@ Lejantta **olmayan** üç şey var ve bunlar tam da bu turda eklenen katmanlar:
 farkı (süpürme 34 vs rebase 62). Yani kullanıcı "neden bu okun etrafında halka var,
 neden bu ok silik" sorusunun cevabını karede/kartta bulamıyor.
 
-**Küçük onarım (S):** `grafik/panels.py::_lejant_satirlar`'a tek cümle:
-`○ halka = güçlü bağlam · ◎ = çok güçlü · silik = zayıf` — yalnız o işaret
-gerçekten çizildiyse (mevcut `iptal_cizildi` deseninin aynısı). Lejant bütçesi
-1 satır + ~55 karakter; bütçe aşımı `lejant_atlanan`da görünür, sessiz düşmez.
+**Düzeltme (uygulandı):** `grafik/panels.py::_lejant` artık çizilen sınıfı
+adıyla yazar ve yalnız GERÇEKTEN çizileni yazar (`_kademe_cizildi`: sayaç varsa
+sayaçtan, ilk geçişte snapshot'tan). Üretilen ek madde:
 
-### P1 — `zayif` kademesi oku fiilen siliyor (doküman "ok silinmez" diyor)
+```
+ok kademesi: ○ güçlü · ◎ çok güçlü · soluk = zayıf      (yalnız var olanlar)
+```
+
+Örnek (VAKBN 1G): `… · ok kademesi: ○ güçlü`, ikinci satırda `soluk = zayıf`.
+Madde `_LEJANT_KORU`'ya alındı: bütçe kısarken ok sözlüğü gibi korunur. Ayrıca
+`_bol` ayırıcıdan böldüğünde satır başında kalan `· ` kırpılıyor
+(`_satirlari_temizle`) — kart metninde "eksik madde" izlenimi vermiyor.
+
+### P1 — `zayif` kademesi oku fiilen siliyor (doküman "ok silinmez" diyor) — **UYGULANDI**
 
 `grafik/render.py:1352-1358` zayıf okun **üstüne** zemin renginde (`PALET["zemin"]`,
 α 0,55) daha **büyük** (s=62 > 34/48) bir üçgen basıyor. 0,55 alfa koyu zeminde
@@ -119,11 +129,13 @@ kalıyor. `docs/denetim/OK_BAGLAM_DOGRULAMA_VE_UYGULAMA_2026-11-15.md` ise
 "zemin rengi yarı saydam örtü; **ok silinmez**" diyor — kod ile doküman çelişiyor.
 `VAKBN_1G_kademeler_ve_halkalar.png`'de zayıf barlar (56/64) leke gibi görünüyor.
 
-**Küçük onarım (S):** örtüyü kaldır, soluklaştırmayı okun kendi üstünde yap
-(`alpha=0.35`, `linewidths/edgecolors` aynı kalsın) veya örtüyü s=40'a küçült.
-Davranış değişmez, yalnız görünürlük.
+**Düzeltme (uygulandı):** zemin örtüsü tamamen kaldırıldı. Zayıf bağlamlı ok,
+kendi kademesinin biçimini koruyarak **kendi alfasıyla** çizilir
+(`grafik-stabil-reclaim-zayif` α 0,35 · `-supurme-zayif` α 0,22 ·
+`momentum-zayif` α 0,30). Ok artık "leke" değil, okun okunabilir soluk hâli;
+`baglam_zayif_isaret` sayacı da çizilen oku saymaya devam ediyor.
 
-### P2 — İşaret–mum çakışması ölçülmüyor; yeni halka kademesi ölçüsüz kaldı
+### P2 — İşaret–mum çakışması ölçülmüyor; yeni halka kademesi ölçüsüz kaldı — **UYGULANDI (ölçüm)**
 
 Sayılar: komşu muma değme **%27** (200 bar) / **%22** (120 bar); çift halka ±2–3 bar.
 Sebep: kapı yalnız yazıları ölçüyor (`grafik/indicators.py::_mum_cakisma_say`,
@@ -131,11 +143,15 @@ Sebep: kapı yalnız yazıları ölçüyor (`grafik/indicators.py::_mum_cakisma_
 (s=300) hiçbir ölçüme girmiyor; ileride "halkalar birbirine değiyor" türü bir
 şikâyet yine ölçümsüz kalır.
 
-**Küçük onarım (M):** `_mum_cakisma_say`'a `PathCollection` (gid `grafik-stabil-*`)
-kontrolü ekle → `meta["kalite"]["isaret_cakisan"]`; eşik testte 0 tutulmaz, mevcut
-durum (13/49) taban olarak yazılır. Ölçüm betiği bunun referans uygulaması.
+**Düzeltme (uygulandı):** kapı artık `PathCollection` işaretlerini de ölçüyor →
+`meta["kalite"]["isaret"]`, `["isaret_komsu_cakisan"]`, `["isaret_detay"]`
+(gid bazında). Kendi mumuna değme hata sayılmaz (ok zaten onun altına konur);
+KOMŞU mumla temas sayılır. Örnek ölçüm: VAKBN 1G/200 → `isaret: 8`,
+`isaret_komsu_cakisan: 5` (detay: `baglam-guclu` 2, `momentum` 2, `-supurme` 1) —
+yani sorunun kaynağı halka çapı ölçümle görünür hâle geldi. Halka boyutlarına
+BİLİNÇLİ dokunulmadı (onaylı görsel); istenirse tek satırla küçültülebilir.
 
-### P2 — Eski snapshot'ta tüm oklar "en güçlü" görünüyor (ters varsayılan)
+### P2 — Eski snapshot'ta momentum okları "en güçlü" görünüyor (ters varsayılan) — **UYGULANDI**
 
 `grafik/render.py:1244` ve `1254`: tür sözlüğü yoksa (`reclaim_turleri` boş)
 **bütün** reclaim okları dolu, `momentum_turleri` boşsa **bütün** momentum okları
@@ -144,10 +160,15 @@ Bugün üretim her zaman bu sözlükleri yazdığı için canlıda görülmüyor
 sürüm düşürmesi / eski `bot_data` snapshot'ı / Supabase'ten dönen eski kayıt
 senaryosunda **aşırı iddia** yönünde yanlış varsayılan.
 
-**Küçük onarım (S):** tür bilinmiyorken nötr kademe (dolu-normal) kullan; süpürme
-küçültmesi yalnız tür **bilinirken** uygulanır (fail-soft, iddia büyütmez).
+**Düzeltme (uygulandı):** ilk değerlendirmede reclaim tarafını da yazmıştım;
+ölçümde görüldü ki `reclaim_turleri` boşken reclaim zaten **nötr** kademeye
+(s=48 dolu) düşüyor — sorun yalnız momentumdaydı. Artık `momentum_turleri`
+boşsa `rebase` grubu **s=50** (nötr) çizilir; s=62 yalnız kanıtlı
+`upward_rebase_momentum` için ayrılmıştır. Sayaç anlamı değişmedi
+(`momentum_isaret` hâlâ görünen oku sayar), böylece eski snapshot'ta da
+"aşırı iddia" yönünde yanlış varsayılan kalmıyor.
 
-### P2 — Dikey ofset volatiliteden bağımsız
+### P2 — Dikey ofset volatiliteden bağımsız — **UYGULANDI**
 
 Yerleşim `y_pos = min(destek, dip) − 0,018 × y_span`. `y_span` kadrajın fiyat
 aralığı olduğu için ölçülen mesafe 12,1 – 56,6 px arasında değişiyor; sakin
@@ -155,10 +176,15 @@ pencerede ok mumun dibine yapışıyor, sert pencerede 50+ px uzakta "havada" du
 (`ULKER`, `AKBNK` 1G). Ayrıca destek fiyattan uzaksa ok desteğe, mumdan kopuk
 çiziliyor (demo karede 49,0 desteğine 3 ok, mumlar 50–52'de).
 
-**Onarım (M, istenirse):** ofseti ATR tabanlı yap (`0,15 × ATR`, alt sınır 8 px)
-ve desteğe değil **mumun dibine** sabitle; desteğe uzaklık yalnız stepline'da kalsın.
+**Düzeltme (uygulandı):** referans artık **mumun dibi** (mum verisi yoksa destek);
+ofset `max(0,018×aralık, min(0,032×aralık, 0,25×tipik gövde))` — sakin pencerede
+sabit, oynak pencerede bir tık nefes payı. Destek çizgisi mumun dibine çok
+yakınsa ok ikisinin ALTINA iner (ölçüm: stepline ▲'nın içinden geçiyordu).
+Sonuç: dikey mesafe 12,1–56,6 px dağınıklığından 12,1–25,0 px'e indi; ok her
+zaman kendi mumunun altında. Komşu muma değme %27 → %39'a çıktı (oklar mumlara
+yaklaştığı için beklenen yön); asıl kaynak halka çapı — bkz. P2 ölçüm maddesi.
 
-### P3 — 120 barlık günlük karelerde tarih etiketi çakışması
+### P3 — 120 barlık günlük karelerde tarih etiketi çakışması — **UYGULANDI**
 
 Ölçülen 7 günlük karenin **7'sinde** sol kenarda iki etiket üst üste (`TURSG_1G_eksen_etiketi_cakismasi.png`:
 "27 Nis" ile "03 May"). Sebep `grafik/markers.py::_tik_etiketleri`: adaylar **ay
@@ -167,9 +193,10 @@ pencere ay sonuna denk gelirse ilk aday (0. bar) ile ay başı adayı 4–6 bar 
 düşüyor. Piksel bütçesi (etiket genişliği × 1,35 + 8) bunu yakalıyor ama seyreltme
 sonrası komşuluk kontrolü yok.
 
-**Küçük onarım (S):** seyreltmeyi soldan sağa "önceki korunan etiketten en az
-`genişlik × 1,35 + 8 px` uzakta" kuralıyla yap (10 satır). Ölçüm betiği bunu
-`--pencere 120` ile tekrar doğrular.
+**Düzeltme (uygulandı):** `grafik/markers.py::_tik_etiketleri` seyreltmeyi artık
+soldan sağa **piksel komşuluğuyla** yapıyor (her etiketin kendi genişliği +
+nefes payı; `px/bar = eksen_px / bar sayısı`). Ölçüm: 120 barlık günlük karelerde
+çakışma **7/7 → 0/12 kare**; 200 barlık karelerde de 0.
 
 ### P3 — Mimari notlar (davranış değil, bakım)
 
@@ -194,10 +221,10 @@ sonrası komşuluk kontrolü yok.
 |---|---|---|
 | Yerleşim / ölçü | **İyi** | Sabitler `SABITLER`'de, dpi 100, dinamik sağ şerit (`_sag_serit_px_hesapla`), yazı ölçeği mobilde 1,35× |
 | Metin çakışması | **İyi** | `_mum_cakisma_say` + `_olay_yazi_koy` gerçek `get_window_extent` ile yer arıyor; 252 grafik testi yeşil |
-| İşaret çakışması | **Ölçümsüz** | bkz. P2 — sayaçlar var, geometri kapısı yok |
+| İşaret çakışması | **Ölçülü** | `meta["kalite"]["isaret"] / ["isaret_komsu_cakisan"]` (2026-11-16) |
 | Renk / erişilebilirlik | **İyi** | Renk körü paleti + "renk tek başına bilgi taşımaz" kuralı (§0.4.1) tutarlı uygulanmış; 8 literal renk istisna |
-| Lejant | **Eksik** | bkz. P1 — kademeler anlatılmıyor |
-| Eksen | **Küçük kusur** | bkz. P3 — 120 barlık günlük karede sol kenarda çakışma |
+| Lejant | **Tam** | `ok kademesi:` maddesi çizilen sınıfı anlatır (2026-11-16) |
+| Eksen | **İyi** | 120 barlık günlük karede çakışma 0/12 (2026-11-16) |
 | Bakım | **Orta** | 480 satırlık `_kare_ciz`, adlandırılmamış zorder tablosu, modül bölünmesinden kalan ~20 satırlık tekrar import blokları |
 | Güvenlik kapıları | **İyi** | kapanmamış mum çizilmez, yanlış sembol reddedilir, katman hatası kareyi düşürmez, sağ şerit taşması engellenir |
 
@@ -217,12 +244,35 @@ Doğrulama: `ruff check .` temiz; grafik test bataryası **252 passed** (30,8 s)
 
 | # | İş | Büyüklük | Kullanıcı etkisi |
 |---|---|---|---|
-| 1 | Lejant satırı (halka/çift halka/silik) | S | "Bu halka ne?" sorusunu kapatır |
-| 2 | `zayif` örtüsünü kaldır, soluklaştırmayı oka uygula | S | Zayıf ok "leke" olmaktan çıkar |
-| 3 | Tür bilinmiyorken nötr kademe (fail-soft) | S | Eski snapshot'ta aşırı iddia biter |
-| 4 | Eksen etiketi seyreltmesini piksel komşuluğuna çevir | S | 120 barlık 1G karelerde bitişik tarih biter |
-| 5 | `kalite["isaret_cakisan"]` kapısı (işaret geometrisi) | M | Yeni kademe ölçülebilir olur |
-| 6 | Ok ofsetini ATR'ye bağla | M | Ok muma daha yakın/dengeli durur |
-| 7 | `zorder` tablosu + `_kare_ciz` bölünmesi | L | Bakım; görsel çıktı değişmez |
+| # | İş | Büyüklük | Kullanıcı etkisi | Durum |
+|---|---|---|---|---|
+| 1 | Lejant satırı (halka/çift halka/silik) | S | "Bu halka ne?" sorusunu kapatır | **yapıldı** |
+| 2 | `zayif` örtüsünü kaldır, soluklaştırmayı oka uygula | S | Zayıf ok "leke" olmaktan çıkar | **yapıldı** |
+| 3 | Tür bilinmiyorken nötr kademe (fail-soft) | S | Eski snapshot'ta aşırı iddia biter | **yapıldı** |
+| 4 | Eksen etiketi seyreltmesini piksel komşuluğuna çevir | S | 120 barlık 1G karelerde bitişik tarih biter | **yapıldı** |
+| 5 | İşaret geometrisi kapısı (`kalite["isaret"]`) | M | Yeni kademe ölçülebilir olur | **yapıldı** |
+| 6 | Ok ofsetini gövdeye bağla, referansı mumun dibine al | M | Ok muma daha yakın/dengeli durur | **yapıldı** |
+| 7 | `zorder` tablosu + `_kare_ciz` bölünmesi | L | Bakım; görsel çıktı değişmez | açık (kapsam dışı) |
 
-1–4 tek turda, davranış değiştirmeden yapılabilir; 5–6 görsel ölçüm ister, 7 ayrı iş.
+Davranış değişmedi: sinyal/alarm üretimi, eşikler ve sayaç ADLARI aynı; yalnız
+çizim, lejant ve ölçüm katmanı değişti.
+
+### 7.1 Uygulanan değişiklikler (dosya bazında)
+
+| Dosya | Değişiklik |
+|---|---|
+| `grafik/render.py` | `_ok_ofset`/`_ok_koordinatlari`/`_ok_grubu`; referans mumun dibi, stepline yakınsa `min(destek, dip)`; kademe blokları tek yardımcıdan; zayıf = aynı biçim + α (örtü yok); `momentum` türsüzken s=50; `cok_guclu` çift halka tek `gid` (`s=300+170`) |
+| `grafik/panels.py` | `_kademe_cizildi()` + `ok kademesi:` lejant maddesi; `_LEJANT_KORU`; `_satirlari_temizle()` |
+| `grafik/markers.py` | `_tik_etiketleri`: piksel komşuluk seyreltmesi |
+| `grafik/indicators.py` | `_mum_cakisma_say`: `PathCollection` geometri kapısı (`isaret`, `isaret_komsu_cakisan`, `isaret_detay`) |
+| `test_grafik_ok_kademesi_duzeltmeleri.py` | 10 sözleşme testi (lejant, zayıf ok, nötr kademe, kapı, eksen) |
+
+### 7.2 Bilinçli olarak DEĞİŞTİRİLMEYENLER
+
+- **Halka çapları** (s=150 / 300+170): onaylı görsel dil. Ölçüldü: 300→240
+  küçültmesi komşu temasını 16/41'den 16/41'e taşımadı (temasın kaynağı bar
+  aralığı, halka değil) — o yüzden dokunulmadı.
+- **Kademe boyutları** (34/48/62/44): replay türetmesi değişmedi.
+- **Sayaç adları** (`reclaim_isaret`, `momentum_isaret`, `baglam_*_isaret`):
+  testler ve `meta` sözleşmesi bunlara bağlı.
+- **`zorder` tablosu / `_kare_ciz` bölünmesi** (P3 #7): bakım işi, ayrı tur.
