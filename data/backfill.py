@@ -27,6 +27,7 @@ import data as _pkg  # geç bağlama (plan §3)
 
 from data.replay import (  # noqa: F401
     _istanbul_zaman,
+    islem_gunu_mu,
 )
 
 def ohlcv_girdi_sorunlari(df) -> List[str]:
@@ -291,6 +292,30 @@ def yuvarlak_orana_yakin_mi(yuzde: float, tolerans: float = 1.0) -> Optional[flo
     return None
 
 
+def _aradaki_islem_gunu_sayisi(ilk: datetime, son: datetime, *, sinir: int = 400) -> int:
+    """İki bar arasında ATLANMIŞ BIST işlem günü sayısı (bar günleri hariç).
+
+    Neden: `sureklilik_sorunlari_bul` boşluğu yalnız AYNI takvim günü içinde
+    arıyordu. Bir seansın tamamı (veya birkaç gün) hiç çekilmediyse iki bar
+    arasındaki aralık farklı güne düştüğü için hiçbir uyarı üretilmiyordu —
+    yani eksik gün sessizce analiz ediliyordu. Gece/hafta sonu/tatil
+    aralıkları burada sayılmaz (takvim işlem günü değildir).
+    """
+    if son <= ilk:
+        return 0
+    sayac = 0
+    gun = ilk.date() + timedelta(days=1)
+    bitis = son.date()
+    adim = 0
+    while gun < bitis and adim < sinir:
+        adim += 1
+        # pytz'de `tzinfo=` doğrudan verilirse LMT (+1:56) kayması olur; localize şart.
+        if islem_gunu_mu(ISTANBUL_TZ.localize(datetime.combine(gun, dt_time(12, 0)))):
+            sayac += 1
+        gun += timedelta(days=1)
+    return sayac
+
+
 def sureklilik_sorunlari_bul(dq) -> List[Dict]:
     """
     Deque'daki mumlarda veri bütünlüğü sorunu ara.
@@ -305,12 +330,19 @@ def sureklilik_sorunlari_bul(dq) -> List[Dict]:
     hissede fiyat aniden yarıya iner ve motor bunu "kırılım" sanıp sahte alarm
     üretir. Gece/hafta sonu boşlukları (15-60 saat) DOĞALDIR, onlar sayılmaz.
     """
+    kayitlar = list(dq) if dq is not None else []
     sorunlar: List[Dict] = []
-    if dq is None or len(dq) < 3:
+    if len(kayitlar) < 3:
         return sorunlar
 
+    # Seri seans içi mi (saatlik) yoksa günlük mü? Eksik SEANS kontrolü yalnız
+    # saatlik seride anlamlıdır; günlük seride "arada bir gün yok" tatil olabilir.
+    zamanlar = [_istanbul_zaman(c['timestamp']) for c in kayitlar]
+    farklar = [(b - a).total_seconds() / 3600.0 for a, b in zip(zamanlar, zamanlar[1:])]
+    seans_ici_seri = bool(farklar) and float(np.median(farklar)) <= 12.0
+
     onceki = None
-    for c in dq:
+    for c in kayitlar:
         ts = _istanbul_zaman(c['timestamp'])
         if onceki is not None:
             onceki_ts, onceki_kapanis, onceki_gun = onceki
@@ -346,22 +378,33 @@ def sureklilik_sorunlari_bul(dq) -> List[Dict]:
                                           f"{c['open']:.2f}) - tek barlık hareket, oran yuvarlak değil"),
                                 'zamandar': ts, 'yuzde': round(ziplama, 2),
                             })
-            elif onceki_kapanis > 0 and c['open'] < onceki_kapanis:
-                # BIST bedelsiz/rüçhan bölünmeleri gece aşırı (önceki gün kapanışı ->
-                # yeni gün açılışı) gerçekleşir. Normal taban marjı %10'dur; tek gecede
-                # >=%30 düşüş ve yuvarlak bölünme oranı yalnızca sermaye düzeltmesinde olur.
-                gece_dusus = (onceki_kapanis - c['open']) / onceki_kapanis * 100.0
-                if gece_dusus >= 30.0:
-                    oran = yuvarlak_orana_yakin_mi(gece_dusus, tolerans=2.5)
-                    if oran:
+            else:
+                if seans_ici_seri:
+                    eksik_seans = _aradaki_islem_gunu_sayisi(onceki_ts, ts)
+                    if eksik_seans > 0:
                         sorunlar.append({
-                            'tip': 'split',
-                            'mesaj': (f"GECE AŞIRI BÖLÜNME/BEDELSİZ (~{oran:.0f}:1): "
-                                      f"{ts.strftime('%d %b %H:%M')} açılışı önceki kapanışa göre "
-                                      f"%{gece_dusus:.1f} düştü ({onceki_kapanis:.2f} -> "
-                                      f"{c['open']:.2f})"),
-                            'zamandar': ts, 'yuzde': round(gece_dusus, 2), 'oran': oran,
+                            'tip': 'gun_boslugu',
+                            'mesaj': (f"EKSİK SEANS: {onceki_ts.strftime('%d %b %H:%M')} ile "
+                                      f"{ts.strftime('%d %b %H:%M')} arasında {eksik_seans} işlem "
+                                      "günü hiç çekilmemiş"),
+                            'zamandar': ts, 'yuzde': float(eksik_seans),
                         })
+                if onceki_kapanis > 0 and c['open'] < onceki_kapanis:
+                    # BIST bedelsiz/rüçhan bölünmeleri gece aşırı (önceki gün kapanışı ->
+                    # yeni gün açılışı) gerçekleşir. Normal taban marjı %10'dur; tek gecede
+                    # >=%30 düşüş ve yuvarlak bölünme oranı yalnızca sermaye düzeltmesinde olur.
+                    gece_dusus = (onceki_kapanis - c['open']) / onceki_kapanis * 100.0
+                    if gece_dusus >= 30.0:
+                        oran = yuvarlak_orana_yakin_mi(gece_dusus, tolerans=2.5)
+                        if oran:
+                            sorunlar.append({
+                                'tip': 'split',
+                                'mesaj': (f"GECE AŞIRI BÖLÜNME/BEDELSİZ (~{oran:.0f}:1): "
+                                          f"{ts.strftime('%d %b %H:%M')} açılışı önceki kapanışa göre "
+                                          f"%{gece_dusus:.1f} düştü ({onceki_kapanis:.2f} -> "
+                                          f"{c['open']:.2f})"),
+                                'zamandar': ts, 'yuzde': round(gece_dusus, 2), 'oran': oran,
+                            })
         onceki = (ts, c['close'], ts.date())
     return sorunlar
 

@@ -1,0 +1,40 @@
+{
+  "parametreler": {
+    "evren": 176,
+    "tfs": [
+      "1h",
+      "2h",
+      "4h",
+      "1d"
+    ],
+    "ilksar_bar": 40,
+    "zaman_stopu": 10,
+    "plan_araligi_bar": 20,
+    "bolme": "kesif/dogrulama %70/%30"
+  },
+  "seri_sayisi": 704,
+  "sayacler": {
+    "bildirim": 673029,
+    "bitis": 142686,
+    "hukum_yazim": 75744,
+    "hukum_dagilim": {
+      "BEKLE": 570143,
+      "UYGUN": 335042,
+      "RET": 223848
+    },
+    "tetik": 190195,
+    "tetik_geometri": 4597,
+    "plan": 633,
+    "teyit_red": 1137,
+    "sonuc": {
+      "hedef": 143,
+      "stop": 253,
+      "yok": 0,
+      "zaman": 237
+    }
+  },
+  "hatalar": [],
+  "hata_sayisi": 0,
+  "sure_sn": 3628.0,
+  "defter": "docs/arastirma/sonuclar/golge_zincir/faz9d_baz_176/golge_defter.jsonl"
+}

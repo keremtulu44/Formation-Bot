@@ -179,6 +179,24 @@ def _saglik_ozeti() -> dict:
     else:
         esik_sn = 259200
     yas = _pkg._heartbeat_yasi_sn(simdi)
+    # --- BİLDİRİM SAĞLIĞI ---
+    # "/health 200 ama Telegram'a hiçbir şey gitmiyor" durumu dışarıdan
+    # görünsün: teslim kuyruğunda bekleyen, ilk bekleyenin hatası ve
+    # notifier'ın açık olup olmadığı. Okuma hatası /health'i düşürmez.
+    bildirim: dict = {"enabled": None, "teslim_kuyrugu": None}
+    try:
+        notifier = _pkg._notifier_ref
+        if notifier is not None:
+            bildirim["enabled"] = bool(getattr(notifier, "enabled", False))
+            durum_fn = getattr(notifier, "gonderim_durumu", None)
+            if callable(durum_fn):
+                gd = durum_fn() or {}
+                bildirim["teslim_kuyrugu"] = gd.get("teslim_kuyrugu")
+                bildirim["acil_kuyruk"] = gd.get("acil_kuyruk")
+                bildirim["son_basarili_gonderim"] = gd.get("son_basarili_gonderim")
+                bildirim["son_gonderme_hatasi"] = gd.get("son_gonderme_hatasi")
+    except Exception as exc:  # noqa: BLE001 - /health asla düşmesin
+        bildirim["hata"] = type(exc).__name__
     tarama_bayat = (
         None if tarama_suruyor is None or (tarama_suruyor and tarama_yasi_sn is None)
         else bool(tarama_suruyor and tarama_yasi_sn > tarama_esigi_sn)
@@ -193,6 +211,7 @@ def _saglik_ozeti() -> dict:
         "scan_stale": tarama_bayat,
         "scan_stale_after_s": tarama_esigi_sn,
         "seans_acik": seans_acik,
+        "bildirim": bildirim,
         "evren": len(_pkg.ACTIVE_STOCKS),
         "instance_id": _pkg.INSTANCE_ID,
         "komut": _pkg._komut_durumu(),
@@ -522,6 +541,22 @@ def _komut_render(_arguman: str) -> str:
         )
     else:
         satirlar.append("Bu sürecin başlangıç zamanı henüz kaydedilmedi")
+
+    # ŞU ANKİ canlılık ayrıca basılır: açılıştaki eski boşluk (uyku/deploy)
+    # geçmişte kalmış olabilir; kullanıcı "hâlâ uyuyor mu?" sanmasın.
+    try:
+        hb_yas = _pkg._heartbeat_yasi_sn(now)
+    except Exception:  # noqa: BLE001 - teşhis komutu düşmesin
+        hb_yas = None
+    if hb_yas is None:
+        satirlar.append("Son heartbeat: henüz yazılmadı/bilinmiyor")
+    elif hb_yas < 180:
+        satirlar.append(f"Şu an canlı: son heartbeat {max(0, int(hb_yas))} sn önce")
+    elif hb_yas < 3600:
+        satirlar.append(f"Son heartbeat: {int(hb_yas // 60)} dk önce")
+    else:
+        satirlar.append(
+            f"⚠️ Son heartbeat {hb_yas / 3600:.1f} sa önce — ana döngü takılmış olabilir")
 
     previous_at = runtime.get("previous_heartbeat_at")
     gap_seconds = runtime.get("estimated_gap_seconds")
@@ -1379,6 +1414,9 @@ def _komut_panel(arguman: str) -> str:
 
 
 _GRAFIK_TAZELEME_COOLDOWN_SN = 120.0
+#: /grafik sağlayıcı isteği: geçici hata (429/timeout/503) için toplam deneme.
+#: 1 = yeniden deneme yok. Kare isteği kullanıcıyı beklettiği için üst sınır küçük.
+_GRAFIK_HATA_DENEME = 2
 _grafik_yenileme_kilidi = threading.Lock()
 _grafik_yenileme_durum = {}
 
@@ -1410,19 +1448,20 @@ def _grafik_cache_tazelik_durumu(frame, tf: str, now=None) -> dict:
 
     if frame is None or len(frame) == 0:
         return {"taze": False, "yas_dk": None, "esik_dk": esik,
-                "aciklama": "kapanmış mum yok"}
+                "gecikme_dk": None, "aciklama": "kapanmış mum yok"}
     try:
         kapanan = _pkg.tamamlanmis_mumlar(frame, tf, now=now)
         if kapanan is None or len(kapanan) < 2:
             return {"taze": False, "yas_dk": None, "esik_dk": esik,
-                    "aciklama": "en az iki kapanmış mum yok"}
+                    "gecikme_dk": None, "aciklama": "en az iki kapanmış mum yok"}
         kapanis = _pkg.mum_kapanis_ani(kapanan.index[-1], tf)
         if kapanis is None:
             return {"taze": False, "yas_dk": None, "esik_dk": esik,
-                    "aciklama": "son mumun kapanış anı belirlenemedi"}
+                    "gecikme_dk": None, "aciklama": "son mumun kapanış anı belirlenemedi"}
         yas = (now - kapanis).total_seconds() / 60.0
     except (TypeError, ValueError, OverflowError, KeyError) as exc:
         return {"taze": False, "yas_dk": None, "esik_dk": esik,
+                "gecikme_dk": None,
                 "aciklama": f"mum tazeliği doğrulanamadı ({type(exc).__name__})"}
 
     # Tarama tarafından sağlanan ortak cache politikası (özellikle test/uygulama
@@ -1433,10 +1472,35 @@ def _grafik_cache_tazelik_durumu(frame, tf: str, now=None) -> dict:
         ortak_kabul = bool(_pkg._cache_verisi_kullanilabilir(yas, False, seans_acik))
     except Exception:  # tazelik kapısı hata verirse fail-closed kal
         ortak_kabul = False
-    taze = ortak_kabul or (seans_acik and yas <= esik)
-    aciklama = (f"son kapanış yaşı {yas:.0f} dk (sınır {esik:.0f} dk)" if not taze
-                else f"son kapanış yaşı {yas:.0f} dk")
+
+    # SEANS AÇIKKEN ÖLÇÜT "YAŞ" DEĞİL "GECİKME" (2026-11-16): seans açıkken
+    # geçen süre takvimin doğal sonucudur. Seansın ilk saatlerinde (ilk saatlik
+    # mum kapanmadan) son kapanmış mum DÜNKÜdür; yaş ~16 saat olur ve eski kapı
+    # bunu "bayat" sayıp /grafik'i "veri yok" ile kapatıyordu. Aynı şekilde 1G
+    # grafik, günün günlük mumu kapanana kadar (18:30) bütün gün bayat
+    # görünüyordu. Artık veri, seans takvimine göre KAPANMIŞ OLMASI GEREKEN son
+    # mumla karşılaştırılır: gecikme = beklenen kapanış - son kapanış.
+    gecikme_dk = None
+    try:
+        beklenen = _pkg.beklenen_son_kapanis_ani(tf, now)
+    except Exception:  # takvim hatası tazelik kapısını kilitlemesin
+        beklenen = None
+    if beklenen is not None:
+        gecikme_dk = (beklenen - kapanis).total_seconds() / 60.0
+    olculen = gecikme_dk if (seans_acik and gecikme_dk is not None) else yas
+    # Mutlak tavan `_cache_verisi_kullanilabilir` içindedir (seans dışı 14 gün);
+    # seans içinde gecikme modeli zaten "beklenen son kapanış"a bağlar.
+    taze = bool(ortak_kabul or (olculen <= esik))
+
+    if taze:
+        aciklama = f"son kapanış yaşı {yas:.0f} dk"
+    elif gecikme_dk is not None:
+        aciklama = (f"son kapanış yaşı {yas:.0f} dk; seans takvimine göre "
+                    f"{gecikme_dk:.0f} dk geride (sınır {esik:.0f} dk)")
+    else:
+        aciklama = f"son kapanış yaşı {yas:.0f} dk (sınır {esik:.0f} dk)"
     return {"taze": taze, "yas_dk": yas, "esik_dk": esik,
+            "gecikme_dk": gecikme_dk, "beklenen_kapanis": beklenen,
             "kapanis": kapanis, "aciklama": aciklama}
 
 
@@ -1529,6 +1593,27 @@ def _grafik_tazele(hisse: str, tf: str, yonetici, now=None) -> dict:
             frame_validator=adayi_kabul_et,
             request_context=saglayici_istegi,
         )
+        # Geçici sağlayıcı hatası (429/timeout/503…) tek istekte kareyi
+        # düşürmesin: sınırlı bir yeniden deneme. Yedeğe geçiş YOK (spot/vadeli
+        # ayrımı korunur); aynı sembol, aynı pencere, kısa bekleme.
+        deneme = 1
+        while (frame is None or len(frame) == 0) and gecici_hata and deneme < _GRAFIK_HATA_DENEME:
+            if _pkg._shutdown_requested:
+                break
+            bekleme = min(2.0 * deneme, 4.0)
+            _pkg.logger.info(
+                "/grafik %s %s geçici sağlayıcı hatası (%s); %.1f sn sonra yeniden denenecek (%d/%d)",
+                sembol, interval, (hata or "")[:120], bekleme, deneme + 1, _GRAFIK_HATA_DENEME,
+            )
+            time.sleep(bekleme)
+            deneme += 1
+            frame, gecici_hata, hata = _pkg.fetch_yfinance_chart_data(
+                sembol,
+                interval,
+                period,
+                frame_validator=adayi_kabul_et,
+                request_context=saglayici_istegi,
+            )
         if frame is None or len(frame) == 0:
             neden = str(hata or ("geçici sağlayıcı hatası" if gecici_hata else "boş veri"))
             return tamamla({"ok": False, "detail": neden, "retryable": bool(gecici_hata)})

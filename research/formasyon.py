@@ -370,6 +370,37 @@ def formasyon_kosu(
             ust_kap.append(max(0.0, y_ust - close[b]) / a_b)
             alt_kap.append(max(0.0, close[b] - y_alt) / a_b)
 
+        # FAZ9-C as-of dizileri: her kayıt barında yalnız o ana kadar biriken
+        # daralma/yakınlık değerleri (dış denetim: tam-seri aggregate'leri
+        # erken barlarda gelecek okuyordu — g2_durumu bunları i'ye kırpıp okur).
+        asof_bar: list[int] = []
+        asof_daralma: list[float | None] = []
+        asof_ust_kap: list[float | None] = []
+        asof_alt_kap: list[float | None] = []
+        _acm_ust: float | None = None
+        _acm_alt: float | None = None
+        try:
+            _gen_dogum = float(dogum_kaydi[26])
+        except (TypeError, ValueError):
+            _gen_dogum = 0.0
+        for _pos_k, _k in enumerate(kayitlar):
+            asof_bar.append(int(_k[0]))
+            try:
+                _w = float(_k[27])
+                asof_daralma.append(
+                    _yuvarla(1.0 - (_w / _gen_dogum)) if _gen_dogum > 0 else None
+                )
+            except (TypeError, ValueError):
+                asof_daralma.append(None)
+            _vu = ust_kap[_pos_k] if _pos_k < len(ust_kap) else None
+            _va = alt_kap[_pos_k] if _pos_k < len(alt_kap) else None
+            if _vu is not None:
+                _acm_ust = _vu if _acm_ust is None else min(_acm_ust, _vu)
+            if _va is not None:
+                _acm_alt = _va if _acm_alt is None else min(_acm_alt, _va)
+            asof_ust_kap.append(_acm_ust)
+            asof_alt_kap.append(_acm_alt)
+
         uy, ay = _temiz(ust_yakin), _temiz(alt_yakin)
         iy, ia = _argmin(ust_yakin), _argmin(alt_yakin)
         satir: dict[str, Any] = {
@@ -408,6 +439,11 @@ def formasyon_kosu(
             "frm_yakinlik_ust_bar_time": _bar_time(index_values, kayitlar[iy][0] if iy is not None else None),
             "frm_yakinlik_alt_bar_time": _bar_time(index_values, kayitlar[ia][0] if ia is not None else None),
             "frm_mesafe_olcum_bar": len(kayitlar),
+            # FAZ9-C as-of (karar alan alanlar): g2_durumu bunları i'ye kırpıp okur
+            "asof_bar": asof_bar,
+            "asof_daralma": asof_daralma,
+            "asof_ust_kap": asof_ust_kap,
+            "asof_alt_kap": asof_alt_kap,
         }
 
         # --- öncül hareket (FRM-01): doğumdan ÖNCEKİ 20 barın getirisi ---

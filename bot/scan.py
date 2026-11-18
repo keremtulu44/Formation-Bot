@@ -30,6 +30,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     TARAMA_SURESI_UYARI_DK, SCAN_REQUEST_BATCH_SIZE,
                     SCAN_REQUEST_DELAY_MIN_SEC, SCAN_REQUEST_DELAY_MAX_SEC,
                     FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD,
+                    FULL_1H_FETCH_STALE_DAYS, FULL_1H_FETCH_WINDOW_DAYS,
                     SCAN_BATCH_PAUSE_MIN_SEC, SCAN_BATCH_PAUSE_MAX_SEC,
                     SCAN_RETRY_BACKOFF_MIN_SEC, SCAN_RETRY_BACKOFF_MAX_SEC,
                     SUMMARY_HOURS, DEFERRED_ALERT_DIGEST_TIME, DEFERRED_ALERT_DIGEST_LIMIT,
@@ -658,16 +659,64 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
 
     # Sağlıklı cache'te son 5 günü, boş/5 günden eski cache'te tam 60 günü çek.
     # Böylece rutin saatlik taramada büyük geçmiş penceresi tekrar tekrar inmez.
+    #
+    # SEANS İÇİ BOŞLUK TAMİRİ (2026-11-16): rutin 5 günlük pencere yalnız son
+    # günleri kapsar; cache'te DAHA ESKİ bir seans içi delik varsa
+    # (sağlayıcı kesintisi / yarım kalan fetch / reddedilen append) o pencere
+    # deliği asla kapatmaz ve bot delikli seriyle formasyon hesaplamaya devam
+    # ederdi. Boşluk görüldüğünde tam pencere (60d) bir kez denenir; soğuma
+    # (`BOSLUK_TAMIR_TEKRAR_DK`) sağlayıcıda kalıcı delik varsa indirmeyi
+    # sınırlar. Onarım başarılıysa `sureklilik_sorunlari` temizlenir.
     fetch_periods = {}
+    bosluk_tamir_sembolleri = []
     for stock in scan_stocks:
         cached = deque_manager.to_dataframe(stock)
-        fetch_periods[stock] = _pkg.select_yfinance_1h_period(cached)
+        period = _pkg.select_yfinance_1h_period(cached)
+        bosluk_sayisi = _pkg.seans_ici_bosluk_sayisi(cached)
+        if bosluk_sayisi == 0:
+            # Kalıcı kayıtlardan devral: bütün seansın eksik olduğu durumlar
+            # (`gun_boslugu`) da tam pencereyle kapanabilir; yalnız pencere içinde
+            # kalanlar anlamlıdır (60d'den eskisini tam pencere kurtaramaz).
+            pencere_basi = simdiki_zaman - pd.Timedelta(days=FULL_1H_FETCH_WINDOW_DAYS)
+            for _s in deque_manager.sureklilik_sorunlari.get(stock, []) or []:
+                if _s.get('tip') not in ('bosluk', 'gun_boslugu'):
+                    continue
+                _zaman = _s.get('zamandar')
+                try:
+                    pencere_disi = _zaman is not None and _zaman < pencere_basi
+                except TypeError:  # tz bilgisi farklıysa temkinli davran: say
+                    pencere_disi = False
+                if not pencere_disi:
+                    bosluk_sayisi += 1
+        if (
+            bosluk_sayisi > 0
+            and period == ROUTINE_1H_FETCH_PERIOD
+            and deque_manager.bosluk_tamir_uygun_mu(stock, simdiki_zaman)
+        ):
+            deque_manager.bosluk_tamir_kaydet(stock, simdiki_zaman)
+            bosluk_tamir_sembolleri.append(stock)
+            period = FULL_1H_FETCH_PERIOD
+            _pkg.logger.warning(
+                f"{stock}: cache'te {bosluk_sayisi} seans içi 1H boşluğu var; "
+                f"rutin {ROUTINE_1H_FETCH_PERIOD} penceresi bunu kapatmaz -> "
+                f"{FULL_1H_FETCH_PERIOD} ile tamir denenecek"
+            )
+        fetch_periods[stock] = period
     full_count = sum(period == FULL_1H_FETCH_PERIOD for period in fetch_periods.values())
     routine_count = len(fetch_periods) - full_count
     _pkg.logger.info(
         f"1H fetch penceresi: tam {FULL_1H_FETCH_PERIOD}={full_count}, "
         f"rutin cache güncellemesi={routine_count} ({ROUTINE_1H_FETCH_PERIOD})"
     )
+    if bosluk_tamir_sembolleri:
+        _pkg.daily_stats['bosluk_tamir_fetch'] = int(
+            _pkg.daily_stats.get('bosluk_tamir_fetch') or 0
+        ) + len(bosluk_tamir_sembolleri)
+        _pkg.logger.warning(
+            "Seans içi boşluk tamiri: %d sembol (%s) tam pencereyle istenecek",
+            len(bosluk_tamir_sembolleri),
+            ", ".join(bosluk_tamir_sembolleri[:8]) + ("…" if len(bosluk_tamir_sembolleri) > 8 else ""),
+        )
 
     # Önce 1H fetch turu ve yalnız geçici hatalar için tek retry; analiz retry
     # tamamlandıktan sonra yapılır ki kurtarılan taze veri aynı turda kullanılsın.
@@ -709,11 +758,23 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             df_1h = deque_manager.to_dataframe(stock)
             taze = taze_1h_verileri.get(stock)
             if taze is not None:
-                deque_manager.append_dataframe(stock, taze)
+                # `append_dataframe` OHLCV doğrulama sınırıdır: False dönerse
+                # sağlayıcı verisi deque'ye YAZILMADI. Bu durumda "taze veri
+                # geldi" iddiası düşürülür; aksi hâlde eski cache tazeymiş gibi
+                # analiz edilir (sessiz geçilme).
+                if not deque_manager.append_dataframe(stock, taze):
+                    _pkg.daily_stats['cache_reddi'] = int(
+                        _pkg.daily_stats.get('cache_reddi') or 0
+                    ) + 1
+                    _pkg.logger.error(
+                        f"{stock}: sağlayıcı 1H verisi OHLCV doğrulamasında REDDEDİLDİ; "
+                        "cache güncellenmedi, taze veri sayılmıyor"
+                    )
+                    taze = None
                 df_1h = deque_manager.to_dataframe(stock)
-            else:
+            if taze is None:
                 _pkg.logger.warning(
-                    f"{stock}: taze 1H veri yok ({fetch_hatalari.get(stock, 'fetch yapılmadı')}); "
+                    f"{stock}: taze 1H veri yok ({fetch_hatalari.get(stock, 'fetch reddedildi/yapılmadı')}); "
                     "cache varsa yalnız veri tazeliği uygunsa kullanılacak"
                 )
             
@@ -770,8 +831,23 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         f"Detay yukarıdaki uyarılarda; veri düzeltilince otomatik döner."
                     )
                     continue
-                # boşluk/şok: analize devam (tek olay, motor ATR ile absorbe eder)
-                _pkg.logger.info(f"{stock}: veri notu {tipler} - analiz devam ediyor")
+                # boşluk/şok: analize devam (tek olay, motor ATR ile absorbe eder).
+                # Boşluk SESSİZ geçilmez: kaç mum eksik olduğu ve bunun veri
+                # kalitesini etkilediği uyarı olarak yazılır + sayılır. Tamir
+                # yolu (tam pencere) bir üstteki fetch turunda denenmiştir.
+                if 'bosluk' in tipler:
+                    eksik = sum(
+                        1 for x in st_sorunlar if x.get('tip') == 'bosluk'
+                    )
+                    _pkg.daily_stats['bosluklu_analiz'] = int(
+                        _pkg.daily_stats.get('bosluklu_analiz') or 0
+                    ) + 1
+                    _pkg.logger.warning(
+                        f"{stock}: veri notu {tipler} ({eksik} seans içi boşluk) - "
+                        "analiz delikli seriyle sürüyor; sinyal kalitesi etkilenebilir"
+                    )
+                else:
+                    _pkg.logger.info(f"{stock}: veri notu {tipler} - analiz devam ediyor")
 
             # Seans dışında provider'dan yeni mum gelmemesi olağandır; bu durum
             # yalnızca piyasa açıkken VERİ YOK sayılır. Kapalı seanslarda son mum,
@@ -832,11 +908,32 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         break
                     taze_gunluk = fetch_yfinance_1d(stock)
                 daily_fetch_wall_seconds += max(0.0, time.monotonic() - daily_fetch_started)
-                deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
+                # Cooldown YALNIZ başarılı çekimde yazılır. Önceden her denemede
+                # yazılıyordu: tek bir geçici sağlayıcı hatası sembolü 6 saat
+                # günlük verisiz bırakıyordu (sessiz eksik veri). Hatalı deneme
+                # kısa bir soğuma ile (`GUNLUK_FETCH_HATA_TEKRAR_DK`) kaydedilir.
                 if taze_gunluk is not None and len(taze_gunluk) >= 30:
-                    deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
-                    _pkg.logger.info(f"{stock}: günlük veri tazelendi ({len(taze_gunluk)} bar)")
+                    # append'in dönüşü ŞART: geçersiz frame deque'ye yazılmaz.
+                    # Önceden dönüş yok sayılıp "tazelendi" loglanıyordu ->
+                    # günlük veri hiç değişmediği hâlde tazelenmiş görünüyordu.
+                    if deque_manager.append_gunluk_dataframe(stock, taze_gunluk):
+                        deque_manager.gunluk_fetch_denemesi_kaydet(stock, simdiki_zaman)
+                        _pkg.logger.info(f"{stock}: günlük veri tazelendi ({len(taze_gunluk)} bar)")
+                    else:
+                        deque_manager.gunluk_fetch_denemesi_kaydet(
+                            stock, simdiki_zaman, basarili=False
+                        )
+                        _pkg.daily_stats['cache_reddi'] = int(
+                            _pkg.daily_stats.get('cache_reddi') or 0
+                        ) + 1
+                        _pkg.logger.error(
+                            f"{stock}: günlük veri OHLCV doğrulamasında REDDEDİLDİ; "
+                            "mevcut günlük cache korunuyor"
+                        )
                 else:
+                    deque_manager.gunluk_fetch_denemesi_kaydet(
+                        stock, simdiki_zaman, basarili=False
+                    )
                     _pkg.logger.warning(f"{stock}: günlük derin veri çekilemedi - resample kullanılacak")
             df_gunluk = deque_manager.to_gunluk_dataframe(stock)
             # Grafik direnci için native, normalize edilmemiş günlük kaynak.

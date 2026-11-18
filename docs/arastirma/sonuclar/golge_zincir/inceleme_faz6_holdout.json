@@ -1,0 +1,339 @@
+{
+  "kapsam": {
+    "plan": 990,
+    "sonuc": 990,
+    "geometri_gecerli_tetik": 7601,
+    "geometri_red_toplam": 193363,
+    "censored": 0,
+    "veri_yok": 0
+  },
+  "giris_kvadrant": {
+    "iyi_zamanlama": 532,
+    "erken_girdi_dustu": 357,
+    "gec_girdi_dibi_kacirdi": 63,
+    "yuksekten_girdi_ve_dustu": 38
+  },
+  "giris_kvadrant_sonuc": {
+    "gec_girdi_dibi_kacirdi": {
+      "zaman": 45,
+      "hedef": 18
+    },
+    "iyi_zamanlama": {
+      "hedef": 256,
+      "zaman": 247,
+      "stop": 29
+    },
+    "erken_girdi_dustu": {
+      "stop": 299,
+      "zaman": 33,
+      "hedef": 25
+    },
+    "yuksekten_girdi_ve_dustu": {
+      "stop": 23,
+      "zaman": 15
+    }
+  },
+  "giris_metrikler": {
+    "dip_kacis": {
+      "ort": 0.475,
+      "p50": 0.407,
+      "p90": 1.014
+    },
+    "dusus": {
+      "ort": 1.095,
+      "p50": 0.655,
+      "p90": 2.798
+    }
+  },
+  "cikis_kvadrant": {
+    "orta_yerde": 596,
+    "dibe_satti": 208,
+    "tepede_satti": 186
+  },
+  "cikis_kvadrant_sonuc": {
+    "tepede_satti": {
+      "hedef": 125,
+      "zaman": 56,
+      "stop": 5
+    },
+    "orta_yerde": {
+      "stop": 218,
+      "zaman": 211,
+      "hedef": 167
+    },
+    "dibe_satti": {
+      "stop": 128,
+      "zaman": 73,
+      "hedef": 7
+    }
+  },
+  "erken_satis": {
+    "n": 299,
+    "ort": 1.542,
+    "p50": 0.837,
+    "p90": 4.468,
+    "toplam_birakilan_atr": 461.2
+  },
+  "geri_verilen": {
+    "n": 638,
+    "ort": 0.389,
+    "p50": 0.0,
+    "p90": 1.249
+  },
+  "stop_kalitesi": {
+    "dogrulandi_devam_etti": 333,
+    "toparlandi_geri_geldi": 18,
+    "toparlanma": {
+      "n": 351,
+      "ort": 1.253,
+      "p50": 0.9,
+      "p90": 3.379
+    }
+  },
+  "zaman_cikisi": {
+    "n": 340,
+    "ort": 6.259,
+    "p50": 2.275,
+    "p90": 7.335,
+    "hedefe_kalan_notu": "medyan esas; ortalama uç değerlerle şişer"
+  },
+  "hedef_mesafe_atr": {
+    "n": 990,
+    "ort": 3.827,
+    "p50": 1.8177592029360579,
+    "p90": 4.226963722452024,
+    "max": 356.5,
+    "on_suz_atr_uzerinde": 44,
+    "zaman_alt_kume": {
+      "n": 340,
+      "ort": 6.683,
+      "p50": 2.6257069671624955,
+      "p90": 7.530747536012825
+    }
+  },
+  "lehte_gucu": {
+    "4": {
+      "stop": 337,
+      "zaman": 325,
+      "hedef": 285
+    },
+    "5": {
+      "zaman": 15,
+      "stop": 14,
+      "hedef": 14
+    }
+  },
+  "kapilar": {
+    "BEKLE · olgunluk yok (desteğe mesafe > 1 ATR)": {
+      "n": 3405,
+      "karsi_olgu_beklenti_atr": 0.349,
+      "toplam_pnl_atr": 1188.3,
+      "sonuc": {
+        "zaman": 1513,
+        "stop": 1032,
+        "hedef": 844,
+        "yok": 16
+      },
+      "giris_kvadrant": {
+        "iyi_zamanlama": 1569,
+        "erken_girdi_dustu": 966,
+        "gec_girdi_dibi_kacirdi": 550,
+        "yuksekten_girdi_ve_dustu": 320
+      },
+      "ornekler": [
+        "BTCIM-2h-1007",
+        "BTCIM-2h-1009",
+        "BTCIM-2h-1010"
+      ]
+    },
+    "Faz6 giriş teyidi (devamlılık)": {
+      "n": 2255,
+      "karsi_olgu_beklenti_atr": 0.3139,
+      "toplam_pnl_atr": 707.7,
+      "sonuc": {
+        "zaman": 989,
+        "stop": 689,
+        "hedef": 574,
+        "yok": 3
+      },
+      "giris_kvadrant": {
+        "iyi_zamanlama": 1117,
+        "erken_girdi_dustu": 615,
+        "gec_girdi_dibi_kacirdi": 323,
+        "yuksekten_girdi_ve_dustu": 200
+      },
+      "ornekler": [
+        "BTCIM-1h-2158",
+        "BTCIM-1h-2159",
+        "BTCIM-1d-179"
+      ]
+    },
+    "BEKLE · taze karşıt MS uyarısı sürüyor": {
+      "n": 579,
+      "karsi_olgu_beklenti_atr": 0.2372,
+      "toplam_pnl_atr": 137.4,
+      "sonuc": {
+        "stop": 230,
+        "hedef": 189,
+        "zaman": 160
+      },
+      "giris_kvadrant": {
+        "iyi_zamanlama": 292,
+        "erken_girdi_dustu": 210,
+        "gec_girdi_dibi_kacirdi": 40,
+        "yuksekten_girdi_ve_dustu": 37
+      },
+      "ornekler": [
+        "BURCE-1d-410",
+        "CCOLA-1h-498",
+        "CCOLA-1h-633"
+      ]
+    },
+    "20-bar boşluk (üst üste tetik)": {
+      "n": 199,
+      "karsi_olgu_beklenti_atr": -0.0311,
+      "toplam_pnl_atr": -6.2,
+      "sonuc": {
+        "stop": 91,
+        "zaman": 76,
+        "hedef": 32
+      },
+      "giris_kvadrant": {
+        "iyi_zamanlama": 91,
+        "erken_girdi_dustu": 86,
+        "yuksekten_girdi_ve_dustu": 17,
+        "gec_girdi_dibi_kacirdi": 5
+      },
+      "ornekler": [
+        "BURCE-1d-370",
+        "BURCE-1d-371",
+        "BURCE-1d-372"
+      ]
+    },
+    "RET · G1 kapandı (tez öldü)": {
+      "n": 142,
+      "karsi_olgu_beklenti_atr": 0.3575,
+      "toplam_pnl_atr": 50.8,
+      "sonuc": {
+        "stop": 66,
+        "hedef": 45,
+        "zaman": 31
+      },
+      "giris_kvadrant": {
+        "gec_girdi_dibi_kacirdi": 59,
+        "yuksekten_girdi_ve_dustu": 42,
+        "iyi_zamanlama": 21,
+        "erken_girdi_dustu": 20
+      },
+      "ornekler": [
+        "BURCE-4h-941",
+        "CANTE-1d-252",
+        "CEMTS-1d-76"
+      ]
+    },
+    "BEKLE · G1 kapısı kapalı (motor susar)": {
+      "n": 31,
+      "karsi_olgu_beklenti_atr": 0.2267,
+      "toplam_pnl_atr": 7.0,
+      "sonuc": {
+        "zaman": 17,
+        "hedef": 7,
+        "stop": 7
+      },
+      "giris_kvadrant": {
+        "gec_girdi_dibi_kacirdi": 10,
+        "erken_girdi_dustu": 10,
+        "iyi_zamanlama": 7,
+        "yuksekten_girdi_ve_dustu": 4
+      },
+      "ornekler": [
+        "CIMSA-1d-53",
+        "CIMSA-1d-54",
+        "CIMSA-1d-55"
+      ]
+    }
+  },
+  "geometri_red": {
+    "hedef adayı yok veya R<1,2 (karşıt yapı)": 92581,
+    "stop çok uzak (>2,5 ATR)": 55859,
+    "stop çok yakın (<0,5 ATR)": 44681,
+    "destek veya bant yok (G1/G5 yapısal)": 242
+  },
+  "en_kotu_10": [
+    {
+      "plan_id": "OTKAR-1h-2955",
+      "sonuc": "stop",
+      "pnl_atr": -2.389,
+      "tf": "1h",
+      "donem": "dogrulama"
+    },
+    {
+      "plan_id": "LMKDC-1h-1664",
+      "sonuc": "stop",
+      "pnl_atr": -2.26,
+      "tf": "1h",
+      "donem": "kesif"
+    },
+    {
+      "plan_id": "OBAMS-2h-1786",
+      "sonuc": "stop",
+      "pnl_atr": -2.234,
+      "tf": "2h",
+      "donem": "dogrulama"
+    },
+    {
+      "plan_id": "EGEEN-2h-1546",
+      "sonuc": "stop",
+      "pnl_atr": -2.233,
+      "tf": "2h",
+      "donem": "dogrulama"
+    },
+    {
+      "plan_id": "EGEEN-1h-193",
+      "sonuc": "stop",
+      "pnl_atr": -2.091,
+      "tf": "1h",
+      "donem": "kesif"
+    },
+    {
+      "plan_id": "OTKAR-1h-3203",
+      "sonuc": "stop",
+      "pnl_atr": -2.028,
+      "tf": "1h",
+      "donem": "dogrulama"
+    },
+    {
+      "plan_id": "GWIND-1h-686",
+      "sonuc": "stop",
+      "pnl_atr": -1.982,
+      "tf": "1h",
+      "donem": "kesif"
+    },
+    {
+      "plan_id": "SAYAS-1h-778",
+      "sonuc": "stop",
+      "pnl_atr": -1.916,
+      "tf": "1h",
+      "donem": "kesif"
+    },
+    {
+      "plan_id": "KONTR-4h-373",
+      "sonuc": "stop",
+      "pnl_atr": -1.912,
+      "tf": "4h",
+      "donem": "kesif"
+    },
+    {
+      "plan_id": "HEDEF-4h-75",
+      "sonuc": "zaman",
+      "pnl_atr": -1.819,
+      "tf": "4h",
+      "donem": "kesif"
+    }
+  ],
+  "sinirlamalar": [
+    "tetik ÖNCESİ kapılar (bant/tepki onayı yoksa tetik hiç yazılmaz) defterde yok — ölçülemedi",
+    "karşıt-olgu yarışları bağımsızdır (örtüşmezlik uygulanmaz); kaba üstel",
+    "close tabanlı (dip/tepe low-high değil) — koşucuyla tutarlılık için"
+  ]
+}

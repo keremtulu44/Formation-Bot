@@ -21,6 +21,7 @@ from config import (
     VERI_YOK_MODU_ESIK_DK, SPLIT_SUREKLILIK_ESIK_PCT, BAR_BOSLUK_ESIK_SAAT,
     GUNLUK_FETCH_PERIOD, GUNLUK_DEQUE_MAXLEN,
     FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD, FULL_1H_FETCH_STALE_DAYS,
+    BOSLUK_TAMIR_TEKRAR_DK,
     ALLOW_TRUSTED_PICKLE_CACHE,
 )
 
@@ -41,6 +42,11 @@ def _saglayici_ohlcv_temizle(
     bırakabiliyor. Tek bir bozuk satır yüzünden tüm geçmişin reddedilmesini
     önlemek için sağlayıcı çıkışında yalnızca geçerli satırlar korunur; tüm
     tablo bozuksa None döner ve üst katman normal hata yolunu izler.
+
+    SESSİZ ELEME YOK (2026-11-16): ayıklanan satır sayıları `attrs` içinde
+    (`ham_satir`, `reddedilen_satir`, `hayalet_satir`) çağırana taşınır; fetch
+    katmanı bunları uyarı olarak loglar. Önceden 500 satırın 30'u elense bile
+    hiçbir iz kalmıyordu — "eksik çekilip geçilme" tam olarak buydu.
     """
     if df is None or len(df) == 0:
         return None
@@ -48,6 +54,8 @@ def _saglayici_ohlcv_temizle(
     if not all(c in df.columns for c in gerekli):
         return None
 
+    ham_satir = int(len(df))
+    hayalet_sayisi = 0
     calis = df[gerekli].copy()
     for col in ("open", "high", "low", "close"):
         calis[col] = pd.to_numeric(calis[col], errors="coerce")
@@ -93,9 +101,15 @@ def _saglayici_ohlcv_temizle(
         sifir_hacim = calis["volume"] <= 0.0
         hayalet = duz_bar & sifir_hacim
         if bool(hayalet.any()) and bool((~hayalet).any()):
+            hayalet_sayisi = int(hayalet.sum())
             calis = calis.loc[~hayalet].copy()
 
-    return calis if len(calis) > 0 else None
+    if len(calis) <= 0:
+        return None
+    calis.attrs["ham_satir"] = ham_satir
+    calis.attrs["hayalet_satir"] = hayalet_sayisi
+    calis.attrs["reddedilen_satir"] = ham_satir - len(calis)
+    return calis
 
 def saglayici_adaylari(stock: str) -> List[str]:
     """Sembolün sağlayıcı adları: önce birincil, sonra varsa yedek.
@@ -124,7 +138,8 @@ def _fetch_yfinance_adaylari(
     """Adayları doğrula; geçici sağlayıcı hatasında ikinci seriye yüklenme.
 
     Spot ve vadeli aynı enstrüman değildir. Normal taramada yedek yalnız
-    birincil seri boş/geçersiz olduğunda denenir. Grafik için isteğe bağlı
+    birincil seri boş/geçersiz olduğunda denenir; geçici (ağ) hatada yedeğe
+    geçilmez, `retryable=True` ile çağırana yeniden denetilir. Grafik için isteğe bağlı
     ``frame_validator`` bayat ama yapısal olarak geçerli birincil seriyi de
     reddedebilir; böylece taze bir yedek varsa ona geçilir. ``request_context``
     sağlayıcı adayı başına ortak Yahoo pacer'ını uygular.
@@ -154,6 +169,22 @@ def _fetch_yfinance_adaylari(
                         ham.index = ham.index.tz_convert(ISTANBUL_TZ)
                     temiz = _saglayici_ohlcv_temizle(ham, stock=stock, timeframe=interval)
                     if temiz is not None and not temiz.empty:
+                        # Sessiz eleme yok: sağlayıcı yanıtından satır atıldıysa görünür olsun.
+                        # (Bozuk satır yüzünden tüm geçmişi reddetmek yerine kısmi kabul
+                        # ediyoruz; ama kullanıcı kaç mumun neden düştüğünü bilmeli.)
+                        _reddedilen = int(temiz.attrs.get("reddedilen_satir") or 0)
+                        if _reddedilen > 0:
+                            _pkg.logger.warning(
+                                "%s: sağlayıcı %s %s yanıtında %d/%d satır elendi "
+                                "(%d hayalet gün, kalan %d mum); seri eksik olabilir",
+                                stock,
+                                ticker,
+                                interval,
+                                _reddedilen,
+                                int(temiz.attrs.get("ham_satir") or len(temiz)),
+                                int(temiz.attrs.get("hayalet_satir") or 0),
+                                len(temiz),
+                            )
                         kabul, dogrulama_nedeni = True, ""
                         if frame_validator is not None:
                             try:
@@ -179,6 +210,11 @@ def _fetch_yfinance_adaylari(
         retryable = yfinance_error_is_retryable(reason)
         reasons.append(f"{ticker}: {reason}")
         if retryable:
+            # Geçici hata: YEDEĞE GEÇİLMEZ, çağıran yeniden dener (sözleşme
+            # `test_grafik_veri_guvenilirligi.py::test_gecici_hatada_yedek_istegi_yok`).
+            # Gerekçe: ağ hatası anında vadeli/spot seriyi sessizce değiştirmek
+            # yanıltıcıdır. Bu yüzden "eksik kalma" riski yeniden-deneme
+            # tarafında çözülür (bkz. başarısız 1D denemesinde kısa soğuma).
             return None, True, "; ".join(reasons)
         _pkg.logger.info("%s: sağlayıcı %s %s başarısız: %s", stock, ticker, interval, reason)
     return None, False, "; ".join(reasons)
@@ -218,6 +254,36 @@ def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional
     except Exception as exc:
         _pkg.logger.debug("%s 1D fetch hatası: %s", stock, exc)
         return None
+
+
+def seans_ici_bosluk_sayisi(cached: Optional[pd.DataFrame]) -> int:
+    """Cache'te AYNI seans içindeki 1H mum boşluklarını say (eksik çekilmiş bar).
+
+    Neden: rutin pencere yalnız son 5 günü indirir. Cache'te daha eski bir
+    seans içi delik varsa (sağlayıcı kesintisi, yarım kalan fetch, bozuk
+    append) bu pencere onu ASLA kapatmaz; bot da delikli seriyle formasyon
+    hesaplamaya devam eder. Boşluk sayısı, fetch penceresini tam (60d) seçip
+    deliği onarmak için kullanılır.
+
+    Eşik `BAR_BOSLUK_ESIK_SAAT`tir (1,5 saat): 1H mumlar 1 saat arayla gelir,
+    bu yüzden 1,5 saati aşan aynı-gün aralığı en az bir eksik mum demektir.
+    Gece/hafta sonu aralıkları farklı güne düştüğü için sayılmaz.
+    """
+    if cached is None or len(cached) < 3:
+        return 0
+    try:
+        idx = pd.DatetimeIndex(pd.to_datetime(cached.index))
+    except (TypeError, ValueError):
+        return 0
+    if len(idx) < 3:
+        return 0
+    if idx.tz is None:
+        idx = idx.tz_localize(ISTANBUL_TZ)
+    idx = idx.sort_values()
+    fark = idx[1:] - idx[:-1]
+    ayni_gun = np.array([a.date() == b.date() for a, b in zip(idx[:-1], idx[1:])])
+    esik = pd.Timedelta(hours=float(BAR_BOSLUK_ESIK_SAAT))
+    return int(np.count_nonzero(ayni_gun & (fark > esik)))
 
 
 def select_yfinance_1h_period(

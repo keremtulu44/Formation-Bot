@@ -1,0 +1,3239 @@
+{
+  "defter": "sonuclar/golge_zincir_faz7h20/golge_defter.jsonl",
+  "bozuk_satir": 0,
+  "plan_genel": {
+    "n": 989,
+    "cozulen": 988,
+    "sansurlu": 1,
+    "sonuc": {
+      "zaman": 153,
+      "hedef": 384,
+      "stop": 451,
+      "sansur": 1
+    },
+    "kosullu_hedef_yuzde": 45.99,
+    "beklenti_atr": 0.3256
+  },
+  "plan_donen": {
+    "dogrulama": {
+      "n": 223,
+      "cozulen": 222,
+      "sansurlu": 1,
+      "sonuc": {
+        "stop": 123,
+        "hedef": 64,
+        "zaman": 35,
+        "sansur": 1
+      },
+      "kosullu_hedef_yuzde": 34.22,
+      "beklenti_atr": 0.0383
+    },
+    "kesif": {
+      "n": 766,
+      "cozulen": 766,
+      "sansurlu": 0,
+      "sonuc": {
+        "zaman": 118,
+        "hedef": 320,
+        "stop": 328
+      },
+      "kosullu_hedef_yuzde": 49.38,
+      "beklenti_atr": 0.4088
+    }
+  },
+  "plan_tf": {
+    "1d": {
+      "n": 216,
+      "cozulen": 216,
+      "sansurlu": 0,
+      "sonuc": {
+        "stop": 104,
+        "hedef": 93,
+        "zaman": 19
+      },
+      "kosullu_hedef_yuzde": 47.21,
+      "beklenti_atr": 0.3338
+    },
+    "1h": {
+      "n": 351,
+      "cozulen": 351,
+      "sansurlu": 0,
+      "sonuc": {
+        "zaman": 80,
+        "hedef": 125,
+        "stop": 146
+      },
+      "kosullu_hedef_yuzde": 46.13,
+      "beklenti_atr": 0.4013
+    },
+    "2h": {
+      "n": 248,
+      "cozulen": 248,
+      "sansurlu": 0,
+      "sonuc": {
+        "stop": 124,
+        "hedef": 97,
+        "zaman": 27
+      },
+      "kosullu_hedef_yuzde": 43.89,
+      "beklenti_atr": 0.1752
+    },
+    "4h": {
+      "n": 174,
+      "cozulen": 173,
+      "sansurlu": 1,
+      "sonuc": {
+        "hedef": 69,
+        "stop": 77,
+        "zaman": 27,
+        "sansur": 1
+      },
+      "kosullu_hedef_yuzde": 47.26,
+      "beklenti_atr": 0.3771
+    }
+  },
+  "maliyet_izgarasi": {
+    "dogrulama_maliyet_0.0": {
+      "n": 223,
+      "cozulen": 222,
+      "sansurlu": 1,
+      "sonuc": {
+        "stop": 123,
+        "hedef": 64,
+        "zaman": 35,
+        "sansur": 1
+      },
+      "kosullu_hedef_yuzde": 34.22,
+      "beklenti_atr": 0.0383
+    },
+    "dogrulama_maliyet_0.05": {
+      "n": 223,
+      "cozulen": 222,
+      "sansurlu": 1,
+      "sonuc": {
+        "stop": 123,
+        "hedef": 64,
+        "zaman": 35,
+        "sansur": 1
+      },
+      "kosullu_hedef_yuzde": 34.22,
+      "beklenti_atr": -0.0117
+    },
+    "dogrulama_maliyet_0.1": {
+      "n": 223,
+      "cozulen": 222,
+      "sansurlu": 1,
+      "sonuc": {
+        "stop": 123,
+        "hedef": 64,
+        "zaman": 35,
+        "sansur": 1
+      },
+      "kosullu_hedef_yuzde": 34.22,
+      "beklenti_atr": -0.0617
+    },
+    "kesif_maliyet_0.0": {
+      "n": 766,
+      "cozulen": 766,
+      "sansurlu": 0,
+      "sonuc": {
+        "zaman": 118,
+        "hedef": 320,
+        "stop": 328
+      },
+      "kosullu_hedef_yuzde": 49.38,
+      "beklenti_atr": 0.4088
+    },
+    "kesif_maliyet_0.05": {
+      "n": 766,
+      "cozulen": 766,
+      "sansurlu": 0,
+      "sonuc": {
+        "zaman": 118,
+        "hedef": 320,
+        "stop": 328
+      },
+      "kosullu_hedef_yuzde": 49.38,
+      "beklenti_atr": 0.3588
+    },
+    "kesif_maliyet_0.1": {
+      "n": 766,
+      "cozulen": 766,
+      "sansurlu": 0,
+      "sonuc": {
+        "zaman": 118,
+        "hedef": 320,
+        "stop": 328
+      },
+      "kosullu_hedef_yuzde": 49.38,
+      "beklenti_atr": 0.3088
+    }
+  },
+  "kor_genel": {
+    "n": 3211,
+    "cozulen": 3196,
+    "sansurlu": 15,
+    "sonuc": {
+      "stop": 1071,
+      "zaman": 1074,
+      "hedef": 1051,
+      "yok": 15
+    },
+    "kosullu_hedef_yuzde": 49.53,
+    "beklenti_atr": 0.329
+  },
+  "kor_donen": {
+    "dogrulama": {
+      "n": 676,
+      "cozulen": 661,
+      "sansurlu": 15,
+      "sonuc": {
+        "stop": 279,
+        "yok": 15,
+        "zaman": 206,
+        "hedef": 176
+      },
+      "kosullu_hedef_yuzde": 38.68,
+      "beklenti_atr": 0.1231
+    },
+    "kesif": {
+      "n": 2535,
+      "cozulen": 2535,
+      "sansurlu": 0,
+      "sonuc": {
+        "stop": 792,
+        "zaman": 868,
+        "hedef": 875
+      },
+      "kosullu_hedef_yuzde": 52.49,
+      "beklenti_atr": 0.3827
+    }
+  },
+  "kor_hukum": {
+    "BEKLE": {
+      "n": 1628,
+      "cozulen": 1621,
+      "sansurlu": 7,
+      "sonuc": {
+        "stop": 528,
+        "zaman": 567,
+        "hedef": 526,
+        "yok": 7
+      },
+      "kosullu_hedef_yuzde": 49.91,
+      "beklenti_atr": 0.3621
+    },
+    "RET": {
+      "n": 88,
+      "cozulen": 88,
+      "sansurlu": 0,
+      "sonuc": {
+        "stop": 40,
+        "hedef": 33,
+        "zaman": 15
+      },
+      "kosullu_hedef_yuzde": 45.21,
+      "beklenti_atr": 0.2623
+    },
+    "UYGUN": {
+      "n": 1495,
+      "cozulen": 1487,
+      "sansurlu": 8,
+      "sonuc": {
+        "zaman": 492,
+        "hedef": 492,
+        "stop": 503,
+        "yok": 8
+      },
+      "kosullu_hedef_yuzde": 49.45,
+      "beklenti_atr": 0.2969
+    }
+  },
+  "kor_tf": {
+    "1d": {
+      "n": 454,
+      "cozulen": 448,
+      "sansurlu": 6,
+      "sonuc": {
+        "stop": 175,
+        "hedef": 170,
+        "zaman": 103,
+        "yok": 6
+      },
+      "kosullu_hedef_yuzde": 49.28,
+      "beklenti_atr": 0.3465
+    },
+    "1h": {
+      "n": 1158,
+      "cozulen": 1158,
+      "sansurlu": 0,
+      "sonuc": {
+        "stop": 346,
+        "zaman": 484,
+        "hedef": 328
+      },
+      "kosullu_hedef_yuzde": 48.66,
+      "beklenti_atr": 0.2951
+    },
+    "2h": {
+      "n": 975,
+      "cozulen": 973,
+      "sansurlu": 2,
+      "sonuc": {
+        "zaman": 291,
+        "stop": 347,
+        "hedef": 335,
+        "yok": 2
+      },
+      "kosullu_hedef_yuzde": 49.12,
+      "beklenti_atr": 0.3427
+    },
+    "4h": {
+      "n": 624,
+      "cozulen": 617,
+      "sansurlu": 7,
+      "sonuc": {
+        "zaman": 196,
+        "hedef": 218,
+        "yok": 7,
+        "stop": 203
+      },
+      "kosullu_hedef_yuzde": 51.78,
+      "beklenti_atr": 0.3584
+    }
+  },
+  "kapi_girdisi": {
+    "K1_dogrulama_uygun_n": 223,
+    "K2_kor_farki_puan": -4.46,
+    "K2_uygun_kosullu": 34.22,
+    "K2_kor_kosullu": 38.68,
+    "K3_dogrulama_beklenti": 0.0383,
+    "K4_g1_kapali_plan_orani": 0.0,
+    "K4_g1_kapali_tetik_payi": 18.12,
+    "K5_ret_sonrasi_plan_ihlal": 0,
+    "K6_kesif_beklenti": 0.4088,
+    "K6_dogrulama_beklenti": 0.0383
+  },
+  "kurallar": {
+    "streak": {
+      "kural": "sembol×TF 3 üst üste stop → sıradaki atla",
+      "atlanan": 13,
+      "toplam": 988,
+      "streak_3plus_seri_yuzde": 8.39,
+      "streak_maks": 3,
+      "ham_toplam_pnl": 321.645,
+      "kural_sonrasi_toplam_pnl": 313.457,
+      "atlanan_islem_pnl_kaybi": 8.188,
+      "atlanan_islemler": [
+        {
+          "plan_id": "BURCE-4h-608",
+          "sonuc": "hedef",
+          "pnl_atr": 1.8821
+        },
+        {
+          "plan_id": "CCOLA-1h-2310",
+          "sonuc": "stop",
+          "pnl_atr": -1.7082
+        },
+        {
+          "plan_id": "DIRIT-1d-305",
+          "sonuc": "stop",
+          "pnl_atr": -0.8051
+        },
+        {
+          "plan_id": "ECZYT-1h-1078",
+          "sonuc": "hedef",
+          "pnl_atr": 4.2127
+        },
+        {
+          "plan_id": "ERSU-2h-916",
+          "sonuc": "stop",
+          "pnl_atr": -0.7703
+        },
+        {
+          "plan_id": "ESEN-1h-2444",
+          "sonuc": "zaman",
+          "pnl_atr": 1.6424
+        },
+        {
+          "plan_id": "KLSER-1h-554",
+          "sonuc": "stop",
+          "pnl_atr": -0.7779
+        },
+        {
+          "plan_id": "KORDS-2h-1620",
+          "sonuc": "stop",
+          "pnl_atr": -1.2595
+        },
+        {
+          "plan_id": "KRTEK-1h-2812",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5739
+        },
+        {
+          "plan_id": "MAGEN-2h-329",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3513
+        },
+        {
+          "plan_id": "METRO-1h-2426",
+          "sonuc": "zaman",
+          "pnl_atr": 1.5746
+        },
+        {
+          "plan_id": "OTKAR-1h-2955",
+          "sonuc": "stop",
+          "pnl_atr": -2.389
+        },
+        {
+          "plan_id": "SELEC-2h-1445",
+          "sonuc": "hedef",
+          "pnl_atr": 3.6603
+        }
+      ]
+    },
+    "gun_durdur": {
+      "kural": "aynı gün 2 stop → gün sonu dur (eski kural)",
+      "atlanan": 0,
+      "toplam": 988,
+      "tetiklenen_gun_sayisi": 0,
+      "ham_toplam_pnl": 321.645,
+      "kural_sonrasi_toplam_pnl": 321.645,
+      "atlanan_islem_pnl_kaybi": 0.0,
+      "atlanan_islemler": []
+    },
+    "tavan": {
+      "kural": "eşzamanlı tavan 3",
+      "atlanan": 560,
+      "toplam": 988,
+      "en_yuksek_eszamanli": 3,
+      "ham_toplam_pnl": 321.645,
+      "kural_sonrasi_toplam_pnl": 87.458,
+      "atlanan_islem_pnl_kaybi": 234.187,
+      "atlanan_islemler": [
+        {
+          "plan_id": "BTCIM-1d-52",
+          "sonuc": "stop",
+          "pnl_atr": -1.1693
+        },
+        {
+          "plan_id": "BTCIM-1d-95",
+          "sonuc": "hedef",
+          "pnl_atr": 0.9544
+        },
+        {
+          "plan_id": "BTCIM-1h-226",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3028
+        },
+        {
+          "plan_id": "BTCIM-1h-712",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2224
+        },
+        {
+          "plan_id": "BTCIM-1h-1983",
+          "sonuc": "zaman",
+          "pnl_atr": 0.6847
+        },
+        {
+          "plan_id": "BTCIM-2h-276",
+          "sonuc": "stop",
+          "pnl_atr": -1.24
+        },
+        {
+          "plan_id": "BTCIM-2h-542",
+          "sonuc": "stop",
+          "pnl_atr": -1.1972
+        },
+        {
+          "plan_id": "BTCIM-4h-173",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3231
+        },
+        {
+          "plan_id": "BTCIM-4h-655",
+          "sonuc": "stop",
+          "pnl_atr": -1.8796
+        },
+        {
+          "plan_id": "BURCE-1d-275",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3749
+        },
+        {
+          "plan_id": "BURCE-1h-200",
+          "sonuc": "stop",
+          "pnl_atr": -0.8679
+        },
+        {
+          "plan_id": "BURCE-1h-591",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5206
+        },
+        {
+          "plan_id": "BURCE-1h-1482",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3318
+        },
+        {
+          "plan_id": "BURCE-1h-1655",
+          "sonuc": "stop",
+          "pnl_atr": -0.9967
+        },
+        {
+          "plan_id": "BURCE-1h-1903",
+          "sonuc": "zaman",
+          "pnl_atr": -0.3238
+        },
+        {
+          "plan_id": "BURCE-2h-71",
+          "sonuc": "hedef",
+          "pnl_atr": 2.1924
+        },
+        {
+          "plan_id": "BURCE-4h-374",
+          "sonuc": "stop",
+          "pnl_atr": -0.7425
+        },
+        {
+          "plan_id": "CANTE-1d-410",
+          "sonuc": "hedef",
+          "pnl_atr": 0.841
+        },
+        {
+          "plan_id": "CANTE-1h-731",
+          "sonuc": "zaman",
+          "pnl_atr": -1.2268
+        },
+        {
+          "plan_id": "CCOLA-1d-70",
+          "sonuc": "stop",
+          "pnl_atr": -1.4338
+        },
+        {
+          "plan_id": "CCOLA-1h-1404",
+          "sonuc": "zaman",
+          "pnl_atr": -0.2415
+        },
+        {
+          "plan_id": "CCOLA-1h-2310",
+          "sonuc": "stop",
+          "pnl_atr": -1.7082
+        },
+        {
+          "plan_id": "CCOLA-2h-1020",
+          "sonuc": "stop",
+          "pnl_atr": -1.5424
+        },
+        {
+          "plan_id": "CCOLA-2h-1142",
+          "sonuc": "hedef",
+          "pnl_atr": 2.2923
+        },
+        {
+          "plan_id": "CCOLA-4h-45",
+          "sonuc": "stop",
+          "pnl_atr": -0.9036
+        },
+        {
+          "plan_id": "CCOLA-4h-681",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5637
+        },
+        {
+          "plan_id": "CEMAS-1d-270",
+          "sonuc": "stop",
+          "pnl_atr": -0.9366
+        },
+        {
+          "plan_id": "CEMAS-1h-168",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6579
+        },
+        {
+          "plan_id": "CEMAS-1h-1432",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6222
+        },
+        {
+          "plan_id": "CEMAS-2h-298",
+          "sonuc": "hedef",
+          "pnl_atr": 1.9686
+        },
+        {
+          "plan_id": "CEMAS-2h-1067",
+          "sonuc": "stop",
+          "pnl_atr": -0.6026
+        },
+        {
+          "plan_id": "CEMTS-1d-461",
+          "sonuc": "stop",
+          "pnl_atr": -1.7951
+        },
+        {
+          "plan_id": "CIMSA-1h-930",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3051
+        },
+        {
+          "plan_id": "CIMSA-1h-955",
+          "sonuc": "hedef",
+          "pnl_atr": 1.7947
+        },
+        {
+          "plan_id": "CIMSA-1h-3171",
+          "sonuc": "stop",
+          "pnl_atr": -0.8286
+        },
+        {
+          "plan_id": "CIMSA-2h-398",
+          "sonuc": "stop",
+          "pnl_atr": -0.6672
+        },
+        {
+          "plan_id": "CLEBI-1d-239",
+          "sonuc": "zaman",
+          "pnl_atr": 1.5466
+        },
+        {
+          "plan_id": "CLEBI-4h-966",
+          "sonuc": "stop",
+          "pnl_atr": -0.5841
+        },
+        {
+          "plan_id": "CLEBI-4h-1000",
+          "sonuc": "stop",
+          "pnl_atr": -1.7845
+        },
+        {
+          "plan_id": "CVKMD-1d-408",
+          "sonuc": "stop",
+          "pnl_atr": -0.8184
+        },
+        {
+          "plan_id": "CVKMD-1h-2418",
+          "sonuc": "stop",
+          "pnl_atr": -0.6167
+        },
+        {
+          "plan_id": "CWENE-1h-513",
+          "sonuc": "hedef",
+          "pnl_atr": 1.0533
+        },
+        {
+          "plan_id": "CWENE-1h-595",
+          "sonuc": "stop",
+          "pnl_atr": -0.5336
+        },
+        {
+          "plan_id": "CWENE-1h-1317",
+          "sonuc": "zaman",
+          "pnl_atr": 1.6062
+        },
+        {
+          "plan_id": "CWENE-2h-690",
+          "sonuc": "hedef",
+          "pnl_atr": 1.0997
+        },
+        {
+          "plan_id": "CWENE-2h-843",
+          "sonuc": "hedef",
+          "pnl_atr": 1.059
+        },
+        {
+          "plan_id": "CWENE-2h-962",
+          "sonuc": "hedef",
+          "pnl_atr": 0.9288
+        },
+        {
+          "plan_id": "CWENE-4h-386",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4559
+        },
+        {
+          "plan_id": "CWENE-4h-499",
+          "sonuc": "hedef",
+          "pnl_atr": 2.1478
+        },
+        {
+          "plan_id": "DAPGM-1d-128",
+          "sonuc": "hedef",
+          "pnl_atr": 2.7635
+        },
+        {
+          "plan_id": "DAPGM-1h-467",
+          "sonuc": "hedef",
+          "pnl_atr": 2.1634
+        },
+        {
+          "plan_id": "DAPGM-1h-1044",
+          "sonuc": "hedef",
+          "pnl_atr": 2.6812
+        },
+        {
+          "plan_id": "DAPGM-2h-88",
+          "sonuc": "zaman",
+          "pnl_atr": 4.0704
+        },
+        {
+          "plan_id": "DAPGM-2h-261",
+          "sonuc": "hedef",
+          "pnl_atr": 2.358
+        },
+        {
+          "plan_id": "DAPGM-4h-239",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2495
+        },
+        {
+          "plan_id": "DARDL-1d-242",
+          "sonuc": "stop",
+          "pnl_atr": -0.6136
+        },
+        {
+          "plan_id": "DARDL-1d-293",
+          "sonuc": "stop",
+          "pnl_atr": -0.533
+        },
+        {
+          "plan_id": "DARDL-1d-449",
+          "sonuc": "stop",
+          "pnl_atr": -0.7502
+        },
+        {
+          "plan_id": "DARDL-4h-81",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6547
+        },
+        {
+          "plan_id": "DENGE-1d-59",
+          "sonuc": "stop",
+          "pnl_atr": -0.7356
+        },
+        {
+          "plan_id": "DENGE-1h-625",
+          "sonuc": "hedef",
+          "pnl_atr": 3.0598
+        },
+        {
+          "plan_id": "DENGE-1h-783",
+          "sonuc": "stop",
+          "pnl_atr": -0.8317
+        },
+        {
+          "plan_id": "DENGE-2h-145",
+          "sonuc": "stop",
+          "pnl_atr": -0.6617
+        },
+        {
+          "plan_id": "DENGE-2h-522",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8523
+        },
+        {
+          "plan_id": "DENGE-4h-319",
+          "sonuc": "stop",
+          "pnl_atr": -0.5672
+        },
+        {
+          "plan_id": "DENGE-4h-542",
+          "sonuc": "stop",
+          "pnl_atr": -1.0716
+        },
+        {
+          "plan_id": "DEVA-1d-61",
+          "sonuc": "stop",
+          "pnl_atr": -0.7631
+        },
+        {
+          "plan_id": "DEVA-1d-128",
+          "sonuc": "zaman",
+          "pnl_atr": -0.6652
+        },
+        {
+          "plan_id": "DEVA-2h-52",
+          "sonuc": "stop",
+          "pnl_atr": -0.8574
+        },
+        {
+          "plan_id": "DIRIT-1d-69",
+          "sonuc": "stop",
+          "pnl_atr": -1.8888
+        },
+        {
+          "plan_id": "DIRIT-1d-277",
+          "sonuc": "stop",
+          "pnl_atr": -0.6091
+        },
+        {
+          "plan_id": "DIRIT-1d-305",
+          "sonuc": "stop",
+          "pnl_atr": -0.8051
+        },
+        {
+          "plan_id": "DMSAS-1h-1479",
+          "sonuc": "zaman",
+          "pnl_atr": -0.7056
+        },
+        {
+          "plan_id": "DMSAS-1h-1773",
+          "sonuc": "zaman",
+          "pnl_atr": -0.4692
+        },
+        {
+          "plan_id": "DMSAS-1h-3231",
+          "sonuc": "stop",
+          "pnl_atr": -1.0582
+        },
+        {
+          "plan_id": "DMSAS-4h-111",
+          "sonuc": "stop",
+          "pnl_atr": -0.6723
+        },
+        {
+          "plan_id": "DMSAS-4h-321",
+          "sonuc": "zaman",
+          "pnl_atr": 1.3765
+        },
+        {
+          "plan_id": "DOAS-1d-337",
+          "sonuc": "stop",
+          "pnl_atr": -0.9506
+        },
+        {
+          "plan_id": "DOAS-1h-399",
+          "sonuc": "hedef",
+          "pnl_atr": 0.7783
+        },
+        {
+          "plan_id": "DOCO-1d-234",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4063
+        },
+        {
+          "plan_id": "DOCO-1h-2012",
+          "sonuc": "hedef",
+          "pnl_atr": 1.7153
+        },
+        {
+          "plan_id": "DOCO-2h-264",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2305
+        },
+        {
+          "plan_id": "DOCO-2h-1119",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1734
+        },
+        {
+          "plan_id": "DOCO-4h-669",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8191
+        },
+        {
+          "plan_id": "DOFER-1h-112",
+          "sonuc": "stop",
+          "pnl_atr": -1.1218
+        },
+        {
+          "plan_id": "DOFER-1h-3030",
+          "sonuc": "stop",
+          "pnl_atr": -0.5909
+        },
+        {
+          "plan_id": "DOHOL-2h-140",
+          "sonuc": "stop",
+          "pnl_atr": -0.5988
+        },
+        {
+          "plan_id": "DYOBY-1h-199",
+          "sonuc": "stop",
+          "pnl_atr": -1.2541
+        },
+        {
+          "plan_id": "DYOBY-1h-239",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3066
+        },
+        {
+          "plan_id": "EBEBK-1d-84",
+          "sonuc": "stop",
+          "pnl_atr": -0.5583
+        },
+        {
+          "plan_id": "EBEBK-1h-109",
+          "sonuc": "zaman",
+          "pnl_atr": 0.4912
+        },
+        {
+          "plan_id": "EBEBK-1h-677",
+          "sonuc": "stop",
+          "pnl_atr": -1.1729
+        },
+        {
+          "plan_id": "EBEBK-1h-977",
+          "sonuc": "hedef",
+          "pnl_atr": 1.117
+        },
+        {
+          "plan_id": "EBEBK-2h-314",
+          "sonuc": "hedef",
+          "pnl_atr": 3.0022
+        },
+        {
+          "plan_id": "EBEBK-2h-530",
+          "sonuc": "stop",
+          "pnl_atr": -1.2131
+        },
+        {
+          "plan_id": "EBEBK-4h-313",
+          "sonuc": "stop",
+          "pnl_atr": -1.2482
+        },
+        {
+          "plan_id": "EBEBK-4h-803",
+          "sonuc": "zaman",
+          "pnl_atr": -0.7488
+        },
+        {
+          "plan_id": "ECILC-1h-1196",
+          "sonuc": "hedef",
+          "pnl_atr": 2.5189
+        },
+        {
+          "plan_id": "ECILC-1h-3153",
+          "sonuc": "zaman",
+          "pnl_atr": -0.523
+        },
+        {
+          "plan_id": "ECILC-2h-389",
+          "sonuc": "stop",
+          "pnl_atr": -1.1705
+        },
+        {
+          "plan_id": "ECILC-4h-685",
+          "sonuc": "hedef",
+          "pnl_atr": 0.7531
+        },
+        {
+          "plan_id": "ECZYT-1h-119",
+          "sonuc": "stop",
+          "pnl_atr": -0.8925
+        },
+        {
+          "plan_id": "ECZYT-2h-88",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4154
+        },
+        {
+          "plan_id": "ECZYT-2h-172",
+          "sonuc": "hedef",
+          "pnl_atr": 1.9778
+        },
+        {
+          "plan_id": "ECZYT-2h-598",
+          "sonuc": "hedef",
+          "pnl_atr": 2.4583
+        },
+        {
+          "plan_id": "ECZYT-4h-359",
+          "sonuc": "hedef",
+          "pnl_atr": 7.0741
+        },
+        {
+          "plan_id": "ECZYT-4h-434",
+          "sonuc": "stop",
+          "pnl_atr": -1.2538
+        },
+        {
+          "plan_id": "ECZYT-4h-649",
+          "sonuc": "stop",
+          "pnl_atr": -0.8242
+        },
+        {
+          "plan_id": "EFOR-1h-1220",
+          "sonuc": "zaman",
+          "pnl_atr": -0.1301
+        },
+        {
+          "plan_id": "EFOR-2h-133",
+          "sonuc": "stop",
+          "pnl_atr": -1.8005
+        },
+        {
+          "plan_id": "EFOR-4h-598",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1263
+        },
+        {
+          "plan_id": "EGEEN-1h-317",
+          "sonuc": "hedef",
+          "pnl_atr": 1.8582
+        },
+        {
+          "plan_id": "EGEEN-2h-193",
+          "sonuc": "stop",
+          "pnl_atr": -0.5108
+        },
+        {
+          "plan_id": "EGEEN-2h-1546",
+          "sonuc": "stop",
+          "pnl_atr": -2.2331
+        },
+        {
+          "plan_id": "EGEEN-4h-104",
+          "sonuc": "hedef",
+          "pnl_atr": 2.6168
+        },
+        {
+          "plan_id": "EGEEN-4h-430",
+          "sonuc": "hedef",
+          "pnl_atr": 2.6594
+        },
+        {
+          "plan_id": "EKGYO-1d-198",
+          "sonuc": "stop",
+          "pnl_atr": -1.0544
+        },
+        {
+          "plan_id": "EKGYO-1d-223",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1857
+        },
+        {
+          "plan_id": "EKGYO-1d-449",
+          "sonuc": "hedef",
+          "pnl_atr": 1.0114
+        },
+        {
+          "plan_id": "EKGYO-1h-363",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6914
+        },
+        {
+          "plan_id": "EKGYO-1h-468",
+          "sonuc": "stop",
+          "pnl_atr": -2.0473
+        },
+        {
+          "plan_id": "ENERY-1d-95",
+          "sonuc": "hedef",
+          "pnl_atr": 0.9801
+        },
+        {
+          "plan_id": "ENERY-1h-460",
+          "sonuc": "hedef",
+          "pnl_atr": 3.1412
+        },
+        {
+          "plan_id": "ENERY-1h-694",
+          "sonuc": "hedef",
+          "pnl_atr": 3.6406
+        },
+        {
+          "plan_id": "ENERY-1h-793",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1391
+        },
+        {
+          "plan_id": "ENERY-4h-156",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3281
+        },
+        {
+          "plan_id": "ENKAI-1h-468",
+          "sonuc": "zaman",
+          "pnl_atr": 0.0672
+        },
+        {
+          "plan_id": "ENKAI-1h-602",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3704
+        },
+        {
+          "plan_id": "ENKAI-2h-59",
+          "sonuc": "hedef",
+          "pnl_atr": 1.497
+        },
+        {
+          "plan_id": "ENKAI-2h-350",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4459
+        },
+        {
+          "plan_id": "ENKAI-2h-1463",
+          "sonuc": "hedef",
+          "pnl_atr": 1.8437
+        },
+        {
+          "plan_id": "ENKAI-2h-1561",
+          "sonuc": "hedef",
+          "pnl_atr": 1.8637
+        },
+        {
+          "plan_id": "ENSRI-1d-236",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5801
+        },
+        {
+          "plan_id": "ENSRI-1d-359",
+          "sonuc": "stop",
+          "pnl_atr": -0.9659
+        },
+        {
+          "plan_id": "ENSRI-4h-239",
+          "sonuc": "hedef",
+          "pnl_atr": 1.7083
+        },
+        {
+          "plan_id": "ERBOS-1h-769",
+          "sonuc": "stop",
+          "pnl_atr": -1.4305
+        },
+        {
+          "plan_id": "ERBOS-1h-1260",
+          "sonuc": "hedef",
+          "pnl_atr": 0.9197
+        },
+        {
+          "plan_id": "ERBOS-1h-1311",
+          "sonuc": "hedef",
+          "pnl_atr": 0.7753
+        },
+        {
+          "plan_id": "ERBOS-1h-1672",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3505
+        },
+        {
+          "plan_id": "ERBOS-2h-209",
+          "sonuc": "zaman",
+          "pnl_atr": -0.8322
+        },
+        {
+          "plan_id": "ERBOS-4h-573",
+          "sonuc": "stop",
+          "pnl_atr": -0.6201
+        },
+        {
+          "plan_id": "EREGL-1d-89",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1171
+        },
+        {
+          "plan_id": "EREGL-1d-407",
+          "sonuc": "zaman",
+          "pnl_atr": 1.7178
+        },
+        {
+          "plan_id": "EREGL-1h-120",
+          "sonuc": "zaman",
+          "pnl_atr": 1.1022
+        },
+        {
+          "plan_id": "EREGL-1h-2715",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1966
+        },
+        {
+          "plan_id": "EREGL-1h-2872",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3167
+        },
+        {
+          "plan_id": "EREGL-2h-171",
+          "sonuc": "hedef",
+          "pnl_atr": 2.4752
+        },
+        {
+          "plan_id": "EREGL-2h-761",
+          "sonuc": "stop",
+          "pnl_atr": -0.6924
+        },
+        {
+          "plan_id": "EREGL-2h-1588",
+          "sonuc": "hedef",
+          "pnl_atr": 1.8169
+        },
+        {
+          "plan_id": "EREGL-4h-806",
+          "sonuc": "zaman",
+          "pnl_atr": 2.7929
+        },
+        {
+          "plan_id": "EREGL-4h-948",
+          "sonuc": "zaman",
+          "pnl_atr": 1.1712
+        },
+        {
+          "plan_id": "ERSU-1d-398",
+          "sonuc": "zaman",
+          "pnl_atr": -0.2387
+        },
+        {
+          "plan_id": "ERSU-1h-605",
+          "sonuc": "zaman",
+          "pnl_atr": 1.5495
+        },
+        {
+          "plan_id": "ERSU-1h-1959",
+          "sonuc": "stop",
+          "pnl_atr": -0.9001
+        },
+        {
+          "plan_id": "ERSU-2h-684",
+          "sonuc": "stop",
+          "pnl_atr": -0.8317
+        },
+        {
+          "plan_id": "ERSU-2h-916",
+          "sonuc": "stop",
+          "pnl_atr": -0.7703
+        },
+        {
+          "plan_id": "ESCAR-1d-241",
+          "sonuc": "zaman",
+          "pnl_atr": 0.6722
+        },
+        {
+          "plan_id": "ESCAR-1d-334",
+          "sonuc": "stop",
+          "pnl_atr": -0.9725
+        },
+        {
+          "plan_id": "ESCAR-1h-1371",
+          "sonuc": "hedef",
+          "pnl_atr": 3.9939
+        },
+        {
+          "plan_id": "ESCAR-1h-1477",
+          "sonuc": "hedef",
+          "pnl_atr": 2.2467
+        },
+        {
+          "plan_id": "ESCAR-1h-2295",
+          "sonuc": "stop",
+          "pnl_atr": -0.6715
+        },
+        {
+          "plan_id": "ESCAR-1h-2430",
+          "sonuc": "stop",
+          "pnl_atr": -1.2691
+        },
+        {
+          "plan_id": "ESCAR-4h-42",
+          "sonuc": "zaman",
+          "pnl_atr": 2.0614
+        },
+        {
+          "plan_id": "ESEN-1d-267",
+          "sonuc": "stop",
+          "pnl_atr": -1.026
+        },
+        {
+          "plan_id": "ESEN-1d-438",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1062
+        },
+        {
+          "plan_id": "ESEN-1h-552",
+          "sonuc": "hedef",
+          "pnl_atr": 2.5504
+        },
+        {
+          "plan_id": "ESEN-1h-955",
+          "sonuc": "zaman",
+          "pnl_atr": 1.867
+        },
+        {
+          "plan_id": "ESEN-1h-1827",
+          "sonuc": "stop",
+          "pnl_atr": -1.266
+        },
+        {
+          "plan_id": "ESEN-1h-2323",
+          "sonuc": "stop",
+          "pnl_atr": -1.7223
+        },
+        {
+          "plan_id": "ESEN-1h-2444",
+          "sonuc": "zaman",
+          "pnl_atr": 1.6424
+        },
+        {
+          "plan_id": "ESEN-2h-662",
+          "sonuc": "stop",
+          "pnl_atr": -2.0089
+        },
+        {
+          "plan_id": "ESEN-4h-376",
+          "sonuc": "hedef",
+          "pnl_atr": 0.9807
+        },
+        {
+          "plan_id": "EUPWR-1h-1635",
+          "sonuc": "zaman",
+          "pnl_atr": 1.4696
+        },
+        {
+          "plan_id": "EUPWR-1h-2567",
+          "sonuc": "zaman",
+          "pnl_atr": 1.5275
+        },
+        {
+          "plan_id": "EUPWR-2h-75",
+          "sonuc": "stop",
+          "pnl_atr": -0.6828
+        },
+        {
+          "plan_id": "EUPWR-4h-959",
+          "sonuc": "hedef",
+          "pnl_atr": 0.7924
+        },
+        {
+          "plan_id": "FENER-1d-89",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4944
+        },
+        {
+          "plan_id": "FENER-1d-164",
+          "sonuc": "stop",
+          "pnl_atr": -0.7815
+        },
+        {
+          "plan_id": "FENER-1d-336",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2817
+        },
+        {
+          "plan_id": "FENER-1h-396",
+          "sonuc": "zaman",
+          "pnl_atr": 0.201
+        },
+        {
+          "plan_id": "FENER-1h-605",
+          "sonuc": "stop",
+          "pnl_atr": -1.0864
+        },
+        {
+          "plan_id": "FENER-2h-632",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5265
+        },
+        {
+          "plan_id": "FENER-2h-748",
+          "sonuc": "stop",
+          "pnl_atr": -0.7246
+        },
+        {
+          "plan_id": "FENER-2h-1585",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4256
+        },
+        {
+          "plan_id": "FENER-2h-1781",
+          "sonuc": "stop",
+          "pnl_atr": -1.438
+        },
+        {
+          "plan_id": "FENER-4h-948",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8957
+        },
+        {
+          "plan_id": "FONET-1d-398",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6515
+        },
+        {
+          "plan_id": "FONET-1h-625",
+          "sonuc": "stop",
+          "pnl_atr": -0.7645
+        },
+        {
+          "plan_id": "FONET-1h-1997",
+          "sonuc": "stop",
+          "pnl_atr": -1.0375
+        },
+        {
+          "plan_id": "FONET-2h-195",
+          "sonuc": "stop",
+          "pnl_atr": -0.9881
+        },
+        {
+          "plan_id": "FONET-2h-531",
+          "sonuc": "hedef",
+          "pnl_atr": 1.0043
+        },
+        {
+          "plan_id": "FROTO-1d-238",
+          "sonuc": "stop",
+          "pnl_atr": -0.5238
+        },
+        {
+          "plan_id": "FROTO-2h-398",
+          "sonuc": "stop",
+          "pnl_atr": -1.6972
+        },
+        {
+          "plan_id": "FROTO-4h-120",
+          "sonuc": "hedef",
+          "pnl_atr": 2.93
+        },
+        {
+          "plan_id": "GARAN-1d-59",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3513
+        },
+        {
+          "plan_id": "GARAN-1d-336",
+          "sonuc": "stop",
+          "pnl_atr": -0.5627
+        },
+        {
+          "plan_id": "GARAN-1h-582",
+          "sonuc": "zaman",
+          "pnl_atr": 0.3285
+        },
+        {
+          "plan_id": "GARAN-2h-332",
+          "sonuc": "stop",
+          "pnl_atr": -1.6519
+        },
+        {
+          "plan_id": "GARAN-4h-476",
+          "sonuc": "hedef",
+          "pnl_atr": 1.8504
+        },
+        {
+          "plan_id": "GARFA-1h-856",
+          "sonuc": "zaman",
+          "pnl_atr": 1.3144
+        },
+        {
+          "plan_id": "GARFA-1h-1652",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8416
+        },
+        {
+          "plan_id": "GARFA-2h-481",
+          "sonuc": "stop",
+          "pnl_atr": -1.7464
+        },
+        {
+          "plan_id": "GLYHO-1d-363",
+          "sonuc": "hedef",
+          "pnl_atr": 2.4626
+        },
+        {
+          "plan_id": "GLYHO-1d-459",
+          "sonuc": "stop",
+          "pnl_atr": -1.0428
+        },
+        {
+          "plan_id": "GLYHO-1h-614",
+          "sonuc": "hedef",
+          "pnl_atr": 0.7613
+        },
+        {
+          "plan_id": "GLYHO-1h-1391",
+          "sonuc": "zaman",
+          "pnl_atr": 0.9632
+        },
+        {
+          "plan_id": "GLYHO-1h-1726",
+          "sonuc": "hedef",
+          "pnl_atr": 2.7851
+        },
+        {
+          "plan_id": "GLYHO-1h-2025",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3336
+        },
+        {
+          "plan_id": "GLYHO-4h-79",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6143
+        },
+        {
+          "plan_id": "GLYHO-4h-496",
+          "sonuc": "hedef",
+          "pnl_atr": 0.7112
+        },
+        {
+          "plan_id": "GLYHO-4h-668",
+          "sonuc": "hedef",
+          "pnl_atr": 2.8524
+        },
+        {
+          "plan_id": "GOLTS-1d-51",
+          "sonuc": "zaman",
+          "pnl_atr": -0.4847
+        },
+        {
+          "plan_id": "GOLTS-1d-119",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8551
+        },
+        {
+          "plan_id": "GOLTS-2h-1148",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3791
+        },
+        {
+          "plan_id": "GOLTS-2h-1672",
+          "sonuc": "stop",
+          "pnl_atr": -1.3573
+        },
+        {
+          "plan_id": "GRSEL-4h-667",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8305
+        },
+        {
+          "plan_id": "GRTHO-1h-781",
+          "sonuc": "stop",
+          "pnl_atr": -0.7628
+        },
+        {
+          "plan_id": "GRTHO-1h-2404",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8024
+        },
+        {
+          "plan_id": "GRTHO-2h-342",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6937
+        },
+        {
+          "plan_id": "GRTHO-2h-1764",
+          "sonuc": "hedef",
+          "pnl_atr": 3.3169
+        },
+        {
+          "plan_id": "GRTHO-4h-185",
+          "sonuc": "zaman",
+          "pnl_atr": -0.1298
+        },
+        {
+          "plan_id": "GRTHO-4h-207",
+          "sonuc": "hedef",
+          "pnl_atr": 3.8432
+        },
+        {
+          "plan_id": "GRTHO-4h-796",
+          "sonuc": "stop",
+          "pnl_atr": -0.7366
+        },
+        {
+          "plan_id": "GRTHO-4h-1054",
+          "sonuc": "stop",
+          "pnl_atr": -0.9459
+        },
+        {
+          "plan_id": "GUBRF-1h-309",
+          "sonuc": "hedef",
+          "pnl_atr": 1.9919
+        },
+        {
+          "plan_id": "GUBRF-1h-704",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1445
+        },
+        {
+          "plan_id": "GUBRF-1h-1237",
+          "sonuc": "hedef",
+          "pnl_atr": 1.7386
+        },
+        {
+          "plan_id": "GUBRF-4h-77",
+          "sonuc": "zaman",
+          "pnl_atr": 0.6275
+        },
+        {
+          "plan_id": "GUBRF-4h-514",
+          "sonuc": "hedef",
+          "pnl_atr": 3.2011
+        },
+        {
+          "plan_id": "GWIND-1d-247",
+          "sonuc": "hedef",
+          "pnl_atr": 1.0247
+        },
+        {
+          "plan_id": "GWIND-1h-577",
+          "sonuc": "stop",
+          "pnl_atr": -1.2815
+        },
+        {
+          "plan_id": "GWIND-1h-640",
+          "sonuc": "zaman",
+          "pnl_atr": 1.8087
+        },
+        {
+          "plan_id": "GWIND-1h-686",
+          "sonuc": "stop",
+          "pnl_atr": -1.9818
+        },
+        {
+          "plan_id": "GWIND-1h-3167",
+          "sonuc": "stop",
+          "pnl_atr": -0.5568
+        },
+        {
+          "plan_id": "GWIND-2h-88",
+          "sonuc": "hedef",
+          "pnl_atr": 2.133
+        },
+        {
+          "plan_id": "GWIND-2h-380",
+          "sonuc": "stop",
+          "pnl_atr": -1.5035
+        },
+        {
+          "plan_id": "GWIND-2h-1780",
+          "sonuc": "stop",
+          "pnl_atr": -0.9182
+        },
+        {
+          "plan_id": "GWIND-4h-393",
+          "sonuc": "stop",
+          "pnl_atr": -0.8694
+        },
+        {
+          "plan_id": "HALKB-1d-85",
+          "sonuc": "hedef",
+          "pnl_atr": 2.913
+        },
+        {
+          "plan_id": "HALKB-1h-1780",
+          "sonuc": "stop",
+          "pnl_atr": -1.5965
+        },
+        {
+          "plan_id": "HATEK-1d-202",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5902
+        },
+        {
+          "plan_id": "HATEK-1d-222",
+          "sonuc": "stop",
+          "pnl_atr": -1.1403
+        },
+        {
+          "plan_id": "HATEK-1h-587",
+          "sonuc": "zaman",
+          "pnl_atr": -0.0437
+        },
+        {
+          "plan_id": "HATEK-1h-608",
+          "sonuc": "stop",
+          "pnl_atr": -1.5175
+        },
+        {
+          "plan_id": "HATEK-1h-636",
+          "sonuc": "zaman",
+          "pnl_atr": 4.66
+        },
+        {
+          "plan_id": "HATEK-1h-1167",
+          "sonuc": "zaman",
+          "pnl_atr": 8.7404
+        },
+        {
+          "plan_id": "HATEK-1h-2917",
+          "sonuc": "zaman",
+          "pnl_atr": 0.4811
+        },
+        {
+          "plan_id": "HATEK-2h-61",
+          "sonuc": "stop",
+          "pnl_atr": -0.8478
+        },
+        {
+          "plan_id": "HATEK-2h-1615",
+          "sonuc": "zaman",
+          "pnl_atr": -0.3872
+        },
+        {
+          "plan_id": "HATEK-4h-192",
+          "sonuc": "stop",
+          "pnl_atr": -0.9979
+        },
+        {
+          "plan_id": "HATEK-4h-967",
+          "sonuc": "zaman",
+          "pnl_atr": 0.199
+        },
+        {
+          "plan_id": "HATSN-1d-48",
+          "sonuc": "stop",
+          "pnl_atr": -0.8359
+        },
+        {
+          "plan_id": "HATSN-1d-221",
+          "sonuc": "stop",
+          "pnl_atr": -1.2235
+        },
+        {
+          "plan_id": "HATSN-1h-587",
+          "sonuc": "stop",
+          "pnl_atr": -0.5062
+        },
+        {
+          "plan_id": "HATSN-2h-440",
+          "sonuc": "hedef",
+          "pnl_atr": 4.201
+        },
+        {
+          "plan_id": "HATSN-2h-633",
+          "sonuc": "stop",
+          "pnl_atr": -0.8176
+        },
+        {
+          "plan_id": "HATSN-2h-1318",
+          "sonuc": "hedef",
+          "pnl_atr": 1.733
+        },
+        {
+          "plan_id": "HEDEF-1h-113",
+          "sonuc": "stop",
+          "pnl_atr": -0.7233
+        },
+        {
+          "plan_id": "HEDEF-1h-759",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3061
+        },
+        {
+          "plan_id": "HEDEF-1h-1078",
+          "sonuc": "stop",
+          "pnl_atr": -1.2224
+        },
+        {
+          "plan_id": "HEDEF-1h-1168",
+          "sonuc": "stop",
+          "pnl_atr": -0.577
+        },
+        {
+          "plan_id": "HEDEF-1h-1259",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8593
+        },
+        {
+          "plan_id": "HEDEF-2h-642",
+          "sonuc": "stop",
+          "pnl_atr": -1.033
+        },
+        {
+          "plan_id": "HEDEF-2h-904",
+          "sonuc": "stop",
+          "pnl_atr": -0.6507
+        },
+        {
+          "plan_id": "HEDEF-4h-75",
+          "sonuc": "stop",
+          "pnl_atr": -2.0077
+        },
+        {
+          "plan_id": "HEKTS-1d-461",
+          "sonuc": "stop",
+          "pnl_atr": -0.7606
+        },
+        {
+          "plan_id": "HEKTS-1h-700",
+          "sonuc": "stop",
+          "pnl_atr": -0.7748
+        },
+        {
+          "plan_id": "HKTM-1h-550",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2462
+        },
+        {
+          "plan_id": "HKTM-1h-1179",
+          "sonuc": "hedef",
+          "pnl_atr": 1.07
+        },
+        {
+          "plan_id": "HKTM-2h-315",
+          "sonuc": "hedef",
+          "pnl_atr": 1.753
+        },
+        {
+          "plan_id": "HKTM-2h-389",
+          "sonuc": "stop",
+          "pnl_atr": -0.7587
+        },
+        {
+          "plan_id": "IHEVA-1h-873",
+          "sonuc": "hedef",
+          "pnl_atr": 2.0206
+        },
+        {
+          "plan_id": "IHEVA-2h-125",
+          "sonuc": "zaman",
+          "pnl_atr": -0.5119
+        },
+        {
+          "plan_id": "IHEVA-2h-341",
+          "sonuc": "zaman",
+          "pnl_atr": 1.0561
+        },
+        {
+          "plan_id": "IHEVA-2h-1282",
+          "sonuc": "stop",
+          "pnl_atr": -0.8343
+        },
+        {
+          "plan_id": "IHEVA-4h-228",
+          "sonuc": "stop",
+          "pnl_atr": -1.2282
+        },
+        {
+          "plan_id": "ISCTR-1d-449",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5819
+        },
+        {
+          "plan_id": "ISCTR-2h-135",
+          "sonuc": "zaman",
+          "pnl_atr": 1.5564
+        },
+        {
+          "plan_id": "ISCTR-2h-642",
+          "sonuc": "hedef",
+          "pnl_atr": 1.8369
+        },
+        {
+          "plan_id": "ISCTR-4h-384",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4798
+        },
+        {
+          "plan_id": "ISCTR-4h-675",
+          "sonuc": "hedef",
+          "pnl_atr": 0.7125
+        },
+        {
+          "plan_id": "ISGYO-1h-685",
+          "sonuc": "stop",
+          "pnl_atr": -0.9307
+        },
+        {
+          "plan_id": "ISGYO-1h-727",
+          "sonuc": "stop",
+          "pnl_atr": -0.7864
+        },
+        {
+          "plan_id": "ISGYO-1h-1560",
+          "sonuc": "zaman",
+          "pnl_atr": -0.1984
+        },
+        {
+          "plan_id": "ISGYO-2h-380",
+          "sonuc": "stop",
+          "pnl_atr": -1.2002
+        },
+        {
+          "plan_id": "ISGYO-2h-1737",
+          "sonuc": "hedef",
+          "pnl_atr": 1.7419
+        },
+        {
+          "plan_id": "ISGYO-4h-564",
+          "sonuc": "stop",
+          "pnl_atr": -1.5553
+        },
+        {
+          "plan_id": "ISMEN-1d-121",
+          "sonuc": "stop",
+          "pnl_atr": -0.5314
+        },
+        {
+          "plan_id": "ISMEN-1h-1673",
+          "sonuc": "zaman",
+          "pnl_atr": 0.3615
+        },
+        {
+          "plan_id": "ISMEN-2h-265",
+          "sonuc": "stop",
+          "pnl_atr": -1.7746
+        },
+        {
+          "plan_id": "ISMEN-2h-308",
+          "sonuc": "zaman",
+          "pnl_atr": -0.0378
+        },
+        {
+          "plan_id": "ISMEN-2h-329",
+          "sonuc": "stop",
+          "pnl_atr": -1.7253
+        },
+        {
+          "plan_id": "ISMEN-2h-352",
+          "sonuc": "hedef",
+          "pnl_atr": 2.8782
+        },
+        {
+          "plan_id": "ISMEN-2h-485",
+          "sonuc": "stop",
+          "pnl_atr": -0.7984
+        },
+        {
+          "plan_id": "ISMEN-4h-206",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3021
+        },
+        {
+          "plan_id": "IZENR-1d-267",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6051
+        },
+        {
+          "plan_id": "IZENR-1h-301",
+          "sonuc": "hedef",
+          "pnl_atr": 0.9142
+        },
+        {
+          "plan_id": "IZENR-2h-538",
+          "sonuc": "stop",
+          "pnl_atr": -0.517
+        },
+        {
+          "plan_id": "IZENR-2h-647",
+          "sonuc": "hedef",
+          "pnl_atr": 2.0366
+        },
+        {
+          "plan_id": "KARSN-2h-1422",
+          "sonuc": "stop",
+          "pnl_atr": -1.6857
+        },
+        {
+          "plan_id": "KARSN-4h-321",
+          "sonuc": "stop",
+          "pnl_atr": -0.6465
+        },
+        {
+          "plan_id": "KCAER-1d-123",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3861
+        },
+        {
+          "plan_id": "KCAER-1d-368",
+          "sonuc": "hedef",
+          "pnl_atr": 0.7203
+        },
+        {
+          "plan_id": "KCAER-1h-1708",
+          "sonuc": "hedef",
+          "pnl_atr": 0.6181
+        },
+        {
+          "plan_id": "KIMMR-1d-51",
+          "sonuc": "hedef",
+          "pnl_atr": 2.5776
+        },
+        {
+          "plan_id": "KIMMR-1d-368",
+          "sonuc": "stop",
+          "pnl_atr": -0.5752
+        },
+        {
+          "plan_id": "KIMMR-1d-406",
+          "sonuc": "stop",
+          "pnl_atr": -0.7017
+        },
+        {
+          "plan_id": "KIMMR-1h-198",
+          "sonuc": "stop",
+          "pnl_atr": -2.0411
+        },
+        {
+          "plan_id": "KIMMR-1h-262",
+          "sonuc": "stop",
+          "pnl_atr": -0.6589
+        },
+        {
+          "plan_id": "KIMMR-1h-2020",
+          "sonuc": "hedef",
+          "pnl_atr": 1.575
+        },
+        {
+          "plan_id": "KIMMR-1h-2064",
+          "sonuc": "zaman",
+          "pnl_atr": -0.4001
+        },
+        {
+          "plan_id": "KIMMR-1h-3222",
+          "sonuc": "stop",
+          "pnl_atr": -1.1631
+        },
+        {
+          "plan_id": "KIMMR-2h-1126",
+          "sonuc": "zaman",
+          "pnl_atr": -1.1167
+        },
+        {
+          "plan_id": "KIMMR-2h-1150",
+          "sonuc": "stop",
+          "pnl_atr": -1.3683
+        },
+        {
+          "plan_id": "KIMMR-4h-1071",
+          "sonuc": "stop",
+          "pnl_atr": -0.6627
+        },
+        {
+          "plan_id": "KLGYO-1d-452",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8754
+        },
+        {
+          "plan_id": "KLGYO-1h-332",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3349
+        },
+        {
+          "plan_id": "KLGYO-1h-357",
+          "sonuc": "zaman",
+          "pnl_atr": 0.1223
+        },
+        {
+          "plan_id": "KLGYO-2h-863",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3783
+        },
+        {
+          "plan_id": "KLGYO-2h-1545",
+          "sonuc": "stop",
+          "pnl_atr": -1.7365
+        },
+        {
+          "plan_id": "KLGYO-4h-685",
+          "sonuc": "hedef",
+          "pnl_atr": 1.459
+        },
+        {
+          "plan_id": "KLSER-1h-115",
+          "sonuc": "stop",
+          "pnl_atr": -1.0532
+        },
+        {
+          "plan_id": "KLSER-1h-137",
+          "sonuc": "stop",
+          "pnl_atr": -1.0077
+        },
+        {
+          "plan_id": "KLSER-1h-533",
+          "sonuc": "stop",
+          "pnl_atr": -0.865
+        },
+        {
+          "plan_id": "KLSER-1h-611",
+          "sonuc": "zaman",
+          "pnl_atr": 2.3051
+        },
+        {
+          "plan_id": "KLSER-2h-74",
+          "sonuc": "stop",
+          "pnl_atr": -0.9809
+        },
+        {
+          "plan_id": "KLSER-2h-324",
+          "sonuc": "stop",
+          "pnl_atr": -0.9114
+        },
+        {
+          "plan_id": "KLSER-2h-1121",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1826
+        },
+        {
+          "plan_id": "KLSER-4h-434",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2785
+        },
+        {
+          "plan_id": "KLSER-4h-499",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4763
+        },
+        {
+          "plan_id": "KLSER-4h-642",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2723
+        },
+        {
+          "plan_id": "KMPUR-1d-305",
+          "sonuc": "stop",
+          "pnl_atr": -0.6336
+        },
+        {
+          "plan_id": "KONTR-1h-1762",
+          "sonuc": "hedef",
+          "pnl_atr": 1.848
+        },
+        {
+          "plan_id": "KONTR-2h-1117",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4119
+        },
+        {
+          "plan_id": "KONYA-1d-307",
+          "sonuc": "stop",
+          "pnl_atr": -0.5505
+        },
+        {
+          "plan_id": "KONYA-1h-357",
+          "sonuc": "zaman",
+          "pnl_atr": -0.1782
+        },
+        {
+          "plan_id": "KONYA-1h-1034",
+          "sonuc": "hedef",
+          "pnl_atr": 0.6832
+        },
+        {
+          "plan_id": "KONYA-2h-275",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3793
+        },
+        {
+          "plan_id": "KONYA-2h-1085",
+          "sonuc": "stop",
+          "pnl_atr": -0.8211
+        },
+        {
+          "plan_id": "KORDS-1h-107",
+          "sonuc": "stop",
+          "pnl_atr": -1.6673
+        },
+        {
+          "plan_id": "KORDS-1h-641",
+          "sonuc": "hedef",
+          "pnl_atr": 3.343
+        },
+        {
+          "plan_id": "KORDS-2h-318",
+          "sonuc": "stop",
+          "pnl_atr": -1.6851
+        },
+        {
+          "plan_id": "KORDS-4h-451",
+          "sonuc": "stop",
+          "pnl_atr": -1.2483
+        },
+        {
+          "plan_id": "KRDMD-1d-362",
+          "sonuc": "hedef",
+          "pnl_atr": 1.0667
+        },
+        {
+          "plan_id": "KRDMD-1d-409",
+          "sonuc": "stop",
+          "pnl_atr": -1.1696
+        },
+        {
+          "plan_id": "KRDMD-1h-560",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3873
+        },
+        {
+          "plan_id": "KRDMD-2h-135",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6192
+        },
+        {
+          "plan_id": "KRDMD-2h-205",
+          "sonuc": "hedef",
+          "pnl_atr": 1.8195
+        },
+        {
+          "plan_id": "KRDMD-2h-534",
+          "sonuc": "stop",
+          "pnl_atr": -0.8704
+        },
+        {
+          "plan_id": "KRGYO-1h-509",
+          "sonuc": "zaman",
+          "pnl_atr": -0.3593
+        },
+        {
+          "plan_id": "KRGYO-1h-705",
+          "sonuc": "hedef",
+          "pnl_atr": 1.849
+        },
+        {
+          "plan_id": "KRGYO-1h-947",
+          "sonuc": "stop",
+          "pnl_atr": -0.875
+        },
+        {
+          "plan_id": "KRGYO-2h-391",
+          "sonuc": "stop",
+          "pnl_atr": -0.5133
+        },
+        {
+          "plan_id": "KRGYO-2h-1138",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5682
+        },
+        {
+          "plan_id": "KRGYO-4h-674",
+          "sonuc": "hedef",
+          "pnl_atr": 3.1426
+        },
+        {
+          "plan_id": "KRTEK-1d-449",
+          "sonuc": "stop",
+          "pnl_atr": -0.7013
+        },
+        {
+          "plan_id": "KRTEK-1h-264",
+          "sonuc": "stop",
+          "pnl_atr": -1.4002
+        },
+        {
+          "plan_id": "KRTEK-1h-618",
+          "sonuc": "stop",
+          "pnl_atr": -0.7924
+        },
+        {
+          "plan_id": "KRTEK-1h-2812",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5739
+        },
+        {
+          "plan_id": "KRTEK-2h-146",
+          "sonuc": "stop",
+          "pnl_atr": -1.0395
+        },
+        {
+          "plan_id": "KRTEK-2h-1423",
+          "sonuc": "stop",
+          "pnl_atr": -0.9601
+        },
+        {
+          "plan_id": "KRTEK-4h-853",
+          "sonuc": "stop",
+          "pnl_atr": -0.7703
+        },
+        {
+          "plan_id": "KRTEK-4h-924",
+          "sonuc": "zaman",
+          "pnl_atr": -0.0664
+        },
+        {
+          "plan_id": "KUTPO-2h-355",
+          "sonuc": "zaman",
+          "pnl_atr": -0.2925
+        },
+        {
+          "plan_id": "KUTPO-2h-378",
+          "sonuc": "stop",
+          "pnl_atr": -1.7064
+        },
+        {
+          "plan_id": "KUTPO-2h-531",
+          "sonuc": "stop",
+          "pnl_atr": -0.9088
+        },
+        {
+          "plan_id": "KUTPO-2h-716",
+          "sonuc": "stop",
+          "pnl_atr": -0.9306
+        },
+        {
+          "plan_id": "KUTPO-4h-79",
+          "sonuc": "stop",
+          "pnl_atr": -0.796
+        },
+        {
+          "plan_id": "KZBGY-1d-152",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2198
+        },
+        {
+          "plan_id": "KZBGY-1d-277",
+          "sonuc": "stop",
+          "pnl_atr": -1.226
+        },
+        {
+          "plan_id": "KZBGY-1d-337",
+          "sonuc": "stop",
+          "pnl_atr": -0.579
+        },
+        {
+          "plan_id": "KZBGY-1d-369",
+          "sonuc": "zaman",
+          "pnl_atr": 0.6805
+        },
+        {
+          "plan_id": "KZBGY-2h-231",
+          "sonuc": "hedef",
+          "pnl_atr": 1.7547
+        },
+        {
+          "plan_id": "KZBGY-2h-533",
+          "sonuc": "stop",
+          "pnl_atr": -0.8125
+        },
+        {
+          "plan_id": "KZBGY-4h-138",
+          "sonuc": "hedef",
+          "pnl_atr": 2.6255
+        },
+        {
+          "plan_id": "KZBGY-4h-336",
+          "sonuc": "stop",
+          "pnl_atr": -0.7938
+        },
+        {
+          "plan_id": "LMKDC-1d-122",
+          "sonuc": "stop",
+          "pnl_atr": -0.8883
+        },
+        {
+          "plan_id": "LMKDC-1d-439",
+          "sonuc": "stop",
+          "pnl_atr": -0.8451
+        },
+        {
+          "plan_id": "MAGEN-1h-693",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6746
+        },
+        {
+          "plan_id": "MAGEN-1h-1177",
+          "sonuc": "hedef",
+          "pnl_atr": 2.9662
+        },
+        {
+          "plan_id": "MAGEN-2h-141",
+          "sonuc": "stop",
+          "pnl_atr": -0.8362
+        },
+        {
+          "plan_id": "MAGEN-2h-261",
+          "sonuc": "stop",
+          "pnl_atr": -0.9439
+        },
+        {
+          "plan_id": "MAGEN-2h-329",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3513
+        },
+        {
+          "plan_id": "MAGEN-2h-748",
+          "sonuc": "hedef",
+          "pnl_atr": 2.2944
+        },
+        {
+          "plan_id": "MAKTK-1d-273",
+          "sonuc": "stop",
+          "pnl_atr": -0.6281
+        },
+        {
+          "plan_id": "MAKTK-1h-113",
+          "sonuc": "stop",
+          "pnl_atr": -1.691
+        },
+        {
+          "plan_id": "MAKTK-1h-552",
+          "sonuc": "zaman",
+          "pnl_atr": -0.6354
+        },
+        {
+          "plan_id": "MAKTK-1h-573",
+          "sonuc": "stop",
+          "pnl_atr": -1.2384
+        },
+        {
+          "plan_id": "MAKTK-1h-595",
+          "sonuc": "stop",
+          "pnl_atr": -0.9526
+        },
+        {
+          "plan_id": "MAKTK-2h-295",
+          "sonuc": "stop",
+          "pnl_atr": -0.5526
+        },
+        {
+          "plan_id": "MAKTK-2h-316",
+          "sonuc": "stop",
+          "pnl_atr": -0.9052
+        },
+        {
+          "plan_id": "MAKTK-4h-183",
+          "sonuc": "stop",
+          "pnl_atr": -0.7152
+        },
+        {
+          "plan_id": "MARMR-1d-134",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2933
+        },
+        {
+          "plan_id": "MARMR-1h-906",
+          "sonuc": "zaman",
+          "pnl_atr": -0.1248
+        },
+        {
+          "plan_id": "MARMR-1h-930",
+          "sonuc": "stop",
+          "pnl_atr": -1.3524
+        },
+        {
+          "plan_id": "MARTI-1d-363",
+          "sonuc": "hedef",
+          "pnl_atr": 2.124
+        },
+        {
+          "plan_id": "MARTI-1d-416",
+          "sonuc": "stop",
+          "pnl_atr": -0.6555
+        },
+        {
+          "plan_id": "MARTI-1h-2019",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4533
+        },
+        {
+          "plan_id": "MARTI-1h-2401",
+          "sonuc": "stop",
+          "pnl_atr": -0.5638
+        },
+        {
+          "plan_id": "MARTI-1h-2507",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8602
+        },
+        {
+          "plan_id": "MARTI-4h-667",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6536
+        },
+        {
+          "plan_id": "MAVI-1h-116",
+          "sonuc": "stop",
+          "pnl_atr": -0.9902
+        },
+        {
+          "plan_id": "MAVI-1h-339",
+          "sonuc": "zaman",
+          "pnl_atr": 0.4075
+        },
+        {
+          "plan_id": "MAVI-1h-954",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6008
+        },
+        {
+          "plan_id": "MAVI-1h-1656",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2824
+        },
+        {
+          "plan_id": "MAVI-4h-151",
+          "sonuc": "stop",
+          "pnl_atr": -0.9412
+        },
+        {
+          "plan_id": "MEDTR-1d-253",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1603
+        },
+        {
+          "plan_id": "MEDTR-1d-273",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5752
+        },
+        {
+          "plan_id": "MEDTR-4h-417",
+          "sonuc": "hedef",
+          "pnl_atr": 1.537
+        },
+        {
+          "plan_id": "MEGAP-1d-131",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3707
+        },
+        {
+          "plan_id": "METRO-1d-268",
+          "sonuc": "stop",
+          "pnl_atr": -0.8045
+        },
+        {
+          "plan_id": "METRO-1d-361",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5842
+        },
+        {
+          "plan_id": "METRO-1h-496",
+          "sonuc": "stop",
+          "pnl_atr": -1.0139
+        },
+        {
+          "plan_id": "METRO-1h-2426",
+          "sonuc": "zaman",
+          "pnl_atr": 1.5746
+        },
+        {
+          "plan_id": "METRO-2h-648",
+          "sonuc": "zaman",
+          "pnl_atr": 0.2806
+        },
+        {
+          "plan_id": "METRO-2h-1119",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3397
+        },
+        {
+          "plan_id": "METRO-4h-387",
+          "sonuc": "stop",
+          "pnl_atr": -1.2853
+        },
+        {
+          "plan_id": "METRO-4h-807",
+          "sonuc": "zaman",
+          "pnl_atr": 0.4381
+        },
+        {
+          "plan_id": "MGROS-2h-695",
+          "sonuc": "hedef",
+          "pnl_atr": 1.6654
+        },
+        {
+          "plan_id": "MGROS-2h-795",
+          "sonuc": "stop",
+          "pnl_atr": -0.6344
+        },
+        {
+          "plan_id": "MIATK-1d-249",
+          "sonuc": "stop",
+          "pnl_atr": -0.6927
+        },
+        {
+          "plan_id": "MIATK-1h-1235",
+          "sonuc": "hedef",
+          "pnl_atr": 1.0977
+        },
+        {
+          "plan_id": "MIATK-2h-285",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5124
+        },
+        {
+          "plan_id": "MIATK-2h-889",
+          "sonuc": "hedef",
+          "pnl_atr": 1.991
+        },
+        {
+          "plan_id": "MIATK-2h-1351",
+          "sonuc": "zaman",
+          "pnl_atr": -0.155
+        },
+        {
+          "plan_id": "MIATK-2h-1375",
+          "sonuc": "stop",
+          "pnl_atr": -0.9737
+        },
+        {
+          "plan_id": "MIATK-4h-296",
+          "sonuc": "stop",
+          "pnl_atr": -2.1116
+        },
+        {
+          "plan_id": "MPARK-1d-404",
+          "sonuc": "stop",
+          "pnl_atr": -1.0946
+        },
+        {
+          "plan_id": "MPARK-1h-1761",
+          "sonuc": "stop",
+          "pnl_atr": -0.9998
+        },
+        {
+          "plan_id": "MPARK-2h-1086",
+          "sonuc": "stop",
+          "pnl_atr": -0.8229
+        },
+        {
+          "plan_id": "MPARK-4h-153",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3578
+        },
+        {
+          "plan_id": "MRSHL-1d-95",
+          "sonuc": "hedef",
+          "pnl_atr": 1.7222
+        },
+        {
+          "plan_id": "MRSHL-1h-2313",
+          "sonuc": "stop",
+          "pnl_atr": -0.857
+        },
+        {
+          "plan_id": "NETAS-1h-233",
+          "sonuc": "stop",
+          "pnl_atr": -0.8016
+        },
+        {
+          "plan_id": "NETAS-1h-363",
+          "sonuc": "hedef",
+          "pnl_atr": 0.7851
+        },
+        {
+          "plan_id": "NETAS-1h-516",
+          "sonuc": "hedef",
+          "pnl_atr": 3.6545
+        },
+        {
+          "plan_id": "NETAS-1h-632",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3687
+        },
+        {
+          "plan_id": "NETAS-1h-677",
+          "sonuc": "stop",
+          "pnl_atr": -0.7644
+        },
+        {
+          "plan_id": "NETAS-1h-1726",
+          "sonuc": "hedef",
+          "pnl_atr": 1.138
+        },
+        {
+          "plan_id": "NETAS-2h-1673",
+          "sonuc": "stop",
+          "pnl_atr": -0.9342
+        },
+        {
+          "plan_id": "NIBAS-1d-213",
+          "sonuc": "stop",
+          "pnl_atr": -0.9059
+        },
+        {
+          "plan_id": "NIBAS-1h-967",
+          "sonuc": "stop",
+          "pnl_atr": -0.7311
+        },
+        {
+          "plan_id": "NIBAS-1h-3187",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4773
+        },
+        {
+          "plan_id": "NIBAS-4h-1058",
+          "sonuc": "stop",
+          "pnl_atr": -0.9546
+        },
+        {
+          "plan_id": "OBAMS-2h-309",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2682
+        },
+        {
+          "plan_id": "OBAMS-2h-426",
+          "sonuc": "stop",
+          "pnl_atr": -1.1038
+        },
+        {
+          "plan_id": "OBAMS-2h-1786",
+          "sonuc": "stop",
+          "pnl_atr": -2.2341
+        },
+        {
+          "plan_id": "ODAS-1d-468",
+          "sonuc": "stop",
+          "pnl_atr": -1.1039
+        },
+        {
+          "plan_id": "ODAS-1h-560",
+          "sonuc": "stop",
+          "pnl_atr": -0.684
+        },
+        {
+          "plan_id": "ODAS-1h-595",
+          "sonuc": "stop",
+          "pnl_atr": -1.374
+        },
+        {
+          "plan_id": "ODAS-2h-745",
+          "sonuc": "stop",
+          "pnl_atr": -0.6406
+        },
+        {
+          "plan_id": "ODAS-4h-83",
+          "sonuc": "hedef",
+          "pnl_atr": 1.5546
+        },
+        {
+          "plan_id": "OFSYM-1d-131",
+          "sonuc": "hedef",
+          "pnl_atr": 0.9726
+        },
+        {
+          "plan_id": "OFSYM-1h-88",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3646
+        },
+        {
+          "plan_id": "OFSYM-1h-126",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1136
+        },
+        {
+          "plan_id": "OFSYM-4h-57",
+          "sonuc": "hedef",
+          "pnl_atr": 2.579
+        },
+        {
+          "plan_id": "OTKAR-1d-67",
+          "sonuc": "stop",
+          "pnl_atr": -0.6988
+        },
+        {
+          "plan_id": "OTKAR-1d-278",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8048
+        },
+        {
+          "plan_id": "OTKAR-1h-759",
+          "sonuc": "hedef",
+          "pnl_atr": 1.7551
+        },
+        {
+          "plan_id": "OTKAR-1h-1073",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4573
+        },
+        {
+          "plan_id": "OTKAR-1h-2033",
+          "sonuc": "zaman",
+          "pnl_atr": 0.4677
+        },
+        {
+          "plan_id": "OTKAR-1h-2427",
+          "sonuc": "stop",
+          "pnl_atr": -1.2441
+        },
+        {
+          "plan_id": "OTKAR-1h-2464",
+          "sonuc": "stop",
+          "pnl_atr": -1.4708
+        },
+        {
+          "plan_id": "OTKAR-1h-2863",
+          "sonuc": "stop",
+          "pnl_atr": -1.3373
+        },
+        {
+          "plan_id": "OTKAR-1h-3183",
+          "sonuc": "zaman",
+          "pnl_atr": 1.4378
+        },
+        {
+          "plan_id": "OTKAR-2h-205",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4994
+        },
+        {
+          "plan_id": "OTKAR-2h-660",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2995
+        },
+        {
+          "plan_id": "OTKAR-2h-700",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4176
+        },
+        {
+          "plan_id": "OTKAR-2h-1129",
+          "sonuc": "hedef",
+          "pnl_atr": 1.7566
+        },
+        {
+          "plan_id": "OTKAR-2h-1373",
+          "sonuc": "stop",
+          "pnl_atr": -1.0194
+        },
+        {
+          "plan_id": "OTKAR-4h-406",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4181
+        },
+        {
+          "plan_id": "OTKAR-4h-824",
+          "sonuc": "hedef",
+          "pnl_atr": 4.4775
+        },
+        {
+          "plan_id": "OYAKC-1d-95",
+          "sonuc": "hedef",
+          "pnl_atr": 1.2969
+        },
+        {
+          "plan_id": "OYAKC-1d-192",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4126
+        },
+        {
+          "plan_id": "OYAKC-1d-418",
+          "sonuc": "stop",
+          "pnl_atr": -0.7114
+        },
+        {
+          "plan_id": "OYAKC-2h-136",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3614
+        },
+        {
+          "plan_id": "OZGYO-1d-213",
+          "sonuc": "stop",
+          "pnl_atr": -0.633
+        },
+        {
+          "plan_id": "OZGYO-2h-167",
+          "sonuc": "hedef",
+          "pnl_atr": 2.1473
+        },
+        {
+          "plan_id": "OZGYO-4h-409",
+          "sonuc": "stop",
+          "pnl_atr": -0.626
+        },
+        {
+          "plan_id": "OZKGY-1d-320",
+          "sonuc": "hedef",
+          "pnl_atr": 2.5079
+        },
+        {
+          "plan_id": "OZKGY-1h-1136",
+          "sonuc": "stop",
+          "pnl_atr": -1.3175
+        },
+        {
+          "plan_id": "OZKGY-2h-302",
+          "sonuc": "hedef",
+          "pnl_atr": 3.4541
+        },
+        {
+          "plan_id": "OZKGY-4h-181",
+          "sonuc": "hedef",
+          "pnl_atr": 3.8389
+        },
+        {
+          "plan_id": "OZKGY-4h-386",
+          "sonuc": "hedef",
+          "pnl_atr": 2.3554
+        },
+        {
+          "plan_id": "OZSUB-1h-867",
+          "sonuc": "stop",
+          "pnl_atr": -1.0912
+        },
+        {
+          "plan_id": "OZSUB-1h-2472",
+          "sonuc": "hedef",
+          "pnl_atr": 0.9297
+        },
+        {
+          "plan_id": "OZSUB-2h-90",
+          "sonuc": "zaman",
+          "pnl_atr": -0.9048
+        },
+        {
+          "plan_id": "OZSUB-2h-205",
+          "sonuc": "hedef",
+          "pnl_atr": 0.9787
+        },
+        {
+          "plan_id": "OZSUB-4h-1068",
+          "sonuc": "stop",
+          "pnl_atr": -1.0748
+        },
+        {
+          "plan_id": "PAMEL-1h-587",
+          "sonuc": "stop",
+          "pnl_atr": -1.6745
+        },
+        {
+          "plan_id": "PAMEL-1h-766",
+          "sonuc": "stop",
+          "pnl_atr": -0.9603
+        },
+        {
+          "plan_id": "PAMEL-1h-982",
+          "sonuc": "stop",
+          "pnl_atr": -0.983
+        },
+        {
+          "plan_id": "PAPIL-1d-417",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3451
+        },
+        {
+          "plan_id": "PAPIL-2h-1592",
+          "sonuc": "hedef",
+          "pnl_atr": 2.6138
+        },
+        {
+          "plan_id": "PASEU-1h-884",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3146
+        },
+        {
+          "plan_id": "PASEU-2h-664",
+          "sonuc": "hedef",
+          "pnl_atr": 3.2008
+        },
+        {
+          "plan_id": "PASEU-4h-153",
+          "sonuc": "stop",
+          "pnl_atr": -1.1248
+        },
+        {
+          "plan_id": "PENTA-1h-700",
+          "sonuc": "stop",
+          "pnl_atr": -0.552
+        },
+        {
+          "plan_id": "PENTA-1h-961",
+          "sonuc": "stop",
+          "pnl_atr": -1.2737
+        },
+        {
+          "plan_id": "PENTA-2h-337",
+          "sonuc": "zaman",
+          "pnl_atr": -0.2169
+        },
+        {
+          "plan_id": "PENTA-2h-526",
+          "sonuc": "stop",
+          "pnl_atr": -1.1498
+        },
+        {
+          "plan_id": "PETKM-2h-284",
+          "sonuc": "hedef",
+          "pnl_atr": 2.7311
+        },
+        {
+          "plan_id": "PGSUS-1d-405",
+          "sonuc": "hedef",
+          "pnl_atr": 1.9227
+        },
+        {
+          "plan_id": "PGSUS-1h-2874",
+          "sonuc": "hedef",
+          "pnl_atr": 0.89
+        },
+        {
+          "plan_id": "PGSUS-2h-650",
+          "sonuc": "hedef",
+          "pnl_atr": 0.9807
+        },
+        {
+          "plan_id": "PGSUS-2h-1592",
+          "sonuc": "hedef",
+          "pnl_atr": 1.021
+        },
+        {
+          "plan_id": "QUAGR-1d-419",
+          "sonuc": "stop",
+          "pnl_atr": -0.6274
+        },
+        {
+          "plan_id": "QUAGR-1h-252",
+          "sonuc": "zaman",
+          "pnl_atr": 0.3126
+        },
+        {
+          "plan_id": "QUAGR-1h-609",
+          "sonuc": "zaman",
+          "pnl_atr": -0.509
+        },
+        {
+          "plan_id": "QUAGR-1h-863",
+          "sonuc": "stop",
+          "pnl_atr": -0.8936
+        },
+        {
+          "plan_id": "QUAGR-1h-1652",
+          "sonuc": "zaman",
+          "pnl_atr": 6.2896
+        },
+        {
+          "plan_id": "QUAGR-1h-2242",
+          "sonuc": "stop",
+          "pnl_atr": -1.3235
+        },
+        {
+          "plan_id": "REEDR-1d-128",
+          "sonuc": "stop",
+          "pnl_atr": -0.7396
+        },
+        {
+          "plan_id": "REEDR-1d-223",
+          "sonuc": "hedef",
+          "pnl_atr": 0.7873
+        },
+        {
+          "plan_id": "REEDR-1d-305",
+          "sonuc": "hedef",
+          "pnl_atr": 2.5637
+        },
+        {
+          "plan_id": "REEDR-1d-393",
+          "sonuc": "stop",
+          "pnl_atr": -0.6646
+        },
+        {
+          "plan_id": "REEDR-1h-1607",
+          "sonuc": "zaman",
+          "pnl_atr": -0.1625
+        },
+        {
+          "plan_id": "REEDR-2h-309",
+          "sonuc": "stop",
+          "pnl_atr": -1.032
+        },
+        {
+          "plan_id": "REEDR-2h-889",
+          "sonuc": "hedef",
+          "pnl_atr": 0.8858
+        },
+        {
+          "plan_id": "REEDR-4h-103",
+          "sonuc": "zaman",
+          "pnl_atr": 0.1234
+        },
+        {
+          "plan_id": "RTALB-2h-347",
+          "sonuc": "zaman",
+          "pnl_atr": 1.7479
+        },
+        {
+          "plan_id": "RTALB-2h-530",
+          "sonuc": "stop",
+          "pnl_atr": -1.5108
+        },
+        {
+          "plan_id": "SASA-1d-50",
+          "sonuc": "stop",
+          "pnl_atr": -0.6885
+        },
+        {
+          "plan_id": "SASA-1d-315",
+          "sonuc": "hedef",
+          "pnl_atr": 2.9104
+        },
+        {
+          "plan_id": "SASA-1d-493",
+          "sonuc": "stop",
+          "pnl_atr": -1.0883
+        },
+        {
+          "plan_id": "SASA-2h-1008",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3104
+        },
+        {
+          "plan_id": "SAYAS-1h-778",
+          "sonuc": "stop",
+          "pnl_atr": -1.9164
+        },
+        {
+          "plan_id": "SDTTR-1h-326",
+          "sonuc": "zaman",
+          "pnl_atr": -0.3116
+        },
+        {
+          "plan_id": "SDTTR-2h-489",
+          "sonuc": "stop",
+          "pnl_atr": -0.8958
+        },
+        {
+          "plan_id": "SDTTR-2h-664",
+          "sonuc": "hedef",
+          "pnl_atr": 1.3189
+        },
+        {
+          "plan_id": "SELEC-1h-135",
+          "sonuc": "zaman",
+          "pnl_atr": 1.8493
+        },
+        {
+          "plan_id": "SELEC-1h-376",
+          "sonuc": "stop",
+          "pnl_atr": -1.3968
+        },
+        {
+          "plan_id": "SELEC-1h-468",
+          "sonuc": "zaman",
+          "pnl_atr": -0.5643
+        },
+        {
+          "plan_id": "SELEC-2h-81",
+          "sonuc": "hedef",
+          "pnl_atr": 4.6345
+        },
+        {
+          "plan_id": "SELEC-2h-342",
+          "sonuc": "stop",
+          "pnl_atr": -0.8651
+        },
+        {
+          "plan_id": "SELEC-2h-684",
+          "sonuc": "stop",
+          "pnl_atr": -1.0572
+        },
+        {
+          "plan_id": "SELEC-4h-284",
+          "sonuc": "hedef",
+          "pnl_atr": 2.0671
+        },
+        {
+          "plan_id": "SELVA-1d-80",
+          "sonuc": "hedef",
+          "pnl_atr": 0.7633
+        },
+        {
+          "plan_id": "SELVA-1d-461",
+          "sonuc": "stop",
+          "pnl_atr": -0.5453
+        },
+        {
+          "plan_id": "SELVA-2h-535",
+          "sonuc": "stop",
+          "pnl_atr": -1.4933
+        },
+        {
+          "plan_id": "SELVA-4h-255",
+          "sonuc": "stop",
+          "pnl_atr": -0.505
+        },
+        {
+          "plan_id": "SELVA-4h-954",
+          "sonuc": "stop",
+          "pnl_atr": -1.0399
+        },
+        {
+          "plan_id": "SEYKM-1d-95",
+          "sonuc": "hedef",
+          "pnl_atr": 1.454
+        },
+        {
+          "plan_id": "SISE-2h-74",
+          "sonuc": "stop",
+          "pnl_atr": -1.0664
+        },
+        {
+          "plan_id": "SKBNK-1d-366",
+          "sonuc": "hedef",
+          "pnl_atr": 4.1615
+        },
+        {
+          "plan_id": "SKBNK-1d-406",
+          "sonuc": "hedef",
+          "pnl_atr": 2.6478
+        },
+        {
+          "plan_id": "SKBNK-1h-1239",
+          "sonuc": "hedef",
+          "pnl_atr": 1.0491
+        },
+        {
+          "plan_id": "SKBNK-1h-1765",
+          "sonuc": "hedef",
+          "pnl_atr": 1.4559
+        },
+        {
+          "plan_id": "SKBNK-1h-2820",
+          "sonuc": "zaman",
+          "pnl_atr": -1.2684
+        },
+        {
+          "plan_id": "SKBNK-1h-2900",
+          "sonuc": "zaman",
+          "pnl_atr": 1.9925
+        },
+        {
+          "plan_id": "SKBNK-1h-2921",
+          "sonuc": "hedef",
+          "pnl_atr": 4.5758
+        },
+        {
+          "plan_id": "SKBNK-2h-204",
+          "sonuc": "zaman",
+          "pnl_atr": 0.8837
+        },
+        {
+          "plan_id": "SKBNK-2h-1319",
+          "sonuc": "stop",
+          "pnl_atr": -0.6916
+        },
+        {
+          "plan_id": "SKBNK-4h-653",
+          "sonuc": "zaman",
+          "pnl_atr": 1.108
+        },
+        {
+          "plan_id": "SKBNK-4h-788",
+          "sonuc": "stop",
+          "pnl_atr": -0.5234
+        },
+        {
+          "plan_id": "SKBNK-4h-933",
+          "sonuc": "zaman",
+          "pnl_atr": 0.5038
+        },
+        {
+          "plan_id": "SMRTG-1d-315",
+          "sonuc": "hedef",
+          "pnl_atr": 1.9708
+        },
+        {
+          "plan_id": "SMRTG-1h-547",
+          "sonuc": "hedef",
+          "pnl_atr": 2.1848
+        },
+        {
+          "plan_id": "SMRTG-1h-3212",
+          "sonuc": "stop",
+          "pnl_atr": -0.8805
+        },
+        {
+          "plan_id": "SMRTG-4h-189",
+          "sonuc": "hedef",
+          "pnl_atr": 1.1792
+        }
+      ]
+    }
+  },
+  "cozunme": {
+    "medyan_bar": 7.0,
+    "p75_bar": 14.0,
+    "R_medyan": 1.7099,
+    "mae_p50": -0.7489,
+    "mae_p90": 0.0
+  },
+  "hukum_degisim_sayim": {
+    "BEKLE": 26113,
+    "UYGUN": 26175,
+    "RET": 6931
+  },
+  "tetik_sayim": {
+    "toplam": 199862,
+    "geometri": 7300,
+    "hukum": {
+      "BEKLE": 86367,
+      "UYGUN": 77272,
+      "RET": 36223
+    },
+    "g1_kapali": 36223
+  }
+}

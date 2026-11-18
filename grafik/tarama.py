@@ -406,7 +406,9 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
     pencere_boy = max(0, sag_i - sol_i)
     bos = {"hazir": False, "seviyeler": [], "renkler": [], "durumlar": [],
            "reclaim_barlar": [], "momentum_barlar": [], "dikey_barlar": [],
-           "dikey_deneme_barlar": [], "son_seviye": None,
+           "dikey_deneme_barlar": [], "reclaim_turleri": {}, "momentum_turleri": {},
+           "rejimler": [], "baglam": {},
+           "son_seviye": None,
            "son_durum": "NO_SUPPORT", "konum": None}
     if not projeksiyon or pencere_boy <= 0:
         return bos
@@ -452,9 +454,14 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
 
     reclaim_barlar: list[int] = []
     momentum_barlar: list[int] = []
+    reclaim_turleri: dict[str, str] = {}
+    momentum_turleri: dict[str, str] = {}
+    rejimler: list[Optional[str]] = []
+    baglam: dict[str, str] = {}
     dikey_barlar: list[int] = []
     dikey_deneme_barlar: list[int] = []
     for idx_b, bhv in enumerate(dav_dilim):
+        rejimler.append(str(_alan(bhv, "regime") or "") if bhv is not None else None)
         if bhv is None:
             continue
         if bool(_alan(bhv, "vertical_support", False)):
@@ -463,8 +470,41 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
             dikey_deneme_barlar.append(int(idx_b))
         if _alan(bhv, "reclaim_kind") in {"multi_bar_recovery", "intrabar_sweep_reclaim"}:
             reclaim_barlar.append(int(idx_b))
+            # Ok türü snapshot'ta taşınır: renderer replay ölçümüne göre
+            # türleri görsel olarak kademeleyebilir (süpürme ≠ çok mumlu).
+            reclaim_turleri[str(int(idx_b))] = str(_alan(bhv, "reclaim_kind"))
         if _alan(bhv, "momentum_kind") in STABIL_GUCLU_YUKARI_MOMENTUM_TURLERI:
             momentum_barlar.append(int(idx_b))
+            momentum_turleri[str(int(idx_b))] = str(_alan(bhv, "momentum_kind"))
+        # --- BAĞLAM SINIFI (2026-11-15, doğrulanmış replay profili) ---
+        # stabil_ok_replay_2026_11_05 (555 ok) + zaman bölmesi ve sembol
+        # kümeli bootstrap ile doğrulandı:
+        #   guclu: rebase oku VEYA (çok mumlu geri alım + BREACHED_FIXED_SUPPORT)
+        #          -> %57,5 yönde / %16,1 zayıf (iki zaman yarısında da %57-58)
+        #   cok_guclu: guclu + (günlük yapi kirik VEYA H4 basarisiz toparlanma)
+        #          -> n=49, %69 yönde / %10 zayıf; zaman %65->%74,
+        #             bootstrap yön farkı +%16,1pp GA [~0, +30,8] (sınırda)
+        #   zayif: HORIZONTAL_AFTER_DROP zemininde geri alım/süpürme
+        #          -> %44,8 yönde / %30,7 zayıf. İstisna: H4 basarisiz
+        #          toparlanma varsa solukluk kalkar (n=21, %62 yönde; iki
+        #          zaman yarısında da %62; medyan negatif oldugu icin
+        #          guclu yapilmaz, yalniz notr gosterilir).
+        # Sinyal üretimi değişmez; sınıf yalnız grafik vurgusudur.
+        _rejim = str(_alan(bhv, "regime") or "")
+        _h4 = str(_alan(bhv, "h4_state") or "")
+        _gunluk = str(_alan(bhv, "daily_raw_state") or "")
+        if (_alan(bhv, "momentum_kind") == "upward_rebase_momentum"
+                or (_alan(bhv, "reclaim_kind") == "multi_bar_recovery"
+                    and _rejim == "BREACHED_FIXED_SUPPORT")):
+            if (_gunluk == "DAILY_RAW_STRUCTURE_BROKEN"
+                    or _h4 == "H4_RECOVERY_FAILED"):
+                baglam[str(int(idx_b))] = "cok_guclu"
+            else:
+                baglam[str(int(idx_b))] = "guclu"
+        elif (_rejim == "HORIZONTAL_AFTER_DROP"
+              and _alan(bhv, "reclaim_kind") in {"multi_bar_recovery", "intrabar_sweep_reclaim"}
+              and _h4 != "H4_RECOVERY_FAILED"):
+            baglam[str(int(idx_b))] = "zayif"
 
     son_seviye = next((v for v in reversed(seviyeler) if v is not None), None)
     son_renk = next((r for r in reversed(renkler) if r is not None), None)
@@ -477,6 +517,10 @@ def _stabil_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
         "durumlar": durumlar,
         "reclaim_barlar": reclaim_barlar,
         "momentum_barlar": momentum_barlar,
+        "reclaim_turleri": reclaim_turleri,
+        "momentum_turleri": momentum_turleri,
+        "rejimler": rejimler,
+        "baglam": baglam,
         "dikey_barlar": dikey_barlar,
         "dikey_deneme_barlar": dikey_deneme_barlar,
         "son_seviye": son_seviye,
@@ -549,7 +593,8 @@ def _stabil_direnc_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
         "hazir": False, "durum": status, "neden": str(neden) if neden else None,
         "seviyeler": [], "renkler": [], "durumlar": [],
         "donus_barlar": [], "momentum_barlar": [], "dikey_barlar": [],
-        "dikey_deneme_barlar": [], "son_seviye": None, "son_renk": None,
+        "dikey_deneme_barlar": [], "donus_turleri": {}, "momentum_turleri": {},
+        "son_seviye": None, "son_renk": None,
     }
     # A partial/failed result is never a trustworthy price line, even if a
     # caller accidentally supplied old projection points alongside the error.
@@ -599,6 +644,8 @@ def _stabil_direnc_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
     durumlar: list[str] = []
     donus: list[int] = []
     momentum: list[int] = []
+    donus_turleri: dict[str, str] = {}
+    momentum_turleri: dict[str, str] = {}
     dikey: list[int] = []
     uyari: list[int] = []
     for idx, anahtar in enumerate(gorunur):
@@ -629,14 +676,17 @@ def _stabil_direnc_verisi(sonuclar: Any, tf: str, sol: int, sag: int,
             continue
         if _alan(bhv, "return_kind") in {"close_return_below", "intrabar_sweep_rejection"}:
             donus.append(idx)
+            donus_turleri[str(idx)] = str(_alan(bhv, "return_kind"))
         elif _alan(bhv, "momentum_kind") in {"long_ceiling_breakdown", "downward_rebase_momentum"}:
             momentum.append(idx)
+            momentum_turleri[str(idx)] = str(_alan(bhv, "momentum_kind"))
 
     return {
         "hazir": any(v is not None for v in seviyeler), "durum": status,
         "neden": str(neden) if neden else None,
         "seviyeler": seviyeler, "renkler": renkler, "durumlar": durumlar,
         "donus_barlar": donus, "momentum_barlar": momentum,
+        "donus_turleri": donus_turleri, "momentum_turleri": momentum_turleri,
         "dikey_barlar": dikey, "dikey_deneme_barlar": uyari,
         # A missing last projection must not leave a stale price chip.
         "son_seviye": seviyeler[-1] if seviyeler else None,

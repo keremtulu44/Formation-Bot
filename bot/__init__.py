@@ -57,8 +57,9 @@ from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   son_kapanan_mum_ani, time_until_next_open, is_bist_open,
                   resample_all_timeframes, resample_ohlcv, fetch_yfinance_1h, fetch_yfinance_1d,
                   fetch_yfinance_chart_data, fetch_last_bar,
+                  seans_ici_bosluk_sayisi,
                   select_yfinance_1h_period, tamamlanmis_mumlar,
-                  mum_kapanis_ani, bar_kapandi_mi)
+                  mum_kapanis_ani, bar_kapandi_mi, beklenen_son_kapanis_ani)
 from scan_pacer import YahooRequestPacer
 from patterns import PatternLifecycleManager
 from telegram_alert_flow import DeferredAlertBuffer, WATCH_STATES
@@ -869,6 +870,7 @@ __all__ = [
     "math",
     "morning_preload",
     "mum_kapanis_ani",
+    "beklenen_son_kapanis_ani",
     "os",
     "panel_raporu",
     "pd",
@@ -878,6 +880,7 @@ __all__ = [
     "resample_ohlcv",
     "reset_daily_if_needed",
     "scan_all_stocks",
+    "seans_ici_bosluk_sayisi",
     "select_yfinance_1h_period",
     "setup_logging",
     "signal",

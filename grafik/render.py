@@ -89,6 +89,54 @@ from grafik.tarama import (  # noqa: F401
     girdi_ozeti,
 )
 
+def _sag_serit_px_hesapla(goruntu: Mapping[str, Any]) -> float:
+    """Sağ şerit genişliğini karenin gerçek etiketlerine göre seç (2026-11-15).
+
+    Eskiden her karede sabit 158 px (mobil 210 px) ayrılıyordu; etiketsiz
+    karede genişliğin ~%15-25'i boş kulvara gidiyordu. Artık en uzun aday
+    etiket ölçülür: yalnız son fiyat çipi varsa şerit daralır, uzun
+    kritik/zone etiketi varsa taban değerin üstüne çıkabilir. Tavan,
+    mum alanını korumak için mobilde 230, masaüstünde 195 px'dir.
+    """
+    metinler: list[str] = []
+    kapanis = goruntu.get("kapanis") or []
+    if kapanis and kapanis[-1] is not None:
+        try:
+            metinler.append(sayi(float(kapanis[-1])))
+        except (TypeError, ValueError):
+            pass
+    alarm = goruntu.get("alarm") or {}
+    if alarm.get("deger") is not None:
+        metinler.append(f"alarm {sayi(float(alarm['deger']))}")
+    if alarm.get("hedef") is not None:
+        metinler.append(f"hedef {sayi(float(alarm['hedef']))}")
+    for b in (goruntu.get("zone") or {}).get("cizilen") or []:
+        try:
+            metinler.append(_zone_kunye(b))
+        except Exception:  # noqa: BLE001, S110 - etiket tahmini çizimi düşürmez
+            pass
+    kritik = (goruntu.get("olay") or {}).get("kritik") or {}
+    if kritik.get("seviye") is not None:
+        metinler.append(f"kritik {sayi(float(kritik['seviye']))}")
+    for anahtar, on_ek in (("stabil", "Destek"), ("stabil_direnc", "Direnç")):
+        seviye = (goruntu.get(anahtar) or {}).get("son_seviye")
+        if seviye is not None:
+            metinler.append(f"{on_ek} {sayi(float(seviye))}")
+    # Genişlik, şeridin KENDİ sığdırma ölçüsüyle aynı modelle hesaplanır:
+    # `grafik.panels._sag_metni_sar` etiketi `_sigar_mi(...)` (aynı
+    # `_genislik_16 * metin_carpani` tahmini) ile sınar ve bütçe
+    # `SABITLER["sag_serit_px"] - 25`tir. Eski "36 + 5,6 px/karakter"
+    # tahmini bu modelin altında kalıyordu: "Destek 282,50" (13 karakter)
+    # 108,8 px şerit → 83,8 px bütçe isterken metnin ölçüsü 95,5 px;
+    # çip gereksiz yere iki satıra sarıyordu (2026-11-16 kontrolü).
+    # Bu yüzden şerit = 25 px çip payı + en uzun etiketin ölçüsü + nefes payı.
+    olcu = max((_genislik_16(str(m)) * float(SABITLER["metin_carpani"])
+                for m in metinler), default=0.0)
+    genislik = 25.0 + olcu * max(1.0, float(_MOD.yazi_olcek or 1.0)) + 8.0
+    tavan = 230.0 if _MOD.mobil else 195.0
+    return round(min(tavan, max(84.0, genislik)), 1)
+
+
 @_seri_cizim
 def ciz(goruntu: Mapping[str, Any], tf: Optional[str] = None,
         secenekler: Optional[Mapping[str, Any]] = None) -> tuple[Optional[str], dict[str, Any]]:
@@ -278,6 +326,12 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
         ust = (0.855 if metin["satirlar"] else 0.885) - 0.031 * max(
             0, len(metin["satirlar"]) - 2) - (0.031 if metin.get("sag_ayri_satir") else 0.0)
         sol_kenar, sag_metin = (0.12 if _MOD.mobil else 0.075), 0.985
+        # Dinamik sağ şerit: bu kareye özel genişlik thread-local moda yazılır;
+        # panels tarafı da aynı SABITLER okumasıyla tutarlı kalır.
+        if not yalnizca_mumlar:
+            _MOD.serit_px = _sag_serit_px_hesapla(goruntu)
+            meta["kare"] = {**(meta.get("kare") or {}),
+                            "sag_serit_px": float(SABITLER["sag_serit_px"])}
         sag_kenar = (sag_metin * genislik - float(SABITLER["sag_serit_px"])) / genislik
         if alt_blok:
             alt, y_lejant, _, _ = _alt_yerlesim(len(metin["dipnotlar"]) + 2,
@@ -653,6 +707,22 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                            "kirmizi": [_taban - _ALT_ADIM * (len(y_gri) + i + 1)
                                        for i in range(len(y_kirmizi))]}
         _pkg._metin_ciz(fig, metin, sol_kenar, sag_metin, ust, alt_blok=alt_blok)
+        # VERİ ROZETİ (2026-11-15): "son mum bilinmiyor" footer'da kayboluyordu;
+        # eksik/açık verili kare köşede belirgin rozet taşır, gerçek analiz
+        # sanılmaz. Replay karelerinde tarih bilinçli gizlidir → rozet yok.
+        veri_rozeti = None
+        if not goruntu.get("replay"):
+            if not goruntu.get("son_bar_ts"):
+                veri_rozeti = ("VERİ EKSİK", "#b91c1c")
+            elif goruntu.get("son_bar_kapali") is False:
+                veri_rozeti = ("SON MUM AÇIK", "#b45309")
+        meta["veri_rozeti"] = veri_rozeti[0] if veri_rozeti else None
+        if veri_rozeti:
+            fig.text(0.985, 0.012, veri_rozeti[0], ha="right", va="bottom",
+                     fontsize=8.5 * max(1.0, float(_MOD.yazi_olcek or 1.0)),
+                     color="#ffffff", zorder=20,
+                     bbox=dict(boxstyle="round,pad=0.35", facecolor=veri_rozeti[1],
+                               edgecolor="none", alpha=0.92))
         if cizilecek_guven:
             _guven_ciz(fig, cizilecek_guven, guven_adim, guven_alt)
         meta["guven_satirlari"] = guven_satirlari
@@ -1023,7 +1093,12 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
         "son_renk": stabil.get("son_renk"),
         "gorunur_bar": 0,
         "reclaim_isaret": 0,
+        "reclaim_supurme_isaret": 0,
         "momentum_isaret": 0,
+        "momentum_taban_isaret": 0,
+        "baglam_cok_guclu_isaret": 0,
+        "baglam_guclu_isaret": 0,
+        "baglam_zayif_isaret": 0,
         "iptal_isaret": 0,
         "dikey_deneme_isaret": 0,
         "kadrajda": bool(kadrajda),
@@ -1122,55 +1197,137 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
     ax.add_collection(koleksiyon)
     ozet["cizildi"] = True
 
-    # `▲` işaretlerini destek/mum altına yerleştir; kadraj dışına taşmasın.
+    # `▲` işaretlerini mumun DİBİNİN altına yerleştir; kadraj dışına taşmasın.
+    #
+    # 2026-11-16 (ok incelemesi): eskiden referans `min(destek, dip)` ve ofset
+    # `0,018 × aralık` idi. Destek fiyattan uzakken ok desteğe kayıp mumdan
+    # kopuyordu (ölçüm: 12–57 px arası değişken mesafe, `ULKER`/`AKBNK` 1G) ve
+    # ofset volatiliteden bağımsızdı. Yeni kural: ref = mumun DİBİ (yoksa destek),
+    # ofset = en az 0,018×aralık, en çok 0,032×aralık VEYA 0,25×tipik gövde
+    # (bar başına ortalama yüksek-düşük): sakin pencerede sabit, oynak pencerede
+    # bir tık daha nefes payı. Ok artık her zaman kendi mumunun dibinde durur.
+    _aralik_boy = [abs(float(h) - float(l)) for h, l in zip(yuksek, dusuk)
+                   if _gercek(h) is not None and _gercek(l) is not None]
+    _tipik_govde = (sum(_aralik_boy) / len(_aralik_boy)) if _aralik_boy else 0.0
+    _ok_ofset = max(0.018 * y_span, min(0.032 * y_span, 0.25 * _tipik_govde))
+
     def _ok_koordinatlari(barlar: Sequence[int]) -> tuple[list[float], list[float]]:
         rx: list[float] = []
         ry: list[float] = []
         for idx in barlar:
             sv_i = _gercek(seviyeler[idx]) if idx < len(seviyeler) else None
             lo_i = _gercek(dusuk[idx]) if idx < len(dusuk) else None
-            ref_y = min(v for v in (sv_i, lo_i) if v is not None) if (sv_i is not None or lo_i is not None) else None
+            # Önce mumun dibi; mum verisi yoksa destek seviyesi (uydurma yok).
+            ref_y = lo_i if lo_i is not None else sv_i
             if ref_y is None:
                 continue
-            y_pos = ref_y - 0.018 * y_span
-            if y_lo <= ref_y <= y_hi:
-                y_pos = max(y_lo + 0.012 * y_span, y_pos)
-                rx.append(float(idx))
-                ry.append(float(y_pos))
+            # Destek çizgisi mumun dibine ÇOK yakınsa (çizgi oku kesiyordu; ölçüm:
+            # 1G karede stepline ▲'nın içinden geçiyor) işaret ikisinin ALTINA iner.
+            if sv_i is not None and lo_i is not None and abs(sv_i - lo_i) <= 2.2 * _ok_ofset:
+                ref_y = min(sv_i, lo_i)
+            if not (y_lo <= ref_y <= y_hi):
+                # Mum kadraj dışındaysa desteğe düş: işaret görünür bölgede kalsın.
+                if sv_i is None or not (y_lo <= sv_i <= y_hi):
+                    continue
+                ref_y = sv_i
+            y_pos = ref_y - _ok_ofset
+            if y_pos < y_lo + 0.012 * y_span:
+                y_pos = y_lo + 0.012 * y_span
+            rx.append(float(idx))
+            ry.append(float(y_pos))
         return rx, ry
 
+    def _ok_grubu(barlar: Sequence[int], gid: str, *, boyut: float, dolu: bool,
+                  zorder: float, alfa: float = 1.0, kenar: float = 0.7,
+                  kalinlik: float = 1.35) -> int:
+        """Tek bir ok kademesini çizer ve GÖRÜNEN işaret sayısını döndürür."""
+        if not barlar:
+            return 0
+        x, y = _ok_koordinatlari(barlar)
+        if not x:
+            return 0
+        ortak = dict(marker="^", s=boyut, zorder=zorder, clip_on=True, alpha=alfa)
+        if dolu:
+            sc = ax.scatter(x, y, c=PALET["stabil_destek"], edgecolors=PALET["zemin"],
+                            linewidths=kenar, **ortak)
+        else:
+            sc = ax.scatter(x, y, facecolors="none", edgecolors=PALET["stabil_destek"],
+                            linewidths=kalinlik, **ortak)
+        sc.set_gid(gid)
+        return len(x)
+
+    # Ok kademeleri — replay destekli (stabil_ok_replay_2026_11_05, 555 geçerli
+    # ▲, 8 bar MFE<0,5 ATR = "zayıf tepki"): çok mumlu/kapanış geri alımı %23,1
+    # zayıf → dolu tam; fitil süpürmesi (`intrabar_sweep_reclaim`) %29,6 zayıf
+    # (en zayıf tür) → küçük+soluk; `upward_rebase_momentum` %17,3 zayıf ve
+    # +1 ATR önce %58,7 (en güçlü) → içi boş büyük; `long_base_breakout` %28,6
+    # → içi boş küçük+soluk. Tür bilgisi YOKSA (eski snapshot) nötr kademe
+    # kullanılır — en güçlü görünüm varsayılan DEĞİLDİR (aşırı iddia olurdu).
+    # Bu yalnız GÖRSEL kademedir; ok üretimi/bastırma değişmez (replay
+    # gözlemsel, filtre kanıtı değildir).
+    reclaim_turleri = stabil.get("reclaim_turleri") or {}
+    momentum_turleri = stabil.get("momentum_turleri") or {}
+    _momentum_bilinmiyor = not momentum_turleri
+
+    def _tur(bar, sozluk):
+        return str(sozluk.get(str(bar)) or sozluk.get(bar) or "")
+
+    supurme = [b for b in reclaim_barlar if _tur(b, reclaim_turleri) == "intrabar_sweep_reclaim"]
+    dolu = [b for b in reclaim_barlar if b not in set(supurme)]
+    if _momentum_bilinmiyor:
+        # Nötr: bilinmeyen tür ne "en güçlü" ne "en zayıf" sayılır.
+        rebase = list(momentum_barlar)
+        taban: list[int] = []
+    else:
+        rebase = [b for b in momentum_barlar if _tur(b, momentum_turleri) == "upward_rebase_momentum"]
+        taban = [b for b in momentum_barlar if b not in set(rebase)]
+
+    # Bağlam sınıfı (2026-11-15, doğrulanmış profil; tarama katmanı hesaplar):
+    # guclu -> beyaz halka (rebase veya kırık-sonrası-sabit zeminde geri alım;
+    # replay %57,5 yönde / %16,1 zayıf), zayif -> SOLUK ok
+    # (düşüş-sonrası yatay zeminde geri alım/süpürme; %44,8 / %30,7).
+    # Ok üretimi değişmez; yalnız vurgu değişir (filtre değildir).
+    # 2026-11-16: zemin rengiyle üstünü boyama KALDIRILDI — ok kayboluyordu
+    # (doküman "ok silinmez" diyordu). Zayıf ok artık kendi alfasıyla çizilir.
+    _baglam = stabil.get("baglam") or {}
+
+    def _baglam_barlar(sinif):
+        return [int(b) for b in (reclaim_barlar + momentum_barlar)
+                if str(_baglam.get(str(b)) or _baglam.get(b) or "") == sinif]
+
+    _zayif = set(_baglam_barlar("zayif"))
+    zayif_dolu_normal = [b for b in dolu if b in _zayif]
+    zayif_dolu_supurme = [b for b in supurme if b in _zayif]
+    zayif_bos = [b for b in rebase + taban if b in _zayif]
+    dolu = [b for b in dolu if b not in _zayif]
+    supurme = [b for b in supurme if b not in _zayif]
+    rebase = [b for b in rebase if b not in _zayif]
+    taban = [b for b in taban if b not in _zayif]
+
     # Dolu ▲ (destek rengi): güçlü geri alım (altına sarkıp geri çıkma).
-    rx, ry = _ok_koordinatlari(reclaim_barlar)
-    if rx:
-        sc = ax.scatter(
-            rx, ry,
-            marker="^",
-            s=48,
-            c=PALET["stabil_destek"],
-            edgecolors=PALET["zemin"],
-            linewidths=0.7,
-            zorder=4.8,
-            clip_on=True,
-        )
-        sc.set_gid("grafik-stabil-reclaim")
-        ozet["reclaim_isaret"] = len(rx)
+    ozet["reclaim_isaret"] = (
+        _ok_grubu(dolu, "grafik-stabil-reclaim", boyut=48, dolu=True, zorder=4.8)
+        + _ok_grubu(zayif_dolu_normal, "grafik-stabil-reclaim-zayif", boyut=44,
+                    dolu=True, zorder=4.8, alfa=0.35)
+    )
+    ozet["reclaim_supurme_isaret"] = (
+        _ok_grubu(supurme, "grafik-stabil-reclaim-supurme", boyut=34, dolu=True,
+                  zorder=4.75, alfa=0.55, kenar=0.6)
+        + _ok_grubu(zayif_dolu_supurme, "grafik-stabil-reclaim-supurme-zayif", boyut=34,
+                    dolu=True, zorder=4.75, alfa=0.22, kenar=0.6)
+    )
 
     # İçi boş ▲ (destek rengi): destek altına inmeden gelen güçlü YUKARI mum.
-    # Yatay zeminden kopuş ve çizgi yukarı basamak yaparken de görünür.
-    mx, my = _ok_koordinatlari(momentum_barlar)
-    if mx:
-        sc = ax.scatter(
-            mx, my,
-            marker="^",
-            s=62,
-            facecolors="none",
-            edgecolors=PALET["stabil_destek"],
-            linewidths=1.35,
-            zorder=4.85,
-            clip_on=True,
-        )
-        sc.set_gid("grafik-stabil-momentum")
-        ozet["momentum_isaret"] = len(mx)
+    # Tür bilinmiyorsa nötr boyut (50) kullanılır: 62 yalnız kanıtlı rebase'in.
+    ozet["momentum_isaret"] = (
+        _ok_grubu(rebase, "grafik-stabil-momentum",
+                  boyut=50.0 if _momentum_bilinmiyor else 62.0, dolu=False, zorder=4.85)
+        + _ok_grubu(zayif_bos, "grafik-stabil-momentum-zayif", boyut=46, dolu=False,
+                    zorder=4.85, alfa=0.30)
+    )
+    ozet["momentum_taban_isaret"] = _ok_grubu(
+        taban, "grafik-stabil-momentum-taban", boyut=44, dolu=False,
+        zorder=4.85, alfa=0.6, kalinlik=1.1)
 
     # A later opposing BOS changes the historical arrow's current state; it
     # does not erase the original event or introduce a new symbol.
@@ -1183,6 +1340,26 @@ def _stabil_ciz(ax: Any, goruntu: Mapping[str, Any], katman_n: int,
                         edgecolors=PALET["zemin"], linewidths=0.7, zorder=4.8, clip_on=True)
         sc.set_gid("grafik-stabil-iptal")
         ozet["iptal_isaret"] = len(cx)
+
+    _cgx, _cgy = _ok_koordinatlari(_baglam_barlar("cok_guclu"))
+    if _cgx:
+        # Ekstra güçlü: çift beyaz halka (dış + iç).
+        sc = ax.scatter(_cgx, _cgy, marker="o", s=300, facecolors="none",
+                        edgecolors="#ffffff", linewidths=1.4, zorder=4.92, clip_on=True)
+        sc.set_gid("grafik-stabil-baglam-cok-guclu-dis")
+        sc = ax.scatter(_cgx, _cgy, marker="o", s=170, facecolors="none",
+                        edgecolors="#e5e7eb", linewidths=1.0, zorder=4.93, clip_on=True)
+        sc.set_gid("grafik-stabil-baglam-cok-guclu")
+        ozet["baglam_cok_guclu_isaret"] = len(_cgx)
+    _gx, _gy = _ok_koordinatlari(_baglam_barlar("guclu"))
+    if _gx:
+        sc = ax.scatter(_gx, _gy, marker="o", s=150, facecolors="none",
+                        edgecolors="#e5e7eb", linewidths=1.1, zorder=4.9, clip_on=True)
+        sc.set_gid("grafik-stabil-baglam-guclu")
+        ozet["baglam_guclu_isaret"] = len(_gx)
+    # Zayıf bağlam SAYACI: ok zaten soluk çizildi; ayrı bir örtü/işaret yok.
+    _zx, _zy = _ok_koordinatlari(sorted(_zayif))
+    ozet["baglam_zayif_isaret"] = len(_zx)
 
     # Dikey adaylar teşhis olarak kalır; bastırılmış oka yeni işaret çizilmez.
 

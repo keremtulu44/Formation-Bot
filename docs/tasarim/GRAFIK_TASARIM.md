@@ -2053,11 +2053,22 @@ yok" idi. Doğrulama: `pytest -q` → **1685 geçti, 43 atlandı**; demo katalo�
   yerel JSON'a yazılır (`persist_remote=False`); Supabase/uzak veri yazımı yoktur.
   Alternatif vadeli seri kullanılırsa caption bunu belirtir, çünkü spotla birebir
   aynı seri değildir.
-- Seans içi tazelik sınırı: 1H = 120 dk; 2H = 240 dk; 4H = 360 dk; 1D = 1560 dk.
-  Seans dışında mevcut 14 günlük üst sınır korunur. Bu nedenle bildirilen 1D
-  kapanış yaşı 1388 dk (~23 saat) günlük mum için tek başına bayatlık değildir;
-  1H'nin 8678 dk yaşı ise açık seans sırasında yenilemeyi tetikler. 2s/4s eski
-  olduklarında aynı tek 1H yenilemesinden tekrar oluşturulur.
+- **Seans açıkken ölçüt "yaş" değil "gecikme"dir (2026-11-16).** Beklenen son
+  kapanış `beklenen_son_kapanis_ani(tf, now)` ile seans takviminden türetilir
+  (`islem_gunu_mu` + `mum_kapanis_anlari`: hafta sonu, resmî tatil ve yarım gün
+  otomatik düşer). Tazelik = `beklenen kapanış - son kapanış <= eşik`.
+  Eşikler: 1H = 120 dk; 2H = 240 dk; 4H = 360 dk; 1D = 1560 dk.
+  Neden: seansın ilk saatlerinde son kapanmış mum DÜNKÜdür (yaş ~16 saat),
+  günlük mum ise 18:30'da kapanır (gün içinde yaş ~2,7 gün). Eski "yaş" kapısı
+  bu iki durumu bayat sayıp `/grafik`'i "veri yok" ile kapatıyordu; artık
+  cache güncelse kare cache'ten üretilir.
+  Seans dışında ölçüt yaştır ve 14 günlük üst sınır korunur (eski davranış).
+  Gerçekten geride kalan cache (birkaç seans eksik) her iki rejimde de reddedilir.
+  2s/4s eski olduklarında aynı tek 1H yenilemesinden tekrar oluşturulur.
+- Sağlayıcının **geçici** hatasında (429/timeout/503) `/grafik` tek istekle pes
+  etmez: `_GRAFIK_HATA_DENEME` (varsayılan 2) kadar, aynı sembol/pencere ile
+  kısa bekleyerek yeniden dener. Yedek seriye (spot ↔ vadeli) geçiş yoktur;
+  o karar `test_gecici_hatada_yedek_istegi_yok` ile sözleşmeye bağlıdır.
 - CLI (`grafik_uret.py`) cache-only kalır; kontrollü sağlayıcı yenilemesi yalnız
   Telegram `/grafik` worker'ının sorumluluğundadır.
 - Doğrulama: `pytest -q` → **3446 geçti, 43 atlandı**; Ruff temiz;

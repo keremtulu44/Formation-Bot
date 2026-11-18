@@ -1,0 +1,332 @@
+{
+  "dagilim": {
+    "mesafe_atr": {
+      "dolu": 585,
+      "bos": 48,
+      "farkli_deger": 569,
+      "min": -49.893238646678654,
+      "medyan": 1.8646136737943135,
+      "maks": 25.174568002839635
+    },
+    "hukum_yasi": {
+      "dolu": 633,
+      "bos": 0,
+      "farkli_deger": 35,
+      "min": 0.0,
+      "medyan": 2.0,
+      "maks": 104.0
+    },
+    "son_ok_yasi": {
+      "dolu": 633,
+      "bos": 0,
+      "farkli_deger": 211,
+      "min": 0.0,
+      "medyan": 39.0,
+      "maks": 1259.0
+    }
+  },
+  "tablo": [
+    {
+      "ozellik": "mesafe_atr",
+      "kova": 1,
+      "donem": "dogrulama",
+      "n": 24,
+      "karli_yuzde": 20.8,
+      "stop_orani": 66.7,
+      "net_atr": -10.66,
+      "PF": 0.4,
+      "beklenti_atr": -0.4441
+    },
+    {
+      "ozellik": "mesafe_atr",
+      "kova": 1,
+      "donem": "kesif",
+      "n": 123,
+      "karli_yuzde": 47.2,
+      "stop_orani": 43.9,
+      "net_atr": 19.4,
+      "PF": 1.35,
+      "beklenti_atr": 0.1577
+    },
+    {
+      "ozellik": "mesafe_atr",
+      "kova": 2,
+      "donem": "dogrulama",
+      "n": 40,
+      "karli_yuzde": 52.5,
+      "stop_orani": 30.0,
+      "net_atr": 8.73,
+      "PF": 1.69,
+      "beklenti_atr": 0.2181
+    },
+    {
+      "ozellik": "mesafe_atr",
+      "kova": 2,
+      "donem": "kesif",
+      "n": 106,
+      "karli_yuzde": 43.4,
+      "stop_orani": 34.9,
+      "net_atr": 29.33,
+      "PF": 1.58,
+      "beklenti_atr": 0.2767
+    },
+    {
+      "ozellik": "mesafe_atr",
+      "kova": 3,
+      "donem": "dogrulama",
+      "n": 53,
+      "karli_yuzde": 35.8,
+      "stop_orani": 58.5,
+      "net_atr": -8.74,
+      "PF": 0.77,
+      "beklenti_atr": -0.1649
+    },
+    {
+      "ozellik": "mesafe_atr",
+      "kova": 3,
+      "donem": "kesif",
+      "n": 93,
+      "karli_yuzde": 53.8,
+      "stop_orani": 29.0,
+      "net_atr": 34.7,
+      "PF": 1.77,
+      "beklenti_atr": 0.3731
+    },
+    {
+      "ozellik": "mesafe_atr",
+      "kova": 4,
+      "donem": "dogrulama",
+      "n": 24,
+      "karli_yuzde": 29.2,
+      "stop_orani": 50.0,
+      "net_atr": -6.2,
+      "PF": 0.67,
+      "beklenti_atr": -0.2584
+    },
+    {
+      "ozellik": "mesafe_atr",
+      "kova": 4,
+      "donem": "kesif",
+      "n": 122,
+      "karli_yuzde": 43.4,
+      "stop_orani": 36.1,
+      "net_atr": 7.89,
+      "PF": 1.11,
+      "beklenti_atr": 0.0647
+    },
+    {
+      "ozellik": "hukum_yasi",
+      "kova": 1,
+      "donem": "dogrulama",
+      "n": 39,
+      "karli_yuzde": 43.6,
+      "stop_orani": 41.0,
+      "net_atr": -1.8,
+      "PF": 0.91,
+      "beklenti_atr": -0.0463
+    },
+    {
+      "ozellik": "hukum_yasi",
+      "kova": 1,
+      "donem": "kesif",
+      "n": 120,
+      "karli_yuzde": 42.5,
+      "stop_orani": 38.3,
+      "net_atr": 0.68,
+      "PF": 1.01,
+      "beklenti_atr": 0.0057
+    },
+    {
+      "ozellik": "hukum_yasi",
+      "kova": 2,
+      "donem": "dogrulama",
+      "n": 39,
+      "karli_yuzde": 33.3,
+      "stop_orani": 53.8,
+      "net_atr": -1.42,
+      "PF": 0.94,
+      "beklenti_atr": -0.0365
+    },
+    {
+      "ozellik": "hukum_yasi",
+      "kova": 2,
+      "donem": "kesif",
+      "n": 119,
+      "karli_yuzde": 44.5,
+      "stop_orani": 40.3,
+      "net_atr": 19.07,
+      "PF": 1.34,
+      "beklenti_atr": 0.1603
+    },
+    {
+      "ozellik": "hukum_yasi",
+      "kova": 3,
+      "donem": "dogrulama",
+      "n": 30,
+      "karli_yuzde": 36.7,
+      "stop_orani": 50.0,
+      "net_atr": -3.6,
+      "PF": 0.81,
+      "beklenti_atr": -0.1199
+    },
+    {
+      "ozellik": "hukum_yasi",
+      "kova": 3,
+      "donem": "kesif",
+      "n": 128,
+      "karli_yuzde": 44.5,
+      "stop_orani": 36.7,
+      "net_atr": 32.17,
+      "PF": 1.47,
+      "beklenti_atr": 0.2513
+    },
+    {
+      "ozellik": "hukum_yasi",
+      "kova": 4,
+      "donem": "dogrulama",
+      "n": 33,
+      "karli_yuzde": 33.3,
+      "stop_orani": 57.6,
+      "net_atr": -10.05,
+      "PF": 0.6,
+      "beklenti_atr": -0.3046
+    },
+    {
+      "ozellik": "hukum_yasi",
+      "kova": 4,
+      "donem": "kesif",
+      "n": 125,
+      "karli_yuzde": 53.6,
+      "stop_orani": 32.8,
+      "net_atr": 46.66,
+      "PF": 1.81,
+      "beklenti_atr": 0.3733
+    },
+    {
+      "ozellik": "son_ok_yasi",
+      "kova": 1,
+      "donem": "dogrulama",
+      "n": 45,
+      "karli_yuzde": 26.7,
+      "stop_orani": 71.1,
+      "net_atr": -12.61,
+      "PF": 0.6,
+      "beklenti_atr": -0.2801
+    },
+    {
+      "ozellik": "son_ok_yasi",
+      "kova": 1,
+      "donem": "kesif",
+      "n": 114,
+      "karli_yuzde": 38.6,
+      "stop_orani": 46.5,
+      "net_atr": 6.0,
+      "PF": 1.1,
+      "beklenti_atr": 0.0526
+    },
+    {
+      "ozellik": "son_ok_yasi",
+      "kova": 2,
+      "donem": "dogrulama",
+      "n": 39,
+      "karli_yuzde": 33.3,
+      "stop_orani": 46.2,
+      "net_atr": -8.21,
+      "PF": 0.64,
+      "beklenti_atr": -0.2105
+    },
+    {
+      "ozellik": "son_ok_yasi",
+      "kova": 2,
+      "donem": "kesif",
+      "n": 119,
+      "karli_yuzde": 44.5,
+      "stop_orani": 37.0,
+      "net_atr": 19.38,
+      "PF": 1.37,
+      "beklenti_atr": 0.1629
+    },
+    {
+      "ozellik": "son_ok_yasi",
+      "kova": 3,
+      "donem": "dogrulama",
+      "n": 32,
+      "karli_yuzde": 50.0,
+      "stop_orani": 34.4,
+      "net_atr": 9.85,
+      "PF": 1.64,
+      "beklenti_atr": 0.3079
+    },
+    {
+      "ozellik": "son_ok_yasi",
+      "kova": 3,
+      "donem": "kesif",
+      "n": 126,
+      "karli_yuzde": 46.8,
+      "stop_orani": 38.9,
+      "net_atr": 14.4,
+      "PF": 1.21,
+      "beklenti_atr": 0.1143
+    },
+    {
+      "ozellik": "son_ok_yasi",
+      "kova": 4,
+      "donem": "dogrulama",
+      "n": 25,
+      "karli_yuzde": 44.0,
+      "stop_orani": 40.0,
+      "net_atr": -5.91,
+      "PF": 0.65,
+      "beklenti_atr": -0.2365
+    },
+    {
+      "ozellik": "son_ok_yasi",
+      "kova": 4,
+      "donem": "kesif",
+      "n": 133,
+      "karli_yuzde": 54.1,
+      "stop_orani": 27.1,
+      "net_atr": 58.8,
+      "PF": 1.95,
+      "beklenti_atr": 0.4421
+    }
+  ],
+  "sinyal": [
+    {
+      "ozellik": "mesafe_atr",
+      "kesif": {
+        "en_iyi_en_kotu_pp": 10.4,
+        "Q4-Q1_pp": -3.8
+      },
+      "dogrulama": {
+        "en_iyi_en_kotu_pp": 31.7,
+        "Q4-Q1_pp": 8.4
+      },
+      "sinyal": false
+    },
+    {
+      "ozellik": "hukum_yasi",
+      "kesif": {
+        "en_iyi_en_kotu_pp": 11.1,
+        "Q4-Q1_pp": 11.1
+      },
+      "dogrulama": {
+        "en_iyi_en_kotu_pp": 10.3,
+        "Q4-Q1_pp": -10.3
+      },
+      "sinyal": false
+    },
+    {
+      "ozellik": "son_ok_yasi",
+      "kesif": {
+        "en_iyi_en_kotu_pp": 15.5,
+        "Q4-Q1_pp": 15.5
+      },
+      "dogrulama": {
+        "en_iyi_en_kotu_pp": 23.3,
+        "Q4-Q1_pp": 17.3
+      },
+      "sinyal": true
+    }
+  ]
+}

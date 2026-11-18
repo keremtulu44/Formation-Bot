@@ -1,0 +1,4863 @@
+{
+  "meta": {
+    "sembol_sayisi": 176,
+    "islem_n": 4233,
+    "motor_ozeti": "df187d7e9732",
+    "esikler_atr": {
+      "yarim": 0.5,
+      "bir": 1.0
+    },
+    "tetikler": {
+      "HER_ISLEM": "Koşulsuz: eşik görüldüğü kapanışta (karşılaştırma tabanı)",
+      "ENGEL": "Mum bilinen bir karşı engele değdi, kapanışla aşamadı",
+      "STABIL": "… karşı Stabil seviyesi",
+      "MS": "… karşı Market Structure seviyesi",
+      "BLOK": "… karşı OB / FVG bandı",
+      "SEVIYE_ICI": "Kapanış tez seviyesinin ters tarafında",
+      "FRM": "Formasyon bozuldu (retest ediliyor / teyitsiz / başarısız / karşı kırılım)",
+      "MS_SUPURME": "Market Structure ters süpürme / sahte kırılım",
+      "VP_TERS": "Ters hacim baskısı",
+      "ENDEKS": "Girişten bu kapanışa endeks işlemin tersine en az %0.5",
+      "HERHANGI": "Domain gözlemlerinden herhangi biri (engel, tez seviyesi, formasyon, süpürme, hacim)",
+      "IKI_FARKLI": "Eşikten beri iki farklı tür domain gözlemi birikti"
+    },
+    "domain_turleri": [
+      "ENGEL",
+      "SEVIYE_ICI",
+      "FRM",
+      "MS_SUPURME",
+      "VP_TERS"
+    ],
+    "tepkiler": {
+      "cik": {
+        "aciklama": "Sonraki açılışta çık",
+        "cikis_modu": "sonraki_acilis"
+      },
+      "basabas": {
+        "aciklama": "Stopu girişe çek",
+        "cikis_modu": "kapanis"
+      }
+    },
+    "varyant_n": 48,
+    "min_n": 30,
+    "baz_esitligi": {
+      "durum": "karsilastirildi",
+      "ortak_n": 4233,
+      "olcumde_olup_anada_olmayan": 0,
+      "max_mutlak_fark": 0.0,
+      "farkli_n": 0
+    },
+    "surec_olcum_esitligi": {
+      "durum": "karsilastirildi",
+      "ortak_n": 4233,
+      "yalniz_bu_olcumde": 0,
+      "yalniz_surec_olcumde": 0,
+      "farkli_n": 0
+    }
+  },
+  "kumeler": {
+    "D7_A_Arti": {
+      "n": 637,
+      "kesif_n": 414,
+      "dogrulama_n": 223,
+      "baz_net": 0.114738,
+      "baz_sonuc": {
+        "STOP": 280,
+        "HEDEF": 262,
+        "DIGER": 95
+      },
+      "esik_goren": {
+        "yarim": 411,
+        "bir": 293
+      },
+      "varyantlar": [
+        {
+          "varyant": "yarim_her_islem_cik",
+          "esik": "yarim",
+          "tetik": "HER_ISLEM",
+          "tepki": "cik",
+          "tetiklenen_n": 411,
+          "etkilenen_n": 411,
+          "kesif_etkilenen_n": 258,
+          "dogrulama_etkilenen_n": 153,
+          "iyilesen_n": 175,
+          "kotulesen_n": 233,
+          "fark_ort": -0.063691,
+          "fark_toplam": -40.57,
+          "fark_en_kotu_alt": -0.1399,
+          "fark_en_kotu_ust": 0.0216,
+          "kesif_fark": -0.025771,
+          "dogrulama_fark": -0.134091,
+          "dokum": {
+            "STOP": {
+              "n": 129,
+              "toplam_r": 160.95
+            },
+            "HEDEF": {
+              "n": 194,
+              "toplam_r": -197.11
+            },
+            "DIGER": {
+              "n": 88,
+              "toplam_r": -4.41
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_engel_cik",
+          "esik": "yarim",
+          "tetik": "ENGEL",
+          "tepki": "cik",
+          "tetiklenen_n": 216,
+          "etkilenen_n": 216,
+          "kesif_etkilenen_n": 134,
+          "dogrulama_etkilenen_n": 82,
+          "iyilesen_n": 92,
+          "kotulesen_n": 124,
+          "fark_ort": -0.023877,
+          "fark_toplam": -15.21,
+          "fark_en_kotu_alt": -0.0827,
+          "fark_en_kotu_ust": 0.0284,
+          "kesif_fark": -0.0208,
+          "dogrulama_fark": -0.02959,
+          "dokum": {
+            "STOP": {
+              "n": 65,
+              "toplam_r": 76.62
+            },
+            "HEDEF": {
+              "n": 86,
+              "toplam_r": -87.54
+            },
+            "DIGER": {
+              "n": 65,
+              "toplam_r": -4.29
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_stabil_cik",
+          "esik": "yarim",
+          "tetik": "STABIL",
+          "tepki": "cik",
+          "tetiklenen_n": 31,
+          "etkilenen_n": 31,
+          "kesif_etkilenen_n": 21,
+          "dogrulama_etkilenen_n": 10,
+          "iyilesen_n": 11,
+          "kotulesen_n": 20,
+          "fark_ort": -0.00781,
+          "fark_toplam": -4.97,
+          "fark_en_kotu_alt": -0.0279,
+          "fark_en_kotu_ust": 0.01,
+          "kesif_fark": -0.005259,
+          "dogrulama_fark": -0.012544,
+          "dokum": {
+            "STOP": {
+              "n": 7,
+              "toplam_r": 7.05
+            },
+            "HEDEF": {
+              "n": 11,
+              "toplam_r": -11.69
+            },
+            "DIGER": {
+              "n": 13,
+              "toplam_r": -0.33
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_ms_cik",
+          "esik": "yarim",
+          "tetik": "MS",
+          "tepki": "cik",
+          "tetiklenen_n": 150,
+          "etkilenen_n": 150,
+          "kesif_etkilenen_n": 83,
+          "dogrulama_etkilenen_n": 67,
+          "iyilesen_n": 69,
+          "kotulesen_n": 81,
+          "fark_ort": -0.00875,
+          "fark_toplam": -5.57,
+          "fark_en_kotu_alt": -0.0684,
+          "fark_en_kotu_ust": 0.0347,
+          "kesif_fark": -0.007846,
+          "dogrulama_fark": -0.010428,
+          "dokum": {
+            "STOP": {
+              "n": 49,
+              "toplam_r": 54.55
+            },
+            "HEDEF": {
+              "n": 57,
+              "toplam_r": -59.36
+            },
+            "DIGER": {
+              "n": 44,
+              "toplam_r": -0.76
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_blok_cik",
+          "esik": "yarim",
+          "tetik": "BLOK",
+          "tepki": "cik",
+          "tetiklenen_n": 146,
+          "etkilenen_n": 146,
+          "kesif_etkilenen_n": 98,
+          "dogrulama_etkilenen_n": 48,
+          "iyilesen_n": 57,
+          "kotulesen_n": 89,
+          "fark_ort": -0.019897,
+          "fark_toplam": -12.67,
+          "fark_en_kotu_alt": -0.0605,
+          "fark_en_kotu_ust": 0.0259,
+          "kesif_fark": -0.009814,
+          "dogrulama_fark": -0.038615,
+          "dokum": {
+            "STOP": {
+              "n": 36,
+              "toplam_r": 45.88
+            },
+            "HEDEF": {
+              "n": 62,
+              "toplam_r": -55.86
+            },
+            "DIGER": {
+              "n": 48,
+              "toplam_r": -2.7
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_seviye_ici_cik",
+          "esik": "yarim",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "cik",
+          "tetiklenen_n": 53,
+          "etkilenen_n": 53,
+          "kesif_etkilenen_n": 38,
+          "dogrulama_etkilenen_n": 15,
+          "iyilesen_n": 43,
+          "kotulesen_n": 5,
+          "fark_ort": 0.006909,
+          "fark_toplam": 4.4,
+          "fark_en_kotu_alt": -0.013,
+          "fark_en_kotu_ust": 0.0244,
+          "kesif_fark": 0.009835,
+          "dogrulama_fark": 0.001476,
+          "dokum": {
+            "STOP": {
+              "n": 47,
+              "toplam_r": 15.14
+            },
+            "HEDEF": {
+              "n": 2,
+              "toplam_r": -5.02
+            },
+            "DIGER": {
+              "n": 4,
+              "toplam_r": -5.72
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "yarim_frm_cik",
+          "esik": "yarim",
+          "tetik": "FRM",
+          "tepki": "cik",
+          "tetiklenen_n": 75,
+          "etkilenen_n": 75,
+          "kesif_etkilenen_n": 53,
+          "dogrulama_etkilenen_n": 22,
+          "iyilesen_n": 45,
+          "kotulesen_n": 27,
+          "fark_ort": -0.007455,
+          "fark_toplam": -4.75,
+          "fark_en_kotu_alt": -0.0357,
+          "fark_en_kotu_ust": 0.0187,
+          "kesif_fark": -0.008335,
+          "dogrulama_fark": -0.005822,
+          "dokum": {
+            "STOP": {
+              "n": 43,
+              "toplam_r": 21.77
+            },
+            "HEDEF": {
+              "n": 16,
+              "toplam_r": -20.58
+            },
+            "DIGER": {
+              "n": 16,
+              "toplam_r": -5.94
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_ms_supurme_cik",
+          "esik": "yarim",
+          "tetik": "MS_SUPURME",
+          "tepki": "cik",
+          "tetiklenen_n": 79,
+          "etkilenen_n": 79,
+          "kesif_etkilenen_n": 50,
+          "dogrulama_etkilenen_n": 29,
+          "iyilesen_n": 44,
+          "kotulesen_n": 33,
+          "fark_ort": -0.005882,
+          "fark_toplam": -3.75,
+          "fark_en_kotu_alt": -0.0327,
+          "fark_en_kotu_ust": 0.0172,
+          "kesif_fark": 0.005373,
+          "dogrulama_fark": -0.026778,
+          "dokum": {
+            "STOP": {
+              "n": 36,
+              "toplam_r": 18.05
+            },
+            "HEDEF": {
+              "n": 16,
+              "toplam_r": -18.15
+            },
+            "DIGER": {
+              "n": 27,
+              "toplam_r": -3.64
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_vp_ters_cik",
+          "esik": "yarim",
+          "tetik": "VP_TERS",
+          "tepki": "cik",
+          "tetiklenen_n": 96,
+          "etkilenen_n": 96,
+          "kesif_etkilenen_n": 60,
+          "dogrulama_etkilenen_n": 36,
+          "iyilesen_n": 46,
+          "kotulesen_n": 46,
+          "fark_ort": -0.019481,
+          "fark_toplam": -12.41,
+          "fark_en_kotu_alt": -0.0458,
+          "fark_en_kotu_ust": 0.0047,
+          "kesif_fark": -0.016603,
+          "dogrulama_fark": -0.024823,
+          "dokum": {
+            "STOP": {
+              "n": 33,
+              "toplam_r": 19.33
+            },
+            "HEDEF": {
+              "n": 20,
+              "toplam_r": -22.71
+            },
+            "DIGER": {
+              "n": 43,
+              "toplam_r": -9.03
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_endeks_cik",
+          "esik": "yarim",
+          "tetik": "ENDEKS",
+          "tepki": "cik",
+          "tetiklenen_n": 150,
+          "etkilenen_n": 150,
+          "kesif_etkilenen_n": 89,
+          "dogrulama_etkilenen_n": 61,
+          "iyilesen_n": 73,
+          "kotulesen_n": 74,
+          "fark_ort": -0.016941,
+          "fark_toplam": -10.79,
+          "fark_en_kotu_alt": -0.0549,
+          "fark_en_kotu_ust": 0.0216,
+          "kesif_fark": -0.011801,
+          "dogrulama_fark": -0.026483,
+          "dokum": {
+            "STOP": {
+              "n": 58,
+              "toplam_r": 48.14
+            },
+            "HEDEF": {
+              "n": 46,
+              "toplam_r": -48.46
+            },
+            "DIGER": {
+              "n": 46,
+              "toplam_r": -10.47
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_herhangi_cik",
+          "esik": "yarim",
+          "tetik": "HERHANGI",
+          "tepki": "cik",
+          "tetiklenen_n": 274,
+          "etkilenen_n": 274,
+          "kesif_etkilenen_n": 171,
+          "dogrulama_etkilenen_n": 103,
+          "iyilesen_n": 125,
+          "kotulesen_n": 146,
+          "fark_ort": -0.033059,
+          "fark_toplam": -21.06,
+          "fark_en_kotu_alt": -0.095,
+          "fark_en_kotu_ust": 0.0215,
+          "kesif_fark": -0.03204,
+          "dogrulama_fark": -0.034952,
+          "dokum": {
+            "STOP": {
+              "n": 93,
+              "toplam_r": 91.94
+            },
+            "HEDEF": {
+              "n": 101,
+              "toplam_r": -104.12
+            },
+            "DIGER": {
+              "n": 80,
+              "toplam_r": -8.88
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_iki_farkli_cik",
+          "esik": "yarim",
+          "tetik": "IKI_FARKLI",
+          "tepki": "cik",
+          "tetiklenen_n": 140,
+          "etkilenen_n": 140,
+          "kesif_etkilenen_n": 91,
+          "dogrulama_etkilenen_n": 49,
+          "iyilesen_n": 75,
+          "kotulesen_n": 60,
+          "fark_ort": -0.012795,
+          "fark_toplam": -8.15,
+          "fark_en_kotu_alt": -0.0538,
+          "fark_en_kotu_ust": 0.0224,
+          "kesif_fark": -0.006725,
+          "dogrulama_fark": -0.024064,
+          "dokum": {
+            "STOP": {
+              "n": 63,
+              "toplam_r": 35.89
+            },
+            "HEDEF": {
+              "n": 27,
+              "toplam_r": -33.68
+            },
+            "DIGER": {
+              "n": 50,
+              "toplam_r": -10.36
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_her_islem_basabas",
+          "esik": "yarim",
+          "tetik": "HER_ISLEM",
+          "tepki": "basabas",
+          "tetiklenen_n": 411,
+          "etkilenen_n": 285,
+          "kesif_etkilenen_n": 184,
+          "dogrulama_etkilenen_n": 101,
+          "iyilesen_n": 148,
+          "kotulesen_n": 134,
+          "fark_ort": -0.059983,
+          "fark_toplam": -38.21,
+          "fark_en_kotu_alt": -0.1328,
+          "fark_en_kotu_ust": 0.0258,
+          "kesif_fark": -0.04957,
+          "dogrulama_fark": -0.079315,
+          "dokum": {
+            "STOP": {
+              "n": 129,
+              "toplam_r": 113.91
+            },
+            "HEDEF": {
+              "n": 84,
+              "toplam_r": -129.14
+            },
+            "DIGER": {
+              "n": 72,
+              "toplam_r": -22.98
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_engel_basabas",
+          "esik": "yarim",
+          "tetik": "ENGEL",
+          "tepki": "basabas",
+          "tetiklenen_n": 216,
+          "etkilenen_n": 152,
+          "kesif_etkilenen_n": 95,
+          "dogrulama_etkilenen_n": 57,
+          "iyilesen_n": 79,
+          "kotulesen_n": 73,
+          "fark_ort": -0.012979,
+          "fark_toplam": -8.27,
+          "fark_en_kotu_alt": -0.0633,
+          "fark_en_kotu_ust": 0.0384,
+          "kesif_fark": -0.0113,
+          "dogrulama_fark": -0.016096,
+          "dokum": {
+            "STOP": {
+              "n": 65,
+              "toplam_r": 57.75
+            },
+            "HEDEF": {
+              "n": 38,
+              "toplam_r": -54.69
+            },
+            "DIGER": {
+              "n": 49,
+              "toplam_r": -11.33
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_stabil_basabas",
+          "esik": "yarim",
+          "tetik": "STABIL",
+          "tepki": "basabas",
+          "tetiklenen_n": 31,
+          "etkilenen_n": 19,
+          "kesif_etkilenen_n": 13,
+          "dogrulama_etkilenen_n": 6,
+          "iyilesen_n": 8,
+          "kotulesen_n": 11,
+          "fark_ort": -0.0019,
+          "fark_toplam": -1.21,
+          "fark_en_kotu_alt": -0.0216,
+          "fark_en_kotu_ust": 0.0122,
+          "kesif_fark": -0.005106,
+          "dogrulama_fark": 0.004053,
+          "dokum": {
+            "STOP": {
+              "n": 7,
+              "toplam_r": 6.23
+            },
+            "HEDEF": {
+              "n": 3,
+              "toplam_r": -5.48
+            },
+            "DIGER": {
+              "n": 9,
+              "toplam_r": -1.96
+            }
+          },
+          "karar": "SAYILMAZ_N<30"
+        },
+        {
+          "varyant": "yarim_ms_basabas",
+          "esik": "yarim",
+          "tetik": "MS",
+          "tepki": "basabas",
+          "tetiklenen_n": 150,
+          "etkilenen_n": 108,
+          "kesif_etkilenen_n": 60,
+          "dogrulama_etkilenen_n": 48,
+          "iyilesen_n": 59,
+          "kotulesen_n": 49,
+          "fark_ort": -0.006859,
+          "fark_toplam": -4.37,
+          "fark_en_kotu_alt": -0.0549,
+          "fark_en_kotu_ust": 0.0344,
+          "kesif_fark": -0.0097,
+          "dogrulama_fark": -0.001583,
+          "dokum": {
+            "STOP": {
+              "n": 49,
+              "toplam_r": 41.34
+            },
+            "HEDEF": {
+              "n": 26,
+              "toplam_r": -39.01
+            },
+            "DIGER": {
+              "n": 33,
+              "toplam_r": -6.7
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_blok_basabas",
+          "esik": "yarim",
+          "tetik": "BLOK",
+          "tepki": "basabas",
+          "tetiklenen_n": 146,
+          "etkilenen_n": 91,
+          "kesif_etkilenen_n": 63,
+          "dogrulama_etkilenen_n": 28,
+          "iyilesen_n": 47,
+          "kotulesen_n": 44,
+          "fark_ort": -0.00858,
+          "fark_toplam": -5.47,
+          "fark_en_kotu_alt": -0.0413,
+          "fark_en_kotu_ust": 0.0307,
+          "kesif_fark": -0.003592,
+          "dogrulama_fark": -0.017841,
+          "dokum": {
+            "STOP": {
+              "n": 36,
+              "toplam_r": 33.6
+            },
+            "HEDEF": {
+              "n": 23,
+              "toplam_r": -31.73
+            },
+            "DIGER": {
+              "n": 32,
+              "toplam_r": -7.33
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_seviye_ici_basabas",
+          "esik": "yarim",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "basabas",
+          "tetiklenen_n": 53,
+          "etkilenen_n": 53,
+          "kesif_etkilenen_n": 38,
+          "dogrulama_etkilenen_n": 15,
+          "iyilesen_n": 43,
+          "kotulesen_n": 5,
+          "fark_ort": 0.006909,
+          "fark_toplam": 4.4,
+          "fark_en_kotu_alt": -0.013,
+          "fark_en_kotu_ust": 0.0244,
+          "kesif_fark": 0.009835,
+          "dogrulama_fark": 0.001476,
+          "dokum": {
+            "STOP": {
+              "n": 47,
+              "toplam_r": 15.14
+            },
+            "HEDEF": {
+              "n": 2,
+              "toplam_r": -5.02
+            },
+            "DIGER": {
+              "n": 4,
+              "toplam_r": -5.72
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "yarim_frm_basabas",
+          "esik": "yarim",
+          "tetik": "FRM",
+          "tepki": "basabas",
+          "tetiklenen_n": 75,
+          "etkilenen_n": 67,
+          "kesif_etkilenen_n": 49,
+          "dogrulama_etkilenen_n": 18,
+          "iyilesen_n": 44,
+          "kotulesen_n": 20,
+          "fark_ort": -0.007516,
+          "fark_toplam": -4.79,
+          "fark_en_kotu_alt": -0.0406,
+          "fark_en_kotu_ust": 0.0182,
+          "kesif_fark": -0.011539,
+          "dogrulama_fark": -4.7e-05,
+          "dokum": {
+            "STOP": {
+              "n": 43,
+              "toplam_r": 19.83
+            },
+            "HEDEF": {
+              "n": 11,
+              "toplam_r": -18.66
+            },
+            "DIGER": {
+              "n": 13,
+              "toplam_r": -5.96
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_ms_supurme_basabas",
+          "esik": "yarim",
+          "tetik": "MS_SUPURME",
+          "tepki": "basabas",
+          "tetiklenen_n": 79,
+          "etkilenen_n": 67,
+          "kesif_etkilenen_n": 41,
+          "dogrulama_etkilenen_n": 26,
+          "iyilesen_n": 41,
+          "kotulesen_n": 24,
+          "fark_ort": 0.000947,
+          "fark_toplam": 0.6,
+          "fark_en_kotu_alt": -0.0218,
+          "fark_en_kotu_ust": 0.0207,
+          "kesif_fark": 0.007968,
+          "dogrulama_fark": -0.012086,
+          "dokum": {
+            "STOP": {
+              "n": 36,
+              "toplam_r": 17.03
+            },
+            "HEDEF": {
+              "n": 8,
+              "toplam_r": -10.24
+            },
+            "DIGER": {
+              "n": 23,
+              "toplam_r": -6.19
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_vp_ters_basabas",
+          "esik": "yarim",
+          "tetik": "VP_TERS",
+          "tepki": "basabas",
+          "tetiklenen_n": 96,
+          "etkilenen_n": 78,
+          "kesif_etkilenen_n": 49,
+          "dogrulama_etkilenen_n": 29,
+          "iyilesen_n": 41,
+          "kotulesen_n": 34,
+          "fark_ort": -0.008033,
+          "fark_toplam": -5.12,
+          "fark_en_kotu_alt": -0.0375,
+          "fark_en_kotu_ust": 0.0141,
+          "kesif_fark": -0.008179,
+          "dogrulama_fark": -0.007764,
+          "dokum": {
+            "STOP": {
+              "n": 33,
+              "toplam_r": 18.65
+            },
+            "HEDEF": {
+              "n": 9,
+              "toplam_r": -13.08
+            },
+            "DIGER": {
+              "n": 36,
+              "toplam_r": -10.69
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_endeks_basabas",
+          "esik": "yarim",
+          "tetik": "ENDEKS",
+          "tepki": "basabas",
+          "tetiklenen_n": 150,
+          "etkilenen_n": 113,
+          "kesif_etkilenen_n": 70,
+          "dogrulama_etkilenen_n": 43,
+          "iyilesen_n": 63,
+          "kotulesen_n": 48,
+          "fark_ort": -0.01025,
+          "fark_toplam": -6.53,
+          "fark_en_kotu_alt": -0.0449,
+          "fark_en_kotu_ust": 0.0226,
+          "kesif_fark": -0.006564,
+          "dogrulama_fark": -0.017094,
+          "dokum": {
+            "STOP": {
+              "n": 58,
+              "toplam_r": 39.43
+            },
+            "HEDEF": {
+              "n": 21,
+              "toplam_r": -30.69
+            },
+            "DIGER": {
+              "n": 34,
+              "toplam_r": -15.27
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_herhangi_basabas",
+          "esik": "yarim",
+          "tetik": "HERHANGI",
+          "tepki": "basabas",
+          "tetiklenen_n": 274,
+          "etkilenen_n": 204,
+          "kesif_etkilenen_n": 128,
+          "dogrulama_etkilenen_n": 76,
+          "iyilesen_n": 110,
+          "kotulesen_n": 92,
+          "fark_ort": -0.022644,
+          "fark_toplam": -14.42,
+          "fark_en_kotu_alt": -0.0845,
+          "fark_en_kotu_ust": 0.0355,
+          "kesif_fark": -0.021251,
+          "dogrulama_fark": -0.025229,
+          "dokum": {
+            "STOP": {
+              "n": 93,
+              "toplam_r": 72.11
+            },
+            "HEDEF": {
+              "n": 47,
+              "toplam_r": -67.1
+            },
+            "DIGER": {
+              "n": 64,
+              "toplam_r": -19.43
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_iki_farkli_basabas",
+          "esik": "yarim",
+          "tetik": "IKI_FARKLI",
+          "tepki": "basabas",
+          "tetiklenen_n": 140,
+          "etkilenen_n": 115,
+          "kesif_etkilenen_n": 75,
+          "dogrulama_etkilenen_n": 40,
+          "iyilesen_n": 69,
+          "kotulesen_n": 41,
+          "fark_ort": 0.001673,
+          "fark_toplam": 1.07,
+          "fark_en_kotu_alt": -0.0346,
+          "fark_en_kotu_ust": 0.0317,
+          "kesif_fark": -0.001554,
+          "dogrulama_fark": 0.007664,
+          "dokum": {
+            "STOP": {
+              "n": 63,
+              "toplam_r": 33.4
+            },
+            "HEDEF": {
+              "n": 14,
+              "toplam_r": -21.78
+            },
+            "DIGER": {
+              "n": 38,
+              "toplam_r": -10.55
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_her_islem_cik",
+          "esik": "bir",
+          "tetik": "HER_ISLEM",
+          "tepki": "cik",
+          "tetiklenen_n": 293,
+          "etkilenen_n": 293,
+          "kesif_etkilenen_n": 177,
+          "dogrulama_etkilenen_n": 116,
+          "iyilesen_n": 110,
+          "kotulesen_n": 181,
+          "fark_ort": -0.030427,
+          "fark_toplam": -19.38,
+          "fark_en_kotu_alt": -0.0886,
+          "fark_en_kotu_ust": 0.029,
+          "kesif_fark": -0.022092,
+          "dogrulama_fark": -0.045902,
+          "dokum": {
+            "STOP": {
+              "n": 58,
+              "toplam_r": 90.92
+            },
+            "HEDEF": {
+              "n": 163,
+              "toplam_r": -122.43
+            },
+            "DIGER": {
+              "n": 72,
+              "toplam_r": 12.13
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_engel_cik",
+          "esik": "bir",
+          "tetik": "ENGEL",
+          "tepki": "cik",
+          "tetiklenen_n": 140,
+          "etkilenen_n": 140,
+          "kesif_etkilenen_n": 85,
+          "dogrulama_etkilenen_n": 55,
+          "iyilesen_n": 55,
+          "kotulesen_n": 85,
+          "fark_ort": -0.015425,
+          "fark_toplam": -9.83,
+          "fark_en_kotu_alt": -0.056,
+          "fark_en_kotu_ust": 0.0269,
+          "kesif_fark": -0.012302,
+          "dogrulama_fark": -0.021223,
+          "dokum": {
+            "STOP": {
+              "n": 28,
+              "toplam_r": 40.12
+            },
+            "HEDEF": {
+              "n": 64,
+              "toplam_r": -54.48
+            },
+            "DIGER": {
+              "n": 48,
+              "toplam_r": 4.53
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_stabil_cik",
+          "esik": "bir",
+          "tetik": "STABIL",
+          "tepki": "cik",
+          "tetiklenen_n": 18,
+          "etkilenen_n": 18,
+          "kesif_etkilenen_n": 14,
+          "dogrulama_etkilenen_n": 4,
+          "iyilesen_n": 5,
+          "kotulesen_n": 13,
+          "fark_ort": -0.007002,
+          "fark_toplam": -4.46,
+          "fark_en_kotu_alt": -0.0196,
+          "fark_en_kotu_ust": 0.0034,
+          "kesif_fark": -0.004985,
+          "dogrulama_fark": -0.010745,
+          "dokum": {
+            "STOP": {
+              "n": 1,
+              "toplam_r": 1.02
+            },
+            "HEDEF": {
+              "n": 7,
+              "toplam_r": -5.64
+            },
+            "DIGER": {
+              "n": 10,
+              "toplam_r": 0.16
+            }
+          },
+          "karar": "SAYILMAZ_N<30"
+        },
+        {
+          "varyant": "bir_ms_cik",
+          "esik": "bir",
+          "tetik": "MS",
+          "tepki": "cik",
+          "tetiklenen_n": 95,
+          "etkilenen_n": 95,
+          "kesif_etkilenen_n": 51,
+          "dogrulama_etkilenen_n": 44,
+          "iyilesen_n": 39,
+          "kotulesen_n": 56,
+          "fark_ort": -0.008153,
+          "fark_toplam": -5.19,
+          "fark_en_kotu_alt": -0.047,
+          "fark_en_kotu_ust": 0.0266,
+          "kesif_fark": -0.004845,
+          "dogrulama_fark": -0.014296,
+          "dokum": {
+            "STOP": {
+              "n": 23,
+              "toplam_r": 30.92
+            },
+            "HEDEF": {
+              "n": 42,
+              "toplam_r": -38.13
+            },
+            "DIGER": {
+              "n": 30,
+              "toplam_r": 2.02
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_blok_cik",
+          "esik": "bir",
+          "tetik": "BLOK",
+          "tepki": "cik",
+          "tetiklenen_n": 93,
+          "etkilenen_n": 93,
+          "kesif_etkilenen_n": 61,
+          "dogrulama_etkilenen_n": 32,
+          "iyilesen_n": 32,
+          "kotulesen_n": 61,
+          "fark_ort": -0.011381,
+          "fark_toplam": -7.25,
+          "fark_en_kotu_alt": -0.0403,
+          "fark_en_kotu_ust": 0.0189,
+          "kesif_fark": -0.005239,
+          "dogrulama_fark": -0.022784,
+          "dokum": {
+            "STOP": {
+              "n": 15,
+              "toplam_r": 23.05
+            },
+            "HEDEF": {
+              "n": 45,
+              "toplam_r": -32.87
+            },
+            "DIGER": {
+              "n": 33,
+              "toplam_r": 2.57
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_seviye_ici_cik",
+          "esik": "bir",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "cik",
+          "tetiklenen_n": 20,
+          "etkilenen_n": 20,
+          "kesif_etkilenen_n": 14,
+          "dogrulama_etkilenen_n": 6,
+          "iyilesen_n": 17,
+          "kotulesen_n": 1,
+          "fark_ort": 0.006746,
+          "fark_toplam": 4.3,
+          "fark_en_kotu_alt": -0.0066,
+          "fark_en_kotu_ust": 0.0176,
+          "kesif_fark": 0.005739,
+          "dogrulama_fark": 0.008615,
+          "dokum": {
+            "STOP": {
+              "n": 19,
+              "toplam_r": 7.22
+            },
+            "HEDEF": {
+              "n": 1,
+              "toplam_r": -2.92
+            },
+            "DIGER": {
+              "n": 0,
+              "toplam_r": 0.0
+            }
+          },
+          "karar": "SAYILMAZ_N<30"
+        },
+        {
+          "varyant": "bir_frm_cik",
+          "esik": "bir",
+          "tetik": "FRM",
+          "tepki": "cik",
+          "tetiklenen_n": 26,
+          "etkilenen_n": 26,
+          "kesif_etkilenen_n": 19,
+          "dogrulama_etkilenen_n": 7,
+          "iyilesen_n": 16,
+          "kotulesen_n": 9,
+          "fark_ort": -0.000533,
+          "fark_toplam": -0.34,
+          "fark_en_kotu_alt": -0.0159,
+          "fark_en_kotu_ust": 0.0116,
+          "kesif_fark": -0.001648,
+          "dogrulama_fark": 0.001535,
+          "dokum": {
+            "STOP": {
+              "n": 14,
+              "toplam_r": 5.36
+            },
+            "HEDEF": {
+              "n": 5,
+              "toplam_r": -5.95
+            },
+            "DIGER": {
+              "n": 7,
+              "toplam_r": 0.26
+            }
+          },
+          "karar": "SAYILMAZ_N<30"
+        },
+        {
+          "varyant": "bir_ms_supurme_cik",
+          "esik": "bir",
+          "tetik": "MS_SUPURME",
+          "tepki": "cik",
+          "tetiklenen_n": 45,
+          "etkilenen_n": 45,
+          "kesif_etkilenen_n": 31,
+          "dogrulama_etkilenen_n": 14,
+          "iyilesen_n": 23,
+          "kotulesen_n": 21,
+          "fark_ort": 0.0016,
+          "fark_toplam": 1.02,
+          "fark_en_kotu_alt": -0.0128,
+          "fark_en_kotu_ust": 0.016,
+          "kesif_fark": 0.01162,
+          "dogrulama_fark": -0.017002,
+          "dokum": {
+            "STOP": {
+              "n": 15,
+              "toplam_r": 8.35
+            },
+            "HEDEF": {
+              "n": 10,
+              "toplam_r": -8.82
+            },
+            "DIGER": {
+              "n": 20,
+              "toplam_r": 1.49
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_vp_ters_cik",
+          "esik": "bir",
+          "tetik": "VP_TERS",
+          "tepki": "cik",
+          "tetiklenen_n": 59,
+          "etkilenen_n": 59,
+          "kesif_etkilenen_n": 35,
+          "dogrulama_etkilenen_n": 24,
+          "iyilesen_n": 23,
+          "kotulesen_n": 32,
+          "fark_ort": -0.016155,
+          "fark_toplam": -10.29,
+          "fark_en_kotu_alt": -0.0358,
+          "fark_en_kotu_ust": 0.0028,
+          "kesif_fark": -0.020412,
+          "dogrulama_fark": -0.008252,
+          "dokum": {
+            "STOP": {
+              "n": 14,
+              "toplam_r": 9.67
+            },
+            "HEDEF": {
+              "n": 15,
+              "toplam_r": -16.37
+            },
+            "DIGER": {
+              "n": 30,
+              "toplam_r": -3.59
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_endeks_cik",
+          "esik": "bir",
+          "tetik": "ENDEKS",
+          "tepki": "cik",
+          "tetiklenen_n": 90,
+          "etkilenen_n": 90,
+          "kesif_etkilenen_n": 46,
+          "dogrulama_etkilenen_n": 44,
+          "iyilesen_n": 39,
+          "kotulesen_n": 48,
+          "fark_ort": -0.003695,
+          "fark_toplam": -2.35,
+          "fark_en_kotu_alt": -0.0367,
+          "fark_en_kotu_ust": 0.0318,
+          "kesif_fark": -0.012192,
+          "dogrulama_fark": 0.012082,
+          "dokum": {
+            "STOP": {
+              "n": 26,
+              "toplam_r": 26.25
+            },
+            "HEDEF": {
+              "n": 32,
+              "toplam_r": -26.77
+            },
+            "DIGER": {
+              "n": 32,
+              "toplam_r": -1.83
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_herhangi_cik",
+          "esik": "bir",
+          "tetik": "HERHANGI",
+          "tepki": "cik",
+          "tetiklenen_n": 171,
+          "etkilenen_n": 171,
+          "kesif_etkilenen_n": 105,
+          "dogrulama_etkilenen_n": 66,
+          "iyilesen_n": 72,
+          "kotulesen_n": 97,
+          "fark_ort": -0.019221,
+          "fark_toplam": -12.24,
+          "fark_en_kotu_alt": -0.0631,
+          "fark_en_kotu_ust": 0.022,
+          "kesif_fark": -0.029032,
+          "dogrulama_fark": -0.001007,
+          "dokum": {
+            "STOP": {
+              "n": 40,
+              "toplam_r": 46.59
+            },
+            "HEDEF": {
+              "n": 74,
+              "toplam_r": -64.01
+            },
+            "DIGER": {
+              "n": 57,
+              "toplam_r": 5.17
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_iki_farkli_cik",
+          "esik": "bir",
+          "tetik": "IKI_FARKLI",
+          "tepki": "cik",
+          "tetiklenen_n": 75,
+          "etkilenen_n": 75,
+          "kesif_etkilenen_n": 48,
+          "dogrulama_etkilenen_n": 27,
+          "iyilesen_n": 35,
+          "kotulesen_n": 37,
+          "fark_ort": -0.004547,
+          "fark_toplam": -2.9,
+          "fark_en_kotu_alt": -0.0301,
+          "fark_en_kotu_ust": 0.0188,
+          "kesif_fark": 0.00579,
+          "dogrulama_fark": -0.023737,
+          "dokum": {
+            "STOP": {
+              "n": 24,
+              "toplam_r": 16.08
+            },
+            "HEDEF": {
+              "n": 15,
+              "toplam_r": -17.06
+            },
+            "DIGER": {
+              "n": 36,
+              "toplam_r": -1.91
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_her_islem_basabas",
+          "esik": "bir",
+          "tetik": "HER_ISLEM",
+          "tepki": "basabas",
+          "tetiklenen_n": 293,
+          "etkilenen_n": 142,
+          "kesif_etkilenen_n": 84,
+          "dogrulama_etkilenen_n": 58,
+          "iyilesen_n": 72,
+          "kotulesen_n": 68,
+          "fark_ort": -0.020318,
+          "fark_toplam": -12.94,
+          "fark_en_kotu_alt": -0.0641,
+          "fark_en_kotu_ust": 0.0241,
+          "kesif_fark": -0.015071,
+          "dogrulama_fark": -0.03006,
+          "dokum": {
+            "STOP": {
+              "n": 58,
+              "toplam_r": 53.84
+            },
+            "HEDEF": {
+              "n": 39,
+              "toplam_r": -60.12
+            },
+            "DIGER": {
+              "n": 45,
+              "toplam_r": -6.66
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_engel_basabas",
+          "esik": "bir",
+          "tetik": "ENGEL",
+          "tepki": "basabas",
+          "tetiklenen_n": 140,
+          "etkilenen_n": 68,
+          "kesif_etkilenen_n": 39,
+          "dogrulama_etkilenen_n": 29,
+          "iyilesen_n": 37,
+          "kotulesen_n": 31,
+          "fark_ort": 0.005784,
+          "fark_toplam": 3.68,
+          "fark_en_kotu_alt": -0.0231,
+          "fark_en_kotu_ust": 0.0337,
+          "kesif_fark": 0.010015,
+          "dogrulama_fark": -0.002072,
+          "dokum": {
+            "STOP": {
+              "n": 28,
+              "toplam_r": 27.13
+            },
+            "HEDEF": {
+              "n": 12,
+              "toplam_r": -19.18
+            },
+            "DIGER": {
+              "n": 28,
+              "toplam_r": -4.27
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_stabil_basabas",
+          "esik": "bir",
+          "tetik": "STABIL",
+          "tepki": "basabas",
+          "tetiklenen_n": 18,
+          "etkilenen_n": 8,
+          "kesif_etkilenen_n": 5,
+          "dogrulama_etkilenen_n": 3,
+          "iyilesen_n": 2,
+          "kotulesen_n": 6,
+          "fark_ort": -0.005117,
+          "fark_toplam": -3.26,
+          "fark_en_kotu_alt": -0.0159,
+          "fark_en_kotu_ust": 0.0035,
+          "kesif_fark": -0.00281,
+          "dogrulama_fark": -0.0094,
+          "dokum": {
+            "STOP": {
+              "n": 1,
+              "toplam_r": 1.0
+            },
+            "HEDEF": {
+              "n": 2,
+              "toplam_r": -3.58
+            },
+            "DIGER": {
+              "n": 5,
+              "toplam_r": -0.68
+            }
+          },
+          "karar": "SAYILMAZ_N<30"
+        },
+        {
+          "varyant": "bir_ms_basabas",
+          "esik": "bir",
+          "tetik": "MS",
+          "tepki": "basabas",
+          "tetiklenen_n": 95,
+          "etkilenen_n": 53,
+          "kesif_etkilenen_n": 27,
+          "dogrulama_etkilenen_n": 26,
+          "iyilesen_n": 30,
+          "kotulesen_n": 23,
+          "fark_ort": -0.001082,
+          "fark_toplam": -0.69,
+          "fark_en_kotu_alt": -0.0295,
+          "fark_en_kotu_ust": 0.0258,
+          "kesif_fark": 0.002357,
+          "dogrulama_fark": -0.007465,
+          "dokum": {
+            "STOP": {
+              "n": 23,
+              "toplam_r": 21.15
+            },
+            "HEDEF": {
+              "n": 11,
+              "toplam_r": -18.38
+            },
+            "DIGER": {
+              "n": 19,
+              "toplam_r": -3.46
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_blok_basabas",
+          "esik": "bir",
+          "tetik": "BLOK",
+          "tepki": "basabas",
+          "tetiklenen_n": 93,
+          "etkilenen_n": 38,
+          "kesif_etkilenen_n": 27,
+          "dogrulama_etkilenen_n": 11,
+          "iyilesen_n": 21,
+          "kotulesen_n": 17,
+          "fark_ort": 0.010204,
+          "fark_toplam": 6.5,
+          "fark_en_kotu_alt": -0.007,
+          "fark_en_kotu_ust": 0.0287,
+          "kesif_fark": 0.008345,
+          "dogrulama_fark": 0.013654,
+          "dokum": {
+            "STOP": {
+              "n": 15,
+              "toplam_r": 15.18
+            },
+            "HEDEF": {
+              "n": 5,
+              "toplam_r": -6.47
+            },
+            "DIGER": {
+              "n": 18,
+              "toplam_r": -2.21
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "bir_seviye_ici_basabas",
+          "esik": "bir",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "basabas",
+          "tetiklenen_n": 20,
+          "etkilenen_n": 20,
+          "kesif_etkilenen_n": 14,
+          "dogrulama_etkilenen_n": 6,
+          "iyilesen_n": 17,
+          "kotulesen_n": 1,
+          "fark_ort": 0.006746,
+          "fark_toplam": 4.3,
+          "fark_en_kotu_alt": -0.0066,
+          "fark_en_kotu_ust": 0.0176,
+          "kesif_fark": 0.005739,
+          "dogrulama_fark": 0.008615,
+          "dokum": {
+            "STOP": {
+              "n": 19,
+              "toplam_r": 7.22
+            },
+            "HEDEF": {
+              "n": 1,
+              "toplam_r": -2.92
+            },
+            "DIGER": {
+              "n": 0,
+              "toplam_r": 0.0
+            }
+          },
+          "karar": "SAYILMAZ_N<30"
+        },
+        {
+          "varyant": "bir_frm_basabas",
+          "esik": "bir",
+          "tetik": "FRM",
+          "tepki": "basabas",
+          "tetiklenen_n": 26,
+          "etkilenen_n": 21,
+          "kesif_etkilenen_n": 16,
+          "dogrulama_etkilenen_n": 5,
+          "iyilesen_n": 16,
+          "kotulesen_n": 4,
+          "fark_ort": 0.001295,
+          "fark_toplam": 0.82,
+          "fark_en_kotu_alt": -0.014,
+          "fark_en_kotu_ust": 0.0125,
+          "kesif_fark": -0.001443,
+          "dogrulama_fark": 0.006378,
+          "dokum": {
+            "STOP": {
+              "n": 14,
+              "toplam_r": 5.32
+            },
+            "HEDEF": {
+              "n": 2,
+              "toplam_r": -4.6
+            },
+            "DIGER": {
+              "n": 5,
+              "toplam_r": 0.11
+            }
+          },
+          "karar": "SAYILMAZ_N<30"
+        },
+        {
+          "varyant": "bir_ms_supurme_basabas",
+          "esik": "bir",
+          "tetik": "MS_SUPURME",
+          "tepki": "basabas",
+          "tetiklenen_n": 45,
+          "etkilenen_n": 34,
+          "kesif_etkilenen_n": 22,
+          "dogrulama_etkilenen_n": 12,
+          "iyilesen_n": 21,
+          "kotulesen_n": 12,
+          "fark_ort": 0.004636,
+          "fark_toplam": 2.95,
+          "fark_en_kotu_alt": -0.0088,
+          "fark_en_kotu_ust": 0.0169,
+          "kesif_fark": 0.014278,
+          "dogrulama_fark": -0.013264,
+          "dokum": {
+            "STOP": {
+              "n": 15,
+              "toplam_r": 7.7
+            },
+            "HEDEF": {
+              "n": 5,
+              "toplam_r": -5.47
+            },
+            "DIGER": {
+              "n": 14,
+              "toplam_r": 0.73
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_vp_ters_basabas",
+          "esik": "bir",
+          "tetik": "VP_TERS",
+          "tepki": "basabas",
+          "tetiklenen_n": 59,
+          "etkilenen_n": 43,
+          "kesif_etkilenen_n": 25,
+          "dogrulama_etkilenen_n": 18,
+          "iyilesen_n": 18,
+          "kotulesen_n": 21,
+          "fark_ort": -0.009806,
+          "fark_toplam": -6.25,
+          "fark_en_kotu_alt": -0.0294,
+          "fark_en_kotu_ust": 0.0062,
+          "kesif_fark": -0.013738,
+          "dogrulama_fark": -0.002507,
+          "dokum": {
+            "STOP": {
+              "n": 14,
+              "toplam_r": 7.7
+            },
+            "HEDEF": {
+              "n": 6,
+              "toplam_r": -8.74
+            },
+            "DIGER": {
+              "n": 23,
+              "toplam_r": -5.2
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_endeks_basabas",
+          "esik": "bir",
+          "tetik": "ENDEKS",
+          "tepki": "basabas",
+          "tetiklenen_n": 90,
+          "etkilenen_n": 52,
+          "kesif_etkilenen_n": 25,
+          "dogrulama_etkilenen_n": 27,
+          "iyilesen_n": 28,
+          "kotulesen_n": 22,
+          "fark_ort": 0.002747,
+          "fark_toplam": 1.75,
+          "fark_en_kotu_alt": -0.0188,
+          "fark_en_kotu_ust": 0.0277,
+          "kesif_fark": 0.000332,
+          "dogrulama_fark": 0.00723,
+          "dokum": {
+            "STOP": {
+              "n": 26,
+              "toplam_r": 17.68
+            },
+            "HEDEF": {
+              "n": 7,
+              "toplam_r": -10.28
+            },
+            "DIGER": {
+              "n": 19,
+              "toplam_r": -5.66
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "bir_herhangi_basabas",
+          "esik": "bir",
+          "tetik": "HERHANGI",
+          "tepki": "basabas",
+          "tetiklenen_n": 171,
+          "etkilenen_n": 94,
+          "kesif_etkilenen_n": 54,
+          "dogrulama_etkilenen_n": 40,
+          "iyilesen_n": 51,
+          "kotulesen_n": 41,
+          "fark_ort": -0.000427,
+          "fark_toplam": -0.27,
+          "fark_en_kotu_alt": -0.0369,
+          "fark_en_kotu_ust": 0.0339,
+          "kesif_fark": 0.000231,
+          "dogrulama_fark": -0.001648,
+          "dokum": {
+            "STOP": {
+              "n": 40,
+              "toplam_r": 32.27
+            },
+            "HEDEF": {
+              "n": 17,
+              "toplam_r": -25.85
+            },
+            "DIGER": {
+              "n": 37,
+              "toplam_r": -6.69
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_iki_farkli_basabas",
+          "esik": "bir",
+          "tetik": "IKI_FARKLI",
+          "tepki": "basabas",
+          "tetiklenen_n": 75,
+          "etkilenen_n": 53,
+          "kesif_etkilenen_n": 33,
+          "dogrulama_etkilenen_n": 20,
+          "iyilesen_n": 31,
+          "kotulesen_n": 19,
+          "fark_ort": 0.006403,
+          "fark_toplam": 4.08,
+          "fark_en_kotu_alt": -0.0156,
+          "fark_en_kotu_ust": 0.0249,
+          "kesif_fark": 0.009193,
+          "dogrulama_fark": 0.001226,
+          "dokum": {
+            "STOP": {
+              "n": 24,
+              "toplam_r": 14.78
+            },
+            "HEDEF": {
+              "n": 6,
+              "toplam_r": -8.98
+            },
+            "DIGER": {
+              "n": 23,
+              "toplam_r": -1.72
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        }
+      ]
+    },
+    "D6_A_Cekirdek_Veya_Arti": {
+      "n": 1124,
+      "kesif_n": 738,
+      "dogrulama_n": 386,
+      "baz_net": 0.061109,
+      "baz_sonuc": {
+        "STOP": 504,
+        "HEDEF": 447,
+        "DIGER": 173
+      },
+      "esik_goren": {
+        "yarim": 718,
+        "bir": 502
+      },
+      "varyantlar": [
+        {
+          "varyant": "yarim_her_islem_cik",
+          "esik": "yarim",
+          "tetik": "HER_ISLEM",
+          "tepki": "cik",
+          "tetiklenen_n": 718,
+          "etkilenen_n": 718,
+          "kesif_etkilenen_n": 465,
+          "dogrulama_etkilenen_n": 253,
+          "iyilesen_n": 319,
+          "kotulesen_n": 395,
+          "fark_ort": -0.03224,
+          "fark_toplam": -36.24,
+          "fark_en_kotu_alt": -0.1075,
+          "fark_en_kotu_ust": 0.0501,
+          "kesif_fark": -0.009363,
+          "dogrulama_fark": -0.07598,
+          "dokum": {
+            "STOP": {
+              "n": 230,
+              "toplam_r": 280.06
+            },
+            "HEDEF": {
+              "n": 328,
+              "toplam_r": -325.43
+            },
+            "DIGER": {
+              "n": 160,
+              "toplam_r": 9.13
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_engel_cik",
+          "esik": "yarim",
+          "tetik": "ENGEL",
+          "tepki": "cik",
+          "tetiklenen_n": 433,
+          "etkilenen_n": 433,
+          "kesif_etkilenen_n": 272,
+          "dogrulama_etkilenen_n": 161,
+          "iyilesen_n": 195,
+          "kotulesen_n": 238,
+          "fark_ort": -0.013421,
+          "fark_toplam": -15.09,
+          "fark_en_kotu_alt": -0.071,
+          "fark_en_kotu_ust": 0.0388,
+          "kesif_fark": -0.012935,
+          "dogrulama_fark": -0.014351,
+          "dokum": {
+            "STOP": {
+              "n": 132,
+              "toplam_r": 152.72
+            },
+            "HEDEF": {
+              "n": 177,
+              "toplam_r": -172.2
+            },
+            "DIGER": {
+              "n": 124,
+              "toplam_r": 4.39
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_stabil_cik",
+          "esik": "yarim",
+          "tetik": "STABIL",
+          "tepki": "cik",
+          "tetiklenen_n": 86,
+          "etkilenen_n": 86,
+          "kesif_etkilenen_n": 61,
+          "dogrulama_etkilenen_n": 25,
+          "iyilesen_n": 46,
+          "kotulesen_n": 40,
+          "fark_ort": 0.004395,
+          "fark_toplam": 4.94,
+          "fark_en_kotu_alt": -0.0207,
+          "fark_en_kotu_ust": 0.0247,
+          "kesif_fark": 0.006377,
+          "dogrulama_fark": 0.000607,
+          "dokum": {
+            "STOP": {
+              "n": 31,
+              "toplam_r": 30.86
+            },
+            "HEDEF": {
+              "n": 26,
+              "toplam_r": -27.35
+            },
+            "DIGER": {
+              "n": 29,
+              "toplam_r": 1.43
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "yarim_ms_cik",
+          "esik": "yarim",
+          "tetik": "MS",
+          "tepki": "cik",
+          "tetiklenen_n": 295,
+          "etkilenen_n": 295,
+          "kesif_etkilenen_n": 172,
+          "dogrulama_etkilenen_n": 123,
+          "iyilesen_n": 139,
+          "kotulesen_n": 156,
+          "fark_ort": -0.009713,
+          "fark_toplam": -10.92,
+          "fark_en_kotu_alt": -0.0621,
+          "fark_en_kotu_ust": 0.0319,
+          "kesif_fark": -0.003045,
+          "dogrulama_fark": -0.022462,
+          "dokum": {
+            "STOP": {
+              "n": 93,
+              "toplam_r": 102.53
+            },
+            "HEDEF": {
+              "n": 118,
+              "toplam_r": -119.22
+            },
+            "DIGER": {
+              "n": 84,
+              "toplam_r": 5.77
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_blok_cik",
+          "esik": "yarim",
+          "tetik": "BLOK",
+          "tepki": "cik",
+          "tetiklenen_n": 292,
+          "etkilenen_n": 292,
+          "kesif_etkilenen_n": 188,
+          "dogrulama_etkilenen_n": 104,
+          "iyilesen_n": 123,
+          "kotulesen_n": 169,
+          "fark_ort": -0.014319,
+          "fark_toplam": -16.09,
+          "fark_en_kotu_alt": -0.0486,
+          "fark_en_kotu_ust": 0.0219,
+          "kesif_fark": -0.013701,
+          "dogrulama_fark": -0.0155,
+          "dokum": {
+            "STOP": {
+              "n": 77,
+              "toplam_r": 94.11
+            },
+            "HEDEF": {
+              "n": 126,
+              "toplam_r": -114.41
+            },
+            "DIGER": {
+              "n": 89,
+              "toplam_r": 4.2
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_seviye_ici_cik",
+          "esik": "yarim",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "cik",
+          "tetiklenen_n": 97,
+          "etkilenen_n": 97,
+          "kesif_etkilenen_n": 65,
+          "dogrulama_etkilenen_n": 32,
+          "iyilesen_n": 79,
+          "kotulesen_n": 12,
+          "fark_ort": 0.006702,
+          "fark_toplam": 7.53,
+          "fark_en_kotu_alt": -0.0067,
+          "fark_en_kotu_ust": 0.0188,
+          "kesif_fark": 0.006301,
+          "dogrulama_fark": 0.007471,
+          "dokum": {
+            "STOP": {
+              "n": 83,
+              "toplam_r": 25.59
+            },
+            "HEDEF": {
+              "n": 3,
+              "toplam_r": -7.63
+            },
+            "DIGER": {
+              "n": 11,
+              "toplam_r": -10.43
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "yarim_frm_cik",
+          "esik": "yarim",
+          "tetik": "FRM",
+          "tepki": "cik",
+          "tetiklenen_n": 141,
+          "etkilenen_n": 141,
+          "kesif_etkilenen_n": 97,
+          "dogrulama_etkilenen_n": 44,
+          "iyilesen_n": 82,
+          "kotulesen_n": 56,
+          "fark_ort": -0.005643,
+          "fark_toplam": -6.34,
+          "fark_en_kotu_alt": -0.0268,
+          "fark_en_kotu_ust": 0.0143,
+          "kesif_fark": -0.004999,
+          "dogrulama_fark": -0.006873,
+          "dokum": {
+            "STOP": {
+              "n": 73,
+              "toplam_r": 40.77
+            },
+            "HEDEF": {
+              "n": 36,
+              "toplam_r": -40.67
+            },
+            "DIGER": {
+              "n": 32,
+              "toplam_r": -6.44
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_ms_supurme_cik",
+          "esik": "yarim",
+          "tetik": "MS_SUPURME",
+          "tepki": "cik",
+          "tetiklenen_n": 178,
+          "etkilenen_n": 178,
+          "kesif_etkilenen_n": 116,
+          "dogrulama_etkilenen_n": 62,
+          "iyilesen_n": 103,
+          "kotulesen_n": 73,
+          "fark_ort": 0.000402,
+          "fark_toplam": 0.45,
+          "fark_en_kotu_alt": -0.0222,
+          "fark_en_kotu_ust": 0.0213,
+          "kesif_fark": 0.007719,
+          "dogrulama_fark": -0.013588,
+          "dokum": {
+            "STOP": {
+              "n": 77,
+              "toplam_r": 51.05
+            },
+            "HEDEF": {
+              "n": 44,
+              "toplam_r": -45.91
+            },
+            "DIGER": {
+              "n": 57,
+              "toplam_r": -4.69
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_vp_ters_cik",
+          "esik": "yarim",
+          "tetik": "VP_TERS",
+          "tepki": "cik",
+          "tetiklenen_n": 179,
+          "etkilenen_n": 179,
+          "kesif_etkilenen_n": 109,
+          "dogrulama_etkilenen_n": 70,
+          "iyilesen_n": 99,
+          "kotulesen_n": 75,
+          "fark_ort": -0.008652,
+          "fark_toplam": -9.73,
+          "fark_en_kotu_alt": -0.034,
+          "fark_en_kotu_ust": 0.0134,
+          "kesif_fark": -0.011525,
+          "dogrulama_fark": -0.00316,
+          "dokum": {
+            "STOP": {
+              "n": 63,
+              "toplam_r": 35.6
+            },
+            "HEDEF": {
+              "n": 31,
+              "toplam_r": -35.33
+            },
+            "DIGER": {
+              "n": 85,
+              "toplam_r": -10.0
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_endeks_cik",
+          "esik": "yarim",
+          "tetik": "ENDEKS",
+          "tepki": "cik",
+          "tetiklenen_n": 272,
+          "etkilenen_n": 272,
+          "kesif_etkilenen_n": 172,
+          "dogrulama_etkilenen_n": 100,
+          "iyilesen_n": 135,
+          "kotulesen_n": 131,
+          "fark_ort": -0.008852,
+          "fark_toplam": -9.95,
+          "fark_en_kotu_alt": -0.0395,
+          "fark_en_kotu_ust": 0.0202,
+          "kesif_fark": -0.005852,
+          "dogrulama_fark": -0.014586,
+          "dokum": {
+            "STOP": {
+              "n": 105,
+              "toplam_r": 86.98
+            },
+            "HEDEF": {
+              "n": 85,
+              "toplam_r": -84.81
+            },
+            "DIGER": {
+              "n": 82,
+              "toplam_r": -12.12
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_herhangi_cik",
+          "esik": "yarim",
+          "tetik": "HERHANGI",
+          "tepki": "cik",
+          "tetiklenen_n": 528,
+          "etkilenen_n": 528,
+          "kesif_etkilenen_n": 338,
+          "dogrulama_etkilenen_n": 190,
+          "iyilesen_n": 251,
+          "kotulesen_n": 274,
+          "fark_ort": -0.018965,
+          "fark_toplam": -21.32,
+          "fark_en_kotu_alt": -0.0819,
+          "fark_en_kotu_ust": 0.0445,
+          "kesif_fark": -0.021898,
+          "dogrulama_fark": -0.013359,
+          "dokum": {
+            "STOP": {
+              "n": 183,
+              "toplam_r": 180.96
+            },
+            "HEDEF": {
+              "n": 200,
+              "toplam_r": -200.27
+            },
+            "DIGER": {
+              "n": 145,
+              "toplam_r": -2.0
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_iki_farkli_cik",
+          "esik": "yarim",
+          "tetik": "IKI_FARKLI",
+          "tepki": "cik",
+          "tetiklenen_n": 297,
+          "etkilenen_n": 297,
+          "kesif_etkilenen_n": 194,
+          "dogrulama_etkilenen_n": 103,
+          "iyilesen_n": 171,
+          "kotulesen_n": 120,
+          "fark_ort": -0.004697,
+          "fark_toplam": -5.28,
+          "fark_en_kotu_alt": -0.0409,
+          "fark_en_kotu_ust": 0.0248,
+          "kesif_fark": -0.001015,
+          "dogrulama_fark": -0.011738,
+          "dokum": {
+            "STOP": {
+              "n": 126,
+              "toplam_r": 77.76
+            },
+            "HEDEF": {
+              "n": 67,
+              "toplam_r": -73.51
+            },
+            "DIGER": {
+              "n": 104,
+              "toplam_r": -9.53
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_her_islem_basabas",
+          "esik": "yarim",
+          "tetik": "HER_ISLEM",
+          "tepki": "basabas",
+          "tetiklenen_n": 718,
+          "etkilenen_n": 514,
+          "kesif_etkilenen_n": 340,
+          "dogrulama_etkilenen_n": 174,
+          "iyilesen_n": 273,
+          "kotulesen_n": 232,
+          "fark_ort": -0.038817,
+          "fark_toplam": -43.63,
+          "fark_en_kotu_alt": -0.1079,
+          "fark_en_kotu_ust": 0.0361,
+          "kesif_fark": -0.031849,
+          "dogrulama_fark": -0.052139,
+          "dokum": {
+            "STOP": {
+              "n": 230,
+              "toplam_r": 200.22
+            },
+            "HEDEF": {
+              "n": 142,
+              "toplam_r": -209.35
+            },
+            "DIGER": {
+              "n": 142,
+              "toplam_r": -34.5
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_engel_basabas",
+          "esik": "yarim",
+          "tetik": "ENGEL",
+          "tepki": "basabas",
+          "tetiklenen_n": 433,
+          "etkilenen_n": 310,
+          "kesif_etkilenen_n": 195,
+          "dogrulama_etkilenen_n": 115,
+          "iyilesen_n": 167,
+          "kotulesen_n": 140,
+          "fark_ort": -0.008548,
+          "fark_toplam": -9.61,
+          "fark_en_kotu_alt": -0.055,
+          "fark_en_kotu_ust": 0.0333,
+          "kesif_fark": -0.008289,
+          "dogrulama_fark": -0.009045,
+          "dokum": {
+            "STOP": {
+              "n": 132,
+              "toplam_r": 112.54
+            },
+            "HEDEF": {
+              "n": 73,
+              "toplam_r": -103.19
+            },
+            "DIGER": {
+              "n": 105,
+              "toplam_r": -18.96
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_stabil_basabas",
+          "esik": "yarim",
+          "tetik": "STABIL",
+          "tepki": "basabas",
+          "tetiklenen_n": 86,
+          "etkilenen_n": 65,
+          "kesif_etkilenen_n": 47,
+          "dogrulama_etkilenen_n": 18,
+          "iyilesen_n": 39,
+          "kotulesen_n": 25,
+          "fark_ort": 0.005152,
+          "fark_toplam": 5.79,
+          "fark_en_kotu_alt": -0.0185,
+          "fark_en_kotu_ust": 0.0219,
+          "kesif_fark": 0.001292,
+          "dogrulama_fark": 0.01253,
+          "dokum": {
+            "STOP": {
+              "n": 31,
+              "toplam_r": 23.41
+            },
+            "HEDEF": {
+              "n": 10,
+              "toplam_r": -14.0
+            },
+            "DIGER": {
+              "n": 24,
+              "toplam_r": -3.62
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "yarim_ms_basabas",
+          "esik": "yarim",
+          "tetik": "MS",
+          "tepki": "basabas",
+          "tetiklenen_n": 295,
+          "etkilenen_n": 215,
+          "kesif_etkilenen_n": 125,
+          "dogrulama_etkilenen_n": 90,
+          "iyilesen_n": 120,
+          "kotulesen_n": 94,
+          "fark_ort": -0.007598,
+          "fark_toplam": -8.54,
+          "fark_en_kotu_alt": -0.0487,
+          "fark_en_kotu_ust": 0.0237,
+          "kesif_fark": -0.005753,
+          "dogrulama_fark": -0.011127,
+          "dokum": {
+            "STOP": {
+              "n": 93,
+              "toplam_r": 77.75
+            },
+            "HEDEF": {
+              "n": 53,
+              "toplam_r": -76.21
+            },
+            "DIGER": {
+              "n": 69,
+              "toplam_r": -10.08
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_blok_basabas",
+          "esik": "yarim",
+          "tetik": "BLOK",
+          "tepki": "basabas",
+          "tetiklenen_n": 292,
+          "etkilenen_n": 197,
+          "kesif_etkilenen_n": 129,
+          "dogrulama_etkilenen_n": 68,
+          "iyilesen_n": 100,
+          "kotulesen_n": 94,
+          "fark_ort": -0.009893,
+          "fark_toplam": -11.12,
+          "fark_en_kotu_alt": -0.0384,
+          "fark_en_kotu_ust": 0.0214,
+          "kesif_fark": -0.01175,
+          "dogrulama_fark": -0.006344,
+          "dokum": {
+            "STOP": {
+              "n": 77,
+              "toplam_r": 66.53
+            },
+            "HEDEF": {
+              "n": 47,
+              "toplam_r": -63.76
+            },
+            "DIGER": {
+              "n": 73,
+              "toplam_r": -13.89
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_seviye_ici_basabas",
+          "esik": "yarim",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "basabas",
+          "tetiklenen_n": 97,
+          "etkilenen_n": 97,
+          "kesif_etkilenen_n": 65,
+          "dogrulama_etkilenen_n": 32,
+          "iyilesen_n": 79,
+          "kotulesen_n": 12,
+          "fark_ort": 0.006702,
+          "fark_toplam": 7.53,
+          "fark_en_kotu_alt": -0.0067,
+          "fark_en_kotu_ust": 0.0188,
+          "kesif_fark": 0.006301,
+          "dogrulama_fark": 0.007471,
+          "dokum": {
+            "STOP": {
+              "n": 83,
+              "toplam_r": 25.59
+            },
+            "HEDEF": {
+              "n": 3,
+              "toplam_r": -7.63
+            },
+            "DIGER": {
+              "n": 11,
+              "toplam_r": -10.43
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "yarim_frm_basabas",
+          "esik": "yarim",
+          "tetik": "FRM",
+          "tepki": "basabas",
+          "tetiklenen_n": 141,
+          "etkilenen_n": 126,
+          "kesif_etkilenen_n": 87,
+          "dogrulama_etkilenen_n": 39,
+          "iyilesen_n": 78,
+          "kotulesen_n": 45,
+          "fark_ort": -0.008895,
+          "fark_toplam": -10.0,
+          "fark_en_kotu_alt": -0.0303,
+          "fark_en_kotu_ust": 0.011,
+          "kesif_fark": -0.009026,
+          "dogrulama_fark": -0.008644,
+          "dokum": {
+            "STOP": {
+              "n": 73,
+              "toplam_r": 36.5
+            },
+            "HEDEF": {
+              "n": 24,
+              "toplam_r": -35.98
+            },
+            "DIGER": {
+              "n": 29,
+              "toplam_r": -10.52
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_ms_supurme_basabas",
+          "esik": "yarim",
+          "tetik": "MS_SUPURME",
+          "tepki": "basabas",
+          "tetiklenen_n": 178,
+          "etkilenen_n": 148,
+          "kesif_etkilenen_n": 94,
+          "dogrulama_etkilenen_n": 54,
+          "iyilesen_n": 96,
+          "kotulesen_n": 50,
+          "fark_ort": 0.007786,
+          "fark_toplam": 8.75,
+          "fark_en_kotu_alt": -0.0129,
+          "fark_en_kotu_ust": 0.0269,
+          "kesif_fark": 0.01284,
+          "dogrulama_fark": -0.001877,
+          "dokum": {
+            "STOP": {
+              "n": 77,
+              "toplam_r": 45.74
+            },
+            "HEDEF": {
+              "n": 20,
+              "toplam_r": -26.24
+            },
+            "DIGER": {
+              "n": 51,
+              "toplam_r": -10.75
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_vp_ters_basabas",
+          "esik": "yarim",
+          "tetik": "VP_TERS",
+          "tepki": "basabas",
+          "tetiklenen_n": 179,
+          "etkilenen_n": 155,
+          "kesif_etkilenen_n": 94,
+          "dogrulama_etkilenen_n": 61,
+          "iyilesen_n": 88,
+          "kotulesen_n": 63,
+          "fark_ort": -0.00435,
+          "fark_toplam": -4.89,
+          "fark_en_kotu_alt": -0.0314,
+          "fark_en_kotu_ust": 0.0169,
+          "kesif_fark": -0.008904,
+          "dogrulama_fark": 0.004358,
+          "dokum": {
+            "STOP": {
+              "n": 63,
+              "toplam_r": 34.01
+            },
+            "HEDEF": {
+              "n": 17,
+              "toplam_r": -23.19
+            },
+            "DIGER": {
+              "n": 75,
+              "toplam_r": -15.71
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_endeks_basabas",
+          "esik": "yarim",
+          "tetik": "ENDEKS",
+          "tepki": "basabas",
+          "tetiklenen_n": 272,
+          "etkilenen_n": 209,
+          "kesif_etkilenen_n": 132,
+          "dogrulama_etkilenen_n": 77,
+          "iyilesen_n": 119,
+          "kotulesen_n": 86,
+          "fark_ort": -0.005092,
+          "fark_toplam": -5.72,
+          "fark_en_kotu_alt": -0.0316,
+          "fark_en_kotu_ust": 0.0199,
+          "kesif_fark": 0.001858,
+          "dogrulama_fark": -0.018382,
+          "dokum": {
+            "STOP": {
+              "n": 105,
+              "toplam_r": 72.46
+            },
+            "HEDEF": {
+              "n": 38,
+              "toplam_r": -53.92
+            },
+            "DIGER": {
+              "n": 66,
+              "toplam_r": -24.26
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_herhangi_basabas",
+          "esik": "yarim",
+          "tetik": "HERHANGI",
+          "tepki": "basabas",
+          "tetiklenen_n": 528,
+          "etkilenen_n": 398,
+          "kesif_etkilenen_n": 255,
+          "dogrulama_etkilenen_n": 143,
+          "iyilesen_n": 223,
+          "kotulesen_n": 170,
+          "fark_ort": -0.014526,
+          "fark_toplam": -16.33,
+          "fark_en_kotu_alt": -0.0682,
+          "fark_en_kotu_ust": 0.04,
+          "kesif_fark": -0.013428,
+          "dogrulama_fark": -0.016626,
+          "dokum": {
+            "STOP": {
+              "n": 183,
+              "toplam_r": 138.9
+            },
+            "HEDEF": {
+              "n": 88,
+              "toplam_r": -124.87
+            },
+            "DIGER": {
+              "n": 127,
+              "toplam_r": -30.36
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_iki_farkli_basabas",
+          "esik": "yarim",
+          "tetik": "IKI_FARKLI",
+          "tepki": "basabas",
+          "tetiklenen_n": 297,
+          "etkilenen_n": 248,
+          "kesif_etkilenen_n": 161,
+          "dogrulama_etkilenen_n": 87,
+          "iyilesen_n": 154,
+          "kotulesen_n": 88,
+          "fark_ort": 0.003812,
+          "fark_toplam": 4.28,
+          "fark_en_kotu_alt": -0.0271,
+          "fark_en_kotu_ust": 0.0296,
+          "kesif_fark": -0.001246,
+          "dogrulama_fark": 0.013483,
+          "dokum": {
+            "STOP": {
+              "n": 126,
+              "toplam_r": 71.06
+            },
+            "HEDEF": {
+              "n": 35,
+              "toplam_r": -50.27
+            },
+            "DIGER": {
+              "n": 87,
+              "toplam_r": -16.5
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_her_islem_cik",
+          "esik": "bir",
+          "tetik": "HER_ISLEM",
+          "tepki": "cik",
+          "tetiklenen_n": 502,
+          "etkilenen_n": 502,
+          "kesif_etkilenen_n": 316,
+          "dogrulama_etkilenen_n": 186,
+          "iyilesen_n": 202,
+          "kotulesen_n": 295,
+          "fark_ort": -0.002757,
+          "fark_toplam": -3.1,
+          "fark_en_kotu_alt": -0.0555,
+          "fark_en_kotu_ust": 0.0454,
+          "kesif_fark": -0.004945,
+          "dogrulama_fark": 0.001426,
+          "dokum": {
+            "STOP": {
+              "n": 104,
+              "toplam_r": 154.08
+            },
+            "HEDEF": {
+              "n": 269,
+              "toplam_r": -189.36
+            },
+            "DIGER": {
+              "n": 129,
+              "toplam_r": 32.19
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_engel_cik",
+          "esik": "bir",
+          "tetik": "ENGEL",
+          "tepki": "cik",
+          "tetiklenen_n": 278,
+          "etkilenen_n": 278,
+          "kesif_etkilenen_n": 171,
+          "dogrulama_etkilenen_n": 107,
+          "iyilesen_n": 115,
+          "kotulesen_n": 162,
+          "fark_ort": -0.00387,
+          "fark_toplam": -4.35,
+          "fark_en_kotu_alt": -0.047,
+          "fark_en_kotu_ust": 0.0356,
+          "kesif_fark": -0.004384,
+          "dogrulama_fark": -0.002887,
+          "dokum": {
+            "STOP": {
+              "n": 58,
+              "toplam_r": 79.64
+            },
+            "HEDEF": {
+              "n": 132,
+              "toplam_r": -99.97
+            },
+            "DIGER": {
+              "n": 88,
+              "toplam_r": 15.98
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_stabil_cik",
+          "esik": "bir",
+          "tetik": "STABIL",
+          "tepki": "cik",
+          "tetiklenen_n": 48,
+          "etkilenen_n": 48,
+          "kesif_etkilenen_n": 37,
+          "dogrulama_etkilenen_n": 11,
+          "iyilesen_n": 19,
+          "kotulesen_n": 29,
+          "fark_ort": -0.004352,
+          "fark_toplam": -4.89,
+          "fark_en_kotu_alt": -0.0215,
+          "fark_en_kotu_ust": 0.0091,
+          "kesif_fark": -0.003169,
+          "dogrulama_fark": -0.006613,
+          "dokum": {
+            "STOP": {
+              "n": 10,
+              "toplam_r": 12.03
+            },
+            "HEDEF": {
+              "n": 18,
+              "toplam_r": -16.54
+            },
+            "DIGER": {
+              "n": 20,
+              "toplam_r": -0.38
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_ms_cik",
+          "esik": "bir",
+          "tetik": "MS",
+          "tepki": "cik",
+          "tetiklenen_n": 189,
+          "etkilenen_n": 189,
+          "kesif_etkilenen_n": 110,
+          "dogrulama_etkilenen_n": 79,
+          "iyilesen_n": 79,
+          "kotulesen_n": 110,
+          "fark_ort": -0.009707,
+          "fark_toplam": -10.91,
+          "fark_en_kotu_alt": -0.0454,
+          "fark_en_kotu_ust": 0.0236,
+          "kesif_fark": -0.005652,
+          "dogrulama_fark": -0.017461,
+          "dokum": {
+            "STOP": {
+              "n": 44,
+              "toplam_r": 56.05
+            },
+            "HEDEF": {
+              "n": 88,
+              "toplam_r": -74.41
+            },
+            "DIGER": {
+              "n": 57,
+              "toplam_r": 7.46
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_blok_cik",
+          "esik": "bir",
+          "tetik": "BLOK",
+          "tepki": "cik",
+          "tetiklenen_n": 179,
+          "etkilenen_n": 179,
+          "kesif_etkilenen_n": 108,
+          "dogrulama_etkilenen_n": 71,
+          "iyilesen_n": 70,
+          "kotulesen_n": 108,
+          "fark_ort": 0.000118,
+          "fark_toplam": 0.13,
+          "fark_en_kotu_alt": -0.0229,
+          "fark_en_kotu_ust": 0.025,
+          "kesif_fark": 0.000367,
+          "dogrulama_fark": -0.000359,
+          "dokum": {
+            "STOP": {
+              "n": 33,
+              "toplam_r": 46.83
+            },
+            "HEDEF": {
+              "n": 86,
+              "toplam_r": -57.07
+            },
+            "DIGER": {
+              "n": 60,
+              "toplam_r": 10.37
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_seviye_ici_cik",
+          "esik": "bir",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "cik",
+          "tetiklenen_n": 37,
+          "etkilenen_n": 37,
+          "kesif_etkilenen_n": 23,
+          "dogrulama_etkilenen_n": 14,
+          "iyilesen_n": 32,
+          "kotulesen_n": 3,
+          "fark_ort": 0.006442,
+          "fark_toplam": 7.24,
+          "fark_en_kotu_alt": -0.0016,
+          "fark_en_kotu_ust": 0.0132,
+          "kesif_fark": 0.00582,
+          "dogrulama_fark": 0.00763,
+          "dokum": {
+            "STOP": {
+              "n": 33,
+              "toplam_r": 10.81
+            },
+            "HEDEF": {
+              "n": 1,
+              "toplam_r": -2.92
+            },
+            "DIGER": {
+              "n": 3,
+              "toplam_r": -0.65
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "bir_frm_cik",
+          "esik": "bir",
+          "tetik": "FRM",
+          "tepki": "cik",
+          "tetiklenen_n": 55,
+          "etkilenen_n": 55,
+          "kesif_etkilenen_n": 34,
+          "dogrulama_etkilenen_n": 21,
+          "iyilesen_n": 33,
+          "kotulesen_n": 21,
+          "fark_ort": 0.001382,
+          "fark_toplam": 1.55,
+          "fark_en_kotu_alt": -0.0087,
+          "fark_en_kotu_ust": 0.0126,
+          "kesif_fark": 0.00416,
+          "dogrulama_fark": -0.00393,
+          "dokum": {
+            "STOP": {
+              "n": 25,
+              "toplam_r": 12.02
+            },
+            "HEDEF": {
+              "n": 13,
+              "toplam_r": -11.74
+            },
+            "DIGER": {
+              "n": 17,
+              "toplam_r": 1.28
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_ms_supurme_cik",
+          "esik": "bir",
+          "tetik": "MS_SUPURME",
+          "tepki": "cik",
+          "tetiklenen_n": 108,
+          "etkilenen_n": 108,
+          "kesif_etkilenen_n": 77,
+          "dogrulama_etkilenen_n": 31,
+          "iyilesen_n": 60,
+          "kotulesen_n": 47,
+          "fark_ort": -0.00072,
+          "fark_toplam": -0.81,
+          "fark_en_kotu_alt": -0.0158,
+          "fark_en_kotu_ust": 0.0154,
+          "kesif_fark": 0.003526,
+          "dogrulama_fark": -0.008837,
+          "dokum": {
+            "STOP": {
+              "n": 36,
+              "toplam_r": 24.77
+            },
+            "HEDEF": {
+              "n": 28,
+              "toplam_r": -27.01
+            },
+            "DIGER": {
+              "n": 44,
+              "toplam_r": 1.43
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_vp_ters_cik",
+          "esik": "bir",
+          "tetik": "VP_TERS",
+          "tepki": "cik",
+          "tetiklenen_n": 119,
+          "etkilenen_n": 119,
+          "kesif_etkilenen_n": 70,
+          "dogrulama_etkilenen_n": 49,
+          "iyilesen_n": 61,
+          "kotulesen_n": 53,
+          "fark_ort": -0.007586,
+          "fark_toplam": -8.53,
+          "fark_en_kotu_alt": -0.0266,
+          "fark_en_kotu_ust": 0.0099,
+          "kesif_fark": -0.014179,
+          "dogrulama_fark": 0.005019,
+          "dokum": {
+            "STOP": {
+              "n": 31,
+              "toplam_r": 21.01
+            },
+            "HEDEF": {
+              "n": 24,
+              "toplam_r": -27.54
+            },
+            "DIGER": {
+              "n": 64,
+              "toplam_r": -2.0
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_endeks_cik",
+          "esik": "bir",
+          "tetik": "ENDEKS",
+          "tepki": "cik",
+          "tetiklenen_n": 165,
+          "etkilenen_n": 165,
+          "kesif_etkilenen_n": 97,
+          "dogrulama_etkilenen_n": 68,
+          "iyilesen_n": 76,
+          "kotulesen_n": 84,
+          "fark_ort": -7.4e-05,
+          "fark_toplam": -0.08,
+          "fark_en_kotu_alt": -0.0237,
+          "fark_en_kotu_ust": 0.0222,
+          "kesif_fark": -0.011646,
+          "dogrulama_fark": 0.022049,
+          "dokum": {
+            "STOP": {
+              "n": 50,
+              "toplam_r": 47.72
+            },
+            "HEDEF": {
+              "n": 57,
+              "toplam_r": -47.02
+            },
+            "DIGER": {
+              "n": 58,
+              "toplam_r": -0.78
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_herhangi_cik",
+          "esik": "bir",
+          "tetik": "HERHANGI",
+          "tepki": "cik",
+          "tetiklenen_n": 329,
+          "etkilenen_n": 329,
+          "kesif_etkilenen_n": 207,
+          "dogrulama_etkilenen_n": 122,
+          "iyilesen_n": 144,
+          "kotulesen_n": 182,
+          "fark_ort": -0.007604,
+          "fark_toplam": -8.55,
+          "fark_en_kotu_alt": -0.0518,
+          "fark_en_kotu_ust": 0.0309,
+          "kesif_fark": -0.016982,
+          "dogrulama_fark": 0.010327,
+          "dokum": {
+            "STOP": {
+              "n": 78,
+              "toplam_r": 89.91
+            },
+            "HEDEF": {
+              "n": 146,
+              "toplam_r": -114.59
+            },
+            "DIGER": {
+              "n": 105,
+              "toplam_r": 16.13
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_iki_farkli_cik",
+          "esik": "bir",
+          "tetik": "IKI_FARKLI",
+          "tepki": "cik",
+          "tetiklenen_n": 164,
+          "etkilenen_n": 164,
+          "kesif_etkilenen_n": 105,
+          "dogrulama_etkilenen_n": 59,
+          "iyilesen_n": 87,
+          "kotulesen_n": 73,
+          "fark_ort": -0.002425,
+          "fark_toplam": -2.73,
+          "fark_en_kotu_alt": -0.0233,
+          "fark_en_kotu_ust": 0.0179,
+          "kesif_fark": 0.000918,
+          "dogrulama_fark": -0.008817,
+          "dokum": {
+            "STOP": {
+              "n": 50,
+              "toplam_r": 36.19
+            },
+            "HEDEF": {
+              "n": 41,
+              "toplam_r": -41.04
+            },
+            "DIGER": {
+              "n": 73,
+              "toplam_r": 2.13
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_her_islem_basabas",
+          "esik": "bir",
+          "tetik": "HER_ISLEM",
+          "tepki": "basabas",
+          "tetiklenen_n": 502,
+          "etkilenen_n": 262,
+          "kesif_etkilenen_n": 163,
+          "dogrulama_etkilenen_n": 99,
+          "iyilesen_n": 137,
+          "kotulesen_n": 120,
+          "fark_ort": -0.014443,
+          "fark_toplam": -16.23,
+          "fark_en_kotu_alt": -0.0581,
+          "fark_en_kotu_ust": 0.0258,
+          "kesif_fark": -0.018932,
+          "dogrulama_fark": -0.005859,
+          "dokum": {
+            "STOP": {
+              "n": 104,
+              "toplam_r": 91.78
+            },
+            "HEDEF": {
+              "n": 64,
+              "toplam_r": -94.27
+            },
+            "DIGER": {
+              "n": 94,
+              "toplam_r": -13.75
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_engel_basabas",
+          "esik": "bir",
+          "tetik": "ENGEL",
+          "tepki": "basabas",
+          "tetiklenen_n": 278,
+          "etkilenen_n": 153,
+          "kesif_etkilenen_n": 92,
+          "dogrulama_etkilenen_n": 61,
+          "iyilesen_n": 81,
+          "kotulesen_n": 71,
+          "fark_ort": -0.003887,
+          "fark_toplam": -4.37,
+          "fark_en_kotu_alt": -0.0318,
+          "fark_en_kotu_ust": 0.0237,
+          "kesif_fark": -0.005975,
+          "dogrulama_fark": 0.000105,
+          "dokum": {
+            "STOP": {
+              "n": 58,
+              "toplam_r": 51.86
+            },
+            "HEDEF": {
+              "n": 32,
+              "toplam_r": -46.97
+            },
+            "DIGER": {
+              "n": 63,
+              "toplam_r": -9.26
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_stabil_basabas",
+          "esik": "bir",
+          "tetik": "STABIL",
+          "tepki": "basabas",
+          "tetiklenen_n": 48,
+          "etkilenen_n": 32,
+          "kesif_etkilenen_n": 24,
+          "dogrulama_etkilenen_n": 8,
+          "iyilesen_n": 15,
+          "kotulesen_n": 17,
+          "fark_ort": -0.004821,
+          "fark_toplam": -5.42,
+          "fark_en_kotu_alt": -0.0187,
+          "fark_en_kotu_ust": 0.0068,
+          "kesif_fark": -0.005516,
+          "dogrulama_fark": -0.003491,
+          "dokum": {
+            "STOP": {
+              "n": 10,
+              "toplam_r": 8.12
+            },
+            "HEDEF": {
+              "n": 8,
+              "toplam_r": -10.29
+            },
+            "DIGER": {
+              "n": 14,
+              "toplam_r": -3.25
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_ms_basabas",
+          "esik": "bir",
+          "tetik": "MS",
+          "tepki": "basabas",
+          "tetiklenen_n": 189,
+          "etkilenen_n": 115,
+          "kesif_etkilenen_n": 66,
+          "dogrulama_etkilenen_n": 49,
+          "iyilesen_n": 63,
+          "kotulesen_n": 52,
+          "fark_ort": -0.007954,
+          "fark_toplam": -8.94,
+          "fark_en_kotu_alt": -0.0339,
+          "fark_en_kotu_ust": 0.0141,
+          "kesif_fark": -0.008907,
+          "dogrulama_fark": -0.006133,
+          "dokum": {
+            "STOP": {
+              "n": 44,
+              "toplam_r": 39.2
+            },
+            "HEDEF": {
+              "n": 28,
+              "toplam_r": -42.04
+            },
+            "DIGER": {
+              "n": 43,
+              "toplam_r": -6.1
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_blok_basabas",
+          "esik": "bir",
+          "tetik": "BLOK",
+          "tepki": "basabas",
+          "tetiklenen_n": 179,
+          "etkilenen_n": 89,
+          "kesif_etkilenen_n": 55,
+          "dogrulama_etkilenen_n": 34,
+          "iyilesen_n": 48,
+          "kotulesen_n": 40,
+          "fark_ort": 0.005231,
+          "fark_toplam": 5.88,
+          "fark_en_kotu_alt": -0.0115,
+          "fark_en_kotu_ust": 0.0217,
+          "kesif_fark": -0.000863,
+          "dogrulama_fark": 0.016881,
+          "dokum": {
+            "STOP": {
+              "n": 33,
+              "toplam_r": 29.02
+            },
+            "HEDEF": {
+              "n": 13,
+              "toplam_r": -16.67
+            },
+            "DIGER": {
+              "n": 43,
+              "toplam_r": -6.47
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_seviye_ici_basabas",
+          "esik": "bir",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "basabas",
+          "tetiklenen_n": 37,
+          "etkilenen_n": 37,
+          "kesif_etkilenen_n": 23,
+          "dogrulama_etkilenen_n": 14,
+          "iyilesen_n": 32,
+          "kotulesen_n": 3,
+          "fark_ort": 0.006442,
+          "fark_toplam": 7.24,
+          "fark_en_kotu_alt": -0.0016,
+          "fark_en_kotu_ust": 0.0132,
+          "kesif_fark": 0.00582,
+          "dogrulama_fark": 0.00763,
+          "dokum": {
+            "STOP": {
+              "n": 33,
+              "toplam_r": 10.81
+            },
+            "HEDEF": {
+              "n": 1,
+              "toplam_r": -2.92
+            },
+            "DIGER": {
+              "n": 3,
+              "toplam_r": -0.65
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "bir_frm_basabas",
+          "esik": "bir",
+          "tetik": "FRM",
+          "tepki": "basabas",
+          "tetiklenen_n": 55,
+          "etkilenen_n": 47,
+          "kesif_etkilenen_n": 28,
+          "dogrulama_etkilenen_n": 19,
+          "iyilesen_n": 31,
+          "kotulesen_n": 15,
+          "fark_ort": -0.001233,
+          "fark_toplam": -1.39,
+          "fark_en_kotu_alt": -0.0119,
+          "fark_en_kotu_ust": 0.0081,
+          "kesif_fark": 0.000184,
+          "dogrulama_fark": -0.003943,
+          "dokum": {
+            "STOP": {
+              "n": 25,
+              "toplam_r": 10.59
+            },
+            "HEDEF": {
+              "n": 7,
+              "toplam_r": -10.47
+            },
+            "DIGER": {
+              "n": 15,
+              "toplam_r": -1.5
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_ms_supurme_basabas",
+          "esik": "bir",
+          "tetik": "MS_SUPURME",
+          "tepki": "basabas",
+          "tetiklenen_n": 108,
+          "etkilenen_n": 83,
+          "kesif_etkilenen_n": 58,
+          "dogrulama_etkilenen_n": 25,
+          "iyilesen_n": 53,
+          "kotulesen_n": 29,
+          "fark_ort": 0.003769,
+          "fark_toplam": 4.24,
+          "fark_en_kotu_alt": -0.0088,
+          "fark_en_kotu_ust": 0.0162,
+          "kesif_fark": 0.006364,
+          "dogrulama_fark": -0.001193,
+          "dokum": {
+            "STOP": {
+              "n": 36,
+              "toplam_r": 21.27
+            },
+            "HEDEF": {
+              "n": 11,
+              "toplam_r": -13.71
+            },
+            "DIGER": {
+              "n": 36,
+              "toplam_r": -3.33
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_vp_ters_basabas",
+          "esik": "bir",
+          "tetik": "VP_TERS",
+          "tepki": "basabas",
+          "tetiklenen_n": 119,
+          "etkilenen_n": 97,
+          "kesif_etkilenen_n": 56,
+          "dogrulama_etkilenen_n": 41,
+          "iyilesen_n": 50,
+          "kotulesen_n": 42,
+          "fark_ort": -0.007209,
+          "fark_toplam": -8.1,
+          "fark_en_kotu_alt": -0.0279,
+          "fark_en_kotu_ust": 0.0094,
+          "kesif_fark": -0.014237,
+          "dogrulama_fark": 0.006228,
+          "dokum": {
+            "STOP": {
+              "n": 31,
+              "toplam_r": 18.12
+            },
+            "HEDEF": {
+              "n": 13,
+              "toplam_r": -18.15
+            },
+            "DIGER": {
+              "n": 53,
+              "toplam_r": -8.07
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_endeks_basabas",
+          "esik": "bir",
+          "tetik": "ENDEKS",
+          "tepki": "basabas",
+          "tetiklenen_n": 165,
+          "etkilenen_n": 107,
+          "kesif_etkilenen_n": 59,
+          "dogrulama_etkilenen_n": 48,
+          "iyilesen_n": 58,
+          "kotulesen_n": 46,
+          "fark_ort": -0.002762,
+          "fark_toplam": -3.1,
+          "fark_en_kotu_alt": -0.022,
+          "fark_en_kotu_ust": 0.0154,
+          "kesif_fark": -0.00573,
+          "dogrulama_fark": 0.002914,
+          "dokum": {
+            "STOP": {
+              "n": 50,
+              "toplam_r": 35.24
+            },
+            "HEDEF": {
+              "n": 17,
+              "toplam_r": -25.56
+            },
+            "DIGER": {
+              "n": 40,
+              "toplam_r": -12.78
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_herhangi_basabas",
+          "esik": "bir",
+          "tetik": "HERHANGI",
+          "tepki": "basabas",
+          "tetiklenen_n": 329,
+          "etkilenen_n": 196,
+          "kesif_etkilenen_n": 119,
+          "dogrulama_etkilenen_n": 77,
+          "iyilesen_n": 106,
+          "kotulesen_n": 87,
+          "fark_ort": -0.008036,
+          "fark_toplam": -9.03,
+          "fark_en_kotu_alt": -0.0423,
+          "fark_en_kotu_ust": 0.0226,
+          "kesif_fark": -0.012199,
+          "dogrulama_fark": -7.7e-05,
+          "dokum": {
+            "STOP": {
+              "n": 78,
+              "toplam_r": 60.8
+            },
+            "HEDEF": {
+              "n": 39,
+              "toplam_r": -55.66
+            },
+            "DIGER": {
+              "n": 79,
+              "toplam_r": -14.17
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_iki_farkli_basabas",
+          "esik": "bir",
+          "tetik": "IKI_FARKLI",
+          "tepki": "basabas",
+          "tetiklenen_n": 164,
+          "etkilenen_n": 124,
+          "kesif_etkilenen_n": 77,
+          "dogrulama_etkilenen_n": 47,
+          "iyilesen_n": 73,
+          "kotulesen_n": 47,
+          "fark_ort": 0.002435,
+          "fark_toplam": 2.74,
+          "fark_en_kotu_alt": -0.0164,
+          "fark_en_kotu_ust": 0.0203,
+          "kesif_fark": -0.001209,
+          "dogrulama_fark": 0.009402,
+          "dokum": {
+            "STOP": {
+              "n": 50,
+              "toplam_r": 32.05
+            },
+            "HEDEF": {
+              "n": 18,
+              "toplam_r": -24.7
+            },
+            "DIGER": {
+              "n": 56,
+              "toplam_r": -4.61
+            }
+          },
+          "karar": "GECMEDI"
+        }
+      ]
+    },
+    "D1_Birincil": {
+      "n": 4233,
+      "kesif_n": 2723,
+      "dogrulama_n": 1510,
+      "baz_net": 0.009985,
+      "baz_sonuc": {
+        "STOP": 2158,
+        "HEDEF": 1435,
+        "DIGER": 640
+      },
+      "esik_goren": {
+        "yarim": 2539,
+        "bir": 1749
+      },
+      "varyantlar": [
+        {
+          "varyant": "yarim_her_islem_cik",
+          "esik": "yarim",
+          "tetik": "HER_ISLEM",
+          "tepki": "cik",
+          "tetiklenen_n": 2539,
+          "etkilenen_n": 2539,
+          "kesif_etkilenen_n": 1601,
+          "dogrulama_etkilenen_n": 938,
+          "iyilesen_n": 1160,
+          "kotulesen_n": 1362,
+          "fark_ort": -0.047355,
+          "fark_toplam": -200.45,
+          "fark_en_kotu_alt": -0.0903,
+          "fark_en_kotu_ust": -0.0017,
+          "kesif_fark": -0.032102,
+          "dogrulama_fark": -0.074861,
+          "dokum": {
+            "STOP": {
+              "n": 851,
+              "toplam_r": 1121.55
+            },
+            "HEDEF": {
+              "n": 1096,
+              "toplam_r": -1298.29
+            },
+            "DIGER": {
+              "n": 592,
+              "toplam_r": -23.71
+            }
+          },
+          "karar": "ZARARLI"
+        },
+        {
+          "varyant": "yarim_engel_cik",
+          "esik": "yarim",
+          "tetik": "ENGEL",
+          "tepki": "cik",
+          "tetiklenen_n": 1855,
+          "etkilenen_n": 1855,
+          "kesif_etkilenen_n": 1140,
+          "dogrulama_etkilenen_n": 715,
+          "iyilesen_n": 847,
+          "kotulesen_n": 996,
+          "fark_ort": -0.035657,
+          "fark_toplam": -150.93,
+          "fark_en_kotu_alt": -0.0689,
+          "fark_en_kotu_ust": -0.0013,
+          "kesif_fark": -0.025024,
+          "dogrulama_fark": -0.05483,
+          "dokum": {
+            "STOP": {
+              "n": 592,
+              "toplam_r": 761.7
+            },
+            "HEDEF": {
+              "n": 758,
+              "toplam_r": -908.48
+            },
+            "DIGER": {
+              "n": 505,
+              "toplam_r": -4.16
+            }
+          },
+          "karar": "ZARARLI"
+        },
+        {
+          "varyant": "yarim_stabil_cik",
+          "esik": "yarim",
+          "tetik": "STABIL",
+          "tepki": "cik",
+          "tetiklenen_n": 377,
+          "etkilenen_n": 377,
+          "kesif_etkilenen_n": 252,
+          "dogrulama_etkilenen_n": 125,
+          "iyilesen_n": 196,
+          "kotulesen_n": 173,
+          "fark_ort": 0.001064,
+          "fark_toplam": 4.51,
+          "fark_en_kotu_alt": -0.0129,
+          "fark_en_kotu_ust": 0.0146,
+          "kesif_fark": 0.002398,
+          "dogrulama_fark": -0.001339,
+          "dokum": {
+            "STOP": {
+              "n": 136,
+              "toplam_r": 163.39
+            },
+            "HEDEF": {
+              "n": 117,
+              "toplam_r": -154.94
+            },
+            "DIGER": {
+              "n": 124,
+              "toplam_r": -3.94
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_ms_cik",
+          "esik": "yarim",
+          "tetik": "MS",
+          "tepki": "cik",
+          "tetiklenen_n": 1268,
+          "etkilenen_n": 1268,
+          "kesif_etkilenen_n": 739,
+          "dogrulama_etkilenen_n": 529,
+          "iyilesen_n": 611,
+          "kotulesen_n": 647,
+          "fark_ort": -0.016158,
+          "fark_toplam": -68.4,
+          "fark_en_kotu_alt": -0.0429,
+          "fark_en_kotu_ust": 0.0122,
+          "kesif_fark": 0.000769,
+          "dogrulama_fark": -0.046683,
+          "dokum": {
+            "STOP": {
+              "n": 423,
+              "toplam_r": 509.33
+            },
+            "HEDEF": {
+              "n": 479,
+              "toplam_r": -573.0
+            },
+            "DIGER": {
+              "n": 366,
+              "toplam_r": -4.73
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_blok_cik",
+          "esik": "yarim",
+          "tetik": "BLOK",
+          "tepki": "cik",
+          "tetiklenen_n": 1304,
+          "etkilenen_n": 1304,
+          "kesif_etkilenen_n": 816,
+          "dogrulama_etkilenen_n": 488,
+          "iyilesen_n": 589,
+          "kotulesen_n": 707,
+          "fark_ort": -0.016196,
+          "fark_toplam": -68.56,
+          "fark_en_kotu_alt": -0.0424,
+          "fark_en_kotu_ust": 0.0118,
+          "kesif_fark": -0.01814,
+          "dogrulama_fark": -0.012689,
+          "dokum": {
+            "STOP": {
+              "n": 390,
+              "toplam_r": 540.54
+            },
+            "HEDEF": {
+              "n": 548,
+              "toplam_r": -628.52
+            },
+            "DIGER": {
+              "n": 366,
+              "toplam_r": 19.42
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_seviye_ici_cik",
+          "esik": "yarim",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "cik",
+          "tetiklenen_n": 392,
+          "etkilenen_n": 392,
+          "kesif_etkilenen_n": 246,
+          "dogrulama_etkilenen_n": 146,
+          "iyilesen_n": 301,
+          "kotulesen_n": 65,
+          "fark_ort": 0.006148,
+          "fark_toplam": 26.03,
+          "fark_en_kotu_alt": -0.0026,
+          "fark_en_kotu_ust": 0.0142,
+          "kesif_fark": 0.009141,
+          "dogrulama_fark": 0.000752,
+          "dokum": {
+            "STOP": {
+              "n": 318,
+              "toplam_r": 120.78
+            },
+            "HEDEF": {
+              "n": 16,
+              "toplam_r": -47.92
+            },
+            "DIGER": {
+              "n": 58,
+              "toplam_r": -46.83
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "yarim_frm_cik",
+          "esik": "yarim",
+          "tetik": "FRM",
+          "tepki": "cik",
+          "tetiklenen_n": 374,
+          "etkilenen_n": 374,
+          "kesif_etkilenen_n": 232,
+          "dogrulama_etkilenen_n": 142,
+          "iyilesen_n": 221,
+          "kotulesen_n": 144,
+          "fark_ort": -0.001409,
+          "fark_toplam": -5.96,
+          "fark_en_kotu_alt": -0.0104,
+          "fark_en_kotu_ust": 0.0078,
+          "kesif_fark": 0.00489,
+          "dogrulama_fark": -0.012767,
+          "dokum": {
+            "STOP": {
+              "n": 188,
+              "toplam_r": 126.39
+            },
+            "HEDEF": {
+              "n": 92,
+              "toplam_r": -113.95
+            },
+            "DIGER": {
+              "n": 94,
+              "toplam_r": -18.4
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_ms_supurme_cik",
+          "esik": "yarim",
+          "tetik": "MS_SUPURME",
+          "tepki": "cik",
+          "tetiklenen_n": 650,
+          "etkilenen_n": 650,
+          "kesif_etkilenen_n": 416,
+          "dogrulama_etkilenen_n": 234,
+          "iyilesen_n": 356,
+          "kotulesen_n": 287,
+          "fark_ort": -0.009249,
+          "fark_toplam": -39.15,
+          "fark_en_kotu_alt": -0.0225,
+          "fark_en_kotu_ust": 0.0045,
+          "kesif_fark": 0.00284,
+          "dogrulama_fark": -0.03105,
+          "dokum": {
+            "STOP": {
+              "n": 264,
+              "toplam_r": 241.36
+            },
+            "HEDEF": {
+              "n": 188,
+              "toplam_r": -256.94
+            },
+            "DIGER": {
+              "n": 198,
+              "toplam_r": -23.57
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_vp_ters_cik",
+          "esik": "yarim",
+          "tetik": "VP_TERS",
+          "tepki": "cik",
+          "tetiklenen_n": 656,
+          "etkilenen_n": 656,
+          "kesif_etkilenen_n": 370,
+          "dogrulama_etkilenen_n": 286,
+          "iyilesen_n": 389,
+          "kotulesen_n": 254,
+          "fark_ort": -0.00083,
+          "fark_toplam": -3.51,
+          "fark_en_kotu_alt": -0.0138,
+          "fark_en_kotu_ust": 0.0127,
+          "kesif_fark": -0.000583,
+          "dogrulama_fark": -0.001276,
+          "dokum": {
+            "STOP": {
+              "n": 269,
+              "toplam_r": 190.66
+            },
+            "HEDEF": {
+              "n": 109,
+              "toplam_r": -153.27
+            },
+            "DIGER": {
+              "n": 278,
+              "toplam_r": -40.91
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_endeks_cik",
+          "esik": "yarim",
+          "tetik": "ENDEKS",
+          "tepki": "cik",
+          "tetiklenen_n": 925,
+          "etkilenen_n": 925,
+          "kesif_etkilenen_n": 568,
+          "dogrulama_etkilenen_n": 357,
+          "iyilesen_n": 481,
+          "kotulesen_n": 433,
+          "fark_ort": -0.009385,
+          "fark_toplam": -39.73,
+          "fark_en_kotu_alt": -0.0289,
+          "fark_en_kotu_ust": 0.0126,
+          "kesif_fark": 0.002337,
+          "dogrulama_fark": -0.030524,
+          "dokum": {
+            "STOP": {
+              "n": 359,
+              "toplam_r": 340.45
+            },
+            "HEDEF": {
+              "n": 266,
+              "toplam_r": -321.08
+            },
+            "DIGER": {
+              "n": 300,
+              "toplam_r": -59.1
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_herhangi_cik",
+          "esik": "yarim",
+          "tetik": "HERHANGI",
+          "tepki": "cik",
+          "tetiklenen_n": 2091,
+          "etkilenen_n": 2091,
+          "kesif_etkilenen_n": 1293,
+          "dogrulama_etkilenen_n": 798,
+          "iyilesen_n": 1001,
+          "kotulesen_n": 1071,
+          "fark_ort": -0.029934,
+          "fark_toplam": -126.71,
+          "fark_en_kotu_alt": -0.0634,
+          "fark_en_kotu_ust": 0.0049,
+          "kesif_fark": -0.018055,
+          "dogrulama_fark": -0.051356,
+          "dokum": {
+            "STOP": {
+              "n": 732,
+              "toplam_r": 862.41
+            },
+            "HEDEF": {
+              "n": 808,
+              "toplam_r": -973.49
+            },
+            "DIGER": {
+              "n": 551,
+              "toplam_r": -15.63
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_iki_farkli_cik",
+          "esik": "yarim",
+          "tetik": "IKI_FARKLI",
+          "tepki": "cik",
+          "tetiklenen_n": 1119,
+          "etkilenen_n": 1119,
+          "kesif_etkilenen_n": 682,
+          "dogrulama_etkilenen_n": 437,
+          "iyilesen_n": 643,
+          "kotulesen_n": 456,
+          "fark_ort": -0.010632,
+          "fark_toplam": -45.0,
+          "fark_en_kotu_alt": -0.0291,
+          "fark_en_kotu_ust": 0.0088,
+          "kesif_fark": 0.002095,
+          "dogrulama_fark": -0.033582,
+          "dokum": {
+            "STOP": {
+              "n": 486,
+              "toplam_r": 383.29
+            },
+            "HEDEF": {
+              "n": 266,
+              "toplam_r": -374.41
+            },
+            "DIGER": {
+              "n": 367,
+              "toplam_r": -53.88
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_her_islem_basabas",
+          "esik": "yarim",
+          "tetik": "HER_ISLEM",
+          "tepki": "basabas",
+          "tetiklenen_n": 2539,
+          "etkilenen_n": 1774,
+          "kesif_etkilenen_n": 1122,
+          "dogrulama_etkilenen_n": 652,
+          "iyilesen_n": 1014,
+          "kotulesen_n": 742,
+          "fark_ort": -0.037151,
+          "fark_toplam": -157.26,
+          "fark_en_kotu_alt": -0.0666,
+          "fark_en_kotu_ust": -0.0068,
+          "kesif_fark": -0.026266,
+          "dogrulama_fark": -0.056779,
+          "dokum": {
+            "STOP": {
+              "n": 851,
+              "toplam_r": 769.72
+            },
+            "HEDEF": {
+              "n": 425,
+              "toplam_r": -753.61
+            },
+            "DIGER": {
+              "n": 498,
+              "toplam_r": -173.37
+            }
+          },
+          "karar": "ZARARLI"
+        },
+        {
+          "varyant": "yarim_engel_basabas",
+          "esik": "yarim",
+          "tetik": "ENGEL",
+          "tepki": "basabas",
+          "tetiklenen_n": 1855,
+          "etkilenen_n": 1293,
+          "kesif_etkilenen_n": 789,
+          "dogrulama_etkilenen_n": 504,
+          "iyilesen_n": 730,
+          "kotulesen_n": 552,
+          "fark_ort": -0.027791,
+          "fark_toplam": -117.64,
+          "fark_en_kotu_alt": -0.0527,
+          "fark_en_kotu_ust": -0.003,
+          "kesif_fark": -0.020713,
+          "dogrulama_fark": -0.040555,
+          "dokum": {
+            "STOP": {
+              "n": 592,
+              "toplam_r": 530.83
+            },
+            "HEDEF": {
+              "n": 288,
+              "toplam_r": -518.34
+            },
+            "DIGER": {
+              "n": 413,
+              "toplam_r": -130.13
+            }
+          },
+          "karar": "ZARARLI"
+        },
+        {
+          "varyant": "yarim_stabil_basabas",
+          "esik": "yarim",
+          "tetik": "STABIL",
+          "tepki": "basabas",
+          "tetiklenen_n": 377,
+          "etkilenen_n": 279,
+          "kesif_etkilenen_n": 182,
+          "dogrulama_etkilenen_n": 97,
+          "iyilesen_n": 171,
+          "kotulesen_n": 104,
+          "fark_ort": 0.000867,
+          "fark_toplam": 3.67,
+          "fark_en_kotu_alt": -0.0113,
+          "fark_en_kotu_ust": 0.011,
+          "kesif_fark": 0.001302,
+          "dogrulama_fark": 8.4e-05,
+          "dokum": {
+            "STOP": {
+              "n": 136,
+              "toplam_r": 115.94
+            },
+            "HEDEF": {
+              "n": 48,
+              "toplam_r": -87.36
+            },
+            "DIGER": {
+              "n": 95,
+              "toplam_r": -24.91
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "yarim_ms_basabas",
+          "esik": "yarim",
+          "tetik": "MS",
+          "tepki": "basabas",
+          "tetiklenen_n": 1268,
+          "etkilenen_n": 905,
+          "kesif_etkilenen_n": 523,
+          "dogrulama_etkilenen_n": 382,
+          "iyilesen_n": 526,
+          "kotulesen_n": 372,
+          "fark_ort": -0.010953,
+          "fark_toplam": -46.36,
+          "fark_en_kotu_alt": -0.0331,
+          "fark_en_kotu_ust": 0.0099,
+          "kesif_fark": -0.000558,
+          "dogrulama_fark": -0.029697,
+          "dokum": {
+            "STOP": {
+              "n": 423,
+              "toplam_r": 369.8
+            },
+            "HEDEF": {
+              "n": 193,
+              "toplam_r": -334.34
+            },
+            "DIGER": {
+              "n": 289,
+              "toplam_r": -81.82
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_blok_basabas",
+          "esik": "yarim",
+          "tetik": "BLOK",
+          "tepki": "basabas",
+          "tetiklenen_n": 1304,
+          "etkilenen_n": 868,
+          "kesif_etkilenen_n": 536,
+          "dogrulama_etkilenen_n": 332,
+          "iyilesen_n": 490,
+          "kotulesen_n": 372,
+          "fark_ort": -0.016992,
+          "fark_toplam": -71.93,
+          "fark_en_kotu_alt": -0.0351,
+          "fark_en_kotu_ust": 0.0015,
+          "kesif_fark": -0.016149,
+          "dogrulama_fark": -0.018512,
+          "dokum": {
+            "STOP": {
+              "n": 390,
+              "toplam_r": 356.0
+            },
+            "HEDEF": {
+              "n": 186,
+              "toplam_r": -337.96
+            },
+            "DIGER": {
+              "n": 292,
+              "toplam_r": -89.97
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_seviye_ici_basabas",
+          "esik": "yarim",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "basabas",
+          "tetiklenen_n": 392,
+          "etkilenen_n": 392,
+          "kesif_etkilenen_n": 246,
+          "dogrulama_etkilenen_n": 146,
+          "iyilesen_n": 301,
+          "kotulesen_n": 65,
+          "fark_ort": 0.00544,
+          "fark_toplam": 23.03,
+          "fark_en_kotu_alt": -0.0031,
+          "fark_en_kotu_ust": 0.0135,
+          "kesif_fark": 0.008959,
+          "dogrulama_fark": -0.000906,
+          "dokum": {
+            "STOP": {
+              "n": 318,
+              "toplam_r": 118.42
+            },
+            "HEDEF": {
+              "n": 16,
+              "toplam_r": -48.03
+            },
+            "DIGER": {
+              "n": 58,
+              "toplam_r": -47.36
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_frm_basabas",
+          "esik": "yarim",
+          "tetik": "FRM",
+          "tepki": "basabas",
+          "tetiklenen_n": 374,
+          "etkilenen_n": 322,
+          "kesif_etkilenen_n": 206,
+          "dogrulama_etkilenen_n": 116,
+          "iyilesen_n": 203,
+          "kotulesen_n": 110,
+          "fark_ort": -0.00071,
+          "fark_toplam": -3.0,
+          "fark_en_kotu_alt": -0.0091,
+          "fark_en_kotu_ust": 0.0078,
+          "kesif_fark": 0.003688,
+          "dogrulama_fark": -0.008639,
+          "dokum": {
+            "STOP": {
+              "n": 188,
+              "toplam_r": 111.83
+            },
+            "HEDEF": {
+              "n": 51,
+              "toplam_r": -83.92
+            },
+            "DIGER": {
+              "n": 83,
+              "toplam_r": -30.91
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_ms_supurme_basabas",
+          "esik": "yarim",
+          "tetik": "MS_SUPURME",
+          "tepki": "basabas",
+          "tetiklenen_n": 650,
+          "etkilenen_n": 520,
+          "kesif_etkilenen_n": 331,
+          "dogrulama_etkilenen_n": 189,
+          "iyilesen_n": 322,
+          "kotulesen_n": 191,
+          "fark_ort": -0.004583,
+          "fark_toplam": -19.4,
+          "fark_en_kotu_alt": -0.0162,
+          "fark_en_kotu_ust": 0.0064,
+          "kesif_fark": 0.003177,
+          "dogrulama_fark": -0.018577,
+          "dokum": {
+            "STOP": {
+              "n": 264,
+              "toplam_r": 192.88
+            },
+            "HEDEF": {
+              "n": 90,
+              "toplam_r": -155.61
+            },
+            "DIGER": {
+              "n": 166,
+              "toplam_r": -56.67
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_vp_ters_basabas",
+          "esik": "yarim",
+          "tetik": "VP_TERS",
+          "tepki": "basabas",
+          "tetiklenen_n": 656,
+          "etkilenen_n": 573,
+          "kesif_etkilenen_n": 318,
+          "dogrulama_etkilenen_n": 255,
+          "iyilesen_n": 357,
+          "kotulesen_n": 204,
+          "fark_ort": -0.001138,
+          "fark_toplam": -4.82,
+          "fark_en_kotu_alt": -0.0133,
+          "fark_en_kotu_ust": 0.0116,
+          "kesif_fark": 0.001671,
+          "dogrulama_fark": -0.006203,
+          "dokum": {
+            "STOP": {
+              "n": 269,
+              "toplam_r": 171.46
+            },
+            "HEDEF": {
+              "n": 68,
+              "toplam_r": -122.37
+            },
+            "DIGER": {
+              "n": 236,
+              "toplam_r": -53.91
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_endeks_basabas",
+          "esik": "yarim",
+          "tetik": "ENDEKS",
+          "tepki": "basabas",
+          "tetiklenen_n": 925,
+          "etkilenen_n": 710,
+          "kesif_etkilenen_n": 433,
+          "dogrulama_etkilenen_n": 277,
+          "iyilesen_n": 425,
+          "kotulesen_n": 277,
+          "fark_ort": -0.003104,
+          "fark_toplam": -13.14,
+          "fark_en_kotu_alt": -0.019,
+          "fark_en_kotu_ust": 0.0129,
+          "kesif_fark": 0.007808,
+          "dogrulama_fark": -0.022782,
+          "dokum": {
+            "STOP": {
+              "n": 359,
+              "toplam_r": 276.56
+            },
+            "HEDEF": {
+              "n": 109,
+              "toplam_r": -190.97
+            },
+            "DIGER": {
+              "n": 242,
+              "toplam_r": -98.73
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_herhangi_basabas",
+          "esik": "yarim",
+          "tetik": "HERHANGI",
+          "tepki": "basabas",
+          "tetiklenen_n": 2091,
+          "etkilenen_n": 1511,
+          "kesif_etkilenen_n": 930,
+          "dogrulama_etkilenen_n": 581,
+          "iyilesen_n": 886,
+          "kotulesen_n": 608,
+          "fark_ort": -0.022635,
+          "fark_toplam": -95.81,
+          "fark_en_kotu_alt": -0.0492,
+          "fark_en_kotu_ust": 0.0038,
+          "kesif_fark": -0.012282,
+          "dogrulama_fark": -0.041304,
+          "dokum": {
+            "STOP": {
+              "n": 732,
+              "toplam_r": 620.6
+            },
+            "HEDEF": {
+              "n": 319,
+              "toplam_r": -566.52
+            },
+            "DIGER": {
+              "n": 460,
+              "toplam_r": -149.89
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "yarim_iki_farkli_basabas",
+          "esik": "yarim",
+          "tetik": "IKI_FARKLI",
+          "tepki": "basabas",
+          "tetiklenen_n": 1119,
+          "etkilenen_n": 939,
+          "kesif_etkilenen_n": 571,
+          "dogrulama_etkilenen_n": 368,
+          "iyilesen_n": 587,
+          "kotulesen_n": 331,
+          "fark_ort": -0.006102,
+          "fark_toplam": -25.83,
+          "fark_en_kotu_alt": -0.0236,
+          "fark_en_kotu_ust": 0.0103,
+          "kesif_fark": -0.000538,
+          "dogrulama_fark": -0.016134,
+          "dokum": {
+            "STOP": {
+              "n": 486,
+              "toplam_r": 322.13
+            },
+            "HEDEF": {
+              "n": 142,
+              "toplam_r": -256.27
+            },
+            "DIGER": {
+              "n": 311,
+              "toplam_r": -91.69
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_her_islem_cik",
+          "esik": "bir",
+          "tetik": "HER_ISLEM",
+          "tepki": "cik",
+          "tetiklenen_n": 1749,
+          "etkilenen_n": 1749,
+          "kesif_etkilenen_n": 1077,
+          "dogrulama_etkilenen_n": 672,
+          "iyilesen_n": 709,
+          "kotulesen_n": 1026,
+          "fark_ort": -0.003856,
+          "fark_toplam": -16.32,
+          "fark_en_kotu_alt": -0.0325,
+          "fark_en_kotu_ust": 0.0268,
+          "kesif_fark": -0.003211,
+          "dogrulama_fark": -0.005018,
+          "dokum": {
+            "STOP": {
+              "n": 393,
+              "toplam_r": 653.75
+            },
+            "HEDEF": {
+              "n": 891,
+              "toplam_r": -768.97
+            },
+            "DIGER": {
+              "n": 465,
+              "toplam_r": 98.9
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_engel_cik",
+          "esik": "bir",
+          "tetik": "ENGEL",
+          "tepki": "cik",
+          "tetiklenen_n": 1233,
+          "etkilenen_n": 1233,
+          "kesif_etkilenen_n": 746,
+          "dogrulama_etkilenen_n": 487,
+          "iyilesen_n": 509,
+          "kotulesen_n": 712,
+          "fark_ort": -0.004392,
+          "fark_toplam": -18.59,
+          "fark_en_kotu_alt": -0.029,
+          "fark_en_kotu_ust": 0.0199,
+          "kesif_fark": -0.007801,
+          "dogrulama_fark": 0.001754,
+          "dokum": {
+            "STOP": {
+              "n": 282,
+              "toplam_r": 447.61
+            },
+            "HEDEF": {
+              "n": 580,
+              "toplam_r": -533.43
+            },
+            "DIGER": {
+              "n": 371,
+              "toplam_r": 67.23
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_stabil_cik",
+          "esik": "bir",
+          "tetik": "STABIL",
+          "tepki": "cik",
+          "tetiklenen_n": 220,
+          "etkilenen_n": 220,
+          "kesif_etkilenen_n": 146,
+          "dogrulama_etkilenen_n": 74,
+          "iyilesen_n": 113,
+          "kotulesen_n": 99,
+          "fark_ort": 0.0078,
+          "fark_toplam": 33.02,
+          "fark_en_kotu_alt": -0.0011,
+          "fark_en_kotu_ust": 0.0168,
+          "kesif_fark": 0.008284,
+          "dogrulama_fark": 0.006925,
+          "dokum": {
+            "STOP": {
+              "n": 73,
+              "toplam_r": 100.68
+            },
+            "HEDEF": {
+              "n": 69,
+              "toplam_r": -79.59
+            },
+            "DIGER": {
+              "n": 78,
+              "toplam_r": 11.92
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "bir_ms_cik",
+          "esik": "bir",
+          "tetik": "MS",
+          "tepki": "cik",
+          "tetiklenen_n": 807,
+          "etkilenen_n": 807,
+          "kesif_etkilenen_n": 471,
+          "dogrulama_etkilenen_n": 336,
+          "iyilesen_n": 349,
+          "kotulesen_n": 449,
+          "fark_ort": -0.004302,
+          "fark_toplam": -18.21,
+          "fark_en_kotu_alt": -0.0228,
+          "fark_en_kotu_ust": 0.0136,
+          "kesif_fark": 0.00199,
+          "dogrulama_fark": -0.015649,
+          "dokum": {
+            "STOP": {
+              "n": 201,
+              "toplam_r": 292.24
+            },
+            "HEDEF": {
+              "n": 350,
+              "toplam_r": -341.86
+            },
+            "DIGER": {
+              "n": 256,
+              "toplam_r": 31.41
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_blok_cik",
+          "esik": "bir",
+          "tetik": "BLOK",
+          "tepki": "cik",
+          "tetiklenen_n": 883,
+          "etkilenen_n": 883,
+          "kesif_etkilenen_n": 535,
+          "dogrulama_etkilenen_n": 348,
+          "iyilesen_n": 361,
+          "kotulesen_n": 514,
+          "fark_ort": 0.000775,
+          "fark_toplam": 3.28,
+          "fark_en_kotu_alt": -0.0199,
+          "fark_en_kotu_ust": 0.0212,
+          "kesif_fark": -0.007478,
+          "dogrulama_fark": 0.015657,
+          "dokum": {
+            "STOP": {
+              "n": 192,
+              "toplam_r": 318.26
+            },
+            "HEDEF": {
+              "n": 420,
+              "toplam_r": -369.22
+            },
+            "DIGER": {
+              "n": 271,
+              "toplam_r": 54.24
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_seviye_ici_cik",
+          "esik": "bir",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "cik",
+          "tetiklenen_n": 164,
+          "etkilenen_n": 164,
+          "kesif_etkilenen_n": 100,
+          "dogrulama_etkilenen_n": 64,
+          "iyilesen_n": 125,
+          "kotulesen_n": 25,
+          "fark_ort": 0.005642,
+          "fark_toplam": 23.88,
+          "fark_en_kotu_alt": 0.0005,
+          "fark_en_kotu_ust": 0.0105,
+          "kesif_fark": 0.006595,
+          "dogrulama_fark": 0.003924,
+          "dokum": {
+            "STOP": {
+              "n": 135,
+              "toplam_r": 52.17
+            },
+            "HEDEF": {
+              "n": 4,
+              "toplam_r": -11.94
+            },
+            "DIGER": {
+              "n": 25,
+              "toplam_r": -16.35
+            }
+          },
+          "karar": "UMUT_VAR"
+        },
+        {
+          "varyant": "bir_frm_cik",
+          "esik": "bir",
+          "tetik": "FRM",
+          "tepki": "cik",
+          "tetiklenen_n": 139,
+          "etkilenen_n": 139,
+          "kesif_etkilenen_n": 77,
+          "dogrulama_etkilenen_n": 62,
+          "iyilesen_n": 72,
+          "kotulesen_n": 62,
+          "fark_ort": -0.003487,
+          "fark_toplam": -14.76,
+          "fark_en_kotu_alt": -0.0084,
+          "fark_en_kotu_ust": 0.0014,
+          "kesif_fark": -0.002426,
+          "dogrulama_fark": -0.005401,
+          "dokum": {
+            "STOP": {
+              "n": 51,
+              "toplam_r": 27.76
+            },
+            "HEDEF": {
+              "n": 41,
+              "toplam_r": -41.06
+            },
+            "DIGER": {
+              "n": 47,
+              "toplam_r": -1.46
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_ms_supurme_cik",
+          "esik": "bir",
+          "tetik": "MS_SUPURME",
+          "tepki": "cik",
+          "tetiklenen_n": 406,
+          "etkilenen_n": 406,
+          "kesif_etkilenen_n": 260,
+          "dogrulama_etkilenen_n": 146,
+          "iyilesen_n": 210,
+          "kotulesen_n": 190,
+          "fark_ort": 0.000539,
+          "fark_toplam": 2.28,
+          "fark_en_kotu_alt": -0.0106,
+          "fark_en_kotu_ust": 0.0108,
+          "kesif_fark": 0.003892,
+          "dogrulama_fark": -0.005508,
+          "dokum": {
+            "STOP": {
+              "n": 138,
+              "toplam_r": 146.59
+            },
+            "HEDEF": {
+              "n": 124,
+              "toplam_r": -146.45
+            },
+            "DIGER": {
+              "n": 144,
+              "toplam_r": 2.14
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_vp_ters_cik",
+          "esik": "bir",
+          "tetik": "VP_TERS",
+          "tepki": "cik",
+          "tetiklenen_n": 419,
+          "etkilenen_n": 419,
+          "kesif_etkilenen_n": 223,
+          "dogrulama_etkilenen_n": 196,
+          "iyilesen_n": 233,
+          "kotulesen_n": 174,
+          "fark_ort": -0.001622,
+          "fark_toplam": -6.87,
+          "fark_en_kotu_alt": -0.0104,
+          "fark_en_kotu_ust": 0.0082,
+          "kesif_fark": -0.005337,
+          "dogrulama_fark": 0.005076,
+          "dokum": {
+            "STOP": {
+              "n": 137,
+              "toplam_r": 103.92
+            },
+            "HEDEF": {
+              "n": 79,
+              "toplam_r": -96.26
+            },
+            "DIGER": {
+              "n": 203,
+              "toplam_r": -14.53
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_endeks_cik",
+          "esik": "bir",
+          "tetik": "ENDEKS",
+          "tepki": "cik",
+          "tetiklenen_n": 549,
+          "etkilenen_n": 549,
+          "kesif_etkilenen_n": 320,
+          "dogrulama_etkilenen_n": 229,
+          "iyilesen_n": 259,
+          "kotulesen_n": 281,
+          "fark_ort": -0.001149,
+          "fark_toplam": -4.86,
+          "fark_en_kotu_alt": -0.0139,
+          "fark_en_kotu_ust": 0.0115,
+          "kesif_fark": 0.000461,
+          "dogrulama_fark": -0.00405,
+          "dokum": {
+            "STOP": {
+              "n": 164,
+              "toplam_r": 180.32
+            },
+            "HEDEF": {
+              "n": 182,
+              "toplam_r": -172.69
+            },
+            "DIGER": {
+              "n": 203,
+              "toplam_r": -12.49
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_herhangi_cik",
+          "esik": "bir",
+          "tetik": "HERHANGI",
+          "tepki": "cik",
+          "tetiklenen_n": 1349,
+          "etkilenen_n": 1349,
+          "kesif_etkilenen_n": 823,
+          "dogrulama_etkilenen_n": 526,
+          "iyilesen_n": 574,
+          "kotulesen_n": 760,
+          "fark_ort": -0.004792,
+          "fark_toplam": -20.29,
+          "fark_en_kotu_alt": -0.0283,
+          "fark_en_kotu_ust": 0.018,
+          "kesif_fark": -0.009993,
+          "dogrulama_fark": 0.004585,
+          "dokum": {
+            "STOP": {
+              "n": 331,
+              "toplam_r": 482.95
+            },
+            "HEDEF": {
+              "n": 610,
+              "toplam_r": -566.91
+            },
+            "DIGER": {
+              "n": 408,
+              "toplam_r": 63.67
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_iki_farkli_cik",
+          "esik": "bir",
+          "tetik": "IKI_FARKLI",
+          "tepki": "cik",
+          "tetiklenen_n": 635,
+          "etkilenen_n": 635,
+          "kesif_etkilenen_n": 371,
+          "dogrulama_etkilenen_n": 264,
+          "iyilesen_n": 336,
+          "kotulesen_n": 284,
+          "fark_ort": -0.001405,
+          "fark_toplam": -5.95,
+          "fark_en_kotu_alt": -0.0146,
+          "fark_en_kotu_ust": 0.0112,
+          "kesif_fark": -0.000174,
+          "dogrulama_fark": -0.003623,
+          "dokum": {
+            "STOP": {
+              "n": 217,
+              "toplam_r": 197.36
+            },
+            "HEDEF": {
+              "n": 172,
+              "toplam_r": -200.27
+            },
+            "DIGER": {
+              "n": 246,
+              "toplam_r": -3.04
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_her_islem_basabas",
+          "esik": "bir",
+          "tetik": "HER_ISLEM",
+          "tepki": "basabas",
+          "tetiklenen_n": 1749,
+          "etkilenen_n": 898,
+          "kesif_etkilenen_n": 548,
+          "dogrulama_etkilenen_n": 350,
+          "iyilesen_n": 507,
+          "kotulesen_n": 379,
+          "fark_ort": -0.008745,
+          "fark_toplam": -37.02,
+          "fark_en_kotu_alt": -0.0286,
+          "fark_en_kotu_ust": 0.0104,
+          "kesif_fark": -0.012124,
+          "dogrulama_fark": -0.002652,
+          "dokum": {
+            "STOP": {
+              "n": 393,
+              "toplam_r": 368.89
+            },
+            "HEDEF": {
+              "n": 192,
+              "toplam_r": -330.19
+            },
+            "DIGER": {
+              "n": 313,
+              "toplam_r": -75.72
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_engel_basabas",
+          "esik": "bir",
+          "tetik": "ENGEL",
+          "tepki": "basabas",
+          "tetiklenen_n": 1233,
+          "etkilenen_n": 671,
+          "kesif_etkilenen_n": 396,
+          "dogrulama_etkilenen_n": 275,
+          "iyilesen_n": 376,
+          "kotulesen_n": 287,
+          "fark_ort": -0.007058,
+          "fark_toplam": -29.87,
+          "fark_en_kotu_alt": -0.0252,
+          "fark_en_kotu_ust": 0.0101,
+          "kesif_fark": -0.00995,
+          "dogrulama_fark": -0.001842,
+          "dokum": {
+            "STOP": {
+              "n": 282,
+              "toplam_r": 265.47
+            },
+            "HEDEF": {
+              "n": 138,
+              "toplam_r": -240.18
+            },
+            "DIGER": {
+              "n": 251,
+              "toplam_r": -55.17
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_stabil_basabas",
+          "esik": "bir",
+          "tetik": "STABIL",
+          "tepki": "basabas",
+          "tetiklenen_n": 220,
+          "etkilenen_n": 156,
+          "kesif_etkilenen_n": 97,
+          "dogrulama_etkilenen_n": 59,
+          "iyilesen_n": 97,
+          "kotulesen_n": 57,
+          "fark_ort": 0.00304,
+          "fark_toplam": 12.87,
+          "fark_en_kotu_alt": -0.0047,
+          "fark_en_kotu_ust": 0.0099,
+          "kesif_fark": 0.003383,
+          "dogrulama_fark": 0.002421,
+          "dokum": {
+            "STOP": {
+              "n": 73,
+              "toplam_r": 65.42
+            },
+            "HEDEF": {
+              "n": 28,
+              "toplam_r": -46.16
+            },
+            "DIGER": {
+              "n": 55,
+              "toplam_r": -6.4
+            }
+          },
+          "karar": "ZAYIF_ARTI"
+        },
+        {
+          "varyant": "bir_ms_basabas",
+          "esik": "bir",
+          "tetik": "MS",
+          "tepki": "basabas",
+          "tetiklenen_n": 807,
+          "etkilenen_n": 473,
+          "kesif_etkilenen_n": 273,
+          "dogrulama_etkilenen_n": 200,
+          "iyilesen_n": 274,
+          "kotulesen_n": 193,
+          "fark_ort": -0.00252,
+          "fark_toplam": -10.67,
+          "fark_en_kotu_alt": -0.0175,
+          "fark_en_kotu_ust": 0.0101,
+          "kesif_fark": -0.001293,
+          "dogrulama_fark": -0.004734,
+          "dokum": {
+            "STOP": {
+              "n": 201,
+              "toplam_r": 184.71
+            },
+            "HEDEF": {
+              "n": 95,
+              "toplam_r": -156.96
+            },
+            "DIGER": {
+              "n": 177,
+              "toplam_r": -38.42
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_blok_basabas",
+          "esik": "bir",
+          "tetik": "BLOK",
+          "tepki": "basabas",
+          "tetiklenen_n": 883,
+          "etkilenen_n": 457,
+          "kesif_etkilenen_n": 261,
+          "dogrulama_etkilenen_n": 196,
+          "iyilesen_n": 261,
+          "kotulesen_n": 192,
+          "fark_ort": -0.002198,
+          "fark_toplam": -9.3,
+          "fark_en_kotu_alt": -0.016,
+          "fark_en_kotu_ust": 0.0111,
+          "kesif_fark": -0.005488,
+          "dogrulama_fark": 0.003735,
+          "dokum": {
+            "STOP": {
+              "n": 192,
+              "toplam_r": 180.4
+            },
+            "HEDEF": {
+              "n": 86,
+              "toplam_r": -153.77
+            },
+            "DIGER": {
+              "n": 179,
+              "toplam_r": -35.94
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_seviye_ici_basabas",
+          "esik": "bir",
+          "tetik": "SEVIYE_ICI",
+          "tepki": "basabas",
+          "tetiklenen_n": 164,
+          "etkilenen_n": 164,
+          "kesif_etkilenen_n": 100,
+          "dogrulama_etkilenen_n": 64,
+          "iyilesen_n": 125,
+          "kotulesen_n": 25,
+          "fark_ort": 0.00507,
+          "fark_toplam": 21.46,
+          "fark_en_kotu_alt": 0.0002,
+          "fark_en_kotu_ust": 0.0095,
+          "kesif_fark": 0.006432,
+          "dogrulama_fark": 0.002614,
+          "dokum": {
+            "STOP": {
+              "n": 135,
+              "toplam_r": 49.86
+            },
+            "HEDEF": {
+              "n": 4,
+              "toplam_r": -12.05
+            },
+            "DIGER": {
+              "n": 25,
+              "toplam_r": -16.35
+            }
+          },
+          "karar": "UMUT_VAR"
+        },
+        {
+          "varyant": "bir_frm_basabas",
+          "esik": "bir",
+          "tetik": "FRM",
+          "tepki": "basabas",
+          "tetiklenen_n": 139,
+          "etkilenen_n": 104,
+          "kesif_etkilenen_n": 62,
+          "dogrulama_etkilenen_n": 42,
+          "iyilesen_n": 58,
+          "kotulesen_n": 41,
+          "fark_ort": -0.002919,
+          "fark_toplam": -12.36,
+          "fark_en_kotu_alt": -0.0075,
+          "fark_en_kotu_ust": 0.0017,
+          "kesif_fark": -0.003875,
+          "dogrulama_fark": -0.001197,
+          "dokum": {
+            "STOP": {
+              "n": 51,
+              "toplam_r": 23.87
+            },
+            "HEDEF": {
+              "n": 18,
+              "toplam_r": -27.3
+            },
+            "DIGER": {
+              "n": 35,
+              "toplam_r": -8.93
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_ms_supurme_basabas",
+          "esik": "bir",
+          "tetik": "MS_SUPURME",
+          "tepki": "basabas",
+          "tetiklenen_n": 406,
+          "etkilenen_n": 300,
+          "kesif_etkilenen_n": 189,
+          "dogrulama_etkilenen_n": 111,
+          "iyilesen_n": 181,
+          "kotulesen_n": 113,
+          "fark_ort": 0.00029,
+          "fark_toplam": 1.23,
+          "fark_en_kotu_alt": -0.0078,
+          "fark_en_kotu_ust": 0.0083,
+          "kesif_fark": 0.000852,
+          "dogrulama_fark": -0.000723,
+          "dokum": {
+            "STOP": {
+              "n": 138,
+              "toplam_r": 107.83
+            },
+            "HEDEF": {
+              "n": 48,
+              "toplam_r": -79.69
+            },
+            "DIGER": {
+              "n": 114,
+              "toplam_r": -26.92
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_vp_ters_basabas",
+          "esik": "bir",
+          "tetik": "VP_TERS",
+          "tepki": "basabas",
+          "tetiklenen_n": 419,
+          "etkilenen_n": 342,
+          "kesif_etkilenen_n": 175,
+          "dogrulama_etkilenen_n": 167,
+          "iyilesen_n": 201,
+          "kotulesen_n": 129,
+          "fark_ort": -0.002657,
+          "fark_toplam": -11.25,
+          "fark_en_kotu_alt": -0.0109,
+          "fark_en_kotu_ust": 0.0056,
+          "kesif_fark": -0.004345,
+          "dogrulama_fark": 0.000388,
+          "dokum": {
+            "STOP": {
+              "n": 137,
+              "toplam_r": 89.71
+            },
+            "HEDEF": {
+              "n": 45,
+              "toplam_r": -76.65
+            },
+            "DIGER": {
+              "n": 160,
+              "toplam_r": -24.31
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_endeks_basabas",
+          "esik": "bir",
+          "tetik": "ENDEKS",
+          "tepki": "basabas",
+          "tetiklenen_n": 549,
+          "etkilenen_n": 350,
+          "kesif_etkilenen_n": 197,
+          "dogrulama_etkilenen_n": 153,
+          "iyilesen_n": 203,
+          "kotulesen_n": 142,
+          "fark_ort": -0.000152,
+          "fark_toplam": -0.64,
+          "fark_en_kotu_alt": -0.0104,
+          "fark_en_kotu_ust": 0.0097,
+          "kesif_fark": 0.000423,
+          "dogrulama_fark": -0.001188,
+          "dokum": {
+            "STOP": {
+              "n": 164,
+              "toplam_r": 130.48
+            },
+            "HEDEF": {
+              "n": 43,
+              "toplam_r": -76.17
+            },
+            "DIGER": {
+              "n": 143,
+              "toplam_r": -54.96
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_herhangi_basabas",
+          "esik": "bir",
+          "tetik": "HERHANGI",
+          "tepki": "basabas",
+          "tetiklenen_n": 1349,
+          "etkilenen_n": 763,
+          "kesif_etkilenen_n": 456,
+          "dogrulama_etkilenen_n": 307,
+          "iyilesen_n": 434,
+          "kotulesen_n": 318,
+          "fark_ort": -0.007758,
+          "fark_toplam": -32.84,
+          "fark_en_kotu_alt": -0.0258,
+          "fark_en_kotu_ust": 0.0102,
+          "kesif_fark": -0.011145,
+          "dogrulama_fark": -0.001651,
+          "dokum": {
+            "STOP": {
+              "n": 331,
+              "toplam_r": 295.37
+            },
+            "HEDEF": {
+              "n": 152,
+              "toplam_r": -262.26
+            },
+            "DIGER": {
+              "n": 280,
+              "toplam_r": -65.95
+            }
+          },
+          "karar": "GECMEDI"
+        },
+        {
+          "varyant": "bir_iki_farkli_basabas",
+          "esik": "bir",
+          "tetik": "IKI_FARKLI",
+          "tepki": "basabas",
+          "tetiklenen_n": 635,
+          "etkilenen_n": 485,
+          "kesif_etkilenen_n": 279,
+          "dogrulama_etkilenen_n": 206,
+          "iyilesen_n": 288,
+          "kotulesen_n": 181,
+          "fark_ort": -0.001799,
+          "fark_toplam": -7.61,
+          "fark_en_kotu_alt": -0.0134,
+          "fark_en_kotu_ust": 0.0091,
+          "kesif_fark": -0.004889,
+          "dogrulama_fark": 0.003774,
+          "dokum": {
+            "STOP": {
+              "n": 217,
+              "toplam_r": 153.19
+            },
+            "HEDEF": {
+              "n": 75,
+              "toplam_r": -125.68
+            },
+            "DIGER": {
+              "n": 193,
+              "toplam_r": -35.12
+            }
+          },
+          "karar": "GECMEDI"
+        }
+      ]
+    }
+  }
+}

@@ -122,7 +122,7 @@ def main():
                         f"{stock}: günlük fetch cooldown yalnızca bellekte; kalıcı cache doğrulanmadı"
                     )
             else:
-                deque_manager.gunluk_fetch_denemesi_kaydet(stock)
+                deque_manager.gunluk_fetch_denemesi_kaydet(stock, basarili=False)
         df_gunluk = deque_manager.to_gunluk_dataframe(stock)
         if df_gunluk is not None and len(df_gunluk) >= 30:
             tfs["1d"] = df_gunluk

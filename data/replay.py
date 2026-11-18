@@ -594,6 +594,88 @@ def mum_kapanis_ani(ts, tf: str) -> Optional[pd.Timestamp]:
     return None if len(kapanislar) == 0 else kapanislar[0]
 
 
+_SEANS_BAR_DESENI: Dict[str, List[Tuple[int, int]]] = {}
+
+
+def _seans_bar_deseni(tf: str) -> List[Tuple[int, int]]:
+    """Bir BIST seansında `tf` kovalarının (saat, dakika) etiket deseni.
+
+    Desen, gerçek kova hizasından (`resample_ohlcv`, 09:30 çapası) türetilir;
+    böylece 2H/4H fazı elle yazılmaz ve tek kaynak korunur.
+    """
+    tf = str(tf or "").strip().lower()
+    if tf in _SEANS_BAR_DESENI:
+        return _SEANS_BAR_DESENI[tf]
+    if tf == "1d":
+        desen = [(0, 0)]
+    else:
+        # 2026-01-05 Pazartesi, tatil değil: tam seans (09:30..17:30).
+        idx = pd.date_range("2026-01-05 09:30", "2026-01-05 17:30",
+                            freq="h", tz=ISTANBUL_TZ)
+        if tf == "1h":
+            desen = [(int(t.hour), int(t.minute)) for t in idx]
+        else:
+            sentetik = pd.DataFrame(
+                {"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0},
+                index=idx,
+            )
+            kova = resample_ohlcv(sentetik, tf)
+            desen = ([(int(t.hour), int(t.minute)) for t in kova.index]
+                     if len(kova) else [(9, 30)])
+    _SEANS_BAR_DESENI[tf] = desen
+    return desen
+
+
+def beklenen_son_kapanis_ani(tf: str, now: Optional[datetime] = None, *,
+                             geri_gun: int = 14) -> Optional[pd.Timestamp]:
+    """Seans takvimine göre `now` itibarıyla kapanmış OLMASI GEREKEN son mum.
+
+    Neden: veri tazeliği "son kapanış kaç dakika önceydi" diye ölçülünce seans
+    takvimi yok sayılıyordu. Seansın ilk saatlerinde (veya ilk saatlik mum
+    kapanmadan) geçen süre doğal olarak büyüktür; o saatlerde cache GÜNCEL
+    olduğu hâlde "bayat" sayılıp /grafik veri yok hatası veriyordu. Burada
+    beklenen kapanış anı hesaplanır; çağıran `beklenen - son kapanış` farkını
+    (gecikme) kullanır — gecikme ~0 ise veri günceldir.
+
+    Takvim kararı `islem_gunu_mu` + `mum_kapanis_anlari` ile verilir (tek
+    kaynak): hafta sonu, resmî tatil ve yarım gün otomatik düşer.
+    """
+    if now is None:
+        now = datetime.now(ISTANBUL_TZ)
+    elif now.tzinfo is None:
+        now = ISTANBUL_TZ.localize(now)
+    else:
+        now = now.astimezone(ISTANBUL_TZ)
+    desen = _seans_bar_deseni(tf)
+    if not desen:
+        return None
+    bugun = now.date()
+    etiketler = []
+    for geri in range(max(1, int(geri_gun))):
+        gun = bugun - timedelta(days=geri)
+        # NOT: `tzinfo=` doğrudan verilmez; pytz'de LMT (+1:56) kaymasına yol açar
+        # (17:30 etiketi 18:34'e kayıyordu). `.localize()` kullanılır.
+        if not islem_gunu_mu(ISTANBUL_TZ.localize(datetime.combine(gun, dt_time(12, 0)))):
+            continue
+        # Yarım günde seans 13:00'te biter: seans sonundan SONRA başlayan kova
+        # etiketleri gerçekte yoktur; üretilirse kapanışı şişirir (18:30 gibi).
+        seans_sonu = seans_sonu_saati(gun)
+        for saat, dakika in desen:
+            if (saat, dakika) >= (seans_sonu.hour, seans_sonu.minute):
+                continue
+            etiketler.append(pd.Timestamp(
+                ISTANBUL_TZ.localize(datetime.combine(gun, dt_time(saat, dakika)))))
+    if not etiketler:
+        return None
+    kapanislar = mum_kapanis_anlari(pd.DatetimeIndex(etiketler), tf)
+    if len(kapanislar) == 0:
+        return None
+    gecmis = kapanislar[kapanislar <= pd.Timestamp(now)]
+    if len(gecmis) == 0:
+        return None
+    return gecmis.max()
+
+
 def bar_kapandi_mi(ts, tf: str, now: Optional[datetime] = None) -> bool:
     """Bu mum, verilen ana kadar GERÇEKTEN kapandı mı? (bildirim güvenlik kapısı).
 

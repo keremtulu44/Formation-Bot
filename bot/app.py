@@ -423,9 +423,20 @@ def main_loop():
             break
         taze = ilk_veriler.get(stock)
         if taze is not None:
-            deque_manager.append_dataframe(stock, taze)
-            deque_manager.save_to_disk(stock)
-            _pkg.logger.info(f"{stock}: {len(taze)} mum çekildi ve diske kaydedildi")
+            # Dönüş kontrol edilmeden "kaydedildi" demek yanlış başarı loguydu:
+            # OHLCV doğrulaması reddederse deque değişmez (sessiz geçilme).
+            if deque_manager.append_dataframe(stock, taze):
+                deque_manager.save_to_disk(stock)
+                _pkg.logger.info(f"{stock}: {len(taze)} mum çekildi ve diske kaydedildi")
+            else:
+                _pkg.daily_stats['cache_reddi'] = int(
+                    _pkg.daily_stats.get('cache_reddi') or 0
+                ) + 1
+                _pkg.logger.error(
+                    f"{stock}: ilk yükleme verisi OHLCV doğrulamasında REDDEDİLDİ; "
+                    "diske yazılmadı, sonraki turda tekrar denenecek"
+                )
+                ilk_hatalar[stock] = "OHLCV doğrulaması reddetti"
         else:
             _pkg.logger.warning(
                 f"{stock}: ilk veri çekilemedi ({ilk_hatalar.get(stock, 'veri yok')}); "
@@ -441,12 +452,22 @@ def main_loop():
                 if _pkg._shutdown_requested:
                     break
                 taze_gunluk = fetch_yfinance_1d(stock)
-            deque_manager.gunluk_fetch_denemesi_kaydet(stock)
             if taze_gunluk is not None and len(taze_gunluk) >= 30:
-                deque_manager.append_gunluk_dataframe(stock, taze_gunluk)
-                deque_manager.save_gunluk_to_disk(stock)
-                _pkg.logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
+                if deque_manager.append_gunluk_dataframe(stock, taze_gunluk):
+                    deque_manager.gunluk_fetch_denemesi_kaydet(stock)
+                    deque_manager.save_gunluk_to_disk(stock)
+                    _pkg.logger.info(f"{stock}: {len(taze_gunluk)} GÜNLÜK mum çekildi ve diske kaydedildi")
+                else:
+                    deque_manager.gunluk_fetch_denemesi_kaydet(stock, basarili=False)
+                    _pkg.daily_stats['cache_reddi'] = int(
+                        _pkg.daily_stats.get('cache_reddi') or 0
+                    ) + 1
+                    _pkg.logger.error(
+                        f"{stock}: ilk günlük veri OHLCV doğrulamasında REDDEDİLDİ; "
+                        "diske yazılmadı - resample kullanılacak"
+                    )
             else:
+                deque_manager.gunluk_fetch_denemesi_kaydet(stock, basarili=False)
                 _pkg.logger.warning(f"{stock}: ilk günlük veri çekilemedi - resample kullanılacak")
 
     # İlk yükleme eksik önbelleği birleştirir; temiz gece yenilemesi değildir.
@@ -504,6 +525,18 @@ def main_loop():
     while not _pkg._shutdown_requested:
         try:
             now = _pkg.datetime.now(ISTANBUL_TZ)
+            # --- CANLILIK / HEARTBEAT (periyodik) ---
+            # Heartbeat eskiden yalnız tarama içinde/ sonunda yazılıyordu;
+            # seans dışı uzun uykularda ve beklemelerde dosya saatlerce
+            # güncellenmediği için /health, deploy_check ve /render canlı
+            # süreci "uyuyor/bayat" sanıyordu. write_heartbeat içeride
+            # HEARTBEAT_MIN_ARALIK_SN ile kısılır; buradan her döngüde
+            # çağrılması ucuzdur ve gerçek kesinti ile boşta beklemeyi ayırır.
+            try:
+                _pkg.write_heartbeat(notifier=notifier)
+            except Exception as hb_hata:  # noqa: BLE001 - heartbeat ana döngüyü düşürmesin
+                _pkg.logger.debug("Periyodik heartbeat yazılamadı: %s", type(hb_hata).__name__)
+
             # Durable delivery is not tied to the next candle or market hours.
             # Media failures must also recover after the closing scan/restart.
             try:

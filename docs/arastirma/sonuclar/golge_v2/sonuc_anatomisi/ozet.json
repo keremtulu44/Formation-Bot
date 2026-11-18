@@ -1,0 +1,4544 @@
+{
+  "meta": {
+    "islem_n": 4233,
+    "tfs": [
+      "4h",
+      "1d"
+    ],
+    "hedef_atr": 2.0,
+    "endeks": "XU100",
+    "yol_csv_ile_ayni_n": 4233,
+    "ana_rapor_esitligi": {
+      "durum": "karsilastirildi",
+      "kumeler": {
+        "D7_A_Arti": {
+          "n": 637,
+          "net_ort": 0.1147
+        },
+        "D6_A_Cekirdek_Veya_Arti": {
+          "n": 1124,
+          "net_ort": 0.0611
+        },
+        "D1_Birincil": {
+          "n": 4233,
+          "net_ort": 0.01
+        }
+      }
+    },
+    "saatlik_durum": {
+      "4h": {
+        "AYNI": 2820,
+        "ONCE_HEDEF": 3,
+        "KAPSAM_DISI": 2
+      },
+      "1d": {
+        "AYNI": 1160,
+        "VERI_YOK": 230,
+        "TUTARSIZ": 15,
+        "KAPSAM_DISI": 2,
+        "ONCE_HEDEF": 1
+      }
+    },
+    "esikler": {
+      "az_kar_r": 0.25,
+      "kar_r": 0.5,
+      "bir_r": 1.0,
+      "dar_stop_atr": 1.0,
+      "endeks_yatay_yuzde": 0.5
+    }
+  },
+  "kumeler": {
+    "D7_A_Arti": {
+      "genel": {
+        "n": 637,
+        "kar_n": 323,
+        "zarar_n": 314,
+        "kar_pay": 0.507064,
+        "net_ort": 0.114738,
+        "brut_ort": 0.231127,
+        "masraf_ort": 0.11639,
+        "net_toplam": 73.09,
+        "brut_toplam": 147.23,
+        "masraf_toplam": 74.14,
+        "masraf_brut_payi": 0.503566,
+        "kazanan_ort_net": 1.266312,
+        "kaybeden_ort_net": -1.069844,
+        "kazanan_toplam_net": 409.02,
+        "kaybeden_toplam_net": -335.93,
+        "kazanc_kayip_orani": 1.183642,
+        "basabas_kar_pay": 0.457951,
+        "brutte_arti_nette_zarar_n": 3,
+        "risk_atr_medyan": 1.2882,
+        "hedef_r_medyan": 1.5525,
+        "donem": {
+          "kesif": {
+            "n": 414,
+            "kar_pay": 0.478261,
+            "stop_pay": 0.458937,
+            "hedef_pay": 0.391304,
+            "net_ort": 0.054302
+          },
+          "dogrulama": {
+            "n": 223,
+            "kar_pay": 0.560538,
+            "stop_pay": 0.403587,
+            "hedef_pay": 0.44843,
+            "net_ort": 0.226936
+          }
+        }
+      },
+      "cikis": [
+        {
+          "tur": "HEDEF",
+          "ad": "Hedefe ulaştı",
+          "n": 262,
+          "pay": 0.411303,
+          "kar_n": 262,
+          "zarar_n": 0,
+          "net_ort": 1.431055,
+          "net_toplam": 374.94,
+          "bar_medyan": 3.0
+        },
+        {
+          "tur": "STOP",
+          "ad": "Stop oldu",
+          "n": 255,
+          "pay": 0.400314,
+          "kar_n": 0,
+          "zarar_n": 255,
+          "net_ort": -1.13056,
+          "net_toplam": -288.29,
+          "bar_medyan": 3.0
+        },
+        {
+          "tur": "STOP_BOSLUK",
+          "ad": "Açılış boşluğuyla stop oldu",
+          "n": 25,
+          "pay": 0.039246,
+          "kar_n": 0,
+          "zarar_n": 25,
+          "net_ort": -1.436064,
+          "net_toplam": -35.9,
+          "bar_medyan": 3.0
+        },
+        {
+          "tur": "SURE",
+          "ad": "Süre doldu (ne stop ne hedef)",
+          "n": 95,
+          "pay": 0.149137,
+          "kar_n": 61,
+          "zarar_n": 34,
+          "net_ort": 0.235221,
+          "net_toplam": 22.35,
+          "bar_medyan": 10.0
+        }
+      ],
+      "zarar_yollari": [
+        {
+          "kod": "SURE_ZARAR",
+          "ad": "Stop olmadı; süre doldu, zararda kapandı",
+          "n": 34,
+          "zarar_payi": 0.10828,
+          "islem_payi": 0.053375,
+          "net_ort": -0.345194,
+          "net_toplam": -11.74,
+          "zarar_toplam_payi": 0.034938
+        },
+        {
+          "kod": "BOSLUK",
+          "ad": "Açılış boşluğu stopu atladı",
+          "n": 25,
+          "zarar_payi": 0.079618,
+          "islem_payi": 0.039246,
+          "net_ort": -1.436064,
+          "net_toplam": -35.9,
+          "zarar_toplam_payi": 0.106872
+        },
+        {
+          "kod": "ILK_MUM",
+          "ad": "Girişten sonraki ilk mumda stop",
+          "n": 47,
+          "zarar_payi": 0.149682,
+          "islem_payi": 0.073783,
+          "net_ort": -1.151638,
+          "net_toplam": -54.13,
+          "zarar_toplam_payi": 0.161125
+        },
+        {
+          "kod": "KAR_GORMEDI",
+          "ad": "2+ mum yaşadı, +0.25 R'yi hiç görmedi",
+          "n": 58,
+          "zarar_payi": 0.184713,
+          "islem_payi": 0.091052,
+          "net_ort": -1.121098,
+          "net_toplam": -65.02,
+          "zarar_toplam_payi": 0.193563
+        },
+        {
+          "kod": "AZ_KAR",
+          "ad": "+0.25–0.5 R gördü, döndü",
+          "n": 51,
+          "zarar_payi": 0.16242,
+          "islem_payi": 0.080063,
+          "net_ort": -1.105869,
+          "net_toplam": -56.4,
+          "zarar_toplam_payi": 0.167889
+        },
+        {
+          "kod": "KAR_GORDU",
+          "ad": "+0.5–1 R gördü, geri verdi",
+          "n": 60,
+          "zarar_payi": 0.191083,
+          "islem_payi": 0.094192,
+          "net_ort": -1.13096,
+          "net_toplam": -67.86,
+          "zarar_toplam_payi": 0.201999
+        },
+        {
+          "kod": "BIR_R_GORDU",
+          "ad": "+1 R ve üstünü gördü, geri verdi",
+          "n": 39,
+          "zarar_payi": 0.124204,
+          "islem_payi": 0.061224,
+          "net_ort": -1.150905,
+          "net_toplam": -44.89,
+          "zarar_toplam_payi": 0.133615
+        }
+      ],
+      "stop": {
+        "n": 280,
+        "islem_payi": 0.43956,
+        "zarar_payi": 0.89172,
+        "bosluk_n": 25,
+        "bar": [
+          {
+            "aralik": "1. mum",
+            "n": 48,
+            "pay": 0.171429
+          },
+          {
+            "aralik": "2–3. mum",
+            "n": 108,
+            "pay": 0.385714
+          },
+          {
+            "aralik": "4–6. mum",
+            "n": 82,
+            "pay": 0.292857
+          },
+          {
+            "aralik": "7–10. mum",
+            "n": 42,
+            "pay": 0.15
+          }
+        ],
+        "bar_medyan": 3.0,
+        "once_kar": [
+          {
+            "esik": 0.25,
+            "mum_n": 162,
+            "mum_pay": 0.578571,
+            "saat_n": 161,
+            "saat_pay": 0.633858,
+            "saat_kumesinde_mum_n": 148
+          },
+          {
+            "esik": 0.5,
+            "mum_n": 110,
+            "mum_pay": 0.392857,
+            "saat_n": 111,
+            "saat_pay": 0.437008,
+            "saat_kumesinde_mum_n": 100
+          },
+          {
+            "esik": 1.0,
+            "mum_n": 45,
+            "mum_pay": 0.160714,
+            "saat_n": 46,
+            "saat_pay": 0.181102,
+            "saat_kumesinde_mum_n": 41
+          },
+          {
+            "esik": 1.5,
+            "mum_n": 18,
+            "mum_pay": 0.064286,
+            "saat_n": 16,
+            "saat_pay": 0.062992,
+            "saat_kumesinde_mum_n": 15
+          }
+        ],
+        "hic_lehte_gormedi_n": 66,
+        "hedef_yolu": [
+          {
+            "esik": 0.5,
+            "n": 58,
+            "pay": 0.207143
+          },
+          {
+            "esik": 0.75,
+            "n": 23,
+            "pay": 0.082143
+          },
+          {
+            "esik": 0.9,
+            "n": 8,
+            "pay": 0.028571
+          }
+        ],
+        "ayni_mumda_hedef_n": 2,
+        "saatlik": {
+          "cozulen_n": 254,
+          "durum": {
+            "AYNI": 254,
+            "VERI_YOK": 26
+          }
+        }
+      },
+      "ilk_mum": {
+        "n": 48,
+        "stop_payi": 0.171429,
+        "islem_payi": 0.075353,
+        "bosluk_n": 1,
+        "dar_stop_esik_atr": 1.0,
+        "dar_stop_n": 35,
+        "dar_stop_pay": 0.729167,
+        "dar_stoplu_islem_n": 192,
+        "dar_stoplu_islemde_oran": 0.182292,
+        "genis_stoplu_islemde_oran": 0.029213,
+        "giris": [
+          {
+            "giris": "1d 18:30",
+            "islem_n": 203,
+            "ilk_mum_stop_n": 23,
+            "oran": 0.1133
+          },
+          {
+            "giris": "4h 13:30",
+            "islem_n": 262,
+            "ilk_mum_stop_n": 21,
+            "oran": 0.080153
+          },
+          {
+            "giris": "4h 17:30",
+            "islem_n": 153,
+            "ilk_mum_stop_n": 1,
+            "oran": 0.006536
+          },
+          {
+            "giris": "4h 18:00",
+            "islem_n": 18,
+            "ilk_mum_stop_n": 2,
+            "oran": 0.111111
+          }
+        ],
+        "saatlik": {
+          "n": 40,
+          "ilk_saatte_n": 12,
+          "ilk_iki_saatte_n": 19,
+          "dogrudan_n": 31,
+          "once_kar": [
+            {
+              "esik": 0.25,
+              "n": 9
+            },
+            {
+              "esik": 0.5,
+              "n": 7
+            },
+            {
+              "esik": 1.0,
+              "n": 2
+            }
+          ]
+        }
+      },
+      "bosluk": {
+        "n": 25,
+        "stop_payi": 0.089286,
+        "brut_ort": -1.327416,
+        "brut_en_kotu": -2.9118,
+        "fazladan_kayip_ort": 0.327416,
+        "fazladan_kayip_toplam": 8.19,
+        "gun_ilk_mumu_n": 25,
+        "ilk_mum_n": 1,
+        "tf": {
+          "4h": 16,
+          "1d": 9
+        },
+        "once_kar_n": 11
+      },
+      "geri_veren": {
+        "esik": 0.5,
+        "n": 110,
+        "stop_payi": 0.392857,
+        "bir_r_n": 45,
+        "en_iyi_r_medyan": 0.93715,
+        "tepe_stop_arasi": [
+          {
+            "aralik": "1 mum",
+            "n": 34,
+            "pay": 0.309091
+          },
+          {
+            "aralik": "2 mum",
+            "n": 32,
+            "pay": 0.290909
+          },
+          {
+            "aralik": "3 mum",
+            "n": 19,
+            "pay": 0.172727
+          },
+          {
+            "aralik": "4+ mum",
+            "n": 25,
+            "pay": 0.227273
+          }
+        ],
+        "tepe_stop_medyan": 2.0,
+        "hedef_yolu": [
+          {
+            "esik": 0.5,
+            "n": 57,
+            "pay": 0.518182
+          },
+          {
+            "esik": 0.75,
+            "n": 23,
+            "pay": 0.209091
+          },
+          {
+            "esik": 0.9,
+            "n": 8,
+            "pay": 0.072727
+          }
+        ]
+      },
+      "uyari": {
+        "stop_n": 280,
+        "gozlemsiz_stop_n": 48,
+        "gozlemli_stop_n": 232,
+        "gozlemli_kazanan_n": 284,
+        "seviye_ici_goren_n": 89,
+        "son_kapanista_seviye_ici_n": 75,
+        "seviye_disindan_tek_mumda_n": 157,
+        "son_kapanis_r_medyan": -0.2059,
+        "son_kapanista_karda_n": 62,
+        "son_kapanista_yarim_r_karda_n": 12,
+        "stopa_mesafe_atr_medyan": 0.8062,
+        "stopa_mesafe_bir_atr_alti_n": 187,
+        "stopa_mesafe_yarim_atr_alti_n": 75,
+        "etiketler": [
+          {
+            "kod": "SEVIYE_ICI",
+            "ad": "Kapanış tez seviyesinin ters tarafında",
+            "stop_n": 89,
+            "stop_pay": 0.383621,
+            "kazanan_n": 9,
+            "kazanan_pay": 0.03169
+          },
+          {
+            "kod": "FRM_RETEST",
+            "ad": "Formasyon retest ediliyor",
+            "stop_n": 49,
+            "stop_pay": 0.211207,
+            "kazanan_n": 5,
+            "kazanan_pay": 0.017606
+          },
+          {
+            "kod": "FRM_BASARISIZ",
+            "ad": "Formasyon: başarısız kırılım",
+            "stop_n": 6,
+            "stop_pay": 0.025862,
+            "kazanan_n": 0,
+            "kazanan_pay": 0.0
+          },
+          {
+            "kod": "FIYAT_ZARARDA",
+            "ad": "Kapanış girişin zarar tarafında",
+            "stop_n": 189,
+            "stop_pay": 0.814655,
+            "kazanan_n": 118,
+            "kazanan_pay": 0.415493
+          },
+          {
+            "kod": "FIYAT_TERS_KAPANIS",
+            "ad": "Ters yönlü kapanış",
+            "stop_n": 208,
+            "stop_pay": 0.896552,
+            "kazanan_n": 190,
+            "kazanan_pay": 0.669014
+          },
+          {
+            "kod": "SR_KARSI_RED",
+            "ad": "Karşı Stabil çizgisinde ret",
+            "stop_n": 55,
+            "stop_pay": 0.237069,
+            "kazanan_n": 41,
+            "kazanan_pay": 0.144366
+          },
+          {
+            "kod": "BLOK_DUVAR",
+            "ad": "Karşı OB/FVG bandında ret",
+            "stop_n": 55,
+            "stop_pay": 0.237069,
+            "kazanan_n": 108,
+            "kazanan_pay": 0.380282
+          },
+          {
+            "kod": "VP_TERS_BASKI",
+            "ad": "Ters hacim baskısı",
+            "stop_n": 47,
+            "stop_pay": 0.202586,
+            "kazanan_n": 49,
+            "kazanan_pay": 0.172535
+          },
+          {
+            "kod": "MS_TERS",
+            "ad": "Ters yönlü yapı olayı (iç/dış; sweep dahil)",
+            "stop_n": 57,
+            "stop_pay": 0.24569,
+            "kazanan_n": 43,
+            "kazanan_pay": 0.151408
+          },
+          {
+            "kod": "ADAY_KARSI",
+            "ad": "Sistemin kendi karşı yön adayı",
+            "stop_n": 25,
+            "stop_pay": 0.107759,
+            "kazanan_n": 12,
+            "kazanan_pay": 0.042254
+          },
+          {
+            "kod": "FRM_TEYIT",
+            "ad": "Formasyon kırılımı teyit aldı (lehte)",
+            "stop_n": 178,
+            "stop_pay": 0.767241,
+            "kazanan_n": 247,
+            "kazanan_pay": 0.869718
+          }
+        ],
+        "tez_son": [
+          {
+            "kod": "GOZLEM_YOK",
+            "ad": "Hiç kapanış görülmedi (ilk mumda çıkış)",
+            "stop_n": 48,
+            "stop_pay": 0.171429,
+            "hedef_n": 39
+          },
+          {
+            "kod": "BEKLIYOR",
+            "ad": "Tez henüz teyit almamıştı",
+            "stop_n": 25,
+            "stop_pay": 0.089286,
+            "hedef_n": 29
+          },
+          {
+            "kod": "TEYITLI",
+            "ad": "Tez teyitliydi",
+            "stop_n": 127,
+            "stop_pay": 0.453571,
+            "hedef_n": 192
+          },
+          {
+            "kod": "SINANIYOR",
+            "ad": "Tez sınanıyordu",
+            "stop_n": 58,
+            "stop_pay": 0.207143,
+            "hedef_n": 2
+          },
+          {
+            "kod": "BOZULDU",
+            "ad": "Tez bozulmuştu",
+            "stop_n": 22,
+            "stop_pay": 0.078571,
+            "hedef_n": 0
+          }
+        ]
+      },
+      "stop_sonrasi": {
+        "n": 280,
+        "tumu": [
+          {
+            "kod": "HEDEFE_GITTI",
+            "ad": "Stoptan sonra özgün hedefe ulaştı",
+            "n": 41,
+            "pay": 0.146429
+          },
+          {
+            "kod": "KARDA_BITTI",
+            "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+            "n": 42,
+            "pay": 0.15
+          },
+          {
+            "kod": "ZARARDA_BITTI",
+            "ad": "Ufuk sonunda giriş ile stop arasında",
+            "n": 64,
+            "pay": 0.228571
+          },
+          {
+            "kod": "DAHA_KOTU",
+            "ad": "Ufuk sonunda stopun da ötesinde",
+            "n": 129,
+            "pay": 0.460714
+          },
+          {
+            "kod": "UFUK_SONU",
+            "ad": "Stop ufkun son mumunda; sonrası yok",
+            "n": 4,
+            "pay": 0.014286
+          }
+        ],
+        "ilk_mum": {
+          "n": 48,
+          "dagilim": [
+            {
+              "kod": "HEDEFE_GITTI",
+              "ad": "Stoptan sonra özgün hedefe ulaştı",
+              "n": 9,
+              "pay": 0.1875
+            },
+            {
+              "kod": "KARDA_BITTI",
+              "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+              "n": 6,
+              "pay": 0.125
+            },
+            {
+              "kod": "ZARARDA_BITTI",
+              "ad": "Ufuk sonunda giriş ile stop arasında",
+              "n": 5,
+              "pay": 0.104167
+            },
+            {
+              "kod": "DAHA_KOTU",
+              "ad": "Ufuk sonunda stopun da ötesinde",
+              "n": 28,
+              "pay": 0.583333
+            },
+            {
+              "kod": "UFUK_SONU",
+              "ad": "Stop ufkun son mumunda; sonrası yok",
+              "n": 0,
+              "pay": 0.0
+            }
+          ]
+        },
+        "kar_gormeden": {
+          "n": 122,
+          "dagilim": [
+            {
+              "kod": "HEDEFE_GITTI",
+              "ad": "Stoptan sonra özgün hedefe ulaştı",
+              "n": 17,
+              "pay": 0.139344
+            },
+            {
+              "kod": "KARDA_BITTI",
+              "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+              "n": 15,
+              "pay": 0.122951
+            },
+            {
+              "kod": "ZARARDA_BITTI",
+              "ad": "Ufuk sonunda giriş ile stop arasında",
+              "n": 34,
+              "pay": 0.278689
+            },
+            {
+              "kod": "DAHA_KOTU",
+              "ad": "Ufuk sonunda stopun da ötesinde",
+              "n": 56,
+              "pay": 0.459016
+            },
+            {
+              "kod": "UFUK_SONU",
+              "ad": "Stop ufkun son mumunda; sonrası yok",
+              "n": 0,
+              "pay": 0.0
+            }
+          ]
+        },
+        "geri_veren": {
+          "n": 110,
+          "dagilim": [
+            {
+              "kod": "HEDEFE_GITTI",
+              "ad": "Stoptan sonra özgün hedefe ulaştı",
+              "n": 15,
+              "pay": 0.136364
+            },
+            {
+              "kod": "KARDA_BITTI",
+              "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+              "n": 21,
+              "pay": 0.190909
+            },
+            {
+              "kod": "ZARARDA_BITTI",
+              "ad": "Ufuk sonunda giriş ile stop arasında",
+              "n": 25,
+              "pay": 0.227273
+            },
+            {
+              "kod": "DAHA_KOTU",
+              "ad": "Ufuk sonunda stopun da ötesinde",
+              "n": 45,
+              "pay": 0.409091
+            },
+            {
+              "kod": "UFUK_SONU",
+              "ad": "Stop ufkun son mumunda; sonrası yok",
+              "n": 4,
+              "pay": 0.036364
+            }
+          ]
+        }
+      },
+      "sure": {
+        "n": 95,
+        "islem_payi": 0.149137,
+        "net_toplam": 22.35,
+        "kar_n": 61,
+        "kar_ort_net": 0.558731,
+        "zarar_n": 34,
+        "zarar_ort_net": -0.345194,
+        "zararda_brut_arti_n": 3,
+        "zararda_yarim_r_gormus_n": 17,
+        "zararda_bir_r_gormus_n": 3,
+        "karda_hedef_yolu_medyan": 0.7504,
+        "karda_yarim_r_aleyhte_gormus_n": 29,
+        "yarim_r_oynamayan_n": 4
+      },
+      "kurtaran": [
+        {
+          "esik": 0.25,
+          "goren_n": 472,
+          "stop_n": 280,
+          "stop_pay": 0.59322,
+          "kar_n": 158,
+          "kar_pay": 0.334746,
+          "hedef_n": 115,
+          "stopsuz_zarar_n": 34
+        },
+        {
+          "esik": 0.5,
+          "goren_n": 392,
+          "stop_n": 280,
+          "stop_pay": 0.714286,
+          "kar_n": 83,
+          "kar_pay": 0.211735,
+          "hedef_n": 54,
+          "stopsuz_zarar_n": 29
+        },
+        {
+          "esik": 0.75,
+          "goren_n": 323,
+          "stop_n": 280,
+          "stop_pay": 0.866873,
+          "kar_n": 32,
+          "kar_pay": 0.099071,
+          "hedef_n": 18,
+          "stopsuz_zarar_n": 11
+        }
+      ],
+      "kazanan": {
+        "kar_n": 323,
+        "hedef_n": 262,
+        "hedef_ort_net": 1.431055,
+        "hedef_r_ort": 1.54266,
+        "ilk_mumda_hedef_n": 39,
+        "bar": [
+          {
+            "aralik": "1. mum",
+            "n": 39,
+            "pay": 0.148855
+          },
+          {
+            "aralik": "2–3. mum",
+            "n": 104,
+            "pay": 0.396947
+          },
+          {
+            "aralik": "4–6. mum",
+            "n": 70,
+            "pay": 0.267176
+          },
+          {
+            "aralik": "7–10. mum",
+            "n": 49,
+            "pay": 0.187023
+          }
+        ],
+        "bar_medyan": 3.0,
+        "once_aleyhte": [
+          {
+            "esik": 0.25,
+            "n": 115,
+            "pay": 0.438931
+          },
+          {
+            "esik": 0.5,
+            "n": 54,
+            "pay": 0.206107
+          },
+          {
+            "esik": 0.75,
+            "n": 18,
+            "pay": 0.068702
+          }
+        ],
+        "sure_karda_n": 61,
+        "sure_karda_ort_net": 0.558731
+      },
+      "piyasa": {
+        "esik_yuzde": 0.5,
+        "stop": {
+          "n": 280,
+          "olculen_n": 275,
+          "ters_n": 147,
+          "ters_pay": 0.534545,
+          "yatay_n": 71,
+          "yatay_pay": 0.258182,
+          "lehte_n": 57,
+          "lehte_pay": 0.207273,
+          "ort_yuzde": -0.989305
+        },
+        "hedef": {
+          "n": 262,
+          "olculen_n": 258,
+          "ters_n": 42,
+          "ters_pay": 0.162791,
+          "yatay_n": 67,
+          "yatay_pay": 0.25969,
+          "lehte_n": 149,
+          "lehte_pay": 0.577519,
+          "ort_yuzde": 1.141836
+        },
+        "sure": {
+          "n": 95,
+          "olculen_n": 94,
+          "ters_n": 24,
+          "ters_pay": 0.255319,
+          "yatay_n": 18,
+          "yatay_pay": 0.191489,
+          "lehte_n": 52,
+          "lehte_pay": 0.553191,
+          "ort_yuzde": 0.531944
+        }
+      },
+      "hafta": {
+        "hafta_n": 90,
+        "arti_hafta_n": 51,
+        "eksi_hafta_n": 39,
+        "arti_toplam": 162.32,
+        "eksi_toplam": -89.23,
+        "net_toplam": 73.09,
+        "uc_n": 5,
+        "en_iyi": [
+          {
+            "hafta": "2026-H38",
+            "n": 29,
+            "net_toplam": 18.77,
+            "stop_n": 7,
+            "long_n": 0,
+            "short_n": 29
+          },
+          {
+            "hafta": "2026-H07",
+            "n": 16,
+            "net_toplam": 13.76,
+            "stop_n": 2,
+            "long_n": 16,
+            "short_n": 0
+          },
+          {
+            "hafta": "2025-H30",
+            "n": 14,
+            "net_toplam": 12.68,
+            "stop_n": 2,
+            "long_n": 14,
+            "short_n": 0
+          },
+          {
+            "hafta": "2025-H34",
+            "n": 13,
+            "net_toplam": 11.3,
+            "stop_n": 2,
+            "long_n": 12,
+            "short_n": 1
+          },
+          {
+            "hafta": "2026-H03",
+            "n": 9,
+            "net_toplam": 10.89,
+            "stop_n": 0,
+            "long_n": 9,
+            "short_n": 0
+          }
+        ],
+        "en_kotu": [
+          {
+            "hafta": "2025-H25",
+            "n": 11,
+            "net_toplam": -9.78,
+            "stop_n": 10,
+            "long_n": 0,
+            "short_n": 11
+          },
+          {
+            "hafta": "2025-H06",
+            "n": 8,
+            "net_toplam": -5.99,
+            "stop_n": 6,
+            "long_n": 1,
+            "short_n": 7
+          },
+          {
+            "hafta": "2025-H33",
+            "n": 8,
+            "net_toplam": -5.15,
+            "stop_n": 6,
+            "long_n": 7,
+            "short_n": 1
+          },
+          {
+            "hafta": "2026-H37",
+            "n": 8,
+            "net_toplam": -4.78,
+            "stop_n": 6,
+            "long_n": 6,
+            "short_n": 2
+          },
+          {
+            "hafta": "2026-H01",
+            "n": 7,
+            "net_toplam": -4.34,
+            "stop_n": 5,
+            "long_n": 1,
+            "short_n": 6
+          }
+        ],
+        "en_iyi_toplam": 67.42,
+        "en_kotu_toplam": -30.03,
+        "en_iyi_haric_net": 5.67,
+        "en_kotu_haric_net": 103.12,
+        "tek_yonlu_hafta_n": 35,
+        "tek_yonlu_haftalardaki_islem_n": 195
+      },
+      "dar_genis": {
+        "esik_atr": 1.0,
+        "dar": {
+          "n": 192,
+          "stop_pay": 0.625,
+          "ilk_mum_stop_pay": 0.182292,
+          "kar_pay": 0.364583,
+          "net_ort": 0.056173,
+          "hedef_r_ort": 2.618642,
+          "masraf_ort": 0.181271
+        },
+        "genis": {
+          "n": 445,
+          "stop_pay": 0.359551,
+          "ilk_mum_stop_pay": 0.029213,
+          "kar_pay": 0.568539,
+          "net_ort": 0.140006,
+          "hedef_r_ort": 1.271302,
+          "masraf_ort": 0.088396
+        }
+      },
+      "kosullar": {
+        "stop_mesafesi": {
+          "satirlar": [
+            {
+              "kova": "≤ 0.8 ATR",
+              "n": 112,
+              "stop_pay": 0.633929,
+              "ilk_mum_stop_pay": 0.214286,
+              "hedef_pay": 0.3125,
+              "kar_pay": 0.357143,
+              "net_ort": 0.087321,
+              "en_kotu_alt": -0.2596,
+              "en_kotu_ust": 0.4592,
+              "kesif_n": 79,
+              "kesif_net": -0.045314,
+              "dogrulama_n": 33,
+              "dogrulama_net": 0.404842,
+              "hedef_r_ort": 2.889047,
+              "masraf_ort": 0.210651
+            },
+            {
+              "kova": "0.8–1.0 ATR",
+              "n": 80,
+              "stop_pay": 0.6125,
+              "ilk_mum_stop_pay": 0.1375,
+              "hedef_pay": 0.3375,
+              "kar_pay": 0.375,
+              "net_ort": 0.012565,
+              "en_kotu_alt": -0.3466,
+              "en_kotu_ust": 0.3849,
+              "kesif_n": 47,
+              "kesif_net": -0.19097,
+              "dogrulama_n": 33,
+              "dogrulama_net": 0.302448,
+              "hedef_r_ort": 2.240075,
+              "masraf_ort": 0.140139
+            },
+            {
+              "kova": "1.0–1.3 ATR",
+              "n": 133,
+              "stop_pay": 0.473684,
+              "ilk_mum_stop_pay": 0.067669,
+              "hedef_pay": 0.368421,
+              "kar_pay": 0.526316,
+              "net_ort": 0.189897,
+              "en_kotu_alt": -0.0498,
+              "en_kotu_ust": 0.4634,
+              "kesif_n": 85,
+              "kesif_net": 0.2109,
+              "dogrulama_n": 48,
+              "dogrulama_net": 0.152704,
+              "hedef_r_ort": 1.74189,
+              "masraf_ort": 0.118606
+            },
+            {
+              "kova": "1.3–1.7 ATR",
+              "n": 126,
+              "stop_pay": 0.412698,
+              "ilk_mum_stop_pay": 0.02381,
+              "hedef_pay": 0.468254,
+              "kar_pay": 0.547619,
+              "net_ort": 0.135971,
+              "en_kotu_alt": -0.1548,
+              "en_kotu_ust": 0.4177,
+              "kesif_n": 87,
+              "kesif_net": 0.081697,
+              "dogrulama_n": 39,
+              "dogrulama_net": 0.257046,
+              "hedef_r_ort": 1.354144,
+              "masraf_ort": 0.094677
+            },
+            {
+              "kova": "1.7–2.2 ATR",
+              "n": 90,
+              "stop_pay": 0.333333,
+              "ilk_mum_stop_pay": 0.011111,
+              "hedef_pay": 0.411111,
+              "kar_pay": 0.555556,
+              "net_ort": 0.032141,
+              "en_kotu_alt": -0.1697,
+              "en_kotu_ust": 0.2221,
+              "kesif_n": 56,
+              "kesif_net": 0.022223,
+              "dogrulama_n": 34,
+              "dogrulama_net": 0.048476,
+              "hedef_r_ort": 1.04473,
+              "masraf_ort": 0.074371
+            },
+            {
+              "kova": "> 2.2 ATR",
+              "n": 96,
+              "stop_pay": 0.15625,
+              "ilk_mum_stop_pay": 0.0,
+              "hedef_pay": 0.572917,
+              "kar_pay": 0.666667,
+              "net_ort": 0.177304,
+              "en_kotu_alt": 0.0304,
+              "en_kotu_ust": 0.3109,
+              "kesif_n": 60,
+              "kesif_net": 0.145963,
+              "dogrulama_n": 36,
+              "dogrulama_net": 0.229539,
+              "hedef_r_ort": 0.723021,
+              "masraf_ort": 0.051448
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 0
+        },
+        "yon_donem": {
+          "satirlar": [
+            {
+              "kova": "dogrulama / long",
+              "n": 99,
+              "stop_pay": 0.40404,
+              "ilk_mum_stop_pay": 0.070707,
+              "hedef_pay": 0.414141,
+              "kar_pay": 0.525253,
+              "net_ort": 0.143586,
+              "en_kotu_alt": -0.2866,
+              "en_kotu_ust": 0.3868,
+              "kesif_n": 0,
+              "kesif_net": null,
+              "dogrulama_n": 99,
+              "dogrulama_net": 0.143586,
+              "hedef_r_ort": 1.502913,
+              "masraf_ort": 0.096523
+            },
+            {
+              "kova": "dogrulama / short",
+              "n": 124,
+              "stop_pay": 0.403226,
+              "ilk_mum_stop_pay": 0.048387,
+              "hedef_pay": 0.475806,
+              "kar_pay": 0.58871,
+              "net_ort": 0.293482,
+              "en_kotu_alt": -0.0085,
+              "en_kotu_ust": 0.596,
+              "kesif_n": 0,
+              "kesif_net": null,
+              "dogrulama_n": 124,
+              "dogrulama_net": 0.293482,
+              "hedef_r_ort": 1.757583,
+              "masraf_ort": 0.121526
+            },
+            {
+              "kova": "kesif / long",
+              "n": 248,
+              "stop_pay": 0.399194,
+              "ilk_mum_stop_pay": 0.08871,
+              "hedef_pay": 0.475806,
+              "kar_pay": 0.516129,
+              "net_ort": 0.141805,
+              "en_kotu_alt": -0.0663,
+              "en_kotu_ust": 0.3405,
+              "kesif_n": 248,
+              "kesif_net": 0.141805,
+              "dogrulama_n": 0,
+              "dogrulama_net": null,
+              "hedef_r_ort": 1.563387,
+              "masraf_ort": 0.11971
+            },
+            {
+              "kova": "kesif / short",
+              "n": 166,
+              "stop_pay": 0.548193,
+              "ilk_mum_stop_pay": 0.078313,
+              "hedef_pay": 0.26506,
+              "kar_pay": 0.421687,
+              "net_ort": -0.076425,
+              "en_kotu_alt": -0.3196,
+              "en_kotu_ust": 0.1822,
+              "kesif_n": 166,
+              "kesif_net": -0.076425,
+              "dogrulama_n": 0,
+              "dogrulama_net": null,
+              "hedef_r_ort": 1.891926,
+              "masraf_ort": 0.11944
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 0
+        },
+        "giris": {
+          "satirlar": [
+            {
+              "kova": "1d 18:30",
+              "n": 203,
+              "stop_pay": 0.477833,
+              "ilk_mum_stop_pay": 0.1133,
+              "hedef_pay": 0.399015,
+              "kar_pay": 0.497537,
+              "net_ort": 0.099533,
+              "en_kotu_alt": -0.0992,
+              "en_kotu_ust": 0.2992,
+              "kesif_n": 143,
+              "kesif_net": 0.028013,
+              "dogrulama_n": 60,
+              "dogrulama_net": 0.26999,
+              "hedef_r_ort": 1.787938,
+              "masraf_ort": 0.076249
+            },
+            {
+              "kova": "4h 13:30",
+              "n": 262,
+              "stop_pay": 0.39313,
+              "ilk_mum_stop_pay": 0.080153,
+              "hedef_pay": 0.416031,
+              "kar_pay": 0.519084,
+              "net_ort": 0.083108,
+              "en_kotu_alt": -0.0829,
+              "en_kotu_ust": 0.2549,
+              "kesif_n": 161,
+              "kesif_net": 0.009902,
+              "dogrulama_n": 101,
+              "dogrulama_net": 0.199802,
+              "hedef_r_ort": 1.490272,
+              "masraf_ort": 0.12398
+            },
+            {
+              "kova": "4h 17:30",
+              "n": 153,
+              "stop_pay": 0.48366,
+              "ilk_mum_stop_pay": 0.006536,
+              "hedef_pay": 0.392157,
+              "kar_pay": 0.477124,
+              "net_ort": 0.125665,
+              "en_kotu_alt": -0.1222,
+              "en_kotu_ust": 0.3834,
+              "kesif_n": 97,
+              "kesif_net": 0.107088,
+              "dogrulama_n": 56,
+              "dogrulama_net": 0.157845,
+              "hedef_r_ort": 1.855588,
+              "masraf_ort": 0.156032
+            },
+            {
+              "kova": "4h 18:00",
+              "n": 18,
+              "stop_pay": 0.277778,
+              "ilk_mum_stop_pay": 0.111111,
+              "hedef_pay": 0.666667,
+              "kar_pay": 0.722222,
+              "net_ort": 0.721111,
+              "en_kotu_alt": 0.049,
+              "en_kotu_ust": 1.3149,
+              "kesif_n": 12,
+              "kesif_net": 0.632658,
+              "dogrulama_n": 6,
+              "dogrulama_net": 0.898017,
+              "hedef_r_ort": 1.664556,
+              "masraf_ort": 0.122644
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 1
+        },
+        "endeks_islem": {
+          "satirlar": [
+            {
+              "kova": "%2'den fazla ters",
+              "n": 86,
+              "stop_pay": 0.72093,
+              "ilk_mum_stop_pay": 0.093023,
+              "hedef_pay": 0.127907,
+              "kar_pay": 0.255814,
+              "net_ort": -0.551142,
+              "en_kotu_alt": -0.7952,
+              "en_kotu_ust": -0.2976,
+              "kesif_n": 61,
+              "kesif_net": -0.474361,
+              "dogrulama_n": 25,
+              "dogrulama_net": -0.738488,
+              "hedef_r_ort": 1.71955,
+              "masraf_ort": 0.087259
+            },
+            {
+              "kova": "%0.5–2 ters",
+              "n": 127,
+              "stop_pay": 0.669291,
+              "ilk_mum_stop_pay": 0.125984,
+              "hedef_pay": 0.244094,
+              "kar_pay": 0.267717,
+              "net_ort": -0.466421,
+              "en_kotu_alt": -0.684,
+              "en_kotu_ust": -0.2317,
+              "kesif_n": 84,
+              "kesif_net": -0.610264,
+              "dogrulama_n": 43,
+              "dogrulama_net": -0.185426,
+              "hedef_r_ort": 1.675434,
+              "masraf_ort": 0.113505
+            },
+            {
+              "kova": "yatay (±%0.5)",
+              "n": 156,
+              "stop_pay": 0.455128,
+              "ilk_mum_stop_pay": 0.102564,
+              "hedef_pay": 0.429487,
+              "kar_pay": 0.525641,
+              "net_ort": 0.056608,
+              "en_kotu_alt": -0.1581,
+              "en_kotu_ust": 0.2715,
+              "kesif_n": 101,
+              "kesif_net": 0.092453,
+              "dogrulama_n": 55,
+              "dogrulama_net": -0.009218,
+              "hedef_r_ort": 1.719071,
+              "masraf_ort": 0.128931
+            },
+            {
+              "kova": "%0.5–2 lehte",
+              "n": 143,
+              "stop_pay": 0.272727,
+              "ilk_mum_stop_pay": 0.041958,
+              "hedef_pay": 0.517483,
+              "kar_pay": 0.643357,
+              "net_ort": 0.464216,
+              "en_kotu_alt": 0.2355,
+              "en_kotu_ust": 0.6946,
+              "kesif_n": 93,
+              "kesif_net": 0.309267,
+              "dogrulama_n": 50,
+              "dogrulama_net": 0.752422,
+              "hedef_r_ort": 1.620352,
+              "masraf_ort": 0.11915
+            },
+            {
+              "kova": "%2'den fazla lehte",
+              "n": 115,
+              "stop_pay": 0.156522,
+              "ilk_mum_stop_pay": 0.008696,
+              "hedef_pay": 0.652174,
+              "kar_pay": 0.765217,
+              "net_ort": 0.908184,
+              "en_kotu_alt": 0.6683,
+              "en_kotu_ust": 1.1831,
+              "kesif_n": 68,
+              "kesif_net": 0.956728,
+              "dogrulama_n": 47,
+              "dogrulama_net": 0.837951,
+              "hedef_r_ort": 1.640582,
+              "masraf_ort": 0.102025
+            }
+          ],
+          "olculemeyen_n": 10,
+          "kucuk_kova_n": 0
+        },
+        "endeks_on": {
+          "satirlar": [
+            {
+              "kova": "%2'den fazla ters",
+              "n": 24,
+              "stop_pay": 0.458333,
+              "ilk_mum_stop_pay": 0.208333,
+              "hedef_pay": 0.375,
+              "kar_pay": 0.541667,
+              "net_ort": 0.227946,
+              "en_kotu_alt": -0.3346,
+              "en_kotu_ust": 0.8178,
+              "kesif_n": 13,
+              "kesif_net": 0.512615,
+              "dogrulama_n": 11,
+              "dogrulama_net": -0.108482,
+              "hedef_r_ort": 1.741246,
+              "masraf_ort": 0.087829
+            },
+            {
+              "kova": "%0–2 ters",
+              "n": 97,
+              "stop_pay": 0.43299,
+              "ilk_mum_stop_pay": 0.072165,
+              "hedef_pay": 0.443299,
+              "kar_pay": 0.546392,
+              "net_ort": 0.123875,
+              "en_kotu_alt": -0.1763,
+              "en_kotu_ust": 0.4138,
+              "kesif_n": 68,
+              "kesif_net": 0.118444,
+              "dogrulama_n": 29,
+              "dogrulama_net": 0.13661,
+              "hedef_r_ort": 1.636621,
+              "masraf_ort": 0.120542
+            },
+            {
+              "kova": "%0–2 lehte",
+              "n": 238,
+              "stop_pay": 0.441176,
+              "ilk_mum_stop_pay": 0.05042,
+              "hedef_pay": 0.403361,
+              "kar_pay": 0.483193,
+              "net_ort": 0.132616,
+              "en_kotu_alt": -0.0678,
+              "en_kotu_ust": 0.3378,
+              "kesif_n": 152,
+              "kesif_net": 0.018867,
+              "dogrulama_n": 86,
+              "dogrulama_net": 0.333659,
+              "hedef_r_ort": 1.725317,
+              "masraf_ort": 0.132176
+            },
+            {
+              "kova": "%2'den fazla lehte",
+              "n": 268,
+              "stop_pay": 0.436567,
+              "ilk_mum_stop_pay": 0.085821,
+              "hedef_pay": 0.410448,
+              "kar_pay": 0.511194,
+              "net_ort": 0.089448,
+              "en_kotu_alt": -0.1014,
+              "en_kotu_ust": 0.27,
+              "kesif_n": 174,
+              "kesif_net": 0.030879,
+              "dogrulama_n": 94,
+              "dogrulama_net": 0.197864,
+              "hedef_r_ort": 1.6345,
+              "masraf_ort": 0.09532
+            }
+          ],
+          "olculemeyen_n": 10,
+          "kucuk_kova_n": 0
+        },
+        "kalabalik": {
+          "satirlar": [
+            {
+              "kova": "1 (yalnız)",
+              "n": 45,
+              "stop_pay": 0.511111,
+              "ilk_mum_stop_pay": 0.133333,
+              "hedef_pay": 0.288889,
+              "kar_pay": 0.444444,
+              "net_ort": -0.05888,
+              "en_kotu_alt": -0.459,
+              "en_kotu_ust": 0.3687,
+              "kesif_n": 33,
+              "kesif_net": -0.043842,
+              "dogrulama_n": 12,
+              "dogrulama_net": -0.100233,
+              "hedef_r_ort": 1.826911,
+              "masraf_ort": 0.110609
+            },
+            {
+              "kova": "2–3",
+              "n": 119,
+              "stop_pay": 0.487395,
+              "ilk_mum_stop_pay": 0.07563,
+              "hedef_pay": 0.386555,
+              "kar_pay": 0.445378,
+              "net_ort": 0.013052,
+              "en_kotu_alt": -0.2684,
+              "en_kotu_ust": 0.2706,
+              "kesif_n": 78,
+              "kesif_net": 0.117274,
+              "dogrulama_n": 41,
+              "dogrulama_net": -0.185224,
+              "hedef_r_ort": 1.624171,
+              "masraf_ort": 0.116073
+            },
+            {
+              "kova": "4–8",
+              "n": 258,
+              "stop_pay": 0.437984,
+              "ilk_mum_stop_pay": 0.077519,
+              "hedef_pay": 0.44186,
+              "kar_pay": 0.51938,
+              "net_ort": 0.131603,
+              "en_kotu_alt": -0.0572,
+              "en_kotu_ust": 0.333,
+              "kesif_n": 170,
+              "kesif_net": -0.034045,
+              "dogrulama_n": 88,
+              "dogrulama_net": 0.451606,
+              "hedef_r_ort": 1.705524,
+              "masraf_ort": 0.124005
+            },
+            {
+              "kova": "9+",
+              "n": 215,
+              "stop_pay": 0.4,
+              "ilk_mum_stop_pay": 0.060465,
+              "hedef_pay": 0.413953,
+              "kar_pay": 0.539535,
+              "net_ort": 0.187119,
+              "en_kotu_alt": -0.0592,
+              "en_kotu_ust": 0.4359,
+              "kesif_n": 133,
+              "kesif_net": 0.154647,
+              "dogrulama_n": 82,
+              "dogrulama_net": 0.239787,
+              "hedef_r_ort": 1.641842,
+              "masraf_ort": 0.108637
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 0
+        },
+        "formasyon": {
+          "satirlar": [
+            {
+              "kova": "Alçalan Kama",
+              "n": 85,
+              "stop_pay": 0.470588,
+              "ilk_mum_stop_pay": 0.094118,
+              "hedef_pay": 0.4,
+              "kar_pay": 0.470588,
+              "net_ort": 0.023369,
+              "en_kotu_alt": -0.2581,
+              "en_kotu_ust": 0.2714,
+              "kesif_n": 48,
+              "kesif_net": -0.098552,
+              "dogrulama_n": 37,
+              "dogrulama_net": 0.181538,
+              "hedef_r_ort": 1.796502,
+              "masraf_ort": 0.123609
+            },
+            {
+              "kova": "Alçalan Üçgen",
+              "n": 222,
+              "stop_pay": 0.454955,
+              "ilk_mum_stop_pay": 0.058559,
+              "hedef_pay": 0.382883,
+              "kar_pay": 0.504505,
+              "net_ort": 0.114601,
+              "en_kotu_alt": -0.1127,
+              "en_kotu_ust": 0.3154,
+              "kesif_n": 123,
+              "kesif_net": -0.029176,
+              "dogrulama_n": 99,
+              "dogrulama_net": 0.293233,
+              "hedef_r_ort": 1.728115,
+              "masraf_ort": 0.110661
+            },
+            {
+              "kova": "Simetrik Üçgen",
+              "n": 54,
+              "stop_pay": 0.351852,
+              "ilk_mum_stop_pay": 0.037037,
+              "hedef_pay": 0.444444,
+              "kar_pay": 0.611111,
+              "net_ort": 0.224043,
+              "en_kotu_alt": -0.1072,
+              "en_kotu_ust": 0.5309,
+              "kesif_n": 37,
+              "kesif_net": 0.250197,
+              "dogrulama_n": 17,
+              "dogrulama_net": 0.167118,
+              "hedef_r_ort": 1.383485,
+              "masraf_ort": 0.099807
+            },
+            {
+              "kova": "Yükselen Kama",
+              "n": 105,
+              "stop_pay": 0.371429,
+              "ilk_mum_stop_pay": 0.038095,
+              "hedef_pay": 0.47619,
+              "kar_pay": 0.542857,
+              "net_ort": 0.319318,
+              "en_kotu_alt": 0.0315,
+              "en_kotu_ust": 0.6024,
+              "kesif_n": 79,
+              "kesif_net": 0.281384,
+              "dogrulama_n": 26,
+              "dogrulama_net": 0.434581,
+              "hedef_r_ort": 1.761156,
+              "masraf_ort": 0.131504
+            },
+            {
+              "kova": "Yükselen Üçgen",
+              "n": 165,
+              "stop_pay": 0.478788,
+              "ilk_mum_stop_pay": 0.127273,
+              "hedef_pay": 0.406061,
+              "kar_pay": 0.472727,
+              "net_ort": 0.000935,
+              "en_kotu_alt": -0.2637,
+              "en_kotu_ust": 0.2205,
+              "kesif_n": 122,
+              "kesif_net": -0.009132,
+              "dogrulama_n": 43,
+              "dogrulama_net": 0.029498,
+              "hedef_r_ort": 1.597072,
+              "masraf_ort": 0.116161
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 6
+        }
+      }
+    },
+    "D6_A_Cekirdek_Veya_Arti": {
+      "genel": {
+        "n": 1124,
+        "kar_n": 545,
+        "zarar_n": 579,
+        "kar_pay": 0.484875,
+        "net_ort": 0.061109,
+        "brut_ort": 0.172233,
+        "masraf_ort": 0.111124,
+        "net_toplam": 68.69,
+        "brut_toplam": 193.59,
+        "masraf_toplam": 124.9,
+        "masraf_brut_payi": 0.645178,
+        "kazanan_ort_net": 1.237362,
+        "kaybeden_ort_net": -1.046073,
+        "kazanan_toplam_net": 674.36,
+        "kaybeden_toplam_net": -605.68,
+        "kazanc_kayip_orani": 1.182864,
+        "basabas_kar_pay": 0.458114,
+        "brutte_arti_nette_zarar_n": 10,
+        "risk_atr_medyan": 1.29265,
+        "hedef_r_medyan": 1.5472,
+        "donem": {
+          "kesif": {
+            "n": 738,
+            "kar_pay": 0.47019,
+            "stop_pay": 0.460705,
+            "hedef_pay": 0.380759,
+            "net_ort": 0.020993
+          },
+          "dogrulama": {
+            "n": 386,
+            "kar_pay": 0.512953,
+            "stop_pay": 0.42487,
+            "hedef_pay": 0.430052,
+            "net_ort": 0.137807
+          }
+        }
+      },
+      "cikis": [
+        {
+          "tur": "HEDEF",
+          "ad": "Hedefe ulaştı",
+          "n": 447,
+          "pay": 0.397687,
+          "kar_n": 447,
+          "zarar_n": 0,
+          "net_ort": 1.391802,
+          "net_toplam": 622.14,
+          "bar_medyan": 3.0
+        },
+        {
+          "tur": "STOP",
+          "ad": "Stop oldu",
+          "n": 468,
+          "pay": 0.41637,
+          "kar_n": 0,
+          "zarar_n": 468,
+          "net_ort": -1.122653,
+          "net_toplam": -525.4,
+          "bar_medyan": 3.0
+        },
+        {
+          "tur": "STOP_BOSLUK",
+          "ad": "Açılış boşluğuyla stop oldu",
+          "n": 36,
+          "pay": 0.032028,
+          "kar_n": 0,
+          "zarar_n": 36,
+          "net_ort": -1.460231,
+          "net_toplam": -52.57,
+          "bar_medyan": 3.0
+        },
+        {
+          "tur": "SURE",
+          "ad": "Süre doldu (ne stop ne hedef)",
+          "n": 173,
+          "pay": 0.153915,
+          "kar_n": 98,
+          "zarar_n": 75,
+          "net_ort": 0.141735,
+          "net_toplam": 24.52,
+          "bar_medyan": 10.0
+        }
+      ],
+      "zarar_yollari": [
+        {
+          "kod": "SURE_ZARAR",
+          "ad": "Stop olmadı; süre doldu, zararda kapandı",
+          "n": 75,
+          "zarar_payi": 0.129534,
+          "islem_payi": 0.066726,
+          "net_ort": -0.369424,
+          "net_toplam": -27.71,
+          "zarar_toplam_payi": 0.045745
+        },
+        {
+          "kod": "BOSLUK",
+          "ad": "Açılış boşluğu stopu atladı",
+          "n": 36,
+          "zarar_payi": 0.062176,
+          "islem_payi": 0.032028,
+          "net_ort": -1.460231,
+          "net_toplam": -52.57,
+          "zarar_toplam_payi": 0.086793
+        },
+        {
+          "kod": "ILK_MUM",
+          "ad": "Girişten sonraki ilk mumda stop",
+          "n": 68,
+          "zarar_payi": 0.117444,
+          "islem_payi": 0.060498,
+          "net_ort": -1.14115,
+          "net_toplam": -77.6,
+          "zarar_toplam_payi": 0.128118
+        },
+        {
+          "kod": "KAR_GORMEDI",
+          "ad": "2+ mum yaşadı, +0.25 R'yi hiç görmedi",
+          "n": 123,
+          "zarar_payi": 0.212435,
+          "islem_payi": 0.109431,
+          "net_ort": -1.119306,
+          "net_toplam": -137.67,
+          "zarar_toplam_payi": 0.227307
+        },
+        {
+          "kod": "AZ_KAR",
+          "ad": "+0.25–0.5 R gördü, döndü",
+          "n": 98,
+          "zarar_payi": 0.169257,
+          "islem_payi": 0.087189,
+          "net_ort": -1.106889,
+          "net_toplam": -108.48,
+          "zarar_toplam_payi": 0.179097
+        },
+        {
+          "kod": "KAR_GORDU",
+          "ad": "+0.5–1 R gördü, geri verdi",
+          "n": 114,
+          "zarar_payi": 0.196891,
+          "islem_payi": 0.101423,
+          "net_ort": -1.120445,
+          "net_toplam": -127.73,
+          "zarar_toplam_payi": 0.210889
+        },
+        {
+          "kod": "BIR_R_GORDU",
+          "ad": "+1 R ve üstünü gördü, geri verdi",
+          "n": 65,
+          "zarar_payi": 0.112263,
+          "islem_payi": 0.057829,
+          "net_ort": -1.137274,
+          "net_toplam": -73.92,
+          "zarar_toplam_payi": 0.12205
+        }
+      ],
+      "stop": {
+        "n": 504,
+        "islem_payi": 0.448399,
+        "zarar_payi": 0.870466,
+        "bosluk_n": 36,
+        "bar": [
+          {
+            "aralik": "1. mum",
+            "n": 70,
+            "pay": 0.138889
+          },
+          {
+            "aralik": "2–3. mum",
+            "n": 189,
+            "pay": 0.375
+          },
+          {
+            "aralik": "4–6. mum",
+            "n": 163,
+            "pay": 0.323413
+          },
+          {
+            "aralik": "7–10. mum",
+            "n": 82,
+            "pay": 0.162698
+          }
+        ],
+        "bar_medyan": 3.0,
+        "once_kar": [
+          {
+            "esik": 0.25,
+            "mum_n": 295,
+            "mum_pay": 0.585317,
+            "saat_n": 297,
+            "saat_pay": 0.640086,
+            "saat_kumesinde_mum_n": 274
+          },
+          {
+            "esik": 0.5,
+            "mum_n": 195,
+            "mum_pay": 0.386905,
+            "saat_n": 197,
+            "saat_pay": 0.424569,
+            "saat_kumesinde_mum_n": 181
+          },
+          {
+            "esik": 1.0,
+            "mum_n": 72,
+            "mum_pay": 0.142857,
+            "saat_n": 73,
+            "saat_pay": 0.157328,
+            "saat_kumesinde_mum_n": 68
+          },
+          {
+            "esik": 1.5,
+            "mum_n": 23,
+            "mum_pay": 0.045635,
+            "saat_n": 21,
+            "saat_pay": 0.045259,
+            "saat_kumesinde_mum_n": 20
+          }
+        ],
+        "hic_lehte_gormedi_n": 102,
+        "hedef_yolu": [
+          {
+            "esik": 0.5,
+            "n": 104,
+            "pay": 0.206349
+          },
+          {
+            "esik": 0.75,
+            "n": 39,
+            "pay": 0.077381
+          },
+          {
+            "esik": 0.9,
+            "n": 10,
+            "pay": 0.019841
+          }
+        ],
+        "ayni_mumda_hedef_n": 4,
+        "saatlik": {
+          "cozulen_n": 464,
+          "durum": {
+            "AYNI": 464,
+            "VERI_YOK": 36,
+            "TUTARSIZ": 2,
+            "ONCE_HEDEF": 2
+          }
+        }
+      },
+      "ilk_mum": {
+        "n": 70,
+        "stop_payi": 0.138889,
+        "islem_payi": 0.062278,
+        "bosluk_n": 2,
+        "dar_stop_esik_atr": 1.0,
+        "dar_stop_n": 43,
+        "dar_stop_pay": 0.614286,
+        "dar_stoplu_islem_n": 267,
+        "dar_stoplu_islemde_oran": 0.161049,
+        "genis_stoplu_islemde_oran": 0.031505,
+        "giris": [
+          {
+            "giris": "1d 18:30",
+            "islem_n": 348,
+            "ilk_mum_stop_n": 31,
+            "oran": 0.08908
+          },
+          {
+            "giris": "4h 13:30",
+            "islem_n": 458,
+            "ilk_mum_stop_n": 30,
+            "oran": 0.065502
+          },
+          {
+            "giris": "4h 17:30",
+            "islem_n": 287,
+            "ilk_mum_stop_n": 4,
+            "oran": 0.013937
+          },
+          {
+            "giris": "4h 18:00",
+            "islem_n": 27,
+            "ilk_mum_stop_n": 4,
+            "oran": 0.148148
+          }
+        ],
+        "saatlik": {
+          "n": 59,
+          "ilk_saatte_n": 16,
+          "ilk_iki_saatte_n": 26,
+          "dogrudan_n": 44,
+          "once_kar": [
+            {
+              "esik": 0.25,
+              "n": 15
+            },
+            {
+              "esik": 0.5,
+              "n": 8
+            },
+            {
+              "esik": 1.0,
+              "n": 2
+            }
+          ]
+        }
+      },
+      "bosluk": {
+        "n": 36,
+        "stop_payi": 0.071429,
+        "brut_ort": -1.354517,
+        "brut_en_kotu": -2.9118,
+        "fazladan_kayip_ort": 0.354517,
+        "fazladan_kayip_toplam": 12.76,
+        "gun_ilk_mumu_n": 36,
+        "ilk_mum_n": 2,
+        "tf": {
+          "4h": 22,
+          "1d": 14
+        },
+        "once_kar_n": 16
+      },
+      "geri_veren": {
+        "esik": 0.5,
+        "n": 195,
+        "stop_payi": 0.386905,
+        "bir_r_n": 72,
+        "en_iyi_r_medyan": 0.8965,
+        "tepe_stop_arasi": [
+          {
+            "aralik": "1 mum",
+            "n": 51,
+            "pay": 0.261538
+          },
+          {
+            "aralik": "2 mum",
+            "n": 49,
+            "pay": 0.251282
+          },
+          {
+            "aralik": "3 mum",
+            "n": 37,
+            "pay": 0.189744
+          },
+          {
+            "aralik": "4+ mum",
+            "n": 58,
+            "pay": 0.297436
+          }
+        ],
+        "tepe_stop_medyan": 2.0,
+        "hedef_yolu": [
+          {
+            "esik": 0.5,
+            "n": 102,
+            "pay": 0.523077
+          },
+          {
+            "esik": 0.75,
+            "n": 39,
+            "pay": 0.2
+          },
+          {
+            "esik": 0.9,
+            "n": 10,
+            "pay": 0.051282
+          }
+        ]
+      },
+      "uyari": {
+        "stop_n": 504,
+        "gozlemsiz_stop_n": 70,
+        "gozlemli_stop_n": 434,
+        "gozlemli_kazanan_n": 478,
+        "seviye_ici_goren_n": 164,
+        "son_kapanista_seviye_ici_n": 136,
+        "seviye_disindan_tek_mumda_n": 298,
+        "son_kapanis_r_medyan": -0.263,
+        "son_kapanista_karda_n": 97,
+        "son_kapanista_yarim_r_karda_n": 22,
+        "stopa_mesafe_atr_medyan": 0.8155,
+        "stopa_mesafe_bir_atr_alti_n": 333,
+        "stopa_mesafe_yarim_atr_alti_n": 137,
+        "etiketler": [
+          {
+            "kod": "SEVIYE_ICI",
+            "ad": "Kapanış tez seviyesinin ters tarafında",
+            "stop_n": 164,
+            "stop_pay": 0.37788,
+            "kazanan_n": 18,
+            "kazanan_pay": 0.037657
+          },
+          {
+            "kod": "FRM_RETEST",
+            "ad": "Formasyon retest ediliyor",
+            "stop_n": 76,
+            "stop_pay": 0.175115,
+            "kazanan_n": 10,
+            "kazanan_pay": 0.020921
+          },
+          {
+            "kod": "FRM_BASARISIZ",
+            "ad": "Formasyon: başarısız kırılım",
+            "stop_n": 9,
+            "stop_pay": 0.020737,
+            "kazanan_n": 2,
+            "kazanan_pay": 0.004184
+          },
+          {
+            "kod": "FIYAT_ZARARDA",
+            "ad": "Kapanış girişin zarar tarafında",
+            "stop_n": 367,
+            "stop_pay": 0.845622,
+            "kazanan_n": 222,
+            "kazanan_pay": 0.464435
+          },
+          {
+            "kod": "FIYAT_TERS_KAPANIS",
+            "ad": "Ters yönlü kapanış",
+            "stop_n": 394,
+            "stop_pay": 0.907834,
+            "kazanan_n": 336,
+            "kazanan_pay": 0.702929
+          },
+          {
+            "kod": "SR_KARSI_RED",
+            "ad": "Karşı Stabil çizgisinde ret",
+            "stop_n": 109,
+            "stop_pay": 0.251152,
+            "kazanan_n": 84,
+            "kazanan_pay": 0.175732
+          },
+          {
+            "kod": "BLOK_DUVAR",
+            "ad": "Karşı OB/FVG bandında ret",
+            "stop_n": 110,
+            "stop_pay": 0.253456,
+            "kazanan_n": 208,
+            "kazanan_pay": 0.435146
+          },
+          {
+            "kod": "VP_TERS_BASKI",
+            "ad": "Ters hacim baskısı",
+            "stop_n": 93,
+            "stop_pay": 0.214286,
+            "kazanan_n": 84,
+            "kazanan_pay": 0.175732
+          },
+          {
+            "kod": "MS_TERS",
+            "ad": "Ters yönlü yapı olayı (iç/dış; sweep dahil)",
+            "stop_n": 118,
+            "stop_pay": 0.271889,
+            "kazanan_n": 95,
+            "kazanan_pay": 0.198745
+          },
+          {
+            "kod": "ADAY_KARSI",
+            "ad": "Sistemin kendi karşı yön adayı",
+            "stop_n": 55,
+            "stop_pay": 0.126728,
+            "kazanan_n": 23,
+            "kazanan_pay": 0.048117
+          },
+          {
+            "kod": "FRM_TEYIT",
+            "ad": "Formasyon kırılımı teyit aldı (lehte)",
+            "stop_n": 314,
+            "stop_pay": 0.723502,
+            "kazanan_n": 396,
+            "kazanan_pay": 0.828452
+          }
+        ],
+        "tez_son": [
+          {
+            "kod": "GOZLEM_YOK",
+            "ad": "Hiç kapanış görülmedi (ilk mumda çıkış)",
+            "stop_n": 70,
+            "stop_pay": 0.138889,
+            "hedef_n": 67
+          },
+          {
+            "kod": "BEKLIYOR",
+            "ad": "Tez henüz teyit almamıştı",
+            "stop_n": 63,
+            "stop_pay": 0.125,
+            "hedef_n": 55
+          },
+          {
+            "kod": "TEYITLI",
+            "ad": "Tez teyitliydi",
+            "stop_n": 217,
+            "stop_pay": 0.430556,
+            "hedef_n": 319
+          },
+          {
+            "kod": "SINANIYOR",
+            "ad": "Tez sınanıyordu",
+            "stop_n": 116,
+            "stop_pay": 0.230159,
+            "hedef_n": 3
+          },
+          {
+            "kod": "BOZULDU",
+            "ad": "Tez bozulmuştu",
+            "stop_n": 38,
+            "stop_pay": 0.075397,
+            "hedef_n": 3
+          }
+        ]
+      },
+      "stop_sonrasi": {
+        "n": 504,
+        "tumu": [
+          {
+            "kod": "HEDEFE_GITTI",
+            "ad": "Stoptan sonra özgün hedefe ulaştı",
+            "n": 61,
+            "pay": 0.121032
+          },
+          {
+            "kod": "KARDA_BITTI",
+            "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+            "n": 63,
+            "pay": 0.125
+          },
+          {
+            "kod": "ZARARDA_BITTI",
+            "ad": "Ufuk sonunda giriş ile stop arasında",
+            "n": 118,
+            "pay": 0.234127
+          },
+          {
+            "kod": "DAHA_KOTU",
+            "ad": "Ufuk sonunda stopun da ötesinde",
+            "n": 253,
+            "pay": 0.501984
+          },
+          {
+            "kod": "UFUK_SONU",
+            "ad": "Stop ufkun son mumunda; sonrası yok",
+            "n": 9,
+            "pay": 0.017857
+          }
+        ],
+        "ilk_mum": {
+          "n": 70,
+          "dagilim": [
+            {
+              "kod": "HEDEFE_GITTI",
+              "ad": "Stoptan sonra özgün hedefe ulaştı",
+              "n": 10,
+              "pay": 0.142857
+            },
+            {
+              "kod": "KARDA_BITTI",
+              "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+              "n": 9,
+              "pay": 0.128571
+            },
+            {
+              "kod": "ZARARDA_BITTI",
+              "ad": "Ufuk sonunda giriş ile stop arasında",
+              "n": 7,
+              "pay": 0.1
+            },
+            {
+              "kod": "DAHA_KOTU",
+              "ad": "Ufuk sonunda stopun da ötesinde",
+              "n": 44,
+              "pay": 0.628571
+            },
+            {
+              "kod": "UFUK_SONU",
+              "ad": "Stop ufkun son mumunda; sonrası yok",
+              "n": 0,
+              "pay": 0.0
+            }
+          ]
+        },
+        "kar_gormeden": {
+          "n": 239,
+          "dagilim": [
+            {
+              "kod": "HEDEFE_GITTI",
+              "ad": "Stoptan sonra özgün hedefe ulaştı",
+              "n": 27,
+              "pay": 0.112971
+            },
+            {
+              "kod": "KARDA_BITTI",
+              "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+              "n": 25,
+              "pay": 0.104603
+            },
+            {
+              "kod": "ZARARDA_BITTI",
+              "ad": "Ufuk sonunda giriş ile stop arasında",
+              "n": 67,
+              "pay": 0.280335
+            },
+            {
+              "kod": "DAHA_KOTU",
+              "ad": "Ufuk sonunda stopun da ötesinde",
+              "n": 119,
+              "pay": 0.497908
+            },
+            {
+              "kod": "UFUK_SONU",
+              "ad": "Stop ufkun son mumunda; sonrası yok",
+              "n": 1,
+              "pay": 0.004184
+            }
+          ]
+        },
+        "geri_veren": {
+          "n": 195,
+          "dagilim": [
+            {
+              "kod": "HEDEFE_GITTI",
+              "ad": "Stoptan sonra özgün hedefe ulaştı",
+              "n": 24,
+              "pay": 0.123077
+            },
+            {
+              "kod": "KARDA_BITTI",
+              "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+              "n": 29,
+              "pay": 0.148718
+            },
+            {
+              "kod": "ZARARDA_BITTI",
+              "ad": "Ufuk sonunda giriş ile stop arasında",
+              "n": 44,
+              "pay": 0.225641
+            },
+            {
+              "kod": "DAHA_KOTU",
+              "ad": "Ufuk sonunda stopun da ötesinde",
+              "n": 90,
+              "pay": 0.461538
+            },
+            {
+              "kod": "UFUK_SONU",
+              "ad": "Stop ufkun son mumunda; sonrası yok",
+              "n": 8,
+              "pay": 0.041026
+            }
+          ]
+        }
+      },
+      "sure": {
+        "n": 173,
+        "islem_payi": 0.153915,
+        "net_toplam": 24.52,
+        "kar_n": 98,
+        "kar_ort_net": 0.532929,
+        "zarar_n": 75,
+        "zarar_ort_net": -0.369424,
+        "zararda_brut_arti_n": 10,
+        "zararda_yarim_r_gormus_n": 47,
+        "zararda_bir_r_gormus_n": 13,
+        "karda_hedef_yolu_medyan": 0.7582,
+        "karda_yarim_r_aleyhte_gormus_n": 46,
+        "yarim_r_oynamayan_n": 9
+      },
+      "kurtaran": [
+        {
+          "esik": 0.25,
+          "goren_n": 849,
+          "stop_n": 504,
+          "stop_pay": 0.59364,
+          "kar_n": 271,
+          "kar_pay": 0.319199,
+          "hedef_n": 202,
+          "stopsuz_zarar_n": 74
+        },
+        {
+          "esik": 0.5,
+          "goren_n": 697,
+          "stop_n": 504,
+          "stop_pay": 0.723099,
+          "kar_n": 133,
+          "kar_pay": 0.190818,
+          "hedef_n": 87,
+          "stopsuz_zarar_n": 60
+        },
+        {
+          "esik": 0.75,
+          "goren_n": 583,
+          "stop_n": 504,
+          "stop_pay": 0.864494,
+          "kar_n": 51,
+          "kar_pay": 0.087479,
+          "hedef_n": 27,
+          "stopsuz_zarar_n": 28
+        }
+      ],
+      "kazanan": {
+        "kar_n": 545,
+        "hedef_n": 447,
+        "hedef_ort_net": 1.391802,
+        "hedef_r_ort": 1.499238,
+        "ilk_mumda_hedef_n": 67,
+        "bar": [
+          {
+            "aralik": "1. mum",
+            "n": 67,
+            "pay": 0.149888
+          },
+          {
+            "aralik": "2–3. mum",
+            "n": 167,
+            "pay": 0.373602
+          },
+          {
+            "aralik": "4–6. mum",
+            "n": 121,
+            "pay": 0.270694
+          },
+          {
+            "aralik": "7–10. mum",
+            "n": 92,
+            "pay": 0.205817
+          }
+        ],
+        "bar_medyan": 3.0,
+        "once_aleyhte": [
+          {
+            "esik": 0.25,
+            "n": 202,
+            "pay": 0.451902
+          },
+          {
+            "esik": 0.5,
+            "n": 87,
+            "pay": 0.194631
+          },
+          {
+            "esik": 0.75,
+            "n": 27,
+            "pay": 0.060403
+          }
+        ],
+        "sure_karda_n": 98,
+        "sure_karda_ort_net": 0.532929
+      },
+      "piyasa": {
+        "esik_yuzde": 0.5,
+        "stop": {
+          "n": 504,
+          "olculen_n": 495,
+          "ters_n": 279,
+          "ters_pay": 0.563636,
+          "yatay_n": 117,
+          "yatay_pay": 0.236364,
+          "lehte_n": 99,
+          "lehte_pay": 0.2,
+          "ort_yuzde": -0.942383
+        },
+        "hedef": {
+          "n": 447,
+          "olculen_n": 440,
+          "ters_n": 76,
+          "ters_pay": 0.172727,
+          "yatay_n": 109,
+          "yatay_pay": 0.247727,
+          "lehte_n": 255,
+          "lehte_pay": 0.579545,
+          "ort_yuzde": 1.161589
+        },
+        "sure": {
+          "n": 173,
+          "olculen_n": 172,
+          "ters_n": 49,
+          "ters_pay": 0.284884,
+          "yatay_n": 30,
+          "yatay_pay": 0.174419,
+          "lehte_n": 93,
+          "lehte_pay": 0.540698,
+          "ort_yuzde": 0.450457
+        }
+      },
+      "hafta": {
+        "hafta_n": 92,
+        "arti_hafta_n": 45,
+        "eksi_hafta_n": 47,
+        "arti_toplam": 216.86,
+        "eksi_toplam": -148.17,
+        "net_toplam": 68.69,
+        "uc_n": 5,
+        "en_iyi": [
+          {
+            "hafta": "2026-H38",
+            "n": 40,
+            "net_toplam": 33.71,
+            "stop_n": 7,
+            "long_n": 0,
+            "short_n": 40
+          },
+          {
+            "hafta": "2026-H07",
+            "n": 29,
+            "net_toplam": 16.72,
+            "stop_n": 7,
+            "long_n": 29,
+            "short_n": 0
+          },
+          {
+            "hafta": "2026-H03",
+            "n": 19,
+            "net_toplam": 14.4,
+            "stop_n": 3,
+            "long_n": 16,
+            "short_n": 3
+          },
+          {
+            "hafta": "2025-H34",
+            "n": 22,
+            "net_toplam": 13.49,
+            "stop_n": 4,
+            "long_n": 20,
+            "short_n": 2
+          },
+          {
+            "hafta": "2025-H21",
+            "n": 11,
+            "net_toplam": 12.14,
+            "stop_n": 2,
+            "long_n": 1,
+            "short_n": 10
+          }
+        ],
+        "en_kotu": [
+          {
+            "hafta": "2026-H01",
+            "n": 16,
+            "net_toplam": -11.61,
+            "stop_n": 12,
+            "long_n": 5,
+            "short_n": 11
+          },
+          {
+            "hafta": "2025-H25",
+            "n": 18,
+            "net_toplam": -9.17,
+            "stop_n": 13,
+            "long_n": 1,
+            "short_n": 17
+          },
+          {
+            "hafta": "2026-H37",
+            "n": 13,
+            "net_toplam": -8.43,
+            "stop_n": 10,
+            "long_n": 11,
+            "short_n": 2
+          },
+          {
+            "hafta": "2025-H33",
+            "n": 12,
+            "net_toplam": -7.91,
+            "stop_n": 9,
+            "long_n": 10,
+            "short_n": 2
+          },
+          {
+            "hafta": "2025-H24",
+            "n": 9,
+            "net_toplam": -6.53,
+            "stop_n": 6,
+            "long_n": 4,
+            "short_n": 5
+          }
+        ],
+        "en_iyi_toplam": 90.46,
+        "en_kotu_toplam": -43.65,
+        "en_iyi_haric_net": -21.77,
+        "en_kotu_haric_net": 112.34,
+        "tek_yonlu_hafta_n": 17,
+        "tek_yonlu_haftalardaki_islem_n": 164
+      },
+      "dar_genis": {
+        "esik_atr": 1.0,
+        "dar": {
+          "n": 267,
+          "stop_pay": 0.640449,
+          "ilk_mum_stop_pay": 0.161049,
+          "kar_pay": 0.340824,
+          "net_ort": -0.047917,
+          "hedef_r_ort": 2.474636,
+          "masraf_ort": 0.170324
+        },
+        "genis": {
+          "n": 857,
+          "stop_pay": 0.388565,
+          "ilk_mum_stop_pay": 0.031505,
+          "kar_pay": 0.529755,
+          "net_ort": 0.095076,
+          "hedef_r_ort": 1.341238,
+          "masraf_ort": 0.092681
+        }
+      },
+      "kosullar": {
+        "stop_mesafesi": {
+          "satirlar": [
+            {
+              "kova": "≤ 0.8 ATR",
+              "n": 112,
+              "stop_pay": 0.633929,
+              "ilk_mum_stop_pay": 0.214286,
+              "hedef_pay": 0.3125,
+              "kar_pay": 0.357143,
+              "net_ort": 0.087321,
+              "en_kotu_alt": -0.2596,
+              "en_kotu_ust": 0.4592,
+              "kesif_n": 79,
+              "kesif_net": -0.045314,
+              "dogrulama_n": 33,
+              "dogrulama_net": 0.404842,
+              "hedef_r_ort": 2.889047,
+              "masraf_ort": 0.210651
+            },
+            {
+              "kova": "0.8–1.0 ATR",
+              "n": 155,
+              "stop_pay": 0.645161,
+              "ilk_mum_stop_pay": 0.122581,
+              "hedef_pay": 0.283871,
+              "kar_pay": 0.329032,
+              "net_ort": -0.145638,
+              "en_kotu_alt": -0.367,
+              "en_kotu_ust": 0.1124,
+              "kesif_n": 92,
+              "kesif_net": -0.260092,
+              "dogrulama_n": 63,
+              "dogrulama_net": 0.021502,
+              "hedef_r_ort": 2.17519,
+              "masraf_ort": 0.141185
+            },
+            {
+              "kova": "1.0–1.3 ATR",
+              "n": 300,
+              "stop_pay": 0.49,
+              "ilk_mum_stop_pay": 0.056667,
+              "hedef_pay": 0.363333,
+              "kar_pay": 0.48,
+              "net_ort": 0.119392,
+              "en_kotu_alt": -0.0275,
+              "en_kotu_ust": 0.2654,
+              "kesif_n": 192,
+              "kesif_net": 0.158072,
+              "dogrulama_n": 108,
+              "dogrulama_net": 0.050626,
+              "hedef_r_ort": 1.75897,
+              "masraf_ort": 0.120701
+            },
+            {
+              "kova": "1.3–1.7 ATR",
+              "n": 259,
+              "stop_pay": 0.444015,
+              "ilk_mum_stop_pay": 0.030888,
+              "hedef_pay": 0.428571,
+              "kar_pay": 0.498069,
+              "net_ort": 0.044111,
+              "en_kotu_alt": -0.1728,
+              "en_kotu_ust": 0.2529,
+              "kesif_n": 179,
+              "kesif_net": -0.037151,
+              "dogrulama_n": 80,
+              "dogrulama_net": 0.225934,
+              "hedef_r_ort": 1.366178,
+              "masraf_ort": 0.092771
+            },
+            {
+              "kova": "1.7–2.2 ATR",
+              "n": 158,
+              "stop_pay": 0.303797,
+              "ilk_mum_stop_pay": 0.012658,
+              "hedef_pay": 0.43038,
+              "kar_pay": 0.550633,
+              "net_ort": 0.061672,
+              "en_kotu_alt": -0.115,
+              "en_kotu_ust": 0.2224,
+              "kesif_n": 108,
+              "kesif_net": 0.050754,
+              "dogrulama_n": 50,
+              "dogrulama_net": 0.085254,
+              "hedef_r_ort": 1.05026,
+              "masraf_ort": 0.074196
+            },
+            {
+              "kova": "> 2.2 ATR",
+              "n": 140,
+              "stop_pay": 0.164286,
+              "ilk_mum_stop_pay": 0.0,
+              "hedef_pay": 0.571429,
+              "kar_pay": 0.671429,
+              "net_ort": 0.174954,
+              "en_kotu_alt": 0.0444,
+              "en_kotu_ust": 0.3,
+              "kesif_n": 88,
+              "kesif_net": 0.157041,
+              "dogrulama_n": 52,
+              "dogrulama_net": 0.205269,
+              "hedef_r_ort": 0.728349,
+              "masraf_ort": 0.053331
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 0
+        },
+        "yon_donem": {
+          "satirlar": [
+            {
+              "kova": "dogrulama / long",
+              "n": 190,
+              "stop_pay": 0.447368,
+              "ilk_mum_stop_pay": 0.047368,
+              "hedef_pay": 0.389474,
+              "kar_pay": 0.473684,
+              "net_ort": 0.025461,
+              "en_kotu_alt": -0.2492,
+              "en_kotu_ust": 0.2072,
+              "kesif_n": 0,
+              "kesif_net": null,
+              "dogrulama_n": 190,
+              "dogrulama_net": 0.025461,
+              "hedef_r_ort": 1.501828,
+              "masraf_ort": 0.09458
+            },
+            {
+              "kova": "dogrulama / short",
+              "n": 196,
+              "stop_pay": 0.403061,
+              "ilk_mum_stop_pay": 0.035714,
+              "hedef_pay": 0.469388,
+              "kar_pay": 0.55102,
+              "net_ort": 0.246713,
+              "en_kotu_alt": -0.1149,
+              "en_kotu_ust": 0.5074,
+              "kesif_n": 0,
+              "kesif_net": null,
+              "dogrulama_n": 196,
+              "dogrulama_net": 0.246713,
+              "hedef_r_ort": 1.720009,
+              "masraf_ort": 0.122296
+            },
+            {
+              "kova": "kesif / long",
+              "n": 451,
+              "stop_pay": 0.416851,
+              "ilk_mum_stop_pay": 0.070953,
+              "hedef_pay": 0.454545,
+              "kar_pay": 0.501109,
+              "net_ort": 0.102029,
+              "en_kotu_alt": -0.0788,
+              "en_kotu_ust": 0.2621,
+              "kesif_n": 451,
+              "kesif_net": 0.102029,
+              "dogrulama_n": 0,
+              "dogrulama_net": null,
+              "hedef_r_ort": 1.5157,
+              "masraf_ort": 0.110706
+            },
+            {
+              "kova": "kesif / short",
+              "n": 287,
+              "stop_pay": 0.529617,
+              "ilk_mum_stop_pay": 0.076655,
+              "hedef_pay": 0.264808,
+              "kar_pay": 0.421603,
+              "net_ort": -0.106349,
+              "en_kotu_alt": -0.2894,
+              "en_kotu_ust": 0.0705,
+              "kesif_n": 287,
+              "kesif_net": -0.106349,
+              "dogrulama_n": 0,
+              "dogrulama_net": null,
+              "hedef_r_ort": 1.756513,
+              "masraf_ort": 0.115105
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 0
+        },
+        "giris": {
+          "satirlar": [
+            {
+              "kova": "1d 18:30",
+              "n": 348,
+              "stop_pay": 0.471264,
+              "ilk_mum_stop_pay": 0.08908,
+              "hedef_pay": 0.387931,
+              "kar_pay": 0.482759,
+              "net_ort": 0.069073,
+              "en_kotu_alt": -0.0935,
+              "en_kotu_ust": 0.2458,
+              "kesif_n": 249,
+              "kesif_net": 0.032139,
+              "dogrulama_n": 99,
+              "dogrulama_net": 0.16197,
+              "hedef_r_ort": 1.693988,
+              "masraf_ort": 0.073455
+            },
+            {
+              "kova": "4h 13:30",
+              "n": 458,
+              "stop_pay": 0.39738,
+              "ilk_mum_stop_pay": 0.065502,
+              "hedef_pay": 0.414847,
+              "kar_pay": 0.510917,
+              "net_ort": 0.071807,
+              "en_kotu_alt": -0.0657,
+              "en_kotu_ust": 0.205,
+              "kesif_n": 280,
+              "kesif_net": 0.010279,
+              "dogrulama_n": 178,
+              "dogrulama_net": 0.168593,
+              "hedef_r_ort": 1.471053,
+              "masraf_ort": 0.120521
+            },
+            {
+              "kova": "4h 17:30",
+              "n": 287,
+              "stop_pay": 0.519164,
+              "ilk_mum_stop_pay": 0.013937,
+              "hedef_pay": 0.355401,
+              "kar_pay": 0.421603,
+              "net_ort": -0.02633,
+              "en_kotu_alt": -0.2126,
+              "en_kotu_ust": 0.1575,
+              "kesif_n": 187,
+              "kesif_net": -0.03028,
+              "dogrulama_n": 100,
+              "dogrulama_net": -0.018944,
+              "hedef_r_ort": 1.735369,
+              "masraf_ort": 0.141009
+            },
+            {
+              "kova": "4h 18:00",
+              "n": 27,
+              "stop_pay": 0.259259,
+              "ilk_mum_stop_pay": 0.148148,
+              "hedef_pay": 0.703704,
+              "kar_pay": 0.740741,
+              "net_ort": 0.73417,
+              "en_kotu_alt": 0.2333,
+              "en_kotu_ust": 1.2092,
+              "kesif_n": 18,
+              "kesif_net": 0.598856,
+              "dogrulama_n": 9,
+              "dogrulama_net": 1.0048,
+              "hedef_r_ort": 1.597107,
+              "masraf_ort": 0.119563
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 4
+        },
+        "endeks_islem": {
+          "satirlar": [
+            {
+              "kova": "%2'den fazla ters",
+              "n": 158,
+              "stop_pay": 0.71519,
+              "ilk_mum_stop_pay": 0.075949,
+              "hedef_pay": 0.126582,
+              "kar_pay": 0.240506,
+              "net_ort": -0.602913,
+              "en_kotu_alt": -0.7854,
+              "en_kotu_ust": -0.417,
+              "kesif_n": 107,
+              "kesif_net": -0.568662,
+              "dogrulama_n": 51,
+              "dogrulama_net": -0.674775,
+              "hedef_r_ort": 1.617209,
+              "masraf_ort": 0.087628
+            },
+            {
+              "kova": "%0.5–2 ters",
+              "n": 246,
+              "stop_pay": 0.674797,
+              "ilk_mum_stop_pay": 0.097561,
+              "hedef_pay": 0.227642,
+              "kar_pay": 0.260163,
+              "net_ort": -0.501002,
+              "en_kotu_alt": -0.6554,
+              "en_kotu_ust": -0.3607,
+              "kesif_n": 166,
+              "kesif_net": -0.564867,
+              "dogrulama_n": 80,
+              "dogrulama_net": -0.368484,
+              "hedef_r_ort": 1.613987,
+              "masraf_ort": 0.114833
+            },
+            {
+              "kova": "yatay (±%0.5)",
+              "n": 256,
+              "stop_pay": 0.457031,
+              "ilk_mum_stop_pay": 0.085938,
+              "hedef_pay": 0.425781,
+              "kar_pay": 0.511719,
+              "net_ort": 0.048137,
+              "en_kotu_alt": -0.1115,
+              "en_kotu_ust": 0.214,
+              "kesif_n": 167,
+              "kesif_net": 0.027629,
+              "dogrulama_n": 89,
+              "dogrulama_net": 0.086619,
+              "hedef_r_ort": 1.64869,
+              "masraf_ort": 0.121497
+            },
+            {
+              "kova": "%0.5–2 lehte",
+              "n": 252,
+              "stop_pay": 0.265873,
+              "ilk_mum_stop_pay": 0.035714,
+              "hedef_pay": 0.507937,
+              "kar_pay": 0.623016,
+              "net_ort": 0.44015,
+              "en_kotu_alt": 0.2887,
+              "en_kotu_ust": 0.6204,
+              "kesif_n": 167,
+              "kesif_net": 0.35688,
+              "dogrulama_n": 85,
+              "dogrulama_net": 0.603753,
+              "hedef_r_ort": 1.584388,
+              "masraf_ort": 0.112232
+            },
+            {
+              "kova": "%2'den fazla lehte",
+              "n": 195,
+              "stop_pay": 0.164103,
+              "ilk_mum_stop_pay": 0.010256,
+              "hedef_pay": 0.651282,
+              "kar_pay": 0.753846,
+              "net_ort": 0.843365,
+              "en_kotu_alt": 0.6343,
+              "en_kotu_ust": 1.0465,
+              "kesif_n": 122,
+              "kesif_net": 0.867412,
+              "dogrulama_n": 73,
+              "dogrulama_net": 0.803177,
+              "hedef_r_ort": 1.570794,
+              "masraf_ort": 0.096727
+            }
+          ],
+          "olculemeyen_n": 17,
+          "kucuk_kova_n": 0
+        },
+        "endeks_on": {
+          "satirlar": [
+            {
+              "kova": "%2'den fazla ters",
+              "n": 44,
+              "stop_pay": 0.431818,
+              "ilk_mum_stop_pay": 0.113636,
+              "hedef_pay": 0.386364,
+              "kar_pay": 0.522727,
+              "net_ort": 0.196348,
+              "en_kotu_alt": -0.2248,
+              "en_kotu_ust": 0.6292,
+              "kesif_n": 22,
+              "kesif_net": 0.334341,
+              "dogrulama_n": 22,
+              "dogrulama_net": 0.058355,
+              "hedef_r_ort": 1.634352,
+              "masraf_ort": 0.086698
+            },
+            {
+              "kova": "%0–2 ters",
+              "n": 193,
+              "stop_pay": 0.440415,
+              "ilk_mum_stop_pay": 0.046632,
+              "hedef_pay": 0.430052,
+              "kar_pay": 0.507772,
+              "net_ort": 0.073839,
+              "en_kotu_alt": -0.123,
+              "en_kotu_ust": 0.2819,
+              "kesif_n": 131,
+              "kesif_net": 0.069228,
+              "dogrulama_n": 62,
+              "dogrulama_net": 0.083582,
+              "hedef_r_ort": 1.562154,
+              "masraf_ort": 0.112665
+            },
+            {
+              "kova": "%0–2 lehte",
+              "n": 420,
+              "stop_pay": 0.45,
+              "ilk_mum_stop_pay": 0.045238,
+              "hedef_pay": 0.380952,
+              "kar_pay": 0.461905,
+              "net_ort": 0.052432,
+              "en_kotu_alt": -0.1064,
+              "en_kotu_ust": 0.21,
+              "kesif_n": 267,
+              "kesif_net": -0.034734,
+              "dogrulama_n": 153,
+              "dogrulama_net": 0.204546,
+              "hedef_r_ort": 1.634598,
+              "masraf_ort": 0.123457
+            },
+            {
+              "kova": "%2'den fazla lehte",
+              "n": 450,
+              "stop_pay": 0.448889,
+              "ilk_mum_stop_pay": 0.08,
+              "hedef_pay": 0.4,
+              "kar_pay": 0.493333,
+              "net_ort": 0.053952,
+              "en_kotu_alt": -0.103,
+              "en_kotu_ust": 0.2019,
+              "kesif_n": 309,
+              "kesif_net": 0.026771,
+              "dogrulama_n": 141,
+              "dogrulama_net": 0.113521,
+              "hedef_r_ort": 1.60057,
+              "masraf_ort": 0.0954
+            }
+          ],
+          "olculemeyen_n": 17,
+          "kucuk_kova_n": 0
+        },
+        "kalabalik": {
+          "satirlar": [
+            {
+              "kova": "1 (yalnız)",
+              "n": 75,
+              "stop_pay": 0.453333,
+              "ilk_mum_stop_pay": 0.093333,
+              "hedef_pay": 0.306667,
+              "kar_pay": 0.453333,
+              "net_ort": -0.070235,
+              "en_kotu_alt": -0.3661,
+              "en_kotu_ust": 0.2222,
+              "kesif_n": 57,
+              "kesif_net": -0.046284,
+              "dogrulama_n": 18,
+              "dogrulama_net": -0.146078,
+              "hedef_r_ort": 1.606733,
+              "masraf_ort": 0.103192
+            },
+            {
+              "kova": "2–3",
+              "n": 220,
+              "stop_pay": 0.459091,
+              "ilk_mum_stop_pay": 0.05,
+              "hedef_pay": 0.4,
+              "kar_pay": 0.463636,
+              "net_ort": 0.047752,
+              "en_kotu_alt": -0.1364,
+              "en_kotu_ust": 0.2381,
+              "kesif_n": 144,
+              "kesif_net": 0.142154,
+              "dogrulama_n": 76,
+              "dogrulama_net": -0.131114,
+              "hedef_r_ort": 1.572726,
+              "masraf_ort": 0.110609
+            },
+            {
+              "kova": "4–8",
+              "n": 458,
+              "stop_pay": 0.451965,
+              "ilk_mum_stop_pay": 0.067686,
+              "hedef_pay": 0.423581,
+              "kar_pay": 0.49345,
+              "net_ort": 0.080103,
+              "en_kotu_alt": -0.0823,
+              "en_kotu_ust": 0.2512,
+              "kesif_n": 293,
+              "kesif_net": -0.009149,
+              "dogrulama_n": 165,
+              "dogrulama_net": 0.238593,
+              "hedef_r_ort": 1.630837,
+              "masraf_ort": 0.116196
+            },
+            {
+              "kova": "9+",
+              "n": 371,
+              "stop_pay": 0.436658,
+              "ilk_mum_stop_pay": 0.056604,
+              "hedef_pay": 0.382749,
+              "kar_pay": 0.493261,
+              "net_ort": 0.072132,
+              "en_kotu_alt": -0.1358,
+              "en_kotu_ust": 0.28,
+              "kesif_n": 244,
+              "kesif_net": 0.001399,
+              "dogrulama_n": 127,
+              "dogrulama_net": 0.208028,
+              "hedef_r_ort": 1.608466,
+              "masraf_ort": 0.106773
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 0
+        },
+        "formasyon": {
+          "satirlar": [
+            {
+              "kova": "Alçalan Kama",
+              "n": 153,
+              "stop_pay": 0.464052,
+              "ilk_mum_stop_pay": 0.091503,
+              "hedef_pay": 0.372549,
+              "kar_pay": 0.45098,
+              "net_ort": -0.027103,
+              "en_kotu_alt": -0.2882,
+              "en_kotu_ust": 0.2079,
+              "kesif_n": 90,
+              "kesif_net": -0.192647,
+              "dogrulama_n": 63,
+              "dogrulama_net": 0.209389,
+              "hedef_r_ort": 1.685041,
+              "masraf_ort": 0.111076
+            },
+            {
+              "kova": "Alçalan Üçgen",
+              "n": 395,
+              "stop_pay": 0.470886,
+              "ilk_mum_stop_pay": 0.053165,
+              "hedef_pay": 0.379747,
+              "kar_pay": 0.478481,
+              "net_ort": 0.042776,
+              "en_kotu_alt": -0.1205,
+              "en_kotu_ust": 0.2056,
+              "kesif_n": 233,
+              "kesif_net": -0.067294,
+              "dogrulama_n": 162,
+              "dogrulama_net": 0.201086,
+              "hedef_r_ort": 1.630873,
+              "masraf_ort": 0.108444
+            },
+            {
+              "kova": "Simetrik Üçgen",
+              "n": 159,
+              "stop_pay": 0.389937,
+              "ilk_mum_stop_pay": 0.037736,
+              "hedef_pay": 0.421384,
+              "kar_pay": 0.534591,
+              "net_ort": 0.14843,
+              "en_kotu_alt": -0.0799,
+              "en_kotu_ust": 0.3369,
+              "kesif_n": 107,
+              "kesif_net": 0.235045,
+              "dogrulama_n": 52,
+              "dogrulama_net": -0.029798,
+              "hedef_r_ort": 1.498709,
+              "masraf_ort": 0.105004
+            },
+            {
+              "kova": "Yükselen Kama",
+              "n": 152,
+              "stop_pay": 0.414474,
+              "ilk_mum_stop_pay": 0.039474,
+              "hedef_pay": 0.467105,
+              "kar_pay": 0.513158,
+              "net_ort": 0.228042,
+              "en_kotu_alt": -0.0449,
+              "en_kotu_ust": 0.4848,
+              "kesif_n": 114,
+              "kesif_net": 0.220728,
+              "dogrulama_n": 38,
+              "dogrulama_net": 0.249984,
+              "hedef_r_ort": 1.692599,
+              "masraf_ort": 0.126933
+            },
+            {
+              "kova": "Yükselen Üçgen",
+              "n": 258,
+              "stop_pay": 0.465116,
+              "ilk_mum_stop_pay": 0.089147,
+              "hedef_pay": 0.387597,
+              "kar_pay": 0.468992,
+              "net_ort": -0.006415,
+              "en_kotu_alt": -0.1662,
+              "en_kotu_ust": 0.1688,
+              "kesif_n": 188,
+              "kesif_net": -0.008935,
+              "dogrulama_n": 70,
+              "dogrulama_net": 0.000353,
+              "hedef_r_ort": 1.560099,
+              "masraf_ort": 0.10968
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 7
+        }
+      }
+    },
+    "D1_Birincil": {
+      "genel": {
+        "n": 4233,
+        "kar_n": 1818,
+        "zarar_n": 2415,
+        "kar_pay": 0.429483,
+        "net_ort": 0.009985,
+        "brut_ort": 0.14109,
+        "masraf_ort": 0.131105,
+        "net_toplam": 42.27,
+        "brut_toplam": 597.23,
+        "masraf_toplam": 554.97,
+        "masraf_brut_payi": 0.92924,
+        "kazanan_ort_net": 1.478642,
+        "kaybeden_ort_net": -1.095612,
+        "kazanan_toplam_net": 2688.17,
+        "kaybeden_toplam_net": -2645.9,
+        "kazanc_kayip_orani": 1.349604,
+        "basabas_kar_pay": 0.425604,
+        "brutte_arti_nette_zarar_n": 33,
+        "risk_atr_medyan": 1.0579,
+        "hedef_r_medyan": 1.8905,
+        "donem": {
+          "kesif": {
+            "n": 2723,
+            "kar_pay": 0.422328,
+            "stop_pay": 0.520015,
+            "hedef_pay": 0.330518,
+            "net_ort": -0.009638
+          },
+          "dogrulama": {
+            "n": 1510,
+            "kar_pay": 0.442384,
+            "stop_pay": 0.491391,
+            "hedef_pay": 0.354305,
+            "net_ort": 0.045373
+          }
+        }
+      },
+      "cikis": [
+        {
+          "tur": "HEDEF",
+          "ad": "Hedefe ulaştı",
+          "n": 1435,
+          "pay": 0.339003,
+          "kar_n": 1435,
+          "zarar_n": 0,
+          "net_ort": 1.677427,
+          "net_toplam": 2407.11,
+          "bar_medyan": 4.0
+        },
+        {
+          "tur": "STOP",
+          "ad": "Stop oldu",
+          "n": 1998,
+          "pay": 0.472006,
+          "kar_n": 0,
+          "zarar_n": 1998,
+          "net_ort": -1.143064,
+          "net_toplam": -2283.84,
+          "bar_medyan": 3.0
+        },
+        {
+          "tur": "STOP_BOSLUK",
+          "ad": "Açılış boşluğuyla stop oldu",
+          "n": 160,
+          "pay": 0.037798,
+          "kar_n": 0,
+          "zarar_n": 160,
+          "net_ort": -1.623106,
+          "net_toplam": -259.7,
+          "bar_medyan": 3.0
+        },
+        {
+          "tur": "SURE",
+          "ad": "Süre doldu (ne stop ne hedef)",
+          "n": 636,
+          "pay": 0.150248,
+          "kar_n": 383,
+          "zarar_n": 253,
+          "net_ort": 0.284351,
+          "net_toplam": 180.85,
+          "bar_medyan": 10.0
+        },
+        {
+          "tur": "TEZ_IPTAL",
+          "ad": "Tez iptaliyle kapandı",
+          "n": 4,
+          "pay": 0.000945,
+          "kar_n": 0,
+          "zarar_n": 4,
+          "net_ort": -0.5372,
+          "net_toplam": -2.15,
+          "bar_medyan": 1.5
+        }
+      ],
+      "zarar_yollari": [
+        {
+          "kod": "SURE_ZARAR",
+          "ad": "Stop olmadı; süre doldu, zararda kapandı",
+          "n": 253,
+          "zarar_payi": 0.104762,
+          "islem_payi": 0.059768,
+          "net_ort": -0.396111,
+          "net_toplam": -100.22,
+          "zarar_toplam_payi": 0.037876
+        },
+        {
+          "kod": "TEZ_IPTAL",
+          "ad": "Stop olmadı; tez iptaliyle zararda kapandı",
+          "n": 4,
+          "zarar_payi": 0.001656,
+          "islem_payi": 0.000945,
+          "net_ort": -0.5372,
+          "net_toplam": -2.15,
+          "zarar_toplam_payi": 0.000812
+        },
+        {
+          "kod": "BOSLUK",
+          "ad": "Açılış boşluğu stopu atladı",
+          "n": 160,
+          "zarar_payi": 0.066253,
+          "islem_payi": 0.037798,
+          "net_ort": -1.623106,
+          "net_toplam": -259.7,
+          "zarar_toplam_payi": 0.098151
+        },
+        {
+          "kod": "ILK_MUM",
+          "ad": "Girişten sonraki ilk mumda stop",
+          "n": 411,
+          "zarar_payi": 0.170186,
+          "islem_payi": 0.097094,
+          "net_ort": -1.157896,
+          "net_toplam": -475.9,
+          "zarar_toplam_payi": 0.179861
+        },
+        {
+          "kod": "KAR_GORMEDI",
+          "ad": "2+ mum yaşadı, +0.25 R'yi hiç görmedi",
+          "n": 508,
+          "zarar_payi": 0.210352,
+          "islem_payi": 0.120009,
+          "net_ort": -1.130711,
+          "net_toplam": -574.4,
+          "zarar_toplam_payi": 0.217091
+        },
+        {
+          "kod": "AZ_KAR",
+          "ad": "+0.25–0.5 R gördü, döndü",
+          "n": 327,
+          "zarar_payi": 0.135404,
+          "islem_payi": 0.07725,
+          "net_ort": -1.125788,
+          "net_toplam": -368.13,
+          "zarar_toplam_payi": 0.139133
+        },
+        {
+          "kod": "KAR_GORDU",
+          "ad": "+0.5–1 R gördü, geri verdi",
+          "n": 400,
+          "zarar_payi": 0.165631,
+          "islem_payi": 0.094496,
+          "net_ort": -1.137995,
+          "net_toplam": -455.2,
+          "zarar_toplam_payi": 0.172039
+        },
+        {
+          "kod": "BIR_R_GORDU",
+          "ad": "+1 R ve üstünü gördü, geri verdi",
+          "n": 352,
+          "zarar_payi": 0.145756,
+          "islem_payi": 0.083156,
+          "net_ort": -1.165381,
+          "net_toplam": -410.21,
+          "zarar_toplam_payi": 0.155037
+        }
+      ],
+      "stop": {
+        "n": 2158,
+        "islem_payi": 0.509804,
+        "zarar_payi": 0.893582,
+        "bosluk_n": 160,
+        "bar": [
+          {
+            "aralik": "1. mum",
+            "n": 443,
+            "pay": 0.205283
+          },
+          {
+            "aralik": "2–3. mum",
+            "n": 804,
+            "pay": 0.372567
+          },
+          {
+            "aralik": "4–6. mum",
+            "n": 613,
+            "pay": 0.284059
+          },
+          {
+            "aralik": "7–10. mum",
+            "n": 298,
+            "pay": 0.138091
+          }
+        ],
+        "bar_medyan": 3.0,
+        "once_kar": [
+          {
+            "esik": 0.25,
+            "mum_n": 1168,
+            "mum_pay": 0.541242,
+            "saat_n": 1226,
+            "saat_pay": 0.608437,
+            "saat_kumesinde_mum_n": 1099
+          },
+          {
+            "esik": 0.5,
+            "mum_n": 816,
+            "mum_pay": 0.378128,
+            "saat_n": 853,
+            "saat_pay": 0.423325,
+            "saat_kumesinde_mum_n": 773
+          },
+          {
+            "esik": 1.0,
+            "mum_n": 382,
+            "mum_pay": 0.177016,
+            "saat_n": 385,
+            "saat_pay": 0.191067,
+            "saat_kumesinde_mum_n": 364
+          },
+          {
+            "esik": 1.5,
+            "mum_n": 174,
+            "mum_pay": 0.08063,
+            "saat_n": 165,
+            "saat_pay": 0.081886,
+            "saat_kumesinde_mum_n": 163
+          }
+        ],
+        "hic_lehte_gormedi_n": 566,
+        "hedef_yolu": [
+          {
+            "esik": 0.5,
+            "n": 393,
+            "pay": 0.182113
+          },
+          {
+            "esik": 0.75,
+            "n": 142,
+            "pay": 0.065802
+          },
+          {
+            "esik": 0.9,
+            "n": 52,
+            "pay": 0.024096
+          }
+        ],
+        "ayni_mumda_hedef_n": 9,
+        "saatlik": {
+          "cozulen_n": 2015,
+          "durum": {
+            "AYNI": 2015,
+            "VERI_YOK": 129,
+            "TUTARSIZ": 10,
+            "ONCE_HEDEF": 4
+          }
+        }
+      },
+      "ilk_mum": {
+        "n": 443,
+        "stop_payi": 0.205283,
+        "islem_payi": 0.104654,
+        "bosluk_n": 32,
+        "dar_stop_esik_atr": 1.0,
+        "dar_stop_n": 329,
+        "dar_stop_pay": 0.742664,
+        "dar_stoplu_islem_n": 1888,
+        "dar_stoplu_islemde_oran": 0.174258,
+        "genis_stoplu_islemde_oran": 0.048614,
+        "giris": [
+          {
+            "giris": "1d 18:30",
+            "islem_n": 1406,
+            "ilk_mum_stop_n": 183,
+            "oran": 0.130156
+          },
+          {
+            "giris": "4h 13:30",
+            "islem_n": 1496,
+            "ilk_mum_stop_n": 138,
+            "oran": 0.092246
+          },
+          {
+            "giris": "4h 17:30",
+            "islem_n": 952,
+            "ilk_mum_stop_n": 13,
+            "oran": 0.013655
+          },
+          {
+            "giris": "4h 18:00",
+            "islem_n": 369,
+            "ilk_mum_stop_n": 103,
+            "oran": 0.279133
+          }
+        ],
+        "saatlik": {
+          "n": 407,
+          "ilk_saatte_n": 134,
+          "ilk_iki_saatte_n": 212,
+          "dogrudan_n": 316,
+          "once_kar": [
+            {
+              "esik": 0.25,
+              "n": 91
+            },
+            {
+              "esik": 0.5,
+              "n": 45
+            },
+            {
+              "esik": 1.0,
+              "n": 8
+            }
+          ]
+        }
+      },
+      "bosluk": {
+        "n": 160,
+        "stop_payi": 0.074143,
+        "brut_ort": -1.483889,
+        "brut_en_kotu": -4.5919,
+        "fazladan_kayip_ort": 0.483889,
+        "fazladan_kayip_toplam": 77.42,
+        "gun_ilk_mumu_n": 158,
+        "ilk_mum_n": 32,
+        "tf": {
+          "4h": 108,
+          "1d": 52
+        },
+        "once_kar_n": 64
+      },
+      "geri_veren": {
+        "esik": 0.5,
+        "n": 816,
+        "stop_payi": 0.378128,
+        "bir_r_n": 382,
+        "en_iyi_r_medyan": 0.9504,
+        "tepe_stop_arasi": [
+          {
+            "aralik": "1 mum",
+            "n": 230,
+            "pay": 0.281863
+          },
+          {
+            "aralik": "2 mum",
+            "n": 190,
+            "pay": 0.232843
+          },
+          {
+            "aralik": "3 mum",
+            "n": 180,
+            "pay": 0.220588
+          },
+          {
+            "aralik": "4+ mum",
+            "n": 216,
+            "pay": 0.264706
+          }
+        ],
+        "tepe_stop_medyan": 2.0,
+        "hedef_yolu": [
+          {
+            "esik": 0.5,
+            "n": 390,
+            "pay": 0.477941
+          },
+          {
+            "esik": 0.75,
+            "n": 142,
+            "pay": 0.17402
+          },
+          {
+            "esik": 0.9,
+            "n": 52,
+            "pay": 0.063725
+          }
+        ]
+      },
+      "uyari": {
+        "stop_n": 2158,
+        "gozlemsiz_stop_n": 443,
+        "gozlemli_stop_n": 1715,
+        "gozlemli_kazanan_n": 1647,
+        "seviye_ici_goren_n": 708,
+        "son_kapanista_seviye_ici_n": 607,
+        "seviye_disindan_tek_mumda_n": 1108,
+        "son_kapanis_r_medyan": -0.1911,
+        "son_kapanista_karda_n": 405,
+        "son_kapanista_yarim_r_karda_n": 107,
+        "stopa_mesafe_atr_medyan": 0.71535,
+        "stopa_mesafe_bir_atr_alti_n": 1616,
+        "stopa_mesafe_yarim_atr_alti_n": 616,
+        "etiketler": [
+          {
+            "kod": "SEVIYE_ICI",
+            "ad": "Kapanış tez seviyesinin ters tarafında",
+            "stop_n": 708,
+            "stop_pay": 0.412828,
+            "kazanan_n": 110,
+            "kazanan_pay": 0.066788
+          },
+          {
+            "kod": "FRM_RETEST",
+            "ad": "Formasyon retest ediliyor",
+            "stop_n": 172,
+            "stop_pay": 0.100292,
+            "kazanan_n": 31,
+            "kazanan_pay": 0.018822
+          },
+          {
+            "kod": "FRM_BASARISIZ",
+            "ad": "Formasyon: başarısız kırılım",
+            "stop_n": 14,
+            "stop_pay": 0.008163,
+            "kazanan_n": 2,
+            "kazanan_pay": 0.001214
+          },
+          {
+            "kod": "FIYAT_ZARARDA",
+            "ad": "Kapanış girişin zarar tarafında",
+            "stop_n": 1398,
+            "stop_pay": 0.81516,
+            "kazanan_n": 715,
+            "kazanan_pay": 0.434123
+          },
+          {
+            "kod": "FIYAT_TERS_KAPANIS",
+            "ad": "Ters yönlü kapanış",
+            "stop_n": 1538,
+            "stop_pay": 0.896793,
+            "kazanan_n": 1177,
+            "kazanan_pay": 0.714633
+          },
+          {
+            "kod": "SR_KARSI_RED",
+            "ad": "Karşı Stabil çizgisinde ret",
+            "stop_n": 338,
+            "stop_pay": 0.197085,
+            "kazanan_n": 336,
+            "kazanan_pay": 0.204007
+          },
+          {
+            "kod": "BLOK_DUVAR",
+            "ad": "Karşı OB/FVG bandında ret",
+            "stop_n": 632,
+            "stop_pay": 0.368513,
+            "kazanan_n": 873,
+            "kazanan_pay": 0.530055
+          },
+          {
+            "kod": "VP_TERS_BASKI",
+            "ad": "Ters hacim baskısı",
+            "stop_n": 428,
+            "stop_pay": 0.249563,
+            "kazanan_n": 302,
+            "kazanan_pay": 0.183364
+          },
+          {
+            "kod": "MS_TERS",
+            "ad": "Ters yönlü yapı olayı (iç/dış; sweep dahil)",
+            "stop_n": 377,
+            "stop_pay": 0.219825,
+            "kazanan_n": 364,
+            "kazanan_pay": 0.221008
+          },
+          {
+            "kod": "ADAY_KARSI",
+            "ad": "Sistemin kendi karşı yön adayı",
+            "stop_n": 193,
+            "stop_pay": 0.112536,
+            "kazanan_n": 110,
+            "kazanan_pay": 0.066788
+          },
+          {
+            "kod": "FRM_TEYIT",
+            "ad": "Formasyon kırılımı teyit aldı (lehte)",
+            "stop_n": 1223,
+            "stop_pay": 0.71312,
+            "kazanan_n": 1429,
+            "kazanan_pay": 0.867638
+          }
+        ],
+        "tez_son": [
+          {
+            "kod": "GOZLEM_YOK",
+            "ad": "Hiç kapanış görülmedi (ilk mumda çıkış)",
+            "stop_n": 443,
+            "stop_pay": 0.205283,
+            "hedef_n": 171
+          },
+          {
+            "kod": "BEKLIYOR",
+            "ad": "Tez henüz teyit almamıştı",
+            "stop_n": 257,
+            "stop_pay": 0.119092,
+            "hedef_n": 154
+          },
+          {
+            "kod": "TEYITLI",
+            "ad": "Tez teyitliydi",
+            "stop_n": 809,
+            "stop_pay": 0.374884,
+            "hedef_n": 1094
+          },
+          {
+            "kod": "SINANIYOR",
+            "ad": "Tez sınanıyordu",
+            "stop_n": 476,
+            "stop_pay": 0.220575,
+            "hedef_n": 9
+          },
+          {
+            "kod": "BOZULDU",
+            "ad": "Tez bozulmuştu",
+            "stop_n": 173,
+            "stop_pay": 0.080167,
+            "hedef_n": 7
+          }
+        ]
+      },
+      "stop_sonrasi": {
+        "n": 2158,
+        "tumu": [
+          {
+            "kod": "HEDEFE_GITTI",
+            "ad": "Stoptan sonra özgün hedefe ulaştı",
+            "n": 290,
+            "pay": 0.134384
+          },
+          {
+            "kod": "KARDA_BITTI",
+            "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+            "n": 284,
+            "pay": 0.131603
+          },
+          {
+            "kod": "ZARARDA_BITTI",
+            "ad": "Ufuk sonunda giriş ile stop arasında",
+            "n": 467,
+            "pay": 0.216404
+          },
+          {
+            "kod": "DAHA_KOTU",
+            "ad": "Ufuk sonunda stopun da ötesinde",
+            "n": 1058,
+            "pay": 0.490269
+          },
+          {
+            "kod": "UFUK_SONU",
+            "ad": "Stop ufkun son mumunda; sonrası yok",
+            "n": 59,
+            "pay": 0.02734
+          }
+        ],
+        "ilk_mum": {
+          "n": 443,
+          "dagilim": [
+            {
+              "kod": "HEDEFE_GITTI",
+              "ad": "Stoptan sonra özgün hedefe ulaştı",
+              "n": 87,
+              "pay": 0.196388
+            },
+            {
+              "kod": "KARDA_BITTI",
+              "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+              "n": 77,
+              "pay": 0.173815
+            },
+            {
+              "kod": "ZARARDA_BITTI",
+              "ad": "Ufuk sonunda giriş ile stop arasında",
+              "n": 51,
+              "pay": 0.115124
+            },
+            {
+              "kod": "DAHA_KOTU",
+              "ad": "Ufuk sonunda stopun da ötesinde",
+              "n": 228,
+              "pay": 0.514673
+            },
+            {
+              "kod": "UFUK_SONU",
+              "ad": "Stop ufkun son mumunda; sonrası yok",
+              "n": 0,
+              "pay": 0.0
+            }
+          ]
+        },
+        "kar_gormeden": {
+          "n": 899,
+          "dagilim": [
+            {
+              "kod": "HEDEFE_GITTI",
+              "ad": "Stoptan sonra özgün hedefe ulaştı",
+              "n": 105,
+              "pay": 0.116796
+            },
+            {
+              "kod": "KARDA_BITTI",
+              "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+              "n": 97,
+              "pay": 0.107898
+            },
+            {
+              "kod": "ZARARDA_BITTI",
+              "ad": "Ufuk sonunda giriş ile stop arasında",
+              "n": 238,
+              "pay": 0.264739
+            },
+            {
+              "kod": "DAHA_KOTU",
+              "ad": "Ufuk sonunda stopun da ötesinde",
+              "n": 452,
+              "pay": 0.502781
+            },
+            {
+              "kod": "UFUK_SONU",
+              "ad": "Stop ufkun son mumunda; sonrası yok",
+              "n": 7,
+              "pay": 0.007786
+            }
+          ]
+        },
+        "geri_veren": {
+          "n": 816,
+          "dagilim": [
+            {
+              "kod": "HEDEFE_GITTI",
+              "ad": "Stoptan sonra özgün hedefe ulaştı",
+              "n": 98,
+              "pay": 0.120098
+            },
+            {
+              "kod": "KARDA_BITTI",
+              "ad": "Hedefe ulaşmadı ama ufuk sonunda girişin kâr tarafında",
+              "n": 110,
+              "pay": 0.134804
+            },
+            {
+              "kod": "ZARARDA_BITTI",
+              "ad": "Ufuk sonunda giriş ile stop arasında",
+              "n": 178,
+              "pay": 0.218137
+            },
+            {
+              "kod": "DAHA_KOTU",
+              "ad": "Ufuk sonunda stopun da ötesinde",
+              "n": 378,
+              "pay": 0.463235
+            },
+            {
+              "kod": "UFUK_SONU",
+              "ad": "Stop ufkun son mumunda; sonrası yok",
+              "n": 52,
+              "pay": 0.063725
+            }
+          ]
+        }
+      },
+      "sure": {
+        "n": 636,
+        "islem_payi": 0.150248,
+        "net_toplam": 180.85,
+        "kar_n": 383,
+        "kar_ort_net": 0.733848,
+        "zarar_n": 253,
+        "zarar_ort_net": -0.396111,
+        "zararda_brut_arti_n": 33,
+        "zararda_yarim_r_gormus_n": 162,
+        "zararda_bir_r_gormus_n": 71,
+        "karda_hedef_yolu_medyan": 0.7654,
+        "karda_yarim_r_aleyhte_gormus_n": 196,
+        "yarim_r_oynamayan_n": 22
+      },
+      "kurtaran": [
+        {
+          "esik": 0.25,
+          "goren_n": 3401,
+          "stop_n": 2158,
+          "stop_pay": 0.634519,
+          "kar_n": 994,
+          "kar_pay": 0.292267,
+          "hedef_n": 689,
+          "stopsuz_zarar_n": 249
+        },
+        {
+          "esik": 0.5,
+          "goren_n": 2896,
+          "stop_n": 2158,
+          "stop_pay": 0.745166,
+          "kar_n": 535,
+          "kar_pay": 0.184738,
+          "hedef_n": 339,
+          "stopsuz_zarar_n": 203
+        },
+        {
+          "esik": 0.75,
+          "goren_n": 2501,
+          "stop_n": 2158,
+          "stop_pay": 0.862855,
+          "kar_n": 226,
+          "kar_pay": 0.090364,
+          "hedef_n": 123,
+          "stopsuz_zarar_n": 117
+        }
+      ],
+      "kazanan": {
+        "kar_n": 1818,
+        "hedef_n": 1435,
+        "hedef_ort_net": 1.677427,
+        "hedef_r_ort": 1.803813,
+        "ilk_mumda_hedef_n": 171,
+        "bar": [
+          {
+            "aralik": "1. mum",
+            "n": 171,
+            "pay": 0.119164
+          },
+          {
+            "aralik": "2–3. mum",
+            "n": 519,
+            "pay": 0.361672
+          },
+          {
+            "aralik": "4–6. mum",
+            "n": 425,
+            "pay": 0.296167
+          },
+          {
+            "aralik": "7–10. mum",
+            "n": 320,
+            "pay": 0.222997
+          }
+        ],
+        "bar_medyan": 4.0,
+        "once_aleyhte": [
+          {
+            "esik": 0.25,
+            "n": 689,
+            "pay": 0.480139
+          },
+          {
+            "esik": 0.5,
+            "n": 339,
+            "pay": 0.236237
+          },
+          {
+            "esik": 0.75,
+            "n": 123,
+            "pay": 0.085714
+          }
+        ],
+        "sure_karda_n": 383,
+        "sure_karda_ort_net": 0.733848
+      },
+      "piyasa": {
+        "esik_yuzde": 0.5,
+        "stop": {
+          "n": 2158,
+          "olculen_n": 2128,
+          "ters_n": 1161,
+          "ters_pay": 0.545583,
+          "yatay_n": 553,
+          "yatay_pay": 0.259868,
+          "lehte_n": 414,
+          "lehte_pay": 0.194549,
+          "ort_yuzde": -0.867218
+        },
+        "hedef": {
+          "n": 1435,
+          "olculen_n": 1411,
+          "ters_n": 210,
+          "ters_pay": 0.148831,
+          "yatay_n": 283,
+          "yatay_pay": 0.200567,
+          "lehte_n": 918,
+          "lehte_pay": 0.650602,
+          "ort_yuzde": 1.488912
+        },
+        "sure": {
+          "n": 636,
+          "olculen_n": 632,
+          "ters_n": 215,
+          "ters_pay": 0.34019,
+          "yatay_n": 101,
+          "yatay_pay": 0.15981,
+          "lehte_n": 316,
+          "lehte_pay": 0.5,
+          "ort_yuzde": 0.400683
+        }
+      },
+      "hafta": {
+        "hafta_n": 99,
+        "arti_hafta_n": 45,
+        "eksi_hafta_n": 54,
+        "arti_toplam": 555.6,
+        "eksi_toplam": -513.33,
+        "net_toplam": 42.27,
+        "uc_n": 5,
+        "en_iyi": [
+          {
+            "hafta": "2026-H38",
+            "n": 87,
+            "net_toplam": 88.9,
+            "stop_n": 17,
+            "long_n": 5,
+            "short_n": 82
+          },
+          {
+            "hafta": "2026-H31",
+            "n": 69,
+            "net_toplam": 39.37,
+            "stop_n": 23,
+            "long_n": 11,
+            "short_n": 58
+          },
+          {
+            "hafta": "2025-H27",
+            "n": 55,
+            "net_toplam": 27.7,
+            "stop_n": 18,
+            "long_n": 46,
+            "short_n": 9
+          },
+          {
+            "hafta": "2026-H20",
+            "n": 53,
+            "net_toplam": 25.82,
+            "stop_n": 19,
+            "long_n": 20,
+            "short_n": 33
+          },
+          {
+            "hafta": "2025-H21",
+            "n": 24,
+            "net_toplam": 23.09,
+            "stop_n": 6,
+            "long_n": 4,
+            "short_n": 20
+          }
+        ],
+        "en_kotu": [
+          {
+            "hafta": "2026-H13",
+            "n": 73,
+            "net_toplam": -27.06,
+            "stop_n": 49,
+            "long_n": 27,
+            "short_n": 46
+          },
+          {
+            "hafta": "2026-H34",
+            "n": 53,
+            "net_toplam": -26.94,
+            "stop_n": 35,
+            "long_n": 36,
+            "short_n": 17
+          },
+          {
+            "hafta": "2026-H41",
+            "n": 41,
+            "net_toplam": -26.52,
+            "stop_n": 25,
+            "long_n": 33,
+            "short_n": 8
+          },
+          {
+            "hafta": "2026-H37",
+            "n": 62,
+            "net_toplam": -22.88,
+            "stop_n": 44,
+            "long_n": 51,
+            "short_n": 11
+          },
+          {
+            "hafta": "2026-H12",
+            "n": 40,
+            "net_toplam": -22.37,
+            "stop_n": 30,
+            "long_n": 27,
+            "short_n": 13
+          }
+        ],
+        "en_iyi_toplam": 204.88,
+        "en_kotu_toplam": -125.76,
+        "en_iyi_haric_net": -162.62,
+        "en_kotu_haric_net": 168.03,
+        "tek_yonlu_hafta_n": 5,
+        "tek_yonlu_haftalardaki_islem_n": 15
+      },
+      "dar_genis": {
+        "esik_atr": 1.0,
+        "dar": {
+          "n": 1888,
+          "stop_pay": 0.620763,
+          "ilk_mum_stop_pay": 0.174258,
+          "kar_pay": 0.356462,
+          "net_ort": -0.009098,
+          "hedef_r_ort": 2.610682,
+          "masraf_ort": 0.173743
+        },
+        "genis": {
+          "n": 2345,
+          "stop_pay": 0.420469,
+          "ilk_mum_stop_pay": 0.048614,
+          "kar_pay": 0.488273,
+          "net_ort": 0.02535,
+          "hedef_r_ort": 1.41241,
+          "masraf_ort": 0.096776
+        }
+      },
+      "kosullar": {
+        "stop_mesafesi": {
+          "satirlar": [
+            {
+              "kova": "≤ 0.8 ATR",
+              "n": 1041,
+              "stop_pay": 0.651297,
+              "ilk_mum_stop_pay": 0.217099,
+              "hedef_pay": 0.25072,
+              "kar_pay": 0.32853,
+              "net_ort": -0.037861,
+              "en_kotu_alt": -0.1703,
+              "en_kotu_ust": 0.1187,
+              "kesif_n": 710,
+              "kesif_net": -0.10299,
+              "dogrulama_n": 331,
+              "dogrulama_net": 0.10184,
+              "hedef_r_ort": 2.913525,
+              "masraf_ort": 0.196343
+            },
+            {
+              "kova": "0.8–1.0 ATR",
+              "n": 847,
+              "stop_pay": 0.583235,
+              "ilk_mum_stop_pay": 0.121606,
+              "hedef_pay": 0.31523,
+              "kar_pay": 0.390791,
+              "net_ort": 0.026254,
+              "en_kotu_alt": -0.1013,
+              "en_kotu_ust": 0.1455,
+              "kesif_n": 548,
+              "kesif_net": 0.048708,
+              "dogrulama_n": 299,
+              "dogrulama_net": -0.014899,
+              "hedef_r_ort": 2.238475,
+              "masraf_ort": 0.145967
+            },
+            {
+              "kova": "1.0–1.3 ATR",
+              "n": 983,
+              "stop_pay": 0.510682,
+              "ilk_mum_stop_pay": 0.078332,
+              "hedef_pay": 0.348932,
+              "kar_pay": 0.446592,
+              "net_ort": 0.035994,
+              "en_kotu_alt": -0.0723,
+              "en_kotu_ust": 0.1531,
+              "kesif_n": 606,
+              "kesif_net": 0.029025,
+              "dogrulama_n": 377,
+              "dogrulama_net": 0.047195,
+              "hedef_r_ort": 1.770738,
+              "masraf_ort": 0.11992
+            },
+            {
+              "kova": "1.3–1.7 ATR",
+              "n": 721,
+              "stop_pay": 0.441054,
+              "ilk_mum_stop_pay": 0.041609,
+              "hedef_pay": 0.356449,
+              "kar_pay": 0.471567,
+              "net_ort": -0.02369,
+              "en_kotu_alt": -0.1296,
+              "en_kotu_ust": 0.078,
+              "kesif_n": 470,
+              "kesif_net": -0.06232,
+              "dogrulama_n": 251,
+              "dogrulama_net": 0.048644,
+              "hedef_r_ort": 1.373968,
+              "masraf_ort": 0.09439
+            },
+            {
+              "kova": "1.7–2.2 ATR",
+              "n": 363,
+              "stop_pay": 0.330579,
+              "ilk_mum_stop_pay": 0.016529,
+              "hedef_pay": 0.426997,
+              "kar_pay": 0.520661,
+              "net_ort": 0.01531,
+              "en_kotu_alt": -0.1168,
+              "en_kotu_ust": 0.1628,
+              "kesif_n": 231,
+              "kesif_net": 0.055755,
+              "dogrulama_n": 132,
+              "dogrulama_net": -0.055468,
+              "hedef_r_ort": 1.047719,
+              "masraf_ort": 0.073216
+            },
+            {
+              "kova": "> 2.2 ATR",
+              "n": 278,
+              "stop_pay": 0.165468,
+              "ilk_mum_stop_pay": 0.003597,
+              "hedef_pay": 0.546763,
+              "kar_pay": 0.636691,
+              "net_ort": 0.128009,
+              "en_kotu_alt": 0.0418,
+              "en_kotu_ust": 0.2128,
+              "kesif_n": 158,
+              "kesif_net": 0.120305,
+              "dogrulama_n": 120,
+              "dogrulama_net": 0.138152,
+              "hedef_r_ort": 0.721265,
+              "masraf_ort": 0.051889
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 0
+        },
+        "yon_donem": {
+          "satirlar": [
+            {
+              "kova": "dogrulama / long",
+              "n": 807,
+              "stop_pay": 0.535316,
+              "ilk_mum_stop_pay": 0.094176,
+              "hedef_pay": 0.309789,
+              "kar_pay": 0.375465,
+              "net_ort": -0.146753,
+              "en_kotu_alt": -0.3576,
+              "en_kotu_ust": -0.0057,
+              "kesif_n": 0,
+              "kesif_net": null,
+              "dogrulama_n": 807,
+              "dogrulama_net": -0.146753,
+              "hedef_r_ort": 1.780482,
+              "masraf_ort": 0.124134
+            },
+            {
+              "kova": "dogrulama / short",
+              "n": 703,
+              "stop_pay": 0.440967,
+              "ilk_mum_stop_pay": 0.102418,
+              "hedef_pay": 0.405405,
+              "kar_pay": 0.519203,
+              "net_ort": 0.265921,
+              "en_kotu_alt": -0.0483,
+              "en_kotu_ust": 0.5906,
+              "kesif_n": 0,
+              "kesif_net": null,
+              "dogrulama_n": 703,
+              "dogrulama_net": 0.265921,
+              "hedef_r_ort": 2.047597,
+              "masraf_ort": 0.131587
+            },
+            {
+              "kova": "kesif / long",
+              "n": 1371,
+              "stop_pay": 0.461707,
+              "ilk_mum_stop_pay": 0.107221,
+              "hedef_pay": 0.415026,
+              "kar_pay": 0.46973,
+              "net_ort": 0.102855,
+              "en_kotu_alt": -0.0448,
+              "en_kotu_ust": 0.2355,
+              "kesif_n": 1371,
+              "kesif_net": 0.102855,
+              "dogrulama_n": 0,
+              "dogrulama_net": null,
+              "hedef_r_ort": 1.835491,
+              "masraf_ort": 0.129671
+            },
+            {
+              "kova": "kesif / short",
+              "n": 1352,
+              "stop_pay": 0.579142,
+              "ilk_mum_stop_pay": 0.109467,
+              "hedef_pay": 0.244822,
+              "kar_pay": 0.37426,
+              "net_ort": -0.123712,
+              "en_kotu_alt": -0.2752,
+              "en_kotu_ust": 0.0145,
+              "kesif_n": 1352,
+              "kesif_net": -0.123712,
+              "dogrulama_n": 0,
+              "dogrulama_net": null,
+              "hedef_r_ort": 2.106731,
+              "masraf_ort": 0.136468
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 0
+        },
+        "giris": {
+          "satirlar": [
+            {
+              "kova": "1d 18:30",
+              "n": 1406,
+              "stop_pay": 0.525605,
+              "ilk_mum_stop_pay": 0.130156,
+              "hedef_pay": 0.323613,
+              "kar_pay": 0.424609,
+              "net_ort": 0.050511,
+              "en_kotu_alt": -0.061,
+              "en_kotu_ust": 0.1655,
+              "kesif_n": 975,
+              "kesif_net": 0.052273,
+              "dogrulama_n": 431,
+              "dogrulama_net": 0.046526,
+              "hedef_r_ort": 2.039187,
+              "masraf_ort": 0.085665
+            },
+            {
+              "kova": "4h 13:30",
+              "n": 1496,
+              "stop_pay": 0.445856,
+              "ilk_mum_stop_pay": 0.092246,
+              "hedef_pay": 0.382353,
+              "kar_pay": 0.476604,
+              "net_ort": 0.070349,
+              "en_kotu_alt": -0.0212,
+              "en_kotu_ust": 0.1666,
+              "kesif_n": 913,
+              "kesif_net": 0.025737,
+              "dogrulama_n": 583,
+              "dogrulama_net": 0.140212,
+              "hedef_r_ort": 1.758393,
+              "masraf_ort": 0.142206
+            },
+            {
+              "kova": "4h 17:30",
+              "n": 952,
+              "stop_pay": 0.553571,
+              "ilk_mum_stop_pay": 0.013655,
+              "hedef_pay": 0.298319,
+              "kar_pay": 0.384454,
+              "net_ort": -0.102492,
+              "en_kotu_alt": -0.1957,
+              "en_kotu_ust": -0.0007,
+              "kesif_n": 602,
+              "kesif_net": -0.11952,
+              "dogrulama_n": 350,
+              "dogrulama_net": -0.073203,
+              "hedef_r_ort": 1.975278,
+              "masraf_ort": 0.158185
+            },
+            {
+              "kova": "4h 18:00",
+              "n": 369,
+              "stop_pay": 0.588076,
+              "ilk_mum_stop_pay": 0.279133,
+              "hedef_pay": 0.333333,
+              "kar_pay": 0.379404,
+              "net_ort": -0.076548,
+              "en_kotu_alt": -0.2558,
+              "en_kotu_ust": 0.1155,
+              "kesif_n": 223,
+              "kesif_net": -0.092306,
+              "dogrulama_n": 146,
+              "dogrulama_net": -0.05248,
+              "hedef_r_ort": 2.288392,
+              "masraf_ort": 0.189258
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 10
+        },
+        "endeks_islem": {
+          "satirlar": [
+            {
+              "kova": "%2'den fazla ters",
+              "n": 621,
+              "stop_pay": 0.723027,
+              "ilk_mum_stop_pay": 0.095008,
+              "hedef_pay": 0.086957,
+              "kar_pay": 0.199678,
+              "net_ort": -0.666423,
+              "en_kotu_alt": -0.811,
+              "en_kotu_ust": -0.5205,
+              "kesif_n": 405,
+              "kesif_net": -0.633991,
+              "dogrulama_n": 216,
+              "dogrulama_net": -0.727234,
+              "hedef_r_ort": 1.912545,
+              "masraf_ort": 0.102605
+            },
+            {
+              "kova": "%0.5–2 ters",
+              "n": 967,
+              "stop_pay": 0.736298,
+              "ilk_mum_stop_pay": 0.149948,
+              "hedef_pay": 0.161324,
+              "kar_pay": 0.21303,
+              "net_ort": -0.59275,
+              "en_kotu_alt": -0.6698,
+              "en_kotu_ust": -0.5096,
+              "kesif_n": 611,
+              "kesif_net": -0.598411,
+              "dogrulama_n": 356,
+              "dogrulama_net": -0.583033,
+              "hedef_r_ort": 1.972181,
+              "masraf_ort": 0.136309
+            },
+            {
+              "kova": "yatay (±%0.5)",
+              "n": 938,
+              "stop_pay": 0.589552,
+              "ilk_mum_stop_pay": 0.173774,
+              "hedef_pay": 0.301706,
+              "kar_pay": 0.3742,
+              "net_ort": -0.200626,
+              "en_kotu_alt": -0.303,
+              "en_kotu_ust": -0.1051,
+              "kesif_n": 614,
+              "kesif_net": -0.272549,
+              "dogrulama_n": 324,
+              "dogrulama_net": -0.064329,
+              "hedef_r_ort": 2.004196,
+              "masraf_ort": 0.150259
+            },
+            {
+              "kova": "%0.5–2 lehte",
+              "n": 874,
+              "stop_pay": 0.350114,
+              "ilk_mum_stop_pay": 0.072082,
+              "hedef_pay": 0.469108,
+              "kar_pay": 0.573227,
+              "net_ort": 0.423051,
+              "en_kotu_alt": 0.3212,
+              "en_kotu_ust": 0.5375,
+              "kesif_n": 566,
+              "kesif_net": 0.396472,
+              "dogrulama_n": 308,
+              "dogrulama_net": 0.471895,
+              "hedef_r_ort": 1.915412,
+              "masraf_ort": 0.132265
+            },
+            {
+              "kova": "%2'den fazla lehte",
+              "n": 775,
+              "stop_pay": 0.139355,
+              "ilk_mum_stop_pay": 0.009032,
+              "hedef_pay": 0.655484,
+              "kar_pay": 0.787097,
+              "net_ort": 1.091681,
+              "en_kotu_alt": 0.9342,
+              "en_kotu_ust": 1.2277,
+              "kesif_n": 491,
+              "kesif_net": 1.089279,
+              "dogrulama_n": 284,
+              "dogrulama_net": 1.095835,
+              "hedef_r_ort": 1.899325,
+              "masraf_ort": 0.111815
+            }
+          ],
+          "olculemeyen_n": 58,
+          "kucuk_kova_n": 0
+        },
+        "endeks_on": {
+          "satirlar": [
+            {
+              "kova": "%2'den fazla ters",
+              "n": 305,
+              "stop_pay": 0.540984,
+              "ilk_mum_stop_pay": 0.15082,
+              "hedef_pay": 0.321311,
+              "kar_pay": 0.436066,
+              "net_ort": 0.091794,
+              "en_kotu_alt": -0.1476,
+              "en_kotu_ust": 0.3442,
+              "kesif_n": 194,
+              "kesif_net": 0.237602,
+              "dogrulama_n": 111,
+              "dogrulama_net": -0.16304,
+              "hedef_r_ort": 2.163858,
+              "masraf_ort": 0.116079
+            },
+            {
+              "kova": "%0–2 ters",
+              "n": 927,
+              "stop_pay": 0.533981,
+              "ilk_mum_stop_pay": 0.122977,
+              "hedef_pay": 0.316073,
+              "kar_pay": 0.408846,
+              "net_ort": -0.072961,
+              "en_kotu_alt": -0.2005,
+              "en_kotu_ust": 0.0621,
+              "kesif_n": 613,
+              "kesif_net": -0.065792,
+              "dogrulama_n": 314,
+              "dogrulama_net": -0.086955,
+              "hedef_r_ort": 1.990419,
+              "masraf_ort": 0.140562
+            },
+            {
+              "kova": "%0–2 lehte",
+              "n": 1553,
+              "stop_pay": 0.520283,
+              "ilk_mum_stop_pay": 0.095299,
+              "hedef_pay": 0.339987,
+              "kar_pay": 0.417901,
+              "net_ort": -0.00626,
+              "en_kotu_alt": -0.1237,
+              "en_kotu_ust": 0.1077,
+              "kesif_n": 974,
+              "kesif_net": -0.047637,
+              "dogrulama_n": 579,
+              "dogrulama_net": 0.063346,
+              "hedef_r_ort": 1.944425,
+              "masraf_ort": 0.145043
+            },
+            {
+              "kova": "%2'den fazla lehte",
+              "n": 1390,
+              "stop_pay": 0.47482,
+              "ilk_mum_stop_pay": 0.092806,
+              "hedef_pay": 0.353957,
+              "kar_pay": 0.453957,
+              "net_ort": 0.0647,
+              "en_kotu_alt": -0.088,
+              "en_kotu_ust": 0.2041,
+              "kesif_n": 906,
+              "kesif_net": 0.011185,
+              "dogrulama_n": 484,
+              "dogrulama_net": 0.164876,
+              "hedef_r_ort": 1.867616,
+              "masraf_ort": 0.10631
+            }
+          ],
+          "olculemeyen_n": 58,
+          "kucuk_kova_n": 0
+        },
+        "kalabalik": {
+          "satirlar": [
+            {
+              "kova": "1 (yalnız)",
+              "n": 337,
+              "stop_pay": 0.489614,
+              "ilk_mum_stop_pay": 0.106825,
+              "hedef_pay": 0.347181,
+              "kar_pay": 0.454006,
+              "net_ort": 0.123291,
+              "en_kotu_alt": -0.0425,
+              "en_kotu_ust": 0.3093,
+              "kesif_n": 240,
+              "kesif_net": 0.158878,
+              "dogrulama_n": 97,
+              "dogrulama_net": 0.035239,
+              "hedef_r_ort": 2.042874,
+              "masraf_ort": 0.135083
+            },
+            {
+              "kova": "2–3",
+              "n": 858,
+              "stop_pay": 0.531469,
+              "ilk_mum_stop_pay": 0.102564,
+              "hedef_pay": 0.310023,
+              "kar_pay": 0.398601,
+              "net_ort": -0.074381,
+              "en_kotu_alt": -0.1817,
+              "en_kotu_ust": 0.0285,
+              "kesif_n": 563,
+              "kesif_net": -0.01584,
+              "dogrulama_n": 295,
+              "dogrulama_net": -0.186105,
+              "hedef_r_ort": 1.947976,
+              "masraf_ort": 0.13583
+            },
+            {
+              "kova": "4–8",
+              "n": 1662,
+              "stop_pay": 0.516847,
+              "ilk_mum_stop_pay": 0.116727,
+              "hedef_pay": 0.340554,
+              "kar_pay": 0.429603,
+              "net_ort": -0.004817,
+              "en_kotu_alt": -0.0979,
+              "en_kotu_ust": 0.0916,
+              "kesif_n": 1030,
+              "kesif_net": -0.079471,
+              "dogrulama_n": 632,
+              "dogrulama_net": 0.116849,
+              "hedef_r_ort": 1.947018,
+              "masraf_ort": 0.136397
+            },
+            {
+              "kova": "9+",
+              "n": 1376,
+              "stop_pay": 0.492733,
+              "ilk_mum_stop_pay": 0.090843,
+              "hedef_pay": 0.353198,
+              "kar_pay": 0.442587,
+              "net_ort": 0.052722,
+              "en_kotu_alt": -0.1147,
+              "en_kotu_ust": 0.2147,
+              "kesif_n": 890,
+              "kesif_net": 0.02966,
+              "dogrulama_n": 486,
+              "dogrulama_net": 0.094953,
+              "hedef_r_ort": 1.922466,
+              "masraf_ort": 0.120792
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 0
+        },
+        "formasyon": {
+          "satirlar": [
+            {
+              "kova": "Alçalan Kama",
+              "n": 740,
+              "stop_pay": 0.506757,
+              "ilk_mum_stop_pay": 0.110811,
+              "hedef_pay": 0.322973,
+              "kar_pay": 0.395946,
+              "net_ort": -0.086197,
+              "en_kotu_alt": -0.2172,
+              "en_kotu_ust": 0.0564,
+              "kesif_n": 438,
+              "kesif_net": -0.039747,
+              "dogrulama_n": 302,
+              "dogrulama_net": -0.153566,
+              "hedef_r_ort": 1.834309,
+              "masraf_ort": 0.12471
+            },
+            {
+              "kova": "Alçalan Üçgen",
+              "n": 1251,
+              "stop_pay": 0.509193,
+              "ilk_mum_stop_pay": 0.099121,
+              "hedef_pay": 0.349321,
+              "kar_pay": 0.440448,
+              "net_ort": 0.017144,
+              "en_kotu_alt": -0.0837,
+              "en_kotu_ust": 0.1089,
+              "kesif_n": 733,
+              "kesif_net": -0.034102,
+              "dogrulama_n": 518,
+              "dogrulama_net": 0.089659,
+              "hedef_r_ort": 1.906795,
+              "masraf_ort": 0.129456
+            },
+            {
+              "kova": "Simetrik Üçgen",
+              "n": 687,
+              "stop_pay": 0.500728,
+              "ilk_mum_stop_pay": 0.101892,
+              "hedef_pay": 0.336245,
+              "kar_pay": 0.439592,
+              "net_ort": 0.042604,
+              "en_kotu_alt": -0.0693,
+              "en_kotu_ust": 0.1621,
+              "kesif_n": 457,
+              "kesif_net": 0.056298,
+              "dogrulama_n": 230,
+              "dogrulama_net": 0.015394,
+              "hedef_r_ort": 2.018159,
+              "masraf_ort": 0.134424
+            },
+            {
+              "kova": "Yükselen Kama",
+              "n": 694,
+              "stop_pay": 0.534582,
+              "ilk_mum_stop_pay": 0.096542,
+              "hedef_pay": 0.331412,
+              "kar_pay": 0.410663,
+              "net_ort": 0.010743,
+              "en_kotu_alt": -0.1178,
+              "en_kotu_ust": 0.1466,
+              "kesif_n": 516,
+              "kesif_net": -0.045184,
+              "dogrulama_n": 178,
+              "dogrulama_net": 0.172869,
+              "hedef_r_ort": 1.997758,
+              "masraf_ort": 0.13314
+            },
+            {
+              "kova": "Yükselen Üçgen",
+              "n": 843,
+              "stop_pay": 0.502966,
+              "ilk_mum_stop_pay": 0.118624,
+              "hedef_pay": 0.344009,
+              "kar_pay": 0.448399,
+              "net_ort": 0.054864,
+              "en_kotu_alt": -0.0786,
+              "en_kotu_ust": 0.192,
+              "kesif_n": 567,
+              "kesif_net": 0.028629,
+              "dogrulama_n": 276,
+              "dogrulama_net": 0.108761,
+              "hedef_r_ort": 2.008037,
+              "masraf_ort": 0.134224
+            }
+          ],
+          "olculemeyen_n": 0,
+          "kucuk_kova_n": 18
+        }
+      }
+    }
+  }
+}

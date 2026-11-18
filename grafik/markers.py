@@ -812,6 +812,28 @@ def _tik_etiketleri(ax, zamanlar: Sequence[Optional[datetime]], tf: str) -> None
     if len(aday) > sinir:
         adim = math.ceil(len(aday) / float(sinir))
         aday = [x for j, x in enumerate(aday) if j % adim == 0][:sinir]
+    # PİKSEL KOMŞULUĞU (2026-11-16): adaylar AY BAŞLARINDAN geliyor, aralıkları
+    # eşit DEĞİL — kadraj ay sonuna denk gelirse ilk aday (0. bar) ile ay başı
+    # adayı 4-6 bar arayla düşüp etiketler üst üste biniyordu (ölçüm: 120 barlık
+    # 1G karelerin 7/7'sinde sol kenarda "27 Nis"+"03 May"). Yukarıdaki `adim`
+    # seyreltmesi eşit aralık varsayar; burada GERÇEK piksel mesafesi denetlenir.
+    try:
+        aralik_px = float(SABITLER["eksen_pt"])
+        eksen_px = float(ax.get_window_extent().width)
+        bar_px = eksen_px / max(1.0, float(len(zamanlar)))
+        genislikler = [_metin_px(ax.figure, t, aralik_px) for _, t in aday]
+        secilen: list[int] = []
+        son_px = -1e9
+        for j, (i, _t) in enumerate(aday):
+            px = float(i) * bar_px
+            gerek = (genislikler[j] + (genislikler[secilen[-1]] if secilen else 0)) / 2.0
+            if secilen and (px - son_px) < (gerek * 1.15 + 10.0):
+                continue
+            secilen.append(j)
+            son_px = px
+        aday = [aday[j] for j in secilen]
+    except Exception as hata:      # pragma: no cover - ölçüm süsü, `adim` sonucu kalır
+        log.debug("grafik: tick komşuluk ölçümü atlandı (%s)", hata)
     ax.set_xticks([i for i, _ in aday])
     ax.set_xticklabels([t for _, t in aday], rotation=0, fontsize=SABITLER["eksen_pt"])
 

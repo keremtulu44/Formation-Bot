@@ -49,7 +49,11 @@ def boundary_violation_stats_range(upper_x1: int, upper_y1: float, upper_x2: int
 
     n = len(close)
     safe_end_bar = min(requested_end_bar, n - 1)
-    available_start_bar = max(requested_start_bar, max(0, (n - 1) - max_history_offset))
+    # FAZ9-C as-of: geçmiş penceresi ÇERÇEVE sonuna değil taramanın bitiş
+    # barına çakılır. Canlıda safe_end ≈ n-1 olduğundan davranış aynı; uzun
+    # replay çerçevelerinde erken bar taramaları yanlış çapa yüzünden
+    # atlanıyordu/kaçırılıyordu (dış denetim: G2/G4 kesim tutarsızlığı).
+    available_start_bar = max(requested_start_bar, max(0, safe_end_bar - max_history_offset))
     scan_start_bar = max(available_start_bar, safe_end_bar - max_violation_scan + 1) if apply_maximum_window else available_start_bar
     history_truncated = apply_maximum_window and scan_start_bar > geometry_start_bar
 

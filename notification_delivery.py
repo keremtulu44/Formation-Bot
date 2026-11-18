@@ -387,11 +387,21 @@ class DeliveryOutbox:
                 row["data"]["_delivery_message"] = self.owner.format_message(data)
                 self.save()
             self.flush()
-            return row["done"]
+            # "tekrar" kapısında kapatılan satır teslim edilmiş sayılmaz.
+            return bool(row["done"] and not row.get("suppressed"))
 
     def prepare(self, row):
         from notifier import _grafik_salteri_acik, _grafik_basligi
         data = row["data"]
+        if row.get("grafik_atlandi"):
+            # Zehirli kare kaydı: kare kalıcı olarak üretilemiyorsa (örn.
+            # snapshot'ta kare verisi yok) metin sonsuza kadar bekletilmez;
+            # flush, birkaç denemeden sonra bu bayrağı basar ve kart
+            # karesiz gider. Sessiz kayıp yerine log + bu bayrak iz bırakır.
+            row["images"] = []
+            row["prepared"] = True
+            row["graph_policy"] = "chart-trust-focus-v3"
+            return
         # All pending pictures from older chart policies are regenerated from the
         # saved snapshot: no internal markers, no engulf, exact right-side ranges.
         if row.get("prepared") and row.get("graph_policy") == "chart-trust-focus-v3":
@@ -451,6 +461,8 @@ class DeliveryOutbox:
                     "text_sent_media_pending": sum(bool(r["text_sent"]) for r in pending),
                     "oldest_created": pending[0]["created"] if pending else None,
                     "last_error": pending[0].get("last_error") if pending else None,
+                    "attempts": (pending[0].get("attempts") if pending else None),
+                    "grafik_atlandi": bool(pending[0].get("grafik_atlandi")) if pending else False,
                     "retry_at": pending[0].get("retry_at") if pending else None}
 
     def flush(self, *, force=False):
@@ -467,7 +479,29 @@ class DeliveryOutbox:
                         if not self.owner.can_send(d.get("stock_name", ""), d.get("pattern_name", ""),
                                                    d.get("timeframe", ""), d.get("state", ""),
                                                    formation_id=d.get("formation_id")):
+                            if getattr(self.owner, "_son_engel", None) == "tekrar":
+                                # NİHAİ ret: bu slot/state bugün zaten bildirildi.
+                                # Satırı bekletmek kuyruğu sonsuza kadar kilitlerdi;
+                                # "gönderildi say"sız, tekrar saymadan kapat ve
+                                # arkadaki bildirimlere yol ver.
+                                row["done"] = True
+                                row["suppressed"] = "tekrar"
+                                row["images"] = []
+                                row["data"].pop("grafik_verisi", None)
+                                self.save()
+                                log.info("Bildirim tekrar kapısında kapatıldı (%s): %s %s %s",
+                                         row["id"][:12], d.get("stock_name"),
+                                         d.get("timeframe"), d.get("state"))
+                                continue
                             break
+                    if (not row.get("prepared") and not row["text_sent"]
+                            and int(row.get("attempts") or 0) >= 3):
+                        # Kare hazırlığı 3 kez patladı: kalıcı bozuk snapshot
+                        # bütün kuyruğu kilitlemesin; kart karesiz devam etsin.
+                        row["grafik_atlandi"] = True
+                        log.warning("Bildirim karesi 3 denemede hazırlanamadı; "
+                                    "metin karesiz gönderilecek (%s): %s",
+                                    row["id"][:12], row.get("last_error"))
                     self.prepare(row)  # all pictures ready BEFORE sending any text
                     # A previous checkpoint may have failed after mutating memory.
                     # Re-establish durability even when prepare() is already cached.
@@ -476,7 +510,12 @@ class DeliveryOutbox:
                         self.owner._grafik_pace()  # pace BEFORE text, not between text and album
                     if not row["text_sent"]:
                         if not self.owner._gonder_metin(row["data"]):
-                            break
+                            # Eskiden retry_at basılmadan break ediliyordu:
+                            # ana döngü her turda aynı satırı anında yeniden
+                            # deniyor (Telegram'a istek yağmuru) ve arkadaki
+                            # her bildirimi kilitliyordu. Artık ortak hata
+                            # yolu 30 sn backoff basar.
+                            raise RuntimeError("Telegram metin gönderimi başarısız; yeniden denenecek")
                         row["text_sent"] = True
                         self.save()
                     if row["images"]:
@@ -490,6 +529,7 @@ class DeliveryOutbox:
                     delivered += 1
                 except Exception as exc:
                     from secrets_redaction import redact_sensitive_text
+                    row["attempts"] = int(row.get("attempts") or 0) + 1
                     row["last_error"] = redact_sensitive_text(str(exc), getattr(self.owner, "token", ""))[:200]
                     row["retry_at"] = (self.now() + timedelta(seconds=30)).isoformat()
                     try:

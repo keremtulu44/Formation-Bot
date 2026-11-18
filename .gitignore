@@ -109,3 +109,18 @@ dz_yukleme/
 
 # Replay olcum ara ciktilari (yeniden uretilebilir, Git e girmez)
 var/
+
+# Gölge zincir defteri — büyük çıktı; ölçüm özetleri (ozet.json/CSV) commit edilir
+docs/arastirma/sonuclar/**/golge_defter.jsonl*
+
+# Kök seviye gölge-zincir replay çıktıları (yeniden üretilebilir)
+/sonuclar/
+
+# Canlı bot çıkışları (yeniden üretilebilir, Git'e girmez)
+/canli_ciktilar/
+
+# Legacy / gölge sistem arşivi (yeniden üretilebilir, Git'e girmez)
+/arsiv/
+
+# Gölge v2 alt ölçümlerinin sembol bazlı ara önbelleği (yeniden üretilebilir; özet/CSV commit edilir)
+docs/arastirma/sonuclar/golge_v2/*/parca/

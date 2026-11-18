@@ -1,0 +1,77 @@
+{
+  "karar": "GEÇMEDİ",
+  "gecen": 4,
+  "toplam_esik": 7,
+  "esikler": [
+    {
+      "kod": "K1",
+      "esik": ">= 50",
+      "aciklama": "doğrulamada UYGUN plan n",
+      "deger": 141,
+      "gecti": true
+    },
+    {
+      "kod": "K2",
+      "esik": ">= 5.0",
+      "aciklama": "UYGUN − kör koşullu hedef (puan)",
+      "deger": 2.88,
+      "gecti": false
+    },
+    {
+      "kod": "K3",
+      "esik": "> 0.0",
+      "aciklama": "doğrulama beklentisi (maliyet 0)",
+      "deger": -0.1197,
+      "gecti": false
+    },
+    {
+      "kod": "K4",
+      "esik": "<= 5.0",
+      "aciklama": "G1 kapalıyken plan oranı (%)",
+      "deger": 0.0,
+      "gecti": true
+    },
+    {
+      "kod": "K5",
+      "esik": "== 0",
+      "aciklama": "RET sonrası plan ihlali",
+      "deger": 0,
+      "gecti": true
+    },
+    {
+      "kod": "K6a",
+      "esik": "> 0.0",
+      "aciklama": "keşif beklentisi",
+      "deger": 0.2004,
+      "gecti": true
+    },
+    {
+      "kod": "K6b",
+      "esik": "> 0.0",
+      "aciklama": "doğrulama beklentisi",
+      "deger": -0.1197,
+      "gecti": false
+    }
+  ],
+  "not": "Kanıt birikimi; canlıya bağlantı yok (kırmızı çizgi 8). Eşikler koşumdan ÖNCE plan belgesinde sabitlendi.",
+  "olcum_dosyasi": "docs/arastirma/sonuclar/golge_zincir/faz9d_baz_176/olcum/olcum_ozet.json",
+  "pasaport": {
+    "defter_sha256": "933244755ee4a1e9ab1bee923c9dc84d929a1fbb708d38e541632f15b0c5906a",
+    "defter_boyut_bayt": 333263270,
+    "python": "3.11.2",
+    "pandas": "2.2.2",
+    "plan_n": 633,
+    "sembol_n": 168
+  },
+  "ga95": {
+    "aciklama": "sembol-gruplu bootstrap; B=2000, tohum=42; yalnız görünürlük (rapor), karar kapısı değil",
+    "K2_puan": [
+      -7.1,
+      12.87
+    ],
+    "K3_beklenti": [
+      -0.407,
+      0.1482
+    ]
+  }
+}

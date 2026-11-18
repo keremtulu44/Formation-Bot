@@ -1,0 +1,38 @@
+{
+  "girdi": "docs/arastirma/sonuclar/teyit_sonrasi/teyit_sonrasi_olaylar.csv.gz",
+  "girdi_sha256": "d4cfaae7acc5999ec8b3861cb2c408e001db48b759f079705220d96e8ad7b6fe",
+  "arsiv_kok": "backfill_data/",
+  "ham_olay": 18495,
+  "gecerli_yol": 18352,
+  "ortusesiz_secim": 15808,
+  "eslesmeyen": 0,
+  "sansurlu": 143,
+  "kovalar": {
+    "stop": [
+      0.5,
+      0.75,
+      1.0,
+      1.25,
+      1.5
+    ],
+    "hedef": [
+      1.0,
+      1.5,
+      2.0
+    ],
+    "ufuk": [
+      10,
+      20
+    ]
+  },
+  "baz_hucre": {
+    "stop_atr": 1.0,
+    "hedef_atr": 1.5,
+    "ufuk": 10
+  },
+  "kural": "aynı barda çift dokunuş → stop (muhafazakâr); yalnız ileri barlar; eksik pencere sansür, sonuç sayılmaz",
+  "girdi_period_degerleri": [
+    "discovery",
+    "validation"
+  ]
+}

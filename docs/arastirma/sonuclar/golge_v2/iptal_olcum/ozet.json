@@ -1,0 +1,725 @@
+{
+  "baz_max_fark": 6.764316991625385e-05,
+  "ozet": [
+    {
+      "ornek": "tum_10",
+      "donem": "tum",
+      "variant": "baz10",
+      "n": 648,
+      "net_ort": 0.123414858128216,
+      "toplam": 79.97282806708397,
+      "kazanc_orani": 0.5092592592592593,
+      "degisim_ort": 0.0,
+      "iptal": 0,
+      "iptalde_baz_kazanc": 0,
+      "iptalde_baz_zarar": 0,
+      "nedenler": {
+        "HEDEF": 269,
+        "STOP": 257,
+        "ZAMAN_STOPU": 96,
+        "STOP_GAP": 26
+      }
+    },
+    {
+      "ornek": "tum_10",
+      "donem": "tum",
+      "variant": "duvar10",
+      "n": 648,
+      "net_ort": 0.11329155565908022,
+      "toplam": 73.41292806708398,
+      "kazanc_orani": 0.5015432098765432,
+      "degisim_ort": -0.010123302469135806,
+      "iptal": 122,
+      "iptalde_baz_kazanc": 76,
+      "iptalde_baz_zarar": 46,
+      "nedenler": {
+        "HEDEF": 224,
+        "STOP": 223,
+        "DUVAR_IPTAL": 122,
+        "ZAMAN_STOPU": 57,
+        "STOP_GAP": 22
+      }
+    },
+    {
+      "ornek": "tum_10",
+      "donem": "tum",
+      "variant": "baski10",
+      "n": 648,
+      "net_ort": 0.11259988899241354,
+      "toplam": 72.96472806708397,
+      "kazanc_orani": 0.49691358024691357,
+      "degisim_ort": -0.010814969135802472,
+      "iptal": 58,
+      "iptalde_baz_kazanc": 22,
+      "iptalde_baz_zarar": 36,
+      "nedenler": {
+        "HEDEF": 261,
+        "STOP": 243,
+        "ZAMAN_STOPU": 63,
+        "BASKI_IPTAL": 58,
+        "STOP_GAP": 23
+      }
+    },
+    {
+      "ornek": "tum_10",
+      "donem": "tum",
+      "variant": "birlesik10",
+      "n": 648,
+      "net_ort": 0.10160127788130242,
+      "toplam": 65.83762806708397,
+      "kazanc_orani": 0.49382716049382713,
+      "degisim_ort": -0.021813580246913582,
+      "iptal": 159,
+      "iptalde_baz_kazanc": 91,
+      "iptalde_baz_zarar": 68,
+      "nedenler": {
+        "HEDEF": 218,
+        "STOP": 217,
+        "DUVAR_IPTAL": 120,
+        "BASKI_IPTAL": 39,
+        "ZAMAN_STOPU": 34,
+        "STOP_GAP": 20
+      }
+    },
+    {
+      "ornek": "tum_10",
+      "donem": "kesif",
+      "variant": "baz10",
+      "n": 422,
+      "net_ort": 0.0632037341380689,
+      "toplam": 26.671975806265074,
+      "kazanc_orani": 0.48104265402843605,
+      "degisim_ort": 0.0,
+      "iptal": 0,
+      "iptalde_baz_kazanc": 0,
+      "iptalde_baz_zarar": 0,
+      "nedenler": {
+        "STOP": 178,
+        "HEDEF": 167,
+        "ZAMAN_STOPU": 62,
+        "STOP_GAP": 15
+      }
+    },
+    {
+      "ornek": "tum_10",
+      "donem": "kesif",
+      "variant": "duvar10",
+      "n": 422,
+      "net_ort": 0.0697622649437561,
+      "toplam": 29.439675806265075,
+      "kazanc_orani": 0.48104265402843605,
+      "degisim_ort": 0.006558530805687198,
+      "iptal": 79,
+      "iptalde_baz_kazanc": 49,
+      "iptalde_baz_zarar": 30,
+      "nedenler": {
+        "STOP": 156,
+        "HEDEF": 139,
+        "DUVAR_IPTAL": 79,
+        "ZAMAN_STOPU": 36,
+        "STOP_GAP": 12
+      }
+    },
+    {
+      "ornek": "tum_10",
+      "donem": "kesif",
+      "variant": "baski10",
+      "n": 422,
+      "net_ort": 0.0470835919579741,
+      "toplam": 19.86927580626507,
+      "kazanc_orani": 0.471563981042654,
+      "degisim_ort": -0.016120142180094787,
+      "iptal": 36,
+      "iptalde_baz_kazanc": 13,
+      "iptalde_baz_zarar": 23,
+      "nedenler": {
+        "STOP": 170,
+        "HEDEF": 162,
+        "ZAMAN_STOPU": 40,
+        "BASKI_IPTAL": 36,
+        "STOP_GAP": 14
+      }
+    },
+    {
+      "ornek": "tum_10",
+      "donem": "kesif",
+      "variant": "birlesik10",
+      "n": 422,
+      "net_ort": 0.055287383427168414,
+      "toplam": 23.331275806265072,
+      "kazanc_orani": 0.47393364928909953,
+      "degisim_ort": -0.00791635071090048,
+      "iptal": 102,
+      "iptalde_baz_kazanc": 57,
+      "iptalde_baz_zarar": 45,
+      "nedenler": {
+        "STOP": 153,
+        "HEDEF": 136,
+        "DUVAR_IPTAL": 78,
+        "BASKI_IPTAL": 24,
+        "ZAMAN_STOPU": 20,
+        "STOP_GAP": 11
+      }
+    },
+    {
+      "ornek": "tum_10",
+      "donem": "dogrulama",
+      "variant": "baz10",
+      "n": 226,
+      "net_ort": 0.23584447903017208,
+      "toplam": 53.30085226081889,
+      "kazanc_orani": 0.5619469026548672,
+      "degisim_ort": 0.0,
+      "iptal": 0,
+      "iptalde_baz_kazanc": 0,
+      "iptalde_baz_zarar": 0,
+      "nedenler": {
+        "HEDEF": 102,
+        "STOP": 79,
+        "ZAMAN_STOPU": 34,
+        "STOP_GAP": 11
+      }
+    },
+    {
+      "ornek": "tum_10",
+      "donem": "dogrulama",
+      "variant": "duvar10",
+      "n": 226,
+      "net_ort": 0.1945719126584907,
+      "toplam": 43.973252260818896,
+      "kazanc_orani": 0.5398230088495575,
+      "degisim_ort": -0.04127256637168142,
+      "iptal": 43,
+      "iptalde_baz_kazanc": 27,
+      "iptalde_baz_zarar": 16,
+      "nedenler": {
+        "HEDEF": 85,
+        "STOP": 67,
+        "DUVAR_IPTAL": 43,
+        "ZAMAN_STOPU": 21,
+        "STOP_GAP": 10
+      }
+    },
+    {
+      "ornek": "tum_10",
+      "donem": "dogrulama",
+      "variant": "baski10",
+      "n": 226,
+      "net_ort": 0.23493562947264995,
+      "toplam": 53.09545226081889,
+      "kazanc_orani": 0.5442477876106194,
+      "degisim_ort": -0.0009088495575221233,
+      "iptal": 22,
+      "iptalde_baz_kazanc": 9,
+      "iptalde_baz_zarar": 13,
+      "nedenler": {
+        "HEDEF": 99,
+        "STOP": 73,
+        "ZAMAN_STOPU": 23,
+        "BASKI_IPTAL": 22,
+        "STOP_GAP": 9
+      }
+    },
+    {
+      "ornek": "tum_10",
+      "donem": "dogrulama",
+      "variant": "birlesik10",
+      "n": 226,
+      "net_ort": 0.18808120469388892,
+      "toplam": 42.50635226081889,
+      "kazanc_orani": 0.5309734513274337,
+      "degisim_ort": -0.04776327433628319,
+      "iptal": 57,
+      "iptalde_baz_kazanc": 34,
+      "iptalde_baz_zarar": 23,
+      "nedenler": {
+        "HEDEF": 82,
+        "STOP": 64,
+        "DUVAR_IPTAL": 42,
+        "BASKI_IPTAL": 15,
+        "ZAMAN_STOPU": 14,
+        "STOP_GAP": 9
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "tum",
+      "variant": "baz10",
+      "n": 645,
+      "net_ort": 0.11874823978276544,
+      "toplam": 76.59261465988371,
+      "kazanc_orani": 0.5069767441860465,
+      "degisim_ort": 0.0,
+      "iptal": 0,
+      "iptalde_baz_kazanc": 0,
+      "iptalde_baz_zarar": 0,
+      "nedenler": {
+        "HEDEF": 266,
+        "STOP": 257,
+        "ZAMAN_STOPU": 96,
+        "STOP_GAP": 26
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "tum",
+      "variant": "duvar10",
+      "n": 645,
+      "net_ort": 0.10857785218586624,
+      "toplam": 70.03271465988372,
+      "kazanc_orani": 0.4992248062015504,
+      "degisim_ort": -0.010170387596899231,
+      "iptal": 122,
+      "iptalde_baz_kazanc": 76,
+      "iptalde_baz_zarar": 46,
+      "nedenler": {
+        "STOP": 223,
+        "HEDEF": 221,
+        "DUVAR_IPTAL": 122,
+        "ZAMAN_STOPU": 57,
+        "STOP_GAP": 22
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "tum",
+      "variant": "baski10",
+      "n": 645,
+      "net_ort": 0.10788296846493599,
+      "toplam": 69.58451465988371,
+      "kazanc_orani": 0.4945736434108527,
+      "degisim_ort": -0.010865271317829462,
+      "iptal": 58,
+      "iptalde_baz_kazanc": 22,
+      "iptalde_baz_zarar": 36,
+      "nedenler": {
+        "HEDEF": 258,
+        "STOP": 243,
+        "ZAMAN_STOPU": 63,
+        "BASKI_IPTAL": 58,
+        "STOP_GAP": 23
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "tum",
+      "variant": "birlesik10",
+      "n": 645,
+      "net_ort": 0.09683320102307554,
+      "toplam": 62.45741465988372,
+      "kazanc_orani": 0.49147286821705427,
+      "degisim_ort": -0.021915038759689923,
+      "iptal": 159,
+      "iptalde_baz_kazanc": 91,
+      "iptalde_baz_zarar": 68,
+      "nedenler": {
+        "STOP": 217,
+        "HEDEF": 215,
+        "DUVAR_IPTAL": 120,
+        "BASKI_IPTAL": 39,
+        "ZAMAN_STOPU": 34,
+        "STOP_GAP": 20
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "tum",
+      "variant": "baz20",
+      "n": 645,
+      "net_ort": 0.1075949064494321,
+      "toplam": 69.39871465988371,
+      "kazanc_orani": 0.4930232558139535,
+      "degisim_ort": 0.0,
+      "iptal": 0,
+      "iptalde_baz_kazanc": 0,
+      "iptalde_baz_zarar": 0,
+      "nedenler": {
+        "HEDEF": 305,
+        "STOP": 285,
+        "STOP_GAP": 28,
+        "ZAMAN_STOPU": 27
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "tum",
+      "variant": "duvar20",
+      "n": 645,
+      "net_ort": 0.1061057591626104,
+      "toplam": 68.43821465988371,
+      "kazanc_orani": 0.49767441860465117,
+      "degisim_ort": -0.001489147286821705,
+      "iptal": 136,
+      "iptalde_baz_kazanc": 75,
+      "iptalde_baz_zarar": 61,
+      "nedenler": {
+        "HEDEF": 239,
+        "STOP": 238,
+        "DUVAR_IPTAL": 136,
+        "STOP_GAP": 24,
+        "ZAMAN_STOPU": 8
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "tum",
+      "variant": "baski20",
+      "n": 645,
+      "net_ort": 0.09748746458896698,
+      "toplam": 62.87941465988371,
+      "kazanc_orani": 0.47751937984496123,
+      "degisim_ort": -0.01010744186046512,
+      "iptal": 72,
+      "iptalde_baz_kazanc": 30,
+      "iptalde_baz_zarar": 42,
+      "nedenler": {
+        "HEDEF": 281,
+        "STOP": 256,
+        "BASKI_IPTAL": 72,
+        "STOP_GAP": 23,
+        "ZAMAN_STOPU": 13
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "tum",
+      "variant": "birlesik20",
+      "n": 645,
+      "net_ort": 0.093791960712998,
+      "toplam": 60.49581465988371,
+      "kazanc_orani": 0.4868217054263566,
+      "degisim_ort": -0.013802945736434112,
+      "iptal": 174,
+      "iptalde_baz_kazanc": 91,
+      "iptalde_baz_zarar": 83,
+      "nedenler": {
+        "HEDEF": 224,
+        "STOP": 222,
+        "DUVAR_IPTAL": 127,
+        "BASKI_IPTAL": 47,
+        "STOP_GAP": 20,
+        "ZAMAN_STOPU": 5
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "kesif",
+      "variant": "baz10",
+      "n": 422,
+      "net_ort": 0.0632037341380689,
+      "toplam": 26.671975806265074,
+      "kazanc_orani": 0.48104265402843605,
+      "degisim_ort": 0.0,
+      "iptal": 0,
+      "iptalde_baz_kazanc": 0,
+      "iptalde_baz_zarar": 0,
+      "nedenler": {
+        "STOP": 178,
+        "HEDEF": 167,
+        "ZAMAN_STOPU": 62,
+        "STOP_GAP": 15
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "kesif",
+      "variant": "duvar10",
+      "n": 422,
+      "net_ort": 0.0697622649437561,
+      "toplam": 29.439675806265075,
+      "kazanc_orani": 0.48104265402843605,
+      "degisim_ort": 0.006558530805687198,
+      "iptal": 79,
+      "iptalde_baz_kazanc": 49,
+      "iptalde_baz_zarar": 30,
+      "nedenler": {
+        "STOP": 156,
+        "HEDEF": 139,
+        "DUVAR_IPTAL": 79,
+        "ZAMAN_STOPU": 36,
+        "STOP_GAP": 12
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "kesif",
+      "variant": "baski10",
+      "n": 422,
+      "net_ort": 0.0470835919579741,
+      "toplam": 19.86927580626507,
+      "kazanc_orani": 0.471563981042654,
+      "degisim_ort": -0.016120142180094787,
+      "iptal": 36,
+      "iptalde_baz_kazanc": 13,
+      "iptalde_baz_zarar": 23,
+      "nedenler": {
+        "STOP": 170,
+        "HEDEF": 162,
+        "ZAMAN_STOPU": 40,
+        "BASKI_IPTAL": 36,
+        "STOP_GAP": 14
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "kesif",
+      "variant": "birlesik10",
+      "n": 422,
+      "net_ort": 0.055287383427168414,
+      "toplam": 23.331275806265072,
+      "kazanc_orani": 0.47393364928909953,
+      "degisim_ort": -0.00791635071090048,
+      "iptal": 102,
+      "iptalde_baz_kazanc": 57,
+      "iptalde_baz_zarar": 45,
+      "nedenler": {
+        "STOP": 153,
+        "HEDEF": 136,
+        "DUVAR_IPTAL": 78,
+        "BASKI_IPTAL": 24,
+        "ZAMAN_STOPU": 20,
+        "STOP_GAP": 11
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "kesif",
+      "variant": "baz20",
+      "n": 422,
+      "net_ort": 0.05562411328498833,
+      "toplam": 23.473375806265075,
+      "kazanc_orani": 0.47393364928909953,
+      "degisim_ort": 0.0,
+      "iptal": 0,
+      "iptalde_baz_kazanc": 0,
+      "iptalde_baz_zarar": 0,
+      "nedenler": {
+        "STOP": 196,
+        "HEDEF": 190,
+        "ZAMAN_STOPU": 20,
+        "STOP_GAP": 16
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "kesif",
+      "variant": "duvar20",
+      "n": 422,
+      "net_ort": 0.06083240712385089,
+      "toplam": 25.671275806265076,
+      "kazanc_orani": 0.4834123222748815,
+      "degisim_ort": 0.0052082938388625585,
+      "iptal": 89,
+      "iptalde_baz_kazanc": 50,
+      "iptalde_baz_zarar": 39,
+      "nedenler": {
+        "STOP": 168,
+        "HEDEF": 148,
+        "DUVAR_IPTAL": 89,
+        "STOP_GAP": 13,
+        "ZAMAN_STOPU": 4
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "kesif",
+      "variant": "baski20",
+      "n": 422,
+      "net_ort": 0.04465444503854282,
+      "toplam": 18.84417580626507,
+      "kazanc_orani": 0.4549763033175355,
+      "degisim_ort": -0.010969668246445498,
+      "iptal": 47,
+      "iptalde_baz_kazanc": 21,
+      "iptalde_baz_zarar": 26,
+      "nedenler": {
+        "STOP": 177,
+        "HEDEF": 175,
+        "BASKI_IPTAL": 47,
+        "STOP_GAP": 14,
+        "ZAMAN_STOPU": 9
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "kesif",
+      "variant": "birlesik20",
+      "n": 422,
+      "net_ort": 0.049202075370296375,
+      "toplam": 20.76327580626507,
+      "kazanc_orani": 0.46919431279620855,
+      "degisim_ort": -0.006422037914691942,
+      "iptal": 113,
+      "iptalde_baz_kazanc": 60,
+      "iptalde_baz_zarar": 53,
+      "nedenler": {
+        "STOP": 157,
+        "HEDEF": 139,
+        "DUVAR_IPTAL": 84,
+        "BASKI_IPTAL": 29,
+        "STOP_GAP": 11,
+        "ZAMAN_STOPU": 2
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "dogrulama",
+      "variant": "baz10",
+      "n": 223,
+      "net_ort": 0.22385936705658582,
+      "toplam": 49.92063885361864,
+      "kazanc_orani": 0.5560538116591929,
+      "degisim_ort": 0.0,
+      "iptal": 0,
+      "iptalde_baz_kazanc": 0,
+      "iptalde_baz_zarar": 0,
+      "nedenler": {
+        "HEDEF": 99,
+        "STOP": 79,
+        "ZAMAN_STOPU": 34,
+        "STOP_GAP": 11
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "dogrulama",
+      "variant": "duvar10",
+      "n": 223,
+      "net_ort": 0.18203156436600293,
+      "toplam": 40.59303885361865,
+      "kazanc_orani": 0.5336322869955157,
+      "degisim_ort": -0.04182780269058296,
+      "iptal": 43,
+      "iptalde_baz_kazanc": 27,
+      "iptalde_baz_zarar": 16,
+      "nedenler": {
+        "HEDEF": 82,
+        "STOP": 67,
+        "DUVAR_IPTAL": 43,
+        "ZAMAN_STOPU": 21,
+        "STOP_GAP": 10
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "dogrulama",
+      "variant": "baski10",
+      "n": 223,
+      "net_ort": 0.22293829082340205,
+      "toplam": 49.71523885361866,
+      "kazanc_orani": 0.5381165919282511,
+      "degisim_ort": -0.0009210762331838576,
+      "iptal": 22,
+      "iptalde_baz_kazanc": 9,
+      "iptalde_baz_zarar": 13,
+      "nedenler": {
+        "HEDEF": 96,
+        "STOP": 73,
+        "ZAMAN_STOPU": 23,
+        "BASKI_IPTAL": 22,
+        "STOP_GAP": 9
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "dogrulama",
+      "variant": "birlesik10",
+      "n": 223,
+      "net_ort": 0.1754535374601733,
+      "toplam": 39.12613885361865,
+      "kazanc_orani": 0.5246636771300448,
+      "degisim_ort": -0.048405829596412556,
+      "iptal": 57,
+      "iptalde_baz_kazanc": 34,
+      "iptalde_baz_zarar": 23,
+      "nedenler": {
+        "HEDEF": 79,
+        "STOP": 64,
+        "DUVAR_IPTAL": 42,
+        "BASKI_IPTAL": 15,
+        "ZAMAN_STOPU": 14,
+        "STOP_GAP": 9
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "dogrulama",
+      "variant": "baz20",
+      "n": 223,
+      "net_ort": 0.20594322355882802,
+      "toplam": 45.92533885361865,
+      "kazanc_orani": 0.5291479820627802,
+      "degisim_ort": 0.0,
+      "iptal": 0,
+      "iptalde_baz_kazanc": 0,
+      "iptalde_baz_zarar": 0,
+      "nedenler": {
+        "HEDEF": 115,
+        "STOP": 89,
+        "STOP_GAP": 12,
+        "ZAMAN_STOPU": 7
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "dogrulama",
+      "variant": "duvar20",
+      "n": 223,
+      "net_ort": 0.19177999485927646,
+      "toplam": 42.766938853618655,
+      "kazanc_orani": 0.5246636771300448,
+      "degisim_ort": -0.014163228699551562,
+      "iptal": 47,
+      "iptalde_baz_kazanc": 25,
+      "iptalde_baz_zarar": 22,
+      "nedenler": {
+        "HEDEF": 91,
+        "STOP": 70,
+        "DUVAR_IPTAL": 47,
+        "STOP_GAP": 11,
+        "ZAMAN_STOPU": 4
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "dogrulama",
+      "variant": "baski20",
+      "n": 223,
+      "net_ort": 0.1974674388054648,
+      "toplam": 44.03523885361865,
+      "kazanc_orani": 0.5201793721973094,
+      "degisim_ort": -0.008475784753363231,
+      "iptal": 25,
+      "iptalde_baz_kazanc": 9,
+      "iptalde_baz_zarar": 16,
+      "nedenler": {
+        "HEDEF": 106,
+        "STOP": 79,
+        "BASKI_IPTAL": 25,
+        "STOP_GAP": 9,
+        "ZAMAN_STOPU": 4
+      }
+    },
+    {
+      "ornek": "ortak_20",
+      "donem": "dogrulama",
+      "variant": "birlesik20",
+      "n": 223,
+      "net_ort": 0.17817281997138412,
+      "toplam": 39.73253885361866,
+      "kazanc_orani": 0.5201793721973094,
+      "degisim_ort": -0.02777040358744394,
+      "iptal": 61,
+      "iptalde_baz_kazanc": 31,
+      "iptalde_baz_zarar": 30,
+      "nedenler": {
+        "HEDEF": 85,
+        "STOP": 65,
+        "DUVAR_IPTAL": 43,
+        "BASKI_IPTAL": 18,
+        "STOP_GAP": 9,
+        "ZAMAN_STOPU": 3
+      }
+    }
+  ]
+}
