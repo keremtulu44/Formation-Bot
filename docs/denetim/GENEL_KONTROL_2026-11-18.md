@@ -2,8 +2,11 @@
 
 **Dal:** `arena/79b4d2e1-formation-bot` · **HEAD:** `9cb439b0c13375f6fadaa8f4b4faaf97d03befb4`
 (grafted tek commit; geçmiş diff yoktur, bu yüzden kod/doküman/testler tek tek okundu).
-**Durum:** Yerel doğrulama + düzeltmeler tamam. Canlı Render/Telegram/TradingView verisi
-bu checkout'ta doğrulanmadı; commit/push/PR yapılmadı.
+**Durum:** İlk tur `87cb6ed` ile `origin/arena/79b4d2e1-formation-bot` dalına
+push edildi; GitHub Actions `CI (Render parity)` koşusu **success** (Python 3.12,
+9 dk 46 sn / run `44326773886`). Operatörün Windows makinesindeki ilk canlı ölçüm
+ardından §8'deki ikinci düzeltme turu yapıldı. Canlı Render/Telegram doğrulaması
+yok; PR açılmadı.
 
 ## 1. Özet
 
@@ -19,6 +22,10 @@ Başlangıçta CI eşdeğeri kapılar yeşildi (4405 test geçti), fakat yeşil 
 eklenen ölçüm aracındaki **karar kapısı ve zaman damgası** hatalarını yakalamıyordu.
 Bu kontrol sırasında 6 ana kusur düzeltildi, 28 yeni regresyon testi eklendi ve aktif
 belgelerdeki eski dal / sağlayıcı / `data.py` bilgileri gerçek kodla hizalandı.
+Push sonrası operatörün gerçek TradingView verisiyle yaptığı ilk ölçüm üç yeni
+kusuru daha ortaya çıkardı (§8): 1g damga hizası, yfinance MultiIndex kolonları ve
+pandas `freq`'li `intersection` sahte eşleşmesi. Bunlar da düzeltildi; `4442 passed /
+43 skipped` ile yeniden doğrulandı.
 
 ## 2. Yöntem ve yeniden üretilebilir komutlar
 
@@ -52,8 +59,8 @@ python -m scripts.saglayici_karsilastirma --mod arsiv --veri-dizini bot_data
 | `ruff check .` | temiz | **temiz** |
 | `python -m pip check` | bağımlılık kurulumu yoktu | **No broken requirements found** |
 | `python -m compileall -q .` | temiz | **temiz** |
-| `python -m pytest -q` | 4405 passed / 43 skipped | **4433 passed / 43 skipped** (694 sn; +28 test) |
-| Hedefli TV/veri testleri | 169 passed / 14 skipped | **76 passed** yeni sözleşme seti dâhil |
+| `python -m pytest -q` | 4405 passed / 43 skipped | **4442 passed / 43 skipped** (696 sn; §8 sonrası son koşu) |
+| Hedefli TV/veri testleri | 169 passed / 14 skipped | **121 passed** (6 dosya; ikinci tur dâhil) |
 | `test_tarama_zamani.py` | — | **102/102** |
 | `test_triangle/breakout/flag/pennant` | — | **4/4** bağımsız script geçti |
 | `deploy_check.py --skip-network --grafik-test` | — | **Kare üretildi: AKBNK 4h**, stabil direnç ve gönderilmeme kapıları geçti |
@@ -168,11 +175,13 @@ paketini ve `python -m data` komutunu kullanıyor. `docs/README.md` ve README'ni
    türetilmiş bar düzeltmesi planda kaldı. Geçiş için canlı ölçüm kapısının yeşil
    olması, kaynak etiketleme ve deque/append senaryo testleri gerekir. Bu kontrol
    ölçüm aracını güvenli hale getirdi; üretim davranışını değiştirmedi.
-2. **Gerçek TradingView ağ doğrulaması yok.** Tüm TV testleri sahte modül/frame ile
-   çevrimdışı koştu. Anonim WS erişimi, sembol izinleri, IP kısıtı ve gerçek bar
-   ızgarası operatör makinesinde `--mod canli` ile ölçülmeli.
-3. **Yerel Python 3.11.2 / CI 3.12 farkı.** Pinler `pip check` ile doğrulandı; CI
-   push sonrası 3.12 üzerinde aynı kapıları koşmalı.
+2. **Gerçek TradingView fiyat karşılaştırması henüz yeşil değil.** Anonim WS
+   erişimi operatör makinesinde **kısmen doğrulandı**: `nologin` uyarısıyla birlikte
+   1g için 360 bar geldi (§8). Ancak ilk ölçüm referans/hizalama hataları nedeniyle
+   `red` üretti; düzeltilmiş araçla yeniden koşulmadı. Sembol izinleri, IP kısıtı,
+   gerçek 4h ızgarası ve fiyat uyumu açık kalmaya devam ediyor.
+3. **Yerel Python 3.11.2 / CI 3.12 farkı.** Pinler `pip check` ile doğrulandı; ilk
+   push'un CI koşusu 3.12 üzerinde **success**. İkinci turun CI koşusu ayrı tetiklenir.
 4. **borsapy hâlâ opsiyonel ölçüm bağımlılığı.** Deploy zincirinde ve otomatik
    yedekte değil; planın "borsapy'yi fiyat kaynağı yapmama" kararı korundu.
 5. **Tarihsel denetim belgeleri** kendi dallarını kayıt olarak taşır; aktif komut
@@ -180,8 +189,56 @@ paketini ve `python -m data` komutunu kullanıyor. `docs/README.md` ve README'ni
 
 ## 7. Sonuç
 
-Yerel statik kapı, 4433 birim test, bağımsız regresyon scriptleri, grafik doktoru ve
-HTTP smoke dahil **tüm kontrol edilen kapılar yeşil**. TV/datafeed ekindeki yanlış
-`geç` kararı, platforma bağımlı zaman dönüşümü, dağıtım/sürüm çelişkisi, WS sızıntısı
-ve eski dal güvenliği düzeltildi. Kalan en önemli iş, planlanan reaktif yedeği canlı
-fetch hattına taşımadan önce gerçek TradingView ölçümünü yeşil geçirmektir.
+Yerel statik kapı, 4442 birim test, bağımsız regresyon scriptleri, grafik doktoru,
+HTTP smoke ve ilk push'un Python 3.12 CI koşusu dahil **tüm kontrol edilen kapılar
+yeşil**. TV/datafeed ekindeki yanlış `geç` kararı, platforma bağımlı zaman dönüşümü,
+dağıtım/sürüm çelişkisi, WS sızıntısı, eski dal güvenliği ve §8'deki üç ölçüm
+hatası düzeltildi. Kalan en önemli iş, planlanan reaktif yedeği canlı fetch hattına
+taşımadan önce düzeltilmiş araçla gerçek TradingView ölçümünü yeşil geçirmektir.
+
+## 8. Operatörün ilk canlı ölçümü ve ikinci düzeltme turu (aynı gün)
+
+`PS C:\Projeler\Formation-Bot>` üzerinde `tradingview-datafeed==2.1.1` kurulduktan
+sonra çalıştırıldı:
+
+```powershell
+python -m scripts.saglayici_karsilastirma --mod tanis --tanis-dene 1 --tanis-sembol THYAO
+python -m scripts.saglayici_karsilastirma --mod canli --tf 4s 1g --sembol "THYAO,GARAN,AKBNK,ASELS,EREGL" --aday tvdatafeed --adet 360
+```
+
+**Gözlem:** `you are using nologin method...` uyarısıyla TradingView WS bağlantısı
+kuruldu ve 1g için **360 bar geldi** → anonim erişim çalışıyor. Buna karşın raporun
+tamamı `red` çıktı:
+
+* `Deneme yahoo: 0 bar geldi ✅` → yanıltıcı başarı işareti; Yahoo veri vermedi.
+* `THYAO`: `$THYAO.IS: possibly delisted; no price data found (60d/2y)` → Yahoo
+  boş döndü. Harici sağlayıcı/kota sorunu, koddan düzeltilemez.
+* `GARAN/AKBNK/ASELS/EREGL 4h`: `KeyError: "Column(s) ['close','high','low','open',
+  'volume'] do not exist"` → yfinance'in MultiIndex kolonları `turet()` öncesinde
+  düzleştirilmiyordu; 4s referansı hiç üretilemedi.
+* `1g`: `ref_bar 360`, `aday_bar 360`, **`ortak_bar 0`** → Yahoo `00:00 İstanbul`
+  tarih etiketi ile TV `00:00 UTC` (= `03:00 İstanbul`) anı damga damga
+  kesişmiyordu. 2s/4s için var olan gün ızgarası 1g'de uygulanmıyordu.
+
+**Kök neden kazısı sırasında üçüncü hata:** `DatetimeIndex.intersection`, `freq`
+taşıyan düzenli ızgaralarda hızlı yola girip **hiç var olmayan damgaları ortak**
+döndürebiliyor (pandas 2.2.2'de yeniden üretildi: `09:30` ızgarası ↔ `10:00`
+ızgarası 5 sahte eşleşme verdi). Bu, ileride sahte `geç` üretebilecek sessiz bir
+riskti; eşleşme değer bazlı `isin`'e çevrildi.
+
+**Yapılan düzeltmeler:**
+
+| Kusur | Düzeltme |
+|---|---|
+| 1g `ortak_bar 0` | `canli_karsilastir` artık `1d` için de `karsilastir_gunluk` (İstanbul takvim günü) kullanıyor |
+| yfinance MultiIndex | `_kolon_adlari` + `normalize` kolonları düzleştiriyor; `_yahoo` türetimden **önce** normalize ediyor |
+| `intersection` sahte eşleşmesi | `karsilastir` / `karsilastir_gunluk` değer bazlı `isin` kullanıyor |
+| `0 bar geldi ✅` | teşhis artık `⚠️ 0 bar … Bu başarı değil` yazıyor |
+| Hata teşhisi zor | `ortak_bar 0` olan kayıtlarda ilk ref/aday damgaları rapora ve `Ham:` JSON'una yazılıyor |
+| Yahoo tek nokta | `--referans` seçeneği eklendi (Yahoo boşsa `1g` için `borsapy` çapraz kontrolü; borsapy 2s/4s desteklemez) |
+
+**Doğrulama:** `ruff check .` temiz, `compileall` temiz, `git diff --check` temiz,
+hedefli 6 dosya **121 passed**, tüm pytest **4442 passed / 43 skipped** (696 sn).
+Dokümanlar (plan §4/§5, `docs/README.md`) yeni ızgara/`-referans` davranışıyla
+hizalandı. **Operatörün düzeltilmiş araçla ölçümü tekrarlaması gerekir**; üretim
+`data/fetch.py` hattı hâlâ değiştirilmedi.

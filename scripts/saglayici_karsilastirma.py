@@ -50,6 +50,21 @@ ESIK_KALITE_TOLERANS_PCT = 0.01
 
 
 # --------------------------------------------------------------- NORMALİZE --
+def _kolon_adlari(frame: pd.DataFrame) -> List[str]:
+    """yfinance'in ``('Close', 'THYAO.IS')`` çoklu kolonunu tek ada indirger.
+
+    Yeni yfinance sürümleri ``Ticker.history`` çıktısını MultiIndex kolonla
+    döndürebiliyor; ``str(('Close','X')).lower()`` ise ``close`` değil
+    ``"('close','x')"`` üretir ve türetim/karşılaştırma KeyError verir.
+    """
+    adlar: List[str] = []
+    for kolon in frame.columns:
+        if isinstance(kolon, tuple):
+            kolon = kolon[0] if kolon else ""
+        adlar.append(str(kolon).strip().lower())
+    return adlar
+
+
 def normalize(df: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
     """Sağlayıcı çıktısını tek biçime getirir: İstanbul TZ, sıralı, tekrarsız.
 
@@ -59,7 +74,9 @@ def normalize(df: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
     if df is None or len(df) == 0:
         return None
     frame = df.copy()
-    frame.columns = [str(c).strip().lower() for c in frame.columns]
+    frame.columns = _kolon_adlari(frame)
+    if frame.columns.has_duplicates:           # aynı ad iki seviyeden gelmişse ilki
+        frame = frame.loc[:, ~frame.columns.duplicated(keep="first")]
     eksik = [k for k in KOLONLAR if k not in frame.columns]
     if eksik:
         raise ValueError(f"eksik kolon: {eksik}")
@@ -146,7 +163,11 @@ def _fark_pct(a: float, b: float) -> float:
 # ------------------------------------------------------------ KARŞILAŞTIRMA --
 def karsilastir(referans: pd.DataFrame, aday: pd.DataFrame) -> Dict:
     """İki seriyi kapanış bazında karşılaştırır (yalnız ortak zaman damgaları)."""
-    ortak = referans.index.intersection(aday.index)
+    # ``DatetimeIndex.intersection`` freq taşıyan düzenli ızgaralarda hızlı yola
+    # girip **hiç bulunmayan** damgaları ortak sanabiliyor (pandas 2.2'de
+    # doğrulandı: 09:30 ızgarası ↔ 10:00 ızgarası 5 sahte eşleşme verdi).
+    # ``isin`` değer bazlıdır; sahte "geç" üretmez.
+    ortak = referans.index[referans.index.isin(aday.index)]
     metrik: Dict = {
         "ref_bar": int(len(referans)),
         "aday_bar": int(len(aday)),
@@ -166,6 +187,9 @@ def karsilastir(referans: pd.DataFrame, aday: pd.DataFrame) -> Dict:
         metrik["medyan_fark_pct"] = round(float(seri.median()), 4)
         metrik["max_fark_pct"] = round(float(seri.max()), 4)
         metrik["fark_esik_asimi"] = int((seri > ESIK_MAX_FARK_PCT).sum())
+    else:  # 0 ortak bar: nedenini tek bakışta göster (TZ / ızgara kayması)
+        metrik["ref_ilk_damga"] = str(referans.index[0])
+        metrik["aday_ilk_damga"] = str(aday.index[0])
     metrik["karar"] = karar_ver(metrik)
     return metrik
 
@@ -239,7 +263,7 @@ def karsilastir_gunluk(referans: pd.DataFrame, aday: pd.DataFrame,
         return {"olcek": "gün", "ortak_bar": 0, "ortak_oran": None,
                 "medyan_fark_pct": None, "max_fark_pct": None,
                 "karar": "red (karşılaştırılabilir gün yok)"}
-    ortak = ref.index.intersection(ad.index)
+    ortak = ref.index[ref.index.isin(ad.index)]
     metrik: Dict = {
         "olcek": "gün",
         "ref_bar": int(len(ref)),
@@ -261,6 +285,9 @@ def karsilastir_gunluk(referans: pd.DataFrame, aday: pd.DataFrame,
         metrik["medyan_fark_pct"] = round(float(seri.median()), 4)
         metrik["max_fark_pct"] = round(float(seri.max()), 4)
         metrik["fark_esik_asimi"] = int((seri > ESIK_MAX_FARK_PCT).sum())
+    elif len(referans) and len(aday):
+        metrik["ref_ilk_damga"] = str(referans.index[0])
+        metrik["aday_ilk_damga"] = str(aday.index[0])
     metrik["karar"] = karar_ver(metrik)
     return metrik
 
@@ -331,10 +358,18 @@ def rapor_markdown(sonuclar: Sequence[Dict]) -> str:
     if kisa:
         satirlar.append("")
         satirlar.append("Kısa bar (bar süresi hedefin altında kalıyor):")
-        for s in kisa:
+    for s in kisa:
+        satirlar.append(
+            f"- {s.get('sembol')} {s.get('tf')}: referans %{_yuzde(s.get('ref_kisa_pct'))}"
+            f" → aday %{_yuzde(s.get('aday_kisa_pct'))}")
+    hizasiz = [s for s in sonuclar if s.get("ref_ilk_damga")]
+    if hizasiz:
+        satirlar.append("")
+        satirlar.append("Zaman damgası hizası (ortak bar 0 olan kayıtlar):")
+        for s in hizasiz:
             satirlar.append(
-                f"- {s.get('sembol')} {s.get('tf')}: referans %{_yuzde(s.get('ref_kisa_pct'))}"
-                f" → aday %{_yuzde(s.get('aday_kisa_pct'))}")
+                f"- {s.get('sembol')} {s.get('tf')}: ref {s['ref_ilk_damga']}"
+                f" → aday {s['aday_ilk_damga']}")
     return "\n".join(satirlar)
 
 
@@ -484,7 +519,12 @@ def tani_markdown(bilgi: Dict) -> str:
         satirlar.append("- Birleştirme işareti: yok (çalışma ağacı temiz)")
     for ad, d in (bilgi.get("denemeler") or {}).items():
         if "bar" in d:
-            satirlar.append(f"- Deneme {ad}: {d['bar']} bar geldi ✅")
+            if d["bar"]:
+                satirlar.append(f"- Deneme {ad}: {d['bar']} bar geldi ✅")
+            else:
+                satirlar.append(
+                    f"- ⚠️ Deneme {ad}: **0 bar** geldi (veri yok; sembol, erişim "
+                    "veya Yahoo kota/rate-limit kontrol edilmeli). Bu başarı değil.")
         else:
             satirlar.append(f"- Deneme {ad}: {d['hata']}")
             if d.get("izi"):
@@ -508,7 +548,10 @@ def _yahoo(sembol: str, tf: str, adet: int) -> Optional[pd.DataFrame]:
     df = yf.Ticker(ticker).history(period="60d" if tf == "1h" else "2y", interval=aralik)
     if df is None or len(df) == 0:
         return None
-    return df.tail(adet) if adet else df
+    # Kolon adlarını (MultiIndex dahil) ve TZ'yi **türetimden önce** tek biçime
+    # getir: turet() düz ``open/high/low/close/volume`` ister, aksi halde
+    # yfinance'in çoklu kolonu 4s ölçümünü KeyError ile düşürür.
+    return normalize(df.tail(adet) if adet else df)
 
 
 def _borsapy(sembol: str, tf: str, adet: int) -> Optional[pd.DataFrame]:
@@ -577,8 +620,14 @@ def canli_karsilastir(semboller: Iterable[str], tfs: Iterable[str], adet: int = 
                                      "karar": f"red ({ad} boş döndü)"})
                     continue
                 kayit = {"sembol": sembol, "tf": tf, "aday": ad}
-                if tf in ("2h", "4h"):  # kova ızgaraları farklı → gün bazında
-                    kayit.update(karsilastir_gunluk(ref, aday, tf_dakika=TF_DAKIKA[tf]))
+                if tf in ("2h", "4h", "1d"):
+                    # 2s/4s: kova ızgaraları farklı (09:30 ↔ 10:00).
+                    # 1g: Yahoo barı günün 00:00 **etiketi**, TradingView barı
+                    # 00:00 UTC anı (= 03:00 İstanbul). Aynı gün, farklı damga;
+                    # damga damga kesişim 0 verip sahte "red" üretir. İkisi de
+                    # İstanbul takvim gününe indirgenerek karşılaştırılır.
+                    kayit.update(karsilastir_gunluk(
+                        ref, aday, tf_dakika=TF_DAKIKA.get(tf)))
                 else:
                     kayit.update(karsilastir(ref, aday))
                 sonuclar.append(kayit)
@@ -611,6 +660,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--tf", nargs="+", default=["1g"])
     ap.add_argument("--adet", type=int, default=360)
     ap.add_argument("--aday", nargs="+", default=["borsapy"])
+    ap.add_argument("--referans", default="yahoo",
+                    help="Kıyas referansı (yahoo / borsapy / tvdatafeed). Yahoo "
+                         "veri döndürmezse 1g çapraz kontrolü için borsapy; "
+                         "borsapy 2s/4s desteklemediğinden o TF'lerde kullanma.")
     ap.add_argument("--cikti", default="")
     # Teşhis varsayılan olarak ağsızdır; --tanis-dene 1 gerçek çekme ister.
     ap.add_argument("--tanis-dene", type=int, default=0)
@@ -646,7 +699,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         semboller = [s.upper() for s in _liste(args.sembol)]
         adaylar = _liste(args.aday)
         tfs = [tf_kodu(t) for t in _liste(args.tf)]
-        sonuclar = canli_karsilastir(semboller, tfs, adet=args.adet, adaylar=adaylar)
+        if args.referans not in SAGLAYICILAR:
+            ap.error(f"bilinmeyen referans: {args.referans!r} "
+                     f"(geçerli: {sorted(SAGLAYICILAR)})")
+        sonuclar = canli_karsilastir(semboller, tfs, adet=args.adet,
+                                     referans=args.referans, adaylar=adaylar)
         metin = rapor_markdown(sonuclar)
         print(metin)
         print("\nHam:", json.dumps(sonuclar, ensure_ascii=False)[:2000])

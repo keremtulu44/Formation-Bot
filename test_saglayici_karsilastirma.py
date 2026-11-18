@@ -459,3 +459,146 @@ def test_tvdatafeed_ortak_istemci_utc_doner_ve_tz_bozulmaz(istanbul_tz, monkeypa
     assert istemciler[0].ws.closed is True
     norm = S.normalize(veri)
     assert norm.index[0] == pd.Timestamp("2026-11-02 00:00", tz=IST)
+
+
+# ---------------- CANLI ÖLÇÜM (2026-11-18) REGRESYONLARI ------------------
+def _coklu_kolon_seri(idx, kapanislar=(10.0, 11.0, 12.0)):
+    """yfinance 1.7+ çıktısı: ``('Close','THYAO.IS')`` biçiminde MultiIndex."""
+    return pd.DataFrame(
+        [[k, k * 1.01, k * 0.99, k + 0.5, 1000] for k in kapanislar],
+        index=idx,
+        columns=pd.MultiIndex.from_tuples([
+            ("Open", "THYAO.IS"), ("High", "THYAO.IS"), ("Low", "THYAO.IS"),
+            ("Close", "THYAO.IS"), ("Volume", "THYAO.IS")]),
+    )
+
+
+def test_normalize_yfinance_multiindex_kolonlarini_duzlestirir():
+    """Gerçek canlı çıktıdaki KeyError: str(tuple).lower() kolon adı değildir."""
+    idx = pd.date_range("2026-11-02", periods=3, freq="D", tz=IST)
+    df = S.normalize(_coklu_kolon_seri(idx))
+
+    assert list(df.columns) == S.KOLONLAR
+    assert df["close"].tolist() == [10.5, 11.5, 12.5]
+    assert str(df.index.tz) == IST
+
+
+def test_yahoo_4s_turetimi_coklu_kolonla_patlamiyor(monkeypatch):
+    """4s referansı türetilmeden önce normalize edilmeli; yoksa KeyError."""
+    idx = pd.date_range("2026-11-02 09:30", periods=8, freq="h", tz=IST)
+    ham = _coklu_kolon_seri(idx, tuple(range(10, 18)))
+    sahte_yfinance = types.SimpleNamespace(
+        Ticker=lambda ticker: types.SimpleNamespace(history=lambda **kw: ham))
+    monkeypatch.setitem(sys.modules, "yfinance", sahte_yfinance)
+
+    df = S._yahoo("THYAO", "4h", 0)
+
+    assert df is not None and len(df) >= 1
+    assert list(df.columns) == S.KOLONLAR
+    assert str(df.index.tz) == IST
+
+
+def _gunluk_barlar(kayma_saat=0):
+    gunler = pd.date_range("2026-10-01", periods=5, freq="D", tz=IST)
+    kapanis = [10.0, 11.0, 12.0, 13.0, 14.0]
+    frame = pd.DataFrame({
+        "open": kapanis, "high": [k + 1 for k in kapanis],
+        "low": [k - 1 for k in kapanis], "close": kapanis,
+        "volume": [1000] * len(kapanis),
+    }, index=gunler)
+    if kayma_saat:
+        frame.index = frame.index + pd.Timedelta(hours=kayma_saat)
+    return frame
+
+
+def test_1g_tv_utc_kaymasi_damga_kesisimini_sifirlar_ama_gun_eslesir():
+    """Yahoo 00:00 etiketi ↔ TV 00:00 UTC (= 03:00 İstanbul): aynı gün."""
+    ref = _gunluk_barlar(0)
+    aday = _gunluk_barlar(3)
+
+    damga = S.karsilastir(ref, aday)
+    assert damga["ortak_bar"] == 0                      # eski hatalı yol
+    assert damga["ref_ilk_damga"] != damga["aday_ilk_damga"]
+
+    gun = S.karsilastir_gunluk(ref, aday)
+    assert gun["olcek"] == "gün"
+    assert gun["ortak_bar"] == 5
+    assert gun["karar"] == "geç"
+
+
+def test_canli_1g_gun_izgarasina_duser(monkeypatch):
+    """main'in 1g satırı artık karsilastir_gunluk kullanmalı (0 ortak bar yok)."""
+    ref, aday = _gunluk_barlar(0), _gunluk_barlar(3)
+    monkeypatch.setitem(S.SAGLAYICILAR, "sahte_ref", lambda s, tf, a: ref)
+    monkeypatch.setitem(S.SAGLAYICILAR, "sahte_aday", lambda s, tf, a: aday)
+
+    sonuc = S.canli_karsilastir(["GARAN"], ["1d"], referans="sahte_ref",
+                                adaylar=["sahte_aday"])
+
+    assert sonuc[0]["olcek"] == "gün"
+    assert sonuc[0]["ortak_bar"] == 5
+    assert sonuc[0]["karar"] == "geç"
+
+
+def test_tani_sifir_bar_basari_sayilmaz():
+    """'0 bar geldi ✅' operatörü yanlış yönlendirir; uyarı olmalı."""
+    bilgi = {"python": "3.12.0", "onerilen_python": "3.11/3.12",
+             "calisan_python": "python", "venv": None, "platform": "Windows",
+             "paketler": {}, "importlar": {}, "surum_uyari": None,
+             "denemeler": {"yahoo": {"bar": 0}}}
+
+    metin = S.tani_markdown(bilgi)
+
+    assert "0 bar geldi ✅" not in metin
+    assert "0 bar" in metin and "⚠️" in metin and "başarı değil" in metin
+
+
+def test_hizasizlik_ipucu_rapora_duser():
+    metin = S.rapor_markdown([{
+        "sembol": "GARAN", "tf": "1d", "ortak_bar": 0,
+        "karar": "red (karşılaştırılabilir ortak bar yok)",
+        "ref_ilk_damga": "2026-10-01 00:00:00+03:00",
+        "aday_ilk_damga": "2026-10-01 03:00:00+03:00",
+    }])
+    assert "Zaman damgası hizası" in metin
+    assert "03:00:00+03:00" in metin
+
+
+def test_main_referans_secimini_aktarir(monkeypatch):
+    """Yahoo boş döndüğünde operatör --referans ile çapraz kontrol edebilmeli."""
+    yakalanan = {}
+
+    def sahte_canli(semboller, tfs, adet=360, referans="yahoo", adaylar=()):
+        yakalanan["referans"] = referans
+        yakalanan["adaylar"] = list(adaylar)
+        return []
+
+    monkeypatch.setattr(S, "canli_karsilastir", sahte_canli)
+
+    assert S.main(["--mod", "canli", "--tf", "1g", "--sembol", "GARAN",
+                   "--aday", "tvdatafeed", "--referans", "borsapy"]) == 0
+    assert yakalanan["referans"] == "borsapy"
+    assert yakalanan["adaylar"] == ["tvdatafeed"]
+
+
+def test_karsilastir_kaymis_izgarada_sahte_ortak_bar_uretmez():
+    """pandas'ın freq'li intersection hızlı yolu sahte eşleşme vermemeli.
+
+    09:30 ızgarası ile 10:00 ızgarasının hiç ortak damgası yoktur; değer bazlı
+    eşleşme 0 dönmeli, aksi halde olmayan fiyatlarla sahte "geç" üretilir.
+    """
+    idx = pd.date_range("2026-11-02 09:30", periods=6, freq="h", tz=IST)
+    kapanis = [10.0, 11.0, 12.0, 13.0, 14.0, 15.0]
+    ref = pd.DataFrame({
+        "open": kapanis, "high": [k + 1 for k in kapanis],
+        "low": [k - 1 for k in kapanis], "close": kapanis,
+        "volume": [1000] * len(kapanis),
+    }, index=idx)
+    aday = ref.copy()
+    aday.index = idx + pd.Timedelta(minutes=30)
+
+    metrik = S.karsilastir(ref, aday)
+
+    assert metrik["ortak_bar"] == 0
+    assert metrik["medyan_fark_pct"] is None
+    assert metrik["karar"].startswith("red")

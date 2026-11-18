@@ -71,7 +71,12 @@ referansı kötüleştiriyorsa `geç` dönmez.
 
 2s/4s'te fiyat uyumu **gün ızgarasında** ölçülür: türetilmiş 4s
 (09:30/13:30/17:30) ile gerçek 4h (10:00/14:00) aynı ızgarada değildir; damga
-damga eşleştirme sıfır ortak bar verip sahte "red" üretir.
+damga eşleştirme sıfır ortak bar verip sahte "red" üretir. **1g de gün
+ızgarasında ölçülür:** Yahoo günlük barı `00:00 İstanbul` tarih etiketi,
+TradingView günlük barı `00:00 UTC` anı (= `03:00 İstanbul`) taşır; aynı takvim
+günü damga damga kesişmez. Damga eşleşmesi `DatetimeIndex.intersection` yerine
+değer bazlı `isin` ile yapılır; pandas'ın `freq`'li hızlı yolu kaymış
+ızgaralarda hiç var olmayan damgaları "ortak" sanıp sahte `geç` üretebiliyor.
 
 ## 5. Ölçüm komutu ve kurulum
 
@@ -83,8 +88,10 @@ damga eşleştirme sıfır ortak bar verip sahte "red" üretir.
 
 # Ağsız ortam teşhisi (gerçek çekme için --tanis-dene 1)
 .\.venv\Scripts\python.exe -m scripts.saglayici_karsilastirma --mod tanis
-# Canlı ölçüm
-.\.venv\Scripts\python.exe -m scripts.saglayici_karsilastirma --mod canli --tf 4s --sembol "THYAO,GARAN,AKBNK,ASELS,EREGL" --aday tvdatafeed
+# Canlı ölçüm (4s ve 1g birlikte)
+.\.venv\Scripts\python.exe -m scripts.saglayici_karsilastirma --mod canli --tf 4s 1g --sembol "THYAO,GARAN,AKBNK,ASELS,EREGL" --aday tvdatafeed --adet 360
+# Yahoo boş/kota döndürürse 1g çapraz kontrolü (borsapy 2s/4s desteklemez)
+.\.venv\Scripts\python.exe -m scripts.saglayici_karsilastirma --mod canli --tf 1g --sembol "THYAO,GARAN" --aday tvdatafeed --referans borsapy
 ```
 
 `tvdatafeed` **adıyla** PyPI paketi yoktur; aynı `tvDatafeed` import modülünü
