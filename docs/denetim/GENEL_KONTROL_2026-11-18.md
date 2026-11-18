@@ -328,5 +328,6 @@ sınırlı `state:notification_delivery` uzak yedeği, Blueprint'te 120 sn grace
 shutdown, CI smoke JSON assert'i ve sıra bağımlı `daily_stats` kirliliği. Varsayılan
 Supabase modu hâlâ tam salt okunur; genel cache/state/mirror yazımları açılmadı.
 Yeni 16 ağsız regresyon; tam pytest **4557 passed / 43 skipped**; doktor/grafik
-**53 tamam / 0 hata**; gerçek entrypoint HTTP smoke. Gerçek Render deploy/PR ve
+**53 tamam / 0 hata**; gerçek entrypoint HTTP smoke. Push `bef9008` CI run
+**`44366863050` success** (9 dk 50 sn, 10/10 adım). Gerçek Render deploy/PR ve
 canlı Telegram/Yahoo/TV/Supabase çağrısı yoktur.

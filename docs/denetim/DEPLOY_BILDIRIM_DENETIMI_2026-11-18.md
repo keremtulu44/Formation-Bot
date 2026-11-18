@@ -89,7 +89,7 @@ sözleşmesini değiştirmez; belirsiz timeout/5xx yine operatör incelemesine d
 | 4 bağımsız formasyon scripti | `test_triangle`, `test_breakout`, `test_flag`, `test_pennant` geçti |
 | `deploy_check.py --skip-network --grafik-test` | **53 tamam · 5 uyarı · 0 hata**; `Kare üretildi: AKBNK 4h · 68 mum · 74.9 KB · 517.8 ms`, `Stabil direnç bu karede çizildi`, `Fotoğraf gönderilmedi` |
 | Gerçek entrypoint HTTP smoke (`BOT_HEALTH_SMOKE_ONLY=1`, `PORT=10013`) | `/health 200` + `bildirim.durum=bilinmiyor` + `nedenler` listesi, `/ready 503`, `/health?ka=1 200`, `/test 404`, kapalı webhook, "Health smoke mode" logu |
-| CI | push sonrası `gh run watch` ile bu tabloya eklenecek |
+| CI | push `bef9008` → run **`44366863050` success** (Python 3.12, 9 dk 50 sn, 10/10 adım): ruff, tam pytest, çevrimdışı doktor/grafik, timing, 4 bağımsız script ve gerçek `/health` smoke |
 
 Doktor uyarıları bilinçlidir: smoke env'inde token/Supabase boş, ağ kontrolleri
 `--skip-network` ile atlandı. `0 hata` canlı erişim kanıtı değildir.
@@ -133,9 +133,11 @@ okunur moddur.
 
 ## 5. Dürüst kanıt sınırı
 
-* Bu çalışma kod/doküman/test/commit-push ile sınırlıdır; **Render'a fiilen deploy
-  edilmedi**, PR açılmadı. `autoDeployTrigger: checksPass` yalnızca Blueprint ile
-  yönetilen servis için tetiklenir.
+* Bu çalışma kod/doküman/test/commit-push ile sınırlıdır; commit `bef9008` dal
+  `arena/79b4d2e1-formation-bot`'a push edildi ve CI `44366863050` success aldı.
+  **Render'a fiilen deploy edilmedi**, PR açılmadı. `autoDeployTrigger: checksPass`
+  yalnızca Blueprint ile yönetilen servis için tetiklenir. Bu raporun CI satırını
+  ekleyen ikinci commit yalnızca doküman güncellemesidir; kod kapılarını değiştirmez.
 * Ajan tarafında canlı Yahoo / TradingView WebSocket / Telegram / Supabase çağrısı yok.
   `SUPABASE_DELIVERY_WRITES=1` yolu sahte store ve ağsız testlerle doğrulandı; gerçek
   tabloya yazım operatör tarafından sınanmalıdır.
