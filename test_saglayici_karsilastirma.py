@@ -483,6 +483,18 @@ def test_normalize_yfinance_multiindex_kolonlarini_duzlestirir():
     assert str(df.index.tz) == IST
 
 
+def test_normalize_ticker_ilk_multiindex_kolonunu_da_duzlestirir():
+    """Bazı yfinance sürümleri ('THYAO.IS','Close') sırasını kullanır."""
+    idx = pd.date_range("2026-11-02", periods=3, freq="D", tz=IST)
+    ham = _coklu_kolon_seri(idx)
+    ham.columns = pd.MultiIndex.from_tuples([(b, a) for a, b in ham.columns])
+
+    df = S.normalize(ham)
+
+    assert list(df.columns) == S.KOLONLAR
+    assert df["close"].tolist() == [10.5, 11.5, 12.5]
+
+
 def test_yahoo_4s_turetimi_coklu_kolonla_patlamiyor(monkeypatch):
     """4s referansı türetilmeden önce normalize edilmeli; yoksa KeyError."""
     idx = pd.date_range("2026-11-02 09:30", periods=8, freq="h", tz=IST)

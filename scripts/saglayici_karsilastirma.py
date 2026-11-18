@@ -60,7 +60,11 @@ def _kolon_adlari(frame: pd.DataFrame) -> List[str]:
     adlar: List[str] = []
     for kolon in frame.columns:
         if isinstance(kolon, tuple):
-            kolon = kolon[0] if kolon else ""
+            parcalar = [str(p).strip().lower() for p in kolon if p is not None]
+            # yfinance sürümüne göre sıra ('Close','X') veya ('X','Close')
+            # olabilir; OHLCV adını nerede bulursak onu al.
+            bilinen = [p for p in parcalar if p in KOLONLAR]
+            kolon = bilinen[0] if bilinen else (parcalar[0] if parcalar else "")
         adlar.append(str(kolon).strip().lower())
     return adlar
 

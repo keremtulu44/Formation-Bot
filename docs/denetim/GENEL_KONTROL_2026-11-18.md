@@ -239,6 +239,10 @@ riskti; eşleşme değer bazlı `isin`'e çevrildi.
 
 **Doğrulama:** `ruff check .` temiz, `compileall` temiz, `git diff --check` temiz,
 hedefli 6 dosya **121 passed**, tüm pytest **4442 passed / 43 skipped** (696 sn).
-Dokümanlar (plan §4/§5, `docs/README.md`) yeni ızgara/`-referans` davranışıyla
+Son sağlamlaştırmada `('THYAO.IS','Close')` sıralı (ticker-ilk) MultiIndex de
+desteklendi (+1 test); ruff/compileall/diff check ve hedefli 6 dosya **122 passed**
+olarak yeniden yeşil. Tam pytest'in 4442'lik koşusu bu izole kolon eşleme
+değişikliğinden önceydi; push'un CI koşusu 3.12 üzerinde tam seti tekrarlar.
+Dokümanlar (plan §4/§5, `docs/README.md`) yeni ızgara/`--referans` davranışıyla
 hizalandı. **Operatörün düzeltilmiş araçla ölçümü tekrarlaması gerekir**; üretim
 `data/fetch.py` hattı hâlâ değiştirilmedi.
