@@ -593,6 +593,54 @@ def test_main_referans_secimini_aktarir(monkeypatch):
     assert yakalanan["adaylar"] == ["tvdatafeed"]
 
 
+def test_yahoo_ham_kapanis_ister_temettu_duzeltmesi_kapali(monkeypatch):
+    """tvDatafeed 'splits' ayarlı; auto_adjust=True temettüyü de düzeltir.
+
+    Canlı 2026-11-18 ölçümünde GARAN %4,04 / AKBNK %3,21 sabit fark (medyan
+    == max, 206/360 gün) bu yüzden çıktı; elma ile armut kıyaslanıyordu.
+    """
+    idx = pd.date_range("2026-11-02 09:30", periods=3, freq="h", tz=IST)
+    ham = _coklu_kolon_seri(idx, (10.0, 11.0, 12.0))
+    cagri = {}
+
+    class History:
+        def __call__(self, **kw):
+            cagri.update(kw)
+            return ham
+
+    sahte = types.SimpleNamespace(
+        Ticker=lambda ticker: types.SimpleNamespace(history=History()))
+    monkeypatch.setitem(sys.modules, "yfinance", sahte)
+
+    assert S._yahoo("THYAO", "1d", 0) is not None
+    assert cagri["auto_adjust"] is False
+    assert cagri["actions"] is False
+
+
+def test_gunluk_kalite_toleransi_bar_sayisindan_hesaplanir():
+    ref = S.turet(_saatlik_gun(), 240)
+    idx = pd.DatetimeIndex(["2026-11-02 10:00", "2026-11-02 14:00"]).tz_localize(IST)
+    aday = pd.DataFrame({"open": 100.0, "high": 101.0, "low": 99.0,
+                         "close": 100.0, "volume": 1000}, index=idx)
+
+    metrik = S.karsilastir_gunluk(ref, aday, tf_dakika=240)
+
+    assert metrik["kalite_tolerans_pct"] > S.ESIK_KALITE_TOLERANS_PCT
+    assert "adayda kısa bar fazla" not in metrik["karar"]
+
+
+def test_dinamik_tolerans_tek_bar_gurultusunu_yutar_ama_kotulesmeyi_yakalar():
+    metrik = {"ortak_oran": 1.0, "medyan_fark_pct": 0.01,
+              "max_fark_pct": 0.2, "sifir_hacim_ref_pct": 0.0,
+              "sifir_hacim_aday_pct": 0.0,
+              "ref_kisa_pct": 33.15, "aday_kisa_pct": 33.33,
+              "kalite_tolerans_pct": 1.38}
+
+    assert S.karar_ver(metrik) == "geç"          # canlı ölçümdeki 0,18 puan
+    metrik["aday_kisa_pct"] = 50.0
+    assert S.karar_ver(metrik) == "red (adayda kısa bar fazla)"
+
+
 def test_karsilastir_kaymis_izgarada_sahte_ortak_bar_uretmez():
     """pandas'ın freq'li intersection hızlı yolu sahte eşleşme vermemeli.
 

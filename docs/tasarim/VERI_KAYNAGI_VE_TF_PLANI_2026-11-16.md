@@ -95,7 +95,11 @@ değer bazlı `isin` ile yapılır; pandas'ın `freq`'li hızlı yolu kaymış
 ```
 
 `tvdatafeed` **adıyla** PyPI paketi yoktur; aynı `tvDatafeed` import modülünü
-sağlayan `tradingview-datafeed==2.1.1` PyPI'dedir. Ortak istemci
+sağlayan `tradingview-datafeed==2.1.1` PyPI'dedir. **Kıyas notu:** tvDatafeed WS
+isteği `adjustment:"splits"` gönderir (yalnız bölünme düzeltmesi); bu yüzden ölçüm
+aracı Yahoo'dan `auto_adjust=False, actions=False` ile **ham kapanış** ister.
+Aksi halde yfinance'in temettü düzeltmesi %3–4 sabit oranlı sahte fark üretir.
+Ortak istemci
 (`scripts/tvdatafeed_client.py`) bu dağıtımı ve sabit GitHub commit'inin
 `tvdatafeed==2.1.0` sürümünü kabul eder; ikisi de varsayılan kurulumda kapalıdır.
 Kırılırsa ölçüm `red`/açık hata verir; üretim hattı etkilenmez.

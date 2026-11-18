@@ -217,16 +217,23 @@ def karar_ver(metrik: Dict) -> str:
     if ortak_oran is None or medyan is None or maks is None:
         return "red (karşılaştırılabilir ortak bar yok)"
 
+    # Farklı bar sayısına sahip iki ızgarada **bir barlık** fark kalite
+    # kötüleşmesi değildir. karsilastir_gunluk bar sayısından dinamik tolerans
+    # koyar; damga bazlı (1h) ölçümde sabit yuvarlama toleransı kalır.
+    tolerans = _metrik_sayi(metrik, "kalite_tolerans_pct")
+    if tolerans is None:
+        tolerans = ESIK_KALITE_TOLERANS_PCT
+
     kalite_nedenleri: List[str] = []
     ref_sifir = _metrik_sayi(metrik, "sifir_hacim_ref_pct")
     aday_sifir = _metrik_sayi(metrik, "sifir_hacim_aday_pct")
     if (ref_sifir is not None and aday_sifir is not None
-            and aday_sifir > ref_sifir + ESIK_KALITE_TOLERANS_PCT):
+            and aday_sifir > ref_sifir + tolerans):
         kalite_nedenleri.append("adayda sıfır hacim fazla")
     ref_kisa = _metrik_sayi(metrik, "ref_kisa_pct")
     aday_kisa = _metrik_sayi(metrik, "aday_kisa_pct")
     if (ref_kisa is not None and aday_kisa is not None
-            and aday_kisa > ref_kisa + ESIK_KALITE_TOLERANS_PCT):
+            and aday_kisa > ref_kisa + tolerans):
         kalite_nedenleri.append("adayda kısa bar fazla")
 
     if kalite_nedenleri:
@@ -280,8 +287,17 @@ def karsilastir_gunluk(referans: pd.DataFrame, aday: pd.DataFrame,
         "max_fark_pct": None,
     }
     if tf_dakika:
+        ref_kapsama = bar_kapsama_dk(referans, tf_dakika)
+        aday_kapsama = bar_kapsama_dk(aday, tf_dakika)
         metrik["ref_kisa_pct"] = kisa_bar_orani(referans, tf_dakika)
         metrik["aday_kisa_pct"] = kisa_bar_orani(aday, tf_dakika)
+        if ref_kapsama and aday_kapsama:
+            # 1 bar = 100/bar_sayısı yüzde puanı. İki serinin bar sayıları
+            # farklı olduğundan iki tarafın birer barı toplanır. Canlı ölçümde
+            # %33,15 → %33,33 (0,18 puan ≈ tek bar) sahte "kısa bar fazla"
+            # üretiyordu; gerçek kötüleşme bu toleransı aşar.
+            metrik["kalite_tolerans_pct"] = round(
+                100 / len(ref_kapsama) + 100 / len(aday_kapsama), 2)
     if len(ortak):
         farklar = [_fark_pct(float(ref.at[g, "close"]), float(ad.at[g, "close"]))
                    for g in ortak]
@@ -549,7 +565,15 @@ def _yahoo(sembol: str, tf: str, adet: int) -> Optional[pd.DataFrame]:
         return (df.tail(adet) if adet else df) if df is not None else None
     ticker = PROVIDER_SYMBOL_MAP.get(sembol, f"{sembol}{MARKET_SUFFIX}")
     aralik = {"1h": "1h", "1d": "1d"}[tf]
-    df = yf.Ticker(ticker).history(period="60d" if tf == "1h" else "2y", interval=aralik)
+    # tvDatafeed WS isteği ``adjustment:"splits"`` gönderir (yalnız bölünme).
+    # yfinance'in varsayılan ``auto_adjust=True``'u temettüyü DE düzelterek
+    # yaklaşık %3-4 sabit oranlı fark üretir (2026-11-18 canlı ölçümünde
+    # GARAN 4,04 / AKBNK 3,21 / EREGL 1,36; medyan == max). Kıyas için ham
+    # (split-adjusted, temettü-ayarsız) ``Close`` gerekir.
+    df = yf.Ticker(ticker).history(
+        period="60d" if tf == "1h" else "2y", interval=aralik,
+        auto_adjust=False, actions=False,
+    )
     if df is None or len(df) == 0:
         return None
     # Kolon adlarını (MultiIndex dahil) ve TZ'yi **türetimden önce** tek biçime

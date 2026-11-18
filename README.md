@@ -420,8 +420,10 @@ geçirme gerektirir.
 
 README dışındaki belgeler için güncel durum/yaş etiketi **[docs/README.md](docs/README.md)**
 tek kaynaktır. Son deploy incelemesi: [DEPLOY_STABIL_KONTROLU_2026-11.md](docs/denetim/DEPLOY_STABIL_KONTROLU_2026-11.md);
-son genel kontrol: [GENEL_KONTROL_2026-11-18.md](docs/denetim/GENEL_KONTROL_2026-11-18.md)
-(TV/datafeed ölçüm kapısı, zaman/sürüm ve 1g hizası düzeltmeleri, 4442 testlik yerel doğrulama).
+son genel kontrol: [GENEL_KONTROL_2026-11-18.md](docs/denetim/GENEL_KONTROL_2026-11-18.md);
+deploy hazırlığı: [DEPLOY_HAZIRLIK_2026-11-18.md](docs/denetim/DEPLOY_HAZIRLIK_2026-11-18.md).
+Üretim veri hattı (yfinance) ve testler deploy'a hazır; TV/datafeed yedeği ölçüm
+kapısı yeşil olmadığı için bu deploy'a **dahil değildir**.
 Eski 2026-09-30 durum tablosu ve “yeni oturum için” maddeleri güncel branch'i
 ve mevcut özellikleri yansıtmadığı için kaldırıldı; eski tarihli denetimler
 `docs/denetim/` ve `docs/arsiv/` altında tarih etiketiyle okunmalıdır.

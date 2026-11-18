@@ -246,3 +246,35 @@ değişikliğinden önceydi; push'un CI koşusu 3.12 üzerinde tam seti tekrarla
 Dokümanlar (plan §4/§5, `docs/README.md`) yeni ızgara/`--referans` davranışıyla
 hizalandı. **Operatörün düzeltilmiş araçla ölçümü tekrarlaması gerekir**; üretim
 `data/fetch.py` hattı hâlâ değiştirilmedi.
+
+## 9. İkinci canlı ölçüm ve deploy hazırlığı (aynı gün)
+
+Düzeltilmiş araçla aynı komut yeniden koşuldu. Hizalama düzeltmesi **çalıştı**:
+1g için `ortak_bar 0 → 360` (`ortak_oran 1.0`), 4s için `60` ortak gün. Fakat
+yeni, gerçek veriden gelen üç bulgu daha çıktı:
+
+| Bulgular | Kök neden | Düzeltme |
+|---|---|---|
+| `GARAN 1d 4,041 / AKBNK 1d 3,205 / EREGL 1d 1,360` ve `medyan == max`, `fark_esik_asimi 206/360` | tvDatafeed `adjustment:"splits"`; yfinance varsayılan `auto_adjust=True` temettüyü de düzeltiyor → sabit oranlı elma/armut kıyası | `_yahoo` artık `auto_adjust=False, actions=False` |
+| `4s: %33,15 → %33,33` → `red (adayda kısa bar fazla)` | 0,18 puan ≈ **tek bar**; sabit 0,01 puan tolerans | tolerans `100/n_ref + 100/n_aday` ile dinamik; gerçek kötüleşme hâlâ `red` |
+| `EREGL 4h: Connection to remote host was lost / no data` | anonim WS geçici kopması | ortak istemci yeni istemciyle en fazla **2 deneme**, her denemede WS kapatılır |
+
+`ASELS 1d geç (0,000 / 0,127)`, `THYAO 1d koşullu (0,000 / 1,030)`;
+`--referans borsapy` ile THYAO/GARAN `geç (0,000/0,000)` geldi ama borsapy de
+TradingView WS kullandığı için bu bağımsız referans **değildir**. THYAO 4h hâlâ
+`red (yahoo boş döndü)` — harici Yahoo kota/sembol sorunu.
+
+**Deploy kararı:** üretim `data/fetch.py` / `bot/scan.py` / `config.py` /
+`requirements-deploy.txt` bu turda da değişmedi; TV yedeği eklenmedi. Mevcut
+yfinance sistemi için deploy hazırlığı tamamlandı. Ayrıntılı kontrol listesi,
+Render build/start/env ayarları ve operatör adımları
+[`docs/denetim/DEPLOY_HAZIRLIK_2026-11-18.md`](DEPLOY_HAZIRLIK_2026-11-18.md)'de.
+**Geçiş kapısı hâlâ yeşil değil:** `auto_adjust` düzeltmesi sonrası canlı ölçümün
+operatör makinesinde tekrarlanması gerekir.
+
+**Deploy hazırlığı doğrulaması:** `ruff` / `compileall` / `pip check` /
+`git diff --check` temiz; tam pytest **4448 passed / 43 skipped** (694,5 sn);
+`tanis`/`arsiv` ağsız, `python -m data`, timing **102/102**, 4 bağımsız script
+**4/4**, grafik doktoru ve `/health` smoke yeşil. `6452a82` CI koşusu Python 3.12'de
+**success** (run `44332184670`, 15 dk 44 sn). Üretim `data/fetch.py` hattı hiçbir
+committe değişmedi.

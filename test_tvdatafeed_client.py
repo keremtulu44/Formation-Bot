@@ -133,6 +133,49 @@ def test_cekme_hatasinda_bile_ws_kapanir(monkeypatch):
     assert istemciler[0].ws.closed is True
 
 
+def test_gecici_bos_yanitta_yeni_istemciyle_bir_kez_dener(monkeypatch):
+    """EREGL 4h: 'Connection ... lost / no data' → tek yeniden deneme kurtarır."""
+    _fake_surum(monkeypatch, "tradingview-datafeed", "2.1.1")
+    istemciler = []
+
+    class WS:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    class TvDatafeed:
+        def __init__(self):
+            self.ws = WS()
+            istemciler.append(self)
+
+        def get_hist(self, **kwargs):
+            return None if len(istemciler) == 1 else _frame()
+
+    modul = types.SimpleNamespace(
+        TvDatafeed=TvDatafeed,
+        Interval=types.SimpleNamespace(in_daily="1D", in_4_hour="4H"),
+    )
+    monkeypatch.setitem(sys.modules, tv.IMPORT_MODULU, modul)
+
+    veri = tv.get_hist(symbol="EREGL", interval="in_4_hour")
+
+    assert len(veri) == 2
+    assert len(istemciler) == 2
+    assert all(c.ws.closed for c in istemciler), "her denemede WS kapanmalı"
+
+
+def test_iki_deneme_de_bosssa_hata_verir_ve_tum_ws_kapanir(monkeypatch):
+    istemciler, _ = _kur(monkeypatch, None)
+
+    with pytest.raises(ValueError, match="boş veya geçersiz sağlayıcı verisi"):
+        tv.get_hist(symbol="THYAO")
+
+    assert len(istemciler) == tv.DENEME_SINIRI
+    assert all(c.ws.closed for c in istemciler)
+
+
 def test_bilinmeyen_aralik_sessizce_gecmez(monkeypatch):
     _kur(monkeypatch, _frame())
 
