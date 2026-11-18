@@ -62,6 +62,69 @@ def normalize(df: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
     return frame.dropna(subset=["close"])
 
 
+# --- ZAMAN DİLİMİ / SEANS -------------------------------------------------
+# Türkçe yazım (1s = 1 saat) ile pandas kodunu ayır: kullanıcı "4s" yazar,
+# sağlayıcı "4h" ister. Sessiz yanlış eşleme olmasın diye tek sözlük.
+TF_KODU = {"1s": "1h", "2s": "2h", "4s": "4h", "1g": "1d",
+           "1h": "1h", "2h": "2h", "4h": "4h", "1d": "1d"}
+TF_DAKIKA = {"1h": 60, "2h": 120, "4h": 240}
+SEANS_ACILIS = (9, 30)
+SEANS_KAPANIS = (18, 10)
+
+
+def tf_kodu(deger: str) -> str:
+    """``1s``/``4s``/``1g`` → ``1h``/``4h``/``1d``; bilinmeyeni ValueError."""
+    anahtar = str(deger).strip().lower()
+    if anahtar not in TF_KODU:
+        raise ValueError(f"bilinmeyen zaman dilimi: {deger!r} "
+                         f"(geçerli: {sorted(TF_KODU)})")
+    return TF_KODU[anahtar]
+
+
+def turet(df: Optional[pd.DataFrame], dakika: int) -> Optional[pd.DataFrame]:
+    """1s barlardan daha uzun bar üretir (bugünkü üretim yolu).
+
+    Kova başlangıcı **seans açılışına** sabitlenir (09:30); yoksa barlar
+    gece yarısına hizalanır ve seansla ilgisi kalmaz.
+    """
+    if df is None or len(df) == 0:
+        return None
+    idx = pd.DatetimeIndex(df.index)
+    origin = idx[0].normalize() + pd.Timedelta(hours=SEANS_ACILIS[0],
+                                               minutes=SEANS_ACILIS[1])
+    kova = df.resample(f"{dakika}min", origin=origin, label="left", closed="left").agg(
+        {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+    ).dropna(subset=["close"])
+    return kova if len(kova) else None
+
+
+def bar_kapsama_dk(df: Optional[pd.DataFrame], dakika: int,
+                   kapanis: tuple = SEANS_KAPANIS) -> List[int]:
+    """Her barın gerçekte kaç dakika kapsadığı (son bar seans kapanışına kadar)."""
+    if df is None or len(df) == 0:
+        return []
+    idx = pd.DatetimeIndex(df.index)
+    sonuc: List[int] = []
+    for i, bas in enumerate(idx):
+        bitis = idx[i + 1] if i + 1 < len(idx) else None
+        if bitis is None or bitis.normalize() != bas.normalize():
+            aday = bas.normalize() + pd.Timedelta(hours=kapanis[0], minutes=kapanis[1])
+            if aday > bas:
+                bitis = aday if bitis is None else min(bitis, aday)
+        if bitis is None or bitis <= bas:
+            continue
+        sonuc.append(min(dakika, int((bitis - bas).total_seconds() // 60)))
+    return sonuc
+
+
+def kisa_bar_orani(df: Optional[pd.DataFrame], dakika: int) -> Optional[float]:
+    """Hedef süreden kısa kalan barların yüzdesi (``None``: hesaplanamadı)."""
+    kapsama = bar_kapsama_dk(df, dakika)
+    if not kapsama:
+        return None
+    return round(sum(1 for d in kapsama if d < dakika) / len(kapsama) * 100, 2)
+
+
 def _fark_pct(a: float, b: float) -> float:
     if a == 0:
         return 0.0 if b == 0 else 100.0
@@ -107,6 +170,60 @@ def karar_ver(metrik: Dict) -> str:
     if ortak_oran >= 0.90 and medyan <= ESIK_MEDYAN_FARK_PCT:
         return "koşullu (bar eksik ama fiyat uyumlu)"
     return "red"
+
+
+def gunluk_seri(df: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
+    """Bar serisini gün ızgarasına indirger (son kapanış + gün içi yüksek/düşük).
+
+    Neden: türetilmiş 4s (09:30/13:30/17:30) ile TradingView'ın gerçek 4s'i
+    (10:00/14:00) **aynı ızgarada değil**; damga damga eşleştirme sıfır ortak
+    bar verip sahte "red" üretir. Fiyat uyumu gün bazında ölçülür, kurgu
+    kalitesi ayrıca (kısa bar oranı) raporlanır.
+    """
+    if df is None or len(df) == 0:
+        return None
+    gruplar = df.groupby(pd.Index(df.index.date))
+    return pd.DataFrame({
+        "close": gruplar["close"].last(),
+        "high": gruplar["high"].max(),
+        "low": gruplar["low"].min(),
+        "volume": gruplar["volume"].sum(),
+    })
+
+
+def karsilastir_gunluk(referans: pd.DataFrame, aday: pd.DataFrame,
+                       tf_dakika: Optional[int] = None) -> Dict:
+    """Fiyat uyumunu gün ızgarasında ölçer + iki kurgunun kısa bar oranını verir."""
+    ref = gunluk_seri(referans)
+    ad = gunluk_seri(aday)
+    if ref is None or ad is None:
+        return {"olcek": "gün", "ortak_bar": 0, "ortak_oran": None,
+                "medyan_fark_pct": None, "max_fark_pct": None,
+                "karar": "red (karşılaştırılabilir gün yok)"}
+    ortak = ref.index.intersection(ad.index)
+    metrik: Dict = {
+        "olcek": "gün",
+        "ref_bar": int(len(ref)),
+        "aday_bar": int(len(ad)),
+        "ortak_bar": int(len(ortak)),
+        "ortak_oran": round(len(ortak) / max(1, len(ref)), 4),
+        "sifir_hacim_ref_pct": round(float((ref["volume"] == 0).mean() * 100), 2),
+        "sifir_hacim_aday_pct": round(float((ad["volume"] == 0).mean() * 100), 2),
+        "medyan_fark_pct": None,
+        "max_fark_pct": None,
+    }
+    if tf_dakika:
+        metrik["ref_kisa_pct"] = kisa_bar_orani(referans, tf_dakika)
+        metrik["aday_kisa_pct"] = kisa_bar_orani(aday, tf_dakika)
+    if len(ortak):
+        farklar = [_fark_pct(float(ref.at[g, "close"]), float(ad.at[g, "close"]))
+                   for g in ortak]
+        seri = pd.Series(farklar)
+        metrik["medyan_fark_pct"] = round(float(seri.median()), 4)
+        metrik["max_fark_pct"] = round(float(seri.max()), 4)
+        metrik["fark_esik_asimi"] = int((seri > ESIK_MAX_FARK_PCT).sum())
+    metrik["karar"] = karar_ver(metrik)
+    return metrik
 
 
 # --------------------------------------------------------------- ARŞİV -----
@@ -171,6 +288,14 @@ def rapor_markdown(sonuclar: Sequence[Dict]) -> str:
             f" | {_yuzde(s.get('medyan_fark_pct'))} | {_yuzde(s.get('max_fark_pct'))}"
             f" | {s.get('sifir_hacim_ref_pct','-')} → {s.get('sifir_hacim_aday_pct','-')}"
             f" | {s.get('karar','-')} |")
+    kisa = [s for s in sonuclar if s.get("aday_kisa_pct") is not None]
+    if kisa:
+        satirlar.append("")
+        satirlar.append("Kısa bar (bar süresi hedefin altında kalıyor):")
+        for s in kisa:
+            satirlar.append(
+                f"- {s.get('sembol')} {s.get('tf')}: referans %{_yuzde(s.get('ref_kisa_pct'))}"
+                f" → aday %{_yuzde(s.get('aday_kisa_pct'))}")
     return "\n".join(satirlar)
 
 
@@ -285,6 +410,11 @@ def tani_markdown(bilgi: Dict) -> str:
             f"{k} {v or 'YOK'}" for k, v in bilgi["paketler"].items()),
         "- Import: " + " · ".join(f"{k}: {v}" for k, v in bilgi["importlar"].items()),
     ]
+    if (bilgi.get("importlar") or {}).get("tvdatafeed") not in (None, "ok"):
+        satirlar.append(
+            "- tvDataFeed kurulu değil; 2s/4s gerçek bar ve yedek için gerekir:"
+            ' `python -m pip install "git+https://github.com/rongardF/tvdatafeed'
+            '@e6f6aaa7de43"`')
     for ad, iz in (bilgi.get("izler") or {}).items():
         if iz:
             satirlar.append(f"- {ad} hatasının izi: " + " ⏎ ".join(_kisa(x) for x in iz[-3:]))
@@ -311,8 +441,13 @@ def tani_markdown(bilgi: Dict) -> str:
 
 # ------------------------------------------------------------ SAĞLAYICILAR --
 def _yahoo(sembol: str, tf: str, adet: int) -> Optional[pd.DataFrame]:
+    """Yahoo: 1h ve 1d var; **2s/4s yok** → 1s'ten türetilir (bugünkü üretim)."""
     import yfinance as yf
     from config import MARKET_SUFFIX, PROVIDER_SYMBOL_MAP
+    if tf in ("2h", "4h"):
+        saatlik = _yahoo(sembol, "1h", 0)
+        df = turet(saatlik, TF_DAKIKA[tf])
+        return (df.tail(adet) if adet else df) if df is not None else None
     ticker = PROVIDER_SYMBOL_MAP.get(sembol, f"{sembol}{MARKET_SUFFIX}")
     aralik = {"1h": "1h", "1d": "1d"}[tf]
     df = yf.Ticker(ticker).history(period="60d" if tf == "1h" else "2y", interval=aralik)
@@ -322,6 +457,9 @@ def _yahoo(sembol: str, tf: str, adet: int) -> Optional[pd.DataFrame]:
 
 
 def _borsapy(sembol: str, tf: str, adet: int) -> Optional[pd.DataFrame]:
+    """borsapy (TradingView WS): 1m–45m, 1h, 1d. 2s/4s **yok**, uydurmuyoruz."""
+    if tf in ("2h", "4h"):
+        raise ValueError("borsapy 2s/4s vermiyor (destek: 1m–45m, 1h, 1d)")
     import borsapy as bp
     periyot = {"1h": "1ay", "1d": "1y"}[tf]
     df = bp.Ticker(sembol).history(period=periyot, interval=tf)
@@ -330,11 +468,20 @@ def _borsapy(sembol: str, tf: str, adet: int) -> Optional[pd.DataFrame]:
     return df.tail(adet) if adet else df
 
 
+# tvDatafeed Interval üyeleri (kütüphane kurulu olmadan da test edilebilsin)
+TV_ARALIK = {"1h": "in_1_hour", "2h": "in_2_hour", "4h": "in_4_hour", "1d": "in_daily"}
+
+
+def _tv_aralik(tf: str):
+    from tvDatafeed import Interval
+    return getattr(Interval, TV_ARALIK[tf])
+
+
 def _tvdatafeed(sembol: str, tf: str, adet: int) -> Optional[pd.DataFrame]:
-    from tvDatafeed import Interval, TvDatafeed
-    esleme = {"1h": Interval.in_1_hour, "1d": Interval.in_daily}
+    """tvDatafeed: TradingView. **2s/4s gerçek** bar veren tek kanal."""
+    from tvDatafeed import TvDatafeed
     df = TvDatafeed().get_hist(symbol=sembol, exchange="BIST",
-                               interval=esleme[tf], n_bars=adet or 500)
+                               interval=_tv_aralik(tf), n_bars=adet or 500)
     return None if df is None or len(df) == 0 else df
 
 
@@ -375,7 +522,10 @@ def canli_karsilastir(semboller: Iterable[str], tfs: Iterable[str], adet: int = 
                                      "karar": f"red ({ad} boş döndü)"})
                     continue
                 kayit = {"sembol": sembol, "tf": tf, "aday": ad}
-                kayit.update(karsilastir(ref, aday))
+                if tf in ("2h", "4h"):  # kova ızgaraları farklı → gün bazında
+                    kayit.update(karsilastir_gunluk(ref, aday, tf_dakika=TF_DAKIKA[tf]))
+                else:
+                    kayit.update(karsilastir(ref, aday))
                 sonuclar.append(kayit)
     return sonuclar
 
@@ -440,7 +590,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     else:
         semboller = [s.upper() for s in _liste(args.sembol)]
         adaylar = _liste(args.aday)
-        tfs = ["1h" if t.lower() in ("1s", "1h") else "1d" for t in _liste(args.tf)]
+        tfs = [tf_kodu(t) for t in _liste(args.tf)]
         sonuclar = canli_karsilastir(semboller, tfs, adet=args.adet, adaylar=adaylar)
         metin = rapor_markdown(sonuclar)
         print(metin)

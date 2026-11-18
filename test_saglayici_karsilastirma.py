@@ -241,3 +241,108 @@ def test_tani_ceken_saglayiciyi_bar_sayisiyla_isaretler():
 
     assert bilgi["denemeler"]["borsapy"] == {"bar": 5}
     assert "5 bar geldi" in S.tani_markdown(bilgi)
+
+
+# ------------------------------------------------------------- 2s / 4s -----
+def _saatlik_gun(gun: str = "2026-11-02", bar: int = 9):
+    """09:30–17:30 arası 1 saatlik barlar (BIST seansı)."""
+    idx = pd.date_range(f"{gun} 09:30", periods=bar, freq="h", tz=IST)
+    return pd.DataFrame({"open": 100.0, "high": 101.0, "low": 99.0,
+                         "close": 100.0, "volume": 1000}, index=idx)
+
+
+def test_tf_kodu_turkce_yazimi_cevirir():
+    assert S.tf_kodu("1g") == "1d"
+    assert S.tf_kodu("1s") == "1h"
+    assert S.tf_kodu("2s") == "2h"
+    assert S.tf_kodu("4s") == "4h"
+    assert S.tf_kodu(" 4S ") == "4h"
+    with pytest.raises(ValueError, match="bilinmeyen zaman dilimi"):
+        S.tf_kodu("3s")
+
+
+def test_turet_4s_gun_basina_uc_bar_verir():
+    """9 saatlik bar → 2 tam 4s + gün sonunda 40 dakikalık kısa bar."""
+    dort = S.turet(_saatlik_gun(), 240)
+
+    assert len(dort) == 3
+    assert [str(t.time()) for t in dort.index] == ["09:30:00", "13:30:00", "17:30:00"]
+    assert S.bar_kapsama_dk(dort, 240) == [240, 240, 40]
+    assert S.kisa_bar_orani(dort, 240) == pytest.approx(33.33, abs=0.01)
+
+
+def test_turet_2s_gun_basina_bes_bar_verir():
+    iki = S.turet(_saatlik_gun(), 120)
+
+    assert len(iki) == 5
+    assert S.kisa_bar_orani(iki, 120) == pytest.approx(20.0, abs=0.01)
+
+
+def test_gercek_4s_barlari_kisa_saymaz():
+    """TradingView gerçek 4h: 10:00 ve 14:00 → ikisi de tam, kısa bar yok."""
+    idx = pd.DatetimeIndex(["2026-11-02 10:00", "2026-11-02 14:00"]).tz_localize(IST)
+    gercek = pd.DataFrame({"open": 100.0, "high": 101.0, "low": 99.0,
+                           "close": 100.0, "volume": 1000}, index=idx)
+
+    assert S.bar_kapsama_dk(gercek, 240) == [240, 240]
+    assert S.kisa_bar_orani(gercek, 240) == 0.0
+
+
+def test_gunluk_karsilastirma_fiyat_uyumunu_olcer():
+    """Farklı kova ızgarasındaki iki kaynak gün bazında karşılaştırılır."""
+    ref = S.turet(_saatlik_gun(), 240)
+    idx = pd.DatetimeIndex(["2026-11-02 10:00", "2026-11-02 14:00"]).tz_localize(IST)
+    aday = pd.DataFrame({"open": 100.0, "high": 101.0, "low": 99.0,
+                         "close": 100.5, "volume": 5000}, index=idx)
+
+    metrik = S.karsilastir_gunluk(ref, aday, tf_dakika=240)
+
+    assert metrik["olcek"] == "gün"
+    assert metrik["ortak_bar"] == 1                 # aynı gün
+    assert metrik["medyan_fark_pct"] == pytest.approx(0.5, abs=0.01)
+    assert metrik["aday_kisa_pct"] == 0.0
+    assert metrik["ref_kisa_pct"] == pytest.approx(33.33, abs=0.01)
+
+
+def test_borsapy_2s_4s_desteklemedigini_soyler():
+    with pytest.raises(ValueError, match="borsapy 2s/4s vermiyor"):
+        S._borsapy("THYAO", "4h", 10)
+
+
+def test_tvdatafeed_aralik_eslemesi():
+    assert S.TV_ARALIK == {"1h": "in_1_hour", "2h": "in_2_hour",
+                           "4h": "in_4_hour", "1d": "in_daily"}
+
+
+def test_canli_4s_gun_olcegine_duser(monkeypatch):
+    """2s/4s karşılaştırması gün ızgarasında yapılmalı (damga damga değil)."""
+    ref = S.turet(_saatlik_gun(), 240)
+    idx = pd.DatetimeIndex(["2026-11-02 10:00", "2026-11-02 14:00"]).tz_localize(IST)
+    aday = pd.DataFrame({"open": 100.0, "high": 101.0, "low": 99.0,
+                         "close": 100.0, "volume": 1000}, index=idx)
+    monkeypatch.setitem(S.SAGLAYICILAR, "sahte_ref", lambda s, tf, a: ref)
+    monkeypatch.setitem(S.SAGLAYICILAR, "sahte_aday", lambda s, tf, a: aday)
+
+    sonuc = S.canli_karsilastir(["THYAO"], ["4h"], referans="sahte_ref",
+                                adaylar=["sahte_aday"])
+
+    assert sonuc[0]["olcek"] == "gün"
+    assert sonuc[0]["karar"] == "geç"
+
+
+def test_tvdatafeed_yoksa_kurulum_ipucu_yazar():
+    bilgi = S.tani(kok="")
+    bilgi["importlar"]["tvdatafeed"] = "ModuleNotFoundError: No module named 'tvDatafeed'"
+    bilgi["izler"]["tvdatafeed"] = ["ModuleNotFoundError: No module named 'tvDatafeed'"]
+
+    metin = S.tani_markdown(bilgi)
+
+    assert "tvDataFeed kurulu değil" in metin
+    assert "rongardF/tvdatafeed@e6f6aaa7de43" in metin
+
+
+def test_tvdatafeed_varsa_kurulum_ipucu_yazmaz():
+    bilgi = S.tani(kok="")
+    bilgi["importlar"]["tvdatafeed"] = "ok"
+
+    assert "tvDataFeed kurulu değil" not in S.tani_markdown(bilgi)
