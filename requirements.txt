@@ -7,10 +7,18 @@ pandas==2.2.2
 numpy==1.26.4
 exchange-calendars==4.13.2  # XIST session/holiday/half-day calendar; unknown dates fail closed
 
-# Alternatif BIST kütüphanesi (tvdatafeed yerine) OPSIYONELDIR ve deploy
-# zincirinden cikarildi: agir C/Rust bagimlilik zinciri getiriyor, hicbir kod
-# icinde import edilmiyor. Yerelde denemek istersen:
-#   pip install -r requirements-optional.txt
+# borsapy OPSIYONELDIR ve deploy zincirinden cikarildi: agir C/Rust
+# bagimlilik zinciri getiriyor, uretim kodunda import edilmiyor. Yerelde
+# denemek istersen: pip install -r requirements-optional.txt
+
+# --- Reaktif TV yedegi (2026-11-18: uretim zincirine girdi) ------------------
+# Yahoo birincil; veri gelmezse TradingView anonim WS devreye girer.
+# `tvdatafeed` ADIYLA PyPI paketi YOK; ayni `tvDatafeed` import modulunu
+# saglayan PyPI çatallı dağıtımı sabitlenir. Sabit GitHub commit alternatifi
+# (dagitim adi tvdatafeed==2.1.0):
+#   git+https://github.com/rongardF/tvdatafeed@e6f6aaa7de43
+tradingview-datafeed==2.1.1
+websocket-client==1.9.2
 
 # Zaman ve config
 pytz==2024.1
@@ -30,7 +38,6 @@ matplotlib==3.11.2
 pytest==8.3.2
 tabulate==0.9.0  # research/soru_cevaplama.py Markdown rapor tabloları (to_markdown)
 
-# Not: `tvdatafeed` ADIYLA PyPI paketi yok; aynı `tvDatafeed` import modülünü
-# sağlayan `tradingview-datafeed==2.1.1` PyPI'de var. Sabit commit alternatifi:
-# git+https://github.com/rongardF/tvdatafeed@e6f6aaa7de43
-# İkisi de yalnız ölçüm/araştırma içindir; canlı bağımlılık zincirine girmez.
+# Not: TV yedegi varsayilan ACIK (TV_YEDEK_AKTIF=1) ama YALNIZCA Yahoo veri
+# dondurmediginde cagrilir; paket kurulu degilse Yahoo-only yoluna dusulur.
+# Kapatmak icin: TV_YEDEK_AKTIF=0

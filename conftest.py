@@ -13,6 +13,12 @@ açıkça `data_dir=` verir veya `SEED_DATA_DIR` yedeğini kullanır.
 import os
 import time
 
+# Üretimde TV reaktif yedeği varsayılan AÇIKTIR (config.TV_YEDEK_AKTIF).
+# Testler ağa çıkmamalı: config/dotenv daha okunmadan yedeği zorla kapat.
+# Yeni entegrasyon testleri data.fetch.TV_YEDEK_AKTIF'i açıkça monkeypatch
+# ederek sahte TV istemcisiyle zinciri sınar.
+os.environ["TV_YEDEK_AKTIF"] = "0"
+
 import pytest
 
 import config as config_mod

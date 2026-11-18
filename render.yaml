@@ -90,6 +90,16 @@ services:
         value: ".IS"
       - key: STOCK_UNIVERSE
         sync: false
+      # --- Reaktif TV yedeği (Yahoo birincil) ---
+      # Yahoo veri döndürmezse tvDatafeed denenir; 0 = eski Yahoo-only davranış.
+      - key: TV_YEDEK_AKTIF
+        value: "1"
+      - key: TV_GERCEK_4S_AKTIF
+        value: "1"
+      - key: TV_EXCHANGE
+        value: "BIST"
+      - key: TV_ZAMAN_ASIMI_SN
+        value: "25"
       # MAKRO_ALARM: ons altın/ons gümüş/USDTRY/BRENT alarm üretsin mi?
       # Varsayılan 0 (yalnız veri + grafik). Bu sembollerin seans kapanışı BIST'e
       # göre olmadığı için "yalnız kapanmış mum" kuralı gün sonu barlarında tam

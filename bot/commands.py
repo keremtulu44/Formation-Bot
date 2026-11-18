@@ -197,6 +197,14 @@ def _saglik_ozeti() -> dict:
                 bildirim["son_gonderme_hatasi"] = gd.get("son_gonderme_hatasi")
     except Exception as exc:  # noqa: BLE001 - /health asla düşmesin
         bildirim["hata"] = type(exc).__name__
+    # --- VERİ SAĞLAYICI SAĞLIĞI (Yahoo birincil / TV reaktif yedek) ---
+    # Hangi kaynağın kullanıldığı, TV'nin kurulu olup olmadığı ve son hatalar
+    # /health üzerinden görünür olsun. Okuma hatası /health'i düşürmez.
+    try:
+        from data import saglayici_durumu
+        veri_saglayicilari = saglayici_durumu()
+    except Exception as exc:  # noqa: BLE001 - /health asla düşmesin
+        veri_saglayicilari = {"hata": type(exc).__name__}
     tarama_bayat = (
         None if tarama_suruyor is None or (tarama_suruyor and tarama_yasi_sn is None)
         else bool(tarama_suruyor and tarama_yasi_sn > tarama_esigi_sn)
@@ -212,6 +220,7 @@ def _saglik_ozeti() -> dict:
         "scan_stale_after_s": tarama_esigi_sn,
         "seans_acik": seans_acik,
         "bildirim": bildirim,
+        "veri_saglayicilari": veri_saglayicilari,
         "evren": len(_pkg.ACTIVE_STOCKS),
         "instance_id": _pkg.INSTANCE_ID,
         "komut": _pkg._komut_durumu(),

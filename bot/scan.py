@@ -40,7 +40,7 @@ from config import (ISTANBUL_TZ, ACTIVE_STOCKS, PROFILE, PROFILE_PARAMS, LOCAL_L
                     MORNING_PRELOAD_HOUR, MORNING_PRELOAD_MINUTE, EVREN_BUYUME_UYARI_ESIGI,
                     TELEGRAM_WEBHOOK_SECRET, TELEGRAM_WEBHOOK_URL, RENDER_EXTERNAL_URL,
                     TERMINAL_TAZE_BAR,
-                    DM_MIN_DEVLAMLILIK)
+                    DM_MIN_DEVLAMLILIK, TV_GERCEK_4S_AKTIF)
 from data import (StockDequeManager, tarama_penceresi_acik_mi, tarama_animi_mi,
                   islem_gunu_mu,
                   son_kapanan_mum_ani, time_until_next_open, is_bist_open,
@@ -97,6 +97,27 @@ from transport import telegram as _transport_telegram
 
 import main as _pkg  # geç bağlama: yamalı adlar _pkg.X (plan §3)
 _fetch_observations_local = threading.local()
+
+
+def _zaman_dilimlerini_hazirla(stock: str, df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    """1H → {1h,2h,4h,1d}. TV yedeği kullanıldıysa GERÇEK 4s barlarını koy.
+
+    Yahoo başarılıyken hiçbir ek TV çağrısı yapılmaz. Native 4s alınamazsa veya
+    geçersizse eski türetim yolu aynen korunur (davranış asla kötüleşmez).
+    """
+    df_4h_native = None
+    if (TV_GERCEK_4S_AKTIF
+            and _pkg.son_veri_kaynagi(stock) == "tvdatafeed"):
+        try:
+            df_4h_native = _pkg.fetch_tv_4h(stock)
+        except Exception as exc:  # noqa: BLE001 - grafik/analiz aksamamalı
+            _pkg.logger.warning(
+                "%s: gerçek 4s yedeği alınamadı (%s); türetilmiş 4s korunuyor",
+                stock, type(exc).__name__)
+    if df_4h_native is not None:
+        return _pkg.resample_all_timeframes(
+            df_1h, df_4h_native=df_4h_native)
+    return _pkg.resample_all_timeframes(df_1h)
 
 # Tüm Yahoo yolları (başlangıç, tarama, gece temizliği ve /grafik) aynı pacer'ı
 # kullanır. YahooRequestPacer isteği seri tutar; singleton da ortak hız bütçesi
@@ -890,9 +911,11 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     f"formasyonlar eski veriyle hesaplanıyor!"
                 )
             
-            # Tüm timeframe'leri üret
+            # Tüm timeframe'leri üret. TV yedeği kullanıldıysa TradingView'ın
+            # GERÇEK 4s barlarını türetilmiş 4s yerine ver; alınamazsa eski
+            # türetim yolu aynen kalır. Yahoo başarılıyken ek WS çağrısı YOK.
             resample_started = time.monotonic()
-            all_tfs = _pkg.resample_all_timeframes(df_1h)
+            all_tfs = _zaman_dilimlerini_hazirla(stock, df_1h)
             resample_seconds += max(0.0, time.monotonic() - resample_started)
             
             # --- 1D İÇİN DERİN VERİ (FAZ 2) ---

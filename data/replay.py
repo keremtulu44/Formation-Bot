@@ -716,20 +716,45 @@ def tamamlanmis_mumlar(df: pd.DataFrame, tf: str, now: Optional[datetime] = None
     return df[tamam]
 
 
-def resample_all_timeframes(df_1h: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+def _gecerli_gercek_4h(df) -> bool:
+    """TV'den gelen native 4s serisi üretime girmeden önce yapısal doğrulama."""
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return False
+    if not isinstance(df.index, pd.DatetimeIndex):
+        return False
+    gerekli = ["open", "high", "low", "close", "volume"]
+    if not all(c in df.columns for c in gerekli):
+        return False
+    return bool(df["close"].notna().any())
+
+
+def resample_all_timeframes(df_1h: pd.DataFrame,
+                            df_4h_native: Optional[pd.DataFrame] = None
+                            ) -> Dict[str, pd.DataFrame]:
+    """1H'den tüm timeframe'leri üret: {'1h','2h','4h','1d'}.
+
+    ``df_4h_native`` verilirse (TradingView gerçek 4s barları) 4h kovası
+    türetilmiş yerine bu seri olur. Geçersiz native seri sessizce yok sayılır ve
+    eski türetim yolu korunur — davranış asla kötüleşmez. 2h ve 1d her zaman
+    1h'den türetilir (plan: 2s türetildi, gerçek 4s yalnızca TV yedeğinde).
     """
-    1H'den tüm timeframe'leri üret
-    Döner: {'1h': df, '2h': df, '4h': df, '1d': df}
-    """
-    result = {}
+    result: Dict[str, pd.DataFrame] = {}
     result['1h'] = df_1h
-    
+    if _gecerli_gercek_4h(df_4h_native):
+        native = df_4h_native.copy()
+        try:
+            native.attrs["veri_kaynagi"] = "tvdatafeed"
+            native.attrs["gercek_bar"] = True
+        except (AttributeError, TypeError):
+            pass
+        result['4h'] = native
+
     for tf in ['2h', '4h', '1D']:
-        resampled = resample_ohlcv(df_1h, tf)
-        # Key'i normalize et: 1D -> 1d
         key = tf.lower()
-        result[key] = resampled
-    
+        if key == '4h' and '4h' in result:
+            continue
+        result[key] = resample_ohlcv(df_1h, tf)
+
     return result
 
 

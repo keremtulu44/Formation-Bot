@@ -17,8 +17,10 @@ Bu yardımcı:
 * tz-aware dönen yeni sürümleri de UTC'ye çevirir,
 * her çağrıdan sonra açık kalan WebSocket'i kapatır.
 
-Üretim canlı fetch hattı bu modülü kullanmaz; yalnız ölçüm ve araştırma
-arşivi scriptleri kullanır.
+2026-11-18 itibarıyla üretim `data/fetch.py` da bu modülü kullanır: Yahoo
+birincil sağlayıcı veri döndürmediğinde reaktif TV yedeği olarak çağrılır
+(yalnızca o durumda; Yahoo başarılıyken hiçbir WS açılmaz). Ölçüm ve araştırma
+arşivi scriptleri de aynı yardımcıyı kullanır.
 """
 from __future__ import annotations
 

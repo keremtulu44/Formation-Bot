@@ -1,158 +1,269 @@
-# Deploy hazırlık kontrolü — 2026-11-18
+# TV + Yahoo tam üretim / deploy yolu — 2026-11-18
 
 **Dal:** `arena/79b4d2e1-formation-bot` (aktif) · **Hedef:** Render Web Service,
-Python 3.12 · **Kapsam:** *mevcut* üretim veri hattının deploy'a hazırlanması.
-TV/datafeed geçişi ayrı bir ölçüm kapısıdır ve bu deploy'un parçası **değildir**.
+Python 3.12 · **Kapsam:** Yahoo birincil + TradingView (`tvDatafeed`) reaktif
+yedeğinin **tüm üretim hattına ve deploy zincirine** oturtulması.
+
+> **Bu belge aynı günün ilk "deploy hazırlığı" kararını geçersiz kılar.** İlk
+> turda TV ölçüm kapısı yeşil sayılmadığı için bilinçli olarak deploy dışında
+> tutulmuştu. Kullanıcının `Yeşil` beyanıyla kapı operatör tarafından açıldı;
+> bu turda `config.py`, `data/fetch.py`, `data/replay.py`, `bot/scan.py`,
+> `bot/commands.py`, `requirements*.txt`, `render.yaml` ve `.env.example`
+> birlikte değiştirildi. TV artık **opsiyonel ölçüm scripti değil**, Yahoo
+> veri döndürmediğinde devreye giren üretim yedeğidir.
 
 ## Kısa cevap
 
 | Soru | Cevap |
 |---|---|
-| **Veri çekme sistemi hazır mı?** | **EVET.** Üretim `data/fetch.py` hattı bu çalışma boyunca **hiç değişmedi**: yfinance birincil + Yahoo sembol yedeği. `python -m data` çevrimdışı duman testi geçti. |
-| **Testler hazır mı?** | **EVET.** `ruff`, `compileall`, `pip check`, `git diff --check`, tam pytest, zamanlama, 4 bağımsız formasyon scripti, grafik doktoru ve gerçek HTTP `/health` smoke yeşil. |
-| **CI hazır mı?** | **EVET.** `.github/workflows/ci.yml` `arena/**` push'unda koşar; ilk push'un Python 3.12 koşusu `success` (run `44326773886`, 9 dk 46 sn). |
-| **TV/datafeed yedeği deploy'a dahil mi?** | **HAYIR.** Ölçüm kapısı henüz yeşil değil; `config.py` / `.env.example` / `requirements-deploy.txt` içinde TV bayrağı veya pin yok. Bu, mevcut sistemi **bloklamaz**. |
-| **Şimdi deploy edilebilir mi?** | **EVET — mevcut yfinance sistemi için.** Aşağıdaki §6 adımlarıyla. |
+| **Veri sistemi hazır mı?** | **EVET.** `yfinance` birincil; BIST hisse/endeks için `tvDatafeed` reaktif yedek. İkisi de veri vermezse uydurma yok, `None` + mevcut "veri yok" kapıları. |
+| **TV deploy'a tam oturdu mu?** | **EVET.** `tradingview-datafeed==2.1.1` + `websocket-client==1.9.2` hem `requirements.txt` hem `requirements-deploy.txt` içinde sabit; aynı installer CI ve Render'da koşuyor. |
+| **Yahoo hâlâ birincil mi?** | **EVET.** Yahoo başarılıyken **hiçbir TV/WS çağrısı yapılmaz**; ek ağ maliyeti yalnızca Yahoo boş/geçersiz döndüğünde oluşur. |
+| **Gerçek 4s barları kullanılıyor mu?** | **EVET, TV yedeği devredeyse.** `TV_GERCEK_4S_AKTIF=1` ile TradingView native 4s, 1s'den türetilmiş 4s'in yerine geçer; alınamazsa türetim korunur. |
+| **Testler hazır mı?** | **EVET.** `ruff`, `pip check`, `compileall`, `git diff --check`, tam pytest **4525 passed / 43 skipped** (668 sn), 39 yeni entegrasyon senaryosu, grafik doktoru, `/health` smoke, çevrimdışı replay. |
+| **CI / Render parity hazır mı?** | **EVET.** `.python-version=3.12`; `scripts/install_deploy_dependencies.sh` CI ve `render.yaml` tarafından birebir kullanılıyor; `pip==26.2` → `setuptools==84.1.0` → `-r requirements-deploy.txt` → `pip check`. Önceki commit `4292ecf` CI run `44337872706` **success**; bu commit'in CI koşusu push sonrası tetiklenir. |
+| **Fiilen Render'a deploy edildi mi?** | **HAYIR.** Bu çalışma kod/push ile sınırlı; `autoDeployTrigger: checksPass` yalnızca Blueprint yönetilen servis için tetiklenir. Operatör adımları §8'de. |
 
-## 1. Üretim veri hattı (değişmedi)
+## 1. Üretim veri akışı
 
-- `data/fetch.py::saglayici_adaylari` / `_fetch_yfinance_adaylari`: **yalnızca yfinance**.
-- `config.py`: BIST endeksleri, makro ve `XAUUSD`/`XAGUSD` için Yahoo yedek sembolleri.
-- `data/replay.py`, `data/seed_cache.py`, `data/__main__.py`: modüler `data/` paketi;
-  kök `data.py` yok, doğru giriş `python -m data`.
-- `data/fetch.py`, `bot/scan.py`, `bot/app.py`, `main.py`, `config.py` içinde
-  **tvDatafeed / tradingview / tvdatafeed_client importu yok** (grep ile doğrulandı).
-- TV kodu yalnızca şu ölçüm/araştırma yüzeylerinde:
-  `scripts/tvdatafeed_client.py`, `scripts/saglayici_karsilastirma.py`,
-  `scripts/backfill/capraz_piyasa_cek.py`. Bunlar `main.py` tarafından import edilmez.
+```
+fetch_yfinance_1h / 1d / chart_data(stock, ...)
+        │
+        ▼
+_veri_zinciri()  ──►  _fetch_yfinance_adaylari()   [Yahoo: auto_adjust=False]
+        │                     │
+        │                başarılı ► frame.attrs = {
+        │                     │        "veri_kaynagi": "yahoo",
+        │                     │        "saglayici_zinciri": ["yahoo"],
+        │                     │        "gercek_bar": False }
+        │                     │        → TV çağrılMAZ
+        │
+        └── boş / kalıcı hata / geçici hata
+                        ▼
+              _tv_yedek_dene()  [yalnız BIST hisse + endeks]
+                        │  • TV_YEDEK_AKTIF=1
+                        │  • TV_ZAMAN_ASIMI_SN=25 (daemon thread + join)
+                        │  • scripts/tvdatafeed_client.get_hist()
+                        │      – doğrulanmış dağıtım/sürüm
+                        │      – en fazla 2 WS denemesi, her denemede ws.close()
+                        │      – naive yerel saati tzlocal() ile GERÇEK UTC'ye
+                        │      – tz-aware UTC DatetimeIndex döner
+                        │  • üretim hattı naive indeksi REDDEDER (fail-closed)
+                        │  • UTC → Europe/Istanbul, OHLCV temizliği
+                        ▼
+              frame.attrs = { "veri_kaynagi": "tvdatafeed",
+                              "saglayici_zinciri": ["yahoo","tvdatafeed"],
+                              "gercek_bar": True, "provider_fallback": True }
+                        │
+                        ▼
+        bot/scan.py::_zaman_dilimlerini_hazirla()
+              ├─ Yahoo → resample_all_timeframes(df_1h)
+              └─ TV    → fetch_tv_4h(stock)
+                         → resample_all_timeframes(df_1h,
+                                                   df_4h_native=gercek_4s)
+                           2s ve 1g yine 1s'den türetilir
+                        │
+           ikisi de başarısız ► None + retryable/gerekçe
+                              ► veri_yok_modu / cache tazeliği / UNKNOWN kapıları
+```
 
-## 2. Deploy yapılandırması
+**Değişmeyen sözleşmeler:** Yahoo kendi içindeki sembol yedeği
+(`PROVIDER_SYMBOL_FALLBACK`) önce denenir; geçici Yahoo hatasında `retryable`
+korunur ama TV kurtarırsa yeniden deneme gerekmez; hiçbir katman sentetik bar
+üretmez. `data/seed_cache.py::append_dataframe` farklı kaynaklardan gelen aynı
+zaman damgasını tekilleştirir, `to_dataframe` tek TZ kovasına indirger.
 
-| Öğe | Durum |
+## 2. Kaynak etiketi ve gözlemlenebilirlik
+
+* `frame.attrs["veri_kaynagi"]` → `"yahoo"` veya `"tvdatafeed"`.
+* `frame.attrs["saglayici_zinciri"]` → `["yahoo"]` / `["yahoo","tvdatafeed"]`.
+* `frame.attrs["gercek_bar"]`, `["gercek_4h"]`, `["tv_exchange"]`,
+  `["provider_fallback"]` TV tarafında doldurulur.
+* `data.fetch.saglayici_durumu()` süreç içi sayaçları döndürür:
+  `yahoo_basari`, `yahoo_hata`, `tv_basari`, `tv_hata`, `yok`,
+  `son_kaynak`, `son_kaynak_by_symbol`, son başarı/hata zamanları,
+  `tv_aktif`, `tv_kurulu`, `tv_dagitim` (metadata ile doğrulanır).
+* `bot/commands.py::_saglik_ozeti` bunu `/health` → `veri_saglayicilari`
+  alanına ekler; `/ready` 503 davranışı ve `?strict=1` heartbeat-bayatlık 503
+  kapısı **değişmedi** (yeni regresyon testiyle doğrulandı).
+
+## 3. Kalite / tazelik / UNKNOWN kapıları
+
+| Kapı | Uygulama |
 |---|---|
-| `.python-version` | `3.12` — Render'ın 3.14 varsayılanına karşı pandas/numpy tekerlek koruması |
-| `render.yaml` | `buildCommand: bash scripts/install_deploy_dependencies.sh` · `startCommand: python main.py` · `healthCheckPath: /health` · `autoDeployTrigger: checksPass` |
-| Build script | `pip==26.2` + `setuptools==84.1.0` → `-r requirements-deploy.txt` → `pip check` |
-| Pinler | `yfinance==1.7.0`, `pandas==2.2.2`, `numpy==1.26.4`, `requests==2.34.2`, `matplotlib==3.11.2`, `pytest==9.0.3`, `python-dotenv==1.2.4` |
-| TV bağımlılığı | **Yok.** Yalnız yorum satırında ölçüm için opsiyonel kurulum ipucu var |
-| Sırlar | `render.yaml` içinde `sync: false` (Telegram token/chat/group, Supabase, webhook secret); depoda değer yok |
-| `TZ` | `Europe/Istanbul` (BIST seansı + günlük sayaç sıfırlaması) |
+| Fiyat ölçeği | Yahoo `history(..., auto_adjust=False)`; tvDatafeed WS `adjustment:"splits"`. İkisi de ham kapanış → elma/elma. |
+| OHLCV | `_saglayici_ohlcv_temizle`: NaN/sonsuz, ≤0 fiyat, zarf ihlali, 0-hacimli hayalet günlük bar ayıklanır; ayıklanan satır `attrs` ile loglanır. |
+| Zaman | Ortak istemci tz-aware UTC döner; üretim İstanbul'a çevirir. Naive indeks **reddedilir** (DST/ortam TZ'sine göre uydurma yok). Süreç `TZ` değiştirilmez. |
+| WS | `scripts/tvdatafeed_client.py`: `DENEME_SINIRI=2`, her denemede yeni istemci, `finally: ws.close()`, boş/geçersiz frame → `ValueError`. |
+| Süre | `TV_ZAMAN_ASIMI_SN=25`; takılan WS taramayı bloke etmez, daemon thread + `join`. |
+| Tazelik | `VERI_YOK_MODU_ESIK_DK=20s`, `STALE_BAR_UYARI_DK`, seans açık/kapalı ayrımı, split süreklilik kontrolü, gece mum temizliği aynen korunur. |
+| STRICT_UNKNOWN | `docs/arastirma/CAPRAZ_PIYASA_UYGULAMA.md` kuralları geçerli: doğrulanmamış bağlam `unknown` kalır, `--availability` dışında varsayım yok. |
+| Kapsam | TV yalnızca `sembol_turu ∈ {hisse, endeks}` için; makro (`XAUUSD`, `BRENT`, `USDTRY`...) Yahoo'nun kendi vadeli yedeğiyle kalır. |
 
-> `render.yaml` **opsiyonel Blueprint**'tir. Dashboard'da servis zaten varsa
-> Blueprint uygulamak ikinci servis / çift fatura / aynı Telegram'a iki bot
-> üretir. Mevcut servis Dashboard > Settings'ten yönetilir.
+## 4. Deploy parity (CI = Render = yerel)
 
-## 3. Doğrulanan kapılar
+| Öğe | Değer |
+|---|---|
+| `.python-version` | `3.12` — pandas 2.2.2 / numpy 1.26.4 cp314 derleme düşmesini engeller |
+| Installer | `scripts/install_deploy_dependencies.sh`: `pip==26.2` + `setuptools==84.1.0` → `-r requirements-deploy.txt` → `pip check` |
+| CI | `.github/workflows/ci.yml` aynı installer'ı `run:` ile çağırır; `arena/**` push'unda koşar |
+| Render | `buildCommand: bash scripts/install_deploy_dependencies.sh` · `startCommand: python main.py` · `healthCheckPath: /health` · `autoDeployTrigger: checksPass` |
+| Pinler | `requirements.txt` **ve** `requirements-deploy.txt`: `tradingview-datafeed==2.1.1`, `websocket-client==1.9.2` (set eşitliği `test_deploy_workflows.py` ile korunur) |
+| Diğer canlı pinler | `yfinance==1.7.0`, `pandas==2.2.2`, `numpy==1.26.4`, `requests==2.34.2`, `matplotlib==3.11.2`, `pytest==9.0.3`, `python-dotenv==1.2.4` |
+| Env | `TV_YEDEK_AKTIF=1`, `TV_GERCEK_4S_AKTIF=1`, `TV_EXCHANGE=BIST`, `TV_ZAMAN_ASIMI_SN=25`, `TZ=Europe/Istanbul` |
+| Sırlar | `render.yaml` içinde `sync: false`; depoda token/chat/Supabase değeri yok |
+
+> `tvdatafeed` **adıyla** PyPI paketi yoktur; aynı `tvDatafeed` import modülünü
+> sağlayan PyPI çatallı dağıtım sabitlendi. Sabit GitHub commit alternatifi
+> (`tvdatafeed==2.1.0`) ortak istemci tarafından da kabul edilir ama deploy
+> manifestinde kullanılmaz. `render.yaml` **opsiyonel Blueprint**'tir:
+> Dashboard'da servis varsa uygulamak ikinci servis / çift fatura üretir.
+
+## 5. Ortam anahtarları
+
+| Anahtar | Varsayılan | Anlamı |
+|---|---|---|
+| `TV_YEDEK_AKTIF` | `1` | `0` → eski Yahoo-only davranış; TV hiç çağrılmaz |
+| `TV_GERCEK_4S_AKTIF` | `1` | `0` → 4s her zaman 1s'den türetilir |
+| `TV_EXCHANGE` | `BIST` | TradingView borsa kodu |
+| `TV_BAR_SAYISI` | `500` | `5d`/`1d` kısa çekimde 60/30'a iner |
+| `TV_ZAMAN_ASIMI_SN` | `25` | Tek TV çağrısının üst sınırı |
+
+Bayrak yorumlayıcısı `config._env_bayrak`: `0/false/off/no/none/hayir/kapalı`
+değerleri kapalı, diğerleri açık. `conftest.py` testler sırasında ağa çıkışı
+önlemek için `TV_YEDEK_AKTIF`'i config importundan **önce** zorla `0` yapar;
+yeni entegrasyon testleri `data.fetch.TV_YEDEK_AKTIF`'i sahte istemciyle açar.
+
+## 6. Çok yönlü testler
+
+`test_tv_yahoo_uretim_zinciri.py` **39 ağsız senaryo**:
+
+1. **Yahoo birincil:** 1h/1d başarı, TV hiç çağrılmaz, `auto_adjust=False`, kaynak etiketi.
+2. **Geçiş:** boş / kalıcı hata / geçici hata → TV; `retryable` korunur veya TV kurtarınca sıfırlanır; 1d + grafik yolları da TV'ye düşer; `frame_validator` TV'yi de reddedebilir.
+3. **Fail-closed:** ikisi de yok → `None` + gerekçe, sayaçlar, `son_kaynak=None`; 5 geçersiz TV yanıtı; makro atlandı; şalter kapalı; WS zaman aşımı; naive damga reddi; UTC→İstanbul dönüşümü.
+4. **WS / 4s:** ortak istemcinin gerçek koduyla `ws.close()` her denemede; native 4s türetilmişin yerine geçer; geçersiz native → türetime geri düşer; kapalı şalterde ek çağrı yok.
+5. **Tarama katmanı:** `_zaman_dilimlerini_hazirla` Yahoo'da TV çağırmaz, TV'de native 4s verir, TV 4s hatasında türetimi korur.
+6. **Cache / health / strict:** karma kaynaklı append tekilleşir ve sıralanır; `/health` yeni alanı + `?strict=1` bayatlık kapısı; `veri_yok_modu` 21s'de açık / 30dk'da kapalı; `STRICT_UNKNOWN` kılavuzu.
+7. **Deploy parity:** iki manifestte aynı TV pinleri, `.env.example`, `render.yaml`, installer/CI, ortak istemci belgesi, doğrulanmış sürüm metadata'sı.
+
+Mevcut regresyonlar da yeniden koştu: `test_scan_pacing`,
+`test_grafik_veri_guvenilirligi`, `test_deploy_workflows`,
+`test_health_server`, `test_kaynak_ve_guvenlik`, `test_live_data_flow`,
+`test_capraz_piyasa_replay`, `test_tvdatafeed_client`,
+`test_saglayici_karsilastirma`, `test_bist_calendar_regressions`.
+
+### Sonuçlar
 
 | Kapı | Sonuç |
 |---|---|
-| `.venv/bin/ruff check .` | temiz |
+| `.venv/bin/ruff check .` | `All checks passed!` |
+| `python -m pip check` | `No broken requirements found.` (TV pinleri kurulu) |
 | `python -m compileall -q .` | temiz |
-| `python -m pip check` | `No broken requirements found.` |
 | `git diff --check` | temiz |
-| Tam `pytest -q` | **4448 passed / 43 skipped** (694,5 sn) |
-| `test_tarama_zamani.py` | `102/102` |
-| `test_triangle.py` / `breakout` / `flag` / `pennant` | 4/4 |
-| `deploy_check.py --skip-network --grafik-test` | kare üretildi, stabil direnç + gönderilmeme kapıları geçti |
+| Tam `pytest -q` | **4525 passed / 43 skipped** (668,14 sn) |
+| Yeni entegrasyon dosyası | **39 passed** |
+| `test_tv_datafeed_docs.py` + deploy/render/docs | **88 passed** (4 dosya) |
+| `scripts/tvdatafeed_client.dogrulanmis_surum()` | `('tradingview-datafeed', '2.1.1')` |
+| `tvDatafeed.Interval` | `in_1_hour / in_2_hour / in_4_hour / in_daily` mevcut |
 | `python -m data` | çevrimdışı duman testi geçti |
-| `--mod tanis --tanis-dene 0`, `--mod arsiv` | ağa çıkmadan rapor üretti |
-| `PORT=10000 BOT_HEALTH_SMOKE_ONLY=1 python main.py` | `/health 200`, `/ready 503`, `/test` 404, webhook 404 |
-| GitHub Actions (Python 3.12) | ilk push `success`; son push'un koşusu §7'de |
+| `--mod tanis --tanis-dene 0` | `tvdatafeed: ok`, dağıtım `tradingview-datafeed 2.1.1 (doğrulandı)`; `borsapy` opsiyonel yok (beklenen iz) |
+| `--mod arsiv` | 28 sembol / 10080 bar, ağsız rapor |
+| `test_tarama_zamani.py` | **102/102** |
+| 4 bağımsız formasyon scripti | **4/4** `TÜM KONTROLLER GEÇTİ` |
+| `deploy_check.py --skip-network --grafik-test` | `✅ 39 tamam · ⚠️ 7 uyarı · ❌ 0 hata`; kare `AKBNK 4h · 68 mum`, `Fotoğraf gönderilmedi`. Stabil direnç uyarısı `UNAVAILABLE/missing_source` bu çevrimdışı tohumda beklenen uyarıdır, hata değildir |
+| `BOT_HEALTH_SMOKE_ONLY=1 PORT=10011 python main.py` | `/health 200`, `/ready 503`, `/test 404`, `/health?strict=1 200` (henüz heartbeat yok). Yanıtta `veri_saglayicilari.tv_kurulu=true`, `tv_dagitim="tradingview-datafeed==2.1.1"`, `tv_aktif=true`, `yahoo_birincil=true` |
 
-Bağımsız regresyon scriptleri ve smoke, CI job'undaki aynı komutlarla yerelde
-koşuldu; CI ile Render build komutu birebir aynı install scriptini kullanıyor.
-
-## 4. TV ölçümü neden bu deploy'un parçası değil
-
-Operatörün `PS C:\Projeler\Formation-Bot>` üzerindeki canlı ölçümü TV tarafının
-çalıştığını gösterdi: `nologin` uyarısıyla WS bağlandı, 1g için **360 bar** geldi.
-Ancak geçiş kapısı yeşil değil ve aşağıdaki bulgular bu turda düzeltildi:
-
-1. **1g damga hizası** — Yahoo `00:00 İstanbul` etiketi ↔ TV `00:00 UTC` anı;
-   `1d` de gün ızgarasına indirildi (`ortak_bar 0 → 360`).
-2. **yfinance MultiIndex kolonları** — 4s referansı `KeyError` veriyordu;
-   türetimden önce normalize edildi.
-3. **`intersection` sahte eşleşmesi** — `freq`'li hızlı yol değer bazlı `isin`'e çevrildi.
-4. **Fiyat düzeltmesi farkı (yeni)** — tvDatafeed WS `adjustment:"splits"` gönderir;
-   yfinance varsayılan `auto_adjust=True` **temettüyü de** düzeltir. Canlı sonuçta
-   `GARAN 4,041 / AKBNK 3,205 / EREGL 1,360` ve `medyan == max`, `fark_esik_asimi
-   206/360` görüldü: sabit oranlı kayma = elma/armut kıyası. `_yahoo` artık
-   `auto_adjust=False, actions=False` istiyor.
-5. **Tek barlık kalite gürültüsü (yeni)** — `%33,15 → %33,33` farkı 0,01 puanlık
-   sabit toleransla `red (adayda kısa bar fazla)` üretiyordu. Tolerans artık iki
-   serinin bar sayısından (`100/n_ref + 100/n_aday`) hesaplanıyor; gerçek
-   kötüleşme hâlâ `red`.
-6. **Geçici WS hatası (yeni)** — `EREGL 4h` için `Connection to remote host was
-   lost / no data` geldi. Ortak istemci artık yeni istemciyle **en fazla 2 deneme**
-   yapıyor, her denemede WS'yi kapatıyor.
-7. `0 bar geldi ✅` → `⚠️ 0 bar … Bu başarı değil`; `--referans` eklendi.
-
-`--referans borsapy` ile THYAO/GARAN 1g `geç (0,000 / 0,000)` geldi; ancak borsapy
-de TradingView WS tabanlı olduğu için bu **bağımsız referans değil**, yalnızca
-çapraz kontroldür. Geçiş kapısının referansı yahoo olarak kalmalı.
-
-**Karar:** kapı yeniden ölçülüp yeşil olmadan `data/fetch.py` / `bot/scan.py`
-değiştirilmeyecek. Bu yüzden TV yedeği deploy'a **dahil edilmedi**; mevcut
-sistemin deploy'u bundan etkilenmez.
-
-## 5. Açık riskler (deploy'u bloklamaz)
-
-1. **Yahoo `THYAO.IS: possibly delisted; no price data found (60d/2y)`** — harici
-   sağlayıcı/kota sorunu. Üretimde sembol yedeği + `UNKNOWN` kapısı korunuyor;
-   `docs/arastirma/CAPRAZ_PIYASA_UYGULAMA.md` fail-closed davranışı değişmedi.
-2. **Anonim TradingView WS** tek sembolde geçici veri vermeyebilir; sınırlı yeniden
-   deneme eklendi ama canlı tekrar doğrulanmadı.
-3. **1g/4h geçiş kapısı yeşil değil** — `auto_adjust` düzeltmesi sonrası ölçümün
-   operatör makinesinde tekrarlanması gerekir.
-4. **Yerel Python 3.11.2 / CI-Render 3.12** farkı: pinler `pip check` ile temiz,
-   CI 3.12'de yeşil; Render build'i aynı scripti kullanır.
-5. **PowerShell `yerel_onar.ps1`** statik/BOM testleri geçti, PowerShell çalıştırılmadı.
-
-## 6. Operatör için deploy adımları
+## 7. Komutlar (PowerShell, `PS C:\Projeler\Formation-Bot>`)
 
 ```powershell
-# 1) Son kodu al ve temiz olduğunu gör
-git status --short --branch
+# 1) Dalı tazele (cd YOK; zaten doğru klasördesin)
+git fetch origin
+git switch arena/79b4d2e1-formation-bot
 git pull --ff-only origin arena/79b4d2e1-formation-bot
 
-# 2) Kapıları yerelde son kez doğrula (opsiyonel; CI zaten koşuyor)
-ruff check .
-python -m pytest -q
-python deploy_check.py --skip-network --grafik-test
+# 2) Yerel ortamı deploy pinleriyle eşitle
+$py = ".\.venv\Scripts\python.exe"; if (-not (Test-Path $py)) { $py = "python" }
+& $py -m pip install -r .\requirements-deploy.txt
+& $py -m pip check
+
+# 3) Hızlı doğrulama (ağsız)
+& $py -m pytest -q test_tv_yahoo_uretim_zinciri.py test_tv_datafeed_docs.py test_deploy_workflows.py
+& $py -m ruff check .
+& $py -m compileall -q .
+
+# 4) Çevrimdışı tanı / arşiv ve modüler data paketi
+& $py scripts\saglayici_karsilastirma.py --mod tanis --tanis-dene 0
+& $py -m data
+
+# 5) Operatör canlı ölçümü (istersen; ölçüm kapısını tekrar görmek için)
+New-Item -ItemType Directory -Force .\var | Out-Null
+& $py scripts\saglayici_karsilastirma.py --mod canli --tf 4s 1g --sembol "GARAN,AKBNK,ASELS,EREGL" --aday tvdatafeed --adet 360 --cikti "var\tv_olcum4.md"
+Get-Content .\var\tv_olcum4.md -Encoding UTF8
+
+# 6) Grafik doktoru + /health smoke
+& $py deploy_check.py --skip-network --grafik-test
+$env:PORT = "10000"; $env:BOT_HEALTH_SMOKE_ONLY = "1"; & $py main.py
 ```
 
-Render Dashboard > ilgili Web Service:
+> `main.py` smoke'unu ayrı terminalde başlatıp `Invoke-RestMethod
+> http://127.0.0.1:10000/health` ile kontrol et; `/ready` başlangıçta 503
+> döner (beklenen), `?strict=1` heartbeat bayatsa 503 döner.
 
-- **Build Command:** `bash scripts/install_deploy_dependencies.sh`
-- **Start Command:** `python main.py`
-- **Health Check Path:** `/health`
-- **Python:** repo `.python-version` = `3.12`
-- **Env (Secret):** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`,
-  `TELEGRAM_GROUP_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
-- **`autoDeployTrigger: checksPass`** — CI yeşil olmadan deploy tetiklenmez.
-
-Deploy sonrası:
+Linux / CI tarafı için aynı kapılar:
 
 ```bash
-curl -fsS https://<servis>/health      # 200 + JSON durum
-curl -sS -o /dev/null -w '%{http_code}\n' https://<servis>/ready
+bash scripts/install_deploy_dependencies.sh
+python -m pytest -q
+python deploy_check.py --skip-network --grafik-test
+PORT=10000 BOT_HEALTH_SMOKE_ONLY=1 python main.py
 ```
 
-`/ready` veri/Telegram hazır değilse `503` dönebilir; `/health` liveness içindir.
+## 8. Operatör deploy adımları
 
-## 7. Son doğrulama kaydı
+1. Bu commit `origin/arena/79b4d2e1-formation-bot` üzerine push edilir; CI
+   (`arena/**`) Python 3.12 ile tam seti koşar. `autoDeployTrigger: checksPass`
+   yalnızca **Blueprint ile yönetilen** Render servisinde otomatik tetiklenir.
+2. Dashboard'da mevcut servis varsa Blueprint'i **yeniden uygulamayın**;
+   Settings > Environment içinde `TV_YEDEK_AKTIF=1`,
+   `TV_GERCEK_4S_AKTIF=1`, `TV_EXCHANGE=BIST`, `TV_ZAMAN_ASIMI_SN=25`,
+   `TZ=Europe/Istanbul` olduğunu doğrulayın. Build komutu installer'a işaret
+   etmeli.
+3. Deploy sonrası `/health` → `veri_saglayicilari.tv_kurulu=true`,
+   `tv_dagitim="tradingview-datafeed==2.1.1"`, `tv_aktif=true` beklenir.
+   `son_kaynak_by_symbol` hangi sembolün TV'ye düştüğünü gösterir.
+4. Yahoo normale döndüğünde sayaçlar yeniden `yahoo` yazmalı; TV yalnızca
+   gerektiğinde `tv_basari` artmalı. `yok` sayacı artıyorsa iki sağlayıcı da
+   veri vermiyor demektir → `?strict=1` ve `veri_yok_modu` kapılarına bakın.
+5. **Fiili Render deploy / PR bu çalışmada yapılmadı.** Bu belge kod, test ve
+   yapılandırma hazırlığını kanıtlar; dağıtım operatör onayıyla gerçekleşir.
 
-Son doğrulama (2026-11-18, Python 3.11.2 venv): `ruff` temiz · `pip check`
-`No broken requirements found.` · `compileall` temiz · `git diff --check` temiz ·
-tam pytest **4448 passed / 43 skipped** (694,5 sn) · ağsız `tanis`/`arsiv` rapor
-üretti · `python -m data` geçti · `test_tarama_zamani.py` **102/102** · 4 bağımsız
-formasyon scripti **4/4** · grafik doktoru `Kare üretildi: AKBNK 4h`, stabil
-direnç çizildi, `Fotoğraf gönderilmedi` · HTTP smoke `/health 200`, `/ready 503`,
-`/test 404`.
+## 9. Dürüst kanıt sınırı
 
-GitHub Actions: `6452a82` için Python 3.12 koşusu **success** (run
-`44332184670`, 15 dk 44 sn); ilk push `87cb6ed` de **success** (`44326773886`,
-9 dk 46 sn). Bu belgenin commit/push'u yeni bir CI koşusu tetikler.
+* Ajan tarafında bu turda **canlı Yahoo/TradingView çağrısı yapılmadı**; tüm
+  entegrasyon testleri sahte `yfinance` + sahte `tvDatafeed` ile ağsız koştu.
+* Kullanıcının `Yeşil` beyanı, operatör makinesindeki ölçüm kapısının açıldığı
+  olarak alındı. Daha önceki iki canlı çıktıda bulunan `auto_adjust`, dinamik
+  tolerans ve geçici WS kopması kök nedenleri `4292ecf` ile düzeltilmişti;
+  düzeltilmiş aracın `var\tv_olcum4.md` çıktısı bu oturuma yapıştırılmadı.
+* Bu nedenle "TV üretimde" ifadesi **kod + pin + 39 senaryo + tam pytest**
+  kanıtına dayanır; "canlı TradingView'den bugün bar geldi" iddiası **değildir**.
+  Canlı teyit §7.5 komutuyla operatör tarafından yapılır.
 
-**Özet: üretim veri sistemi ve testler deploy'a hazır; TV geçişi ayrı, ölçüm
-bekleyen iştir.** Kesin kayıt `docs/denetim/GENEL_KONTROL_2026-11-18.md` §9'da.
+## 10. Tarihçe (aynı gün, ilk tur)
+
+İlk deploy hazırlığında üretim `data/fetch.py` yfinance-only idi; TV yalnız
+`scripts/saglayici_karsilastirma.py`, `scripts/backfill/capraz_piyasa_cek.py`
+ve `scripts/tvdatafeed_client.py` içinde ölçüm/araştırma amaçlıydı. Operatörün
+iki canlı ölçüm turunda şu kök nedenler bulunup düzeltildi: 1g gün ızgarası
+(`ortak_bar 0 → 360`), yfinance MultiIndex kolonları, pandas `intersection`
+sahte eşleşmesi (`isin`), `auto_adjust=True` temettü düzeltmesi
+(`auto_adjust=False, actions=False`), tek barlık kalite gürültüsü (dinamik
+tolerans) ve EREGL 4h geçici WS kopması (`DENEME_SINIRI=2`). O turun kararı
+"mevcut yfinance sistemi hazır, TV deploy dışında" idi; **bu belge o kararı
+kapatır**, düzeltmeleri korur ve TV'yi tüm sürece ekler.
+
+İlgili belgeler:
+[`GENEL_KONTROL_2026-11-18.md`](GENEL_KONTROL_2026-11-18.md) ·
+[`VERI_KAYNAGI_VE_TF_PLANI_2026-11-16.md`](../tasarim/VERI_KAYNAGI_VE_TF_PLANI_2026-11-16.md) ·
+[`LOCAL_SETUP.md`](../kurulum/LOCAL_SETUP.md) ·
+[`CAPRAZ_PIYASA_UYGULAMA.md`](../arastirma/CAPRAZ_PIYASA_UYGULAMA.md)

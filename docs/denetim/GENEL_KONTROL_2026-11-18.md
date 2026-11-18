@@ -278,3 +278,33 @@ operatör makinesinde tekrarlanması gerekir.
 **4/4**, grafik doktoru ve `/health` smoke yeşil. `6452a82` CI koşusu Python 3.12'de
 **success** (run `44332184670`, 15 dk 44 sn). Üretim `data/fetch.py` hattı hiçbir
 committe değişmedi.
+
+## 10. TV + Yahoo tam üretim / deploy entegrasyonu (aynı gün, üçüncü tur)
+
+Kullanıcı ölçüm kapısını `Yeşil` ilan etti ve TV'nin yalnızca ölçümde değil
+**tam süreçte** olmasını istedi. §9'daki "TV deploy dışında" kararı bu turda
+kapatıldı; önceki kök neden düzeltmeleri korundu.
+
+| Katman | Değişiklik |
+|---|---|
+| `config.py` | `TV_YEDEK_AKTIF`, `TV_GERCEK_4S_AKTIF`, `TV_EXCHANGE`, `TV_BAR_SAYISI`, `TV_ZAMAN_ASIMI_SN`, `TV_ARALIK`, `TV_SEMBOL_TURLERI`, ortak `_env_bayrak` |
+| `data/fetch.py` | `_veri_zinciri` (Yahoo → TV → fail-closed), `_tv_yedek_dene` (25 sn sınırlı, UTC-aware zorunlu, OHLCV temizliği), `saglayici_durumu`, `son_veri_kaynagi`, `fetch_tv_4h`; `1h/1d/chart_data` aynı zincirden geçer |
+| `data/replay.py` | `resample_all_timeframes(..., df_4h_native=...)`; geçersiz native 4s türetime geri düşer |
+| `bot/scan.py` | `_zaman_dilimlerini_hazirla`: yalnızca TV yedeği devredeyken gerçek 4s çekilir |
+| `bot/commands.py` | `/health` → `veri_saglayicilari`; `/ready` ve `?strict=1` kapıları değişmedi |
+| Deploy | İki `requirements*.txt` dosyasına `tradingview-datafeed==2.1.1` + `websocket-client==1.9.2`; `render.yaml` env bayrakları; `.env.example`; aynı installer CI/Render |
+| Doküman | `docs/denetim/DEPLOY_HAZIRLIK_2026-11-18.md` tam yol olarak yeniden yazıldı; plan/kurulum/README index güncellendi |
+
+**Yeni regresyonlar:** `test_tv_yahoo_uretim_zinciri.py` 39 ağsız senaryo
+(Yahoo birincil, boş/kalıcı/geçici hata, TV kurtarma, ikisi de yok, 5 geçersiz
+frame, makro kısıtı, şalter, zaman aşımı, naive reddi, UTC→İstanbul, WS
+kapanışı, gerçek 4s, cache tekilleştirme, strict health, `veri_yok_modu`,
+`STRICT_UNKNOWN`, pin/CI/Render parity). `conftest.py` testlerde ağa çıkışı
+önlemek için `TV_YEDEK_AKTIF`'i config'ten önce zorla kapatır.
+
+**Doğrulama:** `ruff`, `pip check` (TV pinleri kurulu), `compileall`,
+`git diff --check` temiz; tam pytest **4525 passed / 43 skipped** (668,14 sn);
+yeni dosya **39 passed**; doküman/deploy/render hedefli 4 dosya **88 passed**;
+`dogrulanmis_surum() == ('tradingview-datafeed','2.1.1')`. Ajan tarafında canlı
+Yahoo/TradingView çağrısı yok; entegrasyon kanıtı kod + testlerdir, operatörün
+`var\tv_olcum4.md` canlı teyidi ayrıdır. Fiili Render deploy / PR yapılmadı.

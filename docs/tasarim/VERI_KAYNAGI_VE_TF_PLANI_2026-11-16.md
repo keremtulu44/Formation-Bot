@@ -1,13 +1,16 @@
 # Veri kaynağı ve zaman dilimi planı (2026-11-16)
 
-> **Uygulama durumu (2026-11-18):** Bu belge bir **geçiş planı / ölçüm kapısı**dır;
-> aşağıdaki reaktif yedekleşme, 4s gerçek barı ve `veri_kaynagi = "turetildi"`
-> etiketleri **canlı tarama hattında henüz uygulanmadı**. Üretim `data/fetch.py`
-> şu anda yalnızca `yfinance` kullanır (aynı sağlayıcıda sembol yedeği vardır);
-> `borsapy` üretimde import edilmez. tvDatafeed yalnız
-> `scripts/saglayici_karsilastirma.py` ölçüm aracında ve
-> `scripts/backfill/capraz_piyasa_cek.py` günlük araştırma arşivi yedeğinde
-> kullanılır. Geçiş kapısı yeşil olmadan üretim fetch akışı değiştirilmeyecek.
+> **Uygulama durumu (2026-11-18, güncellendi):** Reaktif yedekleşme, gerçek 4s
+> barı ve `veri_kaynagi` etiketi **üretim `data/fetch.py` hattına uygulandı**.
+> Yahoo birincil; Yahoo boş/geçersiz dönerse `tvDatafeed` denenir, ikisi de
+> başarısızsa veri uydurulmadan `None` döner. TV başarılıyken
+> `frame.attrs["veri_kaynagi"] = "tvdatafeed"`, `TV_GERCEK_4S_AKTIF=1` ise gerçek
+> 4s barları `resample_all_timeframes(..., df_4h_native=...)` ile türetilmiş 4s'in
+> yerine geçer. Kaynak sayaçları `/health` → `veri_saglayicilari` alanında
+> görünür. `borsapy` üretimde import edilmez. `TV_YEDEK_AKTIF=0` eski
+> Yahoo-only davranışa döndürür. Aşağıdaki eşikler geçiş kapısı ölçümünün
+> sözleşmesi olarak geçerliliğini korur; canlı ölçüm sonuçları
+> `docs/denetim/GENEL_KONTROL_2026-11-18.md` §8–§9'dadır.
 
 Hedef karar: **Yahoo birincil**, tvDataFeed **reaktif yedek** ve **4s için gerçek
 bar** kaynağı. Amaç daha çok kaynak değil, doğru bar kurgusu ve tek noktaya

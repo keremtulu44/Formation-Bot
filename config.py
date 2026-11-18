@@ -114,6 +114,42 @@ def yahoo_ticker_for_symbol(stock: str) -> str:
     return key + MARKET_SUFFIX
 
 
+def _env_bayrak(ad: str, varsayilan: str = "1") -> bool:
+    """Ortak aç/kapat yorumlayıcısı: 0/false/off/no/kapalı → False."""
+    deger = str(os.getenv(ad, varsayilan)).strip().lower()
+    return deger not in ("", "0", "false", "off", "no", "none", "hayir",
+                         "hayır", "kapali", "kapalı", "kapali")
+
+
+# --- TV/DATAFEED REAKTİF YEDEK (2026-11-18) --------------------------------
+# Yahoo birincildir. Yahoo boş/geçersiz veri döndürdüğünde BIST hisse/endeks
+# sembolleri için tvDatafeed (TradingView anonim WS) devreye girer. İkisi de
+# veri vermezse UYDURMA YOK: fetch None döner, mevcut "veri yok" kapıları aynen
+# çalışır. TV hiçbir zaman Yahoo başarılıyken çağrılmaz; böylece normal taramada
+# ek WS/ağ maliyeti yoktur.
+TV_YEDEK_AKTIF = _env_bayrak("TV_YEDEK_AKTIF", "1")
+#: TradingView gerçek 4s barları türetilmiş 4s yerine kullanılsın mı?
+TV_GERCEK_4S_AKTIF = _env_bayrak("TV_GERCEK_4S_AKTIF", "1")
+TV_EXCHANGE = str(os.getenv("TV_EXCHANGE", "BIST")).strip() or "BIST"
+try:
+    TV_BAR_SAYISI = max(10, int(os.getenv("TV_BAR_SAYISI", "500")))
+except ValueError:
+    TV_BAR_SAYISI = 500
+try:
+    TV_ZAMAN_ASIMI_SN = max(1.0, float(os.getenv("TV_ZAMAN_ASIMI_SN", "25")))
+except ValueError:
+    TV_ZAMAN_ASIMI_SN = 25.0
+
+#: tvDatafeed Interval üyelerinin ADLARI (kütüphane kurulu olmadan da okunur).
+TV_ARALIK = {
+    "1h": "in_1_hour", "2h": "in_2_hour", "4h": "in_4_hour",
+    "1d": "in_daily",
+}
+#: Sadece BIST hisse/endeks için TV denenir; makro (XAUUSD, BRENT, USDTRY...)
+#: TradingView'ın BIST exchange'inde yoktur ve Yahoo'nun vadeli yedeği zaten var.
+TV_SEMBOL_TURLERI = frozenset({"hisse", "endeks"})
+
+
 BIST_50 = [
     "THYAO", "GARAN", "AKBNK", "ISCTR", "YKBNK", "KCHOL", "SAHOL", "EREGL", "SISE", "BIMAS",
     "ASELS", "TUPRS", "FROTO", "TOASO", "KRDMD", "PETKM", "PGSUS", "SASA", "HEKTS", "GUBRF",

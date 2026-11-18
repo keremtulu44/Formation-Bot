@@ -421,9 +421,11 @@ geçirme gerektirir.
 README dışındaki belgeler için güncel durum/yaş etiketi **[docs/README.md](docs/README.md)**
 tek kaynaktır. Son deploy incelemesi: [DEPLOY_STABIL_KONTROLU_2026-11.md](docs/denetim/DEPLOY_STABIL_KONTROLU_2026-11.md);
 son genel kontrol: [GENEL_KONTROL_2026-11-18.md](docs/denetim/GENEL_KONTROL_2026-11-18.md);
-deploy hazırlığı: [DEPLOY_HAZIRLIK_2026-11-18.md](docs/denetim/DEPLOY_HAZIRLIK_2026-11-18.md).
-Üretim veri hattı (yfinance) ve testler deploy'a hazır; TV/datafeed yedeği ölçüm
-kapısı yeşil olmadığı için bu deploy'a **dahil değildir**.
+tam TV + Yahoo deploy yolu: [DEPLOY_HAZIRLIK_2026-11-18.md](docs/denetim/DEPLOY_HAZIRLIK_2026-11-18.md).
+Üretim veri hattı **Yahoo birincil + tvDatafeed reaktif yedek** olarak deploy'a
+hazır; TV pinleri CI/Render manifestlerinde, kaynak etiketi `/health` içinde,
+39 yeni ağsız senaryo ve tam pytest **4525 passed / 43 skipped** ile doğrulandı.
+Fiili Render deploy/PR bu çalışmada yapılmadı.
 Eski 2026-09-30 durum tablosu ve “yeni oturum için” maddeleri güncel branch'i
 ve mevcut özellikleri yansıtmadığı için kaldırıldı; eski tarihli denetimler
 `docs/denetim/` ve `docs/arsiv/` altında tarih etiketiyle okunmalıdır.

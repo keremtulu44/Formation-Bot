@@ -9,6 +9,8 @@ import math
 import os
 import pickle
 import tempfile
+import threading
+from importlib import metadata as _metadata
 from contextlib import nullcontext
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -23,9 +25,243 @@ from config import (
     FULL_1H_FETCH_PERIOD, ROUTINE_1H_FETCH_PERIOD, FULL_1H_FETCH_STALE_DAYS,
     BOSLUK_TAMIR_TEKRAR_DK,
     ALLOW_TRUSTED_PICKLE_CACHE,
+    TV_YEDEK_AKTIF, TV_GERCEK_4S_AKTIF, TV_EXCHANGE, TV_BAR_SAYISI,
+    TV_ZAMAN_ASIMI_SN, TV_ARALIK, TV_SEMBOL_TURLERI,
 )
 
 import data as _pkg  # geç bağlama (plan §3)
+
+
+# ------------------------------------------------- SAĞLAYICI ZİNCİRİ / DURUM --
+# Yahoo birincil, tvDatafeed reaktif yedek. Durum /health üzerinden görünür;
+# hiçbir veri uydurulmaz. Sayaçlar süreç içi gözlemseldir, kalıcı depoya yazmaz.
+_SAGLAYICI_KILIT = threading.Lock()
+_SAGLAYICI_DURUM: Dict[str, object] = {
+    "yahoo_basari": 0, "yahoo_hata": 0,
+    "tv_basari": 0, "tv_hata": 0, "yok": 0,
+    "son_kaynak": None, "son_kaynak_by_symbol": {},
+    "yahoo_son_basari": None, "yahoo_son_hata": None,
+    "tv_son_basari": None, "tv_son_hata": None,
+}
+
+
+def _saglayici_zamani() -> str:
+    return datetime.now(ISTANBUL_TZ).isoformat()
+
+
+def _saglayici_kaydet(stock: str, kaynak: str, hata: str = "") -> None:
+    """Kaynak başarı/hata sayacını ve son durumu güncelle (kilitli, ağ yok)."""
+    anahtar = str(stock or "?").strip().upper()
+    # Durum sözlüğü kısa önek kullanır: tvdatafeed -> tv_*. Yanlış önek
+    # sayaçları görünmez kılardı (regresyon: test_tv_yahoo_uretim_zinciri).
+    on_ek = "tv" if kaynak == "tvdatafeed" else kaynak
+    with _SAGLAYICI_KILIT:
+        if hata:
+            _SAGLAYICI_DURUM[f"{on_ek}_hata"] = int(
+                _SAGLAYICI_DURUM.get(f"{on_ek}_hata") or 0) + 1
+            _SAGLAYICI_DURUM[f"{on_ek}_son_hata"] = str(hata)[:200]
+        else:
+            _SAGLAYICI_DURUM[f"{on_ek}_basari"] = int(
+                _SAGLAYICI_DURUM.get(f"{on_ek}_basari") or 0) + 1
+            _SAGLAYICI_DURUM[f"{on_ek}_son_basari"] = _saglayici_zamani()
+            if kaynak in ("yahoo", "tvdatafeed"):
+                _SAGLAYICI_DURUM["son_kaynak"] = kaynak
+                _SAGLAYICI_DURUM["son_kaynak_by_symbol"][anahtar] = kaynak
+
+
+def _tv_kurulum_bilgisi() -> Tuple[bool, Optional[str]]:
+    """Kurulu TV dağıtımını doğrula; import/ağ yapmadan yalnız metadata okur."""
+    for ad, surumler in (("tradingview-datafeed", ("2.1.1",)),
+                         ("tvdatafeed", ("2.1.0",))):
+        try:
+            surum = _metadata.version(ad)
+        except _metadata.PackageNotFoundError:
+            continue
+        return surum in surumler, f"{ad}=={surum}"
+    return False, None
+
+
+def saglayici_durumu() -> Dict[str, object]:
+    """/health için gözlemsel sağlayıcı özeti; asla istisna fırlatmaz."""
+    kurulu, dagitim = _tv_kurulum_bilgisi()
+    with _SAGLAYICI_KILIT:
+        ozet = dict(_SAGLAYICI_DURUM)
+        ozet["son_kaynak_by_symbol"] = dict(
+            _SAGLAYICI_DURUM["son_kaynak_by_symbol"])
+    ozet.update({
+        "tv_aktif": bool(TV_YEDEK_AKTIF),
+        "tv_gercek_4s_aktif": bool(TV_GERCEK_4S_AKTIF),
+        "tv_kurulu": kurulu,
+        "tv_dagitim": dagitim,
+        "tv_exchange": TV_EXCHANGE,
+        "tv_zaman_asimi_sn": TV_ZAMAN_ASIMI_SN,
+        "yahoo_birincil": True,
+    })
+    return ozet
+
+
+def son_veri_kaynagi(stock: str) -> Optional[str]:
+    """Sembol için son başarılı kaynak: 'yahoo' / 'tvdatafeed' / None."""
+    with _SAGLAYICI_KILIT:
+        return _SAGLAYICI_DURUM["son_kaynak_by_symbol"].get(
+            str(stock or "").strip().upper())
+
+
+def _tv_bar_sayisi(period: str, tf: str) -> int:
+    """Kısa '5d' ön yükleme için gereksiz 500 bar isteme."""
+    metin = str(period or "").strip().lower()
+    if metin.startswith("5d") or metin.startswith("1d"):
+        return min(TV_BAR_SAYISI, 60 if tf == "1h" else 30)
+    return TV_BAR_SAYISI
+
+
+def _tv_yedek_dene(
+    stock: str, tf: str, period: str = "60d"
+) -> Tuple[Optional[pd.DataFrame], str]:
+    """Yahoo veri döndürmediğinde tvDatafeed'den OHLCV çeker.
+
+    DÖNÜŞ: (frame|None, hata). Hiçbir durumda uydurulmuş/sentetik bar üretmez.
+    Süreç TZ'si değiştirilmez; WS istemcisi ortak modülde `finally` ile kapanır;
+    tüm çağrı `TV_ZAMAN_ASIMI_SN` ile sınırlıdır (anonim WS takılmasın).
+    """
+    if not TV_YEDEK_AKTIF:
+        return None, "TV yedeği kapalı (TV_YEDEK_AKTIF=0)"
+    if sembol_turu(stock) not in TV_SEMBOL_TURLERI:
+        return None, "TV yalnız BIST hisse/endeks için (makro atlandı)"
+    anahtar = str(tf or "").strip().lower()
+    if anahtar not in TV_ARALIK:
+        return None, f"TV aralığı desteklenmiyor: {tf!r}"
+
+    sembol = str(stock or "").strip().upper()
+    sonuc: Dict[str, object] = {}
+
+    def _cek() -> None:
+        try:
+            from scripts import tvdatafeed_client as tv_client
+            sonuc["frame"] = tv_client.get_hist(
+                symbol=sembol, exchange=TV_EXCHANGE,
+                interval=TV_ARALIK[anahtar],
+                n_bars=_tv_bar_sayisi(period, anahtar))
+        except Exception as exc:  # noqa: BLE001 - ağ/import hatası rapora düşsün
+            sonuc["hata"] = f"{type(exc).__name__}: {exc}"
+
+    isci = threading.Thread(target=_cek, daemon=True,
+                            name=f"tv-{sembol}-{anahtar}")
+    isci.start()
+    isci.join(TV_ZAMAN_ASIMI_SN)
+    if isci.is_alive():
+        return None, f"TV zaman aşımı ({TV_ZAMAN_ASIMI_SN} sn)"
+    if "hata" in sonuc:
+        return None, str(sonuc["hata"])
+
+    ham = sonuc.get("frame")
+    if ham is None or not isinstance(ham, pd.DataFrame) or ham.empty:
+        return None, "TV boş veya geçersiz sağlayıcı verisi"
+    cerceve = ham.copy()
+    cerceve.columns = [str(c).strip().lower() for c in cerceve.columns]
+    if "symbol" in cerceve.columns:
+        cerceve = cerceve.drop(columns=["symbol"])
+    if not isinstance(cerceve.index, pd.DatetimeIndex):
+        return None, "TV geçerli zaman indeksi döndürmedi"
+    if cerceve.index.tz is None:
+        # Ortak istemci 2.1.x'in naive yerel duvar saatini tzlocal() ile GERÇEK
+        # UTC'ye çevirir; üretim hattına yalnızca tz-aware UTC gelmelidir.
+        # Burada naive kalmışsa sözleşme bozulmuştur: ortam TZ'sine göre
+        # uydurma dönüşüm DST / yanlış bar üretir → fail-closed.
+        return None, "TV naive zaman damgası reddedildi (istemci UTC-aware dönmeli)"
+    cerceve.index = cerceve.index.tz_convert(ISTANBUL_TZ)
+    temiz = _saglayici_ohlcv_temizle(cerceve, stock=stock, timeframe=anahtar)
+    if temiz is None or temiz.empty:
+        return None, "TV geçerli OHLCV mumu döndürmedi"
+    temiz.attrs.update({
+        "veri_kaynagi": "tvdatafeed",
+        "provider_symbol": sembol,
+        "provider_fallback": True,
+        "gercek_bar": True,
+        "gercek_4h": anahtar == "4h",
+        "tv_exchange": TV_EXCHANGE,
+    })
+    return temiz, ""
+
+
+def _veri_zinciri(
+    stock: str,
+    period: str,
+    tf: str,
+    *,
+    frame_validator: Optional[Callable] = None,
+    request_context: Optional[Callable] = None,
+) -> Tuple[Optional[pd.DataFrame], bool, str]:
+    """Yahoo birincil → TV reaktif yedek → (None, retryable, gerekçe).
+
+    TV yalnızca Yahoo hiç veri döndürmediğinde çağrılır. Yahoo GEÇİCİ hata
+    verdiyse `retryable` korunur (mevcut tek yeniden deneme sözleşmesi bozulmaz);
+    TV o anda kurtarırsa veri geldiği için yeniden denemeye gerek kalmaz.
+    """
+    try:
+        frame, retryable, reason = _fetch_yfinance_adaylari(
+            stock, period, tf, frame_validator=frame_validator,
+            request_context=request_context)
+    except Exception as exc:  # noqa: BLE001 - sağlayıcı hatası rapora düşsün
+        frame = None
+        retryable = yfinance_error_is_retryable(exc)
+        reason = f"{type(exc).__name__}: {exc}"
+
+    if frame is not None and len(frame):
+        frame.attrs["veri_kaynagi"] = "yahoo"
+        frame.attrs["saglayici_zinciri"] = ["yahoo"]
+        frame.attrs["gercek_bar"] = False
+        _saglayici_kaydet(stock, "yahoo")
+        return frame, False, ""
+
+    _saglayici_kaydet(stock, "yahoo", reason)
+    tv, tv_hata = _tv_yedek_dene(stock, tf, period)
+    if tv is None:
+        _saglayici_kaydet(stock, "tvdatafeed", tv_hata)
+        with _SAGLAYICI_KILIT:
+            _SAGLAYICI_DURUM["yok"] = int(_SAGLAYICI_DURUM["yok"]) + 1
+            _SAGLAYICI_DURUM["son_kaynak_by_symbol"].pop(
+                str(stock or "").strip().upper(), None)
+        return None, retryable, f"{reason} | tv: {tv_hata}"
+
+    if frame_validator is not None:
+        try:
+            degerlendirme = frame_validator(tv)
+            if isinstance(degerlendirme, tuple):
+                kabul, neden = bool(degerlendirme[0]), str(degerlendirme[1] or "")
+            else:
+                kabul, neden = bool(degerlendirme), ""
+        except Exception as exc:  # noqa: BLE001
+            kabul, neden = False, f"tazelik doğrulaması {type(exc).__name__}"
+        if not kabul:
+            _saglayici_kaydet(stock, "tvdatafeed", neden)
+            return None, retryable, f"{reason} | tv: {neden or 'tazelik doğrulaması'}"
+
+    tv.attrs["saglayici_zinciri"] = ["yahoo", "tvdatafeed"]
+    _saglayici_kaydet(stock, "tvdatafeed")
+    _pkg.logger.warning(
+        "%s: Yahoo %s veri döndürmedi (%s); tvDatafeed yedeği kullanıldı "
+        "(%d bar). Kaynak etiketi: tvdatafeed",
+        stock, tf, reason[:160], len(tv))
+    return tv, False, ""
+
+
+def fetch_tv_4h(stock: str) -> Optional[pd.DataFrame]:
+    """TradingView GERÇEK 4s barları (türetilmiş 4s yerine kullanılmak üzere).
+
+    Yalnızca TV yedeğinin kullanıldığı sembollerde, tarama katmanı tarafından
+    çağrılır. Kapalıysa/kurulu değilse None döner; üretim akışı bozulmaz.
+    """
+    if not TV_GERCEK_4S_AKTIF or son_veri_kaynagi(stock) != "tvdatafeed":
+        return None
+    frame, hata = _tv_yedek_dene(stock, "4h", "60d")
+    if frame is None:
+        _saglayici_kaydet(stock, "tvdatafeed", f"gerçek 4s: {hata}")
+        _pkg.logger.warning("%s: gerçek 4s alınamadı (%s); türetilmiş 4s kullanılacak",
+                            stock, hata)
+        return None
+    _saglayici_kaydet(stock, "tvdatafeed")
+    return frame
 
 
 def _saglayici_ohlcv_temizle(
@@ -237,7 +473,7 @@ def fetch_yfinance_chart_data(
     tf = str(interval or "").strip().lower()
     if tf not in ("1h", "1d"):
         raise ValueError("Grafik fetch interval yalnızca 1h veya 1d olabilir")
-    return _fetch_yfinance_adaylari(
+    return _veri_zinciri(
         stock,
         period,
         tf,
@@ -247,9 +483,9 @@ def fetch_yfinance_chart_data(
 
 
 def fetch_yfinance_1d(stock: str, period: str = GUNLUK_FETCH_PERIOD) -> Optional[pd.DataFrame]:
-    """Günlük derin OHLCV geçmişini sağlayıcıdan çeker."""
+    """Günlük derin OHLCV geçmişini sağlayıcıdan çeker (Yahoo → TV yedek)."""
     try:
-        frame, _retryable, _reason = _fetch_yfinance_adaylari(stock, period, "1d")
+        frame, _retryable, _reason = _veri_zinciri(stock, period, "1d")
         return frame
     except Exception as exc:
         _pkg.logger.debug("%s 1D fetch hatası: %s", stock, exc)
@@ -357,11 +593,9 @@ def fetch_yfinance_1h(
     ham fiyat kullanır. Bu port sırasında parametre düşmüştü -> temettü sonrası tüm
     geçmiş kayar, pivot/sınır/ATR değerleri Pine'dan sapardı. Geri konuldu.
     """
-    # Ortak sağlayıcı yolu history çağrısını auto_adjust=False ile yapar.
-    try:
-        df, retryable, reason = _fetch_yfinance_adaylari(stock, period, "1h")
-    except Exception as exc:
-        df, retryable, reason = None, yfinance_error_is_retryable(exc), f"{type(exc).__name__}: {exc}"
+    # Ortak Yahoo yolu history çağrısını auto_adjust=False ile yapar; TV yedeği
+    # de ham (splits-only) kapanış kullanır. İkisi aynı fiyat ölçeğindedir.
+    df, retryable, reason = _veri_zinciri(stock, period, "1h")
     return (df, retryable, reason) if with_status else df
 
 

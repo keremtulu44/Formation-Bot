@@ -189,12 +189,18 @@ print(df.head())
 **Avantaj:** BIST'e özel, İş Yatırım API · **Dezavantaj:** TradingView kısmı bazen
 SSL hatası, dokümantasyon az, ağır bağımlılık zinciri (Render build'ına alınmaz).
 
-### Seçmeli ölçüm/araştırma: tvDatafeed
+### tvDatafeed: Yahoo'nun reaktif yedeği (üretimde)
 
-Üretim canlı veri yolu değildir. `scripts/saglayici_karsilastirma.py` (TF/bar
-ölçümü) ve `scripts/backfill/capraz_piyasa_cek.py` (günlük çapraz piyasa arşivi)
-için kullanılır. `tvdatafeed` **adıyla** PyPI paketi yoktur; aynı `tvDatafeed`
-import modülünü sağlayan iki doğrulanmış dağıtım vardır:
+`TV_YEDEK_AKTIF=1` varsayılandır: Yahoo boş/geçersiz veri döndürürse BIST
+hisse/endeks sembolleri için TradingView anonim WS denenir. Yahoo başarılıyken
+**hiçbir TV çağrısı yapılmaz**. İkisi de veri vermezse uydurma yoktur; mevcut
+"veri yok" kapıları aynen çalışır. Aynı paket ölçüm/araştırma scriptlerinde de
+kullanılır: `scripts/saglayici_karsilastirma.py` (TF/bar ölçümü) ve
+`scripts/backfill/capraz_piyasa_cek.py` (günlük çapraz piyasa arşivi).
+
+`tvdatafeed` **adıyla** PyPI paketi yoktur; aynı `tvDatafeed` import modülünü
+sağlayan iki doğrulanmış dağıtım vardır. Deploy/CI için PyPI çatallı dağıtımı
+`requirements-deploy.txt` içinde sabitlenmiştir:
 
 ```powershell
 python -m pip install tradingview-datafeed==2.1.1
@@ -212,8 +218,11 @@ df = tv.get_hist(symbol="THYAO", exchange="BIST",
                  interval="in_4_hour", n_bars=360)  # UTC-aware index
 ```
 
-**Üretim kararı:** yfinance birincildir; sembol yedeği yine Yahoo içindedir.
-borsapy ve tvDatafeed geçiş kapısı yeşil olmadan `data/fetch.py`'a bağlanmaz.
+**Üretim kararı:** yfinance birincildir; sembol yedeği yine Yahoo içindedir,
+ikinci sağlayıcı tvDatafeed'dir. Geçtiğinde `frame.attrs["veri_kaynagi"] =
+"tvdatafeed"` yazılır, `/health` → `veri_saglayicilari` alanından izlenir.
+`TV_GERCEK_4S_AKTIF=1` ise TradingView gerçek 4s barları türetilmiş 4s yerine
+kullanılır. borsapy üretimde import edilmez. Kapatmak için `TV_YEDEK_AKTIF=0`.
 
 ### data/ paketinde Nasıl Değiştirilir?
 
@@ -223,10 +232,12 @@ Modülerleştirme sonrası kök `data.py` yoktur; iş `data/` paketinde hazır g
 from data import fetch_yfinance_1h, fetch_yfinance_1d   # canlı veri
 from config import MARKET_SUFFIX                        # ".IS" (env: MARKET_SUFFIX)
 
-# fetch_yfinance_1h/1d: yfinance (auto_adjust=False), sütunları küçük harfe
-# çevirir, MARKET_SUFFIX / PROVIDER_SYMBOL_MAP ekini kendisi uygular. Yedek
-# yalnızca aynı sağlayıcıda ikinci sembol adayıdır; borsapy'ye düşmez.
+# fetch_yfinance_1h/1d: yfinance (auto_adjust=False) birincil, tvDatafeed
+# reaktif yedek. Sütunları küçük harfe çevirir, MARKET_SUFFIX /
+# PROVIDER_SYMBOL_MAP ekini kendisi uygular. Aynı Yahoo içindeki ikinci sembol
+# adayından sonra TV denenir; borsapy'ye düşmez.
 df = fetch_yfinance_1h("THYAO")     # ~60 gün, 1 saatlik
+# df.attrs["veri_kaynagi"] -> "yahoo" veya "tvdatafeed"
 ```
 
 ## 🧪 Test Komutları
