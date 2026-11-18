@@ -11,3 +11,8 @@
 # tek bir satır yok, bu yüzden deploy zincirinden çıkarıldı.
 
 borsapy==0.11.0
+
+# TradingView ölçüm/araştırma yedeği isteğe bağlıdır; deploy zincirine girmez.
+# Ortak istemci bu sürümü veya sabit GitHub commit'indeki tvdatafeed==2.1.0'ı
+# kabul eder. Termux/build kısıtı olan ortamda kurmayın:
+# tradingview-datafeed==2.1.1

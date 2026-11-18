@@ -11,15 +11,14 @@ import argparse
 import hashlib
 import io
 import json
-import os
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from scripts import tvdatafeed_client as tv_client  # noqa: E402
 from scripts.backfill import yahoo_backfill as yb  # noqa: E402
 
 # Sembol -> (Yahoo ticker, varlık türü, para birimi). Spot/futures asla
@@ -148,52 +147,26 @@ def _stooq_cek(symbol, period):
 def _tradingview_cek(symbol, period, *, exchange="BIST"):
     """Anonim TradingView yedeği (opsiyonel bağımlılık).
 
-    tvDatafeed 2.1.1 POSIX zamanlarını datetime.fromtimestamp ile yerel naive
-    zaman olarak verir. Tek iş parçacıklı CLI'da TZ=UTC altında okuyup TZ'yi
-    geri alıyoruz. Saat etiketi yine gerçek mum kapanışı olarak kullanılamaz.
+    Ortak ``tvdatafeed_client`` sürümü doğrular, yerel naive damgayı süreç TZ'sini
+    değiştirmeden UTC'ye çevirir ve WebSocket'i kapatır. Saat etiketi yine gerçek
+    mum kapanışı olarak kullanılamaz.
     """
-    import importlib.metadata
     import pandas as pd
 
     try:
-        if importlib.metadata.version("tradingview-datafeed") != "2.1.1":
-            raise ValueError("yalnız tradingview-datafeed==2.1.1 doğrulandı")
-        from tvDatafeed import Interval, TvDatafeed
-    except (ImportError, importlib.metadata.PackageNotFoundError, ValueError) as exc:
-        return None, f"TradingView yedeği yok: {exc}; pip install tradingview-datafeed==2.1.1"
-    if not hasattr(time, "tzset"):
-        return None, "TradingView yedeği: güvenli UTC zaman ayarı desteklenmiyor"
-    original_tz = os.environ.get("TZ")
-    client = None
-    try:
-        os.environ["TZ"] = "UTC"
-        time.tzset()
-        client = TvDatafeed()  # Anonim: kullanıcı adı, parola veya token istenmez.
         bars = {"2y": 800, "5y": 1600, "10y": 3000, "max": 5000}[period]
-        data = client.get_hist(symbol=symbol, exchange=exchange, interval=Interval.in_daily, n_bars=bars)
-        if data is None or not isinstance(data.index, pd.DatetimeIndex):
-            raise ValueError("boş veya geçersiz sağlayıcı verisi")
-        if data.index.tz is not None:
-            raise ValueError("beklenmeyen saat formatı; otomatik dönüştürülmedi")
-        data = data.copy()
-        data.index = data.index.tz_localize("UTC")
+        data = tv_client.get_hist(
+            symbol=symbol,
+            exchange=exchange,
+            interval="in_daily",
+            n_bars=bars,
+        )
         if period != "max":
             start = pd.Timestamp.now(tz="UTC").normalize() - pd.DateOffset(years=int(period[:-1]))
             data = data[data.index >= start]
         return _validated_frame(data), ""
     except Exception as exc:  # noqa: BLE001 - üçüncü taraf ağ kütüphanesi hataları CLI'da raporlanır
         return None, f"TradingView verisi alınamadı: {type(exc).__name__}: {str(exc)[:200]}"
-    finally:
-        try:
-            if client is not None and getattr(client, "ws", None) is not None:
-                client.ws.close()
-        except Exception:  # noqa: BLE001, S110 - bağlantı kapanışı veri sonucunu değiştirmemeli
-            pass
-        if original_tz is None:
-            os.environ.pop("TZ", None)
-        else:
-            os.environ["TZ"] = original_tz
-        time.tzset()
 
 
 def _record_ok(record, path, ticker, period):

@@ -1,22 +1,26 @@
 ﻿#requires -version 5.1
 <#
-  Yerel depoyu toparlar ve ortam teşhisini çalıştırır (2026-11-16).
+  Yerel depoyu toparlar ve ortam teşhisini çalıştırır (2026-11-18).
 
   Neden: yarım kalmış bir birleştirme (merge) sonrası "needs merge" hataları
   birikir; `git pull` çalışmaz, `import config` "SyntaxError" verir. Bu betik
-  sırayla: yarım merge'i iptal eder, yerel değişiklikleri stash'e alır, dalı
-  uzaktaki hâline eşitler ve teşhisi yazar.
+  sırayla: yarım merge'i iptal eder, yerel değişiklikleri stash'e alır, AKTİF
+  dalı uzaktaki hâline eşitler ve ağsız teşhisi yazar.
 
   Kullanım (tek satır, PowerShell):
     powershell -ExecutionPolicy Bypass -File .\scripts\yerel_onar.ps1
+    powershell -ExecutionPolicy Bypass -File .\scripts\yerel_onar.ps1 -Dal arena/baska-dal
 
   Notlar:
-    - Hiçbir şey silinmez: yerel değişiklikler `git stash list` altında durur.
+    - Varsayılan dal hardcoded DEĞİLDİR; `git rev-parse --abbrev-ref HEAD`
+      ile bulunur. Başka bir dala geçmek için -Dal açıkça verilmelidir.
+    - Hiçbir şey sessizce silinmez: kirli çalışma ağacı `git stash list`
+      altında durur; uzaktan ileride YEREL COMMIT varsa reset yapılmaz.
     - .env .gitignore'daysa yerinde kalır (stash'e girmez).
     - Dala ait yerel commit varsa `git reflog` ile geri alınabilir.
 #>
 param(
-    [string]$Dal = "arena/52b49b26-formation-bot",
+    [string]$Dal = "",
     [switch]$TeshisYok
 )
 
@@ -38,6 +42,18 @@ if ($LASTEXITCODE -ne 0) {
 $kok = (& git rev-parse --show-toplevel).Trim()
 $gitDir = (& git rev-parse --git-dir).Trim()
 Write-Host "  depo: $kok" -ForegroundColor DarkGray
+
+# 0) Hangi dal? Varsayılan = şu an checkout edilmiş dal (detached HEAD değil).
+$aktifDalHam = & git rev-parse --abbrev-ref HEAD 2>$null
+$aktifDal = ""
+if ($aktifDalHam) { $aktifDal = ([string]$aktifDalHam).Trim() }
+if ([string]::IsNullOrWhiteSpace($Dal)) {
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($aktifDal) -or $aktifDal -eq "HEAD") {
+        Write-Host "HATA: detached HEAD veya dal okunamadi. -Dal <dal-adi> ile belirt." -ForegroundColor Red
+        exit 1
+    }
+    $Dal = $aktifDal
+}
 Write-Host "  dal : $Dal" -ForegroundColor DarkGray
 
 # 1) Yarim kalmis islemleri iptal et
@@ -70,9 +86,14 @@ if ($kirli) {
     Write-Host "  yerel degisiklik yok" -ForegroundColor DarkGray
 }
 
-# 3) Dali uzaktaki haline esitle
+# 3) Dali uzaktaki haline esitle (yerel commit varsa DUR)
 if ((Git @("fetch", "origin", $Dal)) -ne 0) {
     Write-Host "HATA: fetch basarisiz (ag / kimlik). Komutu tekrar dene." -ForegroundColor Red
+    exit 1
+}
+& git rev-parse --verify --quiet "refs/remotes/origin/$Dal" *> $null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "HATA: origin/$Dal bulunamadi. -Dal degerini kontrol et." -ForegroundColor Red
     exit 1
 }
 & git rev-parse --verify --quiet "refs/heads/$Dal" *> $null
@@ -80,6 +101,19 @@ if ($LASTEXITCODE -ne 0) {
     if ((Git @("checkout", "-b", $Dal, "origin/$Dal")) -ne 0) { exit 1 }
 } else {
     if ((Git @("checkout", $Dal)) -ne 0) { exit 1 }
+}
+$yerel = (& git rev-parse HEAD).Trim()
+$uzak = (& git rev-parse "refs/remotes/origin/$Dal").Trim()
+if ($yerel -ne $uzak) {
+    $ilerideHam = & git rev-list --count "$uzak..$yerel" 2>$null
+    $ileride = 0
+    if ($LASTEXITCODE -eq 0 -and $ilerideHam) { $ileride = [int]([string]$ilerideHam).Trim() }
+    if ($ileride -gt 0) {
+        Write-Host "HATA: $Dal dalinda $ileride YEREL COMMIT var; reset --hard bunlari siler." -ForegroundColor Red
+        Write-Host "      Once commitleri push/rebase et veya -Dal ile baska dal sec." -ForegroundColor Red
+        Write-Host "      Kirli calisma agaci daha once stash'e alindi: git stash list" -ForegroundColor Yellow
+        exit 1
+    }
 }
 if ((Git @("reset", "--hard", "origin/$Dal")) -ne 0) { exit 1 }
 
@@ -90,7 +124,7 @@ Write-Host "== Depo durumu ==" -ForegroundColor Cyan
 
 if ($TeshisYok) { exit 0 }
 
-# 4) Teshis
+# 4) Ağsız teşhis (canlı çekme denemesi için --tanis-dene 1 eklenmeli)
 Write-Host ""
 Write-Host "== Ortam teshisi ==" -ForegroundColor Cyan
 $py = Join-Path $kok ".venv\Scripts\python.exe"
@@ -101,7 +135,7 @@ if (-not (Test-Path $py)) {
     Write-Host "  python: $py" -ForegroundColor DarkGray
 }
 Push-Location $kok
-& $py -m scripts.saglayici_karsilastirma --mod tanis
+& $py -m scripts.saglayici_karsilastirma --mod tanis --tanis-dene 0
 $kod = $LASTEXITCODE
 Pop-Location
 

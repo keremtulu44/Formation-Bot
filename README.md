@@ -28,8 +28,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\yerel_onar.ps1
 ```
 
 Yarım kalmış birleştirmeyi iptal eder, yerel değişiklikleri `git stash`'e alır
-(`git stash list` ile geri alınır), dalı uzaktaki hâline eşitler ve ortam teşhisini
-(`--mod tanis`) çalıştırır. Hiçbir şey silinmez.
+(`git stash list` ile geri alınır), **aktif dalı** uzaktaki hâline eşitler ve ağsız
+ortam teşhisini (`--mod tanis`) çalıştırır. Varsayılan dal sabit değildir; başka
+dal için `-Dal <ad>` verilir. Uzaktan ileride yerel commit varsa `reset --hard`
+yapmadan durur; hiçbir şey sessizce silinmez.
 
 `config.py: needs merge`, `Pulling is not possible because you have unmerged files` ve
 `--mod: invalid choice: 'tanis'` hatalarının üçü de aynı sebepten gelir: çalışma ağacı
@@ -108,8 +110,8 @@ elle güncellenmelidir.
 
 ### Mum kapanış kuralı (bildirim ancak mum KAPANDIKTAN sonra)
 
-`tamamlanmis_mumlar()` (data.py) motoru yalnız kapanmış mumlarla besler; kural tek
-kaynaktan (`mum_kapanis_anlari`) yönetilir:
+`tamamlanmis_mumlar()` (`data/replay.py`) motoru yalnız kapanmış mumlarla besler;
+kural tek kaynaktan (`mum_kapanis_anlari`) yönetilir:
 
 | TF | Kapanış anı |
 |---|---|
@@ -357,7 +359,7 @@ snapshot'ı güncel sonuç diye kullanılmaz; `/panel` yeni veriyle tarama başl
 
 ### Takvim kaynağı ve sınırı
 
-`data.py` içindeki geleneksel saat/tatil yardımcılarında `config.py`'deki manuel
+`data/replay.py` içindeki geleneksel saat/tatil yardımcılarında `config.py`'deki manuel
 `BIST_TATILLER` / `BIST_YARIM_GUNLER` ile 09:50 başlangıç politikası esas alınır.
 Ana otomatik scheduler ise ayrı olarak `bist_calendar.py` içindeki pinned,
 offline `exchange-calendars` XIST takvimini fail-closed kullanır. XIST resmî BIST
@@ -380,7 +382,7 @@ geçirme gerektirir.
 | `main.py` | Bot döngüsü: fetch → resample → motor → Telegram + heartbeat; veri-yok/split kapıları |
 | `canli_tarama.py` | Aktif evren (48 sembol) × 4 TF (1h/2h/4h/1d) canlı tarama raporu — **Pine karşılaştırması için** |
 | `config.py` | Profiller (eşikler), hisse listesi, tatil/yarım gün takvimi, timing sabitleri |
-| `data.py` | yfinance fetch (`auto_adjust=False`), StockDequeManager (1H + ayrı 1D deque), tatil/veri-yok/split yardımcıları |
+| `data/` (`fetch.py`, `replay.py`, `seed_cache.py`) | yfinance fetch (`auto_adjust=False`), StockDequeManager (1H + ayrı 1D deque), tatil/veri-yok/split yardımcıları |
 | `scan_pacer.py` | Seri Yahoo istekleri için rastgele aralık, 10'lu istek grubu ve grup molası |
 | `supabase_store.py` | Supabase REST API adaptörü; servis anahtarı yalnızca environment'tan okunur |
 | `telegram_commands.py` | İki yönlü Telegram: `getUpdates` uzun yoklaması, yetki kontrolü, komut dağıtımı, 401/409 yönetimi (webhook modunda da aynı komut dağıtımı kullanılır) |
@@ -414,11 +416,12 @@ geçirme gerektirir.
 - Rapor sonunda **PINE KARSILASTIRMA REHBERI**: kaç bayrak/flama bulundu + tüm eşikler.
 - Not: Pine ekranında eski TAMAMLANDI/BASARISIZ formasyonlar da çizili kalabilir — rapor yalnız **canlı** olanları listeler.
 
-## Güncel işletim notları (2026-11-03)
+## Güncel işletim notları (2026-11-18)
 
 README dışındaki belgeler için güncel durum/yaş etiketi **[docs/README.md](docs/README.md)**
 tek kaynaktır. Son deploy incelemesi: [DEPLOY_STABIL_KONTROLU_2026-11.md](docs/denetim/DEPLOY_STABIL_KONTROLU_2026-11.md);
-son genel kontrol: [GENEL_KONTROL_VE_STABIL_OK_DUZELTMESI_2026-11-03.md](docs/tasarim/GENEL_KONTROL_VE_STABIL_OK_DUZELTMESI_2026-11-03.md).
+son genel kontrol: [GENEL_KONTROL_2026-11-18.md](docs/denetim/GENEL_KONTROL_2026-11-18.md)
+(TV/datafeed ölçüm kapısı, zaman/sürüm düzeltmeleri ve 4433 testlik yerel doğrulama).
 Eski 2026-09-30 durum tablosu ve “yeni oturum için” maddeleri güncel branch'i
 ve mevcut özellikleri yansıtmadığı için kaldırıldı; eski tarihli denetimler
 `docs/denetim/` ve `docs/arsiv/` altında tarih etiketiyle okunmalıdır.

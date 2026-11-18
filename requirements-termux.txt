@@ -22,7 +22,7 @@ tabulate
 # Hata: Target triple not supported by rustup
 # İhtiyaç olursa --no-deps ile kur, ama yfinance yeterli
 # pip install borsapy --no-deps  (opsiyonel, test için)
-# Ama bot yfinance ile de çalışır, borsapy fallback zaten
+# Ama bot yfinance ile çalışır; borsapy üretimde otomatik fallback DEĞİLDİR.
 
 # pandas/numpy buraya yazma! pkg'den geliyor
 # Eğer illa pip'den kurmak istersen:

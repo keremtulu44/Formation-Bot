@@ -221,25 +221,38 @@ def test_failed_tradingview_is_explicit_not_different_index(tmp_path, monkeypatc
     assert not (tmp_path / "XUTUM_1d.csv.gz").exists()
 
 
-def test_tradingview_utc_conversion_and_tz_restored(monkeypatch):
+def test_tradingview_utc_conversion_and_tz_not_mutated(istanbul_tz, monkeypatch):
+    """Ortak istemci naive yerel zamanı UTC'ye çevirir; süreç TZ'si bozulmaz."""
     import importlib.metadata as package_metadata
     import os
     import sys
     import types
 
+    class WS:
+        def __init__(self):
+            self.closed = False
+        def close(self):
+            self.closed = True
+
+    istemciler = []
+
     class TV:
         def __init__(self):
-            self.ws = None
+            self.ws = WS()
+            istemciler.append(self)
         def get_hist(self, **kwargs):
-            assert os.environ["TZ"] == "UTC"
+            assert os.environ["TZ"] == "Europe/Istanbul"
             return frame(tz=None)
     dummy = types.SimpleNamespace(TvDatafeed=TV, Interval=types.SimpleNamespace(in_daily="1D"))
     monkeypatch.setitem(sys.modules, "tvDatafeed", dummy)
     monkeypatch.setattr(package_metadata, "version", lambda _: "2.1.1")
-    monkeypatch.setenv("TZ", "Europe/Istanbul")
+
     data, err = tool._tradingview_cek("XU050", "max")
+
     assert err == "" and str(data.index.tz) == "UTC"
+    assert data.index[0] == pd.Timestamp("2021-10-27 21:00", tz="UTC")
     assert os.environ["TZ"] == "Europe/Istanbul"
+    assert istemciler[0].ws.closed is True
 
 
 def test_existing_v1_manifest_stays_usable_after_update(tmp_path, monkeypatch, symbols):

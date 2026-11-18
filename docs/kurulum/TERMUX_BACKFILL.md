@@ -51,23 +51,28 @@ python -c "import pandas, numpy, yfinance, pytz; print('ok', pandas.__version__)
 
 ---
 
-## 2) Repoyu ve branch'i al
+## 2) Repoyu ve **aktif Arena dalını** al
+
+Branch adı oturumdan oturuma değişir; aşağıdaki örneklerde sabit dal YOKTUR.
+Arena oturum notundaki dal adını `DAL` olarak ver.
 
 ```bash
 cd ~
 git clone https://github.com/keremtulu44/Formation-Bot.git
 cd Formation-Bot
 git fetch origin
-git checkout arena/88cda271-formation-bot
+DAL="ARENA_OTURUM_DALIN"   # ör. arena/...-formation-bot
+git switch "$DAL"
 ```
 
-Zaten klonun varsa:
+Zaten klonun varsa aktif dalı kullan:
 
 ```bash
 cd ~/Formation-Bot
 git fetch origin
-git checkout arena/88cda271-formation-bot
-git pull --rebase origin arena/88cda271-formation-bot
+DAL="$(git branch --show-current)"
+test -n "$DAL" -a "$DAL" != "HEAD" || { echo "Önce Arena dalına geç"; exit 1; }
+git pull --rebase origin "$DAL"
 ```
 
 Doğrula — bu iki dosya olmalı:
@@ -194,17 +199,19 @@ Dikkat edilecekler:
 
 ```bash
 cd ~/Formation-Bot
+DAL="$(git branch --show-current)"
+test -n "$DAL" -a "$DAL" != "HEAD" || { echo "Önce Arena dalına geç"; exit 1; }
 git add backfill_data/
 git status --short | head
 git commit -m "backfill: BIST derin geçmiş (365d 1h + 2y 1d) — Termux çekimi"
-git push origin arena/88cda271-formation-bot
+git push origin "$DAL"
 ```
 
 Push'tan önce benim yeni commit'lerim geldiyse:
 
 ```bash
-git pull --rebase origin arena/88cda271-formation-bot
-git push origin arena/88cda271-formation-bot
+git pull --rebase origin "$DAL"
+git push origin "$DAL"
 ```
 
 Push sonrası bana haber ver — gerçek veriyle Faz 2'yi (ölçüm çekirdeği) doğrularım.
@@ -221,9 +228,11 @@ Push sonrası bana haber ver — gerçek veriyle Faz 2'yi (ölçüm çekirdeği)
 pkg update -y && pkg install python python-pandas python-numpy git -y
 pip install --upgrade pip && pip install yfinance pytz
 
-# repo
+# repo — Arena oturum dalını DAL olarak ver
 cd ~ && git clone https://github.com/keremtulu44/Formation-Bot.git
-cd Formation-Bot && git checkout arena/88cda271-formation-bot
+cd Formation-Bot
+DAL="ARENA_OTURUM_DALIN"   # ör. arena/...-formation-bot
+git switch "$DAL"
 
 # koşu
 python scripts/backfill/yahoo_backfill.py --probe
@@ -232,7 +241,7 @@ termux-wake-lock && python scripts/backfill/yahoo_backfill.py
 
 # push
 git add backfill_data/ && git commit -m "backfill: BIST derin geçmiş" \
-  && git push origin arena/88cda271-formation-bot
+  && git push origin "$DAL"
 ```
 
 ---
@@ -271,5 +280,5 @@ Kurallar:
 - Sıfır hacim **korunur** (düşürülmez), yalnız işaretlenir
 - Yazım **atomik** (`.tmp` → `os.replace`): yarım dosya arşive girmez
 - `auto_adjust=False`: ham fiyat (Pine/TradingView paritesi)
-- 2h/4h **saklanmaz**: `resample_ohlcv` (data.py:1470) seans başına hizalı
+- 2h/4h **saklanmaz**: `resample_ohlcv` (`data/replay.py`) seans başına hizalı
   kovalarla 1H'den deterministik türetir

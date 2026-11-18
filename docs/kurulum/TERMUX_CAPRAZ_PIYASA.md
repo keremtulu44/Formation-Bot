@@ -54,12 +54,14 @@ git status --short
 ```
 
 Yerel değişiklik varsa önce koru/incele; başkasının değişikliklerini silen
-komutları çalıştırma. Dal GitHub'da varsa ve çalışma ağacın uygunsa:
+komutları çalıştırma. Branch adı oturumdan oturuma değişir; **aktif Arena
+dalını** kullan (sabit eski dal adı yoktur):
 
 ```bash
 git fetch origin
-git switch arena/cd404914-formation-bot
-git pull --ff-only origin arena/cd404914-formation-bot
+DAL="$(git branch --show-current)"
+test -n "$DAL" -a "$DAL" != "HEAD" || { echo "Önce Arena dalına geç"; exit 1; }
+git pull --ff-only origin "$DAL"
 ls scripts/backfill/capraz_piyasa_cek.py
 ```
 
@@ -87,11 +89,15 @@ denemek üzere ek bağımlılığı kur:
 
 ```bash
 pip install tradingview-datafeed==2.1.1
+# Alternatif (dağıtım adı tvdatafeed==2.1.0):
+# pip install "git+https://github.com/rongardF/tvdatafeed@e6f6aaa7de43"
 ```
 
 Bu paket opsiyoneldir, giriş bilgisi gerektirmez; TradingView anonim veriyi
-sınırlayabilir. Kaynak, sembol ve ayrı düzeltme/hacim notları manifestte
-belirtilir. Termux sürümüne göre kurulum hata verebilir; çıktıyı paylaş.
+sınırlayabilir. Ortak istemci yalnızca bu iki doğrulanmış dağıtımı kabul eder,
+yerel naive bar zamanlarını süreç TZ'sini değiştirmeden UTC'ye çevirir. Kaynak,
+sembol ve ayrı düzeltme/hacim notları manifestte belirtilir. Termux sürümüne
+göre kurulum hata verebilir; çıktıyı paylaş.
 Komutlar `.env`, TradingView hesabı veya Supabase anahtarı gerektirmez.
 
 ## 2. Çekim ve doğrulama
@@ -140,7 +146,9 @@ git status --short
 git add capraz_piyasa_data/
 git diff --cached --stat
 git commit -m "Add cross-market daily research data"
-git push origin arena/cd404914-formation-bot
+DAL="$(git branch --show-current)"
+test -n "$DAL" -a "$DAL" != "HEAD" || { echo "Önce Arena dalına geç"; exit 1; }
+git push origin "$DAL"
 ```
 
 Başka önceden stage edilmiş dosyalar varsa `git diff --cached --stat` içinde

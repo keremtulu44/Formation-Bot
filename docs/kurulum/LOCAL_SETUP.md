@@ -117,7 +117,7 @@ mkdir logs
 ```
 Formation-Bot/
 ├── config.py              # BIST listesi, profil, sabitler
-├── data.py                # Deque, resample, BIST saat kontrolü
+├── data/                  # Veri paketi: fetch.py, replay.py, seed_cache.py
 ├── reporting/             # Raporlama katmanı (panel/digest metinleri; batch-8)
 ├── state/                 # Kalıcılık katmanı (son tarama + digest tamponu; batch-8)
 ├── transport/             # Taşıma katmanı (Telegram webhook/komut; batch-8)
@@ -161,7 +161,7 @@ ticker = yf.Ticker("THYAO.IS")
 df = ticker.history(period="60d", interval="1h")
 print(df.head())
 # Sütunlar: Open, High, Low, Close, Volume
-# Bizim kod open/high/low/close küçük harf bekliyor, data.py çeviriyor
+# Bizim kod open/high/low/close küçük harf bekliyor, data/fetch.py çeviriyor
 ```
 
 **Avantaj:**
@@ -173,56 +173,59 @@ print(df.head())
 - Bazen BIST için 1H boş dönebilir (tatil, düşük hacim)
 - Rate limit var ama 45sn bekleme ile çözülüyor
 
-### Alternatif: borsapy (İş Yatırım + TradingView)
+### Seçmeli ölçüm: borsapy (İş Yatırım + TradingView)
+
+`requirements-optional.txt` içindeki `borsapy` yalnız yerel ölçüm/deneme içindir;
+**üretim fetch hattında import edilmez ve otomatik yedek değildir**.
 
 ```python
 import borsapy as bp
 
-# Ticker
 t = bp.Ticker("THYAO")
 df = t.history(period="1ay", interval="1s")  # interval seçenekleri farklı
 print(df.head())
-
-# Veya
-bp.download("THYAO", period="1ay")
 ```
 
-**Avantaj:**
-- BIST'e özel, İş Yatırım API
-- Daha fazla BIST verisi
+**Avantaj:** BIST'e özel, İş Yatırım API · **Dezavantaj:** TradingView kısmı bazen
+SSL hatası, dokümantasyon az, ağır bağımlılık zinciri (Render build'ına alınmaz).
 
-**Dezavantaj:**
-- TradingView kısmı bazen SSL hatası (sandbox'ta gördük)
-- Dokümantasyon az
+### Seçmeli ölçüm/araştırma: tvDatafeed
 
-### Eski: tvdatafeed (Kullanmıyoruz artık)
+Üretim canlı veri yolu değildir. `scripts/saglayici_karsilastirma.py` (TF/bar
+ölçümü) ve `scripts/backfill/capraz_piyasa_cek.py` (günlük çapraz piyasa arşivi)
+için kullanılır. `tvdatafeed` **adıyla** PyPI paketi yoktur; aynı `tvDatafeed`
+import modülünü sağlayan iki doğrulanmış dağıtım vardır:
+
+```powershell
+python -m pip install tradingview-datafeed==2.1.1
+# veya sabit GitHub commit'i (dağıtım adı tvdatafeed==2.1.0):
+python -m pip install "git+https://github.com/rongardF/tvdatafeed@e6f6aaa7de43"
+```
+
+Ham kütüphaneyi doğrudan çağırmayın: 2.1.x POSIX zamanları yerel naive duvar
+saati olarak verir. Ortak istemci sürümü doğrular, UTC'ye çevirir ve WS'i kapatır:
 
 ```python
-# PyPI'de yok, git'ten kurulur
-# pip install git+https://github.com/rongardF/tvdatafeed.git
+from scripts import tvdatafeed_client as tv
 
-from tvDatafeed import TvDatafeed, Interval
-tv = TvDatafeed()
-df = tv.get_hist(symbol="THYAO", exchange="BIST", interval=Interval.in_1_hour, n_bars=360)
+df = tv.get_hist(symbol="THYAO", exchange="BIST",
+                 interval="in_4_hour", n_bars=360)  # UTC-aware index
 ```
 
-**Neden kullanmıyoruz:**
-- Unofficial, sık bozuluyor
-- IP ban riski (Oracle Cloud'da)
-- PyPI'de yok
+**Üretim kararı:** yfinance birincildir; sembol yedeği yine Yahoo içindedir.
+borsapy ve tvDatafeed geçiş kapısı yeşil olmadan `data/fetch.py`'a bağlanmaz.
 
-**Bizim karar:** yfinance primary, borsapy fallback, tvdatafeed opsiyonel
+### data/ paketinde Nasıl Değiştirilir?
 
-### data.py'de Nasıl Değiştirilir?
-
-`data.py` içinde bu iş **hazır** gelir:
+Modülerleştirme sonrası kök `data.py` yoktur; iş `data/` paketinde hazır gelir:
 
 ```python
 from data import fetch_yfinance_1h, fetch_yfinance_1d   # canlı veri
 from config import MARKET_SUFFIX                        # ".IS" (env: MARKET_SUFFIX)
 
-# fetch_yfinance_1h/1d: yfinance → borsapy yedeği, sütunları küçük harfe çevirir,
-# MARKET_SUFFIX ekini kendisi uygular. Doğrudan çağırman yeterli:
+# fetch_yfinance_1h/1d: yfinance (auto_adjust=False), sütunları küçük harfe
+# çevirir, MARKET_SUFFIX / PROVIDER_SYMBOL_MAP ekini kendisi uygular. Yedek
+# yalnızca aynı sağlayıcıda ikinci sembol adayıdır; borsapy'ye düşmez.
 df = fetch_yfinance_1h("THYAO")     # ~60 gün, 1 saatlik
 ```
 
@@ -241,7 +244,7 @@ python test_tarama_zamani.py
 python -m pytest -q
 
 # 3. Veri katmanı duman testi (çevrimdışı)
-python data.py
+python -m data
 
 # 4. Kaynak/şablon güvenlik kontrolleri
 python -m pytest -q test_kaynak_ve_guvenlik.py

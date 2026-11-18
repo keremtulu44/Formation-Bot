@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
 """Sağlayıcı karşılaştırma ve geçiş kararı ölçümü (2026-11-16).
 
-İki mod:
+Üç mod:
 
   * ``--mod arsiv``  : Ağ GEREKTİRMEZ. ``bot_data/*.json`` yerel arşivini ölçer
     (bar/gün, sıfır hacim oranı, ilk bar etiketi, 1s'ten türetilen 4s barların
     kaçının kısmi olduğu). Yedekleşme kararının "bugün neredeyiz" tabanı.
   * ``--mod canli``  : Verilen sağlayıcılardan aynı sembol/TF'yi çeker ve
     karşılaştırır (referans: yahoo). Ağ erişimi olan makinede çalıştırılır.
+  * ``--mod tanis``  : Varsayılan olarak AĞSIZ ortam/import teşhisi. Gerçek çekme
+    denemesi yalnızca ``--tanis-dene 1`` ile açılır.
 
-Karar kapısı (``karar_ver``) — üçü birlikte sağlanmadan "geç" denmez:
+Karar kapısı (``karar_ver``) — dördü birlikte sağlanmadan "geç" denmez:
 
   1. ortak bar oranı  ≥ %98   (eksik bar yedekte olmamalı)
   2. kapanış farkı medyanı ≤ %0,05 ve en büyük fark ≤ %0,50
   3. adayda sıfır hacim oranı referanstan kötü değil
+  4. 2s/4s ölçeğinde adayın kısa bar oranı referanstan kötü değil
 
 Ölçüm hiçbir üretim kodunu değiştirmez, ``bot_data``ya yazmaz, ağ yoksa
 "ulaşılamadı" der ve uydurmaz.
@@ -28,13 +31,22 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence
 
 import pandas as pd
 
+try:  # ``python -m scripts...`` ve doğrudan script çalıştırma ikisi de desteklensin
+    from scripts import tvdatafeed_client as tv_client
+except ImportError:  # pragma: no cover - doğrudan script yolunda scripts/ paketi yok
+    import tvdatafeed_client as tv_client
+
 ISTANBUL = "Europe/Istanbul"
 KOLONLAR = ["open", "high", "low", "close", "volume"]
 
 # --- KARAR EŞİKLERİ (tek yerde; testler bunlara bağlı) ---------------------
-ESIK_ORTak_BAR = 0.98
+ESIK_ORTAK_BAR = 0.98
+# Eski yazım dışarıdan import edilebileceği için geriye uyumlu takma ad.
+ESIK_ORTak_BAR = ESIK_ORTAK_BAR
 ESIK_MEDYAN_FARK_PCT = 0.05
 ESIK_MAX_FARK_PCT = 0.50
+# Yüzde puanı: raporlanan 2 ondalık değerlerde yuvarlama gürültüsü red üretmesin.
+ESIK_KALITE_TOLERANS_PCT = 0.01
 
 
 # --------------------------------------------------------------- NORMALİZE --
@@ -158,14 +170,41 @@ def karsilastir(referans: pd.DataFrame, aday: pd.DataFrame) -> Dict:
     return metrik
 
 
+def _metrik_sayi(metrik: Dict, anahtar: str) -> Optional[float]:
+    """Eksik/None/boş kalite metriğini güvenle okur; karar kapısı çökmesin."""
+    deger = metrik.get(anahtar)
+    if deger is None:
+        return None
+    try:
+        return float(deger)
+    except (TypeError, ValueError):
+        return None
+
+
 def karar_ver(metrik: Dict) -> str:
-    """'geç' / 'koşullu' / 'red' — gerekçesiyle birlikte tek kelime."""
-    ortak_oran = metrik.get("ortak_oran")
-    medyan = metrik.get("medyan_fark_pct")
-    if ortak_oran is None or medyan is None:
+    """'geç' / 'koşullu' / 'red' — kalite gerekçesiyle birlikte."""
+    ortak_oran = _metrik_sayi(metrik, "ortak_oran")
+    medyan = _metrik_sayi(metrik, "medyan_fark_pct")
+    maks = _metrik_sayi(metrik, "max_fark_pct")
+    if ortak_oran is None or medyan is None or maks is None:
         return "red (karşılaştırılabilir ortak bar yok)"
-    if ortak_oran >= ESIK_ORTak_BAR and medyan <= ESIK_MEDYAN_FARK_PCT \
-            and (metrik.get("max_fark_pct") or 0) <= ESIK_MAX_FARK_PCT:
+
+    kalite_nedenleri: List[str] = []
+    ref_sifir = _metrik_sayi(metrik, "sifir_hacim_ref_pct")
+    aday_sifir = _metrik_sayi(metrik, "sifir_hacim_aday_pct")
+    if (ref_sifir is not None and aday_sifir is not None
+            and aday_sifir > ref_sifir + ESIK_KALITE_TOLERANS_PCT):
+        kalite_nedenleri.append("adayda sıfır hacim fazla")
+    ref_kisa = _metrik_sayi(metrik, "ref_kisa_pct")
+    aday_kisa = _metrik_sayi(metrik, "aday_kisa_pct")
+    if (ref_kisa is not None and aday_kisa is not None
+            and aday_kisa > ref_kisa + ESIK_KALITE_TOLERANS_PCT):
+        kalite_nedenleri.append("adayda kısa bar fazla")
+
+    if kalite_nedenleri:
+        return "red (" + ", ".join(kalite_nedenleri) + ")"
+    if (ortak_oran >= ESIK_ORTAK_BAR and medyan <= ESIK_MEDYAN_FARK_PCT
+            and maks <= ESIK_MAX_FARK_PCT):
         return "geç"
     if ortak_oran >= 0.90 and medyan <= ESIK_MEDYAN_FARK_PCT:
         return "koşullu (bar eksik ama fiyat uyumlu)"
@@ -368,19 +407,26 @@ def tani(dene: bool = False, sembol: str = "THYAO", adet: int = 5, kok: str = ".
         "cakisma": [],
     }
     from importlib.metadata import PackageNotFoundError, version as _v
-    for paket in ("yfinance", "pandas", "numpy", "borsapy", "curl_cffi", "tvdatafeed"):
+    for paket in ("yfinance", "pandas", "numpy", "borsapy", "curl_cffi",
+                  *tv_client.BILINEN_DAGITIMLAR):
         try:
             bilgi["paketler"][paket] = _v(paket)
         except PackageNotFoundError:
             bilgi["paketler"][paket] = None
     for ad, modul in (("yfinance", "yfinance"), ("borsapy", "borsapy"),
-                      ("tvdatafeed", "tvDatafeed")):
+                      ("tvdatafeed", tv_client.IMPORT_MODULU)):
         try:
             __import__(modul)
             bilgi["importlar"][ad] = "ok"
         except Exception as hata:  # noqa: BLE001 - teşhis kendisi hata üretmesin
             bilgi["importlar"][ad] = _hata_metni(hata)
             bilgi["izler"][ad] = _izi(hata)
+    try:
+        bilgi["tv_dagitim"], bilgi["tv_surum"] = tv_client.dogrulanmis_surum()
+        bilgi["tv_surum_durumu"] = "ok"
+    except Exception as hata:  # noqa: BLE001 - teşhis kendisi hata üretmesin
+        bilgi["tv_dagitim"], bilgi["tv_surum"] = None, None
+        bilgi["tv_surum_durumu"] = _hata_metni(hata)
     if kok:
         bilgi["cakisma"] = cakisma_dosyalari(kok)
     if dene:
@@ -413,8 +459,17 @@ def tani_markdown(bilgi: Dict) -> str:
     if (bilgi.get("importlar") or {}).get("tvdatafeed") not in (None, "ok"):
         satirlar.append(
             "- tvDataFeed kurulu değil; 2s/4s gerçek bar ve yedek için gerekir:"
+            " `python -m pip install tradingview-datafeed==2.1.1` (PyPI) veya"
             ' `python -m pip install "git+https://github.com/rongardF/tvdatafeed'
-            '@e6f6aaa7de43"`')
+            '@e6f6aaa7de43"` (sabit commit)')
+    if bilgi.get("tv_surum_durumu") not in (None, "ok"):
+        satirlar.append(
+            "- ⚠️ tvDataFeed dağıtım sürümü doğrulanmadı: "
+            + str(bilgi.get("tv_surum_durumu")))
+    elif bilgi.get("tv_surum_durumu") == "ok":
+        satirlar.append(
+            f"- tvDataFeed dağıtımı: {bilgi.get('tv_dagitim')} "
+            f"{bilgi.get('tv_surum')} (doğrulandı)")
     for ad, iz in (bilgi.get("izler") or {}).items():
         if iz:
             satirlar.append(f"- {ad} hatasının izi: " + " ⏎ ".join(_kisa(x) for x in iz[-3:]))
@@ -468,21 +523,21 @@ def _borsapy(sembol: str, tf: str, adet: int) -> Optional[pd.DataFrame]:
     return df.tail(adet) if adet else df
 
 
-# tvDatafeed Interval üyeleri (kütüphane kurulu olmadan da test edilebilsin)
+# tvDatafeed Interval üyelerinin ADLARI (kütüphane kurulu olmadan test edilebilsin)
 TV_ARALIK = {"1h": "in_1_hour", "2h": "in_2_hour", "4h": "in_4_hour", "1d": "in_daily"}
 
 
-def _tv_aralik(tf: str):
-    from tvDatafeed import Interval
-    return getattr(Interval, TV_ARALIK[tf])
+def _tv_aralik(tf: str) -> str:
+    """``4h`` → ``in_4_hour``; bilinmeyen TF sessizce yanlış eşlenmesin."""
+    if tf not in TV_ARALIK:
+        raise ValueError(f"tvDatafeed aralığı desteklenmiyor: {tf!r}")
+    return TV_ARALIK[tf]
 
 
 def _tvdatafeed(sembol: str, tf: str, adet: int) -> Optional[pd.DataFrame]:
-    """tvDatafeed: TradingView. **2s/4s gerçek** bar veren tek kanal."""
-    from tvDatafeed import TvDatafeed
-    df = TvDatafeed().get_hist(symbol=sembol, exchange="BIST",
-                               interval=_tv_aralik(tf), n_bars=adet or 500)
-    return None if df is None or len(df) == 0 else df
+    """tvDatafeed: TradingView. **2s/4s gerçek** bar veren tek ölçüm kanalı."""
+    return tv_client.get_hist(symbol=sembol, exchange="BIST",
+                              interval=_tv_aralik(tf), n_bars=adet or 500)
 
 
 SAGLAYICILAR: Dict[str, Callable[[str, str, int], Optional[pd.DataFrame]]] = {
@@ -557,8 +612,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--adet", type=int, default=360)
     ap.add_argument("--aday", nargs="+", default=["borsapy"])
     ap.add_argument("--cikti", default="")
-    # Teşhis modu: --tanis-dene 1 → gerçek çekme denemesi (ağ gerekir)
-    ap.add_argument("--tanis-dene", type=int, default=1)
+    # Teşhis varsayılan olarak ağsızdır; --tanis-dene 1 gerçek çekme ister.
+    ap.add_argument("--tanis-dene", type=int, default=0)
     ap.add_argument("--tanis-sembol", default="THYAO")
     args = ap.parse_args(argv)
 

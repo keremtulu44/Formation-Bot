@@ -10,10 +10,33 @@ bağlandığı için modül özniteliğini değiştirmek onu etkilemez; testler 
 açıkça `data_dir=` verir veya `SEED_DATA_DIR` yedeğini kullanır.
 """
 
+import os
+import time
+
 import pytest
 
 import config as config_mod
 import notifier as notifier_mod
+
+
+@pytest.fixture
+def istanbul_tz(monkeypatch):
+    """TV/datafeed zaman testleri için süreç TZ'sini İstanbul'a sabitler.
+
+    Monkeypatch geri alma sırasında `time.tzset()` de açıkça çağrılır; aksi
+    hâlde diğer testler sandbox'ın yerel saatini İstanbul sanmaya devam eder.
+    """
+    if not hasattr(time, "tzset"):  # pragma: no cover - POSIX dışı platform
+        pytest.skip("time.tzset olmayan platformda TZ fixture kullanılamaz")
+    eski = os.environ.get("TZ")
+    monkeypatch.setenv("TZ", "Europe/Istanbul")
+    time.tzset()
+    yield "Europe/Istanbul"
+    if eski is None:
+        monkeypatch.delenv("TZ", raising=False)
+    else:
+        monkeypatch.setenv("TZ", eski)
+    time.tzset()
 
 # Repo seed'i (bot_data/*.json + *.pkl) testlere sızmamalı: `_okuma_yolu` DATA_DIR'de
 # dosya bulamazsa SEED_DATA_DIR'e bakar ve geçici dizinli testler 360 satırlık örnek

@@ -8,6 +8,9 @@ ulaşılamayan sağlayıcının rapora düşmesi.
 from __future__ import annotations
 
 import json
+import os
+import sys
+import types
 from datetime import datetime
 from pathlib import Path
 
@@ -96,10 +99,39 @@ def test_ortak_bar_yoksa_red():
 
 
 def test_karar_esikleri_sabit():
-    """Eşikler gizli değişmesin: karar kapısı bu üç sayıya bağlı."""
-    assert S.ESIK_ORTak_BAR == 0.98
+    """Eşikler gizli değişmesin: karar kapısı bu sayılara bağlı."""
+    assert S.ESIK_ORTAK_BAR == 0.98
+    assert S.ESIK_ORTak_BAR == S.ESIK_ORTAK_BAR  # eski yazım geriye uyumlu
     assert S.ESIK_MEDYAN_FARK_PCT == 0.05
     assert S.ESIK_MAX_FARK_PCT == 0.50
+
+
+def test_adayda_sifir_hacim_artisi_gec_kararini_engeller():
+    ref = S.normalize(_seri([10, 11, 12], hacim=1000))
+    aday_ham = _seri([10, 11, 12], hacim=1000)
+    aday_ham.loc[aday_ham.index[0], "volume"] = 0
+
+    metrik = S.karsilastir(ref, S.normalize(aday_ham))
+
+    assert metrik["sifir_hacim_ref_pct"] == 0.0
+    assert metrik["sifir_hacim_aday_pct"] > 0
+    assert metrik["karar"].startswith("red")
+    assert "sıfır hacim" in metrik["karar"]
+
+
+def test_adayda_kisa_bar_artisi_gec_kararini_engeller():
+    temel = {"ortak_oran": 1.0, "medyan_fark_pct": 0.0, "max_fark_pct": 0.0,
+             "sifir_hacim_ref_pct": 0.0, "sifir_hacim_aday_pct": 0.0,
+             "ref_kisa_pct": 0.0, "aday_kisa_pct": 5.0}
+
+    assert "kısa bar" in S.karar_ver(temel)
+    assert S.karar_ver({**temel, "aday_kisa_pct": 0.0}) == "geç"
+
+
+def test_kalite_metrigi_eksikse_karar_capisi_cokmez():
+    metrik = {"ortak_oran": 1.0, "medyan_fark_pct": 0.0, "max_fark_pct": 0.0,
+              "sifir_hacim_ref_pct": None, "sifir_hacim_aday_pct": None}
+    assert S.karar_ver(metrik) == "geç"
 
 
 # --------------------------------------------------------------- ARŞİV -----
@@ -166,6 +198,10 @@ def test_tani_ortam_bilgisi_verir():
     bilgi = S.tani()
     assert bilgi["python"].count(".") == 2
     assert set(bilgi["importlar"]) == {"yfinance", "borsapy", "tvdatafeed"}
+    # PyPI çatalı ve sabit GitHub dağıtımı ayrı adlarla raporlanmalı.
+    assert "tvdatafeed" in bilgi["paketler"]
+    assert "tradingview-datafeed" in bilgi["paketler"]
+    assert "tv_surum_durumu" in bilgi
     # Python <3.10 ise uyarı metni dolu olmalı, aksi halde boş
     assert (bilgi["surum_uyari"] is None) == (tuple(map(int, bilgi["python"].split(".")[:2])) >= (3, 10))
     metin = S.tani_markdown(bilgi)
@@ -199,6 +235,25 @@ def test_cli_arsiv_modu_cikti_uretir(tmp_path, capsys):
     assert kod == 0
     assert "Yerel arşiv kalitesi" in capsys.readouterr().out
     assert "sıfır hacim" in cikti.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("ek_argumanlar,beklenen", [
+    ([], False),
+    (["--tanis-dene", "1"], True),
+])
+def test_cli_tanis_varsayilan_ag_siz(monkeypatch, capsys, ek_argumanlar, beklenen):
+    """``--mod tanis`` ağ denemesini yalnızca açık bayrakla yapmalı."""
+    temel = S.tani(kok="")
+    yakalanan = {}
+
+    def sahte_tani(**kwargs):
+        yakalanan.update(kwargs)
+        return dict(temel)
+
+    monkeypatch.setattr(S, "tani", sahte_tani)
+    assert S.main(["--mod", "tanis", *ek_argumanlar]) == 0
+    assert yakalanan["dene"] is beklenen
+    assert "Ortam teşhisi" in capsys.readouterr().out
 
 
 def test_cakisma_isareti_kalan_dosyayi_bulur(tmp_path):
@@ -312,6 +367,9 @@ def test_borsapy_2s_4s_desteklemedigini_soyler():
 def test_tvdatafeed_aralik_eslemesi():
     assert S.TV_ARALIK == {"1h": "in_1_hour", "2h": "in_2_hour",
                            "4h": "in_4_hour", "1d": "in_daily"}
+    assert S._tv_aralik("4h") == "in_4_hour"
+    with pytest.raises(ValueError, match="desteklenmiyor"):
+        S._tv_aralik("5h")
 
 
 def test_canli_4s_gun_olcegine_duser(monkeypatch):
@@ -330,7 +388,7 @@ def test_canli_4s_gun_olcegine_duser(monkeypatch):
     assert sonuc[0]["karar"] == "geç"
 
 
-def test_tvdatafeed_yoksa_kurulum_ipucu_yazar():
+def test_tvdatafeed_yoksa_iki_kurulum_ipucu_yazar():
     bilgi = S.tani(kok="")
     bilgi["importlar"]["tvdatafeed"] = "ModuleNotFoundError: No module named 'tvDatafeed'"
     bilgi["izler"]["tvdatafeed"] = ["ModuleNotFoundError: No module named 'tvDatafeed'"]
@@ -338,11 +396,66 @@ def test_tvdatafeed_yoksa_kurulum_ipucu_yazar():
     metin = S.tani_markdown(bilgi)
 
     assert "tvDataFeed kurulu değil" in metin
+    assert "tradingview-datafeed==2.1.1" in metin
     assert "rongardF/tvdatafeed@e6f6aaa7de43" in metin
 
 
 def test_tvdatafeed_varsa_kurulum_ipucu_yazmaz():
     bilgi = S.tani(kok="")
     bilgi["importlar"]["tvdatafeed"] = "ok"
+    bilgi["tv_surum_durumu"] = "ok"
+    bilgi["tv_dagitim"] = "tradingview-datafeed"
+    bilgi["tv_surum"] = "2.1.1"
 
-    assert "tvDataFeed kurulu değil" not in S.tani_markdown(bilgi)
+    metin = S.tani_markdown(bilgi)
+    assert "tvDataFeed kurulu değil" not in metin
+    assert "doğrulandı" in metin
+
+
+def test_tvdatafeed_ortak_istemci_utc_doner_ve_tz_bozulmaz(istanbul_tz, monkeypatch):
+    """Ölçüm aracı naive TV damgasını İstanbul sanmamalı; normalize geri çevirmeli."""
+    import importlib.metadata as package_metadata
+
+    def fake_version(name):
+        if name == "tradingview-datafeed":
+            return "2.1.1"
+        raise package_metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(package_metadata, "version", fake_version)
+    istemciler = []
+    cagri = {}
+
+    class WS:
+        def __init__(self):
+            self.closed = False
+        def close(self):
+            self.closed = True
+
+    class TV:
+        def __init__(self):
+            self.ws = WS()
+            istemciler.append(self)
+        def get_hist(self, **kwargs):
+            cagri.update(kwargs)
+            idx = pd.date_range("2026-11-02", periods=2, freq="4h")
+            return pd.DataFrame({
+                "Symbol": ["THYAO"] * 2, "Open": 100.0, "High": 101.0,
+                "Low": 99.0, "Close": 100.5, "Volume": 1000,
+            }, index=idx)
+
+    modul = types.SimpleNamespace(
+        TvDatafeed=TV,
+        Interval=types.SimpleNamespace(in_1_hour="1H", in_2_hour="2H",
+                                       in_4_hour="4H", in_daily="1D"),
+    )
+    monkeypatch.setitem(sys.modules, "tvDatafeed", modul)
+
+    veri = S._tvdatafeed("THYAO", "4h", 2)
+
+    assert str(veri.index.tz) == "UTC"
+    assert veri.index[0] == pd.Timestamp("2026-11-01 21:00", tz="UTC")
+    assert os.environ["TZ"] == "Europe/Istanbul"
+    assert cagri["interval"] == "4H" and cagri["n_bars"] == 2
+    assert istemciler[0].ws.closed is True
+    norm = S.normalize(veri)
+    assert norm.index[0] == pd.Timestamp("2026-11-02 00:00", tz=IST)

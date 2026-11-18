@@ -35,5 +35,7 @@ matplotlib==3.11.2
 pytest==9.0.3
 tabulate==0.9.0  # research/soru_cevaplama.py Markdown rapor tabloları (to_markdown)
 
-# Not: tvdatafeed PyPI'de yok, gerekirse git'ten:
-# git+https://github.com/rongardF/tvdatafeed.git
+# Not: `tvdatafeed` ADIYLA PyPI paketi yok; aynı `tvDatafeed` import modülünü
+# sağlayan `tradingview-datafeed==2.1.1` PyPI'de var. Sabit commit alternatifi:
+# git+https://github.com/rongardF/tvdatafeed@e6f6aaa7de43
+# İkisi de yalnız ölçüm/araştırma içindir; deploy bağımlılığı DEĞİLDİR.

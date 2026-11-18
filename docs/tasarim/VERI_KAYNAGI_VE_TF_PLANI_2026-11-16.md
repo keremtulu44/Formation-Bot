@@ -1,10 +1,19 @@
 # Veri kaynağı ve zaman dilimi planı (2026-11-16)
 
-Karar: **Yahoo birincil**, tvDataFeed **reaktif yedek** ve **4s için gerçek bar**
-kaynağı. Amaç daha çok kaynak değil, doğru bar kurgusu ve tek noktaya bağımlı
-kalmamak.
+> **Uygulama durumu (2026-11-18):** Bu belge bir **geçiş planı / ölçüm kapısı**dır;
+> aşağıdaki reaktif yedekleşme, 4s gerçek barı ve `veri_kaynagi = "turetildi"`
+> etiketleri **canlı tarama hattında henüz uygulanmadı**. Üretim `data/fetch.py`
+> şu anda yalnızca `yfinance` kullanır (aynı sağlayıcıda sembol yedeği vardır);
+> `borsapy` üretimde import edilmez. tvDatafeed yalnız
+> `scripts/saglayici_karsilastirma.py` ölçüm aracında ve
+> `scripts/backfill/capraz_piyasa_cek.py` günlük araştırma arşivi yedeğinde
+> kullanılır. Geçiş kapısı yeşil olmadan üretim fetch akışı değiştirilmeyecek.
 
-## 1. Zaman dilimleri: kim, nereden
+Hedef karar: **Yahoo birincil**, tvDataFeed **reaktif yedek** ve **4s için gerçek
+bar** kaynağı. Amaç daha çok kaynak değil, doğru bar kurgusu ve tek noktaya
+bağımlı kalmamak.
+
+## 1. Zaman dilimleri: kim, nereden (hedef)
 
 | TF | Kaynak | Not |
 |---|---|---|
@@ -19,7 +28,7 @@ kalmamak.
 - Gerçek 4h (TradingView ızgarası 10:00/14:00): kısa bar **%0**, son bar seans kapanışında biter.
 - Sıfır hacim: Yahoo %10,85 · TradingView tarafı genelde dolu.
 
-## 2. Tarama temposu (TF bazlı ayrı)
+## 2. Tarama temposu (TF bazlı ayrı; hedef)
 
 | Dilim | Ne çekilir | İstek (28 sembol) |
 |---|---|---|
@@ -33,7 +42,7 @@ kalmamak.
 Bugünkü ~513 isteğe göre yaklaşık **%62 az**. Her TF'yi her dilimde çekmek
 (~5.480/gün) bilinçli olarak yapılmıyor: 10 kat istek, sıfır yeni bilgi.
 
-## 3. Yedekleşme davranışı (reaktif, çift çekme yok)
+## 3. Yedekleşme davranışı (hedef; üretimde henüz yok)
 
 1. Önce Yahoo denenir (birincil).
 2. Yahoo hata verirse/boş dönerse aynı turda tvDataFeed denenir.
@@ -43,7 +52,8 @@ Bugünkü ~513 isteğe göre yaklaşık **%62 az**. Her TF'yi her dilimde çekme
 5. tvDataFeed geri gelirse son türetilmiş 4s barları gerçek barlarla **düzeltilir**;
    düzeltme `veri_kaynagi` etiketinde ve durum satırında görünür.
 
-Sessiz düşüş yok: her bar hangi kaynaktan geldiğini taşır.
+Sessiz düşüş olmayacak: geçiş sonrası her bar hangi kaynaktan geldiğini taşır.
+Bu maddeler **sözleşme taslağıdır**; mevcut ölçüm aracı üretim deque'ine yazmaz.
 
 ## 4. Geçiş kapısı (ölçüm yeşil olmadan kod devreye girmez)
 
@@ -53,23 +63,40 @@ Sessiz düşüş yok: her bar hangi kaynaktan geldiğini taşır.
 | Medyan kapanış farkı | ≤ %0,05 |
 | En büyük fark | ≤ %0,50 |
 | Adayda kısa bar | referanstan kötü değil |
+| Adayda sıfır hacim | referanstan kötü değil |
 
-2s/4s'te fiyat uyumu **gün ızgarasında** ölçülür: türetilmiş 4s (09:30/13:30/17:30)
-ile gerçek 4h (10:00/14:00) aynı ızgarada değildir; damga damga eşleştirme
-sıfır ortak bar verip sahte "red" üretir.
+`scripts/saglayici_karsilastirma.py::karar_ver` bu kalite koşullarının ikisini de
+denetler; yalnızca fiyat/bar uyumu yeşil olsa bile aday hacim veya bar kurgusu
+referansı kötüleştiriyorsa `geç` dönmez.
 
-## 5. Ölçüm komutu
+2s/4s'te fiyat uyumu **gün ızgarasında** ölçülür: türetilmiş 4s
+(09:30/13:30/17:30) ile gerçek 4h (10:00/14:00) aynı ızgarada değildir; damga
+damga eşleştirme sıfır ortak bar verip sahte "red" üretir.
+
+## 5. Ölçüm komutu ve kurulum
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install "git+https://github.com/rongardF/tvdatafeed@e6f6aaa7de43"
+# PyPI çatallaması (doğrulanmış sürüm)
+.\.venv\Scripts\python.exe -m pip install tradingview-datafeed==2.1.1
+# Alternatif: sabit GitHub commit'i (dağıtım adı tvdatafeed==2.1.0)
+# .\.venv\Scripts\python.exe -m pip install "git+https://github.com/rongardF/tvdatafeed@e6f6aaa7de43"
+
+# Ağsız ortam teşhisi (gerçek çekme için --tanis-dene 1)
+.\.venv\Scripts\python.exe -m scripts.saglayici_karsilastirma --mod tanis
+# Canlı ölçüm
 .\.venv\Scripts\python.exe -m scripts.saglayici_karsilastirma --mod canli --tf 4s --sembol "THYAO,GARAN,AKBNK,ASELS,EREGL" --aday tvdatafeed
 ```
 
-tvDataFeed PyPI'da yok (sabit commit ile GitHub'dan kurulur, varsayılan kapalı).
-Kırılırsa sistem türetmeye düşer ve bunu söyler.
+`tvdatafeed` **adıyla** PyPI paketi yoktur; aynı `tvDatafeed` import modülünü
+sağlayan `tradingview-datafeed==2.1.1` PyPI'dedir. Ortak istemci
+(`scripts/tvdatafeed_client.py`) bu dağıtımı ve sabit GitHub commit'inin
+`tvdatafeed==2.1.0` sürümünü kabul eder; ikisi de varsayılan kurulumda kapalıdır.
+Kırılırsa ölçüm `red`/açık hata verir; üretim hattı etkilenmez.
 
 ## 6. Bilinçli olarak yapılmayanlar
 
+- Canlı `data/fetch.py` / `bot/scan.py` hattına tvDatafeed yedeğini bağlamak:
+  ölçüm kapısı yeşil olmadan ve kaynak etiketi/senaryo testleri yazılmadan geçiş yok.
 - 2s'yi gerçek çekmek: günde 5 bar için ayrı istek akışı; 4s kazancı zaten alınıyor.
 - Her TF'yi her dilimde çekmek: istek 4-10 katı, karşılığı yok.
-- borsapy'yi fiyat kaynağı yapmak: 2s/4s vermiyor, Yahoo ile aynı işi görüyor.
+- borsapy'yi fiyat kaynağı yapmak: üretimde import edilmiyor, 2s/4s vermiyor.

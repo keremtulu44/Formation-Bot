@@ -9,6 +9,7 @@ Gerçek BIST verisini çekip kalıcı olarak kaydet
 import yfinance as yf
 import os
 import shutil
+import subprocess
 from data import StockDequeManager
 from config import BIST_30, BIST_50, ACTIVE_STOCKS
 import time
@@ -82,6 +83,13 @@ print(f"\nDosya listesi (ilk 10):")
 for f in os.listdir(data_dir)[:10]:
     print(f"  {f}")
 
+try:
+    dal = subprocess.check_output(
+        ["git", "branch", "--show-current"], text=True
+    ).strip() or "AKTIF_DAL"
+except Exception:  # noqa: BLE001 - yalnızca push ipucu; veri kaydını etkilemesin
+    dal = "AKTIF_DAL"
+
 print(f"\n=== GITHUB'A PUSH İÇİN ===")
 print(f"Şu an .gitignore'da bot_data/ ve *.pkl ignore'lı")
 print(f"Pushlamak için PowerShell'de:")
@@ -91,10 +99,10 @@ print(f"  git add -f bot_data/*.json   # Sadece json'ları pushla (human-readabl
 print(f"  # Veya pkl de dahil:")
 print(f"  git add -f bot_data/")
 print(f"  git commit -m 'real BIST data 30 stocks 60d 1h'")
-print(f"  git push origin arena/01a0dd9d-formation-bot")
+print(f"  git push origin {dal}   # aktif Arena dalı")
 print(f"")
 print(f"Ben de çekip kullanabilirim:")
-print(f"  git pull origin arena/01a0dd9d-formation-bot")
+print(f"  git pull origin {dal}")
 print(f"")
 print(f"Not: bot_data çok büyürse (30 hisse * 360 bar ~ 5MB json), GitHub'a pushlamak yavaş olabilir")
 print(f"Alternatif: Sadece 1-2 hisse (THYAO, GARAN) pushla test için")
