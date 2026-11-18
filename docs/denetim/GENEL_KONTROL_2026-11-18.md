@@ -305,6 +305,9 @@ kapanışı, gerçek 4s, cache tekilleştirme, strict health, `veri_yok_modu`,
 **Doğrulama:** `ruff`, `pip check` (TV pinleri kurulu), `compileall`,
 `git diff --check` temiz; tam pytest **4525 passed / 43 skipped** (668,14 sn);
 yeni dosya **39 passed**; doküman/deploy/render hedefli 4 dosya **88 passed**;
-`dogrulanmis_surum() == ('tradingview-datafeed','2.1.1')`. Ajan tarafında canlı
-Yahoo/TradingView çağrısı yok; entegrasyon kanıtı kod + testlerdir, operatörün
-`var\tv_olcum4.md` canlı teyidi ayrıdır. Fiili Render deploy / PR yapılmadı.
+`dogrulanmis_surum() == ('tradingview-datafeed','2.1.1')`; grafik doktoru,
+`/health` smoke, çevrimdışı `tanis`/`arsiv`, timing **102/102** ve 4 bağımsız
+script **4/4**. Push `8707efa` CI run **`44346289337` success** (Python 3.12,
+15 dk 8 sn, 10/10 job). Ajan tarafında canlı Yahoo/TradingView çağrısı yok;
+entegrasyon kanıtı kod + testlerdir, operatörün `var\tv_olcum4.md` canlı teyidi
+ayrıdır. Fiili Render deploy / PR yapılmadı.

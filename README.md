@@ -424,7 +424,8 @@ son genel kontrol: [GENEL_KONTROL_2026-11-18.md](docs/denetim/GENEL_KONTROL_2026
 tam TV + Yahoo deploy yolu: [DEPLOY_HAZIRLIK_2026-11-18.md](docs/denetim/DEPLOY_HAZIRLIK_2026-11-18.md).
 Üretim veri hattı **Yahoo birincil + tvDatafeed reaktif yedek** olarak deploy'a
 hazır; TV pinleri CI/Render manifestlerinde, kaynak etiketi `/health` içinde,
-39 yeni ağsız senaryo ve tam pytest **4525 passed / 43 skipped** ile doğrulandı.
+39 yeni ağsız senaryo, tam pytest **4525 passed / 43 skipped** ve Python 3.12
+CI run `44346289337` (**success**, 15 dk 8 sn) ile doğrulandı.
 Fiili Render deploy/PR bu çalışmada yapılmadı.
 Eski 2026-09-30 durum tablosu ve “yeni oturum için” maddeleri güncel branch'i
 ve mevcut özellikleri yansıtmadığı için kaldırıldı; eski tarihli denetimler

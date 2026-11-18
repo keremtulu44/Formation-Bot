@@ -21,7 +21,7 @@ yedeğinin **tüm üretim hattına ve deploy zincirine** oturtulması.
 | **Yahoo hâlâ birincil mi?** | **EVET.** Yahoo başarılıyken **hiçbir TV/WS çağrısı yapılmaz**; ek ağ maliyeti yalnızca Yahoo boş/geçersiz döndüğünde oluşur. |
 | **Gerçek 4s barları kullanılıyor mu?** | **EVET, TV yedeği devredeyse.** `TV_GERCEK_4S_AKTIF=1` ile TradingView native 4s, 1s'den türetilmiş 4s'in yerine geçer; alınamazsa türetim korunur. |
 | **Testler hazır mı?** | **EVET.** `ruff`, `pip check`, `compileall`, `git diff --check`, tam pytest **4525 passed / 43 skipped** (668 sn), 39 yeni entegrasyon senaryosu, grafik doktoru, `/health` smoke, çevrimdışı replay. |
-| **CI / Render parity hazır mı?** | **EVET.** `.python-version=3.12`; `scripts/install_deploy_dependencies.sh` CI ve `render.yaml` tarafından birebir kullanılıyor; `pip==26.2` → `setuptools==84.1.0` → `-r requirements-deploy.txt` → `pip check`. Önceki commit `4292ecf` CI run `44337872706` **success**; bu commit'in CI koşusu push sonrası tetiklenir. |
+| **CI / Render parity hazır mı?** | **EVET.** `.python-version=3.12`; `scripts/install_deploy_dependencies.sh` CI ve `render.yaml` tarafından birebir kullanılıyor; `pip==26.2` → `setuptools==84.1.0` → `-r requirements-deploy.txt` → `pip check`. Entegrasyon commit'i `8707efa` CI run **`44346289337` success** (15 dk 8 sn, Python 3.12, 10/10 job ✓); önceki `4292ecf` run `44337872706` de **success**. |
 | **Fiilen Render'a deploy edildi mi?** | **HAYIR.** Bu çalışma kod/push ile sınırlı; `autoDeployTrigger: checksPass` yalnızca Blueprint yönetilen servis için tetiklenir. Operatör adımları §8'de. |
 
 ## 1. Üretim veri akışı
@@ -106,7 +106,7 @@ zaman damgasını tekilleştirir, `to_dataframe` tek TZ kovasına indirger.
 |---|---|
 | `.python-version` | `3.12` — pandas 2.2.2 / numpy 1.26.4 cp314 derleme düşmesini engeller |
 | Installer | `scripts/install_deploy_dependencies.sh`: `pip==26.2` + `setuptools==84.1.0` → `-r requirements-deploy.txt` → `pip check` |
-| CI | `.github/workflows/ci.yml` aynı installer'ı `run:` ile çağırır; `arena/**` push'unda koşar |
+| CI | `.github/workflows/ci.yml` aynı installer'ı `run:` ile çağırır; `arena/**` push'unda koşar. `8707efa` → run `44346289337` **success** (15 dk 8 sn): ruff, tam pytest, kurulum doktoru + grafik, zamanlama, 4 formasyon scripti ve `/health` duman testi dahil tüm job'lar yeşil |
 | Render | `buildCommand: bash scripts/install_deploy_dependencies.sh` · `startCommand: python main.py` · `healthCheckPath: /health` · `autoDeployTrigger: checksPass` |
 | Pinler | `requirements.txt` **ve** `requirements-deploy.txt`: `tradingview-datafeed==2.1.1`, `websocket-client==1.9.2` (set eşitliği `test_deploy_workflows.py` ile korunur) |
 | Diğer canlı pinler | `yfinance==1.7.0`, `pandas==2.2.2`, `numpy==1.26.4`, `requests==2.34.2`, `matplotlib==3.11.2`, `pytest==9.0.3`, `python-dotenv==1.2.4` |
@@ -172,6 +172,7 @@ Mevcut regresyonlar da yeniden koştu: `test_scan_pacing`,
 | 4 bağımsız formasyon scripti | **4/4** `TÜM KONTROLLER GEÇTİ` |
 | `deploy_check.py --skip-network --grafik-test` | `✅ 39 tamam · ⚠️ 7 uyarı · ❌ 0 hata`; kare `AKBNK 4h · 68 mum`, `Fotoğraf gönderilmedi`. Stabil direnç uyarısı `UNAVAILABLE/missing_source` bu çevrimdışı tohumda beklenen uyarıdır, hata değildir |
 | `BOT_HEALTH_SMOKE_ONLY=1 PORT=10011 python main.py` | `/health 200`, `/ready 503`, `/test 404`, `/health?strict=1 200` (henüz heartbeat yok). Yanıtta `veri_saglayicilari.tv_kurulu=true`, `tv_dagitim="tradingview-datafeed==2.1.1"`, `tv_aktif=true`, `yahoo_birincil=true` |
+| GitHub Actions (Python 3.12) | `8707efa` → run `44346289337` **success** (15 dk 8 sn); installer/ruff/pytest/doktor/zamanlama/4 script/`/health` job'larının tamamı ✓ |
 
 ## 7. Komutlar (PowerShell, `PS C:\Projeler\Formation-Bot>`)
 
@@ -220,9 +221,10 @@ PORT=10000 BOT_HEALTH_SMOKE_ONLY=1 python main.py
 
 ## 8. Operatör deploy adımları
 
-1. Bu commit `origin/arena/79b4d2e1-formation-bot` üzerine push edilir; CI
-   (`arena/**`) Python 3.12 ile tam seti koşar. `autoDeployTrigger: checksPass`
-   yalnızca **Blueprint ile yönetilen** Render servisinde otomatik tetiklenir.
+1. Bu commit `origin/arena/79b4d2e1-formation-bot` üzerine push edildi; CI
+   (`arena/**`) Python 3.12 ile tam seti koştu ve **success** oldu
+   (run `44346289337`, 15 dk 8 sn). `autoDeployTrigger: checksPass` yalnızca
+   **Blueprint ile yönetilen** Render servisinde otomatik tetiklenir.
 2. Dashboard'da mevcut servis varsa Blueprint'i **yeniden uygulamayın**;
    Settings > Environment içinde `TV_YEDEK_AKTIF=1`,
    `TV_GERCEK_4S_AKTIF=1`, `TV_EXCHANGE=BIST`, `TV_ZAMAN_ASIMI_SN=25`,
