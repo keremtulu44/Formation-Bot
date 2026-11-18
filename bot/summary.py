@@ -206,6 +206,56 @@ def _public_turu_kapat(notifier) -> None:
         _pkg.logger.warning("Public bülten gönderilemedi: %s", public_hata)
 
 
+def _public_bulten_bosalt(notifier, simdi, digest_saati, son_deneme: float,
+                          aralik_sn: int = None):
+    """Public ana kuyruğu tarama DIŞINDA da periyodik boşalt.
+
+    `_public_turu_kapat()` taramanın sonunda çalışır; tarama çökerse, ağ hatası
+    varsa veya kuyruk restart'tan geri yüklenirse bir sonraki taramaya kadar
+    beklememek için ana döngü de aynı tek-işçi `public_bosalt()` kapısını çağırır.
+    DM `enabled` bayrağına BAKILMAZ: public-only kurulumda DM kapalıdır ama grup
+    yayını açıktır. Yalnızca iş günü, seans başlangıcından sonra ve kapanış
+    özetinden 2 dk önceki kesime kadar denenir; hafta sonu/gece eski kuyruk
+    push'u üretmez.
+
+    Dönen `(gonderilen, yeni_son_deneme)` çiftidir; hata taramayı/ana döngüyü
+    düşürmez ve kuyrukta kalan kayıtlar korunur.
+    """
+    simdi_mono = time.time()
+    try:
+        aralik = max(1, int(aralik_sn if aralik_sn is not None
+                            else ACIL_KUYRUK_BOSALTMA_ARALIK_SN))
+        eski = float(son_deneme or 0.0)
+    except (TypeError, ValueError):
+        aralik = max(1, int(ACIL_KUYRUK_BOSALTMA_ARALIK_SN))
+        eski = 0.0
+    if (notifier is None or getattr(_pkg, "_shutdown_requested", False)
+            or not getattr(notifier, "public_enabled", False)
+            or simdi_mono - eski < aralik):
+        return 0, eski
+    try:
+        yerel = (ISTANBUL_TZ.localize(simdi) if simdi.tzinfo is None
+                 else simdi.astimezone(ISTANBUL_TZ))
+        if (not islem_gunu_mu(simdi)
+                or yerel.replace(tzinfo=None).time() < BIST_OPEN
+                or not _acil_kuyruk_gonderim_penceresi_acik(simdi, digest_saati)):
+            return 0, eski
+    except (AttributeError, TypeError, ValueError):
+        return 0, eski
+    bosalt = getattr(notifier, "public_bosalt", None)
+    if not callable(bosalt):
+        return 0, eski
+    try:
+        adet = int(bosalt() or 0)
+    except Exception as hata:  # noqa: BLE001 - dış servis ana döngüyü durdurmasın
+        _pkg.logger.warning("Public bülten kuyruğu periyodik denemede gönderilemedi: %s",
+                            type(hata).__name__)
+        return 0, simdi_mono
+    if adet:
+        _pkg.logger.info("Periyodik public bülten kuyruğundan %d olay gönderildi", adet)
+    return adet, simdi_mono
+
+
 def _parse_summary_hours() -> List[dt_time]:
     """SUMMARY_HOURS env'ini İstanbul saatine çevir (09:55,18:45)."""
     try:

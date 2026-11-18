@@ -21,6 +21,10 @@ services:
     buildCommand: bash scripts/install_deploy_dependencies.sh
     startCommand: python main.py
     healthCheckPath: /health
+    # SIGTERM'de cache, heartbeat ve teslim kuyruğu kayıtları 30 sn'ye sıkışmasın.
+    # Render varsayılanı 30 sn; 1-300 aralığı desteklenir. Mevcut Dashboard
+    # servisinde bu alan Blueprint uygulanmadığı için elle kontrol edilmelidir.
+    maxShutdownDelaySeconds: 120
     # Yalnizca Blueprint ile yonetilen servise uygulanir; mevcut Dashboard ayarini kontrol edin.
     autoDeployTrigger: checksPass
     envVars:
@@ -58,6 +62,12 @@ services:
       # Yeni "sb_secret_..." anahtarı veya eski service_role JWT; ikisi de olur
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # Varsayılan 0: hiçbir uzak yazı yok. 1 = YALNIZCA bekleyen DM teslim
+      # kuyruğu state:notification_delivery anahtarına yazılır; diğer tüm yeni
+      # cache/state yine yerel/ephemeral DATA_DIR'de kalır. Açmadan önce tablo
+      # yazma iznini ve tek bot örneğini doğrulayın.
+      - key: SUPABASE_DELIVERY_WRITES
+        value: "0"
       - key: BOT_PROFILE
         value: Dengeli
       # Sunucu saat dilimi = BIST saati. Verilmezse Render süreçleri UTC çalışır ve

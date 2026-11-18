@@ -20,6 +20,43 @@ log = logging.getLogger(__name__)
 KEY = "state:notification_delivery"
 
 
+class DeliveryOnlyStore:
+    """Narrow facade: allow remote reads/writes for the delivery outbox ONLY.
+
+    Production starts Supabase in read-only mode. An operator may opt into one
+    durable backup without reopening the broad cache/state writer: this facade
+    rejects every other key and never escalates a read-only underlying store.
+    """
+
+    def __init__(self, store):
+        self._store = store
+
+    @property
+    def writable(self) -> bool:
+        return bool(getattr(self._store, "writable", False))
+
+    def get(self):
+        try:
+            rows = self._store.get_many([KEY])
+        except Exception:  # noqa: BLE001 - startup must survive Supabase outage
+            log.exception("Teslim kuyruğunun uzak yedeği okunamadı; yerel kayıt korunacak")
+            return None
+        return rows.get(KEY) if isinstance(rows, dict) else None
+
+    def upsert(self, store_key: str, payload) -> bool:
+        if store_key != KEY:
+            log.error("Teslim yedekleyicisi izinsiz anahtar yazımını reddetti: %s", store_key)
+            return False
+        if not self.writable:
+            log.warning("Teslim kuyruğunun uzak yedeği salt okunur; yerel kayıt korundu")
+            return False
+        try:
+            return bool(self._store.upsert(store_key, payload))
+        except Exception:  # noqa: BLE001 - ağ hatası yerel FIFO'yu kaybettirmesin
+            log.exception("Teslim kuyruğu uzak yedeği başarısız; yerel kayıt korundu")
+            return False
+
+
 def _encode(value):
     if isinstance(value, (datetime, date)):
         return {"__delivery_datetime__": value.isoformat()}
@@ -157,6 +194,14 @@ class DeliveryOutbox:
         self.lock = threading.RLock()
         self.state = {"rows": [], "public": [], "saved_at": ""}
         candidates = []
+        # Opt-in dar yazıcı varsa doğrulanmamış uzak satırları da oku: başlangıçta
+        # salt okunur okuyucu bu satırları güvenle atlamış olabilir. Yerel dosya
+        # ve uzak kopya arasında `saved_at` daha yeni olan kazanır.
+        delivery_store = getattr(notifier, "remote_delivery_store", None)
+        if delivery_store is not None:
+            canli_uzak = delivery_store.get()
+            if isinstance(canli_uzak, dict):
+                candidates.append(canli_uzak)
         remote = notifier.initial_store_data.get(KEY)
         if isinstance(remote, dict):
             candidates.append(remote)
@@ -187,13 +232,19 @@ class DeliveryOutbox:
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temp, self.path)
-        store = self.owner.persistent_store
+        # Dar teslim yazıcısı varsa O kullanılır; aksi halde eski genel store
+        # davranışı korunur. İkisi birden asla yazılmaz (çift kaynak karmaşası).
+        store = getattr(self.owner, "remote_delivery_store", None)
+        if store is None:
+            store = self.owner.persistent_store
         if store is not None:
             try:
-                if not store.upsert(KEY, raw):
-                    log.warning("Teslim kuyruğunun uzak yedeği yazılamadı; yerel kayıt korundu")
-            except Exception:
+                ok = bool(store.upsert(KEY, raw))
+            except Exception:  # noqa: BLE001 - yerel atomik kayıt zaten yazıldı
                 log.exception("Teslim kuyruğu uzak yedeği başarısız; yerel kayıt korundu")
+            else:
+                if not ok:
+                    log.warning("Teslim kuyruğunun uzak yedeği yazılamadı; yerel kayıt korundu")
 
     def recent(self, row):
         from config import MTF_ALERT_MERGE_HOURS

@@ -132,6 +132,110 @@ def _komut_durumu() -> dict:
     return ozet
 
 
+def _bildirim_sagligi() -> dict:
+    """/health için sır içermeyen bildirim/kuyruk özeti.
+
+    DM `enabled=False` tek başına hata değildir: public-only kurulumda grup/kanal
+    yayını `public_enabled` ile sürer. Bu yüzden mod, public sayaçları, kalıcı
+    teslim/özel kuyruklar ve operatör incelemesi gerektiren durumlar ayrı raporlanır.
+    `/health` yine 200 kalır; okuma hatası liveness'ı düşürmez.
+    """
+    ozet = {
+        "enabled": None,
+        "public_enabled": None,
+        "mod": "bilinmiyor",
+        "durum": "bilinmiyor",
+        "nedenler": ["notifier kurulmadi"],
+        "uzak_yedek": "kapali",
+        "teslim_kuyrugu": None,
+        "acil_kuyruk": None,
+        "public_kuyruk": None,
+        "public_ozel_kuyruk": None,
+        "dm_ozel_kuyruk": None,
+        "public_hedef_inceleme": None,
+        "grafik_kuyruk": None,
+        "son_basarili_gonderim": None,
+        "son_public_gonderim": None,
+        "son_gonderme_hatasi": None,
+        "public_hatasi": None,
+    }
+    notifier = getattr(_pkg, "_notifier_ref", None)
+    if notifier is None:
+        return ozet
+    try:
+        enabled = bool(getattr(notifier, "enabled", False))
+        public_enabled = bool(getattr(notifier, "public_enabled", False))
+        ozet["enabled"] = enabled
+        ozet["public_enabled"] = public_enabled
+        store = (getattr(notifier, "remote_delivery_store", None)
+                 or getattr(notifier, "persistent_store", None))
+        if store is not None and getattr(store, "writable", True) is not False:
+            ozet["uzak_yedek"] = "aktif"
+        gd = {}
+        durum_fn = getattr(notifier, "gonderim_durumu", None)
+        if callable(durum_fn):
+            ham = durum_fn()
+            if isinstance(ham, dict):
+                gd = ham
+    except Exception as exc:  # noqa: BLE001 - /health asla düşmesin
+        ozet["hata"] = type(exc).__name__
+        return ozet
+
+    def _tam(value):
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    ozet.update({
+        "teslim_kuyrugu": gd.get("teslim_kuyrugu"),
+        "acil_kuyruk": gd.get("acil_kuyruk"),
+        "public_kuyruk": gd.get("public_kuyruk"),
+        "public_ozel_kuyruk": gd.get("public_ozel_kuyruk"),
+        "dm_ozel_kuyruk": gd.get("dm_ozel_kuyruk"),
+        "public_hedef_inceleme": gd.get("public_hedef_inceleme"),
+        "grafik_kuyruk": gd.get("grafik_kuyruk"),
+        "son_basarili_gonderim": gd.get("son_basarili_gonderim"),
+        "son_public_gonderim": gd.get("son_public_gonderim"),
+        "son_gonderme_hatasi": gd.get("son_gonderme_hatasi"),
+        "public_hatasi": gd.get("public_hatasi"),
+    })
+    nedenler: list = []
+    if not enabled and not public_enabled:
+        ozet["mod"] = "kapali"
+        ozet["durum"] = "kapali"
+        nedenler.append("Telegram teslim hedefi yok")
+    else:
+        ozet["mod"] = ("dm+public" if enabled and public_enabled
+                       else "public-only" if public_enabled else "dm-only")
+        for ad, etiket in (("public_ozel_kuyruk", "public özel"),
+                           ("dm_ozel_kuyruk", "DM özel")):
+            durum = ozet.get(ad)
+            if isinstance(durum, dict):
+                if _tam(durum.get("review")):
+                    nedenler.append(f"{etiket} kuyruk inceleme: {_tam(durum['review'])}")
+                if durum.get("available") is False:
+                    nedenler.append(f"{etiket} kuyruk dosyası okunamadı")
+        teslim = ozet.get("teslim_kuyrugu")
+        if isinstance(teslim, dict):
+            if _tam(teslim.get("pending")) and (teslim.get("last_error")
+                                                 or _tam(teslim.get("attempts")) >= 3):
+                nedenler.append("DM teslim kuyruğu tekrarlanan hatada")
+        hedef = ozet.get("public_hedef_inceleme")
+        if isinstance(hedef, dict):
+            if hedef.get("available") is False:
+                nedenler.append("public hedef inceleme arşivi okunamadı")
+            if _tam(hedef.get("archives")):
+                nedenler.append(f"public hedef değişimi inceleme: {_tam(hedef['archives'])}")
+        if _tam(gd.get("public_kuyruk_tasmasi")):
+            nedenler.append("public ana kuyruk taştı")
+        if gd.get("public_state_writable") is False:
+            nedenler.append("public durum dosyası yazılamıyor")
+        ozet["durum"] = "inceleme" if nedenler else "tamam"
+    ozet["nedenler"] = nedenler
+    return ozet
+
+
 def _saglik_ozeti() -> dict:
     """GET /health için canlılık alanları (denetim B-4).
 
@@ -181,22 +285,10 @@ def _saglik_ozeti() -> dict:
     yas = _pkg._heartbeat_yasi_sn(simdi)
     # --- BİLDİRİM SAĞLIĞI ---
     # "/health 200 ama Telegram'a hiçbir şey gitmiyor" durumu dışarıdan
-    # görünsün: teslim kuyruğunda bekleyen, ilk bekleyenin hatası ve
-    # notifier'ın açık olup olmadığı. Okuma hatası /health'i düşürmez.
-    bildirim: dict = {"enabled": None, "teslim_kuyrugu": None}
-    try:
-        notifier = _pkg._notifier_ref
-        if notifier is not None:
-            bildirim["enabled"] = bool(getattr(notifier, "enabled", False))
-            durum_fn = getattr(notifier, "gonderim_durumu", None)
-            if callable(durum_fn):
-                gd = durum_fn() or {}
-                bildirim["teslim_kuyrugu"] = gd.get("teslim_kuyrugu")
-                bildirim["acil_kuyruk"] = gd.get("acil_kuyruk")
-                bildirim["son_basarili_gonderim"] = gd.get("son_basarili_gonderim")
-                bildirim["son_gonderme_hatasi"] = gd.get("son_gonderme_hatasi")
-    except Exception as exc:  # noqa: BLE001 - /health asla düşmesin
-        bildirim["hata"] = type(exc).__name__
+    # görünsün: DM/public modu, bekleyen teslim/özel/public kuyrukları, kalıcı
+    # yedek durumu ve operatör incelemesi gerektiren nedenler. Okuma hatası
+    # /health'i düşürmez; Render'ın sorgusuz canlılık çağrısı 200 kalır.
+    bildirim = _bildirim_sagligi()
     # --- VERİ SAĞLAYICI SAĞLIĞI (Yahoo birincil / TV reaktif yedek) ---
     # Hangi kaynağın kullanıldığı, TV'nin kurulu olup olmadığı ve son hatalar
     # /health üzerinden görünür olsun. Okuma hatası /health'i düşürmez.

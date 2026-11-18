@@ -187,6 +187,11 @@ jobs:
 
           grep -q '"status": "ok"' "$ROOT/health.json" \
             || { echo "::error::/health gövdesi beklenen JSON değil"; exit 1; }
+          # Bildirim gözlemlenebilirliği gerçek entrypoint'ten düşmeli. Smoke
+          # modunda notifier kurulmadığı için durum "bilinmiyor" olabilir; önemli
+          # olan alanın ve inceleme nedenleri listesinin JSON'da bulunmasıdır.
+          python -c 'import json, sys; d=json.load(open(sys.argv[1])); b=d.get("bildirim"); assert isinstance(b, dict) and "durum" in b and isinstance(b.get("nedenler"), list)' "$ROOT/health.json" \
+            || { echo "::error::/health bildirim sagligi alani eksik"; exit 1; }
 
           # Smoke modunda ana döngü özellikle başlamaz: readiness yanlışlıkla
           # 200 dönerse liveness ve başlangıç hazırlığı birbirine karıştırılmıştır.

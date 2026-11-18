@@ -298,6 +298,30 @@ def main_loop():
     if supabase_store is not None:
         # Ortam değişkenleri yanlışsa teşhis loga düşsün; hata halinde bot durmaz.
         supabase_store.ping()
+    # Varsayılan: hiçbir uzak yazı yok. Operatör bilinçli açarsa YALNIZCA
+    # `state:notification_delivery` için ayrı, dar bir yazıcı kurulur; genel
+    # okuyucu read_only kalır ve diğer anahtarlar yazılamaz.
+    delivery_store = None
+    if config.supabase_delivery_writes_enabled() and supabase_store is not None:
+        try:
+            from notification_delivery import DeliveryOnlyStore
+            writer = SupabaseStore.from_env(read_only=False)
+            if writer is not None and getattr(writer, "writable", False):
+                delivery_store = DeliveryOnlyStore(writer)
+                _pkg.logger.info(
+                    "Supabase teslim yedeği AÇIK: yalnız state:notification_delivery "
+                    "yazılacak; diğer tüm uzak yazımlar kapalı"
+                )
+            else:
+                _pkg.logger.warning(
+                    "SUPABASE_DELIVERY_WRITES=1 ama yazılabilir store kurulamadı; "
+                    "teslim kuyruğu yalnız yerel/ephemeral diskte kalacak"
+                )
+        except Exception as exc:  # noqa: BLE001 - uzak yedek açılışı botu düşürmesin
+            _pkg.logger.warning(
+                "Supabase teslim yedeği kurulamadı (%s); yerel kuyrukla devam",
+                type(exc).__name__,
+            )
     # Restart/uyku sonrası son başarılı tarama listesi geri yüklenir (Supabase ve
     # yerel dosyanın EN YENİ kopyası). Bu çağrı olmadan /panel, /canli, /durum ve
     # sabah özeti her yeniden başlatmada boş görünür; kalıcılık yazılır ama okunmaz.
@@ -356,10 +380,15 @@ def main_loop():
         # Notifier'ın gerçek DATA_DIR yama yüzeyi; cache hydrate verisini değiştirme.
         from notifier import DATA_DIR as notifier_data_dir
         notifier_rows = _salt_okunur_notifier_baslangici(remote_rows, notifier_data_dir)
-    notifier = TelegramNotifier(
-        persistent_store=None,
-        initial_store_data=notifier_rows,
-    )
+    notifier_kwargs = {
+        "persistent_store": None,
+        "initial_store_data": notifier_rows,
+    }
+    # Eski test/çağrı sözleşmelerini bozmamak için ek anahtar yalnızca gerçekten
+    # dar yazıcı kurulduysa gönderilir.
+    if delivery_store is not None:
+        notifier_kwargs["remote_delivery_store"] = delivery_store
+    notifier = TelegramNotifier(**notifier_kwargs)
     setattr(_pkg, "_notifier_ref", notifier)
     # SIGTERM açılış sırasında gelmişse yeni ağ işi/komut dinleyicisi başlatma.
     # Başlamış tek bir ağ çağrısı anında iptal edilemez; zaman aşımları geçerlidir.
@@ -516,6 +545,7 @@ def main_loop():
     son_kuyruk_bosaltma = 0.0  # engellenen acil olaylar bu aralıkla yeniden denenir
     son_public_ozel_deneme = 0.0
     son_dm_ozel_deneme = 0.0
+    son_public_bulten_deneme = 0.0
     # Restart gün sürekliliği: bugün zaten sayaç biriktirilmişse geri yükle
     # (aksi halde 18:45 kanal özeti günün gerçek toplamını eksik gösterir).
     _pkg._gunluk_sayac_yukle()
@@ -605,6 +635,19 @@ def main_loop():
                         _pkg.logger.info("Bekleyen public özel alarmlardan %d metin gönderildi", adet)
             except Exception as exc:  # noqa: BLE001 - dış servis ana döngüyü durdurmasın
                 _pkg.logger.warning("Public özel alarm kuyruğu denenemedi: %s", type(exc).__name__)
+
+            # Public ANA bülten kuyruğu yalnızca tarama sonunda değil, ana döngüde
+            # de periyodik boşaltılır. Tarama çökmesi/restart/Telegram ağ hatası
+            # sonrası biriken onaylı olaylar bir sonraki taramaya kadar beklemez.
+            # Kapı DM `enabled` değil `public_enabled` kullanır (public-only).
+            try:
+                adet, son_public_bulten_deneme = _pkg._public_bulten_bosalt(
+                    notifier, now, deferred_alert_digest_time,
+                    son_public_bulten_deneme,
+                )
+            except Exception as exc:  # noqa: BLE001 - dış servis ana döngüyü durdurmasın
+                _pkg.logger.debug("Public bülten kuyruğu denemesi atlandı: %s",
+                                  type(exc).__name__)
 
             # --- ÇOKLU ÖRNEK KONTROLÜ (Batch 6 / B10) ---
             # 5 dakikada bir: aynı Supabase anahtarlarını kullanan başka bir canlı

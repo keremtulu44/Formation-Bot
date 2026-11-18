@@ -3,6 +3,7 @@
 Ağa çıkmaz: `requests.post` monkeypatch ile sahtelenir.
 """
 
+import copy
 import json
 from datetime import datetime, timedelta
 
@@ -90,6 +91,8 @@ def test_gonderim_durumu_alanlari():
 def test_heartbeat_gonderim_sagligini_ve_huniyi_yazar(monkeypatch, tmp_path):
     monkeypatch.setattr(main_mod, "_deque_manager_ref", None)
     monkeypatch.setattr(main_mod, "_supabase_store_ref", None)
+    # global daily_stats başka testlerin panel/huni raporunu kirletmesin.
+    monkeypatch.setattr(main_mod, "daily_stats", copy.deepcopy(main_mod.daily_stats))
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "")
     n = TelegramNotifier()

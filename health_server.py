@@ -23,10 +23,12 @@ stray caller cannot spam Telegram sends or webhook parsing.
 The route stays CLOSED (404, exactly like /test) unless TELEGRAM_WEBHOOK_SECRET
 is set, so an unconfigured deployment exposes nothing to the outside.
 
-Denetim B-4: `/health` her koşulda 200 döner (Render health check davranışı
-değişmez) ama artık botun canlılığını da raporlar. `health_provider` ile dışarıdan
-enjekte edilen özet (heartbeat yaşı, tarama sürüyor mu, seans açık mı) yanıta
-eklenir; monitör `?strict=1` ile çağırırsa heartbeat bayatken uç 503 döner.
+Denetim B-4 + 2026-11-18 bildirim denetimi: `/health` her koşulda 200 döner
+(Render health check davranışı değişmez) ama artık botun canlılığını, veri
+sağlayıcılarını ve `health_provider` üzerinden DM/public bildirim kuyruklarını da
+raporlar. `bildirim.durum` / `bildirim.nedenler` dış izleme için JSON alanlarıdır;
+sorgusuz Render çağrısının HTTP kodunu değiştirmez. Monitör `?strict=1` ile
+çağırırsa yalnızca heartbeat bayatken uç 503 döner.
 `/ready` başlangıç tamamlanmadıkça veya kapanışta 503 döner; yalnız başlangıç
 aşamasını gösterir, Telegram, veri veya Supabase sağlığını garanti etmez.
 Bu modül main'i import etmez; veriyi yalnızca enjekte edilen callable'dan alır.

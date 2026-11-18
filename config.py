@@ -121,6 +121,16 @@ def _env_bayrak(ad: str, varsayilan: str = "1") -> bool:
                          "hayır", "kapali", "kapalı", "kapali")
 
 
+def supabase_delivery_writes_enabled() -> bool:
+    """Opt-in: yalnız teslim kuyruğunun uzak yedeğine izin ver.
+
+    Varsayılan **0**. Açılırsa bot yine salt okunur ana store kullanır; ayrı bir
+    dar yazıcı yalnızca `state:notification_delivery` anahtarını günceller. Diğer
+    cache/state/mühür/coklu-ornek yazımları kapalı kalır.
+    """
+    return _env_bayrak("SUPABASE_DELIVERY_WRITES", "0")
+
+
 # --- TV/DATAFEED REAKTİF YEDEK (2026-11-18) --------------------------------
 # Yahoo birincildir. Yahoo boş/geçersiz veri döndürdüğünde BIST hisse/endeks
 # sembolleri için tvDatafeed (TradingView anonim WS) devreye girer. İkisi de

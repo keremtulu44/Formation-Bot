@@ -266,6 +266,12 @@ kapatır**, düzeltmeleri korur ve TV'yi tüm sürece ekler.
 
 İlgili belgeler:
 [`GENEL_KONTROL_2026-11-18.md`](GENEL_KONTROL_2026-11-18.md) ·
+[`DEPLOY_BILDIRIM_DENETIMI_2026-11-18.md`](DEPLOY_BILDIRIM_DENETIMI_2026-11-18.md) ·
 [`VERI_KAYNAGI_VE_TF_PLANI_2026-11-16.md`](../tasarim/VERI_KAYNAGI_VE_TF_PLANI_2026-11-16.md) ·
 [`LOCAL_SETUP.md`](../kurulum/LOCAL_SETUP.md) ·
 [`CAPRAZ_PIYASA_UYGULAMA.md`](../arastirma/CAPRAZ_PIYASA_UYGULAMA.md)
+
+> **Aynı gün ikinci tur:** Bildirim gönderme ve deploy sürecinin tamamı ayrıca
+> [`DEPLOY_BILDIRIM_DENETIMI_2026-11-18.md`](DEPLOY_BILDIRIM_DENETIMI_2026-11-18.md)
+> içinde denetlendi; doktor public-only kuralı, `/health.bildirim`, tarama dışı
+> public flush, opt-in dar teslim yedeği ve 120 sn shutdown düzeltmeleri oradadır.

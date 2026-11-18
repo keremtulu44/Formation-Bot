@@ -119,8 +119,12 @@ from notifier.format_summary import (
     piyasa_snapshot,
 )
 class TelegramNotifier:
-    def __init__(self, persistent_store=None, initial_store_data=None):
+    def __init__(self, persistent_store=None, initial_store_data=None,
+                 remote_delivery_store=None):
         self.persistent_store = persistent_store
+        # Yalnızca state:notification_delivery için kullanılan, opsiyonel dar
+        # yazıcı. None ise eski davranış: genel persistent_store veya sadece yerel.
+        self.remote_delivery_store = remote_delivery_store
         self.initial_store_data = initial_store_data if isinstance(initial_store_data, dict) else {}
         self.token = _env_temizle(os.environ.get("TELEGRAM_BOT_TOKEN", ""))
         self.chat_id = _env_temizle(os.environ.get("TELEGRAM_CHAT_ID", ""))

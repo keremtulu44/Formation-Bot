@@ -8,31 +8,38 @@ token'ın telefondan alınması ve servisi ayakta tutma (keep-alive) yöntemi.
 
 # ⚡ TEK SAYFA KONTROL LİSTESİ
 
-`__` = boş yer. DM Telegram komutları için `TELEGRAM_BOT_TOKEN` ve
-`TELEGRAM_CHAT_ID` gereklidir. Supabase URL/anahtar çifti **opsiyoneldir** ve
-mevcut botta yalnızca eski cache/durumu okumak içindir: yeni yedek yazılmaz.
+`__` = boş yer. En az **token + bir teslim hedefi** gerekir:
+`TELEGRAM_CHAT_ID` (DM + komutlar) veya `TELEGRAM_GROUP_ID` /
+`TELEGRAM_CHANNEL_ID` (public-only yayın). İkisi birlikte de çalışır. Supabase
+URL/anahtar çifti **opsiyoneldir** ve varsayılan olarak yalnızca eski
+cache/durumu okur: hiçbir yeni yedek yazılmaz. `SUPABASE_DELIVERY_WRITES=1`
+bilinçli açılırsa **yalnızca** `state:notification_delivery` uzak yedeklenir.
 `TELEGRAM_TEST_KEY` opsiyoneldir. Render Web Service'te webhook varsayılan açık;
 `TELEGRAM_WEBHOOK_SECRET` yalnızca sabit bir secret istiyorsanız gerekir.
 
 > **Takıldığın yeri tek komutla bul:** `python deploy_check.py --url
 > https://<servis-adin>.onrender.com` → Render/Telegram durumunu ve (varsa)
 > Supabase okuma bağlantısını kontrol eder. Supabase eksikliği analiz çalışmasına
-> engel değildir; Supabase tanımlı olsa bile yeni durum uzaktan yedeklenmez.
-> Ayrıntı: **§D3**.
+> engel değildir; Supabase tanımlı olsa bile yalnızca opt-in teslim kuyruğu
+> yedeği dışında yeni durum uzaktan yazılmaz. Ayrıntı: **§D3**.
 
 ## A) Render → Environment (Telegram gerekli; Supabase opsiyonel)
 
-Render Dashboard → servisin → **Environment** → **Add**. `TELEGRAM_BOT_TOKEN` ve
-`TELEGRAM_CHAT_ID` DM komutları için gereklidir. Supabase URL/anahtar çifti
-eski uzak kayıtların salt okunur kullanımı için isteğe bağlıdır; ekliyorsanız
-anahtar Secret olmalı. `BOT_PROFILE` plain/isteğe bağlıdır.
+Render Dashboard → servisin → **Environment** → **Add**. `TELEGRAM_BOT_TOKEN`
+zorunludur; `TELEGRAM_CHAT_ID` **veya** public hedef (`TELEGRAM_GROUP_ID` /
+`TELEGRAM_CHANNEL_ID`) en az biri tanımlı olmalıdır. DM hedefi yoksa public-only
+mod çalışır; public komutları grup yöneticilerine açık kalabilir. Supabase
+URL/anahtar çifti eski uzak kayıtların salt okunur kullanımı için isteğe
+bağlıdır; ekliyorsanız anahtar Secret olmalı. `BOT_PROFILE` plain/isteğe bağlıdır.
 
 | # | Key (yazılacak isim) | Value (yapıştırılacak) | Secret? |
 |---|---|---|---|
 | 1 | `SUPABASE_URL` | `https://pzbuqlvehiokeondvrdq.supabase.co` | hayır |
 | 2 | `SUPABASE_SERVICE_ROLE_KEY` | `__` ← Supabase → Settings → API → **service_role** (`eyJ...` ile başlayan uzun metin) | **evet** |
 | 3 | `TELEGRAM_BOT_TOKEN` | `__` ← **@BotFather** → `/newbot` → "Use this token" satırındaki kod | **evet** |
-| 4 | `TELEGRAM_CHAT_ID` | `__` ← **@userinfobot** → Start → verdiği `Id:` sayısı | **evet** |
+| 4 | `TELEGRAM_CHAT_ID` | `__` ← **@userinfobot** → Start → verdiği `Id:` sayısı. **Public-only kurulumda boş bırakılabilir** | **evet** |
+| 4a | `TELEGRAM_GROUP_ID` | `@kanal_adi` veya `-100…` public hedefi; DM yokken yayın için **zorunlu**, DM varken opsiyonel | hayır |
+| 2a | `SUPABASE_DELIVERY_WRITES` | Varsayılan `0`; `1` = **yalnız** bekleyen DM teslim kuyruğunu Supabase'e yedekle. Diğer uzak yazılar açılmaz | hayır |
 | 5 | `BOT_PROFILE` | `Dengeli` | hayır |
 | 6 | `TELEGRAM_TEST_KEY` | `__` ← istediğin rastgele bir yazı (örn. `k7m2x9`) | **evet** |
 | 7 | `TELEGRAM_WEBHOOK_SECRET` | Boş bırakılabilir; güncel kod Render'da token'dan HMAC ile sabit bir değer türetir. Bağımsız döndürülebilen secret istersen rastgele değer tanımla (bkz. **§4.6**). | **evet** |
@@ -48,8 +55,10 @@ anahtar Secret olmalı. `BOT_PROFILE` plain/isteğe bağlıdır.
 > **ekleme gerekmez**, Render Web Service'lerde otomatik tanımlıdır.
 
 Boş bırakırsan bot çalışır ama: #1/#2 boşsa eski uzak kayıtlar okunamaz;
-tanımlı olsalar da yeni kayıtlar Supabase'e **yazılmaz**. #3/#4 boşsa DM
-komut/mesaj yolu çalışmaz (public hedef ayrı yapılandırılır). #7 boşsa güncel
+#2a=0 ise yeni kayıtlar Supabase'e **hiç yazılmaz**, #2a=1 ise yalnız
+`state:notification_delivery` yazılır. #3/#4 boşsa DM komut/mesaj yolu kapalıdır;
+#4a tanımlıysa **public-only** yayın yine çalışır. #3 + (#4 veya #4a) birlikte
+yoksa hiçbir Telegram teslimi olmaz. #7 boşsa güncel
 Render Web Service kodu otomatik olarak bot token'ından HMAC ile webhook secret'ı
 **türetir**; yeni kodlu örnekler aynı token ile aynı başlığı doğrular. Token veya
 secret'ı loglara yazmayın. Token'dan bağımsız rotasyon için ayrı güçlü
@@ -72,6 +81,7 @@ aktif bot veya bildirim tekilliği garantisi değildir.
 | B7 | Root Directory | Bos birak (repo kok) |
 | B8 | Auto-Deploy | `After CI Checks Pass` (§2.1; mevcut Dashboard servisinde ayrıca doğrula) |
 | B9 | Branch | `main` olmali - `main`de bot kodu yoksa servis acilmaz |
+| B10 | Max Shutdown Delay | `120 s` — Blueprint'te `maxShutdownDelaySeconds: 120`; Dashboard servisinde elle doğrula. SIGTERM'de cache/heartbeat/kuyruk kaydı 30 sn'ye sıkışmasın |
 
 **Bağımlılık geçişi:** `requirements.txt` araştırma replay'inin değiştirilmeyen
 eski hash'li ortam kaydıdır; tek başına canlı kullanım için değildir. Yukarıdaki
@@ -261,6 +271,15 @@ yalnız internet mi yavaş, dışarıdan görünür:
 | `heartbeat_stale_esik_s` | O an geçerli eşik (saniye) |
 | `tarama_suruyor` / `seans_acik` | Anlık durum bayrakları |
 | `evren` / `instance_id` | Taranan hisse sayısı / örnek kimliği |
+| `veri_saglayicilari` | Yahoo birincil / TV reaktif yedek kurulum, sayaç ve son hata alanları |
+| `bildirim.mod` | `dm+public`, `public-only`, `dm-only`, `kapali` veya `bilinmiyor` |
+| `bildirim.durum` / `nedenler` | `tamam`, `inceleme`, `kapali`, `bilinmiyor`; inceleme gerektiren kuyruk/hedef nedenleri |
+| `bildirim.public_kuyruk` / `*_ozel_kuyruk` | Bekleyen public ana, public özel ve DM özel olay sayıları |
+| `bildirim.teslim_kuyrugu` / `uzak_yedek` | Kalıcı DM FIFO durumu ve uzak yedeğin açık/kapalı olduğu |
+
+`bildirim` alanları sırdır içermez: token/chat_id JSON'a yazılmaz. `durum=inceleme`
+bir operatör kuyruğu/manuel hedef değişimi olduğunu bildirir; Render'ın liveness
+yanıtını düşürmez. `/health?strict=1` hâlâ yalnızca bayat heartbeat'te 503 döner.
 
 Render'ın kendi health check'i sorgusuz `/health` çağırdığı için **her zaman 200**
 alır (davranış değişmedi). Gerçek izleme yapmak istersen UptimeRobot/cron-job.org
@@ -273,10 +292,12 @@ uzun sürebilir ve bu değişiklik dağıtım davranışını etkiler.
 
 > **Kalıcılık:** Render Free üzerindeki varsayılan `DATA_DIR` geçicidir;
 > deploy/restart'ta yeni OHLCV, karne, kuyruk ve Telegram limit durumu
-> kaybolabilir. Supabase yapılandırılsa da bot şu anda **yalnız okur**, yeni
-> yedek veya örnek heartbeat'i yazmaz; uzak çoklu örnek tespiti kapalıdır.
-> Eski uzak kayıtlar okunabilir, ancak yeni verinin korunması için uygun kalıcı
-> disk ve `DATA_DIR` gerekir. Tek bot örneği kullandığınızı ayrıca doğrulayın.
+> kaybolabilir. Varsayılanda Supabase **yalnız okur**; `SUPABASE_DELIVERY_WRITES=1`
+> açılırsa yalnız bekleyen DM teslim kuyruğu (`state:notification_delivery`)
+> uzak yedeklenir, public ana kuyruk/özel kuyruklar ve diğer state yine yerel
+> kalır. Uzak çoklu örnek tespiti her iki modda da kapalıdır. Tüm yeni durumun
+> korunması için uygun kalıcı disk ve `DATA_DIR` gerekir. Tek bot örneği
+> kullandığınızı ayrıca doğrulayın.
 
 ---
 

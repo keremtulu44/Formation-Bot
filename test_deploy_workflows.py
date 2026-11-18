@@ -132,7 +132,7 @@ done
 case "$url" in
   */ready) body="$READY_BODY"; status=503 ;;
   */test*|*/webhook*) body='{"ok": false}'; status=404 ;;
-  *) body='{"status": "ok", "commit": "deadbee"}'; status=200; /bin/sleep 0.05 ;;
+  *) body='{"status": "ok", "commit": "deadbee", "bildirim": {"durum": "bilinmiyor", "nedenler": []}}'; status=200; /bin/sleep 0.05 ;;
 esac
 printf '%s' "$body" > "$out"
 if [ "$show_code" = 1 ]; then printf '%s' "$status"; fi

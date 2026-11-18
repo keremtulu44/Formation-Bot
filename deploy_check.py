@@ -12,8 +12,9 @@ Kullanım (yerelde, telefondan Termux'ta veya Render Shell'de):
 Ne yapar:
   1. Repo tarafı: .python-version (Render 3.12 sabiti), requirements pinleri,
      .github/workflows/keepalive.yml varlığı, yerel bot_data önbelleği.
-  2. Env: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (komutlar için gerekli),
-     Supabase env'leri (opsiyonel) tanımlı mı? Değerleri ASLA yazdırmaz.
+  2. Env: TELEGRAM_BOT_TOKEN + (TELEGRAM_CHAT_ID veya public hedef) ve TV/Yahoo
+     yedek bayrakları tanımlı mı? Değerleri ASLA yazdırmaz. Public-only kurulumda
+     DM chat_id boş olabilir; grup/kanal yayını yine çalışır.
   3. Supabase varsa: tablo okunabiliyor mu? Yalnız GET yapılır; yazma testi ve
      güncellenmeyen uzak heartbeat üzerinden canlılık kontrolü yapılmaz.
   4. Telegram: getMe ile token; istenirse gerçek test mesajı. Ardından
@@ -23,7 +24,9 @@ Ne yapar:
   5. Render: https://<servis>.onrender.com/health ayakta mı; /test ucu açık mı.
 
 Çıkış kodu 0 = kritik hata yok, 1 = en az bir HATA var (uyarılar kodu bozmaz).
-Canlı modda (--url) eksik Telegram env'i = HATA; opsiyonel Supabase env'i eksikliği uyarıdır.
+Canlı modda (--url) token + (DM veya public hedef) eksikse HATA; yalnızca DM
+chat_id eksik ama public hedef tanımlıysa public-only mod kabul edilir.
+Opsiyonel Supabase env'i eksikliği uyarıdır.
 """
 
 from __future__ import annotations
@@ -317,14 +320,24 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("SUPABASE_URL", False, "İsteğe bağlı: Supabase → Settings → API → Project URL (sonda /rest/v1 OLMADAN)"),
         ("SUPABASE_SERVICE_ROLE_KEY", False, "İsteğe bağlı eski uzak cache/state okuması için service_role JWT veya sb_secret_... anahtarı"),
         ("TELEGRAM_BOT_TOKEN", True, "@BotFather → /newbot → 'Use this token'"),
-        ("TELEGRAM_CHAT_ID", True, "@userinfobot'un verdiği Id (kendine mesaj için pozitif sayı; KOMUTLAR buna bağlı)"),
-        ("TELEGRAM_GROUP_ID", False, "PUBLIC GRUP/kanal hedefi (@FormationBot1 veya -100…): yayın burada açılır (eski adı TELEGRAM_CHANNEL_ID)"),
+        # DM hedefi artık koşullu zorunlu: public hedef varsa public-only kurulum
+        # geçerlidir. Aşağıda token + hedef birlikte doğrulanır; burada opsiyonel
+        # raporlanır ki public-only deploy yanlışlıkla FAIL almasın.
+        ("TELEGRAM_CHAT_ID", False, "@userinfobot'un verdiği Id (DM + komutlar; public-only kurulumda boş olabilir)"),
+        ("TELEGRAM_GROUP_ID", False, "PUBLIC GRUP/kanal hedefi (@FormationBot1 veya -100…): yayın burada açılır"),
+        ("TELEGRAM_CHANNEL_ID", False, "Eski public kanal değişkeni; TELEGRAM_GROUP_ID boşsa yedek olarak okunur"),
         ("TELEGRAM_WEBHOOK_SECRET", False, "İsteğe bağlı sabit webhook secret'ı; boşsa Render Web Service otomatik üretir"),
         ("TELEGRAM_WEBHOOK_AUTO", False, "Render Web Service'te varsayılan 1: secret otomatik üretilir; 0 = polling'e dön"),
         ("RENDER_EXTERNAL_URL", False, "Render otomatik verir (webhook adresi buradan üretilir); render.yaml'de tanımlıdır"),
+        ("PORT", False, "Render Web Service otomatik verir; /health ve /webhook bu portu dinler"),
+        ("TZ", False, "Render'da Europe/Istanbul; log damgaları ve günlük kota sıfırlaması"),
+        ("DATA_DIR", False, "Canlı veri/kuyruk dizini; Render'da varsayılan /tmp/formation-bot-data geçicidir"),
+        ("LOG_DIR", False, "Sunucu log dizini; yazılamazsa LOCAL_LOG_DIR'e düşer"),
+        ("LOCAL_LOG_DIR", False, "LOG_DIR yazılamazsa kullanılan yerel log yedeği"),
         ("BOT_PROFILE", False, "Dengeli / Hassas / Seçici"),
         ("TELEGRAM_TEST_KEY", False, "İsteğe bağlı: /test ucunu açar (telefondan Telegram testi)"),
         ("SUPABASE_STORE_PREFIX", False, "Varsayılan formation-bot: ; aynı tabloyu paylaşan 2. kopya için değiştirin"),
+        ("SUPABASE_DELIVERY_WRITES", False, "Varsayılan 0: hiçbir uzak yazı yok. 1 = YALNIZ state:notification_delivery yedeğine izin"),
         ("BOT_INSTANCE_ID", False, "Varsayılan hostname:pid; salt okunur modda uzak çoklu örnek tespiti kapalıdır"),
         ("PUBLIC_COMMANDS_ENABLED", False, "Public GRUP komutları (varsayılan 1 = açık): yalnız grup YÖNETİCİLERİ okuma komutlarını çalıştırır"),
         ("PUBLIC_COMMAND_CHATS", False, "Boş = TELEGRAM_GROUP_ID; virgülle çok sohbet (-100…,@grup_adi)"),
@@ -338,6 +351,12 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("GRAFIK_OLAY_MAKS", False, "İsteğe bağlı: kareye çizilen onaylı BOS/CHoCH sayısı (varsayılan 6)"),
         ("NIGHTLY_CANDLE_REFRESH_HOUR", False, "Gece Supabase-kayıtsız mum temizliği saati (varsayılan 2 -> 02:00 TSİ)"),
         ("STABIL_GERI_ALIM_ALARM", False, "Ayrı 4S Stabil güçlü geri alım alarmları (varsayılan 1 = açık)"),
+        # --- Yahoo birincil / TV reaktif yedek (üretim zinciri) ---------------
+        ("TV_YEDEK_AKTIF", False, "Yahoo boş/geçersiz dönerse tvDatafeed yedeği (varsayılan 1; 0 = Yahoo-only)"),
+        ("TV_GERCEK_4S_AKTIF", False, "TV yedeği devredeyken gerçek 4s barları kullan (varsayılan 1)"),
+        ("TV_EXCHANGE", False, "TradingView borsa kodu (varsayılan BIST)"),
+        ("TV_BAR_SAYISI", False, "TV geçmiş bar sayısı (varsayılan 500; kısa 5d/1d çekimde küçülür)"),
+        ("TV_ZAMAN_ASIMI_SN", False, "Tek TV/WS çağrısı üst sınırı, saniye (varsayılan 25)"),
     ]
 
     degerler = {}
@@ -393,15 +412,38 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
                   "Aynı sohbet hem DM hem grup olamaz; görseller DM kapısından "
                   "reddedilir ve alarm iki kez düşer. Grup için TELEGRAM_GROUP_ID'yi "
                   "-100… kimliğiyle ayrı tanımlayın.")
-    if not degerler.get("TELEGRAM_BOT_TOKEN") and not degerler.get("TELEGRAM_CHAT_ID"):
-        seviye = FAIL if canli_mod else WARN
-        satir(seviye, "Telegram kapalı olacak", "Token/chat_id yoksa bot çalışır ama hiç mesaj göndermez (log: 'notifier pasif').")
-    if not degerler.get("SUPABASE_URL") and not degerler.get("SUPABASE_SERVICE_ROLE_KEY"):
+    # Token + en az BİR teslim hedefi gerekir. Public-only modda yalnızca
+    # TELEGRAM_GROUP_ID/CHANNEL_ID geçerlidir; DM chat_id boşken doktor FAIL
+    # basmamalı. `notifier.enabled` yalnızca DM kapısını açar, public yayın
+    # `public_enabled` ile ayrıdır.
+    if not degerler.get("TELEGRAM_BOT_TOKEN"):
+        satir(FAIL if canli_mod else WARN, "Telegram token eksik",
+              "TELEGRAM_BOT_TOKEN olmadan ne DM ne public mesaj gönderilir.")
+    if not dm_hedef and not public_hedef:
+        satir(FAIL if canli_mod else WARN, "Telegram teslim hedefi yok",
+              "TELEGRAM_CHAT_ID (DM) veya TELEGRAM_GROUP_ID/TELEGRAM_CHANNEL_ID "
+              "(public) tanımlayın; hedefsiz bot hiç mesaj göndermez.")
+    elif not dm_hedef:
+        satir(OK, "Public-only Telegram kurulumu",
+              "DM/comut hedefi yok; grup/kanal yayını ve public komutları "
+              "TELEGRAM_GROUP_ID/TELEGRAM_CHANNEL_ID ile çalışır.")
+    supabase_var = bool(degerler.get("SUPABASE_URL") and degerler.get("SUPABASE_SERVICE_ROLE_KEY"))
+    if not supabase_var:
         satir(WARN, "Supabase kapalı olacak",
               "Analiz yine çalışır; eski uzak kayıtlar okunamaz.")
-    satir(WARN, "Yeni durum Supabase'e yedeklenmez",
-          "Bot salt okunur çalışır; geçici DATA_DIR silinirse yeni önbellek, karne ve bildirim durumu kaybolabilir. "
-          "Uzak çoklu örnek tespiti de kapalıdır.")
+    # Salt okunur uyarı yalnızca uzak store tanımlıysa anlamlıdır. Supabase
+    # hiç yoksa aynı risk zaten yukarıdaki uyarıda bildirildi; iki kez basılmaz.
+    if supabase_var:
+        if _env_bool(degerler.get("SUPABASE_DELIVERY_WRITES"), varsayilan=False):
+            satir(WARN, "Yalnız teslim kuyruğu Supabase'e yedeklenir",
+                  "SUPABASE_DELIVERY_WRITES=1: yalnız state:notification_delivery yazılır; "
+                  "geçici DATA_DIR silinirse yeni önbellek, karne ve diğer bildirim durumları kaybolabilir. "
+                  "Uzak çoklu örnek tespiti de kapalıdır.")
+        else:
+            satir(WARN, "Yeni durum Supabase'e yedeklenmez",
+                  "Bot salt okunur çalışır; geçici DATA_DIR silinirse yeni önbellek, karne ve bildirim durumu kaybolabilir. "
+                  "Yalnız teslim kuyruğu için SUPABASE_DELIVERY_WRITES=1 opt-in'i açılabilir; "
+                  "uzak çoklu örnek tespiti yine kapalıdır.")
     anahtar = degerler.get("SUPABASE_SERVICE_ROLE_KEY", "")
     rol = _jwt_rolu(anahtar)
     tur = anahtar_turu(anahtar) if anahtar else ""
@@ -557,7 +599,8 @@ def kontrol_supabase(url: str, anahtar: str, onek: str = None) -> None:
         satir(OK, "Supabase salt okunur", "Yazma testi atlandı; canlılık için Render /health kullanın.")
 
 
-def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
+def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool,
+                     public_hedef: str = "") -> None:
     bolum("4) TELEGRAM")
     if not token:
         satir(WARN, "Atlandı", "TELEGRAM_BOT_TOKEN yok (bot çalışır ama mesaj göndermez).")
@@ -602,37 +645,47 @@ def kontrol_telegram(token: str, chat_id: str, mesaj_gonder: bool) -> None:
         return
 
     if not chat_id:
-        satir(WARN, "chat_id yok", "Telegram'a gönderim için TELEGRAM_CHAT_ID şart (@userinfobot).")
-        return
-    satir(OK, "DM hedefi tanımlı: /formasyonlar · /durum · /tara · /grafik · /yardim",
-          "getMe ve hedefin varlığı komut yolunun veya mesaj tesliminin çalıştığını kanıtlamaz; "
-          "yetkili sohbetten komut deneyin. Aynı token'ı ikinci bir kopya da dinlerse "
-          "Telegram 409 Conflict verebilir.")
-    if not chat_id.lstrip("-").isdigit():
-        satir(WARN, "chat_id sayı değil", "Kendine mesaj için pozitif Id, grup için -100... ile başlar.")
+        if not public_hedef:
+            satir(WARN, "chat_id ve public hedef yok",
+                  "Telegram'a gönderim için TELEGRAM_CHAT_ID veya TELEGRAM_GROUP_ID şart.")
+            return
+        # Public-only kurulum: getMe doğrulandı, DM komut hedefi bilerek yok.
+        satir(OK, "Public-only hedef: DM chat_id yok",
+              "Grup/kanal yayını ayrı doğrulanır; public komutları PUBLIC_COMMANDS_ENABLED "
+              "ve grup hedefiyle çalışır. Kişisel DM komutları isteniyorsa TELEGRAM_CHAT_ID ekleyin.")
     else:
-        satir(OK, f"chat_id sayı biçiminde (uzunluk {len(chat_id)})")
+        satir(OK, "DM hedefi tanımlı: /formasyonlar · /durum · /tara · /grafik · /yardim",
+              "getMe ve hedefin varlığı komut yolunun veya mesaj tesliminin çalıştığını kanıtlamaz; "
+              "yetkili sohbetten komut deneyin. Aynı token'ı ikinci bir kopya da dinlerse "
+              "Telegram 409 Conflict verebilir.")
+        if not chat_id.lstrip("-").isdigit():
+            satir(WARN, "chat_id sayı değil", "Kendine mesaj için pozitif Id, grup için -100... ile başlar.")
+        else:
+            satir(OK, f"chat_id sayı biçiminde (uzunluk {len(chat_id)})")
 
     if not mesaj_gonder:
         satir(OK, "Gerçek mesaj gönderilmedi", "Denemek için: --send-test-message")
         return
 
+    # DM hedefi yoksa test mesajını public hedefe gönder; aksi halde public-only
+    # kurulumda --send-test-message sessizce hiçbir teslim sınamazdı.
+    teslim_hedefi = chat_id or public_hedef
     metin = "✅ Formation-Bot kurulum kontrolü: bu mesajı görüyorsan Telegram tarafı tamam."
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": metin},
+            json={"chat_id": teslim_hedefi, "text": metin},
             timeout=15,
         )
     except Exception as exc:  # noqa: BLE001
         satir(FAIL, "Test mesajı gönderilemedi",
-              f"{type(exc).__name__}: {_kisa(exc, 180, token, chat_id)}")
+              f"{type(exc).__name__}: {_kisa(exc, 180, token, chat_id, public_hedef)}")
         return
 
     if r.status_code == 200:
         satir(OK, "Test mesajı gönderildi", "Telegram'ı açıp kontrol edin.")
     else:
-        aciklama = _kisa(r.text, 200, token, chat_id)
+        aciklama = _kisa(r.text, 200, token, chat_id, public_hedef)
         ipucu = ""
         if "chat not found" in aciklama:
             ipucu = " Kendi botunuza Telegram'da bir kez 'Start' yazın."
@@ -691,7 +744,8 @@ def _direnc_dumanini_raporla(meta: dict, token: str = "", chat_id: str = "") -> 
 
 
 def kontrol_grafik(token: str, chat_id: str, mesaj_gonder: bool, *,
-                   hisse: str = "AKBNK", tf: str = "4h") -> None:
+                   hisse: str = "AKBNK", tf: str = "4h",
+                   public_hedef: str = "") -> None:
     """Grafik katmanının canlı dumanı (G4): kare üret, isteğe bağlı gönder.
 
     Neden `deploy_check` içinde: alarm kareleri `TELEGRAM_GRAFIK=alarm` ile açılıyor
@@ -744,12 +798,13 @@ def kontrol_grafik(token: str, chat_id: str, mesaj_gonder: bool, *,
     if not mesaj_gonder:
         satir(OK, "Fotoğraf gönderilmedi", "Denemek için: --grafik-test --send-test-message")
         return
-    if not (token and chat_id):
-        satir(FAIL, "chat_id/token yok", "sendPhoto denenemedi.")
+    teslim_hedefi = chat_id or public_hedef
+    if not (token and teslim_hedefi):
+        satir(FAIL, "token/teslim hedefi yok", "sendPhoto denenemedi.")
         return
     from transport.telegram import foto_gonder
 
-    ok, aciklama = foto_gonder(sonuc["yol"], chat_id=chat_id, token=token,
+    ok, aciklama = foto_gonder(sonuc["yol"], chat_id=teslim_hedefi, token=token,
                                caption=f"{hisse} · {tf} · kurulum dumanı")
     try:
         os.remove(sonuc["yol"])
@@ -1207,6 +1262,9 @@ def main() -> int:
     kontrol_bagimlilik_guvenligi()
     degerler = kontrol_env(dosya_env, canli_mod=canli_mod)
 
+    public_hedef = (degerler.get("TELEGRAM_GROUP_ID", "")
+                    or degerler.get("TELEGRAM_CHANNEL_ID", "")).strip()
+    dm_hedef = degerler.get("TELEGRAM_CHAT_ID", "").strip()
     public_hazir = False
     if args.skip_network:
         bolum("AĞ KONTROLLERİ")
@@ -1216,8 +1274,9 @@ def main() -> int:
                          degerler.get("SUPABASE_STORE_PREFIX", ""))
         kontrol_telegram(
             degerler.get("TELEGRAM_BOT_TOKEN", ""),
-            degerler.get("TELEGRAM_CHAT_ID", ""),
+            dm_hedef,
             args.send_test_message,
+            public_hedef=public_hedef,
         )
         # Komut yolu: webhook mı yoklama mı, Telegram tarafında ne kayıtlı?
         # (DM komutlarının çalışmaması en çok buradan anlaşılır.)
@@ -1230,8 +1289,8 @@ def main() -> int:
         )
         public_hazir = kontrol_public_hedef(
             degerler.get("TELEGRAM_BOT_TOKEN", ""),
-            degerler.get("TELEGRAM_GROUP_ID", "") or degerler.get("TELEGRAM_CHANNEL_ID", ""),
-            degerler.get("TELEGRAM_CHAT_ID", ""),
+            public_hedef,
+            dm_hedef,
             public_komut_acik=_public_komut_acik(degerler),
         )
         kontrol_render(args.url or "", args.test_key or degerler.get("TELEGRAM_TEST_KEY", ""))
@@ -1240,17 +1299,27 @@ def main() -> int:
         # Çizim çevrimdışı çalışır (yalnız önbellek okunur); fotoğraf gönderimi
         # `--send-test-message` ile ağa çıkar — o yüzden ağ dalının dışında.
         kontrol_grafik(degerler.get("TELEGRAM_BOT_TOKEN", ""),
-                       degerler.get("TELEGRAM_CHAT_ID", ""),
-                       args.send_test_message and not args.skip_network)
+                       dm_hedef,
+                       args.send_test_message and not args.skip_network,
+                       public_hedef=public_hedef)
 
     bolum("ÖZET")
     # Değişkenlerin varlığı, kimlik/erişim veya teslimin başarıyla sınandığını
     # göstermez. Ağ kontrollerinin ayrıntısı yukarıdaki satırlarda kalır.
-    telegram_tanimli = bool(degerler.get("TELEGRAM_BOT_TOKEN") and degerler.get("TELEGRAM_CHAT_ID"))
+    token_var = bool(degerler.get("TELEGRAM_BOT_TOKEN"))
+    telegram_tanimli = bool(token_var and (dm_hedef or public_hedef))
     supabase_tanimli = bool(degerler.get("SUPABASE_URL") and degerler.get("SUPABASE_SERVICE_ROLE_KEY"))
-    kanal_hedefi = (degerler.get("TELEGRAM_GROUP_ID", "") or degerler.get("TELEGRAM_CHANNEL_ID", ""))
-    ozet_telegram = "TANIMLI" if telegram_tanimli else "EKSİK/YOK"
-    ozet_supabase = "TANIMLI (salt okunur)" if supabase_tanimli else "EKSİK/YOK"
+    kanal_hedefi = public_hedef
+    if telegram_tanimli and not dm_hedef:
+        ozet_telegram = "TANIMLI (PUBLIC-ONLY)"
+    else:
+        ozet_telegram = "TANIMLI" if telegram_tanimli else "EKSİK/YOK"
+    if not supabase_tanimli:
+        ozet_supabase = "EKSİK/YOK"
+    elif _env_bool(degerler.get("SUPABASE_DELIVERY_WRITES"), varsayilan=False):
+        ozet_supabase = "TANIMLI (yalnız teslim yedeği yazılır)"
+    else:
+        ozet_supabase = "TANIMLI (salt okunur)"
     ozet_kanal = "YOK"
     if kanal_hedefi:
         if args.skip_network:

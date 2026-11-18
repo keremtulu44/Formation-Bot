@@ -311,3 +311,22 @@ script **4/4**. Push `8707efa` CI run **`44346289337` success** (Python 3.12,
 15 dk 8 sn, 10/10 job). Ajan tarafında canlı Yahoo/TradingView çağrısı yok;
 entegrasyon kanıtı kod + testlerdir, operatörün `var\tv_olcum4.md` canlı teyidi
 ayrıdır. Fiili Render deploy / PR yapılmadı.
+
+## 11. Deploy + bildirim uçtan uca ikinci denetim (2026-11-18)
+
+Aynı gün gelen *"deploy sürecini her türlü baştan sona incele, sorunları düzelt,
+bildirim gönderme sürecini de incele"* isteği ayrı bir denetim raporuna taşındı:
+[`DEPLOY_BILDIRIM_DENETIMI_2026-11-18.md`](DEPLOY_BILDIRIM_DENETIMI_2026-11-18.md).
+Build/start/env pinleri, Python 3.12 CI↔Render parity, `/health`/`/ready`,
+webhook/polling, Telegram komutları, Supabase read-only, veri/cache/tarama,
+DM/public alarm-bülten-grafik ve kalıcı teslim kuyrukları birlikte okundu.
+
+Düzeltmeler: doktor public-only ve TV/runtime env körlükleri, public-only test
+mesajı/fotoğrafı, koşullu Supabase uyarısı, `/health.bildirim` public/inceleme
+sayaçları, tarama dışı periyodik public bülten flush'ı, opt-in ve tek anahtarla
+sınırlı `state:notification_delivery` uzak yedeği, Blueprint'te 120 sn graceful
+shutdown, CI smoke JSON assert'i ve sıra bağımlı `daily_stats` kirliliği. Varsayılan
+Supabase modu hâlâ tam salt okunur; genel cache/state/mirror yazımları açılmadı.
+Yeni 16 ağsız regresyon; tam pytest **4557 passed / 43 skipped**; doktor/grafik
+**53 tamam / 0 hata**; gerçek entrypoint HTTP smoke. Gerçek Render deploy/PR ve
+canlı Telegram/Yahoo/TV/Supabase çağrısı yoktur.
