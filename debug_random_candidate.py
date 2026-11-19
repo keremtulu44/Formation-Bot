@@ -1,0 +1,243 @@
+import numpy as np
+import pandas as pd
+
+from patterns import find_best_triangle_candidate
+
+
+def create_random_walk(n_bars=250, start_price=100.0):
+    np.random.seed(42)
+
+    returns = np.random.normal(0, 1.0, n_bars)
+    close = start_price + np.cumsum(returns)
+
+    close = np.maximum(close, 1.0)
+
+    high = close + np.abs(np.random.normal(0, 0.5, n_bars))
+    low = close - np.abs(np.random.normal(0, 0.5, n_bars))
+
+    return pd.DataFrame({
+        "close": close,
+        "high": high,
+        "low": low,
+    })
+
+
+def show(name, value):
+    print(f"{name:<32}: {value}")
+
+
+print()
+print("=" * 70)
+print("RANDOM CANDIDATE DIAGNOSTIC")
+print("=" * 70)
+
+df = create_random_walk()
+
+candidate, logs = find_best_triangle_candidate(
+    df,
+    profile="Dengeli",
+    verbose=True
+)
+
+print()
+print("--- DETECTOR SUMMARY ---")
+
+if candidate is None or not candidate.valid:
+    print("Random veride geçerli aday bulunamadı.")
+    print()
+    print("Detector logları:")
+    for log in logs[:30]:
+        print(log)
+    raise SystemExit(0)
+
+print("Random veride aday bulundu.")
+
+print()
+print("--- IDENTITY ---")
+
+show("Pattern", candidate.pattern_type)
+show("Family", candidate.family)
+show("Classic direction", candidate.classic_dir)
+show("Valid", candidate.valid)
+show("Raw quality", candidate.raw_quality)
+
+print()
+print("--- PIVOTS ---")
+
+show("HB1", candidate.hb1)
+show("HP1", candidate.hp1)
+show("HB2", candidate.hb2)
+show("HP2", candidate.hp2)
+show("LB1", candidate.lb1)
+show("LP1", candidate.lp1)
+show("LB2", candidate.lb2)
+show("LP2", candidate.lp2)
+
+print()
+print("--- TIME / MATURITY ---")
+
+show("Start bar", candidate.start_bar)
+show("End bar", candidate.end_bar)
+show("Known bar", candidate.known_bar)
+show("Current bar", len(df) - 1)
+show("Apex bar", candidate.apex_bar)
+show("Age", (
+    (len(df) - 1) - candidate.start_bar
+    if candidate.start_bar is not None else None
+))
+show("Progress", candidate.progress)
+
+print()
+print("--- GEOMETRY ---")
+
+show("Upper slope", candidate.upper_slope)
+show("Lower slope", candidate.lower_slope)
+show("Start width", candidate.start_width)
+show("Current width", candidate.current_width)
+show("Contraction", candidate.contraction)
+show("Upper now", candidate.upper_now)
+show("Lower now", candidate.lower_now)
+show("Geometry ATR", candidate.geometry_atr)
+
+print()
+print("--- TOUCHES ---")
+
+show("Upper touches", candidate.upper_touches)
+
+show("Lower touches", candidate.lower_touches)
+
+print()
+print("--- INDEPENDENT TOUCHES ---")
+
+show(
+    "Independent upper touches",
+    candidate.independent_upper_touches
+)
+show(
+    "Independent lower touches",
+    candidate.independent_lower_touches
+)
+show(
+    "Independent total touches",
+    candidate.independent_upper_touches
+    + candidate.independent_lower_touches
+)
+show(
+    "Independent upper avg distance",
+    candidate.independent_upper_avg_distance
+)
+show(
+    "Independent lower avg distance",
+    candidate.independent_lower_avg_distance
+)
+show("Total touches", (
+    (candidate.upper_touches or 0)
+    + (candidate.lower_touches or 0)
+))
+
+print()
+print("--- QUALITY COMPONENTS ---")
+
+show("Geometry score", candidate.geometry_score)
+show("Slope shape score", candidate.slope_shape_score)
+show("Contraction score", candidate.contraction_score)
+show("Touch score", candidate.touch_score)
+show("Maturity score", candidate.maturity_score)
+
+print()
+print("--- VIOLATIONS ---")
+
+show(
+    "Upper close violations",
+    candidate.historical_upper_close_violations
+)
+show(
+    "Lower close violations",
+    candidate.historical_lower_close_violations
+)
+show(
+    "Upper wick violations",
+    candidate.historical_upper_wick_violations
+)
+show(
+    "Lower wick violations",
+    candidate.historical_lower_wick_violations
+)
+show(
+    "Total close violations",
+    candidate.historical_close_violations
+)
+show(
+    "Total wick violations",
+    candidate.historical_wick_violations
+)
+show(
+    "Max historical violation",
+    candidate.max_historical_violation
+)
+show(
+    "Violation penalty",
+    candidate.historical_violation_penalty
+)
+show(
+    "Scanned bars",
+    candidate.historical_scanned_bars
+)
+
+print()
+print("--- CURRENT INTEGRITY ---")
+
+show(
+    "Current close violations",
+    candidate.current_close_violations
+)
+show(
+    "Current wick violations",
+    candidate.current_wick_violations
+)
+show(
+    "Current max violation",
+    candidate.current_max_violation
+)
+show(
+    "Current violation penalty",
+    candidate.current_violation_penalty
+)
+show(
+    "Current state",
+    candidate.current_state
+)
+show(
+    "Current scanned bars",
+    candidate.current_scanned_bars
+)
+
+print()
+print("--- CURRENT PRICE VS BOUNDARIES ---")
+
+current_close = float(df["close"].iloc[-1])
+
+show("Current close", current_close)
+show("Upper boundary now", candidate.upper_now)
+show("Lower boundary now", candidate.lower_now)
+
+if candidate.upper_now is not None and candidate.lower_now is not None:
+    if current_close > candidate.upper_now:
+        location = "UPPER BOUNDARY ÜSTÜNDE"
+    elif current_close < candidate.lower_now:
+        location = "LOWER BOUNDARY ALTINDA"
+    else:
+        location = "İKİ SINIR ARASINDA"
+
+    show("Current price location", location)
+
+print()
+print("--- DETECTOR LOGS ---")
+
+for log in logs[:20]:
+    print(log)
+
+print()
+print("=" * 70)
+print("END")
+print("=" * 70)
