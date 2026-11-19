@@ -1,0 +1,67 @@
+{
+ "arsiv_modu": "native",
+ "beklenen_dosya_sayisi": 704,
+ "bu_kosu_araliklari": [
+  "1h",
+  "2h",
+  "4h",
+  "1d"
+ ],
+ "diskteki_dosya_sayisi": 704,
+ "eksik_dosya_sayisi": 0,
+ "eksik_dosyalar": [],
+ "kayit_durum_ozeti": {
+  "1d|yahoo|ok": 176,
+  "1h|yahoo|ok": 176,
+  "2h|tvdatafeed|ok": 176,
+  "4h|tvdatafeed|ok": 176
+ },
+ "kaynak_plani": {
+  "1d": "yahoo",
+  "1h": "yahoo",
+  "2h": "tvdatafeed",
+  "4h": "tvdatafeed"
+ },
+ "kaynak_plani_ozeti": [
+  {
+   "kaynak": "yahoo",
+   "native": true,
+   "provider_interval": "1h",
+   "timeframe": "1h"
+  },
+  {
+   "kaynak": "tvdatafeed",
+   "native": true,
+   "provider_interval": "in_2_hour",
+   "timeframe": "2h"
+  },
+  {
+   "kaynak": "tvdatafeed",
+   "native": true,
+   "provider_interval": "in_4_hour",
+   "timeframe": "4h"
+  },
+  {
+   "kaynak": "yahoo",
+   "native": true,
+   "provider_interval": "1d",
+   "timeframe": "1d"
+  }
+ ],
+ "native_zorunlu": true,
+ "resample_kullanildi": false,
+ "sembol_sayisi": 176,
+ "surum": "native-1",
+ "tarih": "2026-11-19T13:24:28+00:00",
+ "tv_dagitim": {
+  "dagitim": "tradingview-datafeed",
+  "hazir": true,
+  "surum": "2.1.1"
+ },
+ "zaman_dilimleri": [
+  "1h",
+  "2h",
+  "4h",
+  "1d"
+ ]
+}

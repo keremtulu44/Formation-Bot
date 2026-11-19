@@ -1,195 +1,1014 @@
 {
- "gecerli": [
-  "THYAO",
-  "GARAN",
-  "AKBNK",
-  "ISCTR",
-  "YKBNK",
-  "KCHOL",
-  "SAHOL",
-  "EREGL",
-  "SISE",
-  "BIMAS",
-  "ASELS",
-  "TUPRS",
-  "FROTO",
-  "TOASO",
-  "KRDMD",
-  "PETKM",
-  "PGSUS",
-  "SASA",
-  "HEKTS",
-  "GUBRF",
-  "EKGYO",
-  "HALKB",
-  "VAKBN",
-  "TCELL",
-  "TTKOM",
-  "TAVHL",
-  "DOHOL",
-  "ALARK",
-  "ARCLK",
-  "ENKAI",
-  "ODAS",
-  "ASTOR",
-  "KONTR",
-  "SMRTG",
-  "CWENE",
-  "SNGYO",
-  "ISMEN",
-  "SKBNK",
-  "TSKB",
-  "TTRAK",
-  "OTKAR",
-  "AKSA",
-  "AKSEN",
-  "AYDEM",
-  "BRSAN",
-  "CIMSA",
-  "DOAS",
-  "EGEEN",
-  "AEFES",
-  "AGHOL",
-  "AKCNS",
-  "AKFGY",
-  "AKFYE",
-  "ALBRK",
-  "ALFAS",
-  "ALGYO",
-  "ANSGR",
-  "ARDYZ",
-  "AVPGY",
-  "BERA",
-  "BIOEN",
-  "BJKAS",
-  "BTCIM",
-  "CANTE",
-  "CCOLA",
-  "CLEBI",
-  "ECILC",
-  "ECZYT",
-  "ENERY",
-  "EUPWR",
-  "FENER",
-  "GESAN",
-  "GLYHO",
-  "GSRAY",
-  "GWIND",
-  "ISGYO",
-  "IZENR",
-  "KARSN",
-  "KCAER",
-  "KLSER",
-  "KMPUR",
-  "KORDS",
-  "KZBGY",
-  "MAVI",
-  "MGROS",
-  "MIATK",
-  "MPARK",
-  "OYAKC",
-  "PASEU",
-  "QUAGR",
-  "REEDR",
-  "SDTTR",
-  "SELEC",
-  "TKFEN",
-  "TURSG",
-  "ULKER",
-  "VESBE",
-  "VESTL",
-  "YEOTK",
-  "ZOREN",
-  "AGROT",
-  "ALTNY",
-  "ARZUM",
-  "BEGYO",
-  "BOBET",
-  "BRKVY",
-  "BURCE",
-  "CEMAS",
-  "CEMTS",
-  "CVKMD",
-  "DAPGM",
-  "DARDL",
-  "DENGE",
-  "DERIM",
-  "DEVA",
-  "DIRIT",
-  "DMSAS",
-  "DOCO",
-  "DOFER",
-  "DYOBY",
-  "EBEBK",
-  "EFOR",
-  "ENSRI",
-  "ERBOS",
-  "ERSU",
-  "ESCAR",
-  "ESEN",
-  "FONET",
-  "GARFA",
-  "GOLTS",
-  "GRSEL",
-  "GRTHO",
-  "HATEK",
-  "HATSN",
-  "HEDEF",
-  "HKTM",
-  "IHEVA",
-  "KFEIN",
-  "KIMMR",
-  "KLGYO",
-  "KONYA",
-  "KRGYO",
-  "KRTEK",
-  "KUTPO",
-  "LMKDC",
-  "MAGEN",
-  "MAKTK",
-  "MARMR",
-  "MARTI",
-  "MEDTR",
-  "MEGAP",
-  "METRO",
-  "MRSHL",
-  "NETAS",
-  "NIBAS",
-  "OBAMS",
-  "OFSYM",
-  "OZGYO",
-  "OZKGY",
-  "OZSUB",
-  "PAMEL",
-  "PAPIL",
-  "PEKGY",
-  "PENTA",
-  "RTALB",
-  "SAYAS",
-  "SELVA",
-  "SEYKM",
-  "SNICA",
-  "SOKE",
-  "TUKAS",
-  "ULUUN",
-  "VERUS",
-  "YYAPI",
-  "XU100",
-  "XU30",
-  "BRENT"
- ],
- "gecerli_sayisi": 177,
- "gecersiz": {
-  "BAHSK": "HTTP Error 404: {\"quoteSummary\":{\"result\":null,\"error\":{\"code\":\"Not Found\",\"description\":\"Quote not found for symbol: BAHSK.IS\"}}}\n$BAHSK.IS: No data found, sym",
-  "DOAR": "HTTP Error 404: {\"quoteSummary\":{\"result\":null,\"error\":{\"code\":\"Not Found\",\"description\":\"Quote not found for symbol: DOAR.IS\"}}}\n$DOAR.IS: No data found, symbo",
-  "GTZYO": "$GTZYO.IS: No data found, symbol may be delisted",
-  "HTKMK": "$HTKMK.IS: No data found, symbol may be delisted",
-  "IDEAS": "$IDEAS.IS: No data found, symbol may be delisted",
-  "IPEKE": "$IPEKE.IS: No data found, symbol may be delisted",
-  "IZDMC": "$IZDMC.IS: No data found, symbol may be delisted",
-  "KLSRN": "$KLSRN.IS: No data found, symbol may be delisted",
-  "TEKYO": "$TEKYO.IS: No data found, symbol may be delisted"
- },
- "gecersiz_sayisi": 9,
- "tarih": "2026-10-19T13:24:39+00:00"
+  "tarih": "2026-11-19T12:09:00+00:00",
+  "mod": "native-karma",
+  "kaynak_plani": {
+    "1d": "yahoo",
+    "1h": "yahoo",
+    "2h": "tvdatafeed",
+    "4h": "tvdatafeed"
+  },
+  "kaynak_plani_ozeti": [
+    {
+      "kaynak": "yahoo",
+      "native": true,
+      "provider_interval": "1h",
+      "timeframe": "1h"
+    },
+    {
+      "kaynak": "tvdatafeed",
+      "native": true,
+      "provider_interval": "in_2_hour",
+      "timeframe": "2h"
+    },
+    {
+      "kaynak": "tvdatafeed",
+      "native": true,
+      "provider_interval": "in_4_hour",
+      "timeframe": "4h"
+    },
+    {
+      "kaynak": "yahoo",
+      "native": true,
+      "provider_interval": "1d",
+      "timeframe": "1d"
+    }
+  ],
+  "tv_dagitim": {
+    "dagitim": "tradingview-datafeed",
+    "hazir": true,
+    "surum": "2.1.1"
+  },
+  "yahoo_probe": "5d/1d",
+  "tv_probe": "5 bar/4h/BIST",
+  "gecerli": [
+    "AEFES",
+    "AGHOL",
+    "AGROT",
+    "AKBNK",
+    "AKCNS",
+    "AKFGY",
+    "AKFYE",
+    "AKSA",
+    "AKSEN",
+    "ALARK",
+    "ALBRK",
+    "ALFAS",
+    "ALGYO",
+    "ALTNY",
+    "ANSGR",
+    "ARCLK",
+    "ARDYZ",
+    "ARZUM",
+    "ASELS",
+    "ASTOR",
+    "AVPGY",
+    "AYDEM",
+    "BEGYO",
+    "BERA",
+    "BIMAS",
+    "BIOEN",
+    "BJKAS",
+    "BOBET",
+    "BRKVY",
+    "BRSAN",
+    "BTCIM",
+    "BURCE",
+    "CANTE",
+    "CCOLA",
+    "CEMAS",
+    "CEMTS",
+    "CIMSA",
+    "CLEBI",
+    "CVKMD",
+    "CWENE",
+    "DAPGM",
+    "DARDL",
+    "DENGE",
+    "DERIM",
+    "DEVA",
+    "DIRIT",
+    "DMSAS",
+    "DOAS",
+    "DOCO",
+    "DOFER",
+    "DOHOL",
+    "DYOBY",
+    "EBEBK",
+    "ECILC",
+    "ECZYT",
+    "EFOR",
+    "EGEEN",
+    "EKGYO",
+    "ENERY",
+    "ENKAI",
+    "ENSRI",
+    "ERBOS",
+    "EREGL",
+    "ERSU",
+    "ESCAR",
+    "ESEN",
+    "EUPWR",
+    "FENER",
+    "FONET",
+    "FROTO",
+    "GARAN",
+    "GARFA",
+    "GESAN",
+    "GLYHO",
+    "GOLTS",
+    "GRSEL",
+    "GRTHO",
+    "GSRAY",
+    "GUBRF",
+    "GWIND",
+    "HALKB",
+    "HATEK",
+    "HATSN",
+    "HEDEF",
+    "HEKTS",
+    "HKTM",
+    "IHEVA",
+    "ISCTR",
+    "ISGYO",
+    "ISMEN",
+    "IZENR",
+    "KARSN",
+    "KCAER",
+    "KCHOL",
+    "KFEIN",
+    "KIMMR",
+    "KLGYO",
+    "KLSER",
+    "KMPUR",
+    "KONTR",
+    "KONYA",
+    "KORDS",
+    "KRDMD",
+    "KRGYO",
+    "KRTEK",
+    "KUTPO",
+    "KZBGY",
+    "LMKDC",
+    "MAGEN",
+    "MAKTK",
+    "MARMR",
+    "MARTI",
+    "MAVI",
+    "MEDTR",
+    "MEGAP",
+    "METRO",
+    "MGROS",
+    "MIATK",
+    "MPARK",
+    "MRSHL",
+    "NETAS",
+    "NIBAS",
+    "OBAMS",
+    "ODAS",
+    "OFSYM",
+    "OTKAR",
+    "OYAKC",
+    "OZGYO",
+    "OZKGY",
+    "OZSUB",
+    "PAMEL",
+    "PAPIL",
+    "PASEU",
+    "PEKGY",
+    "PENTA",
+    "PETKM",
+    "PGSUS",
+    "QUAGR",
+    "REEDR",
+    "RTALB",
+    "SAHOL",
+    "SASA",
+    "SAYAS",
+    "SDTTR",
+    "SELEC",
+    "SELVA",
+    "SEYKM",
+    "SISE",
+    "SKBNK",
+    "SMRTG",
+    "SNGYO",
+    "SNICA",
+    "SOKE",
+    "TAVHL",
+    "TCELL",
+    "THYAO",
+    "TKFEN",
+    "TOASO",
+    "TSKB",
+    "TTKOM",
+    "TTRAK",
+    "TUKAS",
+    "TUPRS",
+    "TURSG",
+    "ULKER",
+    "ULUUN",
+    "VAKBN",
+    "VERUS",
+    "VESBE",
+    "VESTL",
+    "XU100",
+    "XU30",
+    "YEOTK",
+    "YKBNK",
+    "YYAPI",
+    "ZOREN"
+  ],
+  "gecersiz": {
+    "BAHSK": "yahoo: Yahoo boş veri döndürdü | tv: ValueError: boş veya geçersiz sağlayıcı verisi",
+    "BRENT": "yahoo: ok | tv: BIST dışı makro; TradingView BIST exchange'inde native 2h/4h karşılığı yok",
+    "DOAR": "yahoo: Yahoo boş veri döndürdü | tv: ValueError: boş veya geçersiz sağlayıcı verisi",
+    "GTZYO": "yahoo: Yahoo boş veri döndürdü | tv: ValueError: boş veya geçersiz sağlayıcı verisi",
+    "HTKMK": "yahoo: Yahoo boş veri döndürdü | tv: ValueError: boş veya geçersiz sağlayıcı verisi",
+    "IDEAS": "yahoo: Yahoo boş veri döndürdü | tv: ok",
+    "IPEKE": "yahoo: Yahoo boş veri döndürdü | tv: ok",
+    "IZDMC": "yahoo: Yahoo boş veri döndürdü | tv: ValueError: boş veya geçersiz sağlayıcı verisi",
+    "KLSRN": "yahoo: Yahoo boş veri döndürdü | tv: ValueError: boş veya geçersiz sağlayıcı verisi",
+    "TEKYO": "yahoo: Yahoo boş veri döndürdü | tv: ValueError: boş veya geçersiz sağlayıcı verisi"
+  },
+  "gecerli_sayisi": 176,
+  "gecersiz_sayisi": 10,
+  "kaynak_ozeti": {
+    "THYAO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "GARAN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "AKBNK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ISCTR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "YKBNK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KCHOL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SAHOL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "EREGL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SISE": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "BIMAS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ASELS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "TUPRS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "FROTO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "TOASO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KRDMD": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "PETKM": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "PGSUS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SASA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "HEKTS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "GUBRF": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "EKGYO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "HALKB": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "VAKBN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "TCELL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "TTKOM": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "TAVHL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DOHOL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ALARK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ARCLK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ENKAI": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ODAS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ASTOR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KONTR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SMRTG": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "CWENE": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SNGYO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ISMEN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SKBNK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "TSKB": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "TTRAK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "OTKAR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "AKSA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "AKSEN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "AYDEM": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "BRSAN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "CIMSA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DOAS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "EGEEN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "AEFES": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "AGHOL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "AKCNS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "AKFGY": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "AKFYE": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ALBRK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ALFAS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ALGYO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ANSGR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ARDYZ": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "AVPGY": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "BERA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "BIOEN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "BJKAS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "BTCIM": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "CANTE": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "CCOLA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "CLEBI": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DOAR": {
+      "yahoo": "Yahoo boş veri döndürdü",
+      "tvdatafeed": "ValueError: boş veya geçersiz sağlayıcı verisi"
+    },
+    "ECILC": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ECZYT": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ENERY": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "EUPWR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "FENER": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "GESAN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "GLYHO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "GSRAY": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "GWIND": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ISGYO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "IZENR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KARSN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KCAER": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KLSER": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KMPUR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KORDS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KZBGY": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "MAVI": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "MGROS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "MIATK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "MPARK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "OYAKC": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "PASEU": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "QUAGR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "REEDR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SDTTR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SELEC": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "TKFEN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "TURSG": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ULKER": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "VESBE": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "VESTL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "YEOTK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ZOREN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "AGROT": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ALTNY": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ARZUM": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "BAHSK": {
+      "yahoo": "Yahoo boş veri döndürdü",
+      "tvdatafeed": "ValueError: boş veya geçersiz sağlayıcı verisi"
+    },
+    "BEGYO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "BOBET": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "BRKVY": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "BURCE": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "CEMAS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "CEMTS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "CVKMD": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DAPGM": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DARDL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DENGE": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DERIM": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DEVA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DIRIT": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DMSAS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DOCO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DOFER": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "DYOBY": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "EBEBK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "EFOR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ENSRI": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ERBOS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ERSU": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ESCAR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ESEN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "FONET": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "GARFA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "GOLTS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "GRSEL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "GRTHO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "GTZYO": {
+      "yahoo": "Yahoo boş veri döndürdü",
+      "tvdatafeed": "ValueError: boş veya geçersiz sağlayıcı verisi"
+    },
+    "HATEK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "HATSN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "HEDEF": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "HKTM": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "HTKMK": {
+      "yahoo": "Yahoo boş veri döndürdü",
+      "tvdatafeed": "ValueError: boş veya geçersiz sağlayıcı verisi"
+    },
+    "IDEAS": {
+      "yahoo": "Yahoo boş veri döndürdü",
+      "tvdatafeed": "ok"
+    },
+    "IHEVA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "IPEKE": {
+      "yahoo": "Yahoo boş veri döndürdü",
+      "tvdatafeed": "ok"
+    },
+    "IZDMC": {
+      "yahoo": "Yahoo boş veri döndürdü",
+      "tvdatafeed": "ValueError: boş veya geçersiz sağlayıcı verisi"
+    },
+    "KFEIN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KIMMR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KLGYO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KLSRN": {
+      "yahoo": "Yahoo boş veri döndürdü",
+      "tvdatafeed": "ValueError: boş veya geçersiz sağlayıcı verisi"
+    },
+    "KONYA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KRGYO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KRTEK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "KUTPO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "LMKDC": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "MAGEN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "MAKTK": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "MARMR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "MARTI": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "MEDTR": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "MEGAP": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "METRO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "MRSHL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "NETAS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "NIBAS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "OBAMS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "OFSYM": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "OZGYO": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "OZKGY": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "OZSUB": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "PAMEL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "PAPIL": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "PEKGY": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "PENTA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "RTALB": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SAYAS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SELVA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SEYKM": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SNICA": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "SOKE": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "TEKYO": {
+      "yahoo": "Yahoo boş veri döndürdü",
+      "tvdatafeed": "ValueError: boş veya geçersiz sağlayıcı verisi"
+    },
+    "TUKAS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "ULUUN": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "VERUS": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "YYAPI": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "XU100": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "XU30": {
+      "yahoo": "ok",
+      "tvdatafeed": "ok"
+    },
+    "BRENT": {
+      "yahoo": "ok",
+      "tvdatafeed": "BIST dışı makro; TradingView BIST exchange'inde native 2h/4h karşılığı yok"
+    }
+  },
+  "yeniden_probe": {
+    "ilk_gecerli": 164,
+    "ilk_gecersiz": 22,
+    "yeniden_denenen": 12,
+    "yeni_gecerli": [
+      "CANTE",
+      "DARDL",
+      "DOAS",
+      "KONYA",
+      "MAGEN",
+      "MIATK",
+      "MPARK",
+      "PASEU",
+      "SELEC",
+      "SNGYO",
+      "TCELL",
+      "TOASO"
+    ],
+    "kalici_gecersiz": [
+      "BAHSK",
+      "BRENT",
+      "DOAR",
+      "GTZYO",
+      "HTKMK",
+      "IDEAS",
+      "IPEKE",
+      "IZDMC",
+      "KLSRN",
+      "TEKYO"
+    ],
+    "son_gecerli": 176,
+    "not": "164/22 yedekleri 12/0 ile ezildigi icin havuz + ilk 22 cikti + 12/0 retry sonucundan yeniden kuruldu; canli cagri yapilmadi"
+  }
 }
