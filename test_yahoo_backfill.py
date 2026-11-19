@@ -76,6 +76,7 @@ def test_script_yardimi_bagimlilik_olmadan_calisir():
     )
     assert sonuc.returncode == 0, sonuc.stderr[:400]
     assert "--probe" in sonuc.stdout and "--retry-failed" in sonuc.stdout
+    assert "--tv-bar-sayisi" in sonuc.stdout and "1h,2h,4h,1d" in sonuc.stdout
 
 
 # === 2/3) HATA SINIFLANDIRMASI ==============================================
@@ -185,21 +186,27 @@ def test_tempo_azami_soguma_asilinca_kosuyu_durdurur():
 
 
 # === 5) DEVAM (RESUME) KARARI ===============================================
-def test_atlanmali_mi_uc_kosulu_birlikte_ister(tmp_path):
+def test_atlanmali_mi_native_kaynak_ve_dosya_ister(tmp_path):
     dosya = tmp_path / "THYAO_1h.csv.gz"
-    ok = {"durum": "ok", "satir": 2268}
+    ok = {"durum": "ok", "satir": 2268, "native": True, "kaynak": "yahoo"}
 
     # manifest ok AMA dosya diskte yok -> ATLANMAZ (veri kaybolmuş)
-    assert yb.atlanmali_mi(ok, dosya, zorla=False) is False
+    assert yb.atlanmali_mi(ok, dosya, zorla=False, beklenen_kaynak="yahoo") is False
     dosya.write_bytes(b"x")
-    assert yb.atlanmali_mi(ok, dosya, zorla=False) is True
+    assert yb.atlanmali_mi(ok, dosya, zorla=False, beklenen_kaynak="yahoo") is True
+    # Kaynak değiştiyse eski native etiketli kayıt BİLE yeniden çekilir.
+    assert yb.atlanmali_mi(ok, dosya, zorla=False, beklenen_kaynak="tvdatafeed") is False
+    # Eski türetimli/etiketsiz kayıt yeniden çekilir.
+    assert yb.atlanmali_mi({"durum": "ok", "satir": 2268}, dosya,
+                            zorla=False, beklenen_kaynak="yahoo") is False
     # --zorla her şeyi yeniden çeker
-    assert yb.atlanmali_mi(ok, dosya, zorla=True) is False
+    assert yb.atlanmali_mi(ok, dosya, zorla=True, beklenen_kaynak="yahoo") is False
     # başarısız/yarım kayıtlar asla atlanmaz
     for durum in ("kalici_basarisiz", "gecici_basarisiz", "durduruldu", "yazma_hatasi"):
-        assert yb.atlanmali_mi({"durum": durum}, dosya, zorla=False) is False, durum
+        assert yb.atlanmali_mi({"durum": durum}, dosya, zorla=False,
+                                beklenen_kaynak="yahoo") is False, durum
     # kayıt hiç yoksa (ilk koşu) atlanmaz
-    assert yb.atlanmali_mi(None, dosya, zorla=False) is False
+    assert yb.atlanmali_mi(None, dosya, zorla=False, beklenen_kaynak="yahoo") is False
 
 
 # === 6) MANIFEST =============================================================

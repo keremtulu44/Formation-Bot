@@ -295,6 +295,21 @@ def test_bars_k5_bayraklari_ve_k1() -> None:
     assert all(s["kaynak"] == "backfill" and s["run_id"] == "run-1" for s in satirlar)
 
 
+def test_bars_satirlari_dort_native_tf_etiketler() -> None:
+    """1h/2h/4h/1d intervali olduğu gibi timeframe'e yazılır; 1d'ye düşmez."""
+    for tf in ("1h", "2h", "4h", "1d"):
+        df = pd.DataFrame({
+            "bar_time": ["2026-01-02 09:30:00+03:00"],
+            "open": [100.0], "high": [101.0], "low": [99.0],
+            "close": [100.5], "volume": [10.0],
+        })
+        df["interval"] = tf
+        satirlar = bars_satirlari("TEST", df, "run-native")
+        assert len(satirlar) == 1
+        assert satirlar[0]["timeframe"] == tf
+        assert satirlar[0]["kaynak"] == "backfill"
+
+
 # ---------------------------------------------------------------------------
 # şema sözlüğü
 # ---------------------------------------------------------------------------

@@ -1,4 +1,8 @@
-"""Arşiv/replay ve canlı mumların farklı kaynak sözleşmeleri."""
+"""Arşiv/replay ve canlı mumların farklı kaynak sözleşmeleri.
+
+Bu dosyadaki önbellek testi eski 1h+1d arşivinin AÇIK legacy
+uyumluluk modunu kilitler; yeni native replay bu fallback'i kullanmaz.
+"""
 import os
 
 import pandas as pd
@@ -22,18 +26,18 @@ def test_arsiv_koku_ve_dosya_degisiminde_eski_seri_kullanilmaz(tmp_path, tf):
     a, b = tmp_path / "a", tmp_path / "b"
     path = _archive(a, 10.)
     _archive(b, 20.)
-    assert arsiv.tf_frame("TEST", tf, a).close.iloc[-1] == 10.
-    x = arsiv.tf_frame("TEST", tf, b)
+    assert arsiv.tf_frame("TEST", tf, a, legacy_resample=True).close.iloc[-1] == 10.
+    x = arsiv.tf_frame("TEST", tf, b, legacy_resample=True)
     assert x.close.iloc[-1] == 20.
     x.iloc[0, x.columns.get_loc("close")] = 12345
-    assert arsiv.tf_frame("TEST", tf, b).close.iloc[0] == 20.
+    assert arsiv.tf_frame("TEST", tf, b, legacy_resample=True).close.iloc[0] == 20.
     old = path.stat().st_mtime_ns
     _archive(a, 30.)
     os.utime(path, ns=(old + 1_000_000_000, old + 1_000_000_000))
-    assert arsiv.tf_frame("TEST", tf, a).close.iloc[-1] == 30.
+    assert arsiv.tf_frame("TEST", tf, a, legacy_resample=True).close.iloc[-1] == 30.
     path.unlink()
     with pytest.raises(FileNotFoundError):
-        arsiv.tf_frame("TEST", tf, a)
+        arsiv.tf_frame("TEST", tf, a, legacy_resample=True)
 
 
 def test_test_egitim_penceresinde_gecersiz_hacim_reddedilir():

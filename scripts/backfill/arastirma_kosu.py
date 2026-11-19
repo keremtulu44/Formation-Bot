@@ -14,6 +14,8 @@ Kullanım:
 
 Tasarım kararları:
 
+**Native 1h/2h/4h/1d zorunlu.** Arşiv dört ayrı native CSV.gz taşır; 2h/4h 1h'den `resample_ohlcv` ile TÜRETİLMEZ. `tf_frame` strict çağrılır, dört dosyası tamamlanmamış sembol plana alınmaz. Kaynak etiketleri rapor notlarına yazılır.
+
 **JSONL'e sembol bazında ekleme.** Koşu ~1 saat sürebilir; tek seferde bellekte
 toplamak çökme halinde her şeyi kaybettirir. Her sembol bittiğinde satırlar
 ``arastirma_cikti/<kategori>.jsonl`` dosyasına eklenir ve dosya kapatılır.
@@ -331,7 +333,12 @@ def _koşu_planı(args: argparse.Namespace) -> list[str]:
 
     if args.semboller:
         return [s.strip().upper() for s in args.semboller.split(",") if s.strip()]
-    semboller = arsiv.arsiv_sembolleri()
+    semboller = arsiv.arsiv_sembolleri(native_only=True)
+    if not semboller:
+        raise SystemExit(
+            "Native arşivde dört dosyası tamamlanmış sembol yok. "
+            "Önce docs/kurulum/TERMUX_BACKFILL.md ile 1h/2h/4h/1d çekimini yap."
+        )
     if not args.havuz_disi_dahil:
         semboller = [s for s in semboller if s not in arsiv.HAVUZ_DISI_SEMBOLLER]
     if args.limit:
@@ -377,7 +384,7 @@ def _kosu_govdesi(args: argparse.Namespace, cikti: Path) -> int:
     for i, (sembol, tf) in enumerate(plan, 1):
         t0 = time.time()
         try:
-            frame = arsiv.tf_frame(sembol, tf)
+            frame = arsiv.tf_frame(sembol, tf, legacy_resample=False)
             gozlem = kayit.sembol_timeframe_gozlem(sembol, tf, frame)
             for kategori in KATEGORILER:
                 _ekle(cikti / f"{kategori}.jsonl", gozlem.get(kategori, []))
@@ -469,6 +476,11 @@ def agregasyon(args: argparse.Namespace) -> int:
         "PH/PL/WH/WL rolleri bar bar izlenir: `structural_role` zamanla mutate olur ve final değer tarihsel atamaları kaybetmiştir.",
         "`TUM_ZONE`/`ZONE_ICI` temaslarında kenar-ancored yön belirlenemez; bunlar `OLCULEMEDI` kovasında ayrı raporlanır, düşürülmez.",
         "Güven etiketi: n>=30 YETERLI, n>=15 KISMI, altı ZAYIF (`analytics/backtest.py` ile aynı eşikler).",
+        "Native arşiv: 2h/4h 1h'den resample EDİLMEZ; eksik native dosya ölçüm hatası olarak yazılır.",
+        "Kaynak/TF: " + ", ".join(
+            f"{tf}={arsiv.arsiv_kaynak_plani().get(tf, '?')}"
+            for tf in arsiv.ARASTIRMA_TIMEFRAMELERI
+        ) + f" (arsiv_modu={arsiv.arsiv_modu()}).",
     ]
     if hatalar:
         notlar.append(f"**{len(hatalar)} sembol x zaman dilimi hatayla atlandı** (`hatalar.jsonl`); rapor kalan veriyi yansıtır.")

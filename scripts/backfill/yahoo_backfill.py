@@ -1,56 +1,63 @@
 #!/usr/bin/env python3
-"""BIST derin geçmiş çekicisi — Termux'ta tek başına çalışan BAĞIMSIZ araç.
+"""BIST derin geçmiş çekicisi — NATIVE 1h/2h/4h/1d (Termux, bağımsız araç).
 
 NEDEN AYRI BİR ARAÇ
 -------------------
-Ana bot 51 sembolü 60 günlük kayan pencereyle canlı tarar ve `DEQUE_MAXLEN=360`
-Pine/TradingView uyumu bozulmasın diye bilerek büyütülmez (config.py:225-229).
-Araştırma veri setinin ihtiyaç duyduğu derinlik (varsayılan 365 gün) canlı yolu
-riske atmadan, YALNIZ arşive yazan bağımsız bir çekimle sağlanır.
+Ana bot 51 sembolü 60 günlük kayan pencereyle canlı tarar ve ``DEQUE_MAXLEN=360``
+Pine/TradingView uyumu bozulmasın diye bilerek büyütülmez. Araştırma arşivinin
+ihtiyaç duyduğu derinlik, canlı yolu riske atmadan yalnız diske yazan bu
+çekimle sağlanır.
 
-Bu araç NE YAPMAZ: Supabase'e bağlanmaz, Telegram'a dokunmaz, .env okumaz,
+KAYNAK PLANI (2026-11-18)
+-------------------------
+Yahoo ``2h``/``4h`` intervalini desteklemez. 170+ sembol için 1h'den büyük
+zaman dilimlerini türetmek hacim/fiyat kayması üretiyordu; artık dört zaman
+dilimi de **native** çekilir:
+
+    1h  -> Yahoo       (auto_adjust=False, ham OHLCV)
+    2h  -> TradingView (tvDatafeed, in_2_hour, gerçek bar)
+    4h  -> TradingView (tvDatafeed, in_4_hour, gerçek bar)
+    1d  -> Yahoo       (auto_adjust=False, native günlük)
+
+2h/4h için ``resample_ohlcv`` KESİNLİKLE çağrılmaz. ``BRENT`` gibi BIST
+exchange'inde karşılığı olmayan makro semboller probe'da elenir; dört native
+dosyası tamamlanmayan sembol replay'e alınmaz.
+
+Bu araç NE YAPMAZ: Supabase'e bağlanmaz, Telegram'a dokunmaz, ``.env`` okumaz,
 domain motorlarını çalıştırmaz, formasyon/zone üretmez, bildirim göndermez.
-Yalnız Yahoo'dan OHLCV çeker ve diske CSV.gz olarak yazar.
+Yalnız iki sağlayıcıdan OHLCV çeker ve diske ``CSV.gz`` yazar.
 
-Bağımlılık: yfinance + pandas (Termux'ta pandas `pkg install python-pandas`
-ile gelir, pip ile DEĞİL — aarch64 derleme hatası; bkz. requirements-termux.txt).
-İkisi de YALNIZ ihtiyaç anında import edilir, böylece `--help` ve liste modları
-bağımlılık kurulu olmadan da çalışır.
+Bağımlılık: yfinance + pandas (Termux'ta ``pkg install python-pandas``) ve
+doğrulanmış ``tradingview-datafeed==2.1.1`` + ``websocket-client==1.9.2``.
+Ağır modüller yalnız ihtiyaç anında import edilir; ``--help``/liste modları
+çıplak yorumlayıcıda çalışır.
 
 BAN KORUMASI
 ------------
-1. İstekler tek iş parçacığında ve SERİ atılır (paralel istek yok); grup içi kısa
-   ara + grup sonrası uzun mola. Tempo mantığı ana botla aynıdır (scan_pacer.py).
-2. Ardışık geçici hata (429/timeout/5xx) görülünce tempo KENDİLİĞİNDEN yavaşlar
-   ve uzun soğuma molası verilir.
-3. Kalıcı hatalar (404 / "symbol not found" / "no data found") TEKRAR DENENMEZ;
-   gereksiz istek atılmaz. Ayrım `yfinance_error_is_retryable` (data.py:1724)
-   mantığının bağımsız kopyasıdır.
-4. Yarım kalırsa kaldığı yerden devam eder: başarılı sembol/atılım çifti atlanır
-   (`--zorla` ile baştan çeker). Termux'ta süreç öldürülürse bu kritiktir.
+İstekler tek iş parçacığında ve SERİ atılır; grup içi kısa ara + grup sonrası
+uzun mola. Ardışık geçici hata (429/timeout/WS kopması/5xx) tempoyu yavaşlatır
+ve uzun soğuma verir. Kalıcı hatalar (404 / sembol yok / doğrulanmamış kurulum)
+tekrar denenmez. Yarım kalırsa başarılı ``(sembol, interval, kaynak)`` çifti
+atlanır; ``--zorla`` ile baştan çekilir.
 
 ÇIKTI
 -----
-    <hedef>/<SEMBOL>_1h.csv.gz     bar_time,open,high,low,close,volume
-    <hedef>/<SEMBOL>_1d.csv.gz     aynı biçim
-    <hedef>/manifest.json          sembol başına durum/satır/aralık/hata/süre
-    <hedef>/probe_sonucu.json      (--probe) Yahoo geçerlilik raporu
+    <hedef>/<SEMBOL>_1h.csv.gz ... _2h.csv.gz ... _4h.csv.gz ... _1d.csv.gz
+    <hedef>/manifest.json          sembol başına durum/satır/kaynak/TF/native/kalite
+    <hedef>/probe_sonucu.json      iki sağlayıcının geçerlilik + dağıtım raporu
+    <hedef>/dogrulanmis_semboller.txt   yalnız dört native kaynakta da geçerli semboller
+    <hedef>/kaynak_raporu.json     TF x kaynak x durum özeti + eksik native dosyalar
 
-`bar_time` METİNDİR: 'YYYY-MM-DD HH:MM:SS+03:00' (Europe/Istanbul).
-Neden TEXT: supabase_schema.sql'deki kritik uyarı — timestamptz PostgREST'ten
-ISO 'T' ayraçlı döner ve string eşitliği arayan konum bulma sessizce kaçar.
-Aynı disiplin arşivde de korunur.
-
-Neden auto_adjust=False: yfinance varsayılanı True'dur ve geçmiş OHLC'yi
-temettü/splite göre YENİDEN ayarlar; TradingView/Pine ham fiyat kullanır.
-Bu parametre daha önce düşmüştü ve tüm geçmiş kaymıştı (data.py:1757-1762).
+``bar_time`` METİNDİR: ``YYYY-MM-DD HH:MM:SS+03:00`` (Europe/Istanbul). Sayılar
+``repr()`` ile tam round-trip; NaN/inf boş hücre; yazım atomik. Yahoo'da
+``auto_adjust=False`` temettü/split yeniden ayarını kapatır (Pine ham fiyat).
 
 KULLANIM (Termux)
     python scripts/backfill/yahoo_backfill.py --probe
     python scripts/backfill/yahoo_backfill.py --limit 10
     python scripts/backfill/yahoo_backfill.py
     python scripts/backfill/yahoo_backfill.py --retry-failed
-    python scripts/backfill/yahoo_backfill.py --semboller THYAO,GARAN --period-1h 730d
+    python scripts/backfill/yahoo_backfill.py --semboller THYAO,GARAN --tv-bar-sayisi 1500
 """
 
 from __future__ import annotations
@@ -75,6 +82,8 @@ ISTANBUL_OFFSET_SAAT = 3  # Europe/Istanbul, DST'siz kış/yaz +03:00 (BIST)
 VARSAYILAN_HEDEF = "backfill_data"
 VARSAYILAN_PERIOD_1H = "365d"
 VARSAYILAN_PERIOD_1D = "2y"
+VARSAYILAN_ARALIKLAR: Tuple[str, ...] = ("1h", "2h", "4h", "1d")
+VARSAYILAN_TV_BAR_SAYISI = 1500  # 2h ~1.3 yıl, 4h ~2.5 yıl BIST seansı
 
 # --- TEMPO (ana bot sabitleriyle aynı mantık; config.py:84-95) ----------------
 ISTEK_ARA_MIN_SN = 0.9
@@ -158,6 +167,24 @@ def _ticker_cozucu_yukle():
 def ticker_for(symbol: str) -> str:
     cozucu, _ = _ticker_cozucu_yukle()
     return cozucu(symbol)
+
+
+def _native_kaynak_yukle():
+    """Kaynak planı/TV yardımcısını lazy yükler; repo kökünü sys.path'e ekler.
+
+    Neden: script doğrudan ``python scripts/backfill/yahoo_backfill.py`` ile
+    çalıştığında ``sys.path[0]`` script dizinidir. ``scripts`` namespace
+    paketinin bulunması için repo kökü eklenmelidir. Modül seviyesinde ağır
+    import yapılmaz.
+    """
+    kok = str(Path(__file__).resolve().parents[2])
+    if kok not in sys.path:
+        sys.path.insert(0, kok)
+    try:
+        from scripts.backfill import native_kaynak
+    except Exception as exc:  # noqa: BLE001 - kurulum hatası rapora düşsün
+        raise RuntimeError(f"native_kaynak yüklenemedi: {exc}") from exc
+    return native_kaynak
 
 
 # -----------------------------------------------------------------------------
@@ -426,20 +453,59 @@ def sembol_cek(
     *,
     deneme: int,
     log=print,
+    tv_bar_sayisi: int = VARSAYILAN_TV_BAR_SAYISI,
+    tv_exchange: str = "BIST",
+    kaynak: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Bir (sembol, interval) çiftini dener; manifest girdisi döner."""
+    """Bir (sembol, interval) çiftini NATIVE kaynağından dener; manifest girdisi döner."""
+    nk = _native_kaynak_yukle()
+    kaynak = kaynak or nk.KAYNAK_PLANI.get(interval)
+    if kaynak not in ("yahoo", "tvdatafeed"):
+        raise ValueError(f"desteklenmeyen kaynak/TF: {kaynak}/{interval}")
+    if kaynak == "yahoo":
+        provider_symbol = ticker_for(sembol)
+        provider_interval = interval
+    else:
+        provider_symbol = nk.tv_sembol(sembol)
+        provider_interval = nk.TV_ARALIK[interval]
+
     basladi = time.monotonic()
-    ticker = ticker_for(sembol)
+
+    def temel(durum: str, **ek: Any) -> Dict[str, Any]:
+        kayit: Dict[str, Any] = {
+            "sembol": sembol,
+            "interval": interval,
+            "durum": durum,
+            "kaynak": kaynak,
+            "native": True,
+            "provider_symbol": provider_symbol,
+            "provider_interval": provider_interval,
+            "period": period if kaynak == "yahoo" else None,
+            "bar_sayisi_istek": max(1, int(tv_bar_sayisi)) if kaynak == "tvdatafeed" else None,
+            "tv_exchange": tv_exchange if kaynak == "tvdatafeed" else None,
+            "sure_sn": round(time.monotonic() - basladi, 1),
+        }
+        if kaynak == "yahoo":
+            kayit["ticker"] = provider_symbol
+        kayit.update(ek)
+        return kayit
+
+    if provider_symbol is None:
+        sebep = nk.TV_DISI_SEMBOLLER.get(str(sembol).upper(), "TV kapsam dışı")
+        log(f"  ⏭️  {sembol:<7} {interval:<3} kapsam dışı: {sebep[:80]}")
+        return temel("kapsam_disi", hata=sebep, deneme=0)
+
     son_sebep = ""
     for girisim in range(1, max(1, deneme) + 1):
         if tempo.dur:
-            return {
-                "sembol": sembol, "interval": interval, "durum": "durduruldu",
-                "ticker": ticker, "hata": "tempo ban koruması koşuyu durdurdu",
-                "deneme": girisim - 1, "sure_sn": round(time.monotonic() - basladi, 1),
-            }
+            return temel("durduruldu", hata="tempo ban koruması koşuyu durdurdu", deneme=girisim - 1)
         tempo.bekle()
-        df, sebep, gecici = _ham_cek(ticker, period, interval)
+        if kaynak == "yahoo":
+            df, sebep, gecici = _ham_cek(provider_symbol, period, provider_interval)
+        else:
+            df, sebep, gecici = nk.tv_ham_cek(
+                sembol, interval, tv_bar_sayisi, exchange=tv_exchange
+            )
         tempo.istek_bitti()
 
         if df is not None and len(df) > 0:
@@ -451,44 +517,34 @@ def sembol_cek(
                 try:
                     satir = _csv_gz_yaz(yol, df)
                 except Exception as exc:  # noqa: BLE001
-                    return {
-                        "sembol": sembol, "interval": interval, "durum": "yazma_hatasi",
-                        "ticker": ticker, "hata": f"{type(exc).__name__}: {exc}",
-                        "deneme": girisim, "sure_sn": round(time.monotonic() - basladi, 1),
-                    }
+                    return temel("yazma_hatasi", hata=f"{type(exc).__name__}: {exc}", deneme=girisim)
                 tempo.basarili()
                 ilk, son = str(df.index[0]), str(df.index[-1])
-                log(f"  ✅ {sembol:<7} {interval:<3} {satir:>5} bar  {ilk[:10]} → {son[:16]}")
-                return {
-                    "sembol": sembol, "interval": interval, "durum": "ok",
-                    "ticker": ticker, "dosya": yol.name, "satir": satir,
-                    "period": period, "ilk_bar": ilk, "son_bar": son,
-                    "kalite": _kalite_raporu(df), "deneme": girisim,
-                    "sure_sn": round(time.monotonic() - basladi, 1),
-                }
+                log(f"  ✅ {sembol:<7} {interval:<3} {kaynak:<10} {satir:>5} bar  {ilk[:10]} → {son[:16]}")
+                return temel(
+                    "ok",
+                    dosya=yol.name,
+                    satir=satir,
+                    ilk_bar=ilk,
+                    son_bar=son,
+                    kalite=_kalite_raporu(df),
+                    deneme=girisim,
+                )
 
         son_sebep = sebep or "boş veri"
         if gecici:
             tempo.gecici_hata(son_sebep)
             if girisim < deneme:
                 bekleme = random.uniform(30.0, 60.0) * girisim
-                log(f"  ⏳ {sembol} {interval}: geçici hata, {bekleme:.0f} sn sonra {girisim+1}. deneme ({son_sebep[:70]})")
+                log(f"  ⏳ {sembol} {interval}/{kaynak}: geçici hata, {bekleme:.0f} sn sonra "
+                    f"{girisim+1}. deneme ({son_sebep[:70]})")
                 time.sleep(bekleme)
             continue
-        # Kalıcı hata: tekrar deneme, isteği boşa harcama
-        log(f"  ❌ {sembol:<7} {interval:<3} KALICI: {son_sebep[:90]}")
-        return {
-            "sembol": sembol, "interval": interval, "durum": "kalici_basarisiz",
-            "ticker": ticker, "hata": son_sebep, "deneme": girisim,
-            "sure_sn": round(time.monotonic() - basladi, 1),
-        }
+        log(f"  ❌ {sembol:<7} {interval:<3} {kaynak:<10} KALICI: {son_sebep[:90]}")
+        return temel("kalici_basarisiz", hata=son_sebep, deneme=girisim)
 
-    log(f"  ⚠️ {sembol:<7} {interval:<3} denemeler tükendi: {son_sebep[:90]}")
-    return {
-        "sembol": sembol, "interval": interval, "durum": "gecici_basarisiz",
-        "ticker": ticker, "hata": son_sebep, "deneme": deneme,
-        "sure_sn": round(time.monotonic() - basladi, 1),
-    }
+    log(f"  ⚠️ {sembol:<7} {interval:<3} {kaynak:<10} denemeler tükendi: {son_sebep[:90]}")
+    return temel("gecici_basarisiz", hata=son_sebep, deneme=deneme)
 
 
 # -----------------------------------------------------------------------------
@@ -520,24 +576,42 @@ def manifest_yaz(hedef: Path, veri: Dict[str, Any]) -> None:
     os.replace(gecici, yol)
 
 
+def json_yaz(yol: Path, veri: Dict[str, Any]) -> None:
+    """Manifest dışındaki raporlar için atomik JSON yazımı."""
+    yol.parent.mkdir(parents=True, exist_ok=True)
+    gecici = yol.with_suffix(yol.suffix + ".tmp")
+    with open(gecici, "w", encoding="utf-8") as fh:
+        json.dump(veri, fh, ensure_ascii=False, indent=1, sort_keys=True)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(gecici, yol)
+
+
 def anahtar(sembol: str, interval: str) -> str:
     return f"{sembol}:{interval}"
 
 
-def atlanmali_mi(onceki: Optional[Dict[str, Any]], dosya: Path, *, zorla: bool) -> bool:
-    """Bu (sembol, interval) çifti yeniden çekilmeli mi, atlanmalı mı?
+def atlanmali_mi(
+    onceki: Optional[Dict[str, Any]],
+    dosya: Path,
+    *,
+    zorla: bool,
+    beklenen_kaynak: Optional[str] = None,
+) -> bool:
+    """Bu (sembol, interval, kaynak) çifti yeniden çekilmeli mi, atlanmalı mı?
 
-    Atlama koşulu ÜÇLÜ: manifest kaydı `ok` VE dosya diskte gerçekten var VE
-    `--zorla` verilmemiş. Neden dosya da kontrol ediliyor: manifest yazıldıktan
-    sonra dosya silinmiş/bozulmuş olabilir (Termux'ta depolama temizliği yaygın);
-    yalnız manifest'e güvenmek "çekilmiş görünen ama diskte olmayan" veri üretir.
-
-    `--retry-failed` bu fonksiyonu DEĞİŞTİRMEZ: o bayrak yalnız başarısız
-    kayıtları seçer, başarılı olanlar yine atlanır.
+    Atlama koşulu: manifest kaydı ``ok`` + ``native=True`` + beklenen kaynakla
+    aynı + dosya diskte gerçekten var + ``--zorla`` yok. Eski türetimli/ kaynak
+    etiketsiz kayıtlar BİLEREK yeniden çekilir; aksi halde 1h'den resample
+    edilmiş eski veri native arşivde kalabilir.
     """
     if zorla:
         return False
     if not onceki or onceki.get("durum") != "ok":
+        return False
+    if onceki.get("native") is not True:
+        return False
+    if beklenen_kaynak is not None and onceki.get("kaynak") != beklenen_kaynak:
         return False
     return bool(dosya.exists())
 
@@ -545,35 +619,71 @@ def atlanmali_mi(onceki: Optional[Dict[str, Any]], dosya: Path, *, zorla: bool) 
 # -----------------------------------------------------------------------------
 # Probe — hangi semboller Yahoo'da gerçekten var
 # -----------------------------------------------------------------------------
-def probe(semboller: Sequence[str], hedef: Path, tempo: Tempo, *, log=print) -> Dict[str, Any]:
-    """Sembol başına TEK ucuz istekle geçerlilik testi (5d/1d).
+def probe(
+    semboller: Sequence[str],
+    hedef: Path,
+    tempo: Tempo,
+    *,
+    log=print,
+    tv_bar_sayisi: int = 5,
+    tv_exchange: str = "BIST",
+) -> Dict[str, Any]:
+    """Her sembol için Yahoo 1d + TradingView native 4h geçerlilik testi.
 
-    Neden ayrı mod: havuz doğrulanmamış ve BIST100 bileşimi değişiyor. Probe
-    404'leri ve boş dönenleri önceden eler; asıl çekimde boşa istek atılmaz.
+    Yalnız İKİ kaynak da veri döndürürse sembol ``dogrulanmis_semboller.txt``
+    listesine girer. Böylece tam çekimde 2h/4h için boşa WS isteği atılmaz ve
+    dört native dosyası olmayan sembol replay'e sokulmaz.
     """
-    sonuc: Dict[str, Any] = {"gecerli": [], "gecersiz": {}, "tarih": _simdi_iso()}
+    nk = _native_kaynak_yukle()
+    sonuc: Dict[str, Any] = {
+        "tarih": _simdi_iso(),
+        "mod": "native-karma",
+        "kaynak_plani": nk.KAYNAK_PLANI,
+        "kaynak_plani_ozeti": nk.kaynak_plani_ozeti(),
+        "tv_dagitim": nk.tv_hazirlik_raporu(),
+        "yahoo_probe": "5d/1d",
+        "tv_probe": f"{max(1, int(tv_bar_sayisi))} bar/4h/{tv_exchange}",
+        "gecerli": [],
+        "gecersiz": {},
+        "kaynak_ozeti": {},
+    }
     for i, sembol in enumerate(semboller, 1):
         tempo.bekle()
-        df, sebep, gecici = _ham_cek(ticker_for(sembol), "5d", "1d")
+        yahoo_df, yahoo_sebep, yahoo_gecici = _ham_cek(ticker_for(sembol), "5d", "1d")
         tempo.istek_bitti()
-        if df is not None and len(df) > 0:
+        if yahoo_gecici:
+            tempo.gecici_hata(f"yahoo: {yahoo_sebep}")
+
+        tempo.bekle()
+        tv_df, tv_sebep, tv_gecici = nk.tv_ham_cek(
+            sembol, "4h", tv_bar_sayisi, exchange=tv_exchange
+        )
+        tempo.istek_bitti()
+        if tv_gecici:
+            tempo.gecici_hata(f"tv: {tv_sebep}")
+
+        yahoo_ok = yahoo_df is not None and len(yahoo_df) > 0
+        tv_ok = tv_df is not None and len(tv_df) > 0
+        sonuc["kaynak_ozeti"][sembol] = {
+            "yahoo": "ok" if yahoo_ok else yahoo_sebep[:160],
+            "tvdatafeed": "ok" if tv_ok else tv_sebep[:160],
+        }
+        if yahoo_ok and tv_ok:
             tempo.basarili()
             sonuc["gecerli"].append(sembol)
-            log(f"  [{i}/{len(semboller)}] ✅ {sembol}")
+            log(f"  [{i}/{len(semboller)}] ✅ {sembol} (yahoo + tv native)")
         else:
-            if gecici:
-                tempo.gecici_hata(sebep)
-            sonuc["gecersiz"][sembol] = sebep[:160]
-            log(f"  [{i}/{len(semboller)}] ❌ {sembol}: {sebep[:80]}")
+            sonuc["gecersiz"][sembol] = (
+                f"yahoo: {yahoo_sebep[:100] or 'ok'} | tv: {tv_sebep[:100] or 'ok'}"
+            )
+            log(f"  [{i}/{len(semboller)}] ❌ {sembol}: {sonuc['gecersiz'][sembol][:110]}")
         if tempo.dur:
             sonuc["uyari"] = "tempo ban koruması probe'u erken durdurdu"
             break
     sonuc["gecerli_sayisi"] = len(sonuc["gecerli"])
     sonuc["gecersiz_sayisi"] = len(sonuc["gecersiz"])
     hedef.mkdir(parents=True, exist_ok=True)
-    with open(hedef / "probe_sonucu.json", "w", encoding="utf-8") as fh:
-        json.dump(sonuc, fh, ensure_ascii=False, indent=1, sort_keys=True)
-    # Doğrulanmış liste — asıl çekime doğrudan beslenebilir
+    json_yaz(hedef / "probe_sonucu.json", sonuc)
     with open(hedef / "dogrulanmis_semboller.txt", "w", encoding="utf-8") as fh:
         fh.write("\n".join(sonuc["gecerli"]) + ("\n" if sonuc["gecerli"] else ""))
     log(f"\nProbe bitti: {sonuc['gecerli_sayisi']} geçerli, {sonuc['gecersiz_sayisi']} geçersiz")
@@ -619,21 +729,71 @@ def sembol_listesi_coz(args) -> List[str]:
 
 
 # -----------------------------------------------------------------------------
+# Kaynak raporu — TF x kaynak x durum + eksik native dosyalar
+# -----------------------------------------------------------------------------
+def kaynak_raporu_olustur(
+    hedef: Path,
+    kayitlar: Dict[str, Any],
+    intervals: Sequence[str],
+    tv_hazirlik: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Manifest + disk üzerinden kaynak/TF etiketli denetim raporu üretir."""
+    nk = _native_kaynak_yukle()
+    semboller = sorted({
+        str(v.get("sembol")) for v in kayitlar.values() if v.get("sembol")
+    })
+    beklenen = [
+        hedef / f"{sembol}_{tf}.csv.gz"
+        for sembol in semboller
+        for tf in VARSAYILAN_ARALIKLAR
+    ]
+    eksik = [str(yol.relative_to(hedef)) for yol in beklenen if not yol.exists()]
+    durumlar: Dict[str, int] = {}
+    for kayit in kayitlar.values():
+        anahtar = "|".join(str(kayit.get(k, "?")) for k in ("interval", "kaynak", "durum"))
+        durumlar[anahtar] = durumlar.get(anahtar, 0) + 1
+    return {
+        "tarih": _simdi_iso(),
+        "surum": "native-1",
+        "arsiv_modu": "native",
+        "native_zorunlu": True,
+        "zaman_dilimleri": list(VARSAYILAN_ARALIKLAR),
+        "bu_kosu_araliklari": list(intervals),
+        "kaynak_plani": nk.KAYNAK_PLANI,
+        "kaynak_plani_ozeti": nk.kaynak_plani_ozeti(),
+        "tv_dagitim": tv_hazirlik,
+        "sembol_sayisi": len(semboller),
+        "beklenen_dosya_sayisi": len(beklenen),
+        "diskteki_dosya_sayisi": len(beklenen) - len(eksik),
+        "eksik_dosya_sayisi": len(eksik),
+        "eksik_dosyalar": eksik[:200],
+        "kayit_durum_ozeti": durumlar,
+        "resample_kullanildi": False,
+    }
+
+
+# -----------------------------------------------------------------------------
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    nk = _native_kaynak_yukle()
     p = argparse.ArgumentParser(
-        description="BIST derin geçmiş çekicisi (yalnız Yahoo -> disk; Supabase/Telegram yok).",
+        description="BIST derin geçmiş çekicisi (Yahoo 1h/1d + TradingView native 2h/4h -> disk).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--hedef", default=VARSAYILAN_HEDEF, help=f"çıktı dizini (varsayılan: {VARSAYILAN_HEDEF})")
-    p.add_argument("--probe", action="store_true", help="yalnız geçerlilik testi (sembol başına 1 ucuz istek)")
-    p.add_argument("--semboller", default="", help="virgülle ayrılmış sembol listesi (havuz/liste yerine)")
-    p.add_argument("--liste-dosyasi", default="", help="sembol listesini dosyadan oku (örn. dogrulanmis_semboller.txt)")
+    p.add_argument("--probe", action="store_true", help="Yahoo + TV native geçerlilik testi")
+    p.add_argument("--semboller", default="", help="virgülle ayrılmış sembol listesi")
+    p.add_argument("--liste-dosyasi", default="", help="sembol listesini dosyadan oku")
     p.add_argument("--limit", type=int, default=0, help="yalnız ilk N sembol (pilot için)")
-    p.add_argument("--period-1h", default=VARSAYILAN_PERIOD_1H, help="1h geçmişi (varsayılan 365d; Yahoo üst sınırı ~730d)")
-    p.add_argument("--period-1d", default=VARSAYILAN_PERIOD_1D, help="1d geçmişi (varsayılan 2y)")
-    p.add_argument("--interval", default="1h,1d", help="çekilecek aralıklar (varsayılan: 1h,1d)")
-    p.add_argument("--deneme", type=int, default=3, help="geçici hatada azami deneme (varsayılan 3)")
-    p.add_argument("--retry-failed", action="store_true", help="yalnız manifest'te başarısız olanları dene")
+    p.add_argument("--period-1h", default=VARSAYILAN_PERIOD_1H, help="Yahoo 1h geçmişi (varsayılan 365d)")
+    p.add_argument("--period-1d", default=VARSAYILAN_PERIOD_1D, help="Yahoo 1d geçmişi (varsayılan 2y)")
+    p.add_argument("--interval", default=",".join(VARSAYILAN_ARALIKLAR),
+                   help="çekilecek NATIVE aralıklar (varsayılan: 1h,2h,4h,1d)")
+    p.add_argument("--tv-bar-sayisi", type=int, default=VARSAYILAN_TV_BAR_SAYISI,
+                   help=f"TV 2h/4h istenen bar sayısı (varsayılan {VARSAYILAN_TV_BAR_SAYISI})")
+    p.add_argument("--tv-exchange", default=nk.TV_VARSAYILAN_EXCHANGE,
+                   help=f"TradingView exchange (varsayılan: {nk.TV_VARSAYILAN_EXCHANGE})")
+    p.add_argument("--deneme", type=int, default=3, help="geçici hatada azami deneme")
+    p.add_argument("--retry-failed", action="store_true", help="yalnız başarısız/eksik kayıtları dene")
     p.add_argument("--zorla", action="store_true", help="başarılı kayıtları da yeniden çek")
     p.add_argument("--grup", type=int, default=GRUP_BOYUTU, help=f"molalar arası istek sayısı (varsayılan {GRUP_BOYUTU})")
     p.add_argument("--wake-lock", action="store_true", help="Termux'ta ekran kilidi/uyku engelini dene")
@@ -653,30 +813,63 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
 
     intervals = [i.strip().lower() for i in args.interval.split(",") if i.strip()]
-    tempo = Tempo(grup=args.grup, log=log)
+    gecersiz = [i for i in intervals if i not in nk.KAYNAK_PLANI]
+    if gecersiz:
+        log(f"HATA: desteklenmeyen aralıklar: {gecersiz}. Geçerli: {list(nk.KAYNAK_PLANI)}")
+        return 2
+    if args.tv_bar_sayisi <= 0:
+        log("HATA: --tv-bar-sayisi > 0 olmalı")
+        return 2
 
+    tv_gerekli = any(nk.KAYNAK_PLANI[i] == "tvdatafeed" for i in intervals)
+    tv_hazirlik = (
+        nk.tv_hazirlik_raporu()
+        if tv_gerekli
+        else {"hazir": True, "dagitim": "kullanilmadi", "surum": "-"}
+    )
+    if tv_gerekli and not tv_hazirlik.get("hazir"):
+        log("HATA: TradingView native 2h/4h için doğrulanmış kurulum yok:")
+        log(f"  {tv_hazirlik.get('hata')}")
+        log("  python -m pip install tradingview-datafeed==2.1.1 websocket-client==1.9.2")
+        return 2
+
+    tempo = Tempo(grup=args.grup, log=log)
     if args.wake_lock:
         _wake_lock(log)
 
-    log("=" * 68)
-    log("BIST DERİN GEÇMİŞ ÇEKİCİSİ — yalnız Yahoo -> disk")
-    log("=" * 68)
+    log("=" * 72)
+    log("BIST DERİN GEÇMİŞ ÇEKİCİSİ — NATIVE Yahoo + TradingView -> disk")
+    log("=" * 72)
     log(f"Hedef dizin : {hedef.resolve()}")
     log(f"Sembol      : {len(semboller)} ({semboller[0]} ... {semboller[-1]})")
     log(f"Aralıklar   : {intervals}")
+    log(f"Kaynak      : {', '.join(f'{tf}={nk.KAYNAK_PLANI[tf]}' for tf in intervals)}")
+    log(f"TV dağıtım  : {tv_hazirlik.get('dagitim')}=={tv_hazirlik.get('surum')} "
+        f"(hazır={tv_hazirlik.get('hazir')})")
     if not args.probe:
-        log(f"Period      : 1h={args.period_1h}  1d={args.period_1d}")
+        log(f"Period/bar  : Yahoo 1h={args.period_1h} 1d={args.period_1d} · "
+            f"TV 2h/4h={args.tv_bar_sayisi} bar")
     log(f"Tempo       : grup={args.grup}, istek arası {ISTEK_ARA_MIN_SN}-{ISTEK_ARA_MAX_SN} sn, "
         f"grup molası {GRUP_MOLA_MIN_SN:.0f}-{GRUP_MOLA_MAX_SN:.0f} sn")
-    tahmini = len(semboller) * (1 if args.probe else len(intervals))
+    tahmini = len(semboller) * (2 if args.probe else len(intervals))
     log(f"Tahmini istek: {tahmini}  (~{tahmini/args.grup*(args.grup*1.2+12.5)/60:.0f} dk)")
     log("")
 
     if args.probe:
-        probe(semboller, hedef, tempo, log=log)
+        probe(semboller, hedef, tempo, log=log,
+              tv_bar_sayisi=args.tv_bar_sayisi, tv_exchange=args.tv_exchange)
         return 1 if tempo.dur else 0
 
     manifest = manifest_oku(hedef)
+    manifest.update({
+        "surum": "native-1",
+        "arsiv_modu": "native",
+        "native_zorunlu": True,
+        "zaman_dilimleri": list(VARSAYILAN_ARALIKLAR),
+        "kaynak_plani": nk.KAYNAK_PLANI,
+        "kaynak_plani_ozeti": nk.kaynak_plani_ozeti(),
+        "tv_dagitim": tv_hazirlik,
+    })
     kayitlar: Dict[str, Any] = manifest["kayitlar"]
     kosu_basladi = time.monotonic()
     sayac = {"ok": 0, "atlandi": 0, "kalici": 0, "gecici": 0, "diger": 0}
@@ -690,12 +883,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             k = anahtar(sembol, interval)
             onceki = kayitlar.get(k)
             dosya = hedef / f"{sembol}_{interval}.csv.gz"
-            if atlanmali_mi(onceki, dosya, zorla=args.zorla):
-                log(f"  ⏭️  {interval}: zaten çekilmiş ({(onceki or {}).get('satir')} bar) — atlandı")
+            beklenen_kaynak = nk.KAYNAK_PLANI[interval]
+            if args.retry_failed and onceki and onceki.get("durum") in ("ok", "kapsam_disi"):
+                log(f"  ⏭️  {interval}: önceki kayıt terminal ({onceki.get('durum')}) — atlandı")
+                sayac["atlandi"] += 1
+                continue
+            if atlanmali_mi(onceki, dosya, zorla=args.zorla, beklenen_kaynak=beklenen_kaynak):
+                log(f"  ⏭️  {interval}: native {beklenen_kaynak} çekilmiş "
+                    f"({(onceki or {}).get('satir')} bar) — atlandı")
                 sayac["atlandi"] += 1
                 continue
             period = args.period_1h if interval == "1h" else args.period_1d
-            kayit = sembol_cek(sembol, interval, period, hedef, tempo, deneme=args.deneme, log=log)
+            kayit = sembol_cek(
+                sembol, interval, period, hedef, tempo,
+                deneme=args.deneme, log=log,
+                tv_bar_sayisi=args.tv_bar_sayisi,
+                tv_exchange=args.tv_exchange,
+                kaynak=beklenen_kaynak,
+            )
             kayit["zaman"] = _simdi_iso()
             kayitlar[k] = kayit
             durum = kayit["durum"]
@@ -707,15 +912,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 sayac["gecici"] += 1
             else:
                 sayac["diger"] += 1
-            # Her adımda yaz: Termux'ta süreç ölürse ilerleme kaybolmaz
             manifest["kayitlar"] = kayitlar
             manifest_yaz(hedef, manifest)
 
     sure = round(time.monotonic() - kosu_basladi, 1)
     ozet = {
-        "basladi": _simdi_iso(), "sure_sn": sure, "mod": "backfill",
+        "basladi": _simdi_iso(), "sure_sn": sure, "mod": "native-backfill",
         "sembol_sayisi": len(semboller), "araliklar": intervals,
+        "kaynak_plani": {tf: nk.KAYNAK_PLANI[tf] for tf in intervals},
         "period_1h": args.period_1h, "period_1d": args.period_1d,
+        "tv_bar_sayisi": args.tv_bar_sayisi, "tv_exchange": args.tv_exchange,
+        "tv_dagitim": tv_hazirlik,
         "sonuclar": sayac, "toplam_istek": tempo.toplam_istek,
         "soguma_sayisi": tempo.soguma_sayisi, "ban_korumasi_durdurdu": tempo.dur,
     }
@@ -723,19 +930,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     manifest["son_kosu"] = ozet
     manifest_yaz(hedef, manifest)
 
+    rapor = kaynak_raporu_olustur(hedef, kayitlar, intervals, tv_hazirlik)
+    json_yaz(hedef / "kaynak_raporu.json", rapor)
+
     log("")
-    log("=" * 68)
-    log("KOŞU ÖZETİ")
-    log("=" * 68)
+    log("=" * 72)
+    log("KOŞU ÖZETİ — NATIVE 1h/2h/4h/1d")
+    log("=" * 72)
     log(f"Süre        : {sure/60:.1f} dk   Toplam istek: {tempo.toplam_istek}")
     log(f"Başarılı    : {sayac['ok']}")
-    log(f"Atlanan     : {sayac['atlandi']} (zaten çekilmiş)")
-    log(f"Kalıcı hata : {sayac['kalici']} (404/sembol yok — tekrar denenmedi)")
+    log(f"Atlanan     : {sayac['atlandi']}")
+    log(f"Kalıcı hata : {sayac['kalici']}")
     log(f"Geçici hata : {sayac['gecici']} (--retry-failed ile yeniden dene)")
+    log(f"Diğer       : {sayac['diger']} (kapsam dışı/yazma/durduruldu)")
+    log(f"Eksik dosya : {rapor['eksik_dosya_sayisi']} / {rapor['beklenen_dosya_sayisi']}")
     if tempo.soguma_sayisi:
         log(f"Soğuma      : {tempo.soguma_sayisi} kez (ban koruması devreye girdi)")
     if tempo.dur:
         log("⚠️  KOŞU BAN KORUMASIYLA DURDURULDU. Birkaç saat bekleyip --retry-failed koş.")
+    if rapor["eksik_dosya_sayisi"]:
+        log("⚠️  Dört native dosyası tamamlanmayan semboller replay'e ALINMAMALIDIR.")
 
     kirli = [
         (k, v.get("kalite", {})) for k, v in kayitlar.items()
@@ -747,7 +961,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             log(f"     {k}: {kal.get('split_sicramasi_adayi')} bar")
 
     log(f"\nManifest    : {hedef/'manifest.json'}")
-    log("Sonraki adım: docs/kurulum/TERMUX_BACKFILL.md — commit & push")
+    log(f"Kaynak raporu: {hedef/'kaynak_raporu.json'}")
+    log("Sonraki adım: docs/kurulum/TERMUX_BACKFILL.md — doğrulama, commit & push")
     return 1 if tempo.dur else 0
 
 

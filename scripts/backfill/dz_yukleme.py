@@ -22,8 +22,9 @@ geldiği (veya neden NULL kaldığı) `KAPSAM` raporunda toplanır — sessiz ve
 kaybı yoktur.
 
 **Çerçeve bağımlılıkları araştırma yüküyle aynıdır.** touch indeksleri,
-arrival_previous_close, pencere_* ve confirmation OHLC arşiv çerçevesinden
-türetilir (`research.arsiv.tf_frame` — koşuyla birebir aynı resample).
+arrival_previous_close, pencere_* ve confirmation OHLC NATIVE arşiv
+çerçevesinden türetilir (`research.arsiv.tf_frame(..., legacy_resample=False)`
+— koşuyla birebir aynı 1h/2h/4h/1d serisi; 2h/4h 1h'den resample EDİLMEZ).
 
 **Idempotent.** Tüm upsert'ler doğal anahtar/PK üzerinde merge-duplicates ile
 gider; tekrar koşu çoğaltma üretmez. Yükleme kipi `durum.json` ile devam eder.
@@ -161,7 +162,7 @@ class SeriBaglam:
             return self._frame
         from research import arsiv
 
-        frame = arsiv.tf_frame(self.symbol, self.timeframe)
+        frame = arsiv.tf_frame(self.symbol, self.timeframe, legacy_resample=False)
         self._frame = frame
         self.first_bar_time = _bar_zamani(frame.index[0]) if len(frame) else None
         self._zaman_indeks = {pd_ts: i for i, pd_ts in enumerate(frame.index)}
@@ -489,8 +490,14 @@ def event_satiri(
 
 
 # ---------------------------------------------------------------------------
-# dz_bars — backfill_data CSV'leri
+# dz_bars — backfill_data NATIVE CSV'leri
 # ---------------------------------------------------------------------------
+
+def _native_tf(deger: Any) -> str:
+    """CSV intervalini doğrudan timeframe yazar; bilinmeyen -> 1h."""
+    tf = str(deger or "1h").strip().lower()
+    return tf if tf in ("1h", "2h", "4h", "1d") else "1h"
+
 
 def bars_satirlari(sembol: str, df: Any, run_id: str) -> list[dict[str, Any]]:
     """Arşiv CSV çerçevesinden dz_bars satırları (K5 bayrakları türetilir)."""
@@ -507,7 +514,7 @@ def bars_satirlari(sembol: str, df: Any, run_id: str) -> list[dict[str, Any]]:
             split = abs(acilis - onceki_kapanis) / onceki_kapanis > 0.10
         satirlar.append({
             "symbol": sembol,
-            "timeframe": "1h" if getattr(satir, "interval", "1h") == "1h" else "1d",
+            "timeframe": _native_tf(getattr(satir, "interval", "1h")),
             "bar_time": bar_time,
             "open": acilis if not (acilis is not None and math.isnan(acilis)) else None,
             "high": yuksek if yuksek is None or not math.isnan(yuksek) else None,
@@ -603,7 +610,14 @@ def uret(args: argparse.Namespace) -> dict[str, Any]:
     # aralıklar (yalnız seçilen kategoriler)
     dizinler = {k: _jsonl_dizin(arastirma / f"{k}.jsonl") for k in kategoriler if (arastirma / f"{k}.jsonl").exists()}
 
-    kapsam: dict[str, Any] = {"run_id": run_id, "seri": len(plan), "tablolar": {}, "hatalar": [], "atlananlar": {}}
+    kapsam: dict[str, Any] = {
+        "run_id": run_id, "seri": len(plan), "tablolar": {}, "hatalar": [], "atlananlar": {},
+        "arsiv_modu": arsiv.arsiv_modu(),
+        "native_zorunlu": arsiv.arsiv_modu() == "native",
+        "zaman_dilimleri": list(arsiv.ARASTIRMA_TIMEFRAMELERI),
+        "kaynak_plani": arsiv.arsiv_kaynak_plani(),
+        "resample_kullanildi": False,
+    }
     uretilen = {k: 0 for k in kategoriler}
     atlanan = {"event_onay_yok": 0}
 
@@ -852,11 +866,18 @@ def uret_bars(args: argparse.Namespace) -> None:
     run_id = args.run_id or f"dz-{time.strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
     adet = 0
     with (cikti / "dz_bars.jsonl").open("w", encoding="utf-8") as cikti_dosya:
-        for csv_yol in sorted((REPO / "backfill_data").glob("*_*.csv.gz")):
+        from research import arsiv
+
+        kok = arsiv.arsiv_koku()
+        gecerli = set(arsiv.ARASTIRMA_TIMEFRAMELERI)
+        for csv_yol in sorted(kok.glob("*_*.csv.gz")):
             parca = csv_yol.name.rsplit("_", 1)
-            if len(parca) != 2 or parca[1].replace(".csv.gz", "") not in ("1h", "1d"):
+            if len(parca) != 2:
                 continue
-            sembol, aralik = parca[0], parca[1].replace(".csv.gz", "")
+            aralik = parca[1].replace(".csv.gz", "")
+            if aralik not in gecerli:
+                continue
+            sembol = parca[0]
             with gzip.open(csv_yol, "rt", encoding="utf-8") as f:
                 df = pd.read_csv(f)
             if "bar_time" not in df.columns:

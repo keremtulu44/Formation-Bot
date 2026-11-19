@@ -1,13 +1,22 @@
 # Termux için - MINIMAL, build yok
 # Python 3.14 + aarch64 Android - rust derleme hatası var
-# Çözüm: prebuilt paketler + sadece yfinance
+# Çözüm: prebuilt pkg + saf Python/pip paketleri
 
-# Termux pkg ile kurulanlar (pip ile kurma, build hatası verir):
-# pkg install python-numpy python-pandas
-# Bunlar pip list'te görünür ama pkg'den gelir
+# Termux pkg ile kurulanlar (pip ile KURMA, build hatası verir):
+#   pkg install python-numpy python-pandas
+# Bunlar pip list'te görünür ama pkg'den gelir.
 
-# Sadece saf python paketler - build gerektirmeyen:
-yfinance
+# --- NATIVE 1h/2h/4h/1d arşivi (2026-11-18) --------------------------------
+# 1h/1d Yahoo; 2h/4h TradingView/tvDatafeed GERÇEK native barları.
+# `tvdatafeed` ADIYLA PyPI paketi YOK; aynı `tvDatafeed` import modülünü
+# sağlayan doğrulanmış çatal + WS istemcisi requirements-deploy.txt ile aynı
+# pinlerde sabitlenir. Sürüm kayması `scripts.tvdatafeed_client` tarafından
+# fail-closed reddedilir.
+yfinance==1.7.0
+tradingview-datafeed==2.1.1
+websocket-client==1.9.2
+
+# Saf Python yardımcılar (build gerektirmez)
 exchange-calendars
 pytz
 # Bilinen güvenlik duyuruları için en az düzeltilmiş sürümler.
@@ -23,6 +32,7 @@ tabulate
 # İhtiyaç olursa --no-deps ile kur, ama yfinance yeterli
 # pip install borsapy --no-deps  (opsiyonel, test için)
 # Ama bot yfinance ile çalışır; borsapy üretimde otomatik fallback DEĞİLDİR.
+# Ayrıca borsapy 2h/4h native bar VERMEZ; arşivin 2h/4h kaynağı TV'dir.
 
 # pandas/numpy buraya yazma! pkg'den geliyor
 # Eğer illa pip'den kurmak istersen:

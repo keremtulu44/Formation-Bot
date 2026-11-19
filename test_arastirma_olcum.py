@@ -386,11 +386,16 @@ def test_arsiv_bos_frame_sessiz_degil(tmp_path: Path) -> None:
 
 
 def test_arsiv_kaynak_interval_eslemesi() -> None:
-    """2h/4h 1h'den türetilir, 1d native günlük seriden okunur."""
+    """Dört TF de kendi native dosyasından okunur; 2h/4h resample edilmez."""
     from research import arsiv
 
-    assert arsiv.KAYNAK_INTERVAL == {"1h": "1h", "2h": "1h", "4h": "1h", "1d": "1d"}
+    assert arsiv.KAYNAK_INTERVAL == {"1h": "1h", "2h": "2h", "4h": "4h", "1d": "1d"}
+    assert arsiv.KAYNAK_PLANI == {"1h": "yahoo", "2h": "tvdatafeed", "4h": "tvdatafeed", "1d": "yahoo"}
     assert set(arsiv.ARASTIRMA_TIMEFRAMELERI) == {"1h", "2h", "4h", "1d"}
+    from scripts.backfill import native_kaynak
+
+    assert arsiv.KAYNAK_PLANI == native_kaynak.KAYNAK_PLANI
+    assert tuple(arsiv.ARASTIRMA_TIMEFRAMELERI) == native_kaynak.ZAMAN_DILIMLERI
 
 
 def test_arsiv_temizle_high_low_tutarsizligini_ayiklar() -> None:
@@ -417,6 +422,87 @@ def test_arsiv_manifest_bozuk_json_toleransi(tmp_path: Path) -> None:
     (tmp_path / "manifest.json").write_text("{bozuk json", encoding="utf-8")
     assert arsiv.manifest_oku(tmp_path) == {}
     assert arsiv.arsiv_sembolleri(tmp_path) == []
+
+
+
+
+def _native_csv_yaz(kok: Path, sembol: str, tf: str, close: float) -> None:
+    """Ağsız native arşiv fixture'ı; her TF farklı close taşır."""
+    import gzip
+
+    kok.mkdir(parents=True, exist_ok=True)
+    idx = pd.date_range("2026-01-02 09:30", periods=3, freq="h", tz="Europe/Istanbul")
+    frame = pd.DataFrame({
+        "bar_time": [str(t) for t in idx],
+        "open": [close - 1.0] * 3,
+        "high": [close + 1.0] * 3,
+        "low": [close - 2.0] * 3,
+        "close": [close] * 3,
+        "volume": [1000.0] * 3,
+    })
+    with gzip.open(kok / f"{sembol}_{tf}.csv.gz", "wt", encoding="utf-8", newline="") as fh:
+        frame.to_csv(fh, index=False)
+
+
+def _native_manifest_yaz(kok: Path) -> None:
+    import json
+
+    from research import arsiv
+
+    (kok / "manifest.json").write_text(json.dumps({
+        "surum": "native-1",
+        "arsiv_modu": "native",
+        "native_zorunlu": True,
+        "zaman_dilimleri": list(arsiv.ARASTIRMA_TIMEFRAMELERI),
+        "kaynak_plani": arsiv.KAYNAK_PLANI,
+        "kayitlar": {},
+        "kosular": [],
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_native_arsiv_dort_dosya_ve_kaynak_plani_zorunlu(tmp_path: Path) -> None:
+    from research import arsiv
+
+    _native_manifest_yaz(tmp_path)
+    for tf in arsiv.ARASTIRMA_TIMEFRAMELERI:
+        _native_csv_yaz(tmp_path, "TAM", tf, 100.0)
+    for tf in ("1h", "1d"):
+        _native_csv_yaz(tmp_path, "EKSIK", tf, 50.0)
+
+    assert arsiv.arsiv_modu(tmp_path) == "native"
+    assert arsiv.arsiv_kaynak_plani(tmp_path)["4h"] == "tvdatafeed"
+    assert arsiv.arsiv_sembolleri(tmp_path) == ["TAM"]
+    assert arsiv.arsiv_sembolleri(tmp_path, native_only=False) == ["EKSIK", "TAM"]
+
+
+def test_native_tf_frame_resample_cagirmaz_ve_eksikte_hata_verir(tmp_path: Path, monkeypatch) -> None:
+    from research import arsiv
+
+    _native_manifest_yaz(tmp_path)
+    _native_csv_yaz(tmp_path, "TEST", "1h", 10.0)
+    _native_csv_yaz(tmp_path, "TEST", "4h", 400.0)
+
+    import data
+
+    def yanlis_resample(*_a, **_k):
+        raise AssertionError("native replay 1h'den resample çağırmamalı")
+
+    monkeypatch.setattr(data, "resample_ohlcv", yanlis_resample)
+    frame = arsiv.tf_frame("TEST", "4h", kok=tmp_path, legacy_resample=False)
+    assert float(frame.close.iloc[-1]) == 400.0, "4h native dosyası okunmalı"
+
+    (tmp_path / "TEST_4h.csv.gz").unlink()
+    with pytest.raises(FileNotFoundError, match="native 4h"):
+        arsiv.tf_frame("TEST", "4h", kok=tmp_path, legacy_resample=False)
+
+
+def test_native_manifest_eksik_4h_varsayilan_da_resample_etmez(tmp_path: Path) -> None:
+    from research import arsiv
+
+    _native_manifest_yaz(tmp_path)
+    _native_csv_yaz(tmp_path, "TEST", "1h", 10.0)
+    with pytest.raises(FileNotFoundError, match="1h'den resample kapalı"):
+        arsiv.tf_frame("TEST", "4h", kok=tmp_path)
 
 
 # ---------------------------------------------------------------------------

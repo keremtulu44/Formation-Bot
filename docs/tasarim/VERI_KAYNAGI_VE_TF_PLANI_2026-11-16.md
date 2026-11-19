@@ -111,6 +111,27 @@ Kırılırsa ölçüm `red`/açık hata verir; üretim hattı etkilenmez.
 
 - Canlı `data/fetch.py` / `bot/scan.py` hattına tvDatafeed yedeğini bağlamak:
   ölçüm kapısı yeşil olmadan ve kaynak etiketi/senaryo testleri yazılmadan geçiş yok.
-- 2s'yi gerçek çekmek: günde 5 bar için ayrı istek akışı; 4s kazancı zaten alınıyor.
+- 2s'yi **canlı üretimde** gerçek çekmek: günde 5 bar için ayrı istek akışı; 4s kazancı zaten alınıyor. Bu madde arşiv replay'i için 2026-11-18'de aşağıdaki §7 ile revize edildi.
 - Her TF'yi her dilimde çekmek: istek 4-10 katı, karşılığı yok.
+
+## 7. Arşiv replay'i için NATIVE 1h/2h/4h/1d kararı (2026-11-18)
+
+Canlı taramadaki yukarıdaki istek ekonomisi korunur; ancak **araştırma
+replay'i** ayrı bir veri setidir. 170+ sembolde 2h/4h'nin 1h'den
+`resample_ohlcv` ile türetilmesi hacim/fiyat kayması ürettiği için replay
+girdisinden çıkarıldı:
+
+- `1h`/`1d`: Yahoo/yfinance, `auto_adjust=False`, native.
+- `2h`/`4h`: TradingView/tvDatafeed `in_2_hour`/`in_4_hour`, **native WS barları**.
+- `research/arsiv.py`: yeni `native_zorunlu` manifestinde 2h/4h için kendi
+  `_2h.csv.gz` / `_4h.csv.gz` dosyalarını okur; eksikse fail-closed.
+- `scripts/backfill/arastirma_kosu.py` ve `dz_yukleme.py`: strict native çerçeve;
+  eski legacy fallback yalnızca eski manifestli yardımcı çağrılarda kalır.
+- `BRENT`: BIST exchange'inde native 2h/4h yok; doğrulanmış sembol setinden çıkar.
+
+Bu karar canlı `data/fetch.py` / `bot/scan.py` zincirini değiştirmez: orada Yahoo
+birincil, TV yalnızca Yahoo veri döndürmediğinde reaktif yedektir. Ayrıntı ve
+Termux komutları: [`NATIVE_TF_REPLAY_PLANI_2026-11-18.md`](../arastirma/NATIVE_TF_REPLAY_PLANI_2026-11-18.md),
+[`TERMUX_BACKFILL.md`](../kurulum/TERMUX_BACKFILL.md). Bu turda replay
+koşulmadı; önce native verilerin Termux'tan push edilmesi bekleniyor.
 - borsapy'yi fiyat kaynağı yapmak: üretimde import edilmiyor, 2s/4s vermiyor.

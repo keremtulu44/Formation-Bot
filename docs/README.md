@@ -15,11 +15,11 @@
 |---|---|
 | Botu kuracağım / çalıştıracağım | [kurulum/LOCAL_SETUP.md](kurulum/LOCAL_SETUP.md) |
 | Render'a (canlıya) çıkaracağım | [kurulum/RENDER_DEPLOY.md](kurulum/RENDER_DEPLOY.md) |
-| Telefondan arşiv verisi çekeceğim | [kurulum/TERMUX_BACKFILL.md](kurulum/TERMUX_BACKFILL.md) |
+| Telefondan NATIVE 1h/2h/4h/1d arşiv verisi çekeceğim | [kurulum/TERMUX_BACKFILL.md](kurulum/TERMUX_BACKFILL.md) |
 | Canlıya geçiş / güncel deploy ve rollback | [kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md](kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md) (eski plan: [arşiv](operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md)) |
 | Grup hedefi ve komutlar | [Render rehberi](kurulum/RENDER_DEPLOY.md) · geçmiş kararlar: [kanal paketi](operasyon/KANAL_ACILIS_PAKETI.md), [grup hazırlık analizi](operasyon/PUBLIC_GRUP_HAZIRLIK.md) |
 | Formasyon mantığı / Pine farkı | [tasarim/FORMASYON_MANTIGI.md](tasarim/FORMASYON_MANTIGI.md) · [tasarim/PINE_FARK_ANALIZI.md](tasarim/PINE_FARK_ANALIZI.md) |
-| Veri kaynağı / TF geçiş kapısı | [tasarim/VERI_KAYNAGI_VE_TF_PLANI_2026-11-16.md](tasarim/VERI_KAYNAGI_VE_TF_PLANI_2026-11-16.md) (2026-11-18: üretime uygulandı) · [tam TV + Yahoo deploy yolu](denetim/DEPLOY_HAZIRLIK_2026-11-18.md) · [son genel kontrol](denetim/GENEL_KONTROL_2026-11-18.md) |
+| Veri kaynağı / TF geçiş kapısı | [tasarim/VERI_KAYNAGI_VE_TF_PLANI_2026-11-16.md](tasarim/VERI_KAYNAGI_VE_TF_PLANI_2026-11-16.md) (2026-11-18: üretime uygulandı + native replay kararı) · [NATIVE 1h/2h/4h/1d replay veri planı](arastirma/NATIVE_TF_REPLAY_PLANI_2026-11-18.md) · [tam TV + Yahoo deploy yolu](denetim/DEPLOY_HAZIRLIK_2026-11-18.md) · [son genel kontrol](denetim/GENEL_KONTROL_2026-11-18.md) |
 | Deploy + bildirim kuyrukları denetimi | [denetim/DEPLOY_BILDIRIM_DENETIMI_2026-11-18.md](denetim/DEPLOY_BILDIRIM_DENETIMI_2026-11-18.md) · [Render rehberi](kurulum/RENDER_DEPLOY.md) |
 | Grafik tasarım sözleşmesi | [tasarim/GRAFIK_TASARIM.md](tasarim/GRAFIK_TASARIM.md) · [tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md](tasarim/GRAFIK_GUVEN_ODAK_AYRINTI.md) |
 | Telegram kart/bildirim kuralları | [tasarim/TELEGRAM_KART_FORMAT.md](tasarim/TELEGRAM_KART_FORMAT.md) · [tasarim/BILDIRIM_TESLIM_POLITIKASI.md](tasarim/BILDIRIM_TESLIM_POLITIKASI.md) |
@@ -60,7 +60,8 @@
 | [arastirma/AMPIRIK_REFERANS.md](arastirma/AMPIRIK_REFERANS.md) | Yürürlükte | 2026-10-21 | Ölçümü canlı metne bağlayan katman: hangi sayı kartta hangi koşulda görünür (`ampirik_referans.py`) |
 | [arastirma/KOSULLU_CUMLE_OLCUMU.md](arastirma/KOSULLU_CUMLE_OLCUMU.md) | Ölçüm | 2026-10-22 | Koşullu tamamlanma cümlesi: çapraz tablo, aşım kovaları, "yazılmadı" kararı | 
 | [arastirma/REPLAY_OZET_2026-10-21.md](arastirma/REPLAY_OZET_2026-10-21.md) | Kayıt | 2026-10-21 | Son doğrulanmış replay'in okunur özeti: tek tabloda MFE/MAE/NET, örneklem güvenilirliği, açık uçlar |
-| [arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md](arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md) | Ölçüm + hat | 2026-10-28 | 177 sembol × 4 TF tam replay (708/708, 0 hata): anlamlı sonuçlar özeti, `dz_*` depolama hattı (`scripts/backfill/dz_yukleme.py`) ve kolon kapsam raporu |
+| [arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md](arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md) | Ölçüm + hat (legacy) | 2026-10-28 | 177 sembol × 4 TF tam replay (708/708, 0 hata): **2h/4h 1h'den türetilmiş** eski sonuçlar, `dz_*` depolama hattı ve kolon kapsam raporu; native replay için yenilenecek |
+| [arastirma/NATIVE_TF_REPLAY_PLANI_2026-11-18.md](arastirma/NATIVE_TF_REPLAY_PLANI_2026-11-18.md) | Plan | 2026-11-18 | 170+ sembol için 1h/1d Yahoo + 2h/4h TradingView NATIVE çekimi; manifest/probe/rapor etiketleri, Termux akışı, replay sonraki tur |
 | [arastirma/AI_SORU_URETICI_PROMPT.md](arastirma/AI_SORU_URETICI_PROMPT.md) | Yöntem | 2026-10-29 | Kod erişimi olmayan bir yapay zekâya verilecek tek parça soru-üretici prompt: tüm kolon/ölçek/eşik sözlüğü gömülü, depo yolları yalnızca dışlama satırı olarak |
 | [arastirma/REPLAY_SORU_SETI_2026-10-29.md](arastirma/REPLAY_SORU_SETI_2026-10-29.md) | Soru seti | 2026-10-29 | Prompt'tan üretilen S01–S32 soru seti (kodla birebir karşılığı ve cevap sözleşmesi §0–§7 + açık uç sicili §8 E1–E16) |
 | [arastirma/REPLAY_SORU_YANITLARI_2026-10-29.md](arastirma/REPLAY_SORU_YANITLARI_2026-10-29.md) | Üretilen | 2026-10-29 | `research/soru_cevaplama.py` ile S01–S32 cevapları (708 seri, 0 hata): §6 karar özeti 19 canlıya yazılır / 1 kart metni / 7 RED / 1 karar yok / 4 gözlem (S27 çırpınma kuralı yapısal taban nedeniyle RED'e çekildi) |
@@ -92,7 +93,7 @@
 |---|---|---|
 | [kurulum/LOCAL_SETUP.md](kurulum/LOCAL_SETUP.md) | Yürürlükte | Yerel/Termux kurulumu, bilinen build hataları |
 | [kurulum/RENDER_DEPLOY.md](kurulum/RENDER_DEPLOY.md) | Yürürlükte | Render + Supabase + Telegram + keep-alive |
-| [kurulum/TERMUX_BACKFILL.md](kurulum/TERMUX_BACKFILL.md) | Yürürlükte | Telefondan 365 günlük arşiv çekimi |
+| [kurulum/TERMUX_BACKFILL.md](kurulum/TERMUX_BACKFILL.md) | Yürürlükte | Mevcut yerel klondan NATIVE 1h/2h/4h/1d çekimi, doğrulama, commit/push; replay yok |
 
 ### `operasyon/` — canlıya alma ve işletim
 | Dosya | Durum | İçerik |

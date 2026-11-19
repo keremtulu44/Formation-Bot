@@ -3,6 +3,11 @@
 > **Durum:** Ölçüm + depolama hattı · **Tarih:** 2026-10-28 · **Koşu:** `dz-20261028-full`
 > **Okuma süresi:** 3 dk özet · tablo ekleri `ARASTIRMA_BULGULARI.md` (59K karakter)
 > Sayılar bu belgede **o günün koşusundan**; tablo ekindeki hücrelerle birebir aynıdır.
+>
+> **2026-11-18 UYARISI:** Bu koşuda `2h/4h` **1h'den `resample_ohlcv` ile
+> türetilmişti**; hacim/fiyat kayması içerir. Tarihsel kayıt olarak korunur ama
+> yeni NATIVE 1h/2h/4h/1d replay'in sonucu olarak kabul EDİLMEZ. Yeni plan:
+> [`NATIVE_TF_REPLAY_PLANI_2026-11-18.md`](NATIVE_TF_REPLAY_PLANI_2026-11-18.md).
 
 ---
 
@@ -132,6 +137,7 @@ Upsert idempotent; yarıda kesilirse `dz_yukleme/durum.json` kaldığı yerden d
 ## 4 · Sınırlar
 
 - Ölçüm **bant**: 1h penceresi Mayıs-2025'e, 1d Ekim-2024'e kadar; daha uzağı yok.
+- **Yöntem sınırı:** 2h/4h native değil, 1h'den türetilmiş olduğu için hacim/fiyat kayması vardır; 2026-11-18 native veri çekiminden sonra rapor yenilenmelidir.
 - Havuz dışı BRENT ana raporun dışında (istisna koşuldu, satırları dz'de `symbol=BRENT`).
 - NULL kalan kolonlar **boş veri değil, henüz üretilmeyen ölçümdür** — kapsam raporu
   hangi kolonun neden boş olduğunu listeler; doldurma FAZ 2 işidir (engine-record köprüsü).

@@ -1,22 +1,30 @@
-"""``backfill_data/`` arşivini ölçüm için çerçevelere çevirir.
+"""``backfill_data/`` NATIVE arşivini ölçüm için çerçevelere çevirir.
 
-Arşiv 177 sembol x 2 interval (1h, 1d) CSV.gz dosyasıdır. Araştırma dört
-zaman diliminde ölçüm ister (1h, 2h, 4h, 1d); 2h ve 4h repo'nun kendi
-``data.resample_ohlcv`` fonksiyonuyla 1h'den türetilir. Bu fonksiyon BIST
-seansına (09:30) hizalıdır; pandas'in varsayılan gece yarısı hizalaması
-2H/4H mumlarını bir saat kaydırır ve TradingView pivotlarıyla uyuşmaz.
+Yeni arşiv 1h/2h/4h/1d için **dört ayrı native CSV.gz** taşır:
 
-``1d`` için arşivdeki **native günlük** seri kullanılır, 1h'den
-resample edilmiş olan değil. Gerekçe: 1h serisinin 09:30 barı açılış
-seansı müzayede barıdır ve barların %94.6'sında hacmi sıfırdır; oradan
-türetilen günlük açık, Yahoo'nun native günlük açılışıyla birebir
-örtüşmez. Her zaman dilimi zaten bağımsız ölçülür ve rapor zaman
-dilimine göre ayrılır, dolayısıyla bu seçim karşılaştırmayı bozmaz.
+    1h  -> Yahoo
+    2h  -> TradingView/tvDatafeed
+    4h  -> TradingView/tvDatafeed
+    1d  -> Yahoo
 
-``BRENT`` havuzlanmış (cross-symbol) istatistikten çıkarılır: 327 gün,
-günde 23 bar ve yaklaşık 24 saat işlem görür. BIST seans yapısı
-taşımadığı için seansa hizalı resample ve seans içi bar sayımları onda
-anlamsızdır. Sembol bazında ölçülür ama havuz ortalamalarına katılmaz.
+Eski koşularda 2h/4h ``data.resample_ohlcv`` ile 1h'den türetiliyordu; bu,
+özellikle hacim ve açılış/kapanış fiyatlarında sağlayıcının gerçek mumundan
+sapan bir kayma üretiyordu. Yeni ``manifest.json`` ``native_zorunlu=True`` ve
+``arsiv_modu="native"`` taşır; ``tf_frame`` bu modda 2h/4h için **yalnız**
+``<SEM>_2h.csv.gz`` / ``<SEM>_4h.csv.gz`` dosyalarını okur, eksikse açık hata
+verir. Replay/rapor scriptleri ``legacy_resample=False`` ile çağırır; hiçbir
+yeni ölçüm 1h'den türetilmiş 2h/4h barı görmez.
+
+Geriye dönük uyumluluk: manifesti eski (native etiketsiz) arşivlerde doğrudan
+``tf_frame`` çağıran eski yardımcı scriptler için 2h/4h fallback'i varsayılan
+olarak açık kalır. Bu, yeni replay girdisinin bir parçası DEĞİLDİR;
+``arsiv_modu() == "native"`` olan arşivde fallback otomatik kapalıdır ve
+``legacy_resample=False`` her koşulda strict davranır.
+
+``BRENT`` havuzlanmış (cross-symbol) istatistikten çıkarılır: BIST seans yapısı
+taşımadığı için seansa hizalı ölçümler onda anlamsızdır. Ayrıca BIST
+exchange'inde native 2h/4h karşılığı olmadığından yeni native sembol setine
+alınmaz.
 """
 
 from __future__ import annotations
@@ -31,9 +39,12 @@ import pandas as pd
 __all__ = [
     "ARASTIRMA_TIMEFRAMELERI",
     "KAYNAK_INTERVAL",
+    "KAYNAK_PLANI",
     "HAVUZ_DISI_SEMBOLLER",
     "arsiv_koku",
     "manifest_oku",
+    "arsiv_modu",
+    "arsiv_kaynak_plani",
     "arsiv_sembolleri",
     "ham_frame",
     "tf_frame",
@@ -43,8 +54,16 @@ __all__ = [
 #: Ölçüm yapılacak zaman dilimleri. Rapor her biri için ayrı üretilir.
 ARASTIRMA_TIMEFRAMELERI: tuple[str, ...] = ("1h", "2h", "4h", "1d")
 
-#: Her zaman diliminin hangi arşiv intervalinden türediği.
-KAYNAK_INTERVAL: dict[str, str] = {"1h": "1h", "2h": "1h", "4h": "1h", "1d": "1d"}
+#: Her zaman diliminin hangi NATIVE arşiv intervalinden okunduğu (identity).
+KAYNAK_INTERVAL: dict[str, str] = {tf: tf for tf in ARASTIRMA_TIMEFRAMELERI}
+
+#: Native sağlayıcı etiketleri. Backfill manifestindeki planla birebir aynıdır.
+KAYNAK_PLANI: dict[str, str] = {
+    "1h": "yahoo",
+    "2h": "tvdatafeed",
+    "4h": "tvdatafeed",
+    "1d": "yahoo",
+}
 
 #: Havuzlanmış istatistiğe katılmayan semboller ve gerekçeleri.
 HAVUZ_DISI_SEMBOLLER: dict[str, str] = {
@@ -68,23 +87,64 @@ def arsiv_koku(kok: str | Path | None = None) -> Path:
 
 
 def manifest_oku(kok: str | Path | None = None) -> dict[str, Any]:
-    """``manifest.json`` içeriğini döndürür; yoksa ya da bozuksa boş sözlük.
-
-    Bozuk JSON'a tolerans gösterilir çünkü arşivin kendisi ölçümün girdisidir
-    ve manifest yokluğu ölçümü durdurmamalıdır; yalnız denetim raporunda
-    "manifest okunamadı" olarak görünür.
-    """
+    """``manifest.json`` içeriğini döndürür; yoksa ya da bozuksa boş sözlük."""
     return temizle_json(arsiv_koku(kok) / "manifest.json") or {}
 
 
-def arsiv_sembolleri(kok: str | Path | None = None) -> list[str]:
-    """Arşivde 1h dosyası bulunan sembolleri alfabetik döndürür."""
+def arsiv_modu(kok: str | Path | None = None) -> str:
+    """``"native"`` veya ``"legacy"``.
+
+    Yeni backfill manifesti üç işaretten biriyle native sayılır:
+    ``native_zorunlu=True``, ``arsiv_modu="native"`` veya ``surum="native-*"``.
+    Eski 1h+1d arşivlerinde manifestte bunlar yoktur; legacy uyumluluk modu
+    döner.
+    """
+    meta = manifest_oku(kok)
+    if meta.get("native_zorunlu") is True:
+        return "native"
+    if str(meta.get("arsiv_modu", "")).strip().lower() == "native":
+        return "native"
+    if str(meta.get("surum", "")).strip().lower().startswith("native-"):
+        return "native"
+    return "legacy"
+
+
+def arsiv_kaynak_plani(kok: str | Path | None = None) -> dict[str, str]:
+    """Manifestteki kaynak planını döndürür; yoksa yerel varsayılan plan."""
+    plan = manifest_oku(kok).get("kaynak_plani")
+    if isinstance(plan, dict) and all(tf in plan for tf in ARASTIRMA_TIMEFRAMELERI):
+        return {tf: str(plan[tf]) for tf in ARASTIRMA_TIMEFRAMELERI}
+    return dict(KAYNAK_PLANI)
+
+
+def arsiv_sembolleri(
+    kok: str | Path | None = None,
+    *,
+    native_only: bool | None = None,
+) -> list[str]:
+    """Arşivde ölçülebilecek sembolleri alfabetik döndürür.
+
+    Native arşivde bir sembolün **dört** dosyasının da bulunması şarttır; eksik
+    2h/4h dosyası olan sembol sessizce replay'e alınmaz. Eski manifestli
+    arşivlerde (veya açık ``native_only=False``) 1h dosyası yeterlidir.
+    """
     root = arsiv_koku(kok)
     if not root.exists():
         return []
-    semboller = sorted(p.name[: -len("_1h.csv.gz")] for p in root.glob("*_1h.csv.gz"))
-    return semboller
-
+    if native_only is None:
+        native_only = arsiv_modu(kok) == "native"
+    if not native_only:
+        return sorted(p.name[: -len("_1h.csv.gz")] for p in root.glob("*_1h.csv.gz"))
+    kumeler = [
+        {
+            p.name[: -len(f"_{tf}.csv.gz")]
+            for p in root.glob(f"*_{tf}.csv.gz")
+        }
+        for tf in ARASTIRMA_TIMEFRAMELERI
+    ]
+    if not kumeler:
+        return []
+    return sorted(set.intersection(*kumeler))
 
 
 def _anahtar(sembol: str, interval: str, tur: str, kok: str | Path | None) -> tuple:
@@ -106,12 +166,9 @@ def _sakla(anahtar: tuple, frame: pd.DataFrame) -> pd.DataFrame:
     _OBELLEK[anahtar] = frame
     return frame.copy(deep=True)
 
-def ham_frame(sembol: str, interval: str, kok: str | Path | None = None) -> pd.DataFrame:
-    """Arşivdeki ham intervali DatetimeIndex'li OHLCV çerçevesi olarak okur.
 
-    ``bar_time`` metin olarak saklanır (repo kuralı: timestamptz değil) ve
-    ``+03:00`` ofsetlidir. Sıra korunur; arşiv zaten kronolojik yazılır.
-    """
+def ham_frame(sembol: str, interval: str, kok: str | Path | None = None) -> pd.DataFrame:
+    """Arşivdeki NATIVE intervali DatetimeIndex'li OHLCV çerçevesi olarak okur."""
     anahtar = _anahtar(sembol, interval, f"raw:{interval}", kok)
     kayit = _OBELLEK.get(anahtar)
     if kayit is not None:
@@ -131,25 +188,46 @@ def ham_frame(sembol: str, interval: str, kok: str | Path | None = None) -> pd.D
     return _sakla(anahtar, ham)
 
 
-def tf_frame(sembol: str, timeframe: str, kok: str | Path | None = None) -> pd.DataFrame:
-    """Sembol için istenen zaman diliminin çerçevesini üretir (önbellekli)."""
+def tf_frame(
+    sembol: str,
+    timeframe: str,
+    kok: str | Path | None = None,
+    *,
+    legacy_resample: bool | None = None,
+) -> pd.DataFrame:
+    """Sembol için istenen NATIVE zaman diliminin çerçevesini üretir (önbellekli).
+
+    ``legacy_resample=False`` replay sözleşmesidir: 2h/4h dosyası yoksa 1h'den
+    türetim yapılmaz, ``FileNotFoundError`` fırlatılır. ``None`` ise karar
+    manifest moduna bırakılır: yeni native arşiv strict, eski arşiv uyumluluk.
+    """
+    if timeframe not in KAYNAK_INTERVAL:
+        raise KeyError(f"desteklenmeyen zaman dilimi: {timeframe!r}")
     kaynak = KAYNAK_INTERVAL[timeframe]
-    anahtar = _anahtar(sembol, kaynak, timeframe, kok)
-    kayit = _OBELLEK.get(anahtar)
-    if kayit is not None:
-        return kayit.copy(deep=True)
-    ham = ham_frame(sembol, kaynak, kok)
-    if timeframe == kaynak:
+    if legacy_resample is None:
+        legacy_resample = arsiv_modu(kok) == "legacy"
+    root = arsiv_koku(kok)
+    native_yol = root / f"{sembol}_{kaynak}.csv.gz"
+
+    if native_yol.exists():
+        anahtar = _anahtar(sembol, kaynak, f"native:{timeframe}", kok)
+        kayit = _OBELLEK.get(anahtar)
+        if kayit is not None:
+            return kayit.copy(deep=True)
+        ham = ham_frame(sembol, kaynak, kok)
         frame = ham.copy()
-    else:
+        kaynak_modu = f"native:{kaynak}"
+    elif timeframe in ("2h", "4h") and legacy_resample:
+        # YALNIZ eski manifest uyumluluğu. Yeni replay bu dala girmez.
+        anahtar = _anahtar(sembol, "1h", f"legacy:{timeframe}", kok)
+        kayit = _OBELLEK.get(anahtar)
+        if kayit is not None:
+            return kayit.copy(deep=True)
+        ham = ham_frame(sembol, "1h", kok)
         from data import resample_ohlcv
 
         # DatetimeIndex KORUNARAK verilir: resample_ohlcv kova çapasını
-        # İstanbul saatine göre SABİT 09:30'a bağlar (FAZ düzeltmesi,
-        # 2026-10-23); tz bilgisi bunun için şarttır. UTC girdi, çapa
-        # İstanbul'da hesaplanıp UTC'ye geri çevrilerek aynen korunur.
-        # Int index verilirse fonksiyon boş DataFrame döndürür
-        # (sessiz veri kaybı) — o yüzden index'e dokunulmuyor.
+        # İstanbul saatine göre SABİT 09:30'a bağlar; tz bilgisi şarttır.
         frame = resample_ohlcv(ham, timeframe)
         if not isinstance(frame.index, pd.DatetimeIndex):
             if "timestamp" in frame.columns:
@@ -157,28 +235,34 @@ def tf_frame(sembol: str, timeframe: str, kok: str | Path | None = None) -> pd.D
             else:
                 raise ValueError(f"{sembol}/{timeframe}: resample DatetimeIndex üretmedi")
         frame = frame.sort_index()
+        kaynak_modu = "legacy:1h"
+    else:
+        raise FileNotFoundError(
+            f"native {timeframe} arşiv dosyası yok: {native_yol}. "
+            "1h'den resample kapalı; önce Termux native çekimini çalıştır "
+            "(docs/kurulum/TERMUX_BACKFILL.md)."
+        )
+
     frame = temizle(frame)
     if frame is None or len(frame) == 0:
-        # Sessiz sıfır yerine gürültülü hata: boş frame "ölçülecek zone yok"
-        # ile karışır ve raporda yanlışlıkla sıfır gözlem olarak görünür.
-        raise ValueError(f"{sembol}/{timeframe}: resample/temizlik sonrası boş frame (kaynak {kaynak}, {len(ham)} bar)")
+        raise ValueError(
+            f"{sembol}/{timeframe}: {kaynak_modu} temizlik sonrası boş frame "
+            f"({len(ham)} ham bar)"
+        )
     return _sakla(anahtar, frame)
 
 
 def temizle(frame: pd.DataFrame) -> pd.DataFrame:
     """NaN OHLC satırlarını ve pozitif olmayan yüksek/düşük tutarsızlığını ayıklar.
 
-    Kalite bayrağı düşürmek yerine satırı tamamen çıkarmak burada güvenlidir:
-    arşivin NaN OHLC sayısı ölçümde **sıfır** bulundu. Yine de ileriye dönük
-    koruma olarak tutulur; hacim sıfırlığı ise *çıkarılmaz*, çünkü BIST açılış
-    müzayede barı sistemli olarak sıfır hacimlidir ve çıkarılırsa seans
-    yapısı bozulur. VP tarafında bu durum ``volume_usable`` bayrağıyla taşınır.
+    Hacim sıfırlığı çıkarılmaz: BIST açılış müzayede barı sistemli olarak sıfır
+    hacimlidir ve çıkarılırsa seans yapısı bozulur. Native TV barlarında da aynı
+    koruma geçerlidir.
     """
     if frame is None or len(frame) == 0:
         return pd.DataFrame()
     temiz = frame.dropna(subset=["open", "high", "low", "close"])
     temiz = temiz[(temiz["high"] > 0) & (temiz["low"] > 0)]
-    # high < low olan satır veri hatasıdır; uzanım ölçümünü ters çevirir.
     temiz = temiz[temiz["high"] >= temiz["low"]]
     return temiz
 
