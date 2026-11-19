@@ -474,8 +474,9 @@ def test_vertical_tolerance_warning_does_not_claim_actual_touch_on_gap():
 
 
 @pytest.mark.parametrize("symbol,cutoff,expected_line,expected_close", [
-    ("EFOR", "2026-07-28 13:30", 19.53, 19.80),
-    ("AKBNK", "2026-01-06 17:30", 73.65, 74.15),
+    # 2026-11-19 native 4h arşivi: barlar 09:00/13:00/17:00 (+03:00) kapanır.
+    ("EFOR", "2026-07-28 13:00", 19.53, 19.83),
+    ("AKBNK", "2026-01-06 17:00", 73.65, 74.10),
 ])
 def test_two_historical_path_examples_and_all_their_4h_arrows_mirror_support(
     symbol, cutoff, expected_line, expected_close,

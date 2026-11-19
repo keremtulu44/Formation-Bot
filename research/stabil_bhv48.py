@@ -265,7 +265,7 @@ def _build_question_specs() -> list[QuestionSpec]:
 
     # --- SECTION A: Uzaklaşma ve takip ---
     def a01(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["above_4h"] & df["dist_atr_4h"].notna() & (df["dist_atr_4h"] >= 1.0)].copy()
+        c = df[df["above_4h"].astype(bool) & df["dist_atr_4h"].notna() & (df["dist_atr_4h"] >= 1.0)].copy()
         c["_bucket"] = np.where(
             c["dist_atr_4h"] < 2.0,
             "1.0-2.0_ATR_uzak",
@@ -282,7 +282,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def a02(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["above_4h"] & df["dist_atr_4h"].between(1.5, 3.0) & df["past12_ret_atr"].notna()].copy()
+        c = df[df["above_4h"].astype(bool) & df["dist_atr_4h"].between(1.5, 3.0) & df["past12_ret_atr"].notna()].copy()
         c["_bucket"] = np.where(c["past12_ret_atr"] >= 1.2, "hizli_uzaklasma", "yavas_uzaklasma")
         return c, 0
 
@@ -310,7 +310,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def a04(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["above_4h"] & (df["dist_atr_4h"] >= 1.0)]
+        base = df[df["above_4h"].astype(bool) & (df["dist_atr_4h"] >= 1.0)]
         unk = int((~base["episode_known"]).sum())
         c = base[base["episode_known"] & (base["bars_since_support"] >= 0)].copy()
         c["_bucket"] = np.where(
@@ -363,7 +363,7 @@ def _build_question_specs() -> list[QuestionSpec]:
 
     # --- SECTION B: Yükseliş sonrası yataylaşma (Candidate Regime Dependent) ---
     def b01(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["above_4h"]]
+        base = df[df["above_4h"].astype(bool)]
         unk = int((~base["episode_known"]).sum())
         c = base[base["episode_known"] & c_in(base["candidate_regime"], ["STEPPING_UP", "NEWLY_FLATTENED_AFTER_RISE", "LONG_HORIZONTAL"])].copy()
         c["_bucket"] = c["candidate_regime"]
@@ -381,7 +381,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def b02(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["above_4h"] & (df["candidate_regime"] == "NEWLY_FLATTENED_AFTER_RISE")]
+        base = df[df["above_4h"].astype(bool) & (df["candidate_regime"] == "NEWLY_FLATTENED_AFTER_RISE")]
         unk = int((~base["episode_known"]).sum())
         c = base[base["episode_known"]].copy()
         c["_bucket"] = np.where(c["prev_rise_bars"] >= 20, "uzun_yukselis_sonrasi_yeni_yatay", "kisa_yukselis_sonrasi_yeni_yatay")
@@ -396,7 +396,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def b03(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["above_4h"] & (df["candidate_regime"] == "NEWLY_FLATTENED_AFTER_RISE") & df["prev_rise_gain_atr"].notna()]
+        base = df[df["above_4h"].astype(bool) & (df["candidate_regime"] == "NEWLY_FLATTENED_AFTER_RISE") & df["prev_rise_gain_atr"].notna()]
         unk = int((~base["episode_known"]).sum())
         c = base[base["episode_known"] & (base["prev_rise_bars"] >= 12)].copy()
         c["_bucket"] = np.where(c["prev_rise_gain_atr"] >= 3.0, "yuksek_siddetli_onceki_artis", "ilimli_onceki_artis")
@@ -411,7 +411,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def b04(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["above_4h"] & df["dist_atr_4h"].between(0.0, 2.5)]
+        base = df[df["above_4h"].astype(bool) & df["dist_atr_4h"].between(0.0, 2.5)]
         unk = int((~base["episode_known"]).sum())
         c = base[base["episode_known"] & c_in(base["candidate_regime"], ["NEWLY_FLATTENED_AFTER_RISE", "LONG_HORIZONTAL"])].copy()
         c["_bucket"] = c["candidate_regime"]
@@ -426,7 +426,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def b05(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["just_broke_below_4h"]]
+        base = df[df["just_broke_below_4h"].astype(bool)]
         unk = int((~base["episode_known"]).sum())
         c = base[base["episode_known"] & c_in(base["prev_regime"], ["NEWLY_FLATTENED_AFTER_RISE", "LONG_HORIZONTAL", "STEPPING_UP"])].copy()
         c["_bucket"] = c["prev_regime"]
@@ -441,7 +441,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def b06(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["above_4h"] & df["episode_known"] & (df["bars_since_support"].between(1, 12))]
+        base = df[df["above_4h"].astype(bool) & df["episode_known"] & (df["bars_since_support"].between(1, 12))]
         c = base[base["past12_ret_atr"].notna()].copy()
         c["_bucket"] = np.where(
             c["bars_since_support"] <= 4,
@@ -460,7 +460,7 @@ def _build_question_specs() -> list[QuestionSpec]:
 
     # --- SECTION C: Temas ve tepki dizileri ---
     def c01(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["above_4h"] & (df["progression"] == "REBASED_HIGHER")]
+        base = df[df["above_4h"].astype(bool) & (df["progression"] == "REBASED_HIGHER")]
         unk = int((~base["episode_known"]).sum())
         c = base[base["episode_known"]].copy()
         c["_bucket"] = np.where(c["touch_4h"] & (c["touch_seq"] <= 1), "ilk_temas_ani", "temassiz_devam")
@@ -475,7 +475,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def c02(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["touch_4h"]]
+        base = df[df["touch_4h"].astype(bool)]
         unk = int((base["touch_seq"] < 0).sum())
         c = base[base["touch_seq"] >= 1].copy()
         c["_bucket"] = np.where(c["touch_seq"] == 1, "birinci_temas", np.where(c["touch_seq"] == 2, "ikinci_temas", "uc_ve_uzeri_temas"))
@@ -503,7 +503,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def c04(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["touch_4h"]]
+        base = df[df["touch_4h"].astype(bool)]
         unk = int((base["failed_bounces"] < 0).sum())
         c = base[base["failed_bounces"] >= 0].copy()
         c["_bucket"] = np.where(c["failed_bounces"] == 0, "onceki_basarisiz_tepki_yok", "onceki_basarisiz_tepki_var")
@@ -561,7 +561,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def d02(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["reclaimed_4h_now"] & df["reclaimed_prev_depth_atr"].notna()].copy()
+        c = df[df["reclaimed_4h_now"].astype(bool) & df["reclaimed_prev_depth_atr"].notna()].copy()
         c["_bucket"] = np.where(
             c["reclaimed_prev_depth_atr"] <= 0.5, "kucuk_kirilmadan_geri_alim",
             np.where(c["reclaimed_prev_depth_atr"] <= 1.2, "orta_kirilmadan_geri_alim", "derin_kirilmadan_geri_alim"),
@@ -590,7 +590,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def d04(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["below_4h"]].copy()
+        c = df[df["below_4h"].astype(bool)].copy()
         c["_bucket"] = np.where(c["breach_floor_seen"] | (c["h4_close"] < c["support_floor"]), "floor_alti_ihlal", "yalniz_ana_destek_alti")
         return c, 0
 
@@ -603,7 +603,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def d05(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["just_broke_below_4h"]].copy()
+        c = df[df["just_broke_below_4h"].astype(bool)].copy()
         c["_bucket"] = np.where(c["breach_gap_open"], "bosluklu_gap_kirilma", "seans_ici_normal_kirilma")
         return c, 0
 
@@ -616,7 +616,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def d06(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["reclaimed_4h_now"] & df["reclaimed_prev_depth_atr"].notna() & df["daily_atr"].notna()].copy()
+        c = df[df["reclaimed_4h_now"].astype(bool) & df["reclaimed_prev_depth_atr"].notna() & df["daily_atr"].notna()].copy()
         spent = c["reclaimed_prev_depth_atr"] + c["dist_atr_4h"].clip(lower=0.0)
         c["_bucket"] = np.where(spent >= 1.2, "geri_alima_kadar_buyuk_yol_tuketildi", "geri_alima_yakin_donduruldu")
         return c, 0
@@ -634,7 +634,7 @@ def _build_question_specs() -> list[QuestionSpec]:
         c = df[
             df["support_ready"]
             & (~df["support_rebased_now"])
-            & ((df["below_4h"] & (df["h4_high"] >= df["support_level"] - 0.1 * df["daily_atr"].fillna(0.0))) | df["reclaimed_4h_now"])
+            & ((df["below_4h"].astype(bool) & (df["h4_high"] >= df["support_level"] - 0.1 * df["daily_atr"].fillna(0.0))) | df["reclaimed_4h_now"].astype(bool))
         ].copy()
         c["_bucket"] = np.where(c["reclaimed_4h_now"], "ustte_kapanis_basarili", "fitil_veya_yakin_red")
         return c, 0
@@ -648,7 +648,9 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def e02(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["below_4h"] & (~df["support_rebased_now"])]
+        # NaN içeren object kolon bool maske olarak kullanılamaz (pandas 2.2):
+        # katı bool'a çeviriyoruz; NA satırları maskeden düşer, sayı uydurulmaz.
+        base = df[df["below_4h"].astype(bool) & (~df["support_rebased_now"].astype(bool))]
         unk = int((base["breach_attempts"] < 0).sum())
         c = base[base["breach_attempts"] >= 1].copy()
         c["_bucket"] = np.where(c["breach_attempts"] == 1, "ilk_basarisiz_deneme_sonrasi", "coklu_basarisiz_deneme_sonrasi")
@@ -663,9 +665,12 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def e03(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["reclaimed_4h_now"]]
+        # Aynı NaN gerekçesi: 5 satırda ayrık (NA) değer var; maskeyi katı bool
+        # yaparak eşleşmeyen satırları dışarıda bırakıyoruz.
+        cagrilan = df["reclaimed_4h_now"].astype(bool)
+        base = df[cagrilan]
         unk = int((base["reclaimed_prev_attempts"] < 0).sum())
-        c = base[base["reclaimed_prev_attempts"] >= 0].copy()
+        c = base[(base["reclaimed_prev_attempts"] >= 0) & (base["reclaimed_prev_attempts"].notna())].copy()
         c["_bucket"] = np.where(c["reclaimed_prev_attempts"] == 0, "ilk_denemede_geri_alim", "birden_cok_deneme_sonrasi_geri_alim")
         return c, unk
 
@@ -678,7 +683,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def e04(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["reclaimed_4h_now"] & (df["reclaimed_prev_bars_4h"] >= 1)].copy()
+        c = df[df["reclaimed_4h_now"].astype(bool) & (df["reclaimed_prev_bars_4h"] >= 1)].copy()
         c["_bucket"] = np.where(
             c["reclaimed_prev_bars_4h"] <= 4, "kisa_altta_kalma_1_4_4h",
             np.where(c["reclaimed_prev_bars_4h"] <= 12, "orta_altta_kalma_5_12_4h", "uzun_altta_kalma_13+_4h"),
@@ -694,7 +699,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def e05(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["reclaimed_4h_now"] & df["daily_atr"].notna()].copy()
+        c = df[df["reclaimed_4h_now"].astype(bool) & df["daily_atr"].notna()].copy()
         candle_gain = (c["h4_close"] - c["h4_open"]) / c["daily_atr"]
         c["_bucket"] = np.where(candle_gain >= 0.5, "guclu_geri_alim_mumu", "ilimli_geri_alim_mumu")
         return c, 0
@@ -708,11 +713,12 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def e06(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        reclaim_Direct = df[df["reclaimed_4h_now"]].copy()
+        reclaim_Direct = df[df["reclaimed_4h_now"].astype(bool)].copy()
         reclaim_Direct["_bucket"] = "dogrudan_geri_alim_kapanisi"
         retest_hold = df[df["touch_4h"] & (df["bars_above_support"].between(1, 5)) & (df["prior_lost_supports"] >= 0)].copy()
         # Filter to recent reclaim episodes via native reclaim_count or recent move above
-        retest_hold = df[df["touch_4h"] & (df["bars_above_support"].between(1, 3))].copy()
+        # Aynı NaN gerekçesi (2026-11-19 native arşiv): katı bool maske.
+        retest_hold = df[df["touch_4h"].astype(bool) & (df["bars_above_support"].between(1, 3))].copy()
         retest_hold["_bucket"] = "ustte_kapanis_sonrasi_yeniden_test_tutunmasi"
         c = pd.concat([reclaim_Direct, retest_hold], ignore_index=True)
         return c, 0
@@ -744,12 +750,12 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def f02(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["just_moved_above_4h"]].copy()
+        c = df[df["just_moved_above_4h"].astype(bool)].copy()
         c["_bucket"] = np.where(
-            c["rebased_lower_now"] & (c["h4_close"] < c["prev_support"]),
+            c["rebased_lower_now"].astype(bool) & (c["h4_close"] < c["prev_support"]),
             "destek_asagi_inerek_ustte_kaldi",
             np.where(
-                (~c["rebased_lower_now"]) & (c["h4_close"] >= c["support_level"]),
+                (~c["rebased_lower_now"].astype(bool)) & (c["h4_close"] >= c["support_level"]),
                 "fiyat_yukselerek_eski_destegi_asti",
                 "hem_fiyat_hem_destek_degisti",
             ),
@@ -798,7 +804,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def f05(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["above_4h"] & (df["candidate_regime"] == "HORIZONTAL_AFTER_DROP")].copy()
+        c = df[df["above_4h"].astype(bool) & (df["candidate_regime"] == "HORIZONTAL_AFTER_DROP")].copy()
         c["_bucket"] = np.where(c["bars_since_support"] == 1, "hemen_ilk_gun_giris", "yeni_dip_yapmadan_3_6g_sonra")
         c = c[(c["bars_since_support"] == 1) | (c["bars_since_support"].between(3, 6))]
         return c, 0
@@ -826,7 +832,7 @@ def _build_question_specs() -> list[QuestionSpec]:
 
     # --- SECTION G: Yol bağımlılığı ve karşı örnekler ---
     def g01(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["above_4h"] & df["dist_atr_4h"].between(0.0, 1.0)].copy()
+        c = df[df["above_4h"].astype(bool) & df["dist_atr_4h"].between(0.0, 1.0)].copy()
         c["_bucket"] = np.where(
             c["reclaimed_4h_now"],
             "asagidan_eski_destegi_geri_alarak",
@@ -847,7 +853,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def g02(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["above_4h"] & df["dist_atr_4h"].between(0.0, 1.2)]
+        base = df[df["above_4h"].astype(bool) & df["dist_atr_4h"].between(0.0, 1.2)]
         unk = int((~base["episode_known"]).sum())
         c = base[base["episode_known"]].copy()
         c["_bucket"] = np.where(c["bars_since_support"] <= 3, "yeni_teyitli_destek_0_3g", "eski_yasli_destek_15g_ustu")
@@ -882,7 +888,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def g04(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        base = df[df["support_rebased_now"]]
+        base = df[df["support_rebased_now"].astype(bool)]
         unk = int((~base["episode_known"]).sum())
         c = base[base["episode_known"]].copy()
         c["_bucket"] = np.where(c["prior_lost_supports"] == 0, "gecmiste_kayip_yok", "gecmiste_en_az_1_kayip_var")
@@ -911,7 +917,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def g06(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[df["reclaimed_4h_now"] | df["touch_4h"]].copy()
+        c = df[df["reclaimed_4h_now"].astype(bool) | df["touch_4h"].astype(bool)].copy()
         c["_bucket"] = np.where(
             c["h4_bull_disp"] & c["h4_volume_pass"],
             "4h_alici_ve_hacim_kaniti_var",
@@ -946,7 +952,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def h02(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        s_touch = df[df["touch_4h"]].copy()
+        s_touch = df[df["touch_4h"].astype(bool)].copy()
         s_touch["_bucket"] = "stabil_destek_temasi"
         c_roll = df[df["ctrl_near_roll20_low"] & (~df["touch_4h"])].copy()
         c_roll["_bucket"] = "basit_20g_dip_kontrol_temasi"
@@ -962,7 +968,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     )
 
     def h03(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-        c = df[(df["touch_4h"] | df["reclaimed_4h_now"]) & (df["xu100_regime"].isin(["XU100_ABOVE_EMA34", "XU100_BELOW_EMA34"]))].copy()
+        c = df[(df["touch_4h"] | df["reclaimed_4h_now"].astype(bool)) & (df["xu100_regime"].isin(["XU100_ABOVE_EMA34", "XU100_BELOW_EMA34"]))].copy()
         c["_bucket"] = c["xu100_regime"]
         return c, 0
 
@@ -990,7 +996,7 @@ def _build_question_specs() -> list[QuestionSpec]:
     def h05(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         grp = df.groupby("symbol", sort=False)
         recl_prev = grp["reclaimed_4h_now"].shift(1, fill_value=False).astype(bool)
-        imm = df[df["reclaimed_4h_now"]].copy()
+        imm = df[df["reclaimed_4h_now"].astype(bool)].copy()
         imm["_bucket"] = "ilk_4h_kapanisinda_giris"
         wait1 = df[recl_prev & df["above_4h"]].copy()
         wait1["_bucket"] = "izleyen_ikinci_4h_kapanisinda_giris"
@@ -1009,7 +1015,7 @@ def _build_question_specs() -> list[QuestionSpec]:
         syms = sorted(df["symbol"].unique())
         half = max(1, len(syms) // 2)
         first_syms = set(syms[:half])
-        c = df[df["touch_4h"] | df["reclaimed_4h_now"]].copy()
+        c = df[df["touch_4h"].astype(bool) | df["reclaimed_4h_now"].astype(bool)].copy()
         c["_bucket"] = np.where(c["symbol"].isin(first_syms), "alfabetik_ilk_yari_semboller", "alfabetik_ikinci_yari_semboller")
         return c, 0
 

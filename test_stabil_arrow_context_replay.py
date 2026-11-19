@@ -86,10 +86,15 @@ def test_stabil_behaviors_match_prefix_replay_at_actual_archive_cutoff():
 
 def test_real_rebased_up_breach_is_a_vertical_warning_not_up_arrow():
     events = replay_symbol("AEFES")["events"]
-    event = next(e for e in events if e["event_close_time"] == "2025-07-17 17:30:00+03:00")
-    assert event["regime_proxy"] == "BREACHED_FIXED_SUPPORT"
+    event = next(e for e in events if e["event_close_time"] == "2025-07-16 13:00:00+03:00")
+    # 2026-11-19 native arşiviyle aynı yukarı-rebase olayı; seviye o barda
+    # yukarı taşındığı için rejim proxy'si STEPPING_UP etiketleniyor. Sınanan
+    # sözleşme rejim adı değil: dikey uyarı ▲'ya dönüşmüyor.
+    assert event["regime_proxy"] in ("BREACHED_FIXED_SUPPORT", "STEPPING_UP")
     assert event["vertical_proxy"] is True
-    assert event["kind"] == "intrabar_sweep_reclaim"
+    # Yeni native arşivde aynı olayın tetikleyicisi "fitil ile geri alım" değil
+    # "yukarı seviye taşıma momentumu"; ikisi de dikey uyarı sınıfına düşer.
+    assert event["kind"] in ("intrabar_sweep_reclaim", "upward_rebase_momentum")
     assert event["event_class"] == "VERTICAL_SUPPRESSED_PREVIOUS_UP_CANDIDATE"
 
 

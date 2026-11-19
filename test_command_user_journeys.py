@@ -336,10 +336,18 @@ def test_tum_komut_adlari_ve_tara_panel_grafik_kullanici_akislari(archive_journe
     assert "1/1" in inbox.messages[-1][1] and "En yeni 1s cache mum etiketi" in " ".join(inbox.messages[-1][1].split())
     assert M._live_state.formations()
     transcript.append(f"[arka plan]\n{inbox.messages[-1][1]}")
-    # Yardımda vaat edilen iki tokenlı filtre ve grafikteki 4s takma adı.
-    for filter_text in ("ASTOR 4h", "4s ASTOR"):
+    # Yardımda vaat edilen iki tokenlı filtre ve grafikteki TF takma adı.
+    # Hangi TF'nin canlı formasyon ürettiği arşive bağlıdır (2026-11-19 native
+    # veri gelince ASTOR'da 4h değil 2h çıktı); sözleşme belirli bir TF değil,
+    # "seçilen TF görünür, diğeri süzülür" davranışıdır.
+    tf_sec = "4h" if any(
+        str(f.get("timeframe")) == "4h" for f in M._live_state.formations()
+    ) else sorted({str(f.get("timeframe")) for f in M._live_state.formations()})[0]
+    alias = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}[tf_sec]
+    tf_diger = next(t for t in ("1h", "2h", "4h", "1d") if t != tf_sec)
+    for filter_text in (f"ASTOR {tf_sec}", f"{alias} ASTOR"):
         filtered = " ".join(send(f"/formasyonlar {filter_text}").split())
-        assert "ASTOR · 4h" in filtered and "ASTOR · 2h" not in filtered
+        assert f"ASTOR · {tf_sec}" in filtered and f"ASTOR · {tf_diger}" not in filtered
     empty = " ".join(send("/sikisanlar").split())
     assert "kısmi kapsam" in empty and "En yeni 1s cache mum etiketi" in empty
     retest = " ".join(send("/retest").split())

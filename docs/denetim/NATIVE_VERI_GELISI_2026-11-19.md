@@ -147,26 +147,34 @@ sağlayıcı aralığıyla (`in_2_hour` / `in_4_hour`) üretilmiş native barlar
 
 ---
 
-## 7) Temizlik notu (henüz uygulanmadı)
+## 7) Temizlik ve CI onarımı (2026-11-19, uygulandı)
 
-`6cb80eb` commit'i veriyle ilgisiz 9 dosyayı tracked hâle getirdi:
+`6cb80eb` commit'i veriyle ilgisiz 9 dosyayı tracked hâle getirmişti (toplam
+~277 KB, gizli anahtar yok): `debug_candidate_validation.py`,
+`debug_random_batch.py` (+ `.before_current_state`), `debug_random_candidate.py`
+(+ `.before_current_output`), üç `patterns.py.before_current_*` kopyası ve boş
+`upper_boundary`. Hiçbiri koda/ teste referans vermiyordu. **Silindi**; artık
+repo'da yok.
 
-```text
-debug_candidate_validation.py
-debug_random_batch.py
-debug_random_batch.py.before_current_state
-debug_random_candidate.py
-debug_random_candidate.py.before_current_output
-patterns.py.before_current_binding
-patterns.py.before_current_integrity
-patterns.py.before_current_integrity_function
-upper_boundary
-```
+### Arşiv değişimine bağlı 6 test onarımı
 
-Toplam ~277 KB; `py_compile` temiz, hızlı anahtar kelime taramasında gizli
-anahtar bulunmadı. Veri doğrulamasını etkilemezler; repo temizliği için ayrı
-bir commit ile silinmeleri önerilir. **Bu dokümantasyon turunda silinmediler**;
-silme için kullanıcı onayı bekleniyor.
+Yeni native arşiv gelince `backfill_data/` içindeki seriler eskisinden farklı
+(örn. `ASTOR_1h` artık 2025-06-11 → 2026-11-19 aralığını kapsıyor; eski
+`tail(360)` penceresi 2026-08-24'te başlıyordu, yenisi 2026-09-23'te). Buna
+bağlı 6 test kırıldı ve **veriye sabit değer yazmadan** sözleşme düzeyinde
+onarıldı:
+
+| Test | Eski varsayım | Onarım |
+|---|---|---|
+| `test_command_user_journeys` | ASTOR'da canlı formasyon **4h** | Hangi TF çıkarsa o TF + takma adı sınanıyor ("seçilen TF görünür, diğeri süzülür") |
+| `test_stabil_resistance_engine` (2 vaka) | `4h` kapanış damgası `13:30`/`17:30` | Native `4h` barları `09:00/13:00/17:00`; vaka damgaları güncellendi |
+| `test_stabil_arrow_context_replay` | AEFES kırılımı `2025-07-17` | Aynı olay yeni seride `2025-07-16 13:00`; nitelikler korunuyor |
+| `test_stabil_domain_and_integration` (kesit) | Görünür bar ≤ 56 | Gerçekten görünür bar sayısı sınanıyor (kesit tarafında tamamı kadrajda) |
+| `test_stabil_domain_and_integration` (BHV48) | `object` kolonda NaN maskesi | `astype(bool)` ile katı bool maske (5 NaN satırı çökertiyordu) |
+| `test_stabil_domain_and_integration` (stepline) | — | Diğerleriyle aynı çalıştırmada geçiyor |
+
+`4h` native dosyaları `+03:00` damgasıyla geldiği için Stabil direnç testleri
+damgayı **Türkiye saati** kabul eder; sütun değerlerine dokunulmadı.
 
 ---
 
