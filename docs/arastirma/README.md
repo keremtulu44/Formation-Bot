@@ -37,6 +37,7 @@ tartışmalarında sayı gerektiğinde buraya bakılır.
 
 | Dosya | Ne | Nasıl okunur |
 |---|---|---|
+| **[REPLAY_ANA_DERLEMESI.md](REPLAY_ANA_DERLEMESI.md)** | **TÜM replay'ler tek dosyada:** kapsam + ana sayı + kısa yorum + geçerlilik etiketi (35 çalışma) | "Bu konuda daha önce ne ölçtük?" sorusunda **önce buraya bak** |
 | **[ARASTIRMA_SONUCLARI.md](ARASTIRMA_SONUCLARI.md)** | **Ana belge:** soru bazında cevap + yorum | Buradan başla |
 | [ARASTIRMA_BULGULARI.md](ARASTIRMA_BULGULARI.md) | Ham tablo eki (üretici script buraya yazar) | Sonucu doğrulamak için |
 | [ARASTIRMA_HATTI.md](ARASTIRMA_HATTI.md) | Yöntem, modüller, anti-lookahead sözleşmesi | Ölçüme güvenmeden önce |

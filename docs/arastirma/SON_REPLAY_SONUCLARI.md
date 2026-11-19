@@ -1,5 +1,9 @@
 # Replay araştırmaları ve sonuç dosyaları
 
+> **Tek dosyada bütün replay'ler:** [REPLAY_ANA_DERLEMESI.md](REPLAY_ANA_DERLEMESI.md) —
+> 35 çalışma, her biri kapsam + ana sayı + kısa yorum + geçerlilik etiketiyle.
+> Bu dosya dizin/bağlantı listesi olarak kalır.
+
 ## Stabil — kaynak, entegrasyon ve iki ayrı araştırma
 
 **[Stabil ana rehberi](STABIL_REHBERI.md)** · [Replay yöntemleri](STABIL_REPLAY_HATLARI.md) ·
