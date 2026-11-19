@@ -359,8 +359,39 @@ bulduğu için 1 doküman testi kırmızıydı; `TERMUX_BACKFILL.md` dinamik
 Push `96bd20b` (17 dosya, 1617+/423-); CI run **`44508629441` success**
 (Python 3.12, 10 dk 9 sn, 10/10 adım, head `96bd20b8b4c7002e503726f4f9bac135447acb27`).
 
-**Sınır:** Ajan canlı Yahoo/TradingView/Supabase/Telegram/Render çağrısı,
-fiili Render deploy veya PR yapmadı. 170+ sembolün gerçek çekimi, `backfill_data/`
-commit/push'u ve replay kullanıcının Termux'unda/sonraki turda gerçekleşecek.
+**Sınır (§13 ile güncellendi):** Ajan canlı Yahoo/TradingView/Supabase/Telegram/Render çağrısı,
+fiili Render deploy veya PR yapmadı. 170+ sembolün gerçek çekimi ve `backfill_data/`
+commit/push'u kullanıcının Termux'unda 2026-11-19'da tamamlandı; ayrıntı §13'tedir.
 Bu turda replay komutu verilmedi; `docs/kurulum/TERMUX_BACKFILL.md` akışı
 bilerek replay içermez. Bağlı uygulamalar kapalı ve kullanılmadı.
+
+
+## 13. NATIVE veri arşivinin gelişi ve doğrulanması (2026-11-19)
+
+§12'de "Termux'ta/sonraki turda" denilen çekim gerçekleşti. Kullanıcının yerel
+klonundan iki commit geldi: **`8a18fbd`** (176 sembol × 4 native TF + manifest,
+probe ve kaynak raporu) ve **`6cb80eb`** (ikinci kayıt; dokuz alakasız debug
+dosyası da içeriyor). Ayrıntılı rapor:
+[`NATIVE_VERI_GELISI_2026-11-19.md`](NATIVE_VERI_GELISI_2026-11-19.md).
+
+| Kapı | Sonuç |
+|---|---|
+| Probe / liste | **176 geçerli / 10 geçersiz**, 176 benzersiz satır |
+| Kaynak planı | `1h`/`1d` Yahoo · `2h`/`4h` tvDatafeed `2.1.1` |
+| `kaynak_raporu.json` | `native`, `native_zorunlu=True`, **704/704**, `eksik=0`, `resample_kullanildi=False` |
+| Kayıt özeti | 176 × 4 `ok`; `1h\|yahoo`, `1d\|yahoo`, `2h\|tvdatafeed`, `4h\|tvdatafeed` |
+| `manifest.son_kosu` | **704 `ok`**, `gecici=0`, `kalici=0`, ban durdurmadı, 3579.6 sn |
+| Strict kesişim | Dört dosyası olan **176** sembol = doğrulanmış liste; `BRENT` yok |
+| Örnek CSV | `TCELL_2h` 1500 bar / 120 dk, `TCELL_4h` 1500 bar / 240 dk, tüm `bar_time` `+03:00` |
+| Boyut | `backfill_data/` **20M** |
+
+İlk probe'da TV WS boş yanıtıyla düşen 12 sembol (`TCELL`, `TOASO`, `DOAS`,
+`SNGYO`, `CANTE` dahil) kısa yeniden probe ile **12/0** kurtarıldı; 164/22
+sonucu 176/10'a yükseldi. Kalıcı 10 sembol `BRENT` + 9 Yahoo-boş semboldür;
+bunlar için 2h/4h dosyası üretilmedi ve strict replay'e girmezler.
+
+**Sınır:** Ajan verileri üretmedi, yalnızca gelen dosyaları okudu; canlı
+Yahoo/TradingView/Supabase/Telegram/Render çağrısı, fiili Render deploy, PR,
+tam pytest veya CI watch yoktur. `6cb80eb` ile giren 9 debug/backup dosyası
+veri doğrulamasını etkilemez; ayrı temizlik onayı bekliyor. **Replay koşulmadı**;
+native seriler hazır, replay ayrı turda.

@@ -132,6 +132,12 @@ girdisinden çıkarıldı:
 Bu karar canlı `data/fetch.py` / `bot/scan.py` zincirini değiştirmez: orada Yahoo
 birincil, TV yalnızca Yahoo veri döndürmediğinde reaktif yedektir. Ayrıntı ve
 Termux komutları: [`NATIVE_TF_REPLAY_PLANI_2026-11-18.md`](../arastirma/NATIVE_TF_REPLAY_PLANI_2026-11-18.md),
-[`TERMUX_BACKFILL.md`](../kurulum/TERMUX_BACKFILL.md). Bu turda replay
-koşulmadı; önce native verilerin Termux'tan push edilmesi bekleniyor.
-- borsapy'yi fiyat kaynağı yapmak: üretimde import edilmiyor, 2s/4s vermiyor.
+[`TERMUX_BACKFILL.md`](../kurulum/TERMUX_BACKFILL.md). **2026-11-19
+güncellemesi:** native veriler Termux'tan push edildi ve
+[`NATIVE_VERI_GELISI_2026-11-19.md`](../denetim/NATIVE_VERI_GELISI_2026-11-19.md)
+ile doğrulandı (176 sembol, 704/704 dosya, resample yok). Replay hâlâ koşulmadı;
+veriler geldikten sonra ayrı turda yapılacak.
+
+### Reddedilen alternatif
+
+- `borsapy`'yi fiyat kaynağı yapmak: üretimde import edilmiyor, 2s/4s vermiyor.

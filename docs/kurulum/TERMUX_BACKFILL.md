@@ -5,6 +5,14 @@ mumlarıyla** çekmek, `backfill_data/` altındaki CSV'leri + manifest/probe/rap
 `git push` ile ajana ulaştırmak. Bu turda **replay koşulmaz**; önce veriler
 gelecek, replay komutu veriler geldikten sonra ayrı verilecek.
 
+> **GERÇEKLEŞEN KOŞU (2026-11-19):** Bu akış Termux'ta tamamlandı. `8a18fbd`
+> ile 176 sembol × 4 native TF, 704/704 dosya, `manifest.json`,
+> `probe_sonucu.json`, `kaynak_raporu.json` ve doğrulanmış liste push edildi;
+> `6cb80eb` ikinci kayıt commit'idir. Ajan tarafında dosyalar okundu:
+> `eksik=0`, `resample_kullanildi=false`, probe **176/10**. Ayrıntılı kanıt:
+> [`NATIVE_VERI_GELISI_2026-11-19.md`](../denetim/NATIVE_VERI_GELISI_2026-11-19.md).
+> **Replay hâlâ yok**; veriler geldikten sonra ayrı turda koşulacak.
+
 **Kaynak kararı (2026-11-18):**
 
 | TF | Sağlayıcı | Native istek | Not |

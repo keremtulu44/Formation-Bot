@@ -109,16 +109,17 @@ raporlar yeniden üretilmelidir.
 - [x] Eski türetimli kayıtlar `atlanmali_mi` ile yeniden çekiliyor.
 - [x] Termux kurulumu TV pinleri + dağıtım doğrulaması içeriyor.
 - [x] Ağsız testler 2h/4h resample çağrılmadığını, TV kurulumu yokken fail-closed durduğunu kilitliyor.
-- [ ] Canlı çekim kullanıcının Termux'unda yapılacak.
-- [ ] `backfill_data/` commit/push edilecek.
-- [ ] Replay, veriler ajana geldikten sonra ayrı turda koşulacak.
+- [x] Canlı çekim kullanıcının Termux'unda yapıldı (2026-11-19, `8a18fbd`).
+- [x] `backfill_data/` commit/push edildi (2026-11-19, `8a18fbd` + `6cb80eb`).
+- [ ] Replay, veriler ajana geldikten sonra ayrı turda koşulacak. **Veriler geldi; replay hazır, henüz koşulmadı.**
 
 ## 7) Kanıt sınırı
 
 Bu belge kod/test/doküman teslimidir. Ajan canlı Yahoo veya TradingView
 çağrısı yapmadı; 170+ sembolün gerçek bar sayıları, TV WS erişimi, Termux
-çalışma süresi ve push sonrası commit hash'i kullanıcı cihazındaki koşudan
-gelecektir. Fiili Render deploy, PR veya canlı Telegram/Supabase çağrısı yoktur.
+çalışma süresi ve push sonrası commit hash'leri kullanıcı cihazındaki koşudan
+2026-11-19'da geldi (§9). Fiili Render deploy, PR veya canlı Telegram/Supabase
+çağrısı yoktur.
 
 ## 8) Doğrulama (2026-11-19)
 
@@ -137,3 +138,29 @@ sağlayıcıyı birlikte doğrular; manifest/probe/rapor kaynak + TF + native
 etiketlerini taşır; `dz_bars` dört TF'yi olduğu gibi yazar. Canlı 170+ sembol
 çekimi, `backfill_data/` push'u ve replay hâlâ kullanıcı cihazında/sonraki
 turda bekliyor.
+
+
+## 9) Veriler geldi — doğrulama ve replay kapısı (2026-11-19)
+
+Planın "Termux'ta çekilecek / push edilecek" maddeleri tamamlandı. Ayrıntılı
+kanıt: [`NATIVE_VERI_GELISI_2026-11-19.md`](../denetim/NATIVE_VERI_GELISI_2026-11-19.md).
+
+| Madde | Sonuç |
+|---|---|
+| Commit | `8a18fbd` veri + `6cb80eb` ikinci kayıt |
+| Sembol | **176** doğrulanmış, **10** kalıcı/engelli |
+| Dosya | **704 / 704** native `csv.gz`, `eksik_dosya_sayisi=0` |
+| Resample | **`False`**; 2h/4h kendi TV `in_2_hour`/`in_4_hour` barları |
+| Probe | **176/10**; 12 sembol yeniden probe ile kurtarıldı |
+| Manifest | `native-1`, son koşu **704 `ok`**, ban koruması durdurmadı |
+| Strict okuyucu | Dört dosya kesişimi **176** = `dogrulanmis_semboller.txt` |
+| Örnek | `TCELL_2h` 1500 bar / 120 dk, `TCELL_4h` 1500 bar / 240 dk, `+03:00` |
+
+Eski [`DZ_REPLAY_SONUCLARI_2026-10-28.md`](DZ_REPLAY_SONUCLARI_2026-10-28.md)
+hâlâ legacy türetimli kayıttır; native replay sonucu olarak kullanılamaz.
+`arastirma_kosu.py` / `dz_yukleme.py` strict native yüzeyleri bu yeni arşivle
+çalışmaya hazırdır. **Replay komutu bu belgede de bilerek yoktur**: kullanıcı
+*"Hayır sadece veriler gelecek önce"* demişti; replay veriler geldikten sonraki
+ayrı turda koşulacak. Ajan canlı provider çağrısı, PR, fiili deploy, tam pytest
+veya CI watch yapmadı; bu tur yalnızca gelen dosyaların okunması ve
+dokümantasyonudur.

@@ -85,6 +85,24 @@ docs/
 Kod, testler ve `scripts/` **yerinde** durur; yerleşim kuralı ve gerekçesi
 [docs/YAPI.md](docs/YAPI.md)'de. Ölçüm sonuçlarının özeti: [docs/arastirma/README.md](docs/arastirma/README.md).
 
+## Güncel native veri arşivi (2026-11-19)
+
+Araştırma replay'i için **176 sembol × 4 native zaman dilimi** Termux'taki yerel
+klondan üretildi ve aktif dala push edildi: `1h`/`1d` Yahoo, `2h`/`4h`
+TradingView/tvDatafeed. 2h/4h **1h'den resample edilmedi**; `backfill_data/`
+içinde **704/704 dosya**, `eksik=0`, `resample_kullanildi=false`.
+
+| Ne | Nerede |
+|---|---|
+| Verinin gelişi + doğrulama kanıtı | [NATIVE veri gelişi raporu](docs/denetim/NATIVE_VERI_GELISI_2026-11-19.md) |
+| Çekim/probe/push akışı | [TERMUX_BACKFILL.md](docs/kurulum/TERMUX_BACKFILL.md) |
+| Native replay planı ve kabul kriterleri | [NATIVE_TF_REPLAY_PLANI_2026-11-18.md](docs/arastirma/NATIVE_TF_REPLAY_PLANI_2026-11-18.md) |
+| Eski türetimli sonuçların statüsü | [DZ_REPLAY_SONUCLARI_2026-10-28.md](docs/arastirma/DZ_REPLAY_SONUCLARI_2026-10-28.md) |
+
+Veriler ajan tarafında **canlı provider çağrısıyla üretilmedi**; ajan yalnızca
+gelen dosyaları okudu. **Replay bu turda koşulmadı**; native seriler hazır, replay
+ayrı turda yapılacak. PR ve fiili Render deploy yok.
+
 ## Tarama temposu
 
 Varsayılan `BIST_50` evreni **48 hisse, 5 endeks ve 4 makro araçtan oluşan 57
@@ -159,6 +177,11 @@ disk ve `DATA_DIR` gerekir; Supabase tanımlamak tek başına yeterli değildir.
 ## Replay araştırma sonuçları
 
 **174 hisse kırılım ve teyit Replay'i:** [ayrıntılı sonuç, yöntem ve veri rehberi](docs/arastirma/KIRILIM_TEYIT_REPLAY_AYRINTILI_DOSYA_2026-10-30.md) — aday/teyit karşılaştırması, yukarı-aşağı ve zaman dilimleri, sansür, kontrol ve ham veriler. Ölçüm tarihsel araştırmadır; canlı bildirim teslimi veya yatırım getirisi değildir.
+
+**Yeni native arşiv (2026-11-19):** 176 sembol için 1h/2h/4h/1d native OHLCV
+Termux'tan geldi ve [doğrulama raporu](docs/denetim/NATIVE_VERI_GELISI_2026-11-19.md)
+ile kaydedildi. Eski 2h/4h türetimli `DZ` sonuçları native replay sonucu sayılmaz;
+native replay veriler geldikten sonra ayrı turda koşulacak.
 
 Verilerin hangi amaçlarla kullanılabileceği ve güvenilirlik sınırları: [veri envanteri ve kullanım değerlendirmesi](docs/arastirma/VERI_KULLANIM_VE_GUVENILIRLIK_2026-10-30.md).
 
@@ -416,17 +439,19 @@ geçirme gerektirir.
 - Rapor sonunda **PINE KARSILASTIRMA REHBERI**: kaç bayrak/flama bulundu + tüm eşikler.
 - Not: Pine ekranında eski TAMAMLANDI/BASARISIZ formasyonlar da çizili kalabilir — rapor yalnız **canlı** olanları listeler.
 
-## Güncel işletim notları (2026-11-18)
+## Güncel işletim notları (2026-11-19)
 
 README dışındaki belgeler için güncel durum/yaş etiketi **[docs/README.md](docs/README.md)**
 tek kaynaktır. Son deploy incelemesi: [DEPLOY_STABIL_KONTROLU_2026-11.md](docs/denetim/DEPLOY_STABIL_KONTROLU_2026-11.md);
 son genel kontrol: [GENEL_KONTROL_2026-11-18.md](docs/denetim/GENEL_KONTROL_2026-11-18.md);
-tam TV + Yahoo deploy yolu: [DEPLOY_HAZIRLIK_2026-11-18.md](docs/denetim/DEPLOY_HAZIRLIK_2026-11-18.md).
+tam TV + Yahoo deploy yolu: [DEPLOY_HAZIRLIK_2026-11-18.md](docs/denetim/DEPLOY_HAZIRLIK_2026-11-18.md);
+native veri arşivinin gelişi: [NATIVE_VERI_GELISI_2026-11-19.md](docs/denetim/NATIVE_VERI_GELISI_2026-11-19.md).
 Üretim veri hattı **Yahoo birincil + tvDatafeed reaktif yedek** olarak deploy'a
 hazır; TV pinleri CI/Render manifestlerinde, kaynak etiketi `/health` içinde,
 39 yeni ağsız senaryo, tam pytest **4525 passed / 43 skipped** ve Python 3.12
 CI run `44346289337` (**success**, 15 dk 8 sn) ile doğrulandı.
-Fiili Render deploy/PR bu çalışmada yapılmadı.
+Fiili Render deploy/PR bu çalışmada yapılmadı. Araştırma tarafında ise 176 sembollü
+native arşiv 2026-11-19'da Termux'tan geldi; replay ayrı turda koşulacak.
 Eski 2026-09-30 durum tablosu ve “yeni oturum için” maddeleri güncel branch'i
 ve mevcut özellikleri yansıtmadığı için kaldırıldı; eski tarihli denetimler
 `docs/denetim/` ve `docs/arsiv/` altında tarih etiketiyle okunmalıdır.
