@@ -34,6 +34,14 @@ Termux'undaki yerel klonda olur. Klon **canlı servis değildir**.
 
 ---
 
+> **TERMUX OTURUMU KAPANMASIN (2026-11-19):** Hata kontrollerindeki çıkış
+> komutu interaktif kabukta **oturumun kendisini** kapatır. Bu belgedeki
+> kontroller bu yüzden `bash -s <<'SH' ... SH` alt kabuğu içindedir; çıkış
+> yalnızca o alt kabuğu bitirir, Termux penceresi açık kalır. Blokları
+> **başından `SH` satırına kadar** kopyala; tek satırı ayırıp çalıştırma.
+
+---
+
 ## 0) Beklenen çıktı ve maliyet
 
 | Kalem | Değer |
@@ -59,6 +67,7 @@ uydurma/türetme bar eklenmez.
 > canlı değil, sadece veri çekim çalışma alanıdır.
 
 ```bash
+bash -s <<'SH'
 cd ~/Formation-Bot
 DAL="$(git branch --show-current)"
 test -n "$DAL" -a "$DAL" != "HEAD" || { echo "HATA: önce Arena oturumunun aktif dalına geç"; exit 1; }
@@ -88,6 +97,7 @@ print("tv", *dogrulanmis_surum())
 from scripts.backfill import native_kaynak
 print("kaynak plani", native_kaynak.KAYNAK_PLANI)
 PY
+SH
 ```
 
 Beklenen son satır:
@@ -274,6 +284,7 @@ listesinden çıkmalı; `gecici_basarisiz` varsa retry gerekir.
 ## 6) ADIM 5 — Commit & push
 
 ```bash
+bash -s <<'SH'
 cd ~/Formation-Bot
 DAL="$(git branch --show-current)"
 test -n "$DAL" -a "$DAL" != "HEAD" || { echo "HATA: önce Arena oturumunun aktif dalına geç"; exit 1; }
@@ -282,6 +293,7 @@ git add backfill_data/
 git status --short | head -30
 git commit -m "backfill: 1h/2h/4h/1d native OHLCV (Yahoo + TradingView) — Termux"
 git push origin "$DAL"
+SH
 ```
 
 Push reddedilirse (ajandan yeni commit gelmişse):
@@ -310,6 +322,7 @@ printf 'Ajana haber: native veri push edildi. commit=%s sembol=%s csv=%s kaynak_
 ## 7) Komut özeti (kopyala-yapıştır)
 
 ```bash
+bash -s <<'SH'
 cd ~/Formation-Bot
 DAL="$(git branch --show-current)"
 test -n "$DAL" -a "$DAL" != "HEAD" || { echo "HATA: önce Arena oturumunun aktif dalına geç"; exit 1; }
@@ -336,6 +349,7 @@ printf 'Ajana haber: commit=%s sembol=%s csv=%s replay=YOK.\n' \
   "$(git rev-parse --short HEAD)" \
   "$(grep -c . backfill_data/dogrulanmis_semboller.txt)" \
   "$(ls backfill_data/*_*.csv.gz | wc -l)"
+SH
 ```
 
 ---
@@ -352,6 +366,7 @@ printf 'Ajana haber: commit=%s sembol=%s csv=%s replay=YOK.\n' \
 | Sürekli `429` / `Too Many Requests` | Ban koruması yavaşlatır; durduysa birkaç saat bekle, `--retry-failed` |
 | `KOZAL: HTTP Error 404` | Normal — Yahoo taşımıyor; `kalici_basarisiz`, tekrar denenmez |
 | Süreç kendi kendine kapandı | Android öldürdü. `termux-wake-lock` + aynı komutu tekrar koş |
+| Enter'a basınca Termux anında kapanıyor | Hata kontrolündeki çıkış komutu interaktif kabukta oturumu kapatır; `bash -s <<'SH' ... SH` bloğunu baştan sona kopyala, tek satırı çalıştırma |
 | `~90 satır` 1h | `--period-1h 365d` açıkça ver (varsayılan zaten 365d) |
 | `bar_time` içinde `T` | Hata — bana söyle. Sözleşme `YYYY-MM-DD HH:MM:SS+03:00` |
 | `native 4h arşiv dosyası yok` | Replay'e geçilmemeli; önce 4h çekimini tamamla |

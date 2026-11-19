@@ -32,3 +32,32 @@ def test_aktif_kurulum_belgeleri_ve_script_sabit_dal_icermez():
         metin = _metin(rel)
         assert not ESKI_DAL.search(metin), f"{rel} eski Arena dalını öneriyor"
         assert "$DAL" in metin or "--show-current" in metin
+
+
+def test_termux_backfill_cikis_komutu_interaktif_oturumu_kapatmaz():
+    """`exit 1` yalnızca `bash -s` alt kabuğunda olmalı; Termux kapanmamalı.
+
+    2026-11-19: Kullanıcı Enter'a basınca oturumun kapandığını bildirdi. Sebep
+    interaktif kabukta çalışan hata kontrolünün `exit 1` ile oturumun kendisini
+    bitirmesiydi. Aktif kurulum dokümanı blokları `bash -s <<'SH' ... SH`
+    sarmalına alındı; bu test sarmalın ve bash sözdiziminin korunmasını kilitler.
+    """
+    import re
+    import subprocess
+
+    metin = _metin("docs/kurulum/TERMUX_BACKFILL.md")
+    bloklar = re.findall(r"```bash\n(.*?)\n```", metin, re.S)
+    dis = re.sub(r"```bash\n(.*?)\n```", "", metin, flags=re.S)
+    assert "exit 1" not in dis, "kod bloğu dışında interaktif çıkış komutu kaldı"
+
+    sarmalilar = [b for b in bloklar if "bash -s <<'SH'" in b]
+    assert sarmalilar, "güvenli alt kabuk sarmalı yok"
+    for blok in bloklar:
+        if "exit 1" in blok:
+            assert "bash -s <<'SH'" in blok, "sarmalanmamış çıkış komutu var"
+    for blok in sarmalilar:
+        assert "\nSH\n" in blok or blok.endswith("\nSH"), "SH ayracı eksik"
+        sonuc = subprocess.run(
+            ["bash", "-n"], input=blok, text=True, capture_output=True, timeout=30
+        )
+        assert sonuc.returncode == 0, f"bash -n hatası: {sonuc.stderr[:300]}"
