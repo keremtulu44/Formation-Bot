@@ -118,7 +118,7 @@ TABAN_ADIM = 10
 #: Rapor tablolarının kullandığı seri satırı (bellek kısıtı için kolon seçimi).
 SERI_SATIRLARI: tuple[str, ...] = (
     "symbol", "timeframe", "bar_index", "bar_time", "close", "atr",
-    "kanallar", "kanal_sayisi", "yon", "kontrol", "formasyon_state", "formasyon_tip",
+    "kanallar", "kanal", "kanal_sayisi", "yon", "kontrol", "formasyon_state", "formasyon_tip",
     "rvol", "hacim_tier", "data_quality", "cooldown_elenen",
     "bagl_sikisma", "bagl_hacim_kuruma", "bagl_uzaklik_atr", "bagl_yapi",
     "bagl_gunici_kosu", "bagl_atr_yuzdelik", "bagl_seans_saati",
@@ -658,8 +658,14 @@ def seri_olcumu(
             tetik = {**tetik, **baglam_satiri(frame, index, atr)}
         yon = int(tetik.get("yon") or 0)
         yonlar = (1, -1) if yon == 0 else (yon,)
+        kanallar = tetik.get("kanallar") or []
         for secilen in yonlar:
             satir = dict(tetik)
+            # Satırı SINIFLANDIRAN kanal, çok kanallı tetikte bile tek satıra
+            # yazılır (yön 0 iki satıra ayrılınca mükerrer sayılmasın diye
+            # yalnız ilk eleman). Yoksa segment tablosunda aynı tetik hem OB
+            # hem formasyon satırı olur ve n'ler şişer.
+            satir["kanal"] = str(kanallar[0]) if kanallar else "YOK"
             satir["yon"] = secilen if yon == 0 else yon
             satir["atr"] = atr_deger
             satir["gozlenen_bar"] = gozlenen
@@ -819,6 +825,69 @@ def topla(cikti: Path) -> dict[str, Any]:
     return {"df": df, "temiz": temiz, "tetik": int(len(df)), "temiz_tetik": int(len(temiz))}
 
 
+def _segment_bolumu(ekle, tetik_kume: pd.DataFrame, taban_satir: dict[str, Any],
+                    kontrol_kume: pd.DataFrame) -> None:
+    """§7.5 — kanal × bağlam segmentlerini alt sınırla sıralar.
+
+    Ham yüzdeyle sıralamak, n=300'lük bir hücreyi n=20.000'lik bir hücrenin
+    önüne koyar; bu yüzden sıralama Wilson %95 alt sınırına göre yapılır ve
+    tabana karşı z yazılır. 84 segment denendiği için z<2 olanlar **açıkça**
+    "anlamsız" işaretlenir — aksi hâlde şans eseri çıkan farklar bulgu sanılır.
+    """
+    kume = tetik_kume
+    if "kanal" not in kume.columns or kume["kanal"].isna().all():
+        # Eski JSONL: kanal sütunu yok, kanallar demetinin ilk elemanından türet.
+        kume = kume.copy()
+        kume["kanal"] = kume["kanallar"].map(
+            lambda v: str(v[0]) if isinstance(v, (list, tuple)) and len(v) else "YOK"
+        )
+    taban = taban_satir.get("h12_1atr")
+    if taban is None:
+        return
+    seg = degerli_segmentler(kume, float(taban), len(kontrol_kume))
+    if not seg:
+        return
+    seg = sorted(seg, key=lambda d: -(d["alt"] or 0))
+    ekle("## 7.5 · Hangi alarm türü gerçekten değerli? — kanal × bağlam")
+    ekle("")
+    ekle(
+        f"Tablo **Wilson %95 alt sınırına** göre sıralı (n ≥ {DEGER_MIN_N}); alt sınır az veriyle "
+        "iyi görünen hücreyi cezalandırır. z, taban oranına karşı anlamlılıktır."
+    )
+    ekle("")
+    ekle(f"**Taban:** {_pct(taban)} (n={len(kontrol_kume)}) — rastgele bir barın 12 barda ≥1 ATR görme oranı.")
+    ekle("")
+    ekle("| segment | n | ≥1 ATR | taban farkı | alt sınır | z | iki yöne de |")
+    ekle("|---|---:|---:|---:|---:|---:|---:|")
+    for d in seg[:16]:
+        z = d["z"]
+        ekle(
+            f"| {d['ad']} | {d['n']} | {_pct(d['oran'])} | {d['fark_pp']:+.1f} pp | "
+            f"{_pct(d['alt']) if d['alt'] is not None else '—'} | "
+            f"{'—' if z is None else f'{z:+.1f}'} | {_pct(d['karisik'])} |"
+        )
+    ekle("")
+    anlamli = [d for d in seg if d["z"] is not None and d["z"] > 2]
+    anlamsiz = [d for d in seg if d["z"] is not None and abs(d["z"]) < 2]
+    ters = [d for d in seg if d["z"] is not None and d["z"] < -2]
+    ekle(
+        f"- **{len(seg)} segmentin {len(anlamli)}'i tabandan anlamlı iyi, {len(ters)}'i anlamlı "
+        f"kötü, {len(anlamsiz)}'i anlamsız (|z|<2).**"
+    )
+    if ters:
+        ekle(
+            "- **Tabandan anlamlı KÖTÜ olanlar** (canlıda susturulacak ilk adaylar): "
+            + "; ".join(f"{d['ad']} ({d['fark_pp']:+.1f} pp, n={d['n']}, z={d['z']:+.1f})" for d in ters[:5])
+            + "."
+        )
+    ekle(
+        "- **Uyarı:** 84 segment aynı örneklemde denendi. Bonferroni ile anlamlılık eşiği "
+        "|z|>3,2'ye çıkar; bu eşiği geçen segmentler yukarıdaki tablonun ilk sıralarıdır, "
+        "ama 'her segment ayrı bir kural' diye okunmamalı."
+    )
+    ekle("")
+
+
 def rapor_yaz(ozet: Mapping[str, Any], cikti: Path, rapor_yolu: Path) -> str:
     """Tetik ölçümünü okunabilir Markdown raporuna çevirir."""
     df = ozet.get("df")
@@ -874,6 +943,21 @@ def rapor_yaz(ozet: Mapping[str, Any], cikti: Path, rapor_yolu: Path) -> str:
         sembol = int(meta["symbol"].nunique()) if "symbol" in meta.columns else 0
     else:
         seri, sembol = 0, 0
+    # Kapsam: kaç sembol gerçekten koşuldu, arşivin kaçı? 44/176 koşup
+    # "176 sembol" yazmak bu raporun en kolay yapılabilecek hatası.
+    try:
+        from research import arsiv as _arsiv
+
+        toplam_sembol = len(_arsiv.arsiv_sembolleri(native_only=True))
+    except Exception:  # noqa: BLE001 - arşiv okunamazsa kapsam yazılmaz
+        toplam_sembol = 0
+    if toplam_sembol and sembol and sembol < toplam_sembol:
+        ekle(
+            f"> **KAPSAM UYARISI:** Bu koşu arşivin **{sembol}/{toplam_sembol}** sembolünü kapsıyor "
+            f"(%{100 * sembol / toplam_sembol:.0f}) — alfabetik ilk N değil, **her 4. sembol** "
+            "(sektör/kapula dağılsın diye). Sayılar bu semboller için geçerlidir; arşivin tamamına "
+            "genelleme yapılmadan önce tam koşu gerekir."
+        )
     ekle(
         f"- **Örneklem:** {sembol} sembol × {seri // max(1, sembol) if sembol else 0} zaman dilimi = "
         f"{seri} seri · **{ozet['tetik']} satır** (sansürsüz {ozet['temiz_tetik']}; "
@@ -1056,6 +1140,8 @@ def rapor_yaz(ozet: Mapping[str, Any], cikti: Path, rapor_yolu: Path) -> str:
                 )
             ekle("")
 
+    _segment_bolumu(ekle, tetik_kume, taban_satir, kontrol_kume)
+
     ekle("## 8 · Nasıl okunur / sınırlar")
     ekle("")
     ekle("- **'≥1 ATR' bir kazanç değildir.** Tetiğin gösterdiği yönde fiyatın 12 bar içinde")
@@ -1171,6 +1257,78 @@ def _baglam_tablosu(kume: pd.DataFrame) -> list[tuple[str, str, list[dict[str, A
         if len(satirlar) >= 2:
             cikti.append((kolon, etiket, satirlar))
     return cikti
+
+
+def wilson_alt(p: float | None, n: int, z: float = 1.96) -> float | None:
+    """Wilson alt sınırı — küçük n'de yüksek yüzdeyi cezalandırır.
+
+    Neden: 87.000 satırda en yüksek yüzdeyi seçen bir tablo, n=40'lık bir
+    hücreyi n=50.000'lik bir hücrenin önüne koyar. Sıralama **alt sınırla**
+    yapılırsa "az veriyle iyi görünme" ödüllendirilmez.
+    """
+    if p is None or n <= 0:
+        return None
+    p = min(max(p, 0.0), 1.0)
+    payda = 1 + z * z / n
+    merkez = p + z * z / (2 * n)
+    yayilim = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+    return (merkez - yayilim) / payda
+
+
+#: Değerli segment ararken gereken en az satır. 300'ün altı "keşif"tir.
+DEGER_MIN_N = 300
+
+
+def _iki_oran_z(pa: float, na: int, pb: float, nb: int) -> float | None:
+    """İki oran farkı için z istatistiği (havuzlanmış)."""
+    if na <= 0 or nb <= 0:
+        return None
+    havuz = (pa * na + pb * nb) / (na + nb)
+    if not (0 < havuz < 1):
+        return None
+    se = math.sqrt(havuz * (1 - havuz) * (1 / na + 1 / nb))
+    return None if se == 0 else (pa - pb) / se
+
+
+def degerli_segmentler(
+    kume: pd.DataFrame,
+    taban: float,
+    taban_satir_sayisi: int,
+    min_n: int = DEGER_MIN_N,
+) -> list[dict[str, Any]]:
+    """Kanal × bağlam kesişimlerinden **tabandan anlamlı** ayrışanları bulur.
+
+    Her segment için: n, ≥1 ATR oranı, taban farkı, Wilson %95 alt sınırı ve
+    tabana karşı z. Sıralama alt sınıra göre. ``|z| < 2`` olanlar "anlamlı
+    değil" diye işaretlenir — 20 segment denendiğinde şans eseri 1 tanesi
+    z>2 çıkabilir, bu yüzden sütun açıkça yazılır.
+    """
+    segmentler: list[dict[str, Any]] = []
+    for kanal, kanal_grup in kume.groupby("kanal"):
+        for kolon, etiket, kovalayici in BAGLAM_KOVALARI:
+            if kolon not in kanal_grup.columns:
+                continue
+            etiketler = kanal_grup[kolon].map(kovalayici)
+            for kova, grup in kanal_grup.assign(_k=etiketler).dropna(subset=["_k"]).groupby("_k"):
+                if len(grup) < min_n:
+                    continue
+                s = _kanal_satiri(f"{kanal} · {etiket}: {kova}", grup)
+                if s["h12_1atr"] is None:
+                    continue
+                z = _iki_oran_z(s["h12_1atr"], s["n"], taban, taban_satir_sayisi)
+                segmentler.append({
+                    "ad": s["ad"],
+                    "kanal": str(kanal),
+                    "baglam": etiket,
+                    "n": s["n"],
+                    "oran": s["h12_1atr"],
+                    "fark_pp": (s["h12_1atr"] - taban) * 100,
+                    "alt": wilson_alt(s["h12_1atr"], s["n"]),
+                    "z": z,
+                    "karisik": s["karisik"],
+                    "medyan_tepe": s["medyan_tepe"],
+                })
+    return segmentler
 
 
 def _kanal_tablosu(temiz: pd.DataFrame) -> list[dict[str, Any]]:

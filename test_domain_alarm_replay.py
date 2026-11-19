@@ -481,3 +481,86 @@ def test_sansur_ufku_dolmadan_horizon_yazilmaz():
     assert satir["yon_h12"] is None
     assert satir["yon_h40"] is None
     assert satir["ters_h12"] is None
+
+
+# --- Sözleşme 9: değerli segment seçimi ------------------------------------
+
+def test_wilson_alt_siniri_kucuk_n_cezalandirir():
+    """Aynı oranda küçük örneklem daha düşük alt sınır üretmeli."""
+    kucuk = dar.wilson_alt(0.80, 50)
+    buyuk = dar.wilson_alt(0.80, 5000)
+    assert kucuk < buyuk < 0.80
+
+
+def test_wilson_alt_sinir_disinda_kalmaz():
+    assert dar.wilson_alt(0.0, 100) == 0.0
+    assert dar.wilson_alt(1.0, 100) < 1.0
+    assert dar.wilson_alt(None, 100) is None
+    assert dar.wilson_alt(0.5, 0) is None
+
+
+def test_iki_oran_z_ayni_oranda_sifir():
+    assert dar._iki_oran_z(0.5, 1000, 0.5, 1000) == pytest.approx(0.0, abs=1e-9)
+    # Fark büyüdükçe z büyür.
+    assert dar._iki_oran_z(0.7, 2000, 0.5, 2000) > dar._iki_oran_z(0.55, 2000, 0.5, 2000)
+
+
+def test_degerli_segment_min_n_altini_atlar():
+    """n<300 segment tabloya girmemeli: 40 satırla 'en iyi kanal' ilan edilemez."""
+    satirlar = []
+    for i in range(400):
+        satirlar.append({
+            "kanal": "OB", "bagl_sikisma": 0.3 if i < 350 else 1.5,
+            "h12_1atr": True, "karisik": False, "medyan_tepe": 3.0,
+            "yon_h12": 1.0, "yon_tepe_atr": 2.0, "ters_h12": False,
+            "yon_asim_050": True, "yon_asim_100": True,
+            "yon_asim_150": False, "yon_asim_200": False,
+        })
+    # Küçük grup: 40 satır, %100 başarı — min_n ile elenmeli.
+    for i in range(40):
+        satirlar.append({
+            "kanal": "FVG", "bagl_sikisma": 0.3,
+            "h12_1atr": True, "karisik": False, "medyan_tepe": 5.0,
+            "yon_h12": 1.0, "yon_tepe_atr": 2.0, "ters_h12": False,
+            "yon_asim_050": True, "yon_asim_100": True,
+            "yon_asim_150": False, "yon_asim_200": False,
+        })
+    kume = pd.DataFrame(satirlar)
+    seg = dar.degerli_segmentler(kume, 0.60, 5000, min_n=dar.DEGER_MIN_N)
+    adlar = {d["ad"] for d in seg}
+    assert not any(a.startswith("FVG") for a in adlar)
+    assert any(a.startswith("OB") for a in adlar)
+
+
+def test_kanal_sutunu_yoksa_ilk_elemandan_turetulur():
+    """Eski JSONL'de `kanal` yok; segment bölümü yine de çalışmalı."""
+    satirlar = [{
+        "kanallar": ("FVG",), "bagl_sikisma": 0.3,
+        "h12_1atr": True, "karisik": False, "medyan_tepe": 3.0,
+        "yon_h12": 1.0, "yon_tepe_atr": 2.0, "ters_h12": False,
+        "yon_asim_050": True, "yon_asim_100": True,
+        "yon_asim_150": False, "yon_asim_200": False,
+    } for _ in range(5)]
+    cikti: list[str] = []
+    dar._segment_bolumu(cikti.append, pd.DataFrame(satirlar), {"h12_1atr": 0.5},
+                        pd.DataFrame(satirlar))
+    # min_n altında kaldığı için bölüm boş; ama patlamamalı.
+    assert cikti == []
+
+
+def test_segment_bolumu_bonferroni_uyarisini_yazar():
+    satirlar = []
+    for i in range(2000):
+        satirlar.append({
+            "kanal": "OB", "bagl_sikisma": 0.3 if i % 2 else 0.8,
+            "h12_1atr": bool(i % 3), "karisik": False, "medyan_tepe": 3.0,
+            "yon_h12": 1.0, "yon_tepe_atr": 2.0, "ters_h12": False,
+            "yon_asim_050": True, "yon_asim_100": False,
+            "yon_asim_150": False, "yon_asim_200": False,
+        })
+    cikti: list[str] = []
+    kume = pd.DataFrame(satirlar)
+    dar._segment_bolumu(cikti.append, kume, {"h12_1atr": 0.4}, kume)
+    metin = "\n".join(cikti)
+    assert "Wilson" in metin
+    assert "Bonferroni" in metin

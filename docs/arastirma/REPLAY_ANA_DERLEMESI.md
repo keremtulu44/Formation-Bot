@@ -19,7 +19,7 @@ sonra ilgili kart. Yeni bir ölçüm planlayan → **§6 sıra** + **§8 Sınır
 | §1 | Veri rejimi değişikliği (2h/4h native, 1h'de FVG yok) |
 | §2 | 37 çalışmanın envanter tablosu (ID · evren · sonuç yönü · durum) |
 | §3 | Kartlar: §3.1 zone/OB/FVG/MS · §3.2 formasyon · §3.3 kırılım/teyit · §3.4 gölge · §3.5 stabil · §3.6 pilot · §3.7 altyapı |
-| §4 | Onlarca çalışmanın kesiştiği **8 tekrar eden ders** |
+| §4 | Onlarca çalışmanın kesiştiği **9 tekrar eden ders** |
 | §5 | "Yazı tura kadar" olanlar (ölçülmüş belirsizlikler) |
 | §5.5 | Native verinin kendi gürültü tabanı (2h/4h ↔ 1h) |
 | §6 | Yeniden koşu sırası ve komutlar |
@@ -123,7 +123,7 @@ gerçeği:
 | R34 | Alarm context prototipi | 10 sembol | JSON paket | Prototip | GEÇERLİ |
 | R35 | Ampirik referans katmanı | 176×4 | kart satırı | **Ölçüm→metin köprüsü** | VERİ DEĞİŞTİ |
 | R36 | **Native tutarlılık denetimi** (bu tur) | 174×2 | kapanış farkı | **Veri kalitesi** — %0,2–0,3 medyan, 13 uyumsuz sembol | GEÇERLİ |
-| R37 | **Domain alarm replay** (bu tur) | 176×4 | tetik satırı | *Koşuyor* (§6 sıra 7) | PLAN → ölçüm |
+| R37 | **Domain alarm replay** (bu tur) | 44×4 (arşivin %25'i) | 87.299 tetik + 40.398 taban | **Karışık** — HACIM +8,4 pp, BOS −1,6 pp; hiçbiri yön vermiyor | GEÇERLİ |
 
 \* `GEÇERLİ*`: Stabil çalışmaları **1d + 1h→4h** kullanır. 4h tarafı hâlâ türetim
 olduğu için native 4h ile birebir aynı olmayabilir; ancak bu çalışmaların ana
@@ -683,19 +683,35 @@ var (%10,6); fiyatı gerçek, hacmi yok → RVOL/kuruma bağlamı orada bozuluyo
 
 ---
 
-### R37 · Domain alarm replay — "hangi alarm türü gerçekten değerli?" (bu tur, koşuyor)
-**KAPSAM** 176×4 native seri · canlı 6 alarm kanalının (BOS/CHoCH/OB/FVG/
-formasyon/hacim) arşiv karşılığı · tetik başına 3/12/40 bar ATR yolu ·
-**kontrol (taban) örneklemi** + canlı 6 bar cooldown
-**ANA SAYI** Koşu bitince §6 sıra 7'de üretilecek; pilot (3 sembol × 4 TF)
-işaret veriyor: HACIM kanalı tabandan **+17 pp**, FVG **−1,5 pp** (1h'de FVG yok).
-**YORUM** Bu ölçümün asıl değeri **kanal başına "değer" iddiasını test
-edilebilir hâle getirmesi**: taban olmadan "alarm çalışıyor" denemez, çünkü
-ATR zaten ortalama bar aralığıdır ve herhangi bir barda 12 barda ≥1 ATR görülür.
-İkinci yenilik: tetiğin **grafik görüntüsü** (sıkışma, hacim kuruması, en yakın
-bölgeye uzaklık, koşu, ATR yüzdeligi, seans saati) de ölçülüyor.
-**DURUM** `PLAN → ölçüm` (rapor: `DOMAIN_ALARM_REPLAY.md`)
-**KAYNAK** [`domain_alarm_replay.py`](../../research/domain_alarm_replay.py) · [`test_domain_alarm_replay.py`](../../test_domain_alarm_replay.py) (32 test)
+### R37 · Domain alarm replay — "hangi alarm türü gerçekten değerli?"
+**KAPSAM** **44 sembol × 4 TF = 176 seri** (arşivin %25'i, her 4. sembol) ·
+131.224 satır = 87.299 tetik + 40.398 taban · tetik başına 3/12/40 bar ATR yolu ·
+canlı 6 bar cooldown · tetik anındaki 6 bağlam özelliği
+**ANA SAYI**
+- Tetik vs **taban** (12 bar, lehte ≥1 ATR): **%66,9 vs %64,6 → fazla +2,2 pp**
+- Yön farkı (lehte − aleyhte): tetik **+4,3 pp**, taban **+0,0 pp**
+- **Belirsizlik:** tetiklerin **%30,9**'u 12 barda *her iki yöne de* ≥1 ATR görüyor;
+  tabanda %31,3 → **alarm belirsizliği azaltmıyor**
+- Kanal (taban farkı): **HACIM +8,4** (n=2.105) · **FVG +3,3** (7.218) ·
+  **FORMASYON +2,9** (37.169) · **OB +1,1** (49.677) · **BOS −1,6** (963, aleyhte %73,5) ·
+  **CHoCH −2,0** (83)
+- **Cooldown:** 30.104 kart gönderildi, **57.195 tekrar susturuldu (%65,5)**.
+  Gönderilen %67,6 vs susturulan %66,5 → **−1,1 pp** (susturulanlar daha kötü değil)
+- **En değerli segment** (Wilson alt sınırı): HACIM × 6-bar yukarı koşu
+  **%75,6** (n=973, z=+7,1) · FORMASYON × yukarı koşu %70,4 (n=9.155, z=+10,5)
+- 84 segmentin **55'i anlamlı iyi, 2'si anlamlı kötü** (BOS × yukarı koşu −6,0 pp,
+  BOS × hacim canlı −5,7 pp), 27'si anlamsız
+**YORUM** Üç ayrı hüküm:
+1. **Kanal seçimi gerçekten fark yaratıyor** — HACIM +8,4 pp ile OB'nin (+1,1)
+   sekiz katı. "Alarm" tek bir şey değil; en az üç farklı değer sınıfı var.
+2. **Ama hiçbir kanal "burada şu olacak" demiyor:** hepsinde 12 barda her iki yöne
+   de ≥1 ATR görenler ~%30. Bu, kullanıcının şikâyetinin ("belirsizlik değil,
+   yön hissi") ölçülmüş hâli: alarm **oynaklığı** işaret ediyor, **yönü** değil.
+   Yön farkı +4,3 pp (taban 0,0) — gerçek ama küçük.
+3. **Cooldown doğru karar:** %65,5 tekrarı susturup sonucu bozmuyor (−1,1 pp).
+   Yani "alarm yorgunluğu"nun en az yarısı **bilgi taşımayan tekrar**.
+**DURUM** `GEÇERLİ` — 44/176 sembol; tam arşive genelleme için tam koşu gerekli
+**KAYNAK** [`DOMAIN_ALARM_REPLAY.md`](DOMAIN_ALARM_REPLAY.md) · [`domain_alarm_replay.py`](../../research/domain_alarm_replay.py) · [`test_domain_alarm_replay.py`](../../test_domain_alarm_replay.py) (38 test)
 
 ---
 
@@ -708,7 +724,7 @@ değiştirmez. [`ALARM_CONTEXT_API_PLANI.md`](ALARM_CONTEXT_API_PLANI.md)
 
 ---
 
-## 4 · Replay'lerin kesişiminde tekrar eden 8 şey
+## 4 · Replay'lerin kesişiminde tekrar eden 9 şey
 
 Bu liste, onlarca ayrı çalışmanın **aynı yöne** işaret ettiği maddelerdir. Tek tek
 sayılar değişse de yön aynı kaldığı için en güvenilir bilgi bunlar.
@@ -743,6 +759,12 @@ sayılar değişse de yön aynı kaldığı için en güvenilir bilgi bunlar.
 8. **En büyük risk erken/yüksekten giriş, stop ayarı değil.**
    R14 (stopların %90'ı) + R11 (dar stop pişmanlığı %4) + R17 (erken çık refleksi
    kazandırmıyor).
+
+9. **Alarm oynaklık işaret ediyor, yön değil.** (bu tur eklendi — R37)
+   Tetiklerin %30,9'u 12 barda *iki yöne de* ≥1 ATR görüyor; taban örneklemde bu
+   oran %31,3. Yani alarm "burada bir şey olacak" diyor, "şu yöne gidecek"
+   demiyor. Bu, 1–8. maddelerin **alarm tarafındaki karşılığı**: yön üstünlüğü
+   kurulamıyorsa kartın işi **dikkat yönetimi** olmalı, tahmin değil.
 
 ---
 
@@ -852,7 +874,7 @@ yeni veriyle anlam kazanmaz), R29 (düzeltildi, konu kapandı), R32/R31 (sicil).
 | Stabil | [`STABIL_REHBERI.md`](STABIL_REHBERI.md) · [`STABIL_REPLAY_HATLARI.md`](STABIL_REPLAY_HATLARI.md) · `stabil_*/` dizinleri |
 | Kolon/terminoloji | [`KOLON_SOZLUGU.md`](KOLON_SOZLUGU.md) · [`YASAM_TABLOSU.md`](YASAM_TABLOSU.md) |
 | Veri güvenilirliği | [`VERI_KULLANIM_VE_GUVENILIRLIK_2026-10-30.md`](VERI_KULLANIM_VE_GUVENILIRLIK_2026-10-30.md) |
-| Bu derlemenin alarm tarafı | [`DOMAIN_ALARM_REPLAY_SONUCLARI.md`](DOMAIN_ALARM_REPLAY_SONUCLARI.md) |
+| Bu derlemenin alarm tarafı | [`DOMAIN_ALARM_REPLAY.md`](DOMAIN_ALARM_REPLAY.md) · üretici: `research/domain_alarm_replay.py` |
 
 ---
 
@@ -865,9 +887,11 @@ ne yapabilirim?" sorusunun derlemeden çıkan cevabı:
 |---|---|---|
 | **Yapılabilir:** Sabit seviyeyi "şuradan döner" diye **kart metninde** kullanmak | R01, R02, R22 | Seviye oynaklığı ölçüyor (%65 temas), yönü değil |
 | **Yapılabilir:** Tekrarlanan temasları "tükenme" olarak işaretlemek | R19, R21 | 3.–4. temas −0,67 ATR ve %48,5 kırılma; en güçlü ve tutarlı bulgu |
-| **Yapılabilir:** Hacmi *yön teyidi* değil, *dikkat* sinyali saymak | R01, R07, R20 + R37 pilot | Hacim yön ayırt etmiyor ama 12 barda ≥1 ATR oranını yükseltiyor |
-| **Yapılabilir:** Alarm sıklığını cooldown ile sınırlamak | R37 pilot | Susturulan tekrarlar gönderilenlerden **daha iyi** çıktı (%68,8 vs %66,3) → sıklık değer eklemiyor |
+| **Yapılabilir:** Hacmi *yön teyidi* değil, *dikkat* sinyali saymak | R01, R07, R20, R37 | Hacim yön ayırt etmiyor ama ≥1 ATR oranını **+8,4 pp** yükseltiyor (en güçlü kanal) |
+| **Yapılabilir:** Alarm sıklığını cooldown ile sınırlamak | R37 | Tetiklerin **%65,5**'i tekrar; susturulanlar gönderilenlerden farksız (%66,5 vs %67,6), yani sıklık değer eklemiyor |
 | **Yapılabilir:** FVG'ye *tek kullanımlık* muamele | R01 | Tekrar denendiğinde tepki düşüyor |
+| **Yapılabilir:** Alarm kanallarını değere göre önceliklendirmek | R37 | HACIM +8,4 pp · FVG +3,3 · FORMASYON +2,9 · OB +1,1 · BOS −1,6 · CHoCH −2,0 |
+| **Güvenilemez:** Alarmı "burada şu olacak" diye sunmak | R37 | Tetiklerin **%30,9**'u 12 barda iki yöne de ≥1 ATR görüyor (taban %31,3) — alarm oynaklık işaret ediyor, yön değil |
 | **Güvenilemez:** Kalite/puan ile eleme | R05, R06, R08 | Üç bağımsız çalışma aynı hükmü verdi |
 | **Güvenilemez:** Kırılımı tek başına sinyal saymak | R06, R08, R11 | Rastgele girişten +1,5 pp; maliyetle −0,01 ATR |
 | **Güvenilemez:** "Yukarı teyit al" / "aşağı teyit al" kuralı | R09, R10 | Aşağı lehine asimetri **tek rejim**; kalıcı değil |
