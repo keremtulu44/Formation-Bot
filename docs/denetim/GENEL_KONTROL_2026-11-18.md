@@ -331,3 +331,36 @@ Yeni 16 ağsız regresyon; tam pytest **4557 passed / 43 skipped**; doktor/grafi
 **53 tamam / 0 hata**; gerçek entrypoint HTTP smoke. Push `bef9008` CI run
 **`44366863050` success** (9 dk 50 sn, 10/10 adım). Gerçek Render deploy/PR ve
 canlı Telegram/Yahoo/TV/Supabase çağrısı yoktur.
+
+## 12. NATIVE 1h/2h/4h/1d replay veri zinciri (2026-11-19)
+
+Kullanıcı 170+ sembolde 2h/4h'nin 1h'den `resample_ohlcv` ile türetilmesinin
+hacim/fiyat kayması ürettiğini bildirdi; dört TF'nin de **native** çekilmesini,
+mevcut mum çekme/kurulum betiğinin düzenlenmesini ve Termux'taki yerel klondan
+`pull → bağımlılık → probe/pilot → tam çekim → doğrulama → commit/push → ajana
+haber` komutlarını istedi. Üç kapsam kararı kullanıcıdan alındı: **karma kaynak**
+(1h/1d Yahoo + 2h/4h TradingView), **CSV'ler + manifest push**, **replay şimdi
+yok — önce veriler gelecek**.
+
+| Katman | Değişiklik |
+|---|---|
+| Yeni `scripts/backfill/native_kaynak.py` | Kaynak planı, TV sembol eşlemesi, lazy ortak istemci, UTC→İstanbul, OHLCV normalizasyonu, WS hata sınıflandırması |
+| `scripts/backfill/yahoo_backfill.py` | Varsayılan `1h,2h,4h,1d`, `--tv-bar-sayisi/--tv-exchange`, iki sağlayıcılı probe, native etiketli manifest, `kaynak_raporu.json`, kaynak/native resume kapısı, gerçek `--retry-failed` |
+| `research/arsiv.py` | `KAYNAK_INTERVAL` identity, `arsiv_modu`, `arsiv_kaynak_plani`, dört dosya şartı, `tf_frame(..., legacy_resample=False)` strict native okuma |
+| Replay/rapor | `arastirma_kosu.py` strict native + kaynak/TF rapor notları; `dz_yukleme.py` 4 TF `dz_bars` etiketi + `kapsam_raporu.json` native alanları |
+| Termux | `requirements-termux.txt` + `setup-termux.sh` içine `tradingview-datafeed==2.1.1`, `websocket-client==1.9.2` ve dağıtım doğrulaması; `TERMUX_BACKFILL.md` baştan yazıldı |
+| Doküman | `NATIVE_TF_REPLAY_PLANI_2026-11-18.md` eklendi; eski `DZ_REPLAY_SONUCLARI_2026-10-28.md` legacy türetim uyarısıyla işaretlendi; plan/README index güncellendi |
+
+**Kanıt:** `ruff`, `pip check`, `compileall`, `bash -n`, `git diff --check` temiz;
+hedefli 8 dosya **256 passed**; tam pytest **4585 passed / 43 skipped**
+(513,07 sn). İlk tam koşuda `test_yerel_onar_script.py` sabit Arena dalı
+bulduğu için 1 doküman testi kırmızıydı; `TERMUX_BACKFILL.md` dinamik
+`DAL="$(git branch --show-current)"` ile düzeltildi ve tam suite yeşil döndü.
+Push `96bd20b` (17 dosya, 1617+/423-); CI run **`44508629441` success**
+(Python 3.12, 10 dk 9 sn, 10/10 adım, head `96bd20b8b4c7002e503726f4f9bac135447acb27`).
+
+**Sınır:** Ajan canlı Yahoo/TradingView/Supabase/Telegram/Render çağrısı,
+fiili Render deploy veya PR yapmadı. 170+ sembolün gerçek çekimi, `backfill_data/`
+commit/push'u ve replay kullanıcının Termux'unda/sonraki turda gerçekleşecek.
+Bu turda replay komutu verilmedi; `docs/kurulum/TERMUX_BACKFILL.md` akışı
+bilerek replay içermez. Bağlı uygulamalar kapalı ve kullanılmadı.

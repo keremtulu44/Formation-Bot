@@ -1,6 +1,7 @@
 # NATIVE 1h/2h/4h/1d REPLAY VERİ PLANI — 2026-11-18
 
-> **Durum:** Kod + Termux akışı hazır · **Canlı çekim:** kullanıcının Termux
+> **Durum:** Kod + Termux akışı hazır · **Commit:** `96bd20b` · **CI:** run
+> `44508629441` **success** (10 dk 9 sn) · **Canlı çekim:** kullanıcının Termux
 > cihazında yapılacak · **Replay:** bu turda **YOK**, önce veriler gelecek.
 > **Ajan kanıtı:** ağsız testler + kod; ajan canlı Yahoo/TradingView/Supabase/
 > Telegram/Render çağrısı yapmadı.
@@ -118,3 +119,21 @@ Bu belge kod/test/doküman teslimidir. Ajan canlı Yahoo veya TradingView
 çağrısı yapmadı; 170+ sembolün gerçek bar sayıları, TV WS erişimi, Termux
 çalışma süresi ve push sonrası commit hash'i kullanıcı cihazındaki koşudan
 gelecektir. Fiili Render deploy, PR veya canlı Telegram/Supabase çağrısı yoktur.
+
+## 8) Doğrulama (2026-11-19)
+
+| Kapı | Sonuç |
+|---|---|
+| Statik | `ruff check .`, `pip check`, `compileall`, `bash -n setup-termux.sh`, `git diff --check` temiz |
+| Hedefli testler | `test_native_kaynak.py` + 7 ilgili dosya: **256 passed** |
+| Tam pytest | **4585 passed / 43 skipped** · 513,07 sn · `DATA_DIR=/tmp/fb-native-data` |
+| İlk tam koşu | 1 doküman testi sabit Arena dalı nedeniyle kırmızı; `DAL="$(git branch --show-current)"` ile düzeltildi |
+| Commit | `96bd20b` · 17 dosya · 1617+/423- |
+| CI | `44508629441` **success** · Python 3.12 · 10 dk 9 sn · 10/10 adım |
+
+Ağsız testler şunları kilitler: 2h/4h için `resample_ohlcv` çağrılmaz; native
+dosya eksikse `FileNotFoundError`; TV kurulumu yokken `main` 2 döner; probe iki
+sağlayıcıyı birlikte doğrular; manifest/probe/rapor kaynak + TF + native
+etiketlerini taşır; `dz_bars` dört TF'yi olduğu gibi yazar. Canlı 170+ sembol
+çekimi, `backfill_data/` push'u ve replay hâlâ kullanıcı cihazında/sonraki
+turda bekliyor.
