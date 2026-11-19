@@ -22,6 +22,7 @@ sonra ilgili kart. Yeni bir ölçüm planlayan → **§6 sıra** + **§8 Sınır
 | §4 | Onlarca çalışmanın kesiştiği **9 tekrar eden ders** |
 | §5 | "Yazı tura kadar" olanlar (ölçülmüş belirsizlikler) |
 | §5.5 | Native verinin kendi gürültü tabanı (2h/4h ↔ 1h) |
+| §5.7 | **İlk native sonuçlar** — eski vs yeni yan yana, hangi bulgu ayakta kaldı |
 | §6 | Yeniden koşu sırası ve komutlar |
 | §7 | Dosya haritası · §7.5 Karar tablosu · §8 Sınırlar |
 
@@ -829,6 +830,66 @@ okunmalı; 5 pp'den küçük farklar bu gürültünün altında kalabilir.
 
 ---
 
+## 5.7 · İLK NATIVE SONUÇLAR — eski sayılarla yan yana (bu tur)
+
+44 sembol × 4 TF, native 2h/4h, **hata 0**. Aşağıdaki her satır iki bağımsız
+koşunun karşılaştırması: sol taraf eski (2h/4h **türetilmiş**), sağ taraf bu tur
+(**native**). Amaç "hangi eski bulgu ayakta kaldı"yı görmek.
+
+| Ne | Eski (türetilmiş) | **Yeni (native)** | Hüküm |
+|---|---|---|---|
+| Zone temas oranı (OB, 1h) | %94 civarı | **%94,2** (1h) / %92,9 (2h) / %93,0 (4h) | **Aynı** |
+| OB geçilme (violation) | %90+ | **%85,6–%93,2** | **Aynı** — seviye yön söylemiyor |
+| FVG tek deneme | 1d %71,9 | **%71,9 (1d) / %76,2 (4h)** | **Aynı** — FVG tek kullanımlık |
+| OB tek deneme | %61 | **%59,3–%61,0** | **Aynı** — OB tekrar denenir |
+| Dokunuş tepkisi "çalıştı" (OB) | ~%65 | **%63,7 (1d) – %66,7 (1h)** | **Aynı** — %4'lük yön avantajı |
+| Ters tepki (OB) | ~%15 | **%13,7–%15,6** | **Aynı** |
+| Kenar ≥1 ATR aşım (h12) | — | **%58,5–%61,0** | Yeni ölçüm |
+| `ORT_İz` tepe h40 | ≈3,8 ATR | **3,74–3,88 ATR** | **Aynı** |
+| MS BOS "CALISTI" | — | **%66,6–%70,3** (4h en yüksek) | Yeni ölçüm |
+| **MS BOS yön asimetrisi** | — | **1d UP %75,9 vs DOWN %60,9** | **Eski R09/R10'un TERSİ** |
+| Formasyon tamamlanma | %76,2 | **%74,7** (n=4.495/6.018) | **Aynı** (1,5 pp) |
+| Formasyon tipi/kalite | tipler 80–86 | **78–85**, tip ayrımı yok | **Aynı** |
+| Retest oranı | %34,9 | **%41,1** (GA %39,8–%42,4) | **DEĞİŞTİ** (+6,2 pp) |
+| Retest derinliği etkisi | — | **<0,25 ATR %63,7 vs ≥0,5 ATR %36,6** | Yeni, güçlü |
+| Retest hacmi (rvol) | — | düşük rvol %39,0 vs yüksek %47,3 (**+8,3 pp, GA +4,9…+11,6**) | Yeni, güçlü |
+| Formasyon ↔ MS yön uyumu | — | uyumlu **%79,4** vs uyumsuz **%69,3** (**+10,1 pp, GA +7,6…+12,2**) | Yeni, güçlü |
+
+### Bu tablodan çıkan üç hüküm
+
+1. **Yapısal bulgular native veride de ayakta.** "OB tekrar denenir, FVG tek
+   kullanımlıktır", "seviye oynaklık ölçer, yön ölçmez", "formasyon kalitesi
+   tipi ayırt etmez" — üçü de neredeyse birebir aynı çıktı. **R01/R02/R05'in
+   ana hükmü veri değişikliğinden etkilenmedi.** Bu, derlemenin en sağlam haberi.
+2. **En büyük sürpriz yön asimetrisinin ters dönmesi.** Eski kırılım/teyit
+   çalışması (R09/R10) "aşağı yön daha iyi" diyordu (%49,3 vs %25,8; 4h −0,67
+   vs +0,81). Native veride **1d'de yukarı BOS %75,9, aşağı %60,9** — yani
+   *yukarı* lehine. Bu, R09/R10'un kendi uyarısını ("tek rejim, kalıcı değil")
+   birebir doğruluyor: **yön asimetrisi bir kural değil, dönemin özelliği.**
+   Karar tablosundaki "yukarı/aşağı teyit kuralı güvenilemez" satırı artık
+   iki bağımsız gözlemle destekli.
+3. **Yeni ve en kullanışlı bulgu retest tarafında.** Retest oranı %34,9'dan
+   %41,1'e çıktı ve **retestin niteliği** sonucu büyük ölçüde belirliyor:
+   sığ retest (<0,25 ATR) %63,7, derin retest (≥0,5 ATR) %36,6. Fark 27 pp —
+   bu derlemedeki en büyük tek etki. Aynı şekilde retest hacmi (+8,3 pp) ve
+   formasyon–MS yön uyumu (+10,1 pp) GA'ları sıfırı içermiyor.
+   **Bunlar kart metninde kullanılabilir; ama önce ayrı pencerede tekrar
+   test edilmeli** (raporun kendi kuralı: tanımlayıcı bulgu ≠ kural).
+
+### Uyarılar
+
+- 44/176 sembol (%25). Yüzdeler bu evren için geçerli; tam arşivde ±1–2 pp
+  kayabilir.
+- `1h`'de FVG yok (bilinen kısıt): FVG satırları 2h/4h/1d'ye aittir.
+- **Retest +6,2 pp'lik değişim**, R36'daki %0,2–0,3 fiyat gürültüsünün çok
+  üstünde — yani gerçek bir fark, veri gürültüsü değil. Ama nedeni veri mi
+  yoksa 44 sembollük örneklem mi, tam koşu ayırt eder.
+
+**KAYNAK** [`ARASTIRMA_BULGULARI.md`](ARASTIRMA_BULGULARI.md) (ham tablolar) ·
+[`FORMASYON_SONUCLARI.md`](FORMASYON_SONUCLARI.md) (FRM-01…20)
+
+---
+
 ## 6 · Bundan sonra: ne yeniden koşulacak, hangi sırayla
 
 Native veri geldiği için **2h/4h'ye dayanan her sayı** yeniden üretilmeli. Ama
@@ -836,7 +897,7 @@ hepsini birden koşmak gerekmez; bağımlılık sırası var:
 
 | Sıra | İş | Neden bu sırada | Komut |
 |---|---|---|---|
-| **1** | Ana arşiv ölçümü (R01/R02/R05) | Diğer her şeyin girdisi; 704 seri | `python scripts/backfill/arastirma_kosu.py` |
+| **1** | Ana arşiv ölçümü (R01/R02/R05) | Diğer her şeyin girdisi. **44 sembollük koşu BİTTİ (§5.7); 176'ya tamamlama bekliyor** | `python scripts/backfill/arastirma_kosu.py` |
 | **2** | S01–S32 cevapları (R04) | 1'in çıktısını okur | `python -m research.soru_cevaplama` |
 | **3** | Formasyon kartları (R05) | 1'in çıktısını okur | aynı koşunun `--agrega` adımı |
 | **4** | Kırılım/teyit (R09/R10/R11) | Kendi replay'i, 696 seri | `python scripts/kirilim_replay.py` |
@@ -889,7 +950,8 @@ ne yapabilirim?" sorusunun derlemeden çıkan cevabı:
 | **Yapılabilir:** Tekrarlanan temasları "tükenme" olarak işaretlemek | R19, R21 | 3.–4. temas −0,67 ATR ve %48,5 kırılma; en güçlü ve tutarlı bulgu |
 | **Yapılabilir:** Hacmi *yön teyidi* değil, *dikkat* sinyali saymak | R01, R07, R20, R37 | Hacim yön ayırt etmiyor ama ≥1 ATR oranını **+8,4 pp** yükseltiyor (en güçlü kanal) |
 | **Yapılabilir:** Alarm sıklığını cooldown ile sınırlamak | R37 | Tetiklerin **%65,5**'i tekrar; susturulanlar gönderilenlerden farksız (%66,5 vs %67,6), yani sıklık değer eklemiyor |
-| **Yapılabilir:** FVG'ye *tek kullanımlık* muamele | R01 | Tekrar denendiğinde tepki düşüyor |
+| **Yapılabilir:** FVG'ye *tek kullanımlık* muamele | R01, §5.7 | Tekrar denendiğinde tepki düşüyor — native veride de aynı (%76,2 tek deneme) |
+| **Aday (önce tekrar test):** Retest niteliğini karta yazmak | §5.7 | Sığ retest (<0,25 ATR) **%63,7** vs derin retest (≥0,5 ATR) **%36,6** — derlemedeki en büyük tek etki (27 pp), ama tek pencerede ölçüldü |
 | **Yapılabilir:** Alarm kanallarını değere göre önceliklendirmek | R37 | HACIM +8,4 pp · FVG +3,3 · FORMASYON +2,9 · OB +1,1 · BOS −1,6 · CHoCH −2,0 |
 | **Güvenilemez:** Alarmı "burada şu olacak" diye sunmak | R37 | Tetiklerin **%30,9**'u 12 barda iki yöne de ≥1 ATR görüyor (taban %31,3) — alarm oynaklık işaret ediyor, yön değil |
 | **Güvenilemez:** Kalite/puan ile eleme | R05, R06, R08 | Üç bağımsız çalışma aynı hükmü verdi |
