@@ -10,6 +10,21 @@
 
 ## 0 · Nasıl okunur
 
+**Nereden başlamalı:** acelesi olan → **§7.5 Karar tablosu** (hangi kurala
+güvenilebilir). Bir iddiayı kontrol edecek olan → **§2 Envanter** (ID ile ara),
+sonra ilgili kart. Yeni bir ölçüm planlayan → **§6 sıra** + **§8 Sınırlar**.
+
+| Bölüm | Ne var |
+|---|---|
+| §1 | Veri rejimi değişikliği (2h/4h native, 1h'de FVG yok) |
+| §2 | 37 çalışmanın envanter tablosu (ID · evren · sonuç yönü · durum) |
+| §3 | Kartlar: §3.1 zone/OB/FVG/MS · §3.2 formasyon · §3.3 kırılım/teyit · §3.4 gölge · §3.5 stabil · §3.6 pilot · §3.7 altyapı |
+| §4 | Onlarca çalışmanın kesiştiği **8 tekrar eden ders** |
+| §5 | "Yazı tura kadar" olanlar (ölçülmüş belirsizlikler) |
+| §5.5 | Native verinin kendi gürültü tabanı (2h/4h ↔ 1h) |
+| §6 | Yeniden koşu sırası ve komutlar |
+| §7 | Dosya haritası · §7.5 Karar tablosu · §8 Sınırlar |
+
 Her replay bir **kart** olarak durur:
 
 ```
@@ -838,6 +853,30 @@ yeni veriyle anlam kazanmaz), R29 (düzeltildi, konu kapandı), R32/R31 (sicil).
 | Kolon/terminoloji | [`KOLON_SOZLUGU.md`](KOLON_SOZLUGU.md) · [`YASAM_TABLOSU.md`](YASAM_TABLOSU.md) |
 | Veri güvenilirliği | [`VERI_KULLANIM_VE_GUVENILIRLIK_2026-10-30.md`](VERI_KULLANIM_VE_GUVENILIRLIK_2026-10-30.md) |
 | Bu derlemenin alarm tarafı | [`DOMAIN_ALARM_REPLAY_SONUCLARI.md`](DOMAIN_ALARM_REPLAY_SONUCLARI.md) |
+
+---
+
+## 7.5 · Karar tablosu — bugün **hangi kurala güvenilebilir, hangisine güvenilemez**
+
+Bu dosya bir başvuru kaynağı olarak kullanılacaksa tek ekran bu. "Bugün canlıda
+ne yapabilirim?" sorusunun derlemeden çıkan cevabı:
+
+| Karar | Dayanak | Neden |
+|---|---|---|
+| **Yapılabilir:** Sabit seviyeyi "şuradan döner" diye **kart metninde** kullanmak | R01, R02, R22 | Seviye oynaklığı ölçüyor (%65 temas), yönü değil |
+| **Yapılabilir:** Tekrarlanan temasları "tükenme" olarak işaretlemek | R19, R21 | 3.–4. temas −0,67 ATR ve %48,5 kırılma; en güçlü ve tutarlı bulgu |
+| **Yapılabilir:** Hacmi *yön teyidi* değil, *dikkat* sinyali saymak | R01, R07, R20 + R37 pilot | Hacim yön ayırt etmiyor ama 12 barda ≥1 ATR oranını yükseltiyor |
+| **Yapılabilir:** Alarm sıklığını cooldown ile sınırlamak | R37 pilot | Susturulan tekrarlar gönderilenlerden **daha iyi** çıktı (%68,8 vs %66,3) → sıklık değer eklemiyor |
+| **Yapılabilir:** FVG'ye *tek kullanımlık* muamele | R01 | Tekrar denendiğinde tepki düşüyor |
+| **Güvenilemez:** Kalite/puan ile eleme | R05, R06, R08 | Üç bağımsız çalışma aynı hükmü verdi |
+| **Güvenilemez:** Kırılımı tek başına sinyal saymak | R06, R08, R11 | Rastgele girişten +1,5 pp; maliyetle −0,01 ATR |
+| **Güvenilemez:** "Yukarı teyit al" / "aşağı teyit al" kuralı | R09, R10 | Aşağı lehine asimetri **tek rejim**; kalıcı değil |
+| **Güvenilemez:** 5 pp altındaki her iyileşme | R36 | Native 2h/4h ↔ 1h gürültü tabanı %0,2–0,3 kapanış = eşik sınırında sinyal çevirir |
+| **Güvenilemez:** Stop/hedef ayarını değiştirerek kurtarmak | R11, R14 | Dar stop pişmanlığı yalnız %4; sorun giriş zamanı |
+| **Yasak:** R18'in herhangi bir sayısı | R18 | G5 gelecek barı okuyordu |
+
+**Bu tabloyu kullanma kuralı:** Sağ sütunda bir kart ID'si yoksa, o karar bu
+derlemeden **desteklenmiyor** demektir — desteklenmediği de yazılıdır.
 
 ---
 
