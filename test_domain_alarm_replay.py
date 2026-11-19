@@ -384,3 +384,100 @@ def test_rapor_bos_ciktiya_dayanir(tmp_path):
     cikti.mkdir()
     metin = dar.rapor_yaz(dar.topla(cikti), cikti, tmp_path / "R.md")
     assert "tetik bulunamadı" in metin.lower()
+
+
+# --- Sözleşme 7: canlı cooldown ---------------------------------------------
+
+def _tetik(bar_index: int, sembol: str = "TEST", tf: str = "1h") -> dict:
+    return {
+        "symbol": sembol, "timeframe": tf, "bar_index": bar_index,
+        "bar_time": "x", "close": 10.0, "kanallar": ["OB"],
+        "kanal_sayisi": 1, "yon": 1, "formasyon_state": None,
+        "formasyon_tip": None, "hacim_tier": None, "rvol": None, "kontrol": False,
+    }
+
+
+def test_cooldown_canli_6_bar_kuralini_uygular():
+    """Canlı `_zaten_gonderildi`: son bar_index'ten 6 bar geçmeden tekrar yok."""
+    kalan = dar.cooldown_uygula([_tetik(10), _tetik(11), _tetik(16), _tetik(17)])
+    # 11 (10+1) ve 17 (16+1) susar; 16 tam 6 bar sonra serbest.
+    assert [t["bar_index"] for t in kalan] == [10, 16]
+
+
+def test_cooldown_sembol_ve_tf_bazinda_ayri():
+    kalan = dar.cooldown_uygula([
+        _tetik(10, "AAA"), _tetik(10, "BBB"), _tetik(12, "AAA"), _tetik(12, "AAA", "4h"),
+    ])
+    anahtarlar = {(t["symbol"], t["timeframe"], t["bar_index"]) for t in kalan}
+    assert anahtarlar == {("AAA", "1h", 10), ("BBB", "1h", 10), ("AAA", "4h", 12)}
+
+
+def test_cooldown_sabit_canli_config_ile_ayni():
+    import config
+
+    assert dar.COOLDOWN_BAR == config.YENI_DOMAIN_ALARM_COOLDOWN_BAR
+
+
+# --- Sözleşme 8: tetik anındaki bağlam ------------------------------------
+
+def _baglam_frame() -> pd.DataFrame:
+    """60 bar: ilk 40 geniş, son 10 dar; hacim son 5 barda yarıya iner."""
+    kapanis, yuksek, dusuk, hacim = [], [], [], []
+    for i in range(70):
+        genislik = 1.0 if i < 50 else 0.3
+        kapanis.append(10.0)
+        yuksek.append(10.0 + genislik)
+        dusuk.append(10.0 - genislik)
+        hacim.append(1000.0 if i < 65 else 400.0)
+    return _frame(kapanis, yuksek, dusuk, hacimler=hacim)
+
+
+def test_baglam_sikisma_ve_hacim_kurumasi():
+    frame = _baglam_frame()
+    atr = [0.5] * len(frame)
+    satir = dar.baglam_satiri(frame, 69, atr)
+    # Son 10 bar aralığı 0.6, son 50 bar aralığı 2.0 → sıkışmış.
+    assert satir["bagl_sikisma"] < 0.5
+    # Son 5 bar 400, son 25 bar 1000 → kuruma.
+    assert satir["bagl_hacim_kuruma"] < 0.8
+
+
+def test_baglam_gelecege_bakmaz():
+    """Bağlam yalnız tetik barına kadarki veriyi okuyabilir."""
+    frame = _baglam_frame()
+    atr = [0.5] * len(frame)
+    once = dar.baglam_satiri(frame, 60, atr)
+    bozuk = frame.copy()
+    bozuk.loc[61:, "high"] = 9999.0
+    bozuk.loc[61:, "low"] = -9999.0
+    sonra = dar.baglam_satiri(bozuk, 60, atr)
+    assert dar_esit(once, sonra)
+
+
+def dar_esit(a: dict, b: dict) -> bool:
+    anahtarlar = [k for k in a if k.startswith("bagl_")]
+    return all(a[k] == b[k] for k in anahtarlar)
+
+
+def test_baglam_yapi_bos_ve_yakin_ayrimi():
+    frame = _baglam_frame()
+    atr = [1.0] * len(frame)
+    # Aktif bölge yoksa BOS.
+    assert dar.baglam_satiri(frame, 69, atr)["bagl_yapi"] == "BOS"
+    # Fiyatı saran bölge → mesafe 0 → YAKIN.
+    # Zone ancak doğumundan SONRAKİ barda kullanılabilir (canlı `_aktif_mi`).
+    zone = [{"zone_upper": 10.1, "zone_lower": 9.9, "dogum_index": 60}]
+    satir = dar.baglam_satiri(frame, 69, atr, ob_zonlar=zone)
+    assert satir["bagl_uzaklik_atr"] == 0.0
+    assert satir["bagl_yapi"] == "YAKIN"
+
+
+def test_sansur_ufku_dolmadan_horizon_yazilmaz():
+    """40 bar dolmadıysa `yon_h40` None olmalı: 3 barın tepesini 40 bar gibi yazmak yalan."""
+    frame = _frame([10.0] * 25)
+    satir = dar.seri_olcumu([_tetik(20)], frame)[0]
+    assert satir["gozlenen_bar"] == 4
+    assert satir["yon_h3"] is not None
+    assert satir["yon_h12"] is None
+    assert satir["yon_h40"] is None
+    assert satir["ters_h12"] is None

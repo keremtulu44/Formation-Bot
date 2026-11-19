@@ -107,6 +107,8 @@ gerçeği:
 | R33 | Telegram DM replay eğitimi | — | — | Ayrı ürün | GEÇERLİ |
 | R34 | Alarm context prototipi | 10 sembol | JSON paket | Prototip | GEÇERLİ |
 | R35 | Ampirik referans katmanı | 176×4 | kart satırı | **Ölçüm→metin köprüsü** | VERİ DEĞİŞTİ |
+| R36 | **Native tutarlılık denetimi** (bu tur) | 174×2 | kapanış farkı | **Veri kalitesi** — %0,2–0,3 medyan, 13 uyumsuz sembol | GEÇERLİ |
+| R37 | **Domain alarm replay** (bu tur) | 176×4 | tetik satırı | *Koşuyor* (§6 sıra 7) | PLAN → ölçüm |
 
 \* `GEÇERLİ*`: Stabil çalışmaları **1d + 1h→4h** kullanır. 4h tarafı hâlâ türetim
 olduğu için native 4h ile birebir aynı olmayabilir; ancak bu çalışmaların ana
@@ -277,6 +279,20 @@ de burada: sonuç görülmeden eşik yazılmış.
 
 ---
 
+### R12 · Kırılım/teyit replay — plan ve kabul kapıları (`PLAN`)
+**KAPSAM** Ölçüm yok; bu turun **sözleşmesi**: 174 hisse × 4 TF = 696 seri,
+veri sonu 19 Ekim 2026, çevrimdışı gözlemsel araştırma.
+**ANA SAYI** — (plan; R09/R10/R11/R25 bu planın ürünü)
+**YORUM** Planın en değerli kısmı **kabul kapılarının önceden yazılmış olması**:
+ölçüm bittikten sonra eşik seçilmedi. R09/R10/R11'in "geçti/kaldı" hükmü bu
+yüzden sonradan rasyonalize edilmiş değil. Ayrıca üç bağımsız payda tanımlıyor
+(25.457 ham aday / 21.244 çakışmasız olay / 18.131 teyit penceresi filtreli) —
+bu derlemede oranların neden birbirine eklenemediğinin kaynağı budur.
+**DURUM** `PLAN` (kabul edildi ve uygulandı; R09/R10/R11/R25 onun çıktısı)
+**KAYNAK** [`REPLAY_UYGULAMA_VE_KOR_NOKTA_PLANI.md`](REPLAY_UYGULAMA_VE_KOR_NOKTA_PLANI.md)
+
+---
+
 ### R09 · Kırılım + teyit replay
 **KAPSAM** 174 hisse × 4 TF = 696 seri · **25.457 ham aday** · son kayıt 19 Ekim 2026
 **ANA SAYI**
@@ -328,6 +344,23 @@ teyitlerin negatif medyanı **kural olarak "yukarı teyitte sat"** demek değil.
 işlemler düşmeye devam ediyor. Değer **seçicilikte**, stop ayarında değil.
 **DURUM** `VERİ DEĞİŞTİ`
 **KAYNAK** [`STOP_SERMAYE_REPLAY_2026-11-09.md`](STOP_SERMAYE_REPLAY_2026-11-09.md)
+
+---
+
+### R25 · Kırılım/teyit ayrıntılı dosya — "sayılar birbirini tutuyor mu?"
+**KAPSAM** 174×4 = 696 seri · 45.255 takip kontrolü · bağımsız skor yeniden hesabı
+**ANA SAYI**
+- 45.255 kontrolde bağımsız skor hesabıyla en büyük fark **1,82 × 10⁻¹²**
+  (kayan nokta gürültüsü düzeyi) — aritmetik uyuşmazlık yok
+- **Üç farklı payda** açıkça ayrıştırıldı: 25.457 ham aday → 21.244 çakışmasız
+  olay (15.947 teyitli / 3.577 teyitsiz / 1.720 başarısız) → 18.131 teyit
+  penceresi filtreli olay
+**YORUM** Bu kart bir "bulgu" değil, **denetim**: aynı olayların farklı
+raporlarda farklı paydalarla görünmesinin nedeni belgelendi. Derlemede oranları
+toplamayı yasaklayan kural (§0) doğrudan buradan geliyor. Sınırı da yazılı:
+aritmetik doğrulama, **Pine/canlı motor/Telegram teslimatı doğrulaması değildir**.
+**DURUM** `VERİ DEĞİŞTİ` (yeniden koşulursa payda tablosu native veriyle tekrar üretilmeli)
+**KAYNAK** [`KIRILIM_TEYIT_REPLAY_AYRINTILI_DOSYA_2026-10-30.md`](KIRILIM_TEYIT_REPLAY_AYRINTILI_DOSYA_2026-10-30.md)
 
 ---
 
@@ -619,6 +652,38 @@ güncellenmesi gerekir — yoksa kart doğru sayıyı **yanlış tabandan** basa
 
 ---
 
+### R36 · Native tutarlılık denetimi — "2h/4h gerçekten aynı barı mı anlatıyor?" (bu tur)
+**KAPSAM** 174 sembol × 2 TF · native 2h/4h ↔ 1h kapanış karşılaştırması
+**ANA SAYI** Kapanış medyan |fark| **2h %0,249 / 4h %0,212**; birebir aynı
+kapanış yalnız **%3,5 / %4,0**; barların **%23 / %20**'si %0,5'ten fazla farklı.
+Uyumsuz sembol **6 (2h) / 7 (4h)**: `KRTEK` %71, `CVKMD` %61, `SKBNK` %22,
+`MARTI`, `CANTE`, `BJKAS` (+4h'de `GSRAY`, `SELVA`).
+**YORUM** `resample_kullanildi=False` **doğru** ama yeterli değil: iki sağlayıcı
+arasında %0,25'lik sistematik bir fiyat farkı var. Bu, ATR tabanlı bir eşiğin tam
+sınırındaki sinyalleri düzenli olarak çevirir → **5 pp altı farklar gürültünün
+altında kalabilir.** Ayrıca 1h dosyasında her gün 09:30'da hacmi 0 olan bir bar
+var (%10,6); fiyatı gerçek, hacmi yok → RVOL/kuruma bağlamı orada bozuluyor.
+**DURUM** `GEÇERLİ` (ölçüm bu veri seti için geçerli; veri yenilenirse tekrar koş)
+**KAYNAK** [`NATIVE_TUTARLILIK.md`](../denetim/NATIVE_TUTARLILIK.md) · [`native_tutarlilik.py`](../../research/native_tutarlilik.py)
+
+---
+
+### R37 · Domain alarm replay — "hangi alarm türü gerçekten değerli?" (bu tur, koşuyor)
+**KAPSAM** 176×4 native seri · canlı 6 alarm kanalının (BOS/CHoCH/OB/FVG/
+formasyon/hacim) arşiv karşılığı · tetik başına 3/12/40 bar ATR yolu ·
+**kontrol (taban) örneklemi** + canlı 6 bar cooldown
+**ANA SAYI** Koşu bitince §6 sıra 7'de üretilecek; pilot (3 sembol × 4 TF)
+işaret veriyor: HACIM kanalı tabandan **+17 pp**, FVG **−1,5 pp** (1h'de FVG yok).
+**YORUM** Bu ölçümün asıl değeri **kanal başına "değer" iddiasını test
+edilebilir hâle getirmesi**: taban olmadan "alarm çalışıyor" denemez, çünkü
+ATR zaten ortalama bar aralığıdır ve herhangi bir barda 12 barda ≥1 ATR görülür.
+İkinci yenilik: tetiğin **grafik görüntüsü** (sıkışma, hacim kuruması, en yakın
+bölgeye uzaklık, koşu, ATR yüzdeligi, seans saati) de ölçülüyor.
+**DURUM** `PLAN → ölçüm` (rapor: `DOMAIN_ALARM_REPLAY.md`)
+**KAYNAK** [`domain_alarm_replay.py`](../../research/domain_alarm_replay.py) · [`test_domain_alarm_replay.py`](../../test_domain_alarm_replay.py) (32 test)
+
+---
+
 ### R33 · Telegram DM replay eğitimi · R34 · Alarm context prototipi
 **R33** kullanıcıya soru-cevap soran **ürün**; ölçüm koşusu değil.
 [`TELEGRAM_DM_REPLAY_EGITIM_MODU.md`](../tasarim/TELEGRAM_DM_REPLAY_EGITIM_MODU.md)
@@ -689,6 +754,44 @@ ilkenin çalışan örneği.
 
 ---
 
+## 5.5 · Native verinin kendi kontrolü — "aynı barı mı anlatıyor?"
+
+Bu tur eklenen **veri kalitesi** bulgusu; bütün 2h/4h sayılarının tavanını
+belirlediği için ayrı bölüm.
+
+`manifest.json` `resample_kullanildi=False` diyor ve bu doğru: 2h/4h dosyaları
+1h'den **türetilmedi**, TradingView'den native geldi. Ama "native" olmak "1h ile
+tutarlı" olmak demek değil — farklı sağlayıcı ve farklı kova çapası (09:00 vs
+09:30) kullanıldı. Ölçtüm (`python -m research.native_tutarlilik`, 174 sembol):
+
+| TF | kapanış medyan \|fark\| | p95 | birebir aynı kapanış | >%0,5 fark eden bar | uyumsuz sembol |
+|---|---|---|---|---|
+| 2h | **%0,249** | %1,15 | %3,5 | %23 | **6 / 174** |
+| 4h | **%0,212** | %1,03 | %4,0 | %20 | **7 / 174** |
+
+- **%0,2–0,3 medyan fark beklenen düzey** (çapa + sağlayıcı farkı). Bu düzeyde
+  2h/4h sayıları kullanılabilir; ama bir sinyal tam eşik sınırında tetikleniyorsa
+  iki seride farklı sonuç verir.
+- **Kapanışların yalnız %3,5'i birebir aynı.** "Resample yok" doğru olsa da
+  "aynı veri" değil. İki sağlayıcı arasında ortalama %0,25'lik bir fiyat farkı
+  var; ATR tabanlı bir eşiğin (ör. 1 ATR) tam sınırında bu düzenli olarak
+  sinyal çevirir.
+- **Uyumsuz semboller** (medyan fark > %0,5): 2h'de `KRTEK` (%71), `CVKMD` (%61),
+  `SKBNK` (%22), `MARTI`, `CANTE`, `BJKAS`; 4h'de aynı küme + `GSRAY`, `SELVA`.
+  Bunlarda 2h/4h ile 1h **çelişiyor**; o sembollerin 2h/4h sayıları ayrıca
+  işaretlenmeli. `MARTI`/`CANTE`/`SELVA` p95'te %16–41'e çıkıyor → serinin bir
+  bölümünde ciddi ayrışma var (bedelsiz/split veya sağlayıcı boşluğu).
+- Ayrıca **1h dosyasında her gün 09:30'da hacmi 0 olan bir bar var** (%10,6'sı).
+  OHLC'si düz değil, yani gerçek bir fiyat taşıyor; canlı sistemde RVOL hesabı bu
+  barlarda 0 hacim görür. Alarmın HACIM kanalı bu yüzden günde bir kez yanlış
+  "hacim yok" bağlamı görebilir — 5×/10× eşiği tetiklenmez ama "kuruma" tipi
+  bağlam ölçümleri bu barda bozulur (bknz. `bagl_hacim_kuruma`).
+
+**Sonuç:** 2h/4h'ye dayanan her yeni sayı bu %0,2–0,3 gürültü tabanıyla
+okunmalı; 5 pp'den küçük farklar bu gürültünün altında kalabilir.
+
+---
+
 ## 6 · Bundan sonra: ne yeniden koşulacak, hangi sırayla
 
 Native veri geldiği için **2h/4h'ye dayanan her sayı** yeniden üretilmeli. Ama
@@ -703,7 +806,15 @@ hepsini birden koşmak gerekmez; bağımlılık sırası var:
 | **5** | Stabil hattı (R19/R21) | 1d native ama 4h türetim → native 4h ile tekrar | `python -m research.stabil_replay` |
 | **6** | Ampirik referans tabloları (R35) | Kart metnini yeni sayılara bağlar | elle: yeni tablolardan satır güncelleme |
 
-Bu turda **1. sıra başlatıldı** (704 iş, native, `resample_kullanildi=false`).
+Bu turda **1. sıra başlatıldı** (704 iş, native, `resample_kullanildi=false`) ve
+**7. sıra** olarak aşağıdaki uçtan uca hat eklendi (canlı alarm tetikleyicilerinin
+arşivde ölçümü — derlemedeki R21/R24/R29 derslerinin doğal devamı):
+
+| Sıra | İş | Neden | Komut |
+|---|---|---|---|
+| **7** | Domain alarm ölçümü | Hangi alarm kanalı gerçekten değerli? Canlı eşiklerin birebir kopyası + kontrol örneklemi | `python -m research.domain_alarm_replay --havuz-disi-dahil` |
+| **0** | Veri tutarlılığı (ön koşul) | 2h/4h'nin 1h ile aynı barı anlatıp anlatmadığı; bütün 2h/4h sayılarının gürültü tabanı | `python -m research.native_tutarlilik` |
+
 Diğer sıralar onun çıktısına bağlı olduğu için bekliyor.
 
 **Yeniden koşulmayacaklar:** R18 (`GEÇERSİZ`, sızıntı), R26/R27/R28 (pilot/keşif;
@@ -741,3 +852,12 @@ yeni veriyle anlam kazanmaz), R29 (düzeltildi, konu kapandı), R32/R31 (sicil).
   bir sayı ile kaynağı çelişirse **kaynak doğrudur**.
 - **Eski türetilmiş 2h/4h'ye dayanan her sayı** yeni replay'in sonucu olarak
   kullanılamaz. Bu, listedeki kartların çoğunluğu için geçerli.
+- **Native veri de tek başına "temiz veri" değil.** 2h/4h ile 1h arasında medyan
+  %0,2–0,3 kapanış farkı var (§5.5). Bu fark, özellikle eşik sınırında tetiklenen
+  sinyalleri çevirebilir; **5 pp altındaki iyileşmeler bu gürültüyle ayrılamaz.**
+- **`1h`'de FVG yok.** FVG'ye dair her cümle 2h/4h/1d için geçerlidir.
+- **Hacmi 0 olan 09:30 barı.** 1h arşivinde her gün bir tane var (%10,6); fiyatı
+  gerçek, hacmi yok. Hacim/RVOL tabanlı ölçümlerde bu barlar özel işlenmezse
+  "kuruma" gibi yanlış bağlam okumaları üretir.
+- **Envanterdeki 37 kartın 37'si bulgu değil.** 5'i `PLAN`/`SİCİL`, 1'i `GEÇERSİZ`;
+  gerçek karar tabanı olabilecek kart sayısı ~20 ve çoğu `VERİ DEĞİŞTİ`.

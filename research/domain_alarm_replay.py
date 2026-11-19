@@ -119,7 +119,9 @@ TABAN_ADIM = 10
 SERI_SATIRLARI: tuple[str, ...] = (
     "symbol", "timeframe", "bar_index", "bar_time", "close", "atr",
     "kanallar", "kanal_sayisi", "yon", "kontrol", "formasyon_state", "formasyon_tip",
-    "rvol", "hacim_tier", "data_quality",
+    "rvol", "hacim_tier", "data_quality", "cooldown_elenen",
+    "bagl_sikisma", "bagl_hacim_kuruma", "bagl_uzaklik_atr", "bagl_yapi",
+    "bagl_gunici_kosu", "bagl_atr_yuzdelik", "bagl_seans_saati",
     "yon_h3", "yon_h12", "yon_h40", "yon_kap_h12", "yon_kap_h40",
     "yon_tepe_atr", "yon_tepe_bar", "yon_dip_atr", "yon_pay_5",
     "yon_asim_050", "yon_asim_100", "yon_asim_150", "yon_asim_200",
@@ -454,7 +456,156 @@ def _yon_tahmini(
 
 
 # ---------------------------------------------------------------------------
-# 2) Ölçüm — çapa sonrası ATR yolu
+# 2) Tetik anındaki bağlam — "grafiğin görüntüsü anlamlı mı?"
+# ---------------------------------------------------------------------------
+
+
+def baglam_satiri(
+    frame: pd.DataFrame,
+    index: int,
+    atr: Sequence[float | None],
+    *,
+    ob_zonlar: Sequence[Mapping[str, Any]] = (),
+    fvg_zonlar: Sequence[Mapping[str, Any]] = (),
+    close: float | None = None,
+) -> dict[str, Any]:
+    """Tetik **anında bilinen** bağlam özellikleri (geleceğe bakmaz).
+
+    Neden: aynı kanal (ör. OB) çok farklı grafik görüntülerinde ateşliyor.
+    Ölçüm yalnız "hangi kanal" dediği için, "grafik neye benziyordu" sorusu
+    cevapsız kalıyor. Buradaki özellikler kullanıcı geri bildiriminden
+    türetildi ve **hepsi nedensel**:
+
+    ``bagl_sikisma``
+        Son 10 barın aralığı / önceki 40 barın aralığı. Sıkışma (daralma)
+        varsa <1. "Sıkışmadan sonra tetik daha değerli mi?"
+    ``bagl_hacim_kuruma``
+        Son 5 barın ortalama hacmi / önceki 20 barın ortalaması. <1 = kuruma.
+    ``bagl_uzaklik_atr``
+        Fiyatın en yakın aktif OB/FVG sınırına ATR cinsinden uzaklığı.
+        0 = zone'un içinde.
+    ``bagl_yapi``
+        ``YAKIN`` (≤1 ATR) / ``ORTA`` (1–2) / ``UZAK`` (>2) / ``BOS`` (aktif
+        bölge yok).
+    ``bagl_gunici_kosu``
+        Tetik barına kadarki son 6 barın yönlü getirisi (ATR). Trendin
+        içinde mi, tepesinde mi tetikledi?
+    ``bagl_atr_yuzdelik``
+        Tetik ATR'sinin son 100 bardaki yüzdelik dilimi. Sakin mi, fırtınalı
+        mı bir günde ateşledi?
+    ``bagl_seans_saati``
+        İstanbul saati (0–23). Kova fazı dersinin (R29) doğrudan devamı.
+    """
+    bos: dict[str, Any] = {
+        "bagl_sikisma": None,
+        "bagl_hacim_kuruma": None,
+        "bagl_uzaklik_atr": None,
+        "bagl_yapi": None,
+        "bagl_gunici_kosu": None,
+        "bagl_atr_yuzdelik": None,
+        "bagl_seans_saati": None,
+    }
+    if frame is None or len(frame) == 0 or not (0 <= index < len(frame)):
+        return bos
+    yuksek = frame["high"].astype(float).to_numpy()
+    dusuk = frame["low"].astype(float).to_numpy()
+    kapanis = frame["close"].astype(float).to_numpy()
+    hacim = pd.to_numeric(frame["volume"], errors="coerce").astype(float).to_numpy()
+    sonuc = dict(bos)
+
+    # Sıkışma: kısa aralık / uzun aralık.
+    if index >= 50:
+        kisa = yuksek[index - 9: index + 1].max() - dusuk[index - 9: index + 1].min()
+        uzun = yuksek[index - 49: index + 1].max() - dusuk[index - 49: index + 1].min()
+        if uzun > 0:
+            sonuc["bagl_sikisma"] = round(float(kisa / uzun), 4)
+
+    # Hacim kuruması.
+    if index >= 25:
+        kisa_h = hacim[index - 4: index + 1]
+        uzun_h = hacim[index - 24: index + 1]
+        if not pd.isna(kisa_h).any() and not pd.isna(uzun_h).any():
+            ort_uzun = float(uzun_h.mean())
+            if ort_uzun > 0:
+                sonuc["bagl_hacim_kuruma"] = round(float(kisa_h.mean()) / ort_uzun, 4)
+
+    # En yakın aktif bölgeye uzaklık.
+    atr_deger = atr[index] if 0 <= index < len(atr) else None
+    fiyat = float(close) if close is not None else float(kapanis[index])
+    if atr_deger and atr_deger > 0:
+        en_yakin = None
+        for zone in list(ob_zonlar) + list(fvg_zonlar):
+            if not _aktif_mi(zone, index):
+                continue
+            ust, alt = _sayi(zone.get("zone_upper")), _sayi(zone.get("zone_lower"))
+            if ust is None or alt is None:
+                continue
+            if alt <= fiyat <= ust:
+                mesafe = 0.0
+            else:
+                mesafe = min(abs(fiyat - alt), abs(fiyat - ust))
+            if en_yakin is None or mesafe < en_yakin:
+                en_yakin = mesafe
+        if en_yakin is not None:
+            atr_mesafe = float(en_yakin) / atr_deger
+            sonuc["bagl_uzaklik_atr"] = round(atr_mesafe, 4)
+            sonuc["bagl_yapi"] = "YAKIN" if atr_mesafe <= 1.0 else ("ORTA" if atr_mesafe <= 2.0 else "UZAK")
+        else:
+            sonuc["bagl_yapi"] = "BOS"
+
+    # Gün içi koşu: son 6 barın getirisi.
+    if index >= 6 and atr_deger and atr_deger > 0:
+        sonuc["bagl_gunici_kosu"] = round(float(kapanis[index] - kapanis[index - 6]) / atr_deger, 4)
+
+    # ATR yüzdelik dilimi (son 100 bar) — tetik günü sakin mi fırtınalı mı?
+    if index >= 100 and atr_deger:
+        pencere = [v for v in atr[index - 99: index + 1] if v]
+        if len(pencere) >= 50:
+            alt_say = sum(1 for v in pencere if v <= atr_deger)
+            sonuc["bagl_atr_yuzdelik"] = round(alt_say / len(pencere), 4)
+
+    # Seans saati (İstanbul).
+    try:
+        zaman = pd.Timestamp(frame["timestamp"].iloc[index] if "timestamp" in frame.columns else frame.index[index])
+        if zaman.tzinfo is None:
+            zaman = zaman.tz_localize("Europe/Istanbul")
+        else:
+            zaman = zaman.tz_convert("Europe/Istanbul")
+        sonuc["bagl_seans_saati"] = int(zaman.hour)
+    except (TypeError, ValueError, IndexError, KeyError):  # saat okunamazsa alan boş kalır
+        pass
+    return sonuc
+
+
+#: Canlı servisin bar bazlı cooldown'u (`YENI_DOMAIN_ALARM_COOLDOWN_BAR`).
+#: Aynı sembol/TF bir kez alarm ürettikten sonra 6 bar boyunca susar. Ölçüm bunu
+#: uygulamazsa "bar başına %36 tetik" gibi bir sayı **hiçbir zaman kullanıcıya
+#: ulaşmayan** tekrarları da sayar; "telefon neden susmuyor" sorusu bu yüzden
+#: replay'de yanlış cevaplanır.
+COOLDOWN_BAR = 6
+
+
+def cooldown_uygula(tetikler: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Canlı dedup kuralını uygular: sembol/TF başına 6 bar sessizlik.
+
+    Canlıda ``_zaten_gonderildi`` slotun ``last_bar_index``'ine bakar; burada
+    da aynı şey yapılır. Girdi sırası korunur (bar_index artan).
+    """
+    son: dict[tuple[str, str], int] = {}
+    kalanlar: list[dict[str, Any]] = []
+    for tetik in sorted(tetikler, key=lambda t: int(t.get("bar_index") or 0)):
+        anahtar = (str(tetik.get("symbol") or ""), str(tetik.get("timeframe") or ""))
+        indeks = int(tetik.get("bar_index") or 0)
+        onceki = son.get(anahtar)
+        if onceki is not None and (indeks - onceki) < COOLDOWN_BAR:
+            continue
+        son[anahtar] = indeks
+        kalanlar.append(dict(tetik))
+    return kalanlar
+
+
+# ---------------------------------------------------------------------------
+# 3) Ölçüm — çapa sonrası ATR yolu
 # ---------------------------------------------------------------------------
 
 
@@ -503,6 +654,8 @@ def seri_olcumu(
         gozlenen = len(gelecek_kapanis)
         if gozlenen == 0:
             continue
+        if "bagl_yapi" not in tetik:
+            tetik = {**tetik, **baglam_satiri(frame, index, atr)}
         yon = int(tetik.get("yon") or 0)
         yonlar = (1, -1) if yon == 0 else (yon,)
         for secilen in yonlar:
@@ -568,7 +721,7 @@ def _esik_etiketi(esik: float) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 3) Toplama ve rapor
+# 4) Toplama ve rapor
 # ---------------------------------------------------------------------------
 
 
@@ -681,6 +834,17 @@ def rapor_yaz(ozet: Mapping[str, Any], cikti: Path, rapor_yolu: Path) -> str:
         temiz = temiz.assign(kontrol=False)
     tetik_kume = temiz[temiz["kontrol"] != True].copy()  # noqa: E712 - pandas maskesi
     kontrol_kume = temiz[temiz["kontrol"] == True].copy()  # noqa: E712 - pandas maskesi
+
+    # Cooldown ayrımı: kullanıcıya GİDEN kart ile susturulan tekrar ayrı
+    # ölçülür. İkisi de aynı sonucu veriyorsa cooldown bedava; susturulanlar
+    # daha iyiyse alarm sıklığı gerçekten değer kaçırıyor demektir.
+    if "cooldown_elenen" in tetik_kume.columns:
+        elenen_maske = pd.to_numeric(tetik_kume["cooldown_elenen"], errors="coerce").fillna(0) == 1
+        gonderilen_kume = tetik_kume[~elenen_maske].copy()
+        elenen_kume = tetik_kume[elenen_maske].copy()
+    else:  # eski JSONL
+        gonderilen_kume = tetik_kume
+        elenen_kume = tetik_kume.iloc[0:0].copy()
     satirlar: list[str] = []
     ekle = satirlar.append
 
@@ -716,6 +880,22 @@ def rapor_yaz(ozet: Mapping[str, Any], cikti: Path, rapor_yolu: Path) -> str:
         f"bunun {len(tetik_kume)} satırı tetik, {len(kontrol_kume)} satırı taban)"
     )
     ekle(f"- **Bar başına tetik:** {_num(_bar_orani(df, meta) * 100, 2)}% — her 100 mumda ortalama bu kadar kart.")
+    if len(elenen_kume):
+        g = _kanal_satiri("GÖNDERİLEN", gonderilen_kume)
+        e = _kanal_satiri("COOLDOWN'UN ELEDİĞİ", elenen_kume)
+        ekle(
+            f"- **Cooldown (canlı 6 bar):** {g['n']} kart gönderildi, {e['n']} tekrar susturuldu "
+            f"(%{100 * e['n'] / max(1, g['n'] + e['n']):.1f} tetiğin kartı basılmadı)."
+        )
+        ekle(
+            f"  - Gönderilen: ≥1 ATR {_pct(g['h12_1atr'])} · medyan tepe {_num(g['medyan_tepe'])} · "
+            f"iki yöne de {_pct(g['karisik'])}"
+        )
+        ekle(
+            f"  - Susturulan: ≥1 ATR {_pct(e['h12_1atr'])} · medyan tepe {_num(e['medyan_tepe'])} · "
+            f"iki yöne de {_pct(e['karisik'])} → fark "
+            f"{_pp_fark(e['h12_1atr'], g['h12_1atr'])}"
+        )
     ekle(
         f"- **Tetik vs taban (12 bar, lehte ≥1 ATR):** {_pct(tum_satir['h12_1atr'])} vs "
         f"{_pct(taban_satir['h12_1atr'])} → **fazla {_pp_fark(tum_satir['h12_1atr'], taban_satir['h12_1atr'])}**"
@@ -783,12 +963,29 @@ def rapor_yaz(ozet: Mapping[str, Any], cikti: Path, rapor_yolu: Path) -> str:
     # Zaman dilimi kırılımı
     ekle("## 3 · Zaman dilimi kırılımı")
     ekle("")
-    ekle("| TF | tetik | bar başına | ≥1 ATR (12b) | medyan tepe | aleyhte ≥1 ATR |")
-    ekle("|---|---:|---:|---:|---:|---:|")
+    # Bar başına tetik: ham (cooldown öncesi) tetik / o TF'in toplam barı.
+    # Cooldown sonrası sayıyı bara bölmek yanıltıcı olur — "kaç mumda bir kart"
+    # sorusunun cevabı canlı üretim hızıdır.
+    bar_toplam: dict[str, int] = {}
+    ham_toplam: dict[str, int] = {}
+    if meta is not None and len(meta):
+        if "bar_sayisi" in meta.columns:
+            for tf, grup in meta.groupby("timeframe"):
+                bar_toplam[str(tf)] = int(grup["bar_sayisi"].sum())
+        if "tetik_bar_ham" in meta.columns:
+            for tf, grup in meta.groupby("timeframe"):
+                ham_toplam[str(tf)] = int(pd.to_numeric(grup["tetik_bar_ham"], errors="coerce").fillna(0).sum())
+    ekle("| TF | tetik | ham tetik | bar başına (ham) | ≥1 ATR (12b) | taban farkı (pp) | medyan tepe | aleyhte ≥1 ATR |")
+    ekle("|---|---:|---:|---:|---:|---:|---:|---:|")
     for tf, grup in sorted(tetik_kume.groupby("timeframe")):
         s = _kanal_satiri(tf, grup)
+        bar = bar_toplam.get(str(tf))
+        ham = ham_toplam.get(str(tf))
+        # ``_pct`` zaten 100 ile çarpar; burada oran (0–1) verilir.
+        oran = _pct(ham / bar) if (bar and ham is not None) else "—"
         ekle(
-            f"| {tf} | {s['n']} | — | {_pct(s['h12_1atr'])} | {_num(s['medyan_tepe'])} | {_pct(s['ters_1atr'])} |"
+            f"| {tf} | {s['n']} | {ham if ham is not None else '—'} | {oran} | {_pct(s['h12_1atr'])} | "
+            f"{_pp_fark(s['h12_1atr'], taban_satir['h12_1atr'])} | {_num(s['medyan_tepe'])} | {_pct(s['ters_1atr'])} |"
         )
     ekle("")
 
@@ -835,7 +1032,31 @@ def rapor_yaz(ozet: Mapping[str, Any], cikti: Path, rapor_yolu: Path) -> str:
         ekle(f"| {ad} | {s['n']} | {_pct(s['h12_1atr'])} | {_num(s['medyan_tepe'])} | {_pct(s['ters_1atr'])} |")
     ekle("")
 
-    ekle("## 7 · Nasıl okunur / sınırlar")
+    # Bağlam kırılımı
+    baglam = _baglam_tablosu(tetik_kume)
+    if baglam:
+        ekle("## 7 · Tetik anındaki grafik görüntüsü — hangi bağlamda tetik daha değerli?")
+        ekle("")
+        ekle(
+            "Aynı kanal çok farklı grafiklerde ateşliyor. Aşağıdaki özellikler **tetik anında "
+            "bilinen** (geleceğe bakmayan) bağlamdır; sütunlar kanal tablosuyla aynı ölçüdür."
+        )
+        ekle("")
+        for kolon, etiket, baglam_satirlari in baglam:
+            ekle(f"### {etiket} (`{kolon}`)")
+            ekle("")
+            ekle("| kova | n | ≥1 ATR (12b) | taban farkı (pp) | ≥1,5 ATR | medyan tepe | aleyhte ≥1 ATR | iki yöne de |")
+            ekle("|---|---:|---:|---:|---:|---:|---:|---:|")
+            for bsatir in baglam_satirlari:
+                ekle(
+                    f"| {bsatir['ad']} | {bsatir['n']} | {_pct(bsatir['h12_1atr'])} | "
+                    f"{_pp_fark(bsatir['h12_1atr'], taban_satir['h12_1atr'])} | "
+                    f"{_pct(bsatir['h12_15atr'])} | {_num(bsatir['medyan_tepe'])} | "
+                    f"{_pct(bsatir['ters_1atr'])} | {_pct(bsatir['karisik'])} |"
+                )
+            ekle("")
+
+    ekle("## 8 · Nasıl okunur / sınırlar")
     ekle("")
     ekle("- **'≥1 ATR' bir kazanç değildir.** Tetiğin gösterdiği yönde fiyatın 12 bar içinde")
     ekle("  en az 1 ATR uzanıp uzanmadığıdır; maliyet, kayma, pozisyon ve çıkış kuralı yok.")
@@ -847,6 +1068,12 @@ def rapor_yaz(ozet: Mapping[str, Any], cikti: Path, rapor_yolu: Path) -> str:
     ekle("  kanal sayısı tablosu bu yüzden kanal tablosundan farklı toplam verir.")
     ekle("- **FVG reaksiyonu nedensel türetilir:** arşiv zone satırı doğum anını taşıdığı için")
     ekle("  canlı motorun 'state=REACTION' anı, 'sınıra dokundu ve tükenmedi' ile karşılanır.")
+    ekle("- **Seans saati tablosu yalnız intraday TF'ler (1h/2h/4h) içindir.** Günlük barların")
+    ekle("  saati 00:00 olduğu için onları katmak 'gece tetikleri daha iyi' gibi sahte bir")
+    ekle("  bulgu üretirdi; bu yüzden 1d bu tabloya alınmaz.")
+    ekle("- **Bağlam tablolarındaki farklar tek tek anlamlılık testinden geçmedi.** Kova sayısı")
+    ekle("  arttıkça şans eseri 5–10 pp fark çıkar; ±5 pp altındaki satırlar **bulgu değildir**,")
+    ekle("  yalnız adaydır. Bu tablolar hipotez üretmek için, karar vermek için değil.")
     ekle("- Bu rapor **canlı alarm davranışını değiştirmez**; yalnız hangi tetiğin ölçülebilir")
     ekle("  bir fark ürettiğini gösterir.")
     ekle("")
@@ -909,6 +1136,43 @@ def _ve(a: pd.Series, b: pd.Series) -> float | None:
     return float((aa & bb).mean())
 
 
+#: Bağlam özelliklerinin rapor kovaları (her biri n>=30 ister).
+BAGLAM_KOVALARI: tuple[tuple[str, str, Any], ...] = (
+    ("bagl_sikisma", "sıkışma", lambda v: None if v is None else ("sıkışmış (<0,5)" if v < 0.5 else ("daralıyor (0,5–1)" if v < 1.0 else "geniş (≥1)"))),
+    ("bagl_hacim_kuruma", "hacim kuruma", lambda v: None if v is None else ("kurumuş (<0,8)" if v < 0.8 else ("normal (0,8–1,2)" if v < 1.2 else "canlı (≥1,2)"))),
+    ("bagl_yapi", "yapı yakınlığı", lambda v: v),
+    ("bagl_gunici_kosu", "6 bar koşu", lambda v: None if v is None else ("aşağı (≤−1A)" if v <= -1.0 else ("yatay" if abs(v) < 1.0 else "yukarı (≥+1A)"))),
+    ("bagl_atr_yuzdelik", "ATR yüzdeliği", lambda v: None if v is None else ("sakin (<%30)" if v < 0.3 else ("orta" if v < 0.7 else "fırtına (≥%70)"))),
+    ("bagl_seans_saati", "seans saati", lambda v: None if v is None else (f"{int(v):02d}:00")),
+)
+
+
+def _baglam_tablosu(kume: pd.DataFrame) -> list[tuple[str, str, list[dict[str, Any]]]]:
+    """Her bağlam özelliği için kova × sonuç tablosu (n>=30 olanlar)."""
+    cikti: list[tuple[str, str, list[dict[str, Any]]]] = []
+    for kolon, etiket, kovalayici in BAGLAM_KOVALARI:
+        if kolon not in kume.columns:
+            continue
+        taban = kume
+        if kolon == "bagl_seans_saati" and "timeframe" in kume.columns:
+            # 1d barların saati 00:00'dır; onları bu tabloya katmak "gece
+            # tetikleri daha iyi" gibi SAHTE bir bulgu üretir (aslında günlük
+            # bar). Saat kırılımı yalnız intraday TF'lerde raporlanır.
+            taban = kume[kume["timeframe"].astype(str).str.lower().isin({"1h", "2h", "4h"})]
+            if len(taban) < 30:
+                continue
+        seri = taban[kolon].map(kovalayici)
+        satirlar: list[dict[str, Any]] = []
+        for kova, grup in taban.assign(_kova=seri).dropna(subset=["_kova"]).groupby("_kova"):
+            if len(grup) < 30:
+                continue
+            s = _kanal_satiri(str(kova), grup)
+            satirlar.append(s)
+        if len(satirlar) >= 2:
+            cikti.append((kolon, etiket, satirlar))
+    return cikti
+
+
 def _kanal_tablosu(temiz: pd.DataFrame) -> list[dict[str, Any]]:
     satirlar = [_kanal_satiri("TÜM TETİKLER", temiz)]
     for kanal in KANALLAR:
@@ -962,16 +1226,34 @@ def kosu(args: argparse.Namespace) -> int:
         try:
             frame = arsiv.tf_frame(sembol, tf, legacy_resample=False)
             gozlem = sembol_timeframe_gozlem(sembol, tf, frame)
-            tetikler = sembol_timeframe_tetikleri(sembol, tf, frame, gozlem)
+            ham = sembol_timeframe_tetikleri(sembol, tf, frame, gozlem)
+            # Ölçüm CANLI davranışı ölçmeli: cooldown'suz liste "kullanıcıya
+            # hiç ulaşmayan" tekrarları sayar ve alarm yorgunluğu iddiasını
+            # olduğundan hafif gösterir.
+            tetikler = cooldown_uygula(ham) if not args.cooldown_yok else ham
+            # Cooldown'un ELEDİĞİ tetikler de ölçülür (``cooldown_elenen=1``).
+            # İstenen "ikisini de raporla": gönderilen kart kadar, gönderilmeyen
+            # tekrarın kendi sonucu da görünsün — yoksa "susturulan tekrarlar
+            # zaten değersizdi" iddiası kanıtsız kalır.
+            gonderilen = {(t["symbol"], t["timeframe"], int(t["bar_index"])) for t in tetikler}
+            elenen = [
+                t for t in ham
+                if (t["symbol"], t["timeframe"], int(t["bar_index"])) not in gonderilen
+            ]
             kontroller = kontrol_tetikleri(
-                sembol, tf, frame, {int(t["bar_index"]) for t in tetikler}, args.taban_adim
+                sembol, tf, frame, {int(t["bar_index"]) for t in ham}, args.taban_adim
             )
-            satirlar = seri_olcumu(tetikler, frame) + seri_olcumu(kontroller, frame)
+            satirlar = (
+                seri_olcumu(tetikler, frame)
+                + seri_olcumu([{**t, "cooldown_elenen": 1} for t in elenen], frame)
+                + seri_olcumu(kontroller, frame)
+            )
             _satir_ekle(cikti / "tetikler.jsonl", satirlar)
             _satir_ekle(cikti / "meta.jsonl", [{
                 "symbol": sembol,
                 "timeframe": tf,
                 "bar_sayisi": int(len(frame)),
+                "tetik_bar_ham": len(ham),
                 "tetik_bar": len(tetikler),
                 "kontrol_bar": len(kontroller),
                 "tetik_satir": len(satirlar),
@@ -980,7 +1262,7 @@ def kosu(args: argparse.Namespace) -> int:
             }])
             print(
                 f"[{i}/{len(plan)}] {sembol:8} {tf:3} {time.time() - t0:6.1f}s "
-                f"bar={len(frame)} tetik={len(tetikler)} kontrol={len(kontroller)} satir={len(satirlar)}",
+                f"bar={len(frame)} tetik={len(tetikler)}/{len(ham)} kontrol={len(kontroller)} satir={len(satirlar)}",
                 flush=True,
             )
         except Exception as exc:  # noqa: BLE001 - sembol izolasyonu
@@ -1015,6 +1297,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--rapor-atla", action="store_true", help="koşu sonunda rapor üretme")
     p.add_argument("--zorla", action="store_true", help="tamamlanmış işleri de yeniden koş")
     p.add_argument("--havuz-disi-dahil", action="store_true", help="BRENT dahil")
+    p.add_argument("--cooldown-yok", action="store_true",
+                   help="canlı 6 bar cooldown'unu uygulama (varsayılan: uygula)")
     p.add_argument(
         "--taban-adim",
         type=int,
