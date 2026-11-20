@@ -39,6 +39,7 @@ tartışmalarında sayı gerektiğinde buraya bakılır.
 |---|---|---|
 | **[REPLAY_ANA_DERLEMESI.md](REPLAY_ANA_DERLEMESI.md)** | **TÜM replay'ler tek dosyada:** kapsam + ana sayı + yorum + geçerlilik etiketi (37 çalışma) · §7.5 hangi kurala güvenilebilir · §5.5 native veri gürültüsü | "Bu konuda daha önce ne ölçtük?" ve "bu kurala güvenebilir miyim?" sorusunda **önce buraya bak** |
 | **[DOMAIN_ALARM_REPLAY.md](DOMAIN_ALARM_REPLAY.md)** | **Hangi alarm türü değerli?** 6 kanalın arşiv ölçümü: taban farkı, cooldown, tetik anındaki grafik bağlamı, Wilson alt sınırıyla segment sıralaması | "Bu alarm türü işe yarıyor mu, sustursam ne kaybederim?" sorusunda |
+| **[ALARM_YONU_2026-11-19.md](ALARM_YONU_2026-11-19.md)** | **Alarmın yönü:** 4 katman (sessiz/özet/kart/grafik) + grafik tasarım kuralları | "Alarmı nasıl daha anlamlı yaparım?" sorusunda |
 | [NATIVE_TUTARLILIK.md](../denetim/NATIVE_TUTARLILIK.md) | 2h/4h native dosyaları 1h ile aynı barı mı anlatıyor? | 2h/4h'ye dayanan bir sayıya güvenmeden önce |
 | **[ARASTIRMA_SONUCLARI.md](ARASTIRMA_SONUCLARI.md)** | **Ana belge:** soru bazında cevap + yorum | Buradan başla |
 | [ARASTIRMA_BULGULARI.md](ARASTIRMA_BULGULARI.md) | Ham tablo eki (üretici script buraya yazar) | Sonucu doğrulamak için |

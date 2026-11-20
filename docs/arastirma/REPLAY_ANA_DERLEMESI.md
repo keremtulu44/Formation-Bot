@@ -24,6 +24,7 @@ sonra ilgili kart. Yeni bir ölçüm planlayan → **§6 sıra** + **§8 Sınır
 | §5.5 | Native verinin kendi gürültü tabanı (2h/4h ↔ 1h) |
 | §5.7 | **Native sonuçlar (tam evren)** — eski vs yeni yan yana, hangi bulgu ayakta kaldı |
 | §5.8 | **Üç aile (Stabil/OB/FVG)** 8 soruda karşılaştırma — hangisi ne işe yarıyor |
+| §5.9 | **Alarm yönü önerisi** — 4 katman + 5 grafik kuralı ([ayrı dosya](ALARM_YONU_2026-11-19.md)) |
 | §6 | Yeniden koşu sırası ve komutlar |
 | §7 | Dosya haritası · §7.5 Karar tablosu · §8 Sınırlar |
 
@@ -956,6 +957,26 @@ en net ifadesi.
 | Stabil çizgi **2. temasta** ve **yataylaşmış** | en güçlü kombinasyon (R19: %42,7 takip) | 3.+ temasta aynı şeyi söyleme (−0,67 ATR) |
 | Hacim yüksek | "hareket olabilir" bağlamı | "yön teyit edildi" |
 
+## 5.9 · Alarm yönü — ölçüm ne diyorsa o
+
+Ölçüm bir **yön** veriyor; ayrıntı [`ALARM_YONU_2026-11-19.md`](ALARM_YONU_2026-11-19.md).
+Tek cümle:
+
+> **Alarm "olay bildiricisi" olarak çalışıyor; ölçüm "nadirlik dedektörü" olmasını
+> söylüyor.** Taban oranı %64,1; alarmlı barlarda %66,5. Fark +2,4 pp.
+
+En sert kanıt **kapsam ↔ değer ters oranı**: tetiklerin **%56'sı OB** (+1,7 pp),
+**%2,5'i HACIM** (+7,3 pp). Ve **kombinasyon seyreltıyor**: HACIM tek başına
+%71,6 → HACIM+OB %67,9 → FORMASYON+HACIM+OB %65,9. Mevcut sistem tam tersini
+varsayıyor ("çok kanal = güçlü").
+
+Önerilen 4 katman: **0 sessiz** (yalnız OB/FVG/BOS) · **1 günlük özet satırı**
+(formasyon state) · **2 kart** (HACIM ≥5× veya HACIM+FORMASYON) · **3 grafik**
+(katman 2 + 09–10 / 17 seansı). Grafik kuralı: **yön oku değil, aralık konisi** —
+çünkü tetiklerin %30,5'i iki yöne de ≥1 ATR görüyor.
+
+---
+
 **KAYNAK** §5.7 (R01/R02/R05 native) · R19/R20/R21/R22/R24 · R37
 
 ---
@@ -1022,7 +1043,9 @@ ne yapabilirim?" sorusunun derlemeden çıkan cevabı:
 | **Yapılabilir:** Alarm sıklığını cooldown ile sınırlamak | R37 | Tetiklerin **%65,3**'ü tekrar; susturulanlar gönderilenlerden farksız (%66,1 vs %67,4), yani sıklık değer eklemiyor |
 | **Yapılabilir:** FVG'ye *tek kullanımlık* muamele | R01, §5.7 | Tekrar denendiğinde tepki düşüyor — native veride de aynı (%76,2 tek deneme) |
 | **Aday (önce ayrı pencerede test):** Retest niteliğini karta yazmak | §5.7 | Sığ retest (<0,25 ATR) **%61,7** vs derin retest (≥0,5 ATR) **%35,5** — **26 pp**, derlemedeki en büyük tek etki. 704 seride de duruyor ama tek dönemde ölçüldü |
-| **Yapılabilir:** Alarm kanallarını değere göre önceliklendirmek | R37 | HACIM +7,3 · FORMASYON +2,9 · FVG +2,8 · OB +1,7 · CHoCH +0,9 · **BOS −2,0 (sustur)** |
+| **Yapılabilir:** Alarmı **katmanlamak** (sessiz / günlük özet / kart / grafik) | R37, §5.9 | HACIM +7,3 · OB +1,7 · BOS −2,0 → tek tek kart basmak değer üretmiyor |
+| **Güvenilemez:** "Çok kanal ateşledi = güçlü sinyal" | R37 §2 | HACIM tek başına %71,6; HACIM+OB %67,9; üçü birlikte %65,9 → **kombinasyon seyreltıyor** |
+| **Güvenilemez:** Grafikte **yön oku** | R21, R37 | Okların %89'u aynı uyarının tekrarı; tetiklerin %30,5'i iki yöne de ≥1 ATR |
 | **Güvenilemez:** Alarmı "burada şu olacak" diye sunmak | R37 | Tetiklerin **%30,5**'i 12 barda iki yöne de ≥1 ATR görüyor (taban %30,4) — alarm oynaklık işaret ediyor, yön değil |
 | **Aday (önce ayrı pencerede test):** Formasyon yönü ile MS yönü uyumunu karta yazmak | §5.7 (FRM-20) | Uyumlu **%79,3** vs uyumsuz **%69,6** = **+9,6 pp** (GA +8,4…+10,7), n=22.738 |
 | **Güvenilemez:** Kalite/puan ile eleme | R05, R06, R08 | Üç bağımsız çalışma aynı hükmü verdi |
