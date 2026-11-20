@@ -1,85 +1,97 @@
-# Alarm grafiği — 3 gerçek örnek
+# Alarm tetiklendi — ne okumalıyım?
 
-Aşağıdaki üç grafik **gerçek alarmlardan** alındı (aynı veri: 352 seri, `4h`).
-Üçü de aynı format: göreceğin şey her seferinde aynı.
+Bu dosya tek soruya cevap veriyor: **alarm geldiğinde grafiğe bakıp ne anlamalıyım?**
 
-## Grafikte ne var
+Cevap 4 satır. Grafikte sol üstteki mavi panel her zaman bu 4 satırı yazıyor:
 
-| Görsel | Anlamı |
-|---|---|
-| **Dikey kesikli çizgi** | alarmın çıktığı bar — "ALARM →" |
-| **Kırmızı/yeşil kutu (üstte)** | alarmın **iddia ettiği yön** |
-| **Mavi gölgeli koni** | aynı sembolde geçmiş **200 alarmdan** sonra tipik olarak ne oldu |
-| **Mavi / mor ince çizgi** | tipik yukarı ve aşağı uzanımın **medyanı** |
-| **Yeşil noktalı çizgiler** | bu alarmdan sonra **gerçekten** olan (12 bar) |
-| **Turuncu noktalı çizgiler** | aynı şeyin 40 bar versiyonu |
-| **Sol üstteki kutu** | alarm fiyatı, ATR, sonraki 12 bar gerçekleşen, ve **alarm yönünde lehte mi aleyhte mi** |
+| satır | soru | örnek |
+|---|---|---|
+| **1) Büyüklük** | 12 barda tipik ne kadar oynar? | "3,4 ATR (%80: 2,7 – 4,6)" |
+| **2) Yön** | alarmın dediği yön belli mi? | "lehte 1,5 / aleyhte 1,7 → **yön zayıf**" |
+| **3) Şu an** | oynaklık bu sembolde normal mi? | "sakin (%36 dilim)" |
+| **4) Bu sefer** | gerçekleşen, tipikten saptı mı? | "8,9 ATR → **tipikten BÜYÜK**" |
 
-**Grafik yorum yapmıyor.** İki şeyi yan yana koyuyor: *"tipik olarak ne olur"* ve
-*"bu sefer ne oldu"*. Karşılaştırmayı sen yapıyorsun.
+**En önemli satır 2.** Çünkü ölçüm şunu söylüyor: alarmların çoğunda
+*lehte ≈ aleyhte*. Yani **alarm yön söylemiyor** — sadece "oynaklık artıyor"
+diyor. Aşağıdaki üç örnekte bu oran sırasıyla **0,8 / 1,1 / 0,7** — üçü de
+"yön zayıf".
+
+Bunun anlamı: **grafiği oynaklık bekleyerek oku, yön bekleyerek okuma.**
 
 ---
 
-## 1 · Tipik bir alarm — XU100, 4h
+## Örnek 1 — "tipik" alarm (XU100 4h)
 
 ![Tipik XU100](grafik_tipik_xu100.png)
 
-Alarm `KIRILIM_ADAYI` demiş, **yukarı**. Sonraki 12 barda yukarı +0,2 ATR,
-aşağı −3,5 ATR. Yani **alarmın dediği yönün tersi** oldu.
+Panel diyor: tipik **4,2 ATR** (%80: 2,9–6,0) · lehte 1,9 / aleyhte 1,7 → **yön
+zayıf** · oynaklık **sakin** · bu sefer 3,7 ATR → **≈ tipik**.
 
-Ama dikkat: mavi koni de aşağı doğru geniş. Bu, "tipik olarak bu sembolde alarm
-sonrası aşağı oynaklık daha büyük" demek. Grafik bunu saklamıyor.
+Grafikte: mavi koni hem yukarı hem aşağı açılıyor (o yüzden "koni", ok değil).
+Alarm "yukarı" dedi ama 12 barda yukarı **+0,2** ATR, aşağı **−3,5** ATR oldu.
+
+**Ne anlamalı:** Alarm isabetli çıkmadı, ama **beklenen büyüklük** tuttu (3,7 ≈
+4,2). Yani alarm büyüklük konusunda doğru, yön konusunda yanlıştı. Bu tipik
+durum.
 
 ---
 
-## 2 · Alarmın haklı çıktığı örnek — KONTR, 4h
+## Örnek 2 — alarm haklı (KONTR 4h)
 
 ![İyi KONTR](grafik_iyi_kontr.png)
 
-Alarm `KIRILIM_TEYITLI`, yön **aşağı**. Sonraki 12 barda aşağı −7,0 ATR, yukarı
-sadece +1,9. **Alarm yönünde lehte** — 7 ATR'lik bir düşüş.
+Panel: tipik **3,4 ATR** · lehte 1,5 / aleyhte 1,7 → **yön zayıf** · bu sefer
+**8,9 ATR → tipikten BÜYÜK**.
 
-Bu örnek önemli: demek ki alarm bazen gerçekten önden konuşuyor. Ama bu **tek
-örnek**; aşağıdaki üçüncü grafik tersini gösteriyor. İkisini birlikte görmek
-şart, yoksa insan "alarm çalışıyor" ya da "alarm çalışmıyor" diye yanlış
-geneller.
+Alarm "aşağı" dedi ve fiyat 12 barda **7,0 ATR** düştü. Panel "bu sefer
+tipikten büyük" diyor — yani **beklenenden büyük bir hareket** oldu ve alarm
+yönünde oldu.
+
+**Ne anlamalı:** Bu bir başarı **ama panel bunu önceden söylemiyordu.** Panel
+"yön zayıf" diyordu; büyüklük tahmini doğruydu, yön tahmini ortalamada
+kazançlı değildi.
 
 ---
 
-## 3 · Alarmın yanıldığı örnek — EREGL, 4h
+## Örnek 3 — alarm yanlış (EREGL 4h)
 
 ![Kötü EREGL](grafik_kotu_eregl.png)
 
-Alarm `FORMASYON_TAMAMLANDI`, yön **yukarı**. Sonraki 12 barda yukarı +0,6,
-aşağı −3,4 ATR. **Alarm yönünde aleyhte.** Fiyat 24,30'dan 22,80'e indi.
+Panel: tipik **3,5 ATR** · lehte 1,1 / aleyhte 1,6 → **yön zayıf** · oynaklık
+**sakin (%0 dilim)** · bu sefer 4,0 ATR → **≈ tipik**.
+
+Alarm "yukarı" dedi, fiyat **3,4 ATR düştü**.
+
+**Ne anlamalı:** "Sakin" dilim uyarısı önemli — oynaklık sembolün dibindeyken
+alarm çıkmış ve ters yönde sert hareket olmuş. Düşük oynaklık, düşük risk
+demek değil.
 
 ---
 
-## Bu üç örnek ne anlatıyor
+## Üçünden çıkan tek ders
 
-Üç alarm, üç farklı sonuç: **biri haklı (7 ATR), biri yanlış (−3,4 ATR), biri
-belirsiz (0,2 vs 3,5)**. Tek tek bakınca hiçbiri bir şey kanıtlamıyor.
+Üç alarmın **üçünde de panel "yön zayıf"** dedi. Biri haklı (%7 ATR kazanç), biri
+yanlış (%3,4 ATR kayıp), biri belirsiz.
 
-Kanıt 177.723 alarmın tamamında: 12 barda alarm yönünde ≥1 ATR görme oranı
-**%65,8**, hiç alarm olmayan barlarda **%63,7**. Fark **+2,1 puan**.
+Bu yüzden panelin 2. satırı **yön değil, yönün zayıflığını** söylüyor. Sen
+grafiğe baktığında şunu aramalısın:
 
-Yani **alarm doğru yönde biraz daha sık** hareket görüyor — ama "tahmin" demek
-için çok az. Grafikler bunu tek tek göstermiyor; gösterdiği şey **dağılımın ne
-kadar geniş olduğu**. Üç örnekte de görüyorsun: aynı formatta üç alarm, üç
-tamamen farklı sonuç.
+1. **Koni ne kadar geniş?** Genişse hareket büyük olacak, ama yönü belirsiz.
+2. **Gerçekleşen koninin içinde mi?** İçindeyse "normal", dışındaysa "sürpriz".
+3. **3. satır ne diyor?** Sakin dilimdeyse alarm sonrası hareket daha şaşırtıcı
+   olur — sakinlik güvenlik sanılmasın.
 
 ---
 
-## Kendi grafiğini üretmek
+## Kendi grafiğini üret
 
 ```bash
 python -m research.grafik_alarm --sembol KONTR --tf 4h --bar 61 \
     --etiket "KIRILIM_TEYITLI" --yon -1 --cikti var/grafik/kontr.png
 ```
 
-`--yon`: `1` yukarı, `-1` aşağı, `0` yönsüz. Bar indeksini replay çıktısından
-(`var/replay/da_pol/tetikler.jsonl`) alabilirsin — her satırda `symbol`,
-`timeframe`, `bar_index` var.
+`--yon`: `1` yukarı, `-1` aşağı. Bar indeksi `var/replay/da_pol/tetikler.jsonl`
+içinde (`symbol`, `timeframe`, `bar_index`).
 
-Kod: [`research/grafik_alarm.py`](../../research/grafik_alarm.py). Canlı çizim
-hattı (`grafik/render.py`) **değişmedi**; bu ayrı bir araç.
+Kod: [`research/grafik_alarm.py`](../../research/grafik_alarm.py).
+Canlı çizim hattı (`grafik/render.py`) değişmedi.

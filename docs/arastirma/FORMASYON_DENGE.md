@@ -122,6 +122,12 @@ olabilir** (84 segment denendi → Bonferroni eşiği |z|>3,2). Yani:
 - **"Önce vardı" ölçümü 12 ve 40 bar**: aynı barda hem hedefin hem stopun
   görüldüğü durumlar **stop sayıldı** (kötümser). Gerçek sıra bilinmiyor —
   bu, sonuçları **iyimser** gösteriyor olabilir.
+- **ÖLÇÜM HATASI DÜZELTİLDİ (2026-11-19):** `yon_dip_atr` (aleyhte uzanım)
+  işareti tersti — 46.116 satırda (%17,5) negatif çıkıyordu, yani **daha çok
+  ters gitmiş** satırlar daha *küçük* değer alıyordu. Düzeltildi
+  (`domain_alarm_replay.py`, `min()*-1` → `max()`), iki regresyon testi eklendi.
+  **Bu dosyadaki sayılar etkilenmedi**: kullandığım `ters_h12` bayrağı doğruydu.
+  Ama `yon_dip_atr` üzerinden yapılan **önceki** analizler bozuktu.
 - **`bagl_uzaklik_atr` sütunu bu koşuda boş** — "fiyat seviyeye ne kadar uzak"
   kırılımı yapılamadı. Oysa R37'nin `dist_atr < 0` bulgusu (çöküş tarafı +1,5
   puan) bu sütuna dayanıyordu. **Tekrar ölçülmesi gereken tek şey bu.**

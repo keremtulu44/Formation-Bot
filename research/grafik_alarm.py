@@ -24,7 +24,7 @@ import argparse
 import math
 import sys
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 import pandas as pd
 
@@ -169,6 +169,15 @@ def ciz(
         etiketler.append((tepe, f"{et} tepe  +{(tepe-ref)/atr:.1f} ATR", renk))
         etiketler.append((dip, f"{et} dip  −{(ref-dip)/atr:.1f} ATR", renk))
 
+    # --- "BU ALARM NE SÖYLÜYOR" paneli
+    _panel = ne_okumaliyim(frame, tetik, yon=yon)
+    _g12 = frame.iloc[tetik + 1: tetik + 13]
+    if len(_g12) == 12:
+        _t12 = (float(_g12["high"].max()) - ref) / atr
+        _d12 = (ref - float(_g12["low"].min())) / atr
+        _panel["bu_sefer_toplam"] = _t12 + _d12
+    panel_ciz(_panel, ax)
+
     # --- sol üst kutu: sade dille "ne oldu"
     satirlar = [f"{sembol} · {tf}", ""]
     if etiket:
@@ -193,9 +202,9 @@ def ciz(
             satirlar.append(f"alarm yönünde:    {sonuc}  (lehte {_t(d12,1)} / aleyhte {_t(t12,1)})")
     satirlar += ["", "bu çizgi yorum değil:", "gerçekleşen vs tipik"]
     ax.text(
-        0.010, 0.985, "\n".join(satirlar), transform=ax.transAxes, va="top", ha="left",
-        fontsize=9, family="monospace", color="#263238",
-        bbox=dict(boxstyle="round,pad=0.5", facecolor="white", alpha=0.92, edgecolor="#b0bec5"),
+        0.012, 0.40, "\n".join(satirlar), transform=ax.transAxes, va="top", ha="left",
+        fontsize=8.5, family="monospace", color="#263238",
+        bbox=dict(boxstyle="round,pad=0.45", facecolor="white", alpha=0.93, edgecolor="#b0bec5"),
         zorder=5,
     )
 
@@ -211,17 +220,122 @@ def ciz(
                 bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.85,
                           edgecolor="none"))
 
-    ax.set_title("Alarmdan sonra ne oldu — ve tipik olarak ne oluyor",
+    ax.set_title("Alarm tetiklendi — ne oldu, tipik olarak ne olur",
                  fontsize=12, color="#1c1c1c", pad=34)
     ax.set_ylabel("fiyat")
     ax.grid(alpha=0.12)
-    ax.legend(loc="lower left", fontsize=8.5, framealpha=0.92)
+    ax.legend(loc="upper left", bbox_to_anchor=(0.005, 0.62), fontsize=8.5, framealpha=0.93)
     ax.set_xlim(-1, len(parca))
     fig.tight_layout()
     cikti.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(cikti)
     plt.close(fig)
     return cikti
+
+
+def ne_okumaliyim(frame: pd.DataFrame, tetik: int, *, yon: int = 0,
+                  pencere: int = 200) -> dict[str, Any]:
+    """Tek bir alarm için **okunabilir cevap**: büyüklük, belirsizlik, tipik.
+
+    Üç soruyu yanıtlar — kullanıcının "alarm tetiklenince ne anladın" sorusu:
+
+    1. **Ne kadar oynayabilir?** → aynı sembolde geçmiş alarm sonrası 12 barın
+       tepe+dip toplamının medyanı ve %80 aralığı (ATR).
+    2. **Yön belli mi?** → lehte ve aleyhte uzanım oranı.
+    3. **Bugün nerede duruyor?** → son 100 barın oynaklığı bu sembolün kendi
+       geçmişine göre yüksek mi düşük mü.
+    """
+    atr_seri = _atr(frame)
+    atr = float(atr_seri.iloc[tetik])
+    n = len(frame)
+    y = frame["high"].astype(float).to_numpy()
+    d = frame["low"].astype(float).to_numpy()
+    k = frame["close"].astype(float).to_numpy()
+    toplamlar: list[float] = []
+    lehte: list[float] = []
+    aleyhte: list[float] = []
+    for i in range(max(0, tetik - pencere), tetik):
+        if i + 12 >= n:
+            continue
+        a = float(atr_seri.iloc[i])
+        if not math.isfinite(a) or a <= 0:
+            continue
+        ref = float(k[i])
+        t = (float(y[i + 1:i + 13].max()) - ref) / a
+        b = (ref - float(d[i + 1:i + 13].min())) / a
+        toplamlar.append(t + b)
+        if yon > 0:
+            lehte.append(t); aleyhte.append(b)
+        elif yon < 0:
+            lehte.append(b); aleyhte.append(t)
+    if not toplamlar:
+        return {"n": 0}
+    seri = pd.Series(toplamlar)
+    sonuc: dict[str, Any] = {
+        "n": len(toplamlar),
+        "atr": atr,
+        "aralik_medyan": float(seri.median()),
+        "aralik_p10": float(seri.quantile(0.10)),
+        "aralik_p90": float(seri.quantile(0.90)),
+        "aralik_p50_ust": float(seri.quantile(0.50)),
+    }
+    if lehte:
+        sonuc["lehte_medyan"] = float(pd.Series(lehte).median())
+        sonuc["aleyhte_medyan"] = float(pd.Series(aleyhte).median())
+    # Bugünün oynaklığı: son 100 barın ATR%'si, sembolün kendi dağılımında nerede
+    atr_pct = (atr_seri / frame["close"].astype(float) * 100).dropna()
+    if len(atr_pct) > 120:
+        gecmis = atr_pct.iloc[-250:]
+        simdi = float(atr_pct.iloc[tetik])
+        sonuc["atr_yuzdelik"] = float((gecmis <= simdi).mean())
+    return sonuc
+
+
+def panel_ciz(sonuc: Mapping[str, Any], ax: Any) -> None:
+    """Sol üst panel: 'bu alarm ne söylüyor' — 3 satır, sade dil."""
+    if not sonuc.get("n"):
+        return
+    med = sonuc["aralik_medyan"]
+    p10, p90 = sonuc["aralik_p10"], sonuc["aralik_p90"]
+    satirlar = [
+        f"BU ALARM NE SÖYLÜYOR  (geçmiş {sonuc['n']} alarm)",
+        "",
+        f"1) Büyüklük: 12 barda tipik {_t(med,1)} ATR oynar",
+        f"   (%80 ihtimalle {_t(p10,1)} – {_t(p90,1)} ATR)",
+    ]
+    if "lehte_medyan" in sonuc:
+        le, al = sonuc["lehte_medyan"], sonuc["aleyhte_medyan"]
+        oran = le / al if al > 0 else float("inf")
+        yorum = "yön zayıf" if oran < 1.5 else ("yön orta" if oran < 3 else "yön belirgin")
+        satirlar += [
+            "",
+            f"2) Yön: lehte {_t(le,1)} / aleyhte {_t(al,1)} ATR",
+            f"   → {yorum} (oran {_t(oran,1)})",
+        ]
+    if "atr_yuzdelik" in sonuc:
+        q = sonuc["atr_yuzdelik"] * 100
+        durum = "sakin" if q < 30 else ("normal" if q < 70 else "hareketli")
+        satirlar += [
+            "",
+            f"3) Şu an: oynaklık {durum} (%{_t(q,0)} dilim)",
+        ]
+    bu_sefer = sonuc.get("bu_sefer_toplam")
+    if bu_sefer is not None:
+        p10, p90 = sonuc["aralik_p10"], sonuc["aralik_p90"]
+        if bu_sefer > p90:
+            karar = "↑ tipikten BÜYÜK"
+        elif bu_sefer < p10:
+            karar = "↓ tipikten KÜÇÜK"
+        else:
+            karar = "≈ tipik"
+        satirlar += ["", f"4) Bu sefer: {_t(bu_sefer,1)} ATR → {karar}"]
+    ax.text(
+        0.012, 0.985, "\n".join(satirlar), transform=ax.transAxes, va="top", ha="left",
+        fontsize=9, family="monospace", color="#1a237e",
+        bbox=dict(boxstyle="round,pad=0.55", facecolor="#e8eaf6", alpha=0.96,
+                  edgecolor="#5c6bc0", lw=1.2),
+        zorder=9,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

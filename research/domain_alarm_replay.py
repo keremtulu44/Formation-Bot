@@ -709,7 +709,16 @@ def olcum_yaz(
     tepe = max(yol) if yol else None
     satir["yon_tepe_atr"] = tepe
     satir["yon_tepe_bar"] = (yol.index(tepe) + 1) if yol else None
-    satir["yon_dip_atr"] = min(ters_yol) * -1 if ters_yol else None
+    # İŞARET HATASI DÜZELTMESİ (2026-11-19):
+    # ``ters_yol`` zaten **aleyhte uzanım** (pozitif = aleyhe ne kadar gitti).
+    # Eski kod ``min()*-1`` ile onu işaret olarak negatife çeviriyordu:
+    #   fiyat aleyhe hiç gitmediyse en küçük değer ≈ −0,2 → ×−1 = +0,2 ✓
+    #   fiyat 3 ATR aleyhe gittiyse max ≈ 3,0 → min()*−1 = −3,0 ✗ (olmamalı)
+    # Sonuç: 46.116 satırda (tüm satırların %17,5'i) "aleyhte uzanım" negatif
+    # görünüyordu — yani **daha çok ters gitmiş** satırlar daha **küçük** değer
+    # alıyordu. Raporun "aleyhte ≥1 ATR" sütunu ``ters_h12`` kullanıyor ve o
+    # DOĞRU; ama ``yon_dip_atr`` üzerinden yapılan her analiz bozuktu.
+    satir["yon_dip_atr"] = max(ters_yol) if ters_yol else None
     satir["yon_pay_5"] = (max(yol[:5]) / tepe) if (len(yol) >= 5 and tepe and tepe > 0) else None
     # Aşım ızgarası 12 bar ufkuna sabittir (HORIZONLAR'ın ortası): kısa
     # pencerede "≥1 ATR gördü" demek için 12 barın dolması gerekir.

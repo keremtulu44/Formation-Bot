@@ -101,7 +101,13 @@ def test_olcum_tetik_barindan_sonra_baslar():
 
 
 def test_negatif_yon_asagi_olcer():
-    """Aşağı yönde "lehte" = düşük fiyat. Fiyat düşerse tepe pozitiftir."""
+    """Yön −1: düşen fiyat "lehte"dir; ``yon_dip_atr`` **aleyhte** uzanımdır.
+
+    İşaret sözleşmesi (2026-11-19'da düzeltildi): ``yon_dip_atr`` HER İKİ yönde
+    de **pozitif ve büyük olan daha kötü**dür (aleyhe ne kadar gitti). Eski kod
+    ``min()*-1`` ile onu negatife çeviriyordu; o yüzden daha çok ters gitmiş
+    satırlar daha *küçük* değer alıyordu (46.116 satır, %17,5).
+    """
     kapanis = [10.0] * 24
     yuksek = [10.05] * 24
     dusuk = [9.95] * 20 + [9.90, 9.80, 9.70, 9.60]
@@ -114,7 +120,44 @@ def test_negatif_yon_asagi_olcer():
     }
     satir = dar.seri_olcumu([tetik], frame)[0]
     assert satir["yon_tepe_atr"] > 0
-    assert satir["yon_dip_atr"] <= 0
+    # Fiyat 10,00'dan 9,60'a indi → lehte ~1,1 ATR; aleyhe (yukarı) neredeyse yok.
+    assert 0 <= satir["yon_dip_atr"] < satir["yon_tepe_atr"], (
+        f"aleyhte uzanım küçük pozitif olmalı, gelen: {satir['yon_dip_atr']}"
+    )
+
+
+def test_aleyhte_uzanim_negatif_olamaz():
+    """Regresyon: hiçbir satırda ``yon_dip_atr`` negatif olmamalı."""
+    kapanis = [10.0] * 24
+    yuksek = [10.05] * 20 + [10.60, 10.70, 10.80, 10.90]   # yukarı fırlıyor
+    dusuk = [9.95] * 24
+    frame = _frame(kapanis, yuksek, dusuk)
+    tetik = {
+        "symbol": "TEST", "timeframe": "1h", "bar_index": 20, "bar_time": "x",
+        "close": 10.0, "kanallar": ["CHoCH"], "kanal_sayisi": 1, "yon": 1,
+        "formasyon_state": None, "formasyon_tip": None, "hacim_tier": None,
+        "rvol": None, "kontrol": False,
+    }
+    satir = dar.seri_olcumu([tetik], frame)[0]
+    assert satir["yon_dip_atr"] >= 0, "aleyhe uzanım negatif olamaz"
+    # Yön yukarı; aleyhte = aşağı hareket ve dipler 9,95'te sabit → küçük.
+    assert satir["yon_dip_atr"] < 0.5, "aleyhe uzanım küçük olmalı"
+
+
+def test_aleyhte_buyuk_oldugunda_da_pozitif():
+    """Aleyhe 3 ATR giderse ``yon_dip_atr`` ~3 (pozitif) olmalı, negatif değil."""
+    kapanis = [10.0] * 24
+    yuksek = [10.05] * 24
+    dusuk = [9.95] * 20 + [9.50, 9.00, 8.50, 8.00]     # sert düşüş
+    frame = _frame(kapanis, yuksek, dusuk)
+    tetik = {
+        "symbol": "TEST", "timeframe": "1h", "bar_index": 20, "bar_time": "x",
+        "close": 10.0, "kanallar": ["CHoCH"], "kanal_sayisi": 1, "yon": 1,
+        "formasyon_state": None, "formasyon_tip": None, "hacim_tier": None,
+        "rvol": None, "kontrol": False,
+    }
+    satir = dar.seri_olcumu([tetik], frame)[0]
+    assert satir["yon_dip_atr"] > 1.0, "aleyhe 1+ ATR gitti, değer pozitif ve büyük olmalı"
 
 
 def test_yon_sifir_iki_yone_ayrilir():
