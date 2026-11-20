@@ -156,6 +156,17 @@ Koni örneği: `python -m research.koni_grafik --sembol ASELS --tf 4h --bar -90`
 Grafikte **ok yok**; tetikten sonra 12 bar için medyan yukarı/aşağı ve %80
 aralık var. Kart metninde "teyit/onay/güçlü sinyal" kelimeleri **yok**.
 
+### Örnek çıktılar
+
+| ASELS 4h | THYAO 1d |
+|---|---|
+| ![ASELS 4h](koni_ornek_asels_4h.png) | ![THYAO 1d](koni_ornek_thyao_1d.png) |
+
+İki örnekte de koni **referanstan başlıyor** ve iki yöne açılıyor. Sol üstteki
+kutu sıfat değil **ölçü** yazıyor (ATR, sıkışma, koşu, ATR yüzdelik). Grafikte
+tek bir ok, tek bir hedef, tek bir "döner/döner değil" iddiası yok — çünkü
+ölçüm bunları desteklemiyor.
+
 ---
 
 ## 7 · Sınırlar — bu raporun söylemedikleri
