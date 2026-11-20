@@ -10,10 +10,10 @@
 |---|---|
 | Seri (sembol × TF) | 704 |
 | Sembol | 176 |
-| Formasyon | 33964 |
-| Formasyon olayı | 229785 |
-| Hâlâ açık (sansürlü) | 171 |
-| Doğum aralığı | 2024-11-27 → 2026-10-19 |
+| Formasyon | 24615 |
+| Formasyon olayı | 183803 |
+| Hâlâ açık (sansürlü) | 166 |
+| Doğum aralığı | 2024-11-27 → 2026-11-19 |
 
 
 ## Okuma kuralları
@@ -33,8 +33,8 @@
 **SORU**      : FRM-01 · Formasyon doğmadan önce öncül hareket var mıydı, yönü neydi?
 **AŞAMA**     : S0 (doğum öncesi)
 **ANA ÇİZGİ** : doğumdan önceki 20 barın getirisi (ATR) + direk (pole) varlığı
-**ÇIKTI**     : son 20 bar getirisi medyan -0.04 ATR (ÇGA -1.91–+1.87) · yukarı olanlar %48.8 (GA %48.2–%49.3) · direk (pole) tabanlı %0.1 (GA %0.1–%0.2)
-**TABAN**     : tüm formasyonlar (n=33964, öncül getiri n=33964)
+**ÇIKTI**     : son 20 bar getirisi medyan -0.24 ATR (ÇGA -1.86–+1.38) · yukarı olanlar %45.5 (GA %44.9–%46.1) · direk (pole) tabanlı %0.2 (GA %0.1–%0.2)
+**TABAN**     : tüm formasyonlar (n=24615, öncül getiri n=24615)
 **YAN SÜTUN** : — (ana çıktı zaten doğum öncesi)
 **KARAR**     : tanımlayıcı; eşik yok
 
@@ -45,20 +45,20 @@
 **AŞAMA**     : S1 (doğum)
 **ANA ÇİZGİ** : formasyon tipi
 **ÇIKTI**     : dağılım + tip başına medyan kalite/genişlik
-**TABAN**     : tüm formasyonlar (n=33964)
+**TABAN**     : tüm formasyonlar (n=24615)
 **YAN SÜTUN** : n<50 tipler yalnız sayım; oran yorumu yok
 **KARAR**     : tanımlayıcı; eşik yok
 
 | tip | n | pay | medyan kalite | medyan genişlik (ATR) |
 |---|---|---|---|---|
-| Alçalan Üçgen | 9794 | %28.8 | 84 | 0.34 |
-| Yükselen Üçgen | 7736 | %22.8 | 84 | 0.38 |
-| Yükselen Kama | 6862 | %20.2 | 84 | 0.51 |
-| Alçalan Kama | 6556 | %19.3 | 80 | 0.46 |
-| Simetrik Üçgen | 2971 | %8.7 | 80 | 0.52 |
-| Ayı Flaması | 16 | %0.0 | 84 | 0.82 |
-| Ayı Bayrağı | 16 | %0.0 | 86 | 1.01 |
-| Boğa Bayrağı | 9 | %0.0 | 91 | 2.10 |
+| Alçalan Üçgen | 7010 | %28.5 | 85 | 0.39 |
+| Yükselen Üçgen | 4894 | %19.9 | 85 | 0.45 |
+| Alçalan Kama | 4780 | %19.4 | 79 | 0.50 |
+| Simetrik Üçgen | 4141 | %16.8 | 78 | 0.51 |
+| Yükselen Kama | 3746 | %15.2 | 83 | 0.58 |
+| Ayı Bayrağı | 19 | %0.1 | 85 | 1.01 |
+| Ayı Flaması | 14 | %0.1 | 83 | 0.76 |
+| Boğa Bayrağı | 7 | %0.0 | 91 | 1.52 |
 
 
 ### FRM-03 · Doğumda en yakın korunan seviye ne kadar uzakta?
@@ -67,17 +67,17 @@
 **AŞAMA**     : S1 (doğum)
 **ANA ÇİZGİ** : mesafe kovası (<0.5 · 0.5–1 · 1–2 · 2–3 · ≥3 ATR)
 **ÇIKTI**     : kova başına formasyon sayısı + kırılıma varma oranı
-**TABAN**     : MS rolü açık olan formasyonlar (n=33742)
+**TABAN**     : MS rolü açık olan formasyonlar (n=24483)
 **YAN SÜTUN** : rol ucu PH/PL
 **KARAR**     : tanımlayıcı; kırılım oranı sütunu keşif niteliğinde
 
 | mesafe | n | kırılım oranı | GA |
 |---|---|---|---|
-| <0.5 | 569 | %93.7 | %91.4–%95.4 |
-| 0.5–1 | 859 | %95.3 | %93.7–%96.6 |
-| 1–2 | 2908 | %94.6 | %93.7–%95.3 |
-| 2–3 | 4401 | %94.7 | %94.0–%95.3 |
-| ≥3 | 25005 | %94.7 | %94.4–%94.9 |
+| <0.5 | 422 | %91.9 | %89.0–%94.2 |
+| 0.5–1 | 634 | %92.4 | %90.1–%94.2 |
+| 1–2 | 2145 | %93.0 | %91.8–%94.0 |
+| 2–3 | 3464 | %93.2 | %92.3–%94.0 |
+| ≥3 | 17818 | %92.7 | %92.3–%93.1 |
 
 
 
@@ -90,8 +90,8 @@
 **SORU**      : FRM-04 · Formasyon kırılıma kadar ne kadar daralıyor ve kaç bar sürüyor?
 **AŞAMA**     : S2 (olgunlaşma)
 **ANA ÇİZGİ** : daralma oranı: 1 − genişlik(son gözlem barı)/genişlik(doğum)
-**ÇIKTI**     : medyan daralma %76.6 (ÇGA %63.4–%86.2) · geometri fazı medyan 1 bar
-**TABAN**     : tüm formasyonlar (n=33964)
+**ÇIKTI**     : medyan daralma %74.8 (ÇGA %60.4–%85.8) · geometri fazı medyan 2 bar
+**TABAN**     : tüm formasyonlar (n=24615)
 **YAN SÜTUN** : geometri fazı kısa: formasyon apeksine yakın doğuyor
 **KARAR**     : tanımlayıcı; eşik yok
 
@@ -101,8 +101,8 @@
 **SORU**      : FRM-05 · Doğumdan olgunlaşmaya rvol düşüyor mu?
 **AŞAMA**     : S2 (olgunlaşma)
 **ANA ÇİZGİ** : rvol(olgunlaşma) − rvol(doğum)
-**ÇIKTI**     : ölçüm yok · eşleşen çift 2260 (vp olgunlaşma kapsaması düşük) · %85.1'inde iki bar birebir aynı
-**TABAN**     : hacmi kullanılabilir formasyonlar (n=2260)
+**ÇIKTI**     : ölçüm yok · eşleşen çift 2868 (vp olgunlaşma kapsaması düşük) · %87.6'inde iki bar birebir aynı
+**TABAN**     : hacmi kullanılabilir formasyonlar (n=2868)
 **YAN SÜTUN** : yan sütun: rvol · ana çıktı değil
 **KARAR**     : ölçüm yok (olgunlaşma penceresi doğumla aynı bar)
 
@@ -118,17 +118,17 @@
 **AŞAMA**     : S3 (hazırlık)
 **ANA ÇİZGİ** : min uzaklık kovası (fitil, ATR)
 **ÇIKTI**     : kova başına kırılıma varma oranı
-**TABAN**     : tüm formasyonlar (n=33964)
+**TABAN**     : tüm formasyonlar (n=24615)
 **YAN SÜTUN** : —
 **KARAR**     : tanımlayıcı; doz-yanıt eğrisi
 
 | min uzaklık | n | kırılım oranı | GA |
 |---|---|---|---|
-| 0–0.5 | 32551 | %95.6 | %95.4–%95.8 |
-| 0.5–1 | 1035 | %80.7 | %78.2–%83.0 |
-| 1–1.5 | 287 | %56.8 | %51.0–%62.4 |
-| 1.5–2 | 74 | %51.4 | %40.2–%62.4 |
-| ≥2 | 17 | %17.6 | %6.2–%41.0 |
+| 0–0.5 | 22960 | %94.3 | %94.0–%94.6 |
+| 0.5–1 | 1180 | %77.7 | %75.2–%80.0 |
+| 1–1.5 | 352 | %62.5 | %57.3–%67.4 |
+| 1.5–2 | 101 | %38.6 | %29.7–%48.4 |
+| ≥2 | 22 | %27.3 | %13.2–%48.2 |
 
 
 ### FRM-07 · Kaç deneme yapılıyor?
@@ -137,25 +137,22 @@
 **AŞAMA**     : S4 (deneme)
 **ANA ÇİZGİ** : kırılım fazına giriş epizodu (KIRILIM_DENEMESI + KIRILIM_ADAYI)
 **ÇIKTI**     : dağılım (medyan 1 deneme)
-**TABAN**     : tüm formasyonlar (n=33964)
+**TABAN**     : tüm formasyonlar (n=24615)
 **YAN SÜTUN** : zayıf deneme (yalnız KIRILIM_DENEMESI) ayrı kolonda
 **KARAR**     : tanımlayıcı
 
 | deneme | n | pay |
 |---|---|---|
-| 0 | 1813 | %5.3 |
-| 1 | 26481 | %78.0 |
-| 2 | 4250 | %12.5 |
-| 3 | 999 | %2.9 |
-| 4 | 289 | %0.9 |
-| 5 | 82 | %0.2 |
-| 6 | 28 | %0.1 |
-| 7 | 9 | %0.0 |
-| 8 | 3 | %0.0 |
+| 0 | 1778 | %7.2 |
+| 1 | 19671 | %79.9 |
+| 2 | 2463 | %10.0 |
+| 3 | 517 | %2.1 |
+| 4 | 142 | %0.6 |
+| 5 | 22 | %0.1 |
+| 6 | 15 | %0.1 |
+| 7 | 2 | %0.0 |
 | 9 | 2 | %0.0 |
-| 10 | 4 | %0.0 |
-| 11 | 3 | %0.0 |
-| 17 | 1 | %0.0 |
+| 10 | 3 | %0.0 |
 
 
 ### FRM-08 · Kırılım yönü en yakın seviyenin tarafıyla uyumlu mu?
@@ -163,8 +160,8 @@
 **SORU**      : FRM-08 · Kırılım, en yakın korunan seviyeye doğru mu oluyor?
 **AŞAMA**     : S4 (deneme)
 **ANA ÇİZGİ** : uyum: yukarı kırılım + üstte PH / aşağı kırılım + altta PL
-**ÇIKTI**     : uyum oranı %53.5 (GA %53.0–%54.1)
-**TABAN**     : kırılımı olan ve MS rolü açık formasyonlar (n=31960)
+**ÇIKTI**     : uyum oranı %56.0 (GA %55.3–%56.6)
+**TABAN**     : kırılımı olan ve MS rolü açık formasyonlar (n=22738)
 **YAN SÜTUN** : —
 **KARAR**     : tanımlayıcı
 
@@ -179,8 +176,8 @@
 **SORU**      : FRM-09 · Kırılım anından teyide kaç bar geçiyor?
 **AŞAMA**     : S5 (teyit)
 **ANA ÇİZGİ** : bar gecikmesi
-**ÇIKTI**     : medyan 1 bar (ÇGA 1–2)
-**TABAN**     : teyit alan formasyonlar (n=28624)
+**ÇIKTI**     : medyan 1 bar (ÇGA 1–1)
+**TABAN**     : teyit alan formasyonlar (n=20153)
 **YAN SÜTUN** : —
 **KARAR**     : tanımlayıcı
 
@@ -191,16 +188,16 @@
 **AŞAMA**     : S5 (teyit)
 **ANA ÇİZGİ** : hacim skoru kovası
 **ÇIKTI**     : kova başına ≥1 ATR MFE oranı (12 bar)
-**TABAN**     : teyit alan formasyonlar (n=28611)
+**TABAN**     : teyit alan formasyonlar (n=20149)
 **YAN SÜTUN** : yan sütun: hacim — ana çıktı değil
 **KARAR**     : tanımlayıcı; zone'da bulunan 'Q4 zayıf' bulgusuyla karşılaştırılacak
 
 | hacim kovası | n | ≥1 ATR oranı | GA |
 |---|---|---|---|
-| Q1 (<25) | 15094 | %52.4 | %51.6–%53.2 |
-| Q2 (25–50) | 1494 | %54.6 | %52.1–%57.1 |
-| Q3 (50–75) | 3631 | %47.6 | %46.0–%49.3 |
-| Q4 (≥75) | 8392 | %54.7 | %53.6–%55.8 |
+| Q1 (<25) | 9464 | %53.8 | %52.8–%54.8 |
+| Q2 (25–50) | 1059 | %56.0 | %53.0–%59.0 |
+| Q3 (50–75) | 2850 | %47.5 | %45.6–%49.3 |
+| Q4 (≥75) | 6776 | %56.2 | %55.1–%57.4 |
 
 
 ### FRM-11 · Teyit ile MS BOS aynı barda mı?
@@ -208,8 +205,8 @@
 **SORU**      : FRM-11 · Formasyon teyidi ile yapısal BOS aynı anda mı oluyor?
 **AŞAMA**     : S5 (teyit)
 **ANA ÇİZGİ** : aynı bar (|gecikme| ≤ 10 bar içinde en yakın BOS)
-**ÇIKTI**     : aynı bar oranı %12.3 (GA %11.8–%12.8) · aynı bar + aynı yön %11.6 · medyan |gecikme| 3 bar
-**TABAN**     : teyit alan ve ±10 bar içinde BOS bulunan formasyonlar (n=18032)
+**ÇIKTI**     : aynı bar oranı %13.4 (GA %12.9–%14.0) · aynı bar + aynı yön %13.1 · medyan |gecikme| 3 bar
+**TABAN**     : teyit alan ve ±10 bar içinde BOS bulunan formasyonlar (n=12992)
 **YAN SÜTUN** : —
 **KARAR**     : tanımlayıcı
 
@@ -224,8 +221,8 @@
 **SORU**      : FRM-12 · Teyitten sonra retest geliyor mu, kaç barda?
 **AŞAMA**     : S6 (retest)
 **ANA ÇİZGİ** : retest var/yok
-**ÇIKTI**     : retest oranı %34.9 (GA %34.4–%35.5) · medyan gecikme 1 bar
-**TABAN**     : teyit alan formasyonlar (n=28624)
+**ÇIKTI**     : retest oranı %40.8 (GA %40.2–%41.5) · medyan gecikme 1 bar
+**TABAN**     : teyit alan formasyonlar (n=20153)
 **YAN SÜTUN** : retest = RETEST_BASARILI state'i (motorun kendi tanımı)
 **KARAR**     : tanımlayıcı
 
@@ -236,15 +233,15 @@
 **AŞAMA**     : S6 (retest)
 **ANA ÇİZGİ** : derinlik kovası (ATR)
 **ÇIKTI**     : kova başına ≥1 ATR MFE oranı
-**TABAN**     : başarılı retest gören teyitli formasyonlar (n=9991)
+**TABAN**     : başarılı retest gören teyitli formasyonlar (n=8232)
 **YAN SÜTUN** : retest fazına girip geri alamayanlar paydada yok
 **KARAR**     : tanımlayıcı
 
 | derinlik | n | ≥1 ATR oranı | GA |
 |---|---|---|---|
-| <0.25 | 1989 | %60.8 | %58.7–%63.0 |
-| 0.25–0.5 | 1448 | %50.8 | %48.2–%53.3 |
-| ≥0.5 ATR | 6554 | %33.2 | %32.1–%34.4 |
+| <0.25 | 1582 | %61.7 | %59.3–%64.1 |
+| 0.25–0.5 | 1157 | %49.4 | %46.5–%52.2 |
+| ≥0.5 ATR | 5493 | %35.5 | %34.2–%36.8 |
 
 
 ### FRM-14 · Retest hacmi düşükse başarı artıyor mu?
@@ -252,15 +249,15 @@
 **SORU**      : FRM-14 · Retest barındaki rvol, teyit sonrası hareketi değiştiriyor mu?
 **AŞAMA**     : S6 (retest)
 **ANA ÇİZGİ** : rvol medyan bölmesi
-**ÇIKTI**     : grup başına ≥1 ATR MFE oranı · fark +4.6 puan (GA +2.5…+6.9) · fark var
-**TABAN**     : başarılı retest gören ve rvol'ü ölçülebilen formasyonlar (n=9336)
+**ÇIKTI**     : grup başına ≥1 ATR MFE oranı · fark +6.2 puan (GA +4.0…+8.2) · fark var
+**TABAN**     : başarılı retest gören ve rvol'ü ölçülebilen formasyonlar (n=7702)
 **YAN SÜTUN** : yan sütun: hacim
 **KARAR**     : tanımlayıcı
 
 | grup | n | ≥1 ATR oranı | GA |
 |---|---|---|---|
-| rvol < medyan | 4668 | %38.8 | %37.5–%40.2 |
-| rvol ≥ medyan | 4668 | %43.5 | %42.1–%44.9 |
+| rvol < medyan | 3851 | %39.4 | %37.9–%41.0 |
+| rvol ≥ medyan | 3851 | %45.6 | %44.0–%47.2 |
 
 
 
@@ -274,15 +271,15 @@
 **AŞAMA**     : S7 (sonuç)
 **ANA ÇİZGİ** : terminal state
 **ÇIKTI**     : dağılım + GA
-**TABAN**     : ölümle biten formasyonlar (n=32321)
-**YAN SÜTUN** : sansür: değiştirilen 1472 · veri sonu 171 (paydaya girmez)
+**TABAN**     : ölümle biten formasyonlar (n=23012)
+**YAN SÜTUN** : sansür: değiştirilen 1437 · veri sonu 166 (paydaya girmez)
 **KARAR**     : tanımlayıcı
 
 | terminal state | n | pay | GA |
 |---|---|---|---|
-| FORMASYON_TAMAMLANDI | 24618 | %76.2 | %75.7–%76.6 |
-| BASARISIZ_KIRILIM | 6186 | %19.1 | %18.7–%19.6 |
-| FORMASYON_GECERSIZ | 1517 | %4.7 | %4.5–%4.9 |
+| FORMASYON_TAMAMLANDI | 17115 | %74.4 | %73.8–%74.9 |
+| BASARISIZ_KIRILIM | 4863 | %21.1 | %20.6–%21.7 |
+| FORMASYON_GECERSIZ | 1034 | %4.5 | %4.2–%4.8 |
 
 
 ### FRM-16 · Tamamlanma süresi ve hareket
@@ -290,8 +287,8 @@
 **SORU**      : FRM-16 · Tamamlanan formasyon ne kadar sürüyor ve teyitten sonra ne kadar gidiyor?
 **AŞAMA**     : S7 (sonuç)
 **ANA ÇİZGİ** : ömür (bar) · teyit sonrası MFE (ATR, 12 bar)
-**ÇIKTI**     : medyan ömür 11 bar · medyan MFE 1.23 ATR (ÇGA 0.61–2.14)
-**TABAN**     : tamamlanan formasyonlar (n=24618)
+**ÇIKTI**     : medyan ömür 13 bar · medyan MFE 1.27 ATR (ÇGA 0.64–2.18)
+**TABAN**     : tamamlanan formasyonlar (n=17115)
 **YAN SÜTUN** : uzun pencere (40 bar) ayrı kolonda
 **KARAR**     : tanımlayıcı
 
@@ -301,8 +298,8 @@
 **SORU**      : FRM-17 · Başarısız kırılımda teyit sonrası ters hareket ne kadar?
 **AŞAMA**     : S7 (sonuç)
 **ANA ÇİZGİ** : MAE (ATR, 12 bar)
-**ÇIKTI**     : medyan 2.83 ATR (ÇGA 2.00–4.00)
-**TABAN**     : başarısız kırılımlar (n=6186)
+**ÇIKTI**     : medyan 2.81 ATR (ÇGA 2.03–3.90)
+**TABAN**     : başarısız kırılımlar (n=4863)
 **YAN SÜTUN** : —
 **KARAR**     : tanımlayıcı
 
@@ -313,16 +310,16 @@
 **AŞAMA**     : S7 (sonuç)
 **ANA ÇİZGİ** : geçersizleşmeden ÖNCEKİ state
 **ÇIKTI**     : dağılım
-**TABAN**     : geçersizleşen formasyonlar (n=1517) · ayrıca WEAK olayı: 15631
-**YAN SÜTUN** : doğumda ölen 267 (paydada; ayrı satır)
+**TABAN**     : geçersizleşen formasyonlar (n=1034) · ayrıca WEAK olayı: 14978
+**YAN SÜTUN** : doğumda ölen 45 (paydada; ayrı satır)
 **KARAR**     : tanımlayıcı
 
 | önceki state | n | pay |
 |---|---|---|
-| FORMASYON_TANIMLANDI | 764 | %50.4 |
-| FORMASYON_ZAYIFLADI | 328 | %21.6 |
-| DOĞUMDA (ömür 1 bar) | 267 | %17.6 |
-| KIRILIM_HAZIRLIGI | 158 | %10.4 |
+| FORMASYON_TANIMLANDI | 513 | %49.6 |
+| FORMASYON_ZAYIFLADI | 318 | %30.8 |
+| KIRILIM_HAZIRLIGI | 158 | %15.3 |
+| DOĞUMDA (ömür 1 bar) | 45 | %4.4 |
 
 
 
@@ -335,20 +332,20 @@
 **SORU**      : FRM-19 · Kırılım anında fiyat canlı bir OB/FVG zone'u içindeyse sonuç değişiyor mu?
 **AŞAMA**     : Çapraz
 **ANA ÇİZGİ** : zone var / yok
-**ÇIKTI**     : tamamlanma oranı · fark −1.1 puan (GA −2.2…−0.2) · fark var
-**TABAN**     : kırılımı olan formasyonlar (n=32137)
+**ÇIKTI**     : tamamlanma oranı · fark −1.5 puan (GA −2.7…−0.4) · fark var
+**TABAN**     : kırılımı olan formasyonlar (n=22831)
 **YAN SÜTUN** : OB ve FVG ayrı ayrı (bağımsız kolonlar) altta
 **KARAR**     : fark var (GA sıfırı içermiyor)
 
 | grup | n | tamamlanma | GA |
 |---|---|---|---|
-| zone var | 11905 | %75.9 | %75.1–%76.6 |
-| zone yok | 20232 | %77.0 | %76.4–%77.6 |
+| zone var | 8984 | %74.0 | %73.1–%74.9 |
+| zone yok | 13847 | %75.6 | %74.8–%76.3 |
 
 | ayrıştırma (yan sütun) | n | tamamlanma | fark (GA) |
 |---|---|---|---|
-| OB var | 11249 | %75.7 | fark −1.4 puan (GA −2.5…−0.4) · fark var |
-| FVG var | 859 | %79.0 | fark +2.5 puan (GA −0.1…+5.1) · fark yok |
+| OB var | 8541 | %73.6 | fark −2.2 puan (GA −3.4…−1.1) · fark var |
+| FVG var | 584 | %81.0 | fark +6.2 puan (GA +2.9…+9.0) · fark var |
 
 
 ### FRM-20 · Formasyon yönü ile MS yönü uyumu
@@ -356,13 +353,13 @@
 **SORU**      : FRM-20 · Kırılım yönü en yakın rol seviyesine doğruysa sonuç değişiyor mu?
 **AŞAMA**     : Çapraz
 **ANA ÇİZGİ** : uyumlu / uyumsuz
-**ÇIKTI**     : tamamlanma oranı · fark +6.4 puan (GA +5.3…+7.5) · fark var
-**TABAN**     : kırılımı olan ve MS rolü açık formasyonlar (n=31960)
+**ÇIKTI**     : tamamlanma oranı · fark +9.6 puan (GA +8.4…+10.7) · fark var
+**TABAN**     : kırılımı olan ve MS rolü açık formasyonlar (n=22738)
 **YAN SÜTUN** : —
 **KARAR**     : fark var (GA sıfırı içermiyor)
 
 | grup | n | tamamlanma | GA |
 |---|---|---|---|
-| uyumlu | 17103 | %79.6 | %79.0–%80.2 |
-| uyumsuz | 14857 | %73.2 | %72.5–%73.9 |
+| uyumlu | 12730 | %79.3 | %78.5–%79.9 |
+| uyumsuz | 10008 | %69.6 | %68.7–%70.5 |
 
