@@ -41,6 +41,7 @@ tartışmalarında sayı gerektiğinde buraya bakılır.
 | **[DOMAIN_ALARM_REPLAY.md](DOMAIN_ALARM_REPLAY.md)** | **Hangi alarm türü değerli?** 6 kanalın arşiv ölçümü: taban farkı, cooldown, tetik anındaki grafik bağlamı, Wilson alt sınırıyla segment sıralaması | "Bu alarm türü işe yarıyor mu, sustursam ne kaybederim?" sorusunda |
 | **[ALARM_YONU_2026-11-19.md](ALARM_YONU_2026-11-19.md)** | **Alarmın yönü:** 4 katman (sessiz/özet/kart/grafik) + grafik tasarım kuralları | "Alarmı nasıl daha anlamlı yaparım?" sorusunda |
 | **[ALARM_POLITIKA_SONUCLARI.md](ALARM_POLITIKA_SONUCLARI.md)** | **Politika ölçümü:** 8 kural aynı veride; kanal katmanı değil **bağlam** kazandırıyor | "Alarmı değiştirsem ne olur?" sorusunda |
+| **[FORMASYON_DENGE.md](FORMASYON_DENGE.md)** | **Formasyon tarafı:** "şu olursa şu olur" kuralları neden kurulamıyor; 4 denge ekseni | "Formasyonu nasıl dengelerim?" sorusunda |
 | [NATIVE_TUTARLILIK.md](../denetim/NATIVE_TUTARLILIK.md) | 2h/4h native dosyaları 1h ile aynı barı mı anlatıyor? | 2h/4h'ye dayanan bir sayıya güvenmeden önce |
 | **[ARASTIRMA_SONUCLARI.md](ARASTIRMA_SONUCLARI.md)** | **Ana belge:** soru bazında cevap + yorum | Buradan başla |
 | [ARASTIRMA_BULGULARI.md](ARASTIRMA_BULGULARI.md) | Ham tablo eki (üretici script buraya yazar) | Sonucu doğrulamak için |
