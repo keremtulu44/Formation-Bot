@@ -24,7 +24,8 @@ sonra ilgili kart. Yeni bir ölçüm planlayan → **§6 sıra** + **§8 Sınır
 | §5.5 | Native verinin kendi gürültü tabanı (2h/4h ↔ 1h) |
 | §5.7 | **Native sonuçlar (tam evren)** — eski vs yeni yan yana, hangi bulgu ayakta kaldı |
 | §5.8 | **Üç aile (Stabil/OB/FVG)** 8 soruda karşılaştırma — hangisi ne işe yarıyor |
-| §5.9 | **Alarm yönü önerisi** — 4 katman + 5 grafik kuralı ([ayrı dosya](ALARM_YONU_2026-11-19.md)) |
+| §5.9 | **Alarm yönü** — 4 katman + grafik kuralı ([ayrı dosya](ALARM_YONU_2026-11-19.md)) |
+| §5.10 | **Politika ölçümü** — 8 kural aynı veride; kanal katmanı değil **bağlam** kazandırıyor ([ayrı dosya](ALARM_POLITIKA_SONUCLARI.md)) |
 | §6 | Yeniden koşu sırası ve komutlar |
 | §7 | Dosya haritası · §7.5 Karar tablosu · §8 Sınırlar |
 
@@ -977,6 +978,38 @@ varsayıyor ("çok kanal = güçlü").
 
 ---
 
+## 5.10 · Politika ölçümü — "kuralı değiştirsem ne olurdu?"
+
+§5.9 bir **öneriydi**. Bu bölüm onu **test ediyor**: aynı tetik satırları 8
+politikadan geçirilip üç sütunla karşılaştırıldı (kart/gün · isabet · **iyi
+yakalama**). Veri: **352 seri** (yarı evren), 177.723 tetik + 86.496 taban.
+Ayrıntı: [`ALARM_POLITIKA_SONUCLARI.md`](ALARM_POLITIKA_SONUCLARI.md).
+
+| politika | kart | kart/gün | ≥1 ATR | taban farkı | iyi yakalama |
+|---|---:|---:|---:|---:|---:|
+| P0 canlı kural | 61.221 | 1,17 | %66,6 | +3,0 pp | %35,1 |
+| P2 yalnız hacim ≥5× | 3.338 | 0,06 | %70,6 | +6,9 pp | **%2,1** |
+| P3 **kanal katmanı** (OB/FVG sessiz) | 37.734 | 0,72 | %66,5 | +2,9 pp | %21,2 |
+| P4 kanal + bağlam | 14.257 | 0,27 | %68,2 | +4,6 pp | %8,2 |
+| P6 **yalnız bağlam** (koşu/sıkışma) | 21.913 | 0,42 | **%68,3** | **+4,7 pp** | %12,8 |
+
+**Üç hüküm — §5.9'u düzelten:**
+
+1. **Kanal katmanı isabet kazandırmıyor.** P3 (%66,5) ≈ P0 (%66,6); yalnız kart
+   sayısını %38 düşürüyor. Kanal farkı gerçek ama küçük (+1,7…+2,8 pp).
+2. **Kazandıran şey bağlam.** P6 kart sayısını **%64** azaltırken isabeti
+   **+1,7 pp** yükseltiyor (Wilson alt sınırı P0'ın üstünde). Yani doğru soru
+   "hangi kanal" değil, **"hangi bağlamda"**.
+3. **Ufuk ayrışmayı büyütmüyor.** 40 bar / 3 ATR'de HACIM–OB farkı 3,0 pp
+   (12b'de 5,5 pp). "Trend devamı" iddiası kanalları daha da eşitliyor. BOS her
+   ufukta tabanın altında (12b: %58,0 vs %64,0 — **−6 pp**).
+
+**Karar:** uygulanacaksa savunulabilir olan **P6** (veya daha az konuşan P4).
+Ancak iyi tetiklerin %87–92'si kaybedilir; bu bir **ürün tercihi**, ölçüm kararı
+değil.
+
+---
+
 **KAYNAK** §5.7 (R01/R02/R05 native) · R19/R20/R21/R22/R24 · R37
 
 ---
@@ -1044,6 +1077,9 @@ ne yapabilirim?" sorusunun derlemeden çıkan cevabı:
 | **Yapılabilir:** FVG'ye *tek kullanımlık* muamele | R01, §5.7 | Tekrar denendiğinde tepki düşüyor — native veride de aynı (%76,2 tek deneme) |
 | **Aday (önce ayrı pencerede test):** Retest niteliğini karta yazmak | §5.7 | Sığ retest (<0,25 ATR) **%61,7** vs derin retest (≥0,5 ATR) **%35,5** — **26 pp**, derlemedeki en büyük tek etki. 704 seride de duruyor ama tek dönemde ölçüldü |
 | **Yapılabilir:** Alarmı **katmanlamak** (sessiz / günlük özet / kart / grafik) | R37, §5.9 | HACIM +7,3 · OB +1,7 · BOS −2,0 → tek tek kart basmak değer üretmiyor |
+| **Yapılabilir:** **Bağlam filtresi** (6b koşu ≥1 ATR veya sıkışma ≥1) | R37 + §5.10 (P6) | Kart −%64, isabet +1,7 pp; Wilson alt sınırı P0'ın üstünde |
+| **Güvenilemez:** Kanal katmanı (OB/FVG'yi susturmak) isabet kazandırır | §5.10 (P3) | P3 %66,5 ≈ P0 %66,6 — yalnız kart sayısı düşüyor |
+| **Güvenilemez:** 40 bar/3 ATR'de kanallar ayrışır | §5.10 §4 | HACIM–OB farkı 12b'de 5,5 pp, 40b'de **3,0 pp** (küçülüyor) |
 | **Güvenilemez:** "Çok kanal ateşledi = güçlü sinyal" | R37 §2 | HACIM tek başına %71,6; HACIM+OB %67,9; üçü birlikte %65,9 → **kombinasyon seyreltıyor** |
 | **Güvenilemez:** Grafikte **yön oku** | R21, R37 | Okların %89'u aynı uyarının tekrarı; tetiklerin %30,5'i iki yöne de ≥1 ATR |
 | **Güvenilemez:** Alarmı "burada şu olacak" diye sunmak | R37 | Tetiklerin **%30,5**'i 12 barda iki yöne de ≥1 ATR görüyor (taban %30,4) — alarm oynaklık işaret ediyor, yön değil |

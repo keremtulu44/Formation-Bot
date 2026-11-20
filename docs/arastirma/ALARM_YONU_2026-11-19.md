@@ -6,6 +6,12 @@
 > **Ne yapar:** mevcut alarm tasarımının neden "tetiklendiği için" hissi verdiğini
 > ölçümle açıklar ve **alternatif bir yön** önerir.
 > **Ne yapmaz:** canlı kodu değiştirmez; eşik/kural önermez, **çerçeve** önerir.
+>
+> ⚠️ **GÜNCELLEME (aynı gün):** Bu dosyadaki 4 katmanlı öneri, yarı evren
+> politika koşusuyla **kısmen düzeltildi**. Ölçüm: kanal katmanı (Katman 0)
+> isabet kazandırmıyor; **bağlam filtresi** kazandırıyor. Düzeltilmiş sonuçlar
+> ve 3 seçenek: [`ALARM_POLITIKA_SONUCLARI.md`](ALARM_POLITIKA_SONUCLARI.md).
+> Özellikle §5 ("Üç seçenek") ve §2 (P4/P6 satırları) buradaki §3'ün yerine geçer.
 
 ---
 
@@ -54,7 +60,9 @@ Bugünkü sistem: *"kanallardan biri ateşlerse kart bas"*.
 | **3 · Çizim** | Katman 2 **ve** tetik 09:00–10:00 veya 17:00 seansında | grafik (aşağıdaki tasarım) | Saat segmentleri %75–77; günde en fazla 1–2 tane |
 
 **Tek kural:** Bir alarmın değeri, **kaç kanalın ateşlediğiyle değil**, o kanalın
-taban farkıyla ve nadirliğiyle ölçülür. Bu, bugünkü "çok kanal = güçlü sinyal"
+taban farkıyla ve nadirliğiyle ölçülür.
+> **Düzeltme:** Politika koşusu bunun **yalnız yarısını** doğruladı. Kanal farkı
+> gerçek ama küçük; onu elemek isabet kazandırmıyor. Kazandıran şey **bağlam**. Bu, bugünkü "çok kanal = güçlü sinyal"
 varsayımının **ölçümle çürütülmesidir** (2. madde).
 
 **Ne zaman uygulanmaz:** Bu bir *önerme*dir. Katman 0'ı uygulamak, bugün giden
