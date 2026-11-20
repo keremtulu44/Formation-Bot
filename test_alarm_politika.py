@@ -93,3 +93,22 @@ def test_politika_tablosu_kart_sayisi_cooldown_sonrasi():
     tablo = {r["kod"]: r for r in ap.politika_tablosu(df, taban)}
     assert tablo["P0"]["n"] == 2  # 12 tetik → cooldown → 2 kart
     assert tablo["P0"]["basilan_pay"] < 0.2
+
+
+def test_kart_gun_meta_bar_sayisindan_hesaplanir():
+    """Kart/gün, TETİK SATIRI değil GERÇEK bar sayısından hesaplanmalı.
+
+    Regresyon: eski sürüm ``len(grup)`` kullanıyordu → 3.253 barlık bir seride
+    ~800 tetik satırı olduğu için oran ~3 kat şişiyordu.
+    """
+    df = pd.DataFrame([_satir(symbol="A", bar_index=i) for i in range(10)] + 
+                      [_satir(symbol="B", bar_index=i) for i in range(10)])
+    meta = pd.DataFrame([
+        {"symbol": "A", "timeframe": "1d", "bar_sayisi": 500},
+        {"symbol": "B", "timeframe": "1d", "bar_sayisi": 500},
+    ])
+    # 1.000 gün bekleniyor (500+500), 20 değil
+    assert ap._gun_sayisi(df, meta) == 1000.0
+    # 1h: 9,5 bar/gün
+    meta_h = pd.DataFrame([{"symbol": "A", "timeframe": "1h", "bar_sayisi": 950}])
+    assert abs(ap._gun_sayisi(df, meta_h) - 100.0) < 1e-6

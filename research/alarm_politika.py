@@ -215,8 +215,25 @@ def _cooldown(secili: pd.DataFrame, bar: int = COOLDOWN_BAR) -> pd.DataFrame:
     return secili.loc[kalan]
 
 
-def _gun_sayisi(df: pd.DataFrame) -> float:
-    """Kaba gün sayısı: (sembol, tf) başına bar sayısı / günlük bar."""
+def _gun_sayisi(df: pd.DataFrame, meta: pd.DataFrame | None = None) -> float:
+    """Toplam (sembol × gün) — ``meta.jsonl``deki GERÇEK bar sayısından.
+
+    DİKKAT: tetik satırı sayısı bar sayısı değildir. Önceki sürüm ``len(grup)``
+    kullanıyordu ve kart/gün oranını ~3 kat şişiriyordu (bir seride 3.253 bar
+    var ama yalnız ~800 tetik satırı). Bu düzeltme, "günde kaç kart" sorusunun
+    cevabını değiştirir; bu yüzden ayrıca test edilir.
+    """
+    if meta is not None and len(meta):
+        gun = 0.0
+        for _, satir in meta.iterrows():
+            tf = str(satir.get("timeframe"))
+            try:
+                bar = int(satir.get("bar_sayisi"))
+            except (TypeError, ValueError):
+                continue
+            gun += bar / BAR_GUN.get(tf, 1.0)
+        return max(gun, 1.0)
+    # meta yoksa: seri başına tetik satırından kaba tahmin (üst sınır).
     toplam = 0.0
     for (_, tf), grup in df.groupby(["symbol", "timeframe"]):
         toplam += len(grup) / BAR_GUN.get(str(tf), 1.0)
@@ -227,7 +244,8 @@ def _gun_sayisi(df: pd.DataFrame) -> float:
 # Ölçüm
 # ---------------------------------------------------------------------------
 
-def politika_tablosu(df: pd.DataFrame, taban: pd.DataFrame) -> list[dict[str, Any]]:
+def politika_tablosu(df: pd.DataFrame, taban: pd.DataFrame,
+                     meta: pd.DataFrame | None = None) -> list[dict[str, Any]]:
     """Her politika için sıklık/isabet/hatırlama. Eksik sütunlar sessizce 0 olur."""
     for kare in (df, taban):
         for kolon, varsayilan in (("hareket", False), ("iyi", False), ("hareket_iki", False),
@@ -237,7 +255,7 @@ def politika_tablosu(df: pd.DataFrame, taban: pd.DataFrame) -> list[dict[str, An
     taban_oran = float(taban["hareket"].mean()) if len(taban) else float("nan")
     ham = df[df.get("kontrol", False) == False]  # noqa: E712 - açık karşılaştırma
     iyi_toplam = float(ham["iyi"].sum())
-    gun = _gun_sayisi(ham)
+    gun = _gun_sayisi(ham, meta)
 
     satirlar: list[dict[str, Any]] = []
     for kod, ad, fn in POLITIKALAR:
@@ -332,8 +350,17 @@ def _f(deger: float | None, basamak: int = 2) -> str:
     return f"{deger:.{basamak}f}".replace(".", ",")
 
 
-def rapor(df: pd.DataFrame, taban: pd.DataFrame) -> str:
-    tablo = politika_tablosu(df, taban)
+def _oku_meta(cikti: Path) -> pd.DataFrame | None:
+    yol = cikti / "meta.jsonl"
+    if not yol.exists():
+        return None
+    satirlar = [json.loads(l) for l in yol.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return pd.DataFrame(satirlar) if satirlar else None
+
+
+def rapor(df: pd.DataFrame, taban: pd.DataFrame, meta: pd.DataFrame | None = None,
+          baslik: bool = True) -> str:
+    tablo = politika_tablosu(df, taban, meta)
     taban_oran = float(taban["hareket"].mean()) * 100.0 if len(taban) else float("nan")
     satir = ("| politika | ne yapar | kart | kart/gün | ≥1 ATR (yönlü) | Wilson alt | taban farkı "
              "| ≥1 ATR (iki yön) | iyi yakalama | hamın %'si |")
@@ -348,9 +375,7 @@ def rapor(df: pd.DataFrame, taban: pd.DataFrame) -> str:
         f"%{_f((r.get('basilan_pay') or 0) * 100, 1)} |"
         for r in tablo
     ]
-    return "\n".join([
-        "# Politika karşılaştırması",
-        "",
+    govde_satirlari = [
         f"Taban (alarmsız bar): **%{_f(taban_oran, 1)}** · tetik satırı: "
         f"**{len(df[df.get('kontrol', False) == False]):,}** · taban satırı: **{len(taban):,}**",
         "",
@@ -365,7 +390,10 @@ def rapor(df: pd.DataFrame, taban: pd.DataFrame) -> str:
         "- **iyi yakalama**: ≥1,5 ATR hareket eden tetiklerin politika sonrası hâlâ basılan payı.",
         "  Bu sütun, politikanın **ne kaybettiğini** gösterir.",
         f"- Cooldown: {COOLDOWN_BAR} bar (canlı kural). Kart sayıları cooldown SONRASI.",
-    ])
+    ]
+    if not baslik:
+        return "\n".join(govde_satirlari)
+    return "\n".join(["# Politika karşılaştırması", ""] + govde_satirlari)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -375,11 +403,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     df = oku(Path(args.cikti))
+    meta = _oku_meta(Path(args.cikti))
     taban = df[df.get("kontrol", False) == True]  # noqa: E712
-    metin = rapor(df, taban)
+    metin = rapor(df, taban, meta)
     yol = Path(args.rapor)
     yol.parent.mkdir(parents=True, exist_ok=True)
-    yol.write_text(metin + "\n", encoding="utf-8")
+    # ELLE YAZILAN BÖLÜMLERİ KORU: dosyada ``<!-- URETILEN:BASLANGIC -->``
+    # işareti varsa yalnız o blok yenilenir. Aksi hâlde analiz/karar bölümleri
+    # (4.5, 4.6, 5.5 gibi) her koşuda silinir — bu bir kez yaşandı.
+    ESKI_BAS, ESKI_SON = "<!-- URETILEN:BASLANGIC -->", "<!-- URETILEN:BITIS -->"
+    if yol.exists():
+        eski = yol.read_text(encoding="utf-8")
+        if ESKI_BAS in eski and ESKI_SON in eski:
+            bas = eski.index(ESKI_BAS) + len(ESKI_BAS)
+            son = eski.index(ESKI_SON)
+            eski = eski[:bas] + "\n\n" + rapor(df, taban, meta, baslik=False) + "\n\n" + eski[son:]
+            yol.write_text(eski, encoding="utf-8")
+            print(f"[rapor] {yol} (yalniz URETILEN blogu yenilendi)")
+            print(metin)
+            return 0
+    yaz = f"{ESKI_BAS}\n\n{metin}\n\n{ESKI_SON}\n"
+    yol.write_text(yaz, encoding="utf-8")
     print(metin)
     print(f"\n[rapor] {yol} ({len(metin)} karakter)")
     return 0

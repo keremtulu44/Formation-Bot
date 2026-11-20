@@ -1004,9 +1004,21 @@ Ayrıntı: [`ALARM_POLITIKA_SONUCLARI.md`](ALARM_POLITIKA_SONUCLARI.md).
    (12b'de 5,5 pp). "Trend devamı" iddiası kanalları daha da eşitliyor. BOS her
    ufukta tabanın altında (12b: %58,0 vs %64,0 — **−6 pp**).
 
+**4. Hacmin üstünlüğü rejim etkisi değil.** ATR yüzdeliği sabit tutulduğunda
+hacim farkı **+3,4 / +6,6 / +9,5 pp** (sakin/orta/fırtına) — kaybolmuyor,
+büyüyor. OB her rejimde **+1,2…+4,6 pp**.
+
+**5. Ama FVG ve BOS "oynaklık" diyor, "fırsat" demiyor.** En yüksek ATR%
+onlarda (FVG 2,37 · BOS 2,75 vs taban 1,82) ama isabet tabanda veya altında
+(BOS **−11,6 pp**). Sistem oynaklıkla fırsatı aynı sanıyor.
+
 **Karar:** uygulanacaksa savunulabilir olan **P6** (veya daha az konuşan P4).
 Ancak iyi tetiklerin %87–92'si kaybedilir; bu bir **ürün tercihi**, ölçüm kararı
 değil.
+
+**Replay ile ne seçilmez:** **sembol.** 0,38 kart/sembol/gün ve dar ayrışma ile
+704 hücreden "en iyi 10 sembol" seçmek aşırı uydurmadır. Replay **kural**
+seçer, sembol seçmez.
 
 ---
 
@@ -1078,6 +1090,8 @@ ne yapabilirim?" sorusunun derlemeden çıkan cevabı:
 | **Aday (önce ayrı pencerede test):** Retest niteliğini karta yazmak | §5.7 | Sığ retest (<0,25 ATR) **%61,7** vs derin retest (≥0,5 ATR) **%35,5** — **26 pp**, derlemedeki en büyük tek etki. 704 seride de duruyor ama tek dönemde ölçüldü |
 | **Yapılabilir:** Alarmı **katmanlamak** (sessiz / günlük özet / kart / grafik) | R37, §5.9 | HACIM +7,3 · OB +1,7 · BOS −2,0 → tek tek kart basmak değer üretmiyor |
 | **Yapılabilir:** **Bağlam filtresi** (6b koşu ≥1 ATR veya sıkışma ≥1) | R37 + §5.10 (P6) | Kart −%64, isabet +1,7 pp; Wilson alt sınırı P0'ın üstünde |
+| **Yapılabilir:** Kartın iddiasını değiştirmek (aralık + bağlam ölçüsü) | §5.10, §5.5 | Verimsizlik mesaj sayısında değil (0,38 kart/gün), iddiada |
+| **Güvenilemez:** Replay ile sembol seçmek | §5.5 | 704 hücrede dar ayrışma → en iyi %5 şans eseri; aşırı uydurma |
 | **Güvenilemez:** Kanal katmanı (OB/FVG'yi susturmak) isabet kazandırır | §5.10 (P3) | P3 %66,5 ≈ P0 %66,6 — yalnız kart sayısı düşüyor |
 | **Güvenilemez:** 40 bar/3 ATR'de kanallar ayrışır | §5.10 §4 | HACIM–OB farkı 12b'de 5,5 pp, 40b'de **3,0 pp** (küçülüyor) |
 | **Güvenilemez:** "Çok kanal ateşledi = güçlü sinyal" | R37 §2 | HACIM tek başına %71,6; HACIM+OB %67,9; üçü birlikte %65,9 → **kombinasyon seyreltıyor** |

@@ -100,8 +100,9 @@ Doğru cümle: "hacim **dikkat** çekiyor", "hacim **teyit etti**" değil. Kart
 metninde "onaylandı/teyit" kelimesi ölçümle **çelişir**.
 
 ### Kural 5 — **Grafiği nadir tut.**
-Ölçüm: günde 37 kartlık hacimde grafik değersizleşiyor; cooldown %65'i zaten
-kesiyor. Öneri: **günde en fazla 1–2 grafik**, yalnız Katman 3. Grafik az
+Ölçüm: bir sembolde günde **0,38 kart** (352 seride ölçüldü) — yani "günde 37
+kart" varsayımı **yanlıştı**, tüm evrende bile sembol başına günde yarım kartın
+altında. Grafik zaten nadir; asıl kıtlık kart değil, **kartın ne söylediği**. Öneri: **günde en fazla 1–2 grafik**, yalnız Katman 3. Grafik az
 olduğunda "geldi" demek bilgi taşır; her saat geldiğinde taşımaz.
 
 ---
