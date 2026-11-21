@@ -455,6 +455,105 @@ def _formasyon_sebepleri(kayitlar: Sequence[Mapping[str, Any]] | None,
     return sorted(set(bulunan))
 
 
+# --- Alarm politikası (P0/P6/P4; ölçüm: research/alarm_politika.py) -----------
+# Replay `baglam_satiri` ile BİREBİR aynı formüller; yalnız son bar (index=-1)
+# canlıda değerlendirilir. ATR: `_causal_atr14` (Wilder 14) — replay'in
+# `compute_wilder_atr`'siyle son barda aynı değer (ikisi de SMA-seedli RMA).
+# Yetersiz veri (sikisma için 50 bar, kosu için 6 bar + ATR>0) → alan None;
+# politika varsayılanları replay ile aynıdır (sikisma None→1.0 geçer,
+# kosu None→0.0 kalır). Yani kısa çerçeve P6/P4'te fail-open geçer.
+
+_YALNIZ_ZAYIF_KANALLAR = frozenset({"OB", "FVG", "BOS", "CHoCH"})
+
+
+def _baglam_sikisma_kosu(frame: pd.DataFrame) -> tuple[float | None, float | None]:
+    """Son barın (sikisma, kosu) bağlamı; hesaplanamazsa None.
+
+    sikisma = son 10 bar aralığı / son 50 bar aralığı (50 bar gerekir).
+    kosu = son 6 barın yönlü getirisi / ATR (6 bar + ATR>0 gerekir).
+    """
+    try:
+        n = len(frame)
+        if n < 7:
+            return None, None
+        yuksek = frame["high"].astype(float).to_numpy()
+        dusuk = frame["low"].astype(float).to_numpy()
+        kapanis = frame["close"].astype(float).to_numpy()
+        index = n - 1
+        sikisma: float | None = None
+        if index >= 50:
+            kisa = float(yuksek[index - 9: index + 1].max() - dusuk[index - 9: index + 1].min())
+            uzun = float(yuksek[index - 49: index + 1].max() - dusuk[index - 49: index + 1].min())
+            if uzun > 0 and math.isfinite(kisa) and math.isfinite(uzun):
+                sikisma = round(kisa / uzun, 4)
+        kosu: float | None = None
+        # Replay `compute_wilder_atr` ilk ATR'yi ancak 14. barda (index 13)
+        # üretir; aynı eşiği kullanmazsak erken barlarda canlı kosu üretip
+        # replay None derdi. Parite için ikisi de 14 bar ister.
+        if index >= 13:
+            try:
+                from domain_engines.stabil.signals import _causal_atr14
+                atr = float(_causal_atr14(yuksek, dusuk, kapanis, period=14)[-1])
+            except Exception:  # noqa: BLE001 - ATR yoksa kosu None kalır
+                atr = float("nan")
+            if math.isfinite(atr) and atr > 0:
+                kosu = round(float(kapanis[index] - kapanis[index - 6]) / atr, 4)
+        return sikisma, kosu
+    except Exception:  # noqa: BLE001 - bağlam alarmı düşürmesin
+        return None, None
+
+
+def _kanallar_from_sebepler(sebepler: Sequence[str]) -> frozenset[str]:
+    """Canlı sebep metinlerini replay `kanallar` kümesine çevirir."""
+    kanallar: set[str] = set()
+    for sebep in sebepler:
+        s = str(sebep)
+        if s.startswith("BOS"):
+            kanallar.add("BOS")
+        elif s.startswith("CHoCH"):
+            kanallar.add("CHoCH")
+        elif s.startswith("OB"):
+            kanallar.add("OB")
+        elif s.startswith("FVG"):
+            kanallar.add("FVG")
+        elif s.startswith("formasyon"):
+            kanallar.add("FORMASYON")
+        elif s.startswith("hacim"):
+            kanallar.add("HACIM")
+    return frozenset(kanallar)
+
+
+def _politika_gecer(sebepler: Sequence[str], hacim_tier: str | None,
+                    sikisma: float | None, kosu: float | None) -> bool:
+    """Seçili politikaya göre aday geçer mi? (P0 her zaman geçer.)
+
+    P6: kosu>=1.0 veya sikisma>=1.0 (sikisma None→1.0, kosu None→0.0).
+    P4: P3 katmanı (yalnız OB/FVG/BOS/CHoCH sessiz; hacim/formasyon geçer)
+        + bağlam; hacim ≥5× bağlamı baypas eder.
+    """
+    politika = str(getattr(config, "YENI_DOMAIN_ALARM_POLITIKA", "P0")).strip().upper()
+    if politika == "P0":
+        return True
+    sik = 1.0 if sikisma is None else float(sikisma)
+    kos = 0.0 if kosu is None else float(kosu)
+    baglam_gecer = bool(kos >= 1.0 or sik >= 1.0)
+    if politika == "P6":
+        return baglam_gecer
+    if politika == "P4":
+        kanallar = _kanallar_from_sebepler(sebepler)
+        if not kanallar:
+            return False
+        hacim_var = str(hacim_tier or "") in {"5×", "5x"}
+        if hacim_var:
+            return True
+        if "FORMASYON" in kanallar:
+            return baglam_gecer
+        if kanallar <= _YALNIZ_ZAYIF_KANALLAR:
+            return False
+        return baglam_gecer
+    return True
+
+
 def evaluate_domain_alarm_candidates(
     stock: str,
     all_tfs: Mapping[str, Any],
@@ -528,6 +627,18 @@ def evaluate_domain_alarm_candidates(
         sebepler = sorted(set(s for s in sebepler if s))
         if not sebepler:
             continue
+
+        # Alarm politikası (P0/P6/P4): P0 her tetik; P6/P4 bağlam ister.
+        # Filtre aday üretimini engeller; dedup/cooldown'a dokunmaz.
+        _politika = str(getattr(config, "YENI_DOMAIN_ALARM_POLITIKA", "P0")).strip().upper()
+        if _politika in ("P6", "P4"):
+            _sikisma, _kosu = _baglam_sikisma_kosu(frame)
+            if not _politika_gecer(sebepler, hacim["tier"], _sikisma, _kosu):
+                logger.debug(
+                    "Yeni domain aday politika %s ile elendi %s/%s (sikisma=%s kosu=%s sebepler=%s)",
+                    _politika, stock, tf, _sikisma, _kosu, sebepler,
+                )
+                continue
 
         kalite = str(stabil["data_quality"] or "OK")
         if hacim["veri_suphe"]:

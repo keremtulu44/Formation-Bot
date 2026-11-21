@@ -30,6 +30,17 @@ from research.arsiv import ham_frame
 DM, GROUP = "12345", "-10012345"  # fake targets, never real Telegram
 
 
+@pytest.fixture(autouse=True)
+def _politika_p0(monkeypatch):
+    """Bu dosya kanal teslimat tesisatını ölçer, politika seçiciliğini değil.
+
+    Gerçek arşiv adayları P6/P4 altında elenebileceği için buradaki tüm
+    senaryolar P0'da koşar; politika regresyonları
+    ``test_domain_alarm_politika.py`` içindedir.
+    """
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_POLITIKA", "P0")
+
+
 class ArchiveManager:
     def __init__(self, symbol, hourly, daily, directory):
         self.symbol = symbol

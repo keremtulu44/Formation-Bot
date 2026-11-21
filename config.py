@@ -954,5 +954,16 @@ YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR = os.getenv(
     "YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR", "1"
 ).strip().lower() in {"1", "true", "yes", "on", "acik", "açık"}
 
+# --- ALARM POLİTİKASI (P0/P6/P4; ölçüm: docs/arastirma/ALARM_POLITIKA_PILOTU.md) ---
+# P0: her tetik kart basar (eski davranış). P6: yalnız bağlam (sıkışma genişliyor
+# veya 6 bar koşu yukarı). P4: katman (yalnız OB/FVG/BOS sessiz) + bağlam, hacim
+# ≥5× bağlamı baypas eder. Ölçüm (22 seans, 50 sembol × 4 TF): P0 97 kart/seans,
+# P6 36, P4 23; isabet %67-69 bandında sabit, güçlü yakalama P0 %33 → P6 %12 → P4 %8.
+# Varsayılan P6 (operatör seçimi). P0'a dönüş: YENI_DOMAIN_ALARM_POLITIKA=P0.
+# Tanınmayan değer fail-open ile P0'a düşer (alarm bastırma sessizce olmaz).
+YENI_DOMAIN_ALARM_POLITIKA = os.getenv("YENI_DOMAIN_ALARM_POLITIKA", "P6").strip().upper()
+if YENI_DOMAIN_ALARM_POLITIKA not in ("P0", "P6", "P4"):
+    YENI_DOMAIN_ALARM_POLITIKA = "P0"
+
 
 

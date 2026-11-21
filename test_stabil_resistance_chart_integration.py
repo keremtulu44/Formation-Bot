@@ -185,6 +185,9 @@ def test_domain_alarm_dm_and_public_share_resistance_without_changing_support(mo
 
 
 def test_domain_candidate_and_text_are_identical_with_graphics_on_or_off(monkeypatch):
+    # Bu test kanal tesisatını (grafik açık/kapalı aynı aday+metin) ölçer;
+    # politika seçiciliği ayrı dosyada (test_domain_alarm_politika.py).
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_POLITIKA", "P0")
     from bot.domain_alarm_service import evaluate_domain_alarm_candidates, format_domain_alarm_card
     import domain_engines.stabil.chart_bridge as bridge
 

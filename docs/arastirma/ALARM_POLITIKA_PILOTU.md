@@ -1,6 +1,6 @@
 # P0 / P6 ölçüm pilotu — yöntem ve tekrar koşusu
 
-**[Aynı örneklemde eski → yeni sonuç tablosu](ALARM_POLITIKA_P0_P6_2026-11-20.md)** · [önceki 88 sembollük araştırma](ALARM_POLITIKA_SONUCLARI.md). Eski çalışmayla bu pilot farklı evren ve dönemlerdir; ölçüm düzeltmesinin etkisi iki ayrı belgedeki yüzdeler çıkarılarak değil, yeni tablonun *aynı satırındaki* eski ve yeni değerler karşılaştırılarak okunmalıdır.
+**[Aynı örneklemde eski → yeni sonuç tablosu](ALARM_POLITIKA_P0_P6_2026-11-20.md)** · **[P6 canlıya alındı (2026-11-21)](ALARM_POLITIKA_CANLI_2026-11-21.md)** · [önceki 88 sembollük araştırma](ALARM_POLITIKA_SONUCLARI.md). Eski çalışmayla bu pilot farklı evren ve dönemlerdir; ölçüm düzeltmesinin etkisi iki ayrı belgedeki yüzdeler çıkarılarak değil, yeni tablonun *aynı satırındaki* eski ve yeni değerler karşılaştırılarak okunmalıdır.
 
 ## Nasıl tekrar edilir?
 
