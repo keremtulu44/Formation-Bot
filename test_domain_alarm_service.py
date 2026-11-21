@@ -318,6 +318,86 @@ def test_ayni_bar_ve_cooldown_tekrar_bastirilir(tmp_path):
     assert len(notifier.dm) == 1 and len(notifier.public) == 1
 
 
+def test_cooldown_sonraki_barlarda_da_susar(tmp_path):
+    """``COOLDOWN_BAR`` gerçekten çalışır: aynı sembol/TF 6 bar boyunca susar.
+
+    Regresyon: dedup anahtarı bar içerdiğinde her yeni mum yeni slot açıyor,
+    cooldown hiç uygulanmıyordu (canlıda 1954 kart → 902 olması gerekiyordu).
+    """
+    notifier = _Notifier()
+    state_path = str(tmp_path / "yeni.json")
+
+    barlar = [
+        ("2026-11-03T10:00:00+03:00", 10),
+        ("2026-11-03T14:00:00+03:00", 11),   # cooldown içi
+        ("2026-11-04T10:00:00+03:00", 15),   # cooldown içi (4 < 6)
+        ("2026-11-04T14:00:00+03:00", 16),   # cooldown bitti (6) → geçer
+    ]
+    sonuc = []
+    for bar_open, index in barlar:
+        cand = _aday(bar_open=bar_open, bar_index=index)
+        sonuc.append(
+            dispatch_domain_alarm_candidates([cand], notifier, state_path=state_path)
+        )
+
+    assert [s["tekil_gonderilen"] for s in sonuc] == [1, 0, 0, 1]
+    assert [s["filtrelendi"] for s in sonuc] == [0, 1, 1, 0]
+    assert len(notifier.dm) == 2
+
+
+def test_cooldown_farkli_tf_ve_sembolu_etkilemez(tmp_path):
+    """Sessizlik sembol/TF başına: komşu sembol ve diğer TF susmaz."""
+    notifier = _Notifier()
+    state_path = str(tmp_path / "yeni.json")
+
+    ilk = _aday(symbol="ASTOR", timeframe="4h", bar_index=10)
+    dispatch_domain_alarm_candidates([ilk], notifier, state_path=state_path)
+
+    komsu_sembol = _aday(symbol="ASELS", timeframe="4h",
+                         bar_index=11, bar_open="2026-11-03T14:00:00+03:00")
+    ayni_sembol_diger_tf = _aday(symbol="ASTOR", timeframe="1d",
+                                 bar_index=11, bar_open="2026-11-03T14:00:00+03:00")
+    ozet = dispatch_domain_alarm_candidates(
+        [komsu_sembol, ayni_sembol_diger_tf], notifier, state_path=state_path
+    )
+    assert ozet["tekil_gonderilen"] == 2
+    assert ozet["filtrelendi"] == 0
+
+
+def test_cooldown_eski_bar_anahtarli_state_ile_uyumlu(tmp_path):
+    """Deploy sonrası eski state dosyası çökertmez; ilk alarm geçer."""
+    import json
+
+    state_path = tmp_path / "yeni.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "slots": {
+                    # Eski sürümün bar içeren anahtarı
+                    "ASTOR|1d|2026-11-02T10:00:00+03:00": {
+                        "last_bar_open": "2026-11-02T10:00:00+03:00",
+                        "last_bar_index": 5,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    notifier = _Notifier()
+    ozet = dispatch_domain_alarm_candidates(
+        [_aday(bar_index=9)], notifier, state_path=str(state_path)
+    )
+    assert ozet["tekil_gonderilen"] == 1
+
+
+def test_dedup_key_bar_icermez_bar_key_icerir():
+    """Slot anahtarı sembol/TF; bar kimliği ayrı property'de."""
+    cand = _aday(symbol="ASTOR", timeframe="4h")
+    assert cand.dedup_key == "ASTOR|4h"
+    assert cand.bar_key == f"ASTOR|4h|{cand.bar_open}"
+
+
 # 5) Formasyon OR kaynağı; anlık push state'i de yeni karta dahil, eski alarm korunur.
 def test_formasyon_dahil_anlik_state_tekrar_acik():
     kayitlar = [

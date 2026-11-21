@@ -73,6 +73,20 @@ class DomainAlarmCandidate:
 
     @property
     def dedup_key(self) -> str:
+        """Kalıcı state slot anahtarı: **sembol|TF** (bar DEĞİL).
+
+        Bar anahtarı kullanıldığında her yeni mum yeni bir slot açıyor,
+        ``_zaten_gonderildi`` slotun ``last_bar_index``'ini hiç bulamıyor ve
+        ``YENI_DOMAIN_ALARM_COOLDOWN_BAR`` sessizce devre dışı kalıyordu.
+        Aynı barı iki kez basmayı yine engeller (``last_bar_open`` eşitliği);
+        cooldown de artık gerçekten uygulanır. Replay ``cooldown_uygula`` ile
+        aynı semantik: sembol/TF başına N bar sessizlik.
+        """
+        return f"{self.symbol}|{self.timeframe}"
+
+    @property
+    def bar_key(self) -> str:
+        """Bar düzeyi kimlik (aynı bar iki kez basılmasın)."""
         return f"{self.symbol}|{self.timeframe}|{self.bar_open}"
 
     @property
@@ -718,16 +732,32 @@ def _load_state(state_path: str | None = None) -> dict[str, Any]:
 
 
 def _save_state(state: Mapping[str, Any], state_path: str | None = None) -> None:
+    """State'i **atomik** yaz (tmp + os.replace).
+
+    Doğrudan yazmada süreç tam o anda SIGTERM/OOM ile ölürse dosya yarım kalır;
+    bir sonraki açılışta JSON okunamaz, state sıfırlanır ve tüm cooldown
+    slotları kaybolur — deploy sonrası art arda mükerrer alarm demek.
+    ``bot/stabil_service.py::_save_alarm_state`` ile aynı desen.
+    """
     yol = _state_yolu(state_path)
     try:
         os.makedirs(os.path.dirname(yol) or ".", exist_ok=True)
-        with open(yol, "w", encoding="utf-8") as f:
+        tmp = f"{yol}.tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(dict(state), f, ensure_ascii=False, indent=2)
+        os.replace(tmp, yol)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Yeni domain alarm state yazılamadı (%s): %s", yol, exc)
 
 
 def _zaten_gonderildi(slot: Mapping[str, Any] | None, cand: DomainAlarmCandidate) -> bool:
+    """Aynı bar iki kez basılmasın; sembol/TF başına N bar sessizlik uygula.
+
+    Slot anahtarı artık ``sembol|TF`` (bar değil), bu yüzden ``last_bar_index``
+    her zaman bulunur ve ``YENI_DOMAIN_ALARM_COOLDOWN_BAR`` gerçekten çalışır.
+    Eski (bar anahtarlı) state dosyaları yeni anahtarı içermez; deploy sonrası
+    ilk alarm geçer, sonra cooldown devreye girer.
+    """
     if not slot:
         return False
     if str(slot.get("last_bar_open") or "") == cand.bar_open:
@@ -737,6 +767,8 @@ def _zaten_gonderildi(slot: Mapping[str, Any] | None, cand: DomainAlarmCandidate
     except (KeyError, TypeError, ValueError, OverflowError):
         return False
     cooldown = _cfg_int("YENI_DOMAIN_ALARM_COOLDOWN_BAR", 6)
+    # Bar yeniden çekildiğinde indeks geriye dönebilir; "eski ya da aynı bar"
+    # da tekrar basılmamalı (aksi halde cooldown negatif farkla atlanır).
     return (cand.bar_index - son_index) < cooldown
 
 
@@ -971,11 +1003,14 @@ def dispatch_domain_alarm_candidates(
         return ozet
 
     # Aynı sembol/TF/bar için en yüksek puanlı tek aday.
+    # Gruplama `bar_key` ile yapılır (dedup_key artık sembol|TF; aynı TF'nin
+    # iki farklı barı burada birleşmemeli). State slotu ise `dedup_key` ile
+    # yazılır, böylece cooldown sembol/TF düzeyinde tutulur.
     en_iyi: dict[str, DomainAlarmCandidate] = {}
     for cand in candidates:
-        onceki = en_iyi.get(cand.dedup_key)
+        onceki = en_iyi.get(cand.bar_key)
         if onceki is None or cand.rank_score > onceki.rank_score:
-            en_iyi[cand.dedup_key] = cand
+            en_iyi[cand.bar_key] = cand
     sirali = sorted(en_iyi.values(), key=lambda c: (-c.rank_score, c.symbol, c.timeframe))
 
     state = _load_state(state_path)
