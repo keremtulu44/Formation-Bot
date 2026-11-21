@@ -24,6 +24,12 @@ Kullanıcı geri bildirimi tek cümleydi: *"sonuç çıkmıyor"* — aslında te
 | **P6** ✅ canlı varsayılan | yalnız bağlam | 785 | 35,68 | %67,1 | %12,0 |
 | **P4** | katman + bağlam | 500 | 22,73 | %69,2 | %8,2 |
 
+> **Sayı okuma notu:** yukarıdaki tablo `research/alarm_politika.py` çıktısıdır
+> ve **cooldown uygulanmış** hâlidir. Aynı örneklemde ham tetik sayısı 9.087;
+> cooldown + politika sonrası gerçek teslim sayısı (canlı `dispatch` ile uçtan
+> uca doğrulandı): P0 **2.531**, P6 **902**, P4 **499**. Oranlar aynı
+> (97/36/23 → 115/41/23), çünkü iki tablo farklı gün sayısına bölünüyor.
+
 Diğerleri (P1/P2/P3/P5/P7: 2.061 / 47 / 1.415 / 711 / 811 kart) aynı örneklemde
 ölçüldü; isabet **%67–73 bandında** kalıyor, yani politika isabeti değil **kart
 sayısını** değiştiriyor. Karar bu yüzden "hangi kart kullanıcıya değer katıyor"
@@ -84,6 +90,32 @@ Doğrulama: `python -m scripts.politika_parite_kontrol --seri 300`
 → **300/300 seri, 0 fark**. Bu komut politika değişikliğinden sonra da
 çalıştırılmalıdır; parite bozulursa aşağıdaki sayılar geçersizdir.
 
+## 4b. Cooldown düzeltmesi (aynı turda, kritik)
+
+P6 canlıya alınırken **ikinci bir hata** bulundu ve düzeltildi: dedup anahtarı
+`sembol|TF|bar_open` idi. Her yeni mum yeni bir slot açtığı için
+`_zaten_gonderildi` slotun `last_bar_index`'ini hiç bulamıyor,
+`YENI_DOMAIN_ALARM_COOLDOWN_BAR=6` **pratikte uygulanmıyordu**. Yalnız "aynı
+barı iki kez basma" çalışıyordu.
+
+Sonuç: P6 canlıda 41 değil **~89 kart/seans** üretecekti (1.954 kart). Yani
+ölçülen düşüşün yaklaşık yarısı cooldown'a aitti ve o yarı canlıda yoktu.
+
+Düzeltme:
+- `dedup_key` = `sembol|TF` (state slotu, cooldown düzeyi)
+- `bar_key` = `sembol|TF|bar_open` (aynı barı iki kez basma + burst gruplaması)
+- negatif indeks farkı da sessizlik sayılır (bar yeniden çekilirse)
+- `_save_state` artık **atomik** (`tmp` + `os.replace`); yarım yazılmış JSON
+  deploy sonrası tüm cooldown slotlarını kaybettiriyordu
+
+Uçtan uca doğrulama (replay tetikleri → gerçek `dispatch_domain_alarm_candidates`):
+
+| Politika | Canlı dispatch (düzeltme öncesi) | Canlı dispatch (sonrası) | Replay |
+|---|---:|---:|---:|
+| P0 | 7.699 | 2.531 | 2.531 ✅ |
+| **P6** | 1.954 | **902** | 902 ✅ |
+| P4 | 807 | 499 | 499 ✅ |
+
 ## 5. Testler
 
 - `test_domain_alarm_politika.py` (15 test): sıkışma/koşu formülleri, kısa
@@ -94,7 +126,10 @@ Doğrulama: `python -m scripts.politika_parite_kontrol --seri 300`
   kanal tesisatını (albüm gruplaması, dedup, metin/grafik paritesi) ölçer,
   politika seçiciliğini değil. Aksi halde gerçek arşiv adayları P6 altında
   elenip tesisat testleri yanlış yere kırılıyordu.
-- Tam paket: **4.750 passed / 43 skipped**, `ruff` temiz.
+- Cooldown regresyonları (`test_domain_alarm_service.py`): sonraki barlarda
+  susma, farklı sembol/TF'nin etkilenmemesi, eski bar anahtarlı state uyumu,
+  `dedup_key`/`bar_key` semantiği.
+- Tam paket: **4.756 passed / 43 skipped**, `ruff` temiz.
 
 ## 6. Geri alma
 

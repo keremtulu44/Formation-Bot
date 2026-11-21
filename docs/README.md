@@ -18,6 +18,7 @@
 | Render'a (canlıya) çıkaracağım | [kurulum/RENDER_DEPLOY.md](kurulum/RENDER_DEPLOY.md) |
 | Telefondan NATIVE 1h/2h/4h/1d arşiv verisi çekeceğim | [kurulum/TERMUX_BACKFILL.md](kurulum/TERMUX_BACKFILL.md) |
 | Native veri arşivi geldi mi / doğrulama sayıları | [denetim/NATIVE_VERI_GELISI_2026-11-19.md](denetim/NATIVE_VERI_GELISI_2026-11-19.md) · [Termux çekim rehberi](kurulum/TERMUX_BACKFILL.md) |
+| **Alarm politikası (P6) canlıda + deploy kontrolü** | [karar belgesi](arastirma/ALARM_POLITIKA_CANLI_2026-11-21.md) · [deploy kontrolü ve operatör kararları](operasyon/DEPLOY_KONTROL_2026-11-21.md) |
 | Canlıya geçiş / güncel deploy ve rollback | [kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md](kurulum/DEPLOY_CANLI_ONCESI_2026-11-06.md) (eski plan: [arşiv](operasyon/CANLI_DOGRLAMA_PLANI_VE_RUNBOOK.md)) |
 | Grup hedefi ve komutlar | [Render rehberi](kurulum/RENDER_DEPLOY.md) · geçmiş kararlar: [kanal paketi](operasyon/KANAL_ACILIS_PAKETI.md), [grup hazırlık analizi](operasyon/PUBLIC_GRUP_HAZIRLIK.md) |
 | Formasyon mantığı / Pine farkı | [tasarim/FORMASYON_MANTIGI.md](tasarim/FORMASYON_MANTIGI.md) · [tasarim/PINE_FARK_ANALIZI.md](tasarim/PINE_FARK_ANALIZI.md) |
