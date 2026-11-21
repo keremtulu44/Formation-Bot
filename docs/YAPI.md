@@ -33,6 +33,7 @@
 ├── scripts/ patterns/ state/ domain_engines/ research/ reporting/ transport/ analytics/
 └── docs/
     ├── README.md                   ← BELGE HARİTASI (tek giriş, durum + tarih)
+    ├── mimari/                     ← KOD BAĞLANTILARI: ana adres mimari/README.md
     ├── YAPI.md                     ← bu belge: yerleşim planı ve kuralları
     ├── arastirma/                  ← ÖLÇÜM: arşiv araştırması (değerli çıktı)
     │   ├── README.md               ← kilit bulgular + açık bulgu + yeniden üretim

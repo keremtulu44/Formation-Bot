@@ -13,6 +13,7 @@
 
 | İhtiyaç | Belge |
 |---|---|
+| Dosyalar nasıl bağlı, domain bilgisi alarma nasıl dönüşüyor? | **[Mimari merkez](mimari/README.md)** |
 | Botu kuracağım / çalıştıracağım | [kurulum/LOCAL_SETUP.md](kurulum/LOCAL_SETUP.md) |
 | Render'a (canlıya) çıkaracağım | [kurulum/RENDER_DEPLOY.md](kurulum/RENDER_DEPLOY.md) |
 | Telefondan NATIVE 1h/2h/4h/1d arşiv verisi çekeceğim | [kurulum/TERMUX_BACKFILL.md](kurulum/TERMUX_BACKFILL.md) |
@@ -36,6 +37,15 @@
 | Eski planlar / kapanmış iş listesi | [arsiv/](arsiv/README.md) |
 
 ## Yürürlükteki belgeler
+
+### `mimari/` — kod bağlantıları ve alarm akışı
+
+| Dosya | Durum | Tarih | İçerik |
+|---|---|---|---|
+| [Mimari merkez](mimari/README.md) | Yürürlükte | 2026-11-20 | Katmanlar, üç bildirim yolu, domain üretici/tüketici tablosu ve kaynak kanıtı |
+| [Değişiklik ve bakım kılavuzu](mimari/BAKIM.md) | Yürürlükte | 2026-11-20 | Etki analizi, test seçimi ve yenileme sırası |
+| [Dosya gezgini](mimari/DOSYA_HARITASI.html) | Üretilen | 2026-11-20 | Yerel statik Python importları; elle düzenlenmez |
+| [Alarm çağrı kesiti](mimari/ALARM_CAGRILARI.csv) | Kayıt | 2026-11-20 | GitNexus'un dört kaynak dosyada bulduğu fonksiyon → fonksiyon bağları |
 
 ### `arastirma/` — ölçüm çıktısı
 | Dosya | Durum | Tarih | İçerik |

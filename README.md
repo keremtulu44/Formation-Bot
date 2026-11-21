@@ -4,6 +4,8 @@
 > formasyonlarını tespit eder, state makinesiyle takip eder ve Telegram'dan bildirir.
 > Pine ile **birebir** uyum hedefi; her reddedilme sebebi Türkçe loglanır (explainable).
 
+**[Mimari merkez](docs/mimari/README.md)** — dosya bağımlılıkları, domain → alarm → Telegram akışı ve değişiklik yapmadan önce izlenecek kontrol yolu.
+
 ## Hızlı başlangıç
 
 ```bash
@@ -71,6 +73,7 @@ dosya adından değil, oradaki **durum + tarih** tablosundan okunur.
 ```
 docs/
 ├── README.md      ← belge haritası (buradan başla)
+├── mimari/        ← kod bağlantıları, alarm yolları ve bakım kılavuzu
 ├── YAPI.md        ← dosya yerleşimi kuralları + taşıma kaydı
 ├── arastirma/     ← ÖLÇÜM: arşivde zone/OB/FVG/MS davranışı (değerli çıktı + açık MS bulgusu)
 ├── tasarim/       ← yürürlükteki sözleşmeler (grafik, kart, formasyon, teslim politikası)
