@@ -14,6 +14,7 @@ basmasını engellemek**. Üç sözleşme korunuyor:
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from research import alarm_politika as ap
 
@@ -63,14 +64,44 @@ def test_p3_tek_basina_gorultu_kanalini_susturur():
     assert df.apply(ap.p_katman, axis=1).tolist() == [False, True, True, False, True]
 
 
-def test_iki_yonlu_hareket_yonluden_kucuk_olamaz():
-    df = ap.oku.__wrapped__ if hasattr(ap.oku, "__wrapped__") else None
-    # Fonksiyonu doğrudan dataframe üzerinden doğrula.
-    veri = pd.DataFrame([_satir(yon_asim_100=False, yon_tepe_atr=1.5, yon_dip_atr=0.1)])
-    veri["hareket"] = veri["yon_asim_100"].map(ap._bayrak)
-    veri["hareket_iki"] = (veri["yon_tepe_atr"] >= 1) | (veri["yon_dip_atr"] >= 1)
-    assert bool(veri["hareket_iki"].iloc[0]) and not bool(veri["hareket"].iloc[0])
-    assert df is None  # dokümantasyon: sarmalayıcı beklenmiyor
+def test_ureticiden_rapora_ayni_ufuk_ve_gercek_seanslar(tmp_path):
+    from research import domain_alarm_replay as replay
+
+    # İstanbul'da 2 Kasım: gece yarısı UTC tarihine göre bir gün erkendir.
+    tarih = "2026-11-01T21:00:00+00:00"
+    satirlar = []
+    for idx, (ileri, geri) in enumerate([
+        ([0.2] * 12 + [2], [0] * 13),  # lehte hareket ancak 13. barda
+        ([0.2] * 12, [2] * 12),        # yalnız aleyhe, 12. bar doldu
+        ([2] * 12, [0] * 12),          # lehte ≥1,5 ATR
+        ([2] * 11, [0] * 11),          # ham hareket var ama ufuk dolmadı
+    ]):
+        r = _satir(bar_time=tarih, bar_index=idx * 6, bagl_gunici_kosu=1)
+        replay.olcum_yaz(r, 1, 10, 1, [10+x for x in ileri], [10-x for x in geri], [10]*len(ileri))
+        satirlar.append(r)
+    replay._satir_ekle(tmp_path / "tetikler.jsonl", satirlar)
+    df = ap.oku(tmp_path)
+    assert df.seans.unique().tolist() == ["2026-11-02"]
+    assert df.hareket_iki.tolist()[:3] == [False, True, True]
+    assert pd.isna(df.hareket_iki.iloc[-1])
+    # 3 Kasım kart çıkmayan gerçek seans, 4 Kasım arşivin son günü.
+    envanter = {g: 1 for g in ("2026-11-02", "2026-11-03", "2026-11-04")}
+    replay._satir_ekle(tmp_path / "meta.jsonl", [
+        {"symbol": "X", "timeframe": tf, "seans_bar_sayilari": envanter}
+        for tf in ("1h", "2h", "4h", "1d")])
+    meta = ap._oku_meta(tmp_path)
+    rapor = ap.rapor(df, meta, "2026-11-01", "2026-11-04", ["X", "Y"], ["X"])
+    assert "2 ortak İstanbul seansı" in rapor and "Arşiv dışında: Y" in rapor
+    assert "2,00 (2,0) | 4 (2026-11-02) | 3 / 1 | 25,0% → 33,3% | 100,0% → 66,7% | 100,0%" in rapor
+    with pytest.raises(ValueError, match="eksik veya tekrarlı seri"):
+        ap.rapor(df, meta.iloc[1:], "2026-11-01", "2026-11-04", ["X"], ["X"])
+
+
+def test_seans_basinda_cooldown_sifirlanmaz():
+    df = pd.DataFrame([_satir(bar_index=i, seans=str(gun), hareket=True, iyi=True, hareket_iki=True)
+                       for i, gun in [(4, 1), (6, 2), (10, 2)]])
+    r = ap.politika_tablosu(df, df.iloc[:0], seanslar=["2"], politikalar=ap.POLITIKALAR[:1])[0]
+    assert r["n"] == 1 and r["hatirlama"] == 0.5
 
 
 def test_bayrak_metin_ve_sayiyi_ayni_okur():
@@ -112,3 +143,17 @@ def test_kart_gun_meta_bar_sayisindan_hesaplanir():
     # 1h: 9,5 bar/gün
     meta_h = pd.DataFrame([{"symbol": "A", "timeframe": "1h", "bar_sayisi": 950}])
     assert abs(ap._gun_sayisi(df, meta_h) - 100.0) < 1e-6
+
+
+def test_ufku_dolmayan_kart_yuktur_isabet_degil(tmp_path):
+    from research.domain_alarm_replay import _satir_ekle
+
+    _satir_ekle(tmp_path / "tetikler.jsonl", [
+        _satir(bar_time="2026-10-19T10:00:00+03:00", yon_asim_100=None, yon_asim_150=None, ters_h12=None)
+    ])
+    df = ap.oku(tmp_path)
+    tablo = {r['kod']: r for r in ap.politika_tablosu(df, df[df.kontrol], seanslar=["2026-10-19"])}
+    assert tablo['P0']['gunluk'] == 1 and tablo['P0']['olculen'] == 0
+    assert pd.isna(tablo['P0']['hareket']) and pd.isna(tablo['P0']['iki'])
+    assert pd.isna(tablo['P0']['hatirlama'])
+    assert tablo['P6']['gunluk'] == 0 and pd.isna(tablo['P6']['hareket'])

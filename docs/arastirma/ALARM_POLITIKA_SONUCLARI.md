@@ -1,5 +1,7 @@
 # ALARM POLİTİKASI — "hangi kural daha iyi?" sorusunun sayıyla cevabı
 
+> **20 Kasım notu:** Aşağıdaki tablo tarihsel v1 hesabıdır. 12 bar sansürü, ortak ufuk ve seans bazında kanal yükü için [düzeltilmiş P0/P6 ölçümüne](ALARM_POLITIKA_PILOTU.md) bakın.
+
 > **Durum:** Ölçüm + çalışan prototipler · **Tarih:** 2026-11-19
 > **Canlıya etkisi:** **YOK.** Canlı kural, eşik, kart biçimi, Telegram, Supabase
 > değişmedi. Bu dosya yalnız **ölçüm** ve **araç** içerir.

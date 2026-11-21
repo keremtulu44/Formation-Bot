@@ -1,27 +1,8 @@
-"""Alarm POLİTİKASI replay'i — "hangi kural daha iyi?" sorusunu sayıyla cevaplar.
+"""Ağsız alarm politikası karşılaştırması (P0/P6; isteğe bağlı sekiz politika).
 
-Mevcut ``domain_alarm_replay.py`` **canlı davranışı** ölçer (bugün gönderilen
-kart ne yapıyor). Bu modül ondan farklı bir soru sorar:
-
-    "Kuralı değiştirsem ne olurdu?"
-
-Aynı tetik satırlarını (``tetikler.jsonl``) farklı politikalardan geçirir ve
-her politika için üç şeyi yan yana koyar:
-
-1. **Sıklık** — sembol/gün başına kaç kart çıkıyor (alarm yorgunluğu).
-2. **İsabet** — çıkan kartların ne kadarı ≥1 ATR hareket görüyor (taban farkı).
-3. **Hatırlama** — "iyi" tetiklerin (≥1,5 ATR) yüzde kaçı hâlâ yakalanıyor.
-
-Üçüncü sütun olmadan politika tartışması eksik kalır: her politika isabeti
-artırır, çünkü az kart basar. Asıl soru **neyi kaybettiğidir**.
-
-Kullanım::
-
-    python -m research.alarm_politika --cikti var/domain_alarm_replay \\
-        --rapor docs/arastirma/ALARM_POLITIKA_SONUCLARI.md
-
-Not: Bu modül **hiçbir canlı ayarı değiştirmez** ve canlı kodu import etmez;
-yalnız replay JSONL'ini okur. Politika tanımları burada veridir, kural değil.
+Aynı adayları ve cooldown kararlarını korur. Eski ölçüler yalnız tarihsel
+karşılaştırma içindir. Seans yükü için seri bazında bar envanteri gereklidir.
+Kullanım ve pilot sınırları: docs/arastirma/ALARM_POLITIKA_PILOTU.md.
 """
 
 from __future__ import annotations
@@ -29,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from datetime import date
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
@@ -172,7 +154,7 @@ def _bayrak(deger: Any) -> bool:
         return False
 
 
-def oku(cikti: Path) -> pd.DataFrame:
+def oku(cikti: Path, semboller: set[str] | None = None) -> pd.DataFrame:
     yol = cikti / "tetikler.jsonl"
     if not yol.exists():
         raise SystemExit(f"Replay çıktısı yok: {yol} (önce domain_alarm_replay koş)")
@@ -181,20 +163,19 @@ def oku(cikti: Path) -> pd.DataFrame:
         for cizgi in f:
             cizgi = cizgi.strip()
             if cizgi:
-                satirlar.append(json.loads(cizgi))
+                row = json.loads(cizgi)
+                if semboller is None or row["symbol"] in semboller:
+                    satirlar.append(row)
     df = pd.DataFrame(satirlar)
     if df.empty:
         raise SystemExit("Replay çıktısı boş.")
-    for kolon in ("yon_tepe_atr", "yon_dip_atr", "ters_h12", "yon_asim_100", "yon_asim_150"):
-        if kolon in df:
-            df[kolon] = pd.to_numeric(df[kolon], errors="coerce")
-    # İki farklı "hareket" tanımı var, ikisi de raporlanır:
-    #  * ``hareket``    — YÖNLÜ: kartın söylediği yönde ≥1 ATR (arşiv raporuyla aynı ölçü).
-    #  * ``hareket_iki`` — herhangi bir yöne ≥1 ATR (daha kaba; tabanı %80'e çıkarır ve
-    #    farkları sıkıştırır). Tek başına kullanılmamalı.
-    df["hareket"] = df.get("yon_asim_100").map(_bayrak)
-    df["iyi"] = df.get("yon_asim_150").map(_bayrak)
-    df["hareket_iki"] = (df["yon_tepe_atr"] >= HAREKET_ESIK) | (df["yon_dip_atr"] >= HAREKET_ESIK)
+    # Üreticide 12 mum tamamlanmadan bayrak null'dır; bool(null) başarısızlık değildir.
+    for kaynak, hedef in (("yon_asim_100", "hareket"), ("yon_asim_150", "iyi"), ("ters_h12", "ters")):
+        ham = df[kaynak]
+        df[hedef] = ham.map(_bayrak).astype("boolean").mask(ham.isna())
+    df["hareket_iki"] = df["hareket"] | df["ters"]  # herhangi bir yöne, aynı 12 bar
+    df["eski_iki"] = (df["yon_tepe_atr"] >= 1) | (df["yon_dip_atr"] >= 1)
+    df["seans"] = pd.to_datetime(df["bar_time"], utc=True).dt.tz_convert("Europe/Istanbul").dt.date.astype(str)
     return df
 
 
@@ -244,44 +225,38 @@ def _gun_sayisi(df: pd.DataFrame, meta: pd.DataFrame | None = None) -> float:
 # Ölçüm
 # ---------------------------------------------------------------------------
 
-def politika_tablosu(df: pd.DataFrame, taban: pd.DataFrame,
-                     meta: pd.DataFrame | None = None) -> list[dict[str, Any]]:
-    """Her politika için sıklık/isabet/hatırlama. Eksik sütunlar sessizce 0 olur."""
-    for kare in (df, taban):
-        for kolon, varsayilan in (("hareket", False), ("iyi", False), ("hareket_iki", False),
-                                  ("kontrol", False), ("hacim_tier", None)):
-            if kolon not in kare:
-                kare[kolon] = varsayilan
-    taban_oran = float(taban["hareket"].mean()) if len(taban) else float("nan")
-    ham = df[df.get("kontrol", False) == False]  # noqa: E712 - açık karşılaştırma
-    iyi_toplam = float(ham["iyi"].sum())
-    gun = _gun_sayisi(ham, meta)
+def politika_tablosu(df: pd.DataFrame, taban: pd.DataFrame, *, seanslar=None, politikalar=POLITIKALAR):
+    """Cooldown tüm geçmişte çalışır; yalnız sonuç ve yük seçili seanslarda sayılır."""
+    def pencerede(rows):
+        return rows if seanslar is None else rows[rows["seans"].isin(seanslar)]
 
-    satirlar: list[dict[str, Any]] = []
-    for kod, ad, fn in POLITIKALAR:
-        mask = ham.apply(fn, axis=1) if len(ham) else pd.Series(dtype=bool)
-        secili = ham[mask]
-        gonderilen = _cooldown(secili)
-        n = len(gonderilen)
-        if n == 0:
-            satirlar.append({"kod": kod, "ad": ad, "n": 0})
-            continue
-        oran = float(gonderilen["hareket"].mean())
-        iyi = float(gonderilen["iyi"].sum())
-        satirlar.append({
-            "kod": kod,
-            "ad": ad,
-            "n": n,
-            "gunluk": n / gun,
-            "hareket": oran,
-            "fark_pp": (oran - taban_oran) * 100.0,
-            "iki": float(gonderilen["hareket_iki"].mean()),
-            "iyi": iyi,
-            "hatirlama": iyi / iyi_toplam if iyi_toplam else float("nan"),
-            "basilan_pay": n / max(len(ham), 1),
-            "wilson": wilson_alt(oran, n),
-        })
-    return satirlar
+    ham = df[~df["kontrol"]]
+    adaylar = pencerede(ham)
+    iyi_toplam = adaylar["iyi"].sum()
+    taban_oran = pencerede(taban)["hareket"].mean()
+    sonuc = []
+    for kod, ad, kural in politikalar:
+        secili = ham.loc[ham.apply(kural, axis=1).astype(bool)] if len(ham) else ham
+        kart = pencerede(_cooldown(secili))
+        n = len(kart)
+        olculen = int(kart["hareket"].count())
+        oran = float(kart["hareket"].dropna().mean()) if olculen else math.nan
+        r = {
+            "kod": kod, "ad": ad, "n": n,
+            "olculen": olculen, "eksik": n - olculen,
+            "hareket": oran, "wilson": wilson_alt(oran, olculen),
+            "fark_pp": (oran - float(taban_oran)) * 100 if pd.notna(taban_oran) else math.nan,
+            "iki": float(kart["hareket_iki"].mean()) if kart["hareket_iki"].count() else math.nan,
+            "hatirlama": kart["iyi"].sum() / iyi_toplam if iyi_toplam else math.nan,
+            "basilan_pay": n / len(adaylar) if len(adaylar) else math.nan,
+            "eski_hareket": kart["hareket"].fillna(False).mean() if n else math.nan,
+            "eski_iki": kart["eski_iki"].mean() if n and "eski_iki" in kart else math.nan,
+        }
+        if seanslar is not None:
+            yuk = kart.groupby("seans").size().reindex(sorted(seanslar), fill_value=0)
+            r.update(gunluk=yuk.mean(), tipik=yuk.median(), zirve=int(yuk.max()), zirve_gun=yuk.idxmax())
+        sonuc.append(r)
+    return sonuc
 
 
 #: Ufuk × eşik ızgarası. Replay JSONL'inde hazır duruyor (``yon_h3``,
@@ -358,74 +333,85 @@ def _oku_meta(cikti: Path) -> pd.DataFrame | None:
     return pd.DataFrame(satirlar) if satirlar else None
 
 
-def rapor(df: pd.DataFrame, taban: pd.DataFrame, meta: pd.DataFrame | None = None,
-          baslik: bool = True) -> str:
-    tablo = politika_tablosu(df, taban, meta)
-    taban_oran = float(taban["hareket"].mean()) * 100.0 if len(taban) else float("nan")
-    satir = ("| politika | ne yapar | kart | kart/gün | ≥1 ATR (yönlü) | Wilson alt | taban farkı "
-             "| ≥1 ATR (iki yön) | iyi yakalama | hamın %'si |")
-    cizgi = "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|"
-    govde = [
-        f"| **{r['kod']}** | {r['ad']} | {r['n']:,} | {_f(r.get('gunluk'))} | "
-        f"%{_f((r.get('hareket') or 0) * 100, 1)} | "
-        f"%{_f((r.get('wilson') or 0) * 100, 1)} | "
-        f"{('+' if (r.get('fark_pp') or 0) >= 0 else '')}{_f(r.get('fark_pp'), 1)} pp | "
-        f"%{_f((r.get('iki') or 0) * 100, 1)} | "
-        f"%{_f((r.get('hatirlama') or 0) * 100, 1)} | "
-        f"%{_f((r.get('basilan_pay') or 0) * 100, 1)} |"
-        for r in tablo
-    ]
-    govde_satirlari = [
-        f"Taban (alarmsız bar): **%{_f(taban_oran, 1)}** · tetik satırı: "
-        f"**{len(df[df.get('kontrol', False) == False]):,}** · taban satırı: **{len(taban):,}**",
-        "",
-        satir,
-        cizgi,
-        *govde,
-        "",
-        "- **≥1 ATR (yönlü)**: kartın söylediği yönde 12 bar içinde ≥1 ATR. Arşiv raporuyla",
-        "  aynı ölçü (orada taban %64,1 / tetik %66,5).",
-        "- **taban farkı**: aynı verideki alarmsız barlara göre fark. Tek başına yeterli değil;",
-        "  az kart basan politika bu sütunu otomatik yükseltir.",
-        "- **iyi yakalama**: ≥1,5 ATR hareket eden tetiklerin politika sonrası hâlâ basılan payı.",
-        "  Bu sütun, politikanın **ne kaybettiğini** gösterir.",
-        f"- Cooldown: {COOLDOWN_BAR} bar (canlı kural). Kart sayıları cooldown SONRASI.",
-    ]
-    if not baslik:
-        return "\n".join(govde_satirlari)
-    return "\n".join(["# Politika karşılaştırması", ""] + govde_satirlari)
+def seans_kapsami(meta, semboller, ilk, son):
+    """Tam seri setini doğrula; kart çıkmayan seansları bar envanterinden al."""
+    from research.arsiv import ARASTIRMA_TIMEFRAMELERI
+
+    sec = meta[meta["symbol"].isin(semboller)]
+    beklenen = {(s, tf) for s in semboller for tf in ARASTIRMA_TIMEFRAMELERI}
+    if len(sec) != len(beklenen) or set(zip(sec.symbol, sec.timeframe)) != beklenen:
+        raise ValueError("Aktif native evrende eksik veya tekrarlı seri var.")
+    if not all(isinstance(m, dict) and m for m in sec.seans_bar_sayilari):
+        raise ValueError("Seans bar envanteri eksik veya geçersiz.")
+    # Replay sıfır gelecek barı olan son çapa için satır üretmez. Son,
+    # kısmi olabilecek seansı yük hesabına sokma; 1–11 barlık sonuçlar kalır.
+    gunler = set.intersection(*(set(m) - {max(m)} for m in sec.seans_bar_sayilari))
+    ortak = sorted(g for g in gunler if ilk <= g <= son)
+    if not ortak:
+        raise ValueError("Seçilen aralıkta ortak seans yok.")
+    return ortak
+
+
+def rapor(df, meta, ilk, son, aktif, native, *, tum_politikalar=False):
+    semboller = set(aktif) & set(native)
+    if not semboller:
+        raise ValueError("Native arşivde aktif sembol yok.")
+    seanslar = seans_kapsami(meta, semboller, ilk, son)
+    df = df[df.symbol.isin(semboller)]
+    tablo = politika_tablosu(df, df[df.kontrol], seanslar=seanslar,
+                             politikalar=[p for p in POLITIKALAR if tum_politikalar or p[0] in {"P0", "P6"}])
+    # v1'in yaklaşık seri-günü paydasını aynı pencere/evrende yeniden hesapla.
+    envanter = meta[meta.symbol.isin(semboller)].copy()
+    envanter["bar_sayisi"] = envanter.seans_bar_sayilari.map(lambda m: sum(m[g] for g in seanslar))
+    seri_gun = _gun_sayisi(df, envanter)
+    satir = ["# Alarm politikası: aynı örneklemde eski ve düzeltilmiş ölçüm", "",
+             f"{seanslar[0]} – {seanslar[-1]} · {len(seanslar)} ortak İstanbul seansı · "
+             f"{len(semboller)}/{len(set(aktif))} aktif sembol × 4 native zaman dilimi.",
+             "Arşiv dışında: " + (", ".join(sorted(set(aktif)-semboller)) or "yok") + ".", "",
+             "| Politika | Kart | Eski kart/seri-günü | Kart/seans ort. (medyan) | En yoğun seans | Ölçülen / henüz ölçülemeyen | Yönlü ≥1 ATR eski → yeni | Herhangi yöne ≥1 ATR eski → yeni | Güçlü tetik yakalama |",
+             "|---|---:|---:|---:|---|---:|---:|---:|---:|"]
+    def yuzde(oran):
+        return _f(100 * oran, 1) + "%" if math.isfinite(oran) else "—"
+
+    for r in tablo:
+        satir.append(f"| {r['kod']} | {r['n']} | {_f(r['n']/seri_gun)} | {_f(r['gunluk'])} ({_f(r['tipik'],1)}) | "
+                     f"{r['zirve']} ({r['zirve_gun']}) | {r['olculen']} / {r['eksik']} | "
+                     f"{yuzde(r['eski_hareket'])} → {yuzde(r['hareket'])} | {yuzde(r['eski_iki'])} → {yuzde(r['iki'])} | {yuzde(r['hatirlama'])} |")
+    satir += ["", "P0: her tetik; P6: mevcut bağlam filtresi. İki hesapta aynı kartlar; filtre eşikleri değişmedi. "
+              "Eski yönlü hesap boş sonucu başarısız, eski yönsüz hesap 40 bara kadar uzanımı kullanır. "
+              "Yeni ikisi de 12 mum kullanır. Ufku dolmayan kart sıklığa dahil, isabete dahil değil.", "",
+              "Güçlü yakalama = gönderilen ≥1,5 ATR yönlü tetik / tüm ölçülen ≥1,5 ATR yönlü tetikler (12 bar). "
+              "Cooldown sembol ve periyot başına 6 bar; pencere öncesi geçmiş korunur. Replay'in yönsüz tetikten ürettiği iki yön satırı bağımsız işlem değildir.", "",
+              "Seanslar tetiklerden değil, tüm kapsanan serilerde bar gözlenen İstanbul tarihlerinden gelir; sıfır kartlı günler dahildir. "
+              "Eski seri-günü ile yeni kanal toplamının birimleri farklıdır. Sayılar potansiyel karttır; canlı teslimat, getiri veya canlıdaki türetilmiş mumların doğrulaması değildir."]
+    return "\n".join(satir) + "\n"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="Alarm politikası karşılaştırması (replay JSONL'den)")
-    p.add_argument("--cikti", default="var/domain_alarm_replay")
-    p.add_argument("--rapor", default="docs/arastirma/ALARM_POLITIKA_SONUCLARI.md")
-    args = p.parse_args(argv)
+    from config import ACTIVE_STOCKS
+    from research.arsiv import arsiv_sembolleri
 
-    df = oku(Path(args.cikti))
-    meta = _oku_meta(Path(args.cikti))
-    taban = df[df.get("kontrol", False) == True]  # noqa: E712
-    metin = rapor(df, taban, meta)
+    p = argparse.ArgumentParser(description="Aktif native evrende P0/P6 karşılaştırması")
+    p.add_argument("--cikti", default="var/domain_alarm_replay")
+    p.add_argument("--ilk", required=True, type=date.fromisoformat, help="İlk seans YYYY-MM-DD")
+    p.add_argument("--son", required=True, type=date.fromisoformat, help="Son seans YYYY-MM-DD")
+    p.add_argument("--rapor", default="var/alarm_politika_v2.md")
+    p.add_argument("--tum-politikalar", action="store_true", help="P0–P7 tamamını karşılaştır")
+    args = p.parse_args(argv)
+    kok = Path(args.cikti)
+    meta = _oku_meta(kok)
+    if meta is None or "seans_bar_sayilari" not in meta:
+        p.error("Seans envanteri yok; replay'i yeni bir çıktı dizininde üretin.")
+    native = arsiv_sembolleri(native_only=True)
+    veri = oku(kok, set(ACTIVE_STOCKS) & set(native))
+    metin = rapor(veri, meta, args.ilk.isoformat(), args.son.isoformat(), ACTIVE_STOCKS, native,
+                  tum_politikalar=args.tum_politikalar)
     yol = Path(args.rapor)
+    if yol.exists() and "<!-- URETILEN:BASLANGIC -->" in yol.read_text(encoding="utf-8"):
+        p.error("Bu dosyada elle yazılmış tarihsel analiz var; ayrı bir --rapor yolu seçin.")
     yol.parent.mkdir(parents=True, exist_ok=True)
-    # ELLE YAZILAN BÖLÜMLERİ KORU: dosyada ``<!-- URETILEN:BASLANGIC -->``
-    # işareti varsa yalnız o blok yenilenir. Aksi hâlde analiz/karar bölümleri
-    # (4.5, 4.6, 5.5 gibi) her koşuda silinir — bu bir kez yaşandı.
-    ESKI_BAS, ESKI_SON = "<!-- URETILEN:BASLANGIC -->", "<!-- URETILEN:BITIS -->"
-    if yol.exists():
-        eski = yol.read_text(encoding="utf-8")
-        if ESKI_BAS in eski and ESKI_SON in eski:
-            bas = eski.index(ESKI_BAS) + len(ESKI_BAS)
-            son = eski.index(ESKI_SON)
-            eski = eski[:bas] + "\n\n" + rapor(df, taban, meta, baslik=False) + "\n\n" + eski[son:]
-            yol.write_text(eski, encoding="utf-8")
-            print(f"[rapor] {yol} (yalniz URETILEN blogu yenilendi)")
-            print(metin)
-            return 0
-    yaz = f"{ESKI_BAS}\n\n{metin}\n\n{ESKI_SON}\n"
-    yol.write_text(yaz, encoding="utf-8")
+    yol.write_text(metin, encoding="utf-8")
     print(metin)
-    print(f"\n[rapor] {yol} ({len(metin)} karakter)")
     return 0
 
 

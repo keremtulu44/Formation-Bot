@@ -40,6 +40,10 @@ tartışmalarında sayı gerektiğinde buraya bakılır.
 | **[REPLAY_ANA_DERLEMESI.md](REPLAY_ANA_DERLEMESI.md)** | **TÜM replay'ler tek dosyada:** kapsam + ana sayı + yorum + geçerlilik etiketi (37 çalışma) · §7.5 hangi kurala güvenilebilir · §5.5 native veri gürültüsü | "Bu konuda daha önce ne ölçtük?" ve "bu kurala güvenebilir miyim?" sorusunda **önce buraya bak** |
 | **[DOMAIN_ALARM_REPLAY.md](DOMAIN_ALARM_REPLAY.md)** | **Hangi alarm türü değerli?** 6 kanalın arşiv ölçümü: taban farkı, cooldown, tetik anındaki grafik bağlamı, Wilson alt sınırıyla segment sıralaması | "Bu alarm türü işe yarıyor mu, sustursam ne kaybederim?" sorusunda |
 | **[ALARM_YONU_2026-11-19.md](ALARM_YONU_2026-11-19.md)** | **Alarmın yönü:** 4 katman (sessiz/özet/kart/grafik) + grafik tasarım kuralları | "Alarmı nasıl daha anlamlı yaparım?" sorusunda |
+| **[İki OB arasındaki sıkışma](sonuclar/ob_koridor/RAPOR.md)** | Alt/üst blok genişliği, yakın kenar ve çıkış yönü | Kalın blok mu itiyor, yoksa yakın sınır mı önce deneniyor? |
+| **[OB temas haritası](sonuclar/ob_temas_haritasi/RAPOR.md)** | Temas sırası × büyüklük; eski/kalan bant, tarihli ziyaretler | Daha çok temas OB’yi güçlendiriyor mu? |
+| **[Büyük FVG: tarihli temas envanteri](sonuclar/buyuk_fvg_izleri/RAPOR.md)** | 176 sembol, dört mum-mum örnek, bütün büyük bölgelerin tarihleri | İlk temastan sonra önce hareket mi geldi, dolum mu? |
+| **[P0/P6 düzeltme pilotu](ALARM_POLITIKA_PILOTU.md)** | Gerçek seans yükü, 12 mum isabeti ve eksik gözlem paydası | Aktif evrende daha az kart karşılığında ne kaybediliyor? |
 | **[ALARM_POLITIKA_SONUCLARI.md](ALARM_POLITIKA_SONUCLARI.md)** | **Politika ölçümü:** 8 kural aynı veride; kanal katmanı değil **bağlam** kazandırıyor | "Alarmı değiştirsem ne olur?" sorusunda |
 | **[FORMASYON_DENGE.md](FORMASYON_DENGE.md)** | **Formasyon tarafı:** "şu olursa şu olur" kuralları neden kurulamıyor; 4 denge ekseni | "Formasyonu nasıl dengelerim?" sorusunda |
 | **[GRAFIK_ORNEKLERI.md](GRAFIK_ORNEKLERI.md)** | **Alarm grafiği:** gerçekleşen vs tipik — 3 gerçek örnek (tipik/iyi/kötü) | "Grafik nasıl olmalı?" sorusunda |
@@ -133,3 +137,7 @@ python scripts/ornek_kartlar.py                          # 9 örnek kartlık gal
   pozisyon boyutu ve çıkış kuralı modellenmedi. "%65 CALISTI" kârlılık değil, ≥1 ATR'lik
   yönlü uzanım sıklığıdır.
 - Motor parametreleri değiştirilmedi; ölçüm canlı "Dengeli" profiliyle alındı.
+
+- [Alarm karar defteri: beş fikir ve aynı saate göre hacimli dip geri alımı](ALARM_KARAR_DEFTERI.md)
+
+- [Hareket haritası: aynı bütçede hacmin eklediği ve sildiği erken uyarılar](sonuclar/hareket_kapsam/RAPOR.md)

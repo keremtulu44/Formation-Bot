@@ -750,6 +750,8 @@ def _json_serializable(deger: Any) -> Any:
             return _json_serializable(deger.item())
         except (ValueError, TypeError):
             return str(deger)
+    if isinstance(deger, dict):
+        return {k: _json_serializable(v) for k, v in deger.items()}
     if isinstance(deger, (list, tuple)):
         return [_json_serializable(v) for v in deger]
     return str(deger)
@@ -1369,8 +1371,12 @@ def kosu(args: argparse.Namespace) -> int:
     cikti.mkdir(parents=True, exist_ok=True)
 
     semboller = [s.strip().upper() for s in args.semboller.split(",") if s.strip()] if args.semboller else arsiv.arsiv_sembolleri(native_only=True)
+    if args.aktif_evren:
+        from config import ACTIVE_STOCKS
+
+        semboller = sorted(set(semboller) & set(ACTIVE_STOCKS))
     if not semboller:
-        raise SystemExit("Native arşivde dört dosyası tamamlanmış sembol yok.")
+        raise SystemExit("Seçilen evrende dört native dosyası tamamlanmış sembol yok.")
     if not args.havuz_disi_dahil:
         semboller = [s for s in semboller if s not in arsiv.HAVUZ_DISI_SEMBOLLER]
     if args.limit:
@@ -1392,6 +1398,9 @@ def kosu(args: argparse.Namespace) -> int:
         t0 = time.time()
         try:
             frame = arsiv.tf_frame(sembol, tf, legacy_resample=False)
+            if args.son_bar:
+                frame = frame.tail(args.son_bar)
+            seanslar = frame.index.tz_convert("Europe/Istanbul").strftime("%Y-%m-%d").value_counts()
             gozlem = sembol_timeframe_gozlem(sembol, tf, frame)
             ham = sembol_timeframe_tetikleri(sembol, tf, frame, gozlem)
             # Ölçüm CANLI davranışı ölçmeli: cooldown'suz liste "kullanıcıya
@@ -1420,6 +1429,7 @@ def kosu(args: argparse.Namespace) -> int:
                 "symbol": sembol,
                 "timeframe": tf,
                 "bar_sayisi": int(len(frame)),
+                "seans_bar_sayilari": seanslar.to_dict(),
                 "tetik_bar_ham": len(ham),
                 "tetik_bar": len(tetikler),
                 "kontrol_bar": len(kontroller),
@@ -1455,8 +1465,11 @@ def kosu(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Domain alarm replay — canlı tetikleyicilerin arşiv ölçümü")
+    p.add_argument("--son-bar", type=int, default=0, help="seri başına son N bar (kısa pilot; yeni çıktı dizini kullanın)")
     p.add_argument("--limit", type=int, default=0, help="kaç sembol (0 = hepsi)")
-    p.add_argument("--semboller", default="", help="virgülle sembol listesi")
+    secim = p.add_mutually_exclusive_group()
+    secim.add_argument("--semboller", default="", help="virgülle sembol listesi")
+    secim.add_argument("--aktif-evren", action="store_true", help="Yalnız ACTIVE_STOCKS ile native arşivin kesişimi")
     p.add_argument("--timeframe", default="1h,2h,4h,1d", help="virgülle zaman dilimleri")
     p.add_argument("--cikti", default="var/domain_alarm_replay", help="JSONL çıktı dizini")
     p.add_argument("--rapor", default="docs/arastirma/DOMAIN_ALARM_REPLAY_SONUCLARI.md")
@@ -1473,6 +1486,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="kontrol (taban) örnekleme adımı — her N barda bir tetik olmayan bar",
     )
     args = p.parse_args(argv)
+    if args.son_bar < 0:
+        p.error("--son-bar negatif olamaz")
+    if args.son_bar and any((Path(args.cikti) / name).exists() for name in ("meta.jsonl", "tetikler.jsonl")):
+        p.error("Kısa pilot için boş bir --cikti dizini seçin")
 
     if args.rapor_yaz:
         ozet = topla(Path(args.cikti))
