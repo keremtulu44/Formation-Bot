@@ -109,3 +109,124 @@ tek commit'te (`769a338`) — `git revert` ile ayrılabilir.
 
 **DİKKAT:** P0'a dönmek cooldown'u geri almaz; artık P0 de 6 bar sessizlikle
 çalışır (115 kart/seans, önceki 350 değil). Bu bilinçli: eski davranış hatalıydı.
+
+---
+
+# EK — Baştan sona denetim (2026-11-21, ikinci tur)
+
+Bu bölüm deploy zincirini uçtan uca yeniden taradı; §1–§7'yi **tamamlar**.
+
+## E1. Depo durumu: `main` ile ortak ata YOK
+
+| | main | bu dal |
+|---|---|---|
+| Son commit | 2026-11-09 | 2026-11-21 |
+| Dosya | 1.326 | 1.927 |
+| `bot/domain_alarm_service.py` | cooldown **hatalı** (bar anahtarlı) | düzeltilmiş |
+
+`git merge-base` **boş** döner — iki geçmiş birleşmiyor. Pratikte:
+`main`'de olup bu dalda olmayan **0 kod dosyası** var; bu dal `main`'in tüm
+kodunu + 12 günlük birikimi içeriyor. Yani bu dal **daha yeni ve daha doğru**.
+
+**Karar gerekiyor — deploy kaynağı hangisi?**
+`render.yaml` bir branch belirtmiyor; Render Dashboard'daki bağlı branch neyse
+o deploy edilir. Bu dal merge edilmezse:
+
+- canlı bugünkü (main) kodu çalıştırmaya devam eder → **P6 yok, cooldown hâlâ hatalı**
+- bu dalda yapılan düzeltmeler hiç canlıya çıkmaz
+
+## E2. `main`'de kullanılmayan bir CI dosyası var
+
+`.github/workflows/keepalive.yml` (Render uyku engelleyici, 5 dk cron):
+
+- `on.schedule` **yalnız varsayılan branch'te** (main) çalışır → bu dalda merge
+  edilene kadar **çalışmıyor**
+- Render Free 15 dk inbound istek gelmezse uyur; keepalive olmadan servis
+  uykuya dalar ve Telegram komutları ~1 dk gecikir
+- Kurulum: repo secret/variable `RENDER_HEALTH_URL = https://<servis>.onrender.com/health`
+- **Bilinen tuzak:** public repoda 60 gün aktivite olmazsa GitHub zamanlanmış
+  iş akışlarını sessizce kapatır
+
+## E3. Env: sembolik olarak sağlam
+
+| Kontrol | Sonuç |
+|---|---|
+| Kodda okunan env | 65 (aslında daha fazlası `_env_int`/`_env_bayrak` ile) |
+| `.env.example` | 101 anahtar — süperset, ölü anahtar yok |
+| `render.yaml` | 35 anahtar, hepsi `.env.example` içinde |
+| Kodda var / `.env.example`'da yok | 14 — hepsi **araştırma/teşhis** (aşağıda) |
+| `.env` git'te | ✅ yok (`.gitignore:8`) |
+| `.env` yükleme | `load_dotenv()` = `override=False` → **OS/Render env öncelikli**, doğru |
+
+Belgelenmemiş 14 anahtarın hiçbiri canlı akışı etkilemez:
+`BOT_HEALTH_SMOKE_ONLY` (CI), `RENDER`/`RENDER_GIT_COMMIT`/`RENDER_GIT_BRANCH`
+(Render enjekte eder), `GRAFIK_SAG_BOSLUK`, `GRAFIK_YAZI`, `TELEGRAM_KART_YORUM`,
+`FB_ARSIV_KOKU`, `LIMIT`, `GORSEL_*`, `FORMATION_API_POC_KEY`,
+`FORMATION_BOT_ALLOW_LIVE_YAHOO_RESEARCH`, `FORMATION_BOT_EXPLORATORY_DATA_DIR`.
+
+## E4. ⚠️ Env eksikse bot ÖLMÜYOR — "sessiz ölüm"
+
+Ampirik (token/chat_id boş, Render'a benzer ortam):
+
+```
+/health   -> HTTP 200  status: "ok"
+/ready    -> HTTP 503
+bildirim  -> {"durum": "kapali", "mod": "kapali", "nedenler": ["Telegram teslim hedefi yok"]}
+log       -> [WARNING] Telegram token env'de yok - notifier pasif (test modu)
+```
+
+`healthCheckPath: /health` olduğu için Render servisi **sağlıklı** sayar.
+Sonuç: token yanlış/eksikse Render yeşil, bot ayakta, tarama çalışıyor ama
+**tek bir mesaj gitmiyor**. Panel/uyarı yok.
+
+**Deploy sonrası ilk kontrol (zorunlu):**
+```
+curl -s https://<servis>.onrender.com/health | grep -o '"durum": "[^"]*"'
+```
+`"durum": "acik"` değilse alarm yok demektir.
+
+## E5. `deploy_check.py` — 0 hata, 7 uyarı
+
+`46 tamam / 7 uyarı / 0 hata`. Uyarılar bu ortamda token/anahtar olmamasından
+(temizlik kanıtı). **Deploy ortamında tekrar koşulmalı** — orada da uyarı
+çıkarsa gerçek eksik var demektir.
+
+## E6. Sağlık uçları
+
+| Uç | Beklenen | Doğrulandı |
+|---|---|---|
+| `/health` | 200 + `status: ok` + `commit` | ✅ |
+| `/health?ka=1` | 200 (keepalive uyumlu) | ✅ CI'da kilitli |
+| `/ready` açılışta | 503 (`startup_complete: false`) | ✅ |
+| `/test` anahtar yokken | 404 (kapalı) | ✅ CI'da kilitli |
+| `/webhook/*` secret yokken | 404 (kapalı) | ✅ CI'da kilitli |
+
+## E7. CI kapsaması
+
+| Commit | CI |
+|---|---|
+| `bb80d14` (P6) | success |
+| `769a338` (cooldown) | ayrı koşu yok |
+| `58b86a0` (docs) | **success** — `769a338`'i ata olarak içeriyor |
+
+Cooldown commit'i 23 dk sonraki docs commit'iyle birlikte koştu ve geçti;
+tam paket yerelde de 4.756 passed.
+
+## E8. Bu turda kapatılan iki bulgu
+
+1. **State atomik yazımı** — `_save_state` doğrudan yazıyordu; SIGTERM/OOM
+   anında yarım JSON → tüm cooldown kaybı → mükerrer alarm.
+   `tmp` + `os.replace` yapıldı (`stabil_service` ile aynı desen).
+2. **Cooldown semantiği** — `dedup_key` artık `sembol|TF`; ayrıntı karar
+   belgesinde (§4b).
+
+## E9. Sıralı deploy kontrol listesi
+
+1. `YENI_DOMAIN_ALARM_POLITIKA` **eklemek zorunlu değil** (kodda P6). İstersen
+   görünürlük için `P6` olarak ekle.
+2. `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` **veya** `TELEGRAM_GROUP_ID`,
+   `TZ=Europe/Istanbul` Dashboard'da gerçek değerlerle dolu mu?
+3. Git repo secret: `RENDER_HEALTH_URL` (keepalive için)
+4. Kalıcılık: `DATA_DIR` için disk **veya** riski kabul et (§5.1)
+5. Render Dashboard'daki bağlı branch bu dal mı, `main` mi? (E1)
+6. Deploy → `/health` içinde `"durum": "acik"` gör → ilk 3 seans §6'yı izle
