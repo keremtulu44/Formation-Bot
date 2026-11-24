@@ -930,7 +930,7 @@ STABIL_ALARM_TAZE_DK = _env_int("STABIL_ALARM_TAZE_DK", 390, minimum=30)
 # public hedefe "🆕 YENİ" işaretli ayrı kart gönderir. Stabil koşulu native
 # basamaklı desteğin o anki seviyesine göre HARD alt sınırdır: dist_atr >= -3;
 # üst sınır yoktur. Hacim hard kapı değil, kendi başına tetikleyicidir.
-YENI_DOMAIN_ALARM = os.getenv("YENI_DOMAIN_ALARM", "1").strip().lower() in {
+YENI_DOMAIN_ALARM = os.getenv("YENI_DOMAIN_ALARM", "0").strip().lower() in {
     "1", "true", "yes", "on", "acik", "açık",
 }
 YENI_DOMAIN_ALARM_DM = os.getenv("YENI_DOMAIN_ALARM_DM", "1").strip().lower() in {

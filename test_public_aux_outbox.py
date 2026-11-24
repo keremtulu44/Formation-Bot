@@ -185,6 +185,7 @@ def test_stabil_dm_success_no_longer_loses_quota_blocked_public_copy(monkeypatch
 
 
 def test_real_notifier_public_budget_unblocks_without_repeating_dm(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
     import requests
     from test_alarm_routing_diagnostics import _notifier
 
@@ -305,3 +306,46 @@ def test_invalidated_pending_summary_goes_to_review_without_sending_other_member
     recovered = PublicAuxOutbox(recovered_owner, tmp_path)
     assert recovered.flush() == 0 and recovered_owner.attempts == []
     assert recovered.rows[0]["text"] == "A and B"  # retained for operator review
+
+
+def test_disabled_domain_pending_does_not_block_stabil_and_can_resume(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
+    owner = FakeOwner(["butce", "butce"])
+    queue = PublicAuxOutbox(owner, tmp_path)
+    domain = auxiliary_event_id("domain", [("A", "4h", "bar")])
+    assert queue.submit(domain, "domain")[0]
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", False)
+    # The skipped older domain card cannot consume the attempt limit.
+    assert queue.submit(auxiliary_event_id("stabil", [("A", "bar")]), "stabil")[0]
+    assert owner.attempts == ["domain", "stabil"]
+    assert queue.flush(max_items=1) == 1
+    assert owner.attempts == ["domain", "stabil", "stabil"]
+    assert queue.flush() == 0
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
+    assert queue.flush() == 1 and owner.attempts[-1] == "domain"
+
+
+def test_disabled_domain_summary_and_pending_image_are_not_sent(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
+    owner = FakeOwner(["butce"])
+    queue = PublicAuxOutbox(owner, tmp_path)
+    summary = auxiliary_event_id("domain-summary", [("A", "4h", "bar")])
+    assert queue.submit(summary, "summary", graphics=_graphics())[0]
+    queue.rows[0]["status"] = "text_sent"
+    queue.rows[0]["text_sent"] = True
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", False)
+    assert queue.flush() == 0 and owner.graphics == []
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
+    assert queue.flush() == 0 and len(owner.graphics) == 1
+
+
+def test_paused_domain_backlog_does_not_fill_stabil_capacity(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", False)
+    owner = FakeOwner()
+    queue = PublicAuxOutbox(owner, tmp_path)
+    queue.rows = [{"id": f"domain:{i}", "status": "pending", "created": queue._now().isoformat(),
+                   "target": owner.public_chat_id, "text": "domain", "text_sent": False}
+                  for i in range(queue.MAX_PENDING)]
+    assert queue.submit(auxiliary_event_id("stabil", [("A", "bar")]), "stabil") == (True, True)
+    assert owner.attempts == ["stabil"]
+    assert len(queue.rows) == queue.MAX_PENDING + 1

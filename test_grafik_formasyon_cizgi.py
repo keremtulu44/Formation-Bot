@@ -121,12 +121,17 @@ def test_grafik_kapisi_her_durumda_aktif_formasyonu_cizer(durum):
     assert U._grafik_formasyonu_bul(_Snap(durum)) is not None
 
 
-def test_grafik_kapisi_kalite_ve_aktif_yok_elenir():
-    """Durumdan bağımsız, ama motorun kendi geçerlilik ölçütleri yine uygulanır."""
+def test_grafik_kapisi_dusen_kaliteyi_gosterir_ama_aday_uydurmaz():
+    """Pine kabul edilen adayı puanı sonradan düşse de çizmeye devam eder."""
     import grafik_uret as U
-    assert U._grafik_formasyonu_bul(_Snap("RETEST_BEKLENIYOR", q=40.0)) is None
+    from patterns.detect import _usable_active, TRIANGLE_FAMILIES
+    for durum in ("FORMASYON_ZAYIFLADI", "RETEST_BEKLENIYOR"):
+        snap = _Snap(durum, q=40.0)
+        assert U._grafik_formasyonu_bul(snap) is snap.active
+        assert _usable_active(snap, TRIANGLE_FAMILIES) is None  # alarm kapısı değişmez
     assert U._grafik_formasyonu_bul(_Snap("RETEST_BEKLENIYOR", aktif=False)) is None
     assert U._grafik_formasyonu_bul(_Snap("FORMASYON_YOK", aktif=False)) is None
+
 
 
 def test_durum_etiketi_turkce_ve_bilinmeyen_bos():

@@ -1,0 +1,64 @@
+Dört grafiği ana zaman dilimini merkeze alarak yorumla: ağır basan olasılığı, gerekçelerini, en önemli karşı kanıtı ve görüşü değiştirecek gelişmeyi açıkla. Kanıt yetersizse kararsız kal. Grafik, grafiğe özel replay ve genel araştırmayı ayır; temas kapanışlarını değerlendir.
+Gözlem ile yorumu ayır; verilmeyen olay veya teyit uydurma. Eksik veri yokluk, temas ret, geçiş teyit değildir. Kalite puanı ve genel istatistik sembole özel olasılık değildir. TF'leri karıştırma; kesin tahmin, al-sat, hedef veya stop verme.
+Üç başlık: Mevcut durum / Bağlam / Replay notu. 120–180 kelime hedefle; düz metin, gereksiz tekrar yok.
+
+GRAFİK VERİSİ
+BIMAS — kesit 25.09.26 18:30; ana zaman dilimi 4h; tarihsel veya isteğe bağlı kesit; gerçek alarm doğrulanmadı.
+Kaynak: yerel BIMAS.json; sağlayıcı bilinmiyor; günlük: saatlik önbellekten türetilmiş. Fiyat her TF'nin son tamamlanmış kapanışıdır; farklı kapanış saatleri farklı fiyatlar verebilir.
+Saatler İstanbul; kapanış dışındaki zamanlar mum açılışıdır, bilgi kapanışta bilinir. İlk türetilen kova eksik, son seans mumu kısa olabilir; görünüm tüm geçmiş değildir. Süreklilik kontrolü tüm eksik seansları doğrulamaz.
+Grafik uyarısı (1h/2h/4h/1d): Stabil direnç gösterilemedi: gerekli günlük veya saatlik kaynak yok.
+
+1H GRAFİK
+Kapanış 25.09.26 18:00: 426,25.
+Dış yapı: 11.09.26 12:30 BOS yukarı 431,25; 15.09.26 10:30 CHoCH aşağı 422,50; 24.09.26 12:30 BOS aşağı 429,00.
+Bölgeler: negatif OB 428,00–430,50 (kaynak 25.09.26 14:30); negatif OB 432,25–435,75 (kaynak 24.09.26 09:30); negatif OB 434,00–437,50 (kaynak 23.09.26 16:30).
+Formasyon: Yükselen Kama, kırılım adayı, kalite 77,6844. Daralma yaklaşık %69,4845. Bant teması üst 2, alt 2. Çizgi üst 446,84375, alt 428,40.
+FVG: çalıştırılmadı (source supports only 2h, 4h, and 1d); sonuç bilinmiyor.
+Grafik hacim rozetleri (motor): 17.09.26 10:30 artış ×2,06; 23.09.26 12:30 kuruma ×0,24; 18.09.26 12:30 kuruma ×0,27; 15.09.26 10:30 artış ×3,5.
+
+2H GRAFİK
+Kapanış 25.09.26 18:00: 426,25.
+Dış yapı: 26.08.26 13:30 BOS yukarı 418,50; 16.09.26 09:30 CHoCH aşağı 411,75.
+Dış seviyeler: PH 437,50.
+Bölgeler: negatif OB 427,50–430,50 (kaynak 25.09.26 13:30); pozitif OB 410,75–423,50 (kaynak 21.09.26 09:30); negatif OB 432,50–437,50 (kaynak 23.09.26 15:30).
+Formasyon: Alçalan Üçgen, tamamlandı, kalite 84,7739. Daralma yaklaşık %80,7345. Bant teması üst 2, alt 2.
+FVG: çalıştırılmadı (2h FVG requires explicit offline/replay opt-in); sonuç bilinmiyor.
+Grafik hacim rozetleri (motor): 16.09.26 15:30 artış ×3,34; 24.09.26 17:30 kuruma ×0,46.
+
+4H GRAFİK
+Kapanış 25.09.26 18:00: 426,25.
+Dış yapı: 10.08.26 09:30 BOS yukarı 386,75; 19.08.26 09:30 BOS yukarı 386,25; 09.09.26 13:30 BOS yukarı 422,75; 09.09.26 17:30 BOS yukarı 421,50; 16.09.26 13:30 CHoCH aşağı 411,75.
+Dış seviyeler: PH 437,50; WL 410,75.
+Bölgeler: pozitif OB 410,75–423,50 (kaynak 21.09.26 09:30); negatif OB 432,00–437,50 (kaynak 23.09.26 13:30).
+Formasyon: Simetrik Üçgen, retest bekleniyor, kalite 75,8822. Daralma yaklaşık %90,2939. Bant teması üst 2, alt 2.
+Grafik hacim rozetleri (yerel hesap): 21.09.26 13:30 artış ×2,38; 25.09.26 17:30 kuruma ×0,31; 24.08.26 17:30 kuruma ×0,16; 18.08.26 09:30 artış ×2,42; 12.08.26 13:30 artış ×2,25.
+Grafikte Stabil destek: 390,00.
+
+1D GRAFİK
+Kapanış 25.09.26 18:30: 426,25.
+Dış yapı: 09.09.26 00:00 BOS yukarı 422,75.
+Dış seviyeler: PL 399,25; WH 437,50.
+Bölgeler: pozitif OB 390,00–419,25 (kaynak 16.09.26 00:00).
+Formasyon: grafikte kullanılabilir aday yok.
+Grafik hacim rozetleri (yerel hesap): 16.09.26 00:00 artış ×2,24.
+Grafikte Stabil destek: 390,00.
+
+GRAFİĞE ÖZEL REPLAY — ana TF, seçili bölgeler: OB teması orijinal bantla OHLC örtüşmesi; FVG kendi motor kuralı. Ardışık temas mumları bir epizot; yalnız bu pencere gözlendi, öncesi bilinmez. Son iki epizot ayrıntılıdır. Doğum ATR: Wilder(14); yükseklik orijinal banttır, grup ham orandan (alt dahil, üst hariç) hesaplanır.
+
+4H REPLAY
+Pozitif OB 410,75–423,50: 2 epizot; kullanılabilir 21.09.26 17:30; kalan 410,75–422,00; doğum ATR≈7,73561, yükseklik/ATR≈1,64822 (grup 1-2).
+  1. epizot 24.09.26 13:30–17:30 (2 mum); temas kapanışları: 24.09.26 13:30=425,25, 24.09.26 17:30=424,00; sonraki mum 25.09.26 09:30 kapanışı 428,25.
+  2. epizot 25.09.26 13:30–17:30 (2 mum); temas kapanışları: 25.09.26 13:30=422,00, 25.09.26 17:30=426,25; sonraki kapanmış mum yok; epizot devam ediyor olabilir.
+Negatif OB 432,00–437,50: 0 epizot; kullanılabilir 24.09.26 13:30; kalan 435,75–437,50; doğum ATR≈7,39807, yükseklik/ATR≈0,743437 (grup 0.5-1).
+
+Stabil günlük replay: OHLC desteği kapsar ve kapanış altında değildir; bağımsız temaslar arası ≥0,35 günlük ATR uzaklaşma gerekir. Aynı gün ilk bilinen destek önceden bilinen test değildir; günlük sayım 4s temas veya ret teyidi değildir.
+
+STABİL GÜNLÜK DESTEK REPLAY
+Destek 390,00; kullanıma giriş günlük kapanış 22.09.26 18:30; pencere içinde başlangıç 22.09.26 18:30.
+Pencerede gözlenen günlük bağımsız temas: 0; ilk destek kimliği olduğundan önceki geçmiş ve gerçek sıra bilinmiyor.
+
+GENEL ARAŞTIRMA — grafiğe özel sonuç veya kişisel olasılık değildir.
+Geriye dönük: kesit sonrası/belirsiz çalışmalar etiketlidir; o tarihte biliniyor sayma.
+ob-temas-2026-10-21 [kesitten sonra; rapor=2026-10-21, veri sonu=2026-10-19]: OB: 131.901 bölgede 17.048 (%12,9) üç veya daha fazla temas epizodu gördü. Bu bir bölgenin başarı olasılığı değildir; çok temasın bölgeyi zayıflattığı tek başına kanıtlanmaz.
+stabil-temas-2026-11-01 [kesitten sonra; rapor=2026-11-01, veri sonu=bilinmiyor]: Stabil: Günlük destek kimliğine bağlı, ≥0,35 günlük ATR ayrılmalı günlük temas sırasıyla etiketlenen 4s temas checkpointleri; 8×4s tam ufuk 3+ grubu n=33, %81,8 tek sembol. Örnek yoğun; genellenebilir kural değildir. Kaynak veri bitişi bilinmiyor.
+ms-dis-bos-2026-10-21 [kesitten sonra; rapor=2026-10-21, veri sonu=2026-10-19]: Market Structure: 4s dış BOS olayları ayrı bir gruptur; iç BOS, CHoCH veya diğer zaman dilimlerine aynı sonuç aktarılamaz. Geçmiş olay istatistiği mevcut olayın sonucunu belirlemez.

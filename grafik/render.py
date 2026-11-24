@@ -89,6 +89,103 @@ from grafik.tarama import (  # noqa: F401
     girdi_ozeti,
 )
 
+def olay_kadrajini_hazirla(goruntu: Mapping[str, Any], n: int) -> tuple[dict, list[float], int, bool, bool]:
+    """Grafik ve prompt için ortak fiyat kadrajı; görünüm filtresinden sonra çağrılır."""
+    kapanis, yuksek, dusuk = (list(goruntu[ad][:n]) for ad in ("kapanis", "yuksek", "dusuk"))
+    formasyon = goruntu.get("formasyon") or {}
+    alarm = goruntu.get("alarm") or {}
+    ek_y: list[float] = []
+    for ad in ("upper_now", "lower_now"):
+        if formasyon.get(ad) is not None:
+            ek_y.append(float(formasyon[ad]))
+    if alarm.get("deger") is not None:
+        ek_y.append(float(alarm["deger"]))
+    if alarm.get("hedef") is not None:
+        ek_y.append(float(alarm["hedef"]))     # FAZ 4 §4: 🎯 hedef kadrajda kalsın
+    zone = goruntu.get("zone") or {}
+    for b in (_grafik_zone(zone).get("cizilen") or []):
+        ek_y.extend([float(b["alt"]), float(b["ust"])])
+    _olay_src = goruntu.get("olay") or {}
+    replay = goruntu.get("replay") or {}
+    kesit = replay.get("kesit") if replay.get("asama") == "sonuc" else None
+    # Olayların kadraja alınıp alınmaması soru anındaki mumlarla belirlenir;
+    # sonuç mumları ancak sonrasında fiyat ekseninin genişlemesini sağlar.
+    olay_son = int(kesit) + 1 if kesit is not None else n
+    ham = [float(v) for v in (kapanis[:olay_son] + yuksek[:olay_son]
+                              + dusuk[:olay_son]) if v is not None]
+    gorunum_modu = str((goruntu.get("gorunum") or {}).get("mod") or "odak").lower()
+    if ham and gorunum_modu != "baglam":
+        _m_lo, _m_hi = min(ham), max(ham)
+        _m_span = max(_m_hi - _m_lo, abs(_m_hi) * 0.015, 1e-9)
+        _seviye_pay = 1.25 * _m_span
+        _yakin_seviye = lambda val: (_m_lo - _seviye_pay) <= val <= (_m_hi + _seviye_pay)
+    else:
+        _yakin_seviye = lambda _val: True
+    for b in (_olay_src.get("swinglar") or []):        # iç pivot okları
+        v = _gercek(b.get("fiyat"))
+        if v is not None and _yakin_seviye(v):
+            ek_y.append(v)
+    kabul_seviyeler = []
+    for b in (_olay_src.get("seviyeler") or []):       # dış PH/PL/WH/WL cetveli
+        v = _gercek(b.get("fiyat"))
+        if v is not None and _yakin_seviye(v):
+            ek_y.append(v)
+            kabul_seviyeler.append(b)
+    # BOS/CHoCH/kritik seviyeleri: yalnız mum aralığına yakınsa çizilir ve
+    # aralığı genişletir. Eski ve uzak seviyeler (ör. 3 hafta önceki kırılım
+    # 8% üstte) eskiden tüm grafiği sıkıştırıyordu; şimdi sayılır, çizilmez.
+    stabil_src = goruntu.get("stabil") or {}
+    stabil_kadrajda = False
+    if ham and stabil_src.get("hazir"):
+        m_lo, m_hi = min(ham), max(ham)
+        m_span = max(m_hi - m_lo, abs(m_hi) * 0.015, 1e-9)
+        stabil_pay = float(SABITLER.get("stabil_kadraj_orani", 0.35)) * m_span
+        for sv in list(stabil_src.get("seviyeler") or [])[:olay_son]:
+            sv_f = _gercek(sv)
+            if sv_f is not None and (m_lo - stabil_pay <= sv_f <= m_hi + stabil_pay):
+                ek_y.append(sv_f)
+                stabil_kadrajda = True
+    # Direnç, desteğin yerini almaz; aynı sınırlı kadraj politikasına
+    # bağımsız olarak girer. Uzak seviye mumları sıkıştırmaz.
+    direnc_src = goruntu.get("stabil_direnc") or {}
+    direnc_kadrajda = False
+    if ham and direnc_src.get("hazir"):
+        m_lo, m_hi = min(ham), max(ham)
+        m_span = max(m_hi - m_lo, abs(m_hi) * 0.015, 1e-9)
+        direnc_pay = float(SABITLER.get("stabil_kadraj_orani", 0.35)) * m_span
+        for sv in list(direnc_src.get("seviyeler") or [])[:olay_son]:
+            sv_f = _gercek(sv)
+            if sv_f is not None and (m_lo - direnc_pay <= sv_f <= m_hi + direnc_pay):
+                ek_y.append(sv_f)
+                direnc_kadrajda = True
+    taban = ham + ek_y
+    t_lo, t_hi = (min(taban), max(taban)) if taban else (0.0, 1.0)
+    kadraj_pay = float(SABITLER["kadraj_pay_orani"]) * max(t_hi - t_lo, 1e-9)
+    kadrajda = (lambda v: t_lo - kadraj_pay <= v <= t_hi + kadraj_pay)
+    kabul_olaylar, kadraj_disi = [], 0
+    for b in (_olay_src.get("olaylar") or []):
+        v = _gercek(b.get("seviye"))
+        if v is None:
+            continue
+        if kadrajda(v):
+            kabul_olaylar.append(b)
+            ek_y.append(v)
+        else:
+            kadraj_disi += 1
+    kritik_ham = dict(_olay_src.get("kritik") or {})
+    kritik_kabul: dict[str, Any] = {}
+    if kritik_ham.get("seviye") is not None:
+        if kadrajda(float(kritik_ham["seviye"])):
+            kritik_kabul = kritik_ham
+            ek_y.append(float(kritik_ham["seviye"]))
+        else:
+            kadraj_disi += 1
+    goruntu = {**goruntu, "olay": {**_olay_src, "olaylar": kabul_olaylar,
+                                   "seviyeler": kabul_seviyeler,
+                                   "kritik": kritik_kabul}}
+    return goruntu, ek_y, kadraj_disi, stabil_kadrajda, direnc_kadrajda
+
+
 def _sag_serit_px_hesapla(goruntu: Mapping[str, Any]) -> float:
     """Sağ şerit genişliğini karenin gerçek etiketlerine göre seç (2026-11-15).
 
@@ -393,95 +490,10 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                                          list(goruntu["dusuk"][:n]), list(goruntu["kapanis"][:n]))
         formasyon = goruntu.get("formasyon") or {}
         alarm = goruntu.get("alarm") or {}
-        ek_y: list[float] = []
-        for ad in ("upper_now", "lower_now"):
-            if formasyon.get(ad) is not None:
-                ek_y.append(float(formasyon[ad]))
-        if alarm.get("deger") is not None:
-            ek_y.append(float(alarm["deger"]))
-        if alarm.get("hedef") is not None:
-            ek_y.append(float(alarm["hedef"]))     # FAZ 4 §4: 🎯 hedef kadrajda kalsın
-        zone = goruntu.get("zone") or {}
-        for b in (_grafik_zone(zone).get("cizilen") or []):
-            ek_y.extend([float(b["alt"]), float(b["ust"])])
-        _olay_src = goruntu.get("olay") or {}
         replay = goruntu.get("replay") or {}
         kesit = replay.get("kesit") if replay.get("asama") == "sonuc" else None
-        # Olayların kadraja alınıp alınmaması soru anındaki mumlarla belirlenir;
-        # sonuç mumları ancak sonrasında fiyat ekseninin genişlemesini sağlar.
-        olay_son = int(kesit) + 1 if kesit is not None else n
-        ham = [float(v) for v in (kapanis[:olay_son] + yuksek[:olay_son]
-                                  + dusuk[:olay_son]) if v is not None]
-        gorunum_modu = str((goruntu.get("gorunum") or {}).get("mod") or "odak").lower()
-        if ham and gorunum_modu != "baglam":
-            _m_lo, _m_hi = min(ham), max(ham)
-            _m_span = max(_m_hi - _m_lo, abs(_m_hi) * 0.015, 1e-9)
-            _seviye_pay = 1.25 * _m_span
-            _yakin_seviye = lambda val: (_m_lo - _seviye_pay) <= val <= (_m_hi + _seviye_pay)
-        else:
-            _yakin_seviye = lambda _val: True
-        for b in (_olay_src.get("swinglar") or []):        # iç pivot okları
-            v = _gercek(b.get("fiyat"))
-            if v is not None and _yakin_seviye(v):
-                ek_y.append(v)
-        kabul_seviyeler = []
-        for b in (_olay_src.get("seviyeler") or []):       # dış PH/PL/WH/WL cetveli
-            v = _gercek(b.get("fiyat"))
-            if v is not None and _yakin_seviye(v):
-                ek_y.append(v)
-                kabul_seviyeler.append(b)
-        # BOS/CHoCH/kritik seviyeleri: yalnız mum aralığına yakınsa çizilir ve
-        # aralığı genişletir. Eski ve uzak seviyeler (ör. 3 hafta önceki kırılım
-        # 8% üstte) eskiden tüm grafiği sıkıştırıyordu; şimdi sayılır, çizilmez.
-        stabil_src = goruntu.get("stabil") or {}
-        stabil_kadrajda = False
-        if ham and stabil_src.get("hazir"):
-            m_lo, m_hi = min(ham), max(ham)
-            m_span = max(m_hi - m_lo, abs(m_hi) * 0.015, 1e-9)
-            stabil_pay = float(SABITLER.get("stabil_kadraj_orani", 0.35)) * m_span
-            for sv in list(stabil_src.get("seviyeler") or [])[:olay_son]:
-                sv_f = _gercek(sv)
-                if sv_f is not None and (m_lo - stabil_pay <= sv_f <= m_hi + stabil_pay):
-                    ek_y.append(sv_f)
-                    stabil_kadrajda = True
-        # Direnç, desteğin yerini almaz; aynı sınırlı kadraj politikasına
-        # bağımsız olarak girer. Uzak seviye mumları sıkıştırmaz.
-        direnc_src = goruntu.get("stabil_direnc") or {}
-        direnc_kadrajda = False
-        if ham and direnc_src.get("hazir"):
-            m_lo, m_hi = min(ham), max(ham)
-            m_span = max(m_hi - m_lo, abs(m_hi) * 0.015, 1e-9)
-            direnc_pay = float(SABITLER.get("stabil_kadraj_orani", 0.35)) * m_span
-            for sv in list(direnc_src.get("seviyeler") or [])[:olay_son]:
-                sv_f = _gercek(sv)
-                if sv_f is not None and (m_lo - direnc_pay <= sv_f <= m_hi + direnc_pay):
-                    ek_y.append(sv_f)
-                    direnc_kadrajda = True
-        taban = ham + ek_y
-        t_lo, t_hi = (min(taban), max(taban)) if taban else (0.0, 1.0)
-        kadraj_pay = float(SABITLER["kadraj_pay_orani"]) * max(t_hi - t_lo, 1e-9)
-        kadrajda = (lambda v: t_lo - kadraj_pay <= v <= t_hi + kadraj_pay)
-        kabul_olaylar, kadraj_disi = [], 0
-        for b in (_olay_src.get("olaylar") or []):
-            v = _gercek(b.get("seviye"))
-            if v is None:
-                continue
-            if kadrajda(v):
-                kabul_olaylar.append(b)
-                ek_y.append(v)
-            else:
-                kadraj_disi += 1
-        kritik_ham = dict(_olay_src.get("kritik") or {})
-        kritik_kabul: dict[str, Any] = {}
-        if kritik_ham.get("seviye") is not None:
-            if kadrajda(float(kritik_ham["seviye"])):
-                kritik_kabul = kritik_ham
-                ek_y.append(float(kritik_ham["seviye"]))
-            else:
-                kadraj_disi += 1
-        goruntu = {**goruntu, "olay": {**_olay_src, "olaylar": kabul_olaylar,
-                                       "seviyeler": kabul_seviyeler,
-                                       "kritik": kritik_kabul}}
+        goruntu, ek_y, kadraj_disi, stabil_kadrajda, direnc_kadrajda = olay_kadrajini_hazirla(goruntu, n)
+        zone = goruntu.get("zone") or {}
         # Bant doğruları y-aralığını BELİRLEMEZ (2026-10-23 ölçümü): seriyi
         # olduğu gibi aralığa katmak, bandın fiyattan kopuk bölümünü (üçgenin
         # geriye uzanan tabanı, dik yükselen alt çizgi) da hesaba katıyor ve
@@ -687,6 +699,8 @@ def _kare_ciz(goruntu: Mapping[str, Any], tf: str, olcu: Mapping[str, Any],
                                        + sayac_rozet.get("dusus", 0))
         meta["serit"]["rozet_artis"] = int(sayac_rozet.get("artis", 0))
         meta["serit"]["rozet_dusus"] = int(sayac_rozet.get("dusus", 0))
+        # Actual chart labels, not every underlying RVOL value.
+        meta["serit"]["rozetler"] = list(sayac_rozet.get("rozetler") or [])
         # Tazelik önceliği izleri: en yeni uygun mumun rozeti çizildiyse barı.
         meta["serit"]["rozet_taze_artis"] = sayac_rozet.get("taze_artis")
         meta["serit"]["rozet_taze_dusus"] = sayac_rozet.get("taze_dusus")

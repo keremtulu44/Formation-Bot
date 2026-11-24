@@ -70,6 +70,9 @@ class DomainAlarmCandidate:
     rank_score: float
     grafik_verisi: dict[str, Any] | None = None
     grafik_verisi_public: dict[str, Any] | None = None
+    # Recent completed bar labels allow cooldown to survive rolling windows,
+    # whose frame-relative last index may remain constant indefinitely.
+    recent_bar_opens: tuple[str, ...] = ()
 
     @property
     def dedup_key(self) -> str:
@@ -365,7 +368,13 @@ def _bolge_sebepleri(results: Mapping[str, Any], tf: str,
         ("order_block", "OB", ("bull", "bear")),
         ("fvg", "FVG", ("bull_fvg", "bear_fvg")),
     ):
-        export = _usable_export(_domain(results, tf, alan))
+        entry = _domain(results, tf, alan)
+        quality = _token_temiz(_field(entry, "data_quality"))
+        # OB/FVG deliberately freeze their previous export on incomplete or
+        # gap bars; that historical snapshot is not a fresh trigger.
+        if quality and quality != "OK":
+            continue
+        export = _usable_export(entry)
         if export is None:
             continue
         for anahtar in yanlar:
@@ -706,6 +715,10 @@ def evaluate_domain_alarm_candidates(
                 rank_score=puan,
                 grafik_verisi=grafik_verisi,
                 grafik_verisi_public=grafik_verisi_public,
+                recent_bar_opens=tuple(
+                    pd.Timestamp(ts).isoformat()
+                    for ts in frame.index[-_cfg_int("YENI_DOMAIN_ALARM_COOLDOWN_BAR", 6):]
+                ),
             )
         )
 
@@ -762,13 +775,31 @@ def _zaten_gonderildi(slot: Mapping[str, Any] | None, cand: DomainAlarmCandidate
         return False
     if str(slot.get("last_bar_open") or "") == cand.bar_open:
         return True
+    cooldown = _cfg_int("YENI_DOMAIN_ALARM_COOLDOWN_BAR", 6)
+    if cand.recent_bar_opens and slot.get("last_bar_open"):
+        # Count actual distinct completed bars, not positions in a rolling
+        # frame. If the available history is too short, fail closed instead of
+        # guessing elapsed bars from wall-clock time or a shifted index.
+        try:
+            previous = pd.Timestamp(slot["last_bar_open"])
+            current = pd.Timestamp(cand.bar_open)
+            history = pd.to_datetime(list(cand.recent_bar_opens), utc=True, errors="raise")
+            previous = previous.tz_localize("UTC") if previous.tzinfo is None else previous.tz_convert("UTC")
+            current = current.tz_localize("UTC") if current.tzinfo is None else current.tz_convert("UTC")
+            if pd.isna(previous) or pd.isna(current) or history.isna().any():
+                return True
+            if current <= previous or len(history) == 0 or history[-1] != current:
+                return True
+            if not history.is_monotonic_increasing or history.has_duplicates:
+                return True
+            return int(((history > previous) & (history <= current)).sum()) < cooldown
+        except (TypeError, ValueError, OverflowError):
+            return True
+    # Compatibility for callers without bar history and older stored slots.
     try:
         son_index = int(slot["last_bar_index"])
     except (KeyError, TypeError, ValueError, OverflowError):
         return False
-    cooldown = _cfg_int("YENI_DOMAIN_ALARM_COOLDOWN_BAR", 6)
-    # Bar yeniden çekildiğinde indeks geriye dönebilir; "eski ya da aynı bar"
-    # da tekrar basılmamalı (aksi halde cooldown negatif farkla atlanır).
     return (cand.bar_index - son_index) < cooldown
 
 

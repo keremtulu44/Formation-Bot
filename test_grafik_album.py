@@ -146,6 +146,30 @@ def test_formasyon_verilmediyse_uyari_yok():
     assert formasyon is None and uyarilar == []
 
 
+def test_formasyon_dosyasi_kart_anahtarlarini_kabul_eder(tmp_path):
+    """Kart kaydı `upper/lower` kullanır; çizim `upper_now/lower_now` okur.
+
+    Regresyon: aynı kayıt `--formasyon` ile verildiğinde bant sessizce
+    çizilmiyordu. Eski anahtar yeni anahtara kopyalanır, geometri değişmez.
+    """
+    import json
+
+    class _Cerceve:
+        def __len__(self):
+            return 100
+
+    dosya = tmp_path / "kart.json"
+    dosya.write_text(json.dumps({"pattern_name": "Alçalan Üçgen",
+                                 "upper": 12.5, "lower": 11.0}), encoding="utf-8")
+    formasyon, uyarilar = grafik_uret._formasyon_yukle(str(dosya), _Cerceve())
+    assert uyarilar == []
+    assert formasyon["upper_now"] == 12.5 and formasyon["lower_now"] == 11.0
+    # Açıkça verilmiş yeni anahtar ezilmez.
+    dosya.write_text(json.dumps({"upper": 99.0, "upper_now": 12.5}), encoding="utf-8")
+    formasyon, _ = grafik_uret._formasyon_yukle(str(dosya), _Cerceve())
+    assert formasyon["upper_now"] == 12.5
+
+
 def test_kare_altyazisi_tarih_ve_mum(monkeypatch):
     import main as M
     alt = M._kare_altyazisi("AKBNK", "4h", {"mum_sayisi": 120,

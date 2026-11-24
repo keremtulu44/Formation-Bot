@@ -199,6 +199,7 @@ def _aday(symbol: str = "ASTOR", **kwargs) -> DomainAlarmCandidate:
         rank_score=kwargs.get("rank_score", 4.0),
         grafik_verisi=kwargs.get("grafik_verisi"),
         grafik_verisi_public=kwargs.get("grafik_verisi_public"),
+        recent_bar_opens=kwargs.get("recent_bar_opens", ()),
     )
 
 
@@ -342,6 +343,64 @@ def test_cooldown_sonraki_barlarda_da_susar(tmp_path):
 
     assert [s["tekil_gonderilen"] for s in sonuc] == [1, 0, 0, 1]
     assert [s["filtrelendi"] for s in sonuc] == [0, 1, 1, 0]
+    assert len(notifier.dm) == 2
+
+
+@pytest.mark.parametrize("domain,flag", [("order_block", "INCOMPLETE_BAR"),
+                                        ("order_block", "SOURCE_GAP"),
+                                        ("fvg", "INCOMPLETE_BAR"),
+                                        ("fvg", "SOURCE_GAP"),
+                                        ("fvg", "WARMUP")])
+def test_kalitesi_dusuk_donmus_bolge_alarm_tetiklemez(domain, flag):
+    from bot.domain_alarm_service import _bolge_sebepleri
+
+    results = _sonuclar(ob_tepki=domain == "order_block", fvg_reaksiyon=domain == "fvg")
+    results["1d"][domain].data_quality = flag
+    assert _bolge_sebepleri(results, "1d", 100.0) == []
+    results["1d"][domain].data_quality = "OK"
+    assert _bolge_sebepleri(results, "1d", 100.0)
+
+
+def test_cooldown_rolling_pencerede_gercek_kapanmis_mumlari_sayar(tmp_path):
+    from bot.domain_alarm_service import _zaten_gonderildi
+
+    index = pd.date_range("2026-10-01 10:00", periods=48, freq="D", tz=ISTANBUL_TZ)
+    frame = _frame()
+    frame.index = index[:40]
+    results = _sonuclar(dist_atr=1.0, rvol=6.0, bos=True)
+    generated = evaluate_domain_alarm_candidates(
+        "ASTOR", {"1d": frame}, {"1d": frame}, results,
+        (index[39] + pd.Timedelta(hours=10)).to_pydatetime(),
+    )
+    assert len(generated) == 1
+    first = generated[0]
+    assert first.recent_bar_opens == tuple(t.isoformat() for t in index[34:40])
+    slot = {"last_bar_open": first.bar_open, "last_bar_index": first.bar_index}
+    for offset in range(1, 7):
+        # 40-bar rolling window: newest position stays 39 on every scan.
+        window = index[offset:40 + offset]
+        later = _aday(bar_index=39, bar_open=window[-1].isoformat(),
+                      recent_bar_opens=tuple(t.isoformat() for t in window[-6:]))
+        assert _zaten_gonderildi(slot, later) is (offset < 6)
+    malformed = _aday(bar_index=39, bar_open=index[45].isoformat(),
+                      recent_bar_opens=("not-a-timestamp",))
+    assert _zaten_gonderildi(slot, malformed)
+    too_short = _aday(bar_index=39, bar_open=index[45].isoformat(),
+                      recent_bar_opens=(index[45].isoformat(),))
+    assert _zaten_gonderildi(slot, too_short)
+
+
+def test_rolling_cooldown_kalici_state_ile_tekrar_gonderir(tmp_path):
+    index = pd.date_range("2026-09-01 10:00", periods=46, freq="D", tz=ISTANBUL_TZ)
+    notifier = _Notifier()
+    state_path = str(tmp_path / "domain.json")
+    for offset in range(7):
+        window = index[offset:40 + offset]
+        candidate = _aday(bar_index=39, bar_open=window[-1].isoformat(),
+                         recent_bar_opens=tuple(t.isoformat() for t in window[-6:]))
+        result = dispatch_domain_alarm_candidates([candidate], notifier, state_path=state_path)
+        assert result["tekil_gonderilen"] == int(offset in (0, 6))
+        assert result["filtrelendi"] == int(offset not in (0, 6))
     assert len(notifier.dm) == 2
 
 

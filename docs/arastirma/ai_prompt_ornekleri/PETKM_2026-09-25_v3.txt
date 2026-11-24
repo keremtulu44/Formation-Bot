@@ -1,0 +1,83 @@
+Sen Formation-Bot'un grafik yorumcususun. Kullanıcı grafiği zaten görüyor; verileri yeniden sıralamak yerine kendi görüşüyle karşılaştırabileceği gerekçeli bir okuma yap.
+
+Ana zaman diliminde ağır basan yönü veya ihtimali ve en önemli gerekçelerini belirt; dayanak yetersizse kararsız kal. En önemli karşı kanıtı ve görüşünü güçlendirecek veya sorgulatacak gelişmeyi açıkla. Grafiğe özel replay'de yalnız temas sayısını değil, verilmiş kapanışların anlamını da tart. İlgili sabit araştırmayı kendi kapsamında kullan; bütün bulguları tekrarlama.
+
+Gözlem ile koşullu yorumu ayır. Verilmeyen fiyat, olay, temas sonucu veya hacim teyidi uydurma; eksik veri yokluk değildir. Temas tek başına ret, dönüş veya gerçek emir yoğunluğu göstermez. Geçişi teyitli yönle, farklı zaman dilimlerini ve hazır olmayan motoru sonuçla karıştırma. Formasyon kalite puanı yön veya olasılık değildir; genel istatistik bu sembolün olasılığı değildir. Kesin tahmin, al-sat, hedef veya stop verme; makul ve koşullu yön görüşünden kaçınma.
+
+Yalnız üç başlık kullan: Mevcut durum / Bağlam / Replay notu. Yaklaşık 120–180 kelime hedefle, gereksiz uzatma ve tekrar yapma. Her TF veya seviyeyi sıralama. Tablo, uzun giriş, genel yatırım uyarısı ve Markdown kullanma; düz metin yaz.
+
+GRAFİK VERİSİ
+PETKM — kesit 25.09.26 18:30; ana zaman dilimi 4h; tarihsel veya isteğe bağlı kesit; gerçek alarm doğrulanmadı.
+Kaynak: yerel PETKM.json; sağlayıcı bilinmiyor; günlük: saatlik önbellekten türetilmiş. Fiyat her TF'nin son tamamlanmış kapanışıdır; farklı kapanış saatleri farklı fiyatlar verebilir.
+Olay, kaynak, temas ve formasyon zamanları aksi belirtilmedikçe mum AÇILIŞ etiketidir. Saatler İstanbul saatidir. Saatlik mumlar önce kesildi, sonra üst TF türetildi; pencerenin ilk kovası eksik olabilir. Son seans mumları kısa olabilir. Seçilen olay/bölgeler tüm geçmiş değildir.
+
+1H GRAFİK
+360 mum; son açılış 25.09.26 17:30, kapanış 25.09.26 18:00: 21,10.
+07.09.26 14:30 dış geçiş başarısızlığı, olay yönü yukarı 21,06 [teyitli/geçerli/güncel/gözlendi].
+Pozitif OB bölgesi 20,58–20,96; kaynak mum 21.09.26 11:30.
+23.09.26 09:30 dış BOS yukarı 21,74 [teyitli/geçerli/güncel/gözlendi].
+23.09.26 09:30 iç CHOCH yukarı 21,54 [teyitli/geçerli/güncel/takip bekleniyor].
+24.09.26 14:30: Alçalan Üçgen bilinir mum etiketi.
+25.09.26 10:30 dış SWEEP aşağı 21,62 [teyitli/geçerli/güncel/gözlendi].
+Son yapı: dış yukarı yönlü (BOS teyitli); iç yukarı geçişte (yukarı CHoCH, BOS bekleniyor).
+Formasyon: Alçalan Üçgen, sıkışma güçleniyor, kalite 86,31. Çizgi üst 23,55, alt 20,55.
+FVG: çalıştırılmadı (source supports only 2h, 4h, and 1d); sonuç bilinmiyor.
+Hacim: yukarı kırılımda katılım desteği var; sınıf normal, RVOL 0,91, yön desteği yukarı.
+Stabil: destek 20,18, durum ACTIVE, destek kesiti 24.09.26 18:30, kalite OK; haftalık=hazır değil (hazır=False); günlük=hazır değil (hazır=False); 4s=satış zayıflıyor (hazır=True).
+
+2H GRAFİK
+200 mum; son açılış 25.09.26 17:30, kapanış 25.09.26 18:00: 21,10.
+Pozitif OB bölgesi 19,79–19,94; kaynak mum 04.09.26 13:30.
+07.09.26 13:30 dış geçiş başarısızlığı, olay yönü yukarı 21,08 [teyitli/geçerli/güncel/gözlendi].
+Pozitif OB bölgesi 20,58–21,00; kaynak mum 21.09.26 11:30.
+23.09.26 09:30 iç BOS yukarı 21,74 [teyitli/geçerli/güncel/gözlendi].
+23.09.26 15:30 dış BOS yukarı 21,74 [teyitli/geçerli/güncel/gözlendi].
+25.09.26 09:30 iç SWEEP aşağı 21,62 [teyitli/geçerli/güncel/gözlendi].
+25.09.26 09:30: Alçalan Üçgen bilinir mum etiketi.
+Son yapı: dış yukarı yönlü (BOS teyitli); iç yukarı yönlü (geçiş BOS ile teyitli).
+Formasyon: Alçalan Üçgen, sıkışma güçleniyor, kalite 83,74. Çizgi üst 23,58, alt 20,54.
+FVG: çalıştırılmadı (2h FVG requires explicit offline/replay opt-in); sonuç bilinmiyor.
+Hacim: aşağı katılım zayıflıyor; sınıf düşük, RVOL 0,63, yön desteği nötr.
+Stabil: destek 20,18, durum ACTIVE, destek kesiti 24.09.26 18:30, kalite OK; haftalık=hazır değil (hazır=False); günlük=hazır değil (hazır=False); 4s=satış zayıflıyor (hazır=True).
+
+4H GRAFİK
+120 mum; son açılış 25.09.26 17:30, kapanış 25.09.26 18:00: 21,10.
+Pozitif OB bölgesi 19,11–19,39; kaynak mum 17.08.26 17:30.
+Pozitif OB bölgesi 19,78–20,06; kaynak mum 04.09.26 13:30.
+07.09.26 13:30 dış BOS yukarı 21,06 [teyitli/geçerli/güncel/gözlendi].
+18.09.26 09:30 dış SWEEP aşağı 21,08 [teyitli/geçerli/güncel/gözlendi].
+23.09.26 09:30 iç BOS yukarı 21,74 [teyitli/geçerli/güncel/gözlendi].
+Negatif FVG bölgesi 21,26–21,70; kaynak mum 25.09.26 13:30; durum aktif.
+25.09.26 17:30: Simetrik Üçgen bilinir mum etiketi.
+Son yapı: dış yukarı yönlü (BOS teyitli); iç yukarı yönlü (BOS teyitli).
+Formasyon: Simetrik Üçgen, sıkışma güçleniyor, kalite 79,17. Çizgi üst 23,63, alt 20,67.
+FVG motoru: pozitif aktif 0, negatif aktif 1.
+Hacim: hazır değil; sınıf bilinmiyor, RVOL bilinmiyor, yön desteği nötr.
+Stabil: destek 20,18, durum ACTIVE, destek kesiti 24.09.26 18:30, kalite OK; haftalık=hazır değil (hazır=False); günlük=hazır değil (hazır=False); 4s=satış zayıflıyor (hazır=True).
+
+1D GRAFİK
+40 mum; son açılış 25.09.26 00:00, kapanış 25.09.26 18:30: 21,10.
+Pozitif OB bölgesi 19,78–20,40; kaynak mum 04.09.26 00:00.
+07.09.26 00:00 iç BOS yukarı 21,06 [teyitli/geçerli/güncel/gözlendi].
+Negatif OB bölgesi 24,62–26,80; kaynak mum 10.09.26 00:00.
+16.09.26 00:00 iç SWEEP aşağı 21,08 [teyitli/geçerli/güncel/gözlendi].
+Son yapı: dış nötr; iç yukarı yönlü (BOS teyitli).
+Formasyon: grafikte kullanılabilir aday yok.
+FVG motoru: pozitif aktif 0, negatif aktif 0.
+Hacim: hazır değil; sınıf bilinmiyor, RVOL bilinmiyor, yön desteği nötr.
+Stabil: destek 20,18, durum ACTIVE, destek kesiti 25.09.26 18:30, kalite OK; haftalık=hazır değil (hazır=False); günlük=hazır değil (hazır=False); 4s=satış zayıflıyor (hazır=True).
+
+GRAFİĞE ÖZEL REPLAY — kapanmış mumlarla; seçilen bölgeler. OB: orijinal sınırla OHLC örtüşmesi; FVG: motorun kendi temas kuralı. Birbirini izleyen temas mumları tek epizottur; yalnız bu veri penceresi ve seçilen bölgeler gözlenmiştir. Öncesi bilinmez; son iki epizot ayrıntılı gösterilir. Yalnız ana TF replay özeti yazılır. Stabil için grafik-özel temas replay'i bu sürümde hesaplanmadı.
+
+4H REPLAY
+Negatif FVG 21,26–21,70: 0 temas; kullanılır mum 25.09.26 13:30; kalan bant 21,26–21,70; doğum mumunda Wilder ATR(14) 0,73, orijinal bölge yüksekliği/ATR 0,61.
+Pozitif OB 19,78–20,06: 0 temas; kullanılır mum 07.09.26 09:30; kalan bant 19,78–20,06; doğum mumunda Wilder ATR(14) 0,37, orijinal bölge yüksekliği/ATR 0,75.
+Pozitif OB 19,11–19,39: 0 temas; kullanılır mum 18.08.26 13:30; kalan bant 19,11–19,39; doğum mumunda Wilder ATR(14) 0,32, orijinal bölge yüksekliği/ATR 0,88.
+
+SABİT GENEL ARAŞTIRMA BLOĞU — değişken grafiğin sonucu değildir. Araştırma ölçümleri ve kaynakları aşağıdadır; bireysel başarı veya kesin sonuç değildir.
+Bu geriye dönük denemede kesit sonrasındaki veya tarihi belirsiz araştırmalar da açık etiketle verilir; kesitte biliniyormuş gibi sunma.
+ob-temas-2026-10-21 [kesitten sonra; rapor=2026-10-21, veri sonu=2026-10-19; kaynak=docs/arastirma/REPLAY_OZET_2026-10-21.md §4]: OB: 131.901 bölgede 17.048 (%12,9) üç veya daha fazla temas epizodu gördü. Bu bir bölgenin başarı olasılığı değildir; çok temasın bölgeyi zayıflattığı tek başına kanıtlanmaz.
+fvg-atr-2026-10-21 [kesitten sonra; rapor=2026-10-21, veri sonu=2026-10-19; kaynak=docs/arastirma/REPLAY_OZET_2026-10-21.md §5]: FVG: Günlük örneklem n=6.285; yükseklik 0–0,5 ATR olanlarda n=3.276, ≥2 ATR olanlarda n=162; beklenen yönde ≥1 ATR uzanım sırasıyla %64,3 ve %71,0. İşlem başarısı veya sembole özel olasılık değildir; yükseklik/ATR verilmedikçe grup varsayma.
+stabil-temas-2026-11-01 [kesitten sonra; rapor=2026-11-01, veri sonu=bilinmiyor; kaynak=docs/arastirma/stabil_100_sonuclar/STABIL_DAVRANIS_48_YANITLARI.md §STB-BHV-C02]: Stabil: 0,35 ATR ayrılma ile sayılan bağımsız destek temaslarında, 8×4s tam ufuk 3+ temas grubu n=33; %81,8'i tek semboldendir. Genellenebilir kural değildir; veri bitişi bilinmiyor.
+ms-dis-bos-2026-10-21 [kesitten sonra; rapor=2026-10-21, veri sonu=2026-10-19; kaynak=docs/arastirma/REPLAY_OZET_2026-10-21.md §8]: Market Structure: 4s dış BOS olayları ayrı bir gruptur; iç BOS, CHoCH veya diğer zaman dilimlerine aynı sonuç aktarılamaz. Geçmiş olay istatistiği mevcut olayın sonucunu belirlemez.
+hacim-kosul-2026-10 [kesitten sonra; rapor=bilinmiyor, veri sonu=2026-10-19; kaynak=docs/arastirma/ARASTIRMA_BULGULARI.md §Hacim]: Hacim: 4s bölge teması ve Market Structure olayı farklı araştırma gruplarıdır; yüksek hacim tek başına iyi veya kötü diye genellenemez. Hazır olmayan motor için sonuç çıkarma.

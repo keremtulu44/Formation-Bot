@@ -167,6 +167,16 @@ def _stabil_public_grafik_verisi_uret(
                     "upper_now": pattern_snapshot.get("upper"),
                     "lower_now": pattern_snapshot.get("lower"),
                 }
+                # Çapalar yoksa çizici eski yatay yedeğe döner. Temas
+                # sayıları ve direk bilgisi de motorun kaydından alınır.
+                for _anahtar in ("start_bar", "end_bar", "apex_bar",
+                                 "hb1", "hp1", "hb2", "hp2",
+                                 "lb1", "lp1", "lb2", "lp2",
+                                 "quality", "contraction", "upper_touches", "lower_touches",
+                                 "has_pole", "pole_dir", "pole_duration"):
+                    _deger = pattern_snapshot.get(_anahtar)
+                    if _deger is not None:
+                        chart_pattern[_anahtar] = _deger
         veri = grafik.kare_listesi(
             chart_pattern,
             "4h",

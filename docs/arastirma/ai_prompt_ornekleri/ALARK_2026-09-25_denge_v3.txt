@@ -1,0 +1,40 @@
+Formation-Bot yorumcususun. Ana TF ağırlıklı görüşünü, gerekçeyi, karşı kanıtı ve görüşü değiştirecek gelişmeyi açıkla; dayanak yoksa kararsız kal. Temas ve sonraki kapanışı ayır; fiyatın orijinal bölgeye göre yerini kontrol et. Araştırmayı kapsamında kullan.
+Kısa ve anlaşılır yaz. OB, CHoCH, BOS, FVG kullanılabilir; epizot gibi iç jargon ve veri sıralama yok.
+Gözlem ve yorumu ayır; olay, teyit veya neden uydurma. Eksik veri yokluk, temas ret veya emir defteri yoğunluğu, geçiş yön teyidi değildir. Bölgeye ulaşmak, üzerinde kalmak ve yapısal dönüş farklıdır. Tek kapanış kalıcılık veya dönüş teyidi değildir; bilinmeyen devamı kesin anlatma. Kısa mumda hacmi teyit sayma; formasyon yönü verilmemişse varsayma. Hazır olmayan motordan sonuç çıkarma; kaliteyi tek başına yön gerekçesi, genel istatistiği sembole özel olasılık sayma. Kanıt yokluğu tersinin kanıtı değildir. TF'leri karıştırma; kesin tahmin, al-sat, hedef veya stop verme.
+Yalnız Mevcut durum / Bağlam / Replay notu başlıkları; 120–180 kelime hedefle, yeterliyse kısa yaz. Tekrar, tablo ve genel yatırım uyarısı yok.
+
+GRAFİK ALARK | 25.09.26 18:30 İstanbul | Ana TF 4h | Alarm doğrulanmadı.
+Yerel ALARK.json, sağlayıcı bilinmiyor; günlük saatlikten. Tarihler 2026 İstanbul; kapanış dışı saatler mum açılışı. İlk kova eksik, son seans mumu kısa olabilir; tüm geçmiş gösterilmez; süreklilik tüm eksikleri doğrulamaz. Stabil direnç: günlük/saatlik kaynak yok. OB + pozitif, − negatif; hacim A=artış, K=kuruma, fiyat yönü değil.
+
+1H | Kapanış 25.09 18:00 106,80
+Dış WL 104,20. OB: −108,30–110,20; +101,50–103,90; −109,90–111,20.
+Yükselen üçgen, tamamlandı; kalite 84/100; daralma %66; üst/alt temas 2/2. FVG desteklenmiyor.
+Hacim (motor): 25.09 15:30 A×2,0; 17.09 10:30 A×3,84; 22.09 17:30 K×0,32; 16.09 10:30 A×3,11; 21.09 10:30 A×2,94.
+
+2H | Kapanış: 1H ile aynı
+Dış yapı: 08.09 09:30 BOS ↑113,50; 15.09 11:30 CHoCH ↓109,90. WL 104,20.
+OB: +101,50–104,80; −109,90–111,20; +100,90–102,30.
+Formasyon: aday yok. FVG çalıştırılmadı. Hacim (motor): 25.09 15:30 A×2,02; 22.09 17:30 K×0,19; 17.09 09:30 A×2,5.
+
+4H | Kapanış: 1H ile aynı
+Dış yapı: 19.08 09:30 BOS ↑107,60; 19.08 17:30 BOS ↑105,00; 04.09 17:30 BOS ↑111,30; 08.09 13:30 BOS ↑113,50; 15.09 09:30 CHoCH ↓109,90. WL 104,20.
+OB: +101,50–106,00; −109,50–111,20; +99,15–101,40.
+Alçalan üçgen, sıkışma güçleniyor; kalite 89/100; daralma %77; üst/alt temas 2/2.
+Hacim (yerel): 21.09 13:30 A×2,05; 25.09 17:30 K×0,26; 27.08 17:30 K×0,12; 20.08 09:30 A×3,92; 03.09 09:30 A×2,27; 09.09 13:30 A×2,16. Stabil destek 101,50.
+
+1D | Kapanış 25.09 18:30 106,80
+Dış yapı: 16.09 00:00 BOS ↓104,80. +OB 100,90–102,60. Formasyon: aday yok. Hacim (yerel): 21.08 00:00 A×2,04; 10.09 00:00 K×0,49. Stabil destek 101,50.
+
+4H REPLAY | OB teması orijinal bant/OHLC örtüşmesi; ardışık temaslar tek grup. Öncesi bilinmez; ayrıntılar seçilidir. Saat=mum açılışı, değer=kapanış; sonraki=sonraki mumun kapanışı.
++OB 101,50–106,00: son kapanış orijinal bölge üstünde; 2 epizot; kullanılabilir 17.09 17:30; kalan 101,50–103,30.
+1: 21.09 09:30=106,10, 13:30=107,80; sonraki 17:30=107,80.
+2: 24.09 13:30–25.09 13:30, 4 mum; son 3 kapanış 24.09 17:30=105,20, 25.09 09:30=105,70, 13:30=106,60; sonraki 17:30=106,80.
+−OB 109,50–111,20: 4 epizot; kullanılabilir 16.09 09:30; kalan 110,20–111,20.
+3: 23.09 09:30=109,10, 13:30=108,80; sonraki 17:30=108,50.
+4: 24.09 09:30=106,90; sonraki 13:30=105,70.
++OB 99,15–101,40: 2 epizot; kullanılabilir 10.08 13:30; kalan 99,15–100,90.
+Bu bölgenin temas kapanışları gösterilmedi.
+Stabil günlük replay: 101,50; kullanıma giriş ve pencere başlangıcı günlük kapanış 22.09 18:30; bağımsız temas 0. Temas kuralı: OHLC desteği kapsar, kapanış altında değil; temaslar arası ≥0,35 günlük ATR ayrılması gerekir. İlk bilindiği gün önceden bilinen test değil; günlük sayım 4h temas veya ret teyidi değil.
+
+ARAŞTIRMA | Kesit sonrası, o tarihte biliniyor sayma.
+OB (21.10.2026, veri sonu 19.10): 131.901 bölgede 17.048 (%12,9) 3+ temas; çok temasın zayıflattığı kanıtlanmaz.

@@ -281,10 +281,14 @@ def kare_uret(hisse: str, tf: str, *, veri_dizin: str | None = None, zone: bool 
     uyari: list[str] = []
     if tf == "1d" and not demo:
         from config import sembol_turu
-        if sembol_turu(hisse) == "makro" and {"high", "low"}.issubset(cerceve.columns):
-            duz_adet = int((cerceve["high"] == cerceve["low"]).sum())
-            if duz_adet:
-                uyari.append(f"Günlük kaynakta {duz_adet} düz OHLC mum var; saatlik veriyle doğrulanmadan değiştirilmedi")
+        if sembol_turu(hisse) == "makro":
+            # Genel kapanış kapısı BIST saatini kullanır; makro sağlayıcının
+            # gerçek seans kapanışı cache'te doğrulanmış olarak saklanmaz.
+            uyari.append("Makro günlük mumun kapanışı doğrulanmadı; son mum eksik olabilir")
+            if {"high", "low"}.issubset(cerceve.columns):
+                duz_adet = int((cerceve["high"] == cerceve["low"]).sum())
+                if duz_adet:
+                    uyari.append(f"Günlük kaynakta {duz_adet} düz OHLC mum var; saatlik veriyle doğrulanmadan değiştirilmedi")
     durum = None
     if formasyon is None:
         if formasyon_tara:
@@ -432,19 +436,13 @@ def _demo_cerceve(bar_sayisi: int):
 def _grafik_formasyonu_bul(snap):
     """Grafik kapısı: motorun raporladığı aktif formasyon, durumdan bağımsız.
 
-    Karar: `/grafik` formasyon varsa çizer (sıkışma, kırılım denemesi, başarısız
-    kırılım dâhil). Durum etiketi başlıkta ve altyazıda yazar, böylece kullanıcı ne
-    olduğunu görür. Yalnız motorun kendi geçerlilik ölçütleri uygulanır: aktif
-    aday, kalite eşiği ve Üçgen/Kama/Bayrak/Flama ailesi. Alarm kapısı
-    (`patterns.detect._usable_active`) ayrı kalır; burada ona dokunulmaz.
+    Pine'da eşik yeni adayın kabulünde uygulanır; sonradan puanı düşen aktif
+    formasyonun çizimi sırf bu nedenle kaldırılmaz. Alarm ve canlı takip kalite
+    kapıları bundan bağımsızdır.
     """
     from patterns.detect import SPECIALIZED_FAMILIES, TRIANGLE_FAMILIES
     a = snap.active
     if a is None:
-        return None
-    min_q = (snap.min_specialized_quality if a.family in SPECIALIZED_FAMILIES
-             else snap.min_raw_quality)
-    if snap.effective_quality is None or snap.effective_quality < min_q:
         return None
     if a.family not in TRIANGLE_FAMILIES + SPECIALIZED_FAMILIES:
         return None
@@ -458,30 +456,48 @@ def _formasyon_tara(cerceve, tf: str | None = None) -> tuple[Any, list[str]]:
 
 
 def _formasyon_tara_ayrintili(cerceve, tf: str | None = None) -> tuple[Any, Any, list[str]]:
-    """Botun canlı taramasıyla AYNI motor ve AYNI kullanılabilirlik kapısı.
+    """Botun motoruyla tarar; gösterim ve alarm kalite kapıları ayrıdır.
 
-    Canlı yol `canli_tarama`/`main` → `PatternLifecycleManager.scan` →
-    `ArgentEngine.process(df)`; kapı `patterns.detect._usable_active(snap,
-    TRIANGLE_FAMILIES + SPECIALIZED_FAMILIES)`. Burada motor doğrudan kurulur:
-    lifecycle'ın geçmiş defterine yazması CLI'da istenmez. Profil ve mintick
+    Lifecycle geçmişine yazmamak için motor doğrudan kurulur. Profil ve mintick
     botla aynıdır (`config.PROFILE`, varsayılan mintick 0,01). Çerçeve kopyalanır.
-    Dönüş: `(PatternCandidate | None, uyarılar)`; formasyon yoksa uydurma yok.
+    Dönüş: `(PatternCandidate | None, durum | None, uyarılar)`; aday uydurulmaz.
     """
     from config import PROFILE
+    from patterns.candidate import effective_raw_quality
+    from patterns.constants import ST_BREAK_FAILED, ST_BREAK_TIMEOUT, ST_COMPLETED, ST_INVALID
+    from patterns.detect import SPECIALIZED_FAMILIES, TRIANGLE_FAMILIES
     from patterns.lifecycle import ArgentEngine
 
     try:
-        snap = ArgentEngine(PROFILE, 0.01, timeframe=tf).process(cerceve.copy(deep=True))
+        motor = ArgentEngine(PROFILE, 0.01, timeframe=tf)
+        snap = motor.process(cerceve.copy(deep=True))
         aday = _grafik_formasyonu_bul(snap)
-        if aday is not None and snap.effective_quality is not None:
+        kalite = snap.effective_quality
+        # Pine tamamlanmış formasyonu yeni aday gelene kadar çizer; başarısız,
+        # geçersiz ve teyitsiz yapıları ise varsayılan olarak dört bar gösterir.
+        # Motor snapshot'ı alarm tekrarı için terminal adayı erken gizler; bu
+        # çizim-only yol içerdeki gerçek adayı kullanır, alarm davranışı değişmez.
+        if snap.state in (ST_BREAK_FAILED, ST_BREAK_TIMEOUT, ST_INVALID):
+            yas = motor.bar_index - motor.pattern_state_bar
+            if motor.pattern_state_bar < 0 or yas > 4:
+                aday = None
+            elif aday is None and motor.active.valid:
+                aday = motor.active
+                kalite = effective_raw_quality(aday)
+        elif snap.state == ST_COMPLETED and aday is None and motor.active.valid:
+            aday = motor.active
+            kalite = effective_raw_quality(aday)
+        if aday is not None and aday.family not in TRIANGLE_FAMILIES + SPECIALIZED_FAMILIES:
+            aday = None
+        if aday is not None and kalite is not None:
             try:
-                aday.effective_quality = float(snap.effective_quality)
+                aday.effective_quality = float(kalite)
             except Exception:  # noqa: BLE001, S110 - zenginleştirme süsü; kare yine çizilir
                 pass
     except Exception as hata:  # noqa: BLE001 - tarama hatası kareyi düşürmesin
         return None, None, [f"tarama hatası ({type(hata).__name__}): formasyonsuz çizildi"]
     if aday is None:
-        return None, None, ["tarama: bu karede kullanılabilir formasyon yok (canlı tarama kapısı)"]
+        return None, None, ["tarama: bu karede kullanılabilir formasyon yok"]
     return aday, str(snap.state), []
 
 
@@ -505,6 +521,13 @@ def _formasyon_yukle(yol: str | None, cerceve) -> tuple[dict | None, list[str]]:
     # JSON'da bar indeksi yoksa son kapanan muma sabitlenir: kart da alarm
     # bilgisini kapanan bardan okuyor, CLI'da uydurma indeks üretilmez.
     kayit.setdefault("end_bar", n - 1)
+    # Kart kaydı `upper/lower` anahtarını kullanır; çizim `upper_now/lower_now`
+    # okur. Aynı kayıt `--formasyon` ile verildiğinde bant sessizce çizilmiyordu
+    # (`bant verisi yok` → formasyon katmanı atlanıyordu). Uyumluluk: eski
+    # anahtar yeni anahtara kopyalanır, geometri değişmez.
+    for _kaynak, _hedef in (("upper", "upper_now"), ("lower", "lower_now")):
+        if kayit.get(_hedef) is None and kayit.get(_kaynak) is not None:
+            kayit[_hedef] = kayit[_kaynak]
     return kayit, []
 
 

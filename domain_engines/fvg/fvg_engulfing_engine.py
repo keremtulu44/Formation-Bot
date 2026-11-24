@@ -6,6 +6,8 @@ from typing import Any
 import math
 import pandas as pd
 
+from ..bar_quality import flag_is_true
+
 from .fvg_engulfing_models import (
     ATR_LENGTH,
     ENGULFING_DEEP_RETRACE_THRESHOLD,
@@ -248,11 +250,11 @@ class FvgEngulfingEngine:
 
     def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
         row = dict(bar)
-        if not bool(row.get("is_closed", True)):
+        if not flag_is_true(row, "is_closed"):
             self._last_data_quality = FvgEngulfingDataQuality.INCOMPLETE_BAR
             return self._result(row.get("timestamp"), confirmed=False)
 
-        complete = bool(row.get("is_complete", True))
+        complete = flag_is_true(row, "is_complete")
         normalized = self._normalize_row(row)
         self._rows.append(normalized)
         self._valid.append(complete)

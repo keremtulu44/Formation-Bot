@@ -7,6 +7,7 @@ from typing import Any
 
 import pandas as pd
 
+from ..bar_quality import bar_is_completed as _bar_is_completed
 from .base import BaseEngine
 from .models import Direction, EngineResult
 
@@ -850,7 +851,7 @@ class VolumeParticipationEngine(BaseEngine):
 
     def update(self, bar: Any) -> EngineResult | None:
         row = dict(bar) if not isinstance(bar, dict) else bar.copy()
-        if row.get("is_closed") is False or row.get("is_complete") is False:
+        if not _bar_is_completed(row):
             return self._snapshot
         required = ("open", "high", "low", "close", "volume")
         if any(key not in row or pd.isna(row[key]) for key in required):

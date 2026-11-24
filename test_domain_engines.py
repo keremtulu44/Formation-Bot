@@ -32,6 +32,58 @@ from domain_engines.volume_participation import (
 )
 
 
+@pytest.mark.parametrize("engine_kind", ["market_structure", "order_block", "fvg"])
+@pytest.mark.parametrize("flag", ["is_closed", "is_complete"])
+@pytest.mark.parametrize("value", [np.bool_(False), pd.NA, np.nan, None, "False"])
+def test_unknown_or_false_completion_flags_do_not_advance_confirmed_domains(engine_kind, flag, value):
+    bar = {"timestamp": pd.Timestamp("2025-01-01", tz="UTC"), "open": 10.0,
+           "high": 11.0, "low": 9.0, "close": 10.5, "volume": 100.0}
+    engines = {
+        "market_structure": lambda: MarketStructureEngine(),
+        "order_block": lambda: OrderBlockEngine(),
+        "fvg": lambda: FvgEngulfingEngine(FvgEngulfingConfig(timeframe="4h")),
+    }
+    engine = engines[engine_kind]()
+    engine.update(bar)
+    before = len(engine._rows)
+    previous_export = getattr(engine, "export", None)
+    engine.update({**bar, "timestamp": bar["timestamp"] + pd.Timedelta(hours=1), flag: value})
+    if engine_kind == "fvg" and flag == "is_complete":
+        # FVG retains a source-gap marker to reset the detector chain.
+        assert len(engine._rows) == before + 1
+        assert not engine._valid[-1]
+        assert engine.last_data_quality == FvgEngulfingDataQuality.SOURCE_GAP
+    else:
+        assert len(engine._rows) == before
+        if engine_kind != "market_structure":
+            expected = "INCOMPLETE_BAR" if flag == "is_closed" else "SOURCE_GAP"
+            assert engine.last_data_quality.value == expected
+    if engine_kind in {"order_block", "fvg"}:
+        assert engine.export == previous_export
+
+
+@pytest.mark.parametrize("engine_module", [
+    "domain_engines.volume_participation.volume_participation_engine",
+    "domain_engines.volume_participation.volume_participation_lifecycle",
+    "domain_engines.volume_participation.volume_participation_final",
+])
+@pytest.mark.parametrize("flag", ["is_closed", "is_complete"])
+@pytest.mark.parametrize("value", [np.bool_(False), pd.NA, np.nan, None, "False"])
+def test_volume_explicit_unclosed_or_unknown_flags_never_advance(engine_module, flag, value):
+    from importlib import import_module
+
+    engine = import_module(engine_module).VolumeParticipationEngine()
+    bar = {"timestamp": pd.Timestamp("2025-01-01", tz="UTC"), "open": 10.0,
+           "high": 11.0, "low": 9.0, "close": 10.5, "volume": 100.0}
+    before = engine.update(bar)
+    assert len(engine._rows) == 1
+    prior_export = engine.export_contract
+    rejected = engine.update({**bar, "timestamp": bar["timestamp"] + pd.Timedelta(hours=1), flag: value})
+    assert rejected == before
+    assert len(engine._rows) == 1
+    assert engine.export_contract == prior_export
+
+
 def _ohlcv_frame(count: int = 180) -> pd.DataFrame:
     index = pd.date_range(
         "2025-01-02 09:30",

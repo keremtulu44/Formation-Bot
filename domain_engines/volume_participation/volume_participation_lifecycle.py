@@ -11,6 +11,7 @@ from .volume_participation_engine import (
     VolumeParticipationEngine as CoreVolumeParticipationEngine,
     VolumeParticipationMetrics,
     _safe_div,
+    _bar_is_completed,
 )
 
 
@@ -386,7 +387,7 @@ class VolumeParticipationEngine(CoreVolumeParticipationEngine):
 
     def update(self, bar: Any) -> EngineResult | None:
         row = dict(bar) if not isinstance(bar, dict) else bar.copy()
-        if row.get("is_closed") is False or row.get("is_complete") is False:
+        if not _bar_is_completed(row):
             return self._lifecycle_snapshot or self._snapshot
         result = super().update(row)
         if result is None:

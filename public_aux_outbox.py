@@ -18,10 +18,18 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import config
 from config import ACIL_KUYRUK_TTL_DK, ISTANBUL_TZ
 from notification_delivery import snapshot_from_json, snapshot_to_json
 
 logger = logging.getLogger(__name__)
+
+
+def _domain_paused(row):
+    """Disabled, safely retryable domain work; retained but not dispatched."""
+    kind = str(row.get("id") or "").split(":", 1)[0]
+    return (kind in {"domain", "domain-summary"} and not config.YENI_DOMAIN_ALARM
+            and row.get("status") in {"pending", "text_sent"})
 
 
 def auxiliary_event_id(kind, identities):
@@ -115,7 +123,8 @@ class PublicAuxOutbox:
                 return True, bool(row.get("text_sent"))
             now = self._now()
             self._prune_receipts(now)
-            if sum(r.get("status") not in {"complete", "cancelled"} for r in self.rows) >= self.MAX_PENDING:
+            if sum(r.get("status") not in {"complete", "cancelled"} and not _domain_paused(r)
+                   for r in self.rows) >= self.MAX_PENDING:
                 logger.error("%s özel alarm kuyruğu dolu (%d); yeni olay saklanamadı", self.label, self.MAX_PENDING)
                 return False, False
             snapshot = None
@@ -217,6 +226,12 @@ class PublicAuxOutbox:
             if only_id is not None and row.get("id") != only_id:
                 continue
             if row.get("status") not in {"pending", "text_sent"}:
+                continue
+            # Keep disabled domain cards in the outbox without sending them,
+            # including summaries and their already-sent text's pending image.
+            # Stabil and unrelated cards must not be starved. If re-enabled,
+            # normal TTL/target checks still apply before any delivery.
+            if _domain_paused(row):
                 continue
             if attempted >= max_items:
                 break

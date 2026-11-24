@@ -5,6 +5,8 @@ from typing import Any, Iterable
 
 import pandas as pd
 
+from ..bar_quality import bar_is_completed
+
 from .base import BaseEngine
 from .models import Direction, EngineResult
 
@@ -150,7 +152,7 @@ class MarketStructureEngine(BaseEngine):
 
     def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
         row = dict(bar) if isinstance(bar, dict) else bar.to_dict()
-        if not bool(row.get("is_closed", True)) or not bool(row.get("is_complete", True)):
+        if not bar_is_completed(row):
             return self._snapshot
 
         required = ("timestamp", "open", "high", "low", "close")

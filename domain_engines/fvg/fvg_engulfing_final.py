@@ -6,6 +6,8 @@ import math
 
 import pandas as pd
 
+from ..bar_quality import flag_is_true
+
 from .fvg_engulfing_engine import (
     FvgEngulfingEngine as _DetectorEngine,
     FvgFormation,
@@ -213,7 +215,7 @@ class FvgEngulfingEngine(_DetectorEngine):
 
     def update(self, bar: pd.Series | dict[str, Any]):
         row = dict(bar)
-        if not bool(row.get("is_closed", True)):
+        if not flag_is_true(row, "is_closed"):
             return super().update(row)
 
         before_fvg = len(self._fvg_formations)
