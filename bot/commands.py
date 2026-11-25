@@ -868,6 +868,8 @@ def _komut_durum(_arguman: str) -> str:
             if isinstance(dm_ozel, dict):
                 gosterim += (f"\n   DM özel alarmlar: {dm_ozel.get('pending', 0)} bekliyor · "
                              f"{dm_ozel.get('review', 0)} elle inceleme")
+                if dm_ozel.get("paused"):
+                    gosterim += f" · {dm_ozel['paused']} duraklatıldı"
                 if dm_ozel.get("available") is False:
                     gosterim += " · ⚠️ kuyruk okunamadı"
             if gd.get("public_enabled"):
@@ -906,6 +908,8 @@ def _komut_durum(_arguman: str) -> str:
                         f"\n   Özel alarmlar: {ozel.get('pending', 0)} bekliyor · "
                         f"{ozel.get('review', 0)} elle inceleme"
                     )
+                    if ozel.get("paused"):
+                        gosterim_public += f" · {ozel['paused']} duraklatıldı"
                     if ozel.get("available") is False:
                         gosterim_public += " · ⚠️ kuyruk okunamadı"
                 filtre = gd.get("public_filtre_sayac")

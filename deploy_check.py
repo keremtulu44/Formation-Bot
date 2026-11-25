@@ -351,6 +351,9 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("GRAFIK_OLAY_MAKS", False, "İsteğe bağlı: kareye çizilen onaylı BOS/CHoCH sayısı (varsayılan 6)"),
         ("NIGHTLY_CANDLE_REFRESH_HOUR", False, "Gece Supabase-kayıtsız mum temizliği saati (varsayılan 2 -> 02:00 TSİ)"),
         ("STABIL_GERI_ALIM_ALARM", False, "Ayrı 4S Stabil güçlü geri alım alarmları (varsayılan 1 = açık)"),
+        ("YENI_DOMAIN_ALARM", False, "Ayrı yeni domain alarm kanalı (varsayılan 0 = kapalı; klasik düzen)"),
+        ("YENI_DOMAIN_ALARM_POLITIKA", False, "Yeni domain alarm politikası (P0/P4/P6; varsayılan P6)"),
+        ("AI_SHADOW_LOG", False, "Telegram'a açmadan gizli [AI_SONUC] gölge kaydı (varsayılan 0 = kapalı)"),
         # --- Yahoo birincil / TV reaktif yedek (üretim zinciri) ---------------
         ("TV_YEDEK_AKTIF", False, "Yahoo boş/geçersiz dönerse tvDatafeed yedeği (varsayılan 1; 0 = Yahoo-only)"),
         ("TV_GERCEK_4S_AKTIF", False, "TV yedeği devredeyken gerçek 4s barları kullan (varsayılan 1)"),
@@ -389,6 +392,24 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
                   "`bash scripts/install_deploy_dependencies.sh` sonra botu yeniden başlatın.")
     else:
         satir(OK, "Otomatik alarm grafikleri kapalı", "/grafik komutu bu şalterden bağımsızdır.")
+    yeni_domain_ham = (degerler.get("YENI_DOMAIN_ALARM") or "").strip().lower()
+    if yeni_domain_ham in {"1", "true", "yes", "on", "acik", "açık", "evet"}:
+        satir(WARN, "YENI_DOMAIN_ALARM ortamda AÇIK",
+              "Klasik formasyon + Stabil düzeni için ortam değişkenini 0 yapın veya kaldırın.")
+    elif yeni_domain_ham and yeni_domain_ham not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}:
+        satir(WARN, f"YENI_DOMAIN_ALARM değeri tanınmıyor ({yeni_domain_ham})",
+              "Belirsizliği önlemek için 0 veya 1 kullanın.")
+    politika_ham = (degerler.get("YENI_DOMAIN_ALARM_POLITIKA") or "").strip().upper()
+    if politika_ham and politika_ham not in {"P0", "P4", "P6"}:
+        satir(WARN, f"YENI_DOMAIN_ALARM_POLITIKA tanınmıyor ({politika_ham})",
+              "Desteklenen canlı politikalar: P0, P4, P6 (varsayılan P6).")
+    ai_shadow_ham = (degerler.get("AI_SHADOW_LOG") or "").strip().lower()
+    if ai_shadow_ham in {"1", "true", "yes", "on", "acik", "açık", "evet"}:
+        satir(WARN, "AI_SHADOW_LOG ortamda AÇIK",
+              "Gölge AI kayıtları yalnızca Supabase ai_yorum_test tablosuna yazar; Telegram yayını açmaz.")
+    elif ai_shadow_ham and ai_shadow_ham not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}:
+        satir(WARN, f"AI_SHADOW_LOG değeri tanınmıyor ({ai_shadow_ham})",
+              "Belirsizliği önlemek için 0 veya 1 kullanın.")
     # --- DM kimliği görsel kapısı (2026-10-22) -----------------------------
     # DM grafik yolu pozitif tamsayı sohbet ister; public grafik ve grup /grafik
     # ayrı hedef/yetki kapıları kullanır. Bu kontrol public teslimini kanıtlamaz.

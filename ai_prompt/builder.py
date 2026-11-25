@@ -690,6 +690,11 @@ def build_from_local_cache(symbol: str, *, as_of: Any, main_tf: str = "4h",
                              research_mode=research_mode, source=f"yerel {symbol}.json; sağlayıcı bilinmiyor")
 
 
+def _same_level(a: Any, b: Any) -> bool:
+    fa, fb = _num(a), _num(b)
+    return fa is not None and fb is not None and math.isclose(fa, fb, rel_tol=1e-9, abs_tol=1e-9)
+
+
 def _render_pattern(p: dict) -> str:
     if p["status"] == "absent":
         return "Formasyon: grafikte kullanılabilir aday yok."
@@ -701,6 +706,12 @@ def _render_pattern(p: dict) -> str:
     if quality is not None:
         text += f", kalite {int(round(quality))}/100"
     text += "."
+    break_dir = p.get("break_direction")
+    if break_dir in ("yukarı", "aşağı"):
+        if p.get("state") in {"KIRILIM_ADAYI", "KIRILIM_DENEMESI"}:
+            text += f" Aday kırılım yönü: {break_dir} (teyitli değil)."
+        elif p.get("state") in {"KIRILIM_TEYITLI", "RETEST_BEKLENIYOR", "FORMASYON_TAMAMLANDI", "KIRILIM_BASARISIZ"}:
+            text += f" Kırılım yönü: {break_dir}."
     if p.get("contraction") is not None:
         text += f" Daralma %{sayi(100 * p['contraction'], 0)}."
     if p.get("upper_touches") is not None or p.get("lower_touches") is not None:
@@ -750,8 +761,14 @@ def _render_tf(tf: str, row: dict) -> list[str]:
     if row["fvg"]["status"] != "available":
         lines.append(f"FVG: {row['fvg']['status']}.")
     if row.get("chart_volume_badges"):
+        badges = list(row["chart_volume_badges"])
+        if all(b.get("bar_open") is not None for b in badges):
+            try:
+                badges.sort(key=lambda b: pd.Timestamp(b["bar_open"]))
+            except (TypeError, ValueError):
+                pass
         labels = "; ".join(f"{_ts(b['bar_open'])} {'artış' if b['direction'] == 'artis' else 'kuruma'} ×{b['value']}"
-                           for b in row["chart_volume_badges"])
+                           for b in badges)
         lines.append(f"Grafik hacim rozetleri ({row.get('chart_rvol_source') or 'kaynak bilinmiyor'}): {labels}.")
     if row.get("chart_stabil_support") is not None:
         lines.append(f"Grafikte Stabil destek: {_fmt(row['chart_stabil_support'])}.")
@@ -841,7 +858,7 @@ def render_prompt(packet: dict) -> str:
     row = {**packet["timeframes"][tf], "_main_tf": tf}
     lines.extend(_render_replay(tf, row))
     if (row["status"] == "available" and row.get("chart_stabil_support") is not None
-            and row["stabil_daily_replay"].get("support_level") == row["chart_stabil_support"]):
+            and _same_level(row["stabil_daily_replay"].get("support_level"), row["chart_stabil_support"])):
         lines.append("\nStabil günlük replay: OHLC desteği kapsar ve kapanış altında değildir; bağımsız temaslar arası ≥0,35 günlük ATR uzaklaşma gerekir. Aynı gün ilk bilinen destek önceden bilinen test değildir; günlük sayım 4s temas veya ret teyidi değildir.")
         lines.extend(_render_stabil_daily_replay(row["stabil_daily_replay"]))
     # Research is a separate, labelled retrospective context. Include only
@@ -849,7 +866,7 @@ def render_prompt(packet: dict) -> str:
     # FVG or 4h Stabil results to a different timeframe.
     families = {z["family"] for z in row.get("zones", [])}
     stabil_applicable = (tf == "4h" and row.get("chart_stabil_support") is not None
-                         and row.get("stabil_daily_replay", {}).get("support_level") == row.get("chart_stabil_support"))
+                         and _same_level(row.get("stabil_daily_replay", {}).get("support_level"), row.get("chart_stabil_support")))
     def relevant(item):
         ident = item["id"]
         return ((ident.startswith("ob-") and "OB" in families)

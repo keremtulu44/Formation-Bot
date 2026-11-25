@@ -6,12 +6,13 @@ Veri seçimleri yalnız promptu etkiler: packet, grafik, motor ve alarm değişm
 from __future__ import annotations
 
 import hashlib
+import math
 from typing import Any
 
 import pandas as pd
 
 import chart_experience
-from .builder import ROOT, TF_ORDER, PATTERN_STATES, _fmt, _fmt_metric, _label, _num, _render_pattern
+from .builder import ROOT, TF_ORDER, PATTERN_STATES, _fmt, _fmt_metric, _label, _num, _render_pattern, _same_level
 from reporting.format import sayi
 
 TARGET = 4000
@@ -97,6 +98,13 @@ def _pattern(p: dict) -> str:
     if p["status"] != "available":
         return _render_pattern(p)
     parts = [str(p["type"]), PATTERN_STATES.get(p["state"], str(p["state"]))]
+    break_dir = p.get("break_direction")
+    if break_dir in ("yukarı", "aşağı"):
+        arrow = "↑" if break_dir == "yukarı" else "↓"
+        if p.get("state") in {"KIRILIM_ADAYI", "KIRILIM_DENEMESI"}:
+            parts.append(f"aday yön {arrow}")
+        elif p.get("state") in {"KIRILIM_TEYITLI", "RETEST_BEKLENIYOR", "FORMASYON_TAMAMLANDI", "KIRILIM_BASARISIZ"}:
+            parts.append(f"kırılım {arrow}")
     quality = _num(p.get("quality"))
     if quality is not None:
         parts.append(f"kalite {int(round(quality))}/100")
@@ -179,10 +187,13 @@ def _drawn_context(tf: str, row: dict, year: int, compact_volume: int = 0,
             chosen.update(i for i in selected if source[i].get("direction") not in ("artis", "dusus")
                           or _known_age(source[i].get("age_bars")) is None and history_bars is not None)
             selected = chosen
+        ordered_indices = (
+            sorted(selected, key=lambda i: pd.Timestamp(source[i]["bar_open"]))
+            if valid else [i for i in range(len(source)) if i in selected]
+        )
         badges = []
-        for i, badge in enumerate(source):
-            if i not in selected:
-                continue
+        for i in ordered_indices:
+            badge = source[i]
             direction = {"artis": "A", "dusus": "K"}.get(badge.get("direction"), "?")
             age = _known_age(badge.get("age_bars"))
             older = " [E]" if history_bars is not None and age is not None and age >= history_bars else ""
@@ -229,7 +240,7 @@ def _focus_indices(zones: list[dict], close: Any) -> set[int]:
 
 def _replay(tf: str, row: dict, year: int, focus_only: bool, last_only: bool = False,
             history_bars: int | None = None) -> list[str]:
-    lines = [f"\n{tf.upper()} REPLAY | OB: orijinal bant/OHLC örtüşmesi; FVG motor kuralı. Ardışık temaslar grup; sayım tüm pencere, ayrıntı son iki grup. Değer=kapanış; sonraki=sonraki kapanmış mum."]
+    lines = [f"\n{tf.upper()} REPLAY | OB: orijinal bant/OHLC; FVG: motor kuralı. Ardışık temas=grup; sayım tüm pencere, detay son 2 grup. Değer=kapanış; sonraki=sonraki mum."]
     if row["status"] != "available":
         return lines + ["Grafik çizilemedi; replay bilinmiyor."]
     zones = row["replay"]["zones"]
@@ -257,7 +268,8 @@ def _replay(tf: str, row: dict, year: int, focus_only: bool, last_only: bool = F
                 atr = f"; doğum yükseklik/ATR≈{_fmt_metric(z['width_atr_birth'])} (grup {z['width_atr_bucket']})"
         remaining_lo, remaining_hi = _num(z.get("remaining_lower")), _num(z.get("remaining_upper"))
         remaining = ("aynı" if None not in (lo, hi, remaining_lo, remaining_hi)
-                     and remaining_lo == lo and remaining_hi == hi
+                     and math.isclose(remaining_lo, lo, rel_tol=1e-10, abs_tol=1e-12)
+                     and math.isclose(remaining_hi, hi, rel_tol=1e-10, abs_tol=1e-12)
                      else f"{_fmt(remaining_lo)}–{_fmt(remaining_hi)}")
         line = (f"{label}: {z['episodes']} grup; kullanılabilir {_time(z.get('available_open'), year)}; "
                 f"kalan {remaining}{pos}{atr}.")
@@ -324,7 +336,7 @@ def _stabil(replay: dict, year: int) -> list[str]:
         lines.append(f"Pencerede {replay['observed_count']} temas; {reason}, geçmiş ve gerçek sıra bilinmiyor.")
     for day in replay["recent_touch_days"]:
         lines.append(f"Günlük temas kapanışı {_time(day['daily_close_time'], year)}={_fmt(day['close'])}.")
-    lines.append("Günlük temas: OHLC desteği kapsar, kapanış altında değil; bağımsız sayımda ≥0,35 günlük ATR ayrılma gerekir. İlk gün önceden bilinen test değil; 4s temas/ret teyidi değil.")
+    lines.append("Günlük temas: OHLC desteği kapsar, kapanış altında değil; bağımsız sayım ≥0,35 günlük ATR ayrılma ister. İlk gün bilinen test değil; 4s temas/ret teyidi değil.")
     return lines
 
 
@@ -349,7 +361,7 @@ _RESEARCH_DIGEST = {
 def _research(packet: dict, row: dict, tf: str, abbreviated: bool = False) -> list[str]:
     families = {z["family"] for z in row.get("zones", [])}
     stabil = (tf == "4h" and row.get("chart_stabil_support") is not None
-              and row.get("stabil_daily_replay", {}).get("support_level") == row.get("chart_stabil_support"))
+              and _same_level(row.get("stabil_daily_replay", {}).get("support_level"), row.get("chart_stabil_support")))
     def relevant(item):
         ident = item["id"]
         return ((ident.startswith("ob-") and "OB" in families)
@@ -393,7 +405,7 @@ def _compose(packet: dict, stage: int = 0, history_bars: int | None = None) -> s
         kind = "tarihsel/isteğe bağlı; alarm doğrulanmadı"
     lines = [(ROOT / "talimat_kisa.txt").read_text(encoding="utf-8").strip(),
              f"\nGRAFİK VERİSİ | {packet['symbol']} | kesit {_time(packet['as_of'], year)} (İstanbul) | ana TF {packet['main_tf']} | {kind}.",
-             f"{packet['source']}; günlük: {packet['daily_source']}. Yıl {year}; kapanış dışı saat=mum açılışı, bilgi kapanışta bilinir. İlk kova eksik, son seans mumu kısa olabilir; görünüm tüm geçmiş değil, süreklilik tam doğrulanmadı.",
+             f"{packet['source']}; günlük: {packet['daily_source']}. Yıl {year}; kapanış dışı saat=açılış, bilgi kapanışta bilinir. İlk kova eksik, son mum kısa olabilir; tüm geçmiş değil, süreklilik tam doğrulanmadı.",
              "OB/FVG: + pozitif, − negatif. Hacim rozetinde A=artış, K=kuruma; fiyat yönü değildir."]
     if history_bars is not None:
         lines.append(f"TF başına son {history_bars} kapanmış mum öncelikli; [E]=daha eski.")
@@ -416,7 +428,7 @@ def _compose(packet: dict, stage: int = 0, history_bars: int | None = None) -> s
     lines.extend(_replay(tf, row, year, focus_only=stage >= 1, last_only=stage >= 3,
                          history_bars=history_bars))
     if (row["status"] == "available" and row.get("chart_stabil_support") is not None
-            and row["stabil_daily_replay"].get("support_level") == row["chart_stabil_support"]):
+            and _same_level(row["stabil_daily_replay"].get("support_level"), row["chart_stabil_support"])):
         lines.extend(_stabil(row["stabil_daily_replay"], year))
     lines.extend(_research(packet, row, tf, abbreviated=stage >= 2))
     return "\n".join(lines).strip() + "\n"

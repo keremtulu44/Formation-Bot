@@ -360,9 +360,16 @@ def _bos_ve_choch_sebepleri(results: Mapping[str, Any], tf: str,
     return sorted(set(bulunan))
 
 
+# FVG motorunda yalnızca aktif/canlı durumlar fiyat-içi bölge tepkisi üretir;
+# CANDIDATE (2), FULL_FILL (7), FAILED_REACTION (9) ve diğer terminal durumlar
+# canlı bölge değildir. REACTION (±8) ise motor tarafından `event` alanına
+# yazılır (aktif FVG temizlendiği için top/bottom/state None olur).
+_FVG_AKTIF_DURUMLAR = frozenset({3, 4, 5, 6})
+
+
 def _bolge_sebepleri(results: Mapping[str, Any], tf: str,
                      close: float) -> list[str]:
-    """OB/FVG: fiyat aktif bölgenin içindeyse veya FVG `reaksiyon` state'indeyse."""
+    """OB/FVG: fiyat aktif bölgenin içindeyse veya FVG `reaksiyon` olayındaysa."""
     bulunan: list[str] = []
     for alan, tip, yanlar in (
         ("order_block", "OB", ("bull", "bear")),
@@ -379,21 +386,27 @@ def _bolge_sebepleri(results: Mapping[str, Any], tf: str,
             continue
         for anahtar in yanlar:
             yan = _field(export, anahtar)
+            if yan is None:
+                continue
+            yon = "boğa" if "bull" in anahtar else "ayı"
+            state = _number(_field(yan, "state"))
+            event = _number(_field(yan, "event"))
+            reaksiyon = bool(
+                tip == "FVG" and (
+                    (event is not None and abs(int(event)) == 8)
+                    or (state is not None and abs(int(state)) == 8)
+                )
+            )
+            if reaksiyon:
+                bulunan.append(f"{tip} {yon} reaksiyon")
+                continue
             top = _number(_field(yan, "top"))
             bottom = _number(_field(yan, "bottom"))
             if top is None or bottom is None or top < bottom:
                 continue
-            icinde = bottom <= close <= top
-            state = _number(_field(yan, "state"))
-            reaksiyon = bool(
-                tip == "FVG" and state is not None and abs(int(state)) == 8
-            )
-            if not (icinde or reaksiyon):
+            if tip == "FVG" and (state is None or abs(int(state)) not in _FVG_AKTIF_DURUMLAR):
                 continue
-            yon = "boğa" if "bull" in anahtar else "ayı"
-            if reaksiyon:
-                bulunan.append(f"{tip} {yon} reaksiyon")
-            else:
+            if bottom <= close <= top:
                 bulunan.append(f"{tip} {yon} bölge tepkisi")
     return sorted(set(bulunan))
 
@@ -566,7 +579,7 @@ def _politika_gecer(sebepler: Sequence[str], hacim_tier: str | None,
         kanallar = _kanallar_from_sebepler(sebepler)
         if not kanallar:
             return False
-        hacim_var = str(hacim_tier or "") in {"5×", "5x"}
+        hacim_var = str(hacim_tier or "") in {"5×", "5x", "10×", "10x"}
         if hacim_var:
             return True
         if "FORMASYON" in kanallar:
@@ -763,6 +776,16 @@ def _save_state(state: Mapping[str, Any], state_path: str | None = None) -> None
         logger.warning("Yeni domain alarm state yazılamadı (%s): %s", yol, exc)
 
 
+def _ts_utc(value: Any) -> pd.Timestamp:
+    """Naive zaman damgalarını Europe/Istanbul olarak kabul edip UTC'ye çevir."""
+    ts = pd.Timestamp(value)
+    if pd.isna(ts):
+        raise ValueError("NaT")
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("Europe/Istanbul")
+    return ts.tz_convert("UTC")
+
+
 def _zaten_gonderildi(slot: Mapping[str, Any] | None, cand: DomainAlarmCandidate) -> bool:
     """Aynı bar iki kez basılmasın; sembol/TF başına N bar sessizlik uygula.
 
@@ -781,14 +804,12 @@ def _zaten_gonderildi(slot: Mapping[str, Any] | None, cand: DomainAlarmCandidate
         # frame. If the available history is too short, fail closed instead of
         # guessing elapsed bars from wall-clock time or a shifted index.
         try:
-            previous = pd.Timestamp(slot["last_bar_open"])
-            current = pd.Timestamp(cand.bar_open)
-            history = pd.to_datetime(list(cand.recent_bar_opens), utc=True, errors="raise")
-            previous = previous.tz_localize("UTC") if previous.tzinfo is None else previous.tz_convert("UTC")
-            current = current.tz_localize("UTC") if current.tzinfo is None else current.tz_convert("UTC")
-            if pd.isna(previous) or pd.isna(current) or history.isna().any():
+            previous = _ts_utc(slot["last_bar_open"])
+            current = _ts_utc(cand.bar_open)
+            history = pd.DatetimeIndex([_ts_utc(v) for v in cand.recent_bar_opens])
+            if len(history) == 0 or history[-1] != current:
                 return True
-            if current <= previous or len(history) == 0 or history[-1] != current:
+            if current <= previous:
                 return True
             if not history.is_monotonic_increasing or history.has_duplicates:
                 return True
@@ -804,6 +825,13 @@ def _zaten_gonderildi(slot: Mapping[str, Any] | None, cand: DomainAlarmCandidate
 
 
 def _isaretle(slots: dict[str, Any], cand: DomainAlarmCandidate) -> None:
+    mevcut = slots.get(cand.dedup_key)
+    if mevcut and mevcut.get("last_bar_open") and cand.bar_open:
+        try:
+            if _ts_utc(cand.bar_open) < _ts_utc(mevcut["last_bar_open"]):
+                return
+        except (TypeError, ValueError, OverflowError):
+            pass
     slots[cand.dedup_key] = {
         "last_bar_open": cand.bar_open,
         "last_bar_close": cand.bar_close,
@@ -1049,8 +1077,15 @@ def dispatch_domain_alarm_candidates(
     degisti = False
     # Burst sınırı tekrarlı adaylar çıkarıldıktan sonra uygulanmalı. Aksi halde
     # önceki turda gönderilmiş iki yüksek puanlı aday, yeni iki olayı tekil kart
-    # ve görsel yerine gereksizce toplu özete itiyordu.
-    yeni_adaylar = [c for c in sirali if not _zaten_gonderildi(slots.get(c.dedup_key), c)]
+    # ve görsel yerine gereksizce toplu özete itiyordu. Aynı batch içinde aynı
+    # sembol/TF'nin cooldown içindeki ikinci barı da elenir.
+    gecici_slots: dict[str, Any] = dict(slots)
+    yeni_adaylar: list[DomainAlarmCandidate] = []
+    for cand in sirali:
+        if _zaten_gonderildi(gecici_slots.get(cand.dedup_key), cand):
+            continue
+        yeni_adaylar.append(cand)
+        _isaretle(gecici_slots, cand)
     ozet["filtrelendi"] += len(sirali) - len(yeni_adaylar)
 
     ust_sinir = _cfg_int("YENI_DOMAIN_ALARM_TEKIL_UST_SINIR", 3)

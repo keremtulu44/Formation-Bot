@@ -1680,29 +1680,30 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 # Ayrı yeni kanal: BOS/CHoCH · formasyon · OB/FVG · hacim OR
                 # tetikleyicileri, o anki native basamaklı Stabil desteğiyle
                 # ölçülür. Eski kartlar / replay sonuçları değişmez.
-                try:
-                    # Domain sonuçları kart bağlamı için zaten TÜM TF'lerle
-                    # cache'lendi; yeni kanal aynı kapanmış frame kümesini kullanır.
-                    yeni_frames = _pkg._completed_domain_frames(all_tfs, simdiki_zaman)
-                    yeni_outputs = _pkg._domain_results_for_notification(
-                        stock, all_tfs, simdiki_zaman, domain_results_by_stock,
-                        frames=yeni_frames,
-                    )
-                    domain_alarm_adaylari.extend(
-                        evaluate_domain_alarm_candidates(
-                            stock,
-                            all_tfs,
-                            yeni_frames,
-                            yeni_outputs,
-                            simdiki_zaman,
-                            formasyon_kayitlari=hisse_formasyonlari,
-                            bar_metni_fn=_mum_bilgisi,
-                            grafik_baglami=grafik_baglami_by_tf,
-                            direnc_gunluk_ham=df_gunluk_ham,
+                if bool(getattr(config, "YENI_DOMAIN_ALARM", False)):
+                    try:
+                        # Domain sonuçları kart bağlamı için zaten TÜM TF'lerle
+                        # cache'lendi; yeni kanal aynı kapanmış frame kümesini kullanır.
+                        yeni_frames = _pkg._completed_domain_frames(all_tfs, simdiki_zaman)
+                        yeni_outputs = _pkg._domain_results_for_notification(
+                            stock, all_tfs, simdiki_zaman, domain_results_by_stock,
+                            frames=yeni_frames,
                         )
-                    )
-                except Exception as yeni_err:  # noqa: BLE001 - yeni kanal ana taramayı düşürmez
-                    _pkg.logger.warning("%s yeni domain aday kontrolü hatası: %s", stock, yeni_err)
+                        domain_alarm_adaylari.extend(
+                            evaluate_domain_alarm_candidates(
+                                stock,
+                                all_tfs,
+                                yeni_frames,
+                                yeni_outputs,
+                                simdiki_zaman,
+                                formasyon_kayitlari=hisse_formasyonlari,
+                                bar_metni_fn=_mum_bilgisi,
+                                grafik_baglami=grafik_baglami_by_tf,
+                                direnc_gunluk_ham=df_gunluk_ham,
+                            )
+                        )
+                    except Exception as yeni_err:  # noqa: BLE001 - yeni kanal ana taramayı düşürmez
+                        _pkg.logger.warning("%s yeni domain aday kontrolü hatası: %s", stock, yeni_err)
 
             _pkg.daily_stats['stocks_scanned'] += 1
             tur_taranan += 1

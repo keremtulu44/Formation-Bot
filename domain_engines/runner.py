@@ -65,26 +65,36 @@ _incremental_states_by_series: dict[
     dict[str, tuple[tuple[Any, ...], IncrementalEngineState]],
 ] = {}
 _series_state_locks: dict[tuple[str, str], threading.RLock] = {}
+_global_reset_generation = 0
+_symbol_reset_generation: dict[str, int] = {}
+_run_context = threading.local()
+
+
+def _current_generation_locked(symbol: str) -> tuple[int, int]:
+    return (_global_reset_generation, _symbol_reset_generation.get(str(symbol), 0))
 
 
 def reset_incremental_domain_states(symbol: str | None = None) -> None:
     """Clear process-local incremental OB/FVG states after full candle replacement."""
+    global _global_reset_generation
     with _state_registry_lock:
         if symbol is None:
+            _global_reset_generation += 1
             _incremental_states_by_series.clear()
         else:
             hedef = str(symbol)
+            _symbol_reset_generation[hedef] = _symbol_reset_generation.get(hedef, 0) + 1
             for key in list(_incremental_states_by_series.keys()):
                 if key[0] == hedef:
                     _incremental_states_by_series.pop(key, None)
-    with _latest_lock:
-        if symbol is None:
-            _latest_by_series.clear()
-        else:
-            hedef = str(symbol)
-            for key in list(_latest_by_series.keys()):
-                if key[0] == hedef:
-                    _latest_by_series.pop(key, None)
+        with _latest_lock:
+            if symbol is None:
+                _latest_by_series.clear()
+            else:
+                hedef = str(symbol)
+                for key in list(_latest_by_series.keys()):
+                    if key[0] == hedef:
+                        _latest_by_series.pop(key, None)
 
 
 def _advance_incremental_engine(
@@ -101,11 +111,16 @@ def _advance_incremental_engine(
     if isolated:
         state = IncrementalEngineState(domain, engine_factory())
         return state, state.advance(frame)
+    expected_generation = getattr(_run_context, "generation", None)
     key = (symbol, timeframe)
     with _state_registry_lock:
         series_lock = _series_state_locks.setdefault(key, threading.RLock())
     with series_lock:
         with _state_registry_lock:
+            if (expected_generation is not None
+                    and _current_generation_locked(symbol) != expected_generation):
+                state = IncrementalEngineState(domain, engine_factory())
+                return state, state.advance(frame)
             states = _incremental_states_by_series.setdefault(key, {})
             stored = states.get(domain)
             if stored is None or stored[0] != config_signature:
@@ -354,60 +369,71 @@ def _run_domain_engines_locked(
     if tf not in ALL_DOMAIN_TIMEFRAMES:
         raise ValueError(f"unsupported Formation-Bot timeframe: {timeframe!r}")
 
-    # The shared shape adapter is the only common input operation. A failure
-    # here means the frame itself cannot satisfy the engines' timestamp contract.
-    domain_frame = to_domain_frame(frame)
-    output: dict[str, DomainRunResult] = {}
+    run_gen: tuple[int, int] | None = None
+    prev_gen = getattr(_run_context, "generation", None)
+    if not isolated:
+        with _state_registry_lock:
+            run_gen = _current_generation_locked(symbol)
+    _run_context.generation = run_gen
+    try:
+        # The shared shape adapter is the only common input operation. A failure
+        # here means the frame itself cannot satisfy the engines' timestamp contract.
+        domain_frame = to_domain_frame(frame)
+        output: dict[str, DomainRunResult] = {}
 
-    output["market_structure"] = _execute_domain(
-        "market_structure",
-        symbol,
-        tf,
-        lambda: _run_market_structure(symbol, tf, domain_frame.copy(deep=True), profile),
-    )
-    output["volume_participation"] = _execute_domain(
-        "volume_participation",
-        symbol,
-        tf,
-        lambda: _run_volume(symbol, tf, domain_frame.copy(deep=True)),
-    )
-
-    fvg_enabled = tf in FVG_TIMEFRAMES and (tf != "2h" or enable_2h_fvg)
-    if fvg_enabled:
-        output["fvg"] = _execute_domain(
-            "fvg",
+        output["market_structure"] = _execute_domain(
+            "market_structure",
             symbol,
             tf,
-            lambda: (_run_fvg(symbol, tf, domain_frame.copy(deep=True), profile, isolated=True)
-                     if isolated else _run_fvg(symbol, tf, domain_frame.copy(deep=True), profile)),
+            lambda: _run_market_structure(symbol, tf, domain_frame.copy(deep=True), profile),
         )
-    else:
-        reason = (
-            "2h FVG requires explicit offline/replay opt-in"
-            if tf == "2h" and not enable_2h_fvg
-            else "source supports only 2h, 4h, and 1d"
-        )
-        logger.debug("FVG skipped for %s/%s: %s", symbol, tf, reason)
-        output["fvg"] = DomainRunResult(
-            domain="fvg",
-            symbol=symbol,
-            timeframe=tf,
-            skipped=True,
-            reason=reason,
+        output["volume_participation"] = _execute_domain(
+            "volume_participation",
+            symbol,
+            tf,
+            lambda: _run_volume(symbol, tf, domain_frame.copy(deep=True)),
         )
 
-    output["order_block"] = _execute_domain(
-        "order_block",
-        symbol,
-        tf,
-        lambda: (_run_order_block(symbol, tf, domain_frame.copy(deep=True), isolated=True)
-                 if isolated else _run_order_block(symbol, tf, domain_frame.copy(deep=True))),
-    )
+        fvg_enabled = tf in FVG_TIMEFRAMES and (tf != "2h" or enable_2h_fvg)
+        if fvg_enabled:
+            output["fvg"] = _execute_domain(
+                "fvg",
+                symbol,
+                tf,
+                lambda: (_run_fvg(symbol, tf, domain_frame.copy(deep=True), profile, isolated=True)
+                         if isolated else _run_fvg(symbol, tf, domain_frame.copy(deep=True), profile)),
+            )
+        else:
+            reason = (
+                "2h FVG requires explicit offline/replay opt-in"
+                if tf == "2h" and not enable_2h_fvg
+                else "source supports only 2h, 4h, and 1d"
+            )
+            logger.debug("FVG skipped for %s/%s: %s", symbol, tf, reason)
+            output["fvg"] = DomainRunResult(
+                domain="fvg",
+                symbol=symbol,
+                timeframe=tf,
+                skipped=True,
+                reason=reason,
+            )
 
-    if not isolated:
-        with _latest_lock:
-            _latest_by_series[(symbol, tf)] = dict(output)
-    return dict(output)
+        output["order_block"] = _execute_domain(
+            "order_block",
+            symbol,
+            tf,
+            lambda: (_run_order_block(symbol, tf, domain_frame.copy(deep=True), isolated=True)
+                     if isolated else _run_order_block(symbol, tf, domain_frame.copy(deep=True))),
+        )
+
+        if not isolated:
+            with _state_registry_lock:
+                if _current_generation_locked(symbol) == run_gen:
+                    with _latest_lock:
+                        _latest_by_series[(symbol, tf)] = dict(output)
+        return dict(output)
+    finally:
+        _run_context.generation = prev_gen
 
 
 

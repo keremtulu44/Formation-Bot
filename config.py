@@ -965,5 +965,17 @@ YENI_DOMAIN_ALARM_POLITIKA = os.getenv("YENI_DOMAIN_ALARM_POLITIKA", "P6").strip
 if YENI_DOMAIN_ALARM_POLITIKA not in ("P0", "P6", "P4"):
     YENI_DOMAIN_ALARM_POLITIKA = "P0"
 
+# --- AI Gölge (Shadow) Değerlendirme Kaydı (varsayılan KAPALI) ---
+# Telegram'a hiçbir AI yorumu göndermeden yalnızca gizli [AI_SONUC ...]
+# bloğunu ayıklayıp yerel JSON + Supabase `ai_yorum_test` tablosuna yazmak
+# için opt-in bayrak. Varsayılan 0: operatör açıkça açmadan kapalı kalır.
+AI_SHADOW_LOG = os.getenv("AI_SHADOW_LOG", "0").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık",
+}
+
+
+def ai_shadow_log_enabled() -> bool:
+    return bool(AI_SHADOW_LOG)
+
 
 

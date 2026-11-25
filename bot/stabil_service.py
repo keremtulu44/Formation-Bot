@@ -282,7 +282,11 @@ def evaluate_stabil_4h_candidate(
     son_kapanis = mum_kapanis_ani(last_open_ts, "4h")
     if son_kapanis is None:
         return None
-    yas_dk = (simdiki_zaman - son_kapanis).total_seconds() / 60.0
+    now_ts = pd.Timestamp(simdiki_zaman)
+    now_ts = now_ts.tz_localize("Europe/Istanbul") if now_ts.tzinfo is None else now_ts.tz_convert("Europe/Istanbul")
+    close_ts = pd.Timestamp(son_kapanis)
+    close_ts = close_ts.tz_localize("Europe/Istanbul") if close_ts.tzinfo is None else close_ts.tz_convert("Europe/Istanbul")
+    yas_dk = (now_ts - close_ts).total_seconds() / 60.0
     taze_sinir = float(getattr(config, "STABIL_ALARM_TAZE_DK", 390))
     if yas_dk < -1.0 or yas_dk > taze_sinir:
         # Eski cache veya ertesi gün yeniden başlatmalarda geçmiş 4S mumu tekrar bildirilmez
