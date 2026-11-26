@@ -978,4 +978,22 @@ def ai_shadow_log_enabled() -> bool:
     return bool(AI_SHADOW_LOG)
 
 
+# --- KAP Alarm Bağlamı Arşivi (`kap/` paketi; varsayılan KAPALI) ---
+# Arka plan SQLite WAL toplayıcısı ve salt-okunur alarm bağlamı sorgusu.
+# Varsayılan 0: operatör açıkça açmadıkça ağa çıkmaz, SQLite dosyası açmaz.
+KAP_BAGLAM_AKTIF = os.getenv("KAP_BAGLAM_AKTIF", "0").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık",
+}
+KAP_ARSIV_YOLU = os.getenv("KAP_ARSIV_YOLU", "").strip()
+KAP_TARAMA_ARALIK_SN = _env_int("KAP_TARAMA_ARALIK_SN", 180, minimum=30)
+KAP_MAX_YAS_GUN = _env_int("KAP_MAX_YAS_GUN", 7, minimum=1)
+KAP_WARMUP_ACILISTA = os.getenv("KAP_WARMUP_ACILISTA", "0").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık",
+}
+
+
+def kap_baglam_enabled() -> bool:
+    return bool(KAP_BAGLAM_AKTIF)
+
+
 

@@ -2,9 +2,11 @@
 
 Bu modül tamamen yerel ve ağsızdır: HTTP isteği atmaz, API anahtarı okumaz,
 SDK bağımlılığı eklemez ve canlı motor/alarm state'ini değiştirmez.
-Üretilen `system` metni aynı modalite için semboller arası bayt-birebir
-sabittir (OpenAI / Anthropic / Gemini prompt caching uyumlu); dinamik grafik,
-replay ve araştırma verisi XML sınırlarıyla ayrılmış `user` mesajına konur.
+Üretilen `system` metni aynı modalite ve kural kombinasyonu için semboller
+arası bayt-birebir sabittir (OpenAI / Anthropic / Gemini prompt caching uyumlu);
+dinamik grafik, replay, araştırma ve harici bağlam verisi XML sınırlarıyla
+ayrılmış `user` mesajına konur ve tek-kaynak `PromptBudget` sistematiğiyle
+ölçülüp denetlenir.
 """
 from __future__ import annotations
 
@@ -15,28 +17,38 @@ from typing import Any, Mapping, Sequence
 import pandas as pd
 
 from notification_context import _VOLUME_STATE_LABELS
+
+from .budget import (
+    API_STANDARD_BUDGET,
+    PromptBudget,
+    evaluate_api_budget,
+    resolve_budget,
+    utf16_len,
+)
 from .builder import ROOT, STABIL_LABELS, TF_ORDER, _label, _num, _same_level
-from .compact import _drawn_context, _replay, _research, _size, _stabil, _time
+from .compact import _drawn_context, _replay, _research, _stabil, _time
+from .kap_bridge import KAP_SYNTHESIS_INSTRUCTION, format_kap_for_prompt
 from .verdict import HIDDEN_VERDICT_INSTRUCTION
 
 API_PROMPT_VERSION = "api-v1"
-DEFAULT_MAX_USER_CHARS = 6000
+DEFAULT_MAX_USER_CHARS = API_STANDARD_BUDGET.user_hard_max
 HARD_MAX_USER_CHARS = 12000
 
 _MODALITY_NOTES = {
     "text_only": (
-        "MODALİTE: Grafik görseli ekli değil; yalnızca `<veri_paketi>` içindeki "
-        "kapalı-bar verilerine dayan, verilmeyen görsel detayı varsayma."
+        "MODALİTE: Grafik görseli ekli değil; yalnız `<veri_paketi>` kapalı-bar verisine dayan."
     ),
     "multimodal": (
-        "MODALİTE: Grafik görselleri ekli; görsel çizgileri `<veri_paketi>` içindeki "
-        "sayısal bağlamla birlikte oku, çelişkide kapalı-bar verisini esas al, "
-        "görselde etiketlenmeyen sayıyı tahmin etme."
+        "MODALİTE: Grafik görselleri ekli; çizgileri `<veri_paketi>` ile birlikte oku, "
+        "çelişkide kapalı-bar verisini esas al, etiketsiz sayı tahmin etme."
     ),
 }
 
 _SAFE_TAG_RE = re.compile(r"^[a-z0-9_]{1,32}$")
-_CLOSING_TAG_RE = re.compile(r"</\s*(ek_baglam|veri_paketi|tetikleyici|grafikler|replay|genel_arastirma)\s*>", re.IGNORECASE)
+_CLOSING_TAG_RE = re.compile(
+    r"</\s*(ek_baglam|veri_paketi|tetikleyici|grafikler|replay|genel_arastirma)\s*>",
+    re.IGNORECASE,
+)
 
 
 def _escape_data_text(text: str) -> str:
@@ -53,54 +65,102 @@ def _pct_vs(close: Any, level: Any) -> str:
     return f" ({sign}%{abs(pct):.1f})".replace(".", ",")
 
 
-def _rich_tf_lines(tf: str, row: Mapping[str, Any]) -> list[str]:
+def _stabil_roles_text(row: Mapping[str, Any]) -> str | None:
+    stabil = row.get("stabil") or {}
+    if stabil.get("status") != "available":
+        return None
+    roles = stabil.get("roles") or {}
+    role_parts: list[str] = []
+    for rkey, rlabel in (("weekly", "haftalık"), ("daily", "günlük"), ("h4", "4s")):
+        info = roles.get(rkey)
+        if isinstance(info, Mapping) and info.get("state"):
+            state_tr = _label(STABIL_LABELS, str(info["state"]))
+            role_parts.append(f"{rlabel}={state_tr}")
+    return ", ".join(role_parts) if role_parts else None
+
+
+def _attach_stabil_distances(tf_lines: list[str], row: Mapping[str, Any]) -> None:
+    """Mevcut `Stabil destek:` / `Stabil direnç:` satırlarına yüzde uzaklığı satır içi ekler."""
+    close = row.get("last_close")
+    sup_pct = _pct_vs(close, row.get("chart_stabil_support"))
+    res_pct = _pct_vs(close, row.get("chart_stabil_resistance"))
+    if not sup_pct and not res_pct:
+        return
+    for idx, line in enumerate(tf_lines):
+        if sup_pct and line.startswith("Stabil destek: ") and line.endswith("."):
+            tf_lines[idx] = f"{line[:-1]}{sup_pct}."
+        elif res_pct and line.startswith("Stabil direnç: ") and line.endswith("."):
+            tf_lines[idx] = f"{line[:-1]}{res_pct}."
+
+
+def _rich_tf_lines(
+    tf: str,
+    row: Mapping[str, Any],
+    *,
+    compact: bool = False,
+    seen_stabil_roles: set[str] | None = None,
+) -> list[str]:
     """Packet içinde zaten bulunan ama çıplak grafik özetinde saklı kalan motor durumları."""
     if row.get("status") != "available":
         return []
     out: list[str] = []
 
+    ext_state: str | None = None
     ms = row.get("market_structure") or {}
     if ms.get("status") == "available":
         ext = (ms.get("scopes") or {}).get("dış")
         if isinstance(ext, Mapping) and ext.get("state"):
-            out.append(f"Dış yapı durumu: {ext['state']}.")
+            ext_state = str(ext["state"])
 
+    vol_text: str | None = None
     vol = row.get("volume") or {}
     if vol.get("status") == "available":
         state = str(vol.get("state") or "")
         if state == "PARTICIPATION_PENDING":
-            out.append("Hacim motoru: hazır değil (sonuç çıkarılmaz).")
+            vol_text = "hazır değil" if compact else "hazır değil (sonuç çıkarılmaz)"
         elif state:
-            label = _VOLUME_STATE_LABELS.get(state, state)
-            out.append(f"Hacim motoru: {label}.")
+            vol_text = _VOLUME_STATE_LABELS.get(state, state)
     elif vol.get("status"):
-        out.append(f"Hacim motoru: {vol['status']}.")
+        vol_text = str(vol["status"])
+
+    if compact:
+        parts = []
+        if ext_state:
+            parts.append(f"dış yapı={ext_state}")
+        if vol_text:
+            parts.append(f"hacim={vol_text}")
+        if parts:
+            out.append("Durum: " + "; ".join(parts) + ".")
+    else:
+        if ext_state:
+            out.append(f"Dış yapı durumu: {ext_state}.")
+        if vol_text:
+            out.append(f"Hacim motoru: {vol_text}.")
 
     if tf in {"4h", "1d"}:
-        close = row.get("last_close")
-        for key, title in (("chart_stabil_support", "Stabil destek uzaklığı"),
-                           ("chart_stabil_resistance", "Stabil direnç uzaklığı")):
-            if row.get(key) is not None:
-                pct = _pct_vs(close, row[key])
-                if pct:
-                    out.append(f"{title}:{pct}.")
-        stabil = row.get("stabil") or {}
-        if stabil.get("status") == "available":
-            roles = stabil.get("roles") or {}
-            role_parts = []
-            for rkey, rlabel in (("weekly", "haftalık"), ("daily", "günlük"), ("h4", "4s")):
-                info = roles.get(rkey)
-                if isinstance(info, Mapping) and info.get("state"):
-                    state_tr = _label(STABIL_LABELS, str(info["state"]))
-                    role_parts.append(f"{rlabel}={state_tr}")
-            if role_parts:
-                out.append("Stabil roller: " + ", ".join(role_parts) + ".")
+        roles_str = _stabil_roles_text(row)
+        if roles_str:
+            # 1D üzerinde 4H ile birebir aynı Stabil roller satırını tekrarlama.
+            if seen_stabil_roles is None or roles_str not in seen_stabil_roles:
+                out.append(f"Stabil roller: {roles_str}.")
+                if seen_stabil_roles is not None:
+                    seen_stabil_roles.add(roles_str)
     return out
 
 
 def _render_trigger(trigger: Mapping[str, Any], year: int) -> list[str]:
     lines = ["<tetikleyici>"]
-    for key in ("kind", "channel", "timeframe", "state", "pattern_name", "direction", "bar_open", "bar_close", "summary"):
+    for key in (
+        "kind",
+        "channel",
+        "timeframe",
+        "state",
+        "pattern_name",
+        "direction",
+        "bar_open",
+        "bar_close",
+        "summary",
+    ):
         value = trigger.get(key)
         if value is None or value == "":
             continue
@@ -130,21 +190,36 @@ def _normalize_extra_sections(
     for raw_name, raw_body in items:
         name = str(raw_name).strip().lower()
         if not _SAFE_TAG_RE.fullmatch(name):
-            raise ValueError(f"Geçersiz ek bölüm adı: {raw_name!r} (yalnız [a-z0-9_], en fazla 32 karakter)")
+            raise ValueError(
+                f"Geçersiz ek bölüm adı: {raw_name!r} (yalnız [a-z0-9_], en fazla 32 karakter)"
+            )
         body = str(raw_body or "").strip()
         if body:
             out.append((name, _escape_data_text(body)))
     return out
 
 
-def _build_system_prompt(modality: str, *, include_hidden_verdict: bool = False) -> str:
+def _build_system_prompt(
+    modality: str,
+    *,
+    include_hidden_verdict: bool = False,
+    include_kap_rules: bool = False,
+) -> str:
     if modality not in _MODALITY_NOTES:
         raise ValueError(f"Desteklenmeyen modalite: {modality!r} ('text_only' veya 'multimodal' olmalı)")
     base = (ROOT / "talimat_api.txt").read_text(encoding="utf-8").strip()
     parts = [base, _MODALITY_NOTES[modality]]
+    if include_kap_rules:
+        parts.append(KAP_SYNTHESIS_INSTRUCTION)
     if include_hidden_verdict:
         parts.append(HIDDEN_VERDICT_INSTRUCTION)
     return "\n\n".join(parts)
+
+
+def _strip_leading_blank(lines: list[str]) -> list[str]:
+    if lines and isinstance(lines[0], str) and lines[0].startswith("\n"):
+        lines = [lines[0].lstrip("\n"), *lines[1:]]
+    return lines
 
 
 def _compose_user_payload(
@@ -171,12 +246,14 @@ def _compose_user_payload(
         "<meta>",
         f"Durum: {kind}.",
         f"Kaynak: {packet['source']}; günlük: {packet['daily_source']}.",
-        "İlk kova eksik, son seans mumu kısa olabilir; görünüm tüm geçmiş değil, süreklilik tam doğrulanmadı.",
+        "İlk kova eksik, son mum kısa olabilir; tüm geçmiş değil, süreklilik tam doğrulanmadı.",
     ]
     if history_bars is not None:
         lines.append(f"TF başına son {history_bars} kapanmış mum öncelikli; [E]=daha eski.")
     if packet.get("quality_notes"):
-        lines.append("Veri uyarısı: " + "; ".join(_escape_data_text(str(x)) for x in packet["quality_notes"]) + ".")
+        lines.append(
+            "Veri uyarısı: " + "; ".join(_escape_data_text(str(x)) for x in packet["quality_notes"]) + "."
+        )
     warnings: dict[str, list[str]] = {}
     for tf in TF_ORDER:
         for warning in packet["timeframes"][tf].get("chart_warnings", []):
@@ -191,7 +268,8 @@ def _compose_user_payload(
         lines.extend(_render_trigger(trigger, year))
 
     lines.append("<grafikler>")
-    for tf in TF_ORDER:
+    seen_stabil_roles: set[str] = set()
+    for tf_idx, tf in enumerate(TF_ORDER):
         row = packet["timeframes"][tf]
         tf_lines = _drawn_context(
             tf,
@@ -201,11 +279,18 @@ def _compose_user_payload(
             baseline=packet["timeframes"]["1h"],
             history_bars=history_bars,
         )
+        if tf_idx == 0:
+            tf_lines = _strip_leading_blank(tf_lines)
         if include_rich_context:
-            rich = _rich_tf_lines(tf, row)
+            if tf in {"4h", "1d"} and row.get("status") == "available":
+                _attach_stabil_distances(tf_lines, row)
+            rich = _rich_tf_lines(
+                tf,
+                row,
+                compact=stage >= 6,
+                seen_stabil_roles=seen_stabil_roles,
+            )
             if rich:
-                # Insert right after closing price line (index 2) so the model
-                # reads current state before raw historical events.
                 insert_at = min(2, len(tf_lines))
                 tf_lines[insert_at:insert_at] = rich
         lines.extend(tf_lines)
@@ -213,23 +298,30 @@ def _compose_user_payload(
 
     row_main = packet["timeframes"][main_tf]
     lines.append(f'<replay tf="{main_tf}">')
-    lines.extend(_replay(
-        main_tf,
-        row_main,
-        year,
-        focus_only=stage >= 1,
-        last_only=stage >= 3,
-        history_bars=history_bars,
-    ))
+    replay_lines = _strip_leading_blank(
+        _replay(
+            main_tf,
+            row_main,
+            year,
+            focus_only=stage >= 1,
+            last_only=stage >= 3,
+            history_bars=history_bars,
+            compact_header=stage >= 6,
+        )
+    )
+    lines.extend(replay_lines)
     if (
         row_main.get("status") == "available"
         and row_main.get("chart_stabil_support") is not None
-        and _same_level(row_main.get("stabil_daily_replay", {}).get("support_level"), row_main["chart_stabil_support"])
+        and _same_level(
+            row_main.get("stabil_daily_replay", {}).get("support_level"),
+            row_main["chart_stabil_support"],
+        )
     ):
-        lines.extend(_stabil(row_main["stabil_daily_replay"], year))
+        lines.extend(_stabil(row_main["stabil_daily_replay"], year, compact_note=stage >= 6))
     lines.append("</replay>")
 
-    research_lines = _research(packet, row_main, main_tf, abbreviated=stage >= 2)
+    research_lines = _strip_leading_blank(_research(packet, row_main, main_tf, abbreviated=stage >= 2))
     if research_lines:
         lines.append("<genel_arastirma>")
         lines.extend(research_lines)
@@ -252,20 +344,48 @@ def build_api_prompt(
     history_bars: int | None = 60,
     include_rich_context: bool = True,
     include_hidden_verdict: bool = False,
+    kap_context: Mapping[str, Any] | None = None,
+    kap_max_age_gun: int = 7,
     extra_sections: Mapping[str, str] | Sequence[tuple[str, str]] | None = None,
-    max_user_chars: int = DEFAULT_MAX_USER_CHARS,
+    budget: str | PromptBudget = "standard",
+    max_user_chars: int | None = None,
 ) -> dict[str, Any]:
-    """Sağlayıcıdan bağımsız, önbelleklenebilir `system` + `user` prompt paketi üret."""
-    if not 500 <= max_user_chars <= HARD_MAX_USER_CHARS:
+    """Sağlayıcıdan bağımsız, önbelleklenebilir ve bütçe-denetimli `system` + `user` paketi üret."""
+    budget_profile = resolve_budget(budget)
+    effective_user_max = (
+        int(max_user_chars) if max_user_chars is not None else budget_profile.user_hard_max
+    )
+    if not 500 <= effective_user_max <= HARD_MAX_USER_CHARS:
         raise ValueError(f"max_user_chars 500..{HARD_MAX_USER_CHARS} aralığında olmalı")
-    if history_bars is not None and (not isinstance(history_bars, int) or isinstance(history_bars, bool) or history_bars < 1):
+    if history_bars is not None and (
+        not isinstance(history_bars, int) or isinstance(history_bars, bool) or history_bars < 1
+    ):
         raise ValueError("Geçmiş penceresi pozitif tamamlanmış mum sayısı olmalı")
     if trigger is not None and not isinstance(trigger, Mapping):
         raise ValueError("trigger bir eşleme (dict) veya None olmalı")
 
-    system_text = _build_system_prompt(modality, include_hidden_verdict=include_hidden_verdict)
-    extras = _normalize_extra_sections(extra_sections)
+    kap_info = format_kap_for_prompt(
+        kap_context,
+        as_of=packet.get("as_of"),
+        max_age_gun=kap_max_age_gun,
+    )
+    system_text = _build_system_prompt(
+        modality,
+        include_hidden_verdict=include_hidden_verdict,
+        include_kap_rules=bool(kap_info["include_kap_rules"]),
+    )
+    if budget_profile.system_hard_max > 0 and utf16_len(system_text) > budget_profile.system_hard_max:
+        raise ValueError(
+            f"API system prompt {utf16_len(system_text)} UTF-16 birim; "
+            f"üst sınır {budget_profile.system_hard_max} ({budget_profile.name})."
+        )
 
+    extras = _normalize_extra_sections(extra_sections)
+    if kap_info["section_name"] and kap_info["section_text"]:
+        kap_pair = (kap_info["section_name"], _escape_data_text(kap_info["section_text"]))
+        extras = [kap_pair, *[item for item in extras if item[0] != kap_pair[0]]]
+
+    used_stage = 0
     user_text = _compose_user_payload(
         packet,
         stage=0,
@@ -274,8 +394,8 @@ def build_api_prompt(
         include_rich_context=include_rich_context,
         extra_sections=extras,
     )
-    if _size(user_text) > max_user_chars:
-        for stage in range(1, 6):
+    if utf16_len(user_text) > effective_user_max:
+        for stage in range(1, 7):
             candidate = _compose_user_payload(
                 packet,
                 stage=stage,
@@ -284,14 +404,28 @@ def build_api_prompt(
                 include_rich_context=include_rich_context,
                 extra_sections=extras,
             )
-            if _size(candidate) < _size(user_text):
+            if utf16_len(candidate) < utf16_len(user_text):
                 user_text = candidate
-            if _size(user_text) <= max_user_chars:
+                used_stage = stage
+            if utf16_len(user_text) <= effective_user_max:
                 break
-    if _size(user_text) > max_user_chars:
+    if utf16_len(user_text) > effective_user_max:
         raise ValueError(
-            f"API user prompt {_size(user_text)} karakter/birim; üst sınır {max_user_chars}. "
+            f"API user prompt {utf16_len(user_text)} karakter/birim; üst sınır {effective_user_max}. "
             "Veriler sessizce kesilmedi."
+        )
+
+    budget_report = evaluate_api_budget(
+        system_text,
+        user_text,
+        budget=budget_profile,
+        effective_user_max=effective_user_max,
+        compaction_stage=used_stage,
+    )
+    if not budget_report["within_hard_cap"]:
+        raise ValueError(
+            f"API toplam prompt bütçesi aşıldı ({budget_report['total']['utf16']} > "
+            f"{budget_report['total']['hard_max']})."
         )
 
     return {
@@ -300,7 +434,8 @@ def build_api_prompt(
         "system": system_text,
         "system_sha256": hashlib.sha256(system_text.encode("utf-8")).hexdigest(),
         "user": user_text,
-        "user_size": _size(user_text),
+        "user_size": utf16_len(user_text),
+        "budget": budget_report,
         "expected_sections": ("🧭 Mevcut durum", "🔎 Bağlam", "🕯️ Replay notu"),
         "metadata": {
             "symbol": packet.get("symbol"),
@@ -310,6 +445,11 @@ def build_api_prompt(
             "has_trigger": trigger is not None,
             "include_rich_context": bool(include_rich_context),
             "include_hidden_verdict": bool(include_hidden_verdict),
+            "budget_profile": budget_profile.name,
+            "compaction_stage": used_stage,
+            "kap_status": kap_info["status"],
+            "kap_rules_included": bool(kap_info["include_kap_rules"]),
+            "kap_summary": kap_info["meta_summary"],
             "extra_section_tags": [name for name, _ in extras],
         },
     }

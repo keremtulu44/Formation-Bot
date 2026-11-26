@@ -71,6 +71,21 @@ def _read_local_frame(symbol: str, tf: str, data_dir: str) -> pd.DataFrame | Non
     return resampled.get(tf)
 
 
+def _load_kap_context(args: argparse.Namespace, symbol: str, as_of: str) -> dict | None:
+    arsiv = getattr(args, "kap_arsiv", None)
+    if not arsiv:
+        return None
+    from kap.runtime import alarm_kap_baglami_oku
+
+    return alarm_kap_baglami_oku(
+        symbol,
+        pd.Timestamp(as_of).to_pydatetime(),
+        arsiv_yolu=arsiv,
+        origin=getattr(args, "kap_origin", "kap_arsiv"),
+        force=True,
+    )
+
+
 def _cmd_prompt(args: argparse.Namespace) -> int:
     packet = build_from_local_cache(
         args.symbol,
@@ -86,11 +101,13 @@ def _cmd_prompt(args: argparse.Namespace) -> int:
         print(text)
         return 0
 
+    kap_ctx = _load_kap_context(args, packet["symbol"], packet["as_of"])
     bundle = build_api_prompt(
         packet,
         modality=args.modality,
         history_bars=args.history_bars,
         include_hidden_verdict=args.with_verdict,
+        kap_context=kap_ctx,
     )
     if args.json:
         print(json.dumps(bundle, ensure_ascii=False, indent=2))
@@ -115,7 +132,13 @@ def _cmd_parse(args: argparse.Namespace) -> int:
         data_dir=args.data_dir,
         research_mode=args.research_mode,
     )
-    bundle = build_api_prompt(packet, modality=args.modality, include_hidden_verdict=True)
+    kap_ctx = _load_kap_context(args, packet["symbol"], packet["as_of"])
+    bundle = build_api_prompt(
+        packet,
+        modality=args.modality,
+        include_hidden_verdict=True,
+        kap_context=kap_ctx,
+    )
     record, parsed = build_shadow_record(
         packet,
         raw_text,
@@ -124,6 +147,7 @@ def _cmd_parse(args: argparse.Namespace) -> int:
         system_sha256=bundle["system_sha256"],
         kaynak_turu=args.kaynak_turu,
         tetikleyici_tur=args.tetikleyici_tur or None,
+        kap_context=kap_ctx,
         telegrama_gitti=False,
     )
 
@@ -209,6 +233,8 @@ def main(argv: list[str] | None = None) -> int:
     p_prompt.add_argument("--research-mode", choices=["strict", "retrospective"], default="strict")
     p_prompt.add_argument("--history-bars", type=int, default=60)
     p_prompt.add_argument("--with-verdict", action=argparse.BooleanOptionalAction, default=True)
+    p_prompt.add_argument("--kap-arsiv", default=None, help="İsteğe bağlı salt-okunur KAP SQLite arşivi")
+    p_prompt.add_argument("--kap-origin", choices=["kap_arsiv", "sentetik"], default="kap_arsiv")
     p_prompt.add_argument("--json", action="store_true")
     p_prompt.set_defaults(func=_cmd_prompt)
 
@@ -223,6 +249,8 @@ def main(argv: list[str] | None = None) -> int:
     p_parse.add_argument("--model", default="")
     p_parse.add_argument("--kaynak-turu", default="manuel")
     p_parse.add_argument("--tetikleyici-tur", default="")
+    p_parse.add_argument("--kap-arsiv", default=None, help="İsteğe bağlı salt-okunur KAP SQLite arşivi")
+    p_parse.add_argument("--kap-origin", choices=["kap_arsiv", "sentetik"], default="kap_arsiv")
     p_parse.add_argument("--local-file", default=str(Path("bot_data") / DEFAULT_LOCAL_SHADOW_FILE))
     p_parse.add_argument("--supabase-kaydet", action="store_true",
                          help="Açıkça verilmedikçe Supabase'e hiçbir veri yazılmaz.")

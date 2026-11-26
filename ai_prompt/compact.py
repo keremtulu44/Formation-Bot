@@ -12,16 +12,17 @@ from typing import Any
 import pandas as pd
 
 import chart_experience
+from .budget import COMPACT_PASTE_BUDGET, utf16_len
 from .builder import ROOT, TF_ORDER, PATTERN_STATES, _fmt, _fmt_metric, _label, _num, _render_pattern, _same_level
 from reporting.format import sayi
 
-TARGET = 4000
-MAXIMUM = 4500
+TARGET = COMPACT_PASTE_BUDGET.user_target
+MAXIMUM = COMPACT_PASTE_BUDGET.user_hard_max
 
 
 def _size(text: str) -> int:
     """En katı yaygın karakter sayımı: Unicode kod noktası veya UTF-16 birimi."""
-    return max(len(text), len(text.encode("utf-16-le")) // 2)
+    return utf16_len(text)
 
 
 def _time(value: Any, year: int) -> str:
@@ -239,8 +240,12 @@ def _focus_indices(zones: list[dict], close: Any) -> set[int]:
 
 
 def _replay(tf: str, row: dict, year: int, focus_only: bool, last_only: bool = False,
-            history_bars: int | None = None) -> list[str]:
-    lines = [f"\n{tf.upper()} REPLAY | OB: orijinal bant/OHLC; FVG: motor kuralı. Ardışık temas=grup; sayım tüm pencere, detay son 2 grup. Değer=kapanış; sonraki=sonraki mum."]
+            history_bars: int | None = None, compact_header: bool = False) -> list[str]:
+    if compact_header:
+        header = f"\n{tf.upper()} REPLAY | OB: bant/OHLC; FVG: motor. Ardışık=grup (detay son 2); değer=kapanış."
+    else:
+        header = f"\n{tf.upper()} REPLAY | OB: orijinal bant/OHLC; FVG: motor kuralı. Ardışık temas=grup; sayım tüm pencere, detay son 2 grup. Değer=kapanış; sonraki=sonraki mum."
+    lines = [header]
     if row["status"] != "available":
         return lines + ["Grafik çizilemedi; replay bilinmiyor."]
     zones = row["replay"]["zones"]
@@ -320,7 +325,7 @@ def _replay(tf: str, row: dict, year: int, focus_only: bool, last_only: bool = F
     return lines
 
 
-def _stabil(replay: dict, year: int) -> list[str]:
+def _stabil(replay: dict, year: int, compact_note: bool = False) -> list[str]:
     if replay["status"] != "ok":
         return [f"Stabil günlük temas sırası bilinmiyor: {replay['status']}."]
     available = _time(replay['support_available_at'], year)
@@ -336,7 +341,10 @@ def _stabil(replay: dict, year: int) -> list[str]:
         lines.append(f"Pencerede {replay['observed_count']} temas; {reason}, geçmiş ve gerçek sıra bilinmiyor.")
     for day in replay["recent_touch_days"]:
         lines.append(f"Günlük temas kapanışı {_time(day['daily_close_time'], year)}={_fmt(day['close'])}.")
-    lines.append("Günlük temas: OHLC desteği kapsar, kapanış altında değil; bağımsız sayım ≥0,35 günlük ATR ayrılma ister. İlk gün bilinen test değil; 4s temas/ret teyidi değil.")
+    if compact_note:
+        lines.append("Günlük temas: OHLC≥destek, kapanış üstü; bağımsız≥0,35 günlük ATR. İlk gün test, 4s teyit değil.")
+    else:
+        lines.append("Günlük temas: OHLC desteği kapsar, kapanış altında değil; bağımsız sayım ≥0,35 günlük ATR ayrılma ister. İlk gün bilinen test değil; 4s temas/ret teyidi değil.")
     return lines
 
 
@@ -426,10 +434,10 @@ def _compose(packet: dict, stage: int = 0, history_bars: int | None = None) -> s
     tf = packet["main_tf"]
     row = packet["timeframes"][tf]
     lines.extend(_replay(tf, row, year, focus_only=stage >= 1, last_only=stage >= 3,
-                         history_bars=history_bars))
+                         history_bars=history_bars, compact_header=stage >= 6))
     if (row["status"] == "available" and row.get("chart_stabil_support") is not None
             and _same_level(row["stabil_daily_replay"].get("support_level"), row["chart_stabil_support"])):
-        lines.extend(_stabil(row["stabil_daily_replay"], year))
+        lines.extend(_stabil(row["stabil_daily_replay"], year, compact_note=stage >= 6))
     lines.extend(_research(packet, row, tf, abbreviated=stage >= 2))
     return "\n".join(lines).strip() + "\n"
 
@@ -450,7 +458,7 @@ def render_compact_prompt(packet: dict, *, target: int = TARGET, maximum: int = 
         if _size(candidate) <= target:
             text = candidate
     elif _size(text) > maximum:
-        for stage in range(1, 6):
+        for stage in range(1, 7):
             candidate = _compose(packet, stage=stage, history_bars=history_bars)
             if _size(candidate) < _size(text):
                 text = candidate

@@ -135,8 +135,10 @@ def test_api_prompt_separates_cacheable_system_and_xml_user_payload(bimas, alark
     assert "<veri_paketi " in b1["user"] and "</veri_paketi>" in b1["user"]
     assert "Dış yapı durumu: aşağı geçişte." in b1["user"]
     assert "Hacim motoru: hazır değil (sonuç çıkarılmaz)." in b1["user"]
-    assert "Stabil destek uzaklığı: (+%9,3)." in b1["user"]
+    assert "Stabil destek: 390,00 (+%9,3)." in b1["user"]
     assert "Stabil roller: haftalık=hazır değil, günlük=hazır değil, 4s=satış zayıflıyor." in b1["user"]
+    # Identical Stabil roles line must not be duplicated on 1D.
+    assert b1["user"].count("Stabil roller: haftalık=hazır değil, günlük=hazır değil, 4s=satış zayıflıyor.") == 1
     assert "gerçek alarm doğrulanmadı" in b1["user"]
     assert "<tetikleyici>" not in b1["user"]
 

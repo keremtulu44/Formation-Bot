@@ -16,6 +16,7 @@ from typing import Any, Mapping, Sequence
 
 import pandas as pd
 
+from .kap_bridge import format_kap_for_prompt
 from .verdict import VERDICT_FIELDS, parse_ai_response
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,7 @@ def build_shadow_record(
     system_sha256: str = "",
     kaynak_turu: str = "manuel",
     tetikleyici_tur: str | None = None,
+    kap_context: Mapping[str, Any] | None = None,
     telegrama_gitti: bool = False,
     min_words: int = 80,
     max_words: int = 220,
@@ -106,6 +108,11 @@ def build_shadow_record(
     ref_price = _safe_float(row_main.get("last_close"))
     verdict = parsed["verdict"] or {}
     now_iso = datetime.now(timezone.utc).isoformat()
+    context_summary = _context_summary(packet)
+    if kap_context is not None:
+        kap_info = format_kap_for_prompt(kap_context, as_of=packet.get("as_of"))
+        if kap_info["meta_summary"] is not None:
+            context_summary["kap"] = kap_info["meta_summary"]
 
     record: dict[str, Any] = {
         "anahtar": make_shadow_key(
@@ -144,7 +151,7 @@ def build_shadow_record(
         "prompt_surumu": prompt_surumu.strip() or "api-v1",
         "system_sha256": system_sha256.strip() or None,
         "telegrama_gitti": bool(telegrama_gitti),
-        "baglam_ozet": _context_summary(packet),
+        "baglam_ozet": context_summary,
         "sonuc": None,
         "olcum_zamani": None,
         "updated_at": now_iso,

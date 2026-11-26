@@ -25,18 +25,11 @@ VERDICT_SCHEMA: dict[str, tuple[str, ...]] = {
 VERDICT_FIELDS: tuple[str, ...] = tuple(VERDICT_SCHEMA.keys())
 
 HIDDEN_VERDICT_INSTRUCTION = (
-    "GİZLİ DEĞERLENDİRME BLOĞU (yalnız sistem kaydı için; kullanıcı görmez)\n"
-    "- Üç başlıklı yorumun EN SONUNA yeni bir satırda, başka metin eklemeden tek satır "
-    "halinde şu gizli filtre bloğunu yaz:\n"
-    "  [AI_SONUC egilim=... | guc=... | mtf_uyum=... | risk=... | yayin_degeri=...]\n"
-    "- İzinli değerler (birebir kullan):\n"
-    "  egilim: yukari | asagi | kararsiz\n"
-    "  guc: dusuk | orta | yuksek\n"
-    "  mtf_uyum: uyumlu | karma | celiskili\n"
-    "  risk: dusuk | orta | yuksek\n"
-    "  yayin_degeri: gonder | izle | pas\n"
-    "- Değerlerin üç başlıklı metindeki görüşün ve karşı kanıtlarınla tutarlı olsun; "
-    "eksik/hazır olmayan veri veya güçlü çelişkide `yayin_degeri=gonder` yazma."
+    "GİZLİ SONUÇ (sistem kaydı; kullanıcı görmez)\n"
+    "- Yorumun EN SONUNA tek satır ekle, her alandan tek değer seç, başka metin yazma:\n"
+    "  [AI_SONUC egilim=yukari|asagi|kararsiz | guc=dusuk|orta|yuksek | "
+    "mtf_uyum=uyumlu|karma|celiskili | risk=dusuk|orta|yuksek | yayin_degeri=gonder|izle|pas]\n"
+    "- Metindeki görüşünle tutarlı ol; eksik veri veya güçlü çelişkide `yayin_degeri=gonder` yazma."
 )
 
 # Fenced or plain `[AI_SONUC ...]` / `[SONUC ...]` / `[SONUÇ ...]` blocks.

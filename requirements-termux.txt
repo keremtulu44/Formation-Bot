@@ -23,6 +23,7 @@ pytz
 python-dotenv>=1.2.2
 python-dateutil
 requests>=2.33.0
+httpx>=0.28.1
 tabulate
 
 # borsapy TERIMUX'TA KURULMAZ! Sebep:

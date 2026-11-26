@@ -354,6 +354,11 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("YENI_DOMAIN_ALARM", False, "Ayrı yeni domain alarm kanalı (varsayılan 0 = kapalı; klasik düzen)"),
         ("YENI_DOMAIN_ALARM_POLITIKA", False, "Yeni domain alarm politikası (P0/P4/P6; varsayılan P6)"),
         ("AI_SHADOW_LOG", False, "Telegram'a açmadan gizli [AI_SONUC] gölge kaydı (varsayılan 0 = kapalı)"),
+        ("KAP_BAGLAM_AKTIF", False, "KAP arka plan SQLite WAL toplayıcısı (varsayılan 0 = kapalı)"),
+        ("KAP_ARSIV_YOLU", False, "İsteğe bağlı KAP SQLite arşiv yolu (boş = DATA_DIR/kap_arsiv.sqlite)"),
+        ("KAP_TARAMA_ARALIK_SN", False, "KAP tarama aralığı, saniye (varsayılan 180)"),
+        ("KAP_MAX_YAS_GUN", False, "Alarm anında kabul edilecek azami KAP bildirim yaşı, gün (varsayılan 7)"),
+        ("KAP_WARMUP_ACILISTA", False, "Açılışta boş KAP arşivini son 7 günle doldur (varsayılan 0 = kapalı)"),
         # --- Yahoo birincil / TV reaktif yedek (üretim zinciri) ---------------
         ("TV_YEDEK_AKTIF", False, "Yahoo boş/geçersiz dönerse tvDatafeed yedeği (varsayılan 1; 0 = Yahoo-only)"),
         ("TV_GERCEK_4S_AKTIF", False, "TV yedeği devredeyken gerçek 4s barları kullan (varsayılan 1)"),
@@ -409,6 +414,18 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
               "Gölge AI kayıtları yalnızca Supabase ai_yorum_test tablosuna yazar; Telegram yayını açmaz.")
     elif ai_shadow_ham and ai_shadow_ham not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}:
         satir(WARN, f"AI_SHADOW_LOG değeri tanınmıyor ({ai_shadow_ham})",
+              "Belirsizliği önlemek için 0 veya 1 kullanın.")
+    kap_ham = (degerler.get("KAP_BAGLAM_AKTIF") or "").strip().lower()
+    if kap_ham in {"1", "true", "yes", "on", "acik", "açık", "evet"}:
+        try:
+            import httpx  # noqa: F401
+            import kap  # noqa: F401
+            satir(OK, "KAP_BAGLAM_AKTIF açık ve kap/httpx modülleri hazır")
+        except Exception as kap_hata:  # noqa: BLE001
+            satir(FAIL, "KAP_BAGLAM_AKTIF açık ama kap/httpx yüklenemedi",
+                  f"{type(kap_hata).__name__}: {kap_hata} — `bash scripts/install_deploy_dependencies.sh` çalıştırın.")
+    elif kap_ham and kap_ham not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}:
+        satir(WARN, f"KAP_BAGLAM_AKTIF değeri tanınmıyor ({kap_ham})",
               "Belirsizliği önlemek için 0 veya 1 kullanın.")
     # --- DM kimliği görsel kapısı (2026-10-22) -----------------------------
     # DM grafik yolu pozitif tamsayı sohbet ister; public grafik ve grup /grafik

@@ -114,3 +114,12 @@ YENI_DOMAIN_ALARM_STATE_DOSYA = "yeni_domain_alarm_state.json"
 def yeni_domain_alarm_state_yolu(data_dir=None) -> str:
     from config import DATA_DIR
     return os.path.join(data_dir or DATA_DIR, YENI_DOMAIN_ALARM_STATE_DOSYA)
+
+
+# KAP alarm bağlamı yerel SQLite WAL arşivi (kap/ paketi; varsayılan kapalı).
+KAP_ARSIV_DOSYA = "kap_arsiv.sqlite"
+
+
+def kap_arsiv_yolu(data_dir=None) -> str:
+    from config import DATA_DIR
+    return os.path.join(data_dir or DATA_DIR, KAP_ARSIV_DOSYA)
