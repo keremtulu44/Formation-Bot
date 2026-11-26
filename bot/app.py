@@ -425,12 +425,14 @@ def main_loop():
         _pkg._telegram_komut_katmanini_kur(notifier)
 
     _kap_runner = None
+    setattr(_pkg, "_kap_runner_ref", None)
     if not _pkg._shutdown_requested and config.kap_baglam_enabled():
         try:
             from kap.runtime import KapBackgroundRunner
 
             _kap_runner = KapBackgroundRunner(universe=_pkg.ACTIVE_STOCKS)
             _kap_runner.start()
+            setattr(_pkg, "_kap_runner_ref", _kap_runner)
             _pkg.logger.info(
                 "KAP arka plan toplayıcısı başlatıldı (%d hisse, %ds aralık)",
                 len(_kap_runner.universe),
@@ -438,6 +440,7 @@ def main_loop():
             )
         except Exception as kap_err:  # noqa: BLE001 - KAP arızası botu durdurmaz
             _kap_runner = None
+            setattr(_pkg, "_kap_runner_ref", None)
             _pkg.logger.warning("KAP arka plan toplayıcısı başlatılamadı: %s", kap_err)
     
     # İlk kurulum/preload de aynı hız sınırını kullanır; boş 1H cache'ler seri çekilir.
@@ -1124,6 +1127,8 @@ def main_loop():
             _kap_runner.stop()
     except Exception as e:
         _pkg.logger.warning(f"KAP arka plan toplayıcısı kapatılamadı: {e}")
+    finally:
+        setattr(_pkg, "_kap_runner_ref", None)
     # Webhook modunda: kapanışta gelen güncellemeler 503 alsın (Telegram tekrar
     # dener; yarım kalan komut yanıtı üretilmez).
     setattr(_pkg, "_telegram_update_processor_ref", None)

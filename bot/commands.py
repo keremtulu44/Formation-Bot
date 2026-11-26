@@ -301,6 +301,16 @@ def _saglik_ozeti() -> dict:
         None if tarama_suruyor is None or (tarama_suruyor and tarama_yasi_sn is None)
         else bool(tarama_suruyor and tarama_yasi_sn > tarama_esigi_sn)
     )
+    kap_runner = getattr(_pkg, "_kap_runner_ref", None)
+    try:
+        kap_status = dict(kap_runner.status()) if kap_runner is not None else None
+    except Exception:  # noqa: BLE001 - /health asla düşmesin
+        kap_status = None
+    kap_baglam_ozet = {
+        "aktif": bool(config.kap_baglam_enabled()),
+        "calisiyor": bool(kap_status.get("running")) if isinstance(kap_status, dict) else False,
+        "son_hata": kap_status.get("last_error") if isinstance(kap_status, dict) else None,
+    }
     return {
         "startup_complete": bool(_pkg._startup_ready) and not _pkg._shutdown_requested,
         "heartbeat_age_s": None if yas is None else int(yas),
@@ -313,6 +323,8 @@ def _saglik_ozeti() -> dict:
         "seans_acik": seans_acik,
         "bildirim": bildirim,
         "veri_saglayicilari": veri_saglayicilari,
+        "kap_baglam": kap_baglam_ozet,
+        "ai_shadow_aktif": bool(config.ai_shadow_log_enabled()),
         "evren": len(_pkg.ACTIVE_STOCKS),
         "instance_id": _pkg.INSTANCE_ID,
         "komut": _pkg._komut_durumu(),

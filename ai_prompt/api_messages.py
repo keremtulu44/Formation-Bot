@@ -45,15 +45,15 @@ _MODALITY_NOTES = {
 }
 
 _SAFE_TAG_RE = re.compile(r"^[a-z0-9_]{1,32}$")
-_CLOSING_TAG_RE = re.compile(
-    r"</\s*(ek_baglam|veri_paketi|tetikleyici|grafikler|replay|genel_arastirma)\s*>",
+_RESERVED_TAG_RE = re.compile(
+    r"<\s*(/?)\s*(ek_baglam|veri_paketi|tetikleyici|grafikler|replay|genel_arastirma|meta)\b([^>]*)>",
     re.IGNORECASE,
 )
 
 
 def _escape_data_text(text: str) -> str:
-    """Harici metinlerdeki kapatma etiketlerini etkisizleştir (veri sınırı koruması)."""
-    return _CLOSING_TAG_RE.sub(lambda m: f"&lt;/{m.group(1)}&gt;", str(text))
+    """Harici metinlerdeki açılış ve kapanış XML etiketlerini etkisizleştir (veri sınırı koruması)."""
+    return _RESERVED_TAG_RE.sub(lambda m: f"&lt;{m.group(1)}{m.group(2)}{m.group(3)}&gt;", str(text))
 
 
 def _pct_vs(close: Any, level: Any) -> str:
@@ -65,13 +65,17 @@ def _pct_vs(close: Any, level: Any) -> str:
     return f" ({sign}%{abs(pct):.1f})".replace(".", ",")
 
 
-def _stabil_roles_text(row: Mapping[str, Any]) -> str | None:
+def _stabil_roles_text(row: Mapping[str, Any], *, include_h4: bool = True) -> str | None:
     stabil = row.get("stabil") or {}
     if stabil.get("status") != "available":
         return None
     roles = stabil.get("roles") or {}
     role_parts: list[str] = []
-    for rkey, rlabel in (("weekly", "haftalık"), ("daily", "günlük"), ("h4", "4s")):
+    keys = (("weekly", "haftalık"), ("daily", "günlük"), ("h4", "4s")) if include_h4 else (
+        ("weekly", "haftalık"),
+        ("daily", "günlük"),
+    )
+    for rkey, rlabel in keys:
         info = roles.get(rkey)
         if isinstance(info, Mapping) and info.get("state"):
             state_tr = _label(STABIL_LABELS, str(info["state"]))
@@ -118,6 +122,10 @@ def _rich_tf_lines(
         state = str(vol.get("state") or "")
         if state == "PARTICIPATION_PENDING":
             vol_text = "hazır değil" if compact else "hazır değil (sonuç çıkarılmaz)"
+        elif state == "PARTICIPATION_VOLUME_UNAVAILABLE":
+            vol_text = "veri yok" if compact else "hacim verisi yok (sonuç çıkarılmaz)"
+        elif state == "PARTICIPATION_NEUTRAL":
+            vol_text = "nötr"
         elif state:
             vol_text = _VOLUME_STATE_LABELS.get(state, state)
     elif vol.get("status"):
@@ -137,14 +145,24 @@ def _rich_tf_lines(
         if vol_text:
             out.append(f"Hacim motoru: {vol_text}.")
 
-    if tf in {"4h", "1d"}:
-        roles_str = _stabil_roles_text(row)
+    if tf == "4h":
+        roles_str = _stabil_roles_text(row, include_h4=True)
         if roles_str:
-            # 1D üzerinde 4H ile birebir aynı Stabil roller satırını tekrarlama.
-            if seen_stabil_roles is None or roles_str not in seen_stabil_roles:
-                out.append(f"Stabil roller: {roles_str}.")
-                if seen_stabil_roles is not None:
-                    seen_stabil_roles.add(roles_str)
+            out.append(f"Stabil roller: {roles_str}.")
+            if seen_stabil_roles is not None:
+                seen_stabil_roles.add(roles_str)
+                wd_str = _stabil_roles_text(row, include_h4=False)
+                if wd_str:
+                    seen_stabil_roles.add(wd_str)
+    elif tf == "1d":
+        # 4H zaten güncel 4s rolünü içerir; 1D bir önceki günlük kapanıştan
+        # hesaplandığı için eski 4s rolünü tekrarlayıp çelişki üretme.
+        has_4h_roles = bool(seen_stabil_roles)
+        roles_str = _stabil_roles_text(row, include_h4=not has_4h_roles)
+        if roles_str and (seen_stabil_roles is None or roles_str not in seen_stabil_roles):
+            out.append(f"Stabil roller: {roles_str}.")
+            if seen_stabil_roles is not None:
+                seen_stabil_roles.add(roles_str)
     return out
 
 

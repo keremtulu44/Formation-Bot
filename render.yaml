@@ -154,3 +154,18 @@ services:
         value: "3"
       - key: STABIL_ALARM_TAZE_DK
         value: "390"
+      # --- AI GÖLGE KAYDI VE KAP BAĞLAMI (varsayılan KAPALI; canlı akışa müdahale etmez) ---
+      # AI_SHADOW_LOG=1 yalnız açık operatör onayıyla gizli [AI_SONUC] test kaydı için açılır.
+      - key: AI_SHADOW_LOG
+        value: "0"
+      # KAP_BAGLAM_AKTIF=1 arka planda yerel DATA_DIR/kap_arsiv.sqlite WAL arşivini besler.
+      # Render Free geçici diskte restart sonrası son 7 günü hızla doldurmak için
+      # KAP_WARMUP_ACILISTA=1 ayrıca açılabilir (varsayılan 0 = kapalı).
+      - key: KAP_BAGLAM_AKTIF
+        value: "0"
+      - key: KAP_TARAMA_ARALIK_SN
+        value: "180"
+      - key: KAP_MAX_YAS_GUN
+        value: "7"
+      - key: KAP_WARMUP_ACILISTA
+        value: "0"

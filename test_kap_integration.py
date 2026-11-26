@@ -177,3 +177,11 @@ def test_deploy_check_verifies_kap_env_flag(monkeypatch, capsys):
     deploy_check.kontrol_env({}, canli_mod=False)
     out = capsys.readouterr().out
     assert "KAP_BAGLAM_AKTIF açık ve kap/httpx modülleri hazır" in out
+
+
+def test_health_summary_reports_kap_and_ai_shadow_default_off():
+    import main as main_mod
+
+    ozet = main_mod._saglik_ozeti()
+    assert ozet["kap_baglam"] == {"aktif": False, "calisiyor": False, "son_hata": None}
+    assert ozet["ai_shadow_aktif"] is False

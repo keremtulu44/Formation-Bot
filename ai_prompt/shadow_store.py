@@ -64,7 +64,7 @@ def _context_summary(packet: Mapping[str, Any]) -> dict[str, Any]:
         "research_mode": packet.get("research_mode"),
         "external_ms_state": ext.get("state") if isinstance(ext, Mapping) else None,
         "volume_state": vol.get("state") if isinstance(vol, Mapping) else None,
-        "pattern_name": pat.get("name") if isinstance(pat, Mapping) else None,
+        "pattern_name": (pat.get("type") or pat.get("name")) if isinstance(pat, Mapping) else None,
         "pattern_state": pat.get("state") if isinstance(pat, Mapping) else None,
         "pattern_break_direction": pat.get("break_direction") if isinstance(pat, Mapping) else None,
         "stabil_support": _safe_float(row.get("chart_stabil_support")),

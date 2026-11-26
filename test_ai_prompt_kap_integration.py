@@ -81,7 +81,7 @@ def test_kap_var_adds_conditional_system_rules_tsi_time_profile_and_cache_parity
     assert "25.09 09:15 TSİ, seans öncesi" in user
     assert "14.08 18:00 TSİ" in user
     assert "17:00 TSİ tarihli daha yeni bildirimin detayı" in user
-    assert "seyrek (son 30 günde nadir bildirim) (son 30 gün: 1)" in user
+    assert "seyrek (nadir bildirim; son 30 gün: 1)" in user
     assert "Bedelin son 12 aylık ciroya oranı %11,4" in user
     assert "önceki bir KAP açıklamasının düzeltmesidir" in user
     assert "&lt;/ek_baglam&gt;" in user
@@ -189,3 +189,39 @@ def test_end_to_end_wal_archive_to_api_prompt_and_shadow_record(bimas, tmp_path)
     assert record["baglam_ozet"]["kap"]["konu"] == "satis_sozlesmesi"
     assert record["baglam_ozet"]["kap"]["has_mali_tablo"] is True
     assert record["baglam_ozet"]["kap"]["aliskanlik"] == "seyrek"
+    assert record["baglam_ozet"]["pattern_name"] == "Simetrik Üçgen"
+
+
+def test_kap_future_timestamp_is_causally_excluded_and_pending_order_is_accurate():
+    # Publication 10 min AFTER as_of must be excluded (no future lookahead).
+    future_kap = {
+        "durum": "var",
+        "baglam": {
+            "konu": "satis_sozlesmesi",
+            "yayin_zamani": "2026-09-25T15:15:00Z",  # 18:15 TSİ > 18:05 TSİ
+            "seans_durumu": "seans_sonrasi",
+            "olay": "Gelecek saatli bildirim",
+        },
+    }
+    info_future = format_kap_for_prompt(future_kap, as_of="2026-09-25 18:05+03:00")
+    assert info_future["status"] == "beklemede"
+    assert info_future["include_kap_rules"] is False
+    assert "nedensellik" in info_future["section_text"]
+
+    # Pending disclosure older than main baglam must NOT say "daha yeni".
+    older_pending_kap = {
+        "durum": "var",
+        "baglam": {
+            "konu": "satis_sozlesmesi",
+            "yayin_zamani": "2026-09-25T12:00:00Z",  # 15:00 TSİ
+            "seans_durumu": "seans_ici",
+            "olay": "Ana sözleşme bildirimi.",
+        },
+        "bekleyen_bildirim": {
+            "yayin_zamani": "2026-09-25T11:00:00Z",  # 14:00 TSİ < 15:00 TSİ
+        },
+    }
+    info_older = format_kap_for_prompt(older_pending_kap, as_of="2026-09-25 18:05+03:00")
+    assert info_older["status"] == "var"
+    assert "ek bir bildirimin" in info_older["section_text"]
+    assert "daha yeni bildirimin" not in info_older["section_text"]

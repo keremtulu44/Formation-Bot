@@ -45,11 +45,44 @@ STATE_LABELS = {
     "STATE_NEUTRAL": "nötr", "STATE_UNAVAILABLE": "hazır değil",
 }
 PATTERN_STATES = {
-    "KIRILIM_ADAYI": "kırılım adayı", "KIRILIM_DENEMESI": "kırılım denemesi",
-    "KIRILIM_TEYITLI": "kırılım teyitli", "RETEST_BEKLENIYOR": "retest bekleniyor",
-    "FORMASYON_TAMAMLANDI": "tamamlandı", "SIKISMA_GUCLENIYOR": "sıkışma güçleniyor",
-    "OLGUNLASIYOR": "olgunlaşıyor", "KIRILIM_BASARISIZ": "kırılım başarısız",
+    "FORMASYON_YOK": "formasyon yok",
+    "ADAY_OLUSUYOR": "aday oluşuyor",
+    "GEOMETRI_ADAYI": "geometri adayı",
+    "FORMASYON_TANIMLANDI": "formasyon tanımlandı",
+    "OLGUNLASIYOR": "olgunlaşıyor",
+    "SIKISMA_GUCLENIYOR": "sıkışma güçleniyor",
+    "KIRILIM_HAZIRLIGI": "kırılım hazırlığı",
+    "KIRILIM_DENEMESI": "kırılım denemesi",
+    "KIRILIM_ADAYI": "kırılım adayı",
+    "KIRILIM_TEYITLI": "kırılım teyitli",
+    "RETEST_BEKLENIYOR": "retest bekleniyor",
+    "RETEST_EDILIYOR": "retest ediliyor",
+    "RETEST_BASARILI": "retest başarılı",
+    "KIRILIM_TEYIT_ALAMADI": "kırılım teyit alamadı",
+    "BASARISIZ_KIRILIM": "kırılım başarısız",
+    "KIRILIM_BASARISIZ": "kırılım başarısız",
+    "KIRILIM_GECERSIZLESTI": "kırılım geçersizleşti",
+    "FORMASYON_ZAYIFLADI": "formasyon zayıfladı",
+    "FORMASYON_GECERSIZ": "formasyon geçersiz",
+    "FORMASYON_TAMAMLANDI": "tamamlandı",
 }
+_CANDIDATE_BREAK_STATES = frozenset({
+    "KIRILIM_ADAYI",
+    "KIRILIM_DENEMESI",
+    "KIRILIM_TEYIT_ALAMADI",
+})
+_CONFIRMED_BREAK_STATES = frozenset({
+    "KIRILIM_TEYITLI",
+    "RETEST_BEKLENIYOR",
+    "RETEST_EDILIYOR",
+    "RETEST_BASARILI",
+    "FORMASYON_TAMAMLANDI",
+})
+_FAILED_BREAK_STATES = frozenset({
+    "BASARISIZ_KIRILIM",
+    "KIRILIM_BASARISIZ",
+    "KIRILIM_GECERSIZLESTI",
+})
 
 
 EVENT_LABELS = {"CONFIRMED": "teyitli", "CANDIDATE_FAILED": "aday başarısız",
@@ -708,10 +741,12 @@ def _render_pattern(p: dict) -> str:
     text += "."
     break_dir = p.get("break_direction")
     if break_dir in ("yukarı", "aşağı"):
-        if p.get("state") in {"KIRILIM_ADAYI", "KIRILIM_DENEMESI"}:
+        if p.get("state") in _CANDIDATE_BREAK_STATES:
             text += f" Aday kırılım yönü: {break_dir} (teyitli değil)."
-        elif p.get("state") in {"KIRILIM_TEYITLI", "RETEST_BEKLENIYOR", "FORMASYON_TAMAMLANDI", "KIRILIM_BASARISIZ"}:
+        elif p.get("state") in _CONFIRMED_BREAK_STATES:
             text += f" Kırılım yönü: {break_dir}."
+        elif p.get("state") in _FAILED_BREAK_STATES:
+            text += f" Başarısız kırılım yönü: {break_dir}."
     if p.get("contraction") is not None:
         text += f" Daralma %{sayi(100 * p['contraction'], 0)}."
     if p.get("upper_touches") is not None or p.get("lower_touches") is not None:

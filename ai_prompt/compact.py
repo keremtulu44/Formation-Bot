@@ -13,7 +13,20 @@ import pandas as pd
 
 import chart_experience
 from .budget import COMPACT_PASTE_BUDGET, utf16_len
-from .builder import ROOT, TF_ORDER, PATTERN_STATES, _fmt, _fmt_metric, _label, _num, _render_pattern, _same_level
+from .builder import (
+    ROOT,
+    TF_ORDER,
+    PATTERN_STATES,
+    _CANDIDATE_BREAK_STATES,
+    _CONFIRMED_BREAK_STATES,
+    _FAILED_BREAK_STATES,
+    _fmt,
+    _fmt_metric,
+    _label,
+    _num,
+    _render_pattern,
+    _same_level,
+)
 from reporting.format import sayi
 
 TARGET = COMPACT_PASTE_BUDGET.user_target
@@ -102,10 +115,12 @@ def _pattern(p: dict) -> str:
     break_dir = p.get("break_direction")
     if break_dir in ("yukarı", "aşağı"):
         arrow = "↑" if break_dir == "yukarı" else "↓"
-        if p.get("state") in {"KIRILIM_ADAYI", "KIRILIM_DENEMESI"}:
+        if p.get("state") in _CANDIDATE_BREAK_STATES:
             parts.append(f"aday yön {arrow}")
-        elif p.get("state") in {"KIRILIM_TEYITLI", "RETEST_BEKLENIYOR", "FORMASYON_TAMAMLANDI", "KIRILIM_BASARISIZ"}:
+        elif p.get("state") in _CONFIRMED_BREAK_STATES:
             parts.append(f"kırılım {arrow}")
+        elif p.get("state") in _FAILED_BREAK_STATES:
+            parts.append(f"denenen yön {arrow}")
     quality = _num(p.get("quality"))
     if quality is not None:
         parts.append(f"kalite {int(round(quality))}/100")

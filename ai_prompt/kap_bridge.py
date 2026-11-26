@@ -35,9 +35,9 @@ _SEANS_LABELS: dict[str, str] = {
 }
 
 _ALISKANLIK_LABELS: dict[str, str] = {
-    "seyrek": "seyrek (son 30 günde nadir bildirim)",
+    "seyrek": "seyrek (nadir bildirim)",
     "normal": "normal",
-    "sik": "sık (son 30 günde düzenli/sık bildirim)",
+    "sik": "sık (düzenli/sık bildirim)",
 }
 
 _INCOMPLETE_REASONS = frozenset({
@@ -144,6 +144,25 @@ def format_kap_for_prompt(
 
     if durum == "var" and isinstance(kap_context.get("baglam"), Mapping):
         baglam = kap_context["baglam"]
+        pub_ist = _to_istanbul(baglam.get("yayin_zamani"))
+        # Nedensellik koruması: kesit saatinden SONRA yayımlanmış bildirim asla içeri sızmasın.
+        if pub_ist is not None and cut_ist is not None and pub_ist > cut_ist:
+            return {
+                "status": "beklemede",
+                "include_kap_rules": False,
+                "section_name": "kap_durum",
+                "section_text": (
+                    "KAP durumu: Kesit saatinden sonraki bildirim nedensellik gereği dışlandı; "
+                    "haber yokluğu doğrulanmadı."
+                ),
+                "meta_summary": {
+                    "durum": "yok",
+                    "neden": "kesit_sonrasi_dislandi",
+                    "konu": None,
+                    "yayin_zamani": baglam.get("yayin_zamani"),
+                },
+            }
+
         konu_raw = str(baglam.get("konu") or "").strip()
         konu_tr = _KONU_LABELS.get(konu_raw, konu_raw or "bildirim")
         seans_raw = str(baglam.get("seans_durumu") or "").strip()
@@ -182,11 +201,22 @@ def format_kap_for_prompt(
                 lines.append("Referans mali tablo: " + ", ".join(m_parts) + ".")
 
         if habit:
-            habit_tr = _ALISKANLIK_LABELS.get(habit, habit)
-            if count_30 is not None:
-                lines.append(f"Şirket bildirim alışkanlığı: {habit_tr} (son 30 gün: {count_30}).")
+            if habit == "seyrek":
+                habit_line = (
+                    f"seyrek (nadir bildirim; son 30 gün: {count_30})"
+                    if count_30 is not None
+                    else "seyrek (son 30 günde nadir bildirim)"
+                )
+            elif habit == "sik":
+                habit_line = (
+                    f"sık (düzenli/sık bildirim; son 30 gün: {count_30})"
+                    if count_30 is not None
+                    else "sık (son 30 günde düzenli/sık bildirim)"
+                )
             else:
-                lines.append(f"Şirket bildirim alışkanlığı: {habit_tr}.")
+                habit_tr = _ALISKANLIK_LABELS.get(habit, habit)
+                habit_line = f"{habit_tr} (son 30 gün: {count_30})" if count_30 is not None else habit_tr
+            lines.append(f"Şirket bildirim alışkanlığı: {habit_line}.")
 
         rev = baglam.get("revizyon")
         if isinstance(rev, Mapping):
@@ -194,8 +224,13 @@ def format_kap_for_prompt(
 
         pending = kap_context.get("bekleyen_bildirim")
         if isinstance(pending, Mapping):
-            p_time = _fmt_ist(pending.get("yayin_zamani"), ref_year=ref_year)
-            lines.append(f"Bekleyen bildirim: {p_time} TSİ tarihli daha yeni bildirimin detayı henüz bekleniyor.")
+            p_ts = _to_istanbul(pending.get("yayin_zamani"))
+            # Gelecek saatli bekleyen bildirimi kesit içine sızdırma.
+            if not (p_ts is not None and cut_ist is not None and p_ts > cut_ist):
+                p_time = _fmt_ist(pending.get("yayin_zamani"), ref_year=ref_year)
+                is_newer = p_ts is not None and pub_ist is not None and p_ts > pub_ist
+                rel = "daha yeni bildirimin" if is_newer else "ek bir bildirimin"
+                lines.append(f"Bekleyen bildirim: {p_time} TSİ tarihli {rel} detayı henüz bekleniyor.")
 
         section_text = "\n".join(lines)
         if len(section_text) > _MAX_KAP_SECTION_CHARS:
