@@ -965,12 +965,12 @@ YENI_DOMAIN_ALARM_POLITIKA = os.getenv("YENI_DOMAIN_ALARM_POLITIKA", "P6").strip
 if YENI_DOMAIN_ALARM_POLITIKA not in ("P0", "P6", "P4"):
     YENI_DOMAIN_ALARM_POLITIKA = "P0"
 
-# --- AI Gölge (Shadow) Değerlendirme Kaydı (varsayılan KAPALI) ---
-# Telegram'a hiçbir AI yorumu göndermeden yalnızca gizli [AI_SONUC ...]
-# bloğunu ayıklayıp yerel JSON + Supabase `ai_yorum_test` tablosuna yazmak
-# için opt-in bayrak. Varsayılan 0: operatör açıkça açmadan kapalı kalır.
-AI_SHADOW_LOG = os.getenv("AI_SHADOW_LOG", "0").strip().lower() in {
-    "1", "true", "yes", "on", "acik", "açık",
+# --- AI Gölge (Shadow) Değerlendirme Kaydı (kullanıcı kararı: varsayılan AÇIK) ---
+# AI yanıtının sonundaki gizli [AI_SONUC ...] 5-filtre bloğunu ayıklayıp
+# yerel DATA_DIR/ai_yorum_test.json dosyasına ve Supabase tanımlıysa
+# `public.ai_yorum_test` tablosuna yazar.
+AI_SHADOW_LOG = os.getenv("AI_SHADOW_LOG", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
 }
 
 
@@ -978,17 +978,16 @@ def ai_shadow_log_enabled() -> bool:
     return bool(AI_SHADOW_LOG)
 
 
-# --- KAP Alarm Bağlamı Arşivi (`kap/` paketi; varsayılan KAPALI) ---
+# --- KAP Alarm Bağlamı Arşivi (`kap/` paketi; kullanıcı kararı: varsayılan AÇIK) ---
 # Arka plan SQLite WAL toplayıcısı ve salt-okunur alarm bağlamı sorgusu.
-# Varsayılan 0: operatör açıkça açmadıkça ağa çıkmaz, SQLite dosyası açmaz.
-KAP_BAGLAM_AKTIF = os.getenv("KAP_BAGLAM_AKTIF", "0").strip().lower() in {
-    "1", "true", "yes", "on", "acik", "açık",
+KAP_BAGLAM_AKTIF = os.getenv("KAP_BAGLAM_AKTIF", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
 }
 KAP_ARSIV_YOLU = os.getenv("KAP_ARSIV_YOLU", "").strip()
 KAP_TARAMA_ARALIK_SN = _env_int("KAP_TARAMA_ARALIK_SN", 180, minimum=30)
 KAP_MAX_YAS_GUN = _env_int("KAP_MAX_YAS_GUN", 7, minimum=1)
-KAP_WARMUP_ACILISTA = os.getenv("KAP_WARMUP_ACILISTA", "0").strip().lower() in {
-    "1", "true", "yes", "on", "acik", "açık",
+KAP_WARMUP_ACILISTA = os.getenv("KAP_WARMUP_ACILISTA", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
 }
 
 
@@ -996,8 +995,8 @@ def kap_baglam_enabled() -> bool:
     return bool(KAP_BAGLAM_AKTIF)
 
 
-# --- AI API İstemci Katmanı (istemci ayarları; ana döngüye henüz bağlı DEĞİL) ---
-# Sıralı zincir: ApiWrapper (/v1/ask) -> Ücretsiz Gemini #1 -> Ücretsiz Gemini #2 -> normal alarm.
+# --- AI API İstemci Katmanı & Canlı Alarm Entegrasyonu ---
+# Sıralı zincir: ApiWrapper (/v1/ask) -> Ücretsiz Gemini #1 -> Ücretsiz Gemini #2 -> düz kart.
 AI_WRAPPER_BASE_URL = os.getenv("AI_WRAPPER_BASE_URL", "").strip()
 AI_WRAPPER_API_KEY = os.getenv("AI_WRAPPER_API_KEY", "").strip()
 AI_WRAPPER_MODEL = os.getenv("AI_WRAPPER_MODEL", "").strip()
@@ -1012,6 +1011,38 @@ GEMINI_MODEL_1 = (
 )
 GEMINI_API_KEY_2 = os.getenv("GEMINI_API_KEY_2", "").strip()
 GEMINI_MODEL_2 = os.getenv("GEMINI_MODEL_2", "").strip() or GEMINI_MODEL_1
+
+# Canlı alarmlarda düz kart yerine AI yorumu gönderim şalterleri (hepsi varsayılan AÇIK;
+# anahtar girilmemişse veya tüm AI sağlayıcıları düşerse otomatik düz kart gider).
+AI_YORUM_AKTIF = os.getenv("AI_YORUM_AKTIF", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
+}
+AI_YORUM_DM = os.getenv("AI_YORUM_DM", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
+}
+AI_YORUM_PUBLIC = os.getenv("AI_YORUM_PUBLIC", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
+}
+# 0 = toplam süre sınırı yok (ApiWrapper kuralı: 10s bağlanma + 45s sessizlik);
+# isteğe bağlı pozitif saniye (örn. 240) sağlayıcı başına üst sınır koyar.
+AI_YORUM_MAX_BEKLEME_SN = _env_int("AI_YORUM_MAX_BEKLEME_SN", 0, minimum=0)
+
+
+def ai_yorum_enabled() -> bool:
+    return bool(AI_YORUM_AKTIF)
+
+
+def ai_yorum_dm_enabled() -> bool:
+    return bool(AI_YORUM_AKTIF and AI_YORUM_DM)
+
+
+def ai_yorum_public_enabled() -> bool:
+    return bool(AI_YORUM_AKTIF and AI_YORUM_PUBLIC)
+
+
+def ai_yorum_max_bekleme_sn() -> float | None:
+    val = int(AI_YORUM_MAX_BEKLEME_SN or 0)
+    return float(val) if val > 0 else None
 
 
 

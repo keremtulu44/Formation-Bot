@@ -353,15 +353,19 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("STABIL_GERI_ALIM_ALARM", False, "Ayrı 4S Stabil güçlü geri alım alarmları (varsayılan 1 = açık)"),
         ("YENI_DOMAIN_ALARM", False, "Ayrı yeni domain alarm kanalı (varsayılan 0 = kapalı; klasik düzen)"),
         ("YENI_DOMAIN_ALARM_POLITIKA", False, "Yeni domain alarm politikası (P0/P4/P6; varsayılan P6)"),
-        ("AI_SHADOW_LOG", False, "Telegram'a açmadan gizli [AI_SONUC] gölge kaydı (varsayılan 0 = kapalı)"),
-        ("AI_WRAPPER_BASE_URL", False, "İsteğe bağlı ApiWrapper temel adresi (yalnız /v1/ask kullanılır)"),
-        ("AI_WRAPPER_API_KEY", False, "İsteğe bağlı ApiWrapper Bearer anahtarı"),
+        ("AI_YORUM_AKTIF", False, "Alarm yerine AI yorumu gönderimi (varsayılan 1 = açık; sorunda düz kart)"),
+        ("AI_YORUM_DM", False, "DM alarmlarında AI yorumu (varsayılan 1 = açık)"),
+        ("AI_YORUM_PUBLIC", False, "Public grup/kanal alarmlarında AI yorumu (varsayılan 1 = açık)"),
+        ("AI_YORUM_MAX_BEKLEME_SN", False, "İsteğe bağlı sağlayıcı başına üst bekleme sn (0 = sınırsız)"),
+        ("AI_SHADOW_LOG", False, "Gizli [AI_SONUC] gölge kaydı (varsayılan 1 = açık)"),
+        ("AI_WRAPPER_BASE_URL", False, "ApiWrapper temel adresi (yalnız /v1/ask kullanılır)"),
+        ("AI_WRAPPER_API_KEY", False, "ApiWrapper Bearer anahtarı"),
         ("AI_WRAPPER_MODEL", False, "İsteğe bağlı ApiWrapper model adı (boş = sunucu varsayılanı)"),
-        ("GEMINI_API_KEY_1", False, "İsteğe bağlı 1. ücretsiz Gemini yedek anahtarı"),
+        ("GEMINI_API_KEY_1", False, "1. ücretsiz Gemini yedek anahtarı"),
         ("GEMINI_MODEL_1", False, "1. Gemini yedek model adı (varsayılan gemini-2.5-flash)"),
-        ("GEMINI_API_KEY_2", False, "İsteğe bağlı 2. ücretsiz Gemini yedek anahtarı"),
+        ("GEMINI_API_KEY_2", False, "2. ücretsiz Gemini yedek anahtarı"),
         ("GEMINI_MODEL_2", False, "2. Gemini yedek model adı (boş = GEMINI_MODEL_1)"),
-        ("KAP_BAGLAM_AKTIF", False, "KAP arka plan SQLite WAL toplayıcısı (varsayılan 0 = kapalı)"),
+        ("KAP_BAGLAM_AKTIF", False, "KAP arka plan SQLite WAL toplayıcısı (varsayılan 1 = açık)"),
         ("KAP_ARSIV_YOLU", False, "İsteğe bağlı KAP SQLite arşiv yolu (boş = DATA_DIR/kap_arsiv.sqlite)"),
         ("KAP_TARAMA_ARALIK_SN", False, "KAP tarama aralığı, saniye (varsayılan 180)"),
         ("KAP_MAX_YAS_GUN", False, "Alarm anında kabul edilecek azami KAP bildirim yaşı, gün (varsayılan 7)"),
@@ -424,12 +428,29 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
               "Belirsizliği önlemek için 0 veya 1 kullanın.")
     wrapper_url = (degerler.get("AI_WRAPPER_BASE_URL") or "").strip()
     wrapper_key = (degerler.get("AI_WRAPPER_API_KEY") or "").strip()
+    gem1 = (degerler.get("GEMINI_API_KEY_1") or degerler.get("GEMINI_API_KEY") or "").strip()
+    gem2 = (degerler.get("GEMINI_API_KEY_2") or "").strip()
     if bool(wrapper_url) != bool(wrapper_key):
         satir(WARN, "AI_WRAPPER_BASE_URL ve AI_WRAPPER_API_KEY birlikte tanımlanmalı",
               "Biri eksikse ApiWrapper zincire eklenmez.")
     elif wrapper_url and not wrapper_url.startswith(("http://", "https://")):
         satir(WARN, "AI_WRAPPER_BASE_URL geçerli bir http(s) adresi değil",
               "Örnek: https://api.ornek.com (sonuna /v1/ask otomatik eklenir).")
+    ai_aktif_ham = (degerler.get("AI_YORUM_AKTIF") or "1").strip().lower()
+    ai_aktif = ai_aktif_ham not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}
+    tanimli_saglayicilar = []
+    if wrapper_url and wrapper_key and wrapper_url.startswith(("http://", "https://")):
+        tanimli_saglayicilar.append("ApiWrapper")
+    if gem1:
+        tanimli_saglayicilar.append("Gemini#1")
+    if gem2:
+        tanimli_saglayicilar.append("Gemini#2")
+    if ai_aktif and tanimli_saglayicilar:
+        satir(OK, f"AI alarm zinciri hazır: {' -> '.join(tanimli_saglayicilar)} -> düz kart",
+              "Sorun çıkarsa normal teknik kart kesintisiz gönderilir.")
+    elif ai_aktif:
+        satir(WARN, "AI_YORUM_AKTIF açık ancak hiçbir AI sağlayıcı anahtarı tanımlı değil",
+              "AI_WRAPPER_BASE_URL+AI_WRAPPER_API_KEY veya GEMINI_API_KEY_1/2 eklenene kadar düz kart gider.")
     kap_ham = (degerler.get("KAP_BAGLAM_AKTIF") or "").strip().lower()
     if kap_ham in {"1", "true", "yes", "on", "acik", "açık", "evet"}:
         try:

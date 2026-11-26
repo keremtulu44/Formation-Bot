@@ -30,8 +30,8 @@ def test_package_layout_and_top_level_shim_stay_in_sync():
     assert kap.KapCollectorService is kap_baglam.KapCollectorService
     assert kap.open_archive is kap_baglam.open_archive
     assert kap.AlarmArchive is kap_baglam.AlarmArchive
-    assert config.KAP_BAGLAM_AKTIF is False
-    assert config.kap_baglam_enabled() is False
+    assert config.KAP_BAGLAM_AKTIF is True
+    assert config.kap_baglam_enabled() is True
 
 
 def test_ticker_universe_and_archive_path_helpers(tmp_path, monkeypatch):
@@ -179,9 +179,13 @@ def test_deploy_check_verifies_kap_env_flag(monkeypatch, capsys):
     assert "KAP_BAGLAM_AKTIF açık ve kap/httpx modülleri hazır" in out
 
 
-def test_health_summary_reports_kap_and_ai_shadow_default_off():
+def test_health_summary_reports_kap_ai_shadow_and_ai_client():
     import main as main_mod
 
     ozet = main_mod._saglik_ozeti()
-    assert ozet["kap_baglam"] == {"aktif": False, "calisiyor": False, "son_hata": None}
-    assert ozet["ai_shadow_aktif"] is False
+    assert ozet["kap_baglam"] == {"aktif": True, "calisiyor": False, "son_hata": None}
+    assert ozet["ai_shadow_aktif"] is True
+    assert ozet["ai_istemci"]["aktif"] is True
+    assert ozet["ai_istemci"]["dm_aktif"] is True
+    assert ozet["ai_istemci"]["public_aktif"] is True
+    assert isinstance(ozet["ai_istemci"]["saglayicilar"], list)

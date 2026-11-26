@@ -193,6 +193,8 @@ def test_evaluate_shadow_outcome_uses_only_future_bars_and_scores_direction():
     assert out_flat["yon_isabet"] is None
 
 
-def test_ai_shadow_log_defaults_off_until_explicitly_enabled():
-    assert config.AI_SHADOW_LOG is False
+def test_ai_shadow_log_defaults_on_and_can_be_toggled(monkeypatch):
+    assert config.AI_SHADOW_LOG is True
+    assert config.ai_shadow_log_enabled() is True
+    monkeypatch.setattr(config, "AI_SHADOW_LOG", False)
     assert config.ai_shadow_log_enabled() is False

@@ -966,10 +966,13 @@ def format_domain_alarm_summary_card(cands: Sequence[DomainAlarmCandidate]) -> s
 
 
 def _deliver_message(notifier: Any, text: str, *, public_event_id=None,
-                     public_identity=None, public_graphics=None, dm_graphics=None) -> dict[str, bool]:
+                     public_identity=None, public_graphics=None, dm_graphics=None,
+                     dm_text: str | None = None, public_text: str | None = None) -> dict[str, bool]:
     """DM ve public için bağımsız teslim/kuyruk durumunu takip et."""
     dm_on = bool(getattr(config, "YENI_DOMAIN_ALARM_DM", True))
     pub_on = bool(getattr(config, "YENI_DOMAIN_ALARM_PUBLIC", True))
+    dm_body = dm_text if dm_text else text
+    pub_body = public_text if public_text else text
     dm_ok = dm_accepted = pub_ok = pub_accepted = False
     dm_managed = public_managed = False
     dm_required = dm_on and notifier is not None and getattr(notifier, "enabled", True) is not False
@@ -982,12 +985,12 @@ def _deliver_message(notifier: Any, text: str, *, public_event_id=None,
             dm_managed = True
             try:
                 dm_accepted, dm_ok = queue_dm(
-                    public_event_id, text, identity=public_identity, graphics=dm_graphics)
+                    public_event_id, dm_body, identity=public_identity, graphics=dm_graphics)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Yeni domain DM kuyruğu başarısız: %s", type(exc).__name__)
         elif callable(send_text):
             try:
-                res = send_text(text)
+                res = send_text(dm_body)
                 dm_ok = bool(res[0] if isinstance(res, tuple) else res)
                 dm_accepted = dm_ok
             except Exception as exc:  # noqa: BLE001
@@ -1001,12 +1004,12 @@ def _deliver_message(notifier: Any, text: str, *, public_event_id=None,
             public_managed = True
             try:
                 pub_accepted, pub_ok = queue_pub(
-                    public_event_id, text, identity=public_identity, graphics=public_graphics)
+                    public_event_id, pub_body, identity=public_identity, graphics=public_graphics)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Yeni domain public kuyruğu başarısız: %s", type(exc).__name__)
         elif public_acik is not False and callable(send_pub):
             try:
-                pub_ok = bool(send_pub(text))
+                pub_ok = bool(send_pub(pub_body))
                 pub_accepted = pub_ok
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Yeni domain public gönderim hatası: %s", type(exc).__name__)
@@ -1054,6 +1057,8 @@ def dispatch_domain_alarm_candidates(
     notifier: Any,
     *,
     state_path: str | None = None,
+    frames_by_symbol: Mapping[str, Any] | None = None,
+    router: Any = None,
 ) -> dict[str, int]:
     """Adayları tekilleştir, burst kuralıyla gönder, state'e işaretle."""
     ozet = {"aday": len(candidates), "tekil_gonderilen": 0,
@@ -1102,8 +1107,38 @@ def dispatch_domain_alarm_candidates(
     for cand in tekil_liste:
         identity = {"stock_name": cand.symbol, "timeframe": cand.timeframe,
                     "state": "YENI_DOMAIN", "pattern_name": "DOMAİN TETİKLEME"}
+        duz_metin = format_domain_alarm_card(cand)
+        dm_metin = duz_metin
+        pub_metin = duz_metin
+        if frames_by_symbol and cand.symbol in frames_by_symbol:
+            try:
+                from ai_prompt.service import build_ai_replacement_text_for_signal
+
+                df_1h, df_1d, as_of_dt = frames_by_symbol[cand.symbol]
+                ai_text = build_ai_replacement_text_for_signal(
+                    symbol=cand.symbol,
+                    timeframe=cand.timeframe,
+                    pattern_name="Teknik Tetikleme",
+                    state="YENI_DOMAIN",
+                    close_price=cand.close_price,
+                    bar_metni=cand.bar_label,
+                    df_1h=df_1h,
+                    df_1d=df_1d,
+                    as_of=as_of_dt,
+                    router=router,
+                )
+                if ai_text:
+                    if config.ai_yorum_dm_enabled():
+                        dm_metin = ai_text
+                    if config.ai_yorum_public_enabled():
+                        pub_metin = ai_text
+            except Exception as ai_err:  # noqa: BLE001 - AI hatasında düz kart gider
+                logger.warning("Yeni domain AI yorumu atlandı (%s %s): %s",
+                               cand.symbol, cand.timeframe, type(ai_err).__name__)
         sonuc = _deliver_message(
-            notifier, format_domain_alarm_card(cand),
+            notifier, duz_metin,
+            dm_text=dm_metin,
+            public_text=pub_metin,
             public_event_id=auxiliary_event_id("domain", [(cand.symbol, cand.timeframe, cand.bar_open)]),
             public_identity=identity, public_graphics=cand.grafik_verisi_public,
             dm_graphics=cand.grafik_verisi,

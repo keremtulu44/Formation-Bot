@@ -663,6 +663,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     domain_results_by_stock = {}
     stabil_adaylari = []
     domain_alarm_adaylari = []
+    ai_frames_by_symbol = {}
     _pkg._live_state.begin_scan(
         simdiki_zaman,
         manuel=manuel,
@@ -1564,8 +1565,25 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                     stock, tf_name, exc,
                                 )
                             _grafik_koprusu(payload, outputs)
+                            # Canlı AI alarm yorumu (senkron: başarırsa ana kart
+                            # yerine gider; anahtar yoksa veya tüm AI sağlayıcıları
+                            # düşerse düz teknik kart kesintisiz gönderilir).
+                            try:
+                                from ai_prompt.service import enrich_alarm_with_ai
+
+                                enrich_alarm_with_ai(
+                                    payload,
+                                    df_1h=df_1h,
+                                    df_1d=df_gunluk_ham,
+                                    as_of=simdiki_zaman,
+                                )
+                            except Exception as ai_hata:  # noqa: BLE001 - AI hatası alarmı düşürmesin
+                                _pkg.logger.warning(
+                                    "AI alarm yorumu atlandı (%s %s); düz kart kullanılacak: %s",
+                                    stock, tf_name, type(ai_hata).__name__,
+                                )
                             # Public kuyruk: bülten kartı hazır olduktan SONRA
-                            # (kart bağlamı + varsa public karesi kayda girer).
+                            # (kart bağlamı + varsa AI yorumu + public karesi kayda girer).
                             try:
                                 notifier.public_kuyruk(payload)
                             except Exception as public_hata:  # noqa: BLE001
@@ -1674,6 +1692,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     )
                     if st_cand is not None:
                         stabil_adaylari.append(st_cand)
+                        ai_frames_by_symbol[stock] = (df_1h, df_gunluk_ham, simdiki_zaman)
                 except Exception as st_err:  # noqa: BLE001 - Stabil ayrı sinyali ana taramayı düşürmez
                     _pkg.logger.warning("%s Stabil 4s aday kontrolü hatası: %s", stock, st_err)
 
@@ -1689,19 +1708,20 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             stock, all_tfs, simdiki_zaman, domain_results_by_stock,
                             frames=yeni_frames,
                         )
-                        domain_alarm_adaylari.extend(
-                            evaluate_domain_alarm_candidates(
-                                stock,
-                                all_tfs,
-                                yeni_frames,
-                                yeni_outputs,
-                                simdiki_zaman,
-                                formasyon_kayitlari=hisse_formasyonlari,
-                                bar_metni_fn=_mum_bilgisi,
-                                grafik_baglami=grafik_baglami_by_tf,
-                                direnc_gunluk_ham=df_gunluk_ham,
-                            )
+                        yeni_cands = evaluate_domain_alarm_candidates(
+                            stock,
+                            all_tfs,
+                            yeni_frames,
+                            yeni_outputs,
+                            simdiki_zaman,
+                            formasyon_kayitlari=hisse_formasyonlari,
+                            bar_metni_fn=_mum_bilgisi,
+                            grafik_baglami=grafik_baglami_by_tf,
+                            direnc_gunluk_ham=df_gunluk_ham,
                         )
+                        if yeni_cands:
+                            domain_alarm_adaylari.extend(yeni_cands)
+                            ai_frames_by_symbol[stock] = (df_1h, df_gunluk_ham, simdiki_zaman)
                     except Exception as yeni_err:  # noqa: BLE001 - yeni kanal ana taramayı düşürmez
                         _pkg.logger.warning("%s yeni domain aday kontrolü hatası: %s", stock, yeni_err)
 
@@ -1878,7 +1898,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
         try:
             from bot.stabil_service import dispatch_stabil_scan_candidates
 
-            st_ozet = dispatch_stabil_scan_candidates(stabil_adaylari, notifier)
+            st_ozet = dispatch_stabil_scan_candidates(
+                stabil_adaylari, notifier, frames_by_symbol=ai_frames_by_symbol,
+            )
             _pkg.daily_stats['stabil_alerts_sent'] = int(
                 _pkg.daily_stats.get('stabil_alerts_sent') or 0
             ) + int(st_ozet.get('tekil_gonderilen') or 0) + int(st_ozet.get('toplu_ozet') or 0)
@@ -1894,7 +1916,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     # işaretli AYRI kart olarak gider. Eski formasyon/4S alarmlarına dokunulmaz.
     if send_alerts and domain_alarm_adaylari:
         try:
-            dy_ozet = dispatch_domain_alarm_candidates(domain_alarm_adaylari, notifier)
+            dy_ozet = dispatch_domain_alarm_candidates(
+                domain_alarm_adaylari, notifier, frames_by_symbol=ai_frames_by_symbol,
+            )
             _pkg.daily_stats['yeni_domain_alerts_sent'] = int(
                 _pkg.daily_stats.get('yeni_domain_alerts_sent') or 0
             ) + int(dy_ozet.get('tekil_gonderilen') or 0) + int(dy_ozet.get('toplu_ozet') or 0)

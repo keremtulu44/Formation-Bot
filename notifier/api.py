@@ -12,6 +12,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+import config
 from config import (ACTIVE_STOCKS, DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT,
                     TELEGRAM_MAX_MESAJ_GUN,
                     TELEGRAM_ALERT_STYLE, TELEGRAM_ALERT_MAX_KARAKTER, TELEGRAM_SATIR_PX,
@@ -881,7 +882,8 @@ class TelegramNotifier:
             "candle_close_price", "close_price", "upper_touches", "lower_touches",
             "formation_id", "break_strength", "age_bars", "band_baslangic", "upper_now",
             "lower_now", "retest_seen", "mtf_destek", "mtf_uyum", "mtf_kontrol_edildi",
-            "mtf_yon_biliniyor", "domain_bolumleri", "domain_karsi", "watch_context")}
+            "mtf_yon_biliniyor", "domain_bolumleri", "domain_karsi", "watch_context",
+            "ai_yorum_mesaji")}
         # Seçim hisse bazlı hafızayı değiştirir; DM ve public ayrı ayrı
         # seçerse aynı olayın yorumları farklı olur. Bir kez seçip sabitle.
         if data.get("kart_yorum_kapisi"):
@@ -1098,6 +1100,10 @@ class TelegramNotifier:
             return ""
         if state not in CONFIRMED_PUBLIC_STATES:
             return ""
+        if (config.ai_yorum_public_enabled()
+                and isinstance(kayit.get("ai_yorum_mesaji"), str)
+                and kayit["ai_yorum_mesaji"].strip()):
+            return kayit["ai_yorum_mesaji"].strip()
         return _format_lifecycle_alert_kart(kayit)
 
     def format_public_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None,
@@ -2059,6 +2065,10 @@ class TelegramNotifier:
         if state in {"KIRILIM_DENEMESI", "BASARISIZ_KIRILIM", "FORMASYON_TAMAMLANDI"}:
             return ""
         if state in {"KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI"}:
+            if (config.ai_yorum_dm_enabled()
+                    and isinstance(data.get("ai_yorum_mesaji"), str)
+                    and data["ai_yorum_mesaji"].strip()):
+                return data["ai_yorum_mesaji"].strip()
             return _format_lifecycle_alert(
                 data, guncelleme=bool(data.get("_dm_bağlam_değişmedi"))
             )

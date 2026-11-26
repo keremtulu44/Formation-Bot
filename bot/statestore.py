@@ -472,6 +472,12 @@ _grafik_is_kilidi = threading.Lock()
 _grafik_aktif_is = {}
 
 
+_ai_is_kilidi = threading.Lock()
+
+
+_ai_aktif_is = {}
+
+
 _GRAFIK_HEDEF_SN = 60
 
 
