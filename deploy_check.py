@@ -354,6 +354,13 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("YENI_DOMAIN_ALARM", False, "Ayrı yeni domain alarm kanalı (varsayılan 0 = kapalı; klasik düzen)"),
         ("YENI_DOMAIN_ALARM_POLITIKA", False, "Yeni domain alarm politikası (P0/P4/P6; varsayılan P6)"),
         ("AI_SHADOW_LOG", False, "Telegram'a açmadan gizli [AI_SONUC] gölge kaydı (varsayılan 0 = kapalı)"),
+        ("AI_WRAPPER_BASE_URL", False, "İsteğe bağlı ApiWrapper temel adresi (yalnız /v1/ask kullanılır)"),
+        ("AI_WRAPPER_API_KEY", False, "İsteğe bağlı ApiWrapper Bearer anahtarı"),
+        ("AI_WRAPPER_MODEL", False, "İsteğe bağlı ApiWrapper model adı (boş = sunucu varsayılanı)"),
+        ("GEMINI_API_KEY_1", False, "İsteğe bağlı 1. ücretsiz Gemini yedek anahtarı"),
+        ("GEMINI_MODEL_1", False, "1. Gemini yedek model adı (varsayılan gemini-2.5-flash)"),
+        ("GEMINI_API_KEY_2", False, "İsteğe bağlı 2. ücretsiz Gemini yedek anahtarı"),
+        ("GEMINI_MODEL_2", False, "2. Gemini yedek model adı (boş = GEMINI_MODEL_1)"),
         ("KAP_BAGLAM_AKTIF", False, "KAP arka plan SQLite WAL toplayıcısı (varsayılan 0 = kapalı)"),
         ("KAP_ARSIV_YOLU", False, "İsteğe bağlı KAP SQLite arşiv yolu (boş = DATA_DIR/kap_arsiv.sqlite)"),
         ("KAP_TARAMA_ARALIK_SN", False, "KAP tarama aralığı, saniye (varsayılan 180)"),
@@ -415,6 +422,14 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
     elif ai_shadow_ham and ai_shadow_ham not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}:
         satir(WARN, f"AI_SHADOW_LOG değeri tanınmıyor ({ai_shadow_ham})",
               "Belirsizliği önlemek için 0 veya 1 kullanın.")
+    wrapper_url = (degerler.get("AI_WRAPPER_BASE_URL") or "").strip()
+    wrapper_key = (degerler.get("AI_WRAPPER_API_KEY") or "").strip()
+    if bool(wrapper_url) != bool(wrapper_key):
+        satir(WARN, "AI_WRAPPER_BASE_URL ve AI_WRAPPER_API_KEY birlikte tanımlanmalı",
+              "Biri eksikse ApiWrapper zincire eklenmez.")
+    elif wrapper_url and not wrapper_url.startswith(("http://", "https://")):
+        satir(WARN, "AI_WRAPPER_BASE_URL geçerli bir http(s) adresi değil",
+              "Örnek: https://api.ornek.com (sonuna /v1/ask otomatik eklenir).")
     kap_ham = (degerler.get("KAP_BAGLAM_AKTIF") or "").strip().lower()
     if kap_ham in {"1", "true", "yes", "on", "acik", "açık", "evet"}:
         try:

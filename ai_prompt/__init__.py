@@ -19,6 +19,16 @@ from .budget import (
     resolve_budget,
     utf16_len,
 )
+from .client import (
+    AIAskResult,
+    AIAttemptRecord,
+    AIClientRouter,
+    ApiWrapperClient,
+    DEFAULT_CONNECT_TIMEOUT_S,
+    DEFAULT_GEMINI_MODEL,
+    DEFAULT_READ_TIMEOUT_S,
+    GeminiFreeClient,
+)
 from .builder import build_from_frames, build_from_local_cache, render_prompt
 from .commentary import format_ai_commentary, validate_ai_commentary
 from .compact import render_compact_prompt
@@ -48,13 +58,21 @@ from .verdict import (
 )
 
 __all__ = [
+    "AIAskResult",
+    "AIAttemptRecord",
+    "AIClientRouter",
     "AI_YORUM_TEST_TABLE",
     "AI_YORUM_TEST_VIEW",
     "API_EXTENDED_BUDGET",
     "API_PROMPT_VERSION",
     "API_STANDARD_BUDGET",
+    "ApiWrapperClient",
     "COMPACT_PASTE_BUDGET",
+    "DEFAULT_CONNECT_TIMEOUT_S",
+    "DEFAULT_GEMINI_MODEL",
     "DEFAULT_LOCAL_SHADOW_FILE",
+    "DEFAULT_READ_TIMEOUT_S",
+    "GeminiFreeClient",
     "HIDDEN_VERDICT_INSTRUCTION",
     "HIDDEN_VERDICT_TAG",
     "KAP_SYNTHESIS_INSTRUCTION",

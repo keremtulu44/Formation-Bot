@@ -996,4 +996,23 @@ def kap_baglam_enabled() -> bool:
     return bool(KAP_BAGLAM_AKTIF)
 
 
+# --- AI API İstemci Katmanı (istemci ayarları; ana döngüye henüz bağlı DEĞİL) ---
+# Sıralı zincir: ApiWrapper (/v1/ask) -> Ücretsiz Gemini #1 -> Ücretsiz Gemini #2 -> normal alarm.
+AI_WRAPPER_BASE_URL = os.getenv("AI_WRAPPER_BASE_URL", "").strip()
+AI_WRAPPER_API_KEY = os.getenv("AI_WRAPPER_API_KEY", "").strip()
+AI_WRAPPER_MODEL = os.getenv("AI_WRAPPER_MODEL", "").strip()
+GEMINI_API_KEY_1 = (
+    os.getenv("GEMINI_API_KEY_1", "").strip()
+    or os.getenv("GEMINI_API_KEY", "").strip()
+)
+GEMINI_MODEL_1 = (
+    os.getenv("GEMINI_MODEL_1", "").strip()
+    or os.getenv("GEMINI_MODEL", "").strip()
+    or "gemini-2.5-flash"
+)
+GEMINI_API_KEY_2 = os.getenv("GEMINI_API_KEY_2", "").strip()
+GEMINI_MODEL_2 = os.getenv("GEMINI_MODEL_2", "").strip() or GEMINI_MODEL_1
+
+
+
 
