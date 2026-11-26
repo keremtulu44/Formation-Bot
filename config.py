@@ -995,22 +995,29 @@ def kap_baglam_enabled() -> bool:
     return bool(KAP_BAGLAM_AKTIF)
 
 
+def _env_str_temiz(name: str, default: str = "") -> str:
+    s = os.getenv(name, default).strip()
+    while len(s) >= 2 and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+        s = s[1:-1].strip()
+    return s.strip()
+
+
 # --- AI API İstemci Katmanı & Canlı Alarm Entegrasyonu ---
 # Sıralı zincir: ApiWrapper (/v1/ask) -> Ücretsiz Gemini #1 -> Ücretsiz Gemini #2 -> düz kart.
-AI_WRAPPER_BASE_URL = os.getenv("AI_WRAPPER_BASE_URL", "").strip()
-AI_WRAPPER_API_KEY = os.getenv("AI_WRAPPER_API_KEY", "").strip()
-AI_WRAPPER_MODEL = os.getenv("AI_WRAPPER_MODEL", "").strip()
+AI_WRAPPER_BASE_URL = _env_str_temiz("AI_WRAPPER_BASE_URL")
+AI_WRAPPER_API_KEY = _env_str_temiz("AI_WRAPPER_API_KEY")
+AI_WRAPPER_MODEL = _env_str_temiz("AI_WRAPPER_MODEL")
 GEMINI_API_KEY_1 = (
-    os.getenv("GEMINI_API_KEY_1", "").strip()
-    or os.getenv("GEMINI_API_KEY", "").strip()
+    _env_str_temiz("GEMINI_API_KEY_1")
+    or _env_str_temiz("GEMINI_API_KEY")
 )
 GEMINI_MODEL_1 = (
-    os.getenv("GEMINI_MODEL_1", "").strip()
-    or os.getenv("GEMINI_MODEL", "").strip()
+    _env_str_temiz("GEMINI_MODEL_1")
+    or _env_str_temiz("GEMINI_MODEL")
     or "gemini-2.5-flash"
 )
-GEMINI_API_KEY_2 = os.getenv("GEMINI_API_KEY_2", "").strip()
-GEMINI_MODEL_2 = os.getenv("GEMINI_MODEL_2", "").strip() or GEMINI_MODEL_1
+GEMINI_API_KEY_2 = _env_str_temiz("GEMINI_API_KEY_2")
+GEMINI_MODEL_2 = _env_str_temiz("GEMINI_MODEL_2") or GEMINI_MODEL_1
 
 # Canlı alarmlarda düz kart yerine AI yorumu gönderim şalterleri (hepsi varsayılan AÇIK;
 # anahtar girilmemişse veya tüm AI sağlayıcıları düşerse otomatik düz kart gider).

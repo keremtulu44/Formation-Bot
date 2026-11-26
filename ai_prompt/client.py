@@ -84,8 +84,18 @@ class AIProviderClient(Protocol):
         ...
 
 
+def _clean_env_value(value: Any) -> str:
+    """Render/yerel env değerlerindeki boşluk ve kazara yapıştırılmış tırnakları temizler."""
+    if value is None:
+        return ""
+    s = str(value).strip()
+    while len(s) >= 2 and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+        s = s[1:-1].strip()
+    return s.strip()
+
+
 def _normalize_wrapper_ask_url(base_url: str) -> str:
-    raw = str(base_url or "").strip().rstrip("/")
+    raw = _clean_env_value(base_url).rstrip("/")
     if not raw or not raw.startswith(("http://", "https://")):
         raise ValueError("ApiWrapper BASE_URL geçerli bir http(s) adresi olmalı")
     if raw.endswith("/v1/ask"):
@@ -130,11 +140,12 @@ class ApiWrapperClient:
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.ask_url = _normalize_wrapper_ask_url(base_url)
-        key = str(api_key or "").strip()
+        key = _clean_env_value(api_key)
         if not key:
             raise ValueError("ApiWrapper API_KEY boş olamaz")
         self._api_key = key
-        self.model = str(model).strip() if model and str(model).strip() else None
+        clean_model = _clean_env_value(model)
+        self.model = clean_model or None
         self.name = str(name or "api_wrapper")
         self.connect_timeout = float(connect_timeout)
         self.read_timeout = float(read_timeout)
@@ -310,13 +321,13 @@ class GeminiFreeClient:
         transport: httpx.BaseTransport | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        key = str(api_key or "").strip()
+        key = _clean_env_value(api_key)
         if not key:
             raise ValueError("Gemini API anahtarı boş olamaz")
-        mdl = str(model or DEFAULT_GEMINI_MODEL).strip()
+        mdl = _clean_env_value(model) or DEFAULT_GEMINI_MODEL
         if not mdl:
             raise ValueError("Gemini model adı boş olamaz")
-        root = str(base_url or DEFAULT_GEMINI_BASE_URL).strip().rstrip("/")
+        root = (_clean_env_value(base_url) or DEFAULT_GEMINI_BASE_URL).rstrip("/")
         if not root.startswith(("http://", "https://")):
             raise ValueError("Gemini base_url geçerli bir http(s) adresi olmalı")
 
@@ -453,7 +464,7 @@ class AIClientRouter:
         source = env if env is not None else os.environ
 
         def _get(key: str, default: str = "") -> str:
-            return str(source.get(key, default) or "").strip()
+            return _clean_env_value(source.get(key, default))
 
         providers: list[AIProviderClient] = []
 
@@ -472,6 +483,8 @@ class AIClientRouter:
                 )
             )
 
+        gemini_base = _get("GEMINI_BASE_URL") or DEFAULT_GEMINI_BASE_URL
+
         # 2) Yedek 1: Ücretsiz Gemini #1
         gem_key_1 = _get("GEMINI_API_KEY_1") or _get("GEMINI_API_KEY")
         gem_model_1 = _get("GEMINI_MODEL_1") or _get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL
@@ -481,6 +494,7 @@ class AIClientRouter:
                     gem_key_1,
                     model=gem_model_1,
                     name="gemini_free_1",
+                    base_url=gemini_base,
                     transport=gemini_transport,
                 )
             )
@@ -494,6 +508,7 @@ class AIClientRouter:
                     gem_key_2,
                     model=gem_model_2,
                     name="gemini_free_2",
+                    base_url=gemini_base,
                     transport=gemini_transport,
                 )
             )

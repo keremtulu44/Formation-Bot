@@ -118,9 +118,9 @@ def _resolve_kap_archive_path(explicit_path: str | None = None) -> Path | None:
     if explicit_path and str(explicit_path).strip():
         return Path(str(explicit_path).strip())
     try:
-        from kap.runtime import resolve_kap_archive_path
+        from kap.runtime import kap_arsiv_yolu
 
-        return Path(resolve_kap_archive_path())
+        return Path(kap_arsiv_yolu())
     except Exception:  # noqa: BLE001
         raw = str(getattr(config, "KAP_ARSIV_YOLU", "") or "").strip()
         if raw:
@@ -133,7 +133,7 @@ def _read_live_kap_context(
     as_of: Any,
     *,
     kap_arsiv_yolu: str | None = None,
-    origin: str = "kap_canli",
+    origin: str = "kap_arsiv",
 ) -> dict[str, Any] | None:
     if not config.kap_baglam_enabled() and not kap_arsiv_yolu:
         return None
@@ -150,7 +150,7 @@ def _read_live_kap_context(
             symbol,
             stamp.to_pydatetime(),
             arsiv_yolu=str(archive),
-            max_yas_gun=int(getattr(config, "KAP_MAX_YAS_GUN", 7) or 7),
+            max_age_gun=int(getattr(config, "KAP_MAX_YAS_GUN", 7) or 7),
             origin=origin,  # type: ignore[arg-type]
             force=True,
         )
@@ -162,11 +162,14 @@ def _read_live_kap_context(
 def _resolve_shadow_local_path(explicit_path: str | os.PathLike[str] | None = None) -> Path | None:
     if explicit_path is not None:
         return Path(explicit_path)
+    data_dir = str(getattr(config, "DATA_DIR", "") or os.getenv("DATA_DIR") or "").strip()
+    if data_dir:
+        return Path(data_dir) / DEFAULT_LOCAL_SHADOW_FILE
     try:
         from state import paths as _state_paths
 
-        data_dir = _state_paths.veri_dizini_coz()
-        return Path(data_dir) / DEFAULT_LOCAL_SHADOW_FILE
+        resolved = _state_paths.son_tarama_data_dir()
+        return Path(resolved) / DEFAULT_LOCAL_SHADOW_FILE
     except Exception:  # noqa: BLE001
         return Path(DEFAULT_LOCAL_SHADOW_FILE)
 
@@ -174,15 +177,11 @@ def _resolve_shadow_local_path(explicit_path: str | os.PathLike[str] | None = No
 def _make_shadow_supabase_store(explicit_store: Any = None) -> tuple[Any, bool]:
     if explicit_store is not None:
         return explicit_store, bool(getattr(explicit_store, "writable", False))
-    url = str(os.getenv("SUPABASE_URL") or "").strip()
-    key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
-    if not (url and key):
-        return None, False
     try:
         from supabase_store import SupabaseStore
 
-        store = SupabaseStore(url=url, key=key, writable=True)
-        if getattr(store, "enabled", False) and getattr(store, "writable", False):
+        store = SupabaseStore.from_env(read_only=False)
+        if store is not None and getattr(store, "writable", False):
             return store, True
     except Exception as exc:  # noqa: BLE001
         logger.debug("AI gölge Supabase istemcisi açılamadı: %s", type(exc).__name__)

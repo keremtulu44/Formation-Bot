@@ -44,10 +44,15 @@ def normalize_bist_ticker(symbol: Any) -> str:
 
 
 def active_kap_universe(stocks: Sequence[str] | None = None) -> tuple[str, ...]:
-    """Formation-Bot aktif hisse listesinden tekil KAP sembol demeti üretir."""
+    """Formation-Bot aktif evreninden yalnızca BIST hisse KAP sembollerini üretir."""
     source = stocks if stocks is not None else getattr(config, "ACTIVE_STOCKS", ())
     tickers = [normalize_bist_ticker(s) for s in source]
-    return tuple(dict.fromkeys(t for t in tickers if t))
+    return tuple(
+        dict.fromkeys(
+            t for t in tickers
+            if t and config.sembol_turu(t) == "hisse"
+        )
+    )
 
 
 def kap_arsiv_yolu(data_dir: str | Path | None = None) -> Path:

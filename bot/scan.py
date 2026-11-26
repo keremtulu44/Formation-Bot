@@ -1577,6 +1577,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                     df_1d=df_gunluk_ham,
                                     as_of=simdiki_zaman,
                                 )
+                                _pkg.write_heartbeat(notifier=notifier)
                             except Exception as ai_hata:  # noqa: BLE001 - AI hatası alarmı düşürmesin
                                 _pkg.logger.warning(
                                     "AI alarm yorumu atlandı (%s %s); düz kart kullanılacak: %s",

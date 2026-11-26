@@ -369,7 +369,7 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("KAP_ARSIV_YOLU", False, "İsteğe bağlı KAP SQLite arşiv yolu (boş = DATA_DIR/kap_arsiv.sqlite)"),
         ("KAP_TARAMA_ARALIK_SN", False, "KAP tarama aralığı, saniye (varsayılan 180)"),
         ("KAP_MAX_YAS_GUN", False, "Alarm anında kabul edilecek azami KAP bildirim yaşı, gün (varsayılan 7)"),
-        ("KAP_WARMUP_ACILISTA", False, "Açılışta boş KAP arşivini son 7 günle doldur (varsayılan 0 = kapalı)"),
+        ("KAP_WARMUP_ACILISTA", False, "Açılışta boş KAP arşivini son 7 günle doldur (varsayılan 1 = açık)"),
         # --- Yahoo birincil / TV reaktif yedek (üretim zinciri) ---------------
         ("TV_YEDEK_AKTIF", False, "Yahoo boş/geçersiz dönerse tvDatafeed yedeği (varsayılan 1; 0 = Yahoo-only)"),
         ("TV_GERCEK_4S_AKTIF", False, "TV yedeği devredeyken gerçek 4s barları kullan (varsayılan 1)"),
@@ -426,10 +426,16 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
     elif ai_shadow_ham and ai_shadow_ham not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}:
         satir(WARN, f"AI_SHADOW_LOG değeri tanınmıyor ({ai_shadow_ham})",
               "Belirsizliği önlemek için 0 veya 1 kullanın.")
-    wrapper_url = (degerler.get("AI_WRAPPER_BASE_URL") or "").strip()
-    wrapper_key = (degerler.get("AI_WRAPPER_API_KEY") or "").strip()
-    gem1 = (degerler.get("GEMINI_API_KEY_1") or degerler.get("GEMINI_API_KEY") or "").strip()
-    gem2 = (degerler.get("GEMINI_API_KEY_2") or "").strip()
+    def _temiz(v: str) -> str:
+        s = (v or "").strip()
+        while len(s) >= 2 and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+            s = s[1:-1].strip()
+        return s.strip()
+
+    wrapper_url = _temiz(degerler.get("AI_WRAPPER_BASE_URL") or "")
+    wrapper_key = _temiz(degerler.get("AI_WRAPPER_API_KEY") or "")
+    gem1 = _temiz(degerler.get("GEMINI_API_KEY_1") or degerler.get("GEMINI_API_KEY") or "")
+    gem2 = _temiz(degerler.get("GEMINI_API_KEY_2") or "")
     if bool(wrapper_url) != bool(wrapper_key):
         satir(WARN, "AI_WRAPPER_BASE_URL ve AI_WRAPPER_API_KEY birlikte tanımlanmalı",
               "Biri eksikse ApiWrapper zincire eklenmez.")

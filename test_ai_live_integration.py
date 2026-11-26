@@ -452,3 +452,93 @@ def test_health_and_render_yaml_and_deploy_check_env_parity(monkeypatch, capsys)
     out = capsys.readouterr().out
     assert "AI alarm zinciri hazır: ApiWrapper -> Gemini#1 -> Gemini#2 -> düz kart" in out
     assert "TOP_SECRET" not in out
+
+
+def test_audit_regressions_supabase_kap_universe_quotes_and_prose_wrapping(monkeypatch, tmp_path):
+    from datetime import timezone
+
+    from ai_prompt.service import (
+        _make_shadow_supabase_store,
+        _read_live_kap_context,
+        _resolve_shadow_local_path,
+    )
+    from kap.baglam import DisclosureStub, make_candidate, open_archive
+    from kap.runtime import active_kap_universe
+    from notifier.api import _ai_duzyazi_mesaji_mi, _metin_govdesi
+
+    # 1) Supabase shadow store instantiates via SupabaseStore.from_env(read_only=False)
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_test_key_000")
+    store, writable = _make_shadow_supabase_store()
+    assert store is not None and writable is True and store.writable is True
+
+    # 2) Live KAP archive read uses kap_arsiv_yolu + max_age_gun + origin='kap_arsiv' and blocks future items
+    kap_db = tmp_path / "kap_arsiv.sqlite"
+    past_pub = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc)
+    past_known = datetime(2026, 9, 25, 10, 2, tzinfo=timezone.utc)
+    future_pub = datetime(2026, 9, 25, 16, 30, tzinfo=timezone.utc)
+    future_known = datetime(2026, 9, 25, 16, 31, tzinfo=timezone.utc)
+    with open_archive(kap_db, writable=True) as arsiv:
+        for idx, pub, known, q in (
+            (920001, past_pub, past_known, "Geçmiş KAP bildirimi doğrulandı."),
+            (920002, future_pub, future_known, "GELECEK_SIZMAMALI_920002"),
+        ):
+            stub = DisclosureStub(
+                index=idx,
+                published_at=pub,
+                title="BIMAS",
+                subject="ÖDA",
+                summary=q,
+                disclosure_class="ODA",
+                tickers=("BIMAS",),
+                member_oid="oid-bimas",
+                minute_precision=False,
+            )
+            assert arsiv.record(
+                make_candidate(stub, ticker="BIMAS"),
+                origin="kap_arsiv",
+                known_at=known,
+                topic="sirket_aciklamasi",
+                quote=q,
+            ) == "hazir"
+
+    monkeypatch.setattr(config, "KAP_ARSIV_YOLU", str(kap_db))
+    monkeypatch.setattr(config, "KAP_BAGLAM_AKTIF", True)
+    ctx = _read_live_kap_context("BIMAS", datetime(2026, 9, 25, 18, 5, tzinfo=config.ISTANBUL_TZ))
+    assert isinstance(ctx, dict) and ctx.get("durum") == "var"
+    assert "Geçmiş KAP bildirimi doğrulandı." in str(ctx)
+    assert "GELECEK_SIZMAMALI_920002" not in str(ctx)
+
+    # 3) KAP universe excludes index/macro symbols
+    kap_u = active_kap_universe(["BIMAS", "XU100", "XAUUSD", "XAGUSD", "USDTRY", "BRENT", "THYAO.IS"])
+    assert kap_u == ("BIMAS", "THYAO")
+
+    # 4) Quoted Render env vars strip cleanly and GEMINI_BASE_URL override works
+    router = AIClientRouter.from_env({
+        "AI_WRAPPER_BASE_URL": '"https://wrap.example.test/"',
+        "AI_WRAPPER_API_KEY": "'quoted-secret'",
+        "GEMINI_BASE_URL": '"http://127.0.0.1:9999/v1beta/"',
+        "GEMINI_API_KEY_1": '"quoted-gem-1"',
+    })
+    assert [p.name for p in router.providers] == ["api_wrapper", "gemini_free_1"]
+    assert router.providers[0].ask_url == "https://wrap.example.test/v1/ask"
+    assert router.providers[1].endpoint_url.startswith("http://127.0.0.1:9999/v1beta/models/")
+
+    # 5) Shadow local path resolves under config.DATA_DIR (never CWD)
+    monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))
+    assert _resolve_shadow_local_path() == tmp_path / "ai_yorum_test.json"
+
+    # 6) AI prose messages bypass metni_sigdir hanging-indent chopping; plain cards still wrap
+    ai_prose = (
+        "🤖 BIMAS · 4s · Simetrik Üçgen (Kırılım Teyitli)\n\n"
+        "🧭 Mevcut durum\n"
+        "Bu uzun doğal Türkçe paragraf Telegram ekranında telefonun kendi satır genişliğine göre akmalıdır."
+    )
+    assert _ai_duzyazi_mesaji_mi(ai_prose) is True
+    assert _metin_govdesi(ai_prose) == ai_prose
+    assert "\n   " not in _metin_govdesi(ai_prose)
+
+    plain_card = "📊 BIMAS · 4s · Simetrik Üçgen — bu çok uzun bir tablo kartı satırıdır ve sarılmalıdır"
+    assert _ai_duzyazi_mesaji_mi(plain_card) is False
+    assert "\n" in _metin_govdesi(plain_card)
+
