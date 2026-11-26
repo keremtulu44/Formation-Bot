@@ -37,7 +37,9 @@ DEFAULT_WRITE_TIMEOUT_S = 15.0
 DEFAULT_POOL_TIMEOUT_S = 10.0
 
 DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+# Dengeli sabit Gemini yedek modeli (Google AI resmi kararlı Flash modeli,
+# Free Tier Standard destekli, 1M bağlam / 65K çıktı, thinking blokları ayıklanır).
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 
 
 @dataclass(frozen=True, slots=True)
@@ -468,16 +470,15 @@ class AIClientRouter:
 
         providers: list[AIProviderClient] = []
 
-        # 1) Birincil: ApiWrapper (/v1/ask)
+        # 1) Birincil: ApiWrapper (/v1/ask) — model her zaman otomatik (gövdede gönderilmez)
         wrapper_url = _get("AI_WRAPPER_BASE_URL")
         wrapper_key = _get("AI_WRAPPER_API_KEY")
-        wrapper_model = _get("AI_WRAPPER_MODEL") or None
         if wrapper_url and wrapper_key:
             providers.append(
                 ApiWrapperClient(
                     wrapper_url,
                     wrapper_key,
-                    model=wrapper_model,
+                    model=None,
                     name="api_wrapper",
                     transport=wrapper_transport,
                 )
@@ -485,28 +486,26 @@ class AIClientRouter:
 
         gemini_base = _get("GEMINI_BASE_URL") or DEFAULT_GEMINI_BASE_URL
 
-        # 2) Yedek 1: Ücretsiz Gemini #1
+        # 2) Yedek 1: Ücretsiz Gemini #1 — sabit dengeli model (DEFAULT_GEMINI_MODEL)
         gem_key_1 = _get("GEMINI_API_KEY_1") or _get("GEMINI_API_KEY")
-        gem_model_1 = _get("GEMINI_MODEL_1") or _get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL
         if gem_key_1:
             providers.append(
                 GeminiFreeClient(
                     gem_key_1,
-                    model=gem_model_1,
+                    model=DEFAULT_GEMINI_MODEL,
                     name="gemini_free_1",
                     base_url=gemini_base,
                     transport=gemini_transport,
                 )
             )
 
-        # 3) Yedek 2: Ücretsiz Gemini #2
+        # 3) Yedek 2: Ücretsiz Gemini #2 — sabit dengeli model (DEFAULT_GEMINI_MODEL)
         gem_key_2 = _get("GEMINI_API_KEY_2")
-        gem_model_2 = _get("GEMINI_MODEL_2") or gem_model_1
         if gem_key_2:
             providers.append(
                 GeminiFreeClient(
                     gem_key_2,
-                    model=gem_model_2,
+                    model=DEFAULT_GEMINI_MODEL,
                     name="gemini_free_2",
                     base_url=gemini_base,
                     transport=gemini_transport,

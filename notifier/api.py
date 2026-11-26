@@ -1725,23 +1725,50 @@ class TelegramNotifier:
                 return True
             return any(self._public_event_key(k) == event_key for k in self._public_kuyruk)
 
+    def public_kabul_eder_mi(self, data: Dict) -> bool:
+        """Salt-okunur ön kontrol: bu olay public kuyruğuna gerçekten kabul edilecek mi?
+
+        Bağlam/AI çağrısı öncesi gereksiz iş (ve boşa API harcaması) önlemek
+        için kullanılır; sayaç/kuyruk mutasyonu yapmaz.
+        """
+        if not self.public_enabled or not isinstance(data, dict):
+            return False
+        try:
+            if not self.should_send_to_public(data):
+                return False
+        except Exception:  # noqa: BLE001 - public filtresi DM'i düşürmesin
+            return False
+        if self._public_kayitli_mi(data):
+            return False
+        if self._delivery.public_duplicate(data):
+            return False
+        state_norm = str(data.get("state") or "").strip().upper()
+        if TELEGRAM_KANAL_GECERSIZ_KAPISI and state_norm == "KIRILIM_GECERSIZLESTI":
+            stock = str(data.get("stock_name") or "").upper()
+            tf = str(data.get("timeframe") or "").lower()
+            fid = str(data.get("formation_id") or "").strip()
+            teyit_key = f"{stock}|{tf}|KIRILIM_TEYITLI|{fid}" if fid else ""
+            onek = f"{stock}|{tf}|KIRILIM_TEYITLI|"
+            with self._public_lck:
+                if any(teyit_key and self._public_event_key(k) == teyit_key for k in self._public_kuyruk):
+                    return False
+                gonderilmis = bool(
+                    (teyit_key and teyit_key in self._public_alert_markers)
+                    or any(str(k).startswith(onek) for k in self._public_alert_markers)
+                )
+            if not gonderilmis:
+                return False
+        return True
+
     def _public_kurtar(self, data: Dict, prepare_context) -> bool:
         """DM "tekrar" dediğinde public'in kaybolmuş olayını kurtarır.
 
         Dönen değer: bağlam hazırlandı mı (yani public kuyruğuna giriş denendi mi).
         Karar public'in kendi kapılarına bırakılır (`should_send_to_public`,
-        kuyruk mührü); burada yalnız "bağlamı hazırlamaya değer mi" sorusu
-        cevaplanır. Sessiz istisna yok: hata loglanır, alarm akışı durmaz.
+        kuyruk mührü, duplicate ve teyit kapısı); burada yalnız "bağlamı ve AI
+        yorumunu hazırlamaya değer mi" sorusu cevaplanır.
         """
-        if not self.public_enabled:
-            return False
-        try:
-            if not self.should_send_to_public(data):
-                return False
-        except Exception as exc:  # noqa: BLE001 - public filtresi DM'i düşürmesin
-            logger.debug("Public kurtarma filtresi hata verdi: %s", exc)
-            return False
-        if self._public_kayitli_mi(data):
+        if not self.public_kabul_eder_mi(data):
             return False
         prepare_context()
         return True

@@ -1103,6 +1103,16 @@ def dispatch_domain_alarm_candidates(
 
     from public_aux_outbox import auxiliary_event_id
 
+    dm_ai_hedef = bool(
+        getattr(config, "YENI_DOMAIN_ALARM_DM", True)
+        and getattr(notifier, "enabled", False)
+        and config.ai_yorum_dm_enabled()
+    )
+    pub_ai_hedef = bool(
+        getattr(config, "YENI_DOMAIN_ALARM_PUBLIC", True)
+        and getattr(notifier, "public_enabled", False)
+        and config.ai_yorum_public_enabled()
+    )
     gonderilen: list[DomainAlarmCandidate] = []
     for cand in tekil_liste:
         identity = {"stock_name": cand.symbol, "timeframe": cand.timeframe,
@@ -1110,7 +1120,7 @@ def dispatch_domain_alarm_candidates(
         duz_metin = format_domain_alarm_card(cand)
         dm_metin = duz_metin
         pub_metin = duz_metin
-        if frames_by_symbol and cand.symbol in frames_by_symbol:
+        if (dm_ai_hedef or pub_ai_hedef) and frames_by_symbol and cand.symbol in frames_by_symbol:
             try:
                 from ai_prompt.service import build_ai_replacement_text_for_signal
 

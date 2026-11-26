@@ -4,24 +4,21 @@ Bu dosya, gizli anahtarları **sonradan dolduracağınız** zaman hiçbir deği�
 
 ---
 
-## 1. Doldurmanız Gereken Gizli Anahtarlar (Render → Environment)
+## 1. Doldurmanız Gereken 4 Gizli Anahtar (Render → Environment)
 
-Aşağıdaki 4–5 alanı eklemeniz yeterlidir; tüm çalışma şalterleri kodda ve `render.yaml` içinde **varsayılan olarak AÇIK (`1`)** gelir:
+Yalnızca aşağıdaki **4** alanı eklemeniz yeterlidir:
+- **ApiWrapper modeli otomatik** seçilir (istek gövdesinde `model` alanı gönderilmez).
+- **Gemini #1 ve #2** dengeli sabit **`gemini-3.8-flash`** modelini kullanır (ayrı model env'i gerekmez).
+- Tüm çalışma şalterleri kodda ve `render.yaml` içinde **varsayılan olarak AÇIK (`1`)** gelir:
 
 ```env
-# 1) Birincil sağlayıcı: ApiWrapper (yalnızca POST {BASE_URL}/v1/ask çağrılır)
+# 1) Birincil sağlayıcı: ApiWrapper (yalnızca POST {BASE_URL}/v1/ask, model otomatik)
 AI_WRAPPER_BASE_URL=https://...
 AI_WRAPPER_API_KEY=...
-# İsteğe bağlı; boş bırakılırsa ApiWrapper kendi varsayılan modelini kullanır
-AI_WRAPPER_MODEL=
 
-# 2) Yedek #1: Ücretsiz Gemini API anahtarı (x-goog-api-key başlığıyla gider)
+# 2) Yedek #1 & #2: Ücretsiz Gemini API anahtarları (sabit dengeli model: gemini-3.8-flash)
 GEMINI_API_KEY_1=...
-GEMINI_MODEL_1=gemini-2.5-flash
-
-# 3) Yedek #2: İkinci ücretsiz Gemini API anahtarı
 GEMINI_API_KEY_2=...
-GEMINI_MODEL_2=gemini-2.5-flash
 ```
 
 > **Not:** Değerleri yanlışlıkla tırnak içinde (`"..."`) yapıştırsanız bile istemci katmanı tırnak ve boşlukları otomatik temizler. `AI_WRAPPER_BASE_URL` sonuna `/v1/ask` yazsanız da yazmasanız da otomatik tek `/v1/ask` olarak normalize edilir.

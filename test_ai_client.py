@@ -336,14 +336,18 @@ def test_router_from_env_and_ask_bundle_end_to_end():
     env = {
         "AI_WRAPPER_BASE_URL": "https://wrap.example.test",
         "AI_WRAPPER_API_KEY": "w-secret",
+        # Eski/fazla model env'leri verilse bile yok sayılmalı:
+        # ApiWrapper otomatik, Gemini #1/#2 sabit dengeli DEFAULT_GEMINI_MODEL.
+        "AI_WRAPPER_MODEL": "ignored-wrapper-model",
         "GEMINI_API_KEY_1": "g1-secret",
-        "GEMINI_MODEL_1": "gemini-2.5-flash",
+        "GEMINI_MODEL_1": "ignored-gem-1",
         "GEMINI_API_KEY_2": "g2-secret",
-        "GEMINI_MODEL_2": "gemini-2.5-flash-lite",
+        "GEMINI_MODEL_2": "ignored-gem-2",
     }
 
     def wrapper_ok(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content.decode("utf-8"))
+        assert "model" not in body
         assert "<veri_paketi" in body["prompt"]
         assert "🧭 Mevcut durum" in body["system"]
         return httpx.Response(200, text=f'data: {json.dumps({"status": "done", "text": SAMPLE_COMMENTARY})}\n')
@@ -354,8 +358,9 @@ def test_router_from_env_and_ask_bundle_end_to_end():
         gemini_transport=httpx.MockTransport(lambda req: httpx.Response(500)),
     )
     assert router.provider_names() == ("api_wrapper", "gemini_free_1", "gemini_free_2")
-    assert router.providers[1].model == "gemini-2.5-flash"
-    assert router.providers[2].model == "gemini-2.5-flash-lite"
+    assert router.providers[0].model is None
+    assert router.providers[1].model == DEFAULT_GEMINI_MODEL == "gemini-3.8-flash"
+    assert router.providers[2].model == DEFAULT_GEMINI_MODEL == "gemini-3.8-flash"
 
     pkt = build_from_local_cache("BIMAS", as_of="2026-09-25 18:05+03:00", main_tf="4h")
     bundle = build_api_prompt(pkt, include_hidden_verdict=True)

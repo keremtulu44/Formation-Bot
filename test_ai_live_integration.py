@@ -409,13 +409,14 @@ def test_health_and_render_yaml_and_deploy_check_env_parity(monkeypatch, capsys)
     for secret_key in (
         "AI_WRAPPER_BASE_URL",
         "AI_WRAPPER_API_KEY",
-        "AI_WRAPPER_MODEL",
         "GEMINI_API_KEY_1",
         "GEMINI_API_KEY_2",
     ):
         assert secret_key in env_map
         assert env_map[secret_key].get("sync") == "false"
         assert "value" not in env_map[secret_key]
+    for removed_model_key in ("AI_WRAPPER_MODEL", "GEMINI_MODEL_1", "GEMINI_MODEL_2"):
+        assert removed_model_key not in env_map
     for on_key in (
         "AI_YORUM_AKTIF",
         "AI_YORUM_DM",
@@ -541,4 +542,120 @@ def test_audit_regressions_supabase_kap_universe_quotes_and_prose_wrapping(monke
     plain_card = "📊 BIMAS · 4s · Simetrik Üçgen — bu çok uzun bir tablo kartı satırıdır ve sarılmalıdır"
     assert _ai_duzyazi_mesaji_mi(plain_card) is False
     assert "\n" in _metin_govdesi(plain_card)
+
+
+def test_alarm_triggering_audit_prevents_wasted_ai_calls_on_blocked_targets(tmp_path, monkeypatch):
+    """Alarm tetikleme denetimi regresyonu:
+    1) Public'te önceki teyidi gönderilmemiş KIRILIM_GECERSIZLESTI olayı için
+       `public_kabul_eder_mi()` False döner, `_public_kurtar()` prepare_context/AI çağırmaz.
+    2) Önceki teyit Public'e gerçekten gönderildiyse `public_kabul_eder_mi()` True döner.
+    3) Public tekrar (`public_duplicate`) kayıtlıysa `_public_kurtar()` boşa çalışmaz.
+    4) Stabil 4H ve Yeni Domain akışları, etkin kanal yoksa AI çağrısı yapmaz.
+    """
+    notifier = _make_test_notifier(tmp_path, monkeypatch)
+
+    inval_data = _sample_alert_data()
+    inval_data["state"] = "KIRILIM_GECERSIZLESTI"
+    inval_data["formation_id"] = "F-BIMAS-01"
+    # Önceki KIRILIM_TEYITLI Public'e hiç gitmedi -> kabul edilmemeli!
+    assert notifier.public_kabul_eder_mi(inval_data) is False
+    prep_calls = {"n": 0}
+    assert notifier._public_kurtar(inval_data, lambda: prep_calls.__setitem__("n", prep_calls["n"] + 1)) is False
+    assert prep_calls["n"] == 0
+
+    # Önceki teyit Public'e gönderildiyse şimdi geçersizleşme kabul edilmeli
+    teyit_key = "BIMAS|4h|KIRILIM_TEYITLI|F-BIMAS-01"
+    notifier._public_alert_markers[teyit_key] = "2026-09-25T14:00:00+03:00"
+    assert notifier.public_kabul_eder_mi(inval_data) is True
+    assert notifier._public_kurtar(inval_data, lambda: prep_calls.__setitem__("n", prep_calls["n"] + 1)) is True
+    assert prep_calls["n"] == 1
+
+    # Public'te zaten kayıtlıysa tekrar çalışmaz
+    inval_key = notifier._public_event_key(inval_data)
+    notifier._public_alert_markers[inval_key] = "2026-09-25T18:00:00+03:00"
+    assert notifier.public_kabul_eder_mi(inval_data) is False
+    assert notifier._public_kurtar(inval_data, lambda: prep_calls.__setitem__("n", prep_calls["n"] + 1)) is False
+    assert prep_calls["n"] == 1
+
+    # Stabil 4H & Yeni Domain: hedef kanallar kapalıyken AI router HİÇ çağrılmamalı
+    df_1h = _load_bimas_1h_frame()
+    frames_map = {"BIMAS": (df_1h, None, pd.Timestamp("2026-09-25 18:05+03:00"))}
+    ai_calls = {"n": 0}
+
+    def _fail_if_called(request: httpx.Request) -> httpx.Response:
+        ai_calls["n"] += 1
+        return httpx.Response(500)
+
+    router_spy = AIClientRouter([
+        ApiWrapperClient("https://wrap.example.test", "secret", transport=httpx.MockTransport(_fail_if_called)),
+    ])
+
+    class _DisabledNotifier:
+        enabled = False
+        public_enabled = False
+
+        def send_text(self, text):
+            return False, "disabled"
+
+        def send_to_public(self, text):
+            return False
+
+    beh = SimpleNamespace(
+        reclaim_kind="intrabar_sweep_reclaim",
+        rank_score=9.5,
+        support_level=390.0,
+        close_price=421.5,
+        dist_atr=0.8,
+        touch_count=3,
+        unchanged_days=12,
+        reclaim_bars_ago=0,
+        momentum_kind=None,
+        vol_ratio=1.6,
+    )
+    st_cand = StabilAlarmCandidate(
+        symbol="BIMAS",
+        bar_open_ts="2026-09-25T14:00:00+03:00",
+        bar_close_ts="2026-09-25T18:00:00+03:00",
+        bar_label="25 Eyl 14:00–18:00",
+        close_price=421.5,
+        support_level=390.0,
+        behavior=beh,
+        card_lines=("Stabil destek üstünde",),
+    )
+    dispatch_stabil_scan_candidates(
+        [st_cand],
+        _DisabledNotifier(),
+        state_path=str(tmp_path / "stabil_disabled.json"),
+        frames_by_symbol=frames_map,
+        router=router_spy,
+    )
+    dom_cand = DomainAlarmCandidate(
+        symbol="BIMAS",
+        timeframe="4h",
+        bar_open="2026-09-25T14:00:00+03:00",
+        bar_close="2026-09-25T18:00:00+03:00",
+        bar_label="25 Eyl 14:00–18:00",
+        bar_index=100,
+        close_price=421.5,
+        support_level=390.0,
+        dist_atr=0.8,
+        relation="destek üstünde",
+        reasons=("BOS ↑",),
+        volume_rvol=1.4,
+        volume_tier=None,
+        volume_source="OK",
+        data_quality="OK",
+        card_lines=("Stabil destek üstünde",),
+        rank_score=7.5,
+    )
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
+    dispatch_domain_alarm_candidates(
+        [dom_cand],
+        _DisabledNotifier(),
+        state_path=str(tmp_path / "domain_disabled.json"),
+        frames_by_symbol=frames_map,
+        router=router_spy,
+    )
+    assert ai_calls["n"] == 0
+
 

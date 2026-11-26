@@ -155,22 +155,16 @@ services:
       - key: STABIL_ALARM_TAZE_DK
         value: "390"
       # --- AI YORUM + YEDEK ZİNCİRİ + GÖLGE KAYIT + KAP BAĞLAMI ---
-      # Sıralı zincir: ApiWrapper (/v1/ask) -> Ücretsiz Gemini #1 -> Ücretsiz Gemini #2 -> düz kart.
-      # Gizli URL/anahtarları Render Dashboard > Environment bölümünden girin (repoya yazılmaz).
+      # Sıralı zincir: ApiWrapper (/v1/ask, model otomatik) -> Ücretsiz Gemini #1 -> Ücretsiz Gemini #2 -> düz kart.
+      # Gemini #1 ve #2 sabit dengeli model (gemini-3.8-flash) kullanır; yalnız 4 gizli anahtar girilir.
       - key: AI_WRAPPER_BASE_URL
         sync: false
       - key: AI_WRAPPER_API_KEY
         sync: false
-      - key: AI_WRAPPER_MODEL
-        sync: false
       - key: GEMINI_API_KEY_1
         sync: false
-      - key: GEMINI_MODEL_1
-        value: "gemini-2.5-flash"
       - key: GEMINI_API_KEY_2
         sync: false
-      - key: GEMINI_MODEL_2
-        value: "gemini-2.5-flash"
       # Ana alarm kartı yerine AI yorumu gönderir; sorun çıkarsa düz karta düşer.
       - key: AI_YORUM_AKTIF
         value: "1"

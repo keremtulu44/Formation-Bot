@@ -1003,21 +1003,16 @@ def _env_str_temiz(name: str, default: str = "") -> str:
 
 
 # --- AI API İstemci Katmanı & Canlı Alarm Entegrasyonu ---
-# Sıralı zincir: ApiWrapper (/v1/ask) -> Ücretsiz Gemini #1 -> Ücretsiz Gemini #2 -> düz kart.
+# Sıralı zincir: ApiWrapper (/v1/ask, model otomatik) -> Ücretsiz Gemini #1 -> Ücretsiz Gemini #2 -> düz kart.
+# Env'de yalnız 4 gizli anahtar gerekir; Gemini modeli dengeli sabit modeldir.
 AI_WRAPPER_BASE_URL = _env_str_temiz("AI_WRAPPER_BASE_URL")
 AI_WRAPPER_API_KEY = _env_str_temiz("AI_WRAPPER_API_KEY")
-AI_WRAPPER_MODEL = _env_str_temiz("AI_WRAPPER_MODEL")
 GEMINI_API_KEY_1 = (
     _env_str_temiz("GEMINI_API_KEY_1")
     or _env_str_temiz("GEMINI_API_KEY")
 )
-GEMINI_MODEL_1 = (
-    _env_str_temiz("GEMINI_MODEL_1")
-    or _env_str_temiz("GEMINI_MODEL")
-    or "gemini-2.5-flash"
-)
 GEMINI_API_KEY_2 = _env_str_temiz("GEMINI_API_KEY_2")
-GEMINI_MODEL_2 = _env_str_temiz("GEMINI_MODEL_2") or GEMINI_MODEL_1
+GEMINI_FIXED_MODEL = "gemini-3.8-flash"
 
 # Canlı alarmlarda düz kart yerine AI yorumu gönderim şalterleri (hepsi varsayılan AÇIK;
 # anahtar girilmemişse veya tüm AI sağlayıcıları düşerse otomatik düz kart gider).

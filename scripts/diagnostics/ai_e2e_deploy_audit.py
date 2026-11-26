@@ -463,9 +463,7 @@ def main() -> int:
             os.environ["AI_WRAPPER_API_KEY"] = f"'{WRAPPER_SECRET}'"  # tek tırnak!
             os.environ["GEMINI_BASE_URL"] = gem_url
             os.environ["GEMINI_API_KEY_1"] = GEM1_SECRET
-            os.environ["GEMINI_MODEL_1"] = "gemini-2.5-flash"
             os.environ["GEMINI_API_KEY_2"] = GEM2_SECRET
-            os.environ["GEMINI_MODEL_2"] = "gemini-2.5-flash-lite"
             os.environ["SUPABASE_URL"] = supa_url
             os.environ["SUPABASE_SERVICE_ROLE_KEY"] = SUPA_SECRET
             os.environ["KAP_ARSIV_YOLU"] = str(kap_db)

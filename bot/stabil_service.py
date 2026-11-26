@@ -622,11 +622,21 @@ def dispatch_stabil_scan_candidates(
     degisti = False
     from public_aux_outbox import auxiliary_event_id
 
+    dm_ai_hedef = bool(
+        getattr(config, "STABIL_ALARM_DM", True)
+        and getattr(notifier, "enabled", False)
+        and config.ai_yorum_dm_enabled()
+    )
+    pub_ai_hedef = bool(
+        getattr(config, "STABIL_ALARM_PUBLIC", True)
+        and getattr(notifier, "public_enabled", False)
+        and config.ai_yorum_public_enabled()
+    )
     for cand in tekil_liste:
         metin = format_stabil_reclaim_alert_card(cand)
         dm_metin = metin
         pub_metin = metin
-        if frames_by_symbol and cand.symbol in frames_by_symbol:
+        if (dm_ai_hedef or pub_ai_hedef) and frames_by_symbol and cand.symbol in frames_by_symbol:
             try:
                 from ai_prompt.service import build_ai_replacement_text_for_signal
 

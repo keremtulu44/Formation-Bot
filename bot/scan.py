@@ -1565,24 +1565,36 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                     stock, tf_name, exc,
                                 )
                             _grafik_koprusu(payload, outputs)
-                            # Canlı AI alarm yorumu (senkron: başarırsa ana kart
-                            # yerine gider; anahtar yoksa veya tüm AI sağlayıcıları
-                            # düşerse düz teknik kart kesintisiz gönderilir).
-                            try:
-                                from ai_prompt.service import enrich_alarm_with_ai
+                            # Canlı AI alarm yorumu (senkron: yalnız DM veya Public
+                            # hedefinden en az biri gerçekten gönderecekse çalışır;
+                            # başarırsa ana kart yerine gider, sorunda düz kart gider).
+                            dm_ai_gerekli = bool(
+                                not (dm_gecersiz_engel or dm_dev_engel)
+                                and getattr(notifier, "enabled", False)
+                                and config.ai_yorum_dm_enabled()
+                            )
+                            pub_kabul_fn = getattr(notifier, "public_kabul_eder_mi", None)
+                            pub_ai_gerekli = bool(
+                                config.ai_yorum_public_enabled()
+                                and getattr(notifier, "public_enabled", False)
+                                and (pub_kabul_fn(payload) if callable(pub_kabul_fn) else True)
+                            )
+                            if dm_ai_gerekli or pub_ai_gerekli:
+                                try:
+                                    from ai_prompt.service import enrich_alarm_with_ai
 
-                                enrich_alarm_with_ai(
-                                    payload,
-                                    df_1h=df_1h,
-                                    df_1d=df_gunluk_ham,
-                                    as_of=simdiki_zaman,
-                                )
-                                _pkg.write_heartbeat(notifier=notifier)
-                            except Exception as ai_hata:  # noqa: BLE001 - AI hatası alarmı düşürmesin
-                                _pkg.logger.warning(
-                                    "AI alarm yorumu atlandı (%s %s); düz kart kullanılacak: %s",
-                                    stock, tf_name, type(ai_hata).__name__,
-                                )
+                                    enrich_alarm_with_ai(
+                                        payload,
+                                        df_1h=df_1h,
+                                        df_1d=df_gunluk_ham,
+                                        as_of=simdiki_zaman,
+                                    )
+                                    _pkg.write_heartbeat(notifier=notifier)
+                                except Exception as ai_hata:  # noqa: BLE001 - AI hatası alarmı düşürmesin
+                                    _pkg.logger.warning(
+                                        "AI alarm yorumu atlandı (%s %s); düz kart kullanılacak: %s",
+                                        stock, tf_name, type(ai_hata).__name__,
+                                    )
                             # Public kuyruk: bülten kartı hazır olduktan SONRA
                             # (kart bağlamı + varsa AI yorumu + public karesi kayda girer).
                             try:
