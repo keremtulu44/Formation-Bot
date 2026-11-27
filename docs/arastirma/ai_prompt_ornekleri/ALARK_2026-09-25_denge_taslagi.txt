@@ -1,0 +1,40 @@
+Formation-Bot yorumcususun. Ana TF için ağırlıklı görüş, gerekçe, karşı kanıt ve görüşü değiştirecek koşulu belirt; dayanak yoksa kararsız kal. Replay kapanışlarını yorumla; araştırmayı kapsamında kullan.
+Gözlem ve yorumu ayır; olay, teyit veya neden uydurma. Eksik veri yokluk, temas ret/emir yoğunluğu, geçiş yön teyidi değildir. Bölgeye ulaşmak, üzerinde kalmak ve yapısal dönüş farklıdır. Hazır olmayan motordan sonuç çıkarma; kalite yön gerekçesi veya olasılık değildir. TF'leri karıştırma; kesin tahmin, al-sat, hedef veya stop verme.
+Başlıklar: Mevcut durum / Bağlam / Replay notu. 120–180 kelime hedefle; kısa olabilir. Tekrar, tablo, genel yatırım uyarısı yok.
+
+GRAFİK | ALARK | 25.09.26 18:30 İstanbul | Ana TF 4h | Deneme; alarm doğrulanmadı.
+Yerel ALARK.json; sağlayıcı bilinmiyor, günlük saatlikten türetildi. Tarihler 2026 İstanbul; kapanış dışındaki saatler mum açılışı. İlk kova eksik olabilir, son seans mumu kısa olabilir; tüm geçmiş gösterilmez, süreklilik kontrolü tüm eksikleri doğrulamaz. Stabil direnç: günlük/saatlik kaynak yok. OB + pozitif, − negatif; parantez kaynak mum; hacim rozetleri A=artış, K=kuruma, fiyat yönü değildir.
+
+1H | Kapanış 25.09 18:00 106,80
+Dış seviye WL 104,20. OB: −108,30–110,20 (24.09 10:30); +101,50–103,90 (16.09 16:30); −109,90–111,20 (15.09 15:30).
+Yükselen üçgen, tamamlandı; kalite ≈84,4; daralma ≈%66,3; üst/alt temas 2/2. FVG desteklenmiyor; bilinmiyor.
+Hacim (motor): 25.09 15:30 A×2,0; 17.09 10:30 A×3,84; 22.09 17:30 K×0,32; 16.09 10:30 A×3,11; 21.09 10:30 A×2,94.
+
+2H | Kapanış: 1H ile aynı
+Dış yapı: 08.09 09:30 BOS ↑113,50; 15.09 11:30 CHoCH ↓109,90. WL 104,20.
+OB: +101,50–104,80 (16.09 15:30); −109,90–111,20 (15.09 15:30); +100,90–102,30 (13.08 13:30).
+Formasyon: kullanılabilir aday yok. FVG çalıştırılmadı; bilinmiyor. Hacim (motor): 25.09 15:30 A×2,02; 22.09 17:30 K×0,19; 17.09 09:30 A×2,5.
+
+4H | Kapanış: 1H ile aynı
+Dış yapı: 19.08 09:30 BOS ↑107,60; 19.08 17:30 BOS ↑105,00; 04.09 17:30 BOS ↑111,30; 08.09 13:30 BOS ↑113,50; 15.09 09:30 CHoCH ↓109,90. WL 104,20.
+OB: +101,50–106,00 (16.09 13:30); −109,50–111,20 (15.09 13:30); +99,15–101,40 (07.08 09:30).
+Alçalan üçgen, sıkışma güçleniyor; kalite ≈89,3; daralma ≈%77,3; üst/alt temas 2/2; çizgi üst 108,684371233 alt 101,465625525.
+Hacim (yerel): 21.09 13:30 A×2,05; 25.09 17:30 K×0,26; 27.08 17:30 K×0,12; 20.08 09:30 A×3,92; 03.09 09:30 A×2,27; 09.09 13:30 A×2,16. Stabil destek 101,50.
+
+1D | Kapanış 25.09 18:30 106,80
+Dış yapı: 16.09 00:00 BOS ↓104,80. +OB 100,90–102,60 (13.08 00:00). Formasyon: kullanılabilir aday yok. Hacim (yerel): 21.08 00:00 A×2,04; 10.09 00:00 K×0,49. Stabil destek 101,50.
+
+4H REPLAY | OB teması: orijinal bant/OHLC örtüşmesi; ardışık temaslar tek epizot. Pencere öncesi bilinmez; son 2 epizot ayrıntılı. Aşağıda mum açılışı=kapanış.
++OB 101,50–106,00: 2 epizot; kullanılabilir 17.09 17:30; kalan 101,50–103,30.
+1: 21.09 09:30=106,10, 13:30=107,80; sonraki 17:30=107,80.
+2: 24.09 13:30–25.09 13:30, 4 mum; son 3 kapanış 24.09 17:30=105,20, 25.09 09:30=105,70, 13:30=106,60; sonraki 17:30=106,80.
+−OB 109,50–111,20: 4 epizot; kullanılabilir 16.09 09:30; kalan 110,20–111,20.
+3: 23.09 09:30=109,10, 13:30=108,80; sonraki 17:30=108,50.
+4: 24.09 09:30=106,90; sonraki 13:30=105,70.
++OB 99,15–101,40: 2 epizot; kullanılabilir 10.08 13:30; kalan 99,15–100,90.
+1: 11.08 09:30=103,80; sonraki 13:30=104,00.
+2: 12.08 13:30–13.08 13:30, 4 mum; son 3 kapanış 12.08 17:30=101,50, 13.08 09:30=102,00, 13:30=102,10; sonraki 17:30=102,20.
+Stabil günlük replay: 101,50, kullanıma giriş ve pencere başlangıcı günlük kapanış 22.09 18:30; bağımsız temas sırası 0. Temas: OHLC desteği kapsar, kapanış altında değil; bağımsız temaslar arası ≥0,35 günlük ATR ayrılması gerekir. İlk bilindiği gün test değil; günlük sayım 4h temas veya ret teyidi değildir.
+
+GENEL ARAŞTIRMA | Kişisel olasılık değil; kesit sonrası, o tarihte biliniyor sayma.
+OB (21.10.2026; veri sonu 19.10): 131.901 bölgede 17.048 (%12,9) 3+ temas; çok temasın bölgeyi zayıflattığı kanıtlanmaz.

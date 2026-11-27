@@ -1,0 +1,38 @@
+Formation-Bot yorumcususun. Ana TF için ağırlıklı görüş, gerekçe, karşı kanıt ve görüşü değiştirecek koşulu belirt; dayanak yoksa kararsız kal. Replay kapanışlarını yorumla; araştırmayı kapsamında kullan.
+Gözlem ve yorumu ayır; olay, teyit veya neden uydurma. Eksik veri yokluk, temas ret/emir yoğunluğu, geçiş yön teyidi değildir. Bölgeye ulaşmak, üzerinde kalmak ve yapısal dönüş farklıdır. Hazır olmayan motordan sonuç çıkarma; kalite yön gerekçesi veya olasılık değildir. TF'leri karıştırma; kesin tahmin, al-sat, hedef veya stop verme.
+Başlıklar: Mevcut durum / Bağlam / Replay notu. 120–180 kelime hedefle; kısa olabilir. Tekrar, tablo, genel yatırım uyarısı yok.
+
+GRAFİK | BIMAS | 25.09.26 18:30 İstanbul | Ana TF 4h | Deneme; alarm doğrulanmadı.
+Yerel BIMAS.json; sağlayıcı bilinmiyor, günlük saatlikten türetildi. Tarihler 2026 İstanbul; kapanış dışındaki saatler mum açılışı. İlk kova eksik olabilir, son seans mumu kısa olabilir; tüm geçmiş gösterilmez, süreklilik kontrolü tüm eksikleri doğrulamaz. Stabil direnç: günlük/saatlik kaynak yok. OB + pozitif, − negatif; parantez kaynak mum; hacim rozetleri A=artış, K=kuruma, fiyat yönü değildir.
+
+1H | Kapanış 25.09 18:00 426,25
+Dış yapı: 11.09 12:30 BOS ↑431,25; 15.09 10:30 CHoCH ↓422,50; 24.09 12:30 BOS ↓429,00.
+OB: −428,00–430,50 (25.09 14:30); −432,25–435,75 (24.09 09:30); −434,00–437,50 (23.09 16:30).
+Yükselen kama, kırılım adayı; kalite ≈77,7; daralma ≈%69,5; üst/alt temas 2/2; çizgi üst 446,84375 alt 428,40.
+FVG desteklenmiyor; bilinmiyor. Hacim (motor): 17.09 10:30 A×2,06; 23.09 12:30 K×0,24; 18.09 12:30 K×0,27; 15.09 10:30 A×3,5.
+
+2H | Kapanış 25.09 18:00 426,25
+Dış yapı: 26.08 13:30 BOS ↑418,50; 16.09 09:30 CHoCH ↓411,75. Seviyeler: PH 437,50.
+OB: −427,50–430,50 (25.09 13:30); +410,75–423,50 (21.09 09:30); −432,50–437,50 (23.09 15:30).
+Alçalan üçgen, tamamlandı; kalite ≈84,8; daralma ≈%80,7; üst/alt temas 2/2.
+FVG çalıştırılmadı; bilinmiyor. Hacim (motor): 16.09 15:30 A×3,34; 24.09 17:30 K×0,46.
+
+4H | Kapanış 25.09 18:00 426,25
+Dış yapı: 10.08 09:30 BOS ↑386,75; 19.08 09:30 BOS ↑386,25; 09.09 13:30 BOS ↑422,75; 09.09 17:30 BOS ↑421,50; 16.09 13:30 CHoCH ↓411,75. Seviyeler: PH 437,50; WL 410,75.
+OB: +410,75–423,50 (21.09 09:30); −432,00–437,50 (23.09 13:30).
+Simetrik üçgen, retest bekleniyor; kalite ≈75,9; daralma ≈%90,3; üst/alt temas 2/2.
+Hacim (yerel): 21.09 13:30 A×2,38; 25.09 17:30 K×0,31; 24.08 17:30 K×0,16; 18.08 09:30 A×2,42; 12.08 13:30 A×2,25. Stabil destek 390,00.
+
+1D | Kapanış 25.09 18:30 426,25
+Dış yapı: 09.09 00:00 BOS ↑422,75. Seviyeler: PL 399,25; WH 437,50.
++OB 390,00–419,25 (16.09 00:00). Formasyon: kullanılabilir aday yok. Hacim (yerel): 16.09 00:00 A×2,24. Stabil destek 390,00.
+
+4H REPLAY | OB teması: orijinal bant/OHLC örtüşmesi; ardışık temaslar tek epizot. Pencere öncesi bilinmez; son 2 epizot ayrıntılı. Aşağıda mum açılışı=kapanış.
++OB 410,75–423,50: 2 epizot; kullanılabilir 21.09 17:30; kalan 410,75–422,00.
+1: 24.09 13:30=425,25, 17:30=424,00; sonraki mum 25.09 09:30=428,25.
+2: 25.09 13:30=422,00, 17:30=426,25; sonraki kapanmış mum yok; epizot devam ediyor olabilir.
+−OB 432,00–437,50: 0 epizot; kullanılabilir 24.09 13:30; kalan 435,75–437,50.
+Stabil günlük replay: 390,00, kullanıma giriş ve pencere başlangıcı günlük kapanış 22.09 18:30. 0 bağımsız temas; ilk destek kimliği, önceki geçmiş ve sıra bilinmiyor. Temas: OHLC desteği kapsar, kapanış altında değil; bağımsız temaslar arası ≥0,35 günlük ATR ayrılması gerekir. İlk bilindiği gün test değil; günlük sayım 4h temas veya ret teyidi değildir.
+
+GENEL ARAŞTIRMA | Kişisel olasılık değil; tümü kesit sonrası, o tarihte biliniyor sayma.
+OB (21.10.2026; veri sonu 19.10): 131.901 bölgede 17.048 (%12,9) 3+ temas; çok temasın bölgeyi zayıflattığı kanıtlanmaz.

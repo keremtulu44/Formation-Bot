@@ -663,6 +663,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     domain_results_by_stock = {}
     stabil_adaylari = []
     domain_alarm_adaylari = []
+    ai_frames_by_symbol = {}
     _pkg._live_state.begin_scan(
         simdiki_zaman,
         manuel=manuel,
@@ -1154,6 +1155,22 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         'stable_id': getattr(active, 'stable_id', None),
                         'upper': getattr(active, 'upper_now', None),
                         'lower': getattr(active, 'lower_now', None),
+                        # Stabil grafiği motorun eğimli sınırlarını ve varsa
+                        # bayrak direğini çizebilmek için bu alanları kullanır.
+                        'start_bar': getattr(active, 'start_bar', None),
+                        'end_bar': getattr(active, 'end_bar', None),
+                        'apex_bar': getattr(active, 'apex_bar', None),
+                        'hb1': getattr(active, 'hb1', None),
+                        'hp1': getattr(active, 'hp1', None),
+                        'hb2': getattr(active, 'hb2', None),
+                        'hp2': getattr(active, 'hp2', None),
+                        'lb1': getattr(active, 'lb1', None),
+                        'lp1': getattr(active, 'lp1', None),
+                        'lb2': getattr(active, 'lb2', None),
+                        'lp2': getattr(active, 'lp2', None),
+                        'has_pole': getattr(active, 'has_pole', False),
+                        'pole_dir': getattr(active, 'pole_dir', None),
+                        'pole_duration': getattr(active, 'pole_duration', None),
                         'critical_price': (active.upper_now if break_dir == 1 else active.lower_now),
                         'break_strength': getattr(active, 'break_strength', None),
                         'contraction': getattr(active, 'contraction', None),
@@ -1548,8 +1565,38 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                     stock, tf_name, exc,
                                 )
                             _grafik_koprusu(payload, outputs)
+                            # Canlı AI alarm yorumu (senkron: yalnız DM veya Public
+                            # hedefinden en az biri gerçekten gönderecekse çalışır;
+                            # başarırsa ana kart yerine gider, sorunda düz kart gider).
+                            dm_ai_gerekli = bool(
+                                not (dm_gecersiz_engel or dm_dev_engel)
+                                and getattr(notifier, "enabled", False)
+                                and config.ai_yorum_dm_enabled()
+                            )
+                            pub_kabul_fn = getattr(notifier, "public_kabul_eder_mi", None)
+                            pub_ai_gerekli = bool(
+                                config.ai_yorum_public_enabled()
+                                and getattr(notifier, "public_enabled", False)
+                                and (pub_kabul_fn(payload) if callable(pub_kabul_fn) else True)
+                            )
+                            if dm_ai_gerekli or pub_ai_gerekli:
+                                try:
+                                    from ai_prompt.service import enrich_alarm_with_ai
+
+                                    enrich_alarm_with_ai(
+                                        payload,
+                                        df_1h=df_1h,
+                                        df_1d=df_gunluk_ham,
+                                        as_of=simdiki_zaman,
+                                    )
+                                    _pkg.write_heartbeat(notifier=notifier)
+                                except Exception as ai_hata:  # noqa: BLE001 - AI hatası alarmı düşürmesin
+                                    _pkg.logger.warning(
+                                        "AI alarm yorumu atlandı (%s %s); düz kart kullanılacak: %s",
+                                        stock, tf_name, type(ai_hata).__name__,
+                                    )
                             # Public kuyruk: bülten kartı hazır olduktan SONRA
-                            # (kart bağlamı + varsa public karesi kayda girer).
+                            # (kart bağlamı + varsa AI yorumu + public karesi kayda girer).
                             try:
                                 notifier.public_kuyruk(payload)
                             except Exception as public_hata:  # noqa: BLE001
@@ -1658,22 +1705,23 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     )
                     if st_cand is not None:
                         stabil_adaylari.append(st_cand)
+                        ai_frames_by_symbol[stock] = (df_1h, df_gunluk_ham, simdiki_zaman)
                 except Exception as st_err:  # noqa: BLE001 - Stabil ayrı sinyali ana taramayı düşürmez
                     _pkg.logger.warning("%s Stabil 4s aday kontrolü hatası: %s", stock, st_err)
 
                 # Ayrı yeni kanal: BOS/CHoCH · formasyon · OB/FVG · hacim OR
                 # tetikleyicileri, o anki native basamaklı Stabil desteğiyle
                 # ölçülür. Eski kartlar / replay sonuçları değişmez.
-                try:
-                    # Domain sonuçları kart bağlamı için zaten TÜM TF'lerle
-                    # cache'lendi; yeni kanal aynı kapanmış frame kümesini kullanır.
-                    yeni_frames = _pkg._completed_domain_frames(all_tfs, simdiki_zaman)
-                    yeni_outputs = _pkg._domain_results_for_notification(
-                        stock, all_tfs, simdiki_zaman, domain_results_by_stock,
-                        frames=yeni_frames,
-                    )
-                    domain_alarm_adaylari.extend(
-                        evaluate_domain_alarm_candidates(
+                if bool(getattr(config, "YENI_DOMAIN_ALARM", False)):
+                    try:
+                        # Domain sonuçları kart bağlamı için zaten TÜM TF'lerle
+                        # cache'lendi; yeni kanal aynı kapanmış frame kümesini kullanır.
+                        yeni_frames = _pkg._completed_domain_frames(all_tfs, simdiki_zaman)
+                        yeni_outputs = _pkg._domain_results_for_notification(
+                            stock, all_tfs, simdiki_zaman, domain_results_by_stock,
+                            frames=yeni_frames,
+                        )
+                        yeni_cands = evaluate_domain_alarm_candidates(
                             stock,
                             all_tfs,
                             yeni_frames,
@@ -1684,9 +1732,11 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             grafik_baglami=grafik_baglami_by_tf,
                             direnc_gunluk_ham=df_gunluk_ham,
                         )
-                    )
-                except Exception as yeni_err:  # noqa: BLE001 - yeni kanal ana taramayı düşürmez
-                    _pkg.logger.warning("%s yeni domain aday kontrolü hatası: %s", stock, yeni_err)
+                        if yeni_cands:
+                            domain_alarm_adaylari.extend(yeni_cands)
+                            ai_frames_by_symbol[stock] = (df_1h, df_gunluk_ham, simdiki_zaman)
+                    except Exception as yeni_err:  # noqa: BLE001 - yeni kanal ana taramayı düşürmez
+                        _pkg.logger.warning("%s yeni domain aday kontrolü hatası: %s", stock, yeni_err)
 
             _pkg.daily_stats['stocks_scanned'] += 1
             tur_taranan += 1
@@ -1861,7 +1911,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
         try:
             from bot.stabil_service import dispatch_stabil_scan_candidates
 
-            st_ozet = dispatch_stabil_scan_candidates(stabil_adaylari, notifier)
+            st_ozet = dispatch_stabil_scan_candidates(
+                stabil_adaylari, notifier, frames_by_symbol=ai_frames_by_symbol,
+            )
             _pkg.daily_stats['stabil_alerts_sent'] = int(
                 _pkg.daily_stats.get('stabil_alerts_sent') or 0
             ) + int(st_ozet.get('tekil_gonderilen') or 0) + int(st_ozet.get('toplu_ozet') or 0)
@@ -1877,7 +1929,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     # işaretli AYRI kart olarak gider. Eski formasyon/4S alarmlarına dokunulmaz.
     if send_alerts and domain_alarm_adaylari:
         try:
-            dy_ozet = dispatch_domain_alarm_candidates(domain_alarm_adaylari, notifier)
+            dy_ozet = dispatch_domain_alarm_candidates(
+                domain_alarm_adaylari, notifier, frames_by_symbol=ai_frames_by_symbol,
+            )
             _pkg.daily_stats['yeni_domain_alerts_sent'] = int(
                 _pkg.daily_stats.get('yeni_domain_alerts_sent') or 0
             ) + int(dy_ozet.get('tekil_gonderilen') or 0) + int(dy_ozet.get('toplu_ozet') or 0)

@@ -262,6 +262,31 @@ def test_incremental_state_duplicate_revision_catchup_and_restart_fallbacks():
     _assert_ob_native_state_equal(reference, restarted.engine)
 
 
+@pytest.mark.parametrize("domain", ["order_block", "fvg"])
+@pytest.mark.parametrize("flag", ["is_closed", "is_complete"])
+def test_duplicate_ohlcv_with_conflicting_quality_flags_is_replayed(domain, flag):
+    frame = _ohlcv_frame(20)
+    frame["is_closed"] = True
+    frame["is_complete"] = True
+    duplicate = frame.iloc[[-1]].copy()
+    duplicate[flag] = False
+    conflict = pd.concat([frame, duplicate], ignore_index=True)
+    factory = (OrderBlockEngine if domain == "order_block" else
+               lambda: FvgEngulfingEngine(FvgEngulfingConfig(timeframe="4h")))
+    state = IncrementalEngineState(domain, factory())
+    decision = state.advance(conflict)
+    reference = factory()
+    reference.replay(conflict)
+    assert decision.mode == "full_replay_conflicting_timestamp"
+    assert not state._incremental_safe
+    assert state.engine.last_data_quality == reference.last_data_quality
+    if domain == "order_block":
+        _assert_ob_native_state_equal(reference, state.engine)
+    else:
+        _assert_fvg_native_state_equal(reference, state.engine)
+    assert state.advance(frame).mode == "full_replay_untrusted_state"
+
+
 def test_fvg_duplicate_without_complete_ohlcv_is_not_deduplicated():
     frame = _ohlcv_frame(8).drop(columns=["volume"])
     state = IncrementalEngineState("fvg", FvgEngulfingEngine(FvgEngulfingConfig(timeframe="2h")))

@@ -930,7 +930,7 @@ STABIL_ALARM_TAZE_DK = _env_int("STABIL_ALARM_TAZE_DK", 390, minimum=30)
 # public hedefe "🆕 YENİ" işaretli ayrı kart gönderir. Stabil koşulu native
 # basamaklı desteğin o anki seviyesine göre HARD alt sınırdır: dist_atr >= -3;
 # üst sınır yoktur. Hacim hard kapı değil, kendi başına tetikleyicidir.
-YENI_DOMAIN_ALARM = os.getenv("YENI_DOMAIN_ALARM", "1").strip().lower() in {
+YENI_DOMAIN_ALARM = os.getenv("YENI_DOMAIN_ALARM", "0").strip().lower() in {
     "1", "true", "yes", "on", "acik", "açık",
 }
 YENI_DOMAIN_ALARM_DM = os.getenv("YENI_DOMAIN_ALARM_DM", "1").strip().lower() in {
@@ -964,6 +964,88 @@ YENI_DOMAIN_ALARM_IMMEDIATE_TEKRAR = os.getenv(
 YENI_DOMAIN_ALARM_POLITIKA = os.getenv("YENI_DOMAIN_ALARM_POLITIKA", "P6").strip().upper()
 if YENI_DOMAIN_ALARM_POLITIKA not in ("P0", "P6", "P4"):
     YENI_DOMAIN_ALARM_POLITIKA = "P0"
+
+# --- AI Gölge (Shadow) Değerlendirme Kaydı (kullanıcı kararı: varsayılan AÇIK) ---
+# AI yanıtının sonundaki gizli [AI_SONUC ...] 5-filtre bloğunu ayıklayıp
+# yerel DATA_DIR/ai_yorum_test.json dosyasına ve Supabase tanımlıysa
+# `public.ai_yorum_test` tablosuna yazar.
+AI_SHADOW_LOG = os.getenv("AI_SHADOW_LOG", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
+}
+
+
+def ai_shadow_log_enabled() -> bool:
+    return bool(AI_SHADOW_LOG)
+
+
+# --- KAP Alarm Bağlamı Arşivi (`kap/` paketi; kullanıcı kararı: varsayılan AÇIK) ---
+# Arka plan SQLite WAL toplayıcısı ve salt-okunur alarm bağlamı sorgusu.
+KAP_BAGLAM_AKTIF = os.getenv("KAP_BAGLAM_AKTIF", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
+}
+KAP_ARSIV_YOLU = os.getenv("KAP_ARSIV_YOLU", "").strip()
+KAP_TARAMA_ARALIK_SN = _env_int("KAP_TARAMA_ARALIK_SN", 180, minimum=30)
+KAP_MAX_YAS_GUN = _env_int("KAP_MAX_YAS_GUN", 7, minimum=1)
+KAP_WARMUP_ACILISTA = os.getenv("KAP_WARMUP_ACILISTA", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
+}
+
+
+def kap_baglam_enabled() -> bool:
+    return bool(KAP_BAGLAM_AKTIF)
+
+
+def _env_str_temiz(name: str, default: str = "") -> str:
+    s = os.getenv(name, default).strip()
+    while len(s) >= 2 and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+        s = s[1:-1].strip()
+    return s.strip()
+
+
+# --- AI API İstemci Katmanı & Canlı Alarm Entegrasyonu ---
+# Sıralı zincir: ApiWrapper (/v1/ask, model otomatik) -> Ücretsiz Gemini #1 -> Ücretsiz Gemini #2 -> düz kart.
+# Env'de yalnız 4 gizli anahtar gerekir; Gemini modeli dengeli sabit modeldir.
+AI_WRAPPER_BASE_URL = _env_str_temiz("AI_WRAPPER_BASE_URL")
+AI_WRAPPER_API_KEY = _env_str_temiz("AI_WRAPPER_API_KEY")
+GEMINI_API_KEY_1 = (
+    _env_str_temiz("GEMINI_API_KEY_1")
+    or _env_str_temiz("GEMINI_API_KEY")
+)
+GEMINI_API_KEY_2 = _env_str_temiz("GEMINI_API_KEY_2")
+GEMINI_FIXED_MODEL = "gemini-3.8-flash"
+
+# Canlı alarmlarda düz kart yerine AI yorumu gönderim şalterleri (hepsi varsayılan AÇIK;
+# anahtar girilmemişse veya tüm AI sağlayıcıları düşerse otomatik düz kart gider).
+AI_YORUM_AKTIF = os.getenv("AI_YORUM_AKTIF", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
+}
+AI_YORUM_DM = os.getenv("AI_YORUM_DM", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
+}
+AI_YORUM_PUBLIC = os.getenv("AI_YORUM_PUBLIC", "1").strip().lower() in {
+    "1", "true", "yes", "on", "acik", "açık", "evet",
+}
+# 0 = toplam süre sınırı yok (ApiWrapper kuralı: 10s bağlanma + 45s sessizlik);
+# isteğe bağlı pozitif saniye (örn. 240) sağlayıcı başına üst sınır koyar.
+AI_YORUM_MAX_BEKLEME_SN = _env_int("AI_YORUM_MAX_BEKLEME_SN", 0, minimum=0)
+
+
+def ai_yorum_enabled() -> bool:
+    return bool(AI_YORUM_AKTIF)
+
+
+def ai_yorum_dm_enabled() -> bool:
+    return bool(AI_YORUM_AKTIF and AI_YORUM_DM)
+
+
+def ai_yorum_public_enabled() -> bool:
+    return bool(AI_YORUM_AKTIF and AI_YORUM_PUBLIC)
+
+
+def ai_yorum_max_bekleme_sn() -> float | None:
+    val = int(AI_YORUM_MAX_BEKLEME_SN or 0)
+    return float(val) if val > 0 else None
+
 
 
 

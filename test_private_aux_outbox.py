@@ -100,6 +100,7 @@ def test_dm_chart_snapshots_render_only_after_successful_text(monkeypatch, tmp_p
 
 
 def test_public_success_and_dm_definite_failure_are_recovered_independently(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
     import requests
     n = _notifier(monkeypatch, tmp_path)
     n.public_min_aralik_sn = n.retry_bekleme_sn = 0
@@ -124,6 +125,7 @@ def test_public_success_and_dm_definite_failure_are_recovered_independently(monk
 
 
 def test_real_dm_chart_snapshot_survives_restart_and_renders_album(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
     import os
     import requests
     import grafik
@@ -179,6 +181,7 @@ def test_stabil_dm_failure_is_queued_even_if_public_succeeds(monkeypatch, tmp_pa
 
 
 def test_failed_public_checkpoint_does_not_mark_candidate_or_repeat_dm(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
     import requests
     n = _notifier(monkeypatch, tmp_path)
     n.public_min_aralik_sn = n.retry_bekleme_sn = 0
@@ -202,6 +205,7 @@ def test_failed_public_checkpoint_does_not_mark_candidate_or_repeat_dm(monkeypat
 
 
 def test_failed_dm_checkpoint_does_not_mark_candidate_or_repeat_public(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
     import requests
     n = _notifier(monkeypatch, tmp_path)
     n.public_min_aralik_sn = n.retry_bekleme_sn = 0
@@ -222,3 +226,18 @@ def test_failed_dm_checkpoint_does_not_mark_candidate_or_repeat_public(monkeypat
     assert state.exists()
     assert [c["chat_id"] for c in calls].count(n.public_chat_id) == 1
     assert [c["chat_id"] for c in calls].count(n.chat_id) == 1
+
+
+def test_disabled_domain_dm_waits_but_stabil_still_sends(monkeypatch, tmp_path):
+    from public_aux_outbox import auxiliary_event_id
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
+    owner = _Owner(["HTTP 429: rate limited"])
+    queue = PrivateAuxOutbox(owner, tmp_path)
+    domain = auxiliary_event_id("domain", [("A", "4h", "bar")])
+    assert queue.submit(domain, "domain") == (True, False)
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", False)
+    assert queue.submit(auxiliary_event_id("stabil", [("A", "bar")]), "stabil") == (True, True)
+    assert [call[0] for call in owner.calls] == ["domain", "stabil"]
+    assert queue.flush() == 0
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM", True)
+    assert queue.flush() == 1 and owner.calls[-1][0] == "domain"

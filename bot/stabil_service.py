@@ -167,6 +167,16 @@ def _stabil_public_grafik_verisi_uret(
                     "upper_now": pattern_snapshot.get("upper"),
                     "lower_now": pattern_snapshot.get("lower"),
                 }
+                # Çapalar yoksa çizici eski yatay yedeğe döner. Temas
+                # sayıları ve direk bilgisi de motorun kaydından alınır.
+                for _anahtar in ("start_bar", "end_bar", "apex_bar",
+                                 "hb1", "hp1", "hb2", "hp2",
+                                 "lb1", "lp1", "lb2", "lp2",
+                                 "quality", "contraction", "upper_touches", "lower_touches",
+                                 "has_pole", "pole_dir", "pole_duration"):
+                    _deger = pattern_snapshot.get(_anahtar)
+                    if _deger is not None:
+                        chart_pattern[_anahtar] = _deger
         veri = grafik.kare_listesi(
             chart_pattern,
             "4h",
@@ -272,7 +282,11 @@ def evaluate_stabil_4h_candidate(
     son_kapanis = mum_kapanis_ani(last_open_ts, "4h")
     if son_kapanis is None:
         return None
-    yas_dk = (simdiki_zaman - son_kapanis).total_seconds() / 60.0
+    now_ts = pd.Timestamp(simdiki_zaman)
+    now_ts = now_ts.tz_localize("Europe/Istanbul") if now_ts.tzinfo is None else now_ts.tz_convert("Europe/Istanbul")
+    close_ts = pd.Timestamp(son_kapanis)
+    close_ts = close_ts.tz_localize("Europe/Istanbul") if close_ts.tzinfo is None else close_ts.tz_convert("Europe/Istanbul")
+    yas_dk = (now_ts - close_ts).total_seconds() / 60.0
     taze_sinir = float(getattr(config, "STABIL_ALARM_TAZE_DK", 390))
     if yas_dk < -1.0 or yas_dk > taze_sinir:
         # Eski cache veya ertesi gün yeniden başlatmalarda geçmiş 4S mumu tekrar bildirilmez
@@ -472,10 +486,14 @@ def format_stabil_burst_summary_card(extra_candidates: Sequence[StabilAlarmCandi
 
 
 def _deliver_stabil_message_result(notifier: Any, text: str, *, public_event_id=None,
-                                   public_identity=None, public_graphics=None) -> dict[str, bool]:
+                                   public_identity=None, public_graphics=None,
+                                   dm_text: str | None = None,
+                                   public_text: str | None = None) -> dict[str, bool]:
     """DM sonucu ile public'in teslim/kuyruk sonucunu ayrı tut."""
     dm_on = bool(getattr(config, "STABIL_ALARM_DM", True))
     pub_on = bool(getattr(config, "STABIL_ALARM_PUBLIC", True))
+    dm_body = dm_text if dm_text else text
+    pub_body = public_text if public_text else text
     dm_ok = dm_accepted = pub_ok = pub_accepted = False
     public_managed = False
     dm_required = dm_on and notifier is not None and getattr(notifier, "enabled", True) is not False
@@ -486,12 +504,12 @@ def _deliver_stabil_message_result(notifier: Any, text: str, *, public_event_id=
         queue_dm = getattr(notifier, "dm_ozel_gonder", None)
         if public_event_id and callable(queue_dm):
             try:
-                dm_accepted, dm_ok = queue_dm(public_event_id, text, identity=public_identity)
+                dm_accepted, dm_ok = queue_dm(public_event_id, dm_body, identity=public_identity)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Stabil DM kuyruğu başarısız: %s", type(exc).__name__)
         elif callable(send_text):
             try:
-                res = send_text(text)
+                res = send_text(dm_body)
                 dm_ok = bool(res[0] if isinstance(res, tuple) else res)
                 dm_accepted = dm_ok
             except Exception as exc:  # noqa: BLE001
@@ -508,12 +526,12 @@ def _deliver_stabil_message_result(notifier: Any, text: str, *, public_event_id=
             public_managed = True
             try:
                 pub_accepted, pub_ok = queue_pub(
-                    public_event_id, text, identity=public_identity, graphics=public_graphics)
+                    public_event_id, pub_body, identity=public_identity, graphics=public_graphics)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Stabil public kuyruğu başarısız: %s", type(exc).__name__)
         elif callable(send_pub) and not dm_aktif_ama_public_kapali:
             try:
-                pub_ok = bool(send_pub(text))
+                pub_ok = bool(send_pub(pub_body))
                 pub_accepted = pub_ok
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Stabil public gönderim hatası: %s", type(exc).__name__)
@@ -575,6 +593,8 @@ def dispatch_stabil_scan_candidates(
     notifier: Any,
     *,
     state_path: str | None = None,
+    frames_by_symbol: Mapping[str, Any] | None = None,
+    router: Any = None,
 ) -> dict[str, int]:
     """Send standalone 4H Stabil alerts applying burst rule (>3 -> top 2 cards + 1 summary)."""
     # Legacy candidates may be deserialized or passed directly, bypassing
@@ -602,10 +622,49 @@ def dispatch_stabil_scan_candidates(
     degisti = False
     from public_aux_outbox import auxiliary_event_id
 
+    dm_ai_hedef = bool(
+        getattr(config, "STABIL_ALARM_DM", True)
+        and getattr(notifier, "enabled", False)
+        and config.ai_yorum_dm_enabled()
+    )
+    pub_ai_hedef = bool(
+        getattr(config, "STABIL_ALARM_PUBLIC", True)
+        and getattr(notifier, "public_enabled", False)
+        and config.ai_yorum_public_enabled()
+    )
     for cand in tekil_liste:
         metin = format_stabil_reclaim_alert_card(cand)
+        dm_metin = metin
+        pub_metin = metin
+        if (dm_ai_hedef or pub_ai_hedef) and frames_by_symbol and cand.symbol in frames_by_symbol:
+            try:
+                from ai_prompt.service import build_ai_replacement_text_for_signal
+
+                df_1h, df_1d, as_of_dt = frames_by_symbol[cand.symbol]
+                ident = _stabil_public_identity(cand)
+                ai_text = build_ai_replacement_text_for_signal(
+                    symbol=cand.symbol,
+                    timeframe="4h",
+                    pattern_name=ident["pattern_name"],
+                    state="STABIL_GERI_ALIM",
+                    close_price=cand.close_price,
+                    bar_metni=cand.bar_label,
+                    df_1h=df_1h,
+                    df_1d=df_1d,
+                    as_of=as_of_dt,
+                    router=router,
+                )
+                if ai_text:
+                    if config.ai_yorum_dm_enabled():
+                        dm_metin = ai_text
+                    if config.ai_yorum_public_enabled():
+                        pub_metin = ai_text
+            except Exception as ai_err:  # noqa: BLE001 - AI hatasında düz kart gider
+                logger.warning("Stabil AI yorumu atlandı (%s): %s", cand.symbol, type(ai_err).__name__)
         sonuc = _deliver_stabil_message_result(
             notifier, metin,
+            dm_text=dm_metin,
+            public_text=pub_metin,
             public_event_id=auxiliary_event_id("stabil", [(cand.symbol, cand.bar_open_ts)]),
             public_identity=_stabil_public_identity(cand),
             public_graphics=cand.grafik_verisi_public,

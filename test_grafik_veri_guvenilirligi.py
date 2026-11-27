@@ -58,6 +58,21 @@ def test_gecici_hatada_yedek_istegi_yok(monkeypatch, interval):
     assert frame is None and calls == ["XAUUSD=X"]
 
 
+@pytest.mark.parametrize("symbol,tf,expected", [
+    ("XAUUSD", "1d", True), ("XAGUSD", "1d", True),
+    ("XAUUSD", "1h", False), ("AKBNK", "1d", False),
+])
+def test_makro_gunluk_grafikte_kapanis_kisitlamasi_gosterilir(monkeypatch, tmp_path, symbol, tf, expected):
+    df = pd.DataFrame({"open": [10., 10.], "high": [11., 11.],
+                       "low": [9., 9.], "close": [10., 10.], "volume": [100., 100.]},
+                      index=pd.date_range("2026-10-01", periods=2, tz="Europe/Istanbul"))
+    monkeypatch.setattr(grafik_uret, "cerceve_getir", lambda *_a, **_kw: (df, "test cache"))
+    result = grafik_uret.kare_uret(symbol, tf, cikti=str(tmp_path / f"{symbol}-{tf}.png"))
+    assert result["yol"]
+    assert any("Makro günlük mumun kapanışı doğrulanmadı" in s
+               for s in result["uyarilar"]) is expected
+
+
 def test_bilinmeyen_sembol_tahmini_sadece_oneri(tmp_path):
     with pytest.raises(grafik_uret.VeriYok, match="Benzer semboller: XAGUSD, XAUUSD"):
         grafik_uret.cerceve_getir("XAUSD", "1h", str(tmp_path))

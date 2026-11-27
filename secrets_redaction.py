@@ -8,7 +8,10 @@ from typing import Any
 
 _RE_TELEGRAM_BOT_PATH = re.compile(r"(?i)(/bot)[^/?#\s'\"<>]+")
 _RE_SECRET_QUERY = re.compile(
-    r"(?i)([?&](?:token|secret(?:_token)?|api[_-]?key|k)=)[^&#\s'\"<>]+"
+    r"(?i)([?&](?:token|secret(?:_token)?|api[_-]?key|key|k)=)[^&#\s'\"<>]+"
+)
+_RE_AUTH_HEADER = re.compile(
+    r"(?i)((?:authorization\s*:\s*bearer|x-goog-api-key\s*:)\s*)[^\s'\",;]+"
 )
 _REDACTED = "[REDACTED]"
 
@@ -30,4 +33,5 @@ def redact_sensitive_text(value: Any, *secrets: Any) -> str:
         text = text.replace(secret, _REDACTED)
     text = _RE_TELEGRAM_BOT_PATH.sub(r"\1" + _REDACTED, text)
     text = _RE_SECRET_QUERY.sub(r"\1" + _REDACTED, text)
+    text = _RE_AUTH_HEADER.sub(r"\1" + _REDACTED, text)
     return text

@@ -351,6 +351,22 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
         ("GRAFIK_OLAY_MAKS", False, "İsteğe bağlı: kareye çizilen onaylı BOS/CHoCH sayısı (varsayılan 6)"),
         ("NIGHTLY_CANDLE_REFRESH_HOUR", False, "Gece Supabase-kayıtsız mum temizliği saati (varsayılan 2 -> 02:00 TSİ)"),
         ("STABIL_GERI_ALIM_ALARM", False, "Ayrı 4S Stabil güçlü geri alım alarmları (varsayılan 1 = açık)"),
+        ("YENI_DOMAIN_ALARM", False, "Ayrı yeni domain alarm kanalı (varsayılan 0 = kapalı; klasik düzen)"),
+        ("YENI_DOMAIN_ALARM_POLITIKA", False, "Yeni domain alarm politikası (P0/P4/P6; varsayılan P6)"),
+        ("AI_YORUM_AKTIF", False, "Alarm yerine AI yorumu gönderimi (varsayılan 1 = açık; sorunda düz kart)"),
+        ("AI_YORUM_DM", False, "DM alarmlarında AI yorumu (varsayılan 1 = açık)"),
+        ("AI_YORUM_PUBLIC", False, "Public grup/kanal alarmlarında AI yorumu (varsayılan 1 = açık)"),
+        ("AI_YORUM_MAX_BEKLEME_SN", False, "İsteğe bağlı sağlayıcı başına üst bekleme sn (0 = sınırsız)"),
+        ("AI_SHADOW_LOG", False, "Gizli [AI_SONUC] gölge kaydı (varsayılan 1 = açık)"),
+        ("AI_WRAPPER_BASE_URL", False, "ApiWrapper temel adresi (yalnız /v1/ask, model otomatik)"),
+        ("AI_WRAPPER_API_KEY", False, "ApiWrapper Bearer anahtarı"),
+        ("GEMINI_API_KEY_1", False, "1. ücretsiz Gemini yedek anahtarı (sabit model: gemini-3.8-flash)"),
+        ("GEMINI_API_KEY_2", False, "2. ücretsiz Gemini yedek anahtarı (sabit model: gemini-3.8-flash)"),
+        ("KAP_BAGLAM_AKTIF", False, "KAP arka plan SQLite WAL toplayıcısı (varsayılan 1 = açık)"),
+        ("KAP_ARSIV_YOLU", False, "İsteğe bağlı KAP SQLite arşiv yolu (boş = DATA_DIR/kap_arsiv.sqlite)"),
+        ("KAP_TARAMA_ARALIK_SN", False, "KAP tarama aralığı, saniye (varsayılan 180)"),
+        ("KAP_MAX_YAS_GUN", False, "Alarm anında kabul edilecek azami KAP bildirim yaşı, gün (varsayılan 7)"),
+        ("KAP_WARMUP_ACILISTA", False, "Açılışta boş KAP arşivini son 7 günle doldur (varsayılan 1 = açık)"),
         # --- Yahoo birincil / TV reaktif yedek (üretim zinciri) ---------------
         ("TV_YEDEK_AKTIF", False, "Yahoo boş/geçersiz dönerse tvDatafeed yedeği (varsayılan 1; 0 = Yahoo-only)"),
         ("TV_GERCEK_4S_AKTIF", False, "TV yedeği devredeyken gerçek 4s barları kullan (varsayılan 1)"),
@@ -389,6 +405,67 @@ def kontrol_env(dosya_env: dict, canli_mod: bool = False) -> dict:
                   "`bash scripts/install_deploy_dependencies.sh` sonra botu yeniden başlatın.")
     else:
         satir(OK, "Otomatik alarm grafikleri kapalı", "/grafik komutu bu şalterden bağımsızdır.")
+    yeni_domain_ham = (degerler.get("YENI_DOMAIN_ALARM") or "").strip().lower()
+    if yeni_domain_ham in {"1", "true", "yes", "on", "acik", "açık", "evet"}:
+        satir(WARN, "YENI_DOMAIN_ALARM ortamda AÇIK",
+              "Klasik formasyon + Stabil düzeni için ortam değişkenini 0 yapın veya kaldırın.")
+    elif yeni_domain_ham and yeni_domain_ham not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}:
+        satir(WARN, f"YENI_DOMAIN_ALARM değeri tanınmıyor ({yeni_domain_ham})",
+              "Belirsizliği önlemek için 0 veya 1 kullanın.")
+    politika_ham = (degerler.get("YENI_DOMAIN_ALARM_POLITIKA") or "").strip().upper()
+    if politika_ham and politika_ham not in {"P0", "P4", "P6"}:
+        satir(WARN, f"YENI_DOMAIN_ALARM_POLITIKA tanınmıyor ({politika_ham})",
+              "Desteklenen canlı politikalar: P0, P4, P6 (varsayılan P6).")
+    ai_shadow_ham = (degerler.get("AI_SHADOW_LOG") or "").strip().lower()
+    if ai_shadow_ham in {"1", "true", "yes", "on", "acik", "açık", "evet"}:
+        satir(WARN, "AI_SHADOW_LOG ortamda AÇIK",
+              "Gölge AI kayıtları yalnızca Supabase ai_yorum_test tablosuna yazar; Telegram yayını açmaz.")
+    elif ai_shadow_ham and ai_shadow_ham not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}:
+        satir(WARN, f"AI_SHADOW_LOG değeri tanınmıyor ({ai_shadow_ham})",
+              "Belirsizliği önlemek için 0 veya 1 kullanın.")
+    def _temiz(v: str) -> str:
+        s = (v or "").strip()
+        while len(s) >= 2 and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+            s = s[1:-1].strip()
+        return s.strip()
+
+    wrapper_url = _temiz(degerler.get("AI_WRAPPER_BASE_URL") or "")
+    wrapper_key = _temiz(degerler.get("AI_WRAPPER_API_KEY") or "")
+    gem1 = _temiz(degerler.get("GEMINI_API_KEY_1") or degerler.get("GEMINI_API_KEY") or "")
+    gem2 = _temiz(degerler.get("GEMINI_API_KEY_2") or "")
+    if bool(wrapper_url) != bool(wrapper_key):
+        satir(WARN, "AI_WRAPPER_BASE_URL ve AI_WRAPPER_API_KEY birlikte tanımlanmalı",
+              "Biri eksikse ApiWrapper zincire eklenmez.")
+    elif wrapper_url and not wrapper_url.startswith(("http://", "https://")):
+        satir(WARN, "AI_WRAPPER_BASE_URL geçerli bir http(s) adresi değil",
+              "Örnek: https://api.ornek.com (sonuna /v1/ask otomatik eklenir).")
+    ai_aktif_ham = (degerler.get("AI_YORUM_AKTIF") or "1").strip().lower()
+    ai_aktif = ai_aktif_ham not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}
+    tanimli_saglayicilar = []
+    if wrapper_url and wrapper_key and wrapper_url.startswith(("http://", "https://")):
+        tanimli_saglayicilar.append("ApiWrapper")
+    if gem1:
+        tanimli_saglayicilar.append("Gemini#1")
+    if gem2:
+        tanimli_saglayicilar.append("Gemini#2")
+    if ai_aktif and tanimli_saglayicilar:
+        satir(OK, f"AI alarm zinciri hazır: {' -> '.join(tanimli_saglayicilar)} -> düz kart",
+              "Sorun çıkarsa normal teknik kart kesintisiz gönderilir.")
+    elif ai_aktif:
+        satir(WARN, "AI_YORUM_AKTIF açık ancak hiçbir AI sağlayıcı anahtarı tanımlı değil",
+              "AI_WRAPPER_BASE_URL+AI_WRAPPER_API_KEY veya GEMINI_API_KEY_1/2 eklenene kadar düz kart gider.")
+    kap_ham = (degerler.get("KAP_BAGLAM_AKTIF") or "").strip().lower()
+    if kap_ham in {"1", "true", "yes", "on", "acik", "açık", "evet"}:
+        try:
+            import httpx  # noqa: F401
+            import kap  # noqa: F401
+            satir(OK, "KAP_BAGLAM_AKTIF açık ve kap/httpx modülleri hazır")
+        except Exception as kap_hata:  # noqa: BLE001
+            satir(FAIL, "KAP_BAGLAM_AKTIF açık ama kap/httpx yüklenemedi",
+                  f"{type(kap_hata).__name__}: {kap_hata} — `bash scripts/install_deploy_dependencies.sh` çalıştırın.")
+    elif kap_ham and kap_ham not in {"0", "false", "no", "off", "kapali", "kapalı", "hayir", "hayır"}:
+        satir(WARN, f"KAP_BAGLAM_AKTIF değeri tanınmıyor ({kap_ham})",
+              "Belirsizliği önlemek için 0 veya 1 kullanın.")
     # --- DM kimliği görsel kapısı (2026-10-22) -----------------------------
     # DM grafik yolu pozitif tamsayı sohbet ister; public grafik ve grup /grafik
     # ayrı hedef/yetki kapıları kullanır. Bu kontrol public teslimini kanıtlamaz.

@@ -64,9 +64,12 @@ def p_bos_sustur(t: Mapping[str, Any]) -> bool:
     return not (len(k) == 1 and k[0] == "BOS")
 
 
+_YUKSEK_HACIM_KADEMELERI = frozenset({"5×", "5x", "10×", "10x"})
+
+
 def p_yalniz_hacim(t: Mapping[str, Any]) -> bool:
     """P2 · Yalnız hacim kademesi ≥5× (ölçülen en güçlü tek kanal)."""
-    return _hacim(t) in {"5x", "10×", "10x"}
+    return _hacim(t) in _YUKSEK_HACIM_KADEMELERI
 
 
 def p_katman(t: Mapping[str, Any]) -> bool:
@@ -78,7 +81,7 @@ def p_katman(t: Mapping[str, Any]) -> bool:
     k = _kanallar(t)
     if not k:
         return False
-    hacim = _hacim(t) in {"5x", "10×", "10x"}
+    hacim = _hacim(t) in _YUKSEK_HACIM_KADEMELERI
     formasyon = "FORMASYON" in k
     if hacim:
         return True
@@ -95,7 +98,7 @@ def p_katman_baglam(t: Mapping[str, Any]) -> bool:
         return False
     kosu = _bagl(t, "bagl_gunici_kosu")
     sikisma = _bagl(t, "bagl_sikisma", 1.0)
-    if _hacim(t) in {"5x", "10×", "10x"}:
+    if _hacim(t) in _YUKSEK_HACIM_KADEMELERI:
         return True
     return kosu >= 1.0 or sikisma >= 1.0
 
@@ -114,7 +117,7 @@ def p_baglam(t: Mapping[str, Any]) -> bool:
 
 def p_baglam_veya_hacim(t: Mapping[str, Any]) -> bool:
     """P7 · P6 + hacim ≥5× (hacim kendi başına yeter)."""
-    return p_baglam(t) or _hacim(t) in {"5x", "10×", "10x"}
+    return p_baglam(t) or _hacim(t) in _YUKSEK_HACIM_KADEMELERI
 
 
 def p_katman_seans(t: Mapping[str, Any]) -> bool:

@@ -259,7 +259,10 @@ def test_full_formation_scan_preserves_alert_and_adds_dm_public_charts(
         raw_quality=92.0, pattern_type="Simetrik Üçgen", upper_now=last_price - 0.5,
         lower_now=last_price - 5, frozen_upper_boundary_at_break=(last_price + 1 if invalidation else last_price - 0.5),
         frozen_lower_boundary_at_break=last_price - 5, stable_id="resistance-chart-audit",
-        start_bar=4, break_strength=91.0, contraction=0.6, upper_touches=3, lower_touches=2,
+        start_bar=4, end_bar=30, apex_bar=45,
+        hb1=4, hp1=110., hb2=20, hp2=108., lb1=4, lp1=100., lb2=20, lp2=101.,
+        has_pole=True, pole_dir=1, pole_duration=3,
+        break_strength=91.0, contraction=0.6, upper_touches=3, lower_touches=2,
     )
     events = []
     if invalidation:
@@ -284,9 +287,10 @@ def test_full_formation_scan_preserves_alert_and_adds_dm_public_charts(
         def get_snapshot(self, _key):
             return None
 
+    formations = []
     class State:
         def begin_scan(self, *_a, **_k): pass
-        def record_formation(self, *_a, **_k): pass
+        def record_formation(self, record): formations.append(dict(record))
         def mark_alert_sent(self, *_a, **_k): pass
         def finish_scan(self, *_a, **_k): pass
         def fail_scan(self, *_a, **_k): pass
@@ -358,6 +362,13 @@ def test_full_formation_scan_preserves_alert_and_adds_dm_public_charts(
         return notifier.sent[0]
 
     old = scan("yok")
+    import json
+    assert formations
+    record = formations[-1]
+    json.dumps(record, allow_nan=False)
+    for field in ("start_bar", "end_bar", "apex_bar", "hb1", "hp1", "hb2", "hp2",
+                  "lb1", "lp1", "lb2", "lp2", "has_pole", "pole_dir", "pole_duration"):
+        assert record[field] == getattr(active, field)
     assert calls == []  # disabled graphs do not calculate resistance
     new = scan("alarm")
     remove = {"grafik_verisi", "grafik_verisi_public"}

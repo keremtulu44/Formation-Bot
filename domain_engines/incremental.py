@@ -65,7 +65,7 @@ class IncrementalEngineState:
             return self._replay(
                 incoming,
                 "full_replay_conflicting_timestamp",
-                "duplicate timestamp cannot be verified or carries different OHLCV",
+                "duplicate timestamp cannot be verified or carries different input values",
                 incremental_safe=False,
             )
 
@@ -221,7 +221,11 @@ class IncrementalEngineState:
 
 
 def _drop_identical_timestamp_duplicates(frame: pd.DataFrame) -> tuple[pd.DataFrame, bool]:
-    """Drop exact duplicate completed candles; flag same-time OHLCV conflicts."""
+    """Drop exact duplicate rows; flag same-time conflicts in any input field.
+
+    Flags such as is_closed/is_complete affect the engines even when OHLCV is
+    identical, so treating those rows as duplicates can hide data-quality state.
+    """
     if "timestamp" not in frame.columns or not frame["timestamp"].duplicated().any():
         return frame.reset_index(drop=True), False
 
@@ -240,8 +244,8 @@ def _drop_identical_timestamp_duplicates(frame: pd.DataFrame) -> tuple[pd.DataFr
             keep_positions.append(position)
             continue
         first_row = frame.iloc[first_position]
-        first_values = [first_row[name] for name in required]
-        duplicate_values = [row[name] for name in required]
+        first_values = [first_row[name] for name in frame.columns]
+        duplicate_values = [row[name] for name in frame.columns]
         if any(_is_missing(value) for value in (*first_values, *duplicate_values)) or not _same_values(
             first_values,
             duplicate_values,

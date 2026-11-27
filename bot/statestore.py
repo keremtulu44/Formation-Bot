@@ -222,6 +222,9 @@ _lifecycle_manager_ref = None
 _telegram_listener_ref = None
 
 
+_kap_runner_ref = None
+
+
 # PUBLIC komut hedefinin Telegram'daki GERÇEK tipi (getChat ile bir kez okunur).
 # Neden gerekli: `TELEGRAM_GROUP_ID` bir KANAL gösteriyorsa komut imkânsızdır
 # (üyeler kanala yazamaz; admin gönderilerinde `from` yoktur). Bu teşhis
@@ -467,6 +470,12 @@ _grafik_is_kilidi = threading.Lock()
 
 
 _grafik_aktif_is = {}
+
+
+_ai_is_kilidi = threading.Lock()
+
+
+_ai_aktif_is = {}
 
 
 _GRAFIK_HEDEF_SN = 60

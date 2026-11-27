@@ -111,6 +111,90 @@ def test_formasyon_tara_canli_kapi_ile_ALARK_4s():
     assert aday.start_bar is not None and 0 <= aday.start_bar < len(df)
 
 
+def test_xauusd_retest_grafikte_bant_ve_durum_ile_gosterilir(monkeypatch, tmp_path):
+    """Sahte snapshot sadece çizim köprüsünü sınar; gerçek TV verisi değildir."""
+    from types import SimpleNamespace
+    import patterns.lifecycle as lifecycle_module
+    from patterns.candidate import PatternCandidate
+    from patterns.mathutil import f_line_price
+
+    frame = _mum_listesi(100)
+    upper, lower = (10, 54., 60, 51.), (10, 48., 60, 48.5)
+    aday = PatternCandidate(valid=True, family="Üçgen", pattern_type="Alçalan Üçgen",
+                            start_bar=10, end_bar=60, hb1=upper[0], hp1=upper[1],
+                            hb2=upper[2], hp2=upper[3], lb1=lower[0], lp1=lower[1],
+                            lb2=lower[2], lp2=lower[3],
+                            upper_now=f_line_price(*upper, 99),
+                            lower_now=f_line_price(*lower, 99),
+                            quality_frozen=True, frozen_raw_quality=89.4)
+    class Motor:
+        def __init__(self, *_args, **_kwargs): pass
+        def process(self, _df):
+            return SimpleNamespace(active=aday, state="RETEST_BEKLENIYOR",
+                                   effective_quality=89.4)
+    monkeypatch.setattr(lifecycle_module, "ArgentEngine", Motor)
+    monkeypatch.setattr(grafik_uret, "cerceve_getir", lambda *_a, **_k: (frame, "test"))
+    sonuc = grafik_uret.kare_uret("XAUUSD", "1d", formasyon_tara=True,
+                                cikti=str(tmp_path / "retest.png"))
+    assert sonuc["yol"]
+    assert sonuc["meta"]["formasyon_ad"] == "Alçalan Üçgen"
+    assert sonuc["meta"]["formasyon_durum"] == "RETEST_BEKLENIYOR"
+    assert sonuc["meta"]["cizgiler"]["formasyon"]["bar"] > 0
+
+
+def test_xauusd_tamamlanan_formasyon_grafikte_kalir(monkeypatch, tmp_path):
+    """Canlı alarm snapshot'ı gizlese de Pine tamamlanan yapıyı çizer."""
+    import pandas as pd
+    from patterns.lifecycle import ArgentEngine
+
+    df = pd.read_csv("capraz_piyasa_data/XAUUSD_1d.csv.gz")
+    df["bar_time"] = pd.to_datetime(df["bar_time"], utc=True)
+    df = df.set_index("bar_time").tail(500)
+    motor = ArgentEngine("Dengeli", timeframe="1d")
+    snap = motor.process(df)
+    assert snap.state == "FORMASYON_TAMAMLANDI"
+    assert snap.active is None  # eski tamamlanma, alarm için gizli kalır
+    assert motor.active.valid
+    aday, durum, uyarilar = grafik_uret._formasyon_tara_ayrintili(df, tf="1d")
+    assert not uyarilar
+    assert durum == "FORMASYON_TAMAMLANDI"
+    assert aday.pattern_type == motor.active.pattern_type
+    assert aday.hb1 == motor.active.hb1 and aday.lb2 == motor.active.lb2
+    assert aday.effective_quality == pytest.approx(motor.active.frozen_raw_quality)
+    goruntu = grafik.anlik_goruntu(aday, "1d", df, sembol="XAUUSD")
+    assert goruntu["formasyon"]["hb1"] == motor.active.hb1
+    monkeypatch.setattr(grafik_uret, "cerceve_getir", lambda *_a, **_k: (df, "arşiv"))
+    sonuc = grafik_uret.kare_uret("XAUUSD", "1d", formasyon_tara=True,
+                                cikti=str(tmp_path / "xauusd.png"))
+    assert sonuc["yol"] and sonuc["meta"]["formasyon_ad"] == aday.pattern_type
+    assert sonuc["meta"]["formasyon_durum"] == "FORMASYON_TAMAMLANDI"
+    assert sonuc["meta"]["cizgiler"]["formasyon"]["bar"] > 0
+
+
+@pytest.mark.parametrize("state", ["FORMASYON_GECERSIZ", "BASARISIZ_KIRILIM", "KIRILIM_TEYIT_ALAMADI"])
+@pytest.mark.parametrize("age,visible", [(3, True), (4, True), (5, False)])
+def test_formasyon_hayaleti_dort_bar_ile_sinirli(monkeypatch, state, age, visible):
+    from types import SimpleNamespace
+    import patterns.lifecycle as lifecycle_module
+    from patterns.candidate import PatternCandidate
+
+    aday = PatternCandidate(valid=True, family="Üçgen", pattern_type="Yükselen Üçgen",
+                            raw_quality=45.0)
+    class Motor:
+        def __init__(self, *_args, **_kwargs):
+            self.active = aday
+            self.bar_index = 20
+            self.pattern_state_bar = 20 - age
+        def process(self, _df):
+            # Snapshot politikasından bağımsız 4. barda da çizim yapılmalı.
+            return SimpleNamespace(active=aday if age <= 3 else None, state=state,
+                                   effective_quality=45.0 if age <= 3 else None)
+    monkeypatch.setattr(lifecycle_module, "ArgentEngine", Motor)
+    sonuc, durum, _ = grafik_uret._formasyon_tara_ayrintili(_mum_listesi(60), tf="1h")
+    assert (sonuc is not None) is visible
+    assert durum == (state if visible else None)
+
+
 def test_formasyon_tara_cli_png_uretir(tmp_path):
     """`--formasyon-tara` ile CLI gerçek önbellekten PNG üretir (exit 0)."""
     cikti = tmp_path / "alark_4h.png"

@@ -68,6 +68,9 @@ bot_data/formation_history/
 # Mirror taşıma kuyruğu yerel çalışma durumudur; Git'e alınmaz.
 bot_data/f2_kuyruk.sqlite3*
 bot_data/f2_kuyruk.json
+# KAP alarm bağlamı SQLite WAL arşivi (runtime durum; Git'e alınmaz)
+bot_data/kap_arsiv.sqlite*
+**/kap_arsiv.sqlite*
 
 # Simülasyon raporları (üretilen çıktı)
 raporlar/

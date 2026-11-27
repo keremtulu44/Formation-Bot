@@ -987,6 +987,10 @@ def _alarm_tf_zone(results_by_timeframe: Any, alarm_tf: str,
             bottom = _number(_field(yan, "bottom"))
             if top is None or bottom is None or top < bottom:
                 continue
+            if aile == "FVG":
+                kod = _number(_field(yan, "state"))
+                if kod is not None and abs(int(kod)) not in {3, 4, 5, 6}:
+                    continue
             icinde = bottom <= reference <= top
             mesafe = 0.0 if icinde else min(abs(top - reference),
                                            abs(bottom - reference))

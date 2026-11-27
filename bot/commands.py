@@ -301,6 +301,25 @@ def _saglik_ozeti() -> dict:
         None if tarama_suruyor is None or (tarama_suruyor and tarama_yasi_sn is None)
         else bool(tarama_suruyor and tarama_yasi_sn > tarama_esigi_sn)
     )
+    kap_runner = getattr(_pkg, "_kap_runner_ref", None)
+    try:
+        kap_status = dict(kap_runner.status()) if kap_runner is not None else None
+    except Exception:  # noqa: BLE001 - /health asla düşmesin
+        kap_status = None
+    kap_baglam_ozet = {
+        "aktif": bool(config.kap_baglam_enabled()),
+        "calisiyor": bool(kap_status.get("running")) if isinstance(kap_status, dict) else False,
+        "son_hata": kap_status.get("last_error") if isinstance(kap_status, dict) else None,
+    }
+    try:
+        from ai_prompt.service import ai_health_summary
+
+        ai_istemci_ozet = ai_health_summary()
+    except Exception:  # noqa: BLE001 - /health asla düşmesin
+        ai_istemci_ozet = {
+            "aktif": bool(config.ai_yorum_enabled()),
+            "hazir": False,
+        }
     return {
         "startup_complete": bool(_pkg._startup_ready) and not _pkg._shutdown_requested,
         "heartbeat_age_s": None if yas is None else int(yas),
@@ -313,6 +332,9 @@ def _saglik_ozeti() -> dict:
         "seans_acik": seans_acik,
         "bildirim": bildirim,
         "veri_saglayicilari": veri_saglayicilari,
+        "kap_baglam": kap_baglam_ozet,
+        "ai_shadow_aktif": bool(config.ai_shadow_log_enabled()),
+        "ai_istemci": ai_istemci_ozet,
         "evren": len(_pkg.ACTIVE_STOCKS),
         "instance_id": _pkg.INSTANCE_ID,
         "komut": _pkg._komut_durumu(),
@@ -340,6 +362,7 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 /panel · /p · /genel · /tablo — tüm evreni analiz eder; 4 zaman dilimi ve ilk 12 aday. Örnek: /panel THYAO 1h
 /tara [HISSE] — hisseyi veya tüm evreni yeniden analiz eder. Seans dışında da çalışır.
 /grafik · /g HISSE [1s|2s|4s|1g] [sade|detay] [odak|baglam] [mobil] — cache tazeliğini denetler; eksik/bayat seriyi ortak Yahoo pacer'ıyla sınırlı yenilemeyi dener. Örnek: /grafik THYAO 4s sade. TF belirtilmezse 4 kare denenir.
+/ai HISSE [1s|2s|4s|1g] — yalnız özel DM'de canlı AI teknik yorum + KAP bağlamı testi (ApiWrapper → Gemini #1 → Gemini #2). Örnek: /ai BIMAS 4s
 /test [HISSE] — yalnız özel DM'de arşivle alıştırma. 4 kareden TF ve yön tahmin edin (ör. 1s aşağı). Tarih gizlidir; skor tutulmaz. Örnek: /test ASTOR
 
 📊 BİLGİ VE DİĞER KOMUTLAR
@@ -376,6 +399,101 @@ def _komut_stabil(arguman: str) -> str:
         now=_pkg.datetime.now(ISTANBUL_TZ),
         formations=_pkg._live_state.formations(),
     )
+
+
+def _komut_ai(arguman: str):
+    """Yalnız özel sahip DM'inde çalışan canlı AI teknik yorum komutu (`/ai HISSE [TF]`)."""
+    from ai_prompt.service import is_ai_configured
+
+    komut_sohbeti_fn = getattr(_pkg, "komut_sohbeti", None)
+    hedef_sohbet = str(komut_sohbeti_fn() if callable(komut_sohbeti_fn) else "").strip()
+    try:
+        if hedef_sohbet and int(hedef_sohbet) < 0:
+            return "🔒 /ai komutu yalnızca özel sahip DM'inde çalışır."
+    except (TypeError, ValueError):
+        pass
+
+    parcalar = [p.strip() for p in str(arguman or "").split() if p.strip()]
+    if not parcalar:
+        return "Kullanım: /ai HISSE [1s|2s|4s|1g]\nÖrnek: /ai BIMAS 4s"
+
+    hisse = parcalar[0].upper()
+    if hisse.endswith(".IS"):
+        hisse = hisse[:-3]
+    if not re.fullmatch(r"[A-Z0-9]{1,12}", hisse):
+        return f"Geçersiz sembol: {parcalar[0]}\nÖrnek: /ai BIMAS 4s"
+    if config.sembol_turu(hisse) != "hisse":
+        return f"ℹ️ {hisse} BIST hissesi değil; /ai yalnızca BIST hisselerinde çalışır."
+
+    tf = "4h"
+    if len(parcalar) >= 2:
+        secim = parcalar[1].lower()
+        if secim in _pkg._GRAFIK_TF:
+            tf = _pkg._GRAFIK_TF[secim]
+        else:
+            return f"Zaman dilimi tanınmadı: {parcalar[1]}\nGeçerli: 1s · 2s · 4s · 1g"
+
+    notifier = _pkg._notifier_ref
+    if notifier is None or not getattr(notifier, "enabled", False):
+        return "Telegram DM gönderimi kapalı: /ai çalıştırılamıyor."
+    if not is_ai_configured():
+        return (
+            "⚠️ Hiçbir AI sağlayıcısı yapılandırılmamış.\n"
+            "Render Environment (veya .env) içine AI_WRAPPER_BASE_URL + AI_WRAPPER_API_KEY "
+            "ve/veya GEMINI_API_KEY_1 / GEMINI_API_KEY_2 ekleyin."
+        )
+
+    with _pkg._ai_is_kilidi:
+        if _pkg._ai_aktif_is:
+            return (
+                f"⏳ {_pkg._ai_aktif_is.get('hisse', '?')} için AI analizi zaten hazırlanıyor; "
+                "bitince yeniden deneyin."
+            )
+        istek = {"hisse": hisse, "tf": tf}
+        _pkg._ai_aktif_is.update(istek)
+
+    def baslat():
+        try:
+            threading.Thread(
+                target=_pkg._ai_isi_calistir,
+                args=(istek, notifier, _pkg._deque_manager_ref),
+                name="ai-komut-istegi",
+                daemon=True,
+            ).start()
+        except Exception:
+            with _pkg._ai_is_kilidi:
+                _pkg._ai_aktif_is.clear()
+            raise
+
+    return ArkaPlanYaniti(
+        f"⏳ AI analizi hazırlanıyor: {hisse} · {_tf_kisa(tf)} "
+        "(ApiWrapper → Gemini #1 → Gemini #2). Sonuç hazır olunca DM'e gelecek.",
+        baslat,
+    )
+
+
+def _ai_isi_calistir(istek, notifier, yonetici):
+    from ai_prompt.service import run_manual_ai_analysis
+
+    try:
+        metin = run_manual_ai_analysis(
+            istek["hisse"],
+            istek["tf"],
+            deque_manager=yonetici,
+            now=_pkg.datetime.now(ISTANBUL_TZ),
+        )
+        notifier.send_text(metin)
+    except Exception as hata:  # noqa: BLE001 - arka plan işi botu düşürmez
+        _pkg.logger.warning("/ai iş hatası (%s): %s", istek.get("hisse"), type(hata).__name__)
+        try:
+            notifier.send_text(
+                f"❌ {istek.get('hisse', '?')} AI analizi tamamlanamadı: {type(hata).__name__}"
+            )
+        except Exception as bildirim_hatasi:  # noqa: BLE001 - en iyi çaba; asıl hata yukarıda loglandı
+            _pkg.logger.debug("/ai hata bildirimi gönderilemedi: %s", type(bildirim_hatasi).__name__)
+    finally:
+        with _pkg._ai_is_kilidi:
+            _pkg._ai_aktif_is.clear()
 
 
 def _komut_test(arguman: str) -> str:
@@ -868,6 +986,8 @@ def _komut_durum(_arguman: str) -> str:
             if isinstance(dm_ozel, dict):
                 gosterim += (f"\n   DM özel alarmlar: {dm_ozel.get('pending', 0)} bekliyor · "
                              f"{dm_ozel.get('review', 0)} elle inceleme")
+                if dm_ozel.get("paused"):
+                    gosterim += f" · {dm_ozel['paused']} duraklatıldı"
                 if dm_ozel.get("available") is False:
                     gosterim += " · ⚠️ kuyruk okunamadı"
             if gd.get("public_enabled"):
@@ -906,6 +1026,8 @@ def _komut_durum(_arguman: str) -> str:
                         f"\n   Özel alarmlar: {ozel.get('pending', 0)} bekliyor · "
                         f"{ozel.get('review', 0)} elle inceleme"
                     )
+                    if ozel.get("paused"):
+                        gosterim_public += f" · {ozel['paused']} duraklatıldı"
                     if ozel.get("available") is False:
                         gosterim_public += " · ⚠️ kuyruk okunamadı"
                 filtre = gd.get("public_filtre_sayac")
@@ -2320,6 +2442,7 @@ TELEGRAM_KOMUTLARI = {
     "grafik": _komut_grafik,
     "g": _komut_grafik,
     "stabil": _komut_stabil,
+    "ai": _komut_ai,
     "test": _komut_test,
     "genel": _komut_panel,
     "tablo": _komut_panel,

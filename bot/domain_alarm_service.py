@@ -70,6 +70,9 @@ class DomainAlarmCandidate:
     rank_score: float
     grafik_verisi: dict[str, Any] | None = None
     grafik_verisi_public: dict[str, Any] | None = None
+    # Recent completed bar labels allow cooldown to survive rolling windows,
+    # whose frame-relative last index may remain constant indefinitely.
+    recent_bar_opens: tuple[str, ...] = ()
 
     @property
     def dedup_key(self) -> str:
@@ -357,34 +360,53 @@ def _bos_ve_choch_sebepleri(results: Mapping[str, Any], tf: str,
     return sorted(set(bulunan))
 
 
+# FVG motorunda yalnızca aktif/canlı durumlar fiyat-içi bölge tepkisi üretir;
+# CANDIDATE (2), FULL_FILL (7), FAILED_REACTION (9) ve diğer terminal durumlar
+# canlı bölge değildir. REACTION (±8) ise motor tarafından `event` alanına
+# yazılır (aktif FVG temizlendiği için top/bottom/state None olur).
+_FVG_AKTIF_DURUMLAR = frozenset({3, 4, 5, 6})
+
+
 def _bolge_sebepleri(results: Mapping[str, Any], tf: str,
                      close: float) -> list[str]:
-    """OB/FVG: fiyat aktif bölgenin içindeyse veya FVG `reaksiyon` state'indeyse."""
+    """OB/FVG: fiyat aktif bölgenin içindeyse veya FVG `reaksiyon` olayındaysa."""
     bulunan: list[str] = []
     for alan, tip, yanlar in (
         ("order_block", "OB", ("bull", "bear")),
         ("fvg", "FVG", ("bull_fvg", "bear_fvg")),
     ):
-        export = _usable_export(_domain(results, tf, alan))
+        entry = _domain(results, tf, alan)
+        quality = _token_temiz(_field(entry, "data_quality"))
+        # OB/FVG deliberately freeze their previous export on incomplete or
+        # gap bars; that historical snapshot is not a fresh trigger.
+        if quality and quality != "OK":
+            continue
+        export = _usable_export(entry)
         if export is None:
             continue
         for anahtar in yanlar:
             yan = _field(export, anahtar)
+            if yan is None:
+                continue
+            yon = "boğa" if "bull" in anahtar else "ayı"
+            state = _number(_field(yan, "state"))
+            event = _number(_field(yan, "event"))
+            reaksiyon = bool(
+                tip == "FVG" and (
+                    (event is not None and abs(int(event)) == 8)
+                    or (state is not None and abs(int(state)) == 8)
+                )
+            )
+            if reaksiyon:
+                bulunan.append(f"{tip} {yon} reaksiyon")
+                continue
             top = _number(_field(yan, "top"))
             bottom = _number(_field(yan, "bottom"))
             if top is None or bottom is None or top < bottom:
                 continue
-            icinde = bottom <= close <= top
-            state = _number(_field(yan, "state"))
-            reaksiyon = bool(
-                tip == "FVG" and state is not None and abs(int(state)) == 8
-            )
-            if not (icinde or reaksiyon):
+            if tip == "FVG" and (state is None or abs(int(state)) not in _FVG_AKTIF_DURUMLAR):
                 continue
-            yon = "boğa" if "bull" in anahtar else "ayı"
-            if reaksiyon:
-                bulunan.append(f"{tip} {yon} reaksiyon")
-            else:
+            if bottom <= close <= top:
                 bulunan.append(f"{tip} {yon} bölge tepkisi")
     return sorted(set(bulunan))
 
@@ -557,7 +579,7 @@ def _politika_gecer(sebepler: Sequence[str], hacim_tier: str | None,
         kanallar = _kanallar_from_sebepler(sebepler)
         if not kanallar:
             return False
-        hacim_var = str(hacim_tier or "") in {"5×", "5x"}
+        hacim_var = str(hacim_tier or "") in {"5×", "5x", "10×", "10x"}
         if hacim_var:
             return True
         if "FORMASYON" in kanallar:
@@ -706,6 +728,10 @@ def evaluate_domain_alarm_candidates(
                 rank_score=puan,
                 grafik_verisi=grafik_verisi,
                 grafik_verisi_public=grafik_verisi_public,
+                recent_bar_opens=tuple(
+                    pd.Timestamp(ts).isoformat()
+                    for ts in frame.index[-_cfg_int("YENI_DOMAIN_ALARM_COOLDOWN_BAR", 6):]
+                ),
             )
         )
 
@@ -750,6 +776,16 @@ def _save_state(state: Mapping[str, Any], state_path: str | None = None) -> None
         logger.warning("Yeni domain alarm state yazılamadı (%s): %s", yol, exc)
 
 
+def _ts_utc(value: Any) -> pd.Timestamp:
+    """Naive zaman damgalarını Europe/Istanbul olarak kabul edip UTC'ye çevir."""
+    ts = pd.Timestamp(value)
+    if pd.isna(ts):
+        raise ValueError("NaT")
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("Europe/Istanbul")
+    return ts.tz_convert("UTC")
+
+
 def _zaten_gonderildi(slot: Mapping[str, Any] | None, cand: DomainAlarmCandidate) -> bool:
     """Aynı bar iki kez basılmasın; sembol/TF başına N bar sessizlik uygula.
 
@@ -762,17 +798,40 @@ def _zaten_gonderildi(slot: Mapping[str, Any] | None, cand: DomainAlarmCandidate
         return False
     if str(slot.get("last_bar_open") or "") == cand.bar_open:
         return True
+    cooldown = _cfg_int("YENI_DOMAIN_ALARM_COOLDOWN_BAR", 6)
+    if cand.recent_bar_opens and slot.get("last_bar_open"):
+        # Count actual distinct completed bars, not positions in a rolling
+        # frame. If the available history is too short, fail closed instead of
+        # guessing elapsed bars from wall-clock time or a shifted index.
+        try:
+            previous = _ts_utc(slot["last_bar_open"])
+            current = _ts_utc(cand.bar_open)
+            history = pd.DatetimeIndex([_ts_utc(v) for v in cand.recent_bar_opens])
+            if len(history) == 0 or history[-1] != current:
+                return True
+            if current <= previous:
+                return True
+            if not history.is_monotonic_increasing or history.has_duplicates:
+                return True
+            return int(((history > previous) & (history <= current)).sum()) < cooldown
+        except (TypeError, ValueError, OverflowError):
+            return True
+    # Compatibility for callers without bar history and older stored slots.
     try:
         son_index = int(slot["last_bar_index"])
     except (KeyError, TypeError, ValueError, OverflowError):
         return False
-    cooldown = _cfg_int("YENI_DOMAIN_ALARM_COOLDOWN_BAR", 6)
-    # Bar yeniden çekildiğinde indeks geriye dönebilir; "eski ya da aynı bar"
-    # da tekrar basılmamalı (aksi halde cooldown negatif farkla atlanır).
     return (cand.bar_index - son_index) < cooldown
 
 
 def _isaretle(slots: dict[str, Any], cand: DomainAlarmCandidate) -> None:
+    mevcut = slots.get(cand.dedup_key)
+    if mevcut and mevcut.get("last_bar_open") and cand.bar_open:
+        try:
+            if _ts_utc(cand.bar_open) < _ts_utc(mevcut["last_bar_open"]):
+                return
+        except (TypeError, ValueError, OverflowError):
+            pass
     slots[cand.dedup_key] = {
         "last_bar_open": cand.bar_open,
         "last_bar_close": cand.bar_close,
@@ -907,10 +966,13 @@ def format_domain_alarm_summary_card(cands: Sequence[DomainAlarmCandidate]) -> s
 
 
 def _deliver_message(notifier: Any, text: str, *, public_event_id=None,
-                     public_identity=None, public_graphics=None, dm_graphics=None) -> dict[str, bool]:
+                     public_identity=None, public_graphics=None, dm_graphics=None,
+                     dm_text: str | None = None, public_text: str | None = None) -> dict[str, bool]:
     """DM ve public için bağımsız teslim/kuyruk durumunu takip et."""
     dm_on = bool(getattr(config, "YENI_DOMAIN_ALARM_DM", True))
     pub_on = bool(getattr(config, "YENI_DOMAIN_ALARM_PUBLIC", True))
+    dm_body = dm_text if dm_text else text
+    pub_body = public_text if public_text else text
     dm_ok = dm_accepted = pub_ok = pub_accepted = False
     dm_managed = public_managed = False
     dm_required = dm_on and notifier is not None and getattr(notifier, "enabled", True) is not False
@@ -923,12 +985,12 @@ def _deliver_message(notifier: Any, text: str, *, public_event_id=None,
             dm_managed = True
             try:
                 dm_accepted, dm_ok = queue_dm(
-                    public_event_id, text, identity=public_identity, graphics=dm_graphics)
+                    public_event_id, dm_body, identity=public_identity, graphics=dm_graphics)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Yeni domain DM kuyruğu başarısız: %s", type(exc).__name__)
         elif callable(send_text):
             try:
-                res = send_text(text)
+                res = send_text(dm_body)
                 dm_ok = bool(res[0] if isinstance(res, tuple) else res)
                 dm_accepted = dm_ok
             except Exception as exc:  # noqa: BLE001
@@ -942,12 +1004,12 @@ def _deliver_message(notifier: Any, text: str, *, public_event_id=None,
             public_managed = True
             try:
                 pub_accepted, pub_ok = queue_pub(
-                    public_event_id, text, identity=public_identity, graphics=public_graphics)
+                    public_event_id, pub_body, identity=public_identity, graphics=public_graphics)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Yeni domain public kuyruğu başarısız: %s", type(exc).__name__)
         elif public_acik is not False and callable(send_pub):
             try:
-                pub_ok = bool(send_pub(text))
+                pub_ok = bool(send_pub(pub_body))
                 pub_accepted = pub_ok
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Yeni domain public gönderim hatası: %s", type(exc).__name__)
@@ -995,6 +1057,8 @@ def dispatch_domain_alarm_candidates(
     notifier: Any,
     *,
     state_path: str | None = None,
+    frames_by_symbol: Mapping[str, Any] | None = None,
+    router: Any = None,
 ) -> dict[str, int]:
     """Adayları tekilleştir, burst kuralıyla gönder, state'e işaretle."""
     ozet = {"aday": len(candidates), "tekil_gonderilen": 0,
@@ -1018,8 +1082,15 @@ def dispatch_domain_alarm_candidates(
     degisti = False
     # Burst sınırı tekrarlı adaylar çıkarıldıktan sonra uygulanmalı. Aksi halde
     # önceki turda gönderilmiş iki yüksek puanlı aday, yeni iki olayı tekil kart
-    # ve görsel yerine gereksizce toplu özete itiyordu.
-    yeni_adaylar = [c for c in sirali if not _zaten_gonderildi(slots.get(c.dedup_key), c)]
+    # ve görsel yerine gereksizce toplu özete itiyordu. Aynı batch içinde aynı
+    # sembol/TF'nin cooldown içindeki ikinci barı da elenir.
+    gecici_slots: dict[str, Any] = dict(slots)
+    yeni_adaylar: list[DomainAlarmCandidate] = []
+    for cand in sirali:
+        if _zaten_gonderildi(gecici_slots.get(cand.dedup_key), cand):
+            continue
+        yeni_adaylar.append(cand)
+        _isaretle(gecici_slots, cand)
     ozet["filtrelendi"] += len(sirali) - len(yeni_adaylar)
 
     ust_sinir = _cfg_int("YENI_DOMAIN_ALARM_TEKIL_UST_SINIR", 3)
@@ -1032,12 +1103,52 @@ def dispatch_domain_alarm_candidates(
 
     from public_aux_outbox import auxiliary_event_id
 
+    dm_ai_hedef = bool(
+        getattr(config, "YENI_DOMAIN_ALARM_DM", True)
+        and getattr(notifier, "enabled", False)
+        and config.ai_yorum_dm_enabled()
+    )
+    pub_ai_hedef = bool(
+        getattr(config, "YENI_DOMAIN_ALARM_PUBLIC", True)
+        and getattr(notifier, "public_enabled", False)
+        and config.ai_yorum_public_enabled()
+    )
     gonderilen: list[DomainAlarmCandidate] = []
     for cand in tekil_liste:
         identity = {"stock_name": cand.symbol, "timeframe": cand.timeframe,
                     "state": "YENI_DOMAIN", "pattern_name": "DOMAİN TETİKLEME"}
+        duz_metin = format_domain_alarm_card(cand)
+        dm_metin = duz_metin
+        pub_metin = duz_metin
+        if (dm_ai_hedef or pub_ai_hedef) and frames_by_symbol and cand.symbol in frames_by_symbol:
+            try:
+                from ai_prompt.service import build_ai_replacement_text_for_signal
+
+                df_1h, df_1d, as_of_dt = frames_by_symbol[cand.symbol]
+                ai_text = build_ai_replacement_text_for_signal(
+                    symbol=cand.symbol,
+                    timeframe=cand.timeframe,
+                    pattern_name="Teknik Tetikleme",
+                    state="YENI_DOMAIN",
+                    close_price=cand.close_price,
+                    bar_metni=cand.bar_label,
+                    df_1h=df_1h,
+                    df_1d=df_1d,
+                    as_of=as_of_dt,
+                    router=router,
+                )
+                if ai_text:
+                    if config.ai_yorum_dm_enabled():
+                        dm_metin = ai_text
+                    if config.ai_yorum_public_enabled():
+                        pub_metin = ai_text
+            except Exception as ai_err:  # noqa: BLE001 - AI hatasında düz kart gider
+                logger.warning("Yeni domain AI yorumu atlandı (%s %s): %s",
+                               cand.symbol, cand.timeframe, type(ai_err).__name__)
         sonuc = _deliver_message(
-            notifier, format_domain_alarm_card(cand),
+            notifier, duz_metin,
+            dm_text=dm_metin,
+            public_text=pub_metin,
             public_event_id=auxiliary_event_id("domain", [(cand.symbol, cand.timeframe, cand.bar_open)]),
             public_identity=identity, public_graphics=cand.grafik_verisi_public,
             dm_graphics=cand.grafik_verisi,

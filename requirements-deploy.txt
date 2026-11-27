@@ -31,6 +31,8 @@ python-dateutil==2.9.0.post0   # data.py JSON fallback (pickle bozulursa) bunu k
 
 # Telegram (basit requests de olur ama python-telegram-bot opsiyonel)
 requests==2.34.2
+# KAP alarm bağlamı asenkron HTTP istemcisi (`kap/` paketi)
+httpx==0.28.1
 
 # Grafik (G1): otomatik alarm karesi açık olduğunda lazy import edilir;
 # /grafik komutu otomatik alarm şalterinden bağımsızdır. Agg arka ucu,

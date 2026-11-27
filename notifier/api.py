@@ -12,6 +12,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+import config
 from config import (ACTIVE_STOCKS, DATA_DIR, ISTANBUL_TZ, TELEGRAM_MAX_MESAJ_SAAT,
                     TELEGRAM_MAX_MESAJ_GUN,
                     TELEGRAM_ALERT_STYLE, TELEGRAM_ALERT_MAX_KARAKTER, TELEGRAM_SATIR_PX,
@@ -45,6 +46,18 @@ from secrets_redaction import redact_sensitive_text
 
 
 logger = logging.getLogger("notifier")  # eski kayıt adıyla aynı
+
+
+def _ai_duzyazi_mesaji_mi(text: object) -> bool:
+    """Doğal düzyazı AI yorumu mu? (283px tablo satırı gibi yapay girintiyle sarılmaz.)"""
+    s = str(text or "")
+    return s.startswith("🤖 ") and "🧭 Mevcut durum" in s
+
+
+def _metin_govdesi(text: object, *, sar: bool | None = None) -> str:
+    if sar is None:
+        sar = not _ai_duzyazi_mesaji_mi(text)
+    return metni_sigdir(str(text), guvenlik=1.0) if sar else str(text)
 
 from notifier.util import (
     CONFIRMED_PUBLIC_STATES,
@@ -374,7 +387,7 @@ class TelegramNotifier:
         # karne aynı yolu kullanıyor ve 300-600 px'lık satırlarla telefonda
         # dağılıyordu. Alarm yolu (``_gonder``) burada DEĞİL: kart satırlarını
         # kendi üretirken bütçeliyor, klasik stil ise eski haliyle kalmalı.
-        govde = kirp(metni_sigdir(text, guvenlik=1.0))
+        govde = kirp(_metin_govdesi(text))
         deneme = max(1, int(deneme))
         son_hata = ""
         for i in range(deneme):
@@ -707,12 +720,12 @@ class TelegramNotifier:
         if bekle > 0:
             time.sleep(min(bekle, 5.0))
 
-    def send_to_public(self, text: str, deneme: int = 1) -> bool:
+    def send_to_public(self, text: str, deneme: int = 1, *, sar: bool | None = None) -> bool:
         # Check budget, pace, send and account as one operation for all callers.
         with self._public_send_lck:
-            return self._send_to_public(text, deneme)
+            return self._send_to_public(text, deneme, sar=sar)
 
-    def _send_to_public(self, text: str, deneme: int = 1) -> bool:
+    def _send_to_public(self, text: str, deneme: int = 1, *, sar: bool | None = None) -> bool:
         """Grup/kanal hedefine gönderir: bütçe + pacing + 429 retry + kırpma."""
         self._son_public_deneme = "belirsiz"
         if not self.public_enabled:
@@ -725,7 +738,7 @@ class TelegramNotifier:
             logger.warning("Public bütçe dolu (saatlik %d / günlük %d) - gönderim atlandı",
                            self.public_max_saatlik, self.public_max_gunluk)
             return False
-        govde = _kirp(metni_sigdir(text, guvenlik=1.0))
+        govde = _kirp(_metin_govdesi(text, sar=sar))
         try:
             import requests
             self._public_pace()
@@ -825,7 +838,7 @@ class TelegramNotifier:
             return bool(self.send_to_public(text, deneme=max(1, int(deneme))))
         if not self.token:
             return False
-        govde = _kirp(metni_sigdir(text, guvenlik=1.0))
+        govde = _kirp(_metin_govdesi(text))
         try:
             import requests
             self._public_pace()
@@ -881,7 +894,8 @@ class TelegramNotifier:
             "candle_close_price", "close_price", "upper_touches", "lower_touches",
             "formation_id", "break_strength", "age_bars", "band_baslangic", "upper_now",
             "lower_now", "retest_seen", "mtf_destek", "mtf_uyum", "mtf_kontrol_edildi",
-            "mtf_yon_biliniyor", "domain_bolumleri", "domain_karsi", "watch_context")}
+            "mtf_yon_biliniyor", "domain_bolumleri", "domain_karsi", "watch_context",
+            "ai_yorum_mesaji")}
         # Seçim hisse bazlı hafızayı değiştirir; DM ve public ayrı ayrı
         # seçerse aynı olayın yorumları farklı olur. Bir kez seçip sabitle.
         if data.get("kart_yorum_kapisi"):
@@ -1098,6 +1112,10 @@ class TelegramNotifier:
             return ""
         if state not in CONFIRMED_PUBLIC_STATES:
             return ""
+        if (config.ai_yorum_public_enabled()
+                and isinstance(kayit.get("ai_yorum_mesaji"), str)
+                and kayit["ai_yorum_mesaji"].strip()):
+            return kayit["ai_yorum_mesaji"].strip()
         return _format_lifecycle_alert_kart(kayit)
 
     def format_public_summary(self, aktif_formasyonlar: List[Dict], gun_ozeti: Dict = None,
@@ -1707,23 +1725,50 @@ class TelegramNotifier:
                 return True
             return any(self._public_event_key(k) == event_key for k in self._public_kuyruk)
 
+    def public_kabul_eder_mi(self, data: Dict) -> bool:
+        """Salt-okunur ön kontrol: bu olay public kuyruğuna gerçekten kabul edilecek mi?
+
+        Bağlam/AI çağrısı öncesi gereksiz iş (ve boşa API harcaması) önlemek
+        için kullanılır; sayaç/kuyruk mutasyonu yapmaz.
+        """
+        if not self.public_enabled or not isinstance(data, dict):
+            return False
+        try:
+            if not self.should_send_to_public(data):
+                return False
+        except Exception:  # noqa: BLE001 - public filtresi DM'i düşürmesin
+            return False
+        if self._public_kayitli_mi(data):
+            return False
+        if self._delivery.public_duplicate(data):
+            return False
+        state_norm = str(data.get("state") or "").strip().upper()
+        if TELEGRAM_KANAL_GECERSIZ_KAPISI and state_norm == "KIRILIM_GECERSIZLESTI":
+            stock = str(data.get("stock_name") or "").upper()
+            tf = str(data.get("timeframe") or "").lower()
+            fid = str(data.get("formation_id") or "").strip()
+            teyit_key = f"{stock}|{tf}|KIRILIM_TEYITLI|{fid}" if fid else ""
+            onek = f"{stock}|{tf}|KIRILIM_TEYITLI|"
+            with self._public_lck:
+                if any(teyit_key and self._public_event_key(k) == teyit_key for k in self._public_kuyruk):
+                    return False
+                gonderilmis = bool(
+                    (teyit_key and teyit_key in self._public_alert_markers)
+                    or any(str(k).startswith(onek) for k in self._public_alert_markers)
+                )
+            if not gonderilmis:
+                return False
+        return True
+
     def _public_kurtar(self, data: Dict, prepare_context) -> bool:
         """DM "tekrar" dediğinde public'in kaybolmuş olayını kurtarır.
 
         Dönen değer: bağlam hazırlandı mı (yani public kuyruğuna giriş denendi mi).
         Karar public'in kendi kapılarına bırakılır (`should_send_to_public`,
-        kuyruk mührü); burada yalnız "bağlamı hazırlamaya değer mi" sorusu
-        cevaplanır. Sessiz istisna yok: hata loglanır, alarm akışı durmaz.
+        kuyruk mührü, duplicate ve teyit kapısı); burada yalnız "bağlamı ve AI
+        yorumunu hazırlamaya değer mi" sorusu cevaplanır.
         """
-        if not self.public_enabled:
-            return False
-        try:
-            if not self.should_send_to_public(data):
-                return False
-        except Exception as exc:  # noqa: BLE001 - public filtresi DM'i düşürmesin
-            logger.debug("Public kurtarma filtresi hata verdi: %s", exc)
-            return False
-        if self._public_kayitli_mi(data):
+        if not self.public_kabul_eder_mi(data):
             return False
         prepare_context()
         return True
@@ -2059,6 +2104,10 @@ class TelegramNotifier:
         if state in {"KIRILIM_DENEMESI", "BASARISIZ_KIRILIM", "FORMASYON_TAMAMLANDI"}:
             return ""
         if state in {"KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI"}:
+            if (config.ai_yorum_dm_enabled()
+                    and isinstance(data.get("ai_yorum_mesaji"), str)
+                    and data["ai_yorum_mesaji"].strip()):
+                return data["ai_yorum_mesaji"].strip()
             return _format_lifecycle_alert(
                 data, guncelleme=bool(data.get("_dm_bağlam_değişmedi"))
             )
@@ -3007,18 +3056,24 @@ class TelegramNotifier:
         state = data.get('state', '')
 
         message = data.get("_delivery_message") or self.format_message(data)
+        ai_mesaji_mi = bool(
+            isinstance(data.get("ai_yorum_mesaji"), str)
+            and data["ai_yorum_mesaji"].strip()
+            and message.strip() == data["ai_yorum_mesaji"].strip()
+        )
         # Güvenlik: 4096 kr üzeri istek Telegram'da 400 döner ve mesaj tamamen
         # kaybolurdu. Artık sınırına kırpılır ve logda iz bırakır.
         if len(message) > _PUBLIC_MAX_METIN:
             logger.warning("Alarm mesajı Telegram sınırını aştı (%d kr) → kırpıldı", len(message))
             message = _kirp(message)
-        elif TELEGRAM_ALERT_MAX_KARAKTER and len(message) > TELEGRAM_ALERT_MAX_KARAKTER:
+        elif not ai_mesaji_mi and TELEGRAM_ALERT_MAX_KARAKTER and len(message) > TELEGRAM_ALERT_MAX_KARAKTER:
             logger.warning("Alarm kartı hedefin üstünde: %s %s %s · %d kr (hedef %d)",
                            stock, timeframe, state, len(message), TELEGRAM_ALERT_MAX_KARAKTER)
-        asiyan = [satir for satir in message.splitlines() if _satir_px(satir) > (_px_butce() or 1e9)]
-        if asiyan:
-            logger.warning("Alarm kartında %d satır telefon bütçesini aşıyor (%s %s)",
-                           len(asiyan), stock, timeframe)
+        if not ai_mesaji_mi:
+            asiyan = [satir for satir in message.splitlines() if _satir_px(satir) > (_px_butce() or 1e9)]
+            if asiyan:
+                logger.warning("Alarm kartında %d satır telefon bütçesini aşıyor (%s %s)",
+                               len(asiyan), stock, timeframe)
 
         if not self.enabled:
             logger.info(f"[MOCK TELEGRAM {state}]\n{message}\n")

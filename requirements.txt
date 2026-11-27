@@ -27,6 +27,8 @@ python-dateutil==2.9.0.post0   # data.py JSON fallback (pickle bozulursa) bunu k
 
 # Telegram (basit requests de olur ama python-telegram-bot opsiyonel)
 requests==2.32.3
+# KAP alarm bağlamı asenkron HTTP istemcisi (`kap/` paketi)
+httpx==0.28.1
 
 # Grafik (G1): alarm kartının gerekçesini kareye döken `grafik.py`.
 # Yalnız `TELEGRAM_GRAFIK=alarm` iken lazy import edilir (§7); Agg arkası,

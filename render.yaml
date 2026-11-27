@@ -154,3 +154,35 @@ services:
         value: "3"
       - key: STABIL_ALARM_TAZE_DK
         value: "390"
+      # --- AI YORUM + YEDEK ZİNCİRİ + GÖLGE KAYIT + KAP BAĞLAMI ---
+      # Sıralı zincir: ApiWrapper (/v1/ask, model otomatik) -> Ücretsiz Gemini #1 -> Ücretsiz Gemini #2 -> düz kart.
+      # Gemini #1 ve #2 sabit dengeli model (gemini-3.8-flash) kullanır; yalnız 4 gizli anahtar girilir.
+      - key: AI_WRAPPER_BASE_URL
+        sync: false
+      - key: AI_WRAPPER_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY_1
+        sync: false
+      - key: GEMINI_API_KEY_2
+        sync: false
+      # Ana alarm kartı yerine AI yorumu gönderir; sorun çıkarsa düz karta düşer.
+      - key: AI_YORUM_AKTIF
+        value: "1"
+      - key: AI_YORUM_DM
+        value: "1"
+      - key: AI_YORUM_PUBLIC
+        value: "1"
+      - key: AI_YORUM_MAX_BEKLEME_SN
+        value: "0"
+      # Gizli [AI_SONUC ...] 5-filtre bloğunu yerele ve Supabase `ai_yorum_test` tablosuna yazar.
+      - key: AI_SHADOW_LOG
+        value: "1"
+      # KAP_BAGLAM_AKTIF=1 arka planda yerel DATA_DIR/kap_arsiv.sqlite WAL arşivini besler.
+      - key: KAP_BAGLAM_AKTIF
+        value: "1"
+      - key: KAP_TARAMA_ARALIK_SN
+        value: "180"
+      - key: KAP_MAX_YAS_GUN
+        value: "7"
+      - key: KAP_WARMUP_ACILISTA
+        value: "1"

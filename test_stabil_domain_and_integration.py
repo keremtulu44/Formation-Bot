@@ -529,6 +529,94 @@ def test_stabil_public_grafik_verisi_uret_main_4h_and_upper_1d(monkeypatch):
     assert veri["goruntular"][1]["rol"] == "ust"
 
 
+def test_stabil_public_grafik_formasyon_geometrisini_tasir(monkeypatch):
+    """Stabil karesi formasyonu YATAY değil, motorun doğrusuyla çizsin.
+
+    Regresyon (2026-11-22): `chart_pattern` yalnız `upper/lower` taşıyordu;
+    çizim çapa bulamayınca iki yatay çizgiye düşüyor, başlıkta "Alçalan Üçgen"
+    yazdığı hâlde üçgen görünmüyordu. Kayıt artık çapa noktalarını da taşır.
+    """
+    import bot.stabil_service as st_srv
+
+    frame_4h = SimpleNamespace(index=["2026-11-04T09:00:00+03:00"])
+    seen = {}
+
+    def kare_listesi(cift, tf, cerceve, **kwargs):
+        seen["cift"] = cift
+        return {"goruntular": [{"tf": "4h", "goruntu": {}}]}
+
+    fake_grafik = SimpleNamespace(grafik_aktif_mi=lambda: True, kare_listesi=kare_listesi)
+    monkeypatch.setitem(sys.modules, "grafik", fake_grafik)
+
+    pattern_snapshot = {
+        "bar_time": "2026-11-04T09:00:00+03:00",
+        "state": "SIKISMA_GUCLENIYOR",
+        "pattern_name": "Alçalan Üçgen",
+        "upper": 108.68,
+        "lower": 101.47,
+        "start_bar": 33, "end_bar": 114, "apex_bar": 143,
+        "hb1": 82, "hp1": 119.9, "hb2": 114, "hp2": 110.2,
+        "lb1": 33, "lp1": 101.6, "lb2": 97, "lp2": 101.5,
+        "quality": 89, "contraction": 0.77, "upper_touches": 2, "lower_touches": 2,
+        "has_pole": True, "pole_dir": 1, "pole_duration": 8,
+    }
+    st_srv._stabil_public_grafik_verisi_uret(
+        "THYAO", frame_4h, object(), object(), {}, object(),
+        pattern_snapshot=pattern_snapshot,
+    )
+    cift = seen["cift"]
+    assert cift["upper_now"] == 108.68 and cift["lower_now"] == 101.47
+    for anahtar in ("start_bar", "end_bar", "apex_bar",
+                    "hb1", "hp1", "hb2", "hp2", "lb1", "lp1", "lb2", "lp2",
+                    "quality", "contraction", "upper_touches", "lower_touches",
+                    "has_pole", "pole_dir", "pole_duration"):
+        assert cift[anahtar] == pattern_snapshot[anahtar], anahtar
+
+    # Başka muma ait indisler hiçbir zaman bu kareye uygulanmamalı.
+    pattern_snapshot["bar_time"] = "2026-11-03T09:00:00+03:00"
+    st_srv._stabil_public_grafik_verisi_uret(
+        "THYAO", frame_4h, object(), object(), {}, object(),
+        pattern_snapshot=pattern_snapshot,
+    )
+    assert seen["cift"] is None
+
+
+def test_stabil_public_grafik_egimli_bandi_gercekten_cizer(monkeypatch):
+    from matplotlib.figure import Figure
+    import bot.stabil_service as st_srv
+    from patterns.mathutil import f_line_price
+
+    monkeypatch.setenv("TELEGRAM_GRAFIK", "alarm")
+    idx = pd.date_range("2026-08-01", periods=80, freq="4h", tz="Europe/Istanbul")
+    frame = pd.DataFrame({"open": 105., "high": 107., "low": 103.,
+                          "close": 105., "volume": 1000.}, index=idx)
+    upper = (10, 115., 60, 110.)
+    lower = (10, 100., 60, 101.)
+    record = {"bar_time": str(idx[-1]), "state": "SIKISMA_GUCLENIYOR",
+              "pattern_name": "Alçalan Üçgen", "start_bar": 10, "end_bar": 79,
+              "upper": f_line_price(*upper, 79), "lower": f_line_price(*lower, 79),
+              "hb1": upper[0], "hp1": upper[1], "hb2": upper[2], "hp2": upper[3],
+              "lb1": lower[0], "lp1": lower[1], "lb2": lower[2], "lp2": lower[3],
+              "upper_touches": 2, "lower_touches": 3}
+    veri = st_srv._stabil_public_grafik_verisi_uret(
+        "THYAO", frame, frame, idx[-1].to_pydatetime(), {}, None,
+        pattern_snapshot=record,
+    )
+    assert veri and veri["goruntular"]
+    goruntu = veri["goruntular"][0]["goruntu"]
+    assert goruntu["formasyon"]["upper_touches"] == 2
+    ax = Figure().subplots()
+    ax.set_xlim(-1, 100)
+    ax.set_ylim(90, 120)
+    grafik._formasyon_ciz(ax, goruntu, len(goruntu["kapanis"]), 300., {})
+    cizgiler = [line for line in ax.lines
+                if line.get_linewidth() == grafik.SABITLER["cizgi_kalinlik"]["formasyon"]
+                and line.get_linestyle() == "-" and len(line.get_ydata()) > 2]
+    assert len(cizgiler) == 2
+    egimler = [float(line.get_ydata()[-1] - line.get_ydata()[0]) for line in cizgiler]
+    assert min(egimler) < 0 < max(egimler)
+
+
 def test_stabil_public_grafik_respects_global_kill_switch(monkeypatch):
     import bot.stabil_service as st_srv
 

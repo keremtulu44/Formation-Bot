@@ -6,6 +6,8 @@ from typing import Any
 
 import pandas as pd
 
+from ..bar_quality import flag_is_true
+
 from .models import EngineResult
 from .order_block_engine import (
     OrderBlockConfig,
@@ -83,10 +85,10 @@ class OrderBlockEngine(_CoreOrderBlockEngine):
 
     def update(self, bar: pd.Series | dict[str, Any]) -> EngineResult | None:
         row = dict(bar)
-        if not bool(row.get("is_closed", True)):
+        if not flag_is_true(row, "is_closed"):
             self._last_data_quality = OrderBlockDataQuality.INCOMPLETE_BAR
             return self.snapshot()
-        if not bool(row.get("is_complete", True)):
+        if not flag_is_true(row, "is_complete"):
             self._last_data_quality = OrderBlockDataQuality.SOURCE_GAP
             return self.snapshot()
 

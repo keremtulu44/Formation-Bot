@@ -18,6 +18,7 @@ from enum import StrEnum
 import math
 from typing import Any, Mapping, Sequence
 
+import numpy as np
 import pandas as pd
 
 from .stabil_support_lifecycle import (
@@ -227,12 +228,22 @@ def prepare_causal_ohlcv(
         }
     )
     out = out.dropna(subset=["timestamp", "open", "high", "low", "close"])
+    from domain_engines.bar_quality import flag_is_true
+
     if "is_closed" in df.columns:
-        closed_mask = df["is_closed"].fillna(False).astype(bool).to_numpy()
+        closed_mask = np.fromiter(
+            (flag_is_true({"is_closed": v}, "is_closed") for v in df["is_closed"]),
+            dtype=bool,
+            count=len(df),
+        )
         if len(closed_mask) == len(frame):
             out = out.loc[closed_mask[out["_source_row"].to_numpy(dtype=int)]]
     if "is_complete" in df.columns:
-        complete_mask = df["is_complete"].fillna(False).astype(bool).to_numpy()
+        complete_mask = np.fromiter(
+            (flag_is_true({"is_complete": v}, "is_complete") for v in df["is_complete"]),
+            dtype=bool,
+            count=len(df),
+        )
         if len(complete_mask) == len(frame):
             out = out.loc[complete_mask[out["_source_row"].to_numpy(dtype=int)]]
     out = out.drop(columns=["_source_row"], errors="ignore")

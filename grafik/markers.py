@@ -53,7 +53,7 @@ from grafik.panels import (  # noqa: F401
 def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
                     dusuk: Sequence[Optional[float]],
                     yuksek: Sequence[Optional[float]] = (),
-                    fig: Any = None) -> dict[str, int]:
+                    fig: Any = None) -> dict[str, Any]:
     """Sıra dışı hacim mumlarının altına YÖNLÜ RVOL rozeti basar (FAZ 1 + 2026-10-16).
 
     İki yön, iki eşik:
@@ -190,6 +190,7 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
     sayac = {"artis": 0, "dusus": 0}
     yerlesik: list[int] = []
     cizilen_bar: set[int] = set()
+    rozetler: list[dict[str, Any]] = []
     for sertlik, i, deger, yon in adaylar:
         if cizilen >= maks:
             break
@@ -257,11 +258,13 @@ def _rvol_rozetleri(ax, goruntu: Mapping[str, Any], n: int,
                                          else PALET["mum_dusen"]),
                               linewidth=0.6, alpha=0.9))
         cizilen += 1
+        rozetler.append({"bar": int(i), "yon": "artis" if yon > 0 else "dusus",
+                         "deger": _rvol_katı(deger)})
         cizilen_bar.add(int(i))
         sayac["artis" if yon > 0 else "dusus"] += 1
     # Taze rozet GERÇEKTEN çizildi mi: yerleşim sırası önde olduğu için beklenen
     # "evet"; yine de varsayım değil ÖLÇÜM — çizilen bar kümesinden okunur.
-    return {"artis": sayac["artis"], "dusus": sayac["dusus"],
+    return {"artis": sayac["artis"], "dusus": sayac["dusus"], "rozetler": rozetler,
             "taze_artis": (int(taze_artis[1]) if taze_artis is not None
                            and int(taze_artis[1]) in cizilen_bar else None),
             "taze_dusus": (int(taze_dusus[1]) if taze_dusus is not None

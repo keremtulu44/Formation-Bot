@@ -1,0 +1,62 @@
+Ana TF ağırlıklı görüş veya gerekçeli kararsızlık; gerekçe, karşı kanıt ve görüşü değiştirecek koşul ver. Temasla sonraki kapanışı ayır; fiyatı orijinal bölgeyle karşılaştır. Araştırmayı kapsamında kullan.
+Açık yaz; OB, CHoCH, BOS, FVG terimlerini koru, iç jargon ve veri tekrarı kullanma. Gözlemle yorumu ayır; olay, teyit veya neden uydurma. Formasyonun klasik eğilimini diğer kanıtlarla yorumla; gerçekleşmemiş kırılımı kesin sayma. Eksik veri yokluk, temas ret/emir yoğunluğu, geçiş yön teyidi değildir. Tek kapanış kalıcılık veya dönüşü kanıtlamaz. Kısa mum hacmi teyit değildir. Hazır olmayan motordan sonuç çıkarma; kalite yön gerekçesi, genel istatistik sembole özel olasılık değildir. TF'leri karıştırma; kesin tahmin, al-sat, hedef veya stop verme.
+Şu üç başlığı sırayla ve yıldızsız kullan: 🧭 Mevcut durum / 🔎 Bağlam / 🕯️ Replay notu. 120–180 kelime hedefle; tablo ve genel yatırım uyarısı yok.
+
+GRAFİK VERİSİ | ALARK | kesit 25.09 18:30 (İstanbul) | ana TF 4h | tarihsel/isteğe bağlı; alarm doğrulanmadı.
+yerel ALARK.json; sağlayıcı bilinmiyor; günlük: saatlik önbellekten türetilmiş. Yıl 2026; kapanış dışı saat=mum açılışı, bilgi kapanışta bilinir. İlk kova eksik, son seans mumu kısa olabilir; görünüm tüm geçmiş değil, süreklilik tam doğrulanmadı.
+OB/FVG: + pozitif, − negatif. Hacim rozetinde A=artış, K=kuruma; fiyat yönü değildir.
+TF başına son 60 kapanmış mum öncelikli; [E]=daha eski.
+Grafik uyarısı (1h/2h/4h/1d): Stabil direnç: günlük/saatlik kaynak eksik; gösterilemedi.
+
+1H GRAFİK
+Kapanış 25.09 18:00=106,80.
+Seviye: WL 104,20.
+Bölge: −OB 108,30–110,20; +OB 101,50–103,90; −OB 109,90–111,20.
+Formasyon: Yükselen Üçgen; tamamlandı; kalite 84/100; daralma %66; temas üst/alt 2/2.
+FVG: desteklenmiyor; bilinmiyor.
+Hacim (motor): 25.09 15:30 A×2,0; 22.09 17:30 K×0,32; 21.09 10:30 A×2,94; 2 diğer grafik rozeti özette yok.
+
+2H GRAFİK
+Kapanış 1H ile aynı.
+Dış yapı: 08.09 09:30 BOS ↑113,50 [E]; 15.09 11:30 CHoCH ↓109,90.
+Seviye: WL 104,20.
+Bölge: +OB 101,50–104,80; −OB 109,90–111,20; +OB 100,90–102,30.
+Grafikte formasyon adayı yok.
+FVG: çalıştırılmadı; bilinmiyor.
+Hacim (motor): 25.09 15:30 A×2,02; 22.09 17:30 K×0,19; 17.09 09:30 A×2,5.
+
+4H GRAFİK
+Kapanış 1H ile aynı.
+Dış yapı: 04.09 17:30 BOS ↑111,30; 08.09 13:30 BOS ↑113,50; 15.09 09:30 CHoCH ↓109,90.
+Dış yapı: 2 diğer grafik olayı özet dışı.
+Seviye: WL 104,20.
+Bölge: +OB 101,50–106,00; −OB 109,50–111,20; +OB 99,15–101,40.
+Formasyon: Alçalan Üçgen; sıkışma güçleniyor; kalite 89/100; daralma %77; temas üst/alt 2/2.
+Hacim (yerel hesap): 21.09 13:30 A×2,05; 25.09 17:30 K×0,26; 03.09 09:30 A×2,27; 09.09 13:30 A×2,16; 2 diğer grafik rozeti özette yok.
+Stabil destek: 101,50.
+
+1D GRAFİK
+Kapanış 25.09 18:30=106,80.
+Dış yapı: 16.09 00:00 BOS ↓104,80.
+Bölge: +OB 100,90–102,60.
+Grafikte formasyon adayı yok.
+Hacim (yerel hesap): 21.08 00:00 A×2,04; 10.09 00:00 K×0,49.
+Stabil destek: 101,50.
+
+4H REPLAY | OB: orijinal bant/OHLC örtüşmesi; FVG motor kuralı. Ardışık temaslar grup; sayım tüm pencere, ayrıntı son iki grup. Değer=kapanış; sonraki=sonraki kapanmış mum.
++OB 101,50–106,00: 2 grup; kullanılabilir 17.09 17:30; kalan 101,50–103,30; son kapanış orijinal bant üstünde.
+  1: 21.09 09:30=106,10, 13:30=107,80; sonraki 17:30=107,80.
+  2: 24.09 13:30–25.09 13:30; 4 mum, son 3: 24.09 17:30=105,20, 25.09 09:30=105,70, 13:30=106,60; sonraki 17:30=106,80.
+−OB 109,50–111,20: 4 grup; kullanılabilir 16.09 09:30; kalan 110,20–111,20; son kapanış orijinal bant altında.
+  3: 23.09 09:30=109,10, 13:30=108,80; sonraki 17:30=108,50.
+  4: 24.09 09:30=106,90; sonraki 13:30=105,70.
++OB 99,15–101,40: 2 grup; kullanılabilir 10.08 13:30; kalan 99,15–100,90.
+  Bu bölgenin bazı temas kapanışları kısa özete alınmadı.
+Stabil günlük destek 101,50; bilinir ve pencere başlangıcı 22.09 18:30.
+Günlük bağımsız temas sırası: 0.
+Günlük temas: OHLC desteği kapsar, kapanış altında değil; bağımsız sayımda ≥0,35 günlük ATR ayrılma gerekir. İlk gün önceden bilinen test değil; 4s temas/ret teyidi değil.
+
+GENEL ARAŞTIRMA | Sembole özel olasılık değil.
+OB [kesitten sonra; rapor 2026-10-21, veri sonu 2026-10-19]: Bu kesitte kullanılabilirliği doğrulanmadı; bulgu verilmedi.
+Stabil [kesitten sonra; rapor 2026-11-01, veri sonu bilinmiyor]: Bu kesitte kullanılabilirliği doğrulanmadı; bulgu verilmedi.
+MS [kesitten sonra; rapor 2026-10-21, veri sonu 2026-10-19]: Bu kesitte kullanılabilirliği doğrulanmadı; bulgu verilmedi.

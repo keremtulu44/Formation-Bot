@@ -1,0 +1,60 @@
+Formation-Bot yorumcususun. Ana TF'de ağırlıklı görüş, gerekçe, karşı kanıt ve görüşü değiştirecek koşulu açıkla; kanıt yetersizse kararsız kal. Temas ve sonraki kapanışı ayır; fiyatı orijinal bölgeyle karşılaştır. Araştırmayı kapsamında kullan.
+Kısa, anlaşılır yaz; OB, CHoCH, BOS, FVG kullanılabilir. İç jargon ve veri sıralama yok.
+Gözlem ve yorumu ayır; olay, teyit veya neden uydurma. Eksik veri yokluk; temas ret/emir yoğunluğu; geçiş yön teyidi değildir. Tek kapanış kalıcılık/dönüş teyidi değildir; bilinmeyeni kesin anlatma. Kısa mum hacmi teyit değildir; verilmeyen formasyon yönünü varsayma. Hazır olmayan motordan sonuç çıkarma; kalite yön gerekçesi, genel istatistik sembole özel olasılık değildir. Kanıt yokluğu tersinin kanıtı değildir. TF'leri karıştırma; kesin tahmin, al-sat, hedef veya stop verme.
+Yalnız Mevcut durum / Bağlam / Replay notu; 120–180 kelime hedefle, yeterliyse kısa yaz. Tekrar, tablo ve genel yatırım uyarısı yok.
+
+GRAFİK VERİSİ | BIMAS | kesit 25.09 18:30 (2026 İstanbul) | ana TF 4h | tarihsel veya isteğe bağlı kesit; gerçek alarm doğrulanmadı.
+yerel BIMAS.json; sağlayıcı bilinmiyor; günlük: saatlik önbellekten türetilmiş. Kapanış dışı saatler mum açılışı; yıl yazılmayanlar 2026. İlk kova eksik, son seans mumu kısa olabilir; tüm geçmiş gösterilmez, süreklilik tüm eksikleri doğrulamaz.
+OB/FVG: + pozitif, − negatif. Hacim rozetinde A=artış, K=kuruma; fiyat yönü değildir.
+Grafik uyarısı (1h/2h/4h/1d): Stabil direnç gösterilemedi: gerekli günlük veya saatlik kaynak yok.
+
+1H GRAFİK
+Kapanış 25.09 18:00=426,25.
+Dış yapı: 11.09 12:30 BOS ↑431,25; 15.09 10:30 CHoCH ↓422,50; 24.09 12:30 BOS ↓429,00.
+Bölge: −OB 428,00–430,50; −OB 432,25–435,75; −OB 434,00–437,50.
+Formasyon: Yükselen Kama; kırılım adayı; kalite 78/100; daralma %69; temas üst/alt 2/2.
+FVG: desteklenmiyor; bilinmiyor.
+Hacim (motor): 17.09 10:30 A×2,06; 23.09 12:30 K×0,24; 18.09 12:30 K×0,27; 15.09 10:30 A×3,5.
+
+2H GRAFİK
+Kapanış: 1H ile aynı.
+Dış yapı: 26.08 13:30 BOS ↑418,50; 16.09 09:30 CHoCH ↓411,75.
+Seviye: PH 437,50.
+Bölge: −OB 427,50–430,50; +OB 410,75–423,50; −OB 432,50–437,50.
+Formasyon: Alçalan Üçgen; tamamlandı; kalite 85/100; daralma %81; temas üst/alt 2/2.
+FVG: çalıştırılmadı; bilinmiyor.
+Hacim (motor): 16.09 15:30 A×3,34; 24.09 17:30 K×0,46.
+
+4H GRAFİK
+Kapanış: 1H ile aynı.
+Dış yapı: 09.09 13:30 BOS ↑422,75; 09.09 17:30 BOS ↑421,50; 16.09 13:30 CHoCH ↓411,75.
+Dış yapı: grafikteki 2 eski olay özette yok.
+Seviye: PH 437,50; WL 410,75.
+Bölge: +OB 410,75–423,50; −OB 432,00–437,50.
+Formasyon: Simetrik Üçgen; retest bekleniyor; kalite 76/100; daralma %90; temas üst/alt 2/2.
+Hacim (yerel hesap): 21.09 13:30 A×2,38; 25.09 17:30 K×0,31; 24.08 17:30 K×0,16; 18.08 09:30 A×2,42; 12.08 13:30 A×2,25.
+Stabil destek: 390,00.
+
+1D GRAFİK
+Kapanış 25.09 18:30=426,25.
+Dış yapı: 09.09 00:00 BOS ↑422,75.
+Seviye: PL 399,25; WH 437,50.
+Bölge: +OB 390,00–419,25.
+Grafikte formasyon adayı yok.
+Hacim (yerel hesap): 16.09 00:00 A×2,24.
+Stabil destek: 390,00.
+
+4H REPLAY | OB: orijinal bant/OHLC örtüşmesi; FVG motor kuralı. Ardışık temaslar bir grup; yalnız bu pencere. Saat=mum açılışı, değer=kapanış; sonraki=sonraki kapanmış mum.
++OB 410,75–423,50: 2 grup; kullanılabilir 21.09 17:30; kalan 410,75–422,00; son kapanış orijinal bant üstünde.
+  1: 24.09 13:30=425,25, 17:30=424,00; sonraki 25.09 09:30=428,25.
+  2: 25.09 13:30=422,00, 17:30=426,25; sonraki kapanmış mum yok; devam ediyor olabilir.
+−OB 432,00–437,50: 0 grup; kullanılabilir 24.09 13:30; kalan 435,75–437,50.
+Stabil günlük destek 390,00; bilinir ve pencere başlangıcı 22.09 18:30.
+Pencerede 0 temas; ilk destek kimliği, geçmiş ve gerçek sıra bilinmiyor.
+Günlük temas: OHLC desteği kapsar, kapanış altında değil; bağımsız sayım için ≥0,35 günlük ATR ayrılma. İlk bilindiği gün önceden bilinen test değil; 4s temas/ret teyidi değil.
+
+GENEL ARAŞTIRMA | Sembole özel olasılık değil.
+Kesit sonrası/belirsiz bulguları o tarihte biliniyor sayma.
+OB [kesitten sonra; rapor 2026-10-21, veri sonu 2026-10-19]: OB: 131.901 bölgede 17.048 (%12,9) 3+ temas; çok temasın zayıflattığı kanıtlanmaz.
+Stabil [kesitten sonra; rapor 2026-11-01, veri sonu bilinmiyor]: Stabil: ≥0,35 günlük ATR ayrılmalı günlük destek temas sırasına göre 4s temaslar; 8×4s tam ufuk 3+ grubu n=33, %81,8 tek sembol. Genellenemez; veri sonu bilinmiyor.
+MS [kesitten sonra; rapor 2026-10-21, veri sonu 2026-10-19]: MS: 4s dış BOS grubu iç BOS, CHoCH veya başka TF'ye aktarılmaz; mevcut olayın sonucu belirlenmez.
