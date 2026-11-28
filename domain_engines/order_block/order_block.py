@@ -34,6 +34,14 @@ class OrderBlockSideExport:
 
 
 @dataclass(frozen=True, slots=True)
+class OrderBlockReactionContext:
+    bar_time: Any
+    previous_bar_time: Any
+    previous_export: Any
+    surviving_sources: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class OrderBlockExport:
     """ARGENT Export Contract v1: nearest active OB snapshot per direction."""
 
@@ -61,6 +69,11 @@ class OrderBlockEngine(_CoreOrderBlockEngine):
         super().__init__(config)
         self._export = OrderBlockExport()
         self._last_data_quality = OrderBlockDataQuality.OK
+        self._reaction_context: OrderBlockReactionContext | None = None
+
+    @property
+    def reaction_context(self) -> OrderBlockReactionContext | None:
+        return self._reaction_context
 
     @property
     def export(self) -> OrderBlockExport:
@@ -74,10 +87,13 @@ class OrderBlockEngine(_CoreOrderBlockEngine):
         super()._reset()
         self._export = OrderBlockExport()
         self._last_data_quality = OrderBlockDataQuality.OK
+        self._reaction_context = None
 
     def slide_window(self, drop_count: int) -> None:
         """Rebase the frame-relative native state and refresh the same export."""
         super().slide_window(drop_count)
+        if drop_count:
+            self._reaction_context = None
         if self._rows:
             self._export = self._select_export(float(self._rows[-1]["close"]))
         else:
@@ -92,9 +108,19 @@ class OrderBlockEngine(_CoreOrderBlockEngine):
             self._last_data_quality = OrderBlockDataQuality.SOURCE_GAP
             return self.snapshot()
 
+        previous_export = self._export
+        previous_time = self._rows[-1].get("timestamp") if self._rows else None
         result = super().update(row)
         self._last_data_quality = OrderBlockDataQuality.OK
         self._export = self._select_export(float(row["close"]))
+        # Event evidence only: keep the pre-touch remaining bounds. Core OB
+        # detection, fill/cancel math and the public export are unchanged.
+        self._reaction_context = OrderBlockReactionContext(
+            bar_time=row.get("timestamp"), previous_bar_time=previous_time,
+            previous_export=previous_export,
+            surviving_sources=tuple((r.source_index, 1 if r.bullish else -1)
+                                    for r in self.active_records),
+        )
         return result
 
     def _select_export(self, close: float) -> OrderBlockExport:

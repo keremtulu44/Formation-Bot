@@ -162,7 +162,8 @@ def _tarama_kur(monkeypatch, tmp_path, *, fetch_frames, daily_frame=None, now=No
 
     cagrilar = {"periods": None}
 
-    def sahte_fetch(stocks, _pacer, _phase, periods=None):
+    def sahte_fetch(stocks, _pacer, _phase, periods=None, *, validate_freshness=False):
+        assert validate_freshness is True
         cagrilar["periods"] = dict(periods or {})
         return (
             {s: fetch_frames[s] for s in stocks if s in fetch_frames},

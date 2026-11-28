@@ -73,6 +73,28 @@ def f_line_price(x1: int, y1: float, x2: int, y2: float, x: int) -> float:
     return y1 + (y2 - y1) / float(x2 - x1) * float(x - x1)
 
 
+def candidate_boundary_at_bar(candidate, direction, bar_index) -> Optional[float]:
+    """Mevcut motor çapalarının olay mumundaki değeri; yeni geometri üretmez.
+
+    Kırılım anının fiyatı yatay bir çizgi değildir: eğimli sınır aynı sabit
+    çapalarla sonraki mumlara taşınır. Eksik/geçersiz çapada tahmin yapılmaz.
+    """
+    if direction not in (-1, 1) or bar_index is None:
+        return None
+    names = ("hb1", "hp1", "hb2", "hp2") if direction == 1 else ("lb1", "lp1", "lb2", "lp2")
+    try:
+        x1, y1, x2, y2 = (float(getattr(candidate, name)) for name in names)
+        x = float(bar_index)
+        if (not all(math.isfinite(v) for v in (x1, y1, x2, y2, x))
+                or not all(v.is_integer() for v in (x1, x2, x))
+                or x1 < 0 or x2 <= x1 or x < x2 or min(y1, y2) <= 0):
+            return None
+        value = f_line_price(x1, y1, x2, y2, x)
+        return value if math.isfinite(value) and value > 0 else None
+    except (TypeError, ValueError, AttributeError, OverflowError):
+        return None
+
+
 def f_slope(x1: int, y1: float, x2: int, y2: float) -> float:
     if x2 == x1:
         return 0.0

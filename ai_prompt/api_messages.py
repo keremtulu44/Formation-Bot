@@ -222,10 +222,21 @@ def _build_system_prompt(
     *,
     include_hidden_verdict: bool = False,
     include_kap_rules: bool = False,
+    output_profile: str = "standard",
 ) -> str:
     if modality not in _MODALITY_NOTES:
         raise ValueError(f"Desteklenmeyen modalite: {modality!r} ('text_only' veya 'multimodal' olmalı)")
     base = (ROOT / "talimat_api.txt").read_text(encoding="utf-8").strip()
+    if output_profile not in {"standard", "alarm"}:
+        raise ValueError(f"Bilinmeyen çıktı profili: {output_profile}")
+    if output_profile == "alarm":
+        from .commentary import ALARM_MAX_WORDS
+
+        core, separator, _ = base.partition("\nÇIKTI\n")
+        if not separator:
+            raise ValueError("API talimatında ÇIKTI bölümü eksik")
+        output_rules = (ROOT / "talimat_api_alarm.txt").read_text(encoding="utf-8").strip()
+        base = core + separator + output_rules.format(max_words=ALARM_MAX_WORDS)
     parts = [base, _MODALITY_NOTES[modality]]
     if include_kap_rules:
         parts.append(KAP_SYNTHESIS_INSTRUCTION)
@@ -248,6 +259,7 @@ def _compose_user_payload(
     trigger: Mapping[str, Any] | None,
     include_rich_context: bool,
     extra_sections: Sequence[tuple[str, str]],
+    compact_context: bool = False,
 ) -> str:
     year = pd.Timestamp(packet["as_of"]).tz_convert("Europe/Istanbul").year
     symbol = str(packet["symbol"])
@@ -305,7 +317,7 @@ def _compose_user_payload(
             rich = _rich_tf_lines(
                 tf,
                 row,
-                compact=stage >= 6,
+                compact=compact_context or stage >= 6,
                 seen_stabil_roles=seen_stabil_roles,
             )
             if rich:
@@ -367,6 +379,7 @@ def build_api_prompt(
     extra_sections: Mapping[str, str] | Sequence[tuple[str, str]] | None = None,
     budget: str | PromptBudget = "standard",
     max_user_chars: int | None = None,
+    output_profile: str = "standard",
 ) -> dict[str, Any]:
     """Sağlayıcıdan bağımsız, önbelleklenebilir ve bütçe-denetimli `system` + `user` paketi üret."""
     budget_profile = resolve_budget(budget)
@@ -391,6 +404,7 @@ def build_api_prompt(
         modality,
         include_hidden_verdict=include_hidden_verdict,
         include_kap_rules=bool(kap_info["include_kap_rules"]),
+        output_profile=output_profile,
     )
     if budget_profile.system_hard_max > 0 and utf16_len(system_text) > budget_profile.system_hard_max:
         raise ValueError(
@@ -411,6 +425,7 @@ def build_api_prompt(
         trigger=trigger,
         include_rich_context=include_rich_context,
         extra_sections=extras,
+        compact_context=output_profile == "alarm",
     )
     if utf16_len(user_text) > effective_user_max:
         for stage in range(1, 7):
@@ -421,6 +436,7 @@ def build_api_prompt(
                 trigger=trigger,
                 include_rich_context=include_rich_context,
                 extra_sections=extras,
+                compact_context=output_profile == "alarm",
             )
             if utf16_len(candidate) < utf16_len(user_text):
                 user_text = candidate
@@ -461,6 +477,7 @@ def build_api_prompt(
             "main_tf": packet.get("main_tf"),
             "research_mode": packet.get("research_mode"),
             "has_trigger": trigger is not None,
+            "output_profile": output_profile,
             "include_rich_context": bool(include_rich_context),
             "include_hidden_verdict": bool(include_hidden_verdict),
             "budget_profile": budget_profile.name,

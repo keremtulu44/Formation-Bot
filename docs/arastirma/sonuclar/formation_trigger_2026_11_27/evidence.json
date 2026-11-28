@@ -1,0 +1,27 @@
+{
+  "source": "var/formation_trigger_aligned_20261127",
+  "outputs": {
+    "rows.jsonl": {
+      "sha256": "c2da1148ad811e097594c137602d32091b8fdbb854a4ecb1459d1a5d2a303fc6",
+      "bytes": 2459143
+    },
+    "summary.json": {
+      "sha256": "181f60294c31587dd739de7ec67a43e62d0d942591a323bd769f4af52b2c72d7",
+      "bytes": 84311
+    }
+  },
+  "tests": {
+    "geometry": "21 passed in 1.95s",
+    "wider": "187 passed in 189.03s; 12 files, includes the 21 geometry tests; NOT full repository suite"
+  },
+  "test_sha256": {
+    "test_formation_trigger_geometry.py": "91ce62b505188a537af272b07d1af8fe67293b1f2404d663ee549a2fa594c1a3",
+    "test_stabil_resistance_delivery_e2e.py": "91e72004bb31e429c80b85f8361050454c0dfcb4e987420a836458f0702d26e8"
+  },
+  "reverted": [
+    "last _yon_isareti readability edit",
+    "last added directional rules in talimat.txt/talimat_api.txt/talimat_kisa.txt",
+    "test_direction_readability.py"
+  ],
+  "preserved": "Earlier candle/AI/candidate replay work"
+}

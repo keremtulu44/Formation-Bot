@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
+import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -24,6 +27,8 @@ logger = logging.getLogger(__name__)
 AI_YORUM_TEST_TABLE = "ai_yorum_test"
 AI_YORUM_TEST_VIEW = "v_ai_yorum_test_ozet"
 DEFAULT_LOCAL_SHADOW_FILE = "ai_yorum_test.json"
+# DM komutları arka plan thread'lerinde aynı deftere yazabilir.
+_LOCAL_SHADOW_LOCK = threading.RLock()
 
 DEFAULT_HORIZON_BARS: dict[str, int] = {
     "1h": 16,
@@ -48,7 +53,7 @@ def _safe_float(value: Any) -> float | None:
         out = float(value)
     except (TypeError, ValueError):
         return None
-    return out if pd.notna(out) else None
+    return out if math.isfinite(out) else None
 
 
 def _context_summary(packet: Mapping[str, Any]) -> dict[str, Any]:
@@ -79,10 +84,15 @@ def make_shadow_key(
     *,
     prompt_surumu: str = "api-v1",
     model_adi: str = "",
+    output_profile: str = "standard",
 ) -> str:
+    if output_profile not in {"standard", "alarm"}:
+        raise ValueError(f"Bilinmeyen çıktı profili: {output_profile}")
     model_slug = (model_adi or "bilinmiyor").strip().lower().replace("|", "_")
     version_slug = (prompt_surumu or "api-v1").strip().lower().replace("|", "_")
-    return f"{str(symbol).strip().upper()}|{str(tf).strip().lower()}|{_iso_utc(as_of)}|{version_slug}|{model_slug}"
+    base = f"{str(symbol).strip().upper()}|{str(tf).strip().lower()}|{_iso_utc(as_of)}|{version_slug}|{model_slug}"
+    # Eski standart anahtarlar sabit kalır; kısa alarm manuel analizi ezmez.
+    return base + "|alarm" if output_profile == "alarm" else base
 
 
 def build_shadow_record(
@@ -98,9 +108,13 @@ def build_shadow_record(
     telegrama_gitti: bool = False,
     min_words: int = 80,
     max_words: int = 220,
+    output_profile: str = "standard",
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Packet + ham AI yanıtından `public.ai_yorum_test` satırı ve ayrıştırma sonucu üretir."""
-    parsed = parse_ai_response(raw_ai_text, require_verdict=False, min_words=min_words, max_words=max_words)
+    parsed = parse_ai_response(
+        raw_ai_text, require_verdict=False, min_words=min_words, max_words=max_words,
+        output_profile=output_profile,
+    )
     symbol = str(packet["symbol"]).strip().upper()
     main_tf = str(packet["main_tf"]).strip().lower()
     as_of_iso = _iso_utc(packet["as_of"])
@@ -109,6 +123,8 @@ def build_shadow_record(
     verdict = parsed["verdict"] or {}
     now_iso = datetime.now(timezone.utc).isoformat()
     context_summary = _context_summary(packet)
+    context_summary["output_profile"] = output_profile
+    context_summary["teslim_durumu"] = "teslim_edildi" if telegrama_gitti else "dogrulanmadi"
     if kap_context is not None:
         kap_info = format_kap_for_prompt(kap_context, as_of=packet.get("as_of"))
         if kap_info["meta_summary"] is not None:
@@ -121,6 +137,7 @@ def build_shadow_record(
             as_of_iso,
             prompt_surumu=prompt_surumu,
             model_adi=model_adi,
+            output_profile=output_profile,
         ),
         "sembol": symbol,
         "tf": main_tf,
@@ -159,40 +176,65 @@ def build_shadow_record(
     return record, parsed
 
 
-def load_local_shadow_records(path: str | os.PathLike[str]) -> list[dict[str, Any]]:
+def load_local_shadow_records(
+    path: str | os.PathLike[str], *, strict: bool = False,
+) -> list[dict[str, Any]]:
     file_path = Path(path)
-    if not file_path.exists():
-        return []
     try:
         data = json.loads(file_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return []
     except (OSError, ValueError) as exc:
+        if strict:
+            raise
         logger.warning("Yerel AI gölge defteri okunamadı (%s): %s", file_path, exc)
         return []
     rows = data.get("kayitlar") if isinstance(data, Mapping) else data
-    return [dict(r) for r in rows if isinstance(r, Mapping)] if isinstance(rows, list) else []
+    if not isinstance(rows, list):
+        if strict:
+            raise ValueError("Yerel AI gölge defteri şeması geçersiz; mevcut dosya korunuyor")
+        return []
+    if strict and any(not isinstance(r, Mapping) or not r.get("anahtar") for r in rows):
+        raise ValueError("Yerel AI gölge defterinde eksik/bozuk kayıt var; mevcut dosya korunuyor")
+    return [dict(r) for r in rows if isinstance(r, Mapping)]
 
 
 def save_local_shadow_records(records: Sequence[Mapping[str, Any]], path: str | os.PathLike[str]) -> int:
-    file_path = Path(path)
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    existing = load_local_shadow_records(file_path)
-    by_key = {str(r["anahtar"]): dict(r) for r in existing if r.get("anahtar")}
-    written = 0
-    for rec in records:
-        key = str(rec.get("anahtar") or "").strip()
-        if not key:
-            continue
-        by_key[key] = dict(rec)
-        written += 1
-    payload = {
-        "schema_version": 1,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "kayitlar": list(by_key.values()),
-    }
-    tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp_path, file_path)
-    return written
+    with _LOCAL_SHADOW_LOCK:
+        file_path = Path(path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        # Okunamayan geçmişi boş defter sanıp üzerine yazma.
+        existing = load_local_shadow_records(file_path, strict=True)
+        by_key = {str(r["anahtar"]): dict(r) for r in existing if r.get("anahtar")}
+        written = 0
+        for rec in records:
+            key = str(rec.get("anahtar") or "").strip()
+            if not key:
+                continue
+            by_key[key] = dict(rec)
+            written += 1
+        payload = {
+            "schema_version": 1,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "kayitlar": list(by_key.values()),
+        }
+        # Tek sabit .tmp adı aynı anda çalışan yazarlarda çakışır. Eşsiz geçici
+        # dosya + replace, okuyuculara yarım JSON görünmesini de engeller.
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=file_path.parent,
+                prefix=file_path.name + ".", suffix=".tmp", delete=False,
+            ) as stream:
+                tmp_path = Path(stream.name)
+                json.dump(payload, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(tmp_path, file_path)
+        finally:
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
+        return written
 
 
 def write_shadow_records_to_supabase(
@@ -239,7 +281,10 @@ def save_shadow_record(
     """Tek gölge kaydını yerel JSON'a ve (yalnız açık izinle) Supabase'e kaydeder."""
     local_saved = False
     if local_path is not None:
-        local_saved = save_local_shadow_records([record], local_path) > 0
+        try:
+            local_saved = save_local_shadow_records([record], local_path) > 0
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning("Yerel AI gölge kaydı yazılamadı; eski dosya korundu: %s", type(exc).__name__)
     supabase_saved = write_shadow_records_to_supabase(
         [record], store, allow_supabase_write=allow_supabase_write,
     ) > 0

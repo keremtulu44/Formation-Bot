@@ -343,6 +343,7 @@ def _run_order_block(
         details={
             "records": deepcopy(engine.records),
             "active_records": deepcopy(engine.active_records),
+            "reaction_context": deepcopy(engine.reaction_context),
         },
     )
 

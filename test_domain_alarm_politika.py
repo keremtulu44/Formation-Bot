@@ -67,7 +67,7 @@ def _frame(n: int = 60, close: float = 100.0, *, daralan: bool = False,
             lows[i] = closes[i] - 2.0
     return pd.DataFrame(
         {
-            "open": [c - 1.0 for c in closes],
+            "open": [c - 0.1 for c in closes],
             "high": highs,
             "low": lows,
             "close": closes,
@@ -190,8 +190,13 @@ def _behavior(*, dist_atr: float, support: float, close: float = 100.0):
     )
 
 
-def _sonuclar_ob(*, close: float = 100.0):
+def _sonuclar_ob(*, close: float = 100.0, frame=None):
     bhv = _behavior(dist_atr=1.0, support=90.0, close=close)
+    reaction = None if frame is None else {
+        "bar_time": frame.index[-1], "previous_bar_time": frame.index[-2],
+        "previous_export": {"bull": {"source_bar": 3, "top": close - .1, "bottom": close - 2}},
+        "surviving_sources": ((3, 1),),
+    }
     return {
         "1d": {
             "stabil": SimpleNamespace(
@@ -213,6 +218,7 @@ def _sonuclar_ob(*, close: float = 100.0):
             ),
             "order_block": SimpleNamespace(
                 skipped=False, error=None,
+                details={"reaction_context": reaction},
                 export=SimpleNamespace(
                     bull=SimpleNamespace(top=105.0, bottom=95.0, state=None),
                     bear=SimpleNamespace(top=150.0, bottom=145.0, state=None),
@@ -233,7 +239,7 @@ def test_evaluate_p6_daralan_yatay_elenir(monkeypatch):
     monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_POLITIKA", "P6")
     frame = _frame(60, daralan=True)
     adaylar = evaluate_domain_alarm_candidates(
-        "ASTOR", {}, {"1d": frame}, _sonuclar_ob(), SIMDI,
+        "ASTOR", {}, {"1d": frame}, _sonuclar_ob(frame=frame), SIMDI,
     )
     assert adaylar == []
 
@@ -242,7 +248,7 @@ def test_evaluate_p0_ayni_cerceve_gecer(monkeypatch):
     monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_POLITIKA", "P0")
     frame = _frame(60, daralan=True)
     adaylar = evaluate_domain_alarm_candidates(
-        "ASTOR", {}, {"1d": frame}, _sonuclar_ob(), SIMDI,
+        "ASTOR", {}, {"1d": frame}, _sonuclar_ob(frame=frame), SIMDI,
     )
     assert len(adaylar) == 1
     assert any(s.startswith("OB") for s in adaylar[0].reasons)

@@ -51,7 +51,7 @@ logger = logging.getLogger("notifier")  # eski kayıt adıyla aynı
 def _ai_duzyazi_mesaji_mi(text: object) -> bool:
     """Doğal düzyazı AI yorumu mu? (283px tablo satırı gibi yapay girintiyle sarılmaz.)"""
     s = str(text or "")
-    return s.startswith("🤖 ") and "🧭 Mevcut durum" in s
+    return s.startswith("🤖 ") and ("🧭 Mevcut durum" in s or "🧭 Görünüm" in s)
 
 
 def _metin_govdesi(text: object, *, sar: bool | None = None) -> str:

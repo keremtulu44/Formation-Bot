@@ -1,0 +1,32 @@
+{
+  "source": "var/ob_alarm_event_final_20261127",
+  "files": {
+    "rows.jsonl": {
+      "sha256": "257624fe3c753a7e0f6207b64a962f261f145e167211fa89c3c724547e63bb02",
+      "bytes": 7888769
+    },
+    "summary.json": {
+      "sha256": "a18efa18304006a54d35bdcc401d24bc3005e4e4e5bb5a9d193fe6c67d8c27f5",
+      "bytes": 59451
+    }
+  },
+  "selection": "chronological first three per category and OB side; no future outcome used",
+  "weak_edge_close_check": {
+    "old_ob_reason_rows": 196,
+    "close_at_low_for_bull_or_high_for_bear": 196,
+    "tolerance": {
+      "relative": 1e-09,
+      "absolute": 1e-09
+    }
+  },
+  "tests": {
+    "focused": "35 passed in 5.66s",
+    "regression": "297 passed, 1 skipped in 192.13s (0:03:12)"
+  },
+  "test_hashes": {
+    "test_ob_alarm_events.py": "3f337c61b1df33d4d79626a92bc158a2c329779ef6438b1df2e3473ac387bd81",
+    "test_domain_alarm_service.py": "bb3d20625542d62c00aab2d62cc5487fb0671543acd16f8fdf61635039889b43",
+    "test_domain_alarm_politika.py": "7472a6ed973aadce69257d31727484d993e6bb50f7ef9696ffbff20ac35c4dc3",
+    "test_stabil_resistance_delivery_e2e.py": "09024cdd354e77e679ae0c5609fe4f198a2732268992037aec78fbd66fe0fffe"
+  }
+}

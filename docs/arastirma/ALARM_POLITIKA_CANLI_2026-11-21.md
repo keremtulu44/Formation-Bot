@@ -1,5 +1,7 @@
 # Alarm Politikası — P6 Canlıya Alındı (2026-11-21)
 
+> **27 Kasım takip denetimi:** [Alarm dengesi ve replay güvenilirliği](../denetim/ALARM_DENGESI_VE_REPLAY_DENETIMI_2026-11-27.md). Bu tarihli belgedeki “gerçek teslim/günde DM” ifadeleri gerçek Telegram makbuzu değildir; potansiyel olay, test dispatch'i ve mesaj birimleri ayrılmalıdır. 97,09 → 35,68 olay/seans hesabı yeniden üretildi; ancak domain replay'inin tetik/yön prefix değişmezliği bozuk bulundu. Aşağıdaki yönlü isabet/hatırlama oranları yeni filtre seçimi için yeniden doğrulanmalıdır. Bağlam formülü paritesi, tüm canlı/replay karar zincirinin paritesi değildir. Bu dosyanın “canlıya alındı” başlığı tarihli kayıttır, bugünkü üretim env/deploy kanıtı değildir.
+
 **Durum:** UYGULANDI · **Karar:** `YENI_DOMAIN_ALARM_POLITIKA=P6` (varsayılan)
 **Ölçüm kaynağı:** 22 seans · 50 sembol × 4 TF · 2026-10-19 → 2026-11-18
 **Kod:** `bot/domain_alarm_service.py::_politika_gecer` · `config.py`

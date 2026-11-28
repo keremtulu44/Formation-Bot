@@ -20,6 +20,7 @@ Sorumluluk sınırı:
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -213,8 +214,10 @@ class ApiWrapperClient:
 
         try:
             with _make_httpx_client(
-                connect_timeout=self.connect_timeout,
+                connect_timeout=min(self.connect_timeout, max_wall_seconds) if max_wall_seconds else self.connect_timeout,
                 read_timeout=effective_read,
+                write_timeout=min(DEFAULT_WRITE_TIMEOUT_S, max_wall_seconds) if max_wall_seconds else DEFAULT_WRITE_TIMEOUT_S,
+                pool_timeout=min(DEFAULT_POOL_TIMEOUT_S, max_wall_seconds) if max_wall_seconds else DEFAULT_POOL_TIMEOUT_S,
                 transport=self._transport,
             ) as client:
                 with client.stream("POST", self.ask_url, headers=headers, json=payload) as resp:
@@ -403,12 +406,16 @@ class GeminiFreeClient:
 
         try:
             with _make_httpx_client(
-                connect_timeout=self.connect_timeout,
+                connect_timeout=min(self.connect_timeout, max_wall_seconds) if max_wall_seconds else self.connect_timeout,
                 read_timeout=effective_read,
+                write_timeout=min(DEFAULT_WRITE_TIMEOUT_S, max_wall_seconds) if max_wall_seconds else DEFAULT_WRITE_TIMEOUT_S,
+                pool_timeout=min(DEFAULT_POOL_TIMEOUT_S, max_wall_seconds) if max_wall_seconds else DEFAULT_POOL_TIMEOUT_S,
                 transport=self._transport,
             ) as client:
                 resp = client.post(url, headers=headers, json=body)
                 http_status = int(resp.status_code)
+                if max_wall_seconds is not None and self._clock() - started >= max_wall_seconds:
+                    return _fail("wall_timeout", "sağlayıcı süre bütçesi doldu")
                 if http_status != 200:
                     return _fail("http_error", f"HTTP {http_status}")
                 try:
@@ -523,21 +530,31 @@ class AIClientRouter:
         *,
         system: str | None = None,
         max_wall_seconds_per_provider: float | None = None,
+        max_total_seconds: float | None = None,
     ) -> AIAskResult:
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("prompt boş olamaz")
 
+        if max_total_seconds is not None and (not math.isfinite(max_total_seconds) or max_total_seconds <= 0):
+            raise ValueError("max_total_seconds sonlu ve pozitif olmalı")
         started = self._clock()
         attempts: list[AIAttemptRecord] = []
 
         for provider in self.providers:
+            budget = max_wall_seconds_per_provider
+            if max_total_seconds is not None:
+                remaining = max_total_seconds - (self._clock() - started)
+                if remaining <= 0:
+                    break
+                budget = remaining if budget is None else min(budget, remaining)
             text, rec = provider.ask(
                 prompt,
                 system=system,
-                max_wall_seconds=max_wall_seconds_per_provider,
+                max_wall_seconds=budget,
             )
             attempts.append(rec)
-            if rec.ok and text:
+            if (rec.ok and text and (max_total_seconds is None
+                    or self._clock() - started < max_total_seconds)):
                 return AIAskResult(
                     ok=True,
                     text=text,
@@ -565,16 +582,21 @@ class AIClientRouter:
         parse_response: bool = True,
         require_verdict: bool = False,
         max_wall_seconds_per_provider: float | None = None,
+        max_total_seconds: float | None = None,
     ) -> dict[str, Any]:
         """`build_api_prompt()` çıktısını (`system` + `user` ayrı) zincire gönderir."""
         result = self.ask(
             str(bundle["user"]),
             system=str(bundle.get("system") or "") or None,
             max_wall_seconds_per_provider=max_wall_seconds_per_provider,
+            max_total_seconds=max_total_seconds,
         )
         parsed: dict[str, Any] | None = None
         if result.ok and result.text and parse_response:
-            parsed = parse_ai_response(result.text, require_verdict=require_verdict)
+            parsed = parse_ai_response(
+                result.text, require_verdict=require_verdict,
+                output_profile=(bundle.get("metadata") or {}).get("output_profile", "standard"),
+            )
         return {
             "result": result,
             "parsed": parsed,

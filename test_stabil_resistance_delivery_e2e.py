@@ -430,7 +430,7 @@ def test_domain_public_graph_timeframe_pair_and_resistance_per_timeframe(monkeyp
     assert all(k["goruntu"]["stabil_direnc"]["hazir"] for k in public["goruntular"])
 
 
-def test_actual_formation_retest_outside_frozen_boundary_is_not_a_sent_alert(monkeypatch, tmp_path, offline):
+def test_actual_formation_retest_uses_sloping_boundary_on_event_bar(monkeypatch, tmp_path, offline):
     from patterns import PatternLifecycleManager
 
     now, hourly, daily, _, _ = archived("AKBNK", "2026-03-23 17:30")
@@ -446,7 +446,16 @@ def test_actual_formation_retest_outside_frozen_boundary_is_not_a_sent_alert(mon
     assert snap.state == "RETEST_BASARILI" and snap.active.pattern_type == "Alçalan Kama"
     assert float(hourly["close"].iloc[-1]) == pytest.approx(72.50)
     assert snap.active.frozen_upper_boundary_at_break == pytest.approx(73.942853, abs=.001)
-    assert not offline.messages and not offline.albums  # existing close-confirmation gate vetoed it
+    # The old gate treated 73.94 (break-day line price) as horizontal and
+    # wrongly vetoed this native engine retest. The same frozen anchors now
+    # reach 70.24 on this bar, exactly the line used by the engine/chart.
+    level = main._alert_break_level(snap.active, snap.break_dir, snap.state,
+                                    bar_index=snap.bar_index)
+    assert level == pytest.approx(snap.active.upper_now)
+    assert level < 72.50 < snap.active.frozen_upper_boundary_at_break
+    assert [m["chat_id"] for m in offline.messages] == [DM, GROUP]
+    assert all("SEVİYE KORUNDU" in m["text"] for m in offline.messages)
+    assert [(a["chat_id"], len(a["images"])) for a in offline.albums] == [(DM, 4), (GROUP, 2)]
 
 
 def test_domain_real_event_media_uncertainty_keeps_text_and_requests_manual_review(monkeypatch, tmp_path, offline):
@@ -571,7 +580,10 @@ def test_four_actual_4h_domain_candidates_use_two_individual_albums_and_text_sum
         candidates.extend(found)
 
     assert candidates[0].reasons == ("BOS ↓",) and candidates[1].reasons == ("BOS ↓",)
-    assert candidates[2].reasons == ("CHoCH ↑",) and candidates[3].reasons == ("BOS ↓",)
+    # DOCO's closed wick rejection is now retained alongside its CHoCH;
+    # the old post-fill close-inside check missed this real same-bar event.
+    assert candidates[2].reasons == ("CHoCH ↑", "OB boğa bölge tepkisi")
+    assert candidates[3].reasons == ("BOS ↓",)
     assert sorted(candidates, key=lambda c: (-c.rank_score, c.symbol))[:2] == candidates[:2]
     n = _notifier(monkeypatch)
     path = str(tmp_path / "burst.json")
@@ -606,13 +618,16 @@ def test_same_real_scan_can_emit_stabil_reclaim_and_existing_domain_event(monkey
     lifecycle = PatternLifecycleManager()
     report = main.scan_all_stocks(manager, lifecycle, _notifier(monkeypatch), stocks=["AKBNK"])
     assert report["status"] == "tamamlandi", report
-    assert lifecycle.get_snapshot("AKBNK_4h").state == "RETEST_BASARILI"  # vetoed by existing close gate
+    assert lifecycle.get_snapshot("AKBNK_4h").state == "RETEST_BASARILI"
     dm = [m["text"] for m in offline.messages if m["chat_id"] == DM]
     group = [m["text"] for m in offline.messages if m["chat_id"] == GROUP]
-    assert len(dm) == len(group) == 2 and dm == group
+    # Corrected sloping-line gate lets the existing formation retest through.
+    # Separate domain events are intentionally NOT muted by this geometry fix.
+    assert len(dm) == len(group) == 3 and dm == group
+    assert "SEVİYE KORUNDU" in dm[0]
     assert all("STABİL GÜÇLÜ GERİ ALIM" not in text for text in dm)
-    assert "🆕 YENİ" in dm[0] and "BOS ↓" in dm[0]
-    assert "🆕 YENİ" in dm[1] and "2s" in dm[1]
+    assert "🆕 YENİ" in dm[1] and "BOS ↓" in dm[1]
+    assert "🆕 YENİ" in dm[2] and "2s" in dm[2]
     assert [(a["chat_id"], len(a["images"])) for a in offline.albums] == [
-        (DM, 1), (GROUP, 2), (DM, 1), (GROUP, 2),
+        (DM, 1), (GROUP, 2), (DM, 1), (GROUP, 2), (DM, 1), (GROUP, 2),
     ]

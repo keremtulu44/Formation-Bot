@@ -36,6 +36,9 @@ import data as _pkg  # geç bağlama (plan §3)
 # Yahoo birincil, tvDatafeed reaktif yedek. Durum /health üzerinden görünür;
 # hiçbir veri uydurulmaz. Sayaçlar süreç içi gözlemseldir, kalıcı depoya yazmaz.
 _SAGLAYICI_KILIT = threading.Lock()
+_TV_ISCI_SINIRI = 2
+_TV_ISCI_KOTASI = threading.BoundedSemaphore(_TV_ISCI_SINIRI)
+_TV_AKTIF_ISCI = 0
 _SAGLAYICI_DURUM: Dict[str, object] = {
     "yahoo_basari": 0, "yahoo_hata": 0,
     "tv_basari": 0, "tv_hata": 0, "yok": 0,
@@ -49,7 +52,7 @@ def _saglayici_zamani() -> str:
     return datetime.now(ISTANBUL_TZ).isoformat()
 
 
-def _saglayici_kaydet(stock: str, kaynak: str, hata: str = "") -> None:
+def _saglayici_kaydet(stock: str, kaynak: str, hata: str = "", *, tf: str = "") -> None:
     """Kaynak başarı/hata sayacını ve son durumu güncelle (kilitli, ağ yok)."""
     anahtar = str(stock or "?").strip().upper()
     # Durum sözlüğü kısa önek kullanır: tvdatafeed -> tv_*. Yanlış önek
@@ -67,6 +70,8 @@ def _saglayici_kaydet(stock: str, kaynak: str, hata: str = "") -> None:
             if kaynak in ("yahoo", "tvdatafeed"):
                 _SAGLAYICI_DURUM["son_kaynak"] = kaynak
                 _SAGLAYICI_DURUM["son_kaynak_by_symbol"][anahtar] = kaynak
+                if tf:
+                    _SAGLAYICI_DURUM.setdefault("son_kaynak_by_series", {})[f"{anahtar}|{tf}"] = kaynak
 
 
 def _tv_kurulum_bilgisi() -> Tuple[bool, Optional[str]]:
@@ -86,6 +91,9 @@ def saglayici_durumu() -> Dict[str, object]:
     kurulu, dagitim = _tv_kurulum_bilgisi()
     with _SAGLAYICI_KILIT:
         ozet = dict(_SAGLAYICI_DURUM)
+        ozet["tv_aktif_isci"] = _TV_AKTIF_ISCI
+        ozet["tv_isci_siniri"] = _TV_ISCI_SINIRI
+        ozet["son_kaynak_by_series"] = dict(_SAGLAYICI_DURUM.get("son_kaynak_by_series", {}))
         ozet["son_kaynak_by_symbol"] = dict(
             _SAGLAYICI_DURUM["son_kaynak_by_symbol"])
     ozet.update({
@@ -100,9 +108,14 @@ def saglayici_durumu() -> Dict[str, object]:
     return ozet
 
 
-def son_veri_kaynagi(stock: str) -> Optional[str]:
+def son_veri_kaynagi(stock: str, tf: str = "") -> Optional[str]:
     """Sembol için son başarılı kaynak: 'yahoo' / 'tvdatafeed' / None."""
     with _SAGLAYICI_KILIT:
+        if tf:
+            key = f"{str(stock or '').strip().upper()}|{tf}"
+            series = _SAGLAYICI_DURUM.get("son_kaynak_by_series", {})
+            if key in series:
+                return series[key]
         return _SAGLAYICI_DURUM["son_kaynak_by_symbol"].get(
             str(stock or "").strip().upper())
 
@@ -122,7 +135,8 @@ def _tv_yedek_dene(
 
     DÖNÜŞ: (frame|None, hata). Hiçbir durumda uydurulmuş/sentetik bar üretmez.
     Süreç TZ'si değiştirilmez; WS istemcisi ortak modülde `finally` ile kapanır;
-    tüm çağrı `TV_ZAMAN_ASIMI_SN` ile sınırlıdır (anonim WS takılmasın).
+    çağıranın beklemesi `TV_ZAMAN_ASIMI_SN` ile sınırlıdır. İş iptal edilmiş
+    sayılmaz; dönen worker kotasını bitene kadar tutar (en fazla iki iş).
     """
     if not TV_YEDEK_AKTIF:
         return None, "TV yedeği kapalı (TV_YEDEK_AKTIF=0)"
@@ -135,7 +149,14 @@ def _tv_yedek_dene(
     sembol = str(stock or "").strip().upper()
     sonuc: Dict[str, object] = {}
 
+    if not _TV_ISCI_KOTASI.acquire(blocking=False):
+        return None, "TV worker sınırı dolu; yeni iş açılmadı"
+    global _TV_AKTIF_ISCI
+    with _SAGLAYICI_KILIT:
+        _TV_AKTIF_ISCI += 1
+
     def _cek() -> None:
+        global _TV_AKTIF_ISCI
         try:
             from scripts import tvdatafeed_client as tv_client
             sonuc["frame"] = tv_client.get_hist(
@@ -144,10 +165,20 @@ def _tv_yedek_dene(
                 n_bars=_tv_bar_sayisi(period, anahtar))
         except Exception as exc:  # noqa: BLE001 - ağ/import hatası rapora düşsün
             sonuc["hata"] = f"{type(exc).__name__}: {exc}"
+        finally:
+            with _SAGLAYICI_KILIT:
+                _TV_AKTIF_ISCI -= 1
+            _TV_ISCI_KOTASI.release()
 
     isci = threading.Thread(target=_cek, daemon=True,
                             name=f"tv-{sembol}-{anahtar}")
-    isci.start()
+    try:
+        isci.start()
+    except Exception:
+        with _SAGLAYICI_KILIT:
+            _TV_AKTIF_ISCI -= 1
+        _TV_ISCI_KOTASI.release()
+        raise
     isci.join(TV_ZAMAN_ASIMI_SN)
     if isci.is_alive():
         return None, f"TV zaman aşımı ({TV_ZAMAN_ASIMI_SN} sn)"
@@ -194,7 +225,8 @@ def _veri_zinciri(
 ) -> Tuple[Optional[pd.DataFrame], bool, str]:
     """Yahoo birincil → TV reaktif yedek → (None, retryable, gerekçe).
 
-    TV yalnızca Yahoo hiç veri döndürmediğinde çağrılır. Yahoo GEÇİCİ hata
+    TV yalnızca Yahoo kullanılabilir veri döndürmediğinde çağrılır (canlı
+    çağrıda bayat yanıt da validator tarafından reddedilir). Yahoo GEÇİCİ hata
     verdiyse `retryable` korunur (mevcut tek yeniden deneme sözleşmesi bozulmaz);
     TV o anda kurtarırsa veri geldiği için yeniden denemeye gerek kalmaz.
     """
@@ -211,7 +243,7 @@ def _veri_zinciri(
         frame.attrs["veri_kaynagi"] = "yahoo"
         frame.attrs["saglayici_zinciri"] = ["yahoo"]
         frame.attrs["gercek_bar"] = False
-        _saglayici_kaydet(stock, "yahoo")
+        _saglayici_kaydet(stock, "yahoo", tf=tf)
         return frame, False, ""
 
     _saglayici_kaydet(stock, "yahoo", reason)
@@ -222,6 +254,8 @@ def _veri_zinciri(
             _SAGLAYICI_DURUM["yok"] = int(_SAGLAYICI_DURUM["yok"]) + 1
             _SAGLAYICI_DURUM["son_kaynak_by_symbol"].pop(
                 str(stock or "").strip().upper(), None)
+        with _SAGLAYICI_KILIT:
+            _SAGLAYICI_DURUM.setdefault("son_kaynak_by_series", {})[f"{str(stock).strip().upper()}|{tf}"] = None
         return None, retryable, f"{reason} | tv: {tv_hata}"
 
     if frame_validator is not None:
@@ -235,10 +269,15 @@ def _veri_zinciri(
             kabul, neden = False, f"tazelik doğrulaması {type(exc).__name__}"
         if not kabul:
             _saglayici_kaydet(stock, "tvdatafeed", neden)
+            with _SAGLAYICI_KILIT:
+                key = str(stock).strip().upper()
+                _SAGLAYICI_DURUM["son_kaynak_by_symbol"].pop(key, None)
+                _SAGLAYICI_DURUM.setdefault("son_kaynak_by_series", {})[f"{key}|{tf}"] = None
+                _SAGLAYICI_DURUM["yok"] = int(_SAGLAYICI_DURUM.get("yok") or 0) + 1
             return None, retryable, f"{reason} | tv: {neden or 'tazelik doğrulaması'}"
 
     tv.attrs["saglayici_zinciri"] = ["yahoo", "tvdatafeed"]
-    _saglayici_kaydet(stock, "tvdatafeed")
+    _saglayici_kaydet(stock, "tvdatafeed", tf=tf)
     _pkg.logger.warning(
         "%s: Yahoo %s veri döndürmedi (%s); tvDatafeed yedeği kullanıldı "
         "(%d bar). Kaynak etiketi: tvdatafeed",
@@ -252,7 +291,7 @@ def fetch_tv_4h(stock: str) -> Optional[pd.DataFrame]:
     Yalnızca TV yedeğinin kullanıldığı sembollerde, tarama katmanı tarafından
     çağrılır. Kapalıysa/kurulu değilse None döner; üretim akışı bozulmaz.
     """
-    if not TV_GERCEK_4S_AKTIF or son_veri_kaynagi(stock) != "tvdatafeed":
+    if not TV_GERCEK_4S_AKTIF or son_veri_kaynagi(stock, "1h") != "tvdatafeed":
         return None
     frame, hata = _tv_yedek_dene(stock, "4h", "60d")
     if frame is None:
@@ -573,6 +612,7 @@ def yfinance_error_is_retryable(error) -> bool:
         "timeout", "timed out", "connection", "temporarily unavailable",
         "502", "503", "504", "service unavailable", "bad gateway",
         "gateway timeout", "network is unreachable", "remote disconnected",
+        "veri gecikmesi",
     )
     return any(marker in text for marker in transient_markers)
 
@@ -581,6 +621,8 @@ def fetch_yfinance_1h(
     stock: str,
     period: str = "60d",
     with_status: bool = False,
+    *,
+    as_of: Optional[datetime] = None,
 ):
     """yfinance'den 1h OHLCV çeker; varsayılan olarak DataFrame veya None döner.
 
@@ -595,7 +637,10 @@ def fetch_yfinance_1h(
     """
     # Ortak Yahoo yolu history çağrısını auto_adjust=False ile yapar; TV yedeği
     # de ham (splits-only) kapanış kullanır. İkisi aynı fiyat ölçeğindedir.
-    df, retryable, reason = _veri_zinciri(stock, period, "1h")
+    from data.quality import hourly_fetch_validator
+    validator = hourly_fetch_validator(stock, as_of) if as_of is not None else None
+    df, retryable, reason = _veri_zinciri(
+        stock, period, "1h", frame_validator=validator)
     return (df, retryable, reason) if with_status else df
 
 

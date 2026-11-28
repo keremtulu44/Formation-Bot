@@ -95,6 +95,9 @@ from state import persistence as _state_persistence
 from state import paths as _state_paths
 from transport import telegram as _transport_telegram
 
+from collections import Counter
+from bot import scan_evidence
+
 import main as _pkg  # geç bağlama: yamalı adlar _pkg.X (plan §3)
 _fetch_observations_local = threading.local()
 
@@ -107,7 +110,7 @@ def _zaman_dilimlerini_hazirla(stock: str, df_1h: pd.DataFrame) -> Dict[str, pd.
     """
     df_4h_native = None
     if (TV_GERCEK_4S_AKTIF
-            and _pkg.son_veri_kaynagi(stock) == "tvdatafeed"):
+            and (df_1h.attrs.get("veri_kaynagi") or _pkg.son_veri_kaynagi(stock)) == "tvdatafeed"):
         try:
             df_4h_native = _pkg.fetch_tv_4h(stock)
         except Exception as exc:  # noqa: BLE001 - grafik/analiz aksamamalı
@@ -212,7 +215,8 @@ def create_yahoo_pacer() -> YahooRequestPacer:
     return _yahoo_pacer_ref
 
 
-def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=None):
+def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=None,
+                          *, validate_freshness: bool = False):
     """1H verilerini seri çeker; geçici hatalı sembolleri bir kez tekrar dener.
 
     Dönenler: başarılı DataFrame'ler, kalıcı/son hatalar, retry sayısı,
@@ -240,7 +244,8 @@ def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=
                 request_started = time.monotonic()
                 try:
                     frame, can_retry, reason = _pkg.fetch_yfinance_1h(
-                        stock, period=period, with_status=True
+                        stock, period=period, with_status=True,
+                        **({"as_of": _pkg.datetime.now(ISTANBUL_TZ)} if validate_freshness else {}),
                     )
                 finally:
                     request_seconds = max(0.0, time.monotonic() - request_started)
@@ -252,12 +257,14 @@ def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=
             "provider_seconds": request_seconds,
             "attempts": 1,
             "status": "ok" if frame is not None else "failed",
+            "source": getattr(frame, "attrs", {}).get("veri_kaynagi"),
+            "reason": str(reason or "")[:240],
         }
 
         if frame is not None:
             fetched[stock] = frame
             _pkg.logger.info(
-                f"{phase} [{index}/{len(stocks)}] {stock}: {period} taze 1H veri alındı "
+                f"{phase} [{index}/{len(stocks)}] {stock}: {period} 1H yanıtı alındı "
                 f"({len(frame)} bar, sağlayıcı çağrısı {request_seconds:.2f} sn)"
             )
         else:
@@ -308,6 +315,7 @@ def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=
                             stock,
                             period=periods.get(stock, FULL_1H_FETCH_PERIOD),
                             with_status=True,
+                            **({"as_of": _pkg.datetime.now(ISTANBUL_TZ)} if validate_freshness else {}),
                         )
                     finally:
                         request_seconds = max(0.0, time.monotonic() - request_started)
@@ -321,6 +329,9 @@ def fetch_1h_stocks_paced(stocks, pacer: YahooRequestPacer, phase: str, periods=
                 "provider_seconds": float(prior.get("provider_seconds") or 0.0) + request_seconds,
                 "attempts": int(prior.get("attempts") or 1) + 1,
                 "status": "ok" if frame is not None else "failed",
+                "source": getattr(frame, "attrs", {}).get("veri_kaynagi"),
+                "reason": str(reason or "")[:240],
+                "recovered": frame is not None,
             }
             if frame is not None:
                 fetched[stock] = frame
@@ -641,6 +652,9 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     - Telegram (cooldown ile)
     """
     simdiki_zaman = _pkg.datetime.now(ISTANBUL_TZ)
+    evidence_started_at = simdiki_zaman.isoformat()
+    flow_data, flow_main, flow_domain = Counter(), Counter(), Counter()
+    flow_problems = []
     tarama_baslangici = time.monotonic()
     scan_stocks = list(dict.fromkeys(stocks or _pkg.ACTIVE_STOCKS))
     tur_taranan = 0
@@ -749,7 +763,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     pacer = _pkg.create_yahoo_pacer()
     fetch_started = time.monotonic()
     taze_1h_verileri, fetch_hatalari, retry_sayisi, retry_kurtarilan = _pkg.fetch_1h_stocks_paced(
-        scan_stocks, pacer, "MANUEL ANALİZ" if manuel else "CANLI TARAMA", periods=fetch_periods
+        scan_stocks, pacer, "MANUEL ANALİZ" if manuel else "CANLI TARAMA", periods=fetch_periods,
+        validate_freshness=True
     )
     fetch_1h_wall_seconds = max(0.0, time.monotonic() - fetch_started)
     fetch_observations = getattr(
@@ -762,6 +777,14 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
     _pkg.daily_stats['fetch_failures'] += len(fetch_hatalari)
     _pkg.daily_stats['fetch_retries'] += retry_sayisi
     _pkg.daily_stats['fetch_retry_recovered'] += retry_kurtarilan
+    flow_data.update(received=len(taze_1h_verileri), fetch_failed=len(fetch_hatalari),
+                     retry_recovered=retry_kurtarilan, retries=retry_sayisi)
+    for failure_reason in fetch_hatalari.values():
+        kind = "fetch_stale" if "veri gecikmesi" in str(failure_reason).lower() else "fetch_other"
+        flow_data[kind] += 1
+    for symbol, frame in taze_1h_verileri.items():
+        source = getattr(frame, "attrs", {}).get("veri_kaynagi")
+        flow_data[source if source in ("yahoo", "tvdatafeed") else "source_unknown"] += 1
 
     for idx, stock in enumerate(scan_stocks):
         if _pkg._shutdown_requested:
@@ -792,6 +815,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         f"{stock}: sağlayıcı 1H verisi OHLCV doğrulamasında REDDEDİLDİ; "
                         "cache güncellenmedi, taze veri sayılmıyor"
                     )
+                    flow_data["cache_rejected"] += 1
+                    flow_problems.append(f"{stock}:cache_rejected")
                     taze = None
                 df_1h = deque_manager.to_dataframe(stock)
             if taze is None:
@@ -801,8 +826,15 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 )
             
             if df_1h is None or len(df_1h) < 50:
+                flow_data["insufficient"] += 1
+                flow_problems.append(f"{stock}:insufficient")
                 _pkg.logger.warning(f"{stock}: veri yok (fetch basarisiz + cache bos) - bu tur atlandi")
                 continue
+
+            if taze is not None:
+                df_1h.attrs.update(getattr(taze, "attrs", {}))
+            else:
+                df_1h.attrs["veri_kaynagi"] = "cache"
 
             # Sağlayıcı timestamp'i bar açılışı olarak yorumlanır; gerçek kapanış
             # gecikmesini 1H etiket yaşıyla karıştırmamak için ayrı, yalnızca
@@ -847,6 +879,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             if st_sorunlar:
                 tipler = sorted({x['tip'] for x in st_sorunlar})
                 if 'split' in tipler:
+                    flow_data['split'] += 1
+                    flow_problems.append(f"{stock}:split")
                     _pkg.daily_stats['split_atlanan'] += 1
                     _pkg.logger.error(
                         f"{stock}: analiz atlanıyor - veri sorunu {tipler}. "
@@ -858,6 +892,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                 # kalitesini etkilediği uyarı olarak yazılır + sayılır. Tamir
                 # yolu (tam pencere) bir üstteki fetch turunda denenmiştir.
                 if 'bosluk' in tipler:
+                    flow_data['gaps'] += 1
                     eksik = sum(
                         1 for x in st_sorunlar if x.get('tip') == 'bosluk'
                     )
@@ -877,6 +912,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             seans_acik = _pkg.tarama_penceresi_acik_mi(simdiki_zaman)
             if (taze is None and seans_acik and son_bar_yasi_dk is not None
                     and son_bar_yasi_dk > VERI_YOK_MODU_ESIK_DK):
+                flow_data['stale'] += 1
+                flow_problems.append(f"{stock}:stale_cache")
                 _pkg.daily_stats['veri_yok_modu'] = True
                 _pkg.logger.info(
                     f"{stock}: seans açıkken yeni veri yok (son mum "
@@ -889,6 +926,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             # (varsayılan 14 gün) kadar açıkça eski veri olarak kullanılabilir.
             if not _pkg._cache_verisi_kullanilabilir(
                     son_bar_yasi_dk, taze is not None, seans_acik):
+                flow_data['stale'] += 1
+                flow_problems.append(f"{stock}:stale")
                 _pkg.daily_stats['stale_stocks'] += 1
                 _pkg.daily_stats['data_stale'] = True
                 _pkg.logger.warning(
@@ -1037,7 +1076,10 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         candle_close_price = float(df_tf["close"].iloc[-1])
                     except (KeyError, IndexError, TypeError, ValueError, OverflowError):
                         candle_close_price = None
-                    break_price = _pkg._alert_break_level(active, break_dir, notification_state)
+                    break_price = _pkg._alert_break_level(
+                        active, break_dir, notification_state,
+                        bar_index=getattr(snap, "bar_index", None),
+                    )
                     _pkg._record_daily_lifecycle_events(
                         stock, tf_name, snap, fallback_bar_time=df_tf.index[-1]
                     )
@@ -1208,6 +1250,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     # eşiği geçmiş bir olayın iptali, formasyon kalitesi sonradan
                     # düştü diye bastırılırsa kullanıcıda "geçerli" kalır.
                     if q < min_q and notification_state != "KIRILIM_GECERSIZLESTI":
+                        flow_main["below_threshold"] += 1
                         _pkg.daily_stats['alerts_below_threshold'] += 1
                         _pkg.logger.debug(f"{stock} {tf_name} kalite {q:.0f} < {min_q} (alert eşiği) - telegram atlanıyor")
                     elif send_alerts and not _pkg._alarm_izni_var(stock):
@@ -1218,6 +1261,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                      "(MAKRO_ALARM=0); formasyon kaydı tutuldu",
                                      stock, tf_name, notification_state)
                     elif send_alerts and state in WATCH_STATES:
+                        flow_main["deferred"] += 1
                         _pkg.daily_stats['alerts_deferred'] += 1
                         _pkg.logger.info(f"{stock} {tf_name} {state}: düşük öncelikli bildirim kapanış özetine ertelendi")
                     # Teyitli kırılım, başarılı retest, tamamlanma ve başarısız kırılım acildir.
@@ -1226,6 +1270,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         # normalde HİÇ çalışmaz (tamamlanmis_mumlar aynı kuralı
                         # uygular); saat/tarama kayması olursa sinyal yanlış
                         # gönderilmek yerine bir sonraki taramaya bırakılır.
+                        flow_main["bar_not_closed"] += 1
                         _pkg.daily_stats['alerts_bar_kapanmadi'] += 1
                         _pkg.logger.warning(
                             f"⏸️ {stock} {tf_name} {notification_state}: bar henüz kapanmadı "
@@ -1234,6 +1279,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     elif (send_alerts and notification_state in _pkg.IMMEDIATE_ALERT_STATES
                           and not _pkg._closed_formation_event_confirmed(
                               notification_state, break_dir, candle_close_price, break_price)):
+                        flow_main["close_not_confirmed"] += 1
                         _pkg.daily_stats['alerts_break_close_invalid'] += 1
                         _pkg.logger.warning(
                             "⏸️ %s %s %s: kapanış teyit seviyesi dışında; Telegram push atlandı "
@@ -1605,6 +1651,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
 
 
                         if dm_gecersiz_engel or dm_dev_engel:
+                            flow_main["dm_policy_blocked"] += 1
                             # Yalnız bağlam + public kuyruğu: DM'e gönderim yok,
                             # hint/kuyruk sayaçları da değişmez. İki bilinçli
                             # DM kapısı aynı yolu kullanır: geçersizleşme
@@ -1612,6 +1659,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             _attach_domain_context(alert_data)
                             alert_sent = False
                         else:
+                            flow_main["attempted"] += 1
                             _pkg.daily_stats['alerts_attempted'] += 1
                             send_with_prepare = getattr(notifier, "send_with_prepare", None)
                             if callable(send_with_prepare):
@@ -1623,6 +1671,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                                 _attach_domain_context(alert_data)
                                 alert_sent = notifier.send(alert_data)
                         if alert_sent:
+                            flow_main["sent"] += 1
                             _pkg.daily_stats['alerts_sent'] += 1
                             _pkg._gun_sayacini_gonderimle_hizala(
                                 stock, tf_name, notification_state)
@@ -1637,6 +1686,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             # DM geçersizleşme/devamlılık kapıları buraya DÜŞMEZ
                             # (yukarıda ayrıldı): onlar arıza değil, bilinçli
                             # "DM'e söyleme" kararıdır.
+                            flow_main["not_sent"] += 1
                             _pkg.daily_stats['alerts_failed'] += 1
                             if getattr(notifier, "_son_engel", ""):
                                 if notifier._son_engel == "cooldown":
@@ -1660,6 +1710,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                     elif send_alerts:
                         # Ne acil ne izleme: mevcut state politikasında push yok,
                         # yalnız /panel ve /formasyonlar gösterir. Sessizce düşmesin.
+                        flow_main["state_disabled"] += 1
                         _pkg.daily_stats['alerts_state_disabled'] += 1
                 else:
                     # Başarılı TF taramasında aday kaybolduysa bekleyen kaydı kaldır.
@@ -1731,6 +1782,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                             bar_metni_fn=_mum_bilgisi,
                             grafik_baglami=grafik_baglami_by_tf,
                             direnc_gunluk_ham=df_gunluk_ham,
+                            diagnostics=flow_domain,
                         )
                         if yeni_cands:
                             domain_alarm_adaylari.extend(yeni_cands)
@@ -1739,6 +1791,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
                         _pkg.logger.warning("%s yeni domain aday kontrolü hatası: %s", stock, yeni_err)
 
             _pkg.daily_stats['stocks_scanned'] += 1
+            flow_data["provider_used" if taze is not None else "cache_used"] += 1
             tur_taranan += 1
             
             # Her hisse sonrası diske kaydet (crash durumunda kayıp azalsın) + heartbeat
@@ -1762,6 +1815,7 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
 
         except Exception as e:
             _pkg.daily_stats['errors'] += 1
+            flow_problems.append(f"{stock}:analysis_error")
             tur_hata += 1
             _pkg.logger.error(f"{stock} tarama hatası: {e} - devam ediliyor", exc_info=True)
             continue
@@ -1932,6 +1986,8 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
             dy_ozet = dispatch_domain_alarm_candidates(
                 domain_alarm_adaylari, notifier, frames_by_symbol=ai_frames_by_symbol,
             )
+            flow_domain['dispatch_filtered'] += int(dy_ozet.get('filtrelendi') or 0)
+            flow_domain['dispatch_ok'] += int(dy_ozet.get('tekil_gonderilen') or 0) + int(dy_ozet.get('toplu_ozet') or 0)
             _pkg.daily_stats['yeni_domain_alerts_sent'] = int(
                 _pkg.daily_stats.get('yeni_domain_alerts_sent') or 0
             ) + int(dy_ozet.get('tekil_gonderilen') or 0) + int(dy_ozet.get('toplu_ozet') or 0)
@@ -1945,6 +2001,18 @@ def scan_all_stocks(deque_manager: StockDequeManager, lifecycle_manager: Pattern
         except Exception as dy_disp_err:  # noqa: BLE001
             _pkg.logger.warning("Yeni domain bildirim gönderim hatası: %s", dy_disp_err)
     _pkg._grafikleri_tur_sonunda(notifier)
+    flow_data["skipped"] = max(0, len(scan_stocks) - tur_taranan)
+    mode = ("analysis_only" if not send_alerts else "manual" if manuel else
+            "scheduled_full" if _pkg._is_full_universe_scan(scan_stocks) else "scheduled_subset")
+    evidence = scan_evidence.new_snapshot(
+        started_at=evidence_started_at, finished_at=_pkg.datetime.now(ISTANBUL_TZ).isoformat(),
+        requested=len(scan_stocks), processed=tur_taranan, mode=mode,
+        policy=str(config.YENI_DOMAIN_ALARM_POLITIKA), data=flow_data,
+        formation=flow_main, domain=flow_domain, problems=flow_problems,
+    )
+    _pkg.last_run_stats["flow"] = evidence
+    scan_evidence.save_evidence(evidence)
+    _pkg.logger.info("Mum/alarm akışı: %s", json.dumps(evidence, ensure_ascii=False))
     # Tarama bitti: heartbeat kesin yazılsın (force), böylece per-hisse
     # throttle'a takılan son durum dışarıdan anında görünür.
     _pkg.write_heartbeat(notifier=notifier, force=True)

@@ -519,9 +519,16 @@ def test_immediate_tekrar_operatörce_kapatilabilir(monkeypatch):
 
 # 6) OB/FVG tepkisi OR kaynağı.
 def test_ob_ve_fvg_tepkisi_ayri_sebep_olur():
-    cands = _degerlendir(
-        _sonuclar(dist_atr=2.0, rvol=1.0, ob_tepki=True, fvg_reaksiyon=True)
-    )
+    results = _sonuclar(dist_atr=2.0, rvol=1.0, ob_tepki=True, fvg_reaksiyon=True)
+    frame = _frame()
+    # A prior known OB was touched (low 98) and close 100 recovered above 99;
+    # a post-fill price-inside export alone is not reaction evidence anymore.
+    results["1d"]["order_block"].details = {"reaction_context": {
+        "bar_time": frame.index[-1], "previous_bar_time": frame.index[-2],
+        "previous_export": {"bull": {"source_bar": 3, "top": 99., "bottom": 95.}},
+        "surviving_sources": ((3, 1),),
+    }}
+    cands = _degerlendir(results)
     assert len(cands) == 1
     sebep_metni = " | ".join(cands[0].reasons)
     assert "OB boğa bölge tepkisi" in sebep_metni
@@ -734,3 +741,26 @@ def test_yeni_kart_grafikleri_ayni_payload_ile_gider(tmp_path):
     assert notifier.grafik_kuyruk[0][0]["state"] == "YENI_DOMAIN"
     assert notifier.public_grafik[0][1] is pub_veri
     assert notifier.public_grafik[0][0]["pattern_name"] == "DOMAİN TETİKLEME"
+
+
+def test_scan_diagnostics_observe_policy_without_changing_candidates(monkeypatch):
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_POLITIKA", "P0")
+    stats = {}
+    normal = _degerlendir(_sonuclar(dist_atr=1.0, rvol=6.0))
+    observed = _degerlendir(_sonuclar(dist_atr=1.0, rvol=6.0), diagnostics=stats)
+    assert [c.bar_key for c in normal] == [c.bar_key for c in observed]
+    assert stats["triggered"] == stats["candidates"] == 1
+    assert stats.get("policy_rejected", 0) == 0
+
+
+def test_scan_diagnostics_distinguish_policy_and_support_rejection(monkeypatch):
+    import bot.domain_alarm_service as service
+    monkeypatch.setattr(config, "YENI_DOMAIN_ALARM_POLITIKA", "P6")
+    monkeypatch.setattr(service, "_politika_gecer", lambda *a: False)
+    stats = {}
+    assert not _degerlendir(_sonuclar(dist_atr=1.0, rvol=6.0), diagnostics=stats)
+    assert stats["triggered"] == stats["policy_rejected"] == 1
+    assert stats["candidates"] == 0
+    stats = {}
+    assert not _degerlendir(_sonuclar(dist_atr=-4.0, rvol=6.0), diagnostics=stats)
+    assert stats["support_rejected"] == 1 and stats.get("triggered", 0) == 0

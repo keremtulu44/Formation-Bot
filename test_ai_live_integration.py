@@ -29,7 +29,7 @@ from notifier import TelegramNotifier
 from telegram_commands import ArkaPlanYaniti
 
 
-VALID_AI_REPLY = (
+LONG_AI_REPLY = (
     "🧭 Mevcut durum\n"
     "BIMAS 4H grafikte Simetrik Üçgen yukarı kırılım sonrası retest bekliyor; "
     "dış yapı aşağı geçişte kaldığı için görüş koşullu kararsız, yukarı eğilime yakın. "
@@ -43,6 +43,20 @@ VALID_AI_REPLY = (
     "4H +OB 410,75–423,50 iki temas grubu sonrası son kapanışta orijinal bandın üzerinde; "
     "sonraki kapanmış mum henüz oluşmamış. 432,00–437,50 −OB bölgesi henüz temas almamış "
     "ve izlenecek ilk üst direnç alanı olarak duruyor.\n\n"
+    "[AI_SONUC egilim=yukari | guc=orta | mtf_uyum=karma | risk=orta | yayin_degeri=izle]"
+)
+
+
+# Alarm profili kısa kalır; uzun örnek yalnız manuel analiz/limit testindedir.
+VALID_AI_REPLY = (
+    "🧭 Mevcut durum\n"
+    "4H yukarı kırılım sonrası görüş koşullu olumlu; +OB üzerindeki kapanış ana gerekçe. "
+    "\n\n"
+    "🔎 Bağlam\n"
+    "Dış yapı aşağı geçişte; henüz yukarı BOS teyidi yok ve hacim motoru hazır değil.\n\n"
+    "🕯️ Replay notu\n"
+    "410,75 altı kapanış bu görüşü zayıflatır. "
+    "410,75–423,50 +OB temasında son kapanış orijinal bandın üzerinde; sonraki kapanış henüz oluşmadı.\n\n"
     "[AI_SONUC egilim=yukari | guc=orta | mtf_uyum=karma | risk=orta | yayin_degeri=izle]"
 )
 
@@ -204,10 +218,10 @@ def test_alarm_replaced_by_ai_on_both_dm_and_public_and_shadow_saved(tmp_path, m
 
     # BOTH DM and Public receive the AI commentary IN PLACE OF the plain card!
     assert dm_text == pub_text
-    assert dm_text.startswith("🤖 BIMAS · 4s · Simetrik Üçgen (Kırılım Teyitli)")
-    assert "🧭 Mevcut durum" in dm_text
-    assert "🔎 Bağlam" in dm_text
-    assert "🕯️ Replay notu" in dm_text
+    assert dm_text.startswith("🤖 BIMAS · 4 saat · Simetrik Üçgen (Kırılım Teyitli)")
+    assert "🧭 Görünüm" in dm_text
+    assert "📍 İzlenecek bölgeler" in dm_text
+    assert "Mevcut durum" not in dm_text and "Replay notu" not in dm_text
     # Hidden [AI_SONUC ...] block MUST NEVER appear in Telegram!
     assert "AI_SONUC" not in dm_text
     assert "AI_SONUC" not in pub_text
@@ -222,7 +236,9 @@ def test_alarm_replaced_by_ai_on_both_dm_and_public_and_shadow_saved(tmp_path, m
     rows = load_local_shadow_records(shadow_file)
     assert len(rows) == 1
     assert rows[0]["egilim"] == "yukari"
-    assert rows[0]["telegrama_gitti"] is True
+    # Kuyruğa hazırlamak gerçek teslim makbuzu değildir.
+    assert rows[0]["telegrama_gitti"] is False
+    assert rows[0]["baglam_ozet"]["teslim_durumu"] == "dogrulanmadi"
     assert len(fake_store.calls) == 1
     assert fake_store.calls[0][0] == "ai_yorum_test"
 
@@ -319,7 +335,7 @@ def test_stabil_and_domain_single_cards_use_ai_or_fallback_to_plain_card(tmp_pat
         frames_by_symbol=frames_map,
         router=_mock_router_wrapper_ok(),
     )
-    assert len(sent_dm) == 1 and sent_dm[0].startswith("🤖 BIMAS · 4s")
+    assert len(sent_dm) == 1 and sent_dm[0].startswith("🤖 BIMAS · 4 saat")
     assert len(sent_pub) == 1 and sent_pub[0] == sent_dm[0]
     assert "AI_SONUC" not in sent_dm[0]
 

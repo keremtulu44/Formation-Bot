@@ -368,8 +368,12 @@ _FVG_AKTIF_DURUMLAR = frozenset({3, 4, 5, 6})
 
 
 def _bolge_sebepleri(results: Mapping[str, Any], tf: str,
-                     close: float) -> list[str]:
-    """OB/FVG: fiyat aktif bölgenin içindeyse veya FVG `reaksiyon` olayındaysa."""
+                     close: float, frame: pd.DataFrame | None = None) -> list[str]:
+    """OB canlıda temas+geri kapanış; FVG mevcut native koşulları korunur.
+
+    Framesiz üç-argümanlı çağrı tarihî araştırma/legacy fiyat-içi sözleşmesidir.
+    Canlı aday üretimi tamamlanmış frame'i vererek olay kanıtını kullanır.
+    """
     bulunan: list[str] = []
     for alan, tip, yanlar in (
         ("order_block", "OB", ("bull", "bear")),
@@ -383,6 +387,11 @@ def _bolge_sebepleri(results: Mapping[str, Any], tf: str,
             continue
         export = _usable_export(entry)
         if export is None:
+            continue
+        if tip == "OB" and frame is not None:
+            from .domain_alarm_events import ob_reaction_reasons
+            context = _field(_field(entry, "details", {}) or {}, "reaction_context")
+            bulunan.extend(ob_reaction_reasons(context, frame))
             continue
         for anahtar in yanlar:
             yan = _field(export, anahtar)
@@ -601,6 +610,7 @@ def evaluate_domain_alarm_candidates(
     bar_metni_fn: Any = None,
     grafik_baglami: Mapping[str, Mapping[str, Any]] | None = None,
     direnc_gunluk_ham: pd.DataFrame | None = None,
+    diagnostics: dict | None = None,
 ) -> list[DomainAlarmCandidate]:
     """Bir sembol için yeni kanal adaylarını üret; canlı state'e yazmaz."""
     if not bool(getattr(config, "YENI_DOMAIN_ALARM", True)):
@@ -619,7 +629,12 @@ def evaluate_domain_alarm_candidates(
     # direnç hesabını tekrar çalıştırmasın. Kill-switch kapalıyken boş kalır.
     direnc_cache: dict[str, Any] = {}
 
+    def count(name):
+        if diagnostics is not None:
+            diagnostics[name] = int(diagnostics.get(name, 0)) + 1
+
     for tf, frame in frames.items():
+        count("evaluated")
         tf = str(tf).lower()
         if tf not in results or not isinstance(frame, pd.DataFrame) or len(frame) < 30:
             continue
@@ -649,12 +664,13 @@ def evaluate_domain_alarm_candidates(
 
         stabil = _stabil_bilgisi(results, tf, frame, formasyon_kayitlari)
         if stabil is None:
+            count("support_rejected")
             continue
 
         close = float(stabil["close_price"])
         sebepler: list[str] = []
         sebepler.extend(_bos_ve_choch_sebepleri(results, tf, len(frame)))
-        sebepler.extend(_bolge_sebepleri(results, tf, close))
+        sebepler.extend(_bolge_sebepleri(results, tf, close, frame=frame))
         sebepler.extend(_formasyon_sebepleri(formasyon_kayitlari, tf))
 
         hacim = _hacim_bilgisi(results, tf, frame)
@@ -662,7 +678,9 @@ def evaluate_domain_alarm_candidates(
             sebepler.append(hacim["sebep"])
         sebepler = sorted(set(s for s in sebepler if s))
         if not sebepler:
+            count("no_trigger")
             continue
+        count("triggered")
 
         # Alarm politikası (P0/P6/P4): P0 her tetik; P6/P4 bağlam ister.
         # Filtre aday üretimini engeller; dedup/cooldown'a dokunmaz.
@@ -670,6 +688,7 @@ def evaluate_domain_alarm_candidates(
         if _politika in ("P6", "P4"):
             _sikisma, _kosu = _baglam_sikisma_kosu(frame)
             if not _politika_gecer(sebepler, hacim["tier"], _sikisma, _kosu):
+                count("policy_rejected")
                 logger.debug(
                     "Yeni domain aday politika %s ile elendi %s/%s (sikisma=%s kosu=%s sebepler=%s)",
                     _politika, stock, tf, _sikisma, _kosu, sebepler,
@@ -735,6 +754,8 @@ def evaluate_domain_alarm_candidates(
             )
         )
 
+    if diagnostics is not None:
+        diagnostics["candidates"] = int(diagnostics.get("candidates", 0)) + len(adaylar)
     return adaylar
 
 
@@ -786,6 +807,17 @@ def _ts_utc(value: Any) -> pd.Timestamp:
     return ts.tz_convert("UTC")
 
 
+def _ob_sonrasi_yeni_kanal(slot: Mapping[str, Any], cand: DomainAlarmCandidate) -> bool:
+    """OB-only temas bildirimi yeni bağımsız kanal bilgisini susturmasın.
+
+    Aynı mum/zaman güvenlikleri çağıranda önce uygulanır. Bilinmeyen legacy
+    imzada istisna yok; OB tekrarına veya genel cooldown gevşetmeye izin vermez.
+    """
+    previous = str(slot.get("reason_signature") or "").split("|")
+    return (bool(previous) and all(s.startswith("OB ") for s in previous)
+            and any(not s.startswith("OB ") for s in cand.reasons))
+
+
 def _zaten_gonderildi(slot: Mapping[str, Any] | None, cand: DomainAlarmCandidate) -> bool:
     """Aynı bar iki kez basılmasın; sembol/TF başına N bar sessizlik uygula.
 
@@ -813,7 +845,8 @@ def _zaten_gonderildi(slot: Mapping[str, Any] | None, cand: DomainAlarmCandidate
                 return True
             if not history.is_monotonic_increasing or history.has_duplicates:
                 return True
-            return int(((history > previous) & (history <= current)).sum()) < cooldown
+            elapsed = int(((history > previous) & (history <= current)).sum())
+            return elapsed < cooldown and not _ob_sonrasi_yeni_kanal(slot, cand)
         except (TypeError, ValueError, OverflowError):
             return True
     # Compatibility for callers without bar history and older stored slots.
@@ -821,7 +854,17 @@ def _zaten_gonderildi(slot: Mapping[str, Any] | None, cand: DomainAlarmCandidate
         son_index = int(slot["last_bar_index"])
     except (KeyError, TypeError, ValueError, OverflowError):
         return False
-    return (cand.bar_index - son_index) < cooldown
+    elapsed = cand.bar_index - son_index
+    if elapsed <= 0:
+        return True
+    # Timestamp ordering still takes precedence for legacy positional callers.
+    if slot.get("last_bar_open"):
+        try:
+            if _ts_utc(cand.bar_open) <= _ts_utc(slot["last_bar_open"]):
+                return True
+        except (TypeError, ValueError, OverflowError):
+            return True
+    return elapsed < cooldown and not _ob_sonrasi_yeni_kanal(slot, cand)
 
 
 def _isaretle(slots: dict[str, Any], cand: DomainAlarmCandidate) -> None:

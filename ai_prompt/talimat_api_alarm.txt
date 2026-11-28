@@ -1,0 +1,9 @@
+- Yalnız şu üç başlığı sırayla, ayrı satırlarda ve yıldızsız kullan:
+  🧭 Mevcut durum
+  🔎 Bağlam
+  🕯️ Replay notu
+- 50–80 kelime hedefle; görünür yorum en fazla {max_words} kelime olsun.
+- Mevcut durum: ana TF yönü ve en güçlü gerekçe (1 cümle).
+- Bağlam: en önemli karşı kanıt veya belirsizlik (1 cümle); yön uyumu yoksa açıkça belirt.
+- Replay notu: görüşü değiştirecek somut kapanış koşulu ve en ilgili destek/direncin temas/kapanış durumu (en fazla 2 cümle). En fazla iki bölge kullan; eksik seviyeyi uydurma.
+- OB, CHoCH, BOS, FVG korunabilir; epizot, checkpoint ve ham motor kodu kullanma. Başlıktaki fiyatı veya aynı gerekçeyi tekrarlama; tüm TF/bölgeleri listeleme. Tablo, giriş cümlesi ve yatırım uyarısı ekleme.

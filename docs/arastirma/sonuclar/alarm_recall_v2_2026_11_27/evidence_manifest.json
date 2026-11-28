@@ -1,0 +1,44 @@
+{
+  "schema": "causal-alarm-channels-v2",
+  "source_directory": "var/alarm_recall_v2_20261127",
+  "outputs": {
+    "breakdown.json": {
+      "sha256": "ccd57e6d09ec42f9055b99d859bac3621cac980eadbd00441aff60524cff8247",
+      "bytes": 121913
+    },
+    "daily.csv": {
+      "sha256": "5189bdf70fd37687ef6530bd9ae4a3503811525717041ec654f97c2b5a60e8fe",
+      "bytes": 515
+    },
+    "decisions.jsonl": {
+      "sha256": "c7bba2dacd9ea29164c7c9bc4e15e302bf7ca89426da17aceab65ab0b180d460",
+      "bytes": 6145414
+    },
+    "events.jsonl": {
+      "sha256": "ef7f87217c99d01ee98672f14a2d8f472b22c2f3f4742a4151b02eed71b910a2",
+      "bytes": 32476446
+    },
+    "examples.csv": {
+      "sha256": "a69d96a0034e9b6c1a277ac6ead2ab9a91724a20cdd9f80e3427b1c7dd7d5989",
+      "bytes": 2215
+    },
+    "meta.json": {
+      "sha256": "eeea281d5f88a1d8318781780e0cf290e6822582041af188742d5eead59c15e0",
+      "bytes": 934761
+    },
+    "summary.json": {
+      "sha256": "254559dae06d657830a4945b06ee490f70b462044caf3caa3dc55b7a960dcc2f",
+      "bytes": 89871
+    }
+  },
+  "tests": {
+    "focused_new": "25 passed in 3.21s",
+    "related_regression": "1547 passed in 192.20s; overlapping tests, do not sum",
+    "scope": "not a full repository suite"
+  },
+  "supplement_code": {
+    "research/alarm_recall_breakdown.py": "f135ba7267a8a63093b140e01cc0b7a918abae3deebcf30e10d314d0b8134da7",
+    "test_causal_alarm_replay.py": "036c193b3dc50a8c7d053b39676c8bf7a91ebfff47468acd2d4b3cefc658a3ae",
+    "test_alarm_recall_breakdown.py": "7b4af6b91c173ff9406965f80a41c4e3ae44fc2a1ae0fedab4f8e9d13c9b6b68"
+  }
+}

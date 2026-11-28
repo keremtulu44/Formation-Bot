@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .commentary import validate_ai_commentary
+from .commentary import ALARM_MAX_WORDS, validate_ai_commentary
 
 HIDDEN_VERDICT_TAG = "AI_SONUC"
 
@@ -32,12 +32,14 @@ HIDDEN_VERDICT_INSTRUCTION = (
     "- Metindeki görüşünle tutarlı ol; eksik veri veya güçlü çelişkide `yayin_degeri=gonder` yazma."
 )
 
-# Fenced or plain `[AI_SONUC ...]` / `[SONUC ...]` / `[SONUÇ ...]` blocks.
-_FENCED_VERDICT_RE = re.compile(
-    r"(?is)```[a-z0-9_-]*\s*\n\s*(\[\s*(?:ai[_\s-]*)?sonu[cç]\b[^\]]*\])\s*\n\s*```",
-)
-_PLAIN_VERDICT_RE = re.compile(
-    r"(?is)\[\s*(?:ai[_\s-]*)?sonu[cç]\b([^\]]*)\]",
+# Birleştirilmiş tarama kaynak sırasını korur. Kapanış köşeli parantezi
+# eksikse gizli bloktan metnin sonuna kadar temizlenir (model/stream kesintisi).
+_VERDICT_OPEN = r"\[\s*(?:ai[_\s-]*)?sonu[cç]\b"
+_PLAIN_VERDICT_RE = re.compile(r"(?is)" + _VERDICT_OPEN + r"([^\]]*)\]")
+_STRIP_VERDICT_RE = re.compile(
+    r"(?is)(?P<fence>```[a-z0-9_-]*[ \t]*(?:\r?\n)?[ \t]*)?"
+    r"(?P<block>" + _VERDICT_OPEN + r"[^\]]*(?:\]|\Z))"
+    r"(?(fence)(?:[ \t]*(?:\r?\n)?[ \t]*```)?)",
 )
 _PAIR_RE = re.compile(r"([a-zA-ZçğıöşüÇĞİÖŞÜ_]+)\s*[:=]\s*([^\s|;,\]\"']+)")
 
@@ -94,19 +96,12 @@ def strip_hidden_verdict(text: str) -> tuple[str, str | None]:
     src = str(text or "")
     last_raw: str | None = None
 
-    def _capture_fenced(match: re.Match[str]) -> str:
+    def _capture(match: re.Match[str]) -> str:
         nonlocal last_raw
-        last_raw = match.group(1).strip()
+        last_raw = match.group("block").strip()
         return ""
 
-    cleaned = _FENCED_VERDICT_RE.sub(_capture_fenced, src)
-
-    def _capture_plain(match: re.Match[str]) -> str:
-        nonlocal last_raw
-        last_raw = match.group(0).strip()
-        return ""
-
-    cleaned = _PLAIN_VERDICT_RE.sub(_capture_plain, cleaned)
+    cleaned = _STRIP_VERDICT_RE.sub(_capture, src)
     # Clean trailing whitespace and redundant blank lines left after stripping.
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
     return cleaned, last_raw
@@ -116,8 +111,8 @@ def parse_verdict_block(raw_block: str | None) -> tuple[dict[str, str] | None, b
     """Ham `[AI_SONUC ...]` bloğunu çekirdek 5 filtre şemasına göre ayrıştır ve doğrula."""
     if not raw_block:
         return None, False, ["gizli_blok_yok"]
-    match = _PLAIN_VERDICT_RE.search(raw_block)
-    if not match:
+    match = _PLAIN_VERDICT_RE.fullmatch(raw_block.strip())
+    if not match or "[" in match.group(1):
         return None, False, ["gizli_blok_bicim_hatali"]
     body = match.group(1).strip().lstrip(":").strip()
 
@@ -128,6 +123,9 @@ def parse_verdict_block(raw_block: str | None) -> tuple[dict[str, str] | None, b
         canonical_key = _KEY_ALIASES.get(key_norm)
         if canonical_key is None:
             errors.append(f"tanimsiz_alan:{key_norm}")
+            continue
+        if canonical_key in parsed_raw:
+            errors.append(f"yinelenen_alan:{canonical_key}")
             continue
         parsed_raw[canonical_key] = _norm_token(raw_v)
 
@@ -152,12 +150,17 @@ def parse_ai_response(
     require_verdict: bool = False,
     min_words: int = 80,
     max_words: int = 220,
+    output_profile: str = "standard",
 ) -> dict[str, Any]:
     """Ham AI çıktısından gizli bloğu ayır, görünür yorumu biçimle ve doğrula.
 
     `visible_text` her zaman `[AI_SONUC ...]` bloğundan arındırılmıştır.
     `require_verdict=True` ise geçersiz/eksik gizli blokta `ValueError` fırlatır.
     """
+    if output_profile not in {"standard", "alarm"}:
+        raise ValueError(f"Bilinmeyen çıktı profili: {output_profile}")
+    if output_profile == "alarm":
+        min_words, max_words = 1, ALARM_MAX_WORDS
     stripped, raw_block = strip_hidden_verdict(raw_text)
     verdict, verdict_valid, verdict_errors = parse_verdict_block(raw_block)
     validation = validate_ai_commentary(stripped, min_words=min_words, max_words=max_words)
@@ -166,7 +169,8 @@ def parse_ai_response(
         raise ValueError(f"Gizli AI_SONUC bloğu geçersiz: {', '.join(verdict_errors)}")
 
     warnings = list(validation.get("warnings") or [])
-    fatal_warnings = [w for w in warnings if w in _FATAL_TELEGRAM_WARNINGS]
+    fatal_warnings = [w for w in warnings if w in _FATAL_TELEGRAM_WARNINGS
+                      or (output_profile == "alarm" and w == "cok_uzun")]
     visible_text = validation["formatted"] if validation["valid_structure"] else stripped
 
     return {

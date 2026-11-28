@@ -48,12 +48,17 @@ GERIYE_GUN = 3              # son kaç günün uyarıları denetlenir
 BUTCE_SN = 90.0             # işin duvar saati bütçesi: gece işi taramayı bekletmesin
 
 
-def seviye(active: Any, yon: int, durum: str) -> Optional[float]:
+def seviye(active: Any, yon: int, durum: str, bar_index=None) -> Optional[float]:
     """Uyarıdaki kırılım seviyesi — `main._alert_break_level` ile aynı kural.
 
     (Kopya tutuluyor çünkü `main` import etmek döngüsel bağımlılık yaratır;
      eşitlik `test_tutarlilik.py` içinde ayrıca sınanır.)
     """
+    if durum in {"KIRILIM_TEYITLI", "RETEST_BASARILI"}:
+        from patterns.mathutil import candidate_boundary_at_bar
+        projected = candidate_boundary_at_bar(active, yon, bar_index)
+        if projected is not None:
+            return projected
     aday = []
     if durum in {"KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI"}:
         ad = "frozen_upper_boundary_at_break" if yon == 1 else "frozen_lower_boundary_at_break"
@@ -126,7 +131,8 @@ def denetle(kayit: Dict, df: Any, *, motor_kur: Optional[Callable[[str], Any]] =
         "desen": _desen(aktif),
         "aile": _aile(aktif),
         "yon": yon,
-        "seviye": seviye(aktif, int(kayit.get("yon") or 1), str(kayit.get("durum") or "")),
+        "seviye": seviye(aktif, int(kayit.get("yon") or 1), str(kayit.get("durum") or ""),
+                         bar_index=getattr(snap, "bar_index", None)),
         "durum": str(getattr(snap, "state", "") or ""),
     }
 

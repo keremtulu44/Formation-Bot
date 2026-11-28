@@ -11,6 +11,10 @@
 
 ## Ne arıyorsan buraya
 
+**Alarmın doğru yerde tetiklenmesi:** [Geometri ve tetikleme zamanı kontrolü](denetim/ALARM_TETIKLEME_YERI_2026-11-27.md) — eğimli formasyon çizgisi ile sabit fiyat kontrolü arasındaki uyumsuzluk düzeltildi; 200-seri önce/sonra ölçümü. Son yön/AI talimatı ekleri geri alındı; yeni görsel veya filtre yok, deploy yapılmadı.
+
+**27 Kasım alarm incelemesi:** [Nedensel replay, anlamlı olay kapsamı ve bastırılan alarmlar](denetim/NEDENSEL_ALARM_KAPSAMASI_2026-11-27.md) — onarılmış 200-seri aday akışı, 200/200 önek eşitliği, seçilen/reddedilen sonuçlar ve gecikme; hedef adet azaltmak değil. Önceki [sistem/filtre denetimi](denetim/ALARM_DENGESI_VE_REPLAY_DENETIMI_2026-11-27.md) eski rekonstrüksiyonun kusurlarını ve günlük sayı proxy'sini korur. Canlı eşik değişikliği yok.
+
 | İhtiyaç | Belge |
 |---|---|
 | Dosyalar nasıl bağlı, domain bilgisi alarma nasıl dönüşüyor? | **[Mimari merkez](mimari/README.md)** |
@@ -63,7 +67,7 @@
 | [arastirma/STABIL_CALISMA_GECMISI.md](arastirma/STABIL_CALISMA_GECMISI.md) | Kayıt | 2026-11-01 | 27/48 soru koşularının konuşmada raporlanan sayıları; artefaktlar eksik |
 | [arastirma/STABIL_DOSYA_ENVANTERI.md](arastirma/STABIL_DOSYA_ENVANTERI.md) | Kayıt | 2026-11-01 | Bugün mevcut dosyalar, eksik runtime/veri ve kurtarma listesi |
 | [Stabil kaynak notu](../domain_engines/STABIL_KAYNAK_NOTU.md) | Kayıt | 2026-11-01 | Özgün TXT, SHA256 ve eksik entegrasyon kapsamı |
-| [arastirma/README.md](arastirma/README.md) | Yürürlükte | 2026-10 | Giriş: kilit bulgular + açık MS bulgusu |
+| [arastirma/README.md](arastirma/README.md) | Yürürlükte | 2026-10 | Giriş: kilit bulgular + 28 Ekim'de düzeltilmiş MS bulgusunun geçmişi |
 | [arastirma/ARASTIRMA_SONUCLARI.md](arastirma/ARASTIRMA_SONUCLARI.md) | Yürürlükte | 2026-10 | Soru bazında cevaplar ve yorum |
 | [arastirma/ARASTIRMA_HATTI.md](arastirma/ARASTIRMA_HATTI.md) | Yürürlükte | 2026-10 | Yöntem, modüller, anti-lookahead |
 | [arastirma/YASAM_TABLOSU.md](arastirma/YASAM_TABLOSU.md) | Yürürlükte | 2026-10-20 | Domain bazında soru sicili: OB/FVG/formasyon yaşam tablosu + cevap formatı |
@@ -129,6 +133,12 @@ diye bakmadan önce kodun kendisine ve [YAPI.md](YAPI.md) §6'ya bakın.
 
 | Dosya | Tarih | Ne ölçtü |
 |---|---|---|
+| [denetim/ALARM_TETIKLEME_YERI_2026-11-27.md](denetim/ALARM_TETIKLEME_YERI_2026-11-27.md) | 2026-11-27 | Alarmın doğru mumda tetiklenmesi: motor çizgisi / bildirim seviyesi uyumsuzluğu, geometri hizalama düzeltmesi, 200-seri önce/sonra ve gerçek arşivli sahte taşıma testi; görsel/tahmin kuralı eklenmedi |
+| [denetim/NEDENSEL_ALARM_KAPSAMASI_2026-11-27.md](denetim/NEDENSEL_ALARM_KAPSAMASI_2026-11-27.md) | 2026-11-27 | Onarılmış 200-seri nedensel aday akışı, 200/200 önek eşitliği; seçilen/bastırılan ilk bariyer, kapanış/MAE, yön asimetrisi, cooldown bilgi proxy'si ve gecikme; adet azaltma hedefi veya canlı eşik değişikliği yok |
+| [denetim/ALARM_DENGESI_VE_REPLAY_DENETIMI_2026-11-27.md](denetim/ALARM_DENGESI_VE_REPLAY_DENETIMI_2026-11-27.md) | 2026-11-27 | 200-seri native tekrar koşusu; P6/cooldown ve alternatiflerin 22 seanslık olay yükü, 8/8 prefix farkı ve yön kusurları, üç alarm yolu filtre haritası; yeni canlı filtre seçimi değil |
+| [denetim/MUM_AKISI_AI_VE_BILDIRIM_2026-11-27.md](denetim/MUM_AKISI_AI_VE_BILDIRIM_2026-11-27.md) | 2026-11-27 | Canlı mum tazelik/kurtarma düzenlemesi, TV worker sınırı ve TF kaynak ayrımı, AI ortak süre/veri kapısı, `/akis` yerel teşhis sicili; bildirim azalmasının kanıt sınırı ve canlı gözlem planı |
+| [denetim/PROJE_GENEL_DURUM_VE_YON_2026-11-27.md](denetim/PROJE_GENEL_DURUM_VE_YON_2026-11-27.md) | 2026-11-27 | Uçtan uca proje değerlendirmesi: mimari/veri/motor/teslim/kalıcılık/güvenlik/araştırma/CI; kanıt sınırları ve öncelikli güvenilir işletim yol haritası |
+| [ALARM_AI_DENETIMI_2026-11-27.md](ALARM_AI_DENETIMI_2026-11-27.md) | 2026-11-27 | AI/alarm denetimi ve yerel sadeleştirme: kısa alarm profili, doğrulama, olay zamanı/tekrar, shadow saklama ve test sonuçları; canlı dağıtım kanıtı değil |
 | [denetim/DEPLOY_HAZIRLIK_2026-11-18.md](denetim/DEPLOY_HAZIRLIK_2026-11-18.md) | 2026-11-18 | **Tam TV + Yahoo deploy yolu:** Yahoo birincil + tvDatafeed reaktif yedek üretim hattına ve `requirements*.txt`/`render.yaml`/CI'ye oturtuldu; kaynak etiketi, gerçek 4s, `/health`, `STRICT_UNKNOWN` kapıları; 39 yeni ağsız senaryo, **4525 passed / 43 skipped**, Python 3.12 CI `44346289337` success (15 dk 8 sn), ruff/pip check/compileall/diff/doktor/`health` smoke; PowerShell + Linux komutları, operatör adımları ve dürüst kanıt sınırı. İlk "TV deploy dışında" kararını geçersiz kılar |
 | [denetim/DEPLOY_BILDIRIM_DENETIMI_2026-11-18.md](denetim/DEPLOY_BILDIRIM_DENETIMI_2026-11-18.md) | 2026-11-18 | **Deploy + bildirim baştan sona denetim:** build/start/env parity, public-only doktor, TV/runtime env görünürlüğü, `/health.bildirim`, tarama dışı public bülten flush'ı, opt-in dar Supabase teslim yedeği, 120 sn shutdown, CI smoke assert'i ve global test-state izolasyonu; 16 yeni ağsız regresyon, **4557 passed / 43 skipped**, 102/102 timing, doktor/grafik 53 tamam / 0 hata, HTTP smoke; push `bef9008` CI `44366863050` success (9 dk 50 sn); gerçek deploy/PR ve canlı servis çağrısı yok |
 | [denetim/GENEL_KONTROL_2026-11-18.md](denetim/GENEL_KONTROL_2026-11-18.md) | 2026-11-18 | TV/datafeed ekleri ve depo geneli: karar kapısının hacim/kısa-bar koşulları, naive yerel zamanın UTC'ye çevrimi, iki dağıtım/sürüm doğrulaması, WS kapanışı, ağsız `tanis`, eski dal `reset --hard` riski, aktif belge/kod çelişkileri; §8 ilk canlı ölçüm + ızgara/MultiIndex/`intersection` düzeltmeleri; §9 ikinci canlı ölçüm + `auto_adjust`/dinamik tolerans/WS yeniden deneme; §10 **TV + Yahoo tam üretim entegrasyonu** (`data/fetch.py`, `bot/scan.py`, pinler, `/health`, 39 senaryo, 4525 test) ve ilk "TV deploy dışında" kararının kapatılması |

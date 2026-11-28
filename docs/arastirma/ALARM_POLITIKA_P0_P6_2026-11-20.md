@@ -1,5 +1,7 @@
 # Alarm politikası: aynı örneklemde eski ve düzeltilmiş ölçüm
 
+> **27 Kasım uyarısı:** [Yeni denetim](../denetim/ALARM_DENGESI_VE_REPLAY_DENETIMI_2026-11-27.md) bu sayımları yeniden üretti fakat domain tetik rekonstrüksiyonunda yön ve geleceğin geçmişi etkilemesi sorunlarını kanıtladı. Aşağıdaki tablo tarihsel/retrospektif ölçümdür; nedensel canlı simülasyon, Telegram teslim sayısı veya geçerli yön başarısı karnesi değildir.
+
 2026-10-19 – 2026-11-18 · 22 ortak İstanbul seansı · 50/57 aktif sembol × 4 native zaman dilimi.
 Arşiv dışında: BRENT, USDTRY, XAGUSD, XAUUSD, XBANK, XU50, XUSIN.
 

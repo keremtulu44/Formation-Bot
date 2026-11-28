@@ -168,11 +168,15 @@ def _zaman_coz(deger):
             dt = ISTANBUL_TZ.localize(dt)
         except Exception:
             dt = dt.replace(tzinfo=ISTANBUL_TZ)
-    return dt
+    from config import ISTANBUL_TZ
+    return dt.astimezone(ISTANBUL_TZ)
 
 
 def _olay_zamani(data):
-    for alan in ("bar_time", "timestamp", "bar_kapanis"):
+    # TF'ler arasında açılış etiketleri sıralanamaz: 13:30 açılan 4H
+    # retest, 15:30 açılan 1H teyitten SONRA bilinir. Önce kapanış anı;
+    # eski kayıtlarda kapanış yoksa geçmiş davranışa dön.
+    for alan in ("bar_kapanis", "bar_time", "timestamp"):
         dt = _zaman_coz((data or {}).get(alan))
         if dt is not None:
             return dt
@@ -353,7 +357,10 @@ class DeliveryOutbox:
         asama = _HIKAYE_ASAMA[state]
         aday_fid = str(data.get("formation_id") or "")
         for eski_zaman, eski_asama, eski_fid, kesin in ilgili:
-            if kesin and aday_zaman <= eski_zaman:  # aynı/eski bar: replay/kopya
+            # Aynı kapanışta başka TF'deki retest, teyitten ileri aşamadır;
+            # eski bar değildir. Eşit zamanda aynı/geri aşama yine kopyadır.
+            if kesin and (aday_zaman < eski_zaman
+                          or (aday_zaman == eski_zaman and asama <= eski_asama)):
                 return True
             ayni_kimlik = bool(aday_fid and eski_fid and aday_fid == eski_fid)
             ayni_gun = aday_zaman.date() == eski_zaman.date()
@@ -405,12 +412,12 @@ class DeliveryOutbox:
         with self.lock:
             self.state["public"] = [r for r in self.state["public"] if
                 (self.now() - datetime.fromisoformat(r["created"])).total_seconds() < 7 * 86400]
-            # formation_id + bar_time: hikâye kapısının kimlik/bar karşılaştırması
+            # Kimlik + açılış/kapanış: hikâye kapısının olay karşılaştırması
             # bunlara bakar; eski kayıtlarda yoksa kapı o kayıt için eski
             # davranışa düşer (created zamanı yedek olur).
             self.state["public"].append({"data": {k: data.get(k) for k in
                 ("stock_name", "timeframe", "state", "break_dir", "pattern_name",
-                 "formation_id", "bar_time")},
+                 "formation_id", "bar_time", "bar_kapanis", "timestamp")},
                 "target": str(getattr(self.owner, "public_chat_id", "") or ""),
                 "created": self.now().isoformat()})
             self.save()

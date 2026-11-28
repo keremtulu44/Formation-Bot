@@ -1,4 +1,8 @@
-"""Yerel, izole grafik-prompt derleme aracı; ağ/Telegram entegrasyonu içermez."""
+"""Grafik-prompt derleme, AI istemci ve alarm/manuel yorum hizmetleri.
+
+Derleyiciler ağsızdır; istemci/hizmet çağrıları yapılandırılmış sağlayıcılara
+istek gönderebilir. Modülün import edilmesi tek başına ağ isteği başlatmaz.
+"""
 from .api_messages import (
     API_PROMPT_VERSION,
     build_api_prompt,

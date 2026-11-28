@@ -1,5 +1,7 @@
 # Domain alarm replay — tetikleyiciler ne kadar değerli?
 
+> **27 Kasım yöntem uyarısı:** [Takip denetimi](../denetim/ALARM_DENGESI_VE_REPLAY_DENETIMI_2026-11-27.md) eski domain tetik üretiminde negatif BOS'un pozitif etiketlenmesi, gelecekte doğacak zone'dan yön çıkarımı ve prefix kararsızlığı buldu (iki sembol × dört TF'nin tamamında fark). Bu tarihsel sonuçların yönlü başarı/üstünlük iddiaları yeniden ölçülmeden canlı filtre kalibrasyonunda kullanılmamalı. Motorun kendisinin geleceği gördüğü anlamına gelmez; sorun araştırma rekonstrüksiyonunda kanıtlandı.
+
 > **Tür:** Ölçüm (replay) · **Sürüm:** `domain-alarm-replay-v1` · **Tarih:** 2026-11-19
 > **Kaynak:** `backfill_data/` native arşiv — 1h/2h/4h/1d, resample yok.
 > **Çapa:** tetiğin oluştuğu mumun kapanışı; ölçüm bir sonraki bardan başlar. Tetik barı hiçbir uzanıma katılmaz.

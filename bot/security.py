@@ -103,8 +103,17 @@ def _alarm_izni_var(sembol: str) -> bool:
     return bool(getattr(config, "MAKRO_ALARM", False))
 
 
-def _alert_break_level(active, break_dir, state):
-    """Kapanış teyidi/retest için kırılım anındaki dondurulmuş sınırı seç."""
+def _alert_break_level(active, break_dir, state, bar_index=None):
+    """Teyit/retestte aynı motor çizgisinin olay mumundaki seviyesini seç.
+
+    İptal ve bar/çapa içermeyen eski kayıtlarda dondurulmuş fiyat korunur.
+    Motorun teyit gücü, kalite, kapanış ve retest koşulları değiştirilmez.
+    """
+    if state in {"KIRILIM_TEYITLI", "RETEST_BASARILI"}:
+        from patterns.mathutil import candidate_boundary_at_bar
+        projected = candidate_boundary_at_bar(active, break_dir, bar_index)
+        if projected is not None:
+            return projected
     if state in {"KIRILIM_TEYITLI", "RETEST_BASARILI", "KIRILIM_GECERSIZLESTI"}:
         frozen_name = "frozen_upper_boundary_at_break" if break_dir == 1 else "frozen_lower_boundary_at_break"
         frozen = getattr(active, frozen_name, None)

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import re
 
+ALARM_MAX_WORDS = 100
+
 _HEADINGS = ("Mevcut durum", "Bağlam", "Replay notu")
 _DECORATED = ("🧭 Mevcut durum", "🔎 Bağlam", "🕯️ Replay notu")
 _EMOJIS = ("🧭", "🔎", "🕯️", "🕯")
@@ -88,6 +90,23 @@ def format_ai_commentary(text: str) -> str:
     return "\n\n".join(output)
 
 
+def format_short_alarm_commentary(text: str) -> str:
+    """Doğrulanmış üç bölümü, cümle kesmeden iki kısa alarm bölümünde sun.
+
+    Model/denetim sözleşmesi değişmez; manuel analiz ve gölge kaydı üç
+    bölümlüdür. Yalnız Telegram alarmında durum + karşı kanıt birleştirilir.
+    """
+    formatted = format_ai_commentary(text)
+    situation, _, rest = formatted.removeprefix(_DECORATED[0] + "\n").partition(
+        "\n\n" + _DECORATED[1] + "\n"
+    )
+    context, _, levels = rest.partition("\n\n" + _DECORATED[2] + "\n")
+    # Modelin bölüm içi satır/paragraf boşluklarını da telefon düzyazısına çevir.
+    outlook = " ".join((situation + " " + context).split())
+    levels = " ".join(levels.split())
+    return f"🧭 Görünüm\n{outlook}\n\n📍 İzlenecek bölgeler\n{levels}"
+
+
 def validate_ai_commentary(
     text: str,
     *,
@@ -113,14 +132,18 @@ def validate_ai_commentary(
             "warnings": [],
         }
 
-    blocks = formatted.split("\n\n")
-    section_counts: dict[str, int] = {}
+    # Bölüm içindeki boş satır yeni bir başlık değildir. split("\n\n")
+    # uzun paragrafların ve koruma ihlallerinin denetimden kaçmasına yol açar.
+    section_counts: dict[str, int] = dict.fromkeys(_HEADINGS, 0)
     body_parts: list[str] = []
-    for key, block in zip(_HEADINGS, blocks):
-        _, _, body = block.partition("\n")
-        words = re.findall(r"\S+", body)
-        section_counts[key] = len(words)
-        body_parts.append(body)
+    current_heading = None
+    for line in formatted.splitlines():
+        heading = _heading(line)
+        if heading is not None:
+            current_heading = heading
+        elif current_heading is not None:
+            section_counts[current_heading] += len(re.findall(r"\S+", line))
+            body_parts.append(line)
 
     full_body = "\n".join(body_parts)
     total_words = sum(section_counts.values())

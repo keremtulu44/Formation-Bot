@@ -336,6 +336,7 @@ def _saglik_ozeti() -> dict:
         "ai_shadow_aktif": bool(config.ai_shadow_log_enabled()),
         "ai_istemci": ai_istemci_ozet,
         "evren": len(_pkg.ACTIVE_STOCKS),
+        "son_tarama_akisi": (_pkg.last_run_stats or {}).get("flow"),
         "instance_id": _pkg.INSTANCE_ID,
         "komut": _pkg._komut_durumu(),
     }
@@ -367,6 +368,7 @@ KOMUT_YARDIM = """🤖 Formation-Bot komutları
 
 📊 BİLGİ VE DİĞER KOMUTLAR
 /durum — bot, piyasa, veri sağlığı ve tarama ilerlemesi
+/akis · /akış — mum çekme, kurtarma ve alarm eleme sicili
 /render · /uyku — Render süreç süresi, olası kesinti/uyanma aralığı ve mum/görsel durumu
 /teshis · /teşhis — grup/kanal komut ve teslim teşhisi
 /olcum · /ölçüm · /referans — karttaki arşiv ölçümlerinin kaynağı
@@ -826,6 +828,12 @@ def _komut_render(_arguman: str) -> str:
         "/grafik isteği ayrıca cache tazeliğiyle doğrulanır."
     )
     return "\n".join(satirlar)
+
+
+def _komut_akis(_arguman: str) -> str:
+    """Salt okunur yerel mum/alarm sicili; API veya tarama başlatmaz."""
+    from bot.scan_evidence import command_report
+    return command_report()
 
 
 def _komut_durum(_arguman: str) -> str:
@@ -2403,6 +2411,8 @@ TELEGRAM_KOMUTLARI = {
     "yardim": _komut_yardim,
     "help": _komut_yardim,
     "durum": _komut_durum,
+    "akis": _komut_akis,
+    "akış": _komut_akis,
     "render": _komut_render,
     "uyku": _komut_render,
     "formasyonlar": _komut_formasyonlar,
@@ -2466,7 +2476,7 @@ TELEGRAM_KOMUTLARI = {
 #   /evet, /hayir → gece önerisi kararı KAYDA geçer (yetki tartışmalı, DM'de kalır)
 # `PUBLIC_COMMAND_EXTRA` ile tek tek açılabilir (örn. "tara").
 PUBLIC_KOMUT_ISLEYICILERI = (
-    _komut_yardim, _komut_durum, _komut_render, _komut_formasyonlar, _komut_canli, _komut_ozet,
+    _komut_yardim, _komut_durum, _komut_akis, _komut_render, _komut_formasyonlar, _komut_canli, _komut_ozet,
     _komut_sikisanlar, _komut_tamamlanan, _komut_retest, _komut_kirilim,
     _komut_olcum, _komut_karne, _komut_backtest, _komut_panel, _komut_teshis,
     _komut_stabil,

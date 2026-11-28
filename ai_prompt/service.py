@@ -14,7 +14,10 @@ Sorumluluklar:
 from __future__ import annotations
 
 import logging
+import math
 import os
+import threading
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
@@ -26,7 +29,9 @@ from secrets_redaction import redact_sensitive_text
 
 from .api_messages import API_PROMPT_VERSION, build_api_prompt
 from .builder import build_from_frames, build_from_local_cache
+from .budget import utf16_len
 from .client import AIClientRouter
+from .commentary import format_short_alarm_commentary
 from .shadow_store import (
     DEFAULT_LOCAL_SHADOW_FILE,
     build_shadow_record,
@@ -34,6 +39,18 @@ from .shadow_store import (
 )
 
 logger = logging.getLogger(__name__)
+_AI_ALARM_LOCK = threading.Lock()
+_AI_ALARM_COUNTS = Counter()
+
+
+def _note_alarm_outcome(outcome):
+    reason = "ok" if outcome.get("ok") else outcome.get("reason", "other")
+    if reason not in {"ok", "stale_or_unknown_data", "all_providers_failed",
+                       "validation_failed", "packet_error", "client_error"}:
+        reason = "other"
+    with _AI_ALARM_LOCK:
+        _AI_ALARM_COUNTS[reason] += 1
+
 
 _TF_TR = {"1h": "1s", "2h": "2s", "4h": "4s", "1d": "1g"}
 _STATE_TR = {
@@ -83,6 +100,8 @@ def ai_health_summary(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         providers = list(AIClientRouter.from_env(env).provider_names())
     except Exception:  # noqa: BLE001
         providers = []
+    with _AI_ALARM_LOCK:
+        alarm_counts = dict(_AI_ALARM_COUNTS)
     aktif = bool(config.ai_yorum_enabled())
     return {
         "aktif": aktif,
@@ -91,6 +110,9 @@ def ai_health_summary(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         "shadow_log_aktif": bool(config.ai_shadow_log_enabled()),
         "saglayicilar": providers,
         "hazir": bool(aktif and providers),
+        "alarm_sonuclari_oturum": alarm_counts,
+        "alarm_toplam_butce_sn": config.AI_ALARM_TOPLAM_BUTCE_SN,
+        "alarm_saglayici_butce_sn": config.AI_ALARM_SAGLAYICI_BUTCE_SN,
     }
 
 
@@ -107,7 +129,7 @@ def _ensure_tz_frame(frame: pd.DataFrame | None) -> pd.DataFrame | None:
 def _tr_price(value: Any) -> str:
     try:
         num = float(value)
-        if pd.isna(num):
+        if isinstance(value, bool) or not math.isfinite(num) or num <= 0:
             return ""
         return f"{num:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
     except (TypeError, ValueError):
@@ -210,12 +232,13 @@ def _persist_shadow_safe(
             packet,
             raw_ai_text,
             model_adi=model_label,
-            prompt_surumu=str(bundle.get("version") or API_PROMPT_VERSION),
+            prompt_surumu=str(bundle.get("prompt_version") or API_PROMPT_VERSION),
             system_sha256=str(bundle.get("system_sha256") or ""),
             kaynak_turu=source_kind,
             tetikleyici_tur=trigger_kind,
             kap_context=kap_context,
             telegrama_gitti=telegram_delivered,
+            output_profile=(bundle.get("metadata") or {}).get("output_profile", "standard"),
         )
         local_path = _resolve_shadow_local_path(shadow_local_path)
         store, allow_supa = _make_shadow_supabase_store(shadow_store)
@@ -244,7 +267,7 @@ def format_ai_alarm_message(
     """
     stock = str(alert_data.get("stock_name") or "").strip().upper()
     tf = str(alert_data.get("timeframe") or "").strip().lower()
-    tf_tr = _TF_TR.get(tf, tf or "4s")
+    tf_tr = {"1h": "1 saat", "2h": "2 saat", "4h": "4 saat", "1d": "Günlük"}.get(tf, tf or "4 saat")
     pattern = str(alert_data.get("pattern_name") or "").strip()
     state = str(alert_data.get("state") or "").strip().upper()
     state_tr = _STATE_TR.get(state, state.replace("_", " ").title() if state else "")
@@ -270,13 +293,13 @@ def format_ai_alarm_message(
     if meta_parts:
         lines.append(" · ".join(meta_parts))
     lines.append("")
-    lines.append(visible_text.strip())
+    lines.append(format_short_alarm_commentary(visible_text))
     lines.append("")
     lines.append("📌 Yapay zekâ teknik özeti · yatırım tavsiyesi değildir")
 
     text = "\n".join(lines).strip()
-    if len(text) > _TELEGRAM_SAFE_MAX:
-        text = text[: _TELEGRAM_SAFE_MAX - 1].rstrip() + "…"
+    if utf16_len(text) > _TELEGRAM_SAFE_MAX:
+        raise ValueError("AI alarm mesajı Telegram güvenli uzunluk sınırını aştı")
     return text
 
 
@@ -289,13 +312,18 @@ def generate_ai_commentary_for_frames(
     df_1d: pd.DataFrame | None = None,
     source_kind: str = "alarm",
     trigger_kind: str | None = None,
+    trigger: Mapping[str, Any] | None = None,
     router: AIClientRouter | None = None,
     kap_arsiv_yolu: str | None = None,
     shadow_local_path: str | os.PathLike[str] | None = None,
     shadow_store: Any = None,
     telegram_delivered_hint: bool = False,
 ) -> dict[str, Any]:
-    """OHLCV çerçevelerinden prompt + KAP bağlamı kurup AI zincirini çalıştırır."""
+    """OHLCV çerçevelerinden prompt + KAP bağlamı kurup AI zincirini çalıştırır.
+
+    `telegram_delivered_hint` eski çağrılarla uyum için kabul edilir; hazırlık
+    gerçek teslim olmadığı için artık gölge kaydını teslim edildi işaretlemez.
+    """
     sym = str(symbol or "").strip().upper()
     tf = str(main_tf or "4h").strip().lower()
     if config.sembol_turu(sym) != "hisse":
@@ -318,12 +346,50 @@ def generate_ai_commentary_for_frames(
             main_tf=tf,
             daily=daily,
             research_mode="strict",
-            source="canlı tarama verisi",
+            source=(f"{'canlı tarama' if source_kind == 'alarm' else 'manuel önbellek'}; "
+                    f"1H kaynak={hourly.attrs.get('veri_kaynagi', 'bilinmiyor')}"),
         )
+        if source_kind == "alarm" and tf == "1h":
+            # The generic packet builder uses the :30 chart grid. A validated
+            # native :00 close is not 30 minutes late on its own provider grid.
+            from data.quality import hourly_fetch_validator
+            validate = hourly_fetch_validator(sym, as_of)
+            if validate is not None and validate(hourly)[0]:
+                packet["timeframes"]["1h"]["expected_delay_minutes"] = 0
     except Exception as exc:  # noqa: BLE001 - prompt kurulum hatası düz karta düşer
         logger.warning("AI veri paketi kurulamadı (%s %s): %s", sym, tf, exc)
         return {"ok": False, "reason": "packet_error", "fallback_to_plain_card": True}
 
+    return _generate_ai_commentary_for_packet(
+        packet, router=active_router, source_kind=source_kind,
+        trigger_kind=trigger_kind, trigger=trigger, kap_arsiv_yolu=kap_arsiv_yolu,
+        shadow_local_path=shadow_local_path, shadow_store=shadow_store,
+    )
+
+
+def _generate_ai_commentary_for_packet(
+    packet: Mapping[str, Any],
+    *,
+    router: AIClientRouter,
+    source_kind: str,
+    trigger_kind: str | None = None,
+    trigger: Mapping[str, Any] | None = None,
+    kap_arsiv_yolu: str | None = None,
+    shadow_local_path: str | os.PathLike[str] | None = None,
+    shadow_store: Any = None,
+) -> dict[str, Any]:
+    """Canlı ve yerel veri aynı hata/koruma kapılarından geçer."""
+    sym, tf = str(packet["symbol"]), str(packet["main_tf"])
+    active_router = router
+    # Eksik/bayat ana TF için AI harcaması yapma; teknik alarm engellenmez.
+    main_data = (packet.get("timeframes") or {}).get(tf, {})
+    delay = main_data.get("expected_delay_minutes")
+    try:
+        fresh_main = main_data.get("status") == "available" and math.isfinite(float(delay)) and float(delay) == 0
+    except (TypeError, ValueError):
+        fresh_main = False
+    if source_kind == "alarm" and not fresh_main:
+        return {"ok": False, "reason": "stale_or_unknown_data", "fallback_to_plain_card": True}
     kap_ctx = _read_live_kap_context(sym, packet["as_of"], kap_arsiv_yolu=kap_arsiv_yolu)
     try:
         bundle = build_api_prompt(
@@ -331,18 +397,26 @@ def generate_ai_commentary_for_frames(
             modality="text_only",
             include_hidden_verdict=True,
             kap_context=kap_ctx,
+            trigger=trigger,
+            output_profile="alarm" if source_kind == "alarm" else "standard",
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("AI prompt derlenemedi (%s %s): %s", sym, tf, exc)
         return {"ok": False, "reason": "prompt_error", "fallback_to_plain_card": True}
 
     max_wall = config.ai_yorum_max_bekleme_sn()
+    budget_args = {}
+    if source_kind == "alarm":
+        max_wall = min(max_wall or config.AI_ALARM_SAGLAYICI_BUTCE_SN,
+                       config.AI_ALARM_SAGLAYICI_BUTCE_SN)
+        budget_args["max_total_seconds"] = config.AI_ALARM_TOPLAM_BUTCE_SN
     try:
         asked = active_router.ask_bundle(
             bundle,
             parse_response=True,
             require_verdict=False,
             max_wall_seconds_per_provider=max_wall,
+            **budget_args,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -376,13 +450,15 @@ def generate_ai_commentary_for_frames(
         source_kind=source_kind,
         trigger_kind=trigger_kind,
         kap_context=kap_ctx,
-        telegram_delivered=bool(telegram_delivered_hint and ok_tg),
+        # Hazırlama/gönderim niyeti teslim makbuzu değildir.
+        telegram_delivered=False,
         shadow_local_path=shadow_local_path,
         shadow_store=shadow_store,
     )
 
     if not ok_tg:
-        err = ((parsed.get("validation") or {}).get("error")) or "yapısal doğrulama geçemedi"
+        validation = parsed.get("validation") or {}
+        err = validation.get("error") or ", ".join(validation.get("warnings") or []) or "doğrulama geçemedi"
         logger.warning(
             "AI yanıtı Telegram doğrulamasından geçemedi (%s %s, %s: %s) -> düz kart yedeği",
             sym,
@@ -454,16 +530,31 @@ def enrich_alarm_with_ai(
         df_1d=df_1d,
         source_kind="alarm",
         trigger_kind=state or None,
+        trigger={
+            "kind": "alarm",
+            "timeframe": tf,
+            "state": state,
+            "pattern_name": alert_data.get("pattern_name"),
+            "direction": alert_data.get("break_dir"),
+            "bar_open": alert_data.get("bar_time"),
+            "bar_close": alert_data.get("bar_kapanis"),
+        },
         router=router,
         kap_arsiv_yolu=kap_arsiv_yolu,
         shadow_local_path=shadow_local_path,
         shadow_store=shadow_store,
-        telegram_delivered_hint=bool(config.ai_yorum_dm_enabled() or config.ai_yorum_public_enabled()),
     )
+    _note_alarm_outcome(outcome)
+    alert_data["ai_yorum_durum"] = "ok" if outcome.get("ok") else outcome.get("reason", "hata")
     if not outcome.get("ok"):
         return False
 
-    alert_data["ai_yorum_mesaji"] = format_ai_alarm_message(alert_data, outcome["visible_text"])
+    try:
+        message = format_ai_alarm_message(alert_data, outcome["visible_text"])
+    except ValueError as exc:
+        logger.warning("AI alarm biçimlenemedi (%s %s): %s -> düz kart", stock, tf, exc)
+        return False
+    alert_data["ai_yorum_mesaji"] = message
     res = outcome.get("result")
     if res is not None:
         alert_data["ai_yorum_saglayici"] = res.provider
@@ -570,7 +661,6 @@ def run_manual_ai_analysis(
             kap_arsiv_yolu=kap_arsiv_yolu,
             shadow_local_path=shadow_local_path,
             shadow_store=shadow_store,
-            telegram_delivered_hint=True,
         )
     else:
         # Bellek önbelleğinde yoksa yerel bot_data seed dosyasını dene.
@@ -578,47 +668,14 @@ def run_manual_ai_analysis(
             packet = build_from_local_cache(sym, as_of=simdi, main_tf=tf_norm)
         except Exception as exc:  # noqa: BLE001
             return f"⚠️ {sym} ({tf_tr}) için önbellekte yeterli veri bulunamadı ({type(exc).__name__})."
-        kap_ctx = _read_live_kap_context(sym, packet["as_of"], kap_arsiv_yolu=kap_arsiv_yolu)
-        bundle = build_api_prompt(
-            packet,
-            modality="text_only",
-            include_hidden_verdict=True,
-            kap_context=kap_ctx,
+        outcome = _generate_ai_commentary_for_packet(
+            packet, router=active_router, source_kind="manuel",
+            trigger_kind="komut_ai", kap_arsiv_yolu=kap_arsiv_yolu,
+            shadow_local_path=shadow_local_path, shadow_store=shadow_store,
         )
-        asked = active_router.ask_bundle(
-            bundle,
-            parse_response=True,
-            require_verdict=False,
-            max_wall_seconds_per_provider=config.ai_yorum_max_bekleme_sn(),
-        )
-        res = asked["result"]
-        parsed = asked["parsed"]
-        if not res.ok or not res.text or not isinstance(parsed, Mapping):
-            outcome = {"ok": False, "reason": "all_providers_failed", "result": res, "parsed": parsed}
-        else:
-            _persist_shadow_safe(
-                packet,
-                bundle,
-                res.text,
-                provider=res.provider,
-                model=res.model,
-                source_kind="manuel",
-                trigger_kind="komut_ai",
-                kap_context=kap_ctx,
-                telegram_delivered=bool(parsed.get("ok_for_telegram")),
-                shadow_local_path=shadow_local_path,
-                shadow_store=shadow_store,
-            )
-            outcome = {
-                "ok": bool(parsed.get("visible_text")),
-                "visible_text": str(parsed.get("visible_text") or "").strip(),
-                "verdict": parsed.get("verdict"),
-                "result": res,
-                "parsed": parsed,
-            }
 
     res = outcome.get("result")
-    if not outcome.get("ok") and not outcome.get("visible_text"):
+    if not outcome.get("ok"):
         denemeler = ""
         if res is not None and getattr(res, "attempts", None):
             denemeler = "\nDenemeler: " + ", ".join(
@@ -647,6 +704,6 @@ def run_manual_ai_analysis(
         )
     lines.append("📌 Yapay zekâ teknik özeti · yatırım tavsiyesi değildir")
     text = "\n".join(lines).strip()
-    if len(text) > _TELEGRAM_SAFE_MAX:
-        text = text[: _TELEGRAM_SAFE_MAX - 1].rstrip() + "…"
+    if utf16_len(text) > _TELEGRAM_SAFE_MAX:
+        return f"⚠️ {sym} · {tf_tr} AI yanıtı güvenli mesaj sınırını aştı; yorum kesilerek gösterilmedi."
     return text

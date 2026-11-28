@@ -1028,6 +1028,9 @@ AI_YORUM_PUBLIC = os.getenv("AI_YORUM_PUBLIC", "1").strip().lower() in {
 # 0 = toplam süre sınırı yok (ApiWrapper kuralı: 10s bağlanma + 45s sessizlik);
 # isteğe bağlı pozitif saniye (örn. 240) sağlayıcı başına üst sınır koyar.
 AI_YORUM_MAX_BEKLEME_SN = _env_int("AI_YORUM_MAX_BEKLEME_SN", 0, minimum=0)
+# Sadece canlı alarm API zinciri; manuel /ai ve offline deneyler ayrı kalır.
+AI_ALARM_TOPLAM_BUTCE_SN = _env_int("AI_ALARM_TOPLAM_BUTCE_SN", 45, minimum=1)
+AI_ALARM_SAGLAYICI_BUTCE_SN = _env_int("AI_ALARM_SAGLAYICI_BUTCE_SN", 20, minimum=1)
 
 
 def ai_yorum_enabled() -> bool:

@@ -1,0 +1,801 @@
+{
+  "synthetic": {
+    "live_mixed_direction_display": {
+      "reasons": [
+        "BOS ↑",
+        "OB ↓"
+      ],
+      "display": "▲",
+      "problem_present": true
+    },
+    "bearish_bos": {
+      "event_direction": "DOWN",
+      "replay_direction": 1,
+      "problem_present": true
+    },
+    "future_zone_direction": {
+      "zone_birth": 20,
+      "anchor_index": 2,
+      "direction_without_zone": 0,
+      "direction_with_future_zone": 1,
+      "problem_present": true
+    }
+  },
+  "saved_results": {
+    "docs/arastirma/sonuclar/bes_alarm_pilotu/OLAYLAR.csv.gz": {
+      "sha256": "1d6284a5462c8abe93efebd2ffd8b7226b96335ef18d29b3a1ff9a2795692ebf",
+      "rows": 11423,
+      "groups": {
+        "F1/aday": {
+          "n": 694,
+          "up_first": 348,
+          "down_first": 334,
+          "ambiguous": 7,
+          "neither": 5
+        },
+        "F1/teyit": {
+          "n": 1266,
+          "up_first": 642,
+          "down_first": 599,
+          "ambiguous": 12,
+          "neither": 13
+        },
+        "F2/aday": {
+          "n": 321,
+          "up_first": 159,
+          "down_first": 157,
+          "ambiguous": 4,
+          "neither": 1
+        },
+        "F2/egim": {
+          "n": 1166,
+          "up_first": 574,
+          "down_first": 571,
+          "ambiguous": 14,
+          "neither": 7
+        },
+        "S2/geri_alis": {
+          "n": 630,
+          "up_first": 330,
+          "down_first": 290,
+          "ambiguous": 3,
+          "neither": 7
+        },
+        "S2/temiz80": {
+          "n": 2,
+          "up_first": 1,
+          "down_first": 1,
+          "ambiguous": 0,
+          "neither": 0
+        }
+      }
+    },
+    "docs/arastirma/sonuclar/bes_alarm_pilotu/genis/ADAYLAR.csv.gz": {
+      "sha256": "1fba014b2cf9c824bc61b470920ed5c15112e1100f44c1aac1de4db9eb1b0154",
+      "rows": 4868,
+      "groups": {
+        "S2/temiz80": {
+          "n": 19,
+          "up_first": 13,
+          "down_first": 6,
+          "ambiguous": 0,
+          "neither": 0
+        }
+      }
+    },
+    "recorded_kirilim_archive_check": {
+      "checked_files": 348,
+      "same_bytes": 0,
+      "latest_anchor": "2026-10-19 15:30:00+03:00",
+      "candidate_rows": 25457,
+      "note": "Byte mismatch is provenance mismatch, not proof all price values changed."
+    }
+  },
+  "prefix_probes": [
+    {
+      "symbol": "THYAO",
+      "tf": "1h",
+      "full_bars": 480,
+      "prefix_bars": 360,
+      "full_past_events": 106,
+      "prefix_events": 112,
+      "differences": 7,
+      "examples": [
+        {
+          "bar_index": 26,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 27,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 124,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 125,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 207,
+          "full": {
+            "channels": [
+              "FORMASYON"
+            ],
+            "direction": 1
+          },
+          "prefix": {
+            "channels": [
+              "FORMASYON"
+            ],
+            "direction": 0
+          }
+        },
+        {
+          "bar_index": 358,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "CHoCH"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 359,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "CHoCH"
+            ],
+            "direction": 1
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "THYAO",
+      "tf": "2h",
+      "full_bars": 480,
+      "prefix_bars": 360,
+      "full_past_events": 115,
+      "prefix_events": 118,
+      "differences": 6,
+      "examples": [
+        {
+          "bar_index": 254,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 255,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 317,
+          "full": {
+            "channels": [
+              "OB"
+            ],
+            "direction": 1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "OB"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 318,
+          "full": {
+            "channels": [
+              "OB"
+            ],
+            "direction": 1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "OB"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 357,
+          "full": {
+            "channels": [
+              "FORMASYON"
+            ],
+            "direction": -1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "CHoCH",
+              "FORMASYON"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 358,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS",
+              "CHoCH"
+            ],
+            "direction": 1
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "THYAO",
+      "tf": "4h",
+      "full_bars": 480,
+      "prefix_bars": 360,
+      "full_past_events": 115,
+      "prefix_events": 118,
+      "differences": 5,
+      "examples": [
+        {
+          "bar_index": 193,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 341,
+          "full": {
+            "channels": [
+              "OB"
+            ],
+            "direction": -1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "OB"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 342,
+          "full": {
+            "channels": [
+              "FORMASYON"
+            ],
+            "direction": -1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "FORMASYON"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 344,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 345,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "THYAO",
+      "tf": "1d",
+      "full_bars": 480,
+      "prefix_bars": 360,
+      "full_past_events": 129,
+      "prefix_events": 135,
+      "differences": 9,
+      "examples": [
+        {
+          "bar_index": 255,
+          "full": {
+            "channels": [
+              "OB"
+            ],
+            "direction": -1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "OB"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 256,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 257,
+          "full": {
+            "channels": [
+              "FORMASYON",
+              "OB"
+            ],
+            "direction": -1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "FORMASYON",
+              "OB"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 281,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 282,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 304,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "CHoCH"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 305,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "CHoCH"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 354,
+          "full": {
+            "channels": [
+              "OB"
+            ],
+            "direction": 1
+          },
+          "prefix": {
+            "channels": [
+              "CHoCH",
+              "OB"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 355,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "CHoCH"
+            ],
+            "direction": 1
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "ASELS",
+      "tf": "1h",
+      "full_bars": 480,
+      "prefix_bars": 360,
+      "full_past_events": 108,
+      "prefix_events": 114,
+      "differences": 6,
+      "examples": [
+        {
+          "bar_index": 288,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 289,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 339,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 340,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 344,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 345,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "ASELS",
+      "tf": "2h",
+      "full_bars": 480,
+      "prefix_bars": 360,
+      "full_past_events": 137,
+      "prefix_events": 142,
+      "differences": 8,
+      "examples": [
+        {
+          "bar_index": 174,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 175,
+          "full": {
+            "channels": [
+              "FORMASYON"
+            ],
+            "direction": -1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "FORMASYON"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 229,
+          "full": {
+            "channels": [
+              "FORMASYON",
+              "OB"
+            ],
+            "direction": -1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "FORMASYON",
+              "OB"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 230,
+          "full": {
+            "channels": [
+              "OB"
+            ],
+            "direction": -1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "OB"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 330,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 331,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 334,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 335,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "ASELS",
+      "tf": "4h",
+      "full_bars": 480,
+      "prefix_bars": 360,
+      "full_past_events": 128,
+      "prefix_events": 133,
+      "differences": 8,
+      "examples": [
+        {
+          "bar_index": 244,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 245,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 250,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "BOS"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 251,
+          "full": {
+            "channels": [
+              "OB"
+            ],
+            "direction": 1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "OB"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 275,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "CHoCH"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 276,
+          "full": null,
+          "prefix": {
+            "channels": [
+              "CHoCH"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 339,
+          "full": {
+            "channels": [
+              "FORMASYON"
+            ],
+            "direction": 1
+          },
+          "prefix": {
+            "channels": [
+              "CHoCH",
+              "FORMASYON"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 340,
+          "full": {
+            "channels": [
+              "FORMASYON"
+            ],
+            "direction": 1
+          },
+          "prefix": {
+            "channels": [
+              "CHoCH",
+              "FORMASYON"
+            ],
+            "direction": 1
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "ASELS",
+      "tf": "1d",
+      "full_bars": 480,
+      "prefix_bars": 360,
+      "full_past_events": 93,
+      "prefix_events": 93,
+      "differences": 2,
+      "examples": [
+        {
+          "bar_index": 326,
+          "full": {
+            "channels": [
+              "FORMASYON"
+            ],
+            "direction": 1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "FORMASYON"
+            ],
+            "direction": 1
+          }
+        },
+        {
+          "bar_index": 327,
+          "full": {
+            "channels": [
+              "FORMASYON"
+            ],
+            "direction": 1
+          },
+          "prefix": {
+            "channels": [
+              "BOS",
+              "FORMASYON"
+            ],
+            "direction": 1
+          }
+        }
+      ]
+    }
+  ]
+}
